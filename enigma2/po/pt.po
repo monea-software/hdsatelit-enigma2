@@ -16472,11 +16472,11 @@ msgid "OK: lista paginilor favorite."
 msgstr "OK: lista das páginas favoritas."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "OK: șterge istoricul, cookie-urile, datele siturilor și mărirea ținută minte."
+msgid "OK: șterge istoricul, cookie-urile, datele site-urilor și mărirea ținută minte."
 msgstr "OK: apaga o histórico, os cookies, os dados dos sites e o tamanho memorizado."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele siturilor și mărirea ținută minte. Favoritele rămân."
+msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele site-urilor și mărirea ținută minte. Favoritele rămân."
 msgstr "Apagar os dados de navegação? Apagam-se os cookies, os dados dos sites e o tamanho memorizado. Os favoritos ficam."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
@@ -16508,7 +16508,7 @@ msgid "Pagina care se deschide când pornești navigatorul din meniu."
 msgstr "A página que abre quando inicias o navegador a partir do menu."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare sit."
+msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare site."
 msgstr "Automático: a página mais larga do que o ecrã é reduzida até caber. O amarelo, no navegador, amplia a página e memoriza o tamanho em cada site."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -16730,7 +16730,7 @@ msgid "Datele de navigare"
 msgstr "Dados de navegação"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
-msgid "Cookie-urile, datele siturilor și mărirea ținută minte pe fiecare sit. Favoritele rămân."
+msgid "Cookie-urile, datele site-urilor și mărirea ținută minte pe fiecare site. Favoritele rămân."
 msgstr "Os cookies, os dados dos sites e o tamanho memorizado em cada site. Os favoritos ficam."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
@@ -27784,7 +27784,7 @@ msgid "Rapidă"
 msgstr "Rápida"
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Un chenar arată elementul ales în pagină, chiar dacă situl îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
+msgid "Un chenar arată elementul ales în pagină, chiar dacă site-ul îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
 msgstr "Uma moldura mostra o elemento escolhido na página, mesmo que o site o esconda. A cor, a forma, a espessura e a pulsação escolhem-se mais abaixo."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -28023,7 +28023,7 @@ msgstr "Para perguntas: %s"
 
 #: lib/python/Components/HdsFunctii.py
 #, python-format
-msgid "Situl: %s"
+msgid "Site-ul: %s"
 msgstr "Site: %s"
 
 #: lib/python/Components/HdsFunctii.py
@@ -32316,7 +32316,7 @@ msgid "Adrese care nu sunt bune: %s"
 msgstr "Endereços não válidos: %s"
 
 #: lib/python/Screens/HdsVpn.py
-msgid "Află adresa IP și țara pe care le văd siturile acum."
+msgid "Află adresa IP și țara pe care le văd site-urile acum."
 msgstr "Descobre o endereço IP e o país que os sites veem agora."
 
 #: lib/python/Screens/HdsVpn.py
@@ -32348,7 +32348,7 @@ msgid "Alege întâi un server."
 msgstr "Escolhe primeiro um servidor."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py
-msgid "Alte adrese (nume de situri sau adrese IP, câte una pe rând)"
+msgid "Alte adrese (nume de site-uri sau adrese IP, câte una pe rând)"
 msgstr "Outros endereços (nomes de sites ou endereços IP, um por linha)"
 
 #: lib/python/Components/HdsVpn.py
@@ -47442,3 +47442,114 @@ msgstr "O vigilante reinicia a interface só quando ela deixa de dar sinal de vi
 #: lib/python/Screens/Information.py
 msgid "Prag"
 msgstr "Limite"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "--- Adrese proprii ---"
+msgstr "--- Endereços próprios ---"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată cheia"
+msgstr "Mostrar chave"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată parola"
+msgstr "Mostrar palavra-passe"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Arată parola și cheia"
+msgstr "Mostrar palavra-passe e chave"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde cheia"
+msgstr "Ocultar chave"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde parola"
+msgstr "Ocultar palavra-passe"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Ascunde parola și cheia"
+msgstr "Ocultar palavra-passe e chave"
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Canalul pornește imediat."
+msgstr "O canal começa já a seguir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă."
+msgstr "A partir de scripts: acrescenta o parâmetro <code>token=&lt;cheie&gt;</code> a qualquer endereço acima (GET ou POST). A chave para scripts está oculta e só se vê a pedido: no recetor, no ecrã da interface web (Azul, Outras opções, Mostrar palavra-passe e chave), ou na página Interface web (botão Mostrar). Também aí se pode criar uma chave nova."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată cheia o arată întreagă."
+msgstr "Só para programadores. O navegador normal não precisa dela. A chave está oculta: o botão Mostrar chave mostra-a completa."
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Filmul pornește imediat."
+msgstr "O filme começa já a seguir."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Memoria internă (eMMC)"
+msgstr "Memória interna (eMMC)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Parola nouă pentru aplicații e făcută. O vezi cu butonul Arată; scrie-o în aplicațiile pe care le folosești din afara casei."
+msgstr "A nova palavra-passe para aplicações está feita. Vê-la com o botão Mostrar; escreve-a nas aplicações que usas de fora de casa."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Parola și cheia se văd numai dintr-un browser."
+msgstr "A palavra-passe e a chave só se veem a partir de um navegador."
+
+#: lib/python/Screens/PositionerSetup.py
+msgid "Recalculează"
+msgstr "Recalcular"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Codul se cere și în casă, deci aplicațiile de telefon intră și de acasă numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Guardado. O código é pedido também em casa, por isso as aplicações de telemóvel também entram de casa só com o utilizador root e a palavra-passe para aplicações (botão Mostrar)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Din afara casei, aplicațiile intră numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Guardado. De fora de casa, as aplicações entram só com o utilizador root e a palavra-passe para aplicações (botão Mostrar)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Se cere cu ce=parola sau ce=cheie."
+msgstr "Pede-se com ce=parola ou ce=cheie."
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "Se reîncarcă... Canalele apar în câteva secunde în buchetul Canale de pe internet (DVB-I)."
+msgstr "A recarregar... Os canais aparecem dentro de segundos no bouquet Canais da Internet (DVB-I)."
+
+#: lib/python/Screens/Information.py
+msgid "Ultima eliberare"
+msgstr "Última libertação"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "cel mult %s"
+msgstr "no máximo %s"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "pentru un film"
+msgstr "para um filme"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mare"
+msgstr "um recetor com mais memória interna"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mare (de exemplu %s)"
+msgstr "um recetor com mais memória interna (por exemplo %s)"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mică"
+msgstr "um recetor com menos memória interna"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mică (de exemplu %s)"
+msgstr "um recetor com menos memória interna (por exemplo %s)"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "în standby"
+msgstr "em standby"

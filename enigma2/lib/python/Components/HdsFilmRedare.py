@@ -14,7 +14,11 @@
 #            pipeline    playbin lipseste; eroare: orice alta eroare GStreamer
 #            decodor     receptorul HiSilicon nu mai are memoria decodorului pentru fisiere (maparea demonului platformei
 #                        a esuat la pornire): pipeline-ul nu se face, altfel prima scriere a sinkurilor in video0 sau audio0
-#                        ar opri nucleul (lib/dvb/hdspazavideo.h); trece numai la repornirea receptorului
+#                        ar opri nucleul (lib/dvb/hdspazavideo.h); trece numai la repornirea receptorului. Nu e un
+#                        defect de spus omului (niciun defect intern pe televizor): receptorul isi reface singur
+#                        memoria, cu pazele repornirii in standby, si filmul porneste dupa repornire
+#                        (Components/HdsMemorieDriver.py, refacereFilm); pe ecran numai TXT_PORNESTE, iar cand o paza
+#                        opreste repornirea, numai TXT_NU_ACUM
 #   capuri   tipul GStreamer fara drum (video/x-av1, audio/x-wma, video/mpeg...), poate fi gol
 #   video    1 = imaginea merge, 0 = nu, ? = nu se stie inca
 #   detaliu  mesajul GStreamer, englezeste (pentru jurnal si pentru randul tehnic)
@@ -147,7 +151,8 @@ TXT_NIMIC = N_("Fișierul nu are imagine sau sunet pe care receptorul să le poa
 TXT_FARA_REDARE = N_("Redarea filmelor nu este pregătită: lipsește o componentă din programul receptorului.")
 TXT_FORMATE = N_("Imagine: %s. Sunet: %s.")
 TXT_NU_ACUM = N_("Filmul nu poate porni acum.")
-TXT_DECODOR = N_("Decodorul receptorului nu mai are memorie. Repornește receptorul.")
+# lipsa memoriei decodorului (felul "decodor"): receptorul o reface singur, deci pe ecran numai textul scurt, fara defect
+TXT_PORNESTE = N_("Filmul pornește imediat.")
 # un canal de pe internet din lista de canale (tipul 4097 in bara principala): aceleasi verdicte, spuse despre canal
 TXT_CANAL_REFUZ = N_("Canalul nu se poate reda pe acest receptor.")
 TXT_CANAL_FARA_SUNET = N_("Canalul merge fără sunet.")
@@ -156,6 +161,7 @@ TXT_CANAL_NEPORNIT = N_("Canalul nu a pornit în 30 de secunde, așa că a fost 
 TXT_CANAL_NEDESCHIS = N_("Fluxul canalului nu se poate desface: poate fi într-un format necunoscut.")
 TXT_CANAL_NIMIC = N_("Canalul nu trimite imagine sau sunet pe care receptorul să le poată reda.")
 TXT_CANAL_NU_ACUM = N_("Canalul nu poate porni acum.")
+TXT_CANAL_PORNESTE = N_("Canalul pornește imediat.")
 PENTRU_CANAL = {
 	TXT_REFUZ: TXT_CANAL_REFUZ,
 	TXT_FARA_IMAGINE: TXT_CANAL_REFUZ,
@@ -166,6 +172,7 @@ PENTRU_CANAL = {
 	TXT_NEDESCHIS: TXT_CANAL_NEDESCHIS,
 	TXT_NIMIC: TXT_CANAL_NIMIC,
 	TXT_NU_ACUM: TXT_CANAL_NU_ACUM,
+	TXT_PORNESTE: TXT_CANAL_PORNESTE,
 }
 
 
@@ -294,8 +301,10 @@ def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
 	if not fel:
 		return None
 	if fel == "decodor":
-		# nu fisierul e de vina: memoria decodorului lipseste pana la repornirea receptorului
-		return Verdict(fel, True, _t(TXT_NU_ACUM), _t(TXT_DECODOR), detaliu)
+		# nu fisierul e de vina: memoria decodorului lipseste pana la repornirea receptorului. Niciun defect intern pe
+		# ecran: playerul cere refacerea (HdsMemorieDriver.refacereFilm) si arata atunci verdictRefacere(); cand o paza o
+		# opreste, ramane numai fraza scurta. Motivul tehnic ramane in randul tehnic si in jurnal.
+		return Verdict(fel, True, _t(TXT_NU_ACUM), "", detaliu)
 	formate = _formateCunoscute(codec_video, codec_sunet)
 	container = numeContainer(capuri)
 	nume = numeFormat(capuri)
@@ -334,6 +343,18 @@ def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
 	if fel == "pipeline":
 		return Verdict(fel, True, _t(TXT_REFUZ), _t(TXT_FARA_REDARE), "")
 	return Verdict(fel, True, _t(TXT_REFUZ), formate, detaliu)
+
+
+def verdictRefacere(tehnic="", canal=False):
+	"""Ce se spune cand receptorul isi reface memoria decodorului ca sa porneasca filmul (sau canalul): o fraza scurta,
+	fara defect; filmul nu se opreste de mana (refuza False), receptorul se reporneste si il porneste apoi."""
+	_t = _tCanal if canal else _tFilm
+	return Verdict("decodor", False, _t(TXT_PORNESTE), "", tehnic)
+
+
+def esteDecodor(verdict_):
+	"""Verdictul spune ca lipseste memoria decodorului (felul "decodor")."""
+	return verdict_ is not None and getattr(verdict_, "fel", "") == "decodor"
 
 
 def verdictDinInfo(info, cale="", canal=False):

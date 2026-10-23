@@ -165,7 +165,7 @@ GRUPE = (
 # contactul de la Despre: intrebarile si alte modele de receptoare, cu conditiile; fara nume
 CONTACT_TITLU = N_("Contact")
 CONTACT_INTREBARI = N_("Pentru întrebări: %s")
-CONTACT_SIT = N_("Situl: %s")
+CONTACT_SIT = N_("Site-ul: %s")
 CONTACT_ALTE_RECEPTOARE = N_("Vrei HD Satelit și pe alt model de receptor? Scrie-ne la %s. Avem nevoie de receptor, "
 	"dat gratuit și definitiv, și de driverele și tot ce mai trebuie de la producător.")
 

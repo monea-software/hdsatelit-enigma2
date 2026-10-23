@@ -576,7 +576,7 @@ class HdsDvbIAvansat(Screen):
         self['key_red'] = StaticText(_('Înapoi'))
         self['key_green'] = StaticText(_('Reîncarcă'))
         self['key_yellow'] = StaticText(_('Pornit/Oprit'))
-        self['key_blue'] = StaticText(_('Adaugă URL'))
+        self['key_blue'] = StaticText(_('Adaugă adresă'))
         self['tastatura'] = ActionMap(
             ['ColorActions', 'OkCancelActions', 'DirectionActions'],
             {
@@ -600,10 +600,10 @@ class HdsDvbIAvansat(Screen):
             marcaj = '[✓] ' if cheie in predefinite_active else '[  ] '
             self._intrari.append((marcaj + descriere, ('predefinit', cheie)))
 
-        self._intrari.append((_('--- URL-uri proprii ---'), None))
+        self._intrari.append((_('--- Adrese proprii ---'), None))
         for i, url in enumerate(self._config.get('url_uri', [])):
             # adresa intreaga: un rand care nu incape deruleaza (lib/gui/elabel.h)
-            self._intrari.append(('[URL] ' + url, ('url', i)))
+            self._intrari.append(('  ' + url, ('url', i)))
 
     def _reactualizeaza(self):
         """Reconstruieste lista si actualizeaza starea."""
@@ -622,9 +622,14 @@ class HdsDvbIAvansat(Screen):
             if S.comutaPredefinita(self._config, valoare):
                 self._reactualizeaza()
         elif tip == 'url':
-            # OK pe o adresa proprie o sterge
-            if S.stergeUrl(self._config, valoare) is not None:
-                self._reactualizeaza()
+            # OK pe o adresa proprie o sterge, dupa o intrebare cu Nu ales dinainte (ca pagina web /dvb-i)
+            from Screens.MessageBox import MessageBox
+            self.session.openWithCallback(lambda da, i=valoare: self._stergeUrl(i, da), MessageBox,
+                _('Ștergi adresa din listele DVB-I?') + '\n' + selectat[0].strip(), MessageBox.TYPE_YESNO, default=False)
+
+    def _stergeUrl(self, index, da):
+        if da and S.stergeUrl(self._config, index) is not None:
+            self._reactualizeaza()
 
     def toggle_activ(self):
         S.comutaActiv(self._config)
@@ -641,7 +646,8 @@ class HdsDvbIAvansat(Screen):
         try:
             _scrie_config(self._config)
             S.reincarca()
-            self['stare'].setText(_('Se reîncarcă... (verifică bouquet DVB-I în câteva secunde)'))
+            self['stare'].setText(_('Se reîncarcă... Canalele apar în câteva secunde în buchetul Canale de pe '
+                'internet (DVB-I).'))
         except Exception as e:
             self['stare'].setText(_('Eroare: %s') % e)
 

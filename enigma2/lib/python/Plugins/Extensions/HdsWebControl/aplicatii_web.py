@@ -3581,10 +3581,9 @@ def rute(resource, NOT_DONE_YET, L, M=None):
 # ---------------------------------------------------------------- setarile (ecranul de pe televizor si /setari)
 
 def stareSetari(activ, afara=False):
-	"""Pentru GET /api/interfata-web: cele doua setari, parola (numai cand aplicatiile sunt pornite) si aplicatiile
-	vazute."""
-	return {"aplicatii": bool(activ), "aplicatii_afara": bool(afara),
-		"parola_aplicatii": parola(creeaza=True) if activ else "", "aplicatii_vazute": vazute() if activ else []}
+	"""Pentru GET /api/interfata-web: cele doua setari si aplicatiile vazute. Parola pentru aplicatii NU: e ascunsa
+	(puncte) si o da numai POST /api/interfata-web-secrete?ce=parola, la butonul "Arată" (plugin.py)."""
+	return {"aplicatii": bool(activ), "aplicatii_afara": bool(afara), "aplicatii_vazute": vazute() if activ else []}
 
 
 def seteaza(cheie, text, aplicatii, afara, salveaza, cod_acasa=False):
@@ -3602,15 +3601,17 @@ def seteaza(cheie, text, aplicatii, afara, salveaza, cod_acasa=False):
 	if element is afara:
 		_jurnal("accesul aplicatiilor din afara casei: %s (din web)" % ("pornit" if element.value else "oprit"))
 		if element.value:
-			mesaj = _t("Salvat. Din afara casei, aplicațiile intră numai cu utilizatorul root și parola %s.")
-			mesaj = mesaj % parola(creeaza=True)
+			parola(creeaza=True)
+			mesaj = _t("Salvat. Din afara casei, aplicațiile intră numai cu utilizatorul root și parola pentru "
+				"aplicații (butonul Arată).")
 		else:
 			mesaj = _t("Salvat. Din afara casei, receptorul nu mai răspunde aplicațiilor.")
 	else:
 		_jurnal("aplicatiile de telefon: %s (din web)" % ("pornite" if element.value else "oprite"))
 		if element.value and cod_acasa:
+			parola(creeaza=True)
 			mesaj = _t("Salvat. Codul se cere și în casă, deci aplicațiile de telefon intră și de acasă numai cu "
-				"utilizatorul root și parola %s.") % parola(creeaza=True)
+				"utilizatorul root și parola pentru aplicații (butonul Arată).")
 		elif element.value:
 			mesaj = _t("Salvat. Aplicațiile de telefon din casă intră fără parolă: în aplicație scrii numai adresa "
 				"receptorului.")
@@ -3622,9 +3623,9 @@ def seteaza(cheie, text, aplicatii, afara, salveaza, cod_acasa=False):
 
 
 def parolaNouaWeb(activ, afara=False):
-	"""POST /api/interfata-web-seteaza?parola_aplicatii_noua=1."""
-	p = parolaNoua()
-	rez = {"result": True, "message": _t("Parola nouă pentru aplicații: %s. Scrie-o în aplicațiile pe care le "
-		"folosești din afara casei.") % p}
+	"""POST /api/interfata-web-seteaza?parola_aplicatii_noua=1. Raspunsul nu are parola noua (o arata butonul "Arată")."""
+	parolaNoua()
+	rez = {"result": True, "message": _t("Parola nouă pentru aplicații e făcută. O vezi cu butonul Arată; scrie-o în "
+		"aplicațiile pe care le folosești din afara casei.")}
 	rez.update(stareSetari(activ, afara))
 	return rez

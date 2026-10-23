@@ -565,7 +565,7 @@ ETICHETE = {
 	"ADAUGA": N_("Adaugă la favorite"),
 	"FARA_FAV": N_("Nu ai pagini favorite."),
 	"DATE": N_("Datele de navigare"),
-	"DATE_NOTA": N_("Cookie-urile, datele siturilor și mărirea ținută minte pe fiecare sit. Favoritele rămân."),
+	"DATE_NOTA": N_("Cookie-urile, datele site-urilor și mărirea ținută minte pe fiecare site. Favoritele rămân."),
 	"STERGE_DATE": N_("Șterge datele de navigare"),
 	"HBBTV": N_("HbbTV"),
 	"HBBTV_NOTA": N_("Aplicațiile HbbTV ale canalelor pornesc cu ROȘU sau Portal pe canal. Datele lor (cookie-urile, alegerea din fereastra de consimțământ) sunt separate de ale navigatorului."),

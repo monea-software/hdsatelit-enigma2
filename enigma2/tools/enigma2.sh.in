@@ -45,7 +45,13 @@ fi
 # is never kept), the box type of the driver and the BOX_TYPE of the label at 0x3F6000 of deviceinfo. That label is
 # written by showiframe of the image that ran before, from the box type of its driver: on a receiver of another type
 # it still names that type at the first start of this image, so a BOX_TYPE that is there and differs from the rules is
-# a mismatch; a missing label decides nothing and its UPD_PATH (the model name) is only shown.
+# a mismatch; a missing label decides nothing and its UPD_PATH (the model name) is only shown. The size of the internal
+# memory (the whole mmcblk0 disk in /proc/partitions) tells an Amiko Viper 4K V30 (8 GB) from a V20 (4 GB, 3837952 KiB):
+# same chip, board, box type and partitions. Its limits come from the rules (emmc_min_kib=, emmc_max_kib=, KiB) or,
+# for rules without them (every V20 receiver today: the rules come with the image, not with an update), from the
+# machine: viper4kv20 at most 5 GiB (5242880 KiB). It decides on both tiers. A disk line that is not there decides
+# nothing (as a missing label): /proc/partitions of a real receiver always lists it, and an unreadable one already
+# fails on the kernel partition.
 # On a mismatch, or when a value cannot be read, the hook of the flash kit is skipped and enigma2 starts to show only
 # the message. showiframe (it brings up HDMI and the remote) starts only when it is known not to write: see below.
 # The verdict goes to a state file in RAM, computed once per boot; enigma2 and the web interface read it. Without the
@@ -157,6 +163,14 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					lt = substr(et, RSTART + 9, RLENGTH - 9); gsub(/[\047"]/, "", lt)
 				}
 				if (lt != "" && !(lt in TT)) m = m " eticheta"
+				# the internal memory: the same limits as HdsPazaModel.limiteEmmc (EMMC_IMPLICIT for viper4kv20)
+				ek = ("mmcblk0" in S) ? S["mmcblk0"] : ""
+				emi = (R["emmc_min_kib"] ~ /^[0-9]+$/) ? R["emmc_min_kib"] : ""
+				ema = (R["emmc_max_kib"] ~ /^[0-9]+$/) ? R["emmc_max_kib"] : ""
+				if (emi == "" && ema == "" && R["machinebuild"] == "viper4kv20") ema = 5242880
+				if (bune && (emi != "" || ema != "")) {
+					if (ek != "" && ((ema != "" && ek + 0 > ema + 0) || (emi != "" && ek + 0 < emi + 0))) m = m " emmc"
+				}
 				print "stare=" (m == "" ? "potrivit" : "nepotrivit")
 				print "nepotriviri=" substr(m, 2)
 				print "treapta=" (t2 ? 2 : 1)
@@ -167,6 +181,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				print "kernel=" (kp == "" ? "" : kp " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
 				print "boxtype=" bt
 				print "eticheta=" et
+				print "emmc=" ek
 			}' "$HDS_PAZA_REGULI" "$hds_pp" > "$HDS_PAZA_STARE.nou" 2>/dev/null
 		mv -f "$HDS_PAZA_STARE.nou" "$HDS_PAZA_STARE" 2>/dev/null
 	fi

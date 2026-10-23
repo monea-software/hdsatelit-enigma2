@@ -197,7 +197,7 @@ def randuri(s):
 			_("Dacă VPN-ul cade, receptorul nu mai iese în internet până revine. Rețeaua din casă merge.")))
 	r.append(("%s: %s" % (_("Pornește odată cu receptorul"), _da(s["la_pornire"])), LA_PORNIRE,
 		_("VPN-ul pornește singur după fiecare pornire a receptorului, dacă era pornit.")))
-	r.append((_("Verifică adresa văzută pe internet"), IP, _("Află adresa IP și țara pe care le văd siturile acum.")))
+	r.append((_("Verifică adresa văzută pe internet"), IP, _("Află adresa IP și țara pe care le văd site-urile acum.")))
 	if s["profil"]:
 		r.append((_("Șterge serverul ales"), STERGE, _("Șterge de pe receptor fișierul serverului %s.") % s["profil"]["titlu"]))
 	if s["nr_profiluri"]:

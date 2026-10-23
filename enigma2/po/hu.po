@@ -16555,11 +16555,11 @@ msgid "OK: lista paginilor favorite."
 msgstr "OK: a kedvenc oldalak listája."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "OK: șterge istoricul, cookie-urile, datele siturilor și mărirea ținută minte."
+msgid "OK: șterge istoricul, cookie-urile, datele site-urilor și mărirea ținută minte."
 msgstr "OK: törli az előzményeket, a sütiket, a webhelyadatokat és a megjegyzett nagyítást."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele siturilor și mărirea ținută minte. Favoritele rămân."
+msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele site-urilor și mărirea ținută minte. Favoritele rămân."
 msgstr "Törlöd a böngészési adatokat? Törlődnek a sütik, a webhelyadatok és a megjegyzett nagyítás. A kedvencek megmaradnak."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
@@ -16591,7 +16591,7 @@ msgid "Pagina care se deschide când pornești navigatorul din meniu."
 msgstr "Az oldal, amely a böngésző menüből való indításakor nyílik meg."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare sit."
+msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare site."
 msgstr "Automatikus: a képernyőnél szélesebb oldal kicsinyítődik, amíg elfér. A sárga gomb a böngészőben nagyít, és minden webhelyen megjegyzi a nagyítást."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -16813,7 +16813,7 @@ msgid "Datele de navigare"
 msgstr "Böngészési adatok"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
-msgid "Cookie-urile, datele siturilor și mărirea ținută minte pe fiecare sit. Favoritele rămân."
+msgid "Cookie-urile, datele site-urilor și mărirea ținută minte pe fiecare site. Favoritele rămân."
 msgstr "A sütik, a webhelyadatok és a webhelyenként megjegyzett nagyítás. A kedvencek megmaradnak."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
@@ -27867,7 +27867,7 @@ msgid "Rapidă"
 msgstr "Gyors"
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Un chenar arată elementul ales în pagină, chiar dacă situl îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
+msgid "Un chenar arată elementul ales în pagină, chiar dacă site-ul îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
 msgstr "Egy keret mutatja a kiválasztott elemet az oldalon, akkor is, ha a webhely elrejti. A színét, alakját, vastagságát és lüktetését lejjebb választhatod ki."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -28106,7 +28106,7 @@ msgstr "Kérdésekkel: %s"
 
 #: lib/python/Components/HdsFunctii.py
 #, python-format
-msgid "Situl: %s"
+msgid "Site-ul: %s"
 msgstr "Weboldal: %s"
 
 #: lib/python/Components/HdsFunctii.py
@@ -32399,7 +32399,7 @@ msgid "Adrese care nu sunt bune: %s"
 msgstr "Nem jó címek: %s"
 
 #: lib/python/Screens/HdsVpn.py
-msgid "Află adresa IP și țara pe care le văd siturile acum."
+msgid "Află adresa IP și țara pe care le văd site-urile acum."
 msgstr "Megmutatja az IP-címet és az országot, amelyet a webhelyek most látnak."
 
 #: lib/python/Screens/HdsVpn.py
@@ -32431,7 +32431,7 @@ msgid "Alege întâi un server."
 msgstr "Először válassz egy szervert."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py
-msgid "Alte adrese (nume de situri sau adrese IP, câte una pe rând)"
+msgid "Alte adrese (nume de site-uri sau adrese IP, câte una pe rând)"
 msgstr "További címek (webhelynevek vagy IP-címek, soronként egy)"
 
 #: lib/python/Components/HdsVpn.py
@@ -50258,3 +50258,114 @@ msgstr "Az őrszem csak akkor indítja újra a felületet, ha az nem ad életjel
 #: lib/python/Screens/Information.py
 msgid "Prag"
 msgstr "Határ"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "--- Adrese proprii ---"
+msgstr "--- Saját címek ---"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată cheia"
+msgstr "Kulcs megjelenítése"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată parola"
+msgstr "Jelszó megjelenítése"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Arată parola și cheia"
+msgstr "Jelszó és kulcs megjelenítése"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde cheia"
+msgstr "Kulcs elrejtése"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde parola"
+msgstr "Jelszó elrejtése"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Ascunde parola și cheia"
+msgstr "Jelszó és kulcs elrejtése"
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Canalul pornește imediat."
+msgstr "A csatorna azonnal indul."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă."
+msgstr "Szkriptekből: add hozzá a <code>token=&lt;cheie&gt;</code> paramétert a fenti bármelyik címhez (GET vagy POST). A szkriptekhez való kulcs rejtve van, és csak kérésre látszik: a vevőn, a webes felület képernyőjén (Kék, További lehetőségek, Jelszó és kulcs megjelenítése), vagy a Webes felület oldalon (Megjelenítés gomb). Ugyanott új kulcs is készíthető."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată cheia o arată întreagă."
+msgstr "Csak programozóknak. A szokásos böngészőnek nincs rá szüksége. A kulcs rejtve van: a Kulcs megjelenítése gomb teljesen megmutatja."
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Filmul pornește imediat."
+msgstr "A film azonnal indul."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Memoria internă (eMMC)"
+msgstr "Belső memória (eMMC)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Parola nouă pentru aplicații e făcută. O vezi cu butonul Arată; scrie-o în aplicațiile pe care le folosești din afara casei."
+msgstr "Az új alkalmazásjelszó elkészült. A Megjelenítés gombbal látod; írd be azokba az alkalmazásokba, amelyeket otthonon kívülről használsz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Parola și cheia se văd numai dintr-un browser."
+msgstr "A jelszó és a kulcs csak böngészőből látható."
+
+#: lib/python/Screens/PositionerSetup.py
+msgid "Recalculează"
+msgstr "Újraszámolás"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Codul se cere și în casă, deci aplicațiile de telefon intră și de acasă numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Elmentve. A kódot otthon is kéri, ezért a telefonos alkalmazások otthonról is csak a root felhasználóval és az alkalmazásjelszóval lépnek be (Megjelenítés gomb)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Din afara casei, aplicațiile intră numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Elmentve. Otthonon kívülről az alkalmazások csak a root felhasználóval és az alkalmazásjelszóval lépnek be (Megjelenítés gomb)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Se cere cu ce=parola sau ce=cheie."
+msgstr "ce=parola vagy ce=cheie értékkel kérhető."
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "Se reîncarcă... Canalele apar în câteva secunde în buchetul Canale de pe internet (DVB-I)."
+msgstr "Újratöltés... A csatornák néhány másodperc múlva megjelennek az Internetes csatornák (DVB-I) csokorban."
+
+#: lib/python/Screens/Information.py
+msgid "Ultima eliberare"
+msgstr "Utolsó felszabadítás"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "cel mult %s"
+msgstr "legfeljebb %s"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "pentru un film"
+msgstr "egy film miatt"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mare"
+msgstr "nagyobb belső memóriájú vevő"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mare (de exemplu %s)"
+msgstr "nagyobb belső memóriájú vevő (például %s)"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mică"
+msgstr "kisebb belső memóriájú vevő"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mică (de exemplu %s)"
+msgstr "kisebb belső memóriájú vevő (például %s)"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "în standby"
+msgstr "készenlétben"

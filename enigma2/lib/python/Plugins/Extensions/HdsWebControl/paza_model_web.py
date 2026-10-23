@@ -85,6 +85,9 @@ def stare(M=None, radacina=None, cale_stare=None):
 	amprenta = []
 	if v["stare"] != M.STARE_NU_SE_APLICA:
 		for cheie in M.CHEI_AMPRENTA:
+			if cheie == "emmc" and M.limiteEmmc(reguli) is None:
+				# memoria interna se verifica numai la modelele care au limite (V20 fata de V30)
+				continue
 			gasit = nep[cheie] if cheie in nep else avert[cheie] if cheie in avert else M.valoareGasita(a_verdict, cheie)
 			if not gasit:
 				gasit = _t("lipsește (nu se verifică)") if cheie == "eticheta" else _t("nu s-a putut citi")

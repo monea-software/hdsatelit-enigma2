@@ -54,10 +54,11 @@ class ParentalControlSetup(Screen, ConfigListScreen, ProtectedScreen):
 		ConfigListScreen.__init__(self, self.list, session = self.session, on_change = self.changedEntry)
 		self.createSetup()
 		
+		# HDSatelit: ROSU ("Anulare") si EXIT (cancel) anuleaza, VERDE (save) salveaza; inainte toate trei salvau
 		self["actions"] = NumberActionMap(["SetupActions"],
 		{
 		  "cancel": self.keyCancel,
-		  "save": self.keyCancel
+		  "save": self.keySave
 		}, -2)
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("OK"))
@@ -156,19 +157,34 @@ class ParentalControlSetup(Screen, ConfigListScreen, ProtectedScreen):
 			self.session.openWithCallback(self.cancelCB, ParentalControlChangePin, config.ParentalControl.setuppin, _("setup PIN"))
 		else:
 			config.ParentalControl.setuppinactive.value = False
-			self.keyCancel()
+			self.keySave()
 
 	def ServicePinMessageCallback(self, value):
 		if value:
 			self.session.openWithCallback(self.cancelCB, ParentalControlChangePin, config.ParentalControl.servicepin[0], _("service PIN"))
 		else:
 			config.ParentalControl.servicepinactive.value = False
-			self.keyCancel()
+			self.keySave()
 
 	def cancelCB(self,value):
-		self.keyCancel()
+		self.keySave()
+
+	# randurile ecranului care tin o setare (si cele ascunse intre timp de "Enable parental control")
+	RANDURI_SETARI = ("configured", "setuppinactive", "servicepinactive", "type", "storeservicepin",
+		"storeservicepincancel", "mode")
 
 	def keyCancel(self):
+		"""ROSU si EXIT: setarile ecranului se intorc la cele salvate. PIN-urile se schimba (si se salveaza) in ecranul
+		lor, cu OK acolo."""
+		for nume in self.RANDURI_SETARI:
+			element = getattr(config.ParentalControl, nume, None)
+			if element is not None and hasattr(element, "cancel"):
+				element.cancel()
+		for x in self["config"].list:
+			x[1].cancel()
+		self.close()
+
+	def keySave(self):
 		if config.ParentalControl.setuppinactive.value and HdsControlParental.pinLipsa(config.ParentalControl, "setuppinactive"):
 			self.session.openWithCallback(self.SetupPinMessageCallback, MessageBox, _("No valid setup PIN found!\nDo you like to change the setup PIN now?\nWhen you say 'No' here the setup protection stay disabled!"), MessageBox.TYPE_YESNO)
 		elif config.ParentalControl.servicepinactive.value and HdsControlParental.pinLipsa(config.ParentalControl, "servicepinactive"):

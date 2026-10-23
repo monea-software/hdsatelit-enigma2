@@ -16518,11 +16518,11 @@ msgid "OK: lista paginilor favorite."
 msgstr "OK: sık kullanılan sayfaların listesi."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "OK: șterge istoricul, cookie-urile, datele siturilor și mărirea ținută minte."
+msgid "OK: șterge istoricul, cookie-urile, datele site-urilor și mărirea ținută minte."
 msgstr "OK: geçmişi, çerezleri, site verilerini ve hatırlanan yakınlaştırmayı siler."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
-msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele siturilor și mărirea ținută minte. Favoritele rămân."
+msgid "Ștergi datele de navigare? Se șterg cookie-urile, datele site-urilor și mărirea ținută minte. Favoritele rămân."
 msgstr "Tarama verileri silinsin mi? Çerezler, site verileri ve hatırlanan yakınlaştırma silinir. Sık kullanılanlar kalır."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
@@ -16554,7 +16554,7 @@ msgid "Pagina care se deschide când pornești navigatorul din meniu."
 msgstr "Tarayıcıyı menüden başlattığında açılan sayfa."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare sit."
+msgid "Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare site."
 msgstr "Otomatik: ekrandan geniş bir sayfa sığana kadar küçültülür. Tarayıcıda sarı düğme sayfayı büyütür ve her site için yakınlaştırmayı hatırlar."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -16776,7 +16776,7 @@ msgid "Datele de navigare"
 msgstr "Tarama verileri"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
-msgid "Cookie-urile, datele siturilor și mărirea ținută minte pe fiecare sit. Favoritele rămân."
+msgid "Cookie-urile, datele site-urilor și mărirea ținută minte pe fiecare site. Favoritele rămân."
 msgstr "Çerezler, site verileri ve her site için hatırlanan yakınlaştırma. Sık kullanılanlar kalır."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
@@ -27829,7 +27829,7 @@ msgid "Rapidă"
 msgstr "Hızlı"
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
-msgid "Un chenar arată elementul ales în pagină, chiar dacă situl îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
+msgid "Un chenar arată elementul ales în pagină, chiar dacă site-ul îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."
 msgstr "Bir çerçeve, site gizlese bile sayfada seçilen öğeyi gösterir. Rengini, biçimini, kalınlığını ve yanıp sönmesini aşağıda seçebilirsin."
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
@@ -28068,7 +28068,7 @@ msgstr "Sorular için: %s"
 
 #: lib/python/Components/HdsFunctii.py
 #, python-format
-msgid "Situl: %s"
+msgid "Site-ul: %s"
 msgstr "Web sitesi: %s"
 
 #: lib/python/Components/HdsFunctii.py
@@ -32360,7 +32360,7 @@ msgid "Adrese care nu sunt bune: %s"
 msgstr "Geçerli olmayan adresler: %s"
 
 #: lib/python/Screens/HdsVpn.py
-msgid "Află adresa IP și țara pe care le văd siturile acum."
+msgid "Află adresa IP și țara pe care le văd site-urile acum."
 msgstr "Sitelerin şu anda gördüğü IP adresini ve ülkeyi bulur."
 
 #: lib/python/Screens/HdsVpn.py
@@ -32392,7 +32392,7 @@ msgid "Alege întâi un server."
 msgstr "Önce bir sunucu seç."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py
-msgid "Alte adrese (nume de situri sau adrese IP, câte una pe rând)"
+msgid "Alte adrese (nume de site-uri sau adrese IP, câte una pe rând)"
 msgstr "Diğer adresler (site adları veya IP adresleri, satır başına bir)"
 
 #: lib/python/Components/HdsVpn.py
@@ -52209,3 +52209,114 @@ msgstr "Bekçi, arayüzü yalnızca artık yaşam belirtisi göstermediğinde ve
 #: lib/python/Screens/Information.py
 msgid "Prag"
 msgstr "Sınır"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "--- Adrese proprii ---"
+msgstr "--- Kendi adreslerin ---"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată cheia"
+msgstr "Anahtarı göster"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Arată parola"
+msgstr "Parolayı göster"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Arată parola și cheia"
+msgstr "Parolayı ve anahtarı göster"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde cheia"
+msgstr "Anahtarı gizle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Ascunde parola"
+msgstr "Parolayı gizle"
+
+#: lib/python/Screens/HdsWebControlSetup.py
+msgid "Ascunde parola și cheia"
+msgstr "Parolayı ve anahtarı gizle"
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Canalul pornește imediat."
+msgstr "Kanal birazdan başlıyor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă."
+msgstr "Betiklerden: yukarıdaki herhangi bir adrese <code>token=&lt;cheie&gt;</code> parametresini ekle (GET veya POST). Betik anahtarı gizlidir ve yalnızca istenince görünür: alıcıda, web arayüzü ekranında (Mavi, Diğer seçenekler, Parolayı ve anahtarı göster), ya da Web arayüzü sayfasında (Göster düğmesi). Yeni bir anahtar da orada oluşturulabilir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată cheia o arată întreagă."
+msgstr "Yalnızca programcılar için. Normal tarayıcının buna ihtiyacı yok. Anahtar gizli: Anahtarı göster düğmesi onu tamamen gösterir."
+
+#: lib/python/Components/HdsFilmRedare.py
+msgid "Filmul pornește imediat."
+msgstr "Film birazdan başlıyor."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Memoria internă (eMMC)"
+msgstr "Dahili bellek (eMMC)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Parola nouă pentru aplicații e făcută. O vezi cu butonul Arată; scrie-o în aplicațiile pe care le folosești din afara casei."
+msgstr "Uygulamalar için yeni parola oluşturuldu. Göster düğmesiyle görürsün; ev dışından kullandığın uygulamalara bunu yaz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Parola și cheia se văd numai dintr-un browser."
+msgstr "Parola ve anahtar yalnızca bir tarayıcıdan görülebilir."
+
+#: lib/python/Screens/PositionerSetup.py
+msgid "Recalculează"
+msgstr "Yeniden hesapla"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Codul se cere și în casă, deci aplicațiile de telefon intră și de acasă numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Kaydedildi. Kod evde de isteniyor, bu yüzden telefon uygulamaları evden de yalnızca kullanıcı root ve uygulama parolası ile girer (Göster düğmesi)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Salvat. Din afara casei, aplicațiile intră numai cu utilizatorul root și parola pentru aplicații (butonul Arată)."
+msgstr "Kaydedildi. Ev dışından uygulamalar yalnızca kullanıcı root ve uygulama parolası ile girer (Göster düğmesi)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Se cere cu ce=parola sau ce=cheie."
+msgstr "ce=parola veya ce=cheie ile istenir."
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "Se reîncarcă... Canalele apar în câteva secunde în buchetul Canale de pe internet (DVB-I)."
+msgstr "Yeniden yükleniyor... Kanallar birkaç saniye içinde İnternet kanalları (DVB-I) buketinde görünür."
+
+#: lib/python/Screens/Information.py
+msgid "Ultima eliberare"
+msgstr "Son boşaltma"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "cel mult %s"
+msgstr "en fazla %s"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "pentru un film"
+msgstr "bir film için"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mare"
+msgstr "daha büyük dahili belleğe sahip bir alıcı"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mare (de exemplu %s)"
+msgstr "daha büyük dahili belleğe sahip bir alıcı (örneğin %s)"
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "un receptor cu memoria internă mai mică"
+msgstr "daha küçük dahili belleğe sahip bir alıcı"
+
+#: lib/python/Components/HdsPazaModel.py
+#, python-format
+msgid "un receptor cu memoria internă mai mică (de exemplu %s)"
+msgstr "daha küçük dahili belleğe sahip bir alıcı (örneğin %s)"
+
+#: lib/python/Components/HdsMemorieDriver.py
+msgid "în standby"
+msgstr "hazırda beklet durumunda"

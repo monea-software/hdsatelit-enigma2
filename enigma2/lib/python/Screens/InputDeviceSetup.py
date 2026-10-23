@@ -189,14 +189,13 @@ class InputDeviceSetup(Screen, ConfigListScreen):
 
 	def createSetup(self):
 		self.list = [ ]
-		cmd = "self.enableEntry = getConfigListEntry(_('"'Change repeat and delay settings?'"'), config.inputDevices." + self.inputDevice + ".enabled)"
-		exec (cmd)
-		cmd = "self.repeatEntry = getConfigListEntry(_('"'Interval between keys when repeating:'"'), config.inputDevices." + self.inputDevice + ".repeat)"
-		exec (cmd)
-		cmd = "self.delayEntry = getConfigListEntry(_('"'Delay before key repeat starts:'"'), config.inputDevices." + self.inputDevice + ".delay)"
-		exec (cmd)
-		cmd = "self.nameEntry = getConfigListEntry(_('"'Devicename:'"'), config.inputDevices." + self.inputDevice + ".name)"
-		exec (cmd)
+		# HDSatelit: aceleasi texte ca in pagina web /dispozitive-intrare (traduse in 13 limbi). Inainte erau in englezeste,
+		# in siruri date lui exec, deci xgettext nu le vedea si ecranul le arata netraduse, in orice limba.
+		s = getattr(config.inputDevices, self.inputDevice)
+		self.enableEntry = getConfigListEntry(_("Schimbi intervalul și întârzierea repetării?"), s.enabled)
+		self.repeatEntry = getConfigListEntry(_("Intervalul dintre taste la repetare"), s.repeat)
+		self.delayEntry = getConfigListEntry(_("Întârzierea până începe repetarea"), s.delay)
+		self.nameEntry = getConfigListEntry(_("Numele"), s.name)
 		if self.enableEntry:
 			if isinstance(self.enableEntry[1], ConfigYesNo):
 				self.enableConfigEntry = self.enableEntry[1]

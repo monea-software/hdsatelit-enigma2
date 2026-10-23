@@ -16,9 +16,11 @@
 #                   Logica si verificarea textelor: Components/HdsIptvSurse (aceleasi pe televizor).
 #   /interfata-web  Interfata web (Screens/HdsWebControlSetup.py): pornirea si portul (oprirea si mutarea cu confirmare
 #                   si avertismentul ca pagina se pierde sau se muta), browserele conectate (deconectarea, cod nou pe
-#                   televizor, cu confirmare), cheia pentru scripturi (numai inceputul ei; tasta Cheie noua pentru
+#                   televizor, cu confirmare), cheia pentru scripturi (ascunsa, puncte; butonul Arata cheia o cere
+#                   intreaga prin POST /api/interfata-web-secrete?ce=cheie, din plugin.py; tasta Cheie noua pentru
 #                   panoul web cu confirmare: cheie noua si toate aparatele asociate deconectate, in afara de browserul
-#                   care cere, ca pe televizor, cheieNouaPanou).
+#                   care cere, ca pe televizor, cheieNouaPanou). Parola pentru aplicatii la fel: puncte pana la butonul
+#                   Arata parola (?ce=parola); nici HTML-ul, nici GET-urile paginii nu au parola sau cheia.
 #                   Randurile cod_retea_locala, aplicatii, aplicatii_afara si parola pentru aplicatii merg
 #                   prin rutele care exista deja (plugin.py: /api/interfata-web, /api/interfata-web-seteaza).
 #
@@ -36,7 +38,7 @@
 #                                   xtream_user; xtream_parola (numai din corp); sterge=xtream_parola
 #   POST /api/iptv-adauga           [m3u_cale=...] adauga sursa M3U, ca Galben pe televizor
 #   POST /api/iptv-sterge           index=N, in doi pasi
-#   GET  /api/interfata-web-detalii pornirea, portul, browserele, inceputul cheii
+#   GET  /api/interfata-web-detalii pornirea, portul, browserele (fara cheie)
 #   POST /api/interfata-web-actiune fapta=activ&valoare=0|1 | fapta=port&valoare=N | fapta=deconecteaza |
 #                                   fapta=cheie | fapta=browser_nou; cele periculoase in doi pasi
 #   GET  /dvb-i, /mabr, /iptv, /interfata-web   paginile
@@ -632,8 +634,7 @@ def stareInterfataWeb(P=None):
 	P = _plugin(P)
 	c = _cfgWeb(P)
 	return {"result": True, "activ": bool(c.activ.value), "port": int(c.port.value), "port_folosit": int(P.portFolosit()),
-		"adresa": P.adresaWeb() or "", "port_min": PORT_MIN, "port_max": PORT_MAX, "browsere": _browsere(P),
-		"cheie_inceput": inceputCheie(str(c.token.value or ""))}
+		"adresa": P.adresaWeb() or "", "port_min": PORT_MIN, "port_max": PORT_MAX, "browsere": _browsere(P)}
 
 
 def _salveazaElement(el, valoare, configfile=None):
@@ -1403,7 +1404,8 @@ PAGINA_INTERFATA_WEB = "<!DOCTYPE html>" + _CAP + "Interfața web" + _STIL + """
     <div class="rand"><label for="aplicatiiAfara">Acces din afara casei</label>
       <select id="aplicatiiAfara"><option value="0">Nu</option><option value="1">Da</option></select></div>
     <p class="nota" id="aplicatiiNota"></p>
-    <div class="butoane"><button type="button" class="ascuns" id="parolaAplicatii">Parolă nouă pentru aplicații</button></div>
+    <div class="butoane"><button type="button" class="ascuns" id="arataParola">Arată parola</button>
+      <button type="button" class="ascuns" id="parolaAplicatii">Parolă nouă pentru aplicații</button></div>
   </section>
   <section class="card">
     <h2>Browsere conectate</h2>
@@ -1413,13 +1415,14 @@ PAGINA_INTERFATA_WEB = "<!DOCTYPE html>" + _CAP + "Interfața web" + _STIL + """
   </section>
   <section class="card">
     <h2>Cheia pentru scripturi</h2>
-    <div class="status-linie"><span>Începe cu</span><span id="cheie"></span></div>
-    <p class="nota">Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia întreagă se vede pe televizor, în ecranul interfeței web.</p>
-    <div class="butoane"><button type="button" class="rosu" id="cheieNoua">Cheie nouă pentru panoul web</button></div>
+    <div class="status-linie"><span>Cheia</span><span id="cheie"></span></div>
+    <p class="nota">Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată cheia o arată întreagă.</p>
+    <div class="butoane"><button type="button" id="arataCheie">Arată cheia</button>
+      <button type="button" class="rosu" id="cheieNoua">Cheie nouă pentru panoul web</button></div>
   </section>
   <p class="nota">Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în pagina Setări.</p>
 </div>
-""" + _COADA + """var D = null;
+""" + _COADA + """var D = null, A = null, PAROLA = "", CHEIE = "", PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 function data(t){ return t ? new Date(t * 1000).toLocaleDateString("ro-RO") : ""; }
 function arata(d){
   D = d;
@@ -1433,13 +1436,15 @@ function arata(d){
     return rand(t);
   });
   pune("browsere", b.length ? b : [gol("Niciun browser conectat cu cod.")]);
-  $("cheie").textContent = d.cheie_inceput;
+  $("cheie").textContent = CHEIE || PUNCTE;
+  $("arataCheie").textContent = CHEIE ? "Ascunde cheia" : "Arată cheia";
 }
 function arataAcces(a){
   $("codRetea").value = a.cod_retea_locala ? "1" : "0";
   $("aplicatii").value = a.aplicatii ? "1" : "0";
   $("aplicatiiAfara").value = a.aplicatii_afara ? "1" : "0";
-  var p = a.parola_aplicatii || "", t = [];
+  A = a;
+  var p = PAROLA || PUNCTE, t = [];
   if(a.aplicatii){
     t.push(a.cod_retea_locala ? "Aplicații de telefon: și acasă scrii utilizatorul root și parola " + p + "." : "Aplicații de telefon: acasă scrii în aplicație numai adresa receptorului, fără utilizator și parolă.");
     t.push(a.aplicatii_afara ? "Din afara casei: utilizatorul root și parola " + p + "." : "Din afara casei: oprit. Pornit, cere utilizatorul root și parola " + p + ".");
@@ -1450,6 +1455,16 @@ function arataAcces(a){
   }
   $("aplicatiiNota").textContent = t.join(" ");
   $("parolaAplicatii").classList.toggle("ascuns", !a.aplicatii);
+  $("arataParola").classList.toggle("ascuns", !a.aplicatii);
+  $("arataParola").textContent = PAROLA ? "Ascunde parola" : "Arată parola";
+}
+// parola pentru aplicatii si cheia pentru scripturi: numai la butoanele Arată (POST /api/interfata-web-secrete)
+function secret(ce, gata){
+  var q = new URLSearchParams(); q.set("ce", ce);
+  cerere("/api/interfata-web-secrete", "POST", q).then(function(d){
+    if(!d.result){ mesaj(d.message, true); return; }
+    gata(d);
+  }).catch(nimicNuRaspunde);
 }
 function citesteAcces(){
   return cerere("/api/interfata-web").then(function(a){ if(a.result){ arataAcces(a); } });
@@ -1489,7 +1504,15 @@ $("schimbaPort").addEventListener("click", function(){ cuConfirmare("/api/interf
 $("parolaAplicatii").addEventListener("click", function(){
   if(!confirm("Faci o parolă nouă pentru aplicații? Din afara casei, aplicațiile care o folosesc pe cea veche nu mai primesc răspuns până nu scrii în ele parola nouă.")){ return; }
   var q = new URLSearchParams(); q.set("parola_aplicatii_noua", "1");
-  cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){ mesaj(d.message, !d.result); citesteAcces(); }).catch(nimicNuRaspunde);
+  cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){ PAROLA = ""; mesaj(d.message, !d.result); citesteAcces(); }).catch(nimicNuRaspunde);
+});
+$("arataParola").addEventListener("click", function(){
+  if(PAROLA){ PAROLA = ""; if(A){ arataAcces(A); } return; }
+  secret("parola", function(d){ PAROLA = d.parola_aplicatii || ""; if(A){ arataAcces(A); } });
+});
+$("arataCheie").addEventListener("click", function(){
+  if(CHEIE){ CHEIE = ""; if(D){ arata(D); } return; }
+  secret("cheie", function(d){ CHEIE = d.cheie || ""; if(D){ arata(D); } });
 });
 $("deconecteaza").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("deconecteaza"), dupa); });
 $("browserNou").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("browser_nou"), dupa); });
@@ -1588,14 +1611,16 @@ TEXTE_PAGINA = {
 		N_("Cere codul și în rețeaua locală"),
 		N_("Aplicații de telefon"),
 		N_("Acces din afara casei"),
+		N_("Arată parola"),
 		N_("Parolă nouă pentru aplicații"),
 		N_("Browsere conectate"),
 		N_("Deconectează browserele"),
 		N_("Conectează un browser nou"),
 		N_("Cheia pentru scripturi"),
-		N_("Începe cu"),
-		N_("Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia întreagă se vede pe "
-			"televizor, în ecranul interfeței web."),
+		N_("Cheia"),
+		N_("Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată "
+			"cheia o arată întreagă."),
+		N_("Arată cheia"),
 		N_("Cheie nouă pentru panoul web"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în "
 			"pagina Setări."),
@@ -1676,6 +1701,10 @@ TEXTE_PAGINA = {
 			"înregistrări) primesc răspuns după ce pornești rândul de mai sus."),
 		N_("Faci o parolă nouă pentru aplicații? Din afara casei, aplicațiile care o folosesc pe cea veche "
 			"nu mai primesc răspuns până nu scrii în ele parola nouă."),
+		N_("Arată parola"),
+		N_("Ascunde parola"),
+		N_("Arată cheia"),
+		N_("Ascunde cheia"),
 	),
 }
 

@@ -79,7 +79,7 @@ class HdsPositionerSetup(Screen, ConfigListScreen):
 	# "config"/"rezultat"/"ghid"/"key_red"/"key_green"). Redenumit `Hds...`, acelasi tipar ca
 	# HdsSoftwareUpdate/TempFanControl/HdsLogManager/HdsButtonSetup.
 	skin = """
-	<screen name="HdsPositionerSetup" resolution="1920,1080" position="center,center" size="1000,560" title="Calculator unghiuri satelit">
+	<screen name="HdsPositionerSetup" resolution="1920,1080" position="center,center" size="1000,560" title="Calculator de unghiuri">
 		<widget name="config" position="30,30" size="940,110" scrollbarMode="showOnDemand" font="Regular;24" secondfont="Regular;16" itemHeight="42" />
 		<widget source="rezultat" render="Label" position="30,160" size="940,120" font="Regular;26" />
 		<widget source="ghid" render="Label" position="30,300" size="940,200" font="Regular;20" />
@@ -91,7 +91,8 @@ class HdsPositionerSetup(Screen, ConfigListScreen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		ConfigListScreen.__init__(self, [], session=session)
-		self.setTitle(_("Calculator unghiuri satelit"))
+		# titlul ca randul din meniu (Calculator de unghiuri, tradus in toate limbile)
+		self.setTitle(_("Calculator de unghiuri"))
 		initConfigPositioner()
 
 		# Lista de sateliti reala, din lamedb/satellites.xml deja incarcat de nimmanager (fara date proprii inventate).
@@ -108,8 +109,8 @@ class HdsPositionerSetup(Screen, ConfigListScreen):
 			"Locul tău e locul antenei, același pentru motorul USALS: OK pe primul rând îl schimbă (țara și orașul "
 			"sau coordonatele). Satelitul se alege cu Galben/Albastru, iar azimutul, elevația și skew-ul se calculează "
 			"pe loc. Ecranul e doar calculator: antena se rotește din Rotirea antenei."))
-		self["key_red"] = StaticText(_("Inapoi"))
-		self["key_green"] = StaticText(_("Recalculeaza"))
+		self["key_red"] = StaticText(_("Înapoi"))
+		self["key_green"] = StaticText(_("Recalculează"))
 
 		self["actiuni"] = ActionMap(
 			["OkCancelActions", "ColorActions"],

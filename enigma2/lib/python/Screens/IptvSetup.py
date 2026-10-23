@@ -254,8 +254,16 @@ class IptvSetup(Screen):
 		self.session.open(IptvDateAcces)
 
 	def _stergeSelectia(self):
+		# dupa o intrebare cu Nu ales dinainte, ca pagina web /iptv (stergerea in doi pasi)
 		index = self["lista"].getSelectionIndex()
-		if stergeSursa(self._surse, index) is not None:
+		if not 0 <= index < len(self._surse):
+			return
+		from Screens.MessageBox import MessageBox
+		self.session.openWithCallback(lambda da, i=index: self._sterge(i, da), MessageBox,
+			_("Ștergi sursa IPTV?") + "\n" + self._randSursa(self._surse[index]), MessageBox.TYPE_YESNO, default=False)
+
+	def _sterge(self, index, da):
+		if da and stergeSursa(self._surse, index) is not None:
 			salveazaSurse(self._surse)
 			self["lista"].setList([self._randSursa(s) for s in self._surse] or [_("Nicio sursă IPTV adăugată încă.")])
 

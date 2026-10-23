@@ -55,7 +55,7 @@ class HdsDvbMABRSetup(Screen):
         self['sesiuni']        = Label(_('Apasă Caută pentru a descoperi sesiuni MABR în rețea.'))
         self['buton_rosu']     = Button(_('Înapoi'))
         self['buton_verde']    = Button(_('Salvează'))
-        self['buton_galben']   = Button(_('Toggle'))
+        self['buton_galben']   = Button(_('Schimbă'))
         self['buton_albastru'] = Button(_('Caută SAP'))
 
         self['tastatura'] = ActionMap(
@@ -118,11 +118,16 @@ class HdsDvbMABRSetup(Screen):
             if S.comuta(self._config, valoare):
                 self._reactualizeaza()
         elif tip == 'grup':
-            # Sterge grupul selectat
-            if S.stergeGrup(self._config, valoare) is not None:
-                self._reactualizeaza()
+            # Sterge grupul selectat, dupa o intrebare cu Nu ales dinainte (ca pagina web /mabr, stergerea in doi pasi)
+            from Screens.MessageBox import MessageBox
+            self.session.openWithCallback(lambda da, i=valoare: self._stergeGrup(i, da), MessageBox,
+                _('Ștergi grupul multicast?') + '\n' + selectat[0].strip(), MessageBox.TYPE_YESNO, default=False)
         elif tip == 'adauga':
             self._deschide_adauga()
+
+    def _stergeGrup(self, index, da):
+        if da and S.stergeGrup(self._config, index) is not None:
+            self._reactualizeaza()
 
     def _deschide_adauga(self):
         """HDSatelit: era doar un mesaj de stare, autorul

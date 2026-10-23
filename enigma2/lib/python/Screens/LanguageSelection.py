@@ -65,6 +65,9 @@ class LanguageSelection(Screen):
 		self.close()
 
 	def cancel(self):
+		# HDSatelit: EXIT anuleaza si limba salvata: mutarea cursorului o schimba numai in memorie (run, justlocal), deci
+		# fara asta limba pe care a stat cursorul ultima data se scria la iesirea enigma2 si venea la pornirea urmatoare
+		config.osd.language.cancel()
 		language.activateLanguage(self.oldActiveLanguage)
 		self.close()
 
@@ -72,15 +75,19 @@ class LanguageSelection(Screen):
 		print("updating language...")
 		lang = self["languages"].getCurrent()[0]
 		config.osd.language.value = lang
-		config.osd.language.save()
 		self.setTitle(_cached("T2"))
 		
 		if justlocal:
 			return
 
+		config.osd.language.save()
+
 		language.activateLanguage(lang)
 		config.misc.languageselected.value = 0
 		config.misc.languageselected.save()
+		# ca pagina web (limba_interfata_web): alegerea ramane si dupa o oprire fara iesire curata
+		from Components.config import configfile
+		configfile.save()
 		print("ok")
 
 	def updateList(self):

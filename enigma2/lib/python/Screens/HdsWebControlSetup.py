@@ -35,6 +35,11 @@
 # pentru scripturi spune ce scrii in aplicatie din casa si din afara, parola (facuta acum, prima data) si aplicatiile
 # conectate; Albastru > Alte optiuni > „Parolă nouă pentru aplicații” o schimba. Se aplica imediat, ca randul codului;
 # aceleasi randuri sunt si in web, in caseta „Interfața web” din /setari.
+#
+# Parola pentru aplicatii si cheia pentru scripturi sunt ascunse din fabrica (PUNCTE) la fiecare deschidere a ecranului,
+# ca sa nu ajunga in poze sau filme ale ecranului: Albastru > Alte optiuni > "Arată parola și cheia" le arata,
+# "Ascunde parola și cheia" le ascunde din nou. O parola sau o cheie noua, facuta chiar acum, se arata (omul a cerut-o).
+# In web la fel: butoanele "Arată" din /setari si /interfata-web (POST /api/interfata-web-secrete).
 
 import time
 
@@ -51,6 +56,8 @@ from Plugins.Extensions.HdsWebControl import aplicatii_web
 _BROWSERE_PE_ECRAN = 5
 # cate aplicatii de telefon conectate se scriu pe randul parolei
 _APLICATII_PE_ECRAN = 3
+# in locul parolei si al cheiei, cat nu s-a cerut "Arată parola și cheia"
+PUNCTE = u"\u2022" * 8
 
 
 class HdsWebControlSetup(Screen, ConfigListScreen):
@@ -77,6 +84,8 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		initConfigHdsWebControl()
 
 		self._adresa = adresaWeb()
+		# parola pentru aplicatii si cheia pentru scripturi: ascunse la fiecare deschidere
+		self._arata = False
 		self["ghid"] = StaticText("")
 		self["browsere"] = StaticText("")
 		self["jeton"] = StaticText("")
@@ -168,6 +177,8 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		except Exception as eroare:
 			print("[HdsWebControlSetup] parola pentru aplicatii: %s" % eroare)
 			parola, vazute = "?", []
+		if not self._arata:
+			parola = PUNCTE
 		if config.plugins.hdswebcontrol.cod_retea_locala.value:
 			# cu codul cerut si in casa, aplicatiile cer parola si acasa (aplicatii_web._poarta)
 			randuri = [_("Aplicații de telefon: și acasă scrii utilizatorul root și parola %s (se cere codul și în "
@@ -189,7 +200,15 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		if not raspuns:
 			return
 		aplicatii_web.parolaNoua()
+		# parola noua, ceruta chiar acum: se arata (ca omul s-o scrie in aplicatii)
+		self._arata = True
 		self._actualizeazaAplicatii()
+		self._actualizeazaTextJeton()
+
+	def _comutaArata(self):
+		self._arata = not self._arata
+		self._actualizeazaAplicatii()
+		self._actualizeazaTextJeton()
 
 	# ------------------------------------------------------------------ browserele conectate
 	def _actualizeazaBrowsere(self):
@@ -238,11 +257,13 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 	def _actualizeazaTextJeton(self):
 		# cererile scripturilor catre /api/... au nevoie de aceasta cheie
 		# (parametrul token=); afisata aici ca programatorul s-o poata copia. Browserul obisnuit nu are nevoie de ea.
-		self["jeton"].setText(_("Cheie pentru scripturi (doar pentru programatori): %s") % config.plugins.hdswebcontrol.token.value)
+		cheie = config.plugins.hdswebcontrol.token.value if self._arata else PUNCTE
+		self["jeton"].setText(_("Cheie pentru scripturi (doar pentru programatori): %s") % cheie)
 
 	def _alteOptiuni(self):
 		from Screens.ChoiceBox import ChoiceBox
 		self.session.openWithCallback(self._optiuneAleasa, ChoiceBox, title=_("Alte opțiuni"), list=[
+			(_("Ascunde parola și cheia") if self._arata else _("Arată parola și cheia"), "arata"),
 			(_("Conectează un browser nou"), "browser_nou"),
 			(_("Cheie nouă pentru panoul web"), "cheie"),
 			(_("Parolă nouă pentru aplicații"), "parola_aplicatii"),
@@ -251,7 +272,9 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 	def _optiuneAleasa(self, alegere):
 		if not alegere:
 			return
-		if alegere[1] == "browser_nou":
+		if alegere[1] == "arata":
+			self._comutaArata()
+		elif alegere[1] == "browser_nou":
 			self._conecteazaBrowserNou()
 		elif alegere[1] == "cheie":
 			from Screens.MessageBox import MessageBox
@@ -300,6 +323,9 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		from Plugins.Extensions.HdsWebControl.internet_web import cheieNouaPanou
 		numar = cheieNouaPanou(config, configfile, obtineAsociere())
 		print("[HdsWebControlSetup] cheie noua pentru panoul web; aparate deconectate: %d" % numar)
+		# cheia noua, ceruta chiar acum: se arata
+		self._arata = True
+		self._actualizeazaAplicatii()
 		self._actualizeazaTextJeton()
 		self._actualizeazaBrowsere()
 		from Screens.MessageBox import MessageBox

@@ -1,6 +1,48 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.1",
+   "build": "0061202610232154",
+   "data": "23.10.2026",
+   "intrari": [
+    {
+     "fel": "imbunatatit",
+     "ro": "Filmul sau canalul de pe internet care nu pornea din lipsa memoriei decodorului pornește acum singur: receptorul se repornește o dată și deschide filmul, fără mesaj de eroare.",
+     "en": "A film or internet channel that would not start for lack of decoder memory now starts by itself: the receiver restarts once and opens the film, with no error message."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Informații despre sistem, la Memorie, vezi când s-a eliberat ultima dată memoria decodorului și de ce.",
+     "en": "In System information, under Memory, you see when the decoder memory was last freed and why."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Parola aplicațiilor de telefon și cheia pentru scripturi sunt ascunse pe televizor și în interfața web; le vezi numai când alegi Arată.",
+     "en": "The phone apps password and the key for scripts are hidden on the TV and in the web interface; you see them only when you choose Show."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Software-ul acestui receptor nu mai pornește pe modelul V30, care are aceeași placă, dar mai multă memorie internă: acolo arată numai mesajul că e pentru alt receptor.",
+     "en": "This receiver's software no longer starts on the V30 model, which has the same board but more internal memory: there it only says that it is for another receiver."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Ștergerea unei adrese DVB-I, a unui grup DVB-MABR sau a unei surse IPTV cere acum confirmare, ca în interfața web.",
+     "en": "Deleting a DVB-I address, a DVB-MABR group or an IPTV source now asks for confirmation, as in the web interface."
+    },
+    {
+     "fel": "reparat",
+     "ro": "La Limba interfeței, EXIT păstrează limba de dinainte, nu pe cea pe care a stat cursorul; în Control parental, Roșu (Anulare) chiar anulează.",
+     "en": "In Interface language, EXIT keeps the previous language, not the one the cursor stopped on; in Parental control, Red (Cancel) really cancels."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Texte îndreptate: „site” în loc de „sit”, tastele calculatorului de unghiuri, DVB-MABR, Dispozitive de intrare și felul în care e folosit fiecare tuner, în limba aleasă.",
+     "en": "Texts fixed: “site” instead of “sit” in Romanian, the angle calculator buttons, DVB-MABR, Input devices and how each tuner is used, in your language."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.0",
    "build": "0060202610231500",
    "data": "23.10.2026",

@@ -641,6 +641,19 @@ class HdsReceiverInfo(InformationBase):
 		self["text"].setText(text if text is not None else "\n".join(inainte + l))
 
 
+def _modTuner(nim_obj):
+	"""Cum e folosit tunerul, cu numele alegerii din Setari tuner (ConfigSelection.getText, tradus: "simplu",
+	"activat"...), nu valoarea interna; fara setare, valoarea, iar fara ea "neconfigurat"."""
+	try:
+		from Components.config import config
+		text = config.Nims[nim_obj.slot].configMode.getText()
+		if text:
+			return text
+	except Exception:
+		pass
+	return str(getattr(nim_obj, "config_mode", "") or _("neconfigurat"))
+
+
 class HdsTunerInfo(InformationBase):
 	def __init__(self, session):
 		InformationBase.__init__(self, session, _("Tunere"))
@@ -658,7 +671,7 @@ class HdsTunerInfo(InformationBase):
 			nim_obj = nimmanager.nim_slots[idx] if idx < len(nimmanager.nim_slots) else None
 			if nim_obj:
 				l.append(_rand(_("Semnal"), getattr(nim_obj, "friendly_type", "DVB")))
-				l.append(_rand(_("Folosit ca"), str(getattr(nim_obj, "config_mode", _("neconfigurat")))))
+				l.append(_rand(_("Folosit ca"), _modTuner(nim_obj)))
 				if hasattr(nim_obj, "canBeCompatibleWith") and nim_obj.canBeCompatibleWith("DVB-S2"):
 					l.append(_rand(_("Poate primi"), "DVB-S, DVB-S2, DVB-S2X, multistream"))
 				elif hasattr(nim_obj, "canBeCompatibleWith") and nim_obj.canBeCompatibleWith("DVB-T2"):
@@ -731,6 +744,15 @@ class HdsMemoryInfo(InformationBase):
 			l.append(_("Memoria decodorului:"))
 			l.append(_rand(_("Cea mai mare bucată liberă"), _mb(dec["liber_kb"] // 1024)))
 			l.append(_rand(_("Prag"), _mb(dec["prag_kb"] // 1024)))
+			# 0.6.1: ultima repornire facuta de receptor pentru aceasta memorie (in standby sau pentru un film care nu
+			# pornea): diagnosticul sta aici, nu intr-un mesaj pe televizor
+			try:
+				ultima = HdsMemorieDriver.textUltimaEliberare()
+			except Exception as e:
+				print("[HdsMemoryInfo] ultima eliberare: %r" % (e,))
+				ultima = ""
+			if ultima:
+				l.append(_rand(_("Ultima eliberare"), ultima))
 			if dec.get("eliberare"):
 				l.append("  • " + dec["eliberare"])
 

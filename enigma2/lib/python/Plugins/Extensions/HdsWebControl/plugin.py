@@ -2051,7 +2051,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>GET /api/actualizari</code>, <code>POST /api/actualizari-cauta</code>, <code>POST /api/actualizari-instaleaza?actualizare=&lt;n&gt;</code>, <code>POST /api/actualizari-zilnic?zilnic=0|1</code>, <code>POST /api/actualizari-reporneste</code>: actualizările prin pachete de pe stb.hdsatelit.com (starea, căutarea, instalarea, verificarea zilnică, repornirea interfeței după instalare)</li>
 </ul>
 <h2>Acces</h2>
-<p>Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi se vede pe receptor, în ecranul de setări al interfeței web (Setări, Internet Sources, HdsWebControl). Tot acolo se poate face o cheie nouă.</p>
+<p>Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă.</p>
 <p>Din browser: după conectarea cu codul de pe televizor, browserul primește un cookie. Cu el, comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou.</p>
 <p>Comenzile care mișcă motorul, pornesc măsurarea semnalului sau schimbă LNB-ul (<code>lnb-aplica</code>, <code>lnb-raspuns</code>, <code>gasire-semnal-porneste</code>, <code>-reacordeaza</code>, <code>-opreste</code>, <code>motor-comanda</code>) se dau numai din paginile receptorului, cu browserul conectat: cu POST, cu antetul <code>X-HDS-CSRF</code>, fără cheia pentru scripturi.</p>
 <p>Adresele de mai sus răspund numai din rețeaua locală.</p>
@@ -2090,10 +2090,29 @@ def stareInterfataWeb(browser=None):
 	liber = bool(browser and browser.get("liber"))
 	rez = {"result": True, "cod_retea_locala": codInReteaLocala(), "fara_cod": liber,
 		"drum": _drumSetariWeb()}
-	# aplicatiile de telefon: cele doua setari, parola (numai cand aplicatiile sunt pornite) si aplicatiile vazute
+	# aplicatiile de telefon: cele doua setari si aplicatiile vazute; parola NU (o da numai POST
+	# /api/interfata-web-secrete, la butonul "Arată")
 	from . import aplicatii_web
 	rez.update(aplicatii_web.stareSetari(aplicatiiPornite(), aplicatiiAfara()))
 	return rez
+
+
+SECRETE = ("parola", "cheie")
+
+
+def secreteInterfataWeb(ce):
+	"""POST /api/interfata-web-secrete?ce=parola|cheie: parola pentru aplicatii sau cheia pentru scripturi, intreaga,
+	numai la cererea omului (butonul "Arată" din /setari si /interfata-web; pe televizor Albastru > Alte optiuni).
+	Paginile nu le au in HTML si nici in GET /api/interfata-web: se vad numai dupa apasare, deci nu ajung singure in
+	capturi. Cine are voie: un browser care a trecut poarta (POST, aceeasi origine, antetul CSRF); cererile cu ?token=
+	(scripturile) sunt refuzate inainte (resursa)."""
+	if ce == "parola":
+		from . import aplicatii_web
+		return {"result": True, "parola_aplicatii": aplicatii_web.parola(creeaza=True)}
+	if ce == "cheie":
+		initConfigHdsWebControl()
+		return {"result": True, "cheie": str(config.plugins.hdswebcontrol.token.value or "")}
+	return {"result": False, "message": _t("Se cere cu ce=parola sau ce=cheie.")}
 
 
 def _drumSetariWeb():
@@ -3403,6 +3422,25 @@ def _construiesteResurse():
 		def render_GET(self, request):
 			return self.render_POST(request)
 
+	class InterfataWebSecreteResource(HdsJsonResource):
+		"""POST /api/interfata-web-secrete?ce=parola|cheie: parola pentru aplicatii sau cheia pentru scripturi, la
+		butonul "Arată" (secreteInterfataWeb). Numai din browser: POST, aceeasi origine, antetul CSRF (schimbaCeva);
+		cu ?token= se refuza (un script nu are nevoie sa citeasca parola sau cheia)."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			if PARAM_JETON in request.args:
+				return self._raspunde(request, {"result": False,
+					"message": _t("Parola și cheia se văd numai dintr-un browser.")}, 403)
+			ce = request.args.get(b"ce", [b""])[0]
+			if isinstance(ce, bytes):
+				ce = ce.decode("ascii", "replace")
+			rezultat = secreteInterfataWeb(ce.strip())
+			if rezultat["result"]:
+				_jurnal("%s aratata in web, la cerere, de la %s" % ("parola pentru aplicatii" if ce.strip() == "parola"
+					else "cheia pentru scripturi", _adresaClient(request)))
+			return self._raspunde(request, rezultat, 200 if rezultat["result"] else 400)
+
 	class DeconectareResource(resource.Resource):
 		"""POST /deconectare: scoate browserul curent (butonul din subsolul panoului) si sterge cookie-ul.
 		Aceleasi conditii ca o comanda din panou: cookie, POST, aceeasi origine, antetul CSRF."""
@@ -4029,6 +4067,8 @@ def _construiesteResurse():
 			# codul de asociere si in reteaua locala (pagina /setari, caseta „Interfața web”)
 			self.putChild(b"interfata-web", InterfataWebResource())
 			self.putChild(b"interfata-web-seteaza", InterfataWebSeteazaResource())
+			# parola pentru aplicatii si cheia pentru scripturi, numai la butonul "Arată"
+			self.putChild(b"interfata-web-secrete", InterfataWebSecreteResource())
 			# scanarea si antena (scanare_web.py)
 			self.putChild(b"scanare", _SCANARE[b"scanare"])
 			self.putChild(b"scanare-porneste", _SCANARE[b"scanare-porneste"])
@@ -5044,8 +5084,9 @@ TEXTE_PAGINA = {
 			"zilnică, repornirea interfeței după instalare)"),
 		N_("Acces"),
 		N_("Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus "
-			"(GET sau POST). Cheia pentru scripturi se vede pe receptor, în ecranul de setări al interfeței "
-			"web (Setări, Internet Sources, HdsWebControl). Tot acolo se poate face o cheie nouă."),
+			"(GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în "
+			"ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața "
+			"web (butonul Arată). Tot acolo se poate face o cheie nouă."),
 		N_("Din browser: după conectarea cu codul de pe televizor, browserul primește un cookie. Cu el, "
 			"comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit cu POST, "
 			"dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou."),

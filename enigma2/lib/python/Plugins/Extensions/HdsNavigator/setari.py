@@ -83,14 +83,14 @@ ETICHETE = {
 
 DESCRIERI = {
 	"pagina_pornire": N_("Pagina care se deschide când pornești navigatorul din meniu. Un cuvânt fără punct deschide căutarea Google."),
-	"marire": N_("Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare sit."),
+	"marire": N_("Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare site."),
 	"font_minim": N_("Literele mai mici decât atât se măresc, ca textul să se citească de la distanță (puncte CSS)."),
 	"desen": N_("Automat: placa video, apoi procesorul, dacă placa video nu merge. Numai procesorul: mai încet, dar merge pe orice receptor."),
 	"hbbtv": N_("Nu: HbbTV se oprește de tot. Fără semnul roșu, ROȘU și Portal nu mai pornesc aplicațiile canalelor, iar receptorul nu mai citește tabela lor. Navigatorul web rămâne."),
 	"hbbtv_semn": N_("Pe canalele cu aplicație HbbTV, bara de informații arată semnul HbbTV pe roșu. Apasă ROȘU ca să pornești aplicația."),
 	"hbbtv_autostart": N_("Da: pe canalele cu HbbTV, aplicația canalului pornește singură, ascunsă, iar ROȘU o arată pe loc. Ține memorie ocupată cât privești canalul și nu pornește în timpul unei înregistrări, în timeshift sau cu memorie puțină. Nu: aplicația pornește numai la ROȘU."),
 	"hbbtv_clar": N_("Da: aplicațiile HbbTV se desenează la mărimea întreagă a ecranului, deci textul și pozele sunt mai clare, dar tastele răspund mai încet. Nu: aplicația se desenează mai mic și se mărește, iar tastele răspund repede. Se folosește de la următoarea pornire a aplicației."),
-	"chenar": N_("Un chenar arată elementul ales în pagină, chiar dacă situl îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."),
+	"chenar": N_("Un chenar arată elementul ales în pagină, chiar dacă site-ul îl ascunde. Culoarea, forma, grosimea și pulsul lui se aleg mai jos."),
 	"chenar_culoare": N_("Contrast automat: galben pe paginile închise și albastru închis pe cele deschise, după cum arată pagina sub chenar."),
 	"chenar_forma": N_("Dreptunghi: chenarul obișnuit. Colțuri rotunjite: același chenar, cu colțurile rotunde. Subliniere: o linie sub element. Fundal colorat: elementul se colorează ușor."),
 	"chenar_grosime": N_("Cât de gros este chenarul. La fundalul colorat: cât de tare se vede culoarea."),

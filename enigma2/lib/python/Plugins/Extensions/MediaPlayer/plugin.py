@@ -422,6 +422,21 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 			verdict = HdsFilmRedare.verdictDinInfo(currPlay.info())
 		except ImportError:
 			verdict = None
+		if verdict is not None and HdsFilmRedare.esteDecodor(verdict):
+			# HDSatelit: lipseste memoria decodorului; niciun defect pe ecran: receptorul isi reface singur memoria
+			# (Components/HdsMemorieDriver.refacereFilm) si porneste fisierul dupa repornire, in playerul de filme
+			fapta = ref = None
+			try:
+				from Components import HdsMemorieDriver
+				ref = self.session.nav.getCurrentlyPlayingServiceReference()
+				fapta = HdsMemorieDriver.refacereFilm(self.session, ref and ref.toString() or "", False, verdict.tehnic)
+				if fapta == HdsMemorieDriver.FAPTA_REINCEARCA and ref is not None:
+					HdsMemorieDriver.programeaza(1, lambda: self.session.nav.playService(ref))
+					return
+			except Exception as e:
+				print("[__evPluginError] refacerea memoriei: %r" % (e,))
+			if fapta == "reporneste":
+				verdict = HdsFilmRedare.verdictRefacere(verdict.tehnic)
 		if verdict is not None:
 			message = verdict.text()
 		print("[__evPluginError]" , message)

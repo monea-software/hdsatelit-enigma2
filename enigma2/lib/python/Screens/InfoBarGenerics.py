@@ -2807,6 +2807,8 @@ class InfoBarFilmRefuz:
 		verdict = HdsFilmRedare.verdictDinInfo(info, ref.getPath(), canal = peCanal)
 		if verdict is None:
 			return
+		if HdsFilmRedare.esteDecodor(verdict) and self.__decodorFaraMesaj(HdsFilmRedare, ref, peCanal, verdict):
+			return
 		self.__filmSpus = True
 		print("[InfoBarFilmRefuz] %s, se opreste: %s (%s)" % (verdict.fel, verdict.refuza, verdict.tehnic))
 		if peCanal:
@@ -2819,6 +2821,36 @@ class InfoBarFilmRefuz:
 			Notifications.AddNotificationWithCallback(self.__dupaRefuz, MessageBox, verdict.text(), MessageBox.TYPE_ERROR)
 		else:
 			Notifications.AddPopup(text = verdict.text(), type = MessageBox.TYPE_INFO, timeout = 8, id = "HdsFilm")
+
+	def __decodorFaraMesaj(self, HdsFilmRedare, ref, peCanal, verdict):
+		"""Felul "decodor" (lipseste memoria decodorului): niciun defect intern pe ecran. Receptorul isi
+		reface singur memoria (Components/HdsMemorieDriver.refacereFilm: repornirea, cu pazele ei, si filmul pornit
+		dupa ea), cu o fraza scurta pe ecran; cu maparea deja la loc filmul porneste din nou. -> True cand s-a ocupat de
+		tot; False cand ramane verdictul obisnuit (numai "Filmul nu poate porni acum.")."""
+		try:
+			from Components import HdsMemorieDriver
+		except ImportError as eroare:
+			print("[InfoBarFilmRefuz] fara Components.HdsMemorieDriver: %s" % eroare)
+			return False
+		if HdsMemorieDriver.reluareInCurs():
+			# dupa repornirea pentru film: filmul se porneste din nou singur, cand demonul are maparea
+			self.__filmSpus = True
+			print("[InfoBarFilmRefuz] decodor, reluarea de dupa repornire e in curs: niciun mesaj")
+			return True
+		fapta = HdsMemorieDriver.refacereFilm(self.session, ref.toString(), peCanal, verdict.tehnic)
+		print("[InfoBarFilmRefuz] decodor: %s (%s)" % (fapta, verdict.tehnic))
+		if fapta == HdsMemorieDriver.FAPTA_REINCEARCA:
+			# maparea e la loc: acelasi film din nou, putin mai tarziu (nu din evenimentul serviciului care porneste)
+			self.__filmSpus = True
+			HdsMemorieDriver.programeaza(1, lambda: self.session.nav.playService(ref))
+			return True
+		if fapta != HdsMemorieDriver.FAPTA_REPORNESTE:
+			return False
+		self.__filmSpus = True
+		v = HdsFilmRedare.verdictRefacere(verdict.tehnic, canal = peCanal)
+		Notifications.RemovePopup(id = "HdsFilm")
+		Notifications.AddPopup(text = v.text(), type = MessageBox.TYPE_INFO, timeout = HdsMemorieDriver.FILM_ARATARE_S + 5, id = "HdsFilm")
+		return True
 
 	def __dupaRefuz(self, *raspuns):
 		# in playerul de filme: inapoi la lista, cu cursorul pe filmul de dupa cel refuzat (un OK in lista nu il mai

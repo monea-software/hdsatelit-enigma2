@@ -39,7 +39,8 @@
 # parola) si „Acces din afara casei” (oprit din fabrica; pornit, din afara numai cu utilizatorul root si parola pentru
 # aplicatii), aceleasi ca pe televizor, cu parola, aplicatiile conectate si „Fă altă parolă pentru aplicații”
 # (aplicatii_web.py). Integrarea 0.2.4: cu „Cere codul și în rețeaua locală” pornit, notele spun ca aplicatiile cer
-# parola si din casa.
+# parola si din casa. Parola e ascunsa (puncte): pagina n-o are in HTML si nici in GET /api/interfata-web; butonul
+# "Arată parola" o cere cu POST /api/interfata-web-secrete?ce=parola (plugin.py), "Ascunde parola" o scoate din nou.
 #
 # primul rand al casetei e „Tema interfeței web” (Clasic sau Pro, cadru_web.py),
 # aplicata pe loc si tinuta minte in acest browser (cookie-ul hds_tema), nu pe receptor.
@@ -700,6 +701,7 @@ PAGINA = """<!DOCTYPE html>
     <select id="aplicatiiAfara"><option value="0">Nu</option><option value="1">Da</option></select>
     <p class="ajutor" id="aplicatiiAfaraNota"></p></div>
   <div class="butoane"><button type="button" id="codReteaSalveaza">Salvează</button>
+    <button type="button" class="ascuns" id="arataParola">Arată parola</button>
     <button type="button" class="ascuns" id="parolaAplicatii">Fă altă parolă pentru aplicații</button></div>
   <p class="mesaj" id="codReteaMesaj"></p>
 </section>
@@ -804,8 +806,11 @@ function notaCodRetea(d){
   n += " Același rând e pe televizor, în " + (d.drum || "Meniu") + ".";
   $("codReteaNota").textContent = n;
 }
+// parola pentru aplicatii: puncte pana la butonul Arată parola (POST /api/interfata-web-secrete); ULTIMA = ultima stare citita
+var PAROLA = "", PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022", ULTIMA = null;
 function notaAplicatii(d){
-  var n, a, p = d.parola_aplicatii || "";
+  ULTIMA = d;
+  var n, a, p = PAROLA || PUNCTE;
   if(d.aplicatii){
     n = d.cod_retea_locala
       ? "Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, înregistrări, liste m3u) intră și din casă numai cu utilizatorul root și parola pentru aplicații" + (p ? " " + p : "") + ", fiindcă rândul de mai sus cere codul și în rețeaua locală."
@@ -824,6 +829,8 @@ function notaAplicatii(d){
   $("aplicatiiNota").textContent = n;
   $("aplicatiiAfaraNota").textContent = a;
   $("parolaAplicatii").classList.toggle("ascuns", !d.aplicatii);
+  $("arataParola").classList.toggle("ascuns", !d.aplicatii);
+  $("arataParola").textContent = PAROLA ? "Ascunde parola" : "Arată parola";
 }
 function citesteInterfataWeb(){
   cerere("/api/interfata-web").then(function(d){
@@ -1006,12 +1013,23 @@ $("codReteaSalveaza").addEventListener("click", function(){
     citesteInterfataWeb();
   }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
 });
+$("arataParola").addEventListener("click", function(){
+  var m = $("codReteaMesaj");
+  if(PAROLA){ PAROLA = ""; if(ULTIMA){ notaAplicatii(ULTIMA); } return; }
+  var q = new URLSearchParams(); q.set("ce", "parola");
+  cerere("/api/interfata-web-secrete", "POST", q).then(function(d){
+    if(!d.result){ m.textContent = d.message || ""; m.classList.add("eroare"); return; }
+    PAROLA = d.parola_aplicatii || "";
+    if(ULTIMA){ notaAplicatii(ULTIMA); }
+  }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
+});
 $("parolaAplicatii").addEventListener("click", function(){
   var m = $("codReteaMesaj");
   if(!confirm("Faci o parolă nouă pentru aplicații? Din afara casei, aplicațiile care o folosesc pe cea veche nu mai primesc răspuns până nu scrii în ele parola nouă.")){ return; }
   var q = new URLSearchParams(); q.set("parola_aplicatii_noua", "1");
   m.textContent = "Se face parola nouă..."; m.classList.remove("eroare");
   cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){
+    PAROLA = "";
     m.textContent = d.message || ""; m.classList.toggle("eroare", !d.result);
     citesteInterfataWeb();
   }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
@@ -1094,6 +1112,7 @@ TEXTE_PAGINA = {
 		N_("Acces din afara casei"),
 		N_("Salvează"),
 		N_("Fă altă parolă pentru aplicații"),
+		N_("Arată parola"),
 		N_("Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile "
 			"care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de "
 			"alegeri se schimbă de pe televizor."),
@@ -1127,6 +1146,8 @@ TEXTE_PAGINA = {
 		N_("Oprit din fabrică: din afara rețelei locale receptorul nu răspunde aplicațiilor."),
 		N_("Pornit, le cere utilizatorul root și parola"),
 		N_("Merge numai cu rândul de mai sus pornit."),
+		N_("Ascunde parola"),
+		N_("Arată parola"),
 		N_("Clasic"),
 		N_("Ca pe televizor"),
 		N_("o variantă"),

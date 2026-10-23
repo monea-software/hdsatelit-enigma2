@@ -45,13 +45,24 @@
 #    repornire se scrie in CALE_NOAPTE semnul standby; la pornirea urmatoare (porneste), cu semnul proaspat, receptorul
 #    intra in standby ca dupa un temporizator. Televizorul nu se aprinde: la pornire nu pleaca nimic pe CEC spre el, iar
 #    intrarea in standby trimite <Standby> numai cand receptorul era sursa activa (Components/HdsStandbyTv.py).
+# c) Filmul (sau canalul de pe internet) care nu porneste din lipsa memoriei decodorului (servicemp3: felul "decodor",
+#    maparea demonului platformei lipseste; Components/HdsFilmRedare.py): playerul cere refacereFilm(). Cu aceleasi paze
+#    ca b), fara cele ale standby-ului (hotarareFilm: receptorul treaz, pornit de cel putin FILM_UPTIME_MINIM_S, ceasul
+#    potrivit, o data pe pornire si PAUZA_S de la ultima repornire de aici, oricare a fost, fara inregistrari acum sau
+#    in urmatoarele INREGISTRARE_CURAND_S, fara intrebare de repornire, fara lucrari; maparea chiar lipsa, nu necitita),
+#    receptorul se reporneste intreg (TryQuitMainloop 2, dupa FILM_ARATARE_S cu fraza scurta pe ecran) si dupa pornire
+#    porneste filmul (CALE_FILM, citit o data de porneste(); filmul in playerul de filme, canalul pe locul lui), dupa ce
+#    demonul isi are maparea (cel mult FILM_ASTEPTARE_S). Cand maparea e deja la loc, filmul se porneste din nou, fara
+#    repornire. Nicio repornire care nu se poate face nu se spune ca defect: pe ecran ramane "Filmul nu poate porni acum."
+#    Setarea repornirii in standby nu opreste c): omul a cerut chiar acum filmul, iar fara repornire el nu porneste.
 # Fiecare repornire intreaga ceruta de aici scrie un rand in jurnalul paznicului (motivul si valoarea masurata).
 #
 # PROBA pe receptor (fara sa se strice memoria): CALE_PROBA (/tmp, deci dispare singur la repornirea receptorului) cu
 # randuri "prag_mb=N" (pragul de proba, 1-1024), "uptime_min_s=N" (cat trebuie sa fi mers receptorul inainte de
-# repornirea in standby, 0-86400), "standby_min_s=N" (cat trebuie sa stea in standby, 0-3600) si "uscat=1" (proba uscata:
-# unde s-ar reporni receptorul se scrie numai randul "PROBA uscata" in jurnalul paznicului; dupa o actualizare se
-# reporneste atunci numai interfata, iar in standby nimic, o data pe pornirea interfetei). Nimic altceva.
+# repornirea in standby sau pentru un film, 0-86400), "standby_min_s=N" (cat trebuie sa stea in standby, 0-3600) si
+# "uscat=1" (proba uscata: unde s-ar reporni receptorul se scrie numai randul "PROBA uscata" in jurnalul paznicului;
+# dupa o actualizare se reporneste atunci numai interfata, iar in standby si pentru film nimic, o data pe pornirea
+# interfetei, respectiv la fiecare film). Nimic altceva.
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
@@ -88,6 +99,18 @@ CEAS_IN_URMA_S = 6 * 3600       # cu alt boot_id: cat de in urma poate fi ceasul
 SEMN_RAMAS_S = 5 * 60           # semnul standby din aceeasi pornire, mai vechi de atat: repornirea nu s-a facut
 VERIFICARE_S = 60               # cat de des se uita bataia la repornirea in standby (standby-ul se urmareste la fiecare bataie)
 REPORNIRE_STANDBY_IMPLICIT = True
+
+CALE_FILM = "/home/root/hds-film-dupa-repornire"  # filmul de pornit dupa repornirea pentru el (JSON)
+FILM_UPTIME_MINIM_S = 5 * 60    # c): nicio repornire pentru film mai devreme de atat de la pornirea receptorului
+FILM_ARATARE_S = 3              # cat sta fraza scurta pe ecran inainte de repornire
+FILM_ASTEPTARE_S = 90           # dupa pornire: cat se asteapta maparea demonului inainte de a porni filmul oricum
+FILM_PAS_MS = 1000              # cat de des se uita, dupa pornire, dupa mapare si dupa bara principala
+REINCERCARE_S = 60              # acelasi film pornit din nou fara repornire: cel mult o data in atat
+FAPTA_REPORNESTE = "reporneste"
+FAPTA_REINCEARCA = "reincearca"
+FAPTA_NIMIC = "nimic"
+MOTIV_STANDBY = "standby"       # "motiv" in CALE_NOAPTE: de ce s-a facut ultima repornire de aici (lipsa = standby)
+MOTIV_FILM = "film"
 
 
 def _(text):
@@ -772,7 +795,8 @@ class RepornireStandby(object):
 			_log("proba uscata: as reporni receptorul acum (%s KB, prag %d KB)" % (m["liber_kb"] if m else "?", p))
 			return True
 		if not scrieNoaptea({"zi": time.strftime("%Y-%m-%d", local), "ora": int(acum), "standby": 1,
-				"liber_kb": int(m["liber_kb"]) if m else -1, "prag_kb": int(p), "boot": boot, "lipsa_es": int(lipsa)},
+				"liber_kb": int(m["liber_kb"]) if m else -1, "prag_kb": int(p), "boot": boot, "lipsa_es": int(lipsa),
+					"motiv": MOTIV_STANDBY},
 				self.caleNoapte):
 			# fara semn pe disc s-ar putea reporni in lant sau s-ar trezi televizorul: nu se reporneste
 			self.ceruta = False
@@ -826,7 +850,253 @@ def repornireStandby():
 	return _repornire[0]
 
 
+# ---------------------------------------------------------------- c) filmul care nu porneste din lipsa memoriei
+
+def numarMapari(date_vmalloc):
+	"""Cate mapari de MARIME_ES listeaza vmallocinfo (ca hisiCountEsMaps din lib/dvb/hdspazavideo.h)."""
+	if isinstance(date_vmalloc, bytes):
+		date_vmalloc = date_vmalloc.decode("ascii", "replace")
+	n = 0
+	for rand in (date_vmalloc or "").splitlines():
+		p = rand.split()
+		if len(p) > 1 and p[0].startswith("0x") and p[1] == str(MARIME_ES):
+			n += 1
+	return n
+
+
+def mapareEs(cale=None):
+	"""1 cand demonul platformei are maparea memoriei filmelor (vmallocinfo o listeaza), 0 cand nu, -1 cand vmallocinfo
+	nu se poate citi (atunci nu se stie, deci nu se reporneste nimic). Citit acum, nu din cache."""
+	try:
+		date = _citeste(cale or CALE_VMALLOCINFO, 4 * 1024 * 1024)
+	except (IOError, OSError) as e:
+		_log("nu pot citi vmallocinfo: %s" % e)
+		return -1
+	if not date:
+		return -1
+	return 1 if numarMapari(date) >= 1 else 0
+
+
+def hotarareFilm(standby, local, acum, ultima, boot, uptime_s, mapare, inregistrari, urmatoarea, intrebare, lucrari,
+		uptime_minim=None):
+	"""Ce se face pentru un film (sau canal de pe internet) refuzat din lipsa memoriei decodorului, fara efecte.
+	mapare = mapareEs() acum; ultima = randul din CALE_NOAPTE ({} fara); boot = boot_id-ul de acum.
+	-> (FAPTA_REPORNESTE | FAPTA_REINCEARCA | FAPTA_NIMIC, motivul scurt)."""
+	if standby:
+		return FAPTA_NIMIC, "receptorul e in standby"
+	if mapare == 1:
+		# maparea s-a facut intre timp (de pilda dupa o pornire direct in standby): filmul porneste din nou, fara repornire
+		return FAPTA_REINCEARCA, "maparea e la loc"
+	if mapare != 0:
+		return FAPTA_NIMIC, "memoria nucleului nu se poate citi"
+	if uptime_s is None or uptime_s < (FILM_UPTIME_MINIM_S if uptime_minim is None else uptime_minim):
+		return FAPTA_NIMIC, "pornit de prea putin timp"
+	if local.tm_year < 2024:
+		return FAPTA_NIMIC, "ceasul nu e potrivit"
+	ultima = ultima or {}
+	if ultima.get("boot") and ultima.get("boot") == boot:
+		return FAPTA_NIMIC, "o data pe pornire"
+	try:
+		ora = float(ultima.get("ora") or 0)
+	except (TypeError, ValueError):
+		ora = 0
+	if ora > 0 and acum - ora < PAUZA_S:
+		# si cu ceasul in urma fata de ora scrisa: prea devreme (paza impotriva repornirilor in lant)
+		return FAPTA_NIMIC, "alta repornire de curand"
+	if inregistrari is None or inregistrari != 0:
+		return FAPTA_NIMIC, "inregistrare in curs"
+	if urmatoarea and urmatoarea > 0 and urmatoarea - acum < INREGISTRARE_CURAND_S:
+		return FAPTA_NIMIC, "inregistrare in urmatoarele 30 de minute"
+	if intrebare:
+		return FAPTA_NIMIC, "intrebare de repornire pe ecran"
+	if lucrari:
+		return FAPTA_NIMIC, "lucrare in curs: %s" % ", ".join(lucrari)
+	return FAPTA_REPORNESTE, ""
+
+
+def citesteFilm(cale=None):
+	try:
+		with open(cale or CALE_FILM, "r", encoding="utf-8") as f:
+			d = json.loads(f.read(8192))
+		return d if isinstance(d, dict) else {}
+	except (IOError, OSError, ValueError):
+		return {}
+
+
+def scrieFilm(d, cale=None):
+	return scrieNoaptea(d, cale or CALE_FILM)
+
+
+def stergeFilm(cale=None):
+	try:
+		os.remove(cale or CALE_FILM)
+	except OSError:
+		pass
+
+
+def _stareReceptorSesiune(sesiune):
+	"""Inregistrarile, urmatoarea inregistrare, intrebarea de repornire si lucrarile in fundal, din sesiunea data."""
+	from Screens import Standby
+	from Components.HdsAlimentare import stareReceptor
+	r = stareReceptor(sesiune, Standby=Standby)
+	r["lucrari_nume"] = ["lucrari in fundal (%d)" % r["lucrari"]] if r.get("lucrari") else []
+	return r
+
+
+def _programeaza(secunde, functie):
+	"""functie() dupa `secunde`, pe firul enigma2 (eTimer tinut pana se cheama)."""
+	from enigma import eTimer
+	t = eTimer()
+	tinut = [t]
+
+	def gata():
+		tinut[0].stop()
+		tinut[:] = []
+		functie()
+	t.callback.append(gata)
+	t.start(int(secunde * 1000), True)
+	_tinute.append(tinut)
+
+
+_tinute = []
+programeaza = _programeaza
+
+
+def _repornesteDinSesiune(sesiune):
+	"""Calea sigura a imaginii (TryQuitMainloop 2, ca Repornire din meniu); canalul tinut minte se scrie la inchidere."""
+	from Screens import Standby
+	sesiune.open(Standby.TryQuitMainloop, COD_RECEPTOR)
+
+
+class RefacereFilm(object):
+	"""Cererea playerului pentru un film refuzat cu felul "decodor". Toate dependentele se pot da (probele de pe PC)."""
+
+	def __init__(self, ceas_perete=None, uptime_=None, boot=None, mapare=None, masura=None, receptor=None, lucrari=None,
+			standby=None, cale_noapte=None, cale_film=None, cale_proba=None, jurnal=None, programeaza=None,
+			reporneste=None, ceas=None):
+		self.ceasPerete = ceas_perete or time.time
+		self.ceas = ceas or time.monotonic
+		self.uptime = uptime_ or uptime
+		self.boot = boot or bootId
+		self.mapare = mapare or mapareEs
+		self.masura = masura or masoara
+		self.receptor = receptor or _stareReceptorSesiune
+		self.lucrari = lucrari or lucrariImagine
+		self.standby = standby or _inStandby
+		self.caleNoapte = cale_noapte
+		self.caleFilm = cale_film
+		self.caleProba = cale_proba
+		self.jurnal = jurnal or scrieJurnal
+		self.programeaza = programeaza or _programeaza
+		self.reporneste = reporneste or _repornesteDinSesiune
+		self.ceruta = False     # repornirea ceruta de acest proces: nimic mai mult pana la iesire
+		self.motiv = ""
+		self.reincercat = None  # (filmul, ceasul monoton) ultimei porniri din nou fara repornire
+
+	def cere(self, sesiune, ref_text, canal=False, tehnic=""):
+		"""-> FAPTA_REPORNESTE (fraza scurta pe ecran, repornirea dupa FILM_ARATARE_S), FAPTA_REINCEARCA (filmul se
+		porneste din nou acum) sau FAPTA_NIMIC (numai "Filmul nu poate porni acum."). Nu arunca."""
+		try:
+			if self.ceruta:
+				return FAPTA_REPORNESTE
+			pr = proba(self.caleProba)
+			acum = self.ceasPerete()
+			local = time.localtime(acum)
+			mapare = self.mapare()
+			if "unreadable" in (tehnic or "") and mapare != 1:
+				# servicemp3 nu a putut citi vmallocinfo: nu se stie ca memoria lipseste
+				mapare = -1
+			r = self.receptor(sesiune) or {}
+			lucrari = list(r.get("lucrari_nume") or []) + self.lucrari()
+			fapta, motiv = hotarareFilm(self.standby(), local, acum, citesteNoaptea(self.caleNoapte), self.boot(),
+				self.uptime(), mapare, r.get("inregistrari", -1), r.get("urmatoarea", 0), r.get("intrebare_pe_tv", False),
+				lucrari, pr.get("uptime_min_s"))
+			if fapta == FAPTA_REINCEARCA:
+				# o singura data pe film intr-un minut: altfel un refuz care tine ar porni filmul in bucla
+				m_acum = self.ceas()
+				din_nou = self.reincercat is not None and self.reincercat[0] == ref_text
+				if din_nou and 0 <= m_acum - self.reincercat[1] < REINCERCARE_S:
+					fapta, motiv = FAPTA_NIMIC, "pornit din nou de curand"
+				else:
+					self.reincercat = (ref_text, m_acum)
+					_log("filmul: %s, il pornesc din nou" % motiv)
+					return fapta
+			m = self.masura()
+			p = pr.get("prag_kb", PRAG_KB)
+			if fapta == FAPTA_NIMIC:
+				self.motiv = motiv
+				self.jurnal("filmul nu porneste: memoria pozelor si a filmelor lipseste; nu repornesc: %s" % motiv)
+				_log("filmul: nu repornesc (%s)" % motiv)
+				return fapta
+			if pr.get("uscat"):
+				self.jurnal("PROBA uscata: " + randJurnal("pentru un film", m, p, lipsa_es=True) + "; nu repornesc")
+				_log("proba uscata: as reporni receptorul pentru film")
+				return FAPTA_NIMIC
+			boot = self.boot()
+			if not scrieNoaptea({"zi": time.strftime("%Y-%m-%d", local), "ora": int(acum), "standby": 0,
+					"liber_kb": int(m["liber_kb"]) if m else -1, "prag_kb": int(p), "boot": boot, "lipsa_es": 1,
+					"motiv": MOTIV_FILM}, self.caleNoapte):
+				# fara semn pe disc s-ar putea reporni in lant: nu se reporneste
+				return FAPTA_NIMIC
+			scrieFilm({"ref": str(ref_text or ""), "canal": int(bool(canal)), "ora": int(acum), "boot": boot},
+				self.caleFilm)
+			self.ceruta = True
+			self.jurnal(randJurnal("pentru un film", m, p, lipsa_es=True))
+			_log("repornesc receptorul pentru film (%s)" % (ref_text,))
+			self.programeaza(FILM_ARATARE_S, lambda: self.reporneste(sesiune))
+			return FAPTA_REPORNESTE
+		except Exception as e:
+			_log("refacerea pentru film: %r" % (e,))
+			return FAPTA_NIMIC
+
+
+_refacere = [None]
+
+
+def refacereFilm(sesiune, ref_text, canal=False, tehnic=""):
+	"""Din playere (Screens/InfoBarGenerics.InfoBarFilmRefuz, MediaPlayer): un film refuzat cu felul "decodor"."""
+	if _refacere[0] is None:
+		_refacere[0] = RefacereFilm()
+	return _refacere[0].cere(sesiune, ref_text, canal, tehnic)
+
+
+def ultimaEliberare(cale=None):
+	"""(ora, motiv) ultimei reporniri facute de aici (MOTIV_STANDBY sau MOTIV_FILM), sau None. Pentru Informatii >
+	Memorie."""
+	d = citesteNoaptea(cale)
+	try:
+		ora = int(d.get("ora") or 0)
+	except (TypeError, ValueError):
+		ora = 0
+	if ora <= 0:
+		return None
+	return ora, (MOTIV_FILM if d.get("motiv") == MOTIV_FILM else MOTIV_STANDBY)
+
+
+def textUltimaEliberare(cale=None):
+	"""Data si ora ultimei reporniri de aici si motivul ei (pentru un film / in standby), sau "" fara niciuna."""
+	u = ultimaEliberare(cale)
+	if u is None:
+		return ""
+	ora, motiv = u
+	cand = time.strftime("%d.%m.%Y %H:%M", time.localtime(ora))
+	return "%s, %s" % (cand, _("pentru un film") if motiv == MOTIV_FILM else _("în standby"))
+
+
 # ---------------------------------------------------------------- pornirea
+
+def _semnProaspat(d, ceas_perete=None, boot=None, uptime_s=None):
+	"""Semnul scris inainte de o repornire de aici e de la pornirea de dinainte: scris acum cel mult STANDBY_PROASPAT_S
+	dupa ceasul de perete (care dupa pornire vine din fake-hwclock si poate fi in urma: o ora inapoi se primeste), sau
+	alta pornire a nucleului (boot_id schimbat), abia pornita, cu ceasul inca in urma (inainte de NTP)."""
+	varsta = (ceas_perete or time.time)() - float(d.get("ora", 0))
+	if -3600 <= varsta <= STANDBY_PROASPAT_S:
+		return True
+	boot = boot or bootId()
+	up = uptime() if uptime_s is None else uptime_s
+	return bool(d.get("boot")) and d.get("boot") != boot and up is not None and up <= STANDBY_PROASPAT_S and \
+		-CEAS_IN_URMA_S <= varsta < 0
+
 
 def standbyLaPornire(cale=None, ceas_perete=None, boot=None, uptime_s=None):
 	"""Semnul standby lasat de repornirea in standby: True cand e proaspat (si il sterge). Proaspat = alta pornire a
@@ -838,17 +1108,140 @@ def standbyLaPornire(cale=None, ceas_perete=None, boot=None, uptime_s=None):
 			return False
 		d["standby"] = 0
 		scrieNoaptea(d, cale)
-		varsta = (ceas_perete or time.time)() - float(d.get("ora", 0))
-		if -3600 <= varsta <= STANDBY_PROASPAT_S:
-			return True
-		# alta pornire a nucleului, abia pornita, cu ceasul inca in urma (inainte de NTP): tot semnul de dinainte
-		boot = boot or bootId()
-		up = uptime() if uptime_s is None else uptime_s
-		return bool(d.get("boot")) and d.get("boot") != boot and up is not None and up <= STANDBY_PROASPAT_S and \
-			-CEAS_IN_URMA_S <= varsta < 0
+		return _semnProaspat(d, ceas_perete, boot, uptime_s)
 	except Exception as e:
 		_log("semnul standby: %r" % (e,))
 		return False
+
+
+def filmLaPornire(cale=None, ceas_perete=None, boot=None, uptime_s=None):
+	"""Filmul lasat de repornirea pentru el ({'ref', 'canal'}), cand semnul e proaspat si de la alta pornire a
+	nucleului; altfel None. Semnul se sterge oricum (o singura data). Nu arunca."""
+	try:
+		d = citesteFilm(cale)
+		if not d:
+			return None
+		stergeFilm(cale)
+		boot = boot or bootId()
+		if not d.get("ref") or not d.get("boot") or d.get("boot") == boot:
+			# aceeasi pornire: repornirea nu s-a facut (o intrebare cu "Nu"); nimic de pornit mai tarziu
+			return None
+		if not _semnProaspat(d, ceas_perete, boot, uptime_s):
+			return None
+		return {"ref": str(d["ref"]), "canal": bool(d.get("canal"))}
+	except Exception as e:
+		_log("filmul de dupa repornire: %r" % (e,))
+		return None
+
+
+class ReluareFilm(object):
+	"""Dupa repornirea pentru film: asteapta bara principala si maparea demonului (cel mult FILM_ASTEPTARE_S, pe ceasul
+	monoton), apoi porneste filmul in playerul de filme sau canalul pe locul lui (numai daca omul n-a ales intre timp
+	altceva). Cat asteapta, playerul nu spune nimic despre felul "decodor" (reluareInCurs)."""
+
+	def __init__(self, film, ceas=None, mapare=None, bara=None, deschide=None, porneste=None, curent=None,
+			esuat=None, standby=None):
+		self.film = film
+		self.ceas = ceas or time.monotonic
+		self.mapare = mapare or mapareEs
+		self.bara = bara or _baraPrincipala
+		self.deschide = deschide or _deschideFilm
+		self.porneste = porneste or _pornesteCanal
+		self.curent = curent or _serviciulCurent
+		self.esuat = esuat or _serviciulEsuat
+		self.standby = standby or _inStandby
+		self.de_la = None
+		self.gata = False
+
+	def pas(self):
+		"""-> True cand a terminat (a pornit filmul, sau nu mai e nimic de facut). Nu arunca."""
+		if self.gata:
+			return True
+		try:
+			acum = self.ceas()
+			if self.de_la is None:
+				self.de_la = acum
+			if self.standby():
+				_log("dupa repornirea pentru film: receptorul e in standby, nu pornesc nimic")
+				self.gata = True
+				return True
+			bara = self.bara()
+			if bara is None:
+				return False
+			mapat = self.mapare() == 1
+			if not mapat and acum - self.de_la < FILM_ASTEPTARE_S:
+				return False
+			if not mapat:
+				_log("dupa repornirea pentru film: maparea lipseste dupa %d s; pornesc oricum" % FILM_ASTEPTARE_S)
+			ref = self.film["ref"]
+			if self.film.get("canal"):
+				cur = self.curent(bara)
+				if cur is None or (cur == ref and self.esuat(bara)):
+					_log("dupa repornirea pentru film: pornesc din nou canalul")
+					self.porneste(bara, ref)
+			else:
+				_log("dupa repornirea pentru film: deschid filmul")
+				self.deschide(bara, ref)
+			self.gata = True
+			return True
+		except Exception as e:
+			_log("reluarea filmului: %r" % (e,))
+			self.gata = True
+			return True
+
+
+def _baraPrincipala():
+	from Screens.InfoBar import InfoBar
+	return InfoBar.instance
+
+
+def _deschideFilm(bara, ref):
+	from enigma import eServiceReference
+	from Screens.InfoBar import MoviePlayer
+	from Tools import Notifications
+	Notifications.AddNotification(MoviePlayer, eServiceReference(ref))
+
+
+def _pornesteCanal(bara, ref):
+	from enigma import eServiceReference
+	bara.session.nav.playService(eServiceReference(ref))
+
+
+def _serviciulCurent(bara):
+	r = bara.session.nav.getCurrentlyPlayingServiceReference()
+	return r.toString() if r is not None else None
+
+
+def _serviciulEsuat(bara):
+	"""Canalul de acum a fost refuzat de servicemp3 din lipsa memoriei decodorului."""
+	from Components import HdsFilmRedare
+	s = bara.session.nav.getCurrentService()
+	return HdsFilmRedare.esteDecodor(HdsFilmRedare.verdictDinInfo(s and s.info()))
+
+
+_reluare = [None]
+
+
+def reluareInCurs():
+	"""True cat, dupa repornirea pentru film, filmul inca nu a fost pornit din nou."""
+	r = _reluare[0]
+	return r is not None and not r.gata
+
+
+def _pornesteReluarea(film):
+	from enigma import eTimer
+	r = ReluareFilm(film)
+	_reluare[0] = r
+	t = eTimer()
+
+	def pas():
+		if r.pas():
+			t.stop()
+			_tinute[:] = [x for x in _tinute if x is not tinut]
+	tinut = [t]
+	t.callback.append(pas)
+	t.start(FILM_PAS_MS, False)
+	_tinute.append(tinut)
 
 
 def porneste():
@@ -865,3 +1258,12 @@ def porneste():
 			Notifications.AddNotification(Screens.Standby.Standby)
 		except Exception as e:
 			_log("standby la pornire: %r" % (e,))
+		stergeFilm()
+		return
+	film = filmLaPornire()
+	if film:
+		_log("pornit dupa repornirea pentru film: il pornesc cand demonul are maparea")
+		try:
+			_pornesteReluarea(film)
+		except Exception as e:
+			_log("filmul dupa repornire: %r" % (e,))

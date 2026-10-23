@@ -25,6 +25,14 @@
 #   imaginii noastre, eticheta e inca a lui, singurul semn care il deosebeste cand cipul si partitiile sunt la fel. De
 #   aceea un BOX_TYPE care exista si difera de regula e nepotrivire („eticheta”); o eticheta lipsa nu hotaraste nimic,
 #   iar UPD_PATH (numele modelului) se arata numai.
+# - memoria interna (eMMC): marimea discului intreg mmcblk0 din /proc/partitions. Amiko Viper 4K V30 are aceeasi placa,
+#   acelasi cip, acelasi tip de placa (u57) si aceeasi asezare a partitiilor ca V20; numai memoria interna difera (8 GB
+#   fata de 4 GB: 3,66 GiB, 3837952 KiB, pe V20). Regulile pot da limitele (emmc_min_kib=, emmc_max_kib=, in KiB);
+#   regulile scrise pe receptoarele de azi nu le au si nu se schimba printr-o actualizare (vin cu imaginea), deci
+#   pentru machinebuild=viper4kv20 fara limite in reguli se foloseste EMMC_IMPLICIT: cel mult EMMC_MAXIM_V20_KIB (5 GiB,
+#   cu marja fata de ambele). Hotaraste in ambele trepte; fara limite (alt model) nu se verifica. Un disc intreg
+#   nelistat nu hotaraste nimic (ca eticheta lipsa): pe un receptor adevarat /proc/partitions il listeaza mereu, iar un
+#   /proc/partitions necitit cade deja la "kernel"; uneltele de pe PC dau uneori numai randurile p9 si p10.
 # Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), arborele dispozitivului, tunerele.
 # Ce nu se poate citi nu se potriveste: paza cade inchisa.
 #
@@ -71,7 +79,7 @@ OCTETI_ETICHETA = 256
 BLOC_SUMA = 1024 * 1024
 
 # cheile care hotarasc, in ordinea din mesaj; primele cinci se socotesc si cand regulile sunt stricate
-CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta")
+CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta", "emmc")
 CHEI_DE_BAZA = CHEI_AMPRENTA[:5]
 # treapta a doua: cheile care dau numai avertisment (la „kernel” numai marimea; locul hotaraste)
 CHEI_AVERTISMENT = ("hw", "partitii", "kernel")
@@ -99,6 +107,12 @@ REFUZ_SCHIMBAT = "schimbat"
 
 # tipuri de placa din eticheta si un receptor cunoscut de acel tip (oe-alliance, u571.conf); numai pentru mesaj
 EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40"}
+
+# memoria interna: limitele pentru regulile care nu le scriu, dupa machinebuild (min_kib, max_kib; None = fara limita)
+EMMC_MAXIM_V20_KIB = 5 * 1024 * 1024
+EMMC_IMPLICIT = {"viper4kv20": (None, EMMC_MAXIM_V20_KIB)}
+# un receptor cunoscut cu memoria interna mai mare / mai mica decat cea ceruta de reguli; numai pentru mesaj
+EXEMPLU_EMMC = {("viper4kv20", "mare"): "Amiko Viper 4K V30", ("viper4kv30", "mica"): "Amiko Viper 4K V20"}
 
 _CARACTERE_SIGURE = re.compile(r"[^A-Za-z0-9_.:/ ,()'+-]")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -361,6 +375,7 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 	a["rootfs_part"] = ("mmcblk0p%d" % (nume.index("rootfs") + 1)) if "rootfs" in nume else ""
 	a["kernel_kib"] = marimi.get(a["kernel_part"], "") if a["kernel_part"] else ""
 	a["rootfs_kib"] = marimi.get(a["rootfs_part"], "") if a["rootfs_part"] else ""
+	a["emmc_kib"] = marimi.get("mmcblk0", "")
 	campuri = _campuriAntet(antet) if _indexDeviceinfo(brut) is not None else {}
 	a["hw"] = campuri.get("HW", "")
 	a["magicnum"] = campuri.get("MAGICNUM", "")
@@ -414,6 +429,9 @@ def amprentaDinStare(st, baza=None):
 		a["kernel_text"] = curat(st.get("kernel", ""), 120)
 	if "eticheta" in st:
 		a["eticheta"] = curat(st.get("eticheta", ""), 120)
+	if "emmc" in st:
+		e = (st.get("emmc") or "").strip()
+		a["emmc_kib"] = int(e) if e.isdigit() else ""
 	return a
 
 
@@ -425,6 +443,38 @@ def treapta(reguli):
 def tipuriPlaca(reguli):
 	"""Lista din „boxtype=” („u57” -> ["u57"], „u57,u571” -> ["u57", "u571"]); fara spatii, fara intrari goale"""
 	return [t.strip() for t in ((reguli or {}).get("boxtype") or "").split(",") if t.strip()]
+
+
+def limiteEmmc(reguli):
+	"""(min_kib, max_kib) pentru memoria interna (None = fara limita la acel capat), sau None cand nu se verifica.
+	Din reguli (emmc_min_kib=, emmc_max_kib=, numai cifre), altfel EMMC_IMPLICIT dupa machinebuild."""
+	reguli = reguli or {}
+	mic, mare = reguli.get("emmc_min_kib", "").strip(), reguli.get("emmc_max_kib", "").strip()
+	mic = int(mic) if mic.isdigit() else None
+	mare = int(mare) if mare.isdigit() else None
+	if mic is None and mare is None:
+		return EMMC_IMPLICIT.get(reguli.get("machinebuild", ""))
+	return mic, mare
+
+
+def textEmmc(kib):
+	"""'3748 MiB'; "" pentru o marime necitita"""
+	if kib == "" or kib is None:
+		return ""
+	return "%d MiB" % (int(kib) // 1024)
+
+
+def _emmcAfara(reguli, kib):
+	"""None cand marimea e in limite, nu se verifica sau nu e listata; "mare" / "mica" altfel"""
+	lim = limiteEmmc(reguli)
+	if lim is None or kib == "" or kib is None:
+		return None
+	mic, mare = lim
+	if mare is not None and int(kib) > mare:
+		return "mare"
+	if mic is not None and int(kib) < mic:
+		return "mica"
+	return None
 
 
 def _diferente(reguli, a):
@@ -461,6 +511,8 @@ def _diferente(reguli, a):
 	tip = tipDinEticheta(a.get("eticheta"))
 	if tip and tip not in tipuri:
 		d["eticheta"] = (reguli["boxtype"], tip)
+	if _emmcAfara(reguli, a.get("emmc_kib", "")):
+		d["emmc"] = (asteptat_text(reguli, "emmc"), textEmmc(a.get("emmc_kib", "")))
 	return d
 
 
@@ -501,6 +553,8 @@ def valoareGasita(a, cheie):
 		return textKernel(a.get("kernel_part") or "", a.get("kernel_kib", ""), a.get("rootfs_part") or "")
 	if cheie == "eticheta":
 		return tipDinEticheta(a.get("eticheta"))
+	if cheie == "emmc":
+		return textEmmc(a.get("emmc_kib", ""))
 	return a.get(cheie, "") or ""
 
 
@@ -516,6 +570,16 @@ def asteptat_text(reguli, cheie):
 		return textKernel(reguli.get("kernel_part", ""), reguli.get("kernel_kib", ""), reguli.get("rootfs_part", ""))
 	if cheie == "eticheta":
 		return reguli.get("boxtype", "")
+	if cheie == "emmc":
+		lim = limiteEmmc(reguli)
+		if lim is None:
+			return ""
+		mic, mare = lim
+		if mic is not None and mare is not None:
+			return "%s - %s" % (textEmmc(mic), textEmmc(mare))
+		if mare is not None:
+			return _("cel mult %s") % textEmmc(mare)
+		return _("cel puțin %s") % textEmmc(mic)
 	return reguli.get(cheie, "")
 
 
@@ -599,7 +663,7 @@ def inPaza(radacina=None, cale_stare=None):
 
 # ------------------------------------------------------------------ textele
 
-def numeReceptor(a, reguli=None):
+def numeReceptor(a, reguli=None, nepotriviri=None):
 	"""Numele receptorului pentru fraza simpla, dupa eticheta din deviceinfo (nu e dovada: se arata numai pe o
 	nepotrivire). UPD_PATH /amiko/viper4kvNN (cu sau fara ghilimele) da numele; altfel un BOX_TYPE diferit de regula
 	da „un receptor <tip>” (cu un exemplu, cand il stim). O eticheta cu numele din reguli nu se crede (o imagine de-a
@@ -614,6 +678,16 @@ def numeReceptor(a, reguli=None):
 		if tip in EXEMPLU_TIP:
 			return _("un receptor %(tip)s (de exemplu %(model)s)") % {"tip": tip, "model": EXEMPLU_TIP[tip]}
 		return _("un receptor %s") % tip
+	# acelasi tip de placa, dar alta memorie interna (de pilda un Amiko Viper 4K V30 cu imaginea pentru V20)
+	if nepotriviri and "emmc" in [n[0] for n in nepotriviri]:
+		afara = _emmcAfara(reguli, a.get("emmc_kib", ""))
+		model = EXEMPLU_EMMC.get(((reguli or {}).get("machinebuild", ""), afara))
+		if afara == "mare":
+			return (_("un receptor cu memoria internă mai mare (de exemplu %s)") % model) if model else \
+				_("un receptor cu memoria internă mai mare")
+		if afara == "mica":
+			return (_("un receptor cu memoria internă mai mică (de exemplu %s)") % model) if model else \
+				_("un receptor cu memoria internă mai mică")
 	return _("model necunoscut")
 
 
@@ -641,10 +715,10 @@ def textPentruPachet(marcaj):
 		"%(cip)s).") % valori
 
 
-def textAlTau(a, reguli=None):
+def textAlTau(a, reguli=None, nepotriviri=None):
 	"""„Receptorul tău: ...”"""
 	return _("Receptorul tău: %(model)s, placa %(hw)s, procesor %(cip)s.") % {
-		"model": numeReceptor(a, reguli),
+		"model": numeReceptor(a, reguli, nepotriviri),
 		"hw": a.get("hw") or _("necunoscută"),
 		"cip": a.get("cip") or _("necunoscut")}
 
@@ -658,6 +732,7 @@ def eticheteAmprenta():
 		"kernel": _("Partițiile nucleului și ale sistemului"),
 		"boxtype": _("Tipul plăcii spus de driver"),
 		"eticheta": _("Tipul plăcii din eticheta receptorului"),
+		"emmc": _("Memoria internă (eMMC)"),
 	}
 
 
@@ -737,7 +812,7 @@ def mesajPornire(v):
 		tehnice = randuriTehnice(nep)
 	else:
 		titlu = _("Software pentru alt receptor")
-		fraze = [textPentru(reguli), textAlTau(a, reguli)]
+		fraze = [textPentru(reguli), textAlTau(a, reguli, nep)]
 		tehnice = randuriTehnice(nep) + randEticheta(a, reguli)
 	fraze.append(_("Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."))
 	fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
@@ -827,7 +902,7 @@ def textRefuz(cod, marcaj=None, a=None, nepotriviri=None, fisier=None):
 		t = _("Semnul receptorului din pachet este stricat sau de altă versiune, deci nu se poate verifica pentru ce "
 			"receptor este pachetul.")
 	elif cod == REFUZ_ALT_RECEPTOR:
-		t = textPentruPachet(marcaj or {}) + "\n" + textAlTau(a or {}, marcaj)
+		t = textPentruPachet(marcaj or {}) + "\n" + textAlTau(a or {}, marcaj, nepotriviri)
 	elif cod == REFUZ_NECITIT:
 		t = _("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că pachetul este "
 			"pentru el.")

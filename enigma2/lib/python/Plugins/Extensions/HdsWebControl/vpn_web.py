@@ -346,7 +346,7 @@ ETICHETE = {
 		"nicăieri, nici aici, nici pe televizor."),
 	"TRAFIC": N_("Ce trece prin VPN"),
 	"IPTV": N_("Sursele IPTV din liste"),
-	"ADRESE": N_("Alte adrese (nume de situri sau adrese IP, câte una pe rând)"),
+	"ADRESE": N_("Alte adrese (nume de site-uri sau adrese IP, câte una pe rând)"),
 	"SALVEAZA_ADRESE": N_("Salvează adresele"),
 	"OPTIUNI": N_("Opțiuni"),
 	"OPRIRE_TOTALA": N_("Oprire totală la căderea VPN-ului"),

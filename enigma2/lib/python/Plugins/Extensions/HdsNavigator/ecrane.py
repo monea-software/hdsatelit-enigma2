@@ -849,7 +849,7 @@ class HdsNavigatorSetari(Screen, ConfigListScreen):
 		cheie = self._cheie()
 		texte = {
 			"favorite": _("OK: lista paginilor favorite."),
-			"sterge": _("OK: șterge istoricul, cookie-urile, datele siturilor și mărirea ținută minte."),
+			"sterge": _("OK: șterge istoricul, cookie-urile, datele site-urilor și mărirea ținută minte."),
 		}
 		if cheie in S.DESCRIERI:
 			self["descriere"].setText(_(S.DESCRIERI[cheie]))
@@ -865,7 +865,7 @@ class HdsNavigatorSetari(Screen, ConfigListScreen):
 			self.session.openWithCallback(self._dupaFavorite, HdsNavigatorFavorite)
 		elif cheie == "sterge":
 			self.session.openWithCallback(self._stergeDatele, MessageBox,
-				_("Ștergi datele de navigare? Se șterg cookie-urile, datele siturilor și mărirea ținută minte. Favoritele rămân."),
+				_("Ștergi datele de navigare? Se șterg cookie-urile, datele site-urilor și mărirea ținută minte. Favoritele rămân."),
 				MessageBox.TYPE_YESNO)
 		elif cheie == "sterge_hbbtv":
 			self.session.openWithCallback(self._stergeHbbtv, MessageBox,
