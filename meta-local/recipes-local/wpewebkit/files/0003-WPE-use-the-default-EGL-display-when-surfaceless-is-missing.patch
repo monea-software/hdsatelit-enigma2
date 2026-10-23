@@ -1,0 +1,107 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] WPE: use the default EGL display when surfaceless is missing
+
+The web process of the WPE port only accepts a GBM or a surfaceless
+(EGL_MESA_platform_surfaceless) EGL display and aborts otherwise. Vendor
+EGL drivers on fbdev (for example Mali Utgard) expose only the default
+display. Build PlatformDisplayDefault for WPE too, try it after the
+surfaceless display, and render into shared memory buffers with it
+(GL rendering read back with glReadPixels, since there is no dma-buf
+export). Nothing changes when a surfaceless display is available.
+
+Upstream-Status: Inappropriate [embedded fbdev specific]
+
+diff -ruN a/Source/WebCore/platform/graphics/PlatformDisplay.h b/Source/WebCore/platform/graphics/PlatformDisplay.h
+--- a/Source/WebCore/platform/graphics/PlatformDisplay.h	2026-09-27 12:50:10.106154790 +0300
++++ b/Source/WebCore/platform/graphics/PlatformDisplay.h	2026-09-27 12:50:10.175514788 +0300
+@@ -81,7 +81,7 @@
+ #if OS(ANDROID)
+         Android,
+ #endif
+-#if PLATFORM(GTK) || OS(ANDROID)
++#if PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+         Default,
+ #endif
+     };
+diff -ruN a/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.cpp b/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.cpp
+--- a/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.cpp	2026-09-27 12:50:10.132639646 +0300
++++ b/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.cpp	2026-09-27 12:50:10.175728626 +0300
+@@ -26,7 +26,7 @@
+ #include "config.h"
+ #include "PlatformDisplayDefault.h"
+ 
+-#if PLATFORM(GTK) || OS(ANDROID)
++#if PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+ 
+ #include "GLContext.h"
+ #include <epoxy/egl.h>
+@@ -57,4 +57,4 @@
+ 
+ } // namespace WebCore
+ 
+-#endif // PLATFORM(GTK) || OS(ANDROID)
++#endif // PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+diff -ruN a/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.h b/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.h
+--- a/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.h	2026-09-27 12:50:10.120005955 +0300
++++ b/Source/WebCore/platform/graphics/egl/PlatformDisplayDefault.h	2026-09-27 12:50:10.175644556 +0300
+@@ -25,7 +25,7 @@
+ 
+ #pragma once
+ 
+-#if PLATFORM(GTK) || OS(ANDROID)
++#if PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+ 
+ #include "PlatformDisplay.h"
+ 
+@@ -44,4 +44,4 @@
+ 
+ } // namespace WebCore
+ 
+-#endif // PLATFORM(GTK) || OS(ANDROID)
++#endif // PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+diff -ruN a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp	2026-09-27 12:50:10.159266279 +0300
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp	2026-09-27 12:50:10.176038542 +0300
+@@ -621,12 +621,21 @@
+         m_type = Type::EGLImage;
+         setupBufferFormat();
+         break;
++#elif PLATFORM(WPE)
++    case PlatformDisplay::Type::Default:
++        // EGL default display without dma-buf export (for example Mali fbdev):
++        // render with GL and read the pixels back into shared memory.
++        m_type = Type::SharedMemory;
++        break;
+ #endif
+ #else
+     case PlatformDisplay::Type::Surfaceless:
+ #if USE(GBM)
+     case PlatformDisplay::Type::GBM:
+ #endif
++#if PLATFORM(WPE)
++    case PlatformDisplay::Type::Default:
++#endif
+         break;
+ #endif // PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+ #if USE(WPE_RENDERER)
+diff -ruN a/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp b/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp
+--- a/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp	2026-09-27 12:50:10.146142344 +0300
++++ b/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp	2026-09-27 12:50:10.175850514 +0300
+@@ -70,7 +70,7 @@
+ #include <WebCore/PlatformDisplayAndroid.h>
+ #endif
+ 
+-#if PLATFORM(GTK) || OS(ANDROID)
++#if PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+ #include <WebCore/PlatformDisplayDefault.h>
+ #endif
+ 
+@@ -174,7 +174,7 @@
+         return;
+     }
+ 
+-#if PLATFORM(GTK) || OS(ANDROID)
++#if PLATFORM(GTK) || PLATFORM(WPE) || OS(ANDROID)
+     if (auto display = PlatformDisplayDefault::create()) {
+         PlatformDisplay::setSharedDisplay(WTF::move(display));
+         return;

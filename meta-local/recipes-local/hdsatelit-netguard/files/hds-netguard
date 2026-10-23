@@ -1,0 +1,90 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          hds-netguard
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: Ruta blackhole spre serverul de autorizare Dinobot
+# Description:       Opreste iesirea receptorului spre serverul de "autorizare"
+#                    incastrat in /usr/bin/showiframe (Dinobot). Adresa e scrisa
+#                    ca IP in binar, deci nu trece prin DNS; blocarea se face la
+#                    nivel de ruta, cu iproute2 (deja in imagine).
+#                    Nu atinge redarea: pe un receptor deja provizionat calea de
+#                    retea din showiframe nu ruleaza (autorizarea trece local, din OTP).
+### END INIT INFO
+#
+# Dovezi: securitate-showiframe/CONCLUZIE-SI-MASURI.md si REPARARE.md (24.09.2026).
+#
+# 117.78.33.205 = serverul strain din URL-ul cmd:authorize2 (http, port 18080), format de
+# getMac_type (0x30c84), singura cale de retea cu apelant (auth_func -> remoteRestore).
+# 192.168.12.34 (getRemoteAuth, apelat numai din chipAuth, care nu are niciun apelant) NU se
+# blocheaza aici: e o adresa privata de LAN, o ruta blackhole spre ea ar taia un aparat real
+# din reteaua unui utilizator care are 192.168.12.0/24 acasa. Sirul ei e acoperit de peticul
+# optional din dinobot-showiframe-u57.bbappend.dezactivat.
+#
+# Pe un cip NEPROVIZIONAT (OTP fara token), fara aceasta ruta nu se poate autoriza prin retea
+# si ramane fara video (CONCLUZIE 3.7). Portita: "/etc/init.d/hds-netguard stop", o pornire a
+# lui enigma2, apoi "/etc/init.d/hds-netguard start" (sau repornire).
+
+# busybox "ip" nu e cel din imagine; iproute2 e cel care stie sigur "blackhole"
+IP=/sbin/ip.iproute2
+[ -x "$IP" ] || IP=/sbin/ip
+
+GUARD_IPS="117.78.33.205"
+
+# mesajele ajung pe consola seriala (stderr la rcS) si in jurnalul nucleului (dmesg)
+say() {
+    # $1 = nivel printk (3 eroare, 6 informatie), restul = mesajul
+    lvl="$1"; shift
+    [ "$lvl" -le 4 ] && echo "hds-netguard: $*" >&2
+    [ -c /dev/kmsg ] && echo "<$lvl>hds-netguard: $*" > /dev/kmsg 2>/dev/null
+    return 0
+}
+
+# 0 daca exista exact ruta blackhole spre $1/32 in tabela principala
+has_blackhole() {
+    case "$($IP -4 route show exact "$1"/32 2>/dev/null)" in
+        blackhole*) return 0 ;;
+    esac
+    return 1
+}
+
+case "$1" in
+    start|"")
+        bad=""
+        for a in $GUARD_IPS; do
+            $IP -4 route replace blackhole "$a"/32 2>/dev/null
+            has_blackhole "$a" || bad="$bad $a"
+        done
+        if [ -n "$bad" ]; then
+            say 3 "NU s-a pus ruta blackhole spre:$bad (showiframe poate iesi in retea)"
+        else
+            say 6 "blackhole pus spre $GUARD_IPS"
+        fi
+        ;;
+    stop)
+        for a in $GUARD_IPS; do
+            $IP -4 route del blackhole "$a"/32 2>/dev/null
+        done
+        say 4 "ruta blackhole scoasa spre $GUARD_IPS (numai pentru autorizarea unui cip nou)"
+        ;;
+    status)
+        rc=0
+        for a in $GUARD_IPS; do
+            if has_blackhole "$a"; then
+                echo "blackhole $a: pusa"
+            else
+                echo "blackhole $a: LIPSESTE"
+                rc=1
+            fi
+        done
+        exit $rc
+        ;;
+    *)
+        echo "Utilizare: $0 {start|stop|status}" >&2
+        exit 1
+        ;;
+esac
+# la pornire nu oprim niciodata sirul rcS, chiar daca ruta n-a prins (mesajul de mai sus ramane)
+exit 0

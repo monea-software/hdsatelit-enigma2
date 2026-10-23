@@ -1,0 +1,627 @@
+<!-- Modificat de moneasoftware.com si hdsatelit.com, 2026 -->
+<menuxml>
+<menu key="mainmenu" text="Home Menu" title="Meniu principal">
+	<id val="mainmenu" />
+	<!-- pictograma= pe fiecare intrare: desenul ei in meniul cu dale (Screens/Menu.py, imaginile
+	     HDSatelit/meniu/<culoare>/<glif>.png); intrarile puse de extensii primesc toate pictograma generica. -->
+
+	<!-- La tasta MENU primele două intrări sunt „Scanare” și
+	     „Orientarea și setarea antenei” (tastele 1 și 2), la primul nivel, nu într-un submeniu din Setări: ce se
+	     folosește des nu stă îngropat. Drumul vechi prin Setări > Recepție și scanare a fost scos, ca să nu
+	     existe două căi spre același ecran.
+	     Nodurile stau după <id val="mainmenu" /> (Menu.__init__ pornește numărătoarea la <id>), iar fiecare
+	     submeniu are <id>-ul lui pus primul, din același motiv.
+	     „Scanare” păstrează key și id „scan”. Importul de canale are din 0.2.6 intrarea lui aici, în menu.xml
+	     (înainte se agăța ca extensie de id-ul „scan”).
+	     Textele sunt direct în română, ca titlurile ecranelor Hds: Menu.py le trece prin _(), iar traducerile
+	     sunt în po/ pentru toate limbile. -->
+	<menu key="scan" weight="1" level="0" text="Scanare" entryID="hds_scanare" pictograma="scanare" web="/scanare" flushConfigOnClose="1">
+		<id val="scan" />
+		<!-- Satelit, în ordinea cerută. Felul ajunge în ecran ca argument (Menu.py face eval pe textul din
+		     <screen>, deci ghilimelele sunt obligatorii): ScanerSatelit(session, fel). „Mai mulți sateliți” are
+		     ecranul lui (o bifă pe fiecare satelit). La DVB-T2 și DAB+ ecranul deschide singur lista de fluxuri
+		     (HdsComunPrincipal) după o căutare cu rezultat, deci lista nu mai are intrare separată. -->
+		<menu key="hds_scanare_satelit" weight="10" level="0" text="Satelit" entryID="hds_scanare_satelit" pictograma="satelit" web="/scanare/satelit">
+			<id val="hds_scanare_satelit" />
+			<item level="0" text="După transponder" entryID="hds_satelit_transponder" pictograma="frecventa" web="/scanare/satelit/transponder" weight="10">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"transponder"</screen>
+			</item>
+			<item level="0" text="După satelit" entryID="hds_satelit_dupa_satelit" pictograma="satelit" web="/scanare/satelit/satelit" weight="20">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"satelit"</screen>
+			</item>
+			<item level="0" text="Mai mulți sateliți" entryID="hds_satelit_mai_multi" pictograma="sateliti" web="/scanare/satelit/mai-multi" weight="30">
+				<screen module="ScanerMaiMultiSateliti" screen="ScanerMaiMultiSateliti" />
+			</item>
+			<item level="0" text="După operator" entryID="hds_satelit_operator" pictograma="operator" web="/scanare/satelit/operator" weight="40">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"operator"</screen>
+			</item>
+			<item level="0" text="Cu date introduse manual" entryID="hds_satelit_manual" pictograma="manual" web="/scanare/satelit/manual" weight="50">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"manual"</screen>
+			</item>
+			<item level="0" text="DVB-T2 prin satelit" entryID="hds_satelit_dvbt2" pictograma="terestru" web="/scanare/satelit/dvbt2" weight="60">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"dvbt2"</screen>
+			</item>
+			<item level="0" text="DAB+ prin satelit" entryID="hds_satelit_dab" pictograma="radio" web="/scanare/satelit/dab" weight="70">
+				<screen module="ScanerSatelit" screen="ScanerSatelit">"dab"</screen>
+			</item>
+		</menu>
+		<!-- Cablu, în ordinea cerută: ScanerCablu(session, fel). -->
+		<menu key="hds_scanare_cablu" weight="20" level="0" text="Cablu" entryID="hds_scanare_cablu" pictograma="cablu" web="/scanare/cablu">
+			<id val="hds_scanare_cablu" />
+			<item level="0" text="După frecvență" entryID="hds_cablu_frecventa" pictograma="frecventa" web="/scanare/cablu/frecventa" weight="10">
+				<screen module="ScanerCablu" screen="ScanerCablu">"frecventa"</screen>
+			</item>
+			<item level="0" text="Toată banda" entryID="hds_cablu_banda" pictograma="banda" web="/scanare/cablu/banda" weight="20">
+				<screen module="ScanerCablu" screen="ScanerCablu">"banda"</screen>
+			</item>
+			<item level="0" text="După operator" entryID="hds_cablu_operator" pictograma="operator" web="/scanare/cablu/operator" weight="30">
+				<screen module="ScanerCablu" screen="ScanerCablu">"operator"</screen>
+			</item>
+			<item level="0" text="Manual" entryID="hds_cablu_manual" pictograma="manual" web="/scanare/cablu/manual" weight="40">
+				<screen module="ScanerCablu" screen="ScanerCablu">"manual"</screen>
+			</item>
+			<item level="0" text="Automat" entryID="hds_cablu_automat" pictograma="automat" web="/scanare/cablu/automat" weight="50">
+				<screen module="ScanerCablu" screen="ScanerCablu">"automat"</screen>
+			</item>
+		</menu>
+		<!-- Terestru, în ordinea cerută: ScanerTerestru(session, fel). -->
+		<menu key="hds_scanare_terestru" weight="30" level="0" text="Terestru" entryID="hds_scanare_terestru" pictograma="terestru" web="/scanare/terestru">
+			<id val="hds_scanare_terestru" />
+			<item level="0" text="După canal sau multiplex" entryID="hds_terestru_canal" pictograma="multiplex" web="/scanare/terestru/canal" weight="10">
+				<screen module="ScanerTerestru" screen="ScanerTerestru">"canal"</screen>
+			</item>
+			<item level="0" text="Toată banda" entryID="hds_terestru_banda" pictograma="banda" web="/scanare/terestru/banda" weight="20">
+				<screen module="ScanerTerestru" screen="ScanerTerestru">"banda"</screen>
+			</item>
+			<item level="0" text="După regiune sau operator" entryID="hds_terestru_regiune" pictograma="regiune" web="/scanare/terestru/regiune" weight="30">
+				<screen module="ScanerTerestru" screen="ScanerTerestru">"regiune"</screen>
+			</item>
+			<item level="0" text="Manual" entryID="hds_terestru_manual" pictograma="manual" web="/scanare/terestru/manual" weight="40">
+				<screen module="ScanerTerestru" screen="ScanerTerestru">"manual"</screen>
+			</item>
+			<item level="0" text="Automat" entryID="hds_terestru_automat" pictograma="automat" web="/scanare/terestru/automat" weight="50">
+				<screen module="ScanerTerestru" screen="ScanerTerestru">"automat"</screen>
+			</item>
+		</menu>
+		<!-- Scanarea detaliată (in cod: culegerea canal cu canal): trece prin lista facuta de scanare si noteaza ce se afla numai cand
+		     canalul ruleaza (rezolutia, codarea, accesul, PID-urile, pistele). Screens/HdsCulegereTotala.py. Adresa
+		     web veche, /culegere-canale, duce la aceeasi pagina (HdsWebControl/plugin.py). -->
+		<item level="0" text="Scanare detaliată" entryID="hds_culegere_canale" pictograma="scanare-detaliata" web="/scanare-detaliata" weight="40">
+			<screen module="HdsCulegereTotala" screen="HdsCulegereTotala" />
+		</item>
+		<!-- 0.2.6: canalele și setările dintr-o copie de pe stick sau din altă imagine.
+		     Ecranul e în Plugins/Extensions/HdsImportSetari/plugin.py, numit în Screens/HdsImportSetari.py. Înainte era
+		     o extensie cu trei căi (lista de extensii, tasta albastră, agățată aici); acum are numai locul acesta.
+		     In web: /import. -->
+		<item level="0" text="Import canale și setări" entryID="hds_import_setari" pictograma="import" web="/import" weight="50" stare="netestat">
+			<screen module="HdsImportSetari" screen="HdsImportSetariScreen" />
+		</item>
+		<!-- Listele de canale gata făcute nu sunt o scanare. Stau aici, tot numai în modul avansat, până se
+		     hotărăște unde merg. Ecranul (Screens/HdsListeImplicite.py) duce la scanare și la import cât imaginea nu
+		     are liste, iar asistentul vechi (ScanSetup.DefaultSatLists) îl deschide numai când există pachete de liste. -->
+		<item level="1" text="Liste implicite de canale" entryID="default_lists" pictograma="liste-implicite" web="/liste-implicite" weight="60">
+			<screen module="HdsListeImplicite" screen="HdsListeImplicite" />
+		</item>
+	</menu>
+
+	<!-- Orientarea și setarea antenei: tot ce era risipit prin Setări > Recepție și scanare, în ordinea cerută.
+	     Atributul web= (pe orice intrare) e pagina aceluiași ecran în interfața web: Menu.py nu îl
+	     citește, iar meniul web se va construi din el. Poziția unei intrări se scrie numai aici.
+	     Atributul stare= pune la afișare semnul „(în lucru)”
+	     (stare="in-lucru": intrarea nu face încă ce promite) sau „(netestat)” (stare="netestat": terminată, dar
+	     neprobată încă pe receptor), pe televizor (Screens/Menu.py) și în web, prin Components/HdsStareMeniu.py.
+	     Numele intrării nu se schimbă. Semnul se scoate aici după proba pe receptor; la 1.0.0 nu rămâne niciunul. -->
+	<menu key="hds_antena" weight="2" level="0" text="Orientarea și setarea antenei" entryID="hds_antena" pictograma="antena-orientare" web="/antena" flushConfigOnClose="1">
+		<id val="hds_antena" />
+		<item level="0" text="Setări tuner" entryID="hds_antena_tuner" pictograma="tuner" web="/antena/tuner" weight="10">
+			<screen module="Satconfig" screen="NimSelection" />
+		</item>
+		<item level="0" text="Configurare LNB" entryID="hds_antena_lnb" pictograma="lnb" web="/antena/lnb" weight="20" stare="netestat">
+			<screen module="ConfigLNB" screen="ConfigLNB" />
+		</item>
+		<item level="0" text="Rotirea antenei" entryID="hds_antena_rotire" pictograma="rotire" weight="30" web="/motor">
+			<screen module="HdsDishMotor" screen="HdsDishMotorEcran" />
+		</item>
+		<item level="0" text="Locul antenei" entryID="hds_antena_locul" pictograma="locul-antenei" weight="35" web="/antena/locul" stare="netestat">
+			<screen module="HdsLocul" screen="HdsLoculEcran" />
+		</item>
+		<item level="0" text="Calculator de unghiuri" entryID="hds_antena_calculator" pictograma="unghi" web="/antena/calculator" weight="40">
+			<screen module="PositionerSetup" screen="HdsPositionerSetup" />
+		</item>
+		<item level="0" text="Găsire semnal" entryID="hds_antena_gasire_semnal" pictograma="semnal" web="/antena/semnal" weight="50">
+			<screen module="Satfinder" screen="Satfinder" />
+		</item>
+		<!-- Proba DiSEqC e o extensie (Plugins/SystemPlugins/DiseqcTester), nu un modul din Screens, iar
+		     <screen> pune mereu prefixul „Screens.”, deci se deschide prin <code>. In web: /proba-diseqc. -->
+		<item level="0" text="Proba DiSEqC" entryID="hds_antena_proba_diseqc" pictograma="comutator" web="/proba-diseqc" weight="60">
+			<code>
+from Plugins.SystemPlugins.DiseqcTester.plugin import DiseqcTesterNimSelection
+self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
+			</code>
+		</item>
+	</menu>
+
+	<!-- 1. Înregistrări & Timere -->
+	<item level="0" text="Timers &amp; Recordings" entryID="timer_edit" pictograma="programari" web="/temporizatoare" weight="5">
+		<screen module="TimerEdit" screen="TimerEditList" />
+	</item>
+
+	<!-- 2. Informații Sistem & Telemetrie -->
+	<menu key="information" level="0" text="System Information" entryID="info_screen" pictograma="informatii" weight="10">
+		<id val="information" />
+		<!-- Modul sigur (Screens/HdsModSigur.py): intrarea se vede numai cand interfata a pornit in modul sigur, dupa
+		     5 opriri neasteptate in 10 minute (SystemInfo["HdsModSigur"], pus de Components/HdsModSigur.porneste).
+		     Acelasi ecran se deschide singur la pornire; de aici se deschide din nou dupa EXIT. -->
+		<item level="0" text="Mod sigur" entryID="hds_mod_sigur" pictograma="mod-sigur" weight="1" web="/mod-sigur" requires="HdsModSigur" stare="netestat">
+			<screen module="HdsModSigur" screen="HdsModSigur" />
+		</item>
+		<item level="0" text="Despre imagine" entryID="about_hds" pictograma="despre" weight="5" web="/informatii/despre">
+			<screen module="Information" screen="HdsAbout" />
+		</item>
+		<!-- Licentele programelor din imagine si adresa codului sursa (Screens/HdsLicente.py, lista facuta la
+		     construire de clasa hds-licente). Textul e direct in romana, ca titlurile ecranelor Hds. -->
+		<item level="0" text="Licențe" entryID="hds_licente" pictograma="licente" weight="6" web="/licente">
+			<screen module="HdsLicente" screen="HdsLicente" />
+		</item>
+		<!-- jurnalul versiunilor, ce e nou de la ultima actualizare (Screens/HdsJurnalVersiuni.py).
+		     Textul e direct in romana, ca titlurile celorlalte ecrane Hds: Menu.py il trece prin _(), iar un text
+		     fara traducere ramane neschimbat. Sta langa „Despre", pentru ca amandoua spun ce e instalat. -->
+		<item level="0" text="Ce e nou" entryID="hds_jurnal_versiuni" pictograma="noutati" weight="7" web="/jurnal">
+			<screen module="HdsJurnalVersiuni" screen="HdsJurnalVersiuni" />
+		</item>
+		<item level="0" text="Device &amp; Hardware" entryID="receiver_info" pictograma="receptor" weight="10" web="/informatii/receptor">
+			<screen module="Information" screen="HdsReceiverInfo" />
+		</item>
+		<item level="0" text="Tuner Overview" entryID="tuner_info" pictograma="tuner" weight="15" web="/informatii/tunere">
+			<screen module="Information" screen="HdsTunerInfo" />
+		</item>
+		<item level="0" text="Memory Status" entryID="memory_info" pictograma="memorie" weight="20" web="/informatii/memorie">
+			<screen module="Information" screen="HdsMemoryInfo" />
+		</item>
+		<item level="0" text="Storage &amp; Disks" entryID="storage_info" pictograma="disc" weight="25" web="/informatii/stocare">
+			<screen module="Information" screen="HdsStorageInfo" />
+		</item>
+		<item level="0" text="Network Status" entryID="network_info" pictograma="retea" weight="30" web="/informatii/retea">
+			<screen module="Information" screen="HdsNetworkInfo" />
+		</item>
+		<!-- starea iesirii HDMI si ce accepta televizorul (Screens/HdsHdmiInfo.py). Textul e direct in
+		     romana, ca titlurile ecranelor Hds: Menu.py il trece prin _(), iar un text fara traducere ramane neschimbat. -->
+		<item level="0" text="Informații HDMI" entryID="hds_hdmi_info" pictograma="mufa-video" weight="33" web="/informatii/hdmi">
+			<screen module="HdsHdmiInfo" screen="HdsHdmiInfo" />
+		</item>
+		<item level="0" text="Channel Information" entryID="service_info_screen" pictograma="canal-info" web="/informatii-canal" weight="35">
+			<screen module="ServiceInfo" screen="ServiceInfo" />
+		</item>
+	</menu>
+
+	<!-- 3. Extensii & Aplicații -->
+	<item level="0" text="Plugins &amp; Applications" entryID="plugin_selection" pictograma="extensii" web="/extensii" weight="15">
+		<screen module="PluginBrowser" screen="PluginBrowser" />
+	</item>
+
+	<!-- 4. Configurare Sistem & Setări -->
+	<menu key="setup" level="0" text="Settings" flushConfigOnClose="1" entryID="setup_selection" pictograma="setari" weight="20">
+		<id val="setup" />
+
+		<!-- „Caută setări” (Screens/HdsCautaSetari.py, indexul in Components/HdsCautaSetari.py): cautarea in
+		     tot meniul, ca la telefoanele Android; OK deschide ecranul cu randul gasit ales. Prima intrare din Setări; tasta
+		     TEXT o deschide din orice meniu (Screens/Menu.py); a doua intrare, hds_cauta_setari_principal, e jos in meniul
+		     principal (singura pereche spre acelasi ecran, hotarata anume). In web: /cauta-setari. -->
+		<item level="0" text="Caută setări" entryID="hds_cauta_setari" pictograma="cauta" weight="1" web="/cauta-setari">
+			<screen module="HdsCautaSetari" screen="HdsCautaSetari" />
+		</item>
+
+		<!-- „Recepție și scanare” nu mai stă aici. Scanarea și antena sunt primele două intrări din
+		     meniul principal (mai sus). Nu se pun înapoi în Setări: o singură cale spre fiecare ecran. -->
+
+		<!-- Surse Internet: DVB-I, HbbTV, DVB-MABR -->
+		<menu key="internet_sources" weight="15" level="0" text="Internet Sources" entryID="internet_sources_selection" pictograma="surse-internet">
+			<id val="internet_sources" />
+			<item level="0" text="DVB-I Setup (TV over Internet)" entryID="dvbi_setup" pictograma="tv-internet" web="/dvb-i" weight="10">
+				<screen module="HdsDvbI" screen="HdsDvbISetup" />
+			</item>
+			<item level="0" text="DVB-I Reload Now" entryID="dvbi_reload" pictograma="reincarca" web="/dvb-i?f=reincarca" weight="20">
+				<screen module="HdsDvbI" screen="HdsDvbIReloadNow" />
+			</item>
+			<!-- 0.2.7: "HbbTV & Red Button" (hbbtv_config) scos: ecranul scria hdshbbtv.conf, necitit de
+			     nimeni. Setarile HbbTV (semnul rosu, "Șterge datele HbbTV") sunt in "Setări navigator web". -->
+			<item level="1" text="DVB-MABR (IP Multicast)" entryID="mabr_config" pictograma="multicast" web="/mabr" weight="40" stare="in-lucru">
+				<screen module="HdsDvbMABR" screen="HdsDvbMABRSetup" />
+			</item>
+			<item level="0" text="IPTV (M3U / Stalker / Xtream)" entryID="hds_iptv_setup" pictograma="lista-redare" web="/iptv" weight="50" stare="in-lucru">
+				<screen module="IptvSetup" screen="IptvSetup" />
+			</item>
+			<item level="0" text="HdsWebControl (Web Interface)" entryID="hds_webcontrol_setup" pictograma="interfata-web" web="/interfata-web" weight="60">
+				<screen module="HdsWebControlSetup" screen="HdsWebControlSetup" />
+			</item>
+			<!-- 0.2.6: setările navigatorului web (pagina de pornire, mărirea, literele, desenul, favoritele,
+			     ștergerea datelor); navigatorul însuși e în Media. Pereche web: /navigator. -->
+			<item level="0" text="Setări navigator web" entryID="hds_navigator_setari" pictograma="navigator-setari" weight="70" web="/navigator">
+				<screen module="HdsNavigatorWeb" screen="HdsNavigatorWebSetari" />
+			</item>
+		</menu>
+
+
+
+		<!-- Categoria 2: Afișaj & Video -->
+		<menu key="video_audio" weight="20" level="0" text="Video &amp; Display Settings" entryID="video_audio_selection" pictograma="imagine">
+			<id val="video_audio" />
+			<!-- rezolutia, frecventa, culorile HDMI si ce se vede la schimbarea canalului (Screens/VideoSetup.py); in web: /video -->
+			<item level="0" text="Advanced Video Setup" entryID="video_setup" pictograma="video-avansat" weight="20" web="/video">
+				<screen module="VideoSetup" screen="VideoSetup" />
+			</item>
+			<!-- calitatea imaginii: profilurile SD / HD / 4K x SDR / HDR10 / HLG ale blocului de calitate al placii si iesirea HDR
+			     (Screens/HdsCalitateImagine.py, Components/HdsCalitateImagine.py). Sta langa setarile video fiindca e tot
+			     despre imaginea trimisa la televizor; numai pe placile cu /proc/msp/pq (SystemInfo HdsCalitateImagine). In web:
+			     /calitate-imagine -->
+			<item level="0" text="Calitatea imaginii" entryID="hds_calitate_imagine" pictograma="calitate-imagine" weight="25" web="/calitate-imagine" requires="HdsCalitateImagine">
+				<screen module="HdsCalitateImagine" screen="HdsCalitateImagine" />
+			</item>
+			<!-- "Analog RF Modulator" (rfmod_setup, <setup id="RFmod">) scos din meniu: Viper 4K V20 nu are modulator RF.
+			     Pe receptor enigma2 scrie la pornire "couldnt open /dev/rfmod0" (eRFmod.detected() fals, deci intrarea era
+			     oricum ascunsa de requires="RfModulator"); configuratia masinii u57 (meta-dinobot) nu are modulator. -->
+		</menu>
+
+		<!-- Categoria 3: Sunet & Audio -->
+		<menu key="audio_menu" weight="30" level="0" text="Audio &amp; Sound Tracks" entryID="audio_selection" pictograma="sunet-subtitrari">
+			<id val="audio_menu" />
+			<!-- iesirea sunetului (Automat / Manual, Components/HdsSunet.py), AC3 si DTS downmix; in web: /sunet -->
+			<item level="0" text="Sound Output &amp; Downmix" entryID="audio_setup" pictograma="iesire-sunet" weight="10" web="/sunet">
+				<setup id="avsetup" />
+			</item>
+			<!-- pasul volumului, volumul tinut minte pe canal, volumul egal (AVC-ul placii) si intarzierea
+			     sunetului pe HDMI si pe optic (Components/HdsSetariSunet.py, setup.xml hds_setari_sunet); intarzierea pistei
+			     de acum si in ecranul AUDIO. In web: /volum-intarziere (volum_intarziere_web.py) -->
+			<item level="0" text="Volum și întârziere" entryID="hds_setari_sunet" pictograma="volum" weight="12" web="/volum-intarziere">
+				<setup id="hds_setari_sunet" />
+			</item>
+			<!-- egalizatorul in procesor pentru posturile de radio: 10 benzi, presetari, modul de noapte, reglajele pe post
+			     (Screens/HdsEgalizator.py, Components/HdsEgalizator.py, lib/service/hdsegalizator.cpp); in web: /egalizator -->
+			<item level="0" text="Egalizator" entryID="hds_egalizator" pictograma="egalizator" weight="15" web="/egalizator">
+				<screen module="HdsEgalizator" screen="HdsEgalizator" />
+			</item>
+			<!-- limba sunetului si a subtitrarilor, cate 3 preferinte, fara subtitrari niciodata, uitarea alegerilor
+			     de mana tinute minte pe canale (Screens/HdsPisteLimbi.py). In web: /limbi. -->
+			<item level="0" text="Limba sunetului și a subtitrărilor" entryID="hds_piste_limbi" pictograma="limbi" weight="20" web="/limbi">
+				<screen module="HdsPisteLimbi" screen="HdsPisteLimbi" />
+			</item>
+			<!-- cum arata subtitrarile text (teletext si fisiere): marimea, culoarea, conturul, umbra, fundalul,
+			     inaltimea, cu fraza de proba pe ecran (Screens/HdsSubtitrariAspect.py); in web: /subtitrari. -->
+			<item level="0" text="Aspectul subtitrărilor" entryID="hds_subtitrari_aspect" pictograma="subtitrari-aspect" weight="25" web="/subtitrari">
+				<screen module="HdsSubtitrariAspect" screen="HdsSubtitrariAspect" />
+			</item>
+			<!-- traducerea automata a subtitrarilor text (teletext, fisiere, textul citit din subtitrarile DVB) prin serviciul
+			     ales de om, cu cheia sau adresa lui (Screens/HdsTraducereSubtitrari.py); in web: /traducere-subtitrari. -->
+			<item level="0" text="Traducerea subtitrărilor" entryID="hds_traducere_subtitrari" pictograma="traducere" weight="26" web="/traducere-subtitrari">
+				<screen module="HdsTraducereSubtitrari" screen="HdsTraducereSubtitrari" />
+			</item>
+			<!-- subtitrarile filmelor din fisierele de langa film: codarea implicita, ş ţ -> ș ț, fisierul inaintea pistei din
+			     film, subdosarele (setup.xml hds_subtitrari_filme); in web: /subtitrari-film (subtitrarea filmului de acum,
+			     cu drumul spre aceste setari), iar setarile si in pagina setarilor -->
+			<item level="0" text="Subtitrările filmelor" entryID="hds_subtitrari_filme" pictograma="subtitrari-film" web="/subtitrari-film" weight="27" stare="netestat">
+				<setup id="hds_subtitrari_filme" />
+			</item>
+			<!-- 0.3.0.2: descarcarea subtitrarilor de pe internet (OpenSubtitles, subs.ro, SubDL), conturile si cheile. Din
+			     0.3.2 e in imagine (Components/HdsSubtitrariInternet/ecrane.py; Screens/HdsDescarcareSubtitrari.py il
+			     numeste), nu mai e pluginul separat HdsSubtitleDownloader: intrarea se vede mereu, fara requires. Nu e in
+			     lista de pluginuri si nici la tasta albastra; cautarea ramane in ecranul tastei SUB.
+			     In web: /descarcare-subtitrari (aceleasi conturi, parolele si cheile numai se scriu sau se sterg, nu se
+			     arata). -->
+			<item level="0" text="Descărcare subtitrări" entryID="hds_descarcare_subtitrari" pictograma="subtitrari-descarcare" weight="28" stare="netestat" web="/descarcare-subtitrari">
+				<screen module="HdsDescarcareSubtitrari" screen="HdsDescarcareSetari" />
+			</item>
+			<!-- ecranul radio pe tot ecranul: pornit sau oprit, vizualizatorul, culorile, barele, fluiditatea, ecranul de
+			     odihna, emisiunile urmatoare, bara la schimbarea postului (Screens/HdsEcranRadio.py); in web: /radio -->
+			<item level="0" text="Ecranul radio" entryID="hds_ecran_radio" pictograma="ecran-radio" weight="30" web="/radio">
+				<screen module="HdsEcranRadio" screen="HdsEcranRadioSetari" />
+			</item>
+		</menu>
+
+		<!-- Categoria 4: Înregistrări & Stocare -->
+		<menu key="harddisk" weight="40" level="0" text="Recording &amp; Storage Setup" entryID="storage_selection" pictograma="inregistrari-discuri">
+			<id val="harddisk" />
+			<!-- unde se salveaza inregistrarile, spatiul liber si discurile conectate, cu „Folosește „<disc>” pentru
+			     înregistrări” (Screens/HdsLocInregistrari.py, acelasi ecran ca la tasta rosie fara disc); in web: /stocare -->
+			<item level="0" text="Locul înregistrărilor" entryID="hds_loc_inregistrari" pictograma="loc-inregistrari" weight="5" web="/stocare" stare="netestat">
+				<screen module="HdsLocInregistrari" screen="HdsLocInregistrari" />
+			</item>
+			<item level="0" text="Recording Locations" entryID="RecordPaths" pictograma="dosare" web="/locuri-inregistrari" weight="10">
+				<screen module="RecordPaths" screen="RecordPathsSettings" />
+			</item>
+			<item level="0" text="Format Hard Drive" entryID="harddisk_init" pictograma="formatare" web="/discuri?f=formatare" weight="20">
+				<screen module="HarddiskSetup" screen="HarddiskSelection" />
+			</item>
+			<item level="1" text="Check Disk Health" entryID="harddisk_check" pictograma="verificare-disc" web="/discuri?f=verificare" weight="30">
+				<screen module="HarddiskSetup" screen="HarddiskFsckSelection" />
+			</item>
+			<item level="1" text="Hard Drive Standby" entryID="harddisk_setup" pictograma="disc-oprire" web="/setari?id=harddisk" weight="40">
+				<setup id="harddisk" />
+			</item>
+			<item level="1" text="Swap File" entryID="hds_swap_manager" pictograma="swap" web="/swap" weight="45">
+				<screen module="SwapManager" screen="SwapManager" />
+			</item>
+		</menu>
+
+		<!-- Categoria 5: Interfață & Aspect OSD -->
+		<menu key="gui_menu" weight="50" level="0" text="Interface &amp; Appearance" entryID="gui_selection" pictograma="interfata">
+			<id val="gui_menu" />
+			<!-- alegerea skinului intreg (Screens/SkinSelector.py, Components/HdsSkinuri.py), cu nume deosebit de
+			     "Tema interfetei" de mai jos (varianta Clasic sau Pro a skinului HD Satelit); in web: /skin -->
+			<item level="0" text="Aspectul ecranelor" entryID="skin_setup" pictograma="aspect-ecrane" web="/skin" weight="10">
+				<screen module="SkinSelector" screen="SkinSelector" />
+			</item>
+			<!-- tema interfetei de pe televizor, Clasic sau Pro (Screens/HdsTemaInterfata.py,
+			     logica in Components/HdsTemaTv.py; ecranele Pro in HDSatelit/skin_pro.xml din pachetul skinului). Se aplica la
+			     repornirea interfetei. Separata de tema interfetei web (/setari). In web: /tema-tv. -->
+			<item level="0" text="Tema interfeței" entryID="hds_tema_interfata" pictograma="tema" weight="11" web="/tema-tv">
+				<screen module="HdsTemaInterfata" screen="HdsTemaInterfata" />
+			</item>
+			<!-- 0.2.6: panoul skinului HDSatelit (paleta, pagina tehnică), din pachetul
+			     hdsatelit-skin (Plugins/Extensions/HdsSkinSetari, numit în Screens/HdsSkinSetari.py). Pluginul vede
+			     intrarea asta în menu.xml și nu se mai pune în lista de extensii; pe alte imagini rămâne plugin.
+			     Ascunsă fără pachetul skinului (SystemInfo HdsSkinSetari). În web: /culori-skin, culorile pe roluri (paleta,
+			     opacitatea și pagina tehnică se aleg pe televizor). -->
+			<item level="0" text="Setări skin" entryID="hds_skin_setari" pictograma="setari-skin" weight="12" requires="HdsSkinSetari" web="/culori-skin">
+				<screen module="HdsSkinSetari" screen="HdsSkinSetari" />
+			</item>
+			<item level="0" text="System Language" entryID="language_setup" pictograma="limba" web="/limba-interfata" weight="20">
+				<screen module="LanguageSelection" />
+			</item>
+			<item level="0" text="OSD Preferences" entryID="usage_setup" pictograma="setari-generale" web="/setari?id=usage" weight="30">
+				<setup id="usage" />
+			</item>
+			<item level="1" text="Front Panel Display" requires="Display" entryID="lcd_setup" pictograma="afisaj-luminozitate" web="/setari?id=lcd" weight="40">
+				<setup id="lcd" />
+			</item>
+			<item level="1" text="Font Size" entryID="hds_font_setup" pictograma="marime-text" weight="45" web="/marime-text">
+				<screen module="FontSetup" screen="FontSetup" />
+			</item>
+			<!-- fontul interfetei, ales dintre fonturile livrate cu imaginea (Screens/HdsFontInterfata.py); in web: /font-interfata -->
+			<item level="0" text="Fontul interfeței" entryID="hds_font_interfata" pictograma="font" weight="45" web="/font-interfata">
+				<screen module="HdsFontInterfata" screen="HdsFontInterfata" />
+			</item>
+			<item level="1" text="Screen Margins / Overscan" entryID="hds_osd_calibration" pictograma="margini" weight="46" web="/margini-ecran">
+				<screen module="OSDCalibration" screen="OSDCalibration" />
+			</item>
+			<!-- ecranul de pornire, galeria gata facuta plus poza omului (Screens/HdsEcranPornire.py).
+			     Ia locul intrarii vechi „Boot Screen Manager", care chema BootlogoManager: acela cerea ffmpeg, care nu
+			     exista pe receptor, si scria in /usr/share/bootlogo.mvi, cale pe care scriptul de pornire instalat
+			     (tools/enigma2.sh.in) nu o citeste - deci nu schimba nimic. Textul e direct in romana, ca titlurile
+			     celorlalte ecrane Hds: Menu.py il trece prin _(), iar un text fara traducere ramane neschimbat. -->
+			<item level="0" text="Fonturi Google" entryID="hds_fonturi_google" pictograma="fonturi-descarcare" weight="46" web="/fonturi">
+				<screen module="HdsFonturi" screen="HdsFonturi" />
+			</item>
+			<item level="0" text="Ecran de pornire" entryID="hds_ecran_pornire" pictograma="ecran-pornire" weight="47" web="/ecrane">
+				<screen module="HdsEcranPornire" screen="HdsEcranPornire" />
+			</item>
+		</menu>
+
+		<!-- Categoria 7: Acces condiționat (modulele de acces, serverele de carduri, CI). Pagina web /acces-conditionat
+		     (HdsWebControl/acces_conditionat_web.py) are modulele, pornirea / oprirea lor si legatura spre interfetele
+		     lor web (/interfete-cam). -->
+		<menu key="cam_menu" weight="70" level="0" text="Acces condiționat" entryID="cam_selection" pictograma="acces-conditionat" web="/acces-conditionat">
+			<id val="cam_menu" />
+			<item level="0" text="Module de acces condiționat" entryID="cam_setup" pictograma="modul-ci" weight="10" web="/acces-conditionat">
+				<screen module="CamSetup" screen="CamSetup" />
+			</item>
+			<item level="0" text="Informații despre decriptare" entryID="cam_info" pictograma="decriptare-info" weight="20" web="/acces-conditionat">
+				<screen module="CamInfo" screen="CamInfo" />
+			</item>
+			<!-- "Common Interface (CI Slots)" (ci_setup, Ci.CiSelection) scos din meniu: Viper 4K V20 nu are slot CI. Pe
+			     receptor enigma2 scrie la pornire "found 0 common interface slots" si nu exista /dev/ci*; configuratia masinii
+			     u57 (meta-dinobot) nu are "ci" in MACHINE_FEATURES. Intrarea era oricum ascunsa (requires="CommonInterface"). -->
+		</menu>
+
+		<!-- Categoria 8: Software & Pachete -->
+		<menu key="software_menu" weight="80" level="0" text="Software &amp; Firmware" entryID="software_selection" pictograma="programe">
+			<id val="software_menu" />
+			<!-- actualizarile prin pachete de pe stb.hdsatelit.com (Components/HdsActualizari.py,
+			     Screens/HdsActualizari.py): cauta, arata ce se schimba si "Ce e nou",
+			     instaleaza la cerere si reporneste interfata pe calea sigura; cand actualizarea cere nucleu, drivere,
+			     biblioteci de baza sau sunt prea multe pachete, nu instaleaza si spune ca trebuie imagine noua. In web:
+			     /actualizari. Scrierea unei imagini intregi de pe stick (HdsSoftwareUpdate) ramane mai jos, cu numele
+			     "Imagine nouă de pe stick", ca cele doua sa nu aiba acelasi nume. -->
+			<item level="0" text="Actualizare software" entryID="hds_actualizari" pictograma="actualizare" weight="14" web="/actualizari" stare="netestat">
+				<screen module="HdsActualizari" screen="HdsActualizari" />
+			</item>
+			<item level="0" text="Imagine nouă de pe stick" entryID="hds_software_update" pictograma="stick" weight="15" web="/actualizare">
+				<screen module="HdsSoftwareUpdate" screen="HdsSoftwareUpdate" />
+			</item>
+			<!-- copia setarilor pe stick sau disc si punerea ei la loc, de mana sau singura la prima pornire dupa scrierea
+			     unei imagini noi (Components/HdsCopieSetari.py, Screens/HdsCopieSetari.py); in web: /copie-setari. Langa
+			     actualizare: copia se face inaintea ei, de pe acelasi stick, si se pune la loc dupa ea. -->
+			<item level="0" text="Copia setărilor" entryID="hds_copie_setari" pictograma="copie" weight="16" web="/copie-setari">
+				<screen module="HdsCopieSetari" screen="HdsCopieSetariScreen" />
+			</item>
+		</menu>
+
+		<!-- Categoria 9: Rețea & Conexiune Internet -->
+		<menu key="network" weight="90" level="0" text="Network &amp; Internet" entryID="network_selection" pictograma="retea-internet">
+			<id val="network" />
+			<item level="0" text="Network Connection Setup" entryID="network_setup" pictograma="conexiune" web="/retea" weight="10">
+				<screen module="NetworkSetup" screen="NetworkAdapterSelection" />
+			</item>
+			<!-- cat de des se verifica internetul (Components/HdsStareRetea.py, sectiunea hds_internet din setup.xml); in web:
+			     /setari?id=hds_internet si cardul Internetul din /retea (retea_web.py) -->
+			<item level="0" text="Verificarea internetului" entryID="hds_internet" pictograma="verificare-internet" web="/setari?id=hds_internet" weight="15">
+				<setup id="hds_internet" />
+			</item>
+			<!-- trecerea singura pe alta retea (Components/HdsComutareRetea.py, sectiunea hds_retea_comutare din setup.xml) si
+			     utilitarele de retea (Screens/HdsUnelteRetea.py: Components/HdsWifiCanale.py, Components/HdsAparateRetea.py),
+			     din 0.4.4; in web: /setari?id=hds_retea_comutare (si cardul din /retea), /wifi-canale, /aparate-retea -->
+			<item level="0" text="Trecerea singură pe altă rețea" entryID="hds_retea_comutare" pictograma="retea-comutare" web="/setari?id=hds_retea_comutare" weight="16" stare="netestat">
+				<setup id="hds_retea_comutare" />
+			</item>
+			<item level="0" text="Cât de aglomerat e Wi-Fi-ul" entryID="hds_wifi_canale" pictograma="wifi-aglomerare" web="/wifi-canale" weight="17">
+				<screen module="HdsUnelteRetea" screen="HdsWifiCanaleScreen" />
+			</item>
+			<item level="0" text="Ce aparate sunt în rețea" entryID="hds_aparate_retea" pictograma="aparate-retea" web="/aparate-retea" weight="18">
+				<screen module="HdsUnelteRetea" screen="HdsAparateReteaScreen" />
+			</item>
+			<!-- IPv6, oprit din fabrica (Components/HdsIpv6.py, semnul /etc/hds-ipv6-pornit, aplicat pe loc); randul din
+			     setup.xml (sectiunea hds_ipv6) arata si starea de acum (atributul hdsStare, Screens/Setup.py). In web:
+			     cardul IPv6 din /retea. -->
+			<item level="0" text="IPv6" entryID="hds_ipv6" pictograma="retea" web="/retea?f=ipv6" weight="19" stare="netestat">
+				<setup id="hds_ipv6" />
+			</item>
+			<item level="1" text="DNS Server Settings" entryID="dns_setup" pictograma="dns" web="/dns" weight="20">
+				<screen module="NetworkSetup" screen="NameserverSetup" />
+			</item>
+			<!-- intrarea prin SSH: parola lui root facuta pe receptor, cheile SSH, „Fără parolă în rețeaua locală”
+			     (Components/HdsAccesSsh.py, Screens/HdsAccesSsh.py); in web: /acces-ssh. -->
+			<item level="0" text="Acces SSH" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
+				<screen module="HdsAccesSsh" screen="HdsAccesSsh" />
+			</item>
+			<!-- VPN-ul receptorului, oprit din fabrica: HMA, NordVPN, Surfshark, Proton VPN sau alt furnizor OpenVPN,
+			     WireGuard; serverul, numele si parola, ce trece prin VPN (Components/HdsVpn.py, Screens/HdsVpn.py); in
+			     web: /vpn (vpn_web.py). Numai cu programele VPN in imagine (openvpn sau wg, din 0.4.0):
+			     SystemInfo["HdsVpn"]. -->
+			<item level="0" text="VPN" entryID="hds_vpn" pictograma="vpn" weight="35" web="/vpn" requires="HdsVpn" stare="netestat">
+				<screen module="HdsVpn" screen="HdsVpn" />
+			</item>
+			<!-- transmisia canalelor spre browser: sesiunile, oprirea, setarile (Components/HdsTransmisie.py,
+			     Screens/HdsTransmisie.py); in web: /tv, cu redarea in pagina. -->
+			<item level="0" text="Transmisie în rețea" entryID="hds_transmisie" pictograma="transmisie" weight="40" web="/tv">
+				<screen module="HdsTransmisie" screen="HdsTransmisie" />
+			</item>
+		</menu>
+
+		<!-- Categoria 10: Sistem & Dispozitive -->
+		<menu key="system_menu" weight="100" level="0" text="System &amp; Devices" entryID="system_selection" pictograma="sistem">
+			<id val="system_menu" />
+			<!-- ceasul (NTP, transponder, fake-hwclock, Components/HdsCeas.py); in web: /ceas.
+			     Paznicul receptorului; in web: /paznic. -->
+			<item level="0" text="Date &amp; Time Settings" entryID="time_setup" pictograma="ceas" weight="10" web="/ceas">
+				<screen module="Time" screen="Time" />
+			</item>
+			<item level="0" text="Paznicul receptorului" entryID="hds_paznic" pictograma="paznic" weight="12" web="/paznic">
+				<screen module="HdsPaznic" screen="HdsPaznic" />
+			</item>
+			<!-- modul procesorului si paza de caldura (Components/HdsProcesor.py, Screens/HdsProcesor.py); in web: /procesor.
+			     Ascunsa pe un receptor fara cpufreq (SystemInfo HdsProcesor). -->
+			<item level="0" text="Procesor" entryID="hds_procesor" pictograma="procesor" weight="13" web="/procesor" requires="HdsProcesor">
+				<screen module="HdsProcesor" screen="HdsProcesor" />
+			</item>
+			<!-- afisajul din fata (4 cifre): lista de rotire aleasa din catalogul datelor, mesajele scurte si asteptarea
+			     (Components/HdsAfisaj.py, HdsAfisajDate.py; ecranul pe tot ecranul Screens/HdsAfisaj.py); in web: /afisaj.
+			     Ascunsa pe un receptor fara afisaj (SystemInfo HdsAfisaj). -->
+			<item level="0" text="Afișajul din față" entryID="hds_afisaj" pictograma="afisaj" weight="14" web="/afisaj" requires="HdsAfisaj">
+				<screen module="HdsAfisaj" screen="HdsAfisaj" />
+			</item>
+			<item level="1" text="Remote Control Setup" entryID="input_device_setup" pictograma="telecomanda" web="/dispozitive-intrare" weight="20">
+				<screen module="InputDeviceSetup" screen="InputDeviceSelection" />
+			</item>
+			<!-- cititor de coduri, proba tastelor, asocierea altei telecomenzi (Screens/HdsTelecomenzi.py).
+			     In web: /telecomenzi. -->
+			<item level="0" text="Telecomenzi" entryID="hds_telecomenzi" pictograma="telecomenzi" weight="21" web="/telecomenzi" stare="netestat">
+				<screen module="HdsTelecomenzi" screen="HdsTelecomenzi" />
+			</item>
+			<item level="1" text="External Keyboard" entryID="keyboard_setup" pictograma="tastatura" web="/setari?id=keyboard" weight="30">
+				<setup id="keyboard" />
+			</item>
+			<item level="1" text="Buttons &amp; Quick Keys" entryID="hds_button_setup" pictograma="taste-colorate" web="/taste-rapide" weight="35" stare="in-lucru">
+				<screen module="ButtonSetup" screen="HdsButtonSetup" />
+			</item>
+			<!-- iesirea HDMI si televizorul in standby (Components/HdsStandbyTv.py, sectiunea hds_standby_tv din setup.xml);
+			     in web: /setari?id=hds_standby_tv si randurile de sub „Standby” din panou (standby_tv_web.py) -->
+			<item level="0" text="Standby și televizorul" entryID="hds_standby_tv" pictograma="standby-tv" web="/setari?id=hds_standby_tv" weight="36" requires="HdsHdmiStandby" stare="netestat">
+				<setup id="hds_standby_tv" />
+			</item>
+			<item level="0" text="System Log Viewer" entryID="hds_log_manager" pictograma="jurnal" web="/jurnale-sistem" weight="37">
+				<screen module="LogManager" screen="HdsLogManager" />
+			</item>
+			<!-- "Fan Control" (hds_fan_control, Screens/TempFanControl.py) scos din meniu: Viper 4K V20 nu are ventilator.
+			     Pe receptor /proc/stb nu are dosarul fp/ (fara fp/fan_vlt, fan_pwm, fan_speed), deci
+			     Components/FanControl.getFanCount() = 0 si ecranul spunea numai "Niciun ventilator detectat". -->
+			<item level="1" text="Cleanup &amp; Reset Wizard" entryID="hds_cleanup_wizard" pictograma="curatenie" web="/curatenie" weight="39">
+				<screen module="CleanupWizard" screen="CleanupWizard" />
+			</item>
+			<item level="1" text="Crash Log Viewer" entryID="hds_crashlog_autosubmit" pictograma="jurnal-caderi" web="/jurnale-cadere" weight="39">
+				<screen module="HdsCrashlogAutoSubmit" screen="HdsCrashlogAutoSubmit" />
+			</item>
+			<item level="0" text="Parental Lock" entryID="parental_setup" pictograma="control-parental" web="/control-parental" weight="40">
+				<screen module="ParentalControlSetup" screen="ParentalControlSetup" />
+			</item>
+			<item weight="99" level="0" text="Reset to Factory Defaults" entryID="factory_reset" pictograma="revenire" web="/resetare-fabrica">
+				<code>
+from Screens.FactoryReset import FactoryReset
+def msgClosed(ret):
+	if ret:
+		# pasii (baza canalelor oprita, /etc/enigma2 sters, implicitele copiate, iesirea cu 0): Components/HdsResetareFabrica.py,
+		# aceiasi si pentru pagina web /resetare-fabrica
+		from Components.HdsResetareFabrica import reseteaza
+		reseteaza()
+self.session.openWithCallback(msgClosed, FactoryReset)
+				</code>
+			</item>
+		</menu>
+	</menu>
+
+	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;
+	     ?f= aduce in fata cardul intrarii. -->
+	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" pictograma="pornire" web="/alimentare" weight="25">
+		<id val="shutdown" />
+		<item text="Sleep Timer" entryID="sleep" pictograma="oprire-programata" web="/alimentare?f=somn" weight="10">
+			<screen module="SleepTimerEdit" screen="SleepTimerEdit" />
+		</item>
+		<item text="Standby Mode" entryID="standby" pictograma="standby" web="/alimentare?f=standby" weight="20">
+			<screen module="Standby" screen="Standby" />
+		</item>
+		<item text="Restart Interface" entryID="restart_enigma" pictograma="repornire-interfata" web="/alimentare?f=interfata" weight="25">
+			<screen module="Standby" screen="TryQuitMainloop">3</screen>
+		</item>
+		<item text="Restart Box" entryID="restart" pictograma="repornire" web="/alimentare?f=receptor" weight="30">
+			<screen module="Standby" screen="TryQuitMainloop">2</screen>
+		</item>
+		<!-- ascuns cat imaginea nu are multiboot: TryQuitMainloop(0) doar reporneste interfata (enigma2.sh nu face nimic la
+		     codul 0); SystemInfo["HdsMultiboot"] se pune cand pornirea de pe stick exista -->
+		<item text="Return to Flash" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
+			<code><![CDATA[
+from Screens.Standby import TryQuitMainloop
+self.session.open(TryQuitMainloop, 0)
+]]></code>
+		</item>
+		<item text="Deep Standby (Power Off)" entryID="deep_standby" pictograma="oprire" web="/alimentare?f=oprire" weight="60">
+			<screen module="Standby" screen="TryQuitMainloop">1</screen>
+		</item>
+	</menu>
+
+	<!-- 6. Media (din 0.2.6): playerul de fișiere (video, muzică) și pozele, de pe stick,
+	     disc sau din rețea. Înainte playerul se agăța singur de meniul principal cu greutatea 45, iar pozele erau numai
+	     în lista de extensii. „Media” are tot greutatea 45 (după „Alimentare”), deci tastele 1-7 ale meniului principal
+	     rămân aceleași. Ecranele: Plugins/Extensions/MediaPlayer și PicturePlayer, numite în Screens/MediaPlayer.py și
+	     Screens/PicturePlayer.py. In web: /player (alegi fisierul de pe receptor sau din telefon, porneste pe televizor)
+	     si /poze (galeria in browser), din media_web.py. Tasta Mplay deschide tot playerul. -->
+	<menu key="hds_media" weight="45" level="0" text="Media" entryID="hds_media" pictograma="media">
+		<id val="hds_media" />
+		<item level="0" text="Media player" entryID="media_player" pictograma="player" web="/player" weight="10">
+			<screen module="MediaPlayer" screen="MediaPlayer" />
+		</item>
+		<item level="0" text="Poze" entryID="hds_poze" pictograma="poze" web="/poze" weight="20">
+			<screen module="PicturePlayer" screen="picshow" />
+		</item>
+		<!-- 0.2.6: navigatorul web pe televizor, cu telecomanda (Plugins/Extensions/HdsNavigator, pachetul
+		     hds-navigator din imagine), pornit numai la cerere; o aplicație de privit, ca playerul, nu o setare. Setările
+		     lui sunt în Setări > Surse Internet. Pereche web: /navigator (textul trimis în câmpul de pe televizor). -->
+		<item level="0" text="Navigator web" entryID="hds_navigator_web" pictograma="navigator" weight="30" web="/navigator">
+			<screen module="HdsNavigatorWeb" screen="HdsNavigatorWeb" />
+		</item>
+		<!-- locurile din rețea (Components/HdsStocareRetea.py, Screens/HdsLocuriRetea.py): calculatorul cu Windows sau
+		     NAS-ul (SMB), NFS, FTP și FTPS, WebDAV, serverele media din casă (DLNA), montate sau răsfoite numai la cerere;
+		     ultimul în Media, ca tastele intrărilor de mai sus să rămână aceleași. Pereche web: /locuri-retea
+		     (locuri_retea_web.py). Și din meniul Media player-ului. -->
+		<item level="0" text="Locuri din rețea" entryID="hds_locuri_retea" pictograma="aparate-retea" weight="40" web="/locuri-retea" stare="netestat">
+			<screen module="HdsLocuriRetea" screen="HdsLocuriRetea" />
+		</item>
+	</menu>
+
+	<!-- 7. „Caută setări” jos în meniul principal, ultima intrare (tastele 1-8 de mai sus rămân aceleași): același ecran
+	     ca prima intrare din Setări și tasta TEXT (Screens/HdsCautaSetari.py), pus și aici ca să se găsească ușor, în
+	     lista simplă și ca dală cu pictograma căutării. Singura pereche spre același ecran din meniu, hotărâtă anume;
+	     cautarea nu se gaseste pe ea insasi (Components/HdsCautaSetari.ID_PROPRIU). In web: /cauta-setari si campul de
+	     cautare din capul paginilor. -->
+	<item level="0" text="Caută setări" entryID="hds_cauta_setari_principal" pictograma="cauta" weight="50" web="/cauta-setari">
+		<screen module="HdsCautaSetari" screen="HdsCautaSetari" />
+	</item>
+</menu>
+</menuxml>

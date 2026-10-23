@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Ajutorul de montare pentru NTFS, chemat de busybox mount ca: mount.ntfs-3g [-n] <dispozitiv> <dosar> [-o <optiuni>].
+# Porneste ntfs-3g cu big_writes (scrieri mari prin FUSE pe nucleul 4.4) si noatime. Optiunile noastre stau primele:
+# ntfs-3g lipeste mai multe -o cu virgula si o optiune data mai tarziu o inlocuieste pe cea de dinainte, deci cine
+# cheama ajutorul poate cere altceva (de exemplu atime).
+exec @BINDIR@/ntfs-3g -o big_writes,noatime "$@"

@@ -1,0 +1,55 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          hds-ssh
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Parola lui root la prima pornire si drepturile cheilor SSH
+### END INIT INFO
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Porneste inaintea lui dropbear (S09, dropbear e S10):
+# - pune drepturile pe care dropbear le cere pentru cheile lui root (/home/root/.ssh 0700, authorized_keys 0600, ale lui
+#   root); cu drepturi mai largi dropbear refuza cheile si intrarea ar merge numai cu parola;
+# - la prima pornire cheama `hds-ssh-parola prima` in fundal: `openssl rand` asteapta generatorul nucleului, care dupa
+#   un flash (fara samanta salvata) se poate initializa dupa cateva secunde, iar enigma2 porneste abia dupa rc3.
+#   Pana la parola, root intra numai cu o cheie (in imagine parola e `*`);
+# - tot numai la prima pornire dupa flash, `hds-ssh-stick prima` in fundal: cheile publice din dosarul hdsatelit/ssh de
+#   pe stickul de flash (acolo urca-pe-stick-016.sh pune cheia calculatorului) intra in authorized_keys, o singura data
+#   (semnul /etc/hdsatelit-ssh/stick-citit); dupa aceea cheile noi intra numai din ecranul Acces SSH sau din web.
+# Parola nu trece niciodata prin acest script.
+
+PAROLA=/usr/sbin/hds-ssh-parola
+STICK=/usr/sbin/hds-ssh-stick
+SSH=/home/root/.ssh
+
+case "$1" in
+start|"")
+	if [ -d "$SSH" ]; then
+		chown root:root "$SSH" 2>/dev/null
+		chmod 700 "$SSH"
+		if [ -f "$SSH/authorized_keys" ]; then
+			chown root:root "$SSH/authorized_keys" 2>/dev/null
+			chmod 600 "$SSH/authorized_keys"
+		fi
+	fi
+	# zavorul lui hds-ssh-parola fara flock (un dosar) ramas dupa o cadere de curent; la pornire nu-l tine nimeni
+	rmdir /etc/hdsatelit-ssh/.zavor.d 2>/dev/null
+	# prima pornire dupa flash: /etc e nou, deci nici parola, nici semnul stickului
+	if [ -x "$STICK" ] && [ ! -f /etc/hdsatelit-ssh/facuta ] && [ ! -f /etc/hdsatelit-ssh/stick-citit ]; then
+		nice -n 10 "$STICK" prima < /dev/null > /dev/null 2>&1 &
+	fi
+	if [ -x "$PAROLA" ] && [ ! -f /etc/hdsatelit-ssh/facuta ]; then
+		HDS_SSH_LA_PORNIRE=1 nice -n 10 "$PAROLA" prima < /dev/null > /dev/null 2>&1 &
+	fi
+	;;
+stop|restart|force-reload|status)
+	;;
+*)
+	echo "folosire: $0 start" >&2
+	exit 1
+	;;
+esac
+exit 0

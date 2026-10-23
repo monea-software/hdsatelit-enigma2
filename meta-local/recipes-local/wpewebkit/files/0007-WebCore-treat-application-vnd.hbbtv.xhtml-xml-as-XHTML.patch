@@ -1,0 +1,42 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] WebCore: treat application/vnd.hbbtv.xhtml+xml as XHTML
+
+HbbTV (ETSI TS 102 796, annex A) serves applications as
+application/vnd.hbbtv.xhtml+xml, which the terminal must handle as
+application/xhtml+xml. WebKit does not know the type: canShowMIMEType()
+is false, so the default response policy ignores the page and nothing is
+shown; and if it were shown, DOMImplementation::createDocument() would
+make a generic XML document (the "+xml" suffix), where createElement()
+makes elements without the HTML namespace, which breaks the menus that
+HbbTV applications build from JavaScript.
+
+Add the type to the supported non-image types and create an XHTML
+document for it, as for application/xhtml+xml.
+
+Upstream-Status: Inappropriate [HbbTV terminal configuration]
+
+--- a/Source/WebCore/platform/MIMETypeRegistry.cpp	2026-10-06 03:29:30.994240662 +0300
++++ b/Source/WebCore/platform/MIMETypeRegistry.cpp	2026-10-06 03:29:31.006441187 +0300
+@@ -227,6 +227,8 @@
+             "text/"_s,
+             "application/xml"_s,
+             "application/xhtml+xml"_s,
++            // HbbTV (ETSI TS 102 796, annex A): documents served as application/vnd.hbbtv.xhtml+xml are XHTML.
++            "application/vnd.hbbtv.xhtml+xml"_s,
+ #if !PLATFORM(IOS_FAMILY)
+             "application/vnd.wap.xhtml+xml"_s,
+             "application/rss+xml"_s,
+--- a/Source/WebCore/dom/DOMImplementation.cpp	2026-10-06 03:29:30.994187832 +0300
++++ b/Source/WebCore/dom/DOMImplementation.cpp	2026-10-06 03:29:31.006559516 +0300
+@@ -167,7 +167,10 @@
+     // Plug-ins cannot take over for HTML, XHTML, plain text, or non-PDF images.
+     if (equalLettersIgnoringASCIICase(contentType, "text/html"_s))
+         return HTMLDocument::create(frame, settings, url, documentIdentifier);
+-    if (equalLettersIgnoringASCIICase(contentType, "application/xhtml+xml"_s))
++    // HbbTV (ETSI TS 102 796, annex A): application/vnd.hbbtv.xhtml+xml is XHTML, so that createElement() makes
++    // HTML elements, as in an application/xhtml+xml document.
++    if (equalLettersIgnoringASCIICase(contentType, "application/xhtml+xml"_s)
++        || equalLettersIgnoringASCIICase(contentType, "application/vnd.hbbtv.xhtml+xml"_s))
+         return XMLDocument::createXHTML(frame, settings, url);
+     if (equalLettersIgnoringASCIICase(contentType, "text/plain"_s))
+         return TextDocument::create(frame, settings, url, documentIdentifier);

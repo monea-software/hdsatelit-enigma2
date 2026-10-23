@@ -1,0 +1,40 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] Fix the build with ENABLE_VIDEO=OFF
+
+Sources listed unconditionally in Sources.txt use classes that are only
+generated or declared when ENABLE(VIDEO) is on. Guard them.
+
+Upstream-Status: Pending
+
+diff -ruN a/Source/WebCore/bindings/js/JSHTMLMediaElementCustom.cpp b/Source/WebCore/bindings/js/JSHTMLMediaElementCustom.cpp
+--- a/Source/WebCore/bindings/js/JSHTMLMediaElementCustom.cpp	2026-09-27 14:08:14.274273058 +0300
++++ b/Source/WebCore/bindings/js/JSHTMLMediaElementCustom.cpp	2026-09-27 14:08:14.308484602 +0300
+@@ -24,6 +24,9 @@
+  */
+ 
+ #include "config.h"
++
++#if ENABLE(VIDEO)
++
+ #include "JSHTMLMediaElement.h"
+ 
+ #include "TrackOpaqueRoot.h"
+@@ -40,3 +43,5 @@
+ DEFINE_VISIT_ADDITIONAL_CHILDREN_IN_GC_THREAD(JSHTMLMediaElement);
+ 
+ } // namespace WebCore
++
++#endif // ENABLE(VIDEO)
+diff -ruN a/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp b/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp
+--- a/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp	2026-09-27 14:08:14.290128370 +0300
++++ b/Source/WebKit/UIProcess/wpe/AcceleratedBackingStore.cpp	2026-09-27 14:08:14.330353528 +0300
+@@ -41,6 +41,9 @@
+ #include <drm/drm_fourcc.h>
+ #elif USE(LIBDRM)
+ #include <drm_fourcc.h>
++#else
++// DRM_FORMAT_* without libdrm: the kernel UAPI header has the same definitions.
++#include <drm/drm_fourcc.h>
+ #endif
+ 
+ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN

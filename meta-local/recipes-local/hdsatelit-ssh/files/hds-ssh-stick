@@ -1,0 +1,113 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# hds-ssh-stick: NUMAI la prima pornire dupa flash (chemat de /etc/init.d/hds-ssh cat /etc/hdsatelit-ssh/facuta si
+# semnul de aici lipsesc), cheile publice din dosarul hdsatelit/ssh de pe stickul de flash intra in
+# /home/root/.ssh/authorized_keys: urca-pe-stick-016.sh pune acolo cheia calculatorului, deci dupa flash intrarea
+# prin SSH merge fara ca omul sa tasteze ceva. Semnul /etc/hdsatelit-ssh/stick-citit se pune INAINTE de citire:
+# stickul se citeste o singura data; dupa aceea cheile noi intra numai din ecranul Acces SSH (Adaugă cheile de pe
+# stick) sau din browserul conectat cu codul.
+# Se primesc numai randuri „tip cheie [comentariu]” cu tipurile ecranului Acces SSH (fara optiuni in fata, deci fara
+# command= sau from=); un fisier cu o cheie privata se sare intreg. Stickul se asteapta cel mult 90 s (montarea vine
+# de la udev, uneori dupa hds-ssh). Jurnalul: /home/root/logs/hds-ssh.log (numai amprenta, niciodata cheia).
+
+SEMN=/etc/hdsatelit-ssh/stick-citit
+SSH=/home/root/.ssh
+CHEI=$SSH/authorized_keys
+JURNAL=/home/root/logs/hds-ssh.log
+ASTEAPTA_S=90
+MAX_FISIER=65536
+
+jurnal() {
+	mkdir -p /home/root/logs 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') hds-ssh-stick: $*" >> "$JURNAL" 2>/dev/null
+	echo "<6>hds-ssh-stick: $*" > /dev/kmsg 2>/dev/null
+}
+
+# dosarul cu numele dat (literele mari sau mici nu conteaza) din dosarul $1, sau nimic
+intrare() {
+	for d in "$1"/*; do
+		[ -d "$d" ] || continue
+		b=$(basename "$d" | tr 'A-Z' 'a-z')
+		[ "$b" = "$2" ] && { echo "$d"; return 0; }
+	done
+	return 1
+}
+
+# dosarele hdsatelit/ssh de pe montarile stickurilor si discurilor (aceleasi locuri ca ecranul Acces SSH)
+dosare() {
+	sed 's/\040/ /g' /proc/mounts 2>/dev/null | while read -r dev punct fel rest; do
+		case "$fel" in tmpfs|ramfs|devtmpfs|proc|sysfs|overlay|squashfs|nfs|nfs4|cifs|smb3) continue ;; esac
+		case "$punct" in /media/*|/run/media/*|/autofs/*|/mnt/*) ;; *) continue ;; esac
+		h=$(intrare "$punct" hdsatelit) || continue
+		s=$(intrare "$h" ssh) || continue
+		echo "$s"
+	done
+}
+
+case "$1" in
+prima) ;;
+*) echo "folosire: hds-ssh-stick prima" >&2; exit 1 ;;
+esac
+[ -f "$SEMN" ] && exit 0
+mkdir -p /etc/hdsatelit-ssh && chmod 700 /etc/hdsatelit-ssh
+: > "$SEMN" || { jurnal "semnul nu se poate scrie, nu citesc stickul"; exit 1; }
+sync
+
+GASITE=
+i=0
+while [ "$i" -lt "$ASTEAPTA_S" ]; do
+	GASITE=$(dosare)
+	[ -n "$GASITE" ] && break
+	sleep 2
+	i=$((i + 2))
+done
+if [ -z "$GASITE" ]; then
+	jurnal "prima pornire: niciun dosar hdsatelit/ssh pe stick in $ASTEAPTA_S s"
+	exit 0
+fi
+
+NOI=$(mktemp /tmp/hds-ssh-stick.XXXXXX) || exit 1
+trap 'rm -f "$NOI"' EXIT
+printf '%s\n' "$GASITE" | while IFS= read -r dosar; do
+	for f in "$dosar"/*; do
+		[ -f "$f" ] || continue
+		n=$(basename "$f" | tr 'A-Z' 'a-z')
+		case "$n" in authorized_keys|*.pub) ;; *) continue ;; esac
+		[ "$(wc -c < "$f")" -le "$MAX_FISIER" ] || { jurnal "sarit (prea mare): $n"; continue; }
+		if grep -q 'PRIVATE KEY' "$f"; then
+			jurnal "sarit (cheie privata): $n"
+			continue
+		fi
+		tr -d '\r' < "$f" | awk '
+			$1 ~ /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)$/ &&
+			$2 ~ /^[A-Za-z0-9+\/]+=*$/ && length($2) >= 60 { print }' >> "$NOI"
+	done
+done
+if [ ! -s "$NOI" ]; then
+	jurnal "prima pornire: pe stick nicio cheie publica buna"
+	exit 0
+fi
+
+umask 077
+mkdir -p "$SSH" && chown root:root "$SSH" 2>/dev/null && chmod 700 "$SSH"
+[ -f "$CHEI" ] || : > "$CHEI"
+PUSE=0
+while IFS= read -r rand; do
+	cheie=$(echo "$rand" | awk '{ print $2 }')
+	grep -qF "$cheie" "$CHEI" && continue
+	printf '%s\n' "$rand" >> "$CHEI.nou.$$" || break
+	PUSE=$((PUSE + 1))
+done < "$NOI"
+if [ "$PUSE" -gt 0 ]; then
+	# fisierul intreg scris alaturi, apoi mutat (o cadere de curent nu lasa un authorized_keys taiat)
+	cat "$CHEI" "$CHEI.nou.$$" > "$CHEI.tmp.$$" && chmod 600 "$CHEI.tmp.$$" && sync && mv -f "$CHEI.tmp.$$" "$CHEI"
+	rm -f "$CHEI.nou.$$" "$CHEI.tmp.$$"
+	chown root:root "$CHEI" 2>/dev/null
+	chmod 600 "$CHEI"
+	sync
+fi
+rm -f "$CHEI.nou.$$"
+jurnal "prima pornire: chei noi de pe stick: $PUSE"
+exit 0

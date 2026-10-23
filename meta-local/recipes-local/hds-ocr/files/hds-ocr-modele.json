@@ -1,0 +1,219 @@
+{
+ "adresa": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/{model}.traineddata",
+ "commit": "87416418657359cb625c412a48b6e1d6d41c29bd",
+ "format": 1,
+ "in_imagine": [
+  "ron",
+  "fra",
+  "pol",
+  "deu",
+  "ces",
+  "hun",
+  "spa",
+  "ita"
+ ],
+ "licenta": "Apache-2.0",
+ "licenta_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+ "modele": {
+  "ara": {
+   "marime": 1432056,
+   "sha256": "e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729"
+  },
+  "bel": {
+   "marime": 3692098,
+   "sha256": "9c6668a0b202f3dcfe074b64620d108e1902ca7498a40b5a11b4a3da6112d58f"
+  },
+  "bos": {
+   "marime": 2498242,
+   "sha256": "6cc8cc87cf1afbfa6a41febb725dbadb14bed96a46685906440a6eb8a7892f04"
+  },
+  "bre": {
+   "marime": 6335007,
+   "sha256": "db8b31f76b986d63b82dfff9e84e252bf5f7dc53d9128167aaab18b3ec96dd49"
+  },
+  "bul": {
+   "marime": 1675212,
+   "sha256": "aebc9b0fcc8cfaf8a9f38a02bb7b85052bd850744696a2c11cf0081820e5b21e"
+  },
+  "cat": {
+   "marime": 1146012,
+   "sha256": "250db73cd5b380d2798581295dc12f20d0828cdb335a65d833d12dfdbf57117d"
+  },
+  "ces": {
+   "marime": 3795684,
+   "sha256": "934bcaf97ef3348413263331131c9fa7f55f30db333c711929c124fb635f7e1b"
+  },
+  "cos": {
+   "marime": 2299099,
+   "sha256": "018952d1b4b3d4fd6ee5ebbacf90603c9cef6221951359937c274fe1f190f8d3"
+  },
+  "cym": {
+   "marime": 2208919,
+   "sha256": "7f6ee3374749645a7c92dfe773f5c3d6492194d371712ecfd775edc53c363fb4"
+  },
+  "dan": {
+   "marime": 2580059,
+   "sha256": "acb1fd074487a31d1294fcdfd7d7c673467ffd8aeacb2ccd61ebcbf04eb4e2fa"
+  },
+  "deu": {
+   "marime": 1525436,
+   "sha256": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d"
+  },
+  "ell": {
+   "marime": 1419514,
+   "sha256": "4fba8a0b461038d51f1c20d043d4f2ac38c4e778f1b90830847f7bd8fa3ba726"
+  },
+  "eng": {
+   "marime": 4113088,
+   "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+  },
+  "est": {
+   "marime": 4458101,
+   "sha256": "515d4a773682b286369511e83fe412bcff16a92a886f99c761c1d760a7e30456"
+  },
+  "eus": {
+   "marime": 5175921,
+   "sha256": "40e7418296c355d9fd9ca843d115c51e740089e576e887443e61704823cd6624"
+  },
+  "fao": {
+   "marime": 3439772,
+   "sha256": "0ed46203c283c952b7de0530d1c6e6ac9a25a79773fb89cadd149275ffea9a80"
+  },
+  "fas": {
+   "marime": 431500,
+   "sha256": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+  },
+  "fin": {
+   "marime": 7865732,
+   "sha256": "61a04cd62b507c3d9ae0e1cda399e6715ebf49dea9df47897c8acdcd3bd3e13c"
+  },
+  "fra": {
+   "marime": 1130365,
+   "sha256": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca"
+  },
+  "fry": {
+   "marime": 1906018,
+   "sha256": "7c9dbc47ef3848e33b623d1b927dd4d998ed39ff750fbc0f14aeb0f627b5da15"
+  },
+  "gla": {
+   "marime": 3068307,
+   "sha256": "cb7b206d9f56b601d1666683ea8a516c8bb9c04362dbb874fc9665b339b72adf"
+  },
+  "gle": {
+   "marime": 1181824,
+   "sha256": "2fe9ba6119aac7e2a20d6cfb69ed91afe9520f41bc7e3a903f84280f2663858d"
+  },
+  "glg": {
+   "marime": 2554555,
+   "sha256": "7947619c5544d86849f563bd737ad90dbea9f5319fbd838c4747a7a1cd40b260"
+  },
+  "heb": {
+   "marime": 961404,
+   "sha256": "11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db"
+  },
+  "hrv": {
+   "marime": 4103348,
+   "sha256": "9e515d9832ce259dbab550b1cc6b998f8b929faf2edacaaca981b05adb130571"
+  },
+  "hun": {
+   "marime": 5296273,
+   "sha256": "35067e7cfe102dcdc953f9a758fdfaa6296b17a1ee6d874ee780fa306430b9fb"
+  },
+  "isl": {
+   "marime": 2278973,
+   "sha256": "5ec828c363f3f0062c3caf08216677cf5f3c0c981b05fab445123a16b98f10a9"
+  },
+  "ita": {
+   "marime": 2701314,
+   "sha256": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827"
+  },
+  "kmr": {
+   "marime": 3568615,
+   "sha256": "a3ef2daa828399ca8d6ae69edfa21ed21aa5abb3f868e2024d3235406312e7b6"
+  },
+  "lav": {
+   "marime": 2717247,
+   "sha256": "7d9eaf22254b381f18b806cd6cb647862a397a7221adbce3e22cc421793a8847"
+  },
+  "lit": {
+   "marime": 3154896,
+   "sha256": "1e383df5b055583bc01cb5764ecdf74c540753f2cb3f8205e7105361da4bc989"
+  },
+  "ltz": {
+   "marime": 2606426,
+   "sha256": "5516a78efa30c050da7eb0727fec3de59670c19735c00678a67fdad98e4b3ec1"
+  },
+  "mkd": {
+   "marime": 1600188,
+   "sha256": "58622bf154830fa62103359938564aeb8112b929759e22a48224f3ecfaac34c6"
+  },
+  "mlt": {
+   "marime": 2308796,
+   "sha256": "3040b443d5d49e4183da0eaaf58d1033c3a616153d35d2342a56777f9bbb31c7"
+  },
+  "nld": {
+   "marime": 6050296,
+   "sha256": "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6"
+  },
+  "nor": {
+   "marime": 3610079,
+   "sha256": "0451eb4f8049ae78196806bf878a389a2f40f1386fe038568cf4441226ba6ef2"
+  },
+  "oci": {
+   "marime": 6322087,
+   "sha256": "747b9be4c5b80b4c730ce4f426a3b85060a1bb0de54cd566fcbdcb7f407940c9"
+  },
+  "pol": {
+   "marime": 4765518,
+   "sha256": "c4476cdbc0e33d898d32345122b7be1cbf85ace15f920f06c7714756e1ef79b2"
+  },
+  "por": {
+   "marime": 1982756,
+   "sha256": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb"
+  },
+  "ron": {
+   "marime": 2376323,
+   "sha256": "9adfde6b51ba4b97efd10ea37c3070fd3fc2bad7815e81f5c3c198cd96216cc9"
+  },
+  "rus": {
+   "marime": 3861738,
+   "sha256": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225"
+  },
+  "slk": {
+   "marime": 4427661,
+   "sha256": "fbcc400a9c74c6a13d922fcb1211b655d1b165387b675ed75cd2dbd756b974a5"
+  },
+  "slv": {
+   "marime": 3003829,
+   "sha256": "b937632c17ce5fdf20535d25feec044da10a0c4c8234f4302d5606fd671cf60d"
+  },
+  "spa": {
+   "marime": 2294433,
+   "sha256": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464"
+  },
+  "sqi": {
+   "marime": 1874705,
+   "sha256": "1d89621d9afe8ddf35b403ecf8951edea52c3a960d241f287b1a7b2c5ba8daac"
+  },
+  "srp": {
+   "marime": 2149931,
+   "sha256": "aa41ae3d9cc705e60d398ab38a5c3cc8b772c0d420c7d4f0859beb13d0e321b6"
+  },
+  "srp_latn": {
+   "marime": 3281787,
+   "sha256": "54b2e001bd8a336bdffc249c1487b8b7cb712f0a031f2551930ba050ebefa2a0"
+  },
+  "swe": {
+   "marime": 4167034,
+   "sha256": "f7304988d41f833efebcc2d529df54b1903ecebbc3da1faabd19a0fddd4fe586"
+  },
+  "tur": {
+   "marime": 4550554,
+   "sha256": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7"
+  },
+  "ukr": {
+   "marime": 3825102,
+   "sha256": "d59e53e2bded32f4445f124b4b00240fcac7e8044c003ab822ccb94f0b3db59b"
+  }
+ }
+}

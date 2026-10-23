@@ -1,0 +1,269 @@
+{
+	"grupe": [
+		{
+			"id": "logo",
+			"ro": "Logo",
+			"en": "Logo"
+		},
+		{
+			"id": "natura",
+			"ro": "Natură",
+			"en": "Nature"
+		},
+		{
+			"id": "peisaje",
+			"ro": "Peisaje",
+			"en": "Landscapes"
+		},
+		{
+			"id": "flori",
+			"ro": "Flori",
+			"en": "Flowers"
+		},
+		{
+			"id": "sarbatori",
+			"ro": "Sărbători",
+			"en": "Holidays"
+		},
+		{
+			"id": "univers",
+			"ro": "Univers",
+			"en": "Space"
+		},
+		{
+			"id": "animale",
+			"ro": "Animale",
+			"en": "Animals"
+		},
+		{
+			"id": "picturi",
+			"ro": "Picturi",
+			"en": "Paintings"
+		}
+	],
+	"ecrane": [
+		{
+			"id": "grila",
+			"ro": "Grilă",
+			"en": "Grid",
+			"grup": "logo"
+		},
+		{
+			"id": "unde",
+			"ro": "Unde",
+			"en": "Waves",
+			"grup": "logo"
+		},
+		{
+			"id": "orbita",
+			"ro": "Orbită",
+			"en": "Orbit",
+			"grup": "logo"
+		},
+		{
+			"id": "aurora",
+			"ro": "Auroră",
+			"en": "Aurora",
+			"grup": "logo"
+		},
+		{
+			"id": "antena",
+			"ro": "Antenă",
+			"en": "Dish",
+			"grup": "logo"
+		},
+		{
+			"id": "fibre",
+			"ro": "Fibre",
+			"en": "Fibers",
+			"grup": "logo"
+		},
+		{
+			"id": "valuri",
+			"ro": "Valuri",
+			"en": "Ripples",
+			"grup": "logo"
+		},
+		{
+			"id": "particule",
+			"ro": "Particule",
+			"en": "Particles",
+			"grup": "logo"
+		},
+		{
+			"id": "hexagon",
+			"ro": "Fagure",
+			"en": "Honeycomb",
+			"grup": "logo"
+		},
+		{
+			"id": "circuit",
+			"ro": "Circuit",
+			"en": "Circuit",
+			"grup": "logo"
+		},
+		{
+			"id": "padure",
+			"ro": "Pădure",
+			"en": "Forest",
+			"grup": "natura"
+		},
+		{
+			"id": "cascada",
+			"ro": "Cascadă",
+			"en": "Waterfall",
+			"grup": "natura"
+		},
+		{
+			"id": "toamna",
+			"ro": "Toamnă",
+			"en": "Autumn",
+			"grup": "natura"
+		},
+		{
+			"id": "primavara",
+			"ro": "Primăvară",
+			"en": "Spring",
+			"grup": "natura"
+		},
+		{
+			"id": "plaja",
+			"ro": "Plajă",
+			"en": "Beach",
+			"grup": "peisaje"
+		},
+		{
+			"id": "munti",
+			"ro": "Munți",
+			"en": "Mountains",
+			"grup": "peisaje"
+		},
+		{
+			"id": "lac",
+			"ro": "Lac de munte",
+			"en": "Mountain lake",
+			"grup": "peisaje"
+		},
+		{
+			"id": "desert",
+			"ro": "Deșert",
+			"en": "Desert",
+			"grup": "peisaje"
+		},
+		{
+			"id": "lavanda",
+			"ro": "Lavandă",
+			"en": "Lavender",
+			"grup": "flori"
+		},
+		{
+			"id": "trandafiri",
+			"ro": "Trandafiri",
+			"en": "Roses",
+			"grup": "flori"
+		},
+		{
+			"id": "orhidee",
+			"ro": "Orhidee",
+			"en": "Orchids",
+			"grup": "flori"
+		},
+		{
+			"id": "cirese",
+			"ro": "Cireș înflorit",
+			"en": "Cherry blossom",
+			"grup": "flori"
+		},
+		{
+			"id": "lalele",
+			"ro": "Lalele",
+			"en": "Tulips",
+			"grup": "flori"
+		},
+		{
+			"id": "craciun",
+			"ro": "Crăciun",
+			"en": "Christmas",
+			"grup": "sarbatori"
+		},
+		{
+			"id": "iarna",
+			"ro": "Sat de iarnă",
+			"en": "Winter village",
+			"grup": "sarbatori"
+		},
+		{
+			"id": "paste",
+			"ro": "Paște",
+			"en": "Easter",
+			"grup": "sarbatori"
+		},
+		{
+			"id": "inel",
+			"ro": "Inel orbital",
+			"en": "Orbital ring",
+			"grup": "univers"
+		},
+		{
+			"id": "caledelactee",
+			"ro": "Calea Lactee",
+			"en": "Milky Way",
+			"grup": "univers"
+		},
+		{
+			"id": "pisoi",
+			"ro": "Pisoi",
+			"en": "Kitten",
+			"grup": "animale"
+		},
+		{
+			"id": "catelus",
+			"ro": "Cățeluș",
+			"en": "Puppy",
+			"grup": "animale"
+		},
+		{
+			"id": "vulpe",
+			"ro": "Vulpe",
+			"en": "Fox",
+			"grup": "animale"
+		},
+		{
+			"id": "caprioara",
+			"ro": "Căprioară",
+			"en": "Deer",
+			"grup": "animale"
+		},
+		{
+			"id": "pictura",
+			"ro": "Pictură",
+			"en": "Painting",
+			"grup": "picturi"
+		},
+		{
+			"id": "acuarela",
+			"ro": "Acuarelă",
+			"en": "Watercolor",
+			"grup": "picturi"
+		}
+	],
+	"implicit": "grila",
+	"inlocuiri": {
+		"lumina": "aurora",
+		"oras": "grila",
+		"carbon": "hexagon",
+		"raze": "aurora",
+		"radar": "antena",
+		"fum": "valuri",
+		"munte": "munti",
+		"bujori": "trandafiri",
+		"brad": "iarna",
+		"revelion": "craciun",
+		"sampanie": "craciun",
+		"nebula": "caledelactee",
+		"stele": "caledelactee",
+		"galaxie": "caledelactee",
+		"planeta": "inel",
+		"aurorapolar": "caledelactee"
+	}
+}

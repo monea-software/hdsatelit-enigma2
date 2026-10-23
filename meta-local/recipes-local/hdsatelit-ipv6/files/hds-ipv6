@@ -1,0 +1,49 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+### BEGIN INIT INFO
+# Provides:          hds-ipv6
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: IPv6 oprit din fabrica, pornit numai cu semnul /etc/hds-ipv6-pornit
+### END INIT INFO
+#
+# IPv6 e oprit din fabrica. Il porneste numai fisierul-semn /etc/hds-ipv6-pornit (il pune si il scoate setarea IPv6
+# din enigma2; din fabrica nu exista):
+#   semnul lipseste: net.ipv6.conf.all.disable_ipv6 = 1 si net.ipv6.conf.default.disable_ipv6 = 1, deci nicio adresa
+#     IPv6 pe nicio interfata, nici pe cele care apar mai tarziu (placa Wi-Fi USB);
+#   semnul exista: amandoua 0 (IPv6 ca in nucleu).
+# Ruleaza in rcS (S40), deci inainte de retea (rc3, S10networking) si inainte de enigma2 (inittab, nivelul 3).
+# IPv4 nu se atinge. /etc/sysctl.conf (aplicat de bootmisc.sh la S55) nu are randuri ipv6, deci nu schimba nimic dupa.
+# Clientul DHCPv6 nu porneste deloc fara semn (reteta odhcp6c din acest strat, /usr/bin/odhcp6c).
+# Scrie direct in /proc/sys, fara programul sysctl. Iese cu 0 la pornire: sirul rcS nu se opreste din cauza lui.
+# HDS_IPV6_SEMN si HDS_IPV6_PROC schimba caile numai pentru probele de pe calculator.
+
+SEMN=${HDS_IPV6_SEMN:-/etc/hds-ipv6-pornit}
+P=${HDS_IPV6_PROC:-/proc/sys/net/ipv6/conf}
+
+case "$1" in
+start|"")
+	if [ -e "$SEMN" ]; then v=0; else v=1; fi
+	for c in all default; do
+		f=$P/$c/disable_ipv6
+		[ -f "$f" ] || continue
+		echo "$v" > "$f" 2> /dev/null || echo "hds-ipv6: nu pot scrie $v in $f" >&2
+	done
+	;;
+stop)
+	;;
+status)
+	if [ -e "$SEMN" ]; then echo "semn: exista (IPv6 pornit)"; else echo "semn: lipseste (IPv6 oprit)"; fi
+	for c in all default; do
+		echo "$c.disable_ipv6: $(cat "$P/$c/disable_ipv6" 2> /dev/null || echo lipsa)"
+	done
+	;;
+*)
+	echo "folosire: $0 {start|stop|status}" >&2
+	exit 1
+	;;
+esac
+exit 0

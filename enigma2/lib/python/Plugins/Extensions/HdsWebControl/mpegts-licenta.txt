@@ -1,0 +1,288 @@
+mpegts.js 1.8.0 (https://github.com/xqq/mpegts.js), fisierul dist/mpegts.js din pachetul npm mpegts.js@1.8.0
+(sha512 al pachetului: sha512-ZtujqtmTjWgcDDkoOnLvrOKUTO/MKgLHM432zGDI8oPaJ0S+ebPxg1nEpDpLw6I7KmV/GZgUIrfbWi3qqEircg==;
+sha256 al fisierului nemodificat: e998f7a6cec5fcab56ac14e8c22d61a42565c1ebf7174b3fda078343eda6cab0), MODIFICAT.
+
+Schimbarile (2026, moneasoftware.com & hdsatelit.com, pentru pagina TV in browser a imaginii HD Satelit), numai in
+demuxerul TS (partea H.264, HEVC pe campuri, sunetul AAC si sunetul AC-3) si in segmentul de initializare HEVC;
+restul bibliotecii e neschimbat:
+  - un comentariu la inceputul fisierului spune ca fisierul e modificat;
+  - SPSParser.parseSPS da si frame_mbs_only_flag;
+  - TSDemuxer.parseH264Payload: la imaginea H.264 care poate fi intretesuta (frame_mbs_only_flag = 0: campuri sau
+    MBAFF) cadru cheie e numai imaginea IDR, iar mostrele de dinaintea primului IDR se arunca; din imaginile non-IDR
+    se scot mesajele SEI recovery point (Chromium face din ele puncte de pornire la cautare); la imaginea progresiva
+    totul ramane ca in mpegts.js; metode noi: hdsFelieI_, hdsCheie_, hdsSei_, hdsSeiFaraReluare_.
+    Motivul: Chromium decodeaza imaginea intretesuta numai cu FFmpeg, pornit cu AV_EF_EXPLODE; pornit de la o imagine
+    I non-IDR a unui GOP deschis, decodorul refuza pachetul (PIPELINE_ERROR_DECODE).
+  - fluxul H.264 intretesut fara IDR: daca in hdsAsteaptaIdrMs (1,5 s) nu vine niciun IDR, punctul de reluare (I cu
+    random_access_indicator) e rescris ca IDR (nal_unit_type 5, frame_num 0, idr_pic_id, marcajul IDR), iar de acolo
+    demuxerul tine o copie a listei de referinte scurte a decodorului si rescrie antetele feliilor: frame_num
+    renumerotat fata de IDR, operatiile MMCO catre cadre pe care decodorul nu le are scoase, o operatie MMCO in plus
+    cand lista ar trece de max_num_ref_frames, modificarile de lista catre o imagine lipsa scoase; antetul refacut pe
+    biti (CABAC: alinierea refacuta, datele copiate; CAVLC: datele mutate), octetii 0x03 de emulare refacuti. Un IDR
+    adevarat (sau imaginea progresiva) opreste rescrierea; dupa hdsReancoraMs (10 s) fara cadru cheie, sau dupa un SPS
+    care cere segment de initializare nou, urmatorul punct de reluare e rescris iar ca IDR. Daca antetul nu se poate
+    citi (grupuri de felii, MMCO pe termen lung), cheie la I-ul cu random_access_indicator, ca in biblioteca.
+    Metode noi: hdsParam_, hdsFelie_, hdsRefa_, hdsRescrie_, hdsAncora_, hdsTinte_,
+    hdsListe_, hdsMarcaj_, hdsInceput_, hdsRbsp_, hdsEmulare_, hdsCititor_, hdsScriitor_, hdsGaseste_, hdsScoate_,
+    proprietati noi: hdsAsteaptaIdrMs si hdsReancoraMs.
+    Motivul: la canalele fara IDR ale caror puncte de reluare au MMCO catre cadre mai vechi decat cele pe care decodorul
+    le inlocuieste singur (123.live, DF1 HD si altele, 26 de canale in proba din 13-14.10.2026), decodorul strict din
+    Chromium refuza pachetul ("mmco: unref short failure", apoi "number of reference frames exceeds max").
+  - HEVC: parseSPS (H265) da si field_seq_flag; la imaginea HEVC codata pe campuri, segmentul de initializare are
+    cutia pasp 1:2 si inaltimea aratata dubla (campul 1920x540 aratat 16:9 pe toata inaltimea, nu in jumatatea de sus).
+  - TSDemuxer.parseADTSAACPayload si parseLOASAACPayload: restul unui cadru AAC taiat intre doua pachete PES
+    (aac_last_incomplete_data_) se sterge cand pachetul de acum se termina la granita unui cadru; in biblioteca
+    ramanea si se lipea in fata fiecarui pachet care urma, iar cadrele de sunet iesite asa sunt stricate.
+    Restul se lipeste numai daca PTS-ul pachetului nou se leaga de el (cu un cadru sau doua dupa ultimul cadru
+    intreg); altfel (semnal pierdut, salt de timp) se arunca; timpul cadrelor se reia de la PTS-ul pachetului, nu
+    se aduna la nesfarsit din durata cadrelor.
+    Motivul: la canalele care taie cadrele AAC intre pachete (HotBird 4K1) browserul refuza un cadru de sunet
+    (PIPELINE_ERROR_DECODE "Failed to send audio packet") si se opreste toata redarea.
+  - fluxul H.264 intretesut fara IDR, dupa ancora: o imagine care cere mai multe imagini de referinta decat are
+    decodorul (num_ref_idx_active mai mare decat lista lui; la canalele SD 576i campurile B de dupa ancora cer 4)
+    se inlocuieste cu o imagine P in care toate macroblocurile sunt sarite (copia primei referinte), cu acelasi
+    frame_num, acelasi camp, acelasi POC si acelasi marcaj de referinte, codata CAVLC cu un PPS al nostru (id nefolosit
+    de flux, trimis in fata ei). Metode noi: hdsInlocuieste_, hdsSint_.
+    Motivul: decodorul strict din Chromium refuza imaginea ("Missing reference picture") si se opreste redarea.
+  - la imaginea H.264 intretesuta, I-ul cu SEI recovery point sau cu SPS in acelasi pachet e punct de reluare si
+    cand pachetul n-are random_access_indicator (metoda noua hdsSeiRp_). Motivul: canale MBAFF fara IDR si fara
+    random_access_indicator (Cubavision, Canale Italia) nu porneau niciodata.
+  - pachetul PES video fara PTS / DTS (al doilea camp la unele canale) primeste timpul celui de dinainte plus pasul
+    dintre pachetele cu timp (la inceput, din SPS); fara niciun timp inainte se arunca (metoda noua hdsTimp_).
+    Motivul: mostrele primeau timp nedefinit si durata 0, iar browserul nu arata niciun cadru.
+  - HEVC pe campuri: cutia pasp e SAR-ul din VUI inmultit cu 1:2 (SAR 4:3 -> 2:3), nu 1:2 fix.
+  - HEVC fara nicio imagine IRAP: daca in hdsAsteaptaIdrMs vin cel putin 2 imagini I cu random_access_indicator sau
+    SEI recovery point, fiecare astfel de imagine se rescrie CRA (nal_unit_type 21, bitul
+    no_output_of_prior_pics_flag pus, antetul refacut pe biti), iar imaginile de dupa ea cu POC mai mic se rescriu
+    RASL; pana la prima CRA mostrele se arunca. Metode noi: hdsP5_, hdsLista5_, hdsRps5_, hdsF5_, hdsCra5_,
+    hdsRescrie5_. Fluxurile HEVC cu IRAP raman ca in biblioteca.
+  - HEVC: in VPS si SPS, cand profile_tier_level spune numai "interlaced" (general_progressive_source_flag 0,
+    general_interlaced_source_flag 1), se pune si general_progressive_source_flag (metoda noua hdsProgresiv5_);
+    steagul e numai informativ. Motivul: parserul H265 din Chromium refuza altfel tot fluxul ("Interlaced streams
+    not supported") si nu se vede nicio imagine.
+  - la imaginea H.264 progresiva fara IDR si fara random_access_indicator: cat fluxul n-a avut niciun IDR si niciun
+    random_access_indicator, dupa hdsAsteaptaIdrMs (1,5 s) si cel putin 2 puncte, I-ul cu SPS sau cu SEI recovery
+    point in acelasi pachet e cadru cheie, iar in fata feliei lui se pune un SEI recovery point (recovery_frame_cnt
+    0) daca nu are deja unul (metoda noua hdsRpPus_). Un IDR sau un random_access_indicator opresc totul; fluxurile
+    care le au raman ca in biblioteca. Motivul: la canalele progresive fara niciun punct de pornire marcat (Italy
+    Service 3 si 5, 720p50) nu era niciun cadru cheie, iar decodorul H.264 al placii video din Chromium nu porneste
+    de la o felie non-IDR fara SEI recovery point: nu se vedea nicio imagine.
+  - sunetul AC-3 in browserele care nu il redau (Chrome, Edge, Firefox): cand config-ul playerului are hdsSunetAc3
+    (convertorul din hds-sunet.js, cod propriu), TSDemuxer.parseAC3Payload da PES-ul AC-3 convertorului (metoda
+    noua hdsAc3Flac_), care il decodeaza in pagina (decodorul ac3 din FFmpeg, compilat in WebAssembly, tv-wasm/) si
+    da inapoi cadre FLAC cu PTS-ul lor; ele intra in pista audio cu codec "flac" (audio/mp4; codecs="flac"), iar
+    TSDemuxer.dispatchAudioInitSegment face segmentul de initializare FLAC (STREAMINFO-ul dat de convertor in
+    cutia dfLa; cutiile fLaC si dfLa existau deja in biblioteca, pentru FLV). Fara hdsSunetAc3, AC-3 ramane ca in
+    biblioteca. getSilentFrame (AudioSpecificConfig) da si un cadru FLAC de liniste (stereo, 1536 de esantioane), cu
+    care MP4Remuxer umple golurile mari de timp in loc sa repete ultimul cadru de sunet.
+    Motivul: canalele cu sunet numai AC-3 erau fara sunet in browserele fara decodor AC-3.
+Licenta: Apache License 2.0 (textul complet mai jos). Notitele de copyright din sursele bibliotecii:
+  Copyright (C) 2016 Bilibili. All Rights Reserved.
+  Copyright (C) 2021 magicxqq. All Rights Reserved.
+  Copyright (C) 2022 magicxqq. All Rights Reserved.
+  Copyright (C) 2022 もにょてっく. All Rights Reserved.
+  Copyright (C) 2023 zheng qian. All Rights Reserved.
+  Copyright (C) 2023 もにょてっく. All Rights Reserved.
+
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.

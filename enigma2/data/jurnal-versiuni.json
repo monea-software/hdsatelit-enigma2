@@ -1,0 +1,1116 @@
+{
+ "versiuni": [
+  {
+   "versiune": "0.6.0",
+   "build": "0060202610231500",
+   "data": "23.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Subtitrări: subtitrările DVB se măresc la mărimea ecranului, iar receptorul le poate citi și ca text, chiar și pe cele trimise în fâșii, cum sunt la ZDF, deci se pot și traduce.",
+     "en": "Subtitles: DVB subtitles are scaled up to the size of the screen, and the receiver can also read them as text, including those sent in strips, as on ZDF, so they can be translated too."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Aspectul subtitrărilor și în pagina web vezi câte pagini de subtitrare DVB s-au citit ca text și de ce altele au rămas imagine.",
+     "en": "Subtitle appearance and the web page show how many DVB subtitle pages were read as text and why others stayed as pictures."
+    },
+    {
+     "fel": "nou",
+     "ro": "Subtitrările din teletext, cele din fișiere și cele DVB citite ca text se traduc singure în limba ta; receptorul așteaptă până la 2 secunde, ca să arate direct textul tradus.",
+     "en": "Teletext subtitles, subtitles from files and DVB subtitles read as text are translated into your language automatically; the receiver waits up to 2 seconds to show the translated text straight away."
+    },
+    {
+     "fel": "nou",
+     "ro": "Subtitrarea tradusă apare în locul originalului sau sub el, în galben deschis, cu originalul alb.",
+     "en": "The translated subtitle appears instead of the original or below it, in light yellow, with the original in white."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cu traducerea pornită, receptorul alege singur subtitrarea pe orice canal: întâi pe cea în limba traducerii, apoi teletextul, apoi pe cea DVB citită ca text, și o traduce.",
+     "en": "With translation on, the receiver picks the subtitle on any channel by itself: first one in the translation language, then teletext, then a DVB subtitle read as text, and translates it."
+    },
+    {
+     "fel": "nou",
+     "ro": "Alegerea unei subtitrări în altă limbă, pentru traducere, se poate opri din Limba sunetului și a subtitrărilor, pe televizor și în web.",
+     "en": "Picking a subtitle in another language for translation can be turned off in Audio and subtitle language, on the TV and on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Un rând de subtitrare care nu se poate traduce apare în original, cu (netradus) în față. Cât stau pe ecran subtitrările traduse alegi din Timpul de citire: Obișnuit, Mai lung sau Cel mai lung.",
+     "en": "A subtitle line that cannot be translated appears in the original, with (not translated) in front. How long translated subtitles stay on screen is set in Reading time: Normal, Longer or Longest."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Aspectul subtitrărilor alegi mărimea, culoarea, conturul, umbra, fundalul, înălțimea și stilul literelor subtitrărilor text, cu o frază de probă pe ecran, pe televizor și în interfața web.",
+     "en": "In Subtitle appearance you choose the size, colour, outline, shadow, background, height and letter style of text subtitles, with a sample line on screen, on the TV and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Subtitrările de teletext și din fișiere au contur și umbră moale și stau jos pe ecran.",
+     "en": "Teletext and file subtitles have an outline and a soft shadow and sit low on the screen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când postul nu spune limba subtitrării, receptorul o ghicește după sunet sau după ghid și scrie asta pe ecran.",
+     "en": "When the channel does not say which language a subtitle is in, the receiver guesses it from the audio or the guide and says so on screen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pentru citirea subtitrărilor ca text, alte 42 de limbi se descarcă la cerere pe stick sau disc; la o limbă care lipsește, receptorul întreabă dacă o descarcă.",
+     "en": "For reading subtitles as text, 42 more languages can be downloaded on request to a stick or disk; for a missing language, the receiver asks whether to download it."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pista de sunet și subtitrarea se aleg singure după limba receptorului, cu câte trei preferințe pentru fiecare și cu „Fără subtitrări niciodată”.",
+     "en": "The audio track and the subtitles are chosen automatically by the receiver language, with three preferences for each and a “Never show subtitles” option."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pista de sunet sau subtitrarea aleasă de mână pe un canal se ține minte pentru acel canal, iar tasta SUB are și rândul „Fără subtitrări”, pe televizor și în web.",
+     "en": "An audio track or subtitle picked by hand on a channel is remembered for that channel, and the SUB key also has a “No subtitles” line, on the TV and on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "La filme, receptorul găsește singur subtitrările din fișierele MKV, MP4 și AVI, inclusiv WebVTT din MKV, și pe cele de lângă film, după nume și limbă, cu diacriticele corecte.",
+     "en": "For movies, the receiver finds subtitles inside MKV, MP4 and AVI files by itself, WebVTT in MKV included, and those next to the movie, by name and language, with the right accented letters."
+    },
+    {
+     "fel": "nou",
+     "ro": "Întârzierea potrivită a subtitrării se ține minte pentru fiecare film, iar fișierul de subtitrare, întârzierea și codarea se aleg și din web.",
+     "en": "The subtitle delay you set is remembered for each movie, and the subtitle file, delay and encoding can also be chosen on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Subtitrările Blu-ray și DVD din filme se văd clare și pot fi citite ca text, la fel ca subtitrările DVB de pe canale. Subtitrările DVD puse în fișiere MKV încă nu se văd.",
+     "en": "Blu-ray and DVD subtitles in movies are shown sharp and can be read as text, just like DVB subtitles on channels. DVD subtitles inside MKV files do not show yet."
+    },
+    {
+     "fel": "nou",
+     "ro": "O subtitrare care lipsește se caută și se descarcă de pe internet, din meniu sau din interfața web, pentru filme, înregistrări și emisiuni: filmul se caută după ghidul TV, iar viteza se potrivește singură.",
+     "en": "A missing subtitle is found and downloaded from the internet, from the menu or the web interface, for movies, recordings and programmes: the film is looked up in the TV guide and the speed is matched automatically."
+    },
+    {
+     "fel": "nou",
+     "ro": "Din tasta SUB sari la replica următoare sau la cea dinainte a subtitrării.",
+     "en": "From the SUB key you jump to the next or the previous subtitle line."
+    },
+    {
+     "fel": "nou",
+     "ro": "Traducere: textele se traduc prin serviciul ales de tine, unul gratuit, unul cu cheia ta sau un server de traducere din casa ta, găsit cu butonul Caută în rețeaua de acasă.",
+     "en": "Translation: texts are translated by the service you choose, a free one, one with your own key or a translation server in your home, found with the Search the home network button."
+    },
+    {
+     "fel": "nou",
+     "ro": "Prin Adresă proprie poți folosi orice alt server de traducere, iar în lista serviciilor fiecare nume spune dacă lucrează pe internet sau local.",
+     "en": "With Custom address you can use any other translation server, and each name in the service list says whether it works over the internet or locally."
+    },
+    {
+     "fel": "nou",
+     "ro": "Serviciile de traducere de rezervă stau într-o listă: când cel principal are prea multe cereri, rămâne fără credit sau cotă, nu are cheie ori dă o eroare de server, traducerea trece singură la următorul, fără pauză.",
+     "en": "Backup translation services sit in a list: when the main one has too many requests, runs out of credit or quota, has no key or returns a server error, translation moves on to the next one by itself, with no pause."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cu Fă-l principal pui un serviciu de traducere de rezervă în locul celui principal.",
+     "en": "With Make it main you put a backup translation service in place of the main one."
+    },
+    {
+     "fel": "nou",
+     "ro": "Traducerea se configurează și de pe telefon: Configurează de pe telefon arată un cod QR, pagina receptorului se deschide fără cod de scris, iar cheia lipită e probată pe loc și serviciul e recunoscut după ea.",
+     "en": "Translation can also be set up from your phone: Set up from your phone shows a QR code, the receiver's page opens with no code to type, and the pasted key is tested at once and the service recognised from it."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cheia fiecărui serviciu de traducere stă criptată pe receptor, rămâne după actualizări și pleacă numai spre serverul pentru care ai pus-o.",
+     "en": "Each translation service's key is stored encrypted on the receiver, stays after updates and is sent only to the server you set it for."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pașii fiecărui serviciu de traducere au un cod QR spre pagina oficială a cheii și butonul Probează traducerea, iar mesajele și starea cheii apar în limba meniului, și în web.",
+     "en": "The steps for each translation service have a QR code to the official key page and a Test the translation button, and the messages and key status appear in the menu language, on the web too."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cu Tradu EPG, ghidul de programe vine în limba ta, prin serviciul de traducere ales: se traduce numai ce e pe ecran, pe bara de jos, pe a doua bară, în ghiduri, în detaliile emisiunii și în ghidul din web.",
+     "en": "With Translate EPG, the programme guide comes in your language through the chosen translation service: only what is on screen is translated, on the bottom bar, second bar, guides, programme details and web guide."
+    },
+    {
+     "fel": "nou",
+     "ro": "Traducerile ghidului de programe se țin minte pe stick sau disc, iar INFO arată textul original.",
+     "en": "Programme guide translations are remembered on a stick or disk, and INFO shows the original text."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cu traducerea subtitrărilor pornită, titlurile emisiunii de acum și ale celei următoare de pe bara de jos se traduc singure, prin Tradu bara de jos, pornită din fabrică.",
+     "en": "With subtitle translation on, the titles of the current and the next programme on the bottom bar are translated automatically, through Translate the bottom bar, which is on by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Fiecare titlu de pe bara de jos se cere o singură dată la traducere, așa că se folosește foarte puțin din cota serviciului.",
+     "en": "Each bottom bar title is sent for translation only once, so very little of the service quota is used."
+    },
+    {
+     "fel": "nou",
+     "ro": "Paginile de teletext se pot traduce în limba ta, prin serviciul de traducere ales, iar în teletext tasta AUDIO arată originalul. Traducerea teletextului se pornește din Traducerea subtitrărilor și e oprită din fabrică.",
+     "en": "Teletext pages can be translated into your language by the chosen translation service, and in teletext the AUDIO key shows the original. Teletext translation is turned on in Subtitle translation and is off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Textele din aplicațiile HbbTV ale canalelor se pot traduce și ele, cu același serviciu, inclusiv pe paginile securizate. Și această traducere se pornește din Traducerea subtitrărilor și e oprită din fabrică.",
+     "en": "The texts in the channels' HbbTV apps can be translated too, with the same service, secure pages included. This translation is also turned on in Subtitle translation and is off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul nu citește și nu traduce subtitrările cât televizorul e stins sau când sunt deja în limba aleasă, așa că procesorul și serviciul de traducere lucrează numai la nevoie. Un rând tradus se cere o singură dată.",
+     "en": "The receiver does not read or translate subtitles while the TV is off or when they are already in the chosen language, so the processor and the translation service work only when needed. A line is translated only once."
+    },
+    {
+     "fel": "nou",
+     "ro": "Televizor și imagine: la un canal cu imagine AV1, H.266 VVC, AVS2 sau AVS3, pe care receptorul nu o poate reda, vezi pe loc numele formatului în loc de ecran negru, iar sunetul merge; mesajul apare și în web.",
+     "en": "TV and picture: on a channel with AV1, H.266 VVC, AVS2 or AVS3 video, which the receiver cannot play, you see the format name at once instead of a black screen, and the sound plays on; the message also shows on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când ecranul rămâne negru, pe mijlocul lui scrie de ce, de pildă fără semnal, canal criptat, post mutat sau tuner ocupat, și ce poți face.",
+     "en": "When the screen stays black, the middle of it tells you why, for example no signal, encrypted channel, channel moved or tuner busy, and what you can do."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă alegi locul antenei chiar din mesajul de pe ecranul negru, canalul repornește și antena se rotește, fără să schimbi canalul.",
+     "en": "If you choose the dish location right from the black screen message, the channel restarts and the dish turns, without changing channel."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pe un canal fără imagine, OK pe mesaj arată ce trimite de fapt canalul: date, actualizări sau aplicații, cu pistele și debitul lor.",
+     "en": "On a channel with no picture, OK on the message shows what the channel actually sends: data, updates or apps, with their streams and bitrate."
+    },
+    {
+     "fel": "nou",
+     "ro": "Calitatea imaginii, în Setări › Video, are profiluri pentru canalele SD, HD și 4K, în SDR, HDR10 și HLG, puse singure la schimbarea canalului.",
+     "en": "Picture quality, in Settings › Video, has profiles for SD, HD and 4K channels, in SDR, HDR10 and HLG, applied by themselves when the channel changes."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Calitatea imaginii reglezi luminozitatea, contrastul, culorile, claritatea și zgomotul și vezi efectul pe loc, cu comparație pe jumătate de ecran; la fel în web.",
+     "en": "In Picture quality you set brightness, contrast, colour, sharpness and noise and see the effect at once, compared on half of the screen; the same on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ieșirea HDR poate fi automată după canal, mereu HDR10, mereu HLG sau oprită; dacă nu confirmi alegerea, revine ce era. HDR10 și HLG se recunosc din transmisiune și se văd în informațiile canalului.",
+     "en": "HDR output can be automatic by channel, always HDR10, always HLG or off; if you do not confirm it, the previous setting returns. HDR10 and HLG are recognised from the broadcast and shown in the channel information."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul Video alege rezoluția și frecvența, cu 50 Hz recomandat, și, unde receptorul le are, spațiul și adâncimea de culoare; dacă ecranul rămâne negru, setarea veche revine singură în douăzeci de secunde.",
+     "en": "The Video screen sets resolution and refresh rate, 50 Hz recommended, and, where the receiver has them, colour space and depth; if the screen stays black, the old setting returns by itself after twenty seconds."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lista rezoluțiilor din ecranul Video le arată pe toate, și când televizorul anunță una singură.",
+     "en": "The resolution list on the Video screen shows every resolution even when the TV announces only one."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Setări video avansate, rândul Imaginea 4:3 alege cum se văd emisiunile vechi 4:3 pe un televizor lat: întregi, cu benzi negre, mărite sau întinse. La fel în interfața web.",
+     "en": "In Advanced video settings, the 4:3 picture row chooses how old 4:3 programmes look on a wide TV: whole with black bars, zoomed or stretched. The same in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul Informații HDMI arată ce trimite receptorul spre televizor și ce acceptă televizorul: legătura, protecția conținutului și sunetul, plus HDR10 sau HLG când transmisiunea le are.",
+     "en": "The HDMI information screen shows what the receiver sends to the TV and what the TV accepts: the link, content protection and sound, plus HDR10 or HLG when the broadcast has them."
+    },
+    {
+     "fel": "nou",
+     "ro": "Canalele H.265 se văd, iar sunetul E-AC-3 se aude. La filme merg și sunetele WMA, ALAC, TrueHD și DTS, DVD-urile fără protecție la copiere și stickurile sau discurile formatate exFAT sau NTFS.",
+     "en": "H.265 channels play and E-AC-3 sound is heard. Movies also play with WMA, ALAC, TrueHD and DTS sound, as do DVDs without copy protection and sticks or disks formatted as exFAT or NTFS."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lista de canale și barele de informații: lista începe cu Caută canal, TV sau Radio și grupele Toate, Sateliți, Furnizori și Favorite, numai cu săgețile și OK.",
+     "en": "Channel list and info bars: the list starts with Search channel, TV or Radio and the groups All, Satellites, Providers and Favourites, all reached with the arrows and OK."
+    },
+    {
+     "fel": "nou",
+     "ro": "În lista de canale, la Sateliți, cablul și terestrul sunt primele, satelitul canalului de acum e deschis, iar ceilalți se deschid cu OK; tasta VERDE îi strânge pe toți.",
+     "en": "In the channel list, under Satellites, cable and terrestrial come first, the current channel's satellite is open and the others open with OK; the GREEN key folds them all."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lângă lista de canale vezi canalul într-o fereastră mică și emisiunea de acum; sateliții apar cu poziția lor, iar canalele care se înregistrează sunt colorate.",
+     "en": "Next to the channel list you see the channel in a small window and the current programme; satellites appear with their position, and channels being recorded are coloured."
+    },
+    {
+     "fel": "nou",
+     "ro": "Canalul trimis acum în rețea are semnul În rețea, în lista de canale, în bara de informații și în pagina web.",
+     "en": "The channel now streamed on the network carries the On network mark, in the channel list, the info bar and the web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "A doua bară, la dublu OK, are mai multe pagini despre canal, schimbate cu stânga și dreapta, și se închide numai cu OK sau Ieșire.",
+     "en": "The second bar, on a double OK, has several pages about the channel, turned with left and right, and closes only with OK or Exit."
+    },
+    {
+     "fel": "nou",
+     "ro": "Prima pagină a celei de-a doua bare e ghidul canalului, cu descrierea, temporizatorul și înregistrarea; pe tot ecranul alegi din ea cu OK pistele de sunet și subtitrările.",
+     "en": "The first page of the second bar is the channel guide, with the description, the timer and recording; on full screen you pick audio tracks and subtitles from it with OK."
+    },
+    {
+     "fel": "nou",
+     "ro": "Bara de informații stă 8 secunde din fabrică; din setări o lași până la 30 de secunde sau fără închidere. Pe bară, FTA sau Criptat apare numai după ce se știe și se ține minte pentru fiecare canal.",
+     "en": "The info bar stays for 8 seconds by default; in the settings you can keep it up to 30 seconds or never close it. On the bar, FTA or Encrypted appears only once it is known and is remembered for each channel."
+    },
+    {
+     "fel": "nou",
+     "ro": "Setarea Săgețile sus și jos la privit alege ce fac săgețile: SUS lista radio și JOS lista TV, invers, aceeași listă pe amândouă sau schimbarea canalului. Merge la TV, la radio și cu telecomanda televizorului.",
+     "en": "The Up and down arrows while watching setting decides what the arrows do: UP the radio list and DOWN the TV list, the reverse, the same list on both or changing the channel. It works on TV, radio and with the TV remote."
+    },
+    {
+     "fel": "nou",
+     "ro": "Sunet: egalizatorul are 10 benzi, 7 presetări și mod de noapte, cu reglajele ținute minte pentru fiecare post, pe televizor și în interfața web.",
+     "en": "Sound: the equaliser has 10 bands, 7 presets and a night mode, with the settings remembered for each station, on the TV and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Egalizatorul merge la posturile de radio și la canalele TV cu sunet MPEG (MP2); la cele cu sunet AAC nu e disponibil, din motive de licență.",
+     "en": "The equaliser works on radio stations and TV channels with MPEG (MP2) sound; on those with AAC sound it is not available, for licensing reasons."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pe Automat, ieșirea sunetului trimite AC3 5.1 neschimbat numai spre un televizor care îl primește, iar starea se vede și în interfața web.",
+     "en": "On Automatic, the audio output sends AC3 5.1 unchanged only to a TV that accepts it, and the state also shows in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Sunetul DTS al filmelor se poate recoda în AC3 5.1, pentru amplificatoarele fără DTS; recodarea e oprită din fabrică.",
+     "en": "The DTS sound of movies can be converted to AC3 5.1 for amplifiers without DTS; the conversion is off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Volum și întârziere alegi pasul volumului, volumul ținut minte pe fiecare canal, volumul egal între canale și câte secunde stă bara volumului pe ecran, de la 1 la 10; la fel în interfața web.",
+     "en": "In Volume and delay you choose the volume step, the volume remembered for each channel, equal volume across channels and how many seconds the volume bar stays on screen, from 1 to 10; the same on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Tot în Volum și întârziere reglezi întârzierea sunetului pe HDMI, pe ieșirea optică și pe pistă, și în interfața web.",
+     "en": "Volume and delay also sets the sound delay on HDMI, on the optical output and per track, in the web interface too."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pistele de sunet au numele limbii în limba receptorului, iar cele fără limbă scriu Limba originală, Descriere audio sau Nedefinită.",
+     "en": "Audio tracks show the language name in the receiver's language, and tracks without a language say Original language, Audio description or Undefined."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pista de sunet aleasă se ține minte și la sunetul LPCM și DTS-HD; sunetul se poate amesteca pe două canale, iar tasta de sunet face altceva apăsată scurt sau lung.",
+     "en": "The chosen audio track is remembered for LPCM and DTS-HD sound too; sound can be mixed down to two channels, and the audio key does different things on a short or a long press."
+    },
+    {
+     "fel": "nou",
+     "ro": "Radio și DAB+: la un post de radio vezi pe tot ecranul numele postului, emisiunile, piesa și textul radio întregi, și la posturile AAC, plus semnalul și calitatea ca bare, ca la TV.",
+     "en": "Radio and DAB+: on a radio station you see on the whole screen the station name, the programmes, the full song and radio text, AAC stations included, plus signal and quality as bars, as on TV."
+    },
+    {
+     "fel": "nou",
+     "ro": "OK pe un post de radio din listă îl deschide direct pe tot ecranul, iar în interfața web e pagina Radio.",
+     "en": "OK on a radio station in the list opens it straight on full screen, and the web interface has a Radio page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Barele de sunet ale ecranului radio merg pe orice format de sunet, și la posturile DAB+ și la radiourile DVB-T2 din satelit. Tasta galbenă schimbă vizualizarea, albastra culorile, iar verdele deschide egalizatorul.",
+     "en": "The sound bars on the radio screen work with any sound format, DAB+ stations and DVB-T2 radio from satellite included. The yellow key changes the visualisation, blue the colours, and green opens the equaliser."
+    },
+    {
+     "fel": "nou",
+     "ro": "Posturile de radio digital DAB+ trimise prin satelit se aud ca orice post de radio și pornesc direct când schimbi canalul.",
+     "en": "DAB+ digital radio stations sent over satellite play like any radio station and start straight away when you change channel."
+    },
+    {
+     "fel": "nou",
+     "ro": "Posturile DAB+ apar în lista de canale la Sateliți, cu eticheta lor lângă nume, și le găsești la căutare după nume, după DAB+ sau după ansamblu.",
+     "en": "DAB+ stations appear in the channel list under Satellites, with their label next to the name, and you find them in search by name, by DAB+ or by ensemble."
+    },
+    {
+     "fel": "nou",
+     "ro": "Programele DVB-T2 trimise prin satelit se văd ca orice canal, cu eticheta lor în listă, și merg fără opriri și pe multiplexurile mari, de pildă Rai mux B.",
+     "en": "DVB-T2 programmes sent over satellite play like any channel, with their label in the list, and run without stops on large multiplexes too, for example Rai mux B."
+    },
+    {
+     "fel": "nou",
+     "ro": "Programele DVB-T2 din satelit nu se pot încă înregistra, iar REC și temporizatorul spun asta pe televizor și în interfața web.",
+     "en": "DVB-T2 programmes from satellite cannot be recorded yet, and REC and the timer say so on the TV and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Scanarea DAB+ și DVB-T2 prin satelit spune dinainte unde se rotește antena și cât durează și arată ce găsește pe măsură ce caută.",
+     "en": "The DAB+ and DVB-T2 satellite scan tells you beforehand where the dish will turn and how long it takes, and shows what it finds as it searches."
+    },
+    {
+     "fel": "nou",
+     "ro": "La sfârșitul scanării DAB+ și DVB-T2 vezi posturile pe ansambluri, fiecare cu Ascultă, iar antena rămâne pe satelitul scanat până alegi un post sau te întorci la canalul tău.",
+     "en": "At the end of the DAB+ and DVB-T2 scan you see the stations by ensemble, each with Listen, and the dish stays on the scanned satellite until you pick a station or go back to your channel."
+    },
+    {
+     "fel": "nou",
+     "ro": "Listele DAB+ și DVB-T2 vin de pe serverul HD Satelit, cu numele posturilor, numai pentru transponderele pe care le recepționează receptorul tău, așa că posturile apar fără căutare în flux.",
+     "en": "DAB+ and DVB-T2 lists come from the HD Satelit server, with the station names, only for the transponders your receiver receives, so stations appear without searching the stream."
+    },
+    {
+     "fel": "nou",
+     "ro": "Listele DAB+ și DVB-T2 se actualizează oricând cu un buton sau, dacă pornești opțiunea, în fiecare zi.",
+     "en": "The DAB+ and DVB-T2 lists can be updated at any time with a button or, if you turn the option on, every day."
+    },
+    {
+     "fel": "nou",
+     "ro": "Posturile DAB+ și DVB-T2 pornesc cu o rezervă mică, de 0,4 secunde, ca întreruperile scurte să nu se vadă și să nu se audă; bara și ecranul radio arată semnalul tunerului care ține satelitul.",
+     "en": "DAB+ and DVB-T2 stations start with a small buffer of 0.4 seconds, so short dropouts are neither seen nor heard; the bar and the radio screen show the signal of the tuner holding the satellite."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina web Fluxuri și setări arată fluxurile DAB+ și DVB-T2 cu posturile lor și adaugă posturi de mână.",
+     "en": "The Streams and settings web page lists the DAB+ and DVB-T2 streams with their stations and adds stations by hand."
+    },
+    {
+     "fel": "nou",
+     "ro": "Înregistrări și filme: lista înregistrărilor programate, la tasta TIMER, arată unde se salvează și cât loc liber e, iar OK deschide tot ce poți face cu o înregistrare.",
+     "en": "Recordings and movies: the scheduled recordings list, on the TIMER key, shows where recordings are saved and how much space is free, and OK opens everything you can do with a recording."
+    },
+    {
+     "fel": "nou",
+     "ro": "Înregistrările programate se pun, se schimbă, se opresc și se șterg și din interfața web, cu jurnalul fiecăreia.",
+     "en": "Scheduled recordings can also be set, changed, stopped and deleted from the web interface, with each one's log."
+    },
+    {
+     "fel": "nou",
+     "ro": "Locul înregistrărilor se alege singur la prima înregistrare: un singur stick sau disc se folosește direct, cu mai multe ești întrebat o dată, iar fără niciunul afli ce să conectezi și pregătești discul dintr-o alegere.",
+     "en": "The recording location is chosen by itself at the first recording: one stick or hard disk is used straight away, with several you are asked once, and with none you learn what to connect and prepare a disk in one step."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pauza în direct spune limpede când nu are loc pe stick și cât loc îi trebuie.",
+     "en": "Live pause says clearly when there is not enough space on the stick and how much it needs."
+    },
+    {
+     "fel": "nou",
+     "ro": "Formatarea și verificarea discurilor lucrează și cu stickurile USB, pe televizor și în pagina web, în ext4 sau FAT32, iar întrebarea spune pe nume ce se pierde.",
+     "en": "Disk formatting and checking also work with USB sticks, on the TV and on the web page, in ext4 or FAT32, and the question names what will be lost."
+    },
+    {
+     "fel": "nou",
+     "ro": "Din pagina web, formatarea și verificarea discurilor nu pornesc cât o înregistrare e în curs sau începe în mai puțin de 10 minute.",
+     "en": "From the web page, disk formatting and checking do not start while a recording is running or due to start within 10 minutes."
+    },
+    {
+     "fel": "nou",
+     "ro": "Playerul de filme, în meniul Media, derulează înainte și înapoi, reia filmul de unde ai rămas, arată lista filmelor cu detaliile celui ales și are mesaje clare pentru formatele care nu se pot reda.",
+     "en": "The movie player, in the Media menu, skips forward and back, resumes a movie where you left off, lists the movies with details of the selected one and gives clear messages for formats that cannot be played."
+    },
+    {
+     "fel": "nou",
+     "ro": "În meniul Media sunt și pozele și navigatorul web, lângă playerul de filme.",
+     "en": "The Media menu also holds photos and the web browser, next to the movie player."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina web Filmul de acum arată filmul care merge, comenzile telecomenzii și lista filmelor din dosar, de unde pornești unul de unde ai rămas sau de la început.",
+     "en": "The Current film web page shows the movie that is playing, the remote control commands and the list of movies in the folder, from which you start one where you left off or from the beginning."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă pornești un canal din web sau din telefon cât merge un film, playerul se închide și rămâi pe canal, cu sunetul și subtitrarea lui.",
+     "en": "If you start a channel from the web or the phone while a movie plays, the player closes and you stay on the channel, with its sound and subtitles."
+    },
+    {
+     "fel": "nou",
+     "ro": "În playerul înregistrărilor derulezi corect și înregistrările H.265, iar tasta albastră deschide editorul de marcaje, cu care pui marcaje de tăiere în înregistrare, ca să sari peste reclame.",
+     "en": "In the recordings player, H.265 recordings skip correctly too, and the blue key opens the marker editor, where you put cut markers in a recording to skip the adverts."
+    },
+    {
+     "fel": "nou",
+     "ro": "Aplicațiile HbbTV ale canalelor pornesc la tasta ROȘIE sau Portal, cu emisiunea în colțul cerut de aplicație, iar la ieșire canalul revine pe tot ecranul.",
+     "en": "The channels' HbbTV apps start with the RED or Portal key, with the programme in the corner the app asks for, and on exit the channel returns to full screen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Semnul HbbTV din bară se face roșu când canalul are aplicație. Din fabrică HbbTV e oprit și se pornește din Setări navigator web.",
+     "en": "The HbbTV mark on the bar turns red when the channel has an app. HbbTV is off by default and is turned on in Web browser settings."
+    },
+    {
+     "fel": "nou",
+     "ro": "Filmele din aplicațiile canalelor, de pildă din mediatecile ARD și ZDF, pornesc pe receptor, cu pauză, salt în film și limba sunetului; cele protejate la copiere nu merg.",
+     "en": "Videos in the channels' apps, for example from the ARD and ZDF media libraries, play on the receiver, with pause, seeking and audio language; copy-protected ones do not."
+    },
+    {
+     "fel": "nou",
+     "ro": "Aplicațiile HbbTV primesc ce cere standardul HbbTV 1.5: meniurile, tastele lor, schimbarea canalului și ghidul.",
+     "en": "HbbTV apps get what the HbbTV 1.5 standard asks for: their menus, their key presses, channel switching and the guide."
+    },
+    {
+     "fel": "nou",
+     "ro": "Aplicațiile pe care unele canale le trimit numai prin semnalul satelitului pornesc și ele la ROȘU: receptorul le încarcă din semnal și arată cât s-a încărcat, iar EXIT renunță.",
+     "en": "Apps that some channels send only in the satellite signal also start with RED: the receiver loads them from the signal and shows how much has loaded, and EXIT cancels."
+    },
+    {
+     "fel": "nou",
+     "ro": "La canalele de pe internet (DVB-I) alegi țara, iar listele vin singure, numerotate, și pornesc pe receptor, și cele în format DASH sau HLS.",
+     "en": "For internet channels (DVB-I) you choose the country, and the lists arrive by themselves, numbered, and play on the receiver, including those in DASH or HLS format."
+    },
+    {
+     "fel": "nou",
+     "ro": "Un canal de satelit arată și varianta lui de pe internet și trece singur pe ea când satelitul nu se recepționează.",
+     "en": "A satellite channel also shows its internet version and switches to it by itself when the satellite cannot be received."
+    },
+    {
+     "fel": "nou",
+     "ro": "Navigatorul web, din Meniu principal › Media, deschide pagini pe televizor cu telecomanda: un chenar galben care pulsează arată ce ai ales, iar tasta ALBASTRĂ pornește un indicator ca de mouse, mișcat cu săgețile.",
+     "en": "The web browser, in Main menu › Media, opens web pages on the TV with the remote: a pulsing yellow frame shows what you selected, and the BLUE key brings up a mouse-like pointer moved with the arrows."
+    },
+    {
+     "fel": "nou",
+     "ro": "În navigatorul web, ce scrii fără punct în bara de adrese se caută pe internet.",
+     "en": "In the web browser, anything you type without a dot in the address bar is searched on the internet."
+    },
+    {
+     "fel": "nou",
+     "ro": "În navigatorul web, OK sau TEXT pe un câmp deschide tastatura de pe ecran, iar adresele și parolele le poți scrie și din telefon, în interfața web, de unde ajung în câmpul de pe televizor.",
+     "en": "In the web browser, OK or TEXT on a field opens the on-screen keyboard, and you can also type addresses and passwords on your phone, in the web interface, from where they go into the field on the TV."
+    },
+    {
+     "fel": "nou",
+     "ro": "Culoarea, forma, grosimea și pulsul chenarului de selecție se aleg din setările navigatorului web.",
+     "en": "The colour, shape, thickness and pulse of the selection frame are set in the web browser settings."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când o aplicație HbbTV nu se deschide, mesajul spune motivul, de pildă pagină goală sau mutată, adresă care nu mai există, lipsa internetului sau o aplicație care lucrează numai în fundal.",
+     "en": "When an HbbTV app does not open, the message gives the reason, for example an empty or moved page, an address that no longer exists, no internet or an app that works only in the background."
+    },
+    {
+     "fel": "nou",
+     "ro": "Șterge datele HbbTV golește cookie-urile și alegerile salvate de aplicațiile canalelor.",
+     "en": "Delete HbbTV data clears the cookies and choices saved by the channels' apps."
+    },
+    {
+     "fel": "nou",
+     "ro": "Setarea HbbTV clar desenează aplicațiile canalelor la mărimea întreagă a ecranului: textul e mai clar, dar tastele răspund mai încet. E oprită din fabrică și se alege pe televizor sau în web.",
+     "en": "The Sharp HbbTV setting draws channel apps at the full size of the screen: text is sharper, but the remote responds more slowly. It is off by default and can be set on the TV or on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Antena și căutarea: Scanarea și Orientarea și setarea antenei sunt primele în meniul principal, la tastele 1 și 2.",
+     "en": "Dish and channel search: Channel scan and Dish alignment and setup are the first entries in the main menu, on digits 1 and 2."
+    },
+    {
+     "fel": "nou",
+     "ro": "Prin satelit ai șapte feluri de căutare: după transponder, după satelit, pe mai mulți sateliți, după operator (întâi cei din țara ta), cu date scrise de mână, DVB-T2 și DAB+ prin satelit.",
+     "en": "Over satellite there are seven kinds of search: by transponder, by satellite, several satellites, by operator (those in your country first), with data typed by hand, DVB-T2 and DAB+ over satellite."
+    },
+    {
+     "fel": "nou",
+     "ro": "Cablul și terestrul au câte cinci feluri de căutare, și pe tunerele combinate. Scanarea pornește cu săgețile și OK, din rândul Caută acum.",
+     "en": "Cable and terrestrial have five kinds of search each, also on combined tuners. A scan starts with the arrows and OK from the Search now line."
+    },
+    {
+     "fel": "nou",
+     "ro": "Scanarea arată semn de activitate, timpul rămas, socotit după cât a durat pe receptorul tău, cu tot cu rotirea antenei, și un rezumat cu cifre la final.",
+     "en": "A scan shows an activity sign, the time left, worked out from how long it took on your receiver, dish rotation included, and a summary with figures at the end."
+    },
+    {
+     "fel": "nou",
+     "ro": "După o căutare pe cablu, rețeaua operatorului rămâne pe receptor: lista ei stă la Sateliți, cu numerele operatorului, iar cifrele telecomenzii duc la ele, de pildă 23 la TVR 1.",
+     "en": "After a cable search, the operator's network stays on the receiver: its list sits under Satellites with the operator's numbers, and the remote's digits take you to them, for example 23 to TVR 1."
+    },
+    {
+     "fel": "nou",
+     "ro": "Numele rețelei de cablu se vede pe bară și în informații; căutarea după operator are Digi, Vodafone și Nextgen.",
+     "en": "The cable network name shows on the bar and in the information; search by operator includes Digi, Vodafone and Nextgen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Scanarea detaliată pornește pe rând fiecare canal și notează rezoluția, cadrele pe secundă, codarea, accesul și pistele de sunet și subtitrare.",
+     "en": "Detailed scan tunes each channel in turn and notes the resolution, frames per second, coding, access and the audio and subtitle tracks."
+    },
+    {
+     "fel": "nou",
+     "ro": "Scanarea detaliată se oprește la orice tastă, la standby, la o înregistrare sau când schimbi canalul, pune înapoi canalul de dinainte și continuă data viitoare de unde a rămas.",
+     "en": "Detailed scan stops at any key press, at standby, at a recording or when you change channel, puts the previous channel back and continues next time where it left off."
+    },
+    {
+     "fel": "nou",
+     "ro": "Căutarea de canale găsește canalul după nume și restrânge lista după satelit, tip, canale criptate, limbile sunetului și ale subtitrării, formatul sunetului (mono, stereo sau 5.1) și numărul pistelor.",
+     "en": "Channel search finds a channel by name and narrows the list by satellite, type, encrypted channels, audio and subtitle languages, sound format (mono, stereo or 5.1) and number of tracks."
+    },
+    {
+     "fel": "nou",
+     "ro": "În căutarea de canale, lângă fiecare filtru vezi câte canale rămân, ținând cont și de numele scris.",
+     "en": "In channel search, next to each filter you see how many channels remain, taking the typed name into account."
+    },
+    {
+     "fel": "nou",
+     "ro": "Căutarea de canale se deschide fără să oprească imaginea și ține minte numele și filtrele: după ce pornești un canal din rezultate, lista revine la aceeași căutare, cu cursorul pe el, iar ROȘU începe una nouă.",
+     "en": "Channel search opens without stopping the picture and remembers the name and filters: after you start a channel from the results, the list returns to the same search with the cursor on it, and RED starts a new one."
+    },
+    {
+     "fel": "nou",
+     "ro": "Limbile pistelor se citesc la vizionare: oprit, numai canalul privit sau tot transponderul.",
+     "en": "Track languages are read while you watch: off, only the channel being watched or the whole transponder."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul vine cu o bază de canale gata făcută: rezoluția, sunetul și subtitrările a peste 8000 de canale, folosite numai unde nu știe încă nimic, iar versiunea ei se vede în Despre.",
+     "en": "The receiver comes with a ready-made channel database: the resolution, sound and subtitles of more than 8000 channels, used only where it knows nothing yet, and its version is shown in About."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă pornești opțiunea din Setări generale, receptorul ia o dată pe zi o bază de canale mai nouă de pe serverul nostru.",
+     "en": "If you turn on the option in General settings, the receiver takes a newer channel database from our server once a day."
+    },
+    {
+     "fel": "nou",
+     "ro": "Actualizează pistele trece pe rând prin sateliți: așteaptă antena cât se rotește, apoi cel mult 30 de secunde semnalul, spune cât mai durează după trecerile de dinainte și continuă data viitoare de unde a rămas.",
+     "en": "Update tracks goes through the satellites one by one: it waits for the dish to turn, then at most 30 seconds for the signal, says how long is left based on earlier runs and continues next time where it left off."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Actualizează pistele, tasta galbenă sare la satelitul următor, și din pagina web.",
+     "en": "In Update tracks, the yellow key skips to the next satellite, also from the web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul ține minte pe ce sateliți a recepționat semnal și când, iar Actualizează pistele întreabă înainte de pozițiile fără semnal niciodată.",
+     "en": "The receiver remembers on which satellites it has received a signal and when, and Update tracks asks first about positions that never had a signal."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul motorului arată când a fost recepționat ultima dată satelitul spre care merge antena, în câte zile și cu ce calitate maximă.",
+     "en": "The motor screen shows when the satellite the dish is heading to was last received, on how many days and at what best quality."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă semnalul dispare cu antena pe poziție, receptorul verifică întâi alte frecvențe ale aceluiași satelit și o rotește înapoi numai dacă nici acelea nu se recepționează, fără să oprească programul sau înregistrarea.",
+     "en": "If the signal drops with the dish in position, the receiver first checks other frequencies of the same satellite and turns the dish back only if none of them is received, without stopping the programme or recording."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când nu știe unde e antena, receptorul verifică întâi dacă satelitul cerut se recepționează deja.",
+     "en": "When the receiver does not know where the dish is, it first checks whether the requested satellite is already received."
+    },
+    {
+     "fel": "nou",
+     "ro": "Rotirea antenei e desenată pe ecran: sateliții pe arc, plecarea și ținta colorate și antena care se rotește.",
+     "en": "Dish rotation is drawn on screen: the satellites on an arc, the start and the target in colour and the dish turning."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul învață viteza motorului din fiecare mutare și socotește unghiul din coordonatele USALS; ecranul rotirii și pagina web arată și limitele motorului, la est și la vest.",
+     "en": "The receiver learns the motor speed from every move and works out the angle from the USALS coordinates; the rotation screen and the web page also show the motor limits, east and west."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pentru motor ai comenzi pentru un pas spre est sau vest, mișcare până la oprire, poziții memorate, limite și Mergi la satelit, fiecare cu limită de timp.",
+     "en": "The motor has commands for one step east or west, moving until stopped, stored positions, limits and Go to satellite, each with a time limit."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul notează fiecare comandă trimisă motorului, ca o mutare neașteptată a antenei să se poată lămuri.",
+     "en": "The receiver logs every command sent to the motor, so an unexpected dish movement can be explained."
+    },
+    {
+     "fel": "nou",
+     "ro": "Locul antenei pentru motor îl alegi după țară și oraș, scrii coordonatele sau îl afli după internet: receptorul arată orașul găsit, coordonatele și sursa și schimbă locul numai după ce confirmi. La fel în interfața web.",
+     "en": "You set the dish location for the motor by country and city, by typed coordinates or from the internet: the receiver shows the city found, coordinates and source and changes it only after you confirm; same on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Configurare LNB lucrează pe setările adevărate ale tunerului: face o probă de semnal și se întoarce singură la ce era dacă semnalul nu se recepționează.",
+     "en": "LNB setup works on the real tuner settings: it runs a signal test and goes back to the previous values by itself if no signal is received."
+    },
+    {
+     "fel": "nou",
+     "ro": "Găsire semnal acordează transponderul ales, și pe DVB-S2, așteaptă motorul și arată semnalul real. Când tunerul e ținut de un canal trimis în rețea, îți spune limpede ce faci ca să poți măsura.",
+     "en": "Signal finder tunes the chosen transponder, DVB-S2 included, waits for the motor and shows the real signal. When the tuner is held by a channel streamed on the network, it tells you clearly what to do so you can measure."
+    },
+    {
+     "fel": "nou",
+     "ro": "Emisiile multistream, cu mai multe fluxuri pe un transponder, se pot recepționa: alegi fluxul și secvența PLS la scanare și la canale, și pentru programele DVB-T2 și posturile DAB+ din satelit.",
+     "en": "Multistream broadcasts, with several streams on one transponder, can be received: you choose the stream and the PLS sequence when scanning and on channels, also for DVB-T2 programmes and DAB+ stations from satellite."
+    },
+    {
+     "fel": "nou",
+     "ro": "La prima pornire, dacă pe stick sau pe disc e copia altui software de receptor, receptorul întreabă dacă aduce canalele, buchetele, setările antenei și înregistrările programate; la fel în web.",
+     "en": "At first start, if a stick or disk holds a backup from other receiver software, the receiver asks whether to bring over the channels, bouquets, dish settings and scheduled recordings; the same on the web."
+    },
+    {
+     "fel": "nou",
+     "ro": "Importul din alt software de receptor e și în meniul Scanare: găsește singur copia și face întâi o copie de siguranță.",
+     "en": "Import from other receiver software is also in the Channel scan menu: it finds the backup by itself and makes a safety copy first."
+    },
+    {
+     "fel": "nou",
+     "ro": "Tasta FAV din lista de canale pune canalul în Favorite sau îl scoate, iar FAV ținut apăsat pe canalul la care te uiți îl pune direct; în interfața web fiecare canal are o steluță.",
+     "en": "The FAV key in the channel list adds a channel to Favourites or removes it, and holding FAV on the channel you are watching adds it straight away; in the web interface every channel has a star."
+    },
+    {
+     "fel": "nou",
+     "ro": "Rețea și Wi-Fi: rețelele Wi-Fi se caută și se leagă cu parola dintr-un singur ecran, care arată și starea legăturii.",
+     "en": "Network and Wi-Fi: Wi-Fi networks are found and joined with their password from a single screen, which also shows the link state."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul îți arată și canalul Wi-Fi cel mai liber pentru router, semnalul la orice placă și aparatele din rețeaua de acasă; OK pe un aparat îi deschide pagina.",
+     "en": "The receiver also shows you the freest Wi-Fi channel for your router, the signal on any adapter and the devices on your home network; OK on a device opens its page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când internetul cade, receptorul trece singur pe cablu sau pe altă rețea Wi-Fi, iar când scoți cablul trece pe Wi-Fi și își păstrează adresa.",
+     "en": "When the internet goes down, the receiver switches by itself to cable or another Wi-Fi network, and when you unplug the cable it moves to Wi-Fi and keeps its address."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lista plăcilor de rețea arată placa activă, iar tasta verde salvează setările de rețea.",
+     "en": "The network adapter list shows the active adapter, and the green key saves the network settings."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pictograma rețelei, în bare și în paginile web, arată dacă ești pe cablu sau Wi-Fi, dacă merge internetul și unde e problema: la router sau la furnizor.",
+     "en": "The network icon, on the bars and on the web pages, shows whether you are on cable or Wi-Fi, whether the internet works and where the problem is: the router or the provider."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când se pierde internetul apare un mesaj pe ecran; pictograma rețelei se poate ascunde din Setări › Rețea și Internet.",
+     "en": "When the internet is lost a message appears on screen; the network icon can be hidden in Settings › Network and Internet."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Media, Locuri din rețea deschide filmele de pe un calculator cu Windows, un NAS, un server FTP, WebDAV sau serverul media din casă, cu subtitrările lor, numai când le ceri; la fel din pagina web.",
+     "en": "In Media, Network places opens movies from a Windows computer, a NAS, an FTP or WebDAV server or the media server in your home, with their subtitles, only when you ask; the same from the web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Un NAS sau un calculator cu Windows din casă poate ține și înregistrările, după o probă de scriere și de viteză. Parolele acestor locuri stau criptate pe receptor și nu se arată nicăieri.",
+     "en": "A NAS or a Windows computer in your home can also hold the recordings, after a write and speed test. The passwords for these places are stored encrypted on the receiver and are never shown."
+    },
+    {
+     "fel": "nou",
+     "ro": "Conexiunea prin VPN se pornește din setările de rețea, pentru tot traficul sau numai pentru canalele de pe internet, și e oprită din fabrică.",
+     "en": "A VPN connection is turned on in the network settings, for all traffic or only for internet channels, and it is off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Din fabrică IPv6 e oprit: rețeaua merge pe IPv4 până îl pornești din Rețea și Internet, unde vezi și starea lui.",
+     "en": "IPv6 is off by default: the network runs on IPv4 until you turn it on in Network and Internet, where you also see its state."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ceasul se potrivește singur de pe internet la pornire și apoi periodic, fără să întârzie pornirea; fără internet, ora vine de la transponder și devine sigură când două transpondere diferite dau aceeași oră.",
+     "en": "The clock sets itself from the internet at start and then regularly, without delaying start-up; without internet, the time comes from the transponder and is trusted once two different transponders give the same time."
+    },
+    {
+     "fel": "nou",
+     "ro": "Starea ceasului se vede în Data și ora și în interfața web.",
+     "en": "The clock state is shown in Date and time and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Interfața web și telefonul: interfața web deschide tot receptorul pe telefon sau calculator, iar fiecare intrare din meniul televizorului are pagina ei, cu aceleași grupe și nume.",
+     "en": "Web interface and phone: the web interface opens the whole receiver on your phone or computer, and every entry in the TV menu has its own page, with the same groups and names."
+    },
+    {
+     "fel": "nou",
+     "ro": "În interfața web, ce se deschide numai pe televizor are semnul TV, iar un antet comun arată numele receptorului, versiunea, canalul de acum și calea paginii.",
+     "en": "In the web interface, anything that opens only on the TV carries the TV mark, and a shared header shows the receiver name, the version, the current channel and the page path."
+    },
+    {
+     "fel": "nou",
+     "ro": "Interfața web se deschide cu adresa receptorului sau, acasă, după numele lui. Un browser nou se asociază cu un cod de șase cifre arătat mare pe mijlocul televizorului, valabil o oră, iar acțiunile cu risc cer confirmare.",
+     "en": "The web interface opens at the receiver's address or, at home, by its name. A new browser is paired with a six-digit code shown large in the middle of the TV, valid for one hour, and risky actions ask for confirmation."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina web Canale arată listele TV și radio, emisiunea de acum și căutarea cu filtre și pornește canalul ales pe televizor.",
+     "en": "The Channels web page shows the TV and radio lists, the current programme and search with filters, and starts the chosen channel on the TV."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina web Canale se deschide pe satelitul canalului de pe televizor, ține minte filtrele și pe telefon, iar canalele care arată la fel spun ce le deosebește.",
+     "en": "The Channels web page opens on the satellite of the TV's channel, remembers the filters on a phone too, and channels that look alike say what sets them apart."
+    },
+    {
+     "fel": "nou",
+     "ro": "În panoul web vezi ecranul receptorului cu telecomanda lângă el, pe telefon sub el, iar Toate tastele arată toate tastele telecomenzii originale.",
+     "en": "In the web panel you see the receiver's screen with the remote next to it, below it on a phone, and one button shows every key of the original remote."
+    },
+    {
+     "fel": "nou",
+     "ro": "În panoul web, cu mouse-ul dai clic pe rânduri și butoane: clic dreapta e Ieșire, clic pe rotiță e Meniu, iar rotița derulează.",
+     "en": "In the web panel you click lines and buttons with the mouse: right click is Exit, a wheel click is Menu, and the wheel scrolls."
+    },
+    {
+     "fel": "nou",
+     "ro": "Sub butoanele de captură, Privește live aici pornește în pagină canalul de pe televizor, cu meniul și subtitrarea receptorului deasupra și butoane pentru sunet, ecran întreg, pistă și subtitrare.",
+     "en": "Under the capture buttons, Watch live here starts the TV's channel in the page, with the receiver's menu and subtitles on top and buttons for sound, full screen, audio track and subtitles."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Privește live aici, când schimbi canalul, imaginea trece singură pe canalul nou.",
+     "en": "In Watch live here, when you change channel, the picture follows to the new one by itself."
+    },
+    {
+     "fel": "nou",
+     "ro": "Captura ecranului se descarcă din pagina web cu meniul sau fără, cu data și ora în numele fișierului. Lângă Privește live aici, Descarcă playlist dă canalul de pe televizor, de deschis într-un player din casă.",
+     "en": "A screenshot is downloaded from the web page with or without the menu, with the date and time in the file name. Next to Watch live here, Download playlist gives you the TV's channel to open in a player at home."
+    },
+    {
+     "fel": "nou",
+     "ro": "TV în browser pornește canalul direct în browserul telefonului sau al calculatorului, fără recodare pe receptor: merg canalele H.264 și MPEG-2, cu sunet MP2, MP3 sau AC-3.",
+     "en": "TV in the browser starts the channel straight in your phone's or computer's browser, with no transcoding on the receiver: H.264 and MPEG-2 channels work, with MP2, MP3 or AC-3 sound."
+    },
+    {
+     "fel": "nou",
+     "ro": "În TV în browser, afișajul receptorului poate apărea peste imagine, la rezoluție întreagă, cu textul clar.",
+     "en": "In TV in the browser, the receiver's on-screen display can appear over the picture, at full resolution, with sharp text."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina Playlisturi face liste de canale pe sateliți, furnizori sau caracteristici (4K, HEVC, subtitrare, sunet), ca fișier sau ca adresă fixă pentru un player din casă, cu ghidul TV pe toate zilele știute de receptor.",
+     "en": "The Playlists page makes channel lists by satellite, provider or feature (4K, HEVC, subtitles, sound), as a file or a fixed address for a player at home, with the TV guide for all the days the receiver has."
+    },
+    {
+     "fel": "nou",
+     "ro": "Adresele fixe pentru aparatele din casă nu expiră: le adaugi, le redenumești și le revoci din pagina TV în browser, iar lista lor și revocarea sunt și pe televizor.",
+     "en": "Fixed addresses for devices at home do not expire: you add, rename and revoke them on the TV in the browser page, and their list and revoking are on the TV too."
+    },
+    {
+     "fel": "nou",
+     "ro": "În paginile web de canale, fiecare canal are Vezi live, iar canalele găsite se pot lua ca playlist.",
+     "en": "On the channel web pages every channel has Watch live, and the channels found can be taken as a playlist."
+    },
+    {
+     "fel": "nou",
+     "ro": "Paginile web au două teme, Clasic și Pro, cu fontul de pe televizor și cu culori pe care le alegi separat de cele ale televizorului; tema se ține minte în browser, iar pe telefon meniul stă într-o bară jos.",
+     "en": "The web pages have two themes, Classic and Pro, with the TV's font and colours you choose separately from the TV's; the theme is remembered in the browser, and on a phone the menu sits in a bar at the bottom."
+    },
+    {
+     "fel": "nou",
+     "ro": "Aplicațiile obișnuite de telefon pentru receptoare (telecomandă, canale, ghid, înregistrări) merg din fabrică și, acasă, fără parolă.",
+     "en": "The usual phone apps for receivers (remote, channels, guide, recordings) work as shipped and, at home, without a password."
+    },
+    {
+     "fel": "nou",
+     "ro": "Accesul aplicațiilor de telefon din afara casei e oprit din fabrică; dacă îl pornești, intră numai cu o parolă a lor, pe care o vezi în ecranul interfeței web.",
+     "en": "Phone app access from outside the home is off by default; if you turn it on, the apps get in only with their own password, shown on the web interface screen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Aplicațiile de telefon văd înregistrările din fiecare loc, cu titlul, canalul, ora, lungimea, descrierea și etichetele, și le redau de pe receptor, cu sărituri, chiar și pe cea în curs, fără să încurce televizorul.",
+     "en": "Phone apps see the recordings in each location, with title, channel, time, length, description and tags, and play them from the receiver, with skipping, even one still being recorded, without disturbing the TV."
+    },
+    {
+     "fel": "nou",
+     "ro": "Siguranță și actualizări: actualizările vin de pe internet, le cauți și le instalezi din Actualizare software sau din interfața web, fără să rescrii tot sistemul de pe stick.",
+     "en": "Safety and updates: updates come from the internet, and you look for them and install them from Software update or the web interface, without rewriting the whole system from a stick."
+    },
+    {
+     "fel": "nou",
+     "ro": "Actualizează rapid caută, instalează și repornește interfața dintr-un clic; dacă se înregistrează ceva, repornirea așteaptă să se termine.",
+     "en": "Quick update looks for the update, installs it and restarts the interface in one click; if something is recording, the restart waits for it to finish."
+    },
+    {
+     "fel": "nou",
+     "ro": "Actualizare software arată noutățile fiecărei versiuni noi separat, cu titlul ei, de la cea instalată până la cea de instalat, iar textul se derulează cu stânga, dreapta, CH+ sau CH-.",
+     "en": "Software update shows what is new in each new version separately, with its title, from the installed one up to the one being installed, and the text scrolls with left, right, CH+ or CH-."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul instalează numai actualizările semnate de HD Satelit; un pachet nesemnat, schimbat pe drum, stricat sau făcut pentru alt receptor e refuzat, cu un mesaj clar.",
+     "en": "The receiver installs only updates signed by HD Satelit; an unsigned package, one altered on the way, a broken one or one made for another receiver is refused, with a clear message."
+    },
+    {
+     "fel": "nou",
+     "ro": "Imaginea HD Satelit se scrie și pornește numai pe receptorul pentru care e făcută.",
+     "en": "The HD Satelit software installs and starts only on the receiver it is made for."
+    },
+    {
+     "fel": "nou",
+     "ro": "Bibliotecile de sistem pentru descărcări, conexiuni securizate și redarea fișierelor sunt aduse la zi cu reparațiile de securitate cunoscute, iar fiecare versiune e verificată înainte de lansare.",
+     "en": "The system libraries for downloads, secure connections and file playback are kept up to date with the known security fixes, and every version is checked before release."
+    },
+    {
+     "fel": "nou",
+     "ro": "Reparațiile de securitate ale bibliotecilor de sistem vin prin actualizările din meniu, fără un sistem nou de pe stick.",
+     "en": "Security fixes for the system libraries arrive through the menu updates, without a new system from a stick."
+    },
+    {
+     "fel": "nou",
+     "ro": "Copia setărilor pune pe stick sau disc, la cerere sau zilnic, canalele, listele DAB+ și DVB-T2, setările, rețeaua și Wi-Fi-ul.",
+     "en": "Settings backup saves to a stick or disk, on request or daily, the channels, the DAB+ and DVB-T2 lists, the settings, the network and Wi-Fi."
+    },
+    {
+     "fel": "nou",
+     "ro": "După o imagine nouă, cu stickul băgat, copia setărilor se pune singură la loc la prima pornire, o singură dată, iar alegerile tale rămân chiar dacă valoarea din fabrică s-a schimbat.",
+     "en": "After a new system is written, with the stick plugged in, the settings backup is restored by itself at first start, only once, and your choices stay even if the factory value changed."
+    },
+    {
+     "fel": "nou",
+     "ro": "Paznicul receptorului repornește singur interfața blocată, dar așteaptă cât rulează o scanare, citirea pistelor sau rotirea antenei, și notează ce a produs blocarea; are ecranul lui și pagină în interfața web.",
+     "en": "The receiver watchdog restarts a frozen interface by itself, but waits while a scan, track reading or dish rotation is running, and notes what caused the freeze; it has its own screen and a web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "La cinci opriri neașteptate în zece minute, receptorul pornește în mod sigur, fără extensiile adăugate, fonturile descărcate și schimbările de mână ale skinului.",
+     "en": "After five unexpected stops within ten minutes, the receiver starts in safe mode, without added extensions, downloaded fonts and manual skin changes."
+    },
+    {
+     "fel": "nou",
+     "ro": "În modul sigur alegi pornirea normală, setările de dinainte sau Ce s-a întâmplat, cu cauza fiecărei opriri; după încă trei opriri, setările de dinainte se pun singure.",
+     "en": "In safe mode you choose a normal start, the previous settings or What happened, with the cause of each stop; after three more stops, the previous settings are restored by themselves."
+    },
+    {
+     "fel": "nou",
+     "ro": "Intrarea pe receptor prin SSH cere o parolă făcută de receptor la prima pornire sau cheia calculatorului tău, adăugată din Acces SSH, de pe stick sau din pagina web, unde alegi direct fișierul cheii. Telnet e oprit.",
+     "en": "SSH login to the receiver needs a password made by the receiver at first start or your computer's key, added from SSH access, from a stick or from the web page, where you pick the key file directly. Telnet is off."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul Licențe arată programele din imagine, licența și textul fiecăreia și adresa codului sursă, inclusiv datele orașelor folosite la locul antenei; aceeași listă e în interfața web.",
+     "en": "The Licences screen lists the programs in the system, each one's licence and text and the source code address, including the city data used for the dish location; the same list is in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul Despre spune și de unde vine codul de bază al receptorului.",
+     "en": "The About screen also says where the receiver's base code comes from."
+    },
+    {
+     "fel": "nou",
+     "ro": "Gestionarul de extensii instalează, șterge și actualizează pachetele, grupate pe categorii, iar lista arată numai ce ai instalat tu; când nu ai nimic instalat, îți spune asta.",
+     "en": "The extension manager installs, removes and updates packages, grouped by category, and the list shows only what you installed; when you have nothing installed, it tells you so."
+    },
+    {
+     "fel": "nou",
+     "ro": "Viteză și resurse: la schimbarea canalului, imaginea pornește repede, iar numărul canalului apare pe bară aproape pe loc, și cu liste mari de canale radio.",
+     "en": "Speed and resources: when you change channel, the picture starts quickly and the channel number appears on the bar almost at once, even with large radio channel lists."
+    },
+    {
+     "fel": "nou",
+     "ro": "Până apare canalul nou, pe ecran rămâne ultima imagine, nu ecranul negru; din Setări › Video poți alege altfel.",
+     "en": "Until the new channel appears, the last picture stays on screen instead of a black screen; you can choose otherwise in Settings › Video."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul își eliberează singur memoria decodorului: când e nevoie, după câteva minute de standby se repornește fără să aprindă televizorul și rămâne în standby.",
+     "en": "The receiver frees the decoder memory by itself: when needed, after a few minutes in standby it restarts without turning on the TV and stays in standby."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul te anunță când memoria decodorului se fărâmițează, iar eliberarea singură a memoriei se poate opri din Paznicul receptorului.",
+     "en": "The receiver lets you know when the decoder memory gets fragmented, and the automatic freeing of memory can be turned off in Receiver watchdog."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul Procesor arată graficul temperaturii pe ultima oră sau pe ultimele 30 de minute, cu viteza procesorului și pragurile fiecărui mod.",
+     "en": "The Processor screen shows a chart of the temperature over the last hour or the last 30 minutes, with the processor speed and the thresholds of each mode."
+    },
+    {
+     "fel": "nou",
+     "ro": "În modul Performanță al procesorului, la 85 °C receptorul trece pe viteza cea mai mică până se răcește la 78 °C și arată când s-a întâmplat.",
+     "en": "In the processor's Performance mode, at 85 °C the receiver drops to the lowest speed until it cools to 78 °C, and shows when this happened."
+    },
+    {
+     "fel": "nou",
+     "ro": "Accelerarea desenului pe placa video e pornită din fabrică. Dacă apar probleme, receptorul revine singur la desenul fără ea, iar după mai multe opriri neașteptate accelerarea se oprește singură.",
+     "en": "Drawing acceleration on the graphics chip is on by default. If problems appear, the receiver goes back to drawing without it by itself, and after several unexpected stops the acceleration turns itself off."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranele de informații arată modelul, procesorul, memoria, spațiul liber în gigaocteți, rețeaua, tunerele și versiunea instalată, în tabele ordonate; la fel în pagina web, iar textul brut e pe tasta ALBASTRĂ.",
+     "en": "The information screens show the model, processor, memory, free space in gigabytes, network, tuners and installed version, in tidy tables; the same on the web page, with the raw text on the BLUE key."
+    },
+    {
+     "fel": "nou",
+     "ro": "Ecranul de curățenie arată ce ocupă spațiu și eliberează memoria.",
+     "en": "The cleanup screen shows what takes up space and frees memory."
+    },
+    {
+     "fel": "nou",
+     "ro": "Meniuri, aspect și afișaj: Caută setări găsește orice setare după câteva litere scrise cu cifrele telecomenzii, ca la SMS, iar OK te duce direct la ea.",
+     "en": "Menus, look and front display: Search settings finds any setting from a few letters typed with the remote's digits, as in a text message, and OK takes you straight to it."
+    },
+    {
+     "fel": "nou",
+     "ro": "Caută setări se deschide din prima intrare din Setări, de jos din meniul principal sau cu tasta TEXT, din orice meniu.",
+     "en": "Search settings opens from the first entry in Settings, from the bottom of the main menu or with the TEXT key, from any menu."
+    },
+    {
+     "fel": "nou",
+     "ro": "Afișajul din fața receptorului arată pe rând ce alegi, fiecare cât vrei: ora, data, canalul, semnalul, temperatura procesorului, emisiunea, piesa de la radio și peste o sută de alte date, și în standby.",
+     "en": "The front display shows in turn what you choose, each for as long as you like: time, date, channel, signal, processor temperature, programme, radio song and over a hundred other items, also in standby."
+    },
+    {
+     "fel": "nou",
+     "ro": "Volumul, cifrele tastate și canalul nou apar câteva secunde pe afișajul din fața receptorului.",
+     "en": "Volume, typed digits and the new channel appear on the front display for a few seconds."
+    },
+    {
+     "fel": "nou",
+     "ro": "Afișajul poate arăta și un personaj, doi ochi și o gură care clipesc, zâmbesc sau adorm după ce se întâmplă pe receptor. Îl pornești din ecranul afișajului sau din pagina web; din fabrică e oprit.",
+     "en": "The display can also show a character, two eyes and a mouth that blink, smile or fall asleep according to what happens on the receiver. You turn it on from the display screen or the web page; it is off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Un mouse pus în receptor aduce o săgeată pe ecran: clic dreapta e Ieșire, clic pe rotiță e Meniu.",
+     "en": "A mouse plugged into the receiver brings a pointer on screen: right click is Exit, a wheel click is Menu."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pe o tastatură USB, Enter e OK, Esc e Ieșire, F1 până la F4 sunt culorile, F5 Meniu, F6 Info, F7 Ghidul TV, iar literele românești se scriu cu AltGr.",
+     "en": "On a USB keyboard, Enter is OK, Esc is Exit, F1 to F4 are the colours, F5 Menu, F6 Info, F7 the TV guide, and Romanian letters are typed with AltGr."
+    },
+    {
+     "fel": "nou",
+     "ro": "Orice câmp de text se scrie și cu tastatura de pe ecran, cu ă, â, î, ș și ț, nu doar cu cifrele, ca la SMS. Câmpurile lungi se mută spre stânga cât scrii, așa că vezi mereu cursorul și ce ai scris.",
+     "en": "Any text field can also be filled with the on-screen keyboard, Romanian letters included, not only with the digits as in a text message. Long fields scroll left as you type, so you always see the cursor and your text."
+    },
+    {
+     "fel": "nou",
+     "ro": "Fontul meniurilor îl alegi dintre Open Sans, Atkinson Hyperlegible, Barlow și PT Sans, cu proba fiecăruia, pe televizor și în pagina web. Din Fonturi Google poți descărca pe receptor și alte fonturi.",
+     "en": "You choose the menu font from Open Sans, Atkinson Hyperlegible, Barlow and PT Sans, with a preview of each, on the TV and on the web page. From Google Fonts you can download other fonts to the receiver as well."
+    },
+    {
+     "fel": "nou",
+     "ro": "Poza de la pornire o alegi dintr-o galerie pe grupe, în rânduri și coloane, ca în pagina web; ecranele din galerie care nu-ți trebuie se pot șterge și pune la loc.",
+     "en": "You choose the boot picture from a gallery sorted into groups, in rows and columns, as on the web page; gallery screens you do not need can be deleted and brought back."
+    },
+    {
+     "fel": "nou",
+     "ro": "Jos, peste poza de la pornire, scrie versiunea instalată, ca să știi că s-a pus actualizarea.",
+     "en": "At the bottom of the boot picture, the installed version is written, so you know the update went in."
+    },
+    {
+     "fel": "nou",
+     "ro": "Tema Pro dă meniurilor, barelor și listelor de pe televizor un aspect nou; o alegi în Setări › Interfață și aspect › Tema interfeței, separat de tema paginilor web.",
+     "en": "The Pro theme gives the menus, bars and lists on the TV a new look; you choose it in Settings › Interface and appearance › Interface theme, separately from the web page theme."
+    },
+    {
+     "fel": "nou",
+     "ro": "Meniul poate fi listă sau dale, cu pictograma, numele întreg, cifra de scurtătură și starea; tasta galbenă schimbă pe loc între listă și dale.",
+     "en": "The menu can be a list or tiles, with the icon, the full name, the shortcut digit and the state; the yellow key switches between list and tiles at once."
+    },
+    {
+     "fel": "nou",
+     "ro": "Mărimea textului se reglează cu un glisor, cu procentul lângă el și probă pe loc, și se aplică și textelor scrise de ecrane, ale căror rânduri cresc odată cu litera.",
+     "en": "Text size is set with a slider, with the percentage next to it and a live preview, and it also applies to texts drawn by the screens, whose lines grow with the letters."
+    },
+    {
+     "fel": "nou",
+     "ro": "Un text care nu încape derulează încet, nu se taie, așa că numele canalelor și ale sateliților se văd întregi.",
+     "en": "Text that does not fit scrolls slowly instead of being cut, so channel and satellite names show in full."
+    },
+    {
+     "fel": "nou",
+     "ro": "Culorile interfeței se aleg pe roluri, pe o grilă, cu transparența și culorile paletei și cu previzualizare; codul hex rămâne sub Avansat. Culorile se aleg și din pagina web.",
+     "en": "Interface colours are chosen by role on a grid, with transparency and the palette colours and a preview; the hex code stays under Advanced. Colours can also be chosen from the web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Marginile ecranului se reglează pe un cadru de probă pe tot ecranul, fiecare latură cu săgețile, cu Înapoi la implicite; la fel în pagina web.",
+     "en": "Screen margins are set on a test frame over the whole screen, each side with the arrows, with Back to defaults; the same on the web page."
+    },
+    {
+     "fel": "nou",
+     "ro": "Poți pune și alt skin: se încarcă la pornire, iar dacă nu pornește, receptorul revine singur la skinul HD Satelit și spune de ce.",
+     "en": "You can also use another skin: it loads at start, and if it fails, the receiver goes back to the HD Satelit skin by itself and says why."
+    },
+    {
+     "fel": "nou",
+     "ro": "Sub un skin cu altă rezoluție, ecranele HD Satelit se potrivesc singure și încap întregi, cu culorile și fonturile lor.",
+     "en": "Under a skin with a different resolution, the HD Satelit screens adjust by themselves and fit whole, with their colours and fonts."
+    },
+    {
+     "fel": "nou",
+     "ro": "La prima pornire, asistentul are două pagini: limba și rezoluția, apoi o prezentare scurtă, pe grupe, a funcțiilor receptorului; la final, meniul principal. Ecranul Despre arată aceleași funcții și adresa de contact.",
+     "en": "At first start, the wizard has two pages: language and resolution, then a short overview of the receiver's functions by group; at the end, the main menu. The About screen shows the same functions and the contact address."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lângă funcțiile care nu sunt încă gata sau probate, meniurile scriu (în lucru) sau (netestat), iar prezentarea de la pornire spune ca atare ce e încă în pregătire.",
+     "en": "Next to functions that are not ready or tested yet, the menus say (in progress) or (untested), and the start-up presentation says plainly what is still being prepared."
+    },
+    {
+     "fel": "nou",
+     "ro": "Toate tastele telecomenzii au un rost, de la SUBT, Timer și Portal până la FAV, derulare și pauză. Utilitarul Telecomenzi citește codurile, probează fiecare tastă pe o telecomandă desenată și asociază o telecomandă USB.",
+     "en": "Every key on the remote has its job, from SUBT, Timer and Portal to FAV, rewind and pause. The Remote controls tool reads the codes, tests every key on a drawn remote and pairs a USB remote."
+    },
+    {
+     "fel": "nou",
+     "ro": "Telecomanda televizorului comandă receptorul prin cablul HDMI: săgețile, OK, cifrele, culorile și redarea; ții apăsat OK pentru tastele care lipsesc.",
+     "en": "The TV remote controls the receiver over the HDMI cable: arrows, OK, digits, colours and playback; hold OK for any key it lacks."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pagina web Telecomanda televizorului arată ce tastă face ce și trimite tastele pe care telecomanda televizorului nu le are.",
+     "en": "The TV remote web page shows which key does what and sends any key the TV remote does not have."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Standby și televizorul alegi dacă receptorul stinge televizorul la standby și îl aprinde la trezire și cu ce nume apare în lista intrărilor HDMI a televizorului.",
+     "en": "In Standby and TV you choose whether the receiver turns the TV off at standby and on when it wakes, and what name it shows in the TV's HDMI input list."
+    },
+    {
+     "fel": "nou",
+     "ro": "În standby, receptorul oprește ieșirea HDMI, iar televizorul se poate opri singur.",
+     "en": "In standby the receiver turns off its HDMI output, so the TV can switch itself off."
+    },
+    {
+     "fel": "nou",
+     "ro": "Teletext: se deschide la TEXT, cu culori, desene, subpagini și tastele colorate FastText și TOP, pe tot ecranul sau peste emisiune; o pagină neschimbată nu se redesenează, iar ceasul din antet merge mai departe.",
+     "en": "Teletext: opens on TEXT, with colours, graphics, subpages and FastText and TOP on the colour buttons, full screen or over the programme; an unchanged page is not redrawn, and the clock in the header keeps running."
+    },
+    {
+     "fel": "nou",
+     "ro": "Teletextul neted desenează literele și desenele din pătrățele cu linii drepte și colțuri rotunjite, iar casetele continuă drept de la un rând la altul.",
+     "en": "Smooth teletext draws letters and block graphics with straight lines and rounded corners, and boxes continue straight from one row to the next."
+    },
+    {
+     "fel": "nou",
+     "ro": "Teletextul neted se alege din MENU, în teletext, unde pornești și conturul, umbra și relieful literelor, oprite din fabrică.",
+     "en": "Smooth teletext is chosen from MENU in teletext, where you also turn on the letter outline, shadow and relief, which are off by default."
+    },
+    {
+     "fel": "nou",
+     "ro": "Receptorul salvează singur teletextul canalelor, pe care îl citești apoi și fără antenă, pe televizor sau în interfața web, și îl descarci pe telefon sau calculator.",
+     "en": "The receiver saves the channels' teletext by itself, and you can then read it without the dish, on the TV or in the web interface, and download it to a phone or computer."
+    },
+    {
+     "fel": "nou",
+     "ro": "Copia teletextului se face repede și pe canalele cu sute de pagini, iar dacă nu reușește vezi de ce.",
+     "en": "The teletext copy is quick even on channels with hundreds of pages, and if it fails you see why."
+    },
+    {
+     "fel": "nou",
+     "ro": "Limbi: meniurile sunt traduse în 13 limbi, română, engleză, germană, franceză, spaniolă, italiană, maghiară, cehă, poloneză, portugheză, olandeză, rusă și turcă.",
+     "en": "Languages: the menus are translated into 13 languages, Romanian, English, German, French, Spanish, Italian, Hungarian, Czech, Polish, Portuguese, Dutch, Russian and Turkish."
+    },
+    {
+     "fel": "nou",
+     "ro": "Lista de limbi arată numai limbile traduse complet, iar ecranul Extensii și asistentul de pornire sunt traduse și ele.",
+     "en": "The language list shows only fully translated languages, and the Extensions screen and the start-up wizard are translated too."
+    },
+    {
+     "fel": "nou",
+     "ro": "Textele în română sunt scrise simplu, fără cuvinte englezești amestecate, și ți se adresează peste tot cu tu, în meniuri, mesaje și interfața web; la fel și celelalte limbi.",
+     "en": "The Romanian texts are written in plain language, without English words mixed in, and address you informally everywhere, in menus, messages and the web interface; the other languages do the same."
+    },
+    {
+     "fel": "nou",
+     "ro": "În texte, numerele se scriu firesc: o intrare nouă, un canal.",
+     "en": "In the texts, numbers read naturally, with no digit in front of a single item."
+    },
+    {
+     "fel": "nou",
+     "ro": "Punctele cardinale și virgula zecimală din pozițiile sateliților și din coordonate urmează limba meniului: 5,0°V în română, 5.0°W în engleză.",
+     "en": "Compass points and the decimal separator in satellite positions and coordinates follow the menu language: 5,0°V in Romanian, 5.0°W in English."
+    }
+   ]
+  }
+ ]
+}

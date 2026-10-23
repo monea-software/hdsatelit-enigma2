@@ -1,0 +1,850 @@
+<!-- Modificat de moneasoftware.com si hdsatelit.com, 2026 -->
+<keymap>
+	<map context="ListboxActions">
+		<device name="keyboard">
+			<key id="a" mapto="up" flags="mr" />
+			<key id="b" mapto="down" flags="mr" />
+		</device>
+		<key id="KEY_UP" mapto="moveUp" flags="mr" />
+		<key id="KEY_DOWN" mapto="moveDown" flags="mr" />
+		<key id="KEY_HOME" mapto="moveTop" flags="mr" />
+		<key id="KEY_END" mapto="moveEnd" flags="mr" />
+		<key id="KEY_PAGEUP" mapto="pageUp" flags="mr" />
+		<key id="KEY_PAGEDOWN" mapto="pageDown" flags="mr" />
+		<key id="KEY_LEFT" mapto="pageUp" flags="mr" />
+		<key id="KEY_RIGHT" mapto="pageDown" flags="mr" />
+		
+		<key id="1" mapto="moveUp" flags="mr" />
+		<key id="2" mapto="moveDown" flags="mr" />
+	</map>
+
+	<!-- HDSatelit: CH/PAGE + si - dau pagina in liste (meniu,
+	     setari, alegeri), cu pageUp si pageDown. Contextul e al lui eListbox, legat cu
+	     prioritatea 1 (lib/gui/elistbox.h), adica dupa hartile Python: in lista de canale, in ghid si in playerul
+	     media CH+/- raman Buchet+/- (ChannelSelectBaseActions, EPGSelectActions, MediaPlayerActions). -->
+	<map context="ListboxFallbackActions">
+		<!-- numai m. Cu mr, repetarea ajungea la lista acolo unde hartile
+		     Python leaga CH+/- numai m (lista de canale, ghid, playerul media): Buchet+/- si o pagina la aceeasi apasare. -->
+		<key id="KEY_CHANNELUP" mapto="fallbackPageUp" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="fallbackPageDown" flags="m" />
+	</map>
+
+	<!-- HDSatelit: PAGE+ si PAGE-, HOME si END pentru ecranele care dau pagina din
+	     Python (Informatii, Informatii HDMI: toate coloanele, textul brut si "pagina X din Y"). ListboxActions e un
+	     context nativ (lib/actions/action.cpp: tastele lui ajung numai la eListbox din C++), deci hartile Python nu
+	     il pot asculta; acesta e al lor. Nefolosit de un ecran, tastele merg mai departe la liste, ca inainte. -->
+	<map context="HdsPaginiActions">
+		<key id="KEY_PAGEUP" mapto="pageUp" flags="mr" />
+		<key id="KEY_PAGEDOWN" mapto="pageDown" flags="mr" />
+		<key id="KEY_HOME" mapto="moveTop" flags="mr" />
+		<key id="KEY_END" mapto="moveEnd" flags="mr" />
+	</map>
+	
+	<map context="KeyboardInputActions">
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_HOME" mapto="home" flags="mr" />
+		<key id="KEY_END" mapto="end" flags="mr" />
+		<key id="KEY_BACK" mapto="home" flags="mr" />
+		<key id="KEY_FORWARD" mapto="end" flags="mr" />
+		<key id="KEY_DELETE" mapto="deleteForward" flags="mr" />
+		<key id="KEY_BACKSPACE" mapto="deleteBackward" flags="mr" />
+		<key id="KEY_TAB" mapto="tab" flags="mr" />
+		<key id="KEY_INSERT" mapto="toggleOverwrite" flags="m" />
+	</map>
+
+	<map context="SetupActions">
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+		<key id="KEY_ESC" mapto="cancel" flags="m" />
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_RED" mapto="cancel" flags="m" />
+		<key id="KEY_GREEN" mapto="save" flags="m" />
+		<device name="dreambox remote control (native)">
+			<key id="KEY_MUTE" mapto="deleteForward" flags="mr" />
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+		<!-- HDSatelit (tastele Viper): fara KEY_MUTE aici, ca MUTE sa opreasca sunetul si in ecranele cu text;
+		     pe Viper stergerea o fac < si > de langa 0 -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+		<key id="KEY_1" mapto="1" flags="m" />
+		<key id="KEY_2" mapto="2" flags="m" />
+		<key id="KEY_3" mapto="3" flags="m" />
+		<key id="KEY_4" mapto="4" flags="m" />
+		<key id="KEY_5" mapto="5" flags="m" />
+		<key id="KEY_6" mapto="6" flags="m" />
+		<key id="KEY_7" mapto="7" flags="m" />
+		<key id="KEY_8" mapto="8" flags="m" />
+		<key id="KEY_9" mapto="9" flags="m" />
+		<key id="KEY_0" mapto="0" flags="m" />
+	</map>
+	
+	<map context="InputActions">
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_1" mapto="1" flags="m" />
+		<key id="KEY_2" mapto="2" flags="m" />
+		<key id="KEY_3" mapto="3" flags="m" />
+		<key id="KEY_4" mapto="4" flags="m" />
+		<key id="KEY_5" mapto="5" flags="m" />
+		<key id="KEY_6" mapto="6" flags="m" />
+		<key id="KEY_7" mapto="7" flags="m" />
+		<key id="KEY_8" mapto="8" flags="m" />
+		<key id="KEY_9" mapto="9" flags="m" />
+		<key id="KEY_0" mapto="0" flags="m" />
+	</map>
+
+	<map context="InfobarEPGActions">
+		<key id="KEY_INFO" mapto="showEventInfo" flags="b" />
+	</map>
+
+	<!-- HDSatelit (tastele Viper): tastele care nu aveau nicio actiune in bara, cu sensul lor obisnuit in enigma2.
+	     Contextul e folosit numai de bara (Screens/InfoBar.py), deci alte ecrane nu scriu "unknown action" in jurnal.
+	     INFO tinut a trecut aici din InfobarEPGActions: playerele (inregistrari, media) folosesc acel context fara
+	     showEventInfoPlugin. KEY_CONTEXT_MENU (438, a treia tasta cu desen de ecran) ramane nelegata: de obicei e
+	     intrarea HDMI, pe care Viper nu o are. -->
+	<map context="HdsInfobarActions">
+		<key id="KEY_INFO" mapto="ghidProgram" flags="l" />
+		<key id="KEY_EPG" mapto="ghidProgram" flags="m" />
+		<key id="KEY_LIST" mapto="mediaPlayer" flags="m" />
+		<key id="KEY_TIME" mapto="listaTimere" flags="m" />
+		<key id="KEY_WWW" mapto="extensii" flags="m" />
+		<!-- HDSatelit: FAV scurt deschide lista pe Favorite, ca pana acum, dar la eliberare
+		     (favorite); FAV tinut apasat pune canalul de acum in Favorite sau il scoate (favoriteLung, Screens/InfoBar.py).
+		     La apasare (favoriteApasat) nu se stie inca daca va fi lunga: flagLong vine dupa 4 repetari (main/enigma.cpp). -->
+		<key id="KEY_FAVORITES" mapto="favoriteApasat" flags="m" />
+		<key id="KEY_FAVORITES" mapto="favoriteLung" flags="l" />
+		<key id="KEY_FAVORITES" mapto="favorite" flags="b" />
+		<!-- tasta din mijloc (227) are desenul cu benzi laterale, deci formatul imaginii
+		     (KEY_VMODE = toggleAspectRatio, legatura obisnuita); tasta din stanga (373) deschide setarile A/V -->
+		<key id="KEY_MODE" mapto="setariVideo" flags="m" />
+		<key id="KEY_SWITCHVIDEOMODE" mapto="formatImagine" flags="m" />
+		<!-- TTX: fara vizualizator de teletext in imagine, un mesaj; cu vizualizator, InfobarTeletextActions (prioritate 0)
+		     prinde tasta inaintea acestei harti (prioritate 2) -->
+		<key id="KEY_TEXT" mapto="teletext" flags="m" />
+		<!-- HDSatelit (HbbTV): ROSU porneste aplicatia HbbTV a canalului (Components/HdsHbbtvPornire);
+		     pe un canal fara aplicatie actiunea intoarce 0 si tasta ramane cum era (pe Viper nelegata in bara) -->
+		<key id="KEY_RED" mapto="hbbtvRosu" flags="m" />
+	</map>
+	
+	<map context="InfobarInstantRecord">
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_RECORD" mapto="instantRecord" flags="m" />
+			<!-- this breaks timeshift end!!! key id="KEY_STOP" mapto="instantRecord" flags="m" /-->
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_RECORD" mapto="instantRecord" flags="m" />
+		</device>
+		<device name="dreambox remote control (native)">
+			<key id="KEY_RED" mapto="instantRecord" flags="b" />
+		</device>
+	</map>
+
+	<map context="InfobarExtensions">
+		<key id="KEY_BLUE" mapto="extensions" flags="b" />
+	</map>
+	
+	<map context="SatlistShortcutAction">
+		<key id="KEY_BLUE" mapto="nothingconnected" flags="b" />
+	</map>
+	
+	<map context="InfobarChannelSelection">
+		<!-- HDSatelit: stanga si dreapta schimba canalul o data pe apasare, ca CH+/- pe
+		     Viper; cu repetare, o apasare Viper putea sari doua canale, iar tinute apasat schimbau canalele in sir -->
+		<key id="KEY_LEFT" mapto="zapUp" flags="m" />
+		<key id="KEY_RIGHT" mapto="zapDown" flags="m" />
+		<!-- HDSatelit: sus si jos o data pe apasare (Components/HdsSageti.py): cu setarea "Schimba canalul"
+		     schimba canalul ca stanga si dreapta; la liste, lista deschisa ia oricum tastele care urmeaza -->
+		<key id="KEY_UP" mapto="switchChannelUp" flags="m" />
+		<key id="KEY_DOWN" mapto="switchChannelDown" flags="m" />
+		<key id="KEY_PREVIOUS" mapto="historyBack" flags="mr" />
+		<key id="KEY_NEXT" mapto="historyNext" flags="mr" />
+		<key id="KEY_BACK" mapto="historyBack" flags="mr" />
+		<key id="KEY_FORWARD" mapto="historyNext" flags="mr" />
+		<!-- HDSatelit (tastele Viper): CH/PAGE + si - schimba canalul (ChannelPlusPressed);
+		     BOUQUET +/- de pe telecomenzile Dreambox vechi deschid lista, ca inainte -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_CHANNELUP" mapto="zapDown" flags="m" />
+			<key id="KEY_CHANNELDOWN" mapto="zapUp" flags="m" />
+		</device>
+		<device name="dreambox remote control (native)">
+			<key id="KEY_CHANNELUP" mapto="openServiceList" flags="m" />
+			<key id="KEY_CHANNELDOWN" mapto="openServiceList" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_CHANNELUP" mapto="openServiceList" flags="m" />
+			<key id="KEY_CHANNELDOWN" mapto="openServiceList" flags="m" />
+		</device>
+		<!-- HDSatelit: orice alt dispozitiv (panoul din fata, care declara
+		     CH+/- pe receptor, o telecomanda USB, pagina web) deschide lista, ca inainte. keymapparser.py leaga intai
+		     blocurile <device>, iar eActionMap::keyPressed se opreste la prima actiune tratata, deci pe Viper
+		     ramane zapDown/zapUp de mai sus -->
+		<key id="KEY_CHANNELUP" mapto="openServiceList" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="openServiceList" flags="m" />
+		<key id="BTN_0" mapto="zapUp" flags="mr" />
+		<key id="BTN_1" mapto="zapDown" flags="mr" />
+	</map>
+	
+	<map context="MinuteInputActions">
+		<key id="KEY_UP" mapto="up" flags="mr" />
+		<key id="KEY_DOWN" mapto="down" flags="mr" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+		<key id="KEY_ESC" mapto="cancel" flags="m" />
+	</map>
+
+	<map context="InputAsciiActions">
+		<device name="Console">
+			<key id="KEY_ASCII" mapto="gotAsciiCode" flags="mr" />
+		</device>
+		<device name="SDL">
+			<key id="KEY_ASCII" mapto="gotAsciiCode" flags="mr" />
+		</device>
+	</map>
+
+	<map context="InputBoxActions">
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="back" flags="m" />
+		<key id="KEY_ESC" mapto="back" flags="m" />
+		<device name="dreambox remote control (native)">
+			<key id="KEY_MUTE" mapto="deleteForward" flags="mr" />
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+		<!-- HDSatelit (tastele Viper): fara KEY_MUTE aici, ca MUTE sa opreasca sunetul si in ecranele cu text;
+		     pe Viper stergerea o fac < si > de langa 0 -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+		<key id="KEY_1" mapto="1" flags="m" />
+		<key id="KEY_2" mapto="2" flags="m" />
+		<key id="KEY_3" mapto="3" flags="m" />
+		<key id="KEY_4" mapto="4" flags="m" />
+		<key id="KEY_5" mapto="5" flags="m" />
+		<key id="KEY_6" mapto="6" flags="m" />
+		<key id="KEY_7" mapto="7" flags="m" />
+		<key id="KEY_8" mapto="8" flags="m" />
+		<key id="KEY_9" mapto="9" flags="m" />
+		<key id="KEY_0" mapto="0" flags="m" />
+	</map>
+	
+	<map context="WizardActions">
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_UP" mapto="up" flags="mr" />
+		<key id="KEY_DOWN" mapto="down" flags="mr" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="back" flags="m" />
+		<key id="KEY_ESC" mapto="back" flags="m" />
+	</map>
+	
+	<map context="InfobarMenuActions">
+		<key id="KEY_MENU" mapto="mainMenu" flags="mr" />
+		<key id="KEY_SPACE" mapto="mainMenu" flags="mr" />
+	</map>
+	
+	<map context="MenuActions">
+		<key id="KEY_MENU" mapto="menu" flags="mr" />
+		<key id="KEY_SPACE" mapto="menu" flags="mr" />
+	</map>
+	
+	<map context="InfobarShowHideActions">
+		<key id="KEY_OK" mapto="toggleShow" flags="m" />
+		<key id="KEY_ENTER" mapto="toggleShow" flags="m" />
+		<key id="KEY_EXIT" mapto="hide" flags="m" />
+		<key id="KEY_ESC" mapto="hide" flags="m" />
+	</map>
+
+	<map context="InfobarActions">
+		<key id="KEY_VIDEO" mapto="showMovies" flags="m" />
+		<key id="KEY_RADIO" mapto="showRadio" flags="m" />
+		<key id="KEY_TV" mapto="showTv" flags="m" />
+	</map>
+
+	<!-- HDSatelit: KEY_AUDIO era legat numai pentru "remote control (native)" si
+	     "ir keyboard"; telecomanda Viper (amiko6) se numeste "dreambox advanced remote control (native)", deci tasta
+	     AUDIO nu facea nimic. Acum pentru orice telecomanda: scurt = ecranul de sunet (la eliberare), tinut = AC3
+	     downmix pornit / oprit (ca in enigma2-ul mai nou; "m" doar sterge semnul apasarii lungi, vezi
+	     InfoBarAudioSelection). -->
+	<map context="InfobarAudioSelectionActions">
+		<key id="KEY_AUDIO" mapto="audioSelectionPressed" flags="m" />
+		<key id="KEY_AUDIO" mapto="audioSelectionLong" flags="l" />
+		<key id="KEY_AUDIO" mapto="audioSelectionReleased" flags="b" />
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_YELLOW" mapto="audioSelection" flags="b" />
+		</device>
+	</map>
+
+	<!-- HDSatelit: KEY_TEXT mapat spre "subtitles" exista deja mai jos (linia ~670),
+	     dar DOAR in contextul MediaPlayerActions, nu si in InfoBar (TV live), deci nu ajungea
+	     la nicio tasta acolo. Context nou, dupa modelul InfobarAudioSelectionActions de mai sus. -->
+	<!-- HDSatelit (tastele Viper): SUBT (KEY_SUBTITLE, 370) nu era legata nicaieri, deci tasta nu facea
+	     nimic; acum deschide alegerea subtitrarii pe orice telecomanda, in bara si in playerul inregistrarilor.
+	     TEXT ramane teletextul pe Viper; legatura TEXT - subtitrari de mai jos ramane numai pentru cele doua dispozitive. -->
+	<map context="InfobarSubtitleSelectionActions">
+		<key id="KEY_SUBTITLE" mapto="subtitles" flags="m" />
+		<device name="dreambox remote control (native)">
+			<key id="KEY_TEXT" mapto="subtitles" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_TEXT" mapto="subtitles" flags="m" />
+		</device>
+	</map>
+
+	<map context="InfobarSubserviceSelectionActions">
+		<key id="KEY_GREEN" mapto="subserviceSelection" flags="b" />
+	</map>
+
+	<map context="InfobarSubserviceQuickzapActions">
+		<key id="KEY_PREVIOUS" mapto="prevSubservice" flags="m" />
+		<key id="KEY_NEXT" mapto="nextSubservice" flags="m" />
+		<key id="KEY_BACK" mapto="prevSubservice" flags="m" />
+		<key id="KEY_FORWARD" mapto="nextSubservice" flags="m" />
+		<key id="KEY_EXIT" mapto="exit" flags="m" />
+		<key id="KEY_ESC" mapto="exit" flags="m" />
+		<device name="dreambox remote control (native)">
+			<key id="KEY_TV" mapto="exit" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_TV" mapto="exit" flags="m" />
+		</device>
+	</map>
+
+	<map context="GlobalActions">
+		<key id="KEY_VOLUMEUP" mapto="volumeUp" flags="mr" />
+		<key id="KEY_VOLUMEDOWN" mapto="volumeDown" flags="mr" />
+		<!-- HDSatelit: MUTE numai la apasare; cu repetare, tinut
+		     apasat sau apasat obisnuit pe Viper (care trimite si o repetare) oprea si pornea sunetul la aceeasi apasare -->
+		<key id="KEY_MUTE" mapto="volumeMute" flags="m" />
+		<key id="KEY_POWER" mapto="power_long" flags="l" />
+		<key id="KEY_POWER" mapto="power_down" flags="m" />
+		<key id="KEY_POWER" mapto="power_up" flags="b" />
+		<device name="dreambox front panel">
+			<key id="KEY_POWER" mapto="deepstandby" flags="l" />
+		</device>
+	</map>
+	
+	<map context="PowerKeyActions">
+		<key id="KEY_POWER" mapto="powerdown" flags="m" />
+		<key id="KEY_POWER" mapto="powerup" flags="b" />
+	</map>
+	
+	<map context="NumberActions">
+		<key id="KEY_1" mapto="1" flags="m" />
+		<key id="KEY_2" mapto="2" flags="m" />
+		<key id="KEY_3" mapto="3" flags="m" />
+		<key id="KEY_4" mapto="4" flags="m" />
+		<key id="KEY_5" mapto="5" flags="m" />
+		<key id="KEY_6" mapto="6" flags="m" />
+		<key id="KEY_7" mapto="7" flags="m" />
+		<key id="KEY_8" mapto="8" flags="m" />
+		<key id="KEY_9" mapto="9" flags="m" />
+		<key id="KEY_0" mapto="0" flags="m" />
+	</map>
+
+	<map context="TextEntryActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_MUTE" mapto="deleteForward" flags="mr" />
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+		<!-- HDSatelit (tastele Viper): fara KEY_MUTE aici, ca MUTE sa opreasca sunetul si in ecranele cu text;
+		     pe Viper stergerea o fac < si > de langa 0 -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_NEXT" mapto="deleteForward" flags="mr" />
+			<key id="KEY_PREVIOUS" mapto="deleteBackward" flags="mr" />
+		</device>
+	</map>	
+
+	<map context="InfobarSeekActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_YELLOW" mapto="pauseService" flags="b" />
+			<key id="KEY_GREEN" mapto="unPauseService" flags="b" />
+			<key id="KEY_RED" mapto="seekBack" flags="b" />
+			<key id="KEY_BLUE" mapto="seekFwd" flags="b" />
+			<key id="KEY_RED" mapto="seekBackManual" flags="l" />
+			<key id="KEY_BLUE" mapto="seekFwdManual" flags="l" />
+		</device>
+		<!-- HDSatelit (tastele Viper): derulare inapoi si inainte (KEY_REWIND, KEY_FASTFORWARD), tinute cer
+		     timpul; pauza (KEY_PAUSE) opreste pe loc; |<< si >>| sar la semnele inregistrarii (InfobarCueSheetActions) -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_PLAY" mapto="playpauseService" flags="m" />
+			<key id="KEY_PLAYPAUSE" mapto="playpauseService" flags="m" />
+			<key id="KEY_PAUSE" mapto="pauseService" flags="m" />
+			<key id="KEY_REWIND" mapto="seekBack" flags="b" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwd" flags="b" />
+			<key id="KEY_REWIND" mapto="seekBackManual" flags="l" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwdManual" flags="l" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_PAUSE" mapto="pauseService" flags="m" />
+			<key id="KEY_PLAY" mapto="playpauseService" flags="m" />
+			<key id="KEY_REWIND" mapto="seekBack" flags="b" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwd" flags="b" />
+			<key id="KEY_REWIND" mapto="seekBackManual" flags="l" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwdManual" flags="l" />
+		</device>
+		
+		<key id="KEY_LEFT" mapto="seekBack" flags="m" />
+		<key id="KEY_RIGHT" mapto="seekFwd" flags="m" />
+
+		<key id="KEY_OK" mapto="unPauseService" flags="m" />
+		
+		<key id="KEY_1" mapto="seekdef:1" flags="m" />
+		<key id="KEY_3" mapto="seekdef:3" flags="m" />
+		<key id="KEY_4" mapto="seekdef:4" flags="m" />
+		<key id="KEY_6" mapto="seekdef:6" flags="m" />
+		<key id="KEY_7" mapto="seekdef:7" flags="m" />
+		<key id="KEY_9" mapto="seekdef:9" flags="m" />
+	</map>
+
+	<map context="MediaPlayerSeekActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_RED" mapto="seekBack" flags="b" />
+			<key id="KEY_BLUE" mapto="seekFwd" flags="b" />
+			<key id="KEY_RED" mapto="seekBackManual" flags="l" />
+			<key id="KEY_BLUE" mapto="seekFwdManual" flags="l" />
+		</device>
+		<!-- HDSatelit (tastele Viper): derulare cu KEY_REWIND si KEY_FASTFORWARD; |<< si >>| schimba
+		     fisierul (MediaPlayerActions) -->
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_REWIND" mapto="seekBack" flags="b" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwd" flags="b" />
+			<key id="KEY_REWIND" mapto="seekBackManual" flags="l" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwdManual" flags="l" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_REWIND" mapto="seekBack" flags="b" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwd" flags="b" />
+			<key id="KEY_REWIND" mapto="seekBackManual" flags="l" />
+			<key id="KEY_FASTFORWARD" mapto="seekFwdManual" flags="l" />
+		</device>
+		
+		<key id="KEY_1" mapto="seekdef:1" flags="m" />
+		<key id="KEY_3" mapto="seekdef:3" flags="m" />
+		<key id="KEY_4" mapto="seekdef:4" flags="m" />
+		<key id="KEY_6" mapto="seekdef:6" flags="m" />
+		<key id="KEY_7" mapto="seekdef:7" flags="m" />
+		<key id="KEY_9" mapto="seekdef:9" flags="m" />
+	</map>
+
+	<map context="InfobarTimeshiftActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_YELLOW" mapto="timeshiftStart" flags="b" />
+			<key id="KEY_TV" mapto="timeshiftStop" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_PLAY" mapto="timeshiftStart" flags="m" />
+			<key id="KEY_PLAYPAUSE" mapto="timeshiftStart" flags="m" />
+			<key id="KEY_PAUSE" mapto="timeshiftStart" flags="m" />
+			<key id="KEY_TV" mapto="timeshiftStop" flags="m" />
+			<key id="KEY_STOP" mapto="timeshiftStop" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_YELLOW" mapto="timeshiftStart" flags="m" />
+			<key id="KEY_PAUSE" mapto="timeshiftStart" flags="m" />
+			<key id="KEY_STOP" mapto="timeshiftStop" flags="m" />
+		</device>
+	</map>
+
+	<map context="InfobarTimeshiftActivateActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_RED" mapto="timeshiftActivateEnd" flags="b" />
+			<key id="KEY_YELLOW" mapto="timeshiftActivateEndAndPause" flags="b" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_PREVIOUSSONG" mapto="timeshiftActivateEnd" flags="m" />
+			<key id="KEY_REWIND" mapto="timeshiftActivateEnd" flags="m" />
+			<key id="KEY_PLAY" mapto="timeshiftActivateEndAndPause" flags="m" />
+			<key id="KEY_PLAYPAUSE" mapto="timeshiftActivateEndAndPause" flags="m" />
+			<key id="KEY_PAUSE" mapto="timeshiftActivateEndAndPause" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_REWIND" mapto="timeshiftActivateEnd" flags="m" />
+			<key id="KEY_PAUSE" mapto="timeshiftActivateEndAndPause" flags="m" />
+		</device>
+	</map>
+
+	<map context="MovieSelectionActions">
+		<key id="KEY_MENU" mapto="contextMenu" flags="m" />
+		<key id="KEY_SPACE" mapto="contextMenu" flags="m" />
+		<key id="KEY_INFO" mapto="showEventInfo" flags="m" />
+	</map>
+
+	<map context="InfobarMovieListActions">
+		<key id="KEY_UP" mapto="up" flags="m" />
+		<key id="KEY_DOWN" mapto="down" flags="m" />
+		<key id="KEY_VIDEO" mapto="movieList" flags="m" />
+	</map>
+
+	<map context="MoviePlayerActions">
+		<!-- HDSatelit (tastele Viper): EPG si cele doua taste cu desen de ecran si in playerul inregistrarilor -->
+		<key id="KEY_EPG" mapto="eventInfo" flags="m" />
+		<key id="KEY_MODE" mapto="setariVideo" flags="m" />
+		<key id="KEY_SWITCHVIDEOMODE" mapto="formatImagine" flags="m" />
+		<device name="dreambox remote control (native)">
+			<key id="KEY_TV" mapto="leavePlayer" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<!-- TTX pe Viper, ca in bara; pe celelalte doua telecomenzi TEXT ramane la subtitrari -->
+			<key id="KEY_TEXT" mapto="teletext" flags="m" />
+			<key id="KEY_TV" mapto="leavePlayer" flags="m" />
+			<key id="KEY_STOP" mapto="leavePlayer" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_STOP" mapto="leavePlayer" flags="m" />
+		</device>
+	</map>
+	
+	<map context="InfobarCueSheetActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_PREVIOUS" mapto="jumpPreviousMark" flags="m" />
+			<key id="KEY_NEXT" mapto="jumpNextMark" flags="m" />
+			<key id="KEY_0" mapto="toggleMark" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_PREVIOUS" mapto="jumpPreviousMark" flags="m" />
+			<key id="KEY_0" mapto="toggleMark" flags="m" />
+			<key id="KEY_NEXT" mapto="jumpNextMark" flags="m" />
+			<!-- HDSatelit (tastele Viper): |<< si >>| -->
+			<key id="KEY_PREVIOUSSONG" mapto="jumpPreviousMark" flags="m" />
+			<key id="KEY_NEXTSONG" mapto="jumpNextMark" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_PREVIOUSSONG" mapto="jumpPreviousMark" flags="m" />
+			<key id="KEY_TAB" mapto="toggleMark" flags="m" />
+			<key id="KEY_NEXTSONG" mapto="jumpNextMark" flags="m" />
+		</device>
+	</map>
+	
+	<map context="MediaPlayerCueSheetActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_0" mapto="toggleMark" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_0" mapto="toggleMark" flags="m" />
+			<!-- HDSatelit (tastele Viper): fara KEY_YELLOW, care in playerul media pune pauza (HdsColorActions)
+			     si la eliberare mai punea si un semn -->
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_TAB" mapto="toggleMark" flags="m" />
+		</device>
+	</map>
+
+	<map context="VirtualKeyboardActions">
+		<key id="KEY_TEXT" mapto="showVirtualKeyboard" flags="m" />
+	</map>
+	
+	<map context="InfobarTeletextActions">
+		<key id="KEY_TEXT" mapto="startTeletext" flags="m" />
+	</map>
+
+	<!-- HDSatelit: vizualizatorul de teletext al imaginii (Screens/HdsTeletext.py). Cifrele,
+	     culorile, sagetile, OK si EXIT vin din NumberActions, ColorActions, DirectionActions si OkCancelActions;
+	     aici TEXT (pe tot ecranul / peste imagine), INFO (ce e ascuns), MENU (teletextul HD, copiile) si CH+ / CH-
+	     (pagina urmatoare / dinainte) -->
+	<map context="HdsTeletextActions">
+		<key id="KEY_TEXT" mapto="mod" flags="m" />
+		<key id="KEY_INFO" mapto="ascuns" flags="m" />
+		<key id="KEY_AUDIO" mapto="traducere" flags="m" />
+		<key id="KEY_MENU" mapto="meniu" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="paginaInainte" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="paginaInapoi" flags="m" />
+	</map>
+
+	<map context="InfobarRdsActions">
+		<key id="KEY_TEXT" mapto="startRassInteractive" flags="m" />
+	</map>
+
+	<map context="RassInteractiveActions">
+		<key id="KEY_LEFT" mapto="prevSubPage" flags="mr" />
+		<key id="KEY_RIGHT" mapto="nextSubPage" flags="mr" />
+		<key id="KEY_UP" mapto="prevPage" flags="mr" />
+		<key id="KEY_DOWN" mapto="nextPage" flags="mr" />
+		<key id="KEY_EXIT" mapto="exit" flags="m" />
+		<key id="KEY_ESC" mapto="exit" flags="m" />
+	</map>
+
+	<map context="ChannelSelectBaseActions">
+		<key id="KEY_RED" mapto="showAllServices" flags="m" />
+		<key id="KEY_GREEN" mapto="showSatellites" flags="m" />
+		<key id="KEY_YELLOW" mapto="showProviders" flags="m" />
+		<key id="KEY_BLUE" mapto="showFavourites" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="nextBouquet" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="prevBouquet" flags="m" />
+		<key id="KEY_PREVIOUS" mapto="prevMarker" flags="m" />
+		<key id="KEY_NEXT" mapto="nextMarker" flags="m" />
+		<key id="KEY_BACK" mapto="prevMarker" flags="m" />
+		<key id="KEY_FORWARD" mapto="nextMarker" flags="m" />
+	</map>
+
+	<map context="2ndInfobarActions">
+		<key id="KEY_LEFT" mapto="prevPage" flags="m" />
+		<key id="KEY_RIGHT" mapto="nextPage" flags="m" />
+		<key id="KEY_PAGEUP" mapto="prevPage" flags="m" />
+		<key id="KEY_PAGEDOWN" mapto="nextPage" flags="m" />
+		<key id="KEY_UP" mapto="prevPage" flags="m" />
+		<key id="KEY_DOWN" mapto="nextPage" flags="m" />
+	</map>
+
+	<map context="ChannelSelectEPGActions">
+		<key id="KEY_INFO" mapto="showEPGList" flags="m" />
+		<!-- HDSatelit (tastele Viper): EPG in lista de canale = ghidul canalului selectat -->
+		<key id="KEY_EPG" mapto="showEPGList" flags="m" />
+	</map>
+
+	<map context="ChannelSelectEditActions">
+		<key id="KEY_MENU" mapto="contextMenu" flags="m" />
+		<key id="KEY_SPACE" mapto="contextMenu" flags="m" />
+	</map>
+
+	<!-- HDSatelit: cautarea de canale. In lista de canale TEXT deschide cautarea (Screens/HdsCautareCanale.py);
+	     in ecranul cautarii TEXT deschide tastatura de pe ecran. -->
+	<map context="HdsCautareActions">
+		<key id="KEY_TEXT" mapto="cautare" flags="m" />
+	</map>
+
+	<!-- HDSatelit: tasta FAV in lista TV si in lista radio ale imaginii
+	     (Screens/ChannelSelection.py, hdsPornesteFavorite; nu in alegerea simpla a canalului): scurt = canalul ales in
+	     Favorite sau, daca e deja acolo, intrebarea de scoatere (la eliberare); tinut apasat = alege buchetul. -->
+	<map context="HdsListaFavoriteActions">
+		<key id="KEY_FAVORITES" mapto="favApasat" flags="m" />
+		<key id="KEY_FAVORITES" mapto="favLung" flags="l" />
+		<key id="KEY_FAVORITES" mapto="favEliberat" flags="b" />
+	</map>
+
+	<!-- listele de canale ale imaginii (Components/HdsCapLista.py): OK apasat scurt lucreaza la eliberare, OK tinut
+	     apasat deschide cautarea; sagetile ajung la capul listei (fila TV | Radio, randul de cautare). Harta Python
+	     are prioritatea -1 si lasa tasta listei (intoarce 0) cand nu e a capului. -->
+	<map context="HdsListaCanaleActions">
+		<key id="KEY_OK" mapto="okApasat" flags="m" />
+		<key id="KEY_OK" mapto="okLung" flags="l" />
+		<key id="KEY_OK" mapto="okEliberat" flags="b" />
+		<key id="KEY_UP" mapto="sus" flags="m" />
+		<key id="KEY_DOWN" mapto="jos" flags="m" />
+		<key id="KEY_LEFT" mapto="stanga" flags="m" />
+		<key id="KEY_RIGHT" mapto="dreapta" flags="m" />
+		<key id="KEY_UP" mapto="repetat" flags="r" />
+		<key id="KEY_DOWN" mapto="repetat" flags="r" />
+		<key id="KEY_LEFT" mapto="repetat" flags="r" />
+		<key id="KEY_RIGHT" mapto="repetat" flags="r" />
+	</map>
+
+	<!-- tastatura USB in lista de canale TV (Screens/ChannelSelection.py): lista tine tastatura in modul ASCII numai
+	     pentru saltul la prima litera a canalului, deci Backspace nu e tradus in EXIT ca in ecranele fara text
+	     (lib/driver/rcmapper.cpp, keyboardDefault); aici iese din lista, ca Esc. -->
+	<map context="HdsListaCanaleTastaturaActions">
+		<key id="KEY_BACKSPACE" mapto="cancel" flags="m" />
+	</map>
+
+	<!-- tastatura USB in cautarile imaginii (Screens/HdsCautareCanale.py, Screens/HdsCautaSetari.py): Backspace sterge
+	     ultima litera, ca tasta galbena. -->
+	<map context="HdsTastaturaStergeActions">
+		<key id="KEY_BACKSPACE" mapto="deleteBackward" flags="mr" />
+	</map>
+
+	<map context="TvRadioActions">
+		<key id="KEY_TV" mapto="keyTV" flags="m" />
+		<key id="KEY_RADIO" mapto="keyRadio" flags="m" />
+	</map>
+
+	<map context="TimerEditActions">
+		<key id="KEY_INFO" mapto="log" flags="m" />
+	</map>
+	
+	<map context="EPGSelectActions">
+		<key id="KEY_GREEN" mapto="timerAdd" flags="m" />
+		<key id="KEY_YELLOW" mapto="yellow" flags="mr" />
+		<key id="KEY_BLUE" mapto="blue" flags="mr" />
+		<key id="KEY_RED" mapto="red" flags="m" />
+		<key id="KEY_INFO" mapto="info" flags="m" />
+		<key id="KEY_MENU" mapto="input_date_time" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="nextBouquet" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="prevBouquet" flags="m" />
+		<key id="KEY_NEXT" mapto="nextService" flags="m" />
+		<key id="KEY_PREVIOUS" mapto="prevService" flags="m" />
+	</map>
+
+	<map context="EventViewActions">
+		<key id="KEY_UP" mapto="pageUp" flags="mr" />
+		<key id="KEY_DOWN" mapto="pageDown" flags="mr" />
+		<key id="KEY_LEFT" mapto="prevEvent" flags="mr" />
+		<key id="KEY_RIGHT" mapto="nextEvent" flags="mr" />
+		<key id="KEY_RED" mapto="openSimilarList" flags="m" />
+		<key id="KEY_GREEN" mapto="timerAdd" flags="m" />
+		<key id="KEY_INFO" mapto="cancel" flags="m" />
+	</map>
+	
+	<map context="EventViewEPGActions">
+		<key id="KEY_YELLOW" mapto="openSingleServiceEPG" flags="m" />
+		<key id="KEY_BLUE" mapto="openMultiServiceEPG" flags="m" />
+	</map>
+
+	<map context="OkCancelActions">
+		<key id="\x0a" mapto="ok" flags="m" />
+		<key id="\x1b" mapto="cancel" flags="m" />
+
+		<!-- use this on rcu, ok? -->
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_ESC" mapto="cancel" flags="m" />
+	</map>
+	
+	<map context="DirectionActions">
+		<key id="KEY_UP" mapto="up" flags="m" />
+		<key id="KEY_DOWN" mapto="down" flags="m" />
+		<key id="KEY_LEFT" mapto="left" flags="m" />
+		<key id="KEY_RIGHT" mapto="right" flags="m" />
+
+		<key id="KEY_UP" mapto="upRepeated" flags="r" />
+		<key id="KEY_DOWN" mapto="downRepeated" flags="r" />
+		<key id="KEY_LEFT" mapto="leftRepeated" flags="r" />
+		<key id="KEY_RIGHT" mapto="rightRepeated" flags="r" />
+		
+		<key id="KEY_LEFT" mapto="leftUp" flags="b" />
+		<key id="KEY_RIGHT" mapto="rightUp" flags="b" />
+		<key id="KEY_UP" mapto="upUp" flags="b" />
+		<key id="KEY_DOWN" mapto="downUp" flags="b" />
+	</map>
+	
+	<map context="ColorActions">
+		<key id="KEY_RED" mapto="red" flags="m" />
+		<key id="KEY_GREEN" mapto="green" flags="m" />
+		<key id="KEY_YELLOW" mapto="yellow" flags="m" />
+		<key id="KEY_BLUE" mapto="blue" flags="m" />
+	</map>
+
+	<map context="MsgBoxActions">
+		<key id="KEY_GREEN" mapto="alwaysOK" flags="m" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_RED" mapto="cancel" flags="m" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+		<key id="KEY_ESC" mapto="cancel" flags="m" />
+	</map>
+
+	<map context="WindowActions">
+		
+	</map>
+	
+	<map context="HelpActions">
+		<key id="KEY_HELP" mapto="displayHelp" flags="m" />
+	</map>
+
+	<map context="ShortcutActions">
+		<key id="KEY_F1" mapto="red" flags="mr" />
+		<key id="KEY_F2" mapto="yellow" flags="mr" />
+		<key id="KEY_F3" mapto="green" flags="mr" />
+		<key id="KEY_F4" mapto="blue" flags="mr" />
+
+		<key id="KEY_RED" mapto="red" flags="mr" />
+		<key id="KEY_YELLOW" mapto="yellow" flags="mr" />
+		<key id="KEY_GREEN" mapto="green" flags="mr" />
+		<key id="KEY_BLUE" mapto="blue" flags="mr" />
+	</map>
+	<map context="StandbyActions">
+		<key id="KEY_POWER" mapto="power" flags="m" />
+	</map>
+	
+	<map context="SleepTimerEditorActions">
+		<key id="KEY_OK" mapto="select" flags="m" />
+		<key id="KEY_ENTER" mapto="select" flags="m" />
+		<key id="KEY_EXIT" mapto="exit" flags="m" />
+		<key id="KEY_ESC" mapto="exit" flags="m" />
+		<key id="KEY_1" mapto="1" flags="m" />
+		<key id="KEY_2" mapto="2" flags="m" />
+		<key id="KEY_3" mapto="3" flags="m" />
+		<key id="KEY_4" mapto="4" flags="m" />
+		<key id="KEY_5" mapto="5" flags="m" />
+		<key id="KEY_6" mapto="6" flags="m" />
+		<key id="KEY_7" mapto="7" flags="m" />
+		<key id="KEY_8" mapto="8" flags="m" />
+		<key id="KEY_9" mapto="9" flags="m" />
+		<key id="KEY_0" mapto="0" flags="m" />
+		<key id="KEY_LEFT" mapto="selectLeft" flags="mr" />
+		<key id="KEY_RIGHT" mapto="selectRight" flags="mr" />
+		<key id="KEY_RED" mapto="disableTimer" flags="mr" />
+		<key id="KEY_YELLOW" mapto="toggleAsk" flags="mr" />
+		<key id="KEY_GREEN" mapto="toggleAction" flags="mr" />
+		<key id="KEY_BLUE" mapto="useServiceTime" flags="mr" />
+	</map>	
+	
+	<map context="CiSelectionActions">
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+	</map>
+
+	<map context="PiPSetupActions">
+		<key id="KEY_UP" mapto="up" flags="mr" />
+		<key id="KEY_DOWN" mapto="down" flags="mr" />
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+		<key id="KEY_ESC" mapto="cancel" flags="m" />
+		<key id="KEY_ENTER" mapto="ok" flags="m" />
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="size+" flags="mr" />
+		<key id="KEY_CHANNELDOWN" mapto="size-" flags="mr" />
+	</map>
+	
+	<map context="MediaPlayerActions">
+		<device name="dreambox remote control (native)">
+			<key id="KEY_YELLOW" mapto="pause" flags="m" />
+			<key id="KEY_GREEN" mapto="play" flags="m" />
+			<key id="KEY_TV" mapto="stop" flags="b" />
+			<key id="KEY_TV" mapto="shift_stop" flags="l" />
+			<key id="KEY_RADIO" mapto="shift_record" flags="l" />
+			<key id="KEY_PREVIOUS" mapto="previous" flags="m" />
+			<key id="KEY_NEXT" mapto="next" flags="m" />
+		</device>
+		<device name="dreambox advanced remote control (native)">
+			<key id="KEY_PLAYPAUSE" mapto="pause" flags="m" />
+			<key id="KEY_PLAY" mapto="pause" flags="m" />
+			<key id="KEY_STOP" mapto="stop" flags="b" />
+			<key id="KEY_STOP" mapto="shift_stop" flags="l" />
+			<key id="KEY_RECORD" mapto="shift_record" flags="l" />
+			<key id="KEY_PREVIOUS" mapto="previous" flags="m" />
+			<key id="KEY_NEXT" mapto="next" flags="m" />
+			<key id="KEY_RED" mapto="previous" flags="m" />
+			<key id="KEY_BLUE" mapto="next" flags="m" />
+			<!-- HDSatelit (tastele Viper): pauza pe tasta ei, |<< si >>| schimba fisierul -->
+			<key id="KEY_PAUSE" mapto="pause" flags="m" />
+			<key id="KEY_PREVIOUSSONG" mapto="previous" flags="m" />
+			<key id="KEY_NEXTSONG" mapto="next" flags="m" />
+		</device>
+		<device name="dreambox ir keyboard">
+			<key id="KEY_PAUSE" mapto="pause" flags="m" />
+			<key id="KEY_PLAY" mapto="play" flags="m" />
+			<key id="KEY_STOP" mapto="stop" flags="b" />
+			<key id="KEY_STOP" mapto="shift_stop" flags="l" />
+			<key id="KEY_RECORD" mapto="shift_record" flags="l" />
+			<key id="KEY_PREVIOUSSONG" mapto="previous" flags="m" />
+			<key id="KEY_NEXTSONG" mapto="next" flags="m" />
+		</device>
+		
+		<key id="KEY_MENU" mapto="menu" flags="m" />
+		<key id="KEY_SPACE" mapto="menu" flags="m" />
+
+		<key id="KEY_2" mapto="skipListbegin" flags="m" />
+		<key id="KEY_8" mapto="skipListend" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="nextBouquet" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="prevBouquet" flags="m" />
+		<key id="KEY_VIDEO" mapto="delete" flags="m" />
+		<key id="KEY_TEXT" mapto="subtitles" flags="m" />
+		<key id="KEY_SUBTITLE" mapto="subtitles" flags="m" />
+	</map>
+</keymap>

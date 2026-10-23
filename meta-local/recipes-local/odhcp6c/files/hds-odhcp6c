@@ -1,0 +1,13 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# /usr/bin/odhcp6c: poarta clientului DHCPv6. IPv6 e oprit din fabrica (hds-ipv6, rcS S40); clientul porneste numai
+# cand exista fisierul-semn /etc/hds-ipv6-pornit. Il pornesc doua cai, amandoua prin numele odhcp6c din PATH:
+# ifup-ul din busybox pentru randul "iface ... inet6 dhcp" din /etc/network/interfaces (asa e eth0 din fabrica) si
+# /etc/network/if-up.d/odhcp6c pentru interfetele fara rand inet6. Fara semn iese cu 0 (ifup nu da eroare, IPv4 merge
+# mai departe). Programul adevarat e in /usr/libexec/hds-odhcp6c/odhcp6c (acelasi nume de proces, odhcp6c).
+# HDS_IPV6_SEMN schimba calea semnului numai pentru probele de pe calculator.
+
+[ -e "${HDS_IPV6_SEMN:-/etc/hds-ipv6-pornit}" ] || exit 0
+exec /usr/libexec/hds-odhcp6c/odhcp6c "$@"

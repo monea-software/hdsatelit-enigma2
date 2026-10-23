@@ -1,0 +1,189 @@
+<!-- Modificat de moneasoftware.com si hdsatelit.com, 2026 -->
+<setupxml>
+		<setup key="rc" title="RC Menu">
+			<item level="0" text="Repeat">config.inputDevices.repeat</item>
+			<item level="0" text="Delay">config.inputDevices.delay</item>
+			<item level="0" text="Keymap">config.rc.map</item>
+		</setup>
+		<setup key="timezone" title="Timezone">
+			<item level="0" text="Timezone">config.timezone.val</item>
+		</setup>
+		<setup key="avsetup" title="A/V Settings">
+			<!-- Color Format si TV System numai unde pot schimba ceva (Components/AVSwitch.py: HdsFormatCuloareAnalog, HdsSistemTv) -->
+			<item level="0" text="Color Format" requires="HdsFormatCuloareAnalog">config.av.colorformat</item>
+			<item level="0" text="Aspect Ratio">config.av.aspectratio</item>
+			<item level="0" text="TV System" requires="HdsSistemTv">config.av.tvsystem</item>
+			<item level="1" text="WSS on 4:3">config.av.wss</item>
+			<item level="1" text="AC3 default" description="Yes: on channels with several sound tracks the first track that is not MPEG starts (usually AC3 or DD+). No: the first track of the channel starts, or the one chosen last time.">config.av.defaultac3</item>
+			<item level="1" text="General AC3 delay (ms)" requires="CanAC3Delay" description="Delay of the AC3 sound against the picture, on all channels. It is used from the next channel change.">config.av.generalAC3delay</item>
+			<item level="1" text="General PCM delay (ms)" requires="CanPCMDelay" description="Delay of the stereo sound against the picture, on all channels. It is used from the next channel change.">config.av.generalPCMdelay</item>
+			<!-- iesirea sunetului (Components/HdsSunet.py): Automat dupa ce anunta televizorul prin HDMI, Manual dupa randurile
+			     AC3 / DTS downmix de dedesubt; pista AC3 aleasa singura numai cand AC3 pleaca neschimbat; in web: /sunet -->
+			<item level="1" text="Ieșirea sunetului" requires="HdsSunet" description="Micșorează întâi volumul televizorului. Automat: AC3 și DTS pleacă neschimbate (5.1) numai spre un televizor care le primește. Manual: după rândurile de mai jos.">config.av.hds_sunet_iesire</item>
+			<item level="1" text="Alege singur pista AC3" requires="HdsSunetPista" stare="netestat" description="Da: când AC3 pleacă neschimbat, receptorul pornește pista AC3 (de obicei 5.1) în aceeași limbă. O pistă aleasă de mână nu se schimbă.">config.av.hds_sunet_pista51</item>
+			<!-- pe „Ieșirea sunetului: Automat” randurile AC3 / DTS downmix nu se folosesc: ascunse, ca in web (/sunet) -->
+			<item level="1" text="AC3 downmix" requires="CanDownmixAC3" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns AC3 sound into stereo. No: AC3 sound goes unchanged to the TV or sound system (5.1 sound), which must know AC3, otherwise there is no sound.">config.av.downmix_ac3</item>
+			<item level="1" text="DTS downmix" requires="CanDownmixDTS" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns DTS sound into stereo. No: DTS sound goes unchanged to the TV or sound system; if it does not know DTS, there is no sound. Many TVs do not know DTS.">config.av.downmix_dts</item>
+			<!-- DTS recodat in AC3 (Components/HdsSunet.py, elementul hdsdtsac3 din 0.4.0): numai cu elementul in imagine;
+			     merge si pe Automat (AC3-ul recodat pleaca pe calea AC3); in web: /sunet -->
+			<item level="1" text="DTS recodat în AC3" requires="HdsSunetDtsAc3" stare="netestat" description="Da: receptorul recodează în AC3 (5.1) sunetul DTS al filmelor, pentru un amplificator sau televizor care primește AC3, dar nu DTS. AC3 trebuie să plece neschimbat (Ieșirea sunetului pe Automat sau Downmix AC3 pe Nu). Se aplică de la următorul film pornit.">config.av.hds_dts_ac3</item>
+			<item level="1" text="Auto scart switching" requires="ScartSwitch">config.av.vcrswitch</item>
+			<item level="1" text="Picture Sharpness" requires="CanScalerSharpness">config.av.scaler_sharpness</item>
+		</setup>
+		<!-- Components/HdsSetariSunet.py: aceleasi randuri si texte ca pagina web /volum-intarziere
+		     (volum_intarziere_web.py). Randurile placii (volumul egal, intarzierile) se arata numai cand /proc/msp/sound0 le
+		     are (HdsSunetAvc, HdsSunetIntarziere). Balansul lipseste: driverul nu il primeste. -->
+		<setup key="hds_setari_sunet" title="Volum și întârziere">
+			<item level="0" text="Pasul volumului" description="Cât crește sau scade volumul la o apăsare pe tastele de volum (volumul merge de la 0 la 100).">config.hds_setari_sunet.pas_volum</item>
+			<item level="0" text="Cât stă volumul pe ecran" description="Câte secunde rămâne bara volumului pe ecran după ultima apăsare pe tastele de volum.">config.hds_setari_sunet.afisare_volum</item>
+			<item level="0" text="Volumul ținut minte pe canal" description="Da: fiecare canal pornește cu volumul la care l-ai lăsat. Un canal la care nu ai schimbat volumul îl păstrează pe cel de acum.">config.hds_setari_sunet.volum_pe_canal</item>
+			<item level="0" text="Volum egal între canale" requires="HdsSunetAvc" description="Placa de sunet apropie singură volumul: canalele și reclamele tari se aud mai încet, cele încete mai tare. Puternic micșorează și diferența dintre tare și încet (bun noaptea). Nu lucrează când sunetul pleacă neschimbat spre televizor.">config.hds_setari_sunet.volum_egal</item>
+			<item level="0" text="Întârzierea sunetului pe HDMI" requires="HdsSunetIntarziere" description="Când buzele se mișcă după sunet, întârzie sunetul spre televizor. Sunetul se poate numai întârzia, nu grăbi.">config.hds_setari_sunet.intarziere_hdmi</item>
+			<item level="0" text="Întârzierea sunetului pe optic" requires="HdsSunetIntarziere" description="La fel, pentru bara de sunet sau amplificatorul legat la ieșirea optică a receptorului.">config.hds_setari_sunet.intarziere_optic</item>
+		</setup>
+		<setup key="usage" title="Customize">
+			<item level="0" text="Setup Mode">config.usage.setup_level</item>
+			<item level="0" text="What to show at startup">config.usage.hds_pornire</item>
+			<item level="1" text="2D acceleration on the video card (after GUI restart)" requires="HdsAccel2D" description="On at first: the big fills of the screen are done by the video card, the rest by the processor. If problems appear, the receiver goes back by itself to drawing without acceleration. Used from the next start of the interface.">config.usage.hds_accel_2d</item>
+			<!-- modul procesorului (Components/HdsProcesor.py); acelasi rand in ecranul Procesor si in web la /procesor -->
+			<item level="1" text="Modul procesorului" requires="HdsProcesor" description="Cât de repede poate lucra procesorul. Normal este ca la fabricant și e recomandat dacă nu știi ce să alegi. Se aplică la salvare.">config.hds_procesor.mod</item>
+			<item level="1" text="Recordings always have priority">config.recording.asktozap</item>
+			<item level="0" text="Margin before record (minutes)">config.recording.margin_before</item>
+			<item level="0" text="Margin after record">config.recording.margin_after</item>
+			<!-- inregistrarile "Decodează mai târziu" (Components/HdsDecodare.py), numai cu programul de decodare pe receptor;
+			     alegerea din oficiu a unei inregistrari programate noi (oprita din fabrica) si portul local al modulului de
+			     acces (numai 127.0.0.1); in web: /setari?id=usage -->
+			<item level="0" text="Decriptarea înregistrărilor" requires="HdsDecodare" description="Ce se alege din oficiu la o înregistrare programată nouă. Decriptează acum: ca până acum. Decodează mai târziu: înregistrarea se salvează criptată și receptorul o decodează mai târziu, când e în așteptare. Se poate schimba la fiecare înregistrare.">config.recording.hds_decodare</item>
+			<item level="2" text="Portul local al modulului de acces" requires="HdsDecodare" description="Portul de pe acest receptor (127.0.0.1) la care programul de decodare cere modulului de acces cheile înregistrărilor de decodat mai târziu. 0: nefolosit.">config.recording.hds_decodare_port</item>
+			<item level="0" text="Show blinking clock in display during recording">config.usage.blinking_display_clock_during_recording</item>
+			<item level="2" text="Show Message when Recording starts">config.usage.show_message_when_recording_starts</item>
+			<item level="2" text="Load Length of Movies in Movielist">config.usage.load_length_of_movies_in_moviellist</item>
+			<item level="1" text="Show positioner movement">config.usage.showdish</item>
+			<item level="1" text="Enable multiple bouquets">config.usage.multibouquet</item>
+			<item level="1" text="Multi-EPG bouquet selection">config.usage.multiepg_ask_bouquet</item>
+			<item level="1" text="Change bouquets in quickzap">config.usage.quickzap_bouquet_change</item>
+			<item level="1" text="Reading the tracks while watching" description="What the receiver notes by itself for the channel search (sound and subtitle languages, teletext, HbbTV). Only the channel watched: what the receiver already knows. The whole transponder: also reads every channel on it from the tuner (not tested yet). Off: nothing; MENU in the channel search still reads them.">config.usage.hds_culegere_piste</item>
+			<!-- baza de pornire a canalelor (Components/HdsBazaPornire.py): o data pe zi, in fundal, numai cu setarea pornita
+			     (oprita din fabrica); ce afla receptorul singur ramane neschimbat; in web: /setari?id=usage -->
+			<item level="1" text="Ia baza de canale de pe stb.hdsatelit.com" stare="netestat" description="Da: o dată pe zi, în fundal, receptorul caută pe stb.hdsatelit.com o bază de canale mai nouă decât cea din imagine (rezoluția, sunetul, subtitrările, PID-urile fiecărui canal) și o folosește numai unde nu știe el nimic. Ce află receptorul singur rămâne neschimbat. Nu: numai baza venită cu imaginea.">config.usage.hds_baza_stb</item>
+			<item level="1" text="Alternative radio mode">config.usage.e1like_radio_mode</item>
+			<!-- sagetile sus si jos la privit (Components/HdsSageti.py: bara TV si ecranul radio); in web: /setari -->
+			<item level="0" text="Săgețile sus și jos la privit" description="Ce fac săgețile sus și jos când te uiți la un canal sau asculți radio, fără niciun meniu deschis: deschid lista de canale radio sau TV, ori schimbă canalul, sus pe următorul și jos pe cel anterior. Merge și cu telecomanda televizorului.">config.usage.hds_sageata_sus</item>
+			<item level="1" text="Action on long powerbutton press">config.usage.on_long_powerpress</item>
+			<item level="1" text="Action on short powerbutton press">config.usage.on_short_powerpress</item>
+			<item level="1" text="Position of finished Timers in Timerlist">config.usage.timerlist_finished_timer_position</item>
+			<item level="0" text="Infobar timeout">config.usage.infobar_timeout</item>
+			<!-- mesajul de ecran negru (Components/HdsEcranNegru.py, Screens/HdsEcranNegru.py); in web: panoul principal -->
+			<item level="0" text="Explicații pe ecranul negru" requires="HdsEcranNegru" description="Da: cât timp ecranul rămâne negru (canal criptat, fără semnal, canal mutat, tuner ocupat și altele), pe mijlocul ecranului scrie de ce și ce se poate face. EXIT ascunde mesajul. Nu: ferestrele scurte de eroare, ca înainte.">config.usage.hds_ecran_negru</item>
+			<item level="0" text="Analiza fluxului pe ecranul negru" requires="HdsEcranNegru" conditional="config.usage.hds_ecran_negru.value" description="La canalele fără imagine (serviciu de date, format necunoscut), receptorul poate citi din flux ce trimite canalul: fișiere, date IP, actualizări, aplicații. La apăsarea OK: numai când ceri, cu OK pe mesaj. Automat: imediat ce apare mesajul.">config.usage.hds_analiza_flux</item>
+			<!-- pasii decriptarii sub mesajul canalului criptat si in web (Components/HdsPasiDecriptare.py), oprita din fabrica;
+			     in web: /setari?id=usage, pagina TV si randul Acces din panou -->
+			<item level="0" text="Arată pașii decriptării" requires="HdsEcranNegru" stare="netestat" description="Da: la canalele criptate, sub mesajul de pe ecranul negru și în interfața web apar pașii decriptării pe măsură ce se întâmplă: cererea către modulul de acces, răspunsurile și timpul lor, imaginea decriptată, mesajele modulului CI. Nu: nimic din toate acestea.">config.usage.hds_pasi_decriptare</item>
+			<item level="1" text="12V output" requires="12V_Output">config.usage.output_12V</item>
+			<item level="0" text="Show event-progress in channel selection">config.usage.show_event_progress_in_servicelist</item>
+			<!-- randurile „Furnizori” si „Nou” ale fiecarui satelit in lista „Sateliți” (Screens/ChannelSelection.py); in web: /setari?id=usage -->
+			<item level="1" text="Furnizori și Nou la fiecare satelit" description="Da: în lista de canale, la „Sateliți”, fiecare satelit are sub numele lui și rândurile „Furnizori” (canalele lui după furnizor) și „Nou” (canalele noi găsite la căutare). Nu: un singur rând pe satelit, iar furnizorii tuturor sateliților rămân pe tasta galbenă.">config.usage.hds_lista_furnizori_nou</item>
+			<item level="2" text="Show infobar on channel change">config.usage.show_infobar_on_zap</item>
+			<item level="2" text="Show infobar on skip forward/backward">config.usage.show_infobar_on_skip</item>
+			<item level="2" text="Show infobar on event change">config.usage.show_infobar_on_event_change</item>
+			<!-- playerul de filme (Screens/InfoBar.py, MoviePlayer; filme si inregistrari); in web: /filme (filme_web.py) -->
+			<item level="2" text="La pornirea unui film" description="Ce face receptorul când pornești un film sau o înregistrare văzută pe jumătate: întreabă, reia de unde ai rămas sau pornește de la început.">config.usage.on_movie_start</item>
+			<item level="2" text="La oprirea unui film" description="Ce face receptorul când oprești un film sau o înregistrare cu STOP: întreabă, se întoarce la lista de filme sau la canalul de dinainte.">config.usage.on_movie_stop</item>
+			<item level="2" text="La sfârșitul unui film" description="Ce face receptorul când filmul sau înregistrarea ajunge la sfârșit: întreabă, se întoarce la lista de filme, la canalul de dinainte, sau rămâne pe pauză la sfârșit.">config.usage.on_movie_eof</item>
+			<item level="2" text="Custom skip time for '1'/'3'-keys">config.seek.selfdefined_13</item>
+			<item level="2" text="Custom skip time for '4'/'6'-keys">config.seek.selfdefined_46</item>
+			<item level="2" text="Custom skip time for '7'/'9'-keys">config.seek.selfdefined_79</item>
+			<item level="2" text="Fast Forward speeds">config.seek.speeds_forward</item>
+			<item level="2" text="Rewind speeds">config.seek.speeds_backward</item>
+			<item level="2" text="Slow Motion speeds">config.seek.speeds_slowmotion</item>
+<!-- TRANSLATORS: The following is the speed you get on the first press on fast-forward.
+     It was previously called "enter fast forward at speed" which was easily misunderstood. -->  
+			<item level="2" text="Initial Fast Forward speed">config.seek.enter_forward</item>
+			<item level="2" text="Initial Rewind speed">config.seek.enter_backward</item>
+			<item level="2" text="Behavior of 'pause' when paused">config.seek.on_pause</item>
+			<item level="2" text="Behavior of 0 key in PiP-mode">config.usage.pip_zero_button</item>
+			<item level="2" text="Alternative services tuner priority">config.usage.alternatives_priority</item>
+			<item level="2" text="Limited character set for recording filenames">config.recording.ascii_filenames</item>
+			<item level="2" text="Composition of the recording filenames">config.recording.filename_composition</item>
+		</setup>
+		<setup key="harddisk" title="Harddisk setup" >
+			<item level="0" text="Harddisk standby after">config.usage.hdd_standby</item>
+		</setup>
+		<setup key="network" title="Network setup">
+			<item text="Use DHCP">config.network.dhcp</item>
+			<item text="IP Address">config.network.ip</item>
+			<item text="Netmask">config.network.netmask</item>
+			<item text="Gateway">config.network.gateway</item>
+			<item text="Nameserver">config.network.dns</item>
+<!--			<item text="MAC Address">config.network.mac</item>-->
+			<item text="Activate network settings">config.network.activate</item>
+		</setup>
+		<setup key="RFmod" title="RF output">
+			<item level="1" text="Modulator">config.rfmod.enable</item>
+			<item level="2" text="Test mode">config.rfmod.test</item>
+			<item level="2" text="Sound">config.rfmod.sound</item>
+			<item level="2" text="Soundcarrier">config.rfmod.soundcarrier</item>
+			<item level="1" text="Channel">config.rfmod.channel</item>
+			<item level="1" text="Finetune">config.rfmod.finetune</item>
+		</setup>
+		<setup key="keyboard" title="Keyboard Setup">
+			<item level="0" text="Keyboard Map">config.keyboard.keymap</item>
+		</setup>
+		<setup key="osd" title="OSD Settings">
+			<item text="Alpha">config.osd.alpha</item>
+			<item text="Brightness">config.osd.bright</item>
+			<item text="Contrast">config.osd.contrast</item>
+		</setup>
+		<setup key="lcd" title="Display Setup" requires="FrontpanelDisplay">
+			<item level="0" text="Brightness">config.lcd.bright</item>
+			<item level="0" text="Contrast">config.lcd.contrast</item>
+			<item level="0" text="Standby">config.lcd.standby</item>
+		</setup>
+		<setup key="satconfig" title="Sat / Dish Setup">
+			<item text="Tuner Slot">config.sat.tunerslot</item>
+			<item text="Configuration Mode">config.sat.configmode</item>
+			<item text="DiSEqC">config.sat.diseqc</item>
+			<item text="Longitude">config.sat.diseqca</item>
+			<item text="Latitude">config.sat.diseqcb</item>
+			<item text="Use power measurement" >config.sat.diseqcc</item>
+			<!--<item text="DiSEqC D">config.sat.diseqcd</item>-->
+		</setup>
+		<!-- subtitrarile filmelor din fisierele de langa film (Components/HdsSubtitrariFilm.py); alegerea, intarzierea,
+		     codarea si fps-ul pe film sunt la tasta SUB si in web la /subtitrari-film -->
+		<setup key="hds_subtitrari_filme" title="Subtitrările filmelor">
+			<item level="0" text="Codarea implicită" description="Pentru fișierele de subtitrare care nu sunt UTF-8 și pentru textul din filmele MKV scris altfel. Europa Centrală citește corect fișierele românești vechi. La pistele din film se aplică de la filmul următor.">config.subtitles.hds_film_codare</item>
+			<item level="0" text="ș și ț cu virgulă" description="La subtitrările în română, s și t cu sedilă (scrierea veche) se arată ca ș și ț cu virgulă.">config.subtitles.hds_film_virgula</item>
+			<item level="0" text="Întâi fișierul de lângă film" description="La aceeași limbă se alege întâi subtitrarea din fișierul de lângă film (de exemplu film.ro.srt), apoi textul din film.">config.subtitles.hds_film_fisier_intai</item>
+			<item level="1" text="Caută și în subdosarul Subs" description="Subtitrările din subdosarele Subs, Subtitles și Subtitrari din dosarul filmului.">config.subtitles.hds_film_subdosare</item>
+		</setup>
+		<!-- iesirea HDMI si televizorul in standby (Components/HdsStandbyTv.py): „off” in /proc/stb/hdmi/output cat tine
+		     standby-ul, cu paza la reconectarea televizorului, si mesajele CEC prin /dev/hdmi_cec; in web: /setari si randurile
+		     de sub „Standby” din panoul principal (standby_tv_web.py). Numele receptorului pe televizor (lista
+		     intrarilor HDMI): prin CEC, gol = modelul simplificat; in web casuta text din /setari (setari_web.py, felul text). Tastele televizorului prin CEC (HdsStandbyTv.TASTE_CEC),
+		     tabelul lor in web la /telecomanda-tv (standby_tv_web.py) -->
+		<setup key="hds_standby_tv" title="Standby și televizorul">
+			<item level="0" text="Oprește HDMI în standby" requires="HdsHdmiStandby" stare="netestat" description="Da: în standby receptorul nu mai trimite imagine, iar televizorul arată „Fără semnal” și se poate opri singur. Când aprinzi televizorul, imaginea neagră apare câteva secunde. Nu: trimite mai departe imagine neagră.">config.hds_standby.hdmi_oprit</item>
+			<item level="0" text="Stinge și televizorul (CEC)" requires="HdsCec" stare="netestat" description="Da: în standby se stinge și televizorul, prin cablul HDMI, dacă are funcția CEC pornită (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge.">config.hds_standby.cec_stinge</item>
+			<item level="0" text="Pornește televizorul la trezire (CEC)" requires="HdsCec" stare="netestat" description="Da: când scoți receptorul din standby (din telecomandă sau din web), se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit.">config.hds_standby.cec_porneste</item>
+			<item level="0" text="Numele receptorului pe televizor" requires="HdsCec" stare="netestat" description="Numele arătat de televizor în lista intrărilor HDMI, prin CEC (la LG SIMPLINK, la Samsung Anynet+). Gol: modelul receptorului. Cel mult 14 litere, fără diacritice; pe televizor se scrie cu tastele cu cifre, ca un SMS.">config.hds_standby.nume_tv</item>
+			<item level="0" text="Comandă din telecomanda televizorului" requires="HdsCec" stare="netestat" description="Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Puterea și volumul rămân ale televizorului.">config.hds_standby.cec_telecomanda</item>
+		</setup>
+		<!-- verificarea internetului (Components/HdsStareRetea.py): pictograma retelei din bare si din antetul web (randul 1:
+		     aratata sau ascunsa, Components/HdsPictogramaBare.py), mesajul din mijlocul ecranului la pierderea internetului; in
+		     web: /setari?id=hds_internet si cardul Internetul din /retea (randul 0 si randul 1) -->
+		<setup key="hds_internet" title="Verificarea internetului">
+			<item level="0" text="Cât de des se verifică internetul" description="Receptorul verifică singur, în fundal, dacă are internet: trimite o întrebare DNS mică spre serverele publice 1.1.1.1, 9.9.9.9 și 8.8.8.8, fără date despre tine. La orice schimbare a rețelei (cablul, Wi-Fi, adresa) verifică pe loc. Pictograma din bară arată rezultatul.">config.usage.hds_internet_interval</item>
+			<item level="0" text="Arată pictograma internetului în bare" description="Da: pictograma rețelei (cablu sau Wi-Fi și dacă merge internetul) se vede în bare, în capul ferestrelor Pro și în antetul paginilor web. Nu: nu se mai vede, iar ce era lângă ea revine la locul ei. Verificarea internetului și mesajul de pe ecran merg mai departe.">config.usage.hds_internet_pictograma</item>
+		</setup>
+		<!-- trecerea singura pe alta retea cand se pierde internetul, si inapoi (Components/HdsComutareRetea.py, din 0.4.4);
+		     in web: /setari?id=hds_retea_comutare si cardul Trecerea pe alta retea din /retea -->
+		<setup key="hds_retea_comutare" title="Trecerea singură pe altă rețea">
+			<item level="0" text="Trecerea singură pe altă rețea" stare="netestat" description="Da: când internetul nu merge de câteva verificări la rând, receptorul trece singur pe cablu sau pe o rețea Wi-Fi salvată care are internet, și se întoarce când rețeaua lui își revine. Fără altă rețea nu face nimic. Nu trece în timpul unei actualizări sau al unei înregistrări din rețea.">config.usage.hds_retea_comutare</item>
+			<item level="0" text="Ordinea rețelelor" stare="netestat" description="Pe care o încearcă întâi. Rețelele Wi-Fi salvate se încearcă în ordinea în care au fost salvate.">config.usage.hds_retea_ordine</item>
+		</setup>
+		<!-- IPv6, oprit din fabrica (Components/HdsIpv6.py: semnul /etc/hds-ipv6-pornit, aplicat pe loc; randul arata si
+		     starea de acum, prin atributul hdsStare al setarii, Screens/Setup.py); in web: cardul IPv6 din /retea -->
+		<setup key="hds_ipv6" title="IPv6">
+			<item level="0" text="IPv6" description="Nu (din fabrică): plăcile de rețea nu au adrese IPv6, iar clientul IPv6 nu pornește; rețeaua merge pe IPv4, ca până acum. Da: receptorul primește și adrese IPv6, dacă rețeaua ta le dă. Se aplică pe loc.">config.usage.hds_ipv6</item>
+		</setup>
+</setupxml>

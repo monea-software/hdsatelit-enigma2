@@ -1,0 +1,168 @@
+Subject: [PATCH] dvd_input: read unencrypted discs only, never load a decryption library
+
+Without --with-libdvdcss the original code tries dlopen("libdvdcss.so.2") at run time and, if a
+copy is present on the system, uses it to decrypt CSS protected discs. The image must never
+decrypt, so the run time loading and the functions using it are removed; sectors are read
+directly (discs without protection). Linking against the library at build time is not used.
+
+Upstream-Status: Inappropriate [distribution policy]
+---
+--- a/src/dvd_input.c
++++ b/src/dvd_input.c
+@@ -56,25 +56,8 @@
+ # define DVDcss_seek    dvdcss_seek
+ # define DVDcss_read    dvdcss_read
+ #else
+-
+-/* dlopening libdvdcss */
+-# if defined(HAVE_DLFCN_H) && !defined(USING_BUILTIN_DLFCN)
+-#  include <dlfcn.h>
+-# else
+-#   if defined(_WIN32)
+-/* Only needed on MINGW at the moment */
+-#    include "../msvc/contrib/dlfcn.c"
+-#   endif
+-# endif
+-
++/* This build reads only unencrypted discs: no decryption library is linked or loaded at run time. */
+ typedef struct dvdcss_s *dvdcss_t;
+-typedef struct dvdcss_stream_cb dvdcss_stream_cb;
+-static dvdcss_t (*DVDcss_open_stream) (void *, dvdcss_stream_cb *);
+-static dvdcss_t (*DVDcss_open)  (const char *);
+-static int      (*DVDcss_close) (dvdcss_t);
+-static int      (*DVDcss_seek)  (dvdcss_t, int, int);
+-static int      (*DVDcss_read)  (dvdcss_t, void *, int, int);
+-#define DVDCSS_SEEK_KEY (1 << 1)
+ #endif
+ 
+ #ifdef _WIN32
+@@ -116,6 +99,7 @@
+   return dev;
+ }
+ 
++#ifdef HAVE_DVDCSS_DVDCSS_H
+ /**
+  * initialize and open a DVD (device or file or stream_cb)
+  */
+@@ -193,6 +177,8 @@
+ 
+   return ret;
+ }
++
++#endif /* HAVE_DVDCSS_DVDCSS_H */
+ 
+ /**
+  * initialize and open a DVD device or file.
+@@ -327,93 +313,27 @@
+ 
+ 
+ /**
+- * Setup read functions with either libdvdcss or minimal DVD access.
++ * Setup read functions: minimal DVD access (unencrypted discs only).
+  */
+ int dvdinput_setup(void *priv, dvd_logger_cb *logcb)
+ {
+-  void *dvdcss_library = NULL;
+-
+ #ifdef HAVE_DVDCSS_DVDCSS_H
+   /* linking to libdvdcss */
+-  dvdcss_library = &dvdcss_library;  /* Give it some value != NULL */
+-
+-#else
+-  /* dlopening libdvdcss */
+-
+-#ifdef __APPLE__
+-  #define CSS_LIB "libdvdcss.2.dylib"
+-#elif defined(_WIN32)
+-  #define CSS_LIB "libdvdcss-2.dll"
+-#elif defined(__OS2__)
+-  #define CSS_LIB "dvdcss2.dll"
+-#elif defined(__OpenBSD__)
+-  #define CSS_LIB "libdvdcss.so"
+-#else
+-  #define CSS_LIB "libdvdcss.so.2"
+-#endif
+-  dvdcss_library = dlopen(CSS_LIB, RTLD_LAZY);
+-
+-  if(dvdcss_library != NULL) {
+-#ifdef __OS2__
+-#define U_S "_"
+-#else
+-#define U_S
+-#endif
+-    DVDcss_open_stream = (dvdcss_t (*)(void *, dvdcss_stream_cb *))
+-      dlsym(dvdcss_library, U_S "dvdcss_open_stream");
+-    DVDcss_open = (dvdcss_t (*)(const char*))
+-      dlsym(dvdcss_library, U_S "dvdcss_open");
+-    DVDcss_close = (int (*)(dvdcss_t))
+-      dlsym(dvdcss_library, U_S "dvdcss_close");
+-    DVDcss_seek = (int (*)(dvdcss_t, int, int))
+-      dlsym(dvdcss_library, U_S "dvdcss_seek");
+-    DVDcss_read = (int (*)(dvdcss_t, void*, int, int))
+-      dlsym(dvdcss_library, U_S "dvdcss_read");
+-
+-    if(dlsym(dvdcss_library, U_S "dvdcss_crack")) {
+-      DVDReadLog(priv, logcb, DVD_LOGGER_LEVEL_ERROR,
+-                 "Old (pre-0.0.2) version of libdvdcss found. "
+-                "libdvdread: You should get the latest version from "
+-                "http://www.videolan.org/" );
+-      dlclose(dvdcss_library);
+-      dvdcss_library = NULL;
+-    } else if(!DVDcss_open || !DVDcss_close || !DVDcss_seek
+-              || !DVDcss_read) {
+-      DVDReadLog(priv, logcb, DVD_LOGGER_LEVEL_ERROR,
+-                 "Missing symbols in %s, "
+-                "this shouldn't happen !", CSS_LIB);
+-      dlclose(dvdcss_library);
+-      dvdcss_library = NULL;
+-    }
+-  }
+-#endif /* HAVE_DVDCSS_DVDCSS_H */
+-
+-  if(dvdcss_library != NULL) {
+-    /*
+-    char *psz_method = getenv( "DVDCSS_METHOD" );
+-    char *psz_verbose = getenv( "DVDCSS_VERBOSE" );
+-    fprintf(stderr, "DVDCSS_METHOD %s\n", psz_method);
+-    fprintf(stderr, "DVDCSS_VERBOSE %s\n", psz_verbose);
+-    */
+-
+-    /* libdvdcss wrapper functions */
+-    dvdinput_open  = css_open;
+-    dvdinput_close = css_close;
+-    dvdinput_seek  = css_seek;
+-    dvdinput_title = css_title;
+-    dvdinput_read  = css_read;
+-    return 1;
+-
+-  } else {
+-    DVDReadLog(priv, logcb, DVD_LOGGER_LEVEL_WARN,
+-               "Encrypted DVD support unavailable.");
+-
+-    /* libdvdcss replacement functions */
+-    dvdinput_open  = file_open;
+-    dvdinput_close = file_close;
+-    dvdinput_seek  = file_seek;
+-    dvdinput_title = file_title;
+-    dvdinput_read  = file_read;
+-    return 0;
+-  }
+-}
++  dvdinput_open  = css_open;
++  dvdinput_close = css_close;
++  dvdinput_seek  = css_seek;
++  dvdinput_title = css_title;
++  dvdinput_read  = css_read;
++  return 1;
++#else
++  DVDReadLog(priv, logcb, DVD_LOGGER_LEVEL_WARN,
++             "Encrypted DVD support unavailable.");
++
++  dvdinput_open  = file_open;
++  dvdinput_close = file_close;
++  dvdinput_seek  = file_seek;
++  dvdinput_title = file_title;
++  dvdinput_read  = file_read;
++  return 0;
++#endif
++}

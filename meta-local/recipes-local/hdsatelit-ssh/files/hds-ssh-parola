@@ -1,0 +1,183 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# hds-ssh-parola: parola lui root pentru SSH, facuta pe receptor. Singurul loc care o face: /etc/init.d/hds-ssh la prima
+# pornire si ecranul „Acces SSH” (Components/HdsAccesSsh.py, televizorul si interfata web) il cheama pe acesta.
+#   prima    parola, numai daca semnul primei porniri lipseste; o parola pusa deja de om (un hash in /etc/shadow)
+#            ramane si primeste numai semnul
+#   noua     o parola noua, oricand; cea veche nu mai merge
+#   ascunde  sterge textul clar (omul a notat parola); parola ramane pusa
+#   stare    randuri cheie=valoare: facuta (semnul), de_vazut (textul clar exista), eroare (prima pornire nu a reusit),
+#            fel (pusa, blocata, goala, lipsa)
+# Iesirea: 0 reusit, 1 esec (motivul pe stderr si in jurnal), 2 folosire gresita.
+# prima, noua si ascunde lucreaza pe rand (zavor pe $DOSAR/.zavor cu flock; fara flock, un dosar-zavor): pornirea din
+# fundal si o parola ceruta din ecran in acelasi timp ar scrie altfel acelasi parola.nou, iar parola aratata n-ar mai fi
+# cea din /etc/shadow. stare nu ia zavorul (ecranul o poate cere oricand).
+# Cand `prima` nu reuseste, ramane semnul $DOSAR/eroare (ecranul spune atunci ca parola nu s-a putut face, in loc de
+# „Se face...”); orice parola facuta dupa aceea il sterge.
+#
+# Parola: 12 semne din 32 (litere mici fara „l” si „o”, cifre fara 0 si 1, deci nimic de confundat pe ecran), in trei
+# grupe de patru legate cu „-”, adica 60 de biti. Octetii vin din `openssl rand -hex` (getrandom: asteapta pana cand
+# generatorul nucleului e initializat, si la prima pornire dupa flash, cand nu exista inca samanta salvata) si se citesc
+# din textul hex in awk, fara od (od din BusyBox-ul receptorului nu are -A si -t); fiecare octet da un semn
+# (octet % 32): 256 se imparte exact la 32, deci fiecare semn are aceeasi sansa, fara respingere.
+# In /etc/shadow intra numai hash-ul SHA-512 (`openssl passwd -6`, parola pe stdin), pus cu `chpasswd -e` (tot pe
+# stdin): parola si hash-ul nu apar niciodata in linia de comanda a unui proces (ps).
+# Textul clar sta in $DOSAR/parola (0600, dosarul 0700) numai pana la „ascunde” sau pana la parola urmatoare.
+# Ordinea: textul clar intr-un fisier temporar, hash-ul in /etc/shadow, apoi fisierul temporar ia numele bun, apoi
+# semnul. O cadere de curent la mijloc lasa cel mult o parola care nu se vede (se face alta din meniu), niciodata una
+# aratata care nu merge; fara semn, pornirea urmatoare incearca din nou.
+# Jurnalul (/home/root/logs/hds-ssh.log) si consola au numai ce s-a facut, niciodata parola sau hash-ul.
+# HDS_SSH_RADACINA (radacina in care se lucreaza) si HDS_SSH_CHPASSWD (comanda care primeste „root:<hash>” pe stdin)
+# sunt numai pentru probe.
+
+R=${HDS_SSH_RADACINA:-}
+DOSAR=$R/etc/hdsatelit-ssh
+PAROLA=$DOSAR/parola
+SEMN=$DOSAR/facuta
+EROARE=$DOSAR/eroare
+SHADOW=$R/etc/shadow
+JURNAL=$R/home/root/logs/hds-ssh.log
+CHPASSWD=${HDS_SSH_CHPASSWD:-chpasswd -e}
+ALFABET=abcdefghijkmnpqrstuvwxyz23456789
+
+# mesajul in jurnal, la consola (stderr) cand e o eroare si in jurnalul nucleului la pornire
+spune() {
+	mkdir -p "${JURNAL%/*}" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$JURNAL" 2>/dev/null
+	if [ -z "$R" ] && [ -w /dev/kmsg ] && [ -n "${HDS_SSH_LA_PORNIRE:-}" ]; then
+		echo "<6>hds-ssh: $*" > /dev/kmsg 2>/dev/null
+	fi
+	return 0
+}
+
+esec() {
+	spune "EROARE: $*"
+	echo "hds-ssh-parola: $*" >&2
+	if [ -n "${LA_PRIMA:-}" ] && [ -d "$DOSAR" ]; then
+		: > "$EROARE" 2>/dev/null
+	fi
+	exit 1
+}
+
+# o singura comanda care schimba parola deodata; zavorul se elibereaza la iesirea procesului
+ia_zavorul() {
+	umask 077
+	mkdir -p "$DOSAR" || esec "nu pot face $DOSAR"
+	chmod 700 "$DOSAR"
+	if command -v flock > /dev/null 2>&1; then
+		exec 9> "$DOSAR/.zavor" || esec "nu pot deschide zavorul $DOSAR/.zavor"
+		flock 9 || esec "nu pot lua zavorul $DOSAR/.zavor"
+		return 0
+	fi
+	# fara flock: un dosar facut atomic; /etc/init.d/hds-ssh il sterge la pornire, daca a ramas dupa o cadere de curent
+	i=0
+	while ! mkdir "$DOSAR/.zavor.d" 2>/dev/null; do
+		i=$((i + 1))
+		[ "$i" -lt 600 ] || esec "zavorul $DOSAR/.zavor.d e tinut de prea mult timp"
+		sleep 0.1 2>/dev/null || sleep 1
+	done
+	trap 'rmdir "$DOSAR/.zavor.d" 2>/dev/null' EXIT
+}
+
+# felul parolei lui root din /etc/shadow, fara sa scoata hash-ul din functie: pusa | blocata | goala | lipsa
+fel_parola() {
+	awk -F: '$1 == "root" {
+		if ($2 == "") print "goala"
+		else if ($2 ~ /^[!*]/) print "blocata"
+		else print "pusa"
+		gasit = 1
+		exit
+	} END { if (!gasit) print "lipsa" }' "$SHADOW" 2>/dev/null || echo lipsa
+}
+
+# 12 semne alese uniform din ALFABET (32 de semne: fiecare octet, 0-255, da un semn cu o % 32), in grupe de 4; octetul
+# o se face din doua cifre hex (index in h); un rand care nu e numai hex mic nu da nicio parola
+parola_noua() {
+	openssl rand -hex 16 2>/dev/null | awk -v a="$ALFABET" '
+		BEGIN { h = "0123456789abcdef" }
+		{ sub(/\r$/, "") }
+		NR == 1 && /^[0-9a-f]+$/ {
+			for (i = 1; i < length($0) && n < 12; i += 2) {
+				o = (index(h, substr($0, i, 1)) - 1) * 16 + index(h, substr($0, i + 1, 1)) - 1
+				s = s substr(a, (o % 32) + 1, 1)
+				n++
+			}
+		}
+		END { if (n == 12) print substr(s, 1, 4) "-" substr(s, 5, 4) "-" substr(s, 9, 4) }'
+}
+
+fa_parola() {
+	command -v openssl > /dev/null 2>&1 || esec "lipseste openssl"
+	p=$(parola_noua)
+	case "$p" in
+	????-????-????) ;;
+	*) esec "generatorul de numere intamplatoare nu a dat destui octeti" ;;
+	esac
+	h=$(printf '%s' "$p" | openssl passwd -6 -stdin 2>/dev/null)
+	case "$h" in
+	'$6$'*) ;;
+	*) esec "openssl nu a facut hash-ul SHA-512" ;;
+	esac
+	rm -f "$PAROLA.nou"
+	printf '%s\n' "$p" > "$PAROLA.nou" || esec "nu pot scrie $PAROLA.nou"
+	if ! printf 'root:%s\n' "$h" | $CHPASSWD; then
+		rm -f "$PAROLA.nou"
+		esec "chpasswd nu a primit parola noua; parola de dinainte ramane"
+	fi
+	p=; h=
+	sync
+	mv -f "$PAROLA.nou" "$PAROLA" || esec "nu pot pune $PAROLA"
+	chmod 600 "$PAROLA"
+	sync
+}
+
+case "${1:-}" in
+prima)
+	[ -f "$SEMN" ] && exit 0
+	LA_PRIMA=1
+	ia_zavorul
+	# alta comanda a putut termina cat asteptam zavorul
+	[ -f "$SEMN" ] && exit 0
+	fel=$(fel_parola)
+	if [ "$fel" = pusa ]; then
+		: > "$SEMN" || esec "nu pot scrie semnul $SEMN"
+		rm -f "$EROARE"
+		spune "root are deja o parola; nu fac alta"
+		exit 0
+	fi
+	fa_parola
+	: > "$SEMN" || esec "nu pot scrie semnul $SEMN"
+	rm -f "$EROARE"
+	sync
+	spune "parola lui root facuta la prima pornire (era: $fel); se vede in Setari > Retea & Conexiuni > Acces SSH"
+	;;
+noua)
+	ia_zavorul
+	fa_parola
+	[ -f "$SEMN" ] || : > "$SEMN"
+	rm -f "$EROARE"
+	sync
+	spune "parola lui root schimbata (Fa o parola noua)"
+	;;
+ascunde)
+	ia_zavorul
+	if [ -f "$PAROLA" ]; then
+		rm -f "$PAROLA" "$PAROLA.nou" || esec "nu pot sterge $PAROLA"
+		sync
+		spune "textul parolei sters (parola ramane pusa)"
+	fi
+	;;
+stare)
+	[ -f "$SEMN" ] && echo facuta=1 || echo facuta=0
+	[ -f "$PAROLA" ] && echo de_vazut=1 || echo de_vazut=0
+	[ -f "$EROARE" ] && echo eroare=1 || echo eroare=0
+	echo "fel=$(fel_parola)"
+	;;
+*)
+	echo "folosire: hds-ssh-parola prima|noua|ascunde|stare" >&2
+	exit 2
+	;;
+esac
+exit 0

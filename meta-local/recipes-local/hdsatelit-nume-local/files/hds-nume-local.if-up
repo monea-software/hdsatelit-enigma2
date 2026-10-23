@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+# ifup (adresa scrisa de mana in setarile de retea): numele hdsatelit.local se publica cu adresa de acum
+[ "$IFACE" = "lo" ] && exit 0
+/etc/init.d/hds-nume-local start > /dev/null 2>&1 &
+exit 0

@@ -1,0 +1,17 @@
+#%PAM-1.0
+# Optiunea „Fără parolă în rețeaua locală” (Setări > Rețea & Conexiuni > Acces SSH). dropbear da adresa clientului in PAM_RHOST
+# (cifre). Se intra fara parola (pam_permit) numai daca AMANDOUA verificarile pam_access o spun:
+# 1. comutatorul, /etc/security/hds-ssh-retea-locala.conf (il scrie ecranul): „refuzat” (PAM_PERM_DENIED) numai cand
+#    optiunea e pornita si clientul e in reteaua locala (regula „-”); orice alt rezultat, si fisier lipsa, gol sau
+#    stricat, sare direct la parola;
+# 2. reteaua, /etc/security/hds-ssh-retele-locale.conf (fix, din pachetul hdsatelit-ssh): „reusit” numai pentru o adresa
+#    din reteaua locala (regula „+”, apoi „- : ALL : ALL”); orice alt rezultat, si o eroare de citire, sare peste
+#    pam_permit, la parola.
+# O eroare de citire a comutatorului (pam_access o intoarce ca „refuzat”) nu poate deci deschide intrarea fara parola
+# decat pentru adresele din reteaua locala, ca optiunea pornita; de oriunde altundeva se cere parola.
+
+auth     [perm_denied=ignore default=2]  pam_access.so accessfile=/etc/security/hds-ssh-retea-locala.conf nodefgroup
+auth     [success=ignore default=1]      pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup
+auth     [success=done default=ignore]    pam_permit.so
+auth     include  common-auth
+account  include  common-account

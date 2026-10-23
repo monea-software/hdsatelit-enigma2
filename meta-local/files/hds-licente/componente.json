@@ -1,0 +1,1312 @@
+{
+ "descriere": "Date pentru lista_licente.py: programele din interiorul pachetelor care nu apar in license.manifest, fonturile si listele de canale. O intrare intra in lista din imagine numai daca pachetul ei e instalat si macar una dintre cai exista in radacina (fara cai: numai pachetul). ce = textul de pe ecran, in cele 13 limbi ale imaginii. spdx = textul luat din licentele comune ale OpenEmbedded cand imaginea nu are unul langa fisier (spdx_mereu: si langa el, cand fisierul din imagine nu e textul licentei). texte_in_imagine = textele exacte din imagine (la fonturi si la componente), puse inaintea celor SPDX. reteta = reteta care pune fontul. ale_noastre = retetele facute de noi (in lista primesc al_nostru).",
+ "ale_noastre": [
+  "enigma2-hdsatelit",
+  "hds-navigator",
+  "hds-ocr",
+  "hdsatelit-bootlogo",
+  "hdsatelit-netguard",
+  "hdsatelit-skin",
+  "hdsatelit-watchdog"
+ ],
+ "componente": [
+  {
+   "nume": "FFmpeg 3.3.2",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/avdec",
+   "cai": [
+    "/usr/lib/avdec"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Decodoarele de sunet AC3, E-AC3, DTS și TrueHD ale driverului conțin FFmpeg 3.3.2, construit de fabricantul driverului.",
+    "en": "The AC3, E-AC3, DTS and TrueHD audio decoders of the driver contain FFmpeg 3.3.2, built by the driver maker.",
+    "cs": "Zvukové dekodéry AC3, E-AC3, DTS a TrueHD v ovladači obsahují FFmpeg 3.3.2, sestavený výrobcem ovladače.",
+    "de": "Die Tondecoder AC3, E-AC3, DTS und TrueHD des Treibers enthalten FFmpeg 3.3.2, gebaut vom Hersteller des Treibers.",
+    "es": "Los decodificadores de audio AC3, E-AC3, DTS y TrueHD del controlador contienen FFmpeg 3.3.2, compilado por el fabricante del controlador.",
+    "fr": "Les décodeurs audio AC3, E-AC3, DTS et TrueHD du pilote contiennent FFmpeg 3.3.2, compilé par le fabricant du pilote.",
+    "hu": "Az illesztőprogram AC3, E-AC3, DTS és TrueHD hangdekóderei a gyártó által fordított FFmpeg 3.3.2-t tartalmazzák.",
+    "it": "I decodificatori audio AC3, E-AC3, DTS e TrueHD del driver contengono FFmpeg 3.3.2, compilato dal produttore del driver.",
+    "nl": "De AC3-, E-AC3-, DTS- en TrueHD-geluidsdecoders van het stuurprogramma bevatten FFmpeg 3.3.2, gebouwd door de maker ervan.",
+    "pl": "Dekodery dźwięku AC3, E-AC3, DTS i TrueHD sterownika zawierają FFmpeg 3.3.2, zbudowany przez producenta sterownika.",
+    "pt": "Os descodificadores de áudio AC3, E-AC3, DTS e TrueHD do controlador contêm o FFmpeg 3.3.2, compilado pelo fabricante do controlador.",
+    "ru": "Звуковые декодеры AC3, E-AC3, DTS и TrueHD драйвера содержат FFmpeg 3.3.2, собранный производителем драйвера.",
+    "tr": "Sürücünün AC3, E-AC3, DTS ve TrueHD ses kod çözücüleri, sürücü üreticisinin derlediği FFmpeg 3.3.2'yi içerir."
+   }
+  },
+  {
+   "nume": "glibc 2.27 (libm)",
+   "pachet": "dinobot-opengl-hisi3798mv200",
+   "fisier": "/lib/libm-2.27.so",
+   "cai": [
+    "/lib/libm-2.27.so"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Biblioteca matematică glibc 2.27, pusă de fabricant lângă biblioteca grafică Mali.",
+    "en": "The glibc 2.27 math library, shipped by the maker next to the Mali graphics library.",
+    "cs": "Matematická knihovna glibc 2.27, kterou výrobce přiložil ke grafické knihovně Mali.",
+    "de": "Die Mathematikbibliothek glibc 2.27, vom Hersteller neben die Grafikbibliothek Mali gelegt.",
+    "es": "La biblioteca matemática glibc 2.27, que el fabricante incluye junto a la biblioteca gráfica Mali.",
+    "fr": "La bibliothèque mathématique glibc 2.27, fournie par le fabricant à côté de la bibliothèque graphique Mali.",
+    "hu": "A glibc 2.27 matematikai könyvtár, amelyet a gyártó a Mali grafikus könyvtár mellé tett.",
+    "it": "La libreria matematica glibc 2.27, fornita dal produttore accanto alla libreria grafica Mali.",
+    "nl": "De rekenbibliotheek glibc 2.27, door de maker naast de grafische bibliotheek Mali geleverd.",
+    "pl": "Biblioteka matematyczna glibc 2.27, dołączona przez producenta obok biblioteki graficznej Mali.",
+    "pt": "A biblioteca matemática glibc 2.27, colocada pelo fabricante junto à biblioteca gráfica Mali.",
+    "ru": "Математическая библиотека glibc 2.27, которую производитель положил рядом с графической библиотекой Mali.",
+    "tr": "Üreticinin Mali grafik kütüphanesinin yanına koyduğu glibc 2.27 matematik kütüphanesi."
+   }
+  },
+  {
+   "nume": "libpng 1.6.32",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/libpng1.6.26.so",
+   "cai": [
+    "/usr/lib/libpng1.6.26.so"
+   ],
+   "licenta": "Libpng",
+   "spdx": "Libpng",
+   "ce": {
+    "ro": "Biblioteca PNG din pachetul driverului.",
+    "en": "The PNG library inside the driver package.",
+    "cs": "Knihovna PNG v balíčku ovladače.",
+    "de": "Die PNG-Bibliothek im Treiberpaket.",
+    "es": "La biblioteca PNG del paquete del controlador.",
+    "fr": "La bibliothèque PNG du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő PNG-könyvtár.",
+    "it": "La libreria PNG nel pacchetto del driver.",
+    "nl": "De PNG-bibliotheek in het pakket van het stuurprogramma.",
+    "pl": "Biblioteka PNG w pakiecie sterownika.",
+    "pt": "A biblioteca PNG do pacote do controlador.",
+    "ru": "Библиотека PNG в пакете драйвера.",
+    "tr": "Sürücü paketindeki PNG kütüphanesi."
+   }
+  },
+  {
+   "nume": "libjpeg-turbo",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/libjpeg9b.so",
+   "cai": [
+    "/usr/lib/libjpeg9b.so"
+   ],
+   "licenta": "IJG & BSD-3-Clause",
+   "spdx": "IJG",
+   "ce": {
+    "ro": "Biblioteca JPEG din pachetul driverului.",
+    "en": "The JPEG library inside the driver package.",
+    "cs": "Knihovna JPEG v balíčku ovladače.",
+    "de": "Die JPEG-Bibliothek im Treiberpaket.",
+    "es": "La biblioteca JPEG del paquete del controlador.",
+    "fr": "La bibliothèque JPEG du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő JPEG-könyvtár.",
+    "it": "La libreria JPEG nel pacchetto del driver.",
+    "nl": "De JPEG-bibliotheek in het pakket van het stuurprogramma.",
+    "pl": "Biblioteka JPEG w pakiecie sterownika.",
+    "pt": "A biblioteca JPEG do pacote do controlador.",
+    "ru": "Библиотека JPEG в пакете драйвера.",
+    "tr": "Sürücü paketindeki JPEG kütüphanesi."
+   }
+  },
+  {
+   "nume": "libVorbis 1.3.4",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/libHA.AUDIO.VORBIS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.VORBIS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Vorbis din pachetul driverului.",
+    "en": "The Vorbis audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Vorbis v balíčku ovladače.",
+    "de": "Der Vorbis-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Vorbis del paquete del controlador.",
+    "fr": "Le décodeur audio Vorbis du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Vorbis hangdekóder.",
+    "it": "Il decodificatore audio Vorbis nel pacchetto del driver.",
+    "nl": "De Vorbis-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Vorbis w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Vorbis do pacote do controlador.",
+    "ru": "Звуковой декодер Vorbis в пакете драйвера.",
+    "tr": "Sürücü paketindeki Vorbis ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "libopus",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/libHA.AUDIO.OPUS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.OPUS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Opus din pachetul driverului.",
+    "en": "The Opus audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Opus v balíčku ovladače.",
+    "de": "Der Opus-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Opus del paquete del controlador.",
+    "fr": "Le décodeur audio Opus du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Opus hangdekóder.",
+    "it": "Il decodificatore audio Opus nel pacchetto del driver.",
+    "nl": "De Opus-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Opus w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Opus do pacote do controlador.",
+    "ru": "Звуковой декодер Opus в пакете драйвера.",
+    "tr": "Sürücü paketindeki Opus ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "BusyBox 1.36.1, glibc 2.40, rsync",
+   "pachet": "kernel-image-uimage",
+   "fisier": "uImage",
+   "cai": [],
+   "licenta": "GPL-2.0-only & GPL-3.0-or-later & LGPL-2.1-or-later & MIT",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Sistemul mic de pornire (initramfs) pus de fabricant în nucleu: BusyBox, glibc, rsync și câteva biblioteci.",
+    "en": "The small boot system (initramfs) placed by the maker inside the kernel: BusyBox, glibc, rsync and a few libraries.",
+    "cs": "Malý zaváděcí systém (initramfs), který výrobce vložil do jádra: BusyBox, glibc, rsync a několik knihoven.",
+    "de": "Das kleine Startsystem (initramfs), das der Hersteller in den Kernel gelegt hat: BusyBox, glibc, rsync und einige Bibliotheken.",
+    "es": "El pequeño sistema de arranque (initramfs) que el fabricante puso dentro del núcleo: BusyBox, glibc, rsync y algunas bibliotecas.",
+    "fr": "Le petit système de démarrage (initramfs) placé par le fabricant dans le noyau : BusyBox, glibc, rsync et quelques bibliothèques.",
+    "hu": "A gyártó által a kernelbe tett kis indítórendszer (initramfs): BusyBox, glibc, rsync és néhány könyvtár.",
+    "it": "Il piccolo sistema di avvio (initramfs) messo dal produttore nel kernel: BusyBox, glibc, rsync e alcune librerie.",
+    "nl": "Het kleine opstartsysteem (initramfs) dat de maker in de kernel heeft gezet: BusyBox, glibc, rsync en enkele bibliotheken.",
+    "pl": "Mały system startowy (initramfs) umieszczony przez producenta w jądrze: BusyBox, glibc, rsync i kilka bibliotek.",
+    "pt": "O pequeno sistema de arranque (initramfs) colocado pelo fabricante no núcleo: BusyBox, glibc, rsync e algumas bibliotecas.",
+    "ru": "Небольшая загрузочная система (initramfs), встроенная производителем в ядро: BusyBox, glibc, rsync и несколько библиотек.",
+    "tr": "Üreticinin çekirdeğe koyduğu küçük başlatma sistemi (initramfs): BusyBox, glibc, rsync ve birkaç kütüphane."
+   }
+  },
+  {
+   "nume": "HiSilicon: hi_*.ko, mali.ko, ddr.ko",
+   "pachet": "dinobot-dvb-modules-u57",
+   "fisier": "/lib/modules/4.4.35/extra/hi_*.ko, mali.ko, ddr.ko",
+   "cai": [
+    "/lib/modules/*/extra/hi_*.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverele plăcii receptorului, declarate GPL de fabricant. Fabricantul le dă fără cod sursă.",
+    "en": "The drivers of the receiver board, declared GPL by the maker. The maker ships them without source code.",
+    "cs": "Ovladače desky přijímače, které výrobce označil jako GPL. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Die Treiber der Receiver-Platine, vom Hersteller als GPL angegeben. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "Los controladores de la placa del receptor, declarados GPL por el fabricante. El fabricante los entrega sin código fuente.",
+    "fr": "Les pilotes de la carte du récepteur, déclarés GPL par le fabricant. Le fabricant les fournit sans code source.",
+    "hu": "A vevőkészülék alaplapjának illesztőprogramjai, amelyeket a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja őket.",
+    "it": "I driver della scheda del ricevitore, dichiarati GPL dal produttore. Il produttore li fornisce senza codice sorgente.",
+    "nl": "De stuurprogramma's van de ontvangerkaart, door de maker als GPL opgegeven. De maker levert ze zonder broncode.",
+    "pl": "Sterowniki płyty odbiornika, oznaczone przez producenta jako GPL. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "Os controladores da placa do recetor, declarados GPL pelo fabricante. O fabricante fornece-os sem código-fonte.",
+    "ru": "Драйверы платы ресивера, заявленные производителем как GPL. Производитель поставляет их без исходного кода.",
+    "tr": "Alıcı kartının sürücüleri, üretici tarafından GPL olarak bildirilmiştir. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "DVB, komession",
+   "pachet": "dinobot-dvb-modules-u57",
+   "fisier": "/lib/modules/4.4.35/extra/dvbmodule, /usr/bin/komession",
+   "cai": [
+    "/lib/modules/*/extra/dvbmodule"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Modulele DVB ale nucleului (dvb-core și demodulatoarele), într-o arhivă cifrată pe care o încarcă programul komession. Fabricantul le dă fără cod sursă.",
+    "en": "The kernel DVB modules (dvb-core and the demodulators), in an encrypted archive loaded by the komession program. The maker ships them without source code.",
+    "cs": "Moduly DVB jádra (dvb-core a demodulátory) v šifrovaném archivu, který načítá program komession. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Die DVB-Module des Kernels (dvb-core und die Demodulatoren) in einem verschlüsselten Archiv, das das Programm komession lädt. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "Los módulos DVB del núcleo (dvb-core y los demoduladores), en un archivo cifrado que carga el programa komession. El fabricante los entrega sin código fuente.",
+    "fr": "Les modules DVB du noyau (dvb-core et les démodulateurs), dans une archive chiffrée chargée par le programme komession. Le fabricant les fournit sans code source.",
+    "hu": "A kernel DVB-moduljai (dvb-core és a demodulátorok) egy titkosított archívumban, amelyet a komession program tölt be. A gyártó forráskód nélkül adja őket.",
+    "it": "I moduli DVB del kernel (dvb-core e i demodulatori), in un archivio cifrato caricato dal programma komession. Il produttore li fornisce senza codice sorgente.",
+    "nl": "De DVB-modules van de kernel (dvb-core en de demodulators), in een versleuteld archief dat het programma komession laadt. De maker levert ze zonder broncode.",
+    "pl": "Moduły DVB jądra (dvb-core i demodulatory) w zaszyfrowanym archiwum ładowanym przez program komession. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "Os módulos DVB do núcleo (dvb-core e os desmoduladores), num arquivo cifrado carregado pelo programa komession. O fabricante fornece-os sem código-fonte.",
+    "ru": "DVB-модули ядра (dvb-core и демодуляторы) в зашифрованном архиве, который загружает программа komession. Производитель поставляет их без исходного кода.",
+    "tr": "Çekirdeğin DVB modülleri (dvb-core ve demodülatörler), komession programının yüklediği şifreli bir arşivde. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "Realtek RTL8188EU (Wi-Fi)",
+   "pachet": "dinobot-dvb-modules-u57",
+   "fisier": "/lib/modules/4.4.35/extra/rtl8188eu.ko",
+   "cai": [
+    "/lib/modules/*/extra/rtl8188eu.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverul pentru adaptorul Wi-Fi, construit de fabricant, fără cod sursă.",
+    "en": "The Wi-Fi adapter driver, built by the maker, without source code.",
+    "cs": "Ovladač adaptéru Wi-Fi, sestavený výrobcem, bez zdrojového kódu.",
+    "de": "Der Treiber für den WLAN-Adapter, vom Hersteller gebaut, ohne Quellcode.",
+    "es": "El controlador del adaptador Wi-Fi, compilado por el fabricante, sin código fuente.",
+    "fr": "Le pilote de l'adaptateur Wi-Fi, compilé par le fabricant, sans code source.",
+    "hu": "A Wi-Fi-adapter illesztőprogramja, a gyártó fordította, forráskód nélkül.",
+    "it": "Il driver dell'adattatore Wi-Fi, compilato dal produttore, senza codice sorgente.",
+    "nl": "Het stuurprogramma voor de wifi-adapter, gebouwd door de maker, zonder broncode.",
+    "pl": "Sterownik karty Wi-Fi, zbudowany przez producenta, bez kodu źródłowego.",
+    "pt": "O controlador do adaptador Wi-Fi, compilado pelo fabricante, sem código-fonte.",
+    "ru": "Драйвер адаптера Wi-Fi, собранный производителем, без исходного кода.",
+    "tr": "Üreticinin derlediği Wi-Fi bağdaştırıcısı sürücüsü, kaynak kodu olmadan."
+   }
+  },
+  {
+   "nume": "Tuxera NTFS",
+   "pachet": "dinobot-dvb-modules-u57",
+   "fisier": "/lib/modules/4.4.35/extra/tntfs.ko",
+   "cai": [
+    "/lib/modules/*/extra/tntfs.ko"
+   ],
+   "licenta": "Commercial",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Driverul NTFS al fabricantului, cu licență comercială.",
+    "en": "The maker's NTFS driver, under a commercial license.",
+    "cs": "Ovladač NTFS od výrobce, s komerční licencí.",
+    "de": "Der NTFS-Treiber des Herstellers, unter einer kommerziellen Lizenz.",
+    "es": "El controlador NTFS del fabricante, con licencia comercial.",
+    "fr": "Le pilote NTFS du fabricant, sous licence commerciale.",
+    "hu": "A gyártó NTFS-illesztőprogramja, kereskedelmi licenccel.",
+    "it": "Il driver NTFS del produttore, con licenza commerciale.",
+    "nl": "Het NTFS-stuurprogramma van de maker, onder een commerciële licentie.",
+    "pl": "Sterownik NTFS producenta, na licencji komercyjnej.",
+    "pt": "O controlador NTFS do fabricante, com licença comercial.",
+    "ru": "Драйвер NTFS производителя с коммерческой лицензией.",
+    "tr": "Üreticinin ticari lisanslı NTFS sürücüsü."
+   }
+  },
+  {
+   "nume": "HiSilicon: libhi_msp, libhi_common, libhiaccel, libHA.AUDIO",
+   "pachet": "dinobot-libs-u57",
+   "fisier": "/usr/lib/libhi_msp.so, libhi_common.so, libhiaccel.so, libHA.AUDIO.*",
+   "cai": [
+    "/usr/lib/libhi_msp.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Bibliotecile plăcii pentru imagine, sunet și grafică 2D. Programe închise ale fabricantului.",
+    "en": "The board libraries for video, audio and 2D graphics. Closed programs of the maker.",
+    "cs": "Knihovny desky pro obraz, zvuk a 2D grafiku. Uzavřené programy výrobce.",
+    "de": "Die Bibliotheken der Platine für Bild, Ton und 2D-Grafik. Geschlossene Programme des Herstellers.",
+    "es": "Las bibliotecas de la placa para imagen, sonido y gráficos 2D. Programas cerrados del fabricante.",
+    "fr": "Les bibliothèques de la carte pour l'image, le son et le graphisme 2D. Programmes fermés du fabricant.",
+    "hu": "Az alaplap kép-, hang- és 2D-grafikai könyvtárai. A gyártó zárt programjai.",
+    "it": "Le librerie della scheda per immagine, audio e grafica 2D. Programmi chiusi del produttore.",
+    "nl": "De bibliotheken van de kaart voor beeld, geluid en 2D-graphics. Gesloten programma's van de maker.",
+    "pl": "Biblioteki płyty do obrazu, dźwięku i grafiki 2D. Zamknięte programy producenta.",
+    "pt": "As bibliotecas da placa para imagem, som e gráficos 2D. Programas fechados do fabricante.",
+    "ru": "Библиотеки платы для изображения, звука и 2D-графики. Закрытые программы производителя.",
+    "tr": "Kartın görüntü, ses ve 2D grafik kütüphaneleri. Üreticinin kapalı programları."
+   }
+  },
+  {
+   "nume": "ARM Mali",
+   "pachet": "dinobot-opengl-hisi3798mv200",
+   "fisier": "/usr/lib/libMali.so",
+   "cai": [
+    "/usr/lib/libMali.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Biblioteca plăcii video (EGL, OpenGL ES). Program închis.",
+    "en": "The graphics library (EGL, OpenGL ES). Closed program.",
+    "cs": "Knihovna grafického čipu (EGL, OpenGL ES). Uzavřený program.",
+    "de": "Die Grafikbibliothek (EGL, OpenGL ES). Geschlossenes Programm.",
+    "es": "La biblioteca gráfica (EGL, OpenGL ES). Programa cerrado.",
+    "fr": "La bibliothèque graphique (EGL, OpenGL ES). Programme fermé.",
+    "hu": "A grafikus könyvtár (EGL, OpenGL ES). Zárt program.",
+    "it": "La libreria grafica (EGL, OpenGL ES). Programma chiuso.",
+    "nl": "De grafische bibliotheek (EGL, OpenGL ES). Gesloten programma.",
+    "pl": "Biblioteka graficzna (EGL, OpenGL ES). Program zamknięty.",
+    "pt": "A biblioteca gráfica (EGL, OpenGL ES). Programa fechado.",
+    "ru": "Графическая библиотека (EGL, OpenGL ES). Закрытая программа.",
+    "tr": "Grafik kütüphanesi (EGL, OpenGL ES). Kapalı program."
+   }
+  },
+  {
+   "nume": "showiframe",
+   "pachet": "dinobot-showiframe-u57",
+   "fisier": "/usr/bin/showiframe",
+   "cai": [
+    "/usr/bin/showiframe"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Serviciul de imagine și sunet al fabricantului. Program închis.",
+    "en": "The maker's video and audio service. Closed program.",
+    "cs": "Obrazová a zvuková služba výrobce. Uzavřený program.",
+    "de": "Der Bild- und Tondienst des Herstellers. Geschlossenes Programm.",
+    "es": "El servicio de imagen y sonido del fabricante. Programa cerrado.",
+    "fr": "Le service d'image et de son du fabricant. Programme fermé.",
+    "hu": "A gyártó kép- és hangszolgáltatása. Zárt program.",
+    "it": "Il servizio di immagine e audio del produttore. Programma chiuso.",
+    "nl": "De beeld- en geluidsdienst van de maker. Gesloten programma.",
+    "pl": "Usługa obrazu i dźwięku producenta. Program zamknięty.",
+    "pt": "O serviço de imagem e som do fabricante. Programa fechado.",
+    "ru": "Служба изображения и звука производителя. Закрытая программа.",
+    "tr": "Üreticinin görüntü ve ses hizmeti. Kapalı program."
+   }
+  },
+  {
+   "nume": "hihalt, hipmoc",
+   "pachet": "dinobot-hihalt-u57",
+   "fisier": "/usr/bin/hihalt, /usr/bin/hipmoc",
+   "cai": [
+    "/usr/bin/hihalt",
+    "/usr/bin/hipmoc"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Oprirea și pornirea din așteptare. Programe închise ale fabricantului.",
+    "en": "Shutdown and wake from standby. Closed programs of the maker.",
+    "cs": "Vypnutí a probuzení z pohotovostního režimu. Uzavřené programy výrobce.",
+    "de": "Ausschalten und Aufwachen aus dem Standby. Geschlossene Programme des Herstellers.",
+    "es": "Apagado y encendido desde el modo de espera. Programas cerrados del fabricante.",
+    "fr": "Arrêt et réveil depuis la veille. Programmes fermés du fabricant.",
+    "hu": "Kikapcsolás és ébresztés készenlétből. A gyártó zárt programjai.",
+    "it": "Spegnimento e risveglio dallo standby. Programmi chiusi del produttore.",
+    "nl": "Uitschakelen en ontwaken uit stand-by. Gesloten programma's van de maker.",
+    "pl": "Wyłączanie i wybudzanie z czuwania. Zamknięte programy producenta.",
+    "pt": "Desligar e acordar do modo de espera. Programas fechados do fabricante.",
+    "ru": "Выключение и выход из режима ожидания. Закрытые программы производителя.",
+    "tr": "Kapatma ve bekleme modundan uyanma. Üreticinin kapalı programları."
+   }
+  },
+  {
+   "nume": "apploader.bin",
+   "pachet": "dinobot-partitions-hisi3798mv200",
+   "fisier": "/usr/share/apploader.bin",
+   "cai": [
+    "/usr/share/apploader.bin"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Încărcătorul fabricantului pentru partiția loader. Program închis.",
+    "en": "The maker's loader for the loader partition. Closed program.",
+    "cs": "Zavaděč výrobce pro oddíl loader. Uzavřený program.",
+    "de": "Der Lader des Herstellers für die Partition loader. Geschlossenes Programm.",
+    "es": "El cargador del fabricante para la partición loader. Programa cerrado.",
+    "fr": "Le chargeur du fabricant pour la partition loader. Programme fermé.",
+    "hu": "A gyártó betöltője a loader partícióhoz. Zárt program.",
+    "it": "Il caricatore del produttore per la partizione loader. Programma chiuso.",
+    "nl": "De lader van de maker voor de partitie loader. Gesloten programma.",
+    "pl": "Program ładujący producenta dla partycji loader. Program zamknięty.",
+    "pt": "O carregador do fabricante para a partição loader. Programa fechado.",
+    "ru": "Загрузчик производителя для раздела loader. Закрытая программа.",
+    "tr": "Üreticinin loader bölümü için yükleyicisi. Kapalı program."
+   }
+  },
+  {
+   "nume": "mpegts.js 1.8.0",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/mpegts.js",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/mpegts.js"
+   ],
+   "licenta": "Apache-2.0",
+   "spdx": "Apache-2.0",
+   "ce": {
+    "ro": "Pagina TV în browser a interfeței web redă fluxul canalelor cu biblioteca mpegts.js 1.8.0, cu mici schimbări ale noastre pentru canalele întrețesute, pentru canalele fără cadre de pornire marcate, pentru imaginea HEVC pe câmpuri și pentru sunetul AC-3, care rulează numai în browser.",
+    "en": "The TV in browser page of the web interface plays the channel stream with the mpegts.js 1.8.0 library, with small changes of ours for interlaced channels, for channels without marked start frames, for HEVC field video and for AC-3 sound, which run only in the browser.",
+    "cs": "Stránka TV v prohlížeči webového rozhraní přehrává proud kanálů knihovnou mpegts.js 1.8.0 s našimi malými úpravami pro prokládané kanály, pro kanály bez označených počátečních snímků, pro obraz HEVC po půlsnímcích a pro zvuk AC-3, které běží jen v prohlížeči.",
+    "de": "Die Seite TV im Browser der Weboberfläche spielt den Kanalstrom mit der Bibliothek mpegts.js 1.8.0 ab, mit kleinen Änderungen von uns für Kanäle mit Zeilensprung, für Kanäle ohne markierte Startbilder, für HEVC-Halbbilder und für AC-3-Ton, die nur im Browser laufen.",
+    "es": "La página TV en el navegador de la interfaz web reproduce el flujo de los canales con la biblioteca mpegts.js 1.8.0, con pequeños cambios nuestros para los canales entrelazados, para los canales sin fotogramas de inicio marcados, para la imagen HEVC por campos y para el sonido AC-3, que solo se ejecutan en el navegador.",
+    "fr": "La page TV dans le navigateur de l'interface web lit le flux des chaînes avec la bibliothèque mpegts.js 1.8.0, avec de petites modifications de notre part pour les chaînes entrelacées, pour les chaînes sans images de départ marquées, pour l'image HEVC en trames et pour le son AC-3, qui ne s'exécutent que dans le navigateur.",
+    "hu": "A webes felület TV a böngészőben oldala a csatornák adatfolyamát az mpegts.js 1.8.0 könyvtárral játssza le, a váltottsoros csatornákhoz, a megjelölt kezdőképek nélküli csatornákhoz, a félképes HEVC képhez és az AC-3 hanghoz készült kis módosításainkkal; a könyvtár csak a böngészőben fut.",
+    "it": "La pagina TV nel browser dell'interfaccia web riproduce il flusso dei canali con la libreria mpegts.js 1.8.0, con nostre piccole modifiche per i canali interlacciati, per i canali senza fotogrammi di avvio marcati, per l'immagine HEVC a semiquadri e per l'audio AC-3, che funzionano solo nel browser.",
+    "nl": "De pagina TV in de browser van de webinterface speelt de zenderstroom af met de bibliotheek mpegts.js 1.8.0, met kleine wijzigingen van ons voor geïnterlinieerde zenders, voor zenders zonder gemarkeerde startbeelden, voor HEVC-beeld in velden en voor AC-3-geluid, die alleen in de browser draaien.",
+    "pl": "Strona TV w przeglądarce interfejsu WWW odtwarza strumień kanałów biblioteką mpegts.js 1.8.0 z naszymi drobnymi zmianami dla kanałów z przeplotem, dla kanałów bez oznaczonych klatek startowych, dla obrazu HEVC w półobrazach i dla dźwięku AC-3, działającymi tylko w przeglądarce.",
+    "pt": "A página TV no navegador da interface web reproduz o fluxo dos canais com a biblioteca mpegts.js 1.8.0, com pequenas alterações nossas para os canais entrelaçados, para os canais sem imagens de início marcadas, para a imagem HEVC por campos e para o som AC-3, que só correm no navegador.",
+    "ru": "Страница «ТВ в браузере» веб-интерфейса воспроизводит поток каналов библиотекой mpegts.js 1.8.0 с нашими небольшими изменениями для чересстрочных каналов, для каналов без отмеченных стартовых кадров, для изображения HEVC по полям и для звука AC-3, которые работают только в браузере.",
+    "tr": "Web arayüzünün Tarayıcıda TV sayfası kanal akışını, geçmeli kanallar, işaretli başlangıç kareleri olmayan kanallar, alanlar hâlindeki HEVC görüntü ve AC-3 ses için yaptığımız küçük değişikliklerle, yalnızca tarayıcıda çalışan mpegts.js 1.8.0 kütüphanesiyle oynatır."
+   }
+  },
+  {
+   "nume": "FFmpeg 8.1.3 (libavcodec)",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "texte_in_imagine": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/ffmpeg-licenta.txt"
+   ],
+   "ce": {
+    "ro": "Pagina TV în browser a interfeței web decodează imaginea MPEG-2 și sunetul MP2, MP3 și AC-3 cu FFmpeg 8.1.3 (numai libavcodec), compilat în WebAssembly, care rulează numai în browser.",
+    "en": "The TV in browser page of the web interface decodes MPEG-2 pictures and MP2, MP3 and AC-3 sound with FFmpeg 8.1.3 (libavcodec only), compiled to WebAssembly, which runs only in the browser.",
+    "cs": "Stránka TV v prohlížeči webového rozhraní dekóduje obraz MPEG-2 a zvuk MP2, MP3 a AC-3 pomocí FFmpeg 8.1.3 (jen libavcodec), přeloženého do WebAssembly, který běží jen v prohlížeči.",
+    "de": "Die Seite TV im Browser der Weboberfläche dekodiert MPEG-2-Bilder und MP2-, MP3- und AC-3-Ton mit FFmpeg 8.1.3 (nur libavcodec), nach WebAssembly kompiliert, das nur im Browser läuft.",
+    "es": "La página TV en el navegador de la interfaz web decodifica la imagen MPEG-2 y el sonido MP2, MP3 y AC-3 con FFmpeg 8.1.3 (solo libavcodec), compilado a WebAssembly, que solo se ejecuta en el navegador.",
+    "fr": "La page TV dans le navigateur de l'interface web décode l'image MPEG-2 et le son MP2, MP3 et AC-3 avec FFmpeg 8.1.3 (libavcodec seulement), compilé en WebAssembly, qui ne s'exécute que dans le navigateur.",
+    "hu": "A webes felület TV a böngészőben oldala az MPEG-2 képet és az MP2, MP3 és AC-3 hangot az FFmpeg 8.1.3-mal (csak libavcodec) dekódolja, amely WebAssemblyre fordítva csak a böngészőben fut.",
+    "it": "La pagina TV nel browser dell'interfaccia web decodifica l'immagine MPEG-2 e l'audio MP2, MP3 e AC-3 con FFmpeg 8.1.3 (solo libavcodec), compilato in WebAssembly, che funziona solo nel browser.",
+    "nl": "De pagina TV in de browser van de webinterface decodeert MPEG-2-beeld en MP2-, MP3- en AC-3-geluid met FFmpeg 8.1.3 (alleen libavcodec), gecompileerd naar WebAssembly, dat alleen in de browser draait.",
+    "pl": "Strona TV w przeglądarce interfejsu WWW dekoduje obraz MPEG-2 i dźwięk MP2, MP3 i AC-3 za pomocą FFmpeg 8.1.3 (tylko libavcodec), skompilowanego do WebAssembly, działającego tylko w przeglądarce.",
+    "pt": "A página TV no navegador da interface web descodifica a imagem MPEG-2 e o som MP2, MP3 e AC-3 com o FFmpeg 8.1.3 (só libavcodec), compilado para WebAssembly, que só corre no navegador.",
+    "ru": "Страница «ТВ в браузере» веб-интерфейса декодирует изображение MPEG-2 и звук MP2, MP3 и AC-3 с помощью FFmpeg 8.1.3 (только libavcodec), скомпилированного в WebAssembly, который работает только в браузере.",
+    "tr": "Web arayüzünün Tarayıcıda TV sayfası MPEG-2 görüntüyü ve MP2, MP3 ve AC-3 sesi, WebAssembly'ye derlenmiş ve yalnızca tarayıcıda çalışan FFmpeg 8.1.3 (yalnızca libavcodec) ile çözer."
+   }
+  },
+  {
+   "nume": "emscripten 6.0.9",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.js",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.js"
+   ],
+   "licenta": "MIT | NCSA",
+   "spdx": [
+    "MIT",
+    "NCSA"
+   ],
+   "texte_in_imagine": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/emscripten-licenta.txt"
+   ],
+   "ce": {
+    "ro": "Decodorul MPEG-2 al paginii TV în browser e compilat cu emscripten 6.0.9: fișierul hdsdec.js și o parte din biblioteca lui C vin din emscripten.",
+    "en": "The MPEG-2 decoder of the TV in browser page is compiled with emscripten 6.0.9: the hdsdec.js file and part of its C library come from emscripten.",
+    "cs": "Dekodér MPEG-2 stránky TV v prohlížeči je přeložen pomocí emscripten 6.0.9: soubor hdsdec.js a část jeho knihovny C pocházejí z emscripten.",
+    "de": "Der MPEG-2-Decoder der Seite TV im Browser ist mit emscripten 6.0.9 kompiliert: Die Datei hdsdec.js und ein Teil seiner C-Bibliothek stammen aus emscripten.",
+    "es": "El decodificador MPEG-2 de la página TV en el navegador está compilado con emscripten 6.0.9: el archivo hdsdec.js y parte de su biblioteca C vienen de emscripten.",
+    "fr": "Le décodeur MPEG-2 de la page TV dans le navigateur est compilé avec emscripten 6.0.9 : le fichier hdsdec.js et une partie de sa bibliothèque C viennent d'emscripten.",
+    "hu": "A TV a böngészőben oldal MPEG-2 dekódolója emscripten 6.0.9-cel van fordítva: a hdsdec.js fájl és C-könyvtárának egy része az emscriptenből származik.",
+    "it": "Il decodificatore MPEG-2 della pagina TV nel browser è compilato con emscripten 6.0.9: il file hdsdec.js e una parte della sua libreria C vengono da emscripten.",
+    "nl": "De MPEG-2-decoder van de pagina TV in de browser is gecompileerd met emscripten 6.0.9: het bestand hdsdec.js en een deel van de C-bibliotheek komen uit emscripten.",
+    "pl": "Dekoder MPEG-2 strony TV w przeglądarce jest skompilowany za pomocą emscripten 6.0.9: plik hdsdec.js i część jego biblioteki C pochodzą z emscripten.",
+    "pt": "O descodificador MPEG-2 da página TV no navegador é compilado com o emscripten 6.0.9: o ficheiro hdsdec.js e parte da sua biblioteca C vêm do emscripten.",
+    "ru": "Декодер MPEG-2 страницы «ТВ в браузере» скомпилирован с помощью emscripten 6.0.9: файл hdsdec.js и часть его библиотеки C взяты из emscripten.",
+    "tr": "Tarayıcıda TV sayfasının MPEG-2 kod çözücüsü emscripten 6.0.9 ile derlenmiştir: hdsdec.js dosyası ve C kütüphanesinin bir kısmı emscripten'den gelir."
+   }
+  },
+  {
+   "nume": "musl (emscripten 6.0.9)",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm"
+   ],
+   "licenta": "MIT",
+   "spdx": "MIT",
+   "texte_in_imagine": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/musl-licenta.txt"
+   ],
+   "ce": {
+    "ro": "Decodorul MPEG-2 al paginii TV în browser conține părți din biblioteca C musl, venită cu emscripten 6.0.9.",
+    "en": "The MPEG-2 decoder of the TV in browser page contains parts of the musl C library, which comes with emscripten 6.0.9.",
+    "cs": "Dekodér MPEG-2 stránky TV v prohlížeči obsahuje části knihovny C musl, která je součástí emscripten 6.0.9.",
+    "de": "Der MPEG-2-Decoder der Seite TV im Browser enthält Teile der C-Bibliothek musl, die mit emscripten 6.0.9 kommt.",
+    "es": "El decodificador MPEG-2 de la página TV en el navegador contiene partes de la biblioteca C musl, que viene con emscripten 6.0.9.",
+    "fr": "Le décodeur MPEG-2 de la page TV dans le navigateur contient des parties de la bibliothèque C musl, fournie avec emscripten 6.0.9.",
+    "hu": "A TV a böngészőben oldal MPEG-2 dekódolója a musl C-könyvtár részeit tartalmazza, amely az emscripten 6.0.9-cel érkezik.",
+    "it": "Il decodificatore MPEG-2 della pagina TV nel browser contiene parti della libreria C musl, fornita con emscripten 6.0.9.",
+    "nl": "De MPEG-2-decoder van de pagina TV in de browser bevat delen van de C-bibliotheek musl, die met emscripten 6.0.9 meekomt.",
+    "pl": "Dekoder MPEG-2 strony TV w przeglądarce zawiera części biblioteki C musl, dostarczanej z emscripten 6.0.9.",
+    "pt": "O descodificador MPEG-2 da página TV no navegador contém partes da biblioteca C musl, que vem com o emscripten 6.0.9.",
+    "ru": "Декодер MPEG-2 страницы «ТВ в браузере» содержит части библиотеки C musl, входящей в emscripten 6.0.9.",
+    "tr": "Tarayıcıda TV sayfasının MPEG-2 kod çözücüsü, emscripten 6.0.9 ile gelen musl C kütüphanesinin parçalarını içerir."
+   }
+  },
+  {
+   "nume": "compiler-rt (emscripten 6.0.9)",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm"
+   ],
+   "licenta": "Apache-2.0-with-LLVM-exception",
+   "spdx": "Apache-2.0-with-LLVM-exception",
+   "texte_in_imagine": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/compiler-rt-licenta.txt"
+   ],
+   "ce": {
+    "ro": "Decodorul MPEG-2 al paginii TV în browser conține funcții de bază ale compilatorului din compiler-rt (proiectul LLVM), venite cu emscripten 6.0.9.",
+    "en": "The MPEG-2 decoder of the TV in browser page contains basic compiler functions from compiler-rt (the LLVM project), which come with emscripten 6.0.9.",
+    "cs": "Dekodér MPEG-2 stránky TV v prohlížeči obsahuje základní funkce překladače z compiler-rt (projekt LLVM), které jsou součástí emscripten 6.0.9.",
+    "de": "Der MPEG-2-Decoder der Seite TV im Browser enthält grundlegende Compilerfunktionen aus compiler-rt (Projekt LLVM), die mit emscripten 6.0.9 kommen.",
+    "es": "El decodificador MPEG-2 de la página TV en el navegador contiene funciones básicas del compilador de compiler-rt (proyecto LLVM), que vienen con emscripten 6.0.9.",
+    "fr": "Le décodeur MPEG-2 de la page TV dans le navigateur contient des fonctions de base du compilateur issues de compiler-rt (projet LLVM), fournies avec emscripten 6.0.9.",
+    "hu": "A TV a böngészőben oldal MPEG-2 dekódolója a compiler-rt (LLVM projekt) alapvető fordítófüggvényeit tartalmazza, amelyek az emscripten 6.0.9-cel érkeznek.",
+    "it": "Il decodificatore MPEG-2 della pagina TV nel browser contiene funzioni di base del compilatore da compiler-rt (progetto LLVM), fornite con emscripten 6.0.9.",
+    "nl": "De MPEG-2-decoder van de pagina TV in de browser bevat basisfuncties van de compiler uit compiler-rt (project LLVM), die met emscripten 6.0.9 meekomen.",
+    "pl": "Dekoder MPEG-2 strony TV w przeglądarce zawiera podstawowe funkcje kompilatora z compiler-rt (projekt LLVM), dostarczane z emscripten 6.0.9.",
+    "pt": "O descodificador MPEG-2 da página TV no navegador contém funções básicas do compilador do compiler-rt (projeto LLVM), que vêm com o emscripten 6.0.9.",
+    "ru": "Декодер MPEG-2 страницы «ТВ в браузере» содержит базовые функции компилятора из compiler-rt (проект LLVM), входящие в emscripten 6.0.9.",
+    "tr": "Tarayıcıda TV sayfasının MPEG-2 kod çözücüsü, emscripten 6.0.9 ile gelen compiler-rt'den (LLVM projesi) temel derleyici işlevlerini içerir."
+   }
+  },
+  {
+   "nume": "dlmalloc 2.8.6 (emscripten 6.0.9)",
+   "pachet": "",
+   "fisier": "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm",
+   "cai": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/hdsdec.wasm"
+   ],
+   "licenta": "CC0-1.0",
+   "spdx": "CC0-1.0",
+   "texte_in_imagine": [
+    "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/dlmalloc-licenta.txt"
+   ],
+   "spdx_mereu": true,
+   "ce": {
+    "ro": "Decodorul MPEG-2 al paginii TV în browser își împarte memoria cu dlmalloc 2.8.6, venit cu emscripten 6.0.9 și dat de autorul lui în domeniul public.",
+    "en": "The MPEG-2 decoder of the TV in browser page manages its memory with dlmalloc 2.8.6, which comes with emscripten 6.0.9 and was released to the public domain by its author.",
+    "cs": "Dekodér MPEG-2 stránky TV v prohlížeči spravuje svou paměť pomocí dlmalloc 2.8.6, který je součástí emscripten 6.0.9 a jeho autor ho uvolnil jako volné dílo.",
+    "de": "Der MPEG-2-Decoder der Seite TV im Browser verwaltet seinen Speicher mit dlmalloc 2.8.6, das mit emscripten 6.0.9 kommt und von seinem Autor gemeinfrei gestellt wurde.",
+    "es": "El decodificador MPEG-2 de la página TV en el navegador gestiona su memoria con dlmalloc 2.8.6, que viene con emscripten 6.0.9 y que su autor puso en el dominio público.",
+    "fr": "Le décodeur MPEG-2 de la page TV dans le navigateur gère sa mémoire avec dlmalloc 2.8.6, fourni avec emscripten 6.0.9 et placé dans le domaine public par son auteur.",
+    "hu": "A TV a böngészőben oldal MPEG-2 dekódolója a memóriáját a dlmalloc 2.8.6-tal kezeli, amely az emscripten 6.0.9-cel érkezik, és szerzője közkinccsé tette.",
+    "it": "Il decodificatore MPEG-2 della pagina TV nel browser gestisce la memoria con dlmalloc 2.8.6, fornito con emscripten 6.0.9 e messo dal suo autore nel pubblico dominio.",
+    "nl": "De MPEG-2-decoder van de pagina TV in de browser beheert zijn geheugen met dlmalloc 2.8.6, dat met emscripten 6.0.9 meekomt en door de auteur in het publieke domein is gegeven.",
+    "pl": "Dekoder MPEG-2 strony TV w przeglądarce zarządza pamięcią za pomocą dlmalloc 2.8.6, dostarczanego z emscripten 6.0.9 i przekazanego przez autora do domeny publicznej.",
+    "pt": "O descodificador MPEG-2 da página TV no navegador gere a memória com o dlmalloc 2.8.6, que vem com o emscripten 6.0.9 e que o autor colocou no domínio público.",
+    "ru": "Декодер MPEG-2 страницы «ТВ в браузере» управляет памятью с помощью dlmalloc 2.8.6, входящего в emscripten 6.0.9 и переданного автором в общественное достояние.",
+    "tr": "Tarayıcıda TV sayfasının MPEG-2 kod çözücüsü belleğini, emscripten 6.0.9 ile gelen ve yazarının kamu malı yaptığı dlmalloc 2.8.6 ile yönetir."
+   }
+  },
+  {
+   "nume": "FFmpeg 8.0 (libavcodec, libavutil, libswresample)",
+   "pachet": "libavcodec",
+   "fisier": "/usr/lib/libavcodec.so.62",
+   "cai": [
+    "/usr/lib/libavcodec.so.62*"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Decodoarele de sunet ALAC, TrueHD/MLP, DTS (fără componenta LBR), WMA 1 și WMA 2 și codorul AC3 vin din FFmpeg 8.0 (ffmpeg.org), sub licența LGPL 2.1 sau mai nouă, construit fără părțile GPL și fără componente care nu se pot redistribui. Acest program folosește cod FFmpeg sub licența LGPLv2.1; sursa exactă, cu schimbările noastre, se descarcă de la adresa surselor imaginii. Schimbat de noi: sunt pornite numai aceste decodoare și codorul AC3; decodorul DTS nu decodează componenta LBR.",
+    "en": "The ALAC, TrueHD/MLP, DTS (without the LBR component), WMA 1 and WMA 2 audio decoders and the AC3 encoder come from FFmpeg 8.0 (ffmpeg.org), under the LGPL 2.1 or later licence, built without the GPL parts and without non-redistributable components. This software uses code of FFmpeg licensed under the LGPLv2.1; its exact source, with our changes, can be downloaded from the image source address. Changed by us: only these decoders and the AC3 encoder are enabled; the DTS decoder does not decode the LBR component.",
+    "cs": "Zvukové dekodéry ALAC, TrueHD/MLP, DTS (bez složky LBR), WMA 1 a WMA 2 a kodér AC3 pocházejí z FFmpeg 8.0 (ffmpeg.org) pod licencí LGPL 2.1 nebo novější, sestaveného bez částí GPL a bez složek, které nelze dále šířit. Tento software používá kód FFmpeg pod licencí LGPLv2.1; přesný zdrojový kód s našimi změnami lze stáhnout z adresy zdrojových kódů obrazu. Naše změny: zapnuté jsou jen tyto dekodéry a kodér AC3; dekodér DTS nedekóduje složku LBR.",
+    "de": "Die Tondecoder ALAC, TrueHD/MLP, DTS (ohne den Bestandteil LBR), WMA 1 und WMA 2 und der Encoder AC3 stammen aus FFmpeg 8.0 (ffmpeg.org), unter der Lizenz LGPL 2.1 oder neuer, gebaut ohne die GPL-Teile und ohne Bestandteile, die nicht weitergegeben werden dürfen. Diese Software verwendet Code von FFmpeg unter der Lizenz LGPLv2.1; der genaue Quellcode mit unseren Änderungen lässt sich von der Adresse der Quellen des Images herunterladen. Von uns geändert: Nur diese Decoder und der Encoder AC3 sind eingeschaltet; der DTS-Decoder dekodiert den Bestandteil LBR nicht.",
+    "es": "Los decodificadores de audio ALAC, TrueHD/MLP, DTS (sin el componente LBR), WMA 1 y WMA 2 y el codificador AC3 vienen de FFmpeg 8.0 (ffmpeg.org), con la licencia LGPL 2.1 o posterior, compilado sin las partes GPL y sin componentes que no se puedan redistribuir. Este software usa código de FFmpeg con la licencia LGPLv2.1; el código fuente exacto, con nuestros cambios, se descarga desde la dirección de las fuentes de la imagen. Cambiado por nosotros: solo están activados estos decodificadores y el codificador AC3; el decodificador DTS no decodifica el componente LBR.",
+    "fr": "Les décodeurs audio ALAC, TrueHD/MLP, DTS (sans la composante LBR), WMA 1 et WMA 2 et l'encodeur AC3 viennent de FFmpeg 8.0 (ffmpeg.org), sous la licence LGPL 2.1 ou ultérieure, compilé sans les parties GPL et sans composants non redistribuables. Ce logiciel utilise du code de FFmpeg sous la licence LGPLv2.1 ; la source exacte, avec nos modifications, se télécharge à l'adresse des sources de l'image. Modifié par nous : seuls ces décodeurs et l'encodeur AC3 sont activés ; le décodeur DTS ne décode pas la composante LBR.",
+    "hu": "Az ALAC, TrueHD/MLP, DTS (az LBR összetevő nélkül), WMA 1 és WMA 2 hangdekóderek és az AC3 kódoló az FFmpeg 8.0-ból (ffmpeg.org) származnak, LGPL 2.1 vagy újabb licenc alatt; az FFmpeg a GPL-es részek és a tovább nem terjeszthető összetevők nélkül készült. Ez a szoftver az LGPLv2.1 licenc alatt álló FFmpeg kódját használja; a pontos forráskód, a mi változtatásainkkal, a képfájl forrásainak címéről tölthető le. A mi változtatásaink: csak ezek a dekóderek és az AC3 kódoló vannak bekapcsolva; a DTS dekóder nem dekódolja az LBR összetevőt.",
+    "it": "I decodificatori audio ALAC, TrueHD/MLP, DTS (senza la componente LBR), WMA 1 e WMA 2 e il codificatore AC3 vengono da FFmpeg 8.0 (ffmpeg.org), con la licenza LGPL 2.1 o successiva, compilato senza le parti GPL e senza componenti non ridistribuibili. Questo software usa codice di FFmpeg con la licenza LGPLv2.1; il sorgente esatto, con le nostre modifiche, si scarica dall'indirizzo dei sorgenti dell'immagine. Modificato da noi: sono attivati solo questi decodificatori e il codificatore AC3; il decodificatore DTS non decodifica la componente LBR.",
+    "nl": "De geluidsdecoders ALAC, TrueHD/MLP, DTS (zonder het onderdeel LBR), WMA 1 en WMA 2 en de encoder AC3 komen uit FFmpeg 8.0 (ffmpeg.org), onder de licentie LGPL 2.1 of later, gebouwd zonder de GPL-delen en zonder onderdelen die niet verder verspreid mogen worden. Deze software gebruikt code van FFmpeg onder de licentie LGPLv2.1; de exacte broncode, met onze wijzigingen, is te downloaden van het adres van de bronnen van de image. Door ons gewijzigd: alleen deze decoders en de encoder AC3 zijn ingeschakeld; de DTS-decoder decodeert het onderdeel LBR niet.",
+    "pl": "Dekodery dźwięku ALAC, TrueHD/MLP, DTS (bez składnika LBR), WMA 1 i WMA 2 oraz koder AC3 pochodzą z FFmpeg 8.0 (ffmpeg.org), na licencji LGPL 2.1 lub nowszej, zbudowanego bez części GPL i bez składników, których nie można rozpowszechniać. To oprogramowanie używa kodu FFmpeg na licencji LGPLv2.1; dokładny kod źródłowy, z naszymi zmianami, można pobrać z adresu źródeł obrazu. Nasze zmiany: włączone są tylko te dekodery i koder AC3; dekoder DTS nie dekoduje składnika LBR.",
+    "pt": "Os descodificadores de áudio ALAC, TrueHD/MLP, DTS (sem a componente LBR), WMA 1 e WMA 2 e o codificador AC3 vêm do FFmpeg 8.0 (ffmpeg.org), sob a licença LGPL 2.1 ou posterior, compilado sem as partes GPL e sem componentes que não possam ser redistribuídos. Este software usa código do FFmpeg sob a licença LGPLv2.1; o código-fonte exato, com as nossas alterações, pode ser descarregado do endereço das fontes da imagem. Alterado por nós: só estão ativados estes descodificadores e o codificador AC3; o descodificador DTS não descodifica a componente LBR.",
+    "ru": "Звуковые декодеры ALAC, TrueHD/MLP, DTS (без компонента LBR), WMA 1 и WMA 2 и кодер AC3 взяты из FFmpeg 8.0 (ffmpeg.org), собранного без частей GPL и без компонентов, которые нельзя распространять, по лицензии LGPL 2.1 или более поздней. Это программное обеспечение использует код FFmpeg по лицензии LGPLv2.1; точный исходный код с нашими изменениями можно скачать по адресу исходных кодов образа. Наши изменения: включены только эти декодеры и кодер AC3; декодер DTS не декодирует компонент LBR.",
+    "tr": "ALAC, TrueHD/MLP, DTS (LBR bileşeni olmadan), WMA 1 ve WMA 2 ses kod çözücüleri ile AC3 kodlayıcısı, GPL parçaları ve yeniden dağıtılamayan bileşenler olmadan derlenmiş FFmpeg 8.0'dan (ffmpeg.org) gelir ve LGPL 2.1 veya sonrası lisansı altındadır. Bu yazılım, LGPLv2.1 lisansı altındaki FFmpeg kodunu kullanır; değişikliklerimizle birlikte tam kaynak kodu, imajın kaynaklarının adresinden indirilebilir. Tarafımızca değiştirildi: yalnızca bu kod çözücüler ve AC3 kodlayıcısı etkindir; DTS kod çözücüsü LBR bileşenini çözmez."
+   }
+  },
+  {
+   "nume": "gst-libav 1.28",
+   "pachet": "gstreamer1.0-libav",
+   "fisier": "/usr/lib/gstreamer-1.0/libgstlibav.so",
+   "cai": [
+    "/usr/lib/gstreamer-1.0/libgstlibav.so"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Elementele GStreamer care folosesc decodoarele și codorul FFmpeg de mai sus vin din gst-libav 1.28 (gstreamer.freedesktop.org), sub licența LGPL 2.1 sau mai nouă.",
+    "en": "The GStreamer elements that use the FFmpeg decoders and encoder above come from gst-libav 1.28 (gstreamer.freedesktop.org), under the LGPL 2.1 or later licence.",
+    "cs": "Prvky GStreamer, které používají výše uvedené dekodéry a kodér FFmpeg, pocházejí z gst-libav 1.28 (gstreamer.freedesktop.org) pod licencí LGPL 2.1 nebo novější.",
+    "de": "Die GStreamer-Elemente, die die obigen FFmpeg-Decoder und den FFmpeg-Encoder verwenden, stammen aus gst-libav 1.28 (gstreamer.freedesktop.org), unter der Lizenz LGPL 2.1 oder neuer.",
+    "es": "Los elementos de GStreamer que usan los decodificadores y el codificador de FFmpeg de arriba vienen de gst-libav 1.28 (gstreamer.freedesktop.org), con la licencia LGPL 2.1 o posterior.",
+    "fr": "Les éléments GStreamer qui utilisent les décodeurs et l'encodeur FFmpeg ci-dessus viennent de gst-libav 1.28 (gstreamer.freedesktop.org), sous la licence LGPL 2.1 ou ultérieure.",
+    "hu": "A fenti FFmpeg dekódereket és kódolót használó GStreamer-elemek a gst-libav 1.28-ból (gstreamer.freedesktop.org) származnak, LGPL 2.1 vagy újabb licenc alatt.",
+    "it": "Gli elementi GStreamer che usano i decodificatori e il codificatore FFmpeg qui sopra vengono da gst-libav 1.28 (gstreamer.freedesktop.org), con la licenza LGPL 2.1 o successiva.",
+    "nl": "De GStreamer-elementen die de FFmpeg-decoders en -encoder hierboven gebruiken, komen uit gst-libav 1.28 (gstreamer.freedesktop.org), onder de licentie LGPL 2.1 of later.",
+    "pl": "Elementy GStreamer, które używają powyższych dekoderów i kodera FFmpeg, pochodzą z gst-libav 1.28 (gstreamer.freedesktop.org), na licencji LGPL 2.1 lub nowszej.",
+    "pt": "Os elementos do GStreamer que usam os descodificadores e o codificador FFmpeg acima vêm do gst-libav 1.28 (gstreamer.freedesktop.org), sob a licença LGPL 2.1 ou posterior.",
+    "ru": "Элементы GStreamer, которые используют приведённые выше декодеры и кодер FFmpeg, взяты из gst-libav 1.28 (gstreamer.freedesktop.org) по лицензии LGPL 2.1 или более поздней.",
+    "tr": "Yukarıdaki FFmpeg kod çözücülerini ve kodlayıcısını kullanan GStreamer öğeleri, gst-libav 1.28'den (gstreamer.freedesktop.org) gelir ve LGPL 2.1 veya sonrası lisansı altındadır."
+   }
+  },
+  {
+   "nume": "GStreamer asfdemux",
+   "pachet": "gstreamer1.0-plugins-ugly-asf",
+   "fisier": "/usr/lib/gstreamer-1.0/libgstasf.so",
+   "cai": [
+    "/usr/lib/gstreamer-1.0/libgstasf.so"
+   ],
+   "licenta": "LGPL-2.0-or-later",
+   "spdx": "LGPL-2.0-or-later",
+   "ce": {
+    "ro": "Desfacerea fișierelor .wmv, .wma și .asf vine din elementul asfdemux al GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans și ceilalți autori GStreamer), sub licența LGPL 2 sau mai nouă. Elementul doar desface fișierul: imaginea VC-1 o decodează placa receptorului, iar sunetul WMA 1/2 decodorul FFmpeg de mai sus.",
+    "en": "Opening .wmv, .wma and .asf files comes from the GStreamer asfdemux element (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans and the other GStreamer authors), under the LGPL 2 or later licence. The element only splits the file: the VC-1 picture is decoded by the receiver's chip and the WMA 1/2 sound by the FFmpeg decoder above.",
+    "cs": "Rozkládání souborů .wmv, .wma a .asf pochází z prvku asfdemux z GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans a ostatní autoři GStreamer) pod licencí LGPL 2 nebo novější. Prvek soubor jen rozkládá: obraz VC-1 dekóduje deska přijímače a zvuk WMA 1/2 výše uvedený dekodér FFmpeg.",
+    "de": "Das Zerlegen von .wmv-, .wma- und .asf-Dateien stammt aus dem GStreamer-Element asfdemux (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans und die anderen GStreamer-Autoren), unter der Lizenz LGPL 2 oder neuer. Das Element zerlegt die Datei nur: Das VC-1-Bild wird von der Receiver-Platine dekodiert, der Ton WMA 1/2 vom obigen FFmpeg-Decoder.",
+    "es": "La descomposición de los archivos .wmv, .wma y .asf viene del elemento asfdemux de GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans y los demás autores de GStreamer), con la licencia LGPL 2 o posterior. El elemento solo descompone el archivo: la imagen VC-1 la decodifica la placa del receptor, y el sonido WMA 1/2, el decodificador FFmpeg de arriba.",
+    "fr": "Le découpage des fichiers .wmv, .wma et .asf vient de l'élément asfdemux de GStreamer (gst-plugins-ugly 1.28 ; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans et les autres auteurs de GStreamer), sous la licence LGPL 2 ou ultérieure. L'élément ne fait que découper le fichier : l'image VC-1 est décodée par la carte du récepteur, et le son WMA 1/2 par le décodeur FFmpeg ci-dessus.",
+    "hu": "A .wmv, .wma és .asf fájlok szétbontása a GStreamer asfdemux eleméből származik (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans és a GStreamer többi szerzője), LGPL 2 vagy újabb licenc alatt. Az elem csak szétbontja a fájlt: a VC-1 képet a vevőkészülék alaplapja dekódolja, a WMA 1/2 hangot pedig a fenti FFmpeg dekóder.",
+    "it": "La scomposizione dei file .wmv, .wma e .asf viene dall'elemento asfdemux di GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans e gli altri autori di GStreamer), con la licenza LGPL 2 o successiva. L'elemento scompone soltanto il file: l'immagine VC-1 è decodificata dalla scheda del ricevitore e l'audio WMA 1/2 dal decodificatore FFmpeg qui sopra.",
+    "nl": "Het opsplitsen van .wmv-, .wma- en .asf-bestanden komt uit het GStreamer-element asfdemux (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans en de andere GStreamer-auteurs), onder de licentie LGPL 2 of later. Het element splitst het bestand alleen op: het VC-1-beeld wordt gedecodeerd door de ontvangerkaart en het WMA 1/2-geluid door de FFmpeg-decoder hierboven.",
+    "pl": "Rozkładanie plików .wmv, .wma i .asf pochodzi z elementu asfdemux z GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans i pozostali autorzy GStreamer), na licencji LGPL 2 lub nowszej. Element tylko rozkłada plik: obraz VC-1 dekoduje płyta odbiornika, a dźwięk WMA 1/2 powyższy dekoder FFmpeg.",
+    "pt": "A decomposição dos ficheiros .wmv, .wma e .asf vem do elemento asfdemux do GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans e os outros autores do GStreamer), sob a licença LGPL 2 ou posterior. O elemento apenas decompõe o ficheiro: a imagem VC-1 é descodificada pela placa do recetor e o som WMA 1/2 pelo descodificador FFmpeg acima.",
+    "ru": "Разбор файлов .wmv, .wma и .asf выполняет элемент asfdemux из GStreamer (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans и другие авторы GStreamer) по лицензии LGPL 2 или более поздней. Элемент только разбирает файл: изображение VC-1 декодирует плата ресивера, а звук WMA 1/2 приведённый выше декодер FFmpeg.",
+    "tr": ".wmv, .wma ve .asf dosyalarının ayrıştırılması, GStreamer'ın LGPL 2 veya sonrası lisansı altındaki asfdemux öğesinden gelir (gst-plugins-ugly 1.28; Erik Walthinsen, Tim-Philipp Müller, Wim Taymans ve diğer GStreamer yazarları). Öğe dosyayı yalnızca ayrıştırır: VC-1 görüntüsünü alıcı kartı, WMA 1/2 sesini ise yukarıdaki FFmpeg kod çözücüsü çözer."
+   }
+  },
+  {
+   "nume": "GStreamer mpegpsdemux",
+   "pachet": "gstreamer1.0-plugins-bad-mpegpsdemux",
+   "fisier": "/usr/lib/gstreamer-1.0/libgstmpegpsdemux.so",
+   "cai": [
+    "/usr/lib/gstreamer-1.0/libgstmpegpsdemux.so"
+   ],
+   "licenta": "LGPL-2.0-or-later",
+   "spdx": "LGPL-2.0-or-later",
+   "ce": {
+    "ro": "Desfacerea fișierelor .mpg și .vob (MPEG-PS) vine din elementul mpegpsdemux al GStreamer (gst-plugins-bad 1.28; Fluendo S.L. și autorii GStreamer), oferit sub licența MPL 1.1 sau LGPL 2 sau mai nouă; imaginea îl folosește sub LGPL.",
+    "en": "Opening .mpg and .vob files (MPEG-PS) comes from the GStreamer mpegpsdemux element (gst-plugins-bad 1.28; Fluendo S.L. and the GStreamer authors), offered under the MPL 1.1 or the LGPL 2 or later licence; the image uses it under the LGPL.",
+    "cs": "Rozkládání souborů .mpg a .vob (MPEG-PS) pochází z prvku mpegpsdemux z GStreamer (gst-plugins-bad 1.28; Fluendo S.L. a autoři GStreamer), nabízeného pod licencí MPL 1.1 nebo LGPL 2 nebo novější; obraz ho používá pod LGPL.",
+    "de": "Das Zerlegen von .mpg- und .vob-Dateien (MPEG-PS) stammt aus dem GStreamer-Element mpegpsdemux (gst-plugins-bad 1.28; Fluendo S.L. und die GStreamer-Autoren), angeboten unter der Lizenz MPL 1.1 oder LGPL 2 oder neuer; das Image verwendet es unter der LGPL.",
+    "es": "La descomposición de los archivos .mpg y .vob (MPEG-PS) viene del elemento mpegpsdemux de GStreamer (gst-plugins-bad 1.28; Fluendo S.L. y los autores de GStreamer), ofrecido con la licencia MPL 1.1 o LGPL 2 o posterior; la imagen lo usa con la LGPL.",
+    "fr": "Le découpage des fichiers .mpg et .vob (MPEG-PS) vient de l'élément mpegpsdemux de GStreamer (gst-plugins-bad 1.28 ; Fluendo S.L. et les auteurs de GStreamer), proposé sous la licence MPL 1.1 ou LGPL 2 ou ultérieure ; l'image l'utilise sous la LGPL.",
+    "hu": "A .mpg és .vob (MPEG-PS) fájlok szétbontása a GStreamer mpegpsdemux eleméből származik (gst-plugins-bad 1.28; Fluendo S.L. és a GStreamer szerzői), amely MPL 1.1 vagy LGPL 2 vagy újabb licenc alatt érhető el; a képfájl az LGPL alatt használja.",
+    "it": "La scomposizione dei file .mpg e .vob (MPEG-PS) viene dall'elemento mpegpsdemux di GStreamer (gst-plugins-bad 1.28; Fluendo S.L. e gli autori di GStreamer), offerto con la licenza MPL 1.1 o LGPL 2 o successiva; l'immagine lo usa con la LGPL.",
+    "nl": "Het opsplitsen van .mpg- en .vob-bestanden (MPEG-PS) komt uit het GStreamer-element mpegpsdemux (gst-plugins-bad 1.28; Fluendo S.L. en de GStreamer-auteurs), aangeboden onder de licentie MPL 1.1 of LGPL 2 of later; de image gebruikt het onder de LGPL.",
+    "pl": "Rozkładanie plików .mpg i .vob (MPEG-PS) pochodzi z elementu mpegpsdemux z GStreamer (gst-plugins-bad 1.28; Fluendo S.L. i autorzy GStreamer), oferowanego na licencji MPL 1.1 lub LGPL 2 lub nowszej; obraz używa go na licencji LGPL.",
+    "pt": "A decomposição dos ficheiros .mpg e .vob (MPEG-PS) vem do elemento mpegpsdemux do GStreamer (gst-plugins-bad 1.28; Fluendo S.L. e os autores do GStreamer), oferecido sob a licença MPL 1.1 ou LGPL 2 ou posterior; a imagem usa-o sob a LGPL.",
+    "ru": "Разбор файлов .mpg и .vob (MPEG-PS) выполняет элемент mpegpsdemux из GStreamer (gst-plugins-bad 1.28; Fluendo S.L. и авторы GStreamer), предлагаемый по лицензии MPL 1.1 или LGPL 2 или более поздней; образ использует его по LGPL.",
+    "tr": ".mpg ve .vob (MPEG-PS) dosyalarının ayrıştırılması, GStreamer'ın MPL 1.1 lisansı veya LGPL 2 veya sonrası lisansı altında sunulan mpegpsdemux öğesinden gelir (gst-plugins-bad 1.28; Fluendo S.L. ve GStreamer yazarları); imaj onu LGPL altında kullanır."
+   }
+  },
+  {
+   "nume": "GStreamer dvdsubparse",
+   "pachet": "gstreamer1.0-plugins-ugly-dvdsub",
+   "fisier": "/usr/lib/gstreamer-1.0/libgstdvdsub.so",
+   "cai": [
+    "/usr/lib/gstreamer-1.0/libgstdvdsub.so"
+   ],
+   "licenta": "LGPL-2.0-or-later",
+   "spdx": "LGPL-2.0-or-later",
+   "ce": {
+    "ro": "Subtitrările DVD din fișierele .vob sunt lipite din pachete de elementul dvdsubparse al GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), sub licența LGPL 2 sau mai nouă; desenul lor îl face decodorul propriu al imaginii.",
+    "en": "DVD subtitles in .vob files are joined from packets by the GStreamer dvdsubparse element (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), under the LGPL 2 or later licence; they are drawn by the image's own decoder.",
+    "cs": "Titulky DVD v souborech .vob skládá z paketů prvek dvdsubparse z GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans) pod licencí LGPL 2 nebo novější; vykresluje je vlastní dekodér zabudovaný v obrazu.",
+    "de": "DVD-Untertitel in .vob-Dateien setzt das GStreamer-Element dvdsubparse (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), unter der Lizenz LGPL 2 oder neuer, aus Paketen zusammen; gezeichnet werden sie vom eigenen Decoder des Images.",
+    "es": "Los subtítulos DVD de los archivos .vob se juntan a partir de paquetes mediante el elemento dvdsubparse de GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), con la licencia LGPL 2 o posterior; los dibuja el decodificador propio de la imagen.",
+    "fr": "Les sous-titres DVD des fichiers .vob sont assemblés à partir de paquets par l'élément dvdsubparse de GStreamer (gst-plugins-ugly 1.28 ; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), sous la licence LGPL 2 ou ultérieure ; ils sont dessinés par le décodeur propre de l'image.",
+    "hu": "A .vob fájlokban lévő DVD-feliratokat a GStreamer dvdsubparse eleme (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans) rakja össze csomagokból, LGPL 2 vagy újabb licenc alatt; a kirajzolásukat a képfájl saját dekódere végzi.",
+    "it": "L'elemento dvdsubparse di GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), con la licenza LGPL 2 o successiva, ricompone dai pacchetti i sottotitoli DVD dei file .vob; li disegna il decodificatore proprio dell'immagine.",
+    "nl": "Dvd-ondertitels in .vob-bestanden worden uit pakketten samengevoegd door het GStreamer-element dvdsubparse (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), onder de licentie LGPL 2 of later; ze worden getekend door de eigen decoder van de image.",
+    "pl": "Napisy DVD z plików .vob są składane z pakietów przez element dvdsubparse z GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), na licencji LGPL 2 lub nowszej; rysuje je własny dekoder wbudowany w obraz.",
+    "pt": "As legendas DVD dos ficheiros .vob são montadas a partir de pacotes pelo elemento dvdsubparse do GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans), sob a licença LGPL 2 ou posterior; são desenhadas pelo descodificador próprio da imagem.",
+    "ru": "Субтитры DVD из файлов .vob собирает из пакетов элемент dvdsubparse из GStreamer (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans) по лицензии LGPL 2 или более поздней; рисует их собственный декодер образа.",
+    "tr": ".vob dosyalarındaki DVD altyazıları, GStreamer'ın LGPL 2 veya sonrası lisansı altındaki dvdsubparse öğesi (gst-plugins-ugly 1.28; Mark Nauwelaerts, Jan Schmidt, Wim Taymans) tarafından paketlerden birleştirilir; onları imajın kendi kod çözücüsü çizer."
+   }
+  },
+  {
+   "nume": "libdvdread 6.1.3",
+   "pachet": "libdvdread",
+   "fisier": "/usr/lib/libdvdread.so.8",
+   "cai": [
+    "/usr/lib/libdvdread.so.8*"
+   ],
+   "licenta": "GPL-2.0-or-later",
+   "spdx": "GPL-2.0-or-later",
+   "ce": {
+    "ro": "Citirea DVD-urilor copiate (dosar VIDEO_TS sau fișier .iso) vine din libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund și colaboratorii VideoLAN; code.videolan.org/videolan/libdvdread), sub licența GPL 2 sau mai nouă. Schimbat de noi: citește numai discuri fără protecție la copiere și nu încarcă nicio bibliotecă de decriptare.",
+    "en": "Reading copied DVDs (VIDEO_TS folder or .iso file) comes from libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund and the VideoLAN contributors; code.videolan.org/videolan/libdvdread), under the GPL 2 or later licence. Changed by us: it reads only discs without copy protection and loads no decryption library.",
+    "cs": "Čtení zkopírovaných DVD (složka VIDEO_TS nebo soubor .iso) pochází z libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund a přispěvatelé VideoLAN; code.videolan.org/videolan/libdvdread) pod licencí GPL 2 nebo novější. Naše změny: čte jen disky bez ochrany proti kopírování a nenačítá žádnou knihovnu pro dešifrování.",
+    "de": "Das Lesen kopierter DVDs (Ordner VIDEO_TS oder Datei .iso) stammt aus libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund und die VideoLAN-Mitwirkenden; code.videolan.org/videolan/libdvdread), unter der Lizenz GPL 2 oder neuer. Von uns geändert: Es liest nur Discs ohne Kopierschutz und lädt keine Entschlüsselungsbibliothek.",
+    "es": "La lectura de DVD copiados (carpeta VIDEO_TS o archivo .iso) viene de libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund y los colaboradores de VideoLAN; code.videolan.org/videolan/libdvdread), con la licencia GPL 2 o posterior. Cambiado por nosotros: solo lee discos sin protección contra copia y no carga ninguna biblioteca de descifrado.",
+    "fr": "La lecture des DVD copiés (dossier VIDEO_TS ou fichier .iso) vient de libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund et les contributeurs de VideoLAN ; code.videolan.org/videolan/libdvdread), sous la licence GPL 2 ou ultérieure. Modifié par nous : il ne lit que les disques sans protection contre la copie et ne charge aucune bibliothèque de déchiffrement.",
+    "hu": "A másolt DVD-k olvasása (VIDEO_TS mappa vagy .iso fájl) a libdvdread 6.1.3-ból származik (Billy Biggs, Håkan Hjort, Björn Englund és a VideoLAN közreműködői; code.videolan.org/videolan/libdvdread), GPL 2 vagy újabb licenc alatt. A mi változtatásaink: csak másolásvédelem nélküli lemezeket olvas, és nem tölt be visszafejtő könyvtárat.",
+    "it": "La lettura dei DVD copiati (cartella VIDEO_TS o file .iso) viene da libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund e i collaboratori di VideoLAN; code.videolan.org/videolan/libdvdread), con la licenza GPL 2 o successiva. Modificato da noi: legge solo dischi senza protezione dalla copia e non carica nessuna libreria di decifratura.",
+    "nl": "Het lezen van gekopieerde dvd's (map VIDEO_TS of bestand .iso) komt uit libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund en de medewerkers van VideoLAN; code.videolan.org/videolan/libdvdread), onder de licentie GPL 2 of later. Door ons gewijzigd: het leest alleen schijven zonder kopieerbeveiliging en laadt geen ontsleutelingsbibliotheek.",
+    "pl": "Odczyt skopiowanych płyt DVD (folder VIDEO_TS lub plik .iso) pochodzi z libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund i współtwórcy VideoLAN; code.videolan.org/videolan/libdvdread), na licencji GPL 2 lub nowszej. Nasze zmiany: czyta tylko płyty bez zabezpieczenia przed kopiowaniem i nie ładuje żadnej biblioteki deszyfrującej.",
+    "pt": "A leitura de DVDs copiados (pasta VIDEO_TS ou ficheiro .iso) vem do libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund e os colaboradores do VideoLAN; code.videolan.org/videolan/libdvdread), sob a licença GPL 2 ou posterior. Alterado por nós: só lê discos sem proteção contra cópia e não carrega nenhuma biblioteca de desencriptação.",
+    "ru": "Чтение скопированных DVD (папка VIDEO_TS или файл .iso) взято из libdvdread 6.1.3 (Billy Biggs, Håkan Hjort, Björn Englund и участники VideoLAN; code.videolan.org/videolan/libdvdread) по лицензии GPL 2 или более поздней. Наши изменения: читает только диски без защиты от копирования и не загружает никакую библиотеку расшифровки.",
+    "tr": "Kopyalanmış DVD'lerin okunması (VIDEO_TS klasörü veya .iso dosyası), GPL 2 veya sonrası lisansı altındaki libdvdread 6.1.3'ten gelir (Billy Biggs, Håkan Hjort, Björn Englund ve VideoLAN'a katkıda bulunanlar; code.videolan.org/videolan/libdvdread). Tarafımızca değiştirildi: yalnızca kopya koruması olmayan diskleri okur ve hiçbir şifre çözme kütüphanesi yüklemez."
+   }
+  },
+  {
+   "nume": "libdvdnav 6.1.1",
+   "pachet": "libdvdnav",
+   "fisier": "/usr/lib/libdvdnav.so.4",
+   "cai": [
+    "/usr/lib/libdvdnav.so.4*"
+   ],
+   "licenta": "GPL-2.0-or-later",
+   "spdx": "GPL-2.0-or-later",
+   "ce": {
+    "ro": "Navigarea DVD (meniurile, titlurile și capitolele) vine din libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch și colaboratorii VideoLAN; code.videolan.org/videolan/libdvdnav), sub licența GPL 2 sau mai nouă.",
+    "en": "DVD navigation (menus, titles and chapters) comes from libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch and the VideoLAN contributors; code.videolan.org/videolan/libdvdnav), under the GPL 2 or later licence.",
+    "cs": "Navigace DVD (nabídky, tituly a kapitoly) pochází z libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch a přispěvatelé VideoLAN; code.videolan.org/videolan/libdvdnav) pod licencí GPL 2 nebo novější.",
+    "de": "Die DVD-Navigation (Menüs, Titel und Kapitel) stammt aus libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch und die VideoLAN-Mitwirkenden; code.videolan.org/videolan/libdvdnav), unter der Lizenz GPL 2 oder neuer.",
+    "es": "La navegación DVD (menús, títulos y capítulos) viene de libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch y los colaboradores de VideoLAN; code.videolan.org/videolan/libdvdnav), con la licencia GPL 2 o posterior.",
+    "fr": "La navigation DVD (menus, titres et chapitres) vient de libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch et les contributeurs de VideoLAN ; code.videolan.org/videolan/libdvdnav), sous la licence GPL 2 ou ultérieure.",
+    "hu": "A DVD-navigáció (menük, címek és fejezetek) a libdvdnav 6.1.1-ből származik (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch és a VideoLAN közreműködői; code.videolan.org/videolan/libdvdnav), GPL 2 vagy újabb licenc alatt.",
+    "it": "La navigazione DVD (menu, titoli e capitoli) viene da libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch e i collaboratori di VideoLAN; code.videolan.org/videolan/libdvdnav), con la licenza GPL 2 o successiva.",
+    "nl": "De dvd-navigatie (menu's, titels en hoofdstukken) komt uit libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch en de medewerkers van VideoLAN; code.videolan.org/videolan/libdvdnav), onder de licentie GPL 2 of later.",
+    "pl": "Nawigacja DVD (menu, tytuły i rozdziały) pochodzi z libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch i współtwórcy VideoLAN; code.videolan.org/videolan/libdvdnav), na licencji GPL 2 lub nowszej.",
+    "pt": "A navegação DVD (menus, títulos e capítulos) vem do libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch e os colaboradores do VideoLAN; code.videolan.org/videolan/libdvdnav), sob a licença GPL 2 ou posterior.",
+    "ru": "Навигация по DVD (меню, разделы и главы) взята из libdvdnav 6.1.1 (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch и участники VideoLAN; code.videolan.org/videolan/libdvdnav) по лицензии GPL 2 или более поздней.",
+    "tr": "DVD gezinmesi (menüler, başlıklar ve bölümler), GPL 2 veya sonrası lisansı altındaki libdvdnav 6.1.1'den gelir (Daniel Caujolle-Bert, Thomas Vander Stichele, Rich Wareham, Kees Cook, Michael Roitzsch ve VideoLAN'a katkıda bulunanlar; code.videolan.org/videolan/libdvdnav)."
+   }
+  },
+  {
+   "nume": "libdreamdvd",
+   "pachet": "libdreamdvd",
+   "fisier": "/usr/lib/libdreamdvd.so.0",
+   "cai": [
+    "/usr/lib/libdreamdvd.so.0*"
+   ],
+   "licenta": "GPL-2.0-or-later & LGPL-2.1-or-later",
+   "spdx": [
+    "GPL-2.0-or-later",
+    "LGPL-2.1-or-later"
+   ],
+   "ce": {
+    "ro": "Redarea DVD pe decodorul receptorului vine din libdreamdvd (Seddi, 2007, și colaboratorii; github.com/oe-mirrors/libdreamdvd), sub licența GPL 2 sau mai nouă; conține codorul MPEG audio din FFmpeg (Fabrice Bellard, 2000-2001), sub licența LGPL 2.1 sau mai nouă.",
+    "en": "DVD playback on the receiver's decoder comes from libdreamdvd (Seddi, 2007, and contributors; github.com/oe-mirrors/libdreamdvd), under the GPL 2 or later licence; it contains the MPEG audio encoder from FFmpeg (Fabrice Bellard, 2000-2001), under the LGPL 2.1 or later licence.",
+    "cs": "Přehrávání DVD na dekodéru přijímače pochází z libdreamdvd (Seddi, 2007, a přispěvatelé; github.com/oe-mirrors/libdreamdvd) pod licencí GPL 2 nebo novější; obsahuje kodér MPEG audio z FFmpeg (Fabrice Bellard, 2000-2001) pod licencí LGPL 2.1 nebo novější.",
+    "de": "Die DVD-Wiedergabe über den Decoder des Receivers stammt aus libdreamdvd (Seddi, 2007, und Mitwirkende; github.com/oe-mirrors/libdreamdvd), unter der Lizenz GPL 2 oder neuer; libdreamdvd enthält den MPEG-Audio-Encoder aus FFmpeg (Fabrice Bellard, 2000-2001), unter der Lizenz LGPL 2.1 oder neuer.",
+    "es": "La reproducción de DVD en el decodificador del receptor viene de libdreamdvd (Seddi, 2007, y colaboradores; github.com/oe-mirrors/libdreamdvd), con la licencia GPL 2 o posterior; contiene el codificador de audio MPEG de FFmpeg (Fabrice Bellard, 2000-2001), con la licencia LGPL 2.1 o posterior.",
+    "fr": "La lecture des DVD sur le décodeur du récepteur vient de libdreamdvd (Seddi, 2007, et les contributeurs ; github.com/oe-mirrors/libdreamdvd), sous la licence GPL 2 ou ultérieure ; libdreamdvd contient l'encodeur audio MPEG de FFmpeg (Fabrice Bellard, 2000-2001), sous la licence LGPL 2.1 ou ultérieure.",
+    "hu": "A DVD-lejátszás a vevőkészülék dekóderén a libdreamdvd-ből származik (Seddi, 2007, és közreműködők; github.com/oe-mirrors/libdreamdvd), GPL 2 vagy újabb licenc alatt; tartalmazza az FFmpeg MPEG-hangkódolóját (Fabrice Bellard, 2000-2001), LGPL 2.1 vagy újabb licenc alatt.",
+    "it": "La riproduzione dei DVD sul decodificatore del ricevitore viene da libdreamdvd (Seddi, 2007, e collaboratori; github.com/oe-mirrors/libdreamdvd), con la licenza GPL 2 o successiva; contiene il codificatore audio MPEG di FFmpeg (Fabrice Bellard, 2000-2001), con la licenza LGPL 2.1 o successiva.",
+    "nl": "Het afspelen van dvd's via de decoder van de ontvanger komt uit libdreamdvd (Seddi, 2007, en medewerkers; github.com/oe-mirrors/libdreamdvd), onder de licentie GPL 2 of later; libdreamdvd bevat de MPEG-audio-encoder uit FFmpeg (Fabrice Bellard, 2000-2001), onder de licentie LGPL 2.1 of later.",
+    "pl": "Odtwarzanie DVD na dekoderze odbiornika pochodzi z libdreamdvd (Seddi, 2007, i współtwórcy; github.com/oe-mirrors/libdreamdvd), na licencji GPL 2 lub nowszej; zawiera koder audio MPEG z FFmpeg (Fabrice Bellard, 2000-2001), na licencji LGPL 2.1 lub nowszej.",
+    "pt": "A reprodução de DVD no descodificador do recetor vem do libdreamdvd (Seddi, 2007, e colaboradores; github.com/oe-mirrors/libdreamdvd), sob a licença GPL 2 ou posterior; contém o codificador de áudio MPEG do FFmpeg (Fabrice Bellard, 2000-2001), sob a licença LGPL 2.1 ou posterior.",
+    "ru": "Воспроизведение DVD на декодере ресивера взято из libdreamdvd (Seddi, 2007, и участники; github.com/oe-mirrors/libdreamdvd) по лицензии GPL 2 или более поздней; libdreamdvd содержит кодер MPEG-аудио из FFmpeg (Fabrice Bellard, 2000-2001) по лицензии LGPL 2.1 или более поздней.",
+    "tr": "Alıcının kod çözücüsünde DVD oynatma, GPL 2 veya sonrası lisansı altındaki libdreamdvd'den gelir (Seddi, 2007, ve katkıda bulunanlar; github.com/oe-mirrors/libdreamdvd); libdreamdvd, FFmpeg'in LGPL 2.1 veya sonrası lisansı altındaki MPEG ses kodlayıcısını içerir (Fabrice Bellard, 2000-2001)."
+   }
+  },
+  {
+   "nume": "libdvbcsa 1.1.0",
+   "pachet": "libdvbcsa",
+   "fisier": "/usr/lib/libdvbcsa.so.1",
+   "cai": [
+    "/usr/lib/libdvbcsa.so.1*"
+   ],
+   "licenta": "GPL-2.0-or-later",
+   "spdx": "GPL-2.0-or-later",
+   "ce": {
+    "ro": "Algoritmul comun de cifrare DVB (CSA) vine din biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; partea paralelă după codul lui fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sub licența GPL 2 sau mai nouă.",
+    "en": "The DVB Common Scrambling Algorithm (CSA) comes from the libdvbcsa 1.1.0 library (Alexandre Becoulet, 2006-2008; the parallel part based on code by fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), under the GPL 2 or later licence.",
+    "cs": "Společný šifrovací algoritmus DVB (CSA) pochází z knihovny libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; paralelní část podle kódu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) pod licencí GPL 2 nebo novější.",
+    "de": "Der gemeinsame DVB-Verschlüsselungsalgorithmus (CSA) stammt aus der Bibliothek libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; der parallele Teil nach dem Code von fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), unter der Lizenz GPL 2 oder neuer.",
+    "es": "El algoritmo común de cifrado DVB (CSA) viene de la biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; la parte paralela basada en el código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licencia GPL 2 o posterior.",
+    "fr": "L'algorithme commun de chiffrement DVB (CSA) vient de la bibliothèque libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008 ; la partie parallèle d'après le code de fatih89r, 2003-2004 ; github.com/oe-mirrors/libdvbcsa), sous la licence GPL 2 ou ultérieure.",
+    "hu": "A közös DVB-titkosító algoritmus (CSA) a libdvbcsa 1.1.0 könyvtárból származik (Alexandre Becoulet, 2006-2008; a párhuzamos rész fatih89r kódja alapján, 2003-2004; github.com/oe-mirrors/libdvbcsa), GPL 2 vagy újabb licenc alatt.",
+    "it": "L'algoritmo comune di cifratura DVB (CSA) viene dalla libreria libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; la parte parallela basata sul codice di fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licenza GPL 2 o successiva.",
+    "nl": "Het gemeenschappelijke DVB-versleutelingsalgoritme (CSA) komt uit de bibliotheek libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; het parallelle deel naar de code van fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), onder de licentie GPL 2 of later.",
+    "pl": "Wspólny algorytm szyfrowania DVB (CSA) pochodzi z biblioteki libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; część równoległa na podstawie kodu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), na licencji GPL 2 lub nowszej.",
+    "pt": "O algoritmo comum de cifra DVB (CSA) vem da biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; a parte paralela baseada no código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sob a licença GPL 2 ou posterior.",
+    "ru": "Общий алгоритм шифрования DVB (CSA) взят из библиотеки libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; параллельная часть основана на коде fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) по лицензии GPL 2 или более поздней.",
+    "tr": "Ortak DVB şifreleme algoritması (CSA), GPL 2 veya sonrası lisansı altındaki libdvbcsa 1.1.0 kütüphanesinden gelir (Alexandre Becoulet, 2006-2008; paralel kısım fatih89r'ın koduna dayanır, 2003-2004; github.com/oe-mirrors/libdvbcsa)."
+   }
+  },
+  {
+   "nume": "fuse-exfat 1.4.0, exfatprogs 1.2.6",
+   "pachet": "fuse-exfat",
+   "fisier": "/sbin/mount.exfat-fuse",
+   "cai": [
+    "/sbin/mount.exfat-fuse"
+   ],
+   "licenta": "GPL-2.0-or-later & LGPL-2.0-only",
+   "spdx": [
+    "GPL-2.0-or-later",
+    "LGPL-2.0-only"
+   ],
+   "ce": {
+    "ro": "Stick-urile și discurile exFAT se montează prin fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) și se formatează și se verifică cu exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics și colaboratorii; github.com/exfatprogs/exfatprogs), amândouă sub licența GPL 2 sau mai nouă, peste biblioteca libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), sub licența LGPL. exFAT este marcă înregistrată a Microsoft Corporation; programele exFAT din această imagine sunt programe libere independente, fără legătură cu Microsoft.",
+    "en": "exFAT sticks and disks are mounted with fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) and formatted and checked with exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics and contributors; github.com/exfatprogs/exfatprogs), both under the GPL 2 or later licence, on top of the libfuse 2.9.9 library (Miklos Szeredi; github.com/libfuse/libfuse), under the LGPL licence. exFAT is a registered trademark of Microsoft Corporation; the exFAT programs in this image are independent free software, not connected with Microsoft.",
+    "cs": "Flash disky a disky exFAT se připojují pomocí fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) a formátují a kontrolují pomocí exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics a přispěvatelé; github.com/exfatprogs/exfatprogs), oba pod licencí GPL 2 nebo novější, nad knihovnou libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse) pod licencí LGPL. exFAT je registrovaná ochranná známka Microsoft Corporation; programy exFAT v tomto obrazu jsou nezávislé svobodné programy bez vztahu k Microsoftu.",
+    "de": "USB-Sticks und Festplatten mit exFAT werden über fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) eingebunden und mit exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics und Mitwirkende; github.com/exfatprogs/exfatprogs) formatiert und geprüft, beide unter der Lizenz GPL 2 oder neuer, aufbauend auf der Bibliothek libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), unter der Lizenz LGPL. exFAT ist eine eingetragene Marke der Microsoft Corporation; die exFAT-Programme in diesem Image sind unabhängige freie Software ohne Verbindung zu Microsoft.",
+    "es": "Las memorias USB y los discos exFAT se montan mediante fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) y se formatean y se comprueban con exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics y colaboradores; github.com/exfatprogs/exfatprogs), ambos con la licencia GPL 2 o posterior, sobre la biblioteca libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), con la licencia LGPL. exFAT es una marca registrada de Microsoft Corporation; los programas exFAT de esta imagen son programas libres independientes, sin relación con Microsoft.",
+    "fr": "Les clés USB et les disques exFAT sont montés avec fuse-exfat 1.4.0 (Andrew Nayenko ; github.com/relan/exfat) et formatés et vérifiés avec exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics et les contributeurs ; github.com/exfatprogs/exfatprogs), tous deux sous la licence GPL 2 ou ultérieure, au-dessus de la bibliothèque libfuse 2.9.9 (Miklos Szeredi ; github.com/libfuse/libfuse), sous la licence LGPL. exFAT est une marque déposée de Microsoft Corporation ; les programmes exFAT de cette image sont des logiciels libres indépendants, sans lien avec Microsoft.",
+    "hu": "Az exFAT pendrive-ok és lemezek csatolása a fuse-exfat 1.4.0-val (Andrew Nayenko; github.com/relan/exfat), formázásuk és ellenőrzésük pedig az exfatprogs 1.2.6-tal (Namjae Jeon, Hyunchul Lee, LG Electronics és közreműködők; github.com/exfatprogs/exfatprogs) történik, mindkettő GPL 2 vagy újabb licenc alatt, a libfuse 2.9.9 könyvtárra épülve (Miklos Szeredi; github.com/libfuse/libfuse), amely LGPL licenc alatt áll. Az exFAT a Microsoft Corporation bejegyzett védjegye; az ebben a képfájlban lévő exFAT-programok független szabad szoftverek, nincs közük a Microsofthoz.",
+    "it": "Le chiavette e i dischi exFAT vengono montati con fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) e formattati e verificati con exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics e collaboratori; github.com/exfatprogs/exfatprogs), entrambi con la licenza GPL 2 o successiva, sopra la libreria libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), con la licenza LGPL. exFAT è un marchio registrato di Microsoft Corporation; i programmi exFAT in questa immagine sono programmi liberi indipendenti, senza legami con Microsoft.",
+    "nl": "USB-sticks en schijven met exFAT worden gekoppeld via fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) en geformatteerd en gecontroleerd met exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics en medewerkers; github.com/exfatprogs/exfatprogs), beide onder de licentie GPL 2 of later, bovenop de bibliotheek libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), onder de licentie LGPL. exFAT is een gedeponeerd handelsmerk van Microsoft Corporation; de exFAT-programma's in deze image zijn onafhankelijke vrije software, zonder band met Microsoft.",
+    "pl": "Pendrive'y i dyski exFAT są montowane za pomocą fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat), a formatowane i sprawdzane za pomocą exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics i współtwórcy; github.com/exfatprogs/exfatprogs), oba na licencji GPL 2 lub nowszej, na bazie biblioteki libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), na licencji LGPL. exFAT jest zastrzeżonym znakiem towarowym Microsoft Corporation; programy exFAT w tym obrazie są niezależnymi wolnymi programami, niezwiązanymi z Microsoft.",
+    "pt": "As pens USB e os discos exFAT são montados com o fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat) e formatados e verificados com o exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics e colaboradores; github.com/exfatprogs/exfatprogs), ambos sob a licença GPL 2 ou posterior, sobre a biblioteca libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse), sob a licença LGPL. exFAT é uma marca registada da Microsoft Corporation; os programas exFAT desta imagem são programas livres independentes, sem ligação à Microsoft.",
+    "ru": "Флешки и диски exFAT монтируются через fuse-exfat 1.4.0 (Andrew Nayenko; github.com/relan/exfat), а форматируются и проверяются с помощью exfatprogs 1.2.6 (Namjae Jeon, Hyunchul Lee, LG Electronics и участники; github.com/exfatprogs/exfatprogs), обе по лицензии GPL 2 или более поздней, поверх библиотеки libfuse 2.9.9 (Miklos Szeredi; github.com/libfuse/libfuse) по лицензии LGPL. exFAT является зарегистрированным товарным знаком Microsoft Corporation; программы exFAT в этом образе являются независимыми свободными программами и не связаны с Microsoft.",
+    "tr": "exFAT USB bellekler ve diskler fuse-exfat 1.4.0 ile bağlanır (Andrew Nayenko; github.com/relan/exfat) ve exfatprogs 1.2.6 ile biçimlendirilip denetlenir (Namjae Jeon, Hyunchul Lee, LG Electronics ve katkıda bulunanlar; github.com/exfatprogs/exfatprogs); ikisi de GPL 2 veya sonrası lisansı altındadır ve LGPL lisansı altındaki libfuse 2.9.9 kütüphanesinin üzerine kuruludur (Miklos Szeredi; github.com/libfuse/libfuse). exFAT, Microsoft Corporation'ın tescilli ticari markasıdır; bu imajdaki exFAT programları, Microsoft ile bağlantısı olmayan bağımsız özgür programlardır."
+   }
+  },
+  {
+   "nume": "OpenVPN 2.6.15",
+   "pachet": "openvpn",
+   "fisier": "/usr/sbin/openvpn",
+   "cai": [
+    "/usr/sbin/openvpn"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Conexiunile VPN OpenVPN folosesc OpenVPN 2.6.15 (OpenVPN Inc. și colaboratorii; openvpn.net), sub licența GPL 2, cu excepțiile autorilor care permit legarea de OpenSSL și de bibliotecile sub licența Apache 2.0. OpenVPN este marcă a OpenVPN Inc.",
+    "en": "OpenVPN connections use OpenVPN 2.6.15 (OpenVPN Inc. and contributors; openvpn.net), under the GPL 2 licence, with the authors' exceptions that allow linking with OpenSSL and with libraries under the Apache 2.0 licence. OpenVPN is a trademark of OpenVPN Inc.",
+    "cs": "Připojení VPN OpenVPN používají OpenVPN 2.6.15 (OpenVPN Inc. a přispěvatelé; openvpn.net) pod licencí GPL 2 s výjimkami autorů, které povolují propojení s OpenSSL a s knihovnami pod licencí Apache 2.0. OpenVPN je ochranná známka OpenVPN Inc.",
+    "de": "OpenVPN-Verbindungen verwenden OpenVPN 2.6.15 (OpenVPN Inc. und Mitwirkende; openvpn.net), unter der Lizenz GPL 2, mit den Ausnahmen der Autoren, die das Linken mit OpenSSL und mit Bibliotheken unter der Lizenz Apache 2.0 erlauben. OpenVPN ist eine Marke von OpenVPN Inc.",
+    "es": "Las conexiones VPN OpenVPN usan OpenVPN 2.6.15 (OpenVPN Inc. y colaboradores; openvpn.net), con la licencia GPL 2 y las excepciones de los autores que permiten el enlace con OpenSSL y con las bibliotecas bajo la licencia Apache 2.0. OpenVPN es una marca de OpenVPN Inc.",
+    "fr": "Les connexions VPN OpenVPN utilisent OpenVPN 2.6.15 (OpenVPN Inc. et les contributeurs ; openvpn.net), sous la licence GPL 2, avec les exceptions des auteurs qui permettent la liaison avec OpenSSL et avec les bibliothèques sous la licence Apache 2.0. OpenVPN est une marque d'OpenVPN Inc.",
+    "hu": "Az OpenVPN VPN-kapcsolatok az OpenVPN 2.6.15-öt használják (OpenVPN Inc. és közreműködők; openvpn.net), GPL 2 licenc alatt, a szerzők kivételeivel, amelyek megengedik az OpenSSL-lel és az Apache 2.0 licenc alatti könyvtárakkal való összekapcsolást. Az OpenVPN az OpenVPN Inc. védjegye.",
+    "it": "Le connessioni VPN OpenVPN usano OpenVPN 2.6.15 (OpenVPN Inc. e collaboratori; openvpn.net), con la licenza GPL 2, con le eccezioni degli autori che permettono il collegamento con OpenSSL e con le librerie sotto la licenza Apache 2.0. OpenVPN è un marchio di OpenVPN Inc.",
+    "nl": "OpenVPN-verbindingen gebruiken OpenVPN 2.6.15 (OpenVPN Inc. en medewerkers; openvpn.net), onder de licentie GPL 2, met de uitzonderingen van de auteurs die koppelen met OpenSSL en met bibliotheken onder de licentie Apache 2.0 toestaan. OpenVPN is een handelsmerk van OpenVPN Inc.",
+    "pl": "Połączenia VPN OpenVPN używają OpenVPN 2.6.15 (OpenVPN Inc. i współtwórcy; openvpn.net), na licencji GPL 2, z wyjątkami autorów, które pozwalają na łączenie z OpenSSL i z bibliotekami na licencji Apache 2.0. OpenVPN jest znakiem towarowym OpenVPN Inc.",
+    "pt": "As ligações VPN OpenVPN usam o OpenVPN 2.6.15 (OpenVPN Inc. e colaboradores; openvpn.net), sob a licença GPL 2, com as exceções dos autores que permitem a vinculação ao OpenSSL e às bibliotecas sob a licença Apache 2.0. OpenVPN é uma marca da OpenVPN Inc.",
+    "ru": "VPN-подключения OpenVPN используют OpenVPN 2.6.15 (OpenVPN Inc. и участники; openvpn.net) по лицензии GPL 2 с исключениями авторов, которые разрешают компоновку с OpenSSL и с библиотеками по лицензии Apache 2.0. OpenVPN является товарным знаком OpenVPN Inc.",
+    "tr": "OpenVPN VPN bağlantıları, yazarların OpenSSL ile ve Apache 2.0 lisansı altındaki kütüphanelerle bağlamaya izin veren istisnalarıyla GPL 2 lisansı altındaki OpenVPN 2.6.15'i kullanır (OpenVPN Inc. ve katkıda bulunanlar; openvpn.net). OpenVPN, OpenVPN Inc.'in ticari markasıdır."
+   }
+  },
+  {
+   "nume": "Material Symbols (pictogramele meniului)",
+   "pachet": "",
+   "fisier": "/usr/share/enigma2/HDSatelit/meniu",
+   "cai": [
+    "/usr/share/enigma2/HDSatelit/meniu/alb/setari.png"
+   ],
+   "licenta": "Apache-2.0",
+   "spdx": "Apache-2.0",
+   "ce": {
+    "ro": "Pictogramele meniului cu dale sunt din setul Material Symbols (Google), stilul cu linie, transformate în imagini PNG.",
+    "en": "The icons of the tile menu come from the Material Symbols set (Google), outlined style, converted to PNG images.",
+    "cs": "Ikony dlaždicové nabídky pocházejí ze sady Material Symbols (Google), obrysový styl, převedené na obrázky PNG.",
+    "de": "Die Symbole des Kachelmenüs stammen aus dem Satz Material Symbols (Google), Konturstil, in PNG-Bilder umgewandelt.",
+    "es": "Los iconos del menú de mosaicos vienen del conjunto Material Symbols (Google), estilo de contorno, convertidos en imágenes PNG.",
+    "fr": "Les icônes du menu en tuiles viennent du jeu Material Symbols (Google), style contour, converties en images PNG.",
+    "hu": "A csempés menü ikonjai a Material Symbols (Google) készletből származnak, körvonalas stílusban, PNG-képekké alakítva.",
+    "it": "Le icone del menu a riquadri vengono dal set Material Symbols (Google), stile a contorno, convertite in immagini PNG.",
+    "nl": "De pictogrammen van het tegelmenu komen uit de set Material Symbols (Google), omlijnde stijl, omgezet naar PNG-afbeeldingen.",
+    "pl": "Ikony menu z kafelkami pochodzą z zestawu Material Symbols (Google), styl konturowy, zamienione na obrazy PNG.",
+    "pt": "Os ícones do menu em mosaico vêm do conjunto Material Symbols (Google), estilo de contorno, convertidos em imagens PNG.",
+    "ru": "Значки плиточного меню взяты из набора Material Symbols (Google), контурный стиль, преобразованы в изображения PNG.",
+    "tr": "Döşemeli menünün simgeleri Material Symbols (Google) setinden alınmıştır, çizgi stili, PNG resimlerine dönüştürülmüştür."
+   }
+  }
+ ],
+ "fonturi": [
+  {
+   "nume": "Open Sans (HdsRegular, HdsBold, HdsCond)",
+   "fisier": "/usr/share/fonts/HdsRegular.ttf, HdsBold.ttf, HdsCond.ttf",
+   "cai": [
+    "/usr/share/fonts/HdsRegular.ttf"
+   ],
+   "licenta": "OFL-1.1",
+   "texte_in_imagine": [
+    "/usr/share/fonts/OFL.txt"
+   ],
+   "spdx": "OFL-1.1",
+   "ce": {
+    "ro": "Fontul interfeței, o parte din Open Sans.",
+    "en": "The interface font, a subset of Open Sans.",
+    "cs": "Písmo rozhraní, část písma Open Sans.",
+    "de": "Die Schrift der Oberfläche, ein Teil von Open Sans.",
+    "es": "La fuente de la interfaz, una parte de Open Sans.",
+    "fr": "La police de l'interface, une partie d'Open Sans.",
+    "hu": "A felület betűtípusa, az Open Sans egy része.",
+    "it": "Il carattere dell'interfaccia, una parte di Open Sans.",
+    "nl": "Het lettertype van de interface, een deel van Open Sans.",
+    "pl": "Czcionka interfejsu, część Open Sans.",
+    "pt": "O tipo de letra da interface, uma parte do Open Sans.",
+    "ru": "Шрифт интерфейса, часть Open Sans.",
+    "tr": "Arayüz yazı tipi, Open Sans'ın bir bölümü."
+   }
+  },
+  {
+   "nume": "Atkinson Hyperlegible",
+   "fisier": "/usr/share/fonts/AtkinsonHyperlegible-Regular.ttf, AtkinsonHyperlegible-Bold.ttf",
+   "cai": [
+    "/usr/share/fonts/AtkinsonHyperlegible-Regular.ttf"
+   ],
+   "licenta": "OFL-1.1",
+   "texte_in_imagine": [
+    "/usr/share/fonts/AtkinsonHyperlegible-OFL.txt"
+   ],
+   "spdx": "OFL-1.1",
+   "ce": {
+    "ro": "Un font al interfeței, de ales în Fontul interfeței, de la Braille Institute of America, neschimbat.",
+    "en": "An interface font to choose in Interface font, by the Braille Institute of America, unchanged.",
+    "cs": "Písmo rozhraní k výběru v Písmu rozhraní, od Braille Institute of America, beze změn.",
+    "de": "Eine Schrift für die Oberfläche, wählbar unter Schrift der Oberfläche, vom Braille Institute of America, unverändert.",
+    "es": "Una fuente de la interfaz para elegir en Fuente de la interfaz, del Braille Institute of America, sin cambios.",
+    "fr": "Une police de l'interface à choisir dans Police de l'interface, du Braille Institute of America, inchangée.",
+    "hu": "A felület egyik betűtípusa, a Felület betűtípusa menüben választható, a Braille Institute of America-tól, változatlanul.",
+    "it": "Un carattere dell'interfaccia da scegliere in Carattere dell'interfaccia, del Braille Institute of America, invariato.",
+    "nl": "Een lettertype van de interface, te kiezen bij Lettertype van de interface, van het Braille Institute of America, ongewijzigd.",
+    "pl": "Czcionka interfejsu do wyboru w Czcionce interfejsu, od Braille Institute of America, bez zmian.",
+    "pt": "Um tipo de letra da interface para escolher em Tipo de letra da interface, do Braille Institute of America, sem alterações.",
+    "ru": "Шрифт интерфейса на выбор в разделе Шрифт интерфейса, от Braille Institute of America, без изменений.",
+    "tr": "Arayüz yazı tipinde seçilebilen bir arayüz yazı tipi, Braille Institute of America'dan, değiştirilmeden."
+   }
+  },
+  {
+   "nume": "Barlow, Barlow Semi Condensed",
+   "fisier": "/usr/share/fonts/Barlow-Regular.ttf, Barlow-Bold.ttf, BarlowSemiCondensed-Regular.ttf",
+   "cai": [
+    "/usr/share/fonts/Barlow-Regular.ttf"
+   ],
+   "licenta": "OFL-1.1",
+   "texte_in_imagine": [
+    "/usr/share/fonts/Barlow-OFL.txt"
+   ],
+   "spdx": "OFL-1.1",
+   "ce": {
+    "ro": "Un font al interfeței, de ales în Fontul interfeței, de la The Barlow Project Authors, neschimbat.",
+    "en": "An interface font to choose in Interface font, by The Barlow Project Authors, unchanged.",
+    "cs": "Písmo rozhraní k výběru v Písmu rozhraní, od The Barlow Project Authors, beze změn.",
+    "de": "Eine Schrift für die Oberfläche, wählbar unter Schrift der Oberfläche, von The Barlow Project Authors, unverändert.",
+    "es": "Una fuente de la interfaz para elegir en Fuente de la interfaz, de The Barlow Project Authors, sin cambios.",
+    "fr": "Une police de l'interface à choisir dans Police de l'interface, de The Barlow Project Authors, inchangée.",
+    "hu": "A felület egyik betűtípusa, a Felület betűtípusa menüben választható, a The Barlow Project Authors-tól, változatlanul.",
+    "it": "Un carattere dell'interfaccia da scegliere in Carattere dell'interfaccia, di The Barlow Project Authors, invariato.",
+    "nl": "Een lettertype van de interface, te kiezen bij Lettertype van de interface, van The Barlow Project Authors, ongewijzigd.",
+    "pl": "Czcionka interfejsu do wyboru w Czcionce interfejsu, od The Barlow Project Authors, bez zmian.",
+    "pt": "Um tipo de letra da interface para escolher em Tipo de letra da interface, de The Barlow Project Authors, sem alterações.",
+    "ru": "Шрифт интерфейса на выбор в разделе Шрифт интерфейса, от The Barlow Project Authors, без изменений.",
+    "tr": "Arayüz yazı tipinde seçilebilen bir arayüz yazı tipi, The Barlow Project Authors'tan, değiştirilmeden."
+   }
+  },
+  {
+   "nume": "PT Sans, PT Sans Narrow",
+   "fisier": "/usr/share/fonts/PT_Sans-Web-Regular.ttf, PT_Sans-Web-Bold.ttf, PT_Sans-Narrow-Web-Regular.ttf",
+   "cai": [
+    "/usr/share/fonts/PT_Sans-Web-Regular.ttf"
+   ],
+   "licenta": "OFL-1.1",
+   "texte_in_imagine": [
+    "/usr/share/fonts/PT_Sans-OFL.txt"
+   ],
+   "spdx": "OFL-1.1",
+   "ce": {
+    "ro": "Un font al interfeței, de ales în Fontul interfeței, de la ParaType, neschimbat (numele PT Sans și ParaType sunt rezervate).",
+    "en": "An interface font to choose in Interface font, by ParaType, unchanged (the names PT Sans and ParaType are reserved).",
+    "cs": "Písmo rozhraní k výběru v Písmu rozhraní, od ParaType, beze změn (názvy PT Sans a ParaType jsou vyhrazené).",
+    "de": "Eine Schrift für die Oberfläche, wählbar unter Schrift der Oberfläche, von ParaType, unverändert (die Namen PT Sans und ParaType sind reserviert).",
+    "es": "Una fuente de la interfaz para elegir en Fuente de la interfaz, de ParaType, sin cambios (los nombres PT Sans y ParaType están reservados).",
+    "fr": "Une police de l'interface à choisir dans Police de l'interface, de ParaType, inchangée (les noms PT Sans et ParaType sont réservés).",
+    "hu": "A felület egyik betűtípusa, a Felület betűtípusa menüben választható, a ParaType-tól, változatlanul (a PT Sans és a ParaType név fenntartott).",
+    "it": "Un carattere dell'interfaccia da scegliere in Carattere dell'interfaccia, di ParaType, invariato (i nomi PT Sans e ParaType sono riservati).",
+    "nl": "Een lettertype van de interface, te kiezen bij Lettertype van de interface, van ParaType, ongewijzigd (de namen PT Sans en ParaType zijn voorbehouden).",
+    "pl": "Czcionka interfejsu do wyboru w Czcionce interfejsu, od ParaType, bez zmian (nazwy PT Sans i ParaType są zastrzeżone).",
+    "pt": "Um tipo de letra da interface para escolher em Tipo de letra da interface, da ParaType, sem alterações (os nomes PT Sans e ParaType são reservados).",
+    "ru": "Шрифт интерфейса на выбор в разделе Шрифт интерфейса, от ParaType, без изменений (названия PT Sans и ParaType зарезервированы).",
+    "tr": "Arayüz yazı tipinde seçilebilen bir arayüz yazı tipi, ParaType'tan, değiştirilmeden (PT Sans ve ParaType adları saklıdır)."
+   }
+  },
+  {
+   "nume": "Open Sans, Noto Sans (HDSatelit)",
+   "fisier": "/usr/share/enigma2/HDSatelit/fonts/",
+   "cai": [
+    "/usr/share/enigma2/HDSatelit/fonts/*.ttf"
+   ],
+   "licenta": "OFL-1.1",
+   "texte_in_imagine": [
+    "/usr/share/enigma2/HDSatelit/fonts/OFL.txt"
+   ],
+   "spdx": "OFL-1.1",
+   "ce": {
+    "ro": "Fonturile skinului HDSatelit: Open Sans și Noto Sans pentru arabă, ebraică și thailandeză.",
+    "en": "The HDSatelit skin fonts: Open Sans and Noto Sans for Arabic, Hebrew and Thai.",
+    "cs": "Písma vzhledu HDSatelit: Open Sans a Noto Sans pro arabštinu, hebrejštinu a thajštinu.",
+    "de": "Die Schriften des Skins HDSatelit: Open Sans und Noto Sans für Arabisch, Hebräisch und Thai.",
+    "es": "Las fuentes del skin HDSatelit: Open Sans y Noto Sans para árabe, hebreo y tailandés.",
+    "fr": "Les polices du skin HDSatelit : Open Sans et Noto Sans pour l'arabe, l'hébreu et le thaï.",
+    "hu": "A HDSatelit felület betűtípusai: Open Sans és Noto Sans az arab, a héber és a thai íráshoz.",
+    "it": "I caratteri dello skin HDSatelit: Open Sans e Noto Sans per arabo, ebraico e thailandese.",
+    "nl": "De lettertypen van de skin HDSatelit: Open Sans en Noto Sans voor Arabisch, Hebreeuws en Thai.",
+    "pl": "Czcionki skórki HDSatelit: Open Sans i Noto Sans dla arabskiego, hebrajskiego i tajskiego.",
+    "pt": "Os tipos de letra do skin HDSatelit: Open Sans e Noto Sans para árabe, hebraico e tailandês.",
+    "ru": "Шрифты оформления HDSatelit: Open Sans и Noto Sans для арабского, иврита и тайского.",
+    "tr": "HDSatelit arayüzünün yazı tipleri: Arapça, İbranice ve Tayca için Open Sans ve Noto Sans."
+   }
+  },
+  {
+   "nume": "Bitstream Vera Sans Mono Bold",
+   "fisier": "/usr/share/fonts/tuxtxt.ttf",
+   "cai": [
+    "/usr/share/fonts/tuxtxt.ttf"
+   ],
+   "licenta": "Bitstream-Vera",
+   "texte_in_imagine": [
+    "/usr/share/fonts/tuxtxt.license"
+   ],
+   "spdx": "Bitstream-Vera",
+   "ce": {
+    "ro": "Fontul teletextului și al consolei.",
+    "en": "The teletext and console font.",
+    "cs": "Písmo teletextu a konzole.",
+    "de": "Die Schrift für Videotext und Konsole.",
+    "es": "La fuente del teletexto y de la consola.",
+    "fr": "La police du télétexte et de la console.",
+    "hu": "A teletext és a konzol betűtípusa.",
+    "it": "Il carattere del televideo e della console.",
+    "nl": "Het lettertype van teletekst en de console.",
+    "pl": "Czcionka telegazety i konsoli.",
+    "pt": "O tipo de letra do teletexto e da consola.",
+    "ru": "Шрифт телетекста и консоли.",
+    "tr": "Teletekst ve konsol yazı tipi."
+   }
+  },
+  {
+   "nume": "DejaVu Sans Mono Bold",
+   "fisier": "/usr/share/fonts/DejaVuSansMono-Bold.ttf",
+   "cai": [
+    "/usr/share/fonts/DejaVuSansMono-Bold.ttf"
+   ],
+   "licenta": "Bitstream-Vera",
+   "texte_in_imagine": [
+    "/usr/share/fonts/DejaVuSansMono-Bold.license"
+   ],
+   "spdx": "Bitstream-Vera",
+   "ce": {
+    "ro": "Font cu lățime fixă. Schimbările DejaVu sunt în domeniul public.",
+    "en": "Fixed width font. The DejaVu changes are in the public domain.",
+    "cs": "Písmo s pevnou šířkou. Změny DejaVu jsou volným dílem.",
+    "de": "Schrift mit fester Breite. Die DejaVu-Änderungen sind gemeinfrei.",
+    "es": "Fuente de ancho fijo. Los cambios de DejaVu son de dominio público.",
+    "fr": "Police à chasse fixe. Les modifications DejaVu sont dans le domaine public.",
+    "hu": "Rögzített szélességű betűtípus. A DejaVu módosításai közkincsek.",
+    "it": "Carattere a larghezza fissa. Le modifiche DejaVu sono di pubblico dominio.",
+    "nl": "Lettertype met vaste breedte. De DejaVu-wijzigingen zijn publiek domein.",
+    "pl": "Czcionka o stałej szerokości. Zmiany DejaVu są w domenie publicznej.",
+    "pt": "Tipo de letra de largura fixa. As alterações DejaVu são de domínio público.",
+    "ru": "Моноширинный шрифт. Изменения DejaVu являются общественным достоянием.",
+    "tr": "Sabit genişlikli yazı tipi. DejaVu değişiklikleri kamu malıdır."
+   }
+  },
+  {
+   "nume": "ae_AlMateen",
+   "fisier": "/usr/share/fonts/ae_AlMateen.ttf",
+   "cai": [
+    "/usr/share/fonts/ae_AlMateen.ttf"
+   ],
+   "licenta": "GPL",
+   "clasa": "copyleft",
+   "texte_in_imagine": [
+    "/usr/share/fonts/ae_AlMateen.license"
+   ],
+   "spdx": "GPL-2.0-or-later",
+   "spdx_mereu": true,
+   "ce": {
+    "ro": "Font pentru scrierea arabă (Arabeyes).",
+    "en": "Font for Arabic script (Arabeyes).",
+    "cs": "Písmo pro arabské písmo (Arabeyes).",
+    "de": "Schrift für die arabische Schrift (Arabeyes).",
+    "es": "Fuente para la escritura árabe (Arabeyes).",
+    "fr": "Police pour l'écriture arabe (Arabeyes).",
+    "hu": "Betűtípus arab íráshoz (Arabeyes).",
+    "it": "Carattere per la scrittura araba (Arabeyes).",
+    "nl": "Lettertype voor het Arabische schrift (Arabeyes).",
+    "pl": "Czcionka do pisma arabskiego (Arabeyes).",
+    "pt": "Tipo de letra para a escrita árabe (Arabeyes).",
+    "ru": "Шрифт для арабского письма (Arabeyes).",
+    "tr": "Arap yazısı için yazı tipi (Arabeyes)."
+   }
+  },
+  {
+   "nume": "Tiresias Infofont, Tiresias PCfont",
+   "reteta": "hdsatelit-fonturi-tiresias",
+   "fisier": "/usr/share/fonts/tiresias/",
+   "cai": [
+    "/usr/share/fonts/tiresias/*.ttf"
+   ],
+   "licenta": "GPL-3.0-or-later",
+   "texte_in_imagine": [
+    "/usr/share/fonts/tiresias/LICENTA-TIRESIAS.txt",
+    "/usr/share/fonts/tiresias/COPYING"
+   ],
+   "spdx": "GPL-3.0-or-later",
+   "ce": {
+    "ro": "Fonturi ușor de citit de la distanță; licența lor GPL are excepția pentru fonturi.",
+    "en": "Fonts easy to read from a distance, covered by the GPL font exception.",
+    "cs": "Písma dobře čitelná na dálku; platí pro ně výjimka GPL pro písma.",
+    "de": "Aus der Ferne gut lesbare Schriften, mit der Schriftarten-Ausnahme der GPL.",
+    "es": "Fuentes fáciles de leer a distancia, sujetas a la excepción de fuentes de la GPL.",
+    "fr": "Polices faciles à lire de loin, couvertes par l'exception pour les polices de la GPL.",
+    "hu": "Messziről is jól olvasható betűtípusok; a GPL betűtípusokra vonatkozó kivétele érvényes rájuk.",
+    "it": "Caratteri facili da leggere a distanza, coperti dall'eccezione per i caratteri della GPL.",
+    "nl": "Lettertypen die van ver goed leesbaar zijn, met de lettertype-uitzondering van de GPL.",
+    "pl": "Czcionki łatwe do czytania z daleka, objęte wyjątkiem GPL dla czcionek.",
+    "pt": "Tipos de letra fáceis de ler à distância, abrangidos pela exceção de tipos de letra da GPL.",
+    "ru": "Шрифты, хорошо читаемые издалека; на них распространяется исключение GPL для шрифтов.",
+    "tr": "Uzaktan kolay okunan yazı tipleri; GPL'nin yazı tipi istisnası geçerlidir."
+   }
+  },
+  {
+   "nume": "decker.ttf (DirectFB)",
+   "fisier": "/usr/share/directfb-1.7.7/decker.ttf",
+   "cai": [
+    "/usr/share/directfb-*/decker.ttf"
+   ],
+   "licenta": "LGPL-2.1-only",
+   "spdx": "LGPL-2.1-only",
+   "ce": {
+    "ro": "Fontul de probă al bibliotecii DirectFB.",
+    "en": "The sample font of the DirectFB library.",
+    "cs": "Ukázkové písmo knihovny DirectFB.",
+    "de": "Die Beispielschrift der Bibliothek DirectFB.",
+    "es": "La fuente de muestra de la biblioteca DirectFB.",
+    "fr": "La police d'exemple de la bibliothèque DirectFB.",
+    "hu": "A DirectFB könyvtár mintabetűtípusa.",
+    "it": "Il carattere di esempio della libreria DirectFB.",
+    "nl": "Het voorbeeldlettertype van de bibliotheek DirectFB.",
+    "pl": "Przykładowa czcionka biblioteki DirectFB.",
+    "pt": "O tipo de letra de exemplo da biblioteca DirectFB.",
+    "ru": "Пробный шрифт библиотеки DirectFB.",
+    "tr": "DirectFB kütüphanesinin örnek yazı tipi."
+   }
+  },
+  {
+   "nume": "pdf.ttf (Tesseract)",
+   "fisier": "/usr/share/tessdata/pdf.ttf",
+   "cai": [
+    "/usr/share/tessdata/pdf.ttf"
+   ],
+   "licenta": "Apache-2.0",
+   "spdx": "Apache-2.0",
+   "ce": {
+    "ro": "Fontul fără litere desenate folosit de recunoașterea textului.",
+    "en": "The font without drawn glyphs used by text recognition.",
+    "cs": "Písmo bez nakreslených znaků, které používá rozpoznávání textu.",
+    "de": "Die Schrift ohne gezeichnete Zeichen, die die Texterkennung benutzt.",
+    "es": "La fuente sin letras dibujadas que usa el reconocimiento de texto.",
+    "fr": "La police sans glyphes dessinés utilisée par la reconnaissance de texte.",
+    "hu": "A szövegfelismerés által használt, rajzolt betűk nélküli betűtípus.",
+    "it": "Il carattere senza glifi disegnati usato dal riconoscimento del testo.",
+    "nl": "Het lettertype zonder getekende tekens dat de tekstherkenning gebruikt.",
+    "pl": "Czcionka bez narysowanych znaków używana przez rozpoznawanie tekstu.",
+    "pt": "O tipo de letra sem letras desenhadas usado pelo reconhecimento de texto.",
+    "ru": "Шрифт без нарисованных знаков, который использует распознавание текста.",
+    "tr": "Metin tanımanın kullandığı, çizilmiş harfleri olmayan yazı tipi."
+   }
+  }
+ ],
+ "liste": [
+  {
+   "nume": "satellites.xml, cables.xml, terrestrial.xml",
+   "pachet": "tuxbox-common",
+   "fisier": "/etc/tuxbox/satellites.xml, cables.xml, terrestrial.xml, atsc.xml",
+   "cai": [
+    "/etc/tuxbox/satellites.xml"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Lista inițială de sateliți, cablu și terestru, compilată de comunitatea OE-Alliance din date publicate pe lyngsat.com.",
+    "en": "The initial satellite, cable and terrestrial list, compiled by the OE-Alliance community from data published on lyngsat.com.",
+    "cs": "Výchozí seznam satelitů, kabelu a pozemního vysílání, sestavený komunitou OE-Alliance z údajů zveřejněných na lyngsat.com.",
+    "de": "Die Anfangsliste für Satellit, Kabel und Antenne, von der OE-Alliance-Gemeinschaft aus Daten von lyngsat.com zusammengestellt.",
+    "es": "La lista inicial de satélites, cable y terrestre, compilada por la comunidad OE-Alliance con datos publicados en lyngsat.com.",
+    "fr": "La liste initiale des satellites, du câble et de la TNT, compilée par la communauté OE-Alliance à partir de données publiées sur lyngsat.com.",
+    "hu": "A műholdas, kábeles és földfelszíni kezdeti lista, amelyet az OE-Alliance közösség a lyngsat.com oldalon közzétett adatokból állított össze.",
+    "it": "L'elenco iniziale di satelliti, cavo e digitale terrestre, compilato dalla comunità OE-Alliance da dati pubblicati su lyngsat.com.",
+    "nl": "De beginlijst voor satelliet, kabel en antenne, door de OE-Alliance-gemeenschap samengesteld uit gegevens van lyngsat.com.",
+    "pl": "Początkowa lista satelitów, kablówki i telewizji naziemnej, zebrana przez społeczność OE-Alliance z danych opublikowanych na lyngsat.com.",
+    "pt": "A lista inicial de satélites, cabo e terrestre, compilada pela comunidade OE-Alliance a partir de dados publicados em lyngsat.com.",
+    "ru": "Начальный список спутников, кабельного и эфирного вещания, составленный сообществом OE-Alliance по данным с lyngsat.com.",
+    "tr": "OE-Alliance topluluğunun lyngsat.com'da yayımlanan verilerden derlediği ilk uydu, kablo ve karasal liste."
+   }
+  },
+  {
+   "nume": "operatori-satelit.json, *-romania.json",
+   "pachet": "enigma2-hdsatelit",
+   "fisier": "/usr/share/enigma2/operatori-satelit.json, cablu-romania.json, terestru-romania.json",
+   "cai": [
+    "/usr/share/enigma2/operatori-satelit.json"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Operatorii și frecvențele de pornire pentru satelit, cablu și terestru, scrise de noi din paginile operatorilor, lista Radiocom și măsurători. Sursa fiecărei intrări e în fișier.",
+    "en": "The operators and start frequencies for satellite, cable and terrestrial, written by us from the operators' pages, the Radiocom list and measurements. The source of each entry is in the file.",
+    "cs": "Operátoři a výchozí frekvence pro satelit, kabel a pozemní vysílání, sepsané námi ze stránek operátorů, seznamu Radiocom a měření. Zdroj každé položky je v souboru.",
+    "de": "Die Anbieter und Startfrequenzen für Satellit, Kabel und Antenne, von uns aus den Seiten der Anbieter, der Radiocom-Liste und Messungen geschrieben. Die Quelle jedes Eintrags steht in der Datei.",
+    "es": "Los operadores y las frecuencias de inicio para satélite, cable y terrestre, escritos por nosotros a partir de las páginas de los operadores, la lista de Radiocom y mediciones. La fuente de cada entrada está en el archivo.",
+    "fr": "Les opérateurs et fréquences de départ pour le satellite, le câble et la TNT, écrits par nous à partir des pages des opérateurs, de la liste Radiocom et de mesures. La source de chaque entrée est dans le fichier.",
+    "hu": "A műholdas, kábeles és földfelszíni szolgáltatók és kezdőfrekvenciák, amelyeket mi írtunk a szolgáltatók oldalai, a Radiocom listája és mérések alapján. Minden bejegyzés forrása a fájlban van.",
+    "it": "Gli operatori e le frequenze di partenza per satellite, cavo e digitale terrestre, scritti da noi dalle pagine degli operatori, dall'elenco Radiocom e da misure. La fonte di ogni voce è nel file.",
+    "nl": "De aanbieders en startfrequenties voor satelliet, kabel en antenne, door ons geschreven uit de pagina's van de aanbieders, de Radiocom-lijst en metingen. De bron van elke regel staat in het bestand.",
+    "pl": "Operatorzy i częstotliwości startowe dla satelity, kablówki i telewizji naziemnej, opisane przez nas ze stron operatorów, listy Radiocom i pomiarów. Źródło każdego wpisu jest w pliku.",
+    "pt": "Os operadores e as frequências iniciais para satélite, cabo e terrestre, escritos por nós a partir das páginas dos operadores, da lista Radiocom e de medições. A fonte de cada entrada está no ficheiro.",
+    "ru": "Операторы и стартовые частоты для спутникового, кабельного и эфирного вещания, записанные нами по страницам операторов, списку Radiocom и измерениям. Источник каждой записи указан в файле.",
+    "tr": "Uydu, kablo ve karasal yayın için operatörler ve başlangıç frekansları; operatör sayfalarından, Radiocom listesinden ve ölçümlerden tarafımızca yazıldı. Her kaydın kaynağı dosyadadır."
+   }
+  },
+  {
+   "nume": "GeoNames",
+   "pachet": "enigma2-hdsatelit",
+   "fisier": "/usr/lib/enigma2/python/Components/HdsLocuriDate.py",
+   "cai": [
+    "/usr/lib/enigma2/python/Components/HdsLocuriDate.py*"
+   ],
+   "licenta": "CC-BY-4.0",
+   "spdx": "CC-BY-4.0",
+   "ce": {
+    "ro": "Țările și orașele pentru locul antenei, cu coordonatele lor, sunt date GeoNames (www.geonames.org), sub licența Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Schimbate de noi: numai o parte din orașe, coordonatele rotunjite la 0,01 grade, numele unor orașe în română.",
+    "en": "The countries and cities for the dish location, with their coordinates, are GeoNames data (www.geonames.org), under the Creative Commons Attribution 4.0 licence (creativecommons.org/licenses/by/4.0). Changed by us: only some of the cities, coordinates rounded to 0.01 degrees, some city names in Romanian.",
+    "cs": "Země a města pro umístění antény, i s jejich souřadnicemi, jsou data GeoNames (www.geonames.org) pod licencí Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Naše změny: jen část měst, souřadnice zaokrouhlené na 0,01 stupně, názvy některých měst rumunsky.",
+    "de": "Die Länder und Städte für den Standort der Antenne, samt Koordinaten, sind Daten von GeoNames (www.geonames.org) unter der Lizenz Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Von uns geändert: nur ein Teil der Städte, Koordinaten auf 0,01 Grad gerundet, die Namen einiger Städte auf Rumänisch.",
+    "es": "Los países y las ciudades para la ubicación de la antena, con sus coordenadas, son datos de GeoNames (www.geonames.org), con la licencia Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Cambiados por nosotros: solo una parte de las ciudades, las coordenadas redondeadas a 0,01 grados, los nombres de algunas ciudades en rumano.",
+    "fr": "Les pays et les villes pour l'emplacement de l'antenne, avec leurs coordonnées, sont des données GeoNames (www.geonames.org), sous la licence Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Modifiées par nous : une partie seulement des villes, les coordonnées arrondies à 0,01 degré, le nom de certaines villes en roumain.",
+    "hu": "Az antenna helyéhez tartozó országok és városok a koordinátáikkal együtt a GeoNames adatai (www.geonames.org), Creative Commons Attribution 4.0 licenc alatt (creativecommons.org/licenses/by/4.0). A mi változtatásaink: a városoknak csak egy része, 0,01 fokra kerekített koordináták, néhány város neve románul.",
+    "it": "I paesi e le città per la posizione dell'antenna, con le loro coordinate, sono dati GeoNames (www.geonames.org), con la licenza Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Modificati da noi: solo una parte delle città, coordinate arrotondate a 0,01 gradi, i nomi di alcune città in romeno.",
+    "nl": "De landen en steden voor de locatie van de schotel, met hun coördinaten, zijn gegevens van GeoNames (www.geonames.org), onder de licentie Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Door ons gewijzigd: alleen een deel van de steden, coördinaten afgerond op 0,01 graad, de namen van sommige steden in het Roemeens.",
+    "pl": "Kraje i miasta do lokalizacji anteny, wraz ze współrzędnymi, to dane GeoNames (www.geonames.org) na licencji Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Nasze zmiany: tylko część miast, współrzędne zaokrąglone do 0,01 stopnia, nazwy niektórych miast po rumuńsku.",
+    "pt": "Os países e as cidades para a localização da antena, com as suas coordenadas, são dados GeoNames (www.geonames.org), sob a licença Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Alterados por nós: só uma parte das cidades, coordenadas arredondadas a 0,01 graus, os nomes de algumas cidades em romeno.",
+    "ru": "Страны и города для местоположения антенны вместе с их координатами взяты из GeoNames (www.geonames.org) по лицензии Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Наши изменения: только часть городов, координаты округлены до 0,01 градуса, названия некоторых городов на румынском.",
+    "tr": "Anten konumu için ülkeler ve şehirler, koordinatlarıyla birlikte, Creative Commons Attribution 4.0 lisansı (creativecommons.org/licenses/by/4.0) altındaki GeoNames verileridir (www.geonames.org). Tarafımızca değiştirildi: şehirlerin yalnızca bir kısmı, 0,01 dereceye yuvarlanmış koordinatlar, bazı şehirlerin Rumence adları."
+   }
+  },
+  {
+   "nume": "DB-IP IP to City Lite",
+   "pachet": "enigma2-hdsatelit",
+   "fisier": "/usr/lib/enigma2/python/Components/HdsLoculInternet.py",
+   "cai": [
+    "/usr/lib/enigma2/python/Components/HdsLoculInternet.py*"
+   ],
+   "licenta": "CC-BY-4.0",
+   "spdx": "CC-BY-4.0",
+   "ce": {
+    "ro": "Orașul și coordonatele propuse de „Află locul după internet” vin de la serverul HD Satelit, din baza DB-IP „IP to City Lite” (IP Geolocation by DB-IP, db-ip.com), sub licența Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Baza stă pe server, nu în imagine; receptorul primește numai orașul, țara și coordonatele. Schimbat de noi: coordonatele rotunjite la 0,01 grade; un oraș din listă aflat la cel mult 10 km îi ia locul.",
+    "en": "The city and coordinates offered by “Find the location via internet” come from the HD Satelit server, from the DB-IP “IP to City Lite” database (IP Geolocation by DB-IP, db-ip.com), under the Creative Commons Attribution 4.0 licence (creativecommons.org/licenses/by/4.0). The database is on the server, not in the image; the receiver only gets the city, country and coordinates. Changed by us: coordinates rounded to 0.01 degrees; a city from the list within 10 km takes its place.",
+    "cs": "Město a souřadnice, které nabízí „Zjistit umístění podle internetu“, pocházejí ze serveru HD Satelit, z databáze DB-IP „IP to City Lite“ (IP Geolocation by DB-IP, db-ip.com) pod licencí Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Databáze je na serveru, ne v obrazu; přijímač dostává jen město, zemi a souřadnice. Naše změny: souřadnice zaokrouhlené na 0,01 stupně; město ze seznamu do 10 km zaujme jeho místo.",
+    "de": "Stadt und Koordinaten, die „Standort über das Internet ermitteln“ vorschlägt, kommen vom Server von HD Satelit, aus der Datenbank DB-IP „IP to City Lite“ (IP Geolocation by DB-IP, db-ip.com), unter der Lizenz Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Die Datenbank liegt auf dem Server, nicht im Image; der Receiver bekommt nur Stadt, Land und Koordinaten. Von uns geändert: Koordinaten auf 0,01 Grad gerundet; eine Stadt aus der Liste im Umkreis von 10 km tritt an ihre Stelle.",
+    "es": "La ciudad y las coordenadas que propone «Averiguar la ubicación por internet» vienen del servidor de HD Satelit, de la base DB-IP «IP to City Lite» (IP Geolocation by DB-IP, db-ip.com), con la licencia Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). La base está en el servidor, no en la imagen; el receptor solo recibe la ciudad, el país y las coordenadas. Cambiado por nosotros: coordenadas redondeadas a 0,01 grados; una ciudad de la lista a 10 km como máximo ocupa su lugar.",
+    "fr": "La ville et les coordonnées proposées par « Trouver l'emplacement par Internet » viennent du serveur HD Satelit, de la base DB-IP « IP to City Lite » (IP Geolocation by DB-IP, db-ip.com), sous la licence Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). La base est sur le serveur, pas dans l'image ; le récepteur ne reçoit que la ville, le pays et les coordonnées. Modifié par nous : coordonnées arrondies à 0,01 degré ; une ville de la liste à 10 km au plus prend sa place.",
+    "hu": "A „Hely meghatározása az internet alapján” által javasolt város és koordináták a HD Satelit szerveréről jönnek, a DB-IP „IP to City Lite” adatbázisából (IP Geolocation by DB-IP, db-ip.com), Creative Commons Attribution 4.0 licenc alatt (creativecommons.org/licenses/by/4.0). Az adatbázis a szerveren van, nem a képfájlban; a vevő csak a várost, az országot és a koordinátákat kapja meg. A mi változtatásaink: 0,01 fokra kerekített koordináták; a lista legfeljebb 10 km-re lévő városa lép a helyére.",
+    "it": "La città e le coordinate proposte da «Trova la posizione tramite internet» vengono dal server HD Satelit, dal database DB-IP «IP to City Lite» (IP Geolocation by DB-IP, db-ip.com), con la licenza Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Il database è sul server, non nell'immagine; il ricevitore riceve solo la città, il paese e le coordinate. Modificato da noi: coordinate arrotondate a 0,01 gradi; una città dell'elenco entro 10 km prende il suo posto.",
+    "nl": "De stad en coördinaten die „Locatie via internet bepalen” voorstelt, komen van de server van HD Satelit, uit de database DB-IP „IP to City Lite” (IP Geolocation by DB-IP, db-ip.com), onder de licentie Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). De database staat op de server, niet in de image; de ontvanger krijgt alleen de stad, het land en de coördinaten. Door ons gewijzigd: coördinaten afgerond op 0,01 graad; een stad uit de lijst binnen 10 km neemt de plaats in.",
+    "pl": "Miasto i współrzędne proponowane przez „Ustal lokalizację przez internet” pochodzą z serwera HD Satelit, z bazy DB-IP „IP to City Lite” (IP Geolocation by DB-IP, db-ip.com), na licencji Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). Baza jest na serwerze, nie w obrazie; odbiornik dostaje tylko miasto, kraj i współrzędne. Nasze zmiany: współrzędne zaokrąglone do 0,01 stopnia; miasto z listy w promieniu 10 km zajmuje jego miejsce.",
+    "pt": "A cidade e as coordenadas propostas por «Descobrir a localização pela internet» vêm do servidor HD Satelit, da base DB-IP «IP to City Lite» (IP Geolocation by DB-IP, db-ip.com), sob a licença Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). A base está no servidor, não na imagem; o recetor recebe só a cidade, o país e as coordenadas. Alterado por nós: coordenadas arredondadas a 0,01 graus; uma cidade da lista a 10 km no máximo ocupa o seu lugar.",
+    "ru": "Город и координаты, которые предлагает «Определить место по интернету», приходят с сервера HD Satelit, из базы DB-IP «IP to City Lite» (IP Geolocation by DB-IP, db-ip.com) по лицензии Creative Commons Attribution 4.0 (creativecommons.org/licenses/by/4.0). База находится на сервере, а не в образе; ресивер получает только город, страну и координаты. Наши изменения: координаты округлены до 0,01 градуса; город из списка в пределах 10 км занимает его место.",
+    "tr": "“Konumu internetten bul” seçeneğinin önerdiği şehir ve koordinatlar, HD Satelit sunucusundan, DB-IP “IP to City Lite” veritabanından (IP Geolocation by DB-IP, db-ip.com), Creative Commons Attribution 4.0 lisansı (creativecommons.org/licenses/by/4.0) altında gelir. Veritabanı imajda değil, sunucudadır; alıcı yalnızca şehri, ülkeyi ve koordinatları alır. Tarafımızca değiştirildi: koordinatlar 0,01 dereceye yuvarlandı; listede en fazla 10 km uzaktaki bir şehir onun yerini alır."
+   }
+  },
+  {
+   "nume": "Producătorii după adresa MAC (Wireshark manuf)",
+   "pachet": "enigma2-hdsatelit",
+   "fisier": "/usr/share/enigma2/hds-producatori-mac.txt.gz",
+   "cai": [
+    "/usr/share/enigma2/hds-producatori-mac.txt.gz"
+   ],
+   "licenta": "GPL-2.0-or-later",
+   "spdx": "GPL-2.0-or-later",
+   "ce": {
+    "ro": "Producătorul arătat de Ce aparate sunt în rețea vine din lista manuf a proiectului Wireshark (www.wireshark.org), făcută din listele publice IEEE ale adreselor MAC, sub licența GPL-2.0-or-later. Schimbat de noi: numai prefixul și numele producătorului (cel mult 40 de litere); câteva intrări scoase.",
+    "en": "The maker shown by Which devices are on the network comes from the manuf list of the Wireshark project (www.wireshark.org), built from the IEEE public MAC address listings, under the GPL-2.0-or-later licence. Changed by us: only the prefix and the maker name (at most 40 letters); a few entries removed.",
+    "cs": "Výrobce, kterého ukazuje Která zařízení jsou v síti, pochází ze seznamu manuf projektu Wireshark (www.wireshark.org), sestaveného z veřejných seznamů adres MAC organizace IEEE, pod licencí GPL-2.0-or-later. Naše změny: jen předpona a jméno výrobce (nejvýše 40 znaků); několik položek odebráno.",
+    "de": "Der Hersteller, den Welche Geräte sind im Netzwerk anzeigt, stammt aus der Liste manuf des Wireshark-Projekts (www.wireshark.org), erstellt aus den öffentlichen MAC-Adresslisten der IEEE, unter der Lizenz GPL-2.0-or-later. Von uns geändert: nur Präfix und Herstellername (höchstens 40 Zeichen); einige Einträge entfernt.",
+    "es": "El fabricante que muestra Qué aparatos hay en la red viene de la lista manuf del proyecto Wireshark (www.wireshark.org), hecha con las listas públicas de direcciones MAC del IEEE, con la licencia GPL-2.0-or-later. Cambiado por nosotros: solo el prefijo y el nombre del fabricante (como máximo 40 letras); se quitaron algunas entradas.",
+    "fr": "Le fabricant affiché par Quels appareils sont sur le réseau vient de la liste manuf du projet Wireshark (www.wireshark.org), faite à partir des listes publiques d'adresses MAC de l'IEEE, sous la licence GPL-2.0-or-later. Modifié par nous: seulement le préfixe et le nom du fabricant (40 lettres au plus); quelques entrées retirées.",
+    "hu": "A Milyen eszközök vannak a hálózaton által mutatott gyártó a Wireshark projekt (www.wireshark.org) manuf listájából származik, amely az IEEE nyilvános MAC-címlistáiból készült, GPL-2.0-or-later licenc alatt. A mi változtatásaink: csak az előtag és a gyártó neve (legfeljebb 40 betű); néhány bejegyzés kivéve.",
+    "it": "Il produttore mostrato da Quali dispositivi sono in rete viene dall'elenco manuf del progetto Wireshark (www.wireshark.org), fatto dagli elenchi pubblici degli indirizzi MAC dell'IEEE, con la licenza GPL-2.0-or-later. Modificato da noi: solo il prefisso e il nome del produttore (al massimo 40 lettere); alcune voci tolte.",
+    "nl": "De fabrikant die Welke apparaten zitten in het netwerk toont, komt uit de lijst manuf van het Wireshark-project (www.wireshark.org), gemaakt uit de openbare MAC-adreslijsten van de IEEE, onder de licentie GPL-2.0-or-later. Door ons gewijzigd: alleen het voorvoegsel en de naam van de fabrikant (hoogstens 40 tekens); enkele regels weggelaten.",
+    "pl": "Producent pokazywany przez Jakie urządzenia są w sieci pochodzi z listy manuf projektu Wireshark (www.wireshark.org), zrobionej z publicznych list adresów MAC organizacji IEEE, na licencji GPL-2.0-or-later. Nasze zmiany: tylko prefiks i nazwa producenta (najwyżej 40 znaków); kilka wpisów usuniętych.",
+    "pt": "O fabricante mostrado por Que aparelhos estão na rede vem da lista manuf do projeto Wireshark (www.wireshark.org), feita a partir das listas públicas de endereços MAC do IEEE, sob a licença GPL-2.0-or-later. Alterado por nós: só o prefixo e o nome do fabricante (no máximo 40 letras); algumas entradas retiradas.",
+    "ru": "Производитель, которого показывает Какие устройства есть в сети, взят из списка manuf проекта Wireshark (www.wireshark.org), составленного по открытым спискам MAC-адресов IEEE, по лицензии GPL-2.0-or-later. Наши изменения: только префикс и название производителя (не более 40 символов); несколько записей убрано.",
+    "tr": "Ağda hangi cihazlar var ekranının gösterdiği üretici, Wireshark projesinin (www.wireshark.org) IEEE genel MAC adresi listelerinden yapılan manuf listesinden gelir, GPL-2.0-or-later lisansı altındadır. Tarafımızca değiştirildi: yalnızca önek ve üretici adı (en çok 40 harf); birkaç kayıt çıkarıldı."
+   }
+  }
+ ]
+}

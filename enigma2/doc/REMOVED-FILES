@@ -1,0 +1,41 @@
+Removed from the 2011 source tree (licenses that do not allow our use)
+======================================================================
+
+Plugins licensed under CC BY-NC-SA 3.0 (non-commercial):
+  lib/python/Plugins/Extensions/CutListEditor
+  lib/python/Plugins/Extensions/DVDBurn
+  lib/python/Plugins/Extensions/DVDPlayer
+  lib/python/Plugins/Extensions/GraphMultiEPG
+  lib/python/Plugins/Extensions/SocketMMI
+  lib/python/Plugins/SystemPlugins/CleanupWizard
+  lib/python/Plugins/SystemPlugins/CommonInterfaceAssignment
+  lib/python/Plugins/SystemPlugins/CrashlogAutoSubmit
+  lib/python/Plugins/SystemPlugins/Hotplug
+  lib/python/Plugins/SystemPlugins/NetworkWizard
+  lib/python/Plugins/SystemPlugins/PositionerSetup
+  lib/python/Plugins/SystemPlugins/SatelliteEquipmentControl
+  lib/python/Plugins/SystemPlugins/Satfinder
+  lib/python/Plugins/SystemPlugins/SoftwareManager
+  lib/python/Plugins/SystemPlugins/TempFanControl
+  lib/python/Plugins/SystemPlugins/VideoEnhancement
+  lib/python/Plugins/SystemPlugins/Videomode
+  lib/python/Plugins/SystemPlugins/VideoTune
+  lib/python/Plugins/SystemPlugins/WirelessLan
+
+Fonts without a redistribution license:
+  data/fonts/lcd.ttf          (Esselte Letraset / Microsoft, all rights reserved)
+  data/fonts/nmsbd.ttf        (Monotype Typography, all rights reserved)
+  data/fonts/md_khmurabi_10.ttf (no license information)
+
+Removed as unused or tied to Dreambox hardware:
+  lib/python/Screens/ClockDisplay.py       (not used anywhere)
+  lib/python/Screens/ConfigMenu.py         (not used anywhere)
+  lib/python/Screens/TutorialWizard.py     (registration was disabled)
+  lib/python/Plugins/SystemPlugins/OldSoftwareUpdate     (was not built)
+  lib/python/Plugins/SystemPlugins/FrontprocessorUpgrade (Dreambox front processor tool)
+  lib/python/Plugins/Extensions/TuxboxPlugins            (native Tuxbox .so plugins)
+  lib/python/Plugins/Extensions/Modem                    (dial-up modem through pppd: the receivers have no
+                                                         modem; removed in 0.2.6)
+
+Functions provided by these plugins will be written again for HDSatelit
+Image, without copying the removed code.

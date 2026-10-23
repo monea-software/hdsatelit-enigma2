@@ -1,0 +1,882 @@
+{
+  "versiune": 1,
+  "actualizat": "2026-09-24",
+  "unitati": {
+    "frecventa": "kHz (12687000 = 12687 MHz; jumatatile de MHz se pastreaza, ex. 12031500)",
+    "rata": "kSymb/s (27500 = 27500000 simboluri/s)",
+    "pozitie": "zecimi de grad, valoare BRUTA 0..3599 ca in eDVBFrontendParametersSatellite: 192 = 19,2 est; vestul ca 3600 - x, deci 0,8 vest = 3592 si 5,0 vest = 3550",
+    "pls": "null, sau {mod: root|gold|combo, cod: numar} pentru transponderele multistream",
+    "flux": "null, sau is_id (numarul fluxului din multistream)",
+    "atentie": "HdsComun/tuner.py parametri() asteapta alte nume si alte unitati: 'sr' in simboluri/s (rata * 1000), 'pls_mod'/'pls_cod'/'is_id' in loc de 'pls'/'flux'. Cine leaga ecranul de tuner face conversia o SINGURA data; inmultirea dubla cu 1000 a fost deja de doua ori defect in depozitul asta (transponderele de cablu din ScanSetup.py si pachetele DTH, reparate pe 20.09.2026).",
+    "motor": "Pozitia ramane bruta 0..3599 si pentru motor: NU se traduce in numere negative. /etc/tuxbox/satellites.xml scrie vestul cu minus (position=\"-50\" pentru 5,0 vest), dar lib/dvb/db.cpp (randurile 825-832) il aduce la 3600 + x cand il citeste, deci NimManager si SEC-ul lucreaza numai cu 0..3599, iar lib/dvb/sec.cpp (randul 506) calculeaza unghiul USALS din abs(orbital_position) / 10: un -50 trimis nucleului ar insemna 5,0 grade EST si antena ar pleca in partea cealalta. Antena se duce singura pe pozitia ceruta, la acord. Nota de dinainte (24.09.2026), care cerea traducerea in -50, era gresita."
+  },
+  "feluri": {
+    "tv": "televiziune obisnuita: transponderul de pornire, apoi scanare de retea pe NIT",
+    "t2mi": "DVB-T2 prin satelit: acordare pe transponderul purtator, apoi detectorul nostru (Hds/DabT2); nu e o scanare DVB obisnuita",
+    "dab": "DAB+ prin satelit: la fel ca t2mi, prin HdsComun; ascultarea trece prin HdsDab"
+  },
+  "tara_utilizatorului": "config.osd.language (Components/SetupDevices.py randul 28, implicit \"ro_RO\"): tara e bucata de dupa \"_\". Nu exista o setare separata de tara. In Components/Language.py coloana de tara nu e ISO peste tot (engleza -> \"EN\", araba -> \"AE\", catalana -> \"AD\"), deci pentru acele limbi nu iese potrivire si lista cade pe ceilalti operatori.",
+  "romania_fara_t2mi_si_dab": "Pentru Romania nu exista niciun operator de fel 't2mi' si niciun operator de fel 'dab': niciun multiplex DVB-T2 romanesc si niciun ansamblu DAB+ romanesc nu se transmit prin satelit. La aceste doua feluri ecranul trebuie sa spuna limpede ca nu exista operatori din tara utilizatorului, apoi sa continue cu ceilalti.",
+  "operatori": [
+    {
+      "id": "digi_ro",
+      "nume": "Digi TV satelit",
+      "tari": [
+        "RO",
+        "MD"
+      ],
+      "pozitie": 3592,
+      "transponder": {
+        "frecventa": 12687000,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "Operator activ: digi.ro/servicii/televiziune/satelit (citit 24.09.2026). Transponderul, doua surse care se potrivesc pe toate cele sase campuri: scanarile noastre de pe satbase.hdsatelit.com (pozitia 0,8 vest, actualizat 02.07.2026) si satellites.xml al proiectului liber enigma2 (GPL), randul 1378: 12687000 / 27500000 / pol 0 / fec 3 / system 0 / modulation 1. Rezerva, acelasi satelit: 11862 H 28000 7/8 DVB-S."
+    },
+    {
+      "id": "focussat_ro",
+      "nume": "Focus Sat",
+      "tari": [
+        "RO"
+      ],
+      "pozitie": 3592,
+      "transponder": {
+        "frecventa": 11958000,
+        "pol": "V",
+        "rata": 28000,
+        "fec": "7/8",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "Operator activ: focussat.ro/despre-noi (citit 24.09.2026), plus comunicatul primit de noi in septembrie 2026. Transponderul, doua surse: scanarile noastre satbase.hdsatelit.com/sateliti/0-8w si satellites.xml (GPL) randul 1353: 11958000 / 28000000 / pol 1 / fec 5 / system 0 / modulation 1. Nepotrivire lamurita: SatBase scrie 'DVB-S2' langa 11958, dar FEC 7/8 nu exista in DVB-S2, deci sistemul corect e DVB-S. Atentie: mux comun al grupului M7, scanarea de retea aduce si canalele surorilor din Ungaria/Cehia/Slovacia; se filtreaza pe urma la buchet."
+    },
+    {
+      "id": "orangetv_ro",
+      "nume": "Orange TV prin satelit",
+      "tari": [
+        "RO"
+      ],
+      "pozitie": 390,
+      "transponder": {
+        "frecventa": 12328000,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "MUTARE DE POZITIE: orange.ro/tv/abonament-tv-satelit/satelit (citit 24.09.2026) spune ca serviciul merge 'acum pe noua platforma Hellasat 39.1 Est', migrare incheiata la 30.04.2023. Orange NU mai e pe 0,8 vest. Confirmat de articolul nostru din 18.08.2022 (hdsatelit.com/2022/08/orange-romania-se-muta-de-pe-satelitul.html). Transponderul, trei surse: scanarea noastra satbase.hdsatelit.com/sateliti/39e (pe 12328 V 30000 3/4 DVB-S2 8PSK sunt si Orange Info si Orange Sport 1 HD), satindex.de fisa Orange Info (22.08.2026, 12329 V - 1 MHz e rotunjire) si satellites.xml (GPL), blocul 39 est."
+    },
+    {
+      "id": "skylink",
+      "nume": "Skylink",
+      "tari": [
+        "CZ",
+        "SK"
+      ],
+      "pozitie": 235,
+      "transponder": {
+        "frecventa": 12070000,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "SURSA PRIMARA, operatorul: skylink.cz/navody-pro-naladeni scrie ca la cautarea in retea e de ajuns o singura frecventa, 'tzv. domaciho transponderu - 12070 MHz', Astra 23,5E, orizontal, 27500, FEC 3/4, DVB-S. Confirmat de revista operatorului (read.skylink.cz/cz-01-2026/parametry-ladeni-podle-frekvenci, randul 12070) si de tabelul FastScan din enigma2 (cod liber, GPL): 12070000 / 27500000 / FEC 3/4 / orbpos 235."
+    },
+    {
+      "id": "telly_cz",
+      "nume": "Telly",
+      "tari": [
+        "CZ"
+      ],
+      "pozitie": 3592,
+      "transponder": {
+        "frecventa": 12053000,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "PAGINA OPERATORULUI: telly.cz/podpora/satelitni-tv/tech-parametry-kanalu-2, primul transponder din tabel (ST-TP1): 12053 MHz, orizontal, FEC 3/4, SR 30000, 8PSK. Sistemul DVB-S2 NU e scris pe pagina, e dedus: 8PSK nu exista in DVB-S. Telly isi scrie pozitia '1W'; gruparea 0,8 vest (3592) e cea folosita de satellites.xml pentru tot grupul Thor/Intelsat 10-02. LIPSESTE: o a doua sursa independenta pentru sistem."
+    },
+    {
+      "id": "direct_one_hu",
+      "nume": "Direct One",
+      "tari": [
+        "HU"
+      ],
+      "pozitie": 3592,
+      "transponder": {
+        "frecventa": 11727000,
+        "pol": "V",
+        "rata": 28000,
+        "fec": "7/8",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "SURSA PRIMARA: lista oficiala de frecvente pentru abonati, m7cdn.io/directone/pdf/Frekvencialista-20250408.pdf (CDN-ul propriu al operatorului, datat 08.04.2025), randul 2: 'M1 | 11727MHZ/V | QPSK-28000-7/8'. Confirmat de tabelul FastScan din enigma2 (cod liber, GPL): 11727000 / 28000000 / FEC 7/8 / orbpos 3592 / vertical / DVB-S / QPSK. DE URMARIT: presa maghiara de specialitate (dtvnews.hu) scrie ca abonatii de satelit au trecut la DIGI/One, deci marca s-ar putea stinge."
+    },
+    {
+      "id": "one_hu",
+      "nume": "One",
+      "tari": [
+        "HU"
+      ],
+      "pozitie": 3592,
+      "transponder": {
+        "frecventa": 11766000,
+        "pol": "V",
+        "rata": 28000,
+        "fec": "7/8",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "REGULATOR, sursa primara pentru frecventa si polarizare: NMHH (autoritatea maghiara), nmhh.hu/dokumentum/217222 (actualizat 22.11.2023), tabelul 7 pagina 23: pozitia '0,8 NYUGAT', printre transponderele pachetului 'Digi' e si 11766 V. Rata si FEC-ul NU sunt in documentul NMHH (nu are acele coloane); sunt luate din lista oficiala Direct One, de pe aceeasi pozitie orbitala, care da pentru 11766 MHz/V 'QPSK-28000-7/8'. Serviciul e activ in 2026 (one.hu, oferta '2026. aprilis 01-tol visszavonasig'). LIPSESTE: o lista de frecvente publicata de One."
+    },
+    {
+      "id": "polsat_box_pl",
+      "nume": "Polsat Box",
+      "tari": [
+        "PL"
+      ],
+      "pozitie": 130,
+      "transponder": {
+        "frecventa": 11158000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "Doua surse care se potrivesc, niciuna nu e pagina operatorului: presa de specialitate poloneza SatKurier (satkurier.pl/news/234203, primul canal din lista: 11,158 V 27500 3/4 DVB-S2/8PSK, Hot Bird 13E) si documentul de parametri nc+ pentru module CAM CI+ (eltech.net.pl/files/5114/7195/5619, randul 8: TV4 HD, ONID 113, TSID 13200, 11158 V, 27500, 8PSK, DVB-S2, 3/4). Reteaua are ONID 113, deci scanarea de retea de aici aduce numai canalele Polsat Box, nu si Canal+. VERIFICAT si ca operatorul nu publica singur parametrii (bok.polsatbox.pl/article/297 si manualul decodorului 4K nu dau niciun transponder). LIPSESTE: confirmare pe un sit al operatorului."
+    },
+    {
+      "id": "canal_plus_pl",
+      "nume": "Canal+ Polska",
+      "tari": [
+        "PL"
+      ],
+      "pozitie": 130,
+      "transponder": {
+        "frecventa": 11278000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "Documentul de parametri al operatorului nc+ (eltech.net.pl/files/5114/7195/5619, creat 24.06.2016), randul 9: CANAL+ HD, SID 13040, Hot Bird 13.0E, ONID 318, TSID 400, 11278 V, 27500, 8PSK, DVB-S2, 3/4. Confirmare recenta ca transponderul e inca al platformei: wirtualnemedia.pl, 'Parametry dla platformy Canal+ / TVN to: 11.278 GHz, pol. V; 11.508 GHz, pol. V'. Rand separat de Polsat Box fiindca e alta retea (ONID 318). LIPSESTE: o confirmare recenta a ratei si a FEC-ului, documentul de baza e din 2016."
+    },
+    {
+      "id": "eon_sat",
+      "nume": "EON SAT",
+      "tari": [
+        "RS",
+        "HR",
+        "SI",
+        "BA",
+        "ME",
+        "MK"
+      ],
+      "pozitie": 160,
+      "transponder": {
+        "frecventa": 11262000,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "Pozitia orbitala e SIGURA (datele noastre din cercetarea noastra despre T2-MI au Eutelsat 16A la pozitia 160, si la fel satellites.xml). Transponderul vine DOAR de pe forum: Radio TV Forum, firul 'EON SAT (ex Total TV) - opsta tema' (rtvforum.net), parametrii pentru acordare manuala: Eutelsat 16, DVB-S QPSK, 11262, orizontal, SR 30000, FEC 2/3; aceiasi parametri circula si la instalatori autorizati (aksel.rs). VERIFICAT: niciun sit al operatorului (totaltv.tv, eon.tv, sbb-eon.rs) nu publica parametrii. Varianta intalnita pe acelasi forum, de verificat: 11303 H 30000 2/3 DVB-S2 8PSK."
+    },
+    {
+      "id": "sky_uk",
+      "nume": "Sky UK",
+      "tari": [
+        "GB"
+      ],
+      "pozitie": 282,
+      "transponder": {
+        "frecventa": 11778000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker (plugin liber pentru enigma2), providers/sat_282_sky_uk.xml: 11778000, polarization 1, fec_inner 2, system 0, modulation 1, tsid 2004, onid 2. Confirmat de ghidurile publice de configurare a receptoarelor Sky, unde 11778 V 27,5 2/3 e chiar 'Default Transponder' din fabrica (satandpcguy.com, marinesatellitesystems.com). ACELASI transponder ca sky_irl - e intentionat, sunt doua servicii pe acelasi mux de pornire."
+    },
+    {
+      "id": "sky_irl",
+      "nume": "Sky Irlanda",
+      "tari": [
+        "IE"
+      ],
+      "pozitie": 282,
+      "transponder": {
+        "frecventa": 11778000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_282_sky_irl.xml: elementul transponder e identic cu cel din sat_282_sky_uk.xml (acelasi tsid 2004, onid 2), plus aceleasi ghiduri Sky. Difera doar tara din lista, nu transponderul de pornire. Nu am gasit o pagina proprie Sky Irlanda cu frecventa."
+    },
+    {
+      "id": "freesat",
+      "nume": "Freesat",
+      "tari": [
+        "GB"
+      ],
+      "pozitie": 282,
+      "transponder": {
+        "frecventa": 11426000,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_282_freesat.xml: 11426000, polarization 0, fec_inner 2, system 0, modulation 1, tsid 2315, onid 59, cu sdt_pid si bat_pid 0xbba (tabelele proprii Freesat). Confirmat de fisa publica a transponderului (en.satexpat.com/tp/28.2e/11426H): 11426 H, 27500, 2/3. Se mai vede rotunjit ca 11427/11428 H, e acelasi transponder."
+    },
+    {
+      "id": "sky_de",
+      "nume": "Sky Deutschland",
+      "tari": [
+        "DE",
+        "AT"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 12031500,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "9/10",
+        "sistem": "DVB-S2",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_192_sky_deutschland.xml: 12031500, polarization 0, fec_inner 9, system 1, modulation 1, tsid 4, onid 133. Confirmat de satindex.de/frequenz/12032: 12032 MHz, H, 27500, FEC 9/10, DVB-S2, QPSK, reteaua BetaDigital. ATENTIE la jumatatea de MHz: frecventa reala e 12031,5 MHz, scrisa aici 12031500 kHz. Cine o trece printr-un camp de MHz intregi o rotunjeste la 12032 si pierde 500 kHz (la SR 27500 tunerul tot prinde, dar valoarea corecta e cea de aici)."
+    },
+    {
+      "id": "hd_plus",
+      "nume": "HD+",
+      "tari": [
+        "DE"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 10773000,
+        "pol": "H",
+        "rata": 22000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_0192_hd+.xml: 10773000, polarization 0, fec_inner 3, system 1, modulation 2, tsid 1053, onid 1. Confirmat de satindex.de/paytv/hdplus: transponderul 53, 10773 MHz, H, 22000, FEC 3/4, DVB-S2, 8PSK."
+    },
+    {
+      "id": "sky_it",
+      "nume": "Sky Italia",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 130,
+      "transponder": {
+        "frecventa": 11881000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_130_sky_italy.xml: 11881000, polarization 1, fec_inner 3, system 0, modulation 1, tsid 5800, onid 64511. Confirmat de o discutie tehnica publica unde 11881 V 27500 3/4 (TP 58) e numit explicit frecventa de pornire a receptoarelor Sky Italia (digital-forum.it, firul 211446). Nota: in decembrie 2024 Sky Italia a trecut de pe Hotbird 13E pe Hotbird 13F, dar pozitia orbitala ramane 13 est, deci pentru noi nu se schimba nimic."
+    },
+    {
+      "id": "tivusat",
+      "nume": "Tivusat",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 130,
+      "transponder": {
+        "frecventa": 10992000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_130_tivusat.xml: 10992000, polarization 1, fec_inner 2, system 0, modulation 1, tsid 12400, onid 318, protocol lcn2 (numerotarea proprie Tivusat). Confirmat de lista publica de frecvente canalisat.it/frequenze, unde 10992 V 27500 2/3 e data ca 'Home Frequency' a platformei."
+    },
+    {
+      "id": "tntsat",
+      "nume": "TNT SAT",
+      "tari": [
+        "FR"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 11856000,
+        "pol": "V",
+        "rata": 29700,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_192_tntsat.xml: 11856000, polarization 1, fec_inner 2, system 1, modulation 2, bat_pid 0x11, tsid 1072, onid 1. Confirmat de satexpat.com/tp/19.2e/11856V: 'Transpondeur principal de TNT Sat', TP 1072, 11856 V 29700 2/3 DVB-S2 8PSK, folosit la cautarea implicita a decodoarelor (a inlocuit vechiul 11856 27500). ACELASI transponder ca canal_plus_fr - e intentionat."
+    },
+    {
+      "id": "canal_plus_fr",
+      "nume": "Canal+ Franța",
+      "tari": [
+        "FR"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 11856000,
+        "pol": "V",
+        "rata": 29700,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "AutoBouquetsMaker, sat_192_canalsat.xml: elementul transponder e identic cu cel din sat_192_tntsat.xml (acelasi tsid 1072, onid 1, acelasi bat_pid 0x11); ambele platforme isi iau lista din aceleasi tabele BAT de la 19,2 est. LIPSESTE: o sursa proprie a operatorului."
+    },
+    {
+      "id": "fransat",
+      "nume": "FRANSAT",
+      "tari": [
+        "FR"
+      ],
+      "pozitie": 3550,
+      "transponder": {
+        "frecventa": 10971000,
+        "pol": "V",
+        "rata": 29950,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "SURSA PRIMARA, documentul operatorului: 'PLAN DE FREQUENCES FRANSAT', fransat.fr/wp-content/uploads/2022/06/plan-frequences-fransat-06-juillet.pdf, pagina 3, repetorul B02: 10 971 MHz, VERTICALE, DVB-S2 8PSK PILOT ON, FEC 2/3, 29,95 MSps, NID 1375, TSID 20600. Confirmat de AutoBouquetsMaker, sat_3550_fransat.xml (acelasi tsid 20600, onid 1375, fec_inner 2, system 1, modulation 2), care scrie frecventa rotunjita 10972; s-a luat 10971, valoarea operatorului. Emisia are pilotul pornit. Alternativa: repetorul D06, 11554 V, 29950, 3/4, TSID 20300. DE VERIFICAT inainte de lansare: planul publicat e din 06.07.2022, mai nou nu s-a gasit pe fransat.fr."
+    },
+    {
+      "id": "movistar_plus",
+      "nume": "Movistar Plus+",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 10847000,
+        "pol": "V",
+        "rata": 22000,
+        "fec": "5/6",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_192_movistar_plus_esp.xml: 10847000, polarization 1, fec_inner 4 (= 5/6), system 0, modulation 1, bat_pid 0x11, tsid 1058, onid 1. Confirmat de fisa publica a transponderului, cu acelasi numar de flux TP 1058 (canalesparabolica.com/tp/19.2e/10847V): 10847 MHz, V, 22000, FEC 5/6, DVB-S, QPSK. Platforma emite in continuare prin satelit (lista de canale actualizata in septembrie 2026)."
+    },
+    {
+      "id": "hd_austria",
+      "nume": "CANAL+ Austria (HD Austria)",
+      "tari": [
+        "AT"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 12515000,
+        "pol": "H",
+        "rata": 22000,
+        "fec": "5/6",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "AutoBouquetsMaker, sat_192_austriasat.xml, numit chiar 'HD Austria': 12515000, polarization 0, fec_inner 4 (= 5/6), system 0, modulation 1, fastscan_pid 0x3b6, tsid 1105, onid 53. Confirmat de satindex.de/paytv/hd-austria si satindex.de/frequenz/12515: transponderul 105, 12515 MHz, H, 22000, FEC 5/6, DVB-S, QPSK. Platforma s-a numit AustriaSat, apoi HD Austria, azi CANAL+ Austria. Acelasi transponder e folosit si de TeleSAT Belgia si Diveo, fiecare cu alt PID de fastscan."
+    },
+    {
+      "id": "hellas_sat_dtt_cy",
+      "nume": "Multiplexuri DVB-T2 prin satelit (Cipru)",
+      "tari": [
+        "CY"
+      ],
+      "pozitie": 390,
+      "transponder": {
+        "frecventa": 11760000,
+        "pol": "H",
+        "rata": 16515,
+        "fec": "5/6",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 242133
+        },
+        "flux": 0
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). Valorile de aici sunt cele DOVEDITE pe receptor, nu cele din liste: flux (is_id) 0, nu 1 cum scrie satellites.xml - comentariul din codul tunerului (Hds/DabT2) spune ca pe HiSilicon PLS se aplica doar cu is_id >= 0. PID T2-MI 4096, PLP 0. Surse din cercetare (cercetarea noastra despre T2-MI): KingOfSat pos-39E, LyngSat Hellas-Sat-3-4, articolul nostru hdsatelit.com din 09.05.2026 (actualizat 08.06.2026), firul linuxsat-support 162373. Al doilea mux al aceluiasi operator, tot 'merge': 11778500 H, aceiasi parametri. Se prinde gratuit in Romania."
+    },
+    {
+      "id": "zeonbud_ua",
+      "nume": "Multiplexuri DVB-T2 prin satelit - Zeonbud (Ucraina)",
+      "tari": [
+        "UA"
+      ],
+      "pozitie": 90,
+      "transponder": {
+        "frecventa": 12226000,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "5/6",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": 10
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4096, PLP 0. Surse din cercetare: LyngSat Eutelsat-9B, opena.tv firul 64827, balsat.org.ua/sat-t2mi. Al doilea mux, tot 'merge', e pe acelasi transponder cu flux (is_id) 20. Al treilea (12303000 V, flux 30) NU a prins la noi si are o singura sursa - a fost lasat deoparte, e in de-verificat.md."
+    },
+    {
+      "id": "mx7_ua",
+      "nume": "Multiplex DVB-T2 prin satelit MX-7 (Ucraina)",
+      "tari": [
+        "UA"
+      ],
+      "pozitie": 235,
+      "transponder": {
+        "frecventa": 12285000,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4097 (partea in clar; 4096 pe acelasi transponder e acelasi mux, dar criptat BISS), PLP 0. Surse din cercetare: LyngSat mux Astra-3C_East_12285-V, KingOfSat pos-23.5E (MX sid 800/801), satellitescommunity firul 3177. DE SPUS LIMPEDE UTILIZATORULUI: dupa proba noastra pe receptor, in clar sunt doar servicii de informare identice ('DSNS Informed'); canalele TV adevarate sunt criptate. Merge tehnic, dar nu aduce programe de privit. Merita totusi pastrat fiindca 23,5 est e pozitia pe care stau deja antenele fixe din Cehia, Slovacia, Ungaria, Polonia."
+    },
+    {
+      "id": "mx7_ua_48e",
+      "nume": "Multiplex DVB-T2 prin satelit MX-7, a doua poziție (Ucraina)",
+      "tari": [
+        "UA"
+      ],
+      "pozitie": 48,
+      "transponder": {
+        "frecventa": 12073100,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4097 (in clar), PLP 0. Acelasi continut ca mx7_ua, de pe alta pozitie: rand separat anume ca un utilizator cu antena fixa pe 4,8 est sa il vada disponibil acolo. CONFLICT pastrat in cercetare (cercetarea noastra despre T2-MI): satellitescommunity firul 112 (09.12.2024) spune ca T2-MI a plecat de pe 12073 H spre 11747 V si LyngSat nu mai arata T2-MI acolo, dar KingOfSat pos-4.8E are randuri datate 09.09.2026 si la noi a prins."
+    },
+    {
+      "id": "rai_mux_b_it",
+      "nume": "Multiplex DVB-T2 prin satelit - Rai mux B (Italia)",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 3550,
+      "transponder": {
+        "frecventa": 12606000,
+        "pol": "V",
+        "rata": 35294,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 131070
+        },
+        "flux": 5
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4096, PLP 0. Surse din cercetare: KingOfSat pos-5W, LyngSat Eutelsat-5-West-B, satellites.co.uk firul 169560. Cercetarea din 14.09.2026 estima, pe baza hartilor de fascicul, ca Transalpine nu ajunge in Gorj; masuratoarea noastra o infirma, deci e sigur, dar la limita (pe antene mai mici poate sa nu prinda)."
+    },
+    {
+      "id": "rscc_ru",
+      "nume": "Multiplexuri DVB-T2 prin satelit - RSCC (Rusia)",
+      "tari": [
+        "RU"
+      ],
+      "pozitie": 530,
+      "transponder": {
+        "frecventa": 10730000,
+        "pol": "V",
+        "rata": 14180,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Hds/DabT2/t2/date/frecvente.json, PID T2-MI 4096, PLP 0, FTA. NU a fost prins de noi ('fara_semnal_in_zona_testata'), fiindca fasciculul Ku Fixed 1 nu acopera Gorjul - deci 'probabil', nu 'sigur': lipsa semnalului se explica prin acoperire, nu prin valori gresite. Doua surse in cercetare: LyngSat mux Express-AM6_Ku-Fixed-1_10730-V si satellitescommunity firul 999, confirmat 09.05.2025. Al doilea transponder RSCC, tot cu doua surse: 10713000 V, SR 14180 (Crimeea, acces mixt)."
+    },
+    {
+      "id": "dab_bundesmux_de",
+      "nume": "DAB+ prin satelit - Bundesmux (Germania)",
+      "tari": [
+        "DE"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 12460500,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Ansambluri: Bundesmux 1 pe PID 4121 (239.128.43.43:50043) si Bundesmux 2 pe PID 4122 (239.128.72.10:50010), transport MPE/UDP/EDI; ONID 133, TSID 5. Surse din cercetare (cercetarea noastra despre DAB+): pagina de DAB a KingOfSat (en.kingofsat.net/dab, 29.04.2026) si digitalbitrate.com (scanari DAB SAT, 31.08-14.09.2026). ATENTIE la jumatatea de MHz: 12460,5 MHz. Radiourile sunt germane, nu locale."
+    },
+    {
+      "id": "dab_bundesmux_235e",
+      "nume": "DAB+ prin satelit - Bundesmux, a doua poziție (Germania)",
+      "tari": [
+        "DE"
+      ],
+      "pozitie": 235,
+      "transponder": {
+        "frecventa": 12168000,
+        "pol": "V",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Aceleasi ansambluri ca dab_bundesmux_de (PID 4121 si 4122, aceleasi IP-uri), de pe alta pozitie; ONID 3, TSID 3224. Rand separat anume ca un utilizator cu antena fixa pe 23,5 est - pozitia pe care stau deja antenele din Cehia, Slovacia, Ungaria si Polonia - sa il vada disponibil acolo. Surse: KingOfSat en.kingofsat.net/dab, digitalbitrate.com. ATENTIE: pe acelasi transponder e si PID 6743, care NU e DAB."
+    },
+    {
+      "id": "dab_ard_regional_de",
+      "nume": "DAB+ prin satelit - ansamblurile regionale ARD (Germania)",
+      "tari": [
+        "DE"
+      ],
+      "pozitie": 70,
+      "transponder": {
+        "frecventa": 12567800,
+        "pol": "V",
+        "rata": 17017,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Toate cele 15 ansambluri (BR, SWR, hr, NDR si celelalte) au iesit 'merge', toate pe PID 101, fiecare cu IP-ul lui multicast; ONID 1, TSID 22. Surse din cercetare: KingOfSat en.kingofsat.net/dab (tabelul de IP-uri din 27.07.2026), digitalbitrate.com (toate 15 scanate pe 12567,80 V, 06-13.09.2026), digitalfernsehen.de 26.04.2026. Alternativa veche 11513800 V are aceleasi 15 ansambluri, dar la noi a iesit fara semnal - cel mult rezerva."
+    },
+    {
+      "id": "dab_wdr_de",
+      "nume": "DAB+ prin satelit - WDR (Germania)",
+      "tari": [
+        "DE"
+      ],
+      "pozitie": 192,
+      "transponder": {
+        "frecventa": 11603700,
+        "pol": "V",
+        "rata": 2200,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). PID 3000: WDR NRW (228.10.1.5:10010, ansamblu 10EC) si WDR Regional (228.10.2.5:10010, ansamblu 10FA); ONID 1, TSID 1026. Surse din cercetare: KingOfSat en.kingofsat.net/dab, digitalbitrate.com. ATENTIE: rata de simbol e foarte mica (2200 kSymb/s) - unele receptoare nu o accepta implicit, iar un camp de scanare care cere minimul obisnuit o poate respinge."
+    },
+    {
+      "id": "dab_italia_eurodab_it",
+      "nume": "DAB+ prin satelit - DAB Italia și EuroDab (Italia)",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 90,
+      "transponder": {
+        "frecventa": 11727500,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Fel tsniv2ni (ETI-NI V.11 in TS), PID 7031 (DAB Italia, ansamblu 5009) si PID 7131 (EuroDab Italia, ansamblu 5003); ONID 158, TSID 50010. Surse din cercetare: KingOfSat en.kingofsat.net/dab, digitalbitrate.com."
+    },
+    {
+      "id": "dab_d1_sdl_gb",
+      "nume": "DAB+ prin satelit - Digital One și Sound Digital (Marea Britanie)",
+      "tari": [
+        "GB"
+      ],
+      "pozitie": 90,
+      "transponder": {
+        "frecventa": 12091900,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Fel ts2na12 (ETI-NA in TS cu 12 octeti umplutura), PID 1062 (D1 National, ansamblu C181), PID 1063 (SDL National, ansamblu C1CE), PID 1065; ONID 158, TSID 6900. Surse din cercetare: KingOfSat en.kingofsat.net/dab, digitalbitrate.com. Numele 'D1 Scotland' pentru PID 1065 e incert: KingOfSat il numeste tot 'D1 National'."
+    },
+    {
+      "id": "dab_salisbury_gb",
+      "nume": "DAB+ prin satelit - Salisbury, ansamblu local (Marea Britanie)",
+      "tari": [
+        "GB"
+      ],
+      "pozitie": 100,
+      "transponder": {
+        "frecventa": 11220900,
+        "pol": "V",
+        "rata": 24760,
+        "fec": "5/6",
+        "sistem": "DVB-S2",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Fel edi, PID 701 (239.232.1.201:2048, ansamblu C1D8); ONID 16, TSID 1. Surse din cercetare: KingOfSat en.kingofsat.net/dab (rata a scazut de la 30000 la 24760 pe 04.04.2026) si digitalbitrate.com. CAPCANA masurata de noi si scrisa in codul de citire a fluxului (Hds/DabT2): encapsulatorul de pe acest transponder scrie section_length cu doi octeti mai mic, iar datagrama intra peste locul CRC-ului; codul nostru stie sa treaca peste asta, un scaner nou nu trebuie sa 'repare' acel loc."
+    },
+    {
+      "id": "dab_ert_gr",
+      "nume": "DAB+ prin satelit - ERT (Grecia)",
+      "tari": [
+        "GR"
+      ],
+      "pozitie": 390,
+      "transponder": {
+        "frecventa": 12241500,
+        "pol": "H",
+        "rata": 13383,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Fel tsniv2ni, PID 1010, ansamblu E000; ONID 8492, TSID 1. Surse din cercetare: KingOfSat en.kingofsat.net/dab, digitalbitrate.com. VALORILE DE AICI SUNT CELE MASURATE (12241500 kHz, 13383 kSymb/s); listele scriu rotunjit 12242 H si 13381 - s-a luat masuratoarea noastra. Se prinde in Romania, pe aceeasi pozitie pe care o are deja un abonat Orange TV."
+    },
+    {
+      "id": "dab_metropolitain_fr",
+      "nume": "DAB+ prin satelit - Métropolitain (Franța)",
+      "tari": [
+        "FR"
+      ],
+      "pozitie": 3550,
+      "transponder": {
+        "frecventa": 11461300,
+        "pol": "H",
+        "rata": 5780,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "sigur",
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor DAB+ din imagine (Hds/DabT2/dab/date/frecvente.json). Fel edi, amandoua ansamblurile pe PID 301 (Metropolitain 1: 239.0.1.11:5001, ansamblu F043; Metropolitain 2: 239.0.1.12:5002, ansamblu F044); ONID 8442, TSID 3. Surse din cercetare: KingOfSat en.kingofsat.net/dab, digitalbitrate.com. ATENTIE: pe acelasi transponder sunt PID-urile 251, 261, 521, 531 cu IP-uri asemanatoare - acelea sunt fluxuri FM, NU DAB, scanerul sa nu le bage in lista."
+    },
+    {
+      "id": "dab_bbc_d1_sdl_gb",
+      "nume": "DAB+ prin satelit - BBC National, D1 și SDL (Marea Britanie)",
+      "tari": [
+        "GB"
+      ],
+      "pozitie": 282,
+      "transponder": {
+        "frecventa": 11426500,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "2/3",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "dab",
+      "incredere": "probabil",
+      "sursa": "Hds/DabT2/dab/date/frecvente.json. Fel ts2na12, PID 1061 (BBC National, ansamblu CE15), 1062 (D1 National), 1063 (SDL National), 1065 (D1 Scotland); ONID 59, TSID 2315. La noi a iesit 'fara_semnal_in_zona_testata', fiindca fasciculul UK nu acopera Gorjul - de aceea 'probabil', nu 'sigur'. Surse din cercetare: KingOfSat en.kingofsat.net/dab, tabelul de date din github.com/piratfm/eti-tools (firul 55), digitalbitrate.com DAB SAT 28.2E (12.09.2026). ATENTIE: pe acelasi transponder e si PID 1584, care NU e DAB. Nota: e acelasi transponder fizic pe care sta si Freesat (11426 H) - unul se scaneaza ca televiziune, celalalt ca DAB, deci amandoua randurile raman."
+    },
+    {
+      "id": "dab_rai_it",
+      "nume": "DAB+ prin satelit - RAI, ansamblul național (Italia)",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 3550,
+      "transponder": {
+        "frecventa": 12564000,
+        "pol": "V",
+        "rata": 35294,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 131070
+        },
+        "flux": 11
+      },
+      "fel": "dab",
+      "incredere": "probabil",
+      "sursa": "Hds/DabT2/dab/date/frecvente.json. Fel ts2na (ETI-NA in TS, umplutura 0), PID 1000, ansamblu EId 0x5001. La noi a iesit 'fara_semnal_in_zona_testata'. LIPSESTE din KingOfSat si din listele publice de tip enigma2. Doua surse independente, una fiind o masurare reala: comentariul din 21.05.2025 de pe github.com/piratfm/eti-tools (firul 55, proba cu ts2na -p 1000 -s 0, MIS 11) si digitalbitrate.com (EId 0x5001, scanat 14.09.2026). NEEXPLICAT, de reverificat pe receptor: pe ACEEASI pozitie si cu ACEIASI parametri, transponderul vecin 12606000 V (rai_mux_b_it) a prins la noi. Pe aceeasi frecventa, flux (is_id) 12 este 'DAB+ RAI Test', PID 1001."
+    },
+    {
+      "id": "dab_mediadab_liguria_it",
+      "nume": "DAB+ prin satelit - MediaDAB Liguria (Italia)",
+      "tari": [
+        "IT"
+      ],
+      "pozitie": 3550,
+      "transponder": {
+        "frecventa": 12564000,
+        "pol": "V",
+        "rata": 35294,
+        "fec": "2/3",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 131070
+        },
+        "flux": 21
+      },
+      "fel": "dab",
+      "incredere": "probabil",
+      "sursa": "Hds/DabT2/dab/date/frecvente.json. Fel ts2na, PID 1002, ansamblu EId 0x5050; ONID 1, TSID 100. La noi a iesit 'fara_semnal_in_zona_testata'. Surse din cercetare: descoperit 26.06.2026, confirmat pe KingOfSat en.kingofsat.net/dab (10.09.2026) si pe digitalbitrate.com (14.09.2026). Acelasi transponder fizic ca dab_rai_it, alt flux (is_id 21)."
+    }
+  ]
+}

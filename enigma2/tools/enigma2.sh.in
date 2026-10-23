@@ -1,0 +1,828 @@
+#!/bin/sh
+# Modificat de moneasoftware.com si hdsatelit.com, 2026
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+datarootdir=@datarootdir@
+
+# showiframe (Dinobot) sends the chip id and MAC to 117.78.33.205. The null route from hds-netguard
+# does not apply through a proxy set in the environment, so that address stays out of any proxy for
+# showiframe, enigma2 and their children (libcurl reads no_proxy, then NO_PROXY; an empty value counts as
+# unset). Existing lists are kept and a lone "*" is left alone: nothing changes for any other address.
+no_proxy="${no_proxy:-$NO_PROXY}"
+case ",$no_proxy," in
+	",*,"|*,117.78.33.205,*) ;;
+	*) no_proxy="${no_proxy:+$no_proxy,}117.78.33.205" ;;
+esac
+case ",$NO_PROXY," in
+	",*,"|*,117.78.33.205,*) ;;
+	*) NO_PROXY="${NO_PROXY:+$NO_PROXY,}117.78.33.205" ;;
+esac
+export no_proxy NO_PROXY
+
+# SysRq off: a USB keyboard plugged into the receiver is not taken by enigma2 (its letters reach the text fields
+# through the console), so the kernel would also act on Alt+PrintScreen+B (an instant restart, without saving) and the
+# other SysRq keys. The kernel has them on (sysrq=1). The rule is a line kernel.sysrq in /etc/sysctl.conf, applied at
+# boot by bootmisc.sh: when the file has no such line, the line "kernel.sysrq = 0" is added (the file may end without
+# a newline) and the value is put at once. A line that is already there (0 from the image, or another value set by
+# hand) is left as it is. The variables are only for the tests on the PC.
+HDS_SYSRQ=${HDS_SYSRQ:-/proc/sys/kernel/sysrq}
+HDS_SYSCTL_CONF=${HDS_SYSCTL_CONF:-/etc/sysctl.conf}
+if [ -f "$HDS_SYSCTL_CONF" ] && ! grep -q '^[[:space:]]*kernel\.sysrq[[:space:]]*=' "$HDS_SYSCTL_CONF" 2>/dev/null; then
+	if cp -p "$HDS_SYSCTL_CONF" "$HDS_SYSCTL_CONF.hds-nou" 2>/dev/null &&
+		printf '\n# no SysRq keys from a USB keyboard (tools/enigma2.sh)\nkernel.sysrq = 0\n' >> "$HDS_SYSCTL_CONF.hds-nou" &&
+		mv "$HDS_SYSCTL_CONF.hds-nou" "$HDS_SYSCTL_CONF"; then
+		[ -w "$HDS_SYSRQ" ] && echo 0 > "$HDS_SYSRQ" 2>/dev/null
+	else
+		rm -f "$HDS_SYSCTL_CONF.hds-nou"
+	fi
+fi
+
+# Model guard: the image runs only on the receiver named in /etc/hdsatelit-model (written by the image recipe; the
+# same rules are read by Components/HdsPazaModel.py). The fingerprint: the chip (CHIP_VERSION in /proc/msp/sys), the
+# partition table given by the boot loader (blkdevparts in /proc/cmdline, the kernel partition size in
+# /proc/partitions), the factory header of the deviceinfo partition (HW=; the header also holds the MAC address, which
+# is never kept), the box type of the driver and the BOX_TYPE of the label at 0x3F6000 of deviceinfo. That label is
+# written by showiframe of the image that ran before, from the box type of its driver: on a receiver of another type
+# it still names that type at the first start of this image, so a BOX_TYPE that is there and differs from the rules is
+# a mismatch; a missing label decides nothing and its UPD_PATH (the model name) is only shown.
+# On a mismatch, or when a value cannot be read, the hook of the flash kit is skipped and enigma2 starts to show only
+# the message. showiframe (it brings up HDMI and the remote) starts only when it is known not to write: see below.
+# The verdict goes to a state file in RAM, computed once per boot; enigma2 and the web interface read it. Without the
+# rules file (the PC emulator, another image) the guard does nothing. The variables are only for the tests on the
+# PC; init sets none of them.
+HDS_PAZA_RADACINA=${HDS_PAZA_RADACINA:-}
+HDS_PAZA_REGULI=${HDS_PAZA_REGULI:-$HDS_PAZA_RADACINA/etc/hdsatelit-model}
+HDS_PAZA_STARE=${HDS_PAZA_STARE:-/tmp/hds-paza-model.stare}
+hds_paza=potrivit
+if [ -f "$HDS_PAZA_REGULI" ]; then
+	if ! grep -q '^stare=' "$HDS_PAZA_STARE" 2>/dev/null; then
+		hds_p=$HDS_PAZA_RADACINA
+		# every value is cut to a short run of plain characters, so nothing odd reaches awk -v or the state file
+		hds_cip=$(sed -n 's/^[[:space:]]*CHIP_VERSION[[:space:]]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' \
+			"$hds_p/proc/msp/sys" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		hds_bt=$(head -n 1 "$hds_p/proc/stb/info/boxtype" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		hds_parti=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^blkdevparts=//p' | head -n 1 |
+			tr ';' '\n' | sed -n 's/^mmcblk0://p' | head -n 1)
+		case $hds_parti in *[!A-Za-z0-9_@\(\),.-]*) hds_parti='!' ;; esac
+		hds_di=$(echo "$hds_parti" | tr ',' '\n' | grep -n '(deviceinfo)' | head -n 1 | cut -d: -f1)
+		hds_hw=""
+		hds_et=""
+		if [ -n "$hds_di" ]; then
+			hds_hw=$(head -c 4096 "$hds_p/dev/mmcblk0p$hds_di" 2>/dev/null | tr '\000\r' '\n\n' |
+				sed -n 's/^HW=\([A-Za-z0-9_.-]*\).*/\1/p' | head -n 1 | cut -c1-32)
+			hds_et=$(dd if="$hds_p/dev/mmcblk0p$hds_di" bs=256 skip=16224 count=1 2>/dev/null | tr '\000\r' '\n\n' |
+				sed -n '/BOX_TYPE:/{s/^.*\(BOX_TYPE:\)/\1/p;q}' | tr -cd "A-Za-z0-9_.:/ ,()'+-" | cut -c1-120)
+		fi
+		hds_pp=$hds_p/proc/partitions
+		[ -r "$hds_pp" ] || hds_pp=/dev/null
+		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" '
+			function kib(s,   n, u) {
+				if (s !~ /^[0-9]+[KkMmGg]?$/) return -1
+				n = s + 0; u = toupper(substr(s, length(s)))
+				if (u == "K") return n
+				if (u == "M") return n * 1024
+				if (u == "G") return n * 1048576
+				return int(n / 1024)
+			}
+			FILENAME == ARGV[1] {
+				sub(/\r$/, "")
+				if ($0 ~ /^[ \t]*#/) next
+				i = index($0, "="); if (i < 1) next
+				k = substr($0, 1, i - 1); v = substr($0, i + 1)
+				gsub(/^[ \t]+|[ \t]+$/, "", k); gsub(/^[ \t]+|[ \t]+$/, "", v)
+				if (k != "" && !(k in R)) R[k] = v
+				next
+			}
+			NF == 4 && $3 ~ /^[0-9]+$/ { S[$4] = $3 + 0 }
+			END {
+				# the partitions found: each entry size[@offset](name)[ro]; one bad entry = none found
+				nf = split(parti, P, ","); ng = 0; kp = ""; rp = ""
+				for (j = 1; j <= nf; j++) {
+					if (P[j] !~ /^([0-9]+[KkMmGg]?|-)(@[0-9]+[KkMmGg]?)?\([A-Za-z0-9_]+\)(ro)?$/) { ng = 0; break }
+					ng++; a = index(P[j], "("); b = index(P[j], ")")
+					GN[ng] = substr(P[j], a + 1, b - a - 1); z = substr(P[j], 1, a - 1); sub(/@.*/, "", z)
+					GK[ng] = (z == "-") ? "" : kib(z)
+				}
+				for (j = 1; j <= ng; j++) {
+					if (GN[j] == "kernel" && kp == "") kp = "mmcblk0p" j
+					if (GN[j] == "rootfs" && rp == "") rp = "mmcblk0p" j
+				}
+				kk = (kp in S) ? S[kp] : ""
+				rk = (rp in S) ? S[rp] : ""
+				# the rules: the same keys and checks as HdsPazaModel.reguliValide (without the sums)
+				bune = (R["format"] == "1" && R["distro"] == "hdsatelit" && R["kernel_kib"] ~ /^[0-9]+$/)
+				nc = split("model machinebuild chip boxtype hw partitions kernel_part rootfs_part", C, " ")
+				for (j = 1; j <= nc; j++) if (R[C[j]] == "") bune = 0
+				ne = split(R["partitions"], E, ",")
+				for (j = 1; j <= ne; j++) {
+					c = index(E[j], ":")
+					EN[j] = c ? substr(E[j], 1, c - 1) : E[j]
+					EK[j] = c ? kib(substr(E[j], c + 1)) : ""
+					if (EN[j] !~ /^[A-Za-z0-9_]+$/ || EK[j] == -1) bune = 0
+				}
+				if (ne < 1) bune = 0
+				# boxtype= may be a list (u57,u571); a single value compares as before
+				nt = split(R["boxtype"], T, ",")
+				for (j = 1; j <= nt; j++) { gsub(/^[ \t]+|[ \t]+$/, "", T[j]); if (T[j] != "") TT[T[j]] = 1 }
+				# second tier (confirmat=nu, a model not yet checked on a real receiver): only the chip, the box
+				# type, the label and the place of the kernel and of the system decide; the board (HW=), the
+				# partition table and the kernel size are warnings (the interface starts and shows them)
+				t2 = (R["confirmat"] == "nu")
+				m = ""; w = ""
+				if (!bune) m = " cip hw partitii kernel boxtype"
+				else {
+					if (cip == "" || tolower(cip) != tolower(R["chip"])) m = m " cip"
+					hwr = (hw == "" || hw != R["hw"])
+					ok = (ng >= ne)
+					for (j = 1; ok && j <= ne; j++)
+						if (GN[j] != EN[j] || (EK[j] != "" && EK[j] != GK[j])) ok = 0
+					loc = (kp == R["kernel_part"] && rp == R["rootfs_part"] && kk "" != "" && rk "" != "")
+					kr = (!loc || kk "" != R["kernel_kib"])
+					if (t2) {
+						if (hwr) w = w " hw"
+						if (!ok) w = w " partitii"
+						if (!loc) m = m " kernel"
+						else if (kr) w = w " kernel"
+					} else {
+						if (hwr) m = m " hw"
+						if (!ok) m = m " partitii"
+						if (kr) m = m " kernel"
+					}
+					if (bt == "" || !(bt in TT)) m = m " boxtype"
+				}
+				# the BOX_TYPE of the label, quotes removed; only one that is there and differs counts
+				lt = ""
+				if (bune && match(et, /BOX_TYPE:[^ ]*/)) {
+					lt = substr(et, RSTART + 9, RLENGTH - 9); gsub(/[\047"]/, "", lt)
+				}
+				if (lt != "" && !(lt in TT)) m = m " eticheta"
+				print "stare=" (m == "" ? "potrivit" : "nepotrivit")
+				print "nepotriviri=" substr(m, 2)
+				print "treapta=" (t2 ? 2 : 1)
+				print "avertismente=" (m == "" ? substr(w, 2) : "")
+				print "cip=" cip
+				print "hw=" hw
+				print "partitii=" parti
+				print "kernel=" (kp == "" ? "" : kp " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
+				print "boxtype=" bt
+				print "eticheta=" et
+			}' "$HDS_PAZA_REGULI" "$hds_pp" > "$HDS_PAZA_STARE.nou" 2>/dev/null
+		mv -f "$HDS_PAZA_STARE.nou" "$HDS_PAZA_STARE" 2>/dev/null
+	fi
+	# no verdict (awk missing, /tmp not writable) counts as a mismatch: the guard fails closed
+	[ "$(sed -n 's/^stare=//p' "$HDS_PAZA_STARE" 2>/dev/null | head -n 1)" = potrivit ] || hds_paza=nepotrivit
+	if [ "$hds_paza" = nepotrivit ]; then
+		# showiframe rewrites the label (erase and write through /dev/mmcblk0) only when the BOX_TYPE or the
+		# UPD_PATH it reads there (sscanf "BOX_TYPE:%s UPD_PATH:%s" on the bytes at 0x3F6000) differ from the ones it
+		# computes: BOX_TYPE = the first line of /proc/stb/info/boxtype; UPD_PATH = the first line of
+		# /proc/stb/info/upd_path when that file holds more than one byte, else a fixed table on /etc/hostname. With the
+		# UPD_PATH of the label put into upd_path (a buffer of the driver, in RAM) and a label BOX_TYPE equal to the one
+		# of the driver, it computes the label already there and writes nothing, as on every start of the right
+		# receiver; it then brings up HDMI and the remote for the message. Anything else (no label, another BOX_TYPE, an
+		# empty or odd UPD_PATH, upd_path not written back as given) keeps it off.
+		hds_up=""
+		hds_bt=$(head -n 1 "$HDS_PAZA_RADACINA/proc/stb/info/boxtype" 2>/dev/null)
+		hds_di=$(tr ' ' '\n' < "$HDS_PAZA_RADACINA/proc/cmdline" 2>/dev/null | sed -n 's/^blkdevparts=//p' |
+			head -n 1 | tr ';' '\n' | sed -n 's/^mmcblk0://p' | head -n 1 | tr ',' '\n' | grep -n '(deviceinfo)' |
+			head -n 1 | cut -d: -f1)
+		case $hds_bt in ''|*[!A-Za-z0-9_.-]*) hds_di="" ;; esac
+		if [ -n "$hds_di" ]; then
+			hds_rt=$(dd if="$HDS_PAZA_RADACINA/dev/mmcblk0p$hds_di" bs=128 skip=32448 count=1 2>/dev/null |
+				tr '\000\r' '\n\n' | head -n 1)
+			case $hds_rt in
+				"BOX_TYPE:$hds_bt UPD_PATH:"?*) hds_up=${hds_rt#"BOX_TYPE:$hds_bt UPD_PATH:"} ;;
+			esac
+			case $hds_up in *[!A-Za-z0-9_./\'-]*) hds_up="" ;; esac
+			[ "${#hds_up}" -le 60 ] || hds_up=""
+		fi
+		if [ -n "$hds_up" ] && [ -e "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" ]; then
+			printf '%s\n' "$hds_up" > "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null
+			[ "$(head -n 1 "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null)" = "$hds_up" ] && hds_paza=afisare
+		fi
+		echo "[hds-paza-model] another receiver or an unreadable fingerprint ($(sed -n 's/^nepotriviri=//p' \
+			"$HDS_PAZA_STARE" 2>/dev/null)): the flash kit hook is not started; showiframe" \
+			"$([ "$hds_paza" = afisare ] && echo "starts with the UPD_PATH of the label" || echo "is not started")"
+	fi
+fi
+
+# Recovery folder: on the right receiver (or an unconfirmed model that passed the guard) the folder in which
+# Maintenance Mode looks for the image on the stick comes from the rules (upd_path= in /etc/hdsatelit-model) and goes
+# into /proc/stb/info/upd_path before showiframe starts: showiframe takes that buffer when it holds more than one byte
+# and writes it as the UPD_PATH of the label in deviceinfo; without it, it would use its fixed table on /etc/hostname,
+# which knows only a few names. The value must start with / and hold only [A-Za-z0-9_./-], at most 60 characters (the
+# loader of Maintenance Mode puts it unquoted into a command and reads it into a small buffer). Rules without upd_path=
+# (an image written before this field existed) change nothing. The buffer is written only when it holds something
+# else, and read back: a value that does not come back as written is replaced by the one that was there, so showiframe
+# never computes an odd path and rewrites the label.
+if [ "$hds_paza" = potrivit ] && [ -f "$HDS_PAZA_REGULI" ]; then
+	hds_dr=$(sed -n 's/^[[:space:]]*upd_path[[:space:]]*=[[:space:]]*//p' "$HDS_PAZA_REGULI" 2>/dev/null | head -n 1 |
+		tr -d '\r' | sed 's/[[:space:]]*$//')
+	case $hds_dr in /*[!A-Za-z0-9_./-]*|[!/]*) hds_dr="" ;; esac
+	[ "${#hds_dr}" -le 60 ] || hds_dr=""
+	if [ -n "$hds_dr" ] && [ -w "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" ]; then
+		hds_dv=$(head -n 1 "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null)
+		if [ "$hds_dv" != "$hds_dr" ]; then
+			printf '%s\n' "$hds_dr" > "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null
+			if [ "$(head -n 1 "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null)" != "$hds_dr" ]; then
+				printf '%s\n' "$hds_dv" > "$HDS_PAZA_RADACINA/proc/stb/info/upd_path" 2>/dev/null
+				echo "[hds-upd-path] the recovery folder $hds_dr was not taken by the driver; the previous value stays"
+			fi
+		fi
+	fi
+fi
+
+# hds_paza: potrivit (or no rules), nepotrivit (showiframe off) or afisare (another receiver, showiframe without writes)
+# showiframe starts without any proxy variable in its environment, so a proxy cannot carry its request around the null
+# route of hds-netguard. Only its own environment changes (a subshell); enigma2 and the rest keep theirs. When the
+# daemon is still up from the run before (it is kept across restarts of the interface, block after the exit), this
+# second copy only writes backdrop.mvi into /dev/play.file for the running daemon and exits.
+if [ "$hds_paza" != nepotrivit ] && [ -x @bindir@/showiframe -a -f @datadir@/backdrop.mvi ]; then
+	(
+		unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
+		exec @bindir@/showiframe @datadir@/backdrop.mvi
+	)
+fi
+
+# Settings put back while enigma2 was running (Components/HdsSetariDinCopie.py) wait in settings.din-copie, one
+# "config.<name>=value" line per key: at its clean end enigma2 writes its tree from memory over settings, so they
+# are merged here, before enigma2 reads settings. Keys from the file win, every other line of settings stays; lines
+# with another key form and the web control token (it belongs to this receiver) are skipped; a file over 1 MiB is
+# dropped. The previous settings are kept as settings.inainte-de-copie and the mark .hds-setari-din-copie gets the
+# seconds from /proc/uptime (line 1) and the boot id of the kernel (line 2), for the crash guard after the exit of
+# enigma2. A merge inside an open guard window keeps the older snapshot (the state before the first merge). The log
+# gets counts only, never values.
+# Nothing is replaced unless every step is checked (awk exits 0 on a full disk and leaves a cut file): the merged
+# file must hold as many lines as awk printed, the snapshot as many bytes as settings, the mark its number. Any
+# failure leaves settings as it was, keeps settings.din-copie for the next start and removes both .nou files (the
+# snapshot has the web token). The mark is written before settings is replaced, so a power cut in between leaves no
+# merged settings without a guard. settings.din-copie-cazut (what the guard took out) stays: only a later guard
+# replaces it.
+# The guard window closes 30 minutes after the merge (mark and snapshot deleted: the snapshot holds the web token).
+# A mark from another boot of the receiver (a number above the uptime, or another boot id) closes the window too:
+# how long enigma2 ran before that restart is unknown, and an old snapshot must not replace the settings of today.
+# The variables are only for the tests on the PC; init sets none of them.
+HDS_SETARI=${HDS_SETARI:-/etc/enigma2/settings}
+HDS_SETARI_COPIE=${HDS_SETARI_COPIE:-/etc/enigma2/settings.din-copie}
+HDS_SETARI_INAINTE=${HDS_SETARI_INAINTE:-/etc/enigma2/settings.inainte-de-copie}
+HDS_SETARI_CAZUT=${HDS_SETARI_CAZUT:-/etc/enigma2/settings.din-copie-cazut}
+HDS_SETARI_SEMN=${HDS_SETARI_SEMN:-/etc/enigma2/.hds-setari-din-copie}
+HDS_SETARI_FEREASTRA=${HDS_SETARI_FEREASTRA:-1800}
+HDS_BOOT_ID=${HDS_BOOT_ID:-/proc/sys/kernel/random/boot_id}
+hds_jurnal=${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}
+# the clock and the boot id are read only when there is something to do (the usual start runs no command here)
+if [ -f "$HDS_SETARI_SEMN" ] || [ -f "$HDS_SETARI_COPIE" ]; then
+	hds_acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+	[ -n "$hds_acum" ] || hds_acum=$(date +%s)
+	hds_boot=$(head -n 1 "$HDS_BOOT_ID" 2>/dev/null | tr -cd 0-9a-f- | cut -c1-40)
+fi
+if [ -f "$HDS_SETARI_SEMN" ]; then
+	# digits only, no leading zero (a number like 08 is octal in $((...)) and an invalid one ends the shell)
+	hds_semn=$(head -n 1 "$HDS_SETARI_SEMN" 2>/dev/null | tr -cd 0-9 | cut -c1-12 | sed 's/^0*//')
+	hds_semn_boot=$(sed -n 2p "$HDS_SETARI_SEMN" 2>/dev/null | tr -cd 0-9a-f- | cut -c1-40)
+	# a mark without a number (emptied by a power cut) closes the window: 0 would put every crash under the guard
+	if [ -z "$hds_semn" ] || [ "$hds_semn" -gt "$hds_acum" ] ||
+		{ [ -n "$hds_semn_boot" ] && [ -n "$hds_boot" ] && [ "$hds_semn_boot" != "$hds_boot" ]; } ||
+		[ $((hds_acum - hds_semn)) -ge "$HDS_SETARI_FEREASTRA" ]; then
+		rm -f "$HDS_SETARI_SEMN" "$HDS_SETARI_INAINTE"
+	fi
+fi
+if [ -f "$HDS_SETARI_COPIE" ]; then
+	mkdir -p "${hds_jurnal%/*}" 2>/dev/null
+	hds_cand=$(date '+%Y-%m-%d %H:%M:%S')
+	hds_marime=$(wc -c < "$HDS_SETARI_COPIE" 2>/dev/null)
+	if [ "$((hds_marime + 0))" -gt 1048576 ]; then
+		rm -f "$HDS_SETARI_COPIE"
+		echo "$hds_cand setari din copie sterse fara unire: fisier de $hds_marime octeti" >> "$hds_jurnal"
+	else
+		hds_vechi=$HDS_SETARI
+		[ -f "$hds_vechi" ] || hds_vechi=/dev/null
+		hds_n=$(awk '{ sub(/\r$/, "") } /^config\.[A-Za-z0-9_.-]+=/ { k = substr($0, 1, index($0, "=") - 1)
+			if (k != "config.plugins.hdswebcontrol.token" && !(k in v)) { v[k] = 1; n++ } } END { print n + 0 }' \
+			"$HDS_SETARI_COPIE" 2>/dev/null)
+		# hds_motiv: the first step that failed (unire, taiata, instantaneu, semn); empty = every step checked
+		hds_motiv=""
+		# the merged lines go to settings.nou, their count to stderr (captured here); a cut file has fewer lines
+		hds_linii=$(awk '
+			{ sub(/\r$/, "") }
+			FILENAME == ARGV[1] {
+				i = index($0, "="); if (i < 2) next
+				k = substr($0, 1, i - 1)
+				if (k !~ /^config\.[A-Za-z0-9_.-]+$/ || k == "config.plugins.hdswebcontrol.token") next
+				if (!(k in A)) O[++n] = k
+				A[k] = substr($0, i + 1); next
+			}
+			{ i = index($0, "=")
+			  if (i > 1) { k = substr($0, 1, i - 1); if (k in A) { if (!(k in F)) { print k "=" A[k]; c++ }; F[k] = 1; next } }
+			  print; c++ }
+			END { for (j = 1; j <= n; j++) if (!(O[j] in F)) { print O[j] "=" A[O[j]]; c++ }
+			      print c + 0 > "/dev/stderr" }
+		' "$HDS_SETARI_COPIE" "$hds_vechi" 2>&1 > "$HDS_SETARI.nou") || hds_motiv=unire
+		if [ -z "$hds_motiv" ]; then
+			case $hds_linii in
+			''|*[!0-9]*) hds_motiv=unire ;;
+			*) [ "$(($(wc -l < "$HDS_SETARI.nou" 2>/dev/null) + 0))" -eq "$hds_linii" ] || hds_motiv=taiata ;;
+			esac
+		fi
+		# the snapshot only outside an open window (inside it, the older one is the state before the first merge)
+		hds_instantaneu=""
+		if [ -z "$hds_motiv" ] && [ ! -f "$HDS_SETARI_SEMN" ] && [ -f "$HDS_SETARI" ]; then
+			hds_instantaneu=1
+			if ! cp -p "$HDS_SETARI" "$HDS_SETARI_INAINTE.nou" 2>/dev/null ||
+				[ "$(($(wc -c < "$HDS_SETARI_INAINTE.nou" 2>/dev/null) + 0))" -ne "$(($(wc -c < "$HDS_SETARI") + 0))" ]; then
+				hds_motiv=instantaneu
+			fi
+		fi
+		if [ -z "$hds_motiv" ]; then
+			sync
+			if [ -n "$hds_instantaneu" ]; then
+				mv -f "$HDS_SETARI_INAINTE.nou" "$HDS_SETARI_INAINTE" || hds_motiv=instantaneu
+			elif [ ! -f "$HDS_SETARI_SEMN" ]; then
+				rm -f "$HDS_SETARI_INAINTE"
+			fi
+		fi
+		if [ -z "$hds_motiv" ]; then
+			if [ -n "$hds_boot" ]; then
+				printf '%s\n%s\n' "$hds_acum" "$hds_boot" > "$HDS_SETARI_SEMN" 2>/dev/null
+			else
+				echo "$hds_acum" > "$HDS_SETARI_SEMN" 2>/dev/null
+			fi
+			if [ "$(head -n 1 "$HDS_SETARI_SEMN" 2>/dev/null)" != "$hds_acum" ]; then
+				hds_motiv=semn
+				# no window without its mark; the snapshot, with the web token, is not left behind
+				rm -f "$HDS_SETARI_SEMN" "$HDS_SETARI_INAINTE"
+			fi
+		fi
+		if [ -z "$hds_motiv" ]; then
+			sync
+			mv -f "$HDS_SETARI.nou" "$HDS_SETARI"
+			rm -f "$HDS_SETARI_COPIE"
+			sync
+			echo "$hds_cand setari din copie unite peste settings: $hds_n chei" >> "$hds_jurnal"
+		else
+			rm -f "$HDS_SETARI.nou" "$HDS_SETARI_INAINTE.nou"
+			case $hds_motiv in
+			taiata) echo "$hds_cand setari din copie neunite: unirea a iesit taiata (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+			instantaneu) echo "$hds_cand setari din copie neunite: instantaneul nu s-a putut face (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+			semn) echo "$hds_cand setari din copie neunite: semnul garzii nu s-a putut scrie, settings neschimbat" >> "$hds_jurnal" ;;
+			*) echo "$hds_cand setari din copie neunite: unirea nu a reusit, settings neschimbat" >> "$hds_jurnal" ;;
+			esac
+		fi
+	fi
+fi
+
+# Safe mode (Components/HdsModSigur.py, Screens/HdsModSigur.py). From the 5th unclean end of enigma2 in 10 minutes
+# (block after the exit) the mark hds-mod-sigur is written in RAM; while it is there, enigma2 starts with
+# HDS_MOD_SIGUR=1: the plugin loader skips the plugins that did not come with the image (they stay installed),
+# skin.py skips skin_user.xml, the downloaded fonts are not registered and the safe mode screen opens first.
+# A choice made on that screen or in the web interface (/mod-sigur) only writes a request in RAM
+# (hds-mod-sigur.cerere) and asks for a restart of the interface; the request is done here, at the next start, and
+# only here are the mark and the count removed. So a restart that is refused (a recording in progress) changes
+# nothing: the screen removes its request again. Requests:
+#   normal   leave safe mode (mark and count removed);
+#   setari   put the previous settings back, then leave safe mode (on failure the mark stays: safe mode goes on);
+#   automat  written by the block after the exit when safe mode itself ended uncleanly HDS_MOD_SIGUR_PRAG2 (3) times:
+#            the previous settings are put back and safe mode goes on; the result is added to the mark (automat=),
+#            so it is done once. HDS_MOD_SIGUR_PRAG2=0 turns this step off.
+# enigma2 writes its settings from memory at its clean end, so they are put back here, before enigma2 reads settings.
+# settings.bune is the copy that enigma2 made after 10 minutes without an unclean end (from the snapshot taken after
+# the hook below, at each start). The replacement is whole (a key added since then can be the cause), except the web
+# control token, which stays the one of today (it belongs to this receiver). The settings replaced are kept as
+# settings.inainte-de-mod-sigur. The window of the crash guard for settings from a copy is closed (mark and snapshot
+# deleted), so it cannot swap the settings put back for older ones. Nothing is replaced unless the new file holds
+# every line awk printed. A restart of the receiver clears the RAM: mark, count and request go away with it.
+# The files in RAM sit in the directory of HDS_CADERI (/tmp); the variables are only for the tests on the PC.
+hds_ms_caderi=${HDS_CADERI:-/tmp/hds-enigma2.caderi}
+case $hds_ms_caderi in */*) hds_ms_ram=${hds_ms_caderi%/*} ;; *) hds_ms_ram=. ;; esac
+HDS_MOD_SIGUR_SEMN=${HDS_MOD_SIGUR_SEMN:-$hds_ms_ram/hds-mod-sigur}
+HDS_MOD_SIGUR_CERERE=${HDS_MOD_SIGUR_CERERE:-$hds_ms_ram/hds-mod-sigur.cerere}
+HDS_MOD_SIGUR_PRAG=${HDS_MOD_SIGUR_PRAG:-5}
+HDS_MOD_SIGUR_PRAG2=${HDS_MOD_SIGUR_PRAG2:-3}
+HDS_SETARI_PORNIRE=${HDS_SETARI_PORNIRE:-$hds_ms_ram/hds-setari-la-pornire}
+HDS_SETARI_BUNE=${HDS_SETARI_BUNE:-$HDS_SETARI.bune}
+HDS_SETARI_DINAINTE=${HDS_SETARI_DINAINTE:-$HDS_SETARI.inainte-de-mod-sigur}
+if [ -f "$HDS_MOD_SIGUR_CERERE" ]; then
+	hds_ms_cerere=$(head -n 1 "$HDS_MOD_SIGUR_CERERE" 2>/dev/null)
+	rm -f "$HDS_MOD_SIGUR_CERERE"
+	mkdir -p "${hds_jurnal%/*}" 2>/dev/null
+	hds_cand=$(date '+%Y-%m-%d %H:%M:%S')
+	# hds_ms_pus: the result of putting the settings back: da, lipsa (no copy) or the step that failed
+	hds_ms_pus=""
+	case $hds_ms_cerere in
+	setari|automat)
+		if ! grep -q '^config\.' "$HDS_SETARI_BUNE" 2>/dev/null; then
+			hds_ms_pus=lipsa
+		else
+			hds_ms_acum=$HDS_SETARI
+			[ -f "$hds_ms_acum" ] || hds_ms_acum=/dev/null
+			# the copy without its token lines, then the first token line of today (the one of the copy only when
+			# settings has none: the copy was made on this receiver); the count of lines to stderr
+			hds_linii=$(awk -v j="config.plugins.hdswebcontrol.token=" '
+				{ sub(/\r$/, "") }
+				FILENAME == ARGV[1] { if (index($0, j) != 1) { print; c++ } else if (b == "") b = $0; next }
+				index($0, j) == 1 && !t { print; c++; t = 1 }
+				END { if (!t && b != "") { print b; c++ }; print c + 0 > "/dev/stderr" }
+			' "$HDS_SETARI_BUNE" "$hds_ms_acum" 2>&1 > "$HDS_SETARI.nou")
+			hds_motiv=""
+			case $hds_linii in
+			''|*[!0-9]*) hds_motiv=unire ;;
+			*) { [ "$hds_linii" -gt 0 ] && [ "$(($(wc -l < "$HDS_SETARI.nou" 2>/dev/null) + 0))" -eq "$hds_linii" ]; } ||
+				hds_motiv=taiata ;;
+			esac
+			# the settings of today are kept first (copied: settings itself is never missing)
+			if [ -z "$hds_motiv" ] && [ -f "$HDS_SETARI" ]; then
+				if ! cp -p "$HDS_SETARI" "$HDS_SETARI_DINAINTE.nou" 2>/dev/null ||
+					[ "$(($(wc -c < "$HDS_SETARI_DINAINTE.nou" 2>/dev/null) + 0))" -ne "$(($(wc -c < "$HDS_SETARI") + 0))" ] ||
+					! mv -f "$HDS_SETARI_DINAINTE.nou" "$HDS_SETARI_DINAINTE" 2>/dev/null; then
+					hds_motiv=pastrare
+				fi
+			fi
+			if [ -z "$hds_motiv" ]; then
+				sync
+				mv -f "$HDS_SETARI.nou" "$HDS_SETARI"
+				rm -f "$HDS_SETARI_SEMN" "$HDS_SETARI_INAINTE"
+				sync
+				hds_ms_pus=da
+				hds_n=$hds_linii
+			else
+				rm -f "$HDS_SETARI.nou" "$HDS_SETARI_DINAINTE.nou"
+				hds_ms_pus=$hds_motiv
+			fi
+		fi
+		;;
+	esac
+	# the line in the log of unclean ends: fixed text and the number of lines only
+	case "$hds_ms_cerere $hds_ms_pus" in
+	"setari da")
+		echo "$hds_cand setarile de dinainte puse inapoi din settings.bune ($hds_n randuri); cele inlocuite in settings.inainte-de-mod-sigur" >> "$hds_jurnal" ;;
+	"automat da")
+		echo "$hds_cand setarile de dinainte puse inapoi singure, dupa opriri si in modul sigur, din settings.bune ($hds_n randuri); cele inlocuite in settings.inainte-de-mod-sigur" >> "$hds_jurnal" ;;
+	"setari lipsa")
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi: copia settings.bune lipseste" >> "$hds_jurnal" ;;
+	"automat lipsa")
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi singure: copia settings.bune lipseste" >> "$hds_jurnal" ;;
+	"setari pastrare")
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi: settings de acum nu s-a putut pastra (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+	"automat pastrare")
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi singure: settings de acum nu s-a putut pastra (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+	"setari "?*)
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi: copia nu s-a putut pregati (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+	"automat "?*)
+		echo "$hds_cand setarile de dinainte nu s-au pus inapoi singure: copia nu s-a putut pregati (disc plin?), settings neschimbat" >> "$hds_jurnal" ;;
+	esac
+	case $hds_ms_cerere in
+	normal)
+		rm -f "$HDS_MOD_SIGUR_SEMN" "$hds_ms_caderi"
+		echo "$hds_cand modul sigur: iesire, pornire normala aleasa, numaratoarea opririlor stearsa" >> "$hds_jurnal"
+		;;
+	setari)
+		if [ "$hds_ms_pus" = da ]; then
+			rm -f "$HDS_MOD_SIGUR_SEMN" "$hds_ms_caderi"
+			echo "$hds_cand modul sigur: iesire, cu setarile de dinainte, numaratoarea opririlor stearsa" >> "$hds_jurnal"
+		fi
+		;;
+	automat)
+		[ -f "$HDS_MOD_SIGUR_SEMN" ] && echo "automat=$hds_ms_pus $(date +%s)" >> "$HDS_MOD_SIGUR_SEMN" 2>/dev/null
+		;;
+	esac
+fi
+if [ -f "$HDS_MOD_SIGUR_SEMN" ]; then
+	HDS_MOD_SIGUR=1
+	export HDS_MOD_SIGUR
+	echo "[hds-mod-sigur] enigma2 starts in safe mode: only the plugins of the image, the skin without skin_user.xml"
+else
+	unset HDS_MOD_SIGUR
+fi
+
+# Settings copy (Components/HdsCopieSetari.py, run as a program while enigma2 is stopped): a copy chosen in the menu or
+# in the web interface (the request file), or, at the first start of a freshly written image (no prima-pornire mark;
+# the program then looks for a copy only when settings is missing and the mark "gata" of the flash kit is not there),
+# the newest copy of this receiver found on a stick or disc. Same rules, mark and crash guard as the flash kit hook
+# below, which then finds "gata" and writes nothing. A usual start runs no command here (two file tests). The program
+# writes only names and numbers to its log; it always exits 0, so the start never depends on it. The variables are
+# only for the tests on the PC; init sets none of them.
+HDS_RESTAURARE=${HDS_RESTAURARE:-/home/root/hds-restaurare}
+HDS_COPIE_MODUL=${HDS_COPIE_MODUL:-@libdir@/enigma2/python/Components/HdsCopieSetari.py}
+HDS_COPIE_JURNAL=${HDS_COPIE_JURNAL:-/home/root/logs/hds-restaurare.log}
+if [ "$hds_paza" = potrivit ] && { [ -f "$HDS_RESTAURARE/cerere" ] || [ ! -e "$HDS_RESTAURARE/prima-pornire" ]; } &&
+	[ -f "$HDS_COPIE_MODUL" ]; then
+	mkdir -p "${HDS_COPIE_JURNAL%/*}" 2>/dev/null
+	python3 -E -s -B "$HDS_COPIE_MODUL" pornire >> "$HDS_COPIE_JURNAL" 2>&1
+fi
+
+# hook to execute scripts always before enigma2 start (not on another receiver: see the model guard above)
+if [ "$hds_paza" = potrivit ] && [ -x @bindir@/enigma2_pre_start.sh ]; then
+	@bindir@/enigma2_pre_start.sh
+fi
+
+# Snapshot of settings for safe mode (Components/HdsModSigur.py), taken after the hook: the hook can merge the settings
+# kept from before a flash, so the snapshot holds the settings enigma2 starts with. Mode 0600 (it has the web token).
+# After 10 minutes of this enigma2 without an unclean end, enigma2 keeps it as settings.bune (skipped when equal).
+if [ -f "$HDS_SETARI" ]; then
+	(umask 077; cp "$HDS_SETARI" "$HDS_SETARI_PORNIRE.nou" 2>/dev/null && chmod 600 "$HDS_SETARI_PORNIRE.nou" &&
+		mv -f "$HDS_SETARI_PORNIRE.nou" "$HDS_SETARI_PORNIRE") ||
+		rm -f "$HDS_SETARI_PORNIRE.nou"
+else
+	rm -f "$HDS_SETARI_PORNIRE"
+fi
+
+if [ -d /home/root ]; then
+	cd /home/root
+fi
+
+LIBS=@libdir@/libopen.so.0.0.0
+
+#check for dreambox specific passthrough helper lib
+if [ -e @libdir@/libpassthrough.so ]; then
+	LIBS="$LIBS @libdir@/libpassthrough.so"
+fi
+
+# the cause of a crash, written by bsodFatal (main/bsod.cpp) and read after the end below: one from an earlier run (the
+# script killed before it read it) must not explain this one
+HDS_CADERE_MOTIV=${HDS_CADERE_MOTIV:-/tmp/hds-cadere.motiv}
+rm -f "$HDS_CADERE_MOTIV" "$HDS_CADERE_MOTIV.nou"
+
+# libjpeg: ldconfig (run by package install scripts, e.g. an update through opkg) may point libjpeg.so.62 at the
+# vendor libjpeg9b.so (same SONAME, other version, not compatible with libjpeg-turbo, which WebKit and enigma2 are
+# built on): the browser then crashed at the first JPEG (HbbTV on SAT.1 Gold after the opkg updates).
+# The link is put back on libjpeg-turbo before every start of the interface.
+HDS_JPEG_BUN=
+for f in @libdir@/libjpeg.so.62.*; do
+	[ -f "$f" ] && [ ! -L "$f" ] && HDS_JPEG_BUN=${f##*/}
+done
+if [ -n "$HDS_JPEG_BUN" ] && [ "$(readlink @libdir@/libjpeg.so.62)" != "$HDS_JPEG_BUN" ]; then
+	ln -sf "$HDS_JPEG_BUN" @libdir@/libjpeg.so.62
+fi
+
+if grep -qi '^config.crash.enabledebug=true' /etc/enigma2/settings 2>/dev/null; then
+	mkdir -p /home/root/logs
+	ENIGMA_DEBUG_LVL=4 ENIGMA_DEBUG_TIME=2 LD_PRELOAD=$LIBS @bindir@/enigma2 >> /home/root/logs/enigma2-debug.log 2>&1
+else
+	LD_PRELOAD=$LIBS @bindir@/enigma2
+fi
+
+# enigma2 exit codes:
+#
+# 0 - restart enigma
+# 1 - halt
+# 2 - reboot
+#
+# >128 signal
+
+ret=$?
+
+# Unclean ends of enigma2: a signal (>128: 137 after the crash screen, 139 without it,
+# 143 = SIGTERM, which hds-watchdog sends to an interface that stopped answering) or 5 (Python crash). They are counted
+# in RAM (seconds from /proc/uptime: the clock of this receiver can jump) and written one line each, in a small log.
+# If the 2D acceleration (TDE) was drawing the screen (lib/gdi/accel.cpp wrote "pornit" in its state file), the mark
+# /tmp/hds-accel.activ is written again here (the clean end of enigma2 removes it, and a SIGTERM may or may not go
+# through that end: the twisted main loop does not install the SIGTERM handler of runMainloop): the next start of
+# the interface then turns the TDE off by itself and says so. The acceleration is on unless /etc/enigma2/hds-fara-accel
+# exists; 3 unclean ends in 10 minutes of runs where the TDE did work (the state file says "pornit" or "asteapta", or
+# it was stopped after it worked wrongly: "eroare", "proba"; such an end gets the word "placa" in the count) turn it
+# off here too. Runs where it never started (no engine, box type or library, turned off, showiframe not up, the
+# library not loaded...) are not put on its account: a receiver without it, or crashes that are not its doing, get
+# nothing written about it. From 5 unclean ends on, the next start waits 30 s, so ssh stays usable.
+# An end asked for by hds-watchdog (an interface that stopped answering: SIGTERM, then SIGKILL 30 s later) is not a
+# crash: before each signal the watchdog writes HDS_PAZNIC_OPRIRE (in RAM) with the parent of the enigma2 it stops (this
+# script: $$), the uptime and, before SIGKILL, a line sigkill=. A 143 (or a 137 with sigkill=) of the enigma2 of this
+# script, at most 5 minutes after the mark, gets the word "paznic" in the count instead of "placa", the run mark of the
+# TDE is not written, and the marks the clean end (~gAccel) would have removed are removed here (the run mark in /tmp,
+# the work mark on the flash): the next start keeps the 2D acceleration on. The mark is removed after every unclean end;
+# one left after a clean end names this run only (init starts the script again, with another $$, for every run).
+# 0.3.0: every unclean end gets its cause, from the file bsodFatal writes (HDS_CADERE_MOTIV, main/bsod.cpp; enigma2
+# ends with 137 after the crash screen for a C++ crash and for a Python crash alike, so the code alone cannot tell them
+# apart), in the count (third word) and at the end of the line of the small log ("; cauza: ..."):
+#   python   an uncaught Python exception (file, line and error from the crash log): never the TDE's doing;
+#   c++      a fatal signal, with the library of PC and whether a TDE call was running (lib/gdi/accel.cpp);
+#   eroare   another fatal error of enigma2 (eFatal);
+#   oprire   SIGTERM that hds-watchdog did not send (init, a person, a script): asked for, not a crash;
+#   memorie  the kernel killed enigma2 (out of memory, in dmesg);
+#   paznic   the end asked for by hds-watchdog (above);
+#   necunoscuta  a signal without crash report and without any of the above.
+# The 2D acceleration is put on account only with proof: the crash ran inside a TDE call (tde=1) or PC or LR was in
+# libhiaccel: then the run mark stays (the next start turns the TDE off, "cadere-in-lucru"); or repeated ends: a C++
+# crash or an unexplained one while the TDE worked gets the word "placa", and 3 of them in 10 minutes turn it off as
+# before. Any other end removes the run mark and the work mark (what the clean end would have removed): a Python
+# crash, a requested stop or a lack of memory does not touch the 2D acceleration.
+# The variables are only for the tests on the PC; init sets none of them.
+HDS_CADERI=${HDS_CADERI:-/tmp/hds-enigma2.caderi}
+HDS_CADERI_JURNAL=${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}
+HDS_ACCEL_STARE=${HDS_ACCEL_STARE:-/tmp/hds-accel.stare}
+HDS_ACCEL_ACTIV=${HDS_ACCEL_ACTIV:-/tmp/hds-accel.activ}
+HDS_ACCEL_OPRIT=${HDS_ACCEL_OPRIT:-/etc/enigma2/hds-fara-accel}
+HDS_CADERI_PAUZA=${HDS_CADERI_PAUZA:-30}
+HDS_PAZNIC_OPRIRE=${HDS_PAZNIC_OPRIRE:-/tmp/hds-paznic.oprire}
+HDS_ACCEL_LUCRU=${HDS_ACCEL_LUCRU:-/etc/enigma2/hds-accel.lucru}
+if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
+	acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+	[ -n "$acum" ] || acum=$(date +%s)
+	tde=""
+	# lines 1 and 2 of the state file: the word and the code of lib/gdi/accel.cpp (Components/HdsAccel2D.py)
+	tde_cuvant=$(head -n 1 "$HDS_ACCEL_STARE" 2>/dev/null)
+	case "$tde_cuvant $(sed -n 2p "$HDS_ACCEL_STARE" 2>/dev/null)" in
+		"pornit "*|"asteapta "*|"oprit eroare"|"oprit proba") tde_lucrat=" placa" ;;
+		*) tde_lucrat="" ;;
+	esac
+	# the end asked for by hds-watchdog (see above)
+	paznic=""
+	if [ -f "$HDS_PAZNIC_OPRIRE" ]; then
+		if [ "$ret" -eq 143 ] || { [ "$ret" -eq 137 ] && grep -q '^sigkill=' "$HDS_PAZNIC_OPRIRE" 2>/dev/null; }; then
+			# digits only, no leading zero (a number like 08 is octal in $((...)) and an invalid one ends the shell)
+			paznic_up=$(sed -n 's/^uptime=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-12 |
+				sed 's/^0*//')
+			if grep -qx "parinte=$$" "$HDS_PAZNIC_OPRIRE" 2>/dev/null && [ -n "$paznic_up" ] &&
+				[ "$paznic_up" -le "$acum" ] && [ $((acum - paznic_up)) -le 300 ]; then
+				paznic=1
+				tde_lucrat=" paznic"
+			fi
+		fi
+		rm -f "$HDS_PAZNIC_OPRIRE"
+	fi
+	# the cause (see above): the file of bsodFatal, read once and removed
+	motiv_fel=""; motiv_semnal=""; motiv_pc=""; motiv_lr=""; motiv_tde=""; motiv_jurnal=""
+	if [ -f "$HDS_CADERE_MOTIV" ]; then
+		motiv_fel=$(sed -n 's/^fel=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'a-z')
+		motiv_semnal=$(sed -n 's/^semnal=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9')
+		motiv_pc=$(sed -n 's/^pc=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'A-Za-z0-9._+/-' | cut -c1-160)
+		motiv_lr=$(sed -n 's/^lr=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'A-Za-z0-9._+/-' | cut -c1-160)
+		motiv_tde=$(sed -n 's/^tde=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9')
+		motiv_jurnal=$(sed -n 's/^jurnal=//p' "$HDS_CADERE_MOTIV" | head -n 1)
+		rm -f "$HDS_CADERE_MOTIV"
+	fi
+	dovada=""
+	if [ -n "$paznic" ]; then
+		cauza="paznic"
+	elif [ "$motiv_fel" = "semnal" ]; then
+		cauza="c++: semnalul ${motiv_semnal:-?}, in ${motiv_pc##*/}"
+		[ -n "$motiv_lr" ] && cauza="$cauza (apelat din ${motiv_lr##*/})"
+		case "$motiv_pc $motiv_lr" in
+			*hiaccel*) dovada=1 ;;
+		esac
+		[ "$motiv_tde" = 1 ] && dovada=1 && cauza="$cauza, in timpul unui apel al placii 2D"
+	elif [ "$motiv_fel" = "python" ] || [ "$ret" -eq 5 ]; then
+		cauza="python"
+		# the place and the error of the last traceback of the crash log (ASCII, short)
+		if [ -n "$motiv_jurnal" ] && [ -f "$motiv_jurnal" ]; then
+			loc=$(awk '/Traceback \(most recent call last\)/ { l = ""; e = "" }
+				/File "[^"]*", line [0-9]+/ { l = $0; sub(/.*File "/, "", l); sub(/.*\/python\//, "", l);
+					sub(/", line /, ":", l); sub(/,.*/, "", l); e = ""; next }
+				l != "" && e == "" && /^[ <0-9.>]*[A-Za-z_][A-Za-z0-9_.]*(Error|Exception|Exit|Interrupt|Warning)/ {
+					e = $0; sub(/^[ <0-9.>]*/, "", e) }
+				END { if (l != "") print l (e != "" ? " " e : "") }' "$motiv_jurnal" 2>/dev/null |
+				tr -cd ' -~' | cut -c1-200)
+			[ -n "$loc" ] && cauza="python: $loc"
+		fi
+	elif [ "$motiv_fel" = "eroare" ]; then
+		cauza="eroare"
+	elif [ "$ret" -eq 143 ]; then
+		cauza="oprire"
+	elif dmesg 2>/dev/null | tail -n 100 | grep -q 'Killed process [0-9]* (enigma2)'; then
+		cauza="memorie"
+	else
+		cauza="necunoscuta"
+	fi
+	# the word in the count: "placa" only for a C++ crash or an unexplained one while the TDE worked (the rule of the
+	# repeated ends); "paznic" is set above; the other causes have their own word and are not counted for the TDE
+	case "$cauza" in
+		paznic) ;;
+		c++*|necunoscuta) ;;
+		python*) tde_lucrat=" python" ;;
+		*) tde_lucrat=" $cauza" ;;
+	esac
+	echo "$acum $ret$tde_lucrat" >> "$HDS_CADERI"
+	tail -n 20 "$HDS_CADERI" > "$HDS_CADERI.nou" 2>/dev/null && mv -f "$HDS_CADERI.nou" "$HDS_CADERI"
+	recente=$(awk -v a="$acum" '$1 + 600 >= a' "$HDS_CADERI" 2>/dev/null | wc -l)
+	recente=$((recente + 0))
+	recente_placa=$(awk -v a="$acum" '$1 + 600 >= a && $3 == "placa"' "$HDS_CADERI" 2>/dev/null | wc -l)
+	recente_placa=$((recente_placa + 0))
+	if [ -n "$paznic" ]; then
+		tde=", oprire ceruta de paznic: interfata nu mai raspundea"
+	elif [ "$tde_cuvant" = "pornit" ]; then
+		tde=", placa 2D folosita"
+	fi
+	if [ -n "$dovada" ] && [ "$tde_cuvant" = "pornit" ]; then
+		# the proof: the run mark stays, so the next start turns the TDE off ("cadere-in-lucru")
+		echo "cadere in placa 2D (cod $ret)" > "$HDS_ACCEL_ACTIV"
+	else
+		# what the clean end would have removed: the next start reads neither a crash of the TDE (run mark) nor a
+		# restart of the receiver (work mark); rm of a missing file writes nothing on the flash
+		rm -f "$HDS_ACCEL_ACTIV" "$HDS_ACCEL_LUCRU"
+	fi
+	mkdir -p "${HDS_CADERI_JURNAL%/*}" 2>/dev/null
+	marime=0
+	[ -f "$HDS_CADERI_JURNAL" ] && marime=$(wc -c < "$HDS_CADERI_JURNAL")
+	if [ "$((marime + 0))" -gt 65536 ]; then
+		tail -n 200 "$HDS_CADERI_JURNAL" > "$HDS_CADERI_JURNAL.nou" &&
+			mv -f "$HDS_CADERI_JURNAL.nou" "$HDS_CADERI_JURNAL"
+	fi
+	cand=$(date '+%Y-%m-%d %H:%M:%S')
+	echo "$cand enigma2 s-a oprit neasteptat (cod $ret$tde), $recente in ultimele 10 minute; cauza: $cauza" \
+		>> "$HDS_CADERI_JURNAL"
+	if [ "$recente_placa" -ge 3 ] && [ ! -e "$HDS_ACCEL_OPRIT" ]; then
+		{
+			echo "oprita automat: $recente_placa opriri neasteptate ale interfetei in 10 minute dupa ce placa 2D a lucrat"
+			echo "Se porneste din nou din setari (Accelerare 2D) sau se sterge acest fisier."
+		} > "$HDS_ACCEL_OPRIT"
+		sync
+		echo "$cand accelerarea 2D oprita automat dupa $recente_placa opriri neasteptate cu placa 2D lucrand" \
+			>> "$HDS_CADERI_JURNAL"
+	fi
+	if [ "$recente" -ge 5 ]; then
+		sleep "$HDS_CADERI_PAUZA"
+	fi
+fi
+
+# Safe mode (block before the hook): the unclean end that makes HDS_MOD_SIGUR_PRAG (5) in the last 10 minutes writes
+# the mark, so the next start of enigma2 is in safe mode. An existing mark is not written again (the ends in safe mode
+# are counted and paused as above, and the second stage below adds its lines). Lines: the uptime and the count when
+# safe mode began, the code and the seconds since 1970 (compared with the time in the name of the last crash report:
+# no time zone in either).
+if { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${recente:-0}" -ge "$HDS_MOD_SIGUR_PRAG" ] &&
+	[ ! -f "$HDS_MOD_SIGUR_SEMN" ]; then
+	printf 'pornit=%s\ncaderi=%s\ncod=%s\nora=%s\n' "$acum" "$recente" "$ret" "$(date +%s)" > "$HDS_MOD_SIGUR_SEMN" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') modul sigur: $recente opriri neasteptate in 10 minute, la pornirea urmatoare numai extensiile imaginii" >> "$HDS_CADERI_JURNAL"
+fi
+
+# Second stage: this enigma2 ran in safe mode (HDS_MOD_SIGUR=1, exported above for this run) and ended uncleanly too.
+# Each such end adds a line oprire= to the mark; at HDS_MOD_SIGUR_PRAG2 (3) of them, unless the settings were already
+# put back once (a line automat=) or a choice made on the screen waits in RAM, the request "automat" is written: the
+# next start puts the previous settings back by itself and stays in safe mode (block before the hook). An error in
+# the code of the image is not helped by this: the ends go on, with the pause above, and ssh stays usable.
+if { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${HDS_MOD_SIGUR:-}" = 1 ] && [ -f "$HDS_MOD_SIGUR_SEMN" ] &&
+	[ "$((HDS_MOD_SIGUR_PRAG2 + 0))" -gt 0 ]; then
+	echo "oprire=$acum" >> "$HDS_MOD_SIGUR_SEMN" 2>/dev/null
+	hds_ms_n=$(grep -c '^oprire=' "$HDS_MOD_SIGUR_SEMN" 2>/dev/null)
+	if [ "$((hds_ms_n + 0))" -ge "$HDS_MOD_SIGUR_PRAG2" ] && ! grep -q '^automat=' "$HDS_MOD_SIGUR_SEMN" 2>/dev/null &&
+		[ ! -f "$HDS_MOD_SIGUR_CERERE" ]; then
+		echo automat > "$HDS_MOD_SIGUR_CERERE" 2>/dev/null
+		echo "$(date '+%Y-%m-%d %H:%M:%S') modul sigur: $hds_ms_n opriri si in modul sigur, la pornirea urmatoare se pun inapoi singure setarile de dinainte" >> "$HDS_CADERI_JURNAL"
+	fi
+fi
+
+# Crash guard for settings merged from a copy (block before the hook, or the 0.1.5 restore hook, which writes the same
+# snapshot and mark): 2 unclean ends counted above, at or after the merge and within the last 10 minutes, while the
+# window is open, put the previous settings back (settings.inainte-de-copie; without it there were no settings before
+# the merge and enigma2 starts on its defaults) and keep the merged ones as settings.din-copie-cazut. Any exit 30
+# minutes or more after the merge, or with a mark that holds no number, closes the window first (mark and snapshot
+# deleted), so a crash after the window never puts old settings back. The guard only sees the exits of enigma2: a hard
+# restart of the receiver while enigma2 runs is not counted, and the next boot closes the window (block before the
+# hook).
+if [ -f "$HDS_SETARI_SEMN" ]; then
+	acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+	[ -n "$acum" ] || acum=$(date +%s)
+	semn=$(head -n 1 "$HDS_SETARI_SEMN" 2>/dev/null | tr -cd 0-9 | cut -c1-12 | sed 's/^0*//')
+	caderi_setari=0
+	if [ -n "$semn" ] && { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; }; then
+		caderi_setari=$(awk -v s="$semn" -v a="$acum" '$1 >= s && $1 + 600 >= a' "$HDS_CADERI" 2>/dev/null | wc -l)
+		caderi_setari=$((caderi_setari + 0))
+	fi
+	if [ -z "$semn" ]; then
+		rm -f "$HDS_SETARI_SEMN" "$HDS_SETARI_INAINTE"
+	elif [ "$semn" -le "$acum" ] && [ $((acum - semn)) -ge "$HDS_SETARI_FEREASTRA" ]; then
+		rm -f "$HDS_SETARI_SEMN" "$HDS_SETARI_INAINTE"
+	elif [ "$caderi_setari" -ge 2 ]; then
+		[ -f "$HDS_SETARI" ] && mv -f "$HDS_SETARI" "$HDS_SETARI_CAZUT"
+		[ -f "$HDS_SETARI_INAINTE" ] && mv -f "$HDS_SETARI_INAINTE" "$HDS_SETARI"
+		rm -f "$HDS_SETARI_SEMN"
+		sync
+		mkdir -p "${HDS_CADERI_JURNAL%/*}" 2>/dev/null
+		echo "$(date '+%Y-%m-%d %H:%M:%S') setarile din copie scoase dupa $caderi_setari opriri neasteptate in 10 minute; pastrate in settings.din-copie-cazut" >> "$HDS_CADERI_JURNAL"
+	fi
+fi
+
+# On u5/u4 boxes (HiSilicon, Amiko Viper 4K) showiframe is the platform daemon that holds HDMI and
+# the demux link; killing it while enigma2 runs turns HDMI off and can oops the kernel on the next zap.
+# It stays up across the restarts of the interface (codes 0 and 3: Restart Interface, an installed update and every
+# other restart of the interface): the next run of this script starts it again, the running daemon refuses a second
+# copy and only shows backdrop.mvi, and enigma2 finds HDMI, the remote and the shared video memory as they were. So
+# the 33 MB the daemon maps once in vmalloc (lib/dvb/hdspazavideo.h) are not asked for again at every restart and the
+# map of the kernel is not shuffled (Components/HdsMemorieDriver.py). It is stopped as before only after an unclean
+# end of enigma2 (a signal, a Python crash: the daemon may be stuck in the middle of a command) and before a reboot or
+# an update of the front panel (codes 2 and 4); never at halt (code 1).
+if [ "$ret" -ne "1" ] && [ "$ret" -ne "0" ] && [ "$ret" -ne "3" ] && [ -e /proc/stb/info/boxtype ]; then
+	case $(cut -c1-2 /proc/stb/info/boxtype) in
+		u5|u4)
+			killall -9 showiframe 2>/dev/null; sleep 5
+			;;
+	esac
+fi
+
+case $ret in
+	1)
+		/sbin/halt
+		;;
+	2)
+		/sbin/reboot
+		;;
+	4)
+		/sbin/rmmod lcd
+		/usr/sbin/fpupgrade --upgrade 2>&1 | tee /home/root/fpupgrade.log
+		sleep 1;
+		/sbin/rmmod fp
+		/sbin/modprobe fp
+		/sbin/reboot
+		;;
+	*)
+		;;
+esac

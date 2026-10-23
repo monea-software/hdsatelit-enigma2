@@ -1,0 +1,59 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# udhcpc (/etc/udhcpc.d/50default): adresa, ruta implicita si serverele de nume primite prin DHCP, NUMAI pentru placa
+# pe care a venit raspunsul:
+# - se sterg numai rutele implicite ale acestei placi (o reinnoire pe Wi-Fi nu mai sterge ruta cablului si invers);
+# - ruta implicita se pune cu "dev <placa>": fara ea nucleul alegea placa dupa poarta si o putea pune pe cablul scos
+#   (atunci nimic nu iesea pe Wi-Fi);
+# - metrica: placile fara fir de la 10, celelalte de la 0. Cablul ramane primul cand merge; cu cablul scos nucleul sare
+#   ruta lui (ignore_routes_with_linkdown, pus de Components/HdsComutareRetea.py) si castiga Wi-Fi-ul.
+
+[ -n "$1" ] || { echo "folosire: chemat de udhcpc" >&2; exit 1; }
+RESOLV_CONF=/etc/resolv.conf
+
+metrica_de_baza() {
+	if [ -e "/sys/class/net/$interface/wireless" ] || [ -e "/sys/class/net/$interface/phy80211" ]; then
+		echo 10
+	else
+		echo 0
+	fi
+}
+
+case "$1" in
+deconfig)
+	[ -x /sbin/resolvconf ] && /sbin/resolvconf -d "$interface.udhcpc"
+	ip addr flush dev "$interface" scope global
+	ip link set dev "$interface" up
+	;;
+renew|bound)
+	b="broadcast +"
+	[ -n "$broadcast" ] && b="broadcast $broadcast"
+	ip addr add dev "$interface" local "$ip/$mask" $b 2>/dev/null
+	if [ -n "$router" ]; then
+		while ip route del default dev "$interface" 2>/dev/null; do
+			:
+		done
+		m=$(metrica_de_baza)
+		for r in $router; do
+			ip route add default via "$r" dev "$interface" metric "$m" 2>/dev/null || \
+				ip route append default via "$r" dev "$interface" metric "$m"
+			m=$((m + 1))
+		done
+	fi
+	R=""
+	[ -n "$domain" ] && R="domain $domain
+"
+	for d in $dns; do
+		R="${R}nameserver $d
+"
+	done
+	if [ -x /sbin/resolvconf ]; then
+		printf '%s' "$R" | /sbin/resolvconf -a "$interface.udhcpc"
+	else
+		printf '%s' "$R" > "$RESOLV_CONF"
+	fi
+	;;
+esac
+exit 0

@@ -1,0 +1,10 @@
+# HDSatelit (Monea Software pentru HD Satelit), pachetul hdsatelit-noduri.
+#
+# /dev/mali (memoria placii video Mali, nod misc facut de nucleu la insmod mali.ko) pe grupul video, ca /dev/fb0
+# (50-udev-default.rules: SUBSYSTEM=="graphics", GROUP="video"), ca navigatorul HbbTV (utilizatorul hdsnav, din grupul
+# video) sa poata desena cu placa video.
+#
+# La pornire `mdev -s` din S06hotplug.sh strica drepturile tuturor nodurilor, iar /etc/init.d/hds-noduri (S42) le pune la
+# loc dupa el. Regula de aici e pentru nodul facut DUPA S42 (modulul incarcat mai tarziu sau din nou): atunci numai udev
+# il atinge (mdev nu e pus ca hotplug, /proc/sys/kernel/hotplug e gol), deci fara regula ar ramane root:root.
+KERNEL=="mali", GROUP="video", MODE="0660"

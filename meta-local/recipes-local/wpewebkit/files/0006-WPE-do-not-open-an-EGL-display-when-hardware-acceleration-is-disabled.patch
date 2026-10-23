@@ -1,0 +1,63 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] WPE: do not open an EGL display when hardware acceleration is disabled
+
+When WPE_DISABLE_HARDWARE_ACCELERATION is set, the UI process selects the
+non-composited path (see the previous patch) and the web process paints
+with Skia on the CPU into shared memory buffers, without any GL context
+(AcceleratedSurface::usesGL() is false with the WPE platform API). The web
+process still created an EGL display at start-up and aborted when none was
+available. Skip it in that case and disable accelerated image buffers, so
+the web process also runs on devices without any EGL implementation.
+Nothing changes when the variable is not set.
+
+Upstream-Status: Inappropriate [embedded configuration]
+
+diff -ruN a/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp b/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp
+--- a/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp	2026-09-27 16:43:34.054256850 +0300
++++ b/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp	2026-09-27 16:43:34.072116212 +0300
+@@ -139,6 +139,20 @@
+     addSupplementWithoutRefCountedCheck<SystemSettingsManager>();
+ }
+ 
++#if PLATFORM(WPE)
++// WPE_DISABLE_HARDWARE_ACCELERATION is also read by the UI process (WebPreferencesWPE.cpp),
++// which then selects the non-composited path: Skia paints on the CPU straight into shared
++// memory buffers and the web process never uses GL. In that case do not open an EGL display
++// either, so the web process also runs on devices without any EGL implementation.
++static bool hardwareAccelerationDisabledByEnvironment()
++{
++    const char* disable = getenv("WPE_DISABLE_HARDWARE_ACCELERATION");
++    IGNORE_CLANG_WARNINGS_BEGIN("unsafe-buffer-usage-in-libc-call")
++    return disable && strcmp(disable, "0");
++    IGNORE_CLANG_WARNINGS_END
++}
++#endif
++
+ void WebProcess::initializePlatformDisplayIfNeeded() const
+ {
+     if (PlatformDisplay::sharedDisplayIfExists())
+@@ -223,6 +237,9 @@
+ 
+     m_rendererBufferTransportMode = parameters.rendererBufferTransportMode;
+ #if PLATFORM(WPE)
++    bool needsPlatformDisplay = !hardwareAccelerationDisabledByEnvironment();
++    if (!needsPlatformDisplay)
++        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+ #if USE(WPE_RENDERER)
+     if (!parameters.isServiceWorkerProcess) {
+         if (m_rendererBufferTransportMode.isEmpty()) {
+@@ -230,11 +247,12 @@
+             if (!implementationLibraryName.isNull() && implementationLibraryName.data()[0] != '\0')
+                 wpe_loader_init(parameters.implementationLibraryName.data());
+             PlatformDisplay::setSharedDisplay(PlatformDisplayLibWPE::create(parameters.hostClientFileDescriptor.release()));
+-        } else
++        } else if (needsPlatformDisplay)
+             initializePlatformDisplayIfNeeded();
+     }
+ #else
+-    initializePlatformDisplayIfNeeded();
++    if (needsPlatformDisplay)
++        initializePlatformDisplayIfNeeded();
+ #endif
+     initializeVulkanIfNeeded();
+ #endif // PLATFORM(WPE)

@@ -1,0 +1,45 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] WPE: allow disabling hardware acceleration from the environment
+
+The WPE API has no hardware acceleration policy (it is GTK only), so the
+web process always composites with GL. When WPE_DISABLE_HARDWARE_ACCELERATION
+is set (and not "0") in the UI process, turn off hardware acceleration and
+accelerated compositing in the default preferences, which selects the
+non-composited frame renderer (Skia raster into shared memory buffers).
+
+Upstream-Status: Inappropriate [embedded configuration]
+
+diff -ruN a/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp b/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp
+--- a/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp	2026-09-27 13:24:12.059203776 +0300
++++ b/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp	2026-09-27 13:24:12.077023077 +0300
+@@ -26,6 +26,9 @@
+ #include "config.h"
+ #include "WebPreferences.h"
+ 
++#include <stdlib.h>
++#include <string.h>
++
+ namespace WebKit {
+ 
+ void WebPreferences::platformInitializeStore()
+@@ -33,6 +36,20 @@
+     setAcceleratedCompositingEnabled(true);
+     setForceCompositingMode(true);
+     setThreadedScrollingEnabled(true);
++
++    // WPE has no hardware acceleration policy in its API. Allow the embedder to
++    // select the non-composited path (Skia raster into shared memory, no GL in the
++    // web process) on devices where GL composition and read-back is slower than
++    // painting on the CPU.
++#if ENABLE(WPE_PLATFORM)
++    const char* disable = getenv("WPE_DISABLE_HARDWARE_ACCELERATION");
++    if (disable && strcmp(disable, "0")) {
++        setHardwareAccelerationEnabled(false);
++        setAcceleratedCompositingEnabled(false);
++        setForceCompositingMode(false);
++        setThreadedScrollingEnabled(false);
++    }
++#endif
+ }
+ 
+ } // namespace WebKit

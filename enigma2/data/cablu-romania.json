@@ -1,0 +1,55 @@
+{
+  "versiune": 1,
+  "actualizat": "2026-09-27",
+  "sursa": "Parametrii publicati de operatori, fiecare verificat cu o a doua sursa (citite pe 27.09.2026). Frecventa de pornire in MHz, rata de simbol in kSymb/s, modulatia QAM. Dupa pornire, receptorul citeste tabela de retea (NIT) si adauga toate frecventele anuntate de operator. Listele din /etc/tuxbox/cables.xml (pachetul tuxbox-common) raman dupa acestea.",
+  "note": [
+    "Digi: 306 MHz e pe QAM64 in Bucuresti, Deva si Timisoara si pe QAM256 in Caras-Severin; pornirea le incearca pe amandoua, QAM64 intai.",
+    "Vodafone: aceeasi pornire pentru toate localitatile (manualul modulului CI+, pagina 11); identificatorul de retea difera pe orase, dar nu trebuie la scanare.",
+    "Nextgen: parametrii sunt din manualele operatorului din 2011-2012; reteaua trece pe Orange din 2025.",
+    "Orange nu publica frecventele (instructiunile lui cer cautarea completa); nu are intrare aici. Felul Toata banda (122-858 MHz) o gaseste.",
+    "INES, Moldtelecom si StarNet dau televiziune prin internet (IPTV), nu prin cablu. Akta a fost preluata de Digi in 2020."
+  ],
+  "operatori": [
+    {
+      "cheie": "ro:digi",
+      "nume": "Digi",
+      "tara": "ROU",
+      "fel": "pornire",
+      "transpondere": [
+        {"mhz": 306, "sr": 6900, "qam": 64},
+        {"mhz": 306, "sr": 6900, "qam": 256}
+      ],
+      "surse": [
+        "Ghidul oficial Digi pentru televizoare LG, PDF pe s.digi.ro (creat 01.03.2016, citit 27.09.2026): 306000 KHz, 6900 KS/s",
+        "cables.xml al altei imagini (26.07.2022) si OE-Alliance (10.05.2023); dtv-scan-tables ro-DigiTV, ro-Deva-DigiTV (03.2023), ro-Timisoara-DigiTV: 306 MHz, 6900, QAM64",
+        "Comentariu de abonat, media-max.ro, 25.04.2021, Caras-Severin: 306 MHz pe QAM256, 6900"
+      ]
+    },
+    {
+      "cheie": "ro:vodafone",
+      "nume": "Vodafone",
+      "tara": "ROU",
+      "fel": "pornire",
+      "transpondere": [
+        {"mhz": 306, "sr": 6900, "qam": 256}
+      ],
+      "surse": [
+        "Manualul Vodafone „Card Digital CI+ HD”, https://www.vodafone.ro/libs/documents/digital_asset/v666730.pdf (creat 16.03.2020), pagina 11, pentru toate localitatile: 306 MHz, 6900, QAM256, cautare rapida",
+        "RNT, https://rnt.ro/index.php/suport-tehnic/ (citit 27.09.2026): UPC/Vodafone, 306 MHz, 6900, QAM 256, mod de cautare rapid, ID retea 31417 (Bucuresti)"
+      ]
+    },
+    {
+      "cheie": "ro:nextgen",
+      "nume": "Nextgen",
+      "tara": "ROU",
+      "fel": "pornire",
+      "transpondere": [
+        {"mhz": 706, "sr": 6875, "qam": 64}
+      ],
+      "surse": [
+        "Manualele de pe https://www.next-gen.ro/manuale.html (KAON 11.10.2011, Volio 01.03.2012, Synaps CHD 3000 si CSD 300 10.2011 si 13.03.2012, citite 27.09.2026): 706000 kHz, 6875, QAM64, cautare in retea pornita",
+        "https://www.next-gen.ro/compania.html: firma detinuta 100% de Orange Romania; bit24.ro, 20.02.2025: abonatii trec pe reteaua Orange"
+      ]
+    }
+  ]
+}

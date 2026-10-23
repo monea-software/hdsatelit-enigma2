@@ -1,0 +1,14 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+# udhcpc: la o adresa noua (bound, renew) numele hdsatelit.local se publica din nou cu ea (/etc/init.d/hds-nume-local
+# nu schimba nimic cand adresa e aceeasi); la pierderea adresei (deconfig) numele se retrage.
+case "$1" in
+bound|renew)
+	/etc/init.d/hds-nume-local start > /dev/null 2>&1 &
+	;;
+deconfig)
+	/etc/init.d/hds-nume-local stop > /dev/null 2>&1
+	;;
+esac
+exit 0

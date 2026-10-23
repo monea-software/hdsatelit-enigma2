@@ -1,0 +1,57 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+### BEGIN INIT INFO
+# Provides:          hds-jurnal
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:      0 6
+# Short-Description: pastreaza jurnalul sistemului de dinainte de o oprire necurata
+### END INIT INFO
+#
+# Jurnalul sistemului e in /home/root/logs/messages (syslogd pornit din rc5, S20syslog). Dupa o pana de curent, o
+# repornire dura sau o cadere a nucleului, jurnalul de dinainte se pierdea repede prin rotire. Scriptul acesta:
+#   start (rcS, S38: dupa montarea radacinii in scriere, inainte de syslogd): daca lipseste semnul opririi curate si
+#     exista jurnal, copiaza messages.0 si messages (in ordinea timpului) in messages.cadere; copia de dinainte trece
+#     in messages.cadere.1 (deci se pastreaza ultimele doua opriri necurate). Apoi sterge semnul.
+#   stop (rc0 si rc6, S39: dupa oprirea lui syslogd la K20 si inainte de demontare la S40): scrie semnul opririi
+#     curate. O oprire fara rc0/rc6 (pana de curent, sysrq, ceasul hardware, caderea nucleului) il lasa lipsa.
+# La prima pornire dupa scrierea imaginii nu exista nici semn, nici jurnal: nu se copiaza nimic.
+
+D=${HDS_JURNAL_DOSAR:-/home/root/logs}
+SEMN=$D/.oprire-curata
+CADERE=$D/messages.cadere
+
+case "$1" in
+start)
+	if [ -e "$SEMN" ]; then
+		rm -f "$SEMN"
+		exit 0
+	fi
+	if [ -s "$D/messages" ] || [ -s "$D/messages.0" ]; then
+		[ -f "$CADERE" ] && mv -f "$CADERE" "$CADERE.1"
+		{
+			echo "== copia jurnalului de dinainte de o oprire necurata (semnul opririi curate lipsea)"
+			echo "== facuta la pornire, ora receptorului $(date '+%Y-%m-%d %H:%M:%S') (poate fi ora salvata, inca nepotrivita)"
+			for f in messages.0 messages; do
+				[ -s "$D/$f" ] || continue
+				echo "== $f"
+				cat "$D/$f"
+			done
+		} > "$CADERE.nou" 2> /dev/null && mv -f "$CADERE.nou" "$CADERE"
+		rm -f "$CADERE.nou"
+		sync
+	fi
+	;;
+stop)
+	mkdir -p "$D"
+	: > "$SEMN"
+	sync
+	;;
+*)
+	echo "folosire: $0 {start|stop}" >&2
+	exit 1
+	;;
+esac
+exit 0

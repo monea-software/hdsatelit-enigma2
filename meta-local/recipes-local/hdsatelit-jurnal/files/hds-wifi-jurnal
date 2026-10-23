@@ -1,0 +1,22 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Chemat din /etc/modprobe.d/hds-rtl8188fu.conf imediat dupa incarcarea driverului placii Wi-Fi USB (rtl8188fu): coboara
+# jurnalul driverului la erori (log_level 2). Implicit driverul porneste cu 5 (cel mai vorbaret; nu exista optiune de
+# modul pentru asta) si scria ~260 KB in /home/root/logs/messages in primele 2 minute dupa pornire (TODO 17.10.2026
+# 19:14). Intrarea din /proc se face la initializarea modulului, inainte de cautarea placii, deci exista deja cand
+# modprobe a terminat; asteptarea scurta e numai o rezerva. Iese mereu cu 0: un esec aici nu trebuie sa para un esec
+# al incarcarii driverului.
+
+F=/proc/net/rtl8188fu/log_level
+NIVEL=${HDS_WIFI_NIVEL:-2}
+i=0
+while [ ! -e "$F" ] && [ $i -lt 3 ]; do
+	sleep 1
+	i=$((i + 1))
+done
+if [ -e "$F" ]; then
+	echo "$NIVEL" > "$F" 2> /dev/null || :
+fi
+exit 0

@@ -1,0 +1,195 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          hds-nume-local
+# Required-Start:    avahi-daemon
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Numele hdsatelit.local in reteaua de acasa
+### END INIT INFO
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Pe langa numele receptorului (viper4kv20.local, din /etc/hostname, de care depinde dosarul Maintenance Mode si care
+# nu se schimba), avahi-daemon publica si numele hdsatelit.local, cu adresa IPv4 de acum: interfata web se deschide
+# atunci cu http://hdsatelit.local. avahi-publish -a -R tine numele cat merge (fara inregistrarea inversa, pe care o are
+# deja numele receptorului).
+# avahi-publish nu gaseste singur alt nume pentru un nume cu doua etichete: avahi_alternative_host_name (avahi 0.8)
+# primeste numai o eticheta, deci la „Name collision” alege „(null)” si se opreste fara sa publice nimic. De aceea
+# paznicul de mai jos alege el numele, pe rand: hdsatelit.local, hdsatelit-2.local ... hdsatelit-9.local. La o
+# coliziune trece la numele urmator; o coliziune tarzie (alt aparat cu acelasi nume intrat in retea), o eroare sau
+# oprirea lui avahi-publish duc, dupa o pauza, la o runda noua, de la hdsatelit.local (numele cel mai mic liber).
+# Numele tinut ajunge in /var/run/hds-nume-local.nume (interfata web il primeste in antetul Host) si se sterge cand
+# nu mai e tinut. Paznicul merge in fundal: pornirea receptorului nu il asteapta.
+# La o adresa noua (udhcpc, ifup) se porneste din nou cu adresa noua; cu aceeasi adresa nu se schimba nimic.
+
+NUME=hdsatelit
+DOMENIU=local
+NUME_MAX=9
+D=${HDS_NUME_LOCAL_DIR:-/var/run}
+PID=$D/hds-nume-local.pid
+PID_PUBLICA=$D/hds-nume-local.publica.pid
+IP_ACUM=$D/hds-nume-local.ip
+NUME_ACUM=$D/hds-nume-local.nume
+JURNAL=$D/hds-nume-local.log
+PUBLICA=${HDS_NUME_LOCAL_PUBLICA:-/usr/bin/avahi-publish}
+# secunde: intre privirile in jurnal pana se tine numele, apoi cat e tinut; pauzele dintre runde
+PAS_INCERCARE=1
+PAS_TINUT=10
+PAUZA_RUNDA=5
+PAUZA_EROARE=30
+PAUZA_TOATE_OCUPATE=60
+
+adresa() {
+	a=$(ip -4 route get 192.0.2.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
+	if [ -z "$a" ]; then
+		a=$(ip -4 -o addr show scope global 2>/dev/null | awk '{ sub(/\/.*/, "", $4); print $4; exit }')
+	fi
+	echo "$a"
+}
+
+# procesul $1 merge (un proces terminat si neasteptat inca, „Z” in /proc, nu se socoteste)
+viu() {
+	[ -n "$1" ] || return 1
+	read -r _pid _nume stare _rest 2>/dev/null < "/proc/$1/stat" || return 1
+	[ "$stare" != Z ]
+}
+
+# ce spune jurnalul lui avahi-publish despre numele $1: STARE = tinut, ocupat, eroare sau gol (inca nimic)
+stare_jurnal() {
+	STARE=
+	while IFS= read -r rand; do
+		case "$rand" in
+		"Name collision"*) STARE=ocupat; return 0 ;;
+		"Failed to"*) STARE=eroare; return 0 ;;
+		"Established under name '$1'"*) STARE=tinut ;;
+		esac
+	done < "$JURNAL"
+	return 0
+}
+
+# sleep in fundal si wait: un TERM venit in pauza ruleaza trap-ul paznicului imediat, nu dupa sfarsitul lui sleep
+dormi() {
+	sleep "$1" &
+	ds=$!
+	wait "$ds"
+	ds=
+}
+
+# o incercare cu numele $1 (fara .local): avahi-publish pornit si urmarit cat merge. REZ = ocupat (alt aparat are
+# numele), pierdut (coliziune dupa ce numele a fost tinut: alt aparat cu acelasi nume a intrat in retea), eroare (si
+# oprirea inainte sa tina numele), sau iesit (avahi-publish s-a oprit dupa ce a tinut numele)
+incearca() {
+	: > "$JURNAL"
+	"$PUBLICA" -a -R "$1.$DOMENIU" "$ADRESA" > "$JURNAL" 2>&1 < /dev/null &
+	copil=$!
+	echo "$copil" > "$PID_PUBLICA"
+	pas=$PAS_INCERCARE
+	REZ=iesit
+	while viu "$copil"; do
+		stare_jurnal "$1.$DOMENIU"
+		case "$STARE" in
+		ocupat|eroare)
+			REZ=$STARE
+			[ "$STARE" = ocupat ] && [ "$pas" = "$PAS_TINUT" ] && REZ=pierdut
+			kill "$copil" 2>/dev/null
+			break
+			;;
+		tinut)
+			if [ "$pas" = "$PAS_INCERCARE" ]; then
+				echo "$1" > "$NUME_ACUM.nou" && mv -f "$NUME_ACUM.nou" "$NUME_ACUM"
+				pas=$PAS_TINUT
+			fi
+			;;
+		esac
+		dormi "$pas"
+	done
+	wait "$copil" 2>/dev/null
+	if [ "$REZ" = iesit ]; then
+		stare_jurnal "$1.$DOMENIU"
+		case "$STARE" in
+		ocupat) REZ=ocupat; [ "$pas" = "$PAS_TINUT" ] && REZ=pierdut ;;
+		eroare) REZ=eroare ;;
+		*) [ "$pas" = "$PAS_INCERCARE" ] && REZ=eroare ;;
+		esac
+	fi
+	rm -f "$NUME_ACUM" "$PID_PUBLICA"
+	copil=
+}
+
+# paznicul, proces in fundal pornit de porneste() („hds-nume-local paznic <adresa>”): runde de nume cat merge. La
+# TERM opreste numai avahi-publish al lui; fisierele le curata opreste() (un paznic nou poate scrie deja in ele)
+paznic() {
+	copil=
+	ds=
+	trap 'viu "$copil" && kill "$copil" 2>/dev/null; viu "$ds" && kill "$ds" 2>/dev/null; exit 0' TERM INT
+	while :; do
+		i=1
+		while [ "$i" -le "$NUME_MAX" ]; do
+			if [ "$i" = 1 ]; then
+				nume=$NUME
+			else
+				nume=$NUME-$i
+			fi
+			incearca "$nume"
+			[ "$REZ" = ocupat ] || break
+			i=$((i + 1))
+		done
+		# runda noua, de la hdsatelit.local: dupa o coliziune tarzie sau o oprire numele cel mai mic liber
+		case "$REZ" in
+		ocupat) dormi "$PAUZA_TOATE_OCUPATE" ;;
+		eroare) dormi "$PAUZA_EROARE" ;;
+		*) dormi "$PAUZA_RUNDA" ;;
+		esac
+	done
+}
+
+merge() {
+	viu "$(cat "$PID" 2>/dev/null)"
+}
+
+opreste() {
+	p=$(cat "$PID" 2>/dev/null)
+	viu "$p" && kill "$p" 2>/dev/null
+	p=$(cat "$PID_PUBLICA" 2>/dev/null)
+	viu "$p" && kill "$p" 2>/dev/null
+	rm -f "$PID" "$PID_PUBLICA" "$IP_ACUM" "$NUME_ACUM"
+}
+
+porneste() {
+	[ -x "$PUBLICA" ] || exit 0
+	ADRESA=$(adresa)
+	[ -n "$ADRESA" ] || { opreste; exit 0; }
+	if merge && [ "$(cat "$IP_ACUM" 2>/dev/null)" = "$ADRESA" ]; then
+		exit 0
+	fi
+	opreste
+	echo "$ADRESA" > "$IP_ACUM"
+	# proces nou (nu functia in fundal): altfel copiile descriptorilor de iesire ai scriptului, pastrate de sh pentru
+	# redirectarea unei functii, ar ramane deschise in paznic si cine citeste iesirea lui start ar astepta la nesfarsit
+	sh "$0" paznic "$ADRESA" < /dev/null > /dev/null 2>&1 &
+	echo $! > "$PID"
+}
+
+case "$1" in
+start|reload|force-reload|"")
+	porneste
+	;;
+stop)
+	opreste
+	;;
+restart)
+	opreste
+	porneste
+	;;
+paznic)
+	ADRESA=$2
+	[ -n "$ADRESA" ] || exit 1
+	paznic
+	;;
+*)
+	echo "folosire: $0 start|stop|restart" >&2
+	exit 1
+	;;
+esac
+exit 0

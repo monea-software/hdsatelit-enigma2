@@ -1,0 +1,69 @@
+Subject: [PATCH] dvbaudiosink: DTS recodat in AC3 cand recodarea e pornita
+
+Cand /etc/enigma2/hds-dts-ac3 incepe cu "1", get_caps nu mai ofera audio/x-dts: decodebin pune intre
+dcaparse si sink elementul hdsdtsac3 (gstreamer1.0-plugin-hds-dts-ac3), care da audio/x-ac3. DTS-ul de pe
+DVD (audio/x-private1-dts) si toate celelalte formate raman neschimbate; fara fisier, nimic nu se schimba.
+
+Upstream-Status: Inappropriate [specific imaginii HD Satelit]
+---
+diff --git a/common.c b/common.c
+index 955980b..e20ba50 100644
+--- a/common.c
++++ b/common.c
+@@ -149,6 +149,22 @@ gboolean get_ac3_downmix_setting()
+ 	return ret;
+ }
+ 
++/* Recodarea DTS -> AC3 (elementul hdsdtsac3): pornita din enigma2 cand fisierul incepe cu "1". */
++#define DTS_AC3_SETARE "/etc/enigma2/hds-dts-ac3"
++
++gboolean get_dts_ac3_setting()
++{
++	char c = 0;
++	FILE *f = fopen(DTS_AC3_SETARE, "r");
++	if (f)
++	{
++		if (fread(&c, 1, 1, f) != 1)
++			c = 0;
++		fclose(f);
++	}
++	return c == '1';
++}
++
+ gboolean get_downmix_ready()
+ {
+ 	gboolean ret = FALSE;
+diff --git a/common.h b/common.h
+index 81e6951..7d1935f 100644
+--- a/common.h
++++ b/common.h
+@@ -35,6 +35,7 @@ void gst_sleepms(uint32_t msec);
+ void gst_sleepus(uint32_t usec);
+ gboolean get_dts_downmix_setting();
+ gboolean get_ac3_downmix_setting();
++gboolean get_dts_ac3_setting();
+ gboolean get_downmix_ready();
+ gboolean is_video_ready();
+ #endif
+diff --git a/gstdvbaudiosink.c b/gstdvbaudiosink.c
+index 3b1003f..00ec958 100644
+--- a/gstdvbaudiosink.c
++++ b/gstdvbaudiosink.c
+@@ -605,7 +605,16 @@ static GstCaps *gst_dvbaudiosink_get_caps(GstBaseSink *basesink, GstCaps *filter
+ 
+ #if defined(HAVE_DTS) && ((!defined(DREAMBOX) && !defined(VUPLUS) && !defined(OSMIO4K)) || (defined(VUPLUS) && !defined(HAVE_DTSDOWNMIX)))
+ 	/* for the time the static cap has been limited to not be used in case of dts_audio_cd media */
+-	gst_caps_append(caps, gst_caps_from_string(DTSCAPS));
++	if (get_dts_ac3_setting())
++	{
++		/* DTS recodat in AC3: audio/x-dts nu se mai primeste, deci decodebin pune elementul hdsdtsac3 intre
++		 * dcaparse si sink (iese audio/x-ac3); DTS-ul de pe DVD (audio/x-private1-dts) ramane ca pana acum */
++		gst_caps_append(caps, gst_caps_from_string("audio/x-private1-dts, framed =(boolean) true; "));
++	}
++	else
++	{
++		gst_caps_append(caps, gst_caps_from_string(DTSCAPS));
++	}
+ #endif
+ #if defined(HAVE_DTSDOWNMIX) && (defined(DREAMBOX) || defined(VUPLUS) || defined(OSMIO4K))
+ 	if (!get_ac3_downmix_setting())

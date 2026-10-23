@@ -1,0 +1,28 @@
+Subject: [PATCH] dcadec: do not decode the LBR component
+
+The image does not decode DTS LBR (low bit rate, extension sub-stream). The core, XLL and the
+core extensions are decoded as before; a stream carrying only LBR audio gets the usual
+"No valid DCA sub-stream found" error.
+
+Upstream-Status: Inappropriate [distribution policy]
+---
+--- a/libavcodec/dcadec.c
++++ b/libavcodec/dcadec.c
+@@ -228,15 +228,8 @@
+             }
+         }
+ 
+-        // Parse LBR component in EXSS
+-        if (asset && (asset->extension_mask & DCA_EXSS_LBR)) {
+-            if ((ret = ff_dca_lbr_parse(&s->lbr, input, asset)) < 0) {
+-                if (ret == AVERROR(ENOMEM) || (avctx->err_recognition & AV_EF_EXPLODE))
+-                    return ret;
+-            } else {
+-                s->packet |= DCA_PACKET_LBR;
+-            }
+-        }
++        // The LBR component in EXSS is not decoded in this build: a stream with
++        // LBR audio only is reported as having no valid sub-stream.
+ 
+         // Parse core extensions in EXSS or backward compatible core sub-stream
+         if ((s->packet & DCA_PACKET_CORE)

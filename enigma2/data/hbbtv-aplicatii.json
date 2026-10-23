@@ -1,0 +1,24 @@
+{
+	"_despre": "Aplicatiile HbbTV din lista imaginii (Components/HdsHbbtvAplicatii.py). O intrare: adresa = inceputul adresei din AIT, fara http:// sau https:// (gazda si inceputul caii, litere mici); contine = (daca e) un text care trebuie sa fie si el in adresa. Completarile de pe receptor: /etc/enigma2/hbbtv-aplicatii.json, cu aceeasi forma.",
+	"profil": {
+		"producator": "LGE",
+		"model": "55UR78003LK",
+		"versiune": "WEBOS23 03.40.80",
+		"placa": "W23_K24N",
+		"familie": "LaTivu_2.0_2023"
+	},
+	"compatibilitate": [
+		{"adresa": "hbbtv.mediaset.net/app/"},
+		{"adresa": "hbbtv.prosiebensat1puls4.com/extern/redorbit/"},
+		{"adresa": "hbbtv.redbutton.de/extern/redorbit/"}
+	],
+	"audienta": [
+		{"adresa": "hbbtv-ikosystem.ikomg.com/"}
+	],
+	"albastru": [
+		{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"}
+	],
+	"consimtamant": [
+		{"adresa": "r9.hbbtv.media/"}
+	]
+}

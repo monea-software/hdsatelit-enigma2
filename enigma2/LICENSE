@@ -1,0 +1,40 @@
+HDSatelit Image
+===============
+
+HDSatelit Image is a version of the enigma2 set-top box software derived
+under the GNU General Public License, version 2 (see LICENSE.GPLv2).
+
+Origin and permission
+---------------------
+This source tree starts from the enigma2 source code published by Dream
+Multimedia, at the state of 14 September 2011 (git commit
+75d5fba59f4e575eab24d1a6397a5904abed1101). The original license of that
+version is kept unchanged in LICENSE.original-2011. It states:
+
+  "You are free to take *THIS* version of enigma2, and derive a version
+   which will be licensed under the GPLv2. If you're doing this, be sure
+   to insert proper licencening statements to ensure that it doesn't get
+   mixed up with the proprietary version."
+
+HDSatelit Image is such a derived version. It is licensed under the GPLv2
+only, and it is NOT the proprietary version of Dream Multimedia. No code
+from Dream Multimedia released after this date, or under any later license,
+is used.
+
+Files not covered
+-----------------
+The original license excluded plugins in lib/python/Plugins that carry
+their own LICENSE file. Plugins licensed under Creative Commons
+Attribution-NonCommercial-ShareAlike 3.0 and fonts without a license that
+allows redistribution are removed from this tree. The list is in
+doc/REMOVED-FILES.
+
+Trademarks
+----------
+"Enigma" and "Dreambox" are trademarks of Dream Property GmbH. HDSatelit
+Image is an independent project and is not affiliated with or endorsed by
+Dream Multimedia or by any other image team.
+
+Copyright of the original code belongs to its authors (see AUTHORS and the
+git history). Changes made for HDSatelit Image: Copyright (C) 2026
+Monea Software for HD Satelit (hdsatelit.com), GPLv2.

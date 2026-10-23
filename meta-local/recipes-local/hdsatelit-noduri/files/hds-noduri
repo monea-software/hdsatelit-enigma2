@@ -1,0 +1,73 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          hds-noduri
+# Required-Start:    udev
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: HDSatelit: drepturile nodurilor de baza din /dev, dupa mdev -s
+### END INIT INFO
+#
+# HDSatelit (Monea Software pentru HD Satelit). Pune la loc drepturile pe care le strica la fiecare pornire `mdev -s`.
+#
+# De ce: /etc/rcS.d/S06hotplug.sh (pachetul initscripts, din meta-oe-alliance) ruleaza `mdev -s &` DUPA S05udev. Fara
+# /etc/mdev.conf, mdev pune pe fiecare nod din /dev root:root 0660, si pe cele deja facute bine de nucleu si de udev.
+# Asa /dev/null, /dev/zero, /dev/urandom, /dev/tty si /dev/ptmx ajung inchise pentru orice utilizator fara root (navigatorul
+# HbbTV ruleaza ca hdsnav: GLib cade cu SIGABRT cand nu poate deschide /dev/null), iar /dev/fb0 si /dev/mali nu sunt ale
+# grupului video. O regula udev nu ajunge: mdev ruleaza dupa udev si o suprascrie. Pentru /dev/mali facut DUPA acest
+# script (mali.ko incarcat mai tarziu) pachetul pune si regula /etc/udev/rules.d/90-hds-noduri.rules: atunci numai udev
+# atinge nodul (mdev nu e hotplug), deci regula ramane.
+#
+# Ce face: asteapta sa se termine mdev -s (pornit in fundal), apoi pune EXACT nodurile de mai jos, nimic altceva:
+#   null zero full random urandom   0666 root:root   (ca in nucleu si in udev)
+#   tty ptmx                        0666 root:tty    (ca in 50-udev-default.rules)
+#   fb0 mali                        0660 root:video  (ecranul si placa video pentru utilizatorii din grupul video)
+# Nodurile DVB, mmcblk, input, hi_* si celelalte raman cum le lasa mdev (root:root 0660).
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+NODURI_TOTI="null zero full random urandom"
+NODURI_TTY="tty ptmx"
+NODURI_VIDEO="fb0 mali"
+ASTEPTARE_MDEV=50   # de cate ori cate 0,1 s (cel mult 5 s)
+
+asteapta_mdev() {
+	n=0
+	while pidof mdev >/dev/null 2>&1; do
+		n=$((n + 1))
+		[ "$n" -gt "$ASTEPTARE_MDEV" ] && return 1
+		sleep 0.1 2>/dev/null || sleep 1
+	done
+	return 0
+}
+
+pune() {
+	# pune NUME MOD GRUP: numai pe un nod de tip caracter care exista si nu e legatura
+	nod="/dev/$1"
+	if [ ! -c "$nod" ] || [ -L "$nod" ]; then
+		return 0
+	fi
+	chown "root:$3" "$nod" || echo "hds-noduri: nu am putut pune root:$3 pe $nod"
+	chmod "$2" "$nod" || echo "hds-noduri: nu am putut pune $2 pe $nod"
+}
+
+case "$1" in
+	start)
+		asteapta_mdev || echo "hds-noduri: mdev ruleaza inca dupa 5 s, pun drepturile oricum"
+		for n in $NODURI_TOTI; do pune "$n" 0666 root; done
+		for n in $NODURI_TTY; do pune "$n" 0666 tty; done
+		for n in $NODURI_VIDEO; do pune "$n" 0660 video; done
+		;;
+	stop)
+		;;
+	status)
+		for n in $NODURI_TOTI $NODURI_TTY $NODURI_VIDEO; do
+			[ -e "/dev/$n" ] && ls -l "/dev/$n"
+		done
+		;;
+	*)
+		echo "Folosire: $0 {start|stop|status}"
+		exit 1
+		;;
+esac
+exit 0

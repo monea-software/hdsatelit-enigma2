@@ -1,0 +1,130 @@
+# -*- coding: UTF-8 -*-
+# Modificat de moneasoftware.com si hdsatelit.com, 2026
+from enigma import eTimer
+from Components.Language import language
+
+class NumericalTextInput:
+	def __init__(self, nextFunc=None, handleTimeout = True, search = False):
+		self.mapping = []
+		self.lang = language.getLanguage()
+		self.useableChars=None
+		self.nextFunction=nextFunc
+
+		if handleTimeout:
+			self.timer = eTimer()
+			self.timer.callback.append(self.timeout)
+		else:
+			self.timer = None
+		self.lastKey = -1
+		self.pos = -1
+
+		if search:
+			self.mapping.append ("%_0") # 0
+			self.mapping.append (" 1") # 1
+			self.mapping.append ("abc2") # 2
+			self.mapping.append ("def3") # 3
+			self.mapping.append ("ghi4") # 4
+			self.mapping.append ("jkl5") # 5
+			self.mapping.append ("mno6") # 6
+			self.mapping.append ("pqrs7") # 7
+			self.mapping.append ("tuv8") # 8
+			self.mapping.append ("wxyz9") # 9
+			return
+
+		if self.lang == 'de_DE':
+			self.mapping.append ("0,?!&@=*'+\"()$~") # 0
+			self.mapping.append (" 1.:/-_") # 1
+			self.mapping.append ("abcä2ABCÄ") # 2
+			self.mapping.append ("def3DEF") # 3
+			self.mapping.append ("ghi4GHI") # 4
+			self.mapping.append ("jkl5JKL") # 5
+			self.mapping.append ("mnoö6MNOÖ") # 6
+			self.mapping.append ("pqrsß7PQRSß") # 7
+			self.mapping.append ("tuvü8TUVÜ") # 8
+			self.mapping.append ("wxyz9WXYZ") # 9
+		elif self.lang == 'es_ES':
+			self.mapping.append ("0,?!&@=*'+\"()$~") # 0
+			self.mapping.append (" 1.:/-_") # 1
+			self.mapping.append ("abcáà2ABCÁÀ") # 2
+			self.mapping.append ("deéèf3DEFÉÈ") # 3
+			self.mapping.append ("ghiíì4GHIÍÌ") # 4
+			self.mapping.append ("jkl5JKL") # 5
+			self.mapping.append ("mnñoóò6MNÑOÓÒ") # 6
+			self.mapping.append ("pqrs7PQRS") # 7
+			self.mapping.append ("tuvúù8TUVÚÙ") # 8
+			self.mapping.append ("wxyz9WXYZ") # 9
+		if self.lang in ('sv_SE', 'fi_FI'):
+			self.mapping.append ("0,?!&@=*'+\"()$~") # 0
+			self.mapping.append (" 1.:/-_") # 1
+			self.mapping.append ("abcåä2ABCÅÄ") # 2
+			self.mapping.append ("defé3DEFÉ") # 3
+			self.mapping.append ("ghi4GHI") # 4
+			self.mapping.append ("jkl5JKL") # 5
+			self.mapping.append ("mnoö6MNOÖ") # 6
+			self.mapping.append ("pqrs7PQRS") # 7
+			self.mapping.append ("tuv8TUV") # 8
+			self.mapping.append ("wxyz9WXYZ") # 9
+		elif self.lang in ('cs_CZ', 'sk_SK'):
+			self.mapping.append ("0,?'+\"()@$!=&*") # 0
+			self.mapping.append (" 1.:/-_") # 1
+			self.mapping.append ("abc2áäčABCÁÄČ") # 2
+			self.mapping.append ("def3ďéěDEFĎÉĚ") # 3
+			self.mapping.append ("ghi4íGHIÍ") # 4
+			self.mapping.append ("jkl5ľĺJKLĽĹ") # 5
+			self.mapping.append ("mno6ňóöôMNOŇÓÖÔ") # 6
+			self.mapping.append ("pqrs7řŕšPQRSŘŔŠ") # 7
+			self.mapping.append ("tuv8ťúůüTUVŤÚŮÜ") # 8
+			self.mapping.append ("wxyz9ýžWXYZÝŽ") # 9
+		else:
+			self.mapping.append ("0,?!&@=*'+\"()$~") # 0
+			self.mapping.append (" 1.:/-_") # 1
+			self.mapping.append ("abc2ABC") # 2
+			self.mapping.append ("def3DEF") # 3
+			self.mapping.append ("ghi4GHI") # 4
+			self.mapping.append ("jkl5JKL") # 5
+			self.mapping.append ("mno6MNO") # 6
+			self.mapping.append ("pqrs7PQRS") # 7
+			self.mapping.append ("tuv8TUV") # 8
+			self.mapping.append ("wxyz9WXYZ") # 9
+
+	def setUseableChars(self, useable):
+		self.useableChars = str(useable)
+		
+
+	def getKey(self, num):
+		cnt=0
+		if self.lastKey != num:
+			if self.lastKey != -1:
+				self.nextChar()
+			self.lastKey = num
+			self.pos = -1
+		if self.timer is not None:
+			self.timer.start(1000, True)
+		while True:
+			self.pos += 1
+			if len(self.mapping[num]) <= self.pos:
+				self.pos = 0
+			if self.useableChars:
+				pos = self.useableChars.find(self.mapping[num][self.pos])
+				if pos == -1:
+					cnt += 1
+					if cnt < len(self.mapping[num]):
+						continue
+					else:
+						return None
+			break
+		return self.mapping[num][self.pos]
+
+	def nextKey(self):
+		if self.timer is not None:
+			self.timer.stop()
+		self.lastKey = -1
+
+	def nextChar(self):
+		self.nextKey()
+		if self.nextFunction:
+			self.nextFunction()
+
+	def timeout(self):
+		if self.lastKey != -1:
+			self.nextChar()
