@@ -1,6 +1,28 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.4",
+   "build": "0064202610241520",
+   "data": "24.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Importul canalelor și setărilor din altă imagine poate aduce acum și rețeaua și Wi-Fi-ul; dacă receptorul rămâne fără rețea, pune singur la loc rețeaua de dinainte.",
+     "en": "Importing channels and settings from a backup of other receiver software can now bring the network and Wi-Fi too; if the receiver loses the network, it puts the previous one back by itself."
+    },
+    {
+     "fel": "nou",
+     "ro": "Importul aduce și piconurile și setările sigure ale meniului, de pildă fusul orar; limba rămâne cea aleasă de tine.",
+     "en": "The import also brings the picons and the safe menu settings, for example the time zone; the language stays the one you chose."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pluginurile găsite în copie îți sunt oferite la sfârșitul importului și se instalează numai dacă vrei tu.",
+     "en": "The plugins found in the backup are offered to you at the end of the import and are installed only if you want."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.3",
    "build": "0063202610240720",
    "data": "24.10.2026",

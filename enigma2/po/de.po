@@ -22196,6 +22196,7 @@ msgid "Nu este conectat niciun stick USB sau hard disk."
 msgstr "Es ist kein USB-Stick oder keine Festplatte angeschlossen."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+#, python-format
 msgid "Nu este verificat de HD Satelit. Vine din sursa %s."
 msgstr "Nicht von HD Satelit geprüft. Stammt aus der Quelle %s."
 
@@ -22244,6 +22245,7 @@ msgid "Nu se știe: televizorul nu a spus ce sunet primește (poate e stins sau 
 msgstr "Unbekannt: Der Fernseher hat nicht gemeldet, welchen Ton er annimmt (vielleicht ist er aus oder das HDMI-Kabel ist nicht angeschlossen)."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+#, python-format
 msgid "Nu sunt verificate de HD Satelit. Vin din sursele %s."
 msgstr "Nicht von HD Satelit geprüft. Stammen aus den Quellen %s."
 
@@ -52211,3 +52213,187 @@ msgstr "WireGuard ist auf diesem Receiver nicht verfügbar: Sein Kernel hat es n
 #: lib/python/Screens/HdsVpn.py
 msgid "WireGuard: nu este disponibil"
 msgstr "WireGuard: nicht verfügbar"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "rețea"
+msgstr "Netzwerk"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "piconuri"
+msgstr "Picons"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "lista pluginurilor"
+msgstr "Plugin-Liste"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Rețea și Wi-Fi"
+msgstr "Netzwerk und WLAN"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Piconuri"
+msgstr "Picons"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Setări generale"
+msgstr "Allgemeine Einstellungen"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Pluginuri"
+msgstr "Plugins"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Cablul și Wi-Fi-ul (adresa, rețeaua și parola ei), din copie. Dacă receptorul nu are legătură cu ele, rămâne rețeaua de acum."
+msgstr "Kabel und WLAN (Adresse, Netzwerk und sein Passwort) aus der Sicherung. Bekommt der Receiver damit keine Verbindung, bleibt das jetzige Netzwerk."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Piconurile din dosarul picon al copiei, în memoria receptorului."
+msgstr "Die Picons aus dem Ordner picon der Sicherung, in den Speicher des Receivers."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Fusul orar, ecranul și câteva setări de folosire, din copie. Limba rămâne cea de acum."
+msgstr "Zeitzone, Bildschirm und einige Bedienungseinstellungen aus der Sicherung. Die Sprache bleibt die jetzige."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Pluginurile copiei care sunt în sursele receptorului: ți le ofer după import, ca să le instalezi."
+msgstr "Die Plugins der Sicherung, die in den Quellen des Receivers sind: nach dem Import biete ich sie dir zur Installation an."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Piconurile nu încap în memoria receptorului; au rămas pe stick sau pe disc."
+msgstr "Die Picons passen nicht in den Speicher des Receivers; sie sind auf dem Stick oder der Festplatte geblieben."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Copia nu are setări de rețea pe care să le pot folosi."
+msgstr "Die Sicherung hat keine Netzwerkeinstellungen, die ich verwenden kann."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "Piconuri aduse: %d."
+msgstr "Übernommene Picons: %d."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Copia are mai multe piconuri decât încap; am adus o parte."
+msgstr "Die Sicherung hat mehr Picons, als hineinpassen; ich habe einen Teil übernommen."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "Pluginuri în copie: %d; în sursele receptorului și neinstalate: %d."
+msgstr "Plugins in der Sicherung: %d; in den Quellen des Receivers und nicht installiert: %d."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Rețeaua din copie nu s-a aplicat; a rămas cea de dinainte."
+msgstr "Das Netzwerk aus der Sicherung wurde nicht übernommen; das bisherige ist geblieben."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "adresă automată (DHCP)"
+msgstr "automatische Adresse (DHCP)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "adresă fixă %s"
+msgstr "feste Adresse %s"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Receptorul nu are placă de rețea pe cablu; setările cablului din copie au rămas deoparte."
+msgstr "Der Receiver hat keinen Netzwerkanschluss per Kabel; die Kabeleinstellungen der Sicherung bleiben unbenutzt."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Receptorul nu are placă Wi-Fi; rețeaua Wi-Fi din copie a rămas deoparte."
+msgstr "Der Receiver hat kein WLAN; das WLAN-Netzwerk der Sicherung bleibt unbenutzt."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Receptorul nu s-a putut lega la rețeaua Wi-Fi din copie."
+msgstr "Der Receiver konnte sich nicht mit dem WLAN-Netzwerk der Sicherung verbinden."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Cu setările de rețea din copie receptorul nu a primit adresă."
+msgstr "Mit den Netzwerkeinstellungen der Sicherung hat der Receiver keine Adresse bekommen."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Cu setările de rețea din copie receptorul nu mai ajungea la internet."
+msgstr "Mit den Netzwerkeinstellungen der Sicherung kam der Receiver nicht mehr ins Internet."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "Rețeaua din copie: %s."
+msgstr "Netzwerk aus der Sicherung: %s."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Am pus la loc rețeaua de dinainte."
+msgstr "Ich habe das bisherige Netzwerk wiederhergestellt."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Se aduc canalele și buchetele, setările antenei, înregistrările programate, piconurile și setările generale sigure; rețeaua și Wi-Fi numai dacă receptorul nu are deja o rețea care merge. Pluginurile copiei care sunt în sursele receptorului ți le ofer apoi. Limba rămâne cea de acum, iar skinul nu se aduce."
+msgstr "Übernommen werden Sender und Bouquets, Antenneneinstellungen, Timer, Picons und die sicheren allgemeinen Einstellungen; Netzwerk und WLAN nur, wenn der Receiver noch kein funktionierendes Netzwerk hat. Die Plugins der Sicherung, die in den Quellen des Receivers sind, biete ich dir danach an. Die Sprache bleibt, der Skin wird nicht übernommen."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "limba (rămâne cea aleasă la pornire)"
+msgstr "die Sprache (es bleibt die beim Start gewählte)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "skinul (skinurile altor imagini nu se potrivesc pe ecranele acestei imagini)"
+msgstr "der Skin (Skins anderer Images passen nicht zu den Bildschirmen dieses Images)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "Pluginuri din copie care se pot instala acum: %d. Le instalez? Fiecare are întrebarea lui, ca la Extensii și aplicații."
+msgstr "Plugins aus der Sicherung, die sich jetzt installieren lassen: %d. Soll ich sie installieren? Jedes hat seine eigene Frage, wie bei Erweiterungen und Apps."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "piconurile (nu sunt în copie; cele din dosarul picon de pe disc le arată imaginea direct de acolo)"
+msgstr "die Picons (nicht in der Sicherung; die aus dem Ordner picon auf der Festplatte zeigt das Image direkt von dort)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "pluginurile (le pui din nou din Meniu, Extensii și aplicații, din listă sau din fișier .ipk)"
+msgstr "die Plugins (du installierst sie neu unter Menü, Erweiterungen und Apps, aus der Liste oder aus einer .ipk-Datei)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "setări generale: %d (intră după repornirea interfeței)"
+msgstr "allgemeine Einstellungen: %d (gelten nach dem Neustart der Oberfläche)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "piconuri: %d"
+msgstr "Picons: %d"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "rețeaua și Wi-Fi (receptorul avea deja o rețea care merge)"
+msgstr "Netzwerk und WLAN (der Receiver hatte schon ein funktionierendes Netzwerk)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+#, python-format
+msgid "pluginurile (în copie: %d; se pot instala acum: %d, din Meniu, Extensii și aplicații)"
+msgstr "die Plugins (in der Sicherung: %d; jetzt installierbar: %d, unter Menü, Erweiterungen und Apps)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "rețeaua și Wi-Fi (cu ele receptorul nu avea legătură; a rămas rețeaua de dinainte)"
+msgstr "Netzwerk und WLAN (damit hatte der Receiver keine Verbindung; das bisherige Netzwerk ist geblieben)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "rețeaua și Wi-Fi (nu sunt în copie)"
+msgstr "Netzwerk und WLAN (nicht in der Sicherung)"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Câte unul, cu întrebarea de la Extensii și aplicații."
+msgstr "Einzeln, mit der Frage wie bei Erweiterungen und Apps."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Rețeaua se schimbă: legătura poate cădea câteva secunde."
+msgstr "Das Netzwerk ändert sich: die Verbindung kann einige Sekunden abbrechen."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Lista surselor de pachete nu e descărcată încă: o descarci din Meniu, Extensii și aplicații."
+msgstr "Die Paketliste ist noch nicht heruntergeladen: du lädst sie unter Menü, Erweiterungen und Apps herunter."
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Instalează pluginurile din copie"
+msgstr "Plugins aus der Sicherung installieren"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Pluginurile din copie"
+msgstr "Plugins aus der Sicherung"
+
+#: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
+msgid "Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații."
+msgstr "Sie sind in den Quellen des Receivers und nicht installiert. Jedes hat seine eigene Frage, wie bei Erweiterungen und Apps."

@@ -21,11 +21,14 @@
 #      Nu (si EXIT, care la caseta de mesaj inseamna Nu) = starea NU: nu se mai intreaba, importul ramane in meniu.
 #      Fara raspuns (interfata repornita inainte), la urmatoarea pornire a interfetei se cauta si se intreaba din nou.
 #   4. Da = importul existent (HdsImportSurse.porneste_importul) cu alegerile primei porniri (ALEGERI_PRIMA):
-#      canalele si buchetele, setarile antenei si inregistrarile programate, cele pe care copia le are; fara limba si
-#      setarile generale (cheile difera intre imagini, iar limba s-a ales in asistent). Copia de siguranta, arhivele,
-#      limitele si lista alba sunt ale importului.
+#      canalele si buchetele, setarile antenei, inregistrarile programate, piconurile si setarile generale sigure
+#      (Components/HdsImportExtra.CHEI_SIGURE; limba ramane cea din asistent), cele pe care copia le are; reteaua si
+#      Wi-Fi-ul numai cand receptorul nu are deja o retea care merge (retea_merge: reteaua din asistent nu se strica);
+#      pluginurile numai cu oferta. Skinul nu se aduce. Copia de siguranta, arhivele, limitele si lista alba sunt ale
+#      importului.
 #   5. La capat: starea GATA cu rezumatul (ce s-a adus, cu numere, si ce nu), aratat o data pe televizor si in web;
-#      cand setarile antenei asteapta repornirea interfetei, televizorul intreaba apoi daca o reporneste acum.
+#      apoi, pe televizor, oferta pluginurilor (cate unul, cu intrebarea de la Extensii si aplicatii) si, cand setarile
+#      asteapta repornirea interfetei, intrebarea daca o reporneste acum. In web oferta e in rezumat.
 # Starea sta in /home/root/hds-restaurare/alta-imagine.json (dosarul restaurarii HD Satelit, in afara /etc/enigma2:
 # o resetare la valorile din fabrica nu o aduce inapoi), scrisa atomic: starea, numere si calea copiei, fara valori din
 # settings. Variabila HDS_RADACINA e numai pentru probe, ca la HdsCopieSetari.
@@ -54,7 +57,9 @@ DESCHISE = (CAUTA, INTREBARE)
 MEDII_BUNE = ("stick", "disc")
 # copiile HD Satelit stau pe mediu sub HdsCopieSetari.DOSAR_PE_MEDIU ("hdsatelit/copii-setari")
 PREFIX_COPII_HDS = "hdsatelit/"
-ALEGERI_PRIMA = {"canale": True, "tunere": True, "temporizatoare": True, "generale": False}
+# rețeaua numai cand receptorul nu are deja una care merge (retea_merge); pluginurile numai cu oferta
+ALEGERI_PRIMA = {"canale": True, "tunere": True, "temporizatoare": True, "retea": True, "picon": True,
+	"generale": True, "pachete": True}
 MAX_TEXT_SURSA = 70
 # tipurile de serviciu radio din lamedb (al cincilea camp al randului serviciului): 2 = radio, 10 = radio AAC
 TIPURI_RADIO = (2, 10)
@@ -238,13 +243,28 @@ def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
 	"""Rezumatul pastrat in stare (numai numere si texte de jurnal), din rezultatul importului si din fisierele scrise."""
 	dosar_etc = dosar_etc or CALE_ETC
 	rez = rez if isinstance(rez, dict) else {}
+	setari = int(rez.get("setari") or 0)
+	retea = rez.get("retea") if isinstance(rez.get("retea"), dict) else {}
+	pachete = rez.get("pachete") if isinstance(rez.get("pachete"), dict) else {}
 	r = {
 		"ok": bool(rez.get("ok")),
 		"tv": 0, "radio": 0, "buchete": 0, "temporizatoare": 0,
-		"setari": int(rez.get("setari") or 0),
+		"setari": setari,
+		"setari_antena": int(rez.get("setari_antena", setari) or 0) if setari else 0,
+		"setari_generale": int(rez.get("setari_generale") or 0) if setari else 0,
+		"picon": int(rez.get("picon") or 0),
+		"retea": bool(retea.get("adus")),
+		"retea_intoarsa": bool(retea.get("intors")),
+		"retea_lasata": bool(alegeri.get("retea_lasata")),
+		"pachete_total": int(pachete.get("total") or 0),
+		"pachete_oferite": [list(p)[:2] for p in (pachete.get("oferite") or [])][:60],
+		"pachete_fara_lista": bool(pachete.get("fara_lista")),
 		"copia_setari": bool(sursa and sursa.get("setari")),
 		"copia_temporizatoare": bool(sursa and sursa.get("temporizatoare")),
-		"mesaje": [str(m)[:300] for m in (rez.get("mesaje") or [])][:12],
+		"copia_retea": bool(sursa and sursa.get("retea")),
+		"copia_picon": bool(sursa and sursa.get("picon")),
+		"copia_pachete": bool(sursa and sursa.get("pachete")),
+		"mesaje": [str(m)[:300] for m in (rez.get("mesaje") or [])][:16],
 	}
 	if rez.get("canale"):
 		r["tv"], r["radio"] = numara_canale(os.path.join(dosar_etc, "lamedb"))
@@ -282,14 +302,39 @@ def parti_rezumat(r):
 		adus.append(_("liste de canale: %d") % r["buchete"])
 	if r.get("temporizatoare"):
 		adus.append(_("înregistrări programate: %d") % r["temporizatoare"])
-	if r.get("setari"):
+	antena = r.get("setari_antena", r.get("setari"))
+	if antena:
 		adus.append(_("setările antenei (intră după repornirea interfeței)"))
+	if r.get("setari_generale"):
+		adus.append(_("setări generale: %d (intră după repornirea interfeței)") % r["setari_generale"])
+	if r.get("retea"):
+		adus.append(_("rețeaua și Wi-Fi"))
+	if r.get("picon"):
+		adus.append(_("piconuri: %d") % r["picon"])
 	neadus = []
-	if not r.get("setari"):
+	if not antena:
 		neadus.append(_("setările antenei (nu sunt în copie pentru un tuner de satelit)"))
-	neadus.append(_("limba și celelalte setări ale meniului"))
-	neadus.append(_("rețeaua și Wi-Fi"))
-	neadus.append(_("pluginurile, skinul și piconurile"))
+	neadus.append(_("limba (rămâne cea aleasă la pornire)"))
+	if not r.get("retea"):
+		if r.get("retea_lasata"):
+			neadus.append(_("rețeaua și Wi-Fi (receptorul avea deja o rețea care merge)"))
+		elif r.get("retea_intoarsa"):
+			neadus.append(_("rețeaua și Wi-Fi (cu ele receptorul nu avea legătură; a rămas rețeaua de dinainte)"))
+		elif r.get("copia_retea"):
+			# reteaua e in copie, dar n-a fost aleasa (Retea si Wi-Fi: Nu): fara textul nu sunt in copie (integrare-0604)
+			neadus.append(_("rețeaua și Wi-Fi"))
+		else:
+			neadus.append(_("rețeaua și Wi-Fi (nu sunt în copie)"))
+	if not r.get("picon"):
+		neadus.append(_("piconurile (nu sunt în copie; cele din dosarul picon de pe disc le arată imaginea direct de "
+			"acolo)"))
+	oferite = len(r.get("pachete_oferite") or ())
+	if r.get("pachete_total"):
+		neadus.append(_("pluginurile (în copie: %d; se pot instala acum: %d, din Meniu, Extensii și aplicații)")
+			% (r["pachete_total"], oferite))
+	else:
+		neadus.append(_("pluginurile (le pui din nou din Meniu, Extensii și aplicații, din listă sau din fișier .ipk)"))
+	neadus.append(_("skinul (skinurile altor imagini nu se potrivesc pe ecranele acestei imagini)"))
 	neadus.append(_("modulele de acces condiționat"))
 	return adus, neadus
 
@@ -338,14 +383,40 @@ def stare_publica(rad=None):
 			rez["sursa"] = {"text": "", "mediu_nume": "", "descriere": ""}
 	if stare == INTREBARE:
 		rez["intrebare"] = _("Am găsit canalele și setările din altă imagine. Le aduc?")
-		rez["ce_se_aduce"] = _("Se aduc canalele și buchetele, setările antenei și înregistrările programate. Limba și "
-			"celelalte setări rămân cele de acum.")
+		rez["ce_se_aduce"] = text_ce_se_aduce()
 	if stare == GATA and isinstance(st.get("rezumat"), dict) and not st.get("vazut_web"):
 		r = st["rezumat"]
 		adus, neadus = parti_rezumat(r)
 		rez["rezumat"] = {"ok": bool(r.get("ok")) and bool(adus), "adus": adus, "neadus": neadus,
-			"text": text_rezumat(r), "repornire": bool(r.get("repornire"))}
+			"text": text_rezumat(r), "repornire": bool(r.get("repornire")),
+			"pachete": {"oferite": r.get("pachete_oferite") or [], "fara_lista": bool(r.get("pachete_fara_lista"))}}
 	return rez
+
+
+def text_ce_se_aduce():
+	return _("Se aduc canalele și buchetele, setările antenei, înregistrările programate, piconurile și setările "
+		"generale sigure; rețeaua și Wi-Fi numai dacă receptorul nu are deja o rețea care merge. Pluginurile copiei "
+		"care sunt în sursele receptorului ți le ofer apoi. Limba rămâne cea de acum, iar skinul nu se aduce.")
+
+
+def text_oferta(r):
+	n = len(r.get("pachete_oferite") or ())
+	return _("Pluginuri din copie care se pot instala acum: %d. Le instalez? Fiecare are întrebarea lui, ca la "
+		"Extensii și aplicații.") % n
+
+
+def retea_merge(R=None):
+	"""Receptorul are acum o placă activă (legată și cu adresă) pe care trece ruta implicită: asistentul de pornire a
+	făcut deja o rețea care merge, iar prima pornire nu o schimbă. Numai fișierele nucleului, fără trafic."""
+	try:
+		from Components import HdsRetea
+		for placa in HdsRetea.adaptoare(R):
+			st = HdsRetea.stareAdaptor(placa)
+			if st.get("activa") and st.get("internet"):
+				return True
+	except Exception as eroare:
+		_jurnal("starea retelei: %s" % eroare.__class__.__name__)
+	return False
 
 
 # ---------------------------------------------------------------- pe receptor (firul enigma2)
@@ -487,6 +558,9 @@ def raspunde(da, de_unde="web", rad=None):
 	if HdsImportSurse.ocupat():
 		return False, _("Un import e deja în curs. Așteaptă să se termine.")
 	alegeri = alegeri_prima(sursa)
+	if alegeri.get("retea") and retea_merge():
+		alegeri["retea"] = False
+		alegeri["retea_lasata"] = True
 
 	def la_sfarsit(rezultat):
 		try:
@@ -523,10 +597,27 @@ def _arata_rezumatul(rad=None):
 	from Tools import Notifications
 	from Screens.MessageBox import MessageBox
 
-	def dupa(*_a):
+	def repornire(*_a):
 		if r.get("repornire") and r.get("ok"):
 			Notifications.AddNotificationWithCallback(_dupa_intrebarea_repornirii, MessageBox, text_repornire(),
 				type=MessageBox.TYPE_YESNO, default=True)
+
+	def dupa_oferta(da=False):
+		if da and _SESIUNE:
+			try:
+				from Plugins.Extensions.HdsImportSetari.plugin import instaleaza_pluginuri
+				instaleaza_pluginuri(_SESIUNE[0], [p[0] for p in r.get("pachete_oferite") or []], repornire)
+				return
+			except Exception as eroare:
+				_jurnal("pluginurile: %s" % eroare.__class__.__name__)
+		repornire()
+
+	def dupa(*_a):
+		if r.get("ok") and r.get("pachete_oferite"):
+			Notifications.AddNotificationWithCallback(dupa_oferta, MessageBox, text_oferta(r),
+				type=MessageBox.TYPE_YESNO, default=True)
+		else:
+			repornire()
 
 	Notifications.AddNotificationWithCallback(dupa, MessageBox, text_rezumat(r), type=MessageBox.TYPE_INFO)
 

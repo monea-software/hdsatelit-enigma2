@@ -15,7 +15,9 @@
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/import-surse[?cauta=1]      sursele găsite (fără căutare nouă, afară de prima cerere și de cauta=1),
 #                                          starea căutării și a importului, rezultatul ultimului import
-#   POST /api/import?sursa=<id>&canale=1&tunere=1&temporizatoare=0&generale=0   pornește importul
+#   POST /api/import?sursa=<id>&canale=1&tunere=1&temporizatoare=0&retea=0&picon=1&generale=1&pachete=1
+#                                          pornește importul (pluginurile: numai oferta, instalate apoi prin
+#                                          /api/extensii-instaleaza, ca la Extensii și aplicații)
 #   POST /api/import-alta-imagine?raspuns=da|nu|ascunde   răspunsul la întrebarea primei porniri (copia altei imagini,
 #                                          Components/HdsImportAltaImagine.py) sau ascunderea rezumatului ei
 #   GET  /import                           pagina
@@ -121,6 +123,9 @@ def sursa_publica(M, s):
 		"setari": bool(s.get("setari")),
 		"temporizatoare": bool(s.get("temporizatoare")),
 		"buchete": int(s.get("buchete") or 0),
+		"retea": bool(s.get("retea")),
+		"picon": bool(s.get("picon")),
+		"pachete": bool(s.get("pachete")),
 	}
 
 
@@ -142,6 +147,9 @@ def surse(a, M=None, texte_setari=None, A=None):
 		"surse": lista,
 		"fara": M.text_fara_surse() if not lista and not st["cauta"] else "",
 		"alegeri": [c for c, _camp in M.ALEGERI],
+		"campuri": dict(M.ALEGERI),
+		"etichete": dict((c, M.eticheta_alegere(c)) for c, _camp in M.ALEGERI),
+		"ajutor": dict((c, M.ajutor_alegere(c)) for c, _camp in M.ALEGERI),
 		"implicite": dict(M.ALEGERI_IMPLICITE),
 		"ocupat": M.ocupat(),
 		"ultimul": st["ultimul"],
@@ -323,6 +331,12 @@ PAGINA = """<!DOCTYPE html>
   <div class="butoane"><button type="button" class="verde" id="importa" disabled>Importă</button></div>
   <p class="mesaj" id="mesaj"></p>
 </section>
+<section class="card ascuns" id="card-pluginuri" aria-live="polite">
+  <h2>Pluginurile din copie</h2>
+  <p class="nota">Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații.</p>
+  <div id="pluginuri"></div>
+  <p class="mesaj" id="mesaj-pluginuri"></p>
+</section>
 <section class="card ascuns" id="card-setari">
   <h2>Setările importate</h2>
   <div id="setari"></div>
@@ -335,9 +349,7 @@ alese intră la următoarea pornire a interfeței. Pe televizor: Meniu, Scanare,
 </main>
 <script>
 var CFG = __CONFIG__;
-var ETICHETE = {canale: "Canale și buchete", tunere: "Setările antenei (tunere, LNB, DiSEqC, motor)",
-  temporizatoare: "Înregistrări programate", generale: "Limba și setările generale (fusul orar, setările de folosire)"};
-var CAMP = {canale: "canale", tunere: "setari", temporizatoare: "temporizatoare", generale: "setari"};
+var ETICHETE = {}, AJUTOR = {}, CAMP = {}, ORDINE = [];
 var ales = null, surseAcum = [], alegeri = null, asteapta = null, ultimulVazut = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
@@ -356,13 +368,15 @@ function mesaj(text, eroare){ var m = $("mesaj"); m.textContent = text || ""; m.
 function sursaAleasa(){ for(var i = 0; i < surseAcum.length; i++){ if(surseAcum[i].id === ales){ return surseAcum[i]; } } return null; }
 function desenAlegeri(){
   var s = sursaAleasa(), c = $("alegeri"); c.textContent = "";
-  Object.keys(ETICHETE).forEach(function(k){
+  ORDINE.forEach(function(k){
     var are = !s || s[CAMP[k]];
     var l = document.createElement("label"); l.className = "alegere" + (are ? "" : " stins");
     var i = document.createElement("input"); i.type = "checkbox"; i.id = "a-" + k;
     i.checked = are && !!alegeri[k]; i.disabled = !are;
     i.addEventListener("change", function(){ alegeri[k] = i.checked; });
-    l.appendChild(i); l.appendChild(document.createTextNode(ETICHETE[k] + (are ? "" : " (lipsește din copie)")));
+    var t = document.createElement("span"); t.textContent = ETICHETE[k] + (are ? "" : " (lipsește din copie)");
+    if(AJUTOR[k]){ var d = document.createElement("span"); d.className = "desc"; d.textContent = AJUTOR[k]; t.appendChild(d); }
+    l.appendChild(i); l.appendChild(t);
     c.appendChild(l);
   });
   $("importa").disabled = !s || asteapta === "import";
@@ -426,8 +440,39 @@ function desenAlta(a){
     $("alta-rez-text").classList.toggle("ascuns", !!r.ok);
     $("alta-rez-text").textContent = r.ok ? "" : (r.text || "");
     lista($("alta-adus"), r.adus); lista($("alta-neadus"), r.neadus);
+    if(r.ok && r.pachete && r.pachete.oferite && r.pachete.oferite.length && !pluginuriVazute){
+      pluginuriVazute = true; desenPluginuri(r.pachete.oferite);
+    }
     $("alta-reporneste").classList.toggle("ascuns", !(r.ok && r.repornire));
   }
+}
+// oferta pluginurilor din copie: aceeasi intrebare ca la Extensii si aplicatii (/api/extensii-instaleaza, doi pasi)
+var pluginuriVazute = false;
+function mesajPluginuri(text, eroare){ var m = $("mesaj-pluginuri"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
+function desenPluginuri(oferite){
+  var c = $("pluginuri"); c.textContent = "";
+  $("card-pluginuri").classList.toggle("ascuns", !(oferite && oferite.length));
+  (oferite || []).forEach(function(p){
+    var r = document.createElement("div"); r.className = "butoane";
+    var t = document.createElement("span"); t.textContent = p[1] || p[0]; t.style.flex = "1"; t.style.alignSelf = "center";
+    var b = document.createElement("button"); b.type = "button"; b.textContent = "Instalează";
+    b.addEventListener("click", function(){ instaleazaPlugin(p[0], b); });
+    r.appendChild(t); r.appendChild(b); c.appendChild(r);
+  });
+}
+function instaleazaPlugin(nume, b){
+  var q = "/api/extensii-instaleaza?pachet=" + encodeURIComponent(nume);
+  b.disabled = true;
+  cerere(q + "&pas=intreaba", "POST").then(function(d){
+    if(!d.result || !d.confirmare){ mesajPluginuri(d.message, true); b.disabled = false; return; }
+    var cf = d.confirmare;
+    if(!confirm(cf.intrebare + ((cf.detalii && cf.detalii.length) ? "\\n\\n" + cf.detalii.join("\\n") : ""))){
+      cerere(q + "&pas=renunta", "POST").catch(function(){}); b.disabled = false; return;
+    }
+    return cerere(q + "&cod=" + encodeURIComponent(cf.cod), "POST").then(function(r){
+      mesajPluginuri(r.message, !r.result); if(!r.result){ b.disabled = false; }
+    });
+  }).catch(function(){ mesajPluginuri("Receptorul nu răspunde.", true); b.disabled = false; });
 }
 function raspundeAlta(r){
   $("alta-da").disabled = true; $("alta-nu").disabled = true;
@@ -443,11 +488,13 @@ function citeste(cauta){
   return cerere("/api/import-surse" + (cauta ? "?cauta=1" : "")).then(function(d){
     if(!d.result){ mesaj(d.message || "Receptorul nu a putut citi sursele.", true); return d; }
     if(!alegeri){ alegeri = d.implicite || {canale: true, tunere: true}; }
+    if(d.alegeri){ ORDINE = d.alegeri; ETICHETE = d.etichete || {}; AJUTOR = d.ajutor || {}; CAMP = d.campuri || {}; }
     desenSurse(d); desenSetari(d.setari); desenAlta(d.alta_imagine);
     if(asteapta === "import" && !d.ocupat){
       asteapta = null;
       var u = d.ultimul || {mesaje: []};
       mesaj((u.mesaje || []).join("\\n"), !u.ok);
+      desenPluginuri((u.pachete || {}).oferite);
       desenAlegeri();
     }
     if(asteapta === "cauta" && !d.cauta){ asteapta = null; }
@@ -470,9 +517,10 @@ $("cauta").addEventListener("click", function(){ asteapta = "cauta"; mesaj(""); 
 $("importa").addEventListener("click", function(){
   var s = sursaAleasa(); if(!s){ return; }
   var q = [];
-  Object.keys(ETICHETE).forEach(function(k){ q.push(k + "=" + (($("a-" + k) || {}).checked ? "1" : "0")); });
+  ORDINE.forEach(function(k){ q.push(k + "=" + (($("a-" + k) || {}).checked ? "1" : "0")); });
+  var retea = ($("a-retea") || {}).checked ? "\\n\\n" + "Rețeaua se schimbă: legătura poate cădea câteva secunde." : "";
   if(!confirm("Canalele și setările alese se înlocuiesc cu cele din:" + "\\n" + s.text + "\\n\\n" +
-    "Cele de acum se păstrează într-o copie de siguranță pe receptor. Continui?")){ return; }
+    "Cele de acum se păstrează într-o copie de siguranță pe receptor. Continui?" + retea)){ return; }
   $("importa").disabled = true; mesaj("Se pregătește copia...");
   cerere("/api/import?sursa=" + encodeURIComponent(s.id) + "&" + q.join("&"), "POST").then(function(d){
     if(!d.result){ mesaj(d.message, true); desenAlegeri(); return; }
@@ -511,6 +559,8 @@ TEXTE_PAGINA = {
 		N_("Ce se importă"),
 		N_("Importă"),
 		N_("Setările importate"),
+		N_("Pluginurile din copie"),
+		N_("Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații."),
 		N_("<a href=\"/setari-din-copie\">Setările importate</a>: starea lor și repornirea interfeței."),
 		N_("Înainte de import, receptorul păstrează canalele și setările de acum într-o copie de siguranță, "
 			"care apare apoi în lista de mai sus („Copiile de siguranță de pe receptor”; se păstrează "
@@ -518,11 +568,9 @@ TEXTE_PAGINA = {
 			"interfeței. Pe televizor: Meniu, Scanare, Import canale și setări."),
 	),
 	"js": (
-		N_("Canale și buchete"),
-		N_("Setările antenei (tunere, LNB, DiSEqC, motor)"),
-		N_("Înregistrări programate"),
-		N_("Limba și setările generale (fusul orar, setările de folosire)"),
 		N_("browser deconectat"),
+		N_("Instalează"),
+		N_("Rețeaua se schimbă: legătura poate cădea câteva secunde."),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("(lipsește din copie)"),
 		N_("Se caută copiile pe stick-uri, discuri și în memoria receptorului..."),

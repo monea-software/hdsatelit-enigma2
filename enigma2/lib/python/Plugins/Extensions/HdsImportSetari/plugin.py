@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsImportSetari: ecranul „Import canale și setări” (meniul Scanare, din data/menu.xml). Aduce canalele, buchetele,
-# înregistrările programate și o parte din setări dintr-o copie: de pe un stick sau un disc (dosarul etc/enigma2 al
+# înregistrările programate, setările antenei, rețeaua și Wi-Fi-ul, piconurile și setările generale sigure dintr-o
+# copie și oferă pluginurile ei aflate în sursele receptorului (instaleaza_pluginuri, câte unul, cu confirmarea de la
+# Extensii și aplicații); skinul nu. Copia vine: de pe un stick sau un disc (dosarul etc/enigma2 al
 # altei imagini, o copie plată, o arhivă .tar.gz), din altă partiție a memoriei interne sau dintr-o copie de siguranță
 # a receptorului. Sursele, dezarhivarea și importul stau în Components/HdsImportSurse.py, folosit și de pagina web
 # /import (HdsWebControl/scanare_import_web.py).
@@ -36,13 +38,63 @@ COTE = {"eticheta": 480}
 LATIME_SURSA = 632
 
 
-def eticheta_alegere(cheie):
-	return {
-		"canale": _("Canale și buchete"),
-		"tunere": _("Setările antenei"),
-		"temporizatoare": _("Înregistrări programate"),
-		"generale": _("Limba și setările generale"),
-	}[cheie]
+eticheta_alegere = surse_import.eticheta_alegere
+ajutor_alegere = surse_import.ajutor_alegere
+
+
+def _nota_surse(catalog):
+	"""Nota despre sursele pachetelor din confirmare (ca pe pagina web a extensiilor)."""
+	from Components import HdsExtensiiLucru as L
+
+	def nota(pachete):
+		externe = ["%s (%s)" % (n, a) if a else n for n, a in L.surseExterne(catalog, pachete)]
+		if not externe:
+			return _("Verificat de HD Satelit.") if L.culoareNota(catalog, pachete) == "bun" else ""
+		if len(externe) == 1:
+			return _("Nu este verificat de HD Satelit. Vine din sursa %s.") % externe[0]
+		return _("Nu sunt verificate de HD Satelit. Vin din sursele %s.") % ", ".join(externe)
+	return nota
+
+
+def instaleaza_pluginuri(session, nume, la_sfarsit=None):
+	"""Pluginurile `nume` (din copie, aflate în sursele receptorului), câte unul, fiecare cu confirmarea și lucrarea de
+	la Extensii și aplicații (Screens/HdsExtensii.HdsExtensiiActiune); la_sfarsit() după ultimul. Catalogul se citește
+	pe un fir (fișierele opkg pot avea câțiva MB)."""
+	from Components import HdsExtensiiLucru as L
+	from Components import HdsPachete as P
+	from Components.Ipkg import opkgArguments
+	ramase = list(nume or [])
+	pastrat = []
+
+	def sfarsit():
+		del pastrat[:]
+		if la_sfarsit is not None:
+			la_sfarsit()
+
+	def urmatorul(catalog, *_a):
+		while ramase:
+			p = catalog.pachete.get(ramase.pop(0))
+			if p is None or p.instalat or not p.se_poate_instala:
+				continue
+			if L.motivOcupat() is not None:
+				break
+			plan, _eroare = L.planInstalare(catalog, p, opkgArguments, _nota_surse(catalog))
+			if plan is None:
+				continue
+			plan.setdefault("titluri", L.titluri(catalog))
+			from Screens.HdsExtensii import HdsExtensiiActiune
+			session.openWithCallback(lambda *_r: urmatorul(catalog), HdsExtensiiActiune, plan)
+			return
+		sfarsit()
+
+	def citit(catalog, eroare):
+		if catalog is None:
+			print("[HdsImportSetari] catalogul pachetelor: %s" % eroare)
+			sfarsit()
+			return
+		urmatorul(catalog)
+
+	pastrat.append(surse_import.Lucrare(P.incarca, citit))
 
 
 def scurt(text, latime=LATIME_SURSA):
@@ -64,7 +116,8 @@ def _nimic():
 
 
 class HdsImportSetariScreen(Screen):
-	"""Rândurile: Sursa, cele patru alegeri (Da / Nu, sau „lipsește din copie”), „Importă acum”, „Caută din nou”."""
+	"""Rândurile: Sursa, cele șapte alegeri (ALEGERI: Da / Nu, sau „lipsește din copie”), „Importă acum”,
+	„Instalează pluginurile din copie” (după un import cu pluginuri de oferit), „Caută din nou”."""
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
@@ -92,6 +145,7 @@ class HdsImportSetariScreen(Screen):
 		self._inchis = False
 		self._stare_setari = {}
 		self._rezultat = []    # mesajele ultimului import, arătate sub listă până la următoarea schimbare
+		self._oferite = []     # pluginurile copiei aflate în sursele receptorului, după import
 		self["lista"] = List([], enableWrapAround=True)
 		self["preview"] = Label("")
 		self["stare"] = Label("")
@@ -172,6 +226,8 @@ class HdsImportSetariScreen(Screen):
 				randuri.append((eticheta_alegere(cheie), cheie, _("Yes") if self.alegeri[cheie] else _("No"),
 					self._culoare))
 		randuri.append((_("Importă acum"), "importa", "", self._culoare))
+		if self._oferite:
+			randuri.append((_("Instalează pluginurile din copie"), "pluginuri", str(len(self._oferite)), self._culoare))
 		randuri.append((_("Caută din nou"), "cauta", "", self._culoare))
 		if self._stare_setari.get("asteapta"):
 			randuri.append((_("Repornește interfața acum"), "reporneste", "", self._culoare))
@@ -211,12 +267,10 @@ class HdsImportSetariScreen(Screen):
 		if not self.surse:
 			return _("Pune stick-ul cu copia și alege „Caută din nou”.")
 		cheie = self._cheie()
-		if cheie == "tunere":
-			return _("Tunerele, LNB-urile, DiSEqC și motorul antenei, din copie.")
-		if cheie == "generale":
-			return _("Limba meniului, fusul orar și setările de folosire, din copie.")
-		if cheie == "temporizatoare":
-			return _("Înregistrările programate în copie.")
+		if ajutor_alegere(cheie):
+			return ajutor_alegere(cheie)
+		if cheie == "pluginuri":
+			return _("Câte unul, cu întrebarea de la Extensii și aplicații.")
 		if cheie == "reporneste":
 			return _("Setările importate intră după repornirea interfeței: câteva secunde, apoi canalul pornește iar.")
 		if len(self.surse) > 1:
@@ -296,6 +350,11 @@ class HdsImportSetariScreen(Screen):
 			self.importa()
 		elif cheie == "cauta":
 			self.cautaDinNou()
+		elif cheie == "pluginuri":
+			nume = [p[0] for p in self._oferite]
+			self._oferite = []
+			self._arata()
+			instaleaza_pluginuri(self.session, nume)
 		elif cheie == "reporneste":
 			self.session.openWithCallback(self._dupaIntrebareRepornire, MessageBox,
 				_("Interfața repornește acum, ca să intre setările importate. Continui?"), MessageBox.TYPE_YESNO,
@@ -325,9 +384,11 @@ class HdsImportSetariScreen(Screen):
 			self._arata(_("Un import e deja în curs. Așteaptă să se termine."))
 			return
 		# caseta de mesaj are loc pentru trei rânduri: numele scurt al copiei, calea întreagă e sub listă
-		self.session.openWithCallback(self._dupaConfirmare, MessageBox,
-			_("Canalele și setările alese se înlocuiesc cu cele din „%s”. Cele de acum rămân într-o copie de siguranță "
-				"pe receptor. Continui?") % scurt(surse_import.text_sursa(s)), MessageBox.TYPE_YESNO, default=False)
+		text = _("Canalele și setările alese se înlocuiesc cu cele din „%s”. Cele de acum rămân într-o copie de "
+			"siguranță pe receptor. Continui?") % scurt(surse_import.text_sursa(s))
+		if alegeri_efective(self.alegeri, s).get("retea"):
+			text += "\n" + _("Rețeaua se schimbă: legătura poate cădea câteva secunde.")
+		self.session.openWithCallback(self._dupaConfirmare, MessageBox, text, MessageBox.TYPE_YESNO, default=False)
 
 	def _dupaConfirmare(self, da=False):
 		s = self.sursa()
@@ -354,6 +415,10 @@ class HdsImportSetariScreen(Screen):
 			return
 		# mesajele (copia de siguranță, fișierele, setările) nu încap într-o casetă de mesaj: rămân sub listă
 		self._rezultat = list(rezultat.get("mesaje") or [])
+		self._oferite = list((rezultat.get("pachete") or {}).get("oferite") or [])
+		if (rezultat.get("pachete") or {}).get("fara_lista"):
+			self._rezultat.append(_("Lista surselor de pachete nu e descărcată încă: o descarci din Meniu, Extensii și "
+				"aplicații."))
 		self._arata(_("Import terminat.") if rezultat.get("ok") else _("Importul nu s-a făcut."))
 
 	def _laInchidere(self):
