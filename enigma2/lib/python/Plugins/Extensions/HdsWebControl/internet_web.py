@@ -109,6 +109,9 @@ def _reincarcare(D):
 	st = D.stareReincarcare()
 	if st["in_curs"]:
 		mesaj = _t("Se reîncarcă listele DVB-I configurate...")
+	elif st["gata"] and st["succes"] and st.get("fara_liste"):
+		# 0.6.2: nicio lista de descarcat (fara tara, liste sau adrese), ca pe televizor (HdsDvbIReloadNow)
+		mesaj = _t(D.TEXT_FARA_LISTE)
 	elif st["gata"] and st["succes"]:
 		mesaj = _t("Reîncărcare terminată cu succes.")
 	elif st["gata"]:
@@ -116,7 +119,7 @@ def _reincarcare(D):
 	else:
 		mesaj = ""
 	return {"in_curs": bool(st["in_curs"]), "gata": bool(st["gata"]), "succes": st["succes"], "mesaj": mesaj,
-		"ora": st.get("ora", 0)}
+		"ora": st.get("ora", 0), "fara_liste": bool(st.get("fara_liste"))}
 
 
 def _dateDvbi(DD=None):

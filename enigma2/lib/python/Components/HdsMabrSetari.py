@@ -24,6 +24,15 @@ SECUNDE_CAUTARE = 5.0
 _CAUTARE = {"in_curs": False, "rezultat": None, "ora": 0}
 
 
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_), fara efect; textul se traduce la folosire cu _()"""
+	return text
+
+
+# modulul de ascultare SAP nu e in imagine (vezi sus): ce spune cautarea, pe televizor si in pagina web /mabr
+TEXT_FARA_CAUTARE = N_("Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână.")
+
+
 def implicit():
 	return {"activ": "da", "autodiscover": "da", "interfata": "", "grupuri": []}
 
@@ -158,7 +167,8 @@ def cautaSesiuni(interfata, asculta=None):
 		return {"sesiuni": [{"adresa": str(s.adresa_multicast), "port": int(s.port), "nume": str(s.nume or "")}
 			for s in sesiuni], "eroare": ""}
 	except ImportError:
-		return {"sesiuni": [], "eroare": _("Modul dvb_nit_ip nedisponibil pe acest receptor.")}
+		# 0.6.2: text omenesc (inainte numele modulului, "dvb_nit_ip"); acelasi pe televizor si in web (mesajCautare)
+		return {"sesiuni": [], "eroare": _(TEXT_FARA_CAUTARE)}
 	except Exception as eroare:
 		return {"sesiuni": [], "eroare": _("Eroare căutare: %s") % eroare}
 

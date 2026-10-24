@@ -50369,3 +50369,19 @@ msgstr "kisebb belső memóriájú vevő (például %s)"
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "készenlétben"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(nyomd meg az OK-t vagy a Zöldet a cím beírásához)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "A hálózaton meghirdetett csoportok keresése még nincs benne ebben a szoftverben. A csoportokat kézzel kell hozzáadni."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "Nincs letöltendő DVB-I lista: válaszd ki az országot, vagy adj meg egy címet a Kézzel megadott címek (haladó) részben."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "A tévé ki van kapcsolva vagy készenlétben van: a feliratok nem olvasódnak be és nem fordítódnak le, amíg be nem kapcsol."

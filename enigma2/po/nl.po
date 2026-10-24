@@ -53090,3 +53090,19 @@ msgstr "een ontvanger met een kleiner intern geheugen (bijvoorbeeld %s)"
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "in standby"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(druk op OK of Groen om het adres in te voeren)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "Zoeken naar groepen die op het netwerk worden aangekondigd, zit nog niet in deze software. Groepen voeg je met de hand toe."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "Er is geen DVB-I-lijst om te downloaden: kies het land of voeg een adres toe bij Handmatig toegevoegde adressen (geavanceerd)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "De tv staat uit of in stand-by: ondertitels worden pas gelezen en vertaald als hij aangaat."

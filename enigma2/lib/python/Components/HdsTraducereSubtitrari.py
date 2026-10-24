@@ -130,7 +130,8 @@
 #   textCheiDinNou()                 nota „cheile trebuie puse din nou” pentru ecran si web, "" cand nu e cazul
 #   cereOcr()                        traducerea vrea si subtitrarile DVB (Components/HdsOcrSubtitrari.esteOcrPornit)
 #   inainte(texte)                   textul OCR gata inainte de afisare: cererea pleaca acum
-#   instanta().stare()               dict pentru ecran si web (fara chei), cu contorul
+#   instanta().stare()               dict pentru ecran si web (fara chei), cu contorul; tv_stins / tv_stins_text:
+#                                    televizorul stins, deci nimic nu se traduce (TEXT_TV_STINS, textTvStins())
 #   instanta().proba(laRezultat)     „Probează traducerea”: o fraza de proba, raspunsul pe firul enigma2
 #   chei().schimba(serviciu, valoare) / chei().stare()
 #   ceLipseste(), textCeLipseste(), numeServiciu(), SERVICII, LIMBI_TINTA
@@ -3638,8 +3639,12 @@ class Traducator(object):
 				if x["stare"] == "merge":
 					lucreaza = x["serviciu"]
 					break
+		tv_stins = _tvStins()
 		return {
 			"pornit": bool(s.pornit.value),
+			# televizorul stins: nimic nu se traduce (laPagina), deci contorul sta; fraza pentru ecran si web
+			"tv_stins": tv_stins,
+			"tv_stins_text": _t(TEXT_TV_STINS) if tv_stins else u"",
 			"serviciu": cfg["serviciu"],
 			"serviciu_nume": numeServiciu(cfg["serviciu"]),
 			"rezerve": rezerve(s),
@@ -4111,6 +4116,19 @@ def _tvStins():
 		return bool(HdsStandbyTv.tvStins())
 	except Exception:
 		return False
+
+
+# Cu televizorul stins (sau in standby) nimic nu se traduce si nimic nu se citeste cu OCR (laPagina si
+# HdsOcrSubtitrari.ocrDeFolos ies inainte de contor), deci contoarele raman la zero. Fara fraza aceasta, ecranul si
+# pagina web spuneau numai "nicio pagină" si pareau o stricaciune (integrarea 0.6.1, dupa o repornire: televizorul
+# intrase in standby). Cand televizorul se aprinde, totul porneste singur la pagina urmatoare (tvStins se reciteste la
+# cateva secunde). Numai in ecranele de setari si in web, niciodata ca fereastra pe televizor.
+TEXT_TV_STINS = N_("Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde.")
+
+
+def textTvStins():
+	"""TEXT_TV_STINS tradus cand televizorul e stins (HdsStandbyTv.tvStins), altfel sirul gol"""
+	return _t(TEXT_TV_STINS) if _tvStins() else u""
 
 
 def inainte(texte):

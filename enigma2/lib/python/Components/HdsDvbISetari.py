@@ -32,7 +32,17 @@ MAX_URL = 1024
 MAX_URL_URI = 64
 MAX_REINCARCARE_S = 600   # listele se descarca cu 15 s pe lista; mai mult de atat inseamna un fir pierdut
 
-_REINCARCARE = {"in_curs": False, "gata": False, "succes": None, "eroare": "", "ora": 0}
+
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_), fara efect; textul se traduce la folosire cu _()"""
+	return text
+
+
+# fara_liste (0.6.2): reincarcarea s-a terminat fara nimic de descarcat (pluginul: _FARA_LISTE); ecranul si pagina web
+# spun atunci TEXT_FARA_LISTE, nu "terminată cu succes"
+_REINCARCARE = {"in_curs": False, "gata": False, "succes": None, "eroare": "", "ora": 0, "fara_liste": False}
+TEXT_FARA_LISTE = N_("Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână "
+	"(avansat).")
 
 
 def _plugin(plugin=None):
@@ -184,7 +194,8 @@ def adaugaUrl(config, url):
 	"""Albastru pe televizor (Adauga URL). -> (reusit, mesaj)."""
 	url = (url or "").strip()
 	if not urlBun(url):
-		return False, _("URL invalid. Trebuie să înceapă cu http:// sau https://")
+		# 0.6.2: "adresa" (text deja tradus), ca pagina web; urlBun refuza si spatiile
+		return False, _("Adresa trebuie să înceapă cu http:// sau https:// și să nu aibă spații sau semne speciale.")
 	url_uri = config.setdefault("url_uri", [])
 	if len(url_uri) >= MAX_URL_URI:
 		return False, _("Sunt prea multe adrese proprii. Șterge una înainte.")
@@ -562,7 +573,7 @@ def reincarca(la_gata=None, plugin=None, acum=None):
 	if _REINCARCARE["in_curs"] and acum - _REINCARCARE["ora"] < MAX_REINCARCARE_S:
 		return False
 	p = _plugin(plugin)
-	_REINCARCARE.update(in_curs=True, gata=False, succes=None, eroare="", ora=acum)
+	_REINCARCARE.update(in_curs=True, gata=False, succes=None, eroare="", ora=acum, fara_liste=False)
 	manager = getattr(p, "_manager", None)
 	if manager is not None:
 		try:
@@ -571,7 +582,8 @@ def reincarca(la_gata=None, plugin=None, acum=None):
 			print("[HdsDvbISetari] setarile managerului: %s" % eroare)
 
 	def _gata(succes, eroare=None):
-		_REINCARCARE.update(in_curs=False, gata=True, succes=bool(succes), eroare=str(eroare or ""))
+		fara = bool(succes) and bool((getattr(p, "_FARA_LISTE", None) or [False])[0])
+		_REINCARCARE.update(in_curs=False, gata=True, succes=bool(succes), eroare=str(eroare or ""), fara_liste=fara)
 		if la_gata is not None:
 			la_gata(succes, eroare)
 

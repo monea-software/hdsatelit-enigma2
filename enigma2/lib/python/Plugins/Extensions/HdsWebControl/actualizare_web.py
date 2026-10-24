@@ -82,13 +82,15 @@ def pachete(U, H, discuri):
 
 
 def raspuns(lista, H, radacina=None):
-	"""Corpul lui GET /api/actualizare-pachete."""
+	"""Corpul lui GET /api/actualizare-pachete. "versiune" = cea care ruleaza acum (etc/image-version,
+	HdsPazaModel.versiuneAcum), nu imaginea scrisa din reguli, care ramane aceeasi dupa o actualizare prin pachete."""
 	reguli = H.citesteReguli(radacina) or {}
+	acum = getattr(H, "versiuneAcum", None)
 	return {
 		"result": True,
 		"pachete": lista,
 		"model": reguli.get("model", ""),
-		"versiune": reguli.get("version", ""),
+		"versiune": (acum(radacina) if acum is not None else "") or reguli.get("version", ""),
 	}
 
 

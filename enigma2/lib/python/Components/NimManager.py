@@ -533,10 +533,13 @@ def normalizeNimType(type):
 	return NIM_TYPE_ALIASES.get(type, type)
 
 class NIM(object):
-	def __init__(self, slot, type, description, has_outputs = True, internally_connectable = None, multi_type = {}, frontend_id = None, i2c = None, is_empty = False, multistream = False):
+	def __init__(self, slot, type, description, has_outputs = True, internally_connectable = None, multi_type = {}, frontend_id = None, i2c = None, is_empty = False, multistream = False, s2x = False):
 		self.slot = slot
 		# filtrul de flux (ISI) si PLS-ul DVB-S2: tunerele care se anunta „DVB-S2X" sau „Multistream: yes"
 		self.multistream = bool(multistream)
+		# tunerul se anunta "Type: DVB-S2X" in /proc/bus/nim_sockets (tipul ramane DVB-S2, ca in restul imaginii); numai
+		# pentru ce arata Informatii > Tunere ("Poate primi")
+		self.s2x = bool(s2x)
 
 		if type not in ("DVB-S", "DVB-C", "DVB-T", "DVB-S2", "DVB-C/T", None):
 			print("warning: unknown NIM type %s, not using." % type)
@@ -769,6 +772,7 @@ class NimManager:
 				entries[current_slot]["isempty"] = False
 				if tip == "DVB-S2X":
 					entries[current_slot]["multistream"] = True
+					entries[current_slot]["s2x"] = True
 			elif line.strip().startswith("Multistream:"):
 				entries[current_slot]["multistream"] = line.strip()[len("Multistream:"):].strip().lower() == "yes"
 			elif line.strip().startswith("Name:"):
@@ -822,7 +826,7 @@ class NimManager:
 				entry["frontend_device"] = entry["internally_connectable"] = None
 			if not ("multi_type" in entry):
 				entry["multi_type"] = {}
-			self.nim_slots.append(NIM(slot = id, description = entry["name"], type = entry["type"], has_outputs = entry["has_outputs"], internally_connectable = entry["internally_connectable"], multi_type = entry["multi_type"], frontend_id = entry["frontend_device"], i2c = entry["i2c"], is_empty = entry["isempty"], multistream = entry.get("multistream", False)))
+			self.nim_slots.append(NIM(slot = id, description = entry["name"], type = entry["type"], has_outputs = entry["has_outputs"], internally_connectable = entry["internally_connectable"], multi_type = entry["multi_type"], frontend_id = entry["frontend_device"], i2c = entry["i2c"], is_empty = entry["isempty"], multistream = entry.get("multistream", False), s2x = entry.get("s2x", False)))
 
 	def hasNimType(self, chktype):
 		for slot in self.nim_slots:

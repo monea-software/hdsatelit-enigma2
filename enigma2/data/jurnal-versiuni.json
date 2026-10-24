@@ -1,6 +1,38 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.2",
+   "build": "0062202610240058",
+   "data": "24.10.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "După o repornire, subtitrarea aleasă de tine pe un canal revine singură și când pagina ei de teletext apare abia după pornirea canalului (de pildă ZDF HD, pagina 777).",
+     "en": "After a restart, the subtitle you chose on a channel comes back by itself even when its teletext page appears only after the channel starts (for example ZDF HD, page 777)."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Cu televizorul stins, subtitrările nu se citesc și nu se traduc; acum ecranele traducerii și interfața web spun asta, iar traducerea pornește singură când aprinzi televizorul.",
+     "en": "With the TV off, subtitles are not read or translated; the translation screens and the web interface now say so, and the translation starts by itself when you turn the TV on."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Paza de model și actualizarea de pe stick arată versiunea care rulează acum, nu pe cea a imaginii scrise pe receptor, care apare separat ca Imaginea de bază.",
+     "en": "The model guard and the update from a USB stick show the version running now, not the one first written to the receiver, which is shown separately as the base."
+    },
+    {
+     "fel": "reparat",
+     "ro": "În Informații despre sistem, la Tunere, vezi ce semnale poate primi fiecare tuner, de pildă DVB-S2X la satelit și DVB-T2 la cablu și terestru.",
+     "en": "In System information, under Tuners, you see which signals each tuner can receive, for example DVB-S2X for satellite and DVB-T2 for cable and terrestrial."
+    },
+    {
+     "fel": "reparat",
+     "ro": "DVB-I: dialogul de adăugare spune adresă, ca interfața web, iar Reîncarcă fără nicio listă aleasă nu mai spune că a reușit; la DVB-MABR, căutarea are un text pe înțeles.",
+     "en": "DVB-I: the add dialog says address, like the web interface, and Reload with no list chosen no longer says it succeeded; in DVB-MABR, the search has a plain message."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.1",
    "build": "0061202610232154",
    "data": "23.10.2026",

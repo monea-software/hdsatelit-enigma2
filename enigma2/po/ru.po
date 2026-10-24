@@ -48823,3 +48823,19 @@ msgstr "ресивер с меньшей внутренней памятью (н
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "в ждущем режиме"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(нажми ОК или Зелёную кнопку, чтобы ввести адрес)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "Поиска групп, объявленных в сети, в этой программе пока нет. Группы добавляются вручную."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "Нет ни одного списка DVB-I для загрузки: выбери страну или добавь адрес в разделе Адреса, добавленные вручную (дополнительно)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "Телевизор выключен или в режиме ожидания: субтитры не распознаются и не переводятся, пока он не включится."

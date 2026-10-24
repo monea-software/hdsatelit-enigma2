@@ -52724,3 +52724,19 @@ msgstr "un récepteur avec une mémoire interne plus petite (par exemple %s)"
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "en veille"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(appuie sur OK ou Vert pour saisir l'adresse)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "La recherche des groupes annoncés sur le réseau n'est pas encore dans ce logiciel. Les groupes s'ajoutent à la main."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "Il n'y a aucune liste DVB-I à télécharger : choisis le pays ou ajoute une adresse dans Adresses ajoutées à la main (avancé)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "Le téléviseur est éteint ou en veille : les sous-titres ne sont ni lus ni traduits tant qu'il n'est pas allumé."

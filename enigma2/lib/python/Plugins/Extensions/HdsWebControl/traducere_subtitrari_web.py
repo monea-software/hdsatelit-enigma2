@@ -1053,6 +1053,7 @@ PAGINA = """<!DOCTYPE html>
   </section>
   <section class="card" id="card-contor">
     <h2>Ce s-a tradus</h2>
+    <p class="nota ascuns" id="contor-tv"></p>
     <dl class="valori" id="contor-valori"></dl>
     <ul class="erori" id="contor-erori"></ul>
     <p class="nota eroare ascuns" id="contor-pauza"></p>
@@ -1356,6 +1357,8 @@ function valoare(dl, eticheta, text){
 function celula(r, text, clasa){ var td = document.createElement("td"); td.textContent = text; td.className = clasa; r.appendChild(td); }
 function puneContor(){
   var s = ultim.stare || {}, c = s.contor || {};
+  // televizorul stins: nimic nu se traduce, de aceea contorul sta (fraza tradusa vine de la receptor)
+  paragraf("contor-tv", s.tv_stins_text || "");
   var dl = $("contor-valori"); sterge(dl);
   valoare(dl, "Pagini", String(c.pagini || 0));
   valoare(dl, "Din memorie", String(c.din_memorie || 0));

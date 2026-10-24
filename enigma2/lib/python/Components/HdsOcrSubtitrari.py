@@ -1070,6 +1070,11 @@ def _tvStins():
 		return False
 
 
+# aceeasi fraza ca in Components/HdsTraducereSubtitrari.py (TEXT_TV_STINS): cu televizorul stins nimic nu se citeste si
+# nimic nu se traduce; se arata numai in contor (ecranul Aspectul subtitrarilor si pagina web), niciodata ca fereastra
+TEXT_TV_STINS = N_("Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde.")
+
+
 def ocrDeFolos():
 	"""Pagina DVB citita acum ar folosi cuiva? Nu cand televizorul e stins (HdsStandbyTv.tvStins) si nici cand OCR-ul
 	e cerut numai de traducere (fara "Mărirea subtitrărilor DVB" = OCR), iar traducerea nu traduce pista de acum (e deja
@@ -1513,7 +1518,9 @@ class OcrSubtitrari(object):
 			"pid": self.serviciu.pid(), "porniri": self.serviciu.porniri, "oprit_dupa_caderi": self.client.oprit,
 			"pauza_s": int(round(self.client.pauzaRamasa())), "caderi": self.client.caderi_total,
 			"in_lucru": self.client.in_zbor(), "memorie": len(self.memorie), "serviciu": self.client.pong,
-			"contor": self.contor.dict()}
+			"contor": self.contor.dict(),
+			# televizorul stins: paginile raman poza fara sa se numere (ocrDeFolos), deci contorul sta
+			"tv_stins": _tvStins()}
 		# numele vechi (pagina web si jurnalul le citesc)
 		c = s["contor"]
 		s.update({"pagini": c["pagini"], "text": c["text"], "poza": c["poza"], "motiv": c["ultimul_motiv"]})
@@ -1629,11 +1636,13 @@ def textContorDetalii(s=None, cuOk=True):
 	s = s or contor()
 	c = s.get("contor") if s else None
 	ghicire = textGhicire(s) if s else u""
+	# televizorul stins (0.6.2): paginile nu se citesc si nu se numara; fraza spune de ce contorul sta
+	tv = _t(TEXT_TV_STINS) if s and s.get("tv_stins") else u""
 	if not c or not c.get("pagini"):
 		text = _t("Aici se numără paginile subtitrărilor DVB citite ca text și cele rămase imagine, cu motivul. "
 			"Nu a venit încă nicio pagină.")
-		return text + (u" " + ghicire if ghicire else u"")
-	parti = [_t("Citite ca text: %d din %d.") % (c["text"], c["pagini"])]
+		return u" ".join(x for x in (tv, text, ghicire) if x)
+	parti = ([tv] if tv else []) + [_t("Citite ca text: %d din %d.") % (c["text"], c["pagini"])]
 	if ghicire:
 		parti.append(ghicire)
 	motive = [_t(_TEXT_MOTIV[f]) % c["motive"][f] for f in FELURI_MOTIV if c["motive"].get(f)]

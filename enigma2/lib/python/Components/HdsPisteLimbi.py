@@ -38,6 +38,12 @@
 #   subtitrare DVB pusa la c. se schimba o singura data pe teletext (b.) sau pe limba traducerii (a.) cand acestea apar
 #   mai tarziu in lista (paginile de teletext gasite din mers); orice alta alegere pornita ramane.
 #
+# ALEGEREA DE MANA GASITA MAI TARZIU (0.6.2, cu traducerea pornita sau nu): o pagina de teletext fara limba (gasita din
+# mers, nu e in PMT, de pilda TXT 777 pe ZDF HD) lipseste din prima lista a canalului, deci la pornirea canalului se
+# pune alta subtitrare (preferintele sau traducerea). Cand pagina tinuta minte apare in lista, subtitrarea pusa automat
+# se schimba o singura data pe ea, ca dupa o repornire alegerea omului sa revina singura. O subtitrare aleasa de om
+# intre timp (alta decat cea pusa automat) nu se schimba.
+#
 # DE CE „PISTA IMPLICITA A CANALULUI" INSEAMNA „NU SE SCHIMBA NIMIC": selectTrack() din nucleu
 # reporneste decodorul de sunet (se aude o intrerupere) si scrie PID-ul in lamedb (in intrarea formatului pistei).
 # Pista pornita de nucleu tine deja cont de config.av.defaultac3 si de ce s-a ales ultima data
@@ -1456,21 +1462,30 @@ def aplicaSubtitrare(infobar, semn=None):
 	acelasiCanal = semn is not None and semn[0] == semnNou[0] and bool(semn[1])
 	cheie = cheieCanal(ref)
 	if acelasiCanal and infobar.subtitles_enabled:
-		# cu traducerea: o subtitrare DVB pusa automat (citita cu OCR) se schimba o data pe teletext sau pe limba
-		# traducerii, cand acestea apar mai tarziu in lista; orice alta subtitrare pornita ramane
+		# pe acelasi canal, o subtitrare pusa automat (nu cea tinuta minte) se schimba o singura data cand apare mai
+		# tarziu in lista:
+		#  - alegerea de mana tinuta minte pe canal (0.6.2): o pagina de teletext gasita din mers (fara limba, de pilda
+		#    TXT 777 pe ZDF HD) nu e in prima lista, deci la pornirea canalului (si dupa orice repornire) se punea
+		#    altceva, iar alegerea omului nu mai venea niciodata, desi era in piste-alese.json;
+		#  - cu traducerea: in locul unei subtitrari DVB citite cu OCR, teletextul sau limba traducerii.
+		# Subtitrarea pornita trebuie sa fie chiar cea pusa automat (o alegere facuta de om intre timp ramane).
 		ultima = _ULTIMA["subtitrare"]
-		if film is not None or not ultima or ultima.get("motiv") != MOTIV_TRADUCERE_DVB or ultima.get("cheie") != cheie \
-				or not aceeasiSubtitrare(infobar.selected_subtitle, ultima.get("tuplu")):
+		if film is not None or not ultima or ultima.get("motiv") in ("memorat", "memorat-oprit", "internet") \
+				or ultima.get("cheie") != cheie or not aceeasiSubtitrare(infobar.selected_subtitle, ultima.get("tuplu")):
 			return semnNou
 		try:
 			ales, motiv = alegeAcum(lista, memorie().alegere(cheie).get("s") if cheie else None)
 		except Exception as e:
 			print("[HdsPisteLimbi] subtitrarea tradusa: %s" % e)
 			return semnNou
-		if ales is None or motiv not in (MOTIV_TRADUCERE_TINTA, MOTIV_TRADUCERE_TEXT):
+		if ales is None:
+			return semnNou
+		if motiv != "memorat" and (ultima.get("motiv") != MOTIV_TRADUCERE_DVB or
+				motiv not in (MOTIV_TRADUCERE_TINTA, MOTIV_TRADUCERE_TEXT)):
 			return semnNou
 		_pune(infobar, ales["tuplu"])
-		print("[HdsPisteLimbi] subtitrare: %s %s, %s (in locul celei DVB)" % (ales["text"] or "-", ales["fel"], motiv))
+		print("[HdsPisteLimbi] subtitrare: %s %s, %s (in locul celei puse la pornirea canalului)" % (
+			ales["text"] or "-", ales["fel"], motiv))
 		_ULTIMA["subtitrare"] = {"cheie": cheie, "tuplu": ales["tuplu"], "motiv": motiv}
 		return semnNou
 	ales = None

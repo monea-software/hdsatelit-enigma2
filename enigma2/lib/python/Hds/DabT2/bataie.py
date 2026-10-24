@@ -8,13 +8,20 @@
   - steagul /etc/enigma2/hds-paznic.oprit spune paznicului sa stea (setarea „Paznic anti-blocaj" pe nu).
   - dupa o repornire facuta de paznic, la pornirea sesiunii se arata un mesaj (fisierul /tmp/hds-paznic.eveniment).
 Un singur timer pe proces, tinut de coordonator, oricate pluginuri ar fi instalate.
+
+In imaginea HD Satelit (IN_IMAGINE) nimic de aici nu arata vreo fereastra pe televizor (regula imaginii: fara mesaje
+despre defecte interne): paznicul pluginului nu porneste in imagine (imagine.porneste nu cere bataia), imaginea are
+paznicul ei (Components/HdsPaznic.py, hds-watchdog), iar memoria decodorului o reface singur
+Components/HdsMemorieDriver.py (repornirea in standby, cu pazele ei; si la un film). Daca bataia ar fi pornita
+totusi in imagine, mesajele "Receptorul trebuie repornit din meniu." si cele de dupa repornire nu se arata:
+evenimentul ramane numai in jurnalul paznicului. In pluginul pentru alte imagini mesajele raman ca pana acum.
 """
 import json
 import os
 import time
 
 from . import compat, jurnal
-from .limba import _
+from .limba import IN_IMAGINE, _
 
 # duratele (imaginea lipsa de N s) pe ceasul monoton; `t` din fisierul bataii ramane ora de perete (paznicul il
 # compara cu ora lui)
@@ -110,7 +117,10 @@ class Bataie(object):
                 'latime_zero_s': int(acum - self._zero_de_la) if self._zero_de_la is not None else 0}
 
     def mesaj_decodor(self):
-        """Paznicul a gasit decodorul fara memorie: mesaj o data pe eveniment. Nu repornim nimic singuri."""
+        """Paznicul a gasit decodorul fara memorie: mesaj o data pe eveniment. Nu repornim nimic singuri. In imagine
+        niciun mesaj (vezi sus): ramane numai jurnalul paznicului."""
+        if IN_IMAGINE:
+            return
         try:
             if not os.path.exists(EVENIMENT):
                 return
@@ -169,6 +179,15 @@ def eveniment_dupa_repornire():
     decodor/driver, receptorul a fost repornit intre timp: mesajul spune asta. Ambele fisiere se sterg.
     """
     text, t = None, None
+    if IN_IMAGINE:
+        # in imagine fara mesaj pe televizor (vezi sus); fisierele se sterg ca la plugin, evenimentul ramane in jurnal
+        for cale in (EVENIMENT, EVENIMENT_DISC):
+            try:
+                if os.path.exists(cale):
+                    os.remove(cale)
+            except Exception:
+                jurnal.eroare('bataie', 'evenimentul paznicului')
+        return None, None
     try:
         if os.path.exists(EVENIMENT):
             with open(EVENIMENT) as f:

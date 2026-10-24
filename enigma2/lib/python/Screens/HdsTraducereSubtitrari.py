@@ -789,6 +789,9 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		# intai serviciile oprite dupa refuzurile cheii: ce s-a intamplat si ce faci (aceleasi texte ca in web);
 		# caseta are AJUTOR_RANDURI randuri, deci cel mai important sta primul
 		parti = [u"%s %s" % (o["text"], o["ce_faci"]) for o in s.get("oprite") or []]
+		if s.get("tv_stins_text"):
+			# televizorul stins: de aceea contorul sta (0.6.2; numai aici si in web, nu ca fereastra)
+			parti.append(s["tv_stins_text"])
 		parti.append(_("Pagini: %d. Din memorie: %d. Traduse după afișare: %d. Sărite: %d. Cereri: %d.") % (c["pagini"],
 			c["din_memorie"], c["dupa_afisare"], c["sarite"], c["cereri"]))
 		if c.get("in_asteptare") is not None:

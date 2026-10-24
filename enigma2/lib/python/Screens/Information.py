@@ -654,6 +654,52 @@ def _modTuner(nim_obj):
 	return str(getattr(nim_obj, "config_mode", "") or _("neconfigurat"))
 
 
+def primesteTuner(nim_obj):
+	"""Randul "Poate primi" din Tunere (si pagina web /informatii/tunere, din acelasi populate): ce semnale primeste
+	tunerul, numai dupa ce stie NimManager: tipul (DVB-S2, DVB-C/T ...), "Type: DVB-S2X" si multistream din
+	/proc/bus/nim_sockets, "T2" din numele tunerului de cablu si terestru, modurile unui tuner cu mai multe feluri. None
+	pentru un tuner gol sau nesuportat. Inainte randul cauta o functie care nu exista (canBeCompatibleWith), deci nu
+	aparea niciodata; T2-MI nu e al tunerului (il desface receptorul din fluxul de satelit), deci nu se scrie aici."""
+	tip = getattr(nim_obj, "type", None)
+	try:
+		if not tip or not nim_obj.isSupported():
+			return None
+	except Exception:
+		return None
+	t2 = "T2" in str(getattr(nim_obj, "description", "") or "")
+	tipuri = [tip]
+	try:
+		if nim_obj.isMultiType():
+			tipuri += [t for t in nim_obj.getMultiTypeList().values() if t]
+	except Exception:
+		pass
+	semnale = []
+	for t in tipuri:
+		if t in ("DVB-S", "DVB-S2"):
+			bucati = ["DVB-S"]
+			if t == "DVB-S2":
+				bucati.append("DVB-S2")
+				if getattr(nim_obj, "s2x", False):
+					bucati.append("DVB-S2X")
+		elif t in ("DVB-T", "DVB-T2"):
+			bucati = ["DVB-T"] + (["DVB-T2"] if t2 or t == "DVB-T2" else [])
+		elif t in ("DVB-C/T", "DVB-C/T2"):
+			bucati = ["DVB-C", "DVB-T"] + (["DVB-T2"] if t2 or t == "DVB-C/T2" else [])
+		elif t == "DVB-C":
+			bucati = ["DVB-C"]
+		else:
+			bucati = [str(t)]
+		for b in bucati:
+			if b not in semnale:
+				semnale.append(b)
+	try:
+		if nim_obj.isMultistream():
+			semnale.append("multistream")
+	except Exception:
+		pass
+	return ", ".join(semnale) or None
+
+
 class HdsTunerInfo(InformationBase):
 	def __init__(self, session):
 		InformationBase.__init__(self, session, _("Tunere"))
@@ -672,10 +718,9 @@ class HdsTunerInfo(InformationBase):
 			if nim_obj:
 				l.append(_rand(_("Semnal"), getattr(nim_obj, "friendly_type", "DVB")))
 				l.append(_rand(_("Folosit ca"), _modTuner(nim_obj)))
-				if hasattr(nim_obj, "canBeCompatibleWith") and nim_obj.canBeCompatibleWith("DVB-S2"):
-					l.append(_rand(_("Poate primi"), "DVB-S, DVB-S2, DVB-S2X, multistream"))
-				elif hasattr(nim_obj, "canBeCompatibleWith") and nim_obj.canBeCompatibleWith("DVB-T2"):
-					l.append(_rand(_("Poate primi"), "DVB-T, DVB-T2, DVB-C, T2-MI"))
+				primeste = primesteTuner(nim_obj)
+				if primeste:
+					l.append(_rand(_("Poate primi"), primeste))
 			l.append("")
 		l.append(_("Antena:"))
 		# ecranul nu spune unde sta in meniu, ca o mutare in menu.xml sa nu-l faca gresit

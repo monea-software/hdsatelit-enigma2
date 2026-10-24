@@ -52320,3 +52320,19 @@ msgstr "daha küçük dahili belleğe sahip bir alıcı (örneğin %s)"
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "hazırda beklet durumunda"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(adresi yazmak için OK veya Yeşil tuşuna bas)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "Ağda duyurulan grupları arama bu yazılımda henüz yok. Gruplar elle eklenir."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "İndirilecek DVB-I listesi yok: ülkeyi seç veya Elle eklenen adresler (gelişmiş) bölümünde bir adres ekle."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "Televizyon kapalı veya bekleme modunda: açılana kadar altyazılar okunmaz ve çevrilmez."

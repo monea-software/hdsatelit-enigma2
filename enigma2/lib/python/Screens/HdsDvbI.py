@@ -130,7 +130,10 @@ class HdsDvbIReloadNow(Screen):
     def _gata(self, succes, eroare):
         if self._inchis:
             return
-        if succes:
+        if succes and S.stareReincarcare().get('fara_liste'):
+            # 0.6.2: nicio lista de descarcat (fara tara, liste sau adrese): nu "terminată cu succes"
+            self['stare'].setText(_(S.TEXT_FARA_LISTE))
+        elif succes:
             self['stare'].setText(_('Reîncărcare terminată cu succes.\nApasă OK sau Roșu pentru a închide.'))
         else:
             self['stare'].setText(_('Reîncărcarea a eșuat: %s\nApasă OK sau Roșu pentru a închide.') % (eroare or '?'))
@@ -708,7 +711,7 @@ class HdsDvbIAdaugaURL(Screen):
     """Dialog simplu pentru introducerea unui URL DVB-I."""
 
     skin = """
-        <screen name="HdsDvbIAdaugaURL" resolution="1920,1080" position="center,center" size="900,280" flags="wfNoBorder" backgroundColor="#0010162a" title="Adaugă URL DVB-I">
+        <screen name="HdsDvbIAdaugaURL" resolution="1920,1080" position="center,center" size="900,280" flags="wfNoBorder" backgroundColor="#0010162a" title="Adaugă adresă">
             <eLabel position="0,0" size="900,1" backgroundColor="#00374ea1" zPosition="1" />
             <widget name="eticheta" position="40,24"  size="820,36" font="Regular;24" halign="left" foregroundColor="#00f2f4f8" backgroundColor="#0010162a" transparent="1" />
             <widget name="input"    position="40,70"  size="820,56" font="Regular;26" halign="left" foregroundColor="#00ffffff" backgroundColor="#00374ea1" />
@@ -731,8 +734,9 @@ class HdsDvbIAdaugaURL(Screen):
         Screen.__init__(self, session)
         self._url      = ''
 
-        self['eticheta']    = Label(_('Introdu URL-ul listei DVB-I (https://...):'))
-        self['input']       = Label(self._url or _('(apasă OK sau Verde ca să scrii URL-ul)'))
+        # 0.6.2: "adresa", ca pagina web si restul ecranului DVB-I (inainte "URL"); textele erau deja traduse
+        self['eticheta']    = Label(_('Adresă nouă (http:// sau https://)'))
+        self['input']       = Label(self._url or _('(apasă OK sau Verde ca să scrii adresa)'))
         self['eroare']      = Label('')
         self['buton_verde'] = Button(_('Salvează'))
         self['buton_rosu']  = Button(_('Anulează'))
@@ -745,18 +749,18 @@ class HdsDvbIAdaugaURL(Screen):
                 'red':    self._anuleaza,
                 'cancel': self._anuleaza,
             }, -1)
-        self.setTitle(_('Adaugă URL DVB-I'))
+        self.setTitle(_('Adaugă adresă'))
 
     def _deschideTastatura(self):
         from Screens.VirtualKeyBoard import VirtualKeyBoard
         self.session.openWithCallback(self._dupaTastatura, VirtualKeyBoard,
-            title=_('Introdu URL-ul listei DVB-I'), text=self._url)
+            title=_('Adresă nouă (http:// sau https://)'), text=self._url)
 
     def _dupaTastatura(self, text=None):
         if text is None:
             return  # anulat din tastatura virtuala -- ramane la ce era, nu inchide dialogul
         self._url = text.strip()
-        self['input'].setText(self._url or _('(apasă OK sau Verde ca să scrii URL-ul)'))
+        self['input'].setText(self._url or _('(apasă OK sau Verde ca să scrii adresa)'))
         self['eroare'].setText('')
         if self._url:
             self._salveaza()
@@ -764,7 +768,7 @@ class HdsDvbIAdaugaURL(Screen):
     def _salveaza(self):
         url = self._url.strip()
         if not S.urlBun(url):
-            self['eroare'].setText(_('URL invalid. Trebuie să înceapă cu http:// sau https://'))
+            self['eroare'].setText(_('Adresa trebuie să înceapă cu http:// sau https://.'))
             return
         self.close(url)
 

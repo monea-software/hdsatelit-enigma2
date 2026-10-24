@@ -82,6 +82,10 @@ _ULTIMA_EROARE_CEAS = [None]
 # reincarcare reusita), lista de canale nu se reincarca, iar reincarca_acum spune ecranului T_NICIO_LISTA in locul lui
 # "terminata cu succes". O lista descarcata, chiar fara niciun canal, se scrie ca pana acum (e raspunsul ei).
 _TOATE_AU_CAZUT = [False]
+# 0.6.2: True cand la ultima reincarcare nu era nicio lista de descarcat (fara tara, fara liste bifate, fara adrese
+# proprii). Reincarcarea "reuseste" fara sa faca nimic; Components/HdsDvbISetari.reincarca il citeste dupa ea, ca
+# ecranul DVB-I Reload Now si pagina web sa nu mai spuna "terminată cu succes".
+_FARA_LISTE = [False]
 
 
 def N_(text):
@@ -481,10 +485,12 @@ class HdsDvbIManager(object):
         config = self._config
         _ULTIMA_EROARE_CEAS[0] = None
         _TOATE_AU_CAZUT[0] = False
+        _FARA_LISTE[0] = False
 
         url_uri = self._adrese()
         if not url_uri:
             print('[HdsDvbI] nicio lista configurata')
+            _FARA_LISTE[0] = True
             return
 
         # HDSatelit: un singur buchet TV pentru toate listele, fiecare lista in ordinea numerelor ei

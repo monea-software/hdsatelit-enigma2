@@ -48004,3 +48004,19 @@ msgstr "přijímač s menší interní pamětí (například %s)"
 #: lib/python/Components/HdsMemorieDriver.py
 msgid "în standby"
 msgstr "v pohotovostním režimu"
+
+#: lib/python/Screens/HdsDvbI.py
+msgid "(apasă OK sau Verde ca să scrii adresa)"
+msgstr "(stiskni OK nebo Zelené tlačítko pro zadání adresy)"
+
+#: lib/python/Components/HdsMabrSetari.py
+msgid "Căutarea grupurilor anunțate în rețea nu e încă în acest software. Grupurile se adaugă de mână."
+msgstr "Vyhledávání skupin ohlášených v síti v tomto softwaru zatím není. Skupiny se přidávají ručně."
+
+#: lib/python/Components/HdsDvbISetari.py
+msgid "Nu e nicio listă DVB-I de descărcat: alege țara sau pune o adresă în Adrese puse de mână (avansat)."
+msgstr "Není žádný seznam DVB-I ke stažení: zvol zemi nebo přidej adresu v Ručně přidaných adresách (pokročilé)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
+msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
+msgstr "Televize je vypnutá nebo v pohotovostním režimu: titulky se nečtou ani nepřekládají, dokud se nezapne."

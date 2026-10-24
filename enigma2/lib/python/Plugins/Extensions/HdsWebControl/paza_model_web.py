@@ -102,6 +102,10 @@ def stare(M=None, radacina=None, cale_stare=None):
 				(_t("Tunere"), ", ".join(a.get("tunere") or []))):
 			if valoare:
 				informativ.append({"eticheta": eticheta, "valoare": valoare})
+	# imaginea scrisa pe receptor, cand o actualizare prin pachete a adus alta versiune (0.6.2; versiunea de acum e in
+	# fraza de sus, din etc/image-version)
+	if v.get("versiune_baza"):
+		informativ.append({"eticheta": _t("Imaginea de bază"), "valoare": "HD Satelit %s" % v["versiune_baza"]})
 	return {
 		"result": True,
 		"stare": v["stare"],
@@ -112,7 +116,8 @@ def stare(M=None, radacina=None, cale_stare=None):
 		"tehnice": tehnice,
 		"acum": M.randuriAcum(v),
 		"model": reguli.get("model", ""),
-		"versiune": reguli.get("version", ""),
+		"versiune": v.get("versiune") or reguli.get("version", ""),
+		"versiune_baza": v.get("versiune_baza") or "",
 		"amprenta": amprenta,
 		"informativ": informativ,
 	}

@@ -12,6 +12,11 @@
 # tools/enigma2.sh.in (awk) si pagina web paza_model_web.py. Fara fisierul de reguli (emulatorul de pe PC, alta
 # imagine) paza „nu se aplica” si nu schimba nimic.
 #
+# Versiunea din texte ("Acest software (HD Satelit x.y.z)", ecranul, /paza-model, /actualizare): cea care ruleaza acum,
+# din /etc/image-version (versiuneAcum), nu version= din reguli, care ramane al imaginii scrise pe receptor si nu se
+# schimba printr-o actualizare prin pachete (0.6.2: dupa 0.6.1 pagina spunea "HD Satelit 0.6.0"). Imaginea scrisa se
+# arata separat, numai cand difera ("Imaginea de bază", ca in Despre imagine).
+#
 # Amprenta receptorului:
 # - cipul: CHIP_VERSION din /proc/msp/sys (driverul HiSilicon il citeste din cip);
 # - partitiile: blkdevparts din /proc/cmdline (tabela data de bootloader) si marimea partitiei nucleului din
@@ -68,6 +73,9 @@ except NameError:
 		return text
 
 FISIER_REGULI = "etc/hdsatelit-model"          # fata de radacina
+# versiunea care ruleaza acum (randul version=, build-ul de 16 sau 19 cifre): o scrie pachetul enigma2-hdsatelit, deci
+# o actualizare prin pachete o schimba; version= din FISIER_REGULI ramane al imaginii scrise pe receptor (0.6.2)
+FISIER_VERSIUNE = "etc/image-version"          # fata de radacina
 FISIER_STARE = "/tmp/hds-paza-model.stare"
 NUME_MARCAJ = "hdsatelit-model"                # in e2/update/, langa kernel.bin
 FORMAT = "1"
@@ -202,6 +210,40 @@ def citesteReguli(radacina=None):
 		return None
 	reguli = cheiValori(text)
 	return reguli if reguliValide(reguli) else {}
+
+
+def versiuneAcum(radacina=None):
+	"""Versiunea care ruleaza acum, "0.6.1", din etc/image-version (HdsJurnalVersiuni: build_curent si
+	versiune_din_build); "" cand fisierul lipseste, are alta forma sau HdsJurnalVersiuni nu se poate incarca (copia
+	singura a acestui fisier din scripturile de pregatire). Regulile spun numai imaginea scrisa pe receptor, care nu se
+	schimba printr-o actualizare prin pachete."""
+	J = None
+	try:
+		from Components import HdsJurnalVersiuni as J
+	except Exception:
+		try:
+			import importlib.util
+			cale = os.path.join(os.path.dirname(os.path.abspath(__file__)), "HdsJurnalVersiuni.py")
+			if os.path.exists(cale):
+				spec = importlib.util.spec_from_file_location("HdsJurnalVersiuni_paza", cale)
+				J = importlib.util.module_from_spec(spec)
+				spec.loader.exec_module(J)
+		except Exception:
+			J = None
+	if J is None:
+		return ""
+	try:
+		return J.versiune_din_build(J.build_curent(_cale(radacina, FISIER_VERSIUNE))) or ""
+	except Exception:
+		return ""
+
+
+def versiuni(reguli, radacina=None):
+	"""(versiunea de acum, imaginea scrisa) pentru texte: versiunea de acum din etc/image-version, altfel cea din
+	reguli; imaginea scrisa (version= din reguli) numai cand difera de cea de acum, altfel sirul gol"""
+	baza = (reguli or {}).get("version") or ""
+	acum = versiuneAcum(radacina) or baza
+	return acum, (baza if baza and baza != acum else "")
 
 
 # ------------------------------------------------------------------ partitiile
@@ -590,12 +632,13 @@ def verifica(radacina=None, reguli=None):
 		reguli = citesteReguli(radacina)
 	if reguli is None:
 		return {"stare": STARE_NU_SE_APLICA, "reguli": None, "amprenta": {}, "nepotriviri": [], "avertismente": [],
-			"treapta": 1}
+			"treapta": 1, "versiune": "", "versiune_baza": ""}
 	a = amprenta(radacina)
 	nepotriviri = compara(reguli, a)
+	acum, baza = versiuni(reguli, radacina)
 	return {"stare": STARE_NEPOTRIVIT if nepotriviri else STARE_POTRIVIT, "reguli": reguli, "amprenta": a,
 		"nepotriviri": nepotriviri, "avertismente": [] if nepotriviri else avertismente(reguli, a),
-		"treapta": treapta(reguli)}
+		"treapta": treapta(reguli), "versiune": acum, "versiune_baza": baza}
 
 
 # ------------------------------------------------------------------ verdictul de la pornire
@@ -697,11 +740,14 @@ def numeDinEticheta(a, reguli=None):
 	return bool(re.match(r"^/?amiko/viper4kv(\d+)/?$", caleDinEticheta(a.get("eticheta"))))
 
 
-def textPentru(reguli):
-	"""„Acest software (HD Satelit 0.1.6) este pentru receptorul ...”"""
+def textPentru(reguli, versiune=None):
+	""""Acest software (HD Satelit 0.1.6) este pentru receptorul ...". `versiune` = cea care ruleaza acum (verifica():
+	"versiune", din etc/image-version); fara ea, version= din reguli (imaginea scrisa, care ramane aceeasi dupa o
+	actualizare prin pachete: dupa 0.6.1 pagina spunea inca 0.6.0)"""
 	valori = {"model": reguli.get("model") or "?", "hw": reguli.get("hw") or "?", "cip": reguli.get("chip") or "?"}
-	if reguli.get("version"):
-		valori["versiune"] = reguli["version"]
+	versiune = versiune or reguli.get("version")
+	if versiune:
+		valori["versiune"] = versiune
 		return _("Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor "
 			"%(cip)s).") % valori
 	return _("Acest software este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s).") % valori
@@ -808,11 +854,11 @@ def mesajPornire(v):
 	if necitit(nep):
 		titlu = _("Receptorul nu poate fi recunoscut")
 		fraze = [_("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software "
-			"este pentru el."), textPentru(reguli)]
+			"este pentru el."), textPentru(reguli, v.get("versiune"))]
 		tehnice = randuriTehnice(nep)
 	else:
 		titlu = _("Software pentru alt receptor")
-		fraze = [textPentru(reguli), textAlTau(a, reguli, nep)]
+		fraze = [textPentru(reguli, v.get("versiune")), textAlTau(a, reguli, nep)]
 		tehnice = randuriTehnice(nep) + randEticheta(a, reguli)
 	fraze.append(_("Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."))
 	fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
@@ -824,7 +870,7 @@ def mesajNeconfirmat(v):
 	"""(titlu, [fraze], [randuri tehnice]) pentru un model neconfirmat (treapta a doua) care a trecut paza: interfata
 	porneste; randurile tehnice sunt avertismentele (valorile citite care difera de cele asteptate)"""
 	reguli = v.get("reguli") or {}
-	return (_("Model neconfirmat: software pentru testeri"), [textPentru(reguli),
+	return (_("Model neconfirmat: software pentru testeri"), [textPentru(reguli, v.get("versiune")),
 		_("Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru "
 			"testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma.")],
 		randuriTehnice(v.get("avertismente") or []))
@@ -837,7 +883,7 @@ def mesajStare(v):
 	if v.get("stare") == STARE_POTRIVIT and treapta(v.get("reguli")) == 2:
 		return mesajNeconfirmat(v)
 	if v.get("stare") == STARE_POTRIVIT:
-		return (_("Receptorul este cel potrivit"), [textPentru(v.get("reguli") or {}),
+		return (_("Receptorul este cel potrivit"), [textPentru(v.get("reguli") or {}, v.get("versiune")),
 			_("Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.")], [])
 	return (_("Paza de model nu se aplică aici"), [_("Software-ul care rulează nu are semnul receptorului (de exemplu "
 		"în emulatorul de pe calculator), deci paza de model nu verifică nimic.")], [])
