@@ -52186,3 +52186,28 @@ msgstr "Es gibt keine DVB-I-Liste zum Herunterladen: Wähle das Land oder trage 
 #: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
 msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
 msgstr "Der Fernseher ist aus oder im Standby: Untertitel werden erst gelesen und übersetzt, wenn er eingeschaltet wird."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  (fișierul …_recovery_emmc.zip, cu usb_update.bin), după instrucțiunile lui."
+msgstr "  (die Datei …_recovery_emmc.zip mit usb_update.bin), nach seiner Anleitung."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  Pe acest receptor se folosește arhiva de recuperare a producătorului"
+msgstr "  Auf diesem Receiver wird das Wiederherstellungsarchiv des Herstellers verwendet"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Noul software se scrie peste cel care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de scriere, setările și lista de canale se copiază pe stick."
+msgstr "Die neue Software wird über die gerade laufende geschrieben (Ordner %s im internen Speicher): Startet sie nicht, wird sie von Hand repariert, mit dem Wiederherstellungsarchiv des Herstellers auf einem USB-Stick. Vor dem Schreiben werden die Einstellungen und die Senderliste auf den Stick kopiert."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "Recuperare cu un stick USB:"
+msgstr "Wiederherstellung mit einem USB-Stick:"
+
+#: lib/python/Components/HdsVpn.py lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py lib/python/Screens/HdsVpn.py
+msgid "WireGuard nu este disponibil pe acest receptor: nucleul lui nu îl are. Folosește un furnizor OpenVPN."
+msgstr "WireGuard ist auf diesem Receiver nicht verfügbar: Sein Kernel hat es nicht. Nutze einen OpenVPN-Anbieter."
+
+#: lib/python/Screens/HdsVpn.py
+msgid "WireGuard: nu este disponibil"
+msgstr "WireGuard: nicht verfügbar"

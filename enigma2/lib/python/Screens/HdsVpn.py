@@ -174,6 +174,8 @@ def randuri(s):
 	fel = s["fel"]
 	if s["lipsesc"]:
 		r.append((_("Instalează programele VPN"), INSTALEAZA, V.textProgrameLipsa(fel)))
+	elif s.get("wg_indisponibil"):
+		r.append((_("WireGuard: nu este disponibil"), FURNIZOR, _(V.TEXT_WG_INDISPONIBIL)))
 	if s["pornit"] or s["legatura"] in ("conectat", "se_conecteaza", "blocat"):
 		r.append((_("VPN: pornit"), COMUTA, _("OK oprește VPN-ul. Internetul merge apoi direct, prin rețeaua ta.")))
 	else:

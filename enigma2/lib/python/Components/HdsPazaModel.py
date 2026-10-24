@@ -39,6 +39,15 @@
 #   nelistat nu hotaraste nimic (ca eticheta lipsa): pe un receptor adevarat /proc/partitions il listeaza mereu, iar un
 #   /proc/partitions necitit cade deja la "kernel"; uneltele de pe PC dau uneori numai randurile p9 si p10.
 # Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), arborele dispozitivului, tunerele.
+#
+# Numele partitiilor nucleului si ale sistemului (0.6.3): pe V20, V30 si V40 ele se numesc "kernel" si "rootfs" in
+# blkdevparts. Primul Amiko Viper 4K (V10, masina viper4k) le numeste altfel: nucleul in "linuxkernel1" (p12, cu inca
+# trei locuri linuxkernel2-4) si sistemul intr-un subdosar (rootsubdir=linuxrootfs1) al partitiei "userdata" (p16).
+# Regulile pot da numele cu cheile optionale kernel_name= si rootfs_name= (numai litere, cifre si _; altfel regulile
+# sunt stricate); fara ele raman "kernel" si "rootfs", deci regulile de azi dau exact verdictul de pana acum. Locul
+# nucleului se socoteste dupa numele din regulile cu care se compara (_diferente, locNucleu): amprenta pastreaza toata
+# lista partitiilor si toate marimile din /proc/partitions, fiindca actualizarea din meniu citeste amprenta o data si o
+# compara cu marcajul fiecarui pachet (al unui alt model poate avea alte nume).
 # Ce nu se poate citi nu se potriveste: paza cade inchisa.
 #
 # Doua trepte. Treapta intai (modelul confirmat pe un receptor adevarat; regulile fara „confirmat=nu”, cum sunt toate
@@ -98,6 +107,8 @@ NECONFIRMAT = "nu"
 CHEI_REGULI = ("format", "distro", "model", "machinebuild", "chip", "boxtype", "hw", "partitions", "kernel_part",
 	"kernel_kib", "rootfs_part")
 CHEI_SUME = ("kernel_sha256", "rootfs_sha256")
+# cheile optionale cu numele partitiilor nucleului si ale sistemului in blkdevparts, si numele lor fara cheie
+CHEI_NUME_PARTITII = (("kernel_name", "kernel"), ("rootfs_name", "rootfs"))
 FISIERE_SUME = (("kernel_sha256", "kernel.bin"), ("rootfs_sha256", "rootfs.tar.bz2"))
 
 STARE_POTRIVIT = "potrivit"
@@ -195,6 +206,9 @@ def reguliValide(reguli, cu_sume=False):
 		return False
 	if not reguli.get("kernel_kib", "").isdigit():
 		return False
+	for cheie, _implicit in CHEI_NUME_PARTITII:
+		if reguli.get(cheie) and not re.match(r"^[A-Za-z0-9_]+$", reguli[cheie]):
+			return False
 	if cu_sume:
 		for cheie in CHEI_SUME:
 			if not _HEX64.match(reguli.get(cheie, "")):
@@ -262,6 +276,16 @@ def _kib(marime):
 	if unitate == "G":
 		return n * 1024 * 1024
 	return n // 1024
+
+
+def numePartitii(reguli):
+	"""(numele partitiei nucleului, numele partitiei sistemului) in blkdevparts, dupa reguli: kernel_name= si
+	rootfs_name=, altfel "kernel" si "rootfs" (si cand valoarea e stricata: atunci reguliValide le refuza oricum)"""
+	rez = []
+	for cheie, implicit in CHEI_NUME_PARTITII:
+		v = (reguli or {}).get(cheie) or ""
+		rez.append(v if re.match(r"^[A-Za-z0-9_]+$", v) else implicit)
+	return tuple(rez)
 
 
 def partitiiDinReguli(text):
@@ -392,12 +416,14 @@ def caleDinEticheta(eticheta):
 # ------------------------------------------------------------------ amprenta receptorului
 
 def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, antet=None, eticheta=None,
-		board_revision=None, compatibil=None, nim_sockets=None):
+		board_revision=None, compatibil=None, nim_sockets=None, nume_partitii=("kernel", "rootfs")):
 	"""Amprenta din ce s-a citit (None = necitit). `antet`: primii 4 KiB ai partitiei deviceinfo, ca octeti (se
 	pastreaza numai HW= si MAGICNUM=); `eticheta`: cei 256 de octeti de la 0x3F6000 ai aceleiasi partitii;
 	`compatibil`: /proc/device-tree/compatible, ca octeti. Folosita de amprenta() si de scripturile de pe PC care
 	primesc textele prin ssh (urca-pe-stick). Chei: cip, boxtype, partitii (text), partitii_lista, kernel_part,
-	kernel_kib, rootfs_part, rootfs_kib, hw, magicnum, eticheta, board_revision, dt, tunere."""
+	kernel_kib, rootfs_part, rootfs_kib, hw, magicnum, eticheta, board_revision, dt, tunere, marimi_partitii (toate
+	marimile din /proc/partitions, pentru locNucleu). `nume_partitii`: numele nucleului si al sistemului pentru
+	kernel_part si rootfs_part (numePartitii(reguli); implicit "kernel" si "rootfs")."""
 	a = {}
 	a["cip"] = ""
 	for rand in (msp_sys or "").split("\n"):
@@ -412,11 +438,8 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 	a["partitii_lista"] = lista or []
 	a["partitii"] = textPartitii(lista)
 	marimi = _marimiProcPartitions(partitions)
-	nume = [n for n, _k in (lista or [])]
-	a["kernel_part"] = ("mmcblk0p%d" % (nume.index("kernel") + 1)) if "kernel" in nume else ""
-	a["rootfs_part"] = ("mmcblk0p%d" % (nume.index("rootfs") + 1)) if "rootfs" in nume else ""
-	a["kernel_kib"] = marimi.get(a["kernel_part"], "") if a["kernel_part"] else ""
-	a["rootfs_kib"] = marimi.get(a["rootfs_part"], "") if a["rootfs_part"] else ""
+	a["marimi_partitii"] = marimi
+	a["kernel_part"], a["kernel_kib"], a["rootfs_part"], a["rootfs_kib"] = _loc(lista, marimi, nume_partitii)
 	a["emmc_kib"] = marimi.get("mmcblk0", "")
 	campuri = _campuriAntet(antet) if _indexDeviceinfo(brut) is not None else {}
 	a["hw"] = campuri.get("HW", "")
@@ -432,9 +455,29 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 	return a
 
 
-def amprenta(radacina=None):
+def _loc(lista, marimi, nume_partitii):
+	"""(kernel_part, kernel_kib, rootfs_part, rootfs_kib) dupa numele partitiilor; "" pentru ce nu se gaseste"""
+	nume = [n for n, _k in (lista or [])]
+	kn, rn = nume_partitii
+	kp = ("mmcblk0p%d" % (nume.index(kn) + 1)) if kn in nume else ""
+	rp = ("mmcblk0p%d" % (nume.index(rn) + 1)) if rn in nume else ""
+	return kp, (marimi.get(kp, "") if kp else ""), rp, (marimi.get(rp, "") if rp else "")
+
+
+def locNucleu(reguli, a):
+	"""(kernel_part, kernel_kib, rootfs_part, rootfs_kib) ale amprentei `a` dupa numele partitiilor din `reguli`; o
+	amprenta fara marimi (din alta parte decat amprentaDinTexte) da valorile ei."""
+	marimi = a.get("marimi_partitii")
+	if not isinstance(marimi, dict):
+		return (a.get("kernel_part") or "", a.get("kernel_kib", ""), a.get("rootfs_part") or "",
+			a.get("rootfs_kib", ""))
+	return _loc(a.get("partitii_lista"), marimi, numePartitii(reguli))
+
+
+def amprenta(radacina=None, reguli=None):
 	"""Ce spune receptorul despre el acum (amprentaDinTexte cu fisierele de sub `radacina`). Valorile care nu se pot
-	citi sunt "" (cheile hotaratoare) sau lipsesc. Partitia deviceinfo se ia dupa locul ei in blkdevparts."""
+	citi sunt "" (cheile hotaratoare) sau lipsesc. Partitia deviceinfo se ia dupa locul ei in blkdevparts. `reguli`:
+	numele partitiilor nucleului si ale sistemului (numePartitii); fara ele "kernel" si "rootfs"."""
 	cmdline = _citesteText(_cale(radacina, "proc/cmdline"), 4096)
 	antet = eticheta = None
 	di = _indexDeviceinfo(blkdevpartsBrut(cmdline))
@@ -451,7 +494,8 @@ def amprenta(radacina=None):
 		eticheta=eticheta,
 		board_revision=_citesteText(_cale(radacina, "proc/stb/info/board_revision"), 64),
 		compatibil=_citesteOcteti(_cale(radacina, "proc/device-tree/compatible"), 256),
-		nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192))
+		nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192),
+		nume_partitii=numePartitii(reguli))
 
 
 def amprentaDinStare(st, baza=None):
@@ -538,11 +582,8 @@ def _diferente(reguli, a):
 				break
 	if not bune:
 		d["partitii"] = (reguli["partitions"], a.get("partitii", ""))
-	kp = a.get("kernel_part") or ""
-	rp = a.get("rootfs_part") or ""
-	kib = a.get("kernel_kib", "")
-	loc_bun = kp == reguli["kernel_part"] and rp == reguli["rootfs_part"] and str(kib) != "" and \
-		a.get("rootfs_kib", "") != ""
+	kp, kib, rp, rkib = locNucleu(reguli, a)
+	loc_bun = kp == reguli["kernel_part"] and rp == reguli["rootfs_part"] and str(kib) != "" and rkib != ""
 	if not loc_bun or str(kib) != reguli["kernel_kib"]:
 		d["kernel"] = (asteptat_text(reguli, "kernel"), textKernel(kp, kib, rp))
 	if not loc_bun:
@@ -633,7 +674,7 @@ def verifica(radacina=None, reguli=None):
 	if reguli is None:
 		return {"stare": STARE_NU_SE_APLICA, "reguli": None, "amprenta": {}, "nepotriviri": [], "avertismente": [],
 			"treapta": 1, "versiune": "", "versiune_baza": ""}
-	a = amprenta(radacina)
+	a = amprenta(radacina, reguli)
 	nepotriviri = compara(reguli, a)
 	acum, baza = versiuni(reguli, radacina)
 	return {"stare": STARE_NEPOTRIVIT if nepotriviri else STARE_POTRIVIT, "reguli": reguli, "amprenta": a,

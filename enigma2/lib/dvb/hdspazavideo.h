@@ -21,6 +21,12 @@
  * (showSinglePic) and by lib/service/servicemp3.cpp before the pipeline of a file is built (its sinks, dvbvideosink
  * and dvbaudiosink, write to video0 and audio0). The functions are small and keep no state, so they are inline here;
  * the tests on the PC build them alone.
+ *
+ * That daemon and that memory belong to the drivers of the Amiko Viper 4K V20, V30 and V40 (machines u57, u571). The
+ * first Amiko Viper 4K (machine viper4k) has other drivers and another platform daemon (libreader), without such a
+ * range: the enigma2 recipe of that machine defines HDS_FARA_MEMORIE_ES, and hisiEsMemoryMapped() then reports the
+ * memory as present, so films, streams and radio pictures are not refused there. Every other build (no definition)
+ * checks as before. Whether that driver has a fault of its own on writes is a check on a receiver, not here.
  */
 
 #include <fcntl.h>
@@ -67,6 +73,9 @@ inline int hisiCountEsMaps(const char *text, size_t len)
    the file cannot be read */
 inline int hisiEsMemoryMapped()
 {
+#if HDS_FARA_MEMORIE_ES
+	return 1;
+#else
 	int fd = open("/proc/vmallocinfo", O_RDONLY | O_CLOEXEC);
 	if (fd < 0)
 		return -1;
@@ -79,6 +88,7 @@ inline int hisiEsMemoryMapped()
 	if (n < 0 || text.empty())
 		return -1;
 	return hisiCountEsMaps(text.data(), text.size()) > 0 ? 1 : 0;
+#endif
 }
 
 #endif

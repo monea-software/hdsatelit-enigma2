@@ -73,6 +73,7 @@
 
 import glob
 import os
+import re
 import shlex
 import shutil
 import time
@@ -100,11 +101,20 @@ FOLDER_DEZARHIVARE = ".hds-actualizare-extrasa"  # dosarul curat, pe acelasi med
 NUME_PACHET = (NUME_KERNEL, NUME_ROOTFS, NUME_VERSIUNE, NUME_MARCAJ)
 BLOC_COPIE = 1024 * 1024
 CALE_OFGWRITE = "/usr/bin/ofgwrite"
+CALE_CMDLINE = "/proc/cmdline"
 CALE_ENIGMA2_ETC = "/etc/enigma2"
 PREFIX_FOLDER_BACKUP = "hds-backup-setari-"
 
 # Receptorul are o singura pereche kernel + radacina pe eMMC (mmcblk0p9, mmcblk0p10), fara sloturi: o scriere
 # reala sterge tot /etc/enigma2, iar un rootfs care nu porneste se repara numai din Maintenance Mode.
+# Primul Amiko Viper 4K (V10, 0.6.3) tine sistemul intr-un subdosar al partitiei userdata (rootsubdir=linuxrootfs1 in
+# /proc/cmdline, nucleul in linuxkernel1). ofgwrite fara -m (ca aici) scrie atunci nucleul in partitia din kernel= si
+# sistemul in subdosarul care ruleaza (sterge numai acel subdosar; ofgwrite f09040bb, cmdline_parser.c
+# search_current_used_partitions si flash_ext4.c), iar in iesire spune "Using cmdLine kernel device: <kernel=>",
+# "Using cmdLine rootfs device: <root=>" si "Current root sub dir is: <rootsubdir>" in locul randurilor "Found cmdLine
+# ...". _simulareAratacorect le cere pe acestea numai cand /proc/cmdline are rootsubdir= (fara el, exact ca inainte),
+# cu dispozitivele si subdosarul din /proc/cmdline: un subdosar gol ar insemna stergerea intregii partitii. Repararea
+# pe V10 e arhiva de recuperare a producatorului (textUltimaConfirmare).
 # Inainte de scriere se face o copie a datelor omului pe mediul imaginii, un dosar plat
 # hds-backup-setari-AAAALLZZ_HHMMSS/ cu:
 #   - fisierele de canale si temporizatoare de mai jos si toate userbouquet.*;
@@ -469,17 +479,25 @@ def textVerificare(c):
 		_("Acum se face numai o verificare (o simulare): nu se scrie nimic pe receptor. Continui?")
 
 
-def textUltimaConfirmare(c, inregistrare=False, recuperare=""):
+def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar=""):
 	"""Ultima confirmare: textul simplu (se termina cu intrebarea), apoi, dupa un rand gol, randurile mai mici: fraza
-	cu dosarul pentru Maintenance Mode (`recuperare`, poate lipsi) si pachetul."""
+	cu dosarul pentru Maintenance Mode (`recuperare`, poate lipsi) si pachetul. `subdosar`: rootsubdir= din
+	/proc/cmdline (primul Viper 4K, V10: sistemul intr-un subdosar, repararea cu arhiva producatorului); "" = o
+	singura pereche de partitii (V20, V30, V40), textul de pana acum."""
 	sus = _("Atenție: o înregistrare este în curs chiar acum.") + "\n" if inregistrare else ""
 	tehnic = (recuperare.strip() + "\n" if recuperare and recuperare.strip() else "") + \
 		_("Pachet: %s") % "  ·  ".join(_numeSiVersiune(c))
+	if subdosar:
+		pereche = _("Noul software se scrie peste cel care rulează acum (dosarul %s din memoria internă): dacă nu "
+			"pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de "
+			"scriere, setările și lista de canale se copiază pe stick.") % subdosar
+	else:
+		pereche = _("Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă "
+			"noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de scriere, setările "
+			"și lista de canale se copiază pe stick.")
 	return sus + _("Noul software se scrie acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât "
-		"timp scrie; interfața se oprește, iar receptorul repornește singur la final.") + "\n" + _(
-		"Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul "
-		"software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de scriere, setările "
-		"și lista de canale se copiază pe stick.") + "\n" + _("Scrii acum software-ul pe receptor?") + "\n\n" + tehnic
+		"timp scrie; interfața se oprește, iar receptorul repornește singur la final.") + "\n" + pereche + "\n" + \
+		_("Scrii acum software-ul pe receptor?") + "\n\n" + tehnic
 
 
 def _descriereCandidat(c):
@@ -588,16 +606,52 @@ def _ofgwriteAGasitPachetul(iesire, dosar):
 		os.path.normpath(sisteme[0]) == os.path.normpath(os.path.join(baza, NUME_ROOTFS))
 
 
-def _simulareAratacorect(iesire):
+def _citesteCmdline(cale=None):
+	try:
+		with open(cale or CALE_CMDLINE) as f:
+			return f.read(4096)
+	except (IOError, OSError, ValueError):
+		return ""
+
+
+def campCmdline(cmdline, cheie):
+	"""Valoarea primului cuvant "cheie=..." din /proc/cmdline, sau "" """
+	for cuvant in (cmdline or "").split():
+		if cuvant.startswith(cheie + "="):
+			return cuvant[len(cheie) + 1:]
+	return ""
+
+
+def subdosarRadacina(cmdline=None):
+	"""rootsubdir= din /proc/cmdline (primul Viper 4K, V10: "linuxrootfs1"), numai litere, cifre si _; "" cand
+	lipseste (V20, V30, V40) sau e ciudat. Fara `cmdline` se citeste /proc/cmdline."""
+	v = campCmdline(_citesteCmdline() if cmdline is None else cmdline, "rootsubdir")
+	return v if re.match(r"^[A-Za-z0-9_]{1,40}$", v) else ""
+
+
+def _simulareAratacorect(iesire, cmdline=None):
 	"""Verificare PROPRIE, din text, ca ofgwrite a recunoscut pachetul — NU se are incredere in
 	textul lui de "succes" (identic la simulare si la scriere reala). Cere gasirea
-	explicita a kernelului, rootfs-ului SI a dispozitivelor tinta, fara nicio mentiune de eroare."""
+	explicita a kernelului, rootfs-ului SI a dispozitivelor tinta, fara nicio mentiune de eroare.
+	Cu rootsubdir= in /proc/cmdline (V10; `cmdline` dat sau citit acum) dispozitivele sunt cele din kernel= si root=,
+	iar subdosarul anuntat trebuie sa fie chiar cel care ruleaza."""
 	txt = (iesire or "").lower()
 	are_kernel = "found kernel file" in txt
 	are_rootfs = any(s in txt for s in (
 		"found rootfs file", "found ext4 rootfs", "found ext3 rootfs", "found ubi rootfs", "found ubifs rootfs"
 	))
-	are_dispozitive = "found cmdline kernel device" in txt and "found cmdline rootfs device" in txt
+	cmdline = _citesteCmdline() if cmdline is None else cmdline
+	subdosar = subdosarRadacina(cmdline)
+	if subdosar:
+		kernel, radacina = campCmdline(cmdline, "kernel"), campCmdline(cmdline, "root")
+		randuri = [r.strip() for r in txt.splitlines()]
+		bloc = r"^/dev/mmcblk\d+p\d+$"
+		are_dispozitive = bool(re.match(bloc, kernel) and re.match(bloc, radacina)) and \
+			("using cmdline kernel device: %s" % kernel.lower()) in randuri and \
+			("using cmdline rootfs device: %s" % radacina.lower()) in randuri and \
+			("current root sub dir is: %s" % subdosar.lower()) in randuri
+	else:
+		are_dispozitive = "found cmdline kernel device" in txt and "found cmdline rootfs device" in txt
 	are_eroare = ("error" in txt) or ("not found" in txt) or ("missing" in txt) or ("no such file" in txt)
 	return bool(are_kernel and are_rootfs and are_dispozitive and not are_eroare)
 
@@ -1006,7 +1060,7 @@ class HdsSoftwareUpdate(Screen):
 		except Exception:
 			pass
 		self._intreaba(self._dupaConfirmareFlashReal,
-			textUltimaConfirmare(self._candidatAles, inregistrare, self._textRecuperare()),
+			textUltimaConfirmare(self._candidatAles, inregistrare, self._textRecuperare(), subdosarRadacina()),
 			_("Ultima confirmare"), _("Da, scrie acum"), False, RANDURI_CONFIRMARE)
 
 	def _textRecuperare(self):

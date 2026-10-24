@@ -52740,3 +52740,28 @@ msgstr "Il n'y a aucune liste DVB-I à télécharger : choisis le pays ou ajoute
 #: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
 msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
 msgstr "Le téléviseur est éteint ou en veille : les sous-titres ne sont ni lus ni traduits tant qu'il n'est pas allumé."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  (fișierul …_recovery_emmc.zip, cu usb_update.bin), după instrucțiunile lui."
+msgstr "  (le fichier …_recovery_emmc.zip, avec usb_update.bin), selon ses instructions."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  Pe acest receptor se folosește arhiva de recuperare a producătorului"
+msgstr "  Ce récepteur utilise l'archive de récupération du fabricant"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Noul software se scrie peste cel care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de scriere, setările și lista de canale se copiază pe stick."
+msgstr "Le nouveau logiciel est écrit par-dessus celui qui tourne maintenant (dossier %s de la mémoire interne) : s'il ne démarre pas, la réparation se fait à la main, avec l'archive de récupération du fabricant sur une clé USB. Avant l'écriture, les réglages et la liste des chaînes sont copiés sur la clé."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "Recuperare cu un stick USB:"
+msgstr "Récupération avec une clé USB :"
+
+#: lib/python/Components/HdsVpn.py lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py lib/python/Screens/HdsVpn.py
+msgid "WireGuard nu este disponibil pe acest receptor: nucleul lui nu îl are. Folosește un furnizor OpenVPN."
+msgstr "WireGuard n'est pas disponible sur ce récepteur : son noyau ne l'a pas. Utilise un fournisseur OpenVPN."
+
+#: lib/python/Screens/HdsVpn.py
+msgid "WireGuard: nu este disponibil"
+msgstr "WireGuard : non disponible"

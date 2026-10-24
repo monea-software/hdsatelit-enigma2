@@ -29,6 +29,11 @@
 # modelului”. Ordinea de mai sus ramane neschimbata (asa calculeaza showiframe): daca bufferul a ramas gol (un fisier
 # de reguli fara camp, un driver fara nod), calea vine tot din tabelul dupa nume, iar dosarul din reguli se arata numai
 # ca cel asteptat.
+#
+# Primul Amiko Viper 4K (V10, 0.6.3; Components/HdsPlatforma.py): showiframe-ul lui (Amiko) nu scrie nicio eticheta,
+# driverul nu are /proc/stb/info/upd_path, iar recuperarea e alta: arhiva de recuperare a producatorului
+# (<data>_recovery_emmc.zip, cu usb_update.bin), pusa pe stick dupa instructiunile lui. De aceea pe V10 seAplica() e
+# fals (nimic despre Maintenance Mode), iar Informatii Receptor arata randuriV10().
 
 import os
 
@@ -177,9 +182,33 @@ def dosarPeStick(cale):
 	return cale + "/" if cale else ""
 
 
+def esteV10(radacina="/"):
+	"""True pe primul Amiko Viper 4K (Components/HdsPlatforma.py); False si cand modulul nu se poate incarca"""
+	try:
+		try:
+			from Components import HdsPlatforma
+		except ImportError:      # probele de pe PC incarca fisierul singur
+			import importlib.util
+			spec = importlib.util.spec_from_file_location("HdsPlatforma", os.path.join(os.path.dirname(
+				os.path.abspath(__file__)), "HdsPlatforma.py"))
+			HdsPlatforma = importlib.util.module_from_spec(spec)
+			spec.loader.exec_module(HdsPlatforma)
+		return HdsPlatforma.esteV10(None if radacina in ("", "/") else radacina)
+	except Exception:
+		return False
+
+
 def seAplica(radacina="/"):
-	"""True numai pe receptoarele Dinobot, unde showiframe scrie eticheta (nu in emulatorul de pe PC)"""
-	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe"))
+	"""True numai pe receptoarele Dinobot, unde showiframe scrie eticheta (nu in emulatorul de pe PC si nu pe primul
+	Viper 4K, V10, al carui showiframe nu scrie nimic)"""
+	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe")) and not esteV10(radacina)
+
+
+def randuriV10():
+	"""Randurile pentru ecranul Informatii Receptor pe primul Amiko Viper 4K (V10)"""
+	return [_("Recuperare cu un stick USB:"),
+		_("  Pe acest receptor se folosește arhiva de recuperare a producătorului"),
+		_("  (fișierul …_recovery_emmc.zip, cu usb_update.bin), după instrucțiunile lui.")]
 
 
 def randuriInformatii(info):

@@ -321,6 +321,24 @@ def areWireguardInNucleu():
 	return os.path.isdir(_cale("/sys/module/wireguard"))
 
 
+def wireguardIndisponibil():
+	"""True cand nucleul nu are WireGuard deloc: nici in el (/sys/module/wireguard, Viper 4K V20, V30, V40), nici ca
+	modul pus pe disc (wireguard.ko sub /lib/modules/<nucleu>). Asa e primul Viper 4K (V10, nucleul linux-amiko fara
+	CONFIG_WIREGUARD) pana cand stratul aduce modulul. Atunci instalarea lui wireguard-tools nu ajuta: ecranul si
+	pagina spun TEXT_WG_INDISPONIBIL in locul instalarii, iar pornirea cu un profil WireGuard se refuza cu el."""
+	if areWireguardInNucleu():
+		return False
+	baza = _cale("/lib/modules/%s" % versiuneNucleu())
+	for _d, _sub, fisiere in os.walk(baza):
+		if "wireguard.ko" in fisiere:
+			return False
+	return True
+
+
+TEXT_WG_INDISPONIBIL = N_("WireGuard nu este disponibil pe acest receptor: nucleul lui nu îl are. Folosește un "
+	"furnizor OpenVPN.")
+
+
 def programe():
 	return {"openvpn": _executabil(PROGRAM_OPENVPN) and areTun(),
 		"wireguard": _executabil(PROGRAM_WG) and areWireguardInNucleu()}
@@ -1768,6 +1786,8 @@ def _pornesteAcum():
 	if p is None or p.get("grup") != s["furnizor"]:
 		return False, _("Alege întâi un server.")
 	fel = p["fel"]
+	if fel == "wireguard" and wireguardIndisponibil():
+		return False, _(TEXT_WG_INDISPONIBIL)
 	if not programe()[fel]:
 		return False, _("Lipsesc programele VPN. Instalează-le întâi.")
 	if fel == "openvpn" and p.get("cere_cont") and not areCont():
@@ -2418,6 +2438,8 @@ def instaleaza(fel):
 	"""Instaleaza programele VPN din feedul de extensii al bazei. (reusit, mesaj)."""
 	if fel not in ("openvpn", "wireguard"):
 		return False, _("Felul VPN-ului nu este cunoscut.")
+	if fel == "wireguard" and wireguardIndisponibil():
+		return False, _(TEXT_WG_INDISPONIBIL)
 	if not _executabil(PROGRAM_OPKG):
 		return False, _("Instalarea pachetelor nu este disponibilă în această imagine.")
 	canal, baza, arh = canalSiArhitecturi()
@@ -2544,6 +2566,7 @@ def stare():
 		legatura = "se_conecteaza"
 	else:
 		legatura = "eroare" if _STARE["eroare"] else "oprit"
+	wg_indisponibil = fel == "wireguard" and wireguardIndisponibil()
 	return {
 		"furnizor": s["furnizor"], "fel": fel, "mod": s["mod"], "oprire_totala": s["oprire_totala"],
 		"la_pornire": s["la_pornire"], "pornit": s["pornit"], "iptv": s["iptv"], "adrese": list(s["adrese"]),
@@ -2553,7 +2576,8 @@ def stare():
 		"nr_profiluri": len(lista),
 		"cont": areCont(),
 		"programe": programe(),
-		"lipsesc": not programe()[fel],
+		"lipsesc": not programe()[fel] and not wg_indisponibil,
+		"wg_indisponibil": wg_indisponibil,
 		"legatura": legatura,
 		"eroare": _STARE["eroare"] if legatura in ("eroare", "oprit", "blocat") else "",
 		"ip": dict(_STARE["ip"]) if (_STARE["ip"] and legatura == "conectat") else None,

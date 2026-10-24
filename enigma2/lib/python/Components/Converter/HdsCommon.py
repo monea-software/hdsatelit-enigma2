@@ -4099,7 +4099,11 @@ def box_info():
 				try:
 					bt = (read_small("/proc/stb/info/boxtype", 64) or u"").strip().lower()
 					hn = (read_small("/etc/hostname", 64) or u"").strip().lower()
-					if bt == u"u57" or u"viper4k" in hn:
+					# primul Viper 4K (V10): driverul spune viper4k si numele de gazda e viper4k (fara v20)
+					if bt == u"viper4k" or hn == u"viper4k":
+						info["brand"] = info["brand"] or u"Amiko"
+						info["model"] = u"Viper 4K V10"
+					elif bt == u"u57" or u"viper4k" in hn:
 						info["brand"] = info["brand"] or u"Amiko"
 						info["model"] = u"Viper 4K V20" if u"viper4kv20" in hn else u"Viper 4K"
 				except Exception:

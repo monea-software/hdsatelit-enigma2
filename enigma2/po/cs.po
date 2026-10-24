@@ -48020,3 +48020,28 @@ msgstr "Není žádný seznam DVB-I ke stažení: zvol zemi nebo přidej adresu 
 #: lib/python/Components/HdsTraducereSubtitrari.py lib/python/Components/HdsOcrSubtitrari.py
 msgid "Televizorul e stins sau în standby: subtitrările nu se citesc și nu se traduc până se aprinde."
 msgstr "Televize je vypnutá nebo v pohotovostním režimu: titulky se nečtou ani nepřekládají, dokud se nezapne."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  (fișierul …_recovery_emmc.zip, cu usb_update.bin), după instrucțiunile lui."
+msgstr "  (soubor …_recovery_emmc.zip s usb_update.bin), podle jeho pokynů."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "  Pe acest receptor se folosește arhiva de recuperare a producătorului"
+msgstr "  Na tomto přijímači se používá archiv pro obnovu od výrobce"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Noul software se scrie peste cel care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de scriere, setările și lista de canale se copiază pe stick."
+msgstr "Nový software se zapíše přes ten, který právě běží (složka %s ve vnitřní paměti): pokud se nespustí, oprava se dělá ručně, archivem pro obnovu od výrobce na USB disku. Před zápisem se nastavení a seznam kanálů zkopírují na USB disk."
+
+#: lib/python/Components/HdsRecuperare.py
+msgid "Recuperare cu un stick USB:"
+msgstr "Obnova z USB disku:"
+
+#: lib/python/Components/HdsVpn.py lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py lib/python/Screens/HdsVpn.py
+msgid "WireGuard nu este disponibil pe acest receptor: nucleul lui nu îl are. Folosește un furnizor OpenVPN."
+msgstr "WireGuard na tomto přijímači není k dispozici: jeho jádro ho nemá. Použij poskytovatele OpenVPN."
+
+#: lib/python/Screens/HdsVpn.py
+msgid "WireGuard: nu este disponibil"
+msgstr "WireGuard: není k dispozici"

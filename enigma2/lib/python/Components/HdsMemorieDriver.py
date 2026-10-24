@@ -57,6 +57,12 @@
 #    Setarea repornirii in standby nu opreste c): omul a cerut chiar acum filmul, iar fara repornire el nu porneste.
 # Fiecare repornire intreaga ceruta de aici scrie un rand in jurnalul paznicului (motivul si valoarea masurata).
 #
+# Primul Amiko Viper 4K (V10, Components/HdsPlatforma.py, 0.6.3): demonul platformei nu e showiframe Dinobot si nu
+# mapeaza memoria de 34611200 o (enigma2 nici nu e construit acolo cu paza scrierilor, configure.ac). Pe V10 a), b) si
+# c) nu repornesc niciodata receptorul (dupa o actualizare se reporneste numai interfata, ca inainte de 0.5.9);
+# masuratoarea ramane, numai ca informatie. Daca driverul V10 cade si el fara o memorie a lui, se vede pe aparat
+# (lista testerului) si paza se face atunci dupa demonul lui, nu dupa acesta.
+#
 # PROBA pe receptor (fara sa se strice memoria): CALE_PROBA (/tmp, deci dispare singur la repornirea receptorului) cu
 # randuri "prag_mb=N" (pragul de proba, 1-1024), "uptime_min_s=N" (cat trebuie sa fi mers receptorul inainte de
 # repornirea in standby sau pentru un film, 0-86400), "standby_min_s=N" (cat trebuie sa stea in standby, 0-3600) si
@@ -457,6 +463,10 @@ def codRepornireDupaActualizare(sesiune=None, m=None, prag_kb=None, inregistrari
 		if inregistrari is None:
 			inregistrari = _inregistrariAcum(sesiune)
 		cod = hotarareActualizare(m, p, inregistrari != 0)
+		if cod == COD_RECEPTOR and not _cuMemorieEs():
+			_log("dupa actualizare: memoria e sub prag, dar placa nu are memoria demonului (V10): numai interfata")
+			_ultim[0] = COD_INTERFATA
+			return COD_INTERFATA
 		if cod == COD_RECEPTOR and proba().get("uscat"):
 			(jurnal or scrieJurnal)("PROBA uscata: " + randJurnal("dupa actualizare", m, p) + "; repornesc numai interfata")
 			_log("proba uscata dupa actualizare: as reporni receptorul, repornesc numai interfata")
@@ -694,6 +704,23 @@ def _masuraStandby():
 	return esantioane().valoare(True)
 
 
+def _cuMemorieEs():
+	"""HdsPlatforma.cuMemorieEs() (False pe V10); True cand modulul nu se poate incarca (purtarea de pana acum)"""
+	try:
+		try:
+			from Components import HdsPlatforma
+		except ImportError:      # probele de pe PC incarca fisierul singur, fara pachetul Components
+			import importlib.util
+			spec = importlib.util.spec_from_file_location("HdsPlatforma", os.path.join(os.path.dirname(
+				os.path.abspath(__file__)), "HdsPlatforma.py"))
+			HdsPlatforma = importlib.util.module_from_spec(spec)
+			spec.loader.exec_module(HdsPlatforma)
+		return HdsPlatforma.cuMemorieEs()
+	except Exception as e:
+		_log("platforma: %r" % (e,))
+		return True
+
+
 def _memoriaEsLipsa():
 	"""Memoria pozelor si a filmelor lipseste acum (starea scrisa de paznic, de la un paznic viu)."""
 	from Components import HdsPaznic
@@ -707,7 +734,7 @@ class RepornireStandby(object):
 
 	def __init__(self, ceas=None, ceas_perete=None, activ=None, standby=None, masura=None, receptor=None, lucrari=None,
 			cale_noapte=None, cale_proba=None, uptime_=None, reporneste=None, jurnal=None, minim=None, boot=None,
-			lipsa_es=None):
+			lipsa_es=None, memorie_es=None):
 		self.ceas = ceas or time.monotonic
 		self.ceasPerete = ceas_perete or time.time
 		self.activ = activ or activaStandby
@@ -723,6 +750,8 @@ class RepornireStandby(object):
 		self.minim = minim or citesteMinim
 		self.boot = boot or bootId
 		self.lipsaEs = lipsa_es or _memoriaEsLipsa
+		# False pe V10: placa fara memoria demonului, deci nicio repornire de aici
+		self.cuMemorieEs = memorie_es or _cuMemorieEs
 		self.standbyDe = None   # ceasul monoton de la care receptorul sta in standby fara intrerupere (None = treaz)
 		self.ultima = None
 		self.motiv = ""
@@ -756,7 +785,7 @@ class RepornireStandby(object):
 			_log("repornirea in standby nu s-a facut: semnul standby scos")
 
 	def _verifica(self, acum_m):
-		if self.ceruta:
+		if self.ceruta or not self.cuMemorieEs():
 			return False
 		pr = proba(self.caleProba)
 		activ = bool(self.activ())
@@ -973,8 +1002,9 @@ class RefacereFilm(object):
 
 	def __init__(self, ceas_perete=None, uptime_=None, boot=None, mapare=None, masura=None, receptor=None, lucrari=None,
 			standby=None, cale_noapte=None, cale_film=None, cale_proba=None, jurnal=None, programeaza=None,
-			reporneste=None, ceas=None):
+			reporneste=None, ceas=None, memorie_es=None):
 		self.ceasPerete = ceas_perete or time.time
+		self.cuMemorieEs = memorie_es or _cuMemorieEs
 		self.ceas = ceas or time.monotonic
 		self.uptime = uptime_ or uptime
 		self.boot = boot or bootId
@@ -999,6 +1029,10 @@ class RefacereFilm(object):
 		try:
 			if self.ceruta:
 				return FAPTA_REPORNESTE
+			if not self.cuMemorieEs():
+				self.motiv = "placa fara memoria demonului (V10)"
+				_log("filmul: nu repornesc (%s)" % self.motiv)
+				return FAPTA_NIMIC
 			pr = proba(self.caleProba)
 			acum = self.ceasPerete()
 			local = time.localtime(acum)

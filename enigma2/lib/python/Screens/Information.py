@@ -629,6 +629,9 @@ class HdsReceiverInfo(InformationBase):
 				recuperare = HdsRecuperare.randuriInformatii(HdsRecuperare.calculeaza())
 				l.append("")
 				l.extend(recuperare)
+			elif HdsRecuperare.esteV10():
+				l.append("")
+				l.extend(HdsRecuperare.randuriV10())
 		except Exception:
 			pass
 

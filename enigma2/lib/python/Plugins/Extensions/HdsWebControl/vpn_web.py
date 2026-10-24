@@ -120,7 +120,8 @@ def stare(V=None, nivel_cerere="asociat"):
 		explicatie_mod=V.textExplicatieMod(s),
 		text_cont=V.textCont(s["furnizor"]),
 		text_cont_nota=V.textExplicatieCont(s["furnizor"]),
-		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else "",
+		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else (_t(V.TEXT_WG_INDISPONIBIL) if s.get(
+			"wg_indisponibil") else ""),
 		text_lucreaza=V.textLucrare(l["lucreaza"]) if l["lucreaza"] else "")
 
 
@@ -526,7 +527,8 @@ function arata(d){
   var pornit = d.pornit || ["conectat", "se_conecteaza", "blocat"].indexOf(d.legatura) !== -1;
   $("comuta").textContent = pornit ? TXT.opreste : TXT.porneste;
   $("comuta").classList.toggle("rosu", pornit); $("comuta").classList.toggle("principal", !pornit);
-  $("cardPrograme").classList.toggle("ascuns", !d.lipsesc); pune("textPrograme", d.text_programe);
+  $("cardPrograme").classList.toggle("ascuns", !d.lipsesc && !d.wg_indisponibil); pune("textPrograme", d.text_programe);
+  $("instaleaza").classList.toggle("ascuns", !d.lipsesc);
   optiuni($("furnizor"), d.furnizori, d.furnizor);
   var servere = (d.profiluri || []).map(function(p){ return [p.id, p.titlu]; });
   if(!servere.length){ servere = [["", TXT.niciunServer]]; } else if(!d.profil){ servere.unshift(["", "-"]); }

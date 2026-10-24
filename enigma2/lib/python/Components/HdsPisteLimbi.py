@@ -42,7 +42,8 @@
 # mers, nu e in PMT, de pilda TXT 777 pe ZDF HD) lipseste din prima lista a canalului, deci la pornirea canalului se
 # pune alta subtitrare (preferintele sau traducerea). Cand pagina tinuta minte apare in lista, subtitrarea pusa automat
 # se schimba o singura data pe ea, ca dupa o repornire alegerea omului sa revina singura. O subtitrare aleasa de om
-# intre timp (alta decat cea pusa automat) nu se schimba.
+# intre timp (alta decat cea pusa automat) nu se schimba. Din 0.6.3 si dupa zap si dupa trezirea din standby: nucleul
+# nu da niciun eveniment cand gaseste pagina, deci lista se reciteste cateva minute (_urmarestePaginaTarzie).
 #
 # DE CE „PISTA IMPLICITA A CANALULUI" INSEAMNA „NU SE SCHIMBA NIMIC": selectTrack() din nucleu
 # reporneste decodorul de sunet (se aude o intrerupere) si scrie PID-ul in lamedb (in intrarea formatului pistei).
@@ -1509,7 +1510,125 @@ def aplicaSubtitrare(infobar, semn=None):
 	elif motiv == "memorat-oprit":
 		print("[HdsPisteLimbi] subtitrare: niciuna, %s" % motiv)
 	_ULTIMA["subtitrare"] = {"cheie": cheie, "tuplu": dorita, "motiv": motiv}
+	if film is None and not acelasiCanal:
+		_urmarestePaginaTarzie(infobar, ref, cheie, semnNou)
 	return semnNou
+
+
+# ALEGEREA TINUTA MINTE DUPA ZAP SI DUPA STANDBY (0.6.3): ramura pentru acelasi canal de mai sus pune alegerea omului
+# cand pagina ei apare mai tarziu in lista, dar e chemata numai la evUpdatedInfo, iar nucleul (lib/dvb/teletext.cpp)
+# adauga paginile de teletext gasite din mers fara niciun eveniment. Dupa o repornire mai venea un evUpdatedInfo dupa
+# pagina (2 din 2 pe ZDF HD), dupa zap si dupa trezirea din standby nu (TXT 777 nu revenea). De aceea, dupa alegerea
+# pe un canal nou (zap, trezire, pornire), cat timp alegerea tinuta minte nu e pusa, lista se reciteste la
+# PAGINA_TARZIE_MS, cel mult PAGINA_TARZIE_BATAI ori: de cum apare pagina, se pune o singura data. Se opreste la
+# alegerea pusa, la orice alegere a omului intre timp, la alt canal sau la standby (alt serviciu sau niciunul) si la
+# timpul maxim. Fara mesaje pe ecran; o bataie fara schimbare e o citire a listei si o comparatie.
+PAGINA_TARZIE_MS = 4000
+PAGINA_TARZIE_BATAI = 75          # 75 x 4 s = 5 minute
+_PAGINA_TARZIE = {"ceas": None, "infobar": None, "ref": None, "cheie": None, "semn": None, "batai": 0,
+	"in_bataie": False}
+
+
+def _ceasPaginaTarzie():
+	"""eTimer-ul urmaririi, facut o data (None pe PC, fara enigma)."""
+	if _PAGINA_TARZIE["ceas"] is None:
+		try:
+			from enigma import eTimer
+			ceas = eTimer()
+			ceas.callback.append(_bataiePaginaTarzie)
+		except Exception:
+			return None
+		_PAGINA_TARZIE["ceas"] = ceas
+	return _PAGINA_TARZIE["ceas"]
+
+
+def _deAsteptatPagina(infobar, cheie):
+	"""True cat timp pe canal e tinuta minte o subtitrare (nu alegerea fara subtitrare) care nu e pusa, iar subtitrarea
+	care merge e tot cea pusa automat (omul n-a ales nimic intre timp)."""
+	ultima = _ULTIMA["subtitrare"]
+	if not cheie or not ultima or ultima.get("cheie") != cheie \
+			or ultima.get("motiv") in ("memorat", "memorat-oprit", "internet"):
+		return False
+	try:
+		s = memorie().alegere(cheie).get("s")
+	except Exception:
+		return False
+	if not s or s == OPRIT:
+		return False
+	if infobar.subtitles_enabled:
+		return not esteFisierPeCanal(infobar.selected_subtitle) and \
+			aceeasiSubtitrare(infobar.selected_subtitle, ultima.get("tuplu"))
+	return ultima.get("tuplu") is None
+
+
+def _opresteUrmarirea(motiv=None):
+	ceas = _PAGINA_TARZIE["ceas"]
+	activ = _PAGINA_TARZIE["infobar"] is not None
+	if ceas is not None:
+		ceas.stop()
+	_PAGINA_TARZIE.update(infobar=None, ref=None, cheie=None, semn=None, batai=0)
+	if activ and motiv:
+		print("[HdsPisteLimbi] subtitrarea tinuta minte: urmarirea oprita (%s)" % motiv)
+
+
+def _urmarestePaginaTarzie(infobar, ref, cheie, semn):
+	"""Dupa alegerea pe un canal nou: porneste urmarirea daca alegerea tinuta minte inca nu e pusa."""
+	if _PAGINA_TARZIE["in_bataie"] and _PAGINA_TARZIE["ref"] == _refText(ref):
+		# alegerea pe canal facuta chiar din bataie (prima lista era goala): se urmareste mai departe, fara alt termen
+		_PAGINA_TARZIE["semn"] = semn
+		if not _deAsteptatPagina(infobar, cheie):
+			_opresteUrmarirea("pusa sau nimic de asteptat")
+		return
+	_opresteUrmarirea()
+	if not _deAsteptatPagina(infobar, cheie):
+		return
+	ceas = _ceasPaginaTarzie()
+	if ceas is None:
+		return
+	_PAGINA_TARZIE.update(infobar=infobar, ref=_refText(ref), cheie=cheie, semn=semn, batai=0)
+	ceas.start(PAGINA_TARZIE_MS, False)
+	print("[HdsPisteLimbi] subtitrarea tinuta minte nu e inca in lista: se asteapta pagina ei")
+
+
+def _bataiePaginaTarzie():
+	# chemata din eTimer (din C++): nicio exceptie nu iese de aici
+	try:
+		_bataie()
+	except Exception as e:
+		print("[HdsPisteLimbi] subtitrarea tinuta minte: %s" % e)
+		_opresteUrmarirea("eroare")
+
+
+def _bataie():
+	infobar = _PAGINA_TARZIE["infobar"]
+	if infobar is None:
+		_opresteUrmarirea()
+		return
+	_PAGINA_TARZIE["batai"] += 1
+	try:
+		ref = infobar.session.nav.getCurrentlyPlayingServiceReference()
+	except Exception:
+		ref = None
+	if ref is None or _refText(ref) != _PAGINA_TARZIE["ref"]:
+		# alt canal sau standby: canalul nou isi porneste singur urmarirea (evUpdatedInfo)
+		_opresteUrmarirea("alt serviciu")
+		return
+	cheie = _PAGINA_TARZIE["cheie"]
+	if not _deAsteptatPagina(infobar, cheie):
+		_opresteUrmarirea("alegerea omului")
+		return
+	_PAGINA_TARZIE["in_bataie"] = True
+	try:
+		semn = aplicaSubtitrare(infobar, _PAGINA_TARZIE["semn"])
+	finally:
+		_PAGINA_TARZIE["in_bataie"] = False
+	if _PAGINA_TARZIE["infobar"] is None:
+		return
+	_PAGINA_TARZIE["semn"] = semn
+	if not _deAsteptatPagina(infobar, cheie):
+		_opresteUrmarirea("pusa")
+	elif _PAGINA_TARZIE["batai"] >= PAGINA_TARZIE_BATAI:
+		_opresteUrmarirea("timpul maxim")
 
 
 _URMARIT_TRADUCERE = [False]

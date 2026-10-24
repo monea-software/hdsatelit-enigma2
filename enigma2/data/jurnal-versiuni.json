@@ -1,6 +1,23 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.3",
+   "build": "0063202610240720",
+   "data": "24.10.2026",
+   "intrari": [
+    {
+     "fel": "imbunatatit",
+     "ro": "Pregătiri pentru încă un model de receptor, deocamdată pentru testeri; pe receptorul tău totul merge exact ca înainte.",
+     "en": "Groundwork for one more receiver model, for testers for now; on your receiver everything works exactly as before."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Subtitrarea aleasă de tine pe un canal revine singură și după schimbarea canalului și după ieșirea din standby.",
+     "en": "The subtitle you chose on a channel now comes back by itself after switching channels and after standby."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.2",
    "build": "0062202610240058",
    "data": "24.10.2026",

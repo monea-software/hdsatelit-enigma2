@@ -53,6 +53,9 @@ except ImportError:     # probele de pe PC incarca modulele singure
 
 DISPOZITIV = os.environ.get("HDS_AFISAJ_DISPOZITIV") or "/dev/dbox/oled0"
 LUMINOZITATE = "/proc/stb/lcd/oled_brightness"
+# primul Viper 4K (V10, driverul hi-dvb.ko): luminozitatea e in /proc/stb/fp/oled_brightness, iar lcd/oled_brightness
+# si power/vfd lipsesc
+LUMINOZITATE_FP = "/proc/stb/fp/oled_brightness"
 LATIME = L.LATIME
 GOL = " " * LATIME
 MAX_CANALE_NUMARATE = 5000
@@ -88,6 +91,9 @@ DORMI_MAXIM_S = 60.0
 TOLERANTA_S = 0.005          # un pas venit cu atat mai devreme (rotunjirea ceasului) conteaza ca la timp
 # luminozitatea: sirurile hex care aleg cele 7 trepte ale FD650 (driverul imparte valoarea la 37)
 TREPTE_LUMINA = ("0", "4a", "6f", "de", "103", "128", "21e")
+# V10: nodul din fp citeste un numar zecimal ("level=%d" in hi-dvb.ko), 0-255 ca la lib/gdi/lcd.cpp; treptele
+# luminii pe V10 se probeaza pe aparat
+TREPTE_LUMINA_FP = ("0", "42", "84", "127", "169", "212", "255")
 LUMINA_NESCHIMBATA = "neschimbat"
 NOAPTE_LA_FEL = "la_fel"
 ORE_NOAPTE_DE_LA = ("18", "19", "20", "21", "22", "23", "0")
@@ -330,6 +336,16 @@ def cronometru(ce):
 	D.cronometru(ce)
 	actualizeaza()
 	return True, textCronometru()
+
+
+def caleLumina():
+	"""(nodul luminozitatii, treptele lui): lcd/oled_brightness cand exista (Viper 4K V20, V30, V40, ca inainte),
+	altfel fp/oled_brightness (primul Viper 4K, V10), altfel (None, None)"""
+	if os.path.exists(LUMINOZITATE):
+		return LUMINOZITATE, TREPTE_LUMINA
+	if os.path.exists(LUMINOZITATE_FP):
+		return LUMINOZITATE_FP, TREPTE_LUMINA_FP
+	return None, None
 
 
 def disponibil(cale=None):
@@ -1338,11 +1354,12 @@ class Afisaj(object):
 		if treapta is None or treapta == self.lumina:
 			return
 		self.lumina = treapta
-		if not os.path.exists(LUMINOZITATE):
+		cale, trepte = caleLumina()
+		if cale is None:
 			return
 		try:
-			with open(LUMINOZITATE, "w", encoding="ascii") as f:
-				f.write(TREPTE_LUMINA[max(1, min(len(TREPTE_LUMINA), treapta)) - 1])
+			with open(cale, "w", encoding="ascii") as f:
+				f.write(trepte[max(1, min(len(trepte), treapta)) - 1])
 			self.eroareLumina = False
 		except (IOError, OSError) as e:
 			if not self.eroareLumina:

@@ -110,12 +110,21 @@ class About:
 				return "".join(ch for ch in v.strip() if ch.isalnum() or ch in " ._-+()").strip()[:60]
 		return ""
 
+	def _esteViper4kV10(self):
+		"""Primul Amiko Viper 4K (V10, masina viper4k), dupa Components/HdsPlatforma.py: regulile modelului sau boxtype.
+		Numele lui de gazda ("viper4k") l-ar fi facut V20 la randul de mai jos."""
+		try:
+			from Components import HdsPlatforma
+			return HdsPlatforma.esteV10()
+		except Exception:
+			return False
+
 	def _esteViper4kV20(self):
 		"""Semnalul real folosit deja in getReceiverName() -- extras separat ca sa poata fi
 		refolosit si de getBrand()/getModel(), fara sa se duplice logica de detectie in mai multe locuri."""
 		boxtype = self._readFile("/proc/stb/info/boxtype").lower()
 		hostname = self._readFile("/etc/hostname").lower()
-		return boxtype == "u57" or "viper4k" in hostname
+		return (boxtype == "u57" or "viper4k" in hostname) and not self._esteViper4kV10()
 
 	def getBrand(self):
 		"""Marca receptorului, separat de model (inainte era scris "Amiko" neconditionat in
@@ -131,7 +140,7 @@ class About:
 						return v.strip()
 		except (IOError, OSError):
 			pass
-		if self._esteViper4kV20():
+		if self._esteViper4kV20() or self._esteViper4kV10():
 			return "Amiko"
 		return ""
 
@@ -148,6 +157,8 @@ class About:
 			pass
 		if self._esteViper4kV20():
 			return "Viper 4K"
+		if self._esteViper4kV10():
+			return "Viper 4K V10"
 		return self._readFile("/proc/stb/info/boxtype") or ""
 
 	def getReceiverName(self):
@@ -182,6 +193,8 @@ class About:
 		# 3. Mapari specifice pe baza de boxtype si hostname (rezerva, fara reguli)
 		if self._esteViper4kV20():
 			return "Amiko Viper 4K V20"
+		if self._esteViper4kV10():
+			return "Amiko Viper 4K V10"
 
 		# 4. Alte receptoare STB (/proc/stb/info), ignorand valorile stub de compatibilitate
 		for path in ("/proc/stb/info/boxtype", "/proc/stb/info/model", "/proc/stb/info/vumodel"):

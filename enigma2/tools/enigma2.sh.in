@@ -110,9 +110,17 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					GN[ng] = substr(P[j], a + 1, b - a - 1); z = substr(P[j], 1, a - 1); sub(/@.*/, "", z)
 					GK[ng] = (z == "-") ? "" : kib(z)
 				}
+				# the names of the kernel and of the system partition: kernel_name= and rootfs_name= of the rules (the
+				# first Viper 4K, V10: linuxkernel1 and userdata), else kernel and rootfs (V20, V30, V40); a name with
+				# other characters breaks the rules (as HdsPazaModel.reguliValide and numePartitii)
+				kn = R["kernel_name"]; rn = R["rootfs_name"]; nb = 0
+				if (kn == "") kn = "kernel"
+				if (kn !~ /^[A-Za-z0-9_]+$/) { kn = "kernel"; nb = 1 }
+				if (rn == "") rn = "rootfs"
+				if (rn !~ /^[A-Za-z0-9_]+$/) { rn = "rootfs"; nb = 1 }
 				for (j = 1; j <= ng; j++) {
-					if (GN[j] == "kernel" && kp == "") kp = "mmcblk0p" j
-					if (GN[j] == "rootfs" && rp == "") rp = "mmcblk0p" j
+					if (GN[j] == kn && kp == "") kp = "mmcblk0p" j
+					if (GN[j] == rn && rp == "") rp = "mmcblk0p" j
 				}
 				kk = (kp in S) ? S[kp] : ""
 				rk = (rp in S) ? S[rp] : ""
@@ -120,6 +128,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				bune = (R["format"] == "1" && R["distro"] == "hdsatelit" && R["kernel_kib"] ~ /^[0-9]+$/)
 				nc = split("model machinebuild chip boxtype hw partitions kernel_part rootfs_part", C, " ")
 				for (j = 1; j <= nc; j++) if (R[C[j]] == "") bune = 0
+				if (nb) bune = 0
 				ne = split(R["partitions"], E, ",")
 				for (j = 1; j <= ne; j++) {
 					c = index(E[j], ":")
