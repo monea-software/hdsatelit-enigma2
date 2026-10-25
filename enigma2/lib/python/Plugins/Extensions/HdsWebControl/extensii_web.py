@@ -21,6 +21,12 @@
 #   POST /api/extensii-fisier?cale=<cale>               la fel, opkg install <fisier>; numai un fisier gasit la cautare
 #   POST /api/extensii-sursa-adauga?nume=..&adresa=..   la fel; apoi se descarca lista
 #   POST /api/extensii-sursa-sterge?nume=<nume>         la fel; numai sursele adaugate de utilizator
+#   POST /api/extensii-sursa-afla?pachet=<nume>         sursa deschisa a unui plugin (0.6.6): marimea si locul, pe un
+#                                                       fir; starea vine in GET /api/extensii ("sursa")
+#   POST /api/extensii-sursa-descarca?pachet=<nume>     in doi pasi (intrebarea cu marimea si locul), apoi descarcarea
+#                                                       pe stick sau disc (Components/HdsSursaPachet.py)
+#   POST /api/extensii-sursa-opreste                    opreste descarcarea sursei (fisierul partial se sterge)
+#   GET  /api/extensii-sursa-fisier                     arhiva descarcata ultima, data browserului
 #   POST /api/extensii-reporneste                       la fel; repornirea interfetei (TryQuitMainloop 3)
 #   POST /api/extensii-opreste                          la fel; opreste opkg numai dupa un minut fara raspuns
 #   POST /api/extensii-descarca-lista                   opkg update
@@ -33,6 +39,8 @@
 # Components/HdsExtensiiLucru.py pana la urmatoarea schimbare. opkg ruleaza ca pe televizor (Components/Ipkg.py,
 # eConsoleAppContainer, lista de argumente). Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau
 # un Mediu fals.
+
+import os
 
 ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod")
 LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120}
@@ -69,6 +77,10 @@ class Mediu(object):
 	@property
 	def P(self):
 		return self.L.P
+
+	@property
+	def S(self):
+		return self.L.S
 
 	@property
 	def plugins(self):
@@ -214,8 +226,14 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 		rez.append({"f": "descarca", "text": _t("Descarcă lista")})
 		if rosu:
 			rez.append({"f": "sursa-sterge", "text": _t(rosu), "nume": obj[0], "rosu": True})
+	elif fel == "feed":
+		rez.append({"f": "descarca", "text": _t("Descarcă lista")})
 	elif fel == "adauga":
 		rez.append({"f": "adauga", "text": _t("Adaugă o sursă"), "principal": True})
+	# 0.6.6: sursa deschisa a pluginului, numai cand pachetul are arhiva ei langa el in feed
+	p = L.pachetCuSursa(catalog, fel, obj, extra)
+	if p is not None:
+		rez.append({"f": "sursa", "text": _t("Descarcă sursa"), "pachet": p.nume})
 	return rez
 
 
@@ -228,6 +246,8 @@ def _cheie(fel, obj, pluginuri):
 		return "fisier:" + obj.cale_text
 	if fel == "sursa":
 		return "sursa:" + obj[0]
+	if fel == "feed":
+		return "feed:" + obj.id
 	return fel
 
 
@@ -283,8 +303,10 @@ def stare(arg, M, catalog, date=None):
 		lista = _t("Lista din %s") % P.text_varsta(catalog.varsta_liste)
 	ultima = L.STARE.get("descarcare") or {}
 	lucrare = _stareLucrare(L)
+	toate = catalog.actualizari()
 	cf = _stareCautari(M, cautari)
 	descarcare = L.descarcareInCurs()
+	sursa = _stareSursa(M)
 	return {
 		"result": True,
 		"file": [{"id": i, "eticheta": e, "numar": n} for i, e, n in file],
@@ -300,11 +322,31 @@ def stare(arg, M, catalog, date=None):
 		"repornire_ceruta": date["restart"] or bool(lucrare and (lucrare["rezultat"] or {}).get("repornire")),
 		"avertismente": date["avertismente"],
 		"descarcare": {"in_curs": descarcare, "cod": ultima.get("cod"), "motiv": ultima.get("motiv", ""),
-			"cand": P.text_varsta(ultima.get("cand")) if ultima.get("cand") else ""},
+			"cand": P.text_varsta(ultima.get("cand")) if ultima.get("cand") else "",
+			# ce contine lista descarcata ultima oara (0.6.6), acelasi text ca pe televizor
+			"rezumat": L.textDescarcare(catalog, ultima, ultima.get("inainte")) if ultima.get("cand") and not descarcare
+			else "", "id": int(ultima.get("cand") or 0)},
+		# Actualizeaza toate (0.6.6): din orice fila, cand sunt cel putin doua
+		"toate": len(toate), "text_toate": _t("Actualizează toate (%d)") % len(toate) if len(toate) >= 2 else "",
 		"cautare_fisiere": cf,
 		"lucrare": lucrare,
-		"lucreaza": descarcare or cf["in_curs"] or cf["retea_in_curs"] or bool(lucrare and lucrare["faza"] == "lucru"),
+		"sursa": sursa,
+		"lucreaza": descarcare or cf["in_curs"] or cf["retea_in_curs"] or bool(lucrare and lucrare["faza"] == "lucru") or
+			bool(sursa and sursa["faza"] in ("marime", "lucru")),
 	}
+
+
+def _stareSursa(M):
+	"""descarcarea sursei unui plugin (aceeasi ca pe televizor), cu textele gata traduse, sau None"""
+	S = M.S
+	d = S.curenta()
+	if d is None:
+		return None
+	x = d.stare()
+	x.update({"antet": _t("Sursa pluginului %s") % d.titlu, "text_fisier": _t("Ia fișierul pe calculator"),
+		"text_opreste": _t("Oprește descărcarea"), "fisier_web": S.fisier_descarcat() is not None,
+		"asteapta": _t("Se află mărimea sursei și locul unde se salvează...") if d.faza == "marime" else ""})
+	return x
 
 
 def _textGol(fila, cauta, surse, cf):
@@ -357,6 +399,9 @@ def _notaWeb(L, catalog):
 	def nota(pachete):
 		externe = ["%s (%s)" % (n, a) if a else n for n, a in L.surseExterne(catalog, pachete)]
 		if not externe:
+			text = L.notaFeedExtern(catalog, pachete)
+			if text:
+				return text
 			return _t("Verificat de HD Satelit.") if L.culoareNota(catalog, pachete) == "bun" else ""
 		if len(externe) == 1:
 			return _t("Nu este verificat de HD Satelit. Vine din sursa %s.") % externe[0]
@@ -365,7 +410,7 @@ def _notaWeb(L, catalog):
 
 
 def _detaliiPlan(plan):
-	rez = ["%s: %s" % (a, b) for a, b in plan.get("randuri", ()) if b]
+	rez = ["%s: %s" % (a, b) if a else b for a, b in plan.get("randuri", ()) if b]
 	if plan.get("nota"):
 		rez.append(plan["nota"])
 	return rez
@@ -585,6 +630,53 @@ def descarcaLista(arg, request, M):
 	return {"result": True, "message": _t("Se descarcă lista de pachete.")}
 
 
+def _pachetCuSursa(M, catalog, nume):
+	p = catalog._toate.get(nume or "")
+	return M.L.pachetCuSursa(catalog, "pachet", p, None) if p is not None else None
+
+
+def sursaAfla(arg, request, M):
+	"""butonul Descarcă sursa (0.6.6): porneste aflarea marimii si a locului, pe un fir (ca pe televizor); pagina
+	citeste starea din GET /api/extensii si, la intrebare, cere /api/extensii-sursa-descarca"""
+	S = M.S
+	if S.in_lucru():
+		return _refuz(_t("Se descarcă deja o sursă. Așteaptă să se termine."))
+	catalog = _catalog(M)
+	p = _pachetCuSursa(M, catalog, arg.get("pachet", ""))
+	if p is None:
+		return _refuz(_t(S.TEXT_NEGASIT))
+	d, motiv = M.L.descarcareSursa(catalog, "pachet", p, None)
+	if d is None:
+		return _refuz(motiv)
+	return {"result": True, "message": _t("Se află mărimea sursei și locul unde se salvează...")}
+
+
+def sursaDescarca(arg, request, M):
+	"""in doi pasi: intrebarea (marimea, locul) a descarcarii aflate deja, apoi pornirea ei"""
+	S = M.S
+	d = S.curenta()
+	nume = arg.get("pachet", "")
+	if arg.get("pas") == "renunta":
+		S.uita(d)
+	if d is None or d.faza != "intrebare":
+		if d is not None and d.faza in ("negasit", "fara-loc"):
+			return _refuz(d.text_fara_loc() if d.faza == "fara-loc" else d.text_negasit())
+		return _refuz(_t("Apasă din nou Descarcă sursa."))
+
+	def fa():
+		if not d.porneste():
+			return _refuz(_t("Apasă din nou Descarcă sursa."))
+		return {"result": True, "message": _t("Se descarcă sursa pluginului %s") % d.titlu}
+	return _doiPasi(request, arg, "extensii-sursa-descarca", nume, d.intrebare(), _t("Descarcă"), d.detalii(), fa)
+
+
+def sursaOpreste(arg, request, M):
+	d = M.S.curenta()
+	if d is None or not d.opreste():
+		return _refuz(_t("Nu se descarcă nicio sursă acum."))
+	return {"result": True, "message": _t("Descărcarea se oprește.")}
+
+
 def cautaFisiere(arg, request, M):
 	"""ca tasta albastra in fila Din fisier: pe stick, disc si memorie; reteaua numai la cerere (retea=1) sau daca a
 	fost deschisa inainte"""
@@ -681,6 +773,37 @@ def rute(baza, resource, mediu=None):
 		r.functie = f
 		return r
 
+	class SursaFisierResource(baza):
+		"""GET /api/extensii-sursa-fisier: arhiva sursei descarcata ultima pe stick sau disc, data browserului (numai
+		fisierul descarcarii curente, nicio alta cale); trimisa pe bucati (FileSender), fara sa tina firul enigma2"""
+
+		def render_GET(self, request):
+			try:
+				cale = M().S.fisier_descarcat()
+				if cale is None:
+					return self._eroare(request, _t("Nicio sursă descărcată acum."), 404)
+				from twisted.protocols.basic import FileSender
+				from twisted.web.server import NOT_DONE_YET
+				f = open(cale, "rb")
+				nume = os.path.basename(cale).encode("ascii", "replace").replace(b'"', b"_")
+				request.setHeader(b"content-type", b"application/octet-stream")
+				request.setHeader(b"content-disposition", b'attachment; filename="' + nume + b'"')
+				request.setHeader(b"content-length", str(os.path.getsize(cale)).encode("ascii"))
+				request.setHeader(b"cache-control", b"no-store")
+
+				def gata(_r):
+					try:
+						f.close()
+					finally:
+						try:
+							request.finish()
+						except Exception:
+							pass
+				FileSender().beginFileTransfer(f, request).addBoth(gata)
+				return NOT_DONE_YET
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
 	class PaginaResource(resource.Resource):
 		"""GET /extensii"""
 		isLeaf = True
@@ -701,6 +824,10 @@ def rute(baza, resource, mediu=None):
 		b"extensii-descarca-lista": actiune(descarcaLista),
 		b"extensii-cauta-fisiere": actiune(cautaFisiere),
 		b"extensii-deschide": actiune(deschide),
+		b"extensii-sursa-afla": actiune(sursaAfla),
+		b"extensii-sursa-descarca": actiune(sursaDescarca),
+		b"extensii-sursa-opreste": actiune(sursaOpreste),
+		b"extensii-sursa-fisier": SursaFisierResource(),
 	}
 	return api, {b"extensii": PaginaResource()}
 
@@ -749,8 +876,10 @@ __STIL_PAGINI__
     <p class="nota" id="stareText"></p>
     <div class="butoane">
       <button type="button" id="descarca">Descarcă lista</button>
+      <button type="button" id="toate" class="principal ascuns"></button>
       <button type="button" id="reporneste" class="principal ascuns">Repornește interfața</button>
     </div>
+    <p class="descriere ascuns" id="rezumatLista"></p>
   </section>
   <section class="card ascuns" id="avertismente"></section>
   <section class="card ascuns" id="lucrare">
@@ -760,6 +889,15 @@ __STIL_PAGINI__
     <div class="butoane">
       <button type="button" id="lucrareReporneste" class="principal ascuns">Repornește interfața</button>
       <button type="button" id="opreste" class="rosu ascuns">Oprește instalarea</button>
+    </div>
+  </section>
+  <section class="card ascuns" id="sursaCard">
+    <h2 id="sursaTitlu"></h2>
+    <p class="intrebare" id="sursaText"></p>
+    <progress id="sursaBara" class="ascuns" max="100" value="0"></progress>
+    <div class="butoane">
+      <a id="sursaFisier" class="buton principal ascuns" download></a>
+      <button type="button" id="sursaOpreste" class="rosu ascuns"></button>
     </div>
   </section>
   <nav class="butoane file" id="file" aria-label="File"></nav>
@@ -792,7 +930,7 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
-var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", CEAS = null, CAUTAT = false;
+var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", CEAS = null, CAUTAT = false, SURSA = "", LISTA_CERUTA = false;
 function el(tip, clasa, text){ var e = document.createElement(tip); if(clasa){ e.className = clasa; } if(text !== undefined && text !== null){ e.textContent = text; } return e; }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); CEAS = null; } if(ms){ CEAS = setTimeout(citeste, ms); } }
 function citeste(){
@@ -820,6 +958,9 @@ function arataStare(d){
   if(!d.descarcare.in_curs && d.descarcare.cod !== null && d.descarcare.cod !== undefined && d.descarcare.cod !== 0 && d.descarcare.motiv){ p.push("Ultima descărcare (" + d.descarcare.cand + "): " + d.descarcare.motiv); }
   $("stareText").textContent = p.join(" ");
   $("descarca").disabled = d.descarcare.in_curs || !d.surse || !d.opkg;
+  $("toate").classList.toggle("ascuns", !d.text_toate); $("toate").textContent = d.text_toate || ""; $("toate").disabled = !d.opkg;
+  var rz = $("rezumatLista");
+  if(LISTA_CERUTA && !d.descarcare.in_curs && d.descarcare.rezumat){ rz.textContent = d.descarcare.rezumat; rz.classList.remove("ascuns"); LISTA_CERUTA = false; }
   $("reporneste").classList.toggle("ascuns", !d.repornire_ceruta);
   var a = $("avertismente"); a.textContent = "";
   if(d.avertismente.length){
@@ -841,6 +982,23 @@ function arataLucrarea(d){
   l.jurnal.forEach(function(x){ j.appendChild(el("li", x[0] === "eroare" ? "eroare" : null, x[1])); });
   $("lucrareReporneste").classList.toggle("ascuns", !(l.faza === "gata" && l.rezultat && l.rezultat.repornire));
   $("opreste").classList.toggle("ascuns", !l.poate_opri);
+}
+function arataSursa(d){
+  var s = d.sursa, c = $("sursaCard");
+  c.classList.toggle("ascuns", !s);
+  if(!s){ return; }
+  $("sursaTitlu").textContent = s.antet;
+  $("sursaText").textContent = s.faza === "lucru" ? s.progres : (s.mesaj || s.asteapta || "");
+  $("sursaText").classList.toggle("eroare", ["negasit", "fara-loc", "eroare"].indexOf(s.faza) !== -1);
+  $("sursaBara").classList.toggle("ascuns", s.faza !== "lucru");
+  $("sursaBara").value = s.procent || 0;
+  var a = $("sursaFisier");
+  a.classList.toggle("ascuns", !s.fisier_web);
+  if(s.fisier_web){ a.href = adresa("/api/extensii-sursa-fisier"); a.textContent = s.text_fisier; }
+  $("sursaOpreste").classList.toggle("ascuns", s.faza !== "lucru");
+  $("sursaOpreste").textContent = s.text_opreste;
+  if(s.faza === "intrebare" && SURSA){ var q = new URLSearchParams(); q.set("pachet", SURSA); SURSA = ""; cuConfirmare("/api/extensii-sursa-descarca", q, dupa); }
+  else if(s.faza !== "marime"){ SURSA = ""; }
 }
 function arataFile(d){
   var f = $("file"); f.textContent = "";
@@ -892,7 +1050,7 @@ function detalii(r){
 function arataRanduri(d){
   var c = $("randuri"); c.textContent = "";
   if(d.fila === "actualizari" && d.tot.length){
-    var bt = el("button", "principal", "Actualizează tot"); bt.type = "button";
+    var bt = el("button", "principal", "Actualizează toate"); bt.type = "button";
     bt.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
     var bb = el("div", "butoane"); bb.appendChild(bt); c.appendChild(bb);
   }
@@ -914,7 +1072,7 @@ function arataRanduri(d){
     if(deschis){ c.appendChild(detalii(r)); }
   });
 }
-function arata(d){ arataStare(d); arataLucrarea(d); arataFile(d); arataFisiere(d); arataRanduri(d); }
+function arata(d){ arataStare(d); arataLucrarea(d); arataSursa(d); arataFile(d); arataFisiere(d); arataRanduri(d); }
 function actiune(a){
   var q = new URLSearchParams();
   if(a.f === "instaleaza" || a.f === "actualizeaza" || a.f === "sterge"){ q.set("pachet", a.pachet); cuConfirmare("/api/extensii-" + a.f, q, dupa); }
@@ -922,14 +1080,17 @@ function actiune(a){
   else if(a.f === "reporneste"){ cuConfirmare("/api/extensii-reporneste", q, dupaRepornire); }
   else if(a.f === "sursa-sterge"){ q.set("nume", a.nume); cuConfirmare("/api/extensii-sursa-sterge", q, dupa); }
   else if(a.f === "deschide"){ q.set("plugin", String(a.plugin)); q.set("nume", a.nume); trimite("/api/extensii-deschide", q); }
-  else if(a.f === "descarca"){ trimite("/api/extensii-descarca-lista", q); }
+  else if(a.f === "descarca"){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", q); }
+  else if(a.f === "sursa"){ q.set("pachet", a.pachet); SURSA = a.pachet; trimite("/api/extensii-sursa-afla", q); }
   else if(a.f === "adauga"){ $("formSursa").classList.remove("ascuns"); $("formSursa").scrollIntoView({block: "center"}); $("sursaNume").focus(); }
 }
 function dupaRepornire(d){ if(d && d.result){ setTimeout(function(){ location.reload(); }, 20000); } else { citeste(); } }
-$("descarca").addEventListener("click", function(){ trimite("/api/extensii-descarca-lista", new URLSearchParams()); });
+$("descarca").addEventListener("click", function(){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", new URLSearchParams()); });
+$("toate").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
 $("reporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
 $("lucrareReporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
 $("opreste").addEventListener("click", function(){ cuConfirmare("/api/extensii-opreste", new URLSearchParams(), dupa); });
+$("sursaOpreste").addEventListener("click", function(){ trimite("/api/extensii-sursa-opreste", new URLSearchParams()); });
 $("cautaFisiere").addEventListener("click", function(){ trimite("/api/extensii-cauta-fisiere", new URLSearchParams()); });
 $("cautaRetea").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("retea", "1"); trimite("/api/extensii-cauta-fisiere", q); });
 $("formCauta").addEventListener("submit", function(e){
@@ -1012,7 +1173,7 @@ TEXTE_PAGINA = {
 		N_("Caută din nou în rețea"),
 		N_("Caută și în rețea"),
 		N_("Dosarele de rețea (un calculator sau un NAS) nu se caută singure, pot răspunde greu:"),
-		N_("Actualizează tot"),
+		N_("Actualizează toate"),
 	),
 }
 

@@ -233,13 +233,14 @@ def _desen(S, DES):
 
 
 def _numeSigla(ref):
-	"""Numele siglei pentru /api/canale-sigla (canale_web.nume_sigla, ca Renderer/Picon.py), sau None."""
+	"""Numele siglei pentru /api/canale-sigla (canale_web.nume_sigla, ca Renderer/Picon.py), sau None (si cu setarea
+	"Siglele canalelor (piconuri)" oprita)."""
 	try:
-		from .canale_web import nume_sigla
+		from .canale_web import nume_sigla, sigle_pornite
 	except Exception:
 		return None
 	try:
-		return nume_sigla(ref) if ref else None
+		return nume_sigla(ref) if ref and sigle_pornite() else None
 	except Exception:
 		return None
 

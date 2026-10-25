@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Modificat de moneasoftware.com si hdsatelit.com, 2026
 from Components.Converter.Converter import Converter
 from enigma import iServiceInformation, iPlayableService, iPlayableServicePtr
 from Components.Element import cached
@@ -42,7 +43,15 @@ class ServiceName(Converter, object):
 		elif self.type == self.PROVIDER:
 			return self.getServiceInfoValue(info, iServiceInformation.sProvider, ref)
 		elif self.type == self.REFERENCE:
-			return self.getServiceInfoValue(info, iServiceInformation.sServiceref, ref)
+			v = self.getServiceInfoValue(info, iServiceInformation.sServiceref, ref)
+			# o referinta din lista de canale sau din ghid: informatia statica a unui canal DVB nu da sServiceref ("N/A"),
+			# deci se da referinta insasi, ca sigla canalului (Renderer/Picon.py) sa se gaseasca si acolo
+			if v == "N/A" and ref is not None:
+				try:
+					return ref.toString()
+				except Exception:
+					pass
+			return v
 
 	text = property(getText)
 

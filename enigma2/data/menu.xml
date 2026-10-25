@@ -93,7 +93,7 @@
 		     Ecranul e în Plugins/Extensions/HdsImportSetari/plugin.py, numit în Screens/HdsImportSetari.py. Înainte era
 		     o extensie cu trei căi (lista de extensii, tasta albastră, agățată aici); acum are numai locul acesta.
 		     In web: /import. -->
-		<item level="0" text="Import canale și setări" entryID="hds_import_setari" pictograma="import" web="/import" weight="50" stare="netestat">
+		<item level="0" text="Import canale și setări" entryID="hds_import_setari" pictograma="import" web="/import" weight="50">
 			<screen module="HdsImportSetari" screen="HdsImportSetariScreen" />
 		</item>
 		<!-- Listele de canale gata făcute nu sunt o scanare. Stau aici, tot numai în modul avansat, până se

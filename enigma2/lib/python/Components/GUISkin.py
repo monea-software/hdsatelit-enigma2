@@ -51,6 +51,14 @@ class GUISkin:
 		except Exception:
 			print_exc()
 
+		# HDSatelit: sigla canalului pe bare: vecinii ei (atributul vecini al widgetului Picon) se muta la dreapta numai cat
+		# se vede o sigla adevarata (Components/HdsPiconBare; dupa pictograma internetului, ca mutarile sa se adune)
+		try:
+			from Components.HdsPiconBare import aseaza as aseazaSigla
+			aseazaSigla(self)
+		except Exception:
+			print_exc()
+
 		# HDSatelit: cu textul marit (Marimea textului peste 100 %), etichetele pe un rand mai joase decat literele cresc
 		# (textul ramane pe loc), iar textele fixe pe un rand care ies din caseta lor se potrivesc (Components/HdsMarireText);
 		# la 100 % nu se face nimic

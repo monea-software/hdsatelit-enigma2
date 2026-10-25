@@ -6,7 +6,8 @@
 Un singur ecran, ca magazinul de aplicatii al unui televizor:
  - file sus (Stanga/Dreapta): Pe receptor (extensiile instalate; OK le deschide, ca vechiul PluginBrowser),
    Actualizari (doar cand sunt), cate o fila pentru fiecare categorie care chiar are pachete in surse, Din fisier
-   (.ipk de pe stick, disc sau retea) si Surse (sursa HD Satelit si sursele adaugate de utilizator);
+   (.ipk de pe stick, disc sau retea) si Surse (feedurile HD Satelit si Pluginuri externe, cate un rand fiecare, si
+   sursele adaugate de utilizator);
  - lista (Sus/Jos, P+/P- pe pagini): icoana, nume, descriere scurta, sursa, versiune, marime, insigne;
  - detaliile randului ales, mereu in dreapta;
  - OK = actiunea principala (Deschide, Instaleaza, Actualizeaza), rosu Sterge, verde actiunea principala (in fila
@@ -42,6 +43,8 @@ try:
 	from Components import HdsExtensiiLucru as L
 except ImportError:  # probe pe PC: dosarul Components in sys.path
 	import HdsExtensiiLucru as L
+# descarcarea sursei unui plugin (0.6.6): modulul luat prin HdsExtensiiLucru (acelasi si pentru pagina web)
+S = L.S
 from Plugins.Plugin import PluginDescriptor
 from Tools.Directories import resolveFilename, SCOPE_PLUGINS, SCOPE_SKIN_IMAGE
 
@@ -368,7 +371,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			'blue': (self.keyAlbastru, 'Descarcă lista de pachete'),
 		}, -1)
 		# P+/P- (si |<< >>|) pe pagini: contextul listei de canale; tastele colorate din el merg la aceleasi functii
-		self['pagini'] = ActionMap(['ChannelSelectBaseActions'], {
+		# MENU (0.6.6): Actualizeaza toate (0.6.6), din orice fila, cand sunt actualizari (mouse: clic pe rotita)
+		self['pagini'] = ActionMap(['ChannelSelectBaseActions', 'MenuActions'], {
+			'menu': self.keyMeniu,
 			'nextBouquet': self.keyPaginaSus,
 			'prevBouquet': self.keyPaginaJos,
 			'nextMarker': self.keyPaginaJos,
@@ -954,11 +959,12 @@ class HdsExtensii(Screen, HelpableScreen):
 		else:
 			rosu, verde = L.taste(self.catalog, fel, obj, extra, self.pluginuri)
 		if self._idFila() == 'actualizari' and self.randuri:
-			verde = N_('Actualizează tot')
+			verde = N_('Actualizează toate')
 		# numele tastelor raman chei (L.taste); se traduc la afisare
 		self['key_red'].setText(_t(rosu))
 		self['key_green'].setText(_t(verde))
-		self['key_blue'].setText(_t('Caută fișiere') if self._idFila() == 'fisiere' else _t('Descarcă lista'))
+		albastru = L.tastaAlbastra(self.catalog, fel, obj, extra) if fel != 'retea' else ''
+		self['key_blue'].setText(_t('Caută fișiere') if self._idFila() == 'fisiere' else _t(albastru or 'Descarcă lista'))
 
 	def _stare(self):
 		if self.descarca is not None:
@@ -993,9 +999,13 @@ class HdsExtensii(Screen, HelpableScreen):
 			elif self.fisiereTaiate:
 				parti.append(_t('cele mai noi %d') % len(self.fisiere or ()))
 		elif fid == 'surse':
-			parti.append(_t('%d surse') % len(conf.surse) if len(conf.surse) != 1 else _t('o sursă'))
+			n = L.numarSurse(self.catalog)
+			parti.append(_t('%d surse') % n if n != 1 else _t('o sursă'))
 		elif fid == 'cautare':
 			parti.append(_t('Rezultatele căutării'))
+		n_act = len(self.catalog.actualizari())
+		if n_act >= 2 and fid != 'actualizari':
+			parti.append(_t('MENU actualizează toate (%d)') % n_act)
 		if fid not in ('fisiere',):
 			if not conf.surse:
 				parti.append(_t('nicio sursă de pachete'))
@@ -1023,11 +1033,14 @@ class HdsExtensii(Screen, HelpableScreen):
 		ultima = L.STARE['ultima_descarcare']
 		if ultima and 0 <= acum - ultima < DESCARCARE_AUTOMATA:
 			return
-		self._descarcaLista()
+		self._descarcaLista(cerut=False)
 
-	def _descarcaLista(self):
+	def _descarcaLista(self, cerut=True):
 		if self.descarca is not None:
 			return
+		# ceruta de om (OK sau albastru): la sfarsit, ce contine lista (0.6.6); cea automata de la deschidere, nu
+		self.descarcareCeruta = cerut
+		self.inainteDescarcare = L.instantaneu(self.catalog)
 		if _descarcareRamasa():
 			self._mesaj(_t('Lista se descarcă deja. Încearcă din nou peste un minut.'), 'chihlimbar')
 			return
@@ -1045,7 +1058,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		self._setCuloare('stare', 'chihlimbar')
 		self._semn()
 		# pornita si tinuta in Components/HdsExtensiiLucru.py (ora ultimei descarcari, jurnalul, pagina web o vede)
-		L.pornesteDescarcarea(self.descarca)
+		L.pornesteDescarcarea(self.descarca, inainte=self.inainteDescarcare)
 
 	def _evenimentDescarcare(self, eveniment, parametru):
 		if eveniment == IpkgComponent.EVENT_LINE:
@@ -1068,6 +1081,11 @@ class HdsExtensii(Screen, HelpableScreen):
 					motiv += ' ' + _t('Se folosește lista din %s.') % P.text_varsta(self.catalog.varsta_liste)
 				self._mesaj(motiv, 'chihlimbar')
 			self._arataFila()
+			if getattr(self, 'descarcareCeruta', False):
+				self.descarcareCeruta = False
+				stare = {'cod': parametru, 'motiv': '' if parametru == 0 else P.motiv_eroare(self.liniiDescarcare)}
+				self.session.open(MessageBox, L.textDescarcare(self.catalog, stare, self.inainteDescarcare),
+					type=MessageBox.TYPE_INFO if parametru == 0 else MessageBox.TYPE_WARNING)
 
 	def _mesaj(self, text, culoare='eticheta'):
 		self.mesajStare = text
@@ -1178,7 +1196,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._cautaInRetea()
 		elif fel == 'adauga':
 			self._adaugaSursa()
-		elif fel == 'sursa':
+		elif fel in ('sursa', 'feed'):
 			self._descarcaLista()
 
 	def keyVerde(self):
@@ -1211,6 +1229,15 @@ class HdsExtensii(Screen, HelpableScreen):
 		elif fel == 'sursa' and self.catalog.configurare.e_a_utilizatorului(obj[0]):
 			self._stergeSursa(obj[0])
 
+	def keyMeniu(self):
+		"""Actualizeaza toate: toate pachetele instalate cu versiune noua, din orice feed; la unul singur, actualizarea
+		lui (ca din randul lui)"""
+		pachete = self.catalog.actualizari()
+		if not pachete:
+			self._mesaj(_t('Nicio actualizare de instalat.'), 'bun')
+			return
+		self._planActualizare(pachete)
+
 	def keyGalben(self):
 		self.session.openWithCallback(self._dupaCautare, VirtualKeyBoard, title=_t('Caută o extensie după nume'), text=self.cautare)
 
@@ -1226,7 +1253,25 @@ class HdsExtensii(Screen, HelpableScreen):
 				self._cautaFisiere(retea=True)
 			self._arataFila()
 			return
+		fel, obj, extra = self._selectat()
+		if L.pachetCuSursa(self.catalog, fel, obj, extra) is not None:
+			self._descarcaSursa(fel, obj, extra)
+			return
 		self._descarcaLista()
+
+	def _descarcaSursa(self, fel, obj, extra):
+		"""tasta albastra pe un pachet cu arhiva sursei (0.6.6): fereastra descarcarii (marimea si locul, intrebarea,
+		progresul); o descarcare pornita deja (si din pagina web) se arata in loc de una noua"""
+		d = S.curenta()
+		if d is not None and S.in_lucru():
+			self.session.open(HdsSursaDescarcare, d)
+			return
+		d, motiv = L.descarcareSursa(self.catalog, fel, obj, extra)
+		if d is None:
+			self._mesaj(motiv.replace('\n', ' '), 'chihlimbar')
+			return
+		p = L.pachetCuSursa(self.catalog, fel, obj, extra)
+		self.session.open(HdsSursaDescarcare, d, P.ICOANE.get(p.categorie, 'altele') if p is not None else 'altele')
 
 	def _cautaInRetea(self):
 		if self.cautareRetea is not None:
@@ -1293,6 +1338,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		# „Nu este verificat de HD Satelit”, care acum e si prima
 		externe = ['„%s” (%s)' % (n, a) if a else '„%s”' % n for n, a in L.surseExterne(self.catalog, pachete)]
 		if not externe:
+			nota = L.notaFeedExtern(self.catalog, pachete)
+			if nota:
+				return nota
 			return _t('Verificat de HD Satelit.') if self._culoareNota(pachete) == 'bun' else ''
 		if len(externe) == 1:
 			return _t('Nu este verificat de HD Satelit. Vine din sursa %s.') % externe[0]
@@ -1694,3 +1742,224 @@ class HdsExtensiiActiune(Screen):
 	def _laInchidere(self):
 		self.timer.stop()
 		self.lucrare.lasa(self._dinLucrare)
+
+
+class HdsSursaDescarcare(Screen):
+	"""Descarcarea sursei deschise a unui plugin (tasta albastra "Descarcă sursa", 0.6.6): intai
+	marimea si locul (pe un fir), apoi intrebarea cu marimea si locul (stick-ul are intaietate), apoi progresul (bara pe
+	pista ferestrei), la sfarsit calea fisierului. Desenul e al ferestrei HdsExtensiiActiune (acelasi skin, aceleasi
+	widget-uri); lucrul e Components/HdsSursaPachet.Descarcare, acelasi si pentru pagina web. EXIT in timpul descarcarii
+	intreaba, apoi o opreste (fisierul partial se sterge); EXIT inainte sau dupa inchide."""
+	skin = HdsExtensiiActiune.skin.replace('name="HdsExtensiiActiune"', 'name="HdsSursaDescarcare"')
+
+	def __init__(self, session, descarcare, icoana_='altele'):
+		Screen.__init__(self, session)
+		self.skinName = ['HdsSursaDescarcare', 'HdsExtensiiActiune']
+		self.d = descarcare
+		self.icoana = icoana_
+		self.setTitle(_t('Sursa pluginului %s') % descarcare.titlu)
+		self.faza = None
+		self.butoane = []
+		self.buton = 0
+		self.intrebatOprire = False
+
+		self['icoana'] = Pixmap()
+		self['titlu'] = Label('')
+		self['subtitlu'] = Label('')
+		self['etichete'] = Label('')
+		self['valori'] = Label('')
+		self['nota'] = Label('')
+		self['stare'] = Label('')
+		self['pista'] = Label('')
+		self['semn'] = Label('')
+		self['jurnal'] = MenuList([], content=eListboxPythonMultiContent)
+		self['butoane'] = MenuList([], content=eListboxPythonMultiContent)
+
+		self['actiuni'] = ActionMap(['OkCancelActions', 'ColorActions', 'DirectionActions'], {
+			'ok': self.keyOk,
+			'cancel': self.keyCancel,
+			'green': self.keyVerde,
+			'red': self.keyCancel,
+			'left': self.keyLeft,
+			'right': self.keyRight,
+			'leftRepeated': self._nimic,
+			'rightRepeated': self._nimic,
+			'upRepeated': self._nimic,
+			'downRepeated': self._nimic,
+			'leftUp': self._nimic,
+			'rightUp': self._nimic,
+			'upUp': self._nimic,
+			'downUp': self._nimic,
+			'up': self._nimic,
+			'down': self._nimic,
+		}, -1)
+		self.timer = eTimer()
+		self.timer.callback.append(self._verifica)
+		self.onLayoutFinish.append(self._pregateste)
+		self.onClose.append(self.timer.stop)
+		# inchisa inainte de pornire (Renunta, EXIT): descarcarea nu mai e cea curenta
+		self.onClose.append(lambda: S.uita(self.d))
+
+	def _pregateste(self):
+		self.c = dict((k, _culoare(k)) for k in CULORI)
+		fontButon, self.inaltimeButoane = _font('HdsExtensiiButon', 'Regular', 30, 72)
+		self.marimeButon = int(30 * _factor())
+		try:
+			import skin
+			if 'HdsExtensiiButon' in skin.fonts:
+				self.marimeButon = skin.fonts['HdsExtensiiButon'][1]
+		except Exception:
+			pass
+		b = self['butoane']
+		b.l.setFont(0, fontButon)
+		b.l.setItemHeight(self.inaltimeButoane)
+		b.selectionEnabled(False)
+		try:
+			self.pozSemn = self['pista'].instance.position()
+			self.marimePista = self['pista'].instance.size()
+		except Exception:
+			self.pozSemn = self.marimePista = None
+		ptr = icoana(self.icoana or 'altele', 160)
+		if ptr is not None:
+			try:
+				self['icoana'].instance.setPixmap(ptr)
+			except Exception:
+				pass
+		self['subtitlu'].setText(_t('Feedul: %s') % self.d.feed)
+		# nota (mesajele lungi, pe mai multe randuri) creste pana la butoane: jurnalul nu se foloseste aici
+		try:
+			n, b = self['nota'].instance, self['butoane'].instance
+			inaltime = b.position().y() - n.position().y() - max(4, int(8 * _factor()))
+			if inaltime > n.size().height():
+				n.resize(eSize(n.size().width(), inaltime))
+		except Exception as eroare:
+			print('[HdsExtensii] nota sursei: %s' % eroare)
+		for w in ('jurnal', 'pista', 'semn', 'nota'):
+			self[w].hide()
+		self._verifica()
+		self.timer.start(250, False)
+
+	def _setCuloare(self, nume, cheie):
+		try:
+			self[nume].instance.setForegroundColor(gRGB(self.c[cheie]))
+		except Exception:
+			pass
+
+	_butoane = HdsExtensiiActiune.__dict__['_butoane']
+
+	@property
+	def plan(self):
+		# _butoane (luat din HdsExtensiiActiune) citeste plan.get('implicitRenunta')
+		return {}
+
+	def _randuri(self, randuri):
+		self['etichete'].setText('\n'.join(a for a, _b in randuri))
+		self['valori'].setText(_valoriPotrivite(self['valori'], [b for _a, b in randuri], 60))
+
+	def _verifica(self):
+		d = self.d
+		f = d.faza
+		if f != self.faza:
+			self._arata(f)
+		if f == 'lucru':
+			if not self.intrebatOprire:
+				self['stare'].setText(_t('Se descarcă: %s') % d.text_progres())
+			self._bara(d.procent())
+
+	def _bara(self, procent):
+		if self.pozSemn is None or self.marimePista is None:
+			return
+		try:
+			w = max(1, int(self.marimePista.width() * procent / 100))
+			self['semn'].instance.move(ePoint(self.pozSemn.x(), self.pozSemn.y()))
+			self['semn'].instance.resize(eSize(w, self.marimePista.height()))
+		except Exception:
+			pass
+
+	def _nota(self, text, culoare):
+		"""un mesaj lung (intrebarea, sfarsitul): in nota, pe mai multe randuri; randul de stare se ascunde"""
+		self['stare'].hide()
+		self['nota'].setText(text)
+		self._setCuloare('nota', culoare)
+		self['nota'].show()
+
+	def _arata(self, f):
+		d = self.d
+		self.faza = f
+		if f == 'marime':
+			self['titlu'].setText(_t('Sursa pluginului %s') % d.titlu)
+			self._randuri([(_t('Arhiva'), d.fisier)])
+			self['stare'].setText(_t('Se află mărimea sursei și locul unde se salvează...'))
+			self._setCuloare('stare', 'chihlimbar')
+			self['butoane'].hide()
+		elif f == 'intrebare':
+			# intrebarea intreaga (cu marimea si stick-ul) in nota, pe mai multe randuri; avertismentul numai la un
+			# fisier mare (de la 100 MB)
+			self['titlu'].setText(_t('Sursa pluginului %s') % d.titlu)
+			self._randuri(d.randuri())
+			a = d.avertisment()
+			self._nota(d.intrebare() + (('\n' + a) if a else ''), 'chihlimbar' if a else 'text')
+			self._butoane([N_('Descarcă'), N_('Renunță')], 0)
+		elif f == 'lucru':
+			self['titlu'].setText(_t('Se descarcă sursa pluginului %s') % d.titlu)
+			self['butoane'].hide()
+			self['nota'].hide()
+			self['stare'].show()
+			self['pista'].show()
+			self['semn'].show()
+			self._setCuloare('stare', 'chihlimbar')
+			self._bara(0)
+		else:
+			# negasit, fara-loc, gata, oprit, eroare
+			self['pista'].hide()
+			self['semn'].hide()
+			if f == 'gata':
+				self['titlu'].setText(_t('Sursa pluginului %s s-a descărcat') % d.titlu)
+				self._randuri([(_t('Arhiva'), d.fisier), (_t('Mărimea'), P.marime_text(d.citit)), (_t('Locul'), d.cale)])
+			text = d.text_fara_loc() if f == 'fara-loc' else d.text_sfarsit()
+			self._nota(text, 'bun' if f == 'gata' else 'chihlimbar')
+			self.timer.stop()
+			self._butoane([N_('Închide')], 0)
+
+	# ------------------------------------------------------------ taste
+
+	def _nimic(self):
+		pass
+
+	def keyLeft(self):
+		if self.butoane and self.faza == 'intrebare':
+			self._butoane(self.butoane, max(0, self.buton - 1))
+
+	def keyRight(self):
+		if self.butoane and self.faza == 'intrebare':
+			self._butoane(self.butoane, min(len(self.butoane) - 1, self.buton + 1))
+
+	def keyOk(self):
+		if self.faza == 'intrebare':
+			if self.buton == 0:
+				self.d.porneste()
+				self._verifica()
+			else:
+				self.close()
+		elif self.faza == 'lucru':
+			self.keyCancel()
+		elif self.faza != 'marime':
+			self.close()
+
+	def keyVerde(self):
+		if self.faza == 'intrebare':
+			self.d.porneste()
+			self._verifica()
+		elif self.faza not in ('marime', 'lucru'):
+			self.close()
+
+	def keyCancel(self):
+		if self.faza == 'lucru':
+			if self.intrebatOprire:
+				self.d.opreste()
+				return
+			self.intrebatOprire = True
+			self['stare'].setText(_t('Apasă EXIT încă o dată ca să oprești descărcarea.'))
+			self._setCuloare('stare', 'chihlimbar')
+			return
+		self.close()

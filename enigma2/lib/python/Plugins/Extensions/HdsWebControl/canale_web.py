@@ -191,6 +191,16 @@ def ref_epg(ref):
 	return "1:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
 
 
+def sigle_pornite():
+	"""Setarea "Siglele canalelor (piconuri)" (config.usage.hds_piconuri); fara ea (probele de pe PC) sau la orice
+	eroare: da."""
+	try:
+		import sys
+		return bool(sys.modules["Components.config"].config.usage.hds_piconuri.value)
+	except Exception:
+		return True
+
+
 def nume_sigla(ref):
 	"""Numele fisierului siglei ca in Renderer/Picon.py (referinta fara nume, „:” -> „_”), numai la canalele DVB."""
 	c = _campuri(ref)
@@ -1381,7 +1391,8 @@ def gen_lista_raspuns(argumente_, M=None):
 		return 404, {"result": False, "message": _t("Lista aleasă nu există pe receptor. Reîncarcă pagina."),
 			"camp": "buchet"}
 	grupuri = yield from gen_numarare(M, lista)
-	sigle = yield from gen_sigle(M)
+	# setarea "Siglele canalelor (piconuri)" oprita: randurile fara sigla, ca pe televizor
+	sigle = (yield from gen_sigle(M)) if sigle_pornite() else {}
 	text = (argumente_.get("text") or "")[:MAX_TEXT]
 	sel = selectie(argumente_, grupuri)
 	acum = _acum(M)

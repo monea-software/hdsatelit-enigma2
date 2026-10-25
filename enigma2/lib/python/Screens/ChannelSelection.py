@@ -111,9 +111,23 @@ OFF = 0
 EDIT_BOUQUET = 1
 EDIT_ALTERNATIVES = 2
 
+def primaMare(text):
+	"""Randul meniului listei cu prima litera mare: traducerile vechi ale randurilor incep cu litera mica in multe limbi
+	(ro, en, fr, es, ru, tr...), iar randurile noi ale imaginii cu mare. In turca i mic devine I cu punct."""
+	if not text or not text[0].islower():
+		return text
+	if text[0] == "i":
+		try:
+			from Components.Language import language
+			if language.getLanguage()[:2] == "tr":
+				return u"İ" + text[1:]
+		except Exception:
+			pass
+	return text[0].upper() + text[1:]
+
 def append_when_current_valid(current, menu, args, level = 0, key = ""):
 	if current and current.valid() and level <= config.usage.setup_level.index:
-		menu.append(ChoiceEntryComponent(key, args))
+		menu.append(ChoiceEntryComponent(key, (primaMare(args[0]),) + tuple(args[1:])))
 
 class ChannelContextMenu(Screen):
 	def __init__(self, session, csel):
@@ -146,6 +160,7 @@ class ChannelContextMenu(Screen):
 
 		# cautarea de canale (ca tasta TEXT sau OK tinut apasat in lista) si trecerea pe lista cealalta (ca tastele
 		# TV / RADIO), primele randuri: meniul listei le da si fara taste dedicate
+		fav = ""
 		if csel.bouquet_mark_edit == OFF and not csel.movemode:
 			menu.append(ChoiceEntryComponent(text = (_("Caută canale"), self.hdsCautare)))
 			if getattr(csel, "hdsCapPornit", False):
@@ -179,7 +194,9 @@ class ChannelContextMenu(Screen):
 						if not inBouquet or bouquetCnt > 1:
 							append_when_current_valid(current, menu, (_("add service to bouquet"), self.addServiceToBouquetSelected), level = 0)
 					else:
-						if not inBouquet:
+						# fara buchete multiple, "add service to favourites" face ce face randul FAV de sus ("Adaugă la
+						# Favorite"): un singur rand, cel de sus; acesta ramane numai cand randul FAV lipseste
+						if not inBouquet and not fav:
 							append_when_current_valid(current, menu, (_("add service to favourites"), self.addServiceToBouquetSelected), level = 0)
 				else:
 					# HDSatelit: dosarul listei unei retele (numerele operatorului) nu e un satelit: nu se sterge si nu
@@ -200,7 +217,7 @@ class ChannelContextMenu(Screen):
 					append_when_current_valid(current, menu, (_("Activate Picture in Picture"), self.showServiceInPiP), level = 0, key = "blue")
 					self.pipAvailable = True
 			else:
-					menu.append(ChoiceEntryComponent(text = (_("add bouquet"), self.showBouquetInputBox)))
+					menu.append(ChoiceEntryComponent(text = (primaMare(_("add bouquet")), self.showBouquetInputBox)))
 					append_when_current_valid(current, menu, (_("remove entry"), self.removeBouquet), level = 0)
 
 		if inBouquet: # current list is editable?
@@ -208,7 +225,7 @@ class ChannelContextMenu(Screen):
 				if not csel.movemode:
 					append_when_current_valid(current, menu, (_("enable move mode"), self.toggleMoveMode), level = 1)
 					if not inBouquetRootList and current_root and not (current_root.flags & eServiceReference.isGroup):
-						menu.append(ChoiceEntryComponent(text = (_("add marker"), self.showMarkerInputBox)))
+						menu.append(ChoiceEntryComponent(text = (primaMare(_("add marker")), self.showMarkerInputBox)))
 						if haveBouquets:
 							append_when_current_valid(current, menu, (_("enable bouquet edit"), self.bouquetMarkStart), level = 0)
 						else:
@@ -233,7 +250,7 @@ class ChannelContextMenu(Screen):
 						append_when_current_valid(current, menu, (_("end alternatives edit"), self.bouquetMarkEnd), level = 0)
 						append_when_current_valid(current, menu, (_("abort alternatives edit"), self.bouquetMarkAbort), level = 0)
 
-		menu.append(ChoiceEntryComponent(text = (_("back"), self.cancelClick)))
+		menu.append(ChoiceEntryComponent(text = (primaMare(_("back")), self.cancelClick)))
 		self["menu"] = ChoiceList(menu)
 
 	def okbuttonClick(self):

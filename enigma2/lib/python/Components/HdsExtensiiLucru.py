@@ -11,7 +11,10 @@ Components/HdsPachete.py. Aici sunt cele care stateau in ecran si de care are ne
    fiecarui capat;
  - planurile confirmarilor: intrebarea, randurile, argumentele opkg (instalare, actualizare, stergere, fisier .ipk);
    nota despre sursele externe o scrie fiecare capat din surseExterne();
- - sursele adaugate si sterse de utilizator;
+ - sursele adaugate si sterse de utilizator; fila Surse arata feedurile, nu sursele opkg una cate una (0.6.6): un
+   rand "HD Satelit" pentru toate sursele HD Satelit (arhitecturile si canalul de proba
+   sunt numai in detalii), un rand "Pluginuri externe" pentru feedul de pe moneasoftware.com
+   (Components/HdsPluginuriExterne.py), apoi sursele adaugate de om (si alte surse), fiecare pe randul ei;
  - descarcarea listei (opkg update) si lucrarea opkg (Lucrare: progres, jurnal scurt, raspunsul N la fisierele de
    configurare schimbate, reincarcarea pluginurilor, textele de la sfarsit, oprirea dupa un minut fara raspuns). Cate
    una odata in tot procesul: ce porneste pagina vede si televizorul, si invers. Iesirea opkg intreaga merge in
@@ -21,6 +24,7 @@ opkg porneste numai prin Components/Ipkg.py (lista de argumente, nume verificate
 (PluginComponent) si caile se cer numai in functii, ca probele de pe PC sa incarce modulul singur."""
 import os
 import posixpath       # caile pluginurilor sunt ale receptorului (si in probele de pe PC)
+import re
 import time
 
 try:
@@ -63,8 +67,64 @@ def _t(text):
 		return text
 
 
+def _vecin(nume):
+	"""un modul Hds din acelasi dosar (Components): pe receptor din pachet; pe PC din sys.path sau, cand o proba incarca
+	acest fisier singur, chiar din dosarul lui"""
+	import importlib
+	for complet in ('Components.' + nume, nume):
+		try:
+			return importlib.import_module(complet)
+		except ImportError:
+			pass
+	import importlib.util
+	spec = importlib.util.spec_from_file_location(nume, os.path.join(os.path.dirname(os.path.abspath(__file__)), nume + '.py'))
+	m = importlib.util.module_from_spec(spec)
+	spec.loader.exec_module(m)
+	return m
+
+
+_VECINI = {}
+
+
+def _X():
+	"""Components/HdsPluginuriExterne (feedul pluginurilor externe), incarcat la prima folosire"""
+	if 'X' not in _VECINI:
+		_VECINI['X'] = _vecin('HdsPluginuriExterne')
+	return _VECINI['X']
+
+
+def _S():
+	"""Components/HdsSursaPachet (descarcarea sursei unui plugin), incarcat la prima folosire"""
+	if 'S' not in _VECINI:
+		_VECINI['S'] = _vecin('HdsSursaPachet')
+	return _VECINI['S']
+
+
+def __getattr__(nume):
+	# L.X si L.S pentru ecranul de pe televizor si pagina web (aceleasi module)
+	if nume == 'X':
+		return _X()
+	if nume == 'S':
+		return _S()
+	raise AttributeError(nume)
+
+
 # eticheta filei Surse, aceeasi pe televizor si in pagina web (tradusa la folosire)
 ETICHETA_SURSE = N_('Surse')
+# feedurile din fila Surse (0.6.6): toate sursele HD Satelit intr-un rand, feedul pluginurilor externe in altul
+FEED_HDS = 'hds'
+FEED_EXTERN = 'externe'
+ETICHETA_EXTERNE = N_('Monea Software (pluginuri externe)')
+# textul feedului extern, in detaliile randului lui, pe televizor si in pagina web
+TEXT_EXTERNE = N_('Feed întreținut și oferit de Monea Software (moneasoftware.com), care se ocupă de pluginuri și de tot '
+	'ce e nevoie pentru ele. Vrei și alte pluginuri aici? Scrie la contact@moneasoftware.com.')
+# nota confirmarii si a detaliilor unui pachet din feedul extern (in locul frazei "nu este verificat de HD Satelit", care
+# ramane pentru sursele adaugate de om si pentru celelalte surse)
+NOTA_EXTERNE = N_('Vine din feedul pluginurilor externe, întreținut de Monea Software (moneasoftware.com).')
+# categoriile care nu cer repornirea interfetei dupa instalare (0.6.6: si modulele de acces conditionat, pornite si
+# alese din ecranul lor, fara interfata)
+FARA_REPORNIRE_INSTALARE = ('extensions', 'picons', 'settings', 'acces')
+FARA_REPORNIRE_SCHIMBARE = ('acces',)
 
 
 # ---------------------------------------------------------------- texte mici
@@ -120,14 +180,71 @@ def varstaLista(catalog, nume):
 
 # ---------------------------------------------------------------- sursele
 
+def felFeed(catalog, nume, adresa):
+	"""FEED_HDS, FEED_EXTERN sau None (o sursa adaugata de om sau alta sursa: rand separat in fila Surse). O sursa
+	adaugata de om ramane a lui, chiar cu adresa unui feed cunoscut (asa o poate sterge)."""
+	if catalog.configurare.e_a_utilizatorului(nume):
+		return None
+	if P.sursa_hdsatelit(adresa):
+		return FEED_HDS
+	if _X().e_feed_extern(adresa):
+		return FEED_EXTERN
+	return None
+
+
+class Feed(object):
+	"""un rand din fila Surse care tine mai multe surse opkg (cate una pe arhitectura si canal)"""
+	__slots__ = ('id', 'surse')
+
+	def __init__(self, id_, surse):
+		self.id = id_
+		self.surse = surse              # [(nume, adresa)] in ordinea din configurare
+
+	def nume(self):
+		return [n for n, _a in self.surse]
+
+
+def feeduri(catalog):
+	"""[Feed] ale filei Surse, in ordine: HD Satelit, Pluginuri externe (numai cele care au macar o sursa)"""
+	grupe = {FEED_HDS: [], FEED_EXTERN: []}
+	for nume, adresa in catalog.configurare.surse:
+		f = felFeed(catalog, nume, adresa)
+		if f is not None:
+			grupe[f].append((nume, adresa))
+	return [Feed(i, grupe[i]) for i in (FEED_HDS, FEED_EXTERN) if grupe[i]]
+
+
+def surseSingure(catalog):
+	"""sursele care au rand propriu in fila Surse: cele adaugate de om si cele care nu tin de un feed cunoscut"""
+	return [(n, a) for n, a in catalog.configurare.surse if felFeed(catalog, n, a) is None]
+
+
+def numeFeed(f):
+	return 'HD Satelit' if f.id == FEED_HDS else _t(ETICHETA_EXTERNE)
+
+
 def sursa(catalog, nume):
 	"""(eticheta scurta, adresa, e HD Satelit) a unei surse din configurare"""
 	if not nume:
 		return '', '', False
 	adresa = catalog.configurare.adresa(nume)
-	if P.sursa_hdsatelit(adresa):
+	fel = felFeed(catalog, nume, adresa)
+	if fel == FEED_HDS:
 		return 'HD Satelit', adresa, True
+	if fel == FEED_EXTERN:
+		return _t(ETICHETA_EXTERNE), adresa, False
 	return nume, adresa, False
+
+
+def cuSursa(sursa_, text):
+	"""randul de sub numele unui pachet: de unde vine, apoi descrierea scurta"""
+	if sursa_ and text:
+		return '%s · %s' % (sursa_, text)
+	return sursa_ or text or ''
+
+
+def dinFeedulExtern(catalog, p):
+	return p is not None and bool(p.sursa) and felFeed(catalog, p.sursa, catalog.configurare.adresa(p.sursa)) == FEED_EXTERN
 
 
 def sursaPachet(catalog, p):
@@ -153,16 +270,23 @@ def surseExterne(catalog, pachete):
 	rez = []
 	for p in pachete:
 		_s, adresa, hds = sursaPachet(catalog, p)
-		if not hds and p.sursa:
+		if not hds and p.sursa and not dinFeedulExtern(catalog, p):
 			x = (p.sursa, P._curat(adresa, 70) if adresa else '')
 			if x not in rez:
 				rez.append(x)
 	return rez
 
 
+def notaFeedExtern(catalog, pachete):
+	"""nota pentru pachetele din feedul pluginurilor externe (cand nu e niciunul din alte surse externe), altfel ''"""
+	if any(dinFeedulExtern(catalog, p) for p in pachete) and not surseExterne(catalog, pachete):
+		return _t(NOTA_EXTERNE)
+	return ''
+
+
 def culoareNota(catalog, pachete):
-	"""verde cand totul vine din sursa HD Satelit, altfel chihlimbar"""
-	if pachete and all(p.sursa and sursaPachet(catalog, p)[2] for p in pachete):
+	"""verde cand totul vine din sursa HD Satelit sau din feedul pluginurilor externe, altfel chihlimbar"""
+	if pachete and all(p.sursa and (sursaPachet(catalog, p)[2] or dinFeedulExtern(catalog, p)) for p in pachete):
 		return 'bun'
 	return 'chihlimbar'
 
@@ -242,8 +366,13 @@ def file(catalog, nrInstalate):
 
 
 def filaSurse(catalog):
-	"""(id, eticheta, numar) al filei Surse, ultima pe televizor si in pagina web; eticheta tradusa."""
-	return ('surse', _t(ETICHETA_SURSE), len(catalog.configurare.surse))
+	"""(id, eticheta, numar) al filei Surse, ultima pe televizor si in pagina web; eticheta tradusa; numarul = randurile
+	aratate (feedurile si sursele singure), nu sursele opkg"""
+	return ('surse', _t(ETICHETA_SURSE), numarSurse(catalog))
+
+
+def numarSurse(catalog):
+	return len(feeduri(catalog)) + len(surseSingure(catalog))
 
 
 def randuriCautare(catalog, pluginuri, text):
@@ -273,7 +402,8 @@ def randuri(catalog, fila, pluginuri, plugins, cautare=''):
 	if fila == 'actualizari':
 		return [('pachet', p, None) for p in catalog.actualizari()]
 	if fila == 'surse':
-		rez = [('sursa', s, None) for s in catalog.configurare.surse]
+		rez = [('feed', f, None) for f in feeduri(catalog)]
+		rez += [('sursa', s, None) for s in surseSingure(catalog)]
 		rez.append(('adauga', None, None))
 		return rez
 	return [('pachet', p, None) for p in catalog.din_categoria(fila)]
@@ -290,11 +420,13 @@ def descriereRand(catalog, fel, obj, extra):
 		if p is not None and p.actualizare:
 			insigna, culoare = _t('Actualizare'), 'chihlimbar'
 		mic = []
+		sub = obj.description or ''
 		if p is not None:
-			mic.append(sursaPachet(catalog, p)[0])
+			# de unde vine pachetul, sub nume (0.6.6): feedurile stau amestecate in liste
+			sub = cuSursa(sursaPachet(catalog, p)[0], sub)
 			if p.versiune_instalata:
 				mic.append(p.versiune_instalata)
-		return (P.ICOANE.get(cat, 'extensii'), obj.name or '', obj.description or '', insigna, culoare, ' · '.join(mic))
+		return (P.ICOANE.get(cat, 'extensii'), obj.name or '', sub, insigna, culoare, ' · '.join(mic))
 	if fel == 'pachet':
 		p = obj
 		if extra == 'repornire':
@@ -305,8 +437,9 @@ def descriereRand(catalog, fel, obj, extra):
 			insigna, culoare = _t('Instalat'), 'bun'
 		else:
 			insigna = culoare = None
-		mic = [x for x in (sursaPachet(catalog, p)[0], textVersiuni(p), P.marime_text(p.marime or p.marime_instalat)) if x]
-		return (P.ICOANE.get(p.categorie, 'altele'), p.titlu, p.subtitlu, insigna, culoare, ' · '.join(mic))
+		mic = [x for x in (textVersiuni(p), P.marime_text(p.marime or p.marime_instalat)) if x]
+		return (P.ICOANE.get(p.categorie, 'altele'), p.titlu, cuSursa(sursaPachet(catalog, p)[0], p.subtitlu), insigna,
+			culoare, ' · '.join(mic))
 	if fel == 'fisier':
 		f = obj
 		pInstalat = catalog._toate.get(f.nume) if f.nume else None
@@ -330,6 +463,18 @@ def descriereRand(catalog, fel, obj, extra):
 			insigna, culoare = _t('Externă'), 'chihlimbar'
 		mic = _pachete_sursa(n) if nume in catalog.surse_cu_lista else _t('lista nedescărcată')
 		return ('surse', eticheta if hds else nume, adresa, insigna, culoare, mic)
+	if fel == 'feed':
+		f = obj
+		if f.id == FEED_HDS:
+			insigna, culoare = _t('Verificată'), 'bun'
+		else:
+			insigna, culoare = _t('Externă'), 'bun'
+		gazde = []
+		for _n, a in f.surse:
+			g = P.gazda(a)
+			if g and g not in gazde:
+				gazde.append(g)
+		return ('surse', numeFeed(f), ', '.join(gazde), insigna, culoare, stareFeed(catalog, f))
 	# adauga
 	return ('surse', _t('Adaugă o sursă'), _t('Adresa unui depozit de pachete (feed opkg) de pe internet'), None, None, '')
 
@@ -362,6 +507,8 @@ def detalii(catalog, fel, obj, extra):
 			ind.append(_t('Verde actualizează'))
 		if p is not None and p.se_poate_sterge:
 			ind.append(_t('Roșu șterge'))
+		if areSursa(catalog, p):
+			ind.append(_t('Albastru descarcă sursa'))
 		d['indiciu'] = ' · '.join(ind)
 	elif fel == 'pachet':
 		p = obj
@@ -382,7 +529,9 @@ def detalii(catalog, fel, obj, extra):
 		d['etichete'] = [a for a, b in rand if b]
 		d['valori'] = [b for a, b in rand if b]
 		text = p.descriere
-		if not hds and p.sursa:
+		if dinFeedulExtern(catalog, p):
+			text = (text + '\n' if text else '') + _t(NOTA_EXTERNE)
+		elif not hds and p.sursa:
 			text = (text + '\n' if text else '') + _t('Pachetul vine dintr-o sursă externă și nu este verificat de HD Satelit.')
 		d.update(icoana=P.ICOANE.get(p.categorie, 'altele'), titlu=p.titlu, descriere=text)
 		if extra == 'repornire':
@@ -394,6 +543,8 @@ def detalii(catalog, fel, obj, extra):
 			d['indiciu'] = _t('Instalat și la zi · Roșu șterge') if p.se_poate_sterge else _t('Instalat și la zi')
 		elif p.se_poate_instala:
 			d['indiciu'] = _t('OK instalează')
+		if areSursa(catalog, p):
+			d['indiciu'] = ' · '.join(x for x in (d['indiciu'], _t('Albastru descarcă sursa')) if x)
 	elif fel == 'fisier':
 		f = obj
 		rand = [(_t('Pachet'), f.nume or 'necunoscut'), (_t('Versiune'), f.versiune), (_t('Mărime'), P.marime_text(f.marime)),
@@ -433,11 +584,83 @@ def detalii(catalog, fel, obj, extra):
 			d['indiciu'] = _t('Roșu șterge sursa · Albastru descarcă lista')
 		else:
 			d['indiciu'] = _t('Albastru descarcă lista')
+	elif fel == 'feed':
+		d.update(detaliiFeed(catalog, obj))
 	elif fel == 'adauga':
 		d.update(icoana='surse', titlu=_t('Adaugă o sursă'), insigna=_t('Sursă de pachete de pe internet'), culoare='eticheta',
 			descriere=_t('Scrii un nume scurt și adresa depozitului (începe cu http:// sau https://). Pachetele din el '
 			'apar apoi în file, cu numele sursei. Nu sunt verificate de HD Satelit.'), indiciu=_t('OK adaugă'))
 	return d
+
+
+def stareFeed(catalog, f):
+	"""starea unui feed pe intelesul omului, pentru randul lui: cate pluginuri are, "Niciun plugin deocamdată" cand
+	lista lui e descarcata dar goala (sau nu are ce arata pe acest receptor), "Lista nedescărcată" numai cand nicio
+	lista a lui nu exista si nici nu s-a descarcat nimic in aceasta sesiune"""
+	nume = set(f.nume())
+	n = sum(1 for p in catalog.pachete.values() if p.sursa in nume)
+	if n:
+		return _pluginuri(n)
+	if any(x in catalog.surse_cu_lista for x in nume) or (STARE.get('descarcare') or {}).get('cand'):
+		return _t('Niciun plugin deocamdată')
+	return _t('Lista nedescărcată')
+
+
+def _baza_si_arhitectura(adresa):
+	a = (adresa or '').rstrip('/')
+	if '/' not in a.split('://', 1)[-1]:
+		return a, ''
+	return a.rsplit('/', 1)
+
+
+def detaliiFeed(catalog, f):
+	"""detaliile unui rand de feed: adresa (fara arhitectura), arhitecturile alese de receptor, canalul de proba (numai
+	o mentiune), pluginurile, lista, fisierele"""
+	baze, arh, proba = [], [], []
+	for _n, a in f.surse:
+		b, x = _baza_si_arhitectura(a)
+		tinta = proba if ('/proba/' in b + '/' or b.endswith('-proba')) else baze
+		if b not in tinta:
+			tinta.append(b)
+		if x and x not in arh:
+			arh.append(x)
+	nume = set(f.nume())
+	n = sum(1 for p in catalog.pachete.values() if p.sursa in nume)
+	vechime = 0
+	for x in nume:
+		try:
+			vechime = max(vechime, os.path.getmtime(os.path.join(catalog.configurare.lists_dir, x)))
+		except (OSError, TypeError):
+			pass
+	fisiere = []
+	for x in f.nume():
+		b = os.path.basename(catalog.configurare.fisier_sursa.get(x, ''))
+		if b and b not in fisiere:
+			fisiere.append(b)
+	rand = [(_t('Adresa'), b) for b in baze[:2]]
+	rand += [(_t('Probă'), b) for b in proba[:1]]
+	rand += [(_t('Arhitecturi'), ', '.join(arh)), (_t('Pluginuri'), str(n) if n else stareFeed(catalog, f)),
+		(_t('Lista'), P.text_varsta(vechime) if vechime else _t('nedescărcată')), (_t('Fișierele'), ', '.join(fisiere))]
+	d = {'icoana': 'surse', 'titlu': numeFeed(f), 'etichete': [a for a, b in rand if b], 'valori': [b for a, b in rand if b],
+		'indiciu': _t('OK sau Albastru descarcă lista')}
+	if f.id == FEED_HDS:
+		d.update(insigna=_t('Sursa HD Satelit, verificată'), culoare='bun',
+			descriere=_t('Extensiile făcute și verificate de HD Satelit pentru acest receptor.') + ' ' +
+			_t('Receptorul alege singur adresele potrivite pentru procesorul și modelul lui.'))
+	else:
+		d.update(insigna=_t('Feed întreținut de Monea Software'), culoare='bun', descriere=_t(TEXT_EXTERNE))
+	return d
+
+
+def areSursa(catalog, p):
+	"""pachetul are arhiva sursei langa el in feed (butonul "Descarcă sursa", tasta albastra)"""
+	return _S().adresa_arhivei(catalog, p) is not None
+
+
+def pachetCuSursa(catalog, fel, obj, extra):
+	"""pachetul randului, cand are arhiva sursei (randurile pachet si plugin), altfel None"""
+	p = obj if fel == 'pachet' else extra if fel == 'plugin' else None
+	return p if p is not None and areSursa(catalog, p) else None
 
 
 def taste(catalog, fel, obj, extra, pluginuri):
@@ -467,6 +690,21 @@ def taste(catalog, fel, obj, extra, pluginuri):
 	elif fel == 'adauga':
 		verde = N_('Adaugă')
 	return rosu, verde
+
+
+def tastaAlbastra(catalog, fel, obj, extra):
+	"""numele tastei albastre pe rand: "Descarcă sursa" la un pachet cu arhiva sursei, altfel '' (fiecare capat pune
+	actiunea lui obisnuita: Descarcă lista, Caută fișiere)"""
+	return N_('Descarcă sursa') if pachetCuSursa(catalog, fel, obj, extra) is not None else ''
+
+
+def descarcareSursa(catalog, fel, obj, extra, **kw):
+	"""(Descarcare, None) pornita pentru pachetul randului, sau (None, motiv)"""
+	p = pachetCuSursa(catalog, fel, obj, extra)
+	if p is None:
+		return None, _t(_S().TEXT_NEGASIT)
+	titlu = obj.name if fel == 'plugin' and getattr(obj, 'name', '') else p.titlu
+	return _S().noua(catalog, p, titlu, sursaPachet(catalog, p)[0], **kw)
 
 
 # ---------------------------------------------------------------- planurile confirmarilor
@@ -507,8 +745,9 @@ def planInstalare(catalog, p, argumente=None, nota=None):
 	return {'fel': 'instaleaza', 'titlu': 'Instalezi %s?' % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
 		'icoana': P.ICOANE.get(p.categorie, 'altele'), 'randuri': rand, 'nota': _nota(catalog, [p] + dep, nota),
 		'externe': surseExterne(catalog, [p] + dep), 'notaCuloare': culoareNota(catalog, [p] + dep),
-		'buton': N_('Instalează'), 'argumente': a, 'repornire': p.categorie not in ('extensions', 'picons', 'settings'),
-		'pachete': [p.nume]}, None
+		'buton': N_('Instalează'), 'argumente': a,
+		'repornire': any(x.categorie not in FARA_REPORNIRE_INSTALARE for x in [p] + dep),
+		'pachete': [p.nume], 'tinte': [_tinta(p)]}, None
 
 
 def planActualizare(catalog, pachete, argumente=None, nota=None):
@@ -530,15 +769,19 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 		titlu, nume, sub, ic = 'Actualizezi %s?' % p.titlu, p.titlu, p.subtitlu, P.ICOANE.get(p.categorie, 'altele')
 		rand = [(_t('Versiune'), '%s (acum %s)' % (p.versiune, p.versiune_instalata))]
 	else:
+		# "Actualizeaza toate": lista lor, fiecare cu versiunea noua (cel mult trei randuri, apoi "si inca N")
 		titlu, nume, sub, ic = 'Actualizezi %d extensii?' % len(pachete), '%d extensii' % len(pachete), '', 'actualizari'
-		nume_ = ', '.join(p.titlu for p in pachete[:3]) + (' ' + _t('și încă %d') % (len(pachete) - 3) if len(pachete) > 3 else '')
-		rand = [(_t('Extensii'), nume_)]
+		lista = [numeCuVersiune(p.titlu, p.versiune) for p in pachete]
+		if len(lista) > 3:
+			lista = lista[:2] + [_t('și încă %d') % (len(lista) - 2)]
+		rand = [(_t('Extensii') if k == 0 else '', x) for k, x in enumerate(lista)]
 	rand += [(_t('Mărime'), P.marime_text(total) or _t('necunoscută')), (_t('Sursa'), ', '.join(surse))]
 	return {'fel': 'actualizeaza', 'titlu': titlu, 'nume': nume, 'subtitlu': sub, 'icoana': ic, 'randuri': rand,
 		'nota': _nota(catalog, pachete, nota), 'externe': surseExterne(catalog, pachete),
-		'notaCuloare': culoareNota(catalog, pachete), 'buton': N_('Actualizează'), 'argumente': a, 'repornire': True,
+		'notaCuloare': culoareNota(catalog, pachete), 'buton': N_('Actualizează'), 'argumente': a,
+		'repornire': any(p.categorie not in FARA_REPORNIRE_SCHIMBARE for p in pachete),
 		'textGata': _t('Gata. Extensiile sunt la zi.') if len(pachete) > 1 else None,
-		'pachete': [p.nume for p in pachete]}, None
+		'pachete': [p.nume for p in pachete], 'tinte': [_tinta(p) for p in pachete]}, None
 
 
 def planStergere(catalog, p, argumente=None):
@@ -557,7 +800,101 @@ def planStergere(catalog, p, argumente=None):
 		note.append(_t('Nu se află în nicio sursă, deci nu se va mai putea instala din nou de aici.'))
 	return {'fel': 'sterge', 'titlu': _t('Ștergi %s?') % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
 		'icoana': P.ICOANE.get(p.categorie, 'altele'), 'randuri': rand, 'nota': ' '.join(note), 'externe': [],
-		'buton': N_('Șterge'), 'argumente': a, 'repornire': True, 'implicitRenunta': True, 'pachete': [p.nume]}, None
+		'buton': N_('Șterge'), 'argumente': a, 'repornire': p.categorie not in FARA_REPORNIRE_SCHIMBARE,
+		'implicitRenunta': True, 'pachete': [p.nume], 'tinte': [_tinta(p)]}, None
+
+
+def _tinta(p):
+	"""un pachet al planului: numele, titlul, versiunea de dupa (la) si de dinainte (de), daca e modul de acces"""
+	return {'nume': p.nume, 'titlu': p.titlu, 'la': p.versiune or '', 'de': p.versiune_instalata or '',
+		'acces': p.categorie == 'acces'}
+
+
+def numeCuVersiune(titlu, versiune):
+	"""numele pachetului cu versiunea, pentru mesaje: "DAB+ din satelit 0.1.6"; cand versiunea e deja in nume
+	("Alfa 2.26.09-11968"), numai numele"""
+	v = (versiune or '').split(':')[-1]
+	baza = v.rsplit('-', 1)[0] if re.search(r'-r[0-9]', v) else v
+	cifre = re.findall(r'[0-9]+', baza)
+	titlu = titlu or ''
+	if not cifre:
+		return titlu
+	if '.'.join(cifre[:2]) in titlu:
+		return titlu
+	return ('%s %s' % (titlu, baza)).strip()
+
+
+def rezultatePachete(plan, radacina='/'):
+	"""([tintele facute], [tintele nefacute]) dupa opkg, din starea pachetelor: instalat sau actualizat = versiunea din
+	plan e instalata; sters = nu mai e instalat"""
+	inst = {}
+	try:
+		conf = P.citeste_configurarea(radacina)
+		for s in P.citeste_strofe(P._cale(radacina, conf.status_file)):
+			st = s.get('status', '').split()
+			if 'installed' in st and 'not-installed' not in st:
+				inst[s.get('package', '')] = s.get('version', '')
+	except Exception as e:
+		_jurnal('starea pachetelor: %s' % e)
+		return [], []
+	bune, rele = [], []
+	for t in plan.get('tinte') or []:
+		if plan.get('fel') == 'sterge':
+			facut = t['nume'] not in inst
+		else:
+			facut = inst.get(t['nume']) == t['la'] if t['la'] else t['nume'] in inst
+		(bune if facut else rele).append(t)
+	return bune, rele
+
+
+# ---------------------------------------------------------------- rezumatul listei descarcate
+
+def instantaneu(catalog):
+	"""{nume: versiune} ale pachetelor din liste, inainte de descarcare (pentru "nou" in rezumat)"""
+	if catalog is None:
+		return None
+	return dict((n, p.versiune) for n, p in catalog.pachete.items() if p.versiune)
+
+
+def rezumatListe(catalog, inainte=None, maxim=5):
+	"""Ce contine lista dupa descarcare, pe randuri, pentru fiecare feed si sursa singura: cate pluginuri si care (cu
+	versiunea; cel mult `maxim`, apoi "si inca N"), cele noi (care nu erau in lista de dinainte) si cele cu actualizare.
+	Acelasi text pe televizor si in pagina web."""
+	randuri = [_t('Lista pachetelor s-a descărcat.')]
+	grupe = [(numeFeed(f), set(f.nume())) for f in feeduri(catalog)] + [(n, {n}) for n, _a in surseSingure(catalog)]
+	for nume_g, surse in grupe:
+		pachete = sorted((p for p in catalog.pachete.values() if p.sursa in surse), key=lambda p: (p.titlu.lower(), p.nume))
+		if not pachete:
+			stare = _t('Niciun plugin deocamdată') if any(x in catalog.surse_cu_lista for x in surse) else \
+				_t('lista nu s-a putut descărca')
+			randuri.append('%s: %s' % (nume_g, stare))
+			continue
+		randuri.append('%s: %s' % (nume_g, _pluginuri(len(pachete))))
+		for p in pachete[:maxim]:
+			if p.actualizare:
+				semn = _t('actualizare de la %s') % p.versiune_instalata
+			elif inainte is not None and p.nume not in inainte:
+				semn = _t('nou')
+			elif p.instalat:
+				semn = _t('instalat')
+			else:
+				semn = ''
+			randuri.append('   %s%s' % (numeCuVersiune(p.titlu, p.versiune), ' (%s)' % semn if semn else ''))
+		if len(pachete) > maxim:
+			randuri.append('   ' + _t('și încă %d') % (len(pachete) - maxim))
+	return '\n'.join(randuri)
+
+
+def textDescarcare(catalog, stare, inainte=None):
+	"""mesajul de la sfarsitul descarcarii listei (cerute de om): rezumatul, sau motivul pe intelesul omului si, daca
+	s-a putut descarca macar o lista, rezumatul a ce este"""
+	stare = stare or {}
+	if stare.get('cod') == 0:
+		return rezumatListe(catalog, inainte)
+	motiv = stare.get('motiv') or _t('Lista pachetelor nu s-a putut descărca.')
+	if catalog.surse_cu_lista:
+		return motiv + '\n' + rezumatListe(catalog, inainte).split('\n', 1)[-1]
+	return motiv
 
 
 def planFisier(f, argumente=None):
@@ -652,13 +989,15 @@ def pazesteListeleHds():
 	return sterse
 
 
-def pornesteDescarcarea(ipkg=None):
+def pornesteDescarcarea(ipkg=None, inainte=None):
 	"""opkg update. `ipkg`: IpkgComponent-ul ecranului, cu ascultatorul lui pus deja; altfel unul nou (pagina).
 	Descarcarea se tine aici pana la sfarsit, deci se vede si de pe televizor, si din pagina. La sfarsit:
 	STARE['descarcare'] = {'cod', 'motiv', 'cand'} si catalogul paginii se citeste din nou."""
 	d = ipkg if ipkg is not None else IpkgComponent()
 	linii = []
 	STARE['ultima_descarcare'] = time.time()
+	if inainte is None:
+		inainte = instantaneu(_CATALOG['catalog'])
 
 	def eveniment(e, parametru):
 		if e == IpkgComponent.EVENT_LINE:
@@ -667,7 +1006,7 @@ def pornesteDescarcarea(ipkg=None):
 		elif e == IpkgComponent.EVENT_DONE:
 			d.removeCallback(eveniment)
 			STARE['descarcare'] = {'cod': parametru, 'motiv': '' if parametru == 0 else P.motiv_eroare(linii),
-				'cand': time.time()}
+				'cand': time.time(), 'inainte': inainte}
 			catalogVechi()
 	d.addCallback(eveniment)
 
@@ -720,6 +1059,7 @@ class Lucrare(object):
 		self._ascultatori = []
 		self.ipkg = ipkg if ipkg is not None else IpkgComponent()
 		self.ipkg.addCallback(self._eveniment)
+		self.radacina = '/'              # pentru starea pachetelor de la sfarsit (probele de pe PC dau alta)
 
 	def asculta(self, functie):
 		if functie not in self._ascultatori:
@@ -814,10 +1154,28 @@ class Lucrare(object):
 		if self.schimbat or cod == 0:
 			self.schimbat = True
 			trebuieRepornire = reincarcaPluginuri(self.plugins)
+		tinte = self.plan.get('tinte') or []
+		bune, rele = rezultatePachete(self.plan, self.radacina) if tinte and (cod == 0 or self.schimbat) else ([], tinte)
+		if tinte and (cod == 0 or self.schimbat):
+			# ce s-a facut si ce nu, pachet cu pachet, cu versiunea (0.6.6)
+			facut = {'instaleaza': N_('Instalat: %s'), 'actualizeaza': N_('Actualizat: %s'), 'sterge': N_('Șters: %s')}
+			nefacut = {'instaleaza': N_('Nu s-a instalat: %s'), 'actualizeaza': N_('Nu s-a actualizat: %s'),
+				'sterge': N_('Nu s-a șters: %s')}
+			for t in bune:
+				self._scrie('bun', _t(facut.get(fel, '%s')) % numeCuVersiune(t['titlu'], t['de'] if fel == 'sterge' else t['la']))
+			for t in rele:
+				self._scrie('eroare', _t(nefacut.get(fel, '%s')) % numeCuVersiune(t['titlu'], t['de'] if fel == 'sterge' else t['la']))
 		if cod == 0:
-			texte = {'instaleaza': _t('Gata. %s este instalat.'), 'fisier': _t('Gata. %s este instalat.'),
-				'actualizeaza': _t('Gata. %s este la zi.'), 'sterge': _t('Gata. %s a fost șters.')}
-			titlu = self.plan.get('textGata') or (texte.get(fel) or 'Gata. %s') % nume
+			if len(tinte) == 1 and bune:
+				# cu numele si versiunea: "Gata. Alfa 2.26.09-11968 a fost instalat."
+				t = tinte[0]
+				texte = {'instaleaza': _t('Gata. %s a fost instalat.'), 'actualizeaza': _t('Gata. %s a fost actualizat.'),
+					'sterge': _t('Gata. %s a fost șters.')}
+				titlu = texte.get(fel, 'Gata. %s') % numeCuVersiune(t['titlu'], t['de'] if fel == 'sterge' else t['la'])
+			else:
+				texte = {'instaleaza': _t('Gata. %s este instalat.'), 'fisier': _t('Gata. %s este instalat.'),
+					'actualizeaza': _t('Gata. %s este la zi.'), 'sterge': _t('Gata. %s a fost șters.')}
+				titlu = self.plan.get('textGata') or (texte.get(fel) or 'Gata. %s') % nume
 			stare, culoare = _t('Gata'), 'bun'
 			self._scrie('bun', _t('Terminat fără erori.'))
 			butoane = [N_('Închide')]
@@ -832,6 +1190,9 @@ class Lucrare(object):
 			elif self.plan.get('repornire'):
 				butoane = [N_('Închide'), N_('Repornește interfața')]
 				stare = _t('Unele schimbări se văd după repornirea interfeței.')
+			elif fel == 'instaleaza' and any(t['acces'] for t in bune):
+				# un modul de acces nou: nu porneste singur, se alege din ecranul modulelor
+				stare = _t('Îl pornești din ecranul modulelor.')
 		else:
 			motiv = P.motiv_eroare(self.linii)
 			if self.oprit:
@@ -846,6 +1207,13 @@ class Lucrare(object):
 		self.rezultat = {'reusit': cod == 0, 'titlu': titlu, 'stare': stare, 'culoare': culoare, 'butoane': butoane,
 			'ales': ales, 'repornire': 'Repornește interfața' in butoane}
 		scrieJurnal('---- cod %s' % cod)
+		# pachetele descarcate de opkg nu mai trebuie (cache-ul e in RAM): sterse acum, nu la repornire (0.6.6)
+		try:
+			n = P.curata_cache()
+			if n:
+				scrieJurnal('cache opkg: %s pachete sterse' % n)
+		except Exception as e:
+			_jurnal('cache opkg: %s' % e)
 		catalogVechi()
 		self._anunta('gata', cod)
 
@@ -907,6 +1275,18 @@ def incarcaCatalog(incarca=None):
 	_CATALOG['semn'] = _semn(c)
 	_CATALOG['catalog'] = c
 	return c
+
+
+def _pluginuri(n):
+	"""un plugin, 2 pluginuri, 20 de pluginuri (starea unui feed din fila Surse), cu formele de plural ale limbii"""
+	try:
+		from Components.HdsImportSurse import ngettext
+		return ngettext("%d plugin", "%d pluginuri", n) % n
+	except ImportError:
+		pass
+	if n == 1:
+		return "un plugin"
+	return "%d pluginuri" % n
 
 
 def _pachete_sursa(n):

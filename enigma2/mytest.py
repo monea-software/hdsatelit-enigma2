@@ -601,6 +601,13 @@ def runScreenTest():
 		HdsComutareRetea.porneste(session)
 	except Exception as e:
 		print("[mytest] trecerea pe alta retea:", e)
+	# HDSatelit: feedul pluginurilor externe (Components/HdsPluginuriExterne.py, 0.6.6): /etc/opkg/hds-pluginuri-externe.conf
+	# pe arhitectura procesorului, pus si dupa o actualizare prin pachete; numai un fisier mic, fara retea
+	try:
+		from Components import HdsPluginuriExterne
+		HdsPluginuriExterne.porneste()
+	except Exception as e:
+		print("[mytest] feedul pluginurilor externe:", e)
 	# HDSatelit: actualizarile prin pachete (Components/HdsActualizari.py): config-ul si verificarea zilnica (la 5
 	# minute dupa pornire, apoi o data pe zi; numai anunta, nu instaleaza nimic). Pornirea nu depinde de ea.
 	try:

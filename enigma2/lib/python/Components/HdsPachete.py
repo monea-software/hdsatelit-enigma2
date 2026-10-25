@@ -178,7 +178,7 @@ def compara_versiuni(a, b):
 # ---------------------------------------------------------------- texte
 
 def marime_text(octeti):
-	"""34 KB, 1,2 MB (virgula romaneasca); '' daca nu se stie."""
+	"""34 KB, 1,2 MB, 2,3 GB (virgula romaneasca); '' daca nu se stie."""
 	try:
 		n = int(octeti)
 	except (TypeError, ValueError):
@@ -192,7 +192,12 @@ def marime_text(octeti):
 	mb = n / (1024.0 * 1024.0)
 	if mb < 10:
 		return ('%.1f MB' % mb).replace('.', ',')
-	return '%d MB' % int(round(mb))
+	if mb < 1024:
+		return '%d MB' % int(round(mb))
+	gb = mb / 1024.0
+	if gb < 10:
+		return ('%.1f GB' % gb).replace('.', ',')
+	return '%d GB' % int(round(gb))
 
 
 _ANSI = re.compile(r'\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]')
@@ -342,6 +347,7 @@ class Configurare(object):
 		self.lists_dir = '/var/lib/opkg/lists'
 		self.status_file = '/var/lib/opkg/status'
 		self.info_dir = '/var/lib/opkg/info'
+		self.cache_dir = '/var/cache/opkg'  # option cache_dir: pachetele descarcate (in RAM pe receptor)
 		self.semnatura = False          # option check_signature 1
 
 	def nume_surse(self):
@@ -427,6 +433,8 @@ def citeste_configurarea(radacina='/'):
 					c.status_file = parti[2]
 				elif parti[1] == 'info_dir':
 					c.info_dir = parti[2]
+				elif parti[1] == 'cache_dir':
+					c.cache_dir = parti[2]
 				elif parti[1] == 'check_signature':
 					c.semnatura = parti[2] not in ('0', 'false', 'no')
 			elif cheie == 'lists_dir' and len(parti) >= 2:
@@ -493,7 +501,7 @@ def _dependente(text):
 
 class Pachet(object):
 	__slots__ = ('nume', 'categorie', 'titlu', 'subtitlu', 'descriere', 'versiune', 'versiune_instalata',
-		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin')
+		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'fisier', 'arhiva')
 
 	def __init__(self, nume):
 		self.nume = nume
@@ -510,6 +518,8 @@ class Pachet(object):
 		self.din_imagine = False
 		self.arhitectura = ''
 		self.dosar_plugin = ''
+		self.fisier = ''                # Filename din lista sursei (calea pachetului fata de adresa sursei)
+		self.arhiva = ''                # arhiva sursei de langa pachet (randul "Source archive:" din descriere)
 
 	@property
 	def instalat(self):
@@ -545,6 +555,17 @@ class Pachet(object):
 			self.titlu = scurt[:1].upper() + scurt[1:]
 			self.subtitlu = rezumat
 			self.descriere = (rezumat + ('\n' + extins if extins else '')).strip()
+
+
+# randul descrierii care numeste arhiva sursei, pusa langa pachet in feed (pachetele feedului pluginurilor externe:
+# "Source archive: <nume>-<versiune>.tar.gz, next to this package in the feed."); numai un nume de fisier, fara dosare
+_ARHIVA_SURSA = re.compile(r'(?:^|\n)[ \t]*Source archive:[ \t]*([A-Za-z0-9][A-Za-z0-9._+~\-]{0,200}?\.(?:tar\.gz|tar\.xz|tar\.bz2|tar\.zst|tgz|zip))(?=[\s,;]|\Z)')
+
+
+def arhiva_sursa(descriere):
+	"""numele arhivei sursei din descrierea unui pachet (randul "Source archive: <fisier>"), sau ''"""
+	m = _ARHIVA_SURSA.search(descriere or '')
+	return m.group(1) if m else ''
 
 
 def _text_descriere(strofa):
@@ -657,6 +678,8 @@ def incarca(radacina='/'):
 			p.sursa = sursa
 			p.depinde = _dependente(s.get('depends', ''))
 			p.texte(*_text_descriere(s))
+			p.fisier = s.get('filename', '')
+			p.arhiva = arhiva_sursa(s.get('description', ''))
 
 	# 2. pachetele instalate
 	status = _cale(radacina, conf.status_file)
@@ -681,6 +704,7 @@ def incarca(radacina='/'):
 			control = citeste_strofe(os.path.join(dosar_info, n + '.control'))
 			sursa_text = control[0] if control else s
 			p.texte(*_text_descriere(sursa_text))
+			p.arhiva = arhiva_sursa(sursa_text.get('description', ''))
 			p.marime_instalat = _int(sursa_text.get('installed-size'))
 			p.depinde = _dependente(s.get('depends', ''))
 		p.versiune_instalata = s.get('version', '') or '?'
@@ -795,6 +819,57 @@ def scrie_surse_utilizator(surse, radacina='/'):
 			pass
 		return _t('Fișierul surselor nu s-a putut scrie (%s).') % (getattr(e, 'strerror', None) or e)
 	return None
+
+
+# ---------------------------------------------------------------- cache-ul opkg
+
+def curata_cache(radacina='/', lacat='/var/run/opkg.lock'):
+	"""Sterge pachetele (.ipk) descarcate de opkg in cache_dir, dupa o instalare: pe receptor cache-ul e in RAM
+	(/var/cache -> /var/volatile/cache) si opkg le tinea pana la repornire (0.6.6; un pachet al imaginii are ~20 MB).
+	Numai cu lacatul lui opkg luat (lockf, fara asteptare): cat ruleaza alt opkg nu se atinge nimic (ar putea instala
+	chiar un fisier de acolo). Listele din cache (*_Packages.gz) raman. Intoarce numarul fisierelor sterse, sau None
+	cand ruleaza alt opkg."""
+	conf = citeste_configurarea(radacina)
+	dosar = _cale(radacina, conf.cache_dir)
+	try:
+		nume = [n for n in os.listdir(dosar) if n.endswith('.ipk')]
+	except OSError:
+		return 0
+	if not nume:
+		return 0
+	fd = None
+	try:
+		import fcntl
+	except ImportError:            # probele de pe Windows: fara lacat
+		fcntl = None
+	if fcntl is not None:
+		try:
+			fd = os.open(_cale(radacina, lacat), os.O_RDWR | os.O_CREAT, 0o644)
+		except OSError:
+			return None
+		try:
+			fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+		except (IOError, OSError):
+			os.close(fd)
+			return None
+	sterse = 0
+	try:
+		for n in nume:
+			p = os.path.join(dosar, n)
+			try:
+				if os.path.isfile(p) and not os.path.islink(p):
+					os.remove(p)
+					sterse += 1
+			except OSError:
+				pass
+	finally:
+		if fd is not None:
+			try:
+				fcntl.lockf(fd, fcntl.LOCK_UN)
+			except (IOError, OSError):
+				pass
+			os.close(fd)
+	return sterse
 
 
 # ---------------------------------------------------------------- fisiere .ipk de pe stick, disc sau retea
@@ -1141,6 +1216,10 @@ def linie_jurnal(linie, titluri=None):
 		return titluri.get(nume) or nume_scurt(nume)
 	l = _curat(linie, 200)
 	if not l or l == 'Collected errors:':
+		return '', ''
+	# la o actualizare opkg scoate fisierele vechi pe care pachetul nou nu le mai are ("Removing obsolete file X."):
+	# nu e stergerea unui pachet (randul ar fi fost "Se șterge obsolete")
+	if l.startswith('Removing obsolete file'):
 		return '', ''
 	m = _RE_DESCARC.match(l)
 	if m:

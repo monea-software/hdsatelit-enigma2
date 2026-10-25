@@ -1,11 +1,11 @@
-# HD Satelit 0.6.4 beta pentru Amiko Viper 4K V20
+# HD Satelit 0.6.6 beta pentru Amiko Viper 4K V20
 
-Sursa imaginii Enigma2 HD Satelit 0.6.4 (beta) pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea
+Sursa imaginii Enigma2 HD Satelit 0.6.6 (beta) pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea
 Software pentru HD Satelit. Interfața e enigma2 pe Python 3, cu skinul HDSatelit și interfața web proprie.
 
 Imaginea gata construită și pașii de instalare de pe stick: https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
 
-[English below](#hd-satelit-064-beta-for-the-amiko-viper-4k-v20)
+[English below](#hd-satelit-066-beta-for-the-amiko-viper-4k-v20)
 
 ## Ce e în depozit
 
@@ -15,13 +15,14 @@ Imaginea gata construită și pașii de instalare de pe stick: https://stb.hdsat
 | `meta-local/` | stratul OpenEmbedded HD Satelit: distribuția `hdsatelit`, imaginea `hdsatelit-image` și celelalte rețete |
 | `skin/usr/` | skinul HDSatelit (rețeta `hdsatelit-skin`) |
 
-Sunt fișierele din care s-a construit versiunea 0.6.4. Arborele git al dosarului `enigma2/` este
-`1691e648766266d33b6d7809fff676fca2c54d71`, același cu cel construit (`git rev-parse HEAD:enigma2`). Depozitul are câte un comit pe versiune.
+Sunt fișierele din care s-a construit versiunea 0.6.6. Arborele git al dosarului `enigma2/` este
+`5719095de67510d2e9ab2d2423af1516c5cac47f`, același cu cel construit (`git rev-parse HEAD:enigma2`). Depozitul are câte un comit pe versiune.
 
-Versiunea 0.6.4 e o actualizare prin pachete peste imaginea 0.6.0: imaginea 0.6.0 plus pachetul
-`enigma2-hdsatelit` 0.6.4, făcut din `enigma2/`. Stratul `meta-local/` și skinul sunt cele ale imaginii 0.6.0,
-neschimbate; se schimbă numai codul din `enigma2/`. Receptorul cu imaginea 0.6.0 primește versiunea 0.6.4 prin
-actualizare; imaginea pentru stick rămâne cea a versiunii 0.6.0 (comitul `v0.6.0` din acest depozit).
+Versiunea 0.6.6 e o actualizare prin pachete peste imaginea 0.6.0: imaginea 0.6.0 plus pachetele
+`enigma2-hdsatelit` 0.6.6, făcut din `enigma2/`, și `hdsatelit-skin` 0.1.0-r0.hds6, făcut din `skin/`. Stratul
+`meta-local/` e cel al imaginii 0.6.0, neschimbat; se schimbă codul din `enigma2/` și skinul: cel din `skin/` e
+skinul actualizării, nu cel al imaginii 0.6.0. Receptorul cu imaginea 0.6.0 primește versiunea 0.6.6 prin
+actualizare; imaginea pentru stick rămâne cea a versiunii 0.6.0 (comitul `v0.6.0` din acest depozit, cu skinul ei).
 
 ## Construirea
 
@@ -68,25 +69,28 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    cd /hds/hdsatelit-image
    git init -b main
    git add -A -f
-   GIT_COMMITTER_DATE="2026-10-24 15:27:14 +0300" git commit -m "HD Satelit 0.6.4"
+   GIT_COMMITTER_DATE="2026-10-25 14:06:58 +0200" git commit -m "HD Satelit 0.6.6"
    ```
 
    `-f` adaugă și fișierele pe care `.gitignore` din cod le-ar sări. Data comiterii intră în `/etc/image-version`
    (versiunea arătată pe receptor); cu data de mai sus iese la fel ca în imaginea publicată.
 
-4. Construirea pachetului `enigma2-hdsatelit` 0.6.4: cu stratul imaginii 0.6.0, iar numărul versiunii pachetului
-   îl primește bitbake dintr-un fișier citit cu `-R` (așa s-a construit actualizarea):
+4. Construirea pachetelor `enigma2-hdsatelit` 0.6.6 și `hdsatelit-skin` 0.1.0-r0.hds6: cu stratul imaginii
+   0.6.0, iar numărul versiunii pachetului `enigma2-hdsatelit` și revizia pachetului `hdsatelit-skin` le primește
+   bitbake dintr-un fișier citit cu `-R` (așa s-a construit actualizarea). Rețeta `hdsatelit-skin` ia skinul din
+   `/hds/skin`, adică din `skin/usr` al acestui comit (pasul 3):
 
    ```
    cd /calea/spre/build-enviroment/builds/hdsatelit/release/u57
    source env.source
-   printf '%s\n' 'PV:pn-enigma2-hdsatelit = "0.6.4+git${SRCPV}"' > actualizare-0.6.4.conf
-   bitbake -R "$PWD/actualizare-0.6.4.conf" enigma2-hdsatelit
+   printf '%s\n' 'PV:pn-enigma2-hdsatelit = "0.6.6+git${SRCPV}"' 'PKGR:pn-hdsatelit-skin = "r0.hds6"' > actualizare-0.6.6.conf
+   bitbake -R "$PWD/actualizare-0.6.6.conf" enigma2-hdsatelit hdsatelit-skin
    ```
 
-   Rezultatul: `tmp/deploy/ipk/u57/enigma2-hdsatelit_0.6.4+git0+<comiterea>-r0_u57.ipk`, unde `<comiterea>` sunt
-   primele 10 caractere ale comiterii din `/hds/hdsatelit-image`. Imaginea 0.6.0 se construiește din comitul
-   `v0.6.0`, cu pașii de acolo.
+   Rezultatul: `tmp/deploy/ipk/u57/enigma2-hdsatelit_0.6.6+git0+<comiterea>-r0_u57.ipk`, unde `<comiterea>` sunt
+   primele 10 caractere ale comiterii din `/hds/hdsatelit-image`, și
+   `tmp/deploy/ipk/all/hdsatelit-skin_0.1.0-r0.hds6_all.ipk`. Imaginea 0.6.0 se construiește din comitul
+   `v0.6.0`, cu pașii și skinul de acolo.
 
 Componentele fabricantului receptorului (driverele și bibliotecile Dinobot) sunt arhive binare închise. Le descarcă
 rețetele OE-Alliance la construire; nu sunt în acest depozit.
@@ -108,7 +112,7 @@ permite licența originală a acelei versiuni. Detalii în [enigma2/LICENSE](eni
 Fiecare rețetă din `meta-local/` are licența scrisă în ea (`LICENSE = ...`); programele altora aduse de rețete au
 licența lor.
 Componentele HD Satelit `hdsatelit-bootlogo`, `hdsatelit-netguard`, `hdsatelit-noduri`, `hdsatelit-skin` și `hdsatelit-watchdog` sunt publicate sub licența GPLv2, ca restul imaginii (hotărârea din
-23.10.2026). În rețetele versiunii 0.6.4 scrie încă `LICENSE = "CLOSED"`; se corectează în imaginea următoare.
+23.10.2026). În rețetele versiunii 0.6.6 scrie încă `LICENSE = "CLOSED"`; se corectează în imaginea următoare.
 Tot așa, nota din [enigma2/README.md](enigma2/README.md) după care skinul HDSatelit e „declarat deocamdată închis” nu
 mai e valabilă: skinul, din `skin/` și din `enigma2/HDSatelit/`, e sub GPLv2.
 
@@ -121,9 +125,9 @@ contact@hdsatelit.com
 
 ---
 
-# HD Satelit 0.6.4 beta for the Amiko Viper 4K V20
+# HD Satelit 0.6.6 beta for the Amiko Viper 4K V20
 
-Source code of the HD Satelit Enigma2 image 0.6.4 (beta) for the Amiko Viper 4K V20 satellite receiver, made by
+Source code of the HD Satelit Enigma2 image 0.6.6 (beta) for the Amiko Viper 4K V20 satellite receiver, made by
 Monea Software for HD Satelit. The user interface is enigma2 on Python 3, with the HDSatelit skin and its own web
 interface.
 
@@ -138,13 +142,15 @@ https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
 | `meta-local/` | the HD Satelit OpenEmbedded layer: distro `hdsatelit`, image `hdsatelit-image` and the other recipes |
 | `skin/usr/` | the HDSatelit skin (recipe `hdsatelit-skin`) |
 
-These are the files version 0.6.4 was built from. The git tree of the `enigma2/` folder is `1691e648766266d33b6d7809fff676fca2c54d71`,
+These are the files version 0.6.6 was built from. The git tree of the `enigma2/` folder is `5719095de67510d2e9ab2d2423af1516c5cac47f`,
 the same as the one that was built (`git rev-parse HEAD:enigma2`). The repository has one commit per version.
 
-Version 0.6.4 is a package update on top of the 0.6.0 image: the 0.6.0 image plus the `enigma2-hdsatelit`
-0.6.4 package, made from `enigma2/`. The `meta-local/` layer and the skin are those of the 0.6.0 image,
-unchanged; only the code in `enigma2/` changes. A receiver with the 0.6.0 image gets version 0.6.4 as an update;
-the image for the USB stick stays the one of version 0.6.0 (commit `v0.6.0` in this repository).
+Version 0.6.6 is a package update on top of the 0.6.0 image: the 0.6.0 image plus the `enigma2-hdsatelit`
+0.6.6 package, made from `enigma2/`, and the `hdsatelit-skin` 0.1.0-r0.hds6 package, made from `skin/`. The
+`meta-local/` layer is that of the 0.6.0 image, unchanged; the code in `enigma2/` and the skin change: the one in
+`skin/` is the skin of the update, not that of the 0.6.0 image. A receiver with the 0.6.0 image gets version
+0.6.6 as an update; the image for the USB stick stays the one of version 0.6.0 (commit `v0.6.0` in this
+repository, with its own skin).
 
 ## Building
 
@@ -191,25 +197,28 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    cd /hds/hdsatelit-image
    git init -b main
    git add -A -f
-   GIT_COMMITTER_DATE="2026-10-24 15:27:14 +0300" git commit -m "HD Satelit 0.6.4"
+   GIT_COMMITTER_DATE="2026-10-25 14:06:58 +0200" git commit -m "HD Satelit 0.6.6"
    ```
 
    `-f` also adds the files that the code's `.gitignore` would skip. The commit date goes into `/etc/image-version`
    (the version shown on the receiver); with the date above it comes out the same as in the published image.
 
-4. Building the `enigma2-hdsatelit` 0.6.4 package: with the layer of the 0.6.0 image, while bitbake gets the
-   package version number from a file read with `-R` (this is how the update was built):
+4. Building the `enigma2-hdsatelit` 0.6.6 and `hdsatelit-skin` 0.1.0-r0.hds6 packages: with the layer of the
+   0.6.0 image, while bitbake gets the version number of the `enigma2-hdsatelit` package and the revision of the
+   `hdsatelit-skin` package from a file read with `-R` (this is how the update was built). The `hdsatelit-skin` recipe
+   takes the skin from `/hds/skin`, that is from `skin/usr` of this commit (step 3):
 
    ```
    cd /path/to/build-enviroment/builds/hdsatelit/release/u57
    source env.source
-   printf '%s\n' 'PV:pn-enigma2-hdsatelit = "0.6.4+git${SRCPV}"' > actualizare-0.6.4.conf
-   bitbake -R "$PWD/actualizare-0.6.4.conf" enigma2-hdsatelit
+   printf '%s\n' 'PV:pn-enigma2-hdsatelit = "0.6.6+git${SRCPV}"' 'PKGR:pn-hdsatelit-skin = "r0.hds6"' > actualizare-0.6.6.conf
+   bitbake -R "$PWD/actualizare-0.6.6.conf" enigma2-hdsatelit hdsatelit-skin
    ```
 
-   The result: `tmp/deploy/ipk/u57/enigma2-hdsatelit_0.6.4+git0+<commit>-r0_u57.ipk`, where `<commit>` is the
-   first 10 characters of the commit in `/hds/hdsatelit-image`. The 0.6.0 image is built from commit `v0.6.0`, with
-   the steps given there.
+   The result: `tmp/deploy/ipk/u57/enigma2-hdsatelit_0.6.6+git0+<commit>-r0_u57.ipk`, where `<commit>` is the
+   first 10 characters of the commit in `/hds/hdsatelit-image`, and
+   `tmp/deploy/ipk/all/hdsatelit-skin_0.1.0-r0.hds6_all.ipk`. The 0.6.0 image is built from commit `v0.6.0`, with
+   the steps and the skin given there.
 
 The receiver manufacturer's components (the Dinobot drivers and libraries) are closed binary archives. The OE-Alliance
 recipes download them during the build; they are not in this repository.
@@ -231,7 +240,7 @@ the authors in [enigma2/AUTHORS](enigma2/AUTHORS) and [enigma2/CREDITS](enigma2/
 Each recipe in `meta-local/` states its license (`LICENSE = ...`); the third-party programs brought in by the recipes
 keep their own licenses.
 The HD Satelit components `hdsatelit-bootlogo`, `hdsatelit-netguard`, `hdsatelit-noduri`, `hdsatelit-skin` and `hdsatelit-watchdog` are published under the GPLv2 license, like the rest of the image
-(decision of 23.10.2026). The recipes of version 0.6.4 still say `LICENSE = "CLOSED"`; this is corrected in the
+(decision of 23.10.2026). The recipes of version 0.6.6 still say `LICENSE = "CLOSED"`; this is corrected in the
 next image. Likewise, the note in [enigma2/README.md](enigma2/README.md) that the HDSatelit skin is "declared closed
 for now" no longer applies: the skin, in `skin/` and in `enigma2/HDSatelit/`, is under the GPLv2.
 

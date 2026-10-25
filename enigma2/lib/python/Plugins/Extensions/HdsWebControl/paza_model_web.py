@@ -110,6 +110,8 @@ def stare(M=None, radacina=None, cale_stare=None):
 		"result": True,
 		"stare": v["stare"],
 		"treapta": v.get("treapta", 1),
+		# modelul confirmat (0.6.6: si V30, cu regulile inca in treapta a doua): fara nota "model neconfirmat"
+		"confirmat": bool(M.confirmat(reguli)) if v["stare"] != M.STARE_NU_SE_APLICA else True,
 		"sursa": v.get("sursa", "acum"),
 		"titlu": titlu,
 		"fraze": fraze,

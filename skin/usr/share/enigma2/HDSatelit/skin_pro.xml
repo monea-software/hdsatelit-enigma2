@@ -156,6 +156,7 @@
 		<widget source="session.CurrentService" render="FixedLabel" position="104,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="667,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="Label" position="120,792" size="532,84" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">Name,IfNoNumber,Fit=HdsBold:34:532</convert></widget>
+		<widget source="session.CurrentService" render="Picon" position="104,792" size="140,84" alphatest="blend" zPosition="3" vecini="104,792,136,84=252,136|248,792,420,84=396,272|248,792,420,1=396,272|248,875,420,1=396,272|248,793,1,82=396,1|264,792,388,84=412,240|104,792,564,84=252,416|104,792,564,1=252,416|104,875,564,1=252,416|104,793,1,82=252,1|120,792,532,84=268,384"><convert type="ServiceName">Reference</convert></widget>
 		<eLabel position="684,792" size="1,150" backgroundColor="hdsTrack" zPosition="2" />
 		<eLabel position="704,786" size="1100,94" backgroundColor="hdsCell" zPosition="2" />
 		<eLabel position="704,786" size="1100,2" backgroundColor="hdsBrand" zPosition="3" />
@@ -1080,6 +1081,7 @@
 	<screen name="SecondInfoBar" position="72,40" size="1776,1000" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<!-- Pro: capul din Stitch (bara-informatii-extinsa) -->
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsBrand" zPosition="1" />
+		<widget source="session.CurrentService" render="Picon" position="24,16" size="150,90" alphatest="blend" zPosition="2" vecini="24,16,104,64=198,104|144,14,1290,52=318,1116|24,14,1410,52=198,1236|144,66,96,40=318,96|246,66,1188,40=420,1014"><convert type="ServiceName">Reference</convert></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="24,16" size="104,64" backgroundColor="hdsBrand" zPosition="2"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="Label" position="24,16" size="104,64" font="HdsBold;40" foregroundColor="white" backgroundColor="hdsBrand" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="144,14" size="1290,52" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Name,IfNumber</convert></widget>
@@ -1577,6 +1579,7 @@
 	<screen name="HdsSecondInfoBarFereastra" position="72,40" size="1776,624" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<!-- Pro: capul din Stitch (bara-informatii-extinsa) -->
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsBrand" zPosition="1" />
+		<widget source="session.CurrentService" render="Picon" position="24,16" size="150,90" alphatest="blend" zPosition="2" vecini="24,16,104,64=198,104|144,14,1290,52=318,1116|24,14,1410,52=198,1236|144,66,96,40=318,96|246,66,1188,40=420,1014"><convert type="ServiceName">Reference</convert></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="24,16" size="104,64" backgroundColor="hdsBrand" zPosition="2"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="Label" position="24,16" size="104,64" font="HdsBold;40" foregroundColor="white" backgroundColor="hdsBrand" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="144,14" size="1290,52" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Name,IfNumber</convert></widget>

@@ -73,6 +73,9 @@
 			<item level="1" text="Action on short powerbutton press">config.usage.on_short_powerpress</item>
 			<item level="1" text="Position of finished Timers in Timerlist">config.usage.timerlist_finished_timer_position</item>
 			<item level="0" text="Infobar timeout">config.usage.infobar_timeout</item>
+			<!-- siglele canalelor (Components/Renderer/Picon.py, Components/HdsPiconBare.py): pornita din fabrica, se schimba pe
+			     loc; pe bare locul siglei si mutarea textelor numai cat se vede o sigla; in web: /setari?id=usage si lista /canale -->
+			<item level="0" text="Siglele canalelor (piconuri)" description="Da: sigla canalului se vede pe bara de informații, pe a doua bară, în lista de canale și în ghid, iar în interfața web în lista de canale, dacă receptorul o are (în dosarul picon din memoria lui, de pe disc sau de pe stick; o aduce și importul din altă imagine). Pe bare, textele se mută la dreapta numai cât se vede sigla. Nu: nicio siglă.">config.usage.hds_piconuri</item>
 			<!-- mesajul de ecran negru (Components/HdsEcranNegru.py, Screens/HdsEcranNegru.py); in web: panoul principal -->
 			<item level="0" text="Explicații pe ecranul negru" requires="HdsEcranNegru" description="Da: cât timp ecranul rămâne negru (canal criptat, fără semnal, canal mutat, tuner ocupat și altele), pe mijlocul ecranului scrie de ce și ce se poate face. EXIT ascunde mesajul. Nu: ferestrele scurte de eroare, ca înainte.">config.usage.hds_ecran_negru</item>
 			<item level="0" text="Analiza fluxului pe ecranul negru" requires="HdsEcranNegru" conditional="config.usage.hds_ecran_negru.value" description="La canalele fără imagine (serviciu de date, format necunoscut), receptorul poate citi din flux ce trimite canalul: fișiere, date IP, actualizări, aplicații. La apăsarea OK: numai când ceri, cu OK pe mesaj. Automat: imediat ce apare mesajul.">config.usage.hds_analiza_flux</item>

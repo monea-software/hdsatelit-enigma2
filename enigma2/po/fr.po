@@ -52951,3 +52951,273 @@ msgstr "Plugins de la sauvegarde"
 #: lib/python/Components/HdsImportSurse.py lib/python/Components/HdsImportExtra.py lib/python/Components/HdsImportRetea.py lib/python/Components/HdsImportAltaImagine.py lib/python/Plugins/Extensions/HdsImportSetari/plugin.py lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py
 msgid "Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații."
 msgstr "Ils sont dans les sources du récepteur et ne sont pas installés. Chacun a sa question, comme dans Extensions et applications."
+
+#: data/setup.xml
+msgid "Siglele canalelor (piconuri)"
+msgstr "Logos des chaînes (picons)"
+
+#: data/setup.xml
+msgid "Da: sigla canalului se vede pe bara de informații, pe a doua bară, în lista de canale și în ghid, iar în interfața web în lista de canale, dacă receptorul o are (în dosarul picon din memoria lui, de pe disc sau de pe stick; o aduce și importul din altă imagine). Pe bare, textele se mută la dreapta numai cât se vede sigla. Nu: nicio siglă."
+msgstr "Oui : le logo de la chaîne s'affiche dans la barre d'informations, dans la deuxième barre, dans la liste des chaînes et dans le guide, et dans l'interface web dans la liste des chaînes, si le récepteur l'a (dans le dossier picon de sa mémoire, sur un disque ou sur une clé USB ; l'importation depuis une autre image l'apporte aussi). Dans les barres, les textes se décalent vers la droite seulement tant qu'un logo est affiché. Non : aucun logo."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Monea Software (pluginuri externe)"
+msgstr "Monea Software (plugins externes)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Feed întreținut și oferit de Monea Software (moneasoftware.com), care se ocupă de pluginuri și de tot ce e nevoie pentru ele. Vrei și alte pluginuri aici? Scrie la contact@moneasoftware.com."
+msgstr "Feed maintenu et proposé par Monea Software (moneasoftware.com), qui s'occupe des plugins et de tout ce dont ils ont besoin. Tu veux d'autres plugins ici ? Écris à contact@moneasoftware.com."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Vine din feedul pluginurilor externe, întreținut de Monea Software (moneasoftware.com)."
+msgstr "Provient du feed des plugins externes, maintenu par Monea Software (moneasoftware.com)."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Albastru descarcă sursa"
+msgstr "Bleu télécharge le code source"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Niciun plugin deocamdată"
+msgstr "Aucun plugin pour l'instant"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Lista nedescărcată"
+msgstr "Liste non téléchargée"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Probă"
+msgstr "Test"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Arhitecturi"
+msgstr "Architectures"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Fișierele"
+msgstr "Fichiers"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK sau Albastru descarcă lista"
+msgstr "OK ou Bleu télécharge la liste"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Receptorul alege singur adresele potrivite pentru procesorul și modelul lui."
+msgstr "Le récepteur choisit seul les adresses qui conviennent à son processeur et à son modèle."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Feed întreținut de Monea Software"
+msgstr "Feed maintenu par Monea Software"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Descarcă sursa"
+msgstr "Télécharger le code source"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Sursa pluginului %s"
+msgstr "Code source du plugin %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Ia fișierul pe calculator"
+msgstr "Récupérer le fichier sur l'ordinateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Oprește descărcarea"
+msgstr "Arrêter le téléchargement"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Se află mărimea sursei și locul unde se salvează..."
+msgstr "Recherche de la taille du code source et de l'emplacement d'enregistrement..."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Se descarcă deja o sursă. Așteaptă să se termine."
+msgstr "Un code source est déjà en téléchargement. Attends la fin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Apasă din nou Descarcă sursa."
+msgstr "Appuie de nouveau sur Télécharger le code source."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Se descarcă sursa pluginului %s"
+msgstr "Téléchargement du code source du plugin %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Nu se descarcă nicio sursă acum."
+msgstr "Aucun code source n'est en téléchargement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Nicio sursă descărcată acum."
+msgstr "Aucun code source téléchargé pour l'instant."
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "Feedul: %s"
+msgstr "Feed : %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Arhiva"
+msgstr "Archive"
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "Sursa pluginului %s s-a descărcat"
+msgstr "Le code source du plugin %s est téléchargé"
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "Apasă EXIT încă o dată ca să oprești descărcarea."
+msgstr "Appuie encore une fois sur EXIT pour arrêter le téléchargement."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Sursa deschisă (open source) nu a fost găsită în acest feed pentru acest plugin."
+msgstr "Le code source ouvert (open source) n'a pas été trouvé dans ce feed pour ce plugin."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "stick-ul USB"
+msgstr "la clé USB"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "disc"
+msgstr "le disque"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Feedul: %s · Pluginul: %s"
+msgstr "Feed : %s · Plugin : %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Nu am găsit un stick USB sau un disc cu loc liber destul pentru sursa pluginului %s (%s). Pune un stick USB și încearcă din nou. În memoria receptorului nu se descarcă."
+msgstr "Je n'ai trouvé ni clé USB ni disque avec assez d'espace libre pour le code source du plugin %s (%s). Branche une clé USB et réessaie. Rien n'est téléchargé dans la mémoire du récepteur."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "mărime necunoscută"
+msgstr "taille inconnue"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Descarci sursa pluginului %s?"
+msgstr "Télécharger le code source du plugin %s ?"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Feedul"
+msgstr "Feed"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Fișier mare (%s): descărcarea poate dura. Se salvează pe %s."
+msgstr "Fichier volumineux (%s) : le téléchargement peut prendre du temps. Il est enregistré sur %s."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "%s din %s"
+msgstr "%s sur %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Gata. Sursa pluginului %s este în %s"
+msgstr "Terminé. Le code source du plugin %s est dans %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Descărcarea a fost oprită. Nu a rămas niciun fișier pe jumătate."
+msgstr "Le téléchargement a été arrêté. Aucun fichier à moitié téléchargé n'est resté."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Nu mai este loc pe %s. Nu a rămas niciun fișier pe jumătate."
+msgstr "Il n'y a plus de place sur %s. Aucun fichier à moitié téléchargé n'est resté."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Descărcarea sursei nu a reușit. Verifică legătura la internet și încearcă din nou. Nu a rămas niciun fișier pe jumătate."
+msgstr "Le téléchargement du code source a échoué. Vérifie la connexion internet et réessaie. Aucun fichier à moitié téléchargé n'est resté."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%d plugin"
+msgid_plural "%d pluginuri"
+msgstr[0] "%d plugin"
+msgstr[1] "%d plugins"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "stick-ul %s"
+msgstr "la clé %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "discul %s"
+msgstr "le disque %s"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Descarci sursa %s (%s) pe %s?"
+msgstr "Télécharger le code source de %s (%s) sur %s ?"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "Descarci sursa %s pe %s?"
+msgstr "Télécharger le code source de %s sur %s ?"
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "E un fișier mare (%s)."
+msgstr "C'est un gros fichier (%s)."
+
+#: lib/python/Components/HdsSursaPachet.py
+msgid "E un fișier foarte mare (%s); descărcarea poate dura mult."
+msgstr "C'est un très gros fichier (%s) ; le téléchargement peut être long."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Lista pachetelor s-a descărcat."
+msgstr "La liste des paquets a été téléchargée."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "lista nu s-a putut descărca"
+msgstr "la liste n'a pas pu être téléchargée"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "actualizare de la %s"
+msgstr "mise à jour depuis %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "nou"
+msgstr "nouveau"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "instalat"
+msgstr "installé"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalat: %s"
+msgstr "Installé : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Actualizat: %s"
+msgstr "Mis à jour : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Șters: %s"
+msgstr "Supprimé : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat: %s"
+msgstr "Non installé : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a actualizat: %s"
+msgstr "Non mis à jour : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a șters: %s"
+msgstr "Non supprimé : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Gata. %s a fost instalat."
+msgstr "Terminé. %s a été installé."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Gata. %s a fost actualizat."
+msgstr "Terminé. %s a été mis à jour."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Îl pornești din ecranul modulelor."
+msgstr "Tu le démarres depuis l'écran des modules."
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "Nicio actualizare de instalat."
+msgstr "Aucune mise à jour à installer."
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "Actualizează toate"
+msgstr "Tout mettre à jour"
+
+#: lib/python/Screens/HdsExtensii.py
+msgid "MENU actualizează toate (%d)"
+msgstr "MENU met tout à jour (%d)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
+msgid "Actualizează toate (%d)"
+msgstr "Tout mettre à jour (%d)"

@@ -103,6 +103,14 @@ CHEI_AVERTISMENT = ("hw", "partitii", "kernel")
 # cheia si valoarea care pun regulile in treapta a doua (orice alta valoare, sau lipsa, = treapta intai)
 CHEIE_CONFIRMAT = "confirmat"
 NECONFIRMAT = "nu"
+# modelele confirmate pe un receptor adevarat DUPA ce imaginea lor a fost construita cu "confirmat=nu" (regulile vin cu
+# imaginea, deci o actualizare prin pachete nu le schimba): Amiko Viper 4K V30, din 0.6.6 (probat de un tester pe
+# un receptor adevarat: merge). Pentru ele nota si mesajul "Model neconfirmat: software pentru testeri" nu mai
+# apar (confirmat()); valorile citite care difera raman randuri tehnice in mesaj si in pagina. Treapta DECIZIEI ramane cea din reguli (treapta()): pe V30 valorile hw, partitii si marimea
+# nucleului din reguli sunt inca cele de la V20, nemasurate pe un V30, iar treapta intai le-ar face hotaratoare si ar
+# putea opri interfata pe un V30 adevarat; garda din enigma2.sh (awk) le trateaza la fel. Regulile V30 primesc valorile
+# masurate (si fara confirmat=nu) in imaginea urmatoare. V40 ramane neconfirmat.
+MODELE_CONFIRMATE = ("viper4kv30",)
 # cheile obligatorii ale fisierului de reguli si ale marcajului
 CHEI_REGULI = ("format", "distro", "model", "machinebuild", "chip", "boxtype", "hw", "partitions", "kernel_part",
 	"kernel_kib", "rootfs_part")
@@ -522,8 +530,17 @@ def amprentaDinStare(st, baza=None):
 
 
 def treapta(reguli):
-	"""2 pentru regulile unui model neconfirmat („confirmat=nu”), altfel 1 (si fara reguli)"""
+	"""2 pentru regulile unui model neconfirmat ("confirmat=nu"), altfel 1 (si fara reguli). Treapta DECIZIEI (ce
+	cheie opreste si ce cheie numai avertizeaza), aceeasi cu a garzii din enigma2.sh; nota "model neconfirmat" tine de
+	confirmat()."""
 	return 2 if (reguli or {}).get(CHEIE_CONFIRMAT) == NECONFIRMAT else 1
+
+
+def confirmat(reguli):
+	"""True pentru un model confirmat: regulile fara "confirmat=nu" sau un model din MODELE_CONFIRMATE (V30). Hotaraste
+	numai textele: nota de la pornire si mesajul ecranului si al paginii paza de model."""
+	reguli = reguli or {}
+	return treapta(reguli) == 1 or reguli.get("machinebuild", "") in MODELE_CONFIRMATE
 
 
 def tipuriPlaca(reguli):
@@ -921,11 +938,13 @@ def mesajStare(v):
 	"""(titlu, [fraze], [randuri tehnice]) pentru orice stare (pagina web o arata si pe receptorul potrivit)"""
 	if v.get("stare") == STARE_NEPOTRIVIT:
 		return mesajPornire(v)
-	if v.get("stare") == STARE_POTRIVIT and treapta(v.get("reguli")) == 2:
+	if v.get("stare") == STARE_POTRIVIT and not confirmat(v.get("reguli")):
 		return mesajNeconfirmat(v)
 	if v.get("stare") == STARE_POTRIVIT:
+		# un model confirmat dupa scrierea imaginii (MODELE_CONFIRMATE) poate avea inca avertismente: randuri tehnice
 		return (_("Receptorul este cel potrivit"), [textPentru(v.get("reguli") or {}, v.get("versiune")),
-			_("Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.")], [])
+			_("Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.")],
+			randuriTehnice(v.get("avertismente") or []))
 	return (_("Paza de model nu se aplică aici"), [_("Software-ul care rulează nu are semnul receptorului (de exemplu "
 		"în emulatorul de pe calculator), deci paza de model nu verifică nimic.")], [])
 
@@ -934,7 +953,7 @@ def notaNeconfirmat(radacina=None, cale_stare=None):
 	"""Textul notei de la pornire pentru un model neconfirmat care a trecut paza (titlul pe primul rand, frazele,
 	apoi randurile tehnice), sau None (model confirmat, alt receptor, fara reguli). Pentru mytest.py."""
 	reguli = citesteReguli(radacina)
-	if not reguli or treapta(reguli) != 2:
+	if not reguli or confirmat(reguli):
 		return None
 	v = verdict(radacina, cale_stare)
 	if v.get("stare") != STARE_POTRIVIT:

@@ -130,6 +130,14 @@ def plan(ecran):
 	return rez
 
 
+def _decalajSigla(ecran, o):
+	try:
+		from Components.HdsPiconBare import decalaj
+		return decalaj(ecran, o)
+	except Exception:
+		return 0, 0
+
+
 def aplica(ecran, arata=None):
 	"""Vecinii pictogramelor ecranului la locul lor: cu pictograma (setarea pornita) sau fara ea."""
 	p = getattr(ecran, "_hdsPictogramaVecini", None)
@@ -143,6 +151,9 @@ def aplica(ecran, arata=None):
 		if inst is None:
 			continue
 		x, l = cu if arata else fara
+		# un vecin si al siglei canalului (Components/HdsPiconBare): plus deplasarea ei, cat sigla se vede
+		dx, dl = _decalajSigla(ecran, o)
+		x, l = x + dx, l + dl
 		try:
 			poz, mar = inst.position(), inst.size()
 			if poz.x() != x:

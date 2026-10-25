@@ -279,8 +279,13 @@
 	<!-- ========== Bara obisnuita (design.md 6.4), fereastra doar cat panoul: 72,802 1776x232 ========== -->
 	<screen name="HdsInfoBarBase" position="72,802" size="1776,232">
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsLine" zPosition="1" />
-		<!-- fara loc pentru sigla: picon-urile nu sunt inca in imagine; cand vor fi, locul si mutarea textelor la
-		     dreapta vin numai cu picon-urile pornite din meniu -->
+		<!-- sigla canalului (Components/Renderer/Picon.py), 150x90 in stanga primelor doua randuri. Locul ei se face numai cat
+		     se vede o sigla adevarata (setarea "Siglele canalelor (piconuri)" pornita si sigla gasita pentru canal): numarul,
+		     numele, ora si numele emisiunii de acum se muta atunci la dreapta cu 174 px (regulile din vecini,
+		     Components/HdsPiconBare.py); fara sigla raman in stanga, fara loc gol -->
+		<widget source="session.CurrentService" render="Picon" position="24,32" size="150,90" alphatest="blend" zPosition="2" vecini="24,18,120,56=198,120|152,18,756,56=326,582|24,18,884,56=198,710|24,82,100,44=198,100|152,82,1294,44=326,1120">
+			<convert type="ServiceName">Reference</convert>
+		</widget>
 		<!-- numarul din lista de canale; numele dupa el (Name,IfNumber) sau, la un canal fara numar (pornit din Sateliti,
 		     Toate, Furnizori), in locul lui (Name,IfNoNumber), fara loc gol in stanga -->
 		<widget source="session.CurrentService" render="Label" position="24,18" size="120,56" font="HdsBold;44" foregroundColor="hdsBrandLight" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2">
@@ -529,8 +534,12 @@
 	<!-- ========== Pagina tehnica (design.md 6.5), pe tot ecranul: 72,40 1776x1000, acelasi chenar ca ecranul Audio. Implicita; varianta fereastra de dedesubt se alege din panoul skinului. Capul (0-160) ca in fereastra; paginile marite pe inaltime (continut 168-888), stratul DVB-T2 / DAB la 888 (textul in zona sigura EBU). ========== -->
 	<screen name="SecondInfoBar" position="72,40" size="1776,1000" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsLine" zPosition="1" />
-		<!-- capul paginii: fara loc pentru sigla, ca la bara de jos (locul si mutarea textelor la dreapta vin numai cu
-		     picon-urile pornite din meniu); numele dupa numar sau, la un canal fara numar, in locul lui -->
+		<!-- capul paginii: sigla canalului 150x90 in stanga, ca la bara de jos: locul ei se face numai cat se vede o sigla
+		     adevarata (numarul, numele, ora si emisiunea de acum mutate la dreapta cu 174 px, regulile din vecini,
+		     Components/HdsPiconBare.py); numele dupa numar sau, la un canal fara numar, in locul lui -->
+		<widget source="session.CurrentService" render="Picon" position="24,16" size="150,90" alphatest="blend" zPosition="2" vecini="24,14,110,52=198,110|140,14,1296,52=314,1122|24,14,1412,52=198,1238|24,66,110,40=198,110|140,66,1296,40=314,1122">
+			<convert type="ServiceName">Reference</convert>
+		</widget>
 		<widget source="session.CurrentService" render="Label" position="24,14" size="110,52" font="HdsBold;40" foregroundColor="hdsBrandLight" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2">
 			<convert type="HdsInfo">ChannelNumber</convert>
 		</widget>
@@ -990,8 +999,12 @@
 	<!-- ========== Pagina tehnica, varianta fereastra sus (72,40 1776x624), aleasa din panoul skinului (HdsSkinSetari, „Pagina tehnica: Fereastra”). Panoul schimba numele intre acest ecran si cel de mai sus; nu se schimba de mana. ========== -->
 	<screen name="HdsSecondInfoBarFereastra" position="72,40" size="1776,624" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsLine" zPosition="1" />
-		<!-- capul paginii: fara loc pentru sigla, ca la bara de jos (locul si mutarea textelor la dreapta vin numai cu
-		     picon-urile pornite din meniu); numele dupa numar sau, la un canal fara numar, in locul lui -->
+		<!-- capul paginii: sigla canalului 150x90 in stanga, ca la bara de jos: locul ei se face numai cat se vede o sigla
+		     adevarata (numarul, numele, ora si emisiunea de acum mutate la dreapta cu 174 px, regulile din vecini,
+		     Components/HdsPiconBare.py); numele dupa numar sau, la un canal fara numar, in locul lui -->
+		<widget source="session.CurrentService" render="Picon" position="24,16" size="150,90" alphatest="blend" zPosition="2" vecini="24,14,110,52=198,110|140,14,1296,52=314,1122|24,14,1412,52=198,1238|24,66,110,40=198,110|140,66,1296,40=314,1122">
+			<convert type="ServiceName">Reference</convert>
+		</widget>
 		<widget source="session.CurrentService" render="Label" position="24,14" size="110,52" font="HdsBold;40" foregroundColor="hdsBrandLight" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2">
 			<convert type="HdsInfo">ChannelNumber</convert>
 		</widget>

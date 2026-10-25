@@ -1,6 +1,70 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.6",
+   "build": "0066202610251100",
+   "data": "25.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Feedul pluginurilor externe de la Monea Software vine acum cu imaginea: pluginurile lui apar în Extensii, gata de instalat.",
+     "en": "The external plugins feed from Monea Software is now built in: its plugins show up in Extensions, ready to install."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Extensii > Surse arată acum numai feedurile, HD Satelit și Monea Software (pluginuri externe), plus sursele adăugate de tine; receptorul alege singur ce i se potrivește.",
+     "en": "Extensions > Sources now shows only the feeds, HD Satelit and Monea Software (external plugins), plus the sources you added; the receiver picks what suits it on its own."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Extensii, sub numele fiecărui pachet scrie de unde vine, iar pluginurile cu sursa deschisă lângă ele au butonul Descarcă sursa (tasta albastră), care o salvează pe stick.",
+     "en": "In Extensions, each package shows where it comes from under its name, and plugins with their open source next to them have a Download source button (blue key) that saves it to the stick."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Modelul V30 este acum confirmat: nota pentru testeri nu mai apare la pornire.",
+     "en": "The V30 model is now confirmed: the note for testers no longer shows at startup."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "După o instalare din Extensii, pachetele descărcate se șterg din memoria receptorului, iar unele pachete nu mai cer repornirea interfeței.",
+     "en": "After an installation from Extensions, the downloaded packages are deleted from the receiver's memory, and some packages no longer ask for an interface restart."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Extensii, tasta MENU actualizează toate pachetele odată, iar la sfârșitul fiecărei instalări și al descărcării listei se vede exact ce s-a făcut.",
+     "en": "In Extensions, the MENU key updates all packages at once, and at the end of each installation and list download you see exactly what was done."
+    }
+   ]
+  },
+  {
+   "versiune": "0.6.5",
+   "build": "0065202610242100",
+   "data": "24.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Siglele canalelor (piconuri) se văd acum și pe bara de informații și pe a doua bară, în ambele teme; numele canalului se mută la dreapta numai când are siglă.",
+     "en": "Channel logos (picons) now also show on the info bar and on the second bar, in both themes; the channel name moves to the right only when there is a logo."
+    },
+    {
+     "fel": "nou",
+     "ro": "Rând nou în Setări generale și în interfața web: Siglele canalelor (piconuri). Oprit, nu se mai vede nicio siglă, nici în lista de canale din web.",
+     "en": "New row in General settings and in the web interface: Channel logos (picons). When it is off, no logo shows, not even in the web channel list."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Siglele canalelor se văd acum și în lista de canale și în ghid, întregi chiar și în casetele mici (fișierele obișnuite de 220x132).",
+     "en": "Channel logos now also show in the channel list and in the guide, whole even in the small boxes (the usual 220x132 files)."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Meniul listei de canale are un singur rând pentru Favorite, iar Import canale și setări nu mai e marcat ca netestat.",
+     "en": "The channel list menu has a single row for Favourites, and Import channels and settings is no longer marked as untested."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.4",
    "build": "0064202610241520",
    "data": "24.10.2026",

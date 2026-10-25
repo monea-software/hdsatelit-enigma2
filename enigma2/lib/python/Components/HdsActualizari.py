@@ -1320,6 +1320,13 @@ class Actualizari(object):
 
 		def gata(ramase, eroare):
 			goleste_dosarul()
+			# pachetele descarcate de opkg (dependintele din feed) nu mai trebuie: cache-ul e in RAM (0.6.6)
+			try:
+				n = P.curata_cache(radacina)
+				if n:
+					self._jurnal('cache opkg: %s pachete sterse' % n)
+			except Exception as e:
+				self._jurnal('cache opkg: %s' % e)
 			schimbat = len(ramase or []) < len(planificate)
 			self.faza, self.progres = 'liber', (0, 0)
 			if eroare is None and cod == 0 and not ramase:

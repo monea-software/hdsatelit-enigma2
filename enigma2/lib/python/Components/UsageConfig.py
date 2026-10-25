@@ -183,6 +183,9 @@ def InitUsageConfig():
 	# HDSatelit: in lista 'Sateliți' (Screens/ChannelSelection.py, hdsUmpleSateliti) si randurile 'Furnizori' si 'Nou' ale
 	# fiecarui satelit, sub antetul lui; oprita din fabrica: un singur rand pe satelit (furnizorii pe tasta galbena)
 	config.usage.hds_lista_furnizori_nou = ConfigYesNo(default = False)
+	# HDSatelit: siglele canalelor (Components/Renderer/Picon.py): oprita, nicio sigla nu se arata (caseta ramane goala,
+	# transparenta), iar pe bare textele raman la locul lor (Components/HdsPiconBare.py); se schimba pe loc
+	config.usage.hds_piconuri = ConfigYesNo(default = True)
 
 	config.usage.blinking_display_clock_during_recording = ConfigYesNo(default = False)
 

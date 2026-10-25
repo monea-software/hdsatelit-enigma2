@@ -778,10 +778,17 @@ def _probeaza(tinte, termen, conectare, tacere, citire, sonda=None):
 	rezultate = {}
 	lacat = threading.Lock()
 	fire = []
-	for cheie, gazda, port in tinte:
-		def lucru(cheie=cheie, gazda=gazda, port=port):
+	for tinta in tinte:
+		cheie, gazda, port = tinta[:3]
+		rezerva = tinta[3] if len(tinta) > 3 else None
+
+		def lucru(cheie=cheie, gazda=gazda, port=port, rezerva=rezerva):
 			try:
 				r = sonda(gazda, port, conectare, tacere, citire)
+				# un port care asculta pe '::' (IPv6 si IPv4 pe acelasi socket) se probeaza intai pe ::1; un receptor fara
+				# adresa IPv6 de loopback ("Cannot assign requested address") ii raspunde numai pe 127.0.0.1
+				if rezerva and r.get('stare') == 'nu_raspunde':
+					r = sonda(rezerva, port, conectare, tacere, citire)
 			except Exception:
 				r = {'stare': 'nu_raspunde', 'schema': 'http', 'cod_http': None, 'nume': '', 'sursa_nume': ''}
 			with lacat:
@@ -1046,7 +1053,8 @@ def cauta(sistem=None, porturi_excluse=(), limita=LIMITA_CAUTARE, conectare=LIMI
 	for cam in ordonate:
 		for port in sorted(cam.porturi):
 			gazde[(cam.cheie, port)] = _gazda_proba(cam.porturi[port])
-			tinte.append(((cam.cheie, port), gazde[(cam.cheie, port)][0], port))
+			rezerva = '127.0.0.1' if gazde[(cam.cheie, port)][0] == '::1' and '::' in cam.porturi[port] else None
+			tinte.append(((cam.cheie, port), gazde[(cam.cheie, port)][0], port, rezerva))
 	verificate = _probeaza(tinte[:PORTURI_MAXIM], termen, conectare, tacere, citire, sonda)
 
 	lista = []

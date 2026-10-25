@@ -8,9 +8,35 @@
 # cauta_sigla(). Fara sigla se arata picon_default.png (in skinul HDSatelit un dreptunghi transparent: caseta ramane
 # goala, fara semn care sa para o eroare). Cu atributul de skin defaultPerType="1" lipsa se arata cu
 # picon_default_tv.png sau picon_default_radio.png din skinul activ, cand exista.
+#
+# Sigla se potriveste in caseta din skin (ePixmap.setScale): un picon obisnuit de 220x132 intra intreg si in casetele de
+# 110x66 sau 150x90 (fara potrivire se vedea numai coltul lui din stanga sus).
+# Setarea "Siglele canalelor (piconuri)" (config.usage.hds_piconuri, din fabrica da): oprita, nicio sigla nu se cauta
+# si caseta ramane goala (picon_default). Schimbarea setarii se vede pe loc in ecranele deschise (Components/HdsPiconBare).
+# Atributul de skin vecini="x,y,l,i=x2,l2|..." (Components/HdsPiconBare): elementele ecranului cu position="x,y" si
+# size="l,i" se muta la x2 cu latimea l2 numai cat se vede o sigla adevarata (setarea pornita si sigla gasita); fara sigla
+# raman la locul lor din skin, deci nu ramane loc gol in stanga.
 from .Renderer import Renderer
 from enigma import ePixmap, eEnv
 from Tools.Directories import fileExists, SCOPE_SKIN_IMAGE, SCOPE_CURRENT_SKIN, resolveFilename
+
+
+def sigle_pornite():
+	"""Setarea "Siglele canalelor (piconuri)"; fara setare (probele de pe PC, alt cod) sau la orice eroare: da."""
+	try:
+		import sys
+		return bool(sys.modules["Components.config"].config.usage.hds_piconuri.value)
+	except Exception:
+		return True
+
+
+def _anunta(r):
+	"""Sigla s-a aratat sau s-a ascuns: vecinii ei (Components/HdsPiconBare) la locul lor."""
+	try:
+		from Components.HdsPiconBare import schimbat
+		schimbat(r)
+	except Exception as e:
+		print("[Picon] vecinii: %s" % e)
 
 # dosarele de sigle, in ordinea cautarii; %s = numele dosarului (implicit „picon”)
 CAI_SIGLE = (eEnv.resolve('${datadir}/enigma2/%s/'),
@@ -93,6 +119,14 @@ class Picon(Renderer):
 		self.nameCache = { }
 		self.pngname = ""
 		self.perType = False
+		# vecini: textul atributului de skin (Components/HdsPiconBare); hdsAre: se vede acum o sigla adevarata
+		self.vecini = ""
+		self.hdsAre = False
+		try:
+			from Components.HdsPiconBare import inregistreaza
+			inregistreaza(self)
+		except Exception as e:
+			print("[Picon] setarea siglelor nu se urmareste: %s" % e)
 
 	def applySkin(self, desktop, parent):
 		attribs = [ ]
@@ -101,10 +135,18 @@ class Picon(Renderer):
 				self.path = value
 			elif attrib == "defaultPerType":
 				self.perType = value in ("1", "true", "yes")
+			elif attrib == "vecini":
+				self.vecini = value
 			else:
 				attribs.append((attrib,value))
 		self.skinAttributes = attribs
-		return Renderer.applySkin(self, desktop, parent)
+		rez = Renderer.applySkin(self, desktop, parent)
+		# sigla potrivita in caseta (blitScale), oricat de mare e fisierul
+		try:
+			self.instance.setScale(1)
+		except Exception as e:
+			print("[Picon] potrivirea in caseta: %s" % e)
+		return rez
 
 	GUI_WIDGET = ePixmap
 
@@ -114,18 +156,28 @@ class Picon(Renderer):
 			sref = ""
 			if what[0] != self.CHANGED_CLEAR:
 				sref = self.source.text or ""
-				pngname = self.nameCache.get(sref, "")
-				if pngname == "":
-					pngname = cauta_sigla(sref, self.path)
-					if pngname != "":
-						if len(self.nameCache) > 256:
-							self.nameCache.clear()
-						self.nameCache[sref] = pngname
+				if sigle_pornite():
+					pngname = self.nameCache.get(sref, "")
+					# o sigla stearsa intre timp (dosarul scos, stickul luat) nu mai tine locul pe bare
+					if pngname != "" and not fileExists(pngname):
+						del self.nameCache[sref]
+						pngname = ""
+					if pngname == "":
+						pngname = cauta_sigla(sref, self.path)
+						if pngname != "":
+							if len(self.nameCache) > 256:
+								self.nameCache.clear()
+							self.nameCache[sref] = pngname
+			are = pngname != ""
 			if pngname == "": # no picon for service found
 				pngname = self.implicita(sref)
 			if self.pngname != pngname:
 				self.instance.setPixmapFromFile(pngname)
 				self.pngname = pngname
+			if are != self.hdsAre:
+				self.hdsAre = are
+				if self.vecini:
+					_anunta(self)
 
 	def implicita(self, sref):
 		"""Imaginea pentru serviciul fara sigla: dupa tip (defaultPerType), altfel picon_default."""
