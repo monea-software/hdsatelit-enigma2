@@ -59,6 +59,15 @@
 # repornire e pe ecran, se asteapta si se incearca din nou, apoi interfata se reporneste singura (ca TryQuitMainloop
 # cand nu raspunde nimeni la intrebare).
 #
+# Reusita instalarii: fiecare pachet al planului are dupa opkg, in status-ul lui, chiar versiunea noua. Codul de iesire
+# al lui opkg singur nu hotaraste: `opkg install` configureaza la sfarsit si ORICE alt pachet din receptor ramas
+# neconfigurat (o extensie straina al carei postinst a cazut la instalarea ei) si iese cu 255 cand acela cade iar, desi
+# actualizarea s-a instalat intreaga. Atunci instalarea e reusita, iar codul si pachetele neconfigurate se scriu numai in
+# jurnal (pagina web il arata), nu pe televizor.
+#
+# Jurnalul (JURNAL) sta in dosarul jurnalelor de pe memoria interna: ramane dupa repornire (de acolo il trimit testerii)
+# si se vede in Jurnalele sistemului, pe televizor si in web; cel mult MARIME_JURNAL, apoi trece in <nume>.1.
+#
 # Modulul nu importa nimic din enigma la incarcare (probele de pe PC: teste/test_actualizari_pachete_*.py,
 # teste/test_semnare_actualizari.py si teste/test_actualizare_rapida.py).
 
@@ -104,7 +113,8 @@ CONF_PUBLIC = '/etc/opkg/hdsatelit-feed.conf'
 CONF_PROBA = '/etc/opkg/hdsatelit-proba-feed.conf'
 NETRC = ('/home/root/.netrc', '/.netrc')
 LACAT_OPKG = '/var/run/opkg.lock'
-JURNAL = '/tmp/hds-actualizari.log'
+JURNAL = P.DOSAR_JURNALE + '/hds-actualizari.log'
+MARIME_JURNAL = P.MARIME_JURNAL
 PACHET_PRINCIPAL = 'enigma2-hdsatelit'
 PRAG_PACHETE = 150
 MARIME_STARE_MAX = 256 * 1024
@@ -226,11 +236,19 @@ def motiv_eroare(linii, implicit):
 		return _t('Un fișier descărcat nu se potrivește cu suma din lista serverului.')
 	if 'failed to download' in t or 'wget returned' in t:
 		return _t('Un fișier nu s-a putut descărca de pe server.')
-	if 'clash' in t or 'file conflicts' in t:
+	# opkg 0.8.0 (check_data_file_clashes): "But that file is already provided by package Y", "But that path is a
+	# symlink", "But that path is currently a directory"
+	if 'clash' in t or 'file conflicts' in t or 'already provided by package' in t or 'but that path is' in t:
 		return _t('Un pachet ar scrie peste fișierele altui pachet.')
 	if 'malformed' in t or 'error unpacking' in t or 'not a valid' in t or 'failed to extract' in t:
 		return _t('Un fișier descărcat nu se poate citi.')
 	return implicit
+
+
+def text_eroare_instalare(motiv):
+	"""Mesajul unei instalari cazute, cu motivul si jurnalul. Motivul se termina cu punct, iar textul pune unul dupa el:
+	al motivului se scoate (inainte iesea "...nu a reușit.. Jurnalul")."""
+	return _t('Instalarea s-a oprit cu eroare: %s. Jurnalul: %s') % (curata(motiv).rstrip(' .'), JURNAL)
 
 
 def motiv_imagine_noua(nume):
@@ -1030,6 +1048,7 @@ class Actualizari(object):
 		self._ipkg = None
 		self._lista_ipkg = []
 		self._de_instalat = []
+		self._neconfigurate_inainte = None
 		# stare.json semnat al ultimei cautari (pachetele se verifica cu el la instalare),
 		# adresa lui si baza feedului
 		self._semnat = None
@@ -1057,11 +1076,9 @@ class Actualizari(object):
 		rand = curata(rand)
 		self.jurnal.append(rand)
 		del self.jurnal[:-RANDURI_JURNAL]
-		try:
-			with open(JURNAL, 'a', encoding='utf-8', errors='replace') as f:
-				f.write('%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), rand))
-		except (IOError, OSError):
-			pass
+		# cu fsync: randurile sunt putine (o cautare, o instalare) si trebuie sa ramana si dupa o repornire dura
+		P.scrie_jurnal_rotit(JURNAL, '%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), rand), MARIME_JURNAL,
+			sincron=True)
 
 	def ocupat(self):
 		return self.faza != 'liber'
@@ -1248,6 +1265,21 @@ class Actualizari(object):
 		canal = self.canal
 		credentiale = citeste_netrc(self.radacina) if canal == 'proba' else None
 		adresa = '%s/%s/%s' % (ADRESA_FEED, canal, self._baza_feed)
+		# pentru jurnalul trimis de testeri: ce se instaleaza peste ce, pe ce imagine si canal
+		img = imaginea(self.radacina)
+		self._jurnal('actualizarea %s (publicarea %s, canalul %s) peste %s, imaginea de baza %s' % (
+			(r.get('server') or {}).get('versiune') or '?', (r.get('server') or {}).get('actualizare'), canal,
+			img.get('versiune') or '?', img.get('baza') or '?'))
+		# pachetele ramase neconfigurate de dinainte (None = nu se stie): numai ele pot fi motivul unui cod opkg nenul
+		# dupa o instalare a carei pachete au toate versiunea noua
+		try:
+			self._neconfigurate_inainte = P.pachete_neconfigurate(self.radacina)
+		except Exception as e:
+			self._neconfigurate_inainte = None
+			self._jurnal('pachetele neconfigurate nu se pot citi: %s' % curata(e))
+		if self._neconfigurate_inainte:
+			self._jurnal('pachete neconfigurate in receptor (opkg le configureaza din nou la sfarsit): %s' %
+				', '.join(self._neconfigurate_inainte))
 		self._jurnal('descarc si verific: %s' % ' '.join('%s %s' % (x['nume'], x['versiune']) for x in intrari))
 
 		def descarca():
@@ -1274,7 +1306,7 @@ class Actualizari(object):
 			motiv = _t('Nu mai este loc în memoria receptorului.') if fel == 'loc' else \
 				_t('Un fișier nu s-a putut descărca de pe server.')
 			self.rezultat = dict(self.rezultat, stare='eroare-instalare', poate_instala=False, ramase=list(nume))
-			self.mesaj = _t('Instalarea s-a oprit cu eroare: %s. Jurnalul: %s') % (curata(motiv), JURNAL)
+			self.mesaj = text_eroare_instalare(motiv)
 		self._sfarsit_rapid('pachetele nu s-au instalat (%s)' % fel)
 		self._schimbat()
 
@@ -1293,8 +1325,10 @@ class Actualizari(object):
 			if e == IpkgComponent.EVENT_LINE:
 				self._lista_ipkg.append(curata(param))
 				self._jurnal(param)
-				_fel, text = P.linie_jurnal(curata(param))
-				if text:
+				fel, text = P.linie_jurnal(curata(param))
+				# pasul arata numai ce face opkg (se instaleaza, se configureaza); o eroare (si a altui pachet din
+				# receptor) ramane in jurnal, iar rezultatul il spune mesajul de la sfarsit
+				if text and fel == 'pas':
 					self.pas = curata(text)
 				m = re.match(r'^(?:Upgrading|Installing|Configuring) (\S+?)\.?(?:\s|$)', param or '')
 				if m and m.group(1) in nume and param.startswith('Configuring'):
@@ -1313,12 +1347,24 @@ class Actualizari(object):
 	def _dupa_instalare(self, cod):
 		radacina = self.radacina
 		planificate = self._de_instalat
+		inainte = self._neconfigurate_inainte
 
 		def verifica():
-			inst = instalate(radacina)
-			return [p['nume'] for p in planificate if inst.get(p['nume']) != p['la']]
+			conf = P.citeste_configurarea(radacina)
+			inst = instalate(radacina, conf)
+			ramase = [p['nume'] for p in planificate if inst.get(p['nume']) != p['la']]
+			try:
+				straine = [n for n in P.pachete_neconfigurate(radacina, conf) if n not in ramase]
+			except Exception:
+				straine = None
+			return ramase, straine
 
-		def gata(ramase, eroare):
+		def gata(rez, eroare):
+			ramase, straine = rez if rez and not eroare else (None, None)
+			# un pachet ramas neconfigurat ACUM, care nu era asa inainte (o dependinta adusa de instalare, al carei
+			# postinst a cazut), e o greseala a instalarii, nu un pachet strain
+			noi = None if straine is None or inainte is None else [n for n in straine if n not in inainte]
+			straine = straine or []
 			goleste_dosarul()
 			# pachetele descarcate de opkg (dependintele din feed) nu mai trebuie: cache-ul e in RAM (0.6.6)
 			try:
@@ -1329,11 +1375,19 @@ class Actualizari(object):
 				self._jurnal('cache opkg: %s' % e)
 			schimbat = len(ramase or []) < len(planificate)
 			self.faza, self.progres = 'liber', (0, 0)
-			if eroare is None and cod == 0 and not ramase:
+			# reusita = toate pachetele planului la versiunea noua (status-ul opkg) si, cand opkg nu iese cu 0, numai
+			# pachete neconfigurate de dinainte: opkg iese cu 255 si cand cade numai configurarea altui pachet din
+			# receptor (straine), ramas asa de la o instalare de dinainte, nu a actualizarii
+			if eroare is None and ramase == [] and (cod == 0 or noi == []):
 				self.pas = ''
 				self.repornire = True
-				self.rezultat = dict(self.rezultat, stare='instalata', poate_instala=False)
+				self.rezultat = dict(self.rezultat, stare='instalata', poate_instala=False,
+					avertismente=list(straine) if cod != 0 else [])
 				self.mesaj = _t('Actualizarea s-a instalat. Interfața trebuie repornită ca să o folosească.')
+				if cod != 0:
+					self._jurnal('opkg a iesit cu %s, dar toate pachetele actualizarii au versiunea noua: instalarea e '
+						'reusita; pachete neconfigurate in receptor (nu ale actualizarii): %s' % (cod,
+						', '.join(straine) or 'niciunul'))
 			else:
 				motiv = motiv_eroare(self._lista_ipkg, implicit=_t('Instalarea nu a reușit.'))
 				self.pas = ''
@@ -1341,7 +1395,14 @@ class Actualizari(object):
 				self.repornire = schimbat
 				self.rezultat = dict(self.rezultat, stare='eroare-instalare', poate_instala=False,
 					ramase=list(ramase or []))
-				self.mesaj = _t('Instalarea s-a oprit cu eroare: %s. Jurnalul: %s') % (curata(motiv), JURNAL)
+				self.mesaj = text_eroare_instalare(motiv)
+				if eroare is not None:
+					self._jurnal('verificarea dupa opkg: %s' % curata(eroare))
+				if noi:
+					self._jurnal('pachete ramase neconfigurate dupa instalare (nu erau inainte): %s' % ', '.join(noi))
+				vechi = [n for n in straine if n not in (noi or [])]
+				if vechi:
+					self._jurnal('pachete neconfigurate in receptor (nu ale actualizarii): %s' % ', '.join(vechi))
 			self._jurnal('instalare: cod %s, ramase %s' % (cod, ramase))
 			if self.rapid:
 				# numai dupa o instalare reusita; una cazuta (chiar cu repornirea ceruta) opreste modul rapid

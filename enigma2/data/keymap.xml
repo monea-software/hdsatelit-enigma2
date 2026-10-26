@@ -132,7 +132,27 @@
 		     pe un canal fara aplicatie actiunea intoarce 0 si tasta ramane cum era (pe Viper nelegata in bara) -->
 		<key id="KEY_RED" mapto="hbbtvRosu" flags="m" />
 	</map>
-	
+
+	<!-- HDSatelit: apasarea lunga a butoanelor colorate in bara (Screens/InfoBar.py, prioritatea -2, inaintea ecranului
+	     radio si a hartilor barei), cu actiunea aleasa in Butoane colorate si taste rapide (config.hds_buttons, web
+	     /taste-rapide). Ca la POWER, AUDIO si FAV: apasarea ("m") numai sterge semnul si lasa tasta mai departe, deci
+	     apasarea scurta face ce facea; cea lunga ("l", dupa 4 repetari) face actiunea aleasa; eliberarea ("b") e oprita
+	     numai dupa o apasare lunga facuta. Pentru orice telecomanda. -->
+	<map context="HdsTasteColorateActions">
+		<key id="KEY_RED" mapto="rosuApasat" flags="m" />
+		<key id="KEY_RED" mapto="rosuLung" flags="l" />
+		<key id="KEY_RED" mapto="rosuEliberat" flags="b" />
+		<key id="KEY_GREEN" mapto="verdeApasat" flags="m" />
+		<key id="KEY_GREEN" mapto="verdeLung" flags="l" />
+		<key id="KEY_GREEN" mapto="verdeEliberat" flags="b" />
+		<key id="KEY_YELLOW" mapto="galbenApasat" flags="m" />
+		<key id="KEY_YELLOW" mapto="galbenLung" flags="l" />
+		<key id="KEY_YELLOW" mapto="galbenEliberat" flags="b" />
+		<key id="KEY_BLUE" mapto="albastruApasat" flags="m" />
+		<key id="KEY_BLUE" mapto="albastruLung" flags="l" />
+		<key id="KEY_BLUE" mapto="albastruEliberat" flags="b" />
+	</map>
+
 	<map context="InfobarInstantRecord">
 		<device name="dreambox advanced remote control (native)">
 			<key id="KEY_RECORD" mapto="instantRecord" flags="m" />

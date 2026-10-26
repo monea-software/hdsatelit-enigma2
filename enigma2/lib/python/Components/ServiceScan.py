@@ -612,6 +612,7 @@ class ServiceScan:
 		"""Ce a citit trecerea de acum (toate serviciile din SDT si transponderele incercate), din nucleu, inainte ca
 		obiectul scanarii sa fie sters. `stare` "terminata" sau "oprita" incheie inregistrarea. Lamedb nu se atinge."""
 		if self.hdsUltima is None:
+			self.hdsIstoricSemnal(None, stare)
 			return
 		try:
 			eroare = None
@@ -621,6 +622,7 @@ class ServiceScan:
 			except Exception as e:
 				print("[ServiceScan] lista scanarii: %r" % (e,))
 				transpondere, servicii, eroare = [], [], "lista scanarii nu s-a putut citi"
+			self.hdsIstoricSemnal(transpondere, stare)
 			# retelele din NIT (ID, nume, frecventele anuntate, numerele canalelor): numai pe un nucleu care le da;
 			# fara ele inregistrarea ramane cea de dinainte
 			retele = None
@@ -638,6 +640,23 @@ class ServiceScan:
 			return
 		if stare == "terminata":
 			self.hdsPastreazaRetele(corp)
+
+	def hdsIstoricSemnal(self, transpondere, stare=None):
+		"""Transponderele pe care tunerul s-a acordat in trecerea de acum intra in istoricul semnalului
+		(Components/HdsIstoricSemnal.noteaza_scanarea), si la scanarea din asistent sau oprita inainte de capat; la
+		sfarsitul scanarii (`stare`) ce e nou se scrie o data. transpondere None: citite acum din nucleu, daca le da. O
+		eroare de aici nu ajunge la scanare."""
+		try:
+			if transpondere is None:
+				if not hasattr(self.scan, "getScannedTransponders"):
+					return
+				transpondere = self.scan.getScannedTransponders()
+			from Components import HdsIstoricSemnal
+			n = HdsIstoricSemnal.noteaza_scanarea(transpondere, sfarsit=stare is not None)
+			if n:
+				print("[ServiceScan] istoricul semnalului, trecerea %d: transpondere cu semnal %d" % (self.run + 1, n))
+		except Exception as e:
+			print("[ServiceScan] istoricul semnalului: %r" % (e,))
 
 	def hdsPastreazaRetele(self, corp):
 		"""La sfarsitul scanarii: retelele citite din NIT raman pe receptor (Components/HdsRetele.py, in /etc/enigma2):

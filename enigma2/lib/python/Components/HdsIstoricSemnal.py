@@ -29,8 +29,24 @@ nescris. Un ceas nepus (inainte de 2026) nu noteaza nimic.
 CITIREA: o data, la prima folosire. Fisier lipsa = istoric gol; JSON stricat = pus deoparte ca .stricat-AAAALLZZ, apoi
 istoric gol; eroare de citire, v mai mare sau fisier prea mare = numai citire (nu se scrie peste).
 
-PARTEA DE SUS E CURATA (fara enigma): se probeaza pe PC (teste/test_istoric_semnal.py). Ascultatorul de pe navigatie
-(Urmaritor) primeste evenimentele, ceasul si serviciul din afara."""
+CINE NOTEAZA: ascultatorul de pe navigatie (Urmaritor: zap, scanarea detaliata, culegerea pistelor) si orice scanare,
+la sfarsitul fiecarei treceri (Components/ServiceScan.py -> noteaza_scanarea: transponderele pe care tunerul s-a acordat,
+din getScannedTransponders; o scriere pe scanare), plus scanarea DVB-T2 / DAB+ prin satelit (numai pozitia).
+
+ORIGINEA POZITIILOR (/etc/enigma2/hds_origine_pozitii.json, numai ASCII, scris atomic):
+  {"fel": "hds-origine-pozitii", "v": 1, "scris": <secunde>, "adus": {"300": [secunde, "import"]}}
+  pozitiile de satelit ale caror canale au intrat in lista fara scanare pe acest receptor: importul
+  (Components/HdsImportSurse.py, ecranul, pagina web si prima pornire) si pachetele de liste
+  (Components/DreamInfoHandler.mergeServices). Se noteaza numai pozitiile NOI in lista (cele care erau deja raman cum
+  erau: scanate aici sau nestiute) si pleaca pozitiile care nu mai sunt in lista. Semnul din lista Sateliti, din pagina
+  canalelor si intrebarea dinaintea lui "Actualizeaza pistele" (aduse_fara_semnal) privesc NUMAI pozitiile aduse asa pe
+  care receptorul n-a receptionat niciodata semnal; o pozitie cu originea nestiuta (de exemplu scanata inainte de
+  istoric) nu primeste niciun semn. Copia setarilor (Components/HdsCopieSetari.py) pune la loc tot etc/enigma2, deci
+  si fisierul acesta al copiei; o copie facuta de import (hds-backup-setari-*) il are si ea, iar intoarcerea importului
+  il pune la loc.
+
+PARTEA DE SUS E CURATA (fara enigma): se probeaza pe PC (teste/test_istoric_semnal.py, teste/test_semnal_scanare.py).
+Ascultatorul de pe navigatie (Urmaritor) primeste evenimentele, ceasul si serviciul din afara."""
 
 from __future__ import absolute_import
 
@@ -52,6 +68,15 @@ ESECURI_MAX = 3                  # scrieri cazute la rand dupa care istoricul ra
 VERIFICARE_MS = 2000             # dupa evTunedIn, starea tunerului citita o data
 POZ_CABLU = 0xFFFF
 POZ_TERESTRU = 0xEEEE
+SISTEM_SATELIT = 0               # iDVBFrontend.feSatellite, primul camp din getScannedTransponders
+
+CALE_LAMEDB = "/etc/enigma2/lamedb"
+CALE_ORIGINE = "/etc/enigma2/hds_origine_pozitii.json"
+NUME_ORIGINE = "hds_origine_pozitii.json"
+FEL_ORIGINE = "hds-origine-pozitii"
+VERSIUNE_ORIGINE = 1
+MAX_OCTETI_ORIGINE = 256 * 1024
+MAX_LAMEDB = 64 * 1024 * 1024    # o lista de canale mai mare nu se citeste pentru pozitii
 
 
 def _(text):
@@ -205,6 +230,8 @@ class Istoric(object):
 		self.numai_citire = False
 		self.oprit = False
 		self.incarcat = False
+		self.citit = False           # fisierul lipsea sau s-a citit intreg: ce nu e in istoric chiar n-a fost prins
+		self.notari_scanare = 0      # transpondere si pozitii notate din scanari (jurnal, probe)
 		self.versiune = 0            # creste la fiecare schimbare din memorie
 		self.versiune_scrisa = 0
 		self.nou = False             # o prima prindere nescrisa
@@ -246,6 +273,8 @@ class Istoric(object):
 			if getattr(e, "errno", None) != errno.ENOENT:
 				_jurnal("citire: %s; numai citire" % e)
 				self.numai_citire = True
+			else:
+				self.citit = True
 			return
 		if len(date) > MAX_OCTETI:
 			_jurnal("fisier prea mare; numai citire")
@@ -285,6 +314,7 @@ class Istoric(object):
 		scris = d.get("scris")
 		if _intreg(scris, DATA_MIN, int(acum) + 86400) is not None:
 			self.zi_scrisa = _zi(scris)
+		self.citit = True
 
 	def _deoparte(self):
 		"""JSON stricat: pus deoparte (legatura tare, fisierul ramane pe loc pana la prima scriere), istoric gol."""
@@ -302,6 +332,22 @@ class Istoric(object):
 	def noteaza(self, ns, tsid, onid, calitate=-1, snr=-1, acum=None):
 		"""Un semnal prins pe transponder. -> True daca s-a schimbat ceva in memorie. Nu arunca."""
 		try:
+			k = cheie_tp(ns, tsid, onid)
+		except Exception as e:
+			_jurnal("noteaza: %s" % e)
+			return False
+		return self._noteaza(k, pozitie_din_ns(ns), calitate, snr, acum, "noteaza")
+
+	def noteaza_pozitie(self, poz, calitate=-1, snr=-1, acum=None):
+		"""Semnal prins pe o pozitie de satelit fara cheia transponderului (tunerul s-a acordat, dar transponderul n-a
+		dat tabele: scanarea DVB-T2 / DAB+ prin satelit, un transponder fara PAT/SDT). -> True daca s-a schimbat ceva."""
+		p = _intreg(poz, 0, 3599)
+		if p is None:
+			return False
+		return self._noteaza(None, p, calitate, snr, acum, "noteaza_pozitie")
+
+	def _noteaza(self, k, poz, calitate, snr, acum, nume):
+		try:
 			self.incarca()
 			acum = int(self.ceas() if acum is None else acum)
 			if acum < DATA_MIN:
@@ -310,9 +356,8 @@ class Istoric(object):
 			cal = -1 if cal is None else cal
 			s = _intreg(snr, -1, 10000)
 			s = -1 if s is None else s
-			k = cheie_tp(ns, tsid, onid)
 			schimbat = False
-			for tinta, cheie, maxim in ((self.tp, k, MAX_TP), (self.poz, pozitie_din_ns(ns), MAX_POZ)):
+			for tinta, cheie, maxim in ((self.tp, k, MAX_TP), (self.poz, poz, MAX_POZ)):
 				if cheie is None:
 					continue
 				vechi = tinta.get(cheie)
@@ -331,7 +376,7 @@ class Istoric(object):
 					self.termen_nou = acum + SCRIERE_NOU_S
 			return schimbat
 		except Exception as e:
-			_jurnal("noteaza: %s" % e)
+			_jurnal("%s: %s" % (nume, e))
 			return False
 
 	def noteaza_ref(self, ref, calitate=-1, snr=-1, acum=None):
@@ -540,6 +585,16 @@ def text_transpondere(n):
 	return ngettext("%d transponder", "%d transpondere", n) % n
 
 
+def text_aduse(pozitii):
+	"""Pagina istoricului: pozitiile aduse din alta lista, fara semnal pe acest receptor (acelasi semn ca in lista
+	Sateliti); sir gol cand nu sunt."""
+	pozitii = sorted(pozitii or (), key=lambda x: -(x if x <= 1800 else x - 3600))
+	if not pozitii:
+		return u""
+	lista = u", ".join(text_pozitie(p) for p in pozitii[:24]) + (u", …" if len(pozitii) > 24 else u"")
+	return _("Din altă listă, fără semnal aici: %s.") % lista
+
+
 def text_neprinse(pozitii):
 	"""Intrebarea dinaintea lui "Actualizeaza pistele" cand unele pozitii n-au prins niciodata semnal."""
 	n = len(pozitii)
@@ -573,6 +628,243 @@ def inainte_de_copie():
 
 def opreste_scrierile():
 	istoric().opreste_scrierile()
+	origine().oprit = True
+
+
+# ------------------------------------------------------------------ scanarea
+
+def noteaza_scanarea(randuri, ist=None, sfarsit=False):
+	"""Randurile nucleului dupa o trecere a scanarii (eComponentScan.getScannedTransponders: sistemul, pozitia,
+	frecventa, polarizarea, simbolurile, acordat, are_id, ns, tsid, onid, ...): fiecare transponder pe care tunerul s-a
+	acordat intra in istoric, cu cheia lui cand a dat tabele, altfel (satelit) numai pozitia. Calitatea nu se stie aici
+	(-1). sfarsit=True (ultima trecere sau scanarea oprita): ce e nou se scrie o data, ca o scanare intreaga sa fie o
+	singura scriere. -> cate transpondere acordate s-au gasit in randuri. Nu arunca."""
+	try:
+		ist = ist if ist is not None else istoric()
+		n = 0
+		for r in randuri or ():
+			try:
+				t = tuple(r)
+				sistem, poz, acordat, are_id = t[0], t[1], t[5], t[6]
+				# namespace-ul vine si cu semn din nucleu (cablul: 0xFFFF0000)
+				ns, tsid, onid = int(t[7]) & 0xFFFFFFFF, int(t[8]) & 0xFFFF, int(t[9]) & 0xFFFF
+			except (TypeError, ValueError, IndexError):
+				continue
+			if not acordat:
+				continue
+			n += 1
+			if are_id and (ns or tsid or onid):
+				ist.noteaza(ns, tsid, onid)
+			elif sistem == SISTEM_SATELIT and not isinstance(sistem, bool):
+				ist.noteaza_pozitie(poz)
+		ist.notari_scanare += n
+		if sfarsit:
+			if ist.nou:
+				ist.salveaza()
+			else:
+				ist.poate()
+		return n
+	except Exception as e:
+		_jurnal("scanarea: %s" % e)
+		return 0
+
+
+# ------------------------------------------------------------------ originea pozitiilor
+
+def pozitii_lamedb(cale):
+	"""Pozitiile de satelit (zecimi de grad, 0-3599) ale transponderelor dintr-un lamedb in formatul 4 (sectiunea
+	"transponders", randurile-cheie ns:tsid:onid). Fisier lipsa = multime goala; necitit, prea mare sau fara antet =
+	None (nu se stie ce era)."""
+	try:
+		if os.path.getsize(cale) > MAX_LAMEDB:
+			return None
+		with open(cale, "rb") as f:
+			date = f.read(MAX_LAMEDB + 1)
+	except (IOError, OSError) as e:
+		return set() if getattr(e, "errno", None) == errno.ENOENT else None
+	if not date.startswith(b"eDVB services /4/"):
+		return set() if not date.strip() else None
+	rez = set()
+	in_tp = False
+	for rand in date.split(b"\n"):
+		if not in_tp:
+			if rand.strip() == b"transponders":
+				in_tp = True
+			continue
+		if rand.startswith(b"end"):
+			break
+		if not rand or rand[:1] in (b"\t", b" ", b"/"):
+			continue
+		try:
+			p = pozitie_din_ns(int(rand.split(b":", 1)[0], 16))
+		except ValueError:
+			continue
+		if p is not None:
+			rez.add(p)
+	return rez
+
+
+class Origine(object):
+	"""Pozitiile aduse in lista de canale fara scanare pe acest receptor (vezi capul fisierului). Citita o data;
+	scrisa atomic, pe firul care o schimba (importul are firul lui)."""
+
+	def __init__(self, cale=CALE_ORIGINE, ceas=None):
+		self.cale = cale
+		self.ceas = ceas or time.time
+		self.adus = {}
+		self.incarcat = False
+		self.oprit = False
+		self._lacat = threading.Lock()
+
+	def incarca(self):
+		if self.incarcat:
+			return
+		with self._lacat:
+			if not self.incarcat:
+				self.adus = self._citeste(self.cale)
+				self.incarcat = True
+
+	@staticmethod
+	def _citeste(cale):
+		"""Fisierul -> {pozitie: [secunde, fel]}; lipsa, stricat sau alt fel = {} (originea nestiuta: niciun semn)."""
+		try:
+			with open(cale, "rb") as f:
+				date = f.read(MAX_OCTETI_ORIGINE + 1)
+		except (IOError, OSError) as e:
+			if getattr(e, "errno", None) != errno.ENOENT:
+				_jurnal("originea: %s" % e)
+			return {}
+		if len(date) > MAX_OCTETI_ORIGINE:
+			return {}
+		try:
+			d = json.loads(date.decode("utf-8"))
+		except (ValueError, UnicodeDecodeError, RecursionError):
+			_jurnal("originea: fisier stricat, ignorat")
+			return {}
+		if not isinstance(d, dict) or d.get("fel") != FEL_ORIGINE or not isinstance(d.get("v"), int) \
+				or d.get("v") > VERSIUNE_ORIGINE or not isinstance(d.get("adus"), dict):
+			return {}
+		rez = {}
+		for k, v in d["adus"].items():
+			p = _intreg(int(k), 0, 3599) if isinstance(k, str) and k.isdigit() else None
+			if p is None or len(rez) >= MAX_POZ:
+				continue
+			cand = _intreg(v[0], 0, 2 ** 31) if isinstance(v, list) and len(v) == 2 else None
+			fel = v[1] if cand is not None and isinstance(v[1], str) and len(v[1]) <= 16 else None
+			if fel is not None:
+				rez[p] = [cand, fel]
+		return rez
+
+	def aduse(self):
+		self.incarca()
+		return self.adus
+
+	def adusa(self, poz):
+		return poz in self.aduse()
+
+	def dupa_lista_noua(self, inainte, dupa, fel, acum=None):
+		"""Lista de canale tocmai inlocuita fara scanare: inainte / dupa = pozitiile ei (pozitii_lamedb). Pozitiile noi
+		devin aduse (fel: "import", "implicite"); cele care erau deja raman cum erau; cele plecate din lista pleaca si de
+		aici. inainte None (lista veche necitita): nimic nou nu se noteaza (nu se stie ce era). -> pozitiile aduse noi."""
+		if dupa is None or self.oprit:
+			return set()
+		self.incarca()
+		acum = int(self.ceas() if acum is None else acum)
+		vechi = self.adus
+		noi = set() if inainte is None else set(dupa) - set(inainte)
+		adus = dict((p, v) for p, v in vechi.items() if p in dupa and p not in noi)
+		for p in noi:
+			adus[p] = [acum, str(fel)[:16]]
+		if adus != vechi:
+			self.adus = adus
+			self._scrie(adus, acum)
+		return noi
+
+	def pune(self, adus, acum=None):
+		"""Originea luata din alta parte (copia de siguranta a unui import, la intoarcerea lui): {pozitie: [secunde,
+		fel]} sau {} (copia nu avea fisierul: originea e nestiuta)."""
+		if self.oprit:
+			return
+		self.incarca()
+		adus = dict(adus or {})
+		if adus != self.adus:
+			self.adus = adus
+			self._scrie(adus, int(self.ceas() if acum is None else acum))
+
+	def _scrie(self, adus, acum):
+		d = {"fel": FEL_ORIGINE, "v": VERSIUNE_ORIGINE, "scris": acum,
+			"adus": dict((str(p), v) for p, v in sorted(adus.items()))}
+		nou = self.cale + ".nou"
+		with self._lacat:
+			try:
+				date = json.dumps(d, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("ascii")
+				with open(nou, "wb") as f:
+					f.write(date)
+					f.flush()
+					os.fsync(f.fileno())
+				os.replace(nou, self.cale)
+				return True
+			except Exception as e:
+				_jurnal("originea, scriere: %s" % e)
+				try:
+					os.remove(nou)
+				except OSError:
+					pass
+				return False
+
+
+_ORIGINE = {"o": None}
+
+
+def origine():
+	if _ORIGINE["o"] is None:
+		_ORIGINE["o"] = Origine()
+	return _ORIGINE["o"]
+
+
+def _origine_in(dosar):
+	"""Originea care tine de lista din `dosar`: cea a receptorului pentru /etc/enigma2, una separata altfel (probele)."""
+	cale = os.path.join(dosar, NUME_ORIGINE)
+	if os.path.normpath(cale) == os.path.normpath(CALE_ORIGINE):
+		return origine()
+	return Origine(cale)
+
+
+def lista_noua(dosar, inainte, fel):
+	"""Dupa ce lamedb din `dosar` a fost inlocuit fara scanare (importul, un pachet de liste): pozitiile noi in lista
+	se noteaza ca aduse. inainte: pozitii_lamedb de dinainte de inlocuire. -> pozitiile aduse noi. Nu arunca."""
+	try:
+		return _origine_in(dosar).dupa_lista_noua(inainte, pozitii_lamedb(os.path.join(dosar, "lamedb")), fel)
+	except Exception as e:
+		_jurnal("originea: %s" % e)
+		return set()
+
+
+def originea_din_copie(dosar, dosar_copie):
+	"""Intoarcerea unui import din copia de siguranta a receptorului (hds-backup-setari-*): originea de atunci, din
+	copie, sau nestiuta cand copia n-o are. Nu arunca."""
+	try:
+		_origine_in(dosar).pune(Origine._citeste(os.path.join(dosar_copie, NUME_ORIGINE)))
+	except Exception as e:
+		_jurnal("originea din copie: %s" % e)
+
+
+def aduse_fara_semnal(pozitii, ist=None, org=None):
+	"""Dintre pozitiile date (zecimi de grad), cele ale caror canale au venit din alta lista (Origine) si pe care acest
+	receptor n-a receptionat niciodata semnal. Multime goala cand nu se stie: pozitie cu originea nestiuta (scanata
+	aici, sau dinaintea istoricului), istoric necitit. Nimic nu se semneaza din nestiinta. Nu arunca."""
+	try:
+		aduse = (org if org is not None else origine()).aduse()
+		if not aduse:
+			return set()
+		ist = ist if ist is not None else istoric()
+		ist.incarca()
+		if not ist.citit:
+			return set()
+		return set(p for p in pozitii if isinstance(p, int) and p in aduse and p not in ist.poz)
+	except Exception as e:
+		_jurnal("aduse fara semnal: %s" % e)
+		return set()
 
 
 class Urmaritor(object):

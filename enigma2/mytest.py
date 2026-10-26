@@ -453,16 +453,17 @@ class PowerKey:
 			self.shutdown()
 		elif action == "show_menu":
 			print("Show shutdown Menu")
-			root = mdom.getroot()
-			for x in root.findall("menu"):
-				y = x.find("id")
-				if y is not None:
-					id = y.get("val")
-					if id and id == "shutdown":
-						self.session.infobar = self
-						menu_screen = self.session.openWithCallback(self.MenuClosed, MainMenu, x)
-						menu_screen.setTitle(_("Standby / Restart"))
-						return
+			# HDSatelit: meniul "shutdown" se cauta in tot menu.xml (Components/HdsTasteRapide.cauta_meniu): radacina e
+			# <menuxml>, cu meniul principal singur copil, iar cautarea numai printre copiii directi ai radacinii nu-l mai
+			# gasea, deci POWER tinut apasat nu deschidea nimic (si nici actiunea scurta, standbyblocked fiind pus mai sus)
+			from Components.HdsTasteRapide import cauta_meniu
+			x = cauta_meniu(mdom.getroot(), "shutdown")
+			if x is not None:
+				self.session.infobar = self
+				menu_screen = self.session.openWithCallback(self.MenuClosed, MainMenu, x)
+				menu_screen.setTitle(_("Standby / Restart"))
+				return
+			print("[PowerKey] meniul shutdown lipseste din menu.xml")
 		elif action == "standby":
 			self.standby()
 

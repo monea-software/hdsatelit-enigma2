@@ -1206,6 +1206,7 @@ class CautareFluxuri(object):
                 text = _('Nu am putut porni tunerul pe %s. Încearcă din nou.') % _descriere_hdscomun(self.tp)
             self._termina('esuat', text)
             return
+        self._noteaza_semnalul()
         from Hds.DabT2 import scanare as hds_scanare
         profil, cale = profil_hdscomun(self.profil_tip)
         self.scanare = hds_scanare.Scanare(profil, cale)
@@ -1223,6 +1224,19 @@ class CautareFluxuri(object):
         else:
             text = _('Semnal recepționat pe %s. Caut multiplexurile DVB-T2, cel mult %s...')
         self._stare(text % (_descriere_hdscomun(self.tp), text_scurs(secunde)))
+
+    def _noteaza_semnalul(self):
+        """Tunerul s-a acordat pe purtator: pozitia intra in istoricul semnalului (Components/HdsIstoricSemnal.py; fara
+        cheia transponderului, care aici nu se citeste). Ce e nou se scrie o data. Nu arunca."""
+        if self.pozitie is None:
+            return
+        try:
+            from Components import HdsIstoricSemnal
+            ist = HdsIstoricSemnal.istoric()
+            if ist.noteaza_pozitie(self.pozitie % 3600) and ist.nou:
+                ist.salveaza()
+        except Exception as e:
+            print('[ScanerSatelit] istoricul semnalului: %s' % e)
 
     def _progres(self, x):
         """Un ansamblu gasit de detector cat inca lucreaza: apare pe ecran inainte de sfarsit."""

@@ -1,6 +1,48 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.8",
+   "build": "0068202610262317",
+   "data": "26.10.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "Actualizarea din meniu nu mai spune că a eșuat când s-a instalat. Dacă în receptor a rămas o extensie instalată pe jumătate, mesajul vechi mai poate apărea o singură dată, chiar la instalarea acestei versiuni.",
+     "en": "The update from the menu no longer says it failed when it was installed. If an extension was left half installed on the receiver, the old message may still appear once, while this version is being installed."
+    },
+    {
+     "fel": "reparat",
+     "ro": "În Extensii, o instalare reușită nu mai apare ca eșuată din cauza altei extensii rămase neconfigurate în receptor.",
+     "en": "In Extensions, a successful installation no longer shows as failed because of another extension left unconfigured on the receiver."
+    },
+    {
+     "fel": "reparat",
+     "ro": "POWER ținut apăsat deschide din nou meniul de oprire, când el e ales pentru apăsarea lungă; înainte nu se întâmpla nimic.",
+     "en": "Holding POWER opens the shutdown menu again when it is chosen for the long press; before, nothing happened."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Lista Sateliți nu mai scrie „niciodată recepționat” la pozițiile scanate de acest receptor; semnul „din altă listă” apare numai la pozițiile importate, fără semnal aici. La fel în interfața web.",
+     "en": "The Satellites list no longer says \"never received\" for positions scanned by this receiver; the \"from another list\" mark appears only on imported positions with no signal here. The same in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Butoanele colorate ținute apăsat cât te uiți la televizor deschid ce ai ales în Butoane colorate și taste rapide, pe televizor sau în interfața web. Apăsarea scurtă rămâne ca înainte.",
+     "en": "Holding a colour button while watching TV opens what you chose for it in the colour button settings, on the TV or in the web interface. A short press works as before."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Orice scanare, și cea oprită înainte de capăt sau făcută în asistentul de pornire, notează transponderele recepționate în istoricul semnalului.",
+     "en": "Every scan, including one stopped before the end or made in the startup wizard, records the received transponders in the signal history."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Jurnalul actualizării, cel al extensiilor și erorile DAB+ și T2-MI rămân și după repornire, în Jurnalele sistemului, pe televizor și în interfața web.",
+     "en": "The update log, the extensions log and the DAB+ and T2-MI errors are now kept after a restart, in the system logs, on the TV and in the web interface."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.7",
    "build": "0067202610252156",
    "data": "25.10.2026",

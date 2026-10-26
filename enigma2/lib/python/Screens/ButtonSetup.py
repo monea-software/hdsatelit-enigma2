@@ -6,15 +6,11 @@
 # Cod 100% propriu, scris de la zero. NICIO linie copiata din alta distributie.
 #
 # STARE:
-# Facut: ecranul salveaza in configuratie ce vrea utilizatorul sa
-# faca fiecare buton colorat la apasare LUNGA in InfoBar (vizionare live).
-# Nefacut inca: legarea reala in InfoBar (detectarea apasarii lungi
-# si declansarea actiunii alese) — necesita un mecanism de timer pe apasare/
-# ridicare tasta in InfoBarGenerics.py, testat cu o telecomanda IR reala (pe
-# tastatura de PC din emulator apasarea lunga nu se comporta la fel ca pe o
-# telecomanda IR, deci nu poate fi validata corect aici). Pana atunci, valorile
-# salvate aici NU au niciun efect vizibil, doar sunt pastrate, gata de folosit
-# cand se face legarea in InfoBar; intrarea din meniu are stare="in-lucru".
+# Ecranul salveaza in configuratie ce face fiecare buton colorat la apasare LUNGA in bara (vizionare live), iar bara le
+# foloseste: Screens/InfoBar.py, harta HdsTasteColorateActions din data/keymap.xml
+# (apasat / lung / eliberat, ca POWER, AUDIO si FAV; fara ceas propriu: apasarea lunga e flagLong din nucleu) si
+# Components/HdsTasteRapide.ApasareLunga. Apasarea scurta ramane cum era. Pe emulator apasarea lunga nu se poate
+# proba (tastele din web ocolesc acolo numaratoarea repetarilor).
 
 from .Screen import Screen
 from Components.ActionMap import ActionMap
@@ -47,7 +43,7 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		self.setTitle(_("Butoane colorate și taste rapide"))
 		initConfigButtonSetup()
 
-		# intrarea din meniu poarta semnul "in lucru" (data/menu.xml), deci aici nu se mai explica stadiul
+		# ce face apasarea lunga: Components/HdsTasteRapide.py (ApasareLunga) si Screens/InfoBar.py
 		self["ghid"] = StaticText(_("Alege ce se deschide la apăsarea LUNGĂ a fiecărui buton colorat, cât te uiți la TV."))
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))

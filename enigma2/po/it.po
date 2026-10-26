@@ -52730,8 +52730,13 @@ msgid "Da, încearcă și pozițiile fără semnal"
 msgstr "Sì, prova anche le posizioni senza segnale"
 
 #: lib/python/Screens/ChannelSelection.py lib/python/Plugins/Extensions/HdsWebControl/canale_web.py
-msgid "niciodată recepționat"
-msgstr "mai ricevuto"
+msgid "din altă listă, fără semnal aici"
+msgstr "da un'altra lista, nessun segnale qui"
+
+#: lib/python/Components/HdsIstoricSemnal.py lib/python/Plugins/Extensions/HdsWebControl/cautare_web.py
+#, python-format
+msgid "Din altă listă, fără semnal aici: %s."
+msgstr "Da un'altra lista, nessun segnale qui: %s."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/cautare_web.py
 msgid "Istoricul semnalului a fost șters."
@@ -52754,8 +52759,8 @@ msgid "Se citește istoricul..."
 msgstr "Lettura della cronologia..."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/cautare_web.py
-msgid "Pozițiile pe care acest receptor a prins semnal. Actualizează pistele întreabă înainte de pozițiile fără semnal niciodată."
-msgstr "Le posizioni su cui questo ricevitore ha ricevuto segnale. Aggiorna tracce chiede prima per le posizioni che non hanno mai avuto segnale."
+msgid "Pozițiile pe care acest receptor a recepționat semnal, la schimbarea canalului și la scanare. Actualizează pistele întreabă înainte numai de pozițiile aduse din altă listă, fără semnal aici."
+msgstr "Le posizioni su cui questo ricevitore ha ricevuto segnale, al cambio di canale e durante la ricerca. Aggiorna tracce chiede prima solo per le posizioni portate da un'altra lista, senza segnale qui."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/cautare_web.py
 msgid "Niciun semnal ținut minte încă. Se notează singur la fiecare schimbare de canal și la scanare."

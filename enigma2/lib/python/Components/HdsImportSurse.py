@@ -37,6 +37,10 @@
 # numai ultimele PASTRATE_COPII. Un lamedb de acum scris pe jumătate (lib/dvb/db.cpp scrie neatomic) se copiază cum
 # e, cu o notă: tocmai receptorul cu lista stricată are nevoie de import, deci nu e motiv de refuz.
 #
+# Originea pozițiilor (Components/HdsIstoricSemnal.py, hds_origine_pozitii.json): pozițiile de satelit care intră noi în
+# listă prin import sunt notate ca aduse din altă listă (semnul din lista Sateliți, cât receptorul nu le-a recepționat);
+# întoarcerea unui import din copia receptorului pune la loc originea din copie, care o are (copie_de_siguranta o ia).
+#
 # După scriere: rândurile buchetelor imaginii (userbouquet.hds_*: DAB+ și DVB-T2 din satelit) se pun la loc în indexul
 # luat din copie (pune_la_loc_buchetele_imaginii); înregistrările programate importate intră și în lista din memorie a
 # lui RecordTimer (incarca_temporizatoarele, în incheie_importul), altfel ieșirea interfeței le scria peste: lista care
@@ -100,6 +104,7 @@ LOCURI_ACCES = ("/etc/tuxbox/config/",)
 
 FISIERE_CANALE = ("lamedb", "lamedb5", "bouquets.tv", "bouquets.radio")
 FISIERE_TEMPORIZATOARE = ("timers.xml", "autotimer.xml")
+NUME_ORIGINE = "hds_origine_pozitii.json"    # Components/HdsIstoricSemnal.NUME_ORIGINE
 NUME_SETARI = ("settings", "settings-fara-token")
 TIPAR_BUCHET = re.compile(r"^userbouquet\.[A-Za-z0-9_.@+-]{1,120}\.(tv|radio)$")
 TIPAR_RAND_INDEX = re.compile(r'^#SERVICE\s+1:7:\d+:.*FROM BOUQUET\s+"([^"]+)"', re.I)
@@ -1051,7 +1056,8 @@ def _spatiu_liber(dosar):
 
 
 def _fisiere_de_copiat(dosar_etc):
-	nume = [n for n in FISIERE_CANALE + FISIERE_TEMPORIZATOARE]
+	# originea pozițiilor (Components/HdsIstoricSemnal.py) merge cu lista: întoarcerea importului o pune la loc
+	nume = [n for n in FISIERE_CANALE + FISIERE_TEMPORIZATOARE + (NUME_ORIGINE,)]
 	try:
 		nume += sorted(n for n in os.listdir(dosar_etc) if TIPAR_BUCHET.match(n))
 	except OSError:
@@ -1397,6 +1403,8 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 	importate = []
 	if alegeri.get("canale"):
 		ale_imaginii = randuri_buchete_imagine(dest)
+		pozitii_inainte = _pozitii_lamedb(os.path.join(dest, "lamedb"))
+		lamedb_copiat = False
 		copiate = 0
 		for nume in FISIERE_CANALE:
 			cale = os.path.join(dosar, nume)
@@ -1407,6 +1415,9 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 				continue
 			if _copiaza(cale, os.path.join(dest, nume), mesaje):
 				copiate += 1
+				lamedb_copiat = lamedb_copiat or nume == "lamedb"
+		if lamedb_copiat:
+			_noteaza_originea(dest, dosar, pozitii_inainte, sursa)
 		for cale in sorted(glob.glob(os.path.join(dosar, "userbouquet.*"))):
 			nume = os.path.basename(cale)
 			if TIPAR_BUCHET.match(nume) and os.path.isfile(cale) and _copiaza(cale, os.path.join(dest, nume), mesaje):
@@ -1525,6 +1536,44 @@ def _importa_extra(dosar, alegeri, rez, sursa, context, dest_picon, catalog, rad
 			rez["_retea"] = plan
 		else:
 			mesaje.append(_("Copia nu are setări de rețea pe care să le pot folosi."))
+
+
+def _istoric_semnal():
+	try:
+		from Components import HdsIstoricSemnal as I
+	except ImportError:
+		try:
+			import HdsIstoricSemnal as I
+		except ImportError:
+			return None
+	return I
+
+
+def _pozitii_lamedb(cale):
+	"""Pozițiile de satelit din lista de canale de acum (Components/HdsIstoricSemnal.pozitii_lamedb), sau None."""
+	I = _istoric_semnal()
+	try:
+		return I.pozitii_lamedb(cale) if I is not None else None
+	except Exception as eroare:
+		_jurnal("pozitiile listei: %s" % eroare.__class__.__name__)
+		return None
+
+
+def _noteaza_originea(dest, dosar, inainte, sursa):
+	"""Lista de canale tocmai importată (Components/HdsIstoricSemnal.py, originea pozițiilor): pozițiile noi în listă
+	sunt aduse din altă listă; cele care erau deja rămân cum erau. Întoarcerea unui import din copia de siguranță a
+	receptorului pune la loc originea din copie (sau nimic, la o copie fără ea). Pe firul importului; nu aruncă."""
+	I = _istoric_semnal()
+	if I is None:
+		return
+	try:
+		if (sursa or {}).get("mediu") == "receptor":
+			I.originea_din_copie(dest, dosar)
+		else:
+			noi = I.lista_noua(dest, inainte, "import")
+			_jurnal("pozitii aduse noi in lista: %d" % len(noi))
+	except Exception as eroare:
+		_jurnal("originea pozitiilor: %s" % eroare.__class__.__name__)
 
 
 def reincarca_canale():

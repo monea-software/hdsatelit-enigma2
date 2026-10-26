@@ -18,7 +18,9 @@ Components/HdsPachete.py. Aici sunt cele care stateau in ecran si de care are ne
  - descarcarea listei (opkg update) si lucrarea opkg (Lucrare: progres, jurnal scurt, raspunsul N la fisierele de
    configurare schimbate, reincarcarea pluginurilor, textele de la sfarsit, oprirea dupa un minut fara raspuns). Cate
    una odata in tot procesul: ce porneste pagina vede si televizorul, si invers. Iesirea opkg intreaga merge in
-   /tmp/hds-extensii.log;
+   /home/root/logs/hds-extensii.log (memoria interna: ramane dupa repornire, o vad Jurnalele sistemului; rotit). O
+   lucrare e reusita cand codul opkg e 0 SAU cand toate tintele ei s-au facut (versiunea ceruta instalata, pachetul
+   sters): opkg iese cu 255 si cand cade numai configurarea altui pachet din receptor, ramas neconfigurat;
  - catalogul tinut minte pentru pagina (citit din nou numai dupa o schimbare).
 opkg porneste numai prin Components/Ipkg.py (lista de argumente, nume verificate, fara shell). Pluginurile
 (PluginComponent) si caile se cer numai in functii, ca probele de pe PC sa incarce modulul singur."""
@@ -36,7 +38,7 @@ try:
 except ImportError:  # probe pe PC
 	from Ipkg import IpkgComponent, opkgArguments, opkgProgram
 
-JURNAL_OPKG = '/tmp/hds-extensii.log'
+JURNAL_OPKG = P.DOSAR_JURNALE + '/hds-extensii.log'
 FARA_RASPUNS_S = 60              # dupa atata timp fara niciun rand de la opkg se poate opri lucrarea
 
 # starea comuna a procesului: ultima descarcare a listei (automata sau ceruta), rezultatul ei, lucrarea curenta
@@ -1113,23 +1115,13 @@ def planFisier(f, argumente=None):
 
 # ---------------------------------------------------------------- jurnalul opkg si pluginurile
 
-def scrieJurnal(linie):
-	"""iesirea opkg, intreaga, pentru service: /tmp/hds-extensii.log (in memorie, cel mult 256 KB; fara a urma o
-	legatura simbolica pusa in locul fisierului)"""
-	try:
-		mod = os.O_WRONLY | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
-		try:
-			if os.path.getsize(JURNAL_OPKG) > 262144:
-				mod |= os.O_TRUNC
-			else:
-				mod |= os.O_APPEND
-		except OSError:
-			mod |= os.O_APPEND
-		fd = os.open(JURNAL_OPKG, mod, 0o600)
-		with os.fdopen(fd, 'a') as fh:
-			fh.write('%s %s\n' % (time.strftime('%H:%M:%S'), P._curat(linie, 400)))
-	except (IOError, OSError):
-		pass
+def scrieJurnal(linie, sincron=False):
+	"""iesirea opkg, intreaga, pentru service si pentru testeri: JURNAL_OPKG, in dosarul jurnalelor de pe memoria
+	interna (ramane dupa repornire), cel mult P.MARIME_JURNAL plus o copie veche (.1); fara a urma o legatura simbolica
+	pusa in locul fisierului; numele si parola din adresele surselor nu se scriu (P.fara_parola). sincron (fsync):
+	numai randurile de rezumat (inceputul si sfarsitul lucrarii, avertismentele), ca sa ramana si dupa o repornire dura"""
+	P.scrie_jurnal_rotit(JURNAL_OPKG, '%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'),
+		P._curat(P.fara_parola(linie), 400)), P.MARIME_JURNAL, sincron)
 
 
 def reincarcaPluginuri(plugins=None):
@@ -1256,6 +1248,9 @@ class Lucrare(object):
 		self.ipkg = ipkg if ipkg is not None else IpkgComponent()
 		self.ipkg.addCallback(self._eveniment)
 		self.radacina = '/'              # pentru starea pachetelor de la sfarsit (probele de pe PC dau alta)
+		# pachetele ramase neconfigurate dinainte de lucrare (None = nu se stie): numai ele pot fi motivul unui cod opkg
+		# nenul la o lucrare cu toate tintele facute
+		self.neconfigurateInainte = None
 
 	def asculta(self, functie):
 		if functie not in self._ascultatori:
@@ -1280,7 +1275,15 @@ class Lucrare(object):
 		self.ultimaLinie = self.pornita = time.time()
 		STARE['lucrare'] = self
 		self.plan.setdefault('titluri', {})
-		scrieJurnal('---- %s %s' % (self.plan.get('fel'), ' '.join(self.plan.get('argumente') or ())))
+		scrieJurnal('---- %s %s' % (self.plan.get('fel'), ' '.join(self.plan.get('argumente') or ())), True)
+		try:
+			self.neconfigurateInainte = P.pachete_neconfigurate(self.radacina)
+		except Exception as e:
+			self.neconfigurateInainte = None
+			_jurnal('pachetele neconfigurate: %s' % e)
+		if self.neconfigurateInainte:
+			scrieJurnal('pachete neconfigurate in receptor (opkg le configureaza din nou la sfarsit): %s' %
+				', '.join(self.neconfigurateInainte), True)
 		self.ipkg.runCmd(self.plan.get('argumente'))
 
 	def _scrie(self, fel, text):
@@ -1352,6 +1355,23 @@ class Lucrare(object):
 			trebuieRepornire = reincarcaPluginuri(self.plugins)
 		tinte = self.plan.get('tinte') or []
 		bune, rele = rezultatePachete(self.plan, self.radacina) if tinte and (cod == 0 or self.schimbat) else ([], tinte)
+		# reusita: codul 0, sau toate tintele facute si numai pachete neconfigurate de dinainte (opkg iese cu 255 si cand
+		# cade numai configurarea altui pachet din receptor, ramas asa de la o instalare de dinainte: atunci lucrarea
+		# ceruta s-a facut). Un pachet ramas neconfigurat acum, care nu era asa inainte (o dependinta adusa de lucrare),
+		# e o greseala a lucrarii.
+		reusit = cod == 0
+		if not reusit and tinte and bune and not rele and self.schimbat and not self.oprit and (
+				self.neconfigurateInainte is not None):
+			try:
+				acum = P.pachete_neconfigurate(self.radacina)
+			except Exception:
+				acum = None
+			if acum is not None:
+				noi = [n for n in acum if n not in self.neconfigurateInainte]
+				reusit = not noi
+				scrieJurnal(('opkg a iesit cu %s, dar toate pachetele cerute s-au facut: lucrarea e reusita; pachete '
+					'neconfigurate in receptor (de dinainte): %s' % (cod, ', '.join(acum) or 'niciunul')) if reusit else
+					'pachete ramase neconfigurate dupa lucrare (nu erau inainte): %s' % ', '.join(noi), True)
 		if tinte and (cod == 0 or self.schimbat):
 			# ce s-a facut si ce nu, pachet cu pachet, cu versiunea (0.6.6)
 			facut = {'instaleaza': N_('Instalat: %s'), 'actualizeaza': N_('Actualizat: %s'), 'sterge': N_('Șters: %s')}
@@ -1361,7 +1381,7 @@ class Lucrare(object):
 				self._scrie('bun', _t(facut.get(fel, '%s')) % numeCuVersiune(t['titlu'], t['de'] if fel == 'sterge' else t['la']))
 			for t in rele:
 				self._scrie('eroare', _t(nefacut.get(fel, '%s')) % numeCuVersiune(t['titlu'], t['de'] if fel == 'sterge' else t['la']))
-		if cod == 0:
+		if reusit:
 			if len(tinte) == 1 and bune:
 				# cu numele si versiunea: "Gata. Alfa 2.26.09-11968 a fost instalat."
 				t = tinte[0]
@@ -1373,7 +1393,8 @@ class Lucrare(object):
 					'actualizeaza': _t('Gata. %s este la zi.'), 'sterge': _t('Gata. %s a fost șters.')}
 				titlu = self.plan.get('textGata') or (texte.get(fel) or 'Gata. %s') % nume
 			stare, culoare = _t('Gata'), 'bun'
-			self._scrie('bun', _t('Terminat fără erori.'))
+			if cod == 0:
+				self._scrie('bun', _t('Terminat fără erori.'))
 			butoane = [N_('Închide')]
 			if trebuieRepornire and fel != 'sterge':
 				# extensia noua apare in lista (si porneste) abia dupa repornirea interfetei; ales Mai tarziu: un OK
@@ -1400,9 +1421,9 @@ class Lucrare(object):
 			titlu = (texte.get(fel) or _t('%s: nu a reușit.')) % nume
 			stare, culoare = motiv, 'rau'
 			butoane = [N_('Închide')]
-		self.rezultat = {'reusit': cod == 0, 'titlu': titlu, 'stare': stare, 'culoare': culoare, 'butoane': butoane,
+		self.rezultat = {'reusit': reusit, 'titlu': titlu, 'stare': stare, 'culoare': culoare, 'butoane': butoane,
 			'ales': ales, 'repornire': 'Repornește interfața' in butoane}
-		scrieJurnal('---- cod %s' % cod)
+		scrieJurnal('---- cod %s' % cod, True)
 		# pachetele descarcate de opkg nu mai trebuie (cache-ul e in RAM): sterse acum, nu la repornire (0.6.6)
 		try:
 			n = P.curata_cache()

@@ -1916,26 +1916,22 @@ def _istoricSemnal():
 	return I
 
 
-def pozitii_neprinse(grupuri, ist=None):
-	"""Pozitiile de satelit din grupuri pe care acest receptor nu a prins niciodata semnal (Components/HdsIstoricSemnal.py),
-	de la est la vest. Lista goala cand istoricul e gol (nu se stie nimic) sau nu se poate citi."""
-	if ist is None:
-		I = _istoricSemnal()
-		if I is None:
-			return []
-		try:
-			ist = I.istoric()
-		except Exception:
-			return []
-	rez = []
+def pozitii_neprinse(grupuri, ist=None, org=None):
+	"""Pozitiile de satelit din grupuri aduse din alta lista (importul, listele implicite) pe care acest receptor nu a
+	receptionat niciodata semnal (Components/HdsIstoricSemnal.aduse_fara_semnal), in ordinea grupurilor. Lista goala
+	cand nu se stie nimic: pozitiile scanate aici sau cu originea nestiuta nu sunt intrebate."""
+	I = _istoricSemnal()
+	if I is None:
+		return []
+	pozitii = []
 	for g in grupuri:
-		if isinstance(g.poz, int) and g.poz not in rez:
-			try:
-				if ist.prinsa(g.poz) is False:
-					rez.append(g.poz)
-			except Exception:
-				return []
-	return rez
+		if isinstance(g.poz, int) and not isinstance(g.poz, bool) and g.poz not in pozitii:
+			pozitii.append(g.poz)
+	try:
+		aduse = I.aduse_fara_semnal(pozitii, ist, org)
+	except Exception:
+		return []
+	return [p for p in pozitii if p in aduse]
 
 
 def fara_pozitii(grupuri, pozitii):

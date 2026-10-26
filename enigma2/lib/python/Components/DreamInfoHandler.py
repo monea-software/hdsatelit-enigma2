@@ -443,10 +443,20 @@ class DreamInfoHandler:
 	def mergeServices(self, directory, name, merge = False):
 		print("merging services:", directory, " - ", name)
 		if os.path.isfile(directory + name):
+			# HDSatelit: the positions this package adds to the list come from outside, not from a scan here
+			# (Components/HdsIstoricSemnal.py, origin of the positions: the mark in the Satellites list)
+			try:
+				from Components import HdsIstoricSemnal
+				before = HdsIstoricSemnal.pozitii_lamedb(HdsIstoricSemnal.CALE_LAMEDB)
+			except Exception as e:
+				HdsIstoricSemnal, before = None, None
+				print("[DreamInfoHandler] positions of the list:", e)
 			db = eDVBDB.getInstance()
 			db.reloadServicelist()
 			db.loadServicelist(directory + name)
 			db.saveServicelist()
+			if HdsIstoricSemnal is not None:
+				HdsIstoricSemnal.lista_noua(os.path.dirname(HdsIstoricSemnal.CALE_LAMEDB), before, "implicite")
 		self.installNext()
 
 	def installFavourites(self, directory, name):

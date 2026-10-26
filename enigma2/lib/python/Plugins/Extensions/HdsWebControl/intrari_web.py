@@ -12,8 +12,8 @@
 #   settings?" la Verde. config.misc.rcused nu e un rand al ecranului (alege numai iconita), deci nu e nici aici. Ecranul
 #   Telecomenzi (HdsTelecomenzi, /telecomenzi) e altul: pagina pune legatura spre el;
 # - ... > Butoane colorate si taste rapide (Screens/ButtonSetup.py, HdsButtonSetup): cele patru butoane colorate
-#   (apasare lunga), aceleasi actiuni de ales (config.hds_buttons.*), salvate la fel; intrarea are semnul "in lucru"
-#   (apasarea lunga nu le foloseste inca);
+#   (apasare lunga), aceleasi actiuni de ales (config.hds_buttons.*), salvate la fel; bara le foloseste pe loc
+#   (Screens/InfoBar.py), fara semnul "in lucru";
 # - Meniu > Setari > Interfata & Aspect > Aspectul ecranelor (Plugins/SystemPlugins/SkinSelector): skinurile instalate cu
 #   previzualizarea lor (prev.png, servit numai pentru dosarele din lista), alegerea (config.skin.primary_skin, verificata
 #   ca pe televizor: fisierul trebuie sa fie un skin; ecranele HD Satelit se scaleaza la rezolutia lui, iar la un skin
@@ -556,7 +556,6 @@ __STIL_PAGINI__
   <section class="card">
     <h2>Apăsarea lungă</h2>
     <div id="butoane"></div>
-    <p class="nota">Ecranul e în lucru: alegerile se salvează, dar apăsarea lungă din timpul vizionării nu le folosește încă.</p>
   </section>
   <div class="butoane">
     <button type="button" class="principal" id="salveaza">Salvează</button>
@@ -736,8 +735,6 @@ TEXTE_PAGINA = {
 		N_("Alege ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor."),
 		N_("Se citesc butoanele..."),
 		N_("Apăsarea lungă"),
-		N_("Ecranul e în lucru: alegerile se salvează, dar apăsarea lungă din timpul vizionării nu le "
-			"folosește încă."),
 		N_("Salvează"),
 		N_("Renunță"),
 		N_("Aspectul ecranelor"),

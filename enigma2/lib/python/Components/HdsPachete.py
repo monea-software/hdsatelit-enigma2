@@ -872,6 +872,65 @@ def curata_cache(radacina='/', lacat='/var/run/opkg.lock'):
 	return sterse
 
 
+# ---------------------------------------------------------------- pachetele neconfigurate si jurnalele pe disc
+
+# starile din Status (opkg) ale unui pachet despachetat dar neconfigurat: scriptul lui de dupa instalare (postinst) a
+# cazut sau instalarea s-a oprit la jumatate
+STARI_NECONFIGURATE = ('unpacked', 'half-configured', 'half-installed')
+# jurnalele care trebuie sa ramana dupa repornire stau in dosarul jurnalelor de pe memoria interna (il arata Jurnalele
+# sistemului pe televizor si in interfata web); fiecare cel mult MARIME_JURNAL, plus o copie veche (<nume>.1)
+DOSAR_JURNALE = '/home/root/logs'
+MARIME_JURNAL = 128 * 1024
+# numele si parola dintr-o adresa (https://nume:parola@gazda/...): opkg le scrie in "Downloading ..." si in erorile
+# wget pentru sursele adaugate de om cu ele in adresa; in jurnalele de pe disc nu ajung
+_PAROLA_IN_ADRESA = re.compile(r'(?i)\b((?:https?|ftps?)://)[^/\s@]+@')
+
+
+def fara_parola(text):
+	"""text fara numele si parola din adrese: https://nume:parola@gazda -> https://gazda"""
+	return _PAROLA_IN_ADRESA.sub(r'\1', text if isinstance(text, str) else str(text))
+
+
+def pachete_neconfigurate(radacina='/', conf=None):
+	"""Numele pachetelor din status-ul opkg ramase neconfigurate (STARI_NECONFIGURATE), in ordine. opkg 0.8.0 incearca
+	sa le configureze din nou la sfarsitul ORICAREI instalari (opkg_configure_packages) si iese cu 255 cand unul cade
+	iar, chiar daca pachetele cerute s-au instalat bine."""
+	conf = conf or citeste_configurarea(radacina)
+	rez = []
+	for s in citeste_strofe(_cale(radacina, conf.status_file)):
+		n = s.get('package', '')
+		stare = s.get('status', '').split()
+		if n and any(x in stare for x in STARI_NECONFIGURATE):
+			rez.append(n)
+	return sorted(set(rez))
+
+
+def scrie_jurnal_rotit(cale, text, maxim=MARIME_JURNAL, sincron=False):
+	"""Adauga text la jurnalul `cale`. Cand ar trece de `maxim` octeti, jurnalul de pana acum trece in <cale>.1 (unul
+	singur vechi; cel dinainte se pierde), deci pe disc stau cel mult 2 x maxim. Dosarul trebuie sa existe (pe receptor
+	DOSAR_JURNALE il face paznicul la pornire; nu se face de aici, ca probele de pe PC sa nu scrie in afara dosarelor
+	lor); fara legaturi simbolice (O_NOFOLLOW, si o legatura pusa in locul fisierului nu se urmeaza), fisier nou cu
+	drepturile 0600. sincron: fsync dupa scriere (o repornire dura a receptorului, de pilda de la watchdogul HW, lasa
+	altfel randurile din ultimul minut zerouri pe eMMC). False la orice eroare (nu arunca)."""
+	date = (text if isinstance(text, str) else str(text)).encode('utf-8', 'replace')[:maxim]
+	try:
+		if not os.path.isdir(os.path.dirname(cale) or '.') or os.path.islink(cale):
+			return False
+		if os.path.isfile(cale) and os.path.getsize(cale) + len(date) > maxim:
+			os.replace(cale, cale + '.1')
+		fd = os.open(cale, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, 'O_NOFOLLOW', 0) |
+			getattr(os, 'O_BINARY', 0), 0o600)
+		try:
+			os.write(fd, date)
+			if sincron:
+				os.fsync(fd)
+		finally:
+			os.close(fd)
+		return True
+	except (IOError, OSError):
+		return False
+
+
 # ---------------------------------------------------------------- fisiere .ipk de pe stick, disc sau retea
 
 def fisier_ipk_permis(cale, radacina='/'):

@@ -1466,28 +1466,27 @@ def _grupuri_json(grupuri, sel, X):
 
 
 def grupe_neprinse(chei):
-	"""Cheile grupelor de satelit (pozitia ca text) pe care acest receptor n-a prins niciodata semnal
-	(Components/HdsIstoricSemnal.py), ca semnul de pe antetul din lista Sateliti de pe televizor
-	(Screens/ChannelSelection.hds_text_antet). Multime goala cand istoricul e gol sau nu se poate citi."""
+	"""Cheile grupelor de satelit (pozitia ca text) aduse din alta lista pe care acest receptor n-a receptionat niciodata
+	semnal (Components/HdsIstoricSemnal.aduse_fara_semnal), ca semnul de pe antetul din lista Sateliti de pe televizor
+	(Screens/ChannelSelection.hds_text_antet). Pozitiile scanate aici sau cu originea nestiuta nu au semn."""
 	try:
 		from Components import HdsIstoricSemnal
-		ist = HdsIstoricSemnal.istoric()
 	except Exception:
 		return set()
-	rez = set()
+	pozitii = {}
 	for k in chei:
 		try:
-			if ist.prinsa(int(k)) is False:
-				rez.add(k)
+			pozitii[int(k)] = k
 		except (TypeError, ValueError):
 			continue
-	return rez
+	return set(pozitii[p] for p in HdsIstoricSemnal.aduse_fara_semnal(list(pozitii)))
 
 
 def _text_grupa(X, n, neprins):
-	"""Numarul de canale al antetului, cu semnul pozitiei neprinse niciodata (acelasi text ca pe televizor)."""
+	"""Numarul de canale al antetului, cu semnul pozitiei aduse din alta lista, fara semnal aici (acelasi text ca pe
+	televizor)."""
 	text = X.text_numar(n)
-	return text + u" · " + _t("niciodată recepționat") if neprins else text
+	return text + u" · " + _t("din altă listă, fără semnal aici") if neprins else text
 
 
 def gen_antete(M, X, lista, tip, acum, grupuri, sel):

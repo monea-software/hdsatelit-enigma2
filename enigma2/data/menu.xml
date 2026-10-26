@@ -519,7 +519,9 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="External Keyboard" entryID="keyboard_setup" pictograma="tastatura" web="/setari?id=keyboard" weight="30">
 				<setup id="keyboard" />
 			</item>
-			<item level="1" text="Buttons &amp; Quick Keys" entryID="hds_button_setup" pictograma="taste-colorate" web="/taste-rapide" weight="35" stare="in-lucru">
+			<!-- Butoane colorate si taste rapide, fara semnul "in lucru": apasarea lunga e legata in bara
+			     (Screens/InfoBar.py, HdsTasteColorateActions) -->
+			<item level="1" text="Buttons &amp; Quick Keys" entryID="hds_button_setup" pictograma="taste-colorate" web="/taste-rapide" weight="35">
 				<screen module="ButtonSetup" screen="HdsButtonSetup" />
 			</item>
 			<!-- iesirea HDMI si televizorul in standby (Components/HdsStandbyTv.py, sectiunea hds_standby_tv din setup.xml);

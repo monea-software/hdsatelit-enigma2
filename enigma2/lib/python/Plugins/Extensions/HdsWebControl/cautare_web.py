@@ -484,7 +484,12 @@ def istoric_semnal(M=None):
 	M = _m(M)
 	ist = M.I.istoric()
 	pozitii = ist.rezumat()
-	return {"result": True, "pozitii": pozitii, "transpondere": len(ist.tp), "numai_citire": bool(ist.numai_citire)}
+	rez = {"result": True, "pozitii": pozitii, "transpondere": len(ist.tp), "numai_citire": bool(ist.numai_citire)}
+	# pozitiile aduse din alta lista pe care receptorul n-a receptionat semnal (semnul din lista Sateliti)
+	aduse = M.I.text_aduse(M.I.aduse_fara_semnal(list(M.I.origine().aduse()), ist))
+	if aduse:
+		rez["aduse"] = aduse
+	return rez
 
 
 def sterge_istoric(M=None):
@@ -997,7 +1002,8 @@ $("incearca").addEventListener("click", function(){ cerePornire(true, "incearca"
 function arataIstoric(d){
   var lista = $("istoricLista"); lista.textContent = "";
   var poz = (d && d.pozitii) || [];
-  $("istoricNota").textContent = poz.length ? "Pozițiile pe care acest receptor a prins semnal. Actualizează pistele întreabă înainte de pozițiile fără semnal niciodată." : "Niciun semnal ținut minte încă. Se notează singur la fiecare schimbare de canal și la scanare.";
+  $("istoricNota").textContent = poz.length ? "Pozițiile pe care acest receptor a recepționat semnal, la schimbarea canalului și la scanare. Actualizează pistele întreabă înainte numai de pozițiile aduse din altă listă, fără semnal aici." : "Niciun semnal ținut minte încă. Se notează singur la fiecare schimbare de canal și la scanare.";
+  if(d && d.aduse){ var a = document.createElement("div"); a.className = "nota"; a.textContent = d.aduse; lista.appendChild(a); }
   poz.forEach(function(p){
     var r = document.createElement("div"); r.className = "nota";
     r.textContent = p.pozitie_text + " · " + p.text + " · " + p.transpondere_text;
@@ -1104,8 +1110,8 @@ TEXTE_PAGINA = {
 		N_("Ce canale"),
 	),
 	"js": (
-		N_("Pozițiile pe care acest receptor a prins semnal. Actualizează pistele întreabă înainte de pozițiile fără "
-			"semnal niciodată."),
+		N_("Pozițiile pe care acest receptor a recepționat semnal, la schimbarea canalului și la scanare. Actualizează "
+			"pistele întreabă înainte numai de pozițiile aduse din altă listă, fără semnal aici."),
 		N_("Niciun semnal ținut minte încă. Se notează singur la fiecare schimbare de canal și la scanare."),
 		N_("Ștergi istoricul semnalului? Receptorul îl ia de la capăt la următoarele schimbări de canal."),
 		N_("browser deconectat"),

@@ -907,19 +907,20 @@ HDS_LAMEDB = "/etc/enigma2/lamedb"
 
 
 def hds_text_antet(nume, n, deschis, text_numar, neprins=False):
-	"""Numele randului-antet al unui loc: semnul starii, numele locului si cate canale are; la o pozitie pe care acest
-	receptor n-a prins niciodata semnal (Components/HdsIstoricSemnal.py), un semn scurt la sfarsit."""
+	"""Numele randului-antet al unui loc: semnul starii, numele locului si cate canale are; la o pozitie ale carei
+	canale au venit din alta lista si pe care acest receptor n-a receptionat niciodata semnal
+	(Components/HdsIstoricSemnal.aduse_fara_semnal), un semn scurt la sfarsit."""
 	text = u"%s %s \u00b7 %s" % (HDS_SEMN_DESCHIS if deschis else HDS_SEMN_INCHIS, nume, text_numar(n))
-	return text + u" \u00b7 " + _("niciodată recepționat") if neprins else text
+	return text + u" \u00b7 " + _("din altă listă, fără semnal aici") if neprins else text
 
 
 def hds_pozitii_neprinse(pozitii):
-	"""Dintre locurile date (namespace >> 16, fara semn), pozitiile de satelit pe care acest receptor n-a prins niciodata
-	semnal. Multime goala cand istoricul e gol sau nu se poate citi (nimic nu se semneaza din nestiinta)."""
+	"""Dintre locurile date (namespace >> 16, fara semn), pozitiile de satelit aduse din alta lista (importul, listele
+	implicite) pe care acest receptor n-a receptionat niciodata semnal. Pozitiile scanate aici, cele cu originea
+	nestiuta si un istoric necitit nu se semneaza (nimic nu se semneaza din nestiinta)."""
 	try:
 		from Components import HdsIstoricSemnal
-		ist = HdsIstoricSemnal.istoric()
-		return set(p for p in pozitii if ist.prinsa(p) is False)
+		return HdsIstoricSemnal.aduse_fara_semnal(pozitii)
 	except Exception as e:
 		print("[ChannelSelection] istoricul semnalului: %s" % e)
 		return set()
