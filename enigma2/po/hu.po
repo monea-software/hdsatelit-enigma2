@@ -50866,3 +50866,167 @@ msgstr "A MENU mindent frissít (%d)"
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
 msgid "Actualizează toate (%d)"
 msgstr "Az összes frissítése (%d)"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului"
+msgstr "A modul webes felülete"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Se caută interfața web a modulului..."
+msgstr "A modul webes felületének keresése..."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Modulul"
+msgstr "A modul"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Căutarea interfeței web a modulului nu s-a terminat la timp."
+msgstr "A modul webes felületének keresése nem ért véget időben."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Niciun modul nu rulează acum."
+msgstr "Jelenleg egy modul sem fut."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Modulul nu are interfață web."
+msgstr "A modulnak nincs webes felülete."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului pe telefon"
+msgstr "A modul webes felülete a telefonon"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului ascultă doar pe receptor, deci se deschide numai pe televizor."
+msgstr "A modul webes felülete csak a vevőn figyel, ezért csak a tévén nyílik meg."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Scanează codul cu telefonul (în aceeași rețea cu receptorul). Se deschide pagina „Interfețele web ale modulelor”; acolo apasă „Deschide”."
+msgstr "Olvasd be a kódot a telefonnal (a vevővel azonos hálózaton). Megnyílik „A modulok webes felületei” oldal; ott nyomd meg a „Megnyitás” gombot."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Interfața web a modulului pe televizor"
+msgstr "A modul webes felülete a tévén"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Pe televizor e deschisă interfața web a modulului. Închide-o întâi."
+msgstr "A tévén a modul webes felülete van nyitva. Előbb zárd be."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Interfața web a modulului se deschide pe televizor."
+msgstr "A modul webes felülete megnyílik a tévén."
+
+#: lib/python/Screens/CleanupWizard.py
+msgid "Ștergi conținutul „%s”?\nCale: %s\nAcțiunea nu poate fi anulată.\nFișierele folosite acum de programe și steagul de probă prin stick sunt păstrate automat."
+msgstr "Törlöd a(z) „%s” tartalmát?\nÚtvonal: %s\nA művelet nem vonható vissza.\nA programok által most használt fájlok és a pendrive-os próbajelző automatikusan megmaradnak."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/resetare_web.py
+msgid "Fișierele folosite acum de programe și steagul probei prin stick se păstrează singure."
+msgstr "A programok által most használt fájlok és a pendrive-os próbajelző maguktól megmaradnak."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/resetare_web.py
+msgid "Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân."
+msgstr "Csak az ideiglenes fájlokat és a letöltött csomagokat törli; a csatornákhoz, felvételekhez, időzítésekhez és beállításokhoz soha nem nyúl. A programok által most használt fájlok és a pendrive-os próba jelzője megmaradnak."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Cablul și Wi-Fi-ul din copie. Fără legătură cu ele, rămâne rețeaua de acum."
+msgstr "Kábel és Wi-Fi a mentésből. Kapcsolat nélkül a mostani hálózat marad."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Pluginurile din copie, oferite după import ca să le instalezi."
+msgstr "A mentés bővítményei, az importálás után felajánlva telepítésre."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Fusul orar, ecranul și alte setări din copie. Limba nu se schimbă."
+msgstr "Időzóna, képernyő és más beállítások a mentésből. A nyelv nem változik."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtru: %s"
+msgstr "Szűrő: %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Activ"
+msgstr "Bekapcsolva"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtru: toate pachetele"
+msgstr "Szűrő: minden csomag"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege feedul sau felul pachetelor arătate."
+msgstr "Az OK kiválasztja a megjelenített csomagok forrását vagy fajtáját."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege feedul pachetelor arătate."
+msgstr "Az OK kiválasztja a megjelenített csomagok forrását."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%d din %d"
+msgstr "%d / %d"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtrul listei"
+msgstr "A lista szűrője"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate pachetele"
+msgstr "Minden csomag"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Arată numai pachetele dintr-un feed (HD Satelit, Monea Software, sursele tale) sau de un anumit fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu pachete."
+msgstr "Csak egy forrás (HD Satelit, Monea Software, a te forrásaid) vagy egy fajta csomagjait mutatja. A szűrő addig marad, amíg a Bővítményekben vagy, és minden csomagos fülön érvényes."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege · Roșu arată tot"
+msgstr "OK választ · Piros mindent mutat"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege"
+msgstr "OK választ"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtrează"
+msgstr "Szűrés"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Arată tot"
+msgstr "Mindent mutat"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate feedurile"
+msgstr "Minden forrás"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate felurile"
+msgstr "Minden fajta"
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Paznicul nu a verificat încă serviciile de sistem (o face la 3 minute după pornire)."
+msgstr "Az őr még nem ellenőrizte a rendszerszolgáltatásokat (az indulás után 3 perccel teszi)."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Nu merg toate serviciile de sistem; paznicul încearcă din nou: %s"
+msgstr "Nem fut minden rendszerszolgáltatás; az őr újra próbálkozik: %s"
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Serviciile de sistem merg. Porniri făcute de paznic: %d, ultima la %s (vezi hds-servicii.log)."
+msgstr "A rendszerszolgáltatások futnak. Az őr indításai: %d, az utolsó: %s (lásd hds-servicii.log)."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Serviciile de sistem (D-Bus, avahi, numele hdsatelit.local) merg."
+msgstr "A rendszerszolgáltatások (D-Bus, avahi, a hdsatelit.local név) futnak."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Jurnalul sistemului nu se păstrează pe disc în această imagine."
+msgstr "Ebben a rendszerben a rendszernapló nem marad meg a lemezen."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "%s, păstrat pe disc: %d fișiere vechi de câte %d KB; după o oprire necurată, copia lui în messages.cadere."
+msgstr "%s, a lemezen tárolva: %d régi fájl, egyenként %d KB; nem rendes leállás után a másolata a messages.cadere fájlban."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Jurnalul sistemului"
+msgstr "Rendszernapló"
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Serviciile de sistem"
+msgstr "Rendszerszolgáltatások"

@@ -1,18 +1,34 @@
+# Modificat de moneasoftware.com si hdsatelit.com, 2026
 from Screens.Screen import Screen
-from enigma import ePoint, eSize, eServiceCenter, getBestPlayableServiceReference, eServiceReference
+from enigma import ePoint, eSize, eServiceCenter, getBestPlayableServiceReference, eServiceReference, getDesktop
 from Components.VideoWindow import VideoWindow
 from Components.config import config, ConfigPosition
 
 pip_config_initialized = False
 
+
+def _desktop():
+	"""(latimea, inaltimea) ecranului interfetei (1920x1080 in tema noastra); 720x576 cand nu se poate citi"""
+	try:
+		d = getDesktop(0).size()
+		if d.width() > 0 and d.height() > 0:
+			return d.width(), d.height()
+	except Exception:
+		pass
+	return 720, 576
+
 class PictureInPicture(Screen):
 	def __init__(self, session):
 		global pip_config_initialized
 		Screen.__init__(self, session)
-		self["video"] = VideoWindow()
+		# fereastra video in coordonatele ecranului interfetei: cu marimea veche (720x576) o fereastra a unei teme
+		# 1920x1080 iesea in afara si ajungea cu latimea 0 (/proc/stb/vmpeg/1/dst_width = 0, imaginea in imagine
+		# pornea fara sa se vada)
+		latime, inaltime = _desktop()
+		self["video"] = VideoWindow(fb_width=latime, fb_height=inaltime)
 		self.currentService = None
 		if not pip_config_initialized:
-			config.av.pip = ConfigPosition(default=[-1, -1, -1, -1], args = (719, 567, 720, 568))
+			config.av.pip = ConfigPosition(default=[-1, -1, -1, -1], args=(latime - 1, inaltime - 1, latime, inaltime))
 			pip_config_initialized = True
 		self.onLayoutFinish.append(self.LayoutFinished)
 

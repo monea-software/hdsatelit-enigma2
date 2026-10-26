@@ -45716,3 +45716,167 @@ msgstr "MENU actualizează toate (%d)"
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py
 msgid "Actualizează toate (%d)"
 msgstr "Actualizează toate (%d)"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului"
+msgstr "Interfața web a modulului"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Se caută interfața web a modulului..."
+msgstr "Se caută interfața web a modulului..."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Modulul"
+msgstr "Modulul"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Căutarea interfeței web a modulului nu s-a terminat la timp."
+msgstr "Căutarea interfeței web a modulului nu s-a terminat la timp."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Niciun modul nu rulează acum."
+msgstr "Niciun modul nu rulează acum."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Modulul nu are interfață web."
+msgstr "Modulul nu are interfață web."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului pe telefon"
+msgstr "Interfața web a modulului pe telefon"
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Interfața web a modulului ascultă doar pe receptor, deci se deschide numai pe televizor."
+msgstr "Interfața web a modulului ascultă doar pe receptor, deci se deschide numai pe televizor."
+
+#: lib/python/Plugins/Extensions/HdsNavigator/ecrane.py
+msgid "Scanează codul cu telefonul (în aceeași rețea cu receptorul). Se deschide pagina „Interfețele web ale modulelor”; acolo apasă „Deschide”."
+msgstr "Scanează codul cu telefonul (în aceeași rețea cu receptorul). Se deschide pagina „Interfețele web ale modulelor”; acolo apasă „Deschide”."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Interfața web a modulului pe televizor"
+msgstr "Interfața web a modulului pe televizor"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Pe televizor e deschisă interfața web a modulului. Închide-o întâi."
+msgstr "Pe televizor e deschisă interfața web a modulului. Închide-o întâi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/navigator_web.py
+msgid "Interfața web a modulului se deschide pe televizor."
+msgstr "Interfața web a modulului se deschide pe televizor."
+
+#: lib/python/Screens/CleanupWizard.py
+msgid "Ștergi conținutul „%s”?\nCale: %s\nAcțiunea nu poate fi anulată.\nFișierele folosite acum de programe și steagul de probă prin stick sunt păstrate automat."
+msgstr "Ștergi conținutul „%s”?\nCale: %s\nAcțiunea nu poate fi anulată.\nFișierele folosite acum de programe și steagul de probă prin stick sunt păstrate automat."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/resetare_web.py
+msgid "Fișierele folosite acum de programe și steagul probei prin stick se păstrează singure."
+msgstr "Fișierele folosite acum de programe și steagul probei prin stick se păstrează singure."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/resetare_web.py
+msgid "Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân."
+msgstr "Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Cablul și Wi-Fi-ul din copie. Fără legătură cu ele, rămâne rețeaua de acum."
+msgstr "Cablul și Wi-Fi-ul din copie. Fără legătură cu ele, rămâne rețeaua de acum."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Pluginurile din copie, oferite după import ca să le instalezi."
+msgstr "Pluginurile din copie, oferite după import ca să le instalezi."
+
+#: lib/python/Components/HdsImportSurse.py
+msgid "Fusul orar, ecranul și alte setări din copie. Limba nu se schimbă."
+msgstr "Fusul orar, ecranul și alte setări din copie. Limba nu se schimbă."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtru: %s"
+msgstr "Filtru: %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Activ"
+msgstr "Activ"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtru: toate pachetele"
+msgstr "Filtru: toate pachetele"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege feedul sau felul pachetelor arătate."
+msgstr "OK alege feedul sau felul pachetelor arătate."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege feedul pachetelor arătate."
+msgstr "OK alege feedul pachetelor arătate."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%d din %d"
+msgstr "%d din %d"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtrul listei"
+msgstr "Filtrul listei"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate pachetele"
+msgstr "Toate pachetele"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Arată numai pachetele dintr-un feed (HD Satelit, Monea Software, sursele tale) sau de un anumit fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu pachete."
+msgstr "Arată numai pachetele dintr-un feed (HD Satelit, Monea Software, sursele tale) sau de un anumit fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu pachete."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege · Roșu arată tot"
+msgstr "OK alege · Roșu arată tot"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK alege"
+msgstr "OK alege"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Filtrează"
+msgstr "Filtrează"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Arată tot"
+msgstr "Arată tot"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate feedurile"
+msgstr "Toate feedurile"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Toate felurile"
+msgstr "Toate felurile"
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Paznicul nu a verificat încă serviciile de sistem (o face la 3 minute după pornire)."
+msgstr "Paznicul nu a verificat încă serviciile de sistem (o face la 3 minute după pornire)."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Nu merg toate serviciile de sistem; paznicul încearcă din nou: %s"
+msgstr "Nu merg toate serviciile de sistem; paznicul încearcă din nou: %s"
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Serviciile de sistem merg. Porniri făcute de paznic: %d, ultima la %s (vezi hds-servicii.log)."
+msgstr "Serviciile de sistem merg. Porniri făcute de paznic: %d, ultima la %s (vezi hds-servicii.log)."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "Serviciile de sistem (D-Bus, avahi, numele hdsatelit.local) merg."
+msgstr "Serviciile de sistem (D-Bus, avahi, numele hdsatelit.local) merg."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Jurnalul sistemului nu se păstrează pe disc în această imagine."
+msgstr "Jurnalul sistemului nu se păstrează pe disc în această imagine."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "%s, păstrat pe disc: %d fișiere vechi de câte %d KB; după o oprire necurată, copia lui în messages.cadere."
+msgstr "%s, păstrat pe disc: %d fișiere vechi de câte %d KB; după o oprire necurată, copia lui în messages.cadere."
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Jurnalul sistemului"
+msgstr "Jurnalul sistemului"
+
+#: lib/python/Components/HdsJurnale.py
+msgid "Serviciile de sistem"
+msgstr "Serviciile de sistem"

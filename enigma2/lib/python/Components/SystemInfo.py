@@ -74,15 +74,27 @@ SystemInfo["displaymodel"] = _modelul or "HD Satelit"
 SystemInfo["distro"] = "hdsatelit"
 SystemInfo["displaydistro"] = "HD Satelit"
 SystemInfo["displaytype"] = ""
-SystemInfo["machinebuild"] = _device_name or _about_mb or "viper4k"
+# masina pentru pluginuri (machinebuild, model, boxtype): intai cea din regulile imaginii (/etc/hdsatelit-model:
+# viper4kv20, viper4kv30, viper4kv40...), fiindca driverul placii scrie in /proc/stb/info/model un nume vechi de
+# Dreambox ("dm8000"), iar un plugin care se uita la masina ar crede ca ruleaza pe alt receptor. HardwareInfo ramane
+# cum il da driverul: NimManager isi alege dupa el pragul de curent al motorului antenei.
+SystemInfo["machinebuild"] = _about_mb or _device_name or "viper4k"
+SystemInfo["model"] = SystemInfo["machinebuild"]
+SystemInfo["boxtype"] = SystemInfo["machinebuild"]
 SystemInfo["socfamily"] = "hisilicon" if "hisilicon" in _chipset_text.lower() else ""
 try:
 	SystemInfo["ArchIsARM"] = 1 if os.uname().machine.lower().startswith(("arm", "aarch64")) else 0
 except Exception:
 	SystemInfo["ArchIsARM"] = 0
 SystemInfo["oe"] = "OE-Alliance 5.5"
-SystemInfo["imageversion"] = "2026.1"
-SystemInfo["imagebuild"] = "1"
+# versiunea imaginii din /etc/image-version ("0.6.7"), aceeasi ca in Despre; fara numar de constructie separat, ca
+# pluginurile care le lipesc ("versiune.constructie") sa arate numai versiunea
+try:
+	_versiune_imagine = _about.getImageVersionString().split(" ")[0]
+except Exception:
+	_versiune_imagine = ""
+SystemInfo["imageversion"] = _versiune_imagine if _versiune_imagine[:1].isdigit() else ""
+SystemInfo["imagebuild"] = ""
 SystemInfo["driversdate"] = "2026-09-16"
 SystemInfo["kernel"] = _kernel_text or "unknown"
 

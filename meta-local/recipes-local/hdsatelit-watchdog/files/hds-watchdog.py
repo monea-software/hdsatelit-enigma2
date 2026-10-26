@@ -127,6 +127,32 @@ Mecanism (cinci nivele, independente unul de altul):
        - NU se reporneste nimic; hotararea e o functie fara efecte (hotarare_memorie_es), testata in
          teste/test_cadere_radio_2.py.
 
+  6. Serviciile de sistem (adaugat 25.10.2026, versiunea 0.6.7): D-Bus de sistem (dbus-daemon), avahi-daemon si
+     publicarea numelui hdsatelit.local (hds-nume-local). Pe 25.10.2026 dbus-daemon s-a oprit singur, iar odata cu el
+     avahi-daemon si hds-nume-local: hdsatelit.local nu mai raspundea, desi interfata web mergea pe adresa IP. Aici, la
+     SERVICII_INTERVAL_S secunde si numai dupa SERVICII_PORNIRE_S de la pornirea receptorului (pana atunci le porneste
+     rc5):
+       - dbus merge cand exista un proces dbus-daemon si soclul sistemului (DBUS_SOCLURI) primeste o conexiune; fara
+         proces, sau cu soclul refuzat SERVICII_CONFIRMARI verificari la rand, se porneste din nou cu scriptul lui
+         (/etc/init.d/dbus-1 start; restart cand procesul a ramas, dar nu raspunde);
+       - avahi-daemon si hds-nume-local se pornesc din nou numai daca sunt pornite la pornirea receptorului (o legatura
+         S..<nume> in /etc/rc[2-5].d: omul care le-a oprit dinadins le gaseste oprite) si numai cu dbus mergand
+         (avahi are nevoie de el; hds-nume-local de avahi);
+       - fiecare serviciu se porneste de cel mult SERVICII_MAX_ORA ori pe ora (o cadere in bucla nu tine receptorul
+         ocupat); scripturile ruleaza ca lista de argumente, fara shell, cu SERVICII_TIMEOUT_S;
+       - CEL MULT O PORNIRE LA O VERIFICARE, in ordinea dbus, avahi, numele local (ce mai lipseste se porneste la
+         verificarile urmatoare, la SERVICII_INTERVAL_S): hranirea watchdogului HW se face o data pe trecere, iar o
+         trecere nu are voie sa stea aproape de pragul de 60 s; fara sleep si fara asteptarea soclului. Scriptul
+         ruleaza ca la _ng_ruleaza: dupa timpul depasit kill() si o asteptare de cel mult 0,5 s; un script ramas
+         agatat in nucleu (stare D) se tine minte si pana nu iese nu se mai porneste altul. Cel mai rau caz al
+         nivelului 6 intr-o trecere: SERVICII_TIMEOUT_S + 0,5 s + citirea soclurilor (SERVICII_SOCLU_S pe soclu);
+       - TACUT: nicio fereastra pe televizor; o linie in jurnalul paznicului (pe disc) la fiecare pornire si la fiecare
+         schimbare, iar starea (servicii=ok|repornit|esec, servicii_detaliu, servicii_ora, servicii_reporniri) intra in
+         STARE_PATH, de unde enigma2 (Components/HdsPaznic.py) o arata in "Informatii jurnale" si in pagina web
+         /jurnale-sistem;
+       - hotararea e o functie fara efecte (hotarare_servicii), testata in teste/test_gasite_0607.py (clasa
+         Servicii), impreuna cu limita de timp a unei treceri.
+
 Testat izolat pe receptorul de test, 21.09.2026 -- vezi STADIU-PROIECT-IMAGINE.md pentru
 dovada (toate cele trei ramuri: pastreaza receptorul pornit cand enigma2 e sanatos; chiar reporneste dur
 cand un proces tinta e absent/blocat cu fire D, fortat prin variabile de mediu de test; chiar trimite
@@ -271,6 +297,40 @@ _ng_stare = None             # ultima stare publicata (None = inca nicio verific
 _ng_repuneri = 0
 _ng_ultima_repunere = 0
 _ng_copii_blocati = []       # "ip" care nu au murit la SIGKILL (stare D); nu se asteapta niciodata dupa ei
+
+# ---- nivelul 6, serviciile de sistem (0.6.7) ----
+SERVICII_INTERVAL_S = 60     # o privire in /proc si o conexiune la un soclu local: practic zero procesor
+SERVICII_PORNIRE_S = 180     # dupa pornirea receptorului: pana atunci serviciile le porneste rc5 (S02dbus-1, S21, S22)
+SERVICII_CONFIRMARI = 3      # soclul D-Bus refuzat de atatea ori la rand, cu procesul inca acolo
+SERVICII_MAX_ORA = 3         # porniri ale aceluiasi serviciu in ultima ora
+SERVICII_TIMEOUT_S = 10      # scriptul de pornire (dbus-1 se desprinde singur cu --fork, avahi cu -D, numele local
+                              # porneste un proces in fundal: toate ies sub o secunda); mult sub pragul HW de 60 s
+SERVICII_SOCLU_S = 2.0       # conexiunea de proba la soclul D-Bus
+INIT_DIR = os.environ.get("HDS_WATCHDOG_INIT_DIR", "/etc/init.d")
+# listele de cai: despartite prin os.pathsep (":" pe receptor), ca VDEC_DOSARE
+RC_DIRS = tuple(os.environ.get("HDS_WATCHDOG_RC_DIRS", os.pathsep.join(("/etc/rc2.d", "/etc/rc3.d", "/etc/rc4.d",
+    "/etc/rc5.d"))).split(os.pathsep))
+DBUS_SOCLURI = tuple(os.environ.get("HDS_WATCHDOG_DBUS_SOCLURI", os.pathsep.join(("/var/run/dbus/system_bus_socket",
+    "/run/dbus/system_bus_socket"))).split(os.pathsep))
+NUME_LOCAL_PID = os.environ.get("HDS_WATCHDOG_NUME_LOCAL_PID", "/var/run/hds-nume-local.pid")
+# urma pornirilor, pe disc, langa jurnalul sistemului (se vede in Informatii > Jurnale si dupa o repornire); mica
+SERVICII_JURNAL_PATH = os.environ.get("HDS_WATCHDOG_SERVICII_JURNAL", "/home/root/logs/hds-servicii.log")
+SERVICII_JURNAL_MAX = 65536
+PROC_DIR = os.environ.get("HDS_WATCHDOG_PROC", "/proc")
+# (cheia, scriptul din INIT_DIR, procesul cautat dupa nume; None = dupa fisierul pid NUME_LOCAL_PID)
+SERVICII = (
+    ("dbus", "dbus-1", "dbus-daemon"),
+    ("avahi", "avahi-daemon", "avahi-daemon"),
+    ("nume-local", "hds-nume-local", None),
+)
+
+_srv_urmatoarea = 0.0        # urmatoarea verificare (ceas monoton)
+_srv_refuzuri = 0            # soclul D-Bus refuzat la rand, cu procesul acolo
+_srv_porniri = {}            # cheie -> [ceas monoton al fiecarei porniri din ultima ora]
+_srv_stare = ("", "", 0)     # (servicii, detaliu, ora de perete) pentru STARE_PATH
+_srv_reporniri = 0           # porniri facute de nivelul 6 de la pornirea acestui paznic
+_srv_anuntat = None          # ultima stare scrisa in jurnal
+_srv_copii_blocati = []      # scripturi de pornire care nu au murit la SIGKILL (stare D); nu se asteapta dupa ei
 
 # ioctl-uri standard <linux/watchdog.h> (stabile de zeci de ani, nu se schimba cu kernelul)
 WDIOC_GETSUPPORT = 0x80045700
@@ -607,9 +667,11 @@ def scrie_stare_paznic(acum, fel, detaliu, interfata, asteptare, pid_enigma2, ba
     continut = ("stare=%s\ndetaliu=%s\ninterfata=%d\nasteptare=%d\nocupat=%s\nocupat_ramas=%d\nbataie_varsta=%d\n"
                 "placa=1\nplaca_secunde=%d\nreporniri=%d\nultima_actiune=%s\nultima_actiune_ora=%d\n"
                 "verificat=%.3f\npid=%d\ndecodor=%s\nmemorie_es=%s\nmemorie_es_cheie=%s\nmemorie_es_detaliu=%s\n"
+                "servicii=%s\nservicii_detaliu=%s\nservicii_ora=%d\nservicii_reporniri=%d\n"
                 % (stare, _ng_scurt(detaliu or ""), 1 if interfata else 0, asteptare, ",".join(motive), int(ramas),
                    varsta, _placa_secunde, _reporniri_interfata, ultima, int(_ultima_actiune[1]), acum, os.getpid(),
-                   decodor or "", es_fel or "", es_cheie or "", _ng_scurt(es_detaliu or "")))
+                   decodor or "", es_fel or "", es_cheie or "", _ng_scurt(es_detaliu or ""),
+                   _srv_stare[0], _ng_scurt(_srv_stare[1] or ""), int(_srv_stare[2]), _srv_reporniri))
     nou = STARE_PATH + ".nou"
     try:
         with open(nou, "w") as f:
@@ -1716,6 +1778,259 @@ def pas_memorie_es(acum, canal=True):
     return fel, detaliu, cheie
 
 
+def _procese_cu_numele(nume, proc=None):
+    """pid-urile proceselor vii cu numele dat (/proc/<pid>/comm; un proces terminat, "Z", nu se socoteste)"""
+    proc = proc or PROC_DIR
+    rez = []
+    try:
+        intrari = os.listdir(proc)
+    except OSError:
+        return rez
+    for x in intrari:
+        if not x.isdigit():
+            continue
+        try:
+            with open(os.path.join(proc, x, "comm")) as f:
+                if f.read().strip() != nume:
+                    continue
+            with open(os.path.join(proc, x, "stat")) as f:
+                stare = f.read().rsplit(")", 1)[-1].split()
+            if stare and stare[0] == "Z":
+                continue
+        except (OSError, IndexError):
+            continue
+        rez.append(int(x))
+    return rez
+
+
+def _pid_viu(cale, proc=None):
+    proc = proc or PROC_DIR
+    try:
+        with open(cale) as f:
+            pid = int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        with open(os.path.join(proc, str(pid), "stat")) as f:
+            stare = f.read().rsplit(")", 1)[-1].split()
+        return not (stare and stare[0] == "Z")
+    except (OSError, IndexError):
+        return False
+
+
+def dbus_raspunde(socluri=None):
+    """True cand soclul D-Bus de sistem primeste o conexiune (o deschidere si o inchidere; nu se trimite nimic)"""
+    import socket
+    for cale in socluri or DBUS_SOCLURI:
+        if not cale:
+            continue
+        try:
+            if not os.path.exists(cale):
+                continue
+        except OSError:
+            continue
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(SERVICII_SOCLU_S)
+        try:
+            s.connect(cale)
+            return True
+        except OSError:
+            pass
+        finally:
+            s.close()
+    return False
+
+
+def pornit_la_pornire(script, rc_dirs=None):
+    """serviciul are o legatura S..<script> intr-un dosar rc al nivelurilor 2-5 (pornit la pornirea receptorului)"""
+    for d in rc_dirs or RC_DIRS:
+        try:
+            for x in os.listdir(d):
+                if x.startswith("S") and x[3:] == script and x[1:3].isdigit():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def citeste_servicii():
+    """{cheie: {"instalat", "pornit_la_pornire", "proces", "raspunde"}} pentru SERVICII (numai citiri)"""
+    rez = {}
+    for cheie, script, proces in SERVICII:
+        d = {"instalat": os.path.exists(os.path.join(INIT_DIR, script)),
+             "pornit_la_pornire": pornit_la_pornire(script)}
+        if proces:
+            d["proces"] = bool(_procese_cu_numele(proces))
+        else:
+            d["proces"] = _pid_viu(NUME_LOCAL_PID)
+        d["raspunde"] = dbus_raspunde() if cheie == "dbus" and d["proces"] else d["proces"]
+        rez[cheie] = d
+    return rez
+
+
+def hotarare_servicii(stari, uptime_s, refuzuri, porniri, acum):
+    """Fara efecte. -> (lista de (cheie, script, actiune), refuzuri noi, starea pentru ecran, detaliu).
+    actiune: "start" sau "restart" (dbus cu procesul ramas, dar fara raspuns de SERVICII_CONFIRMARI ori la rand).
+    porniri: {cheie: [ceas monoton al pornirilor]}; acum: ceasul monoton."""
+    if uptime_s is not None and uptime_s < SERVICII_PORNIRE_S:
+        return [], 0, "", "pornirea receptorului: serviciile le porneste rc5"
+    de_pornit = []
+    cazute = []
+    limitate = []
+
+    def poate(cheie):
+        recente = [t for t in porniri.get(cheie, []) if acum - t < 3600]
+        return len(recente) < SERVICII_MAX_ORA
+
+    dbus = stari.get("dbus") or {}
+    dbus_bun = True
+    if dbus.get("instalat"):
+        if not dbus.get("proces"):
+            refuzuri = 0
+            dbus_bun = False
+            cazute.append("dbus")
+            if poate("dbus"):
+                de_pornit.append(("dbus", "dbus-1", "start"))
+            else:
+                limitate.append("dbus")
+        elif not dbus.get("raspunde"):
+            refuzuri += 1
+            dbus_bun = False
+            if refuzuri >= SERVICII_CONFIRMARI:
+                cazute.append("dbus")
+                if poate("dbus"):
+                    de_pornit.append(("dbus", "dbus-1", "restart"))
+                    refuzuri = 0
+                else:
+                    limitate.append("dbus")
+        else:
+            refuzuri = 0
+    # avahi si numele local: numai cele pornite la pornirea receptorului, numai cu D-Bus mergand (sau pornit acum)
+    dbus_va_merge = dbus_bun or any(c == "dbus" for c, _s, _a in de_pornit)
+    avahi_va_merge = True
+    for cheie, script in (("avahi", "avahi-daemon"), ("nume-local", "hds-nume-local")):
+        d = stari.get(cheie) or {}
+        if not d.get("instalat") or not d.get("pornit_la_pornire"):
+            continue
+        if d.get("proces"):
+            continue
+        cazute.append(cheie)
+        if cheie == "avahi":
+            avahi_va_merge = False
+        if not dbus_va_merge or (cheie == "nume-local" and not avahi_va_merge and not any(
+                c == "avahi" for c, _s, _a in de_pornit)):
+            continue
+        if poate(cheie):
+            de_pornit.append((cheie, script, "start"))
+        else:
+            limitate.append(cheie)
+    if de_pornit:
+        # cel mult o pornire la o verificare (vezi documentatia nivelului 6); ordinea listei e dbus, avahi, numele local
+        stare = "repornit"
+        detaliu = "cazute: %s; pornit din nou acum: %s" % (", ".join(cazute), de_pornit[0][0])
+        if len(de_pornit) > 1:
+            detaliu += "; la verificarile urmatoare: %s" % ", ".join(c for c, _s, _a in de_pornit[1:])
+        de_pornit = de_pornit[:1]
+    elif limitate:
+        stare = "esec"
+        detaliu = "cazute: %s; pornite de %d ori in ultima ora, nu mai incerc pana trece ora" % (
+            ", ".join(limitate), SERVICII_MAX_ORA)
+    elif cazute or (not dbus_bun):
+        stare = "esec" if cazute else "ok"
+        detaliu = ("cazute: %s (fara D-Bus nu se pot porni)" % ", ".join(cazute)) if cazute else \
+            "soclul D-Bus nu raspunde (%d/%d)" % (refuzuri, SERVICII_CONFIRMARI)
+    else:
+        stare, detaliu = "ok", "dbus, avahi si numele local merg"
+    return de_pornit, refuzuri, stare, detaliu
+
+
+def _porneste_serviciul(script, actiune):
+    """Ruleaza /etc/init.d/<script> <actiune>. -> (pornit, cod): pornit False cand nu s-a rulat nimic (un script de
+    data trecuta e tot agatat sau programul nu a pornit).
+
+    Ca _ng_ruleaza: nu subprocess.run(timeout=...) (dupa timp kill() si wait() FARA limita: un script agatat in nucleu
+    ar opri bucla, hranirea si ar reporni dur receptorul). Iesirile merg in /dev/null, nu intr-o teava: demonul pornit
+    de script mosteneste descriptorii si o teava ar ramane deschisa cat traieste demonul."""
+    for copil in list(_srv_copii_blocati):
+        if copil.poll() is not None:
+            _srv_copii_blocati.remove(copil)
+    if _srv_copii_blocati:
+        return False, "script de data trecuta tot agatat (pid %d)" % _srv_copii_blocati[0].pid
+    cale = os.path.join(INIT_DIR, script)
+    try:
+        copil = subprocess.Popen([cale, actiune], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+    except OSError as e:
+        return False, "eroare: %s" % e
+    try:
+        return True, copil.wait(timeout=SERVICII_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        try:
+            copil.kill()
+        except OSError:
+            pass
+        try:
+            copil.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            _srv_copii_blocati.append(copil)  # stare D: poll() la verificarile urmatoare
+        return True, "timp depasit (%ds)" % SERVICII_TIMEOUT_S
+
+
+def jurnal_servicii(text):
+    """un rand in SERVICII_JURNAL_PATH (ora de perete); peste SERVICII_JURNAL_MAX octeti ramane a doua jumatate"""
+    rand = "%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text)
+    try:
+        try:
+            if os.path.getsize(SERVICII_JURNAL_PATH) > SERVICII_JURNAL_MAX:
+                with open(SERVICII_JURNAL_PATH, "rb") as f:
+                    f.seek(-SERVICII_JURNAL_MAX // 2, os.SEEK_END)
+                    coada = f.read()
+                with open(SERVICII_JURNAL_PATH + ".nou", "wb") as f:
+                    f.write(coada.split(b"\n", 1)[-1])
+                os.replace(SERVICII_JURNAL_PATH + ".nou", SERVICII_JURNAL_PATH)
+        except (OSError, ValueError):
+            pass
+        with open(SERVICII_JURNAL_PATH, "a") as f:
+            f.write(rand)
+    except OSError:
+        pass
+
+
+def pas_servicii(acum):
+    """Nivelul 6: o verificare a serviciilor de sistem si pornirile hotarate; o linie in jurnal la fiecare pornire si
+    la schimbarea starii. Intoarce starea (servicii, detaliu, ora)."""
+    global _srv_refuzuri, _srv_stare, _srv_reporniri, _srv_anuntat
+    stari = citeste_servicii()
+    de_pornit, _srv_refuzuri, stare, detaliu = hotarare_servicii(stari, uptime_secunde(), _srv_refuzuri,
+                                                                 _srv_porniri, acum)
+    # hotarare_servicii da cel mult unul; fara sleep si fara asteptarea soclului: ce depinde de el (avahi dupa dbus,
+    # numele dupa avahi) se porneste la verificarea urmatoare, cand se vede ca merge
+    for cheie, script, actiune in de_pornit[:1]:
+        pornit, cod = _porneste_serviciul(script, actiune)
+        if pornit:
+            _srv_porniri.setdefault(cheie, []).append(acum)
+            _srv_porniri[cheie] = [t for t in _srv_porniri[cheie] if acum - t < 3600]
+            _srv_reporniri += 1
+            log("servicii: %s cazut, %s %s -> %s" % (cheie, script, actiune, cod))
+            jurnal_servicii("%s cazut; pornit din nou de paznic (%s %s, cod %s)" % (cheie, script, actiune, cod))
+        else:
+            log("servicii: %s cazut, nu pornesc acum: %s" % (cheie, cod))
+            jurnal_servicii("%s cazut; nu l-am pornit acum: %s" % (cheie, cod))
+            stare, detaliu = "esec", "%s cazut; nu l-am pornit: %s" % (cheie, cod)
+            de_pornit = []
+    if de_pornit or (stare, detaliu) != _srv_anuntat:
+        if stare != "ok" or (_srv_anuntat is not None and _srv_anuntat[0] != "ok"):
+            log("servicii: %s (%s)" % (stare, detaliu))
+            jurnal_servicii("stare %s: %s" % (stare, detaliu))
+        _srv_anuntat = (stare, detaliu)
+    if stare:
+        # ora ramane a ultimei porniri facute de paznic (0 = niciuna de la pornirea lui)
+        _srv_stare = (stare, detaliu, int(time.time()) if de_pornit else _srv_stare[2])
+    return _srv_stare
+
+
 def un_pas(fd, confirmed, urmatoarea_netguard):
     """O verificare (la fiecare PET_INTERVAL_S). Intoarce (confirmed, urmatoarea_netguard). Separata de main(),
     ca probele sa poata rula verificari cu /proc, /dev/watchdog si fisierele inlocuite.
@@ -1798,6 +2113,18 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
         except Exception:
             pass
         urmatoarea_netguard = time.monotonic() + NETGUARD_INTERVAL_S
+
+    # Nivelul 6 (serviciile de sistem): la SERVICII_INTERVAL_S secunde, tacut; sarit cand repornirea dura e in curs.
+    global _srv_urmatoarea
+    if not confirmed and time.monotonic() >= _srv_urmatoarea:
+        try:
+            pas_servicii(time.monotonic())
+        except Exception as e:
+            try:
+                log("eroare interna la nivelul 6 (servicii): %r" % (e,))
+            except Exception:
+                pass
+        _srv_urmatoarea = time.monotonic() + SERVICII_INTERVAL_S
 
     try:
         scrie_stare_paznic(acum, fel, detaliu, interfata, asteptare, pid_enigma2, bataie, fel5, memorie_es)

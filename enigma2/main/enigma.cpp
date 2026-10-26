@@ -347,7 +347,9 @@ void runMainloop()
 
 const char *getEnigmaVersionString()
 {
-	static std::string version = std::string(enigma2_date) + '-' + enigma2_branch;
+	/* "0.6.7 2026-10-25": versiunea din AC_INIT si data comiterii (forma citita de Components/About.py), fara numele
+	   ramurii git */
+	static std::string version = std::string(PACKAGE_VERSION) + ' ' + enigma2_date;
 	return version.c_str();
 }
 

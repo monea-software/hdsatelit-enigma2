@@ -95,7 +95,7 @@ def skinRezerva(latime, inaltime):
 	pl, ph = x(1500), y(760)
 	q = y(520)
 	return """
-	<screen name="HdsNavigatorRezerva" position="center,center" size="%(pl)d,%(ph)d" flags="wfNoBorder" backgroundColor="#00101828" title="Interfața camului">
+	<screen name="HdsNavigatorRezerva" position="center,center" size="%(pl)d,%(ph)d" flags="wfNoBorder" backgroundColor="#00101828" title="Interfața web a modulului">
 		<eLabel position="0,0" size="%(pl)d,%(linie)d" backgroundColor="#00f5b83d" zPosition="1" />
 		<widget source="titlu" render="Label" position="%(mx)d,%(ty)d" size="%(cl)d,%(th)d" font="Regular;%(tf)d" halign="left" valign="center" foregroundColor="#00f2f4f8" backgroundColor="#00101828" transparent="1" zPosition="1" />
 		<widget source="qr" render="Canvas" position="%(mx)d,%(qy)d" size="%(q)d,%(q)d" zPosition="2" />
@@ -223,7 +223,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self.gata = False
 		self.interfata = None       # modul cam: interfata deschisa (portul, schema, gazda), din HdsInterfeteCam
 		self._intrare_incercata = False   # modul cam: datele de pe receptor s-au dat o data (intrare_cam.py)
-		titlu = _("Interfața camului") if mod == L.MOD_CAM else _("Navigator web")
+		titlu = _("Interfața web a modulului") if mod == L.MOD_CAM else _("Navigator web")
 		self.setTitle(titlu)
 		self["titlu"] = StaticText(titlu)
 		self["pas"] = StaticText("")
@@ -281,7 +281,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 
 	def _cautaCam(self):
 		from Components import HdsInterfeteCam as C
-		self._pas(_("Se caută interfața web a camului..."), 10)
+		self._pas(_("Se caută interfața web a modulului..."), 10)
 		self.cautare = C.cautare(reincarca=True)
 		self.pornit_cautare = 0
 		self.ceas.start(PAS_CAUTARE_MS, False)
@@ -306,7 +306,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 				pornite += 1
 			for i in cam.get("interfete") or []:
 				if i.get("web"):
-					interfete.append((cam.get("nume") or _("Camul"), i))
+					interfete.append((cam.get("nume") or _("Modulul"), i))
 		if not interfete:
 			self._faraNavigator("fara-cam" if not pornite else "fara-web")
 			return
@@ -635,9 +635,9 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		cam sau camul nu are interfata web, numai mesajul: pe telefon n-ar fi nimic de deschis."""
 		texte = {
 			"lipsa": _("Navigatorul lipsește din această imagine."),
-			"cautare": _("Căutarea interfeței camului nu s-a terminat la timp."),
-			"fara-cam": _("Niciun cam nu rulează acum."),
-			"fara-web": _("Camul nu are interfață web."),
+			"cautare": _("Căutarea interfeței web a modulului nu s-a terminat la timp."),
+			"fara-cam": _("Niciun modul nu rulează acum."),
+			"fara-web": _("Modulul nu are interfață web."),
 		}
 		text = texte.get(motiv) or L.textEroare(motiv, _)
 		print("[HdsNavigator] fara navigator: %s" % motiv)
@@ -691,14 +691,14 @@ class HdsNavigatorRezerva(Screen):
 		latime, inaltime = _desktop()
 		self.skin = skinRezerva(latime, inaltime)
 		Screen.__init__(self, session)
-		self.setTitle(_("Interfața camului"))
+		self.setTitle(_("Interfața web a modulului"))
 		self.adresa = adresaPaginiiCam()
-		self["titlu"] = StaticText(_("Interfața camului pe telefon"))
+		self["titlu"] = StaticText(_("Interfața web a modulului pe telefon"))
 		self["motiv"] = StaticText(motiv)
 		if doar_local:
-			pasi = _("Interfața web a camului ascultă doar pe receptor, deci se deschide numai pe televizor.")
+			pasi = _("Interfața web a modulului ascultă doar pe receptor, deci se deschide numai pe televizor.")
 		elif self.adresa:
-			pasi = _("Scanează codul cu telefonul (în aceeași rețea cu receptorul). Se deschide pagina „Interfețe CAM”; acolo apasă „Deschide”.")
+			pasi = _("Scanează codul cu telefonul (în aceeași rețea cu receptorul). Se deschide pagina „Interfețele web ale modulelor”; acolo apasă „Deschide”.")
 		else:
 			pasi = _("Receptorul nu are legătură în rețea, deci pagina nu se poate deschide nici pe telefon.")
 		self["pasi"] = StaticText(pasi)

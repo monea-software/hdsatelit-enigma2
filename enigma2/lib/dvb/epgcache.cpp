@@ -1990,6 +1990,41 @@ int handleEvent(eServiceEvent *ptr, ePyObject dest_list, const char* argstring, 
 //      when type is time then it is the start_time ( -1 for now_time )
 //   the fourth is the end_time .. ( optional .. for query all events in time range)
 
+/* service name for the 'N' (full, without the short-name markers) and 'n' (short) fields; a new reference, or a null
+   object when the service has no information (the caller then puts "<n/a>") */
+static ePyObject lookupServiceName(const eServiceReference &ref, int mode)
+{
+	ePyObject service_name;
+	ePtr<iStaticServiceInformation> sptr;
+	eServiceCenterPtr service_center;
+	eServiceCenter::getPrivInstance(service_center);
+	if (service_center)
+	{
+		service_center->info(ref, sptr);
+		if (sptr)
+		{
+			std::string name;
+			sptr->getName(ref, name);
+
+			if (mode == 1)
+			{
+				size_t pos;
+				// filter short name brakets
+				while((pos = name.find("\xc2\x86")) != std::string::npos)
+					name.erase(pos,2);
+				while((pos = name.find("\xc2\x87")) != std::string::npos)
+					name.erase(pos,2);
+			}
+			else
+				name = buildShortName(name);
+
+			if (name.length())
+				service_name = PyUnicode_FromString(name.c_str());
+		}
+	}
+	return service_name;
+}
+
 PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 {
 	ePyObject convertFuncArgs;
@@ -2115,7 +2150,24 @@ PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 			eServiceReference ref(handleGroup(eServiceReference(servicestr)));
 			if (ref.type != eServiceReference::idDVB)
 			{
-				eDebug("service reference for epg query is not valid");
+				/* a stream (4097, 5001...) has no DVB guide in this cache. With 'X' (one result per query) it still
+				   gets its empty row, like every DVB service without an event: callers that ask for a whole bouquet
+				   pair the results with the services by position */
+				if (forceReturnOne)
+				{
+					ePyObject service_name;
+					if (must_get_service_name)
+					{
+						service_name = lookupServiceName(ref, must_get_service_name);
+						if (!service_name)
+							service_name = PyUnicode_FromString("<n/a>");
+					}
+					/* on error handleEvent has already released service_name (and the rest), as for DVB services */
+					if (handleEvent(0, dest_list, argstring, argcount, service, nowTime, service_name, convertFunc, convertFuncArgs))
+						return 0;  // error
+					if (service_name)
+						Py_DECREF(service_name);
+				}
 				continue;
 			}
 
@@ -2139,33 +2191,7 @@ PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 			ePyObject service_name;
 			if (must_get_service_name)
 			{
-				ePtr<iStaticServiceInformation> sptr;
-				eServiceCenterPtr service_center;
-				eServiceCenter::getPrivInstance(service_center);
-				if (service_center)
-				{
-					service_center->info(ref, sptr);
-					if (sptr)
-					{
-						std::string name;
-						sptr->getName(ref, name);
-
-						if (must_get_service_name == 1)
-						{
-							size_t pos;
-							// filter short name brakets
-							while((pos = name.find("\xc2\x86")) != std::string::npos)
-								name.erase(pos,2);
-							while((pos = name.find("\xc2\x87")) != std::string::npos)
-								name.erase(pos,2);
-						}
-						else
-							name = buildShortName(name);
-
-						if (name.length())
-							service_name = PyUnicode_FromString(name.c_str());
-					}
-				}
+				service_name = lookupServiceName(ref, must_get_service_name);
 				if (!service_name)
 					service_name = PyUnicode_FromString("<n/a>");
 			}

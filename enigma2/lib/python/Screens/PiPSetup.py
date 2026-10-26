@@ -3,13 +3,17 @@ from Screens.Screen import Screen
 from Components.ActionMap import NumberActionMap
 from Components.Label import Label
 
-# this is not so great.
-MAX_X = 720
-MAX_Y = 576
-MAX_W = MAX_X * 3 // 4
-MAX_H = MAX_Y * 3 // 4
-MIN_W = MAX_X // 8
-MIN_H = MAX_Y // 8
+# marginile ferestrei in coordonatele ecranului interfetei (ca Screens/PictureInPicture.py): cu valorile vechi
+# (720x576) o fereastra a unei teme 1920x1080 se muta numai in coltul din stanga sus
+def _limite():
+	"""(MAX_X, MAX_Y, MAX_W, MAX_H, MIN_W, MIN_H) dupa marimea ecranului interfetei"""
+	try:
+		from enigma import getDesktop
+		d = getDesktop(0).size()
+		mx, my = (d.width(), d.height()) if d.width() > 0 and d.height() > 0 else (720, 576)
+	except Exception:
+		mx, my = 720, 576
+	return mx, my, mx * 3 // 4, my * 3 // 4, mx // 8, my // 8
 
 def clip(val, min, max):
 	if min <= val <= max:
@@ -73,8 +77,9 @@ class PiPSetup(Screen):
 		resize += 100 # resize is in percent, so resize=+20 means: 120%
 		
 		oldsize = self.size
-		w = clip(self.size[0] * resize // 100, MIN_W, MAX_W)
-		h = clip(self.size[1] * resize // 100, MIN_H, MAX_H)
+		_mx, _my, max_w, max_h, min_w, min_h = _limite()
+		w = clip(self.size[0] * resize // 100, min_w, max_w)
+		h = clip(self.size[1] * resize // 100, min_h, max_h)
 		
 		# calculate offset from center
 		mx = (oldsize[0] - w) // 2
@@ -85,20 +90,21 @@ class PiPSetup(Screen):
 		self.moveRelative(x=mx, y=my)
 	
 	def moveRelative(self, x=0, y=0):
-		self.pos = (clip(self.pos[0] + x, 0, MAX_X - self.size[0]), clip(self.pos[1] + y, 0, MAX_Y - self.size[1]))
+		max_x, max_y = _limite()[:2]
+		self.pos = (clip(self.pos[0] + x, 0, max_x - self.size[0]), clip(self.pos[1] + y, 0, max_y - self.size[1]))
 		self.setPiPPosition()
 	
 	def up(self):
-		self.moveRelative(y=-32)
+		self.moveRelative(y=-32 * _limite()[1] // 576)
 
 	def down(self):
-		self.moveRelative(y=+32)
+		self.moveRelative(y=+32 * _limite()[1] // 576)
 	
 	def left(self):
-		self.moveRelative(x=-24)
+		self.moveRelative(x=-24 * _limite()[0] // 720)
 	
 	def right(self):
-		self.moveRelative(x=+24)
+		self.moveRelative(x=+24 * _limite()[0] // 720)
 	
 	def bigger(self):
 		self.resizePiP(+10)
@@ -109,12 +115,14 @@ class PiPSetup(Screen):
 	def keyNumberGlobal(self, number):
 		
 		if number > 0:
-			colsize = MAX_X // 3
-			rowsize = MAX_Y // 3
+			max_x, max_y = _limite()[:2]
+			colsize = max_x // 3
+			rowsize = max_y // 3
 			col = (number-1) % 3
 			row = (number-1) // 3
 
-			self.size = (180, 135)
+			# un sfert din latimea ecranului (180x135 pe 720x576)
+			self.size = (max_x // 4, max_y * 135 // 576)
 
 			# offset to keep center
 			ox = (colsize - self.size[0]) // 2

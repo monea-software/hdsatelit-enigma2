@@ -68,6 +68,12 @@
  * un puls pe secunda. Cat ruleaza, comanda "chenar <0|1> <culoare> <forma> <grosime> <puls>" il schimba pe loc
  * (raspunsul "HDS-NAV CHENAR ..." sau "HDS-NAV EROARE chenar"); repornirea pe procesor pastreaza stilul de acum.
  *
+ * Meniurile care se deschid numai sub mouse (regulile CSS cu :hover, de pilda "other files" dintr-o interfata web cu
+ * meniu pe randuri): SCRIPT_MENIURI copiaza fiecare regula :hover a paginii intr-o foaie proprie, cu :focus-within in loc
+ * de :hover, deci meniul se deschide si cand legatura lui primeste focalizarea de la sageti (si ramane deschis cat
+ * focalizarea e intr-un rand al lui). Numai in afara modului HbbTV; foile din alta origine nu se pot citi si raman cum
+ * sunt. Listele derulante (<select>) au fereastra lor de alegere in enigma2 ("CERERE alegere").
+ *
  * Scrisul: OK pe un camp de text sau tasta TEXT cer tastatura enigma2 („CERERE tastatura ...”); TEXT fara camp cu
  * focalizare da focalizarea primului camp de text care se vede pe ecran.
  *
@@ -1967,6 +1973,31 @@ static const char SCRIPT_CHENAR[] =
     ".indexOf(ev.key)<0)return;var a=document.activeElement;if(!a||!a.shadowRoot||!a.shadowRoot.activeElement)return;"
     "try{if(a.shadowRoot.delegatesFocus){a.shadowRoot.activeElement.blur();return;}"
     "if(!a.hasAttribute('tabindex'))a.setAttribute('tabindex','-1');a.focus();}catch(x){}},true);})();";
+
+/* Injectat in toate cadrele (in afara modului HbbTV): fiecare regula CSS cu :hover a paginii (si din @media) se copiaza,
+ * cu :focus-within in loc de :hover, intr-o foaie <style id="hds-meniuri"> pusa la sfarsitul lui <head>; numai partile
+ * selectorului care au :hover. Foile noi (<style>, <link> adaugate sau incarcate mai tarziu) se trec si ele, o singura
+ * data fiecare; o foaie din alta origine (cssRules arunca) se sare. */
+static const char SCRIPT_MENIURI[] =
+    "(function(){if(window.__hdsMeniuri)return;window.__hdsMeniuri=1;var vazute=[],noua=null;"
+    "function inlocuieste(sel){var p=sel.split(','),r=[];for(var i=0;i<p.length;i++){if(p[i].indexOf(':hover')>=0)"
+    "r.push(p[i].replace(/:hover/g,':focus-within'));}return r.join(',');}"
+    "function treci(reguli,iesire){for(var i=0;i<reguli.length;i++){var g=reguli[i];"
+    "if(g.type===1&&g.selectorText&&g.selectorText.indexOf(':hover')>=0){var s=inlocuieste(g.selectorText);"
+    "if(s)iesire.push(s+'{'+g.style.cssText+'}');}"
+    "else if(g.type===4&&g.cssRules){var interior=[];treci(g.cssRules,interior);"
+    "if(interior.length)iesire.push('@media '+g.media.mediaText+'{'+interior.join('')+'}');}}}"
+    "function aplica(){var d=document,f=d.styleSheets,iesire=[];for(var i=0;i<f.length;i++){var o=f[i];"
+    "if(o.ownerNode&&o.ownerNode.id==='hds-meniuri')continue;if(vazute.indexOf(o)>=0)continue;var reguli;"
+    "try{reguli=o.cssRules;}catch(x){vazute.push(o);continue;}if(!reguli)continue;vazute.push(o);treci(reguli,iesire);}"
+    "if(!iesire.length)return;if(!noua||!noua.parentNode){noua=d.createElement('style');noua.id='hds-meniuri';"
+    "(d.head||d.documentElement).appendChild(noua);}noua.appendChild(d.createTextNode(iesire.join('')));}"
+    "function curand(){try{aplica();}catch(x){}}"
+    "document.addEventListener('DOMContentLoaded',curand);window.addEventListener('load',curand);"
+    "document.addEventListener('load',function(e){if(e.target&&e.target.tagName==='LINK')curand();},true);"
+    "try{new MutationObserver(function(m){for(var i=0;i<m.length;i++){for(var j=0;j<m[i].addedNodes.length;j++){"
+    "var n=m[i].addedNodes[j];if(n.tagName==='STYLE'||n.tagName==='LINK'){setTimeout(curand,0);return;}}}})"
+    ".observe(document,{childList:true,subtree:true});}catch(x){}})();";
 
 /* Modul HbbTV: constantele tastelor (CEA-2014 / OIPF DAE, cerute de HbbTV), puse pe window si pe KeyEvent numai daca
  * pagina nu le are deja. Obiectele HbbTV (oipfApplicationManager, video/broadcast ...) sunt in hds-hbbtv.js. */
@@ -4302,6 +4333,11 @@ int main(int argc, char **argv)
             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
         webkit_user_content_manager_add_script(continut, ch);
         webkit_user_script_unref(ch);
+        /* meniurile deschise numai sub mouse se deschid si la focalizare */
+        WebKitUserScript *mn = webkit_user_script_new(SCRIPT_MENIURI, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
+        webkit_user_content_manager_add_script(continut, mn);
+        webkit_user_script_unref(mn);
         /* scroll-behavior: smooth din CSS-ul sitului ar anima derularea la element (foaia utilizatorului castiga) */
         WebKitUserStyleSheet *fara_animatie = webkit_user_style_sheet_new("*{scroll-behavior:auto!important}",
             WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES, WEBKIT_USER_STYLE_LEVEL_USER, NULL, NULL);

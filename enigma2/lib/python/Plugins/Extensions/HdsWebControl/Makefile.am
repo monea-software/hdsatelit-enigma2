@@ -15,6 +15,7 @@ install_PYTHON = \
 	asociere.py \
 	aspect_web.py \
 	cadru_web.py \
+	captura_sigura.py \
 	calitate_imagine_web.py \
 	canale_web.py \
 	cauta_setari_web.py \

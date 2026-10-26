@@ -42,8 +42,8 @@
 
 import os
 
-ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod")
-LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120}
+ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod", "feed", "fel")
+LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80}
 _INCARCARE = [False]      # citirea catalogului pe fir: una singura odata
 _FISIERE = {"local": None, "retea": None}   # ultimele cautari terminate, ca ecranul: lista ramane pana vine alta
 
@@ -290,10 +290,14 @@ def stare(arg, M, catalog, date=None):
 	fila = arg.get("fila") or ("cautare" if cauta else "instalate")
 	if fila not in ids:
 		fila = "cautare" if cauta else "instalate"
+	filtru = _filtruCerut(arg)
+	filtruWeb = None
 	if fila == "fisiere":
 		randuri = [("fisier", f, None) for f in fisiere]
 	else:
-		randuri = L.randuri(catalog, fila, pluginuri, M.plugins, cauta)
+		toateRandurile = L.randuri(catalog, fila, pluginuri, M.plugins, cauta)
+		randuri = L.filtreaza(catalog, toateRandurile, filtru, fila)
+		filtruWeb = _filtruWeb(L, catalog, toateRandurile, randuri, filtru, fila)
 	conf = catalog.configurare
 	if not conf.surse:
 		lista = _t("Nicio sursă de pachete")
@@ -313,7 +317,9 @@ def stare(arg, M, catalog, date=None):
 		"fila": fila,
 		"cauta": cauta,
 		"randuri": [_rand(M, catalog, fel, o, x, pluginuri) for fel, o, x in randuri],
-		"tot": [o.nume for fel, o, x in randuri if fel == "pachet" and o.actualizare] if fila == "actualizari" else [],
+		# toate actualizarile, si cand filtrul arata numai o parte (butonul spune "toate", ca MENU pe televizor)
+		"tot": [o.nume for o in catalog.actualizari()] if fila == "actualizari" else [],
+		"filtru": filtruWeb,
 		"gol": _textGol(fila, cauta, conf.surse, cf),
 		"lista": lista,
 		"surse": len(conf.surse),
@@ -334,6 +340,36 @@ def stare(arg, M, catalog, date=None):
 		"lucreaza": descarcare or cf["in_curs"] or cf["retea_in_curs"] or bool(lucrare and lucrare["faza"] == "lucru") or
 			bool(sursa and sursa["faza"] in ("marime", "lucru")),
 	}
+
+
+def _filtruCerut(arg):
+	"""filtrul din adresa paginii (feed=, fel=): numai litere, cifre si . _ : -"""
+	rez = {}
+	for cheie in ("feed", "fel"):
+		v = (arg.get(cheie) or "").strip()
+		rez[cheie] = v if v and all(c.isalnum() or c in "._:-" for c in v) else ""
+	return rez
+
+
+def _filtruWeb(L, catalog, toate, aratate, filtru, fila):
+	"""filtrul listei pentru pagina (aceleasi alegeri ca randul filtrului de pe televizor), sau None cand fila nu are
+	pachete si filtrul nu e activ; textele vin traduse"""
+	if not L.areFiltru(fila):
+		return None
+	total = sum(1 for r in toate if r[0] in ("plugin", "pachet"))
+	if not total and not L.filtruActiv(filtru, fila):
+		return None
+	feeduri, feluri = L.alegeriFiltru(catalog, toate, fila)
+	if filtru.get("feed") and filtru["feed"] not in [k for k, _t_ in feeduri]:
+		feeduri.append((filtru["feed"], "%s (0)" % L.numeFeedFiltru(filtru["feed"])))
+	fel = filtru.get("fel", "") if fila in L.FILE_AMESTECATE else ""
+	if fel and fel not in [k for k, _t_ in feluri]:
+		feluri.append((fel, "%s (0)" % L.numeFelFiltru(fel)))
+	n = sum(1 for r in aratate if r[0] in ("plugin", "pachet"))
+	return {"feed": filtru.get("feed", ""), "fel": fel, "activ": L.filtruActiv(filtru, fila),
+		"feeduri": [[k, t] for k, t in feeduri], "feluri": [[k, t] for k, t in feluri],
+		"titlu": _t("Filtrul listei"), "eticheta_feed": _t("Feedul"), "eticheta_fel": _t("Felul"),
+		"text_tot": _t("Arată tot"), "aratate": _t("%d din %d") % (n, total)}
 
 
 def _stareSursa(M):
@@ -849,6 +885,9 @@ __STIL_PAGINI__
   .cautare{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;}
   .cautare input{flex:1 1 200px;min-width:0;}
   .element{cursor:pointer;}
+  .filtru{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end;margin-bottom:10px;}
+  .filtru label{display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .filtru select{max-width:100%;}
   .element .stanga{display:flex;flex-direction:column;gap:2px;min-width:0;}
   .element .titlu{overflow-wrap:anywhere;}
   .element .dreapta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;min-width:0;}
@@ -930,11 +969,12 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
-var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", CEAS = null, CAUTAT = false, SURSA = "", LISTA_CERUTA = false;
+var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", CEAS = null, CAUTAT = false, SURSA = "", LISTA_CERUTA = false, FEED = "", FEL = "";
 function el(tip, clasa, text){ var e = document.createElement(tip); if(clasa){ e.className = clasa; } if(text !== undefined && text !== null){ e.textContent = text; } return e; }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); CEAS = null; } if(ms){ CEAS = setTimeout(citeste, ms); } }
 function citeste(){
-  var q = "/api/extensii?fila=" + encodeURIComponent(FILA) + (CAUTA ? "&cauta=" + encodeURIComponent(CAUTA) : "");
+  var q = "/api/extensii?fila=" + encodeURIComponent(FILA) + (CAUTA ? "&cauta=" + encodeURIComponent(CAUTA) : "") +
+    (FEED ? "&feed=" + encodeURIComponent(FEED) : "") + (FEL ? "&fel=" + encodeURIComponent(FEL) : "");
   return cerere(q).then(function(d){
     if(d.se_incarca){ $("incarcare").textContent = d.message || "Se citește lista..."; programeaza(800); return; }
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi lista."; $("incarcare").classList.remove("ascuns"); return; }
@@ -1047,8 +1087,24 @@ function detalii(r){
   x.appendChild(b);
   return x;
 }
+function arataFiltru(d, c){
+  var f = d.filtru; if(!f){ return; }
+  var b = el("div", "filtru"); b.setAttribute("role", "group"); b.setAttribute("aria-label", f.titlu);
+  function lista(eticheta, alegeri, valoare, pune){
+    var l = el("label", null, eticheta); var s = el("select");
+    alegeri.forEach(function(a){ var o = el("option", null, a[1]); o.value = a[0]; if(a[0] === valoare){ o.selected = true; } s.appendChild(o); });
+    s.addEventListener("change", function(){ pune(s.value); DESCHIS = ""; citeste(); });
+    l.appendChild(s); b.appendChild(l);
+  }
+  lista(f.eticheta_feed, f.feeduri, f.feed, function(v){ FEED = v; });
+  if(f.feluri.length){ lista(f.eticheta_fel, f.feluri, f.fel, function(v){ FEL = v; }); }
+  b.appendChild(el("span", "nota", f.aratate));
+  if(f.activ){ var t = el("button", null, f.text_tot); t.type = "button"; t.addEventListener("click", function(){ FEED = ""; FEL = ""; DESCHIS = ""; citeste(); }); b.appendChild(t); }
+  c.appendChild(b);
+}
 function arataRanduri(d){
   var c = $("randuri"); c.textContent = "";
+  arataFiltru(d, c);
   if(d.fila === "actualizari" && d.tot.length){
     var bt = el("button", "principal", "Actualizează toate"); bt.type = "button";
     bt.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });

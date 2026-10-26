@@ -253,7 +253,7 @@ def deschide(argumente, N=None, sesiune=None):
 	nav = _activ(N)
 	if nav is not None:
 		if nav.mod != N.L.MOD_OBISNUIT:
-			return _cuStare({"result": False, "message": _t("Pe televizor e deschisă interfața camului. Închide-o întâi.")}, N, sesiune)
+			return _cuStare({"result": False, "message": _t("Pe televizor e deschisă interfața web a modulului. Închide-o întâi.")}, N, sesiune)
 		if not adresa:
 			adresa = N.S.adresaBuna(N.S.initConfig().pagina_pornire.value) or N.S.PAGINA_IMPLICITA
 		nav.url(adresa)
@@ -271,7 +271,7 @@ def deschideCam(argumente, N=None, sesiune=None):
 		return _cuStare({"result": False, "message": _t("Navigatorul este deja deschis pe televizor. Închide-l întâi.")}, N, sesiune)
 	port = argumente.get("port", "")
 	N.deschideCam(sesiune, int(port) if port.isdigit() and 0 < int(port) < 65536 else None)
-	return _cuStare({"result": True, "message": _t("Interfața camului se deschide pe televizor.")}, N, sesiune)
+	return _cuStare({"result": True, "message": _t("Interfața web a modulului se deschide pe televizor.")}, N, sesiune)
 
 
 def inchide(argumente, N=None, sesiune=None):
@@ -556,7 +556,7 @@ ETICHETE = {
 	# campul "Deschide pe televizor": un cuvant fara punct merge la cautarea Google (HdsNavigator/setari.adresaBuna)
 	"ADRESA_CAUTARE": N_("Adresa paginii sau cuvintele de căutat cu Google"),
 	"ACASA": N_("Pagina de pornire pe televizor"),
-	"CAM": N_("Interfața camului pe televizor"),
+	"CAM": N_("Interfața web a modulului pe televizor"),
 	"INCHIDE": N_("Închide navigatorul de pe televizor"),
 	"SETARI": N_("Setări"),
 	"SALVEAZA": N_("Salvează"),

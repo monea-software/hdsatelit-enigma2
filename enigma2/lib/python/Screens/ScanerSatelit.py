@@ -2045,7 +2045,7 @@ class ScanerSatelit(Screen):
         self.schimba_valoare()
 
     def schimba_valoare(self):
-        """OK: schimba valoarea randului luminat; pe „Caută acum” porneste cautarea, pe „Fluxuri și setări” deschide
+        """OK: alegerile randului luminat; pe "Caută acum" porneste cautarea, pe "Fluxuri și setări" deschide
         fereastra fluxurilor (ca Albastru)."""
         selectat = self['lista'].getCurrent()
         if not selectat:
@@ -2060,13 +2060,9 @@ class ScanerSatelit(Screen):
         for c, _etich, tip, lista in self._CAMPURI:
             if c == cheie:
                 if tip == 'lista' and lista:
-                    # numarul valorilor care se pot alege, nu al celor din tabel: la DVB-S2 'Modulație' are doua
-                    # (QPSK, 8PSK) si trece cu OK ca la stanga si dreapta
-                    permise = _coduri_permise(c, self._config, lista)
-                    if c == 'transponder' or c in CAMP_OPERATOR.values() or len(permise) > PRAG_ALEGERE:
-                        self._alege_din_lista(c, _etich, lista)
-                    else:
-                        self._cicleaza(1)
+                    # OK deschide mereu alegerile randului (numai valorile permise pentru sistemul ales,
+                    # intrari_alegere), ca in toate scanerele si in Scanare detaliata; stanga / dreapta le schimba pe loc
+                    self._alege_din_lista(c, _etich, lista)
                 elif tip == 'numeric':
                     # tastatura scanerelor (fereastra in stilul lor, oprita inaintea ferestrei PiP)
                     from Screens.ScanerCablu import tastatura

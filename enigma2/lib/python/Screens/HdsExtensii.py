@@ -327,6 +327,8 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.liniiDescarcare = []
 		self.mesajStare = ''
 		self.culoareStare = 'eticheta'
+		# filtrul listelor (0.6.7): feedul si felul aratate, tinut cat sta ecranul deschis (HdsExtensiiLucru, randul filtru)
+		self.filtru = L.filtruGol()
 
 		self['file'] = MenuList([], content=eListboxPythonMultiContent)
 		self['lista'] = MenuList([], content=eListboxPythonMultiContent)
@@ -561,7 +563,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			if self.locuriRetea:
 				rez.append(('retea', None, None))
 			return rez
-		return L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare)
+		# randul filtrului primul, apoi randurile care trec de el (0.6.7)
+		return L.cuRandFiltru(self.catalog, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare),
+			self.filtru, fila)
 
 	def _dupaRepornire(self):
 		"""pachetele instalate care au un plugin inca neincarcat (instalat acum, porneste dupa repornirea interfetei)"""
@@ -1198,11 +1202,32 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._adaugaSursa()
 		elif fel in ('sursa', 'feed'):
 			self._descarcaLista()
+		elif fel == 'filtru':
+			self._alegeFiltru()
+
+	def _alegeFiltru(self):
+		"""Fereastra de alegere a filtrului (feedurile si, in filele amestecate, felurile, cu numarul pachetelor), aceeasi
+		ca a scanerelor (titlurile grupelor nu se pot alege)"""
+		fid = self._idFila()
+		toate = L.randuri(self.catalog, fid, self.pluginuri, plugins, self.cautare)
+		alegeri = L.alegeriEcran(self.catalog, toate, fid)
+		ales = [i for i, (_t_, a) in enumerate(alegeri) if a == ('feed', self.filtru.get('feed') or '')]
+		from Screens.ScanerCablu import AlegereDinLista
+		self.session.openWithCallback(self._dupaFiltru, AlegereDinLista, title=_t('Filtrul listei'), list=alegeri,
+			selection=ales[0] if ales else 0)
+
+	def _dupaFiltru(self, rand=None):
+		if not rand or rand[1] is None:
+			return
+		self.filtru = L.aplicaAlegere(self.filtru, rand[1])
+		self.pozitii[self._idFila()] = 0
+		self._arataFila(pastreaza=False)
 
 	def keyVerde(self):
 		fel, obj, extra = self._selectat()
 		if self._idFila() == 'actualizari' and self.randuri:
-			self._planActualizare([o for f, o, _x in self.randuri if f == 'pachet' and o.actualizare])
+			# toate actualizarile (ca MENU si ca in pagina web), si cand filtrul arata numai o parte
+			self._planActualizare(self.catalog.actualizari())
 		elif fel == 'plugin' and extra is not None and extra.actualizare:
 			self._planActualizare([extra])
 		else:
@@ -1228,6 +1253,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._planStergere(obj)
 		elif fel == 'sursa' and self.catalog.configurare.e_a_utilizatorului(obj[0]):
 			self._stergeSursa(obj[0])
+		elif fel == 'filtru' and L.filtruActiv(obj, extra[0]):
+			self.filtru = L.filtruGol()
+			self._arataFila()
 
 	def keyMeniu(self):
 		"""Actualizeaza toate: toate pachetele instalate cu versiune noua, din orice feed; la unul singur, actualizarea

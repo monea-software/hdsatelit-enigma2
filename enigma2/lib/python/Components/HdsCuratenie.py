@@ -9,7 +9,7 @@
 # Numai doua categorii, strict regenerabile: fisierele temporare din /tmp si pachetele descarcate de opkg
 # (/var/cache/opkg). Niciodata setari, canale, inregistrari sau programari (resetarea completa e separata,
 # Components/HdsResetareFabrica.py). In /tmp pot fi obiecte vii cat merge sistemul: socket-urile si FIFO-urile (de
-# exemplu /tmp/mmi.socket, dialogul cu modulul CAM din Components/Ci.py) si steagul hds-pornire-stick.ruleaza
+# exemplu /tmp/mmi.socket, dialogul cu modulul din fanta CI, Components/Ci.py) si steagul hds-pornire-stick.ruleaza
 # (porneste.sh, proba prin stick); ePastrat() le lasa pe loc.
 #
 # Marimile si golirea citesc tot dosarul: pe receptor pagina web le face pe un fir (meniu_comun_web.peFir).

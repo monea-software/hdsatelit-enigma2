@@ -77,8 +77,9 @@
 		<widget source="session.FrontendStatus" render="Label" position="355,3" size="43,22" font="Regular;16" backgroundColor="#102e59" foregroundColor="#e7e7e7" shadowColor="#27384f" shadowOffset="-1,-1" transparent="1" noWrap="1">
 			<convert type="FrontendInfo">BER</convert>
 		</widget>
-		<!-- Channellogo (Picon) -->
-		<widget source="session.CurrentService" render="Picon" position="49,4" zPosition="1" size="70,53" alphatest="on">
+		<!-- Channellogo (Picon): caseta 5:3, proportia siglelor (220x132), ca sigla potrivita in caseta (setScale) sa nu se
+		     intinda; centrata pe inaltimea de 53 de dinainte -->
+		<widget source="session.CurrentService" render="Picon" position="49,8" zPosition="1" size="75,45" alphatest="blend">
 			<convert type="ServiceName">Reference</convert>
 		</widget>
 		<!-- Service name -->

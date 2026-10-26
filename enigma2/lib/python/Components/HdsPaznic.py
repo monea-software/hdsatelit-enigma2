@@ -483,6 +483,44 @@ def stare(cale_stare=None, acum=None, pid_paznic_viu=None):
 	return rez
 
 
+def stareServicii(cale_stare=None, acum=None, pid_paznic_viu=None):
+	"""Serviciile de sistem (D-Bus, avahi, numele hdsatelit.local), din starea paznicului (nivelul 6 din
+	hds-watchdog.py): {'ruleaza', 'servicii' (ok, repornit, esec sau ''), 'detaliu', 'ora' (ultima pornire facuta de
+	paznic, ora de perete, 0 = niciuna), 'reporniri', 'text'}. Nu arunca."""
+	rez = {"ruleaza": False, "servicii": "", "detaliu": "", "ora": 0, "reporniri": 0, "text": ""}
+	try:
+		d = citesteCheiValori(cale_stare or CALE_STARE) or {}
+		if d:
+			acum = monotonic() if acum is None else acum
+			try:
+				vechime = acum - float(d.get("verificat"))
+			except (TypeError, ValueError):
+				vechime = -1
+			rez["ruleaza"] = bool((pid_paznic_viu or _procesExista)(_intreg(d.get("pid")))) and 0 <= vechime <= 90
+			rez["servicii"] = d.get("servicii", "")
+			rez["detaliu"] = d.get("servicii_detaliu", "")
+			rez["ora"] = _intreg(d.get("servicii_ora"))
+			rez["reporniri"] = _intreg(d.get("servicii_reporniri"))
+	except Exception:
+		pass
+	rez["text"] = textServicii(rez)
+	return rez
+
+
+def textServicii(s):
+	"""Un rand pentru "Informatii jurnale" si pagina web: serviciile de sistem pe intelesul omului."""
+	if not s.get("ruleaza") or not s.get("servicii"):
+		return _("Paznicul nu a verificat încă serviciile de sistem (o face la 3 minute după pornire).")
+	if s.get("servicii") == "esec":
+		return _("Nu merg toate serviciile de sistem; paznicul încearcă din nou: %s") % (s.get("detaliu") or "")
+	n = s.get("reporniri") or 0
+	if n:
+		ora = time.strftime("%d.%m %H:%M", time.localtime(s.get("ora"))) if s.get("ora") else "?"
+		return _("Serviciile de sistem merg. Porniri făcute de paznic: %d, ultima la %s (vezi hds-servicii.log).") % (
+			n, ora)
+	return _("Serviciile de sistem (D-Bus, avahi, numele hdsatelit.local) merg.")
+
+
 def stareEs(cale_stare=None, acum=None, pid_paznic_viu=None):
 	"""Numai memoria pozelor si a filmelor, din starea paznicului (pentru repornirea in standby): {'ruleaza',
 	'memorie_es', 'memorie_es_cheie'}; ruleaza = paznicul viu, cu stare noua. Nu arunca."""

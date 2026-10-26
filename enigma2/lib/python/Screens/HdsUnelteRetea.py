@@ -143,6 +143,11 @@ class HdsWifiCanaleScreen(Screen):
 	def pornit(self):
 		self.setTitle(_("Cât de aglomerat e Wi-Fi-ul"))
 		self["lista"].hide()
+		# graficul (barele, cifrele, recomandarea) ascuns pana la primul rezultat: fara placa Wi-Fi sau cand cautarea
+		# cade, barele nu au valori si s-ar vedea la intamplare sub mesaj
+		for i in range(1, 14):
+			self["bara%d" % i].setValue(0)
+		self._grafic(False)
 		if self.placa is None:
 			placi = W.placi_wifi()
 			self.placa = placi[0] if placi else None
@@ -173,8 +178,19 @@ class HdsWifiCanaleScreen(Screen):
 			return
 		self.arata(rez)
 
+	def _grafic(self, vizibil):
+		nume = ["retele", "rec_titlu", "rec_canal", "rec_text"]
+		nume += ["%s%d" % (x, i) for i in range(1, 14) for x in ("tag", "bara", "canal", "numar")]
+		for n in nume:
+			if vizibil:
+				self[n].show()
+			else:
+				self[n].hide()
+
 	def arata(self, rez):
 		self.rez = rez
+		if not self.toate:
+			self._grafic(True)
 		sub = _("Rețele găsite pe 2,4 GHz: %d") % rez["numar"]
 		sub += " · " + _("placa Wi-Fi a receptorului recepționează numai 2,4 GHz")
 		self["subtitlu"].setText(sub)
@@ -246,8 +262,9 @@ class HdsWifiCanaleScreen(Screen):
 			self["key_yellow"].setText(_("Graficul"))
 		else:
 			self["lista"].hide()
-			for n in grafic:
-				self[n].show()
+			if getattr(self, "rez", None) is not None:
+				for n in grafic:
+					self[n].show()
 			self["key_yellow"].setText(_("Toate rețelele"))
 
 

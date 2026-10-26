@@ -147,8 +147,7 @@ def golesteIntrebare(argumente, Cu=None):
 	if pas == "intreaba":
 		return MC.raspunsIntrebare(CONFIRMARE_CURATENIE, cheie, _t("Ștergi conținutul: %s?") % eticheta,
 			_t("Da, golește"), [_t("Calea: %s") % cale, _t("Acțiunea nu poate fi anulată."),
-			_t("Fișierele active (socket-uri, de exemplu dialogul cu modulul CAM) și steagul probei prin stick se "
-			"păstrează singure.")]), None
+			_t("Fișierele folosite acum de programe și steagul probei prin stick se păstrează singure.")]), None
 	if _FIR["golire"][0] or _FIR["marimi"][0]:
 		return _ocupatDisc(), None
 	if not MC.verifica(CONFIRMARE_CURATENIE, cheie, argumente.get("cod", "")):
@@ -368,7 +367,7 @@ __STIL_PAGINI__
   <p class="mesaj" id="incarcare">Se calculează mărimile...</p>
   <div id="randuri"></div>
   <div class="butoane"><button type="button" id="din_nou">Calculează din nou</button></div>
-  <p class="nota">Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, programări sau setări. Fișierele active (socket-uri, de exemplu dialogul cu modulul CAM) și steagul probei prin stick rămân.</p>
+  <p class="nota">Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân.</p>
   <div class="butoane"><a class="legatura" href="/resetare-fabrica">Resetarea completă: Revenire la setările din fabrică</a></div>
 </section>
 <p class="mesaj" id="mesaj"></p>
@@ -445,8 +444,7 @@ TEXTE_PAGINA = {
 		N_("Se calculează mărimile..."),
 		N_("Calculează din nou"),
 		N_("Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, "
-			"programări sau setări. Fișierele active (socket-uri, de exemplu dialogul cu modulul CAM) și "
-			"steagul probei prin stick rămân."),
+			"programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân."),
 		N_("Resetarea completă: Revenire la setările din fabrică"),
 		N_("Același ecran e pe televizor, în __DRUM_MENIU__."),
 	),

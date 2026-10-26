@@ -143,6 +143,54 @@ def informatii(jurnale=None, config=None):
 	return CALE_JURNALE, len(jurnale), total / (1024.0 * 1024.0), pastrate, zile
 
 
+# ------------------------------------------------------------------ jurnalul sistemului si serviciile (0.6.7)
+
+FISIER_SYSLOG = "/etc/syslog-startup.conf"
+
+
+def rotireJurnal(cale=None):
+	"""(fisierul, KB pe fisier, fisiere vechi) din /etc/syslog-startup.conf (busybox syslogd), sau None"""
+	try:
+		with open(cale or FISIER_SYSLOG, encoding="utf-8", errors="replace") as f:
+			text = f.read(8192)
+	except (OSError, IOError):
+		return None
+	v = {}
+	for rand in text.splitlines():
+		cheie, semn, rest = rand.partition("=")
+		if semn and not cheie.strip().startswith("#"):
+			v[cheie.strip()] = rest.split("#", 1)[0].strip()
+	try:
+		return v.get("LOGFILE", ""), int(v.get("ROTATESIZE", "0")), int(v.get("ROTATEGENS", "0"))
+	except ValueError:
+		return None
+
+
+def textJurnalSistem(cale=None):
+	"""Unde se pastreaza jurnalul sistemului, pe intelesul omului"""
+	r = rotireJurnal(cale)
+	if not r or not r[0]:
+		return _("Jurnalul sistemului nu se păstrează pe disc în această imagine.")
+	fisier, kb, vechi = r
+	return _("%s, păstrat pe disc: %d fișiere vechi de câte %d KB; după o oprire necurată, copia lui în "
+		"messages.cadere.") % (fisier, vechi, kb)
+
+
+def randuriInformatii(cale_syslog=None, servicii=None):
+	"""[(eticheta, textul)] in plus fata de informatii(): jurnalul sistemului si serviciile de sistem (starea
+	paznicului, Components/HdsPaznic.stareServicii)"""
+	if servicii is None:
+		try:
+			from Components import HdsPaznic
+			servicii = HdsPaznic.stareServicii()["text"]
+		except Exception:
+			servicii = ""
+	rez = [(_("Jurnalul sistemului"), textJurnalSistem(cale_syslog))]
+	if servicii:
+		rez.append((_("Serviciile de sistem"), servicii))
+	return rez
+
+
 # ------------------------------------------------------------------ jurnalele de cadere
 
 def asiguraDirectorPrincipal():

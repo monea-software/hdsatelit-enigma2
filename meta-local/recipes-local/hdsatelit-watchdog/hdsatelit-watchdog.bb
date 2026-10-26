@@ -41,7 +41,13 @@ PV = "0.1.0"
 # se crede numai cu un canal TV sau radio pornit de cel putin 30 s (bataia enigma2, redare=tv sau radio): demonul isi
 # face maparea abia cand enigma2 foloseste decodorul, iar dupa o pornire direct in standby paznicul scria
 # memorie_es=lipsa si enigma2 0.5.8 arata la trezire mesajul de memorie. Enigma2 nu mai arata niciun mesaj de memorie. Fara importuri noi, deci RDEPENDS neschimbat.
-PR = "r7"
+# r8 (versiunea 0.6.7): nivelul 6, serviciile de sistem: D-Bus (dbus-daemon), avahi-daemon si hds-nume-local pornite din
+# nou, tacut, cand cad (cel mult de 3 ori pe ora fiecare, numai cele pornite la pornirea receptorului, numai dupa 3 minute
+# de la pornire), cu o linie in jurnalul paznicului si starea servicii= in /var/run/hds-paznic.stare. Cel mult o pornire
+# la o trecere (dbus, apoi avahi, apoi numele, la verificarile urmatoare), scriptul cu 10 s si asteptare marginita dupa
+# kill(), fara sleep: o trecere ramane mult sub pragul de 60 s al watchdogului HW. Import nou: socket
+# (il aduce deja python3-netclient, pentru http.client), deci RDEPENDS neschimbat.
+PR = "r8"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

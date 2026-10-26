@@ -57,13 +57,13 @@ if HAVE_GIT_DIR
 GIT_DIR = $(top_srcdir)/.git
 GIT = git --git-dir=$(GIT_DIR)
 
+# In executabil intra numai data comiterii si identificatorul ei scurt (versiunea aratata si jurnalul unei caderi).
+# Numele ramurii git si etichetele depozitului nu intra: sunt nume interne ale depozitului, nu ale versiunii.
 if HAVE_FAKE_GIT_DIR
 ENIGMA2_COMMIT_DATE = `grep '^CommitDate:' $(GIT_DIR)/last_commit_info | cut -d' ' -f2`
-ENIGMA2_BRANCH = `cat $(GIT_DIR)/branch`
 else
 ENIGMA2_COMMIT_DATE = `$(GIT) log --no-color -n 1 --pretty=format:%cd --date=short`
-ENIGMA2_BRANCH = `$(GIT) branch --no-color 2>/dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/'`
-ENIGMA2_REV = `$(GIT) describe --abbrev=7 --always --long --tags`
+ENIGMA2_REV = `$(GIT) rev-parse --short=10 HEAD`
 endif
 endif
 
@@ -73,7 +73,6 @@ BUILT_SOURCES = version-intermediate.h
 version-intermediate.h:
 	$(AM_V_GEN)touch $@
 	-$(AM_V_at)[ -n "$(ENIGMA2_COMMIT_DATE)" ] && echo "#define ENIGMA2_COMMIT_DATE \"$(ENIGMA2_COMMIT_DATE)\"" >> $@
-	-$(AM_V_at)[ -n "$(ENIGMA2_BRANCH)" ] && echo "#define ENIGMA2_BRANCH \"$(ENIGMA2_BRANCH)\"" >> $@
 	-$(AM_V_at)[ -n "$(ENIGMA2_REV)" ] && echo "#define ENIGMA2_REV \"$(ENIGMA2_REV)\"" >> $@
 	$(AM_V_at)([ -f version.h ] && diff -q version.h $@ >/dev/null) || $(INSTALL_HEADER) $@ version.h
 

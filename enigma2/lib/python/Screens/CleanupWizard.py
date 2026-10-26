@@ -99,7 +99,7 @@ class CleanupWizard(Screen):
 			lambda raspuns: self._dupaConfirmare(raspuns, eticheta, cale, nume_excluse),
 			MessageBox,
 			_("Ștergi conținutul „%s”?\nCale: %s\nAcțiunea nu poate fi anulată.\n"
-				"Fișierele active (socket-uri, ex. dialogul CAM) și steagul de probă prin stick "
+				"Fișierele folosite acum de programe și steagul de probă prin stick "
 				"sunt păstrate automat.") % (eticheta, cale),
 			MessageBox.TYPE_YESNO,
 			default=False,

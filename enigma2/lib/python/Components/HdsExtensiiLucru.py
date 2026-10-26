@@ -409,6 +409,172 @@ def randuri(catalog, fila, pluginuri, plugins, cautare=''):
 	return [('pachet', p, None) for p in catalog.din_categoria(fila)]
 
 
+# ------------------------------------------------------------ filtrul listelor (dupa feed si dupa fel)
+# Primul rand al filelor cu pachete e filtrul ('filtru'): OK (sau clic) deschide alegerile, Rosu arata tot. Feedul se
+# alege in orice fila cu pachete; felul (categoria) numai in filele amestecate, unde stau pachete de mai multe feluri
+# (in celelalte fila insasi e felul). Pagina web are aceleasi alegeri, ca liste (feed=, fel=).
+FILE_AMESTECATE = ('instalate', 'actualizari', 'cautare')
+FILE_FARA_FILTRU = ('fisiere', 'surse')
+FEED_IMAGINE = 'imagine'
+FEED_ALTA = 'alta'
+PREFIX_SURSA = 'sursa:'
+
+
+def filtruGol():
+	return {'feed': '', 'fel': ''}
+
+
+def areFiltru(fila):
+	return fila not in FILE_FARA_FILTRU
+
+
+def filtruActiv(filtru, fila):
+	f = filtru or {}
+	return bool(f.get('feed')) or bool(f.get('fel') and fila in FILE_AMESTECATE)
+
+
+def _pachetRand(fel, obj, extra):
+	if fel == 'plugin':
+		return extra
+	if fel == 'pachet':
+		return obj
+	return None
+
+
+def feedRand(catalog, fel, obj, extra):
+	"""feedul unui rand cu pachet: FEED_HDS, FEED_EXTERN, FEED_IMAGINE (vine cu imaginea), PREFIX_SURSA + numele sursei
+	omului sau al altei surse, FEED_ALTA (pachet instalat de nicaieri, de pilda din fisier); '' la celelalte randuri"""
+	if fel not in ('plugin', 'pachet'):
+		return ''
+	p = _pachetRand(fel, obj, extra)
+	if p is None:
+		return FEED_IMAGINE
+	if p.sursa:
+		f = felFeed(catalog, p.sursa, catalog.configurare.adresa(p.sursa))
+		return f if f is not None else PREFIX_SURSA + p.sursa
+	return FEED_IMAGINE if p.din_imagine else FEED_ALTA
+
+
+def felRand(catalog, fel, obj, extra):
+	"""categoria unui rand cu pachet (P.CATEGORII), '' la celelalte randuri"""
+	if fel == 'plugin':
+		return extra.categorie if extra is not None else categoriePlugin(getattr(obj, 'path', ''))
+	if fel == 'pachet':
+		return obj.categorie
+	return ''
+
+
+def numeFeedFiltru(cheie):
+	if cheie == FEED_HDS:
+		return 'HD Satelit'
+	if cheie == FEED_EXTERN:
+		return _t(ETICHETA_EXTERNE)
+	if cheie == FEED_IMAGINE:
+		return _t('Imaginea HD Satelit')
+	if cheie == FEED_ALTA:
+		return _t('Altă sursă')
+	if cheie.startswith(PREFIX_SURSA):
+		return cheie[len(PREFIX_SURSA):]
+	return _t('Toate feedurile')
+
+
+def numeFelFiltru(cheie):
+	return _t(P.ETICHETE[cheie]) if cheie in P.ETICHETE else _t('Toate felurile')
+
+
+def potrivesteFiltru(catalog, rand, filtru, fila):
+	fel, obj, extra = rand
+	if fel not in ('plugin', 'pachet'):
+		return True
+	f = filtru or {}
+	if f.get('feed') and feedRand(catalog, fel, obj, extra) != f['feed']:
+		return False
+	if f.get('fel') and fila in FILE_AMESTECATE and felRand(catalog, fel, obj, extra) != f['fel']:
+		return False
+	return True
+
+
+def filtreaza(catalog, randuri_, filtru, fila):
+	"""randurile filei care trec de filtru (randurile fara pachet raman)"""
+	if not areFiltru(fila) or not filtruActiv(filtru, fila):
+		return list(randuri_)
+	return [r for r in randuri_ if potrivesteFiltru(catalog, r, filtru, fila)]
+
+
+def _ordineFeed(cheie):
+	return ({FEED_HDS: 0, FEED_EXTERN: 1, FEED_IMAGINE: 2}.get(cheie, 4 if cheie == FEED_ALTA else 3), cheie)
+
+
+def alegeriFiltru(catalog, randuri_, fila):
+	"""(feeduri, feluri): [(cheie, text cu numarul pachetelor)] din randurile filei (nefiltrate), prima fiind ('', toate);
+	felurile numai in filele amestecate, altfel []"""
+	feeds = {}
+	kinds = {}
+	for fel, obj, extra in randuri_:
+		if fel not in ('plugin', 'pachet'):
+			continue
+		k = feedRand(catalog, fel, obj, extra)
+		feeds[k] = feeds.get(k, 0) + 1
+		c = felRand(catalog, fel, obj, extra)
+		kinds[c] = kinds.get(c, 0) + 1
+	total = sum(feeds.values())
+	feeduri_ = [('', '%s (%d)' % (_t('Toate feedurile'), total))]
+	feeduri_ += [(k, '%s (%d)' % (numeFeedFiltru(k), feeds[k])) for k in sorted(feeds, key=_ordineFeed)]
+	feluri_ = []
+	if fila in FILE_AMESTECATE:
+		feluri_ = [('', '%s (%d)' % (_t('Toate felurile'), total))]
+		feluri_ += [(c, '%s (%d)' % (numeFelFiltru(c), kinds[c])) for c, _e, _i in P.CATEGORII if c in kinds]
+	return feeduri_, feluri_
+
+
+def alegeriEcran(catalog, randuri_, fila):
+	"""randurile ferestrei de alegere de pe televizor: [(text, (dimensiune, cheie))], cu titlurile grupelor (cheia None)"""
+	feeduri_, feluri_ = alegeriFiltru(catalog, randuri_, fila)
+	rez = [(_t('Arată tot'), ('tot', '')), (_t('Feedul') + ':', None)]
+	rez += [('   ' + t, ('feed', k)) for k, t in feeduri_]
+	if feluri_:
+		rez.append((_t('Felul') + ':', None))
+		rez += [('   ' + t, ('fel', k)) for k, t in feluri_]
+	return rez
+
+
+def aplicaAlegere(filtru, alegere):
+	"""filtrul nou dupa un rand ales din alegeriEcran ((dimensiune, cheie))"""
+	if not alegere:
+		return dict(filtru or filtruGol())
+	dim, cheie = alegere
+	if dim == 'tot':
+		return filtruGol()
+	nou = dict(filtru or filtruGol())
+	if dim in ('feed', 'fel'):
+		nou[dim] = cheie or ''
+	return nou
+
+
+def textFiltru(filtru, fila):
+	"""'HD Satelit · Skinuri' (ce e ales), '' cand filtrul nu e activ in fila"""
+	f = filtru or {}
+	parti = []
+	if f.get('feed'):
+		parti.append(numeFeedFiltru(f['feed']))
+	if f.get('fel') and fila in FILE_AMESTECATE:
+		parti.append(numeFelFiltru(f['fel']))
+	return ' · '.join(parti)
+
+
+def cuRandFiltru(catalog, randuri_, filtru, fila):
+	"""randurile filei pentru televizor: randul filtrului primul, ('filtru', filtrul, (fila, aratate, total)), cand
+	fila are pachete sau filtrul e activ; apoi randurile care trec de filtru"""
+	if not areFiltru(fila):
+		return list(randuri_)
+	cu_pachet = [r for r in randuri_ if r[0] in ('plugin', 'pachet')]
+	if not cu_pachet and not filtruActiv(filtru, fila):
+		return list(randuri_)
+	rez = filtreaza(catalog, randuri_, filtru, fila)
+	aratate = sum(1 for r in rez if r[0] in ('plugin', 'pachet'))
+	return [('filtru', dict(filtru or filtruGol()), (fila, aratate, len(cu_pachet)))] + rez
+
+
 def descriereRand(catalog, fel, obj, extra):
 	"""(icoana, titlu, subtitlu, insigna, culoarea insignei, textul mic din dreapta) al unui rand din lista. Culoarea e
 	o cheie ('bun', 'chihlimbar', 'rau') sau None. Randul cautarii in retea il face fiecare capat. Textele sunt
@@ -475,6 +641,18 @@ def descriereRand(catalog, fel, obj, extra):
 			if g and g not in gazde:
 				gazde.append(g)
 		return ('surse', numeFeed(f), ', '.join(gazde), insigna, culoare, stareFeed(catalog, f))
+	if fel == 'filtru':
+		fila, aratate, total = extra
+		text = textFiltru(obj, fila)
+		if text:
+			titlu, insigna, culoare = _t('Filtru: %s') % text, _t('Activ'), 'chihlimbar'
+		else:
+			titlu, insigna, culoare = _t('Filtru: toate pachetele'), None, None
+		if fila in FILE_AMESTECATE:
+			sub = _t('OK alege feedul sau felul pachetelor arătate.')
+		else:
+			sub = _t('OK alege feedul pachetelor arătate.')
+		return ('liste', titlu, sub, insigna, culoare, _t('%d din %d') % (aratate, total))
 	# adauga
 	return ('surse', _t('Adaugă o sursă'), _t('Adresa unui depozit de pachete (feed opkg) de pe internet'), None, None, '')
 
@@ -590,6 +768,20 @@ def detalii(catalog, fel, obj, extra):
 		d.update(icoana='surse', titlu=_t('Adaugă o sursă'), insigna=_t('Sursă de pachete de pe internet'), culoare='eticheta',
 			descriere=_t('Scrii un nume scurt și adresa depozitului (începe cu http:// sau https://). Pachetele din el '
 			'apar apoi în file, cu numele sursei. Nu sunt verificate de HD Satelit.'), indiciu=_t('OK adaugă'))
+	elif fel == 'filtru':
+		fila, aratate, total = extra
+		activ = filtruActiv(obj, fila)
+		rand = [(_t('Feedul'), numeFeedFiltru(obj.get('feed') or ''))]
+		if fila in FILE_AMESTECATE:
+			rand.append((_t('Felul'), numeFelFiltru(obj.get('fel') or '')))
+		rand.append((_t('Arătate'), _t('%d din %d') % (aratate, total)))
+		d['etichete'] = [a for a, b in rand]
+		d['valori'] = [b for a, b in rand]
+		d.update(icoana='liste', titlu=_t('Filtrul listei'), insigna=_t('Activ') if activ else _t('Toate pachetele'),
+			culoare='chihlimbar' if activ else 'eticheta',
+			descriere=_t('Arată numai pachetele dintr-un feed (HD Satelit, Monea Software, sursele tale) sau de un anumit '
+			'fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu pachete.'),
+			indiciu=_t('OK alege · Roșu arată tot') if activ else _t('OK alege'))
 	return d
 
 
@@ -689,6 +881,10 @@ def taste(catalog, fel, obj, extra, pluginuri):
 			rosu = N_('Șterge sursa')
 	elif fel == 'adauga':
 		verde = N_('Adaugă')
+	elif fel == 'filtru':
+		verde = N_('Filtrează')
+		if filtruActiv(obj, extra[0]):
+			rosu = N_('Arată tot')
 	return rosu, verde
 
 

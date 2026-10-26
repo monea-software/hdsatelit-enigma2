@@ -103,8 +103,9 @@ class HdsCulegereTotala(Screen, ConfigListScreen):
 		self.list = [getConfigListEntry(_(C.T_SATELITI), self.sateliti), getConfigListEntry(_(C.T_CANALE), self.canale),
 			getConfigListEntry(_(C.T_CARE), self.care)]
 		ConfigListScreen.__init__(self, self.list, session=session)
+		# OK deschide alegerile randului (ca in scanerele de satelit, cablu si terestru); pornirea numai pe Verde, ca in bara
 		self["actions"] = ActionMap(["SetupActions", "ColorActions"], {
-			"ok": self.keyPorneste,
+			"ok": self.keyAlege,
 			"green": self.keyPorneste,
 			"yellow": self.keyDeLaCapat,
 			"cancel": self.keyInchide,
@@ -174,6 +175,34 @@ class HdsCulegereTotala(Screen, ConfigListScreen):
 	def abiaIntors(self):
 		"""Adevarat in PAUZA_INTOARCERE_S dupa intoarcerea din trecere (tasta care a inchis mesajul de sfarsit)."""
 		return time.time() - self.intors < PAUZA_INTOARCERE_S
+
+	def keyAlege(self):
+		"""OK: valorile randului luminat in fereastra de alegere a scanerelor (Screens/ScanerCablu.AlegereDinLista)."""
+		if self.abiaIntors():
+			return
+		cur = self["config"].getCurrent()
+		if not cur or len(cur) < 2 or not isinstance(cur[1], ConfigSelection):
+			return
+		cfg = cur[1]
+		randuri = []
+		for x in cfg.choices.choices:
+			valoare, text = x if isinstance(x, tuple) else (x, x)
+			randuri.append((text or valoare, valoare))
+		if not randuri:
+			return
+		poz = [i for i, r in enumerate(randuri) if r[1] == cfg.value]
+		from Screens.ScanerCablu import AlegereDinLista
+		self._inAlegere = cfg
+		self.session.openWithCallback(self._dupaAlegere, AlegereDinLista, title=cur[0], list=randuri,
+			selection=poz[0] if poz else 0)
+
+	def _dupaAlegere(self, rand=None):
+		cfg, self._inAlegere = getattr(self, "_inAlegere", None), None
+		if cfg is None or not rand or rand[1] is None:
+			return
+		cfg.value = rand[1]
+		self["config"].invalidateCurrent()
+		self.ceasPlan.start(300, True)
 
 	def keyPorneste(self):
 		if self.abiaIntors():

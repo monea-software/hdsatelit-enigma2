@@ -136,10 +136,17 @@ class LogInfo(Screen):
             "Păstrează cel mult %d jurnale de depanare, șterge tot ce e mai vechi de %d zile "
             "(curățare automată, rulează doar dacă AutoLogManager e pornit din codul principal)."
         ) % (dosar, numar, total_mb, pastrate, zile)
-        self["text"] = Label(text)
+        # jurnalul sistemului (unde se pastreaza) si serviciile de sistem (paznicul): randuri in plus, cu pagini (Sus/Jos)
+        try:
+            for eticheta, valoare in HdsJurnale.randuriInformatii():
+                text += "\n\n%s: %s" % (eticheta, valoare)
+        except Exception as e:
+            print("[LogInfo] randurile in plus: %s" % e)
+        self["text"] = ScrollLabel(text)
         self["key_red"] = Button(_("Înapoi"))
-        self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"],
-            {"cancel": self.close, "red": self.close}, -2)
+        self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"],
+            {"cancel": self.close, "red": self.close, "up": self["text"].pageUp, "down": self["text"].pageDown,
+             "left": self["text"].pageUp, "right": self["text"].pageDown}, -2)
 
 
 class HdsLogManagerViewLog(Screen):

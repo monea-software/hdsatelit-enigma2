@@ -858,15 +858,39 @@ def _numeDisc(hdd):
 	return text or hdd.device
 
 
-def _monturiDiscuri():
-	"""(punct de montare, dispozitiv, sistem de fisiere) pentru discurile si stickurile montate sub /media, /mnt si
-	/storage, fara dublete. /proc/mounts scrie spatiile din cale ca \040: decodate (unescapeMountPath), altfel statvfs
+# unde se monteaza discurile si stickurile: si /run/media (stickul pus de sistem, de pilda "/run/media/HD SATELIT-sda1",
+# cu legatura /media/hdd spre el)
+_LOCURI_MONTARE = ("/media/", "/mnt/", "/storage/", "/run/media/")
+
+
+def _legaturiMedia(dosar="/media"):
+	"""{calea reala: legatura} pentru legaturile din /media (de pilda /run/media/HD SATELIT-sda1 -> /media/hdd)"""
+	rez = {}
+	try:
+		for nume in sorted(os.listdir(dosar)):
+			cale = os.path.join(dosar, nume)
+			if os.path.islink(cale):
+				rez.setdefault(os.path.realpath(cale), cale)
+	except OSError:
+		pass
+	return rez
+
+
+def _monturiDiscuri(mounts="/proc/mounts", media="/media"):
+	"""(punct de montare, dispozitiv, sistem de fisiere) pentru discurile si stickurile montate sub /media, /mnt,
+	/storage si /run/media, fara dublete; un loc din /run/media cu legatura in /media se arata cu legatura (calea pe
+	care o vede omul in rest). /proc/mounts scrie spatiile din cale ca \040: decodate (unescapeMountPath), altfel statvfs
 	lucreaza pe o cale care nu exista."""
-	from Components.Harddisk import unescapeMountPath
+	try:
+		from Components.Harddisk import unescapeMountPath
+	except ImportError:
+		def unescapeMountPath(t):
+			return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), t)
+	legaturi = _legaturiMedia(media)
 	gasite = []
 	vazute = set()
 	try:
-		with open("/proc/mounts", "r", encoding="utf-8", errors="surrogateescape") as f:
+		with open(mounts, "r", encoding="utf-8", errors="surrogateescape") as f:
 			for linie in f:
 				parti = linie.split()
 				if len(parti) < 3:
@@ -874,12 +898,40 @@ def _monturiDiscuri():
 				dev, mnt, fs = parti[0], unescapeMountPath(parti[1]), parti[2]
 				if fs in _FS_FARA_DISC or mnt in vazute:
 					continue
-				if mnt.startswith(("/media/", "/mnt/", "/storage/")):
+				if mnt.startswith(_LOCURI_MONTARE):
 					vazute.add(mnt)
-					gasite.append((mnt, dev, fs))
+					gasite.append((legaturi.get(mnt, mnt), dev, fs))
 	except (IOError, OSError):
 		pass
 	return gasite
+
+
+def _discuriSys(sys_block="/sys/block"):
+	"""[(dispozitiv, nume, marime in MB zecimali, e stick)] pentru discurile USB si SATA din /sys/block (sd*), cand
+	harddiskmanager nu le are (stickul montat de sistem, nu de enigma2)"""
+	rez = []
+	try:
+		nume_dispozitive = sorted(os.listdir(sys_block))
+	except OSError:
+		return rez
+	for d in nume_dispozitive:
+		if not re.match(r"^sd[a-z]+$", d):
+			continue
+		baza = os.path.join(sys_block, d)
+
+		def citeste(rel):
+			try:
+				with open(os.path.join(baza, rel), encoding="utf-8", errors="replace") as f:
+					return f.read().strip()
+			except (IOError, OSError):
+				return ""
+		try:
+			mb = int(citeste("size") or 0) * 512 // 1000000
+		except ValueError:
+			mb = 0
+		nume = " ".join(x for x in (citeste("device/vendor"), citeste("device/model")) if x) or d
+		rez.append(("/dev/" + d, nume, mb, citeste("removable") == "1"))
+	return rez
 
 
 class HdsStorageInfo(InformationBase):
@@ -914,8 +966,14 @@ class HdsStorageInfo(InformationBase):
 
 		l.append(_("Discuri și stickuri conectate"))
 		discuri = list(getattr(harddiskmanager, "hdd", []))
-		if not discuri:
+		# fara discuri in harddiskmanager (stickul montat de sistem, in /run/media): cele din /sys/block, cu locul lor
+		sys_discuri = [] if discuri else _discuriSys()
+		if not discuri and not sys_discuri:
 			l.append("  " + _("Niciun disc sau stick conectat."))
+		for dev, nume, marime, _stick in sys_discuri:
+			l.append(("  %s: %s" % (nume, _marimeDisc(marime))) if marime > 0 else ("  %s" % nume))
+			puncte = sorted(set(mnt for mnt, d, _fs in monturi if d.startswith(dev)))
+			l.append("    " + (_("Montat în: %s") % ", ".join(puncte) if puncte else _("Nemontat.")))
 		try:
 			partitii = harddiskmanager.getMountedPartitions()
 		except Exception:

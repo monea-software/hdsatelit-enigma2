@@ -3142,7 +3142,19 @@ def _construiesteResurse():
 				return json.dumps({"result": False, "message": "mode trebuie sa fie 'all', 'video' sau 'osd'"}).encode("utf-8")
 			descarcare = request.args.get(b"download", [b""])[0] == b"1"
 
-			comanda = ["grab", "-q", "-s"] + _OPTIUNE_MOD_CAPTURA[mod_captura]
+			# imaginea canalului (decodorul video) numai cand driverul e gata, cel mult o data la 1,5 s
+			# (captura_sigura.py); altfel numai afisajul OSD, refuz la mode=video, sau ultima poza la cereri dese
+			from . import captura_sigura as CS
+			ce, motiv = CS.decide(mod_captura)
+			if ce == "refuz":
+				request.setResponseCode(503)
+				request.setHeader(b"content-type", b"application/json; charset=utf-8")
+				request.setHeader(b"retry-after", b"5")
+				request.setHeader(b"x-hds-captura", motiv.encode("ascii"))
+				return json.dumps({"result": False, "message": "imaginea canalului nu se poate captura acum (%s) -- "
+					"reincearca mai tarziu sau cere mode=osd" % motiv}).encode("utf-8")
+			mod_efectiv = "osd" if ce == "osd" else mod_captura
+			comanda = ["grab", "-q", "-s"] + _OPTIUNE_MOD_CAPTURA[mod_efectiv]
 			if format_cerut in ("jpg", "jpeg"):
 				calitate = 85
 				valori_q = request.args.get(b"quality")
@@ -3167,6 +3179,23 @@ def _construiesteResurse():
 					pass
 
 			nume_fisier = _numeCaptura(mod_captura, "png" if format_cerut == "png" else "jpg") if descarcare else None
+			cheie_pastrare = tuple(comanda)
+			if ce == "des":
+				pastrata = CS.dinPastrare(cheie_pastrare)
+				if pastrata is None:
+					request.setResponseCode(503)
+					request.setHeader(b"content-type", b"application/json; charset=utf-8")
+					request.setHeader(b"retry-after", b"1")
+					return json.dumps({"result": False, "message": "o captura a fost facuta chiar acum -- reincearca "
+						"peste o clipa"}).encode("utf-8")
+				request.setResponseCode(200)
+				request.setHeader(b"content-type", pastrata[1])
+				request.setHeader(b"cache-control", b"no-store")
+				request.setHeader(b"x-hds-captura", b"des")
+				if nume_fisier:
+					request.setHeader(b"content-disposition", ('attachment; filename="%s"' % nume_fisier).encode("ascii"))
+				return pastrata[0]
+			cu_video = mod_efectiv != "osd"
 			timeout_s = self.TIMEOUT_S
 			asteptare_oprire_s = self.ASTEPTARE_OPRIRE_S
 			termen_s = self.TERMEN_S
@@ -3193,6 +3222,10 @@ def _construiesteResurse():
 						request.setResponseCode(200)
 						request.setHeader(b"content-type", tip_continut)
 						request.setHeader(b"cache-control", b"no-store")
+						if motiv:
+							request.setHeader(b"x-hds-captura", ("osd-" + motiv).encode("ascii"))
+						if cu_video:
+							CS.tine(cheie_pastrare, rezultat.stdout, tip_continut)
 						if nume_fisier:
 							request.setHeader(b"content-disposition", ('attachment; filename="%s"' % nume_fisier).encode("ascii"))
 						request.write(rezultat.stdout)
@@ -3225,6 +3258,8 @@ def _construiesteResurse():
 				return _ruleazaGrab(comanda, timeout_s, asteptare_oprire_s)
 
 			_captura_in_curs = True
+			if cu_video:
+				CS.incepeVideo()
 			try:
 				_AsteptareCaptura(reactor, _lucru, _gata, _eroareNeasteptata, _laTermen, termen_s, self.CEAS_MS).porneste()
 			except Exception as eroare:
@@ -4537,6 +4572,12 @@ def porneste(reason, session=None, **kwargs):
 			_pornesteTrimitereaDin8080()
 	except Exception as eroare:
 		_jurnal("nu am putut porni: %s" % eroare)
+	# capturile de ecran: ora fiecarui canal pornit se stie de la pornire, nu abia de la prima captura ceruta
+	try:
+		from . import captura_sigura
+		captura_sigura.asculta()
+	except Exception:
+		pass
 
 
 def _scriePortulAcum(port):

@@ -1,6 +1,53 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.7",
+   "build": "0067202610252156",
+   "data": "25.10.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "Imaginea în imagine (PiP) se vede din nou: fereastra mică pornea fără imagine.",
+     "en": "Picture in picture (PiP) is visible again: the small window used to start without a picture."
+    },
+    {
+     "fel": "reparat",
+     "ro": "În navigatorul web, meniurile paginilor care se deschideau numai sub mouse se deschid acum și cu săgețile telecomenzii.",
+     "en": "In the web browser, page menus that opened only under the mouse now also open with the arrow buttons of the remote."
+    },
+    {
+     "fel": "nou",
+     "ro": "În Extensii, primul rând al listelor e un filtru: alegi feedul și felul pachetelor arătate. La fel în interfața web.",
+     "en": "In Extensions, the first row of each list is a filter: you choose the feed and the type of packages shown. The same in the web interface."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Paznicul receptorului pornește din nou singur, fără mesaje, serviciile care cad, ca numele receptorului în rețeaua de acasă; urma rămâne în jurnale.",
+     "en": "The receiver watchdog quietly restarts the services that stop, such as the receiver name on the home network; the trace stays in the logs."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Discuri și stocare arată acum și stickul montat de sistem.",
+     "en": "Disks and storage now also shows the stick mounted by the system."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Capturile de ecran cerute din interfața web și de pluginuri iau imaginea canalului numai când decodorul e gata.",
+     "en": "Screenshots requested from the web interface and by plugins take the channel picture only when the decoder is ready."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "În scanări, OK deschide alegerile rândului, iar scanarea pornește numai cu tasta verde.",
+     "en": "In the scans, OK opens the choices of the row, and the scan starts only with the green button."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pluginurile văd acum versiunea imaginii și modelul receptorului corect, iar ghidul canalelor de pe internet nu le mai încurcă listele.",
+     "en": "Plugins now see the software version and the receiver model correctly, and the guide of internet channels no longer mixes up their lists."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.6",
    "build": "0066202610251100",
    "data": "25.10.2026",

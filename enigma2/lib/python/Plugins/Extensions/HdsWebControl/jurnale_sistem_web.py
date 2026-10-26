@@ -87,8 +87,16 @@ def stareSistem(J=None, config=None):
 		"dosar": dosar,
 		"jurnale": [{"nume": n, "marime": int(s), "marime_text": _kb(s), "data": J.textData(m)} for m, n, s in jurnale],
 		"informatii": {"dosar": dosar, "numar": numar, "total_mb": round(total_mb, 1), "pastrate": pastrate,
-			"zile": zile},
+			"zile": zile, "randuri": [[a, b] for a, b in _randuriInPlus(J)]},
 	}
+
+
+def _randuriInPlus(J):
+	"""jurnalul sistemului si serviciile de sistem (aceleasi randuri ca "Informatii jurnale" pe televizor)"""
+	try:
+		return J.randuriInformatii()
+	except Exception:
+		return []
 
 
 def _text(J, text):
@@ -471,6 +479,7 @@ PAGINA_SISTEM = """<!DOCTYPE html>
     <div class="status-linie"><span>Spațiu ocupat</span><span id="infoSpatiu"></span></div>
     <div class="status-linie"><span>Jurnale de depanare păstrate</span><span id="infoPastrate"></span></div>
     <div class="status-linie"><span>Se șterg jurnalele mai vechi de</span><span id="infoZile"></span></div>
+    <div id="infoInPlus"></div>
     <p class="nota">Curățarea automată rulează numai dacă AutoLogManager e pornit din codul principal. Aceste două valori nu se schimbă din meniu, nici pe televizor, nici aici.</p>
   </section>
   <p class="nota legaturi">Opririle neașteptate ale interfeței, pe scurt, sunt în <a data-cale="/mod-sigur" href="/mod-sigur">Mod sigur</a>; jurnalele scrise la o cădere sunt în <a data-cale="/jurnale-cadere" href="/jurnale-cadere">Jurnalele de cădere</a>.</p>
@@ -502,6 +511,10 @@ function arata(d){
   $("infoSpatiu").textContent = (i.total_mb || 0).toFixed(1) + " MB";
   $("infoPastrate").textContent = "cel mult " + i.pastrate;
   $("infoZile").textContent = i.zile + " zile";
+  var p = $("infoInPlus"); p.textContent = "";
+  (i.randuri || []).forEach(function(r){ var l = document.createElement("div"); l.className = "status-linie";
+    var a = document.createElement("span"); a.textContent = r[0]; var b = document.createElement("span"); b.textContent = r[1];
+    l.appendChild(a); l.appendChild(b); p.appendChild(l); });
 }
 function citeste(){
   return cerere("/api/jurnale-sistem").then(function(d){

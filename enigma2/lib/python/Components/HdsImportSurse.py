@@ -790,11 +790,10 @@ def ajutor_alegere(cheie):
 	return {
 		"tunere": _("Tunerele, LNB-urile, DiSEqC și motorul antenei, din copie."),
 		"temporizatoare": _("Înregistrările programate în copie."),
-		"retea": _("Cablul și Wi-Fi-ul (adresa, rețeaua și parola ei), din copie. Dacă receptorul nu are legătură cu "
-			"ele, rămâne rețeaua de acum."),
+		"retea": _("Cablul și Wi-Fi-ul din copie. Fără legătură cu ele, rămâne rețeaua de acum."),
 		"picon": _("Piconurile din dosarul picon al copiei, în memoria receptorului."),
-		"generale": _("Fusul orar, ecranul și câteva setări de folosire, din copie. Limba rămâne cea de acum."),
-		"pachete": _("Pluginurile copiei care sunt în sursele receptorului: ți le ofer după import, ca să le instalezi."),
+		"generale": _("Fusul orar, ecranul și alte setări din copie. Limba nu se schimbă."),
+		"pachete": _("Pluginurile din copie, oferite după import ca să le instalezi."),
 	}.get(cheie, "")
 
 

@@ -10,7 +10,10 @@ PV = "0.7.0"
 # zombi pana la inchiderea aplicatiei)
 # r2: comanda paginii "av" (filmele aplicatiilor HbbTV, obiectul A/V) trece spre enigma2, care le reda pe playerul
 # receptorului; starea data paginii spune "av":1
-PR = "r2"
+# r3 (versiunea 0.6.7): SCRIPT_MENIURI, in afara modului HbbTV: meniurile paginilor care se deschid numai sub mouse
+# (reguli CSS :hover, ca "other files" din interfata web a unui modul) se deschid si la focalizarea data de sageti
+# (aceleasi reguli copiate cu :focus-within intr-o foaie a lansatorului)
+PR = "r3"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

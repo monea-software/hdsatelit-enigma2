@@ -116,13 +116,13 @@
 		<item level="0" text="Setări tuner" entryID="hds_antena_tuner" pictograma="tuner" web="/antena/tuner" weight="10">
 			<screen module="Satconfig" screen="NimSelection" />
 		</item>
-		<item level="0" text="Configurare LNB" entryID="hds_antena_lnb" pictograma="lnb" web="/antena/lnb" weight="20" stare="netestat">
+		<item level="0" text="Configurare LNB" entryID="hds_antena_lnb" pictograma="lnb" web="/antena/lnb" weight="20">
 			<screen module="ConfigLNB" screen="ConfigLNB" />
 		</item>
 		<item level="0" text="Rotirea antenei" entryID="hds_antena_rotire" pictograma="rotire" weight="30" web="/motor">
 			<screen module="HdsDishMotor" screen="HdsDishMotorEcran" />
 		</item>
-		<item level="0" text="Locul antenei" entryID="hds_antena_locul" pictograma="locul-antenei" weight="35" web="/antena/locul" stare="netestat">
+		<item level="0" text="Locul antenei" entryID="hds_antena_locul" pictograma="locul-antenei" weight="35" web="/antena/locul">
 			<screen module="HdsLocul" screen="HdsLoculEcran" />
 		</item>
 		<item level="0" text="Calculator de unghiuri" entryID="hds_antena_calculator" pictograma="unghi" web="/antena/calculator" weight="40">

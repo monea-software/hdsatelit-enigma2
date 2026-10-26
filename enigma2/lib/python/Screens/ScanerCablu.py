@@ -921,7 +921,8 @@ class EcranScaner(Screen):
         self.schimba_valoare()
 
     def schimba_valoare(self):
-        """OK: schimba valoarea randului luminat; pe randul „Caută acum” porneste cautarea."""
+        """OK: alegerile randului luminat (fereastra de alegere; tastatura la numere); pe randul "Caută acum" porneste
+        cautarea, ca Verde."""
         selectat = self['lista'].getCurrent()
         if selectat and selectat[1] == RAND_CAUTA:
             self.cauta()
@@ -929,9 +930,18 @@ class EcranScaner(Screen):
         camp = self._camp_curent()
         if not camp:
             return
-        cheie, eticheta, tip, _optiuni = camp
+        cheie, eticheta, tip, optiuni = camp
         if tip == 'lista':
-            self._cicleaza(1)
+            # aceeasi fereastra de alegere ca la randurile cu liste lungi (si ca in Scanare detaliata): OK arata
+            # valorile, nu sare la urmatoarea; stanga / dreapta le schimba pe loc
+            randuri = [(text, str(c)) for c, text in optiuni or []]
+            if not randuri:
+                return
+            val = str(self._config.get(cheie, ''))
+            poz = [i for i, r in enumerate(randuri) if r[1] == val]
+            self._alegere_in_editare = cheie
+            self.session.openWithCallback(self._dupaAlegere, AlegereDinLista, title=eticheta, list=randuri,
+                                          selection=poz[0] if poz else 0)
         elif tip == 'alegere':
             randuri = self._alegeri(cheie)
             if not randuri:
