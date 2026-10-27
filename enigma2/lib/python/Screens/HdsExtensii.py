@@ -1184,7 +1184,8 @@ class HdsExtensii(Screen, HelpableScreen):
 				self._reporneste()
 			elif obj.actualizare:
 				self._planActualizare([obj])
-			elif not obj.instalat and obj.se_poate_instala:
+			elif not obj.instalat and (obj.se_poate_instala or obj.python2):
+				# un pachet numai pentru Python 2: fereastra cu motivul si inlocuitorul (0.6.8)
 				self._planInstalare(obj)
 			elif obj.instalat:
 				plugin = self._pluginPentru(obj)
@@ -1225,6 +1226,11 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def keyVerde(self):
 		fel, obj, extra = self._selectat()
+		inl, stare = L.inlocuitorRand(self.catalog, fel, obj, extra)
+		if stare == 'instalabil':
+			# pachet sau fisier numai pentru Python 2: verde instaleaza direct inlocuitorul pentru Python 3 (0.6.8)
+			self._planInstalare(inl)
+			return
 		if self._idFila() == 'actualizari' and self.randuri:
 			# toate actualizarile (ca MENU si ca in pagina web), si cand filtrul arata numai o parte
 			self._planActualizare(self.catalog.actualizari())
@@ -1413,9 +1419,19 @@ class HdsExtensii(Screen, HelpableScreen):
 			return
 		if not self._poateLucra():
 			return
-		self._dinPlan(L.planFisier(f, opkgArguments))
+		self._dinPlan(L.planFisier(f, opkgArguments, self.catalog))
 
 	def _dupaActiune(self, schimbat=False):
+		if isinstance(schimbat, tuple) and schimbat[:1] == ('inlocuitor',):
+			# butonul "Instalează înlocuitorul" din fereastra unui pachet numai pentru Python 2 (0.6.8): confirmarea
+			# obisnuita a instalarii pachetului pentru Python 3; dupa o verificare din sursa straina, catalogul e recitit
+			if schimbat[2]:
+				self._incarca()
+				self._arataFila()
+			p = self.catalog.pachete.get(schimbat[1])
+			if p is not None and p.se_poate_instala:
+				self._planInstalare(p)
+			return
 		if not schimbat:
 			return
 		# pluginurile le-a recitit deja HdsExtensiiActiune (reincarcaPluginuri), cand s-a terminat opkg; fisierele de pe
@@ -1559,8 +1575,12 @@ class HdsExtensiiActiune(Screen):
 			'down': self._nimic,
 		}, -1)
 
-		self.lucrare = L.Lucrare(plan, program=opkgProgram, plugins=plugins, din_web=False)
-		self.lucrare.asculta(self._dinLucrare)
+		# fereastra unui pachet numai pentru Python 2 (0.6.8) nu porneste opkg: numai motivul si inlocuitorul
+		self.python2 = plan.get('fel') == 'python2'
+		self.lucrare = None
+		if not self.python2:
+			self.lucrare = L.Lucrare(plan, program=opkgProgram, plugins=plugins, din_web=False)
+			self.lucrare.asculta(self._dinLucrare)
 		self.timer = eTimer()
 		self.timer.callback.append(self._misca)
 		self.pas = 0
@@ -1608,6 +1628,9 @@ class HdsExtensiiActiune(Screen):
 		self['valori'].setText(_valoriPotrivite(self['valori'], [b for _a, b in self.plan.get('randuri', ())], 60))
 		for w in ('stare', 'pista', 'semn', 'jurnal'):
 			self[w].hide()
+		if self.python2:
+			self._butoane([self.plan['buton'], N_('Închide')] if self.plan.get('buton') else [N_('Închide')], 0)
+			return
 		self._butoane([self.plan.get('buton', N_('Da')), N_('Renunță')], 1 if self.plan.get('implicitRenunta') else 0)
 
 	def _setCuloare(self, nume, cheie):
@@ -1653,14 +1676,31 @@ class HdsExtensiiActiune(Screen):
 		if self.butoane and self.faza != 'lucru':
 			self._butoane(self.butoane, min(len(self.butoane) - 1, self.buton + 1))
 
+	def _inlocuitor(self):
+		"""numele inlocuitorului pentru Python 3 de instalat (fereastra Python 2 sau refuzul de dupa verificare), sau None"""
+		if self.python2:
+			return self.plan.get('inlocuitor')
+		if self.faza == 'gata' and self.lucrare is not None:
+			return (self.lucrare.rezultat or {}).get('inlocuitor')
+		return None
+
+	def _laInlocuitor(self):
+		# inchisa cu ('inlocuitor', nume, schimbat): ecranul Extensii deschide confirmarea instalarii lui
+		self.close(('inlocuitor', self._inlocuitor(), bool(self.lucrare is not None and self.lucrare.schimbat)))
+
 	def keyOk(self):
-		if self.faza == 'confirmare':
+		ales = self.butoane[self.buton] if self.butoane else ''
+		if ales == L.BUTON_INLOCUITOR and self._inlocuitor():
+			self._laInlocuitor()
+		elif self.python2:
+			self.close(False)
+		elif self.faza == 'confirmare':
 			if self.buton == 0:
 				self._porneste()
 			else:
 				self.close(False)
 		elif self.faza == 'gata':
-			if self.butoane and self.butoane[self.buton] == 'Repornește interfața':
+			if ales == 'Repornește interfața':
 				self._reporneste()
 			else:
 				self.close(self.lucrare.schimbat)
@@ -1668,7 +1708,11 @@ class HdsExtensiiActiune(Screen):
 			self._inLucru()
 
 	def keyVerde(self):
-		if self.faza == 'confirmare':
+		if L.BUTON_INLOCUITOR in self.butoane and self._inlocuitor():
+			self._laInlocuitor()
+		elif self.python2:
+			self.close(False)
+		elif self.faza == 'confirmare':
 			self._porneste()
 		elif self.faza == 'gata' and 'Repornește interfața' in self.butoane:
 			self._reporneste()
@@ -1676,7 +1720,7 @@ class HdsExtensiiActiune(Screen):
 			self.close(self.lucrare.schimbat)
 
 	def keyCancel(self):
-		if self.faza == 'confirmare':
+		if self.python2 or self.faza == 'confirmare':
 			self.close(False)
 		elif self.faza == 'gata':
 			self.close(self.lucrare.schimbat)
@@ -1769,7 +1813,8 @@ class HdsExtensiiActiune(Screen):
 
 	def _laInchidere(self):
 		self.timer.stop()
-		self.lucrare.lasa(self._dinLucrare)
+		if self.lucrare is not None:
+			self.lucrare.lasa(self._dinLucrare)
 
 
 class HdsSursaDescarcare(Screen):

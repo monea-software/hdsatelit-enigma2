@@ -603,6 +603,8 @@ def descriereRand(catalog, fel, obj, extra):
 			insigna, culoare = _t('Actualizare'), 'chihlimbar'
 		elif p.instalat:
 			insigna, culoare = _t('Instalat'), 'bun'
+		elif p.python2:
+			insigna, culoare = _t(INSIGNA_PYTHON2), 'rau'
 		else:
 			insigna = culoare = None
 		mic = [x for x in (textVersiuni(p), P.marime_text(p.marime or p.marime_instalat)) if x]
@@ -613,6 +615,8 @@ def descriereRand(catalog, fel, obj, extra):
 		pInstalat = catalog._toate.get(f.nume) if f.nume else None
 		if not f.citit:
 			insigna, culoare = _t('Nu se poate citi'), 'rau'
+		elif getattr(f, 'python2', None):
+			insigna, culoare = _t(INSIGNA_PYTHON2), 'rau'
 		elif pInstalat is not None and pInstalat.instalat:
 			insigna, culoare = _t('Instalat'), 'bun'
 		else:
@@ -713,6 +717,10 @@ def detalii(catalog, fel, obj, extra):
 			text = (text + '\n' if text else '') + _t(NOTA_EXTERNE)
 		elif not hds and p.sursa:
 			text = (text + '\n' if text else '') + _t('Pachetul vine dintr-o sursă externă și nu este verificat de HD Satelit.')
+		if p.python2 and p.instalat:
+			# versiunea din sursa e numai pentru Python 2: nu e o actualizare (0.6.8)
+			text = (text + '\n' if text else '') + _t('Versiunea %s din sursa %s e făcută pentru Python 2 și nu se '
+				'instalează.') % (p.versiune, s)
 		d.update(icoana=P.ICOANE.get(p.categorie, 'altele'), titlu=p.titlu, descriere=text)
 		if extra == 'repornire':
 			d.update(insigna=_t('Pornește după repornire'), culoare='chihlimbar',
@@ -721,6 +729,9 @@ def detalii(catalog, fel, obj, extra):
 			d['indiciu'] = _t('OK actualizează · Roșu șterge')
 		elif p.instalat:
 			d['indiciu'] = _t('Instalat și la zi · Roșu șterge') if p.se_poate_sterge else _t('Instalat și la zi')
+		elif p.python2:
+			d.update(insigna=_t(INSIGNA_PYTHON2), culoare='rau', descriere=descrierePython2(catalog, fel, obj, extra),
+				indiciu=_indiciuPython2(catalog, fel, obj, extra))
 		elif p.se_poate_instala:
 			d['indiciu'] = _t('OK instalează')
 		if areSursa(catalog, p):
@@ -738,6 +749,9 @@ def detalii(catalog, fel, obj, extra):
 			d.update(insigna=_t('Detaliile pachetului nu s-au putut citi'), culoare='rau',
 				descriere=_t('Se poate încerca instalarea. Dacă fișierul este stricat, opkg îl refuză și nu se schimbă nimic.'))
 		d['indiciu'] = _t('OK instalează fișierul')
+		if getattr(f, 'python2', None):
+			d.update(insigna=_t(INSIGNA_PYTHON2), culoare='rau', descriere=descrierePython2(catalog, fel, obj, extra),
+				indiciu=_indiciuPython2(catalog, fel, obj, extra))
 		if not f.utf8:
 			d.update(insigna=_t('Numele fișierului nu se poate citi'), culoare='rau',
 				indiciu=_t('Redenumește fișierul fără diacritice'),
@@ -874,10 +888,15 @@ def taste(catalog, fel, obj, extra, pluginuri):
 			verde = N_('Instalează')
 		elif obj.instalat and pluginPentru(pluginuri, obj) is not None:
 			verde = N_('Deschide')
+		elif python2Rand(fel, obj, extra) and inlocuitorRand(catalog, fel, obj, extra)[1] == 'instalabil':
+			verde = BUTON_INLOCUITOR
 		if obj.se_poate_sterge:
 			rosu = N_('Șterge')
 	elif fel == 'fisier':
-		verde = N_('Instalează') if obj.utf8 else ''
+		if python2Rand(fel, obj, extra):
+			verde = BUTON_INLOCUITOR if inlocuitorRand(catalog, fel, obj, extra)[1] == 'instalabil' else ''
+		else:
+			verde = N_('Instalează') if obj.utf8 else ''
 	elif fel == 'sursa':
 		if catalog.configurare.e_a_utilizatorului(obj[0]):
 			rosu = N_('Șterge sursa')
@@ -903,6 +922,145 @@ def descarcareSursa(catalog, fel, obj, extra, **kw):
 		return None, _t(_S().TEXT_NEGASIT)
 	titlu = obj.name if fel == 'plugin' and getattr(obj, 'name', '') else p.titlu
 	return _S().noua(catalog, p, titlu, sursaPachet(catalog, p)[0], **kw)
+
+
+# ---------------------------------------------------------------- pachetele numai pentru Python 2 (0.6.8)
+# Recunoasterea e in Components/HdsPython2.py (prin HdsPachete: Pachet.python2 dupa lista, FisierIpk.python2 dupa
+# fisier). Aici: textele (aceleasi pe televizor si in pagina web), inlocuitorul din feedurile noastre si planul ferestrei.
+# Un pachet dintr-o sursa straina se descarca intai (opkg --download-only) si se citeste inainte de instalare (Lucrare).
+INSIGNA_PYTHON2 = N_('Făcut pentru Python 2')
+TITLU_PYTHON2 = N_('%s este făcut pentru Python 2')
+TEXT_PYTHON2 = (N_('Pachetul e făcut pentru imaginile vechi, cu Python 2.'),
+	N_('Imaginea aceasta are Python 3, deci nu se instalează.'))
+BUTON_INLOCUITOR = N_('Instalează înlocuitorul')
+TEXT_VERIFICARE = N_('Se verifică pachetul înainte de instalare.')
+MOTIVE_PYTHON2 = {
+	'dependinta': N_('cere %s'),
+	'biblioteca': N_('e o bibliotecă Python 2'),
+	'dosar': N_('are fișiere în dosarul Python 2'),
+	'compilat': N_('are fișiere compilate pentru Python 2 (%s)'),
+	'legat': N_('e legat de biblioteca Python 2 (%s)'),
+	'sursa': N_('codul nu se compilează în Python 3 (%s)'),
+	'module': N_('folosește module scoase din Python 3 (%s)'),
+	'feed': N_('vine dintr-un feed al imaginilor cu Python 2 (%s)'),
+}
+
+
+def textPython2():
+	"""mesajul scurt, in limba receptorului: facut pentru imaginile vechi, cu Python 2; aici e Python 3"""
+	return ' '.join(_t(x) for x in TEXT_PYTHON2)
+
+
+def textMotiv(motiv):
+	"""motivul (cod, detaliu) din Components/HdsPython2.py, pe intelesul omului; '' cand nu e"""
+	cod, detaliu = motiv or (None, '')
+	t = MOTIVE_PYTHON2.get(cod)
+	if not t:
+		return ''
+	t = _t(t)
+	return t % P._curat(detaliu or '', 60) if '%s' in t else t
+
+
+def dinFeedurileNoastre(catalog, p):
+	"""pachetul vine din feedul HD Satelit sau din feedul pluginurilor externe (Monea Software)"""
+	return p is not None and bool(p.sursa) and \
+		felFeed(catalog, p.sursa, catalog.configurare.adresa(p.sursa)) in (FEED_HDS, FEED_EXTERN)
+
+
+def dinSursaStraina(catalog, p):
+	"""pachetul vine din alta sursa decat feedurile noastre (adaugata de om sau alta): se verifica inainte de instalare"""
+	return p is not None and bool(p.sursa) and not dinFeedurileNoastre(catalog, p)
+
+
+def _feedScurt(catalog, p):
+	return 'HD Satelit' if felFeed(catalog, p.sursa, catalog.configurare.adresa(p.sursa)) == FEED_HDS else 'Monea Software'
+
+
+def inlocuitor(catalog, nume, dosare=()):
+	"""(pachet, 'instalabil' | 'instalat') al inlocuitorului pentru Python 3 din feedurile noastre, sau (None, None).
+	Candidatii: Components/HdsPython2.candidati (acelasi nume, fara sufixul vechi, tabelele facute din date). Numai
+	cand pachetul ales de opkg pentru acel nume (cel din catalog, versiunea cea mai noua) e chiar cel din feedurile
+	noastre si nu e pentru Python 2: asa butonul nu poate instala niciodata pachetul vechi."""
+	if catalog is None:
+		return None, None
+	for c in P.H.candidati(nume, dosare):
+		p = catalog._toate.get(c)
+		if p is None or p.python2 or not dinFeedurileNoastre(catalog, p) or not P.se_arata(p.nume):
+			continue
+		if p.instalat and not p.actualizare:
+			return p, 'instalat'
+		if p.se_poate_instala:
+			return p, 'instalabil'
+	return None, None
+
+
+def notaInlocuitor(catalog, p, stare):
+	if stare == 'instalabil':
+		return _t('Pentru Python 3 există %s, în feedul %s.') % (numeCuVersiune(p.titlu, p.versiune), _feedScurt(catalog, p))
+	if stare == 'instalat':
+		return _t('%s, făcut pentru Python 3, este deja instalat.') % p.titlu
+	return ''
+
+
+def planPython2(catalog, titlu, subtitlu, versiune, motiv, nume, dosare=(), icoana='altele'):
+	"""Fereastra unui pachet numai pentru Python 2 (in locul confirmarii instalarii): de ce nu se instaleaza si, cand
+	exista, inlocuitorul pentru Python 3 cu butonul lui. Nu porneste niciun opkg (argumente None)."""
+	inl, stare = inlocuitor(catalog, nume, dosare)
+	rand = [(_t('Pachet'), nume or ''), (_t('Versiune'), versiune or ''), (_t('Motivul'), textMotiv(motiv))]
+	return {'fel': 'python2', 'titlu': _t(TITLU_PYTHON2) % titlu, 'nume': titlu, 'subtitlu': textPython2(),
+		'icoana': icoana, 'randuri': [r for r in rand if r[1]], 'nota': notaInlocuitor(catalog, inl, stare),
+		'notaCuloare': 'bun', 'externe': [], 'buton': BUTON_INLOCUITOR if stare == 'instalabil' else None,
+		'inlocuitor': inl.nume if stare == 'instalabil' else None, 'argumente': None, 'repornire': False,
+		'pachete': [], 'tinte': []}
+
+
+def python2Rand(fel, obj, extra=None):
+	"""motivul (cod, detaliu) cand randul e un pachet neinstalat sau un fisier numai pentru Python 2, altfel None"""
+	if fel == 'pachet' and extra != 'repornire' and not obj.instalat:
+		return obj.python2
+	if fel == 'fisier':
+		return getattr(obj, 'python2', None)
+	return None
+
+
+def inlocuitorRand(catalog, fel, obj, extra=None):
+	"""(pachet, stare) al inlocuitorului pentru randul unui pachet sau fisier numai pentru Python 2, altfel (None, None)"""
+	if not python2Rand(fel, obj, extra):
+		return None, None
+	if fel == 'fisier':
+		v = obj.verdict
+		return inlocuitor(catalog, obj.nume, v.dosare if v is not None else ())
+	return inlocuitor(catalog, obj.nume)
+
+
+def _indiciuPython2(catalog, fel, obj, extra=None):
+	if inlocuitorRand(catalog, fel, obj, extra)[1] == 'instalabil':
+		return _t('OK arată de ce · Verde instalează înlocuitorul')
+	return _t('OK arată de ce')
+
+
+def descrierePython2(catalog, fel, obj, extra=None):
+	"""textul detaliilor unui rand numai pentru Python 2: mesajul, motivul, inlocuitorul"""
+	parti = [textPython2()]
+	m = textMotiv(python2Rand(fel, obj, extra))
+	if m:
+		parti.append('%s: %s' % (_t('Motivul'), m))
+	inl, stare = inlocuitorRand(catalog, fel, obj, extra)
+	nota = notaInlocuitor(catalog, inl, stare)
+	if nota:
+		parti.append(nota)
+	return '\n'.join(parti)
+
+
+def planPython2Pachet(catalog, p, motiv=None):
+	return planPython2(catalog, p.titlu, p.subtitlu, p.versiune, motiv or p.python2, p.nume, (),
+		P.ICOANE.get(p.categorie, 'altele'))
+
+
+def planPython2Fisier(catalog, f):
+	v = f.verdict
+	return planPython2(catalog, f.titlu, f.rezumat, f.versiune, f.python2, f.nume, v.dosare if v is not None else (),
+		'fisier')
 
 
 # ---------------------------------------------------------------- planurile confirmarilor
@@ -931,21 +1089,50 @@ def _nota(catalog, pachete, nota):
 def planInstalare(catalog, p, argumente=None, nota=None):
 	"""(plan, None) sau (None, (mesaj, culoare)). `argumente`: opkgArguments (ecranul da functia lui); `nota`:
 	functia capatului care scrie nota din surseExterne()."""
+	dep = catalog.dependente_de_instalat(p)
+	# un pachet numai pentru Python 2 (sau care cere unul): fereastra cu motivul si inlocuitorul, fara opkg (0.6.8)
+	if p.python2:
+		return planPython2Pachet(catalog, p), None
+	for d in dep:
+		if d.python2:
+			return planPython2Pachet(catalog, p, (P.H.DEPENDINTA, d.nume)), None
 	a = (argumente or opkgArguments)('install', [p.nume])
 	if a is None:
 		return None, (_t('Numele pachetului nu este valid. Nu se instalează.'), 'rau')
-	dep = catalog.dependente_de_instalat(p)
 	total = p.marime + sum(d.marime for d in dep)
 	s, _hds = randSursa(catalog, p)
 	rand = [(_t('Versiune'), p.versiune), (_t('Mărime'), P.marime_text(total) or _t('necunoscută')), (_t('Sursa'), s)]
 	if dep:
 		rand.append((_t('Se mai instalează'), ', '.join(d.titlu for d in dep[:3]) + (' ' + _t('și încă %d') % (len(dep) - 3) if len(dep) > 3 else '')))
-	return {'fel': 'instaleaza', 'titlu': 'Instalezi %s?' % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
+	plan = {'fel': 'instaleaza', 'titlu': 'Instalezi %s?' % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
 		'icoana': P.ICOANE.get(p.categorie, 'altele'), 'randuri': rand, 'nota': _nota(catalog, [p] + dep, nota),
 		'externe': surseExterne(catalog, [p] + dep), 'notaCuloare': culoareNota(catalog, [p] + dep),
 		'buton': N_('Instalează'), 'argumente': a,
 		'repornire': any(x.categorie not in FARA_REPORNIRE_INSTALARE for x in [p] + dep),
-		'pachete': [p.nume], 'tinte': [_tinta(p)]}, None
+		'pachete': [p.nume], 'tinte': [_tinta(p)]}
+	_cuVerificare(catalog, plan, [p] + dep, 'install', [p.nume], argumente)
+	return plan, None
+
+
+def deVerificat(catalog, p):
+	"""pachetul se descarca si se citeste inainte de instalare: vine dintr-o sursa straina, e o extensie sau un plugin
+	de sistem (cod Python) si lista nu spune pentru ce Python e (nici Depends, nici feedul unei imagini cu Python 2)"""
+	return dinSursaStraina(catalog, p) and p.categorie in P.H.FELURI_VERIFICATE and p.python2 is None
+
+
+def _cuVerificare(catalog, plan, pachete, comanda, nume, argumente=None):
+	"""Un pachet dintr-o sursa straina se descarca intai (opkg --download-only) si se citeste din cache-ul opkg, inainte
+	de instalare (Lucrare): dupa Depends se vede numai o parte din pachetele pentru Python 2 (masurat: 34 din 69)."""
+	if not any(deVerificat(catalog, x) for x in pachete):
+		return
+	v = (argumente or opkgArguments)(comanda, nume, ('--download-only',))
+	if v is not None:
+		plan['verifica'] = v
+		plan['catalog'] = catalog
+		# numele fisierelor din liste: opkg 0.8.0 pastreaza in cache data serverului, nu pe cea a descarcarii, si nu
+		# scrie mereu randul "Downloading" (masurat pe receptorul de proba): asa se recunoaste si un pachet
+		# ramas in cache
+		plan['fisiere'] = [os.path.basename(x.fisier) for x in pachete if x.fisier]
 
 
 def planActualizare(catalog, pachete, argumente=None, nota=None):
@@ -974,12 +1161,15 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 			lista = lista[:2] + [_t('și încă %d') % (len(lista) - 2)]
 		rand = [(_t('Extensii') if k == 0 else '', x) for k, x in enumerate(lista)]
 	rand += [(_t('Mărime'), P.marime_text(total) or _t('necunoscută')), (_t('Sursa'), ', '.join(surse))]
-	return {'fel': 'actualizeaza', 'titlu': titlu, 'nume': nume, 'subtitlu': sub, 'icoana': ic, 'randuri': rand,
+	plan = {'fel': 'actualizeaza', 'titlu': titlu, 'nume': nume, 'subtitlu': sub, 'icoana': ic, 'randuri': rand,
 		'nota': _nota(catalog, pachete, nota), 'externe': surseExterne(catalog, pachete),
 		'notaCuloare': culoareNota(catalog, pachete), 'buton': N_('Actualizează'), 'argumente': a,
 		'repornire': any(p.categorie not in FARA_REPORNIRE_SCHIMBARE for p in pachete),
 		'textGata': _t('Gata. Extensiile sunt la zi.') if len(pachete) > 1 else None,
-		'pachete': [p.nume for p in pachete], 'tinte': [_tinta(p) for p in pachete]}, None
+		'pachete': [p.nume for p in pachete], 'tinte': [_tinta(p) for p in pachete]}
+	# o versiune noua dintr-o sursa straina se citeste inainte (o actualizare numai pentru Python 2 ar strica pluginul)
+	_cuVerificare(catalog, plan, pachete, 'upgrade', [p.nume for p in pachete], argumente)
+	return plan, None
 
 
 def planStergere(catalog, p, argumente=None):
@@ -1095,9 +1285,16 @@ def textDescarcare(catalog, stare, inainte=None):
 	return motiv
 
 
-def planFisier(f, argumente=None):
+def planFisier(f, argumente=None, catalog=None):
+	"""(plan, None) sau (None, (mesaj, culoare)). `catalog`: pentru inlocuitorul unui fisier numai pentru Python 2."""
 	if not f.utf8:
 		return None, (_t('Numele fișierului nu se poate citi pe receptor. Redenumește-l fără diacritice.'), 'rau')
+	# fisierul numai pentru Python 2 (0.6.8): de obicei aflat deja pe firul cautarii; altfel citit acum
+	verifica = getattr(f, 'verificaPython2', None)
+	if verifica is not None:
+		verifica(refa=True)
+	if getattr(f, 'python2', None):
+		return planPython2Fisier(catalog, f), None
 	cale = P.fisier_ipk_permis(f.cale)
 	a = (argumente or opkgArguments)('install', [cale]) if cale else None
 	if a is None:
@@ -1248,6 +1445,9 @@ class Lucrare(object):
 		self.ipkg = ipkg if ipkg is not None else IpkgComponent()
 		self.ipkg.addCallback(self._eveniment)
 		self.radacina = '/'              # pentru starea pachetelor de la sfarsit (probele de pe PC dau alta)
+		self.etapa = None                # 'verificare' (numai descarcarea, 0.6.8), apoi 'instalare'
+		self._inainte = {}
+		self._ceas = None
 		# pachetele ramase neconfigurate dinainte de lucrare (None = nu se stie): numai ele pot fi motivul unui cod opkg
 		# nenul la o lucrare cu toate tintele facute
 		self.neconfigurateInainte = None
@@ -1275,6 +1475,18 @@ class Lucrare(object):
 		self.ultimaLinie = self.pornita = time.time()
 		STARE['lucrare'] = self
 		self.plan.setdefault('titluri', {})
+		if self.plan.get('verifica'):
+			# 0.6.8: intai numai descarcarea (opkg --download-only), apoi pachetele din cache se citesc pentru Python 2
+			self.etapa = 'verificare'
+			self._inainte = self._dinCache()
+			self._scrie('pas', _t(TEXT_VERIFICARE))
+			scrieJurnal('---- verificare %s' % ' '.join(self.plan.get('verifica')))
+			self.ipkg.runCmd(self.plan.get('verifica'))
+			return
+		self._instaleaza()
+
+	def _instaleaza(self):
+		self.etapa = 'instalare'
 		scrieJurnal('---- %s %s' % (self.plan.get('fel'), ' '.join(self.plan.get('argumente') or ())), True)
 		try:
 			self.neconfigurateInainte = P.pachete_neconfigurate(self.radacina)
@@ -1285,6 +1497,112 @@ class Lucrare(object):
 			scrieJurnal('pachete neconfigurate in receptor (opkg le configureaza din nou la sfarsit): %s' %
 				', '.join(self.neconfigurateInainte), True)
 		self.ipkg.runCmd(self.plan.get('argumente'))
+
+	# ------------------------------------------------------------ verificarea pentru Python 2 (0.6.8)
+
+	def _dinCache(self):
+		"""{cale: mtime} ale fisierelor .ipk din cache-ul opkg (acolo le lasa --download-only, in RAM pe receptor;
+		numele lor: <semn>_<fisierul din feed>)"""
+		rez = {}
+		try:
+			dosar = P._cale(self.radacina, P.citeste_configurarea(self.radacina).cache_dir)
+			for n in os.listdir(dosar):
+				if n.endswith('.ipk'):
+					c = os.path.join(dosar, n)
+					try:
+						rez[c] = os.path.getmtime(c)
+					except OSError:
+						pass
+		except OSError:
+			pass
+		return rez
+
+	def _descarcate(self):
+		"""pachetele planului din cache: cele numite in randurile "Downloading ..." ale lui opkg, cele cu numele din
+		listele surselor (Filename, si cand erau deja in cache) si cele noi sau schimbate de la pornire (dependintele;
+		un pachet ramas de altadata, care nu e al planului, nu se socoteste)"""
+		numite = set(n for n in self.plan.get('fisiere') or () if n)
+		for linie in self.linii:
+			m = re.match(r'^Downloading (\S+?)\.?$', linie.strip())
+			if m:
+				numite.add(m.group(1).rsplit('/', 1)[-1])
+		rez = []
+		for c, t in self._dinCache().items():
+			b = os.path.basename(c)
+			if any(b == n or b.endswith('_' + n) for n in numite) or self._inainte.get(c) != t:
+				rez.append(c)
+		return sorted(rez)
+
+	def _dupaDescarcare(self, cod):
+		if cod != 0:
+			# descarcarea n-a mers (retea, sursa): nimic instalat, motivul din randurile opkg
+			self.etapa = None
+			self._gata(cod)
+			return
+		noi = self._descarcate()
+		scrieJurnal('verificare: %d pachete descarcate' % len(noi))
+		stare = {'gata': False, 'rez': []}
+
+		def lucru():
+			try:
+				stare['rez'] = [(c, P.H.din_ipk(c)) for c in noi]
+			except Exception as e:
+				_jurnal('verificarea pachetelor: %s' % e)
+			stare['gata'] = True
+		try:
+			from enigma import eTimer
+		except ImportError:          # probele de pe PC: pe loc
+			lucru()
+			self._verificate(stare['rez'])
+			return
+		# citirea pe un fir separat; rezultatul il culege un eTimer pe firul enigma2 (tragere, ca in HdsLocInregistrari)
+		self._ceas = eTimer()
+
+		def uitaTe():
+			if stare['gata']:
+				self._ceas.stop()
+				self._verificate(stare['rez'])
+		self._ceas.callback.append(uitaTe)
+		P._fire.start_new_thread(lucru, ())
+		self._ceas.start(150, False)
+
+	def _verificate(self, rezultate):
+		for cale, v in rezultate:
+			if v.python2:
+				self._refuzPython2(cale, v)
+				return
+		self._instaleaza()
+
+	def _refuzPython2(self, cale, v):
+		"""un pachet descarcat e numai pentru Python 2: nu se instaleaza nimic; textele, inlocuitorul, cache-ul golit"""
+		control = P.citeste_control_ipk(cale)
+		nume = control.get('package', '') if P.nume_valid(control.get('package', '')) else ''
+		titlu = (self.plan.get('titluri') or {}).get(nume) or (P.nume_scurt(nume) if nume else self.plan.get('nume', ''))
+		inl, stare = inlocuitor(self.plan.get('catalog'), nume, v.dosare)
+		scrieJurnal('verificare: %s %s %s (%s)' % (nume, v.motiv[0], v.motiv[1], os.path.basename(cale)))
+		self.etapa = None
+		self.faza = 'gata'
+		self.cod = 'python2'
+		for t in TEXT_PYTHON2:
+			self._scrie('eroare', _t(t))
+		m = textMotiv(v.motiv)
+		if m:
+			self._scrie('eroare', '%s: %s' % (_t('Motivul'), m))
+		nota = notaInlocuitor(self.plan.get('catalog'), inl, stare)
+		if nota:
+			self._scrie('bun', nota)
+		instalabil = stare == 'instalabil'
+		self.rezultat = {'reusit': False, 'titlu': _t(TITLU_PYTHON2) % titlu, 'stare': _t('Nu s-a instalat nimic.'),
+			'culoare': 'rau', 'butoane': [BUTON_INLOCUITOR, N_('Închide')] if instalabil else [N_('Închide')], 'ales': 0,
+			'repornire': False, 'python2': True, 'inlocuitor': inl.nume if instalabil else None,
+			'textInlocuitor': _t(BUTON_INLOCUITOR) if instalabil else ''}
+		scrieJurnal('---- cod python2')
+		try:
+			P.curata_cache(self.radacina)
+		except Exception as e:
+			_jurnal('cache opkg: %s' % e)
+		catalogVechi()
+		self._anunta('gata', self.cod)
 
 	def _scrie(self, fel, text):
 		if not text or (self.jurnal and self.jurnal[-1] == (fel, text)):
@@ -1312,7 +1630,10 @@ class Lucrare(object):
 			self._scrie('pas', _t('Se păstrează setările tale din %s') % P._curat(str(parametru), 80))
 			self.ipkg.write('N')
 		elif eveniment == IpkgComponent.EVENT_DONE:
-			self._gata(parametru)
+			if self.etapa == 'verificare':
+				self._dupaDescarcare(parametru)
+			else:
+				self._gata(parametru)
 
 	def secundeFaraRaspuns(self):
 		return max(0, int(time.time() - self.ultimaLinie)) if self.faza == 'lucru' else 0

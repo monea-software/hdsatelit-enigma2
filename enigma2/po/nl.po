@@ -53756,3 +53756,319 @@ msgstr "Systeemlogboek"
 #: lib/python/Components/HdsJurnale.py
 msgid "Serviciile de sistem"
 msgstr "Systeemdiensten"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Gemaakt voor Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s is gemaakt voor Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "Het pakket is gemaakt voor oude images met Python 2."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Dit image heeft Python 3, dus het wordt niet geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "Vervanger installeren"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "Het pakket wordt vóór de installatie gecontroleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "vereist %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "het is een Python 2-bibliotheek"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "het heeft bestanden in de map van Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "het heeft bestanden gecompileerd voor Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "het is gekoppeld aan de Python 2-bibliotheek (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "de code compileert niet in Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "het gebruikt modules die uit Python 3 zijn verwijderd (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "het komt uit een feed van images met Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Reden"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Voor Python 3 is er %s, in de feed %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "%s, gemaakt voor Python 3, is al geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Er is niets geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK toont waarom · Groen installeert de vervanger"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK toont waarom"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "Versie %s uit de bron %s is gemaakt voor Python 2 en wordt niet geïnstalleerd."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "De driver van de printplaat is niet geladen, dus het type printplaat kon niet worden gelezen en kan niet worden aangetoond dat deze software ervoor bedoeld is."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Zet de juiste software terug met een USB-stick, zoals de fabrikant van de ontvanger beschrijft (bij Octagon: houd Standby op de ontvanger ingedrukt bij het inschakelen, daarna Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Opstartdiagnose"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "De interface start niet"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "De processor van de ontvanger is niet die waarvoor de software is gemaakt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "De driver meldt een ander type printplaat dan waarvoor de software is gemaakt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "Het label in het geheugen van de ontvanger noemt een ander type printplaat."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "De printplaat van de ontvanger (fabriekskop) is een andere."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "De partities in het geheugen van de ontvanger zijn anders ingedeeld."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "De partitie van kernel of systeem staat op een andere plaats of heeft een andere grootte."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "Het interne geheugen heeft een andere grootte dan bij het model waarvoor de software is."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "Een andere waarde van de ontvanger klopt niet."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "De processor kon niet worden gelezen: de driver van de processor is niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Het type printplaat kon niet worden gelezen: de driver van de printplaat is niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "De printplaat kon niet uit de fabriekskop worden gelezen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "De partities konden niet uit de opstartregel worden gelezen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "De partitie van kernel of systeem is niet gevonden."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "Het ontvangerkenmerk in de software is beschadigd."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "De controle bij het opstarten gaf geen resultaat."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "De interface is bij het opstarten meerdere keren vastgelopen en in de veilige modus gestart."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "De interface loopt ook in de veilige modus vast."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "De interface start helemaal niet."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "De drivers van de ontvanger ontbreken of zijn niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "De interface verscheen niet binnen 5 minuten: hij bleef hangen bij het opstarten."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "De interface stopte bij het opstarten om een andere reden."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Printplaat (driver)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Label"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Printplaat (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Intern geheugen"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Kernel en systeem"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Partities"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Model (bootloader)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d partities"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "plaats %(loc)d: %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, vrij %(liber)d MiB"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "geen gevonden"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "HD Satelit %(versiune)s voor %(model)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Maak een foto van dit scherm en stuur hem naar het forum waar je de software hebt gevonden of naar %s."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "De software schrijft niets in het geheugen van de ontvanger. Zet de juiste software terug met een USB-stick, zoals de fabrikant van de ontvanger beschrijft."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Alle gegevens, in de webinterface: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Alle gegevens, in de webinterface van de ontvanger, op de pagina %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Forum: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "Laatste fout van de interface"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Kernel: stuurprogramma's en fouten"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Alle gegevens, om te kopiëren, vanaf een computer of telefoon:"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "De interface wordt over %d minuten opnieuw geprobeerd."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Codes:"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Code"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "Andere codes: %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "Het opstarten is gelukt: de ontvanger past bij de software."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "Het opstarten is gelukt. Enkele waarden wijken af van de verwachte: het model is nog niet bevestigd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Kopieer de gegevens hieronder en stuur ze naar het forum waar je de software hebt gevonden of naar %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "Het opstarten is gelukt; de gegevens hieronder zijn alleen om te lezen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Alles kopiëren"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "Per e-mail versturen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "HD Satelit-forum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "Zonder JavaScript: houd de tekst ingedrukt, selecteer alles en kopieer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "Op de televisie verschijnt het diagnosescherm alleen vanzelf als het opstarten mislukt; anders open je het via MENU > Systeeminformatie > Opstartdiagnose."

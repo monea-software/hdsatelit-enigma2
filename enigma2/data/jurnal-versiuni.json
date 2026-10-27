@@ -39,6 +39,36 @@
      "fel": "imbunatatit",
      "ro": "Jurnalul actualizării, cel al extensiilor și erorile DAB+ și T2-MI rămân și după repornire, în Jurnalele sistemului, pe televizor și în interfața web.",
      "en": "The update log, the extensions log and the DAB+ and T2-MI errors are now kept after a restart, in the system logs, on the TV and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când pornirea nu reușește, receptorul arată un ecran de diagnostic cu un cod de eroare și cu ce a citit despre placă, procesor și drivere. Fă o poză ecranului și trimite-o pe forumul nostru.",
+     "en": "When startup fails, the receiver shows a diagnostic screen with an error code and what it read about the board, the processor and the drivers. Take a photo of the screen and send it to our forum."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă interfața nu poate porni, receptorul arată pe afișajul din față codul și adresa lui, pe televizor ecranul de diagnostic, iar aceleași date se văd într-o pagină deschisă de pe calculator.",
+     "en": "If the interface cannot start, the receiver shows the code and its address on the front display, the diagnostic screen on the TV, and the same details on a page opened from a computer."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Diagnosticul pornirii se poate citi oricând în Meniu, la Informații despre sistem, și în interfața web, unde un buton copiază tot textul.",
+     "en": "The startup diagnostics can be read at any time in Menu, under System information, and in the web interface, where one button copies all the text."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "La o pornire reușită nu mai apare nicio notă în plus pe ecran, nici pe modelele încă neconfirmate.",
+     "en": "After a successful startup no extra note appears on the screen any more, also on models not yet confirmed."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon, mesajul de la pornire arată calea bună de recuperare, cu Standby ținut apăsat și Recovery From USB, nu pe cea a altui receptor.",
+     "en": "On Octagon receivers, the startup message now shows the right recovery steps, holding Standby and choosing Recovery From USB, not those of another receiver."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Pe Octagon, interfața pornește acum după programul plăcii pentru imagine, cu aceiași pași ca software-ul obișnuit pentru aceste receptoare, ca imaginea să ajungă la televizor.",
+     "en": "On Octagon receivers, the interface now starts after the board's video program, with the same steps as the usual software for these receivers, so the picture reaches the TV."
     }
    ]
   },

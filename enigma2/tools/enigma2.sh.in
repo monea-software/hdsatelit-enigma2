@@ -191,6 +191,8 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				print "boxtype=" bt
 				print "eticheta=" et
 				print "emmc=" ek
+				# only broken rules add a line (the startup code E290); with good rules the file stays as it was
+				if (!bune) print "reguli=stricate"
 			}' "$HDS_PAZA_REGULI" "$hds_pp" > "$HDS_PAZA_STARE.nou" 2>/dev/null
 		mv -f "$HDS_PAZA_STARE.nou" "$HDS_PAZA_STARE" 2>/dev/null
 	fi
@@ -254,6 +256,31 @@ if [ "$hds_paza" = potrivit ] && [ -f "$HDS_PAZA_REGULI" ]; then
 			fi
 		fi
 	fi
+fi
+
+# Receivers with libreader (Octagon SF8008, SF8008 MINI, the first Amiko Viper 4K: HiSilicon boards on which the
+# platform daemon that brings up HDMI and the video path is libreader, started at boot by rcS S05 with 720P_50, and
+# showiframe only puts a picture on the video decoder). As the images made for these receivers do: libreader is started
+# again when it is not running (the block after the exit stops it after every end of enigma2 but halt, so each run of
+# enigma2 gets a fresh one, and it may also have ended by itself), and a showiframe still running is stopped before the
+# backdrop, so that no copy of it holds the video decoder when enigma2 starts. Only where libreader exists: the Viper 4K
+# V20, V30 and V40 (u5/u4, where showiframe is the platform daemon) have none, and there this is one file test.
+# Whether libreader runs is read from /proc by the shell itself (no pidof or pgrep needed). The variables are only for
+# the tests on the PC; init sets none of them.
+HDS_LIBREADER=${HDS_LIBREADER:-@bindir@/libreader}
+HDS_LIBREADER_PAUZA=${HDS_LIBREADER_PAUZA:-5}
+if [ -x "$HDS_LIBREADER" ]; then
+	hds_lr=""
+	for hds_c in /proc/[0-9]*/comm; do
+		hds_n=""
+		read -r hds_n 2>/dev/null < "$hds_c"
+		[ "$hds_n" = libreader ] && { hds_lr=1; break; }
+	done
+	if [ -z "$hds_lr" ]; then
+		echo "[hds-libreader] libreader was not running: started again (720P_50)"
+		"$HDS_LIBREADER" 720P_50
+	fi
+	killall -9 showiframe 2>/dev/null && sleep 1
 fi
 
 # hds_paza: potrivit (or no rules), nepotrivit (showiframe off) or afisare (another receiver, showiframe without writes)
@@ -578,6 +605,39 @@ if [ -n "$HDS_JPEG_BUN" ] && [ "$(readlink @libdir@/libjpeg.so.62)" != "$HDS_JPE
 	ln -sf "$HDS_JPEG_BUN" @libdir@/libjpeg.so.62
 fi
 
+# Fallback when enigma2 does not reach its interface (tools/hds-rezerva.sh), only with the rules file, as the model
+# guard. Here: the uptime at the start, for the block after the exit. On a receiver where the interface of this image
+# has come up once (the mark /etc/hds-interfata-pornita, written by hds-rezerva.sh) and the start is not in doubt,
+# nothing else runs: shell built-ins only (a read of /proc/uptime, file tests). A window left behind by a script
+# stopped with KILL (inetd.pid: its page holds port 80) is stopped first, so the web interface of enigma2 gets port 80.
+# Missing drivers (/dev/fb0, /dev/dvb/adapter0: E304) are noted and enigma2 starts all the same. The timer for an
+# enigma2 stuck before its interface (E305) runs in the background until the first start that reaches the interface
+# (a new install: no mark yet; it stops as soon as the interface is up) and when the start is in doubt: drivers
+# missing, the guard did not pass, or a start that failed earlier in this boot. The variables are only for the tests
+# on the PC; init sets none of them.
+HDS_REZERVA=${HDS_REZERVA:-@bindir@/hds-rezerva.sh}
+HDS_REZERVA_DOSAR=${HDS_REZERVA_DOSAR:-/tmp/hds-rezerva}
+HDS_REZERVA_SEMN=${HDS_REZERVA_SEMN:-$HDS_PAZA_RADACINA/etc/hds-interfata-pornita}
+hds_rz_t0=""
+if [ -f "$HDS_PAZA_REGULI" ] && [ -f "$HDS_REZERVA" ]; then
+	[ -f "$HDS_REZERVA_DOSAR/inetd.pid" ] && sh "$HDS_REZERVA" opreste
+	read hds_rz_t0 hds_rz_x 2>/dev/null < "$HDS_PAZA_RADACINA/proc/uptime"
+	hds_rz_t0=${hds_rz_t0%%.*}
+	case $hds_rz_t0 in ''|*[!0-9]*) hds_rz_t0=0 ;; esac
+	hds_rz_ceas=""
+	if [ ! -e "$HDS_PAZA_RADACINA/dev/fb0" ] || [ ! -e "$HDS_PAZA_RADACINA/dev/dvb/adapter0" ] ||
+		[ -f "$HDS_REZERVA_DOSAR/drivere" ]; then
+		sh "$HDS_REZERVA" drivere
+		[ -f "$HDS_REZERVA_DOSAR/drivere" ] && hds_rz_ceas=1
+	fi
+	[ -f "$HDS_REZERVA_DOSAR/porniri" ] && hds_rz_ceas=1
+	[ "$hds_paza" = potrivit ] || hds_rz_ceas=1
+	[ -f "$HDS_REZERVA_SEMN" ] || hds_rz_ceas=1
+	if [ -n "$hds_rz_ceas" ]; then
+		sh "$HDS_REZERVA" ceas $$ "$hds_rz_t0" < /dev/null > /dev/null 2>&1 &
+	fi
+fi
+
 if grep -qi '^config.crash.enabledebug=true' /etc/enigma2/settings 2>/dev/null; then
 	mkdir -p /home/root/logs
 	ENIGMA_DEBUG_LVL=4 ENIGMA_DEBUG_TIME=2 LD_PRELOAD=$LIBS @bindir@/enigma2 >> /home/root/logs/enigma2-debug.log 2>&1
@@ -815,6 +875,21 @@ if [ -f "$HDS_SETARI_SEMN" ]; then
 	fi
 fi
 
+# Fallback (block before the start of enigma2), after the count of unclean ends and both stages of safe mode, so that
+# safe mode stays the first help: an end with another code than 0-4 goes to hds-rezerva.sh with the uptime of the
+# start and the cause found above. It counts the ends before the interface and shows the codes and the address on the
+# front display, on the television and on port 80 for HDS_REZERVA_DURATA seconds (5 minutes), here, before init starts
+# enigma2 again, only when safe mode cannot help or has done all it can: 126/127 (at once), stuck at start, the guard
+# did not pass or the drivers are missing (two ends before the interface in 10 minutes), or safe mode put the previous
+# settings back and enigma2 still ends before its interface. An end after the interface came up changes nothing.
+if [ -n "$hds_rz_t0" ]; then
+	case $ret in
+		0|1|2|3|4) ;;
+		*) HDS_MOD_SIGUR_SEMN=$HDS_MOD_SIGUR_SEMN HDS_MOD_SIGUR_PRAG2=$HDS_MOD_SIGUR_PRAG2 \
+			sh "$HDS_REZERVA" iesire "$ret" "$hds_rz_t0" "$$" "${cauza:-}" ;;
+	esac
+fi
+
 # On u5/u4 boxes (HiSilicon, Amiko Viper 4K) showiframe is the platform daemon that holds HDMI and
 # the demux link; killing it while enigma2 runs turns HDMI off and can oops the kernel on the next zap.
 # It stays up across the restarts of the interface (codes 0 and 3: Restart Interface, an installed update and every
@@ -830,6 +905,12 @@ if [ "$ret" -ne "1" ] && [ "$ret" -ne "0" ] && [ "$ret" -ne "3" ] && [ -e /proc/
 			killall -9 showiframe 2>/dev/null; sleep 5
 			;;
 	esac
+fi
+
+# Receivers with libreader (see the block before showiframe): after every end of enigma2 but halt (code 1) libreader
+# is stopped, as the images made for these receivers do; the next run of this script starts a fresh one before enigma2.
+if [ "$ret" -ne "1" ] && [ -x "$HDS_LIBREADER" ]; then
+	killall -9 libreader 2>/dev/null; sleep "$HDS_LIBREADER_PAUZA"
 fi
 
 case $ret in

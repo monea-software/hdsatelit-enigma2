@@ -45,6 +45,18 @@ try:
 	from Components.HdsNavigator import readMountTable, NETWORK_FS
 except ImportError:  # teste pe PC: modulul incarcat singur, din dosarul Components
 	from HdsNavigator import readMountTable, NETWORK_FS
+# pachetele numai pentru Python 2 (0.6.8): dupa lista feedului (Pachet.python2) si dupa fisier (FisierIpk.python2)
+try:
+	from Components import HdsPython2 as H
+except ImportError:  # teste pe PC
+	try:
+		import HdsPython2 as H
+	except ImportError:  # modulul incarcat singur, dintr-o cale: vecinul din acelasi dosar
+		import importlib.util
+		_spec = importlib.util.spec_from_file_location('HdsPython2',
+			os.path.join(os.path.dirname(os.path.abspath(__file__)), 'HdsPython2.py'))
+		H = importlib.util.module_from_spec(_spec)
+		_spec.loader.exec_module(H)
 
 PREFIX = 'enigma2-plugin-'
 
@@ -501,7 +513,8 @@ def _dependente(text):
 
 class Pachet(object):
 	__slots__ = ('nume', 'categorie', 'titlu', 'subtitlu', 'descriere', 'versiune', 'versiune_instalata',
-		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'fisier', 'arhiva')
+		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'fisier', 'arhiva',
+		'python2')
 
 	def __init__(self, nume):
 		self.nume = nume
@@ -520,6 +533,9 @@ class Pachet(object):
 		self.dosar_plugin = ''
 		self.fisier = ''                # Filename din lista sursei (calea pachetului fata de adresa sursei)
 		self.arhiva = ''                # arhiva sursei de langa pachet (randul "Source archive:" din descriere)
+		# versiunea din surse e numai pentru Python 2 (dupa Depends din lista, Components/HdsPython2.py): (cod, detaliu)
+		# al motivului, altfel None. Un asemenea pachet nu se instaleaza si nu e o actualizare (0.6.8)
+		self.python2 = None
 
 	@property
 	def instalat(self):
@@ -531,7 +547,8 @@ class Pachet(object):
 
 	@property
 	def actualizare(self):
-		return self.instalat and self.disponibil and compara_versiuni(self.versiune, self.versiune_instalata) > 0
+		return self.instalat and self.disponibil and not self.python2 and \
+			compara_versiuni(self.versiune, self.versiune_instalata) > 0
 
 	@property
 	def se_poate_sterge(self):
@@ -540,7 +557,7 @@ class Pachet(object):
 
 	@property
 	def se_poate_instala(self):
-		return self.disponibil and nume_valid(self.nume) and (not self.instalat or self.actualizare)
+		return self.disponibil and nume_valid(self.nume) and not self.python2 and (not self.instalat or self.actualizare)
 
 	def texte(self, rezumat, extins):
 		"""Titlul (scurt, pentru lista), randul de sub titlu si descrierea din detalii."""
@@ -646,6 +663,7 @@ def incarca(radacina='/'):
 
 	# 1. listele din surse
 	dosar_liste = _cale(radacina, conf.lists_dir)
+	cu_python2 = set()               # sursele care au Python 2 insusi (python-core 2.x): feeduri ale imaginilor vechi
 	for sursa, _adresa in conf.surse:
 		f = os.path.join(dosar_liste, sursa)
 		if not os.path.isfile(f):
@@ -658,6 +676,8 @@ def incarca(radacina='/'):
 		for s in citeste_strofe(f):
 			n = s.get('package', '')
 			if not nume_valid(n) or not n.startswith(PREFIX):
+				if H.e_python2_insusi(s):
+					cu_python2.add(sursa)
 				continue
 			arh = s.get('architecture', '')
 			if not _arhitectura_buna(arh, conf.arhitecturi):
@@ -680,6 +700,18 @@ def incarca(radacina='/'):
 			p.texte(*_text_descriere(s))
 			p.fisier = s.get('filename', '')
 			p.arhiva = arhiva_sursa(s.get('description', ''))
+			# 0.6.8: dupa Depends (None = nu se stie, False = cere ceva din Python 3, altfel motivul Python 2)
+			v2 = H.din_control(s)
+			p.python2 = v2.motiv if v2.python2 else v2.python2
+
+	# 1b. pachetele cu cod Python din feedurile imaginilor cu Python 2 (grupul sursei are python-core 2.x), care nu cer
+	# nimic din Python 3: facute pentru Python 2 (0.6.8)
+	if cu_python2:
+		grupe = set(H.grup_sursa(conf.adresa(x)) for x in cu_python2)
+		for p in toate.values():
+			if p.python2 is None and p.sursa and p.categorie in H.FELURI_COD and \
+					H.grup_sursa(conf.adresa(p.sursa)) in grupe:
+				p.python2 = (H.FEED, p.sursa)
 
 	# 2. pachetele instalate
 	status = _cale(radacina, conf.status_file)
@@ -1112,12 +1144,23 @@ class CautareIpk(object):
 			fisiere = [FisierIpk(c, m, d, retea=self.retea is not None, radacina=self.radacina)
 				for c, m, d in cauta_fisiere_ipk(self.radacina, info=info, retea=self.retea)]
 			fisiere.sort(key=lambda f: (not f.citit, -f.data, f.cale))
+			# pachetele numai pentru Python 2 (0.6.8), tot pe fir: cele mai noi intai, cel mult TIMP_PYTHON2 secunde in
+			# total; cele ramase se verifica la confirmarea instalarii (planFisier)
+			for f in fisiere:
+				ramas = TIMP_PYTHON2 - (_ceas() - self.pornit)
+				if ramas <= 0.5:
+					break
+				if f.citit:
+					f.verificaPython2(min(H.TIMP_MAXIM, ramas))
 			self.fisiere, self.taiat, self.locuri_retea = fisiere, bool(info.get('taiat')), info.get('retea') or []
 		except Exception as e:
 			self.eroare = '%s: %s' % (e.__class__.__name__, e)
 		self.durata = _ceas() - self.pornit
 		self.gata = True
 
+
+# cat timp (secunde, de la pornirea cautarii) se verifica pe fir fisierele gasite pentru Python 2
+TIMP_PYTHON2 = 10.0
 
 # cautarile in curs, cel mult una de fiecare fel (fara retea, in retea): un ecran redeschis se leaga de cea care ruleaza.
 # Un fir agatat pe o retea care nu raspunde nu se poate opri; asa nu se mai porneste inca unul langa el.
@@ -1233,6 +1276,28 @@ class FisierIpk(object):
 		self.descriere = _curat(extins, 600)
 		self.depinde = _dependente(control.get('depends', ''))
 		self.citit = bool(self.nume)
+		# pachet numai pentru Python 2 (0.6.8): Components/HdsPython2.Verdict, aflat pe firul cautarii (verificaPython2)
+		# sau, daca n-a apucat, la confirmarea instalarii; None = neverificat inca
+		self._citire = _cale(radacina, cale)
+		self.verdict = None
+		if control:
+			v = H.din_control(control)
+			if v.python2:
+				self.verdict = v
+
+	def verificaPython2(self, timp_maxim=H.TIMP_MAXIM, refa=False):
+		"""verdictul dupa control si continut (o singura data; `refa`: inca o data cand prima citire s-a oprit la o
+		limita fara un raspuns); numai citit, nimic rulat"""
+		v = self.verdict
+		if v is None or (refa and v.taiat and v.python2 is None):
+			self.verdict = H.din_ipk(self._citire, timp_maxim=timp_maxim)
+		return self.verdict
+
+	@property
+	def python2(self):
+		"""(cod, detaliu) al motivului cand fisierul e numai pentru Python 2, altfel None (si cand nu s-a verificat)"""
+		v = self.verdict
+		return v.motiv if v is not None and v.python2 else None
 
 	@property
 	def titlu(self):

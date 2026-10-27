@@ -200,6 +200,7 @@ po/Makefile
 main/Makefile
 tools/Makefile
 tools/enigma2.sh
+tools/hds-rezerva.sh
 enigma2.pc
 ])
 AC_OUTPUT
