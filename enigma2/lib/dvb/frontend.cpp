@@ -2,6 +2,7 @@
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontendparms.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdscalitate.h>
 #include <lib/base/eerror.h>
 #include <lib/base/nconfig.h> // access to python config
 #include <errno.h>
@@ -845,6 +846,8 @@ int eDVBFrontend::readFrontendData(int type)
 		case signalQualitydB: /* this will move into the driver */
 		{
 			int sat_max = 1600; // for stv0288 / bsbe2
+			int ter_max = 2400; // we assume a max of 24db here
+			int cab_max = 4200; // we assume a max of 42db here
 			int ret = 0x12345678;
 			uint16_t snr=0;
 			if (m_simulate)
@@ -994,6 +997,10 @@ int eDVBFrontend::readFrontendData(int type)
 					default: break;
 				}
 			}
+			// HiSilicon boards with libreader (Octagon SF8008, SF8008 MINI, the first Amiko Viper 4K): the driver gives the
+			// SNR in 0.1 or 0.01 dB (lib/dvb/hdscalitate.h); other names are left as they were
+			else
+				hdscal::calitateTuner(m_description, snr, ret, sat_max, ter_max, cab_max);
 
 			if (type == signalQuality)
 			{
@@ -1003,10 +1010,10 @@ int eDVBFrontend::readFrontendData(int type)
 				{
 					case feSatellite:
 						return ret >= sat_max ? 65536 : ret * 65536 / sat_max;
-					case feCable: // we assume a max of 42db here
-						return ret >= 4200 ? 65536 : ret * 65536 / 4200;
-					case feTerrestrial: // we assume a max of 24db here
-						return ret >= 2400 ? 65536 : ret * 65536 / 2400;
+					case feCable:
+						return ret >= cab_max ? 65536 : ret * 65536 / cab_max;
+					case feTerrestrial:
+						return ret >= ter_max ? 65536 : ret * 65536 / ter_max;
 				}
 			}
 /* else

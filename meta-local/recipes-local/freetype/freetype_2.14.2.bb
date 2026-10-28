@@ -16,8 +16,8 @@ LIC_FILES_CHKSUM = "file://LICENSE.TXT;md5=eeb073d5fb86d23c52bb9b84aa256307 \
                     file://docs/GPLv2.TXT;md5=8ef380476f642c20ebf40fecb0add2ec \
                     "
 
-# HDSatelit 21.09.2026: bump de versiune, gasit lipsa la auditul de CVE-uri periodic (20.09.2026)
-# -- 2.13.3 e sub pragul sigur (CVE-2026-23865, CVSS 5.3, reparat in
+# HDSatelit 21.09.2026: bump de versiune, gasit lipsa la auditul de CVE-uri periodic (TODO.md/
+# ACTUALIZARI-IMAGINE.md, 20.09.2026) -- 2.13.3 e sub pragul sigur (CVE-2026-23865, CVSS 5.3, reparat in
 # 2.14.2). Nicio reteta pentru o versiune mai noua nu exista deja in openembedded-core (verificat).
 # Arhiva si sha256 verificate REAL, descarcate si calculate direct (nu doar copiate dintr-o cautare),
 # 21.09.2026: https://download.savannah.gnu.org/releases/freetype/freetype-2.14.2.tar.xz, 2667092 octeti

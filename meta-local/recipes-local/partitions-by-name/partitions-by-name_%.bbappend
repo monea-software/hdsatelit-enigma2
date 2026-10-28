@@ -10,9 +10,11 @@
 #    partitiile de pe stick-uri si discuri (sda..sdd, mmcblk1), dupa numele lor GPT. Un stick cu doua partitii
 #    numite other1 si other2, legat la pornire, ar debloca boot1 (gasit la verificarea adversariala din 23.09).
 # Imaginea HDSatelit nu are meniu de multiboot si nu foloseste boot1; varianta A2 tine alegerea pe p10.
+# Hotarare: cercetare-multiboot/RAPORT-MULTIBOOT.md, sectiunea 4; facuta si probata in
+# cercetare-multiboot/A2-paznici-imagine.md; regula in REGULI-FLASH-RECEPTOR.md (Regula 22).
 #
 # Cum: ramurile se sterg cu sed din fisierul instalat (fisier comun, citit doar pentru intelegere, nimic
-# copiat). Fiecare ramura are 6 randuri, de la 'if ...' pana la primul 'fi' de la
+# copiat, cf. AGENTS.md regula #0). Fiecare ramura are 6 randuri, de la 'if ...' pana la primul 'fi' de la
 # inceput de rand. Compilarea se opreste cu eroare, nu trece tacut, daca: nu s-au scos exact 12 randuri, "u57"
 # sau by-name/other1 mai apar, sau raman alte scrieri force_ro decat cele 3 ale ramurilor dm820/dm7080/dm900/dm920,
 # et11000/sf4008 si beyonwizu4 (legate de /proc/stb/info/model si boxtype, care pe u57 nu se potrivesc).

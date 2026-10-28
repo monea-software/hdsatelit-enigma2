@@ -3,6 +3,8 @@
 # De ce: la oprirea din meniu, /etc/rc0.d/S89suspend porneste /usr/bin/hihalt (binar Dinobot inchis), care face
 # system("python /usr/bin/timerTask.py"). Imaginea avea numai python3, deci comanda cadea, hipmoc nu rula niciodata:
 # receptorul ramanea cu Linux pornit si afisajul stins si nu se trezea singur pentru inregistrari.
+# Dovezi: securitate-showiframe/4-alte-binare-dinobot.md, Pas 2f si M4; stadiul in
+# lucru-sesiune/adormire-adanca-progres.md.
 #
 # Ce face acest fisier:
 #  - RDEPENDS pe python3-compat2 (reteta din stratul comun OE-Alliance): /usr/bin/python -> python3.

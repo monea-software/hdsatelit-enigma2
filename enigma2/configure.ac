@@ -97,6 +97,22 @@ case "$BOXTYPE" in
 		;;
 esac
 
+dnl The boards on which the platform daemon is libreader (Octagon SF8008 4K UHD, SF8008 MINI 4K, the first Amiko Viper
+dnl 4K). Their showiframe is a plain program: it selects source MEMORY on video0, writes the picture and exits without
+dnl selecting the demux again, so video0 stays on MEMORY after the backdrop. The images made for these boards select the
+dnl demux source when a decoder is opened (lib/dvb/decoder.cpp). The Viper 4K V20, V30 and V40 (u5/u4, where showiframe
+dnl is the daemon and one source serves all decoders) and every other machine define nothing.
+AC_MSG_CHECKING([whether boxtype $BOXTYPE is a board with libreader])
+case "$BOXTYPE" in
+	viper4k|sf8008|sf8008m)
+		AC_DEFINE([HAVE_HISILICON_LIBREADER],[1],[Define to 1 on the HiSilicon boards with libreader (viper4k, sf8008, sf8008m): a decoder selects the demux source when it is opened])
+		AC_MSG_RESULT([yes])
+		;;
+	*)
+		AC_MSG_RESULT([no])
+		;;
+esac
+
 AC_ARG_WITH(debug,
 	AS_HELP_STRING([--without-debug],[disable debugging code]),
 	[with_debug="$withval"],[with_debug="yes"])
@@ -200,6 +216,7 @@ po/Makefile
 main/Makefile
 tools/Makefile
 tools/enigma2.sh
+tools/hds-rezerva.sh
 enigma2.pc
 ])
 AC_OUTPUT

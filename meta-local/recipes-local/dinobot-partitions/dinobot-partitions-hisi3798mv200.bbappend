@@ -6,12 +6,14 @@
 # Maintenance Mode) cu /usr/share/apploader.bin si, daca difera sau daca citirea din p7 cade, rescrie p7 cu dd.
 # p7 e plasa noastra de siguranta: pe 23.09.2026 receptorul a fost reparat numai prin Maintenance Mode.
 # Imaginea noastra nu trebuie sa poata scrie p7 niciodata.
+# Hotarare: cercetare-multiboot/RAPORT-MULTIBOOT.md, sectiunea 4; facuta si probata in
+# cercetare-multiboot/A2-paznici-imagine.md; regula in REGULI-FLASH-RECEPTOR.md.
 #
 # Ce face acest fisier:
 #  - INHIBIT_UPDATERCD_BBCLASS: fara postinst/prerm/postrm de update-rc.d, deci fara legatura
 #    /etc/rcS.d/S90flash-apploader in imagine;
 #  - scriptul se sterge din ${D} dupa instalarea facuta de reteta comuna (fisier comun, citit doar pentru
-#    intelegere, nimic copiat); daca in pachet ramane altceva decat
+#    intelegere, nimic copiat, cf. AGENTS.md regula #0); daca in pachet ramane altceva decat
 #    /usr/share/apploader.bin (de exemplu scriptul redenumit sau mutat de o versiune noua a retetei comune),
 #    compilarea se opreste cu eroare;
 #  - /usr/share/apploader.bin ramane (fisier de date, 7,7 MB, nu scrie nimic singur); pachetul ramane si el,

@@ -3,7 +3,7 @@ DESCRIPTION = "Skinul HDSatelit pentru enigma2 (1920x1080), cu fonturile si comp
 LICENSE = "CLOSED"
 PV = "0.1.0"
 
-# arborele de instalare al skinului (dosarul skin/usr al sursei), pus sau montat doar-citire in /hds/skin;
+# arborele de instalare al skinului, montat doar-citire de oe.sh din hdsatelit-unelte/receptor/skin/src/usr;
 # o cale file:// absoluta se despacheteaza cu tot cu cale, deci sursa ajunge in skin/hds/skin
 SRC_URI = "file:///hds/skin;subdir=skin"
 S = "${UNPACKDIR}/skin/hds/skin"

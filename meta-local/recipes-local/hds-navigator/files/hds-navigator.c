@@ -418,7 +418,7 @@ static void ecran_panza_asigura(int latime, int inaltime)
     ecran.mem = g_malloc0(ecran.marime);
 }
 
-/* Depremultiplicarea (lotul h4-h6, masurat pe receptorul de proba): WebKit da ARGB premultiplicat (rosul de 50 % = 00 00 80 80 in
+/* Depremultiplicarea (lotul h4-h6, masurat pe .122): WebKit da ARGB premultiplicat (rosul de 50 % = 00 00 80 80 in
  * octetii B G R A), iar stratul grafic al u57 amesteca NEPREMULTIPLICAT (/proc/msp/hifb0: "Register Open Premul :
  * false"; asa scrie si enigma2 ferestrele ei semitransparente): fara conversie culorile semitransparente ale paginii ies
  * inmultite de doua ori cu alfa peste imaginea canalului (albul de 50 % ca un gri de 25 %). In modul HbbTV (fundal

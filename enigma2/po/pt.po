@@ -48220,234 +48220,325 @@ msgstr "Registo do sistema"
 msgid "Serviciile de sistem"
 msgstr "Serviços do sistema"
 
-# Asistenta de la distanta
-msgid "    raspuns: cod %d, %d octeti"
-msgstr "    resposta: código de saída %d, %d bytes"
-
-msgid "%d ore"
-msgstr "%d horas"
-
-msgid "Am cerut confirmarea pe televizor."
-msgstr "Foi pedida a confirmação no televisor."
-
-msgid "Asistenta a pornit."
-msgstr "A assistência foi iniciada."
-
-msgid "Asistenta merge deja."
-msgstr "A assistência já está a funcionar."
-
-msgid "Asistenta nu merge."
-msgstr "A assistência não está a funcionar."
-
-msgid "Asistenta s-a oprit. Cheia a fost stearsa."
-msgstr "A assistência parou. A chave foi apagada."
-
-msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să se conecteze, prin internet, la receptorul tău, ca să repare sau să îmbunătățească imaginea pentru modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu.\n\nReceptorul tău face o legătură criptată spre serverul HD Satelit. Cineva de la noi, pe care l-ai chemat tu, citește starea receptorului tău, nu a altor aparate din casa ta, și face numai ce scrie în jurnalul de mai jos.\n\nCât timp e pornită vezi un semn pe ecran. O poți opri oricând. Se oprește singură după timpul ales.\n\nCe vedem: starea tehnică a receptorului, jurnalele lui, uneori o captură a meniurilor. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale."
-msgstr "A assistência remota permite que as pessoas da HD Satelit se liguem, pela internet, ao teu recetor, para reparar ou melhorar a imagem para o teu modelo.\n\nÉ só para quem nos quer ajudar. O teu recetor não precisa dela para funcionar. Fica desligada até a ligares tu.\n\nO teu recetor faz uma ligação cifrada ao servidor da HD Satelit. Alguém da nossa equipa, que tu chamaste, lê o estado do teu recetor, não o de outros aparelhos da tua casa, e faz apenas o que está escrito no registo abaixo.\n\nEnquanto está ligada, vês um aviso no ecrã. Podes pará-la a qualquer momento. Para sozinha depois do tempo escolhido.\n\nO que vemos: o estado técnico do recetor, os seus registos, às vezes uma captura dos menus. Não lemos palavras-passe, chaves, definições dos cartões de acesso nem os teus ficheiros."
-
-msgid "Asistența merge deja."
-msgstr "A assistência já está a funcionar."
-
-msgid "Asistență activă"
-msgstr "Assistência ativa"
-
-msgid "Asistență de la distanță"
-msgstr "Assistência remota"
-
-msgid "Cât timp"
-msgstr "Quanto tempo"
-
-msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Poți opri oricând. Pornești?"
-msgstr "Dás acesso remoto durante %s, nível “Leitura e testes”. Podes parar a qualquer momento. Iniciar?"
-
-msgid "Functia nu e disponibila pe aceasta imagine."
-msgstr "A função não está disponível nesta imagem."
-
-msgid "Funcția nu e disponibilă pe această imagine."
-msgstr "A função não está disponível nesta imagem."
-
-msgid "HD Satelit cere pornirea asistenței de la distanță din pagina web, pentru %s. Pornești?"
-msgstr "A HD Satelit pede para iniciar a assistência remota a partir da página web, durante %s. Iniciar?"
-
-msgid "Informatii"
-msgstr "Informações"
-
-msgid "Jurnale"
-msgstr "Registos"
-
-msgid "Jurnalul asistenței"
-msgstr "Registo da assistência"
-
-msgid "Meniu > Beta tester"
-msgstr "Menu > Testador beta"
-
-msgid "Meniu > Beta tester > Asistență > Oprește"
-msgstr "Menu > Testador beta > Assistência > Parar"
-
-msgid "Mesaj de la HD Satelit:"
-msgstr "Mensagem da HD Satelit:"
-
-msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură a meniurilor cere OK pe ecran). Poți opri oricând."
-msgstr "Nível: Leitura e testes (só podemos executar operações de uma lista fixa, sobretudo leituras; uma captura dos menus pede OK no ecrã). Podes parar a qualquer momento."
-
-msgid "Nu pot cere confirmarea pe televizor acum."
-msgstr "Agora não é possível pedir a confirmação no televisor."
-
-msgid "Nu pot cere confirmarea pe televizor: %s"
-msgstr "Não é possível pedir a confirmação no televisor: %s"
-
-msgid "Nu pot citi catalogul: %s"
-msgstr "Não é possível ler o catálogo: %s"
-
-msgid "Oprești asistența? Cheia se șterge și legătura se închide."
-msgstr "Parar a assistência? A chave é apagada e a ligação é fechada."
-
-msgid "Oprită. O pornești tu, dacă vrei să ne ajuți."
-msgstr "Desligada. Ligas tu, se nos quiseres ajudar."
-
-msgid "Pornește asistența"
-msgstr "Iniciar a assistência"
-
-msgid "Pornirea cere confirmare pe televizor. Oprirea merge din orice browser din rețeaua locală. Aceleași lucruri sunt pe televizor, în __DRUM_MENIU__."
-msgstr "Iniciar pede confirmação no televisor. Parar funciona a partir de qualquer navegador da rede local. As mesmas coisas estão no televisor, em __DRUM_MENIU__."
-
-msgid "Probe"
-msgstr "Testes"
-
-msgid "Spune-ne acest cod. Nu îl da altcuiva."
-msgstr "Diz-nos este código. Não o dês a mais ninguém."
-
-msgid "cerere refuzata: %s"
-msgstr "pedido recusado: %s"
-
-msgid "cererea a fost %s"
-msgstr "o pedido foi %s"
-
-msgid "citire"
-msgstr "leitura"
-
-msgid "cod aratat pe ecran, astept aprobarea"
-msgstr "código mostrado no ecrã, à espera de aprovação"
-
-msgid "codul a expirat fara aprobare"
-msgstr "o código expirou sem aprovação"
-
-msgid "conectat"
-msgstr "ligado"
-
-msgid "copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)"
-msgstr "cópia filtrada das definições (áudio, vídeo, interface, rede; sem palavras-passe nem chaves)"
-
-msgid "jurnalul nucleului"
-msgstr "registo do kernel"
-
-msgid "lista jurnalelor receptorului, cu marimile"
-msgstr "lista dos registos do recetor, com os tamanhos"
-
-msgid "lista pachetelor instalate"
-msgstr "lista dos pacotes instalados"
-
-msgid "lista proceselor (numele, fara argumente)"
-msgstr "lista dos processos (nomes, sem argumentos)"
-
-msgid "mai sunt"
-msgstr "faltam"
-
-msgid "memoria libera si memoria decodorului"
-msgstr "memória livre e memória do descodificador"
-
-msgid "nu pot ajunge la serverul de asistenta"
-msgstr "não é possível chegar ao servidor de assistência"
-
-msgid "o captura a ecranului (numai meniurile, fara imaginea canalului)"
-msgstr "uma captura do ecrã (só os menus, sem a imagem do canal)"
-
-msgid "o oră"
-msgstr "uma hora"
-
-msgid "oprita"
-msgstr "parada"
-
-msgid "oprita (%s)"
-msgstr "parada (%s)"
-
-msgid "placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate"
-msgstr "placa: processador, linha de comandos do kernel, partições, módulos carregados"
-
-msgid "pornita (%s, nivel %s, %d minute, text v%d)"
-msgstr "iniciada (%s, nível %s, %d minutos, texto v%d)"
-
-msgid "proba"
-msgstr "teste"
-
-msgid "reluata dupa repornirea interfetei"
-msgstr "retomada depois de reiniciar a interface"
-
-msgid "reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)"
-msgstr "rede: cabo ou Wi-Fi, ligada ou não, rota predefinida, DNS (sem o nome da rede, MAC mascarado)"
-
-msgid "s-a terminat timpul ales"
-msgstr "o tempo escolhido terminou"
-
-msgid "serverul a refuzat inregistrarea (%s)"
-msgstr "o servidor recusou o registo (%s)"
-
-msgid "starea decodorului (video, sunet, sincronizare)"
-msgstr "estado do descodificador (vídeo, som, sincronização)"
-
-msgid "starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"
-msgstr "estado do recetor (modelo, versão, kernel, memória, disco, temperaturas)"
-
-msgid "tunerele si blocarea semnalului"
-msgstr "sintonizadores e bloqueio do sinal"
-
-msgid "ultimele randuri dintr-un jurnal"
-msgstr "as últimas linhas de um registo"
-
-msgid "un mesaj scris pe ecranul televizorului"
-msgstr "uma mensagem escrita no ecrã do televisor"
-
-
-# Asistenta de la distanta
-msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând."
-msgstr "Nível: Leitura e testes (só podemos executar operações de uma lista fixa, sobretudo leituras; uma captura mostra só os menus, não a imagem do canal). Podes parar a qualquer momento."
-
-
-# Asistenta de la distanta
-msgid "Pornirea se cere numai dintr-un browser conectat cu codul de pe televizor."
-msgstr "O início só se pede a partir de um navegador ligado com o código do televisor."
-
-
-# Asistenta de la distanta
-msgid "(gol)"
-msgstr "(vazio)"
-
-msgid "Ai cerut pornirea din pagina web. Citește, apoi apasă Verde dacă vrei."
-msgstr "Pediste o início a partir da página web. Lê o texto e depois prime Verde, se quiseres."
-
-msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
-msgstr "A assistência remota permite que as pessoas da HD Satelit vejam, pela internet, o estado técnico do teu recetor, para encontrar e reparar mais depressa as falhas da imagem no teu modelo.\n\nÉ só para quem nos quer ajudar. O teu recetor não precisa dela para funcionar. Fica desligada até tu a ligares, cada vez de novo.\n\nComo funciona: o teu recetor pergunta ao servidor da HD Satelit, por uma ligação cifrada, se temos um pedido para ele. Só podemos pedir operações de uma lista fixa, escrita na imagem: leituras do estado e dos registos, uma captura dos menus e uma mensagem escrita no ecrã. Não podemos executar comandos, não podemos alterar definições nem ficheiros e não podemos chegar a outros aparelhos da tua casa. Cada pedido aparece no registo, no ecrã.\n\nEnquanto está ligada, vês um aviso no ecrã. Podes pará-la a qualquer momento aqui ou na página web, e depois do tempo escolhido para sozinha.\n\nQue dados nos chegam: o modelo e a versão do recetor, o país, a hora e a duração da sessão e as respostas aos pedidos do registo (os registos podem mostrar, entre outras coisas, que canais foram abertos e quando). Não guardamos o teu endereço IP. Não lemos palavras-passe, chaves, definições dos cartões de acesso nem os teus ficheiros. Os dados ficam no nosso servidor (Hetzner, Alemanha; a ligação passa pela Cloudflare) durante 30 dias e depois são apagados. Usamo-los só para reparar a imagem e não os damos a outros.\n\nResponsável pelo tratamento: Monea Eduard (HD Satelit), contact@hdsatelit.com. Podes pedir-nos a qualquer momento para ver ou apagar os dados da tua sessão. Usa a função só se tiveres pelo menos 16 anos ou o consentimento de um dos teus pais."
-
-msgid "Asistență de la distanță activă"
-msgstr "Assistência remota ativa"
-
-msgid "Conectat. Mai sunt %s."
-msgstr "Ligado. Faltam %s."
-
-msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
-msgstr "Dás acesso remoto durante %s, nível “Leitura e testes”. Ao iniciar, confirmas que tens pelo menos 16 anos ou o consentimento de um dos teus pais. Podes parar a qualquer momento. Iniciar?"
-
-msgid "Oprești din %s"
-msgstr "Para parar: %s"
-
-msgid "Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo."
-msgstr "No televisor abriu-se a Assistência remota: lê o texto e prime Verde lá."
-
-msgid "Spune-ne codul de mai jos. Mai sunt %s."
-msgstr "Diz-nos o código abaixo. Faltam %s."
-
-msgid "Sus/Jos: tot textul"
-msgstr "Cima/Baixo: todo o texto"
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Feito para Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s é feito para Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "O pacote é feito para imagens antigas, com Python 2."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Esta imagem tem Python 3, por isso não é instalado."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "Instalar o substituto"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "A verificar o pacote antes da instalação."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "requer %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "é uma biblioteca Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "tem ficheiros na pasta do Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "tem ficheiros compilados para Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "está ligado à biblioteca do Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "o código não compila em Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "usa módulos removidos do Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "vem de um feed de imagens com Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Motivo"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Para Python 3 existe %s, no feed %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "%s, feito para Python 3, já está instalado."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Nada foi instalado."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK mostra o motivo · Verde instala o substituto"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK mostra o motivo"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "A versão %s da fonte %s é feita para Python 2 e não é instalada."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "O controlador da placa não foi carregado, por isso não foi possível ler o tipo de placa e não se pode provar que este software é para ele."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Repõe o software certo com uma pen USB, como indica o fabricante do recetor (na Octagon: mantém premido Standby no recetor ao ligar e depois Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Diagnóstico do arranque"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "A interface não arranca"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "O processador do recetor não é aquele para o qual o software foi feito."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "O controlador indica outro tipo de placa diferente daquele para o qual o software foi feito."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "A etiqueta na memória do recetor indica outro tipo de placa."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "A placa do recetor (cabeçalho de fábrica) é outra."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "As partições da memória do recetor estão dispostas de outra forma."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "A partição do kernel ou do sistema está noutro lugar ou tem outro tamanho."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "A memória interna tem outro tamanho do que no modelo para o qual é o software."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "Outro valor do recetor não corresponde."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "Não foi possível ler o processador: o controlador do processador não carregou."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Não foi possível ler o tipo de placa: o controlador da placa não carregou."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "Não foi possível ler a placa a partir do cabeçalho de fábrica."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "Não foi possível ler as partições da linha de arranque."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "Não foi encontrada a partição do kernel ou do sistema."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "A marca do recetor no software está danificada."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "A verificação no arranque não deu nenhum resultado."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "A interface falhou várias vezes no arranque e arrancou no modo de segurança."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "A interface também falha no modo de segurança."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "A interface não arranca de todo."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "Os controladores do recetor faltam ou não carregaram."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "A interface não apareceu em 5 minutos: ficou bloqueada no arranque."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "A interface parou no arranque por outro motivo."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Placa (controlador)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Etiqueta"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Placa (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Memória interna"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Kernel e sistema"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Partições"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Modelo (carregador)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d partições"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "lugar %(loc)d: %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, livres %(liber)d MiB"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "nenhum encontrado"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "HD Satelit %(versiune)s para %(model)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Tira uma fotografia a este ecrã e envia-a para o fórum onde encontraste o software ou para %s."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "O software não escreve nada na memória do recetor. Repõe o software certo com uma pen USB, como indica o fabricante do recetor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Todos os dados, na interface web: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Todos os dados, na interface web do recetor, na página %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Fórum: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "Último erro da interface"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Núcleo: controladores e erros"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Todos os dados, para copiar, a partir do computador ou do telemóvel:"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "A interface volta a ser tentada daqui a %d minutos."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Códigos:"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Código"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "Outros códigos: %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "O arranque correu bem: o recetor corresponde ao software."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "O arranque correu bem. Alguns valores são diferentes dos esperados: o modelo ainda não está confirmado."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Copia os dados abaixo e envia-os para o fórum onde encontraste o software ou para %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "O arranque correu bem; os dados abaixo são só para ler."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Copiar tudo"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "Enviar por e-mail"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "Fórum HD Satelit"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "Sem JavaScript: mantém o texto premido, seleciona tudo e copia."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "Na televisão, o ecrã de diagnóstico só aparece sozinho quando o arranque falha; caso contrário, abres-o em MENU > Informação do Sistema > Diagnóstico do arranque."
+
+#: lib/python/Screens/ChannelSelection.py
+msgid "Căutare"
+msgstr "Pesquisar"
 
 #: lib/python/Components/HdsBetaTester.py
 msgid "Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și e-mailul sunt opționale."
@@ -49036,3 +49127,233 @@ msgstr "Não foi possível fazer a captura; a mensagem segue sem ela."
 #: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
 msgid "Da, ieși și șterge"
 msgstr "Sim, sair e eliminar"
+
+# Asistenta de la distanta
+msgid "    raspuns: cod %d, %d octeti"
+msgstr "    resposta: código de saída %d, %d bytes"
+
+msgid "%d ore"
+msgstr "%d horas"
+
+msgid "Am cerut confirmarea pe televizor."
+msgstr "Foi pedida a confirmação no televisor."
+
+msgid "Asistenta a pornit."
+msgstr "A assistência foi iniciada."
+
+msgid "Asistenta merge deja."
+msgstr "A assistência já está a funcionar."
+
+msgid "Asistenta nu merge."
+msgstr "A assistência não está a funcionar."
+
+msgid "Asistenta s-a oprit. Cheia a fost stearsa."
+msgstr "A assistência parou. A chave foi apagada."
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să se conecteze, prin internet, la receptorul tău, ca să repare sau să îmbunătățească imaginea pentru modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu.\n\nReceptorul tău face o legătură criptată spre serverul HD Satelit. Cineva de la noi, pe care l-ai chemat tu, citește starea receptorului tău, nu a altor aparate din casa ta, și face numai ce scrie în jurnalul de mai jos.\n\nCât timp e pornită vezi un semn pe ecran. O poți opri oricând. Se oprește singură după timpul ales.\n\nCe vedem: starea tehnică a receptorului, jurnalele lui, uneori o captură a meniurilor. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale."
+msgstr "A assistência remota permite que as pessoas da HD Satelit se liguem, pela internet, ao teu recetor, para reparar ou melhorar a imagem para o teu modelo.\n\nÉ só para quem nos quer ajudar. O teu recetor não precisa dela para funcionar. Fica desligada até a ligares tu.\n\nO teu recetor faz uma ligação cifrada ao servidor da HD Satelit. Alguém da nossa equipa, que tu chamaste, lê o estado do teu recetor, não o de outros aparelhos da tua casa, e faz apenas o que está escrito no registo abaixo.\n\nEnquanto está ligada, vês um aviso no ecrã. Podes pará-la a qualquer momento. Para sozinha depois do tempo escolhido.\n\nO que vemos: o estado técnico do recetor, os seus registos, às vezes uma captura dos menus. Não lemos palavras-passe, chaves, definições dos cartões de acesso nem os teus ficheiros."
+
+msgid "Asistența merge deja."
+msgstr "A assistência já está a funcionar."
+
+msgid "Asistență activă"
+msgstr "Assistência ativa"
+
+msgid "Asistență de la distanță"
+msgstr "Assistência remota"
+
+msgid "Cât timp"
+msgstr "Quanto tempo"
+
+msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Poți opri oricând. Pornești?"
+msgstr "Dás acesso remoto durante %s, nível “Leitura e testes”. Podes parar a qualquer momento. Iniciar?"
+
+msgid "Functia nu e disponibila pe aceasta imagine."
+msgstr "A função não está disponível nesta imagem."
+
+msgid "Funcția nu e disponibilă pe această imagine."
+msgstr "A função não está disponível nesta imagem."
+
+msgid "HD Satelit cere pornirea asistenței de la distanță din pagina web, pentru %s. Pornești?"
+msgstr "A HD Satelit pede para iniciar a assistência remota a partir da página web, durante %s. Iniciar?"
+
+msgid "Informatii"
+msgstr "Informações"
+
+msgid "Jurnale"
+msgstr "Registos"
+
+msgid "Jurnalul asistenței"
+msgstr "Registo da assistência"
+
+msgid "Meniu > Beta tester"
+msgstr "Menu > Testador beta"
+
+msgid "Meniu > Beta tester > Asistență > Oprește"
+msgstr "Menu > Testador beta > Assistência > Parar"
+
+msgid "Mesaj de la HD Satelit:"
+msgstr "Mensagem da HD Satelit:"
+
+msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură a meniurilor cere OK pe ecran). Poți opri oricând."
+msgstr "Nível: Leitura e testes (só podemos executar operações de uma lista fixa, sobretudo leituras; uma captura dos menus pede OK no ecrã). Podes parar a qualquer momento."
+
+msgid "Nu pot cere confirmarea pe televizor acum."
+msgstr "Agora não é possível pedir a confirmação no televisor."
+
+msgid "Nu pot cere confirmarea pe televizor: %s"
+msgstr "Não é possível pedir a confirmação no televisor: %s"
+
+msgid "Nu pot citi catalogul: %s"
+msgstr "Não é possível ler o catálogo: %s"
+
+msgid "Oprești asistența? Cheia se șterge și legătura se închide."
+msgstr "Parar a assistência? A chave é apagada e a ligação é fechada."
+
+msgid "Oprită. O pornești tu, dacă vrei să ne ajuți."
+msgstr "Desligada. Ligas tu, se nos quiseres ajudar."
+
+msgid "Pornește asistența"
+msgstr "Iniciar a assistência"
+
+msgid "Pornirea cere confirmare pe televizor. Oprirea merge din orice browser din rețeaua locală. Aceleași lucruri sunt pe televizor, în __DRUM_MENIU__."
+msgstr "Iniciar pede confirmação no televisor. Parar funciona a partir de qualquer navegador da rede local. As mesmas coisas estão no televisor, em __DRUM_MENIU__."
+
+msgid "Probe"
+msgstr "Testes"
+
+msgid "Spune-ne acest cod. Nu îl da altcuiva."
+msgstr "Diz-nos este código. Não o dês a mais ninguém."
+
+msgid "cerere refuzata: %s"
+msgstr "pedido recusado: %s"
+
+msgid "cererea a fost %s"
+msgstr "o pedido foi %s"
+
+msgid "citire"
+msgstr "leitura"
+
+msgid "cod aratat pe ecran, astept aprobarea"
+msgstr "código mostrado no ecrã, à espera de aprovação"
+
+msgid "codul a expirat fara aprobare"
+msgstr "o código expirou sem aprovação"
+
+msgid "conectat"
+msgstr "ligado"
+
+msgid "copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)"
+msgstr "cópia filtrada das definições (áudio, vídeo, interface, rede; sem palavras-passe nem chaves)"
+
+msgid "jurnalul nucleului"
+msgstr "registo do kernel"
+
+msgid "lista jurnalelor receptorului, cu marimile"
+msgstr "lista dos registos do recetor, com os tamanhos"
+
+msgid "lista pachetelor instalate"
+msgstr "lista dos pacotes instalados"
+
+msgid "lista proceselor (numele, fara argumente)"
+msgstr "lista dos processos (nomes, sem argumentos)"
+
+msgid "mai sunt"
+msgstr "faltam"
+
+msgid "memoria libera si memoria decodorului"
+msgstr "memória livre e memória do descodificador"
+
+msgid "nu pot ajunge la serverul de asistenta"
+msgstr "não é possível chegar ao servidor de assistência"
+
+msgid "o captura a ecranului (numai meniurile, fara imaginea canalului)"
+msgstr "uma captura do ecrã (só os menus, sem a imagem do canal)"
+
+msgid "o oră"
+msgstr "uma hora"
+
+msgid "oprita"
+msgstr "parada"
+
+msgid "oprita (%s)"
+msgstr "parada (%s)"
+
+msgid "placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate"
+msgstr "placa: processador, linha de comandos do kernel, partições, módulos carregados"
+
+msgid "pornita (%s, nivel %s, %d minute, text v%d)"
+msgstr "iniciada (%s, nível %s, %d minutos, texto v%d)"
+
+msgid "proba"
+msgstr "teste"
+
+msgid "reluata dupa repornirea interfetei"
+msgstr "retomada depois de reiniciar a interface"
+
+msgid "reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)"
+msgstr "rede: cabo ou Wi-Fi, ligada ou não, rota predefinida, DNS (sem o nome da rede, MAC mascarado)"
+
+msgid "s-a terminat timpul ales"
+msgstr "o tempo escolhido terminou"
+
+msgid "serverul a refuzat inregistrarea (%s)"
+msgstr "o servidor recusou o registo (%s)"
+
+msgid "starea decodorului (video, sunet, sincronizare)"
+msgstr "estado do descodificador (vídeo, som, sincronização)"
+
+msgid "starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"
+msgstr "estado do recetor (modelo, versão, kernel, memória, disco, temperaturas)"
+
+msgid "tunerele si blocarea semnalului"
+msgstr "sintonizadores e bloqueio do sinal"
+
+msgid "ultimele randuri dintr-un jurnal"
+msgstr "as últimas linhas de um registo"
+
+msgid "un mesaj scris pe ecranul televizorului"
+msgstr "uma mensagem escrita no ecrã do televisor"
+
+# Asistenta de la distanta
+msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând."
+msgstr "Nível: Leitura e testes (só podemos executar operações de uma lista fixa, sobretudo leituras; uma captura mostra só os menus, não a imagem do canal). Podes parar a qualquer momento."
+
+# Asistenta de la distanta
+msgid "Pornirea se cere numai dintr-un browser conectat cu codul de pe televizor."
+msgstr "O início só se pede a partir de um navegador ligado com o código do televisor."
+
+# Asistenta de la distanta
+msgid "(gol)"
+msgstr "(vazio)"
+
+msgid "Ai cerut pornirea din pagina web. Citește, apoi apasă Verde dacă vrei."
+msgstr "Pediste o início a partir da página web. Lê o texto e depois prime Verde, se quiseres."
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
+msgstr "A assistência remota permite que as pessoas da HD Satelit vejam, pela internet, o estado técnico do teu recetor, para encontrar e reparar mais depressa as falhas da imagem no teu modelo.\n\nÉ só para quem nos quer ajudar. O teu recetor não precisa dela para funcionar. Fica desligada até tu a ligares, cada vez de novo.\n\nComo funciona: o teu recetor pergunta ao servidor da HD Satelit, por uma ligação cifrada, se temos um pedido para ele. Só podemos pedir operações de uma lista fixa, escrita na imagem: leituras do estado e dos registos, uma captura dos menus e uma mensagem escrita no ecrã. Não podemos executar comandos, não podemos alterar definições nem ficheiros e não podemos chegar a outros aparelhos da tua casa. Cada pedido aparece no registo, no ecrã.\n\nEnquanto está ligada, vês um aviso no ecrã. Podes pará-la a qualquer momento aqui ou na página web, e depois do tempo escolhido para sozinha.\n\nQue dados nos chegam: o modelo e a versão do recetor, o país, a hora e a duração da sessão e as respostas aos pedidos do registo (os registos podem mostrar, entre outras coisas, que canais foram abertos e quando). Não guardamos o teu endereço IP. Não lemos palavras-passe, chaves, definições dos cartões de acesso nem os teus ficheiros. Os dados ficam no nosso servidor (Hetzner, Alemanha; a ligação passa pela Cloudflare) durante 30 dias e depois são apagados. Usamo-los só para reparar a imagem e não os damos a outros.\n\nResponsável pelo tratamento: Monea Eduard (HD Satelit), contact@hdsatelit.com. Podes pedir-nos a qualquer momento para ver ou apagar os dados da tua sessão. Usa a função só se tiveres pelo menos 16 anos ou o consentimento de um dos teus pais."
+
+msgid "Asistență de la distanță activă"
+msgstr "Assistência remota ativa"
+
+msgid "Conectat. Mai sunt %s."
+msgstr "Ligado. Faltam %s."
+
+msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Dás acesso remoto durante %s, nível “Leitura e testes”. Ao iniciar, confirmas que tens pelo menos 16 anos ou o consentimento de um dos teus pais. Podes parar a qualquer momento. Iniciar?"
+
+msgid "Oprești din %s"
+msgstr "Para parar: %s"
+
+msgid "Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo."
+msgstr "No televisor abriu-se a Assistência remota: lê o texto e prime Verde lá."
+
+msgid "Spune-ne codul de mai jos. Mai sunt %s."
+msgstr "Diz-nos o código abaixo. Faltam %s."
+
+msgid "Sus/Jos: tot textul"
+msgstr "Cima/Baixo: todo o texto"
+
+#: lib/python/Screens/ChannelSelection.py
+msgid "Buchete"
+msgstr "Bouquets"

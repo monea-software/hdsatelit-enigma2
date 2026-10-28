@@ -10,8 +10,8 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=5ebcb90236d1ad640558c3d3cd3035df \
 
 DEPENDS = "dbus libnl"
 
-# HDSatelit 21.09.2026: bump de versiune, gasit lipsa la auditul de CVE-uri periodic (20.09.2026)
-# -- 2.11 e sub pragul sigur (CVE-2026-78807, CVSS 7.1, ocolire a
+# HDSatelit 21.09.2026: bump de versiune, gasit lipsa la auditul de CVE-uri periodic (TODO.md/
+# ACTUALIZARI-IMAGINE.md, 20.09.2026) -- 2.11 e sub pragul sigur (CVE-2026-78807, CVSS 7.1, ocolire a
 # verificarii de context de retea la cache-ul PMKSA; CVE-2026-58374, coruperea memoriei la parsarea
 # elementului Multi-Link/MLE -- ambele reparate in 2.12). Reteta noua (nu PREFERRED_VERSION peste reteta
 # veche cu patch-uri specifice 2.11) -- si un `PREFERRED_VERSION_wpa-supplicant` explicit, tare, in

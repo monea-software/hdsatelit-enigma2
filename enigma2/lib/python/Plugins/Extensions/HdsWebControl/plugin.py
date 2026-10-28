@@ -3960,6 +3960,10 @@ def _construiesteResurse():
 	# Aceleasi randuri si texte ca ecranul „Licențe” de pe televizor (Screens/HdsLicente.py, Components/HdsLicente.py).
 	from . import licente_web
 	_LICENTE, _LICENTE_PAGINA = licente_web.rute(HdsJsonResource, resource)
+	# ---------------------------------------------------------------- Ajutor (ajutor_web.py)
+	# Aceleasi pagini ca ajutorul de pe televizor (Screens/HdsAjutor.py, Components/HdsAjutor.py, pachetul hdsatelit-ajutor).
+	from . import ajutor_web
+	_AJUTOR, _AJUTOR_PAGINA = ajutor_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- aspectul ecranului (aspect_web.py)
 	# Perechile web ale ecranelor de aspect si de informatii (lista in aspect_web.MODULE); legate dupa celelalte
 	# rute, deci o ruta cu acelasi nume o inlocuieste pe cea veche.
@@ -4239,6 +4243,9 @@ def _construiesteResurse():
 				self.putChild(nume_ruta, resursa)
 			for nume_ruta, resursa in _ASPECT_API.items():
 				self.putChild(nume_ruta, resursa)
+			# ajutorul (ajutor_web.py): /api/ajutor, /api/ajutor-pagina, /api/ajutor-cauta, /api/ajutor-ecran
+			for nume_ruta, resursa in _AJUTOR.items():
+				self.putChild(nume_ruta, resursa)
 
 	class FaviconResource(resource.Resource):
 		"""GET /favicon.ico: iconita paginilor (PNG), fara asociere (browserul o cere si pe pagina de asociere); poarta
@@ -4320,6 +4327,7 @@ def _construiesteResurse():
 			self.putChild(b"cauta-setari", _CAUTA_SETARI_PAGINA)
 			self.putChild(b"informatii", _INFORMATII_PAGINA)
 			self.putChild(b"licente", _LICENTE_PAGINA)
+			self.putChild(b"ajutor", _AJUTOR_PAGINA)
 			self.putChild(b"canale", _CANALE_PAGINA)
 			self.putChild(b"temporizatoare", _TEMPORIZATOARE_PAGINA)
 			self.putChild(b"subtitrari-film", _SUBTITRARI_FILM_PAGINA)

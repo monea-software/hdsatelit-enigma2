@@ -10,6 +10,7 @@ install_PYTHON = \
 	actualizare_web.py \
 	actualizari_web.py \
 	afisaj_web.py \
+	ajutor_web.py \
 	antena_web.py \
 	aplicatii_web.py \
 	asociere.py \

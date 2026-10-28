@@ -12,7 +12,7 @@ memoria pozelor si a filmelor. Monea Software pentru HD Satelit. Detalii si dova
 STADIU-PROIECT-IMAGINE.md, sectiunea 21.09.2026; paza rutei: securitate-showiframe/REPARARE.md (L1, L3)."
 LICENSE = "CLOSED"
 PV = "0.1.0"
-# r1 (24.09.2026): nivelul 4, paza rutei hds-netguard
+# r1 (24.09.2026): nivelul 4, paza rutei hds-netguard (securitate-showiframe/urmari-paza-progres.md)
 # r2: nivelul 3 nu mai reporneste interfata numai pe tacerea web: bataia enigma2
 # (Components/HdsPaznic.py, /var/run/hds-paznic.bataie, ceas monoton) si semnul „ocupat” (scanare, citirea pistelor,
 # rotirea antenei), setarile config.hds_paznic.*, starea in /var/run/hds-paznic.stare, SIGKILL daca SIGTERM nu ajunge,

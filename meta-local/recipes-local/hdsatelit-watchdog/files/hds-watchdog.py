@@ -6,7 +6,7 @@ hds-watchdog.py -- paznic HDSatelit pentru pornirea NATIVA (de pe flash), indepe
 De ce exista: pe pornirea nativa (fara chroot, fara stick), receptorul se poate bloca total (fir de
 kernel blocat, ex. "dvb_demux_release", vazut la scanarea de satelit) -- fara SSH, fara telecomanda,
 singura recuperare fiind scoaterea din priza. Acest script ruleaza ca proces SEPARAT, supravegheat direct
-de init (linie proprie "respawn" in /etc/inittab, cf. STADIU-PROIECT-IMAGINE.md, 21.09.2026)
+de init (linie proprie "respawn" in /etc/inittab, cf. AGENTS.md / STADIU-PROIECT-IMAGINE.md, 21.09.2026)
 -- daca enigma2 e complet blocat, codul din interiorul lui nu mai apuca sa ruleze niciodata, de-aici
 nevoia unui proces independent.
 
@@ -153,7 +153,7 @@ Mecanism (cinci nivele, independente unul de altul):
        - hotararea e o functie fara efecte (hotarare_servicii), testata in teste/test_gasite_0607.py (clasa
          Servicii), impreuna cu limita de timp a unei treceri.
 
-Testat izolat pe receptorul de test, 21.09.2026 -- vezi STADIU-PROIECT-IMAGINE.md pentru
+Testat izolat pe receptorul de test (192.168.1.122), 21.09.2026 -- vezi STADIU-PROIECT-IMAGINE.md pentru
 dovada (toate cele trei ramuri: pastreaza receptorul pornit cand enigma2 e sanatos; chiar reporneste dur
 cand un proces tinta e absent/blocat cu fire D, fortat prin variabile de mediu de test; chiar trimite
 SIGTERM cand API-ul local nu mai raspunde, reprodus real cu bucla EBUSY pe dvb_audio_open).
@@ -286,7 +286,7 @@ NETGUARD_IP = "117.78.33.205"
 NETGUARD_INTERVAL_S = 180    # la 3 minute: un proces "ip" scurt, deci practic zero procesor
 NETGUARD_IP_TIMEOUT_S = 2    # pe comanda "ip" (raspunde in milisecunde); la primul timp depasit verificarea
                               # se opreste, fara wait() nelimitat, deci hranirea (la 15s, prag HW 60s masurat
-                              # prin ioctl pe receptorul de proba) nu intarzie periculos
+                              # prin ioctl pe .122) nu intarzie periculos
 NETGUARD_PAUZA_MAX_S = 1800  # semnul de pauza tine cel mult 30 de minute de la ultima atingere
 NETGUARD_IP_BIN = os.environ.get("HDS_WATCHDOG_IP")  # numai pentru probe; altfel ca in hds-netguard
 NETGUARD_INITSCRIPT = os.environ.get("HDS_WATCHDOG_NETGUARD_INITSCRIPT", "/etc/init.d/hds-netguard")
@@ -922,7 +922,7 @@ def scrie_semn_oprire(pid, sigkill=False):
 
 def force_soft_recovery(reason, acum=None):
     """Recuperare BLANDA -- STRICT SIGTERM catre enigma2, nu repornire dura. `init` are deja intrare
-    "respawn" pentru enigma2 (/etc/inittab) -- exact recuperarea verificata manual, de
+    "respawn" pentru enigma2 (/etc/inittab, cf. AGENTS.md) -- exact recuperarea verificata manual, de
     doua ori, in aceeasi sesiune (STADIU-PROIECT-IMAGINE.md, ancheta EBUSY/dvb_audio_open): proces nou in
     ~8s, uptime-ul sistemului neschimbat. NU atinge watchdogul HW -- kernelul e sanatos in acest caz, doar
     un serviciu al lui enigma2 e blocat. Pid-ul si ora (ceas monoton) se tin minte pentru SIGKILL

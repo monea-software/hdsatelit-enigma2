@@ -10,7 +10,7 @@ LIC_FILES_CHKSUM = "file://Copyright;md5=5873615e8a9ecbf5c8857c4312ee05d6 \
                     "
 
 # HDSatelit 21.09.2026: bump de versiune deliberat, gasit lipsa la auditul de CVE-uri periodic
-# (20.09.2026) -- 2.14.6 e sub pragul sigur (CVE-2026-86140, CVSS 8.0,
+# (TODO.md/ACTUALIZARI-IMAGINE.md, 20.09.2026) -- 2.14.6 e sub pragul sigur (CVE-2026-86140, CVSS 8.0,
 # reparat in 2.15.4). Nicio reteta pentru o versiune mai noua nu exista deja in openembedded-core
 # (verificat cu grep/find inainte de a scrie asta) -- reteta noua, proprie, in loc de un simplu
 # PREFERRED_VERSION/bbappend, ca sa nu depinda de fisierele de reteta veche (patch-uri specifice
