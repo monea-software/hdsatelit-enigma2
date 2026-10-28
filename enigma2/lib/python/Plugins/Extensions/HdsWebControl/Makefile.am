@@ -67,6 +67,7 @@ install_PYTHON = \
 	osd_strat.py \
 	acces_extern.py \
 	aparate_web.py \
+	betatester_web.py \
 	playlisturi_web.py \
 	piste.py \
 	plugin.py \
@@ -92,6 +93,7 @@ install_PYTHON = \
 	traducere_pagini.py \
 	video_web.py \
 	vpn_web.py \
+	asistenta_web.py \
 	subtitrari_web.py \
 	traducere_subtitrari_web.py \
 	traducere_configurare_web.py \

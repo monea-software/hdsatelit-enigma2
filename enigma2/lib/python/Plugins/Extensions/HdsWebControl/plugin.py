@@ -3842,6 +3842,11 @@ def _construiesteResurse():
 	from . import paznic_web
 	_CEAS, _CEAS_PAGINA = ceas_web.rute(HdsJsonResource, resource)
 	_PAZNIC, _PAZNIC_PAGINA = paznic_web.rute(HdsJsonResource, resource)
+	# ---------------------------------------------------------------- Beta tester (betatester_web.py)
+	# Acelasi acord si acelasi meniu al testerului ca ecranele de pe televizor (Screens/HdsBetaTester.py,
+	# Components/HdsBetaTester.py).
+	from . import betatester_web
+	_BETA, _BETA_PAGINA = betatester_web.rute(HdsJsonResource, resource)
 
 	# ---------------------------------------------------------------- TV in browser (tv_web.py)
 	# Pagina /tv si perechea ecranului "Transmisie in retea" (Screens/HdsTransmisie.py, Components/HdsTransmisie.py).
@@ -4174,6 +4179,9 @@ def _construiesteResurse():
 				self.putChild(nume_ruta, resursa)
 			self.putChild(b"paznic", _PAZNIC[b"paznic"])
 			self.putChild(b"paznic-seteaza", _PAZNIC[b"paznic-seteaza"])
+			# beta tester (betatester_web.py)
+			for nume_ruta, resursa in _BETA.items():
+				self.putChild(nume_ruta, resursa)
 			# TV in browser (tv_web.py)
 			for nume_ruta, resursa in _TV.items():
 				self.putChild(nume_ruta, resursa)
@@ -4284,6 +4292,7 @@ def _construiesteResurse():
 			self.putChild(b"sunet", _SUNET_PAGINA)
 			self.putChild(b"volum-intarziere", _VOLUM_INTARZIERE_PAGINA)
 			self.putChild(b"paznic", _PAZNIC_PAGINA)
+			self.putChild(b"beta-tester", _BETA_PAGINA)
 			self.putChild(b"tv", _TV_PAGINA)
 			self.putChild(b"tv-extern", _TV_EXTERN)
 			self.putChild(b"procesor", _PROCESOR_PAGINA)

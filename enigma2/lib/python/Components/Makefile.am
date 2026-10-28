@@ -41,6 +41,7 @@ install_PYTHON = \
 	HdsEcm.py HdsPasiDecriptare.py HdsStareRetea.py HdsComutareRetea.py HdsWifiCanale.py HdsAparateRetea.py HdsTemporizare.py HdsEcranNegru.py HdsAnalizaFlux.py HdsHbbtv.py HdsHbbtvPornire.py HdsHbbtvAplicatii.py HdsCarusel.py HdsCaruselDemux.py HdsCaruselServer.py HdsAfisaj.py HdsAfisajLitere.py HdsAfisajDate.py \
 	HdsAfisajPersonaj.py \
 	HdsAccesSsh.py HdsEgalizator.py HdsSetariSunet.py HdsVpn.py HdsIpv6.py HdsPlural.py \
+	HdsAsistenta.py HdsAsistentaBroker.py HdsAsistentaCatalog.py \
 	HdsMouseEcran.py \
 	HdsMouseUsb.py HdsTastaturaUsb.py \
 	HdsCampText.py \
@@ -48,6 +49,7 @@ install_PYTHON = \
 	HdsPictogramaBare.py \
 	HdsPiconBare.py \
 	HdsCanalTinut.py \
+	HdsBetaTester.py \
 	HdsLocul.py HdsLocuriDate.py HdsLoculInternet.py HdsGrade.py HdsCalitateImagine.py \
 	HdsEpgSalvare.py \
 	HdsLamedbSalvare.py \

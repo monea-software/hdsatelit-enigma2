@@ -107,6 +107,11 @@
 		<alias name="HdsCautareMic" font="HdsCond" size="26" height="56" />
 		<!-- etichetele randurilor de filtre, cand filtrele stau pe doua coloane -->
 		<alias name="HdsCautareEticheta" font="HdsCond" size="24" height="50" />
+		<!-- editorul de canale din imaginea HDSatelit (Screens/HdsEditorCanale*.py): numele de pe randuri, semnele din dreapta
+		     (pozitia, HD, accesul, numarul canalului) si randul modurilor -->
+		<alias name="HdsEditorRand" font="HdsRegular" size="30" height="54" />
+		<alias name="HdsEditorMic" font="HdsCond" size="26" height="54" />
+		<alias name="HdsEditorMod" font="HdsCond" size="26" height="48" />
 		<!-- „Caută setări” (Screens/HdsCautaSetari.py): titlul rezultatului (sus), drumul din meniu si valoarea (jos, dreapta) -->
 		<alias name="HdsCautaSetariTitlu" font="HdsRegular" size="32" height="88" />
 		<alias name="HdsCautaSetariMic" font="HdsCond" size="26" height="88" />
@@ -126,6 +131,13 @@
 		<alias name="HdsExtensiiFila" font="HdsBold" size="28" height="64" />
 		<alias name="HdsExtensiiButon" font="HdsBold" size="30" height="72" />
 		<alias name="HdsExtensiiJurnal" font="HdsCond" size="26" height="34" />
+		<!-- ajutorul fara internet (Screens/HdsAjutor.py): pagina si listele -->
+		<alias name="HdsAjutorTitlu" font="HdsBold" size="30" height="44" />
+		<alias name="HdsAjutorText" font="HdsRegular" size="28" height="42" />
+		<alias name="HdsAjutorEticheta" font="HdsCond" size="26" height="42" />
+		<alias name="HdsAjutorBold" font="HdsBold" size="28" height="42" />
+		<alias name="HdsAjutorLista" font="HdsRegular" size="32" height="64" />
+		<alias name="HdsAjutorListaMic" font="HdsCond" size="26" height="64" />
 	</fonts>
 
 	<!-- imaginea implicita de meniu: o citesc numai imaginile cu Menu.getMenuEntryImage; fara ea, la prima deschidere
@@ -2394,6 +2406,27 @@
 		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
 	</screen>
 
+	<!-- Ajutorul fara internet (Screens/HdsAjutor.py, din 0.6.8): capitolele (HdsAjutorCuprins foloseste acest ecran),
+	     paginile unui capitol si rezultatele cautarii; randurile le face codul (fonturile HdsAjutorLista si
+	     HdsAjutorListaMic); starea sub lista; masura e eticheta ascunsa cu care codul masoara textele. Tema Pro: cadrul
+	     HdsCadru1776 din skin_pro.xml. -->
+	<screen name="HdsAjutorLista" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,104" size="1712,768" itemHeight="64" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" />
+		<widget name="stare" position="32,876" size="1712,44" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
+	</screen>
+	<!-- o pagina de ajutor: blocurile paginii (fonturile HdsAjutorTitlu, HdsAjutorText, HdsAjutorEticheta, HdsAjutorBold;
+	     inaltimea randului o socoteste codul), sub lista capitolul cu pagina listei si indemnul tastelor, apoi adresa
+	     paginii cu poze de pe site (sau insemnarea ca paginile sunt in engleza) -->
+	<screen name="HdsAjutorPagina" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,100" size="1712,748" itemHeight="42" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="stare" position="32,852" size="1712,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="online" position="32,886" size="1712,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
+	</screen>
+
 	<!-- Jurnalele de cadere (Screens/HdsCrashlogAutoSubmit.py): textul de sus si lista jurnalelor; setarile: cele cateva
 	     randuri si lamurirea lunga de sub ele -->
 	<screen name="HdsCrashlogAutoSubmit" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
@@ -2787,15 +2820,9 @@
 		<widget source="nota" render="Label" position="32,488" size="1176,424" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
 
-	<!-- Paza modelului (Screens/HdsPazaModel.py): software pentru alt receptor (pe tot ecranul, la pornire), intrebarea
-	     si refuzul dinaintea scrierii unui pachet; asezarea din cod, culorile si fonturile skinului -->
-	<screen name="HdsPazaModel" position="0,0" size="1920,1080" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<widget source="titlu" render="Label" position="160,60" size="1600,80" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<eLabel position="160,150" size="1600,4" backgroundColor="hdsAmber" zPosition="1" />
-		<widget source="mesaj" render="Label" position="160,175" size="1600,520" font="HdsRegular;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="tehnic" render="Label" position="160,705" size="1600,255" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="nota" render="Label" position="160,970" size="1600,45" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-	</screen>
+	<!-- Paza modelului (Screens/HdsPazaModel.py): intrebarea si refuzul dinaintea scrierii unui pachet; asezarea din
+	     cod, culorile si fonturile skinului. Ecranul diagnosticului pornirii (fostul HdsPazaModel pe tot ecranul) isi
+	     face skinul in cod, dupa randurile citite (numele HdsDiagnosticPornireEcran, fara forma aici). -->
 	<screen name="HdsPazaModelIntrebare" position="260,95" size="1400,889" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
 		<eLabel position="0,0" size="1400,4" backgroundColor="hdsAmber" zPosition="1" />
 		<widget source="titlu" render="Label" position="50,25" size="1300,65" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
@@ -3525,6 +3552,74 @@
 		<eLabel position="32,500" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="rezultate" position="32,508" size="1712,392" itemHeight="56" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="0" scrollbarMode="showOnDemand" zPosition="2" />
 		<widget name="gol" position="32,560" size="1712,120" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="3" />
+	</screen>
+
+	<!-- Editorul de canale (MENU > Scanare > Editorul de canale, sau MENU in lista de canale), doar in imaginea HDSatelit
+	     (Screens/HdsEditorCanale.py). moduri: randul modurilor (Rasfoire, Muta, Copiaza, Selecteaza) si starea (schimbari
+	     nesalvate, randuri bifate), desenat din cod; capSursa / capBuchet: capetele celor doua coloane (culoarea o pune
+	     codul: coloana cu focus in hdsBrandLight); sursa / buchet: randurile desenate din cod (fonturile HdsEditor*,
+	     culorile din culorile de mai sus); golSursa / golBuchet: textul unei coloane goale (transparente, stau peste
+	     liste); indiciu: ce fac acum OK, sagetile si cifrele, sau mesajul dupa o schimbare („< Anulează: ...”). Ca la
+	     cautarea de canale, moduri, capetele, listele si indiciul NU sunt transparente (pe receptor un element
+	     transparent isi sterge intai toata zona: clipire neagra la fiecare sageata). Tastele colorate (key_red ...
+	     key_blue, Button) vin din HdsCadru1776, cu textul pus de cod dupa mod si coloana. -->
+	<screen name="HdsEditorCanale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="moduri" position="32,100" size="1712,48" itemHeight="48" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="0" selectionDisabled="1" scrollbarMode="showNever" zPosition="2" />
+		<widget name="capSursa" position="32,156" size="836,44" font="HdsBold;26" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+		<widget name="capBuchet" position="908,156" size="836,44" font="HdsBold;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="887,156" size="1,700" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="sursa" position="32,204" size="836,648" itemHeight="54" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="0" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="buchet" position="908,204" size="836,648" itemHeight="54" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="0" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="golSursa" position="52,400" size="796,160" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="3" />
+		<widget name="golBuchet" position="928,400" size="796,160" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="3" />
+		<widget name="indiciu" position="32,864" size="1712,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- Uneltele editorului de canale (Screens/HdsEditorCanaleUnelte.py, HdsEditorCanaleBife): canalele de test, dublurile,
+	     canalele care nu mai exista. explicatie: ce face unealta (doua randuri); lista: titlurile grupelor si randurile cu
+	     bife, desenate din cod (numele sus, pozitia, frecventa, SID-ul si imagine / sunet jos). -->
+	<screen name="HdsEditorCanaleBife" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="explicatie" position="32,100" size="1712,80" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="0" zPosition="2" />
+		<widget name="lista" position="32,188" size="1712,640" itemHeight="80" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="0" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="gol" position="32,400" size="1712,160" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="3" />
+		<widget name="indiciu" position="32,864" size="1712,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- Filtrele sursei din editorul de canale (HdsEditorCanaleFiltre): cate un rand pe grup (titlul, apoi optiunile ca
+	     pastile, desenate din cod cu fonturile HdsCautareRand / HdsCautareEticheta); numar: cate canale raman. -->
+	<screen name="HdsEditorCanaleFiltre" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,100" size="1712,750" itemHeight="50" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="0" selectionDisabled="1" scrollbarMode="showNever" zPosition="2" />
+		<widget name="indiciu" position="32,864" size="1296,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+		<widget name="numar" position="1344,864" size="400,48" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="0" halign="right" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- Copiile de siguranta ale listei de canale (HdsEditorCanaleCopii), aceleasi ca in interfata web: data sus, ce s-a
+	     schimbat si marimea jos. -->
+	<screen name="HdsEditorCanaleCopii" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="explicatie" position="32,100" size="1712,80" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="0" zPosition="2" />
+		<widget name="lista" position="32,188" size="1712,640" itemHeight="80" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="0" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="gol" position="32,400" size="1712,160" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="3" />
+		<widget name="indiciu" position="32,864" size="1712,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="0" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- Ajutorul editorului de canale (tasta HELP, HdsEditorCanaleAjutor); verde = lista tastelor ecranului. Detaliile
+	     unui canal (HdsEditorCanaleDetalii) folosesc ecranul HdsText. -->
+	<screen name="HdsEditorCanaleAjutor" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1712,808" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	</screen>
+	<!-- Alegerea de pe stick a editorului de canale (HdsEditorCanaleFisier): lista de importat (arhiva, m3u, dosarul unei
+	     liste) sau dosarul in care se scrie lista. hds_cale / hds_stare: bara cu calea si dosarul gol
+	     (Components/HdsNavigator.HdsPanouFisiere), ca la alegerea pozei; explicatie: ce se alege si ce fac tastele. -->
+	<screen name="HdsEditorCanaleFisier" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<eLabel position="32,104" size="1712,48" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="32,104" size="4,48" backgroundColor="hdsBrandLight" zPosition="2" />
+		<widget name="hds_cale" position="52,104" size="1676,48" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsTrack" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="lista" position="32,164" size="1712,594" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="hds_stare" position="32,436" size="1712,48" font="HdsRegular;30" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="32,776" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="explicatie" position="32,788" size="1712,124" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
 
 	<!-- Caută setări (MENU > Setări > Caută setări, sau TEXT in orice meniu), doar in imaginea HDSatelit

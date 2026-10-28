@@ -32,7 +32,8 @@
 # aspect_web.MODULE. Un modul care nu se poate incarca nu strica restul: se scrie in jurnal si paginile lui lipsesc.
 
 MODULE = ("alimentare_web", "resetare_web", "parental_web", "disc_web", "jurnale_sistem_web", "canal_info_web",
-	"retea_web", "unelte_retea_web", "internet_web", "intrari_web", "media_web", "extensii_web", "diseqc_web", "vpn_web")
+	"retea_web", "unelte_retea_web", "internet_web", "intrari_web", "media_web", "extensii_web", "diseqc_web", "vpn_web",
+	"asistenta_web")
 
 
 def _modul(nume):

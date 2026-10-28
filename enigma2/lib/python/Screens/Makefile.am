@@ -29,10 +29,11 @@ install_PYTHON = \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
 	HdsPaznic.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
+	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
 	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
 	HdsNavigatorWeb.py HdsTemaInterfata.py HdsAnuntRetea.py HdsUnelteRetea.py \
-	HdsLocuriRetea.py
+	HdsLocuriRetea.py HdsBetaTester.py
 

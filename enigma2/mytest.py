@@ -84,6 +84,12 @@ except Exception as e:
 	print("[mytest] ghidul:", e)
 	HdsEpgSalvare = None
 config.misc.epgcache_filename = ConfigText(default = HdsEpgSalvare.CALE if HdsEpgSalvare else "/home/root/epg.dat")
+# HDSatelit: programul de beta testeri (Components/HdsBetaTester.py): contorul orei, intrebarea, trimiterea
+try:
+	from Components import HdsBetaTester
+except Exception as e:
+	print("[mytest] beta tester:", e)
+	HdsBetaTester = None
 
 def setEPGCachePath(configElement):
 	# un ghid scris de versiunea dinainte pe /hdd/epg.dat trece pe calea noua inainte sa-l citeasca firul ghidului
@@ -384,6 +390,9 @@ class Session:
 		self.current_dialog = dlg
 		dlg.isTmp = True
 		dlg.callback = None
+		# HDSatelit: numaratoarea ecranelor pentru beta testeri (numai cu programul pornit, fara nimic pe disc aici)
+		if HdsBetaTester is not None:
+			HdsBetaTester.numaraEcran(screen)
 		self.execBegin()
 		return dlg
 
@@ -626,6 +635,18 @@ def runScreenTest():
 			HdsVpn.porneste()
 	except Exception as e:
 		print("[mytest] VPN-ul:", e)
+	# HDSatelit: Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistentaSemn.py): oprita din
+	# fabrica, nu porneste nimic de aici. Pune SystemInfo["HdsAsistenta"] (meniul testerilor arata randul numai cand
+	# e disponibila), pregateste semnul de pe ecran si reia o sesiune ramasa dupa o repornire a interfetei (fisierul
+	# de stare exista numai daca omul a pornit asistenta in aceasta pornire). Pornirea nu depinde de ea.
+	try:
+		from Components import HdsAsistenta as _asist
+		from Components.SystemInfo import SystemInfo as infoSistem
+		infoSistem["HdsAsistenta"] = _asist.disponibil()
+		from Screens import HdsAsistentaSemn
+		HdsAsistentaSemn.instaleaza(session)
+	except Exception as e:
+		print("[mytest] asistenta de la distanta:", e)
 	# HDSatelit: modul procesorului si paza de caldura (Components/HdsProcesor.py); fara cpufreq nu face nimic
 	try:
 		from Components import HdsProcesor
@@ -757,6 +778,13 @@ def runScreenTest():
 		HdsLamedbSalvare.porneste()
 	except Exception as e:
 		print("[mytest] lista de canale la standby:", e)
+	# HDSatelit: beta testeri: contorul orei (fara standby), intrebarea o singura data dupa o ora, culegerea si
+	# trimiterea pe fir, numai cu acordul omului. Pornirea nu depinde de el.
+	try:
+		if HdsBetaTester is not None:
+			HdsBetaTester.porneste(session)
+	except Exception as e:
+		print("[mytest] beta tester:", e)
 
 	runNextScreen(session, screensToRun)
 
@@ -795,6 +823,12 @@ def runScreenTest():
 		HdsPaznic.opreste()
 	except Exception as e:
 		print("[mytest] bataia la oprire:", e)
+	# HDSatelit: contorul orei pentru beta testeri scris la iesire (numai cat il mai scrie programul)
+	try:
+		if HdsBetaTester is not None:
+			HdsBetaTester.opreste()
+	except Exception as e:
+		print("[mytest] beta tester la oprire:", e)
 	# HDSatelit: plafonul procesorului pus la loc ca la fabricant (numai daca s-a scris ceva in aceasta pornire)
 	try:
 		from Components import HdsProcesor

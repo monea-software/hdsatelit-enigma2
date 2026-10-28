@@ -472,6 +472,13 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Acces SSH" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
 				<screen module="HdsAccesSsh" screen="HdsAccesSsh" />
 			</item>
+			<!-- Asistenta de la distanta (v1), oprita din fabrica: pornita numai de om, cu informarea si confirmarea pe
+			     televizor; receptorul intreaba serverul HD Satelit prin HTTPS de cereri semnate dintr-o lista fixa
+			     (Components/HdsAsistenta.py, Screens/HdsAsistenta.py); in web: /asistenta. Numai cu verificarea
+			     semnaturii posibila (python3-cryptography): SystemInfo["HdsAsistenta"], pus de mytest.py. -->
+			<item level="0" text="Asistență de la distanță" entryID="hds_asistenta" pictograma="conexiune" weight="32" web="/asistenta" requires="HdsAsistenta" stare="netestat">
+				<screen module="HdsAsistenta" screen="HdsAsistenta" />
+			</item>
 			<!-- VPN-ul receptorului, oprit din fabrica: HMA, NordVPN, Surfshark, Proton VPN sau alt furnizor OpenVPN,
 			     WireGuard; serverul, numele si parola, ce trece prin VPN (Components/HdsVpn.py, Screens/HdsVpn.py); in
 			     web: /vpn (vpn_web.py). Numai cu programele VPN in imagine (openvpn sau wg, din 0.4.0):
@@ -557,6 +564,12 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 				</code>
 			</item>
 		</menu>
+
+		<!-- Programul de beta testeri (Components/HdsBetaTester.py, Screens/HdsBetaTester.py): acordul, apoi meniul
+		     testerului (numai dupa inscriere). Ultima intrare din Setari. In web: /beta-tester. -->
+		<item level="0" text="Beta tester" entryID="hds_beta_tester" pictograma="receptor" weight="110" web="/beta-tester">
+			<screen module="HdsBetaTester" screen="HdsBetaTester" />
+		</item>
 	</menu>
 
 	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;

@@ -27,3 +27,8 @@ dist_pkgdata_DATA = \
 	terestru-romania.json \
 	tutorialwizard.xml \
 	unicable.xml
+
+# catalogul Asistentei de la distanta (data/asistenta/catalog.json -> ${datadir}/enigma2/asistenta/catalog.json);
+# nobase pastreaza subdosarul (Components/HdsAsistentaCatalog.py il citeste de acolo)
+nobase_dist_pkgdata_DATA = \
+	asistenta/catalog.json
