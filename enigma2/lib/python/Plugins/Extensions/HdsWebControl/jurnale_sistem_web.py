@@ -560,7 +560,7 @@ PAGINA_CADERE = """<!DOCTYPE html>
     <p class="nota" id="numar"></p>
     <p class="nota" id="gol">Niciun jurnal de cădere găsit.</p>
     <table class="tabel" id="tabel"><thead><tr><th>Fișierul</th><th>Mărimea</th><th>Data</th><th></th></tr></thead><tbody id="jurnale"></tbody></table>
-    <p class="nota">Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin rețea. Se caută în <span id="principal"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root.</p>
+    <p class="nota">Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id="principal"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root.</p>
   </section>
   <section class="card ascuns" id="cardText">
     <h2 id="titluText"></h2>
@@ -690,8 +690,8 @@ TEXTE_PAGINA = {
 		N_("Se caută jurnalele..."),
 		N_("Jurnalele găsite"),
 		N_("Niciun jurnal de cădere găsit."),
-		N_("Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de "
-			"pe hdsatelit.com; nu există încă o trimitere automată prin rețea. Se caută în <span "
+		N_("Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un "
+			"jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span "
 			"id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."),
 		N_("Setări"),
 		N_("Păstrează jurnalul anonim (fără cartelă CA, fără setările contului)"),

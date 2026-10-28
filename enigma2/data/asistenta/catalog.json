@@ -1,0 +1,111 @@
+{
+  "fel": "hds-asistenta-catalog",
+  "v": 1,
+  "operatii": [
+    {
+      "op": "info",
+      "grup": "Informatii",
+      "fel": "citire",
+      "text": "starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)",
+      "args": []
+    },
+    {
+      "op": "placa",
+      "grup": "Informatii",
+      "fel": "citire",
+      "text": "placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate",
+      "args": []
+    },
+    {
+      "op": "pachete",
+      "grup": "Informatii",
+      "fel": "citire",
+      "text": "lista pachetelor instalate",
+      "args": []
+    },
+    {
+      "op": "retea",
+      "grup": "Informatii",
+      "fel": "citire",
+      "text": "reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)",
+      "args": []
+    },
+    {
+      "op": "tunere",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "tunerele si blocarea semnalului",
+      "args": []
+    },
+    {
+      "op": "decodor",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "starea decodorului (video, sunet, sincronizare)",
+      "args": []
+    },
+    {
+      "op": "memorie",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "memoria libera si memoria decodorului",
+      "args": []
+    },
+    {
+      "op": "jurnale",
+      "grup": "Jurnale",
+      "fel": "citire",
+      "text": "lista jurnalelor receptorului, cu marimile",
+      "args": []
+    },
+    {
+      "op": "jurnal",
+      "grup": "Jurnale",
+      "fel": "citire",
+      "text": "ultimele randuri dintr-un jurnal",
+      "args": [
+        {"nume": "nume", "tipar": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "cerut": true},
+        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,3}$", "cerut": false}
+      ]
+    },
+    {
+      "op": "dmesg",
+      "grup": "Jurnale",
+      "fel": "citire",
+      "text": "jurnalul nucleului",
+      "args": [
+        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,3}$", "cerut": false}
+      ]
+    },
+    {
+      "op": "procese",
+      "grup": "Jurnale",
+      "fel": "citire",
+      "text": "lista proceselor (numele, fara argumente)",
+      "args": []
+    },
+    {
+      "op": "setari",
+      "grup": "Setari",
+      "fel": "citire",
+      "text": "copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)",
+      "args": []
+    },
+    {
+      "op": "captura",
+      "grup": "Probe",
+      "fel": "proba",
+      "text": "o captura a ecranului (numai meniurile, fara imaginea canalului)",
+      "args": []
+    },
+    {
+      "op": "mesaj",
+      "grup": "Probe",
+      "fel": "proba",
+      "text": "un mesaj scris pe ecranul televizorului",
+      "args": [
+        {"nume": "text", "tipar": "^.{1,200}$", "cerut": true}
+      ]
+    }
+  ]
+}

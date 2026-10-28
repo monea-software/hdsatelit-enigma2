@@ -7,6 +7,8 @@ incarcarea lui. Rotirea mai mare a jurnalului (1024 KB x 4) e in busybox_%.bbapp
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
 PV = "0.1.0"
+# r1: hds-jurnal porneste urmarirea pornirii pe pornirile in dubiu (tools/hds-rezerva.sh din enigma2)
+PR = "r1"
 
 SRC_URI = "file://hds-jurnal file://hds-wifi-jurnal file://hds-rtl8188fu.conf"
 S = "${UNPACKDIR}"

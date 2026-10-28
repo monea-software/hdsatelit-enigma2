@@ -25,14 +25,16 @@ install_PYTHON = \
 	HdsSoftwareUpdate.py TempFanControl.py CleanupWizard.py \
 	HdsCrashlogAutoSubmit.py HdsCautareCanale.py HdsCautaSetari.py HdsHdmiInfo.py HdsExtensii.py HdsDishMotor.py \
 	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsComunPrincipal.py \
+	HdsAjutor.py \
 	ScanerMaiMultiSateliti.py ScanerCablu.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
 	HdsPaznic.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
+	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
 	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
 	HdsNavigatorWeb.py HdsTemaInterfata.py HdsAnuntRetea.py HdsUnelteRetea.py \
-	HdsLocuriRetea.py
+	HdsLocuriRetea.py HdsBetaTester.py
 

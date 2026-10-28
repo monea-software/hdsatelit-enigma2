@@ -38,7 +38,17 @@
 #   cu marja fata de ambele). Hotaraste in ambele trepte; fara limite (alt model) nu se verifica. Un disc intreg
 #   nelistat nu hotaraste nimic (ca eticheta lipsa): pe un receptor adevarat /proc/partitions il listeaza mereu, iar un
 #   /proc/partitions necitit cade deja la "kernel"; uneltele de pe PC dau uneori numai randurile p9 si p10.
-# Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), arborele dispozitivului, tunerele.
+# Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), arborele dispozitivului, tunerele
+# si, pentru ecranul de diagnostic si pagina web (informatiiPornire), ce da incarcatorul receptorului in /proc/cmdline
+# (MACHINEBUILD=, OEM= si MODEL= din partitia lui bootargs, pe Octagon de pilda MODEL=sf8008, si mem=), codul tunerelor
+# din driver (/proc/stb/info/type), numele cipului din driver (/proc/stb/info/chipset) si versiunea driverelor din
+# /proc/msp/sys (randul SDK_VERSION). Pe Octagon SF8008, SF8008 MINI si pe primul Viper 4K tipul placii din driver e o
+# constanta a driverului imaginii care ruleaza (hi-dvb.ko: sf8008, sf8008m, viper4k, oricare ar fi placa), iar eticheta
+# din deviceinfo nu exista (showiframe-ul lor nu o scrie): acolo MODEL= din bootargs e singurul semn care vine de la
+# receptor. El numai numeste receptorul in mesaj (numeReceptor) si alege textul recuperarii (octagon), nu hotaraste
+# nimic (nemasurat pe un aparat). Fara tipul placii din driver, dar cu procesorul citit, driverul placii nu s-a incarcat
+# (driverLipsa): mesajul o spune asa.
+# Niciodata seria (/proc/stb/info/sn) sau adresa MAC.
 #
 # Numele partitiilor nucleului si ale sistemului (0.6.3): pe V20, V30 si V40 ele se numesc "kernel" si "rootfs" in
 # blkdevparts. Primul Amiko Viper 4K (V10, masina viper4k) le numeste altfel: nucleul in "linuxkernel1" (p12, cu inca
@@ -133,7 +143,10 @@ REFUZ_SUMA = "suma"
 REFUZ_SCHIMBAT = "schimbat"
 
 # tipuri de placa din eticheta si un receptor cunoscut de acel tip (oe-alliance, u571.conf); numai pentru mesaj
-EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40"}
+EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40", "sf8008": "Octagon SF8008 4K UHD", "sf8008m": "Octagon SF8008 MINI 4K",
+	"viper4k": "Amiko Viper 4K V10"}
+# masinile Octagon: recuperarea e din meniul de pornire al receptorului (Recovery From USB), nu Maintenance Mode
+MASINI_OCTAGON = ("sf8008", "sf8008m")
 
 # memoria interna: limitele pentru regulile care nu le scriu, dupa machinebuild (min_kib, max_kib; None = fara limita)
 EMMC_MAXIM_V20_KIB = 5 * 1024 * 1024
@@ -424,14 +437,16 @@ def caleDinEticheta(eticheta):
 # ------------------------------------------------------------------ amprenta receptorului
 
 def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, antet=None, eticheta=None,
-		board_revision=None, compatibil=None, nim_sockets=None, nume_partitii=("kernel", "rootfs")):
+		board_revision=None, compatibil=None, nim_sockets=None, nume_partitii=("kernel", "rootfs"), tip=None,
+		chipset=None):
 	"""Amprenta din ce s-a citit (None = necitit). `antet`: primii 4 KiB ai partitiei deviceinfo, ca octeti (se
 	pastreaza numai HW= si MAGICNUM=); `eticheta`: cei 256 de octeti de la 0x3F6000 ai aceleiasi partitii;
 	`compatibil`: /proc/device-tree/compatible, ca octeti. Folosita de amprenta() si de scripturile de pe PC care
 	primesc textele prin ssh (urca-pe-stick). Chei: cip, boxtype, partitii (text), partitii_lista, kernel_part,
 	kernel_kib, rootfs_part, rootfs_kib, hw, magicnum, eticheta, board_revision, dt, tunere, marimi_partitii (toate
 	marimile din /proc/partitions, pentru locNucleu). `nume_partitii`: numele nucleului si al sistemului pentru
-	kernel_part si rootfs_part (numePartitii(reguli); implicit "kernel" si "rootfs")."""
+	kernel_part si rootfs_part (numePartitii(reguli); implicit "kernel" si "rootfs"). `tip` si `chipset`:
+	/proc/stb/info/type si /proc/stb/info/chipset; ele si cheile din informatiiPornire sunt numai informative."""
 	a = {}
 	a["cip"] = ""
 	for rand in (msp_sys or "").split("\n"):
@@ -460,7 +475,49 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 		if rand.startswith("Name:"):
 			tunere.append(curat(rand[5:], 40))
 	a["tunere"] = tunere[:8]
+	a.update(informatiiPornire(msp_sys, cmdline, tip, chipset))
 	return a
+
+
+def _cuvinteCmdline(cmdline):
+	"""{cheie: valoare} din cuvintele cheie=valoare ale lui /proc/cmdline; prima aparitie castiga"""
+	rez = {}
+	for cuvant in (cmdline or "").split():
+		cheie, egal, valoare = cuvant.partition("=")
+		if egal and cheie and cheie not in rez:
+			rez[cheie] = valoare
+	return rez
+
+
+def informatiiPornire(msp_sys=None, cmdline=None, tip=None, chipset=None):
+	"""Valorile numai informative, pentru ecranul de diagnostic si pagina web (nu intra in potrivire, nici in fisierul
+	de stare al garzii): pornire_masina, pornire_oem, pornire_model (MACHINEBUILD=, OEM=, MODEL= din /proc/cmdline,
+	date de incarcatorul receptorului din partitia lui bootargs), ram (mem=), tip_tunere (/proc/stb/info/type), chipset
+	(/proc/stb/info/chipset), versiune_drivere (randul SDK_VERSION din /proc/msp/sys). "" = necitit sau lipsa."""
+	c = _cuvinteCmdline(cmdline)
+	vd = re.search(r"SDK_VERSION[ \t]*:[ \t]*\[?([A-Za-z0-9_.-]+)", msp_sys or "")
+	return {"pornire_masina": _simplu(c.get("MACHINEBUILD")), "pornire_oem": _simplu(c.get("OEM")),
+		"pornire_model": _simplu(c.get("MODEL")), "ram": _simplu(c.get("mem"), 16),
+		"tip_tunere": _simplu((tip or "").split("\n")[0], 16), "chipset": _simplu((chipset or "").split("\n")[0]),
+		"versiune_drivere": _simplu(vd.group(1), 64) if vd else ""}
+
+
+def octagon(a, reguli=None):
+	"""True cand receptorul pare un Octagon (recuperarea din meniul lui de pornire): OEM=octagon spus de incarcatorul
+	receptorului; fara OEM=, regulile unei masini Octagon si nicio eticheta (eticheta o lasa numai imaginile Dinobot si
+	Amiko). Numai pentru textul recuperarii."""
+	a = a or {}
+	oem = (a.get("pornire_oem") or "").lower()
+	if oem:
+		return oem == "octagon"
+	return (reguli or {}).get("machine") in MASINI_OCTAGON and not a.get("eticheta")
+
+
+def driverLipsa(a):
+	"""True cand tipul placii din driver nu s-a putut citi, dar procesorul da: driverul placii (pe HiSilicon hi-dvb.ko,
+	care face /proc/stb) nu s-a incarcat. Nu e un semn al altui receptor."""
+	a = a or {}
+	return not a.get("boxtype") and bool(a.get("cip"))
 
 
 def _loc(lista, marimi, nume_partitii):
@@ -503,7 +560,9 @@ def amprenta(radacina=None, reguli=None):
 		board_revision=_citesteText(_cale(radacina, "proc/stb/info/board_revision"), 64),
 		compatibil=_citesteOcteti(_cale(radacina, "proc/device-tree/compatible"), 256),
 		nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192),
-		nume_partitii=numePartitii(reguli))
+		nume_partitii=numePartitii(reguli),
+		tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64),
+		chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64))
 
 
 def amprentaDinStare(st, baza=None):
@@ -779,6 +838,13 @@ def numeReceptor(a, reguli=None, nepotriviri=None):
 		if tip in EXEMPLU_TIP:
 			return _("un receptor %(tip)s (de exemplu %(model)s)") % {"tip": tip, "model": EXEMPLU_TIP[tip]}
 		return _("un receptor %s") % tip
+	# fara eticheta (Octagon, primul Viper 4K): modelul spus de incarcatorul receptorului (MODEL= din bootargs), cand e
+	# altul decat al regulilor
+	model = a.get("pornire_model") or ""
+	if model and not (reguli and (model == reguli.get("machinebuild") or model in tipuriPlaca(reguli))):
+		if model in EXEMPLU_TIP:
+			return _("un receptor %(tip)s (de exemplu %(model)s)") % {"tip": model, "model": EXEMPLU_TIP[model]}
+		return _("un receptor %s") % model
 	# acelasi tip de placa, dar alta memorie interna (de pilda un Amiko Viper 4K V30 cu imaginea pentru V20)
 	if nepotriviri and "emmc" in [n[0] for n in nepotriviri]:
 		afara = _emmcAfara(reguli, a.get("emmc_kib", ""))
@@ -911,16 +977,25 @@ def mesajPornire(v):
 	nep = v.get("nepotriviri") or []
 	if necitit(nep):
 		titlu = _("Receptorul nu poate fi recunoscut")
-		fraze = [_("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software "
-			"este pentru el."), textPentru(reguli, v.get("versiune"))]
+		if [c for c, _a, _g in nep] == ["boxtype"] and driverLipsa(a):
+			prima = _("Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că "
+				"acest software este pentru el.")
+		else:
+			prima = _("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest "
+				"software este pentru el.")
+		fraze = [prima, textPentru(reguli, v.get("versiune"))]
 		tehnice = randuriTehnice(nep)
 	else:
 		titlu = _("Software pentru alt receptor")
 		fraze = [textPentru(reguli, v.get("versiune")), textAlTau(a, reguli, nep)]
 		tehnice = randuriTehnice(nep) + randEticheta(a, reguli)
 	fraze.append(_("Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."))
-	fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
-		"(la Amiko: Maintenance Mode)."))
+	if octagon(a, reguli):
+		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
+			"(la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."))
+	else:
+		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
+			"(la Amiko: Maintenance Mode)."))
 	return titlu, fraze, tehnice
 
 

@@ -1,0 +1,684 @@
+# -*- coding: utf-8 -*-
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# HdsAsistenta.py: „Ajutor de la distanta" pentru beta testeri, versiunea 1. Oprita din fabrica; nu ruleaza nimic,
+# nicio cheie, nicio legatura pana nu o porneste omul din Meniu > Setari > Retea si internet > Asistenta de la distanta
+# (ecranul Screens/HdsAsistenta.py; meniul testerilor poate deschide acelasi ecran) sau din pagina web /asistenta (cu
+# consimtamantul si confirmarea pe televizor). O singura logica pentru televizor si pentru web.
+#
+# Cum merge (fara tunel, fara shell): dupa consimtamant, receptorul se inregistreaza prin HTTPS la serverul HD Satelit,
+# primeste un cod de 6 cifre, il arata mare pe ecran si intreaba din cateva in cateva secunde daca are o cerere. O
+# cerere e numai una din catalogul fix (Components/HdsAsistentaCatalog.py), SEMNATA cu cheia noastra; cheia publica sta
+# in pachet (CHEI_ASISTENTA), nu vine de la server, deci un server spart nu poate cere nimic. Fiecare cerere si raspuns
+# apar pe ecranul omului (jurnalul sesiunii) si in web. Nimic nu se scrie pe receptor in afara dosarului temporar al
+# sesiunii, sters la oprire. Se opreste oricand (o tasta, pagina web) si singura dupa timpul ales (2 ore implicit).
+#
+# Cererea semnata: octetii EXACTI ai JSON-ului {"args":[...],"id":...,"op":...,"seq":N} (chei sortate, fara spatii),
+# semnati pe PC cu cheia operator, stocati verbatim pe server, verificati aici cu Components/HdsSemnatura.verifica
+# (scop „asistenta-cerere"), apoi parsati. Receptorul refuza: id != id-ul sesiunii, seq <= ultimul vazut, op in afara
+# catalogului, argumente care pica tiparul. Fara termen pe ceasul receptorului (id de sesiune + seq ajung impotriva
+# reluarii unei cereri vechi).
+#
+# Firul: inregistrarea, intrebarea serverului si rularea operatiilor merg pe un fir separat, ca sa nu tina interfata;
+# starea se tine in /tmp/hds-asistenta (memorie). La repornirea interfetei in timpul
+# termenului, mytest.py reia firul din fisierul de stare si semnul reapare; repornirea INTREAGA a receptorului
+# opreste sesiunea (nimic pe partea de pornire). Partea de sus nu importa nimic din enigma2: probele de pe PC dau
+# stratul HTTP (_POSTEAZA/_IA) si ceasul (_ACUM) lor.
+
+import base64
+import gzip
+import json
+import os
+import re
+import shutil
+import threading
+import time
+
+from Components import HdsAsistentaCatalog as Catalog
+from Components import HdsAsistentaBroker as Broker
+
+try:
+	from Components import HdsSemnatura
+except Exception:
+	HdsSemnatura = None
+
+
+# ---------------------------------------------------------------- cheile noastre si serverul
+
+# cheile publice HD Satelit (Ed25519) cu care se semneaza cererile Asistentei; vin in pachet, se schimba prin
+# actualizare (o cheie noua sau o revocare = un rand aici). Partea privata a cheii operatorului sta numai pe
+# calculatorul echipei (unelte/asistenta/fa_chei_operator.py), niciodata in depozit, in imagine sau pe server.
+CHEI_ASISTENTA = (
+	("2b7f1de656d7370f", "1725406d53f66fbc6a78f2d461e42786d4da33b698cd467f7afd4318c1664291", "principala"),
+)
+REVOCATE_ASISTENTA = ()
+SCOP_CERERE = "asistenta-cerere"
+
+SERVER = "https://stb.hdsatelit.com/asistenta/v1/"
+DOSAR_SESIUNE = "/tmp/hds-asistenta"
+STARE_FISIER = os.path.join(DOSAR_SESIUNE, "stare.json")
+IMAGE_VERSION = "/etc/image-version"
+
+PROTOCOL = 1
+# versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
+VERSIUNE_TEXT = 2
+# durate alese de om (minute); 2 ore implicit, 4 ore cel mult
+DURATE_MIN = (30, 60, 120, 240)
+DURATA_IMPLICITA_MIN = 120
+NIVELE = ("A",)
+COD_ASTEPTARE_MAX_S = 15 * 60          # cat asteapta un cod aprobarea (apoi moare)
+PAS_INTREBARE_S = 3                    # cat de des intreaba serverul
+TIMP_CERERE_S = 20
+RASPUNS_SERVER_MAX = 512 * 1024
+
+# starile sesiunii
+OPRIT, INREGISTRARE, ASTEAPTA, CONECTAT, SE_OPRESTE = "oprit", "inregistrare", "asteapta", "conectat", "se-opreste"
+
+
+def _jurnal(text):
+	print("[HdsAsistenta] %s" % text)
+
+
+def _t(text):
+	try:
+		return _(text)  # noqa: F821
+	except NameError:
+		return text
+
+
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_): textele se traduc la folosire."""
+	return text
+
+
+# Textul de informare (consimtamantul), acelasi pe televizor si in web. Spune numai ce face versiunea 1 (fara tunel,
+# fara comenzi): ce vedem, ce pastram si cat, cine primeste datele, cum opresti, varsta, contactul.
+INFORMARE = N_(
+	"Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a "
+	"receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\n"
+	"Este numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești "
+	"tu, de fiecare dată din nou.\n\n"
+	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. "
+	"Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a "
+	"meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem "
+	"ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\n"
+	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se "
+	"oprește singură.\n\n"
+	"Ce date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la "
+	"cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de "
+	"internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul "
+	"nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să "
+	"reparăm imaginea și nu le dăm altora.\n\n"
+	"Operatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să "
+	"ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte.")
+
+
+def textInformare():
+	return _t(INFORMARE)
+
+
+def textDurata(minute):
+	minute = int(minute)
+	if minute < 60:
+		return _t("%d minute") % minute
+	ore = minute // 60
+	return _t("o oră") if ore == 1 else _t("%d ore") % ore
+
+
+def drumMeniu():
+	"""Calea de pe televizor spre ecran (pentru semnul de pe ecran si pentru pagina web), in limba receptorului."""
+	return " > ".join(_t(p) for p in ("Menu", "Settings", "Network & Internet", "Asistență de la distanță"))
+
+
+def _acum():
+	"""Ceasul (monoton), inlocuit in probe."""
+	return time.monotonic()
+
+
+def _oraPerete():
+	return time.time()
+
+
+def disponibil():
+	"""Functia merge numai daca verificarea semnaturii se poate face pe receptor (python3-cryptography)."""
+	if HdsSemnatura is None:
+		return False
+	try:
+		import cryptography  # noqa: F401
+		return True
+	except Exception:
+		return False
+
+
+# ---------------------------------------------------------------- cererea semnata
+
+def octetiCerere(id_sesiune, seq, op, args):
+	"""Octetii canonici care se semneaza/verifica: JSON cu chei sortate, fara spatii, numai ASCII. Aceeasi functie e
+	si in unealta de pe PC (unelte/asistenta/asistenta_lib.py); o proba verifica potrivirea octet cu octet."""
+	obj = {"id": str(id_sesiune), "seq": int(seq), "op": str(op), "args": [str(a) for a in (args or [])]}
+	return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
+	"""(bun, date, motiv): verifica o cerere transportata ({"c": base64(octeti), "s": textul .sig}). date e
+	{"seq","op","args"} cand e buna. motiv (pentru jurnal) cand nu: forma, semnatura:<...>, alta-sesiune, seq-vechi,
+	<motivul catalogului>."""
+	if HdsSemnatura is None:
+		return False, None, "fara-verificare"
+	if not isinstance(exterior, dict):
+		return False, None, "forma"
+	b64 = exterior.get("c")
+	sig = exterior.get("s")
+	if not isinstance(b64, str) or not isinstance(sig, str):
+		return False, None, "forma"
+	try:
+		octeti = base64.b64decode(b64.encode("ascii"), validate=True)
+	except Exception:
+		return False, None, "forma"
+	if len(octeti) > 4096:
+		return False, None, "forma"
+	chei = CHEI_ASISTENTA if chei is None else chei
+	revocate = REVOCATE_ASISTENTA if revocate is None else revocate
+	bun, motiv, _id = HdsSemnatura.verifica(octeti, sig, SCOP_CERERE, chei=chei, revocate=revocate)
+	if not bun:
+		return False, None, "semnatura:" + motiv
+	try:
+		o = json.loads(octeti.decode("ascii"))
+	except Exception:
+		return False, None, "forma"
+	if not isinstance(o, dict):
+		return False, None, "forma"
+	if str(o.get("id", "")) != str(id_sesiune):
+		return False, None, "alta-sesiune"
+	try:
+		seq = int(o.get("seq"))
+	except Exception:
+		return False, None, "forma"
+	if seq <= int(ultim_seq):
+		return False, None, "seq-vechi"
+	op = o.get("op")
+	args = o.get("args", [])
+	bun, mot = Catalog.valideaza(op, args)
+	if not bun:
+		return False, None, mot
+	return True, {"seq": seq, "op": op, "args": list(args)}, ""
+
+
+# ---------------------------------------------------------------- stratul HTTP (inlocuit in probe)
+
+def _posteazaHttp(url, metoda, corp_octeti, antete, timp=TIMP_CERERE_S):
+	from urllib.request import Request, urlopen
+	from urllib.error import HTTPError
+	h = {"User-Agent": "hdsatelit-receptor/1", "Accept": "application/json"}
+	h.update(antete or {})
+	cerere = Request(url, data=corp_octeti, method=metoda, headers=h)
+	try:
+		r = urlopen(cerere, timeout=timp)
+		try:
+			return r.getcode(), r.read(RASPUNS_SERVER_MAX)
+		finally:
+			r.close()
+	except HTTPError as e:
+		try:
+			corp = e.read(65536)
+		except Exception:
+			corp = b""
+		return e.code, corp
+	except Exception as e:
+		_jurnal("retea: %s" % type(e).__name__)
+		return 0, b""
+
+
+# probele de pe PC pun aici functia lor
+_RETEA = _posteazaHttp
+
+
+def _ceruta(url, metoda, corp, antete):
+	octeti = None
+	if corp is not None:
+		octeti = json.dumps(corp, ensure_ascii=False).encode("utf-8")
+		antete = dict(antete or {})
+		antete["Content-Type"] = "application/json"
+	cod, raspuns = _RETEA(url, metoda, octeti, antete)
+	try:
+		o = json.loads((raspuns or b"").decode("utf-8")) if raspuns else {}
+		if not isinstance(o, dict):
+			o = {}
+	except Exception:
+		o = {}
+	return cod, o
+
+
+# ---------------------------------------------------------------- modelul si versiunea
+
+def _model():
+	try:
+		from boxbranding import getMachineBuild
+		m = getMachineBuild()
+		if m:
+			return str(m)[:40]
+	except Exception:
+		pass
+	for cale in ("/proc/stb/info/model", "/proc/stb/info/boxtype"):
+		try:
+			with open(cale) as f:
+				v = f.read().strip()
+			if v:
+				return v[:40]
+		except Exception:
+			continue
+	return "necunoscut"
+
+
+def _versiuneImagine():
+	try:
+		with open(IMAGE_VERSION) as f:
+			for rand in f:
+				if rand.startswith("version="):
+					return rand.split("=", 1)[1].strip()[:40]
+	except Exception:
+		pass
+	return "necunoscut"
+
+
+# ---------------------------------------------------------------- jurnalul sesiunii (in memorie + dosar temporar)
+
+class Jurnal(object):
+	"""Randurile sesiunii, cu ora locala, in memorie (vazute pe TV si in web) si oglindite intr-un fisier din dosarul
+	temporar al sesiunii; totul se sterge la oprire."""
+
+	MAX_RANDURI = 500
+
+	def __init__(self, dosar):
+		self.randuri = []
+		self.cale = os.path.join(dosar, "jurnal.log") if dosar else None
+		self._lacat = threading.Lock()
+
+	def adauga(self, text):
+		rand = "%s  %s" % (time.strftime("%H:%M:%S"), text)
+		with self._lacat:
+			self.randuri.append(rand)
+			if len(self.randuri) > self.MAX_RANDURI:
+				self.randuri = self.randuri[-self.MAX_RANDURI:]
+			if self.cale:
+				try:
+					with open(self.cale, "a", encoding="utf-8") as f:
+						f.write(rand + "\n")
+				except Exception:
+					pass
+		return rand
+
+	def ultimele(self, n=40):
+		with self._lacat:
+			return list(self.randuri[-n:])
+
+
+# ---------------------------------------------------------------- sesiunea si firul
+
+class Sesiune(object):
+	"""O sesiune de asistenta. Tine starea, codul, termenul, jurnalul si firul care intreaba serverul."""
+
+	def __init__(self, nivel, durata_min, limba, server, de_la="televizor", versiune_text=VERSIUNE_TEXT, ctx=None):
+		self.nivel = nivel if nivel in NIVELE else "A"
+		self.durata_min = int(durata_min) if int(durata_min) in DURATE_MIN else DURATA_IMPLICITA_MIN
+		self.limba = (limba or "ro")[:8]
+		self.server = server if server.endswith("/") else server + "/"
+		self.de_la = de_la
+		self.versiune_text = int(versiune_text)
+		self.ctx = ctx or {}
+		self.id = None
+		self.secret = None
+		self.cod = None
+		self.stare = OPRIT
+		self.motiv_oprire = ""
+		self.ultim_seq = 0
+		self.pana_la_ora = None            # ora peretelui la care se opreste singura
+		self.dosar = None
+		self.jurnal = None
+		self._fir = None
+		self._stop = threading.Event()
+		self._lacat = threading.Lock()
+
+	# -------- ajutoare de stare
+
+	def ramasS(self):
+		if self.pana_la_ora is None:
+			return self.durata_min * 60
+		return max(0, int(self.pana_la_ora - _oraPerete()))
+
+	def activa(self):
+		return self.stare in (INREGISTRARE, ASTEAPTA, CONECTAT)
+
+	def _pune_stare(self, stare):
+		self.stare = stare
+		_anunta()
+
+	# -------- pornire / oprire
+
+	def porneste(self):
+		self.dosar = os.path.join(DOSAR_SESIUNE, "s-%d" % int(_oraPerete()))
+		try:
+			os.makedirs(self.dosar, mode=0o700, exist_ok=True)
+		except Exception:
+			self.dosar = None
+		self.jurnal = Jurnal(self.dosar)
+		self.jurnal.adauga(_t("pornita (%s, nivel %s, %d minute, text v%d)")
+			% (self.de_la, self.nivel, self.durata_min, self.versiune_text))
+		self._pune_stare(INREGISTRARE)
+		self._fir = threading.Thread(target=self._ruleaza, name="HdsAsistenta")
+		self._fir.daemon = True
+		self._fir.start()
+
+	def opreste(self, motiv="de om"):
+		self.motiv_oprire = motiv
+		self._stop.set()
+		self._pune_stare(SE_OPRESTE)
+
+	def _curata(self):
+		# anunta serverul si sterge dosarul temporar (cheia/jurnalul dispar)
+		if self.id and self.secret:
+			try:
+				_ceruta(self.server + "inchide?id=" + self.id, "POST", {}, {"X-Secret": self.secret})
+			except Exception:
+				pass
+		if self.dosar:
+			try:
+				shutil.rmtree(self.dosar, ignore_errors=True)
+			except Exception:
+				pass
+		try:
+			if os.path.exists(STARE_FISIER):
+				os.remove(STARE_FISIER)
+		except Exception:
+			pass
+
+	# -------- fisierul de stare (reluare dupa repornirea interfetei)
+
+	def _scrie_stare(self):
+		try:
+			with open(STARE_FISIER, "w", encoding="utf-8") as f:
+				json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
+					"nivel": self.nivel, "pana_la_ora": self.pana_la_ora, "ultim_seq": self.ultim_seq,
+					"limba": self.limba, "dosar": self.dosar, "cod": self.cod,
+					"asteapta": self.stare == ASTEAPTA}, f)
+		except Exception:
+			pass
+
+	# -------- firul
+
+	def _ruleaza(self):
+		try:
+			if not self._inregistreaza():
+				return
+			if not self._asteapta_aprobare():
+				return
+			self._bucla_cereri()
+		except Exception as e:
+			_jurnal("firul: %s" % e)
+			self.opreste("eroare: %s" % type(e).__name__)
+		finally:
+			self.jurnal.adauga(_t("oprita (%s)") % self.motiv_oprire if self.motiv_oprire else _t("oprita"))
+			self._pune_stare(OPRIT)
+			self._curata()
+			_uita(self)
+
+	def _inregistreaza(self):
+		corp = {"v": PROTOCOL, "model": _model(), "imagine": _versiuneImagine(), "nivel": self.nivel,
+			"durata_min": self.durata_min, "limba": self.limba}
+		cod, o = _ceruta(self.server + "inregistreaza", "POST", corp, {})
+		if cod == 0 or cod >= 500 or cod == 404:
+			self.jurnal.adauga(_t("nu pot ajunge la serverul de asistenta"))
+			self.opreste("fara-server")
+			return False
+		if not (200 <= cod < 300) or not o.get("id") or not o.get("secret") or not o.get("cod"):
+			self.jurnal.adauga(_t("serverul a refuzat inregistrarea (%s)") % cod)
+			self.opreste("inregistrare-refuzata")
+			return False
+		self.id = str(o["id"])[:64]
+		self.secret = str(o["secret"])[:128]
+		self.cod = re.sub(r"\D", "", str(o["cod"]))[:6]
+		self.pana_la_ora = _oraPerete() + self.durata_min * 60
+		self.stare = ASTEAPTA
+		self._scrie_stare()
+		self._pune_stare(ASTEAPTA)
+		self.jurnal.adauga(_t("cod aratat pe ecran, astept aprobarea"))
+		return True
+
+	def _asteapta_aprobare(self):
+		inceput = _acum()
+		while not self._stop.is_set():
+			if _acum() - inceput > COD_ASTEPTARE_MAX_S:
+				self.jurnal.adauga(_t("codul a expirat fara aprobare"))
+				self.opreste("cod-expirat")
+				return False
+			cod, o = _ceruta(self.server + "stare?id=" + self.id, "GET", None, {"X-Secret": self.secret})
+			stare = o.get("stare")
+			if stare == "conectat":
+				self._pune_stare(CONECTAT)
+				self._scrie_stare()
+				self.jurnal.adauga(_t("conectat"))
+				return True
+			if stare in ("respins", "inchis", "expirat"):
+				self.jurnal.adauga(_t("cererea a fost %s") % stare)
+				self.opreste(stare)
+				return False
+			self._asteapta_pas(PAS_INTREBARE_S)
+		return False
+
+	def _bucla_cereri(self):
+		while not self._stop.is_set():
+			if self.ramasS() <= 0:
+				self.jurnal.adauga(_t("s-a terminat timpul ales"))
+				self.opreste("termen")
+				return
+			url = "%scereri?id=%s&dupa=%d" % (self.server, self.id, self.ultim_seq)
+			cod, o = _ceruta(url, "GET", None, {"X-Secret": self.secret})
+			if o.get("stare") in ("inchis", "expirat", "respins"):
+				self.opreste(o.get("stare"))
+				return
+			for exterior in (o.get("cereri") or [])[:20]:
+				if self._stop.is_set():
+					break
+				self._face_cerere(exterior)
+			self._asteapta_pas(PAS_INTREBARE_S)
+
+	def _face_cerere(self, exterior):
+		bun, date, motiv = verificaCerere(exterior, self.id, self.ultim_seq)
+		if not bun:
+			self.jurnal.adauga(_t("cerere refuzata: %s") % motiv)
+			# o cerere cu seq nou dar refuzata nu trebuie sa blocheze: o sarim daca are un seq citibil. Mutam ultim_seq
+			# dupa un seq NEVERIFICAT: in modelul cutiei postale asta nu slabeste apararea (un server rau poate oricum
+			# sa nu livreze cereri); apararea impotriva reluarii e ca fiecare cerere e semnata cu id+seq si verificata.
+			seq = _seq_din(exterior)
+			if seq is not None and seq > self.ultim_seq:
+				self.ultim_seq = seq
+				self._scrie_stare()
+			return
+		seq, op, args = date["seq"], date["op"], date["args"]
+		intrare = Catalog.gaseste(op)
+		fel = _t("citire") if (intrare and intrare["fel"] == "citire") else _t("proba")
+		eticheta = _t(intrare["text"]) if intrare else op
+		self.jurnal.adauga("%s: %s" % (fel, eticheta))
+		_anunta()
+		rez = Broker.ruleaza(op, args, self.ctx)
+		self.jurnal.adauga(_t("    raspuns: cod %d, %d octeti") % (rez.cod_iesire, rez.marime()))
+		self._trimite_raspuns(seq, op, rez)
+		self.ultim_seq = seq
+		self._scrie_stare()
+
+	def _trimite_raspuns(self, seq, op, rez):
+		if rez.octeti is not None:
+			date = rez.octeti
+			tip = rez.tip
+		else:
+			date = (rez.text or "").encode("utf-8", "replace")
+			tip = "text"
+		gz = base64.b64encode(gzip.compress(date)).decode("ascii")
+		corp = {"v": PROTOCOL, "seq": seq, "op": op, "cod_iesire": rez.cod_iesire, "tip": tip,
+			"marime": len(date), "raspuns_gz": gz}
+		self._ceruta_raspuns(corp)
+
+	def _ceruta_raspuns(self, corp):
+		try:
+			_ceruta(self.server + "raspuns?id=" + self.id, "POST", corp, {"X-Secret": self.secret})
+		except Exception as e:
+			_jurnal("raspuns: %s" % type(e).__name__)
+
+	def _asteapta_pas(self, s):
+		self._stop.wait(s)
+
+
+def _seq_din(exterior):
+	try:
+		octeti = base64.b64decode((exterior or {}).get("c", "").encode("ascii"), validate=True)
+		return int(json.loads(octeti.decode("ascii")).get("seq"))
+	except Exception:
+		return None
+
+
+# ---------------------------------------------------------------- starea globala (o sesiune deodata) si observatorii
+
+_sesiune = None
+_observatori = []
+_lacat = threading.Lock()
+
+
+def _anunta():
+	# observatorii ating interfata enigma2 (ferestre, eTimer, setText): enigma2 NU e sigur intre fire, deci chemam
+	# observatorii NUMAI pe firul principal. Schimbarile facute de firul sesiunii se vad oricum: si banda, si ecranul
+	# citesc starea la fiecare secunda din ceasul lor. Primul _anunta (INREGISTRARE) e inca pe firul principal (din
+	# porneste(), inainte de pornirea firului), deci porneste ceasul benzii.
+	if threading.current_thread() is not threading.main_thread():
+		return
+	for f in list(_observatori):
+		try:
+			f()
+		except Exception:
+			pass
+
+
+def adaugaObservator(f):
+	if f not in _observatori:
+		_observatori.append(f)
+
+
+def scoateObservator(f):
+	if f in _observatori:
+		_observatori.remove(f)
+
+
+def _uita(ses):
+	global _sesiune
+	with _lacat:
+		if _sesiune is ses:
+			_sesiune = None
+	_anunta()
+
+
+def sesiune():
+	return _sesiune
+
+
+def porneste(nivel="A", durata_min=DURATA_IMPLICITA_MIN, limba="ro", de_la="televizor", versiune_text=VERSIUNE_TEXT,
+		ctx=None):
+	"""(reusit, mesaj): porneste o sesiune daca nu merge deja una si daca functia e disponibila. Fara efect daca o
+	sesiune e deja activa."""
+	global _sesiune
+	if not disponibil():
+		return False, _t("Functia nu e disponibila pe aceasta imagine.")
+	with _lacat:
+		if _sesiune is not None and _sesiune.activa():
+			return False, _t("Asistenta merge deja.")
+		ses = Sesiune(nivel, durata_min, limba, SERVER, de_la=de_la, versiune_text=versiune_text, ctx=ctx)
+		_sesiune = ses
+	ses.porneste()
+	return True, _t("Asistenta a pornit.")
+
+
+def opreste(motiv="de om"):
+	"""(reusit, mesaj): opreste sesiunea de acum, daca exista."""
+	ses = _sesiune
+	if ses is None or not ses.activa():
+		return False, _t("Asistenta nu merge.")
+	ses.opreste(motiv)
+	return True, _t("Asistenta s-a oprit. Cheia a fost stearsa.")
+
+
+def stare():
+	"""Starea pentru ecran si pentru pagina web."""
+	ses = _sesiune
+	if ses is None:
+		return {"stare": OPRIT, "disponibil": disponibil(), "durate": list(DURATE_MIN),
+			"durata_implicita": DURATA_IMPLICITA_MIN}
+	return {
+		"stare": ses.stare,
+		"disponibil": True,
+		"nivel": ses.nivel,
+		"cod": ses.cod if ses.stare == ASTEAPTA else None,
+		"ramas_s": ses.ramasS(),
+		"jurnal": ses.jurnal.ultimele(40) if ses.jurnal else [],
+		"durate": list(DURATE_MIN),
+		"durata_implicita": DURATA_IMPLICITA_MIN,
+	}
+
+
+# ---------------------------------------------------------------- reluarea dupa repornirea interfetei
+
+def reia(ctx=None):
+	"""Chemat de mytest.py la pornirea interfetei: daca exista un fisier de stare cu termenul inca valabil (repornire
+	a interfetei, NU a receptorului: /tmp se goleste la o repornire intreaga), reia sesiunea. Nu face niciun apel decat
+	daca sesiunea a fost pornita de om in aceasta pornire (fisierul exista numai atunci)."""
+	global _sesiune
+	if _sesiune is not None:
+		return
+	try:
+		with open(STARE_FISIER, encoding="utf-8") as f:
+			s = json.load(f)
+	except Exception:
+		return
+	if not s.get("id") or not s.get("secret"):
+		return
+	pana = s.get("pana_la_ora")
+	if pana is not None and pana - _oraPerete() <= 0:
+		try:
+			os.remove(STARE_FISIER)
+		except Exception:
+			pass
+		return
+	ses = Sesiune(s.get("nivel", "A"), DURATA_IMPLICITA_MIN, s.get("limba", "ro"), s.get("server", SERVER),
+		de_la="reluare", ctx=ctx)
+	ses.id = s["id"]
+	ses.secret = s["secret"]
+	ses.ultim_seq = int(s.get("ultim_seq", 0))
+	ses.pana_la_ora = pana
+	ses.dosar = s.get("dosar")
+	ses.jurnal = Jurnal(ses.dosar)
+	ses.jurnal.adauga(_t("reluata dupa repornirea interfetei"))
+	asteapta = bool(s.get("asteapta")) and bool(s.get("cod"))
+	if asteapta:
+		# repornirea a venit inainte de aprobare: codul ramane acelasi, receptorul asteapta mai departe
+		ses.cod = re.sub(r"\D", "", str(s.get("cod")))[:6]
+	with _lacat:
+		_sesiune = ses
+	ses._pune_stare(ASTEAPTA if asteapta else CONECTAT)
+	ses._fir = threading.Thread(target=ses._bucla_dupa_reluare, name="HdsAsistenta")
+	ses._fir.daemon = True
+	ses._fir.start()
+
+
+def _bucla_dupa_reluare(self):
+	try:
+		if self.stare == ASTEAPTA and not self._asteapta_aprobare():
+			return
+		self._bucla_cereri()
+	except Exception as e:
+		_jurnal("reluare: %s" % e)
+		self.opreste("eroare: %s" % type(e).__name__)
+	finally:
+		self._pune_stare(OPRIT)
+		self._curata()
+		_uita(self)
+
+
+Sesiune._bucla_dupa_reluare = _bucla_dupa_reluare

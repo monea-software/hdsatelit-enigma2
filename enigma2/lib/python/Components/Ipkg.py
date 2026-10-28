@@ -18,7 +18,9 @@ _PACKAGE_NAME = re.compile(r'^[a-z0-9][a-z0-9+.\-]{0,120}\Z')
 # the image (DreamInfoHandler)
 PACKAGE_FILE_ROOTS = ('/media/', '/hdd/', '/mnt/', '/autofs/', '/tmp/', '/usr/share/enigma2/')
 _COMMANDS = ('update', 'upgrade', 'install', 'remove', 'list', 'list_installed', 'list-installed', 'list-upgradable')
-_OPTIONS = ('--autoremove', '--noaction', '--force-depends')
+# HDSatelit 0.6.8: --download-only, packages from foreign sources are downloaded and read before they are installed
+# (Components/HdsExtensiiLucru.py, packages made only for Python 2)
+_OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only')
 _PROGRAMS = ('/usr/bin/opkg', '/bin/opkg', '/usr/sbin/opkg', '/usr/local/bin/opkg')
 
 

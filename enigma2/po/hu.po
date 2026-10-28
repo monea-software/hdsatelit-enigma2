@@ -9535,10 +9535,10 @@ msgstr "Nem található összeomlási napló."
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
 #, python-format
 msgid ""
-"Găsite: %d. Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin rețea.\n"
+"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
 "Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
 msgstr ""
-"Találat: %d. A küldés kézi marad: az itt talált naplót a hdsatelit.com kapcsolatfelvételi űrlapján lehet elküldeni; automatikus küldés a hálózaton még nincs.\n"
+"Találat: %d. Bétatesztelőként (Beállítások > Bétatesztelő) az új naplók maguktól mennek el, csak a hozzájárulásoddal. Különben az itt talált naplót a hdsatelit.com kapcsolatfelvételi űrlapján lehet elküldeni.\n"
 "Keresés itt: „%s”, a /tmp mappában és minden más, a /media, /run/media, /home/root alá csatolt mappában."
 
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:209
@@ -24918,8 +24918,8 @@ msgid "Trimite poza"
 msgstr "Fénykép küldése"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
-msgid "Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin rețea. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
-msgstr "A küldés kézi marad: az itt talált naplót a hdsatelit.com kapcsolatfelvételi űrlapján lehet elküldeni; automatikus hálózati küldés még nincs. A keresés itt történik: <span id=\"principal\"></span>, a /tmp mappában és bármely más, a /media, /run/media, /home/root alá csatolt mappában."
+msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
+msgstr "Bétatesztelőként (a Beállítások között, a Bétatesztelő résznél) az új naplók maguktól mennek el, csak a hozzájárulásoddal. Különben az itt talált naplót a hdsatelit.com kapcsolatfelvételi űrlapján lehet elküldeni. A keresés itt történik: <span id=\"principal\"></span>, a /tmp mappában és bármely más, a /media, /run/media, /home/root alá csatolt mappában."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/antena_web.py
 msgid "Tunerele nu se pot citi."
@@ -51035,3 +51035,1141 @@ msgstr "Rendszernapló"
 #: lib/python/Components/HdsJurnale.py
 msgid "Serviciile de sistem"
 msgstr "Rendszerszolgáltatások"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Python 2-höz készült"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s Python 2-höz készült"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "A csomag a régi, Python 2-es image-ekhez készült."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Ez az image Python 3-at használ, ezért nem települ."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "A helyettesítő telepítése"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "A csomag ellenőrzése telepítés előtt."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "ezt igényli: %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "Python 2-es könyvtár"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "fájlokat tesz a Python 2 mappájába"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "Python 2-re fordított fájlokat tartalmaz (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "a Python 2 könyvtárához van linkelve (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "a kód nem fordítható Python 3 alatt (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "a Python 3-ból eltávolított modulokat használ (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "Python 2-es image-ek feedjéből származik (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Indok"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Python 3-hoz elérhető: %s, a(z) %s feedben."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "A Python 3-hoz készült %s már telepítve van."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Semmi sem települt."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK megmutatja az okát · Zöld telepíti a helyettesítőt"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK megmutatja az okát"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "A verzió (%s, forrás: %s) Python 2-höz készült, és nem települ."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "Az alaplap illesztőprogramja nem töltődött be, ezért az alaplap típusa nem olvasható ki, és nem igazolható, hogy ez a szoftver hozzá készült."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Tedd vissza a megfelelő szoftvert egy USB-kulccsal, ahogy a vevő gyártója leírja (Octagonnál: bekapcsoláskor tartsd lenyomva a vevőn a Standby gombot, majd Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Indítási diagnosztika"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "A kezelőfelület nem indul el"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "A vevő processzora nem az, amelyre a szoftver készült."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "Az illesztőprogram más alaplaptípust jelez, mint amelyre a szoftver készült."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "A vevő memóriájában lévő címke más alaplaptípust ad meg."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "A vevő alaplapja (gyári fejléc) más."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "A vevő memóriájában a partíciók másképp vannak elrendezve."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "A kernel vagy a rendszer partíciója máshol van, vagy más a mérete."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "A belső memória mérete más, mint annál a modellnél, amelyre a szoftver készült."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "A vevő egy másik értéke nem egyezik."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "A processzort nem sikerült kiolvasni: a processzor illesztőprogramja nem töltődött be."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Az alaplap típusát nem sikerült kiolvasni: az alaplap illesztőprogramja nem töltődött be."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "Az alaplapot nem sikerült kiolvasni a gyári fejlécből."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "A partíciókat nem sikerült kiolvasni az indítási parancssorból."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "A kernel vagy a rendszer partíciója nem található."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "A szoftverben lévő vevőjel sérült."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "Az indításkori ellenőrzés nem adott eredményt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "A kezelőfelület indításkor többször összeomlott, és csökkentett módban indult el."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "A kezelőfelület csökkentett módban is összeomlik."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "A kezelőfelület egyáltalán nem indul el."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "A vevő illesztőprogramjai hiányoznak vagy nem töltődtek be."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "A kezelőfelület 5 percen belül nem jelent meg: indításkor elakadt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "A kezelőfelület indításkor más okból leállt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Alaplaptípus (illesztő)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Címke"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Alaplap (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Belső memória"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Kernel és rendszer"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Partíciók"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Modell (betöltő)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d partíció"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "%(loc)d. hely: %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, szabad %(liber)d MiB"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "egy sem található"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "HD Satelit %(versiune)s ehhez: %(model)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Fényképezd le ezt a képernyőt, és küldd el arra a fórumra, ahol a szoftvert találtad, vagy ide: %s."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "A szoftver semmit sem ír a vevő memóriájába. Tedd vissza a megfelelő szoftvert USB-meghajtóval, ahogy a vevő gyártója leírja."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Minden adat a webes felületen: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Minden adat a vevő webes felületén, a %s oldalon"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Fórum: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "A kezelőfelület utolsó hibája"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Kernel: illesztőprogramok és hibák"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Minden adat másolásra, számítógépről vagy telefonról:"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "A kezelőfelület %d perc múlva újra próbálkozik."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Kódok:"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Kód"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "További kódok: %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "Az indítás sikerült: a vevő megfelel a szoftvernek."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "Az indítás sikerült. Néhány érték eltér a várttól: a modell még nincs megerősítve."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Másold ki az alábbi adatokat, és küldd el arra a fórumra, ahol a szoftvert találtad, vagy ide: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "Az indítás sikerült; az alábbi adatok csak olvasásra valók."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Az összes másolása"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "Küldés e-mailben"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "HD Satelit fórum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "JavaScript nélkül: tartsd lenyomva a szöveget, jelöld ki az egészet, és másold."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "A tévén a diagnosztikai képernyő csak akkor jelenik meg magától, ha az indítás nem sikerül; különben itt nyitod meg: MENU > Rendszerinformációk > Indítási diagnosztika."
+
+#: lib/python/Screens/ChannelSelection.py
+msgid "Căutare"
+msgstr "Keresés"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și e-mailul sunt opționale."
+msgstr "Az adatok névtelenek: a vevő véletlenszerű azonosítót kap, IP-cím, jelszavak és a saját csatornalistáid nélkül. Csak arra használjuk őket, hogy javítsuk az image-et a vevőd modelljén. A név és az e-mail nem kötelező."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus."
+msgstr "Elolvastam az Adatvédelmi tájékoztatót, és hozzájárulok a fent bejelölt adatok küldéséhez."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Vrei să ajuți la îmbunătățirea imaginii pe care o folosești acum?"
+msgstr "Szeretnél segíteni az éppen használt image fejlesztésében?"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai folosit cu interes imaginea E2 HD Satelit peste o oră. Ca beta tester ne trimiți date anonime, numai cele alese de tine."
+msgstr "Már több mint egy órája aktívan használod az E2 HD Satelit image-et. Bétatesztelőként névtelen adatokat küldesz nekünk, csak azokat, amelyeket te választasz."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele le primește Eduard Monea, persoană fizică (mărcile Monea Software și HD Satelit), contact@hdsatelit.com. Pleacă numai felurile bifate de tine, cu un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale, numai ca să îmbunătățim imaginea pe modelul tău de receptor. Jurnalele se păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de date sau poți ieși din program cu ștergerea datelor. Nota întreagă e la adresa de mai jos."
+msgstr "Az adatokat Eduard Monea magánszemély kapja (a Monea Software és a HD Satelit márkák), contact@hdsatelit.com. Csak az általad bejelölt fajták mennek el, véletlenszerű azonosítóval, IP-cím, jelszavak és a saját csatornalistáid nélkül, csak azért, hogy javítsuk az image-et a vevőd modelljén. A naplókat 6 hónapig, a többi adatot 12 hónapig őrizzük. Bármikor kivehetsz egy adatfajtát, vagy kiléphetsz a programból az adatok törlésével. A teljes tájékoztató az alábbi címen olvasható."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite automat în fiecare zi"
+msgstr "Automatikus küldés minden nap"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "O dată pe zi, noaptea, numai felurile bifate, și imediat după o oprire neașteptată a interfeței sau o actualizare care nu a reușit. Fără bifă pleacă numai ce trimiți tu cu „Trimite acum”."
+msgstr "Naponta egyszer, éjszaka, csak a bejelölt fajták, és rögtön a felület váratlan leállása vagy egy sikertelen frissítés után. Jelölés nélkül csak az megy el, amit te küldesz a „Küldés most” gombbal."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Greșeală"
+msgstr "Hiba"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Idee"
+msgstr "Ötlet"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Întrebare"
+msgstr "Kérdés"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "în coadă"
+msgstr "várakozási sorban"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "trimis"
+msgstr "elküldve"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "pierdut, coada era plină"
+msgstr "elveszett, a sor megtelt"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "refuzat de server"
+msgstr "a szerver elutasította"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "citit"
+msgstr "elolvasva"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "are răspuns"
+msgstr "van válasz"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "închis"
+msgstr "lezárva"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Acordul"
+msgstr "Hozzájárulás"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ștergerea datelor"
+msgstr "Adatok törlése"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesaj"
+msgstr "Üzenet"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Jurnalele de cădere și de erori"
+msgstr "Összeomlási és hibanaplók"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce s-a întâmplat când interfața s-a oprit sau un ecran a căzut, fără setările și fără rețeaua ta."
+msgstr "Mi történt, amikor a felület leállt vagy egy képernyő összeomlott, a beállításaid és a hálózatod nélkül."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Canalele scanate"
+msgstr "Talált csatornák"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Sateliții, frecvențele și numele canalelor găsite la scanare, pentru baza de date a tuturor receptoarelor și pentru SatBase. Fără favorite, fără cablu și terestru."
+msgstr "A keresés során talált műholdak, frekvenciák és csatornanevek, az összes vevő adatbázisához és a SatBase-hez. Kedvencek, kábel és földi adás nélkül."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Memoria, procesorul, temperatura și pornirea"
+msgstr "Memória, processzor, hőmérséklet és indítás"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Cât de încărcat e receptorul în timpul zilei și cât durează pornirea."
+msgstr "Mennyire terhelt a vevő napközben, és mennyi ideig tart az indulása."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ecranele și funcțiile folosite"
+msgstr "Használt képernyők és funkciók"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce ecrane deschizi și de câte ori, ca să știm ce să îmbunătățim întâi."
+msgstr "Mely képernyőket nyitod meg és milyen gyakran, hogy tudjuk, mit javítsunk először."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele receptorului"
+msgstr "A vevő adatai"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI și driverele, ca să adaptăm imaginea și lista de receptoare."
+msgstr "Memória, tunerek, hálózati kártyák (MAC-cím nélkül), a HDMI-kimenet és a driverek, hogy az image-et és a vevők listáját hozzájuk igazíthassuk."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor"
+msgstr "A tesztek eredményei"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce au găsit probele pornite de tine din meniul testerului: ce merge și ce nu pe modelul tău."
+msgstr "Amit a tesztelői menüből indított tesztek találtak: mi működik és mi nem a modelleden."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mulțumim. Ești beta tester. Datele bifate pleacă de acum."
+msgstr "Köszönjük. Bétatesztelő vagy. A bejelölt adatok mostantól elmennek."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Salvat. Serverul primește alegerile noi cu următoarea trimitere."
+msgstr "Elmentve. A szerver a következő küldéssel kapja meg az új választásokat."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai ieșit din program. Cererea de ștergere pleacă la server; pe receptor nu mai rămâne nimic."
+msgstr "Kiléptél a programból. A törlési kérés elmegy a szerverre; a vevőn nem marad semmi."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor au intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "A tesztek eredményei a várakozási sorba kerültek, és elmennek, amint a vevőnek lesz internetje."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul a intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "Az üzenet a várakozási sorba került, és elmegy, amint a vevőnek lesz internetje."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu ai trimis încă niciun mesaj."
+msgstr "Még nem küldtél üzenetet."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu apari public. Poți alege un nume public mai jos."
+msgstr "Nyilvánosan nem jelensz meg. Lent választhatsz nyilvános nevet."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Numele public e deja folosit de alt tester. Alege altul."
+msgstr "A nyilvános nevet már egy másik tesztelő használja. Válassz másikat."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Codul nu e bun sau a expirat. Cere un cod nou de pe site."
+msgstr "A kód nem jó, vagy lejárt. Kérj új kódot a weboldalon."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Prea multe încercări. Mai încearcă peste o oră."
+msgstr "Túl sok próbálkozás. Próbáld újra egy óra múlva."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Serverul nu are încă acordul tău. Mai încearcă peste câteva minute."
+msgstr "A szerver még nem kapta meg a hozzájárulásodat. Próbáld újra néhány perc múlva."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Profilul e legat de alt receptor."
+msgstr "A profil egy másik vevőhöz van kapcsolva."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Pe acest receptor nu e încă niciun beta tester. Vrei să fii primul?"
+msgstr "Ezen a vevőn még nincs bétatesztelő. Szeretnél te lenni az első?"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "acest model"
+msgstr "ezen a modellen"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s sunt deja %d beta testeri."
+msgstr "A(z) %s típuson már %d bétatesztelő van."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ultima trimitere: încă nimic."
+msgstr "Utolsó küldés: még semmi."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: %s"
+msgstr "Utolsó küldés: %s"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Se adună datele bifate și pleacă îndată ce receptorul are internet."
+msgstr "A bejelölt adatok összegyűlnek, és elmennek, amint a vevőnek lesz internetje."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Adresa de e-mail nu pare bună."
+msgstr "Az e-mail-cím nem tűnik jónak."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu ești înscris în programul de beta testeri."
+msgstr "Nem vagy tagja a bétatesztelői programnak."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Felul „Rezultatele probelor” e debifat în „Datele pe care le trimit”."
+msgstr "A „A tesztek eredményei” fajta nincs bejelölve az „Az adatok, amelyeket küldök” részben."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor nu au forma bună."
+msgstr "A tesztek eredményeinek nem megfelelő a formája."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor sunt prea mari."
+msgstr "A tesztek eredményei túl nagyok."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Alege felul mesajului."
+msgstr "Válaszd ki az üzenet fajtáját."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Scrie întâi mesajul."
+msgstr "Először írd meg az üzenetet."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai trimis deja 10 mesaje azi. Mai poți trimite mâine."
+msgstr "Ma már 10 üzenetet küldtél. Holnap küldhetsz újra."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul e prea mare."
+msgstr "Az üzenet túl nagy."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu apari public."
+msgstr "Nyilvánosan nem jelensz meg."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ți-am trimis pe e-mail legătura de confirmare."
+msgstr "E-mailben elküldtük neked a megerősítő hivatkozást."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Serverul nu răspunde acum. Încearcă mai târziu."
+msgstr "A szerver most nem válaszol. Próbáld később."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s este deja un beta tester."
+msgstr "A(z) %s típuson már van egy bétatesztelő."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s sunt deja %d de beta testeri."
+msgstr "A(z) %s típuson már %d bétatesztelő van."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: azi, %s"
+msgstr "Utolsó küldés: ma, %s"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: ieri, %s"
+msgstr "Utolsó küldés: tegnap, %s"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Apari public ca „%s”."
+msgstr "Nyilvánosan „%s” néven jelensz meg."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Legat de contul „%s” de pe forum."
+msgstr "Összekapcsolva a(z) „%s” fórumfiókkal."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "E-mailul e confirmat."
+msgstr "Az e-mail-cím megerősítve."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Serverul a refuzat cererea (%s)."
+msgstr "A szerver elutasította a kérést (%s)."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Echipa"
+msgstr "Csapat"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "încă neprimit de server"
+msgstr "a szerver még nem kapta meg"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Trimite un mesaj"
+msgstr "Üzenet küldése"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite acum"
+msgstr "Küldés most"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce am trimis"
+msgstr "Amit elküldtem"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Răspunsurile echipei"
+msgstr "A csapat válaszai"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele pe care le trimit"
+msgstr "Az adatok, amelyeket küldök"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce trimit acum"
+msgstr "Amit most küldök"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Probele receptorului"
+msgstr "A vevő tesztjei"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Cere ajutor de la distanță"
+msgstr "Távoli segítség kérése"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Apariția publică"
+msgstr "Nyilvános profil"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nota de confidențialitate"
+msgstr "Adatvédelmi tájékoztató"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ieși din program și șterge datele"
+msgstr "Kilépés a programból és az adatok törlése"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Beta tester"
+msgstr "Bétatesztelő"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Renunț"
+msgstr "Mégse"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Sunt de acord"
+msgstr "Elfogadom"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Un fel debifat nu mai pleacă de acum; serverul îl refuză și el."
+msgstr "A kivett adatfajta mostantól nem megy el; a szerver is elutasítja."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Mesajul pleacă cu identificatorul anonim al receptorului, ca toate datele. Răspunsul echipei apare în „Răspunsurile echipei”."
+msgstr "Az üzenet a vevő névtelen azonosítójával megy el, mint minden adat. A csapat válasza itt jelenik meg: „A csapat válaszai”."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite"
+msgstr "Küldés"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scrie mesajul"
+msgstr "Írd meg az üzenetet"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul"
+msgstr "Üzenet"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Nu mai apar public"
+msgstr "Ne jelenjek meg nyilvánosan"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Leagă cu contul de pe forum"
+msgstr "Összekapcsolás a fórumfiókkal"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Se cere un cod de legare..."
+msgstr "Összekapcsolási kód kérése..."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Nota de confidențialitate s-a schimbat: citește-o și dă din nou acordul."
+msgstr "Az Adatvédelmi tájékoztató megváltozott: olvasd el, és add meg újra a hozzájárulásodat."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numele (opțional)"
+msgstr "Név (nem kötelező)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul (opțional)"
+msgstr "E-mail (nem kötelező)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Bifează cel puțin un fel de date sau alege Renunț."
+msgstr "Jelölj be legalább egy adatfajtát, vagy válaszd a Mégse gombot."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Ultimele %d, cel mai nou sus. Fără internet, pachetele așteaptă în coadă."
+msgstr "Az utolsó %d, a legújabb felül. Internet nélkül a csomagok a várakozási sorban várnak."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ecranul sau funcția (opțional)"
+msgstr "Képernyő vagy funkció (nem kötelező)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează jurnalul ultimei erori"
+msgstr "Az utolsó hiba naplójának csatolása"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează o captură a ecranului (numai meniurile)"
+msgstr "Képernyőkép csatolása (csak a menük)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Galben: scrie mesajul cu tastatura de pe ecran."
+msgstr "Sárga: írd meg az üzenetet a képernyő-billentyűzettel."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe receptor."
+msgstr "Nem kötelező: egy általad választott névvel jelensz meg a weboldal tesztelői oldalán és a modelled oldalán. A vevőn nincs jelszó."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Cod QR pentru telefon"
+msgstr "QR-kód a telefonhoz"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Numele public"
+msgstr "Nyilvános név"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numele public are 2-40 de semne: litere, cifre, spațiu, punct, liniuță."
+msgstr "A nyilvános név 2-40 karakter: betűk, számjegyek, szóköz, pont, kötőjel."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul are 6 cifre. Îl vezi pe site, pe pagina de legare, când ești conectat."
+msgstr "A kód 6 számjegyű. Bejelentkezve a weboldalon, az összekapcsolási oldalon látod."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul a expirat. Deschide din nou ecranul pentru un cod nou."
+msgstr "A kód lejárt. Nyisd meg újra a képernyőt egy új kódért."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scanează codul cu telefonul pe care ești conectat pe forumul imaginii și apasă „Leagă și arată-mă ca tester”. Codul e valabil 10 minute și se folosește o singură dată."
+msgstr "Olvasd be a kódot azzal a telefonnal, amelyen be vagy jelentkezve az image fórumára, és nyomd meg az „Összekapcsolás és mutass tesztelőként” gombot. A kód 10 percig érvényes, és csak egyszer használható."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid ""
+"Identificatorul tău: %s\n"
+"Acordul din %s, nota de confidențialitate versiunea %d.\n"
+"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul."
+msgstr ""
+"Az azonosítód: %s\n"
+"Hozzájárulás dátuma: %s, adatvédelmi tájékoztató %d. verzió.\n"
+"Az adatok vevő nélküli törléséhez írj a contact@hdsatelit.com címre az azonosítóval."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numai ca să te putem întreba ceva despre o problemă găsită pe receptorul tău. Nu apare public."
+msgstr "Csak azért, hogy kérdezhessünk tőled valamit egy vevődön talált problémáról. Nem jelenik meg nyilvánosan."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Bifează întâi „%s”"
+msgstr "Előbb jelöld be ezt: „%s”"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Încă nu a plecat nimic."
+msgstr "Még semmi nem ment el."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Ai %d secunde: închide meniurile și deschide ecranul despre care scrii. Captura se face singură, numai cu meniurile, apoi mesajul pleacă."
+msgstr "%d másodperced van: zárd be a menüket, és nyisd meg azt a képernyőt, amelyről írsz. A képernyőkép magától elkészül, csak a menükkel, aztán az üzenet elmegy."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul pentru cont (opțional)"
+msgstr "E-mail a fiókhoz (nem kötelező)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul de 6 cifre de pe site (OK după ce îl scrii)"
+msgstr "A weboldalon látható 6 jegyű kód (beírás után OK)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Serverul a dat o adresă greșită."
+msgstr "A szerver hibás címet adott."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numai pentru răspunsurile echipei. Nu apare public și se șterge la cerere."
+msgstr "Csak a csapat válaszaihoz. Nem jelenik meg nyilvánosan, és kérésre töröljük."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scanează cu telefonul sau deschide:"
+msgstr "Olvasd be a telefonnal, vagy nyisd meg:"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat."
+msgstr "Az e-mail (nem kötelező) fiókot hoz létre neked a fórumon: kapsz egy hivatkozást, és ott adod meg a jelszavadat, bármilyen eszközről."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "un răspuns nou"
+msgstr "egy új válasz"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "(automat în fiecare zi)"
+msgstr "(automatikusan minden nap)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Galben deschide nota. Fără această bifă nu pleacă nimic."
+msgstr "A sárga megnyitja a tájékoztatót. E jelölés nélkül semmi sem megy el."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "%d răspunsuri noi"
+msgstr "%d új válasz"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Încă nu a plecat niciun pachet."
+msgstr "Még egyetlen csomag sem ment el."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ieși din programul de beta testeri? Serverul șterge toate datele trimise de acest receptor, iar pe receptor nu mai rămâne nimic."
+msgstr "Kilépsz a bétatesztelői programból? A szerver törli a vevő által küldött összes adatot, és a vevőn sem marad semmi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Cerere necunoscută."
+msgstr "Ismeretlen kérés."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Deschide legătura pe aparatul pe care ești conectat pe forum și apasă „Leagă și arată-mă ca tester”. E valabilă 10 minute."
+msgstr "Nyisd meg a hivatkozást azon az eszközön, amelyen be vagy jelentkezve a fórumra, és nyomd meg az „Összekapcsolás és mutass tesztelőként” gombot. 10 percig érvényes."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează o captură a ecranului (numai meniurile): se face acum, cu ce arată televizorul"
+msgstr "Képernyőkép csatolása (csak a menük): most készül, azzal, amit a tévé mutat"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Caută răspunsuri noi"
+msgstr "Új válaszok keresése"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul de 6 cifre de pe site"
+msgstr "A weboldalon látható 6 jegyű kód"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Leagă cu codul"
+msgstr "Összekapcsolás a kóddal"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Leagă de pe acest aparat"
+msgstr "Összekapcsolás erről az eszközről"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nota întreagă"
+msgstr "A teljes tájékoztató"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Ieși și șterge datele"
+msgstr "Kilépés és az adatok törlése"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Același program e pe televizor, în __DRUM_MENIU__."
+msgstr "Ugyanez a program a tévén is megvan itt: __DRUM_MENIU__."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Nu s-a trimis nimic."
+msgstr "Semmi nem ment el."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Legarea cu un cont de pe forum nu e încă gata."
+msgstr "A fórumfiókkal való összekapcsolás még nincs kész."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Cererea nu mai există. Încearcă din nou."
+msgstr "A kérés már nem létezik. Próbáld újra."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Captura nu s-a putut face; mesajul pleacă fără ea."
+msgstr "A képernyőkép nem készült el; az üzenet nélküle megy el."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Da, ieși și șterge"
+msgstr "Igen, kilépés és törlés"
+
+# Asistenta de la distanta
+msgid "    raspuns: cod %d, %d octeti"
+msgstr "    válasz: kilépési kód %d, %d bájt"
+
+msgid "%d ore"
+msgstr "%d óra"
+
+msgid "Am cerut confirmarea pe televizor."
+msgstr "Megerősítés kérve a tévén."
+
+msgid "Asistenta a pornit."
+msgstr "A távsegítség elindult."
+
+msgid "Asistenta merge deja."
+msgstr "A távsegítség már fut."
+
+msgid "Asistenta nu merge."
+msgstr "A távsegítség nem fut."
+
+msgid "Asistenta s-a oprit. Cheia a fost stearsa."
+msgstr "A távsegítség leállt. A kulcs törölve."
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să se conecteze, prin internet, la receptorul tău, ca să repare sau să îmbunătățească imaginea pentru modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu.\n\nReceptorul tău face o legătură criptată spre serverul HD Satelit. Cineva de la noi, pe care l-ai chemat tu, citește starea receptorului tău, nu a altor aparate din casa ta, și face numai ce scrie în jurnalul de mai jos.\n\nCât timp e pornită vezi un semn pe ecran. O poți opri oricând. Se oprește singură după timpul ales.\n\nCe vedem: starea tehnică a receptorului, jurnalele lui, uneori o captură a meniurilor. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale."
+msgstr "A távsegítséggel a HD Satelit munkatársai az interneten keresztül csatlakozhatnak a vevődhöz, hogy kijavítsák vagy jobbá tegyék az image-et a modelledhez.\n\nCsak azoknak szól, akik segíteni akarnak nekünk. A vevődnek nincs rá szüksége a működéshez. Ki van kapcsolva, amíg te be nem kapcsolod.\n\nA vevőd titkosított kapcsolatot létesít a HD Satelit szerverével. Valaki tőlünk, akit te hívtál, a vevőd állapotát olvassa, nem a többi otthoni eszközödét, és csak azt teszi, ami az alábbi naplóban áll.\n\nAmíg be van kapcsolva, egy jelzést látsz a képernyőn. Bármikor leállíthatod. A választott idő után magától leáll.\n\nAmit látunk: a vevő műszaki állapota, a naplói, néha egy képernyőkép a menükről. Nem olvasunk jelszavakat, kulcsokat, hozzáférési kártyák beállításait vagy a fájljaidat."
+
+msgid "Asistența merge deja."
+msgstr "A távsegítség már fut."
+
+msgid "Asistență activă"
+msgstr "Távsegítség aktív"
+
+msgid "Asistență de la distanță"
+msgstr "Távsegítség"
+
+msgid "Cât timp"
+msgstr "Időtartam"
+
+msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Poți opri oricând. Pornești?"
+msgstr "Távoli hozzáférést adsz %s időtartamra, „Olvasás és tesztek” szinten. Bármikor leállíthatod. Indítod?"
+
+msgid "Functia nu e disponibila pe aceasta imagine."
+msgstr "A funkció nem érhető el ebben az image-ben."
+
+msgid "Funcția nu e disponibilă pe această imagine."
+msgstr "A funkció nem érhető el ebben az image-ben."
+
+msgid "HD Satelit cere pornirea asistenței de la distanță din pagina web, pentru %s. Pornești?"
+msgstr "A HD Satelit a weboldalról kéri a távsegítség indítását, %s időtartamra. Indítod?"
+
+msgid "Informatii"
+msgstr "Információk"
+
+msgid "Jurnale"
+msgstr "Naplók"
+
+msgid "Jurnalul asistenței"
+msgstr "A távsegítség naplója"
+
+msgid "Meniu > Beta tester"
+msgstr "Menü > Bétatesztelő"
+
+msgid "Meniu > Beta tester > Asistență > Oprește"
+msgstr "Menü > Bétatesztelő > Távsegítség > Leállítás"
+
+msgid "Mesaj de la HD Satelit:"
+msgstr "Üzenet a HD Satelit részéről:"
+
+msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură a meniurilor cere OK pe ecran). Poți opri oricând."
+msgstr "Szint: Olvasás és tesztek (csak egy rögzített lista műveleteit futtathatjuk, főleg olvasásokat; a menük képernyőképéhez OK kell a képernyőn). Bármikor leállíthatod."
+
+msgid "Nu pot cere confirmarea pe televizor acum."
+msgstr "Most nem lehet megerősítést kérni a tévén."
+
+msgid "Nu pot cere confirmarea pe televizor: %s"
+msgstr "Nem lehet megerősítést kérni a tévén: %s"
+
+msgid "Nu pot citi catalogul: %s"
+msgstr "Nem lehet beolvasni a katalógust: %s"
+
+msgid "Oprești asistența? Cheia se șterge și legătura se închide."
+msgstr "Leállítod a távsegítséget? A kulcs törlődik, a kapcsolat bezárul."
+
+msgid "Oprită. O pornești tu, dacă vrei să ne ajuți."
+msgstr "Kikapcsolva. Te kapcsolod be, ha segíteni szeretnél nekünk."
+
+msgid "Pornește asistența"
+msgstr "Távsegítség indítása"
+
+msgid "Pornirea cere confirmare pe televizor. Oprirea merge din orice browser din rețeaua locală. Aceleași lucruri sunt pe televizor, în __DRUM_MENIU__."
+msgstr "Az indításhoz megerősítés kell a tévén. Leállítani a helyi hálózat bármelyik böngészőjéből lehet. Ugyanez megvan a tévén is: __DRUM_MENIU__."
+
+msgid "Probe"
+msgstr "Tesztek"
+
+msgid "Spune-ne acest cod. Nu îl da altcuiva."
+msgstr "Mondd meg nekünk ezt a kódot. Másnak ne add meg."
+
+msgid "cerere refuzata: %s"
+msgstr "kérés elutasítva: %s"
+
+msgid "cererea a fost %s"
+msgstr "a kérés állapota: %s"
+
+msgid "citire"
+msgstr "olvasás"
+
+msgid "cod aratat pe ecran, astept aprobarea"
+msgstr "kód a képernyőn, jóváhagyásra vár"
+
+msgid "codul a expirat fara aprobare"
+msgstr "a kód jóváhagyás nélkül lejárt"
+
+msgid "conectat"
+msgstr "csatlakoztatva"
+
+msgid "copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)"
+msgstr "a beállítások szűrt másolata (hang, videó, felület, hálózat; jelszavak és kulcsok nélkül)"
+
+msgid "jurnalul nucleului"
+msgstr "a kernel naplója"
+
+msgid "lista jurnalelor receptorului, cu marimile"
+msgstr "a vevő naplóinak listája, méretekkel"
+
+msgid "lista pachetelor instalate"
+msgstr "a telepített csomagok listája"
+
+msgid "lista proceselor (numele, fara argumente)"
+msgstr "a folyamatok listája (nevek, argumentumok nélkül)"
+
+msgid "mai sunt"
+msgstr "még"
+
+msgid "memoria libera si memoria decodorului"
+msgstr "szabad memória és a dekóder memóriája"
+
+msgid "nu pot ajunge la serverul de asistenta"
+msgstr "a távsegítség szervere nem érhető el"
+
+msgid "o captura a ecranului (numai meniurile, fara imaginea canalului)"
+msgstr "képernyőkép (csak a menük, a csatorna képe nélkül)"
+
+msgid "o oră"
+msgstr "egy óra"
+
+msgid "oprita"
+msgstr "leállítva"
+
+msgid "oprita (%s)"
+msgstr "leállítva (%s)"
+
+msgid "placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate"
+msgstr "alaplap: processzor, a kernel parancssora, partíciók, betöltött modulok"
+
+msgid "pornita (%s, nivel %s, %d minute, text v%d)"
+msgstr "elindítva (%s, szint: %s, %d perc, szöveg v%d)"
+
+msgid "proba"
+msgstr "teszt"
+
+msgid "reluata dupa repornirea interfetei"
+msgstr "folytatva az interfész újraindítása után"
+
+msgid "reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)"
+msgstr "hálózat: kábel vagy Wi-Fi, csatlakozik-e, alapértelmezett útvonal, DNS (hálózatnév nélkül, a MAC elfedve)"
+
+msgid "s-a terminat timpul ales"
+msgstr "a választott idő lejárt"
+
+msgid "serverul a refuzat inregistrarea (%s)"
+msgstr "a szerver elutasította a regisztrációt (%s)"
+
+msgid "starea decodorului (video, sunet, sincronizare)"
+msgstr "a dekóder állapota (videó, hang, szinkron)"
+
+msgid "starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"
+msgstr "a vevő állapota (modell, verzió, kernel, memória, lemez, hőmérsékletek)"
+
+msgid "tunerele si blocarea semnalului"
+msgstr "a tunerek és a jel befogása"
+
+msgid "ultimele randuri dintr-un jurnal"
+msgstr "egy napló utolsó sorai"
+
+msgid "un mesaj scris pe ecranul televizorului"
+msgstr "egy üzenet a tévé képernyőjén"
+
+# Asistenta de la distanta
+msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând."
+msgstr "Szint: Olvasás és tesztek (csak egy rögzített lista műveleteit futtathatjuk, főleg olvasásokat; a képernyőkép csak a menüket mutatja, a csatorna képét nem). Bármikor leállíthatod."
+
+# Asistenta de la distanta
+msgid "Pornirea se cere numai dintr-un browser conectat cu codul de pe televizor."
+msgstr "Az indítást csak a tévén látható kóddal csatlakoztatott böngészőből lehet kérni."
+
+# Asistenta de la distanta
+msgid "(gol)"
+msgstr "(üres)"
+
+msgid "Ai cerut pornirea din pagina web. Citește, apoi apasă Verde dacă vrei."
+msgstr "A weboldalról kérted az indítást. Olvasd el, aztán nyomd meg a Zöldet, ha szeretnéd."
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
+msgstr "A távsegítséggel a HD Satelit munkatársai az interneten keresztül láthatják a vevőd műszaki állapotát, hogy gyorsabban megtalálják és kijavítsák az image hibáit a modelleden.\n\nCsak azoknak szól, akik segíteni akarnak nekünk. A vevődnek nincs rá szüksége a működéshez. Ki van kapcsolva, amíg te be nem kapcsolod, minden alkalommal újra.\n\nÍgy működik: a vevőd titkosított kapcsolaton keresztül megkérdezi a HD Satelit szerverét, hogy van-e kérésünk számára. Csak egy rögzített, az image-be beírt lista műveleteit kérhetjük: az állapot és a naplók olvasását, egy képernyőképet a menükről és egy írott üzenetet a képernyőn. Nem futtathatunk parancsokat, nem módosíthatunk beállításokat vagy fájlokat, és nem érhetünk el más eszközöket az otthonodban. Minden kérés megjelenik a naplóban, a képernyőn.\n\nAmíg be van kapcsolva, egy jelzést látsz a képernyőn. Bármikor leállíthatod innen vagy a weboldalról, a választott idő után pedig magától leáll.\n\nMilyen adatok jutnak el hozzánk: a vevő modellje és verziója, az ország, a munkamenet időpontja és hossza, valamint a naplóban szereplő kérésekre adott válaszok (a naplók többek között azt is mutathatják, mely csatornák nyíltak meg és mikor). Nem tároljuk az IP-címedet. Nem olvasunk jelszavakat, kulcsokat, hozzáférési kártyák beállításait vagy a fájljaidat. Az adatok 30 napig a szerverünkön vannak (Hetzner, Németország; a kapcsolat a Cloudflare-en keresztül megy), aztán törlődnek. Csak az image javítására használjuk őket, és nem adjuk ki másoknak.\n\nAdatkezelő: Monea Eduard (HD Satelit), contact@hdsatelit.com. Bármikor kérheted tőlünk, hogy megnézd vagy töröljük a munkameneted adatait. A funkciót csak akkor használd, ha legalább 16 éves vagy, vagy van szülői hozzájárulásod."
+
+msgid "Asistență de la distanță activă"
+msgstr "Távsegítség aktív"
+
+msgid "Conectat. Mai sunt %s."
+msgstr "Csatlakozva. Még %s."
+
+msgid "Dai acces la distanță pentru %s, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Távoli hozzáférést adsz %s időtartamra, „Olvasás és tesztek” szinten. Az indítással megerősíted, hogy legalább 16 éves vagy, vagy van szülői hozzájárulásod. Bármikor leállíthatod. Indítod?"
+
+msgid "Oprești din %s"
+msgstr "Leállítás: %s"
+
+msgid "Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo."
+msgstr "A tévén megnyílt a Távsegítség: olvasd el, és nyomd meg ott a Zöldet."
+
+msgid "Spune-ne codul de mai jos. Mai sunt %s."
+msgstr "Mondd meg nekünk a lenti kódot. Még %s."
+
+msgid "Sus/Jos: tot textul"
+msgstr "Fel/Le: a teljes szöveg"
+
+#: lib/python/Screens/ChannelSelection.py
+msgid "Buchete"
+msgstr "Csokrok"

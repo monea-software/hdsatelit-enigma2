@@ -90,6 +90,14 @@ UTF8_FS = ("vfat",)
 FSTYPE_RETRIES = 5
 GONE_CHECK_MS = 3000
 UUID_RX = re.compile(r"^[0-9A-Za-z-]{1,64}$")
+# a disk on the SATA bus of the board (the internal or eSATA disk of the Octagon SF8008 and of the first Amiko Viper 4K):
+# its device in sysfs sits under an ATA port, /devices/.../ata1/host0/target0:0:0/0:0:0:0; a USB disk sits under
+# .../usb1/..., the eMMC under .../mmc0/... (never an ATA port)
+ATA_PORT_RX = re.compile(r"/ata[0-9]+/")
+
+def isSataPhysdev(physdev):
+	"""physdev (the device path of the disk in sysfs, without /sys) is on an ATA port and not behind USB"""
+	return bool(physdev) and "/usb" not in physdev and ATA_PORT_RX.search(physdev + "/") is not None
 
 def isUnder(p, base):
 	"""p is inside base (base ends with /), not base itself: /media/hdd is under /media/, /media is not"""
@@ -764,7 +772,9 @@ class HarddiskManager:
 					SystemInfo["Harddisk"] = len(self.hdd) > 0
 
 				usb = "/usb" in (physdev or "") and not is_cdrom
-				if (not removable or medium_found) and not self.knownPartition(device) and (usb or not self.is_hard_mounted(device)):
+				# a SATA disk gets a stable name and is mounted like a USB one; the system disk is blacklisted above
+				sata = not usb and not is_cdrom and isSataPhysdev(physdev)
+				if (not removable or medium_found) and not self.knownPartition(device) and (usb or sata or not self.is_hard_mounted(device)):
 					# device is the device name, without /dev
 					# physdev is the physical device path, which we (might) use to determine the userfriendly name
 					description = self.getUserfriendlyDeviceName(device, physdev)
@@ -774,10 +784,11 @@ class HarddiskManager:
 					p.has_partitions = bool(partitions)
 					p.is_cdrom = is_cdrom
 					p.usb = usb
+					p.sata = sata
 					p.removable = removable
-					stable = self.stableMountpoint(device, mountpoints) if usb and mountpoints else None
-					if mountpoints and (stable or not usb):
-						# not USB (fstab, the system), or already on its stable name (enigma2 started again)
+					stable = self.stableMountpoint(device, mountpoints) if (usb or sata) and mountpoints else None
+					if mountpoints and (stable or not (usb or sata)):
+						# not USB or SATA (fstab, the system), or already on its stable name (enigma2 started again)
 						self.announceMounted(device, stable or mountpoints[0], p)
 					else:
 						# listed after a short wait, on its stable name: a link to where the base system mounted it,
@@ -962,16 +973,16 @@ class HarddiskManager:
 		mountpoints = findMountpoints(device)
 		if mountpoints:
 			stable = None
-			if getattr(p, "usb", False):
+			if getattr(p, "usb", False) or getattr(p, "sata", False):
 				stable = self.stableMountpoint(device, mountpoints) or self.makeAlias(device, mountpoints[0])
 			self.announceMounted(device, stable or mountpoints[0])
 			return
 		if mountedOnly or p.has_partitions or p.is_cdrom:
 			return
-		if not getattr(p, "usb", False):
+		if not getattr(p, "usb", False) and not getattr(p, "sata", False):
 			# internal flash and eMMC partitions are never mounted from here
 			if not quiet:
-				print("[Harddisk] %s is not a USB device, not mounted" % device)
+				print("[Harddisk] %s is not a USB or SATA disk, not mounted" % device)
 			return
 		if not DEVICE_NAME_RX.match(device):
 			print("[Harddisk] unexpected device name %r, not mounted" % device)

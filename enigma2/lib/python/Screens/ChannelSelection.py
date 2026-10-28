@@ -1131,6 +1131,13 @@ def hdsFavReface(ecran):
 HDS_CAP_GRUPE = 5
 
 
+def hdsEtichetaBuchete():
+	"""Textul tastei albastre (showFavourites) si al pastilei ei din capul listei. Cu mai multe buchete tasta deschide
+	lista tuturor buchetelor, deci "Buchete" (text propriu); cu un singur buchet deschide chiar buchetul Favorite, deci
+	numele lui. Traducerea lui "Favourites" ramane a buchetului, nu se schimba aici."""
+	return _("Buchete") if config.usage.multibouquet.value else _("Favourites")
+
+
 class ChannelSelectionBase(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
@@ -1139,9 +1146,9 @@ class ChannelSelectionBase(Screen):
 		self["key_red"] = Button(_("All"))
 		self["key_green"] = Button(_("Satellites"))
 		self["key_yellow"] = Button(_("Provider"))
-		self["key_blue"] = Button(_("Favourites"))
+		self["key_blue"] = Button(hdsEtichetaBuchete())
 		# HDSatelit: cautarea de canale (Screens/HdsCautareCanale.py), in bara de jos a skinului HDSatelit
-		self["key_text"] = StaticText("TEXT  Căutare")
+		self["key_text"] = StaticText("TEXT  " + _("Căutare"))
 		self["HdsCautareActions"] = ActionMap(["HdsCautareActions"],
 			{
 				"cautare": self.hdsCautare,
@@ -1345,6 +1352,9 @@ class ChannelSelectionBase(Screen):
 				return _("All")
 		elif str == "Favourites":
 			return _("Favourites")
+		elif str == "Bouquets" and 'FROM BOUQUET "bouquets.' in (ref.getPath() or ""):
+			# radacina cu toate buchetele (#NAME Bouquets (TV) din bouquets.tv): acelasi text ca tasta albastra
+			return _("Buchete")
 		return str
 
 	def buildTitleString(self):
@@ -2282,7 +2292,7 @@ class ChannelSelectionBase(Screen):
 
 	def hdsCapEtichete(self):
 		"""Textele pastilelor randului grupelor, ca tastele colorate (aceleasi traduceri), apoi meniul listei."""
-		etichete = [_("All"), _("Satellites"), _("Provider"), _("Favourites"), _("Menu")]
+		etichete = [_("All"), _("Satellites"), _("Provider"), hdsEtichetaBuchete(), _("Menu")]
 		return etichete[:self.hdsCap.grupe]
 
 	def hdsGrupaCurenta(self):
@@ -3215,6 +3225,12 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 
 	def multibouquet_config_changed(self, val):
 		self.recallBouquetMode()
+		# tasta albastra deschide acum lista buchetelor sau numai Favorite: textul ei si al pastilei din cap
+		if "key_blue" in self:
+			self["key_blue"].setText(hdsEtichetaBuchete())
+		self.hdsCapDesenat = None
+		if getattr(self, "hdsCapVazut", False):
+			self.hdsDeseneazaCapul()
 
 	def __evServiceStart(self):
 		self.hdsAlesDeOm = 0  # lantul de pornire: Favorite goale nu mai raman lista

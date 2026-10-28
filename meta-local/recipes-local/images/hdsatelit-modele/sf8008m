@@ -1,0 +1,43 @@
+# HD Satelit: regulile garzii de model pentru Octagon SF8008 MINI 4K (masina sf8008m), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina sf8008m e stratul producatorului meta-octagon: nucleul linux-octagon 4.4.35 (defconfig sf8008m), pachetul de
+# drivere sf8008m-hiko 20221108 (hi-dvb.ko face /proc/stb), aceeasi impartire a memoriei interne ca Octagon SF8008 4K
+# UHD si primul Amiko Viper 4K, cu partitia userdata mai mica (eMMC de 4 GB; lotul imagine-060-sf8008m, progres.md).
+# Valorile vin din pachetele publice ale producatorului, verificate pe SHA-256:
+#   boxtype  /proc/stb/info/boxtype din hi-dvb.ko = "sf8008m" (singurul nume de model din modul);
+#   hw       antetul deviceinfo.bin din sf8008m-partitions-20201218 (identic cu cel SF8008): MAGICNUM=deviceinfo
+#            OUI=00000003 HW=00000001;
+#   partitions, kernel_part, rootfs_part: boot.img (STARTUP) din acelasi pachet, identic cu cel SF8008 (blkdevparts,
+#            root=/dev/mmcblk0p16 rootsubdir=linuxrootfs1, kernel=/dev/mmcblk0p12); MTD_KERNEL si MTD_ROOTFS din
+#            sf8008m.conf (meta-octagon); userdata e ultima partitie, cu tot restul memoriei (3580M in
+#            emmc_partitions.xml);
+#   kernel_kib 16384: linuxkernel1 are 16 MB.
+# Nucleul si sistemul sunt in partitiile cu numele linuxkernel1 si userdata (sistemul intr-un subdosar al lui userdata,
+# linuxrootfs1): kernel_name si rootfs_name le dau garzii (enigma2.sh si Components/HdsPazaModel.py, de la imaginea
+# 0.6.3).
+# Tipul placii vine din driverul imaginii care ruleaza: hi-dvb.ko il da constant ("sf8008m") pe orice placa, si pe un
+# Octagon SF8008 4K UHD (sf8008) cu imaginea aceasta; deci dovedeste driverul, nu receptorul. Pe Octagon eticheta din
+# deviceinfo nu exista (showiframe-ul Octagon nu o scrie), iar cipul, antetul deviceinfo si tabela sunt aceleasi la
+# MINI si SF8008: la pornire garda nu le desparte. Semnul receptorului e MODEL= din bootargs-ul lui (sf8008m, sf8008;
+# Components/HdsPazaModel.informatiiPornire), aratat numai informativ: nemasurat pe un aparat.
+# upd_path lipseste dinadins: driverul nu are /proc/stb/info/upd_path, iar recuperarea nu e Maintenance Mode cu un dosar
+# pe stick, ci arhiva de recuperare a producatorului (usb_update.bin).
+# emmc_min_kib nu se pune: marimea memoriei interne nu e masurata de nimeni pentru noi.
+# Se inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=sf8008m.
+format=1
+distro=hdsatelit
+model=Octagon SF8008 MINI 4K
+machine=sf8008m
+machinebuild=sf8008m
+chip=Hi3798MV200
+boxtype=sf8008m
+hw=00000001
+partitions=boot:1M,bootargs:1M,bootoptions:1M,baseparam:3M,pqparam:4M,logo:4M,deviceinfo:4M,softwareinfo:4M,loaderdb:4M,loader:32M,trustedcore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p12
+kernel_kib=16384
+rootfs_part=mmcblk0p16
+confirmat=nu

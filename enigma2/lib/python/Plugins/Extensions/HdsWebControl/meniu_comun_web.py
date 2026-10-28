@@ -193,7 +193,19 @@ def pagina(request, sablon, cu_csrf=True):
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret) if cu_csrf else "", "", browser.get("nume", ""))
-	return sablon(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
+	return _cuBandaAsistenta(sablon(P._STIL_COMUN, config_pagina)).encode("utf-8", "replace")
+
+
+def _cuBandaAsistenta(text):
+	"""Cat Asistenta de la distanta e activa, banda ei sus pe pagina (asistenta_web.bandaWeb); altfel textul ca atare."""
+	try:
+		from .asistenta_web import bandaWeb
+		banda = bandaWeb()
+	except Exception:
+		return text
+	if not banda or "<body>" not in text:
+		return text
+	return text.replace("<body>", "<body>" + banda, 1)
 
 
 # Scriptul comun al paginilor (cererile, mesajul, confirmarea in doi pasi), lipit in fiecare pagina in locul lui

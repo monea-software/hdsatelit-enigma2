@@ -55,6 +55,7 @@ dvbinclude_HEADERS = \
 	frontend.h \
 	frontendparms.h \
 	hdsait.h \
+	hdscalitate.h \
 	hdscedare.h \
 	hdsgrad.h \
 	hdsmultistream.h \

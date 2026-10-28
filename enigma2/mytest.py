@@ -84,6 +84,12 @@ except Exception as e:
 	print("[mytest] ghidul:", e)
 	HdsEpgSalvare = None
 config.misc.epgcache_filename = ConfigText(default = HdsEpgSalvare.CALE if HdsEpgSalvare else "/home/root/epg.dat")
+# HDSatelit: programul de beta testeri (Components/HdsBetaTester.py): contorul orei, intrebarea, trimiterea
+try:
+	from Components import HdsBetaTester
+except Exception as e:
+	print("[mytest] beta tester:", e)
+	HdsBetaTester = None
 
 def setEPGCachePath(configElement):
 	# un ghid scris de versiunea dinainte pe /hdd/epg.dat trece pe calea noua inainte sa-l citeasca firul ghidului
@@ -384,6 +390,9 @@ class Session:
 		self.current_dialog = dlg
 		dlg.isTmp = True
 		dlg.callback = None
+		# HDSatelit: numaratoarea ecranelor pentru beta testeri (numai cu programul pornit, fara nimic pe disc aici)
+		if HdsBetaTester is not None:
+			HdsBetaTester.numaraEcran(screen)
 		self.execBegin()
 		return dlg
 
@@ -573,6 +582,14 @@ def runScreenTest():
 	except Exception as e:
 		print("[mytest] jurnalul de versiuni:", e)
 
+	# HDSatelit: tasta HELP pe orice ecran deschide pagina lui de ajutor, fara internet (Components/HdsAjutor.py; datele
+	# in pachetul hdsatelit-ajutor). Numai legarea tastei: nimic citit de pe disc pana la prima apasare.
+	try:
+		from Components import HdsAjutor
+		HdsAjutor.porneste(session)
+	except Exception as e:
+		print("[mytest] ajutorul:", e)
+
 	# HDSatelit: ceasul (NTP la pornire si periodic, in afara firului principal,
 	# fara sa astepte reteaua; ora din transponder ca rezerva; fake-hwclock salvat periodic) si bataia pentru paznicul
 	# receptorului (hds-watchdog.py nu mai reporneste interfata in timpul unei scanari sau al unei rotiri de antena).
@@ -626,6 +643,18 @@ def runScreenTest():
 			HdsVpn.porneste()
 	except Exception as e:
 		print("[mytest] VPN-ul:", e)
+	# HDSatelit: Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistentaSemn.py): oprita din
+	# fabrica, nu porneste nimic de aici. Pune SystemInfo["HdsAsistenta"] (meniul testerilor arata randul numai cand
+	# e disponibila), pregateste semnul de pe ecran si reia o sesiune ramasa dupa o repornire a interfetei (fisierul
+	# de stare exista numai daca omul a pornit asistenta in aceasta pornire). Pornirea nu depinde de ea.
+	try:
+		from Components import HdsAsistenta as _asist
+		from Components.SystemInfo import SystemInfo as infoSistem
+		infoSistem["HdsAsistenta"] = _asist.disponibil()
+		from Screens import HdsAsistentaSemn
+		HdsAsistentaSemn.instaleaza(session)
+	except Exception as e:
+		print("[mytest] asistenta de la distanta:", e)
 	# HDSatelit: modul procesorului si paza de caldura (Components/HdsProcesor.py); fara cpufreq nu face nimic
 	try:
 		from Components import HdsProcesor
@@ -678,9 +707,10 @@ def runScreenTest():
 		print("[mytest] HbbTV:", e)
 
 	# HDSatelit: paza de model (Components/HdsPazaModel.py). Pe alt receptor decat cel pentru care e construita
-	# imaginea, garda din enigma2.sh a oprit tot ce scrie pe partitii; interfata arata numai mesajul
-	# (Screens/HdsPazaModel.py), fara asistent si fara InfoBar. Fara fisierul de reguli (emulatorul, alta imagine) nu
-	# se schimba nimic.
+	# imaginea, garda din enigma2.sh a oprit tot ce scrie pe partitii; interfata arata numai ecranul diagnosticului
+	# (Screens/HdsPazaModel.py, codurile din Components/HdsDiagnostic.py), fara asistent si fara InfoBar. Fara fisierul
+	# de reguli (emulatorul, alta imagine) nu se schimba nimic. Cand pornirea reuseste nu se arata nimic in plus (nici
+	# pe un model neconfirmat): datele raman in Meniu > Informatii despre sistem > Diagnosticul pornirii si in /paza-model.
 	try:
 		from Components import HdsPazaModel
 		paza_model = HdsPazaModel.inPaza()
@@ -692,17 +722,6 @@ def runScreenTest():
 		screensToRun = [(0, EcranPazaModel)]
 	else:
 		screensToRun = [ p.fnc for p in plugins.getPlugins(PluginDescriptor.WHERE_WIZARD) ]
-		# HDSatelit: un model neconfirmat (treapta a doua a pazei, regulile cu confirmat=nu) a trecut paza: interfata
-		# porneste, iar o nota arata ca software-ul e pentru testeri si ce valori citite difera de cele asteptate
-		try:
-			from Components import HdsPazaModel
-			nota_model = HdsPazaModel.notaNeconfirmat()
-			if nota_model:
-				from Tools import Notifications
-				from Screens.MessageBox import MessageBox
-				Notifications.AddNotification(MessageBox, nota_model, type=MessageBox.TYPE_INFO, timeout=30)
-		except Exception as e:
-			print("[mytest] paza de model, nota:", e)
 
 		profile("wizards")
 		screensToRun += wizardManager.getWizards()
@@ -757,6 +776,13 @@ def runScreenTest():
 		HdsLamedbSalvare.porneste()
 	except Exception as e:
 		print("[mytest] lista de canale la standby:", e)
+	# HDSatelit: beta testeri: contorul orei (fara standby), intrebarea o singura data dupa o ora, culegerea si
+	# trimiterea pe fir, numai cu acordul omului. Pornirea nu depinde de el.
+	try:
+		if HdsBetaTester is not None:
+			HdsBetaTester.porneste(session)
+	except Exception as e:
+		print("[mytest] beta tester:", e)
 
 	runNextScreen(session, screensToRun)
 
@@ -795,6 +821,12 @@ def runScreenTest():
 		HdsPaznic.opreste()
 	except Exception as e:
 		print("[mytest] bataia la oprire:", e)
+	# HDSatelit: contorul orei pentru beta testeri scris la iesire (numai cat il mai scrie programul)
+	try:
+		if HdsBetaTester is not None:
+			HdsBetaTester.opreste()
+	except Exception as e:
+		print("[mytest] beta tester la oprire:", e)
 	# HDSatelit: plafonul procesorului pus la loc ca la fabricant (numai daca s-a scris ceva in aceasta pornire)
 	try:
 		from Components import HdsProcesor

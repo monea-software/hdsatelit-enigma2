@@ -37,7 +37,8 @@
 # jurnale si in orice alt folder montat sub /media, /run/media, si in /home/root -- ca un jurnal scris
 # candva (alt receptor, alta configuratie de montare) sa tot fie gasit.
 #
-# TRIMITEREA RAMANE MANUALA, DELIBERAT (cf. deciziei "n-avem infrastructura de upload inca"):
+# TRIMITEREA AUTOMATA: numai prin programul de beta testeri (Components/HdsBetaTester.py, Setari > Beta tester), cu
+# acordul omului, curatata inainte de coada. In afara lui trimiterea ramane manuala:
 # `CRASH_EMAILADDR` din bsod.cpp e deja "https://hdsatelit.com" (o adresa web, nu un email, desi
 # comentariul C++ zice "email this crashlog to above address") -- nu exista nicaieri in bsod.cpp cod
 # de trimitere automata prin retea, doar scriere pe disc. Ecranul arata asta cinstit userului, nu
@@ -143,9 +144,9 @@ class HdsCrashlogAutoSubmit(Screen):
 		self["lista"].setList(randuri)
 		self["text"].setText(
 			_(
-				"Găsite: %d. Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin "
-				"formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin "
-				"rețea.\nSe caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
+				"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu "
+				"acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe "
+				"hdsatelit.com.\nSe caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
 			) % (len(self._jurnale), CALE_PRINCIPALA)
 		)
 
