@@ -775,7 +775,7 @@ class HarddiskManager:
 					p.is_cdrom = is_cdrom
 					p.usb = usb
 					p.removable = removable
-					stable = self.stableMountpoint(device, mountpoints) if usb and mountpoints else None
+					stable = self.stableMountpoint(device, mountpoints) if (usb or device.startswith("sd")) and mountpoints else None
 					if mountpoints and (stable or not usb):
 						# not USB (fstab, the system), or already on its stable name (enigma2 started again)
 						self.announceMounted(device, stable or mountpoints[0], p)
@@ -962,16 +962,16 @@ class HarddiskManager:
 		mountpoints = findMountpoints(device)
 		if mountpoints:
 			stable = None
-			if getattr(p, "usb", False):
+			if getattr(p, "usb", False) or device.startswith("sd"):
 				stable = self.stableMountpoint(device, mountpoints) or self.makeAlias(device, mountpoints[0])
 			self.announceMounted(device, stable or mountpoints[0])
 			return
 		if mountedOnly or p.has_partitions or p.is_cdrom:
 			return
-		if not getattr(p, "usb", False):
+		if not getattr(p, "usb", False) and not device.startswith("sd"):
 			# internal flash and eMMC partitions are never mounted from here
 			if not quiet:
-				print("[Harddisk] %s is not a USB device, not mounted" % device)
+				print("[Harddisk] %s is not a USB or SATA storage device, not mounted" % device)
 			return
 		if not DEVICE_NAME_RX.match(device):
 			print("[Harddisk] unexpected device name %r, not mounted" % device)

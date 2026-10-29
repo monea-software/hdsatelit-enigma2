@@ -213,6 +213,10 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 			rez.append({"f": "actualizeaza", "text": _t(verde), "pachet": obj.nume, "principal": True})
 		elif verde == "Instalează":
 			rez.append({"f": "instaleaza", "text": _t(verde), "pachet": obj.nume, "principal": True})
+		elif verde == L.BUTON_INLOCUITOR:
+			# pachet numai pentru Python 2 (0.6.8): butonul instaleaza direct inlocuitorul pentru Python 3
+			rez.append({"f": "instaleaza", "text": _t(verde), "pachet": L.inlocuitorRand(catalog, fel, obj, extra)[0].nume,
+				"principal": True})
 		elif verde == "Deschide":
 			pl = L.pluginPentru(pluginuri, obj)
 			rez.append({"f": "deschide", "text": _t("Deschide pe televizor"), "plugin": _indice(pluginuri, pl),
@@ -220,7 +224,10 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 		if rosu:
 			rez.append({"f": "sterge", "text": _t(rosu), "pachet": obj.nume, "rosu": True})
 	elif fel == "fisier":
-		if verde:
+		if verde == L.BUTON_INLOCUITOR:
+			rez.append({"f": "instaleaza", "text": _t(verde), "pachet": L.inlocuitorRand(catalog, fel, obj, extra)[0].nume,
+				"principal": True})
+		elif verde:
 			rez.append({"f": "fisier", "text": _t("Instalează fișierul"), "cale": obj.cale, "principal": True})
 	elif fel == "sursa":
 		rez.append({"f": "descarca", "text": _t("Descarcă lista")})
@@ -486,12 +493,27 @@ def instaleaza(arg, request, M):
 		return r
 	catalog = _catalog(M)
 	p = catalog.pachete.get(nume)
-	if p is None or p.instalat or not p.se_poate_instala:
+	if p is None or p.instalat or not (p.se_poate_instala or p.python2):
 		return _refuz(_t("Pachetul nu se mai poate instala. Reîncarcă pagina."))
 	plan, eroare = M.L.planInstalare(catalog, p, nota=_notaWeb(M.L, catalog))
 	if plan is None:
 		return _refuz(eroare[0])
+	if plan.get("fel") == "python2":
+		return _refuzPython2(M.L, plan)
 	return _pornestePlan(request, arg, M, catalog, "extensii-instaleaza", nume, plan)
+
+
+def _refuzPython2(L, plan):
+	"""pachet sau fisier numai pentru Python 2 (0.6.8): nimic instalat; mesajul, motivul si inlocuitorul, cu butonul
+	lui in pagina (ca fereastra de pe televizor)"""
+	parti = [plan.get("subtitlu", "")]
+	parti += ["%s: %s" % (a, b) for a, b in plan.get("randuri", ()) if a == _t("Motivul")]
+	if plan.get("nota"):
+		parti.append(plan["nota"])
+	rez = _refuz(" ".join(x for x in parti if x))
+	if plan.get("inlocuitor"):
+		rez["python2"] = {"inlocuitor": plan["inlocuitor"], "text": _t(L.BUTON_INLOCUITOR)}
+	return rez
 
 
 def actualizeaza(arg, request, M):
@@ -551,9 +573,11 @@ def fisier(arg, request, M):
 	if f is None:
 		return _refuz(_t("Fișierul nu mai este în lista găsită. Caută din nou."))
 	catalog = _catalog(M)
-	plan, eroare = M.L.planFisier(f)
+	plan, eroare = M.L.planFisier(f, catalog=catalog)
 	if plan is None:
 		return _refuz(eroare[0])
+	if plan.get("fel") == "python2":
+		return _refuzPython2(M.L, plan)
 	return _pornestePlan(request, arg, M, catalog, "extensii-fisier", cale, plan)
 
 
@@ -927,6 +951,7 @@ __STIL_PAGINI__
     <ul class="jurnal" id="lucrareJurnal"></ul>
     <div class="butoane">
       <button type="button" id="lucrareReporneste" class="principal ascuns">Repornește interfața</button>
+      <button type="button" id="lucrareInlocuitor" class="principal ascuns"></button>
       <button type="button" id="opreste" class="rosu ascuns">Oprește instalarea</button>
     </div>
   </section>
@@ -963,6 +988,7 @@ __STIL_PAGINI__
   </section>
   <section class="card" id="randuri"></section>
   <p class="mesaj" id="mesaj"></p>
+  <div class="butoane ascuns" id="inlocuitorBara"><button type="button" id="inlocuitor" class="principal"></button></div>
   <div id="confirmare" class="card ascuns"></div>
   <p class="nota">Aceleași extensii și acțiuni sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -988,7 +1014,10 @@ function trimite(cale, q, tacut){
   if(!tacut){ mesaj("Se trimite..."); }
   cerere(cale, "POST", q).then(function(d){ if(!tacut || !d.result){ mesaj(d.message, !d.result); } citeste(); }).catch(nimicNuRaspunde);
 }
-function dupa(){ citeste(); }
+var INLOCUITOR = "";
+function arataInlocuitor(x){ INLOCUITOR = x && x.inlocuitor ? x.inlocuitor : ""; $("inlocuitorBara").classList.toggle("ascuns", !INLOCUITOR); if(INLOCUITOR){ $("inlocuitor").textContent = x.text; } }
+function instaleazaInlocuitor(nume){ arataInlocuitor(null); var q = new URLSearchParams(); q.set("pachet", nume); cuConfirmare("/api/extensii-instaleaza", q, dupa); }
+function dupa(d){ arataInlocuitor(d && d.python2); citeste(); }
 function arataStare(d){
   $("lista").textContent = d.lista + (d.descarcare.in_curs ? " · se descarcă acum" : "");
   var p = [];
@@ -1021,6 +1050,8 @@ function arataLucrarea(d){
   var j = $("lucrareJurnal"); j.textContent = "";
   l.jurnal.forEach(function(x){ j.appendChild(el("li", x[0] === "eroare" ? "eroare" : null, x[1])); });
   $("lucrareReporneste").classList.toggle("ascuns", !(l.faza === "gata" && l.rezultat && l.rezultat.repornire));
+  var ri = l.faza === "gata" && l.rezultat && l.rezultat.inlocuitor ? l.rezultat : null, bi = $("lucrareInlocuitor");
+  bi.classList.toggle("ascuns", !ri); bi.textContent = ri ? ri.textInlocuitor : ""; bi.dataset.pachet = ri ? ri.inlocuitor : "";
   $("opreste").classList.toggle("ascuns", !l.poate_opri);
 }
 function arataSursa(d){
@@ -1145,6 +1176,8 @@ $("descarca").addEventListener("click", function(){ LISTA_CERUTA = true; trimite
 $("toate").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
 $("reporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
 $("lucrareReporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
+$("lucrareInlocuitor").addEventListener("click", function(){ var n = $("lucrareInlocuitor").dataset.pachet; if(n){ instaleazaInlocuitor(n); } });
+$("inlocuitor").addEventListener("click", function(){ if(INLOCUITOR){ instaleazaInlocuitor(INLOCUITOR); } });
 $("opreste").addEventListener("click", function(){ cuConfirmare("/api/extensii-opreste", new URLSearchParams(), dupa); });
 $("sursaOpreste").addEventListener("click", function(){ trimite("/api/extensii-sursa-opreste", new URLSearchParams()); });
 $("cautaFisiere").addEventListener("click", function(){ trimite("/api/extensii-cauta-fisiere", new URLSearchParams()); });

@@ -9535,10 +9535,10 @@ msgstr "Geen crashlogboek gevonden."
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
 #, python-format
 msgid ""
-"Găsite: %d. Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin rețea.\n"
+"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
 "Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
 msgstr ""
-"Gevonden: %d. Verzenden blijft handmatig: een hier gevonden logboek kan via het contactformulier op hdsatelit.com worden verstuurd; automatisch verzenden via het netwerk bestaat nog niet.\n"
+"Gevonden: %d. Als bètatester (Instellingen > Bètatester) worden nieuwe logboeken vanzelf verzonden, alleen met je toestemming. Anders kan een hier gevonden logboek via het contactformulier op hdsatelit.com worden verstuurd.\n"
 "Er wordt gezocht in “%s”, in /tmp en in elke andere map die onder /media, /run/media, /home/root is aangekoppeld."
 
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:209
@@ -24914,8 +24914,8 @@ msgid "Trimite poza"
 msgstr "Foto verzenden"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
-msgid "Trimiterea rămâne manuală: un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com; nu există încă o trimitere automată prin rețea. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
-msgstr "Verzenden blijft handmatig: een logboek dat je hier vindt, kun je verzenden via het contactformulier op hdsatelit.com; automatisch verzenden via het netwerk bestaat nog niet. Er wordt gezocht in <span id=\"principal\"></span>, in /tmp en in elke andere gekoppelde map onder /media, /run/media, /home/root."
+msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
+msgstr "Als bètatester (in Instellingen, bij Bètatester) worden nieuwe logboeken vanzelf verzonden, alleen met je toestemming. Anders kun je een logboek dat je hier vindt verzenden via het contactformulier op hdsatelit.com. Er wordt gezocht in <span id=\"principal\"></span>, in /tmp en in elke andere gekoppelde map onder /media, /run/media, /home/root."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/antena_web.py
 msgid "Tunerele nu se pot citi."
@@ -53756,3 +53756,911 @@ msgstr "Systeemlogboek"
 #: lib/python/Components/HdsJurnale.py
 msgid "Serviciile de sistem"
 msgstr "Systeemdiensten"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Gemaakt voor Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s is gemaakt voor Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "Het pakket is gemaakt voor oude images met Python 2."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Dit image heeft Python 3, dus het wordt niet geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "Vervanger installeren"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "Het pakket wordt vóór de installatie gecontroleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "vereist %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "het is een Python 2-bibliotheek"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "het heeft bestanden in de map van Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "het heeft bestanden gecompileerd voor Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "het is gekoppeld aan de Python 2-bibliotheek (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "de code compileert niet in Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "het gebruikt modules die uit Python 3 zijn verwijderd (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "het komt uit een feed van images met Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Reden"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Voor Python 3 is er %s, in de feed %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "%s, gemaakt voor Python 3, is al geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Er is niets geïnstalleerd."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK toont waarom · Groen installeert de vervanger"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK toont waarom"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "Versie %s uit de bron %s is gemaakt voor Python 2 en wordt niet geïnstalleerd."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "De driver van de printplaat is niet geladen, dus het type printplaat kon niet worden gelezen en kan niet worden aangetoond dat deze software ervoor bedoeld is."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Zet de juiste software terug met een USB-stick, zoals de fabrikant van de ontvanger beschrijft (bij Octagon: houd Standby op de ontvanger ingedrukt bij het inschakelen, daarna Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Opstartdiagnose"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "De interface start niet"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "De processor van de ontvanger is niet die waarvoor de software is gemaakt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "De driver meldt een ander type printplaat dan waarvoor de software is gemaakt."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "Het label in het geheugen van de ontvanger noemt een ander type printplaat."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "De printplaat van de ontvanger (fabriekskop) is een andere."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "De partities in het geheugen van de ontvanger zijn anders ingedeeld."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "De partitie van kernel of systeem staat op een andere plaats of heeft een andere grootte."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "Het interne geheugen heeft een andere grootte dan bij het model waarvoor de software is."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "Een andere waarde van de ontvanger klopt niet."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "De processor kon niet worden gelezen: de driver van de processor is niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Het type printplaat kon niet worden gelezen: de driver van de printplaat is niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "De printplaat kon niet uit de fabriekskop worden gelezen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "De partities konden niet uit de opstartregel worden gelezen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "De partitie van kernel of systeem is niet gevonden."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "Het ontvangerkenmerk in de software is beschadigd."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "De controle bij het opstarten gaf geen resultaat."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "De interface is bij het opstarten meerdere keren vastgelopen en in de veilige modus gestart."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "De interface loopt ook in de veilige modus vast."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "De interface start helemaal niet."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "De drivers van de ontvanger ontbreken of zijn niet geladen."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "De interface verscheen niet binnen 5 minuten: hij bleef hangen bij het opstarten."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "De interface stopte bij het opstarten om een andere reden."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Printplaat (driver)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Label"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Printplaat (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Intern geheugen"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Kernel en systeem"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Partities"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Model (bootloader)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d partities"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "plaats %(loc)d: %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, vrij %(liber)d MiB"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "geen gevonden"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "HD Satelit %(versiune)s voor %(model)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Maak een foto van dit scherm en stuur hem naar het forum waar je de software hebt gevonden of naar %s."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "De software schrijft niets in het geheugen van de ontvanger. Zet de juiste software terug met een USB-stick, zoals de fabrikant van de ontvanger beschrijft."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Alle gegevens, in de webinterface: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Alle gegevens, in de webinterface van de ontvanger, op de pagina %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Forum: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "Laatste fout van de interface"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Kernel: stuurprogramma's en fouten"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Alle gegevens, om te kopiëren, vanaf een computer of telefoon:"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "De interface wordt over %d minuten opnieuw geprobeerd."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Codes:"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Code"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "Andere codes: %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "Het opstarten is gelukt: de ontvanger past bij de software."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "Het opstarten is gelukt. Enkele waarden wijken af van de verwachte: het model is nog niet bevestigd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Kopieer de gegevens hieronder en stuur ze naar het forum waar je de software hebt gevonden of naar %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "Het opstarten is gelukt; de gegevens hieronder zijn alleen om te lezen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Alles kopiëren"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "Per e-mail versturen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "HD Satelit-forum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "Zonder JavaScript: houd de tekst ingedrukt, selecteer alles en kopieer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "Op de televisie verschijnt het diagnosescherm alleen vanzelf als het opstarten mislukt; anders open je het via MENU > Systeeminformatie > Opstartdiagnose."
+
+#: lib/python/Screens/ChannelSelection.py
+msgid "Căutare"
+msgstr "Zoeken"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și e-mailul sunt opționale."
+msgstr "De gegevens zijn anoniem: de ontvanger krijgt een willekeurige identificatiecode, zonder IP-adres, zonder wachtwoorden en zonder je eigen zenderlijsten. We gebruiken ze alleen om het image op jouw ontvangermodel te verbeteren. Naam en e-mail zijn optioneel."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus."
+msgstr "Ik heb de Privacyverklaring gelezen en ga akkoord met het verzenden van de hierboven aangevinkte gegevens."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Vrei să ajuți la îmbunătățirea imaginii pe care o folosești acum?"
+msgstr "Wil je helpen het image te verbeteren dat je nu gebruikt?"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai folosit cu interes imaginea E2 HD Satelit peste o oră. Ca beta tester ne trimiți date anonime, numai cele alese de tine."
+msgstr "Je gebruikt het image E2 HD Satelit al meer dan een uur actief. Als bètatester stuur je ons anonieme gegevens, alleen die je zelf kiest."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele le primește Eduard Monea, persoană fizică (mărcile Monea Software și HD Satelit), contact@hdsatelit.com. Pleacă numai felurile bifate de tine, cu un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale, numai ca să îmbunătățim imaginea pe modelul tău de receptor. Jurnalele se păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de date sau poți ieși din program cu ștergerea datelor. Nota întreagă e la adresa de mai jos."
+msgstr "De gegevens worden ontvangen door Eduard Monea, natuurlijk persoon (de merken Monea Software en HD Satelit), contact@hdsatelit.com. Alleen de soorten die je aanvinkt worden verzonden, met een willekeurige identificatiecode, zonder IP-adres, zonder wachtwoorden en zonder je eigen zenderlijsten, alleen om het image op jouw ontvangermodel te verbeteren. Logs worden 6 maanden bewaard, de overige gegevens 12 maanden. Je kunt op elk moment een soort gegevens uitvinken of het programma verlaten en de gegevens laten wissen. De volledige verklaring staat op het adres hieronder."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite automat în fiecare zi"
+msgstr "Elke dag automatisch versturen"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "O dată pe zi, noaptea, numai felurile bifate, și imediat după o oprire neașteptată a interfeței sau o actualizare care nu a reușit. Fără bifă pleacă numai ce trimiți tu cu „Trimite acum”."
+msgstr "Eén keer per dag, 's nachts, alleen de aangevinkte soorten, en meteen na een onverwachte stop van de interface of een mislukte update. Zonder vinkje gaat alleen weg wat je zelf verstuurt met „Nu versturen”."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Greșeală"
+msgstr "Fout"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Idee"
+msgstr "Idee"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Întrebare"
+msgstr "Vraag"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "în coadă"
+msgstr "in de wachtrij"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "trimis"
+msgstr "verzonden"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "pierdut, coada era plină"
+msgstr "verloren, de wachtrij was vol"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "refuzat de server"
+msgstr "geweigerd door de server"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "citit"
+msgstr "gelezen"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "are răspuns"
+msgstr "beantwoord"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "închis"
+msgstr "gesloten"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Acordul"
+msgstr "Toestemming"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ștergerea datelor"
+msgstr "Gegevens wissen"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesaj"
+msgstr "Bericht"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Jurnalele de cădere și de erori"
+msgstr "Crash- en foutlogboeken"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce s-a întâmplat când interfața s-a oprit sau un ecran a căzut, fără setările și fără rețeaua ta."
+msgstr "Wat er gebeurde toen de interface stopte of een scherm crashte, zonder je instellingen en zonder je netwerk."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Canalele scanate"
+msgstr "Gevonden zenders"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Sateliții, frecvențele și numele canalelor găsite la scanare, pentru baza de date a tuturor receptoarelor și pentru SatBase. Fără favorite, fără cablu și terestru."
+msgstr "De satellieten, frequenties en zendernamen die bij het zoeken zijn gevonden, voor de database van alle ontvangers en voor SatBase. Geen favorieten, geen kabel of terrestrische zenders."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Memoria, procesorul, temperatura și pornirea"
+msgstr "Geheugen, processor, temperatuur en opstarten"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Cât de încărcat e receptorul în timpul zilei și cât durează pornirea."
+msgstr "Hoe druk de ontvanger het overdag heeft en hoe lang het opstarten duurt."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ecranele și funcțiile folosite"
+msgstr "Gebruikte schermen en functies"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce ecrane deschizi și de câte ori, ca să știm ce să îmbunătățim întâi."
+msgstr "Welke schermen je opent en hoe vaak, zodat we weten wat we eerst moeten verbeteren."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele receptorului"
+msgstr "Gegevens van de ontvanger"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI și driverele, ca să adaptăm imaginea și lista de receptoare."
+msgstr "Geheugen, tuners, netwerkkaarten (zonder het MAC-adres), de HDMI-uitgang en de drivers, zodat we het image en de lijst met ontvangers kunnen aanpassen."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor"
+msgstr "Testresultaten"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce au găsit probele pornite de tine din meniul testerului: ce merge și ce nu pe modelul tău."
+msgstr "Wat de tests die je vanuit het testermenu hebt gestart hebben gevonden: wat werkt en wat niet op je model."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mulțumim. Ești beta tester. Datele bifate pleacă de acum."
+msgstr "Bedankt. Je bent bètatester. De aangevinkte gegevens worden vanaf nu verzonden."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Salvat. Serverul primește alegerile noi cu următoarea trimitere."
+msgstr "Opgeslagen. De server krijgt de nieuwe keuzes bij de volgende verzending."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai ieșit din program. Cererea de ștergere pleacă la server; pe receptor nu mai rămâne nimic."
+msgstr "Je hebt het programma verlaten. Het verzoek om te wissen gaat naar de server; op de ontvanger blijft niets meer over."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor au intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "De testresultaten staan in de wachtrij en worden verzonden zodra de ontvanger internet heeft."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul a intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "Het bericht staat in de wachtrij en wordt verzonden zodra de ontvanger internet heeft."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu ai trimis încă niciun mesaj."
+msgstr "Je hebt nog geen bericht verzonden."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu apari public. Poți alege un nume public mai jos."
+msgstr "Je verschijnt niet openbaar. Hieronder kun je een openbare naam kiezen."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Numele public e deja folosit de alt tester. Alege altul."
+msgstr "De openbare naam wordt al door een andere tester gebruikt. Kies een andere."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Codul nu e bun sau a expirat. Cere un cod nou de pe site."
+msgstr "De code is niet geldig of is verlopen. Vraag een nieuwe code aan op de website."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Prea multe încercări. Mai încearcă peste o oră."
+msgstr "Te veel pogingen. Probeer het over een uur opnieuw."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Serverul nu are încă acordul tău. Mai încearcă peste câteva minute."
+msgstr "De server heeft je toestemming nog niet. Probeer het over een paar minuten opnieuw."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Profilul e legat de alt receptor."
+msgstr "Het profiel is gekoppeld aan een andere ontvanger."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Pe acest receptor nu e încă niciun beta tester. Vrei să fii primul?"
+msgstr "Op deze ontvanger is nog geen bètatester. Wil je de eerste zijn?"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "acest model"
+msgstr "dit model"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s sunt deja %d beta testeri."
+msgstr "Op %s zijn er al %d bètatesters."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ultima trimitere: încă nimic."
+msgstr "Laatst verzonden: nog niets."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: %s"
+msgstr "Laatst verzonden: %s"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Se adună datele bifate și pleacă îndată ce receptorul are internet."
+msgstr "De aangevinkte gegevens worden verzameld en verzonden zodra de ontvanger internet heeft."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Adresa de e-mail nu pare bună."
+msgstr "Het e-mailadres lijkt niet te kloppen."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu ești înscris în programul de beta testeri."
+msgstr "Je doet niet mee aan het bètatesterprogramma."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Felul „Rezultatele probelor” e debifat în „Datele pe care le trimit”."
+msgstr "De soort „Testresultaten” is niet aangevinkt in „De gegevens die ik verstuur”."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor nu au forma bună."
+msgstr "De testresultaten hebben niet de juiste vorm."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Rezultatele probelor sunt prea mari."
+msgstr "De testresultaten zijn te groot."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Alege felul mesajului."
+msgstr "Kies het soort bericht."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Scrie întâi mesajul."
+msgstr "Schrijf eerst het bericht."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ai trimis deja 10 mesaje azi. Mai poți trimite mâine."
+msgstr "Je hebt vandaag al 10 berichten verzonden. Morgen kun je weer berichten sturen."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul e prea mare."
+msgstr "Het bericht is te groot."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nu apari public."
+msgstr "Je verschijnt niet openbaar."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ți-am trimis pe e-mail legătura de confirmare."
+msgstr "We hebben je de bevestigingslink per e-mail gestuurd."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Serverul nu răspunde acum. Încearcă mai târziu."
+msgstr "De server reageert nu niet. Probeer het later."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s este deja un beta tester."
+msgstr "Op %s is er al één bètatester."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Pe %s sunt deja %d de beta testeri."
+msgstr "Op %s zijn er al %d bètatesters."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: azi, %s"
+msgstr "Laatst verzonden: vandaag, %s"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Ultima trimitere: ieri, %s"
+msgstr "Laatst verzonden: gisteren, %s"
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Apari public ca „%s”."
+msgstr "Je verschijnt openbaar als “%s”."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Legat de contul „%s” de pe forum."
+msgstr "Gekoppeld aan het forumaccount “%s”."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "E-mailul e confirmat."
+msgstr "Het e-mailadres is bevestigd."
+
+#: lib/python/Components/HdsBetaTester.py
+#, python-format
+msgid "Serverul a refuzat cererea (%s)."
+msgstr "De server heeft het verzoek geweigerd (%s)."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Echipa"
+msgstr "Team"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "încă neprimit de server"
+msgstr "nog niet ontvangen door de server"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Trimite un mesaj"
+msgstr "Bericht sturen"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite acum"
+msgstr "Nu versturen"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce am trimis"
+msgstr "Wat ik heb verzonden"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Răspunsurile echipei"
+msgstr "Antwoorden van het team"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Datele pe care le trimit"
+msgstr "De gegevens die ik verstuur"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Ce trimit acum"
+msgstr "Wat ik nu verstuur"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Probele receptorului"
+msgstr "Tests van de ontvanger"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Cere ajutor de la distanță"
+msgstr "Hulp op afstand vragen"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Apariția publică"
+msgstr "Openbaar profiel"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nota de confidențialitate"
+msgstr "Privacyverklaring"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ieși din program și șterge datele"
+msgstr "Programma verlaten en gegevens wissen"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Beta tester"
+msgstr "Bètatester"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Renunț"
+msgstr "Afbreken"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Sunt de acord"
+msgstr "Akkoord"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Un fel debifat nu mai pleacă de acum; serverul îl refuză și el."
+msgstr "Een uitgevinkte soort wordt vanaf nu niet meer verzonden; ook de server weigert die."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Mesajul pleacă cu identificatorul anonim al receptorului, ca toate datele. Răspunsul echipei apare în „Răspunsurile echipei”."
+msgstr "Het bericht wordt verzonden met de anonieme identificatiecode van de ontvanger, zoals alle gegevens. Het antwoord van het team verschijnt in “Antwoorden van het team”."
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Trimite"
+msgstr "Verzenden"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scrie mesajul"
+msgstr "Schrijf het bericht"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Mesajul"
+msgstr "Bericht"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Nu mai apar public"
+msgstr "Niet meer openbaar verschijnen"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Leagă cu contul de pe forum"
+msgstr "Koppelen aan het forumaccount"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Se cere un cod de legare..."
+msgstr "Koppelcode wordt aangevraagd..."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Nota de confidențialitate s-a schimbat: citește-o și dă din nou acordul."
+msgstr "De Privacyverklaring is gewijzigd: lees die en geef opnieuw toestemming."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numele (opțional)"
+msgstr "Naam (optioneel)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul (opțional)"
+msgstr "E-mail (optioneel)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Bifează cel puțin un fel de date sau alege Renunț."
+msgstr "Vink minstens één soort gegevens aan of kies Afbreken."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Ultimele %d, cel mai nou sus. Fără internet, pachetele așteaptă în coadă."
+msgstr "De laatste %d, de nieuwste bovenaan. Zonder internet wachten de pakketten in de wachtrij."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ecranul sau funcția (opțional)"
+msgstr "Scherm of functie (optioneel)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează jurnalul ultimei erori"
+msgstr "Log van de laatste fout bijvoegen"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează o captură a ecranului (numai meniurile)"
+msgstr "Schermafbeelding bijvoegen (alleen de menu's)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Galben: scrie mesajul cu tastatura de pe ecran."
+msgstr "Geel: schrijf het bericht met het schermtoetsenbord."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe receptor."
+msgstr "Optioneel: je verschijnt met een naam naar keuze op de testerspagina van de website en bij je model. Geen wachtwoorden op de ontvanger."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Cod QR pentru telefon"
+msgstr "QR-code voor je telefoon"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Numele public"
+msgstr "Openbare naam"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numele public are 2-40 de semne: litere, cifre, spațiu, punct, liniuță."
+msgstr "De openbare naam heeft 2-40 tekens: letters, cijfers, spatie, punt, koppelteken."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul are 6 cifre. Îl vezi pe site, pe pagina de legare, când ești conectat."
+msgstr "De code heeft 6 cijfers. Je ziet hem op de website, op de koppelpagina, als je bent ingelogd."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul a expirat. Deschide din nou ecranul pentru un cod nou."
+msgstr "De code is verlopen. Open het scherm opnieuw voor een nieuwe code."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scanează codul cu telefonul pe care ești conectat pe forumul imaginii și apasă „Leagă și arată-mă ca tester”. Codul e valabil 10 minute și se folosește o singură dată."
+msgstr "Scan de code met de telefoon waarop je bent ingelogd op het forum van het image en druk op “Koppelen en mij tonen als tester”. De code is 10 minuten geldig en kan maar één keer worden gebruikt."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid ""
+"Identificatorul tău: %s\n"
+"Acordul din %s, nota de confidențialitate versiunea %d.\n"
+"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul."
+msgstr ""
+"Je identificatiecode: %s\n"
+"Toestemming van %s, privacyverklaring versie %d.\n"
+"Om de gegevens zonder de ontvanger te wissen, schrijf je naar contact@hdsatelit.com met de identificatiecode."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numai ca să te putem întreba ceva despre o problemă găsită pe receptorul tău. Nu apare public."
+msgstr "Alleen zodat we je iets kunnen vragen over een probleem dat op je ontvanger is gevonden. Het verschijnt niet openbaar."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Bifează întâi „%s”"
+msgstr "Vink eerst “%s” aan"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Încă nu a plecat nimic."
+msgstr "Er is nog niets verzonden."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "Ai %d secunde: închide meniurile și deschide ecranul despre care scrii. Captura se face singură, numai cu meniurile, apoi mesajul pleacă."
+msgstr "Je hebt %d seconden: sluit de menu's en open het scherm waarover je schrijft. De schermafbeelding wordt vanzelf gemaakt, alleen met de menu's, daarna wordt het bericht verzonden."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul pentru cont (opțional)"
+msgstr "E-mail voor het account (optioneel)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul de 6 cifre de pe site (OK după ce îl scrii)"
+msgstr "De 6-cijferige code van de website (OK nadat je hem hebt getypt)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Serverul a dat o adresă greșită."
+msgstr "De server heeft een verkeerd adres gegeven."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Numai pentru răspunsurile echipei. Nu apare public și se șterge la cerere."
+msgstr "Alleen voor de antwoorden van het team. Het verschijnt niet openbaar en wordt op verzoek gewist."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Scanează cu telefonul sau deschide:"
+msgstr "Scan met je telefoon of open:"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat."
+msgstr "Het e-mailadres (optioneel) maakt een account op het forum voor je aan: je krijgt een link en stelt daar je wachtwoord in, vanaf elk apparaat."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "un răspuns nou"
+msgstr "één nieuw antwoord"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "(automat în fiecare zi)"
+msgstr "(elke dag automatisch)"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Galben deschide nota. Fără această bifă nu pleacă nimic."
+msgstr "Geel opent de verklaring. Zonder dit vinkje wordt niets verzonden."
+
+#: lib/python/Screens/HdsBetaTester.py
+#, python-format
+msgid "%d răspunsuri noi"
+msgstr "%d nieuwe antwoorden"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Încă nu a plecat niciun pachet."
+msgstr "Er is nog geen pakket verzonden."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Ieși din programul de beta testeri? Serverul șterge toate datele trimise de acest receptor, iar pe receptor nu mai rămâne nimic."
+msgstr "Het bètatesterprogramma verlaten? De server wist alle gegevens die deze ontvanger heeft verzonden, en op de ontvanger blijft niets meer over."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Cerere necunoscută."
+msgstr "Onbekend verzoek."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Deschide legătura pe aparatul pe care ești conectat pe forum și apasă „Leagă și arată-mă ca tester”. E valabilă 10 minute."
+msgstr "Open de link op het apparaat waarop je bent ingelogd op het forum en druk op “Koppelen en mij tonen als tester”. Hij is 10 minuten geldig."
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Atașează o captură a ecranului (numai meniurile): se face acum, cu ce arată televizorul"
+msgstr "Schermafbeelding bijvoegen (alleen de menu's): die wordt nu gemaakt, met wat de tv laat zien"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Caută răspunsuri noi"
+msgstr "Nieuwe antwoorden zoeken"
+
+#: lib/python/Screens/HdsBetaTester.py
+msgid "Codul de 6 cifre de pe site"
+msgstr "De 6-cijferige code van de website"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Leagă cu codul"
+msgstr "Koppelen met de code"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Leagă de pe acest aparat"
+msgstr "Koppelen vanaf dit apparaat"
+
+#: lib/python/Components/HdsBetaTester.py
+msgid "Nota întreagă"
+msgstr "De volledige verklaring"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Ieși și șterge datele"
+msgstr "Verlaten en gegevens wissen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Același program e pe televizor, în __DRUM_MENIU__."
+msgstr "Hetzelfde programma staat op de tv, in __DRUM_MENIU__."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Nu s-a trimis nimic."
+msgstr "Er is niets verzonden."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Legarea cu un cont de pe forum nu e încă gata."
+msgstr "Koppelen met een forumaccount is nog niet klaar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Cererea nu mai există. Încearcă din nou."
+msgstr "Het verzoek bestaat niet meer. Probeer het opnieuw."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Captura nu s-a putut face; mesajul pleacă fără ea."
+msgstr "De schermafbeelding kon niet worden gemaakt; het bericht wordt zonder verzonden."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
+msgid "Da, ieși și șterge"
+msgstr "Ja, verlaten en wissen"

@@ -126,6 +126,13 @@
 		<alias name="HdsExtensiiFila" font="HdsBold" size="28" height="64" />
 		<alias name="HdsExtensiiButon" font="HdsBold" size="30" height="72" />
 		<alias name="HdsExtensiiJurnal" font="HdsCond" size="26" height="34" />
+		<!-- ajutorul fara internet (Screens/HdsAjutor.py): pagina si listele -->
+		<alias name="HdsAjutorTitlu" font="HdsBold" size="30" height="44" />
+		<alias name="HdsAjutorText" font="HdsRegular" size="28" height="42" />
+		<alias name="HdsAjutorEticheta" font="HdsCond" size="26" height="42" />
+		<alias name="HdsAjutorBold" font="HdsBold" size="28" height="42" />
+		<alias name="HdsAjutorLista" font="HdsRegular" size="32" height="64" />
+		<alias name="HdsAjutorListaMic" font="HdsCond" size="26" height="64" />
 	</fonts>
 
 	<!-- imaginea implicita de meniu: o citesc numai imaginile cu Menu.getMenuEntryImage; fara ea, la prima deschidere
@@ -2394,6 +2401,27 @@
 		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
 	</screen>
 
+	<!-- Ajutorul fara internet (Screens/HdsAjutor.py, din 0.6.8): capitolele (HdsAjutorCuprins foloseste acest ecran),
+	     paginile unui capitol si rezultatele cautarii; randurile le face codul (fonturile HdsAjutorLista si
+	     HdsAjutorListaMic); starea sub lista; masura e eticheta ascunsa cu care codul masoara textele. Tema Pro: cadrul
+	     HdsCadru1776 din skin_pro.xml. -->
+	<screen name="HdsAjutorLista" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,104" size="1712,768" itemHeight="64" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" />
+		<widget name="stare" position="32,876" size="1712,44" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
+	</screen>
+	<!-- o pagina de ajutor: blocurile paginii (fonturile HdsAjutorTitlu, HdsAjutorText, HdsAjutorEticheta, HdsAjutorBold;
+	     inaltimea randului o socoteste codul), sub lista capitolul cu pagina listei si indemnul tastelor, apoi adresa
+	     paginii cu poze de pe site (sau insemnarea ca paginile sunt in engleza) -->
+	<screen name="HdsAjutorPagina" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,100" size="1712,748" itemHeight="42" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="stare" position="32,852" size="1712,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="online" position="32,886" size="1712,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
+	</screen>
+
 	<!-- Jurnalele de cadere (Screens/HdsCrashlogAutoSubmit.py): textul de sus si lista jurnalelor; setarile: cele cateva
 	     randuri si lamurirea lunga de sub ele -->
 	<screen name="HdsCrashlogAutoSubmit" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
@@ -2787,15 +2815,9 @@
 		<widget source="nota" render="Label" position="32,488" size="1176,424" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
 
-	<!-- Paza modelului (Screens/HdsPazaModel.py): software pentru alt receptor (pe tot ecranul, la pornire), intrebarea
-	     si refuzul dinaintea scrierii unui pachet; asezarea din cod, culorile si fonturile skinului -->
-	<screen name="HdsPazaModel" position="0,0" size="1920,1080" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<widget source="titlu" render="Label" position="160,60" size="1600,80" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<eLabel position="160,150" size="1600,4" backgroundColor="hdsAmber" zPosition="1" />
-		<widget source="mesaj" render="Label" position="160,175" size="1600,520" font="HdsRegular;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="tehnic" render="Label" position="160,705" size="1600,255" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="nota" render="Label" position="160,970" size="1600,45" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-	</screen>
+	<!-- Paza modelului (Screens/HdsPazaModel.py): intrebarea si refuzul dinaintea scrierii unui pachet; asezarea din
+	     cod, culorile si fonturile skinului. Ecranul diagnosticului pornirii (fostul HdsPazaModel pe tot ecranul) isi
+	     face skinul in cod, dupa randurile citite (numele HdsDiagnosticPornireEcran, fara forma aici). -->
 	<screen name="HdsPazaModelIntrebare" position="260,95" size="1400,889" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
 		<eLabel position="0,0" size="1400,4" backgroundColor="hdsAmber" zPosition="1" />
 		<widget source="titlu" render="Label" position="50,25" size="1300,65" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />

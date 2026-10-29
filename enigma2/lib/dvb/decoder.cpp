@@ -499,6 +499,13 @@ int eDVBVideo::startPid(int pid, int type)
 		return -errno;
 	}
 	eDebug("ok");
+#if HAVE_DVB_API_VERSION >= 3
+	eDebugNoNewLine("VIDEO_SELECT_SOURCE DEMUX - ");
+	if (::ioctl(m_fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX) < 0)
+		eDebug("failed (%m)");
+	else
+		eDebug("ok");
+#endif
 	freeze();  // why freeze here?!? this is a problem when only a pid change is requested... because of the unfreeze logic in Decoder::setState
 	eDebugNoNewLine("VIDEO_PLAY - ");
 	if (::ioctl(m_fd, VIDEO_PLAY) < 0)

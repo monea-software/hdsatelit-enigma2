@@ -2404,6 +2404,9 @@ class InfoBarSubserviceSelection:
 				selection += 2
 
 			self.session.openWithCallback(self.subserviceSelected, ChoiceBox, title=_("Please select a subservice..."), list = tlist, selection = selection, keys = keys, skin_name = "SubserviceSelection")
+		else:
+			from Screens.TimerEdit import TimerEditList
+			self.session.open(TimerEditList)
 
 	def subserviceSelected(self, service):
 		del self.bouquets

@@ -39,6 +39,61 @@
      "fel": "imbunatatit",
      "ro": "Jurnalul actualizării, cel al extensiilor și erorile DAB+ și T2-MI rămân și după repornire, în Jurnalele sistemului, pe televizor și în interfața web.",
      "en": "The update log, the extensions log and the DAB+ and T2-MI errors are now kept after a restart, in the system logs, on the TV and in the web interface."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când pornirea nu reușește, receptorul arată un ecran de diagnostic cu un cod de eroare și cu ce a citit despre placă, procesor și drivere. Fă o poză ecranului și trimite-o pe forumul nostru.",
+     "en": "When startup fails, the receiver shows a diagnostic screen with an error code and what it read about the board, the processor and the drivers. Take a photo of the screen and send it to our forum."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă interfața nu poate porni, receptorul arată pe afișajul din față codul și adresa lui, pe televizor ecranul de diagnostic, iar aceleași date se văd într-o pagină deschisă de pe calculator.",
+     "en": "If the interface cannot start, the receiver shows the code and its address on the front display, the diagnostic screen on the TV, and the same details on a page opened from a computer."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Diagnosticul pornirii se poate citi oricând în Meniu, la Informații despre sistem, și în interfața web, unde un buton copiază tot textul.",
+     "en": "The startup diagnostics can be read at any time in Menu, under System information, and in the web interface, where one button copies all the text."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "La o pornire reușită nu mai apare nicio notă în plus pe ecran, nici pe modelele încă neconfirmate.",
+     "en": "After a successful startup no extra note appears on the screen any more, also on models not yet confirmed."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon, mesajul de la pornire arată calea bună de recuperare, cu Standby ținut apăsat și Recovery From USB, nu pe cea a altui receptor.",
+     "en": "On Octagon receivers, the startup message now shows the right recovery steps, holding Standby and choosing Recovery From USB, not those of another receiver."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Pe Octagon, interfața pornește acum după programul plăcii pentru imagine, cu aceiași pași ca software-ul obișnuit pentru aceste receptoare, ca imaginea să ajungă la televizor.",
+     "en": "On Octagon receivers, the interface now starts after the board's video program, with the same steps as the usual software for these receivers, so the picture reaches the TV."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon SF8008 și SF8008 MINI, pornirea nu mai rămâne oprită când programul plăcii pentru imagine nu primește autorizarea: pornește ca în software-ul obișnuit al acestor receptoare, așteptat cel mult un minut.",
+     "en": "On the Octagon SF8008 and SF8008 MINI the startup no longer stops when the board's video program is not authorised: it starts as in the usual software of these receivers and is waited for at most one minute."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon, din butoanele din fața receptorului rămâne numai cel de pornire, ca în software-ul obișnuit al acestor receptoare; nu mai apar apăsări false care deschideau singure meniuri sau schimbau canalul.",
+     "en": "On Octagon receivers only the power button on the front panel is used, as in the usual software of these receivers; no more false presses that opened menus or changed the channel by themselves."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă pornirea durează, pe afișajul din față și pe ecran apare pasul la care a ajuns receptorul; dacă interfața nu apare în cel mult un minut și jumătate, apare codul de diagnostic, cu adresa paginii.",
+     "en": "If the startup takes long, the front display and the screen show the step the receiver reached; if the interface does not appear within a minute and a half, the diagnostic code appears, with the page address."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Pe Octagon SF8008 Supreme, driverul plăcii Bluetooth și Wi-Fi își găsește acum la pornire fișierele de care are nevoie.",
+     "en": "On the Octagon SF8008 Supreme the driver of the Bluetooth and Wi-Fi chip now finds the files it needs at startup."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon SF8008 și SF8008 MINI, dacă locul ales la pornire (card, stick, disc) nu are un software bun, receptorul pornește din locul 1 din memoria internă, ca în software-ul obișnuit al acestor receptoare.",
+     "en": "On the Octagon SF8008 and SF8008 MINI, if the slot chosen at startup (card, stick, disc) has no usable software, the receiver starts from slot 1 in the internal memory, as in the usual software of these receivers."
     }
    ]
   },
