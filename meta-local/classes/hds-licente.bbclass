@@ -13,6 +13,8 @@
 #                                             /etc/image-version si adresa sursei (HDS_SURSA_ADRESA)
 #   /usr/share/hdsatelit/licente/texte/*.gz   fiecare text de licenta o data, gzip fara nume si fara data
 # O copie a lui lista.json merge langa imagine, <IMAGE_NAME>.licente.json (pentru pagina sursei versiunii).
+# Pachetele producatorului au in componente.json masina ca "${MACHINE}" (dinobot-libs-${MACHINE}); scriptul o inlocuieste
+# cu MACHINE (u57 la V20/V30, u571 la V40) si opreste construirea daca un astfel de pachet lipseste din imagine.
 #
 # Construirea se opreste cand lista nu poate fi completa: un pachet fara intrare in license.manifest, o licenta din
 # afara claselor stiute, o reteta libera fara niciun text de licenta, o componenta cu clasa necunoscuta; dupa scriere,
@@ -68,7 +70,7 @@ python hds_licente_imagine() {
     lista, texte, erori = m.construieste(manifest, dosar_licente, arhitecturi, instalate, radacina,
         hds_licente_fisier(d, d.getVar("HDS_LICENTE_DATE")), d.getVar("COMMON_LICENSE_DIR"), versiune,
         d.getVar("DISTRO_NAME"), d.getVar("MACHINEBUILD") or d.getVar("MACHINE"), d.getVar("HDS_SURSA_ADRESA"),
-        scoase)
+        scoase, masina_oe=d.getVar("MACHINE"))
     for eroare in erori:
         bb.error("hds-licente: %s" % eroare)
     if erori:
