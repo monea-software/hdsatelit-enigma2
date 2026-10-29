@@ -1,0 +1,34 @@
+# HD Satelit: regulile garzii de model pentru primul Amiko Viper 4K ("V10", masina viper4k), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina viper4k e alt strat al producatorului (meta-amiko): alt nucleu (linux-amiko 4.4.35, alt defconfig), alt pachet
+# de drivere (viper4k-hiko 20201218, hi-dvb.ko face /proc/stb), alta impartire a memoriei interne (lotul imagine-060-v10,
+# drivere-v20-v10.md). Valorile vin din pachetele publice ale producatorului, verificate pe SHA-256:
+#   boxtype  /proc/stb/info/boxtype din hi-dvb.ko = "viper4k" (singurul nume de model din modul);
+#   hw       antetul deviceinfo.bin din viper4k-partitions-20201218: MAGICNUM=deviceinfo OUI=00000003 HW=00000001;
+#   partitions, kernel_part, rootfs_part: bootargs.bin din acelasi pachet (blkdevparts, root=/dev/mmcblk0p16
+#            rootsubdir=linuxrootfs1, kernel=/dev/mmcblk0p12); MTD_KERNEL si MTD_ROOTFS din viper4k.conf (meta-amiko);
+#   kernel_kib 16384: linuxkernel1 are 16 MB (la V20 partitia kernel are 32 MB).
+# Nucleul si sistemul sunt in partitiile cu numele linuxkernel1 si userdata (sistemul intr-un subdosar al lui userdata,
+# linuxrootfs1), nu in cele numite kernel si rootfs: kernel_name si rootfs_name le dau garzii (enigma2.sh si
+# Components/HdsPazaModel.py, de la imaginea 0.6.3); fara ele locul nucleului nu s-ar gasi.
+# upd_path lipseste dinadins: driverul V10 nu are nodul /proc/stb/info/upd_path, iar recuperarea V10 nu e Maintenance
+# Mode cu un dosar pe stick, ci arhiva de recuperare a producatorului (usb_update.bin).
+# emmc_min_kib nu se pune: marimea memoriei interne a lui V10 nu e masurata de nimeni pentru noi.
+# Se inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=viper4k.
+format=1
+distro=hdsatelit
+model=Amiko Viper 4K V10
+machine=viper4k
+machinebuild=viper4k
+chip=Hi3798MV200
+boxtype=viper4k
+hw=00000001
+partitions=boot:1M,bootargs:1M,bootoptions:1M,baseparam:3M,pqparam:4M,logo:4M,deviceinfo:4M,softwareinfo:4M,loaderdb:4M,loader:32M,trustedcore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p12
+kernel_kib=16384
+rootfs_part=mmcblk0p16
+confirmat=nu

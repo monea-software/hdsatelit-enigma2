@@ -1,10 +1,23 @@
 # HD Satelit: regulile garzii de model pentru Amiko Viper 4K V40 (masina u571), NECONFIRMAT
 # confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
 # sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
-# Tipul placii e o lista: driverul imaginilor publice pentru V40 spune tot u57 (dedus din sirurile driverului,
-# nemasurat pe aparat), deci se primesc amandoua pana arata fisa unui receptor V40 adevarat ce spune.
-# Valorile hw, partitions si kernel_kib sunt cele de la V20 (acelasi nucleu, acelasi SDK); se inlocuiesc cu cele din
-# fisa, iar dupa confirmare randul confirmat=nu se scoate. Constructia de azi nu citeste inca acest fisier.
+# Tipul placii: /proc/stb/info/boxtype il da firedtv.ko din dvbmodule, care in pachetul de drivere V40 (u571-drivers
+# 20210727) e acelasi fisier, octet cu octet, ca la V20 (u57-drivers 20211209), si are ca nume de masina numai u57
+# (lotul imagine-060-v40, drivere-v20-v40.md). Deci un V40 spune u57; u571 ramane in lista numai ca rezerva, pana la
+# fisa unui receptor V40 adevarat.
+# Valorile hw, partitions si kernel_kib sunt cele de la V20: nicio imagine publica pentru V40 nu le contine, iar pe V40
+# raman acelasi nucleu (kernel.bin identic in imaginile publice), acelasi SDK si acelasi pachet de partitii al
+# producatorului; locul nucleului si al sistemului (p9, p10) vine din stratul masinii (MTD_KERNEL, MTD_ROOTFS). Se
+# inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# upd_path: dosarul in care Maintenance Mode cauta imaginea pe stick; enigma2.sh il scrie in /proc/stb/info/upd_path
+# inainte de showiframe. Tabelul fix de nume din showiframe-ul V40 (u571-showiframe 20210727) nu are niciun Viper, deci
+# fara upd_path eticheta ar ramane cu UPD_PATH gol. /e2/update, ca toate imaginile publice pentru V40 (dosarul imaginii
+# e2/update, scris de ele la pornire in acelasi nod; lotul imagine-060-v30, cercetare-echipe/RAPORT-ECHIPE.md 2.4, 2.5 si
+# randul 2 din tabelul mare): un V40 venit de pe ele are deja eticheta /e2/update, showiframe nu rescrie p6, iar
+# arhivele lor (si a noastra) merg inapoi fara redenumiri. e2/update e si dosarul pachetului nostru de actualizare.
+# emmc_min_kib nu se pune: marimea memoriei interne a lui V40 (4 sau 8 GB) nu e masurata de nimeni pentru noi.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=viper4kv40 (masina u571: bbappend-urile u571,
+# marcajul zip-ului si pe dinobotemmc, licentele pe masina, lotul imagine-060-v40).
 format=1
 distro=hdsatelit
 model=Amiko Viper 4K V40
@@ -17,5 +30,5 @@ partitions=boot:1M,bootargs:1M,baseparam:4M,pqparam:4M,logo:4M,deviceinfo:4M,loa
 kernel_part=mmcblk0p9
 kernel_kib=32768
 rootfs_part=mmcblk0p10
-upd_path=/amiko/viper4kv40
+upd_path=/e2/update
 confirmat=nu
