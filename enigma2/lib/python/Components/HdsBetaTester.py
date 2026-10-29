@@ -42,7 +42,8 @@ import re
 import threading
 import time
 
-NOTA = 1
+# versiunea Notei de confidentialitate (situl-imaginii/date/nota-testeri.json); 2 = cu amprenta receptorului
+NOTA = 2
 PROTOCOL = 1
 SERVER = "https://stb.hdsatelit.com/api/testeri/"
 ADRESA_NOTA = "https://stb.hdsatelit.com/testeri/confidentialitate/"
@@ -340,7 +341,7 @@ def calculeazaAmprenta(mac, cid):
 	mac = (mac or "").strip().lower()
 	if mac.replace(":", "").replace("0", "") == "":
 		mac = ""
-	cid = (cid or "").strip()
+	cid = "".join((cid or "").split()).lower()
 	if not mac and not cid:
 		return ""
 	return hashlib.pbkdf2_hmac("sha256", ("%s|%s" % (mac, cid)).encode("utf-8"), SARE_AMPRENTA, ITERATII_AMPRENTA,
@@ -357,9 +358,23 @@ def amprenta(radacina=""):
 		return _amprenta
 
 
+def _notaAcceptata():
+	try:
+		return int(_b(None).nota.value)
+	except Exception:
+		return 0
+
+
 def cuAmprenta(corp):
-	"""Corpul unui pachet cu amprenta langa id (o copie; corpurile fara id raman cum sunt)."""
+	"""Corpul unui pachet cu amprenta langa id (o copie). Amprenta pleaca numai cu nota 2 (cea care o descrie): nota din
+	corp sau, la corpurile fara nota (stergerea, profilul), nota acceptata pe receptor. Corpurile fara id raman cum sunt."""
 	if not isinstance(corp, dict) or "id" not in corp or "amprenta" in corp:
+		return corp
+	try:
+		nota = int(corp["nota"]) if "nota" in corp else _notaAcceptata()
+	except (TypeError, ValueError):
+		nota = 0
+	if nota < 2:
 		return corp
 	c = dict(corp)
 	c["amprenta"] = amprenta()
@@ -2042,7 +2057,7 @@ def cheieProfil():
 def corpProfil(ruta, b=None, **campuri):
 	"""Corpul unei cereri de profil (profil, profil-stare, cod-legare, leaga, dezleaga)."""
 	b = _b(b)
-	corp = {"v": PROTOCOL, "id": b.id.value, "amprenta": amprenta(), "cheie": cheieProfil()}
+	corp = cuAmprenta({"v": PROTOCOL, "id": b.id.value, "cheie": cheieProfil()})
 	corp.update(campuri)
 	return corp
 
