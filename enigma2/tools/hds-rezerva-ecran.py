@@ -7,6 +7,10 @@
 # enigma2 nu ajunge la interfata. Ruleaza numai in fereastra de rezerva, cu enigma2 oprit, cu python3 -I -S -B: numai
 # modulele de baza (os, sys, struct, zlib, binascii, fcntl), fara Pillow, fara FreeType, fara enigma2.
 #
+# Fazele (faza= in date.txt): pornire (pasul pornirii, cat urmarirea din hds-rezerva.sh vede pornirea inainte de enigma2:
+# titlul "HD Satelit porneste...", pasul, cat dureaza de obicei), lent (pornirea dureaza mai mult decat de obicei) si cod
+# (diagnosticul). La pornire si lent nu se scrie pagina, iar la pornire imaginea nu se scrie daca enigma2 a pornit
+# intre timp (ecranul e al lui).
 # Intrarea: --date <date.txt> (randurile cheie=valoare scrise de hds-rezerva.sh), --dosar <dosarul din RAM>,
 # --python <dosarul Python al enigma2> (pentru textele din Components/HdsDiagnostic.py, TEXTE_REZERVA, in cele 13
 # limbi), --fb <dispozitivul fb>, --jurnal <hds-caderi.log>, optional --geometrie LxIxBPP (cand fb nu raspunde la
@@ -47,6 +51,12 @@ TEXTE = {
 		"pagina": "Toate datele, de copiat, din calculator sau telefon:",
 		"reincercare": "Interfața se încearcă din nou peste %d minute.",
 		"coduri": "Coduri:",
+		"porneste": "HD Satelit pornește…",
+		"pasul": "Pasul pornirii: %s",
+		"obisnuit": "De obicei pornirea durează sub un minut.",
+		"lent": "Pornirea durează mai mult decât de obicei…",
+		"lent2": "Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic.",
+		"E306": "Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj.",
 		"E101": "Procesorul receptorului nu este cel pentru care e făcut software-ul.",
 		"E102": "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul.",
 		"E103": "Eticheta din memoria receptorului spune alt tip de placă.",
@@ -78,6 +88,12 @@ TEXTE = {
 		"pagina": "All the data, to copy, from a computer or a phone:",
 		"reincercare": "The interface is tried again in %d minutes.",
 		"coduri": "Codes:",
+		"porneste": "HD Satelit is starting…",
+		"pasul": "Start step: %s",
+		"obisnuit": "The start usually takes less than a minute.",
+		"lent": "The start takes longer than usual…",
+		"lent2": "If nothing changes, the diagnostic code appears here soon.",
+		"E306": "The start stopped before the interface, at the step shown on the display.",
 		"E101": "The processor of the receiver is not the one the software is made for.",
 		"E102": "The driver reports another board type than the one the software is made for.",
 		"E103": "The label in the memory of the receiver names another board type.",
@@ -634,11 +650,53 @@ def randuriEcran(date, t, litere, coloane):
 	return r
 
 
+def randuriPornire(date, t, coloane):
+	"""ecranul fazelor pornire si lent: titlul, pasul, cat dureaza de obicei sau ca dureaza mai mult, apoi modelul"""
+	r = [(t.get("porneste", ""), 2, CULORI["titlu"]), (None, 1, None)]
+	if date.get("faza") == "lent":
+		for rand in potrivesteText(t.get("lent", ""), coloane):
+			r.append((rand, 1, CULORI["cod"]))
+		for rand in potrivesteText(t.get("lent2", ""), coloane):
+			r.append((rand, 1, CULORI["text"]))
+		r.append((None, 1, None))
+	pas = textAscii(date.get("pas") or "", 80)
+	if pas:
+		try:
+			r.append((t.get("pasul", "%s") % pas, 1, CULORI["adresa"]))
+		except (TypeError, ValueError):
+			r.append((pas, 1, CULORI["adresa"]))
+	if date.get("faza") != "lent":
+		for rand in potrivesteText(t.get("obisnuit", ""), coloane):
+			r.append((rand, 1, CULORI["gri"]))
+	r.append((None, 1, None))
+	model = date.get("model") or ""
+	if model:
+		r.append((textAscii("%s %s" % (model, date.get("imagine") or date.get("versiune", "")), 160), 1, CULORI["gri"]))
+	return r
+
+
+def ruleazaEnigma2(radacina="/proc"):
+	"""enigma2 ruleaza (un proces cu numele enigma2)"""
+	try:
+		for n in os.listdir(radacina):
+			if n.isdigit():
+				try:
+					with open(os.path.join(radacina, n, "comm")) as f:
+						if f.read().strip() == "enigma2":
+							return True
+				except (IOError, OSError):
+					pass
+	except OSError:
+		pass
+	return False
+
+
 def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
 	litere = Litere()
 	text_tot = "".join(v for v in t.values() if isinstance(v, str))
 	if any(not litere.are(c) for c in text_tot if c >= " "):
 		t = t_en
+	faza = date.get("faza") or "cod"
 	fd = os.open(cale_fb, os.O_RDWR)
 	try:
 		geom = citesteGeometrie(fd, cale_fb, geometrie_ceruta)
@@ -648,13 +706,21 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
 		except (ImportError, IOError, OSError):
 			pass
 		coloane = (geom.xres - 2 * max(16, geom.xres // 24)) // litere.lat
-		randuri = randuriEcran(date, t, litere, coloane)
-		if geom.yres < 800:
+		if faza in ("pornire", "lent"):
+			randuri = randuriPornire(date, t, coloane)
+		else:
+			randuri = randuriEcran(date, t, litere, coloane)
+		if faza in ("pornire", "lent"):
+			pass
+		elif geom.yres < 800:
 			# 720p: codul de doua ori, nu de trei, fara randurile goale si fara randul reincercarii, ca sa incapa
 			# randurile tehnice
 			fara = reincercare(t, date)
 			randuri = [(a, 2 if m == 3 else m, c) for a, m, c in randuri if a is not None and a != fara]
 		img = compune(geom, randuri, litere)
+		if faza == "pornire" and ruleazaEnigma2():
+			# enigma2 a pornit cat se desena: ecranul e al lui
+			return geom, 0
 		os.lseek(fd, geom.yoff * geom.stride + geom.xoff * geom.octeti, 0)
 		scris = 0
 		while scris < len(img):
@@ -686,7 +752,8 @@ def argumente(argv):
 def main(argv):
 	a, fara_fb = argumente(argv)
 	date = citesteDate(a["--date"])
-	if not date.get("cod"):
+	faza = date.get("faza") or "cod"
+	if faza not in ("pornire", "lent") and not date.get("cod"):
 		print("fara cod in %s" % a["--date"])
 		return 1
 	texte_diag = texteDiagnostic(a["--python"])
@@ -694,7 +761,7 @@ def main(argv):
 	t = texte(limba, texte_diag)
 	t_en = texte("en", texte_diag) if limba != "en" else t
 	jurnal = jurnalCaderi(a["--jurnal"]) if a["--jurnal"] else []
-	if a["--dosar"]:
+	if a["--dosar"] and faza not in ("pornire", "lent"):
 		try:
 			scriePagina(a["--dosar"], date, t, t_en, jurnal)
 			print("pagina scrisa (%s)" % limba)

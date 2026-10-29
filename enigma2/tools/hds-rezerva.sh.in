@@ -8,14 +8,21 @@
 # and, for the picture on the television and the page in the 13 languages, python3 without any extra module
 # (tools/hds-rezerva-ecran.py); without python3 the page is still served, in Romanian and English. Commands:
 #   drivere            before enigma2: notes /dev/fb0 or /dev/dvb/adapter0 missing (E304); no file when both are there;
-#   ceas PID T0        in the background, started by the script PID right before enigma2 (T0: the uptime then), only
-#                      until the interface of this image has come up once on this receiver (no mark
-#                      /etc/hds-interfata-pornita: a new install) or when the start is in doubt (drivers missing, the
-#                      guard did not pass, a start that failed earlier in this boot). Every HDS_REZERVA_PAS seconds it
-#                      looks whether that enigma2 reached its interface: then it writes the mark (once, only when the
-#                      guard passed), ends the run of failed starts and stops. When that enigma2 has not reached its
-#                      interface HDS_REZERVA_ASTEPTARE seconds after T0, it is stopped (TERM, then KILL after
-#                      HDS_REZERVA_OPRIRE seconds) and its end counts as stuck at start (E305);
+#   urmareste          in the background, one per boot, only on a start in doubt: started by our first script of
+#                      rcS (hds-jurnal, S38) when the interface of this image never came up on this receiver (no mark
+#                      /etc/hds-interfata-pornita: a new install) or drivers are missing, and by enigma2.sh when the
+#                      guard did not pass or a start failed earlier in this boot. Every second it looks at the boot:
+#                      before enigma2, the script of init.d that runs (rcS.d/S41... -> "S41", rc3.d/S50... -> "3S50",
+#                      enigma2.sh -> "E2SH"), shown on the front display and, as "HD Satelit porneste..." with the
+#                      step, on the television; once enigma2 runs, "E2" on the display and the screen is left to it.
+#                      A step of init.d that lasts HDS_REZERVA_INIT_LENT seconds: "the start takes longer than usual";
+#                      HDS_REZERVA_INIT_COD seconds: the diagnosis with E306 and the step, the page on port 80. An
+#                      enigma2 without its interface HDS_REZERVA_LENT seconds after its start: "takes longer";
+#                      HDS_REZERVA_COD seconds: the diagnosis with E305 (the page on port 80 only when nothing listens
+#                      there); HDS_REZERVA_ASTEPTARE seconds: it is stopped (TERM, then KILL after HDS_REZERVA_OPRIRE
+#                      seconds) and its end counts as stuck at start (E305: the window of enigma2.sh). When the
+#                      interface is up it writes the mark (once, only when the guard passed), ends the run of failed
+#                      starts, stops its page and ends;
 #   iesire RET T0 PID [CAUZA]  after an end of enigma2 with another code than 0-4: an end before the interface is
 #                      counted, and the window runs, in the foreground of enigma2.sh, only where safe mode cannot help
 #                      or has done all it can: at the first 126/127 (E303), after a stop by "ceas" (E305), at the
@@ -62,7 +69,11 @@ HDS_MOD_SIGUR_SEMN=${HDS_MOD_SIGUR_SEMN:-/tmp/hds-mod-sigur}
 HDS_MOD_SIGUR_PRAG2=${HDS_MOD_SIGUR_PRAG2:-3}
 HDS_UPTIME=${HDS_UPTIME:-$HDS_PAZA_RADACINA/proc/uptime}
 HDS_REZERVA_SEMN=${HDS_REZERVA_SEMN:-$HDS_PAZA_RADACINA/etc/hds-interfata-pornita}
-HDS_REZERVA_PAS=${HDS_REZERVA_PAS:-5}
+HDS_REZERVA_PAS=${HDS_REZERVA_PAS:-1}
+HDS_REZERVA_LENT=${HDS_REZERVA_LENT:-40}
+HDS_REZERVA_COD=${HDS_REZERVA_COD:-75}
+HDS_REZERVA_INIT_LENT=${HDS_REZERVA_INIT_LENT:-40}
+HDS_REZERVA_INIT_COD=${HDS_REZERVA_INIT_COD:-90}
 HDS_REZERVA_LOAD=${HDS_REZERVA_LOAD:-}
 
 D=$HDS_REZERVA_DOSAR
@@ -170,6 +181,8 @@ rz_module_lipsa() {
 rz_date() {
 	mkdir -p "$D" 2>/dev/null
 	{
+		echo "faza=${rz_faza:-cod}"
+		echo "pas=$rz_pas"
 		echo "cod=$1"
 		echo "coduri=$*"
 		echo "ip=$(rz_ip)"
@@ -265,8 +278,13 @@ rz_opreste() {
 # the window: everything runs until the deadline, then stops; enigma2 is not running meanwhile
 rz_fereastra() {
 	rz_cod=$1
-	rz_inetd=""; rz_py=""
+	rz_inetd=""; rz_py=""; rz_faza=cod
 	mkdir -p "$D" 2>/dev/null
+	# the page of the watcher of the boot (if it was up) gives port 80 to the window
+	rz_p=""
+	read rz_p 2>/dev/null < "$D/inetd.pid"
+	case $rz_p in ''|*[!0-9]*) ;; *) kill "$rz_p" 2>/dev/null ;; esac
+	rm -f "$D/inetd.pid"
 	trap 'rz_curata; exit 0' TERM INT HUP
 	trap 'rz_curata' EXIT
 	echo "$$" > "$D/fereastra.pid"
@@ -316,6 +334,196 @@ rz_fereastra() {
 	trap - TERM INT HUP EXIT
 	wait 2>/dev/null
 	return 0
+}
+
+# the enigma2 of the receiver: "pid ppid start" (start: the second since boot it was started at, from /proc/<pid>/stat,
+# field 22, in ticks of 1/100 s); nothing when it does not run
+rz_enigma2() {
+	for rz_s in "$HDS_PAZA_RADACINA"/proc/[0-9]*/stat; do
+		rz_l=""
+		read -r rz_l 2>/dev/null < "$rz_s" || continue
+		case $rz_l in *" (enigma2) "*) ;; *) continue ;; esac
+		set -- ${rz_l##*) }
+		[ "$#" -ge 20 ] || continue
+		eval "rz_st=\${20}"
+		case $rz_st in ''|*[!0-9]*) continue ;; esac
+		echo "${rz_l%% *} $2 $((rz_st / 100))"
+		return 0
+	done
+	return 1
+}
+
+# the step of the boot before enigma2: "S41 hds-netguard (rcS)", "3S50 softcam (rc3)", "E2SH enigma2.sh"; the script of
+# init.d that runs now is in the command line of its process (a script ending in .sh is read by rc itself: its step
+# is not seen, the last one stays). The command lines of grep and awk are read too: neither may hold the text it
+# looks for as it is (hence [.] in awk)
+rz_pas_acum() {
+	grep -a -o -h -s -e '/etc/rc[S0-6]\.d/S[0-9][0-9][A-Za-z0-9_.-]*' -e '/enigma2\.sh' \
+		"$HDS_PAZA_RADACINA"/proc/[0-9]*/cmdline 2>/dev/null | awk '
+		/enigma2[.]sh$/ { e = 1; next }
+		r == "" { r = $0 }
+		END {
+			if (e) { print "E2SH enigma2.sh"; exit }
+			if (r == "") exit
+			n = r; sub(/^\/etc\/rc/, "", n); l = substr(n, 1, 1); n = substr(n, 5)
+			print (l == "S" ? "" : l) substr(n, 1, 3) " " substr(n, 4) " (rc" l ")"
+		}'
+}
+
+# a picture on the television in the background (python); one that is still being drawn gives way to the new one
+rz_desen() {
+	[ -n "$rz_py" ] && kill "$rz_py" 2>/dev/null
+	rz_py=""
+	rz_faza=$1
+	rz_date ""
+	rz_ecran
+}
+
+# the page of the watcher on port 80, only when nothing listens there (enigma2 or another program)
+rz_urm_web() {
+	[ -n "$rz_inetd" ] && kill -0 "$rz_inetd" 2>/dev/null && return 0
+	netstat -ltn 2>/dev/null | grep -q ":$HDS_REZERVA_PORT " && return 0
+	command -v inetd > /dev/null 2>&1 || return 0
+	{
+		echo "$HDS_REZERVA_PORT stream tcp nowait root /bin/sh sh $HDS_REZERVA_SINE http"
+		[ -f "$HDS_PAZA_RADACINA/proc/net/tcp6" ] &&
+			echo "$HDS_REZERVA_PORT stream tcp6 nowait root /bin/sh sh $HDS_REZERVA_SINE http"
+	} > "$D/inetd.conf"
+	HDS_REZERVA_DOSAR=$D inetd -f -R 300 "$D/inetd.conf" > /dev/null 2>&1 &
+	rz_inetd=$!
+	echo "$rz_inetd" > "$D/inetd.pid"
+}
+
+rz_urm_web_opreste() {
+	[ -n "$rz_inetd" ] && kill "$rz_inetd" 2>/dev/null
+	[ -n "$rz_inetd" ] && rm -f "$D/inetd.pid"
+	rz_inetd=""
+}
+
+# the diagnosis of the watcher: every code (the guard, the drivers, then $1), the page, the picture, one line in the log
+rz_urm_cod() {
+	rz_faza=cod
+	rz_toate=$(rz_cod_paza)
+	[ -s "$D/drivere" ] && rz_toate="$rz_toate E304"
+	set -- $rz_toate $1
+	rz_cod=$1
+	rz_date "$@"
+	rz_pagina_simpla
+	[ -n "$rz_py" ] && kill "$rz_py" 2>/dev/null
+	rz_py=""
+	rz_ecran
+	rz_urm_web
+	rz_ipa=$(sed -n 's/^ip=//p' "$D/date.txt" 2>/dev/null | head -n 1)
+	# the front display: the code (3 s), the address in pieces, the step
+	rz_sir="$rz_cod $rz_cod $rz_cod IP"
+	if [ -n "$rz_ipa" ]; then rz_sir="$rz_sir $(echo "$rz_ipa" | tr '.' ' ')"; else rz_sir="$rz_sir ----"; fi
+	rz_sir="$rz_sir ${rz_pas%% *} _"
+	rz_rot=0
+	mkdir -p "${HDS_CADERI_JURNAL%/*}" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') pornirea nu a ajuns la interfata: cod $rz_cod (toate: $*), pasul $rz_pas" \
+		>> "$HDS_CADERI_JURNAL" 2>/dev/null
+}
+
+# one piece of the front display of the diagnosis per second
+rz_urm_afisaj_cod() {
+	set -- $rz_sir
+	rz_i=$((rz_rot % $# + 1))
+	eval "rz_x=\${$rz_i}"
+	[ "$rz_x" = _ ] && rz_x=""
+	case $rz_x in [0-9]|[0-9][0-9]|[0-9][0-9][0-9]) rz_x=$(printf '%4s' "$rz_x") ;; esac
+	rz_afisaj "$rz_x"
+	rz_rot=$((rz_rot + 1))
+}
+
+rz_urm_curata() {
+	rz_urm_web_opreste
+	[ -n "$rz_py" ] && kill "$rz_py" 2>/dev/null
+	rm -f "$D/urmarire.pid"
+}
+
+# an enigma2 stuck before its interface: the mark for the block after its exit, TERM, KILL if it is still there
+rz_opreste_enigma2() {
+	printf 'parinte=%s\npid=%s\nuptime=%s\n' "$2" "$1" "$(rz_acum)" > "$D/blocat"
+	kill -TERM "$1" 2>/dev/null
+	rz_i=0
+	while [ "$rz_i" -lt "$HDS_REZERVA_OPRIRE" ] && [ -d "$HDS_PAZA_RADACINA/proc/$1" ]; do
+		sleep 1
+		rz_i=$((rz_i + 1))
+	done
+	[ -d "$HDS_PAZA_RADACINA/proc/$1" ] && kill -KILL "$1" 2>/dev/null
+}
+
+rz_urmareste() {
+	rz_faza=pornire; rz_pas=""; rz_pas_t=$(rz_acum); rz_e2=""; rz_e2_pp=""; rz_e2_t0=0; rz_inetd=""; rz_py=""
+	rz_desenat=""; rz_rot=0
+	trap 'rz_urm_curata; exit 0' TERM INT HUP
+	while :; do
+		sleep "$HDS_REZERVA_PAS"
+		rz_a=$(rz_acum)
+		# a window of enigma2.sh is on: the display, the television and port 80 are its
+		rz_fp=""
+		read rz_fp 2>/dev/null < "$D/fereastra.pid"
+		if [ -n "$rz_fp" ] && [ -d "$HDS_PAZA_RADACINA/proc/$rz_fp" ]; then
+			rz_e2=""
+			continue
+		fi
+		set -- $(rz_enigma2)
+		if [ -n "$1" ]; then
+			if [ "$1" != "$rz_e2" ]; then
+				# a new enigma2: its own count; the picture of the boot is not drawn over its screen
+				rz_e2=$1; rz_e2_pp=$2; rz_e2_t0=$3; rz_faza=e2; rz_pas="E2 enigma2"
+				: > "$D/ceas.$rz_e2_pp"
+				[ -n "$rz_py" ] && kill "$rz_py" 2>/dev/null
+				rz_py=""
+				rz_urm_web_opreste
+				rz_afisaj "E2"
+			fi
+			if rz_ajuns "$rz_e2_t0" "$rz_e2_pp"; then
+				rm -f "$D/porniri"
+				rz_semn
+				rz_urm_curata
+				exit 0
+			fi
+			rz_dt=$((rz_a - rz_e2_t0))
+			if [ "$rz_dt" -ge "$HDS_REZERVA_ASTEPTARE" ]; then
+				rz_urm_web_opreste
+				rz_opreste_enigma2 "$rz_e2" "$rz_e2_pp"
+				rz_e2=""
+			elif [ "$rz_dt" -ge "$HDS_REZERVA_COD" ]; then
+				[ "$rz_faza" = cod ] || rz_urm_cod E305
+				rz_urm_afisaj_cod
+			elif [ "$rz_dt" -ge "$HDS_REZERVA_LENT" ]; then
+				[ "$rz_faza" = lent ] || { rz_desen lent; rz_rot=0; }
+				if [ $((rz_rot % 2)) = 0 ]; then rz_afisaj LENT; else rz_afisaj E2; fi
+				rz_rot=$((rz_rot + 1))
+			fi
+			continue
+		fi
+		# before enigma2: the step of the boot
+		rz_e2=""
+		rz_p=$(rz_pas_acum)
+		if [ -n "$rz_p" ] && [ "$rz_p" != "$rz_pas" ]; then
+			rz_pas=$rz_p; rz_pas_t=$rz_a
+			[ "$rz_faza" = cod ] && rz_urm_web_opreste
+			rz_faza=pornire
+			rz_afisaj "${rz_p%% *}"
+		fi
+		rz_dt=$((rz_a - rz_pas_t))
+		if [ "$rz_dt" -ge "$HDS_REZERVA_INIT_COD" ]; then
+			[ "$rz_faza" = cod ] || rz_urm_cod E306
+			rz_urm_afisaj_cod
+		elif [ "$rz_dt" -ge "$HDS_REZERVA_INIT_LENT" ]; then
+			[ "$rz_faza" = lent ] || { rz_desen lent; rz_rot=0; }
+			if [ $((rz_rot % 2)) = 0 ]; then rz_afisaj LENT; else rz_afisaj "${rz_pas%% *}"; fi
+			rz_rot=$((rz_rot + 1))
+		elif [ "$rz_desenat" != "$rz_pas" ]; then
+			# the picture of the step, not for enigma2.sh (enigma2 takes the screen right after it)
+			case $rz_pas in
+				E2SH*) rz_desenat=$rz_pas ;;
+				*) { [ -z "$rz_py" ] || ! kill -0 "$rz_py" 2>/dev/null; } && { rz_desen pornire; rz_desenat=$rz_pas; } ;;
+			esac
+		fi
+	done
 }
 
 # one HTTP request (inetd): GET or HEAD of /, /index.html or /diagnostic.txt; the body of the request is never read
@@ -369,45 +577,18 @@ drivere)
 		rm -f "$D/drivere"
 	fi
 	;;
-ceas)
-	rz_parinte=$2; rz_t0=$3
-	case $rz_parinte in ''|*[!0-9]*) exit 0 ;; esac
+urmareste)
 	mkdir -p "$D" 2>/dev/null
-	# the mark of this start: the heartbeat or the port file of the web interface newer than it counts as reached
-	: > "$D/ceas.$rz_parinte"
-	rz_pid=""; rz_t=0; rz_sus=""
-	while [ "$rz_t" -lt "$HDS_REZERVA_ASTEPTARE" ]; do
-		sleep "$HDS_REZERVA_PAS"
-		rz_t=$((rz_t + HDS_REZERVA_PAS))
-		# the script or its enigma2 ended: the block after the exit decides
-		[ -d "$HDS_PAZA_RADACINA/proc/$rz_parinte" ] || { rz_pid=""; break; }
-		[ -n "$rz_pid" ] || rz_pid=$(rz_copil "$rz_parinte")
-		[ -z "$rz_pid" ] || [ -d "$HDS_PAZA_RADACINA/proc/$rz_pid" ] || { rz_pid=""; break; }
-		if rz_ajuns "$rz_t0" "$rz_parinte"; then
-			rz_sus=1
-			break
-		fi
-	done
-	[ -n "$rz_sus" ] || [ "$rz_t" -lt "$HDS_REZERVA_ASTEPTARE" ] || [ -n "$rz_pid" ] || rz_pid=$(rz_copil "$rz_parinte")
-	if [ -n "$rz_sus" ]; then
-		# a start that worked: the mark (once), and the run of failed starts is over (the next starts get no timer)
-		rm -f "$D/porniri"
-		rz_semn
-	elif [ -n "$rz_pid" ] && [ "$rz_t" -ge "$HDS_REZERVA_ASTEPTARE" ] && [ -d "$HDS_PAZA_RADACINA/proc/$rz_pid" ]; then
-		printf 'parinte=%s\npid=%s\nuptime=%s\n' "$rz_parinte" "$rz_pid" "$(rz_acum)" > "$D/blocat"
-		kill -TERM "$rz_pid" 2>/dev/null
-		rz_i=0
-		while [ "$rz_i" -lt "$HDS_REZERVA_OPRIRE" ] && [ -d "$HDS_PAZA_RADACINA/proc/$rz_pid" ]; do
-			sleep 1
-			rz_i=$((rz_i + 1))
-		done
-		[ -d "$HDS_PAZA_RADACINA/proc/$rz_pid" ] && kill -KILL "$rz_pid" 2>/dev/null
-	fi
-	# the mark stays while that enigma2 runs (iesire reads it and removes it); the marks of scripts that ended go
-	[ -n "$rz_pid" ] || rm -f "$D/ceas.$rz_parinte"
+	# one watcher per boot
+	rz_p=""
+	read rz_p 2>/dev/null < "$D/urmarire.pid"
+	case $rz_p in ''|*[!0-9]*) ;; *) [ -d "$HDS_PAZA_RADACINA/proc/$rz_p" ] && [ "$rz_p" != "$$" ] && exit 0 ;; esac
+	echo "$$" > "$D/urmarire.pid"
+	# the marks of scripts that ended
 	for rz_f in "$D"/ceas.*; do
 		[ -f "$rz_f" ] && [ ! -d "$HDS_PAZA_RADACINA/proc/${rz_f##*.}" ] && rm -f "$rz_f"
 	done
+	rz_urmareste
 	;;
 iesire)
 	rz_ret=$2; rz_t0=$3; rz_parinte=$4; rz_cauza=$5
@@ -464,7 +645,7 @@ http)
 	rz_http
 	;;
 *)
-	echo "folosire: $0 drivere | ceas PID T0 | iesire COD T0 PID [CAUZA] | fereastra COD... | opreste | http" >&2
+	echo "folosire: $0 drivere | urmareste | iesire COD T0 PID [CAUZA] | fereastra COD... | opreste | http" >&2
 	exit 2
 	;;
 esac

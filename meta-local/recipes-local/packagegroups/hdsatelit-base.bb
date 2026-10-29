@@ -18,6 +18,9 @@ ALLOW_EMPTY:${PN} = "1"
 # RSA (vezi /etc/init.d/dropbear), nu e liber pentru calea sftp-server -- SFTP se activeaza doar prin
 # prezenta binarului la calea compilata mai sus, nu printr-un argument de pornire nou.
 #
+# vsftpd: FTP pe portul 21, ca in imaginile OE-Alliance, cu utilizatorul root si parola receptorului (aceeasi ca la SSH
+# si SFTP), numai din reteaua de acasa; setarile in recipes-local/vsftpd (vsftpd.conf, /etc/pam.d/vsftpd).
+#
 # python3-twisted-core/-web (20.09.2026): HdsWebControl (interfata web proprie, scrisa de la zero pe
 # twisted.web) NU pornea deloc pe imaginea compilata -- jurnalul arata "[HdsWebControl] nu
 # am putut porni: No module named 'twisted'" (gasit intr-un test pe hardware real). Cauza: pachetul lipsea
@@ -166,6 +169,7 @@ RDEPENDS:${PN} = "\
     bash \
     dropbear \
     openssh-sftp-server \
+    vsftpd \
     python3-twisted-core \
     python3-twisted-web \
     opkg \
