@@ -1166,10 +1166,10 @@ def chei_tuner_imagine(chei, toate=None):
 	  imaginea și altele îl țin direct sub config.Nims.N. "dvbs." se scoate (cheia scrisă direct câștigă, dacă sunt
 	  amândouă); dvbc., dvbt. și atsc. nu se aduc (alte nume și alte valori decât cele ale imaginii).
 	- settings are numai valorile diferite de cele implicite ale imaginii care l-a scris, iar acelea diferă: configMode
-	  e "simple" la celelalte imagini cunoscute, "nothing" aici; diseqcMode e "single" la unele (cele cu "dvbs." și
-	  cele cu SEMNE_SINGLE), "diseqc_a_b" la altele și aici. Pe un tuner cu chei de satelit fără configMode se pune
-	  "simple", iar fără diseqcMode (în modul simplu, la o copie a unei imagini cu "single") se pune "single":
-	  valoarea pe care o avea tunerul.
+	  e "simple" la celelalte imagini cunoscute, "nothing" aici (afară de primul tuner de satelit, "simple");
+	  diseqcMode e "single" la unele (cele cu "dvbs." și cele cu SEMNE_SINGLE), "diseqc_a_b" la altele și aici.
+	  Pe un tuner cu chei de satelit fără configMode se pune "simple", iar fără diseqcMode (în modul simplu, la o
+	  copie a unei imagini cu "single") se pune "single": valoarea pe care o avea tunerul.
 	  O copie HD Satelit (are chei config.hds*) nu se completează: valorile ei implicite sunt ale acestei imagini.
 	`toate`: toate cheile din settings-ul sursei (semnele imaginii); implicit `chei`."""
 	toate = chei if toate is None else toate

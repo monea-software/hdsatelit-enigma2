@@ -2963,21 +2963,21 @@ RESULT eDVBFrontend::sendDiseqc(const eDVBDiseqcCommand &diseqc)
    direct din Python, se noteaza dupa raspunsul driverului: cine l-a cerut, pe ce acordare, unde credea nucleul ca e
    antena. Randul pleaca intr-o teava neblocanta; firul principal nu asteapta discul. */
 static void hdsUrmaComanda(int slot, const eDVBDiseqcCommand &diseqc, int rezultat, const hdsurma::Acordare *acordare,
-	const hdsurma::Acordare &ultima, long crezuta, long crezuta_cmd)
+	const hdsurma::Acordare &ultima, long crezuta, long crezuta_cmd, int ret_driver)
 {
 	if (!hdsurma::esteMotor(diseqc.data, diseqc.len))
 		return;
 	if (acordare)
 	{
 		hdsurma::comandaTrimisa(slot, diseqc.data, diseqc.len, rezultat, "acordare", *acordare, acordare->rotor_de_la,
-			acordare->rotor_cmd_vechi);
+			acordare->rotor_cmd_vechi, ret_driver);
 		return;
 	}
 	/* trimitere directa: canalul si transponderul sunt ale ultimei acordari a tunerului, cine a cerut e de acum */
 	hdsurma::Acordare a = ultima;
 	a.rotor_de_la = a.rotor_cmd = a.rotor_cmd_vechi = -1;
 	hdsurma::completeazaCine(a, "comanda directa");
-	hdsurma::comandaTrimisa(slot, diseqc.data, diseqc.len, rezultat, "directa", a, crezuta, crezuta_cmd);
+	hdsurma::comandaTrimisa(slot, diseqc.data, diseqc.len, rezultat, "directa", a, crezuta, crezuta_cmd, ret_driver);
 }
 
 RESULT eDVBFrontend::hdsSendDiseqc(const eDVBDiseqcCommand &diseqc, const hdsurma::Acordare *acordare)
@@ -2992,14 +2992,17 @@ RESULT eDVBFrontend::hdsSendDiseqc(const eDVBDiseqcCommand &diseqc, const hdsurm
 	cmd.u.diseqc.cmd = diseqc.data[2];
 	cmd.u.diseqc.numParams = diseqc.len-3;
 	memcpy(cmd.u.diseqc.params, diseqc.data+3, diseqc.len-3);
-	int hds_rez = ::ioctl(m_secfd, SEC_DISEQC_SEND_MASTER_CMD, &cmd) ? -errno : 0;
+	int hds_ret = ::ioctl(m_secfd, SEC_DISEQC_SEND_MASTER_CMD, &cmd);
+	int hds_rez = hdsurma::rezultatIoctl(hds_ret, errno);  /* numai < 0 e eroare (hdsurmamotor.h) */
 #else
 	struct dvb_diseqc_master_cmd cmd;
 	memcpy(cmd.msg, diseqc.data, diseqc.len);
 	cmd.msg_len = diseqc.len;
-	int hds_rez = ::ioctl(m_fd, FE_DISEQC_SEND_MASTER_CMD, &cmd) ? -errno : 0;
+	int hds_ret = ::ioctl(m_fd, FE_DISEQC_SEND_MASTER_CMD, &cmd);
+	int hds_rez = hdsurma::rezultatIoctl(hds_ret, errno);  /* SF8008 (hi-dvb.ko) intoarce 1 la reusita */
 #endif
-	hdsUrmaComanda(m_slotid, diseqc, hds_rez, acordare, m_hds_acordare, m_data[ROTOR_POS], m_data[ROTOR_CMD]);
+	hdsUrmaComanda(m_slotid, diseqc, hds_rez, acordare, m_hds_acordare, m_data[ROTOR_POS], m_data[ROTOR_CMD],
+		hds_ret > 0 ? hds_ret : 0);
 	if (hds_rez)
 		return -EINVAL;
 	return 0;

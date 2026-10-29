@@ -31,7 +31,11 @@
 #   - read(): un flux de octeti cu mesajele primite, inregistrari [destinatia, lungimea (codul + parametrii), codul,
 #     parametrii...]; primul octet e destinatia (adresa noastra sau 0x0F), cine a trimis nu se afla; read() intoarce 0
 #     cand nu e nimic (nu blocheaza). poll() nu e trezit cand vine un mesaj, deci mesajele se citesc cu un eTimer
-#     (CITIRE_MS) cat nodul e deschis.
+#     (CITIRE_MS) cat nodul e deschis. Pe placile familiei libreader (V10, Octagon SF8008 si MINI: driverul hi_hdmicec
+#     al SDK-ului producatorului) fiecare read() pe coada goala scrie in jurnalul nucleului "hdmicec_read: no enough
+#     data to receive" (kern.warn), deci citirea la 100 ms umplea dmesg cu 10 randuri pe secunda. Acolo read() se face
+#     numai cand poll(0) arata un mesaj in coada, plus o citire de control la CITIRE_SIGURA_MS: daca aceea gaseste un
+#     mesaj pe care poll nu l-a aratat, poll nu e de incredere pe receptorul acesta si citirea revine la fiecare pas.
 # Nodul e deschis tot timpul pe un receptor care il are: numele receptorului pe televizor (lista intrarilor HDMI) vine
 # numai prin CEC. Partea pornita din fabrica e cea mai mica de care e nevoie pentru nume si nu schimba nimic pe
 # televizor: dupa deschidere (ANUNT_MS) <Report Physical Address> 0x84 si <Set OSD Name> 0x47 (repetate la
@@ -108,6 +112,7 @@ ANUNT_REPETA_MS = 5000      # anuntul din nou cat CEC nu e gata (write = 0)
 ANUNT_INCERCARI = 12
 CITIRE_MS = 400             # citirea mesajelor primite, cat nodul e deschis
 CITIRI_PE_PAS = 8
+CITIRE_SIGURA_MS = 5000     # familia libreader: o citire si cand poll(0) nu arata nimic (paza pentru un poll care minte)
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
 
@@ -450,6 +455,30 @@ def _valoareDin(text, chei):
 	return u""
 
 
+def areDate(fd):
+	"""True cand driverul are un mesaj in coada (poll cu timpul 0), False cand nu, None cand poll() nu merge pe nod"""
+	try:
+		import select
+		p = select.poll()
+		p.register(fd, select.POLLIN | select.POLLPRI)
+		r = p.poll(0)
+		return bool(r) and any(ev & (select.POLLIN | select.POLLPRI) for _f, ev in r)
+	except Exception:
+		return None
+
+
+def citireDupaPoll():
+	"""True pe placile al caror driver CEC scrie in jurnalul nucleului la fiecare citire goala (familia libreader)"""
+	try:
+		try:
+			from Components import HdsPlatforma
+		except ImportError:  # probele de pe PC: modulul incarcat singur, din dosarul Components
+			import HdsPlatforma
+		return bool(HdsPlatforma.familiaLibreader())
+	except Exception:
+		return False
+
+
 def modelReceptor():
 	"""Modelul citit pe receptor: model= din /etc/hdsatelit-model (scris de reteta imaginii), altfel displaymodel sau
 	model din /usr/lib/enigma.info; "" daca nu se stie."""
@@ -589,8 +618,11 @@ class Cec(object):
 	intrebarile televizorului, trimiterea si starea ultimului mesaj."""
 
 	def __init__(self, deschide=None, scrieFd=None, inchide=None, ioctl=None, ceas=None, timer=None, citesteFd=None,
-			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None):
+			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None, poll=None, dupaPoll=None):
 		self.deschideFd = deschide or os.open
+		self.pollFd = poll or areDate
+		self.dupaPoll = dupaPoll     # None = aflat la deschidere (citireDupaPoll); False dupa un poll care a mintit
+		self.citireSigura = None     # cand s-a facut ultima citire de control (familia libreader)
 		self.scrieFd = scrieFd or os.write
 		self.inchideFd = inchide or os.close
 		self.citesteFd = citesteFd or os.read
@@ -814,6 +846,18 @@ class Cec(object):
 		inregistrari s-au citit. Nu blocheaza: read() da 0 cand coada e goala."""
 		if self.fd is None:
 			return 0
+		control = False
+		if self.dupaPoll is None:
+			self.dupaPoll = citireDupaPoll()
+		if self.dupaPoll:
+			are = self.pollFd(self.fd)
+			if are is False:
+				acum = self.ceas()
+				if self.citireSigura is not None and 0 <= (acum - self.citireSigura) * 1000 < CITIRE_SIGURA_MS:
+					return 0
+				self.citireSigura = acum
+				control = True
+		inainte = len(self.tampon)
 		for _i in range(CITIRI_PE_PAS):
 			try:
 				date = self.citesteFd(self.fd, 256)
@@ -824,6 +868,9 @@ class Cec(object):
 			if not date:
 				break
 			self.tampon.extend(bytearray(date))
+		if control and len(self.tampon) > inainte:
+			self.dupaPoll = False
+			_jurnal("CEC: poll() nu a aratat un mesaj primit; citirea revine la fiecare pas", "cec-poll")
 		n = 0
 		while True:
 			r = self._inregistrare()

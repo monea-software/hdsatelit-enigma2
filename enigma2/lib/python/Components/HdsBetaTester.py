@@ -192,7 +192,6 @@ RANDURI_MENIU = {
 	"date": N_("Alegi ce date pleacă, numele și e-mailul."),
 	"acum": N_("Tot ce a plecat în ultimul pachet."),
 	"probe": N_("Probe pe receptor: ce merge și ce nu."),
-	"asistenta": N_("Ne lași să vedem starea receptorului, cât alegi tu."),
 	"canal_testeri": N_("Versiunile noi ajung întâi la tine."),
 	"public": N_("Numele cu care apari pe forum și pe site."),
 	"nota": N_("Ce date pleacă, cine le primește, cât se păstrează."),
@@ -204,14 +203,12 @@ RANDURI_VIZITATOR = {
 	"forum": N_("Citește ce scriu testerii acestui receptor."),
 }
 # avantajele aratate celui care nu e inscris (pe receptor si in web): (cheie, pictograma, titlu, rand); apar primele
-# AVANTAJE_ARATATE adevarate pe receptorul lui (cheile canal_testeri, forum, asistenta numai daca exista modulul)
+# AVANTAJE_ARATATE adevarate pe receptorul lui (cheile canal_testeri, forum numai daca exista modulul)
 AVANTAJE = (
 	("canal_testeri", "actualizare", N_("Primești versiunile noi înaintea tuturor"),
 		N_("Din meniul testerului alegi să primești întâi versiunile pentru testeri.")),
 	("forum", "traducere", N_("Scrii pe forumul receptorului, cu capturi de ecran"),
 		N_("Forumul traduce singur mesajele pentru fiecare cititor.")),
-	("asistenta", "conexiune", N_("La o problemă, ne lași să ne uităm la receptor, cât vrei tu"),
-		N_("Asistența de la distanță: o pornești tu și o oprești oricând.")),
 	("date", "noutati", N_("Imaginea merge mai bine pe modelul tău"),
 		N_("Trimiți date anonime, numai cele bifate de tine.")),
 	("raspunsuri", "informatii", N_("Echipa îți răspunde la mesaje"),
@@ -222,7 +219,7 @@ AVANTAJE_ARATATE = 3
 
 def avantaje(exista):
 	"""Avantajele adevarate pe acest receptor, traduse: [(cheie, pictograma, titlu, rand)], cel mult AVANTAJE_ARATATE.
-	exista = {cheie: bool} pentru avantajele legate de un modul (canal_testeri, forum, asistenta)."""
+	exista = {cheie: bool} pentru avantajele legate de un modul (canal_testeri, forum)."""
 	rez = [(cheie, glif, _t(titlu), _t(rand)) for cheie, glif, titlu, rand in AVANTAJE if exista.get(cheie, True)]
 	return rez[:AVANTAJE_ARATATE]
 

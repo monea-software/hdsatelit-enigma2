@@ -651,7 +651,7 @@ def runScreenTest():
 	except Exception as e:
 		print("[mytest] VPN-ul:", e)
 	# HDSatelit: Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistentaSemn.py): oprita din
-	# fabrica, nu porneste nimic de aici. Pune SystemInfo["HdsAsistenta"] (meniul testerilor arata randul numai cand
+	# fabrica, nu porneste nimic de aici. Pune SystemInfo["HdsAsistenta"] (randul din Setari, requires=, se vede numai cand
 	# e disponibila), pregateste semnul de pe ecran si reia o sesiune ramasa dupa o repornire a interfetei (fisierul
 	# de stare exista numai daca omul a pornit asistenta in aceasta pornire). Pornirea nu depinde de ea.
 	try:

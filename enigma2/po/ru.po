@@ -41385,9 +41385,6 @@ msgstr "Зелёная кнопка открывает эквалайзер."
 #~ "Извините, сюда нельзя сохранить резервную копию.\n"
 #~ "/nПожалуйста, выберите другое место"
 
-#
-#~ msgid "Start"
-#~ msgstr "Старт"
 
 #
 #~ msgid "Startwizard"
@@ -54761,3 +54758,39 @@ msgstr "STOP обрезки (здесь заканчивается пропус�
 
 msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
 msgstr "ПОСЛЕДНЕЕ ПОДТВЕРЖДЕНИЕ: новое ПО будет ДЕЙСТВИТЕЛЬНО записано на ресивер.\nНЕ отключай ресивер от сети и НЕ извлекай носитель, пока идёт запись.\nИнтерфейс остановится, а ресивер в конце сам перезапустится.\n\nПакет: %s\n\nДействительно продолжить?"
+
+msgid "Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"
+msgstr "Я принимаю <a href=\"#\" id=\"termeni\">условия использования</a>"
+
+msgid "Accept termenii și condițiile"
+msgstr "Я принимаю условия использования"
+
+msgid "Termenii și condițiile"
+msgstr "Условия использования"
+
+msgid "Start"
+msgstr "Старт"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O oprești oricând."
+msgstr "Команда HD Satelit видит через интернет состояние твоего ресивера, чтобы помочь тебе, ничего не меняя. Ты можешь остановить её в любой момент."
+
+msgid "Fără bifă, asistența nu pornește."
+msgstr "Без отметки удалённая помощь не запустится."
+
+msgid "OK pe rândul de sus: termenii și condițiile."
+msgstr "OK на строке выше: условия использования."
+
+msgid "Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau acordul unui părinte."
+msgstr "Когда строка отмечена, «Старт» подтверждает, что ты согласен с этими условиями и тебе не меньше 16 лет или у тебя есть согласие родителя."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "«Старт» включает её на 2 часа. Ты можешь остановить её в любой момент, на ресивере или на веб-странице. Пока она включена, команда может подключиться в любой момент, но выполняет только чтения и проверки из фиксированного списка, ничего не меняя."
+
+msgid "Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo."
+msgstr "На ресивере открылась удалённая помощь: нажми там «Старт»."
+
+msgid "Nu pot deschide Asistența de la distanță pe receptor acum."
+msgstr "Сейчас не удаётся открыть удалённую помощь на ресивере."
+
+msgid "cerere trimisă, aștept echipa"
+msgstr "запрос отправлен, жду команду"

@@ -616,7 +616,28 @@ class NIM(object):
 	def isMultistream(self):
 		"""Tunerul de satelit poate alege un flux (ISI) si secventa PLS a unui transponder DVB-S2 multistream."""
 		return self.multistream and self.isCompatible("DVB-S2")
-	
+
+	@staticmethod
+	def numeCuCabluSiTerestru(nume):
+		"""True cand numele tunerului din /proc/bus/nim_sockets spune si cablu si terestru. Sistemele se iau din
+		grupurile care incep cu "DVB-", despartite de "/" sau ",": "DVB-C,T/T2 NIM" (Viper 4K V20), "ATBM7821 DVB-T2/C"
+		(tunerul combinat al Octagon SF8008 si SF8008 MINI), "MXL608 DVB-C/T/T2", "DVB-C/DVB-T2". Nu: "DVB-S2 NIM",
+		"Si2166D", "Tuner DVB-T2", "DVB-C NIM".
+		De ce: driverul acestor placi (hi-dvb.ko, proc_bus_nim_sockets_read) scrie la "Type:" numai primul sistem din
+		lista lui (DVB-S2, DVB-S, DVB-T2, DVB-T, ..., DVB-C), deci tunerul combinat se anunta "Type: DVB-T2", iar
+		cablul se vede numai din nume. In "DVB-T2/C" sirul "DVB-C" nu apare, iar proba veche de mai jos il pierdea."""
+		import re
+		cablu = terestru = False
+		for grup in re.findall(r"DVB-([A-Z0-9]+(?:\s*[/,]\s*(?:DVB-)?[A-Z0-9]+)*)", (nume or "").upper()):
+			for sistem in re.split(r"\s*[/,]\s*", grup):
+				if sistem.startswith("DVB-"):
+					sistem = sistem[4:]
+				if sistem in ("C", "C2"):
+					cablu = True
+				elif sistem in ("T", "T2"):
+					terestru = True
+		return cablu and terestru
+
 	def isEmpty(self):
 		return self.__is_empty
 	
@@ -812,6 +833,9 @@ class NimManager:
 				entry["type"] = None
 			name = entry.get("name", "")
 			if ("DVB-C" in name and ("DVB-T" in name or "T2" in name)) or ("DVB-C" in name and "T/T2" in name):
+				entry["type"] = "DVB-C/T"
+			elif entry["type"] in ("DVB-T", "DVB-C") and NIM.numeCuCabluSiTerestru(name):
+				# SF8008 si SF8008 MINI: "Type: DVB-T2" + "Name: ATBM7821 DVB-T2/C" (vezi NIM.numeCuCabluSiTerestru)
 				entry["type"] = "DVB-C/T"
 			if not ("i2c" in entry):
 				entry["i2c"] = None
@@ -1154,6 +1178,111 @@ def felCombinatImplicit(cale = "/etc/enigma2/lamedb"):
 	fel = "cablu" if cab > ter else "terestru"
 	_FEL_COMBINAT.append(fel)
 	return fel
+
+
+# satelitii primului tuner de satelit cand vine pornit singur (DiSEqC A si B), dupa tara receptorului (din limba
+# meniurilor): A = pozitia celor mai multi operatori ai tarii din operatori-satelit.json (la egalitate, primul din
+# fisier), B = 19,2E, sau 13,0E cand A e chiar 19,2E. Pentru Romania: Thor 0,8W si 19,2E. Fara operatori pentru tara:
+# 19,2E si 13,0E, implicitele de dinainte ale modulului.
+SATELITI_IMPLICITI = (192, 130)
+
+
+def satelitiDupaTara(tara, operatori=None):
+	"""(A, B): pozitiile orbitale (in zecimi de grad, vestul ca 3600 - x) pentru DiSEqC A si B ale tarii date."""
+	if operatori is None:
+		try:
+			from Components import HdsOperatoriSatelit
+			operatori = HdsOperatoriSatelit.incarca().get("operatori") or []
+		except Exception as e:
+			print("[NimManager] operatorii de satelit: %s" % e)
+			operatori = []
+	numar = {}
+	ordine = []
+	for op in operatori:
+		try:
+			poz = int(op.get("pozitie"))
+		except (AttributeError, TypeError, ValueError):
+			continue
+		if tara and tara in (op.get("tari") or []):
+			if poz not in numar:
+				ordine.append(poz)
+				numar[poz] = 0
+			numar[poz] += 1
+	if not ordine:
+		return SATELITI_IMPLICITI
+	a = sorted(ordine, key=lambda p: (-numar[p], ordine.index(p)))[0]
+	return (a, 130 if a == 192 else 192)
+
+
+def limbaReceptorului():
+	"""Limba meniurilor ("ro_RO"): setarea, altfel cea scrisa in settings (setarea se face dupa NimManager), altfel
+	limba activa."""
+	try:
+		return config.osd.language.value
+	except Exception:
+		pass
+	try:
+		limba = (config.content.stored_values.get("osd") or {}).get("language")
+		if limba:
+			return limba
+	except Exception:
+		pass
+	try:
+		from Components.Language import language
+		return language.getLanguage()
+	except Exception:
+		return None
+
+
+def taraReceptorului(limba=None):
+	"""Codul de tara (doua litere) din limba meniurilor; "RO" cand nu se poate afla."""
+	try:
+		from Components import HdsOperatoriSatelit
+		return HdsOperatoriSatelit.tara_din_limba(limba or limbaReceptorului()) or HdsOperatoriSatelit.TARA_IMPLICITA
+	except Exception as e:
+		print("[NimManager] tara receptorului: %s" % e)
+		return "RO"
+
+
+def satelitiReceptorului(satlist, limba=None):
+	"""(A, B) dupa tara receptorului, numai cu sateliti din lista receptorului (altfel implicitele vechi)."""
+	pozitii = set(x[0] for x in satlist)
+	a, b = satelitiDupaTara(taraReceptorului(limba))
+	if a not in pozitii or b not in pozitii:
+		return SATELITI_IMPLICITI
+	return (a, b)
+
+
+def _limbaActiva():
+	"""Limba tocmai aleasa (Components.Language), sau None."""
+	try:
+		from Components.Language import language
+		return language.getLanguage()
+	except Exception:
+		return None
+
+
+def _taraSchimbata(slot, implicite):
+	"""Limba aleasa in asistentul primei porniri (dupa ce tunerul a primit satelitii): daca omul n-a schimbat inca
+	nimic la tuner, satelitii A si B se iau dupa tara noii limbi. Dupa asistent o limba schimbata nu-i mai muta (un
+	receptor din Romania cu meniul in engleza ramane pe Thor)."""
+	try:
+		if not config.misc.firstrun.value:
+			return
+		nim = config.Nims[slot]
+		a, b = satelitiReceptorului([(int(v), d, 0) for v, d in nim.diseqcA.choices.choices], _limbaActiva())
+		if (a, b) == tuple(implicite) or nim.configMode.value != "simple":
+			return
+		if (nim.diseqcA.orbital_position, nim.diseqcB.orbital_position) != tuple(implicite):
+			return
+		nim.diseqcA.default = nim.diseqcA.value = str(a)
+		nim.diseqcB.default = nim.diseqcB.value = str(b)
+		nim.diseqcA.save()
+		nim.diseqcB.save()
+		implicite[:] = [a, b]
+		print("[NimManager] tunerul %d: satelitii dupa tara noii limbi: %d si %d" % (slot, a, b))
+	except Exception as e:
+		print("[NimManager] tunerul %d: satelitii dupa limba: %s" % (slot, e))
 
 
 def InitNimManager(nimmgr):
@@ -1513,6 +1642,19 @@ def InitNimManager(nimmgr):
 			nim.multiType.fe_id = x - empty_slots
 			nim.multiType.addNotifier(boundFunction(tunerTypeChanged, nimmgr))
 		
+	# HDSatelit: primul tuner de satelit vine pornit, in modul simplu (DiSEqC A/B, satelitii dupa tara receptorului,
+	# satelitiReceptorului), ca scanarea si canalele sa mearga din prima, fara "Setari tuner". Pana acum implicit era "nothing"
+	# (nimic conectat) si nimic din imagine nu-l schimba (asistentul de la prima pornire nu atinge tunerele), deci pe
+	# un receptor nou scanarea nu vedea niciun tuner de satelit. Ceilalti tuneri de satelit raman opriti pana ii
+	# porneste omul: unul fara cablu, pornit, ar fi ales pentru inregistrari si n-ar prinde nimic. Ce a ales omul
+	# ramane: o valoare diferita de cea implicita se scrie in settings, deci si "nothing" pe primul tuner (Satconfig
+	# pastreaza implicitul de aici, configMode.default).
+	primul_satelit = None
+	for slot in nimmgr.nim_slots:
+		if slot.isCompatible("DVB-S"):
+			primul_satelit = slot.slot
+			break
+
 	empty_slots = 0
 	for slot in nimmgr.nim_slots:
 		x = slot.slot
@@ -1529,8 +1671,20 @@ def InitNimManager(nimmgr):
 			nim.simpleSingleSendDiSEqC = ConfigYesNo(False)
 			nim.simpleDiSEqCSetVoltageTone = ConfigYesNo(True)
 			nim.simpleDiSEqCOnlyOnSatChange = ConfigYesNo(False)
-			nim.diseqcA = getConfigSatlist(192, diseqc_satlist_choices)
-			nim.diseqcB = getConfigSatlist(130, diseqc_satlist_choices)
+			# primul tuner de satelit, inca neconfigurat (settings fara configMode-ul lui: receptor nou): satelitii dupa
+			# tara receptorului, scrisi in settings (mai jos, dupa configMode). Configurat deja:
+			# implicitele de dinainte, ca un receptor care le folosea fara sa le fi scris sa ramana cum era.
+			proaspat = x == primul_satelit and "configMode" not in nim.content.stored_values
+			implicit_a, implicit_b = satelitiReceptorului(diseqc_satlist_choices) if proaspat else SATELITI_IMPLICITI
+			nim.diseqcA = getConfigSatlist(implicit_a, diseqc_satlist_choices)
+			nim.diseqcB = getConfigSatlist(implicit_b, diseqc_satlist_choices)
+			if proaspat:
+				nim.diseqcA.save_forced = nim.diseqcB.save_forced = True
+				try:
+					from Components.Language import language
+					language.addCallback(boundFunction(_taraSchimbata, x, [implicit_a, implicit_b]))
+				except Exception as e:
+					print("[NimManager] limba: %s" % e)
 			nim.diseqcC = ConfigSatlist(list = diseqc_satlist_choices)
 			nim.diseqcD = ConfigSatlist(list = diseqc_satlist_choices)
 			nim.positionerMode = ConfigSelection(positioner_mode_choices, "usals")
@@ -1555,10 +1709,20 @@ def InitNimManager(nimmgr):
 			if len(nimmgr.canConnectTo(x)) > 0:
 				config_mode_choices.append(("loopthrough", _("loopthrough to")))
 			nim.advanced = ConfigNothing()
-			tmp = ConfigSelection(config_mode_choices, "nothing")
+			tmp = ConfigSelection(config_mode_choices, "simple" if x == primul_satelit else "nothing")
+			# pe primul tuner modul se scrie mereu in settings, si cand e cel implicit: settings ramane ca pana acum
+			# (config.Nims.0.configMode=simple), iar o copie sau o versiune mai veche, cu implicitul "nothing", il
+			# citeste la fel
+			tmp.save_forced = x == primul_satelit
 			tmp.slot_id = x
 			tmp.addNotifier(configModeChanged, initial_call = False)
 			nim.configMode = tmp
+			if proaspat:
+				# receptor nou: modul si satelitii intra in settings la prima scriere (oprirea interfetei, orice
+				# setare salvata), deci la pornirea urmatoare tunerul nu mai e "nou" si satelitii nu se mai muta
+				tmp.save()
+				nim.diseqcA.save()
+				nim.diseqcB.save()
 		elif slot.isCompatible("DVB-C") or slot.isCompatible("DVB-T"):
 			nim.configMode = ConfigSelection(
 				choices = {

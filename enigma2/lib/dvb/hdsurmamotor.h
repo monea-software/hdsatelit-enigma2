@@ -107,7 +107,8 @@ struct Eveniment
 	int slot;
 	const unsigned char *octeti;  /* "comanda" */
 	int lungime;
-	int rezultat;                 /* raspunsul driverului (0 = primita) */
+	int rezultat;                 /* raspunsul driverului (0 = primita, altfel -errno) */
+	int ret_driver;               /* ce a intors ioctl-ul cand a reusit, daca nu e 0 (SF8008: 1); 0 = nu se scrie */
 	const char *cale;             /* "acordare" sau "directa" */
 	const Acordare *acordare;     /* acordarea (sau, la cale directa, ultima acordare a tunerului si cine a cerut acum) */
 	long crezuta;                 /* pozitia crezuta de nucleu cand s-a hotarat, zecimi de grad, -1 necunoscuta */
@@ -137,7 +138,11 @@ void noteaza(const Eveniment &e);
 
 /* cele trei evenimente, chemate din frontend.cpp si sec.cpp */
 void comandaTrimisa(int slot, const unsigned char *d, int len, int rezultat, const char *cale, const Acordare &a,
-	long crezuta, long crezuta_cmd);
+	long crezuta, long crezuta_cmd, int ret_driver = 0);
+
+/* raspunsul unui ioctl dupa conventia Linux: numai o valoare negativa e eroare (atunci -errno); un driver care
+   intoarce un numar pozitiv la reusita (hi-dvb.ko pe SF8008: 1) a reusit, iar errno ramas de la alt apel nu conteaza */
+inline int rezultatIoctl(int ret, int err) { return ret < 0 ? -err : 0; }
 void gotoOmis(int slot, const Acordare &a, long ultima_cmd);
 void pozitieCrezuta(int slot, long de_la, long de_la_cmd, int spre, int spre_cmd);
 /* un rand "readucere" (chemat din sec.cpp, hdsMotorReaducere) */

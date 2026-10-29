@@ -47,6 +47,7 @@ from __future__ import absolute_import
 
 import os
 import re
+import threading
 import time
 
 IESIRE_MANUAL = "manual"
@@ -162,6 +163,71 @@ def _citeste(cale, binar=False):
 		return None
 
 
+# Citirile din /proc ale driverului HiSilicon (/proc/msp/avplay00 si celelalte, /proc/hisi, /proc/stb/hdmi) se fac
+# NUMAI intr-un fir de fundal: pe Octagon SF8008 citirea lui /proc/msp/avplay00 a ramas blocata in nucleu, pe firul
+# principal, iar paznicul a oprit interfata care nu mai raspundea. Firul principal asteapta citirea cel mult
+# ASTEPTARE_CITIRE_S (o citire buna din /proc ia sub o milisecunda), apoi foloseste ce s-a citit deja (None = nu se
+# stie). O citire care nu se termina in TIMP_CITIRE_S marcheaza driverul "blocat" pana la repornirea interfetei: nu se
+# mai porneste niciun fir (altfel s-ar strange fire blocate), iar sunetul se socoteste ca pana acum fara date
+# (decodorul presupus prezent). Un singur fir de citire odata.
+PROC_IN_FUNDAL = ("proc/msp/", "proc/hisi/", "proc/stb/hdmi/")
+ASTEPTARE_CITIRE_S = 0.2
+TIMP_CITIRE_S = 1.0
+_FUNDAL = {"fir": None, "pornit_t": 0.0, "blocat": False, "citite": {}}
+_FUNDAL_LACAT = threading.Lock()
+
+
+def citireBlocata():
+	"""True dupa o citire din /proc a driverului care n-a raspuns in TIMP_CITIRE_S (pana la repornirea interfetei)."""
+	_verificaFirul()
+	return _FUNDAL["blocat"]
+
+
+def _verificaFirul():
+	fir = _FUNDAL["fir"]
+	if not _FUNDAL["blocat"] and fir is not None and fir.is_alive() and time.time() - _FUNDAL["pornit_t"] > TIMP_CITIRE_S:
+		_FUNDAL["blocat"] = True
+		print("[HdsSunet] citirea din /proc a driverului nu raspunde de %.1f s (%s): nu mai citesc pana la repornirea "
+			"interfetei" % (time.time() - _FUNDAL["pornit_t"], getattr(fir, "hds_cale", "?")))
+
+
+def _citesteInFir(cale, binar):
+	t0 = time.time()
+	date = _citeste(cale, binar)
+	durata = time.time() - t0
+	with _FUNDAL_LACAT:
+		_FUNDAL["citite"][(cale, binar)] = date
+	if durata > TIMP_CITIRE_S and not _FUNDAL["blocat"]:
+		_FUNDAL["blocat"] = True
+		print("[HdsSunet] citirea lui %s a durat %.1f s: nu mai citesc pana la repornirea interfetei" % (cale, durata))
+
+
+def _citesteProc(cale, binar=False):
+	"""Ca _citeste, pentru fisierele driverului (PROC_IN_FUNDAL): citirea in fundal, asteptata cel mult
+	ASTEPTARE_CITIRE_S; altfel ce s-a citit ultima data (None la inceput)."""
+	_verificaFirul()
+	if not _FUNDAL["blocat"]:
+		fir = _FUNDAL["fir"]
+		if fir is None or not fir.is_alive():
+			fir = threading.Thread(target=_citesteInFir, args=(cale, binar), name="HdsSunetProc")
+			fir.daemon = True
+			fir.hds_cale = cale
+			_FUNDAL["fir"], _FUNDAL["pornit_t"] = fir, time.time()
+			fir.start()
+			fir.join(ASTEPTARE_CITIRE_S)
+			_verificaFirul()
+	with _FUNDAL_LACAT:
+		return _FUNDAL["citite"].get((cale, binar))
+
+
+def _citesteDriver(rad, relativ, binar=False):
+	"""Un fisier al arborelui /proc: cele ale driverului (PROC_IN_FUNDAL) prin firul de fundal, celelalte direct."""
+	cale = _cale(rad, relativ)
+	if relativ.startswith(PROC_IN_FUNDAL):
+		return _citesteProc(cale, binar)
+	return _citeste(cale, binar)
+
+
 def _sectiune(text, nume):
 	"""Textul dintre antetul „---- <nume> ----” si antetul urmator, sau None."""
 	m = re.search(r"-{3,}\s*" + re.escape(nume) + r"\s*-{3,}[^\n]*\n", text or "")
@@ -242,7 +308,7 @@ def formateDinEdid(date):
 def formateTv(rad=None):
 	"""Ce sunet primeste aparatul legat prin HDMI: {"PCM": 2, "AC3": 6, ...}, sau None cand nu se stie (fara HDMI,
 	televizor stins, EDID invalid, alt driver fara fisierele de mai sus)."""
-	text = _citeste(_cale(rad, SINK))
+	text = _citesteDriver(rad, SINK)
 	rez = formateDinSink(text)
 	if rez:
 		return rez
@@ -250,7 +316,7 @@ def formateTv(rad=None):
 		return None             # driverul HiSilicon spune ca nu are EDID valid
 	edid = edidDinText(text) if text else b""
 	if not edid:
-		edid = _citeste(_cale(rad, EDID_BINAR), binar=True) or b""
+		edid = _citesteDriver(rad, EDID_BINAR, binar=True) or b""
 	din_edid = formateDinEdid(edid)
 	if din_edid:
 		return din_edid
@@ -262,7 +328,7 @@ def decodoare(rad=None):
 	None = nu se stie (fisier lipsa, lista goala)."""
 	rez = dict((n, None) for n in COMUTATOARE)
 	for rel in AVPLAY:
-		text = _citeste(_cale(rad, rel))
+		text = _citesteDriver(rad, rel)
 		if not text:
 			continue
 		bloc = _sectiune(text, "AUD LIB")
@@ -280,7 +346,7 @@ def decodoare(rad=None):
 def formatIesire(rad=None):
 	"""Ce arata driverul ca pleaca acum pe HDMI si pe optic (/proc/msp/sound0: „DataFormat(PCM)”):
 	{"hdmi": "PCM", "optic": "PCM"}, cu None unde nu se stie."""
-	text = _citeste(_cale(rad, SOUND)) or ""
+	text = _citesteDriver(rad, SOUND) or ""
 	rez = {"hdmi": None, "optic": None}
 	for cheie, eticheta in (("hdmi", "HDMI"), ("optic", "SPDIF")):
 		m = re.search(eticheta + r"\s+Status\s*:[^\n]*?DataFormat\(([^)]*)\)", text)

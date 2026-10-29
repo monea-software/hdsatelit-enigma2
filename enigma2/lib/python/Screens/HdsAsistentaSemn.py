@@ -4,8 +4,8 @@
 #
 # HdsAsistentaSemn.py: semnul de pe ecran cat Asistenta de la distanta e activa si legatura cu receptorul (partea care
 # are nevoie de enigma2). Logica e in Components/HdsAsistenta.py (fara enigma); aici sunt:
-#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea), pe un singur rand: "Asistenta
-#     activa, mai sunt H:MM:SS" si calea spre Oprire (Meniu > Setari > Beta tester > Cere ajutor de la distanta); se
+#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea), pe un singur rand: pana cand e
+#     pornita si calea spre Oprire (Meniu > Setari > Asistenta de la distanta), fara codul sesiunii (intern); se
 #     vede si peste imaginea pe tot ecranul si peste meniuri, deasupra randului cu titlul ferestrelor (nu il acopera);
 #     cat ecranul asistentei e deschis (el arata starea si timpul), banda se ascunde;
 #   - Controler: un observator care arata, improspateaza (o data pe secunda) si ascunde banda; tot el culege, pe firul
@@ -13,7 +13,7 @@
 #     fir si nu are voie sa atinga interfata direct;
 #   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura numai a meniurilor (OSD),
 #     refuzata cat ecranul „Acces SSH" e deschis (parola lui root pe ecran), si punerea unui mesaj pe ecran;
-#   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (din ecranul TV sau din web) si reluarea
+#   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (de pe receptor sau din web) si reluarea
 #     dupa repornirea interfetei (chemata din mytest.py).
 # Nu se importa la incarcarea mytest.py nimic greu; functiile se cheama la nevoie.
 
@@ -50,7 +50,7 @@ SKIN_BANDA = """
 	</screen>"""
 
 # ecranele care arata ele starea asistentei: cat sunt deasupra, banda nu se arata (le-ar acoperi titlul)
-ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege")
+ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege", "HdsAsistentaTermeni")
 
 
 def N_(text):
@@ -223,27 +223,37 @@ def reia(session):
 		_jurnal("reluare: %r" % (e,))
 
 
+TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo.")
+TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor acum.")
+
+
+def pornesteWeb(session):
+	"""Pornirea din pagina web a unui browser de incredere (conectat cu codul de pe receptor): un clic, ca Start de pe
+	receptor (durata implicita, fara intrebari). -> (reusit, mesaj)."""
+	ses = A.sesiune()
+	if ses is not None and ses.activa():
+		return False, _("Asistența merge deja.")
+	return porneste(session, nivel="A", durata_min=A.DURATA_IMPLICITA_MIN, de_la="web")
+
+
 def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
-	"""Pornirea ceruta din pagina web (browserul omului, conectat cu codul de pe televizor): pe televizor se deschide
-	ecranul Asistentei cu informarea intreaga si durata aleasa; abia dupa Verde, alegere si „Da" porneste sesiunea
-	(nimic nu porneste fara apasare pe televizor). nevoie/detalii ("Cu ce te ajutam?", optionale) apar deja alese pe
-	ecranul de pornire. -> (reusit, mesaj) numai despre faptul ca s-a cerut confirmarea."""
+	"""Pornirea ceruta dintr-un browser fara cod (oricine din reteaua locala): pe receptor se deschide pagina de pornire
+	(randul bifat si Start); porneste numai Start apasat acolo, ca un aparat oarecare din casa sa nu poata da acces la
+	receptor fara stirea omului. durata_min, nevoie si detalii raman in semnatura pentru apelurile vechi; pornirea e cea
+	de pe pagina. -> (reusit, mesaj) numai despre faptul ca s-a deschis pagina."""
 	if session is None:
-		return False, _("Nu pot cere confirmarea pe televizor acum.")
-	if durata_min not in A.DURATE_MIN:
-		durata_min = A.DURATA_IMPLICITA_MIN
+		return False, _(TEXT_WEB_NU_POT)
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
 	try:
 		from Tools import Notifications
 		from Screens.HdsAsistenta import HdsAsistenta
-		nevoie, detalii = A.curataNevoie(nevoie, detalii)
-		Notifications.AddNotification(HdsAsistenta, din_web=durata_min, nevoie=nevoie, detalii=detalii)
-		return True, _("Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo.")
+		Notifications.AddNotification(HdsAsistenta, din_web=A.DURATA_IMPLICITA_MIN)
+		return True, _(TEXT_WEB_PE_RECEPTOR)
 	except Exception as e:
 		_jurnal("cerere web: %r" % (e,))
-		return False, _("Nu pot cere confirmarea pe televizor acum.")
+		return False, _(TEXT_WEB_NU_POT)
 
 
 def _limba():

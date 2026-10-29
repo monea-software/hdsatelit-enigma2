@@ -2,22 +2,22 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsAsistenta.py: „Ajutor de la distanta" pentru beta testeri, versiunea 1. Oprita din fabrica; nu ruleaza nimic,
-# nicio cheie, nicio legatura pana nu o porneste omul din meniul testerului: Meniu > Setari > Beta tester > Cere ajutor
-# de la distanta (ecranul Screens/HdsAsistenta.py; numai beta testerii pot da acces la receptor) sau din pagina web
-# /asistenta (numai pentru testeri, cu consimtamantul si confirmarea pe receptor). O singura logica pentru receptor si
-# pentru web. Modelul si versiunea trimise serverului sunt cele ale programului de testeri (Components/HdsBetaTester.py).
+# HdsAsistenta.py: "Asistenta de la distanta", versiunea 1, pentru oricine. Oprita din fabrica; nu ruleaza nimic,
+# nicio cheie, nicio legatura pana nu o porneste omul: Meniu > Setari > Asistenta de la distanta (ecranul
+# Screens/HdsAsistenta.py: o pagina cu randul bifat "Accept termenii și condițiile" si Start) sau din pagina web
+# /asistenta (aceeasi pagina). O singura logica pentru receptor si pentru web. Modelul si versiunea trimise serverului
+# sunt cele ale programului de testeri (Components/HdsBetaTester.py), fara sa ceara inscrierea in program.
 #
 # Cum merge (fara tunel, fara shell): dupa consimtamant, receptorul se inregistreaza prin HTTPS la serverul HD Satelit,
-# primeste un cod de 6 cifre, il arata mare pe ecran si intreaba din cateva in cateva secunde daca are o cerere.
-# Serverul trimite echipei un anunt cu codul (si cu "Cu ce te ajutam?", daca omul a ales ceva), deci omul nu ne spune
-# nimic: codul ramane pe ecran numai ca sa vada ca e cererea lui. O
-# cerere e numai una din catalogul fix (Components/HdsAsistentaCatalog.py), SEMNATA cu cheia noastra; cheia publica sta
-# in pachet (CHEI_ASISTENTA), nu vine de la server, deci un server spart nu poate cere nimic. Fiecare cerere si raspuns
-# apar pe ecranul omului (jurnalul sesiunii) si in web. Pe receptor se scriu numai dosarul temporar al sesiunii (jurnalul)
-# si fisierul ei de stare (STARE_FISIER), sterse amandoua la oprire. Durata o alege omul (2 ore implicit, pana la o luna,
-# sau permanent); echipa intra oricand cat e pornita (codul nu are termen de aprobare). Se opreste oricand (o tasta,
-# pagina web, banda din web) si singura la sfarsitul duratei alese (niciodata la "permanent").
+# primeste un cod de 6 cifre si intreaba din cateva in cateva secunde daca are o cerere. Codul ramane intern, intre
+# receptor, server si echipa (serverul trimite echipei un anunt cu el si cu "Cu ce te ajutam?"); omului nu i se arata
+# nicaieri. O cerere e numai una din catalogul fix (Components/HdsAsistentaCatalog.py), SEMNATA cu cheia noastra;
+# cheia publica sta in pachet (CHEI_ASISTENTA), nu vine de la server, deci un server spart nu poate cere nimic.
+# Fiecare cerere si raspuns apar pe ecranul omului (jurnalul sesiunii) si in web. Pe receptor se scriu numai dosarul
+# temporar al sesiunii (jurnalul) si fisierul ei de stare (STARE_FISIER), sterse amandoua la oprire. Durata: 2 ore
+# implicit, pana la o luna, sau permanent (de pe pagina de pornire: DURATA_IMPLICITA_MIN); echipa intra oricand cat e
+# pornita (codul nu are termen de aprobare). Se opreste oricand (o tasta, pagina web, banda din web) si singura la
+# sfarsitul duratei alese (niciodata la "permanent").
 #
 # Cererea semnata: octetii EXACTI ai JSON-ului {"args":[...],"id":...,"op":...,"seq":N} (chei sortate, fara spatii),
 # semnati pe PC cu cheia operator, stocati verbatim pe server, verificati aici cu Components/HdsSemnatura.verifica
@@ -73,7 +73,7 @@ IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
-VERSIUNE_TEXT = 3
+VERSIUNE_TEXT = 4
 # durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
 # fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
 DURATA_PERMANENTA = 0
@@ -129,15 +129,33 @@ INFORMARE = N_(
 
 
 # despre durata, pus dupa paragraful "Cât timp e pornită..." al informarii (in web si pe receptor)
-TEXT_DURATE = N_("Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O "
-	"oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai "
-	"citirile și probele din lista fixă, fără să schimbe nimic.")
+TEXT_DURATE = N_("Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e "
+	"pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic.")
 
 
 def textInformare():
 	parti = _t(INFORMARE).split("\n\n")
 	parti.insert(min(4, len(parti)), _t(TEXT_DURATE))
 	return "\n\n".join(parti)
+
+
+# Pagina de pornire (pe receptor si in web): numai randul scurt TEXT_SCURT, randul bifat dinainte TEXT_ACCEPT si Start.
+# Termenii si conditiile intregi (textTermeni) se deschid la cerere: OK pe rand (receptor) sau legatura din fraza (web).
+TEXT_SCURT = N_("Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O "
+	"oprești oricând.")
+TEXT_ACCEPT = N_("Accept termenii și condițiile")
+TEXT_TERMENI = N_("Termenii și condițiile")
+TEXT_FARA_BIFA = N_("Fără bifă, asistența nu pornește.")
+TEXT_NIVEL = N_("Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură "
+	"arată numai meniurile, nu imaginea canalului). Poți opri oricând.")
+TEXT_ACORD = N_("Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau "
+	"acordul unui părinte.")
+
+
+def textTermeni():
+	"""Textul intreg al termenilor si conditiilor (fereastra derulanta de pe receptor si din web): informarea, nivelul
+	si ce confirma Start (varsta)."""
+	return "\n\n".join((textInformare(), _t(TEXT_NIVEL), _t(TEXT_ACORD)))
 
 
 # "Cu ce te ajutam?": optional, pe ecranul de pornire si in pagina web. Cheia aleasa (lista inchisa, aceeasi ca pe
@@ -217,12 +235,9 @@ def textPana(ses, banda=False):
 
 
 def drumMeniu(scurt=False):
-	"""Calea de pe receptor spre ecran (pentru semnul de pe ecran si pentru pagina web), in limba receptorului: numai
-	din meniul testerului (doar beta testerii pot da acces la receptor). scurt=True: pana la meniul testerului (banda de
-	sus are un singur rand, iar acolo randul asistentei se vede)."""
-	parti = ("Menu", "Settings", "Beta tester") if scurt else ("Menu", "Settings", "Beta tester",
-		"Cere ajutor de la distanță")
-	return " > ".join(_t(p) for p in parti)
+	"""Calea de pe receptor spre ecran (pentru semnul de pe ecran si pentru pagina web), in limba receptorului: randul
+	"Asistență de la distanță" din Setari, pentru oricine. scurt ramane pentru cine il da (calea e aceeasi)."""
+	return " > ".join(_t(p) for p in ("Menu", "Settings", "Asistență de la distanță"))
 
 
 # de ce s-a oprit o sesiune, pe intelesul omului (randul "oprită (...)" din jurnal); cheile sunt motivele din cod
@@ -624,7 +639,7 @@ class Sesiune(object):
 		self.stare = ASTEAPTA
 		self._scrie_stare()
 		self._pune_stare(ASTEAPTA)
-		self.jurnal.adauga(_t("cod arătat pe ecran, aștept aprobarea"))
+		self.jurnal.adauga(_t("cerere trimisă, aștept echipa"))
 		return True
 
 	def _asteapta_aprobare(self):

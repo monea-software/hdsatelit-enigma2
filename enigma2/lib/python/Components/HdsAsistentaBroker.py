@@ -306,6 +306,8 @@ def op_procese(ctx, args):
 SETARI_PERMISE = (
 	"config.av.", "config.osd.", "config.subtitles.", "config.usage.",
 	"config.skin.", "config.misc.rcused", "config.network.",
+	# tunerele (modul, LNB-urile, comutatoarele, motorul): fara secrete; ce nu e in settings e valoarea implicita
+	"config.Nims.",
 )
 # ... afara de cheile care, chiar sub un prefix permis, pot avea ceva personal sau un secret
 SETARI_OPRITE = re.compile(

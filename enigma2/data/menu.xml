@@ -494,9 +494,6 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Parola receptorului" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
 				<screen module="HdsAccesSsh" screen="HdsAccesSsh" />
 			</item>
-			<!-- Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistenta.py) nu are intrare aici: numai
-			     beta testerii pot da acces la receptor, deci se deschide numai din meniul testerului (Beta tester > Cere
-			     ajutor de la distanta, Screens/HdsBetaTester.py); in web: /asistenta, legata numai din /beta-tester. -->
 			<!-- VPN-ul receptorului, oprit din fabrica: HMA, NordVPN, Surfshark, Proton VPN sau alt furnizor OpenVPN,
 			     WireGuard; serverul, numele si parola, ce trece prin VPN (Components/HdsVpn.py, Screens/HdsVpn.py); in
 			     web: /vpn (vpn_web.py). Numai cu programele VPN in imagine (openvpn sau wg, din 0.4.0):
@@ -590,9 +587,16 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		</menu>
 
 		<!-- Programul de beta testeri (Components/HdsBetaTester.py, Screens/HdsBetaTester.py): acordul, apoi meniul
-		     testerului (numai dupa inscriere). Ultima intrare din Setari. In web: /beta-tester. -->
+		     testerului (numai dupa inscriere). Penultima intrare din Setari. In web: /beta-tester. -->
 		<item level="0" text="Beta tester" entryID="hds_beta_tester" pictograma="receptor" weight="110" web="/beta-tester">
 			<screen module="HdsBetaTester" screen="HdsBetaTester" />
+		</item>
+		<!-- Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistenta.py), pentru oricine: o pagina cu
+		     randul bifat "Accept termenii și condițiile" si Start; pornita, ecranul spune pana cand si o opreste.
+		     Ultima intrare din Setari, sub Beta tester. requires: SystemInfo["HdsAsistenta"] (mytest.py), adevarat cand
+		     receptorul poate verifica semnatura cererilor. In web: /asistenta, aceeasi pagina. -->
+		<item level="0" text="Asistență de la distanță" entryID="hds_asistenta" pictograma="conexiune" weight="111" web="/asistenta" requires="HdsAsistenta">
+			<screen module="HdsAsistenta" screen="HdsAsistenta" />
 		</item>
 	</menu>
 

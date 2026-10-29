@@ -15,7 +15,9 @@
 #
 # Cautarea: stare.json (pe un fir separat), apoi `opkg update`, apoi planul (pe un fir separat): pachetele instalate
 # pentru care sursele HD Satelit ale canalului au o versiune mai noua, cu dependintele verificate fata de ce e
-# instalat. Instalarea: `opkg install <fisier>` (Semnatura), numai la cererea omului si numai daca verdictul o lasa;
+# instalat (si fata de numele date prin Provides, ca opkg). Feedul unei baze e comun mai multor masini (V10, SF8008 si
+# MINI): pachetele planului se cauta in stare.json dupa nume SI arhitectura (a strofei din listele receptorului, deci
+# una din arch.conf), ca acelasi nume facut pentru doua masini sa dea fiecaruia fisierul lui. Instalarea: `opkg install <fisier>` (Semnatura), numai la cererea omului si numai daca verdictul o lasa;
 # dupa ea interfata trebuie repornita (fisierele enigma2 de pe disc s-au schimbat sub interfata care ruleaza), deci
 # nimic altceva nu mai porneste de aici pana atunci.
 #
@@ -69,7 +71,7 @@
 # si se vede in Jurnalele sistemului, pe televizor si in web; cel mult MARIME_JURNAL, apoi trece in <nume>.1.
 #
 # Modulul nu importa nimic din enigma la incarcare (probele de pe PC: teste/test_actualizari_pachete_*.py,
-# teste/test_semnare_actualizari.py si teste/test_actualizare_rapida.py).
+# teste/test_semnare_actualizari.py, teste/test_actualizare_rapida.py si teste/test_actualizari_arhitectura_provides.py).
 
 import base64
 import hashlib
@@ -306,6 +308,32 @@ def instalate(radacina='/', conf=None):
 		st = s.get('status', '').split()
 		if n and 'installed' in st and 'not-installed' not in st:
 			rez[n] = s.get('version', '')
+	return rez
+
+
+def _furnizari(text):
+	"""Campul Provides al unei strofe: [(nume, versiune)], versiunea '' cand nu e data ("Provides: libdvdread" fata de
+	"Provides: foo (= 1.2)")"""
+	rez = []
+	for parte in (text or '').split(','):
+		m = re.match(r'^\s*([A-Za-z0-9+.\-]+)\s*(?:\(\s*=\s*([^)\s]+)\s*\))?\s*$', parte)
+		if m:
+			rez.append((m.group(1), m.group(2) or ''))
+	return rez
+
+
+def furnizate(radacina='/', conf=None):
+	"""{nume: [(versiune, pachet)]}: numele date prin Provides de pachetele instalate (status-ul opkg), de pilda
+	libdvdread (dat de libdvdread8) sau showiframe (dat de programul producatorului placii); versiunea '' cand Provides
+	nu o spune. opkg le socoteste instalate la dependinte, deci si cautarea."""
+	conf = conf or P.citeste_configurarea(radacina)
+	rez = {}
+	for s in P.citeste_strofe(_cale(radacina, conf.status_file)):
+		n = s.get('package', '')
+		st = s.get('status', '').split()
+		if n and 'installed' in st and 'not-installed' not in st:
+			for virtual, v in _furnizari(s.get('provides')):
+				rez.setdefault(virtual, []).append((v, n))
 	return rez
 
 
@@ -672,29 +700,49 @@ def pachete_din_feed(radacina, surse, conf=None):
 
 
 def planul(feed, inst):
-	"""Pachetele instalate pentru care feedul are o versiune mai noua: [{nume, titlu, de_la, la, marime, depends}],
-	dupa nume. Cele neinstalate (extensii numai in feed) nu intra: se pun din Extensii."""
+	"""Pachetele instalate pentru care feedul are o versiune mai noua: [{nume, titlu, de_la, la, marime, depends,
+	arhitectura}], dupa nume. Cele neinstalate (extensii numai in feed) nu intra: se pun din Extensii. Arhitectura e
+	cea a strofei din listele receptorului (pachete_din_feed le ia numai pe ale arhitecturilor lui): dupa ea se alege
+	intrarea din stare.json cand feedul are acelasi nume pentru doua masini (pachet_din_stare)."""
 	rez = []
 	for n, s in feed.items():
 		if n in inst and P.compara_versiuni(s.get('version', ''), inst[n]) > 0:
 			rez.append({'nume': n, 'titlu': P.nume_scurt(n) if n.startswith(P.PREFIX) else n, 'de_la': inst[n],
-				'la': s.get('version', ''), 'marime': P._int(s.get('size')), 'depends': s.get('depends', '')})
+				'la': s.get('version', ''), 'marime': P._int(s.get('size')), 'depends': s.get('depends', ''),
+				'arhitectura': s.get('architecture', '')})
 	rez.sort(key=lambda x: x['nume'])
 	return rez
 
 
-def dependinte_lipsa(plan, inst, feed):
-	"""Dependintele planului care nu sunt nici instalate, nici in feed, sau nu au versiunea ceruta: ['nume cere ...']"""
+def dependinte_lipsa(plan, inst, feed, furn=None):
+	"""Dependintele planului care nu sunt nici instalate, nici in feed, sau nu au versiunea ceruta: ['nume cere ...'].
+	Un nume dat prin Provides (furn = furnizate(), ale pachetelor instalate, si Provides din feed) satisface o
+	dependinta fara versiune, iar una cu versiune numai cand Provides spune versiunea; Provides-ul instalat al unui
+	pachet din plan nu se mai socoteste (dupa instalare ramane cel din feed)."""
 	disponibile = dict(inst)
 	for n, s in feed.items():
 		if n not in disponibile or P.compara_versiuni(s.get('version', ''), disponibile[n]) > 0:
 			disponibile[n] = s.get('version', '')
 	for x in plan:
 		disponibile[x['nume']] = x['la']
+	in_plan = set(x['nume'] for x in plan)
+	virtuale = {}
+	for virtual, date in (furn or {}).items():
+		for v, pachet in date:
+			if pachet not in in_plan:
+				virtuale.setdefault(virtual, []).append(v)
+	for s in feed.values():
+		for virtual, v in _furnizari(s.get('provides')):
+			virtuale.setdefault(virtual, []).append(v)
+
+	def satisfacuta(n, op, v):
+		if n in disponibile and (not op or _satisface(disponibile[n], op, v)):
+			return True
+		return any(not op or (dat and _satisface(dat, op, v)) for dat in virtuale.get(n, ()))
 	rez = []
 	for x in plan:
 		for alternative in _dependinte(x.get('depends')):
-			if not any(n in disponibile and (not op or _satisface(disponibile[n], op, v)) for n, op, v in alternative):
+			if not any(satisfacuta(n, op, v) for n, op, v in alternative):
 				rez.append('%s: %s' % (x['nume'], ' | '.join('%s%s' % (n, ' (%s %s)' % (op, v) if op else '')
 					for n, op, v in alternative)))
 	return rez
@@ -734,6 +782,32 @@ def verdict(stare, baza, plan, lipsa=()):
 		'poate_instala': bool(plan) and not motive}
 
 
+def rezultat_din_liste(radacina, surse, stare, conf=None):
+	"""Planul si verdictul cautarii din listele surselor feedului descarcate de `opkg update` (verificate inainte fata
+	de stare.json semnat), fata de pachetele instalate si de numele date prin Provides"""
+	conf = conf or P.citeste_configurarea(radacina)
+	inst = instalate(radacina, conf)
+	feed = pachete_din_feed(radacina, surse, conf)
+	plan = planul(feed, inst)
+	return rezultat_cautare(stare, imaginea(radacina, conf), plan,
+		dependinte_lipsa(plan, inst, feed, furnizate(radacina, conf)))
+
+
+def pachet_din_stare(stare, nume, arhitectura=None):
+	"""Intrarea pachetului `nume` din stare.json ("pachete"). Feedul unei baze e comun mai multor masini (V10, SF8008 si
+	MINI), deci acelasi nume poate fi acolo pe doua arhitecturi: se ia numai intrarea arhitecturii date (a strofei din
+	listele receptorului); fara arhitectura, numai cand numele e o singura data. O intrare fara camp "arhitectura"
+	(forma veche) se ia numai cand e singura cu numele acela; una cu alta arhitectura, niciodata. None cand nu e sau nu
+	se poate alege."""
+	gasite = [p for p in (stare or {}).get('pachete') or [] if isinstance(p, dict) and p.get('nume') == nume]
+	if arhitectura:
+		ale_ei = [p for p in gasite if p.get('arhitectura') == arhitectura]
+		if not ale_ei and len(gasite) == 1 and not gasite[0].get('arhitectura'):
+			ale_ei = gasite
+		gasite = ale_ei
+	return gasite[0] if len(gasite) == 1 else None
+
+
 def rezultat_cautare(stare, img, plan, lipsa, cand=None):
 	"""Rezultatul unei cautari reusite, cum il arata ecranul si pagina web"""
 	v = verdict(stare, img['baza'], plan, lipsa)
@@ -744,10 +818,12 @@ def rezultat_cautare(stare, img, plan, lipsa, cand=None):
 	else:
 		cod = LA_ZI
 	pachete = [{'nume': x['nume'], 'titlu': x['titlu'], 'de_la': x['de_la'], 'la': x['la'], 'marime': x['marime'],
-		'de_la_scurt': versiune_scurta(x['de_la']), 'la_scurt': versiune_scurta(x['la'])} for x in plan]
-	# planul trebuie sa fie chiar actualizarea din stare.json: altfel listele si stare.json vin din publicari diferite
-	din_stare = dict((p.get('nume'), p.get('versiune')) for p in stare.get('pachete') or [])
-	nepotrivite = [x['nume'] for x in plan if din_stare.get(x['nume']) != x['la']]
+		'de_la_scurt': versiune_scurta(x['de_la']), 'la_scurt': versiune_scurta(x['la']),
+		'arhitectura': x.get('arhitectura') or ''} for x in plan]
+	# planul trebuie sa fie chiar actualizarea din stare.json (numele, arhitectura si versiunea): altfel listele si
+	# stare.json vin din publicari diferite
+	nepotrivite = [x['nume'] for x in plan
+		if (pachet_din_stare(stare, x['nume'], x.get('arhitectura')) or {}).get('versiune') != x['la']]
 	r = {
 		'stare': cod,
 		'server': {'baza': stare.get('baza'), 'actualizare': stare.get('actualizare'),
@@ -889,15 +965,15 @@ def pazeste_listele(radacina='/'):
 
 def pachete_semnate(semnat, rezultat):
 	"""([{nume, versiune, arhitectura, fisier, marime, sha256}], None) pentru pachetele planului, din stare.json semnat
-	al cautarii; (None, motiv) cand unul nu are acolo chiar versiunea din plan, fisierul, marimea si suma."""
+	al cautarii; (None, motiv) cand unul nu are acolo chiar versiunea din plan, fisierul, marimea si suma. Intrarea se
+	alege dupa nume si arhitectura (pachet_din_stare); arhitecturile receptorului le verifica apoi pachete_straine."""
 	stare = (semnat or {}).get('stare')
 	if not isinstance(stare, dict) or stare.get('actualizare') != (rezultat.get('server') or {}).get('actualizare'):
 		return None, 'starea semnata a cautarii lipseste'
-	din_stare = dict((p.get('nume'), p) for p in stare.get('pachete') or [] if isinstance(p, dict))
 	arhitecturi = stare.get('arhitecturi') or []
 	rez = []
 	for x in rezultat.get('pachete') or []:
-		p = din_stare.get(x.get('nume'))
+		p = pachet_din_stare(stare, x.get('nume'), x.get('arhitectura'))
 		if not p or p.get('versiune') != x.get('la'):
 			return None, 'pachetul %s nu e in stare.json semnat' % x.get('nume')
 		fisier, arh, marime, sha = p.get('fisier'), p.get('arhitectura'), p.get('marime'), p.get('sha256')
@@ -910,6 +986,18 @@ def pachete_semnate(semnat, rezultat):
 	if not rez:
 		return None, 'niciun pachet de instalat'
 	return rez, None
+
+
+def pachete_straine(intrari, arhitecturi_receptor):
+	"""Motivul refuzului cand un pachet semnat (pachete_semnate) e pentru o arhitectura pe care receptorul nu o are in
+	arch.conf (un pachet al altei masini din feedul comun nu e al lui); None cand toate sunt ale lui sau cand
+	arhitecturile receptorului nu se stiu"""
+	if not arhitecturi_receptor:
+		return None
+	for x in intrari or []:
+		if x.get('arhitectura') not in arhitecturi_receptor:
+			return 'pachetul %s e pentru %s, nu pentru arhitecturile receptorului' % (x.get('nume'), x.get('arhitectura'))
+	return None
 
 
 def goleste_dosarul(dosar=None):
@@ -1207,11 +1295,7 @@ class Actualizari(object):
 				sterge_listele(radacina, surse, c)
 				return {'stare': NESEMNATA, 'eroare': curata('; '.join(g[:3]))}, None
 			tine_minte_indexurile(radacina, canal, baza, semnata)
-			inst = instalate(radacina, c)
-			img = imaginea(radacina, c)
-			feed = pachete_din_feed(radacina, surse, c)
-			plan = planul(feed, inst)
-			return rezultat_cautare(semnata, img, plan, dependinte_lipsa(plan, inst, feed)), semnata
+			return rezultat_din_liste(radacina, surse, semnata, c), semnata
 
 		def gata(rez, eroare):
 			if rez and not eroare:
@@ -1251,6 +1335,8 @@ class Actualizari(object):
 			self._schimbat()
 			return False
 		intrari, problema = pachete_semnate(self._semnat, r)
+		if not problema:
+			problema = pachete_straine(intrari, P.citeste_configurarea(self.radacina).arhitecturi)
 		if problema:
 			self._jurnal('instalare refuzata: %s' % problema)
 			self.mesaj = ''
