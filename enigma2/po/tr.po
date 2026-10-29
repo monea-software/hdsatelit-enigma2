@@ -57934,3 +57934,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (gövde: <code>parola=</code>): se
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> ayrıca <code>confirmat=1</code> ister): “Yerel ağda parolasız”. Parola, ham metin ve tüm değişiklikler yalnızca televizyondaki kodla bağlanmış bir tarayıcıdan çalışır (aksi halde <code>trebuie_cod</code> ile 403), asla <code>?token=</code> ile değil; alıcıda “Alıcının parolası” ekranı açık olduğu sürece <code>/api/remotecontrol</code> ve <code>/api/screenshot</code> için de aynısı geçerlidir"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Karasal anten (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Kablo (DVB-C)"
+
+msgid "Legat la"
+msgstr "Bağlı olduğu"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Her frekans DVB-T2 ve DVB-T olarak denenir."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "Seçtiğin modülasyon kabul edilmiyor. Başka birini seç."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM yalnızca DVB-T2'de vardır: Sistem olarak DVB-T2'yi ya da başka bir modülasyonu seç."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "imajın bilmediği bant genişliği (yalnızca 8, 7, 6, 5, 10, 1,712 MHz ve Otomatik)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "imajın bilmediği modülasyon"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM yalnızca DVB-T2'de vardır"
+
+msgid "Tunerul nu e dat."
+msgstr "Tuner belirtilmedi."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "Tuner ayarları okunamıyor: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "%s tuneri birleşik değil (karasal ve kablo)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Bilinmeyen seçim: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Gizlilik bildirimi değişti"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Beta testçilerinin gizlilik bildirimi değişti. Alıcının günlükleri göndermeye devam etmesi için yenilikleri oku ve kabul et."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "Alıcı, birden fazla slota kurulmuş ya da yeniden kurulmuş olsa bile yalnızca bir kez sayılması için kartından hesaplanan bir parmak izi de gönderir. Parmak izinden MAC adresi veya seri numarası öğrenilemez ve bunlar alıcıdan çıkmaz."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Bir kanal çalışmadığında (sinyal yok, görüntü yok, kod çözme hatası), günlük o kanalın adını ve teknik verilerini saklar, böylece nedenini bulabiliriz. Her şey çalışırken hangi kanalları izlediğin gönderilmez."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Kabul et ile yeni bildirimi onaylarsın ve alıcı şimdiye kadar işaretlediğin verileri yeniden gönderir."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Yeni bildirimi kabul edene kadar gönderim durduruldu."
+
+msgid "Citește nota întreagă"
+msgstr "Bildirimin tamamını oku"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "Ekranda, oklarla. EXIT seni buraya geri getirir."
+
+msgid "Accept"
+msgstr "Kabul et"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "İşaretlediğin veriler şimdiye kadar olduğu gibi yeniden gönderilir."
+
+msgid "Îți amintim mâine."
+msgstr "Yarın sana hatırlatırız."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Teşekkürler. Alıcı işaretli verileri yeniden gönderiyor."
+
+msgid "Acceptă nota nouă"
+msgstr "Yeni bildirimi kabul et"
+
+msgid "Trimiterea e oprită"
+msgstr "Gönderim durdu"
+
+msgid "Sau citește pe telefon:"
+msgstr "Ya da telefonunda oku:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "Bildirimin tamamı şu adreste:"
+
+msgid "Nimic anume"
+msgstr "Belirli bir şey yok"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi ve ağ"
+
+msgid "Imaginea sau sunetul"
+msgstr "Görüntü veya ses"
+
+msgid "Canale și scanare"
+msgstr "Kanallar ve tarama"
+
+msgid "Pornirea receptorului"
+msgstr "Alıcının açılışı"
+
+msgid "Altceva"
+msgstr "Başka bir şey"
+
+msgid "Cu ce te ajutăm?"
+msgstr "Sana ne konuda yardım edelim?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Kısaca yaz (isteğe bağlı)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "İstersen sana ne konuda yardım edeceğimizi seç ve neler olduğunu kısaca yaz (OK listeyi ya da klavyeyi açar). Zorunlu değil: Yeşil yine de başlatır."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "İsteğini aşağıdaki kodla aldık. Hiçbir şey yapman gerekmiyor."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "İsteğini aşağıdaki kodla aldık. Hiçbir şey yapman gerekmiyor. Kalan süre: %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Bağlandığımızda sana haber veririz. Bu arada alıcıyı kullanabilirsin."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "HD Satelit ekibi bağlandı. Alıcıyı her zamanki gibi kullanabilirsin."
+
+msgid "permanent"
+msgstr "kalıcı"
+
+msgid "o zi"
+msgstr "bir gün"
+
+msgid "o săptămână"
+msgstr "bir hafta"
+
+msgid "o lună"
+msgstr "bir ay"
+
+msgid "Pornită până la %s."
+msgstr "%s tarihine kadar açık."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Süresiz açık; istediğin zaman kapatabilirsin."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Uzaktan yardım %s tarihine kadar açık"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Uzaktan yardım süresiz açık"
+
+msgid "Oprești oricând din %s"
+msgstr "İstediğin zaman durdurmak için: %s"
+
+msgid "reluată după repornire"
+msgstr "yeniden başlatmadan sonra sürdürüldü"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Sen durdurana kadar kalıcı uzaktan erişim veriyorsun, “Okuma ve test” düzeyinde. Başlatarak en az 16 yaşında olduğunu veya bir ebeveyninin onayı olduğunu onaylıyorsun. İstediğin zaman durdurabilirsin. Başlatılsın mı?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Seçtiğin süre boyunca açık kalabilir: 2 saat, 12 saat, bir gün, bir hafta, bir ay ya da kalıcı olarak. İstediğin zaman alıcıdan veya web sayfasından kapatırsın. Açık olduğu sürece ekip istediği zaman bağlanabilir, ama yalnızca sabit listedeki okumaları ve testleri yapar, hiçbir şeyi değiştirmez."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Oynatılan kayıtta kesme işaretleri ekle, sil ve aralarında atla"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Bellekte bir resim seç. Resim bozulmadan 1920x1080'e getirilir ve alt satır yazılır."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Şimdilik olmuyor: alıcıda %s eksik. Hazır ekranların hepsi çalışıyor."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Kendi resimlerin şimdilik kullanılamıyor: alıcıda %s eksik. Hazır ekranların hepsi çalışıyor, bunları buradan istediğin zaman değiştirebilirsin."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "Ekran galerisi bu alıcıda yüklü değil. Alıcıda gerekli araçlar varsa yine de kendi resmini kullanabilirsin."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Görüntü keskinliği (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Geçerli konum: %s. Yeşil basit bir işaret ekler, Sarı kesme için START/STOP ekler."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "Önizleme, alıcı ekranların küçük resimlerini de aldıktan sonra görünür."
+
+msgid "START tăiere"
+msgstr "START (kesilecek)"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "START (kesilecek, atlanacak kısım burada başlar)"
+
+msgid "START/STOP tăiere aici"
+msgstr "Buraya START/STOP (kesilecek)"
+
+msgid "STOP tăiere"
+msgstr "STOP (kesilecek)"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "STOP (kesilecek, atlanacak kısım burada biter)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "SON ONAY: yeni yazılım alıcıya GERÇEKTEN yazılıyor.\nYazma sürerken alıcının fişini ÇEKME ve depolama aygıtını ÇIKARMA.\nArayüz duracak ve alıcı sonunda kendiliğinden yeniden başlayacak.\n\nPaket: %s\n\nGerçekten devam edilsin mi?"

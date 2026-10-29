@@ -11,12 +11,15 @@
 # (Screens/HdsAsistentaSemn.cerereWeb); omul porneste de acolo. Oprirea merge din orice browser din reteaua locala (a
 # opri nu primejduieste pe nimeni). Codul de 6 cifre se arata numai unui browser conectat cu codul de pe televizor
 # (acelasi nivel asociat ca la Acces SSH). Cat asistenta e activa, paginile web au sus o banda (bandaWeb, pusa de
-# meniu_comun_web.pagina).
+# meniu_comun_web.pagina). Omul nu trebuie sa ne spuna codul: serverul ni-l trimite singur pe e-mail; codul ramane pe
+# pagina numai ca sa vada ca e cererea lui. "Cu ce te ajutăm?" (optional, ca pe receptor): o alegere din lista
+# A.NEVOI si un rand de text; merg cu cererea spre ecranul de pornire de pe receptor, unde apar deja alese.
 #
 # Rute (poarta comuna meniu_comun_web; ce schimba ceva cere, cu cookie, POST si antetul CSRF):
 #   GET  /api/asistenta            starea, timpul ramas, ultimele randuri din jurnal, codul (numai asociat)
 #   GET  /api/asistenta-catalog    lista operatiilor in limba receptorului
-#   POST /api/asistenta-cere?minute=120   cere pornirea (ecranul cu informarea pe televizor)
+#   POST /api/asistenta-cere?minute=120[&nevoie=wifi&detalii=...]   cere pornirea (ecranul cu informarea pe receptor);
+#        minute: 120, 720, 1440, 10080, 43200 sau 0 (permanent), ca A.DURATE_MIN
 #   POST /api/asistenta-opreste    opreste
 #   GET  /asistenta                pagina
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A).
@@ -69,11 +72,19 @@ def stare(request=None, A=None, B=None):
 	s = A.stare()
 	rez = {"result": True, "stare": s.get("stare"), "disponibil": s.get("disponibil"), "tester": tester(B),
 		"ramas_s": s.get("ramas_s", 0), "jurnal": s.get("jurnal", []), "nivel": s.get("nivel"),
-		"durate": s.get("durate", []), "durata_implicita": s.get("durata_implicita")}
+		"durate": s.get("durate", []), "durata_implicita": s.get("durata_implicita"),
+		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
+		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or ""}
 	try:
 		rez["durate_text"] = [[m, A.textDurata(m)] for m in rez["durate"]]
 	except Exception:
 		rez["durate_text"] = [[m, str(m)] for m in rez["durate"]]
+	# "Cu ce te ajutăm?": aceeasi lista ca pe ecranul de pornire, tradusa (prima, "", e implicita)
+	try:
+		rez["nevoi_text"] = [[cheie, text] for cheie, text in A.alegeriNevoie()]
+		rez["detalii_max"] = A.DETALII_MAX
+	except Exception:
+		rez["nevoi_text"] = []
 	# codul numai pentru un browser asociat
 	if s.get("cod") and (request is None or _asociat(request)):
 		rez["cod"] = s["cod"]
@@ -102,10 +113,12 @@ def cere(argumente, A=None, B=None):
 		minute = A.DURATA_IMPLICITA_MIN
 	if minute not in A.DURATE_MIN:
 		minute = A.DURATA_IMPLICITA_MIN
+	curata = getattr(A, "curataNevoie", None)
+	nevoie, detalii = curata(argumente.get("nevoie", ""), argumente.get("detalii", "")) if curata else ("", "")
 	try:
 		from Screens import HdsAsistentaSemn as Semn
 		from .meniu_comun_web import sesiune
-		reusit, mesaj = Semn.cerereWeb(sesiune(), nivel="A", durata_min=minute)
+		reusit, mesaj = Semn.cerereWeb(sesiune(), nivel="A", durata_min=minute, nevoie=nevoie, detalii=detalii)
 	except Exception as e:
 		reusit, mesaj = False, _t("Nu pot cere confirmarea pe televizor: %s") % e
 	rez = stare(None, A, B)
@@ -121,32 +134,46 @@ def opreste(A=None):
 	return rez
 
 
+# butonul "Oprește" al benzii web: opreste direct (POST /api/asistenta-opreste, cu tokenul CSRF al paginii, din CFG,
+# pus de scriptul fiecarei pagini); o pagina fara CFG duce la /asistenta, unde e butonul de oprire
+_OPRESTE_BANDA = ("var c=window.CFG||{};if(!c.csrf&&!c.jeton){location.href='/asistenta';return false;}"
+	"var h={};if(c.csrf){h['X-HDS-CSRF']=c.csrf;}"
+	"fetch('/api/asistenta-opreste'+(c.jeton?'?token='+encodeURIComponent(c.jeton):''),"
+	"{method:'POST',credentials:'same-origin',cache:'no-store',headers:h})"
+	".then(function(){location.reload();},function(){location.href='/asistenta';});return false;")
+
+
 def bandaWeb(A=None):
-	"""Banda pusa sus pe paginile web cat asistenta e activa (HTML gata, tradus), sau "" cand nu e."""
+	"""Banda pusa sus pe paginile web cat asistenta e activa (HTML gata, tradus), sau "" cand nu e: ca e pornita si pana
+	cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si butonul care o opreste pe loc."""
 	import html as _html
 	try:
 		A = _a(A)
 		ses = A.sesiune()
 		if ses is None or not ses.activa():
 			return ""
-		ramas = int(ses.ramasS())
+		text = A.textPana(ses, banda=True)
 	except Exception:
 		return ""
-	text = _t("Asistență de la distanță activă") + " · " + _t("mai sunt") + " %d:%02d" % (ramas // 3600,
-		(ramas % 3600) // 60)
 	return ('<div role="status" style="background:#c0392b;color:#fff;padding:8px 14px;text-align:center;'
-		'font:600 .95rem system-ui,sans-serif;">%s · <a href="/asistenta" style="color:#fff;">%s</a></div>'
-		% (_html.escape(text), _html.escape(_t("Oprește"))))
+		'font:600 .95rem system-ui,sans-serif;">%s · <a href="/asistenta" onclick="%s" style="color:#fff;">%s</a>'
+		'</div>' % (_html.escape(text), _html.escape(_OPRESTE_BANDA, quote=True), _html.escape(_t("Oprește"))))
 
 
-def _minute(request):
-	valori = (getattr(request, "args", None) or {}).get(b"minute")
-	if not valori:
-		return {}
-	v = valori[0]
-	if isinstance(v, bytes):
-		v = v.decode("ascii", "replace")
-	return {"minute": v[:4]}
+def _argumente(request):
+	"""Argumentele cererii de pornire: minutele si, optional, "Cu ce te ajutăm?" (cheia si textul, in UTF-8; taiate
+	aici la o marime sigura, curatate apoi de A.curataNevoie)."""
+	args = getattr(request, "args", None) or {}
+	rez = {}
+	for nume, marime in ((b"minute", 6), (b"nevoie", 16), (b"detalii", 800)):
+		valori = args.get(nume)
+		if not valori:
+			continue
+		v = valori[0]
+		if isinstance(v, bytes):
+			v = v[:marime * 4].decode("utf-8", "replace")
+		rez[nume.decode("ascii")] = v[:marime]
+	return rez
 
 
 def rute(baza, resource, A=None):
@@ -171,13 +198,13 @@ def rute(baza, resource, A=None):
 			try:
 				# numai beta testerii pot da acces la receptor: altfel fraza si legatura spre /beta-tester
 				if not tester():
-					return self._raspunde(request, cere(_minute(request), A))
+					return self._raspunde(request, cere(_argumente(request), A))
 				# pornirea (chiar daca o confirma televizorul) o cere numai un browser conectat cu codul: altfel orice
 				# aparat din casa ar putea deschide ecranul de pornire pe televizor
 				if not _asociat(request):
 					return self._raspunde(request, {"result": False, "trebuie_cod": True,
 						"message": _t("Pornirea se cere numai dintr-un browser conectat cu codul de pe televizor.")}, 403)
-				return self._raspunde(request, cere(_minute(request), A))
+				return self._raspunde(request, cere(_argumente(request), A))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -246,7 +273,9 @@ PAGINA = """<!DOCTYPE html>
   .cod{font-size:2rem;letter-spacing:.25em;text-align:center;margin:6px 0;}
   .jurnal{font-family:monospace;font-size:.82rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text-slab);margin:0;max-height:360px;overflow:auto;}
   .rand{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-  select,button{min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
+  select,button,input{min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
+  #randPornire .rand{margin:0 0 10px;}
+  #detalii{flex:1;min-width:0;}
   button{cursor:pointer;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.2em;}
   .eroare{color:#ffb4a8;}
@@ -268,10 +297,20 @@ PAGINA = """<!DOCTYPE html>
   <section class="card">
     <p class="acum" id="stare"></p>
     <p class="cod ascuns" id="cod"></p>
-    <div class="rand" id="randPornire">
-      <label for="minute">Cât timp</label>
-      <select id="minute"></select>
-      <button id="porneste">Pornește</button>
+    <p class="nota ascuns" id="asteptare">Te anunțăm când intrăm. Poți folosi receptorul între timp.</p>
+    <div id="randPornire">
+      <div class="rand">
+        <label for="minute">Cât timp</label>
+        <select id="minute"></select>
+      </div>
+      <div class="rand">
+        <label for="nevoie">Cu ce te ajutăm?</label>
+        <select id="nevoie"></select>
+      </div>
+      <div class="rand">
+        <input id="detalii" type="text" maxlength="200" autocomplete="off" placeholder="Scrie pe scurt (opțional)">
+      </div>
+      <div class="rand"><button id="porneste">Pornește</button></div>
     </div>
     <div class="rand ascuns" id="randOprire">
       <button id="opreste">Oprește</button>
@@ -309,13 +348,15 @@ function arata(d){
   $("randOprire").classList.toggle("ascuns", !activa);
   $("informare").classList.toggle("ascuns", activa);
   if(!$("minute").options.length){ (d.durate_text||[]).forEach(function(x){ var o=document.createElement("option"); o.value=x[0]; o.textContent=x[1]; if(x[0]===d.durata_implicita){o.selected=true;} $("minute").appendChild(o); }); }
+  if(!$("nevoie").options.length){ (d.nevoi_text||[]).forEach(function(x){ var o=document.createElement("option"); o.value=x[0]; o.textContent=x[1]; $("nevoie").appendChild(o); }); }
   var t = "";
   if(!d.disponibil){ t = "Funcția nu e disponibilă pe această imagine."; }
   else if(!activa){ t = "Oprită. O pornești tu, dacă vrei să ne ajuți."; }
-  else if(d.stare==="asteapta"){ t = "Spune-ne codul de mai jos. Mai sunt %s.".replace("%s", hms(d.ramas_s)); }
-  else if(d.stare==="conectat"){ t = "Conectat. Mai sunt %s.".replace("%s", hms(d.ramas_s)); }
+  else if(d.stare==="asteapta"){ t = "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic." + " " + (d.pana_text||""); }
+  else if(d.stare==="conectat"){ t = "Conectat." + " " + (d.pana_text||""); }
   else { t = "Se pregătește..."; }
   $("stare").textContent = t;
+  $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   if(d.cod){ $("cod").textContent = String(d.cod).replace(/(\\d\\d)(\\d\\d)(\\d\\d)/, "$1 $2 $3"); $("cod").classList.remove("ascuns"); }
   else { $("cod").classList.add("ascuns"); }
   $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";
@@ -326,7 +367,9 @@ function citeste(){
     $("incarcare").classList.add("ascuns"); arata(d);
   }).catch(function(){ $("incarcare").textContent=nuRaspunde(); });
 }
-$("porneste").addEventListener("click", function(){ var q=new URLSearchParams(); q.set("minute", $("minute").value); mesaj("Se deschide pe televizor...");
+$("porneste").addEventListener("click", function(){ var q=new URLSearchParams(); q.set("minute", $("minute").value);
+  if($("nevoie").value){ q.set("nevoie", $("nevoie").value); } if($("detalii").value.trim()){ q.set("detalii", $("detalii").value.trim()); }
+  mesaj("Se deschide pe televizor...");
   cerere("/api/asistenta-cere","POST",q).then(function(d){ mesaj(d.message, !d.result); arata(d); }).catch(function(){ mesaj(nuRaspunde(),true); }); });
 $("opreste").addEventListener("click", function(){ mesaj("Se oprește...");
   cerere("/api/asistenta-opreste","POST", new URLSearchParams()).then(function(d){ mesaj(d.message, !d.result); arata(d); }).catch(function(){ mesaj(nuRaspunde(),true); }); });
@@ -344,7 +387,10 @@ TEXTE_PAGINA = {
 		N_("Se citește starea..."),
 		N_("Asistența de la distanță e pentru beta testeri."),
 		N_("Devino beta tester"),
+		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),
 		N_("Cât timp"),
+		N_("Cu ce te ajutăm?"),
+		N_("Scrie pe scurt (opțional)"),
 		N_("Pornește"),
 		N_("Oprește"),
 		N_("Jurnalul asistenței"),
@@ -355,8 +401,8 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde."),
 		N_("Funcția nu e disponibilă pe această imagine."),
 		N_("Oprită. O pornești tu, dacă vrei să ne ajuți."),
-		N_("Spune-ne codul de mai jos. Mai sunt %s."),
-		N_("Conectat. Mai sunt %s."),
+		N_("Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."),
+		N_("Conectat."),
 		N_("Se pregătește..."),
 		N_("Jurnalul e gol."),
 		N_("Se deschide pe televizor..."),

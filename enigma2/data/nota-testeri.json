@@ -1,0 +1,498 @@
+{
+ "versiune": 2,
+ "data": "2026-10-29",
+ "ro": {
+  "titlu": "Notă de confidențialitate pentru beta testeri",
+  "versiune_text": "Versiunea 2, 29 octombrie 2026",
+  "rezumat": "Ce date trimite receptorul tău când ești beta tester al imaginii HD Satelit, cine le primește, de ce, cât timp le păstrăm și cum renunți oricând.",
+  "sectiuni": [
+   {
+    "titlu": "Pe scurt",
+    "paragrafe": [
+     "Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și e-mailul sunt opționale.",
+     "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor.",
+     "Nu pleacă nimic până nu bifezi „Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus.” și apeși „Sunt de acord”. Felurile de date le alegi tu și le poți schimba oricând.",
+     "Dacă lași bifată „Trimite automat în fiecare zi”, receptorul trimite singur, o dată pe zi, noaptea, numai felurile bifate de tine. Bifa o scoți oricând."
+    ]
+   },
+   {
+    "titlu": "Cine primește datele",
+    "paragrafe": [
+     "Datele le primește Eduard Monea, persoană fizică, care face imaginea HD Satelit. Monea Software și HD Satelit sunt mărcile sub care lucrează; nu sunt firme.",
+     "Pentru orice întrebare despre datele tale ne scrii la contact@hdsatelit.com."
+    ],
+    "legaturi": [
+     [
+      "Scrie-ne la contact@hdsatelit.com",
+      "mailto:contact@hdsatelit.com"
+     ]
+    ]
+   },
+   {
+    "titlu": "Fără plată sau alte recompense",
+    "paragrafe": [
+     "Activitatea de beta tester este voluntară și nu este răsplătită cu bani sau în alt fel. Câștigul tău este un software tot mai bun pe propriul receptor, făcut cum îl dorești. HD Satelit este dezvoltat de o persoană fizică, cu resurse foarte limitate, folosite pentru receptoarele de probă și pentru uneltele de dezvoltare, care sunt scumpe. Dacă vom obține sponsorizări de la producători, receptoare noi sau premii, le vom oferi beta testerilor prin concursuri, pe măsură ce bugetul ne va permite. Până atunci lucrăm în spiritul comunității open source: contribuția fiecăruia face software-ul mai bun pentru toți."
+    ]
+   },
+   {
+    "titlu": "Ce date trimite receptorul",
+    "paragrafe": [
+     "La înscriere, receptorul îți arată șase feluri de date, toate bifate din fabrică, fiecare cu rândul lui scurt, și sub ele bifa „Trimite automat în fiecare zi” (vezi mai jos, la trimiterea automată). Poți debifa oricare, la înscriere sau mai târziu, din meniul testerului, la „Datele pe care le trimit”, pe receptor sau în interfața web. Pleacă numai felurile bifate."
+    ],
+    "tabel": [
+     [
+      "Jurnalele de cădere și de erori",
+      "Ce s-a întâmplat când interfața s-a oprit sau un ecran a căzut, fără setările și fără rețeaua ta."
+     ],
+     [
+      "Canalele scanate",
+      "Sateliții, frecvențele și numele canalelor găsite la scanare, pentru baza de date a tuturor receptoarelor și pentru SatBase. Fără favorite, fără cablu și terestru."
+     ],
+     [
+      "Memoria, procesorul, temperatura și pornirea",
+      "Cât de încărcat e receptorul în timpul zilei și cât durează pornirea."
+     ],
+     [
+      "Ecranele și funcțiile folosite",
+      "Ce ecrane deschizi și de câte ori, ca să știm ce să îmbunătățim întâi."
+     ],
+     [
+      "Datele receptorului",
+      "Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI și driverele, ca să adaptăm imaginea și lista de receptoare."
+     ],
+     [
+      "Rezultatele probelor",
+      "Ce au găsit probele pornite de tine din meniul testerului: ce merge și ce nu pe modelul tău."
+     ]
+    ],
+    "paragrafe_dupa": [
+     "Fiecare pachet are la început aceleași câteva rânduri: identificatorul întâmplător, amprenta receptorului, modelul receptorului, verdictul pazei modelului (cipul, tipul plăcii și memoria internă rotunjită la GB, adică valori ale modelului, nu ale receptorului tău anume), versiunea imaginii, limba meniurilor, orele de funcționare și ora la care s-au cules datele. Modelul îl spune imaginea, nu tu: dacă paza modelului nu recunoaște receptorul, modelul pleacă gol.",
+     "La „Sunt de acord” pleacă acordul (bifele tale, versiunea notei și, dacă le-ai scris, numele și e-mailul) și o primă trimitere a felurilor bifate. După aceea, fiecare fel pleacă așa cum scrie la el mai jos."
+    ]
+   },
+   {
+    "titlu": "Jurnalele de cădere și de erori",
+    "paragrafe": [
+     "Ce conțin: jurnalele noi, scrise când interfața s-a oprit sau un ecran a căzut. Din cele scrise de sistem pleacă numai ultimele rânduri ale jurnalului interfeței și versiunea; din cele ale unui ecran căzut, numele ecranului și urma erorii. Pleacă și celelalte jurnale de erori ale imaginii, pe care receptorul le păstrează după repornire: jurnalul actualizării (ce s-a instalat și cu ce rezultat) și jurnalele extensiilor (instalare, actualizare, ștergere). Plus rândurile noi ale paznicului receptorului: când a repornit interfața și de ce. Jurnalul sistemului nu pleacă.",
+     "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite.",
+     "Înainte să plece, receptorul le curăță: scoate rândurile cu parole, chei, jetoane și Wi-Fi, iar adresele IP și MAC, adresele de e-mail, adresele web și căile spre filmele tale le înlocuiește cu un semn. Setările, rețeaua și lista pachetelor instalate nu pleacă.",
+     "Cât de des: numai jurnalele noi de la ultima trimitere. Cu trimiterea automată, receptorul le caută la 5 minute după fiecare pornire a interfeței (deci și după o oprire neașteptată sau după o actualizare care nu a reușit) și o dată pe zi, noaptea; altfel, când apeși „Trimite acum”. Pleacă cel mult 3 jurnale pe zi. Cât de mare: dintr-un jurnal pleacă cel mult ultimii 64 KB de text; un pachet are de obicei 3-20 KB, comprimat."
+    ]
+   },
+   {
+    "titlu": "Canalele scanate",
+    "paragrafe": [
+     "Ce conțin: numai canalele de pe satelit. Transponderele (poziția satelitului, frecvența, rata de simboluri, polarizarea, FEC, sistemul DVB-S sau DVB-S2, modulația, roll-off și pilot) și serviciile de pe ele (numerele SID, TSID și ONID, felul serviciului, numele și furnizorul).",
+     "Nu pleacă: canalele de cablu și terestre (ele ar arăta operatorul și regiunea ta), listele de favorite, PID-urile și fluxurile de pe internet.",
+     "Cât de des: la înscriere; apoi, cu trimiterea automată, numai după o scanare care a schimbat lista și cel mult o dată pe săptămână; cu „Trimite acum”, oricând lista s-a schimbat de la ultima trimitere. Cât de mare: de obicei 20-150 KB, comprimat; o listă mai mare de 512 KB nu pleacă.",
+     "La ce folosesc: la baza de date a tuturor receptoarelor și la SatBase (satbase.hdsatelit.com), ca frecvențele să fie la zi pentru toți."
+    ]
+   },
+   {
+    "titlu": "Memoria, procesorul, temperatura și pornirea",
+    "paragrafe": [
+     "Ce conțin: memoria (toată, cât e liberă, cea mai mică și media din zi, cea mai mare memorie folosită de interfață), încărcarea procesorului (media și vârful din zi), temperatura procesorului (media și vârful), cât durează pornirea, de câte ori a repornit interfața în ziua aceea și cât a stat receptorul pornit. Receptorul le măsoară la fiecare 10 minute, numai cât ești înscris.",
+     "Cât de des: o dată pe zi, cu trimiterea automată, sau când apeși „Trimite acum”; pleacă ce s-a adunat de la ultima trimitere. Cât de mare: sub 1 KB."
+    ]
+   },
+   {
+    "titlu": "Ecranele și funcțiile folosite",
+    "paragrafe": [
+     "Ce conțin: de câte ori s-a deschis fiecare ecran al receptorului, după numele lui din program (de pildă ChannelSelection, lista de canale; cel mult 150 de ecrane), câte schimbări de canal și câte înregistrări au pornit. Receptorul le numără numai cât ești înscris. Nu pleacă ce canale ai privit, ce ai înregistrat sau numele fișierelor.",
+     "Cât de des: o dată pe zi, cu trimiterea automată, sau când apeși „Trimite acum”; pleacă numărătoarea de la ultima trimitere. Cât de mare: 1-4 KB."
+    ]
+   },
+   {
+    "titlu": "Datele receptorului",
+    "paragrafe": [
+     "Ce conțin: cum e făcut receptorul tău, nu ce faci cu el. Placa (modelul dat de paza modelului, cipul, tipul plăcii, numele plăcii spus de sistem, procesorul și câte nuclee are), memoria (RAM, memoria internă și numele și mărimea partițiilor ei, fără ce e în ele), tunerele (locul, felul, modurile și numele lor), plăcile de rețea Wi-Fi, Bluetooth și Ethernet (felul, cum sunt legate în receptor, codul de produs, numele și driverul), ieșirea HDMI (modurile de imagine, HDR și CEC), afișajul din față, tipul telecomenzii, versiunile driverelor, dispozitivele USB conectate (felul, codul de produs și numele) și numele pachetelor rămase neinstalate până la capăt după o actualizare.",
+     "Nu pleacă: adresa MAC a plăcilor de rețea, numele rețelei tale, adresele IP, seria dispozitivelor USB și numele fișierelor de pe ele.",
+     "Cât de des: la înscriere, apoi numai când se schimbă ceva. Receptorul ține minte o sumă de control a ultimului pachet trimis și trimite din nou numai când datele de acum dau altă sumă.",
+     "La ce folosesc: ca să adaptăm imaginea fiecărui model și să completăm lista receptoarelor de pe site (memoria, tunerele, Wi-Fi). Serverul păstrează numai ultimul pachet al receptorului tău."
+    ]
+   },
+   {
+    "titlu": "Rezultatele probelor",
+    "paragrafe": [
+     "Ce conțin: ce au găsit probele receptorului pe care le pornești tu din meniul testerului, la „Probele receptorului”, când imaginea ta le are: ce probe au rulat, care au mers și care nu și de ce, cât au durat și valorile măsurate, cu modelul și versiunea imaginii. Serverul păstrează numai câmpurile știute ale probelor și înlocuiește cu un semn orice text care seamănă cu o adresă MAC sau IP.",
+     "Cât de des: când trimiți tu rezultatele din ecranul probelor și, cu trimiterea automată, o dată pe zi, numai dacă rezultatul ultimei rulări s-a schimbat de la trimiterea de dinainte. Cât de mare: cel mult 128 KB.",
+     "La ce folosesc: ca să știm ce merge și ce nu pe fiecare model de receptor."
+    ]
+   },
+   {
+    "titlu": "Trimiterea automată",
+    "paragrafe": [
+     "Dacă lași bifată „Trimite automat în fiecare zi”, receptorul trimite singur, o dată pe zi, noaptea, numai felurile de date bifate de tine, și imediat după o oprire neașteptată a interfeței sau după o actualizare care nu a reușit. Nimic nu pleacă de două ori. Poți scoate bifa oricând; atunci pleacă numai ce trimiți tu cu „Trimite acum” sau mesajele tale. Bifa e pusă din fabrică, ca felurile de date, și o schimbi în meniul testerului, la „Datele pe care le trimit”.",
+     "Când: o dată pe zi, între 03:00 și 06:00 după ora receptorului, la un minut ales la întâmplare la fiecare pornire (ca să nu vină toate receptoarele deodată) și la cel puțin 20 de ore după trimiterea de dinainte. Dacă receptorul a stat oprit noaptea și au trecut peste 26 de ore, trimite la pornirea următoare, după 5-35 de minute. Jurnalele noi le caută și la 5 minute după fiecare pornire a interfeței. Nu trimite în timpul unei înregistrări și nici cât se instalează pachete: încearcă din nou peste 10 minute.",
+     "„Trimite acum”, din meniul testerului sau din interfața web, adună pe loc toate felurile bifate și le trimite, cu bifa automată pusă sau nu.",
+     "Fără internet, pachetele așteaptă pe receptor, în coadă: cel mult 20 de pachete și 1 MB, iar peste atât se pierd întâi cele mai vechi. Receptorul încearcă din nou la o oră. Ce a plecat și ce așteaptă vezi în meniul testerului, la „Ce am trimis”; ora ultimei trimiteri e scrisă jos, în meniul testerului."
+    ]
+   },
+   {
+    "titlu": "Mesajele din meniul testerului",
+    "paragrafe": [
+     "După înscriere, din meniul testerului ne poți trimite un mesaj: felul (greșeală, idee sau întrebare), textul tău și, dacă vrei, ecranul sau funcția despre care scrii.",
+     "Numai dacă bifezi la trimitere, mesajul primește și jurnalul ultimei erori, curățat ca mai sus, și o captură a ecranului numai cu meniurile, fără imaginea canalului. Pe receptor, după ce apeși Trimite, ai 15 secunde să închizi meniul testerului și să deschizi ecranul despre care scrii; apoi receptorul face captura. Din interfața web, captura se face pe loc, cu ce e atunci pe ecran.",
+     "Limitele: textul are cel mult 4000 de semne, captura cel mult 400 KB și pleacă cel mult 10 mesaje pe zi. Răspunsurile echipei le găsești în meniul testerului, la „Răspunsurile echipei”.",
+     "Mesajele nu ajung singure pe forum. Dacă un mesaj e util și altora, scriem noi un subiect pe forum, fără datele tale, și îți trimitem legătura. Nu scrie în mesaje parole sau alte date pe care nu vrei să le aflăm."
+    ]
+   },
+   {
+    "titlu": "Ce nu trimite receptorul",
+    "lista": [
+     "adresa IP: serverul nu o scrie nicăieri (vezi mai jos, la anonimizare);",
+     "adresa MAC și seria receptorului sau a dispozitivelor USB (amprenta e calculată din placă, dar nu le dezvăluie);",
+     "parolele, cheile și jetoanele;",
+     "numele rețelei Wi-Fi;",
+     "listele tale de canale: favoritele, canalele de cablu și terestre, fluxurile de pe internet;",
+     "numele filmelor și ale înregistrărilor tale;",
+     "nimic înainte să apeși „Sunt de acord”."
+    ]
+   },
+   {
+    "titlu": "Anonimizarea",
+    "paragrafe": [
+     "Identificatorul: la înscriere, receptorul face la întâmplare un număr de 32 de cifre hexazecimale. Nu vine din adresa MAC, din serie sau din altceva al receptorului, deci nu duce la tine. Îl vezi în meniul testerului și în pagina web a receptorului; notează-l dacă vrei să ne poți cere ceva și fără receptor. Când ieși din program cu ștergerea datelor, receptorul îl uită.",
+     "Amprenta: receptorul o calculează din adresa MAC a plăcii de rețea și din seria memoriei interne, cu o funcție care merge într-un singur sens (PBKDF2-SHA256, 100.000 de treceri); pleacă numai rezultatul, 32 de cifre hexazecimale. E aceeași în orice slot și după orice reinstalare, așa că serverul numără receptorul tău o singură dată. Din ea nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor. Nu o folosim la nimic altceva.",
+     "Adresa IP: programul serverului nu o citește și nu o scrie, iar jurnalul serverului web e oprit pentru adresele programului. Serverul web o folosește numai în memorie, ca să oprească cererile prea dese venite de la aceeași adresă, fără să o lege de date.",
+     "Ora: ora la care s-au cules datele pleacă rotunjită la minut, în UTC, fără fusul tău orar.",
+     "Drumul: datele pleacă numai prin HTTPS, cu certificatul serverului verificat. Legătura trece prin Cloudflare, care apără tot site-ul stb.hdsatelit.com, ca la orice pagină a lui."
+    ]
+   },
+   {
+    "titlu": "Numele și e-mailul (opționale)",
+    "paragrafe": [
+     "Le poți lăsa goale; programul merge la fel. Dacă le scrii, pleacă numai împreună cu acordul (la înscriere și când schimbi bifele) și stau pe server într-un tabel separat. Numele îl folosim numai ca să te putem întreba ceva despre o problemă găsită pe receptorul tău, iar e-mailul numai pentru răspunsurile echipei.",
+     "Dacă ai dat un e-mail, primești pe el răspunsurile echipei la mesajele tale (cel mult un e-mail la 10 minute) și te poți dezabona oricând, dintr-un clic, din legătura de la sfârșitul fiecărui e-mail.",
+     "Nu apar nicăieri public și nu le dăm nimănui; nu sunt numele public de mai jos. Dacă le ștergi din meniul testerului, la „Datele pe care le trimit”, se șterg și de pe server."
+    ]
+   },
+   {
+    "titlu": "Numele public și legarea unui cont (opționale)",
+    "paragrafe": [
+     "Dacă vrei să apari public ca beta tester, în meniul testerului, la „Apariția publică”, îți alegi un nume public: 2-40 de semne, litere, cifre, spațiu, punct sau liniuță. Serverul îl dă în lista publică a testerilor fiecărui model, ca să apară pe site, pe pagina beta testerilor și la modelul tău de receptor. Fără nume public nu apari nicăieri.",
+     "Pentru numele public, receptorul face o cheie secretă a lui, ținută numai pe receptor, care nu apare niciodată pe ecran sau în interfața web; serverul ține numai o amprentă a ei (SHA-256). Pe receptor nu scrii nicio parolă.",
+     "Când receptorul ți le arată, mai sunt două drumuri: legi un cont pe care îl ai deja pe forumul imaginii (stb.hdsatelit.com/forum), cu un cod QR scanat cu telefonul pe care ești conectat pe forum sau cu un cod de 6 cifre de pe pagina de legare; sau scrii pe receptor un e-mail, iar serverul îți trimite o legătură de confirmare pentru un cont nou pe forum, unde îți pui parola, de pe orice aparat. Codurile sunt de unică folosință, expiră în 10 minute și au o limită de încercări. Aceste două drumuri apar pe receptor numai după ce le pornim pe server.",
+     "La legarea unui cont, serverul testerilor ține numai numele contului tău de pe forum, legat de identificatorul receptorului. Forumul nu vede identificatorul și nici datele trimise de receptor. E-mailul pentru cont îl folosim numai pentru cont și pentru răspunsurile echipei.",
+     "Scoți numele public oricând, din receptor („Nu mai apar public”) sau din interfața web; la fel dezlegi contul. Ieșirea din program șterge și numele public, și legătura; contul tău de pe forum rămâne al tău."
+    ]
+   },
+   {
+    "titlu": "Asistența de la distanță (opțională)",
+    "paragrafe": [
+     "Separat de datele de mai sus, ca beta tester poți porni Asistența de la distanță, din meniul testerului sau din pagina /asistenta a interfeței web. O pornești numai tu, pentru cât alegi: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent, și o oprești oricând, de pe receptor sau din interfața web; la sfârșitul duratei alese se oprește singură.",
+     "Cât e pornită, vezi un semn pe ecran, iar echipa HD Satelit se poate conecta oricând și poate cere numai operațiile dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor receptorului, o captură a meniurilor și un mesaj pe ecran. Nu poate rula comenzi, nu poate schimba setări sau fișiere și nu ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnalul de pe ecran.",
+     "Ce ajunge la noi: modelul și versiunea receptorului, țara, ora și durata pornirii, ce ai ales la „Cu ce te ajutăm?” și rândul scris de tine, dacă le-ai dat, și răspunsurile la cererile din jurnal. Nu păstrăm adresa ta de internet. Datele stau pe serverul nostru 30 de zile, apoi se șterg."
+    ]
+   },
+   {
+    "titlu": "De ce folosim datele",
+    "paragrafe": [
+     "Numai ca să îmbunătățim imaginea HD Satelit pe modelul tău de receptor: să găsim și să reparăm căderile, să vedem cât de încărcat e receptorul, ce ecrane contează mai mult și ce merge sau nu pe fiecare model, și să adaptăm imaginea fiecărui model. Canalele scanate merg și în baza de date a tuturor receptoarelor și în SatBase, ca frecvențele să fie la zi pentru toți, iar datele receptorului ne ajută să completăm lista receptoarelor de pe site. Nu vindem datele și nu le folosim pentru reclame.",
+     "Temeiul: acordul tău. Îl dai pe receptor sau în interfața web, cu bifa „Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus.” și cu butonul „Sunt de acord”. Bifa e singura nebifată din fabrică, iar fără ea butonul nu merge. Acordul îl retragi oricând (vezi mai jos).",
+     "Singurul lucru făcut automat cu datele: serverul numără receptoarele înscrise pe fiecare model, pe fiecare o singură dată (după amprentă), iar numărul apare pe pagina receptorului de pe site. Când un model aflat în alfa are un tester al cărui receptor a mers cu imaginea câteva ore, modelul poate trece la beta pe site. Numărul și data aceea nu spun nimic despre tine."
+    ]
+   },
+   {
+    "titlu": "Unde stau datele",
+    "paragrafe": [
+     "Pe serverul site-ului stb.hdsatelit.com, închiriat de la Hetzner, în Germania (Uniunea Europeană). Le citim numai noi, cei care lucrăm la imagine."
+    ]
+   },
+   {
+    "titlu": "Cât timp le păstrăm",
+    "lista": [
+     "jurnalele de cădere și de erori și rezultatele probelor: 6 luni;",
+     "memoria, procesorul, temperatura și pornirea, apoi ecranele și funcțiile folosite: 12 luni;",
+     "canalele scanate și datele receptorului: numai ultimul pachet al receptorului, cât timp ești înscris;",
+     "acordul, numele și e-mailul, numele public și legarea unui cont: până ieși din program sau până trec 12 luni fără nicio veste de la receptor;",
+     "amprenta receptorului: cât timp ești înscris; după ieșirea din program, serverul mai ține 12 luni numai o sumă a ei, fără identificator și fără alte date, ca o înscriere nouă a aceluiași receptor să nu fie anunțată ca un receptor nou;",
+     "mesajele, răspunsurile și jurnalele atașate: tot până ieși din program sau până trec 12 luni fără nicio veste de la receptor; capturile atașate: 6 luni;",
+     "copiile de siguranță ale bazei, făcute zilnic, țin și datele șterse cel mult 14 zile."
+    ],
+    "paragrafe_dupa": [
+     "„Fără nicio veste” înseamnă fără niciun pachet, acord sau mesaj de la receptor. Serverul șterge singur, în fiecare zi, ce a trecut de termen. Rămân numai numărul de testeri de pe fiecare model și data la care un model a fost confirmat: nu sunt datele cuiva."
+    ]
+   },
+   {
+    "titlu": "Cum renunți și cum ceri ștergerea",
+    "pasi": [
+     "Debifezi un fel de date în meniul testerului, la „Datele pe care le trimit”, pe receptor sau în interfața web: felul acela nu mai pleacă, iar serverul îl refuză și el.",
+     "Scoți bifa „Trimite automat în fiecare zi”: nu mai pleacă nimic singur, numai ce trimiți tu. Dacă debifezi și toate felurile, nu mai pleacă deloc date. Ce ai trimis rămâne anonim până la termenele de mai sus.",
+     "Alegi „Ieși din program și șterge datele”, pe receptor sau în interfața web: serverul șterge tot ce ține de identificatorul tău (amprenta, pachetele, canalele, datele receptorului, rezultatele probelor, mesajele, numele și e-mailul, numele public și legarea unui cont), iar receptorul uită identificatorul.",
+     "Fără receptor (l-ai dat altcuiva, l-ai refăcut sau nu mai pornește): ne scrii la contact@hdsatelit.com cu identificatorul, iar noi ștergem datele."
+    ],
+    "paragrafe_dupa": [
+     "Retragerea acordului nu schimbă ce s-a făcut cu datele până atunci."
+    ]
+   },
+   {
+    "titlu": "Drepturile tale",
+    "paragrafe": [
+     "Ai dreptul să afli ce date avem pentru identificatorul tău și să primești o copie a lor, să corectezi numele, e-mailul și numele public, să ceri ștergerea datelor și să-ți retragi acordul oricând. Retragerea nu schimbă ce s-a făcut cu datele până atunci. Ne scrii la contact@hdsatelit.com, cu identificatorul, și îți răspundem în cel mult o lună. Ultimul pachet trimis îl vezi oricând chiar pe receptor, la „Ce trimit acum”.",
+     "Dacă crezi că nu ne purtăm corect cu datele tale, poți face o plângere la autoritatea de protecție a datelor: în România, Autoritatea Națională de Supraveghere a Prelucrării Datelor cu Caracter Personal (ANSPDCP, dataprotection.ro), sau autoritatea din țara ta."
+    ],
+    "legaturi": [
+     [
+      "ANSPDCP: dataprotection.ro",
+      "https://www.dataprotection.ro/"
+     ]
+    ]
+   },
+   {
+    "titlu": "Când se schimbă nota",
+    "paragrafe": [
+     "Nota are o versiune; aceasta e versiunea 2, din 29 octombrie 2026 (față de versiunea 1 adaugă amprenta receptorului și, în jurnale, datele canalului care nu merge). Dacă schimbăm ce date pleacă sau ce facem cu ele, scriem o versiune nouă, iar receptorul îți spune singur și îți cere din nou acordul, cu bifele tale de până atunci: apeși „Accept” pe ecranul notei noi, pe receptor sau în interfața web. Până nu îl dai, nu mai trimite nimic, afară de ștergere, dacă o ceri.",
+     "Jos în meniul testerului vezi data acordului tău și versiunea notei pe care ai acceptat-o."
+    ]
+   }
+  ]
+ },
+ "en": {
+  "titlu": "Privacy notice for beta testers",
+  "versiune_text": "Version 2, 29 October 2026",
+  "rezumat": "What data your receiver sends when you are a beta tester of the HD Satelit image, who receives it, why, how long we keep it and how you can stop at any time.",
+  "sectiuni": [
+   {
+    "titlu": "In short",
+    "paragrafe": [
+     "The data is anonymous: the receiver gets a random identifier, with no IP address, no passwords and no channel lists of yours. We use it only to improve the image on your receiver model. Name and e-mail are optional.",
+     "The receiver also sends a fingerprint calculated from its board, so that it is counted only once even when it is installed in several slots or reinstalled. The fingerprint does not reveal the MAC address or the serial number, and these never leave the receiver.",
+     "Nothing is sent until you tick “I have read the Privacy notice and I agree to send the data ticked above.” and press “I agree”. You choose the kinds of data and can change them at any time.",
+     "If you leave “Send automatically every day” ticked, the receiver sends by itself, once a day, at night, only the kinds you ticked. You can untick it at any time."
+    ]
+   },
+   {
+    "titlu": "Who receives the data",
+    "paragrafe": [
+     "The data is received by Eduard Monea, a private individual, who makes the HD Satelit image. Monea Software and HD Satelit are the brands he works under; they are not companies.",
+     "For any question about your data, write to us at contact@hdsatelit.com."
+    ],
+    "legaturi": [
+     [
+      "Write to us at contact@hdsatelit.com",
+      "mailto:contact@hdsatelit.com"
+     ]
+    ]
+   },
+   {
+    "titlu": "No payment or other rewards",
+    "paragrafe": [
+     "Being a beta tester is voluntary and is not rewarded with money or in any other way. What you gain is ever better software on your own receiver, made the way you want it. HD Satelit is developed by a private individual, with very limited resources, used for the test receivers and for the development tools, which are expensive. If we obtain sponsorships from manufacturers, new receivers or prizes, we will offer them to the beta testers through contests, as the budget allows. Until then we work in the spirit of the open source community: everyone's contribution makes the software better for all."
+    ]
+   },
+   {
+    "titlu": "What data the receiver sends",
+    "paragrafe": [
+     "When you sign up, the receiver shows you six kinds of data, all ticked by default, each with its own short line, and under them the tick “Send automatically every day” (see below, under automatic sending). You can untick any of them, when you sign up or later, from the tester menu, under “The data I send”, on the receiver or in the web interface. Only the ticked kinds are sent."
+    ],
+    "tabel": [
+     [
+      "Crash and error logs",
+      "What happened when the interface stopped or a screen crashed, without your settings and without your network."
+     ],
+     [
+      "Scanned channels",
+      "The satellites, frequencies and channel names found by the scan, for the database of all receivers and for SatBase. No favourites, no cable or terrestrial."
+     ],
+     [
+      "Memory, processor, temperature and start-up",
+      "How busy the receiver is during the day and how long it takes to start."
+     ],
+     [
+      "Screens and functions used",
+      "Which screens you open and how often, so that we know what to improve first."
+     ],
+     [
+      "Receiver details",
+      "Memory, tuners, network cards (without the MAC address), the HDMI output and the drivers, so that we can adapt the image and the list of receivers."
+     ],
+     [
+      "Test results",
+      "What the tests you started from the tester menu found: what works and what does not on your model."
+     ]
+    ],
+    "paragrafe_dupa": [
+     "Every package starts with the same few lines: the random identifier, the receiver fingerprint, the receiver model, the verdict of the model guard (the chip, the board type and the internal memory rounded to GB, which are values of the model, not of your particular receiver), the image version, the menu language, the hours of use and the time the data was collected. The model comes from the image, not from you: if the model guard does not recognise the receiver, the model is sent empty.",
+     "When you press “I agree”, the consent is sent (your ticks, the version of the notice and, if you filled them in, the name and the e-mail), together with a first sending of the ticked kinds. After that, each kind is sent as described for it below."
+    ]
+   },
+   {
+    "titlu": "Crash and error logs",
+    "paragrafe": [
+     "What they contain: the new logs written when the interface stopped or a screen crashed. From those written by the system, only the last lines of the interface log and the version are sent; from those of a crashed screen, the screen's name and the error trace. The image's other error logs, which the receiver keeps after a restart, are sent too: the update log (what was installed and with what result) and the logs of the extensions (installing, updating, removing). Plus the new lines of the receiver's watchdog: when the interface restarted and why. The system log is not sent.",
+     "When a channel does not work (no signal, no picture, decoding error), the log keeps the name and technical data of that channel, so that we can find out why. Which channels you watch when everything works is not sent.",
+     "Before they leave, the receiver cleans them: it removes the lines with passwords, keys, tokens and Wi-Fi, and replaces IP and MAC addresses, e-mail addresses, web addresses and the paths to your films with a placeholder. The settings, the network and the list of installed packages are not sent.",
+     "How often: only the logs that are new since the last sending. With automatic sending, the receiver looks for them 5 minutes after each start of the interface (so also after an unexpected stop or after an update that failed) and once a day, at night; otherwise, when you press “Send now”. At most 3 logs a day are sent. How big: at most the last 64 KB of text of a log are sent; a package is usually 3-20 KB, compressed."
+    ]
+   },
+   {
+    "titlu": "Scanned channels",
+    "paragrafe": [
+     "What they contain: only the satellite channels. The transponders (the satellite position, frequency, symbol rate, polarisation, FEC, the DVB-S or DVB-S2 system, modulation, roll-off and pilot) and the services on them (the SID, TSID and ONID numbers, the type of service, the name and the provider).",
+     "Not sent: cable and terrestrial channels (they would show your operator and region), favourites lists, PIDs and internet streams.",
+     "How often: when you sign up; then, with automatic sending, only after a scan that changed the list, and at most once a week; with “Send now”, whenever the list has changed since the last sending. How big: usually 20-150 KB, compressed; a list larger than 512 KB is not sent.",
+     "What they are for: the database of all receivers and SatBase (satbase.hdsatelit.com), so that the frequencies are up to date for everyone."
+    ]
+   },
+   {
+    "titlu": "Memory, processor, temperature and start-up",
+    "paragrafe": [
+     "What it contains: the memory (total, how much is free, the lowest and the average of the day, the most memory used by the interface), the processor load (the average and the peak of the day), the processor temperature (the average and the peak), how long the start-up takes, how many times the interface restarted that day and how long the receiver was on. The receiver measures them every 10 minutes, only while you are signed up.",
+     "How often: once a day, with automatic sending, or when you press “Send now”; what was gathered since the last sending is sent. How big: under 1 KB."
+    ]
+   },
+   {
+    "titlu": "Screens and functions used",
+    "paragrafe": [
+     "What it contains: how many times each screen of the receiver was opened, by its name in the program (for example ChannelSelection, the channel list; at most 150 screens), how many channel changes and how many recordings were started. The receiver counts them only while you are signed up. What channels you watched, what you recorded and file names are not sent.",
+     "How often: once a day, with automatic sending, or when you press “Send now”; the count since the last sending is sent. How big: 1-4 KB."
+    ]
+   },
+   {
+    "titlu": "Receiver details",
+    "paragrafe": [
+     "What they contain: how your receiver is built, not what you do with it. The board (the model given by the model guard, the chip, the board type, the board name reported by the system, the processor and how many cores it has), the memory (RAM, the internal memory and the names and sizes of its partitions, without what is in them), the tuners (their slot, type, modes and name), the Wi-Fi, Bluetooth and Ethernet network cards (the type, how they are connected inside the receiver, the product code, the name and the driver), the HDMI output (the picture modes, HDR and CEC), the front display, the remote control type, the driver versions, the connected USB devices (the type, the product code and the name) and the names of packages left half installed after an update.",
+     "Not sent: the MAC address of the network cards, the name of your network, IP addresses, the serial number of USB devices and the names of the files on them.",
+     "How often: when you sign up, then only when something changes. The receiver remembers a checksum of the last package sent and sends again only when the current data gives a different checksum.",
+     "What they are for: to adapt the image to each model and to complete the list of receivers on the site (memory, tuners, Wi-Fi). The server keeps only the latest package of your receiver."
+    ]
+   },
+   {
+    "titlu": "Test results",
+    "paragrafe": [
+     "What they contain: what the receiver tests you start yourself from the tester menu, under “Receiver tests”, found, when your image has them: which tests ran, which worked and which did not and why, how long they took and the measured values, with the model and the image version. The server keeps only the known fields of the tests and replaces any text that looks like a MAC or IP address with a placeholder.",
+     "How often: when you send the results yourself from the tests screen and, with automatic sending, once a day, only if the result of the last run has changed since the previous sending. How big: at most 128 KB.",
+     "What they are for: to know what works and what does not on each receiver model."
+    ]
+   },
+   {
+    "titlu": "Automatic sending",
+    "paragrafe": [
+     "If you leave “Send automatically every day” ticked, the receiver sends by itself, once a day, at night, only the kinds of data you ticked, and right after an unexpected stop of the interface or after an update that failed. Nothing is sent twice. You can untick it at any time; then only what you send yourself with “Send now”, or your messages, goes out. The tick is set by default, like the kinds of data, and you change it in the tester menu, under “The data I send”.",
+     "When: once a day, between 03:00 and 06:00 by the receiver's clock, at a minute chosen at random at each start (so that not all receivers come at once), and at least 20 hours after the previous sending. If the receiver was off at night and more than 26 hours have passed, it sends at the next start, after 5-35 minutes. It also looks for new logs 5 minutes after each start of the interface. It does not send during a recording or while packages are being installed: it tries again 10 minutes later.",
+     "“Send now”, from the tester menu or from the web interface, gathers all the ticked kinds right away and sends them, with or without the automatic tick.",
+     "Without internet, the packages wait on the receiver, in a queue: at most 20 packages and 1 MB, and beyond that the oldest are lost first. The receiver tries again after an hour. What was sent and what is waiting you see in the tester menu, under “What I sent”; the time of the last sending is written at the bottom of the tester menu."
+    ]
+   },
+   {
+    "titlu": "Messages from the tester menu",
+    "paragrafe": [
+     "After you sign up, you can send us a message from the tester menu: the kind (bug, idea or question), your text and, if you want, the screen or function you are writing about.",
+     "Only if you tick it when sending, the message also gets the log of the last error, cleaned as above, and a screenshot of the menus only, without the channel picture. On the receiver, after you press Send, you have 15 seconds to close the tester menu and open the screen you are writing about; then the receiver takes the screenshot. From the web interface, the screenshot is taken right away, with what is on the screen at that moment.",
+     "The limits: the text has at most 4000 characters, the screenshot at most 400 KB, and at most 10 messages a day are sent. You find the team's replies in the tester menu, under “Replies from the team”.",
+     "Messages do not go to the forum by themselves. If a message is useful to others too, we write a forum topic ourselves, without your data, and send you the link. Do not write passwords or other data you do not want us to know in your messages."
+    ]
+   },
+   {
+    "titlu": "What the receiver does not send",
+    "lista": [
+     "the IP address: the server does not write it anywhere (see below, under anonymisation);",
+     "the MAC address and the serial number of the receiver or of USB devices (the fingerprint is calculated from the board, but does not reveal them);",
+     "passwords, keys and tokens;",
+     "the name of your Wi-Fi network;",
+     "your own channel lists: favourites, cable and terrestrial channels, internet streams;",
+     "the names of your films and recordings;",
+     "anything before you press “I agree”."
+    ]
+   },
+   {
+    "titlu": "Anonymisation",
+    "paragrafe": [
+     "The identifier: when you sign up, the receiver picks at random a number of 32 hexadecimal digits. It does not come from the MAC address, the serial number or anything else of the receiver, so it does not lead to you. You can see it in the tester menu and on the receiver's web page; write it down if you want to be able to ask us something without the receiver. When you leave the programme and delete the data, the receiver forgets it.",
+     "The fingerprint: the receiver calculates it from the MAC address of the network card and the serial number of the internal memory, with a one-way function (PBKDF2-SHA256, 100,000 rounds); only the result leaves, 32 hexadecimal digits. It is the same in every slot and after every reinstall, so the server counts your receiver only once. It does not reveal the MAC address or the serial number, and these never leave the receiver. We use it for nothing else.",
+     "The IP address: the server program does not read it or write it, and the web server's log is off for the programme's addresses. The web server uses it only in memory, to stop requests that come too often from the same address, without linking it to the data.",
+     "The time: the time the data was collected is sent rounded to the minute, in UTC, without your time zone.",
+     "The way: the data is sent only over HTTPS, with the server's certificate checked. The connection goes through Cloudflare, which protects the whole stb.hdsatelit.com site, as with any of its pages."
+    ]
+   },
+   {
+    "titlu": "Name and e-mail (optional)",
+    "paragrafe": [
+     "You can leave them empty; the programme works the same. If you fill them in, they are sent only together with the consent (when you sign up and when you change the ticks) and are kept on the server in a separate table. We use the name only to be able to ask you something about a problem found on your receiver, and the e-mail only for the team's replies.",
+     "If you gave an e-mail address, the team's replies to your messages reach you there (at most one e-mail every 10 minutes), and you can unsubscribe at any time, with one click, from the link at the end of each e-mail.",
+     "They never appear in public and we give them to no one; they are not the public name described below. If you delete them in the tester menu, under “The data I send”, they are deleted from the server too."
+    ]
+   },
+   {
+    "titlu": "Public name and linking an account (optional)",
+    "paragrafe": [
+     "If you want to appear publicly as a beta tester, in the tester menu, under “Public profile”, you choose a public name: 2-40 characters, letters, digits, space, dot or hyphen. The server gives it in the public list of testers of each model, so that it appears on the site, on the beta testers page and at your receiver model. Without a public name you do not appear anywhere.",
+     "For the public name, the receiver makes a secret key of its own, kept only on the receiver, which never appears on the screen or in the web interface; the server keeps only a fingerprint of it (SHA-256). You do not type any password on the receiver.",
+     "When the receiver shows them, there are two more ways: you link an account you already have on the image's forum (stb.hdsatelit.com/forum), with a QR code scanned with the phone on which you are signed in to the forum or with a 6-digit code from the linking page; or you type an e-mail on the receiver, and the server sends you a confirmation link for a new forum account, where you set your password, from any device. The codes can be used only once, expire in 10 minutes and have a limit of attempts. These two ways appear on the receiver only after we turn them on on the server.",
+     "When you link an account, the testers' server keeps only the name of your forum account, linked to the receiver's identifier. The forum does not see the identifier or the data sent by the receiver. We use the e-mail for the account only for the account and for the team's replies.",
+     "You remove the public name at any time, from the receiver (“Stop appearing publicly”) or from the web interface; you unlink the account the same way. Leaving the programme deletes both the public name and the link; your forum account stays yours."
+    ]
+   },
+   {
+    "titlu": "Remote assistance (optional)",
+    "paragrafe": [
+     "Separately from the data above, as a beta tester you can turn on Remote assistance, from the tester menu or from the /asistenta page of the web interface. Only you turn it on, for as long as you choose: 2 hours, 12 hours, one day, one week, one month or permanently, and you turn it off at any time, on the receiver or in the web interface; at the end of the chosen time it stops by itself.",
+     "While it is on, you see a sign on the screen, and the HD Satelit team can connect at any time and can only ask for the operations in a fixed list written into the image: reads of the receiver's status and logs, a capture of the menus and a message on the screen. It cannot run commands, cannot change settings or files and cannot reach other devices in your home. Every request appears in the log on the screen.",
+     "What reaches us: the receiver model and version, the country, the time and length of the session, what you chose under “What can we help you with?” and the line you wrote, if you gave them, and the answers to the requests in the log. We do not keep your internet address. The data stays on our server for 30 days, then it is deleted."
+    ]
+   },
+   {
+    "titlu": "Why we use the data",
+    "paragrafe": [
+     "Only to improve the HD Satelit image on your receiver model: to find and fix crashes, to see how busy the receiver is, which screens matter most and what works or not on each model, and to adapt the image to each model. The scanned channels also go into the database of all receivers and into SatBase, so that the frequencies are up to date for everyone, and the receiver details help us complete the list of receivers on the site. We do not sell the data and do not use it for advertising.",
+     "The legal basis: your consent. You give it on the receiver or in the web interface, with the tick “I have read the Privacy notice and I agree to send the data ticked above.” and the “I agree” button. The tick is the only one not ticked by default, and without it the button does not work. You can withdraw your consent at any time (see below).",
+     "The only thing done automatically with the data: the server counts the receivers signed up for each model, each one only once (by its fingerprint), and the number appears on the receiver's page on the site. When a model in alpha has a tester whose receiver has run the image for a few hours, the model can move to beta on the site. The number and that date say nothing about you."
+    ]
+   },
+   {
+    "titlu": "Where the data is kept",
+    "paragrafe": [
+     "On the server of the stb.hdsatelit.com site, rented from Hetzner, in Germany (European Union). Only we, the people who work on the image, read it."
+    ]
+   },
+   {
+    "titlu": "How long we keep it",
+    "lista": [
+     "crash and error logs and test results: 6 months;",
+     "memory, processor, temperature and start-up, and the screens and functions used: 12 months;",
+     "scanned channels and receiver details: only the receiver's latest package, as long as you are signed up;",
+     "the consent, the name and the e-mail, the public name and a linked account: until you leave the programme or until 12 months pass without any word from the receiver;",
+     "the receiver fingerprint: as long as you are signed up; after you leave the programme, the server keeps only a sum of it for 12 months, with no identifier and no other data, so that a new sign-up of the same receiver is not announced as a new receiver;",
+     "messages, replies and attached logs: also until you leave the programme or until 12 months pass without any word from the receiver; attached screenshots: 6 months;",
+     "the daily backup copies of the database keep deleted data for at most 14 days."
+    ],
+    "paragrafe_dupa": [
+     "“Without any word” means without any package, consent or message from the receiver. The server deletes by itself, every day, what is past its term. Only the number of testers of each model and the date a model was confirmed remain: they are nobody's data."
+    ]
+   },
+   {
+    "titlu": "How to stop and ask for deletion",
+    "pasi": [
+     "Untick a kind of data in the tester menu, under “The data I send”, on the receiver or in the web interface: that kind is no longer sent, and the server refuses it too.",
+     "Untick “Send automatically every day”: nothing is sent by itself any more, only what you send yourself. If you also untick all the kinds, no data is sent at all. What you sent stays anonymous until the terms above.",
+     "Choose “Leave the programme and delete the data”, on the receiver or in the web interface: the server deletes everything linked to your identifier (the fingerprint, the packages, the channels, the receiver details, the test results, the messages, the name and the e-mail, the public name and a linked account), and the receiver forgets the identifier.",
+     "Without the receiver (you gave it away, restored it or it no longer starts): write to us at contact@hdsatelit.com with the identifier, and we delete the data."
+    ],
+    "paragrafe_dupa": [
+     "Withdrawing your consent does not change what was done with the data before."
+    ]
+   },
+   {
+    "titlu": "Your rights",
+    "paragrafe": [
+     "You have the right to find out what data we hold for your identifier and to get a copy of it, to correct your name, e-mail and public name, to ask for the data to be deleted and to withdraw your consent at any time. Withdrawing it does not change what was done with the data before. Write to us at contact@hdsatelit.com, with the identifier, and we answer within one month. You can always see the last package sent on the receiver itself, under “What I am sending now”.",
+     "If you think we do not handle your data properly, you can complain to the data protection authority: in Romania, the National Supervisory Authority for Personal Data Processing (ANSPDCP, dataprotection.ro), or the authority in your country."
+    ],
+    "legaturi": [
+     [
+      "ANSPDCP: dataprotection.ro",
+      "https://www.dataprotection.ro/"
+     ]
+    ]
+   },
+   {
+    "titlu": "When the notice changes",
+    "paragrafe": [
+     "The notice has a version; this is version 2, of 29 October 2026 (compared with version 1 it adds the receiver fingerprint and, in the logs, the data of a channel that does not work). If we change what data is sent or what we do with it, we write a new version, and the receiver tells you by itself and asks for your consent again, with your ticks so far: you press “Accept” on the new notice screen, on the receiver or in the web interface. Until you give it, it sends nothing, except a deletion, if you ask for one.",
+     "At the bottom of the tester menu you can see the date of your consent and the version of the notice you accepted."
+    ]
+   }
+  ]
+ }
+}

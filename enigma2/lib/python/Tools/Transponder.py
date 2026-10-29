@@ -70,51 +70,69 @@ def ConvertToHumanReadable(tp, type = None):
 			eDVBFrontendParametersCable.FEC_7_8 : "7/8",
 			eDVBFrontendParametersCable.FEC_8_9 : "8/9"}[tp["fec_inner"]]
 	elif type == "DVB-T":
+		# valorile DVB-T2 (256QAM, 1/128, 32k...) sunt in structura dupa Auto; o valoare necunoscuta se arata ca numar,
+		# nu opreste ecranul
+		T = eDVBFrontendParametersTerrestrial
+		def text(cheie, tabel):
+			v = tp.get(cheie)
+			return tabel.get(v, str(v))
+		t2 = tp.get("system") == T.System_DVB_T2
 		ret["tuner_type"] = _("Terrestrial")
-		ret["bandwidth"] = {
-			eDVBFrontendParametersTerrestrial.Bandwidth_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.Bandwidth_8MHz : "8 MHz",
-			eDVBFrontendParametersTerrestrial.Bandwidth_7MHz : "7 MHz",
-			eDVBFrontendParametersTerrestrial.Bandwidth_6MHz : "6 MHz"}[tp["bandwidth"]]
-		ret["code_rate_lp"] = {
-			eDVBFrontendParametersTerrestrial.FEC_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.FEC_1_2 : "1/2",
-			eDVBFrontendParametersTerrestrial.FEC_2_3 : "2/3",
-			eDVBFrontendParametersTerrestrial.FEC_3_4 : "3/4",
-			eDVBFrontendParametersTerrestrial.FEC_5_6 : "5/6",
-			eDVBFrontendParametersTerrestrial.FEC_7_8 : "7/8"}[tp["code_rate_lp"]]
-		ret["code_rate_hp"] = {
-			eDVBFrontendParametersTerrestrial.FEC_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.FEC_1_2 : "1/2",
-			eDVBFrontendParametersTerrestrial.FEC_2_3 : "2/3",
-			eDVBFrontendParametersTerrestrial.FEC_3_4 : "3/4",
-			eDVBFrontendParametersTerrestrial.FEC_5_6 : "5/6",
-			eDVBFrontendParametersTerrestrial.FEC_7_8 : "7/8"}[tp["code_rate_hp"]]
-		ret["constellation"] = {
-			eDVBFrontendParametersTerrestrial.Modulation_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.Modulation_QPSK : "QPSK",
-			eDVBFrontendParametersTerrestrial.Modulation_QAM16 : "QAM16",
-			eDVBFrontendParametersTerrestrial.Modulation_QAM64 : "QAM64"}[tp["constellation"]]
-		ret["transmission_mode"] = {
-			eDVBFrontendParametersTerrestrial.TransmissionMode_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.TransmissionMode_2k : "2k",
-			eDVBFrontendParametersTerrestrial.TransmissionMode_8k : "8k"}[tp["transmission_mode"]]
-		ret["guard_interval"] = {
-			eDVBFrontendParametersTerrestrial.GuardInterval_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.GuardInterval_1_32 : "1/32",
-			eDVBFrontendParametersTerrestrial.GuardInterval_1_16 : "1/16",
-			eDVBFrontendParametersTerrestrial.GuardInterval_1_8 : "1/8",
-			eDVBFrontendParametersTerrestrial.GuardInterval_1_4 : "1/4"}[tp["guard_interval"]]
-		ret["hierarchy_information"] = {
-			eDVBFrontendParametersTerrestrial.Hierarchy_Auto : _("Auto"),
-			eDVBFrontendParametersTerrestrial.Hierarchy_None : _("None"),
-			eDVBFrontendParametersTerrestrial.Hierarchy_1 : "1",
-			eDVBFrontendParametersTerrestrial.Hierarchy_2 : "2",
-			eDVBFrontendParametersTerrestrial.Hierarchy_4 : "4"}[tp["hierarchy_information"]]
-		ret["inversion"] = {
-			eDVBFrontendParametersTerrestrial.Inversion_Unknown : _("Auto"),
-			eDVBFrontendParametersTerrestrial.Inversion_On : _("On"),
-			eDVBFrontendParametersTerrestrial.Inversion_Off : _("Off")}[tp["inversion"]]
+		ret["system"] = "DVB-T2" if t2 else "DVB-T"
+		ret["plp_id"] = (str(tp["plp_id"]) if t2 and tp.get("plp_id", -1) >= 0 else _("Auto"))
+		ret["bandwidth"] = text("bandwidth", {
+			T.Bandwidth_Auto : _("Auto"),
+			T.Bandwidth_8MHz : "8 MHz",
+			T.Bandwidth_7MHz : "7 MHz",
+			T.Bandwidth_6MHz : "6 MHz",
+			T.Bandwidth_5MHz : _("5 MHz"),
+			T.Bandwidth_10MHz : _("10 MHz"),
+			T.Bandwidth_1_712MHz : "1,712 MHz"})
+		fec = {
+			T.FEC_Auto : _("Auto"),
+			T.FEC_1_2 : "1/2",
+			T.FEC_2_3 : "2/3",
+			T.FEC_3_4 : "3/4",
+			T.FEC_5_6 : "5/6",
+			T.FEC_7_8 : "7/8",
+			T.FEC_8_9 : "8/9",
+			T.FEC_3_5 : "3/5",
+			T.FEC_4_5 : "4/5"}
+		ret["code_rate_lp"] = text("code_rate_lp", fec)
+		ret["code_rate_hp"] = text("code_rate_hp", fec)
+		ret["constellation"] = text("constellation", {
+			T.Modulation_Auto : _("Auto"),
+			T.Modulation_QPSK : "QPSK",
+			T.Modulation_QAM16 : "QAM16",
+			T.Modulation_QAM64 : "QAM64",
+			T.Modulation_QAM256 : "QAM256"})
+		ret["transmission_mode"] = text("transmission_mode", {
+			T.TransmissionMode_Auto : _("Auto"),
+			T.TransmissionMode_1k : "1k",
+			T.TransmissionMode_2k : "2k",
+			T.TransmissionMode_4k : "4k",
+			T.TransmissionMode_8k : "8k",
+			T.TransmissionMode_16k : "16k",
+			T.TransmissionMode_32k : "32k"})
+		ret["guard_interval"] = text("guard_interval", {
+			T.GuardInterval_Auto : _("Auto"),
+			T.GuardInterval_1_32 : "1/32",
+			T.GuardInterval_1_16 : "1/16",
+			T.GuardInterval_1_8 : "1/8",
+			T.GuardInterval_1_4 : "1/4",
+			T.GuardInterval_1_128 : "1/128",
+			T.GuardInterval_19_128 : "19/128",
+			T.GuardInterval_19_256 : "19/256"})
+		ret["hierarchy_information"] = text("hierarchy_information", {
+			T.Hierarchy_Auto : _("Auto"),
+			T.Hierarchy_None : _("None"),
+			T.Hierarchy_1 : "1",
+			T.Hierarchy_2 : "2",
+			T.Hierarchy_4 : "4"})
+		ret["inversion"] = text("inversion", {
+			T.Inversion_Unknown : _("Auto"),
+			T.Inversion_On : _("On"),
+			T.Inversion_Off : _("Off")})
 	else:
 		print("ConvertToHumanReadable: no or unknown type in tpdata dict!")
 	for x in list(tp.keys()):

@@ -56043,3 +56043,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (törzs: <code>parola=</code>): a 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> a <code>confirmat=1</code> értéket is kéri): „Jelszó nélkül a helyi hálózaton”. A jelszó, a nyers szöveg és minden módosítás csak a tévén látható kóddal csatlakoztatott böngészőből megy (különben 403 a <code>trebuie_cod</code> mezővel), soha nem <code>?token=</code> használatával; amíg „A vevő jelszava” képernyő nyitva van a vevőn, ugyanígy a <code>/api/remotecontrol</code> és a <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Földi antenna (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Kábel (DVB-C)"
+
+msgid "Legat la"
+msgstr "Csatlakoztatva"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Minden frekvenciát DVB-T2 és DVB-T módban is kipróbál."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "A választott moduláció nem fogadható el. Válassz másikat."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM csak DVB-T2 esetén van: válaszd a DVB-T2-t a Rendszer mezőben, vagy más modulációt."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "sávszélesség, amelyet az image nem ismer (csak 8, 7, 6, 5, 10, 1,712 MHz és Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "moduláció, amelyet az image nem ismer"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM csak DVB-T2 esetén van"
+
+msgid "Tunerul nu e dat."
+msgstr "A tuner nincs megadva."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "A tunerek beállításai nem olvashatók: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "A(z) %s tuner nem kombinált (földi és kábel)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Ismeretlen választás: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Megváltozott az adatvédelmi tájékoztató"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Megváltozott a bétatesztelők adatvédelmi tájékoztatója. Hogy a vevő továbbra is küldje a naplókat, olvasd el az újdonságokat, és fogadd el."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "A vevő egy, a lapjából számolt ujjlenyomatot is küld, hogy csak egyszer számoljuk, akkor is, ha több slotba van telepítve vagy újratelepítették. Az ujjlenyomatból nem derül ki a MAC-cím vagy a sorozatszám, és ezek nem hagyják el a vevőt."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Ha egy csatorna nem működik (nincs jel, nincs kép, dekódolási hiba), a napló megőrzi a csatorna nevét és műszaki adatait, hogy kideríthessük, miért. Hogy mit nézel, amikor minden működik, az nem megy el."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Az Elfogadom gombbal egyetértesz az új tájékoztatóval, és a vevő újra küldi az eddig bejelölt adatokat."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "A küldés szünetel, amíg el nem fogadod az új tájékoztatót."
+
+msgid "Citește nota întreagă"
+msgstr "A teljes tájékoztató elolvasása"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "A képernyőn, a nyilakkal. Az EXIT ide hoz vissza."
+
+msgid "Accept"
+msgstr "Elfogadom"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Az általad bejelölt adatok újra elmennek, mint eddig."
+
+msgid "Îți amintim mâine."
+msgstr "Holnap emlékeztetünk."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Köszönjük. A vevő újra küldi a bejelölt adatokat."
+
+msgid "Acceptă nota nouă"
+msgstr "Az új tájékoztató elfogadása"
+
+msgid "Trimiterea e oprită"
+msgstr "Küldés szünetel"
+
+msgid "Sau citește pe telefon:"
+msgstr "Vagy olvasd el a telefonodon:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "A teljes tájékoztató itt van:"
+
+msgid "Nimic anume"
+msgstr "Semmi különös"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi és hálózat"
+
+msgid "Imaginea sau sunetul"
+msgstr "Kép vagy hang"
+
+msgid "Canale și scanare"
+msgstr "Csatornák és keresés"
+
+msgid "Pornirea receptorului"
+msgstr "A vevő indulása"
+
+msgid "Altceva"
+msgstr "Valami más"
+
+msgid "Cu ce te ajutăm?"
+msgstr "Miben segítsünk?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Írd le röviden (nem kötelező)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Ha szeretnéd, válaszd ki, miben segítsünk, és írd le röviden, mi történik (az OK megnyitja a listát vagy a billentyűzetet). Nem kötelező: a Zöld így is elindítja."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Megkaptuk a kérésedet az alábbi kóddal. Nem kell semmit tenned."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Megkaptuk a kérésedet az alábbi kóddal. Nem kell semmit tenned. Még %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Szólunk, amikor csatlakozunk. Addig is használhatod a vevőt."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "A HD Satelit csapata csatlakozott. A vevőt a szokásos módon használhatod."
+
+msgid "permanent"
+msgstr "állandó"
+
+msgid "o zi"
+msgstr "egy nap"
+
+msgid "o săptămână"
+msgstr "egy hét"
+
+msgid "o lună"
+msgstr "egy hónap"
+
+msgid "Pornită până la %s."
+msgstr "Bekapcsolva eddig: %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Bekapcsolva, vég nélkül; bármikor leállíthatod."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Távsegítség bekapcsolva eddig: %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Távsegítség bekapcsolva, vég nélkül"
+
+msgid "Oprești oricând din %s"
+msgstr "Bármikor leállíthatod: %s"
+
+msgid "reluată după repornire"
+msgstr "folytatva az újraindítás után"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Állandó távoli hozzáférést adsz, amíg le nem állítod, „Olvasás és tesztek” szinten. Az indítással megerősíted, hogy legalább 16 éves vagy, vagy van szülői hozzájárulásod. Bármikor leállíthatod. Indítod?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Annyi ideig maradhat bekapcsolva, amennyit választasz: 2 óra, 12 óra, egy nap, egy hét, egy hónap vagy állandóan. Bármikor leállíthatod, a vevőn vagy a weboldalon. Amíg be van kapcsolva, a csapat bármikor csatlakozhat, de csak a rögzített lista olvasásait és tesztjeit végzi, semmit sem változtat."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Adj hozzá, törölj vágási jelölőket, és ugorj köztük a lejátszott felvételen"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Válassz egy képet a kulcson. A kép torzítás nélkül 1920x1080-ra kerül, és megkapja az alsó sort."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Egyelőre nem megy: a vevőről hiányzik ez: %s. Az összes kész képernyő működik."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Saját képeket egyelőre nem lehet használni: a vevőről hiányzik ez: %s. Az összes kész képernyő működik, innen bármikor cserélheted őket."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "A képernyőgaléria nincs telepítve ezen a vevőn. Saját képet azért használhatsz, ha a vevőn megvannak a szükséges eszközök."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Képélesség (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Jelenlegi pozíció: %s. A Zöld egyszerű jelölőt ad hozzá, a Sárga vágási START/STOP jelölőt."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "Az előnézet akkor látszik, amikor a vevő a képernyők kis képeit is megkapja."
+
+msgid "START tăiere"
+msgstr "START (vágás)"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "START (vágás, itt kezdődik az átugrott rész)"
+
+msgid "START/STOP tăiere aici"
+msgstr "START/STOP (vágás) ide"
+
+msgid "STOP tăiere"
+msgstr "STOP (vágás)"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "STOP (vágás, itt ér véget az átugrott rész)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "UTOLSÓ MEGERŐSÍTÉS: az új szoftver VALÓBAN a vevőre íródik.\nNE húzd ki a vevőt a konnektorból, és NE vedd ki az adathordozót, amíg az írás tart.\nAz interfész leáll, és a vevő a végén magától újraindul.\n\nCsomag: %s\n\nBiztosan folytatod?"

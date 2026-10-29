@@ -53737,3 +53737,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (tělo: <code>parola=</code>): zvo
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> vyžaduje i <code>confirmat=1</code>): „Bez hesla v místní síti“. Heslo, surový text a všechny změny fungují jen z prohlížeče připojeného kódem z televizoru (jinak 403 s <code>trebuie_cod</code>), nikdy s <code>?token=</code>; dokud je v přijímači otevřená obrazovka „Heslo přijímače“, platí totéž pro <code>/api/remotecontrol</code> a <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Pozemní anténa (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Kabel (DVB-C)"
+
+msgid "Legat la"
+msgstr "Připojeno k"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Každá frekvence se zkouší jako DVB-T2 i DVB-T."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "Zvolená modulace není podporována. Vyber jinou."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM je jen u DVB-T2: zvol DVB-T2 v poli Systém nebo jinou modulaci."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "šířka pásma, kterou image nezná (jen 8, 7, 6, 5, 10, 1,712 MHz a Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "modulace, kterou image nezná"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM je jen u DVB-T2"
+
+msgid "Tunerul nu e dat."
+msgstr "Tuner není zadán."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "Nastavení tunerů nelze přečíst: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "Tuner %s není kombinovaný (pozemní a kabel)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Neznámá volba: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Prohlášení o ochraně soukromí se změnilo"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Prohlášení o ochraně soukromí pro betatestery se změnilo. Aby přijímač dál posílal záznamy, přečti si, co je nového, a přijmi ho."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "Přijímač posílá také otisk vypočtený z jeho desky, aby byl započítán jen jednou, i když je nainstalován ve více slotech nebo přeinstalován. Z otisku nelze zjistit adresu MAC ani sériové číslo a ty z přijímače neodcházejí."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Když kanál nefunguje (bez signálu, bez obrazu, chyba dekódování), záznam si ponechá název a technické údaje toho kanálu, abychom mohli zjistit proč. Které kanály sleduješ, když vše funguje, se neposílá."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Tlačítkem Přijmout souhlasíš s novým prohlášením a přijímač znovu posílá data, která máš dosud zaškrtnutá."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Odesílání je zastaveno, dokud nepřijmeš nové prohlášení."
+
+msgid "Citește nota întreagă"
+msgstr "Přečíst celé prohlášení"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "Na obrazovce, šipkami. EXIT tě vrátí sem."
+
+msgid "Accept"
+msgstr "Přijmout"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Data, která máš zaškrtnutá, se znovu posílají, jako dosud."
+
+msgid "Îți amintim mâine."
+msgstr "Připomeneme ti to zítra."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Děkujeme. Přijímač znovu posílá zaškrtnutá data."
+
+msgid "Acceptă nota nouă"
+msgstr "Přijmout nové prohlášení"
+
+msgid "Trimiterea e oprită"
+msgstr "Odesílání zastaveno"
+
+msgid "Sau citește pe telefon:"
+msgstr "Nebo si přečti v telefonu:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "Celé prohlášení je na adrese:"
+
+msgid "Nimic anume"
+msgstr "Nic konkrétního"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi a síť"
+
+msgid "Imaginea sau sunetul"
+msgstr "Obraz nebo zvuk"
+
+msgid "Canale și scanare"
+msgstr "Kanály a vyhledávání"
+
+msgid "Pornirea receptorului"
+msgstr "Spouštění přijímače"
+
+msgid "Altceva"
+msgstr "Něco jiného"
+
+msgid "Cu ce te ajutăm?"
+msgstr "S čím ti pomůžeme?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Napiš krátce (nepovinné)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Jestli chceš, vyber, s čím ti pomůžeme, a krátce napiš, co se děje (OK otevře seznam nebo klávesnici). Není to povinné: Zelené spustí asistenci i tak."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Tvou žádost s kódem níže máme. Nemusíš nic dělat."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Tvou žádost s kódem níže máme. Nemusíš nic dělat. Zbývá %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Dáme ti vědět, až se připojíme. Mezitím můžeš přijímač používat."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "Tým HD Satelit se připojil. Přijímač můžeš používat jako obvykle."
+
+msgid "permanent"
+msgstr "trvale"
+
+msgid "o zi"
+msgstr "jeden den"
+
+msgid "o săptămână"
+msgstr "jeden týden"
+
+msgid "o lună"
+msgstr "jeden měsíc"
+
+msgid "Pornită până la %s."
+msgstr "Zapnuto do %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Zapnuto bez konce; můžeš ji kdykoli vypnout."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Vzdálená pomoc zapnutá do %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Vzdálená pomoc zapnutá, bez konce"
+
+msgid "Oprești oricând din %s"
+msgstr "Kdykoli ji zastavíš v %s"
+
+msgid "reluată după repornire"
+msgstr "obnovena po restartu"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Dáváš vzdálený přístup natrvalo, dokud ho sám nezastavíš, úroveň „Čtení a testy“. Spuštěním potvrzuješ, že ti je aspoň 16 let nebo máš souhlas rodiče. Můžeš ho kdykoli zastavit. Spustit?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Může zůstat zapnutá, jak dlouho si vybereš: 2 hodiny, 12 hodin, den, týden, měsíc nebo natrvalo. Kdykoli ji vypneš, na přijímači nebo na webové stránce. Dokud je zapnutá, tým se může kdykoli připojit, ale dělá jen čtení a testy z pevného seznamu a nic nemění."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Přidávej, mazej a přeskakuj mezi značkami střihu v přehrávaném záznamu"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Vyber obrázek na USB disku. Upraví se na 1920x1080 bez deformace a dostane spodní řádek."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Zatím to nejde: přijímači chybí %s. Všechny hotové obrazovky fungují."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Vlastní obrázky zatím nelze použít: přijímači chybí %s. Všechny hotové obrazovky fungují a můžeš je odsud kdykoli změnit."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "Galerie obrazovek není na tomto přijímači nainstalována. Přesto můžeš použít vlastní obrázek, pokud má přijímač potřebné nástroje."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Ostrost obrazu (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Aktuální pozice: %s. Zelená přidá prostou značku, Žlutá přidá START/STOP střihu."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "Náhled se zobrazí, až přijímač dostane i malé obrázky obrazovek."
+
+msgid "START tăiere"
+msgstr "START střihu"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "START střihu (zde začíná přeskakovaná část)"
+
+msgid "START/STOP tăiere aici"
+msgstr "START/STOP střihu zde"
+
+msgid "STOP tăiere"
+msgstr "STOP střihu"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "STOP střihu (zde končí přeskakovaná část)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "POSLEDNÍ POTVRZENÍ: nový software se SKUTEČNĚ zapíše do přijímače.\nNEODPOJUJ přijímač od proudu a NEVYJÍMEJ médium, dokud se zapisuje.\nRozhraní se zastaví a přijímač se na konci sám restartuje.\n\nBalíček: %s\n\nOpravdu pokračovat?"

@@ -83,6 +83,7 @@ private:
 	bool m_can_handle_dvbs2;
 	int m_delsys_types; // one bit per iDVBFrontend type this tuner can switch to (DTV_ENUM_DELSYS)
 	bool m_multistream; // FE_CAN_MULTISTREAM: filtrul de flux (ISI) si PLS-ul se pot cere
+	bool m_dvbt2;       // DTV_ENUM_DELSYS are SYS_DVBT2 (numai pentru jurnal: acordarea DVB-T2 se incearca oricum)
 	int m_dvb_api;      // DTV_API_VERSION citit din frontend (major << 8 | minor), 0 = necitit
 	char m_filename[128];
 	char m_description[128];
@@ -123,7 +124,7 @@ private:
 	int tuneLoopInt();
 	void setFrontend(bool recvEvents=true);
 	bool setSecSequencePos(int steps);
-	RESULT switchDeliverySystem(int type);
+	RESULT switchDeliverySystem(int type, bool t2 = false);
 	static int PriorityOrder;
 public:
 	eDVBFrontend(int adap, int fe, int &ok, bool simulate=false, eDVBFrontend *simulate_fe=NULL);

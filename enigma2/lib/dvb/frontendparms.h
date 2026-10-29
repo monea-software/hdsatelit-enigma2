@@ -119,20 +119,25 @@ struct eDVBFrontendParametersTerrestrial
 #ifndef SWIG
 	void set(const TerrestrialDeliverySystemDescriptor  &);
 #endif
+	// valorile noi (DVB-T2) sunt adaugate dupa Auto: numerele vechi din lamedb si din terrestrial.xml raman la fel
+	// (lib/dvb/hdsterestru.h)
 	enum {
-		Bandwidth_8MHz, Bandwidth_7MHz, Bandwidth_6MHz, /*Bandwidth_5MHz,*/ Bandwidth_Auto
-	}; // Bw5Mhz nyi (compatibilty with enigma1)
-
-	enum {
-		FEC_1_2, FEC_2_3, FEC_3_4, FEC_5_6, FEC_7_8, FEC_Auto
+		Bandwidth_8MHz, Bandwidth_7MHz, Bandwidth_6MHz, Bandwidth_Auto, Bandwidth_5MHz, Bandwidth_1_712MHz,
+		Bandwidth_10MHz
 	};
 
 	enum {
-		TransmissionMode_2k, TransmissionMode_8k, /*TransmissionMode_4k,*/ TransmissionMode_Auto
-	}; // TM4k nyi (compatibility with enigma1)
+		FEC_1_2, FEC_2_3, FEC_3_4, FEC_5_6, FEC_7_8, FEC_Auto, FEC_8_9 = 7, FEC_3_5, FEC_4_5
+	};
 
 	enum {
-		GuardInterval_1_32, GuardInterval_1_16, GuardInterval_1_8, GuardInterval_1_4, GuardInterval_Auto
+		TransmissionMode_2k, TransmissionMode_8k, TransmissionMode_Auto, TransmissionMode_4k, TransmissionMode_1k,
+		TransmissionMode_16k, TransmissionMode_32k
+	};
+
+	enum {
+		GuardInterval_1_32, GuardInterval_1_16, GuardInterval_1_8, GuardInterval_1_4, GuardInterval_Auto,
+		GuardInterval_1_128, GuardInterval_19_128, GuardInterval_19_256
 	};
 
 	enum {
@@ -140,11 +145,20 @@ struct eDVBFrontendParametersTerrestrial
 	};
 
 	enum {
-		Modulation_QPSK, Modulation_QAM16, Modulation_QAM64, Modulation_Auto
+		Modulation_QPSK, Modulation_QAM16, Modulation_QAM64, Modulation_Auto, Modulation_QAM256
 	};
 
 	enum {
 		Inversion_Off, Inversion_On, Inversion_Unknown
+	};
+
+	// system: DVB-T sau DVB-T2; plp_id: PLP-ul ales (0..255, numai DVB-T2) sau No_PLP_Id = PLP-ul implicit
+	enum {
+		System_DVB_T, System_DVB_T2
+	};
+
+	enum {
+		No_PLP_Id = -1
 	};
 
 	unsigned int frequency;
@@ -155,7 +169,30 @@ struct eDVBFrontendParametersTerrestrial
 	int guard_interval;
 	int hierarchy;
 	int inversion;
+	int system;
+	int plp_id;
+
+#ifndef SWIG
+	// structura ramane fara constructor (sta in uniuni, ca cea de satelit): orice loc care o face din nou cheama aceasta
+	// functie; obiectele facute din Python primesc aceleasi valori din %extend
+	void setDVBT2Defaults()
+	{
+		system = System_DVB_T;
+		plp_id = No_PLP_Id;
+	}
+#endif
 };
+#ifdef SWIG
+%extend eDVBFrontendParametersTerrestrial {
+	eDVBFrontendParametersTerrestrial()
+	{
+		eDVBFrontendParametersTerrestrial *p = new eDVBFrontendParametersTerrestrial();
+		p->system = eDVBFrontendParametersTerrestrial::System_DVB_T;
+		p->plp_id = eDVBFrontendParametersTerrestrial::No_PLP_Id;
+		return p;
+	}
+}
+#endif
 SWIG_ALLOW_OUTPUT_SIMPLE(eDVBFrontendParametersTerrestrial);
 
 #endif

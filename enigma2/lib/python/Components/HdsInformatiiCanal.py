@@ -262,9 +262,13 @@ def randuriTransponder(frontendDataOrg, refstr, rec_info, ConvertToHumanReadable
 		Labels.append((_("FEC"), tp.get("fec_inner", _("N/A")), TYPE_TEXT))
 		Labels.append((_("Inversiune"), tp.get("inversion", _("Auto")), TYPE_TEXT))
 	elif ttype == "DVB-T":
-		Labels.append((_("Tip transmisie"), "Terestru digital (DVB-T/T2)", TYPE_TEXT))
+		# sistemul si PLP-ul spuse de tuner (Tools/Transponder.py: "DVB-T" sau "DVB-T2")
+		sistem = tp.get("system", "DVB-T")
+		Labels.append((_("Tip transmisie"), "Terestru digital (%s)" % sistem, TYPE_TEXT))
 		Labels.extend(randuriRetea(refstr, cuNumar=False))
 		Labels.append((_("Frecvență"), _mhz(tp.get("frequency", 0), False), TYPE_TEXT))
+		if sistem == "DVB-T2":
+			Labels.append(("PLP", tp.get("plp_id", _("Auto")), TYPE_TEXT))
 		Labels.append((_("Lățime bandă"), tp.get("bandwidth", _("N/A")), TYPE_TEXT))
 		Labels.append((_("Constelație"), tp.get("constellation", _("N/A")), TYPE_TEXT))
 		Labels.append((_("Mod transmisie"), tp.get("transmission_mode", _("N/A")), TYPE_TEXT))

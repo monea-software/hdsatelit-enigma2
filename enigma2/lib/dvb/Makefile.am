@@ -66,6 +66,7 @@ dvbinclude_HEADERS = \
 	hdsspectru.h \
 	hdsspectru_tabele.h \
 	hdsteletext.h \
+	hdsterestru.h \
 	hdsurmamotor.h \
 	idemux.h \
 	idvb.h \

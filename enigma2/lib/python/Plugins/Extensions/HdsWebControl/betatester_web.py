@@ -14,7 +14,11 @@
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/beta-tester                   starea, textele, bifele, „Ce am trimis”, „Ce trimit acum”, raspunsurile
 #   POST /api/beta-tester-fa?fa=<ce>        acord, bife, mesaj, profil, leaga, cod-legare, profil-stare, dezleaga,
-#                                           raspunsuri, iesire (iesirea in doi pasi: pas=intreaba, apoi cod=)
+#                                           raspunsuri, iesire (iesirea in doi pasi: pas=intreaba, apoi cod=),
+#                                           accepta-nota (acordul pe nota noua cu alegerile de dinainte),
+#                                           nota-mai-tarziu (banda notei noi revine maine)
+# Cat nota acceptata e mai veche, cadru_web.py pune sus pe orice pagina banda anuntului (bandaNota); pe /beta-tester,
+# in locul ei, caseta notei noi cu starea „Trimiterea e oprita pana accepti nota noua”.
 #   GET  /api/beta-tester-lucrare?n=<nr>    rezultatul unei cereri spre server pornite de fa (profil, raspunsuri)
 #   GET  /beta-tester                       pagina
 #
@@ -85,6 +89,8 @@ def stare(B=None, b=None):
 		"randuri": dict((k, _t(v)) for k, v in (B.RANDURI_MENIU if inscris else B.RANDURI_VIZITATOR).items()),
 	}
 	B.ceNumar()
+	if B.notaVeche(b):
+		rez["nota_noua"] = textNotaNoua(B)
 	if not inscris:
 		rez.update({
 			"intrebare": _t(B.INTREBARE),
@@ -201,6 +207,79 @@ def canalTesteri(B):
 		"TEXT_NOTA_TESTERI", "") else "", "pornit": B.canalTesteriPornit(A)}
 
 
+def textNotaNoua(B):
+	"""Textele anuntului notei noi (aceleasi ca pe receptor), pentru pagina /beta-tester si banda de pe orice pagina."""
+	return {
+		"titlu": _t(B.NOTA_ANUNT_TITLU),
+		"anunt": _t(B.NOTA_ANUNT),
+		"oprita": _t(B.NOTA_OPRITA),
+		"ce_e_nou": _t("Ce e nou"),
+		"noutati": B.noutatiNota(),
+		"accept_rand": _t(B.NOTA_ACCEPT_RAND),
+		"citeste": _t(B.NOTA_BUTOANE["citeste"][0]),
+		"accept": _t(B.NOTA_BUTOANE["accept"][0]),
+		"mai_tarziu": _t(B.NOTA_BUTOANE["mai_tarziu"][0]),
+		"adresa": B.adresaNotei(),
+	}
+
+
+def bandaNota(B=None):
+	"""Banda anuntului notei noi, pusa de cadru_web sus pe orice pagina (HTML gata, tradus), cat nota acceptata e mai
+	veche si „Mai tarziu” din web nu s-a apasat azi; "" altfel. Accept si Mai tarziu merg prin /api/beta-tester-fa, cu
+	jetonul sau antetul CSRF din antetul cadrului (#hdsAntet)."""
+	import html as _html
+	try:
+		B = _b(B)
+		if not B.anuntNotaDatorat(cheie="nota_web_zi"):
+			return ""
+		t = textNotaNoua(B)
+	except Exception:
+		return ""
+	e = _html.escape
+	noutati = "".join("<li>%s</li>" % e(x) for x in t["noutati"])
+	# sablonul nu are text de tradus (locurile __NUME__ primesc textele deja traduse); trece totusi prin traducere,
+	# ca orice sablon de pagina
+	banda = _traducePagina(BANDA_NOTA)
+	for loc, text in (("__TITLU__", e(t["titlu"])), ("__ANUNT__", e(t["anunt"])), ("__CE_E_NOU__", e(t["ce_e_nou"])),
+			("__NOUTATI__", noutati), ("__ACCEPT_RAND__", e(t["accept_rand"])), ("__ADRESA__", e(t["adresa"])),
+			("__CITESTE__", e(t["citeste"])), ("__ACCEPT__", e(t["accept"])), ("__MAI_TARZIU__", e(t["mai_tarziu"]))):
+		banda = banda.replace(loc, text)
+	return banda
+
+
+BANDA_NOTA = """<section id="hdsNotaNoua" role="alert" style="margin:0 0 16px;padding:14px 18px;border-left:6px solid var(--atentie,#E8B93A);background:var(--panou,#1b2130);border-radius:8px;line-height:1.45;">
+<b style="display:block;font-size:1.05rem;margin:0 0 4px;">__TITLU__</b>
+<p style="margin:0 0 8px;">__ANUNT__</p>
+<b style="display:block;color:var(--atentie,#E8B93A);margin:0 0 2px;">__CE_E_NOU__</b>
+<ul style="margin:0 0 8px;padding-left:20px;">__NOUTATI__</ul>
+<p style="margin:0 0 10px;font-size:.88rem;opacity:.85;">__ACCEPT_RAND__</p>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+<a href="__ADRESA__" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura,#3a4255);color:inherit;text-decoration:none;">__CITESTE__</a>
+<button type="button" data-fa="accepta-nota" style="min-height:44px;padding:8px 18px;border-radius:8px;border:1px solid var(--accent,#3D7BE0);background:var(--accent,#3D7BE0);color:#fff;font:inherit;cursor:pointer;">__ACCEPT__</button>
+<button type="button" data-fa="nota-mai-tarziu" style="min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura,#3a4255);background:transparent;color:inherit;font:inherit;cursor:pointer;">__MAI_TARZIU__</button>
+<span id="hdsNotaMesaj" role="status"></span>
+</div>
+<script>
+(function(){
+  var S = document.getElementById("hdsNotaNoua"), A = document.getElementById("hdsAntet"), M = document.getElementById("hdsNotaMesaj");
+  if(!S){ return; }
+  var J = A ? (A.getAttribute("data-jeton") || "") : "", K = A ? (A.getAttribute("data-csrf") || "") : "";
+  S.querySelectorAll("button[data-fa]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var q = new URLSearchParams(); q.set("fa", b.getAttribute("data-fa"));
+      var h = {"Content-Type": "application/x-www-form-urlencoded"}; if(!J){ h["X-HDS-CSRF"] = K; }
+      fetch("/api/beta-tester-fa" + (J ? "?token=" + encodeURIComponent(J) : ""), {method: "POST", cache: "no-store",
+        credentials: "same-origin", headers: h, body: q.toString()}).then(function(r){ return r.json(); }).then(function(d){
+        M.textContent = d.message || "";
+        if(d.result){ setTimeout(function(){ S.remove(); if(window.HDS_NOTA_GATA){ window.HDS_NOTA_GATA(); } }, 2500); }
+      }).catch(function(){});
+    });
+  });
+})();
+</script>
+</section>"""
+
+
 def textIdentificator(B, b):
 	"""Acelasi text ca jos in meniul testerului de pe televizor."""
 	return _t("Identificatorul tău: %s\nAcordul din %s, nota de confidențialitate versiunea %d.\n"
@@ -235,6 +314,15 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 			return {"result": False, "message": _t("Bifează cel puțin un fel de date sau alege Renunț.")}
 		ok, mesaj = B.acceptaAcord(bife, arg.get("nume", ""), arg.get("email", ""), b, de_unde="setari",
 			automat=arg.get("automat", "1") == "1")
+		return {"result": ok, "message": mesaj}
+	if ce == "accepta-nota":
+		# acordul pe nota noua cu alegerile de dinainte (le are receptorul; pagina nu trimite nimic personal)
+		ok, mesaj = B.acceptaNotaNoua(b)
+		return {"result": ok, "message": mesaj}
+	if ce == "nota-mai-tarziu":
+		if not B.notaVeche(b):
+			return {"result": False, "message": _t("Nu ești înscris în programul de beta testeri.")}
+		ok, mesaj = B.amanaAnuntNota(cheie="nota_web_zi")
 		return {"result": ok, "message": mesaj}
 	if not B.inscris(b) and ce != "iesire":
 		return {"result": False, "message": _t("Nu ești înscris în programul de beta testeri.")}
@@ -459,6 +547,18 @@ __STIL_PAGINI__
 <main class="beta">
 <header class="cap"><h1>Beta tester</h1></header>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
+<div id="notaNoua" class="ascuns">
+  <section class="card">
+    <p class="banda" id="notaOprita"></p>
+    <h2 id="notaTitlu" style="margin-top:14px"></h2>
+    <p class="intrebare" id="notaAnunt"></p>
+    <b id="notaCeNou"></b>
+    <ul id="notaNoutati"></ul>
+    <p class="nota" id="notaAcceptRand"></p>
+    <div class="butoane"><a class="buton" id="notaCiteste" href="#" target="_blank" rel="noopener"></a><button type="button" class="principal" id="notaAccept"></button></div>
+  </section>
+  <section class="card"><div class="butoane"><button type="button" class="rosu" id="iesireVeche">Ieși din program și șterge datele</button></div></section>
+</div>
 <div id="acord" class="ascuns">
   <div class="grila">
     <div>
@@ -573,6 +673,7 @@ __STIL_PAGINI__
 <script>
 __SCRIPT_COMUN__
 var STARE = null;
+var LOC_CONFIRMARE = $("confirmare").parentNode;
 function feluri(cutie, lista){
   cutie.textContent = "";
   lista.forEach(function(f){
@@ -603,6 +704,20 @@ function arata(d){
   $("incarcare").classList.add("ascuns");
   $("acord").classList.toggle("ascuns", d.inscris);
   $("meniu").classList.toggle("ascuns", !d.inscris);
+  var nv = d.nota_noua;
+  $("notaNoua").classList.toggle("ascuns", !nv);
+  if(nv){
+    // nota acceptata e mai veche: nimic nu pleaca pana la Accept (acordul nou cu alegerile de dinainte)
+    $("acord").classList.add("ascuns"); $("meniu").classList.add("ascuns");
+    $("notaOprita").textContent = nv.oprita; $("notaTitlu").textContent = nv.titlu; $("notaAnunt").textContent = nv.anunt;
+    $("notaCeNou").textContent = nv.ce_e_nou; $("notaAcceptRand").textContent = nv.accept_rand;
+    var u = $("notaNoutati"); u.textContent = "";
+    (nv.noutati || []).forEach(function(x){ var li = document.createElement("li"); li.textContent = x; u.appendChild(li); });
+    $("notaCiteste").textContent = nv.citeste; $("notaCiteste").href = nv.adresa; $("notaAccept").textContent = nv.accept;
+    $("notaNoua").appendChild($("confirmare"));
+    return;
+  }
+  LOC_CONFIRMARE.appendChild($("confirmare"));
   $("legaturaNota").href = d.adresa_nota; $("legaturaNota2").href = d.adresa_nota;
   ["numarAcord", "numarMeniu"].forEach(function(id){ $(id).textContent = d.numar || ""; $(id).classList.toggle("ascuns", !d.numar); });
   $("automatEticheta").textContent = d.automat_eticheta; $("automatRand").textContent = d.automat_rand;
@@ -719,6 +834,8 @@ $("codLegare").addEventListener("click", function(){
   });
 });
 $("iesire").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
+$("iesireVeche").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
+$("notaAccept").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "accepta-nota"); fa(q); });
 citeste();
 setInterval(function(){ if(STARE && STARE.inscris){ citeste(); } }, 30000);
 </script>

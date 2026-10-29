@@ -5,6 +5,8 @@
 #include <dvbsi++/satellite_delivery_system_descriptor.h>
 #include <dvbsi++/s2_satellite_delivery_system_descriptor.h>
 #include <dvbsi++/terrestrial_delivery_system_descriptor.h>
+#include <dvbsi++/extension_descriptor.h>
+#include <dvbsi++/t2_delivery_system_descriptor.h>
 #include <dvbsi++/cable_delivery_system_descriptor.h>
 #include <dvbsi++/ca_identifier_descriptor.h>
 #include <dvbsi++/registration_descriptor.h>
@@ -14,6 +16,7 @@
 #include <lib/dvb/frontend.h>
 #include <lib/dvb/hdsgrad.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/hdsurmamotor.h>
 #include <lib/base/eenv.h>
 #include <lib/base/eerror.h>
@@ -552,9 +555,10 @@ void eDVBScan::addChannelToScan(const eDVBChannelID &chid, iDVBFrontendParameter
 	{
 		eDVBFrontendParametersTerrestrial parm;
 		feparm->getDVBT(parm);
-		SCAN_eDebug("try to add %d %d %d %d %d %d %d %d",
+		SCAN_eDebug("try to add %d %d %d %d %d %d %d %d, %s, PLP %d",
 			parm.frequency, parm.modulation, parm.transmission_mode, parm.hierarchy,
-			parm.guard_interval, parm.code_rate_LP, parm.code_rate_HP, parm.bandwidth);
+			parm.guard_interval, parm.code_rate_LP, parm.code_rate_HP, parm.bandwidth,
+			hdster::sistemNormalizat(parm.system) == hdster::SISTEM_T2 ? "DVB-T2" : "DVB-T", parm.plp_id);
 		break;
 	}
 	}
@@ -647,6 +651,22 @@ int eDVBScan::sameChannel(iDVBFrontendParameters *ch1, iDVBFrontendParameters *c
 	if (diff < 4000) // more than 4mhz difference?
 		return 1;
 	return 0;
+}
+
+/* Un multiplex terestru prins pe o frecventa: aceeasi frecventa cu celalalt sistem nu se mai incearca (cautarea fara
+   sistem stiut le pune pe amandoua, DVB-T2 si DVB-T), afara de un PLP ales diferit, care e alt multiplex. */
+static bool hdsCelalaltSistem(iDVBFrontendParameters *prins, iDVBFrontendParameters *alt)
+{
+	int a, b;
+	if (!prins || !alt || prins->getSystem(a) || alt->getSystem(b))
+		return false;
+	if (a != iDVBFrontend::feTerrestrial || b != iDVBFrontend::feTerrestrial)
+		return false;
+	eDVBFrontendParametersTerrestrial p, q;
+	if (prins->getDVBT(p) || alt->getDVBT(q))
+		return false;
+	return hdster::sistemNormalizat(p.system) != hdster::sistemNormalizat(q.system)
+		&& hdster::aceeasiFrecventa(p.frequency, q.frequency) && hdster::acelasiPlp(p.plp_id, q.plp_id);
 }
 
 void eDVBScan::channelDone()
@@ -755,6 +775,46 @@ void eDVBScan::channelDone()
 						addChannelToScan(
 							eDVBChannelID(ns, tsid, onid),
 							feparm);
+						break;
+					}
+					case EXTENSION_DESCRIPTOR:
+					{
+						// retelele DVB-T2 isi anunta multiplexurile in descriptorul T2 (extensia 0x04): PLP-ul si, in
+						// forma lunga, frecventele fiecarei celule (in unitati de 10 Hz); forma scurta n-are frecvente
+						if (system != iDVBFrontend::feTerrestrial)
+							break;
+						if (((ExtensionDescriptor&)**desc).getExtensionTag() != hdster::T2_DESCRIPTOR)
+							break;
+						T2DeliverySystemDescriptor &d = (T2DeliverySystemDescriptor&)**desc;
+						const T2CellList *celule = d.getCells();
+						for (T2CellConstIterator c = celule->begin(); c != celule->end(); ++c)
+						{
+							const T2FrequencyList *frecvente = (*c)->getCentreFrequencies();
+							for (T2FrequencyConstIterator f = frecvente->begin(); f != frecvente->end(); ++f)
+							{
+								ePtr<eDVBFrontendParameters> feparm = new eDVBFrontendParameters;
+								eDVBFrontendParametersTerrestrial terr;
+								terr.frequency = (*f) * 10;
+								terr.bandwidth = hdster::latimeDinDescriptorT2(d.getBandwidth());
+								terr.code_rate_HP = terr.code_rate_LP = eDVBFrontendParametersTerrestrial::FEC_Auto;
+								terr.modulation = eDVBFrontendParametersTerrestrial::Modulation_Auto;
+								terr.transmission_mode = hdster::modDinDescriptorT2(d.getTransmissionMode());
+								terr.guard_interval = hdster::gardaDinDescriptorT2(d.getGuardInterval());
+								terr.hierarchy = eDVBFrontendParametersTerrestrial::Hierarchy_Auto;
+								terr.inversion = eDVBFrontendParametersTerrestrial::Inversion_Unknown;
+								terr.system = eDVBFrontendParametersTerrestrial::System_DVB_T2;
+								terr.plp_id = d.getPlpId();
+								feparm->setDVBT(terr);
+
+								unsigned long hash=0;
+								feparm->getHash(hash);
+								eDVBNamespace ns = buildNamespace(onid, tsid, hash);
+
+								addChannelToScan(
+									eDVBChannelID(ns, tsid, onid),
+									feparm);
+							}
+						}
 						break;
 					}
 					case SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR:
@@ -1002,7 +1062,7 @@ void eDVBScan::channelDone()
 
 	for (std::list<ePtr<iDVBFrontendParameters> >::iterator i(m_ch_toScan.begin()); i != m_ch_toScan.end();)
 	{
-		if (sameChannel(*i, m_ch_current))
+		if (sameChannel(*i, m_ch_current) || hdsCelalaltSistem(m_ch_current, *i))
 		{
 			SCAN_eDebug("remove dupe 2");
 			m_ch_toScan.erase(i++);
@@ -1165,14 +1225,27 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 		{
 			case iDVBFrontend::feTerrestrial:
 			{
+				// frecventa, sistemul (DVB-T / DVB-T2) si PLP-ul spuse de tuner dupa prindere (getTransponderData)
+				if (it == m_tuner_data.end())
+					break;
 				eDVBFrontendParameters *p = (eDVBFrontendParameters*)&(*ch->second);
 				eDVBFrontendParametersTerrestrial parm;
-				int freq = PyLong_AsLong(PyDict_GetItemString(it->second, "frequency"));
 				p->getDVBT(parm);
-//				eDebug("corrected freq for tsid %04x, onid %04x, ns %08x is %d, old was %d",
-//					ch->first.transport_stream_id.get(), ch->first.original_network_id.get(),
-//					ch->first.dvbnamespace.get(), freq, parm.frequency);
-				parm.frequency = freq;
+				PyObject *val = PyDict_GetItemString(it->second, "frequency");
+				if (val && PyLong_Check(val))
+					parm.frequency = PyLong_AsLong(val);
+				val = PyDict_GetItemString(it->second, "system");
+				if (val && PyLong_Check(val))
+					parm.system = hdster::sistemNormalizat(PyLong_AsLong(val));
+				val = PyDict_GetItemString(it->second, "plp_id");
+				if (val && PyLong_Check(val))
+				{
+					int plp = hdster::plpNormalizat(parm.system, PyLong_AsLong(val));
+					// un PLP ales la acordare ramane cand driverul nu-l spune
+					if (plp >= 0 || parm.plp_id < 0)
+						parm.plp_id = plp;
+				}
+				parm.plp_id = hdster::plpNormalizat(parm.system, parm.plp_id);
 				p->setDVBT(parm);
 				break;
 			}

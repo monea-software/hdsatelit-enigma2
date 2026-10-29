@@ -53,6 +53,17 @@ SKIN_BANDA = """
 ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege")
 
 
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_): textul se traduce la folosire."""
+	return text
+
+
+# de unde se opreste, pe banda de sus (oricand, si la "permanent")
+TEXT_OPRESTI = N_("Oprești oricând din %s")
+# anuntul de pe ecran cand echipa aproba cererea (ecranul asistentei ii spunea omului "Te anunțăm când intrăm")
+TEXT_CONECTAT = N_("Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei.")
+
+
 class HdsAsistentaSemn(Screen):
 	skin = SKIN_BANDA
 
@@ -74,6 +85,7 @@ class Controler(object):
 		self.ceas = eTimer()
 		self.ceas.callback.append(self._tic)
 		self._mesaje = []
+		self._stare_vazuta = None
 
 	def instaleaza(self):
 		A.adaugaObservator(self._schimbare)
@@ -111,12 +123,21 @@ class Controler(object):
 		while self._mesaje:
 			text = self._mesaje.pop(0)
 			self._arataMesaj(text)
+		# cererea a fost aprobata (asteapta -> conectat): omul afla, oriunde ar fi pe receptor (pe ecranul asistentei
+		# scrie deja "Conectat."); dupa o reluare a interfetei starea de dinainte nu se stie, deci nu se anunta
+		if self._stare_vazuta == A.ASTEAPTA and ses.stare == A.CONECTAT and not self._ecranAsistenta():
+			try:
+				from Screens import HdsAnuntRetea
+				HdsAnuntRetea.arata(self.session, _(TEXT_CONECTAT), "info")
+			except Exception as e:
+				_jurnal("anuntul conectarii: %r" % (e,))
+		self._stare_vazuta = ses.stare
 		if self.banda is not None:
 			if self._ecranAsistenta():
 				self.banda.hide()
 				return
-			self.banda.pune("%s  ·  %s %s" % (_("Asistență de la distanță activă"), _("mai sunt"), _hms(ses.ramasS())),
-				_("Oprești din %s") % A.drumMeniu())
+			# mereu: ca e pornita si pana cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si de unde se opreste
+			self.banda.pune(A.textPana(ses, banda=True), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
 			self.banda.show()
 
 	def _ecranAsistenta(self):
@@ -185,14 +206,14 @@ def ctxReceptor(session):
 
 # ---------------------------------------------------------------- pornirea si reluarea
 
-def porneste(session, nivel="A", durata_min=None, de_la="televizor", versiune_text=None):
+def porneste(session, nivel="A", durata_min=None, de_la="televizor", versiune_text=None, nevoie="", detalii=""):
 	if versiune_text is None:
 		versiune_text = A.VERSIUNE_TEXT
 	if durata_min is None:
 		durata_min = A.DURATA_IMPLICITA_MIN
 	limba = _limba()
 	return A.porneste(nivel=nivel, durata_min=durata_min, limba=limba, de_la=de_la,
-		versiune_text=versiune_text, ctx=ctxReceptor(session))
+		versiune_text=versiune_text, ctx=ctxReceptor(session), nevoie=nevoie, detalii=detalii)
 
 
 def reia(session):
@@ -202,10 +223,11 @@ def reia(session):
 		_jurnal("reluare: %r" % (e,))
 
 
-def cerereWeb(session, nivel="A", durata_min=None):
+def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
 	"""Pornirea ceruta din pagina web (browserul omului, conectat cu codul de pe televizor): pe televizor se deschide
 	ecranul Asistentei cu informarea intreaga si durata aleasa; abia dupa Verde, alegere si „Da" porneste sesiunea
-	(nimic nu porneste fara apasare pe televizor). -> (reusit, mesaj) numai despre faptul ca s-a cerut confirmarea."""
+	(nimic nu porneste fara apasare pe televizor). nevoie/detalii ("Cu ce te ajutam?", optionale) apar deja alese pe
+	ecranul de pornire. -> (reusit, mesaj) numai despre faptul ca s-a cerut confirmarea."""
 	if session is None:
 		return False, _("Nu pot cere confirmarea pe televizor acum.")
 	if durata_min not in A.DURATE_MIN:
@@ -216,7 +238,8 @@ def cerereWeb(session, nivel="A", durata_min=None):
 	try:
 		from Tools import Notifications
 		from Screens.HdsAsistenta import HdsAsistenta
-		Notifications.AddNotification(HdsAsistenta, din_web=durata_min)
+		nevoie, detalii = A.curataNevoie(nevoie, detalii)
+		Notifications.AddNotification(HdsAsistenta, din_web=durata_min, nevoie=nevoie, detalii=detalii)
 		return True, _("Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo.")
 	except Exception as e:
 		_jurnal("cerere web: %r" % (e,))

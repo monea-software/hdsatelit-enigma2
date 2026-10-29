@@ -4177,6 +4177,8 @@ def _construiesteResurse():
 			self.putChild(b"scanare-fluxuri", _SCANARE[b"scanare-fluxuri"])
 			self.putChild(b"scanare-televizor", _SCANARE[b"scanare-televizor"])
 			self.putChild(b"antena", _SCANARE[b"antena"])
+			# tunerul combinat DVB-T2/C: "Legat la" din cartela tunerelor (scanare_web.TunerLegatResource)
+			self.putChild(b"tuner-legat", _SCANARE[b"tuner-legat"])
 			self.putChild(b"piste", _PISTE[b"piste"])
 			self.putChild(b"pista-audio", _PISTE[b"pista-audio"])
 			for nume in (b"ghid", b"ghid-emisiune", b"ghid-temporizator"):

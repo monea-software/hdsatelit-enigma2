@@ -58766,3 +58766,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (body: <code>parola=</code>): het 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> vraagt ook <code>confirmat=1</code>): “Zonder wachtwoord in het lokale netwerk”. Het wachtwoord, de ruwe tekst en alle wijzigingen werken alleen vanuit een browser die verbonden is met de code op de tv (anders 403 met <code>trebuie_cod</code>), nooit met <code>?token=</code>; zolang het scherm “Wachtwoord van de ontvanger” open is op de ontvanger, geldt hetzelfde voor <code>/api/remotecontrol</code> en <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Terrestrische antenne (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Kabel (DVB-C)"
+
+msgid "Legat la"
+msgstr "Verbonden met"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Elke frequentie wordt als DVB-T2 en als DVB-T geprobeerd."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "De gekozen modulatie wordt niet aanvaard. Kies een andere."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM bestaat alleen bij DVB-T2: kies DVB-T2 bij Systeem of een andere modulatie."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "bandbreedte die het image niet kent (alleen 8, 7, 6, 5, 10, 1,712 MHz en Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "modulatie die het image niet kent"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM bestaat alleen bij DVB-T2"
+
+msgid "Tunerul nu e dat."
+msgstr "De tuner is niet opgegeven."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "De tunerinstellingen kunnen niet gelezen worden: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "Tuner %s is niet gecombineerd (terrestrisch en kabel)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Onbekende keuze: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "De privacyverklaring is gewijzigd"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "De privacyverklaring voor bètatesters is gewijzigd. Lees wat er nieuw is en accepteer, zodat de ontvanger de logs blijft verzenden."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "De ontvanger stuurt ook een vingerafdruk die uit zijn moederbord is berekend, zodat hij maar één keer wordt geteld, ook als hij in meerdere slots is geïnstalleerd of opnieuw is geïnstalleerd. Uit de vingerafdruk zijn het MAC-adres en het serienummer niet af te leiden, en die verlaten de ontvanger niet."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Als een zender niet werkt (geen signaal, geen beeld, decodeerfout), bewaart het log de naam en de technische gegevens van die zender, zodat we kunnen uitzoeken waarom. Welke zenders je kijkt als alles werkt, wordt niet verzonden."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Met Accepteren ga je akkoord met de nieuwe verklaring en verzendt de ontvanger weer de gegevens die je tot nu toe hebt aangevinkt."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Het verzenden is gestopt tot je de nieuwe verklaring accepteert."
+
+msgid "Citește nota întreagă"
+msgstr "Lees de volledige verklaring"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "Op het scherm, met de pijltjes. EXIT brengt je hier terug."
+
+msgid "Accept"
+msgstr "Accepteren"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "De gegevens die je hebt aangevinkt worden weer verzonden, zoals tot nu toe."
+
+msgid "Îți amintim mâine."
+msgstr "We herinneren je er morgen aan."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Bedankt. De ontvanger verzendt weer de aangevinkte gegevens."
+
+msgid "Acceptă nota nouă"
+msgstr "Nieuwe verklaring accepteren"
+
+msgid "Trimiterea e oprită"
+msgstr "Verzenden gestopt"
+
+msgid "Sau citește pe telefon:"
+msgstr "Of lees op je telefoon:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "De volledige verklaring staat op:"
+
+msgid "Nimic anume"
+msgstr "Niets in het bijzonder"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi en netwerk"
+
+msgid "Imaginea sau sunetul"
+msgstr "Beeld of geluid"
+
+msgid "Canale și scanare"
+msgstr "Zenders en zoeken"
+
+msgid "Pornirea receptorului"
+msgstr "Opstarten van de ontvanger"
+
+msgid "Altceva"
+msgstr "Iets anders"
+
+msgid "Cu ce te ajutăm?"
+msgstr "Waarmee helpen we je?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Schrijf het kort (optioneel)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Als je wilt, kies waarmee we je helpen en schrijf kort wat er gebeurt (OK opent de lijst of het toetsenbord). Het is niet verplicht: Groen start toch."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "We hebben je verzoek, met de code hieronder. Je hoeft niets te doen."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "We hebben je verzoek, met de code hieronder. Je hoeft niets te doen. Nog %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "We laten het je weten wanneer we verbinden. Je kunt de ontvanger intussen gebruiken."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "Het team van HD Satelit is verbonden. Je kunt de ontvanger gewoon blijven gebruiken."
+
+msgid "permanent"
+msgstr "permanent"
+
+msgid "o zi"
+msgstr "één dag"
+
+msgid "o săptămână"
+msgstr "één week"
+
+msgid "o lună"
+msgstr "één maand"
+
+msgid "Pornită până la %s."
+msgstr "Aan tot %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Aan, zonder einde; je kunt het altijd stoppen."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Hulp op afstand aan tot %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Hulp op afstand aan, zonder einde"
+
+msgid "Oprești oricând din %s"
+msgstr "Altijd te stoppen via %s"
+
+msgid "reluată după repornire"
+msgstr "hervat na de herstart"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Je geeft blijvend toegang op afstand, tot je het zelf stopt, niveau “Lezen en testen”. Door te starten bevestig je dat je minstens 16 jaar bent of toestemming van een ouder hebt. Je kunt het altijd stoppen. Starten?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Ze kan zo lang aan blijven als je kiest: 2 uur, 12 uur, één dag, één week, één maand of blijvend. Je stopt ze altijd, op de ontvanger of op de webpagina. Zolang ze aan is, kan het team op elk moment verbinden, maar doet het alleen de metingen en tests uit de vaste lijst, zonder iets te veranderen."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Voeg knipmarkeringen toe, wis ze en spring ertussen in de opname die wordt afgespeeld"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Kies een afbeelding op de stick. Ze wordt zonder vervorming op 1920x1080 gebracht en krijgt de onderste regel."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Dat kan voorlopig niet: de ontvanger mist %s. Alle kant-en-klare schermen werken."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Eigen afbeeldingen kunnen voorlopig niet worden gebruikt: de ontvanger mist %s. Alle kant-en-klare schermen werken, je kunt ze hier altijd wisselen."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "De schermgalerij is niet geïnstalleerd op deze ontvanger. Je kunt toch een eigen afbeelding gebruiken, als de ontvanger de nodige hulpmiddelen heeft."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Beeldscherpte (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Huidige positie: %s. Groen voegt een gewone markering toe, Geel voegt knip-START/STOP toe."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "Het voorbeeld is zichtbaar zodra de ontvanger ook de kleine afbeeldingen van de schermen krijgt."
+
+msgid "START tăiere"
+msgstr "Knip-START"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "Knip-START (hier begint het deel dat wordt overgeslagen)"
+
+msgid "START/STOP tăiere aici"
+msgstr "Knip-START/STOP hier"
+
+msgid "STOP tăiere"
+msgstr "Knip-STOP"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "Knip-STOP (hier eindigt het deel dat wordt overgeslagen)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "LAATSTE BEVESTIGING: de nieuwe software wordt ECHT naar de ontvanger geschreven.\nHaal de stekker van de ontvanger er NIET uit en verwijder het medium NIET zolang er wordt geschreven.\nDe interface stopt en de ontvanger herstart aan het einde vanzelf.\n\nPakket: %s\n\nEcht doorgaan?"

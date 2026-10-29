@@ -74,15 +74,19 @@ CAB_FEC_AUTO = 0
 CAB_FEC = (0, 1, 2, 3, 4, 5, 6, 15)
 INV_AUTO = 2
 INVERSARI = (0, 1, 2)
-# eDVBFrontendParametersTerrestrial, randurile 72-113
-TER_BW_8, TER_BW_7, TER_BW_6, TER_BW_AUTO = 0, 1, 2, 3
-TER_BENZI = (0, 1, 2, 3)
-TER_MOD_AUTO = 3
-TER_MODULATII = (0, 1, 2, 3)               # QPSK, 16QAM, 64QAM, Auto; 256QAM exista doar la DVB-T2
+# eDVBFrontendParametersTerrestrial (lib/dvb/frontendparms.h, lib/dvb/hdsterestru.h): valorile DVB-T2 sunt adaugate
+# dupa Auto, deci numerele vechi raman
+TER_BW_8, TER_BW_7, TER_BW_6, TER_BW_AUTO, TER_BW_5, TER_BW_1_712, TER_BW_10 = 0, 1, 2, 3, 4, 5, 6
+TER_BENZI = (0, 1, 2, 3, 4, 5, 6)
+TER_MOD_AUTO, TER_QAM256 = 3, 4
+TER_MODULATII = (0, 1, 2, 3, 4)            # QPSK, 16QAM, 64QAM, Auto, 256QAM (256QAM numai la DVB-T2)
 TER_FEC_AUTO, TER_TM_AUTO, TER_GI_AUTO, TER_IER_AUTO = 5, 2, 4, 4
-# DVB-T2: structura din nucleu NU are campurile `system` si `plp_id`, iar frontend.cpp (switchDeliverySystem,
-# randul 2740) trimite mereu SYS_DVBT. Codul de mai jos le pune numai daca structura le are (nucleul_stie_dvbt2),
-# deci cu un nucleu care le adauga merg fara nicio schimbare aici.
+TER_FEC = (0, 1, 2, 3, 4, 5, 7, 8, 9)      # 1/2 2/3 3/4 5/6 7/8 Auto 8/9 3/5 4/5 (6 e scris diferit de liste: Auto)
+# DVB-T2: structura din nucleu are `system` (0 DVB-T, 1 DVB-T2) si `plp_id` (-1 = PLP-ul implicit), iar frontend.cpp
+# acordeaza terestrul prin proprietati (DTV_DELIVERY_SYSTEM, DTV_STREAM_ID). Codul de mai jos le pune numai daca
+# structura le are (nucleul_stie_dvbt2), ca probele sa poata folosi si o structura veche.
+# Un transponder fara sistem stiut (maturarea, canalul ales, listele fara atributul system) se cauta de doua ori,
+# intai DVB-T2, apoi DVB-T (cu_ambele_sisteme); nucleul nu mai incearca celalalt sistem pe o frecventa prinsa.
 SISTEM_DVBT, SISTEM_DVBT2 = 0, 1
 CAMPURI_CABLU = ('frequency', 'symbol_rate', 'modulation', 'inversion', 'fec_inner')
 CAMPURI_TERESTRU = ('frequency', 'bandwidth', 'code_rate_HP', 'code_rate_LP', 'modulation', 'transmission_mode',
@@ -96,8 +100,8 @@ FRECV_MIN_MHZ, FRECV_MAX_MHZ = 47, 862
 # mult 7230 kSymb/s. Retelele europene folosesc aproape toate 6900 sau 6875 kSymb/s.
 SR_CABLU_MIN, SR_CABLU_MAX = 450, 7230
 SR_CABLU_OBISNUITE = (6900, 6875)
-# Cat asteapta nucleul la o frecventa fara semnal inainte sa treaca la urmatoarea (frontend.cpp:442-445, cablu si
-# terestru): 5 secunde. De aici vine durata cea mai lunga a unei maturari, aratata utilizatorului dinainte.
+# Cat asteapta nucleul la o frecventa fara semnal inainte sa treaca la urmatoarea (frontend.cpp, calcLockTimeout,
+# cablu si terestru): 5 secunde. De aici vine durata cea mai lunga a unei maturari, aratata utilizatorului dinainte.
 SECUNDE_ACORDARE = 5
 
 # Maturarea de cablu: raster de 8 MHz de la 122 la 858 MHz, 93 de frecvente, acelasi ca lista de maturare cu pas
@@ -194,6 +198,22 @@ def maturare_terestru(cu_vhf=True):
     return [tp_canal(c) for c in canale(cu_vhf)]
 
 
+def cu_ambele_sisteme(transpondere):
+    """Fiecare transponder fara sistem stiut (system None) devine doua: intai DVB-T2 (cele mai multe retele de acum),
+    apoi DVB-T. Cele cu sistem raman cum sunt. Nucleul (lib/dvb/scan.cpp) nu mai incearca a doua oara o frecventa
+    prinsa, deci pe un multiplex gasit costul e o singura acordare."""
+    rez = []
+    for tp in transpondere:
+        if tp.get('system') is None:
+            for sistem in (SISTEM_DVBT2, SISTEM_DVBT):
+                copie = dict(tp)
+                copie['system'] = sistem
+                rez.append(copie)
+        else:
+            rez.append(tp)
+    return rez
+
+
 def minute_maxime(numar_transpondere):
     """Cat poate dura cel mult o scanare (fiecare frecventa fara semnal costa SECUNDE_ACORDARE), in minute."""
     return max(1, (numar_transpondere * SECUNDE_ACORDARE + 59) // 60)
@@ -219,15 +239,18 @@ def motiv_refuz_terestru(tp):
     if not FRECV_MIN_MHZ * 1000000 <= f <= FRECV_MAX_MHZ * 1000000:
         return _('frecvența %s MHz e în afara benzii terestre (%d-%d MHz)') % (mhz(f), FRECV_MIN_MHZ, FRECV_MAX_MHZ)
     if tp.get('bandwidth') not in TER_BENZI:
-        return _('lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6 MHz și Auto)')
+        return _('lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)')
     if tp.get('modulation') not in TER_MODULATII:
-        return _('modulație pe care imaginea nu o știe încă (256QAM e numai la DVB-T2)')
+        return _('modulație pe care imaginea nu o știe')
+    if tp.get('modulation') == TER_QAM256 and tp.get('system') == SISTEM_DVBT:
+        return _('256QAM e numai la DVB-T2')
     return None
 
 
 def nucleul_stie_dvbt2(clasa):
-    """True numai daca structura eDVBFrontendParametersTerrestrial are campul `system`, adica cu un nucleu care
-    stie DVB-T2. Se intreaba clasa, nu un obiect: la SWIG campurile structurii sunt proprietati ale clasei."""
+    """True daca structura eDVBFrontendParametersTerrestrial are campul `system` (nucleul imaginii il are din 0.6.11;
+    o structura simulata fara el, in probe, da False). Se intreaba clasa, nu un obiect: la SWIG campurile structurii
+    sunt proprietati ale clasei."""
     return hasattr(clasa, 'system')
 
 
@@ -399,17 +422,25 @@ def citeste_cabluri(cale=None):
     return _chei_unice(liste)
 
 
+def _fec_din_lista(v):
+    """code_rate din terrestrial.xml: 6 inseamna in liste lucruri diferite (None sau 6/7), deci Auto, ca in db.cpp."""
+    v = _int(v, TER_FEC_AUTO)
+    return TER_FEC_AUTO if v == 6 else v
+
+
 # campurile terestre: (camp, valorile din nucleu, valoarea Auto)
 _VALIDE_TERESTRU = (('bandwidth', TER_BENZI, TER_BW_AUTO), ('modulation', TER_MODULATII, TER_MOD_AUTO),
-                    ('guard_interval', (0, 1, 2, 3, 4), TER_GI_AUTO), ('transmission_mode', (0, 1, 2), TER_TM_AUTO),
-                    ('hierarchy', (0, 1, 2, 3, 4), TER_IER_AUTO), ('inversion', INVERSARI, INV_AUTO))
+                    ('guard_interval', (0, 1, 2, 3, 4, 5, 6, 7), TER_GI_AUTO),
+                    ('transmission_mode', (0, 1, 2, 3, 4, 5, 6), TER_TM_AUTO),
+                    ('hierarchy', (0, 1, 2, 3, 4), TER_IER_AUTO), ('inversion', INVERSARI, INV_AUTO),
+                    ('code_rate_HP', TER_FEC, TER_FEC_AUTO), ('code_rate_LP', TER_FEC, TER_FEC_AUTO))
 
 
 def citeste_terestru(cale=None):
     """Listele din terrestrial.xml, la fel ca citeste_cabluri. Ca lib/dvb/db.cpp (readTerrestrials): frecventa
-    centrala in Hz, valorile lipsa pe Auto, code_rate peste 5 taiat la 5. In plus: tara listei, atributele
-    `system` (0 DVB-T, 1 DVB-T2) si `plp_id`, pe care db.cpp nu le citeste, iar codurile pe care structura din
-    nucleu nu le are (latimile de 5, 1,712 si 10 MHz, 256QAM, intervalele de garda si modurile noi) trec pe Auto."""
+    centrala in Hz, valorile lipsa pe Auto, atributele `system` (0 DVB-T, 1 DVB-T2; lipsa = nestiut, None) si
+    `plp_id`. In plus: tara listei, iar codurile pe care structura din nucleu nu le are trec pe Auto la vedere (se
+    numara in 'ajustate'); code_rate 6 (scris diferit de liste) trece pe Auto tacut, ca in db.cpp."""
     rad = _radacina(cale or CALE_TERESTRU)
     if rad is None:
         return []
@@ -426,8 +457,7 @@ def citeste_terestru(cale=None):
             tp = tp_terestru(f, _int(t.get('bandwidth'), TER_BW_AUTO), _int(t.get('constellation'), TER_MOD_AUTO),
                              _int(t.get('inversion'), INV_AUTO),
                              sistem=_int(t.get('system'), None), plp=_int(t.get('plp_id'), None),
-                             crh=min(_int(t.get('code_rate_hp'), TER_FEC_AUTO), TER_FEC_AUTO),
-                             crl=min(_int(t.get('code_rate_lp'), TER_FEC_AUTO), TER_FEC_AUTO),
+                             crh=_fec_din_lista(t.get('code_rate_hp')), crl=_fec_din_lista(t.get('code_rate_lp')),
                              gi=_int(t.get('guard_interval'), TER_GI_AUTO),
                              tm=_int(t.get('transmission_mode'), TER_TM_AUTO),
                              ierarhie=_int(t.get('hierarchy_information'), TER_IER_AUTO))
@@ -437,6 +467,8 @@ def citeste_terestru(cale=None):
                     lista['ajustate'] += 1
             if tp['system'] not in (None, SISTEM_DVBT, SISTEM_DVBT2):
                 tp['system'] = None
+            if tp['system'] != SISTEM_DVBT2 or not 0 <= (tp['plp_id'] if tp['plp_id'] is not None else -1) <= 255:
+                tp['plp_id'] = None
             lista['transpondere'].append(tp)
         liste.append(lista)
     return _chei_unice(liste)

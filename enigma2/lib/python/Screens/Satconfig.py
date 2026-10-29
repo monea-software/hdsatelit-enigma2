@@ -100,6 +100,22 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 				choices["loopthrough"] = _("loopthrough to")
 			self.nimConfig.configMode.setChoices(choices, default = "nothing")
 
+	def hdsCombinat(self):
+		"""Tunerul combinat DVB-T2/C (Components/NimManager.py: hds_fel)."""
+		return isinstance(getattr(self.nimConfig, "hds_fel", None), ConfigSelection)
+
+	def hdsCablu(self):
+		"""Setarile de cablu pe ecran: tunerul de cablu, sau cel combinat legat la cablu."""
+		if self.hdsCombinat():
+			return self.nimConfig.hds_fel.value == "cablu"
+		return self.nim.isCompatible("DVB-C")
+
+	def hdsAdaugaFel(self):
+		"""La tunerul combinat, pornit: randul "Legat la" (antena terestra sau cablu), sub "Configuration Mode"."""
+		if self.hdsCombinat() and self.nimConfig.configMode.value == "enabled":
+			self.hdsFelEntry = getConfigListEntry(_("Legat la"), self.nimConfig.hds_fel)
+			self.list.append(self.hdsFelEntry)
+
 	def createSetup(self):
 		print("Creating setup")
 		self.list = [ ]
@@ -118,6 +134,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self.turnFastEpochEnd = None
 		self.uncommittedDiseqcCommand = None
 		self.cableScanType = None
+		self.hdsFelEntry = None
 		self.have_advanced = False
 		self.advancedUnicable = None
 		self.advancedType = None
@@ -184,9 +201,10 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 				self.have_advanced = True
 			if self.nim.description == "Alps BSBE2" and config.usage.setup_level.index >= 2: # expert
 				self.list.append(getConfigListEntry(_("Tone Amplitude"), self.nimConfig.toneAmplitude))
-		elif self.nim.isCompatible("DVB-C"):
+		elif self.hdsCablu():
 			self.configMode = getConfigListEntry(_("Configuration Mode"), self.nimConfig.configMode)
 			self.list.append(self.configMode)
+			self.hdsAdaugaFel()
 			if self.nimConfig.configMode.value == "enabled":
 				self.cableScanType=getConfigListEntry(_("Used service scan type"), self.nimConfig.cable.scan_type)
 				self.list.append(self.cableScanType)
@@ -221,6 +239,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		elif self.nim.isCompatible("DVB-T"):
 			self.configMode = getConfigListEntry(_("Configuration Mode"), self.nimConfig.configMode)
 			self.list.append(self.configMode)
+			self.hdsAdaugaFel()
 			self.have_advanced = False
 			if self.nimConfig.configMode.value == "enabled":
 				self.list.append(getConfigListEntry(_("Terrestrial provider"), self.nimConfig.terrestrial))
@@ -235,7 +254,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.advancedLnbsEntry, self.advancedDiseqcMode, self.advancedUsalsEntry, \
 			self.advancedLof, self.advancedPowerMeasurement, self.turningSpeed, \
 			self.advancedType, self.advancedSCR, self.advancedManufacturer, self.advancedUnicable, self.advancedConnected, \
-			self.uncommittedDiseqcCommand, self.cableScanType, self.multiType)
+			self.uncommittedDiseqcCommand, self.cableScanType, self.multiType, self.hdsFelEntry)
 		if self["config"].getCurrent() == self.multiType:
 			from Components.NimManager import InitNimManager
 			InitNimManager(nimmanager)
@@ -550,6 +569,10 @@ def textNim(x):
 			text = _("nothing connected")
 		elif nimConfig.configMode.value == "enabled":
 			text = _("enabled")
+			# tunerul combinat: ce e legat la el
+			fel = getattr(nimConfig, "hds_fel", None)
+			if isinstance(fel, ConfigSelection):
+				text += ", " + fel.getText()
 	if x.isMultiType():
 		text = _("Switchable tuner types:") + " (" + ', '.join(list(x.getMultiTypeList().values())) + ")" + "\n" + text
 	if not x.isSupported():

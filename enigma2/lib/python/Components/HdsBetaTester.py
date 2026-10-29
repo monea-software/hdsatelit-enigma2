@@ -13,8 +13,11 @@
 #   apoi la 60 de minute numai cat programul e pornit; tot acolo numaratoarea ecranelor, a schimbarilor de canal si a
 #   inregistrarilor (felul „utilizare”);
 # - intrebarea, o singura data, dupa o ora cumulata, numai peste televizorul in direct (bara de sus, fara film, fara
-#   inregistrare in curs, fara decalaj, fara standby); Nu = nu mai apare niciodata. E singurul mesaj pe care programul
-#   il pune singur pe ecran: trimiterile, erorile si coada plina raman in jurnal si in „Ce am trimis”;
+#   inregistrare in curs, fara decalaj, fara standby); Nu = nu mai apare niciodata. In afara de ea, programul pune singur
+#   pe ecran numai anuntul notei noi (cine a acceptat o nota mai veche nu mai trimite nimic pana la acordul nou): la
+#   prima pornire dupa actualizare, in aceleasi conditii ca intrebarea, apoi cel mult o data pe zi, pana la acord
+#   (anuntNotaDatorat, Screens/HdsBetaTester.HdsBetaNotaNoua; in web, sus pe orice pagina). Trimiterile, erorile si
+#   coada plina raman in jurnal si in „Ce am trimis”;
 # - culegerea pe feluri (jurnale, canale, sistem, utilizare, receptor), curatarea (curata()), pachetul JSON comprimat
 #   gzip, coada pe disc (cel mult COADA_MAX pachete si COADA_OCTETI), trimiterea HTTPS pe un fir, ultimul pachet tinut
 #   pentru „Ce trimit acum”, lista „Ce am trimis”, mesajele testerului, raspunsurile echipei, profilul public si
@@ -158,6 +161,26 @@ NOTA_SCURTA = N_("Datele le primește Eduard Monea, persoană fizică (mărcile 
 	"date sau poți ieși din program cu ștergerea datelor. La o pornire ratată, receptorul trimite singur un raport "
 	"tehnic anonim, fără date personale. Dacă scrii pe forumul receptorului, mesajul tău apare public, cu numele "
 	"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos.")
+# anuntul notei noi (receptor si web): titlul, mesajul, ce e nou fata de nota de dinainte (paragrafele notei
+# situl-imaginii/date/nota-testeri.json, cuvant cu cuvant), starea din meniul testerului si butoanele
+NOTA_ANUNT_TITLU = N_("Nota de confidențialitate s-a schimbat")
+NOTA_ANUNT = N_("Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe "
+	"jurnalele, citește ce e nou și acceptă.")
+NOTA_NOUTATI = (
+	N_("Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e "
+		"instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea "
+		"nu pleacă de pe receptor."),
+	N_("Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele "
+		"tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."),
+)
+NOTA_ACCEPT_RAND = N_("Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum.")
+NOTA_OPRITA = N_("Trimiterea e oprită până accepți nota nouă.")
+NOTA_BUTOANE = {
+	"citeste": (N_("Citește nota întreagă"), N_("Pe ecran, cu săgețile. EXIT te întoarce aici.")),
+	"accept": (N_("Accept"), N_("Datele bifate de tine pleacă din nou, ca până acum.")),
+	"mai_tarziu": (N_("Mai târziu"), N_("Îți amintim mâine.")),
+}
+NOTA_ACCEPTATA = N_("Mulțumim. Receptorul trimite din nou datele bifate.")
 # randul scurt de sub fiecare rand al meniului testerului si al celui neinscris (pe receptor si in web): exact ce
 # face randul
 RANDURI_MENIU = {
@@ -174,6 +197,7 @@ RANDURI_MENIU = {
 	"public": N_("Numele cu care apari pe forum și pe site."),
 	"nota": N_("Ce date pleacă, cine le primește, cât se păstrează."),
 	"iesire": N_("Serverul șterge tot ce a trimis acest receptor."),
+	"nota_noua": NOTA_OPRITA,
 }
 RANDURI_VIZITATOR = {
 	"acord": N_("Alegi ce date trimiți; sunt anonime."),
@@ -630,6 +654,119 @@ def iesire(b=None):
 	_starea["numar_cand"] = None
 	_starea["activ"] = False
 	return True, _t("Ai ieșit din program. Cererea de ștergere pleacă la server; pe receptor nu mai rămâne nimic.")
+
+
+# ------------------------------------------------------------------ nota noua: anuntul si acordul dintr-o apasare
+# Cine a acceptat o nota mai veche (notaVeche) nu mai trimite nimic. Anuntul ii spune: pe receptor la prima pornire dupa
+# actualizare (cand bara canalului e libera, ca la intrebare, si la cel putin NOTA_ANUNT_DUPA_S de la pornire), apoi
+# cel mult o data pe zi (ziua locala in stare.json: nota_anunt_zi pe receptor, nota_web_zi pentru „Mai tarziu” din
+# web); in web sus pe orice pagina, pana la acord. „Accept” = acordul nou cu bifele, numele, e-mailul si trimiterea
+# automata de dinainte. Textul intreg al notei e in imagine (CALE_NOTA, copia lui situl-imaginii/date/nota-testeri.json
+# fara campul „despre”), ca omul sa-l citeasca pe receptor fara navigator.
+
+NOTA_ANUNT_DUPA_S = 120
+CEAS_BUN_DUPA = 1700000000      # ceasul receptorului e pus (dupa 2023); inainte de ora din retea nu se stie ziua
+CALE_NOTA = os.environ.get("HDS_BETA_NOTA") or "/usr/share/enigma2/nota-testeri.json"
+NOTA_TEXT_MAX = 256 * 1024
+
+
+def ziLocala(secunde=None):
+	"""Ziua dupa ora receptorului, „AAAA-LL-ZZ”; "" cat ceasul nu e pus."""
+	secunde = time.time() if secunde is None else secunde
+	if secunde < CEAS_BUN_DUPA:
+		return ""
+	return time.strftime("%Y-%m-%d", time.localtime(secunde))
+
+
+def anuntNotaDatorat(b=None, stare=None, acum=None, cheie="nota_anunt_zi"):
+	"""Anuntul notei noi e de aratat azi? Numai cu nota veche, cu ceasul pus si daca nu s-a aratat (sau amanat) azi.
+	`cheie`: nota_anunt_zi (receptorul) sau nota_web_zi (banda din web)."""
+	if not notaVeche(b):
+		return False
+	zi = ziLocala(acum)
+	if not zi:
+		return False
+	stare = citesteStare() if stare is None else stare
+	return stare.get(cheie) != zi
+
+
+def amanaAnuntNota(acum=None, cheie="nota_anunt_zi"):
+	"""Anuntul aratat azi sau „Mai tarziu”: revine a doua zi."""
+	zi = ziLocala(acum)
+	if zi:
+		schimbaStare(lambda s: s.__setitem__(cheie, zi))
+	return True, _t("Îți amintim mâine.")
+
+
+def acceptaNotaNoua(b=None):
+	"""„Accept” din anunt (receptor sau web): acordul pe nota de acum, cu alegerile de dinainte. -> (reusit, mesaj)"""
+	b = _b(b)
+	if not notaVeche(b):
+		return False, _t("Nu ești înscris în programul de beta testeri.")
+	ok, mesaj_ = acceptaAcord(bife(b), b.nume.value, b.email.value, b, de_unde="setari", automat=bool(b.automat.value))
+	if not ok:
+		return False, mesaj_
+	_jurnal("nota %d acceptata din anunt" % NOTA)
+	return True, _t(NOTA_ACCEPTATA)
+
+
+def noutatiNota():
+	"""Ce e nou in nota de acum, tradus: [text]."""
+	return [_t(t) for t in NOTA_NOUTATI]
+
+
+def limbaNotei(limba_=None):
+	"""Nota intreaga e in romana si engleza: romana pentru meniurile in romana, engleza pentru restul."""
+	limba_ = limba() if limba_ is None else limba_
+	return "ro" if (limba_ or "").lower().startswith("ro") else "en"
+
+
+def adresaNotei(limba_=None):
+	return ADRESA_NOTA if limbaNotei(limba_) == "ro" else ADRESA_NOTA_EN
+
+
+def _randuriNota(valoare):
+	"""Textul unui camp al unei sectiuni: paragrafele, randurile tabelului (eticheta: text), listele. Legaturile nu:
+	textul lor e deja in paragrafe."""
+	rez = []
+	for x in valoare if isinstance(valoare, list) else []:
+		if isinstance(x, str):
+			rez.append(x)
+		elif isinstance(x, list) and x and all(isinstance(y, str) for y in x):
+			rez.append(": ".join(x))
+	return rez
+
+
+def textNota(limba_=None, cale_nota=None):
+	"""Nota intreaga, din copia din imagine, in limba notei: (titlu, text), sau None cand copia lipseste, nu se poate
+	citi sau e a altei versiuni decat NOTA (atunci ecranul deschide pagina notei in navigator)."""
+	cale_nota = cale_nota or CALE_NOTA
+	try:
+		if os.path.getsize(cale_nota) > NOTA_TEXT_MAX:
+			return None
+		with open(cale_nota, "rb") as f:
+			d = json.loads(f.read().decode("utf-8"))
+	except (OSError, IOError, ValueError):
+		return None
+	if not isinstance(d, dict) or d.get("versiune") != NOTA:
+		return None
+	n = d.get(limbaNotei(limba_)) or {}
+	if not isinstance(n, dict) or not isinstance(n.get("sectiuni"), list):
+		return None
+	parti = [n.get("versiune_text") or "", n.get("rezumat") or ""]
+	for s in n["sectiuni"]:
+		if not isinstance(s, dict):
+			continue
+		parti.append((s.get("titlu") or "").upper())
+		for camp in ("paragrafe", "tabel", "lista", "pasi", "paragrafe_dupa"):
+			lista = _randuriNota(s.get(camp))
+			if camp in ("tabel", "lista"):
+				lista = ["•  " + x for x in lista]
+			elif camp == "pasi":
+				lista = ["%d. %s" % (k + 1, x) for k, x in enumerate(lista)]
+			parti.extend(lista)
+	text = "\n\n".join(p for p in parti if p)
+	return (n.get("titlu") or _t("Nota de confidențialitate")), text
 
 
 # cererile facute din ecran sau din web, culese de tic() pe firul enigma2
@@ -1264,12 +1401,18 @@ def _tunere(radacina=""):
 		rand = rand.strip()
 		m = re.match(r"NIM Socket (\d+):", rand)
 		if m:
-			slot = {"slot": int(m.group(1)), "fel": "", "nume": ""}
+			slot = {"slot": int(m.group(1)), "fel": "", "nume": "", "moduri": []}
 			rez.append(slot)
 		elif slot is not None and rand.startswith("Type:"):
 			slot["fel"] = _txt(rand[5:], 40)
 		elif slot is not None and rand.startswith("Name:"):
 			slot["nume"] = _txt(rand[5:], 80)
+		elif slot is not None and re.match(r"Mode \d+:", rand) and len(slot["moduri"]) < 8:
+			# tunerele cu mai multe feluri (de pilda DVB-T2/C): fiecare mod, cum il spune driverul
+			slot["moduri"].append(_txt(rand.split(":", 1)[1], 40))
+	for slot in rez:
+		if not slot["moduri"]:
+			del slot["moduri"]
 	return rez[:16]
 
 
@@ -2498,6 +2641,9 @@ def _tic(acum=None):
 		_starea["ultim_esantion"] = acum
 		_starea["es"].citeste()
 	if notaVeche(b):
+		# nimic nu pleaca; anuntul notei noi, cand omul e la televizor (o data pe zi)
+		if acum - pornit >= NOTA_ANUNT_DUPA_S and potIntreba(stare_tv) and anuntNotaDatorat(b):
+			_anuntaNota(sesiune)
 		return
 	# acordul retrimis la prima ora (cine s-a inscris singur inainte de o ora)
 	if not b.acord_ora.value and c.secunde >= ORA_S:
@@ -2586,6 +2732,16 @@ def _intreaba(sesiune):
 		sesiune.openWithCallback(_dupaIntrebare, MessageBox, text, MessageBox.TYPE_YESNO, default=True)
 	except Exception as e:
 		_jurnal("intrebarea: %s" % e)
+
+
+def _anuntaNota(sesiune):
+	"""Anuntul notei noi pe ecran; ziua se scrie inainte (o cadere a ecranului nu-l repeta la un minut)."""
+	amanaAnuntNota()
+	try:
+		from Screens.HdsBetaTester import HdsBetaNotaNoua
+		sesiune.open(HdsBetaNotaNoua)
+	except Exception as e:
+		_jurnal("anuntul notei noi: %s" % e)
 
 
 def _dupaIntrebare(raspuns):

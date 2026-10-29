@@ -1162,11 +1162,17 @@ class HdsInfo(Converter):
 
 	def _t2_name(self, r):
 		"""Un program DVB-T2 din satelit (releul local, http://127.0.0.1:<port>/t2/...): „DVB-T2”, ca in lista de
-		canale; alt flux T2-MI (transponder, alt URL): „T2-MI”."""
+		canale; un program dintr-un flux de distributie de pe 30W (felul abertis din receptie.json: multiplexul terestru
+		spaniol, DVB-T, purtat intreg intr-un PID): „DVB-T”; alt flux T2-MI (transponder, alt URL): „T2-MI”."""
 		ref = r.ref()
 		if ref["url"] and C.is_local_host(ref["host"]) and [p.lower() for p in ref["urlpath"]][:1] == [u"t2"]:
+			if self._t2_abertis(r):
+				return u"DVB-T"
 			return u"DVB-T2"
 		return u"T2-MI"
+
+	def _t2_abertis(self, r):
+		return C.u(C.rj_dict(r.rj() or {}, "t2").get("fel")) == u"abertis"
 
 	# ------------------------------------------------------------ text
 
@@ -1200,6 +1206,9 @@ class HdsInfo(Converter):
 			tp = r.carrier_tp()
 			t2 = C.rj_dict(r.rj() or {}, "t2")
 			plp = C.ival(t2, "plp_id")
+			if self._t2_abertis(r):
+				pid = C.ival(t2, "t2mi_pid")
+				return C.join([self._t2_name(r), C.carrier_short(tp), (u"PID %d" % pid) if pid > 0 else u""])
 			return C.join([self._t2_name(r), C.carrier_short(tp), (u"PLP %d" % plp) if plp >= 0 else u""])
 		host = r.ref()["host"]
 		return C.join([C.tr("rec_ip"), C.tr("local_stream") if C.is_local_host(host) else host])

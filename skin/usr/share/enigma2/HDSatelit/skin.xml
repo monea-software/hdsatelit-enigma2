@@ -2715,6 +2715,27 @@
 		<widget name="descriere" position="32,724" size="1712,84" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
 		<widget name="stare" position="32,816" size="1712,96" font="HdsRegular;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
 	</screen>
+	<!-- anuntul notei noi (Screens/HdsBetaTester.HdsBetaNotaNoua): mesajul in caseta cu bara chihlimbar, ce e nou,
+	     cele trei butoane (Citeste nota intreaga, Accept, Mai tarziu; randurile desenate de cod), randul despre Accept
+	     si, mic, in colt, codul QR al notei pentru telefon -->
+	<screen name="HdsBetaNotaNoua" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="antet_fundal" position="32,104" size="1712,124" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="antet_bara" position="32,104" size="6,124" backgroundColor="hdsAmber" zPosition="2" />
+		<widget name="antet" position="60,104" size="1664,124" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="3" />
+		<widget name="titlu_nou" position="32,248" size="1712,44" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="noutati" position="32,296" size="1712,272" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<eLabel position="32,580" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="lista" position="32,596" size="1072,228" itemHeight="76" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" foregroundColorSelected="hdsText" transparent="1" scrollbarMode="showNever" enableWrapAround="1" zPosition="3" />
+		<widget name="rand_accept" position="32,832" size="1072,84" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget source="qr" render="Canvas" position="1544,604" size="200,200" zPosition="3" />
+		<widget name="adresa" position="1136,812" size="608,104" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="top" zPosition="2" />
+	</screen>
+	<!-- nota intreaga pe receptor (HdsBetaNotaText): textul pe toata latimea, derulat cu sagetile; EXIT intoarce la anunt -->
+	<screen name="HdsBetaNotaText" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1712,808" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+	</screen>
 	<!-- un text lung (nota, raspunsurile, ce trimit acum), cu codul QR si adresa notei in dreapta -->
 	<screen name="HdsBetaText" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />

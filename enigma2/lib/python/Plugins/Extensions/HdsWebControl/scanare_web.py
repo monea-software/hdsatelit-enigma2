@@ -1321,6 +1321,13 @@ def _tunere():
 				t[cheie] = bool(n.isCompatible(tip))
 			except Exception:
 				pass
+		# tunerul combinat DVB-T2/C: ce e legat la el (Components/NimManager.py: hds_fel), ales ca pe televizor
+		fel = _felCombinat(nims, n.slot)
+		if fel is not None:
+			t["combinat"] = True
+			t["legat"] = fel.value
+			t["legat_text"] = fel.getText()
+			t["legat_alegeri"] = [{"valoare": v, "text": d} for v, d in fel.choices.choices]
 		if t["satelit"]:
 			try:
 				sateliti = [(x[0], x[1]) for x in nimmanager.getSatListForNim(n.slot) or []]
@@ -1347,6 +1354,41 @@ def _tunere():
 				t["lnb"] = _lnbTuner(cfg, t["mod"], [p for p, _n in sateliti], n.slot)
 		tunere.append(t)
 	return tunere
+
+
+def _felCombinat(nims, slot):
+	"""Alegerea "Legat la" a tunerului combinat (ConfigSelection), sau None la orice alt tuner."""
+	try:
+		from Components.config import ConfigSelection
+		fel = getattr(nims[slot], "hds_fel", None)
+	except Exception:
+		return None
+	return fel if isinstance(fel, ConfigSelection) else None
+
+
+def seteazaLegat(slot, valoare):
+	"""POST /api/tuner-legat?slot=&fel=terestru|cablu: ce e legat la tunerul combinat, ca randul "Legat la" din ecranul
+	tunerului de pe televizor (Screens/Satconfig.py). Numai alegerea se schimba: tunerul ramane bun pentru amandoua."""
+	try:
+		slot = int(slot)
+	except (TypeError, ValueError):
+		slot = -1
+	if slot < 0:
+		return {"result": False, "message": _t("Tunerul nu e dat.")}
+	try:
+		from Components.config import config, configfile
+		nims = config.Nims
+	except Exception as eroare:
+		return {"result": False, "message": _t("Setările tunerelor nu se pot citi: %s") % eroare}
+	fel = _felCombinat(nims, slot)
+	if fel is None:
+		return {"result": False, "message": _t("Tunerul %s nu e combinat (terestru și cablu).") % chr(ord("A") + max(0, slot))}
+	if valoare not in [v for v, _d in fel.choices.choices]:
+		return {"result": False, "message": _t("Alegere necunoscută: %s.") % valoare}
+	fel.value = valoare
+	fel.save()
+	configfile.save()
+	return {"result": True, "legat": fel.value, "legat_text": fel.getText()}
 
 
 def _semnal():
@@ -1676,6 +1718,18 @@ def rute(baza, resource, NOT_DONE_YET):
 			cerere = argumente(request)
 			return self._raspunde(request, antena(cerere.get("lat"), cerere.get("lon"), cerere.get("doar", "")))
 
+	class TunerLegatResource(baza):
+		"""POST /api/tuner-legat?slot=&fel=terestru|cablu: ce e legat la tunerul combinat DVB-T2/C. Schimba o setare:
+		cu cookie cere POST, aceeasi origine si antetul CSRF."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			cerere = argumente(request)
+			return self._raspunde(request, seteazaLegat(cerere.get("slot"), cerere.get("fel", "")))
+
+		def render_GET(self, request):
+			return self.render_POST(request)     # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class PaginaResource(resource.Resource):
 		"""GET /scanare[/...] si /antena[/...]: aceeasi pagina, cu sectiunea si felul luate din adresa."""
 		isLeaf = True
@@ -1692,6 +1746,7 @@ def rute(baza, resource, NOT_DONE_YET):
 		b"scanare-fluxuri": FluxuriResource(),
 		b"scanare-televizor": TelevizorResource(),
 		b"antena": AntenaResource(),
+		b"tuner-legat": TunerLegatResource(),
 	}
 	return api, PaginaResource()
 
@@ -2479,6 +2534,7 @@ function cartelaTunere(c){
     if(t.terestru){ tipuri.push("terestru"); }
     linie(c, "Recepție", tipuri.join(", "));
     linie(c, "Mod", MODURI[t.mod] || t.mod);
+    if(t.combinat){ randLegat(c, t); }
     if(t.satelit){
       if(t.diseqc){ linie(c, "Comutare", DISEQC[t.diseqc] || t.diseqc); }
       linie(c, "Motor", t.motor ? "da" : "nu");
@@ -2490,6 +2546,29 @@ function cartelaTunere(c){
     }
   });
   c.appendChild(el("p", "nota", "Setările se schimbă pe televizor, în ecranul Setări tuner."));
+}
+// tunerul combinat DVB-T2/C: "Legat la" (antena terestra sau cablu), aceeasi alegere ca pe televizor
+function randLegat(c, t){
+  linie(c, "Legat la", t.legat_text);
+  var stare = el("p", "nota");
+  var lista = (t.legat_alegeri || []).map(function(a){
+    var b = el("button", "buton", a.text);
+    b.type = "button";
+    b.disabled = a.valoare === t.legat;
+    b.onclick = function(){
+      var p = new URLSearchParams();
+      p.set("slot", t.slot);
+      p.set("fel", a.valoare);
+      mesaj(stare, "Se salvează...");
+      cerere("/api/tuner-legat", "POST", p).then(function(d){
+        if(!d.result){ mesaj(stare, d.message, true); return; }
+        incarcaAntena();
+      }).catch(function(){ mesaj(stare, "Receptorul nu răspunde.", true); });
+    };
+    return b;
+  });
+  if(lista.length){ c.appendChild(butoane(lista)); }
+  c.appendChild(stare);
 }
 function cartelaLnb(c){
   var tunere = tunereSatelit();
@@ -2789,6 +2868,9 @@ TEXTE_PAGINA = {
 		N_("Se deschide pe televizor..."),
 		N_("Meniul receptorului nu se poate citi."),
 		N_("Meniul receptorului nu se poate citi, deci nu am ce arăta. Detalii în jurnalul receptorului."),
+		# tunerul combinat DVB-T2/C (cartela tunerelor): randul "Legat la" si salvarea alegerii
+		N_("Legat la"),
+		N_("Se salvează..."),
 	),
 }
 

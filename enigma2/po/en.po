@@ -57221,3 +57221,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (body: <code>parola=</code>): the 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> also requires <code>confirmat=1</code>): “No password on the local network”. The password, the raw text and all the changes work only from a browser connected with the code from the TV (otherwise 403 with <code>trebuie_cod</code>), never with <code>?token=</code>; while the “Receiver password” screen is open on the receiver, the same applies to <code>/api/remotecontrol</code> and <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Terrestrial antenna (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Cable (DVB-C)"
+
+msgid "Legat la"
+msgstr "Connected to"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Each frequency is tried as DVB-T2 and DVB-T."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "The chosen modulation is not accepted. Choose another one."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM exists only in DVB-T2: choose DVB-T2 as System or another modulation."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "bandwidth the image does not know (only 8, 7, 6, 5, 10, 1.712 MHz and Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "modulation the image does not know"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM exists only in DVB-T2"
+
+msgid "Tunerul nu e dat."
+msgstr "The tuner is not given."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "The tuner settings cannot be read: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "Tuner %s is not combined (terrestrial and cable)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Unknown choice: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "The privacy notice has changed"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "The beta testers' privacy notice has changed. For the receiver to keep sending the logs, read what is new and accept."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "The receiver also sends a fingerprint calculated from its board, so that it is counted only once even when it is installed in several slots or reinstalled. The fingerprint does not reveal the MAC address or the serial number, and these never leave the receiver."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "When a channel does not work (no signal, no picture, decoding error), the log keeps the name and technical data of that channel, so that we can find out why. Which channels you watch when everything works is not sent."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "With Accept you agree to the new notice and the receiver sends again the data you have ticked so far."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Sending is stopped until you accept the new notice."
+
+msgid "Citește nota întreagă"
+msgstr "Read the full notice"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "On screen, with the arrows. EXIT brings you back here."
+
+msgid "Accept"
+msgstr "Accept"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "The data you ticked is sent again, as before."
+
+msgid "Îți amintim mâine."
+msgstr "We will remind you tomorrow."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Thank you. The receiver sends the ticked data again."
+
+msgid "Acceptă nota nouă"
+msgstr "Accept the new notice"
+
+msgid "Trimiterea e oprită"
+msgstr "Sending stopped"
+
+msgid "Sau citește pe telefon:"
+msgstr "Or read it on your phone:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "The full notice is at:"
+
+msgid "Nimic anume"
+msgstr "Nothing in particular"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi and network"
+
+msgid "Imaginea sau sunetul"
+msgstr "Picture or sound"
+
+msgid "Canale și scanare"
+msgstr "Channels and scanning"
+
+msgid "Pornirea receptorului"
+msgstr "Receiver start-up"
+
+msgid "Altceva"
+msgstr "Something else"
+
+msgid "Cu ce te ajutăm?"
+msgstr "What can we help you with?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Write it briefly (optional)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "If you like, choose what we can help you with and write briefly what is happening (OK opens the list or the keyboard). It is not required: Green starts anyway."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "We got your request, with the code below. You need not do anything."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "We got your request, with the code below. You need not do anything. %s left."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "We will let you know when we connect. You can use the receiver in the meantime."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "The HD Satelit team has connected. You can use the receiver as usual."
+
+msgid "permanent"
+msgstr "permanent"
+
+msgid "o zi"
+msgstr "one day"
+
+msgid "o săptămână"
+msgstr "one week"
+
+msgid "o lună"
+msgstr "one month"
+
+msgid "Pornită până la %s."
+msgstr "On until %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "On, with no end; you can stop it at any time."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Remote assistance on until %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Remote assistance on, with no end"
+
+msgid "Oprești oricând din %s"
+msgstr "Stop it at any time in %s"
+
+msgid "reluată după repornire"
+msgstr "resumed after the restart"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "You are giving remote access permanently, until you stop it, level “Read and probe”. By starting, you confirm that you are at least 16 years old or have a parent's consent. You can stop it at any time. Start?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "It can stay on for as long as you choose: 2 hours, 12 hours, one day, one week, one month or permanently. You stop it at any time, on the receiver or on the web page. While it is on, the team can connect at any time, but only does the reads and probes from the fixed list, without changing anything."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Add, delete and jump between cut marks on the recording being played"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Choose a picture on the stick. It is brought to 1920x1080 without distortion and gets the bottom line."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Not possible for now: the receiver is missing %s. All the ready-made screens work."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Your own pictures cannot be used for now: the receiver is missing %s. All the ready-made screens work, you can change them here any time."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "The screen gallery is not installed on this receiver. You can still use your own picture, if the receiver has the tools needed."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Picture sharpness (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Current position: %s. Green adds a plain mark, Yellow adds a cut START/STOP."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "The preview shows once the receiver also gets the small pictures of the screens."
+
+msgid "START tăiere"
+msgstr "Cut START"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "Cut START (the part to skip starts here)"
+
+msgid "START/STOP tăiere aici"
+msgstr "Cut START/STOP here"
+
+msgid "STOP tăiere"
+msgstr "Cut STOP"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "Cut STOP (the part to skip ends here)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "LAST CONFIRMATION: the new software is REALLY written to the receiver.\nDo NOT unplug the receiver and do NOT remove the media while it writes.\nThe interface will stop and the receiver will restart by itself at the end.\n\nPackage: %s\n\nReally continue?"

@@ -16,11 +16,10 @@ Fara fel (ScanerTerestru(session)) se deschide pe ultimul fel folosit, la incepu
 Sisteme: DVB-T/T2 (Europa, Australia, Africa, Asia); ISDB-T, DTMB si ATSC raman in lista ca sa primeasca un
 raspuns limpede: tunerul acestui receptor (Viper 4K V20) e DVB-C/T/T2 si nu are demodulator pentru ele.
 
-DVB-T2: nucleul imaginii acordeaza deocamdata numai DVB-T (lib/dvb/frontendparms.h nu are `system` si `plp_id`,
-frontend.cpp trimite mereu SYS_DVBT). Televiziunea terestra din Romania e DVB-T2, deci cu un nucleu fara DVB-T2 orice
-fel de scanare iese acolo cu 0 canale. Ecranul o spune INAINTE de pornire si cere confirmarea; cand structura din
-nucleu va avea campurile, intrebarea dispare singura (HdsListeCabluTerestru.nucleul_stie_dvbt2) si sistemul si
-PLP-ul pleaca spre nucleu fara alta schimbare aici.
+DVB-T2: nucleul acordeaza DVB-T si DVB-T2 (lib/dvb/frontendparms.h: `system` si `plp_id`; frontend.cpp: proprietatile
+DTV_DELIVERY_SYSTEM si DTV_STREAM_ID). Felurile fara sistem stiut (canalul, toata banda, automat, listele fara
+atributul system) cauta fiecare frecventa intai DVB-T2, apoi DVB-T (HdsListeCabluTerestru.cu_ambele_sisteme); cu o
+structura veche, fara `system` (numai in probe), ecranul spune inainte ca DVB-T2 nu se poate cauta.
 
 Ce se cauta hotaraste functia de modul pregateste(fel, valori), fara ecran, folosita si de interfata web;
 cerere_scanare(rezultat) face lista pentru ServiceScan; alegeri(camp) da randurile listelor de alegere.
@@ -43,10 +42,8 @@ SISTEME = [
     (9, _('ATSC 3.0 (SUA, nouă generație)')),
 ]
 
-# Numai ce are nucleul (lib/dvb/frontendparms.h, eDVBFrontendParametersTerrestrial: Bandwidth 8/7/6 MHz si Auto,
-# Modulation QPSK/QAM16/QAM64/Auto). Latimile de 1,712, 5 si 10 MHz si 256QAM le-ar transforma prepare_terrestrial
-# (lib/dvb/frontend.cpp) tacut in Auto, iar 256QAM exista doar la DVB-T2, pe care nucleul nu il acordeaza; se pun
-# odata cu DVB-T2 in C++.
+# Latimile folosite in Europa, America si Asia; 5, 10 si 1,712 MHz (le stie si nucleul) vin numai din listele de
+# frecvente. 256QAM e numai la DVB-T2 (verifica_terestru).
 BENZI = [
     (0, _('8 MHz (Europa standard)')),
     (1, _('7 MHz (Australia, Caraibe)')),
@@ -55,7 +52,7 @@ BENZI = [
 ]
 
 MODULATII = [
-    (0, 'QPSK'), (1, '16QAM'), (2, '64QAM'),
+    (0, 'QPSK'), (1, '16QAM'), (2, '64QAM'), (4, '256QAM'),
     (3, _('Auto')),
 ]
 
@@ -111,9 +108,11 @@ def verifica_terestru(c, hz):
     banda = _int(c.get('banda'), 3)
     if banda not in [x[0] for x in BENZI]:
         return _('Lățimea de bandă aleasă nu e primită: imaginea știe numai 8, 7, 6 MHz și Auto. Alege alta.'), ''
-    if _int(c.get('mod'), 3) not in [x[0] for x in MODULATII]:
-        return _('Modulația aleasă (256QAM) e numai la DVB-T2, pe care imaginea nu îl recepționează încă. '
-                 'Alege QPSK, 16QAM, 64QAM sau Auto.'), ''
+    mod = _int(c.get('mod'), 3)
+    if mod not in [x[0] for x in MODULATII]:
+        return _('Modulația aleasă nu e primită. Alege alta.'), ''
+    if mod == liste.TER_QAM256 and _int(c.get('sistem'), 0) != 1:
+        return _('256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație.'), ''
     if banda == 3:
         return None, _('Lățimea de bandă Auto nu merge pe toate tunerele; dacă iese 0 canale, alege 8 MHz.')
     return None, ''
@@ -222,8 +221,10 @@ def pregateste(fel, valori, nimmanager=None, clasa=None, cale_xml=None, cale_rom
         cu_vhf = valori.get('cu_vhf', 'da') != 'nu'
         tps = liste.maturare_terestru(cu_vhf)
         flags = retea
+        # fiecare canal se incearca DVB-T2 si DVB-T (mai jos), deci timpul cel mai lung e dublu
+        incercari = len(tps) * (2 if liste.nucleul_stie_dvbt2(clasa) else 1)
         text = _('Toată banda terestră: %d canale (%s), cel mult %d minute, plus rețelele găsite în semnal.') % (
-            len(tps), _('VHF 5-12 și UHF 21-69') if cu_vhf else _('UHF 21-69'), liste.minute_maxime(len(tps)))
+            len(tps), _('VHF 5-12 și UHF 21-69') if cu_vhf else _('UHF 21-69'), liste.minute_maxime(incercari))
     elif fel == 'regiune':
         lista = liste.gaseste(liste.liste_terestre(cale_xml, cale_romania), valori.get('regiune'))
         if lista is None:
@@ -261,7 +262,12 @@ def pregateste(fel, valori, nimmanager=None, clasa=None, cale_xml=None, cale_rom
             return {'eroare': _('Nu se poate căuta: %s.') % motiv}
 
     intrebari = []
-    if not liste.nucleul_stie_dvbt2(clasa):
+    if liste.nucleul_stie_dvbt2(clasa):
+        # fara sistem stiut: DVB-T2, apoi DVB-T pe aceeasi frecventa (a doua incercare cade cand prima a prins)
+        if any(tp.get('system') is None for tp in tps):
+            tps = liste.cu_ambele_sisteme(tps)
+            note.append(_('Fiecare frecvență se încearcă DVB-T2 și DVB-T.'))
+    else:
         romania = liste.tara_utilizatorului() == 'RO' and fel != 'manual'
         if romania:
             intrebari.append(_('Televiziunea terestră din România (rețeaua MUX1) e DVB-T2, iar imaginea acordează '

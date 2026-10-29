@@ -1748,7 +1748,7 @@ def imbraca(html, ctx):
 	cap = _RE_STIL.sub(lambda m: m.group(1) + culoriPeTema(m.group(2)) + m.group(3), cap)
 	stil_text = u'<style id="hdsCadruStil">%s</style>\n' % (ctx.get("stil") or stil())
 	return u"".join((html[:m_html.start()], u"<html%s>" % atribute, cap, stil_text, html[a_head:m_body.end()],
-		u"\n", antetHtml(ctx), u"\n", html[m_body.end():]))
+		u"\n", antetHtml(ctx), u"\n", ctx.get("banda_nota") or u"", html[m_body.end():]))
 
 
 # ------------------------------------------------------------------ contextul unei cereri pe receptor
@@ -1913,7 +1913,21 @@ def context(request, html, P, jeton="", csrf=""):
 		"nume": numeReceptor(),
 		"versiune": versiuneImagine(),
 		"stil": stil(c),
+		"banda_nota": bandaNota(cale),
 	}
+
+
+def bandaNota(cale):
+	"""Anuntul notei noi a beta testerilor (betatester_web.bandaNota), sus pe orice pagina afara de /beta-tester (care
+	are caseta ei); "" fara nota veche sau la orice eroare."""
+	if cale.rstrip("/") == "/beta-tester":
+		return u""
+	try:
+		from .betatester_web import bandaNota as banda
+		return banda() or u""
+	except Exception as eroare:
+		_jurnal("banda notei noi: %s" % eroare)
+		return u""
 
 
 def _antetRaspuns(request, nume):

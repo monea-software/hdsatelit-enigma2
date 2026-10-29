@@ -5,6 +5,7 @@
 #include <lib/dvb/frontend.h>
 #include <lib/dvb/hdsgrad.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/epgcache.h>
 #include <lib/base/eenv.h>
 #include <lib/base/eerror.h>
@@ -452,20 +453,23 @@ void eDVBDB::loadServicelist(const char *file)
 				feparm->setFlags(l.flags);
 			} else if (line[1]=='t')
 			{
+				// 10 campuri (listele vechi: DVB-T), 11 sau 12 cu system:plp_id (lib/dvb/hdsterestru.h)
 				eDVBFrontendParametersTerrestrial ter;
-				int frequency, bandwidth, code_rate_HP, code_rate_LP, modulation, transmission_mode, guard_interval, hierarchy, inversion, flags=0;
-				sscanf(line+3, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", &frequency, &bandwidth, &code_rate_HP, &code_rate_LP, &modulation, &transmission_mode, &guard_interval, &hierarchy, &inversion, &flags);
-				ter.frequency = frequency;
-				ter.bandwidth = bandwidth;
-				ter.code_rate_HP = code_rate_HP;
-				ter.code_rate_LP = code_rate_LP;
-				ter.modulation = modulation;
-				ter.transmission_mode = transmission_mode;
-				ter.guard_interval = guard_interval;
-				ter.hierarchy = hierarchy;
-				ter.inversion = inversion;
+				hdster::LinieTerestru l;
+				hdster::citesteLinieTerestru(line+3, l);
+				ter.frequency = l.frequency;
+				ter.bandwidth = l.bandwidth;
+				ter.code_rate_HP = l.code_rate_HP;
+				ter.code_rate_LP = l.code_rate_LP;
+				ter.modulation = l.modulation;
+				ter.transmission_mode = l.transmission_mode;
+				ter.guard_interval = l.guard_interval;
+				ter.hierarchy = l.hierarchy;
+				ter.inversion = l.inversion;
+				ter.system = l.system;
+				ter.plp_id = l.plp_id;
 				feparm->setDVBT(ter);
-				feparm->setFlags(flags);
+				feparm->setFlags(l.flags);
 			} else if (line[1]=='c')
 			{
 				eDVBFrontendParametersCable cab;
@@ -596,10 +600,23 @@ void eDVBDB::saveServicelist(const char *file)
 		}
 		else if (!ch.m_frontendParameters->getDVBT(ter))
 		{
-			fprintf(f, "\tt %d:%d:%d:%d:%d:%d:%d:%d:%d:%d\n",
-				ter.frequency, ter.bandwidth, ter.code_rate_HP,
-				ter.code_rate_LP, ter.modulation, ter.transmission_mode,
-				ter.guard_interval, ter.hierarchy, ter.inversion, flags);
+			// 12 campuri: dupa steaguri system:plp_id (lib/dvb/hdsterestru.h)
+			hdster::LinieTerestru l;
+			l.frequency = ter.frequency;
+			l.bandwidth = ter.bandwidth;
+			l.code_rate_HP = ter.code_rate_HP;
+			l.code_rate_LP = ter.code_rate_LP;
+			l.modulation = ter.modulation;
+			l.transmission_mode = ter.transmission_mode;
+			l.guard_interval = ter.guard_interval;
+			l.hierarchy = ter.hierarchy;
+			l.inversion = ter.inversion;
+			l.flags = flags;
+			l.system = ter.system;
+			l.plp_id = ter.plp_id;
+			char rand[160];
+			hdster::scrieLinieTerestru(rand, sizeof(rand), l);
+			fprintf(f, "\tt %s\n", rand);
 		}
 		else if (!ch.m_frontendParameters->getDVBC(cab))
 		{
@@ -1150,7 +1167,7 @@ PyObject *eDVBDB::readTerrestrials(ePyObject ter_list, ePyObject tp_dict)
 	const Attribute *at;
 	std::string name;
 	int tmp, *dest,
-		freq, bw, constellation, crh = 5, crl = 5, guard = 4, transm, hierarchy, inv = 2;
+		freq, bw, constellation, crh = 5, crl = 5, guard = 4, transm, hierarchy, inv = 2, system = -1, plp_id = -1;
 	char *end_ptr;
 	const ElementList &root_elements = root->getElementList();
 	for (ElementConstIterator it(root_elements.begin()); it != root_elements.end(); ++it)
@@ -1200,6 +1217,9 @@ PyObject *eDVBDB::readTerrestrials(ePyObject ter_list, ePyObject tp_dict)
 				transm = eDVBFrontendParametersTerrestrial::TransmissionMode_Auto;
 				hierarchy = eDVBFrontendParametersTerrestrial::Hierarchy_Auto;
 				inv = eDVBFrontendParametersTerrestrial::Inversion_Unknown;
+				// fara atributul system sistemul nu se stie (-1): cine scaneaza il incearca pe amandoua
+				system = -1;
+				plp_id = eDVBFrontendParametersTerrestrial::No_PLP_Id;
 				for (AttributeConstIterator it(tp_attributes.begin()); it != end; ++it)
 				{
 //					eDebug("\t\tattr: %s", at->name().c_str());
@@ -1215,6 +1235,8 @@ PyObject *eDVBDB::readTerrestrials(ePyObject ter_list, ePyObject tp_dict)
 					else if (name == "transmission_mode") dest = &transm;
 					else if (name == "hierarchy_information") dest = &hierarchy;
 					else if (name == "inversion") dest = &inv;
+					else if (name == "system") dest = &system;
+					else if (name == "plp_id") dest = &plp_id;
 					else continue;
 					if (dest)
 					{
@@ -1225,11 +1247,14 @@ PyObject *eDVBDB::readTerrestrials(ePyObject ter_list, ePyObject tp_dict)
 				}
 				if (freq)
 				{
-					if (crh > 5) // our terrestrial.xml is buggy... 6 for AUTO
-						crh = 5;
-					if (crl > 5) // our terrestrial.xml is buggy... 6 for AUTO
-						crl = 5;
-					tuple = PyTuple_New(10);
+					// 6 e scris diferit de liste (None sau 6/7): Auto; 7..9 (8/9, 3/5, 4/5) raman
+					crh = hdster::fecValid(crh);
+					crl = hdster::fecValid(crl);
+					if (system != -1)
+						system = hdster::sistemNormalizat(system);
+					plp_id = system == -1 ? (int)eDVBFrontendParametersTerrestrial::No_PLP_Id
+						: hdster::plpNormalizat(system, plp_id);
+					tuple = PyTuple_New(12);
 					PyTuple_SET_ITEM(tuple, 0, PyLong_FromLong(2));
 					PyTuple_SET_ITEM(tuple, 1, PyLong_FromLong(freq));
 					PyTuple_SET_ITEM(tuple, 2, PyLong_FromLong(bw));
@@ -1240,6 +1265,8 @@ PyObject *eDVBDB::readTerrestrials(ePyObject ter_list, ePyObject tp_dict)
 					PyTuple_SET_ITEM(tuple, 7, PyLong_FromLong(transm));
 					PyTuple_SET_ITEM(tuple, 8, PyLong_FromLong(hierarchy));
 					PyTuple_SET_ITEM(tuple, 9, PyLong_FromLong(inv));
+					PyTuple_SET_ITEM(tuple, 10, PyLong_FromLong(system));
+					PyTuple_SET_ITEM(tuple, 11, PyLong_FromLong(plp_id));
 					PyList_Append(tplist, tuple);
 					Py_DECREF(tuple);
 				}

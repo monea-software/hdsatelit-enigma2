@@ -10,13 +10,18 @@
 # - HdsAsistenta: intrarea. Deschisa de cineva care nu e inscris in programul de beta testeri (si fara o sesiune
 #   pornita), arata numai fraza "Asistenta de la distanta e pentru beta testeri." si Verde "Devino beta tester"
 #   (acordul). Cat functia e oprita arata informarea intreaga (A.textInformare(): ce facem, ce date ajung la noi, cat le
-#   pastram, cum opresti, varsta) si Verde "Pornește". Cat e pornita arata codul (cat asteapta aprobarea), timpul ramas
-#   si jurnalul in timp real, cu Rosu "Oprește"; tasta verde nu are atunci ce face si nu apare. Deschis la o cerere din
-#   pagina web (browserul omului, conectat cu codul de pe receptor), spune asta sus si se inchide singur dupa 5 minute
-#   fara Verde. Cat ecranul e deschis, banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el
-#   starea si timpul.
-# - HdsAsistentaAlege: alegerea duratei (nivelul e "Citire și probe", fix in versiunea 1), apoi confirmarea (implicit
-#   "Nu"); abia dupa "Da" porneste sesiunea. Semnul de pe ecran si pornirea insasi le face Screens/HdsAsistentaSemn.py.
+#   pastram, cum opresti, cat poate ramane pornita, varsta) si Verde "Pornește". Cat e pornita arata codul (cat asteapta
+#   aprobarea, fara termen: echipa intra oricand cat e pornita), pana cand e pornita (A.textPana: "până la ZZ.LL, HH:MM"
+#   sau "fără sfârșit") si jurnalul in timp real, cu Rosu "Oprește"; tasta verde nu are atunci ce face si nu apare.
+#   Deschis la o cerere din pagina web (browserul omului, conectat cu codul de pe receptor), spune asta sus si ramane
+#   deschis pana raspunde omul. Cat ecranul e deschis, banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde:
+#   ecranul arata el starea si pana cand e pornita.
+# - HdsAsistentaAlege: alegerea duratei (nivelul e "Citire și probe", fix in versiunea 1) si, optional, "Cu ce te
+#   ajutăm?" (o alegere din lista A.NEVOI, implicit "Nimic anume", si un rand de text scris cu tastatura de pe ecran),
+#   apoi confirmarea (implicit "Nu"); abia dupa "Da" porneste sesiunea. Cine nu vrea sa spuna nimic apasa Verde ca
+#   inainte: zero pasi in plus. Stanga/Dreapta schimba o alegere, OK deschide lista ei (ChoiceBox) sau tastatura.
+#   Codul de pe ecran nu trebuie spus nimanui: serverul ni-l trimite singur, cu nevoia aleasa. Semnul de pe ecran si
+#   pornirea insasi le face Screens/HdsAsistentaSemn.py.
 #
 # Skinul: ecranele sunt in skinul HDSatelit (HDSatelit/skin.xml, cadrul HdsCadru1776); skinul de aici e rezerva pentru
 # alt skin ales, cu aceeasi geometrie (CORP_*); in skin.xml formele se numesc HdsAjutorDistanta si
@@ -29,16 +34,16 @@ from enigma import eTimer
 
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
+from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.Button import Button
 from Components.ConfigList import ConfigListScreen
 from Components.ScrollLabel import ScrollLabel
 from Components.Sources.StaticText import StaticText
-from Components.config import ConfigSelection, getConfigListEntry
+from Components.config import ConfigSelection, ConfigText, getConfigListEntry
 from Components import HdsAsistenta as A
 from Screens import HdsAsistentaSemn as Semn
 
-CERERE_WEB_S = 5 * 60
 
 
 def N_(text):
@@ -47,6 +52,21 @@ def N_(text):
 
 
 TEXT_NUMAI_TESTERI = N_("Asistența de la distanță e pentru beta testeri.")
+# cat codul asteapta aprobarea: omul nu trebuie sa ni-l spuna (vine la noi pe e-mail); il vede ca sa stie ca e
+# cererea lui
+TEXT_COD_PRIMIT = N_("Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic.")
+# sub cod, cat cererea asteapta: omul poate iesi de pe ecran si se uita mai departe (banda de sus si anuntul de la
+# conectare ii spun ce se intampla)
+TEXT_ASTEPTARE = N_("Te anunțăm când intrăm. Poți folosi receptorul între timp.")
+TEXT_NEVOIE = N_("Cu ce te ajutăm?")
+TEXT_DETALII = N_("Scrie pe scurt (opțional)")
+TEXT_NEVOIE_AJUTOR = N_("Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau "
+	"tastatura). Nu e obligatoriu: Verde pornește oricum.")
+# confirmarea la "permanent" (la celelalte durate: "Dai acces la distanță pentru %s, ...")
+TEXT_CONFIRMA_PERMANENT = N_("Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, "
+	"confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?")
+# cheia alegerii "Nimic anume" in lista de pe ecran (ConfigSelection vrea o cheie nevida); A.curataNevoie o face ""
+NEVOIE_ECRAN_NIMIC = "nimic"
 
 # culorile skinului HDSatelit (rolurile din skin.xml), scrise ca valori pentru skinul de rezerva
 CULORI_SKIN = {
@@ -127,13 +147,15 @@ def _inscris():
 class HdsAsistenta(Screen):
 	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA)
 
-	def __init__(self, session, din_web=None):
+	def __init__(self, session, din_web=None, nevoie="", detalii=""):
 		Screen.__init__(self, session)
 		# numele formei din skinul HDSatelit (skin.xml nu poate avea numele clasei: verificarea cuvintelor skinului)
 		self.skinName = "HdsAjutorDistanta"
 		self.setTitle(_("Asistență de la distanță"))
 		# din_web: minutele alese in pagina web (cererea de pornire din browserul omului); None = deschis din meniu
 		self.din_web = int(din_web) if din_web in A.DURATE_MIN else None
+		# "Cu ce te ajutăm?" ales in pagina web: ecranul de pornire il arata deja ales (omul il poate schimba)
+		self.nevoie, self.detalii = A.curataNevoie(nevoie, detalii)
 		self["antet"] = StaticText("")
 		self["cod"] = StaticText("")
 		self["text"] = ScrollLabel("")
@@ -160,23 +182,11 @@ class HdsAsistenta(Screen):
 		self.onClose.append(self.ceas.stop)
 		self.onClose.append(lambda: A.scoateObservator(self.reface))
 		A.adaugaObservator(self.reface)
-		self.ceasWeb = None
-		if self.din_web is not None:
-			# o cerere din web neconfirmata in 5 minute moare (ecranul se inchide singur cat functia e oprita)
-			self.ceasWeb = eTimer()
-			self.ceasWeb.callback.append(self._cerereWebExpirata)
-			self.onClose.append(self.ceasWeb.stop)
 		self.onLayoutFinish.append(self._porneste)
 
 	def _porneste(self):
 		self.ceas.start(1000, False)
-		if self.ceasWeb is not None:
-			self.ceasWeb.start(CERERE_WEB_S * 1000, True)
 		self.reface()
-
-	def _cerereWebExpirata(self):
-		if A.stare().get("stare") == A.OPRIT:
-			self.close()
 
 	def _puneText(self, text):
 		# ScrollLabel se intoarce sus la fiecare setText: textul se pune numai cand se schimba
@@ -218,22 +228,27 @@ class HdsAsistenta(Screen):
 			self["key_red"].setText(_("Înapoi"))
 			return
 		if stare == A.ASTEAPTA and s.get("cod"):
-			self["antet"].setText(_("Spune-ne acest cod. Nu îl da altcuiva.") + "  " + self._ramas(s))
+			self["antet"].setText(_(TEXT_COD_PRIMIT))
 			self["cod"].setText(_cod(s["cod"]))
 		elif stare == A.CONECTAT:
-			self["antet"].setText(_("Conectat.") + "  " + self._ramas(s))
+			self["antet"].setText(_("Conectat."))
 			self["cod"].setText("")
 		else:
-			self["antet"].setText(_("Se pregătește...") + "  " + self._ramas(s))
+			self["antet"].setText(_("Se pregătește..."))
 			self["cod"].setText("")
-		self._puneText("\n".join(s.get("jurnal") or []))
-		self["ajutor"].setText("")
+		jurnal = "\n".join(s.get("jurnal") or [])
+		if stare == A.ASTEAPTA and s.get("cod"):
+			jurnal = _(TEXT_ASTEPTARE) + "\n\n" + jurnal
+		self._puneText(jurnal)
+		# jos in dreapta, langa Rosu "Oprește": pana cand e pornita (antetul are un singur rand, pentru stare)
+		self["ajutor"].setText(self._ramas(s))
 		# cat asistenta merge, Verde nu are ce face: fara text, legenda ei nu apare
 		self["key_green"].setText("")
 		self["key_red"].setText(_("Oprește"))
 
 	def _ramas(self, s):
-		return _("mai sunt") + " " + Semn._hms(s.get("ramas_s", 0))
+		# pana cand e pornita ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; o poți opri oricând.")
+		return s.get("pana_text") or ""
 
 	def _verde(self):
 		if not self._tester:
@@ -244,14 +259,12 @@ class HdsAsistenta(Screen):
 		if s.get("disponibil") and s.get("stare") == A.OPRIT:
 			self.session.openWithCallback(self._dupaAlege, HdsAsistentaAlege,
 				minute=self.din_web if self.din_web is not None else A.DURATA_IMPLICITA_MIN,
-				de_la="web" if self.din_web is not None else "televizor")
+				de_la="web" if self.din_web is not None else "televizor", nevoie=self.nevoie, detalii=self.detalii)
 
 	def _dupaAlege(self, pornita=None):
 		if pornita:
 			# dupa pornire ecranul ramane deschis: arata codul mare
 			self.din_web = None
-			if self.ceasWeb is not None:
-				self.ceasWeb.stop()
 			self.reface()
 
 	def _rosu(self):
@@ -275,21 +288,34 @@ def _cod(cod):
 class HdsAsistentaAlege(Screen, ConfigListScreen):
 	skin = _rezerva("HdsAsistentaAlege", "Pornește asistența", CORP_ALEGE, LEGENDA_ALEGE)
 
-	def __init__(self, session, minute=None, de_la="televizor"):
+	def __init__(self, session, minute=None, de_la="televizor", nevoie="", detalii=""):
 		Screen.__init__(self, session)
 		self.skinName = "HdsAjutorDistantaAlege"
 		self.setTitle(_("Pornește asistența"))
 		self.de_la = de_la if de_la in ("televizor", "web") else "televizor"
 		implicit = minute if minute in A.DURATE_MIN else A.DURATA_IMPLICITA_MIN
+		self._alegeri = {}
 		alegeri = [(str(m), A.textDurata(m)) for m in A.DURATE_MIN]
 		self.durata = ConfigSelection(default=str(implicit), choices=alegeri)
-		lista = [getConfigListEntry(_("Cât timp"), self.durata)]
+		self._alegeri[id(self.durata)] = alegeri
+		# "Cu ce te ajutăm?": implicit "Nimic anume", deci Verde porneste ca inainte, fara pasi in plus
+		nevoie, detalii = A.curataNevoie(nevoie, detalii)
+		alegeri = [(cheie or NEVOIE_ECRAN_NIMIC, text) for cheie, text in A.alegeriNevoie()]
+		self.nevoie = ConfigSelection(default=nevoie or NEVOIE_ECRAN_NIMIC, choices=alegeri)
+		self._alegeri[id(self.nevoie)] = alegeri
+		self.detalii = ConfigText(default=detalii, fixed_size=False, visible_width=48)
+		# trei randuri: exact cat incape in lista formei HdsAjutorDistantaAlege (180 px, randuri de 60)
+		lista = [getConfigListEntry(_("Cât timp"), self.durata), getConfigListEntry(_(TEXT_NEVOIE), self.nevoie),
+			getConfigListEntry(_(TEXT_DETALII), self.detalii)]
 		ConfigListScreen.__init__(self, lista, session=session)
 		self["text"] = StaticText(_("Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în "
-			"principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând."))
+			"principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând.") + "\n\n"
+			+ _(TEXT_NEVOIE_AJUTOR))
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Pornește"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
+			# OK legat aici (harta are OkCancelActions): altfel jurnalul scrie "unknown action" la fiecare OK
+			"ok": self.keyOK,
 			"cancel": self.close,
 			"red": self.close,
 			"green": self._porneste,
@@ -297,17 +323,40 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 			"blue": _nimic,
 		}, -2)
 
+	def keyOK(self):
+		# OK pe o alegere deschide lista ei (ChoiceBox); pe randul de text, tastatura de pe ecran (ConfigListScreen)
+		cur = self["config"].getCurrent()
+		el = cur[1] if cur is not None and len(cur) > 1 else None
+		if el is not None and id(el) in self._alegeri:
+			alegeri = self._alegeri[id(el)]
+			chei = [cheie for cheie, _text in alegeri]
+			sel = chei.index(el.value) if el.value in chei else 0
+			self.session.openWithCallback(lambda ales: self._ales(el, ales), ChoiceBox, title=cur[0],
+				list=[(text, cheie) for cheie, text in alegeri], selection=sel)
+			return
+		ConfigListScreen.keyOK(self)
+
+	def _ales(self, el, ales):
+		if ales:
+			el.value = ales[1]
+			self["config"].invalidateCurrent()
+
 	def _porneste(self):
 		durata = int(self.durata.value)
-		fraza = _("Dai acces la distanță pentru %s, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 "
-			"ani sau acordul unui părinte. Poți opri oricând. Pornești?") % A.textDurata(durata)
+		if durata == A.DURATA_PERMANENTA:
+			fraza = _(TEXT_CONFIRMA_PERMANENT)
+		else:
+			fraza = _("Dai acces la distanță pentru %s, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 "
+				"ani sau acordul unui părinte. Poți opri oricând. Pornești?") % A.textDurata(durata)
 		self.session.openWithCallback(lambda da: self._confirmat(da, durata), MessageBox, fraza,
 			MessageBox.TYPE_YESNO, default=False)
 
 	def _confirmat(self, da, durata):
 		if not da:
 			return
-		reusit, mesaj = Semn.porneste(self.session, nivel="A", durata_min=durata, de_la=self.de_la)
+		nevoie, detalii = A.curataNevoie(self.nevoie.value, self.detalii.value)
+		reusit, mesaj = Semn.porneste(self.session, nivel="A", durata_min=durata, de_la=self.de_la, nevoie=nevoie,
+			detalii=detalii)
 		if not reusit:
 			self.session.open(MessageBox, mesaj, MessageBox.TYPE_INFO, timeout=6)
 		self.close(bool(reusit))

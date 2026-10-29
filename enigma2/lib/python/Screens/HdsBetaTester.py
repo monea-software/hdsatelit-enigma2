@@ -106,6 +106,7 @@ GLIFE = {
 	"nota": "mod-sigur",
 	"iesire": "intrare",
 	"acord": "noutati",
+	"nota_noua": "noutati",
 }
 GLIF_TESTER = "noutati"
 GLIF_FORUM = "traducere"
@@ -630,6 +631,13 @@ class HdsBetaTester(Screen):
 		("acord", B.N_("Devino beta tester")),
 		("forum", B.N_("Forumul receptorului")),
 	)
+	# inscris cu o nota mai veche: acceptarea notei noi intai, forumul, nota si iesirea
+	RANDURI_NOTA_VECHE = (
+		("nota_noua", B.N_("Acceptă nota nouă")),
+		("forum", B.N_("Forumul receptorului")),
+		("nota", B.N_("Nota de confidențialitate")),
+		("iesire", B.N_("Ieși din program și șterge datele")),
+	)
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
@@ -738,7 +746,7 @@ class HdsBetaTester(Screen):
 
 	def _laInceput(self):
 		if B.notaVeche():
-			self.session.openWithCallback(self._dupaAcord, HdsBetaAcord)
+			self.session.openWithCallback(self._dupaAcord, HdsBetaNotaNoua)
 			return
 		self._cereRaspunsuri()
 
@@ -848,9 +856,12 @@ class HdsBetaTester(Screen):
 	def reface(self):
 		b = B.initConfig()
 		noi = B.raspunsuriNoi()
-		inscris = B.inscris(b)
+		veche = B.notaVeche(b)
+		# cu nota veche: meniul testerului, cu starea si acceptarea notei noi primele (nimic nu pleaca pana atunci)
+		inscris = B.inscris(b) or veche
 		randuri = []
-		for cheie, text in (self.RANDURI if inscris else self.RANDURI_VIZITATOR):
+		felul = self.RANDURI_NOTA_VECHE if veche else (self.RANDURI if inscris else self.RANDURI_VIZITATOR)
+		for cheie, text in felul:
 			if cheie == "forum" and ecranForum() is None:
 				continue
 			if (cheie == "probe" and ecranProbe() is None) or (cheie == "asistenta" and ecranAsistenta() is None):
@@ -870,6 +881,8 @@ class HdsBetaTester(Screen):
 				insigna = _modulForum().textMesajeNoi(self._forumNoi)
 			elif cheie == "public" and b.public.value:
 				valoare = b.public.value
+			elif cheie == "nota_noua":
+				insigna = _("Trimiterea e oprită")
 			randuri.append((_(text), cheie, _(scurt), insigna, valoare, glif, "rosu" if cheie == "iesire" else ""))
 		self.randuri = randuri
 		self["lista"].setList(randuri)
@@ -894,6 +907,10 @@ class HdsBetaTester(Screen):
 		self["ultima"].setText(self._ultima)
 		self["automat"].setText(_("(automat în fiecare zi)") if b.automat.value else "")
 		numar = B.randNumar()
+		if B.notaVeche(b):
+			# starea spusa limpede, in caseta chihlimbar (in locul numarului de testeri)
+			self["automat"].setText("")
+			numar = _(B.NOTA_OPRITA)
 		self["numar"].setText(numar)
 		for nume_w in ("numar_fundal", "numar_bara", "numar"):
 			_arata(self[nume_w], bool(numar))
@@ -933,7 +950,10 @@ class HdsBetaTester(Screen):
 		if cheie == "acord":
 			self.session.openWithCallback(self._dupaAcord, HdsBetaAcord)
 			return
-		if not B.inscris():
+		if cheie == "nota_noua":
+			self.session.openWithCallback(self._dupaAcord, HdsBetaNotaNoua)
+			return
+		if not B.inscris() and not (B.notaVeche() and cheie in ("nota", "iesire")):
 			return
 		if cheie == "mesaj":
 			self.session.open(HdsBetaMesaj, self.ecran_dedesubt)
@@ -1191,6 +1211,139 @@ class HdsBetaAcord(Screen, _Comutatoare):
 
 	def renunta(self):
 		self.close(False)
+
+
+# ------------------------------------------------------------------ nota noua: anuntul si nota intreaga
+
+CORP_NOTA_NOUA = """
+		<widget name="antet_fundal" position="32,104" size="1712,124" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="antet_bara" position="32,104" size="6,124" backgroundColor="hdsAmber" zPosition="2" />
+		<widget name="antet" position="60,104" size="1664,124" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="3" />
+		<widget name="titlu_nou" position="32,248" size="1712,44" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="noutati" position="32,296" size="1712,272" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<eLabel position="32,580" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="lista" position="32,596" size="1072,228" itemHeight="76" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" foregroundColorSelected="hdsText" transparent="1" scrollbarMode="showNever" enableWrapAround="1" zPosition="3" />
+		<widget name="rand_accept" position="32,832" size="1072,84" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget source="qr" render="Canvas" position="1544,604" size="200,200" zPosition="3" />
+		<widget name="adresa" position="1136,812" size="608,104" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="top" zPosition="2" />"""
+
+
+class HdsBetaNotaNoua(Screen):
+	"""Anuntul notei noi: ce s-a schimbat, „Citeste nota intreaga” (pe receptor), „Accept” (acordul nou cu alegerile de
+	dinainte), „Mai tarziu” (revine maine). Codul QR, mic, in colt, pentru cine vrea sa citeasca pe telefon. Iesirea
+	din program ramane in meniul Beta tester. Se inchide cu True dupa Accept."""
+	skin = _rezerva("HdsBetaNotaNoua", "Beta tester", CORP_NOTA_NOUA, ("key_red", "key_green", "key_yellow"))
+
+	ORDINE = ("citeste", "accept", "mai_tarziu")
+	GLIFE_BUTOANE = {"citeste": "informatii", "accept": "noutati", "mai_tarziu": "ceas"}
+
+	def __init__(self, session):
+		Screen.__init__(self, session)
+		self.setTitle(_(B.NOTA_ANUNT_TITLU))
+		for nume in ("antet_fundal", "antet_bara"):
+			self[nume] = Label("")
+		self["antet"] = Label(_(B.NOTA_ANUNT))
+		self["titlu_nou"] = Label(_("Ce e nou"))
+		self["noutati"] = Label("\n".join("•  " + t for t in B.noutatiNota()))
+		self["rand_accept"] = Label(_(B.NOTA_ACCEPT_RAND))
+		self["qr"] = CanvasSource()
+		self["adresa"] = Label(_("Sau citește pe telefon:") + "\n" + B.adresaNotei().replace("https://", "").rstrip("/"))
+		self["lista"] = _listaDesenata()
+		self.desen = _Desen(self["lista"], "meniu")
+		randuri = []
+		for cheie in self.ORDINE:
+			titlu, rand = B.NOTA_BUTOANE[cheie]
+			randuri.append((_(titlu), cheie, _(rand), "", "", self.GLIFE_BUTOANE[cheie], ""))
+		self.randuri = randuri
+		self["lista"].setList(randuri)
+		self["key_red"] = Button(_(B.NOTA_BUTOANE["mai_tarziu"][0]))
+		self["key_green"] = Button(_(B.NOTA_BUTOANE["accept"][0]))
+		self["key_yellow"] = Button(_(B.NOTA_BUTOANE["citeste"][0]))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], _cuCulori({
+			"ok": self.deschide,
+			"green": self.accept,
+			"yellow": self.citeste,
+			"red": self.maiTarziu,
+			"cancel": self.maiTarziu,
+		}), -2)
+		self.onLayoutFinish.append(self._asezare)
+
+	def _asezare(self):
+		self.desen.aseaza()
+		_deseneazaQr(self, "qr", B.adresaNotei())
+
+	def _alege(self, cheie):
+		try:
+			self["lista"].moveToIndex(self.ORDINE.index(cheie))
+		except Exception:
+			pass
+
+	def deschide(self):
+		ales = self["lista"].getCurrent()
+		cheie = ales[1] if ales else "citeste"
+		if cheie == "accept":
+			self.accept()
+		elif cheie == "mai_tarziu":
+			self.maiTarziu()
+		else:
+			self.citeste()
+
+	def citeste(self):
+		"""Nota intreaga pe receptor, din copia din imagine; fara ea, pagina notei in navigatorul receptorului."""
+		nota = B.textNota()
+		if nota is not None:
+			self.session.openWithCallback(self._dupaCitire, HdsBetaNotaText, nota[0], nota[1])
+			return
+		try:
+			from Plugins.Extensions.HdsNavigator.plugin import deschideNavigator
+			deschideNavigator(self.session, B.adresaNotei())
+			self._alege("accept")
+		except Exception as e:
+			_jurnal("navigatorul pentru nota: %r" % (e,))
+			self.session.open(MessageBox, _("Nota întreagă e la adresa:") + "\n" + B.adresaNotei(), MessageBox.TYPE_INFO,
+				timeout=15)
+
+	def _dupaCitire(self, *_r):
+		# dupa citire, alegerea sta pe Accept
+		self._alege("accept")
+
+	def accept(self):
+		ok, text = B.acceptaNotaNoua()
+		if not ok:
+			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=6)
+			return
+		self.session.openWithCallback(lambda *r: self.close(True), MessageBox, text, MessageBox.TYPE_INFO, timeout=5)
+
+	def maiTarziu(self):
+		B.amanaAnuntNota()
+		self.close(False)
+
+
+CORP_NOTA_TEXT = """
+		<widget name="text" position="32,104" size="1712,808" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />"""
+
+
+class HdsBetaNotaText(Screen):
+	"""Nota intreaga pe receptor, pe toata latimea, cu literele mari: Sus/Jos si Stanga/Dreapta dau pagina, EXIT, OK
+	sau Rosu intorc la anunt."""
+	skin = _rezerva("HdsBetaNotaText", "Beta tester", CORP_NOTA_TEXT, ("key_red",))
+
+	def __init__(self, session, titlu, text):
+		Screen.__init__(self, session)
+		self.setTitle(titlu)
+		self["text"] = ScrollLabel(text)
+		self["key_red"] = Button(_("Înapoi"))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], _cuCulori(_cuDirectii({
+			"cancel": self.close,
+			"ok": self.close,
+			"red": self.close,
+		}, self._sus, self._jos, self._sus, self._jos)), -2)
+
+	def _sus(self):
+		self["text"].pageUp()
+
+	def _jos(self):
+		self["text"].pageDown()
 
 
 CORP_DATE = """

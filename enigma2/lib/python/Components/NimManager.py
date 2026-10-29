@@ -1131,6 +1131,31 @@ def InitSecParams():
 # the C(++) part should can handle this
 # the configElement should be only visible when diseqc 1.2 is disabled
 
+# tunerul combinat DVB-T2/C: alegerea implicita, din lista de canale (o data pe pornire)
+_FEL_COMBINAT = []
+
+
+def felCombinatImplicit(cale = "/etc/enigma2/lamedb"):
+	"""'terestru' sau 'cablu' pentru tunerul combinat cand omul n-a ales: ce are lista de canale (randurile
+	transponderelor terestre si de cablu din lamedb); la egalitate sau fara niciunul, terestru (antena, cum vine
+	tunerul de la fabrica). Citit o singura data pe pornire."""
+	if _FEL_COMBINAT:
+		return _FEL_COMBINAT[0]
+	ter = cab = 0
+	try:
+		with open(cale, "rb") as f:
+			for rand in f:
+				if rand.startswith(b"\tt "):
+					ter += 1
+				elif rand.startswith(b"\tc "):
+					cab += 1
+	except (IOError, OSError):
+		pass
+	fel = "cablu" if cab > ter else "terestru"
+	_FEL_COMBINAT.append(fel)
+	return fel
+
+
 def InitNimManager(nimmgr):
 	hw = HardwareInfo()
 	addNimConfig = False
@@ -1585,6 +1610,14 @@ def InitNimManager(nimmgr):
 					n += 1
 				nim.terrestrial = ConfigSelection(choices = regiuni_terestru)
 				nim.terrestrial_5V = ConfigOnOff()
+			if slot.isCompatible("DVB-C") and slot.isCompatible("DVB-T"):
+				# tunerul combinat (DVB-T2/C, o singura intrare): omul spune ce e legat la el, iar ecranul tunerului arata
+				# setarile potrivite. Tunerul ramane bun pentru amandoua (scanarea, acordarea), deci nimic altceva nu
+				# depinde de alegere. Implicit: ce are lista de canale (felCombinatImplicit).
+				nim.hds_fel = ConfigSelection(choices = [
+					("terestru", _("Antenă terestră (DVB-T/T2)")),
+					("cablu", _("Cablu (DVB-C)"))],
+					default = felCombinatImplicit())
 		else:
 			empty_slots += 1
 			nim.configMode = ConfigSelection(choices = { "nothing": _("disabled") }, default="nothing");

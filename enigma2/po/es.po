@@ -58721,3 +58721,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (cuerpo: <code>parola=</code>): la
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> pide también <code>confirmat=1</code>): “Sin contraseña en la red local”. La contraseña, el texto en bruto y todos los cambios solo funcionan desde un navegador conectado con el código del televisor (si no, 403 con <code>trebuie_cod</code>), nunca con <code>?token=</code>; mientras la pantalla “Contraseña del receptor” está abierta en el receptor, lo mismo vale para <code>/api/remotecontrol</code> y <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Antena terrestre (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Cable (DVB-C)"
+
+msgid "Legat la"
+msgstr "Conectado a"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Cada frecuencia se prueba en DVB-T2 y en DVB-T."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "La modulación elegida no se acepta. Elige otra."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM solo existe en DVB-T2: elige DVB-T2 en Sistema u otra modulación."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "ancho de banda que la imagen no conoce (solo 8, 7, 6, 5, 10, 1,712 MHz y Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "modulación que la imagen no conoce"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM solo existe en DVB-T2"
+
+msgid "Tunerul nu e dat."
+msgstr "No se ha indicado el sintonizador."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "No se pueden leer los ajustes de los sintonizadores: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "El sintonizador %s no es combinado (terrestre y cable)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Opción desconocida: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "La nota de confidencialidad ha cambiado"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "La nota de confidencialidad de los probadores beta ha cambiado. Para que el receptor siga enviando los registros, lee lo nuevo y acepta."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "El receptor envía también una huella calculada a partir de su placa, para que se cuente una sola vez aunque esté instalado en varias ranuras o reinstalado. De la huella no se pueden saber la dirección MAC ni el número de serie, y estos no salen del receptor."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Cuando un canal no funciona (sin señal, sin imagen, error de decodificación), el registro guarda el nombre y los datos técnicos de ese canal, para que podamos saber por qué. Qué canales ves cuando todo funciona no se envía."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Con Aceptar estás de acuerdo con la nota nueva y el receptor vuelve a enviar los datos que tenías marcados."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "El envío está detenido hasta que aceptes la nota nueva."
+
+msgid "Citește nota întreagă"
+msgstr "Leer la nota completa"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "En pantalla, con las flechas. EXIT te devuelve aquí."
+
+msgid "Accept"
+msgstr "Aceptar"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Los datos que marcaste vuelven a enviarse, como hasta ahora."
+
+msgid "Îți amintim mâine."
+msgstr "Te lo recordamos mañana."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Gracias. El receptor vuelve a enviar los datos marcados."
+
+msgid "Acceptă nota nouă"
+msgstr "Aceptar la nota nueva"
+
+msgid "Trimiterea e oprită"
+msgstr "Envío detenido"
+
+msgid "Sau citește pe telefon:"
+msgstr "O léela en el teléfono:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "La nota completa está en:"
+
+msgid "Nimic anume"
+msgstr "Nada en concreto"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi y red"
+
+msgid "Imaginea sau sunetul"
+msgstr "Imagen o sonido"
+
+msgid "Canale și scanare"
+msgstr "Canales y búsqueda"
+
+msgid "Pornirea receptorului"
+msgstr "Arranque del receptor"
+
+msgid "Altceva"
+msgstr "Otra cosa"
+
+msgid "Cu ce te ajutăm?"
+msgstr "¿En qué te ayudamos?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Escríbelo brevemente (opcional)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Si quieres, elige en qué te ayudamos y escribe brevemente qué pasa (OK abre la lista o el teclado). No es obligatorio: Verde inicia igualmente."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Recibimos tu solicitud, con el código de abajo. No tienes que hacer nada."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Recibimos tu solicitud, con el código de abajo. No tienes que hacer nada. Quedan %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Te avisamos cuando entremos. Mientras tanto puedes usar el receptor."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "El equipo de HD Satelit se ha conectado. Puedes usar el receptor como siempre."
+
+msgid "permanent"
+msgstr "permanente"
+
+msgid "o zi"
+msgstr "un día"
+
+msgid "o săptămână"
+msgstr "una semana"
+
+msgid "o lună"
+msgstr "un mes"
+
+msgid "Pornită până la %s."
+msgstr "Activada hasta el %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Activada, sin fecha de fin; puedes detenerla cuando quieras."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Asistencia remota activada hasta el %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Asistencia remota activada, sin fecha de fin"
+
+msgid "Oprești oricând din %s"
+msgstr "La detienes cuando quieras en %s"
+
+msgid "reluată după repornire"
+msgstr "reanudada tras el reinicio"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Das acceso remoto de forma permanente, hasta que lo detengas, nivel “Lectura y pruebas”. Al iniciar, confirmas que tienes al menos 16 años o el consentimiento de uno de tus padres. Puedes detenerlo cuando quieras. ¿Iniciar?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Puede quedar activada el tiempo que elijas: 2 horas, 12 horas, un día, una semana, un mes o de forma permanente. La detienes cuando quieras, en el receptor o en la página web. Mientras está activada, el equipo puede entrar en cualquier momento, pero solo hace las lecturas y pruebas de la lista fija, sin cambiar nada."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Añade, borra y salta entre marcas de corte en la grabación que se reproduce"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Elige una imagen de la memoria USB. Se ajusta a 1920x1080 sin deformarla y se le escribe la línea de abajo."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "De momento no se puede: al receptor le falta %s. Todas las pantallas ya hechas funcionan."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "De momento no se pueden usar imágenes propias: al receptor le falta %s. Todas las pantallas ya hechas funcionan y puedes cambiarlas aquí cuando quieras."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "La galería de pantallas no está instalada en este receptor. Aun así puedes usar una imagen propia, si el receptor tiene las herramientas necesarias."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Nitidez de la imagen (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Posición actual: %s. Verde añade una marca simple, Amarillo añade START/STOP de corte."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "La vista previa se ve cuando el receptor recibe también las imágenes pequeñas de las pantallas."
+
+msgid "START tăiere"
+msgstr "START de corte"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "START de corte (aquí empieza la parte que se salta)"
+
+msgid "START/STOP tăiere aici"
+msgstr "START/STOP de corte aquí"
+
+msgid "STOP tăiere"
+msgstr "STOP de corte"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "STOP de corte (aquí termina la parte que se salta)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "ÚLTIMA CONFIRMACIÓN: el nuevo software se escribe DE VERDAD en el receptor.\nNO desenchufes el receptor y NO retires el soporte mientras se escribe.\nLa interfaz se detendrá y el receptor se reiniciará solo al final.\n\nPaquete: %s\n\n¿Continuar de verdad?"

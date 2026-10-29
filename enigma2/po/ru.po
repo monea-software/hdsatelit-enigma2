@@ -218,7 +218,7 @@ msgstr "16:10 PanScan"
 
 #
 msgid "16:9 always"
-msgstr "16:9 always"
+msgstr "16:9 всегда"
 
 #
 msgid "18 V"
@@ -288,7 +288,7 @@ msgid "9"
 msgstr "9"
 
 msgid "<Current movielist location>"
-msgstr "<Текущее расположение movielist>"
+msgstr "<Текущее расположение списка записей>"
 
 msgid "<Default movie location>"
 msgstr "<Расположение фильма по умолчанию>"
@@ -3703,7 +3703,7 @@ msgstr "Пред."
 
 #, python-format
 msgid "Preview: %d MHz  SR %s kSymb/s  Pol %s  %s  (LOF estimat %d MHz)"
-msgstr "Просмотр: %d МГц  SR %s kSymb/s  Поляризация %s  %s  (расчётный LOF %d МГц)"
+msgstr "Просмотр: %d МГц  SR %s кСимв/с  Поляризация %s  %s  (расчётный LOF %d МГц)"
 
 msgid "Preview: introdu frecventa si SR."
 msgstr "Просмотр: введи частоту и SR."
@@ -4292,7 +4292,7 @@ msgstr "Просканируйте сеть на наличие точек бе�
 
 #, python-format
 msgid "Scanare initiata: %d MHz, SR %d kSymb/s, tuner %d"
-msgstr "Сканирование начато: %d МГц, SR %d kSymb/s, тюнер %d"
+msgstr "Сканирование начато: %d МГц, SR %d кСимв/с, тюнер %d"
 
 #, python-format
 msgid "Scanare inițiată: %d Hz, %s"
@@ -4815,7 +4815,7 @@ msgstr "Флеш-память"
 
 #
 msgid "Stop Timeshift?"
-msgstr "Остановить сдвиг времени?"
+msgstr "Остановить таймшифт?"
 
 #
 msgid "Stop current event and disable coming events"
@@ -5304,7 +5304,7 @@ msgstr "Место хранения таймшифта"
 
 #
 msgid "Timeshift not possible!"
-msgstr "Сдвиг времени не возможен!"
+msgstr "Таймшифт невозможен!"
 
 #
 msgid "Timezone"
@@ -7070,7 +7070,7 @@ msgstr "Твоя антенна неподвижна и видит только:
 
 #, python-format
 msgid "%s transmite în multistream (mai multe fluxuri pe același transponder). Imaginea nu știe încă să acordeze multistream: e nevoie de o actualizare viitoare a imaginii. Până atunci acest operator nu se poate căuta; operatorii fără multistream din listă merg de azi."
-msgstr "%s вещает в режиме multistream (несколько потоков на одном транспондере). Образ пока не умеет настраиваться на multistream: нужно будущее обновление образа. До тех пор этого оператора искать нельзя; операторы из списка без multistream работают уже сегодня."
+msgstr "%s вещает в режиме мультистрима (несколько потоков на одном транспондере). Образ пока не умеет настраиваться на мультистрим: нужно будущее обновление образа. До тех пор этого оператора искать нельзя; операторы из списка без мультистрим работают уже сегодня."
 
 #, python-format
 msgid "DVB-T2 prin satelit: %s, pe %s. Se acordează transponderul %s și se caută fluxurile DVB-T2."
@@ -7087,7 +7087,7 @@ msgid "Schimbă valorile cu OK, stânga sau dreapta. Caută cu Verde."
 msgstr "Меняй значения кнопками OK, влево или вправо. Для поиска нажми зелёную кнопку."
 
 msgid "Introdu frecvența (MHz) și rata de simbol (kSymb/s) ale transponderului."
-msgstr "Введи частоту (МГц) и символьную скорость (kSymb/s) транспондера."
+msgstr "Введи частоту (МГц) и символьную скорость (кСимв/с) транспондера."
 
 msgid "DVB-S2X se caută ca DVB-S2, nucleul imaginii nu are încă APSK."
 msgstr "DVB-S2X ищется как DVB-S2, в ядре образа пока нет APSK."
@@ -7130,10 +7130,10 @@ msgid "Frecvența (MHz)"
 msgstr "Частота (МГц)"
 
 msgid "Rata de simbol (kSymb/s)"
-msgstr "Символьная скорость (kSymb/s)"
+msgstr "Символьная скорость (кСимв/с)"
 
 msgid "IS-ID (multistream, gol = un flux)"
-msgstr "IS-ID (multistream, пусто = один поток)"
+msgstr "IS-ID (мультистрим, пусто = один поток)"
 
 msgid "Cod PLS (Gold, 0 = ROOT)"
 msgstr "Код PLS (Gold, 0 = ROOT)"
@@ -7255,7 +7255,7 @@ msgstr "Поиск по сети"
 
 #, python-format
 msgid "Frecvența reală: %d MHz, rata %s kSymb/s, polarizare %s, %s (LOF estimat %d MHz)"
-msgstr "Реальная частота: %d МГц, скорость %s kSymb/s, поляризация %s, %s (расчётный LOF %d МГц)"
+msgstr "Реальная частота: %d МГц, скорость %s кСимв/с, поляризация %s, %s (расчётный LOF %d МГц)"
 
 msgid "Introdu frecvența și rata de simbol."
 msgstr "Введи частоту и символьную скорость."
@@ -7303,7 +7303,7 @@ msgid "niciun operator de acest fel"
 msgstr "нет оператора такого вида"
 
 msgid "ATENȚIE: IS-ID, codul PLS și T2-MI PLP-ID sunt ignorate: imaginea nu știe încă multistream DVB-S2X și T2-MI."
-msgstr "ВНИМАНИЕ: IS-ID, код PLS и T2-MI PLP-ID игнорируются: образ пока не знает multistream DVB-S2X и T2-MI."
+msgstr "ВНИМАНИЕ: IS-ID, код PLS и T2-MI PLP-ID игнорируются: образ пока не знает мультистрим DVB-S2X и T2-MI."
 
 msgid "Bifez eu sateliții"
 msgstr "Отмечу спутники сам"
@@ -7488,7 +7488,7 @@ msgstr "частота %s МГц вне кабельного диапазона 
 
 #, python-format
 msgid "rata de simbol %d kSymb/s nu e primită de tuner (%d-%d kSymb/s; rețelele folosesc de obicei 6900 sau 6875)"
-msgstr "символьная скорость %d kSymb/s не принимается тюнером (%d-%d kSymb/s; сети обычно используют 6900 или 6875)"
+msgstr "символьная скорость %d кСимв/с не принимается тюнером (%d-%d кСимв/с; сети обычно используют 6900 или 6875)"
 
 #, python-format
 msgid "frecvența %s MHz e în afara benzii terestre (%d-%d MHz)"
@@ -7522,7 +7522,7 @@ msgid "Automat, din rețeaua semnalului"
 msgstr "Автоматически, из сети сигнала"
 
 msgid "6900 și 6875 kSymb/s"
-msgstr "6900 и 6875 kSymb/s"
+msgstr "6900 и 6875 кСимв/с"
 
 msgid "QAM256 și QAM64"
 msgstr "QAM256 и QAM64"
@@ -7562,7 +7562,7 @@ msgstr "Поиск на %s МГц, с известными скоростью и
 
 #, python-format
 msgid "Căutare pe %s MHz: %d încercări, cu 6900 și 6875 kSymb/s, QAM256 și QAM64."
-msgstr "Поиск на %s МГц: %d попыток, с 6900 и 6875 kSymb/s, QAM256 и QAM64."
+msgstr "Поиск на %s МГц: %d попыток, с 6900 и 6875 кСимв/с, QAM256 и QAM64."
 
 #, python-format
 msgid "Toată banda de cablu, %d-%d MHz din 8 în 8 MHz: %d încercări, cel mult %d minute, plus rețelele găsite în semnal."
@@ -7598,7 +7598,7 @@ msgid "Alege operatorul din listă (OK)."
 msgstr "Выбери оператора из списка (OK)."
 
 msgid "Introdu frecvența (MHz) și rata de simbol (kSymb/s), de exemplu 306 și 6900."
-msgstr "Введи частоту (МГц) и символьную скорость (kSymb/s), например 306 и 6900."
+msgstr "Введи частоту (МГц) и символьную скорость (кСимв/с), например 306 и 6900."
 
 #, python-format
 msgid "Pornire de pe %s MHz, apoi toate frecvențele anunțate în semnal."
@@ -7606,7 +7606,7 @@ msgstr "Начало с %s МГц, затем все частоты, объяв�
 
 #, python-format
 msgid "Un singur transponder: %s MHz, %d kSymb/s."
-msgstr "Один транспондер: %s МГц, %d kSymb/s."
+msgstr "Один транспондер: %s МГц, %d кСимв/с."
 
 msgid "Cu modulația Auto, dacă ies 0 canale, alege QAM256 sau QAM64."
 msgstr "С модуляцией Auto, если найдено 0 каналов, выбери QAM256 или QAM64."
@@ -8840,7 +8840,7 @@ msgstr "модуляция, которую образ пока не знает"
 #: lib/python/Screens/ScanerSatelit.py:257
 #, python-format
 msgid "rata de simbol %d kSymb/s nu e primită de tuner (%d-%d kSymb/s)"
-msgstr "символьная скорость %d kSymb/s не принимается тюнером (%d-%d kSymb/s)"
+msgstr "символьная скорость %d кСимв/с не принимается тюнером (%d-%d кСимв/с)"
 
 #: lib/python/Screens/ScanerSatelit.py:312
 msgid "DVB-S2X se caută ca DVB-S2."
@@ -12524,7 +12524,7 @@ msgstr "Программа DVB-T2 со спутника"
 
 #: lib/python/Hds/DabT2/tuner.py
 msgid "Multistream: imaginea nu-l poate receptiona inca."
-msgstr "Multistream: образ пока не может его принимать."
+msgstr "Мультистрим: образ пока не может его принимать."
 
 #: lib/python/Hds/DabT2/ecrane.py
 #, python-format
@@ -14787,7 +14787,7 @@ msgstr "адрес отклонён"
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "Multistream"
-msgstr "Multistream"
+msgstr "Мультистрим"
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "Fluxul (ISI, 0-255)"
@@ -14812,7 +14812,7 @@ msgstr "(тюнер не выбирает поток)"
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "multistream există numai în DVB-S2"
-msgstr "multistream есть только в DVB-S2"
+msgstr "мультистрим есть только в DVB-S2"
 
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
@@ -14821,7 +14821,7 @@ msgstr "код PLS должен быть от 0 до %d"
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "multistream, iar tunerul nu poate alege fluxul"
-msgstr "multistream, а тюнер не умеет выбирать поток"
+msgstr "мультистрим, а тюнер не умеет выбирать поток"
 
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
@@ -14835,11 +14835,11 @@ msgstr "Код PLS это число от 0 до %d."
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "Multistream fără flux și fără cod PLS: se caută ca un transponder obișnuit."
-msgstr "Multistream без потока и без кода PLS: поиск как на обычном транспондере."
+msgstr "Мультистрим без потока и без кода PLS: поиск как на обычном транспондере."
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "Multistream există numai în DVB-S2: se caută ca DVB-S2."
-msgstr "Multistream есть только в DVB-S2: поиск как DVB-S2."
+msgstr "Мультистрим есть только в DVB-S2: поиск как DVB-S2."
 
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
@@ -14849,7 +14849,7 @@ msgstr "Поток и последовательность PLS взяты из �
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
 msgid "Pe %d MHz lista receptorului are mai multe fluxuri (%s); se caută fără să se aleagă unul. Pentru unul anume pune „Multistream” pe Da și scrie fluxul."
-msgstr "На %d МГц в списке ресивера несколько потоков (%s); поиск идёт без выбора потока. Для конкретного поставь «Multistream» на «Да» и введи поток."
+msgstr "На %d МГц в списке ресивера несколько потоков (%s); поиск идёт без выбора потока. Для конкретного поставь «Мультистрим» на «Да» и введи поток."
 
 #: lib/python/Screens/ScanerSatelit.py
 msgid "În lucru: scanarea și ascultarea DVB-T2 prin satelit nu au fost încă probate pe receptor."
@@ -14858,12 +14858,12 @@ msgstr "В разработке: поиск и прослушивание DVB-T2
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
 msgid "%s: emisie în multistream (mai multe fluxuri pe același transponder), iar tunerul de satelit al acestui receptor nu poate alege fluxul. De aici nu se poate căuta; operatorii fără multistream din listă merg."
-msgstr "%s: вещание multistream (несколько потоков на одном транспондере), а спутниковый тюнер этого ресивера не умеет выбирать поток. Отсюда искать нельзя; операторы из списка без multistream работают."
+msgstr "%s: вещание мультистрима (несколько потоков на одном транспондере), а спутниковый тюнер этого ресивера не умеет выбирать поток. Отсюда искать нельзя; операторы из списка без мультистрим работают."
 
 #: lib/python/Screens/ScanerSatelit.py
 #, python-format
 msgid "Transponderul are multistream (%s), iar tunerul de satelit al acestui receptor nu poate alege fluxul."
-msgstr "Транспондер с multistream (%s), а спутниковый тюнер этого ресивера не умеет выбирать поток."
+msgstr "Транспондер с мультистримом (%s), а спутниковый тюнер этого ресивера не умеет выбирать поток."
 
 #: lib/python/Hds/DabT2/ecrane.py
 msgid "Cauta posturile din flux"
@@ -21146,7 +21146,7 @@ msgstr "Потоки и настройки:"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/dabt2_web.py
 msgid "Fluxurile de pe transpondere cu mai multe fluxuri (multistream) nu se pot adăuga încă: imaginea nu le poate recepționa."
-msgstr "Потоки с транспондеров с несколькими потоками (multistream) пока нельзя добавить: образ системы не может их принимать."
+msgstr "Потоки с транспондеров с несколькими потоками (мультистрим) пока нельзя добавить: образ системы не может их принимать."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/retea_web.py
 msgid "Folosește DHCP"
@@ -21206,7 +21206,7 @@ msgstr "Форматирование"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py
 msgid "Formatarea face pe disc o singură partiție și dosarul movie: ext4 pe un hard disk; pe un stick USB alegi FAT32 (se citește pe orice calculator, fișiere de cel mult 4 GB) sau ext4 (pentru înregistrări și timeshift). Toate datele de pe disc se pierd; întrebarea spune pe nume ce e pe el."
-msgstr "Форматирование создаёт на диске один раздел и папку movie: ext4 на жёстком диске; на USB-флешке ты выбираешь FAT32 (читается на любом компьютере, файлы не больше 4 GB) или ext4 (для записей и timeshift). Все данные на диске теряются; в вопросе прямо указано, что на нём есть."
+msgstr "Форматирование создаёт на диске один раздел и папку movie: ext4 на жёстком диске; на USB-флешке ты выбираешь FAT32 (читается на любом компьютере, файлы не больше 4 GB) или ext4 (для записей и таймшифта). Все данные на диске теряются; в вопросе прямо указано, что на нём есть."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py lib/python/Plugins/Extensions/HdsWebControl/stocare_web.py
 msgid "Formatează"
@@ -22732,7 +22732,7 @@ msgstr "Для большого объёма субтитров (целые фи
 
 #: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py
 msgid "Pentru timeshift:"
-msgstr "Для timeshift:"
+msgstr "Для таймшифт:"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/radio_web.py
 msgid "Piesa și textul radio"
@@ -24980,7 +24980,7 @@ msgstr "На папку выше"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py
 msgid "Un dosar în care nu se poate scrie nu se poate alege. Pentru timeshift, sub 1024 MB liberi se cere o confirmare."
-msgstr "Папку, в которую нельзя записывать, выбрать нельзя. Для timeshift при свободном месте меньше 1024 MB требуется подтверждение."
+msgstr "Папку, в которую нельзя записывать, выбрать нельзя. Для таймшифт при свободном месте меньше 1024 MB требуется подтверждение."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/media_web.py
 msgid "Un film pornit din lista de filme se comandă din pagina <a href=\"/filme\">Filmul de acum</a>, unde sunt și derularea și saltul la un loc anume."
@@ -27883,7 +27883,7 @@ msgstr "Автозапуск приложений HbbTV"
 
 #: lib/python/Plugins/Extensions/HdsNavigator/setari.py
 msgid "Da: pe canalele cu HbbTV, aplicația canalului pornește singură, ascunsă, iar ROȘU o arată pe loc. Ține memorie ocupată cât privești canalul și nu pornește în timpul unei înregistrări, în timeshift sau cu memorie puțină. Nu: aplicația pornește numai la ROȘU."
-msgstr "Да: на каналах с HbbTV приложение канала запускается само, скрытым, а КРАСНАЯ сразу его показывает. Пока ты смотришь канал, оно занимает память и не запускается во время записи, в режиме timeshift или при нехватке памяти. Нет: приложение запускается только КРАСНОЙ."
+msgstr "Да: на каналах с HbbTV приложение канала запускается само, скрытым, а КРАСНАЯ сразу его показывает. Пока ты смотришь канал, оно занимает память и не запускается во время записи, в режиме таймшифта или при нехватке памяти. Нет: приложение запускается только КРАСНОЙ."
 
 #: lib/python/Components/HdsHbbtvPornire.py
 msgid "Aplicațiile HbbTV nu pornesc cât rulează o înregistrare."
@@ -32182,7 +32182,7 @@ msgstr "Да, остановить подкачку"
 
 #: lib/python/Components/HdsDiscuri.py
 msgid "Discul se demontează cât ține verificarea; înregistrările și timeshift-ul nu pot scrie pe el."
-msgstr "На время проверки диск отключается; записи и timeshift не могут на него писать."
+msgstr "На время проверки диск отключается; записи и таймшифт не могут на него писать."
 
 #: lib/python/Components/HdsDiscuri.py
 msgid "FAT32: se citește pe orice calculator"
@@ -32273,7 +32273,7 @@ msgstr "Тема выбирается только со скином HD Satelit;
 
 #: lib/python/Components/HdsDiscuri.py
 msgid "Timeshift-ul (pauza) scrie acum pe acest disc."
-msgstr "Timeshift (пауза) сейчас пишет на этот диск."
+msgstr "Таймшифт (пауза) сейчас пишет на этот диск."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py
 msgid "Verificarea nu se face acum din pagină:"
@@ -32281,11 +32281,11 @@ msgstr "Проверка сейчас не выполняется со стра�
 
 #: lib/python/Components/HdsDiscuri.py
 msgid "ext4: pentru înregistrări și timeshift"
-msgstr "ext4: для записей и timeshift"
+msgstr "ext4: для записей и таймшифта"
 
 #: lib/python/Components/HdsDiscuri.py
 msgid "ext4: pentru înregistrări și timeshift, fișiere oricât de mari; un calculator cu Windows nu îl citește"
-msgstr "ext4: для записей и timeshift, файлы любого размера; компьютер с Windows его не читает"
+msgstr "ext4: для записей и таймшифта, файлы любого размера; компьютер с Windows его не читает"
 
 #: lib/python/Components/HdsSkinuri.py
 msgid "fișierul nu e un skin"
@@ -35307,7 +35307,7 @@ msgstr "Когда ты его подключишь, запланированн�
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Când îl conectezi, pornesc singur timeshift-ul."
-msgstr "Когда ты его подключишь, timeshift начнётся сам."
+msgstr "Когда ты его подключишь, таймшифт начнётся сам."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Conectează-l înainte de ora înregistrării."
@@ -35392,7 +35392,7 @@ msgstr "Выбери другой диск или попробуй ещё раз
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Am găsit mai multe discuri. Pe care salvez timeshift-ul?"
-msgstr "Найдено несколько дисков. На какой сохранять timeshift?"
+msgstr "Найдено несколько дисков. На какой сохранять таймшифт?"
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Am găsit mai multe discuri. Pe care salvez înregistrările?"
@@ -39176,7 +39176,7 @@ msgstr "Город выбираешь в Настройках, в строке �
 
 #: lib/python/Components/HdsAfisajDate.py
 msgid "Pauză în direct (timeshift)"
-msgstr "Пауза эфира (timeshift)"
+msgstr "Пауза эфира (таймшифт)"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py
 msgid "Pornesc pe loc, fără Salvează. Se văd pe afișaj când sunt în lista de rotire (grupa „Ora și data”)."
@@ -39429,7 +39429,7 @@ msgstr "Эквалайзер выключен. Звук идёт как обыч
 
 #: lib/python/Components/HdsEgalizator.py
 msgid "La înregistrări și la pauza cu reluare (timeshift) egalizatorul nu lucrează. Sunetul merge prin placa de sunet."
-msgstr "На записях и при timeshift эквалайзер не работает. Звук идёт через звуковой чип."
+msgstr "На записях и при таймшифте эквалайзер не работает. Звук идёт через звуковой чип."
 
 #: lib/python/Components/HdsEgalizator.py
 msgid "Sunetul pleacă neschimbat spre bara de sunet: egalizatorul, volumul și modul de noapte le reglezi din bara de sunet."
@@ -43681,7 +43681,7 @@ msgstr "Запланированная запись не может начать
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Nu am unde să salvez timeshift-ul."
-msgstr "Некуда сохранять timeshift."
+msgstr "Некуда сохранять таймшифт."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "este în memoria RAM a receptorului"
@@ -43717,7 +43717,7 @@ msgstr "Папка записей: %s."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Tot aici se salvează și timeshift-ul."
-msgstr "Сюда же сохраняется timeshift."
+msgstr "Сюда же сохраняется таймшифт."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Gata. Înregistrările se salvează acum pe „%s”."
@@ -43813,7 +43813,7 @@ msgstr "с него можно только читать, записывать �
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Pe „%s” lipsește dosarul %s, în care se salvează timeshift-ul."
-msgstr "На «%s» нет папки %s, в которую сохраняется timeshift."
+msgstr "На «%s» нет папки %s, в которую сохраняется таймшифт."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Pe „%s” lipsește dosarul %s, în care se salvează înregistrările."
@@ -43825,7 +43825,7 @@ msgstr "Папки «%s» на диске ещё нет."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Folosește „%s” pentru timeshift și înregistrări"
-msgstr "Использовать «%s» для timeshift и записей"
+msgstr "Использовать «%s» для таймшифта и записей"
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Dosarul movie există deja pe el."
@@ -43841,15 +43841,15 @@ msgstr "Записи уже сохраняются сюда."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Timeshift-ul se salvează pe „%s”."
-msgstr "Timeshift сохраняется на «%s»."
+msgstr "Таймшифт сохраняется на «%s»."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Timeshift-ul se salvează în %s."
-msgstr "Timeshift сохраняется в %s."
+msgstr "Таймшифт сохраняется в %s."
 
 #: lib/python/Components/HdsLocInregistrari.py
 msgid "Dosarul timeshift-ului: %s."
-msgstr "Папка timeshift: %s."
+msgstr "Папка таймшифта: %s."
 
 #: lib/python/Screens/TimerEdit.py
 msgid "Înregistrări programate"
@@ -47184,16 +47184,16 @@ msgstr "Этот канал нельзя поставить на паузу."
 
 #: lib/python/Screens/InfoBarGenerics.py
 msgid "serviciul nu are timeshift"
-msgstr "у службы нет timeshift"
+msgstr "у службы нет таймшифта"
 
 #: lib/python/Screens/InfoBarGenerics.py
 msgid "Pauza nu a pornit. Verifică discul sau stick-ul USB ales pentru timeshift."
-msgstr "Пауза не включилась. Проверь диск или USB-флешку, выбранные для timeshift."
+msgstr "Пауза не включилась. Проверь диск или USB-флешку, выбранные для таймшифта."
 
 #: lib/python/Screens/InfoBarGenerics.py
 #, python-format
 msgid "timeshift nu a pornit în %s"
-msgstr "timeshift не запустился в %s"
+msgstr "таймшифт не запустился в %s"
 
 #: lib/python/Components/HdsAnalizaFlux.py
 msgid "secțiuni private"
@@ -54557,3 +54557,207 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (тело: <code>parola=</code>): 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> требует и <code>confirmat=1</code>): «Без пароля в локальной сети». Пароль, необработанный текст и все изменения работают только из браузера, подключённого с кодом с телевизора (иначе 403 с <code>trebuie_cod</code>), никогда с <code>?token=</code>; пока экран «Пароль ресивера» открыт на ресивере, так же и <code>/api/remotecontrol</code> и <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Эфирная антенна (DVB-T/T2)"
+
+msgid "Cablu (DVB-C)"
+msgstr "Кабель (DVB-C)"
+
+msgid "Legat la"
+msgstr "Подключено к"
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Каждая частота проверяется в DVB-T2 и в DVB-T."
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "Выбранная модуляция не принимается. Выбери другую."
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM есть только в DVB-T2: выбери DVB-T2 в поле Система или другую модуляцию."
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "ширина полосы, которую образ не знает (только 8, 7, 6, 5, 10, 1,712 МГц и Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "модуляция, которую образ не знает"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM есть только в DVB-T2"
+
+msgid "Tunerul nu e dat."
+msgstr "Тюнер не указан."
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "Не удаётся прочитать настройки тюнеров: %s"
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "Тюнер %s не комбинированный (эфир и кабель)."
+
+msgid "Alegere necunoscută: %s."
+msgstr "Неизвестный выбор: %s."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Уведомление о конфиденциальности изменилось"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Уведомление о конфиденциальности для бета-тестеров изменилось. Чтобы ресивер и дальше отправлял журналы, прочитай, что нового, и прими его."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "Ресивер также отправляет отпечаток, вычисленный по его плате, чтобы его считали только один раз, даже если он установлен в нескольких слотах или переустановлен. По отпечатку нельзя узнать MAC-адрес или серийный номер, и они не покидают ресивер."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Когда канал не работает (нет сигнала, нет изображения, ошибка декодирования), журнал сохраняет название и технические данные этого канала, чтобы мы могли выяснить почему. Какие каналы ты смотришь, когда всё работает, не отправляется."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Нажав «Принять», ты соглашаешься с новым уведомлением, и ресивер снова отправляет данные, которые ты отметил раньше."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Отправка остановлена, пока ты не примешь новое уведомление."
+
+msgid "Citește nota întreagă"
+msgstr "Прочитать уведомление полностью"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "На экране, стрелками. EXIT возвращает сюда."
+
+msgid "Accept"
+msgstr "Принять"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Отмеченные тобой данные снова отправляются, как раньше."
+
+msgid "Îți amintim mâine."
+msgstr "Мы напомним завтра."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Спасибо. Ресивер снова отправляет отмеченные данные."
+
+msgid "Acceptă nota nouă"
+msgstr "Принять новое уведомление"
+
+msgid "Trimiterea e oprită"
+msgstr "Отправка остановлена"
+
+msgid "Sau citește pe telefon:"
+msgstr "Или прочитай на телефоне:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "Полное уведомление по адресу:"
+
+msgid "Nimic anume"
+msgstr "Ничего конкретного"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi и сеть"
+
+msgid "Imaginea sau sunetul"
+msgstr "Изображение или звук"
+
+msgid "Canale și scanare"
+msgstr "Каналы и поиск"
+
+msgid "Pornirea receptorului"
+msgstr "Запуск приёмника"
+
+msgid "Altceva"
+msgstr "Другое"
+
+msgid "Cu ce te ajutăm?"
+msgstr "С чем тебе помочь?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Напиши кратко (необязательно)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Если хочешь, выбери, с чем тебе помочь, и кратко напиши, что происходит (OK открывает список или клавиатуру). Это не обязательно: Зелёная кнопка всё равно запускает."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Твой запрос с кодом ниже у нас. Тебе ничего не нужно делать."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Твой запрос с кодом ниже у нас. Тебе ничего не нужно делать. Осталось %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Мы сообщим тебе, когда подключимся. Пока можешь пользоваться приёмником."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "Команда HD Satelit подключилась. Можешь пользоваться приёмником как обычно."
+
+msgid "permanent"
+msgstr "постоянно"
+
+msgid "o zi"
+msgstr "сутки"
+
+msgid "o săptămână"
+msgstr "7 дней"
+
+msgid "o lună"
+msgstr "30 дней"
+
+msgid "Pornită până la %s."
+msgstr "Включена до %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Включена без срока; можешь выключить её в любой момент."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Удалённая помощь включена до %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Удалённая помощь включена без срока"
+
+msgid "Oprești oricând din %s"
+msgstr "Остановить в любой момент: %s"
+
+msgid "reluată după repornire"
+msgstr "возобновлена после перезапуска"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Ты даёшь удалённый доступ постоянно, пока сам его не остановишь, уровень «Чтение и проверки». Запуская, ты подтверждаешь, что тебе не меньше 16 лет или у тебя есть согласие одного из родителей. Ты можешь остановить его в любой момент. Запустить?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Она может оставаться включённой столько, сколько ты выберешь: 2 часа, 12 часов, сутки, неделю, месяц или постоянно. Ты выключаешь её в любой момент, на приёмнике или на веб-странице. Пока она включена, команда может подключиться в любой момент, но выполняет только чтения и проверки из фиксированного списка и ничего не меняет."
+
+msgid "Adaugă, șterge și sari între marcaje de tăiere pe înregistrarea aflată în redare"
+msgstr "Добавляй, удаляй и переходи между метками обрезки в воспроизводимой записи"
+
+msgid "Alege o poză de pe stick. Se aduce la 1920x1080 fără deformare și i se scrie rândul de jos."
+msgstr "Выбери изображение на флешке. Оно приводится к 1920x1080 без искажений, и на нём пишется нижняя строка."
+
+msgid "Deocamdată nu se poate: receptorului îi lipsește %s. Ecranele gata făcute merg toate."
+msgstr "Пока нельзя: на ресивере нет %s. Все готовые экраны работают."
+
+msgid "Deocamdată nu se pot folosi poze proprii: receptorului îi lipsește %s. Ecranele gata făcute merg toate, le poți schimba de aici oricând."
+msgstr "Свои изображения пока использовать нельзя: на ресивере нет %s. Все готовые экраны работают, их можно сменить здесь в любой момент."
+
+msgid "Galeria de ecrane nu este instalată pe acest receptor. Poți totuși folosi o poză proprie, dacă receptorul are uneltele necesare."
+msgstr "Галерея экранов не установлена на этом ресивере. Можно всё же использовать своё изображение, если на ресивере есть нужные инструменты."
+
+msgid "Picture Sharpness (HD Satelit)"
+msgstr "Резкость изображения (HD Satelit)"
+
+msgid "Poziția curentă: %s; Verde adaugă un marcaj simplu, Galben adaugă START/STOP tăiere."
+msgstr "Текущая позиция: %s. Зелёная добавляет простую метку, Жёлтая добавляет START/STOP обрезки."
+
+msgid "Previzualizarea se vede după ce receptorul primește și pozele mici ale ecranelor."
+msgstr "Просмотр будет доступен, когда ресивер получит и маленькие изображения экранов."
+
+msgid "START tăiere"
+msgstr "START обрезки"
+
+msgid "START tăiere (aici începe porțiunea de sărit)"
+msgstr "START обрезки (здесь начинается пропускаемая часть)"
+
+msgid "START/STOP tăiere aici"
+msgstr "START/STOP обрезки здесь"
+
+msgid "STOP tăiere"
+msgstr "STOP обрезки"
+
+msgid "STOP tăiere (aici se termină porțiunea de sărit)"
+msgstr "STOP обрезки (здесь заканчивается пропускаемая часть)"
+
+msgid "ULTIMA CONFIRMARE: se scrie REAL noul software pe receptor.\nNU opri receptorul de la curent și NU scoate mediul cât timp scrie.\nInterfața se va opri și receptorul se va reporni singur la final.\n\nPachet: %s\n\nChiar continui?"
+msgstr "ПОСЛЕДНЕЕ ПОДТВЕРЖДЕНИЕ: новое ПО будет ДЕЙСТВИТЕЛЬНО записано на ресивер.\nНЕ отключай ресивер от сети и НЕ извлекай носитель, пока идёт запись.\nИнтерфейс остановится, а ресивер в конце сам перезапустится.\n\nПакет: %s\n\nДействительно продолжить?"

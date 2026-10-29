@@ -51006,3 +51006,165 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): paro
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr ""
+
+msgid "Cablu (DVB-C)"
+msgstr ""
+
+msgid "Legat la"
+msgstr ""
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr ""
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr ""
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr ""
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr ""
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr ""
+
+msgid "256QAM e numai la DVB-T2"
+msgstr ""
+
+msgid "Tunerul nu e dat."
+msgstr ""
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr ""
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr ""
+
+msgid "Alegere necunoscută: %s."
+msgstr ""
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Nota de confidențialitate s-a schimbat"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Trimiterea e oprită până accepți nota nouă."
+
+msgid "Citește nota întreagă"
+msgstr "Citește nota întreagă"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "Pe ecran, cu săgețile. EXIT te întoarce aici."
+
+msgid "Accept"
+msgstr "Accept"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Datele bifate de tine pleacă din nou, ca până acum."
+
+msgid "Îți amintim mâine."
+msgstr "Îți amintim mâine."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Mulțumim. Receptorul trimite din nou datele bifate."
+
+msgid "Acceptă nota nouă"
+msgstr "Acceptă nota nouă"
+
+msgid "Trimiterea e oprită"
+msgstr "Trimiterea e oprită"
+
+msgid "Sau citește pe telefon:"
+msgstr "Sau citește pe telefon:"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "Nota întreagă e la adresa:"
+
+msgid "Nimic anume"
+msgstr "Nimic anume"
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi și rețea"
+
+msgid "Imaginea sau sunetul"
+msgstr "Imaginea sau sunetul"
+
+msgid "Canale și scanare"
+msgstr "Canale și scanare"
+
+msgid "Pornirea receptorului"
+msgstr "Pornirea receptorului"
+
+msgid "Altceva"
+msgstr "Altceva"
+
+msgid "Cu ce te ajutăm?"
+msgstr "Cu ce te ajutăm?"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Scrie pe scurt (opțional)"
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+
+msgid "permanent"
+msgstr "permanent"
+
+msgid "o zi"
+msgstr "o zi"
+
+msgid "o săptămână"
+msgstr "o săptămână"
+
+msgid "o lună"
+msgstr "o lună"
+
+msgid "Pornită până la %s."
+msgstr "Pornită până la %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Pornită, fără sfârșit; o poți opri oricând."
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Asistență de la distanță pornită până la %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Asistență de la distanță pornită, fără sfârșit"
+
+msgid "Oprești oricând din %s"
+msgstr "Oprești oricând din %s"
+
+msgid "reluată după repornire"
+msgstr "reluată după repornire"
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
