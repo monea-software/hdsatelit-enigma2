@@ -150,10 +150,58 @@ INTREBARE = N_("Vrei să ajuți la îmbunătățirea imaginii pe care o foloseș
 INTREBARE_RAND = N_("Ai folosit cu interes imaginea E2 HD Satelit peste o oră. Ca beta tester ne trimiți date anonime, "
 	"numai cele alese de tine.")
 NOTA_SCURTA = N_("Datele le primește Eduard Monea, persoană fizică (mărcile Monea Software și HD Satelit), "
-	"contact@hdsatelit.com. Pleacă numai felurile bifate de tine, cu un identificator întâmplător, fără adresa IP, fără "
-	"parole și fără listele tale de canale, numai ca să îmbunătățim imaginea pe modelul tău de receptor. Jurnalele se "
-	"păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de date sau poți ieși din program cu ștergerea "
-	"datelor. Nota întreagă e la adresa de mai jos.")
+	"contact@hdsatelit.com. Pleacă numai felurile bifate de tine, cu un identificator întâmplător și o amprentă "
+	"calculată din placă, ca receptorul să fie numărat o singură dată (din ea nu se pot afla adresa MAC sau "
+	"seria), fără adresa IP, fără parole și fără listele tale de canale, numai ca să îmbunătățim imaginea pe "
+	"modelul tău de receptor. Jurnalele se păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de "
+	"date sau poți ieși din program cu ștergerea datelor. La o pornire ratată, receptorul trimite singur un raport "
+	"tehnic anonim, fără date personale. Dacă scrii pe forumul receptorului, mesajul tău apare public, cu numele "
+	"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos.")
+# randul scurt de sub fiecare rand al meniului testerului si al celui neinscris (pe receptor si in web): exact ce
+# face randul
+RANDURI_MENIU = {
+	"forum": N_("Ce scriu testerii acestui receptor; scrii și tu, cu capturi."),
+	"mesaj": N_("O greșeală, o idee sau o întrebare, direct echipei."),
+	"trimite_acum": N_("Datele bifate pleacă imediat."),
+	"trimise": N_("Ultimele pachete plecate și starea fiecăruia."),
+	"raspunsuri": N_("Ce ți-a răspuns echipa la mesaje."),
+	"date": N_("Alegi ce date pleacă, numele și e-mailul."),
+	"acum": N_("Tot ce a plecat în ultimul pachet."),
+	"probe": N_("Probe pe receptor: ce merge și ce nu."),
+	"asistenta": N_("Ne lași să vedem starea receptorului, cât alegi tu."),
+	"canal_testeri": N_("Versiunile noi ajung întâi la tine."),
+	"public": N_("Numele cu care apari pe forum și pe site."),
+	"nota": N_("Ce date pleacă, cine le primește, cât se păstrează."),
+	"iesire": N_("Serverul șterge tot ce a trimis acest receptor."),
+}
+RANDURI_VIZITATOR = {
+	"acord": N_("Alegi ce date trimiți; sunt anonime."),
+	"forum": N_("Citește ce scriu testerii acestui receptor."),
+}
+# avantajele aratate celui care nu e inscris (pe receptor si in web): (cheie, pictograma, titlu, rand); apar primele
+# AVANTAJE_ARATATE adevarate pe receptorul lui (cheile canal_testeri, forum, asistenta numai daca exista modulul)
+AVANTAJE = (
+	("canal_testeri", "actualizare", N_("Primești versiunile noi înaintea tuturor"),
+		N_("Din meniul testerului alegi să primești întâi versiunile pentru testeri.")),
+	("forum", "traducere", N_("Scrii pe forumul receptorului, cu capturi de ecran"),
+		N_("Forumul traduce singur mesajele pentru fiecare cititor.")),
+	("asistenta", "conexiune", N_("La o problemă, ne lași să ne uităm la receptor, cât vrei tu"),
+		N_("Asistența de la distanță: o pornești tu și o oprești oricând.")),
+	("date", "noutati", N_("Imaginea merge mai bine pe modelul tău"),
+		N_("Trimiți date anonime, numai cele bifate de tine.")),
+	("raspunsuri", "informatii", N_("Echipa îți răspunde la mesaje"),
+		N_("Greșeli, idei, întrebări: răspunsul vine în meniul testerului.")),
+)
+AVANTAJE_ARATATE = 3
+
+
+def avantaje(exista):
+	"""Avantajele adevarate pe acest receptor, traduse: [(cheie, pictograma, titlu, rand)], cel mult AVANTAJE_ARATATE.
+	exista = {cheie: bool} pentru avantajele legate de un modul (canal_testeri, forum, asistenta)."""
+	rez = [(cheie, glif, _t(titlu), _t(rand)) for cheie, glif, titlu, rand in AVANTAJE if exista.get(cheie, True)]
+	return rez[:AVANTAJE_ARATATE]
+
+
 FELURI_MESAJ_TEXT = {
 	"greseala": N_("Greșeală"),
 	"idee": N_("Idee"),
@@ -271,6 +319,51 @@ def oraUtc(secunde=None):
 
 def ziUtc(secunde=None):
 	return time.strftime("%Y-%m-%d", time.gmtime(time.time() if secunde is None else secunde))
+
+
+# ------------------------------------------------------------------ amprenta receptorului
+# Identificatorul (id) e nou la fiecare acord, deci acelasi receptor instalat in mai multe sloturi, reinstalat sau intrat
+# din nou in program ar parea mai multi testeri. Amprenta il leaga de aparat fara sa-l arate: PBKDF2-HMAC-SHA256 din
+# adresa MAC a lui eth0 (litere mici, aa:bb:...) si CID-ul memoriei eMMC, despartite de |, cu o sare fixa; 16 octeti in
+# hexa (32 de semne). MAC-ul si CID-ul nu pleaca niciodata de pe receptor; din amprenta nu se pot afla. Se face o data pe
+# proces (pe fir, fara retea) si se tine in memorie. Fara MAC si fara CID: amprenta e goala.
+CALE_MAC = "/sys/class/net/eth0/address"
+CALE_CID = "/sys/block/mmcblk0/device/cid"
+SARE_AMPRENTA = b"hds-receptor-amprenta-v1"
+ITERATII_AMPRENTA = 100000
+_amprenta = None
+_LACAT_AMPRENTA = threading.Lock()
+
+
+def calculeazaAmprenta(mac, cid):
+	"""Amprenta din MAC si CID (texte; lipsa = gol): 32 de semne hexa, sau "" cand lipsesc amandoua."""
+	mac = (mac or "").strip().lower()
+	if mac.replace(":", "").replace("0", "") == "":
+		mac = ""
+	cid = (cid or "").strip()
+	if not mac and not cid:
+		return ""
+	return hashlib.pbkdf2_hmac("sha256", ("%s|%s" % (mac, cid)).encode("utf-8"), SARE_AMPRENTA, ITERATII_AMPRENTA,
+		16).hex()
+
+
+def amprenta(radacina=""):
+	"""Amprenta acestui receptor, facuta o singura data pe proces."""
+	global _amprenta
+	with _LACAT_AMPRENTA:
+		if _amprenta is None:
+			_amprenta = calculeazaAmprenta(_citesteText(_cale(radacina, CALE_MAC), 64),
+				_citesteText(_cale(radacina, CALE_CID), 128))
+		return _amprenta
+
+
+def cuAmprenta(corp):
+	"""Corpul unui pachet cu amprenta langa id (o copie; corpurile fara id raman cum sunt)."""
+	if not isinstance(corp, dict) or "id" not in corp or "amprenta" in corp:
+		return corp
+	c = dict(corp)
+	c["amprenta"] = amprenta()
+	return c
 
 
 def identificatorNou():
@@ -418,7 +511,7 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 	_ceruteAcum["culegere"] = True
 	# numarul de testeri ai modelului se cere din nou (acum il numara si pe el)
 	_starea["numar_cand"] = None
-	return True, _t("Mulțumim. Ești beta tester. Datele bifate pleacă de acum.")
+	return True, _t("Felicitări, ești beta tester. Datele bifate pleacă de acum.")
 
 
 def schimbaBife(feluri, nume=None, email=None, b=None, automat=None):
@@ -499,7 +592,8 @@ def iesire(b=None):
 		golesteCoada()
 		corp = {"v": PROTOCOL, "id": ident}
 		puneInCoada("sterge", "sterge", corp)
-	for nume in ("ultimul.json", "trimise.json", "raspunsuri.json", "stare.json", "cheie"):
+	# forum-vazut.json: mesajele de pe forum vazute de tester (Components/HdsForumReceptor.FISIER_VAZUT)
+	for nume in ("ultimul.json", "trimise.json", "raspunsuri.json", "stare.json", "cheie", "forum-vazut.json"):
 		_sterge(cale(nume))
 	b.activ.value = False
 	b.id.value = ""
@@ -1442,7 +1536,7 @@ def _fisiereCoada():
 def puneInCoada(ruta, fel, corp, limita=PACHET_MAX):
 	"""Pachetul in coada: `ruta` = acord, date, mesaj, sterge. Peste limita pachetului nu intra (rand in jurnal);
 	peste COADA_MAX sau COADA_OCTETI pleaca intai cele mai vechi (nu si stergerea). -> numele fisierului sau None."""
-	brut, gz = comprima(corp)
+	brut, gz = comprima(cuAmprenta(corp))
 	if len(gz) > limita:
 		_jurnal("pachetul %s are %d octeti comprimat, peste %d: nu pleaca" % (fel, len(gz), limita))
 		adaugaTrimis(fel, len(gz), "refuzat")
@@ -1948,7 +2042,7 @@ def cheieProfil():
 def corpProfil(ruta, b=None, **campuri):
 	"""Corpul unei cereri de profil (profil, profil-stare, cod-legare, leaga, dezleaga)."""
 	b = _b(b)
-	corp = {"v": PROTOCOL, "id": b.id.value, "cheie": cheieProfil()}
+	corp = {"v": PROTOCOL, "id": b.id.value, "amprenta": amprenta(), "cheie": cheieProfil()}
 	corp.update(campuri)
 	return corp
 

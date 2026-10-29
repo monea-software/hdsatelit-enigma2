@@ -9516,15 +9516,6 @@ msgstr "Ayarlar"
 msgid "Niciun jurnal de cădere găsit."
 msgstr "Hiç çökme günlüğü bulunamadı."
 
-#: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
-#, python-format
-msgid ""
-"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
-"Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
-msgstr ""
-"Bulunan: %d. Beta testçisi olarak (Ayarlar > Beta testçisi) yeni günlükler yalnızca senin onayınla kendiliğinden gönderilir. Aksi halde burada bulunan bir günlük hdsatelit.com'daki iletişim formuyla gönderilebilir.\n"
-"Arama yeri: “%s”, /tmp ve /media, /run/media, /home/root altına bağlanan diğer tüm klasörler."
-
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:209
 #, python-format
 msgid "Ștergi jurnalul „%s”?"
@@ -24878,10 +24869,6 @@ msgstr "Alıcıya gönder"
 #: lib/python/Plugins/Extensions/HdsWebControl/ecran_pornire_web.py
 msgid "Trimite poza"
 msgstr "Resmi gönder"
-
-#: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
-msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
-msgstr "Beta testçisi olarak (Ayarlar'da, Beta testçisi bölümünde) yeni günlükler yalnızca senin onayınla kendiliğinden gönderilir. Aksi halde burada bulunan bir günlük, hdsatelit.com üzerindeki iletişim formuyla gönderilebilir. <span id=\"principal\"></span> içinde, /tmp içinde ve /media, /run/media, /home/root altına bağlanmış diğer tüm klasörlerde aranır."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/antena_web.py
 msgid "Tunerele nu se pot citi."
@@ -52986,6 +52973,3313 @@ msgstr "Sistem günlüğü"
 msgid "Serviciile de sistem"
 msgstr "Sistem hizmetleri"
 
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Python 2 için yapılmış"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s, Python 2 için yapılmış"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "Paket, Python 2 kullanan eski imajlar için yapılmış."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Bu imajda Python 3 var, bu yüzden kurulmuyor."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "Yerine geçen paketi kur"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "Paket kurulumdan önce denetleniyor."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "%s gerektiriyor"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "bir Python 2 kitaplığı"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "Python 2 klasöründe dosyaları var"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "Python 2 için derlenmiş dosyaları var (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "Python 2 kitaplığına bağlı (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "kod Python 3'te derlenmiyor (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "Python 3'ten kaldırılmış modülleri kullanıyor (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "Python 2 kullanan imajların feedinden geliyor (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Neden"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Python 3 için %s var, %s feedinde."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "Python 3 için yapılmış %s zaten kurulu."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Hiçbir şey kurulmadı."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK nedenini gösterir · Yeşil yerine geçen paketi kurar"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK nedenini gösterir"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "%s sürümü (%s kaynağından) Python 2 için yapılmış ve kurulmuyor."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "Kart sürücüsü yüklenmedi, bu nedenle kart türü okunamadı ve bu yazılımın onun için olduğu kanıtlanamıyor."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Uygun yazılımı, alıcının üreticisinin anlattığı gibi bir USB bellekle geri yükle (Octagon'da: açarken alıcıdaki Standby tuşunu basılı tut, sonra Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Başlatma tanılaması"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "Arayüz başlamıyor"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "Alıcının işlemcisi, yazılımın yapıldığı işlemci değil."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "Sürücü, yazılımın yapıldığından farklı bir kart türü bildiriyor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "Alıcının belleğindeki etiket başka bir kart türü gösteriyor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "Alıcının kartı (fabrika başlığı) farklı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "Alıcının belleğindeki bölümler farklı yerleşmiş."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "Çekirdek veya sistem bölümü başka bir yerde ya da farklı boyutta."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "Dahili belleğin boyutu, yazılımın yapıldığı modeldekinden farklı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "Alıcının başka bir değeri uyuşmuyor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "İşlemci okunamadı: işlemci sürücüsü yüklenmedi."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Kart türü okunamadı: kart sürücüsü yüklenmedi."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "Kart, fabrika başlığından okunamadı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "Bölümler, önyükleme satırından okunamadı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "Çekirdek veya sistem bölümü bulunamadı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "Yazılımdaki alıcı işareti bozuk."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "Başlangıçtaki denetim sonuç vermedi."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "Arayüz başlangıçta birkaç kez çöktü ve güvenli modda başladı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "Arayüz güvenli modda da çöküyor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "Arayüz hiç başlamıyor."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "Alıcının sürücüleri eksik veya yüklenmedi."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "Arayüz 5 dakika içinde görünmedi: başlangıçta takıldı."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "Arayüz başlangıçta başka bir nedenle durdu."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Kart türü (sürücü)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Etiket"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Kart (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Dahili bellek"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Çekirdek ve sistem"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Bölümler"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Model (önyükleyici)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d bölüm"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "%(loc)d. sıra: %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, boş %(liber)d MiB"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "bulunamadı"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "%(model)s için HD Satelit %(versiune)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Bu ekranın fotoğrafını çek ve yazılımı bulduğun foruma ya da %s adresine gönder."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "Yazılım alıcının belleğine hiçbir şey yazmaz. Doğru yazılımı, alıcının üreticisinin anlattığı gibi bir USB bellekle geri yükle."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Tüm veriler web arayüzünde: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Tüm veriler alıcının web arayüzünde, %s sayfasında"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Forum: %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "Arayüzün son hatası"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Çekirdek: sürücüler ve hatalar"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Kopyalanacak tüm veriler, bilgisayardan veya telefondan:"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "Arayüz %d dakika sonra yeniden denenecek."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Kodlar:"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Kod"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "Diğer kodlar: %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "Başlatma başarılı oldu: alıcı yazılımla eşleşiyor."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "Başlatma başarılı oldu. Bazı değerler beklenenlerden farklı: model henüz doğrulanmadı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Aşağıdaki verileri kopyala ve yazılımı bulduğun foruma ya da %s adresine gönder."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "Başlatma başarılı oldu; aşağıdaki veriler yalnızca okumak içindir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Tümünü kopyala"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "E-postayla gönder"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "HD Satelit forumu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "JavaScript olmadan: metne basılı tut, tümünü seç ve kopyala."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "Televizyonda tanılama ekranı yalnızca başlatma başarısız olduğunda kendiliğinden açılır; aksi halde MENU > Sistem Bilgisi > Başlatma tanılaması yolundan açarsın."
+
+#: lib/python/Components/HdsTasteRapide.py lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Verde (apăsare scurtă)"
+msgstr "Yeşil (kısa basış)"
+
+#: lib/python/Screens/ButtonSetup.py
+msgid "Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea LUNGĂ a fiecărui buton colorat, cât te uiți la TV. Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."
+msgstr "TV izlerken YEŞİL tuşa kısa basıldığında ne olacağını ve her renkli tuşa UZUN basıldığında neyin açılacağını seç. Alt kanalları olan bir kanalda kısa YEŞİL önce onların listesini gösterir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor."
+msgstr "Televizyon izlerken YEŞİL tuşa kısa basıldığında ne olacağını ve her renkli tuşa uzun basıldığında neyin açılacağını seç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Apăsarea scurtă"
+msgstr "Kısa basma"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."
+msgstr "Alt kanalları olan bir kanalda kısa YEŞİL önce onların listesini gösterir."
+
+#: lib/python/Screens/InfoBarGenerics.py
+msgid "Extensiile sau ce ai ales pentru VERDE (subcanalele, când există)"
+msgstr "Uzantılar veya YEŞİL için seçtiğin işlem (varsa alt kanallar)"
+
+#: lib/python/Hds/DabT2/pornire.py
+msgid "Fluxul %s e criptat si nu se poate desface."
+msgstr "%s akışı şifreli, açılamaz."
+
+#: lib/python/Components/HdsEditorCanale.py:103
+msgid "pe televizor"
+msgstr "televizyonda"
+
+#: lib/python/Components/HdsEditorCanale.py:105
+msgid "în interfața web (%s)"
+msgstr "web arayüzünde (%s)"
+
+#: lib/python/Components/HdsEditorCanale.py:106
+msgid "în interfața web"
+msgstr "web arayüzünde"
+
+#: lib/python/Components/HdsEditorCanale.py:113
+msgid "Editorul lucrează încă (citește sau salvează lista). Încearcă din nou peste câteva secunde."
+msgstr "Düzenleyici hâlâ çalışıyor (listeyi okuyor veya kaydediyor). Birkaç saniye sonra yeniden dene."
+
+#: lib/python/Components/HdsEditorCanale.py:115
+msgid "Lista de canale e deschisă acum %s."
+msgstr "Kanal listesi şu anda %s açık."
+
+#: lib/python/Components/HdsEditorCanale.py:117
+msgid "Are o schimbare nesalvată."
+msgid_plural "Are %d schimbări nesalvate."
+msgstr[0] "%d kaydedilmemiş değişikliği var."
+
+#: lib/python/Components/HdsEditorCanale.py:124
+msgid "Lista de canale a fost preluată %s. Schimbările nesalvate de aici s-au pierdut."
+msgstr "Kanal listesi %s devralındı. Buradaki kaydedilmemiş değişiklikler kayboldu."
+
+#: lib/python/Components/HdsEditorCanale.py:173
+msgid "Lista de canale de pe televizor e în modul de mutare sau de editare. Ieși din el și salvează din nou."
+msgstr "Televizyondaki kanal listesi taşıma veya düzenleme kipinde. Bu kipten çık ve yeniden kaydet."
+
+#: lib/python/Components/HdsEditorCanale.py:293
+msgid "Lista de canale nu s-a putut citi sau scrie."
+msgstr "Kanal listesi okunamadı veya yazılamadı."
+
+#: lib/python/Components/HdsEditorCanale.py:586
+msgid "Sesiunea editorului s-a închis. Deschide din nou editorul."
+msgstr "Düzenleyici oturumu kapandı. Düzenleyiciyi yeniden aç."
+
+#: lib/python/Components/HdsEditorCanale.py:710
+msgid "Buchetul nu mai există."
+msgstr "Buket artık yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1094
+msgid "Adăugat: %s"
+msgstr "Eklendi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1095
+msgid "Un canal adăugat"
+msgid_plural "%d canale adăugate"
+msgstr[0] "%d kanal eklendi"
+
+#: lib/python/Components/HdsEditorCanale.py:1106
+msgid "Nu e ales niciun rând."
+msgstr "Hiçbir satır seçili değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1118
+msgid "Mutat: %s"
+msgstr "Taşındı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1119
+msgid "Un rând mutat"
+msgid_plural "%d rânduri mutate"
+msgstr[0] "%d satır taşındı"
+
+#: lib/python/Components/HdsEditorCanale.py:1141
+msgid "Un buchet nu poate fi pus în el însuși."
+msgstr "Bir buket kendi içine konamaz."
+
+#: lib/python/Components/HdsEditorCanale.py:1154
+msgid "Un buchet TV nu se poate pune printre cele de radio."
+msgstr "Bir TV buketi radyo buketlerinin arasına konamaz."
+
+#: lib/python/Components/HdsEditorCanale.py:1159
+msgid "Mutat în %(buchet)s: %(canal)s"
+msgstr "%(buchet)s buketine taşındı: %(canal)s"
+
+#: lib/python/Components/HdsEditorCanale.py:1161
+msgid "în %s"
+msgstr "hedef: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1187
+msgid "Un rând copiat"
+msgid_plural "%d rânduri copiate"
+msgstr[0] "%d satır kopyalandı"
+
+#: lib/python/Components/HdsEditorCanale.py:1201
+msgid "Șters din buchet: %s"
+msgstr "Buketten silindi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1202
+msgid "Un rând șters din buchet"
+msgid_plural "%d rânduri șterse din buchet"
+msgstr[0] "%d satır buketten silindi"
+
+#: lib/python/Components/HdsEditorCanale.py:1211
+msgid "Scos din toate buchetele"
+msgstr "Tüm buketlerden çıkarıldı"
+
+#: lib/python/Components/HdsEditorCanale.py:1234
+msgid "Redenumit: %s"
+msgstr "Yeniden adlandırıldı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1254
+msgid "Canalul nu mai există în lista receptorului."
+msgstr "Kanal artık alıcının listesinde yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1274
+msgid "Buchet redenumit: %s"
+msgstr "Buket yeniden adlandırıldı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1301
+msgid "Marcaj nou: %s"
+msgstr "Yeni işaret: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1311
+msgid "Rând gol nou"
+msgstr "Yeni boş satır"
+
+#: lib/python/Components/HdsEditorCanale.py:1322
+msgid "Adresa fluxului nu e bună (trebuie să înceapă cu http:// sau https://)."
+msgstr "Akış adresi geçerli değil (http:// veya https:// ile başlamalı)."
+
+#: lib/python/Components/HdsEditorCanale.py:1325
+msgid "Adresa fluxului e prea lungă pentru lista de canale."
+msgstr "Akış adresi kanal listesi için çok uzun."
+
+#: lib/python/Components/HdsEditorCanale.py:1329
+msgid "Flux nou: %s"
+msgstr "Yeni akış: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1358
+msgid "Buchet nou: %s"
+msgstr "Yeni buket: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1358
+msgid "Sub-buchet nou: %s"
+msgstr "Yeni alt buket: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1370
+msgid "%s (copie)"
+msgstr "%s (kopya)"
+
+#: lib/python/Components/HdsEditorCanale.py:1376
+msgid "Buchet copiat: %s"
+msgstr "Buket kopyalandı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1380
+msgid "Lista buchetelor nu se poate șterge."
+msgstr "Buket listesi silinemez."
+
+#: lib/python/Components/HdsEditorCanale.py:1382
+msgid "Favorite nu se pot șterge. Poți scoate canalele din ele."
+msgstr "Favoriler silinemez. İçindeki kanalları çıkarabilirsin."
+
+#: lib/python/Components/HdsEditorCanale.py:1402
+msgid "Buchet șters: %s"
+msgstr "Buket silindi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1420
+msgid "Buchet pus în listă: %s"
+msgstr "Buket listeye kondu: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1429
+msgid "Buchetul e în listă; șterge-l din listă."
+msgstr "Buket listede; onu listeden sil."
+
+#: lib/python/Components/HdsEditorCanale.py:1454
+msgid "Buchet arătat: %s"
+msgstr "Buket gösterildi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1454
+msgid "Buchet ascuns: %s"
+msgstr "Buket gizlendi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1464
+msgid "Sortat: %s"
+msgstr "Sıralandı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1501
+msgid "Arătat: %s"
+msgstr "Gösterildi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1501
+msgid "Ascuns: %s"
+msgstr "Gizlendi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1503
+msgid "Un canal ascuns"
+msgid_plural "%d canale ascunse"
+msgstr[0] "%d kanal gizlendi"
+
+#: lib/python/Components/HdsEditorCanale.py:1504
+msgid "Un canal arătat"
+msgid_plural "%d canale arătate"
+msgstr[0] "%d kanal gösterildi"
+
+#: lib/python/Components/HdsEditorCanale.py:1530
+msgid "Un canal blocat"
+msgid_plural "%d canale blocate"
+msgstr[0] "%d kanal kilitlendi"
+
+#: lib/python/Components/HdsEditorCanale.py:1531
+msgid "Un canal deblocat"
+msgid_plural "%d canale deblocate"
+msgstr[0] "%d kanalın kilidi açıldı"
+
+#: lib/python/Components/HdsEditorCanale.py:1548
+msgid "Buchet blocat: %s"
+msgstr "Buket kilitlendi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1548
+msgid "Buchet deblocat: %s"
+msgstr "Buketin kilidi açıldı: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1563
+msgid "Șters din receptor: %s"
+msgstr "Alıcıdan silindi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1564
+msgid "Un canal șters din receptor"
+msgid_plural "%d canale șterse din receptor"
+msgstr[0] "%d kanal alıcıdan silindi"
+
+#: lib/python/Components/HdsEditorCanale.py:1587
+msgid "Transponderul nu mai există."
+msgstr "Transponder artık yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1590
+msgid "Transponder șters: %s"
+msgstr "Transponder silindi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1612
+msgid "Fără furnizor"
+msgstr "Sağlayıcı yok"
+
+#: lib/python/Components/HdsEditorCanale.py:1620
+msgid "Buchet nou"
+msgstr "Yeni buket"
+
+#: lib/python/Components/HdsEditorCanale.py:1622
+msgid "Nu știu din ce să fac buchetul."
+msgstr "Buketi neyden yapacağımı bilmiyorum."
+
+#: lib/python/Components/HdsEditorCanale.py:1625
+msgid "Nu e niciun canal de pus în buchet."
+msgstr "Bukete konacak hiçbir kanal yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1634
+msgid "Un canal care nu mai există, reparat"
+msgid_plural "%d canale care nu mai există, reparate"
+msgstr[0] "Artık var olmayan %d kanal onarıldı"
+
+#: lib/python/Components/HdsEditorCanale.py:1703
+msgid "Fișierul nu are niciun flux."
+msgstr "Dosyada hiç akış yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1713
+msgid "Fluxuri importate: %s"
+msgstr "İçe aktarılan akışlar: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1721
+msgid "Fluxuri"
+msgstr "Akışlar"
+
+#: lib/python/Components/HdsEditorCanale.py:1750
+msgid "Listă importată"
+msgstr "İçe aktarılan liste"
+
+#: lib/python/Components/HdsEditorCanale.py:1890
+msgid "înainte de salvare"
+msgstr "kaydetmeden önce"
+
+#: lib/python/Components/HdsEditorCanale.py:1906
+msgid "Lista s-a scris, dar nu s-a putut reîncărca. Repornește interfața."
+msgstr "Liste yazıldı ama yeniden yüklenemedi. Arayüzü yeniden başlat."
+
+#: lib/python/Components/HdsEditorCanale.py:2066
+msgid "Buchetul %s s-a schimbat și pe receptor între timp; a rămas varianta din editor."
+msgstr "%s buketi bu arada alıcıda da değişti; düzenleyicideki sürüm kaldı."
+
+#: lib/python/Components/HdsEditorCanale.py:2123
+msgid "Nu e loc destul în memoria receptorului pentru lista de canale."
+msgstr "Alıcının belleğinde kanal listesi için yeterli yer yok."
+
+#: lib/python/Components/HdsEditorCanale.py:2205
+msgid "Nu e loc pentru copia de siguranță a listei. Nu s-a salvat nimic."
+msgstr "Listenin yedeği için yer yok. Hiçbir şey kaydedilmedi."
+
+#: lib/python/Components/HdsEditorCanale.py:2300
+msgid "Copia nu mai există."
+msgstr "Yedek artık yok."
+
+#: lib/python/Components/HdsEditorCanale.py:2312
+msgid "înainte de întoarcerea la copia din %s"
+msgstr "%s tarihli yedeğe dönmeden önce"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:111
+msgid "Canale fără nume"
+msgstr "Adsız kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:111
+msgid "Numele e gol sau are numai semne (punct, liniuță, spații). Unele pot fi fluxuri care pornesc numai uneori: uită-te la frecvență și la imagine / sunet."
+msgstr "Ad boş ya da yalnızca işaretlerden oluşuyor (nokta, tire, boşluk). Bazıları yalnızca ara sıra yayın yapan feed'ler olabilir: frekansa ve görüntü / sese bak."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:113
+msgid "Nume de test"
+msgstr "Test adları"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:113
+msgid "Nume puse de emițător pentru probe sau de receptor când lipsește numele (Test, Service 1234, Ch-12, SID ...)."
+msgstr "Yayıncının denemeler için ya da ad eksik olduğunda alıcının koyduğu adlar (Test, Service 1234, Ch-12, SID ...)."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:159
+msgid "Al doilea rând al aceluiași canal din buchet. Ștergerea scoate numai rândul în plus."
+msgstr "Buketteki aynı kanalın ikinci satırı. Silme yalnızca fazla satırı kaldırır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:159
+msgid "De două ori în același buchet"
+msgstr "Aynı bukette iki kez"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:161
+msgid "Același nume pe aceeași poziție"
+msgstr "Aynı konumda aynı ad"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:161
+msgid "Canale diferite (alt SID sau alt transponder) cu același nume pe același satelit. Nu sunt neapărat dubluri: uită-te la frecvență."
+msgstr "Aynı uyduda aynı adı taşıyan farklı kanallar (başka SID veya başka transponder). Mutlaka kopya değiller: frekansa bak."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:163
+msgid "Același SID pe același transponder, scris de două ori cu alt tip de serviciu."
+msgstr "Aynı transponderde aynı SID, farklı hizmet türüyle iki kez yazılmış."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:163
+msgid "Același canal de două ori în listă"
+msgstr "Aynı kanal listede iki kez"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:202
+msgid "Canale care nu mai există"
+msgstr "Artık var olmayan kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:202
+msgid "Rânduri din buchete al căror canal nu mai e în lista receptorului (după o căutare nouă sau o listă adusă din altă parte). Unde am găsit același canal, „Repară” îl leagă din nou; altfel rândul se scoate."
+msgstr "Kanalı artık alıcının listesinde olmayan buket satırları (yeni bir taramadan veya başka yerden getirilen bir listeden sonra). Aynı kanalın bulunduğu yerde “Onar” onu yeniden bağlar; yoksa satır çıkarılır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:215
+msgid "Buchete fără niciun rând."
+msgstr "Hiç satırı olmayan buketler."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:215
+msgid "Buchete goale"
+msgstr "Boş buketler"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:148
+msgid "un browser"
+msgstr "bir tarayıcı"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:243
+msgid "Canalul nu mai există în lista receptorului"
+msgstr "Kanal artık alıcının listesinde yok"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:268
+msgid "Buchetul nu e bun."
+msgstr "Buket geçerli değil."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:277
+msgid "Lista buchetelor"
+msgstr "Buket listesi"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:387
+msgid "Alege un singur rând."
+msgstr "Tek bir satır seç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:391
+msgid "Numai un canal se poate redenumi peste tot."
+msgstr "Yalnızca bir kanal her yerde yeniden adlandırılabilir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:401
+msgid "Alege un singur canal."
+msgstr "Tek bir kanal seç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:480
+msgid "Operația nu e cunoscută."
+msgstr "Bilinmeyen işlem."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:528
+msgid "Pagina nu e bună. Deschide din nou editorul."
+msgstr "Sayfa geçerli değil. Düzenleyiciyi yeniden aç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:533
+msgid "Editorul nu mai e deschis în această pagină. Deschide-l din nou."
+msgstr "Düzenleyici artık bu sayfada açık değil. Yeniden aç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:641
+msgid "Cererea nu e bună."
+msgstr "İstek geçerli değil."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:733
+msgid "Unealta nu e cunoscută."
+msgstr "Bilinmeyen araç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:779
+msgid "Fișierul nu s-a putut face."
+msgstr "Dosya oluşturulamadı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:801
+msgid "Fișierul e gol sau prea mare."
+msgstr "Dosya boş ya da çok büyük."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:819
+msgid "Arhiva nu se poate citi (merg zip, tar și tar.gz)."
+msgstr "Arşiv okunamıyor (zip, tar ve tar.gz olur)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:822
+msgid "În arhivă nu e nicio listă de canale (lamedb sau bouquets.tv)."
+msgstr "Arşivde hiç kanal listesi yok (lamedb veya bouquets.tv)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:843
+msgid "Arhiva nu mai e pe receptor. Alege-o din nou."
+msgstr "Arşiv artık alıcıda değil. Yeniden seç."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2582
+msgid "Editorul de canale"
+msgstr "Kanal düzenleyici"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2584
+msgid "Buchet"
+msgstr "Buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2585
+msgid "Adaugă canale"
+msgstr "Kanal ekle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2586
+msgid "Anulează schimbarea"
+msgstr "Değişikliği geri al"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2587
+msgid "Refă"
+msgstr "Yinele"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2591
+msgid "Preia lista aici"
+msgstr "Listeyi buraya devral"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2595
+msgid "Furnizori"
+msgstr "Sağlayıcılar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2596
+msgid "HD și 4K"
+msgstr "HD ve 4K"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2597
+msgid "Necriptate"
+msgstr "Şifresiz"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2598
+msgid "Criptate"
+msgstr "Şifreli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2599
+msgid "În niciun buchet"
+msgstr "Hiçbir bukette değil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2600
+msgid "Ascunse"
+msgstr "Gizli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2601
+msgid "Limba, subtitrări și altele"
+msgstr "Dil, altyazı ve diğerleri"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2606
+msgid "Adaugă în buchet"
+msgstr "Bukete ekle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2607
+msgid "Mută sus"
+msgstr "Yukarı taşı"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2608
+msgid "Mută jos"
+msgstr "Aşağı taşı"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2609
+msgid "Mută la poziția..."
+msgstr "Konuma taşı..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2610
+msgid "Mută în..."
+msgstr "Şuraya taşı..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2611
+msgid "Copiază în..."
+msgstr "Şuraya kopyala..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2613
+msgid "Șterge din receptor"
+msgstr "Alıcıdan sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2615
+msgid "Redenumește peste tot"
+msgstr "Her yerde yeniden adlandır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2618
+msgid "Blochează"
+msgstr "Kilitle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2619
+msgid "Deblochează"
+msgstr "Kilidi aç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2620
+msgid "Sortează"
+msgstr "Sırala"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2621
+msgid "Sortează cele alese"
+msgstr "Seçilenleri sırala"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2622
+msgid "Selectează tot"
+msgstr "Tümünü seç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2623
+msgid "Deselectează tot"
+msgstr "Seçimi kaldır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2624
+msgid "Selectează grupa de sub marcaj"
+msgstr "İşaretin altındaki grubu seç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2625
+msgid "Marcaj nou"
+msgstr "Yeni işaret"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2627
+msgid "Flux nou (adresă de internet)"
+msgstr "Yeni akış (internet adresi)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2629
+msgid "Sub-buchet nou"
+msgstr "Yeni alt buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2630
+msgid "Buchet nou din cele alese"
+msgstr "Seçilenlerden yeni buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2631
+msgid "Fă un buchet din acest satelit"
+msgstr "Bu uydudan buket yap"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2632
+msgid "Fă un buchet din acest furnizor"
+msgstr "Bu sağlayıcıdan buket yap"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2634
+msgid "Redenumește buchetul"
+msgstr "Buketi yeniden adlandır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2635
+msgid "Copiază buchetul"
+msgstr "Buketi kopyala"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2636
+msgid "Șterge buchetul"
+msgstr "Buketi sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2637
+msgid "Blochează buchetul"
+msgstr "Buketi kilitle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2638
+msgid "Deblochează buchetul"
+msgstr "Buketin kilidini aç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2639
+msgid "Descarcă buchetul (m3u)"
+msgstr "Buketi indir (m3u)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2640
+msgid "Canale de test"
+msgstr "Test kanalları"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2641
+msgid "Dubluri"
+msgstr "Kopyalar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2644
+msgid "Buchete găsite pe disc, care nu sunt în listă"
+msgstr "Diskte bulunan ve listede olmayan buketler"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2645
+msgid "Copii de siguranță"
+msgstr "Yedekler"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2646
+msgid "Importă o listă (arhivă zip sau tar)"
+msgstr "Liste içe aktar (zip veya tar arşivi)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2647
+msgid "Importă fluxuri (m3u)"
+msgstr "Akış içe aktar (m3u)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2648
+msgid "Descarcă lista (zip)"
+msgstr "Listeyi indir (zip)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2649
+msgid "Descarcă lista (tar.gz)"
+msgstr "Listeyi indir (tar.gz)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2651
+msgid "Închide editorul"
+msgstr "Düzenleyiciyi kapat"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2652
+msgid "Înapoi la editor"
+msgstr "Düzenleyiciye dön"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2657
+msgid "Bine"
+msgstr "Tamam"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2660
+msgid "Poziția (numărul rândului)"
+msgstr "Konum (satır numarası)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2661
+msgid "Anulează:"
+msgstr "Geri al:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2662
+msgid "Schimbări nesalvate:"
+msgstr "Kaydedilmemiş değişiklikler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2663
+msgid "Rânduri alese:"
+msgstr "Seçilen satırlar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2664
+msgid "Canale:"
+msgstr "Kanallar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2665
+msgid "în buchete:"
+msgstr "buketlerde:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2666
+msgid "nu mai există"
+msgstr "artık yok"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2667
+msgid "ascuns"
+msgstr "gizli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2668
+msgid "blocat"
+msgstr "kilitli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2669
+msgid "Buchetul e gol. Adaugă canale din „Adaugă canale”."
+msgstr "Buket boş. “Kanal ekle” bölümünden kanal ekle."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2670
+msgid "Nu am găsit niciun canal."
+msgstr "Hiç kanal bulunamadı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2671
+msgid "Se salvează lista și se face copia de siguranță..."
+msgstr "Liste kaydediliyor ve yedek alınıyor..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2672
+msgid "Salvat. Copia de siguranță e făcută, iar lista de pe televizor e la zi."
+msgstr "Kaydedildi. Yedek alındı ve televizyondaki liste güncel."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2673
+msgid "Salvat. Lista din memorie nu s-a putut verifica."
+msgstr "Kaydedildi. Bellekteki liste denetlenemedi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2674
+msgid "Salvat, dar lista din memorie diferă de cea scrisă. Repornește interfața."
+msgstr "Kaydedildi ama bellekteki liste yazılandan farklı. Arayüzü yeniden başlat."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2675
+msgid "Lista e cea din copia aleasă. Copia de dinainte e păstrată."
+msgstr "Liste artık seçilen yedekteki liste. Önceden alınan yedek saklandı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2676
+msgid "Se pune înapoi copia..."
+msgstr "Yedek geri yükleniyor..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2677
+msgid "Întoarce la această copie"
+msgstr "Bu yedeğe dön"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2678
+msgid "Nu e nicio copie de siguranță încă. Prima se face la prima salvare."
+msgstr "Henüz hiç yedek yok. İlki ilk kayıtta alınır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2679
+msgid "Ștergi canalele alese din acest buchet? Rămân în lista receptorului."
+msgstr "Seçilen kanallar bu buketten silinsin mi? Alıcının listesinde kalırlar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2680
+msgid "Ștergi canalele alese din receptor? Dispar și din toate buchetele. Poți anula până la salvare."
+msgstr "Seçilen kanallar alıcıdan silinsin mi? Tüm buketlerden de kaybolurlar. Kaydedene kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2681
+msgid "Ștergi tot buchetul? Canalele lui rămân în lista receptorului."
+msgstr "Buketin tamamı silinsin mi? Kanalları alıcının listesinde kalır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2682
+msgid "Lista de acum se înlocuiește cu cea din copie. Înainte se face o copie a listei de acum."
+msgstr "Şimdiki liste yedekteki listeyle değiştirilir. Önce şimdiki listenin bir yedeği alınır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2683
+msgid "Ai schimbări nesalvate. Dacă pleci acum, se pierd."
+msgstr "Kaydedilmemiş değişikliklerin var. Şimdi çıkarsan kaybolurlar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2684
+msgid "Lista e deschisă în altă parte. Dacă o preiei, schimbările nesalvate de acolo se pierd."
+msgstr "Liste başka bir yerde açık. Devralırsan oradaki kaydedilmemiş değişiklikler kaybolur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2685
+msgid "Unde le muți?"
+msgstr "Nereye taşınsın?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2686
+msgid "Unde le copiezi?"
+msgstr "Nereye kopyalansın?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2687
+msgid "Sortează după"
+msgstr "Sıralama ölçütü"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2689
+msgid "Satelit și frecvență"
+msgstr "Uydu ve frekans"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2690
+msgid "Furnizor"
+msgstr "Sağlayıcı"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2692
+msgid "În ordine inversă"
+msgstr "Ters sırada"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2693
+msgid "Marcajele rămân pe loc: se sortează fiecare grupă de sub un marcaj."
+msgstr "İşaretler yerinde kalır: her işaretin altındaki grup sıralanır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2694
+msgid "„Redenumește” schimbă numele numai în acest buchet. „Redenumește peste tot” îl schimbă în lista receptorului."
+msgstr "“Yeniden adlandır” adı yalnızca bu bukette değiştirir. “Her yerde yeniden adlandır” onu alıcının listesinde değiştirir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2695
+msgid "Bifează tot"
+msgstr "Tümünü işaretle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2696
+msgid "Debifează tot"
+msgstr "Tüm işaretleri kaldır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2698
+msgid "Nu am găsit nimic aici."
+msgstr "Burada hiçbir şey bulunamadı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2699
+msgid "imagine"
+msgstr "görüntü"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2700
+msgid "sunet"
+msgstr "ses"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2702
+msgid "Repară cele bifate"
+msgstr "İşaretlileri onar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2703
+msgid "Șterge rândurile în plus bifate"
+msgstr "İşaretli fazla satırları sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2704
+msgid "Șterge din receptor cele bifate"
+msgstr "İşaretlileri alıcıdan sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2705
+msgid "se leagă la:"
+msgstr "şuna bağlanır:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2706
+msgid "se scoate din buchet"
+msgstr "buketten çıkarılır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2707
+msgid "Ce faci cu lista din arhivă?"
+msgstr "Arşivdeki listeyle ne yapılsın?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2708
+msgid "Înlocuiește lista de acum"
+msgstr "Şimdiki listeyi değiştir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2709
+msgid "Adaugă numai ce lipsește"
+msgstr "Yalnızca eksik olanları ekle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2710
+msgid "Buchetele din arhivă (debifează ce nu vrei)"
+msgstr "Arşivdeki buketler (istemediklerinin işaretini kaldır)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2711
+msgid "canale și buchete în arhivă:"
+msgstr "arşivdeki kanallar ve buketler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2712
+msgid "Un buchet, cu marcaje pe grupe"
+msgstr "Gruplara göre işaretli tek buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2713
+msgid "Câte un buchet pe fiecare grupă"
+msgstr "Her grup için ayrı buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2714
+msgid "Bifează rândurile, apoi alege ce faci cu butoanele de jos. Mânerul ≡ mută rândul trăgându-l. „Anulează” întoarce ultima schimbare. Nimic nu se scrie în receptor până nu apeși „Salvează”; înainte de fiecare salvare se face o copie de siguranță."
+msgstr "Satırları işaretle, sonra alttaki düğmelerle ne yapacağını seç. ≡ tutamacı, sürüklendiğinde satırı taşır. “Geri al” son değişikliği geri alır. “Kaydet”e basana kadar alıcıya hiçbir şey yazılmaz; her kayıttan önce bir yedek alınır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2715
+msgid "Pe calculator: săgețile aleg rândul, Shift + săgeți alege mai multe, Ctrl + săgeți mută, Spațiu bifează, Delete șterge, Ctrl+C / Ctrl+X / Ctrl+V copiază, taie și lipește, Ctrl+Z / Ctrl+Y anulează și reface, Ctrl+A alege tot, Ctrl+S salvează, F2 redenumește."
+msgstr "Bilgisayarda: oklar satırı seçer, Shift + oklar birden çok satır seçer, Ctrl + oklar taşır, Boşluk işaretler, Delete siler, Ctrl+C / Ctrl+X / Ctrl+V kopyalar, keser ve yapıştırır, Ctrl+Z / Ctrl+Y geri alır ve yineler, Ctrl+A tümünü seçer, Ctrl+S kaydeder, F2 yeniden adlandırır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2716
+msgid "Lipit."
+msgstr "Yapıştırıldı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2717
+msgid "Copiate. Alege locul și apasă Ctrl+V."
+msgstr "Kopyalandı. Yeri seç ve Ctrl+V'ye bas."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2718
+msgid "Editorul nu mai e deschis în această pagină."
+msgstr "Düzenleyici artık bu sayfada açık değil."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2719
+msgid "Deschide din nou"
+msgstr "Yeniden aç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2721
+msgid "Erau deja în buchet."
+msgstr "Zaten buketteydiler."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2722
+msgid "Deschide întâi un buchet, apoi adaugă canalele."
+msgstr "Önce bir buket aç, sonra kanalları ekle."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2723
+msgid "Trage ca să muți"
+msgstr "Taşımak için sürükle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2724
+msgid "Acțiunile rândului"
+msgstr "Satır işlemleri"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2725
+msgid "Am găsit în listă:"
+msgstr "Listede bulunanlar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2726
+msgid "Vezi"
+msgstr "Göster"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2727
+msgid "Pune în listă"
+msgstr "Listeye koy"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2728
+msgid "Filtrele bazei de canale"
+msgstr "Kanal veritabanı filtreleri"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2729
+msgid "În aceeași grupă opțiunile bifate se adună cu «sau», între grupe cu «și». Numărul arată câte canale au opțiunea."
+msgstr "Aynı grupta işaretli seçenekler «veya» ile, gruplar arasında «ve» ile birleşir. Sayı, seçeneğe sahip kanal sayısını gösterir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2731
+msgid "Se citesc filtrele..."
+msgstr "Filtreler okunuyor..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2732
+msgid "Felul listei"
+msgstr "Liste türü"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2733
+msgid "Ce vezi"
+msgstr "Görüntülenen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2735
+msgid "Caută după nume, furnizor, SID sau frecvență"
+msgstr "Ada, sağlayıcıya, SID'ye veya frekansa göre ara"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2737
+msgid "Canalele receptorului"
+msgstr "Alıcının kanalları"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2738
+msgid "Rândurile buchetului"
+msgstr "Buketin satırları"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py
+msgid "Editează lista de canale"
+msgstr "Kanal listesini düzenle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Căutare"
+msgstr "Arama"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "(fără nume)"
+msgstr "(adsız)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se salvează…"
+msgstr "Kaydediliyor…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Poziția în buchet sau numele"
+msgstr "Buketteki konum veya ad"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editorul de canale nu se poate deschide acum."
+msgstr "Kanal düzenleyici şu anda açılamıyor."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "SURSA"
+msgstr "KAYNAK"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ai %s. Salvezi?"
+msgstr "%s var. Kaydedilsin mi?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "În ce buchet duci rândurile?"
+msgstr "Satırları hangi bukete taşıyorsun?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista nu s-a salvat. Schimbările au rămas aici: încearcă din nou."
+msgstr "Liste kaydedilmedi. Değişiklikler burada duruyor: yeniden dene."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal din toate buchetele? Rămâne în lista receptorului."
+msgid_plural "Ștergi %d canale din toate buchetele? Rămân în lista receptorului."
+msgstr[0] "%d kanal tüm buketlerden silinsin mi? Alıcının listesinde kalır."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal din receptor? Dispare și din toate buchetele."
+msgid_plural "Ștergi %d canale din receptor? Dispar și din toate buchetele."
+msgstr[0] "%d kanal alıcıdan silinsin mi? Tüm buketlerden de kaybolur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "televizorul"
+msgstr "televizyon"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de canale e deschisă acum pentru editare în interfața web."
+msgstr "Kanal listesi şu anda web arayüzünde düzenleme için açık."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editarea a trecut în interfața web. Editorul de aici se închide."
+msgstr "Düzenleme web arayüzüne geçti. Buradaki düzenleyici kapanıyor."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "BUCHETUL"
+msgstr "BUKET"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "De unde iei canalele?"
+msgstr "Kanalları nereden alıyorsun?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele buchetului nou"
+msgstr "Yeni buketin adı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugi toate cele %d canale din %s în buchet?"
+msgstr "Tüm %d kanal (%s) bukete eklensin mi?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "În ce buchet pui canalele?"
+msgstr "Kanalları hangi bukete koyuyorsun?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Niciun buchet. Albastru: buchet nou."
+msgstr "Buket yok. Mavi: yeni buket."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %s din buchetul %s? Canalul rămâne în lista receptorului."
+msgstr "%s, %s buketinden silinsin mi? Kanal alıcının listesinde kalır."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d rând din buchetul %s? Canalele rămân în lista receptorului."
+msgid_plural "Ștergi %d rânduri din buchetul %s? Canalele rămân în lista receptorului."
+msgstr[0] "%d satır %s buketinden silinsin mi? Kanallar alıcının listesinde kalır."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adăugat %d canal"
+msgid_plural "Adăugate %d canale"
+msgstr[0] "%d kanal eklendi"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele canalului căutat"
+msgstr "Aranan kanalın adı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "> refă"
+msgstr "> yinele"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Refăcut: %s"
+msgstr "Yinelendi: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Salvat. Copia de siguranță: %s"
+msgstr "Kaydedildi. Yedek kopya: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele nou"
+msgstr "Yeni ad"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Pus %d rând"
+msgid_plural "Puse %d rânduri"
+msgstr[0] "%d satır yapıştırıldı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ajutorul editorului"
+msgstr "Düzenleyici yardımı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele fluxului"
+msgstr "Akışın adı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista s-a întors la copia aleasă."
+msgstr "Liste seçilen kopyaya geri döndü."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă, ia, lasă sau deschide"
+msgstr "Ekle, al, bırak veya aç"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Înapoi, pune înapoi sau ieși"
+msgstr "Geri, yerine koy veya çık"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta roșie (scrisă jos)"
+msgstr "Kırmızı tuş (altta yazılı)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta verde (scrisă jos)"
+msgstr "Yeşil tuş (altta yazılı)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta galbenă (scrisă jos)"
+msgstr "Sarı tuş (altta yazılı)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta albastră (scrisă jos)"
+msgstr "Mavi tuş (altta yazılı)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Restul acțiunilor"
+msgstr "Diğer işlemler"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulează ultima schimbare"
+msgstr "Son değişikliği geri al"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Reface schimbarea anulată"
+msgstr "Geri alınan değişikliği yinele"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "O pagină în sus"
+msgstr "Bir sayfa yukarı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "O pagină în jos"
+msgstr "Bir sayfa aşağı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista TV"
+msgstr "TV listesi"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista radio"
+msgstr "Radyo listesi"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele, cu tastatura de pe ecran"
+msgstr "Ad, ekran klavyesiyle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Detaliile canalului"
+msgstr "Kanal ayrıntıları"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editezi aici, pe televizor?"
+msgstr "Burada, televizyonda mı düzenleyeceksin?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Niciun canal găsit. Scrie alt nume sau schimbă filtrele (albastru)."
+msgstr "Kanal bulunamadı. Başka bir ad yaz veya filtreleri değiştir (mavi)."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de canale e goală. Caută canale din meniul Scanare."
+msgstr "Kanal listesi boş. Tarama menüsünden kanal ara."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetul e gol. Adaugă canale din stânga: OK pe un canal."
+msgstr "Buket boş. Soldan kanal ekle: bir kanalda OK."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Marcaj"
+msgstr "İşaret"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "nu mai e în listă"
+msgstr "artık listede yok"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în buchet"
+msgstr "bukette"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în mână: %d"
+msgstr "elde: %d"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "BUCHETELE"
+msgstr "BUKETLER"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "< Anulează: %s"
+msgstr "< Geri al: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchete schimbate: %s"
+msgstr "Değişen buketler: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal șters din receptor"
+msgid_plural "%d canale șterse din receptor"
+msgstr[0] "%d kanal alıcıdan silindi"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista e deschisă acum în interfața web: aici doar o poți privi."
+msgstr "Liste şu anda web arayüzünde açık: burada yalnızca bakabilirsin."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nu se poate."
+msgstr "Yapılamıyor."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Era deja în buchet."
+msgstr "Zaten bukette vardı."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi buchetul %s (%s)? Canalele rămân în lista receptorului."
+msgstr "%s (%s) buketi silinsin mi? Kanallar alıcının listesinde kalır."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Copiat %d rând"
+msgid_plural "Copiate %d rânduri"
+msgstr[0] "%d satır kopyalandı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nimic de anulat."
+msgstr "Geri alınacak bir şey yok."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nimic de refăcut."
+msgstr "Yinelenecek bir şey yok."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ctrl+V îl pune"
+msgstr "Ctrl+V yapıştırır"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Salvează acum"
+msgstr "Şimdi kaydet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Acolo e %d schimbare nesalvată, care se pierde."
+msgid_plural "Acolo sunt %d schimbări nesalvate, care se pierd."
+msgstr[0] "Orada kaydedilmemiş %d değişiklik var, kaybolacak."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d filtru"
+msgid_plural "%d filtre"
+msgstr[0] "%d filtre"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet"
+msgid_plural "%d buchete"
+msgstr[0] "%d buket"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Rămâi"
+msgstr "Kal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mutat %d rând în alt buchet"
+msgid_plural "Mutate %d rânduri în alt buchet"
+msgstr[0] "%d satır başka bir bukete taşındı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mutat %d rând"
+msgid_plural "Mutate %d rânduri"
+msgstr[0] "%d satır taşındı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulat: %s"
+msgstr "Geri alındı: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulează: %s"
+msgstr "Geri al: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Refă: %s"
+msgstr "Yinele: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Marcaj numerotat nou"
+msgstr "Yeni numaralı işaret"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Rând gol (spațiu)"
+msgstr "Boş satır (boşluk)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Sortează…"
+msgstr "Sırala…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă tot în buchet"
+msgstr "Tümünü bukete ekle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă după rândul ales din buchet"
+msgstr "Buketin seçili satırından sonra ekle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Redenumește canalul"
+msgstr "Kanalı yeniden adlandır"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchet nou din rezultatele căutării"
+msgstr "Arama sonuçlarından yeni buket"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Arată canalul în listă"
+msgstr "Kanalı listede göster"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ascunde canalul în listă"
+msgstr "Kanalı listede gizle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Deblochează canalul"
+msgstr "Kanalın kilidini aç"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Blochează canalul (control parental)"
+msgstr "Kanalı kilitle (ebeveyn denetimi)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "rând gol"
+msgstr "boş satır"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în %d buchet"
+msgid_plural "în %d buchete"
+msgstr[0] "%d bukette"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută buchetul"
+msgstr "Buketi taşı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la poziția…"
+msgstr "Konuma taşı…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la început"
+msgstr "Başa taşı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la sfârșit"
+msgstr "Sona taşı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută în…"
+msgstr "Şuraya taşı…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Copiază în…"
+msgstr "Şuraya kopyala…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchet nou din %s"
+msgstr "%s içinden yeni buket"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Șterge din toate buchetele"
+msgstr "Tüm buketlerden sil"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d furnizor"
+msgid_plural "%d furnizori"
+msgstr[0] "%d sağlayıcı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Unde se schimbă numele „%s”?"
+msgstr "„%s” adı nerede değişsin?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tăiat %d rând"
+msgid_plural "Tăiate %d rânduri"
+msgstr[0] "%d satır kesildi"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Șterge din receptor: %s"
+msgstr "Alıcıdan sil: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numai în acest buchet"
+msgstr "Yalnızca bu bukette"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Peste tot"
+msgstr "Her yerde"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Arată buchetul"
+msgstr "Buketi göster"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ascunde buchetul"
+msgstr "Buketi gizle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele marcajului"
+msgstr "İşaretin adı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adresa fluxului (http://...)"
+msgstr "Akış adresi (http://...)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie poziția cu cifrele, apoi OK."
+msgstr "Konumu rakamlarla yaz, sonra OK."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "nume, invers (Z-A)"
+msgstr "ad, ters (Z-A)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "poziția satelitului"
+msgstr "uydu konumu"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "frecvență"
+msgstr "frekans"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "furnizor"
+msgstr "sağlayıcı"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "numai rândurile bifate"
+msgstr "yalnızca işaretli satırlar"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "fiecare grupă între marcaje"
+msgstr "işaretler arasındaki her grup"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Răsfoire"
+msgstr "Gezinme"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Mută"
+msgstr "Taşı"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK ia rândul ca să-l muți · cifrele: poziția · < anulează · > refă · HELP ajutor"
+msgstr "OK taşımak için satırı alır · rakamlar: konum · < geri al · > yinele · HELP yardım"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Pune înapoi"
+msgstr "Yerine koy"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Lasă aici"
+msgstr "Buraya bırak"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "La început / la sfârșit"
+msgstr "Başa / sona"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Gata cu selecția"
+msgstr "Seçim tamam"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Buchetele"
+msgstr "Buketler"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Sus / Jos mută rândurile · cifrele: poziția · OK le lasă aici · EXIT le pune înapoi"
+msgstr "Yukarı / Aşağı satırları taşır · rakamlar: konum · OK buraya bırakır · EXIT yerine koyar"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Sus / Jos alege locul · cifrele: poziția · OK pune copia aici · EXIT renunță"
+msgstr "Yukarı / Aşağı yeri seçer · rakamlar: konum · OK kopyayı buraya koyar · EXIT vazgeçer"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK bifează și trece mai jos · tastele colorate lucrează pe rândurile bifate"
+msgstr "OK işaretler ve aşağı iner · renkli tuşlar işaretli satırlarda çalışır"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK adaugă canalul în buchetul din dreapta · cifrele scriu numele · HELP ajutor"
+msgstr "OK kanalı sağdaki bukete ekler · rakamlar adı yazar · HELP yardım"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide buchetul · Stânga / Dreapta: coloana · < anulează · > refă · HELP ajutor"
+msgstr "OK buketi açar · Sol / Sağ: sütun · < geri al · > yinele · HELP yardım"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide · cifrele: poziția · < anulează · > refă · HELP ajutor"
+msgstr "OK açar · rakamlar: konum · < geri al · > yinele · HELP yardım"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Poziția: %s"
+msgstr "Konum: %s"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "%d schimbare nesalvată"
+msgid_plural "%d schimbări nesalvate"
+msgstr[0] "kaydedilmemiş %d değişiklik"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "%d rând bifat"
+msgid_plural "%d rânduri bifate"
+msgstr[0] "%d işaretli satır"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide · Stânga / Dreapta: coloana · cifrele scriu numele · HELP ajutor"
+msgstr "OK açar · Sol / Sağ: sütun · rakamlar adı yazar · HELP yardım"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alegi tu ce se șterge din receptor: nimic nu e bifat dinainte. Un canal cu „.” poate fi un flux care pornește uneori: uită-te la frecvență și la imagine / sunet."
+msgstr "Alıcıdan neyin silineceğini sen seçersin: önceden hiçbir şey işaretli değil. \".\" adlı bir kanal bazen başlayan bir akış olabilir: frekansa ve görüntü / sese bak."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun canal fără nume și niciun canal de test."
+msgstr "Adsız kanal ve test kanalı yok."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Același canal de două ori în același buchet. Același nume pe alt satelit nu e dublură."
+msgstr "Aynı kanal aynı bukette iki kez. Başka uydudaki aynı ad yineleme değildir."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Șterge din buchet"
+msgstr "Buketten sil"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Nicio dublură în buchete."
+msgstr "Buketlerde yineleme yok."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Rânduri din buchete fără canal în lista receptorului. Cele cu un canal găsit se leagă la el, celelalte se șterg din buchet."
+msgstr "Alıcının listesinde kanalı olmayan buket satırları. Kanalı bulunanlar ona bağlanır, diğerleri buketten silinir."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Repară"
+msgstr "Onar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate rândurile din buchete au canalul lor."
+msgstr "Tüm buket satırlarının kanalı var."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Cum arată"
+msgstr "Nasıl görünür"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În stânga e SURSA: de unde iei canalele (toate, pe sateliți, pe furnizori, pe transpondere sau căutarea). În dreapta e BUCHETUL: lista buchetelor, iar cu OK pe unul, canalele lui. Sus vezi modul de acum (Răsfoire, Mută, Copiază, Selectează) și câte schimbări nu sunt salvate. Jos, fiecare tastă colorată are scris ce face acum."
+msgstr "Solda KAYNAK var: kanalları nereden aldığın (tümü, uyduya, sağlayıcıya, transpondere göre veya arama). Sağda BUKET var: buket listesi ve birinde OK ile onun kanalları. Üstte şu anki kipi (Gezinme, Taşı, Kopyala, Seç) ve kaç değişikliğin kaydedilmediğini görürsün. Altta her renkli tuşun şu an ne yaptığı yazar."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Stânga / Dreapta trec dintr-o coloană în alta. În sursă, OK pe un canal îl adaugă la sfârșitul buchetului din dreapta (pe un satelit sau furnizor, OK îl deschide). Cifrele scriu numele canalului ca la SMS; TEXT deschide tastatura de pe ecran. Albastru: filtrele (HD, FTA, limba sunetului, subtitrări...)."
+msgstr "Sol / Sağ sütunlar arasında geçer. Kaynakta bir kanalda OK onu sağdaki buketin sonuna ekler (bir uydu veya sağlayıcıda OK onu açar). Rakamlar kanal adını SMS gibi yazar; TEXT ekran klavyesini açar. Mavi: filtreler (HD, FTA, ses dili, altyazı...)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În buchet, OK pe un rând îl ia: Sus / Jos îl duc, cifrele îl duc la poziția scrisă, OK îl lasă, EXIT îl pune înapoi. Galben îl duce la început sau la sfârșit, albastru în alt buchet."
+msgstr "Bukette bir satırda OK onu alır: Yukarı / Aşağı taşır, rakamlar yazılan konuma götürür, OK bırakır, EXIT yerine koyar. Sarı başa veya sona, mavi başka bir bukete götürür."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Mai multe deodată"
+msgstr "Aynı anda birden çok"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Galben: Selectează. OK bifează rândul și trece mai jos; galben pe un marcaj bifează toată grupa lui. Tastele colorate lucrează apoi pe toate cele bifate: Șterge, Mută, Copiază în..."
+msgstr "Sarı: Seç. OK satırı işaretler ve aşağı iner; bir işarette sarı tüm grubunu işaretler. Renkli tuşlar sonra tüm işaretli satırlarda çalışır: Sil, Taşı, Şuraya kopyala..."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Anulează și salvează"
+msgstr "Geri al ve kaydet"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Tasta < anulează ultima schimbare, tasta > o reface (și din MENU). Nimic nu se scrie până nu salvezi: MENU > Salvează acum, sau la ieșire. Înainte de fiecare salvare se face singură o copie de siguranță; MENU > Copii de siguranță întoarce lista la oricare."
+msgstr "< tuşu son değişikliği geri alır, > tuşu yineler (MENU'den de). Kaydedene kadar hiçbir şey yazılmaz: MENU > Şimdi kaydet veya çıkışta. Her kayıttan önce kendiliğinden bir yedek kopya alınır; MENU > Yedek kopyalar listeyi herhangi birine geri döndürür."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Uneltele"
+msgstr "Araçlar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Canale de test: canalele fără nume sau cu nume de test, alese de tine pentru ștergere. MENU > Dubluri și Canale care nu mai există curăță buchetele. Nimic nu se șterge fără bifa ta și fără o întrebare cu numărul."
+msgstr "MENU > Test kanalları: adsız veya test adlı kanallar, silmek için senin seçtiklerin. MENU > Yinelenenler ve Artık olmayan kanallar buketleri temizler. Senin işaretin ve sayıyı soran bir soru olmadan hiçbir şey silinmez."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Mouse și tastatură"
+msgstr "Fare ve klavye"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Clic alege rândul, dublu clic face OK, Ctrl + clic bifează, Shift + clic bifează până acolo, tras cu mouse-ul mută sau adaugă, rotița derulează. Tastatura: Ctrl+Z / Ctrl+Y anulează / refac, Ctrl+C / Ctrl+X / Ctrl+V copiază, taie, lipesc, Delete șterge, F2 redenumește, Ctrl+S salvează, Ctrl+A selectează tot; literele scrise în sursă caută."
+msgstr "Tıklama satırı seçer, çift tıklama OK yapar, Ctrl + tıklama işaretler, Shift + tıklama oraya kadar işaretler, fareyle sürükleme taşır veya ekler, tekerlek kaydırır. Klavye: Ctrl+Z / Ctrl+Y geri alır / yineler, Ctrl+C / Ctrl+X / Ctrl+V kopyalar, keser, yapıştırır, Delete siler, F2 yeniden adlandırır, Ctrl+S kaydeder, Ctrl+A tümünü seçer; kaynakta yazılan harfler arar."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "fără imagine și sunet"
+msgstr "görüntü ve ses yok"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "imagine / sunet: nu se știe"
+msgstr "görüntü / ses: bilinmiyor"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "imagine și sunet"
+msgstr "görüntü ve ses"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai imagine"
+msgstr "yalnızca görüntü"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai sunet"
+msgstr "yalnızca ses"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Se întoarce lista la copia aleasă…"
+msgstr "Liste seçilen kopyaya geri döndürülüyor…"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Poziția"
+msgstr "Konum"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Imagine și sunet"
+msgstr "Görüntü ve ses"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Referința"
+msgstr "Başvuru"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Selectează toată grupa"
+msgstr "Tüm grubu seç"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Restrânge grupa"
+msgstr "Grubu daralt"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Sus / Jos: grupul · Stânga / Dreapta: opțiunea · OK o pornește sau o oprește"
+msgstr "Yukarı / Aşağı: grup · Sol / Sağ: seçenek · OK açar veya kapatır"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "O copie se face singură înainte de fiecare salvare, aici și în interfața web. Întoarcerea pune întâi lista de acum într-o copie nouă."
+msgstr "Her kayıttan önce burada ve web arayüzünde kendiliğinden bir kopya alınır. Geri dönüş önce şimdiki listeyi yeni bir kopyaya koyar."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK: întoarce lista la copia aleasă"
+msgstr "OK: listeyi seçilen kopyaya döndür"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "ascuns în listă"
+msgstr "listede gizli"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "blocat (control parental)"
+msgstr "kilitli (ebeveyn denetimi)"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista tastelor"
+msgstr "Tuş listesi"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Nicio copie încă: prima se face la prima salvare."
+msgstr "Henüz kopya yok: ilki ilk kayıtta alınır."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Întorci lista de canale la copia din %s? Lista de acum se pune întâi într-o copie."
+msgstr "Kanal listesi %s tarihli kopyaya döndürülsün mü? Şimdiki liste önce bir kopyaya konur."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista nu s-a întors la copie. Lista de acum a rămas neatinsă."
+msgstr "Liste kopyaya dönmedi. Şimdiki liste olduğu gibi kaldı."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "date"
+msgstr "veri"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În buchete"
+msgstr "Buketlerde"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Deselectează grupa"
+msgstr "Grup seçimini kaldır"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Arată grupa"
+msgstr "Grubu göster"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK bifează sau debifează · pe titlul grupei: toată grupa"
+msgstr "OK işaretler veya kaldırır · grup başlığında: tüm grup"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai de văzut"
+msgstr "yalnızca görüntüleme"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d rând dublat din buchete? Canalul rămâne în lista receptorului."
+msgid_plural "Ștergi %d rânduri dublate din buchete? Canalele rămân în lista receptorului."
+msgstr[0] "%d yinelenen satır buketlerden silinsin mi? Kanallar alıcının listesinde kalır."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Repari %d rând? Cel cu un canal găsit se leagă la el, altfel se șterge din buchet."
+msgid_plural "Repari %d rânduri? Cele cu un canal găsit se leagă la el, celelalte se șterg din buchet."
+msgstr[0] "%d satır onarılsın mı? Kanalı bulunanlar ona bağlanır, diğerleri buketten silinir."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "în niciun buchet"
+msgstr "hiçbir bukette değil"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK bifează sau debifează"
+msgstr "OK işaretler veya kaldırır"
+
+#: lib/python/Components/HdsEditorCanale.py:1608
+msgid "Un transponder șters"
+msgid_plural "%d transpondere șterse"
+msgstr[0] "%d transponder silindi"
+
+#: lib/python/Components/HdsEditorCanale.py:1674
+msgid "Un buchet nou"
+msgid_plural "%d buchete noi"
+msgstr[0] "%d yeni buket"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:230
+msgid "Transpondere din lista receptorului fără niciun canal (rămase după ștergeri sau după căutări pe frecvențe goale). Nu încurcă, dar se pot șterge."
+msgstr "Alıcı listesinde hiç kanalı olmayan transponderler (silmelerden veya boş frekanslardaki aramalardan kaldı). Zarar vermezler ama silinebilirler."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:230
+msgid "Transpondere fără canale"
+msgstr "Kanalsız transponderler"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2973
+msgid "Fără siglă"
+msgstr "Logosuz"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2976
+msgid "Scoate din toate buchetele"
+msgstr "Tüm buketlerden çıkar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2977
+msgid "Le scoți din toate buchetele? Rămân în lista receptorului."
+msgstr "Tüm buketlerden çıkarılsınlar mı? Alıcı listesinde kalırlar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2980
+msgid "Șterge de pe disc"
+msgstr "Diskten sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2981
+msgid "Fișierul buchetului se șterge la salvare. Poți anula până atunci."
+msgstr "Buket dosyası kaydederken silinir. O zamana kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2982
+msgid "Pe transpondere"
+msgstr "Transpondere göre"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2983
+msgid "Toate canalele satelitului"
+msgstr "Uydunun tüm kanalları"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2984
+msgid "Fă un buchet din acest transponder"
+msgstr "Bu transponderden buket yap"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2985
+msgid "Șterge transponderul"
+msgstr "Transponderi sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2986
+msgid "Ștergi transponderul din receptor, cu toate canalele lui? Dispar și din buchete. Poți anula până la salvare."
+msgstr "Transponder tüm kanallarıyla birlikte alıcıdan silinsin mi? Buketlerden de kaybolurlar. Kaydedene kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2987
+msgid "Fă câte un buchet din fiecare ales"
+msgstr "Seçilen her birinden buket yap"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2989
+msgid "Șterge transponderele bifate"
+msgstr "İşaretli transponderleri sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2990
+msgid "Transpondere:"
+msgstr "Transponderler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2991
+msgid "Le ștergi din lista receptorului? Nu au niciun canal. Poți anula până la salvare."
+msgstr "Alıcı listesinden silinsinler mi? Hiç kanalları yok. Kaydedene kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2992
+msgid "Ce s-a schimbat de la ultima salvare"
+msgstr "Son kayıttan beri ne değişti"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2993
+msgid "Nimic schimbat de la ultima salvare."
+msgstr "Son kayıttan beri hiçbir şey değişmedi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2994
+msgid "Canale noi:"
+msgstr "Yeni kanallar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2995
+msgid "Canale șterse:"
+msgstr "Silinen kanallar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2996
+msgid "Canale schimbate:"
+msgstr "Değişen kanallar:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2997
+msgid "Buchete schimbate:"
+msgstr "Değişen buketler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2998
+msgid "Buchete noi:"
+msgstr "Yeni buketler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2999
+msgid "Buchete șterse:"
+msgstr "Silinen buketler:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3000
+msgid "Lista buchetelor s-a schimbat (ordinea sau buchetele ascunse)."
+msgstr "Buket listesi değişti (sıra veya gizli buketler)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3001
+msgid "Blocările s-au schimbat."
+msgstr "Kilitler değişti."
+
+#: lib/python/Components/HdsEditorCanale.py:2344
+msgid "Buchetul e refăcut de căutarea DAB+ / DVB-T2 din satelit: schimbările făcute aici se pot pierde la următoarea căutare."
+msgstr "Buket, uydu üzerinden DAB+ / DVB-T2 aramasıyla yeniden oluşturulur: burada yapılan değişiklikler bir sonraki aramada kaybolabilir."
+
+#: lib/python/Components/HdsEditorCanale.py:2347
+msgid "Buchetul e refăcut automat cu canalele de pe internet (DVB-I): schimbările făcute aici se pot pierde."
+msgstr "Buket, internet kanallarıyla (DVB-I) otomatik olarak yeniden oluşturulur: burada yapılan değişiklikler kaybolabilir."
+
+#: lib/python/Components/HdsEditorCanale.py:2350
+msgid "Buchetul e rescris la fiecare scanare: schimbările făcute aici se pierd la următoarea scanare."
+msgstr "Buket her taramada yeniden yazılır: burada yapılan değişiklikler bir sonraki taramada kaybolur."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:249
+msgid "înainte: %s"
+msgstr "önceden: %s"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:274
+msgid "rânduri: %d"
+msgstr "satır: %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:283
+msgid "rânduri puse: %d"
+msgstr "eklenen satırlar: %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:283
+msgid "scoase: %d"
+msgstr "çıkarılan: %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:285
+msgid "altă ordine"
+msgstr "farklı sıra"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:292
+msgid "Se arată primele %d."
+msgstr "İlk %d gösteriliyor."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:297
+msgid "Canale noi"
+msgstr "Yeni kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:297
+msgid "În lista de acum, dar nu în copie."
+msgstr "Şimdiki listede var, kopyada yok."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:298
+msgid "Canale care nu mai sunt"
+msgstr "Artık olmayan kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:298
+msgid "În copie, dar nu în lista de acum."
+msgstr "Kopyada var, şimdiki listede yok."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Același canal, cu alt nume decât în copie."
+msgstr "Aynı kanal, kopyadakinden farklı bir adla."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Canale redenumite"
+msgstr "Yeniden adlandırılan kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:301
+msgid "Buchete noi"
+msgstr "Yeni buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:302
+msgid "Buchete care nu mai sunt"
+msgstr "Artık olmayan buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Buchete schimbate"
+msgstr "Değişen buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Rânduri puse sau scoase față de copie, sau altă ordine."
+msgstr "Kopyaya göre eklenen veya çıkarılan satırlar ya da farklı sıra."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3047
+msgid "Compară cu lista de acum"
+msgstr "Şimdiki listeyle karşılaştır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3048
+msgid "Buchete"
+msgstr "Buketler"
+
+#: lib/python/Components/HdsEditorCanale.py:1662
+msgid "Alege cel puțin un canal."
+msgstr "En az bir kanal seç."
+
+#: lib/python/Components/HdsEditorCanale.py:1664
+msgid "Alternative"
+msgstr "Alternatifler"
+
+#: lib/python/Components/HdsEditorCanale.py:1666
+msgid "Alternative noi: %s"
+msgstr "Yeni alternatifler: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1676
+msgid "Rândul ales nu e o grupă de alternative."
+msgstr "Seçilen satır bir alternatif grubu değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1694
+msgid "Un canal pus în alternative"
+msgid_plural "%d canale puse în alternative"
+msgstr[0] "%d kanal alternatiflere eklendi"
+
+#: lib/python/Components/HdsEditorCanale.py:1705
+msgid "Alternative desfăcute: %s"
+msgstr "Alternatifler ayrıldı: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3070
+msgid "Unește ca alternative (același canal din alte locuri)"
+msgstr "Alternatif olarak birleştir (başka yerlerden aynı kanal)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3071
+msgid "Desface alternativele"
+msgstr "Alternatifleri ayır"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se citește lista de pe stick…"
+msgstr "Liste USB bellekten okunuyor…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se importă lista…"
+msgstr "Liste içe aktarılıyor…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se scrie pe stick…"
+msgstr "USB belleğe yazılıyor…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nu s-a putut scrie pe stick."
+msgstr "USB belleğe yazılamadı."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de pe stick nu se poate citi."
+msgstr "USB bellekteki liste okunamıyor."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scris pe stick: %s"
+msgstr "USB belleğe yazıldı: %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Importă de pe stick…"
+msgstr "USB bellekten içe aktar…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie lista pe stick…"
+msgstr "Listeyi USB belleğe yaz…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie buchetul ca m3u pe stick…"
+msgstr "Buketi m3u olarak USB belleğe yaz…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Fișierul nu se poate citi."
+msgstr "Dosya okunamıyor."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Fluxurile din %s"
+msgstr "%s içindeki yayınlar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Stick"
+msgstr "USB bellek"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Importă de pe stick: o arhivă cu lista de canale (zip, tar, tar.gz, de la alt receptor sau din programele de pe calculator), un dosar cu lista sau un fișier m3u cu fluxuri; lista din arhivă înlocuiește lista de acum sau adaugă numai ce lipsește. MENU > Scrie lista pe stick face o arhivă tar.gz; în buchet, MENU > Scrie buchetul ca m3u. Ca orice schimbare, importul se poate anula și nu se scrie până nu salvezi."
+msgstr "MENU > USB bellekten içe aktar: kanal listesini içeren bir arşiv (zip, tar, tar.gz, başka bir alıcıdan veya bilgisayar programlarından), listeyi içeren bir klasör ya da yayınları içeren bir m3u dosyası; arşivdeki liste mevcut listenin yerini alır veya yalnızca eksik olanları ekler. MENU > Listeyi USB belleğe yaz bir tar.gz arşivi oluşturur; bir bukette MENU > Buketi m3u olarak yaz. Her değişiklik gibi içe aktarma geri alınabilir ve sen kaydedene kadar hiçbir şey yazılmaz."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege dosarul de pe stick în care se scrie. OK intră în dosar, verde scrie aici."
+msgstr "USB bellekte yazılacak klasörü seç. OK klasörü açar, yeşil buraya yazar."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege o arhivă (zip, tar, tar.gz) cu lista de canale sau un fișier m3u cu fluxuri. OK intră în dosar sau alege fișierul; galben ia lista din dosarul de acum."
+msgstr "Kanal listesini içeren bir arşiv (zip, tar, tar.gz) ya da yayınları içeren bir m3u dosyası seç. OK klasörü açar veya dosyayı seçer; sarı geçerli klasördeki listeyi alır."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Unde scrii lista?"
+msgstr "Listeyi nereye yazıyorsun?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Importă de pe stick"
+msgstr "USB bellekten içe aktar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Scrie aici"
+msgstr "Buraya yaz"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista din acest dosar"
+msgstr "Bu klasördeki liste"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În acest dosar nu e o listă de canale. Intră în dosarul care are fișierele lamedb și bouquets.tv, sau alege o arhivă."
+msgstr "Bu klasörde kanal listesi yok. lamedb ve bouquets.tv dosyalarını içeren klasörü aç ya da bir arşiv seç."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Intră întâi într-un dosar (de pildă pe stick)."
+msgstr "Önce bir klasör aç (örneğin USB bellekte)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În acest dosar nu se poate scrie. Alege altul."
+msgstr "Bu klasöre yazılamıyor. Başka birini seç."
+
+#: lib/python/Components/HdsEditorCanale.py:1729
+msgid "Nu e nimic de șters."
+msgstr "Silinecek bir şey yok."
+
+#: lib/python/Components/HdsEditorCanale.py:1730
+msgid "Un satelit păstrat, restul șterse"
+msgid_plural "%d sateliți păstrați, restul șterse"
+msgstr[0] "%d uydu tutuldu, kalanlar silindi"
+
+#: lib/python/Components/HdsEditorCanale.py:1731
+msgid "Un satelit șters din receptor"
+msgid_plural "%d sateliți șterși din receptor"
+msgstr[0] "%d uydu alıcıdan silindi"
+
+#: lib/python/Components/HdsEditorCanale.py:1745
+msgid "Frecvența trebuie dată în MHz, între 2000 și 30000."
+msgstr "Frekans MHz cinsinden girilmeli, 2000 ile 30000 arasında."
+
+#: lib/python/Components/HdsEditorCanale.py:1748
+msgid "Rata de simbol trebuie dată în kS/s, între 50 și 70000."
+msgstr "Sembol oranı kS/s cinsinden girilmeli, 50 ile 70000 arasında."
+
+#: lib/python/Components/HdsEditorCanale.py:1753
+msgid "O valoare a transponderului nu e bună: %s."
+msgstr "Transponderin bir değeri geçerli değil: %s."
+
+#: lib/python/Components/HdsEditorCanale.py:1763
+msgid "Numai transponderele de satelit se pot schimba aici."
+msgstr "Burada yalnızca uydu transponderleri değiştirilebilir."
+
+#: lib/python/Components/HdsEditorCanale.py:1770
+msgid "Transponder schimbat: %s"
+msgstr "Transponder değiştirildi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1780
+msgid "Poziția satelitului nu e bună."
+msgstr "Uydunun konumu geçerli değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1784
+msgid "Transponderul nou cere frecvența, rata de simbol și polarizarea."
+msgstr "Yeni transponder için frekans, sembol oranı ve polarizasyon gerekir."
+
+#: lib/python/Components/HdsEditorCanale.py:1787
+msgid "TSID și ONID trebuie să fie între 0 și 65535."
+msgstr "TSID ve ONID 0 ile 65535 arasında olmalı."
+
+#: lib/python/Components/HdsEditorCanale.py:1791
+msgid "Transponderul există deja (aceeași poziție, TSID și ONID)."
+msgstr "Transponder zaten var (aynı konum, TSID ve ONID)."
+
+#: lib/python/Components/HdsEditorCanale.py:1797
+msgid "Transponder nou: %s"
+msgstr "Yeni transponder: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1820
+msgid "Semnul „nou” scos de pe un canal"
+msgid_plural "Semnul „nou” scos de pe %d canale"
+msgstr[0] "%d kanaldan “yeni” işareti kaldırıldı"
+
+#: lib/python/Components/HdsEditorCanale.py:1866
+msgid "Un PID nu e bun."
+msgstr "Bir PID geçerli değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1873
+msgid "Detalii schimbate: %s"
+msgstr "Ayrıntılar değiştirildi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1895
+msgid "Rândul ales nu e un flux."
+msgstr "Seçilen satır bir akış değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1902
+msgid "Tipul fluxului nu e cunoscut."
+msgstr "Akış türü bilinmiyor."
+
+#: lib/python/Components/HdsEditorCanale.py:1908
+msgid "Un număr DVB al fluxului nu e bun."
+msgstr "Akışın bir DVB numarası geçerli değil."
+
+#: lib/python/Components/HdsEditorCanale.py:1920
+msgid "Flux schimbat: %s"
+msgstr "Akış değiştirildi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1939
+msgid "Un buchet sortat"
+msgid_plural "%d buchete sortate"
+msgstr[0] "%d buket sıralandı"
+
+#: lib/python/Components/HdsEditorCanale.py:1959
+msgid "Aranjat după: %s"
+msgstr "Şuna göre düzenlendi: %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1967
+msgid "Scrie textul de căutat."
+msgstr "Aranacak metni yaz."
+
+#: lib/python/Components/HdsEditorCanale.py:1986
+msgid "Un nume înlocuit"
+msgid_plural "%d nume înlocuite"
+msgstr[0] "%d ad değiştirildi"
+
+#: lib/python/Components/HdsEditorCanale.py:2001
+msgid "Un canal adus înapoi din copie"
+msgid_plural "%d canale aduse înapoi din copie"
+msgstr[0] "%d kanal kopyadan geri getirildi"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Canale care vin din arhivă"
+msgstr "Arşivden gelen kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Sunt în arhivă, dar nu în lista de acum."
+msgstr "Arşivde var, ama şimdiki listede yok."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:300
+msgid "Canale care dispar"
+msgstr "Kaybolan kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:300
+msgid "Sunt în lista de acum, dar nu în arhivă: la „Înlocuiește lista de acum” pleacă; la „Adaugă numai ce lipsește” rămân."
+msgstr "Şimdiki listede var, ama arşivde yok: “Şimdiki listeyi değiştir” seçilirse gider; “Yalnızca eksik olanları ekle” seçilirse kalır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:302
+msgid "Canale cu alt nume în arhivă"
+msgstr "Arşivde farklı adı olan kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Buchete care vin din arhivă"
+msgstr "Arşivden gelen buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:304
+msgid "Buchete care dispar"
+msgstr "Kaybolan buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:304
+msgid "La „Înlocuiește lista de acum” pleacă."
+msgstr "“Şimdiki listeyi değiştir” seçilirse gider."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:305
+msgid "Buchete schimbate de arhivă"
+msgstr "Arşivin değiştirdiği buketler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:305
+msgid "Rânduri puse sau scoase față de lista de acum, sau altă ordine."
+msgstr "Şimdiki listeye göre eklenen veya çıkarılan satırlar ya da farklı bir sıra."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:345
+msgid "Lista canalelor (lamedb)"
+msgstr "Kanal listesi (lamedb)"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:345
+msgid "nu se citește la fel"
+msgstr "aynı şekilde okunmuyor"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:393
+msgid "Lista e scrisă și citită din nou, ca la salvare. Când grupa e goală, lista se scrie exact cum o vezi."
+msgstr "Liste, kaydederkenki gibi yazılır ve yeniden okunur. Grup boşsa liste tam göründüğü gibi yazılır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:393
+msgid "Rânduri care nu s-ar scrie la fel"
+msgstr "Aynı şekilde yazılmayacak satırlar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:395
+msgid "Nume prea lungi"
+msgstr "Çok uzun adlar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:395
+msgid "Receptorul citește cel mult 250 de octeți pe rând: la salvare numele acestea se scurtează."
+msgstr "Alıcı satır başına en fazla 250 bayt okur: kaydederken bu adlar kısaltılır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:397
+msgid "Canale de pe sateliți care nu sunt în satellites.xml"
+msgstr "satellites.xml içinde olmayan uydulardaki kanallar"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:397
+msgid "Receptorul nu are setările acestor sateliți: canalele nu pornesc până nu pui satelitul în setările antenei. Nimic nu e bifat; le ștergi numai dacă vrei."
+msgstr "Alıcıda bu uyduların ayarları yok: uyduyu anten ayarlarına ekleyene kadar kanallar açılmaz. Hiçbir şey işaretli değil; yalnızca istersen silersin."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:400
+msgid "Marcaje fără canale sub ele"
+msgstr "Altında kanal olmayan işaretler"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:400
+msgid "Marcajul e urmat de alt marcaj sau e la sfârșitul buchetului."
+msgstr "İşaretten sonra başka bir işaret geliyor ya da buketin sonunda."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:402
+msgid "HD în nume, tip SD în listă"
+msgstr "Adında HD, listede SD türü"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:402
+msgid "Numele spune HD sau 4K, dar emițătorul îl anunță ca SD: filtrul „HD și 4K” nu-l prinde. Filtrul „HD în nume, tip SD” din „Adaugă canale” le arată pe toate, cu bife."
+msgstr "Adında HD veya 4K yazıyor ama yayıncı kanalı SD olarak bildiriyor: “HD ve 4K” filtresi onu yakalamaz. “Kanal ekle” bölümündeki “Adında HD, türü SD” filtresi hepsini onay kutularıyla gösterir."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:405
+msgid "Nu se pot porni pe televizor (ghid de programe, actualizări, date ale operatorului). Le poți șterge, dar unele le folosește receptorul."
+msgstr "Televizyonda başlatılamazlar (program rehberi, güncellemeler, operatör verileri). Silebilirsin, ama bazılarını alıcı kullanır."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:429
+msgid "răspunde cu eroarea %d"
+msgstr "%d hatasıyla yanıt veriyor"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:477
+msgid "Am încercat %d adrese de fluxuri din buchete: acestea nu răspund acum. Un flux poate merge din nou mai târziu; scoate-l numai dacă știi că nu mai există."
+msgstr "Buketlerdeki %d akış adresi denendi: bunlar şu anda yanıt vermiyor. Bir akış daha sonra yeniden çalışabilir; yalnızca artık var olmadığını biliyorsan çıkar."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:479
+msgid "Fluxuri care nu răspund"
+msgstr "Yanıt vermeyen akışlar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:1327
+msgid "Sigle nefolosite"
+msgstr "Kullanılmayan logolar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:1327
+msgid "Siglele din dosarele de sigle care nu se potrivesc cu niciun canal din listă (nici după referință, nici după nume). Nimic nu e bifat."
+msgstr "Logo klasörlerindeki, listedeki hiçbir kanalla eşleşmeyen logolar (ne başvuruya ne de ada göre). Hiçbir şey işaretli değil."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3960
+msgid "HD în nume, tip SD"
+msgstr "Adında HD, türü SD"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3961
+msgid "Noi"
+msgstr "Yeni"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3962
+msgid "Blocate"
+msgstr "Kilitli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3964
+msgid "internet"
+msgstr "internet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3966
+msgid "Scoate dintr-un buchet..."
+msgstr "Bir buketten çıkar..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3967
+msgid "Din ce buchet îl scoți?"
+msgstr "Hangi buketten çıkarıyorsun?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3968
+msgid "Pune siglă..."
+msgstr "Logo ayarla..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3969
+msgid "Copiază sigla de la alt canal..."
+msgstr "Logoyu başka bir kanaldan kopyala..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3970
+msgid "Șterge sigla"
+msgstr "Logoyu sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3971
+msgid "Sigla e pusă."
+msgstr "Logo ayarlandı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3972
+msgid "Alege o imagine (PNG, JPG): se micșorează la 220 x 132 și se pune ca siglă."
+msgstr "Bir resim seç (PNG, JPG): 220 x 132 boyutuna küçültülür ve logo olarak ayarlanır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3973
+msgid "Scoate semnul „nou”"
+msgstr "“Yeni” işaretini kaldır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3974
+msgid "Editează fluxul"
+msgstr "Akışı düzenle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3975
+msgid "Tipul fluxului"
+msgstr "Akış türü"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3976
+msgid "Numerele DVB ale fluxului (pentru siglă): SID, TSID, ONID, namespace (hex)"
+msgstr "Akışın DVB numaraları (logo için): SID, TSID, ONID, namespace (hex)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3977
+msgid "Aranjează după alt buchet..."
+msgstr "Başka bir bukete göre düzenle..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3978
+msgid "Scoate marcajele din buchet"
+msgstr "İşaretleri buketten çıkar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3979
+msgid "Descarcă tabelul (CSV)"
+msgstr "Tabloyu indir (CSV)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3980
+msgid "Lipește o listă de nume..."
+msgstr "Ad listesi yapıştır..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3981
+msgid "Câte un nume de canal pe rând. Cele găsite se adaugă în buchet, în ordinea din listă."
+msgstr "Her satıra bir kanal adı. Bulunanlar, listedeki sırayla buketin içine eklenir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3982
+msgid "Găsite / negăsite:"
+msgstr "Bulunan / bulunmayan:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3983
+msgid "Satelit, apoi nume"
+msgstr "Uydu, sonra ad"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3984
+msgid "Furnizor, apoi nume"
+msgstr "Sağlayıcı, sonra ad"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3985
+msgid "Sortează buchetele alese"
+msgstr "Seçilen buketleri sırala"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3987
+msgid "Păstrează numai cei bifați"
+msgstr "Yalnızca işaretlileri tut"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3988
+msgid "Toate canalele și transponderele sateliților bifați se șterg din receptor și din buchete. Poți anula până la salvare."
+msgstr "İşaretli uyduların tüm kanalları ve transponderleri alıcıdan ve buketlerden silinir. Kaydedene kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3989
+msgid "Se șterg din receptor toate canalele celorlalți sateliți (și din buchete). Poți anula până la salvare."
+msgstr "Diğer uyduların tüm kanalları alıcıdan (ve buketlerden) silinir. Kaydedene kadar geri alabilirsin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3990
+msgid "Sateliți:"
+msgstr "Uydular:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3991
+msgid "Verifică lista"
+msgstr "Listeyi denetle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3992
+msgid "Curățenie"
+msgstr "Temizlik"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3993
+msgid "Arată toate canalele ascunse"
+msgstr "Tüm gizli kanalları göster"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3994
+msgid "Deblochează toate canalele"
+msgstr "Tüm kanalların kilidini aç"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3995
+msgid "Scoate semnul „nou” de pe toate canalele"
+msgstr "Tüm kanallardan “yeni” işaretini kaldır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3997
+msgid "Sigle"
+msgstr "Logolar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3999
+msgid "Redenumește siglele după referință"
+msgstr "Logoları başvuruya göre yeniden adlandır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4000
+msgid "Redenumește siglele după nume"
+msgstr "Logoları ada göre yeniden adlandır"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4001
+msgid "Înlocuiește în nume..."
+msgstr "Adlarda değiştir..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4003
+msgid "Înlocuiește cu"
+msgstr "Şununla değiştir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4004
+msgid "Și în numele buchetelor"
+msgstr "Buket adlarında da"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4005
+msgid "Se schimbă:"
+msgstr "Değişecek:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4006
+msgid "Înlocuiește"
+msgstr "Değiştir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4008
+msgid "Mai mari"
+msgstr "Daha büyük"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4009
+msgid "Mai mici"
+msgstr "Daha küçük"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4010
+msgid "Mod avansat: pornit"
+msgstr "Gelişmiş mod: açık"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4011
+msgid "Mod avansat: oprit"
+msgstr "Gelişmiş mod: kapalı"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4012
+msgid "Modul avansat arată și editarea transponderelor, a fișierului satellites.xml și a detaliilor canalelor. Greșelile de acolo pot opri canalele."
+msgstr "Gelişmiş mod, transponderlerin, satellites.xml dosyasının ve kanal ayrıntılarının düzenlenmesini de gösterir. Oradaki hatalar kanalların çalışmasını durdurabilir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4013
+msgid "Sateliți și transpondere (satellites.xml)"
+msgstr "Uydular ve transponderler (satellites.xml)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4014
+msgid "Satelit nou"
+msgstr "Yeni uydu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4015
+msgid "Salvează satellites.xml"
+msgstr "satellites.xml dosyasını kaydet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4017
+msgid "Schimbările se scriu în satellites.xml numai la „Salvează satellites.xml”, cu o copie înainte. Nu intră în „Anulează”."
+msgstr "Değişiklikler yalnızca “satellites.xml dosyasını kaydet” ile satellites.xml dosyasına yazılır, öncesinde bir kopya alınır. “Geri al” bunları kapsamaz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4018
+msgid "satellites.xml e salvat și receptorul îl folosește."
+msgstr "satellites.xml kaydedildi ve alıcı onu kullanıyor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4019
+msgid "satellites.xml e salvat; se vede după repornirea interfeței."
+msgstr "satellites.xml kaydedildi; arayüz yeniden başlatıldıktan sonra görünür."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4021
+msgid "Transponder nou"
+msgstr "Yeni transponder"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4023
+msgid "Poziția (de pildă 19.2E sau 30W)"
+msgstr "Konum (örneğin 19.2E veya 30W)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4024
+msgid "Editează transponderul"
+msgstr "Transponderi düzenle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4025
+msgid "Transponder nou în lista de canale"
+msgstr "Kanal listesinde yeni transponder"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4026
+msgid "Transponderul nou n-are canale: o căutare pe el le aduce."
+msgstr "Yeni transponderde kanal yok: üzerinde yapılan bir tarama onları getirir."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4028
+msgid "Rata de simbol (kS/s)"
+msgstr "Sembol oranı (kS/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4034
+msgid "Steagurile"
+msgstr "Bayraklar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4035
+msgid "PID-uri ținute minte (cod:valoare hex)"
+msgstr "Hatırlanan PID'ler (kod:değer hex)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4036
+msgid "Ascuns în listă"
+msgstr "Listede gizli"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4037
+msgid "Păstrează numele la scanare"
+msgstr "Taramada adı koru"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4038
+msgid "Nou găsit"
+msgstr "Yeni bulundu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4039
+msgid "Fără SDT"
+msgstr "SDT yok"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4040
+msgid "Fără DVB"
+msgstr "DVB yok"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4041
+msgid "Buchet nou din cele bifate"
+msgstr "İşaretlilerden yeni buket"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4042
+msgid "Adu înapoi cele bifate"
+msgstr "İşaretlileri geri getir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4043
+msgid "Șterge marcajele bifate"
+msgstr "Seçili işaretleri sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4044
+msgid "Scoate din buchete cele bifate"
+msgstr "İşaretlileri buketlerden çıkar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4045
+msgid "Șterge siglele bifate"
+msgstr "İşaretli logoları sil"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4047
+msgid "Înapoi la import"
+msgstr "İçe aktarmaya dön"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4049
+msgid "Sfat: bifează rândurile, apoi folosește butoanele de jos. Nimic nu se scrie în receptor până la „Salvează”."
+msgstr "İpucu: satırları işaretle, sonra alttaki düğmeleri kullan. “Kaydet”e basana kadar alıcıya hiçbir şey yazılmaz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4054
+msgid "În buchetele"
+msgstr "Buketlerde"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "MIS (is_id)"
+msgstr "MIS (is_id)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Modul PLS"
+msgstr "PLS modu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Root"
+msgstr "Root"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Gold"
+msgstr "Gold"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Combo"
+msgstr "Combo"
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Copia de siguranță a listei sateliților nu s-a putut face (%s). Nu s-a scris nimic."
+msgstr "Uydu listesinin yedeği alınamadı (%s). Hiçbir şey yazılmadı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Câmpul flags trebuie să fie un număr între 0 și 255."
+msgstr "flags alanı 0 ile 255 arasında bir sayı olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Frecvența pare scrisă în MHz. Scrie-o în kHz: %d."
+msgstr "Frekans MHz olarak yazılmış gibi görünüyor. kHz olarak yaz: %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Frecvența trebuie să fie în kHz, între %d și %d."
+msgstr "Frekans kHz olarak, %d ile %d arasında olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "La DVB-S FEC-ul e Auto (0), 1/2, 2/3, 3/4, 5/6 sau 7/8 (1-5)."
+msgstr "DVB-S'te FEC Auto (0), 1/2, 2/3, 3/4, 5/6 veya 7/8 (1-5) olur."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "La DVB-S modulația e numai QPSK (1) sau Auto (0)."
+msgstr "DVB-S'te modülasyon yalnızca QPSK (1) veya Auto (0) olur."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista nouă a sateliților nu a ieșit bine, așa că nu s-a scris. Fișierul vechi a rămas cum era."
+msgstr "Yeni uydu listesi doğru çıkmadı, bu yüzden yazılmadı. Eski dosya olduğu gibi kaldı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților (%s) e goală sau nu are forma unui satellites.xml."
+msgstr "Uydu listesi (%s) boş ya da bir satellites.xml biçiminde değil."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților (%s) nu se poate citi: e stricată pe rândul %d."
+msgstr "Uydu listesi (%s) okunamıyor: %d. satırda bozuk."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților nu s-a putut scrie (%s). Fișierul vechi a rămas cum era."
+msgstr "Uydu listesi yazılamadı (%s). Eski dosya olduğu gibi kaldı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților s-a schimbat între timp pe receptor. Deschide-o din nou, ca să nu pierzi schimbările de acolo."
+msgstr "Uydu listesi bu arada alıcıda değişti. Oradaki değişiklikleri kaybetmemek için listeyi yeniden aç."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu e loc destul în memoria receptorului pentru lista sateliților."
+msgstr "Alıcının belleğinde uydu listesi için yeterli yer yok."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu există niciun satelit pe %s."
+msgstr "%s konumunda uydu yok."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu pot citi lista sateliților (%s)."
+msgstr "Uydu listesini okuyamıyorum (%s)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele atributului „%s” nu e bun."
+msgstr "“%s” öznitelik adı geçerli değil."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele satelitului are un caracter care nu se poate scrie în listă."
+msgstr "Uydu adında listeye yazılamayan bir karakter var."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele satelitului e prea lung: cel mult %d de caractere."
+msgstr "Uydu adı çok uzun: en fazla %d karakter."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Pe %s există deja satelitul %s."
+msgstr "%s konumunda zaten %s uydusu var."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Pe %s există deja transponderul %s, cu aceeași polarizare, la cel mult 2 MHz."
+msgstr "%s konumunda aynı polarizasyonda, en fazla 2 MHz uzakta %s transponderi zaten var."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Polarizarea trebuie să fie H, V, L sau R (0, 1, 2 sau 3)."
+msgstr "Polarizasyon H, V, L veya R (0, 1, 2 veya 3) olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Poziția trebuie să fie între 180,0W și 180,0E."
+msgstr "Konum 180,0W ile 180,0E arasında olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Poziția „%s” nu e bună. Scrie-o ca 19,2E sau 30,0W."
+msgstr "“%s” konumu geçerli değil. 19,2E veya 30,0W gibi yaz."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Rata de simbol pare scrisă în kS/s. Scrie-o în simboluri pe secundă: %d."
+msgstr "Sembol oranı kS/s olarak yazılmış gibi görünüyor. Saniyedeki sembol olarak yaz: %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Rata de simbol trebuie să fie în simboluri pe secundă, între %d și %d."
+msgstr "Sembol oranı saniyedeki sembol olarak, %d ile %d arasında olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Scrie numele satelitului."
+msgstr "Uydunun adını yaz."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Sistemul trebuie să fie DVB-S sau DVB-S2 (0 sau 1)."
+msgstr "Sistem DVB-S veya DVB-S2 (0 veya 1) olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Transponderul are nevoie de frecvență, rată de simbol și polarizare."
+msgstr "Transponder için frekans, sembol oranı ve polarizasyon gerekir."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Transponderul nu mai există pe %s. Deschide din nou lista."
+msgstr "Transponder artık %s konumunda yok. Listeyi yeniden aç."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea atributului %s are un caracter care nu se poate scrie în listă."
+msgstr "%s özniteliğinin değerinde listeye yazılamayan bir karakter var."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea pentru %s trebuie să fie un număr întreg."
+msgstr "%s için değer bir tam sayı olmalı."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea pentru %s trebuie să fie între %d și %d."
+msgstr "%s için değer %d ile %d arasında olmalı."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu s-a putut lucra cu siglele din %s."
+msgstr "%s içindeki logolara erişilemedi."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Rândul ales nu e un canal, deci nu poate avea siglă."
+msgstr "Seçilen satır bir kanal değil, bu yüzden logosu olamaz."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Referința canalului nu are numerele DVB: sigla s-ar vedea la mai multe canale."
+msgstr "Kanalın başvurusunda DVB numaraları yok: logo birkaç kanalda görünür."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu e niciun dosar de sigle în care să se poată scrie."
+msgstr "Yazılabilen hiçbir logo klasörü yok."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Fișierul nu e o imagine PNG bună. Alege o siglă în format PNG."
+msgstr "Dosya geçerli bir PNG resmi değil. PNG biçiminde bir logo seç."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Fișierul are %d KB. O siglă poate avea cel mult %d KB."
+msgstr "Dosya %d KB. Bir logo en fazla %d KB olabilir."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Imaginea are %d x %d pixeli. O siglă poate avea cel mult %d x %d pixeli."
+msgstr "Resim %d x %d piksel. Bir logo en fazla %d x %d piksel olabilir."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu e destul loc liber pentru siglă în %s."
+msgstr "%s içinde logo için yeterli boş alan yok."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Canalul are deja o siglă într-un dosar în care nu se poate scrie: %s"
+msgstr "Kanalın yazılamayan bir klasörde zaten bir logosu var: %s"
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Canalul de la care copiezi nu are siglă."
+msgstr "Kopyaladığın kanalın logosu yok."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Televizorul caută siglele numai după referință. După redenumirea după nume, nu le mai arată."
+msgstr "Televizyon logoları yalnızca başvuruya göre arar. Ada göre yeniden adlandırdıktan sonra onları artık göstermez."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Redenumirea se face după referință sau după nume."
+msgstr "Yeniden adlandırma başvuruya veya ada göre yapılır."
+
+#: lib/python/Components/HdsEditorCanale.py:1751
+msgid "Pe poziția nouă sunt deja aceleași transpondere."
+msgstr "Yeni konumda aynı transponderler zaten var."
+
+#: lib/python/Components/HdsEditorCanale.py:1754
+msgid "Satelit copiat: %s -> %s"
+msgstr "Uydu kopyalandı: %s -> %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1754
+msgid "Satelit mutat: %s -> %s"
+msgstr "Uydu taşındı: %s -> %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3981
+msgid "Mută satelitul pe altă poziție..."
+msgstr "Uyduyu başka bir konuma taşı..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3982
+msgid "Copiază satelitul pe altă poziție..."
+msgstr "Uyduyu başka bir konuma kopyala..."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:487
+msgid "Releele receptorului (adresele 127.0.0.1) nu se încearcă: merg numai când sunt pornite. Rânduri sărite: %d."
+msgstr "Alıcının aktarıcıları (127.0.0.1 adresleri) denenmez: yalnızca çalışırken çalışırlar. Atlanan satırlar: %d."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Sfaturi: în stânga sunt canalele, în dreapta buchetul; Stânga / Dreapta trec dintr-o parte în alta. OK adaugă canalul sau ia rândul ca să-l muți, galben bifează mai multe. Jos scrie ce face fiecare tastă colorată, MENU are restul. Nimic nu se scrie până nu salvezi, iar tasta < anulează. HELP: ajutorul."
+msgstr "İpuçları: solda kanallar, sağda buket; Sol / Sağ ikisi arasında geçer. OK kanalı ekler ya da taşımak için satırı alır, sarı birden fazlasını işaretler. Her renkli tuşun ne yaptığı altta yazar, kalanı MENU'dedir. Sen kaydedene kadar hiçbir şey yazılmaz, < tuşu geri alır. HELP: yardım."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nicio schimbare de la ultima salvare."
+msgstr "Son kayıttan beri değişiklik yok."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d transponder din receptor, cu canalele lui? Dispar și din buchete."
+msgid_plural "Ștergi %d transpondere din receptor, cu canalele lor? Dispar și din buchete."
+msgstr[0] "%d transponder kanallarıyla birlikte alıcıdan silinsin mi? Buketlerden de kaybolurlar."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet ales: canalele lui care lipsesc intră în listă, restul listei rămâne."
+msgid_plural "%d buchete alese: canalele lor care lipsesc intră în listă, restul listei rămâne."
+msgstr[0] "%d buket seçildi: eksik kanalları listeye girer, listenin geri kalanı kalır."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal fără nume"
+msgid_plural "%d canale fără nume"
+msgstr[0] "%d adsız kanal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal cu nume de test"
+msgid_plural "%d canale cu nume de test"
+msgstr[0] "test adlı %d kanal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d rând dublat"
+msgid_plural "%d rânduri dublate"
+msgstr[0] "%d tekrarlanan satır"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal care nu mai există"
+msgid_plural "%d canale care nu mai există"
+msgstr[0] "artık olmayan %d kanal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet gol"
+msgid_plural "%d buchete goale"
+msgstr[0] "%d boş buket"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet găsit pe disc"
+msgid_plural "%d buchete găsite pe disc"
+msgstr[0] "diskte bulunan %d buket"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "refăcut automat"
+msgstr "otomatik yeniden oluşturulur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetele erau deja în această ordine."
+msgstr "Buketler zaten bu sıradaydı."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetul era deja în această ordine."
+msgstr "Buket zaten bu sıradaydı."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Păstrezi numai %d satelit? Canalele și transponderele tuturor celorlalți (și cablul, terestrul) dispar din receptor și din buchete."
+msgid_plural "Păstrezi numai %d sateliți? Canalele și transponderele tuturor celorlalți (și cablul, terestrul) dispar din receptor și din buchete."
+msgstr[0] "Yalnızca %d uydu mu kalsın? Diğerlerinin (kablo ve karasal da) kanalları ve transponderleri alıcıdan ve buketlerden kaybolur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d satelit din receptor, cu toate canalele lui (TV, radio, date) și transponderele? Dispar și din buchete."
+msgid_plural "Ștergi %d sateliți din receptor, cu toate canalele lor (TV, radio, date) și transponderele? Dispar și din buchete."
+msgstr[0] "%d uydu tüm kanalları (TV, radyo, veri) ve transponderleriyle alıcıdan silinsin mi? Buketlerden de kaybolurlar."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal (TV, radio și date) și transponderele satelitului? Dispar și din buchete."
+msgid_plural "Ștergi %d canale (TV, radio și date) și transponderele satelitului? Dispar și din buchete."
+msgstr[0] "%d kanal (TV, radyo ve veri) ve uydunun transponderleri silinsin mi? Buketlerden de kaybolurlar."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal nou în receptor"
+msgid_plural "%d canale noi în receptor"
+msgstr[0] "alıcıda %d yeni kanal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal schimbat în receptor"
+msgid_plural "%d canale schimbate în receptor"
+msgstr[0] "alıcıda değişen %d kanal"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Din ce buchet le scoți?"
+msgstr "Hangi buketten çıkarıyorsun?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi transponderul și %d canal de pe el? Dispare și din buchete."
+msgid_plural "Ștergi transponderul și cele %d canale de pe el? Dispar și din buchete."
+msgstr[0] "Transponder ve üzerindeki %d kanal silinsin mi? Buketlerden de kaybolurlar."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Alege buchetele…"
+msgstr "Buketleri seç…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Le vezi în MENU."
+msgstr "Onları MENU'de görürsün."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă înaintea rândului ales din buchet"
+msgstr "Buketteki seçili satırın önüne ekle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă la începutul buchetului"
+msgstr "Buketin başına ekle"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Leagă de canalul ales în stânga (siglă și ghid): %s"
+msgstr "Solda seçilen kanala bağla (logo ve rehber): %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Înlocuiește aceste buchete"
+msgstr "Bu buketleri değiştir"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Pune în alternativele din dreapta"
+msgstr "Sağdaki alternatiflere koy"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce s-ar scrie altfel decât se vede, canalele fără satelit în setări, marcajele goale, HD în nume cu tip SD, serviciile de date. Nimic nu se schimbă fără bifa ta."
+msgstr "Gördüğünden farklı yazılacak olanlar, ayarlarda uydusu olmayan kanallar, boş işaretler, adında HD olup türü SD olanlar, veri servisleri. Senin işaretin olmadan hiçbir şey değişmez."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista e în ordine."
+msgstr "Liste düzgün."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun buchet gol."
+msgstr "Boş buket yok."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun transponder fără canale."
+msgstr "Kanalsız transponder yok."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Adresele fluxurilor din buchete se încearcă acum, câteva secunde fiecare."
+msgstr "Buketlerdeki yayın adresleri şimdi deneniyor, her biri birkaç saniye."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate fluxurile încercate răspund."
+msgstr "Denenen tüm yayınlar yanıt veriyor."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate siglele sunt folosite."
+msgstr "Tüm logolar kullanılıyor."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce e altfel în lista de acum față de copie. Din canalele noi faci un buchet; pe cele care nu mai sunt le aduci înapoi."
+msgstr "Şimdiki listede kopyaya göre farklı olanlar. Yeni kanallardan bir buket yaparsın; artık olmayanları geri getirirsin."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista de acum e la fel ca în copie."
+msgstr "Şimdiki liste kopyadakiyle aynı."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce s-ar schimba dacă lista din arhivă ar înlocui lista de acum."
+msgstr "Arşivdeki liste şimdiki listenin yerini alsaydı neler değişirdi."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista din arhivă e la fel ca lista de acum."
+msgstr "Arşivdeki liste şimdiki listeyle aynı."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege buchetele"
+msgstr "Buketleri seç"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Bifează buchetele din arhivă pe care le iei. Canalele lor se adaugă în listă; celelalte buchete ale tale rămân cum sunt."
+msgstr "Arşivden aldığın buketleri işaretle. Kanalları listeye eklenir; diğer buketlerin olduğu gibi kalır."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În arhivă nu e niciun buchet."
+msgstr "Arşivde hiç buket yok."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alte unelte"
+msgstr "Diğer araçlar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Verifică lista, Buchete goale, Transpondere fără canale, Fluxuri care nu răspund, Sigle nefolosite și Curățenie (ascunse, blocate, semnul „nou”). În lista sateliților sau a furnizorilor, galben bifează mai mulți: MENU face câte un buchet din fiecare sau îi șterge din receptor. Copii de siguranță > galben compară o copie cu lista de acum: din canalele noi faci un buchet, pe cele dispărute le aduci înapoi."
+msgstr "MENU > Listeyi denetle, Boş buketler, Kanalsız transponderler, Yanıt vermeyen yayınlar, Kullanılmayan logolar ve Temizlik (gizli, kilitli, „yeni” işareti). Uydu veya sağlayıcı listesinde sarı birden fazlasını işaretler: MENU her birinden bir buket yapar ya da onları alıcıdan siler. Yedek kopyalar > sarı bir kopyayı şimdiki listeyle karşılaştırır: yeni kanallardan bir buket yaparsın, kaybolanları geri getirirsin."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Căutarea și filtrele"
+msgstr "Arama ve filtreler"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Căutarea găsește după nume, furnizor, SID, frecvență sau referință; „*” și „?” se potrivesc pe tot numele („*sport” se termină cu sport); o literă greșită se iartă când nu găsește altceva. Albastru: filtrele, și cele ale listei (noi, blocate, ascunse, în niciun buchet, fără siglă, HD în nume cu tip SD)."
+msgstr "Arama ad, sağlayıcı, SID, frekans veya referansa göre bulur; „*” ve „?” adın tamamına uyar („*sport” sport ile biter); başka bir şey bulunmazsa tek bir yanlış harf affedilir. Mavi: filtreler, listenin filtreleri de (yeni, kilitli, gizli, hiçbir bukette olmayan, logosuz, adında HD olup türü SD olan)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Șterge buchetele bifate"
+msgstr "İşaretli buketleri sil"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Importă buchetele bifate"
+msgstr "İşaretli buketleri içe aktar"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În listă"
+msgstr "Listede"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Tipul serviciului"
+msgstr "Servis türü"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Sfaturile, din nou la deschidere"
+msgstr "Açılışta ipuçları yine"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d marcaj? Canalele rămân în buchet."
+msgid_plural "Ștergi %d marcaje? Canalele rămân în buchete."
+msgstr[0] "%d işaret silinsin mi? Kanallar bukette kalır."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d flux din buchete?"
+msgid_plural "Ștergi %d fluxuri din buchete?"
+msgstr[0] "%d yayın buketlerden silinsin mi?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d buchet gol?"
+msgid_plural "Ștergi %d buchete goale?"
+msgstr[0] "%d boş buket silinsin mi?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d transponder fără canale?"
+msgid_plural "Ștergi %d transpondere fără canale?"
+msgstr[0] "Kanalsız %d transponder silinsin mi?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d siglă de pe disc? Se șterge acum, nu la salvare, și nu se poate anula."
+msgid_plural "Ștergi %d sigle de pe disc? Se șterg acum, nu la salvare, și nu se pot anula."
+msgstr[0] "%d logo diskten silinsin mi? Kaydederken değil, şimdi silinir ve geri alınamaz."
+
+#: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
+#, python-format
+msgid ""
+"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
+"Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
+msgstr ""
+"Bulunan: %d. Beta testçisi olarak (Ayarlar > Beta testçisi) yeni günlükler yalnızca senin onayınla kendiliğinden gönderilir. Aksi halde burada bulunan bir günlük hdsatelit.com'daki iletişim formuyla gönderilebilir.\n"
+"Arama yeri: “%s”, /tmp ve /media, /run/media, /home/root altına bağlanan diğer tüm klasörler."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
+msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
+msgstr "Beta testçisi olarak (Ayarlar'da, Beta testçisi bölümünde) yeni günlükler yalnızca senin onayınla kendiliğinden gönderilir. Aksi halde burada bulunan bir günlük, hdsatelit.com üzerindeki iletişim formuyla gönderilebilir. <span id=\"principal\"></span> içinde, /tmp içinde ve /media, /run/media, /home/root altına bağlanmış diğer tüm klasörlerde aranır."
+
 # Asistenta de la distanta
 msgid "    raspuns: cod %d, %d octeti"
 msgstr "    yanıt: çıkış kodu %d, %d bayt"
@@ -53131,9 +56425,6 @@ msgstr "ekran görüntüsü (yalnızca menüler, kanal görüntüsü olmadan)"
 msgid "o oră"
 msgstr "bir saat"
 
-msgid "oprita"
-msgstr "durduruldu"
-
 msgid "oprita (%s)"
 msgstr "durduruldu (%s)"
 
@@ -53142,9 +56433,6 @@ msgstr "anakart: işlemci, çekirdek komut satırı, bölümler, yüklü modüll
 
 msgid "pornita (%s, nivel %s, %d minute, text v%d)"
 msgstr "başlatıldı (%s, düzey %s, %d dakika, metin v%d)"
-
-msgid "proba"
-msgstr "test"
 
 msgid "reluata dupa repornirea interfetei"
 msgstr "arayüz yeniden başlatıldıktan sonra sürdürüldü"
@@ -53802,3 +57090,847 @@ msgstr "Ekran görüntüsü alınamadı; mesaj onsuz gönderilir."
 #: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
 msgid "Da, ieși și șterge"
 msgstr "Evet, çık ve sil"
+
+msgid "Captura nu s-a putut face."
+msgstr "Ekran görüntüsü alınamadı."
+
+msgid "Captura nu s-a putut salva."
+msgstr "Ekran görüntüsü kaydedilemedi."
+
+msgid "Captura nu s-a putut șterge."
+msgstr "Ekran görüntüsü silinemedi."
+
+msgid "Captură salvată pe disc"
+msgstr "Ekran görüntüsü diske kaydedildi"
+
+msgid "Captură salvată pe stick"
+msgstr "Ekran görüntüsü USB belleğe kaydedildi"
+
+msgid "Captură salvată în memoria receptorului"
+msgstr "Ekran görüntüsü alıcının belleğine kaydedildi"
+
+msgid "Disc USB"
+msgstr "USB disk"
+
+msgid "Nu mai e loc pe stick pentru capturi."
+msgstr "USB bellekte ekran görüntüleri için yer kalmadı."
+
+msgid "Nu mai e loc în memoria receptorului pentru capturi. Pune un stick USB."
+msgstr "Alıcının belleğinde ekran görüntüleri için yer kalmadı. Bir USB bellek tak."
+
+msgid "Poza e prea mare: cel mult %d MB."
+msgstr "Resim çok büyük: en fazla %d MB."
+
+msgid "Receptorul e în standby: captura nu se face."
+msgstr "Alıcı bekleme modunda: ekran görüntüsü alınmaz."
+
+msgid "Stick-ul nu mai e conectat."
+msgstr "USB bellek artık takılı değil."
+
+msgid "Captura nu mai există."
+msgstr "Ekran görüntüsü artık yok."
+
+msgid "Poza trebuie să fie JPG sau PNG."
+msgstr "Resim JPG veya PNG olmalı."
+
+msgid "Forumul nu are încă un subiect pentru acest receptor."
+msgstr "Forumda bu alıcı için henüz bir konu yok."
+
+msgid "Forumul nu răspunde acum. Încearcă mai târziu."
+msgstr "Forum şu anda yanıt vermiyor. Daha sonra dene."
+
+msgid "Legătura cu forumul a expirat. Încearcă din nou."
+msgstr "Forumla bağlantının süresi doldu. Yeniden dene."
+
+msgid "Mesajul e gol sau prea lung."
+msgstr "Mesaj boş veya çok uzun."
+
+msgid "Nu mai poți scrie pe forum de pe acest receptor."
+msgstr "Bu alıcıdan artık foruma yazamazsın."
+
+msgid "Numele e deja folosit. Alege altul."
+msgstr "Bu ad zaten kullanılıyor. Başka bir tane seç."
+
+msgid "O poză nu a putut fi urcată: trebuie să fie JPG sau PNG, de cel mult 4 MB."
+msgstr "Bir resim yüklenemedi: JPG veya PNG olmalı, en fazla 4 MB."
+
+msgid "Prea multe mesaje într-un timp scurt. Mai încearcă peste câteva minute."
+msgstr "Kısa sürede çok fazla mesaj. Birkaç dakika sonra yeniden dene."
+
+msgid "Receptorul nu ajunge la forum. Verifică legătura la internet."
+msgstr "Alıcı foruma ulaşamıyor. İnternet bağlantısını kontrol et."
+
+msgid "Se trimite mesajul..."
+msgstr "Mesaj gönderiliyor..."
+
+msgid "Se urcă poza %(k)d din %(n)d..."
+msgstr "Resim yükleniyor: %(k)d / %(n)d..."
+
+msgid "Subiectul e închis: nu se mai pot scrie mesaje."
+msgstr "Konu kapalı: artık mesaj yazılamaz."
+
+msgid "Tradus automat"
+msgstr "Otomatik çevrildi"
+
+msgid "Tradus din română"
+msgstr "Rumenceden çevrildi"
+
+msgid "Tradus din engleză"
+msgstr "İngilizceden çevrildi"
+
+msgid "Tradus din germană"
+msgstr "Almancadan çevrildi"
+
+msgid "Tradus din franceză"
+msgstr "Fransızcadan çevrildi"
+
+msgid "Tradus din spaniolă"
+msgstr "İspanyolcadan çevrildi"
+
+msgid "Tradus din italiană"
+msgstr "İtalyancadan çevrildi"
+
+msgid "Tradus din maghiară"
+msgstr "Macarcadan çevrildi"
+
+msgid "Tradus din cehă"
+msgstr "Çekçeden çevrildi"
+
+msgid "Tradus din poloneză"
+msgstr "Lehçeden çevrildi"
+
+msgid "Tradus din portugheză"
+msgstr "Portekizceden çevrildi"
+
+msgid "Tradus din neerlandeză"
+msgstr "Hollandacadan çevrildi"
+
+msgid "Tradus din rusă"
+msgstr "Rusçadan çevrildi"
+
+msgid "Tradus din turcă"
+msgstr "Türkçeden çevrildi"
+
+msgid "Tradus din ucraineană"
+msgstr "Ukraynacadan çevrildi"
+
+msgid "Un mesaj poate avea cel mult 4 poze."
+msgstr "Bir mesajda en fazla 4 resim olabilir."
+
+msgid "Ca să scrii pe forum, devino beta tester."
+msgstr "Foruma yazmak için beta testçisi ol."
+
+msgid "ieri, %s"
+msgstr "dün, %s"
+
+msgid "Captură de ecran"
+msgstr "Ekran görüntüsü"
+
+msgid "Forumul receptorului"
+msgstr "Alıcı forumu"
+
+msgid "Devino beta tester"
+msgstr "Beta testçisi ol"
+
+msgid "Adaugă la mesaj"
+msgstr "Mesaja ekle"
+
+msgid "Aici scriu beta testerii acestui receptor. Ca să scrii și tu, devino beta tester."
+msgstr "Burada bu alıcının beta testçileri yazar. Sen de yazmak için beta testçisi ol."
+
+msgid "Așteaptă aprobarea"
+msgstr "Onay bekliyor"
+
+msgid "Mai vechi"
+msgstr "Daha eski"
+
+msgid "Numele tău pe forum"
+msgstr "Forumdaki adın"
+
+msgid "Scrie un mesaj"
+msgstr "Mesaj yaz"
+
+msgid "Se citește forumul..."
+msgstr "Forum okunuyor..."
+
+msgid "Încă nu e niciun mesaj aici."
+msgstr "Burada henüz mesaj yok."
+
+msgid "Același forum e pe televizor: __DRUM_MENIU__, Forumul receptorului."
+msgstr "Aynı forum televizyonda da var: __DRUM_MENIU__, Alıcı forumu."
+
+msgid "Alege din capturile receptorului"
+msgstr "Alıcının ekran görüntülerinden seç"
+
+msgid "Alege o poză."
+msgstr "Bir resim seç."
+
+msgid "Alege întâi capturile."
+msgstr "Önce ekran görüntülerini seç."
+
+msgid "Alese: {n} (până la {m})"
+msgstr "Seçilen: {n} (en fazla {m})"
+
+msgid "Apari ca:"
+msgstr "Görünen adın:"
+
+msgid "Captura s-a șters."
+msgstr "Ekran görüntüsü silindi."
+
+msgid "Capturi atașate: {n} din {m}"
+msgstr "Eklenen ekran görüntüleri: {n} / {m}"
+
+msgid "Capturile receptorului"
+msgstr "Alıcının ekran görüntüleri"
+
+msgid "Capturile s-au șters."
+msgstr "Ekran görüntüleri silindi."
+
+msgid "Cererea se trimite cu POST."
+msgstr "İstek POST ile gönderilir."
+
+msgid "Deschide subiectul pe forum"
+msgstr "Konuyu forumda aç"
+
+msgid "Forumul nu se poate citi acum."
+msgstr "Forum şu anda okunamıyor."
+
+msgid "Fă o captură acum"
+msgstr "Şimdi ekran görüntüsü al"
+
+msgid "Mesaje afișate: {n}"
+msgstr "Gösterilen mesajlar: {n}"
+
+msgid "Mesajele"
+msgstr "Mesajlar"
+
+msgid "Mesajul are deja {m} capturi; noua captură e în galerie."
+msgstr "Mesajda zaten {m} ekran görüntüsü var; yeni ekran görüntüsü galeride."
+
+msgid "Mesajul așteaptă aprobarea moderatorului; până atunci îl vezi numai tu."
+msgstr "Mesaj moderatör onayını bekliyor; o zamana kadar yalnızca sen görürsün."
+
+msgid "Mesajul e pe forum."
+msgstr "Mesaj forumda."
+
+msgid "Mesajul e prea lung."
+msgstr "Mesaj çok uzun."
+
+msgid "Nicio captură aici încă: fă una acum sau apasă tasta de captură de pe telecomandă."
+msgstr "Burada henüz ekran görüntüsü yok: şimdi bir tane al veya kumandadaki ekran görüntüsü tuşuna bas."
+
+msgid "Nu s-a putut face."
+msgstr "Yapılamadı."
+
+msgid "Numele e salvat."
+msgstr "Ad kaydedildi."
+
+msgid "Numele nu se poate schimba încă de aici."
+msgstr "Ad buradan henüz değiştirilemiyor."
+
+msgid "O captură aleasă nu mai există. Alege din nou."
+msgstr "Seçilen bir ekran görüntüsü artık yok. Yeniden seç."
+
+msgid "O singură limbă: forumul traduce singur."
+msgstr "Tek dil: forum kendisi çevirir."
+
+msgid "Poza din mesaj"
+msgstr "Mesajdaki resim"
+
+msgid "Poza e prea mare."
+msgstr "Resim çok büyük."
+
+msgid "Poza e pusă între capturi."
+msgstr "Resim ekran görüntülerinin arasına eklendi."
+
+msgid "Poza nu a ajuns întreagă: %s"
+msgstr "Resim eksiksiz gelmedi: %s"
+
+msgid "Poza nu mai există."
+msgstr "Resim artık yok."
+
+msgid "Poza nu s-a putut aduce."
+msgstr "Resim alınamadı."
+
+msgid "Poza nu se poate citi. Alege o poză JPG sau PNG."
+msgstr "Resim okunamıyor. JPG veya PNG bir resim seç."
+
+msgid "Poza se aduce de pe forum..."
+msgstr "Resim forumdan alınıyor..."
+
+msgid "Poți alege cel mult {m} capturi."
+msgstr "En fazla {m} ekran görüntüsü seçebilirsin."
+
+msgid "Scoate captura"
+msgstr "Ekran görüntüsünü çıkar"
+
+msgid "Scrie mesajul tău..."
+msgstr "Mesajını yaz..."
+
+msgid "Scrie și tu pe forum"
+msgstr "Sen de foruma yaz"
+
+msgid "Se face captura..."
+msgstr "Ekran görüntüsü alınıyor..."
+
+msgid "Se pregătește poza..."
+msgstr "Resim hazırlanıyor..."
+
+msgid "Trimite pe forum"
+msgstr "Foruma gönder"
+
+msgid "Un mesaj poate avea cel mult %d poze."
+msgstr "Bir mesajda en fazla %d resim olabilir."
+
+msgid "sau încarcă o poză de pe calculator"
+msgstr "veya bilgisayardan bir resim yükle"
+
+msgid "Încarcă de pe calculator"
+msgstr "Bilgisayardan yükle"
+
+msgid "Ștergi captura aleasă?"
+msgstr "Seçilen ekran görüntüsü silinsin mi?"
+
+msgid "Ștergi cele %d capturi alese?"
+msgstr "Seçilen ekran görüntüleri (%d) silinsin mi?"
+
+msgid "Capturi"
+msgstr "Ekran görüntüleri"
+
+msgid "Adaugă la mesaj (%d)"
+msgstr "Mesaja ekle (%d)"
+
+msgid "Adaugă o captură"
+msgstr "Ekran görüntüsü ekle"
+
+msgid "Aici scriu beta testerii acestui receptor."
+msgstr "Burada bu alıcının beta testçileri yazar."
+
+msgid "Apari ca: %s"
+msgstr "Görünen adın: %s"
+
+msgid "Apari cu numele dat de forum."
+msgstr "Forumun verdiği adla görünüyorsun."
+
+msgid "Apari pe forum ca „%s”."
+msgstr "Forumda “%s” olarak görünüyorsun."
+
+msgid "Capturi: %d"
+msgstr "Ekran görüntüleri: %d"
+
+msgid "Capturile mele"
+msgstr "Ekran görüntülerim"
+
+msgid "Capturile tale"
+msgstr "Ekran görüntülerin"
+
+msgid "MENU: schimbă numele tău de pe forum"
+msgstr "MENU: forumdaki adını değiştir"
+
+msgid "Mesaje: %d"
+msgstr "Mesajlar: %d"
+
+msgid "Mesajul %(k)d din %(n)d"
+msgstr "Mesaj %(k)d / %(n)d"
+
+msgid "Mesajul anterior"
+msgstr "Önceki mesaj"
+
+msgid "Mesajul tău a plecat și așteaptă aprobarea: până atunci îl vezi numai tu."
+msgstr "Mesajın gönderildi ve onay bekliyor: o zamana kadar yalnızca sen görürsün."
+
+msgid "Mesajul tău a plecat."
+msgstr "Mesajın gönderildi."
+
+msgid "Mesajul următor"
+msgstr "Sonraki mesaj"
+
+msgid "Nicio captură aici: apasă tasta de captură de pe telecomandă (a treia tastă cu desen de ecran) pe orice ecran."
+msgstr "Burada ekran görüntüsü yok: herhangi bir ekranda kumandadaki ekran görüntüsü tuşuna bas (üzerinde ekran çizimi olan üçüncü tuş)."
+
+msgid "Nu e niciun stick USB conectat."
+msgstr "Takılı USB bellek yok."
+
+msgid "Nu sunt mesaje mai vechi."
+msgstr "Daha eski mesaj yok."
+
+msgid "Numele tău pe forum e acum „%s”."
+msgstr "Forumdaki adın artık “%s”."
+
+msgid "OK alege capturile, Verde le pune în mesaj."
+msgstr "OK ekran görüntülerini seçer, Yeşil onları mesaja koyar."
+
+msgid "OK: mărește poza."
+msgstr "OK: resmi büyüt."
+
+msgid "OK: mărește poza. Stânga și Dreapta: celelalte poze."
+msgstr "OK: resmi büyüt. Sol ve Sağ: diğer resimler."
+
+msgid "OK: scrie mesajul cu tastatura de pe ecran."
+msgstr "OK: mesajı ekran klavyesiyle yaz."
+
+msgid "Poza %(k)d din %(n)d"
+msgstr "Resim %(k)d / %(n)d"
+
+msgid "Pozele (%(n)d din %(max)d)"
+msgstr "Resimler (%(n)d / %(max)d)"
+
+msgid "Poți alege cel mult %d capturi."
+msgstr "En fazla %d ekran görüntüsü seçebilirsin."
+
+msgid "Poți alege o singură captură."
+msgstr "Yalnızca bir ekran görüntüsü seçebilirsin."
+
+msgid "Renunți la mesajul scris?"
+msgstr "Yazılan mesajdan vazgeçilsin mi?"
+
+msgid "Răspunde"
+msgstr "Yanıtla"
+
+msgid "Scoate poza"
+msgstr "Resmi çıkar"
+
+msgid "Scrie într-o singură limbă: forumul traduce singur mesajul pentru fiecare cititor."
+msgstr "Tek bir dilde yaz: forum mesajı her okuyucu için kendisi çevirir."
+
+msgid "Se schimbă numele..."
+msgstr "Ad değiştiriliyor..."
+
+msgid "Stick / Memorie"
+msgstr "USB bellek / Alıcı belleği"
+
+msgid "Textul (OK: tastatura de pe ecran)"
+msgstr "Metin (OK: ekran klavyesi)"
+
+msgid "Șterge captura"
+msgstr "Ekran görüntüsünü sil"
+
+msgid "Ștergi captura?"
+msgstr "Ekran görüntüsü silinsin mi?"
+
+msgid "cererea a expirat"
+msgstr "isteğin süresi doldu"
+
+msgid "cererea a fost respinsă"
+msgstr "istek reddedildi"
+
+msgid "cererea a fost închisă"
+msgstr "istek kapatıldı"
+
+msgid "codul a expirat"
+msgstr "kodun süresi doldu"
+
+msgid "din pagina web"
+msgstr "web sayfasından"
+
+msgid "serverul nu răspunde"
+msgstr "sunucu yanıt vermiyor"
+
+msgid "înregistrare refuzată"
+msgstr "kayıt reddedildi"
+
+msgid "de pe receptor"
+msgstr "alıcıdan"
+
+msgid "de om"
+msgstr "kullanıcı tarafından"
+
+msgid "eroare"
+msgstr "hata"
+
+msgid "Ce scriu testerii acestui receptor; scrii și tu, cu capturi."
+msgstr "Bu alıcının testçilerinin yazdıkları; sen de ekran görüntüleriyle yazarsın."
+
+msgid "O greșeală, o idee sau o întrebare, direct echipei."
+msgstr "Bir hata, bir fikir veya bir soru, doğrudan ekibe."
+
+msgid "Datele bifate pleacă imediat."
+msgstr "İşaretli veriler hemen gönderilir."
+
+msgid "Ultimele pachete plecate și starea fiecăruia."
+msgstr "Son gönderilen paketler ve her birinin durumu."
+
+msgid "Ce ți-a răspuns echipa la mesaje."
+msgstr "Ekibin mesajlarına verdiği yanıtlar."
+
+msgid "Alegi ce date pleacă, numele și e-mailul."
+msgstr "Hangi verilerin gönderileceğini, adı ve e-postayı sen seçersin."
+
+msgid "Tot ce a plecat în ultimul pachet."
+msgstr "Son pakette gönderilen her şey."
+
+msgid "Probe pe receptor: ce merge și ce nu."
+msgstr "Alıcıda testler: ne çalışıyor, ne çalışmıyor."
+
+msgid "Ne lași să vedem starea receptorului, cât alegi tu."
+msgstr "Alıcının durumunu görmemize, senin seçtiğin süre kadar izin verirsin."
+
+msgid "Versiunile noi ajung întâi la tine."
+msgstr "Yeni sürümler önce sana ulaşır."
+
+msgid "Numele cu care apari pe forum și pe site."
+msgstr "Forumda ve sitede göründüğün ad."
+
+msgid "Ce date pleacă, cine le primește, cât se păstrează."
+msgstr "Hangi veriler gönderilir, kim alır, ne kadar saklanır."
+
+msgid "Serverul șterge tot ce a trimis acest receptor."
+msgstr "Sunucu bu alıcının gönderdiği her şeyi siler."
+
+msgid "Alegi ce date trimiți; sunt anonime."
+msgstr "Hangi verileri göndereceğini sen seçersin; veriler anonimdir."
+
+msgid "Citește ce scriu testerii acestui receptor."
+msgstr "Bu alıcının testçilerinin yazdıklarını oku."
+
+msgid "Primești versiunile noi înaintea tuturor"
+msgstr "Yeni sürümleri herkesten önce alırsın"
+
+msgid "Din meniul testerului alegi să primești întâi versiunile pentru testeri."
+msgstr "Testçi menüsünden önce testçi sürümlerini almayı seçersin."
+
+msgid "Scrii pe forumul receptorului, cu capturi de ecran"
+msgstr "Alıcı forumuna ekran görüntüleriyle yazarsın"
+
+msgid "Forumul traduce singur mesajele pentru fiecare cititor."
+msgstr "Forum mesajları her okuyucu için kendisi çevirir."
+
+msgid "La o problemă, ne lași să ne uităm la receptor, cât vrei tu"
+msgstr "Bir sorunda alıcıya bakmamıza, istediğin kadar izin verirsin"
+
+msgid "Asistența de la distanță: o pornești tu și o oprești oricând."
+msgstr "Uzaktan yardım: onu sen başlatırsın ve istediğin zaman durdurursun."
+
+msgid "Imaginea merge mai bine pe modelul tău"
+msgstr "İmaj senin modelinde daha iyi çalışır"
+
+msgid "Trimiți date anonime, numai cele bifate de tine."
+msgstr "Anonim veriler gönderirsin, yalnızca senin işaretlediklerini."
+
+msgid "Echipa îți răspunde la mesaje"
+msgstr "Ekip mesajlarını yanıtlar"
+
+msgid "Greșeli, idei, întrebări: răspunsul vine în meniul testerului."
+msgstr "Hatalar, fikirler, sorular: yanıt testçi menüsüne gelir."
+
+msgid "Asistența de la distanță e pentru beta testeri."
+msgstr "Uzaktan yardım beta testçileri içindir."
+
+msgid "Ca beta tester trimiți date anonime care ajută imaginea și poți scrie pe forumul receptorului."
+msgstr "Beta testçisi olarak imaja yardım eden anonim veriler gönderirsin ve alıcı forumuna yazabilirsin."
+
+msgid "Ești beta tester"
+msgstr "Beta testçisisin"
+
+msgid "Înscris din %s"
+msgstr "Kayıt tarihi: %s"
+
+msgid "Ce primești ca beta tester"
+msgstr "Beta testçisi olarak neler alırsın"
+
+msgid "Ultimele mesaje de pe forum"
+msgstr "Forumdaki son mesajlar"
+
+msgid "    răspuns: cod %d, %d octeți"
+msgstr "    yanıt: çıkış kodu %d, %d bayt"
+
+msgid "Asistența a pornit."
+msgstr "Uzaktan yardım başladı."
+
+msgid "Asistența nu merge."
+msgstr "Uzaktan yardım çalışmıyor."
+
+msgid "Asistența s-a oprit. Cheia a fost ștearsă."
+msgstr "Uzaktan yardım durdu. Anahtar silindi."
+
+msgid "cerere refuzată: %s"
+msgstr "istek reddedildi: %s"
+
+msgid "cod arătat pe ecran, aștept aprobarea"
+msgstr "kod ekranda gösterildi, onay bekleniyor"
+
+msgid "codul a expirat fără aprobare"
+msgstr "kod onaylanmadan süresi doldu"
+
+msgid "nu pot ajunge la serverul de asistență"
+msgstr "uzaktan yardım sunucusuna ulaşılamıyor"
+
+msgid "oprită (%s)"
+msgstr "durduruldu (%s)"
+
+msgid "pornită (%s, nivel %s, %d minute, text v%d)"
+msgstr "başlatıldı (%s, düzey %s, %d dakika, metin v%d)"
+
+msgid "probă"
+msgstr "test"
+
+msgid "reluată după repornirea interfeței"
+msgstr "arayüz yeniden başlatıldıktan sonra sürdürüldü"
+
+msgid "serverul a refuzat înregistrarea (%s)"
+msgstr "sunucu kaydı reddetti (%s)"
+
+msgid "copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)"
+msgstr "ayarların süzülmüş kopyası (ses, video, arayüz, ağ; parolalar ve anahtarlar hariç)"
+
+msgid "lista jurnalelor receptorului, cu mărimile"
+msgstr "alıcının günlüklerinin listesi, boyutlarıyla"
+
+msgid "lista proceselor (numele, fără argumente)"
+msgstr "süreç listesi (adlar, argümanlar olmadan)"
+
+msgid "memoria liberă și memoria decodorului"
+msgstr "boş bellek ve kod çözücü belleği"
+
+msgid "o captură a ecranului (numai meniurile, fără imaginea canalului)"
+msgstr "ekran görüntüsü (yalnızca menüler, kanal görüntüsü olmadan)"
+
+msgid "placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate"
+msgstr "anakart: işlemci, çekirdek komut satırı, bölümler, yüklü modüller"
+
+msgid "rețeaua: cablu sau Wi-Fi, legat sau nu, ruta implicită, DNS (fără numele rețelei, MAC mascat)"
+msgstr "ağ: kablo veya Wi-Fi, bağlı olup olmadığı, varsayılan yol, DNS (ağ adı olmadan, MAC gizlenmiş)"
+
+msgid "tunerele și blocarea semnalului"
+msgstr "tunerler ve sinyal kilidi"
+
+msgid "ultimele rânduri dintr-un jurnal"
+msgstr "bir günlüğün son satırları"
+
+msgid ""
+"Datele le primește Eduard Monea, persoană fizică (mărcile Monea Software și "
+"HD Satelit), contact@hdsatelit.com. Pleacă numai felurile bifate de tine, "
+"cu un identificator întâmplător și o amprentă calculată din placă, ca "
+"receptorul să fie numărat o singură dată (din ea nu se pot afla adresa MAC "
+"sau seria), fără adresa IP, fără parole și fără listele tale de canale, "
+"numai ca să îmbunătățim imaginea pe modelul tău de receptor. Jurnalele se "
+"păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de "
+"date sau poți ieși din program cu ștergerea datelor. La o pornire ratată, "
+"receptorul trimite singur un raport tehnic anonim, fără date personale. "
+"Dacă scrii pe forumul receptorului, mesajul tău apare public, cu numele "
+"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos."
+msgstr ""
+"Verileri gerçek kişi Eduard Monea alır (Monea Software ve HD Satelit "
+"markaları), contact@hdsatelit.com. Yalnızca senin işaretlediğin türler "
+"gönderilir; rastgele bir kimlikle ve alıcının yalnızca bir kez sayılması "
+"için karttan hesaplanan bir parmak iziyle (bundan MAC adresi veya seri "
+"numarası çıkarılamaz), IP adresi, parolalar ve senin kanal listelerin "
+"olmadan, yalnızca alıcı modelindeki imajı iyileştirmek için. Günlükler 6 "
+"ay, diğer veriler 12 ay saklanır. İstediğin zaman bir veri türünün "
+"işaretini kaldırabilir veya verilerin silinmesiyle programdan çıkabilirsin. "
+"Başarısız bir açılışta alıcı, kişisel veri içermeyen anonim bir teknik "
+"raporu kendiliğinden gönderir. Alıcı forumuna yazarsan mesajın herkese açık "
+"olarak, senin seçtiğin adla veya otomatik bir adla görünür. Bildirimin "
+"tamamı aşağıdaki adreste."
+
+msgid "Pozele se văd după aprobare."
+msgstr "Resimler onaydan sonra görünür."
+
+msgid "Felicitări, ești beta tester. Datele bifate pleacă de acum."
+msgstr "Tebrikler, artık beta testçisisin. İşaretlenen veriler şu andan itibaren gönderilir."
+
+msgid "un mesaj nou"
+msgid_plural "%d mesaje noi"
+msgstr[0] "%d yeni mesaj"
+
+#: data/menu.xml lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Jurnalele celorlalte sloturi"
+msgstr "Diğer yuvaların kayıtları"
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Dacă o imagine dintr-un alt slot nu pornește, aici iei pașii pornirilor ei, rapoartele și jurnalele de cădere rămase acolo. O apăsare le pune pe stick și le trimite, ca să aflăm de ce nu pornește."
+msgstr "Başka bir yuvadaki imaj açılmıyorsa, burada açılışlarının adımlarını, raporları ve orada kalan çökme kayıtlarını alırsın. Tek bir basış bunları USB belleğe koyar ve gönderir; böylece neden açılmadığını öğreniriz."
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Pune pe stick și trimite"
+msgstr "USB belleğe koy ve gönder"
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Caut celelalte sloturi..."
+msgstr "Diğer yuvaları arıyorum..."
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Nu am găsit alte sloturi pe acest receptor."
+msgstr "Bu alıcıda başka yuva bulamadım."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+#, python-format
+msgid "%(nume)s, %(imagine)s: porniri %(porniri)d, rapoarte %(rapoarte)d, jurnale de cădere %(caderi)d"
+msgstr "%(nume)s, %(imagine)s: açılışlar %(porniri)d, raporlar %(rapoarte)d, çökme kayıtları %(caderi)d"
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Pun jurnalele pe stick și le trimit..."
+msgstr "Kayıtları USB belleğe koyup gönderiyorum..."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Pus pe stick, în dosarul hds-raport."
+msgstr "USB belleğe, hds-raport klasörüne kondu."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu e niciun stick pus: raportul a rămas în receptor."
+msgstr "Takılı USB bellek yok: rapor alıcıda kaldı."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+#, python-format
+msgid "Trimis. Codul raportului: %s."
+msgstr "Gönderildi. Raporun kodu: %s."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu am putut trimite acum: raportul pleacă singur la pornirea următoare, când receptorul are rețea."
+msgstr "Şimdi gönderemedim: rapor bir sonraki açılışta, alıcının ağı olduğunda kendiliğinden gider."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu am putut face raportul."
+msgstr "Raporu hazırlayamadım."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Lipsește programul raportului din această imagine."
+msgstr "Bu imajda rapor programı eksik."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Dacă o imagine dintr-un alt slot nu pornește, aici iei pașii pornirilor ei, rapoartele și jurnalele de cădere rămase acolo. O apăsare le pune pe stick și le trimite, ca să aflăm de ce nu pornește. Același ecran e pe receptor, în __DRUM_MENIU__."
+msgstr "Başka bir yuvadaki imaj açılmıyorsa, burada açılışlarının adımlarını, raporları ve orada kalan çökme kayıtlarını alırsın. Tek bir basış bunları USB belleğe koyar ve gönderir; böylece neden açılmadığını öğreniriz. Aynı ekran alıcıda da var: __DRUM_MENIU__."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Ce am găsit în celelalte sloturi"
+msgstr "Diğer yuvalarda bulduklarım"
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Codul raportului"
+msgstr "Rapor kodu"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola lui root, aceeași pentru SSH și SFTP"
+msgstr "root parolası, SSH ve SFTP için aynı"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola lui root, aceeași pentru FTP, SSH și SFTP"
+msgstr "root parolası, FTP, SSH ve SFTP için aynı"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola poate avea numai litere fără diacritice, cifre și semne, fără spații."
+msgstr "Parola yalnızca Türkçe karakter içermeyen harfler, rakamlar ve işaretler içerebilir, boşluk olmadan."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola are prea puține semne: cel puțin %d."
+msgstr "Parolada çok az karakter var: en az %d."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola are prea multe semne: cel mult %d."
+msgstr "Parolada çok fazla karakter var: en fazla %d."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nouă e pusă. Merge pentru FTP, SSH și SFTP; cea veche nu mai merge."
+msgstr "Yeni parola ayarlandı. FTP, SSH ve SFTP için geçerli; eskisi artık çalışmıyor."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Programul parolei de pe receptor e vechi și nu primește o parolă aleasă. Actualizează receptorul, apoi încearcă din nou. Parola de dinainte rămâne."
+msgstr "Alıcıdaki parola programı eski ve seçilen bir parolayı kabul etmiyor. Alıcıyı güncelle, sonra yeniden dene. Önceki parola geçerli kalır."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nu s-a putut pune. Parola de dinainte rămâne."
+msgstr "Parola ayarlanamadı. Önceki parola geçerli kalır."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Merge numai din rețeaua ta de acasă și se vede aici oricând. Ca s-o schimbi, alege „Schimbă parola”."
+msgstr "Yalnızca ev ağından çalışır ve burada her zaman görünür. Değiştirmek için “Parolayı değiştir”i seç."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola a fost schimbată pe altă cale (de exemplu cu passwd), deci nu se mai vede aici. Alege „Schimbă parola” ca s-o vezi din nou."
+msgstr "Parola başka bir yolla değiştirildi (örneğin passwd ile), bu yüzden burada artık görünmüyor. Yeniden görmek için “Parolayı değiştir”i seç."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nu se vede aici. Alege „Schimbă parola” și pune una nouă: de atunci se vede oricând."
+msgstr "Parola burada görünmüyor. “Parolayı değiştir”i seç ve yeni bir parola koy: o andan itibaren her zaman görünür."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "FTP sau SFTP: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP veya SFTP: %s, kullanıcı root · SSH: ssh root@%s"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Serverul FTP"
+msgstr "FTP sunucusu"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Verificarea parolei FTP (PAM)"
+msgstr "FTP parola denetimi (PAM)"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Rețeaua de acasă"
+msgstr "Ev ağı"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Se pune parola nouă..."
+msgstr "Yeni parola ayarlanıyor..."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Parola receptorului"
+msgstr "Alıcının parolası"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Schimbă parola"
+msgstr "Parolayı değiştir"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Scrii parola ta cu tastatura de pe ecran: 4-64 de semne, fără spații și fără diacritice. Cea veche nu mai merge."
+msgstr "Kendi parolanı ekran klavyesiyle yazarsın: 4-64 karakter, boşluksuz ve Türkçe karaktersiz. Eskisi artık çalışmaz."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Text brut (fișierele serverelor SSH și FTP)"
+msgstr "Ham metin (SSH ve FTP sunucusu dosyaları)"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "OK arată fișierele de setări ale serverelor SSH și FTP, așa cum sunt pe receptor."
+msgstr "OK, SSH ve FTP sunucularının ayar dosyalarını alıcıda oldukları gibi gösterir."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Parola nouă: 4-64 de semne, fără spații și fără diacritice"
+msgstr "Yeni parola: 4-64 karakter, boşluksuz ve Türkçe karaktersiz"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Cât ecranul „Parola receptorului” e deschis pe receptor, telecomanda și captura de ecran merg numai dintr-un browser conectat cu codul de pe televizor."
+msgstr "Alıcıda “Alıcının parolası” ekranı açıkken uzaktan kumanda ve ekran görüntüsü yalnızca televizyondaki kodla bağlanan bir tarayıcıdan çalışır."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Aceleași lucruri sunt și în meniul receptorului, în %s."
+msgstr "Aynıları alıcının menüsünde de var: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Parola nouă"
+msgstr "Yeni parola"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "4-64 de semne: litere fără diacritice, cifre și semne, fără spații. Cea veche nu mai merge."
+msgstr "4-64 karakter: Türkçe karaktersiz harfler, rakamlar ve işaretler, boşluksuz. Eskisi artık çalışmaz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root și parola de sus:"
+msgstr "FTP veya SFTP (örneğin FileZilla veya WinSCP), kullanıcı root ve yukarıdaki parola:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Cu parola se intră numai din rețeaua ta de acasă. Cu o cheie SSH pusă mai jos, calculatorul intră fără parolă."
+msgstr "Parolayla yalnızca ev ağından girilir. Aşağıda eklenen bir SSH anahtarıyla bilgisayar parolasız girer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Scrie întâi parola nouă."
+msgstr "Önce yeni parolayı yaz."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "__T_CUM_FTP__ <span class=\"cod\" id=\"comandaFtp\">ftp://receptor</span>"
+msgstr "__T_CUM_FTP__ <span class=\"cod\" id=\"comandaFtp\">ftp://receptor</span>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/acces-ssh</code>: parola receptorului (FTP, SSH și SFTP): felul parolei lui root (fără parola însăși), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), opțiunea Fără parolă în rețeaua locală, stările periculoase (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi"
+msgstr "<code>GET /api/acces-ssh</code>: alıcının parolası (FTP, SSH ve SFTP): root parolasının türü (parolanın kendisi olmadan), FTP çalışıyor mu (<code>ftp</code>), SSH anahtarları (tür, parmak izi, yorum), “Yerel ağda parolasız”, tehlikeli durumlar (<code>alarme</code>), süren iş ve son komutun sonucu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-parola</code>: textul parolei (se vede oricând); <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow)"
+msgstr "<code>POST /api/acces-ssh-parola</code>: parolanın metni (her zaman görünür); <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: SSH ve FTP sunucusu dosyaları metin olarak (/etc/shadow olmadan)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola aleasă (4-64 de semne: litere fără diacritice, cifre și semne, fără spații); <code>POST /api/acces-ssh-parola-noua?confirmat=1</code>: o parolă nouă la întâmplare"
+msgstr "<code>POST /api/acces-ssh-pune</code> (gövde: <code>parola=</code>): seçilen parola (4-64 karakter: Türkçe karaktersiz harfler, rakamlar ve işaretler, boşluksuz); <code>POST /api/acces-ssh-parola-noua?confirmat=1</code>: yeni rastgele bir parola"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
+msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> ayrıca <code>confirmat=1</code> ister): “Yerel ağda parolasız”. Parola, ham metin ve tüm değişiklikler yalnızca televizyondaki kodla bağlanmış bir tarayıcıdan çalışır (aksi halde <code>trebuie_cod</code> ile 403), asla <code>?token=</code> ile değil; alıcıda “Alıcının parolası” ekranı açık olduğu sürece <code>/api/remotecontrol</code> ve <code>/api/screenshot</code> için de aynısı geçerlidir"

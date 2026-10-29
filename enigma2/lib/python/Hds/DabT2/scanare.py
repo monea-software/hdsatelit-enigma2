@@ -322,7 +322,7 @@ def text_transponder(tp):
 
 
 # ---------------------------------------------------------------- ce ramane dupa scanare
-FELURI_PRIN_8001 = ('t2mi', 'ts2na', 'ts2na12', 'tsniv2ni')     # T2-MI si ETI: pe HiSilicon numai prin portul 8001
+FELURI_PRIN_8001 = ('t2mi', 'abertis', 'ts2na', 'ts2na12', 'tsniv2ni')     # T2-MI, TS in PID si ETI: pe HiSilicon numai prin portul 8001
 
 
 def cauta_in_lista(lista, tp, feed):

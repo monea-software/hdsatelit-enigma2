@@ -14,7 +14,7 @@ Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://hds-ocr.cpp;beginline=3;endline=12;md5=c1e835ad7dea9a839f6476599934a2ef \
                     file://hds_ocr_protocol.h;beginline=3;endline=12;md5=c1e835ad7dea9a839f6476599934a2ef"
-PV = "0.2.0"
+PV = "0.2.1"
 
 SRC_URI = "file://hds-ocr.cpp file://hds_ocr_protocol.h"
 S = "${UNPACKDIR}"

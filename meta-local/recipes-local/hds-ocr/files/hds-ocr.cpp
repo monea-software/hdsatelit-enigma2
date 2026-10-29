@@ -35,6 +35,17 @@
 // nicio grupa cu doua citiri diferite (I si l la fonturile fara serife) si cu toate distantele limpede de litera sau
 // de cuvant, se compune fara tesseract (si pe firul principal, pe loc); altfel merge la tesseract. --no-glyphs o
 // opreste.
+// Scrisul inalt si ingust (fonturi condensate, ca la unele posturi de cablu): tesseract aduce randul la inaltimea lui
+// fixa, deci literele inguste ajung foarte subtiri si se incurca intre ele ("rn" citit "m", "!" citit "I", "Al" citit
+// "AI", "." citit ","), iar increderea cuvintelor scade. Inainte de recunoastere se masoara cat de ingust e scrisul
+// cererii (mediana latime / inaltime a grupelor de cerneala cel putin cat 0,4 din inaltimea randului, adica literele,
+// fara puncte si accente); sub --stretch-narrow randul se intinde pe orizontala pana la --stretch-target (cel mult
+// --stretch-max). O cerere cu prea putine litere ca masura sa fie de crezut ia masura tinuta minte pentru model si
+// inaltimea randului. Masurat pe paginile reale (Food Network pe cablu, mediana 0,47): 108 -> 137 pagini din 156 citite
+// fara niciun cuvant nesigur, cuvintele gresite 86 -> 5; scrisul obisnuit (0,62-0,87) nu se intinde.
+// A doua citire: un rand cu un cuvant nesigur (litere sub 70, semne sub 40) se citeste inca o data cu cealalta
+// pregatire (intins -> neintins, neintins -> intins cu --reread-k), daca mai e timp, si ramane citirea cu increderea
+// medie a cuvintelor mai mare. --no-stretch si --no-reread le opresc.
 
 #include "hds_ocr_protocol.h"
 
@@ -45,6 +56,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cmath>
@@ -74,7 +86,7 @@
 
 using namespace hdsocr;
 
-static const char *HDS_OCR_VERSION = "0.2.0";
+static const char *HDS_OCR_VERSION = "0.2.1";
 
 // ------------------------------------------------------------------------------------------------
 // optiuni
@@ -99,6 +111,16 @@ struct Options {
 	// (benzi de 17+ px) raman x1 si numai textul foarte mic se mareste x2.
 	int target_band = 24;
 	int psm = 7;                          // 7 = un rand, 13 = rand brut
+	// scrisul ingust (vezi sus): sub stretch_narrow (mediana latime / inaltime a literelor) randul se intinde pe
+	// orizontala pana la stretch_target, cel mult stretch_max. Masurat: Food Network (cablu) 0,47; Das Erste, ZDF,
+	// paginile facute cu Arial, Tahoma, Verdana, DejaVu 0,62-0,87 (raman neintinse).
+	bool stretch = true;
+	double stretch_target = 0.68;
+	double stretch_narrow = 0.59;
+	double stretch_max = 1.5;
+	// a doua citire a unui rand nesigur, cu cealalta pregatire (neintins -> intins de reread_k ori)
+	bool reread = true;
+	double reread_k = 1.25;
 	int default_timeout_ms = 5000;        // termenul unei cereri fara timeout_ms
 	// timpul de lucru al unei pagini (vezi sus): budget_factor x estimarea, intre min_budget_ms si max_budget_ms.
 	// Pornirea: 20 ms pe unitate (masurat in /tmp pe receptor, A53: mediana 13,9, p90 23,2 ms pe unitate; un rand
@@ -777,6 +799,9 @@ struct Stats {
 	std::atomic<long> budget_timeouts{0};   // randuri oprite de timpul de lucru al paginii
 	std::atomic<long> expired{0};           // randuri oprite de termenul clientului (pagina fara folos)
 	std::atomic<long> immediate{0};         // cereri raspunse pe loc din memorie, la primire
+	std::atomic<long> stretched{0};         // randuri citite intinse (scris ingust)
+	std::atomic<long> rereads{0};           // randuri nesigure citite a doua oara
+	std::atomic<long> rereads_better{0};    // ... la care a doua citire a ramas
 };
 static Stats g_stats;
 
@@ -1000,6 +1025,30 @@ struct Memory
 	Lru<GlyphVal> glyphs;
 	std::map<std::string, Spacing> spacing;   // pe model si inaltimea literei x („deu:14”)
 	static std::string spacing_key(const std::string &model, int xh) { return model + ":" + std::to_string(xh); }
+	// ingustimea scrisului (mediana latime / inaltime a literelor), pe model si inaltimea randului; medie alunecatoare
+	std::map<std::string, double> aspect;
+	bool get_aspect(const std::string &k, double &v)
+	{
+		std::lock_guard<std::mutex> l(mx);
+		auto it = aspect.find(k);
+		if (it == aspect.end())
+			return false;
+		v = it->second;
+		return true;
+	}
+	void put_aspect(const std::string &k, double v)
+	{
+		std::lock_guard<std::mutex> l(mx);
+		auto it = aspect.find(k);
+		if (it == aspect.end())
+		{
+			if (aspect.size() >= 64)
+				aspect.clear();
+			aspect[k] = v;
+		}
+		else
+			it->second = 0.7 * it->second + 0.3 * v;
+	}
 	bool get_line(uint64_t k, LineOcr &v) { std::lock_guard<std::mutex> l(mx); return lines.get(k, v); }
 	void put_line(uint64_t k, const LineOcr &v) { std::lock_guard<std::mutex> l(mx); lines.put(k, v); }
 	bool get_page(uint64_t k, std::vector<Line> &v) { std::lock_guard<std::mutex> l(mx); return pages.get(k, v); }
@@ -1213,6 +1262,101 @@ struct Memory
 	}
 };
 
+// ------------------------------------------------------------------------------------------------
+// scrisul ingust si a doua citire
+
+static const int ASPECT_MIN_GRUPE = 8;   // atatea litere pe cerere ca masura ei sa fie de crezut
+static const int RECITIRE_PRAG = 70;     // ca in client: un cuvant cu litere sub atat face randul nesigur
+static const int RECITIRE_PRAG_SEMNE = 40;
+
+// cat de ingust e scrisul cererii: mediana latime / inaltime a grupelor de cerneala (8 vecini) inalte cel putin cat 0,4
+// din banda lor (literele; punctele, virgulele si accentele raman deoparte); 0 = nicio litera. *n = cate grupe.
+static double region_aspect(const Request &rq, const Analysis &an, const std::vector<Band> &bands, int *n)
+{
+	std::vector<double> rap;
+	std::vector<uint8_t> vazut;
+	std::vector<int> st;
+	for (const Band &bd : bands)
+	{
+		const int w = bd.x1 - bd.x0, h = bd.y1 - bd.y0;
+		if (w <= 0 || h <= 0)
+			continue;
+		vazut.assign((size_t)w * h, 0);
+		auto cerneala = [&](int x, int y) {
+			return an.lut[rq.pixels[(size_t)(bd.y0 + y) * rq.width + bd.x0 + x]] < 128;
+		};
+		for (int y = 0; y < h; ++y)
+			for (int x = 0; x < w; ++x)
+			{
+				if (vazut[(size_t)y * w + x] || !cerneala(x, y))
+					continue;
+				int x0 = x, x1 = x, y0 = y, y1 = y;
+				vazut[(size_t)y * w + x] = 1;
+				st.assign(1, y * w + x);
+				while (!st.empty())
+				{
+					const int k = st.back();
+					st.pop_back();
+					const int cx = k % w, cy = k / w;
+					x0 = std::min(x0, cx); x1 = std::max(x1, cx); y0 = std::min(y0, cy); y1 = std::max(y1, cy);
+					for (int dy = -1; dy <= 1; ++dy)
+						for (int dx = -1; dx <= 1; ++dx)
+						{
+							const int nx = cx + dx, ny = cy + dy;
+							if (nx < 0 || ny < 0 || nx >= w || ny >= h || vazut[(size_t)ny * w + nx] || !cerneala(nx, ny))
+								continue;
+							vazut[(size_t)ny * w + nx] = 1;
+							st.push_back(ny * w + nx);
+						}
+				}
+				const int gw = x1 - x0 + 1, gh = y1 - y0 + 1;
+				if (gh >= 0.4 * h && gw >= 2)
+					rap.push_back((double)gw / gh);
+			}
+	}
+	*n = (int)rap.size();
+	if (rap.empty())
+		return 0;
+	std::nth_element(rap.begin(), rap.begin() + rap.size() / 2, rap.end());
+	return rap[rap.size() / 2];
+}
+
+// un cuvant cu litere sau cifre (ca _areLitere din client): ASCII alfanumeric sau o litera din afara ASCII (UTF-8 cu
+// primul octet C3..DF, E0, E1 sau de la E3 incolo; C2 si E2 sunt semne: ghilimele, linia lunga, punctele de suspensie)
+static bool are_litere(const std::string &t)
+{
+	for (size_t i = 0; i < t.size(); ++i)
+	{
+		const unsigned char c = (unsigned char)t[i];
+		if (c < 0x80 ? isalnum(c) != 0 : ((c >= 0xC3 && c <= 0xDF) || c == 0xE0 || c == 0xE1 || c >= 0xE3))
+			return true;
+	}
+	return false;
+}
+
+// randul are un cuvant nesigur (aceleasi praguri ca decizia clientului de dinainte)
+static bool rand_nesigur(const LineOcr &lo)
+{
+	for (const Word &w : lo.words)
+		if (w.confidence < (are_litere(w.text) ? RECITIRE_PRAG : RECITIRE_PRAG_SEMNE))
+			return true;
+	return false;
+}
+
+// increderea medie a cuvintelor cu litere (0 fara niciunul)
+static double medie_litere(const LineOcr &lo)
+{
+	double s = 0;
+	int n = 0;
+	for (const Word &w : lo.words)
+		if (are_litere(w.text))
+		{
+			s += w.confidence;
+			n++;
+		}
+	return n ? s / n : 0;
+}
+
 class Recognizer
 {
 public:
@@ -1264,6 +1408,7 @@ public:
 		double units = 0;
 		for (const Band &b : bands)
 			units += band_units(b.x0, b.x1, b.y0, b.y1);
+		const double k = stretch_for(model, rq, an, bands, !cached_only);
 		int64_t run_deadline = 0;   // pus la primul rand de recunoscut, dupa incarcarea modelului
 		tesseract::TessBaseAPI *api = nullptr;
 		bool complete = true;
@@ -1357,6 +1502,8 @@ public:
 			lk = fnv1a(lk, model.data(), model.size());
 			lk = fnv1a(lk, &fl, sizeof(fl));
 			lk = fnv1a(lk, &s, sizeof(s));
+			const int k100 = (int)std::lround(k * 100);   // acelasi rand intins altfel (alt scris tinut minte) e alt rand
+			lk = fnv1a(lk, &k100, sizeof(k100));
 			lk = fnv1a(lk, &cw, sizeof(cw));
 			lk = fnv1a(lk, &ch, sizeof(ch));
 			lk = fnv1a(lk, crop.data(), crop.size());
@@ -1415,8 +1562,33 @@ public:
 					else
 					{
 						std::vector<Sym> syms;
-						lo = recognize_line(api, job, crop, cw, ch, s, bh, (int)left_ms, ro_fix,
-							!(rq.flags & FLAG_NO_WORDS), bi, use_cache && g_opt.glyphs ? &syms : nullptr);
+						const bool cu_glife = use_cache && g_opt.glyphs;
+						lo = recognize_line(api, job, crop, cw, ch, s, bh, k, (int)left_ms, ro_fix,
+							!(rq.flags & FLAG_NO_WORDS), bi, cu_glife ? &syms : nullptr);
+						const int64_t t_prima = now_us();
+						if (lo.ok && k > 1.001)
+							g_stats.stretched++;
+						// randul nesigur: inca o citire cu cealalta pregatire, daca mai e timp pentru ea (cat a durat
+						// prima, dupa latimea imaginii); ramane citirea cu increderea medie mai mare
+						if (lo.ok && g_opt.reread && rand_nesigur(lo) && !job.cancelled.load())
+						{
+							const double k2 = k > 1.001 ? 1.0 : g_opt.reread_k;
+							const int64_t ramas_ms = ((by_budget ? run_deadline : job.deadline) - t_prima) / 1000;
+							const double cat = (t_prima - t0) / 1000.0 * k2 / k;
+							if (ramas_ms > cat * 1.2 + 5)
+							{
+								std::vector<Sym> syms2;
+								LineOcr lo2 = recognize_line(api, job, crop, cw, ch, s, bh, k2, (int)ramas_ms, ro_fix,
+									!(rq.flags & FLAG_NO_WORDS), bi, cu_glife ? &syms2 : nullptr);
+								g_stats.rereads++;
+								if (lo2.ok && medie_litere(lo2) > medie_litere(lo))
+								{
+									lo = lo2;
+									syms.swap(syms2);
+									g_stats.rereads_better++;
+								}
+							}
+						}
 						if (lo.ok && !syms.empty())
 							m_mem.learn(model, crop, cw, bd.y0 - cy0, bd.y1 - cy0, syms, lo.low ? 0 : lo.conf);
 						g_stats.lines++;
@@ -1429,7 +1601,8 @@ public:
 						}
 						else
 						{
-							g_speed.add((now_us() - t0) / 1000.0, band_units(bd.x0, bd.x1, bd.y0, bd.y1));
+							// viteza: numai prima citire (a doua e rara si ar umfla ms pe unitate)
+							g_speed.add((t_prima - t0) / 1000.0, band_units(bd.x0, bd.x1, bd.y0, bd.y1));
 							if (use_cache)
 								m_mem.put_line(lk, lo);
 						}
@@ -1485,8 +1658,44 @@ private:
 		return res;
 	}
 
+	// intinderea orizontala a randurilor cererii (1 = deloc): dupa ingustimea scrisului masurata pe cerere, sau, cand
+	// cererea are prea putine litere, dupa cea tinuta minte pentru model si inaltimea randurilor; tine_minte = masura
+	// cererii intra in memorie (numai firul de lucru, ca o cerere sa nu se numere de doua ori)
+	double stretch_for(const std::string &model, const Request &rq, const Analysis &an, const std::vector<Band> &bands,
+		bool tine_minte)
+	{
+		if (!g_opt.stretch || bands.empty())
+			return 1.0;
+		int n = 0;
+		const double asp = region_aspect(rq, an, bands, &n);
+		std::vector<int> inaltimi;
+		for (const Band &b : bands)
+			inaltimi.push_back(b.y1 - b.y0);
+		std::nth_element(inaltimi.begin(), inaltimi.begin() + inaltimi.size() / 2, inaltimi.end());
+		const std::string cheie = model + ":" + std::to_string(inaltimi[inaltimi.size() / 2] / 8);
+		double folosit = 0;
+		if (n >= ASPECT_MIN_GRUPE)
+		{
+			folosit = asp;
+			if (tine_minte)
+				m_mem.put_aspect(cheie, asp);
+		}
+		else if (!m_mem.get_aspect(cheie, folosit) && n >= 3)
+			folosit = asp;
+		if (folosit <= 0 || folosit >= g_opt.stretch_narrow)
+			return 1.0;
+		double k = std::min(g_opt.stretch_max, std::max(1.0, g_opt.stretch_target / folosit));
+		// pasi de 0,05: acelasi scris da aceeasi intindere (si acelasi rand in memoria randurilor)
+		k = std::round(k * 20) / 20;
+		logv("scris ingust: %.3f (%d litere, %s), intindere %.2f", folosit, n, n >= ASPECT_MIN_GRUPE ? "cererea" : "memoria",
+			k);
+		return k;
+	}
+
+	// k: intinderea orizontala (1 = deloc); cuvintele si literele se intorc in coordonatele decupajului neintins
 	LineOcr recognize_line(tesseract::TessBaseAPI *api, Job &job, const std::vector<uint8_t> &crop, int cw, int ch,
-		int s, int bh, int left_ms, bool ro_fix, bool want_words, size_t line_no, std::vector<Sym> *syms = nullptr)
+		int s, int bh, double k, int left_ms, bool ro_fix, bool want_words, size_t line_no,
+		std::vector<Sym> *syms = nullptr)
 	{
 		LineOcr lo;
 		std::vector<uint8_t> img;
@@ -1497,6 +1706,29 @@ private:
 			use = &img;
 		}
 		int W = cw * s, H = ch * s;
+		std::vector<uint8_t> intins;
+		if (k > 1.001)
+		{
+			// intinderea pe orizontala, liniara (randurile raman cum sunt)
+			const int W2 = (int)std::lround(W * k);
+			intins.resize((size_t)W2 * H);
+			for (int X = 0; X < W2; ++X)
+			{
+				const double fx = (X + 0.5) / k - 0.5;
+				const int x0 = (int)std::floor(fx);
+				const double tx = fx - x0;
+				const int xa = std::min(W - 1, std::max(0, x0)), xb = std::min(W - 1, std::max(0, x0 + 1));
+				for (int Y = 0; Y < H; ++Y)
+				{
+					const uint8_t *r = use->data() + (size_t)Y * W;
+					intins[(size_t)Y * W2 + X] = (uint8_t)std::lround((1 - tx) * r[xa] + tx * r[xb]);
+				}
+			}
+			use = &intins;
+			W = W2;
+		}
+		// marirea pe orizontala: a lui s, plus intinderea
+		const double sx = s * (k > 1.001 ? k : 1.0);
 		if (!g_opt.dump_dir.empty())
 		{
 			char name[512];
@@ -1572,9 +1804,9 @@ private:
 					Word w;
 					if (it->BoundingBox(tesseract::RIL_WORD, &l, &tp, &r, &b))
 					{
-						w.x = (int16_t)(l / s);
+						w.x = (int16_t)(l / sx);
 						w.y = (int16_t)(tp / s);
-						w.w = (uint16_t)std::max(1, (r - l + s - 1) / s);
+						w.w = (uint16_t)std::max(1, (int)std::ceil((r - l) / sx));
 						w.h = (uint16_t)std::max(1, (b - tp + s - 1) / s);
 					}
 					w.confidence = (uint8_t)std::max(0, std::min(100, (int)std::lround(c)));
@@ -1600,8 +1832,8 @@ private:
 						wx0 = wx1 = 0;
 						if (si->BoundingBox(tesseract::RIL_WORD, &l, &tp, &r, &b))
 						{
-							wx0 = l / s;
-							wx1 = (r + s - 1) / s;
+							wx0 = (int)(l / sx);
+							wx1 = (int)std::ceil(r / sx);
 						}
 					}
 					char *st = si->GetUTF8Text(tesseract::RIL_SYMBOL);
@@ -2142,11 +2374,13 @@ private:
 		snprintf(b, sizeof(b), "{\"version\":\"%s\",\"tesseract\":\"%s\",\"requests\":%ld,\"lines_recognized\":%ld,"
 			"\"line_cache_hits\":%ld,\"page_cache_hits\":%ld,\"timeouts\":%ld,\"cancelled\":%ld,\"budget_timeouts\":%ld,"
 			"\"expired\":%ld,\"immediate\":%ld,\"ms_per_unit\":%.2f,\"speed_samples\":%ld,\"glyph_lines\":%ld,"
-			"\"glyphs\":%zu,\"connections\":%zu,\"models\":[",
+			"\"glyphs\":%zu,\"connections\":%zu,\"stretched_lines\":%ld,\"rereads\":%ld,\"rereads_better\":%ld,"
+			"\"models\":[",
 			HDS_OCR_VERSION, tesseract::TessBaseAPI::Version(), g_stats.requests.load(), g_stats.lines.load(),
 			g_stats.line_hits.load(), g_stats.page_hits.load(), g_stats.timeouts.load(), g_stats.cancelled.load(),
 			g_stats.budget_timeouts.load(), g_stats.expired.load(), g_stats.immediate.load(), g_speed.ms_per_unit(),
-			g_speed.samples(), g_stats.glyph_lines.load(), m_mem.glyph_count(), m_conns.size());
+			g_speed.samples(), g_stats.glyph_lines.load(), m_mem.glyph_count(), m_conns.size(), g_stats.stretched.load(),
+			g_stats.rereads.load(), g_stats.rereads_better.load());
 		return std::string(b) + models + "]}";
 	}
 
@@ -2183,6 +2417,12 @@ static void usage()
 		"  --scale N            marirea randului 1..4 (implicit 0 = automat, tinta --target-band px)\n"
 		"  --target-band PX     inaltimea tinta a randului dupa marire (implicit 24)\n"
 		"  --psm N              modul de pagina tesseract pentru un rand (7 sau 13; implicit 7)\n"
+		"  --no-stretch         fara intinderea scrisului ingust\n"
+		"  --stretch-narrow R   scrisul cu latime / inaltime a literelor sub R se intinde (implicit 0.59)\n"
+		"  --stretch-target R   pana la acest raport (implicit 0.68)\n"
+		"  --stretch-max K      intinderea cea mai mare (implicit 1.5)\n"
+		"  --no-reread          fara a doua citire a randurilor nesigure\n"
+		"  --reread-k K         intinderea la a doua citire a unui rand neintins (implicit 1.25)\n"
 		"  --timeout MS         termenul unei cereri fara timeout_ms (implicit 5000)\n"
 		"  --min-budget MS      timpul de lucru minim al unei pagini (implicit 1500)\n"
 		"  --max-budget MS      timpul de lucru maxim al unei pagini (implicit 10000)\n"
@@ -2234,6 +2474,12 @@ int main(int argc, char **argv)
 		else if (a == "--scale") g_opt.scale = atoi(next("--scale").c_str());
 		else if (a == "--target-band") g_opt.target_band = atoi(next("--target-band").c_str());
 		else if (a == "--psm") g_opt.psm = atoi(next("--psm").c_str());
+		else if (a == "--no-stretch") g_opt.stretch = false;
+		else if (a == "--stretch-narrow") g_opt.stretch_narrow = atof(next("--stretch-narrow").c_str());
+		else if (a == "--stretch-target") g_opt.stretch_target = atof(next("--stretch-target").c_str());
+		else if (a == "--stretch-max") g_opt.stretch_max = std::max(1.0, std::min(3.0, atof(next("--stretch-max").c_str())));
+		else if (a == "--no-reread") g_opt.reread = false;
+		else if (a == "--reread-k") g_opt.reread_k = std::max(1.0, std::min(3.0, atof(next("--reread-k").c_str())));
 		else if (a == "--timeout") g_opt.default_timeout_ms = atoi(next("--timeout").c_str());
 		else if (a == "--min-budget") g_opt.min_budget_ms = std::max(50, atoi(next("--min-budget").c_str()));
 		else if (a == "--max-budget") g_opt.max_budget_ms = std::max(50, atoi(next("--max-budget").c_str()));

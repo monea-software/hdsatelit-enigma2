@@ -2,12 +2,14 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# captura_sigura.py: cand intra si imaginea canalului (decodorul video) intr-o captura de ecran ceruta prin
-# /api/screenshot si /grab (ScreenshotResource din plugin.py; pluginurile care cer capturi prin interfata noastra trec
-# tot pe aici). Citirea cadrului din decodor (grab fara optiune sau cu -v) loveste driverul video; cat decodorul nu e
-# gata (interfata abia pornita, canalul abia schimbat, standby, niciun canal TV) captura se face numai cu afisajul OSD
-# (grab -o), iar una cu imaginea canalului se face cel mult o data la INTERVAL_VIDEO_S: cererile dese (o pagina care
-# reimprospateaza dupa fiecare tasta) primesc ultima poza, daca e mai noua de PASTRARE_S.
+# captura_sigura.py: cand intra si imaginea canalului (decodorul video) intr-o captura de ecran ceruta de interfata web
+# straina din feedul extern (peticul ei cere /api/screenshot de pe receptor; plugin.py, _capturaStraina si
+# ScreenshotResource). Panoul nostru, aplicatiile de telefon (/grab) si scripturile nu trec pe aici, iar modulul se
+# incarca abia la prima captura straina (nimic la pornirea interfetei). Citirea cadrului din decodor (grab fara optiune
+# sau cu -v) loveste driverul video; cat decodorul nu e gata (interfata abia pornita, canalul abia schimbat, standby,
+# niciun canal TV) captura se face numai cu afisajul OSD (grab -o), iar una cu imaginea canalului se face cel mult o
+# data la INTERVAL_VIDEO_S: cererile dese (telecomanda straina cere o captura dupa fiecare tasta) primesc ultima poza,
+# daca e mai noua de PASTRARE_S.
 # - hotarare(): functie fara efecte, cu toate intrarile date (testata pe PC);
 # - decide(): aceeasi, cu starea de acum a receptorului (pornirea interfetei, ultimul canal pornit, standby);
 # - tine() si dinPastrare(): ultima captura cu imaginea canalului.
@@ -58,7 +60,8 @@ def _laEveniment(eveniment):
 
 
 def asculta():
-	"""o singura data: ora fiecarui canal pornit (evenimentul evStart al navigatiei)"""
+	"""o singura data, la prima captura straina: ora fiecarui canal pornit (evenimentul evStart al navigatiei). Ora
+	canalului pornit inainte nu se stie: se socoteste acum (prima captura cu imaginea canalului dupa PAUZA_ZAP_S)."""
 	if _STARE["ascult"]:
 		return
 	try:
@@ -67,6 +70,8 @@ def asculta():
 		if nav is not None:
 			nav.event.append(_laEveniment)
 			_STARE["ascult"] = True
+			if _STARE["zap"] is None:
+				_STARE["zap"] = time.monotonic()
 	except Exception:
 		pass
 

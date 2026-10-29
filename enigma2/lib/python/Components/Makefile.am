@@ -24,7 +24,8 @@ install_PYTHON = \
 	Ipkg.py SelectionList.py Scanner.py SystemInfo.py DreamInfoHandler.py \
 	Task.py language_cache.py Console.py ResourceManager.py TuneTest.py \
 	Keyboard.py Sensors.py FanControl.py VideoOutput.py WlanTools.py WlanControl.py DishMath.py \
-	HdsIndexCanale.py HdsPisteCanale.py HdsIstoricSemnal.py HdsHdmiDate.py HdsJurnalVersiuni.py HdsMotorStare.py HdsNavigator.py HdsPachete.py HdsPluginuriExterne.py HdsSursaPachet.py HdsRecuperare.py HdsActualizari.py \
+	HdsIndexCanale.py HdsPisteCanale.py HdsIstoricSemnal.py HdsHdmiDate.py HdsJurnalVersiuni.py HdsMotorStare.py HdsNavigator.py HdsPachete.py HdsPython2.py HdsPluginuriExterne.py HdsSursaPachet.py HdsRecuperare.py HdsActualizari.py \
+	HdsAjutor.py \
 	HdsSemnatura.py \
 	HdsFonturiGoogle.py HdsPacheteDTH.py HdsEcranePornire.py HdsCodorMpeg2.py HdsSemnaturaPornire.py \
 	HdsOperatoriSatelit.py HdsListeCabluTerestru.py HdsInterfeteCam.py HdsModuleAcces.py HdsMutareSetari.py \
@@ -32,7 +33,7 @@ install_PYTHON = \
 	HdsPisteLimbi.py HdsTelecomenziDate.py HdsSubtitrariAspect.py HdsAccel2D.py HdsOcrSubtitrari.py HdsOcrModele.py HdsOcrLimbaGhicita.py \
 	HdsTraducereSubtitrari.py HdsStandbyTv.py HdsQr.py HdsConfigurareTraducere.py HdsTraducereEpg.py \
 	HdsTraducereTexte.py HdsTraducereTeletext.py \
-	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsMemorieDriver.py HdsStocare.py HdsPazaModel.py HdsPlatforma.py \
+	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsJurnaleSloturi.py HdsMemorieDriver.py HdsStocare.py HdsPazaModel.py HdsDiagnostic.py HdsPlatforma.py \
 	HdsStareMeniu.py HdsDale.py HdsCautaSetari.py HdsAccesCanale.py HdsBazaCanale.py HdsBazaPornire.py HdsFisierSigur.py \
 	HdsSetariDinCopie.py HdsCopieSetari.py HdsCulegereCanale.py HdsCulegereTotala.py HdsCapLista.py HdsImportSurse.py HdsImportAltaImagine.py HdsImportExtra.py HdsImportRetea.py HdsLatimeText.py HdsModSigur.py \
 	HdsCursorLista.py HdsSageti.py \
@@ -49,7 +50,7 @@ install_PYTHON = \
 	HdsPictogramaBare.py \
 	HdsPiconBare.py \
 	HdsCanalTinut.py \
-	HdsBetaTester.py \
+	HdsBetaTester.py HdsForumReceptor.py HdsCapturi.py \
 	HdsLocul.py HdsLocuriDate.py HdsLoculInternet.py HdsGrade.py HdsCalitateImagine.py \
 	HdsEpgSalvare.py \
 	HdsLamedbSalvare.py \
@@ -57,4 +58,5 @@ install_PYTHON = \
 	HdsFavorite.py \
 	HdsFunctii.py HdsMarimeText.py HdsMargini.py HdsFontInterfata.py HdsInformatiiTabel.py \
 	HdsTemaTv.py \
-	HdsStocareRetea.py HdsReteaProtocoale.py HdsReteaUnealta.py HdsReteaSmb.py
+	HdsStocareRetea.py HdsReteaProtocoale.py HdsReteaUnealta.py HdsReteaSmb.py \
+	HdsEditorCanale.py HdsEditorCanaleDate.py HdsEditorCanaleUnelte.py HdsEditorSateliti.py HdsEditorSigle.py

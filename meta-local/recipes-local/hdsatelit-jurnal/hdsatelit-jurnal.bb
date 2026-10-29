@@ -7,6 +7,10 @@ incarcarea lui. Rotirea mai mare a jurnalului (1024 KB x 4) e in busybox_%.bbapp
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
 PV = "0.1.0"
+# r1: hds-jurnal porneste urmarirea pornirii pe pornirile in dubiu (tools/hds-rezerva.sh din enigma2)
+# r2: hds-jurnal porneste la fiecare pornire, in fundal, pasii pornirii si raportul pornirii ratate (tools/hds-raport.sh
+#     din enigma2), cand scriptul exista
+PR = "r2"
 
 SRC_URI = "file://hds-jurnal file://hds-wifi-jurnal file://hds-rtl8188fu.conf"
 S = "${UNPACKDIR}"
@@ -43,6 +47,8 @@ do_install() {
         bbfatal "hdsatelit-jurnal: hds-wifi-jurnal nu scrie in /proc/net/rtl8188fu/log_level"
     grep -q '^SEMN=$D/.oprire-curata$' ${D}${sysconfdir}/init.d/hds-jurnal || \
         bbfatal "hdsatelit-jurnal: hds-jurnal fara semnul opririi curate"
+    grep -q 'hds-raport.sh}" urmareste < /dev/null > /dev/null 2>&1 &$' ${D}${sysconfdir}/init.d/hds-jurnal || \
+        bbfatal "hdsatelit-jurnal: hds-jurnal nu porneste in fundal raportul pornirii (hds-raport.sh urmareste)"
 }
 
 FILES:${PN} = "${sysconfdir}/init.d/hds-jurnal ${sbindir}/hds-wifi-jurnal ${sysconfdir}/modprobe.d/hds-rtl8188fu.conf"

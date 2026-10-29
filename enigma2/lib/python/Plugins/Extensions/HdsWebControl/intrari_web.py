@@ -11,9 +11,9 @@
 #   intarzierea pana incepe repetarea (config.inputDevices.<dispozitiv>.*), cu intrebarea "Use this input device
 #   settings?" la Verde. config.misc.rcused nu e un rand al ecranului (alege numai iconita), deci nu e nici aici. Ecranul
 #   Telecomenzi (HdsTelecomenzi, /telecomenzi) e altul: pagina pune legatura spre el;
-# - ... > Butoane colorate si taste rapide (Screens/ButtonSetup.py, HdsButtonSetup): cele patru butoane colorate
-#   (apasare lunga), aceleasi actiuni de ales (config.hds_buttons.*), salvate la fel; bara le foloseste pe loc
-#   (Screens/InfoBar.py), fara semnul "in lucru";
+# - ... > Butoane colorate si taste rapide (Screens/ButtonSetup.py, HdsButtonSetup): VERDE apasat scurt si cele patru
+#   butoane colorate (apasare lunga), aceleasi actiuni de ales (config.hds_buttons.*), salvate la fel; bara le
+#   foloseste pe loc (Screens/InfoBar.py), fara semnul "in lucru";
 # - Meniu > Setari > Interfata & Aspect > Aspectul ecranelor (Plugins/SystemPlugins/SkinSelector): skinurile instalate cu
 #   previzualizarea lor (prev.png, servit numai pentru dosarele din lista), alegerea (config.skin.primary_skin, verificata
 #   ca pe televizor: fisierul trebuie sa fie un skin; ecranele HD Satelit se scaleaza la rezolutia lui, iar la un skin
@@ -32,8 +32,9 @@
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/dispozitive-intrare                    dispozitivele si setarile lor, limitele din config
 #   POST /api/dispozitive-intrare-seteaza?dispozitiv=eventN&activ=0|1&repetare=<ms>&intarziere=<ms>   (+ pas / cod)
-#   GET  /api/taste-rapide                           butoanele, actiunea fiecaruia, actiunile de ales
-#   POST /api/taste-rapide-seteaza?red=&green=&yellow=&blue=   o valoare straina nu schimba nimic
+#   GET  /api/taste-rapide                           butoanele (apasarea lunga), scurtele (VERDE scurt), actiunea
+#                                                    fiecaruia, actiunile de ales
+#   POST /api/taste-rapide-seteaza?red=&green=&yellow=&blue=&green_short=   o valoare straina nu schimba nimic
 #   GET  /api/skin                                   skinurile (cautarea prin ${datadir}/enigma2 pe un fir), alegerea,
 #                                                    aspectul meniului
 #   GET  /api/skin-poza?nume=<skin>                  previzualizarea (PNG sau JPEG, cel mult 2 MiB)
@@ -200,11 +201,13 @@ def seteazaDispozitiv(request):
 # ------------------------------------------------------------------ butoanele colorate
 
 def stareTaste():
-	"""Pentru GET /api/taste-rapide."""
+	"""Pentru GET /api/taste-rapide: "butoane" = apasarea lunga a celor patru, "scurte" = VERDE apasat scurt; aceleasi
+	actiuni de ales pentru toate."""
 	TR = _dep("HdsTasteRapide")
 	b = TR.initConfigButtonSetup(_dep("config"))
 	butoane = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.BUTOANE]
-	return {"result": True, "butoane": butoane, "actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0]))}
+	scurte = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.SCURTE]
+	return {"result": True, "butoane": butoane, "scurte": scurte, "actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0]))}
 
 
 def seteazaTaste(request):
@@ -212,7 +215,7 @@ def seteazaTaste(request):
 	TR = _dep("HdsTasteRapide")
 	config = _dep("config")
 	b = TR.initConfigButtonSetup(config)
-	chei = [k for k, _text in TR.BUTOANE]
+	chei = [k for k, _text in TR.BUTOANE + TR.SCURTE]
 	a = _mc().argumente(request, chei, 20)
 	if not a:
 		rez = stareTaste()
@@ -550,9 +553,14 @@ __STIL_PAGINI__
 <body>
 <main>
 <h1>Butoane colorate și taste rapide</h1>
-<p class="sub">Alege ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor.</p>
+<p class="sub">Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor.</p>
 <p class="mesaj" id="incarcare">Se citesc butoanele...</p>
 <div id="continut" class="ascuns">
+  <section class="card">
+    <h2>Apăsarea scurtă</h2>
+    <div id="scurte"></div>
+    <p class="nota">Pe un canal cu subcanale, VERDE scurt arată întâi lista lor.</p>
+  </section>
   <section class="card">
     <h2>Apăsarea lungă</h2>
     <div id="butoane"></div>
@@ -568,16 +576,21 @@ __STIL_PAGINI__
 <script>
 __SCRIPT_COMUN__
 var D = null;
-function arata(d){
-  D = d;
-  var c = $("butoane"); c.textContent = "";
-  d.butoane.forEach(function(b){
+function randuri(c, lista, actiuni){
+  c.textContent = "";
+  lista.forEach(function(b){
     var r = document.createElement("div"); r.className = "rand";
     var l = document.createElement("label"); l.htmlFor = "b-" + b.cheie; l.textContent = b.text; r.appendChild(l);
     var s = document.createElement("select"); s.id = "b-" + b.cheie;
-    d.actiuni.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); });
+    actiuni.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); });
     s.value = b.valoare; r.appendChild(s); c.appendChild(r);
   });
+}
+function toate(){ return D.butoane.concat(D.scurte || []); }
+function arata(d){
+  D = d;
+  randuri($("scurte"), d.scurte || [], d.actiuni);
+  randuri($("butoane"), d.butoane, d.actiuni);
 }
 function citeste(){
   return cerere("/api/taste-rapide").then(function(d){
@@ -588,7 +601,7 @@ function citeste(){
 }
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams();
-  D.butoane.forEach(function(b){ q.set(b.cheie, $("b-" + b.cheie).value); });
+  toate().forEach(function(b){ q.set(b.cheie, $("b-" + b.cheie).value); });
   mesaj("Se salvează...");
   cerere("/api/taste-rapide-seteaza", "POST", q).then(function(d){ mesaj(d.message, !d.result); if(d.butoane){ arata(d); } }).catch(nimicNuRaspunde);
 });
@@ -732,8 +745,11 @@ TEXTE_PAGINA = {
 		N_("Deschide Telecomenzi"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("Butoane colorate și taste rapide"),
-		N_("Alege ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor."),
+		N_("Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te "
+			"uiți la televizor."),
 		N_("Se citesc butoanele..."),
+		N_("Apăsarea scurtă"),
+		N_("Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."),
 		N_("Apăsarea lungă"),
 		N_("Salvează"),
 		N_("Renunță"),

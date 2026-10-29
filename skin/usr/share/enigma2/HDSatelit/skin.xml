@@ -2426,7 +2426,356 @@
 		<widget name="online" position="32,886" size="1712,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<widget name="masura" position="0,0" size="1,1" noWrap="1" transparent="1" zPosition="0" />
 	</screen>
+	<!-- Forumul receptorului (Screens/HdsForumReceptor.py): subiectul modelului si banda de sus (invitatia pentru
+	     vizitator, numele de pe forum pentru tester), trei carduri de mesaje (fundal, autor, insigna Beta tester sau
+	     Echipa, ora, Tradus din, Asteapta aprobarea, textul, patru poze mici sub text), chenarul cardului ales (pus
+	     de cod sub card, cu 4 px mai mare), gol: textul cand nu sunt mesaje, stare si pagina jos. Codul muta insigna si
+	     ora dupa latimea numelui si strange textul pana la randul pozelor; culorile cardului ales le pune codul
+	     (hdsTrack, altfel hdsCell). Tema Pro: cadrul HdsCadru1776 din skin_pro.xml. -->
+	<screen name="HdsForum" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="subiect" position="32,100" size="1300,44" font="HdsBold;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="numar" position="1344,100" size="400,44" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="banda_fundal" position="32,152" size="1712,64" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="banda_bara" position="32,152" size="6,64" backgroundColor="hdsAmber" zPosition="2" />
+		<widget name="banda" position="54,152" size="1676,36" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="banda_jos" position="54,186" size="1676,28" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="chenar" position="28,222" size="1720,208" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="fundal0" position="32,226" size="1712,200" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="autor0" position="52,234" size="760,40" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="insigna0" position="830,240" size="180,30" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="echipa0" position="830,240" size="180,30" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="ora0" position="1030,238" size="320,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="tradus0" position="1324,238" size="400,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="asteapta0" position="1464,238" size="260,34" font="HdsCond;24" foregroundColor="hdsMarkedText" backgroundColor="hdsMarked" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="text0" position="52,276" size="1672,138" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="3" />
+		<widget name="loc0_0" position="52,350" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza0_0" position="52,350" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc0_1" position="192,350" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza0_1" position="192,350" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc0_2" position="332,350" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza0_2" position="332,350" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc0_3" position="472,350" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza0_3" position="472,350" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="fundal1" position="32,436" size="1712,200" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="autor1" position="52,444" size="760,40" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="insigna1" position="830,450" size="180,30" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="echipa1" position="830,450" size="180,30" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="ora1" position="1030,448" size="320,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="tradus1" position="1324,448" size="400,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="asteapta1" position="1464,448" size="260,34" font="HdsCond;24" foregroundColor="hdsMarkedText" backgroundColor="hdsMarked" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="text1" position="52,486" size="1672,138" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="3" />
+		<widget name="loc1_0" position="52,560" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza1_0" position="52,560" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc1_1" position="192,560" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza1_1" position="192,560" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc1_2" position="332,560" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza1_2" position="332,560" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc1_3" position="472,560" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza1_3" position="472,560" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="fundal2" position="32,646" size="1712,200" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="autor2" position="52,654" size="760,40" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="insigna2" position="830,660" size="180,30" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="echipa2" position="830,660" size="180,30" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="ora2" position="1030,658" size="320,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="tradus2" position="1324,658" size="400,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="asteapta2" position="1464,658" size="260,34" font="HdsCond;24" foregroundColor="hdsMarkedText" backgroundColor="hdsMarked" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="text2" position="52,696" size="1672,138" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="3" />
+		<widget name="loc2_0" position="52,770" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza2_0" position="52,770" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc2_1" position="192,770" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza2_1" position="192,770" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc2_2" position="332,770" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza2_2" position="332,770" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="loc2_3" position="472,770" size="128,72" backgroundColor="hdsPanelSolid" zPosition="3" />
+		<widget name="poza2_3" position="472,770" size="128,72" alphatest="off" zPosition="4" />
+		<widget name="gol" position="32,226" size="1712,620" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="5" />
+		<widget name="stare" position="32,860" size="1200,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="pagina" position="1244,860" size="500,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- un mesaj al forumului: autorul, insigna si ora (mutate de cod dupa nume), textul intreg (se deruleaza cu Sus /
+	     Jos), poza aleasa mare (loc_mare: locul ei cat se incarca) si pozele mici in dreapta ei, cu chenarul pe cea
+	     aleasa; stare: ce fac tastele, pagina: mesajul si poza -->
+	<screen name="HdsForumMesaj" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="autor" position="32,100" size="760,48" font="HdsBold;34" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="insigna" position="810,108" size="190,32" font="HdsCond;24" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="3" />
+		<widget name="echipa" position="810,108" size="190,32" font="HdsCond;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="3" />
+		<widget name="ora" position="1016,104" size="320,40" font="HdsCond;28" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="tradus" position="1284,104" size="460,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="asteapta" position="1464,104" size="280,40" font="HdsCond;26" foregroundColor="hdsMarkedText" backgroundColor="hdsMarked" halign="center" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="32,156" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="text" position="32,168" size="1712,292" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget name="loc_mare" position="32,476" size="768,432" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget name="mare" position="32,476" size="768,432" alphatest="off" zPosition="2" />
+		<widget name="chenar" position="832,472" size="184,107" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="loc_mic0" position="836,476" size="176,99" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="mic0" position="836,476" size="176,99" alphatest="off" zPosition="3" />
+		<widget name="loc_mic1" position="836,587" size="176,99" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="mic1" position="836,587" size="176,99" alphatest="off" zPosition="3" />
+		<widget name="loc_mic2" position="836,698" size="176,99" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="mic2" position="836,698" size="176,99" alphatest="off" zPosition="3" />
+		<widget name="loc_mic3" position="836,809" size="176,99" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="mic3" position="836,809" size="176,99" alphatest="off" zPosition="3" />
+		<widget name="stare" position="1048,476" size="696,96" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget name="pagina" position="1048,860" size="696,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- o poza pe tot ecranul (din mesaj, din scriere si din galerie); pagina: a cata poza, cand sunt mai multe -->
+	<screen name="HdsForumPoza" position="0,0" size="1920,1080" backgroundColor="#00000000" flags="wfNoBorder">
+		<widget name="poza" position="0,0" size="1920,1080" alphatest="off" zPosition="1" />
+		<widget name="pagina" position="1584,960" size="240,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" halign="center" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- scrie un mesaj pe forum: textul in caseta (chenar_text cand e ales), cele patru locuri ale pozelor (al primului
+	     gol scrie + Adauga o captura; chenar_poza pus de cod pe locul ales), nota limbii, numele cu care apare omul
+	     (cu MENU care il schimba), stare: trimiterea pas cu pas sau ce lipseste -->
+	<screen name="HdsForumScrie" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="subtitlu" position="32,100" size="1712,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="eticheta_text" position="32,148" size="1200,36" font="HdsBold;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="chenar_text" position="29,189" size="1718,226" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="fundal_text" position="32,192" size="1712,220" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="text" position="52,202" size="1672,200" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" zPosition="3" />
+		<widget name="eticheta_poze" position="32,428" size="1200,36" font="HdsBold;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="chenar_poza" position="28,468" size="328,188" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="loc0" position="32,472" size="320,180" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" halign="center" valign="center" zPosition="2" />
+		<widget name="poza0" position="32,472" size="320,180" alphatest="off" zPosition="3" />
+		<widget name="loc1" position="384,472" size="320,180" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" halign="center" valign="center" zPosition="2" />
+		<widget name="poza1" position="384,472" size="320,180" alphatest="off" zPosition="3" />
+		<widget name="loc2" position="736,472" size="320,180" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" halign="center" valign="center" zPosition="2" />
+		<widget name="poza2" position="736,472" size="320,180" alphatest="off" zPosition="3" />
+		<widget name="loc3" position="1088,472" size="320,180" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" halign="center" valign="center" zPosition="2" />
+		<widget name="poza3" position="1088,472" size="320,180" alphatest="off" zPosition="3" />
+		<widget name="info" position="32,672" size="1712,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="nume" position="32,716" size="1712,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="stare" position="32,768" size="1712,140" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+	</screen>
+	<!-- galeria capturilor de ecran (Components/HdsCapturi.py): filele stick si memoria receptorului (culorile filei
+	     alese le pune codul), grila de 4 x 3 (poza mica, ales: al catelea e in alegere, data si marimea), chenarul pe
+	     captura aleasa, captura aleasa mare in dreapta cu detaliile ei, gol: grila fara capturi -->
+	<screen name="HdsCapturiGalerie" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="subtitlu" position="32,100" size="1100,44" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="fila_stick" position="1248,100" size="240,44" font="HdsCond;24" foregroundColor="hdsText" backgroundColor="hdsBrand" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget name="fila_memorie" position="1504,100" size="240,44" font="HdsCond;24" foregroundColor="hdsText" backgroundColor="hdsCell" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget name="chenar" position="28,156" size="280,161" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="loc0" position="32,160" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza0" position="32,160" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales0" position="40,168" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data0" position="32,317" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc1" position="320,160" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza1" position="320,160" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales1" position="328,168" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data1" position="320,317" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc2" position="608,160" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza2" position="608,160" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales2" position="616,168" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data2" position="608,317" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc3" position="896,160" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza3" position="896,160" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales3" position="904,168" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data3" position="896,317" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc4" position="32,361" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza4" position="32,361" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales4" position="40,369" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data4" position="32,518" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc5" position="320,361" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza5" position="320,361" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales5" position="328,369" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data5" position="320,518" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc6" position="608,361" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza6" position="608,361" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales6" position="616,369" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data6" position="608,518" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc7" position="896,361" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza7" position="896,361" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales7" position="904,369" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data7" position="896,518" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc8" position="32,562" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza8" position="32,562" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales8" position="40,570" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data8" position="32,719" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc9" position="320,562" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza9" position="320,562" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales9" position="328,570" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data9" position="320,719" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc10" position="608,562" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza10" position="608,562" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales10" position="616,570" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data10" position="608,719" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="loc11" position="896,562" size="272,153" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="poza11" position="896,562" size="272,153" alphatest="off" zPosition="3" />
+		<widget name="ales11" position="904,570" size="48,36" font="HdsBold;24" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" zPosition="4" />
+		<widget name="data11" position="896,719" size="272,32" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="gol" position="32,160" size="1136,590" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" zPosition="5" />
+		<widget name="loc_mare" position="1200,160" size="544,306" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget name="mare" position="1200,160" size="544,306" alphatest="off" zPosition="2" />
+		<widget name="detalii" position="1200,480" size="544,150" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget name="pagina" position="1200,640" size="544,40" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="stare" position="32,780" size="1712,128" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+	</screen>
+	<!-- mesajul de dupa captura (Components/HdsCapturi.py il arata 3 secunde si il ascunde; fara harta de taste): sus in
+	     dreapta, in zona sigura a televizorului, deasupra oricarui ecran -->
+	<screen name="HdsCapturaSalvata" position="936,54" size="888,124" backgroundColor="hdsPanelSolid" flags="wfNoBorder" zPosition="99">
+		<widget name="bara" position="0,0" size="6,124" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="titlu" position="28,14" size="840,48" font="HdsBold;32" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="detaliu" position="28,66" size="840,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="0,122" size="888,2" backgroundColor="hdsBrand" zPosition="1" />
+	</screen>
 
+	<!-- Beta tester (Screens/HdsBetaTester.py): testerul (lista cu randurile desenate de cod: pictograma meniului,
+	     titlul, randul scurt, insigna sau valoarea; panoul din dreapta: din ce data, numele de pe forum, ultima
+	     trimitere, cati testeri are modelul, identificatorul) si cel neinscris (invitatia, trei avantaje, banda cu
+	     numarul de testeri, lista mutata de cod la loc_lista_vizitator, ultimele trei mesaje de pe forum, cu
+	     insigna mutata de cod dupa nume). Codul arata partile unuia si le ascunde pe ale celuilalt. -->
+	<screen name="HdsBetaTester" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,108" size="1072,792" itemHeight="72" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" foregroundColorSelected="hdsText" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="3" />
+		<widget name="loc_lista_vizitator" position="32,756" size="1072,144" transparent="1" zPosition="0" />
+		<widget name="panou" position="1136,108" size="608,792" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="semn" position="1156,124" size="72,72" alphatest="blend" zPosition="2" />
+		<widget name="semn_forum" position="1156,124" size="72,72" alphatest="blend" zPosition="2" />
+		<widget name="titlu_panou" position="1244,124" size="484,44" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="din" position="1244,166" size="484,32" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="linie_panou" position="1160,212" size="560,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="eticheta_nume" position="1160,228" size="560,32" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="nume" position="1160,262" size="560,44" font="HdsBold;32" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="ultima" position="1160,326" size="560,40" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="automat" position="1160,366" size="560,32" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="numar_fundal" position="1160,420" size="560,100" backgroundColor="hdsTrack" zPosition="2" />
+		<widget name="numar_bara" position="1160,420" size="6,100" backgroundColor="hdsAmber" zPosition="3" />
+		<widget name="numar" position="1182,424" size="526,92" font="HdsRegular;26" foregroundColor="hdsAmber" backgroundColor="hdsTrack" transparent="1" valign="center" zPosition="4" />
+		<widget name="identificator" position="1160,736" size="560,152" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="bottom" zPosition="2" />
+		<widget name="invitatie" position="32,108" size="1072,112" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="invitatie_text" position="32,222" size="1072,76" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="fundal_avantaj0" position="32,306" size="1072,108" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="semn_avantaj0" position="48,324" size="72,72" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj0" position="140,312" size="948,42" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="text_avantaj0" position="140,354" size="948,56" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="fundal_avantaj1" position="32,422" size="1072,108" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="semn_avantaj1" position="48,440" size="72,72" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj1" position="140,428" size="948,42" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="text_avantaj1" position="140,470" size="948,56" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="fundal_avantaj2" position="32,538" size="1072,108" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="semn_avantaj2" position="48,556" size="72,72" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj2" position="140,544" size="948,42" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="text_avantaj2" position="140,586" size="948,56" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="banda_fundal" position="32,656" size="1072,84" backgroundColor="hdsTrack" zPosition="1" />
+		<widget name="banda_bara" position="32,656" size="6,84" backgroundColor="hdsAmber" zPosition="2" />
+		<widget name="banda" position="56,656" size="1032,84" font="HdsRegular;28" foregroundColor="hdsAmber" backgroundColor="hdsTrack" transparent="1" valign="center" zPosition="3" />
+		<widget name="fcard0" position="1160,232" size="560,184" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="fautor0" position="1176,240" size="210,36" font="HdsBold;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="finsigna0" position="1396,244" size="130,28" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fechipa0" position="1396,244" size="130,28" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fora0" position="1532,240" size="172,36" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="ftext0" position="1176,282" size="528,126" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="3" />
+		<widget name="fcard1" position="1160,428" size="560,184" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="fautor1" position="1176,436" size="210,36" font="HdsBold;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="finsigna1" position="1396,440" size="130,28" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fechipa1" position="1396,440" size="130,28" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fora1" position="1532,436" size="172,36" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="ftext1" position="1176,478" size="528,126" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="3" />
+		<widget name="fcard2" position="1160,624" size="560,184" backgroundColor="hdsPanelSolid" zPosition="2" />
+		<widget name="fautor2" position="1176,632" size="210,36" font="HdsBold;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="finsigna2" position="1396,636" size="130,28" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fechipa2" position="1396,636" size="130,28" font="HdsCond;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsGood" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<widget name="fora2" position="1532,632" size="172,36" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
+		<widget name="ftext2" position="1176,674" size="528,126" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="3" />
+		<widget name="forum_stare" position="1160,232" size="560,576" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="center" valign="center" zPosition="3" />
+		<widget name="forum_jos" position="1160,840" size="560,44" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- acordul: banda anonimatului, comutatoarele felurilor de date, numele si e-mailul, bifa notei (ultimul rand, cu
+	     chenarul chihlimbar, desenate de cod), randul scurt al randului ales sub lista; in dreapta avantajele,
+	     numarul de testeri si starea -->
+	<screen name="HdsBetaAcord" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="antet_fundal" position="32,104" size="1712,84" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="antet_bara" position="32,104" size="6,84" backgroundColor="hdsGood" zPosition="2" />
+		<widget name="antet" position="56,104" size="1672,84" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="3" />
+		<widget name="config" position="32,200" size="1072,660" itemHeight="66" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" foregroundColorSelected="hdsText" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="3" />
+		<widget name="descriere" position="32,862" size="1072,58" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="panou" position="1136,200" size="608,712" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="titlu_panou" position="1160,212" size="560,48" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="semn_avantaj0" position="1160,276" size="56,56" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj0" position="1228,268" size="500,72" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="text_avantaj0" position="1228,340" size="500,64" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn_avantaj1" position="1160,416" size="56,56" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj1" position="1228,408" size="500,72" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="text_avantaj1" position="1228,480" size="500,64" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn_avantaj2" position="1160,556" size="56,56" alphatest="blend" zPosition="2" />
+		<widget name="titlu_avantaj2" position="1228,548" size="500,72" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="text_avantaj2" position="1228,620" size="500,64" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="numar" position="1160,700" size="560,72" font="HdsRegular;24" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="2" />
+		<widget name="stare" position="1160,784" size="560,120" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+	</screen>
+	<!-- datele trimise: aceleasi comutatoare (fara bifa notei), randul scurt si starea -->
+	<screen name="HdsBetaDate" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="config" position="32,104" size="1712,594" itemHeight="66" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" foregroundColorSelected="hdsText" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="3" />
+		<eLabel position="32,712" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="descriere" position="32,724" size="1712,84" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="stare" position="32,816" size="1712,96" font="HdsRegular;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+	</screen>
+	<!-- un text lung (nota, raspunsurile, ce trimit acum), cu codul QR si adresa notei in dreapta -->
+	<screen name="HdsBetaText" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1200,808" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget source="qr" render="Canvas" position="1284,120" size="420,420" zPosition="3" />
+		<widget name="adresa" position="1256,556" size="476,150" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="top" zPosition="2" />
+	</screen>
+	<!-- ce am trimis: lista pachetelor si randul de sub ea -->
+	<screen name="HdsBetaTrimise" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,104" size="1712,756" itemHeight="54" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="text" position="32,868" size="1712,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<!-- mesajul catre echipa: setarile, textul scris (pe card) si starea -->
+	<screen name="HdsBetaMesaj" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="config" position="32,104" size="1712,300" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<eLabel position="32,420" size="1712,236" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="text" position="52,432" size="1672,212" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
+		<widget name="stare" position="32,672" size="1712,240" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+	</screen>
+	<!-- aparitia publica: lamurirea, numele si e-mailul, starea profilului -->
+	<screen name="HdsBetaPublic" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1712,120" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="config" position="32,236" size="1712,180" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<eLabel position="32,432" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="stare" position="32,448" size="1712,464" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+	</screen>
+	<!-- legarea cu un cont de pe forum: textul, codul QR si adresa -->
+	<screen name="HdsBetaLegareQr" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1160,808" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget source="qr" render="Canvas" position="1264,120" size="440,440" zPosition="3" />
+		<widget name="adresa" position="1224,576" size="520,150" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="top" zPosition="2" />
+	</screen>
+	<!-- ajutorul de la distanta (numai din meniul testerului; numele din skinName al clasei): starea, codul mare,
+	     informarea sau jurnalul; tastele sunt StaticText cu legenda lor aici (liniuta si textul se ascund cand tasta
+	     n-are text: Verde cat sesiunea merge) -->
+	<screen name="HdsAjutorDistanta" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<!-- tastele (StaticText, liniuta ascunsa cand textul e gol) le arata cadrul, in Clasic si in Pro -->
+		<widget source="antet" render="Label" position="32,104" size="1712,56" font="HdsBold;32" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="cod" render="Label" position="32,168" size="1712,112" font="HdsBold;96" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget name="text" position="32,288" size="1712,624" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget source="ajutor" render="Label" position="904,936" size="840,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />
+	</screen>
+	<!-- alegerea duratei ajutorului de la distanta si lamurirea nivelului (numele din skinName al clasei) -->
+	<screen name="HdsAjutorDistantaAlege" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="config" position="32,104" size="1712,180" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<eLabel position="32,300" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="text" render="Label" position="32,316" size="1712,300" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+	</screen>
+	<!-- banda de semn a ajutorului de la distanta (cat sesiunea merge): un rand la y 14-54, deasupra titlului
+	     ferestrelor mari (cadrul lor are titlul la y 58), deci peste marginea de sus a zonei sigure; se ascunde cat
+	     ecranul ajutorului e deasupra. Numele din skinName al clasei. -->
+	<screen name="HdsAjutorDistantaSemn" position="290,14" size="1340,40" flags="wfNoBorder" backgroundColor="hdsPanelSolid" zPosition="20">
+		<eLabel position="0,0" size="6,40" backgroundColor="hdsBad" zPosition="1" />
+		<widget source="text" render="Label" position="22,0" size="1300,40" font="HdsCond;26" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" noWrap="1" zPosition="2" />
+	</screen>
 	<!-- Jurnalele de cadere (Screens/HdsCrashlogAutoSubmit.py): textul de sus si lista jurnalelor; setarile: cele cateva
 	     randuri si lamurirea lunga de sub ele -->
 	<screen name="HdsCrashlogAutoSubmit" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
@@ -6283,6 +6632,21 @@
 		<eLabel position="32,296" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget source="descriere" render="Label" position="32,308" size="1712,80" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
 		<widget source="stare" render="Label" position="32,400" size="1712,512" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+	</screen>
+	<!-- Jurnalele celorlalte sloturi (Screens/HdsJurnaleSloturi.py): explicatia in caseta ei, sloturile gasite (numai
+	     informatie, fara alegere), rezultatul si, in dreapta, codul raportului mare; o singura actiune, VERDE sau OK.
+	     Desenul: Stitch, imagine-hdsatelit/lucru-sesiune/pilot-26-09/raport-pornire/design-stitch (Pro si Clasic: acelasi
+	     loc al lucrurilor, cadrul HdsCadru1776 al temei) -->
+	<screen name="HdsJurnaleSloturi" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<eLabel position="32,104" size="1712,132" backgroundColor="hdsCell" zPosition="1" />
+		<widget source="descriere" render="Label" position="56,114" size="1664,112" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="2" />
+		<widget source="eticheta_sloturi" render="Label" position="32,252" size="1712,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="sloturi" render="Label" position="32,300" size="1712,360" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<eLabel position="32,676" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="rezultat" render="Label" position="32,692" size="1180,220" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget source="eticheta_cod" render="Label" position="1240,692" size="504,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget source="cod" render="Label" position="1240,736" size="504,120" font="HdsBold;96" foregroundColor="hdsWarn" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<!-- Setarile navigatorului web (Plugins/Extensions/HdsNavigator/ecrane.py, HdsNavigatorSetari; din meniu
 	     Screens/HdsNavigatorWeb.py): valorile cat etichetele, adresa paginii de pornire intreaga -->

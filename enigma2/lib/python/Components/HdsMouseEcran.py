@@ -301,10 +301,25 @@ class MouseEcran(object):
 		self._tras = None
 
 	# ---------------------------------------------------------------- intrarea comuna
-	def gest(self, fel, x=None, y=None, clicuri=1, pasi=0, x0=None, y0=None, nou=False, text=""):
+	def gest(self, fel, x=None, y=None, clicuri=1, pasi=0, x0=None, y0=None, nou=False, text="", mod=None):
 		"""Un gest; intoarce un dictionar cu ce s-a facut: {"facut": "selectie" | "ok" | "buton" | "bara" | "derulare" |
 		"tasta" | "nimic", "ecran": numele clasei ecranului, plus "lista", "rand", "tasta", "nume" dupa caz}.
-		nou: prima miscare a unui tras (uita un tras vechi ramas fara dragend, de pilda o fila inchisa in timpul lui)."""
+		nou: prima miscare a unui tras (uita un tras vechi ramas fara dragend, de pilda o fila inchisa in timpul lui).
+		mod: tastele tinute la gest in pagina web (multimea "ctrl" / "shift"), None = nestiute (mouse-ul USB: ecranul
+		le citeste singur de la tastatura pusa in receptor).
+		Un ecran cu metoda hdsGestMouse (editorul de canale: clicul schimba si coloana, Ctrl / Shift + clic, trasul pe
+		randuri) primeste gestul intai; daca intoarce un dictionar, acela e raspunsul, iar None = gestul merge ca mai jos."""
+		ecran = self._ecran()
+		propriu = getattr(ecran, "hdsGestMouse", None) if ecran is not None else None
+		if propriu is not None:
+			try:
+				extra = {"mod": frozenset(mod)} if mod is not None else {}
+				rez = propriu(fel, x=x, y=y, clicuri=clicuri, pasi=pasi, x0=x0, y0=y0, nou=nou, text=text, **extra)
+			except Exception as e:
+				jurnal("gestul ecranului %s a cazut: %r" % (_numeEcran(ecran), e))
+				rez = None
+			if rez is not None:
+				return rez
 		if fel == "clic":
 			return self.clic(x, y, clicuri)
 		if fel == "dublu":

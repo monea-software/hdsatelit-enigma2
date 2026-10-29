@@ -55,10 +55,24 @@
 # aflata inca la serviciu nu se trimite a doua oara, ci asteapta acelasi raspuns. Serviciul are si el memoria paginilor
 # si a randurilor: o pagina sau un rand deja citit primeste raspunsul pe loc, fara coada.
 #
-# REVENIREA LA POZA (laRezultat primeste None si motivul; contorul tine si felul): serviciul sau modelul lipsesc,
-# conexiunea cade, raspunsul nu vine la timp, starea nu e OK, modelul folosit nu e cel cerut, un rand gol sau taiat de
-# timp, un cuvant cu litere sub PRAG_INCREDERE (70, masurat pe paginile de proba)
-# sau un semn fara litere sub PRAG_SEMNE.
+# TEXT MEREU: orice pagina cu litere citite iese text (si merge la traducere), chiar cu un cuvant citit gresit: un
+# cuvant gresit supara mai putin decat poza originala, care nici nu se traduce. Poza ramane numai pentru ce nu e text
+# (decizie): pagina fara nicio litera, sau cu cel mult LITERE_PUTINE litere citite nesigur (media lor sub
+# PRAG_INCREDERE: un desen citit "CD" 67, o fata citita "O" 60, note muzicale citite "Î J]"). Randurile fara nicio
+# litera (o nota muzicala, o liniuta singura) nu se arata, restul paginii da. Masurat pe 1715 pagini (reale si
+# facute), cu serviciul 0.2.1 (scrisul ingust intins, a doua citire a randului nesigur): toate ies text, cu 28 de
+# cuvinte gresite din ~12 700 (0,2 %); paginile fara text (desene, note) raman poza. Inainte, un SINGUR cuvant sub 70
+# tinea toata pagina poza: pe un post cu scris inalt si ingust (Food Network pe cablu) 31 % din pagini.
+# CELELALTE DRUMURI SPRE POZA, si ce se face ca pagina cu text sa nu ramana poza:
+#   - serviciul ocupat (MAX_IN_ZBOR pagini in lucru): pagina asteapta in coada clientului (MAX_COADA) si pleaca de cum
+#     se elibereaza un loc; numai una al carei termen a trecut ramane poza ("termen");
+#   - serviciul cazut cu pagina in lucru: pagina se trimite inca o data (serviciul porneste singur din nou), daca mai
+#     are timp; a doua cadere cu aceeasi pagina o tine poza (sa nu-l doboare iar, vezi MEMORIA);
+#   - raspunsul intarziat: pagina trimisa din timp are termenul pana la DURATA_UTILA_MS dupa afisare; fara traducere,
+#     nucleul arata poza dupa ASTEPTARE_TEXT_MS, iar textul venit mai tarziu ii ia locul cat pagina e pe ecran; cu
+#     traducerea pornita, coada nucleului asteapta textul (si traducerea) pana la termenul traducerii, cu ecranul gol;
+#     o traducere care nu vine lasa textul citit (netradus), nu poza;
+#   - limba fara model, serviciul lipsa sau in pauza dupa caderi, televizorul stins: OCR nu poate citi, poza.
 #
 # CADERILE: dupa CADERI_MAXIME caderi ale serviciului in CADERI_FEREASTRA_S secunde, OCR face o pauza (PAUZA_S, apoi
 # dublu la fiecare pauza noua, cel mult PAUZA_MAXIMA_S); dupa pauza incearca din nou singur. O pista aleasa din nou sau
@@ -151,14 +165,16 @@ TERMEN_MAXIM_MS = 10000    # limita protocolului (timeout_ms)
 MARJA_MS = 1000            # peste termen: daca raspunsul tot nu vine, pagina ramane poza
 TIMP_PORNIRE_MS = 3000     # cat se asteapta socketul dupa pornirea serviciului
 PAS_CONECTARE_MS = 50
-PRAG_INCREDERE = 70        # cuvintele cu litere sau cifre
-PRAG_SEMNE = 40            # cuvintele fara litere si cifre (liniuta de dialog, paranteze, puncte de suspensie)
+PRAG_INCREDERE = 70        # media cuvintelor cu litere ale unei pagini cu cel mult LITERE_PUTINE litere
+PRAG_SEMNE = 40            # semnele fara litere (liniuta de dialog, puncte): numai pentru serviciu (a doua citire)
+LITERE_PUTINE = 3          # pagina cu atatea litere sau mai putine si nesigure: un desen, poza (desenele dau "CD", "O")
 ALFA_TRANSPARENT = 48      # ca in hds-ocr.cpp: sub atata opacitate intrarea din paleta e fundal
 CADERI_MAXIME = 3
 CADERI_FEREASTRA_S = 120
 PAUZA_S = 30
 PAUZA_MAXIMA_S = 600
 MAX_IN_ZBOR = 4            # pagini trimise si nerezolvate (serviciul are coada de 8 cereri)
+MAX_COADA = 16             # pagini care asteapta in client un loc la serviciu (peste: cea mai veche ramane poza)
 MEMORIE_PAGINI = 64        # pagini hotarate tinute minte (amprenta -> text sau poza)
 ULTIMELE = 20              # paginile aratate in pagina web
 UNIRE_GOL_PX = 2           # regiuni una sub alta cu cel mult atatia pixeli intre ele se lipesc (vezi REGIUNILE TAIATE)
@@ -479,24 +495,35 @@ def limbaDinPista(pista):
 
 # ------------------------------------------------------------------ decizia: text sau poza
 
-def randuriPagina(rezultate):
-	"""rezultatele regiunilor unei pagini -> randurile, de sus in jos (fara cele goale)"""
-	linii = []
-	for r in rezultate:
-		linii.extend(l for l in r["linii"] if l["text"].strip())
-	linii.sort(key=lambda l: (l["y"], l["x"]))
-	return linii
-
-
 def _areLitere(text):
 	return any(c.isalnum() for c in text)
 
 
+def randuriPagina(rezultate):
+	"""rezultatele regiunilor unei pagini -> randurile de aratat, de sus in jos: fara cele goale si fara cele fara nicio
+	litera sau cifra (o nota muzicala, o liniuta singura)"""
+	linii = []
+	for r in rezultate:
+		linii.extend(l for l in r["linii"] if _areLitere(l["text"]))
+	linii.sort(key=lambda l: (l["y"], l["x"]))
+	return linii
+
+
+def _increderiLitere(linie):
+	"""increderile cuvintelor cu litere ale randului; un rand fara cuvinte (serviciul cerut fara ele) da increderea lui,
+	sub 50 cand serviciul l-a insemnat nesigur (LF_LOW_CONF)"""
+	if not linie["cuvinte"]:
+		c = linie.get("incredere", 0)
+		return [min(c, 49) if linie["steaguri"] & LF_LOW_CONF else c]
+	return [c["incredere"] for c in linie["cuvinte"] if _areLitere(c["text"])]
+
+
 def decizie(rezultate, model, prag=PRAG_INCREDERE, prag_semne=PRAG_SEMNE):
 	"""(foloseste_textul, fel, motiv). Felul e unul din FELURI_MOTIV (gol cand textul e bun), motivul e pentru jurnal.
-	Pragul se aplica pe cuvant: cuvintele cu litere sau cifre la `prag`, semnele singure (liniuta de dialog,
-	paranteze, puncte) la `prag_semne`. Steagul LF_LOW_CONF al serviciului (un cuvant sub 50) nu se mai ia ca atare:
-	cuvintele lui sunt verificate aici, dupa felul lor."""
+	TEXT MEREU (vezi antetul): orice pagina cu litere citite e text, oricat de nesigure ar fi unele cuvinte; poza ramane
+	numai pagina fara nicio litera (M_FARA_TEXT) si pagina cu cel mult LITERE_PUTINE litere a caror incredere medie e sub
+	`prag` (M_INCREDERE: un desen citit "CD", note muzicale citite "Î J]"). Randurile fara litere nu se arata.
+	`prag_semne` ramane in semnatura pentru cei care o dau (nu mai hotaraste nimic aici)."""
 	if not rezultate:
 		return False, M_TERMEN, "fara raspuns"
 	for r in rezultate:
@@ -509,16 +536,14 @@ def decizie(rezultate, model, prag=PRAG_INCREDERE, prag_semne=PRAG_SEMNE):
 		for l in r["linii"]:
 			if l["steaguri"] & LF_TIMEOUT:
 				return False, M_TERMEN, "rand taiat de timp"
-			if not l["text"].strip():
-				return False, M_INCREDERE, "rand gol"
-			if not l["cuvinte"] and l["steaguri"] & LF_LOW_CONF:
-				return False, M_INCREDERE, "rand nesigur (steaguri %d)" % l["steaguri"]
-			for c in l["cuvinte"]:
-				limita = prag if _areLitere(c["text"]) else prag_semne
-				if c["incredere"] < limita:
-					return False, M_INCREDERE, "cuvant sub %d: %d (%s)" % (limita, c["incredere"], c["text"][:20])
-	if not randuriPagina(rezultate):
+	linii = randuriPagina(rezultate)
+	if not linii:
 		return False, M_FARA_TEXT, "fara text"
+	if sum(sum(1 for ch in l["text"] if ch.isalnum()) for l in linii) <= LITERE_PUTINE:
+		v = [c for l in linii for c in _increderiLitere(l)]
+		if not v or sum(v) / float(len(v)) < prag:
+			return False, M_INCREDERE, "pagina scurta nesigura: %d (%s)" % (
+				int(sum(v) / float(len(v))) if v else 0, u" / ".join(l["text"] for l in linii)[:20])
 	return True, "", ""
 
 
@@ -999,10 +1024,11 @@ class ClientOcr(object):
 		"""conectarea nu a reusit: toate paginile pe poza"""
 		_jurnal(motiv)
 		self.in_asteptare = []
-		for p in list(set(self.pagini.values())):
-			self._rezolva(p, motiv, M_SERVICIU)
+		vechi = list(set(self.pagini.values()))
 		self.pagini = {}
 		self._cadere(motiv)
+		for p in vechi:
+			self._rezolva(p, motiv, M_SERVICIU)
 
 	def _cadere(self, motiv):
 		acum = self.acum()
@@ -1029,13 +1055,14 @@ class ClientOcr(object):
 		self.sock = None
 		self.conectat = False
 		self.iesire = b""
-		# fara pagini in lucru, un EOF e iesirea obisnuita a serviciului (--idle-exit): nu e o cadere
+		# fara pagini in lucru, un EOF e iesirea obisnuita a serviciului (--idle-exit): nu e o cadere. Paginile se scot
+		# din lista inainte de rezolvare (functia lor poate trimite din nou), iar caderea se numara inainte (pauza)
 		in_lucru = [p for p in set(self.pagini.values()) if not p.gata]
-		for p in in_lucru:
-			self._rezolva(p, motiv, M_SERVICIU)
 		self.pagini = {}
 		if motiv != "oprit" and (in_lucru or not motiv.startswith("serviciul a inchis")):
 			self._cadere(motiv)
+		for p in in_lucru:
+			self._rezolva(p, motiv, M_SERVICIU)
 
 	def inchide(self):
 		self.t_conectare.stop()
@@ -1045,9 +1072,10 @@ class ClientOcr(object):
 		if self.conectat:
 			self._inchide("oprit")
 		else:
-			for p in list(set(self.pagini.values())):
-				self._rezolva(p, "oprit", M_SERVICIU)
+			vechi = list(set(self.pagini.values()))
 			self.pagini = {}
+			for p in vechi:
+				self._rezolva(p, "oprit", M_SERVICIU)
 
 
 # ------------------------------------------------------------------ fatada
@@ -1207,12 +1235,18 @@ def _cadereCuPagina(fel, motiv):
 
 
 class _Asteptare(object):
-	"""o pagina trimisa la serviciu si paginile identice venite intre timp (fiecare cu generatia si functia ei)"""
+	"""o pagina trimisa la serviciu (sau care asteapta un loc in coada clientului) si paginile identice venite intre
+	timp (fiecare cu generatia si functia ei)"""
 
 	def __init__(self, cheie, trimisa):
 		self.cheie = cheie
 		self.trimisa = trimisa
 		self.cei = []          # (generatie, laRezultat, clipa afisarii in secunde, avansul in ms sau None)
+		self.cereri = []       # cererile paginii (pentru trimiterea din coada si pentru a doua trimitere dupa o cadere)
+		self.model = None
+		self.generatie = 0
+		self.limita = 0.0      # pana cand mai foloseste raspunsul (clipa, secunde)
+		self.retrimisa = False
 
 
 def _depozitReceptor():
@@ -1285,6 +1319,7 @@ class OcrSubtitrari(object):
 		self.contor = Contor(ceas)
 		self.memorie = OrderedDict()     # amprenta -> (linii relative la nimic: coordonatele paginii, fel, motiv)
 		self.asteptari = {}              # amprenta -> _Asteptare
+		self.coada = deque()             # _Asteptare care asteapta un loc la serviciu (MAX_IN_ZBOR ocupate)
 		self.cazute = OrderedDict()      # amprenta -> de cate ori a fost in lucru la o cadere a serviciului
 
 	def modele(self):
@@ -1431,28 +1466,61 @@ class OcrSubtitrari(object):
 		if cheie is not None and cheie in self.asteptari:
 			self.asteptari[cheie].cei.append((generatie, laRezultat, afisare, avans))
 			return True
-		if self.client.in_zbor() >= MAX_IN_ZBOR:
-			self._numara("poza", M_OCUPAT, "%d pagini in lucru" % MAX_IN_ZBOR)
-			return False                     # serviciul nu tine pasul: poza, fara coada
 		if intarziere_ms >= 0:
 			termen_ms = min(TERMEN_MAXIM_MS, intarziere_ms + DURATA_UTILA_MS)
 		else:
 			termen_ms = min(TERMEN_MAXIM_MS, TIMP_CERERE_MS)
-		for c in cereri:
-			c["timeout_ms"] = termen_ms
 		a = _Asteptare(cheie, acum)
 		a.cei.append((generatie, laRezultat, afisare, avans))
-		if cheie is not None:
-			self.asteptari[cheie] = a
+		a.cereri, a.model, a.generatie = cereri, model, generatie
+		a.limita = acum + termen_ms / 1000.0
+		if self.client.in_zbor() >= MAX_IN_ZBOR:
+			# serviciul nu tine pasul: pagina asteapta un loc in coada clientului (nu poza), pleaca la primul loc liber
+			if cheie is not None:
+				self.asteptari[cheie] = a
+			self.coada.append(a)
+			while len(self.coada) > MAX_COADA:
+				self._renunta(self.coada.popleft(), M_OCUPAT, "coada clientului plina (%d)" % MAX_COADA)
+			return True
 		try:
-			self.client.cere(generatie, cereri, model,
-				lambda gen, linii, motiv, fel, rezultate: self._gata(a, linii, motiv, fel, rezultate), termen_ms)
+			self._trimite(a)
 		except ValueError as e:
-			self.asteptari.pop(cheie, None)
 			_jurnal("cerere gresita: %s" % e)
 			self._numara("poza", M_ALTELE, "cerere gresita")
 			return False
+		if cheie is not None:
+			self.asteptari[cheie] = a
 		return True
+
+	def _trimite(self, a):
+		"""cererile paginii la serviciu, cu termenul ramas (ValueError: cerere gresita)"""
+		ramas_ms = int(round((a.limita - self.acum()) * 1000))
+		termen_ms = max(1, min(TERMEN_MAXIM_MS, ramas_ms))
+		for c in a.cereri:
+			c["timeout_ms"] = termen_ms
+		self.client.cere(a.generatie, a.cereri, a.model,
+			lambda gen, linii, motiv, fel, rezultate: self._gata(a, linii, motiv, fel, rezultate), termen_ms)
+
+	def _renunta(self, a, fel, motiv):
+		"""o pagina care nu mai ajunge la serviciu (coada plina, termen trecut in coada, cerere gresita): poza"""
+		if a.cheie is not None and self.asteptari.get(a.cheie) is a:
+			del self.asteptari[a.cheie]
+		for generatie, laRezultat, afisare, avans in a.cei:
+			self._numara("poza", fel, motiv, avans_ms=avans)
+			self._cheama(laRezultat, generatie, None, motiv)
+
+	def _pompa(self):
+		"""paginile din coada clientului pleaca la serviciu cat sunt locuri; cele al caror termen a trecut raman poza"""
+		while self.coada and self.client.in_zbor() < MAX_IN_ZBOR:
+			a = self.coada.popleft()
+			if self.acum() >= a.limita:
+				self._renunta(a, M_TERMEN, "termen trecut in coada clientului")
+				continue
+			try:
+				self._trimite(a)
+			except ValueError as e:
+				_jurnal("cerere gresita: %s" % e)
+				self._renunta(a, M_ALTELE, "cerere gresita")
 
 	@staticmethod
 	def _cheama(laRezultat, generatie, linii, motiv):
@@ -1463,6 +1531,12 @@ class OcrSubtitrari(object):
 
 	def _gata(self, a, linii, motiv, fel, rezultate):
 		"""raspunsul serviciului pentru o pagina (si copiile ei venite intre timp)"""
+		try:
+			self._gataPagina(a, linii, motiv, fel, rezultate)
+		finally:
+			self._pompa()
+
+	def _gataPagina(self, a, linii, motiv, fel, rezultate):
 		if a.cheie is not None and self.asteptari.get(a.cheie) is a:
 			del self.asteptari[a.cheie]
 		acum = self.acum()
@@ -1473,6 +1547,18 @@ class OcrSubtitrari(object):
 			while len(self.cazute) > MAX_PAGINI_CAZUTE:
 				self.cazute.popitem(last=False)
 			tine = n >= CADERI_ACEEASI_PAGINA
+			# serviciul a cazut cu pagina in lucru: inca o trimitere (serviciul porneste singur din nou), daca mai e timp;
+			# a doua cadere cu aceeasi pagina o tine poza (n >= CADERI_ACEEASI_PAGINA)
+			if not tine and not a.retrimisa and a.cereri and acum < a.limita and not self.client.oprit:
+				a.retrimisa = True
+				_jurnal("serviciul a cazut cu o pagina in lucru: o trimit inca o data")
+				try:
+					self._trimite(a)
+					if a.cheie is not None:
+						self.asteptari[a.cheie] = a
+					return
+				except ValueError as e:
+					_jurnal("cerere gresita: %s" % e)
 		if tine:
 			self.memorie[a.cheie] = (linii, fel if linii is None else u"", motiv)
 			self.memorie.move_to_end(a.cheie)
@@ -1517,7 +1603,8 @@ class OcrSubtitrari(object):
 			"conectat": self.client.conectat,
 			"pid": self.serviciu.pid(), "porniri": self.serviciu.porniri, "oprit_dupa_caderi": self.client.oprit,
 			"pauza_s": int(round(self.client.pauzaRamasa())), "caderi": self.client.caderi_total,
-			"in_lucru": self.client.in_zbor(), "memorie": len(self.memorie), "serviciu": self.client.pong,
+			"in_lucru": self.client.in_zbor(), "in_coada": len(self.coada), "memorie": len(self.memorie),
+			"serviciu": self.client.pong,
 			"contor": self.contor.dict(),
 			# televizorul stins: paginile raman poza fara sa se numere (ocrDeFolos), deci contorul sta
 			"tv_stins": _tvStins()}
@@ -1536,6 +1623,8 @@ class OcrSubtitrari(object):
 			self.client._trimite(codeazaPing())
 
 	def opreste(self):
+		while self.coada:
+			self._renunta(self.coada.popleft(), M_SERVICIU, "oprit")
 		self.client.inchide()
 		return self.serviciu.opreste()
 
@@ -1762,8 +1851,12 @@ def _dupaAlegere(o, model):
 # ------------------------------------------------------------------ legaturile cu nucleul si cu ecranele
 
 # cat nu se arata nimic cat se asteapta textul unei pagini afisate (eSubtitleWidget.setOcrWait); apoi poza, iar
-# textul, daca mai vine, ii ia locul. O pagina trimisa din timp si gata la afisare nu asteapta deloc.
-ASTEPTARE_TEXT_MS = 500
+# textul, daca mai vine, ii ia locul. O pagina trimisa din timp si gata la afisare nu asteapta deloc. Subtitrarile in
+# direct (Das Erste) vin fara avans: masurat pe 251 de pagini, textul vine dupa afisare la 0,54-0,68 s la mediana, ~1 s
+# la 90 %, 1,56 s cel mult; cu 500 ms, mai mult de jumatate din pagini aratau intai poza, apoi treceau la text (cu
+# traducerea oprita). Cu 2000 ms (cat asteapta si coada traducerii) nicio pagina masurata nu mai arata poza; pagina
+# apare direct cu textul. O pagina refuzata (poza) nu asteapta: showOcrBitmap vine pe loc.
+ASTEPTARE_TEXT_MS = 2000
 
 _PISTA = [None]          # subtitrarea pornita acum (tuplul din getSubtitleList); None = niciuna
 _URMARIT = {"setare": False, "oprire": False}

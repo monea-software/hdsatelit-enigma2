@@ -2126,6 +2126,7 @@ PAGINA = """<!DOCTYPE html>
   main{max-width:1200px;margin:0 auto;}
   .sus{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin:0 0 12px;}
   h1{font-size:1.25rem;margin:0;}
+  .leg-editor{margin-left:auto;color:#7fb8ff;min-height:44px;display:inline-flex;align-items:center;}
   .pe-tv{flex:1 1 260px;min-width:0;color:var(--text-slab);font-size:.92rem;line-height:1.4;overflow-wrap:anywhere;}
   .pe-tv b{color:var(--text);}
   /* bara de sus (filele, lista, cautarea, „Filtre” si randul filtrelor deschis) ramane lipita sub antetul cadrului
@@ -2247,6 +2248,7 @@ __LIVE_STIL__
 <div class="sus">
   <h1>Canale</h1>
   <div class="pe-tv" id="peTv" aria-live="polite"></div>
+  <a class="leg-editor" href="/editor-canale">Editează lista de canale</a>
 </div>
 <div class="bara-sus" id="baraSus">
 <div class="comenzi">
@@ -3057,6 +3059,7 @@ citesteAcum();
 TEXTE_PAGINA = {
 	"html": (
 		N_("Canale"),
+		N_("Editează lista de canale"),
 		N_("Radio"),
 		N_("Filtre<span class=\"nrf\" id=\"nrFiltre\"></span>"),
 		N_("Șterge filtrele"),

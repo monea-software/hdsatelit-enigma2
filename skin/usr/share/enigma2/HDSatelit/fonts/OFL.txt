@@ -11,6 +11,10 @@ HdsScripturi.ttf is a merge of static instances (wght 500) of Noto Sans Arabic, 
 Noto Sans Thai, subset to Arabic (with presentation forms), Hebrew and Thai, without hinting and layout tables.
 The Noto fonts have no Reserved Font Name.
 
+HdsRezerva.ttf is HdsRegular.ttf (scaled to 1000 units per em) and HdsScripturi.ttf merged into one font, without
+hinting and layout tables: the fallback font of the receiver when another skin is chosen (skin.py, puneRezervaHds),
+so the letters missing from that skin's fonts are drawn. Same authors and the same license as the two fonts above.
+
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 https://scripts.sil.org/OFL

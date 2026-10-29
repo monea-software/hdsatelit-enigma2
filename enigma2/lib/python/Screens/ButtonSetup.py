@@ -9,8 +9,10 @@
 # Ecranul salveaza in configuratie ce face fiecare buton colorat la apasare LUNGA in bara (vizionare live), iar bara le
 # foloseste: Screens/InfoBar.py, harta HdsTasteColorateActions din data/keymap.xml
 # (apasat / lung / eliberat, ca POWER, AUDIO si FAV; fara ceas propriu: apasarea lunga e flagLong din nucleu) si
-# Components/HdsTasteRapide.ApasareLunga. Apasarea scurta ramane cum era. Pe emulator apasarea lunga nu se poate
-# proba (tastele din web ocolesc acolo numaratoarea repetarilor).
+# Components/HdsTasteRapide.ApasareLunga. Apasarea scurta ramane cum era, afara de VERDE: primul rand al ecranului e
+# VERDE apasat scurt (config.hds_buttons.green_short, implicit pagina de pluginuri; pe un canal cu subcanale bara arata
+# intai lista lor, Screens/InfoBar.py, InfoBar.subserviceSelection). Pe emulator apasarea lunga nu se poate
+# proba (tastele din web ocolesc acolo numaratoarea repetarilor); cea scurta da.
 
 from .Screen import Screen
 from Components.ActionMap import ActionMap
@@ -18,7 +20,7 @@ from Components.ConfigList import ConfigListScreen
 from Components.config import config, getConfigListEntry
 from Components.Sources.StaticText import StaticText
 # actiunile, butoanele, setarile si salvarea sunt comune cu interfata web (/taste-rapide): Components/HdsTasteRapide.py
-from Components.HdsTasteRapide import ACTIUNI_DISPONIBILE, BUTOANE, initConfigButtonSetup
+from Components.HdsTasteRapide import ACTIUNI_DISPONIBILE, BUTOANE, SCURTE, initConfigButtonSetup
 from Components import HdsTasteRapide
 
 
@@ -29,11 +31,11 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 	# un chooser cu doua coloane -- nimic din ce foloseste codul propriu, "config"/"ghid"/"key_red"/
 	# "key_green"). Redenumit `Hds...`, acelasi tipar ca HdsSoftwareUpdate/TempFanControl/HdsLogManager.
 	skin = """
-	<screen name="HdsButtonSetup" resolution="1920,1080" position="center,center" size="900,420" title="Butoane colorate și taste rapide">
-		<widget name="config" position="30,30" size="840,200" scrollbarMode="showOnDemand" font="Regular;24" secondfont="Regular;16" itemHeight="42" />
-		<widget source="ghid" render="Label" position="30,250" size="840,110" font="Regular;20" />
-		<widget source="key_red" render="Label" position="30,360" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
-		<widget source="key_green" render="Label" position="310,360" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
+	<screen name="HdsButtonSetup" resolution="1920,1080" position="center,center" size="900,470" title="Butoane colorate și taste rapide">
+		<widget name="config" position="30,30" size="840,210" scrollbarMode="showOnDemand" font="Regular;24" secondfont="Regular;16" itemHeight="42" />
+		<widget source="ghid" render="Label" position="30,255" size="840,145" font="Regular;20" />
+		<widget source="key_red" render="Label" position="30,410" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
+		<widget source="key_green" render="Label" position="310,410" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
 	</screen>
 	"""
 
@@ -43,8 +45,9 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		self.setTitle(_("Butoane colorate și taste rapide"))
 		initConfigButtonSetup()
 
-		# ce face apasarea lunga: Components/HdsTasteRapide.py (ApasareLunga) si Screens/InfoBar.py
-		self["ghid"] = StaticText(_("Alege ce se deschide la apăsarea LUNGĂ a fiecărui buton colorat, cât te uiți la TV."))
+		# ce face apasarea lunga: Components/HdsTasteRapide.py (ApasareLunga) si Screens/InfoBar.py; VERDE scurt:
+		# InfoBar.subserviceSelection
+		self["ghid"] = StaticText(_("Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea LUNGĂ a fiecărui buton colorat, cât te uiți la TV. Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."))
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))
 
@@ -56,8 +59,8 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 				"green": self.salveaza,
 			}, -2)
 
-		self._initiale = {cheie: getattr(config.hds_buttons, cheie).value for cheie, _t in BUTOANE}
-		self.list = [getConfigListEntry(text, getattr(config.hds_buttons, cheie)) for cheie, text in BUTOANE]
+		self._initiale = {cheie: getattr(config.hds_buttons, cheie).value for cheie, _t in SCURTE + BUTOANE}
+		self.list = [getConfigListEntry(text, getattr(config.hds_buttons, cheie)) for cheie, text in SCURTE + BUTOANE]
 		self["config"].list = self.list
 
 	def salveaza(self):

@@ -1673,6 +1673,9 @@ def _buchete(M, tip):
 		for coada in (" (TV)", " (Radio)"):
 			if n.endswith(coada):
 				n = n[:-len(coada)]
+		if n == "Favourites":
+			# numele implicit din fisier (engleza enigma2), tradus ca in lista de pe receptor
+			n = _t("Favourites")
 		rez.append((r, n or r))
 	if not rez:
 		rez.append((M.toate(tip), _t("Toate canalele")))

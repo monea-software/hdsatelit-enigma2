@@ -4,9 +4,10 @@
 #
 # HdsAsistentaSemn.py: semnul de pe ecran cat Asistenta de la distanta e activa si legatura cu receptorul (partea care
 # are nevoie de enigma2). Logica e in Components/HdsAsistenta.py (fara enigma); aici sunt:
-#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea): „Asistenta activa, mai sunt H:MM:SS"
-#     si, dedesubt, calea spre Oprire (Meniu > Setari > Retea si internet > Asistenta de la distanta); se vede si peste
-#     imaginea pe tot ecranul si peste meniuri;
+#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea), pe un singur rand: "Asistenta
+#     activa, mai sunt H:MM:SS" si calea spre Oprire (Meniu > Setari > Beta tester > Cere ajutor de la distanta); se
+#     vede si peste imaginea pe tot ecranul si peste meniuri, deasupra randului cu titlul ferestrelor (nu il acopera);
+#     cat ecranul asistentei e deschis (el arata starea si timpul), banda se ascunde;
 #   - Controler: un observator care arata, improspateaza (o data pe secunda) si ascunde banda; tot el culege, pe firul
 #     enigma2, mesajele cerute de operator (op „mesaj") si le arata cu HdsAnuntRetea, fiindca brokerul ruleaza pe alt
 #     fir si nu are voie sa atinga interfata direct;
@@ -18,7 +19,7 @@
 
 import subprocess
 
-from enigma import eActionMap, eTimer, getDesktop
+from enigma import eTimer
 
 from Screens.Screen import Screen
 from Components.Sources.StaticText import StaticText
@@ -40,37 +41,28 @@ def _hms(secunde):
 
 # ---------------------------------------------------------------- banda de semn (fereastra nemodala)
 
-def _skinBanda(latime, inaltime):
-	def x(v):
-		return int(round(v * latime / 1920.0))
+# Banda (si in skinul HDSatelit, HDSatelit/skin.xml, forma HdsAjutorDistantaSemn): un rand de 40 px la y 14, deasupra
+# titlului ferestrelor mari (cadrul lor are titlul la y 58); textul si calea pe acelasi rand.
+SKIN_BANDA = """
+	<screen name="HdsAsistentaSemn" resolution="1920,1080" position="290,14" size="1340,40" flags="wfNoBorder" backgroundColor="#00101828" zPosition="20">
+		<eLabel position="0,0" size="6,40" backgroundColor="#00c0392b" zPosition="1" />
+		<widget source="text" render="Label" position="22,0" size="1300,40" font="Regular;24" halign="center" valign="center" foregroundColor="#00ffffff" backgroundColor="#00101828" transparent="1" noWrap="1" zPosition="2" />
+	</screen>"""
 
-	def y(v):
-		return int(round(v * inaltime / 1080.0))
-
-	lat = x(1240)
-	return """
-	<screen name="HdsAsistentaSemn" position="%d,%d" size="%d,%d" flags="wfNoBorder" backgroundColor="#00101828" zPosition="20">
-		<eLabel position="0,0" size="%d,%d" backgroundColor="#00c0392b" zPosition="1" />
-		<widget source="text" render="Label" position="%d,%d" size="%d,%d" font="Regular;%d" halign="center" valign="center" foregroundColor="#00ffffff" backgroundColor="#00101828" transparent="1" zPosition="2" />
-		<widget source="cale" render="Label" position="%d,%d" size="%d,%d" font="Regular;%d" halign="center" valign="center" foregroundColor="#00c8d0d8" backgroundColor="#00101828" transparent="1" zPosition="2" />
-	</screen>""" % (
-		(latime - lat) // 2, y(14), lat, y(84),
-		lat, max(2, y(3)),
-		x(18), y(6), lat - x(36), y(40), y(26),
-		x(18), y(46), lat - x(36), y(32), y(20))
+# ecranele care arata ele starea asistentei: cat sunt deasupra, banda nu se arata (le-ar acoperi titlul)
+ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege")
 
 
 class HdsAsistentaSemn(Screen):
+	skin = SKIN_BANDA
+
 	def __init__(self, session):
-		marime = getDesktop(0).size()
-		self.skin = _skinBanda(marime.width(), marime.height())
 		Screen.__init__(self, session)
+		self.skinName = "HdsAjutorDistantaSemn"
 		self["text"] = StaticText("")
-		self["cale"] = StaticText("")
 
 	def pune(self, text, cale=""):
-		self["text"].setText(text)
-		self["cale"].setText(cale)
+		self["text"].setText("%s  ·  %s" % (text, cale) if cale else text)
 
 
 # ---------------------------------------------------------------- controlerul (observator + ceas + mesaje)
@@ -120,9 +112,20 @@ class Controler(object):
 			text = self._mesaje.pop(0)
 			self._arataMesaj(text)
 		if self.banda is not None:
+			if self._ecranAsistenta():
+				self.banda.hide()
+				return
 			self.banda.pune("%s  ·  %s %s" % (_("Asistență de la distanță activă"), _("mai sunt"), _hms(ses.ramasS())),
 				_("Oprești din %s") % A.drumMeniu())
 			self.banda.show()
+
+	def _ecranAsistenta(self):
+		"""Ecranul asistentei e deasupra (arata el starea si timpul): banda nu se arata peste el."""
+		try:
+			dlg = self.session.current_dialog
+			return type(dlg).__name__ in ECRANE_FARA_BANDA
+		except Exception:
+			return False
 
 	def _arataMesaj(self, text):
 		try:

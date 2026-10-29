@@ -29,7 +29,9 @@
 #      nucleu): fiecare bataie scrie si ce reda interfata (redare=tv: un serviciu cu pista video, in afara standby-ului;
 #      radio, standby, nimic) si daca o inregistrare merge sau incepe in INREGISTRARE_CURAND_S secunde (inregistrare=1).
 #      Paznicul reporneste receptorul pentru decodor numai cu redare=tv si inregistrare=0; cand ele lipsesc sau nu se
-#      pot citi (redare= gol, inregistrare=-1) nu reporneste nimic.
+#      pot citi (redare= gol, inregistrare=-1) nu reporneste nimic. Tot aici criptat= (1/0, -1 nu se stie) si video=
+#      (latimea imaginii decodate, 0 sau -1 fara imagine): le citeste numai raportul pornirii (tools/hds-raport.sh),
+#      ca sa deosebeasca un canal TV in clar fara imagine (decodorul tinut de alt program) de unul criptat.
 #   6. MEMORIA POZELOR SI A FILMELOR: cand demonul platformei nu si-a putut mapa la pornire
 #      memoria prin care driverul video primeste poza posturilor de radio si filmele, paznicul scrie in stare
 #      memorie_es=lipsa si memorie_es_cheie=<pid-ul demonului>. enigma2 nu mai scrie atunci in video0 si audio0 (nucleul
@@ -131,14 +133,17 @@ def textDurata(secunde):
 class Bataie(object):
 	"""Registrul „ocupat” si bataia scrisa pe disc. Un singur obiect pe proces (bataie())."""
 
-	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None):
+	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None, imagine=None):
 		self.cale = cale or CALE_BATAIE
 		self.ceas = ceas or monotonic
 		self.pid = pid if pid is not None else os.getpid()
 		self.rotor = rotor if rotor is not None else _rotorSeMisca
 		self.redare = redare if redare is not None else _redareAcum
+		self.imagine = imagine if imagine is not None else _imagineAcum
 		self.redareFel = ""     # una din REDARI la ultima citire; "" = nu se stie
 		self.inregistrare = -1  # 1: inregistrare acum sau curand, 0: niciuna, -1: nu se stie
+		self.criptat = -1       # serviciul de acum: 1 criptat, 0 in clar, -1 nu se stie (tools/hds-raport.sh)
+		self.video = -1         # latimea imaginii decodate a serviciului de acum; 0 sau -1: nicio imagine
 		self.eroareRedare = None
 		self.ocupat = {}        # cheie -> [motiv, durata_s, inceput, pana_la]
 		self.eroareScriere = None
@@ -235,11 +240,18 @@ class Bataie(object):
 			if self.eroareRedare is None:
 				_jurnal("redarea nu se poate citi: %r" % (e,))
 			self.eroareRedare = repr(e)
+		# criptat= si video= (raportul pornirii, tools/hds-raport.sh: canal TV fara imagine); fara jurnal la eroare
+		try:
+			criptat, video = self.imagine()
+			self.criptat = int(criptat) if int(criptat) in (0, 1) else -1
+			self.video = int(video) if -1 <= int(video) <= 16384 else -1
+		except Exception:
+			self.criptat, self.video = -1, -1
 
 	def text(self, acum):
 		motive, pana = self.semn(acum)
-		return ("pid=%d\nbataie=%.3f\nocupat=%s\nocupat_pana=%.3f\nredare=%s\ninregistrare=%d\n"
-			% (self.pid, acum, ",".join(motive), pana, self.redareFel, self.inregistrare))
+		return ("pid=%d\nbataie=%.3f\nocupat=%s\nocupat_pana=%.3f\nredare=%s\ninregistrare=%d\ncriptat=%d\nvideo=%d\n"
+			% (self.pid, acum, ",".join(motive), pana, self.redareFel, self.inregistrare, self.criptat, self.video))
 
 	def scrie(self, acum=None):
 		if acum is None:
@@ -327,6 +339,20 @@ def _redareAcum():
 		return REDARE_NIMIC, inregistrare
 	from enigma import iServiceInformation
 	return (REDARE_TV if info.getInfo(iServiceInformation.sVideoPID) > 0 else REDARE_RADIO), inregistrare
+
+
+def _imagineAcum():
+	"""(criptat, video) ale serviciului de acum, pentru raportul pornirii (tools/hds-raport.sh): criptat 1/0 (sIsCrypted),
+	video = latimea imaginii decodate (sVideoWidth; 0 sau -1 cat decodorul nu a dat nicio imagine). (-1, -1) fara
+	serviciu."""
+	import NavigationInstance
+	nav = NavigationInstance.instance
+	serviciu = nav and nav.getCurrentService()
+	info = serviciu and serviciu.info()
+	if not info:
+		return -1, -1
+	from enigma import iServiceInformation
+	return (1 if info.getInfo(iServiceInformation.sIsCrypted) == 1 else 0), info.getInfo(iServiceInformation.sVideoWidth)
 
 
 _unic = [None]

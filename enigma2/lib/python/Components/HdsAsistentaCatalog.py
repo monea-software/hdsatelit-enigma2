@@ -44,20 +44,20 @@ def N_(text):
 
 # aceleasi texte ca in catalog.json (grupuri si descrierea fiecarei operatii), ca sa fie traduse in cele 13 limbi
 TEXTE_CATALOG = (
-	N_("Informatii"), N_("Semnal"), N_("Jurnale"), N_("Setari"), N_("Probe"),
+	N_("Informații"), N_("Semnal"), N_("Jurnale"), N_("Setări"), N_("Probe"),
 	N_("starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"),
-	N_("placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate"),
+	N_("placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate"),
 	N_("lista pachetelor instalate"),
-	N_("reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)"),
-	N_("tunerele si blocarea semnalului"),
+	N_("rețeaua: cablu sau Wi-Fi, legat sau nu, ruta implicită, DNS (fără numele rețelei, MAC mascat)"),
+	N_("tunerele și blocarea semnalului"),
 	N_("starea decodorului (video, sunet, sincronizare)"),
-	N_("memoria libera si memoria decodorului"),
-	N_("lista jurnalelor receptorului, cu marimile"),
-	N_("ultimele randuri dintr-un jurnal"),
+	N_("memoria liberă și memoria decodorului"),
+	N_("lista jurnalelor receptorului, cu mărimile"),
+	N_("ultimele rânduri dintr-un jurnal"),
 	N_("jurnalul nucleului"),
-	N_("lista proceselor (numele, fara argumente)"),
-	N_("copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)"),
-	N_("o captura a ecranului (numai meniurile, fara imaginea canalului)"),
+	N_("lista proceselor (numele, fără argumente)"),
+	N_("copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)"),
+	N_("o captură a ecranului (numai meniurile, fără imaginea canalului)"),
 	N_("un mesaj scris pe ecranul televizorului"),
 )
 

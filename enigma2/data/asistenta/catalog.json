@@ -4,37 +4,37 @@
   "operatii": [
     {
       "op": "info",
-      "grup": "Informatii",
+      "grup": "Informații",
       "fel": "citire",
       "text": "starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)",
       "args": []
     },
     {
       "op": "placa",
-      "grup": "Informatii",
+      "grup": "Informații",
       "fel": "citire",
-      "text": "placa: procesorul, linia de comanda a nucleului, partitiile, modulele incarcate",
+      "text": "placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate",
       "args": []
     },
     {
       "op": "pachete",
-      "grup": "Informatii",
+      "grup": "Informații",
       "fel": "citire",
       "text": "lista pachetelor instalate",
       "args": []
     },
     {
       "op": "retea",
-      "grup": "Informatii",
+      "grup": "Informații",
       "fel": "citire",
-      "text": "reteaua: cablu sau Wi-Fi, legat sau nu, ruta implicita, DNS (fara numele retelei, MAC mascat)",
+      "text": "rețeaua: cablu sau Wi-Fi, legat sau nu, ruta implicită, DNS (fără numele rețelei, MAC mascat)",
       "args": []
     },
     {
       "op": "tunere",
       "grup": "Semnal",
       "fel": "citire",
-      "text": "tunerele si blocarea semnalului",
+      "text": "tunerele și blocarea semnalului",
       "args": []
     },
     {
@@ -48,21 +48,21 @@
       "op": "memorie",
       "grup": "Semnal",
       "fel": "citire",
-      "text": "memoria libera si memoria decodorului",
+      "text": "memoria liberă și memoria decodorului",
       "args": []
     },
     {
       "op": "jurnale",
       "grup": "Jurnale",
       "fel": "citire",
-      "text": "lista jurnalelor receptorului, cu marimile",
+      "text": "lista jurnalelor receptorului, cu mărimile",
       "args": []
     },
     {
       "op": "jurnal",
       "grup": "Jurnale",
       "fel": "citire",
-      "text": "ultimele randuri dintr-un jurnal",
+      "text": "ultimele rânduri dintr-un jurnal",
       "args": [
         {"nume": "nume", "tipar": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "cerut": true},
         {"nume": "randuri", "tipar": "^[1-9][0-9]{0,3}$", "cerut": false}
@@ -81,21 +81,21 @@
       "op": "procese",
       "grup": "Jurnale",
       "fel": "citire",
-      "text": "lista proceselor (numele, fara argumente)",
+      "text": "lista proceselor (numele, fără argumente)",
       "args": []
     },
     {
       "op": "setari",
-      "grup": "Setari",
+      "grup": "Setări",
       "fel": "citire",
-      "text": "copie filtrata a setarilor (audio, video, interfata, retea; fara parole si chei)",
+      "text": "copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)",
       "args": []
     },
     {
       "op": "captura",
       "grup": "Probe",
       "fel": "proba",
-      "text": "o captura a ecranului (numai meniurile, fara imaginea canalului)",
+      "text": "o captură a ecranului (numai meniurile, fără imaginea canalului)",
       "args": []
     },
     {

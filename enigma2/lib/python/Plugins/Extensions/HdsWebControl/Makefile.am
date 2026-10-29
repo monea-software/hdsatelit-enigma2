@@ -10,6 +10,7 @@ install_PYTHON = \
 	actualizare_web.py \
 	actualizari_web.py \
 	afisaj_web.py \
+	ajutor_web.py \
 	antena_web.py \
 	aplicatii_web.py \
 	asociere.py \
@@ -18,6 +19,7 @@ install_PYTHON = \
 	captura_sigura.py \
 	calitate_imagine_web.py \
 	canale_web.py \
+	editor_canale_web.py \
 	cauta_setari_web.py \
 	cautare_web.py \
 	vezi_live_web.py \
@@ -32,6 +34,7 @@ install_PYTHON = \
 	egalizator_web.py \
 	filme_web.py \
 	font_interfata_web.py \
+	forum_web.py \
 	ghid_web.py \
 	informatii_web.py \
 	informatii_tabel_web.py \
@@ -63,6 +66,7 @@ install_PYTHON = \
 	ocr_limbi_web.py \
 	paza_model_web.py \
 	paznic_web.py \
+	sloturi_web.py \
 	tv_web.py \
 	osd_strat.py \
 	acces_extern.py \

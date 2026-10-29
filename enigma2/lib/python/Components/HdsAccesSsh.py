@@ -2,14 +2,20 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsAccesSsh.py: intrarea pe receptor prin SSH (dropbear, ca root). O singura logica pentru ecranul de pe televizor
-# (Screens/HdsAccesSsh.py, Setari > Retea & Conexiuni > Acces SSH) si pentru pagina web /acces-ssh
-# (Plugins/Extensions/HdsWebControl/acces_ssh_web.py).
+# HdsAccesSsh.py: intrarea pe receptor prin FTP (vsftpd), SSH si SFTP (dropbear), ca root, cu aceeasi parola: parola
+# receptorului. O singura logica pentru ecranul receptorului (Screens/HdsAccesSsh.py, Setari > Retea & Conexiuni >
+# Parola receptorului) si pentru pagina web /acces-ssh (Plugins/Extensions/HdsWebControl/acces_ssh_web.py).
 #
-# Parola lui root: o face numai /usr/sbin/hds-ssh-parola (pachetul hdsatelit-ssh), la prima pornire si la „Fă o parolă
-# nouă”; in /etc/shadow intra numai hash-ul. Textul clar sta in /etc/hdsatelit-ssh/parola (0600) pana cand omul spune
-# ca l-a notat („ascunde”) sau pana la parola urmatoare. Aici textul clar se citeste numai cand trebuie aratat
-# (parolaDeAratat) si nu se copiaza nicaieri; din /etc/shadow se citeste numai felul campului (pusa, blocata, goala).
+# Parola lui root: o pune numai /usr/sbin/hds-ssh-parola (pachetul hdsatelit-ssh): la prima pornire una la intamplare,
+# apoi cea aleasa de om ("Schimbă parola", comanda pune, parola pe stdin) sau alta la intamplare ("Fă o parolă nouă");
+# in /etc/shadow intra numai hash-ul. Textul clar sta in /etc/hdsatelit-ssh/parola (0600) si se vede oricand, iar
+# hash-ul pus odata cu el in /etc/hdsatelit-ssh/hash: textul se arata numai cat /etc/shadow are inca acel hash (o parola
+# schimbata altfel, de pilda cu passwd, nu lasa pe ecran textul vechi). Aici textul clar se citeste numai cand trebuie
+# aratat (parolaDeAratat) si nu se copiaza nicaieri; din /etc/shadow se citesc numai felul campului si potrivirea lui
+# cu hash-ul tinut langa text.
+# FTP: serverul (vsftpd, portul 21, numai IPv4) e in imagine de la pachetul vsftpd; ecranul vorbeste de FTP numai cat
+# ceva asculta pe portul 21 (/proc/net/tcp). Toate intrarile cu parola merg numai din reteaua de acasa (pam_access cu
+# /etc/security/hds-ssh-retele-locale.conf, in /etc/pam.d/vsftpd si /etc/pam.d/dropbear); cheile SSH, de oriunde.
 #
 # Cheile: /home/root/.ssh/authorized_keys (dosarul 0700, fisierul 0600, scris atomic). Se primesc numai chei publice
 # intregi, fara optiuni in fata: ssh-ed25519, ssh-rsa de cel putin MIN_BITI_RSA biti, ecdsa-sha2-nistp256/384/521 si
@@ -37,7 +43,7 @@
 # rezultatul din stare(). Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC schimba RADACINA,
 # PROGRAM_PAROLA si INTERPRET.
 #
-# Ecranul deschis: cat ecranul „Acces SSH” e pe televizor (parola mare, comenzile lui), ecranDeschis() e adevarat.
+# Ecranul deschis: cat ecranul "Parola receptorului" e pe ecran (parola mare, comenzile lui), ecranDeschis() e adevarat.
 # Interfata web refuza atunci telecomanda si captura de ecran oricui nu e conectat cu codul
 # (HdsWebControl/acces_ssh_web.refuzEcranDeschis): altfel un browser intrat fara cod ar citi parola din captura sau ar
 # apasa OK in locul omului.
@@ -59,6 +65,8 @@ PROGRAM_PAROLA = "/usr/sbin/hds-ssh-parola"
 INTERPRET = ()
 
 CALE_PAROLA = "/etc/hdsatelit-ssh/parola"
+# hash-ul pus odata cu textul clar (hds-ssh-parola): textul se arata numai cat /etc/shadow il are
+CALE_HASH = "/etc/hdsatelit-ssh/hash"
 CALE_SEMN = "/etc/hdsatelit-ssh/facuta"
 # semnul lasat de hds-ssh-parola cand parola de la prima pornire nu s-a putut face (sters la prima reusita)
 CALE_EROARE = "/etc/hdsatelit-ssh/eroare"
@@ -71,6 +79,13 @@ CALE_PAM = "/etc/pam.d/dropbear"
 CALE_COMMON_AUTH = "/etc/pam.d/common-auth"
 CALE_JURNAL = "/home/root/logs/hds-ssh.log"
 CALE_MONTARI = "/proc/mounts"
+CALE_FTP = "/usr/sbin/vsftpd"
+CALE_FTP_CONF = "/etc/vsftpd.conf"
+CALE_PAM_FTP = "/etc/pam.d/vsftpd"
+CALE_RETELE = "/etc/security/hds-ssh-retele-locale.conf"
+# soclurile TCP IPv4 ale nucleului: FTP merge cand ceva asculta pe portul 21 (0015, starea 0A)
+CALE_TCP = "/proc/net/tcp"
+PORT_FTP = 21
 
 # dosarul cheilor de pe stick, din radacina montarii
 DOSAR_STICK = ("hdsatelit", "ssh")
@@ -111,6 +126,9 @@ MAX_FISIERE_STICK = 20
 MAX_FISIER_STICK = 65536
 # cat asteapta cel mult programul parolei (openssl rand asteapta generatorul nucleului numai la pornire)
 TIMP_PROGRAM_S = 60
+# parola aleasa de om: 4-64 de semne ASCII vizibile (aceleasi reguli ca in hds-ssh-parola pune)
+MIN_PAROLA = 4
+MAX_PAROLA = 64
 
 _B64 = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 # „nullok” (nu „nullok_secure”, pe care pam_unix 1.7.1 nu-l cunoaste) pe randul pam_unix din common-auth
@@ -574,44 +592,98 @@ def felParola():
 	return "lipsa"
 
 
+def _hashRoot():
+	"""Campul parolei lui root din /etc/shadow (hash-ul), numai pentru potrivirea cu CALE_HASH; "" daca lipseste."""
+	for linie in (_citeste(CALE_SHADOW) or "").splitlines():
+		parti = linie.split(":")
+		if parti[0] == "root" and len(parti) > 1:
+			return parti[1]
+	return ""
+
+
+def parolaAlta():
+	"""True cand textul clar e pe receptor, dar /etc/shadow nu mai are hash-ul pus odata cu el (parola schimbata pe
+	alta cale, de pilda cu passwd). Fara fisierul hash (receptoarele de dinainte), textul se crede."""
+	if not os.path.isfile(_cale(CALE_PAROLA)):
+		return False
+	tinut = _citeste(CALE_HASH, 512)
+	if tinut is None:
+		return False
+	return tinut.strip() != _hashRoot()
+
+
 def parolaDeAratat():
-	"""Textul clar al parolei, cat timp omul nu a spus ca l-a notat; altfel „”."""
-	text = _citeste(CALE_PAROLA, 64)
-	if not text:
+	"""Textul clar al parolei, cat timp e chiar parola din /etc/shadow; altfel ""."""
+	text = _citeste(CALE_PAROLA, MAX_PAROLA + 8)
+	if not text or parolaAlta():
 		return ""
-	return text.strip()[:32]
+	return text.strip()[:MAX_PAROLA]
 
 
-def _programParola(comanda):
-	"""Porneste hds-ssh-parola cu `comanda`: (reusit, ultimul rand de eroare)."""
+def motivParola(text):
+	"""De ce nu se primeste parola aleasa (textul pentru om), sau "" daca e buna: 4-64 de semne intre "!" si "~"
+	(litere fara diacritice, cifre, semne; fara spatii), ca in hds-ssh-parola pune."""
+	text = text or ""
+	if len(text) < MIN_PAROLA:
+		return _("Parola are prea puține semne: cel puțin %d.") % MIN_PAROLA
+	if len(text) > MAX_PAROLA:
+		return _("Parola are prea multe semne: cel mult %d.") % MAX_PAROLA
+	if any(not ("!" <= c <= "~") for c in text):
+		return _("Parola poate avea numai litere fără diacritice, cifre și semne, fără spații.")
+	return ""
+
+
+def _programParola(comanda, intrare=None):
+	"""Porneste hds-ssh-parola cu `comanda` (si `intrare` pe stdin, niciodata in linia de comanda): (codul de iesire,
+	ultimul rand de eroare); codul -1 cand programul lipseste, n-a terminat la timp sau nu a pornit."""
 	if not os.access(PROGRAM_PAROLA, os.X_OK):
-		return False, _("Lipsește programul care face parola (hds-ssh-parola).")
+		return -1, _("Lipsește programul care face parola (hds-ssh-parola).")
 	mediu = dict(os.environ)
 	if RADACINA:
 		mediu["HDS_SSH_RADACINA"] = RADACINA
 	try:
-		p = subprocess.run(list(INTERPRET) + [PROGRAM_PAROLA, comanda], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE, timeout=TIMP_PROGRAM_S, env=mediu)
+		p = subprocess.run(list(INTERPRET) + [PROGRAM_PAROLA, comanda],
+			input=(intrare + "\n").encode("utf-8") if intrare is not None else None,
+			stdin=subprocess.DEVNULL if intrare is None else None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+			timeout=TIMP_PROGRAM_S, env=mediu)
 	except subprocess.TimeoutExpired:
-		return False, _("Programul parolei nu a terminat la timp.")
+		return -1, _("Programul parolei nu a terminat la timp.")
 	except OSError as eroare:
-		return False, str(eroare)
+		return -1, str(eroare)
 	eroare = p.stderr.decode("utf-8", "replace").strip().splitlines()
-	return p.returncode == 0, (eroare[-1] if eroare else "")
+	return p.returncode, (eroare[-1] if eroare else "")
 
 
 def faParolaNoua():
-	reusit, eroare = _programParola("noua")
-	if reusit:
+	cod, eroare = _programParola("noua")
+	if cod == 0:
 		return True, _("Am făcut o parolă nouă. Cea veche nu mai merge.")
 	return False, _("Parola nouă nu s-a putut face. Parola de dinainte rămâne.") + (" (%s)" % eroare if eroare else "")
 
 
-def ascundeParola():
-	reusit, eroare = _programParola("ascunde")
-	if reusit:
-		return True, _("Textul parolei a fost șters de pe receptor.")
-	return False, _("Nu am putut ascunde parola.") + (" (%s)" % eroare if eroare else "")
+def puneParola(text):
+	"""Pune parola aleasa de om (hds-ssh-parola pune, parola pe stdin)."""
+	motiv = motivParola(text)
+	if motiv:
+		return False, motiv
+	cod, eroare = _programParola("pune", text)
+	if cod == 0:
+		return True, _("Parola nouă e pusă. Merge pentru FTP, SSH și SFTP; cea veche nu mai merge.")
+	if cod == 2:
+		# hds-ssh-parola de dinainte nu stie comanda pune (pachetul hdsatelit-ssh neactualizat)
+		return False, _("Programul parolei de pe receptor e vechi și nu primește o parolă aleasă. Actualizează "
+			"receptorul, apoi încearcă din nou. Parola de dinainte rămâne.")
+	return False, _("Parola nu s-a putut pune. Parola de dinainte rămâne.") + (" (%s)" % eroare if eroare else "")
+
+
+def ftpPornit():
+	"""True cand ceva asculta pe portul FTP (21) pe IPv4: serverul FTP al imaginii merge."""
+	cauta = ":%04X" % PORT_FTP
+	for linie in (_citeste(CALE_TCP, 262144) or "").splitlines()[1:]:
+		parti = linie.split()
+		if len(parti) > 3 and parti[1].endswith(cauta) and parti[3] == "0A":
+			return True
+	return False
 
 
 def semnParola():
@@ -720,7 +792,7 @@ LUCRARI = Lucrari()
 
 # numele lucrarilor si functiile lor, aceleasi pe televizor si in web
 LUCRARE_PAROLA_NOUA = "parola-noua"
-LUCRARE_ASCUNDE = "ascunde-parola"
+LUCRARE_PUNE = "pune-parola"
 LUCRARE_CHEI = "adauga-chei"
 LUCRARE_STICK = "stick"
 LUCRARE_STERGE = "sterge-cheie"
@@ -731,8 +803,8 @@ def pornesteParolaNoua():
 	return LUCRARI.porneste(LUCRARE_PAROLA_NOUA, faParolaNoua)
 
 
-def pornesteAscunde():
-	return LUCRARI.porneste(LUCRARE_ASCUNDE, ascundeParola)
+def pornestePuneParola(text):
+	return LUCRARI.porneste(LUCRARE_PUNE, puneParola, text)
 
 
 def pornesteAdaugaChei(text):
@@ -753,12 +825,12 @@ def pornesteFaraParola(pornit):
 
 # ---------------------------------------------------------------- ecranul de pe televizor deschis
 
-# cate ecrane „Acces SSH” sunt deschise acum (le numara Screens/HdsAccesSsh.py, pe firul enigma2)
+# cate ecrane "Parola receptorului" sunt deschise acum (le numara Screens/HdsAccesSsh.py, pe firul enigma2)
 _ECRANE_DESCHISE = [0]
 
 
 def semnalEcran(deschis):
-	"""Ecranul „Acces SSH” spune ca s-a deschis (True) sau s-a inchis (False)."""
+	"""Ecranul "Parola receptorului" spune ca s-a deschis (True) sau s-a inchis (False)."""
 	_ECRANE_DESCHISE[0] = max(0, _ECRANE_DESCHISE[0] + (1 if deschis else -1))
 
 
@@ -769,7 +841,7 @@ def ecranDeschis():
 def textLucrare(nume):
 	return {
 		LUCRARE_PAROLA_NOUA: _("Se face o parolă nouă..."),
-		LUCRARE_ASCUNDE: _("Se ascunde parola..."),
+		LUCRARE_PUNE: _("Se pune parola nouă..."),
 		LUCRARE_CHEI: _("Se adaugă cheile..."),
 		LUCRARE_STICK: _("Se citesc cheile de pe stick..."),
 		LUCRARE_STERGE: _("Se șterge cheia..."),
@@ -783,9 +855,12 @@ def textLucrare(nume):
 def stare():
 	"""Tot ce arata ecranul si pagina web, fara parola (parolaDeAratat) si fara hash."""
 	chei, alte = citesteChei()
+	alta = parolaAlta()
 	return {
 		"fel_parola": felParola(),
-		"parola_de_vazut": os.path.isfile(_cale(CALE_PAROLA)),
+		"parola_de_vazut": os.path.isfile(_cale(CALE_PAROLA)) and not alta,
+		"parola_alta": alta,
+		"ftp": ftpPornit(),
 		"parola_semn": semnParola(),
 		"parola_facuta": os.path.isfile(_cale(CALE_SEMN)),
 		"parola_eroare": os.path.isfile(_cale(CALE_EROARE)),
@@ -815,8 +890,11 @@ def textParola(s):
 		return _("Nu am putut citi parola lui root.")
 	if fel == "pusa":
 		if s["parola_de_vazut"]:
-			return _("Notează parola, apoi alege „Am notat parola”: după aceea nu se mai arată.")
-		return _("Dacă ai uitat parola, alege „Fă o parolă nouă”.")
+			return _("Merge numai din rețeaua ta de acasă și se vede aici oricând. Ca s-o schimbi, alege „Schimbă parola”.")
+		if s.get("parola_alta"):
+			return _("Parola a fost schimbată pe altă cale (de exemplu cu passwd), deci nu se mai vede aici. Alege "
+				"„Schimbă parola” ca s-o vezi din nou.")
+		return _("Parola nu se vede aici. Alege „Schimbă parola” și pune una nouă: de atunci se vede oricând.")
 	# blocata: in imagine parola e „*” pana cand o face prima pornire
 	if not s["program"]:
 		return _("Lipsește programul care face parola (hds-ssh-parola). Se intră numai cu o cheie.")
@@ -856,6 +934,13 @@ def textAlarme(s):
 	return alarme
 
 
+def textEticheta(s):
+	"""Randul de deasupra parolei: pentru ce merge parola (FTP numai cand serverul FTP asculta)."""
+	if s.get("ftp"):
+		return _("Parola lui root, aceeași pentru FTP, SSH și SFTP")
+	return _("Parola lui root, aceeași pentru SSH și SFTP")
+
+
 def textChei(s):
 	"""Randul cu numarul cheilor, acelasi pe televizor si in web."""
 	n = len(s["chei"])
@@ -864,10 +949,12 @@ def textChei(s):
 	return _("Chei SSH pe receptor: niciuna.")
 
 
-def textCum(adresa):
-	"""Randul cu comanda de conectare."""
+def textCum(adresa, ftp=False):
+	"""Randul cu felul de conectare: FTP si SFTP la adresa receptorului (cand merge FTP) si comanda SSH."""
 	if not adresa:
 		return _("Adresa receptorului în rețea nu e cunoscută.")
+	if ftp:
+		return _("FTP sau SFTP: %s, utilizatorul root · SSH: ssh root@%s") % (adresa, adresa)
 	return _("Te conectezi de pe calculator cu: ssh root@%s") % adresa
 
 
@@ -928,15 +1015,21 @@ def adresaLocala():
 
 
 def paginiBrute(cu_text=True):
-	"""(titlu, cale, text) pentru „Text brut”: setarile lui dropbear si ale PAM, regula optiunii, cheile si jurnalul.
-	Niciodata /etc/shadow si nici fisierul parolei. Fara `cu_text` numai titlurile si caile (lista din pagina web)."""
+	"""(titlu, cale, text) pentru "Text brut": setarile lui dropbear si ale PAM, cele ale serverului FTP (cand e in
+	imagine), retelele de acasa, regula optiunii, cheile si jurnalul. Niciodata /etc/shadow, fisierul parolei sau
+	hash-ul ei. Fara `cu_text` numai titlurile si caile (lista din pagina web)."""
 	pagini = []
 	for titlu, cale in (
 			(_("Pornirea serverului SSH"), CALE_DROPBEAR),
 			(_("Verificarea parolei (PAM)"), CALE_PAM),
+			(_("Serverul FTP"), CALE_FTP_CONF),
+			(_("Verificarea parolei FTP (PAM)"), CALE_PAM_FTP),
+			(_("Rețeaua de acasă"), CALE_RETELE),
 			(_("Regula „Fără parolă în rețeaua locală”"), CALE_REGULA),
 			(_("Cheile SSH"), CALE_CHEI),
 			(_("Jurnalul parolei"), CALE_JURNAL)):
+		if cale in (CALE_FTP_CONF, CALE_PAM_FTP) and not os.path.isfile(_cale(CALE_FTP)):
+			continue
 		if not cu_text:
 			pagini.append((titlu, cale, ""))
 			continue

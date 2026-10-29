@@ -803,6 +803,40 @@
      "antena_verificare": "90 cm"
     }
    ]
+  },
+  {
+   "id": "p3300_12631v",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 12631000,
+   "pol": "V",
+   "sr": 30000000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "acces": "FTA",
+   "confirmat": "2026-10-27",
+   "verificat_pe_receptor": "2026-10-27",
+   "feeduri": [
+    {
+     "id": "p3300_12631v_ab8002",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8002,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "Telemadrid (Abertis)",
+     "tara": "Spania",
+     "acces": "FTA",
+     "canale": "Telemadrid HDR (UHD, HEVC), BOM (HD), Telemadrid HD, LA OTRA HD, Onda Madrid (radio)",
+     "confirmat": "2026-10-27",
+     "verificat_pe_receptor": "2026-10-27",
+     "stare_verificare": "fara_semnal_in_zona_testata",
+     "antena_verificare": "90 cm"
+    }
+   ]
   }
  ]
 }

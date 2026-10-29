@@ -89,6 +89,12 @@
 		<item level="0" text="Scanare detaliată" entryID="hds_culegere_canale" pictograma="scanare-detaliata" web="/scanare-detaliata" weight="40">
 			<screen module="HdsCulegereTotala" screen="HdsCulegereTotala" />
 		</item>
+		<!-- Editorul de canale (Screens/HdsEditorCanale.py): buchetele și canalele lor, cu telecomanda, mouse-ul și
+		     tastatura; aceleași date, aceeași anulare și aceleași copii de siguranță ca pagina web /editor-canale
+		     (Components/HdsEditorCanale.py). Tot din meniul listei de canale (MENU > Editorul de canale). -->
+		<item level="0" text="Editorul de canale" entryID="hds_editor_canale" pictograma="editor-canale" web="/editor-canale" weight="45" stare="netestat">
+			<screen module="HdsEditorCanale" screen="HdsEditorCanale" />
+		</item>
 		<!-- 0.2.6: canalele și setările dintr-o copie de pe stick sau din altă imagine.
 		     Ecranul e în Plugins/Extensions/HdsImportSetari/plugin.py, numit în Screens/HdsImportSetari.py. Înainte era
 		     o extensie cu trei căi (lista de extensii, tasta albastră, agățată aici); acum are numai locul acesta.
@@ -191,6 +197,21 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 		</item>
 		<item level="0" text="Channel Information" entryID="service_info_screen" pictograma="canal-info" web="/informatii-canal" weight="35">
 			<screen module="ServiceInfo" screen="ServiceInfo" />
+		</item>
+		<!-- „Ajutor” (Screens/HdsAjutor.py, datele in Components/HdsAjutor.py si in pachetul hdsatelit-ajutor): ajutorul
+		     fara internet, cu capitolele, paginile si cautarea; tasta HELP deschide de pe orice ecran pagina lui (din
+		     pagina, VERDE duce la cuprins). Ultimul rand al grupei, ca cifrele celorlalte sa ramana aceleasi; meniul
+		     principal ramane cu cele 9 randuri. In web: /ajutor. -->
+		<item level="0" text="Ajutor" entryID="hds_ajutor" pictograma="jurnal" weight="40" web="/ajutor">
+			<screen module="HdsAjutor" screen="HdsAjutorCuprins" />
+		</item>
+		<!-- „Diagnosticul pornirii” (Screens/HdsPazaModel.py, HdsDiagnosticPornire; codurile in
+		     Components/HdsDiagnostic.py): ce a citit receptorul la pornire fata de ce cere software-ul, codurile de
+		     eroare si adresa paginii web. Pe televizor ecranul apare singur numai cand pornirea nu reuseste; de aici se
+		     deschide oricand si OK sau EXIT il inchide. Dupa „Ajutor”, ca cifrele celorlalte randuri sa ramana aceleasi.
+		     In web: /paza-model. -->
+		<item level="0" text="Diagnosticul pornirii" entryID="hds_diagnostic_pornire" pictograma="receptor" weight="45" web="/paza-model" stare="netestat">
+			<screen module="HdsPazaModel" screen="HdsDiagnosticPornire" />
 		</item>
 	</menu>
 
@@ -467,18 +488,15 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="DNS Server Settings" entryID="dns_setup" pictograma="dns" web="/dns" weight="20">
 				<screen module="NetworkSetup" screen="NameserverSetup" />
 			</item>
-			<!-- intrarea prin SSH: parola lui root facuta pe receptor, cheile SSH, „Fără parolă în rețeaua locală”
-			     (Components/HdsAccesSsh.py, Screens/HdsAccesSsh.py); in web: /acces-ssh. -->
-			<item level="0" text="Acces SSH" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
+			<!-- intrarea prin FTP, SSH si SFTP cu aceeasi parola: parola lui root, aleasa pe receptor si vazuta oricand,
+			     cheile SSH, „Fără parolă în rețeaua locală” (Components/HdsAccesSsh.py, Screens/HdsAccesSsh.py); in web:
+			     /acces-ssh. -->
+			<item level="0" text="Parola receptorului" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
 				<screen module="HdsAccesSsh" screen="HdsAccesSsh" />
 			</item>
-			<!-- Asistenta de la distanta (v1), oprita din fabrica: pornita numai de om, cu informarea si confirmarea pe
-			     televizor; receptorul intreaba serverul HD Satelit prin HTTPS de cereri semnate dintr-o lista fixa
-			     (Components/HdsAsistenta.py, Screens/HdsAsistenta.py); in web: /asistenta. Numai cu verificarea
-			     semnaturii posibila (python3-cryptography): SystemInfo["HdsAsistenta"], pus de mytest.py. -->
-			<item level="0" text="Asistență de la distanță" entryID="hds_asistenta" pictograma="conexiune" weight="32" web="/asistenta" requires="HdsAsistenta" stare="netestat">
-				<screen module="HdsAsistenta" screen="HdsAsistenta" />
-			</item>
+			<!-- Asistenta de la distanta (Components/HdsAsistenta.py, Screens/HdsAsistenta.py) nu are intrare aici: numai
+			     beta testerii pot da acces la receptor, deci se deschide numai din meniul testerului (Beta tester > Cere
+			     ajutor de la distanta, Screens/HdsBetaTester.py); in web: /asistenta, legata numai din /beta-tester. -->
 			<!-- VPN-ul receptorului, oprit din fabrica: HMA, NordVPN, Surfshark, Proton VPN sau alt furnizor OpenVPN,
 			     WireGuard; serverul, numele si parola, ce trece prin VPN (Components/HdsVpn.py, Screens/HdsVpn.py); in
 			     web: /vpn (vpn_web.py). Numai cu programele VPN in imagine (openvpn sau wg, din 0.4.0):
@@ -547,6 +565,12 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<item level="1" text="Crash Log Viewer" entryID="hds_crashlog_autosubmit" pictograma="jurnal-caderi" web="/jurnale-cadere" weight="39">
 				<screen module="HdsCrashlogAutoSubmit" screen="HdsCrashlogAutoSubmit" />
+			</item>
+			<!-- pasii pornirilor, rapoartele si caderile lasate in celelalte sloturi, pe stick si trimise dintr-o apasare
+			     (Components/HdsJurnaleSloturi.py, Screens/HdsJurnaleSloturi.py, tools/hds-raport.sh); in web:
+			     /jurnale-sloturi -->
+			<item level="0" text="Jurnalele celorlalte sloturi" entryID="hds_jurnale_sloturi" pictograma="jurnal-caderi" web="/jurnale-sloturi" weight="39">
+				<screen module="HdsJurnaleSloturi" screen="HdsJurnaleSloturi" />
 			</item>
 			<item level="0" text="Parental Lock" entryID="parental_setup" pictograma="control-parental" web="/control-parental" weight="40">
 				<screen module="ParentalControlSetup" screen="ParentalControlSetup" />

@@ -2320,7 +2320,9 @@ class InfoBarSubserviceSelection:
 	def __init__(self):
 		self["SubserviceSelectionAction"] = HelpableActionMap(self, "InfobarSubserviceSelectionActions",
 			{
-				"subserviceSelection": (self.subserviceSelection, _("Subservice list...")),
+				# HDSatelit: VERDE scurt; in bara (Screens/InfoBar.py, InfoBar.subserviceSelection) subcanalele canalului
+				# cand le are, altfel actiunea aleasa in Butoane colorate si taste rapide (implicit Extensii si aplicatii)
+				"subserviceSelection": (self.subserviceSelection, _("Extensiile sau ce ai ales pentru VERDE (subcanalele, când există)")),
 			})
 
 		self["SubserviceQuickzapAction"] = HelpableActionMap(self, "InfobarSubserviceQuickzapActions",

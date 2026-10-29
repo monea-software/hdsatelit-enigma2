@@ -113,7 +113,8 @@ def _traduAlegerileCuNumere():
 def InitUsageConfig():
 	global config
 	config.usage.showdish = ConfigYesNo(default = True)
-	config.usage.multibouquet = ConfigYesNo(default = False)
+	# HDSatelit: tasta albastra deschide lista buchetelor (Favorite primul), nu numai Favorite
+	config.usage.multibouquet = ConfigYesNo(default = True)
 	config.usage.multiepg_ask_bouquet = ConfigYesNo(default = False)
 
 	config.usage.quickzap_bouquet_change = ConfigYesNo(default = False)

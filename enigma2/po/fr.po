@@ -9460,15 +9460,6 @@ msgstr "Paramètres"
 msgid "Niciun jurnal de cădere găsit."
 msgstr "Aucun journal de plantage trouvé."
 
-#: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
-#, python-format
-msgid ""
-"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
-"Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
-msgstr ""
-"Trouvés : %d. En tant que bêta-testeur (Paramètres > Bêta-testeur), les nouveaux journaux partent tout seuls, uniquement avec ton consentement. Sinon, un journal trouvé ici peut être envoyé via le formulaire de contact de hdsatelit.com.\n"
-"Recherche dans « %s », dans /tmp et dans tout autre dossier monté sous /media, /run/media, /home/root."
-
 #: lib/python/Screens/HdsCrashlogAutoSubmit.py:209
 #, python-format
 msgid "Ștergi jurnalul „%s”?"
@@ -24840,10 +24831,6 @@ msgstr "Envoyer sur le récepteur"
 #: lib/python/Plugins/Extensions/HdsWebControl/ecran_pornire_web.py
 msgid "Trimite poza"
 msgstr "Envoyer la photo"
-
-#: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
-msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
-msgstr "En tant que bêta-testeur (dans Paramètres, à Bêta-testeur), les nouveaux journaux partent tout seuls, uniquement avec ton consentement. Sinon, un journal trouvé ici peut être envoyé par le formulaire de contact sur hdsatelit.com. La recherche se fait dans <span id=\"principal\"></span>, dans /tmp et dans tout autre dossier monté sous /media, /run/media, /home/root."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/antena_web.py
 msgid "Tunerele nu se pot citi."
@@ -53391,6 +53378,3371 @@ msgstr "Journal système"
 msgid "Serviciile de sistem"
 msgstr "Services système"
 
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Făcut pentru Python 2"
+msgstr "Conçu pour Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s este făcut pentru Python 2"
+msgstr "%s est conçu pour Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pachetul e făcut pentru imaginile vechi, cu Python 2."
+msgstr "Le paquet est conçu pour les anciennes images, avec Python 2."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Imaginea aceasta are Python 3, deci nu se instalează."
+msgstr "Cette image a Python 3, il n'est donc pas installé."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Instalează înlocuitorul"
+msgstr "Installer le remplaçant"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Se verifică pachetul înainte de instalare."
+msgstr "Vérification du paquet avant l'installation."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "cere %s"
+msgstr "requiert %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e o bibliotecă Python 2"
+msgstr "c'est une bibliothèque Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere în dosarul Python 2"
+msgstr "il a des fichiers dans le dossier de Python 2"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "are fișiere compilate pentru Python 2 (%s)"
+msgstr "il a des fichiers compilés pour Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "e legat de biblioteca Python 2 (%s)"
+msgstr "il est lié à la bibliothèque Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "codul nu se compilează în Python 3 (%s)"
+msgstr "le code ne se compile pas en Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "folosește module scoase din Python 3 (%s)"
+msgstr "il utilise des modules retirés de Python 3 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "vine dintr-un feed al imaginilor cu Python 2 (%s)"
+msgstr "il vient d'un feed d'images avec Python 2 (%s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Motivul"
+msgstr "Raison"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Pentru Python 3 există %s, în feedul %s."
+msgstr "Pour Python 3, il existe %s, dans le feed %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "%s, făcut pentru Python 3, este deja instalat."
+msgstr "%s, conçu pour Python 3, est déjà installé."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Nu s-a instalat nimic."
+msgstr "Rien n'a été installé."
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce · Verde instalează înlocuitorul"
+msgstr "OK montre pourquoi · Vert installe le remplaçant"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "OK arată de ce"
+msgstr "OK montre pourquoi"
+
+#: lib/python/Components/HdsExtensiiLucru.py
+msgid "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instalează."
+msgstr "La version %s de la source %s est conçue pour Python 2 et n'est pas installée."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "Le pilote de la carte ne s'est pas chargé, le type de carte n'a donc pas pu être lu et on ne peut pas prouver que ce logiciel lui est destiné."
+
+#: lib/python/Components/HdsPazaModel.py
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "Remets le bon logiciel avec une clé USB, comme l'indique le fabricant du récepteur (chez Octagon : maintiens Standby sur le récepteur à l'allumage, puis Recovery From USB)."
+
+#: data/menu.xml
+msgid "Diagnosticul pornirii"
+msgstr "Diagnostic du démarrage"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește"
+msgstr "L'interface ne démarre pas"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul receptorului nu este cel pentru care e făcut software-ul."
+msgstr "Le processeur du récepteur n'est pas celui pour lequel le logiciel est fait."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul."
+msgstr "Le pilote indique un autre type de carte que celui pour lequel le logiciel est fait."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Eticheta din memoria receptorului spune alt tip de placă."
+msgstr "L'étiquette dans la mémoire du récepteur indique un autre type de carte."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa receptorului (antetul de fabrică) este alta."
+msgstr "La carte du récepteur (en-tête d'usine) est différente."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile din memoria receptorului sunt așezate altfel."
+msgstr "Les partitions de la mémoire du récepteur sont disposées autrement."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime."
+msgstr "La partition du noyau ou du système est à un autre endroit ou a une autre taille."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memoria internă are altă mărime decât la modelul pentru care e software-ul."
+msgstr "La mémoire interne a une autre taille que sur le modèle pour lequel est le logiciel."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "O altă valoare a receptorului nu se potrivește."
+msgstr "Une autre valeur du récepteur ne correspond pas."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat."
+msgstr "Le processeur n'a pas pu être lu : le pilote du processeur ne s'est pas chargé."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat."
+msgstr "Le type de carte n'a pas pu être lu : le pilote de la carte ne s'est pas chargé."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placa nu s-a putut citi din antetul de fabrică."
+msgstr "La carte n'a pas pu être lue dans l'en-tête d'usine."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partițiile nu s-au putut citi din linia de pornire."
+msgstr "Les partitions n'ont pas pu être lues dans la ligne de démarrage."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiția nucleului sau a sistemului nu s-a găsit."
+msgstr "La partition du noyau ou du système n'a pas été trouvée."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Semnul receptorului din software este stricat."
+msgstr "La marque du récepteur dans le logiciel est endommagée."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Verificarea de la pornire nu a dat niciun rezultat."
+msgstr "La vérification au démarrage n'a donné aucun résultat."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur."
+msgstr "L'interface a planté plusieurs fois au démarrage et a démarré en mode sans échec."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața cade și în modul sigur."
+msgstr "L'interface plante aussi en mode sans échec."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu pornește deloc."
+msgstr "L'interface ne démarre pas du tout."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Driverele receptorului lipsesc sau nu s-au încărcat."
+msgstr "Les pilotes du récepteur manquent ou ne se sont pas chargés."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața nu a apărut în 5 minute: s-a blocat la pornire."
+msgstr "L'interface n'est pas apparue en 5 minutes : elle s'est bloquée au démarrage."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața s-a oprit la pornire din alt motiv."
+msgstr "L'interface s'est arrêtée au démarrage pour une autre raison."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Tip placă (driver)"
+msgstr "Type carte (pilote)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Etichetă"
+msgstr "Étiquette"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Placă (HW)"
+msgstr "Carte (HW)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Memorie internă"
+msgstr "Mémoire interne"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleu și sistem"
+msgstr "Noyau et système"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Partiții"
+msgstr "Partitions"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Model (încărcător)"
+msgstr "Modèle (chargeur)"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%d partiții"
+msgstr "%d partitions"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "locul %(loc)d: %(intrare)s"
+msgstr "place %(loc)d : %(intrare)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "%(marime)s, liber %(liber)d MiB"
+msgstr "%(marime)s, %(liber)d MiB libres"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "niciunul găsit"
+msgstr "aucun trouvé"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "HD Satelit %(versiune)s pentru %(model)s"
+msgstr "HD Satelit %(versiune)s pour %(model)s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Prends une photo de cet écran et envoie-la sur le forum où tu as trouvé le logiciel ou à %s."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului."
+msgstr "Le logiciel n'écrit rien dans la mémoire du récepteur. Remets le bon logiciel avec une clé USB, comme l'indique le fabricant du récepteur."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web: %s"
+msgstr "Toutes les données, dans l'interface web : %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, în interfața web a receptorului, la pagina %s"
+msgstr "Toutes les données, dans l'interface web du récepteur, à la page %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Forumul: %s"
+msgstr "Forum : %s"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Ultima eroare a interfeței"
+msgstr "Dernière erreur de l'interface"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Nucleul: driverele și erorile"
+msgstr "Noyau : pilotes et erreurs"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Toate datele, de copiat, din calculator sau telefon:"
+msgstr "Toutes les données, à copier, depuis un ordinateur ou un téléphone :"
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Interfața se încearcă din nou peste %d minute."
+msgstr "L'interface sera relancée dans %d minutes."
+
+#: lib/python/Components/HdsDiagnostic.py
+msgid "Coduri:"
+msgstr "Codes :"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Cod"
+msgstr "Code"
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Alte coduri: %s."
+msgstr "Autres codes : %s."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit: receptorul se potrivește cu software-ul."
+msgstr "Le démarrage a réussi : le récepteur correspond au logiciel."
+
+#: lib/python/Screens/HdsPazaModel.py
+msgid "Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat."
+msgstr "Le démarrage a réussi. Quelques valeurs diffèrent de celles attendues : le modèle n'est pas encore confirmé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază datele de mai jos și trimite-le pe forumul unde ai găsit software-ul sau la %s."
+msgstr "Copie les données ci-dessous et envoie-les sur le forum où tu as trouvé le logiciel ou à %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pornirea a reușit; datele de mai jos sunt numai de citit."
+msgstr "Le démarrage a réussi ; les données ci-dessous sont seulement à lire."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Copiază tot"
+msgstr "Tout copier"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Trimite pe e-mail"
+msgstr "Envoyer par e-mail"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Forumul HD Satelit"
+msgstr "Forum HD Satelit"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Fără JavaScript: ține apăsat pe text, alege tot și copiază."
+msgstr "Sans JavaScript : appuie longuement sur le texte, sélectionne tout et copie."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
+msgid "Pe televizor, ecranul diagnosticului apare singur numai când pornirea nu reușește; altfel se deschide din MENU > Informații despre sistem > Diagnosticul pornirii."
+msgstr "Sur le téléviseur, l'écran de diagnostic n'apparaît tout seul que si le démarrage échoue ; sinon tu l'ouvres depuis MENU > Informations système > Diagnostic du démarrage."
+
+#: lib/python/Components/HdsTasteRapide.py lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Verde (apăsare scurtă)"
+msgstr "Vert (appui court)"
+
+#: lib/python/Screens/ButtonSetup.py
+msgid "Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea LUNGĂ a fiecărui buton colorat, cât te uiți la TV. Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."
+msgstr "Choisis ce que fait un appui court sur VERT et ce qui s'ouvre lors d'un appui LONG sur chaque bouton coloré, pendant que tu regardes la TV. Sur une chaîne avec des sous-services, un appui court sur VERT affiche d'abord leur liste."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Alege ce face VERDE apăsat scurt și ce se deschide la apăsarea lungă a fiecărui buton colorat, cât te uiți la televizor."
+msgstr "Choisis ce que fait un appui court sur VERT et ce qui s'ouvre à l'appui long sur chaque bouton coloré, pendant que tu regardes la télévision."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Apăsarea scurtă"
+msgstr "L'appui court"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py
+msgid "Pe un canal cu subcanale, VERDE scurt arată întâi lista lor."
+msgstr "Sur une chaîne avec des sous-services, un appui court sur VERT affiche d'abord leur liste."
+
+#: lib/python/Screens/InfoBarGenerics.py
+msgid "Extensiile sau ce ai ales pentru VERDE (subcanalele, când există)"
+msgstr "Extensions ou ton choix pour VERT (sous-services, s'il y en a)"
+
+#: lib/python/Hds/DabT2/pornire.py
+msgid "Fluxul %s e criptat si nu se poate desface."
+msgstr "Le flux %s est chiffré et ne peut pas être décapsulé."
+
+#: lib/python/Components/HdsEditorCanale.py:103
+msgid "pe televizor"
+msgstr "sur le téléviseur"
+
+#: lib/python/Components/HdsEditorCanale.py:105
+msgid "în interfața web (%s)"
+msgstr "dans l'interface web (%s)"
+
+#: lib/python/Components/HdsEditorCanale.py:106
+msgid "în interfața web"
+msgstr "dans l'interface web"
+
+#: lib/python/Components/HdsEditorCanale.py:113
+msgid "Editorul lucrează încă (citește sau salvează lista). Încearcă din nou peste câteva secunde."
+msgstr "L'éditeur travaille encore (il lit ou enregistre la liste). Réessaie dans quelques secondes."
+
+#: lib/python/Components/HdsEditorCanale.py:115
+msgid "Lista de canale e deschisă acum %s."
+msgstr "La liste des chaînes est ouverte en ce moment %s."
+
+#: lib/python/Components/HdsEditorCanale.py:117
+msgid "Are o schimbare nesalvată."
+msgid_plural "Are %d schimbări nesalvate."
+msgstr[0] "Elle a %d modification non enregistrée."
+msgstr[1] "Elle a %d modifications non enregistrées."
+
+#: lib/python/Components/HdsEditorCanale.py:124
+msgid "Lista de canale a fost preluată %s. Schimbările nesalvate de aici s-au pierdut."
+msgstr "La liste des chaînes a été reprise %s. Les modifications non enregistrées faites ici sont perdues."
+
+#: lib/python/Components/HdsEditorCanale.py:173
+msgid "Lista de canale de pe televizor e în modul de mutare sau de editare. Ieși din el și salvează din nou."
+msgstr "La liste des chaînes sur le téléviseur est en mode déplacement ou édition. Quitte ce mode et enregistre à nouveau."
+
+#: lib/python/Components/HdsEditorCanale.py:293
+msgid "Lista de canale nu s-a putut citi sau scrie."
+msgstr "La liste des chaînes n'a pas pu être lue ou écrite."
+
+#: lib/python/Components/HdsEditorCanale.py:586
+msgid "Sesiunea editorului s-a închis. Deschide din nou editorul."
+msgstr "La session de l'éditeur s'est fermée. Ouvre à nouveau l'éditeur."
+
+#: lib/python/Components/HdsEditorCanale.py:710
+msgid "Buchetul nu mai există."
+msgstr "Le bouquet n'existe plus."
+
+#: lib/python/Components/HdsEditorCanale.py:1094
+msgid "Adăugat: %s"
+msgstr "Ajouté : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1095
+msgid "Un canal adăugat"
+msgid_plural "%d canale adăugate"
+msgstr[0] "%d chaîne ajoutée"
+msgstr[1] "%d chaînes ajoutées"
+
+#: lib/python/Components/HdsEditorCanale.py:1106
+msgid "Nu e ales niciun rând."
+msgstr "Aucune ligne n'est sélectionnée."
+
+#: lib/python/Components/HdsEditorCanale.py:1118
+msgid "Mutat: %s"
+msgstr "Déplacé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1119
+msgid "Un rând mutat"
+msgid_plural "%d rânduri mutate"
+msgstr[0] "%d ligne déplacée"
+msgstr[1] "%d lignes déplacées"
+
+#: lib/python/Components/HdsEditorCanale.py:1141
+msgid "Un buchet nu poate fi pus în el însuși."
+msgstr "Un bouquet ne peut pas être mis dans lui-même."
+
+#: lib/python/Components/HdsEditorCanale.py:1154
+msgid "Un buchet TV nu se poate pune printre cele de radio."
+msgstr "Un bouquet TV ne peut pas être mis parmi ceux de radio."
+
+#: lib/python/Components/HdsEditorCanale.py:1159
+msgid "Mutat în %(buchet)s: %(canal)s"
+msgstr "Déplacé dans %(buchet)s : %(canal)s"
+
+#: lib/python/Components/HdsEditorCanale.py:1161
+msgid "în %s"
+msgstr "dans %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1187
+msgid "Un rând copiat"
+msgid_plural "%d rânduri copiate"
+msgstr[0] "%d ligne copiée"
+msgstr[1] "%d lignes copiées"
+
+#: lib/python/Components/HdsEditorCanale.py:1201
+msgid "Șters din buchet: %s"
+msgstr "Supprimé du bouquet : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1202
+msgid "Un rând șters din buchet"
+msgid_plural "%d rânduri șterse din buchet"
+msgstr[0] "%d ligne supprimée du bouquet"
+msgstr[1] "%d lignes supprimées du bouquet"
+
+#: lib/python/Components/HdsEditorCanale.py:1211
+msgid "Scos din toate buchetele"
+msgstr "Retiré de tous les bouquets"
+
+#: lib/python/Components/HdsEditorCanale.py:1234
+msgid "Redenumit: %s"
+msgstr "Renommé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1254
+msgid "Canalul nu mai există în lista receptorului."
+msgstr "La chaîne n'est plus dans la liste du récepteur."
+
+#: lib/python/Components/HdsEditorCanale.py:1274
+msgid "Buchet redenumit: %s"
+msgstr "Bouquet renommé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1301
+msgid "Marcaj nou: %s"
+msgstr "Nouveau marqueur : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1311
+msgid "Rând gol nou"
+msgstr "Nouvelle ligne vide"
+
+#: lib/python/Components/HdsEditorCanale.py:1322
+msgid "Adresa fluxului nu e bună (trebuie să înceapă cu http:// sau https://)."
+msgstr "L'adresse du flux n'est pas valide (elle doit commencer par http:// ou https://)."
+
+#: lib/python/Components/HdsEditorCanale.py:1325
+msgid "Adresa fluxului e prea lungă pentru lista de canale."
+msgstr "L'adresse du flux est trop longue pour la liste des chaînes."
+
+#: lib/python/Components/HdsEditorCanale.py:1329
+msgid "Flux nou: %s"
+msgstr "Nouveau flux : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1358
+msgid "Buchet nou: %s"
+msgstr "Nouveau bouquet : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1358
+msgid "Sub-buchet nou: %s"
+msgstr "Nouveau sous-bouquet : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1370
+msgid "%s (copie)"
+msgstr "%s (copie)"
+
+#: lib/python/Components/HdsEditorCanale.py:1376
+msgid "Buchet copiat: %s"
+msgstr "Bouquet copié : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1380
+msgid "Lista buchetelor nu se poate șterge."
+msgstr "La liste des bouquets ne peut pas être supprimée."
+
+#: lib/python/Components/HdsEditorCanale.py:1382
+msgid "Favorite nu se pot șterge. Poți scoate canalele din ele."
+msgstr "Les Favoris ne peuvent pas être supprimés. Tu peux en retirer les chaînes."
+
+#: lib/python/Components/HdsEditorCanale.py:1402
+msgid "Buchet șters: %s"
+msgstr "Bouquet supprimé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1420
+msgid "Buchet pus în listă: %s"
+msgstr "Bouquet mis dans la liste : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1429
+msgid "Buchetul e în listă; șterge-l din listă."
+msgstr "Le bouquet est dans la liste ; supprime-le de la liste."
+
+#: lib/python/Components/HdsEditorCanale.py:1454
+msgid "Buchet arătat: %s"
+msgstr "Bouquet affiché : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1454
+msgid "Buchet ascuns: %s"
+msgstr "Bouquet masqué : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1464
+msgid "Sortat: %s"
+msgstr "Trié : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1501
+msgid "Arătat: %s"
+msgstr "Affiché : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1501
+msgid "Ascuns: %s"
+msgstr "Masqué : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1503
+msgid "Un canal ascuns"
+msgid_plural "%d canale ascunse"
+msgstr[0] "%d chaîne masquée"
+msgstr[1] "%d chaînes masquées"
+
+#: lib/python/Components/HdsEditorCanale.py:1504
+msgid "Un canal arătat"
+msgid_plural "%d canale arătate"
+msgstr[0] "%d chaîne affichée"
+msgstr[1] "%d chaînes affichées"
+
+#: lib/python/Components/HdsEditorCanale.py:1530
+msgid "Un canal blocat"
+msgid_plural "%d canale blocate"
+msgstr[0] "%d chaîne verrouillée"
+msgstr[1] "%d chaînes verrouillées"
+
+#: lib/python/Components/HdsEditorCanale.py:1531
+msgid "Un canal deblocat"
+msgid_plural "%d canale deblocate"
+msgstr[0] "%d chaîne déverrouillée"
+msgstr[1] "%d chaînes déverrouillées"
+
+#: lib/python/Components/HdsEditorCanale.py:1548
+msgid "Buchet blocat: %s"
+msgstr "Bouquet verrouillé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1548
+msgid "Buchet deblocat: %s"
+msgstr "Bouquet déverrouillé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1563
+msgid "Șters din receptor: %s"
+msgstr "Supprimé du récepteur : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1564
+msgid "Un canal șters din receptor"
+msgid_plural "%d canale șterse din receptor"
+msgstr[0] "%d chaîne supprimée du récepteur"
+msgstr[1] "%d chaînes supprimées du récepteur"
+
+#: lib/python/Components/HdsEditorCanale.py:1587
+msgid "Transponderul nu mai există."
+msgstr "Le transpondeur n'existe plus."
+
+#: lib/python/Components/HdsEditorCanale.py:1590
+msgid "Transponder șters: %s"
+msgstr "Transpondeur supprimé : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1612
+msgid "Fără furnizor"
+msgstr "Sans fournisseur"
+
+#: lib/python/Components/HdsEditorCanale.py:1620
+msgid "Buchet nou"
+msgstr "Nouveau bouquet"
+
+#: lib/python/Components/HdsEditorCanale.py:1622
+msgid "Nu știu din ce să fac buchetul."
+msgstr "Je ne sais pas à partir de quoi faire le bouquet."
+
+#: lib/python/Components/HdsEditorCanale.py:1625
+msgid "Nu e niciun canal de pus în buchet."
+msgstr "Il n'y a aucune chaîne à mettre dans le bouquet."
+
+#: lib/python/Components/HdsEditorCanale.py:1634
+msgid "Un canal care nu mai există, reparat"
+msgid_plural "%d canale care nu mai există, reparate"
+msgstr[0] "%d chaîne qui n'existe plus, réparée"
+msgstr[1] "%d chaînes qui n'existent plus, réparées"
+
+#: lib/python/Components/HdsEditorCanale.py:1703
+msgid "Fișierul nu are niciun flux."
+msgstr "Le fichier ne contient aucun flux."
+
+#: lib/python/Components/HdsEditorCanale.py:1713
+msgid "Fluxuri importate: %s"
+msgstr "Flux importés : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1721
+msgid "Fluxuri"
+msgstr "Flux"
+
+#: lib/python/Components/HdsEditorCanale.py:1750
+msgid "Listă importată"
+msgstr "Liste importée"
+
+#: lib/python/Components/HdsEditorCanale.py:1890
+msgid "înainte de salvare"
+msgstr "avant l'enregistrement"
+
+#: lib/python/Components/HdsEditorCanale.py:1906
+msgid "Lista s-a scris, dar nu s-a putut reîncărca. Repornește interfața."
+msgstr "La liste a été écrite, mais elle n'a pas pu être rechargée. Redémarre l'interface."
+
+#: lib/python/Components/HdsEditorCanale.py:2066
+msgid "Buchetul %s s-a schimbat și pe receptor între timp; a rămas varianta din editor."
+msgstr "Le bouquet %s a aussi été modifié sur le récepteur entre-temps ; c'est la version de l'éditeur qui a été gardée."
+
+#: lib/python/Components/HdsEditorCanale.py:2123
+msgid "Nu e loc destul în memoria receptorului pentru lista de canale."
+msgstr "Il n'y a pas assez de place dans la mémoire du récepteur pour la liste des chaînes."
+
+#: lib/python/Components/HdsEditorCanale.py:2205
+msgid "Nu e loc pentru copia de siguranță a listei. Nu s-a salvat nimic."
+msgstr "Il n'y a pas de place pour la sauvegarde de la liste. Rien n'a été enregistré."
+
+#: lib/python/Components/HdsEditorCanale.py:2300
+msgid "Copia nu mai există."
+msgstr "La sauvegarde n'existe plus."
+
+#: lib/python/Components/HdsEditorCanale.py:2312
+msgid "înainte de întoarcerea la copia din %s"
+msgstr "avant le retour à la sauvegarde du %s"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:111
+msgid "Canale fără nume"
+msgstr "Chaînes sans nom"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:111
+msgid "Numele e gol sau are numai semne (punct, liniuță, spații). Unele pot fi fluxuri care pornesc numai uneori: uită-te la frecvență și la imagine / sunet."
+msgstr "Le nom est vide ou ne contient que des signes (point, tiret, espaces). Certaines peuvent être des feeds qui n'émettent que de temps en temps : regarde la fréquence et l'image / le son."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:113
+msgid "Nume de test"
+msgstr "Noms de test"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:113
+msgid "Nume puse de emițător pentru probe sau de receptor când lipsește numele (Test, Service 1234, Ch-12, SID ...)."
+msgstr "Noms mis par le diffuseur pour des essais, ou par le récepteur quand le nom manque (Test, Service 1234, Ch-12, SID ...)."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:159
+msgid "Al doilea rând al aceluiași canal din buchet. Ștergerea scoate numai rândul în plus."
+msgstr "La deuxième ligne de la même chaîne dans le bouquet. La suppression ne retire que la ligne en trop."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:159
+msgid "De două ori în același buchet"
+msgstr "Deux fois dans le même bouquet"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:161
+msgid "Același nume pe aceeași poziție"
+msgstr "Même nom sur la même position"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:161
+msgid "Canale diferite (alt SID sau alt transponder) cu același nume pe același satelit. Nu sunt neapărat dubluri: uită-te la frecvență."
+msgstr "Des chaînes différentes (autre SID ou autre transpondeur) avec le même nom sur le même satellite. Ce ne sont pas forcément des doublons : regarde la fréquence."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:163
+msgid "Același SID pe același transponder, scris de două ori cu alt tip de serviciu."
+msgstr "Le même SID sur le même transpondeur, écrit deux fois avec un autre type de service."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:163
+msgid "Același canal de două ori în listă"
+msgstr "La même chaîne deux fois dans la liste"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:202
+msgid "Canale care nu mai există"
+msgstr "Chaînes qui n'existent plus"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:202
+msgid "Rânduri din buchete al căror canal nu mai e în lista receptorului (după o căutare nouă sau o listă adusă din altă parte). Unde am găsit același canal, „Repară” îl leagă din nou; altfel rândul se scoate."
+msgstr "Lignes de bouquets dont la chaîne n'est plus dans la liste du récepteur (après une nouvelle recherche ou une liste venue d'ailleurs). Là où la même chaîne a été trouvée, « Réparer » la relie à nouveau ; sinon la ligne est retirée."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:215
+msgid "Buchete fără niciun rând."
+msgstr "Bouquets sans aucune ligne."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:215
+msgid "Buchete goale"
+msgstr "Bouquets vides"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:148
+msgid "un browser"
+msgstr "un navigateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:243
+msgid "Canalul nu mai există în lista receptorului"
+msgstr "La chaîne n'est plus dans la liste du récepteur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:268
+msgid "Buchetul nu e bun."
+msgstr "Le bouquet n'est pas valide."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:277
+msgid "Lista buchetelor"
+msgstr "Liste des bouquets"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:387
+msgid "Alege un singur rând."
+msgstr "Choisis une seule ligne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:391
+msgid "Numai un canal se poate redenumi peste tot."
+msgstr "Seule une chaîne peut être renommée partout."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:401
+msgid "Alege un singur canal."
+msgstr "Choisis une seule chaîne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:480
+msgid "Operația nu e cunoscută."
+msgstr "Opération inconnue."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:528
+msgid "Pagina nu e bună. Deschide din nou editorul."
+msgstr "La page n'est pas valide. Ouvre à nouveau l'éditeur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:533
+msgid "Editorul nu mai e deschis în această pagină. Deschide-l din nou."
+msgstr "L'éditeur n'est plus ouvert dans cette page. Ouvre-le à nouveau."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:641
+msgid "Cererea nu e bună."
+msgstr "La requête n'est pas valide."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:733
+msgid "Unealta nu e cunoscută."
+msgstr "Outil inconnu."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:779
+msgid "Fișierul nu s-a putut face."
+msgstr "Le fichier n'a pas pu être créé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:801
+msgid "Fișierul e gol sau prea mare."
+msgstr "Le fichier est vide ou trop gros."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:819
+msgid "Arhiva nu se poate citi (merg zip, tar și tar.gz)."
+msgstr "L'archive ne peut pas être lue (zip, tar et tar.gz fonctionnent)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:822
+msgid "În arhivă nu e nicio listă de canale (lamedb sau bouquets.tv)."
+msgstr "Il n'y a aucune liste des chaînes dans l'archive (lamedb ou bouquets.tv)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:843
+msgid "Arhiva nu mai e pe receptor. Alege-o din nou."
+msgstr "L'archive n'est plus sur le récepteur. Choisis-la à nouveau."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2582
+msgid "Editorul de canale"
+msgstr "Éditeur de chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2584
+msgid "Buchet"
+msgstr "Bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2585
+msgid "Adaugă canale"
+msgstr "Ajouter des chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2586
+msgid "Anulează schimbarea"
+msgstr "Annuler la modification"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2587
+msgid "Refă"
+msgstr "Rétablir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2591
+msgid "Preia lista aici"
+msgstr "Reprendre la liste ici"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2595
+msgid "Furnizori"
+msgstr "Fournisseurs"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2596
+msgid "HD și 4K"
+msgstr "HD et 4K"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2597
+msgid "Necriptate"
+msgstr "Non cryptées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2598
+msgid "Criptate"
+msgstr "Cryptées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2599
+msgid "În niciun buchet"
+msgstr "Dans aucun bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2600
+msgid "Ascunse"
+msgstr "Masquées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2601
+msgid "Limba, subtitrări și altele"
+msgstr "Langue, sous-titres et plus"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2606
+msgid "Adaugă în buchet"
+msgstr "Ajouter au bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2607
+msgid "Mută sus"
+msgstr "Monter"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2608
+msgid "Mută jos"
+msgstr "Descendre"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2609
+msgid "Mută la poziția..."
+msgstr "Déplacer à la position..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2610
+msgid "Mută în..."
+msgstr "Déplacer vers..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2611
+msgid "Copiază în..."
+msgstr "Copier vers..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2613
+msgid "Șterge din receptor"
+msgstr "Supprimer du récepteur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2615
+msgid "Redenumește peste tot"
+msgstr "Renommer partout"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2618
+msgid "Blochează"
+msgstr "Verrouiller"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2619
+msgid "Deblochează"
+msgstr "Déverrouiller"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2620
+msgid "Sortează"
+msgstr "Trier"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2621
+msgid "Sortează cele alese"
+msgstr "Trier la sélection"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2622
+msgid "Selectează tot"
+msgstr "Tout sélectionner"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2623
+msgid "Deselectează tot"
+msgstr "Tout désélectionner"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2624
+msgid "Selectează grupa de sub marcaj"
+msgstr "Sélectionner le groupe sous le marqueur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2625
+msgid "Marcaj nou"
+msgstr "Nouveau marqueur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2627
+msgid "Flux nou (adresă de internet)"
+msgstr "Nouveau flux (adresse internet)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2629
+msgid "Sub-buchet nou"
+msgstr "Nouveau sous-bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2630
+msgid "Buchet nou din cele alese"
+msgstr "Nouveau bouquet à partir de la sélection"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2631
+msgid "Fă un buchet din acest satelit"
+msgstr "Faire un bouquet de ce satellite"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2632
+msgid "Fă un buchet din acest furnizor"
+msgstr "Faire un bouquet de ce fournisseur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2634
+msgid "Redenumește buchetul"
+msgstr "Renommer le bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2635
+msgid "Copiază buchetul"
+msgstr "Copier le bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2636
+msgid "Șterge buchetul"
+msgstr "Supprimer le bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2637
+msgid "Blochează buchetul"
+msgstr "Verrouiller le bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2638
+msgid "Deblochează buchetul"
+msgstr "Déverrouiller le bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2639
+msgid "Descarcă buchetul (m3u)"
+msgstr "Télécharger le bouquet (m3u)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2640
+msgid "Canale de test"
+msgstr "Chaînes de test"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2641
+msgid "Dubluri"
+msgstr "Doublons"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2644
+msgid "Buchete găsite pe disc, care nu sunt în listă"
+msgstr "Bouquets trouvés sur le disque, qui ne sont pas dans la liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2645
+msgid "Copii de siguranță"
+msgstr "Sauvegardes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2646
+msgid "Importă o listă (arhivă zip sau tar)"
+msgstr "Importer une liste (archive zip ou tar)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2647
+msgid "Importă fluxuri (m3u)"
+msgstr "Importer des flux (m3u)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2648
+msgid "Descarcă lista (zip)"
+msgstr "Télécharger la liste (zip)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2649
+msgid "Descarcă lista (tar.gz)"
+msgstr "Télécharger la liste (tar.gz)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2651
+msgid "Închide editorul"
+msgstr "Fermer l'éditeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2652
+msgid "Înapoi la editor"
+msgstr "Retour à l'éditeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2657
+msgid "Bine"
+msgstr "OK"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2660
+msgid "Poziția (numărul rândului)"
+msgstr "Position (numéro de ligne)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2661
+msgid "Anulează:"
+msgstr "Annuler :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2662
+msgid "Schimbări nesalvate:"
+msgstr "Modifications non enregistrées :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2663
+msgid "Rânduri alese:"
+msgstr "Lignes choisies :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2664
+msgid "Canale:"
+msgstr "Chaînes :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2665
+msgid "în buchete:"
+msgstr "dans les bouquets :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2666
+msgid "nu mai există"
+msgstr "n'existe plus"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2667
+msgid "ascuns"
+msgstr "masqué"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2668
+msgid "blocat"
+msgstr "verrouillé"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2669
+msgid "Buchetul e gol. Adaugă canale din „Adaugă canale”."
+msgstr "Le bouquet est vide. Ajoute des chaînes depuis « Ajouter des chaînes »."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2670
+msgid "Nu am găsit niciun canal."
+msgstr "Aucune chaîne trouvée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2671
+msgid "Se salvează lista și se face copia de siguranță..."
+msgstr "Enregistrement de la liste et création de la sauvegarde..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2672
+msgid "Salvat. Copia de siguranță e făcută, iar lista de pe televizor e la zi."
+msgstr "Enregistré. La sauvegarde est faite et la liste sur le téléviseur est à jour."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2673
+msgid "Salvat. Lista din memorie nu s-a putut verifica."
+msgstr "Enregistré. La liste en mémoire n'a pas pu être vérifiée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2674
+msgid "Salvat, dar lista din memorie diferă de cea scrisă. Repornește interfața."
+msgstr "Enregistré, mais la liste en mémoire diffère de celle écrite. Redémarre l'interface."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2675
+msgid "Lista e cea din copia aleasă. Copia de dinainte e păstrată."
+msgstr "La liste est maintenant celle de la sauvegarde choisie. La sauvegarde faite avant est gardée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2676
+msgid "Se pune înapoi copia..."
+msgstr "Restauration de la sauvegarde..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2677
+msgid "Întoarce la această copie"
+msgstr "Revenir à cette sauvegarde"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2678
+msgid "Nu e nicio copie de siguranță încă. Prima se face la prima salvare."
+msgstr "Il n'y a encore aucune sauvegarde. La première est faite au premier enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2679
+msgid "Ștergi canalele alese din acest buchet? Rămân în lista receptorului."
+msgstr "Supprimer les chaînes sélectionnées de ce bouquet ? Elles restent dans la liste du récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2680
+msgid "Ștergi canalele alese din receptor? Dispar și din toate buchetele. Poți anula până la salvare."
+msgstr "Supprimer les chaînes sélectionnées du récepteur ? Elles disparaissent aussi de tous les bouquets. Tu peux annuler jusqu'à l'enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2681
+msgid "Ștergi tot buchetul? Canalele lui rămân în lista receptorului."
+msgstr "Supprimer tout le bouquet ? Ses chaînes restent dans la liste du récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2682
+msgid "Lista de acum se înlocuiește cu cea din copie. Înainte se face o copie a listei de acum."
+msgstr "La liste actuelle est remplacée par celle de la sauvegarde. Une sauvegarde de la liste actuelle est faite avant."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2683
+msgid "Ai schimbări nesalvate. Dacă pleci acum, se pierd."
+msgstr "Tu as des modifications non enregistrées. Si tu pars maintenant, elles sont perdues."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2684
+msgid "Lista e deschisă în altă parte. Dacă o preiei, schimbările nesalvate de acolo se pierd."
+msgstr "La liste est ouverte ailleurs. Si tu la reprends, les modifications non enregistrées faites là-bas sont perdues."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2685
+msgid "Unde le muți?"
+msgstr "Où les déplacer ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2686
+msgid "Unde le copiezi?"
+msgstr "Où les copier ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2687
+msgid "Sortează după"
+msgstr "Trier par"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2689
+msgid "Satelit și frecvență"
+msgstr "Satellite et fréquence"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2690
+msgid "Furnizor"
+msgstr "Fournisseur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2692
+msgid "În ordine inversă"
+msgstr "Dans l'ordre inverse"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2693
+msgid "Marcajele rămân pe loc: se sortează fiecare grupă de sub un marcaj."
+msgstr "Les marqueurs restent en place : chaque groupe sous un marqueur est trié."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2694
+msgid "„Redenumește” schimbă numele numai în acest buchet. „Redenumește peste tot” îl schimbă în lista receptorului."
+msgstr "« Renommer » change le nom seulement dans ce bouquet. « Renommer partout » le change dans la liste du récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2695
+msgid "Bifează tot"
+msgstr "Tout cocher"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2696
+msgid "Debifează tot"
+msgstr "Tout décocher"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2698
+msgid "Nu am găsit nimic aici."
+msgstr "Rien trouvé ici."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2699
+msgid "imagine"
+msgstr "image"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2700
+msgid "sunet"
+msgstr "son"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2702
+msgid "Repară cele bifate"
+msgstr "Réparer les éléments cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2703
+msgid "Șterge rândurile în plus bifate"
+msgstr "Supprimer les lignes en trop cochées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2704
+msgid "Șterge din receptor cele bifate"
+msgstr "Supprimer du récepteur les éléments cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2705
+msgid "se leagă la:"
+msgstr "sera relié à :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2706
+msgid "se scoate din buchet"
+msgstr "sera retiré du bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2707
+msgid "Ce faci cu lista din arhivă?"
+msgstr "Que faire de la liste de l'archive ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2708
+msgid "Înlocuiește lista de acum"
+msgstr "Remplacer la liste actuelle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2709
+msgid "Adaugă numai ce lipsește"
+msgstr "Ajouter seulement ce qui manque"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2710
+msgid "Buchetele din arhivă (debifează ce nu vrei)"
+msgstr "Bouquets de l'archive (décoche ce que tu ne veux pas)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2711
+msgid "canale și buchete în arhivă:"
+msgstr "chaînes et bouquets dans l'archive :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2712
+msgid "Un buchet, cu marcaje pe grupe"
+msgstr "Un bouquet, avec des marqueurs par groupe"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2713
+msgid "Câte un buchet pe fiecare grupă"
+msgstr "Un bouquet par groupe"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2714
+msgid "Bifează rândurile, apoi alege ce faci cu butoanele de jos. Mânerul ≡ mută rândul trăgându-l. „Anulează” întoarce ultima schimbare. Nimic nu se scrie în receptor până nu apeși „Salvează”; înainte de fiecare salvare se face o copie de siguranță."
+msgstr "Coche les lignes, puis choisis quoi faire avec les boutons du bas. La poignée ≡ déplace la ligne quand tu la fais glisser. « Annuler » défait la dernière modification. Rien n'est écrit dans le récepteur tant que tu n'appuies pas sur « Enregistrer » ; avant chaque enregistrement, une sauvegarde est faite."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2715
+msgid "Pe calculator: săgețile aleg rândul, Shift + săgeți alege mai multe, Ctrl + săgeți mută, Spațiu bifează, Delete șterge, Ctrl+C / Ctrl+X / Ctrl+V copiază, taie și lipește, Ctrl+Z / Ctrl+Y anulează și reface, Ctrl+A alege tot, Ctrl+S salvează, F2 redenumește."
+msgstr "Sur ordinateur : les flèches choisissent la ligne, Maj + flèches en choisissent plusieurs, Ctrl + flèches déplace, Espace coche, Suppr supprime, Ctrl+C / Ctrl+X / Ctrl+V copient, coupent et collent, Ctrl+Z / Ctrl+Y annulent et rétablissent, Ctrl+A sélectionne tout, Ctrl+S enregistre, F2 renomme."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2716
+msgid "Lipit."
+msgstr "Collé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2717
+msgid "Copiate. Alege locul și apasă Ctrl+V."
+msgstr "Copiées. Choisis l'endroit et appuie sur Ctrl+V."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2718
+msgid "Editorul nu mai e deschis în această pagină."
+msgstr "L'éditeur n'est plus ouvert dans cette page."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2719
+msgid "Deschide din nou"
+msgstr "Rouvrir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2721
+msgid "Erau deja în buchet."
+msgstr "Elles étaient déjà dans le bouquet."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2722
+msgid "Deschide întâi un buchet, apoi adaugă canalele."
+msgstr "Ouvre d'abord un bouquet, puis ajoute les chaînes."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2723
+msgid "Trage ca să muți"
+msgstr "Glisser pour déplacer"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2724
+msgid "Acțiunile rândului"
+msgstr "Actions de la ligne"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2725
+msgid "Am găsit în listă:"
+msgstr "Trouvé dans la liste :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2726
+msgid "Vezi"
+msgstr "Voir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2727
+msgid "Pune în listă"
+msgstr "Mettre dans la liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2728
+msgid "Filtrele bazei de canale"
+msgstr "Filtres de la base de chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2729
+msgid "În aceeași grupă opțiunile bifate se adună cu «sau», între grupe cu «și». Numărul arată câte canale au opțiunea."
+msgstr "Dans un même groupe, les options cochées s'additionnent avec «ou», entre groupes avec «et». Le nombre indique combien de chaînes ont l'option."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2731
+msgid "Se citesc filtrele..."
+msgstr "Lecture des filtres..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2732
+msgid "Felul listei"
+msgstr "Type de liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2733
+msgid "Ce vezi"
+msgstr "Ce que tu vois"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2735
+msgid "Caută după nume, furnizor, SID sau frecvență"
+msgstr "Rechercher par nom, fournisseur, SID ou fréquence"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2737
+msgid "Canalele receptorului"
+msgstr "Chaînes du récepteur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2738
+msgid "Rândurile buchetului"
+msgstr "Lignes du bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py
+msgid "Editează lista de canale"
+msgstr "Modifier la liste des chaînes"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Căutare"
+msgstr "Recherche"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "(fără nume)"
+msgstr "(sans nom)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se salvează…"
+msgstr "Enregistrement…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Poziția în buchet sau numele"
+msgstr "Position dans le bouquet ou le nom"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editorul de canale nu se poate deschide acum."
+msgstr "L'éditeur de chaînes ne peut pas être ouvert maintenant."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "SURSA"
+msgstr "SOURCE"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ai %s. Salvezi?"
+msgstr "Tu as %s. Enregistrer ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "În ce buchet duci rândurile?"
+msgstr "Dans quel bouquet emmènes-tu les lignes ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista nu s-a salvat. Schimbările au rămas aici: încearcă din nou."
+msgstr "La liste n'a pas été enregistrée. Les modifications sont toujours là : réessaie."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal din toate buchetele? Rămâne în lista receptorului."
+msgid_plural "Ștergi %d canale din toate buchetele? Rămân în lista receptorului."
+msgstr[0] "Supprimer %d chaîne de tous les bouquets ? Elle reste dans la liste du récepteur."
+msgstr[1] "Supprimer %d chaînes de tous les bouquets ? Elles restent dans la liste du récepteur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal din receptor? Dispare și din toate buchetele."
+msgid_plural "Ștergi %d canale din receptor? Dispar și din toate buchetele."
+msgstr[0] "Supprimer %d chaîne du récepteur ? Elle disparaît aussi de tous les bouquets."
+msgstr[1] "Supprimer %d chaînes du récepteur ? Elles disparaissent aussi de tous les bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "televizorul"
+msgstr "la télévision"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de canale e deschisă acum pentru editare în interfața web."
+msgstr "La liste des chaînes est ouverte en ce moment pour modification dans l'interface web."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editarea a trecut în interfața web. Editorul de aici se închide."
+msgstr "La modification est passée dans l'interface web. L'éditeur d'ici se ferme."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "BUCHETUL"
+msgstr "BOUQUET"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "De unde iei canalele?"
+msgstr "D'où prends-tu les chaînes ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele buchetului nou"
+msgstr "Nom du nouveau bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugi toate cele %d canale din %s în buchet?"
+msgstr "Ajouter les %d chaînes de %s au bouquet ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "În ce buchet pui canalele?"
+msgstr "Dans quel bouquet mets-tu les chaînes ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Niciun buchet. Albastru: buchet nou."
+msgstr "Aucun bouquet. Bleu : nouveau bouquet."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %s din buchetul %s? Canalul rămâne în lista receptorului."
+msgstr "Supprimer %s du bouquet %s ? La chaîne reste dans la liste du récepteur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d rând din buchetul %s? Canalele rămân în lista receptorului."
+msgid_plural "Ștergi %d rânduri din buchetul %s? Canalele rămân în lista receptorului."
+msgstr[0] "Supprimer %d ligne du bouquet %s ? Les chaînes restent dans la liste du récepteur."
+msgstr[1] "Supprimer %d lignes du bouquet %s ? Les chaînes restent dans la liste du récepteur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adăugat %d canal"
+msgid_plural "Adăugate %d canale"
+msgstr[0] "%d chaîne ajoutée"
+msgstr[1] "%d chaînes ajoutées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele canalului căutat"
+msgstr "Nom de la chaîne recherchée"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "> refă"
+msgstr "> rétablir"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Refăcut: %s"
+msgstr "Rétabli : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Salvat. Copia de siguranță: %s"
+msgstr "Enregistré. Copie de sauvegarde : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele nou"
+msgstr "Nouveau nom"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Pus %d rând"
+msgid_plural "Puse %d rânduri"
+msgstr[0] "%d ligne posée"
+msgstr[1] "%d lignes posées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ajutorul editorului"
+msgstr "Aide de l'éditeur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele fluxului"
+msgstr "Nom du flux"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista s-a întors la copia aleasă."
+msgstr "La liste est revenue à la copie choisie."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă, ia, lasă sau deschide"
+msgstr "Ajouter, prendre, poser ou ouvrir"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Înapoi, pune înapoi sau ieși"
+msgstr "Retour, remettre ou quitter"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta roșie (scrisă jos)"
+msgstr "Touche rouge (indiquée en bas)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta verde (scrisă jos)"
+msgstr "Touche verte (indiquée en bas)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta galbenă (scrisă jos)"
+msgstr "Touche jaune (indiquée en bas)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tasta albastră (scrisă jos)"
+msgstr "Touche bleue (indiquée en bas)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Restul acțiunilor"
+msgstr "Autres actions"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulează ultima schimbare"
+msgstr "Annuler la dernière modification"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Reface schimbarea anulată"
+msgstr "Rétablir la modification annulée"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "O pagină în sus"
+msgstr "Une page vers le haut"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "O pagină în jos"
+msgstr "Une page vers le bas"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista TV"
+msgstr "Liste TV"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista radio"
+msgstr "Liste radio"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele, cu tastatura de pe ecran"
+msgstr "Le nom, avec le clavier à l'écran"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Detaliile canalului"
+msgstr "Détails de la chaîne"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Editezi aici, pe televizor?"
+msgstr "Modifier ici, sur la télévision ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Niciun canal găsit. Scrie alt nume sau schimbă filtrele (albastru)."
+msgstr "Aucune chaîne trouvée. Tape un autre nom ou change les filtres (bleu)."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de canale e goală. Caută canale din meniul Scanare."
+msgstr "La liste des chaînes est vide. Recherche des chaînes dans le menu Recherche."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetul e gol. Adaugă canale din stânga: OK pe un canal."
+msgstr "Le bouquet est vide. Ajoute des chaînes depuis la gauche : OK sur une chaîne."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Marcaj"
+msgstr "Marqueur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "nu mai e în listă"
+msgstr "n'est plus dans la liste"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în buchet"
+msgstr "dans le bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în mână: %d"
+msgstr "en main : %d"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "BUCHETELE"
+msgstr "BOUQUETS"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "< Anulează: %s"
+msgstr "< Annuler : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchete schimbate: %s"
+msgstr "Bouquets modifiés : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal șters din receptor"
+msgid_plural "%d canale șterse din receptor"
+msgstr[0] "%d chaîne supprimée du récepteur"
+msgstr[1] "%d chaînes supprimées du récepteur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista e deschisă acum în interfața web: aici doar o poți privi."
+msgstr "La liste est ouverte en ce moment dans l'interface web : ici tu peux seulement la regarder."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nu se poate."
+msgstr "Impossible."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Era deja în buchet."
+msgstr "Elle était déjà dans le bouquet."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi buchetul %s (%s)? Canalele rămân în lista receptorului."
+msgstr "Supprimer le bouquet %s (%s) ? Les chaînes restent dans la liste du récepteur."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Copiat %d rând"
+msgid_plural "Copiate %d rânduri"
+msgstr[0] "%d ligne copiée"
+msgstr[1] "%d lignes copiées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nimic de anulat."
+msgstr "Rien à annuler."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nimic de refăcut."
+msgstr "Rien à rétablir."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ctrl+V îl pune"
+msgstr "Ctrl+V le pose"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Salvează acum"
+msgstr "Enregistrer maintenant"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Acolo e %d schimbare nesalvată, care se pierde."
+msgid_plural "Acolo sunt %d schimbări nesalvate, care se pierd."
+msgstr[0] "Il y a là-bas %d modification non enregistrée, qui sera perdue."
+msgstr[1] "Il y a là-bas %d modifications non enregistrées, qui seront perdues."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d filtru"
+msgid_plural "%d filtre"
+msgstr[0] "%d filtre"
+msgstr[1] "%d filtres"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet"
+msgid_plural "%d buchete"
+msgstr[0] "%d bouquet"
+msgstr[1] "%d bouquets"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Rămâi"
+msgstr "Rester"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mutat %d rând în alt buchet"
+msgid_plural "Mutate %d rânduri în alt buchet"
+msgstr[0] "%d ligne déplacée dans un autre bouquet"
+msgstr[1] "%d lignes déplacées dans un autre bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mutat %d rând"
+msgid_plural "Mutate %d rânduri"
+msgstr[0] "%d ligne déplacée"
+msgstr[1] "%d lignes déplacées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulat: %s"
+msgstr "Annulé : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Anulează: %s"
+msgstr "Annuler : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Refă: %s"
+msgstr "Rétablir : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Marcaj numerotat nou"
+msgstr "Nouveau marqueur numéroté"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Rând gol (spațiu)"
+msgstr "Ligne vide (espace)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Sortează…"
+msgstr "Trier…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă tot în buchet"
+msgstr "Tout ajouter au bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă după rândul ales din buchet"
+msgstr "Ajouter après la ligne choisie du bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Redenumește canalul"
+msgstr "Renommer la chaîne"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchet nou din rezultatele căutării"
+msgstr "Nouveau bouquet à partir des résultats de la recherche"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Arată canalul în listă"
+msgstr "Afficher la chaîne dans la liste"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ascunde canalul în listă"
+msgstr "Masquer la chaîne dans la liste"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Deblochează canalul"
+msgstr "Déverrouiller la chaîne"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Blochează canalul (control parental)"
+msgstr "Verrouiller la chaîne (contrôle parental)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "rând gol"
+msgstr "ligne vide"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "în %d buchet"
+msgid_plural "în %d buchete"
+msgstr[0] "dans %d bouquet"
+msgstr[1] "dans %d bouquets"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută buchetul"
+msgstr "Déplacer le bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la poziția…"
+msgstr "Déplacer à la position…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la început"
+msgstr "Déplacer au début"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută la sfârșit"
+msgstr "Déplacer à la fin"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Mută în…"
+msgstr "Déplacer vers…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Copiază în…"
+msgstr "Copier vers…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchet nou din %s"
+msgstr "Nouveau bouquet à partir de %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Șterge din toate buchetele"
+msgstr "Supprimer de tous les bouquets"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d furnizor"
+msgid_plural "%d furnizori"
+msgstr[0] "%d fournisseur"
+msgstr[1] "%d fournisseurs"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Unde se schimbă numele „%s”?"
+msgstr "Où changer le nom « %s » ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Tăiat %d rând"
+msgid_plural "Tăiate %d rânduri"
+msgstr[0] "%d ligne coupée"
+msgstr[1] "%d lignes coupées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Șterge din receptor: %s"
+msgstr "Supprimer du récepteur : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numai în acest buchet"
+msgstr "Seulement dans ce bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Peste tot"
+msgstr "Partout"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Arată buchetul"
+msgstr "Afficher le bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ascunde buchetul"
+msgstr "Masquer le bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Numele marcajului"
+msgstr "Nom du marqueur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adresa fluxului (http://...)"
+msgstr "Adresse du flux (http://...)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie poziția cu cifrele, apoi OK."
+msgstr "Tape la position avec les chiffres, puis OK."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "nume, invers (Z-A)"
+msgstr "nom, inversé (Z-A)"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "poziția satelitului"
+msgstr "position du satellite"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "frecvență"
+msgstr "fréquence"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "furnizor"
+msgstr "fournisseur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "numai rândurile bifate"
+msgstr "seulement les lignes cochées"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "fiecare grupă între marcaje"
+msgstr "chaque groupe entre les marqueurs"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Răsfoire"
+msgstr "Parcourir"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Mută"
+msgstr "Déplacer"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK ia rândul ca să-l muți · cifrele: poziția · < anulează · > refă · HELP ajutor"
+msgstr "OK prend la ligne pour la déplacer · chiffres : position · < annuler · > rétablir · HELP aide"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Pune înapoi"
+msgstr "Remettre"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Lasă aici"
+msgstr "Poser ici"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "La început / la sfârșit"
+msgstr "Au début / à la fin"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Gata cu selecția"
+msgstr "Sélection terminée"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Buchetele"
+msgstr "Bouquets"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Sus / Jos mută rândurile · cifrele: poziția · OK le lasă aici · EXIT le pune înapoi"
+msgstr "Haut / Bas déplacent les lignes · chiffres : position · OK les pose ici · EXIT les remet"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Sus / Jos alege locul · cifrele: poziția · OK pune copia aici · EXIT renunță"
+msgstr "Haut / Bas choisissent l'endroit · chiffres : position · OK pose la copie ici · EXIT annule"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK bifează și trece mai jos · tastele colorate lucrează pe rândurile bifate"
+msgstr "OK coche et descend · les touches de couleur agissent sur les lignes cochées"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK adaugă canalul în buchetul din dreapta · cifrele scriu numele · HELP ajutor"
+msgstr "OK ajoute la chaîne au bouquet de droite · les chiffres tapent le nom · HELP aide"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide buchetul · Stânga / Dreapta: coloana · < anulează · > refă · HELP ajutor"
+msgstr "OK ouvre le bouquet · Gauche / Droite : colonne · < annuler · > rétablir · HELP aide"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide · cifrele: poziția · < anulează · > refă · HELP ajutor"
+msgstr "OK ouvre · chiffres : position · < annuler · > rétablir · HELP aide"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "Poziția: %s"
+msgstr "Position : %s"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "%d schimbare nesalvată"
+msgid_plural "%d schimbări nesalvate"
+msgstr[0] "%d modification non enregistrée"
+msgstr[1] "%d modifications non enregistrées"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "%d rând bifat"
+msgid_plural "%d rânduri bifate"
+msgstr[0] "%d ligne cochée"
+msgstr[1] "%d lignes cochées"
+
+#: lib/python/Screens/HdsEditorCanaleLogica.py
+msgid "OK deschide · Stânga / Dreapta: coloana · cifrele scriu numele · HELP ajutor"
+msgstr "OK ouvre · Gauche / Droite : colonne · les chiffres tapent le nom · HELP aide"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alegi tu ce se șterge din receptor: nimic nu e bifat dinainte. Un canal cu „.” poate fi un flux care pornește uneori: uită-te la frecvență și la imagine / sunet."
+msgstr "C'est toi qui choisis ce qui est supprimé du récepteur : rien n'est coché d'avance. Une chaîne nommée « . » peut être un flux qui démarre parfois : regarde la fréquence et l'image / le son."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun canal fără nume și niciun canal de test."
+msgstr "Aucune chaîne sans nom ni chaîne de test."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Același canal de două ori în același buchet. Același nume pe alt satelit nu e dublură."
+msgstr "La même chaîne deux fois dans le même bouquet. Le même nom sur un autre satellite n'est pas un doublon."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Șterge din buchet"
+msgstr "Supprimer du bouquet"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Nicio dublură în buchete."
+msgstr "Aucun doublon dans les bouquets."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Rânduri din buchete fără canal în lista receptorului. Cele cu un canal găsit se leagă la el, celelalte se șterg din buchet."
+msgstr "Lignes de bouquet sans chaîne dans la liste du récepteur. Celles avec une chaîne trouvée y sont reliées, les autres sont supprimées du bouquet."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Repară"
+msgstr "Réparer"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate rândurile din buchete au canalul lor."
+msgstr "Toutes les lignes des bouquets ont leur chaîne."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Cum arată"
+msgstr "À quoi ça ressemble"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În stânga e SURSA: de unde iei canalele (toate, pe sateliți, pe furnizori, pe transpondere sau căutarea). În dreapta e BUCHETUL: lista buchetelor, iar cu OK pe unul, canalele lui. Sus vezi modul de acum (Răsfoire, Mută, Copiază, Selectează) și câte schimbări nu sunt salvate. Jos, fiecare tastă colorată are scris ce face acum."
+msgstr "À gauche se trouve la SOURCE : d'où tu prends les chaînes (toutes, par satellite, par fournisseur, par transpondeur ou la recherche). À droite se trouve le BOUQUET : la liste des bouquets et, avec OK sur l'un d'eux, ses chaînes. En haut tu vois le mode actuel (Parcourir, Déplacer, Copier, Sélectionner) et combien de modifications ne sont pas enregistrées. En bas, chaque touche de couleur indique ce qu'elle fait maintenant."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Stânga / Dreapta trec dintr-o coloană în alta. În sursă, OK pe un canal îl adaugă la sfârșitul buchetului din dreapta (pe un satelit sau furnizor, OK îl deschide). Cifrele scriu numele canalului ca la SMS; TEXT deschide tastatura de pe ecran. Albastru: filtrele (HD, FTA, limba sunetului, subtitrări...)."
+msgstr "Gauche / Droite passent d'une colonne à l'autre. Dans la source, OK sur une chaîne l'ajoute à la fin du bouquet de droite (sur un satellite ou un fournisseur, OK l'ouvre). Les chiffres tapent le nom de la chaîne comme un SMS ; TEXT ouvre le clavier à l'écran. Bleu : les filtres (HD, FTA, langue audio, sous-titres...)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În buchet, OK pe un rând îl ia: Sus / Jos îl duc, cifrele îl duc la poziția scrisă, OK îl lasă, EXIT îl pune înapoi. Galben îl duce la început sau la sfârșit, albastru în alt buchet."
+msgstr "Dans le bouquet, OK sur une ligne la prend : Haut / Bas la déplacent, les chiffres l'emmènent à la position tapée, OK la pose, EXIT la remet. Jaune l'emmène au début ou à la fin, bleu dans un autre bouquet."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Mai multe deodată"
+msgstr "Plusieurs à la fois"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Galben: Selectează. OK bifează rândul și trece mai jos; galben pe un marcaj bifează toată grupa lui. Tastele colorate lucrează apoi pe toate cele bifate: Șterge, Mută, Copiază în..."
+msgstr "Jaune : Sélectionner. OK coche la ligne et descend ; jaune sur un marqueur coche tout son groupe. Les touches de couleur agissent ensuite sur toutes les lignes cochées : Supprimer, Déplacer, Copier vers..."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Anulează și salvează"
+msgstr "Annuler et enregistrer"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Tasta < anulează ultima schimbare, tasta > o reface (și din MENU). Nimic nu se scrie până nu salvezi: MENU > Salvează acum, sau la ieșire. Înainte de fiecare salvare se face singură o copie de siguranță; MENU > Copii de siguranță întoarce lista la oricare."
+msgstr "La touche < annule la dernière modification, la touche > la rétablit (aussi depuis MENU). Rien n'est écrit tant que tu n'enregistres pas : MENU > Enregistrer maintenant, ou en quittant. Avant chaque enregistrement une copie de sauvegarde est faite automatiquement ; MENU > Copies de sauvegarde ramène la liste à n'importe laquelle."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Uneltele"
+msgstr "Les outils"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Canale de test: canalele fără nume sau cu nume de test, alese de tine pentru ștergere. MENU > Dubluri și Canale care nu mai există curăță buchetele. Nimic nu se șterge fără bifa ta și fără o întrebare cu numărul."
+msgstr "MENU > Chaînes de test : les chaînes sans nom ou avec un nom de test, choisies par toi pour la suppression. MENU > Doublons et Chaînes qui n'existent plus nettoient les bouquets. Rien n'est supprimé sans ta coche et sans une question avec le nombre."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Mouse și tastatură"
+msgstr "Souris et clavier"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Clic alege rândul, dublu clic face OK, Ctrl + clic bifează, Shift + clic bifează până acolo, tras cu mouse-ul mută sau adaugă, rotița derulează. Tastatura: Ctrl+Z / Ctrl+Y anulează / refac, Ctrl+C / Ctrl+X / Ctrl+V copiază, taie, lipesc, Delete șterge, F2 redenumește, Ctrl+S salvează, Ctrl+A selectează tot; literele scrise în sursă caută."
+msgstr "Le clic choisit la ligne, le double clic fait OK, Ctrl + clic coche, Maj + clic coche jusque-là, glisser avec la souris déplace ou ajoute, la molette fait défiler. Clavier : Ctrl+Z / Ctrl+Y annulent / rétablissent, Ctrl+C / Ctrl+X / Ctrl+V copient, coupent, collent, Suppr supprime, F2 renomme, Ctrl+S enregistre, Ctrl+A sélectionne tout ; les lettres tapées dans la source cherchent."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "fără imagine și sunet"
+msgstr "sans image ni son"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "imagine / sunet: nu se știe"
+msgstr "image / son : inconnu"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "imagine și sunet"
+msgstr "image et son"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai imagine"
+msgstr "image seulement"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai sunet"
+msgstr "son seulement"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Se întoarce lista la copia aleasă…"
+msgstr "Retour de la liste à la copie choisie…"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Poziția"
+msgstr "Position"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Imagine și sunet"
+msgstr "Image et son"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Referința"
+msgstr "Référence"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Selectează toată grupa"
+msgstr "Sélectionner tout le groupe"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Restrânge grupa"
+msgstr "Replier le groupe"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Sus / Jos: grupul · Stânga / Dreapta: opțiunea · OK o pornește sau o oprește"
+msgstr "Haut / Bas : groupe · Gauche / Droite : option · OK l'active ou la désactive"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "O copie se face singură înainte de fiecare salvare, aici și în interfața web. Întoarcerea pune întâi lista de acum într-o copie nouă."
+msgstr "Une copie est faite automatiquement avant chaque enregistrement, ici et dans l'interface web. Le retour met d'abord la liste actuelle dans une nouvelle copie."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK: întoarce lista la copia aleasă"
+msgstr "OK : ramener la liste à la copie choisie"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "ascuns în listă"
+msgstr "masquée dans la liste"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "blocat (control parental)"
+msgstr "verrouillée (contrôle parental)"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista tastelor"
+msgstr "Liste des touches"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Nicio copie încă: prima se face la prima salvare."
+msgstr "Aucune copie pour l'instant : la première est faite au premier enregistrement."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Întorci lista de canale la copia din %s? Lista de acum se pune întâi într-o copie."
+msgstr "Ramener la liste des chaînes à la copie du %s ? La liste actuelle est d'abord mise dans une copie."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista nu s-a întors la copie. Lista de acum a rămas neatinsă."
+msgstr "La liste n'est pas revenue à la copie. La liste actuelle est restée intacte."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "date"
+msgstr "données"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În buchete"
+msgstr "Dans les bouquets"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Deselectează grupa"
+msgstr "Désélectionner le groupe"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Arată grupa"
+msgstr "Afficher le groupe"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK bifează sau debifează · pe titlul grupei: toată grupa"
+msgstr "OK coche ou décoche · sur le titre du groupe : tout le groupe"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "numai de văzut"
+msgstr "à consulter seulement"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d rând dublat din buchete? Canalul rămâne în lista receptorului."
+msgid_plural "Ștergi %d rânduri dublate din buchete? Canalele rămân în lista receptorului."
+msgstr[0] "Supprimer %d ligne en double des bouquets ? La chaîne reste dans la liste du récepteur."
+msgstr[1] "Supprimer %d lignes en double des bouquets ? Les chaînes restent dans la liste du récepteur."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Repari %d rând? Cel cu un canal găsit se leagă la el, altfel se șterge din buchet."
+msgid_plural "Repari %d rânduri? Cele cu un canal găsit se leagă la el, celelalte se șterg din buchet."
+msgstr[0] "Réparer %d ligne ? Si une chaîne est trouvée elle y est reliée, sinon elle est supprimée du bouquet."
+msgstr[1] "Réparer %d lignes ? Celles avec une chaîne trouvée y sont reliées, les autres sont supprimées du bouquet."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "în niciun buchet"
+msgstr "dans aucun bouquet"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "OK bifează sau debifează"
+msgstr "OK coche ou décoche"
+
+#: lib/python/Components/HdsEditorCanale.py:1608
+msgid "Un transponder șters"
+msgid_plural "%d transpondere șterse"
+msgstr[0] "%d transpondeur supprimé"
+msgstr[1] "%d transpondeurs supprimés"
+
+#: lib/python/Components/HdsEditorCanale.py:1674
+msgid "Un buchet nou"
+msgid_plural "%d buchete noi"
+msgstr[0] "%d nouveau bouquet"
+msgstr[1] "%d nouveaux bouquets"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:230
+msgid "Transpondere din lista receptorului fără niciun canal (rămase după ștergeri sau după căutări pe frecvențe goale). Nu încurcă, dar se pot șterge."
+msgstr "Transpondeurs de la liste du récepteur sans aucune chaîne (restés après des suppressions ou des recherches sur des fréquences vides). Ils ne gênent pas, mais on peut les supprimer."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:230
+msgid "Transpondere fără canale"
+msgstr "Transpondeurs sans chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2973
+msgid "Fără siglă"
+msgstr "Sans logo"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2976
+msgid "Scoate din toate buchetele"
+msgstr "Retirer de tous les bouquets"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2977
+msgid "Le scoți din toate buchetele? Rămân în lista receptorului."
+msgstr "Les retirer de tous les bouquets ? Elles restent dans la liste du récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2980
+msgid "Șterge de pe disc"
+msgstr "Supprimer du disque"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2981
+msgid "Fișierul buchetului se șterge la salvare. Poți anula până atunci."
+msgstr "Le fichier du bouquet est supprimé à l'enregistrement. Tu peux annuler d'ici là."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2982
+msgid "Pe transpondere"
+msgstr "Par transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2983
+msgid "Toate canalele satelitului"
+msgstr "Toutes les chaînes du satellite"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2984
+msgid "Fă un buchet din acest transponder"
+msgstr "Faire un bouquet de ce transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2985
+msgid "Șterge transponderul"
+msgstr "Supprimer le transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2986
+msgid "Ștergi transponderul din receptor, cu toate canalele lui? Dispar și din buchete. Poți anula până la salvare."
+msgstr "Supprimer le transpondeur du récepteur, avec toutes ses chaînes ? Elles disparaissent aussi des bouquets. Tu peux annuler jusqu'à l'enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2987
+msgid "Fă câte un buchet din fiecare ales"
+msgstr "Faire un bouquet de chacun des choisis"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2989
+msgid "Șterge transponderele bifate"
+msgstr "Supprimer les transpondeurs cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2990
+msgid "Transpondere:"
+msgstr "Transpondeurs :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2991
+msgid "Le ștergi din lista receptorului? Nu au niciun canal. Poți anula până la salvare."
+msgstr "Les supprimer de la liste du récepteur ? Ils n'ont aucune chaîne. Tu peux annuler jusqu'à l'enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2992
+msgid "Ce s-a schimbat de la ultima salvare"
+msgstr "Ce qui a changé depuis le dernier enregistrement"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2993
+msgid "Nimic schimbat de la ultima salvare."
+msgstr "Rien n'a changé depuis le dernier enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2994
+msgid "Canale noi:"
+msgstr "Nouvelles chaînes :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2995
+msgid "Canale șterse:"
+msgstr "Chaînes supprimées :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2996
+msgid "Canale schimbate:"
+msgstr "Chaînes modifiées :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2997
+msgid "Buchete schimbate:"
+msgstr "Bouquets modifiés :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2998
+msgid "Buchete noi:"
+msgstr "Nouveaux bouquets :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:2999
+msgid "Buchete șterse:"
+msgstr "Bouquets supprimés :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3000
+msgid "Lista buchetelor s-a schimbat (ordinea sau buchetele ascunse)."
+msgstr "La liste des bouquets a changé (l'ordre ou les bouquets masqués)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3001
+msgid "Blocările s-au schimbat."
+msgstr "Les verrouillages ont changé."
+
+#: lib/python/Components/HdsEditorCanale.py:2344
+msgid "Buchetul e refăcut de căutarea DAB+ / DVB-T2 din satelit: schimbările făcute aici se pot pierde la următoarea căutare."
+msgstr "Le bouquet est refait par la recherche DAB+ / DVB-T2 par satellite : les modifications faites ici peuvent se perdre à la prochaine recherche."
+
+#: lib/python/Components/HdsEditorCanale.py:2347
+msgid "Buchetul e refăcut automat cu canalele de pe internet (DVB-I): schimbările făcute aici se pot pierde."
+msgstr "Le bouquet est refait automatiquement avec les chaînes d'internet (DVB-I) : les modifications faites ici peuvent se perdre."
+
+#: lib/python/Components/HdsEditorCanale.py:2350
+msgid "Buchetul e rescris la fiecare scanare: schimbările făcute aici se pierd la următoarea scanare."
+msgstr "Le bouquet est réécrit à chaque recherche de chaînes : les modifications faites ici se perdent à la prochaine recherche."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:249
+msgid "înainte: %s"
+msgstr "avant : %s"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:274
+msgid "rânduri: %d"
+msgstr "lignes : %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:283
+msgid "rânduri puse: %d"
+msgstr "lignes ajoutées : %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:283
+msgid "scoase: %d"
+msgstr "retirées : %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:285
+msgid "altă ordine"
+msgstr "autre ordre"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:292
+msgid "Se arată primele %d."
+msgstr "Les %d premiers sont affichés."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:297
+msgid "Canale noi"
+msgstr "Nouvelles chaînes"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:297
+msgid "În lista de acum, dar nu în copie."
+msgstr "Dans la liste actuelle, mais pas dans la copie."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:298
+msgid "Canale care nu mai sunt"
+msgstr "Chaînes qui ne sont plus là"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:298
+msgid "În copie, dar nu în lista de acum."
+msgstr "Dans la copie, mais pas dans la liste actuelle."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Același canal, cu alt nume decât în copie."
+msgstr "La même chaîne, avec un autre nom que dans la copie."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Canale redenumite"
+msgstr "Chaînes renommées"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:301
+msgid "Buchete noi"
+msgstr "Nouveaux bouquets"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:302
+msgid "Buchete care nu mai sunt"
+msgstr "Bouquets qui ne sont plus là"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Buchete schimbate"
+msgstr "Bouquets modifiés"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Rânduri puse sau scoase față de copie, sau altă ordine."
+msgstr "Lignes ajoutées ou retirées par rapport à la copie, ou un autre ordre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3047
+msgid "Compară cu lista de acum"
+msgstr "Comparer avec la liste actuelle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3048
+msgid "Buchete"
+msgstr "Bouquets"
+
+#: lib/python/Components/HdsEditorCanale.py:1662
+msgid "Alege cel puțin un canal."
+msgstr "Choisis au moins une chaîne."
+
+#: lib/python/Components/HdsEditorCanale.py:1664
+msgid "Alternative"
+msgstr "Alternatives"
+
+#: lib/python/Components/HdsEditorCanale.py:1666
+msgid "Alternative noi: %s"
+msgstr "Nouvelles alternatives : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1676
+msgid "Rândul ales nu e o grupă de alternative."
+msgstr "La ligne choisie n'est pas un groupe d'alternatives."
+
+#: lib/python/Components/HdsEditorCanale.py:1694
+msgid "Un canal pus în alternative"
+msgid_plural "%d canale puse în alternative"
+msgstr[0] "%d chaîne ajoutée aux alternatives"
+msgstr[1] "%d chaînes ajoutées aux alternatives"
+
+#: lib/python/Components/HdsEditorCanale.py:1705
+msgid "Alternative desfăcute: %s"
+msgstr "Alternatives défaites : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3070
+msgid "Unește ca alternative (același canal din alte locuri)"
+msgstr "Réunir comme alternatives (la même chaîne depuis d'autres endroits)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3071
+msgid "Desface alternativele"
+msgstr "Défaire les alternatives"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se citește lista de pe stick…"
+msgstr "Lecture de la liste sur la clé USB…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se importă lista…"
+msgstr "Importation de la liste…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Se scrie pe stick…"
+msgstr "Écriture sur la clé USB…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nu s-a putut scrie pe stick."
+msgstr "Impossible d'écrire sur la clé USB."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Lista de pe stick nu se poate citi."
+msgstr "La liste sur la clé USB ne peut pas être lue."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scris pe stick: %s"
+msgstr "Écrit sur la clé USB : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Importă de pe stick…"
+msgstr "Importer depuis la clé USB…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie lista pe stick…"
+msgstr "Écrire la liste sur la clé USB…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Scrie buchetul ca m3u pe stick…"
+msgstr "Écrire le bouquet en m3u sur la clé USB…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Fișierul nu se poate citi."
+msgstr "Le fichier ne peut pas être lu."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Fluxurile din %s"
+msgstr "Flux de %s"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Stick"
+msgstr "Clé USB"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Importă de pe stick: o arhivă cu lista de canale (zip, tar, tar.gz, de la alt receptor sau din programele de pe calculator), un dosar cu lista sau un fișier m3u cu fluxuri; lista din arhivă înlocuiește lista de acum sau adaugă numai ce lipsește. MENU > Scrie lista pe stick face o arhivă tar.gz; în buchet, MENU > Scrie buchetul ca m3u. Ca orice schimbare, importul se poate anula și nu se scrie până nu salvezi."
+msgstr "MENU > Importer depuis la clé USB : une archive avec la liste des chaînes (zip, tar, tar.gz, d'un autre récepteur ou des programmes sur ordinateur), un dossier avec la liste ou un fichier m3u avec des flux ; la liste de l'archive remplace la liste actuelle ou ajoute seulement ce qui manque. MENU > Écrire la liste sur la clé USB crée une archive tar.gz ; dans un bouquet, MENU > Écrire le bouquet en m3u. Comme toute modification, l'importation peut être annulée et rien n'est écrit tant que tu n'enregistres pas."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege dosarul de pe stick în care se scrie. OK intră în dosar, verde scrie aici."
+msgstr "Choisis le dossier de la clé USB où écrire. OK ouvre le dossier, vert écrit ici."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege o arhivă (zip, tar, tar.gz) cu lista de canale sau un fișier m3u cu fluxuri. OK intră în dosar sau alege fișierul; galben ia lista din dosarul de acum."
+msgstr "Choisis une archive (zip, tar, tar.gz) avec la liste des chaînes ou un fichier m3u avec des flux. OK ouvre le dossier ou choisit le fichier ; jaune prend la liste du dossier actuel."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Unde scrii lista?"
+msgstr "Où écris-tu la liste ?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Importă de pe stick"
+msgstr "Importer depuis la clé USB"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Scrie aici"
+msgstr "Écrire ici"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista din acest dosar"
+msgstr "La liste de ce dossier"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În acest dosar nu e o listă de canale. Intră în dosarul care are fișierele lamedb și bouquets.tv, sau alege o arhivă."
+msgstr "Ce dossier ne contient pas de liste de chaînes. Ouvre le dossier qui contient les fichiers lamedb et bouquets.tv, ou choisis une archive."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Intră întâi într-un dosar (de pildă pe stick)."
+msgstr "Ouvre d'abord un dossier (par exemple sur la clé USB)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În acest dosar nu se poate scrie. Alege altul."
+msgstr "Impossible d'écrire dans ce dossier. Choisis-en un autre."
+
+#: lib/python/Components/HdsEditorCanale.py:1729
+msgid "Nu e nimic de șters."
+msgstr "Il n'y a rien à supprimer."
+
+#: lib/python/Components/HdsEditorCanale.py:1730
+msgid "Un satelit păstrat, restul șterse"
+msgid_plural "%d sateliți păstrați, restul șterse"
+msgstr[0] "%d satellite conservé, les autres supprimés"
+msgstr[1] "%d satellites conservés, les autres supprimés"
+
+#: lib/python/Components/HdsEditorCanale.py:1731
+msgid "Un satelit șters din receptor"
+msgid_plural "%d sateliți șterși din receptor"
+msgstr[0] "%d satellite supprimé du récepteur"
+msgstr[1] "%d satellites supprimés du récepteur"
+
+#: lib/python/Components/HdsEditorCanale.py:1745
+msgid "Frecvența trebuie dată în MHz, între 2000 și 30000."
+msgstr "La fréquence doit être donnée en MHz, entre 2000 et 30000."
+
+#: lib/python/Components/HdsEditorCanale.py:1748
+msgid "Rata de simbol trebuie dată în kS/s, între 50 și 70000."
+msgstr "Le débit de symboles doit être donné en kS/s, entre 50 et 70000."
+
+#: lib/python/Components/HdsEditorCanale.py:1753
+msgid "O valoare a transponderului nu e bună: %s."
+msgstr "Une valeur du transpondeur n'est pas valide : %s."
+
+#: lib/python/Components/HdsEditorCanale.py:1763
+msgid "Numai transponderele de satelit se pot schimba aici."
+msgstr "Seuls les transpondeurs de satellite peuvent être modifiés ici."
+
+#: lib/python/Components/HdsEditorCanale.py:1770
+msgid "Transponder schimbat: %s"
+msgstr "Transpondeur modifié : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1780
+msgid "Poziția satelitului nu e bună."
+msgstr "La position du satellite n'est pas valide."
+
+#: lib/python/Components/HdsEditorCanale.py:1784
+msgid "Transponderul nou cere frecvența, rata de simbol și polarizarea."
+msgstr "Le nouveau transpondeur a besoin d'une fréquence, d'un débit de symboles et d'une polarisation."
+
+#: lib/python/Components/HdsEditorCanale.py:1787
+msgid "TSID și ONID trebuie să fie între 0 și 65535."
+msgstr "TSID et ONID doivent être compris entre 0 et 65535."
+
+#: lib/python/Components/HdsEditorCanale.py:1791
+msgid "Transponderul există deja (aceeași poziție, TSID și ONID)."
+msgstr "Le transpondeur existe déjà (même position, TSID et ONID)."
+
+#: lib/python/Components/HdsEditorCanale.py:1797
+msgid "Transponder nou: %s"
+msgstr "Nouveau transpondeur : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1820
+msgid "Semnul „nou” scos de pe un canal"
+msgid_plural "Semnul „nou” scos de pe %d canale"
+msgstr[0] "Marque « nouveau » retirée de %d chaîne"
+msgstr[1] "Marque « nouveau » retirée de %d chaînes"
+
+#: lib/python/Components/HdsEditorCanale.py:1866
+msgid "Un PID nu e bun."
+msgstr "Un PID n'est pas valide."
+
+#: lib/python/Components/HdsEditorCanale.py:1873
+msgid "Detalii schimbate: %s"
+msgstr "Détails modifiés : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1895
+msgid "Rândul ales nu e un flux."
+msgstr "La ligne choisie n'est pas un flux."
+
+#: lib/python/Components/HdsEditorCanale.py:1902
+msgid "Tipul fluxului nu e cunoscut."
+msgstr "Le type de flux n'est pas connu."
+
+#: lib/python/Components/HdsEditorCanale.py:1908
+msgid "Un număr DVB al fluxului nu e bun."
+msgstr "Un numéro DVB du flux n'est pas valide."
+
+#: lib/python/Components/HdsEditorCanale.py:1920
+msgid "Flux schimbat: %s"
+msgstr "Flux modifié : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1939
+msgid "Un buchet sortat"
+msgid_plural "%d buchete sortate"
+msgstr[0] "%d bouquet trié"
+msgstr[1] "%d bouquets triés"
+
+#: lib/python/Components/HdsEditorCanale.py:1959
+msgid "Aranjat după: %s"
+msgstr "Rangé d'après : %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1967
+msgid "Scrie textul de căutat."
+msgstr "Écris le texte à rechercher."
+
+#: lib/python/Components/HdsEditorCanale.py:1986
+msgid "Un nume înlocuit"
+msgid_plural "%d nume înlocuite"
+msgstr[0] "%d nom remplacé"
+msgstr[1] "%d noms remplacés"
+
+#: lib/python/Components/HdsEditorCanale.py:2001
+msgid "Un canal adus înapoi din copie"
+msgid_plural "%d canale aduse înapoi din copie"
+msgstr[0] "%d chaîne ramenée depuis la copie"
+msgstr[1] "%d chaînes ramenées depuis la copie"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Canale care vin din arhivă"
+msgstr "Chaînes qui viennent de l'archive"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:299
+msgid "Sunt în arhivă, dar nu în lista de acum."
+msgstr "Elles sont dans l'archive, mais pas dans la liste actuelle."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:300
+msgid "Canale care dispar"
+msgstr "Chaînes qui disparaissent"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:300
+msgid "Sunt în lista de acum, dar nu în arhivă: la „Înlocuiește lista de acum” pleacă; la „Adaugă numai ce lipsește” rămân."
+msgstr "Elles sont dans la liste actuelle, mais pas dans l'archive : avec « Remplacer la liste actuelle » elles partent ; avec « Ajouter seulement ce qui manque » elles restent."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:302
+msgid "Canale cu alt nume în arhivă"
+msgstr "Chaînes avec un autre nom dans l'archive"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:303
+msgid "Buchete care vin din arhivă"
+msgstr "Bouquets qui viennent de l'archive"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:304
+msgid "Buchete care dispar"
+msgstr "Bouquets qui disparaissent"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:304
+msgid "La „Înlocuiește lista de acum” pleacă."
+msgstr "Avec « Remplacer la liste actuelle » ils partent."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:305
+msgid "Buchete schimbate de arhivă"
+msgstr "Bouquets modifiés par l'archive"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:305
+msgid "Rânduri puse sau scoase față de lista de acum, sau altă ordine."
+msgstr "Lignes ajoutées ou retirées par rapport à la liste actuelle, ou un autre ordre."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:345
+msgid "Lista canalelor (lamedb)"
+msgstr "Liste des chaînes (lamedb)"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:345
+msgid "nu se citește la fel"
+msgstr "ne se relit pas à l'identique"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:393
+msgid "Lista e scrisă și citită din nou, ca la salvare. Când grupa e goală, lista se scrie exact cum o vezi."
+msgstr "La liste est écrite puis relue, comme à l'enregistrement. Quand le groupe est vide, la liste est écrite exactement comme tu la vois."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:393
+msgid "Rânduri care nu s-ar scrie la fel"
+msgstr "Lignes qui ne seraient pas écrites à l'identique"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:395
+msgid "Nume prea lungi"
+msgstr "Noms trop longs"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:395
+msgid "Receptorul citește cel mult 250 de octeți pe rând: la salvare numele acestea se scurtează."
+msgstr "Le récepteur lit au maximum 250 octets par ligne : à l'enregistrement, ces noms sont raccourcis."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:397
+msgid "Canale de pe sateliți care nu sunt în satellites.xml"
+msgstr "Chaînes de satellites qui ne sont pas dans satellites.xml"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:397
+msgid "Receptorul nu are setările acestor sateliți: canalele nu pornesc până nu pui satelitul în setările antenei. Nimic nu e bifat; le ștergi numai dacă vrei."
+msgstr "Le récepteur n'a pas les réglages de ces satellites : les chaînes ne démarrent pas tant que tu n'as pas mis le satellite dans les réglages de l'antenne. Rien n'est coché ; tu ne les supprimes que si tu le veux."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:400
+msgid "Marcaje fără canale sub ele"
+msgstr "Marqueurs sans chaînes en dessous"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:400
+msgid "Marcajul e urmat de alt marcaj sau e la sfârșitul buchetului."
+msgstr "Le marqueur est suivi d'un autre marqueur ou se trouve à la fin du bouquet."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:402
+msgid "HD în nume, tip SD în listă"
+msgstr "HD dans le nom, type SD dans la liste"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:402
+msgid "Numele spune HD sau 4K, dar emițătorul îl anunță ca SD: filtrul „HD și 4K” nu-l prinde. Filtrul „HD în nume, tip SD” din „Adaugă canale” le arată pe toate, cu bife."
+msgstr "Le nom indique HD ou 4K, mais le diffuseur annonce la chaîne comme SD : le filtre « HD et 4K » ne la trouve pas. Le filtre « HD dans le nom, type SD » de « Ajouter des chaînes » les affiche toutes, avec des cases à cocher."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:405
+msgid "Nu se pot porni pe televizor (ghid de programe, actualizări, date ale operatorului). Le poți șterge, dar unele le folosește receptorul."
+msgstr "Ils ne peuvent pas être lancés sur le téléviseur (guide des programmes, mises à jour, données de l'opérateur). Tu peux les supprimer, mais le récepteur en utilise certains."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:429
+msgid "răspunde cu eroarea %d"
+msgstr "répond avec l'erreur %d"
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:477
+msgid "Am încercat %d adrese de fluxuri din buchete: acestea nu răspund acum. Un flux poate merge din nou mai târziu; scoate-l numai dacă știi că nu mai există."
+msgstr "%d adresses de flux de bouquets ont été essayées : celles-ci ne répondent pas pour le moment. Un flux peut refonctionner plus tard ; retire-le seulement si tu sais qu'il n'existe plus."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:479
+msgid "Fluxuri care nu răspund"
+msgstr "Flux qui ne répondent pas"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:1327
+msgid "Sigle nefolosite"
+msgstr "Logos inutilisés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:1327
+msgid "Siglele din dosarele de sigle care nu se potrivesc cu niciun canal din listă (nici după referință, nici după nume). Nimic nu e bifat."
+msgstr "Les logos des dossiers de logos qui ne correspondent à aucune chaîne de la liste (ni par la référence, ni par le nom). Rien n'est coché."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3960
+msgid "HD în nume, tip SD"
+msgstr "HD dans le nom, type SD"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3961
+msgid "Noi"
+msgstr "Nouvelles"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3962
+msgid "Blocate"
+msgstr "Verrouillées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3964
+msgid "internet"
+msgstr "internet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3966
+msgid "Scoate dintr-un buchet..."
+msgstr "Retirer d'un bouquet..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3967
+msgid "Din ce buchet îl scoți?"
+msgstr "De quel bouquet le retires-tu ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3968
+msgid "Pune siglă..."
+msgstr "Mettre un logo..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3969
+msgid "Copiază sigla de la alt canal..."
+msgstr "Copier le logo d'une autre chaîne..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3970
+msgid "Șterge sigla"
+msgstr "Supprimer le logo"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3971
+msgid "Sigla e pusă."
+msgstr "Le logo est en place."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3972
+msgid "Alege o imagine (PNG, JPG): se micșorează la 220 x 132 și se pune ca siglă."
+msgstr "Choisis une image (PNG, JPG) : elle est réduite à 220 x 132 et mise comme logo."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3973
+msgid "Scoate semnul „nou”"
+msgstr "Retirer la marque « nouveau »"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3974
+msgid "Editează fluxul"
+msgstr "Modifier le flux"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3975
+msgid "Tipul fluxului"
+msgstr "Type de flux"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3976
+msgid "Numerele DVB ale fluxului (pentru siglă): SID, TSID, ONID, namespace (hex)"
+msgstr "Numéros DVB du flux (pour le logo) : SID, TSID, ONID, namespace (hex)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3977
+msgid "Aranjează după alt buchet..."
+msgstr "Ranger d'après un autre bouquet..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3978
+msgid "Scoate marcajele din buchet"
+msgstr "Retirer les marqueurs du bouquet"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3979
+msgid "Descarcă tabelul (CSV)"
+msgstr "Télécharger le tableau (CSV)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3980
+msgid "Lipește o listă de nume..."
+msgstr "Coller une liste de noms..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3981
+msgid "Câte un nume de canal pe rând. Cele găsite se adaugă în buchet, în ordinea din listă."
+msgstr "Un nom de chaîne par ligne. Celles trouvées sont ajoutées au bouquet, dans l'ordre de la liste."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3982
+msgid "Găsite / negăsite:"
+msgstr "Trouvées / non trouvées :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3983
+msgid "Satelit, apoi nume"
+msgstr "Satellite, puis nom"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3984
+msgid "Furnizor, apoi nume"
+msgstr "Fournisseur, puis nom"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3985
+msgid "Sortează buchetele alese"
+msgstr "Trier les bouquets choisis"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3987
+msgid "Păstrează numai cei bifați"
+msgstr "Garder seulement ceux qui sont cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3988
+msgid "Toate canalele și transponderele sateliților bifați se șterg din receptor și din buchete. Poți anula până la salvare."
+msgstr "Toutes les chaînes et tous les transpondeurs des satellites cochés sont supprimés du récepteur et des bouquets. Tu peux annuler jusqu'à l'enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3989
+msgid "Se șterg din receptor toate canalele celorlalți sateliți (și din buchete). Poți anula până la salvare."
+msgstr "Toutes les chaînes des autres satellites sont supprimées du récepteur (et des bouquets). Tu peux annuler jusqu'à l'enregistrement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3990
+msgid "Sateliți:"
+msgstr "Satellites :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3991
+msgid "Verifică lista"
+msgstr "Vérifier la liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3992
+msgid "Curățenie"
+msgstr "Nettoyage"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3993
+msgid "Arată toate canalele ascunse"
+msgstr "Afficher toutes les chaînes masquées"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3994
+msgid "Deblochează toate canalele"
+msgstr "Déverrouiller toutes les chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3995
+msgid "Scoate semnul „nou” de pe toate canalele"
+msgstr "Retirer la marque « nouveau » de toutes les chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3997
+msgid "Sigle"
+msgstr "Logos"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3999
+msgid "Redenumește siglele după referință"
+msgstr "Renommer les logos par la référence"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4000
+msgid "Redenumește siglele după nume"
+msgstr "Renommer les logos par le nom"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4001
+msgid "Înlocuiește în nume..."
+msgstr "Remplacer dans les noms..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4003
+msgid "Înlocuiește cu"
+msgstr "Remplacer par"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4004
+msgid "Și în numele buchetelor"
+msgstr "Aussi dans les noms des bouquets"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4005
+msgid "Se schimbă:"
+msgstr "Sera modifié :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4006
+msgid "Înlocuiește"
+msgstr "Remplacer"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4008
+msgid "Mai mari"
+msgstr "Plus grandes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4009
+msgid "Mai mici"
+msgstr "Plus petites"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4010
+msgid "Mod avansat: pornit"
+msgstr "Mode avancé : activé"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4011
+msgid "Mod avansat: oprit"
+msgstr "Mode avancé : désactivé"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4012
+msgid "Modul avansat arată și editarea transponderelor, a fișierului satellites.xml și a detaliilor canalelor. Greșelile de acolo pot opri canalele."
+msgstr "Le mode avancé affiche aussi la modification des transpondeurs, du fichier satellites.xml et des détails des chaînes. Les erreurs à cet endroit peuvent empêcher les chaînes de fonctionner."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4013
+msgid "Sateliți și transpondere (satellites.xml)"
+msgstr "Satellites et transpondeurs (satellites.xml)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4014
+msgid "Satelit nou"
+msgstr "Nouveau satellite"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4015
+msgid "Salvează satellites.xml"
+msgstr "Enregistrer satellites.xml"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4017
+msgid "Schimbările se scriu în satellites.xml numai la „Salvează satellites.xml”, cu o copie înainte. Nu intră în „Anulează”."
+msgstr "Les modifications ne sont écrites dans satellites.xml qu'avec « Enregistrer satellites.xml », après une copie. « Annuler » ne les concerne pas."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4018
+msgid "satellites.xml e salvat și receptorul îl folosește."
+msgstr "satellites.xml est enregistré et le récepteur l'utilise."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4019
+msgid "satellites.xml e salvat; se vede după repornirea interfeței."
+msgstr "satellites.xml est enregistré ; on le verra après le redémarrage de l'interface."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4021
+msgid "Transponder nou"
+msgstr "Nouveau transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4023
+msgid "Poziția (de pildă 19.2E sau 30W)"
+msgstr "Position (par exemple 19.2E ou 30W)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4024
+msgid "Editează transponderul"
+msgstr "Modifier le transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4025
+msgid "Transponder nou în lista de canale"
+msgstr "Nouveau transpondeur dans la liste des chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4026
+msgid "Transponderul nou n-are canale: o căutare pe el le aduce."
+msgstr "Le nouveau transpondeur n'a pas de chaînes : une recherche dessus les apporte."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4028
+msgid "Rata de simbol (kS/s)"
+msgstr "Débit de symboles (kS/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4034
+msgid "Steagurile"
+msgstr "Indicateurs"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4035
+msgid "PID-uri ținute minte (cod:valoare hex)"
+msgstr "PID mémorisés (code:valeur hex)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4036
+msgid "Ascuns în listă"
+msgstr "Masqué dans la liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4037
+msgid "Păstrează numele la scanare"
+msgstr "Garder le nom lors de la recherche"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4038
+msgid "Nou găsit"
+msgstr "Nouvellement trouvé"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4039
+msgid "Fără SDT"
+msgstr "Sans SDT"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4040
+msgid "Fără DVB"
+msgstr "Sans DVB"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4041
+msgid "Buchet nou din cele bifate"
+msgstr "Nouveau bouquet avec ceux cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4042
+msgid "Adu înapoi cele bifate"
+msgstr "Ramener ceux cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4043
+msgid "Șterge marcajele bifate"
+msgstr "Supprimer les marqueurs cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4044
+msgid "Scoate din buchete cele bifate"
+msgstr "Retirer des bouquets ceux cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4045
+msgid "Șterge siglele bifate"
+msgstr "Supprimer les logos cochés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4047
+msgid "Înapoi la import"
+msgstr "Retour à l'import"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4049
+msgid "Sfat: bifează rândurile, apoi folosește butoanele de jos. Nimic nu se scrie în receptor până la „Salvează”."
+msgstr "Astuce : coche les lignes, puis utilise les boutons du bas. Rien n'est écrit dans le récepteur tant que tu n'appuies pas sur « Enregistrer »."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4054
+msgid "În buchetele"
+msgstr "Dans les bouquets"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "MIS (is_id)"
+msgstr "MIS (is_id)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Modul PLS"
+msgstr "Mode PLS"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Root"
+msgstr "Root"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Gold"
+msgstr "Gold"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py
+msgid "Combo"
+msgstr "Combo"
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Copia de siguranță a listei sateliților nu s-a putut face (%s). Nu s-a scris nimic."
+msgstr "La sauvegarde de la liste des satellites n'a pas pu être faite (%s). Rien n'a été écrit."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Câmpul flags trebuie să fie un număr între 0 și 255."
+msgstr "Le champ flags doit être un nombre entre 0 et 255."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Frecvența pare scrisă în MHz. Scrie-o în kHz: %d."
+msgstr "La fréquence semble écrite en MHz. Écris-la en kHz : %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Frecvența trebuie să fie în kHz, între %d și %d."
+msgstr "La fréquence doit être en kHz, entre %d et %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "La DVB-S FEC-ul e Auto (0), 1/2, 2/3, 3/4, 5/6 sau 7/8 (1-5)."
+msgstr "En DVB-S, le FEC est Auto (0), 1/2, 2/3, 3/4, 5/6 ou 7/8 (1-5)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "La DVB-S modulația e numai QPSK (1) sau Auto (0)."
+msgstr "En DVB-S, la modulation est seulement QPSK (1) ou Auto (0)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista nouă a sateliților nu a ieșit bine, așa că nu s-a scris. Fișierul vechi a rămas cum era."
+msgstr "La nouvelle liste des satellites n'est pas correcte, elle n'a donc pas été écrite. L'ancien fichier est resté tel quel."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților (%s) e goală sau nu are forma unui satellites.xml."
+msgstr "La liste des satellites (%s) est vide ou n'a pas la forme d'un satellites.xml."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților (%s) nu se poate citi: e stricată pe rândul %d."
+msgstr "La liste des satellites (%s) ne peut pas être lue : elle est abîmée à la ligne %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților nu s-a putut scrie (%s). Fișierul vechi a rămas cum era."
+msgstr "La liste des satellites n'a pas pu être écrite (%s). L'ancien fichier est resté tel quel."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Lista sateliților s-a schimbat între timp pe receptor. Deschide-o din nou, ca să nu pierzi schimbările de acolo."
+msgstr "La liste des satellites a changé entre-temps sur le récepteur. Ouvre-la à nouveau pour ne pas perdre les changements faits là-bas."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu e loc destul în memoria receptorului pentru lista sateliților."
+msgstr "Il n'y a pas assez de place dans la mémoire du récepteur pour la liste des satellites."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu există niciun satelit pe %s."
+msgstr "Il n'y a aucun satellite à %s."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Nu pot citi lista sateliților (%s)."
+msgstr "Je ne peux pas lire la liste des satellites (%s)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele atributului „%s” nu e bun."
+msgstr "Le nom de l'attribut « %s » n'est pas valable."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele satelitului are un caracter care nu se poate scrie în listă."
+msgstr "Le nom du satellite contient un caractère qui ne peut pas être écrit dans la liste."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Numele satelitului e prea lung: cel mult %d de caractere."
+msgstr "Le nom du satellite est trop long : %d caractères au plus."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Pe %s există deja satelitul %s."
+msgstr "À %s, il y a déjà le satellite %s."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Pe %s există deja transponderul %s, cu aceeași polarizare, la cel mult 2 MHz."
+msgstr "À %s, il y a déjà le transpondeur %s, avec la même polarisation, à 2 MHz au plus."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Polarizarea trebuie să fie H, V, L sau R (0, 1, 2 sau 3)."
+msgstr "La polarisation doit être H, V, L ou R (0, 1, 2 ou 3)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Poziția trebuie să fie între 180,0W și 180,0E."
+msgstr "La position doit être entre 180,0W et 180,0E."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Poziția „%s” nu e bună. Scrie-o ca 19,2E sau 30,0W."
+msgstr "La position « %s » n'est pas valable. Écris-la comme 19,2E ou 30,0W."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Rata de simbol pare scrisă în kS/s. Scrie-o în simboluri pe secundă: %d."
+msgstr "Le débit de symboles semble écrit en kS/s. Écris-le en symboles par seconde : %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Rata de simbol trebuie să fie în simboluri pe secundă, între %d și %d."
+msgstr "Le débit de symboles doit être en symboles par seconde, entre %d et %d."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Scrie numele satelitului."
+msgstr "Écris le nom du satellite."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Sistemul trebuie să fie DVB-S sau DVB-S2 (0 sau 1)."
+msgstr "Le système doit être DVB-S ou DVB-S2 (0 ou 1)."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Transponderul are nevoie de frecvență, rată de simbol și polarizare."
+msgstr "Le transpondeur a besoin d'une fréquence, d'un débit de symboles et d'une polarisation."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Transponderul nu mai există pe %s. Deschide din nou lista."
+msgstr "Le transpondeur n'existe plus à %s. Ouvre à nouveau la liste."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea atributului %s are un caracter care nu se poate scrie în listă."
+msgstr "La valeur de l'attribut %s contient un caractère qui ne peut pas être écrit dans la liste."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea pentru %s trebuie să fie un număr întreg."
+msgstr "La valeur de %s doit être un nombre entier."
+
+#: lib/python/Components/HdsEditorSateliti.py
+msgid "Valoarea pentru %s trebuie să fie între %d și %d."
+msgstr "La valeur de %s doit être entre %d et %d."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu s-a putut lucra cu siglele din %s."
+msgstr "Impossible d'accéder aux logos dans %s."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Rândul ales nu e un canal, deci nu poate avea siglă."
+msgstr "La ligne choisie n'est pas une chaîne, elle ne peut donc pas avoir de logo."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Referința canalului nu are numerele DVB: sigla s-ar vedea la mai multe canale."
+msgstr "La référence de la chaîne n'a pas les numéros DVB : le logo s'afficherait sur plusieurs chaînes."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu e niciun dosar de sigle în care să se poată scrie."
+msgstr "Aucun dossier de logos n'est accessible en écriture."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Fișierul nu e o imagine PNG bună. Alege o siglă în format PNG."
+msgstr "Le fichier n'est pas une image PNG valide. Choisis un logo au format PNG."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Fișierul are %d KB. O siglă poate avea cel mult %d KB."
+msgstr "Le fichier fait %d Ko. Un logo peut faire au plus %d Ko."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Imaginea are %d x %d pixeli. O siglă poate avea cel mult %d x %d pixeli."
+msgstr "L'image fait %d x %d pixels. Un logo peut faire au plus %d x %d pixels."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Nu e destul loc liber pentru siglă în %s."
+msgstr "Il n'y a pas assez d'espace libre pour le logo dans %s."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Canalul are deja o siglă într-un dosar în care nu se poate scrie: %s"
+msgstr "La chaîne a déjà un logo dans un dossier non accessible en écriture : %s"
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Canalul de la care copiezi nu are siglă."
+msgstr "La chaîne à partir de laquelle tu copies n'a pas de logo."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Televizorul caută siglele numai după referință. După redenumirea după nume, nu le mai arată."
+msgstr "Le téléviseur cherche les logos uniquement par la référence. Après le renommage par nom, il ne les affiche plus."
+
+#: lib/python/Components/HdsEditorSigle.py
+msgid "Redenumirea se face după referință sau după nume."
+msgstr "Le renommage se fait par référence ou par nom."
+
+#: lib/python/Components/HdsEditorCanale.py:1751
+msgid "Pe poziția nouă sunt deja aceleași transpondere."
+msgstr "Les mêmes transpondeurs sont déjà sur la nouvelle position."
+
+#: lib/python/Components/HdsEditorCanale.py:1754
+msgid "Satelit copiat: %s -> %s"
+msgstr "Satellite copié : %s -> %s"
+
+#: lib/python/Components/HdsEditorCanale.py:1754
+msgid "Satelit mutat: %s -> %s"
+msgstr "Satellite déplacé : %s -> %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3981
+msgid "Mută satelitul pe altă poziție..."
+msgstr "Déplacer le satellite sur une autre position..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:3982
+msgid "Copiază satelitul pe altă poziție..."
+msgstr "Copier le satellite sur une autre position..."
+
+#: lib/python/Components/HdsEditorCanaleUnelte.py:487
+msgid "Releele receptorului (adresele 127.0.0.1) nu se încearcă: merg numai când sunt pornite. Rânduri sărite: %d."
+msgstr "Les relais du récepteur (adresses 127.0.0.1) ne sont pas essayés : ils ne marchent que lorsqu'ils sont lancés. Lignes ignorées : %d."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Sfaturi: în stânga sunt canalele, în dreapta buchetul; Stânga / Dreapta trec dintr-o parte în alta. OK adaugă canalul sau ia rândul ca să-l muți, galben bifează mai multe. Jos scrie ce face fiecare tastă colorată, MENU are restul. Nimic nu se scrie până nu salvezi, iar tasta < anulează. HELP: ajutorul."
+msgstr "Astuces : à gauche les chaînes, à droite le bouquet ; Gauche / Droite passent de l'un à l'autre. OK ajoute la chaîne ou prend la ligne pour la déplacer, jaune en coche plusieurs. En bas est écrit ce que fait chaque touche de couleur, MENU a le reste. Rien n'est écrit tant que tu n'enregistres pas, et la touche < annule. HELP : l'aide."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Nicio schimbare de la ultima salvare."
+msgstr "Aucun changement depuis le dernier enregistrement."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d transponder din receptor, cu canalele lui? Dispar și din buchete."
+msgid_plural "Ștergi %d transpondere din receptor, cu canalele lor? Dispar și din buchete."
+msgstr[0] "Supprimer %d transpondeur du récepteur, avec ses chaînes ? Elles disparaissent aussi des bouquets."
+msgstr[1] "Supprimer %d transpondeurs du récepteur, avec leurs chaînes ? Elles disparaissent aussi des bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet ales: canalele lui care lipsesc intră în listă, restul listei rămâne."
+msgid_plural "%d buchete alese: canalele lor care lipsesc intră în listă, restul listei rămâne."
+msgstr[0] "%d bouquet choisi : ses chaînes manquantes entrent dans la liste, le reste de la liste reste."
+msgstr[1] "%d bouquets choisis : leurs chaînes manquantes entrent dans la liste, le reste de la liste reste."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal fără nume"
+msgid_plural "%d canale fără nume"
+msgstr[0] "%d chaîne sans nom"
+msgstr[1] "%d chaînes sans nom"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal cu nume de test"
+msgid_plural "%d canale cu nume de test"
+msgstr[0] "%d chaîne avec un nom de test"
+msgstr[1] "%d chaînes avec un nom de test"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d rând dublat"
+msgid_plural "%d rânduri dublate"
+msgstr[0] "%d ligne en double"
+msgstr[1] "%d lignes en double"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal care nu mai există"
+msgid_plural "%d canale care nu mai există"
+msgstr[0] "%d chaîne qui n'existe plus"
+msgstr[1] "%d chaînes qui n'existent plus"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet gol"
+msgid_plural "%d buchete goale"
+msgstr[0] "%d bouquet vide"
+msgstr[1] "%d bouquets vides"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d buchet găsit pe disc"
+msgid_plural "%d buchete găsite pe disc"
+msgstr[0] "%d bouquet trouvé sur le disque"
+msgstr[1] "%d bouquets trouvés sur le disque"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "refăcut automat"
+msgstr "refait automatiquement"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetele erau deja în această ordine."
+msgstr "Les bouquets étaient déjà dans cet ordre."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Buchetul era deja în această ordine."
+msgstr "Le bouquet était déjà dans cet ordre."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Păstrezi numai %d satelit? Canalele și transponderele tuturor celorlalți (și cablul, terestrul) dispar din receptor și din buchete."
+msgid_plural "Păstrezi numai %d sateliți? Canalele și transponderele tuturor celorlalți (și cablul, terestrul) dispar din receptor și din buchete."
+msgstr[0] "Garder seulement %d satellite ? Les chaînes et transpondeurs de tous les autres (câble et terrestre aussi) disparaissent du récepteur et des bouquets."
+msgstr[1] "Garder seulement %d satellites ? Les chaînes et transpondeurs de tous les autres (câble et terrestre aussi) disparaissent du récepteur et des bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d satelit din receptor, cu toate canalele lui (TV, radio, date) și transponderele? Dispar și din buchete."
+msgid_plural "Ștergi %d sateliți din receptor, cu toate canalele lor (TV, radio, date) și transponderele? Dispar și din buchete."
+msgstr[0] "Supprimer %d satellite du récepteur, avec toutes ses chaînes (TV, radio, données) et ses transpondeurs ? Ils disparaissent aussi des bouquets."
+msgstr[1] "Supprimer %d satellites du récepteur, avec toutes leurs chaînes (TV, radio, données) et leurs transpondeurs ? Ils disparaissent aussi des bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi %d canal (TV, radio și date) și transponderele satelitului? Dispar și din buchete."
+msgid_plural "Ștergi %d canale (TV, radio și date) și transponderele satelitului? Dispar și din buchete."
+msgstr[0] "Supprimer %d chaîne (TV, radio et données) et les transpondeurs du satellite ? Ils disparaissent aussi des bouquets."
+msgstr[1] "Supprimer %d chaînes (TV, radio et données) et les transpondeurs du satellite ? Ils disparaissent aussi des bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal nou în receptor"
+msgid_plural "%d canale noi în receptor"
+msgstr[0] "%d nouvelle chaîne dans le récepteur"
+msgstr[1] "%d nouvelles chaînes dans le récepteur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "%d canal schimbat în receptor"
+msgid_plural "%d canale schimbate în receptor"
+msgstr[0] "%d chaîne modifiée dans le récepteur"
+msgstr[1] "%d chaînes modifiées dans le récepteur"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Din ce buchet le scoți?"
+msgstr "De quel bouquet les retires-tu ?"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Ștergi transponderul și %d canal de pe el? Dispare și din buchete."
+msgid_plural "Ștergi transponderul și cele %d canale de pe el? Dispar și din buchete."
+msgstr[0] "Supprimer le transpondeur et %d chaîne dessus ? Elle disparaît aussi des bouquets."
+msgstr[1] "Supprimer le transpondeur et les %d chaînes dessus ? Elles disparaissent aussi des bouquets."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Alege buchetele…"
+msgstr "Choisir les bouquets…"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Le vezi în MENU."
+msgstr "Tu les vois dans MENU."
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă înaintea rândului ales din buchet"
+msgstr "Ajouter avant la ligne choisie du bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Adaugă la începutul buchetului"
+msgstr "Ajouter au début du bouquet"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Leagă de canalul ales în stânga (siglă și ghid): %s"
+msgstr "Lier à la chaîne choisie à gauche (logo et guide) : %s"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Înlocuiește aceste buchete"
+msgstr "Remplacer ces bouquets"
+
+#: lib/python/Screens/HdsEditorCanale.py
+msgid "Pune în alternativele din dreapta"
+msgstr "Mettre dans les alternatives à droite"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce s-ar scrie altfel decât se vede, canalele fără satelit în setări, marcajele goale, HD în nume cu tip SD, serviciile de date. Nimic nu se schimbă fără bifa ta."
+msgstr "Ce qui serait écrit autrement que ce que tu vois, les chaînes sans satellite dans les réglages, les marqueurs vides, HD dans le nom avec un type SD, les services de données. Rien ne change sans ta coche."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista e în ordine."
+msgstr "La liste est en ordre."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun buchet gol."
+msgstr "Aucun bouquet vide."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Niciun transponder fără canale."
+msgstr "Aucun transpondeur sans chaînes."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Adresele fluxurilor din buchete se încearcă acum, câteva secunde fiecare."
+msgstr "Les adresses des flux des bouquets sont essayées maintenant, quelques secondes chacune."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate fluxurile încercate răspund."
+msgstr "Tous les flux essayés répondent."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Toate siglele sunt folosite."
+msgstr "Tous les logos sont utilisés."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce e altfel în lista de acum față de copie. Din canalele noi faci un buchet; pe cele care nu mai sunt le aduci înapoi."
+msgstr "Ce qui diffère dans la liste actuelle par rapport à la copie. Avec les nouvelles chaînes tu fais un bouquet ; celles qui ont disparu, tu les ramènes."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista de acum e la fel ca în copie."
+msgstr "La liste actuelle est identique à la copie."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ce s-ar schimba dacă lista din arhivă ar înlocui lista de acum."
+msgstr "Ce qui changerait si la liste de l'archive remplaçait la liste actuelle."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Lista din arhivă e la fel ca lista de acum."
+msgstr "La liste de l'archive est identique à la liste actuelle."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alege buchetele"
+msgstr "Choisir les bouquets"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Bifează buchetele din arhivă pe care le iei. Canalele lor se adaugă în listă; celelalte buchete ale tale rămân cum sunt."
+msgstr "Coche les bouquets de l'archive que tu prends. Leurs chaînes sont ajoutées à la liste ; tes autres bouquets restent tels quels."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În arhivă nu e niciun buchet."
+msgstr "Il n'y a aucun bouquet dans l'archive."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Alte unelte"
+msgstr "Autres outils"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "MENU > Verifică lista, Buchete goale, Transpondere fără canale, Fluxuri care nu răspund, Sigle nefolosite și Curățenie (ascunse, blocate, semnul „nou”). În lista sateliților sau a furnizorilor, galben bifează mai mulți: MENU face câte un buchet din fiecare sau îi șterge din receptor. Copii de siguranță > galben compară o copie cu lista de acum: din canalele noi faci un buchet, pe cele dispărute le aduci înapoi."
+msgstr "MENU > Vérifier la liste, Bouquets vides, Transpondeurs sans chaînes, Flux qui ne répondent pas, Logos inutilisés et Nettoyage (cachées, verrouillées, la marque „nouveau”). Dans la liste des satellites ou des fournisseurs, jaune en coche plusieurs : MENU fait un bouquet de chacun ou les supprime du récepteur. Copies de sauvegarde > jaune compare une copie avec la liste actuelle : avec les nouvelles chaînes tu fais un bouquet, celles qui ont disparu tu les ramènes."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Căutarea și filtrele"
+msgstr "La recherche et les filtres"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Căutarea găsește după nume, furnizor, SID, frecvență sau referință; „*” și „?” se potrivesc pe tot numele („*sport” se termină cu sport); o literă greșită se iartă când nu găsește altceva. Albastru: filtrele, și cele ale listei (noi, blocate, ascunse, în niciun buchet, fără siglă, HD în nume cu tip SD)."
+msgstr "La recherche trouve par nom, fournisseur, SID, fréquence ou référence ; „*” et „?” s'appliquent à tout le nom („*sport” se termine par sport) ; une lettre fausse est pardonnée quand rien d'autre n'est trouvé. Bleu : les filtres, y compris ceux de la liste (nouvelles, verrouillées, cachées, dans aucun bouquet, sans logo, HD dans le nom avec type SD)."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Șterge buchetele bifate"
+msgstr "Supprimer les bouquets cochés"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Importă buchetele bifate"
+msgstr "Importer les bouquets cochés"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "În listă"
+msgstr "Dans la liste"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Tipul serviciului"
+msgstr "Type de service"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Sfaturile, din nou la deschidere"
+msgstr "Astuces de nouveau à l'ouverture"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d marcaj? Canalele rămân în buchet."
+msgid_plural "Ștergi %d marcaje? Canalele rămân în buchete."
+msgstr[0] "Supprimer %d marqueur ? Les chaînes restent dans le bouquet."
+msgstr[1] "Supprimer %d marqueurs ? Les chaînes restent dans les bouquets."
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d flux din buchete?"
+msgid_plural "Ștergi %d fluxuri din buchete?"
+msgstr[0] "Supprimer %d flux des bouquets ?"
+msgstr[1] "Supprimer %d flux des bouquets ?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d buchet gol?"
+msgid_plural "Ștergi %d buchete goale?"
+msgstr[0] "Supprimer %d bouquet vide ?"
+msgstr[1] "Supprimer %d bouquets vides ?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d transponder fără canale?"
+msgid_plural "Ștergi %d transpondere fără canale?"
+msgstr[0] "Supprimer %d transpondeur sans chaînes ?"
+msgstr[1] "Supprimer %d transpondeurs sans chaînes ?"
+
+#: lib/python/Screens/HdsEditorCanaleUnelte.py
+msgid "Ștergi %d siglă de pe disc? Se șterge acum, nu la salvare, și nu se poate anula."
+msgid_plural "Ștergi %d sigle de pe disc? Se șterg acum, nu la salvare, și nu se pot anula."
+msgstr[0] "Supprimer %d logo du disque ? Il est supprimé maintenant, pas à l'enregistrement, et ne peut pas être annulé."
+msgstr[1] "Supprimer %d logos du disque ? Ils sont supprimés maintenant, pas à l'enregistrement, et ne peuvent pas être annulés."
+
+#: lib/python/Screens/HdsCrashlogAutoSubmit.py:177
+#, python-format
+msgid ""
+"Găsite: %d. Ca beta tester (Setări > Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com.\n"
+"Se caută în „%s”, în /tmp și în orice alt folder montat sub /media, /run/media, /home/root."
+msgstr ""
+"Trouvés : %d. En tant que bêta-testeur (Paramètres > Bêta-testeur), les nouveaux journaux partent tout seuls, uniquement avec ton consentement. Sinon, un journal trouvé ici peut être envoyé via le formulaire de contact de hdsatelit.com.\n"
+"Recherche dans « %s », dans /tmp et dans tout autre dossier monté sous /media, /run/media, /home/root."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/jurnale_sistem_web.py
+msgid "Ca beta tester (în Setări, la Beta tester), jurnalele noi pleacă singure, numai cu acordul tău. Altfel, un jurnal găsit aici se poate trimite prin formularul de contact de pe hdsatelit.com. Se caută în <span id=\"principal\"></span>, în /tmp și în orice alt dosar montat sub /media, /run/media, /home/root."
+msgstr "En tant que bêta-testeur (dans Paramètres, à Bêta-testeur), les nouveaux journaux partent tout seuls, uniquement avec ton consentement. Sinon, un journal trouvé ici peut être envoyé par le formulaire de contact sur hdsatelit.com. La recherche se fait dans <span id=\"principal\"></span>, dans /tmp et dans tout autre dossier monté sous /media, /run/media, /home/root."
+
 # Asistenta de la distanta
 msgid "    raspuns: cod %d, %d octeti"
 msgstr "    réponse : code de sortie %d, %d octets"
@@ -53536,9 +56888,6 @@ msgstr "une capture de l'écran (seulement les menus, sans l'image de la chaîne
 msgid "o oră"
 msgstr "une heure"
 
-msgid "oprita"
-msgstr "arrêtée"
-
 msgid "oprita (%s)"
 msgstr "arrêtée (%s)"
 
@@ -53547,9 +56896,6 @@ msgstr "carte mère : processeur, ligne de commande du noyau, partitions, module
 
 msgid "pornita (%s, nivel %s, %d minute, text v%d)"
 msgstr "démarrée (%s, niveau %s, %d minutes, texte v%d)"
-
-msgid "proba"
-msgstr "test"
 
 msgid "reluata dupa repornirea interfetei"
 msgstr "reprise après le redémarrage de l'interface"
@@ -54207,3 +57553,850 @@ msgstr "La capture n'a pas pu être faite ; le message part sans elle."
 #: lib/python/Plugins/Extensions/HdsWebControl/betatester_web.py
 msgid "Da, ieși și șterge"
 msgstr "Oui, quitter et supprimer"
+
+msgid "Captura nu s-a putut face."
+msgstr "La capture n'a pas pu être faite."
+
+msgid "Captura nu s-a putut salva."
+msgstr "La capture n'a pas pu être enregistrée."
+
+msgid "Captura nu s-a putut șterge."
+msgstr "La capture n'a pas pu être supprimée."
+
+msgid "Captură salvată pe disc"
+msgstr "Capture enregistrée sur le disque"
+
+msgid "Captură salvată pe stick"
+msgstr "Capture enregistrée sur la clé USB"
+
+msgid "Captură salvată în memoria receptorului"
+msgstr "Capture enregistrée dans la mémoire du récepteur"
+
+msgid "Disc USB"
+msgstr "Disque USB"
+
+msgid "Nu mai e loc pe stick pentru capturi."
+msgstr "Il n'y a plus de place sur la clé USB pour les captures."
+
+msgid "Nu mai e loc în memoria receptorului pentru capturi. Pune un stick USB."
+msgstr "Il n'y a plus de place dans la mémoire du récepteur pour les captures. Branche une clé USB."
+
+msgid "Poza e prea mare: cel mult %d MB."
+msgstr "L'image est trop grande : %d Mo au maximum."
+
+msgid "Receptorul e în standby: captura nu se face."
+msgstr "Le récepteur est en veille : la capture n'est pas faite."
+
+msgid "Stick-ul nu mai e conectat."
+msgstr "La clé USB n'est plus branchée."
+
+msgid "Captura nu mai există."
+msgstr "La capture n'existe plus."
+
+msgid "Poza trebuie să fie JPG sau PNG."
+msgstr "L'image doit être en JPG ou PNG."
+
+msgid "Forumul nu are încă un subiect pentru acest receptor."
+msgstr "Le forum n'a pas encore de sujet pour ce récepteur."
+
+msgid "Forumul nu răspunde acum. Încearcă mai târziu."
+msgstr "Le forum ne répond pas pour l'instant. Réessaie plus tard."
+
+msgid "Legătura cu forumul a expirat. Încearcă din nou."
+msgstr "La connexion au forum a expiré. Réessaie."
+
+msgid "Mesajul e gol sau prea lung."
+msgstr "Le message est vide ou trop long."
+
+msgid "Nu mai poți scrie pe forum de pe acest receptor."
+msgstr "Tu ne peux plus écrire sur le forum depuis ce récepteur."
+
+msgid "Numele e deja folosit. Alege altul."
+msgstr "Le nom est déjà pris. Choisis-en un autre."
+
+msgid "O poză nu a putut fi urcată: trebuie să fie JPG sau PNG, de cel mult 4 MB."
+msgstr "Une image n'a pas pu être envoyée : elle doit être en JPG ou PNG, de 4 Mo au maximum."
+
+msgid "Prea multe mesaje într-un timp scurt. Mai încearcă peste câteva minute."
+msgstr "Trop de messages en peu de temps. Réessaie dans quelques minutes."
+
+msgid "Receptorul nu ajunge la forum. Verifică legătura la internet."
+msgstr "Le récepteur n'arrive pas à joindre le forum. Vérifie la connexion internet."
+
+msgid "Se trimite mesajul..."
+msgstr "Envoi du message..."
+
+msgid "Se urcă poza %(k)d din %(n)d..."
+msgstr "Envoi de l'image %(k)d sur %(n)d..."
+
+msgid "Subiectul e închis: nu se mai pot scrie mesaje."
+msgstr "Le sujet est fermé : on ne peut plus y écrire de messages."
+
+msgid "Tradus automat"
+msgstr "Traduit automatiquement"
+
+msgid "Tradus din română"
+msgstr "Traduit du roumain"
+
+msgid "Tradus din engleză"
+msgstr "Traduit de l'anglais"
+
+msgid "Tradus din germană"
+msgstr "Traduit de l'allemand"
+
+msgid "Tradus din franceză"
+msgstr "Traduit du français"
+
+msgid "Tradus din spaniolă"
+msgstr "Traduit de l'espagnol"
+
+msgid "Tradus din italiană"
+msgstr "Traduit de l'italien"
+
+msgid "Tradus din maghiară"
+msgstr "Traduit du hongrois"
+
+msgid "Tradus din cehă"
+msgstr "Traduit du tchèque"
+
+msgid "Tradus din poloneză"
+msgstr "Traduit du polonais"
+
+msgid "Tradus din portugheză"
+msgstr "Traduit du portugais"
+
+msgid "Tradus din neerlandeză"
+msgstr "Traduit du néerlandais"
+
+msgid "Tradus din rusă"
+msgstr "Traduit du russe"
+
+msgid "Tradus din turcă"
+msgstr "Traduit du turc"
+
+msgid "Tradus din ucraineană"
+msgstr "Traduit de l'ukrainien"
+
+msgid "Un mesaj poate avea cel mult 4 poze."
+msgstr "Un message peut avoir 4 images au maximum."
+
+msgid "Ca să scrii pe forum, devino beta tester."
+msgstr "Pour écrire sur le forum, deviens bêta-testeur."
+
+msgid "ieri, %s"
+msgstr "hier, %s"
+
+msgid "Captură de ecran"
+msgstr "Capture d'écran"
+
+msgid "Forumul receptorului"
+msgstr "Forum du récepteur"
+
+msgid "Devino beta tester"
+msgstr "Deviens bêta-testeur"
+
+msgid "Adaugă la mesaj"
+msgstr "Ajouter au message"
+
+msgid "Aici scriu beta testerii acestui receptor. Ca să scrii și tu, devino beta tester."
+msgstr "Ici écrivent les bêta-testeurs de ce récepteur. Pour écrire toi aussi, deviens bêta-testeur."
+
+msgid "Așteaptă aprobarea"
+msgstr "En attente de validation"
+
+msgid "Mai vechi"
+msgstr "Plus anciens"
+
+msgid "Numele tău pe forum"
+msgstr "Ton nom sur le forum"
+
+msgid "Scrie un mesaj"
+msgstr "Écrire un message"
+
+msgid "Se citește forumul..."
+msgstr "Lecture du forum..."
+
+msgid "Încă nu e niciun mesaj aici."
+msgstr "Il n'y a encore aucun message ici."
+
+msgid "Același forum e pe televizor: __DRUM_MENIU__, Forumul receptorului."
+msgstr "Le même forum est sur le téléviseur : __DRUM_MENIU__, Forum du récepteur."
+
+msgid "Alege din capturile receptorului"
+msgstr "Choisir parmi les captures du récepteur"
+
+msgid "Alege o poză."
+msgstr "Choisis une image."
+
+msgid "Alege întâi capturile."
+msgstr "Choisis d'abord les captures."
+
+msgid "Alese: {n} (până la {m})"
+msgstr "Choisies : {n} (jusqu'à {m})"
+
+msgid "Apari ca:"
+msgstr "Tu apparais comme :"
+
+msgid "Captura s-a șters."
+msgstr "La capture a été supprimée."
+
+msgid "Capturi atașate: {n} din {m}"
+msgstr "Captures jointes : {n} sur {m}"
+
+msgid "Capturile receptorului"
+msgstr "Captures du récepteur"
+
+msgid "Capturile s-au șters."
+msgstr "Les captures ont été supprimées."
+
+msgid "Cererea se trimite cu POST."
+msgstr "La requête s'envoie avec POST."
+
+msgid "Deschide subiectul pe forum"
+msgstr "Ouvrir le sujet sur le forum"
+
+msgid "Forumul nu se poate citi acum."
+msgstr "Le forum ne peut pas être lu pour l'instant."
+
+msgid "Fă o captură acum"
+msgstr "Faire une capture maintenant"
+
+msgid "Mesaje afișate: {n}"
+msgstr "Messages affichés : {n}"
+
+msgid "Mesajele"
+msgstr "Messages"
+
+msgid "Mesajul are deja {m} capturi; noua captură e în galerie."
+msgstr "Le message a déjà {m} captures ; la nouvelle capture est dans la galerie."
+
+msgid "Mesajul așteaptă aprobarea moderatorului; până atunci îl vezi numai tu."
+msgstr "Le message attend la validation du modérateur ; d'ici là, toi seul le vois."
+
+msgid "Mesajul e pe forum."
+msgstr "Le message est sur le forum."
+
+msgid "Mesajul e prea lung."
+msgstr "Le message est trop long."
+
+msgid "Nicio captură aici încă: fă una acum sau apasă tasta de captură de pe telecomandă."
+msgstr "Aucune capture ici pour l'instant : fais-en une maintenant ou appuie sur la touche de capture de la télécommande."
+
+msgid "Nu s-a putut face."
+msgstr "Cela n'a pas pu être fait."
+
+msgid "Numele e salvat."
+msgstr "Le nom est enregistré."
+
+msgid "Numele nu se poate schimba încă de aici."
+msgstr "Le nom ne peut pas encore être changé d'ici."
+
+msgid "O captură aleasă nu mai există. Alege din nou."
+msgstr "Une capture choisie n'existe plus. Choisis à nouveau."
+
+msgid "O singură limbă: forumul traduce singur."
+msgstr "Une seule langue : le forum traduit tout seul."
+
+msgid "Poza din mesaj"
+msgstr "Image du message"
+
+msgid "Poza e prea mare."
+msgstr "L'image est trop grande."
+
+msgid "Poza e pusă între capturi."
+msgstr "L'image est maintenant parmi les captures."
+
+msgid "Poza nu a ajuns întreagă: %s"
+msgstr "L'image n'est pas arrivée entière : %s"
+
+msgid "Poza nu mai există."
+msgstr "L'image n'existe plus."
+
+msgid "Poza nu s-a putut aduce."
+msgstr "L'image n'a pas pu être récupérée."
+
+msgid "Poza nu se poate citi. Alege o poză JPG sau PNG."
+msgstr "L'image ne peut pas être lue. Choisis une image JPG ou PNG."
+
+msgid "Poza se aduce de pe forum..."
+msgstr "Récupération de l'image depuis le forum..."
+
+msgid "Poți alege cel mult {m} capturi."
+msgstr "Tu peux choisir {m} captures au maximum."
+
+msgid "Scoate captura"
+msgstr "Retirer la capture"
+
+msgid "Scrie mesajul tău..."
+msgstr "Écris ton message..."
+
+msgid "Scrie și tu pe forum"
+msgstr "Écris toi aussi sur le forum"
+
+msgid "Se face captura..."
+msgstr "Capture en cours..."
+
+msgid "Se pregătește poza..."
+msgstr "Préparation de l'image..."
+
+msgid "Trimite pe forum"
+msgstr "Envoyer sur le forum"
+
+msgid "Un mesaj poate avea cel mult %d poze."
+msgstr "Un message peut avoir %d images au maximum."
+
+msgid "sau încarcă o poză de pe calculator"
+msgstr "ou envoie une image depuis l'ordinateur"
+
+msgid "Încarcă de pe calculator"
+msgstr "Envoyer depuis l'ordinateur"
+
+msgid "Ștergi captura aleasă?"
+msgstr "Supprimer la capture choisie ?"
+
+msgid "Ștergi cele %d capturi alese?"
+msgstr "Supprimer les %d captures choisies ?"
+
+msgid "Capturi"
+msgstr "Captures"
+
+msgid "Adaugă la mesaj (%d)"
+msgstr "Ajouter au message (%d)"
+
+msgid "Adaugă o captură"
+msgstr "Ajouter une capture"
+
+msgid "Aici scriu beta testerii acestui receptor."
+msgstr "Ici écrivent les bêta-testeurs de ce récepteur."
+
+msgid "Apari ca: %s"
+msgstr "Tu apparais comme : %s"
+
+msgid "Apari cu numele dat de forum."
+msgstr "Tu apparais avec le nom donné par le forum."
+
+msgid "Apari pe forum ca „%s”."
+msgstr "Sur le forum, tu apparais comme « %s »."
+
+msgid "Capturi: %d"
+msgstr "Captures : %d"
+
+msgid "Capturile mele"
+msgstr "Mes captures"
+
+msgid "Capturile tale"
+msgstr "Tes captures"
+
+msgid "MENU: schimbă numele tău de pe forum"
+msgstr "MENU : changer ton nom sur le forum"
+
+msgid "Mesaje: %d"
+msgstr "Messages : %d"
+
+msgid "Mesajul %(k)d din %(n)d"
+msgstr "Message %(k)d sur %(n)d"
+
+msgid "Mesajul anterior"
+msgstr "Message précédent"
+
+msgid "Mesajul tău a plecat și așteaptă aprobarea: până atunci îl vezi numai tu."
+msgstr "Ton message est parti et attend la validation : d'ici là, toi seul le vois."
+
+msgid "Mesajul tău a plecat."
+msgstr "Ton message est parti."
+
+msgid "Mesajul următor"
+msgstr "Message suivant"
+
+msgid "Nicio captură aici: apasă tasta de captură de pe telecomandă (a treia tastă cu desen de ecran) pe orice ecran."
+msgstr "Aucune capture ici : appuie sur la touche de capture de la télécommande (la troisième touche avec un dessin d'écran) sur n'importe quel écran."
+
+msgid "Nu e niciun stick USB conectat."
+msgstr "Aucune clé USB n'est branchée."
+
+msgid "Nu sunt mesaje mai vechi."
+msgstr "Il n'y a pas de messages plus anciens."
+
+msgid "Numele tău pe forum e acum „%s”."
+msgstr "Ton nom sur le forum est maintenant « %s »."
+
+msgid "OK alege capturile, Verde le pune în mesaj."
+msgstr "OK choisit les captures, Vert les met dans le message."
+
+msgid "OK: mărește poza."
+msgstr "OK : agrandir l'image."
+
+msgid "OK: mărește poza. Stânga și Dreapta: celelalte poze."
+msgstr "OK : agrandir l'image. Gauche et Droite : les autres images."
+
+msgid "OK: scrie mesajul cu tastatura de pe ecran."
+msgstr "OK : écris le message avec le clavier à l'écran."
+
+msgid "Poza %(k)d din %(n)d"
+msgstr "Image %(k)d sur %(n)d"
+
+msgid "Pozele (%(n)d din %(max)d)"
+msgstr "Images (%(n)d sur %(max)d)"
+
+msgid "Poți alege cel mult %d capturi."
+msgstr "Tu peux choisir %d captures au maximum."
+
+msgid "Poți alege o singură captură."
+msgstr "Tu ne peux choisir qu'une seule capture."
+
+msgid "Renunți la mesajul scris?"
+msgstr "Abandonner le message écrit ?"
+
+msgid "Răspunde"
+msgstr "Répondre"
+
+msgid "Scoate poza"
+msgstr "Retirer l'image"
+
+msgid "Scrie într-o singură limbă: forumul traduce singur mesajul pentru fiecare cititor."
+msgstr "Écris dans une seule langue : le forum traduit tout seul le message pour chaque lecteur."
+
+msgid "Se schimbă numele..."
+msgstr "Changement du nom..."
+
+msgid "Stick / Memorie"
+msgstr "Clé USB / Mémoire"
+
+msgid "Textul (OK: tastatura de pe ecran)"
+msgstr "Texte (OK : clavier à l'écran)"
+
+msgid "Șterge captura"
+msgstr "Supprimer la capture"
+
+msgid "Ștergi captura?"
+msgstr "Supprimer la capture ?"
+
+msgid "cererea a expirat"
+msgstr "la requête a expiré"
+
+msgid "cererea a fost respinsă"
+msgstr "la requête a été rejetée"
+
+msgid "cererea a fost închisă"
+msgstr "la requête a été fermée"
+
+msgid "codul a expirat"
+msgstr "le code a expiré"
+
+msgid "din pagina web"
+msgstr "depuis la page web"
+
+msgid "serverul nu răspunde"
+msgstr "le serveur ne répond pas"
+
+msgid "înregistrare refuzată"
+msgstr "enregistrement refusé"
+
+msgid "de pe receptor"
+msgstr "depuis le récepteur"
+
+msgid "de om"
+msgstr "par l'utilisateur"
+
+msgid "eroare"
+msgstr "erreur"
+
+msgid "Ce scriu testerii acestui receptor; scrii și tu, cu capturi."
+msgstr "Ce qu'écrivent les testeurs de ce récepteur ; tu écris aussi, avec des captures."
+
+msgid "O greșeală, o idee sau o întrebare, direct echipei."
+msgstr "Une erreur, une idée ou une question, directement à l'équipe."
+
+msgid "Datele bifate pleacă imediat."
+msgstr "Les données cochées partent tout de suite."
+
+msgid "Ultimele pachete plecate și starea fiecăruia."
+msgstr "Les derniers paquets envoyés et l'état de chacun."
+
+msgid "Ce ți-a răspuns echipa la mesaje."
+msgstr "Ce que l'équipe a répondu à tes messages."
+
+msgid "Alegi ce date pleacă, numele și e-mailul."
+msgstr "Tu choisis quelles données partent, le nom et l'e-mail."
+
+msgid "Tot ce a plecat în ultimul pachet."
+msgstr "Tout ce qui est parti dans le dernier paquet."
+
+msgid "Probe pe receptor: ce merge și ce nu."
+msgstr "Tests sur le récepteur : ce qui marche et ce qui ne marche pas."
+
+msgid "Ne lași să vedem starea receptorului, cât alegi tu."
+msgstr "Tu nous laisses voir l'état du récepteur, aussi longtemps que tu le choisis."
+
+msgid "Versiunile noi ajung întâi la tine."
+msgstr "Les nouvelles versions t'arrivent en premier."
+
+msgid "Numele cu care apari pe forum și pe site."
+msgstr "Le nom avec lequel tu apparais sur le forum et sur le site."
+
+msgid "Ce date pleacă, cine le primește, cât se păstrează."
+msgstr "Quelles données partent, qui les reçoit, combien de temps elles sont conservées."
+
+msgid "Serverul șterge tot ce a trimis acest receptor."
+msgstr "Le serveur supprime tout ce que ce récepteur a envoyé."
+
+msgid "Alegi ce date trimiți; sunt anonime."
+msgstr "Tu choisis quelles données tu envoies ; elles sont anonymes."
+
+msgid "Citește ce scriu testerii acestui receptor."
+msgstr "Lis ce qu'écrivent les testeurs de ce récepteur."
+
+msgid "Primești versiunile noi înaintea tuturor"
+msgstr "Tu reçois les nouvelles versions avant tout le monde"
+
+msgid "Din meniul testerului alegi să primești întâi versiunile pentru testeri."
+msgstr "Dans le menu du testeur, tu choisis de recevoir d'abord les versions pour testeurs."
+
+msgid "Scrii pe forumul receptorului, cu capturi de ecran"
+msgstr "Tu écris sur le forum du récepteur, avec des captures d'écran"
+
+msgid "Forumul traduce singur mesajele pentru fiecare cititor."
+msgstr "Le forum traduit tout seul les messages pour chaque lecteur."
+
+msgid "La o problemă, ne lași să ne uităm la receptor, cât vrei tu"
+msgstr "En cas de problème, tu nous laisses regarder le récepteur, aussi longtemps que tu veux"
+
+msgid "Asistența de la distanță: o pornești tu și o oprești oricând."
+msgstr "Assistance à distance : tu la lances toi-même et tu l'arrêtes quand tu veux."
+
+msgid "Imaginea merge mai bine pe modelul tău"
+msgstr "L'image marche mieux sur ton modèle"
+
+msgid "Trimiți date anonime, numai cele bifate de tine."
+msgstr "Tu envoies des données anonymes, seulement celles que tu coches."
+
+msgid "Echipa îți răspunde la mesaje"
+msgstr "L'équipe répond à tes messages"
+
+msgid "Greșeli, idei, întrebări: răspunsul vine în meniul testerului."
+msgstr "Erreurs, idées, questions : la réponse arrive dans le menu du testeur."
+
+msgid "Asistența de la distanță e pentru beta testeri."
+msgstr "L'assistance à distance est réservée aux bêta-testeurs."
+
+msgid "Ca beta tester trimiți date anonime care ajută imaginea și poți scrie pe forumul receptorului."
+msgstr "En tant que bêta-testeur, tu envoies des données anonymes qui aident l'image et tu peux écrire sur le forum du récepteur."
+
+msgid "Ești beta tester"
+msgstr "Tu es bêta-testeur"
+
+msgid "Înscris din %s"
+msgstr "Inscrit depuis %s"
+
+msgid "Ce primești ca beta tester"
+msgstr "Ce que tu reçois en tant que bêta-testeur"
+
+msgid "Ultimele mesaje de pe forum"
+msgstr "Derniers messages du forum"
+
+msgid "    răspuns: cod %d, %d octeți"
+msgstr "    réponse : code de sortie %d, %d octets"
+
+msgid "Asistența a pornit."
+msgstr "L'assistance a démarré."
+
+msgid "Asistența nu merge."
+msgstr "L'assistance n'est pas en cours."
+
+msgid "Asistența s-a oprit. Cheia a fost ștearsă."
+msgstr "L'assistance s'est arrêtée. La clé a été effacée."
+
+msgid "cerere refuzată: %s"
+msgstr "requête refusée : %s"
+
+msgid "cod arătat pe ecran, aștept aprobarea"
+msgstr "code affiché à l'écran, en attente de validation"
+
+msgid "codul a expirat fără aprobare"
+msgstr "le code a expiré sans validation"
+
+msgid "nu pot ajunge la serverul de asistență"
+msgstr "impossible de joindre le serveur d'assistance"
+
+msgid "oprită (%s)"
+msgstr "arrêtée (%s)"
+
+msgid "pornită (%s, nivel %s, %d minute, text v%d)"
+msgstr "démarrée (%s, niveau %s, %d minutes, texte v%d)"
+
+msgid "probă"
+msgstr "test"
+
+msgid "reluată după repornirea interfeței"
+msgstr "reprise après le redémarrage de l'interface"
+
+msgid "serverul a refuzat înregistrarea (%s)"
+msgstr "le serveur a refusé l'enregistrement (%s)"
+
+msgid "copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)"
+msgstr "copie filtrée des réglages (audio, vidéo, interface, réseau ; sans mots de passe ni clés)"
+
+msgid "lista jurnalelor receptorului, cu mărimile"
+msgstr "liste des journaux du récepteur, avec leurs tailles"
+
+msgid "lista proceselor (numele, fără argumente)"
+msgstr "liste des processus (noms, sans arguments)"
+
+msgid "memoria liberă și memoria decodorului"
+msgstr "mémoire libre et mémoire du décodeur"
+
+msgid "o captură a ecranului (numai meniurile, fără imaginea canalului)"
+msgstr "une capture de l'écran (seulement les menus, sans l'image de la chaîne)"
+
+msgid "placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate"
+msgstr "carte mère : processeur, ligne de commande du noyau, partitions, modules chargés"
+
+msgid "rețeaua: cablu sau Wi-Fi, legat sau nu, ruta implicită, DNS (fără numele rețelei, MAC mascat)"
+msgstr "réseau : câble ou Wi-Fi, connecté ou non, route par défaut, DNS (sans le nom du réseau, MAC masquée)"
+
+msgid "tunerele și blocarea semnalului"
+msgstr "tuners et accrochage du signal"
+
+msgid "ultimele rânduri dintr-un jurnal"
+msgstr "les dernières lignes d'un journal"
+
+msgid ""
+"Datele le primește Eduard Monea, persoană fizică (mărcile Monea Software și "
+"HD Satelit), contact@hdsatelit.com. Pleacă numai felurile bifate de tine, "
+"cu un identificator întâmplător și o amprentă calculată din placă, ca "
+"receptorul să fie numărat o singură dată (din ea nu se pot afla adresa MAC "
+"sau seria), fără adresa IP, fără parole și fără listele tale de canale, "
+"numai ca să îmbunătățim imaginea pe modelul tău de receptor. Jurnalele se "
+"păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de "
+"date sau poți ieși din program cu ștergerea datelor. La o pornire ratată, "
+"receptorul trimite singur un raport tehnic anonim, fără date personale. "
+"Dacă scrii pe forumul receptorului, mesajul tău apare public, cu numele "
+"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos."
+msgstr ""
+"Les données sont reçues par Eduard Monea, personne physique (les marques "
+"Monea Software et HD Satelit), contact@hdsatelit.com. Seuls les types que "
+"tu coches sont envoyés, avec un identifiant aléatoire et une empreinte "
+"calculée à partir de la carte, pour que le récepteur ne soit compté qu'une "
+"fois (on ne peut en tirer ni l'adresse MAC ni le numéro de série), sans "
+"adresse IP, sans mots de passe et sans tes listes de chaînes, uniquement "
+"pour améliorer l'image sur ton modèle de récepteur. Les journaux sont "
+"conservés 6 mois, les autres données 12 mois. Tu peux décocher à tout "
+"moment un type de données ou quitter le programme avec la suppression des "
+"données. Après un démarrage raté, le récepteur envoie tout seul un rapport "
+"technique anonyme, sans données personnelles. Si tu écris sur le forum du "
+"récepteur, ton message apparaît publiquement, avec le nom que tu as choisi "
+"ou avec un nom automatique. La note complète se trouve à l'adresse "
+"ci-dessous."
+
+msgid "Pozele se văd după aprobare."
+msgstr "Les images s'affichent après la validation."
+
+msgid "Felicitări, ești beta tester. Datele bifate pleacă de acum."
+msgstr "Félicitations, tu es bêta-testeur. Les données cochées sont envoyées dès maintenant."
+
+msgid "un mesaj nou"
+msgid_plural "%d mesaje noi"
+msgstr[0] "%d nouveau message"
+msgstr[1] "%d nouveaux messages"
+
+#: data/menu.xml lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Jurnalele celorlalte sloturi"
+msgstr "Journaux des autres slots"
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Dacă o imagine dintr-un alt slot nu pornește, aici iei pașii pornirilor ei, rapoartele și jurnalele de cădere rămase acolo. O apăsare le pune pe stick și le trimite, ca să aflăm de ce nu pornește."
+msgstr "Si une image d'un autre slot ne démarre pas, tu récupères ici les étapes de ses démarrages, les rapports et les journaux de plantage restés là-bas. Un seul appui les met sur la clé USB et les envoie, pour que nous sachions pourquoi elle ne démarre pas."
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Pune pe stick și trimite"
+msgstr "Mettre sur la clé et envoyer"
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Caut celelalte sloturi..."
+msgstr "Je cherche les autres slots..."
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Nu am găsit alte sloturi pe acest receptor."
+msgstr "Je n'ai trouvé aucun autre slot sur ce récepteur."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+#, python-format
+msgid "%(nume)s, %(imagine)s: porniri %(porniri)d, rapoarte %(rapoarte)d, jurnale de cădere %(caderi)d"
+msgstr "%(nume)s, %(imagine)s : démarrages %(porniri)d, rapports %(rapoarte)d, journaux de plantage %(caderi)d"
+
+#: lib/python/Components/HdsJurnaleSloturi.py lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Pun jurnalele pe stick și le trimit..."
+msgstr "Je mets les journaux sur la clé et je les envoie..."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Pus pe stick, în dosarul hds-raport."
+msgstr "Mis sur la clé, dans le dossier hds-raport."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu e niciun stick pus: raportul a rămas în receptor."
+msgstr "Aucune clé n'est branchée : le rapport est resté dans le récepteur."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+#, python-format
+msgid "Trimis. Codul raportului: %s."
+msgstr "Envoyé. Le code du rapport : %s."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu am putut trimite acum: raportul pleacă singur la pornirea următoare, când receptorul are rețea."
+msgstr "Je n'ai pas pu l'envoyer maintenant : le rapport part tout seul au prochain démarrage, quand le récepteur a du réseau."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Nu am putut face raportul."
+msgstr "Je n'ai pas pu faire le rapport."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Lipsește programul raportului din această imagine."
+msgstr "Le programme du rapport manque dans cette image."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sloturi_web.py
+msgid "Dacă o imagine dintr-un alt slot nu pornește, aici iei pașii pornirilor ei, rapoartele și jurnalele de cădere rămase acolo. O apăsare le pune pe stick și le trimite, ca să aflăm de ce nu pornește. Același ecran e pe receptor, în __DRUM_MENIU__."
+msgstr "Si une image d'un autre slot ne démarre pas, tu récupères ici les étapes de ses démarrages, les rapports et les journaux de plantage restés là-bas. Un seul appui les met sur la clé USB et les envoie, pour que nous sachions pourquoi elle ne démarre pas. Le même écran est sur le récepteur, dans __DRUM_MENIU__."
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Ce am găsit în celelalte sloturi"
+msgstr "Ce que j'ai trouvé dans les autres slots"
+
+#: lib/python/Components/HdsJurnaleSloturi.py
+msgid "Codul raportului"
+msgstr "Code du rapport"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola lui root, aceeași pentru SSH și SFTP"
+msgstr "Mot de passe de root, le même pour SSH et SFTP"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola lui root, aceeași pentru FTP, SSH și SFTP"
+msgstr "Mot de passe de root, le même pour FTP, SSH et SFTP"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola poate avea numai litere fără diacritice, cifre și semne, fără spații."
+msgstr "Le mot de passe ne peut contenir que des lettres sans accents, des chiffres et des signes, sans espaces."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola are prea puține semne: cel puțin %d."
+msgstr "Le mot de passe a trop peu de caractères : au moins %d."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola are prea multe semne: cel mult %d."
+msgstr "Le mot de passe a trop de caractères : au plus %d."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nouă e pusă. Merge pentru FTP, SSH și SFTP; cea veche nu mai merge."
+msgstr "Le nouveau mot de passe est en place. Il fonctionne pour FTP, SSH et SFTP ; l’ancien ne fonctionne plus."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Programul parolei de pe receptor e vechi și nu primește o parolă aleasă. Actualizează receptorul, apoi încearcă din nou. Parola de dinainte rămâne."
+msgstr "Le programme du mot de passe sur le récepteur est ancien et n’accepte pas un mot de passe choisi. Mets à jour le récepteur, puis réessaie. Le précédent reste."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nu s-a putut pune. Parola de dinainte rămâne."
+msgstr "Le mot de passe n’a pas pu être mis en place. Le précédent reste."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Merge numai din rețeaua ta de acasă și se vede aici oricând. Ca s-o schimbi, alege „Schimbă parola”."
+msgstr "Il ne fonctionne que depuis ton réseau domestique et reste visible ici à tout moment. Pour le changer, choisis « Changer le mot de passe »."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola a fost schimbată pe altă cale (de exemplu cu passwd), deci nu se mai vede aici. Alege „Schimbă parola” ca s-o vezi din nou."
+msgstr "Le mot de passe a été changé autrement (par exemple avec passwd), il n’est donc plus visible ici. Choisis « Changer le mot de passe » pour le revoir."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Parola nu se vede aici. Alege „Schimbă parola” și pune una nouă: de atunci se vede oricând."
+msgstr "Le mot de passe n’est pas visible ici. Choisis « Changer le mot de passe » et mets-en un nouveau : il restera alors visible à tout moment."
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "FTP sau SFTP: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP ou SFTP : %s, utilisateur root · SSH : ssh root@%s"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Serverul FTP"
+msgstr "Serveur FTP"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Verificarea parolei FTP (PAM)"
+msgstr "Vérification du mot de passe FTP (PAM)"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Rețeaua de acasă"
+msgstr "Réseau domestique"
+
+#: lib/python/Components/HdsAccesSsh.py
+msgid "Se pune parola nouă..."
+msgstr "Mise en place du nouveau mot de passe..."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Parola receptorului"
+msgstr "Mot de passe du récepteur"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Schimbă parola"
+msgstr "Changer le mot de passe"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Scrii parola ta cu tastatura de pe ecran: 4-64 de semne, fără spații și fără diacritice. Cea veche nu mai merge."
+msgstr "Tu écris ton mot de passe avec le clavier à l’écran : 4-64 caractères, sans espaces ni accents. L’ancien ne fonctionnera plus."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Text brut (fișierele serverelor SSH și FTP)"
+msgstr "Texte brut (fichiers des serveurs SSH et FTP)"
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "OK arată fișierele de setări ale serverelor SSH și FTP, așa cum sunt pe receptor."
+msgstr "OK affiche les fichiers de réglages des serveurs SSH et FTP tels qu’ils sont sur le récepteur."
+
+#: lib/python/Screens/HdsAccesSsh.py
+msgid "Parola nouă: 4-64 de semne, fără spații și fără diacritice"
+msgstr "Nouveau mot de passe : 4-64 caractères, sans espaces ni accents"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Cât ecranul „Parola receptorului” e deschis pe receptor, telecomanda și captura de ecran merg numai dintr-un browser conectat cu codul de pe televizor."
+msgstr "Tant que l’écran « Mot de passe du récepteur » est ouvert sur le récepteur, la télécommande et la capture d’écran ne fonctionnent que depuis un navigateur connecté avec le code du téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Aceleași lucruri sunt și în meniul receptorului, în %s."
+msgstr "La même chose se trouve aussi dans le menu du récepteur, dans %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Parola nouă"
+msgstr "Nouveau mot de passe"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "4-64 de semne: litere fără diacritice, cifre și semne, fără spații. Cea veche nu mai merge."
+msgstr "4-64 caractères : lettres sans accents, chiffres et signes, sans espaces. L’ancien ne fonctionnera plus."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root și parola de sus:"
+msgstr "FTP ou SFTP (par exemple FileZilla ou WinSCP), utilisateur root et le mot de passe ci-dessus :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Cu parola se intră numai din rețeaua ta de acasă. Cu o cheie SSH pusă mai jos, calculatorul intră fără parolă."
+msgstr "Avec le mot de passe, on n’entre que depuis ton réseau domestique. Avec une clé SSH ajoutée ci-dessous, l’ordinateur se connecte sans mot de passe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "Scrie întâi parola nouă."
+msgstr "Écris d’abord le nouveau mot de passe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py
+msgid "__T_CUM_FTP__ <span class=\"cod\" id=\"comandaFtp\">ftp://receptor</span>"
+msgstr "__T_CUM_FTP__ <span class=\"cod\" id=\"comandaFtp\">ftp://receptor</span>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/acces-ssh</code>: parola receptorului (FTP, SSH și SFTP): felul parolei lui root (fără parola însăși), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), opțiunea Fără parolă în rețeaua locală, stările periculoase (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi"
+msgstr "<code>GET /api/acces-ssh</code> : le mot de passe du récepteur (FTP, SSH et SFTP) : le type de mot de passe de root (sans le mot de passe lui-même), si FTP fonctionne (<code>ftp</code>), les clés SSH (type, empreinte, commentaire), « Sans mot de passe sur le réseau local », les états dangereux (<code>alarme</code>), la tâche en cours et le résultat de la dernière commande"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-parola</code>: textul parolei (se vede oricând); <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow)"
+msgstr "<code>POST /api/acces-ssh-parola</code> : le texte du mot de passe (visible à tout moment) ; <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code> : les fichiers des serveurs SSH et FTP en texte (sans /etc/shadow)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola aleasă (4-64 de semne: litere fără diacritice, cifre și semne, fără spații); <code>POST /api/acces-ssh-parola-noua?confirmat=1</code>: o parolă nouă la întâmplare"
+msgstr "<code>POST /api/acces-ssh-pune</code> (corps : <code>parola=</code>) : le mot de passe choisi (4-64 caractères : lettres sans accents, chiffres et signes, sans espaces) ; <code>POST /api/acces-ssh-parola-noua?confirmat=1</code> : un nouveau mot de passe au hasard"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
+msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> demande aussi <code>confirmat=1</code>) : « Sans mot de passe sur le réseau local ». Le mot de passe, le texte brut et tous les changements passent seulement depuis un navigateur connecté avec le code du téléviseur (sinon 403 avec <code>trebuie_cod</code>), jamais avec <code>?token=</code> ; tant que l'écran « Mot de passe du récepteur » est ouvert sur le récepteur, de même pour <code>/api/remotecontrol</code> et <code>/api/screenshot</code>"

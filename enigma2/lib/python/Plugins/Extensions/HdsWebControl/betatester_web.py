@@ -82,9 +82,18 @@ def stare(B=None, b=None):
 		"automat_eticheta": _t(B.AUTOMAT[0]),
 		"automat_rand": _t(B.AUTOMAT[1]),
 		"numar": B.randNumar(),
+		"randuri": dict((k, _t(v)) for k, v in (B.RANDURI_MENIU if inscris else B.RANDURI_VIZITATOR).items()),
 	}
 	B.ceNumar()
+	if not inscris:
+		rez.update({
+			"intrebare": _t(B.INTREBARE),
+			"invitatie": _t("Ca beta tester trimiți date anonime care ajută imaginea și poți scrie pe forumul "
+				"receptorului."),
+			"avantaje": [[glif, titlu, rand] for _cheie, glif, titlu, rand in B.avantaje(existaAvantaje(B))],
+		})
 	if inscris:
+		noi = B.raspunsuriNoi()
 		rez.update({
 			"id": b.id.value,
 			"acord": B.oraLocala(b.acord.value),
@@ -98,6 +107,12 @@ def stare(B=None, b=None):
 			"ecran": B.ultimulEcranTitlu(),
 			"text_id": textIdentificator(B, b),
 			"ultima": B.randUltimaTrimitere(),
+			"automat_text": _t("(automat în fiecare zi)") if b.automat.value else "",
+			"din": _t("Înscris din %s") % dataScurta(B.oraLocala(b.acord.value)),
+			"nume_forum": numeForum(b),
+			"insigna_raspunsuri": (_t("un răspuns nou") if noi == 1 else _t("%d răspunsuri noi") % noi) if noi else "",
+			"insigna_forum": insignaForum(),
+			"forum_verifica": verificaForum(),
 			"pagini": [[cale, _t(nume)] for cale, nume, modul in PAGINI_ALTE if _paginaArata(cale, modul)],
 			"canal_testeri": canalTesteri(B),
 			"legare_forum": B.legareForum(),
@@ -123,6 +138,57 @@ def _paginaArata(cale, modul):
 		except Exception:
 			return False
 	return True
+
+
+def existaAvantaje(B):
+	"""Avantajele legate de un modul, aratate numai daca modulul e pe receptor (ca pe receptor)."""
+	return {
+		"canal_testeri": B.modulCanalTesteri() is not None,
+		"forum": _modulExista("Screens.HdsForumReceptor"),
+		"asistenta": _paginaArata("/asistenta", "Screens.HdsAsistenta"),
+	}
+
+
+def dataScurta(text):
+	""""AAAA-LL-ZZ HH:MM" -> "ZZ.LL.AAAA"; altfel textul ca atare."""
+	import re
+	m = re.match(r"\A(\d{4})-(\d{2})-(\d{2})", text or "")
+	return "%s.%s.%s" % (m.group(3), m.group(2), m.group(1)) if m else (text or "")
+
+
+def _forum():
+	try:
+		from Components import HdsForumReceptor
+		return HdsForumReceptor
+	except Exception:
+		return None
+
+
+def insignaForum():
+	"""Mesajele noi de pe forum de la ultima vizita (HdsForumReceptor.mesajeNoiCunoscute), ca text; "" fara ele."""
+	F = _forum()
+	if F is None or not _modulExista("Screens.HdsForumReceptor"):
+		return ""
+	return F.textMesajeNoi(F.mesajeNoiCunoscute())
+
+
+def verificaForum():
+	"""O citire a forumului in fundal, cel mult una la cateva minute (pagina nu o asteapta); True cand a pornit una
+	acum: pagina isi cere starea inca o data peste cateva secunde, ca sa arate numarul."""
+	F = _forum()
+	if F is None or not _modulExista("Screens.HdsForumReceptor"):
+		return False
+	return bool(F.verificaMesajeNoi())
+
+
+def numeForum(b):
+	"""Numele cu care apare omul pe forum (cel dat de forum sau cel public), "" cand nu se stie inca."""
+	try:
+		from Components import HdsForumReceptor
+		nume = HdsForumReceptor.numePublic()
+	except Exception:
+		nume = ""
+	return nume or b.public.value or ""
 
 
 def canalTesteri(B):
@@ -265,9 +331,19 @@ def lucrare(arg, B=None, b=None):
 	profil = c.raspuns.get("profil")
 	b.public.value = (profil or {}).get("nume_public") or ""
 	B.salveaza(b)
+	_uitaJetonulForumului()
 	rez["profil"] = B.textProfil(profil)
 	rez["message"] = rez["profil"]
 	return rez
+
+
+def _uitaJetonulForumului():
+	"""Numele public s-a schimbat: jetonul forumului (cu numele vechi in el) se uita, ca forumul sa arate numele nou."""
+	try:
+		from Components import HdsForumReceptor
+		HdsForumReceptor.uitaJetonul()
+	except Exception:
+		pass
 
 
 def rute(baza, resource, B=None):
@@ -328,99 +404,172 @@ PAGINA = """<!DOCTYPE html>
 <title>Beta tester</title>
 <style>__STIL_COMUN__
 __STIL_PAGINI__
+  main.beta{max-width:1180px;}
+  .cap{margin:0 0 18px;}
+  .cap h1{font-size:1.9rem;font-weight:500;margin:0;}
+  .cap p{margin:0;color:var(--text-slab);}
+  .grila{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start;}
+  .randuri{display:flex;flex-direction:column;gap:6px;}
+  .rm{background:var(--rand,var(--panou));border:1px solid var(--bordura);border-radius:6px;}
+  .rm>summary,a.rm{display:grid;grid-template-columns:40px minmax(0,1fr) auto 20px;gap:4px 14px;align-items:center;padding:12px 16px;min-height:44px;cursor:pointer;list-style:none;color:var(--text);text-decoration:none;}
+  .rm>summary::-webkit-details-marker{display:none;}
+  .rm[open]>summary,.rm>summary:hover,a.rm:hover,.rm>summary:focus-visible,a.rm:focus-visible{background:var(--ales,var(--panou));color:var(--ales-text,var(--text));box-shadow:inset 4px 0 0 var(--chihlimbar,var(--galben));outline:none;}
+  .rm svg{width:28px;height:28px;}
+  .rm .t{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .rm .t b{font-weight:500;font-size:1.08rem;}
+  .rm .t span{color:var(--text-slab);font-size:.86rem;line-height:1.35;}
+  .rm .sageata{width:18px;height:18px;transition:transform .15s;}
+  .rm[open] .sageata{transform:rotate(90deg);}
+  .rm.rosu b,.rm.rosu svg{color:var(--rosu);}
+  .rm.ascuns,a.rm.ascuns{display:none;}
+  .insigna.ascuns{padding:0;background:none;}
+  .rm-bifa{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:12px 16px;cursor:pointer;}
+  .rm .corp{padding:4px 16px 16px 70px;}
+  .insigna{display:inline-block;padding:3px 10px;border-radius:4px;background:var(--chihlimbar,var(--galben));color:#1d1700;font-size:.82rem;font-weight:700;white-space:nowrap;}
+  .valoare{color:var(--chihlimbar,var(--galben));font-size:.92rem;white-space:nowrap;}
+  .panou-t{background:var(--panou);border:1px solid var(--bordura);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;}
+  .panou-t .titlu{display:flex;gap:12px;align-items:center;}
+  .panou-t .titlu svg{width:44px;height:44px;padding:8px;border-radius:6px;background:var(--rand,var(--fundal));color:var(--chihlimbar,var(--galben));}
+  .panou-t .titlu b{display:block;font-size:1.3rem;font-weight:600;}
+  .panou-t .titlu span{color:var(--text-slab);font-size:.88rem;}
+  .camp{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--bordura);padding:12px 0 0;}
+  .camp span{color:var(--text-slab);font-size:.85rem;}
+  .camp b{font-size:1.1rem;font-weight:600;}
+  .camp b.chihlimbar{color:var(--chihlimbar,var(--galben));}
+  .banda{border-left:5px solid var(--chihlimbar,var(--galben));background:var(--rand,var(--panou));color:var(--chihlimbar,var(--galben));padding:12px 16px;border-radius:4px;margin:0;line-height:1.45;}
+  button.mare{width:100%;min-height:52px;font-size:1.1rem;font-weight:600;}
+  .invitatie h2{font-size:1.6rem;line-height:1.3;margin:0 0 6px;font-weight:600;}
+  .invitatie>p{color:var(--text-slab);margin:0 0 14px;}
+  .avantaje{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;}
+  .avantaj{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start;background:var(--rand,var(--panou));border:1px solid var(--bordura);border-radius:6px;padding:12px 16px;}
+  .avantaj svg{width:28px;height:28px;margin:6px;color:var(--chihlimbar,var(--galben));}
+  .avantaj b{display:block;font-weight:600;}
+  .avantaj span{color:var(--text-slab);font-size:.88rem;}
   .fel{display:grid;grid-template-columns:30px 1fr;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--bordura);}
   .fel:last-child{border-bottom:0;}
   .fel b{display:block;font-weight:600;}
   textarea{width:100%;min-height:120px;}
   input[type=text],input[type=email]{width:100%;}
+  a.buton{display:inline-flex;align-items:center;min-height:44px;padding:8px 18px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none;}
+  .nota-bifa{border:2px solid var(--chihlimbar,var(--galben));border-radius:6px;padding:4px 12px;}
+  @media (max-width:820px){ .grila{grid-template-columns:1fr;} .rm .corp{padding:4px 12px 14px 12px;} }
 </style>
 </head>
 <body>
-<main>
-<h1>Beta tester</h1>
+<main class="beta">
+<header class="cap"><h1>Beta tester</h1></header>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
 <div id="acord" class="ascuns">
-  <section class="card">
-    <p class="intrebare" id="antet"></p>
-    <p class="intrebare ascuns" id="numarAcord"></p>
-    <div id="feluri"></div>
-    <div class="fel"><input type="checkbox" id="automat" checked><label for="automat"><b id="automatEticheta"></b><span class="nota" id="automatRand"></span></label></div>
-  </section>
-  <section class="card">
-    <div class="rand"><label for="nume">Numele (opțional)</label><input type="text" id="nume" maxlength="60"></div>
-    <div class="rand"><label for="email">E-mailul (opțional)</label><input type="email" id="email" maxlength="120"></div>
-  </section>
-  <section class="card">
-    <div class="fel"><input type="checkbox" id="nota"><label for="nota" id="bifaNota"></label></div>
-    <p class="nota"><a id="legaturaNota" href="#" target="_blank" rel="noopener">Nota de confidențialitate</a></p>
-    <div class="butoane"><button type="button" class="principal" id="deAcord">Sunt de acord</button><button type="button" id="renunt">Renunț</button></div>
-  </section>
+  <div class="grila">
+    <div>
+      <section class="invitatie">
+        <h2 id="titluInvitatie"></h2>
+        <p id="textInvitatie"></p>
+        <div class="avantaje" id="listaAvantaje"></div>
+        <p class="banda ascuns" id="numarAcord"></p>
+      </section>
+      <section class="card">
+        <h2>Devino beta tester</h2>
+        <p class="intrebare" id="antet"></p>
+        <div id="feluri"></div>
+        <div class="fel"><input type="checkbox" id="automat" checked><label for="automat"><b id="automatEticheta"></b><span class="nota" id="automatRand"></span></label></div>
+      </section>
+      <section class="card">
+        <div class="rand"><label for="nume">Numele (opțional)</label><input type="text" id="nume" maxlength="60"></div>
+        <div class="rand"><label for="email">E-mailul (opțional)</label><input type="email" id="email" maxlength="120"></div>
+      </section>
+      <section class="card">
+        <div class="fel nota-bifa"><input type="checkbox" id="nota"><label for="nota" id="bifaNota"></label></div>
+        <p class="nota"><a id="legaturaNota" href="#" target="_blank" rel="noopener">Nota de confidențialitate</a></p>
+        <div class="butoane"><button type="button" class="principal" id="deAcord">Sunt de acord</button><button type="button" id="renunt">Renunț</button></div>
+      </section>
+    </div>
+    <aside class="randuri">
+      <a class="rm" href="/forum-receptor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><div class="t"><b>Forumul receptorului</b><span data-rand="forum"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
+    </aside>
+  </div>
 </div>
 <div id="meniu" class="ascuns">
-  <section class="card">
-    <p class="intrebare ascuns" id="numarMeniu"></p>
-    <p class="nota" id="ultima"></p>
-    <div class="butoane"><button type="button" class="principal" id="trimiteAcum">Trimite acum</button></div>
-    <p class="nota" id="alte"></p>
-    <div class="fel ascuns" id="canalTesteri"><input type="checkbox" id="canalTesteriBifa"><label for="canalTesteriBifa"><b id="canalTesteriEticheta"></b><span class="nota" id="canalTesteriNota"></span></label></div>
-  </section>
-  <section class="card">
-    <h2>Trimite un mesaj</h2>
-    <div class="rand"><label for="felMesaj">Felul</label><select id="felMesaj"></select></div>
-    <textarea id="textMesaj" maxlength="4000" aria-label="Mesajul"></textarea>
-    <div class="rand"><label for="ecranMesaj">Ecranul sau funcția (opțional)</label><input type="text" id="ecranMesaj" maxlength="120"></div>
-    <div class="fel"><input type="checkbox" id="jurnalMesaj"><label for="jurnalMesaj">Atașează jurnalul ultimei erori</label></div>
-    <div class="fel"><input type="checkbox" id="capturaMesaj"><label for="capturaMesaj">Atașează o captură a ecranului (numai meniurile): se face acum, cu ce arată televizorul</label></div>
-    <div class="butoane"><button type="button" class="principal" id="trimiteMesaj">Trimite</button></div>
-  </section>
-  <section class="card">
-    <h2 id="titluRaspunsuri">Răspunsurile echipei</h2>
-    <pre class="text" id="raspunsuri"></pre>
-    <div class="butoane"><button type="button" id="cereRaspunsuri">Caută răspunsuri noi</button></div>
-  </section>
-  <section class="card">
-    <h2>Ce am trimis</h2>
-    <table><thead><tr><th>Data</th><th>Felul</th><th>Mărimea</th><th>Starea</th></tr></thead><tbody id="trimise"></tbody></table>
-  </section>
-  <section class="card">
-    <h2>Datele pe care le trimit</h2>
-    <div id="feluriMeniu"></div>
-    <div class="fel"><input type="checkbox" id="automatMeniu"><label for="automatMeniu"><b id="automatEticheta2"></b><span class="nota" id="automatRand2"></span></label></div>
-    <div class="rand"><label for="numeMeniu">Numele (opțional)</label><input type="text" id="numeMeniu" maxlength="60"></div>
-    <div class="rand"><label for="emailMeniu">E-mailul (opțional)</label><input type="email" id="emailMeniu" maxlength="120"></div>
-    <div class="butoane"><button type="button" class="principal" id="salveazaBife">Salvează</button></div>
-  </section>
-  <section class="card">
-    <h2>Ce trimit acum</h2>
-    <pre class="text" id="ultimul"></pre>
-  </section>
-  <section class="card">
-    <h2>Apariția publică</h2>
-    <p class="nota">Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe receptor.</p>
-    <p class="nota forum ascuns">E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat.</p>
-    <p class="intrebare" id="profil"></p>
-    <div class="rand"><label for="numePublic">Numele public</label><input type="text" id="numePublic" maxlength="40"></div>
-    <div class="rand forum ascuns"><label for="emailCont">E-mailul pentru cont (opțional)</label><input type="email" id="emailCont" maxlength="120"></div>
-    <div class="butoane"><button type="button" class="principal" id="salveazaProfil">Salvează</button><button type="button" id="nuPublic">Nu mai apar public</button></div>
-    <div class="rand forum ascuns"><label for="cod6">Codul de 6 cifre de pe site</label><input type="text" id="cod6" maxlength="6" inputmode="numeric"></div>
-    <div class="butoane forum ascuns"><button type="button" id="leaga">Leagă cu codul</button><button type="button" id="codLegare">Leagă de pe acest aparat</button></div>
-    <p class="nota forum ascuns" id="legatura"></p>
-  </section>
-  <section class="card">
-    <h2>Nota de confidențialitate</h2>
-    <p class="nota" id="notaScurta"></p>
-    <p class="nota"><a id="legaturaNota2" href="#" target="_blank" rel="noopener">Nota întreagă</a></p>
-  </section>
-  <section class="card">
-    <h2>Ieși din program și șterge datele</h2>
-    <p class="nota" id="identificator" style="white-space:pre-line"></p>
-    <div class="butoane"><button type="button" class="rosu" id="iesire">Ieși și șterge datele</button></div>
-  </section>
-  <div id="confirmare" class="card ascuns"></div>
+  <div class="grila">
+    <nav class="randuri" id="randuri">
+      <a class="rm" href="/forum-receptor" id="r-forum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><div class="t"><b>Forumul receptorului</b><span data-rand="forum"></span></div><span class="insigna ascuns" id="insignaForum"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
+      <details class="rm" id="r-mesaj"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4-4"/></svg><div class="t"><b>Trimite un mesaj</b><span data-rand="mesaj"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <div class="rand"><label for="felMesaj">Felul</label><select id="felMesaj"></select></div>
+          <textarea id="textMesaj" maxlength="4000" aria-label="Mesajul"></textarea>
+          <div class="rand"><label for="ecranMesaj">Ecranul sau funcția (opțional)</label><input type="text" id="ecranMesaj" maxlength="120"></div>
+          <div class="fel"><input type="checkbox" id="jurnalMesaj"><label for="jurnalMesaj">Atașează jurnalul ultimei erori</label></div>
+          <div class="fel"><input type="checkbox" id="capturaMesaj"><label for="capturaMesaj">Atașează o captură a ecranului (numai meniurile): se face acum, cu ce arată televizorul</label></div>
+          <div class="butoane"><button type="button" class="principal" id="trimiteMesaj">Trimite</button></div>
+        </div>
+      </details>
+      <details class="rm" id="r-raspunsuri"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="m3 7 9 6 9-6"/></svg><div class="t"><b id="titluRaspunsuri">Răspunsurile echipei</b><span data-rand="raspunsuri"></span></div><span class="insigna ascuns" id="insignaRaspunsuri"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <pre class="text" id="raspunsuri"></pre>
+          <div class="butoane"><button type="button" id="cereRaspunsuri">Caută răspunsuri noi</button></div>
+        </div>
+      </details>
+      <details class="rm" id="r-trimise"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg><div class="t"><b>Ce am trimis</b><span data-rand="trimise"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <table><thead><tr><th>Data</th><th>Felul</th><th>Mărimea</th><th>Starea</th></tr></thead><tbody id="trimise"></tbody></table>
+        </div>
+      </details>
+      <details class="rm" id="r-date"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4z"/><path d="M8 7h.01M8 17h.01"/></svg><div class="t"><b>Datele pe care le trimit</b><span data-rand="date"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <div id="feluriMeniu"></div>
+          <div class="fel"><input type="checkbox" id="automatMeniu"><label for="automatMeniu"><b id="automatEticheta2"></b><span class="nota" id="automatRand2"></span></label></div>
+          <div class="rand"><label for="numeMeniu">Numele (opțional)</label><input type="text" id="numeMeniu" maxlength="60"></div>
+          <div class="rand"><label for="emailMeniu">E-mailul (opțional)</label><input type="email" id="emailMeniu" maxlength="120"></div>
+          <div class="butoane"><button type="button" class="principal" id="salveazaBife">Salvează</button></div>
+        </div>
+      </details>
+      <details class="rm" id="r-acum"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><div class="t"><b>Ce trimit acum</b><span data-rand="acum"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp"><pre class="text" id="ultimul"></pre></div>
+      </details>
+      <a class="rm ascuns" href="/asistenta" id="r-asistenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><div class="t"><b>Cere ajutor de la distanță</b><span data-rand="asistenta"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="rm ascuns" href="/probe" id="r-probe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><div class="t"><b>Probele receptorului</b><span data-rand="probe"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
+      <div class="rm ascuns" id="canalTesteri"><label class="rm-bifa" for="canalTesteriBifa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5M4 20v-5h5"/></svg><div class="t"><b id="canalTesteriEticheta"></b><span id="canalTesteriNota"></span></div><input type="checkbox" id="canalTesteriBifa"></label></div>
+      <details class="rm" id="r-public"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><div class="t"><b>Apariția publică</b><span data-rand="public"></span></div><span class="valoare" id="valoarePublic"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <p class="nota">Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe receptor.</p>
+          <p class="nota forum ascuns">E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat.</p>
+          <p class="intrebare" id="profil"></p>
+          <div class="rand"><label for="numePublic">Numele public</label><input type="text" id="numePublic" maxlength="40"></div>
+          <div class="rand forum ascuns"><label for="emailCont">E-mailul pentru cont (opțional)</label><input type="email" id="emailCont" maxlength="120"></div>
+          <div class="butoane"><button type="button" class="principal" id="salveazaProfil">Salvează</button><button type="button" id="nuPublic">Nu mai apar public</button></div>
+          <div class="rand forum ascuns"><label for="cod6">Codul de 6 cifre de pe site</label><input type="text" id="cod6" maxlength="6" inputmode="numeric"></div>
+          <div class="butoane forum ascuns"><button type="button" id="leaga">Leagă cu codul</button><button type="button" id="codLegare">Leagă de pe acest aparat</button></div>
+          <p class="nota forum ascuns" id="legatura"></p>
+        </div>
+      </details>
+      <details class="rm" id="r-nota"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/></svg><div class="t"><b>Nota de confidențialitate</b><span data-rand="nota"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <p class="nota" id="notaScurta"></p>
+          <p class="nota"><a id="legaturaNota2" href="#" target="_blank" rel="noopener">Nota întreagă</a></p>
+        </div>
+      </details>
+      <details class="rm rosu" id="r-iesire"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><div class="t"><b>Ieși din program și șterge datele</b><span data-rand="iesire"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <div class="butoane"><button type="button" class="rosu" id="iesire">Ieși și șterge datele</button></div>
+        </div>
+      </details>
+      <div id="confirmare" class="card ascuns"></div>
+    </nav>
+    <aside class="panou-t">
+      <div class="titlu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></svg><div><b>Ești beta tester</b><span id="inscrisDin"></span></div></div>
+      <div class="camp"><span>Numele tău pe forum</span><b class="chihlimbar" id="numeForum"></b></div>
+      <div class="camp"><b id="ultima"></b><span id="automatUltima"></span></div>
+      <p class="banda ascuns" id="numarMeniu"></p>
+      <button type="button" class="principal mare" id="trimiteAcum">Trimite acum</button>
+      <p class="nota" data-rand="trimite_acum"></p>
+      <p class="nota" id="identificator" style="white-space:pre-line"></p>
+    </aside>
+  </div>
 </div>
 <p class="mesaj" id="mesaj"></p>
 <p class="nota">Același program e pe televizor, în __DRUM_MENIU__.</p>
 </main>
+<div hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-actualizare"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-traducere"><path d="M4 5h16v11H9l-5 4z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-conexiune"><path d="M4 14h16v6H4z"/><path d="M8 17h.01M12 17h.01M8 10a6 6 0 0 1 8 0M5 7a10 10 0 0 1 14 0"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-noutati"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-informatii"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></div>
 <script>
 __SCRIPT_COMUN__
 var STARE = null;
@@ -438,6 +587,17 @@ function feluri(cutie, lista){
 function bifeDin(cutie, q){
   cutie.querySelectorAll("input[data-fel]").forEach(function(c){ q.set(c.getAttribute("data-fel"), c.checked ? "1" : "0"); });
 }
+function avantaje(lista){
+  var cutie = $("listaAvantaje"); if(cutie.childElementCount){ return; }
+  (lista || []).forEach(function(a){
+    var d = document.createElement("div"); d.className = "avantaj";
+    var i = document.getElementById("svg-" + a[0]); if(i){ d.appendChild(i.cloneNode(true)); } else { d.appendChild(document.createElement("span")); }
+    var t = document.createElement("div");
+    var b = document.createElement("b"); b.textContent = a[1]; t.appendChild(b);
+    var s = document.createElement("span"); s.textContent = a[2]; t.appendChild(s);
+    d.appendChild(t); cutie.appendChild(d);
+  });
+}
 function arata(d){
   STARE = d;
   $("incarcare").classList.add("ascuns");
@@ -447,7 +607,11 @@ function arata(d){
   ["numarAcord", "numarMeniu"].forEach(function(id){ $(id).textContent = d.numar || ""; $(id).classList.toggle("ascuns", !d.numar); });
   $("automatEticheta").textContent = d.automat_eticheta; $("automatRand").textContent = d.automat_rand;
   $("automatEticheta2").textContent = d.automat_eticheta; $("automatRand2").textContent = d.automat_rand;
+  document.querySelectorAll("[data-rand]").forEach(function(e){ e.textContent = (d.randuri || {})[e.getAttribute("data-rand")] || ""; });
   if(!d.inscris){
+    $("titluInvitatie").textContent = d.intrebare || "";
+    $("textInvitatie").textContent = d.invitatie || "";
+    avantaje(d.avantaje);
     $("antet").textContent = d.antet;
     $("bifaNota").textContent = d.bifa_nota;
     if(!$("feluri").childElementCount){ feluri($("feluri"), d.feluri); }
@@ -462,16 +626,25 @@ function arata(d){
     (d.feluri_mesaj || []).forEach(function(f){ var o = document.createElement("option"); o.value = f[0]; o.textContent = f[1]; s.appendChild(o); });
     if(d.ecran){ $("ecranMesaj").value = d.ecran; }
   }
+  $("inscrisDin").textContent = d.din || "";
+  $("numeForum").textContent = d.nume_forum || "Apari cu numele dat de forum.";
   $("notaScurta").textContent = d.nota_scurta;
   $("ultima").textContent = d.ultima || "";
+  $("automatUltima").textContent = d.automat_text || "";
+  $("valoarePublic").textContent = d.public || "";
   document.querySelectorAll(".forum").forEach(function(e){ e.classList.toggle("ascuns", !d.legare_forum); });
-  var alte = $("alte"); alte.textContent = "";
-  (d.pagini || []).forEach(function(p){ var a = document.createElement("a"); a.href = p[0]; a.textContent = p[1]; alte.appendChild(a); alte.appendChild(document.createTextNode("  ")); });
+  var pagini = (d.pagini || []).map(function(p){ return p[0]; });
+  $("r-asistenta").classList.toggle("ascuns", pagini.indexOf("/asistenta") === -1);
+  $("r-probe").classList.toggle("ascuns", pagini.indexOf("/probe") === -1);
   var ct = d.canal_testeri;
   $("canalTesteri").classList.toggle("ascuns", !ct);
-  if(ct){ $("canalTesteriBifa").checked = !!ct.pornit; $("canalTesteriEticheta").textContent = ct.eticheta; $("canalTesteriNota").textContent = ct.nota || ""; }
+  if(ct){ $("canalTesteriBifa").checked = !!ct.pornit; $("canalTesteriEticheta").textContent = ct.eticheta; $("canalTesteriNota").textContent = ct.nota || (d.randuri || {}).canal_testeri || ""; }
   $("raspunsuri").textContent = d.raspunsuri || "";
-  $("titluRaspunsuri").textContent = "Răspunsurile echipei" + (d.raspunsuri_noi ? " (" + d.raspunsuri_noi + ")" : "");
+  $("insignaRaspunsuri").textContent = d.insigna_raspunsuri || "";
+  $("insignaRaspunsuri").classList.toggle("ascuns", !d.insigna_raspunsuri);
+  $("insignaForum").textContent = d.insigna_forum || "";
+  $("insignaForum").classList.toggle("ascuns", !d.insigna_forum);
+  if(d.forum_verifica && !REVENIT){ REVENIT = true; setTimeout(citeste, 5000); }
   var t = $("trimise"); t.textContent = "";
   (d.trimise || []).forEach(function(r){
     var tr = document.createElement("tr");
@@ -481,6 +654,7 @@ function arata(d){
   $("ultimul").textContent = d.ultimul || "Încă nu a plecat niciun pachet.";
   $("identificator").textContent = d.text_id || "";
 }
+var REVENIT = false;
 function citeste(){
   return cerere("/api/beta-tester").then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi starea."; return; }
@@ -531,6 +705,7 @@ $("trimiteMesaj").addEventListener("click", function(){
 $("trimiteAcum").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "trimite-acum"); fa(q); });
 $("canalTesteriBifa").addEventListener("change", canalTesteri);
 $("cereRaspunsuri").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "raspunsuri"); fa(q); });
+$("r-raspunsuri").addEventListener("toggle", function(){ if($("r-raspunsuri").open && STARE && STARE.insigna_raspunsuri){ var q = new URLSearchParams(); q.set("fa", "raspunsuri"); fa(q); } });
 $("salveazaProfil").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("fa", "profil"); q.set("nume_public", $("numePublic").value); q.set("email", $("emailCont").value); fa(q);
 });
@@ -564,15 +739,15 @@ TEXTE_PAGINA = {
 	"html": (
 		N_("Beta tester"),
 		N_("Se citește starea..."),
+		N_("Devino beta tester"),
 		N_("Numele (opțional)"),
 		N_("E-mailul (opțional)"),
 		N_("Nota de confidențialitate"),
 		N_("Sunt de acord"),
 		N_("Renunț"),
-		N_("Trimite acum"),
+		N_("Forumul receptorului"),
 		N_("Trimite un mesaj"),
 		N_("Felul"),
-		N_("Mesajul"),
 		N_("Ecranul sau funcția (opțional)"),
 		N_("Atașează jurnalul ultimei erori"),
 		N_("Atașează o captură a ecranului (numai meniurile): se face acum, cu ce arată televizorul"),
@@ -586,11 +761,13 @@ TEXTE_PAGINA = {
 		N_("Datele pe care le trimit"),
 		N_("Salvează"),
 		N_("Ce trimit acum"),
+		N_("Cere ajutor de la distanță"),
+		N_("Probele receptorului"),
 		N_("Apariția publică"),
-		N_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe "
-			"receptor."),
-		N_("E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice "
-			"aparat."),
+		N_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără "
+			"parole pe receptor."),
+		N_("E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de "
+			"pe orice aparat."),
 		N_("Numele public"),
 		N_("E-mailul pentru cont (opțional)"),
 		N_("Nu mai apar public"),
@@ -600,10 +777,14 @@ TEXTE_PAGINA = {
 		N_("Nota întreagă"),
 		N_("Ieși din program și șterge datele"),
 		N_("Ieși și șterge datele"),
+		N_("Ești beta tester"),
+		N_("Numele tău pe forum"),
+		N_("Trimite acum"),
 		N_("Același program e pe televizor, în __DRUM_MENIU__."),
+		N_("Mesajul"),
 	),
 	"js": (
-		N_("Răspunsurile echipei"),
+		N_("Apari cu numele dat de forum."),
 		N_("Încă nu a plecat niciun pachet."),
 		N_("Receptorul nu a putut citi starea."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),

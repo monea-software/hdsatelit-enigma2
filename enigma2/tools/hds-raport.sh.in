@@ -1,0 +1,884 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# hds-raport.sh: the steps of every start and the technical report of a start that failed. Independent of enigma2 and
+# of Python: BusyBox only (sh, sed, awk, gzip, ip), curl or wget for the upload (python3 only as the last way to send,
+# and for the optional text of Components/HdsDiagnostic.py). The person does nothing: on a failed start the receiver
+# writes the report, sends it by itself when it has a network, puts a copy on every stick or disc that is plugged in
+# (folder hds-raport, made by it) and shows the short code of the report on the front display.
+# Commands:
+#   urmareste          in the background, one per boot, started by our script of rcS (hds-jurnal, S38). Every
+#                      HDS_RAPORT_PAS seconds, for the whole boot:
+#                      - the steps of the start (kernel, init, drivers, network, enigma2 started, interface ready,
+#                        picture on the screen, enigma2 ended, report), with the uptime and the clock, in
+#                        /home/root/logs/hds-porniri/pornire-1.txt (the last 3 starts: pornire-1 is this one); the file
+#                        is written only when a step happens, so the next start, another slot or the report itself
+#                        shows where a start stopped;
+#                      - a failed start, each kind at most once per boot: the interface not ready HDS_RAPORT_ASTEPTARE
+#                        (60) seconds after the first enigma2 of the boot started (interfata, also across restarts), no enigma2 HDS_RAPORT_FARA_ENIGMA2 (300) seconds
+#                        after the kernel (fara-enigma2), safe mode set by enigma2.sh (mod-sigur), HDS_RAPORT_CADERI (3)
+#                        unclean ends of enigma2 in 10 minutes (caderi), and a TV channel without picture (fara-imagine:
+#                        the interface plays a TV service, not scrambled, no recording, HDS_RAPORT_IMAGINE_S (30) seconds
+#                        in a row and at least HDS_RAPORT_ASTEPTARE seconds after enigma2 started, while enigma2 has no
+#                        picture size for it, or, where libreader exists, showiframe is still running). Then the report
+#                        is written and sent at once;
+#                      - when the interface comes up after a report "interfata" was written: one line "the interface
+#                        came up after N seconds" is sent for that report (the server marks it as a slow start);
+#                      - reports not sent yet (no network): sent as soon as there is a network; a failed round is
+#                        tried again 2 and 4 minutes later, then at the next start, at most HDS_RAPORT_INCERCARI (6)
+#                        tries per report in all; never in a tight loop.
+#   raport FEL         writes (and sends, unless HDS_RAPORT_TRIMITE=0) one report of kind FEL now; prints its path.
+#   sloturi cauta      the other slots and images found (multiboot folders linuxrootfsN, other roots on the discs and
+#                      on the internal memory, mounted read only): one line per slot, "slot|name|image|starts|reports|
+#                      crash logs", then "gata=N". Used by the screen and the web page "Logs of the other slots".
+#   sloturi pune       one report (kind "sloturi") with the steps of the starts, the reports and the crash logs left in
+#                      the other slots: kept, put on the stick, sent; prints fisier=, stick=, cod= (or motiv=).
+#   filtru             stdin to stdout through the filter of the report (for the tests on the PC).
+# The report: one text file, raport-<model>-<date>-<time>.txt, kept in /home/root/logs/hds-raport (the last 3) and on
+# every stick; the code from the server goes next to it (<same name>.cod). Its first lines (up to the first empty line)
+# are written by this script from plain values only; everything after them goes through rp_filtru, the rules of
+# Components/HdsDiagnostic.faraDatePersonale: lines with passwords, keys, tokens, users, Wi-Fi networks, serial numbers
+# or CAM data are dropped whole; addresses with a scheme, user:password@, e-mail and IPv6 addresses are hidden whole;
+# IPv4 addresses keep their first two numbers (192.168.x.x), MAC addresses their first three bytes; long hex strings
+# are hidden. Never read: the settings (only a short list of plain keys), the channel list (lamedb, bouquets), the
+# configuration of the access modules (/etc/tuxbox, their program folder in /usr, /etc/*cam*), wpa_supplicant,
+# /etc/shadow, dropbear and ssh keys. The names of access module processes are replaced by "modul-acces".
+# The server keeps no address of the sender.
+# The variables are only for the tests on the PC; hds-jurnal sets none of them.
+
+R=${HDS_RAPORT_RADACINA:-}
+L=${HDS_RAPORT_DOSAR:-$R/home/root/logs}
+PORNIRI=${HDS_RAPORT_PORNIRI:-$L/hds-porniri}
+RAPOARTE=${HDS_RAPORT_RAPOARTE:-$L/hds-raport}
+RAM=${HDS_RAPORT_RAM:-$R/tmp/hds-raport}
+SERVER=${HDS_RAPORT_SERVER:-https://stb.hdsatelit.com/api/testeri/raport-pornire}
+PAS=${HDS_RAPORT_PAS:-5}
+ASTEPTARE=${HDS_RAPORT_ASTEPTARE:-60}
+FARA_E2=${HDS_RAPORT_FARA_ENIGMA2:-300}
+IMAGINE_S=${HDS_RAPORT_IMAGINE_S:-30}
+CADERI_PRAG=${HDS_RAPORT_CADERI:-3}
+INCERCARI=${HDS_RAPORT_INCERCARI:-6}
+TRIMITE=${HDS_RAPORT_TRIMITE:-1}
+BATAIE=${HDS_BATAIE:-$R/var/run/hds-paznic.bataie}
+CADERI=${HDS_CADERI:-$R/tmp/hds-enigma2.caderi}
+CADERI_JURNAL=${HDS_CADERI_JURNAL:-$L/hds-caderi.log}
+MOD_SIGUR=${HDS_MOD_SIGUR_SEMN:-$R/tmp/hds-mod-sigur}
+REZERVA=${HDS_REZERVA_DOSAR:-$R/tmp/hds-rezerva}
+AFISAJ=${HDS_REZERVA_AFISAJ:-$R/dev/dbox/oled0}
+REGULI=${HDS_PAZA_REGULI:-$R/etc/hdsatelit-model}
+PAZA_STARE=${HDS_PAZA_STARE:-$R/tmp/hds-paza-model.stare}
+SETARI=${HDS_RAPORT_SETARI:-$R/etc/enigma2/settings}
+PYTHON_E2=${HDS_RAPORT_PYTHON:-@libdir@/enigma2/python}
+LIBREADER=${HDS_LIBREADER:-@bindir@/libreader}
+MOUNTS=${HDS_RAPORT_MOUNTS:-$R/proc/mounts}
+CLK=${HDS_RAPORT_CLK:-100}
+PASTRATE=3
+MAX_PE_PORNIRE=5
+MAX_OCTETI=716800
+
+# ---------------------------------------------------------------- small helpers
+
+# the seconds since boot, digits only (0 when unreadable)
+rp_acum() {
+	rp_u=""
+	read rp_u rp_x 2>/dev/null < "$R/proc/uptime"
+	rp_u=${rp_u%%.*}
+	case $rp_u in ''|*[!0-9]*) rp_u=0 ;; esac
+	echo "$rp_u"
+}
+
+rp_ora() { date '+%Y-%m-%d %H:%M:%S' 2>/dev/null; }
+
+# plain characters only, at most $2 (default 80)
+rp_curat() { printf '%s' "$1" | tr -cd 'A-Za-z0-9_.,:() /+=-' | cut -c1-"${2:-80}"; }
+
+# a value of the rules file (key $1), plain characters only
+rp_regula() { sed -n "s/^$1=//p" "$REGULI" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9_.,:() /+-' | cut -c1-80; }
+
+rp_boot_id() { head -n 1 "$R/proc/sys/kernel/random/boot_id" 2>/dev/null | tr -cd '0-9a-f-' | cut -c1-40; }
+
+# random hex: $1 characters (from the kernel; the time and the pid when it cannot be read)
+rp_aleator() {
+	rp_h=$(cat "$R/proc/sys/kernel/random/uuid" "$R/proc/sys/kernel/random/uuid" 2>/dev/null | tr -cd '0-9a-f')
+	[ "${#rp_h}" -ge "$1" ] || rp_h=$(printf '%s%s%s' "$(date +%s)" "$$" "$(rp_acum)" | md5sum 2>/dev/null | tr -cd '0-9a-f')
+	printf '%s' "$rp_h" | cut -c1-"$1"
+}
+
+# the machine name: machinebuild of the rules, else /etc/hostname
+rp_masina() {
+	rp_m=$(rp_regula machinebuild)
+	[ -n "$rp_m" ] || rp_m=$(head -n 1 "$R/etc/hostname" 2>/dev/null)
+	rp_m=$(printf '%s' "$rp_m" | tr -cd 'A-Za-z0-9_-' | cut -c1-40)
+	echo "${rp_m:-receptor}"
+}
+
+# the version running now, "0.6.10", from the build in /etc/image-version (as Components/HdsJurnalVersiuni: 16 digits
+# = kind, x, y, z of one digit + the date; 19 digits = kind of one digit, x, y, z of two); version= of the rules (the
+# image written on the receiver, not changed by updates) only when the build has another form
+rp_versiune() {
+	rp_v=$(sed -n 's/^version=//p' "$R/etc/image-version" 2>/dev/null | head -n 1 | tr -cd 0-9 | awk '
+		length($0) == 16 && substr($0, 1, 1) == "0" { printf "%d.%d.%d", substr($0, 2, 1), substr($0, 3, 1), substr($0, 4, 1) }
+		length($0) == 19 && substr($0, 1, 1) == "0" { printf "%d.%d.%d", substr($0, 2, 2), substr($0, 4, 2), substr($0, 6, 2) }')
+	[ -n "$rp_v" ] || rp_v=$(rp_regula version)
+	rp_curat "$rp_v" 40
+}
+
+# the identifier of this receiver for the daily limit of the server: random, made once, nothing from the hardware
+rp_id() {
+	mkdir -p "$PORNIRI" 2>/dev/null
+	rp_i=$(head -n 1 "$PORNIRI/id" 2>/dev/null | tr -cd '0-9a-f')
+	if [ "${#rp_i}" -ne 16 ]; then
+		rp_i=$(rp_aleator 16)
+		printf '%s\n' "$rp_i" > "$PORNIRI/id.nou" 2>/dev/null && mv -f "$PORNIRI/id.nou" "$PORNIRI/id"
+	fi
+	echo "$rp_i"
+}
+
+# the front display: 4 bytes per write, never ":" (as hds-rezerva.sh); not while a window of hds-rezerva.sh runs
+rp_afisaj() {
+	[ -c "$AFISAJ" ] || [ -f "$AFISAJ" ] || return 0
+	printf '%-4.4s' "$1" > "$AFISAJ" 2>/dev/null
+}
+
+rp_fereastra_activa() {
+	rp_fp=""
+	read rp_fp 2>/dev/null < "$REZERVA/fereastra.pid"
+	case $rp_fp in ''|*[!0-9]*) return 1 ;; esac
+	[ -d "$R/proc/$rp_fp" ]
+}
+
+# the code on the front display: "COD", then the digits in groups of three, $2 times
+rp_arata_cod() {
+	[ -n "$1" ] || return 0
+	[ -c "$AFISAJ" ] || [ -f "$AFISAJ" ] || return 0
+	rp_fereastra_activa && return 0
+	rp_n=0
+	while [ "$rp_n" -lt "${2:-1}" ]; do
+		rp_afisaj "COD"; sleep 1
+		rp_afisaj "$(printf '%4s' "$(echo "$1" | cut -c1-3)")"; sleep 2
+		rp_afisaj "$(printf '%4s' "$(echo "$1" | cut -c4-8)")"; sleep 2
+		rp_n=$((rp_n + 1))
+	done
+	rp_afisaj ""
+}
+
+# ---------------------------------------------------------------- the steps of the start
+
+# one step: "<uptime> <date> <time> <name> [details]", added to pornire-1.txt (the file is copied, then replaced)
+rp_pas() {
+	mkdir -p "$PORNIRI" 2>/dev/null
+	rpp_f=$PORNIRI/pornire-1.txt
+	[ -f "$rpp_f" ] && [ "$(grep -c '' "$rpp_f" 2>/dev/null)" -ge 60 ] && return 0
+	{
+		cat "$rpp_f" 2>/dev/null
+		printf '%s %s %s %s\n' "$(rp_acum)" "$(rp_ora)" "$1" "$(rp_curat "$2" 200)"
+	} > "$rpp_f.nou" 2>/dev/null && mv -f "$rpp_f.nou" "$rpp_f"
+	rm -f "$rpp_f.nou"
+}
+
+# a new start: pornire-1 becomes 2, 2 becomes 3; the same boot (the watcher started again) keeps its file
+rp_porniri_noua() {
+	mkdir -p "$PORNIRI" 2>/dev/null
+	rp_b=$(rp_boot_id)
+	if [ -n "$rp_b" ] && grep -qx "boot=$rp_b" "$PORNIRI/pornire-1.txt" 2>/dev/null; then
+		return 1
+	fi
+	[ -f "$PORNIRI/pornire-2.txt" ] && mv -f "$PORNIRI/pornire-2.txt" "$PORNIRI/pornire-3.txt"
+	[ -f "$PORNIRI/pornire-1.txt" ] && mv -f "$PORNIRI/pornire-1.txt" "$PORNIRI/pornire-2.txt"
+	rp_up=$(rp_acum)
+	rp_start=$(date -d "@$(($(date +%s) - rp_up))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
+	{
+		echo "boot=$rp_b"
+		echo "imagine=$(rp_versiune)"
+		echo "nucleu=$(rp_curat "$(uname -r 2>/dev/null)" 60)"
+		echo "0 ${rp_start:-? ?} nucleu"
+	} > "$PORNIRI/pornire-1.txt.nou" 2>/dev/null && mv -f "$PORNIRI/pornire-1.txt.nou" "$PORNIRI/pornire-1.txt"
+	return 0
+}
+
+# the enigma2 process: "pid ppid start" (start = seconds since boot), nothing when there is none
+rp_enigma2() {
+	for rp_s in "$R"/proc/[0-9]*/stat; do
+		rp_l=""
+		read -r rp_l 2>/dev/null < "$rp_s" || continue
+		case $rp_l in *" (enigma2) "*) ;; *) continue ;; esac
+		set -- ${rp_l##*) }
+		[ "$#" -ge 20 ] || continue
+		eval "rp_st=\${20}"
+		case $rp_st in ''|*[!0-9]*) continue ;; esac
+		echo "${rp_l%% *} $2 $((rp_st / CLK))"
+		return 0
+	done
+	return 1
+}
+
+# a process with the name $1 runs
+rp_ruleaza() {
+	for rp_c in "$R"/proc/[0-9]*/comm; do
+		rp_n=""
+		read -r rp_n 2>/dev/null < "$rp_c"
+		[ "$rp_n" = "$1" ] && return 0
+	done
+	return 1
+}
+
+# the script of init.d running now (as hds-rezerva.sh), e.g. "S41 networking (rcS)"; nothing before or after rc
+rp_pas_init() {
+	grep -a -o -h -s -e '/etc/rc[S0-6]\.d/S[0-9][0-9][A-Za-z0-9_.-]*' "$R"/proc/[0-9]*/cmdline 2>/dev/null | head -n 1 |
+		sed 's#^/etc/rc\(.\)\.d/\(S[0-9][0-9]\)\(.*\)#\2 \3 (rc\1)#'
+}
+
+# the heartbeat of the interface (Components/HdsPaznic.py) into rb_* variables; 1 when it is not there
+rp_bataie() {
+	rb_bataie=""; rb_redare=""; rb_inreg=""; rb_criptat=""; rb_video=""
+	[ -f "$BATAIE" ] || return 1
+	while IFS='=' read -r rp_k rp_v; do
+		case $rp_k in
+			bataie) rb_bataie=${rp_v%%.*} ;;
+			redare) rb_redare=$rp_v ;;
+			inregistrare) rb_inreg=$rp_v ;;
+			criptat) rb_criptat=$rp_v ;;
+			video) rb_video=$rp_v ;;
+		esac
+	done < "$BATAIE"
+	case $rb_bataie in ''|*[!0-9]*) rb_bataie="" ;; esac
+	return 0
+}
+
+# the first IPv4 address that is not 127.x (nothing when there is none); a default route
+rp_are_retea() {
+	ip -4 -o addr show 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "inet" && $(i + 1) !~ /^127\./) { f = 1 } }
+		END { exit !f }'
+}
+
+# ---------------------------------------------------------------- the filter
+
+# stdin to stdout: the rules of HdsDiagnostic.faraDatePersonale (the same lines dropped whole; "user" only as a word,
+# so the syslog facility user.info stays), plus API keys, the access modules (by their form, without their names: any
+# word ending in cam, camd or cams, the card readers and servers, their ports and config folder), IPv4 a.b.x.x and the
+# MAC with its maker
+rp_filtru() {
+	tr -d '\000-\010\013-\037\177' | cut -c1-600 | awk '{
+		l = tolower($0)
+		if (l ~ /pass(word|wd)?|parol|token|jeton|secret|(^|[^a-z0-9_])key|cheie|api[_-]?key|access[_-]?key|private|psk|(^|[^a-z0-9_])pin([^a-z0-9_]|$)|auth|(^|[^a-z0-9_])user(name|s)?([^a-z0-9_.]|$)|login|utilizator|ssid|wpa|wifi|wlan.*(essid|network)|serial|(^|[^a-z0-9_])s\/n([^a-z0-9_]|$)|(^|[^a-z0-9_])sn[ \t]*[=:]|cpuid|chipid|chip_id|die.?id|(^|[^a-z0-9_])uuid([^a-z0-9_]|$)|(^|[^a-z0-9_])cid([^a-z0-9_]|$)|(^|[^a-z0-9_])cw([^a-z0-9_]|$)|control.?word|(^|[^a-z0-9_])biss|(^|[^a-z0-9_])ecm([^a-z0-9_]|$)|(^|[^a-z0-9_])emm([^a-z0-9_]|$)|cookie|session/) next
+		if (l ~ /cam[ds]?([^a-z]|$)|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/) next
+		print }' | sed -E \
+		-e 's#[A-Za-z][A-Za-z0-9+.-]*(://|%3[Aa]//|%3[Aa]%2[Ff]%2[Ff])[^ 	"<>]*#<adresa ascunsa>#g' \
+		-e 's#[^ 	/:@"<>]+:[^ 	/@"<>]*@[^ 	/"<>]+#<adresa ascunsa>#g' \
+		-e 's#[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}#<ascuns>#g' \
+		-e ':m' \
+		-e 's#(^|[^0-9A-Fa-f:])([0-9A-Fa-f]{2})([:-])([0-9A-Fa-f]{2})[:-]([0-9A-Fa-f]{2})[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}($|[^0-9A-Fa-f:])#\1\2:\4:\5:xx:xx:xx\6#' \
+		-e 'tm' \
+		-e 's#(([Mm][Aa][Cc]|[Ee][Tt][Hh][Ee][Rr]|[Hh][Ww][Aa][Dd][Dd][Rr]|[Bb][Dd][Aa][Dd][Dd][Rr]|[Aa][Dd][Dd][Rr][Ee][Ss][Ss])[^0-9A-Za-z]{0,3})[0-9A-Fa-f]{12}([^0-9A-Fa-f]|$)#\1xxxxxxxxxxxx\3#g' \
+		-e ':i' \
+		-e 's#(^|[^0-9.])([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}\.[0-9]{1,3}($|[^0-9.])#\1\2.\3.x.x\4#' \
+		-e 'ti' \
+		-e ':s' \
+		-e 's#(^|[^0-9A-Za-z:])(([0-9A-Fa-f]{1,4}:){5,7}[0-9A-Fa-f]{1,4}|[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,6}::([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,6})?|::[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,6})($|[^0-9A-Za-z:])#\1<ascuns>\8#' \
+		-e 'ts' \
+		-e ':h' \
+		-e 's#(^|[^0-9A-Za-z])[0-9A-Fa-f]{16,}($|[^0-9A-Za-z])#\1<ascuns>\2#' \
+		-e 'th'
+}
+
+# ---------------------------------------------------------------- the report
+
+rp_sectiune() { printf '\n== %s\n' "$1"; }
+
+# the last $2 lines of a file (bounded in bytes), or a note
+rp_coada() {
+	if [ -f "$1" ]; then
+		tail -c 262144 "$1" 2>/dev/null | tail -n "${2:-200}"
+	else
+		echo "(lipseste)"
+	fi
+}
+
+# the small files of a /proc/stb folder: "name: value" (the first 200 bytes, one line)
+rp_proc_dosar() {
+	for rp_f in "$1"/*; do
+		[ -f "$rp_f" ] || continue
+		case ${rp_f##*/} in *event*|*_choices) continue ;; esac
+		rp_v=$(head -c 200 "$rp_f" 2>/dev/null | tr '\n' ' ')
+		echo "${rp_f#$R/proc/stb/}: $rp_v"
+	done
+}
+
+# the processes: pid, state, parent and name; the command line only for the start chain and the video daemons;
+# the access modules (by the form of the name) only as "modul-acces"
+rp_procese() {
+	for rp_d in "$R"/proc/[0-9]*; do
+		rp_l=""
+		read -r rp_l 2>/dev/null < "$rp_d/stat" || continue
+		rp_n=${rp_l#*(}; rp_n=${rp_n%)*}
+		set -- ${rp_l##*) }
+		case $rp_n in
+			*[Cc][Aa][Mm]|*[Cc][Aa][Mm][DdSs]|*[Cc][Aa][Mm][Dd][0-9]*|*[Cc][Aa][Mm][._-]*|*[Gg][Bb][Oo][Xx]*|*[Ww][Ii][Cc][Aa][Rr][Dd]*|*[Cc][Aa][Rr][Dd][Ss][Ee][Rr][Vv]*) rp_n=modul-acces ;;
+		esac
+		rp_c=""
+		case $rp_n in
+			enigma2|enigma2.sh|libreader|showiframe|grab|hds-*|rcS|rc|init|udhcpc|python3)
+				rp_c=$(tr '\000' ' ' < "$rp_d/cmdline" 2>/dev/null | cut -c1-200) ;;
+		esac
+		echo "${rp_d##*/} $1 $2 $rp_n $rp_c"
+	done
+}
+
+# which processes hold the video and audio decoders (the case of a daemon that keeps the decoder from enigma2)
+rp_decodor_tinut() {
+	ls -l "$R"/proc/[0-9]*/fd/* 2>/dev/null | awk '
+		$NF ~ /^\/dev\/dvb\/adapter[0-9]+\/(video|audio)[0-9]+$/ && $(NF - 1) == "->" {
+			p = $(NF - 2); sub(/\/fd\/[0-9]+$/, "", p); sub(/.*\//, "", p); t[p] = t[p] " " $NF }
+		END { for (p in t) print p t[p] }' | while read -r rp_p rp_rest; do
+		rp_n=""
+		read -r rp_n 2>/dev/null < "$R/proc/$rp_p/comm"
+		echo "$rp_p ${rp_n:-?}: $rp_rest"
+	done
+}
+
+# the installed packages with their versions (the status file of opkg)
+rp_pachete() {
+	for rp_s in "$R/var/lib/opkg/status" "$R/usr/lib/opkg/status"; do
+		[ -f "$rp_s" ] || continue
+		awk '/^Package: / { p = $2 } /^Version: / { v = $2 } /^Status: / && /installed/ { if (p != "") print p " " v; p = "" }' \
+			"$rp_s" 2>/dev/null | sort
+		return 0
+	done
+	echo "(lista pachetelor lipseste)"
+}
+
+# the plain keys of the settings that may be shown (nothing else of that file is read)
+rp_setari_permise() {
+	grep -E '^config\.(osd\.language|skin\.primary_skin|av\.videoport|av\.videomode\.[A-Za-z0-9_]+|av\.videorate\.[A-Za-z0-9_]+|misc\.firstrun|usage\.setup_level|crash\.enabledebug)=' \
+		"$SETARI" 2>/dev/null | cut -c1-120
+}
+
+# the body of the report (everything after the header); goes through rp_filtru
+rp_corp() {
+	rp_sectiune "pasii pornirilor (cea mai noua intai)"
+	for rp_i in 1 2 3; do
+		[ -f "$PORNIRI/pornire-$rp_i.txt" ] || continue
+		echo "-- pornire-$rp_i"
+		cat "$PORNIRI/pornire-$rp_i.txt" 2>/dev/null
+	done
+	rp_sectiune "pasul init de acum"
+	rp_pas_init
+	rp_sectiune "diagnosticul pornirii (coduri E)"
+	cat "$REZERVA/date.txt" 2>/dev/null | grep -v '^module='
+	cat "$REZERVA/drivere" 2>/dev/null
+	grep -v '^eticheta=' "$PAZA_STARE" 2>/dev/null
+	if [ -f "$PYTHON_E2/Components/HdsDiagnostic.py" ] && command -v python3 > /dev/null 2>&1; then
+		timeout 30 python3 -s -B -c 'import runpy, sys
+p = sys.argv[1]
+sys.path.insert(0, p)
+sys.argv = [p + "/Components/HdsDiagnostic.py", "--rezerva", "--limba", "ro"]
+runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 120
+	fi
+	rp_sectiune "imaginea si regulile modelului"
+	cat "$R/etc/image-version" 2>/dev/null
+	grep -v '^#' "$REGULI" 2>/dev/null | head -n 60
+	echo "hostname=$(head -n 1 "$R/etc/hostname" 2>/dev/null)"
+	echo "slot: $(tr ' ' '\n' < "$R/proc/cmdline" 2>/dev/null | grep -E '^(root|rootsubdir|rootfstype|kernel|boot)=' | tr '\n' ' ')"
+	ls "$R/dev/block/by-name/" 2>/dev/null | tr '\n' ' '; echo
+	ls -d "$R"/linuxrootfs* 2>/dev/null
+	rp_sectiune "linia de comanda a nucleului"
+	cat "$R/proc/cmdline" 2>/dev/null
+	rp_sectiune "setari (numai cheile simple)"
+	rp_setari_permise
+	rp_sectiune "bataia interfetei si paznicul"
+	cat "$BATAIE" 2>/dev/null
+	cat "$R/var/run/hds-paznic.stare" 2>/dev/null | head -n 40
+	rp_sectiune "modul sigur si caderile"
+	echo "semn mod sigur: $(cat "$MOD_SIGUR" 2>/dev/null | tr '\n' ' ')"
+	echo "-- opriri (RAM)"; cat "$CADERI" 2>/dev/null
+	echo "-- hds-caderi.log"; rp_coada "$CADERI_JURNAL" 60
+	echo "-- hds-watchdog.log"; rp_coada "$R/home/root/hds-watchdog.log" 120
+	echo "-- hds-restaurare.log"; rp_coada "$L/hds-restaurare.log" 30
+	rp_sectiune "/proc/stb"
+	for rp_d in video vmpeg/0 vmpeg/1 hdmi info fp audio; do
+		[ -d "$R/proc/stb/$rp_d" ] && rp_proc_dosar "$R/proc/stb/$rp_d"
+	done
+	rp_sectiune "decodoarele (cine tine video0 si audio0)"
+	rp_decodor_tinut
+	for rp_f in "$R"/proc/msp/vdec00 "$R"/proc/msp/vdec01 "$R"/proc/msp/win0000 "$R"/proc/msp/win0100 \
+		"$R"/proc/msp/disp0 "$R"/proc/msp/disp1 "$R"/proc/msp/hdmi0; do
+		[ -f "$rp_f" ] || continue
+		echo "-- ${rp_f##*/}"
+		head -c 3000 "$rp_f" 2>/dev/null | head -n 40
+	done
+	rp_sectiune "modulele incarcate"
+	cut -d' ' -f1-3 "$R/proc/modules" 2>/dev/null
+	rp_sectiune "procesele (pid stare parinte nume)"
+	rp_procese
+	rp_sectiune "memoria si discurile"
+	cat "$R/proc/meminfo" 2>/dev/null | head -n 20
+	df -k 2>/dev/null
+	cat "$R/proc/partitions" 2>/dev/null
+	rp_sectiune "montarile"
+	cat "$MOUNTS" 2>/dev/null
+	rp_sectiune "reteaua (adresele mascate)"
+	ip -o link show 2>/dev/null | cut -c1-200
+	ip -4 -o addr show 2>/dev/null
+	ip route show 2>/dev/null
+	grep '^nameserver' "$R/etc/resolv.conf" 2>/dev/null
+	rp_sectiune "fisierele din /home/root/logs"
+	ls -l "$L" 2>/dev/null | head -n 60
+	rp_sectiune "jurnalele de cadere ale enigma2 (ultimele doua)"
+	for rp_f in $(ls -t "$L"/enigma2_crash_*.log 2>/dev/null | head -n 2); do
+		echo "-- ${rp_f##*/}"
+		rp_coada "$rp_f" 200
+	done
+	if [ -f "$L/enigma2-debug.log" ]; then
+		rp_sectiune "coada jurnalului enigma2 (depanare)"
+		rp_coada "$L/enigma2-debug.log" 400
+	fi
+	rp_sectiune "dmesg"
+	dmesg 2>/dev/null | tail -n 1200
+	rp_sectiune "jurnalul sistemului"
+	rp_coada "$L/messages" 600
+	if [ -f "$L/messages.cadere" ]; then
+		rp_sectiune "jurnalul de dinainte de o oprire necurata"
+		rp_coada "$L/messages.cadere" 300
+	fi
+	rp_sectiune "pachetele"
+	rp_pachete
+}
+
+# the header (plain values only) of a report of kind $1; $2 = seconds since enigma2 started (or ""), $3 = interface
+rp_antet() {
+	echo "HD Satelit - raportul pornirii"
+	echo "format=1"
+	echo "fel=$1"
+	echo "model=$(rp_masina)"
+	echo "nume_model=$(rp_regula model)"
+	echo "placa=$(rp_curat "$(head -n 1 "$R/proc/stb/info/boxtype" 2>/dev/null) $(head -n 1 "$R/proc/stb/info/model" 2>/dev/null)" 60)"
+	echo "versiune=$(rp_versiune)"
+	echo "revizie=$(rp_curat "$(sed -n 's/^version=//p' "$R/etc/image-version" 2>/dev/null | head -n 1)" 40)"
+	echo "ora=$(rp_ora)"
+	echo "uptime=$(rp_acum)"
+	echo "enigma2_s=$2"
+	echo "interfata=${3:-nu}"
+	echo "cod_diagnostic=$(sed -n 's/^coduri=//p' "$REZERVA/date.txt" 2>/dev/null | head -n 1 | tr -cd 'E0-9 ' | cut -c1-40)"
+	echo "id=$(rp_id)"
+	echo "cheie=$(rp_aleator 24)"
+	echo
+}
+
+# the sticks and discs plugged in (USB, SATA, SD card), mounted for writing: one mount point per line
+rp_stickuri() {
+	while read -r rp_dev rp_mp rp_fs rp_opt rp_rest; do
+		case $rp_dev in /dev/sd[a-z]*|/dev/mmcblk[1-9]*) ;; *) continue ;; esac
+		case ",$rp_opt," in *,rw,*) ;; *) continue ;; esac
+		rp_mp=$(printf '%b' "$(echo "$rp_mp" | sed 's/\\\([0-7][0-7][0-7]\)/\\0\1/g')")
+		[ -d "$rp_mp" ] && echo "$rp_mp"
+	done < "$MOUNTS"
+}
+
+# keeps the last $PASTRATE reports of the folder $1 (with their .cod and .completare files)
+rp_pastreaza() {
+	ls -t "$1"/raport-*.txt 2>/dev/null | tail -n +$((PASTRATE + 1)) | while read -r rp_v; do
+		rm -f "$rp_v" "${rp_v%.txt}".cod "${rp_v%.txt}".completare "${rp_v%.txt}".completare.trimisa "${rp_v%.txt}".incercari
+	done
+}
+
+# a copy of the report $1 (and of $2, its .cod file, when there is one) on every stick, in hds-raport/
+rp_pe_stick() {
+	rp_pus=""
+	for rp_m in $(rp_stickuri | tr ' ' '\001'); do
+		rp_m=$(echo "$rp_m" | tr '\001' ' ')
+		mkdir -p "$rp_m/hds-raport" 2>/dev/null || continue
+		cp -f "$1" "$rp_m/hds-raport/${1##*/}" 2>/dev/null || continue
+		[ -n "$2" ] && [ -f "$2" ] && cp -f "$2" "$rp_m/hds-raport/${2##*/}" 2>/dev/null
+		rp_pus="$rp_m/hds-raport/${1##*/}"
+	done
+	sync
+	[ -n "$rp_pus" ] && echo "$rp_pus"
+}
+
+# writes one report of kind $1 ($2 enigma2 seconds, $3 interface); prints the path of the kept file
+rp_scrie_raport() {
+	mkdir -p "$RAPOARTE" "$RAM" 2>/dev/null
+	rp_nume="raport-$(rp_masina)-$(date '+%Y%m%d-%H%M%S').txt"
+	rp_antet "$1" "$2" "$3" > "$RAM/raport.nou" 2>/dev/null
+	{ rp_corp 2>&1; } | rp_filtru | head -c "$MAX_OCTETI" >> "$RAM/raport.nou" 2>/dev/null
+	cp -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou" 2>/dev/null && mv -f "$RAPOARTE/$rp_nume.nou" "$RAPOARTE/$rp_nume"
+	rm -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou"
+	[ -f "$RAPOARTE/$rp_nume" ] || return 1
+	rp_pastreaza "$RAPOARTE"
+	sync
+	rp_pe_stick "$RAPOARTE/$rp_nume" > /dev/null
+	echo "$RAPOARTE/$rp_nume"
+}
+
+# ---------------------------------------------------------------- the upload
+
+# POST of the file $2 to the address $1 (gzip when $3 = 1): the answer in $RAM/raspuns; 0 = HTTP 200
+rp_post() {
+	rm -f "$RAM/raspuns"
+	if command -v curl > /dev/null 2>&1; then
+		if [ "$3" = 1 ]; then
+			rp_h=$(curl -sS -m 60 --connect-timeout 20 -o "$RAM/raspuns" -w '%{http_code}' \
+				-H 'Content-Type: text/plain; charset=utf-8' -H 'Content-Encoding: gzip' --data-binary "@$2" "$1" 2>/dev/null)
+		else
+			rp_h=$(curl -sS -m 60 --connect-timeout 20 -o "$RAM/raspuns" -w '%{http_code}' \
+				-H 'Content-Type: text/plain; charset=utf-8' --data-binary "@$2" "$1" 2>/dev/null)
+		fi
+		echo "$rp_h" > "$RAM/raspuns.http"
+		[ "$rp_h" = 200 ]
+		return
+	fi
+	if wget --help 2>&1 | grep -q -- '--post-file'; then
+		if [ "$3" = 1 ]; then
+			wget -q -T 60 -O "$RAM/raspuns" --header='Content-Type: text/plain; charset=utf-8' \
+				--header='Content-Encoding: gzip' --post-file="$2" "$1" 2>/dev/null
+		else
+			wget -q -T 60 -O "$RAM/raspuns" --header='Content-Type: text/plain; charset=utf-8' --post-file="$2" "$1" 2>/dev/null
+		fi
+		rp_r=$?
+		echo "wget $rp_r" > "$RAM/raspuns.http"
+		return $rp_r
+	fi
+	command -v python3 > /dev/null 2>&1 || return 1
+	python3 -I -S -B -c 'import sys, urllib.request
+a, f, gz, o = sys.argv[1:5]
+h = {"Content-Type": "text/plain; charset=utf-8"}
+if gz == "1":
+    h["Content-Encoding"] = "gzip"
+try:
+    r = urllib.request.urlopen(urllib.request.Request(a, data=open(f, "rb").read(), headers=h, method="POST"), timeout=60)
+    open(o, "wb").write(r.read(65536))
+    sys.exit(0 if r.status == 200 else 1)
+except Exception as e:
+    sys.exit(1)' "$1" "$2" "$3" "$RAM/raspuns" 2>/dev/null
+}
+
+# sends the report $1; prints the code (and writes <name>.cod next to it and on the sticks); 1 when it did not go
+rp_trimite() {
+	[ "$TRIMITE" = 1 ] || return 1
+	[ -f "$1" ] || return 1
+	mkdir -p "$RAM" 2>/dev/null
+	rp_inc=$(head -n 1 "${1%.txt}.incercari" 2>/dev/null | tr -cd 0-9)
+	rp_inc=$((rp_inc + 1))
+	echo "$rp_inc" > "${1%.txt}.incercari" 2>/dev/null
+	gzip -c "$1" > "$RAM/trimis.gz" 2>/dev/null || return 1
+	if ! rp_post "$SERVER" "$RAM/trimis.gz" 1; then
+		rm -f "$RAM/trimis.gz"
+		# 400/413: this report is not taken, ever (no more tries); 429 and the rest: later
+		case $(cat "$RAM/raspuns.http" 2>/dev/null) in 400|413|415) echo "$INCERCARI" > "${1%.txt}.incercari" ;; esac
+		return 1
+	fi
+	rm -f "$RAM/trimis.gz"
+	rp_cod=$(sed -n 's/.*"cod" *: *"\([0-9]\{4,8\}\)".*/\1/p' "$RAM/raspuns" 2>/dev/null | head -n 1)
+	[ -n "$rp_cod" ] || return 1
+	echo "$rp_cod" > "${1%.txt}.cod.nou" 2>/dev/null && mv -f "${1%.txt}.cod.nou" "${1%.txt}.cod"
+	rm -f "${1%.txt}.incercari"
+	rp_pe_stick "$1" "${1%.txt}.cod" > /dev/null
+	echo "$rp_cod"
+}
+
+# the line "the interface came up after N seconds" for the report $1 (its key and code are in its header and .cod)
+rp_trimite_completare() {
+	[ "$TRIMITE" = 1 ] || return 1
+	rp_c=$(head -n 1 "${1%.txt}.cod" 2>/dev/null | tr -cd 0-9)
+	rp_k=$(sed -n '1,25s/^cheie=//p' "$1" 2>/dev/null | head -n 1 | tr -cd 0-9a-f)
+	rp_n=$(head -n 1 "${1%.txt}.completare" 2>/dev/null | tr -cd 0-9)
+	[ -n "$rp_c" ] && [ -n "$rp_k" ] && [ -n "$rp_n" ] || return 1
+	printf 'cod=%s\ncheie=%s\ninterfata_s=%s\n' "$rp_c" "$rp_k" "$rp_n" > "$RAM/completare.txt"
+	rp_post "${SERVER}-completare" "$RAM/completare.txt" 0 || return 1
+	: > "${1%.txt}.completare.trimisa"
+}
+
+# what waits to be sent (this boot and the ones before): reports without a code, then the completion lines
+rp_coada_trimiteri() {
+	for rc_f in $(ls -tr "$RAPOARTE"/raport-*.txt 2>/dev/null); do
+		if [ ! -f "${rc_f%.txt}.cod" ]; then
+			rc_i=$(head -n 1 "${rc_f%.txt}.incercari" 2>/dev/null | tr -cd 0-9)
+			[ "$((rc_i + 0))" -lt "$INCERCARI" ] || continue
+			rc_c=$(rp_trimite "$rc_f") || return 1
+			rp_pas trimis "cod=$rc_c ${rc_f##*/}"
+			rp_ultim_cod=$rc_c
+		fi
+		if [ -f "${rc_f%.txt}.completare" ] && [ ! -f "${rc_f%.txt}.completare.trimisa" ] && [ -f "${rc_f%.txt}.cod" ]; then
+			rp_trimite_completare "$rc_f" || return 1
+			rp_pas completare "${rc_f##*/}"
+		fi
+	done
+	return 0
+}
+
+# ---------------------------------------------------------------- the watcher
+
+rp_declanseaza() {
+	case " $u_facute " in *" $1 "*) return 0 ;; esac
+	u_facute="$u_facute $1"
+	[ "$u_rapoarte" -lt "$MAX_PE_PORNIRE" ] || return 0
+	u_rapoarte=$((u_rapoarte + 1))
+	rd_f=$(rp_scrie_raport "$1" "$2" "$3") || return 0
+	rp_pas raport "fel=$1 ${rd_f##*/}"
+	[ "$1" = interfata ] && u_raport_interfata=$rd_f
+	u_trimite=1; u_trimite_t=0
+}
+
+rp_urmareste() {
+	mkdir -p "$RAM" 2>/dev/null
+	# one watcher per boot: the folder of the lock is made atomically (two started at once: only one goes on); a lock
+	# left by a watcher that is gone is taken over
+	if ! mkdir "$RAM/urmarire.zavor" 2>/dev/null; then
+		rp_p=""
+		read rp_p 2>/dev/null < "$RAM/urmarire.zavor/pid"
+		case $rp_p in ''|*[!0-9]*) sleep 2; read rp_p 2>/dev/null < "$RAM/urmarire.zavor/pid" ;; esac
+		case $rp_p in ''|*[!0-9]*) ;; *) [ -d "$R/proc/$rp_p" ] && [ "$rp_p" != "$$" ] && exit 0 ;; esac
+		rm -rf "$RAM/urmarire.zavor"
+		mkdir "$RAM/urmarire.zavor" 2>/dev/null || exit 0
+	fi
+	echo "$$" > "$RAM/urmarire.zavor/pid"
+	if rp_porniri_noua; then
+		rp_pas init "$(rp_pas_init)"
+	fi
+	u_facute=""; u_rapoarte=0; u_retea=""; u_drivere=""; u_e2=""; u_e2_t0=0; u_e2_prim=""; u_e2_porniri=0
+	u_esecuri=0
+	u_interfata=""; u_interfata_run=""; u_imagine=""; u_tv_de=""; u_raport_interfata=""; u_trimite=1; u_trimite_t=0
+	u_cod_afisat=""; rp_ultim_cod=""; u_afisaj_t=0; u_sigur=""
+	[ -x "$LIBREADER" ] && u_libreader=1 || u_libreader=""
+	while :; do
+		rp_a=$(rp_acum)
+		if [ -z "$u_drivere" ] && [ -e "$R/dev/fb0" ] && [ -e "$R/dev/dvb/adapter0" ]; then
+			u_drivere=1; rp_pas drivere
+		fi
+		if [ -z "$u_retea" ] && rp_are_retea; then
+			u_retea=1; rp_pas retea
+		fi
+		# enigma2: the one running now (a new pid = a new run of the interface)
+		if [ -n "$u_e2" ] && [ ! -d "$R/proc/$u_e2" ]; then
+			rp_pas enigma2-oprit "pid=$u_e2"
+			u_e2=""; u_interfata_run=""; u_tv_de=""
+		fi
+		if [ -z "$u_e2" ]; then
+			set -- $(rp_enigma2)
+			if [ -n "$1" ]; then
+				u_e2=$1; u_e2_t0=$3; u_e2_porniri=$((u_e2_porniri + 1))
+				rp_pas enigma2 "pid=$1 pornit=$3 a=$u_e2_porniri"
+				[ -n "$u_e2_prim" ] || u_e2_prim=$3
+			fi
+		fi
+		rp_bataie
+		if [ -n "$u_e2" ] && [ -z "$u_interfata_run" ] && [ -n "$rb_bataie" ] && [ "$rb_bataie" -ge "$u_e2_t0" ]; then
+			u_interfata_run=1
+			rp_dupa=$((rp_a - u_e2_t0))
+			rp_pas interfata "dupa=${rp_dupa}s"
+			if [ -z "$u_interfata" ]; then
+				# from the first enigma2 of this boot (a start with restarts counts from its beginning)
+				u_interfata=$((rp_a - u_e2_prim))
+				# a report "interfata" written before: the completion line, sent with the queue
+				if [ -n "$u_raport_interfata" ] && [ -f "$u_raport_interfata" ]; then
+					echo "$u_interfata" > "${u_raport_interfata%.txt}.completare"
+					echo "interfata a pornit la $u_interfata secunde de la pornirea enigma2" >> "$u_raport_interfata"
+					rp_pe_stick "$u_raport_interfata" "${u_raport_interfata%.txt}.cod" > /dev/null
+					u_trimite=1; u_trimite_t=0; u_esecuri=0
+				fi
+			fi
+		fi
+		# the picture of a TV channel
+		if [ -n "$u_interfata_run" ] && [ -z "$u_imagine" ]; then
+			if [ "$rb_redare" = tv ] && [ -n "$rb_video" ] && [ "$rb_video" -gt 0 ] 2>/dev/null; then
+				u_imagine=1; u_tv_de=""
+				rp_pas imagine "video=$rb_video"
+			elif [ "$rb_redare" = tv ] && [ "$rb_inreg" = 0 ] && [ "$rb_criptat" != 1 ]; then
+				[ -n "$u_tv_de" ] || u_tv_de=$rp_a
+				rp_lipsa=""
+				[ -n "$rb_video" ] && [ "$rb_criptat" = 0 ] && rp_lipsa=1
+				[ -n "$u_libreader" ] && rp_ruleaza showiframe && rp_lipsa=1
+				if [ -n "$rp_lipsa" ] && [ $((rp_a - u_tv_de)) -ge "$IMAGINE_S" ] && [ $((rp_a - u_e2_prim)) -ge "$ASTEPTARE" ]; then
+					rp_declanseaza fara-imagine "$((rp_a - u_e2_prim))" "$u_interfata"
+					u_imagine=lipsa
+				fi
+			else
+				u_tv_de=""
+			fi
+		fi
+		# the failed starts
+		# the interface not ready ASTEPTARE seconds after the first enigma2 of this boot (also across restarts)
+		if [ -n "$u_e2_prim" ] && [ -z "$u_interfata" ] && [ $((rp_a - u_e2_prim)) -ge "$ASTEPTARE" ]; then
+			rp_declanseaza interfata "$((rp_a - u_e2_prim))" ""
+		fi
+		if [ -z "$u_e2_prim" ] && [ "$rp_a" -ge "$FARA_E2" ]; then
+			rp_pas init-acum "$(rp_pas_init)"
+			rp_declanseaza fara-enigma2 "" ""
+		fi
+		if [ -z "$u_sigur" ] && [ -f "$MOD_SIGUR" ]; then
+			u_sigur=1
+			rp_declanseaza mod-sigur "$( [ -n "$u_e2_prim" ] && echo $((rp_a - u_e2_prim)))" "$u_interfata"
+		fi
+		if [ -f "$CADERI" ]; then
+			rp_n=$(awk -v a="$rp_a" '$1 + 600 >= a && $3 != "oprire"' "$CADERI" 2>/dev/null | wc -l)
+			[ "$((rp_n + 0))" -ge "$CADERI_PRAG" ] && rp_declanseaza caderi "" "$u_interfata"
+		fi
+		# the queue: when there is a network, at once after a report, then 2 and 4 minutes later; after 3 failed rounds
+		# what is left waits for the next start (each report at most INCERCARI tries in all)
+		if [ -n "$u_trimite" ] && [ -n "$u_retea" ] && [ "$rp_a" -ge "$u_trimite_t" ]; then
+			if rp_coada_trimiteri; then
+				u_trimite=""
+			else
+				u_esecuri=$((u_esecuri + 1))
+				u_trimite_t=$((rp_a + 120 * u_esecuri))
+				[ "$u_esecuri" -lt 3 ] || u_trimite=""
+			fi
+		fi
+		# the code on the front display: once at once, then every 30 s while the interface is not up
+		if [ -n "$rp_ultim_cod" ] && [ "$rp_ultim_cod" != "$u_cod_afisat" ]; then
+			rp_arata_cod "$rp_ultim_cod" 2
+			u_cod_afisat=$rp_ultim_cod; u_afisaj_t=$((rp_a + 30))
+		elif [ -n "$u_cod_afisat" ] && [ -z "$u_interfata_run" ] && [ "$rp_a" -ge "$u_afisaj_t" ]; then
+			rp_arata_cod "$u_cod_afisat" 1
+			u_afisaj_t=$(($(rp_acum) + 30))
+		fi
+		sleep "$PAS"
+	done
+}
+
+# ---------------------------------------------------------------- the other slots
+
+# the roots of the other images: the multiboot folders (linuxrootfsN) on every mounted file system and on the
+# internal partitions userdata/rootfs/others when they are not mounted (mounted here read only, without the journal);
+# other image roots on the discs. One path per line; the temporary mounts are listed in $RAM/sloturi.montate
+rp_sloturi_radacini() {
+	mkdir -p "$RAM" 2>/dev/null
+	: > "$RAM/sloturi.montate"
+	rp_rad_dev=$(stat -c '%d' "$R/" 2>/dev/null)
+	for rp_n in userdata rootfs others; do
+		rp_d=$(readlink -f "$R/dev/block/by-name/$rp_n" 2>/dev/null)
+		[ -b "$rp_d" ] || continue
+		grep -q "^$rp_d " "$MOUNTS" 2>/dev/null && continue
+		rp_mm=$(cat "$R/sys/class/block/${rp_d##*/}/dev" 2>/dev/null)
+		if [ -n "$rp_mm" ] && [ -n "$rp_rad_dev" ] && [ $((${rp_mm%%:*} * 256 + ${rp_mm##*:})) = "$rp_rad_dev" ]; then
+			continue
+		fi
+		rp_t=$RAM/slot-$rp_n
+		mkdir -p "$rp_t" 2>/dev/null
+		if mount -t ext4 -o ro,noload "$rp_d" "$rp_t" 2>/dev/null; then
+			echo "$rp_t" >> "$RAM/sloturi.montate"
+		else
+			rmdir "$rp_t" 2>/dev/null
+		fi
+	done
+	{
+		cut -d' ' -f2 "$MOUNTS" 2>/dev/null
+		cat "$RAM/sloturi.montate"
+	} | sort -u | while read -r rp_m; do
+		case $rp_m in /proc*|/sys*|/dev*|/run/user*|/var/volatile*) continue ;; esac
+		rp_m=$(printf '%b' "$(echo "$rp_m" | sed 's/\\\([0-7][0-7][0-7]\)/\\0\1/g')")
+		for rp_s in "${rp_m%/}"/linuxrootfs*; do
+			[ -d "$rp_s/etc" ] && echo "$rp_s"
+		done
+		[ "$rp_m" = / ] && continue
+		[ -d "$rp_m/etc" ] && [ -d "$rp_m/home/root" ] && echo "$rp_m"
+	done | sort -u
+}
+
+rp_sloturi_demonteaza() {
+	while read -r rp_t; do
+		umount "$rp_t" 2>/dev/null && rmdir "$rp_t" 2>/dev/null
+	done < "$RAM/sloturi.montate" 2>/dev/null
+	rm -f "$RAM/sloturi.montate"
+}
+
+# one line per slot: "slot|name|image|starts|reports|crash logs"
+rp_sloturi_cauta() {
+	rp_g=0
+	for rp_s in $(rp_sloturi_radacini | tr ' ' '\001'); do
+		rp_s=$(echo "$rp_s" | tr '\001' ' ')
+		rp_img=$(sed -nE 's/^(distro|creator|imagename)=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		[ -n "$rp_img" ] || rp_img=$(head -n 1 "$rp_s/etc/issue" 2>/dev/null)
+		rp_ver=$(sed -nE 's/^(imageversion|version)=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		rp_np=$(ls "$rp_s"/home/root/logs/hds-porniri/pornire-*.txt 2>/dev/null | wc -l)
+		rp_nr=$(ls "$rp_s"/home/root/logs/hds-raport/raport-*.txt 2>/dev/null | wc -l)
+		rp_nc=$(ls "$rp_s"/home/root/logs/enigma2_crash_*.log "$rp_s"/media/hdd/enigma2_crash_*.log 2>/dev/null | wc -l)
+		rp_nume=${rp_s#$RAM/slot-}
+		echo "slot|$(rp_curat "$rp_nume" 80)|$(rp_curat "$rp_img $rp_ver" 60)|$((rp_np + 0))|$((rp_nr + 0))|$((rp_nc + 0))"
+		rp_g=$((rp_g + 1))
+	done
+	echo "gata=$rp_g"
+}
+
+# the body of the report "sloturi": what each slot left (goes through rp_filtru)
+rp_sloturi_corp() {
+	for rp_s in $(rp_sloturi_radacini | tr ' ' '\001'); do
+		rp_s=$(echo "$rp_s" | tr '\001' ' ')
+		rp_sectiune "slotul ${rp_s#$RAM/slot-}"
+		cat "$rp_s/etc/image-version" 2>/dev/null
+		grep -v '^#' "$rp_s/etc/hdsatelit-model" 2>/dev/null | head -n 30
+		for rp_f in "$rp_s"/home/root/logs/hds-porniri/pornire-1.txt "$rp_s"/home/root/logs/hds-porniri/pornire-2.txt \
+			"$rp_s"/home/root/logs/hds-porniri/pornire-3.txt; do
+			[ -f "$rp_f" ] || continue
+			echo "-- ${rp_f##*/}"; head -n 80 "$rp_f"
+		done
+		for rp_f in $(ls -t "$rp_s"/home/root/logs/hds-raport/raport-*.txt 2>/dev/null | head -n 3); do
+			echo "-- ${rp_f##*/} (cod: $(head -n 1 "${rp_f%.txt}.cod" 2>/dev/null))"
+			head -c 120000 "$rp_f"
+		done
+		for rp_f in $(ls -t "$rp_s"/home/root/logs/enigma2_crash_*.log 2>/dev/null | head -n 3); do
+			echo "-- ${rp_f##*/}"; rp_coada "$rp_f" 150
+		done
+		echo "-- hds-caderi.log"; rp_coada "$rp_s/home/root/logs/hds-caderi.log" 40
+	done
+}
+
+rp_sloturi_pune() {
+	mkdir -p "$RAPOARTE" "$RAM" 2>/dev/null
+	if [ -z "$(rp_sloturi_radacini)" ]; then
+		rp_sloturi_demonteaza
+		echo "motiv=fara-sloturi"
+		return 1
+	fi
+	rp_sloturi_demonteaza
+	rp_nume="raport-$(rp_masina)-$(date '+%Y%m%d-%H%M%S')-sloturi.txt"
+	rp_antet sloturi "" "da" > "$RAM/sloturi.nou"
+	{ rp_sloturi_corp 2>&1; } | rp_filtru | head -c "$MAX_OCTETI" >> "$RAM/sloturi.nou"
+	rp_sloturi_demonteaza
+	cp -f "$RAM/sloturi.nou" "$RAPOARTE/$rp_nume.nou" 2>/dev/null && mv -f "$RAPOARTE/$rp_nume.nou" "$RAPOARTE/$rp_nume"
+	rm -f "$RAM/sloturi.nou" "$RAPOARTE/$rp_nume.nou"
+	if [ ! -f "$RAPOARTE/$rp_nume" ]; then
+		echo "motiv=scriere"
+		return 1
+	fi
+	rp_pastreaza "$RAPOARTE"
+	echo "fisier=$RAPOARTE/$rp_nume"
+	rp_st=$(rp_pe_stick "$RAPOARTE/$rp_nume")
+	echo "stick=${rp_st:-nu}"
+	if ! rp_are_retea; then
+		echo "cod=nu"; echo "motiv=fara-retea"
+	elif rp_c=$(rp_trimite "$RAPOARTE/$rp_nume"); then
+		echo "cod=$rp_c"
+		rp_arata_cod "$rp_c" 1 &
+	else
+		echo "cod=nu"; echo "motiv=trimitere"
+	fi
+	return 0
+}
+
+case $1 in
+urmareste)
+	rp_urmareste
+	;;
+raport)
+	rp_f=$(rp_scrie_raport "$(rp_curat "${2:-manual}" 20)" "" "") || exit 1
+	echo "$rp_f"
+	rp_c=$(rp_trimite "$rp_f") && echo "cod=$rp_c"
+	;;
+sloturi)
+	case $2 in
+		cauta) rp_sloturi_cauta; rp_sloturi_demonteaza ;;
+		pune) rp_sloturi_pune ;;
+		*) echo "folosire: $0 sloturi cauta|pune" >&2; exit 2 ;;
+	esac
+	;;
+filtru)
+	rp_filtru
+	;;
+*)
+	echo "folosire: $0 urmareste | raport FEL | sloturi cauta|pune | filtru" >&2
+	exit 2
+	;;
+esac
+exit 0

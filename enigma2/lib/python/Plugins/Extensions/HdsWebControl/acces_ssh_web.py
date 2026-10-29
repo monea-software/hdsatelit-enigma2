@@ -2,11 +2,12 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# acces_ssh_web.py: „Acces SSH” in interfata web (HdsWebControl), perechea ecranului de pe televizor
-# (Screens/HdsAccesSsh.py, Setari > Retea & Conexiuni > Acces SSH). Aceleasi date, aceleasi texte si aceleasi comenzi,
-# din acelasi modul, Components/HdsAccesSsh.py: parola de administrator (arata, ascunde, fa una noua), cheile SSH
-# (adauga din text lipit sau de pe stick, sterge), „Fără parolă în rețeaua locală”, starile periculoase (banda de sus)
-# si, ca optiune, textul brut al fisierelor serverului SSH.
+# acces_ssh_web.py: "Parola receptorului" in interfata web (HdsWebControl), perechea ecranului receptorului
+# (Screens/HdsAccesSsh.py, Setari > Retea & Conexiuni > Parola receptorului). Aceleasi date, aceleasi texte si aceleasi
+# comenzi, din acelasi modul, Components/HdsAccesSsh.py: parola lui root, aceeasi pentru FTP, SSH si SFTP (o vezi
+# oricand, o schimbi cu una aleasa de tine sau cu una la intamplare), cum te conectezi (FTP numai cand serverul FTP
+# merge), cheile SSH (adauga din text lipit sau de pe stick, sterge), "Fără parolă în rețeaua locală", starile
+# periculoase (banda de sus) si, ca optiune, textul brut al fisierelor serverelor SSH si FTP.
 #
 # Cine are voie: poarta comuna a HdsJsonResource (reteaua locala, apoi ?token= sau cookie-ul browserului; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului) lasa sa treaca si browserele „libere” (in
@@ -14,12 +15,12 @@
 # brut si orice schimbare cer in plus un browser conectat CU CODUL de pe televizor (nivel „asociat”): altfel oricine din
 # casa ar citi parola lui root sau si-ar pune cheia, adica ar intra ca root fara sa fi vazut televizorul. Browserele
 # libere si cheia pentru scripturi vad numai starea; pagina arata unui browser liber conectarea cu codul, pe loc.
-# Tot de aceea, cat ecranul „Acces SSH” e deschis pe televizor, telecomanda si captura de ecran ale panoului
+# Tot de aceea, cat ecranul "Parola receptorului" e deschis pe receptor, telecomanda si captura de ecran ale panoului
 # (plugin.py, RemoteControlResource si ScreenshotResource) cer si ele nivelul „asociat”: refuzEcranDeschis().
 #   GET  /api/acces-ssh                          starea, fara parola si fara hash (oricine trece de poarta)
-#   POST /api/acces-ssh-parola                   textul parolei, cat timp nu a fost ascunsa
-#   POST /api/acces-ssh-ascunde                  „Am notat parola”: textul clar se sterge, parola ramane
-#   POST /api/acces-ssh-parola-noua?confirmat=1  o parola noua
+#   POST /api/acces-ssh-parola                   textul parolei (se vede oricand, cat e chiar parola din /etc/shadow)
+#   POST /api/acces-ssh-pune     (corp: parola=)  parola aleasa de om: 4-64 de semne ASCII vizibile, fara spatii
+#   POST /api/acces-ssh-parola-noua?confirmat=1  o parola noua la intamplare
 #   POST /api/acces-ssh-adauga   (corp: cheie=)  cheile publice lipite (una sau mai multe, si blocuri SSH2); acelasi
 #                                                drum si pentru "Adaugă cheia acestui calculator": pagina citeste
 #                                                fisierul .pub ales de pe calculator (input type=file, FileReader) si
@@ -33,7 +34,7 @@
 # Comenzile pornesc o lucrare pe firul modulului (una deodata, comuna cu televizorul) si raspund pe loc; pagina citeste
 # rezultatul din GET /api/acces-ssh („lucrare”) si il arata langa butoanele casetei din care a pornit. Parola se cere
 # din nou cand se schimba „parola_semn” (inode si ora fisierului parolei, nimic din parola) sau cand se termina o
-# lucrare „parola-noua”, niciodata cat merge o lucrare.
+# lucrare "parola-noua" ori "pune-parola", niciodata cat merge o lucrare.
 # Etichetele paginii si mesajele din script trec prin _t() (ETICHETE, TEXTE_JS), iar lang e limba receptorului.
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 si citesc numai cateva fisiere mici; ce scrie sau porneste un
@@ -101,13 +102,13 @@ def nivel(request, sesiune_cerere=None):
 NEASOCIAT = {"result": False, "trebuie_cod": True,
 	"message": N_("Parola și cheile se văd și se schimbă numai dintr-un browser conectat cu codul de pe televizor.")}
 
-ECRAN_DESCHIS = N_("Cât ecranul „Acces SSH” e deschis pe televizor, telecomanda și captura de ecran merg numai dintr-un "
-	"browser conectat cu codul de pe televizor.")
+ECRAN_DESCHIS = N_("Cât ecranul „Parola receptorului” e deschis pe receptor, telecomanda și captura de ecran merg numai "
+	"dintr-un browser conectat cu codul de pe televizor.")
 
 
 def refuzEcranDeschis(request, A=None, sesiune_cerere=None):
-	"""Pentru telecomanda si captura de ecran din plugin.py: raspunsul de refuz (403) daca ecranul „Acces SSH” e deschis
-	pe televizor si cererea nu vine dintr-un browser conectat cu codul; altfel None. Cu ecranul deschis, o tasta sau o
+	"""Pentru telecomanda si captura de ecran din plugin.py: raspunsul de refuz (403) daca ecranul "Parola receptorului" e
+	deschis pe receptor si cererea nu vine dintr-un browser conectat cu codul; altfel None. Cu ecranul deschis, o tasta sau o
 	captura data unui browser liber ori cheii pentru scripturi ar ocoli poarta paginii (parola mare pe ecran, OK pe
 	„Fără parolă în rețeaua locală”)."""
 	try:
@@ -123,7 +124,7 @@ def refuzEcranDeschis(request, A=None, sesiune_cerere=None):
 
 def _lucrare(nume):
 	"""Caseta paginii in care se arata o lucrare si rezultatul ei."""
-	return {"parola-noua": "parola", "ascunde-parola": "parola", "adauga-chei": "chei", "stick": "chei",
+	return {"parola-noua": "parola", "pune-parola": "parola", "adauga-chei": "chei", "stick": "chei",
 		"sterge-cheie": "chei", "fara-parola": "fara"}.get(nume or "", "")
 
 
@@ -139,8 +140,11 @@ def stare(A=None, nivel_cerere="asociat"):
 		"asociat": nivel_cerere == "asociat",
 		"fel_parola": s["fel_parola"],
 		"parola_de_vazut": bool(s["parola_de_vazut"] and s["fel_parola"] == "pusa"),
+		"parola_alta": bool(s.get("parola_alta")),
 		"parola_semn": s["parola_semn"],
 		"program": s["program"],
+		"ftp": bool(s.get("ftp")),
+		"text_eticheta": A.textEticheta(s),
 		"text_parola": A.textParola(s),
 		"text_parola_scurt": A.textParolaScurt(s),
 		"alarme": A.textAlarme(s),
@@ -170,7 +174,8 @@ def parola(request, A=None):
 	s = A.stare()
 	text = A.parolaDeAratat() if (s["parola_de_vazut"] and s["fel_parola"] == "pusa") else ""
 	if not text:
-		return {"result": False, "message": _t("Parola nu se mai arată. Dacă ai uitat-o, fă una nouă.")}, 404
+		return {"result": False, "message": _t("Parola nu se vede aici. Alege „Schimbă parola” și pune una nouă: de atunci "
+			"se vede oricând.")}, 404
 	return {"result": True, "parola": text, "parola_semn": s["parola_semn"]}, 200
 
 
@@ -187,9 +192,14 @@ def brut(request, A=None):
 	return {"result": True, "pagina": i, "pagini": len(pagini), "titlu": titlu, "cale": cale, "text": text}
 
 
-def ascunde(request, A=None):
+def pune(request, A=None):
+	"""Parola aleasa de om (corp: parola=), verificata intai aici, cu motivul pe intelesul omului."""
 	A = _a(A)
-	return _pornit(A, A.pornesteAscunde(), A.textLucrare(A.LUCRARE_ASCUNDE))
+	text = _arg(request, "parola", A.MAX_PAROLA + 1)
+	motiv = A.motivParola(text)
+	if motiv:
+		return {"result": False, "message": motiv}
+	return _pornit(A, A.pornestePuneParola(text), A.textLucrare(A.LUCRARE_PUNE))
 
 
 def parolaNoua(request, A=None):
@@ -294,8 +304,8 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # poarta cere POST din browser; cu ?token= raspunsul e refuzul
 
-	class AscundeResource(_Comanda):
-		lucru = staticmethod(ascunde)
+	class PuneResource(_Comanda):
+		lucru = staticmethod(pune)
 
 	class ParolaNouaResource(_Comanda):
 		lucru = staticmethod(parolaNoua)
@@ -313,7 +323,7 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 		lucru = staticmethod(faraParola)
 
 	class PaginaResource(resource.Resource):
-		"""GET /acces-ssh: pagina „Acces SSH”."""
+		"""GET /acces-ssh: pagina "Parola receptorului"."""
 		isLeaf = True
 
 		def render_GET(self, request):
@@ -323,7 +333,7 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 		b"acces-ssh": StareResource(),
 		b"acces-ssh-parola": ParolaResource(),
 		b"acces-ssh-brut": BrutResource(),
-		b"acces-ssh-ascunde": AscundeResource(),
+		b"acces-ssh-pune": PuneResource(),
 		b"acces-ssh-parola-noua": ParolaNouaResource(),
 		b"acces-ssh-adauga": AdaugaResource(),
 		b"acces-ssh-stick": StickResource(),
@@ -380,7 +390,7 @@ def _json(obiect):
 
 # etichetele fixe ale paginii: __T_<CHEIE>__ in PAGINA, traduse si scapate pentru HTML
 ETICHETE = {
-	"TITLU": N_("Acces SSH"),
+	"TITLU": N_("Parola receptorului"),
 	"INCARCARE": N_("Se citește starea..."),
 	"CONECTARE": N_("Conectează browserul cu codul"),
 	"CONECTARE_TEXT": N_("Parola și cheile se văd și se schimbă numai dintr-un browser conectat cu codul de pe "
@@ -388,13 +398,16 @@ ETICHETE = {
 	"ARATA_COD": N_("Arată codul pe televizor"),
 	"COD": N_("Codul de pe televizor"),
 	"CONECTEAZA": N_("Conectează"),
-	"PAROLA": N_("Parola de administrator (root)"),
-	"ASCUNDE": N_("Am notat parola, ascunde-o"),
+	"PAROLA": N_("Parola lui root, aceeași pentru SSH și SFTP"),
+	"SCHIMBA": N_("Schimbă parola"),
+	"PAROLA_NOUA": N_("Parola nouă"),
+	"PAROLA_NOUA_NOTA": N_("4-64 de semne: litere fără diacritice, cifre și semne, fără spații. Cea veche nu mai merge."),
 	"NOUA": N_("Fă o parolă nouă"),
 	"CUM": N_("Cum te conectezi"),
+	"CUM_FTP": N_("FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root și parola de sus:"),
 	"CUM_TEXT": N_("De pe calculator, în terminal:"),
-	"CUM_NOTA": N_("Cu o cheie SSH pusă mai jos, calculatorul intră fără parolă. Fișierele se copiază cu SFTP (de "
-		"exemplu WinSCP sau FileZilla), cu aceleași date."),
+	"CUM_NOTA": N_("Cu parola se intră numai din rețeaua ta de acasă. Cu o cheie SSH pusă mai jos, calculatorul intră "
+		"fără parolă."),
 	"CHEI": N_("Cheile SSH"),
 	"LIPESTE": N_("Lipește cheia publică (conținutul fișierului .pub, de exemplu id_ed25519.pub):"),
 	"ADAUGA": N_("Adaugă cheia"),
@@ -407,13 +420,13 @@ ETICHETE = {
 	"FARA": N_("Fără parolă în rețeaua locală"),
 	"FARA_NOTA": N_("Rămâne oprit dacă nu ai un motiv anume. Pornit, oricine din rețeaua ta de acasă intră pe receptor "
 		"fără parolă."),
-	"BRUT": N_("Text brut (fișierele serverului SSH)"),
+	"BRUT": N_("Text brut (fișierele serverelor SSH și FTP)"),
 	"BRUT_BUTON": N_("Text brut"),
 	"FISIER": N_("Fișierul"),
 }
 
 # nota de jos: %s e drumul din meniul televizorului (HTML facut de meniu_web.drumHtml)
-NOTA_TV = N_("Aceleași lucruri sunt pe televizor, în %s.")
+NOTA_TV = N_("Aceleași lucruri sunt și în meniul receptorului, în %s.")
 
 # mesajele scriptului, traduse pe receptor si date paginii ca JSON (TXT)
 TEXTE_JS = {
@@ -428,7 +441,7 @@ TEXTE_JS = {
 	"sterge": N_("Șterge"),
 	"cuOptiuni": N_("(cu opțiuni)"),
 	"intrebareSterge": N_("Ștergi cheia %s?"),
-	"intrebareAscunde": N_("Ai notat parola? După aceea nu se mai arată nici aici, nici pe televizor."),
+	"scrieParola": N_("Scrie întâi parola nouă."),
 	"intrebareNoua": N_("Faci o parolă nouă? Cea de acum nu mai merge."),
 	"intrebareFara": N_("Pornești intrarea fără parolă? Oricine din rețeaua ta de acasă va intra pe receptor."),
 	"porneste": N_("Pornește"),
@@ -495,6 +508,7 @@ PAGINA = """<!DOCTYPE html>
   button.rosu{background:#8f2a1f;border-color:#8f2a1f;color:#fff;}
   button:disabled{opacity:.5;cursor:default;}
   select{min-height:44px;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;max-width:100%;}
+  input#parolaNoua{min-height:44px;width:16em;max-width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:1.1rem ui-monospace,Consolas,monospace;}
   input#cod{min-height:44px;width:9em;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:1.1rem ui-monospace,Consolas,monospace;letter-spacing:.1em;}
   textarea{width:100%;box-sizing:border-box;min-height:96px;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:.85rem ui-monospace,Consolas,monospace;}
   table{width:100%;border-collapse:collapse;font-size:.95rem;}
@@ -532,17 +546,20 @@ PAGINA = """<!DOCTYPE html>
     <p class="mesaj" id="mesajCod"></p>
   </section>
   <section class="card" id="casetaParola">
-    <h2>__T_PAROLA__</h2>
+    <h2 id="eticheta">__T_PAROLA__</h2>
     <p class="parola ascuns" id="parola"></p>
     <p class="text" id="textParola"></p>
     <div class="butoane">
-      <button type="button" class="verde ascuns" id="ascunde">__T_ASCUNDE__</button>
+      <input id="parolaNoua" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="__T_PAROLA_NOUA__" aria-label="__T_PAROLA_NOUA__">
+      <button type="button" class="verde" id="schimba">__T_SCHIMBA__</button>
       <button type="button" id="noua">__T_NOUA__</button>
     </div>
+    <p class="nota">__T_PAROLA_NOUA_NOTA__</p>
     <div id="locparola"></div>
   </section>
   <section class="card">
     <h2>__T_CUM__</h2>
+    <p class="text ascuns" id="randFtp">__T_CUM_FTP__ <span class="cod" id="comandaFtp">ftp://receptor</span></p>
     <p class="text">__T_CUM_TEXT__ <span class="cod" id="comanda">ssh root@receptor</span></p>
     <p class="nota">__T_CUM_NOTA__</p>
   </section>
@@ -616,17 +633,19 @@ function mesaj(text, eroare, caseta){
   m.classList.toggle("eroare", !!eroare);
   if(text && m.scrollIntoView){ m.scrollIntoView({block: "nearest"}); }
 }
+// lucrarile care schimba parola: cat merg, parola veche nu mai ramane pe ecran; dupa ele se cere din nou
+function schimbaParola(nume){ return nume === "parola-noua" || nume === "pune-parola"; }
 function arataParola(d){
+  $("eticheta").textContent = d.text_eticheta;
   $("textParola").textContent = d.text_parola;
-  $("ascunde").classList.toggle("ascuns", !(d.parola_de_vazut && d.asociat));
   $("noua").textContent = d.fel_parola === "pusa" ? TXT.faParolaNoua : TXT.faParola;
-  $("noua").classList.toggle("ascuns", !d.program);
+  ["noua", "schimba", "parolaNoua"].forEach(function(id){ $(id).classList.toggle("ascuns", !d.program); });
   var p = $("parola");
   if(d.parola_semn !== SEMN_PAROLA){ SEMN_PAROLA = d.parola_semn; PAROLA_CERUTA = false; }
-  if(!d.parola_de_vazut || d.lucreaza === "parola-noua"){
-    // starea in cateva cuvinte, ca pe televizor; cat se face o parola noua, cea veche nu mai ramane pe ecran
+  if(!d.parola_de_vazut || schimbaParola(d.lucreaza)){
+    // starea in cateva cuvinte, ca pe receptor; cat se pune o parola noua, cea veche nu mai ramane pe ecran
     PAROLA_CERUTA = false;
-    p.textContent = d.lucreaza === "parola-noua" ? d.text_lucreaza : d.text_parola_scurt;
+    p.textContent = schimbaParola(d.lucreaza) ? d.text_lucreaza : d.text_parola_scurt;
     p.classList.add("scurt"); p.classList.remove("ascuns");
     return;
   }
@@ -682,7 +701,7 @@ function arata(d){
   var ocupat = !!d.lucreaza;
   if(d.ultima && d.ultima.id !== ULTIMA_VAZUTA){
     ULTIMA_VAZUTA = d.ultima.id;
-    if(d.ultima.nume === "parola-noua" && d.ultima.reusit){ PAROLA_CERUTA = false; }
+    if(schimbaParola(d.ultima.nume) && d.ultima.reusit){ PAROLA_CERUTA = false; }
   }
   arataAlarme(d);
   arataParola(d);
@@ -691,7 +710,8 @@ function arata(d){
   $("textFara").textContent = d.text_fara_parola;
   $("fara").textContent = d.fara_parola ? TXT.opreste : TXT.porneste;
   $("fara").className = d.fara_parola ? "verde" : "";
-  ["ascunde", "noua", "adauga", "adaugaFisier", "stick", "fara"].forEach(function(id){ $(id).disabled = ocupat || !d.asociat; });
+  ["schimba", "parolaNoua", "noua", "adauga", "adaugaFisier", "stick", "fara"].forEach(function(id){ $(id).disabled = ocupat || !d.asociat; });
+  $("randFtp").classList.toggle("ascuns", !d.ftp);
   $("comutaBrut").disabled = !d.asociat;
   $("conectare").classList.toggle("ascuns", d.asociat);
   if(d.nivel === "jeton"){
@@ -704,6 +724,7 @@ function arata(d){
   else if(d.ultima && ((ASTEPT !== null && d.ultima.id >= ASTEPT) || VAZUT_LUCRAND)){
     mesaj(d.ultima.mesaj, !d.ultima.reusit, d.ultima.caseta);
     if(ASTEPT !== null && d.ultima.nume === "adauga-chei" && d.ultima.reusit){ $("cheie").value = ""; }
+    if(ASTEPT !== null && d.ultima.nume === "pune-parola" && d.ultima.reusit){ $("parolaNoua").value = ""; }
     ASTEPT = null; VAZUT_LUCRAND = false;
   }
 }
@@ -713,6 +734,7 @@ function citeste(){
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     var h = location.hostname || "receptor";
     $("comanda").textContent = "ssh root@" + (h.indexOf(":") !== -1 ? "[" + h + "]" : h);
+    $("comandaFtp").textContent = ["ftp://" + h, "sftp://" + h].join(" · ");
     arata(d);
   }).catch(function(){ $("incarcare").textContent = TXT.nuRaspundeRetea; });
 }
@@ -725,10 +747,14 @@ function trimite(cale, valori, caseta){
     if(r.result && r.lucrare){ ASTEPT = r.lucrare; citeste(); }
   }).catch(function(){ mesaj(TXT.nuRaspunde, true, caseta); });
 }
-$("ascunde").addEventListener("click", function(){
-  if(!confirm(TXT.intrebareAscunde)){ return; }
-  trimite("/api/acces-ssh-ascunde", {}, "parola");
+// parola aleasa: receptorul o verifica (4-64 de semne ASCII vizibile) si spune motivul cand nu o primeste
+$("schimba").addEventListener("click", function(){
+  var t = $("parolaNoua").value;
+  if(!t){ mesaj(TXT.scrieParola, true, "parola"); $("parolaNoua").focus(); return; }
+  PAROLA_CERUTA = false;
+  trimite("/api/acces-ssh-pune", {parola: t}, "parola");
 });
+$("parolaNoua").addEventListener("keydown", function(e){ if(e.key === "Enter"){ $("schimba").click(); } });
 $("noua").addEventListener("click", function(){
   if(DATE && DATE.fel_parola === "pusa" && !confirm(TXT.intrebareNoua)){ return; }
   PAROLA_CERUTA = false;
@@ -821,6 +847,7 @@ citeste().then(planifica, planifica);
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
 TEXTE_PAGINA = {
 	"html": (
+		N_("__T_CUM_FTP__ <span class=\"cod\" id=\"comandaFtp\">ftp://receptor</span>"),
 		N_("__T_CUM_TEXT__ <span class=\"cod\" id=\"comanda\">ssh root@receptor</span>"),
 		N_("ssh-ed25519 AAAA... nume@calculator"),
 	),

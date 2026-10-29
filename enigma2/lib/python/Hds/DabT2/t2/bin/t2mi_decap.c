@@ -8,10 +8,16 @@
  *
  * Facut de hdsatelit.com. Cod propriu, scris dupa standardele ETSI.
  *
+ * Cu -A face altceva, mai simplu: fluxurile de distributie spaniole de pe 30W (Abertis/Cellnex) poarta un TS intreg
+ * direct in payload-ul unui PID privat, fara T2-MI: payload-urile pachetelor acelui PID, puse cap la cap (dupa antet si
+ * campul de adaptare), sunt pachetele TS de 188 de octeti ale multiplexului terestru, cu PAT, PMT si programele lui.
+ * Pachetele cu bitii de criptare pusi (flux criptat pe care modulul CAM nu l-a decriptat) se numara si se arunca.
+ *
  * Folosire:
- *   t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]
+ *   t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]
  *              [-h URL [-I SEC] [-w SEC] [-R N] [-c FISIER]] [-j FISIER] [-P FISIER]
  *     -p PID   PID-ul care poarta T2-MI (0..8191); nu trebuie cu -r
+ *     -A       PID-ul poarta un TS intreg in payload (fara T2-MI); -l, -n si -r nu se folosesc
  *     -l PLP   PLP-ul dorit (0..255); lipsa = primul PLP de date din L1-current
  *     -n       pune la loc pachetele nule sterse (NPD/DNP)
  *     -s       statistici pe stderr la 5 s, JSON pe o linie (ignorat cu -u)
@@ -134,6 +140,7 @@ typedef struct {
     uint64_t bb, bb_crc, bb_rele, bb_ne_ts, up_crc, up_sinc;
     uint64_t l1, l1_rele, l1_lipsa, comun, t2_alt_flux, ts_criptate;
     uint64_t iesite, nule, aruncate;
+    uint64_t ab_resinc;   /* -A: pierderi de sincronizare in TS-ul interior */
     int mod; /* -1 necunoscut, 0 NM, 1 HEM */
 } Statistici;
 
@@ -155,6 +162,7 @@ static uint8_t l1_ids[256];
 static int l1_n = -1;               /* -1 = inca nu am primit L1-current */
 
 static int opt_pid = -1, opt_plp = -1, opt_nule = 0, opt_stat = 0, opt_brut = 0, opt_port = -1;
+static int opt_ts_in_pid = 0;        /* -A */
 static int plp_date = -1, plp_comun = -1;
 
 static volatile sig_atomic_t opreste = 0;
@@ -955,6 +963,129 @@ static void ts_pachet(const uint8_t *p)
         asm_date(d, n);
 }
 
+/* ------------------------------------------------------------------ -A: TS intreg in payload-ul unui PID */
+
+/* payload-urile puse cap la cap; dupa fiecare apel raman cel mult 188 de octeti (un pachet inceput sau o cautare), plus
+ * cel mult 184 noi */
+#define AB_MAX (4u * TS_LEN)
+static uint8_t ab[AB_MAX];
+static size_t ab_len;
+static int ab_sinc = 0;
+
+static void ab_pierdut(void)
+{
+    if (ab_sinc)
+        st.ab_resinc++;
+    ab_len = 0;
+    ab_sinc = 0;
+}
+
+static void ab_date(const uint8_t *d, size_t n)
+{
+    if (ab_len + n > AB_MAX) {     /* nu se poate (vezi AB_MAX); daca totusi, o luam de la capat */
+        ab_pierdut();
+        if (n > AB_MAX)
+            return;
+    }
+    memcpy(ab + ab_len, d, n);
+    ab_len += n;
+    size_t i = 0;
+    for (;;) {
+        if (ab_sinc) {
+            if (ab_len - i < TS_LEN)
+                break;
+            if (ab[i] == 0x47) {
+                emite_188(ab + i);
+                i += TS_LEN;
+                continue;
+            }
+            ab_sinc = 0;
+            st.ab_resinc++;
+        }
+        /* cautare: 0x47 urmat de 0x47 dupa 188 de octeti */
+        const uint8_t *q = memchr(ab + i, 0x47, ab_len - i);
+        if (!q) {
+            i = ab_len;
+            break;
+        }
+        i = (size_t)(q - ab);
+        if (ab_len - i < TS_LEN + 1)
+            break;                 /* asteptam inca un payload */
+        if (ab[i + TS_LEN] == 0x47) {
+            ab_sinc = 1;
+            continue;
+        }
+        i++;
+    }
+    if (i > 0) {
+        memmove(ab, ab + i, ab_len - i);
+        ab_len -= i;
+    }
+}
+
+static void ts_pachet_in_pid(const uint8_t *p)
+{
+    st.ts_in++;
+    unsigned pid = ((unsigned)(p[1] & 0x1F) << 8) | p[2];
+    if ((int)pid != opt_pid)
+        return;
+    st.ts_pid++;
+    if (p[1] & 0x80) {
+        st.ts_tei++;
+        cc_are = 0;
+        ab_pierdut();
+        return;
+    }
+    unsigned afc = (p[3] >> 4) & 3;
+    unsigned cc = p[3] & 0x0F;
+    size_t off = 4;
+    int disc = 0;
+    if (p[3] & 0xC0) {
+        st.ts_criptate++;
+        cc_are = 0;
+        ab_pierdut();
+        return;
+    }
+    if (afc == 0) {
+        st.ts_af_rau++;
+        ab_pierdut();
+        return;
+    }
+    if (afc & 2) {
+        unsigned afl = p[4];
+        if ((afc == 3 && afl > 182) || (afc == 2 && afl != 183)) {
+            st.ts_af_rau++;
+            if (afc == 3) {
+                cc_are = 0;
+                ab_pierdut();
+            }
+            return;
+        }
+        if (afl > 0 && (p[5] & 0x80))
+            disc = 1;
+        off = 5 + afl;
+    }
+    if (!(afc & 1))
+        return;
+    if (cc_are && !disc) {
+        if (cc == cc_ultim) {
+            if (memcmp(p, ts_ultim, TS_LEN) == 0) {
+                st.ts_dublu++;
+                return;
+            }
+            st.ts_cc++;
+            ab_pierdut();
+        } else if (cc != ((cc_ultim + 1) & 0x0F)) {
+            st.ts_cc++;
+            ab_pierdut();
+        }
+    }
+    cc_ultim = cc;
+    cc_are = 1;
+    memcpy(ts_ultim, p, TS_LEN);
+    ab_date(p + off, TS_LEN - off);
+}
+
 static uint8_t intrare[BLOC_CITIRE + T2MI_MAX + 3 * TS_LEN];
 static size_t intrare_len;
 static int ts_sinc = 0;
@@ -966,7 +1097,10 @@ static void proceseaza_ts(int la_sfarsit)
     while (len - i >= TS_LEN) {
         if (ts_sinc) {
             if (b[i] == 0x47) {
-                ts_pachet(b + i);
+                if (opt_ts_in_pid)
+                    ts_pachet_in_pid(b + i);
+                else
+                    ts_pachet(b + i);
                 i += TS_LEN;
                 continue;
             }
@@ -1065,6 +1199,8 @@ static void decap_reset(void)
     asm_total = 0;
     asm_sinc = 0;
     cc_are = 0;
+    ab_len = 0;
+    ab_sinc = 0;
     t2_flux = -1;
     t2_are_contor = 0;
     memset(plp, 0, sizeof(plp));
@@ -1661,7 +1797,8 @@ static size_t formateaza_stat(char *s, size_t cap, int64_t de_la_ms)
                  "\"bb\":%llu,\"bb_crc\":%llu,\"bb_rele\":%llu,\"bb_ne_ts\":%llu,\"up_crc\":%llu,\"up_sinc\":%llu,"
                  "\"l1\":%llu,\"l1_rele\":%llu,\"l1_lipsa\":%llu,\"alt_flux\":%llu,\"criptate\":%llu,"
                  "\"mod\":\"%s\",\"plp_date\":%d,\"plp_comun\":%d,\"comun_iesite\":%llu,"
-                 "\"iesite\":%llu,\"nule\":%llu,\"aruncate\":%llu,\"client\":%s,",
+                 "\"iesite\":%llu,\"nule\":%llu,\"aruncate\":%llu,\"ts_in_pid\":%s,\"resinc_interior\":%llu,"
+                 "\"client\":%s,",
                  (long long)(acum_ms() - de_la_ms), (unsigned long long)st.ts_in, (unsigned long long)st.ts_pid,
                  (unsigned long long)st.ts_cc, (unsigned long long)st.ts_tei, (unsigned long long)st.ts_dublu,
                  (unsigned long long)st.ts_af_rau, (unsigned long long)st.ts_pointer_rau,
@@ -1673,6 +1810,7 @@ static size_t formateaza_stat(char *s, size_t cap, int64_t de_la_ms)
                  (unsigned long long)st.ts_criptate, mod, plp_date, plp_comun, (unsigned long long)st.comun,
                  (unsigned long long)st.iesite,
                  (unsigned long long)st.nule, (unsigned long long)st.aruncate,
+                 opt_ts_in_pid ? "true" : "false", (unsigned long long)st.ab_resinc,
                  opt_port < 0 ? "null" : (clienti_flux() > 0 ? "true" : "false"));
     if (r < 0 || (size_t)r >= cap - k)
         return 0;
@@ -1901,9 +2039,10 @@ static void la_semnal(int s)
 static void folosire(void)
 {
     static const char t[] =
-        "folosire: t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]\n"
+        "folosire: t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]\n"
         "                     [-h URL [-I SEC] [-w SEC] [-R N] [-c FISIER]] [-j FISIER] [-P FISIER]\n"
         "  -p PID     PID-ul cu T2-MI (0..8191), nu trebuie cu -r\n"
+        "  -A         PID-ul poarta un TS intreg in payload, fara T2-MI (fara -l, -n, -r)\n"
         "  -l PLP     PLP-ul dorit (0..255), implicit primul PLP de date din L1-current\n"
         "  -n         pune la loc pachetele nule sterse (NPD)\n"
         "  -s         statistici JSON pe stderr la 5 s (nu cu -u)\n"
@@ -1957,7 +2096,7 @@ int main(int argc, char **argv)
         if (strncmp(argv[i], "-u", 2) == 0)
             tacut = 1;
 
-    while ((c = getopt(argc, argv, "p:l:nsri:o:u:th:I:w:R:c:j:P:a:")) != -1) {
+    while ((c = getopt(argc, argv, "p:l:nsrAi:o:u:th:I:w:R:c:j:P:a:")) != -1) {
         switch (c) {
         case 'p':
             if (numar(optarg, 0, 8191, &v)) { folosire(); return 2; }
@@ -1970,6 +2109,7 @@ int main(int argc, char **argv)
         case 'n': opt_nule = 1; break;
         case 's': opt_stat = 1; break;
         case 'r': opt_brut = 1; break;
+        case 'A': opt_ts_in_pid = 1; break;
         case 'i': f_in = optarg; break;
         case 'o': f_out = optarg; break;
         case 'u':
@@ -2008,7 +2148,8 @@ int main(int argc, char **argv)
         }
     }
     tacut = opt_port >= 0;
-    if (optind != argc || (opt_pid < 0 && !opt_brut) || (opt_url && strcmp(f_in, "-") != 0)) {
+    if (optind != argc || (opt_pid < 0 && !opt_brut) || (opt_url && strcmp(f_in, "-") != 0)
+        || (opt_ts_in_pid && (opt_pid < 0 || opt_brut || opt_nule || opt_plp >= 0))) {
         folosire();
         return 2;
     }

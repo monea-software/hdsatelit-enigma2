@@ -470,7 +470,11 @@
       var p = punct(e.clientX, e.clientY);
       if(!p){ return; }
       semn(el, e.clientX, e.clientY);
-      pune("clic", {xp: p.xp, yp: p.yp, clicuri: Math.max(1, Math.min(3, e.detail || 1))});
+      // Ctrl / Shift tinute la clic (bifele din editorul de canale de pe televizor); fara ele parametrul lipseste
+      var mod = [];
+      if(e.ctrlKey || e.metaKey){ mod.push("ctrl"); }
+      if(e.shiftKey){ mod.push("shift"); }
+      pune("clic", {xp: p.xp, yp: p.yp, clicuri: Math.max(1, Math.min(3, e.detail || 1)), mod: mod.length ? mod.join(",") : null});
     }, true);
     el.addEventListener("mousedown", function(e){
       // clicul pe rotita: fara derularea automata a browserului

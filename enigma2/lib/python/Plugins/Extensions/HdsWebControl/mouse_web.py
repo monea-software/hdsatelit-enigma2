@@ -12,7 +12,8 @@
 #   POST /api/mouse?fel=clic|dublu|drag|dragend|rotita|dreapta|mijloc|pagina|capat|text&xp=&yp=   (GET numai cu ?token=)
 #     xp, yp: locul in procente din ecran (0-100, cu zecimale), sau x, y in pixelii ecranului enigma2 (1920x1080);
 #     clicuri=1|2 (al catelea clic: 2 = dublu clic); drag: si x0p, y0p (sau x0, y0) = locul unde s-a apasat,
-#     nou=1 la prima miscare a trasului;
+#     nou=1 la prima miscare a trasului; clic / dublu: mod=ctrl|shift|ctrl,shift = tastele tinute la clic in pagina
+#     (Ctrl / Shift + clic in editorul de canale: bife), lipsa = nicio tasta;
 #     rotita: pasi = -12..12 (pozitiv = in jos), 3 sau mai multi = o pagina;
 #     dreapta = IESIRE, mijloc (clic pe rotita) = MENIU, ca in emulator; numele spun butonul mouse-ului, nu tasta;
 #     pagina (Page Up/Down din tastatura paginii): pasi=-1|1, o pagina in lista principala, fara lista canalul +/-;
@@ -134,6 +135,19 @@ def _numar(request, nume, fel=float):
 	return fel(v)
 
 
+MODURI = ("ctrl", "shift")
+
+
+def _mod(text):
+	"""mod=ctrl|shift|ctrl,shift -> multimea tastelor tinute; None cand lipseste (ecranul citeste tastatura receptorului)."""
+	if text is None:
+		return None
+	alese = frozenset(t.strip() for t in text.lower().split(",") if t.strip())
+	if not alese <= frozenset(MODURI):
+		raise ValueError("mod trebuie sa fie ctrl, shift sau ctrl,shift")
+	return alese
+
+
 def _punct(request, M, px, py, pp_x, pp_y):
 	"""(x, y) in pixelii ecranului enigma2, din x/y (pixeli) sau din procente; (None, None) cand lipsesc."""
 	xp, yp = _numar(request, pp_x), _numar(request, pp_y)
@@ -168,6 +182,7 @@ def raspunde(request, sesiune, apasa, M=None, acces_ssh=None):
 		clicuri = max(1, min(3, _numar(request, "clicuri", int) or 1))
 		pasi = max(-M.PASI_MAXIM, min(M.PASI_MAXIM, _numar(request, "pasi", int) or 0))
 		nou = _arg(request, "nou") == "1"
+		mod = _mod(_arg(request, "mod"))
 		# textul fara strip: spatiul e un semn
 		brut = request.args.get(b"text")
 		text = brut[0].decode("utf-8", "strict") if brut else ""
@@ -178,7 +193,9 @@ def raspunde(request, sesiune, apasa, M=None, acces_ssh=None):
 	if fel == "text" and not 0 < len(text) <= M.TEXT_MAXIM:
 		return {"result": False, "message": "text: intre 1 si %d semne" % M.TEXT_MAXIM}, 400
 	try:
-		rezultat = _mouse(sesiune, apasa, M).gest(fel, x, y, clicuri=clicuri, pasi=pasi, x0=x0, y0=y0, nou=nou, text=text)
+		extra = {"mod": mod} if mod is not None else {}
+		rezultat = _mouse(sesiune, apasa, M).gest(fel, x, y, clicuri=clicuri, pasi=pasi, x0=x0, y0=y0, nou=nou, text=text,
+			**extra)
 	except Exception as eroare:
 		print("[HdsWebControl] mouse %s: %s" % (fel, eroare))
 		return {"result": False, "message": "mouse: %s" % eroare}, 500

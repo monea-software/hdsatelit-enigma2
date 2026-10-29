@@ -468,6 +468,54 @@
       "sursa": "AutoBouquetsMaker, sat_192_movistar_plus_esp.xml: 10847000, polarization 1, fec_inner 4 (= 5/6), system 0, modulation 1, bat_pid 0x11, tsid 1058, onid 1. Confirmat de fisa publica a transponderului, cu acelasi numar de flux TP 1058 (canalesparabolica.com/tp/19.2e/10847V): 10847 MHz, V, 22000, FEC 5/6, DVB-S, QPSK. Platforma emite in continuare prin satelit (lista de canale actualizata in septembrie 2026)."
     },
     {
+      "id": "aragon_tv_es",
+      "nume": "Aragón TV",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11330000,
+        "pol": "H",
+        "rata": 9140,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 174526
+        },
+        "flux": 0
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "LyngSat Hispasat-30W-5 (actualizat 25.10.2026): 11330 H tp 128, DVB-S2 8PSK, SR 9140, FEC 3/4, PLS Gold 174526, Aragón TV (MPEG-4 HD) si trei radiouri Aragón Radio, fara criptare scrisa, ONID-TID 8916-1001. NEPOTRIVIRE: lista abertis-dtt.github.io (sat_data.json, 13.10.2026) scrie 11329.50 H, QPSK, SR 9142, fara PLS, ONID 8916, TSID 1001. Ales LyngSat (mai nou si cu PLS). Lipseste masurarea pe receptor: 30W se prinde in Gorj (11222/11302/11347/11382 H in lista scanata), dar transponderul multistream nu a fost acordat inca. Nu e un flux Abertis (acelea sunt aproape toate criptate BISS). Fluxul (is_id) 0 scris de noi, nu de surse (transponder cu un singur flux si cod PLS): pe HiSilicon PLS se aplica numai cu is_id >= 0, ca la hellas_sat_dtt_cy (39E 11760 H, dovedit pe receptor cu 0)."
+    },
+    {
+      "id": "cmm_tv_es",
+      "nume": "CMM TV (Castilla-La Mancha)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11491000,
+        "pol": "V",
+        "rata": 7522,
+        "fec": "8/9",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": {
+          "mod": "gold",
+          "cod": 79463
+        },
+        "flux": 0
+      },
+      "fel": "tv",
+      "incredere": "probabil",
+      "sursa": "Doua surse la fel: LyngSat Hispasat-30W-6 (actualizat 25.10.2026): 11491 V tp 199, DVB-S2 8PSK, SR 7522, FEC 8/9, PLS Gold 79463, Telecom CLM, CMM TV (MPEG-4 HD) si sase radiouri Radio Castilla-La Mancha, fara criptare scrisa; abertis-dtt.github.io (sat_data.json, 13.10.2026): 11491.00 V DVB-S2/8PSK PLS Gold 79463, 7522 8/9, MAUT-CLM TDT, fara criptare. Lipseste masurarea pe receptor (transponderul multistream nu a fost acordat inca). Fluxul (is_id) 0 scris de noi, nu de surse (transponder cu un singur flux si cod PLS): pe HiSilicon PLS se aplica numai cu is_id >= 0, ca la hellas_sat_dtt_cy (39E 11760 H, dovedit pe receptor cu 0)."
+    },
+    {
       "id": "hd_austria",
       "nume": "CANAL+ Austria (HD Austria)",
       "tari": [
@@ -619,6 +667,27 @@
       "fel": "t2mi",
       "incredere": "probabil",
       "sursa": "Hds/DabT2/t2/date/frecvente.json, PID T2-MI 4096, PLP 0, FTA. NU a fost prins de noi ('fara_semnal_in_zona_testata'), fiindca fasciculul Ku Fixed 1 nu acopera Gorjul - deci 'probabil', nu 'sigur': lipsa semnalului se explica prin acoperire, nu prin valori gresite. Doua surse in cercetare: LyngSat mux Express-AM6_Ku-Fixed-1_10730-V si satellitescommunity firul 999, confirmat 09.05.2025. Al doilea transponder RSCC, tot cu doua surse: 10713000 V, SR 14180 (Crimeea, acces mixt)."
+    },
+    {
+      "id": "abertis_es_8002",
+      "nume": "Abertis - Telemadrid (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 12631000,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): Stream 8002 (HSA-67.2) TDT-CAM pe 12631.00 V DVB-S2 8PSK 30000 3/4, purtatorul SID 1002, programele Telemadrid HDR, BOM, Telemadrid HD, LA OTRA HD, Onda Madrid; singurul flux Abertis la care lista nu scrie BISS (celelalte 37 sunt BISS). Formatul: TS terestru intreg in payload-ul PID-ului 8002 (fara T2-MI), desfacut de Hds/DabT2 (t2mi_decap -A, felul abertis). La noi (Gorj, antena 90 cm, 27.10.2026) 12631 V e fara semnal, deci criptarea nu e masurata; drumul imaginii e probat pe receptor cu un flux de proba invelit la fel. Fluxurile Abertis care se prind in Gorj (11222/11302/11347/11382 H) sunt criptate (masurat)."
     },
     {
       "id": "dab_bundesmux_de",

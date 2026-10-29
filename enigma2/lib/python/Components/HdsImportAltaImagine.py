@@ -584,7 +584,26 @@ def _dupa_import(rezultat, alegeri, sursa, rad=None, dosar_etc=None):
 	_schimba(rad, stare=GATA, rezumat=r, vazut_tv=False, vazut_web=False)
 	_jurnal("importul s-a terminat: ok=%s tv=%d radio=%d buchete=%d temporizatoare=%d setari=%d" % (r["ok"], r["tv"],
 		r["radio"], r["buchete"], r["temporizatoare"], r["setari"]))
+	if r.get("ok") and r.get("buchete", 0) > 1:
+		porneste_lista_buchetelor()
 	_arata_rezumatul(rad)
+
+
+def porneste_lista_buchetelor():
+	"""Mai multe buchete aduse: tasta albastra (Buchete) deschide lista lor, Favorite primul,
+	chiar daca setarea "mai multe buchete" fusese oprita de mana. True daca setarea s-a schimbat acum."""
+	try:
+		from Components.config import config, configfile
+		if config.usage.multibouquet.value:
+			return False
+		config.usage.multibouquet.value = True
+		config.usage.multibouquet.save()
+		configfile.save()
+		_jurnal("mai multe buchete aduse: lista buchetelor pornita")
+		return True
+	except Exception as eroare:
+		_jurnal("lista buchetelor: %s" % eroare.__class__.__name__)
+		return False
 
 
 def _arata_rezumatul(rad=None):

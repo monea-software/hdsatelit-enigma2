@@ -1,6 +1,163 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.10",
+   "build": "0000610202610290805",
+   "data": "29.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Editorul de canale, pe receptor și în interfața web: muți, copiezi, redenumești, ascunzi și ștergi canale și buchete, cu anulare, copie de siguranță și lista schimbărilor înainte de salvare.",
+     "en": "The channel editor, on the receiver and in the web interface: move, copy, rename, hide and delete channels and bouquets, with undo, a backup copy and the list of changes before saving."
+    },
+    {
+     "fel": "nou",
+     "ro": "În interfața web, editorul are și modul avansat, cu transponderele și detaliile canalului, siglele puse pe canale, verificarea listei, importul cu diferențele și căutarea cu * sau cu o literă greșită.",
+     "en": "In the web interface the editor also has an advanced mode with transponders and channel details, logos set on channels, a list check, import that shows the differences and search with * or a typo."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pe receptor, editorul se deschide din lista de canale pe satelitul sau furnizorul ei, importă și scrie lista pe stick, ca arhivă sau m3u, și arată siglele canalelor pe rânduri.",
+     "en": "On the receiver the editor opens from the channel list on its satellite or provider, imports and writes the list on a USB stick, as an archive or m3u, and shows the channel logos on the rows."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când pornirea nu reușește, receptorul arată un ecran de diagnostic cu un cod de eroare și cu ce a citit despre placă, procesor și drivere. Fă o poză ecranului și trimite-o pe forumul nostru.",
+     "en": "When startup fails, the receiver shows a diagnostic screen with an error code and what it read about the board, the processor and the drivers. Take a photo of the screen and send it to our forum."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă interfața nu poate porni, receptorul arată pe afișajul din față codul și adresa lui, pe televizor ecranul de diagnostic, iar aceleași date se văd într-o pagină deschisă de pe calculator.",
+     "en": "If the interface cannot start, the receiver shows the code and its address on the front display, the diagnostic screen on the TV, and the same details on a page opened from a computer."
+    },
+    {
+     "fel": "nou",
+     "ro": "Forumul receptorului tău, pe receptor și în interfața web: citești discuția modelului tău, tradusă în limba ta, iar ca beta tester scrii mesaje și pui capturi de ecran.",
+     "en": "Your receiver's forum, on the receiver and in the web interface: read your model's thread, translated into your language, and as a beta tester write posts and add screenshots."
+    },
+    {
+     "fel": "nou",
+     "ro": "Tasta de captură salvează ecranul pe stick sau, fără stick, în memoria receptorului: pe telecomandă e a treia tastă cu desen de ecran, pe o tastatură USB Print Screen.",
+     "en": "The screenshot button saves the screen to a USB stick or, without one, to the receiver's memory: on the remote it is the third button with a screen drawing, on a USB keyboard Print Screen."
+    },
+    {
+     "fel": "nou",
+     "ro": "Când adaugi o poză la un mesaj, se deschide direct galeria capturilor, cu cea mai nouă întâi; în interfața web poți face și o captură pe loc sau urca o poză de pe calculator.",
+     "en": "When you add a picture to a post, the screenshot gallery opens directly, newest first; in the web interface you can also take a screenshot on the spot or upload a picture from your computer."
+    },
+    {
+     "fel": "nou",
+     "ro": "Numele tău de pe forum se schimbă cu MENU pe ecranul forumului, în pagina web a forumului sau la Apariția publică, și apare imediat la toate mesajele tale.",
+     "en": "Your forum name is changed with MENU on the forum screen, on the forum web page or in Public profile, and it shows at once on all your posts."
+    },
+    {
+     "fel": "nou",
+     "ro": "Dacă receptorul nu pornește, trimite singur un raport tehnic anonim, fără date personale, și arată codul lui pe afișajul din față.",
+     "en": "If the receiver does not start, it sends an anonymous technical report by itself, with no personal data, and shows its code on the front display."
+    },
+    {
+     "fel": "nou",
+     "ro": "Jurnalele celorlalte sloturi, în Setări > Sistem și dispozitive: ce au lăsat celelalte sloturi la o pornire ratată pleacă dintr-o apăsare, pe stick și la echipa noastră.",
+     "en": "Logs of the other slots, in Settings > System & Devices: what the other slots left behind after a failed start goes out with one press, to a USB stick and to our team."
+    },
+    {
+     "fel": "nou",
+     "ro": "Parola receptorului, în Setări > Rețea și internet și în interfața web: îți alegi parola pentru SSH și SFTP, o vezi oricând acolo, iar cu parola se intră numai din rețeaua ta de acasă.",
+     "en": "Receiver password, in Settings > Network & Internet and in the web interface: you choose the password for SSH and SFTP, see it there at any time, and the password works only from your home network."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "VERDE apăsat scurt cât te uiți la televizor deschide Extensii și aplicații, ca în alte imagini; pe un canal cu subcanale arată întâi lista lor. Altă acțiune o alegi în Butoane colorate și taste rapide.",
+     "en": "A short press of GREEN while watching TV opens Plugins & Applications, as in other receiver software; on a channel with subservices it shows their list first. Choose another action in the colour button settings."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "DVB-T2 prin satelit știe și fluxurile de distribuție spaniole de pe 30W: multiplexul purtat într-un PID e desfăcut și canalele lui intră în listă; fluxurile criptate sunt anunțate ca atare.",
+     "en": "DVB-T2 via satellite now also handles the Spanish distribution feeds on 30W: the multiplex carried in one PID is unpacked and its channels go to the list; encrypted feeds are reported as such."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Subtitrările DVB citite ca text apar mereu ca text și se traduc, chiar dacă un cuvânt e citit greșit; scrisul înalt și îngust se citește acum corect.",
+     "en": "DVB subtitles read as text now always appear as text and get translated, even if a word is misread; tall, narrow lettering is now read correctly."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Diagnosticul pornirii se poate citi oricând în Meniu, la Informații despre sistem, și în interfața web, unde un buton copiază tot textul.",
+     "en": "The startup diagnostics can be read at any time in Menu, under System information, and in the web interface, where one button copies all the text."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "La o pornire reușită nu mai apare nicio notă în plus pe ecran, nici pe modelele încă neconfirmate.",
+     "en": "After a successful startup no extra note appears on the screen any more, also on models not yet confirmed."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Pe Octagon și pe celelalte receptoare cu același program al plăcii pentru imagine, interfața pornește după el, cu aceiași pași ca software-ul lor obișnuit, ca imaginea să ajungă la televizor.",
+     "en": "On Octagon and the other receivers with the same board video program, the interface now starts after it, with the same steps as their usual software, so the picture reaches the TV."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Extensiile scrise pentru versiunea veche a limbajului, care nu mai merg aici, sunt recunoscute înainte de instalare: Extensii spune de ce și oferă înlocuitorul din feedurile noastre, când există.",
+     "en": "Extensions written for the old version of the programming language, which no longer run here, are recognised before installing: Extensions says why and offers the replacement from our feeds, if any."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Tasta HELP și Ajutor din Informații despre sistem deschid ajutorul receptorului; paginile lui, care merg fără internet, vin cu o actualizare următoare.",
+     "en": "The HELP button and Help under System information open the receiver help; its pages, which work without internet, come with a later update."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Tasta albastră deschide lista buchetelor, cu Favorite primul, și după importul canalelor din alt software. Numele buchetului Favorite apare în limba meniului, și în editorul de canale.",
+     "en": "The blue button opens the list of bouquets, with Favourites first, also after importing channels from other software. The Favourites bouquet name appears in the menu language, also in the channel editor."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Beta tester are un aspect nou, în stilul meniurilor: vezi dintr-o privire ce primești ca tester și ultimele mesaje de pe forum, iar asistența de la distanță se cere numai din meniul testerului.",
+     "en": "Beta tester has a new look, in the style of the menus: see at a glance what you get as a tester and the latest forum posts, and remote assistance is requested only from the tester menu."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Pe Octagon și pe primul receptor V10, bara de calitate a semnalului arată acum valoarea bună, nu 1 la sută cu imagine bună.",
+     "en": "On Octagon and on the first V10 receiver the signal quality bar now shows the right value, not 1 percent with a good picture."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Un receptor instalat în mai multe sloturi sau reinstalat se numără o singură dată ca beta tester.",
+     "en": "A receiver installed in several slots or reinstalled is counted only once as a beta tester."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Ecranul receptorului din pagina web arată din nou imaginea canalului și imediat după pornire sau după schimbarea canalului, nu numai meniurile de pe ecran.",
+     "en": "The receiver screen in the web page shows the channel picture again, also right after start-up or a channel change, not only the on-screen menus."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon, mesajul de la pornire arată calea bună de recuperare, cu Standby ținut apăsat și Recovery From USB, nu pe cea a altui receptor.",
+     "en": "On Octagon receivers, the startup message now shows the right recovery steps, holding Standby and choosing Recovery From USB, not those of another receiver."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Asistența de la distanță trimite modelul și versiunea corecte ale receptorului, iar meniul testerului arată ultima trimitere imediat după ce pleacă.",
+     "en": "Remote assistance sends the receiver's correct model and version, and the tester menu shows the last sending right after it leaves."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon și pe primul receptor V10, tastele telecomenzii lor merg acum: înregistrarea, pauza și redarea, derularea, oprirea, GALBEN pentru sunet, iar CH+ și CH- schimbă canalul.",
+     "en": "On Octagon and on the first V10 receiver the buttons of their remote now work: recording, pause and play, rewind and fast forward, stop, YELLOW for the sound, and CH+ and CH- change the channel."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pe Octagon și pe primul receptor V10, decodorul imaginii pornește acum ca în software-ul obișnuit al acestor receptoare, ca imaginea canalelor să apară pe tot ecranul.",
+     "en": "On Octagon and on the first V10 receiver the picture decoder now starts as in the usual software of these receivers, so that the channel picture appears on the whole screen."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Discul legat la portul SATA al receptorului, intern sau eSATA, e acum folosit ca disc pentru înregistrări, la fel ca un disc USB.",
+     "en": "A disk on the receiver's SATA port, internal or eSATA, is now used as the recording disk, just like a USB disk."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.9",
    "build": "0069202610272241",
    "data": "27.10.2026",

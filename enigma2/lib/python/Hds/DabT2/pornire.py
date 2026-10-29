@@ -72,6 +72,22 @@ from . import buchete, compat, coordonator, fir, fundal, jurnal, marcaj, proces,
 from . import profil as profil_mod
 from .limba import _
 
+STAT_T2 = '/tmp/hdst2mi-stat.json'      # statisticile binarului T2 (t2/motor/releu_t2.py STAT_BINAR, t2mi_decap -j)
+
+
+def flux_criptat(cale=STAT_T2):
+    """Binarul T2 a primit pachete pe PID-ul feed-ului, dar toate cu bitii de criptare pusi (si nimic iesit): un flux
+    criptat, nu o lipsa de semnal. Fisierul e mic (sub 16 KB, in /tmp)."""
+    try:
+        with open(cale) as f:
+            st = json.load(f)
+    except (IOError, OSError, ValueError):
+        return False
+    try:
+        return int(st.get('criptate') or 0) > 0 and int(st.get('iesite') or 0) == 0
+    except (TypeError, ValueError, AttributeError):
+        return False
+
 # Duratele si termenele merg pe ceasul monoton (compat.monoton): nu sare cand ora sistemului se potriveste din retea
 # dupa pornire. time.time() ramane numai pentru ora adevarata (marcajul de pe disc, receptie.json, repunerea din /dabt2).
 _monoton = compat.monoton
@@ -1264,7 +1280,12 @@ class Controlor(object):
             else:
                 self.rotire = False
             if _monoton() > self._termen:
-                self._esec(_('Releul nu a primit date de la %s.') % (self.feed.get('nume') or self.feed.get('id')))
+                nume = self.feed.get('nume') or self.feed.get('id')
+                if self.profil.tip == 't2' and flux_criptat():
+                    # datele vin, dar toate pachetele PID-ului au bitii de criptare: nu e o lipsa de semnal
+                    self._esec(_('Fluxul %s e criptat si nu se poate desface.') % nume)
+                    return
+                self._esec(_('Releul nu a primit date de la %s.') % nume)
                 return
             if self._tuner_8001_refuzat():
                 return

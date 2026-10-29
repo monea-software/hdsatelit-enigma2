@@ -60,6 +60,12 @@ eDVBAudio::eDVBAudio(eDVBDemux *demux, int dev)
 	m_fd = ::open(filename, O_RDWR);
 	if (m_fd < 0)
 		eWarning("%s: %m", filename);
+#if HAVE_HISILICON_LIBREADER
+	/* boards with libreader: the decoder takes its data from the demux, as the images made for these boards set it
+	   when a decoder is opened (a player that ended without its last commands may have left source MEMORY) */
+	else if (::ioctl(m_fd, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_DEMUX) < 0)
+		eDebug("AUDIO_SELECT_SOURCE DEMUX failed (%m)");
+#endif
 #if HAVE_DVB_API_VERSION < 3
 	sprintf(filename, "/dev/dvb/card%d/demux%d", demux->adapter, demux->demux);
 #else
@@ -350,6 +356,14 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 	{
 		m_sn = eSocketNotifier::create(eApp, m_fd, eSocketNotifier::Priority);
 		CONNECT(m_sn->activated, eDVBVideo::video_event);
+#if HAVE_HISILICON_LIBREADER
+		/* boards with libreader: showiframe there is a plain program that selects source MEMORY on video0, writes the
+		   backdrop and exits without selecting the demux again. The images made for these boards select the demux
+		   source when a decoder is opened; without it live video stays black on video0 (sound, the PiP decoder and
+		   the media player, which sets the source itself, work). setState closes an open still picture first. */
+		if (::ioctl(m_fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX) < 0)
+			eDebug("VIDEO_SELECT_SOURCE DEMUX failed (%m)");
+#endif
 	}
 	eDebug("Video Device: %s", filename);
 #if HAVE_DVB_API_VERSION < 3

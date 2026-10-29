@@ -18,6 +18,14 @@
 #   stop (rc0 si rc6, S39: dupa oprirea lui syslogd la K20 si inainte de demontare la S40): scrie semnul opririi
 #     curate. O oprire fara rc0/rc6 (pana de curent, sysrq, ceasul hardware, caderea nucleului) il lasa lipsa.
 # La prima pornire dupa scrierea imaginii nu exista nici semn, nici jurnal: nu se copiaza nimic.
+#   Tot la start, primul lucru: pe o pornire in dubiu (interfata acestei imagini n-a pornit inca niciodata pe receptor,
+#     adica lipseste /etc/hds-interfata-pornita, sau lipsesc driverele: /dev/fb0, /dev/dvb/adapter0) porneste in fundal
+#     urmarirea pornirii (/usr/bin/hds-rezerva.sh urmareste, tools/hds-rezerva.sh.in din enigma2): pasul pornirii pe
+#     afisajul din fata si pe televizor, pana apare interfata, si diagnosticul cand nu apare. Pe orice alta pornire
+#     numai cateva teste de fisier, nimic pornit. HDS_REZERVA_SEMN, HDS_REZERVA_SINE: numai pentru probele de pe PC.
+#   Tot la start, la fiecare pornire: urmarirea pasilor pornirii si raportul unei porniri ratate (/usr/bin/hds-raport.sh
+#     urmareste, tools/hds-raport.sh.in din enigma2), in fundal, cand scriptul exista (o imagine fara el: nimic).
+#     HDS_RAPORT_SINE: numai pentru probele de pe PC.
 
 D=${HDS_JURNAL_DOSAR:-/home/root/logs}
 SEMN=$D/.oprire-curata
@@ -25,6 +33,14 @@ CADERE=$D/messages.cadere
 
 case "$1" in
 start)
+	if [ -x "${HDS_RAPORT_SINE:-/usr/bin/hds-raport.sh}" ]; then
+		"${HDS_RAPORT_SINE:-/usr/bin/hds-raport.sh}" urmareste < /dev/null > /dev/null 2>&1 &
+	fi
+	if [ -f /etc/hdsatelit-model ] && [ -x "${HDS_REZERVA_SINE:-/usr/bin/hds-rezerva.sh}" ]; then
+		if [ ! -f "${HDS_REZERVA_SEMN:-/etc/hds-interfata-pornita}" ] || [ ! -e /dev/fb0 ] || [ ! -e /dev/dvb/adapter0 ]; then
+			"${HDS_REZERVA_SINE:-/usr/bin/hds-rezerva.sh}" urmareste < /dev/null > /dev/null 2>&1 &
+		fi
+	fi
 	if [ -e "$SEMN" ]; then
 		rm -f "$SEMN"
 		exit 0

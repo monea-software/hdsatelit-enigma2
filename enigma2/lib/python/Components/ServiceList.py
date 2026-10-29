@@ -101,6 +101,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 		# addService peste radacina (lista "Sateliti" pe grupe le pune asa, nu prin radacina)
 		self.hdsEticheteDate = {}
 		self.hdsAdaugate = []
+		# drumurile buchetelor aratate in lista tuturor buchetelor cu numele tradus (hdsNumeleBuchetelor)
+		self.hdsNumite = set()
 		if hasattr(self.l, "addStreamed"):
 			self.hdsPictogramaTransmis(resolveFilename(SCOPE_CURRENT_SKIN, PICTOGRAMA_TRANSMIS))
 			self.l.setStreamedLabel(_("În rețea"))
@@ -340,6 +342,59 @@ class ServiceList(HTMLComponent, GUIComponent):
 		for x in self.onSelectionChanged:
 			x()
 
+	# ---- buchetul Favorite in lista tuturor buchetelor: numele lui implicit din fisier ("Favourites (TV)", textul
+	# englezesc pus de enigma2) se arata tradus, ca in titlul listei (ChannelSelection.getServiceName: "Favorite").
+	# Fisierul buchetului ramane neatins. Randul primeste o referinta cu acelasi drum si cu nume: pentru o referinta de
+	# buchet cu nume, eServiceFactoryDVB::info da numele referintei (eStaticServiceDVBInformation), nu #NAME din fisier.
+	# Spre restul codului (getCurrent, getMarked) iese referinta din fisier, fara nume.
+	NUME_FAVORITE = ("Favourites (TV)", "Favourites (Radio)", "Favourites")
+
+	def hdsNumeleBuchetelor(self):
+		self.hdsNumite = set()
+		root = self.root
+		if root is None or self.instance is None or 'FROM BOUQUET "bouquets.' not in (root.getPath() or ""):
+			return
+		try:
+			handler = eServiceCenter.getInstance()
+			lista = handler.list(root)
+			randuri = []
+			while lista is not None:
+				s = lista.getNext()
+				if not s.valid():
+					break
+				randuri.append(s)
+			numite = {}
+			for i, s in enumerate(randuri):
+				if not (s.flags & eServiceReference.isDirectory) or s.getName():
+					continue
+				info = handler.info(s)
+				if info is not None and info.getName(s) in self.NUME_FAVORITE:
+					numite[i] = _("Favourites")
+			if not numite:
+				return
+			acum = self.getCurrent()
+			# ca la listele facute din Python (ChannelSelection: setRoot(..., True), addService, FillFinished)
+			self.l.setRoot(root, True)
+			for i, s in enumerate(randuri):
+				if i in numite:
+					s = eServiceReference(s.toString())
+					s.setName(numite[i])
+					self.hdsNumite.add(s.getPath())
+				self.l.addService(s)
+			self.l.FillFinished()
+			self.l.sort()
+			if acum.valid():
+				self.l.setCurrent(acum)
+		except Exception as e:
+			print("[ServiceList] numele buchetelor: %s" % e)
+
+	def hdsFaraNume(self, ref):
+		"""Referinta din fisier pentru un rand cu numele tradus (hdsNumeleBuchetelor); celelalte raman cum sunt."""
+		numite = getattr(self, "hdsNumite", None)
+		if numite and ref.getName() and ref.getPath() in numite:
+			ref.setName("")
+		return ref
+
 	def setCurrent(self, ref):
 		self.l.setCurrent(ref)
 		# serviciul cautat nu e in lista (de pilda postul de acum, din alt buchet): cursorul ramanea dupa ultimul rand,
@@ -348,6 +403,13 @@ class ServiceList(HTMLComponent, GUIComponent):
 			self.instance.moveSelectionTo(0)
 
 	def getCurrent(self):
+		r = eServiceReference()
+		self.l.getCurrent(r)
+		return self.hdsFaraNume(r)
+
+	def hdsCurentAfisat(self):
+		"""Randul ales cum e desenat in lista (cu numele tradus al buchetului Favorite, hdsNumeleBuchetelor): pentru
+		panoul cu numele randului ales. Restul codului foloseste getCurrent (referinta din fisier)."""
 		r = eServiceReference()
 		self.l.getCurrent(r)
 		return r
@@ -402,6 +464,7 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsLeagaTransmise(True)
 		self.hdsTransmiseAcum()
 		self.hdsLeagaDvbI(True)
+		self.hdsNumeleBuchetelor()
 
 	def preWidgetRemove(self, instance):
 		instance.setContent(None)
@@ -440,6 +503,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.l.setRoot(root, justSet)
 		if not justSet:
 			self.l.sort()
+			self.hdsNumeleBuchetelor()
+		else:
+			self.hdsNumite = set()
 		self.hdsEticheteDvbI()
 		self.selectionChanged()
 
@@ -497,7 +563,7 @@ class ServiceList(HTMLComponent, GUIComponent):
 		ref = eServiceReference()
 		marked = [ ]
 		while i.markedQueryNext(ref) == 0:
-			marked.append(ref.toString())
+			marked.append(self.hdsFaraNume(ref).toString())
 			ref = eServiceReference()
 		return marked
 

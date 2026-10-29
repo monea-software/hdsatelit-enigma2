@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsAsistenta.py: „Ajutor de la distanta" pentru beta testeri, versiunea 1. Oprita din fabrica; nu ruleaza nimic,
-# nicio cheie, nicio legatura pana nu o porneste omul din Meniu > Setari > Retea si internet > Asistenta de la distanta
-# (ecranul Screens/HdsAsistenta.py; meniul testerilor poate deschide acelasi ecran) sau din pagina web /asistenta (cu
-# consimtamantul si confirmarea pe televizor). O singura logica pentru televizor si pentru web.
+# nicio cheie, nicio legatura pana nu o porneste omul din meniul testerului: Meniu > Setari > Beta tester > Cere ajutor
+# de la distanta (ecranul Screens/HdsAsistenta.py; numai beta testerii pot da acces la receptor) sau din pagina web
+# /asistenta (numai pentru testeri, cu consimtamantul si confirmarea pe receptor). O singura logica pentru receptor si
+# pentru web. Modelul si versiunea trimise serverului sunt cele ale programului de testeri (Components/HdsBetaTester.py).
 #
 # Cum merge (fara tunel, fara shell): dupa consimtamant, receptorul se inregistreaza prin HTTPS la serverul HD Satelit,
 # primeste un cod de 6 cifre, il arata mare pe ecran si intreaba din cateva in cateva secunde daca are o cerere. O
@@ -127,8 +128,38 @@ def textDurata(minute):
 
 
 def drumMeniu():
-	"""Calea de pe televizor spre ecran (pentru semnul de pe ecran si pentru pagina web), in limba receptorului."""
-	return " > ".join(_t(p) for p in ("Menu", "Settings", "Network & Internet", "Asistență de la distanță"))
+	"""Calea de pe receptor spre ecran (pentru semnul de pe ecran si pentru pagina web), in limba receptorului: numai
+	din meniul testerului (doar beta testerii pot da acces la receptor)."""
+	return " > ".join(_t(p) for p in ("Menu", "Settings", "Beta tester", "Cere ajutor de la distanță"))
+
+
+# de ce s-a oprit o sesiune, pe intelesul omului (randul "oprită (...)" din jurnal); cheile sunt motivele din cod
+MOTIVE_OPRIRE = {
+	"de om": N_("de om"),
+	"de om (web)": N_("din pagina web"),
+	"fara-server": N_("serverul nu răspunde"),
+	"inregistrare-refuzata": N_("înregistrare refuzată"),
+	"cod-expirat": N_("codul a expirat"),
+	"termen": N_("s-a terminat timpul ales"),
+	"respins": N_("cererea a fost respinsă"),
+	"inchis": N_("cererea a fost închisă"),
+	"expirat": N_("cererea a expirat"),
+}
+
+# de unde a pornit o sesiune, pe intelesul omului (randul "pornită (...)" din jurnal); cheile sunt valorile de_la
+ORIGINI = {
+	"televizor": N_("de pe receptor"),
+	"web": N_("din pagina web"),
+}
+
+
+def textMotiv(motiv):
+	"""Motivul opririi pentru jurnal: textul lui tradus, altfel (eroare: ...) cuvantul "eroare" tradus si numele."""
+	if motiv in MOTIVE_OPRIRE:
+		return _t(MOTIVE_OPRIRE[motiv])
+	if motiv.startswith("eroare: "):
+		return "%s: %s" % (_t("eroare"), motiv[len("eroare: "):])
+	return motiv
 
 
 def _acum():
@@ -252,7 +283,27 @@ def _ceruta(url, metoda, corp, antete):
 
 # ---------------------------------------------------------------- modelul si versiunea
 
+def _beta():
+	"""Components.HdsBetaTester (modelul si versiunea, la fel ca programul de testeri), sau None fara el."""
+	try:
+		from Components import HdsBetaTester
+		return HdsBetaTester
+	except Exception:
+		return None
+
+
 def _model():
+	"""Modelul receptorului, acelasi ca la programul de testeri: machinebuild-ul din paza modelului (verdictul
+	„potrivit”), tinut minte de HdsBetaTester sau calculat aici (suntem pe firul sesiunii); altfel cel spus de
+	sistem."""
+	B = _beta()
+	if B is not None:
+		try:
+			m = (B._modelTinut() or ("",))[0] or B.modelSiPaza()[0]
+			if m:
+				return str(m)[:40]
+		except Exception as e:
+			_jurnal("modelul: %s" % e)
 	try:
 		from boxbranding import getMachineBuild
 		m = getMachineBuild()
@@ -272,6 +323,16 @@ def _model():
 
 
 def _versiuneImagine():
+	"""Versiunea imaginii (ex. 0.6.10), aceeasi ca la programul de testeri; altfel randul version= din
+	/etc/image-version."""
+	B = _beta()
+	if B is not None:
+		try:
+			v = B.versiuneImagine()
+			if v:
+				return str(v)[:40]
+		except Exception as e:
+			_jurnal("versiunea: %s" % e)
 	try:
 		with open(IMAGE_VERSION) as f:
 			for rand in f:
@@ -363,8 +424,9 @@ class Sesiune(object):
 		except Exception:
 			self.dosar = None
 		self.jurnal = Jurnal(self.dosar)
-		self.jurnal.adauga(_t("pornita (%s, nivel %s, %d minute, text v%d)")
-			% (self.de_la, self.nivel, self.durata_min, self.versiune_text))
+		self.jurnal.adauga(_t("pornită (%s, nivel %s, %d minute, text v%d)")
+			% (_t(ORIGINI[self.de_la]) if self.de_la in ORIGINI else self.de_la, self.nivel, self.durata_min,
+			self.versiune_text))
 		self._pune_stare(INREGISTRARE)
 		self._fir = threading.Thread(target=self._ruleaza, name="HdsAsistenta")
 		self._fir.daemon = True
@@ -418,7 +480,7 @@ class Sesiune(object):
 			_jurnal("firul: %s" % e)
 			self.opreste("eroare: %s" % type(e).__name__)
 		finally:
-			self.jurnal.adauga(_t("oprita (%s)") % self.motiv_oprire if self.motiv_oprire else _t("oprita"))
+			self.jurnal.adauga(_t("oprită (%s)") % textMotiv(self.motiv_oprire) if self.motiv_oprire else _t("oprită"))
 			self._pune_stare(OPRIT)
 			self._curata()
 			_uita(self)
@@ -428,11 +490,11 @@ class Sesiune(object):
 			"durata_min": self.durata_min, "limba": self.limba}
 		cod, o = _ceruta(self.server + "inregistreaza", "POST", corp, {})
 		if cod == 0 or cod >= 500 or cod == 404:
-			self.jurnal.adauga(_t("nu pot ajunge la serverul de asistenta"))
+			self.jurnal.adauga(_t("nu pot ajunge la serverul de asistență"))
 			self.opreste("fara-server")
 			return False
 		if not (200 <= cod < 300) or not o.get("id") or not o.get("secret") or not o.get("cod"):
-			self.jurnal.adauga(_t("serverul a refuzat inregistrarea (%s)") % cod)
+			self.jurnal.adauga(_t("serverul a refuzat înregistrarea (%s)") % cod)
 			self.opreste("inregistrare-refuzata")
 			return False
 		self.id = str(o["id"])[:64]
@@ -442,14 +504,14 @@ class Sesiune(object):
 		self.stare = ASTEAPTA
 		self._scrie_stare()
 		self._pune_stare(ASTEAPTA)
-		self.jurnal.adauga(_t("cod aratat pe ecran, astept aprobarea"))
+		self.jurnal.adauga(_t("cod arătat pe ecran, aștept aprobarea"))
 		return True
 
 	def _asteapta_aprobare(self):
 		inceput = _acum()
 		while not self._stop.is_set():
 			if _acum() - inceput > COD_ASTEPTARE_MAX_S:
-				self.jurnal.adauga(_t("codul a expirat fara aprobare"))
+				self.jurnal.adauga(_t("codul a expirat fără aprobare"))
 				self.opreste("cod-expirat")
 				return False
 			cod, o = _ceruta(self.server + "stare?id=" + self.id, "GET", None, {"X-Secret": self.secret})
@@ -460,7 +522,7 @@ class Sesiune(object):
 				self.jurnal.adauga(_t("conectat"))
 				return True
 			if stare in ("respins", "inchis", "expirat"):
-				self.jurnal.adauga(_t("cererea a fost %s") % stare)
+				self.jurnal.adauga(textMotiv(stare))
 				self.opreste(stare)
 				return False
 			self._asteapta_pas(PAS_INTREBARE_S)
@@ -486,7 +548,7 @@ class Sesiune(object):
 	def _face_cerere(self, exterior):
 		bun, date, motiv = verificaCerere(exterior, self.id, self.ultim_seq)
 		if not bun:
-			self.jurnal.adauga(_t("cerere refuzata: %s") % motiv)
+			self.jurnal.adauga(_t("cerere refuzată: %s") % motiv)
 			# o cerere cu seq nou dar refuzata nu trebuie sa blocheze: o sarim daca are un seq citibil. Mutam ultim_seq
 			# dupa un seq NEVERIFICAT: in modelul cutiei postale asta nu slabeste apararea (un server rau poate oricum
 			# sa nu livreze cereri); apararea impotriva reluarii e ca fiecare cerere e semnata cu id+seq si verificata.
@@ -497,12 +559,12 @@ class Sesiune(object):
 			return
 		seq, op, args = date["seq"], date["op"], date["args"]
 		intrare = Catalog.gaseste(op)
-		fel = _t("citire") if (intrare and intrare["fel"] == "citire") else _t("proba")
+		fel = _t("citire") if (intrare and intrare["fel"] == "citire") else _t("probă")
 		eticheta = _t(intrare["text"]) if intrare else op
 		self.jurnal.adauga("%s: %s" % (fel, eticheta))
 		_anunta()
 		rez = Broker.ruleaza(op, args, self.ctx)
-		self.jurnal.adauga(_t("    raspuns: cod %d, %d octeti") % (rez.cod_iesire, rez.marime()))
+		self.jurnal.adauga(_t("    răspuns: cod %d, %d octeți") % (rez.cod_iesire, rez.marime()))
 		self._trimite_raspuns(seq, op, rez)
 		self.ultim_seq = seq
 		self._scrie_stare()
@@ -586,23 +648,23 @@ def porneste(nivel="A", durata_min=DURATA_IMPLICITA_MIN, limba="ro", de_la="tele
 	sesiune e deja activa."""
 	global _sesiune
 	if not disponibil():
-		return False, _t("Functia nu e disponibila pe aceasta imagine.")
+		return False, _t("Funcția nu e disponibilă pe această imagine.")
 	with _lacat:
 		if _sesiune is not None and _sesiune.activa():
-			return False, _t("Asistenta merge deja.")
+			return False, _t("Asistența merge deja.")
 		ses = Sesiune(nivel, durata_min, limba, SERVER, de_la=de_la, versiune_text=versiune_text, ctx=ctx)
 		_sesiune = ses
 	ses.porneste()
-	return True, _t("Asistenta a pornit.")
+	return True, _t("Asistența a pornit.")
 
 
 def opreste(motiv="de om"):
 	"""(reusit, mesaj): opreste sesiunea de acum, daca exista."""
 	ses = _sesiune
 	if ses is None or not ses.activa():
-		return False, _t("Asistenta nu merge.")
+		return False, _t("Asistența nu merge.")
 	ses.opreste(motiv)
-	return True, _t("Asistenta s-a oprit. Cheia a fost stearsa.")
+	return True, _t("Asistența s-a oprit. Cheia a fost ștearsă.")
 
 
 def stare():
@@ -654,7 +716,7 @@ def reia(ctx=None):
 	ses.pana_la_ora = pana
 	ses.dosar = s.get("dosar")
 	ses.jurnal = Jurnal(ses.dosar)
-	ses.jurnal.adauga(_t("reluata dupa repornirea interfetei"))
+	ses.jurnal.adauga(_t("reluată după repornirea interfeței"))
 	asteapta = bool(s.get("asteapta")) and bool(s.get("cod"))
 	if asteapta:
 		# repornirea a venit inainte de aprobare: codul ramane acelasi, receptorul asteapta mai departe

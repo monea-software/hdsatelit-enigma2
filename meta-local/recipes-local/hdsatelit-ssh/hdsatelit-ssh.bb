@@ -1,12 +1,13 @@
-SUMMARY = "HDSatelit: parola lui root facuta pe receptor si regula „Fără parolă în rețeaua locală”"
+SUMMARY = "HDSatelit: parola receptorului (root, pentru FTP, SSH si SFTP) si regula „Fără parolă în rețeaua locală”"
 DESCRIPTION = "La prima pornire receptorul face o parola intamplatoare pentru root (numai hash-ul intra in \
-/etc/shadow; textul clar ramane cat trebuie ca sa fie aratat in Setari > Retea > Acces SSH si in interfata web). \
-Programul parolei e folosit si de ecranul Acces SSH (Fa o parola noua). Fisierul de reguli pam_access al optiunii \
-Fara parola in reteaua locala vine oprit. Monea Software pentru HD Satelit."
+/etc/shadow; textul clar ramane pe receptor si se vede oricand in Setari > Retea > Parola receptorului si in interfata \
+web). Programul parolei e folosit si de acel ecran (Schimba parola, Fa o parola noua). Aceeasi parola merge pentru FTP, \
+SSH si SFTP, numai din reteaua de acasa (hds-ssh-retele-locale.conf). Fisierul de reguli pam_access al optiunii Fara \
+parola in reteaua locala vine oprit. Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
 PV = "0.1.0"
-PR = "r1"
+PR = "r2"
 
 SRC_URI = "file://hds-ssh-parola \
            file://hds-ssh \
@@ -55,6 +56,10 @@ do_install() {
 		bbfatal "hdsatelit-ssh: regulile din imagine lasa pe cineva fara parola"
 	fi
 	grep -q 'chpasswd -e' ${D}${sbindir}/hds-ssh-parola || bbfatal "hdsatelit-ssh: hds-ssh-parola fara chpasswd -e"
+	# parola aleasa de om numai pe stdin (niciodata in linia de comanda), cu hash-ul tinut langa textul clar
+	grep -q '^pune)' ${D}${sbindir}/hds-ssh-parola || bbfatal "hdsatelit-ssh: hds-ssh-parola fara comanda pune"
+	grep -q 'IFS= read -r p' ${D}${sbindir}/hds-ssh-parola || bbfatal "hdsatelit-ssh: hds-ssh-parola nu citeste parola de pe stdin"
+	grep -q '^HASH=\$DOSAR/hash$' ${D}${sbindir}/hds-ssh-parola || bbfatal "hdsatelit-ssh: hds-ssh-parola fara fisierul hash"
 	# cheile de pe stick numai la prima pornire dupa flash (semnul stick-citit, pus inainte de citire)
 	grep -q 'stick-citit' ${D}${sbindir}/hds-ssh-stick || bbfatal "hdsatelit-ssh: hds-ssh-stick fara semnul primei porniri"
 	# a doua verificare din /etc/pam.d/dropbear: numai rețeaua locala, apoi refuz pentru toti

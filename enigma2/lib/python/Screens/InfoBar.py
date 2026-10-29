@@ -36,6 +36,8 @@ from Screens.HelpMenu import HelpableScreen
 # KEY_WWW = showWWW, KEY_FAVORITES = openBouquetList, KEY_MODE = aspectSelection, KEY_SWITCHVIDEOMODE = vmodeSelection.
 # Pe Viper desenul cu benzi laterale e pe tasta din mijloc (227), deci formatul imaginii
 # e acolo (KEY_VMODE = toggleAspectRatio, legatura obisnuita); tasta din stanga (373) deschide setarile A/V.
+# A treia tasta cu desen de ecran (438) si Print Screen de pe o tastatura USB fac captura ecranului: legarea globala din
+# Components/HdsCapturi.py le ia pe orice ecran; actiunea "captura" de aici ramane pentru bara cand aceea lipseste.
 
 def hdsAlegeFormatImagine(session):
 	"""lista formatelor de imagine (config.av.aspectratio, ca in Setari); alegerea se aplica prin notificatorul din
@@ -231,8 +233,29 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		ecran.subtitleSelection()
 	elif actiune == "channellist":
 		ecran.openServiceList()
+	elif actiune == "captura":
+		ecran.hdsCaptura()
 	else:
 		print("[InfoBar] apasare lunga: actiune necunoscuta %r" % (actiune,))
+
+
+def hdsAreSubcanale(session):
+	"""Canalul de acum are subcanale (aceeasi intrebare ca InfoBarSubserviceSelection.subserviceSelection)."""
+	service = session.nav.getCurrentService()
+	subservices = service and service.subServices()
+	n = subservices and subservices.getNumberOfSubservices()
+	return bool(n and n > 0)
+
+
+def hdsActiuneVerdeScurt():
+	"""Actiunea aleasa pentru VERDE apasat scurt (Components/HdsTasteRapide.py, config.hds_buttons.green_short, implicit
+	"plugins"); "none" fara modul sau cand setarea nu se poate citi (atunci VERDE face ce facea: nimic fara subcanale)."""
+	try:
+		from Components.HdsTasteRapide import actiune_aleasa
+		return actiune_aleasa("green_short")
+	except Exception as e:
+		print("[InfoBar] verde scurt: setarea nu se poate citi: %s" % e)
+		return "none"
 
 
 class InfoBar(InfoBarBase, InfoBarShowHide,
@@ -271,6 +294,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				"setariVideo": (self.hdsSetariVideo, _("A/V Settings")),
 				"teletext": (self.hdsTeletext, _("View teletext...")),
 				"hbbtvRosu": (self.hdsHbbtvRosu, _("Aplicația HbbTV a canalului (butonul roșu)")),
+				"captura": (self.hdsCaptura, _("Captură de ecran")),
 			}, prio=2)
 
 		# HDSatelit: apasarea lunga a butoanelor colorate (data/keymap.xml, HdsTasteColorateActions), cu actiunea aleasa
@@ -587,6 +611,15 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		self.hdsRosuLuat = bool(rez)
 		return rez
 
+	def hdsCaptura(self):
+		"""Captura ecranului (Components/HdsCapturi.py, pe un fir; mesajul mic de dupa ea il pune modulul). O eroare
+		ramane numai in jurnal."""
+		try:
+			from Components import HdsCapturi
+			HdsCapturi.captureaza(self.session)
+		except Exception as e:
+			print("[InfoBar] captura: %s: %s" % (type(e).__name__, e))
+
 	# butoanele colorate tinute apasat (harta HdsTasteColorateActions); fara modulul HdsTasteRapide, nimic nu se schimba
 	def hdsTastaApasata(self, buton):
 		if buton == "red":
@@ -616,6 +649,18 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		except Exception as e:
 			print("[InfoBar] %s tinut apasat (%s): %s: %s" % (buton, actiune, type(e).__name__, e))
 		return True
+
+	def subserviceSelection(self):
+		"""VERDE apasat scurt cat te uiti la televizor (harta InfobarSubserviceSelectionActions, la eliberare; dupa o
+		apasare lunga eliberarea e oprita de HdsTasteColorateActions): pe un canal cu subcanale lista lor, ca inainte;
+		altfel actiunea aleasa in Butoane colorate si taste rapide, implicit pagina de pluginuri. Actiunea trece pe
+		aceeasi cale ca apasarea lunga (hdsPornesteTastaLunga): ecranul radio isi pastreaza tastele colorate, o eroare
+		ramane numai in jurnal."""
+		if hdsAreSubcanale(self.session):
+			return InfoBarSubserviceSelection.subserviceSelection(self)
+		actiune = hdsActiuneVerdeScurt()
+		if actiune != "none":
+			self.hdsPornesteTastaLunga("green", actiune)
 
 	def hdsFavorite(self):
 		# ca tasta albastra din lista de canale: lista buchetelor (favoritele), apoi lista se deschide

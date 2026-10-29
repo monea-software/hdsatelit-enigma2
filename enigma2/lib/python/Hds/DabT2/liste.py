@@ -62,7 +62,9 @@ URL_REZERVA = {'dab': 'https://www.hdsatelit.com/receptor/dab/frecvente.json',
 MARIME_SERVICII_MAX = 2 * 1024 * 1024
 FISIER_SERVICII_STB = 'servicii-stb.json'          # acelasi nume ca buchete.FISIER_SERVICII_STB
 DIR_IMPLICIT = {'dab': '/etc/enigma2/hdsdab', 't2': '/etc/enigma2/hdst2mi'}
-FEL = {'dab': ('edi', 'ts2na', 'ts2na12', 'tsniv2ni'), 't2': ('t2mi',)}
+# t2: t2mi (DVB-T2 prin T2-MI) si abertis (un TS terestru intreg in payload-ul unui PID privat, fara T2-MI: fluxurile
+# de distributie spaniole de pe 30W; desfacut de t2mi_decap -A)
+FEL = {'dab': ('edi', 'ts2na', 'ts2na12', 'tsniv2ni'), 't2': ('t2mi', 'abertis')}
 PRIORITATE = ('manual', 'scanat', 'descarcat', 'incorporat')
 FISIER = {'manual': 'manual.json', 'scanat': 'scanate.json', 'descarcat': 'frecvente.json'}
 POLARIZARI = ('H', 'V', 'L', 'R')

@@ -46,7 +46,7 @@ else:
     def _din_octeti(b):
         return int.from_bytes(b, 'big')
 
-__all__ = ['Decapsulator', 'crc32_mpeg', 'crc8_dvb', 'PACHET_NUL', 'KBCH']
+__all__ = ['Decapsulator', 'TsInPid', 'crc32_mpeg', 'crc8_dvb', 'PACHET_NUL', 'KBCH']
 
 # ---------------------------------------------------------------------------
 # CRC-uri
@@ -142,6 +142,147 @@ class _StarePlp(object):
         self.crc_ant = None   # NM: CRC-8 al pachetului anterior (doar cu verifica_up)
         self.iesite = 0
         self.nule = 0
+
+
+class TsInPid(object):
+    """Un TS intreg purtat direct in payload-ul unui PID, fara T2-MI (felul abertis: fluxurile de distributie spaniole de
+    pe 30W). Rezerva in Python a lui bin/t2mi_decap -A: payload-urile pachetelor PID-ului (dupa antet si campul de
+    adaptare), puse cap la cap, sunt pachetele TS de 188 de octeti ale multiplexului; resincronizare pe 0x47 la fiecare
+    188. Pachetele cu bitii de criptare pusi se numara si se arunca; o pierdere (CC, TEI) reia sincronizarea.
+    Aceeasi interfata ca Decapsulator: adauga(bloc_ts) -> bytes, goleste(), stare, plp_uri."""
+
+    def __init__(self, pid):
+        self.pid = int(pid) & 0x1FFF
+        self.plp_uri = {}
+        self.stare = {'ts_pachete': 0, 'ts_pid': 0, 'ts_resincronizari': 0, 'ts_cc_erori': 0, 'ts_duplicate': 0,
+                      'ts_tei': 0, 'ts_criptate': 0, 'ts_af_rele': 0, 'resinc_interior': 0, 'iesite': 0,
+                      'exceptii_prinse': 0}
+        self.goleste()
+
+    def goleste(self):
+        self._ts_rest = b''
+        self._cc = -1
+        self._ultim = None
+        self._ab = bytearray()
+        self._sinc = False
+
+    def _pierdut(self):
+        if self._sinc:
+            self.stare['resinc_interior'] += 1
+        self._ab = bytearray()
+        self._sinc = False
+
+    def adauga(self, bloc_ts):
+        out = bytearray()
+        try:
+            self._adauga(bloc_ts, out)
+        except Exception:
+            self.stare['exceptii_prinse'] += 1
+            self.goleste()
+        return bytes(out)
+
+    def _adauga(self, bloc, out):
+        st = self.stare
+        date = _B(self._ts_rest + _B(bloc)) if self._ts_rest else _B(bloc)
+        n = len(date)
+        i = 0
+        while i + 188 <= n:
+            if date[i] != 0x47:
+                st['ts_resincronizari'] += 1
+                self._cc = -1
+                self._pierdut()
+                j = date.find(b'\x47', i + 1)
+                while j >= 0 and j + 188 < n and date[j + 188] != 0x47:
+                    j = date.find(b'\x47', j + 1)
+                if j < 0:
+                    i = n
+                    break
+                i = j
+                continue
+            st['ts_pachete'] += 1
+            if ((date[i + 1] & 0x1F) << 8 | date[i + 2]) == self.pid:
+                st['ts_pid'] += 1
+                self._pachet(date[i:i + 188], out)
+            i += 188
+        self._ts_rest = date[i:] if i < n else b''
+        if len(self._ts_rest) >= 188:
+            self._ts_rest = b''
+
+    def _pachet(self, p, out):
+        st = self.stare
+        if p[1] & 0x80:
+            st['ts_tei'] += 1
+            self._cc = -1
+            self._pierdut()
+            return
+        if p[3] & 0xC0:
+            st['ts_criptate'] += 1
+            self._cc = -1
+            self._pierdut()
+            return
+        afc = (p[3] >> 4) & 3
+        cc = p[3] & 0x0F
+        off = 4
+        disc = False
+        if afc == 0:
+            st['ts_af_rele'] += 1
+            self._pierdut()
+            return
+        if afc & 2:
+            afl = p[4]
+            if (afc == 3 and afl > 182) or (afc == 2 and afl != 183):
+                st['ts_af_rele'] += 1
+                if afc == 3:
+                    self._cc = -1
+                    self._pierdut()
+                return
+            disc = afl > 0 and bool(p[5] & 0x80)
+            off = 5 + afl
+        if not afc & 1:
+            return
+        if self._cc >= 0 and not disc:
+            if cc == self._cc:
+                if self._ultim == p:
+                    st['ts_duplicate'] += 1
+                    return
+                st['ts_cc_erori'] += 1
+                self._pierdut()
+            elif cc != (self._cc + 1) & 0x0F:
+                st['ts_cc_erori'] += 1
+                self._pierdut()
+        self._cc = cc
+        self._ultim = p
+        self._ab += p[off:]
+        self._interior(out)
+
+    def _interior(self, out):
+        ab = self._ab
+        i = 0
+        n = len(ab)
+        while True:
+            if self._sinc:
+                if n - i < 188:
+                    break
+                if ab[i] == 0x47:
+                    out += ab[i:i + 188]
+                    self.stare['iesite'] += 1
+                    i += 188
+                    continue
+                self._sinc = False
+                self.stare['resinc_interior'] += 1
+            j = ab.find(b'\x47', i)
+            if j < 0:
+                i = n
+                break
+            i = j
+            if n - i < 189:
+                break
+            if ab[i + 188] == 0x47:
+                self._sinc = True
+                continue
+            i += 1
+        if i:
+            del ab[:i]
 
 
 class Decapsulator(object):

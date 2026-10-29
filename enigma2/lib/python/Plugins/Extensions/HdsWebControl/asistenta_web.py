@@ -2,8 +2,11 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# asistenta_web.py: Ajutor de la distanta in interfata web (HdsWebControl), perechea ecranului de pe televizor
+# asistenta_web.py: Ajutor de la distanta in interfata web (HdsWebControl), perechea ecranului de pe receptor
 # (Screens/HdsAsistenta.py). Aceeasi stare, acelasi text de informare si acelasi jurnal, din Components/HdsAsistenta.py.
+# Numai pentru beta testeri (numai ei pot da acces la receptor): pagina e legata numai din /beta-tester; cine nu e
+# inscris vede fraza Asistenta de la distanta e pentru beta testeri. si legatura spre /beta-tester, iar cererea de
+# pornire e refuzata. Oprirea merge oricand (si dupa iesirea din program cu o sesiune pornita).
 # Pornirea din web NU porneste nimic: deschide pe televizor ecranul Asistentei cu informarea si durata aleasa
 # (Screens/HdsAsistentaSemn.cerereWeb); omul porneste de acolo. Oprirea merge din orice browser din reteaua locala (a
 # opri nu primejduieste pe nimeni). Codul de 6 cifre se arata numai unui browser conectat cu codul de pe televizor
@@ -23,6 +26,9 @@ def N_(text):
 	return text
 
 
+TEXT_NUMAI_TESTERI = N_("Asistența de la distanță e pentru beta testeri.")
+
+
 def _t(text):
 	if not text:
 		return text or ""
@@ -39,6 +45,16 @@ def _a(A=None):
 	return HdsAsistenta
 
 
+def tester(B=None):
+	"""Omul e beta tester? (Components.HdsBetaTester; fara el, nimeni nu e.)"""
+	try:
+		if B is None:
+			from Components import HdsBetaTester as B
+		return bool(B.inscris())
+	except Exception:
+		return False
+
+
 def _asociat(request):
 	"""True daca cererea vine dintr-un browser conectat cu codul de pe televizor (codul se arata numai lui)."""
 	try:
@@ -48,10 +64,10 @@ def _asociat(request):
 		return False
 
 
-def stare(request=None, A=None):
+def stare(request=None, A=None, B=None):
 	A = _a(A)
 	s = A.stare()
-	rez = {"result": True, "stare": s.get("stare"), "disponibil": s.get("disponibil"),
+	rez = {"result": True, "stare": s.get("stare"), "disponibil": s.get("disponibil"), "tester": tester(B),
 		"ramas_s": s.get("ramas_s", 0), "jurnal": s.get("jurnal", []), "nivel": s.get("nivel"),
 		"durate": s.get("durate", []), "durata_implicita": s.get("durata_implicita")}
 	try:
@@ -74,8 +90,12 @@ def catalog(A=None):
 		return {"result": False, "message": _t("Nu pot citi catalogul: %s") % e}
 
 
-def cere(argumente, A=None):
+def cere(argumente, A=None, B=None):
 	A = _a(A)
+	if not tester(B):
+		rez = stare(None, A, B)
+		rez.update({"result": False, "message": _t(TEXT_NUMAI_TESTERI), "beta": "/beta-tester"})
+		return rez
 	try:
 		minute = int(argumente.get("minute", A.DURATA_IMPLICITA_MIN))
 	except (TypeError, ValueError):
@@ -88,7 +108,7 @@ def cere(argumente, A=None):
 		reusit, mesaj = Semn.cerereWeb(sesiune(), nivel="A", durata_min=minute)
 	except Exception as e:
 		reusit, mesaj = False, _t("Nu pot cere confirmarea pe televizor: %s") % e
-	rez = stare(None, A)
+	rez = stare(None, A, B)
 	rez.update({"result": bool(reusit), "message": mesaj})
 	return rez
 
@@ -149,6 +169,9 @@ def rute(baza, resource, A=None):
 
 		def render_POST(self, request):
 			try:
+				# numai beta testerii pot da acces la receptor: altfel fraza si legatura spre /beta-tester
+				if not tester():
+					return self._raspunde(request, cere(_minute(request), A))
 				# pornirea (chiar daca o confirma televizorul) o cere numai un browser conectat cu codul: altfel orice
 				# aparat din casa ar putea deschide ecranul de pornire pe televizor
 				if not _asociat(request):
@@ -193,7 +216,7 @@ def _drumMeniu(A=None):
 	try:
 		return _a(A).drumMeniu()
 	except Exception:
-		return "Meniu > Setări > Rețea și internet > Asistență de la distanță"
+		return "Meniu > Setări > Beta tester > Cere ajutor de la distanță"
 
 
 def _informare(A=None):
@@ -229,6 +252,7 @@ PAGINA = """<!DOCTYPE html>
   .eroare{color:#ffb4a8;}
   .nota{color:var(--text-slab);font-size:.85rem;line-height:1.45;}
   .informare p{font-size:.9rem;line-height:1.5;margin:0 0 8px;}
+  a.buton{display:inline-flex;align-items:center;min-height:44px;padding:8px 18px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none;}
   .ascuns{display:none;}
 </style>
 </head>
@@ -236,6 +260,10 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>Asistență de la distanță</h1>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
+<section class="card ascuns" id="numaiTesteri">
+  <p class="acum">Asistența de la distanță e pentru beta testeri.</p>
+  <div class="rand"><a class="buton" href="/beta-tester">Devino beta tester</a></div>
+</section>
 <div id="continut" class="ascuns">
   <section class="card">
     <p class="acum" id="stare"></p>
@@ -273,6 +301,10 @@ function mesaj(t,e){ var m=$("mesaj"); m.textContent=t||""; m.classList.toggle("
 function nuRaspunde(){ return "Receptorul nu răspunde."; }
 function arata(d){
   var activa = d.stare && d.stare!=="oprit";
+  var poarta = !d.tester && !activa;
+  $("numaiTesteri").classList.toggle("ascuns", !poarta);
+  $("continut").classList.toggle("ascuns", poarta);
+  if(poarta){ return; }
   $("randPornire").classList.toggle("ascuns", activa || !d.disponibil);
   $("randOprire").classList.toggle("ascuns", !activa);
   $("informare").classList.toggle("ascuns", activa);
@@ -291,7 +323,7 @@ function arata(d){
 function citeste(){
   return cerere("/api/asistenta").then(function(d){
     if(d.result===false){ $("incarcare").textContent = d.message||nuRaspunde(); return; }
-    $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns"); arata(d);
+    $("incarcare").classList.add("ascuns"); arata(d);
   }).catch(function(){ $("incarcare").textContent=nuRaspunde(); });
 }
 $("porneste").addEventListener("click", function(){ var q=new URLSearchParams(); q.set("minute", $("minute").value); mesaj("Se deschide pe televizor...");
@@ -310,6 +342,8 @@ TEXTE_PAGINA = {
 	"html": (
 		N_("Asistență de la distanță"),
 		N_("Se citește starea..."),
+		N_("Asistența de la distanță e pentru beta testeri."),
+		N_("Devino beta tester"),
 		N_("Cât timp"),
 		N_("Pornește"),
 		N_("Oprește"),

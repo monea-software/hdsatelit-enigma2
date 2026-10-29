@@ -139,7 +139,7 @@ def contorOcr(M=None, O=None, ping=False):
 		"limbi": _limbiOcr(),
 		"serviciu": {k: serv[k] for k in ("version", "requests", "lines_recognized", "line_cache_hits",
 			"page_cache_hits", "timeouts", "budget_timeouts", "expired", "ms_per_unit", "speed_samples", "glyph_lines",
-			"glyphs", "immediate") if k in serv},
+			"glyphs", "immediate", "stretched_lines", "rereads", "rereads_better") if k in serv},
 	}
 
 

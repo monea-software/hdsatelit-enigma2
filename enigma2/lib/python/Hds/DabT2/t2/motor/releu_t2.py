@@ -331,6 +331,12 @@ class Psi(object):
 
 
 # ---------------------------------------------------------------- decapsulatoare
+def ts_in_pid(feed):
+    """Feed-ul poarta un TS intreg direct in payload-ul PID-ului, fara T2-MI (felul abertis: fluxurile de distributie
+    spaniole de pe 30W). Binarul primeste -A, rezerva Python foloseste t2mi.TsInPid."""
+    return str((feed or {}).get('fel') or '') == 'abertis'
+
+
 class DecapBinar(object):
     """t2mi_decap ca proces: stdin TS (sau T2-MI brut cu -r), stdout TS 188. Un fir citeste stdout."""
     fel = 'binar'
@@ -340,11 +346,14 @@ class DecapBinar(object):
         self.plp = plp
         self.intrat = self.iesit = self.aruncat = 0
         cmd = [binar] if not binar.endswith('.py') else [sys.executable, binar]
-        cmd += ['-p', str(releu.pid), '-l', str(plp)]
-        if forma == 'sarcina':
-            cmd.append('-r')
-        if releu.feed.get('nule'):
-            cmd.append('-n')
+        if ts_in_pid(releu.feed):
+            cmd += ['-A', '-p', str(releu.pid)]       # TS intreg in payload-ul PID-ului: fara PLP, -r si -n
+        else:
+            cmd += ['-p', str(releu.pid), '-l', str(plp)]
+            if forma == 'sarcina':
+                cmd.append('-r')
+            if releu.feed.get('nule'):
+                cmd.append('-n')
         self.p = _popen_fara_iesiri(cmd, stdin=stdin if stdin is not None else subprocess.PIPE, stdout=subprocess.PIPE,
                                     bufsize=0)
         self._in = self.p.stdin.fileno() if self.p.stdin is not None else None
@@ -441,8 +450,12 @@ class DecapPython(object):
         import t2mi
         self.releu = releu
         self.plp = plp
-        self.d = t2mi.Decapsulator(releu.pid, plp, nule=bool(releu.feed.get('nule')))
-        self.ad = self.d.adauga_sarcina if forma == 'sarcina' else self.d.adauga
+        if ts_in_pid(releu.feed):
+            self.d = t2mi.TsInPid(releu.pid)
+            self.ad = self.d.adauga
+        else:
+            self.d = t2mi.Decapsulator(releu.pid, plp, nule=bool(releu.feed.get('nule')))
+            self.ad = self.d.adauga_sarcina if forma == 'sarcina' else self.d.adauga
         self.cheie = 't2:%d' % plp
         self.intrat = self.iesit = self.aruncat = 0
         self.psi = None
@@ -720,6 +733,9 @@ class ReleuT2(object):
                # -c: mereu acelasi fisier, la orice fel de pornire; releul nu il sterge si nu il goleste niciodata
                # (binarul citeste la pornire randurile lui din ultimele 120 s: asa fereastra trece peste reporniri)
                '-j', self.cale_stat, '-P', self.cale_psi, '-c', self.cale_sesiuni]
+        if ts_in_pid(f):
+            cmd.append('-A')           # TS intreg in payload-ul PID-ului (fara T2-MI): fara -l si -n
+            return cmd
         if plp is not None:
             cmd += ['-l', str(self.plp_binar)]
         if f.get('nule'):
