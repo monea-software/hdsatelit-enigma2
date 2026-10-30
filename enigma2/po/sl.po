@@ -8204,10 +8204,10 @@ msgid ""
 "Canalul pornește din nou și pe televizor apare o întrebare: fără răspuns în "
 "20 de secunde revine ieșirea de dinainte."
 msgstr ""
-"Samodejno: kanali HDR izhajajo v HDR, drugi v SDR. Vedno HDR10 ali HLG: tudi "
-"meniji in kanali SDR izhajajo v HDR, brez utripanja ob zamenjavi kanala. "
-"Kanal se znova zažene in na televizorju se pojavi vprašanje: brez odgovora v "
-"20 sekundah se vrne prejšnji izhod."
+"Samodejno: kanali HDR se predvajajo v HDR, drugi v SDR. Vedno HDR10 ali HLG: "
+"tudi meniji in kanali SDR se predvajajo v HDR, brez utripanja ob zamenjavi "
+"kanala. Kanal se znova zažene in na televizorju se pojavi vprašanje: brez "
+"odgovora v 20 sekundah se vrne prejšnji izhod."
 
 msgid ""
 "Automat: canalele HDR ies în HDR, celelalte în SDR. Mereu HDR10 sau HLG: și "
@@ -9013,7 +9013,7 @@ msgid "Ca la calculator (RGB)"
 msgstr "Kot računalnik (RGB)"
 
 msgid "Ca la televizor (YCbCr)"
-msgstr "Kot televizor (YCbCr)"
+msgstr "Kot na televizorju (YCbCr)"
 
 msgid ""
 "Ca meniul de pe televizor: rânduri mari, titlul cu linie chihlimbarie, "
@@ -22988,8 +22988,8 @@ msgstr ""
 msgid "Meniul receptorului nu se poate citi."
 msgstr "Menija sprejemnika ni mogoče prebrati."
 
-msgid "Meniurile traduse complet în 13 limbi."
-msgstr "Meniji v celoti prevedeni v 13 jezikov."
+msgid "Meniurile traduse complet în 28 de limbi."
+msgstr "Meniji v celoti prevedeni v 28 jezikov."
 
 msgid ""
 "Meniurile, bara de informații, subtitrarea și ghidul receptorului, peste "
@@ -47516,7 +47516,7 @@ msgid "serverul modelelor nu răspunde (legătura e refuzată)"
 msgstr "Strežnik modelov ne odgovarja (povezava zavrnjena)."
 
 msgid "serverul modelelor nu răspunde la timp"
-msgstr "strežnik modelov ne odgovori pravočasno"
+msgstr "strežnik modelov se ne odziva pravočasno"
 
 msgid "serverul nu răspunde"
 msgstr "strežnik ne odgovarja"
@@ -51764,9 +51764,6 @@ msgstr "−1 min"
 #~ "\n"
 #~ "Prosim izberite drugo lokacijo."
 
-#
-#~ msgid "Start"
-#~ msgstr "Začetek"
 
 #
 #~ msgid "Startwizard"
@@ -52766,3 +52763,51 @@ msgstr "−1 min"
 #~ msgstr ""
 #~ "vaš dreambox je sedaj možno uporabljati. Prosim preverite uporabniška "
 #~ "navodila za dodatne informacije pred ponovnim zagonom dreambox-a."
+
+msgid "Ce am găsit și ce am făcut"
+msgstr "Kaj smo ugotovili in kaj smo naredili"
+
+msgid "Mulțumim că ne-ai lăsat să te ajutăm."
+msgstr "Hvala, ker smo ti lahko pomagali."
+
+msgid "Ultimele concluzii"
+msgstr "Zadnje ugotovitve"
+
+msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
+msgstr "ugotovitve ekipe (kaj smo ugotovili in kaj smo naredili), prikazane na sprejemniku, dokler ne pritisneš OK"
+
+msgid "Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"
+msgstr "Sprejemam <a href=\"#\" id=\"termeni\">pogoje uporabe</a>"
+
+msgid "Accept termenii și condițiile"
+msgstr "Sprejemam pogoje uporabe"
+
+msgid "Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau acordul unui părinte."
+msgstr "Z označeno vrstico Zaženi potrdi, da se strinjaš s temi pogoji in da imaš vsaj 16 let ali soglasje starša."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O oprești oricând."
+msgstr "Ekipa HD Satelit prek interneta vidi stanje tvojega sprejemnika, da ti pomaga, ne da bi kar koli spremenila. Kadar koli jo izklopiš."
+
+msgid "Fără bifă, asistența nu pornește."
+msgstr "Brez kljukice se pomoč ne zažene."
+
+msgid "Nu pot deschide Asistența de la distanță pe receptor acum."
+msgstr "Zdaj ne morem odpreti oddaljene pomoči na sprejemniku."
+
+msgid "OK pe rândul de sus: termenii și condițiile."
+msgstr "OK na vrstici zgoraj: pogoji uporabe."
+
+msgid "Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo."
+msgstr "Na sprejemniku se je odprla oddaljena pomoč: tam pritisni Zaženi."
+
+msgid "Start"
+msgstr "Zaženi"
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Zaženi jo vklopi za 2 uri. Kadar koli jo izklopiš, na sprejemniku ali na spletni strani. Ko je vklopljena, se ekipa lahko poveže kadar koli, vendar opravi samo branja in preizkuse s stalnega seznama, ne da bi kar koli spremenila."
+
+msgid "Termenii și condițiile"
+msgstr "Pogoji uporabe"
+
+msgid "cerere trimisă, aștept echipa"
+msgstr "zahteva poslana, čakam ekipo"

@@ -697,12 +697,27 @@ def _sincronizat(ctx):
 
 # ---------------------------------------------------------------- citirile: receptorul
 
-def _citesteMic(cale, maxim=4096):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citesteMic_direct(cale, maxim=4096):
 	try:
 		with open(cale, "rb") as f:
 			return f.read(maxim).decode("utf-8", "replace")
 	except (IOError, OSError):
 		return None
+
+
+def _citesteMic(cale, maxim=4096):
+	"""Ca _citesteMic_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(_citesteMic_direct, cale, maxim)
 
 
 def _procesor():

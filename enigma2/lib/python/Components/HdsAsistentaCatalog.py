@@ -30,9 +30,12 @@ FELURI = ("citire", "proba")
 # un nume de op: litere mici, cifre si cratima; niciodata inceput cu cratima
 _OP = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _NUME_ARG = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-# cel mult atatea argumente la o operatie si atatea semne intr-un argument (dincolo oricum nu trece niciun tipar)
+# cel mult atatea argumente la o operatie si atatea semne intr-un argument (dincolo oricum nu trece niciun tipar); un
+# argument poate cere in catalog o margine proprie ("max_semne"), dar niciodata peste MAX_SEMNE_ARG_LUNG (textul
+# concluziilor echipei)
 MAX_ARGUMENTE = 4
 MAX_SEMNE_ARG = 256
+MAX_SEMNE_ARG_LUNG = 2000
 
 
 def N_(text):
@@ -59,6 +62,7 @@ TEXTE_CATALOG = (
 	N_("copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)"),
 	N_("o captură a ecranului (numai meniurile, fără imaginea canalului)"),
 	N_("un mesaj scris pe ecranul televizorului"),
+	N_("concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"),
 )
 
 
@@ -132,7 +136,10 @@ def _verifica_arg(op, a):
 		rx = re.compile(tipar)
 	except re.error as e:
 		raise ValueError("catalog: tipar rau la %s/%s: %s" % (op, nume, e))
-	return {"nume": nume, "tipar": tipar, "rx": rx, "cerut": bool(a.get("cerut", False))}
+	max_semne = a.get("max_semne", MAX_SEMNE_ARG)
+	if not isinstance(max_semne, int) or isinstance(max_semne, bool) or not 1 <= max_semne <= MAX_SEMNE_ARG_LUNG:
+		raise ValueError("catalog: max_semne rau la %s/%s" % (op, nume))
+	return {"nume": nume, "tipar": tipar, "rx": rx, "cerut": bool(a.get("cerut", False)), "max_semne": max_semne}
 
 
 def gaseste(op, cale_=None):
@@ -160,7 +167,7 @@ def valideaza(op, args, cale_=None):
 				return False, "lipseste-%s" % spec["nume"]
 			continue
 		v = args[i]
-		if not isinstance(v, str) or len(v) > MAX_SEMNE_ARG or not spec["rx"].match(v):
+		if not isinstance(v, str) or len(v) > spec["max_semne"] or not spec["rx"].match(v):
 			return False, "argument-%s" % spec["nume"]
 	return True, ""
 

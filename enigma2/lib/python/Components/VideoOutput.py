@@ -137,12 +137,27 @@ TRY_TV = "tv"
 TRY_LATER = "later"
 
 
-def readText(path):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def readText_direct(path):
 	try:
 		with open(path) as f:
 			return f.read().strip()
 	except (IOError, OSError):
 		return None
+
+
+def readText(path):
+	"""Ca readText_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(readText_direct, path)
 
 
 def writeText(path, value):

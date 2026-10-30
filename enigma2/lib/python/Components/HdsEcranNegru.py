@@ -613,12 +613,27 @@ def cadre_hisilicon(citeste=None):
 	return total
 
 
-def _citeste_proc(cale):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citeste_proc_direct(cale):
 	try:
 		with open(cale, "rb") as f:
 			return f.read(8192).decode("latin-1")
 	except (IOError, OSError):
 		return None
+
+
+def _citeste_proc(cale):
+	"""Ca _citeste_proc_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(_citeste_proc_direct, cale)
 
 
 # ---------------------------------------------------------------- setarea si starea pentru web

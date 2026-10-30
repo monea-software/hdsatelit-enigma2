@@ -18,10 +18,13 @@
 #   ramane intern, intre receptor, server si echipa. Deschis la o cerere din pagina web (un browser fara cod, vezi
 #   Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire. Cat ecranele asistentei sunt deschise,
 #   banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el starea si pana cand e pornita.
+#   Cand echipa a trimis concluzii (op "concluzii"), Galben "Ultimele concluzii" le deschide din nou.
+# - HdsAsistentaConcluzii: fereastra "Ce am găsit și ce am făcut" (concluziile echipei si multumirile), modala, pana la
+#   OK; o deschide Screens/HdsAsistentaSemn.Controler cand sosesc concluziile si o data la sfarsitul sesiunii.
 #
 # Skinul: ecranele sunt in skinul HDSatelit (HDSatelit/skin.xml, cadrul HdsCadru1776); skinul de aici e rezerva pentru
 # alt skin ales, cu aceeasi geometrie (CORP_*); in skin.xml formele se numesc HdsAjutorDistanta (si fereastra
-# termenilor) si HdsAjutorDistantaAlege (skinName). Tastele lui HdsAsistenta sunt StaticText (liniuta si textul se
+# termenilor si a concluziilor) si HdsAjutorDistantaAlege (skinName). Tastele lui HdsAsistenta sunt StaticText (liniuta si textul se
 # ascund cand textul e gol): in skin.xml legenda lor o arata cadrul, in skinul de rezerva LEGENDA_ASISTENTA.
 
 import re
@@ -86,6 +89,14 @@ LEGENDA_ASISTENTA = """
 		</widget>
 		<widget source="key_green" render="Label" conditional="key_green" objectTypes="key_green,StaticText" position="476,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
+# a treia tasta (Galben "Ultimele concluzii"), numai pe ecranul asistentei, in skinul de rezerva; ajutorul din dreapta
+# jos e aliniat la dreapta, deci incape langa ea
+LEGENDA_GALBEN = """
+		<widget source="key_yellow" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="888,944" size="6,32" backgroundColor="hdsAmber" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="key_yellow" render="Label" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
+
 CORP_ALEGE = """
 		<widget name="config" position="32,104" size="1712,180" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 		<eLabel position="32,300" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
@@ -110,7 +121,11 @@ LEGENDA_ALEGE = """
 		<eLabel position="32,944" size="6,32" backgroundColor="#E5484D" zPosition="1" />
 		<widget name="key_red" position="48,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="460,944" size="6,32" backgroundColor="#46B06A" zPosition="1" />
-		<widget name="key_green" position="476,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
+		<widget name="key_green" position="476,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="888,944" size="6,32" backgroundColor="#F5B83D" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="key_yellow" render="Label" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
 
 def _nimic(*_a):
@@ -122,7 +137,7 @@ def _activa(s):
 
 
 class HdsAsistenta(Screen):
-	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA)
+	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA + LEGENDA_GALBEN)
 
 	def __init__(self, session, din_web=None, nevoie="", detalii=""):
 		Screen.__init__(self, session)
@@ -139,11 +154,12 @@ class HdsAsistenta(Screen):
 		self["ajutor"] = StaticText("")
 		self["key_red"] = StaticText("")
 		self["key_green"] = StaticText("")
+		self["key_yellow"] = StaticText("")
 		actiuni = {
 			"cancel": self.close,
 			"red": self._rosu,
 			"green": self._verde,
-			"yellow": _nimic,
+			"yellow": self._galben,
 			"blue": _nimic,
 		}
 		# toate actiunile hartii de directii legate (fara "unknown action" in jurnal); Sus/Jos deruleaza textul
@@ -194,6 +210,8 @@ class HdsAsistenta(Screen):
 	def reface(self):
 		s = A.stare()
 		self["cod"].setText("")
+		# Galben: ultimele concluzii ale echipei, cand exista (si dupa oprire)
+		self["key_yellow"].setText(_(A.TEXT_ULTIMELE_CONCLUZII) if s.get("are_concluzii") else "")
 		if not s.get("disponibil"):
 			self["antet"].setText(_("Funcția nu e disponibilă pe această imagine."))
 			self._puneText("")
@@ -230,6 +248,51 @@ class HdsAsistenta(Screen):
 			# oprirea e pe loc, fara intrebare (a opri nu primejduieste nimic); ecranul se inchide
 			A.opreste("de om")
 		self.close()
+
+	def _galben(self):
+		c = A.ultimeleConcluzii()
+		if c:
+			self.session.open(HdsAsistentaConcluzii, c)
+
+
+class HdsAsistentaConcluzii(Screen):
+	"""Concluziile echipei la finalul asistentei: "Ce am găsit și ce am făcut", textul derulant (Sus/Jos), la sfarsit
+	multumirile. Sta pana la OK (sau EXIT); fara intrebari. intrare: {"text", "ora", "id"} (A.ultimeleConcluzii)."""
+	skin = _rezerva("HdsAsistentaConcluzii", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA)
+	# cate ferestre ale concluziilor sunt deschise acum (la sfarsitul sesiunii nu se deschide a doua daca e una)
+	deschise = 0
+
+	def __init__(self, session, intrare=None):
+		Screen.__init__(self, session)
+		self.skinName = "HdsAjutorDistanta"
+		self.setTitle(_("Asistență de la distanță"))
+		intrare = intrare or A.ultimeleConcluzii() or {}
+		ora = intrare.get("ora") or 0
+		self["antet"] = StaticText(_(A.TEXT_CONCLUZII))
+		self["cod"] = StaticText("")
+		self["text"] = ScrollLabel(A.textConcluzii(intrare))
+		self["ajutor"] = StaticText(("%s  ·  %s" % (A.oraSfarsit(ora), _("Sus/Jos: tot textul"))) if ora else
+			_("Sus/Jos: tot textul"))
+		self["key_red"] = StaticText("")
+		self["key_green"] = StaticText(_("OK"))
+		actiuni = {
+			"ok": self.close,
+			"cancel": self.close,
+			"red": _nimic,
+			"green": self.close,
+			"yellow": _nimic,
+			"blue": _nimic,
+		}
+		for d, f in (("up", self["text"].pageUp), ("down", self["text"].pageDown), ("left", _nimic), ("right", _nimic)):
+			actiuni[d] = f
+			actiuni[d + "Repeated"] = f
+			actiuni[d + "Up"] = _nimic
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], actiuni, -2)
+		HdsAsistentaConcluzii.deschise += 1
+		self.onClose.append(self._inchisa)
+
+	def _inchisa(self):
+		HdsAsistentaConcluzii.deschise = max(0, HdsAsistentaConcluzii.deschise - 1)
 
 
 class HdsAsistentaTermeni(Screen):
@@ -276,13 +339,15 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		self["text"] = StaticText("")
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Start"))
+		# Galben: ultimele concluzii ale echipei, cand exista (dupa o sesiune, de aici le reciteste omul)
+		self["key_yellow"] = StaticText(_(A.TEXT_ULTIMELE_CONCLUZII) if A.ultimeleConcluzii() else "")
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
 			# OK legat aici (harta are OkCancelActions): OK pe rand deschide termenii si conditiile
 			"ok": self.keyOK,
 			"cancel": self.close,
 			"red": self.close,
 			"green": self._start,
-			"yellow": _nimic,
+			"yellow": self._galben,
 			"blue": _nimic,
 		}, -2)
 		self._fara_bifa = False
@@ -300,6 +365,11 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 
 	def keyOK(self):
 		self.session.open(HdsAsistentaTermeni)
+
+	def _galben(self):
+		c = A.ultimeleConcluzii()
+		if c:
+			self.session.open(HdsAsistentaConcluzii, c)
 
 	def _start(self):
 		if not self.accept.value:

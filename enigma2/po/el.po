@@ -5817,7 +5817,7 @@ msgid ""
 "Refer to your receiver's manual on how to do that."
 msgstr ""
 "Μετά την ολοκλήρωση του οδηγού εκκίνησης, πρέπει να προστατέψεις μεμονωμένες "
-"υπηρεσίες. Ανατρέξε στο εγχειρίδιο του δέκτη σου για το πώς να το κάνεις."
+"υπηρεσίες. Ανάτρεξε στο εγχειρίδιο του δέκτη σου για το πώς να το κάνεις."
 
 #, python-format
 msgid ""
@@ -14371,8 +14371,9 @@ msgstr ""
 "Τα δεδομένα τα λαμβάνει ο Eduard Monea, φυσικό πρόσωπο (Monea Software, HD "
 "Satelit), contact@hdsatelit.com. Στέλνονται μόνο όσα τσεκάρεις, με τυχαίο "
 "αναγνωριστικό, χωρίς IP, κωδικούς ή λίστες καναλιών, μόνο για βελτίωση του "
-"image. Logs κρατούνται 6 μήνες, άλλα δεδομένα 12. Μπορείς να αφαιρέσεις "
-"επιλογή ή να βγεις με διαγραφή. Πλήρης σημείωση στη διεύθυνση παρακάτω."
+"image. Αρχεία καταγραφής κρατούνται 6 μήνες, άλλα δεδομένα 12. Μπορείς να "
+"αφαιρέσεις επιλογή ή να βγεις με διαγραφή. Πλήρης σημείωση στη διεύθυνση "
+"παρακάτω."
 
 #, python-format
 msgid "Datele nu s-au putut citi: %s"
@@ -20620,13 +20621,13 @@ msgid "Jurnale"
 msgstr "Καταγραφές"
 
 msgid "Jurnale de depanare păstrate"
-msgstr "Logs αποσφαλμάτωσης"
+msgstr "Αρχεία καταγραφής αποσφαλμάτωσης"
 
 msgid "Jurnalele"
-msgstr "Logs"
+msgstr "Αρχεία καταγραφής"
 
 msgid "Jurnalele celorlalte sloturi"
-msgstr "Logs άλλων slot"
+msgstr "Αρχεία καταγραφής άλλων slot"
 
 msgid "Jurnalele de cădere"
 msgstr "Log σφαλμάτων"
@@ -20635,10 +20636,10 @@ msgid "Jurnalele de cădere și de erori"
 msgstr "Αρχεία καταγραφής σφαλμάτων"
 
 msgid "Jurnalele găsite"
-msgstr "Logs που βρέθηκαν"
+msgstr "Αρχεία καταγραφής που βρέθηκαν"
 
 msgid "Jurnalele sistemului"
-msgstr "Logs συστήματος"
+msgstr "Αρχεία καταγραφής συστήματος"
 
 msgid "Jurnalul"
 msgstr "Log"
@@ -23285,8 +23286,8 @@ msgstr ""
 msgid "Meniul receptorului nu se poate citi."
 msgstr "Το μενού του δέκτη δεν μπορεί να διαβαστεί."
 
-msgid "Meniurile traduse complet în 13 limbi."
-msgstr "Μενού πλήρως μεταφρασμένα σε 13 γλώσσες."
+msgid "Meniurile traduse complet în 28 de limbi."
+msgstr "Μενού πλήρως μεταφρασμένα σε 28 γλώσσες."
 
 msgid ""
 "Meniurile, bara de informații, subtitrarea și ghidul receptorului, peste "
@@ -30417,7 +30418,7 @@ msgid "Pista audio nu s-a putut alege."
 msgstr "Δεν ήταν δυνατή η επιλογή καναλιού ήχου."
 
 msgid "Pista de acum"
-msgstr "Η τρέχουσα πίστα"
+msgstr "Το τρέχον κομμάτι"
 
 msgid "Pista de sunet"
 msgstr "Κανάλι ήχου"
@@ -30506,7 +30507,7 @@ msgid "Pistele nu se știu încă la niciun canal din %d."
 msgstr "Τα ίχνη δεν είναι ακόμα γνωστά για κανένα κανάλι από %d."
 
 msgid "Pistele nu se știu încă."
-msgstr "Οι πίστες δεν είναι ακόμα γνωστές."
+msgstr "Τα κομμάτια δεν είναι ακόμα γνωστά."
 
 #, python-format
 msgid "Pistele se știu la %s din %d · MENU le actualizează"
@@ -47396,7 +47397,7 @@ msgstr "το τσιπ ήχου σταμάτησε"
 msgid ""
 "placa: procesorul, linia de comanda a nucleului, partitiile, modulele "
 "incarcate"
-msgstr "μητρική: επεξεργαστής, γραμμή εντολών πυρήνα, partitions, modules"
+msgstr "μητρική: επεξεργαστής, γραμμή εντολών πυρήνα, κατατμήσεις, αρθρώματα"
 
 msgid ""
 "placa: procesorul, linia de comandă a nucleului, partițiile, modulele "
@@ -49378,7 +49379,7 @@ msgid "Începe din nou"
 msgstr "Ξεκίνα ξανά"
 
 msgid "Începe din ziua"
-msgstr "Ξεκινά από"
+msgstr "Ξεκινά από την ημέρα"
 
 msgid "Începe o înregistrare."
 msgstr "Ξεκινά μια εγγραφή."
@@ -49537,7 +49538,7 @@ msgid "Înregistrarea de deasupra"
 msgstr "Προηγούμενη εγγραφή"
 
 msgid "Înregistrarea de dedesubt"
-msgstr "Επόμενη εγγραφή"
+msgstr "Η παρακάτω εγγραφή"
 
 msgid "Înregistrarea nouă"
 msgstr "Η νέα εγγραφή"
@@ -51833,9 +51834,6 @@ msgstr "−1 λ"
 #~ "\n"
 #~ "Όριστε άλλη τοποθέτηση."
 
-#
-#~ msgid "Start"
-#~ msgstr "Έναρξη"
 
 #
 #~ msgid "Startwizard"
@@ -52468,3 +52466,51 @@ msgstr "−1 λ"
 #~ msgstr ""
 #~ "Ενδέχετε η dreambox να μην λειτοθργεί. Παρακαλώ διαβάστε στον βιβλιό "
 #~ "χρήσεως πρώτοθ επανεκκίνηθει η dreambox."
+
+msgid "Ce am găsit și ce am făcut"
+msgstr "Τι βρήκαμε και τι κάναμε"
+
+msgid "Mulțumim că ne-ai lăsat să te ajutăm."
+msgstr "Ευχαριστούμε που μας άφησες να σε βοηθήσουμε."
+
+msgid "Ultimele concluzii"
+msgstr "Τελευταία συμπεράσματα"
+
+msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
+msgstr "τα συμπεράσματα της ομάδας (τι βρήκαμε και τι κάναμε), στον δέκτη μέχρι να πατήσεις OK"
+
+msgid "Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"
+msgstr "Αποδέχομαι τους <a href=\"#\" id=\"termeni\">όρους και προϋποθέσεις</a>"
+
+msgid "Accept termenii și condițiile"
+msgstr "Αποδέχομαι τους όρους και προϋποθέσεις"
+
+msgid "Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau acordul unui părinte."
+msgstr "Με τη γραμμή σημειωμένη, η Έναρξη επιβεβαιώνει ότι συμφωνείς με αυτούς τους όρους και ότι είσαι τουλάχιστον 16 ετών ή έχεις τη συγκατάθεση ενός γονέα."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O oprești oricând."
+msgstr "Η ομάδα του HD Satelit βλέπει μέσω του διαδικτύου την κατάσταση του δέκτη σου, για να σε βοηθήσει, χωρίς να αλλάζει τίποτα. Τη σταματάς οποτεδήποτε."
+
+msgid "Fără bifă, asistența nu pornește."
+msgstr "Χωρίς το σημάδι, η τηλεβοήθεια δεν ξεκινά."
+
+msgid "Nu pot deschide Asistența de la distanță pe receptor acum."
+msgstr "Δεν μπορώ να ανοίξω την Τηλεβοήθεια στον δέκτη τώρα."
+
+msgid "OK pe rândul de sus: termenii și condițiile."
+msgstr "OK στη γραμμή από πάνω: οι όροι και προϋποθέσεις."
+
+msgid "Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo."
+msgstr "Στον δέκτη άνοιξε η Τηλεβοήθεια: πάτησε εκεί Έναρξη."
+
+msgid "Start"
+msgstr "Έναρξη"
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Η Έναρξη την ενεργοποιεί για 2 ώρες. Τη σταματάς οποτεδήποτε, από τον δέκτη ή από την ιστοσελίδα. Όσο είναι ενεργή, η ομάδα μπορεί να συνδεθεί οποτεδήποτε, αλλά κάνει μόνο τις αναγνώσεις και τους ελέγχους από τη σταθερή λίστα, χωρίς να αλλάζει τίποτα."
+
+msgid "Termenii și condițiile"
+msgstr "Όροι και προϋποθέσεις"
+
+msgid "cerere trimisă, aștept echipa"
+msgstr "το αίτημα στάλθηκε, περιμένω την ομάδα"

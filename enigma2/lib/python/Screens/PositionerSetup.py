@@ -127,7 +127,7 @@ class HdsPositionerSetup(Screen, ConfigListScreen):
 		# Importul aici: pagina web /antena (scanare_web) incarca modulul numai pentru calculeazaUnghiuri.
 		from Components.config import ConfigSelection, NoSave
 		self._loc = NoSave(ConfigSelection([("loc", "")], "loc"))
-		self.list = [getConfigListEntry(_("%s (netestat)") % _("Locul tău"), self._loc)]
+		self.list = [getConfigListEntry(_("Locul tău"), self._loc)]
 		self._scrieLoc()
 		self["config"].list = self.list
 		self["config"].onSelectionChanged.append(self._recalculeaza)

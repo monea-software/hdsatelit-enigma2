@@ -2,8 +2,13 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsStareMeniu - semnele „(în lucru)” si „(netestat)” de langa intrarile de meniu si de langa setari: cine intra in
-# meniu vede din nume ce nu e terminat sau ce nu a fost inca probat pe receptor.
+# HdsStareMeniu - starea intrarilor de meniu si a randurilor de setari („in-lucru”, „netestat”) si semnele lor.
+#
+# REGULA: starea NU se mai arata omului. Imaginea e toata beta, deci un semn „(netestat)” sau „(în lucru)” langa o
+# intrare nu spune nimic in plus si incarca meniul. Nicio functie noua nu primeste semn: STARI_ARATATE ramane gol, iar
+# cuSemn() si aratata() de mai jos sunt singurul loc in care s-ar hotari afisarea (meniul, setarile, dalele, lista
+# functiilor, interfata web trec toate pe aici). Starea ramane in menu.xml / setup.xml si in cod, pentru probe si
+# pentru lista functiilor de pe site (campul probat).
 #
 # STAREA STA INTR-UN SINGUR LOC, langa intrare: atributul stare= din data/menu.xml (si din data/setup.xml, pentru un
 # rand de setari), cu valorile:
@@ -17,6 +22,8 @@
 # Fisierul nu importa nimic din enigma2: se foloseste si din probele de pe PC.
 
 STARI = ("in-lucru", "netestat")
+# starile al caror semn se vede pe receptor si in web: niciuna (vezi REGULA de sus)
+STARI_ARATATE = ()
 
 
 def N_(text):
@@ -53,9 +60,15 @@ def stare(nod):
 	return valoare if valoare in STARI else None
 
 
+def aratata(starea):
+	"""Starea, daca semnul ei se arata (STARI_ARATATE), altfel None."""
+	return starea if starea in STARI_ARATATE else None
+
+
 def cuSemn(text, starea, traducere=None):
-	"""Textul deja tradus al intrarii, cu semnul starii dupa el; fara stare, textul neschimbat."""
-	if starea not in _FORME:
+	"""Textul deja tradus al intrarii, cu semnul starii dupa el numai daca starea se arata (STARI_ARATATE); altfel
+	textul neschimbat."""
+	if starea not in _FORME or aratata(starea) is None:
 		return text
 	tr = traducere or _
 	try:

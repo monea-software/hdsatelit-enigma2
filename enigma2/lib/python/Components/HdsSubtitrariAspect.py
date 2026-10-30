@@ -75,7 +75,7 @@ DISTANTE = (50, 100, 150, 200, 300)
 OPACITATI = tuple(range(10, 101, 10))
 SPATIERI = (80, 90, 100, 110, 125, 150)
 # marirea subtitrarilor DVB (poze): ordinea da numarul pentru C++ (numarMarireDvb, gPixmap::setSubtitleScaleMode);
-# se ofera numai MARIRI_DVB_OFERITE (vezi sus), iar cele din MARIRI_DVB_NETESTATE (acum niciuna) au eticheta „(netestat)"
+# se ofera numai MARIRI_DVB_OFERITE (vezi sus); MARIRI_DVB_NETESTATE (acum niciuna) nu mai pune nicio eticheta
 MARIRI_DVB = ("fara", "clara", "ocr", "gpu")
 MARIRI_DVB_OFERITE = ("clara", "ocr")
 MARIRI_DVB_NETESTATE = ()
@@ -225,13 +225,13 @@ def maririDvbOferite():
 
 
 def textMaririDvb():
-	"""Alegerile oferite (maririDvbOferite(), in ordinea din MARIRI_DVB); cele netestate pe receptor o spun. Textele
+	"""Alegerile oferite (maririDvbOferite(), in ordinea din MARIRI_DVB), fara semne de stare (MARIRI_DVB_NETESTATE
+	ramane numai pentru probe; Components/HdsStareMeniu.py: starea nu se arata). Textele
 	lui „fara" si „gpu" raman aici (si in traduceri) pentru mai tarziu, desi deocamdata nu se ofera."""
 	texte = {"fara": _t("Fără netezire"), "clara": _t("Clară (margini netede)"),
 		"ocr": _t("Recunoașterea textului (OCR)"), "gpu": _t("Cu placa video (GPU)")}
 	oferite = maririDvbOferite()
-	return [(cheie, _t("%s (netestat)") % texte[cheie] if cheie in MARIRI_DVB_NETESTATE else texte[cheie])
-		for cheie in MARIRI_DVB if cheie in oferite]
+	return [(cheie, texte[cheie]) for cheie in MARIRI_DVB if cheie in oferite]
 
 
 def seAlegeMarireaDvb(s=None):

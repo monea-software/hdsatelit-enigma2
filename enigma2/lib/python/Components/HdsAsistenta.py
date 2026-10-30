@@ -69,6 +69,10 @@ DOSAR_SESIUNE = "/tmp/hds-asistenta"
 # timp sau permanent sa ramana pornita si dupa repornirea receptorului; se sterge la oprire
 DOSAR_STARE = "/home/root/hds-asistenta"
 STARE_FISIER = os.path.join(DOSAR_STARE, "stare.json")
+# concluziile echipei (op "concluzii"): ultimele primite, cu ora si sesiunea; raman dupa oprire, ca omul sa le
+# poata reciti (ecranul asistentei si pagina web); fiecare concluzie noua o inlocuieste pe cea de dinainte
+CONCLUZII_FISIER = os.path.join(DOSAR_STARE, "concluzii.json")
+CONCLUZII_MAX = 2000
 IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
@@ -805,13 +809,90 @@ def opreste(motiv="de om"):
 	return True, _t("Asistența s-a oprit. Cheia a fost ștearsă.")
 
 
+# ---------------------------------------------------------------- concluziile echipei (op "concluzii")
+
+TEXT_CONCLUZII = N_("Ce am găsit și ce am făcut")
+TEXT_MULTUMIM = N_("Mulțumim că ne-ai lăsat să te ajutăm.")
+TEXT_ULTIMELE_CONCLUZII = N_("Ultimele concluzii")
+
+
+def curataConcluzii(text):
+	"""Textul concluziilor gata de aratat: randurile pastrate, fara caractere de control sau de formatare, spatiile
+	de la capetele randurilor scoase, cel mult doua randuri goale la rand, cel mult CONCLUZII_MAX semne."""
+	if isinstance(text, bytes):
+		text = text.decode("utf-8", "replace")
+	if not isinstance(text, str):
+		return ""
+	randuri = []
+	for rand in text[:CONCLUZII_MAX * 2].replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+		rand = " ".join(_FARA_CONTROL.sub("", rand.replace("\t", " ")).split())
+		if not rand and randuri[-2:] == ["", ""]:
+			continue
+		randuri.append(rand)
+	return "\n".join(randuri).strip()[:CONCLUZII_MAX].strip()
+
+
+def salveazaConcluzii(text, id_sesiune=None):
+	"""Scrie concluziile (curatate) in CONCLUZII_FISIER (0600) si intoarce intrarea {"text", "ora", "id"}, sau None
+	cand textul e gol. Chemata de pe firul sesiunii (op "concluzii")."""
+	text = curataConcluzii(text)
+	if not text:
+		return None
+	if id_sesiune is None:
+		ses = _sesiune
+		id_sesiune = ses.id if ses is not None else None
+	intrare = {"v": 1, "text": text, "ora": int(_oraPerete()), "id": id_sesiune}
+	try:
+		os.makedirs(os.path.dirname(CONCLUZII_FISIER), mode=0o700, exist_ok=True)
+		nou = CONCLUZII_FISIER + ".nou"
+		fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+		with os.fdopen(fd, "w", encoding="utf-8") as f:
+			json.dump(intrare, f, ensure_ascii=False)
+		os.replace(nou, CONCLUZII_FISIER)
+	except Exception as e:
+		_jurnal("concluzii: %s" % e)
+	return intrare
+
+
+def ultimeleConcluzii():
+	"""Ultimele concluzii primite ({"text", "ora", "id"}) sau None."""
+	try:
+		with open(CONCLUZII_FISIER, encoding="utf-8") as f:
+			o = json.load(f)
+	except Exception:
+		return None
+	if not isinstance(o, dict) or not isinstance(o.get("text"), str) or not o["text"].strip():
+		return None
+	try:
+		ora = int(o.get("ora") or 0)
+	except (TypeError, ValueError):
+		ora = 0
+	return {"text": curataConcluzii(o["text"]), "ora": ora, "id": o.get("id")}
+
+
+def textConcluzii(intrare):
+	"""Textul ferestrei: concluziile, apoi multumirile."""
+	if not intrare:
+		return ""
+	return "%s\n\n%s" % (intrare.get("text") or "", _t(TEXT_MULTUMIM))
+
+
+def stareConcluzii():
+	"""Pentru pagina web: {"text", "ora_text"} sau None."""
+	c = ultimeleConcluzii()
+	if not c:
+		return None
+	return {"text": c["text"], "ora_text": oraSfarsit(c["ora"]) if c["ora"] else ""}
+
+
 def stare():
 	"""Starea pentru ecran si pentru pagina web."""
 	ses = _sesiune
 	if ses is None:
 		return {"stare": OPRIT, "disponibil": disponibil(), "durate": list(DURATE_MIN),
-			"durata_implicita": DURATA_IMPLICITA_MIN}
+			"durata_implicita": DURATA_IMPLICITA_MIN, "are_concluzii": ultimeleConcluzii() is not None}
 	return {
+		"are_concluzii": ultimeleConcluzii() is not None,
 		"stare": ses.stare,
 		"disponibil": True,
 		"nivel": ses.nivel,

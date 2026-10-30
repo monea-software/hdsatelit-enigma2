@@ -288,13 +288,28 @@ def _jurnal(text, cheie=None):
 		pass
 
 
-def citeste(cale):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def citeste_direct(cale):
 	"""Textul unui fisier mic (/proc), sau None."""
 	try:
 		with io.open(cale, "r", encoding="latin-1") as f:
 			return f.read()
 	except (IOError, OSError, ValueError):
 		return None
+
+
+def citeste(cale):
+	"""Ca citeste_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(citeste_direct, cale)
 
 
 def scrie(cale, valoare, cheie=None):

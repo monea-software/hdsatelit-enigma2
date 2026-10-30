@@ -42,7 +42,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		from Components import HdsLocul
 		el = NoSave(ConfigSelection([("loc", HdsLocul.textLoc())], "loc"))
 		el.hdsLoc = True
-		return getConfigListEntry(_("%s (netestat)") % _("Locul antenei"), el)
+		return getConfigListEntry(_("Locul antenei"), el)
 
 	def keyOk(self):
 		cur = self["config"].getCurrent()

@@ -140,12 +140,27 @@ def _jurnal(text):
 	print("[HdsCalitateImagine] %s" % text)
 
 
-def _citesteText(cale):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citesteText_direct(cale):
 	try:
 		with open(cale, "rb") as f:
 			return f.read().decode("utf-8", "replace")
 	except (IOError, OSError):
 		return None
+
+
+def _citesteText(cale):
+	"""Ca _citesteText_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(_citesteText_direct, cale)
 
 
 def _scrieText(cale, text):
