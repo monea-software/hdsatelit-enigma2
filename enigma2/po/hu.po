@@ -56295,3 +56295,90 @@ msgstr "Legutóbbi megállapítások"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "a csapat megállapításai (mit találtunk és mit tettünk), a vevőn láthatók, amíg meg nem nyomod az OK gombot"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "A HD Satelit csapata az interneten keresztül látja a vevőd állapotát, hogy segíthessen neked. Bármikor leállíthatod."
+
+msgid "Control complet"
+msgstr "Teljes vezérlés"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Teljes vezérlés: a csapat navigálhat a menükben, módosíthatja a beállításokat, kereshet csatornákat és telepíthet a hivatalos feedből; soha nem a kulcsokat, a feltételes hozzáférési modulok előfizetési vonalait vagy a személyes adataidat."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Teljes vezérlés nélkül: a csapat csak olvassa a vevő állapotát anélkül, hogy bármit megváltoztatna."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "A HD Satelit most dolgozik a vevődön"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hogyan működik: a vevőd egy titkosított kapcsolaton keresztül megkérdezi a HD Satelit szervert, hogy van-e kérésünk számára. Csak az image-ben rögzített listából kérhetünk műveleteket: az állapot, a naplók és a képernyőn lévő szöveg kiolvasását, a menük képernyőképét és a képernyőre írt üzenetet. Ha a Teljes vezérlés be van jelölve, a csapat megnyomhatja a távirányító gombjait és írhat a szövegmezőkbe is, hogy bejárja a menüket, módosítsa a beállításokat, keressen csatornákat és telepítsen a hivatalos feedből, mintha a távirányítót fogná. Nem futtathatunk tetszőleges parancsokat, és nem érhetünk el más eszközöket az otthonodban. A hozzáférési modulok, a jelszavak, az SSH-hozzáférés, a Wi-Fi-hálózat és a személyes adataid képernyői zárva maradnak: ott a csapat semmit sem lát, és csak kilépni tud. Minden kérés megjelenik a naplóban, a képernyőn."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "A Start 2 órára elindítja. Bármikor leállíthatod a vevőről vagy a weboldalról. Amíg fut, a csapat bármikor beléphet, de csak azt teszi, ami a rögzített listában szerepel; Teljes vezérlés nélkül semmit sem változtat meg."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Teljes vezérlés nélkül: olvasások és próbák (műveletek egy rögzített listából, főként olvasások; a képernyőkép csak a menüket mutatja, a csatorna képét nem). Teljes vezérléssel: a távirányító gombjai és a mezőkbe írt szöveg is, kivéve a privát képernyőket. Bármikor leállíthatod."
+
+msgid "Ecran"
+msgstr "Képernyő"
+
+msgid "Control"
+msgstr "Vezérlés"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "a vevőn megnyitott képernyő szövege (a menü, a kiválasztott sor, a beállítások), a privát képernyők nélkül"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "a távirányító gombjai, mintha a csapat fogná a távirányítót (csak Teljes vezérléssel)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "a képernyőn megnyitott mezőbe írt szöveg (csak Teljes vezérléssel, soha nem jelszavakban)"
+
+msgid "control"
+msgstr "vezérlés"
+
+msgid "control oprit"
+msgstr "vezérlés leállítva"
+
+msgid "%d semne"
+msgstr "%d karakter"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "a megnyitott csatorna: a szolgáltatás, a transzponder, a tuner és a jel (a feltételes hozzáférési modulok adatai nélkül)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "a csatornalista transzponderei (csatornák nélkül és személyes adatok nélkül)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "indíts el egy csatornát a listádról (csak Teljes vezérléssel)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "módosíts egy beállítást (kép, hang, felület, tunerek, idő, műsorújság, hálózat; soha nem jelszavak, kulcsok vagy személyes adatok; csak Teljes vezérléssel)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "telepíts egy plugint vagy modult a hivatalos HD Satelit feedből (annak konfigurációja és kulcsai nélkül; csak Teljes vezérléssel)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "távolíts el egy plugint vagy modult (csak Teljes vezérléssel)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "indítsd újra a felületet vagy a vevőt, képernyőn megjelenő értesítéssel; a segítségnyújtás folytatódik az újraindítás után (csak Teljes vezérléssel)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "A HD Satelit most újraindítja a vevő felületét. A segítségnyújtás folytatódik az újraindítás után."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "A HD Satelit most újraindítja a vevőt. A segítségnyújtás folytatódik az újraindítás után."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "A HD Satelit csapata az interneten keresztül belép a vevőkészülékedre, hogy segítsen neked: böngészhet a menükben, módosíthatja a beállításokat, kereshet csatornákat és telepíthet a hivatalos feedből, a hozzáférési modulok kulcsai és előfizetési vonalai nélkül, és a személyes adataid nélkül. Bármikor leállíthatod."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hogyan működik: a vevőkészüléked titkosított kapcsolaton keresztül megkérdezi a HD Satelit szervert, hogy van-e kérésünk a számára. Csak egy rögzített listából kérhetünk műveleteket, amely a képfájlban van megírva: állapot-, napló- és képernyőszöveg-leolvasások, egy képernyőkép a menükről, egy képernyőre írt üzenet, a távirányító gombjai és a mezőkben lévő szöveg, hogy végigmenjünk a menükön, módosítsuk a beállításokat, csatornákat keressünk és telepítsünk a hivatalos feedből, mintha a távirányítót tartanánk. Nem futtathatunk szabad parancsokat, és nem férhetünk hozzá más eszközökhöz az otthonodban. A hozzáférési modulok, a jelszavak, az SSH-hozzáférés, a Wi-Fi-hálózat és a személyes adataid képernyői zárva maradnak: ott a csapat semmit sem lát, és csak kilépni tud. Minden kérés megjelenik a naplóban, a képernyőn."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "A Start 2 órára kapcsolja be. Bármikor leállíthatod, a vevőkészülékről vagy a weboldalról. Amíg be van kapcsolva, a csapat bármikor beléphet, de csak azt teszi, ami a rögzített listában van."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "A támogatás teljes: leolvasások, próbák és a vevőkészülék menükön keresztüli vezérlése a rögzített listából. Egy képernyőmentés csak a menüket mutatja, nem a csatorna képét. A privát képernyők zárva maradnak. Bármikor leállíthatod."

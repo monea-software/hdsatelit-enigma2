@@ -57365,3 +57365,15 @@ msgstr "HD Satelit зараз перезапускає інтерфейс рес
 
 msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
 msgstr "HD Satelit зараз перезапускає ресивер. Підтримка продовжується після перезапуску."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "Команда HD Satelit заходить через інтернет на твій ресивер, щоб допомогти тобі: може пересуватися по меню, змінювати налаштування, шукати канали й встановлювати з офіційного фіду, без ключів і ліній модулів доступу та без твоїх особистих даних. Ти можеш вимкнути це будь-коли."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Як це працює: твій ресивер запитує сервер HD Satelit через зашифроване з'єднання, чи є в нас запит для нього. Ми можемо просити лише операції з фіксованого списку, записаного в образі: зчитування стану, журналів і тексту з екрана, знімок меню, повідомлення на екрані, клавіші пульта і текст із полів, щоб пересуватися по меню, змінювати налаштування, шукати канали й встановлювати з офіційного фіду, ніби ми тримаємо пульт. Ми не можемо виконувати довільні команди й не можемо дістатися до інших пристроїв у твоєму домі. Екрани модулів доступу, паролів, доступу SSH, мережі Wi-Fi і твоїх особистих даних залишаються закритими: там команда нічого не бачить і може тільки вийти. Кожен запит з'являється в журналі, на екрані."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start вмикає її на 2 години. Ти можеш вимкнути її будь-коли, з ресивера або з вебсторінки. Поки вона ввімкнена, команда може заходити будь-коли, але робить лише те, що є у фіксованому списку."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Підтримка повна: зчитування, перевірки й керування ресивером через меню, з фіксованого списку. Знімок показує лише меню, а не зображення каналу. Приватні екрани залишаються закритими. Ти можеш зупинити будь-коли."

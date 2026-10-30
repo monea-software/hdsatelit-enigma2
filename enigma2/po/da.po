@@ -54688,3 +54688,42 @@ msgstr "kontrol stoppet"
 
 msgid "%d semne"
 msgstr "%d tegn"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "den åbne kanal: tjenesten, transponderen, tuneren og signalet (uden noget fra adgangsmodulerne)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "transponderne fra kanallisten (uden kanaler og uden noget personligt)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "start en kanal fra din liste (kun med Fuld kontrol)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "skift en indstilling (billede, lyd, brugerflade, tunere, tid, guide, netværk; aldrig adgangskoder, nøgler eller personlige data; kun med Fuld kontrol)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "installer et plugin eller et modul fra den officielle HD Satelit-feed (uden dens konfiguration og nøgler; kun med Fuld kontrol)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "afinstaller et plugin eller et modul (kun med Fuld kontrol)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "genstart brugerfladen eller modtageren, med meddelelse på skærmen; fjernhjælpen fortsætter efter genstart (kun med Fuld kontrol)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit genstarter nu modtagerens brugerflade. Fjernhjælpen fortsætter efter genstart."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit genstarter nu modtageren. Fjernhjælpen fortsætter efter genstart."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Satelit-teamet går ind på din modtager via internettet for at hjælpe dig: det kan navigere i menuerne, ændre indstillinger, søge efter kanaler og installere fra det officielle feed, uden adgangsmodulernes nøgler og linjer og uden dine personlige data. Du kan stoppe den når som helst."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Sådan fungerer det: din modtager spørger HD Satelit-serveren, gennem en krypteret forbindelse, om vi har en anmodning til den. Vi kan kun bede om handlinger fra en fast liste, der er skrevet i imageet: aflæsninger af statussen, af loggene og af teksten på skærmen, et skærmbillede af menuerne, en besked skrevet på skærmen, tasterne på fjernbetjeningen og teksten i felterne, så vi kan gå gennem menuerne, ændre indstillinger, søge efter kanaler og installere fra det officielle feed, som om vi holdt fjernbetjeningen. Vi kan ikke køre vilkårlige kommandoer, og vi kan ikke komme ind på andre apparater i dit hjem. Skærmene for adgangsmodulerne, for kodeordene, for SSH-adgangen, for Wi-Fi-netværket og for dine personlige data forbliver lukkede: der ser teamet ingenting og kan kun forlade dem. Hver anmodning dukker op i loggen på skærmen."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start tænder den i 2 timer. Du kan stoppe den når som helst, fra modtageren eller fra hjemmesiden. Mens den er tændt, kan teamet gå ind når som helst, men gør kun det, der er i den faste liste."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Hjælpen er komplet: aflæsninger, prøver og styring af modtageren gennem menuerne, fra den faste liste. Et skærmbillede viser kun menuerne, ikke kanalbilledet. De private skærme forbliver lukkede. Du kan stoppe når som helst."

@@ -55900,3 +55900,42 @@ msgstr "juhtimine peatatud"
 
 msgid "%d semne"
 msgstr "%d märki"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "avatud kanal: teenus, transponder, tuuner ja signaal (ilma juurdepääsumoodulite infota)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "transponderid kanaliloendist (ilma kanaliteta ja ilma isikliku infota)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "käivita kanal oma loendist (ainult täieliku juhtimisega)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "muuda seadistust (pilt, heli, kasutajaliides, tuunerid, kellaaeg, telekava, võrk; mitte kunagi paroolid, võtmed ega isikuandmed; ainult täieliku juhtimisega)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "paigalda pistikprogramm või moodul ametlikust HD Sateliti paketihoidlast (ilma selle seadistuse ja võtmeteta; ainult täieliku juhtimisega)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "eemalda pistikprogramm või moodul (ainult täieliku juhtimisega)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "taaskäivita kasutajaliides või vastuvõtja, teatega ekraanil; abi jätkub pärast taaskäivitamist (ainult täieliku juhtimisega)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit taaskäivitab nüüd vastuvõtja kasutajaliidese. Abi jätkub pärast taaskäivitamist."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit taaskäivitab nüüd vastuvõtja. Abi jätkub pärast taaskäivitamist."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Sateliti meeskond siseneb interneti kaudu sinu vastuvõtjasse, et sind aidata: ta saab menüüdes liikuda, seadeid muuta, kanaleid otsida ja ametlikust pakihoidlast paigaldada, ilma juurdepääsumoodulite võtmete ja liinideta ning ilma sinu isikuandmeteta. Sa saad selle igal ajal peatada."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Kuidas see käib: sinu vastuvõtja küsib HD Sateliti serverilt, krüpteeritud ühenduse kaudu, kas meil on sellele taotlus. Me saame taotleda ainult tegevusi ühest kindlast loendist, mis on pildis kirjas: oleku, logide ja ekraanil oleva teksti lugemised, menüüde ekraanipilt, ekraanile kirjutatud sõnum, puldi klahvid ja väljades olev tekst, et me saaksime menüüdes liikuda, seadeid muuta, kanaleid otsida ja ametlikust pakihoidlast paigaldada, nagu me pulti hoiaksime. Me ei saa käivitada suvalisi käske ega pääseda ligi teistele seadmetele sinu kodus. Juurdepääsumoodulite, paroolide, SSH-juurdepääsu, Wi-Fi-võrgu ja sinu isikuandmete ekraanid jäävad suletuks: seal meeskond midagi ei näe ja saab ainult väljuda. Iga taotlus ilmub logis, ekraanil."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start käivitab selle 2 tunniks. Sa saad selle igal ajal peatada, vastuvõtjalt või veebilehelt. Kui see on sees, saab meeskond igal ajal siseneda, aga teeb ainult seda, mis on kindlas loendis."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Abi on täielik: lugemised, testid ja vastuvõtja juhtimine menüüde kaudu, kindlast loendist. Ekraanipilt näitab ainult menüüsid, mitte kanali pilti. Privaatsed ekraanid jäävad suletuks. Sa saad selle igal ajal peatada."

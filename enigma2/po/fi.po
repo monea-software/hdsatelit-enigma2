@@ -56593,3 +56593,90 @@ msgstr "Käyttöehdot"
 
 msgid "cerere trimisă, aștept echipa"
 msgstr "pyyntö lähetetty, odotan tiimiä"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit -tiimi näkee vastaanottimesi tilan internetin kautta auttaakseen sinua. Voit pysäyttää sen milloin tahansa."
+
+msgid "Control complet"
+msgstr "Täysi hallinta"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Täysi hallinta: tiimi voi liikkua valikoissa, muuttaa asetuksia, etsiä kanavia ja asentaa virallisesta syötteestä; ei koskaan avaimia, pääsymoduulien tilausrivejä tai henkilökohtaisia tietojasi."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Ilman Täyttä hallintaa: tiimi vain lukee vastaanottimen tilan muuttamatta mitään."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit työskentelee nyt vastaanottimellasi"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Miten se toimii: vastaanottimesi kysyy HD Satelit -palvelimelta salatun yhteyden kautta, onko meillä sille pyyntöä. Voimme pyytää vain toimintoja kiinteästä, imageen kirjoitetusta luettelosta: tilan, lokien ja näytön tekstin lukemista, valikoiden kuvankaappausta ja näytölle kirjoitettua viestiä. Kun Täysi hallinta on valittuna, tiimi voi myös painaa kaukosäätimen painikkeita ja kirjoittaa tekstikenttiin liikkuakseen valikoissa, muuttaakseen asetuksia, etsiäkseen kanavia ja asentaakseen virallisesta syötteestä aivan kuin se pitäisi kaukosäädintä kädessään. Emme voi suorittaa vapaita komentoja emmekä pääse muihin kotisi laitteisiin. Pääsymoduulien, salasanojen, SSH-yhteyden, Wi-Fi-verkon ja henkilökohtaisten tietojesi näytöt pysyvät suljettuina: siellä tiimi ei näe mitään ja voi vain poistua. Jokainen pyyntö näkyy lokissa, näytöllä."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start käynnistää sen 2 tunniksi. Voit pysäyttää sen milloin tahansa vastaanottimesta tai verkkosivulta. Niin kauan kuin se on päällä, tiimi voi tulla milloin tahansa, mutta tekee vain sitä, mikä on kiinteässä luettelossa; ilman Täyttä hallintaa se ei muuta mitään."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Ilman Täyttä hallintaa: lukemiset ja testit (toiminnot kiinteästä luettelosta, pääasiassa lukemisia; kuvankaappaus näyttää vain valikot, ei kanavan kuvaa). Täydellä hallinnalla: myös kaukosäätimen painikkeet ja tekstikentät, paitsi yksityiset näytöt. Voit pysäyttää milloin tahansa."
+
+msgid "Ecran"
+msgstr "Näyttö"
+
+msgid "Control"
+msgstr "Hallinta"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "vastaanottimessa avoinna olevan näytön teksti (valikko, valittu rivi, asetukset), ilman yksityisiä näyttöjä"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "kaukosäätimen painikkeet, aivan kuin tiimi pitäisi kaukosäädintä (vain Täydellä hallinnalla)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "näytöllä avoinna olevaan kenttään kirjoitettu teksti (vain Täydellä hallinnalla, ei koskaan salasanoihin)"
+
+msgid "control"
+msgstr "hallinta"
+
+msgid "control oprit"
+msgstr "hallinta pysäytetty"
+
+msgid "%d semne"
+msgstr "%d merkkiä"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "avoinna oleva kanava: palvelu, transponderi, viritin ja signaali (ilman mitään pääsymoduuleilta)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "kanavaluettelon transponderit (ilman kanavia ja ilman mitään henkilökohtaista)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "käynnistä kanava luettelostasi (vain Täydellä hallinnalla)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "muuta asetusta (kuva, ääni, käyttöliittymä, virittimet, kellonaika, opas, verkko; ei koskaan salasanoja, avaimia tai henkilökohtaisia tietoja; vain Täydellä hallinnalla)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "asenna lisäosa tai moduuli virallisesta HD Satelit -syötteestä (ilman sen määrityksiä ja avaimia; vain Täydellä hallinnalla)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "poista lisäosa tai moduuli (vain Täydellä hallinnalla)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "käynnistä käyttöliittymä tai vastaanotin uudelleen, ilmoituksella näytöllä; etäapu jatkuu uudelleenkäynnistyksen jälkeen (vain Täydellä hallinnalla)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit käynnistää nyt vastaanottimen käyttöliittymän uudelleen. Etäapu jatkuu uudelleenkäynnistyksen jälkeen."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit käynnistää nyt vastaanottimen uudelleen. Etäapu jatkuu uudelleenkäynnistyksen jälkeen."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Satelit -tiimi tulee internetin kautta vastaanottimeesi auttaakseen sinua: se voi liikkua valikoissa, muuttaa asetuksia, etsiä kanavia ja asentaa virallisesta pakettilähteestä ilman käyttöoikeusmoduulien avaimia ja linjoja sekä ilman henkilökohtaisia tietojasi. Voit pysäyttää sen milloin tahansa."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Näin se toimii: vastaanottimesi kysyy HD Satelit -palvelimelta salatun yhteyden kautta, onko meillä sille pyyntöä. Voimme pyytää vain toimintoja kiinteästä listasta, joka on kirjoitettu kuvaan: tilan, lokien ja näytöllä olevan tekstin lukemista, valikoiden kuvakaappaus, näytölle kirjoitettu viesti, kaukosäätimen näppäimet ja kenttien teksti, jotta voimme liikkua valikoissa, muuttaa asetuksia, etsiä kanavia ja asentaa virallisesta pakettilähteestä, aivan kuin pitäisimme kaukosäädintä. Emme voi ajaa vapaita komentoja emmekä pääse muihin laitteisiin kotonaasi. Käyttöoikeusmoduulien, salasanojen, SSH-yhteyden, Wi-Fi-verkon ja henkilökohtaisten tietojesi näytöt pysyvät suljettuina: siellä tiimi ei näe mitään ja voi vain poistua. Jokainen pyyntö näkyy lokissa, näytöllä."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start käynnistää sen 2 tunniksi. Voit pysäyttää sen milloin tahansa, vastaanottimesta tai verkkosivulta. Niin kauan kuin se on päällä, tiimi voi tulla sisään milloin tahansa, mutta tekee vain sen, mikä on kiinteässä listassa."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Tuki on täydellistä: lukemisia, testejä ja vastaanottimen hallintaa valikoiden kautta, kiinteästä listasta. Kuvakaappaus näyttää vain valikot, ei kanavan kuvaa. Yksityiset näytöt pysyvät suljettuina. Voit lopettaa milloin tahansa."

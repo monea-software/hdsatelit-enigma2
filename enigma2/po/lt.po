@@ -56001,3 +56001,90 @@ msgstr "−1 min"
 #~ msgstr ""
 #~ "jūsų imtuvas galėjo būti dabar nenaudojamas. Prašome vadovautis "
 #~ "instrukcija dėl tolimesnės pagalbos prieš perkraunant imtuvą."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit komanda per internetą mato tavo imtuvo būseną, kad tau padėtų. Gali tai bet kada sustabdyti."
+
+msgid "Control complet"
+msgstr "Visiškas valdymas"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Visiškas valdymas: komanda gali naršyti meniu, keisti nustatymus, ieškoti kanalų ir diegti iš oficialaus kanalo; niekada raktų, prieigos modulių prenumeratos eilučių ar tavo asmeninių duomenų."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Be Visiško valdymo: komanda tik skaito imtuvo būseną, nieko nekeisdama."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit dabar dirba tavo imtuve"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Kaip tai veikia: tavo imtuvas per šifruotą ryšį klausia HD Satelit serverio, ar turime jam užklausą. Galime prašyti tik operacijų iš fiksuoto sąrašo, įrašyto image: būsenos, žurnalų ir ekrano teksto nuskaitymo, meniu ekrano kopijos ir ekrane parašytos žinutės. Pažymėjus Visišką valdymą, komanda taip pat gali spausti nuotolinio pultelio mygtukus ir rašyti į teksto laukus, kad naršytų meniu, keistų nustatymus, ieškotų kanalų ir diegtų iš oficialaus kanalo, tarsi laikytų pultelį rankose. Negalime vykdyti laisvų komandų ir negalime pasiekti kitų įrenginių tavo namuose. Prieigos modulių, slaptažodžių, SSH prieigos, Wi-Fi tinklo ir tavo asmeninių duomenų ekranai lieka uždari: ten komanda nieko nemato ir gali tik išeiti. Kiekviena užklausa rodoma žurnale, ekrane."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start paleidžia tai 2 valandoms. Gali sustabdyti bet kada, iš imtuvo arba iš tinklalapio. Kol tai įjungta, komanda gali prisijungti bet kada, bet daro tik tai, kas yra fiksuotame sąraše; be Visiško valdymo nieko nekeičia."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Be Visiško valdymo: nuskaitymai ir bandymai (operacijos iš fiksuoto sąrašo, daugiausia nuskaitymai; ekrano kopija rodo tik meniu, o ne kanalo vaizdą). Su Visišku valdymu: taip pat pultelio mygtukai ir tekstas laukuose, išskyrus privačius ekranus. Gali sustabdyti bet kada."
+
+msgid "Ecran"
+msgstr "Ekranas"
+
+msgid "Control"
+msgstr "Valdymas"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "imtuve atidaryto ekrano tekstas (meniu, pasirinkta eilutė, nustatymai), be privačių ekranų"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "nuotolinio pultelio mygtukai, tarsi komanda laikytų pultelį (tik su Visišku valdymu)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "tekstas, parašytas ekrane atidarytame lauke (tik su Visišku valdymu, niekada slaptažodžiuose)"
+
+msgid "control"
+msgstr "valdymas"
+
+msgid "control oprit"
+msgstr "valdymas sustabdytas"
+
+msgid "%d semne"
+msgstr "%d ženklų"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "atidarytas kanalas: paslauga, transponderis, tiuneris ir signalas (be nieko iš prieigos modulių)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "transponderiai iš kanalų sąrašo (be kanalų ir be nieko asmeniško)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "paleisk kanalą iš savo sąrašo (tik su Visišku valdymu)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "pakeisk nustatymą (vaizdas, garsas, sąsaja, tiuneriai, laikas, gidas, tinklas; niekada slaptažodžiai, raktai ar asmeniniai duomenys; tik su Visišku valdymu)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "įdiek papildinį arba modulį iš oficialaus HD Satelit kanalo (be jo konfigūracijos ir raktų; tik su Visišku valdymu)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "pašalink papildinį arba modulį (tik su Visišku valdymu)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "iš naujo paleisk sąsają arba imtuvą, su pranešimu ekrane; pagalba tęsiama po paleidimo iš naujo (tik su Visišku valdymu)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit dabar iš naujo paleidžia imtuvo sąsają. Pagalba tęsiama po paleidimo iš naujo."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit dabar iš naujo paleidžia imtuvą. Pagalba tęsiama po paleidimo iš naujo."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Satelit komanda per internetą prisijungia prie tavo imtuvo, kad tau padėtų: gali naršyti meniu, keisti nustatymus, ieškoti kanalų ir diegti iš oficialaus paketo, be prieigos modulių raktų ir linijų ir be tavo asmeninių duomenų. Bet kada gali tai sustabdyti."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Kaip tai veikia: tavo imtuvas per užšifruotą ryšį klausia HD Satelit serverio, ar turime jam užklausą. Galime prašyti tik operacijų iš fiksuoto sąrašo, įrašyto į atvaizdą: būsenos, žurnalų ir ekrano teksto nuskaitymų, meniu ekrano kopijos, ekrane rodomo pranešimo, nuotolinio valdymo pultelio mygtukų ir laukų teksto, kad galėtume eiti per meniu, keisti nustatymus, ieškoti kanalų ir diegti iš oficialaus paketo, lyg laikytume nuotolinio valdymo pultą. Negalime vykdyti laisvų komandų ir negalime pasiekti kitų įrenginių tavo namuose. Prieigos modulių, slaptažodžių, SSH prieigos, Wi-Fi tinklo ir tavo asmeninių duomenų ekranai lieka uždaryti: ten komanda nieko nemato ir gali tik išeiti. Kiekviena užklausa rodoma žurnale, ekrane."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start įjungia ją 2 valandoms. Bet kada gali tai sustabdyti iš imtuvo arba iš interneto puslapio. Kol ji įjungta, komanda gali bet kada prisijungti, bet daro tik tai, kas yra fiksuotame sąraše."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Pagalba yra visapusiška: nuskaitymai, bandymai ir imtuvo valdymas per meniu, iš fiksuoto sąrašo. Ekrano kopija rodo tik meniu, ne kanalo vaizdą. Privatūs ekranai lieka uždaryti. Bet kada gali sustabdyti."
