@@ -11279,3 +11279,78 @@ msgstr "مقدمو الخدمه"
 #
 #~ msgid "no HDD found"
 #~ msgstr "لم يتم العثور على قرص صلب"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "يرى فريق HD Satelit عبر الإنترنت حالة ريسيفرك، لمساعدتك. يمكنك إيقافها في أي وقت."
+
+msgid "Control complet"
+msgstr "تحكم كامل"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "تحكم كامل: يمكن للفريق التنقل في القوائم وتغيير الإعدادات والبحث عن القنوات والتثبيت من المستودع الرسمي؛ ولا يمكنه أبدًا الوصول إلى المفاتيح أو أسطر وحدات الوصول المشروط أو بياناتك الشخصية."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "بدون تحكم كامل: يقرأ الفريق حالة الريسيفر فقط، دون تغيير أي شيء."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "يعمل HD Satelit الآن على ريسيفرك"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "كيف يعمل: يسأل ريسيفرك خادم HD Satelit، عبر اتصال مشفر، إن كان لدينا طلب له. لا يمكننا طلب سوى عمليات من قائمة ثابتة مكتوبة في النظام: قراءات الحالة والسجلات والنص الموجود على الشاشة، ولقطة للقوائم، ورسالة مكتوبة على الشاشة. مع تحديد تحكم كامل، يمكن للفريق أيضًا الضغط على أزرار الريموت والكتابة في حقول النص، للتنقل في القوائم وتغيير الإعدادات والبحث عن القنوات والتثبيت من المستودع الرسمي، وكأنه يمسك الريموت. لا يمكننا تشغيل أوامر حرة ولا الوصول إلى أجهزة أخرى في منزلك. تبقى شاشات وحدات الوصول المشروط وكلمات المرور ووصول SSH وشبكة Wi-Fi وبياناتك الشخصية مغلقة: لا يرى الفريق هناك شيئًا ولا يمكنه إلا الخروج. يظهر كل طلب في السجل، على الشاشة."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start يشغّلها لمدة ساعتين. يمكنك إيقافها في أي وقت، من الريسيفر أو من صفحة الويب. طالما أنها تعمل، يمكن للفريق الدخول في أي وقت، لكنه يفعل فقط ما هو في القائمة الثابتة؛ بدون تحكم كامل لا يغيّر شيئًا."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "بدون تحكم كامل: قراءات وفحوصات (عمليات من قائمة ثابتة، أساسًا قراءات؛ اللقطة تُظهر القوائم فقط، لا صورة القناة). مع تحكم كامل: أيضًا أزرار الريموت والكتابة في الحقول، ما عدا الشاشات الخاصة. يمكنك الإيقاف في أي وقت."
+
+msgid "Ecran"
+msgstr "الشاشة"
+
+msgid "Control"
+msgstr "التحكم"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "نص الشاشة المفتوحة على الريسيفر (القائمة، الصف المحدد، الإعدادات)، دون الشاشات الخاصة"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "أزرار الريموت، وكأن الفريق يمسك الريموت (فقط مع تحكم كامل)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "نص مكتوب في الحقل المفتوح على الشاشة (فقط مع تحكم كامل، ولا في كلمات المرور أبدًا)"
+
+msgid "control"
+msgstr "تحكم"
+
+msgid "control oprit"
+msgstr "تحكم متوقف"
+
+msgid "%d semne"
+msgstr "%d حرفًا"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "القناة المفتوحة: الخدمة، الترانسبوندر، التيونر والإشارة (بدون أي شيء من وحدات فك التشفير)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "الترانسبوندرات من قائمة القنوات (بدون قنوات وبدون أي شيء شخصي)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "يشغّل قناة من قائمتك (فقط مع تحكم كامل)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "يغيّر إعدادًا (الصورة، الصوت، الواجهة، التيونرات، الوقت، الدليل، الشبكة؛ أبدًا كلمات المرور أو المفاتيح أو البيانات الشخصية؛ فقط مع تحكم كامل)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "يثبّت إضافة أو وحدة من المستودع الرسمي HD Satelit (بدون إعداده ومفاتيحه؛ فقط مع تحكم كامل)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "يزيل إضافة أو وحدة (فقط مع تحكم كامل)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "يعيد تشغيل الواجهة أو جهاز الاستقبال، مع إشعار على الشاشة؛ تستمر المساعدة بعد إعادة التشغيل (فقط مع تحكم كامل)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "يقوم HD Satelit الآن بإعادة تشغيل واجهة جهاز الاستقبال. تستمر المساعدة بعد إعادة التشغيل."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "يقوم HD Satelit الآن بإعادة تشغيل جهاز الاستقبال. تستمر المساعدة بعد إعادة التشغيل."

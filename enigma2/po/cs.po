@@ -53986,3 +53986,51 @@ msgstr "Poslední závěry"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "závěry týmu (co jsme zjistili a co jsme udělali), zobrazené na přijímači, dokud nestiskneš OK"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "Tým HD Satelit vidí přes internet stav tvého přijímače, aby ti pomohl. Můžeš to kdykoli vypnout."
+
+msgid "Control complet"
+msgstr "Plná kontrola"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Plná kontrola: tým může procházet nabídky, měnit nastavení, vyhledávat kanály a instalovat z oficiálního feedu; nikdy klíče, linky modulů podmíněného přístupu ani tvá osobní data."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Bez Plné kontroly: tým jen čte stav přijímače, nic nemění."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit teď pracuje na tvém přijímači"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Jak to funguje: tvůj přijímač se ptá serveru HD Satelit, přes šifrované spojení, jestli pro něj máme požadavek. Můžeme žádat jen operace z pevného seznamu zapsaného v image: čtení stavu, logů a textu z obrazovky, snímek nabídek a zprávu napsanou na obrazovce. S zaškrtnutou Plnou kontrolou může tým také mačkat tlačítka dálkového ovladače a psát do textových polí, aby procházel nabídky, měnil nastavení, vyhledával kanály a instaloval z oficiálního feedu, jako by držel dálkový ovladač. Nemůžeme spouštět libovolné příkazy a nemůžeme se dostat k jiným zařízením ve tvém domě. Obrazovky modulů podmíněného přístupu, hesel, přístupu SSH, sítě Wi-Fi a tvých osobních dat zůstávají zavřené: tam tým nic nevidí a může jen odejít. Každý požadavek se objeví v logu, na obrazovce."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start to zapne na 2 hodiny. Můžeš to kdykoli vypnout, na přijímači nebo na webové stránce. Dokud je zapnuté, tým může kdykoli vstoupit, ale dělá jen to, co je v pevném seznamu; bez Plné kontroly nic nemění."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Bez Plné kontroly: čtení a testy (operace z pevného seznamu, hlavně čtení; snímek ukazuje jen nabídky, ne obraz kanálu). S Plnou kontrolou: i tlačítka dálkového ovladače i text do polí, kromě soukromých obrazovek. Můžeš to kdykoli vypnout."
+
+msgid "Ecran"
+msgstr "Obrazovka"
+
+msgid "Control"
+msgstr "Ovládání"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "text otevřené obrazovky na přijímači (nabídka, vybraný řádek, nastavení), bez soukromých obrazovek"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "tlačítka dálkového ovladače, jako by tým držel dálkový ovladač (jen s Plnou kontrolou)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "text napsaný do pole otevřeného na obrazovce (jen s Plnou kontrolou, nikdy v heslech)"
+
+msgid "control"
+msgstr "ovládání"
+
+msgid "control oprit"
+msgstr "ovládání vypnuto"
+
+msgid "%d semne"
+msgstr "%d znaků"

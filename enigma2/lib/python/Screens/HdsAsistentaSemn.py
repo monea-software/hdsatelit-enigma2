@@ -367,12 +367,107 @@ def _captura():
 	return iesire or None
 
 
+def _canal():
+	"""Canalul deschis (op "canal"), ca Informatii despre canal (paginile din canal_info_web), pe firul enigma2."""
+	def lucru(gata):
+		from Plugins.Extensions.HdsWebControl import canal_info_web
+		d = canal_info_web.stare()
+		randuri = ["Canal deschis: %s%s" % ("da" if d.get("are_canal") else "nu", " (standby)" if d.get("standby") else "")]
+		for p in d.get("pagini") or []:
+			randuri.append("[%s]" % p.get("id"))
+			for r in p.get("randuri") or []:
+				if len(r) >= 2 and (str(r[0]).strip() or str(r[1]).strip()):
+					randuri.append("  %s = %s" % (r[0], r[1]))
+		gata("\n".join(randuri))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _zap(referinta):
+	"""Porneste canalul (op "zap"), ca din lista de canale, pe firul enigma2. -> (cod, text)."""
+	def lucru(gata):
+		import NavigationInstance
+		from enigma import eServiceReference
+		nav = NavigationInstance.instance
+		if nav is None:
+			gata((1, "(navigatia nu e gata)"))
+			return
+		ref = eServiceReference(referinta)
+		if not ref.valid():
+			gata((1, "(referinta rea)"))
+			return
+		nav.playService(ref)
+		try:
+			from Components.HdsCanalTinut import tine_minte
+			tine_minte(ref)
+		except Exception:
+			pass
+		gata((0, "pornit: %s" % referinta))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+TEXT_REPORNESTE_INTERFATA = N_("HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire.")
+TEXT_REPORNESTE_RECEPTOR = N_("HD Satelit repornește acum receptorul. Asistența continuă după repornire.")
+REPORNIRE_DUPA_MS = 6000
+
+
+def _reporneste(ce):
+	"""Repornirea (op "reporneste"): anuntul pe ecran, apoi, dupa REPORNIRE_DUPA_MS (raspunsul pleaca intre timp si
+	starea sesiunii e scrisa), interfata (quitMainloop 3) sau receptorul (quitMainloop 2). Sesiunea se reia singura dupa
+	repornire (A.reia, din fisierul de stare). -> (cod, text)."""
+	def lucru(gata):
+		s = _session()
+		if s is None:
+			gata((1, "(fara sesiunea enigma2)"))
+			return
+		cod = 3 if ce == "interfata" else 2
+		try:
+			from Screens import HdsAnuntRetea
+			HdsAnuntRetea.arata(s, _(TEXT_REPORNESTE_INTERFATA if cod == 3 else TEXT_REPORNESTE_RECEPTOR), "info")
+		except Exception as e:
+			_jurnal("anuntul repornirii: %r" % (e,))
+		ceas = eTimer()
+
+		def acum():
+			ceas.stop()
+			_vii.discard(ceas)
+			try:
+				from Screens.Standby import TryQuitMainloop
+				s.open(TryQuitMainloop, cod)
+			except Exception as e:
+				_jurnal("repornirea: %r" % (e,))
+				from enigma import quitMainloop
+				quitMainloop(cod)
+		ceas.callback.append(acum)
+		_vii.add(ceas)
+		ceas.start(REPORNIRE_DUPA_MS, True)
+		gata((0, "repornesc %s in %d s; asistenta continua dupa repornire" % (ce, REPORNIRE_DUPA_MS // 1000)))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _setare(cheie, valoare):
+	"""O setare scrisa direct (op "setare-scrie"), pe firul enigma2, cu efectele ei; la tunere, actualizarea lor ca din
+	meniu. -> (cod, text)."""
+	def lucru(gata):
+		from Components.config import config, configfile
+
+		def dupa(c):
+			if c.startswith("config.Nims."):
+				from Components.NimManager import nimmanager
+				nimmanager.sec.update()
+		gata(Control.scrieSetare(config, cheie, valoare, salveaza=configfile.save, dupa=dupa))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
 def ctxReceptor(session):
 	ctx = {}
 	ctx["captura"] = _captura
 	ctx["ecran"] = _ecranText
 	ctx["taste"] = _taste
 	ctx["text"] = _text
+	ctx["canal"] = _canal
+	ctx["zap"] = _zap
+	ctx["reporneste"] = _reporneste
+	ctx["setare"] = _setare
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
 		ctx["concluzii"] = _controler[0].cereConcluzii
@@ -391,9 +486,11 @@ def _concluziiFaraControler(text):
 
 # ---------------------------------------------------------------- pornirea si reluarea
 
-def porneste(session, nivel="A", durata_min=None, de_la="televizor", versiune_text=None, nevoie="", detalii=""):
+def porneste(session, nivel=None, durata_min=None, de_la="televizor", versiune_text=None, nevoie="", detalii=""):
 	if versiune_text is None:
 		versiune_text = A.VERSIUNE_TEXT
+	if nivel is None:
+		nivel = A.NIVEL_PORNIRE
 	if durata_min is None:
 		durata_min = A.DURATA_IMPLICITA_MIN
 	limba = _limba()
@@ -412,13 +509,13 @@ TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: 
 TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor acum.")
 
 
-def pornesteWeb(session, nivel="A"):
+def pornesteWeb(session, nivel=None):
 	"""Pornirea din pagina web a unui browser de incredere (conectat cu codul de pe receptor): un clic, ca Start de pe
-	receptor (durata implicita, fara intrebari); nivel "B" cu randul "Control complet" bifat. -> (reusit, mesaj)."""
+	receptor (asistenta completa, durata implicita, fara intrebari). -> (reusit, mesaj)."""
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
-	return porneste(session, nivel=nivel if nivel in A.NIVELE else "A", durata_min=A.DURATA_IMPLICITA_MIN,
+	return porneste(session, nivel=nivel if nivel in A.NIVELE else A.NIVEL_PORNIRE, durata_min=A.DURATA_IMPLICITA_MIN,
 		de_la="web")
 
 

@@ -52514,3 +52514,51 @@ msgstr "Όροι και προϋποθέσεις"
 
 msgid "cerere trimisă, aștept echipa"
 msgstr "το αίτημα στάλθηκε, περιμένω την ομάδα"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "Η ομάδα HD Satelit βλέπει μέσω διαδικτύου την κατάσταση του δέκτη σου, για να σε βοηθήσει. Μπορείς να τη σταματήσεις όποτε θέλεις."
+
+msgid "Control complet"
+msgstr "Πλήρης έλεγχος"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Πλήρης έλεγχος: η ομάδα μπορεί να πλοηγείται στα μενού, να αλλάζει ρυθμίσεις, να ψάχνει κανάλια και να εγκαθιστά από το επίσημο feed· ποτέ τα κλειδιά, τις γραμμές των modules πρόσβασης ή τα προσωπικά σου δεδομένα."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Χωρίς Πλήρης έλεγχος: η ομάδα μόνο διαβάζει την κατάσταση του δέκτη, χωρίς να αλλάζει τίποτα."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit δουλεύει τώρα στον δέκτη σου"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Πώς λειτουργεί: ο δέκτης σου ρωτά τον διακομιστή HD Satelit, μέσω κρυπτογραφημένης σύνδεσης, αν έχουμε κάποιο αίτημα για αυτόν. Μπορούμε να ζητήσουμε μόνο ενέργειες από μια σταθερή λίστα, γραμμένη στην εικόνα: αναγνώσεις της κατάστασης, των αρχείων καταγραφής και του κειμένου στην οθόνη, ένα στιγμιότυπο των μενού και ένα μήνυμα γραμμένο στην οθόνη. Όταν είναι επιλεγμένο το Πλήρης έλεγχος, η ομάδα μπορεί επίσης να πατά τα πλήκτρα του τηλεχειριστηρίου και να γράφει στα πεδία κειμένου, για να πλοηγείται στα μενού, να αλλάζει ρυθμίσεις, να ψάχνει κανάλια και να εγκαθιστά από το επίσημο feed, σαν να κρατούσε το τηλεχειριστήριο. Δεν μπορούμε να εκτελούμε ελεύθερες εντολές και δεν μπορούμε να φτάσουμε σε άλλες συσκευές στο σπίτι σου. Οι οθόνες των modules πρόσβασης, των κωδικών πρόσβασης, της πρόσβασης SSH, του δικτύου Wi-Fi και των προσωπικών σου δεδομένων παραμένουν κλειστές: εκεί η ομάδα δεν βλέπει τίποτα και μπορεί μόνο να βγει. Κάθε αίτημα εμφανίζεται στο αρχείο καταγραφής, στην οθόνη."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start την ενεργοποιεί για 2 ώρες. Μπορείς να τη σταματήσεις όποτε θέλεις, από τον δέκτη ή από την ιστοσελίδα. Όσο είναι ενεργοποιημένη, η ομάδα μπορεί να μπει όποτε θέλει, αλλά κάνει μόνο ό,τι είναι στη σταθερή λίστα. Χωρίς Πλήρης έλεγχος δεν αλλάζει τίποτα."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Χωρίς Πλήρης έλεγχος: αναγνώσεις και δοκιμές (ενέργειες από μια σταθερή λίστα, κυρίως αναγνώσεις· ένα στιγμιότυπο δείχνει μόνο τα μενού, όχι την εικόνα του καναλιού). Με Πλήρης έλεγχος: και τα πλήκτρα του τηλεχειριστηρίου και κείμενο στα πεδία, εκτός από τις ιδιωτικές οθόνες. Μπορείς να σταματήσεις όποτε θέλεις."
+
+msgid "Ecran"
+msgstr "Οθόνη"
+
+msgid "Control"
+msgstr "Έλεγχος"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "το κείμενο της οθόνης που είναι ανοιχτή στον δέκτη (το μενού, η επιλεγμένη γραμμή, οι ρυθμίσεις), χωρίς τις ιδιωτικές οθόνες"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "τα πλήκτρα του τηλεχειριστηρίου, σαν να κρατά η ομάδα το τηλεχειριστήριο (μόνο με Πλήρης έλεγχος)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "ένα κείμενο γραμμένο στο ανοιχτό πεδίο στην οθόνη (μόνο με Πλήρης έλεγχος, ποτέ σε κωδικούς πρόσβασης)"
+
+msgid "control"
+msgstr "έλεγχος"
+
+msgid "control oprit"
+msgstr "έλεγχος απενεργοποιημένος"
+
+msgid "%d semne"
+msgstr "%d χαρακτήρες"

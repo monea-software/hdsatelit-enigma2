@@ -9,9 +9,9 @@
 # Un clic, fara pasi in plus:
 # - HdsAsistentaAlege: pagina de pornire. Numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și
 #   condițiile" (Stanga/Dreapta schimba bifa; OK deschide HdsAsistentaTermeni, fereastra derulanta cu textul intreg,
-#   A.textTermeni), al doilea rand bifat dinainte "Control complet" (nivelul B: tastele si textul, afara de ecranele
-#   private; debifat = nivelul A, numai citiri) si Verde "Start". Start porneste pe loc, fara nicio intrebare: durata
-#   A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume". Fara bifa de acord, Start nu porneste si pagina spune scurt de ce.
+#   A.textTermeni) si Verde "Start". Start porneste pe loc asistenta completa (nivelul B: citirile si controlul prin
+#   meniuri, afara de ecranele private), fara nicio intrebare: durata A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume".
+#   Fara bifa de acord, Start nu porneste si pagina spune scurt de ce.
 # - HdsAsistenta: intrarea din meniu. Cat asistenta e oprita deschide pe loc pagina de pornire (la prima executie,
 #   onFirstExecBegin: un ecran modal se deschide numai cand cel de dedesubt ruleaza); iesirea de pe pagina fara Start
 #   inchide si intrarea. Cat e pornita arata numai pana cand e pornita (A.textPana) si, dedesubt, jurnalul (fiecare
@@ -334,11 +334,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		self.skinName = "HdsAjutorDistantaAlege"
 		self.setTitle(_("Asistență de la distanță"))
 		self.de_la = de_la if de_la in ("televizor", "web") else "televizor"
-		# bifate dinainte: omul apasa Start si atat
+		# bifat dinainte: omul apasa Start si atat
 		self.accept = ConfigYesNo(default=True)
-		self.control = ConfigYesNo(default=True)
-		ConfigListScreen.__init__(self, [getConfigListEntry(_(A.TEXT_ACCEPT), self.accept),
-			getConfigListEntry(_(A.TEXT_CONTROL), self.control)], session=session)
+		ConfigListScreen.__init__(self, [getConfigListEntry(_(A.TEXT_ACCEPT), self.accept)], session=session)
 		self["text"] = StaticText("")
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Start"))
@@ -355,13 +353,11 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		}, -2)
 		self._fara_bifa = False
 		self.accept.addNotifier(self._bifa, initial_call=False)
-		self.control.addNotifier(self._bifa, initial_call=False)
 		self._puneText()
 
 	def _puneText(self):
 		dedesubt = A.TEXT_FARA_BIFA if self._fara_bifa and not self.accept.value else TEXT_OK_TERMENI
-		control = A.TEXT_CONTROL_LUNG if self.control.value else A.TEXT_FARA_CONTROL
-		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + _(control) + "\n\n" + _(dedesubt))
+		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + _(dedesubt))
 
 	def _bifa(self, *_a):
 		if self.accept.value:
@@ -381,9 +377,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 			self._fara_bifa = True
 			self._puneText()
 			return
-		# fara intrebari: durata implicita, nevoia "Nimic anume"; nivelul dupa randul "Control complet"
-		nivel = "B" if self.control.value else "A"
-		reusit, mesaj = Semn.porneste(self.session, nivel=nivel, durata_min=A.DURATA_IMPLICITA_MIN, de_la=self.de_la)
+		# fara intrebari: asistenta completa, durata implicita, nevoia "Nimic anume"
+		reusit, mesaj = Semn.porneste(self.session, nivel=A.NIVEL_PORNIRE, durata_min=A.DURATA_IMPLICITA_MIN,
+			de_la=self.de_la)
 		if not reusit:
 			# de ce n-a pornit, pe pagina (o fereastra deschisa inainte de close ar lasa pagina sub ea)
 			self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + (mesaj or ""))

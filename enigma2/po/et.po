@@ -55852,3 +55852,51 @@ msgstr "−1 min"
 #~ msgstr ""
 #~ "teie vastuvõtja võib olla nüüd kasutu.Uuri juhendit täiendava "
 #~ "abileidmiseks enne vastuvõtja alglaadimist."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Sateliti meeskond näeb interneti kaudu su vastuvõtja olekut, et sind aidata. Sa saad selle igal ajal peatada."
+
+msgid "Control complet"
+msgstr "Täielik juhtimine"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Täielik juhtimine: meeskond saab menüüdes liikuda, seadeid muuta, kanaleid otsida ja ametlikust paketihoidlast paigaldada; mitte kunagi võtmeid, juurdepääsumoodulite liine ega su isikuandmeid."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Ilma täieliku juhtimiseta: meeskond ainult loeb vastuvõtja olekut, midagi muutmata."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit töötab praegu su vastuvõtjal"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Kuidas see käib: su vastuvõtja küsib HD Sateliti serverilt, krüpteeritud ühenduse kaudu, kas meil on temale päring. Me saame küsida ainult toiminguid kindlast loendist, mis on pildis kirjas: oleku, logide ja ekraanil oleva teksti lugemised, menüüde kuvatõmmis ja ekraanile kirjutatud sõnum. Kui täielik juhtimine on märgitud, saab meeskond ka puldi nuppe vajutada ja tekstiväljadesse kirjutada, et menüüdes liikuda, seadeid muuta, kanaleid otsida ja ametlikust paketihoidlast paigaldada, nagu ta hoiaks pulti. Me ei saa käivitada vabu käske ega jõuda teistele seadmetele su kodus. Juurdepääsumoodulite, paroolide, SSH-juurdepääsu, Wi-Fi võrgu ja su isikuandmete ekraanid jäävad suletuks: seal meeskond midagi ei näe ja saab ainult väljuda. Iga päring ilmub logis, ekraanil."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start käivitab selle 2 tunniks. Sa saad selle igal ajal peatada, vastuvõtjalt või veebilehelt. Kui see on käimas, saab meeskond igal ajal siseneda, aga teeb ainult seda, mis on kindlas loendis; ilma täieliku juhtimiseta ei muuda ta midagi."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Ilma täieliku juhtimiseta: lugemised ja proovid (toimingud kindlast loendist, peamiselt lugemised; kuvatõmmis näitab ainult menüüsid, mitte kanali pilti). Täieliku juhtimisega: ka puldi nupud ja tekst väljades, välja arvatud privaatsed ekraanid. Sa saad selle igal ajal peatada."
+
+msgid "Ecran"
+msgstr "Ekraan"
+
+msgid "Control"
+msgstr "Juhtimine"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "vastuvõtjal avatud ekraani tekst (menüü, valitud rida, seaded), ilma privaatsete ekraanideta"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "puldi nupud, nagu hoiaks meeskond pulti (ainult täieliku juhtimisega)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "ekraanil avatud välja kirjutatud tekst (ainult täieliku juhtimisega, mitte kunagi paroolidesse)"
+
+msgid "control"
+msgstr "juhtimine"
+
+msgid "control oprit"
+msgstr "juhtimine peatatud"
+
+msgid "%d semne"
+msgstr "%d märki"

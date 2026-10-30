@@ -23,6 +23,7 @@
 # eTimer, nu cu sleep pe firul enigma2. Modulul nu importa nimic din enigma2 la incarcare: probele de pe PC dau ecrane
 # false (orice obiect cu aceleasi metode).
 
+import os
 import re
 import threading
 import time
@@ -519,3 +520,158 @@ def asteptareTaste(n):
 
 def acum():
 	return time.monotonic()
+
+
+# ---------------------------------------------------------------- scrierea directa a unei setari (op "setare-scrie")
+
+# numai sub aceste prefixe (video, sunet, interfata, subtitrari, telecomanda, tunerele, ora, ghidul, inregistrarile,
+# reteaua) si niciodata o cheie care se potriveste SETARI_OPRITE (parole, chei, nume, e-mail, modulele de acces)
+SETARI_SCRIERE = (
+	"config.av.", "config.osd.", "config.usage.", "config.subtitles.", "config.skin.", "config.misc.rcused",
+	"config.Nims.", "config.timezone.", "config.epg.", "config.recording.", "config.network.",
+)
+SETARI_OPRITE = re.compile(r"(?i)(pass|pwd|parola|psk|secret|token|key|pin|auth|login|user|card|cam|mail|email|nume|"
+	r"name|ssid|wpa|wlan|hdswebcontrol|hds_beta)")
+_CHEIE = re.compile(r"^config(\.[A-Za-z0-9_]{1,40}){1,8}$")
+
+
+def cheieScriere(cheie):
+	"""'' daca cheia se poate scrie, altfel motivul."""
+	if not isinstance(cheie, str) or not _CHEIE.match(cheie):
+		return "cheie rea"
+	if not any(cheie.startswith(p) or cheie + "." == p for p in SETARI_SCRIERE):
+		return "cheie in afara listei permise"
+	if SETARI_OPRITE.search(cheie):
+		return "cheie oprita (parole, chei, date personale, modulele de acces)"
+	return ""
+
+
+def elementSetare(radacina, cheie):
+	"""Elementul de setari pentru cheie ("config.av.videomode.HDMI"), urmand atributele si indicii (config.Nims.0...),
+	sau None."""
+	obj = radacina
+	for parte in cheie.split(".")[1:]:
+		try:
+			if parte.isdigit():
+				obj = obj[int(parte)]
+			else:
+				obj = getattr(obj, parte)
+		except Exception:
+			return None
+	return obj if _esteElement(obj) and hasattr(obj, "save") else None
+
+
+def scrieSetare(radacina, cheie, valoare, salveaza=None, dupa=None):
+	"""(cod, mesaj): pune valoarea (din text, ca in fisierul settings) pe elementul cheii, cu efectele lui (notificarile
+	elementului), il salveaza si salveaza fisierul (salveaza(): configfile.save). dupa(cheie): ce mai trebuie facut dupa
+	schimbare (la tunere, actualizarea lor, ca din meniu)."""
+	motiv = cheieScriere(cheie)
+	if motiv:
+		return 1, "(%s: %s)" % (motiv, cheie)
+	if _elementPrivat_dupa_cheie(cheie):
+		return 1, "(cheie oprita: %s)" % cheie
+	el = elementSetare(radacina, cheie)
+	if el is None:
+		return 1, "(setare necunoscuta: %s)" % cheie
+	if _elementPrivat(el):
+		return 1, "(camp de parola: %s)" % cheie
+	vechi = _valoare(el)
+	try:
+		nou = el.fromstring(valoare) if hasattr(el, "fromstring") else valoare
+		el.value = nou
+	except Exception as e:
+		return 1, "(valoare respinsa pentru %s: %s)" % (cheie, type(e).__name__)
+	try:
+		el.save()
+		if salveaza is not None:
+			salveaza()
+	except Exception as e:
+		return 1, "(nu s-a putut salva %s: %s)" % (cheie, type(e).__name__)
+	if dupa is not None:
+		try:
+			dupa(cheie)
+		except Exception as e:
+			_jurnal("dupa %s: %r" % (cheie, e))
+	return 0, "%s: %s -> %s" % (cheie, vechi, _valoare(el))
+
+
+def _elementPrivat_dupa_cheie(cheie):
+	return bool(SETARI_OPRITE.search(cheie))
+
+
+# ---------------------------------------------------------------- pachetele din feedurile noastre (instaleaza)
+
+# numai pluginurile si modulele din feed (enigma2-plugin-...); dependintele le aduce opkg singur
+PACHET = re.compile(r"^enigma2-plugin-[a-z0-9][a-z0-9.+-]{0,62}$")
+# feedurile imaginii (stb.hdsatelit.com) si al pluginurilor si modulelor (Monea Software, moneasoftware.com)
+GAZDE_NOASTRE = ("stb.hdsatelit.com", "feed.hdsatelit.com", "moneasoftware.com")
+_SRC = re.compile(r"^\s*src(?:/gz)?\s+(\S+)\s+(\S+)")
+
+
+def feeduriNoastre(dosar="/etc/opkg"):
+	"""Numele surselor opkg ale feedurilor noastre (adresa pe una din GAZDE_NOASTRE)."""
+	nume = []
+	try:
+		fisiere = sorted(os.listdir(dosar))
+	except Exception:
+		return nume
+	for f in fisiere:
+		if not f.endswith(".conf"):
+			continue
+		try:
+			with open(os.path.join(dosar, f), encoding="utf-8", errors="replace") as h:
+				for rand in h:
+					m = _SRC.match(rand)
+					if m:
+						gazda = m.group(2).split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0].lower()
+						if gazda in GAZDE_NOASTRE:
+							nume.append(m.group(1))
+		except Exception:
+			continue
+	return nume
+
+
+def pachetInFeed(pachet, feeduri, liste="/var/lib/opkg/lists"):
+	"""True daca pachetul e in indexul (descarcat de opkg update) al unuia dintre feedurile noastre."""
+	semn = "Package: %s\n" % pachet
+	for f in feeduri:
+		try:
+			with open(os.path.join(liste, f), encoding="utf-8", errors="replace") as h:
+				if semn in h.read() + "\n":
+					return True
+		except Exception:
+			continue
+	return False
+
+
+# ---------------------------------------------------------------- transponderele din lamedb (citire)
+
+def transpondere(text_lamedb, namespace=None, maxim=1500):
+	"""Transponderele din lamedb (numai sectiunea lor: namespace:tsid:onid si parametrii), fara canale si fara nimic
+	al omului; namespace (hex) le alege pe ale unui satelit."""
+	randuri = []
+	sectiune = False
+	cap = None
+	ns = namespace.lower().lstrip("0") if namespace else None
+	for rand in (text_lamedb or "").splitlines():
+		r = rand.strip()
+		if r == "transponders":
+			sectiune = True
+			continue
+		if not sectiune:
+			continue
+		if r == "end":
+			break
+		if r == "/":
+			cap = None
+			continue
+		if cap is None:
+			cap = r
+			continue
+		if ns is not None and cap.split(":")[0].lower().lstrip("0") != ns:
+			continue
+		randuri.append("%s  %s" % (cap, r))
+		if len(randuri) >= maxim:
+			randuri.append("... (taiat la %d)" % maxim)
+			break
+	return "\n".join(randuri) or "(niciun transponder)"

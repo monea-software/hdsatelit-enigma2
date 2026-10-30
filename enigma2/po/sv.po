@@ -55437,3 +55437,78 @@ msgstr "Villkor"
 
 msgid "cerere trimisă, aștept echipa"
 msgstr "begäran skickad, väntar på teamet"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit-teamet ser via internet statusen på din mottagare för att hjälpa dig. Du stänger av det när som helst."
+
+msgid "Control complet"
+msgstr "Full kontroll"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Full kontroll: teamet kan navigera i menyerna, ändra inställningar, söka kanaler och installera från den officiella feeden; aldrig nycklarna, linjerna för åtkomstmodulerna eller dina personuppgifter."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Utan Full kontroll: teamet läser bara statusen på mottagaren, utan att ändra något."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit arbetar nu på din mottagare"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Så fungerar det: din mottagare frågar HD Satelit-servern, via en krypterad anslutning, om vi har en begäran för den. Vi kan bara begära åtgärder från en fast lista, skriven i imagen: avläsningar av status, loggarna och texten på skärmen, en skärmbild av menyerna och ett meddelande skrivet på skärmen. Med Full kontroll ikryssad kan teamet också trycka på fjärrkontrollens knappar och skriva i textfälten, för att gå genom menyerna, ändra inställningar, söka kanaler och installera från den officiella feeden, som om teamet höll i fjärrkontrollen. Vi kan inte köra fria kommandon och vi kan inte nå andra enheter i ditt hem. Skärmarna för åtkomstmodulerna, lösenorden, SSH-åtkomsten, Wi-Fi-nätverket och dina personuppgifter förblir stängda: där ser teamet ingenting och kan bara gå ut. Varje begäran visas i loggen, på skärmen."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start startar den i 2 timmar. Du stänger av den när som helst, från mottagaren eller från webbsidan. Medan den är igång kan teamet när som helst gå in, men gör bara det som finns i den fasta listan; utan Full kontroll ändrar teamet ingenting."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Utan Full kontroll: avläsningar och tester (åtgärder från en fast lista, huvudsakligen avläsningar; en skärmbild visar bara menyerna, inte kanalbilden). Med Full kontroll: även fjärrkontrollens knappar och text i fält, utom de privata skärmarna. Du kan stänga av när som helst."
+
+msgid "Ecran"
+msgstr "Skärm"
+
+msgid "Control"
+msgstr "Kontroll"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "texten på skärmen som är öppen på mottagaren (menyn, den valda raden, inställningarna), utan de privata skärmarna"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "fjärrkontrollens knappar, som om teamet höll i fjärrkontrollen (endast med Full kontroll)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "en text skriven i fältet som är öppet på skärmen (endast med Full kontroll, aldrig i lösenord)"
+
+msgid "control"
+msgstr "kontroll"
+
+msgid "control oprit"
+msgstr "kontroll avstängd"
+
+msgid "%d semne"
+msgstr "%d tecken"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "öppnad kanal: tjänst, transponder, tuner och signal (utan något från modulerna för villkorad åtkomst)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "transpondrarna i kanallistan (utan kanaler och utan något personligt)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "starta en kanal från din lista (bara med Full kontroll)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "ändra en inställning (bild, ljud, gränssnitt, tuners, tid, guide, nätverk; aldrig lösenord, nycklar eller personuppgifter; bara med Full kontroll)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "installera ett plugin eller en modul från HD Satelits officiella feed (utan dess konfiguration och nycklar; bara med Full kontroll)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "avinstallera ett plugin eller en modul (bara med Full kontroll)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "starta om gränssnittet eller mottagaren, med meddelande på skärmen; supporten fortsätter efter omstart (bara med Full kontroll)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit startar nu om mottagarens gränssnitt. Supporten fortsätter efter omstart."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit startar nu om mottagaren. Supporten fortsätter efter omstart."

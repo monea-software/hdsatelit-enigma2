@@ -58649,3 +58649,51 @@ msgstr "Dernières conclusions"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "les conclusions de l'équipe (ce que nous avons trouvé et ce que nous avons fait), affichées sur le récepteur jusqu'à ce que tu appuies sur OK"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "L'équipe HD Satelit voit par internet l'état de ton récepteur, pour t'aider. Tu peux l'arrêter à tout moment."
+
+msgid "Control complet"
+msgstr "Contrôle total"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Contrôle total : l'équipe peut naviguer dans les menus, changer des réglages, chercher des chaînes et installer depuis le flux officiel ; jamais les clés, les lignes des modules d'accès ni tes données personnelles."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Sans Contrôle total : l'équipe lit seulement l'état du récepteur, sans rien changer."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit travaille maintenant sur ton récepteur"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Comment ça marche : ton récepteur demande au serveur HD Satelit, par une connexion chiffrée, si nous avons une demande pour lui. Nous ne pouvons demander que des opérations d'une liste fixe, écrite dans l'image : des lectures de l'état, des journaux et du texte à l'écran, une capture des menus et un message écrit à l'écran. Avec Contrôle total coché, l'équipe peut aussi appuyer sur les touches de la télécommande et écrire dans les champs de texte, pour aller dans les menus, changer des réglages, chercher des chaînes et installer depuis le flux officiel, comme si elle tenait la télécommande. Nous ne pouvons pas exécuter de commandes libres et nous ne pouvons pas atteindre d'autres appareils dans ta maison. Les écrans des modules d'accès, des mots de passe, de l'accès SSH, du réseau Wi-Fi et de tes données personnelles restent fermés : là, l'équipe ne voit rien et peut seulement sortir. Chaque demande apparaît dans le journal, à l'écran."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start la démarre pour 2 heures. Tu peux l'arrêter à tout moment, depuis le récepteur ou depuis la page web. Pendant qu'elle est démarrée, l'équipe peut entrer à tout moment, mais ne fait que ce qui est dans la liste fixe ; sans Contrôle total, elle ne change rien."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Sans Contrôle total : lectures et tests (opérations d'une liste fixe, principalement des lectures ; une capture montre seulement les menus, pas l'image de la chaîne). Avec Contrôle total : aussi les touches de la télécommande et le texte dans les champs, sauf les écrans privés. Tu peux arrêter à tout moment."
+
+msgid "Ecran"
+msgstr "Écran"
+
+msgid "Control"
+msgstr "Contrôle"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "le texte de l'écran ouvert sur le récepteur (le menu, la ligne choisie, les réglages), sans les écrans privés"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "les touches de la télécommande, comme si l'équipe tenait la télécommande (seulement avec Contrôle total)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "un texte écrit dans le champ ouvert à l'écran (seulement avec Contrôle total, jamais dans les mots de passe)"
+
+msgid "control"
+msgstr "contrôle"
+
+msgid "control oprit"
+msgstr "contrôle arrêté"
+
+msgid "%d semne"
+msgstr "%d caractères"

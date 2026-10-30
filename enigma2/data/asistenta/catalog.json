@@ -140,6 +140,68 @@
       "args": [
         {"nume": "text", "tipar": "^[^\\x00-\\x1f\\x7f]{1,200}$", "cerut": true}
       ]
+    },
+    {
+      "op": "canal",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)",
+      "args": []
+    },
+    {
+      "op": "transpondere",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "transponderele din lista de canale (fără canale și fără nimic personal)",
+      "args": [
+        {"nume": "namespace", "tipar": "^[0-9a-fA-F]{1,8}$", "cerut": false}
+      ]
+    },
+    {
+      "op": "zap",
+      "grup": "Control",
+      "fel": "control",
+      "text": "pornește un canal din lista ta (numai cu Control complet)",
+      "args": [
+        {"nume": "referinta", "tipar": "^1:0:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,8}:0:0:0:$", "cerut": true}
+      ]
+    },
+    {
+      "op": "setare-scrie",
+      "grup": "Control",
+      "fel": "control",
+      "text": "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)",
+      "args": [
+        {"nume": "cheie", "tipar": "^config(\\.[A-Za-z0-9_]{1,40}){1,8}$", "cerut": true},
+        {"nume": "valoare", "tipar": "^[^\\x00-\\x1f\\x7f]{0,128}$", "cerut": false}
+      ]
+    },
+    {
+      "op": "instaleaza",
+      "grup": "Control",
+      "fel": "control",
+      "text": "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)",
+      "args": [
+        {"nume": "pachet", "tipar": "^enigma2-plugin-[a-z0-9][a-z0-9.+-]{0,62}$", "cerut": true}
+      ]
+    },
+    {
+      "op": "dezinstaleaza",
+      "grup": "Control",
+      "fel": "control",
+      "text": "dezinstalează un plugin sau un modul (numai cu Control complet)",
+      "args": [
+        {"nume": "pachet", "tipar": "^enigma2-plugin-[a-z0-9][a-z0-9.+-]{0,62}$", "cerut": true}
+      ]
+    },
+    {
+      "op": "reporneste",
+      "grup": "Control",
+      "fel": "control",
+      "text": "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)",
+      "args": [
+        {"nume": "ce", "tipar": "^(interfata|receptor)$", "cerut": true}
+      ]
     }
   ]
 }

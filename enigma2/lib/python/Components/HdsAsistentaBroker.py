@@ -46,7 +46,7 @@ _CAM = re.compile(r"(?i)cam[ds]?(?![a-z])|card(?:d\b|[_.-]?serv)|(?<![a-z])[gs]b
 RASPUNS_MAX = 1024 * 1024           # 1 MB de raspuns (text sau captura)
 CAPTURA_MAX = 2 * 1024 * 1024       # o captura (JPEG mic de la 0.6.15; PNG inainte) se plafoneaza aparte
 # op-urile de control: numai la nivelul B (omul a lasat bifat "Control complet")
-CONTROL = ("taste", "text")
+CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza")
 TERMEN_S = 20                       # cat asteapta un extern
 MAX_RANDURI_JURNAL = 2000
 
@@ -371,7 +371,9 @@ def _controlPermis(ctx):
 	return ctx.get("nivel") == "B"
 
 
-TEXT_FARA_CONTROL = "(control oprit: asistenta a fost pornita fara Control complet)"
+# raspunsul unui op de control intr-o sesiune numai de citire (nivelul A, reluata de pe o imagine de dinainte de
+# 0.6.16, cand omul putea debifa Control complet)
+TEXT_FARA_CONTROL = "(control oprit: sesiune numai de citire; omul porneste din nou asistenta, care e completa)"
 
 
 def op_taste(ctx, args):
@@ -432,6 +434,99 @@ def op_concluzii(ctx, args):
 	return Rezultat(0, text="concluzii aratate pe ecran: %d semne" % int(semne))
 
 
+def op_canal(ctx, args):
+	"""Canalul deschis: serviciul, PID-urile, transponderul (frecventa, polarizarea, rata), tunerul si semnalul, ca in
+	Informatii despre canal; randurile modulelor de acces le scoate filtrul (mascheaza)."""
+	citeste = ctx.get("canal")
+	if citeste is None:
+		return Rezultat(1, text="(canalul nu se poate citi)")
+	text = citeste()
+	if text is None:
+		return Rezultat(1, text="(receptorul nu a raspuns la timp)")
+	return Rezultat(0, text=text)
+
+
+def op_transpondere(ctx, args):
+	"""Transponderele din lista de canale (lamedb), numai sectiunea lor, eventual ale unui singur satelit (namespace)."""
+	from Components import HdsAsistentaControl as C
+	cale = ctx.get("lamedb", "/etc/enigma2/lamedb")
+	text = _citeste(cale, 8 * 1024 * 1024)
+	return Rezultat(0, text=C.transpondere(text, args[0] if args and args[0] else None))
+
+
+def _cuControl(ctx, nume, *a):
+	"""Ruleaza unealta de control `nume` din ctx (numai la nivelul B). -> Rezultat."""
+	if not _controlPermis(ctx):
+		return Rezultat(1, text=TEXT_FARA_CONTROL)
+	f = ctx.get(nume)
+	if f is None:
+		return Rezultat(1, text="(%s nu se poate face pe acest receptor)" % nume)
+	rez = f(*a)
+	if rez is None:
+		return Rezultat(1, text="(receptorul nu a raspuns la timp)")
+	cod, text = rez
+	return Rezultat(cod, text=text)
+
+
+def op_zap(ctx, args):
+	"""Porneste canalul cu referinta data (ca din lista de canale)."""
+	return _cuControl(ctx, "zap", args[0])
+
+
+def op_reporneste(ctx, args):
+	"""Reporneste interfata sau receptorul intreg, cu anunt pe ecran; sesiunea continua dupa repornire (fisierul ei de
+	stare)."""
+	return _cuControl(ctx, "reporneste", args[0])
+
+
+def op_setare_scrie(ctx, args):
+	"""O setare scrisa direct (cheie si valoare ca in fisierul settings), numai sub prefixele permise si niciodata o
+	cheie oprita (Components/HdsAsistentaControl.SETARI_SCRIERE, SETARI_OPRITE), prin obiectul config, cu efectele ei."""
+	return _cuControl(ctx, "setare", args[0], args[1] if len(args) > 1 else "")
+
+
+TERMEN_OPKG_S = 300
+
+
+def _opkg(ctx, actiune, pachet):
+	from Components import HdsAsistentaControl as C
+	if not _controlPermis(ctx):
+		return Rezultat(1, text=TEXT_FARA_CONTROL)
+	if not C.PACHET.match(pachet or ""):
+		return Rezultat(1, text="(numai pluginurile si modulele din feed: enigma2-plugin-...)")
+	ruleaza = ctx.get("opkg", _ruleaza)
+	feeduri = C.feeduriNoastre(ctx.get("opkg_conf", "/etc/opkg"))
+	if not feeduri:
+		return Rezultat(1, text="(niciun feed HD Satelit in /etc/opkg)")
+	liste = ctx.get("opkg_liste", "/var/lib/opkg/lists")
+	jurnal = []
+	if actiune == "install":
+		if not C.pachetInFeed(pachet, feeduri, liste):
+			cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
+			jurnal.append("opkg update: cod %s" % cod)
+			if not C.pachetInFeed(pachet, feeduri, liste):
+				return Rezultat(1, text="(%s nu e in feedurile HD Satelit)" % pachet)
+		argv = ["opkg", "install", pachet]
+	else:
+		cod, stare = ruleaza(["opkg", "status", pachet], termen=30, limita=65536)
+		if "Status:" not in stare or "not-installed" in stare:
+			return Rezultat(1, text="(%s nu e instalat)" % pachet)
+		argv = ["opkg", "remove", pachet]
+	cod, text = ruleaza(argv, termen=TERMEN_OPKG_S, limita=256 * 1024)
+	jurnal.append(text.strip())
+	return Rezultat(cod, text="\n".join(jurnal))
+
+
+def op_instaleaza(ctx, args):
+	"""Un plugin sau un modul din feedurile noastre oficiale (opkg install); configurarea si cheile modulelor nu."""
+	return _opkg(ctx, "install", args[0])
+
+
+def op_dezinstaleaza(ctx, args):
+	"""Un plugin sau un modul instalat (opkg remove), numai enigma2-plugin-..."""
+	return _opkg(ctx, "remove", args[0])
+
+
 TABEL = {
 	"info": op_info,
 	"placa": op_placa,
@@ -451,6 +546,13 @@ TABEL = {
 	"ecran": op_ecran,
 	"taste": op_taste,
 	"text": op_text,
+	"canal": op_canal,
+	"transpondere": op_transpondere,
+	"zap": op_zap,
+	"reporneste": op_reporneste,
+	"setare-scrie": op_setare_scrie,
+	"instaleaza": op_instaleaza,
+	"dezinstaleaza": op_dezinstaleaza,
 }
 
 

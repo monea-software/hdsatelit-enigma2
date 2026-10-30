@@ -67,6 +67,16 @@ TEXTE_CATALOG = (
 	N_("textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"),
 	N_("tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"),
 	N_("un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"),
+	N_("canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"),
+	N_("transponderele din lista de canale (fără canale și fără nimic personal)"),
+	N_("pornește un canal din lista ta (numai cu Control complet)"),
+	N_("schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date "
+		"personale; numai cu Control complet)"),
+	N_("instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu "
+		"Control complet)"),
+	N_("dezinstalează un plugin sau un modul (numai cu Control complet)"),
+	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control "
+		"complet)"),
 )
 
 

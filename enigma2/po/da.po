@@ -54640,3 +54640,51 @@ msgstr "Vilkår og betingelser"
 
 msgid "cerere trimisă, aștept echipa"
 msgstr "anmodning sendt, venter på teamet"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit-teamet ser via internettet statussen på din modtager, for at hjælpe dig. Du kan stoppe den når som helst."
+
+msgid "Control complet"
+msgstr "Fuld kontrol"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Fuld kontrol: teamet kan navigere i menuer, ændre indstillinger, søge efter kanaler og installere fra den officielle feed; aldrig nøglerne, linjerne i adgangsmodulerne eller dine personlige data."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Uden Fuld kontrol: teamet læser kun statussen på modtageren, uden at ændre noget."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit arbejder nu på din modtager"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Sådan virker det: din modtager spørger HD Satelit-serveren, via en krypteret forbindelse, om vi har en forespørgsel til den. Vi kan kun bede om handlinger fra en fast liste, der står skrevet i imaget: aflæsninger af statussen, af loggene og af teksten på skærmen, et billede af menuerne og en besked skrevet på skærmen. Med Fuld kontrol slået til kan teamet også trykke på fjernbetjeningens taster og skrive i tekstfelterne, for at gå gennem menuer, ændre indstillinger, søge efter kanaler og installere fra den officielle feed, som om det holdt fjernbetjeningen. Vi kan ikke køre frie kommandoer og kan ikke komme til andre enheder i dit hjem. Skærmene for adgangsmodulerne, for adgangskoder, for SSH-adgang, for Wi-Fi-netværket og for dine personlige data forbliver lukkede: der ser teamet ingenting og kan kun gå ud. Hver forespørgsel vises i loggen, på skærmen."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start slår den til i 2 timer. Du kan stoppe den når som helst, fra modtageren eller fra websiden. Mens den er slået til, kan teamet når som helst komme ind, men gør kun det, der står på den faste liste; uden Fuld kontrol ændrer det ingenting."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Uden Fuld kontrol: aflæsninger og prøver (handlinger fra en fast liste, især aflæsninger; et billede viser kun menuerne, ikke kanalbilledet). Med Fuld kontrol: både fjernbetjeningens taster og tekst i felterne, undtagen de private skærme. Du kan stoppe når som helst."
+
+msgid "Ecran"
+msgstr "Skærm"
+
+msgid "Control"
+msgstr "Kontrol"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "teksten på den skærm, der er åben på modtageren (menuen, den valgte række, indstillingerne), uden de private skærme"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "fjernbetjeningens taster, som om teamet holdt fjernbetjeningen (kun med Fuld kontrol)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "en tekst skrevet i det felt, der er åbent på skærmen (kun med Fuld kontrol, aldrig i adgangskoder)"
+
+msgid "control"
+msgstr "kontrol"
+
+msgid "control oprit"
+msgstr "kontrol stoppet"
+
+msgid "%d semne"
+msgstr "%d tegn"

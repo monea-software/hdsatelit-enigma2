@@ -57290,3 +57290,78 @@ msgstr "−1 хв"
 #~ "Ваш Dreambox зараз може бути непридатним для роботи. Будь ласка "
 #~ "перегляньте інструкцію користувача перед тим як перезавантажити ваш "
 #~ "Dreambox."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "Команда HD Satelit бачить через інтернет стан твого приймача, щоб тобі допомогти. Можеш зупинити це будь-коли."
+
+msgid "Control complet"
+msgstr "Повний контроль"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Повний контроль: команда може переміщатися по меню, змінювати налаштування, шукати канали та встановлювати з офіційного фіда; ніколи ключі, лінії модулів доступу чи твої особисті дані."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Без Повного контролю: команда лише читає стан приймача, нічого не змінюючи."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit зараз працює на твоєму приймачі"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Як це працює: твій приймач запитує сервер HD Satelit, через шифроване з'єднання, чи є у нас запит для нього. Ми можемо запитувати лише операції з фіксованого списку, записаного в іміджі: читання стану, журналів і тексту з екрана, знімок меню та повідомлення, написане на екрані. Коли позначено Повний контроль, команда може і натискати кнопки пульта, і писати в текстові поля, щоб переходити по меню, змінювати налаштування, шукати канали та встановлювати з офіційного фіда, наче тримає пульт. Ми не можемо запускати довільні команди й не можемо діставатися до інших пристроїв у твоєму домі. Екрани модулів доступу, паролів, доступу SSH, мережі Wi-Fi і твоїх особистих даних залишаються закритими: там команда нічого не бачить і може лише вийти. Кожен запит з'являється в журналі, на екрані."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start запускає це на 2 години. Можеш зупинити це будь-коли, з приймача або з веб-сторінки. Поки це ввімкнено, команда може заходити будь-коли, але робить лише те, що є у фіксованому списку; без Повного контролю нічого не змінює."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Без Повного контролю: читання і проби (операції з фіксованого списку, переважно читання; знімок показує лише меню, а не картинку каналу). З Повним контролем: і кнопки пульта, і текст у полях, крім приватних екранів. Можеш зупинити будь-коли."
+
+msgid "Ecran"
+msgstr "Екран"
+
+msgid "Control"
+msgstr "Контроль"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "текст екрана, відкритого на приймачі (меню, вибраний рядок, налаштування), без приватних екранів"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "кнопки пульта, наче команда тримає пульт (лише з Повним контролем)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "текст, написаний у полі, відкритому на екрані (лише з Повним контролем, ніколи в паролях)"
+
+msgid "control"
+msgstr "контроль"
+
+msgid "control oprit"
+msgstr "контроль зупинено"
+
+msgid "%d semne"
+msgstr "%d знаків"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "відкритий канал: сервіс, транспондер, тюнер і сигнал (без нічого від модулів доступу)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "транспондери зі списку каналів (без каналів і без нічого особистого)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "увімкни канал з твого списку (тільки з опцією Повний контроль)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "зміни налаштування (зображення, звук, інтерфейс, тюнери, час, гід, мережа; ніколи паролі, ключі або особисті дані; тільки з опцією Повний контроль)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "встанови плагін або модуль з офіційного фіда HD Satelit (без його налаштування та ключів; тільки з опцією Повний контроль)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "видали плагін або модуль (тільки з опцією Повний контроль)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "перезапусти інтерфейс або ресивер з повідомленням на екрані; підтримка продовжується після перезапуску (тільки з опцією Повний контроль)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit зараз перезапускає інтерфейс ресивера. Підтримка продовжується після перезапуску."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit зараз перезапускає ресивер. Підтримка продовжується після перезапуску."

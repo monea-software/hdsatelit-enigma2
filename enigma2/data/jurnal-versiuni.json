@@ -1,6 +1,45 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.16",
+   "build": "0000616202610301700",
+   "data": "30.10.2026",
+   "intrari": [
+    {
+     "fel": "imbunatatit",
+     "ro": "Asistența de la distanță e acum mereu completă: pagina de pornire are numai rândul de acord și Start, fără alegerea unui nivel numai de citire.",
+     "en": "Remote assistance is now always complete: the start page has only the consent row and Start, without choosing a read-only level.",
+     "de": "Die Fernhilfe ist jetzt immer vollständig: die Startseite hat nur die Zustimmungszeile und Start, ohne Auswahl einer Stufe nur zum Lesen.",
+     "fr": "L'assistance à distance est maintenant toujours complète : la page de départ n'a que la ligne d'accord et Start, sans choix d'un niveau en lecture seule.",
+     "es": "La asistencia remota es ahora siempre completa: la página de inicio tiene solo la fila de acuerdo y Start, sin elegir un nivel de solo lectura.",
+     "it": "L'assistenza remota è ora sempre completa: la pagina iniziale ha solo la riga del consenso e Start, senza scegliere un livello di sola lettura.",
+     "hu": "A távsegítség most mindig teljes: a kezdőoldalon csak a hozzájárulás sora és a Start van, csak olvasási szint választása nélkül.",
+     "cs": "Vzdálená pomoc je teď vždy úplná: úvodní stránka má jen řádek se souhlasem a Start, bez volby úrovně jen pro čtení.",
+     "pl": "Pomoc zdalna jest teraz zawsze pełna: strona startowa ma tylko wiersz zgody i Start, bez wyboru poziomu tylko do odczytu.",
+     "pt": "A assistência remota é agora sempre completa: a página inicial tem só a linha de acordo e Start, sem escolher um nível só de leitura.",
+     "nl": "De hulp op afstand is nu altijd volledig: de startpagina heeft alleen de regel met de toestemming en Start, zonder een niveau alleen lezen te kiezen.",
+     "ru": "Удалённая помощь теперь всегда полная: на странице запуска только строка согласия и Start, без выбора уровня только для чтения.",
+     "tr": "Uzaktan yardım artık her zaman tam: başlangıç sayfasında yalnızca onay satırı ve Start var, salt okuma düzeyi seçimi yok."
+    },
+    {
+     "fel": "nou",
+     "ro": "Asistența face acum și pași direcți: pornește un canal, schimbă o setare, instalează sau dezinstalează un plugin din feedul oficial și repornește interfața; asistența continuă după repornire.",
+     "en": "The assistance now also takes direct steps: it starts a channel, changes a setting, installs or removes a plugin from the official feed and restarts the interface; the assistance goes on afterwards.",
+     "de": "Die Fernhilfe macht jetzt auch direkte Schritte: Sender starten, eine Einstellung ändern, ein Plugin aus dem offiziellen Feed installieren oder entfernen, die Oberfläche neu starten; die Hilfe läuft danach weiter.",
+     "fr": "L'assistance fait aussi des étapes directes : lancer une chaîne, changer un réglage, installer ou retirer un plugin du flux officiel et redémarrer l'interface ; l'assistance continue ensuite.",
+     "es": "La asistencia hace ahora también pasos directos: abre un canal, cambia un ajuste, instala o quita un plugin del feed oficial y reinicia la interfaz; la asistencia sigue después.",
+     "it": "L'assistenza fa ora anche passi diretti: avvia un canale, cambia un'impostazione, installa o rimuove un plugin dal feed ufficiale e riavvia l'interfaccia; l'assistenza continua dopo.",
+     "hu": "A távsegítség most közvetlen lépéseket is tesz: csatornát indít, beállítást módosít, plugint telepít vagy töröl a hivatalos feedből és újraindítja a felületet; a segítség utána folytatódik.",
+     "cs": "Pomoc teď dělá i přímé kroky: spustí kanál, změní nastavení, nainstaluje nebo odebere plugin z oficiálního feedu a restartuje rozhraní; pomoc pak pokračuje.",
+     "pl": "Pomoc robi teraz też bezpośrednie kroki: włącza kanał, zmienia ustawienie, instaluje lub usuwa wtyczkę z oficjalnego feedu i restartuje interfejs; pomoc trwa dalej.",
+     "pt": "A assistência faz agora também passos diretos: abre um canal, muda uma definição, instala ou remove um plugin do feed oficial e reinicia a interface; a assistência continua depois.",
+     "nl": "De hulp zet nu ook directe stappen: een zender starten, een instelling wijzigen, een plugin uit de officiële feed installeren of verwijderen en de interface herstarten; de hulp gaat daarna door.",
+     "ru": "Помощь теперь делает и прямые шаги: включает канал, меняет настройку, ставит или удаляет плагин из официального фида и перезапускает интерфейс; помощь потом продолжается.",
+     "tr": "Yardım artık doğrudan adımlar da atıyor: kanal açar, bir ayarı değiştirir, resmi akıştan eklenti kurar veya kaldırır ve arayüzü yeniden başlatır; yardım sonra devam eder."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.15",
    "build": "0000615202610301800",
    "data": "30.10.2026",
