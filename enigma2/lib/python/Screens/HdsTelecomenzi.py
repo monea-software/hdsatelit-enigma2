@@ -659,12 +659,11 @@ class HdsTelecomenzi(Screen):
 		"""O fereastră a contorului IR (bătaia de o secundă). True dacă s-a schimbat numărul arătat."""
 		if self.contor_ir is None:
 			return False
-		try:
-			with open(self.cale_ir) as f:
-				n = self.contor_ir.fereastra(f.read(8192))
-		except OSError:
+		text = _procFundal(_citesteIrText, self.cale_ir)
+		if text is None:
 			self.contor_ir = None
 			return False
+		n = self.contor_ir.fereastra(text)
 		if n == self.ir_aratat:
 			return False
 		self.ir_aratat = n
@@ -1016,3 +1015,21 @@ class HdsTelecomenzi(Screen):
 		if D.redenumeste(self.date, ident, nume):
 			self._salveaza()
 		self.arataStart(ident)
+
+
+def _citesteIrText(cale):
+	try:
+		with open(cale) as f:
+			return f.read(8192)
+	except OSError:
+		return None
+
+
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)

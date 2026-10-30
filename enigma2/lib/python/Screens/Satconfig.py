@@ -98,7 +98,11 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 				choices["satposdepends"] = _("second cable of motorized LNB")
 			if len(nimmanager.canConnectTo(self.slotid)) > 0:
 				choices["loopthrough"] = _("loopthrough to")
-			self.nimConfig.configMode.setChoices(choices, default = "nothing")
+			# implicitul ramane cel pus de NimManager (primul tuner de satelit: "simple"): cu "nothing" aici, alegerea
+			# "nothing" a omului ar fi fost egala cu implicitul, nu s-ar fi scris in settings si dupa repornire tunerul
+			# ar fi revenit pornit
+			implicit = getattr(self.nimConfig.configMode, "default", "nothing")
+			self.nimConfig.configMode.setChoices(choices, default = implicit if implicit in choices else "nothing")
 
 	def hdsCombinat(self):
 		"""Tunerul combinat DVB-T2/C (Components/NimManager.py: hds_fel)."""

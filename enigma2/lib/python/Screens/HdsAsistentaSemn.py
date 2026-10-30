@@ -4,16 +4,18 @@
 #
 # HdsAsistentaSemn.py: semnul de pe ecran cat Asistenta de la distanta e activa si legatura cu receptorul (partea care
 # are nevoie de enigma2). Logica e in Components/HdsAsistenta.py (fara enigma); aici sunt:
-#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea), pe un singur rand: "Asistenta
-#     activa, mai sunt H:MM:SS" si calea spre Oprire (Meniu > Setari > Beta tester > Cere ajutor de la distanta); se
+#   - banda mica de sus, mereu deasupra (fereastra nemodala, ca mesajul de retea), pe un singur rand: pana cand e
+#     pornita si calea spre Oprire (Meniu > Setari > Asistenta de la distanta), fara codul sesiunii (intern); se
 #     vede si peste imaginea pe tot ecranul si peste meniuri, deasupra randului cu titlul ferestrelor (nu il acopera);
 #     cat ecranul asistentei e deschis (el arata starea si timpul), banda se ascunde;
 #   - Controler: un observator care arata, improspateaza (o data pe secunda) si ascunde banda; tot el culege, pe firul
-#     enigma2, mesajele cerute de operator (op „mesaj") si le arata cu HdsAnuntRetea, fiindca brokerul ruleaza pe alt
-#     fir si nu are voie sa atinga interfata direct;
+#     enigma2, ce cere operatorul pe ecran, fiindca brokerul ruleaza pe alt fir si nu are voie sa atinga interfata:
+#     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
+#     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
+#     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
 #   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura numai a meniurilor (OSD),
-#     refuzata cat ecranul „Acces SSH" e deschis (parola lui root pe ecran), si punerea unui mesaj pe ecran;
-#   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (din ecranul TV sau din web) si reluarea
+#     refuzata cat ecranul "Acces SSH" e deschis (parola lui root pe ecran), punerea unui mesaj si a concluziilor;
+#   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (de pe receptor sau din web) si reluarea
 #     dupa repornirea interfetei (chemata din mytest.py).
 # Nu se importa la incarcarea mytest.py nimic greu; functiile se cheama la nevoie.
 
@@ -50,7 +52,9 @@ SKIN_BANDA = """
 	</screen>"""
 
 # ecranele care arata ele starea asistentei: cat sunt deasupra, banda nu se arata (le-ar acoperi titlul)
-ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege")
+ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege", "HdsAsistentaTermeni", "HdsAsistentaConcluzii")
+# cat sta pe ecran un mesaj al echipei (op "mesaj"), cel putin; urmatorul vine dupa
+MESAJ_S = 30
 
 
 def N_(text):
@@ -82,10 +86,15 @@ class Controler(object):
 	def __init__(self, session):
 		self.session = session
 		self.banda = None
+		self.fereastraMesaj = None
 		self.ceas = eTimer()
 		self.ceas.callback.append(self._tic)
 		self._mesaje = []
+		self._mesaj_liber_la = 0.0
+		self._concluzii = []
 		self._stare_vazuta = None
+		# sesiunea vazuta activa (id-ul ei): la sfarsitul ei, daca echipa a trimis concluzii, fereastra inca o data
+		self._id_activ = None
 
 	def instaleaza(self):
 		A.adaugaObservator(self._schimbare)
@@ -94,6 +103,16 @@ class Controler(object):
 	def cereMesaj(self, text):
 		"""Chemata de pe firul sesiunii (brokerul): pune un mesaj in coada; _tic il arata pe firul enigma2."""
 		self._mesaje.append(text)
+
+	def cereConcluzii(self, text):
+		"""Chemata de pe firul sesiunii (op "concluzii"): pastreaza concluziile pe receptor (se recitesc din ecranul
+		asistentei si din web) si le pune in coada; _tic deschide fereastra pe firul enigma2. -> numarul de semne."""
+		ses = A.sesiune()
+		intrare = A.salveazaConcluzii(text, ses.id if ses is not None else None)
+		if not intrare:
+			return 0
+		self._concluzii.append(intrare)
+		return len(intrare["text"])
 
 	def _schimbare(self):
 		ses = A.sesiune()
@@ -106,23 +125,43 @@ class Controler(object):
 			self._tic()
 			self.ceas.start(1000, False)
 		else:
-			self.ceas.stop()
 			if self.banda is not None:
 				try:
 					self.banda.hide()
 				except Exception:
 					pass
+			# sfarsitul sesiunii (fereastra concluziilor, mesajele ramase) il face _tic la urmatoarea secunda, nu aici:
+			# oprirea poate veni de pe un ecran care se inchide imediat dupa (Rosu pe ecranul asistentei)
+			if self._id_activ is not None or self._mesaje or self._concluzii:
+				self.ceas.start(1000, False)
+			else:
+				self.ceas.stop()
 
 	def _tic(self):
+		import time
 		ses = A.sesiune()
-		if ses is None or not ses.activa():
-			self.ceas.stop()
+		activa = ses is not None and ses.activa()
+		# mesajele: la rand, fiecare cel putin MESAJ_S secunde (si dupa oprire, cele ramase in coada)
+		if self._mesaje and time.time() >= self._mesaj_liber_la:
+			self._arataMesaj(self._mesaje.pop(0))
+			self._mesaj_liber_la = time.time() + MESAJ_S
+		while self._concluzii:
+			self._arataConcluzii(self._concluzii.pop(0))
+		if activa:
+			self._id_activ = getattr(ses, "id", None) or self._id_activ
+		elif self._id_activ is not None:
+			# sesiunea s-a terminat (omul, termenul, serverul): concluziile ei inca o data, cu multumirile
+			id_ = self._id_activ
+			self._id_activ = None
+			c = A.ultimeleConcluzii()
+			if c and c.get("id") == id_:
+				self._arataConcluzii(c, la_sfarsit=True)
+		if not activa:
 			if self.banda is not None:
 				self.banda.hide()
+			if not self._mesaje:
+				self.ceas.stop()
 			return
-		while self._mesaje:
-			text = self._mesaje.pop(0)
-			self._arataMesaj(text)
 		# cererea a fost aprobata (asteapta -> conectat): omul afla, oriunde ar fi pe receptor (pe ecranul asistentei
 		# scrie deja "Conectat."); dupa o reluare a interfetei starea de dinainte nu se stie, deci nu se anunta
 		if self._stare_vazuta == A.ASTEAPTA and ses.stare == A.CONECTAT and not self._ecranAsistenta():
@@ -149,11 +188,28 @@ class Controler(object):
 			return False
 
 	def _arataMesaj(self, text):
+		# fereastra proprie (nu cea a anunturilor de retea, care s-ar putea pune peste ea), nemodala: nu ia tastele
+		# nimanui si nu dispare la prima tasta, sta MESAJ_S secunde
 		try:
 			from Screens import HdsAnuntRetea
-			HdsAnuntRetea.arata(self.session, "%s %s" % (_("Mesaj de la HD Satelit:"), text), "info")
+			if self.fereastraMesaj is None:
+				self.fereastraMesaj = self.session.instantiateDialog(HdsAnuntRetea.HdsAnuntRetea)
+			self.fereastraMesaj.anunta("%s %s" % (_("Mesaj de la HD Satelit:"), text), "info",
+				durata_ms=MESAJ_S * 1000, ascunde_la_tasta=False)
 		except Exception as e:
 			_jurnal("mesaj: %r" % (e,))
+
+	def _arataConcluzii(self, intrare, la_sfarsit=False):
+		"""Fereastra concluziilor (modala, pana la OK), prin notificari: se deschide cand omul e la imaginea canalului,
+		nu peste alt ecran modal. La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa."""
+		try:
+			from Screens.HdsAsistenta import HdsAsistentaConcluzii
+			if la_sfarsit and HdsAsistentaConcluzii.deschise:
+				return
+			from Tools import Notifications
+			Notifications.AddNotification(HdsAsistentaConcluzii, intrare)
+		except Exception as e:
+			_jurnal("concluzii: %r" % (e,))
 
 
 _controler = [None]
@@ -199,9 +255,18 @@ def ctxReceptor(session):
 	ctx["captura"] = _captura
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
+		ctx["concluzii"] = _controler[0].cereConcluzii
 	else:
 		ctx["mesaj"] = lambda t: None
+		ctx["concluzii"] = _concluziiFaraControler
 	return ctx
+
+
+def _concluziiFaraControler(text):
+	# fara controler (nu se intampla dupa pornirea interfetei): concluziile raman macar pentru recitire
+	ses = A.sesiune()
+	intrare = A.salveazaConcluzii(text, ses.id if ses is not None else None)
+	return len(intrare["text"]) if intrare else 0
 
 
 # ---------------------------------------------------------------- pornirea si reluarea
@@ -223,27 +288,37 @@ def reia(session):
 		_jurnal("reluare: %r" % (e,))
 
 
+TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo.")
+TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor acum.")
+
+
+def pornesteWeb(session):
+	"""Pornirea din pagina web a unui browser de incredere (conectat cu codul de pe receptor): un clic, ca Start de pe
+	receptor (durata implicita, fara intrebari). -> (reusit, mesaj)."""
+	ses = A.sesiune()
+	if ses is not None and ses.activa():
+		return False, _("Asistența merge deja.")
+	return porneste(session, nivel="A", durata_min=A.DURATA_IMPLICITA_MIN, de_la="web")
+
+
 def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
-	"""Pornirea ceruta din pagina web (browserul omului, conectat cu codul de pe televizor): pe televizor se deschide
-	ecranul Asistentei cu informarea intreaga si durata aleasa; abia dupa Verde, alegere si „Da" porneste sesiunea
-	(nimic nu porneste fara apasare pe televizor). nevoie/detalii ("Cu ce te ajutam?", optionale) apar deja alese pe
-	ecranul de pornire. -> (reusit, mesaj) numai despre faptul ca s-a cerut confirmarea."""
+	"""Pornirea ceruta dintr-un browser fara cod (oricine din reteaua locala): pe receptor se deschide pagina de pornire
+	(randul bifat si Start); porneste numai Start apasat acolo, ca un aparat oarecare din casa sa nu poata da acces la
+	receptor fara stirea omului. durata_min, nevoie si detalii raman in semnatura pentru apelurile vechi; pornirea e cea
+	de pe pagina. -> (reusit, mesaj) numai despre faptul ca s-a deschis pagina."""
 	if session is None:
-		return False, _("Nu pot cere confirmarea pe televizor acum.")
-	if durata_min not in A.DURATE_MIN:
-		durata_min = A.DURATA_IMPLICITA_MIN
+		return False, _(TEXT_WEB_NU_POT)
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
 	try:
 		from Tools import Notifications
 		from Screens.HdsAsistenta import HdsAsistenta
-		nevoie, detalii = A.curataNevoie(nevoie, detalii)
-		Notifications.AddNotification(HdsAsistenta, din_web=durata_min, nevoie=nevoie, detalii=detalii)
-		return True, _("Pe televizor s-a deschis Asistența de la distanță: citește și apasă Verde acolo.")
+		Notifications.AddNotification(HdsAsistenta, din_web=A.DURATA_IMPLICITA_MIN)
+		return True, _(TEXT_WEB_PE_RECEPTOR)
 	except Exception as e:
 		_jurnal("cerere web: %r" % (e,))
-		return False, _("Nu pot cere confirmarea pe televizor acum.")
+		return False, _(TEXT_WEB_NU_POT)
 
 
 def _limba():

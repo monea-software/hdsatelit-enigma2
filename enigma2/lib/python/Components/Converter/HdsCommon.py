@@ -4015,7 +4015,17 @@ TEMP_FILES = (
 )
 
 
-def read_small(path, limit=16384):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def read_small_direct(path, limit=16384):
 	"""Continutul unui fisier mic ca text, sau None daca lipseste."""
 	try:
 		if not os.path.exists(path):
@@ -4027,6 +4037,11 @@ def read_small(path, limit=16384):
 			f.close()
 	except Exception:
 		return None
+
+
+def read_small(path, limit=16384):
+	"""Ca read_small_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(read_small_direct, path, limit)
 
 
 def _kv_file(text):

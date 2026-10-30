@@ -97,7 +97,7 @@ void Acordare::goleste()
 }
 
 Eveniment::Eveniment()
-	: tip(""), slot(-1), octeti(0), lungime(0), rezultat(0), cale(0), acordare(0), crezuta(-1), crezuta_cmd(-1),
+	: tip(""), slot(-1), octeti(0), lungime(0), rezultat(0), ret_driver(0), cale(0), acordare(0), crezuta(-1), crezuta_cmd(-1),
 	spre(-1), spre_cmd(-1), omise(0), faza(""), incercare(0), fara_semnal_ms(-1), dupa_ms(-1), mers_ms(-1),
 	urmatoarea_s(-1), cod(0), tensiune(0), plan_ms(-1), tinut_ms(-1)
 {
@@ -382,6 +382,8 @@ size_t formeaza(char *buf, size_t n, const Eveniment &e, const struct timespec &
 			}
 		}
 		j.numar("rezultat", e.rezultat);
+		if (e.ret_driver > 0)
+			j.numar("ret", e.ret_driver);
 	}
 	if (e.cale)
 		j.text("cale", e.cale);
@@ -660,7 +662,7 @@ int asteaptaScrierea(int ms)
 /* ------------------------------------------------------------------ evenimentele */
 
 void comandaTrimisa(int slot, const unsigned char *d, int len, int rezultat, const char *cale, const Acordare &a,
-	long crezuta, long crezuta_cmd)
+	long crezuta, long crezuta_cmd, int ret_driver)
 {
 	Eveniment e;
 	e.tip = "comanda";
@@ -672,6 +674,7 @@ void comandaTrimisa(int slot, const unsigned char *d, int len, int rezultat, con
 	e.acordare = &a;
 	e.crezuta = crezuta;
 	e.crezuta_cmd = crezuta_cmd;
+	e.ret_driver = ret_driver;
 	noteaza(e);
 }
 

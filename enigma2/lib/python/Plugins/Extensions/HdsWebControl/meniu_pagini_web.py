@@ -27,6 +27,7 @@
 #   extensii_web         /extensii              Meniu > Extensii & Aplicatii (HdsExtensii)
 #   diseqc_web           /proba-diseqc          Meniu > Orientarea si setarea antenei > Proba DiSEqC (DiseqcTester)
 #   vpn_web              /vpn                   Meniu > Setari > Retea & Internet > VPN (HdsVpn)
+#   asistenta_web        /asistenta             Meniu > Setari > Asistenta de la distanta (HdsAsistenta), pentru oricine
 #
 # Fiecare modul are rute(baza, resource) -> ({nume: resursa /api}, {nume: resursa pagina}), ca modulele din
 # aspect_web.MODULE. Un modul care nu se poate incarca nu strica restul: se scrie in jurnal si paginile lui lipsesc.

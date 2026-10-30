@@ -269,6 +269,8 @@ fi
 # the tests on the PC; init sets none of them.
 HDS_LIBREADER=${HDS_LIBREADER:-@bindir@/libreader}
 HDS_LIBREADER_PAUZA=${HDS_LIBREADER_PAUZA:-5}
+HDS_LIBREADER_ASTEAPTA=${HDS_LIBREADER_ASTEAPTA:-60}
+HDS_LIBREADER_SEMN=${HDS_LIBREADER_SEMN:-/tmp/hds-libreader.blocat}
 if [ -x "$HDS_LIBREADER" ]; then
 	hds_lr=""
 	for hds_c in /proc/[0-9]*/comm; do
@@ -278,7 +280,20 @@ if [ -x "$HDS_LIBREADER" ]; then
 	done
 	if [ -z "$hds_lr" ]; then
 		echo "[hds-libreader] libreader was not running: started again (720P_50)"
-		"$HDS_LIBREADER" 720P_50
+		# In the background, waited for at most HDS_LIBREADER_ASTEAPTA seconds: libreader checks the board before it
+		# becomes a daemon (its launcher exits then) and, on a board it does not accept, stays in that check for ever.
+		# The start of the interface does not wait for it longer, so the diagnostic and the fallback path still come.
+		"$HDS_LIBREADER" 720P_50 &
+		hds_lrp=$!
+		hds_t=0
+		while kill -0 "$hds_lrp" 2>/dev/null && [ "$hds_t" -lt "$HDS_LIBREADER_ASTEAPTA" ]; do
+			sleep 1
+			hds_t=$((hds_t + 1))
+		done
+		if kill -0 "$hds_lrp" 2>/dev/null; then
+			echo "[hds-libreader] libreader did not become a daemon in ${hds_t} s (board check?): the start goes on"
+			echo "libreader_blocat=enigma2.sh ${hds_t}" > "$HDS_LIBREADER_SEMN" 2>/dev/null
+		fi
 	fi
 	killall -9 showiframe 2>/dev/null && sleep 1
 fi
@@ -610,11 +625,12 @@ fi
 # has come up once (the mark /etc/hds-interfata-pornita, written by hds-rezerva.sh) and the start is not in doubt,
 # nothing else runs: shell built-ins only (a read of /proc/uptime, file tests). A window left behind by a script
 # stopped with KILL (inetd.pid: its page holds port 80) is stopped first, so the web interface of enigma2 gets port 80.
-# Missing drivers (/dev/fb0, /dev/dvb/adapter0: E304) are noted and enigma2 starts all the same. The timer for an
-# enigma2 stuck before its interface (E305) runs in the background until the first start that reaches the interface
-# (a new install: no mark yet; it stops as soon as the interface is up) and when the start is in doubt: drivers
-# missing, the guard did not pass, or a start that failed earlier in this boot. The variables are only for the tests
-# on the PC; init sets none of them.
+# Missing drivers (/dev/fb0, /dev/dvb/adapter0: E304) are noted and enigma2 starts all the same. The watcher of the
+# boot (hds-rezerva.sh urmareste: the step on the front display and the television, the diagnosis after 75 s without
+# the interface, an enigma2 stuck before its interface stopped after 300 s: E305) runs in the background only on a
+# start in doubt: a new install (no mark yet; it ends as soon as the interface is up), drivers missing, the guard did
+# not pass, or a start that failed earlier in this boot. Usually it already runs from rcS (hds-jurnal); one watcher per
+# boot. The variables are only for the tests on the PC; init sets none of them.
 HDS_REZERVA=${HDS_REZERVA:-@bindir@/hds-rezerva.sh}
 HDS_REZERVA_DOSAR=${HDS_REZERVA_DOSAR:-/tmp/hds-rezerva}
 HDS_REZERVA_SEMN=${HDS_REZERVA_SEMN:-$HDS_PAZA_RADACINA/etc/hds-interfata-pornita}
@@ -634,7 +650,7 @@ if [ -f "$HDS_PAZA_REGULI" ] && [ -f "$HDS_REZERVA" ]; then
 	[ "$hds_paza" = potrivit ] || hds_rz_ceas=1
 	[ -f "$HDS_REZERVA_SEMN" ] || hds_rz_ceas=1
 	if [ -n "$hds_rz_ceas" ]; then
-		sh "$HDS_REZERVA" ceas $$ "$hds_rz_t0" < /dev/null > /dev/null 2>&1 &
+		sh "$HDS_REZERVA" urmareste < /dev/null > /dev/null 2>&1 &
 	fi
 fi
 

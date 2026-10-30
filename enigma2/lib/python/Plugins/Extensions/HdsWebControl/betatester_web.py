@@ -52,7 +52,7 @@ def _b(B=None):
 
 
 def _modulExista(nume):
-	"""Pagina altui modul al imaginii (ajutorul de la distanta, probele) se arata numai daca modulul exista."""
+	"""Pagina altui modul al imaginii (probele) se arata numai daca modulul exista."""
 	try:
 		import importlib.util
 		return importlib.util.find_spec(nume) is not None
@@ -126,24 +126,15 @@ def stare(B=None, b=None):
 	return rez
 
 
-# paginile altor module, aratate in meniul testerului numai daca modulul exista (probele receptorului si
-# asistenta de la distanta; asistenta numai cu SystemInfo["HdsAsistenta"] adevarat, ca pe televizor)
+# paginile altor module, aratate in meniul testerului numai daca modulul exista (probele receptorului; asistenta de
+# la distanta e pentru oricine, in Setari: /asistenta)
 PAGINI_ALTE = (
 	("/probe", "Probele receptorului", "Screens.HdsProbe"),
-	("/asistenta", "Cere ajutor de la distanță", "Screens.HdsAsistenta"),
 )
 
 
 def _paginaArata(cale, modul):
-	if not _modulExista(modul):
-		return False
-	if cale == "/asistenta":
-		try:
-			from Components.SystemInfo import SystemInfo
-			return bool(SystemInfo.get("HdsAsistenta"))
-		except Exception:
-			return False
-	return True
+	return _modulExista(modul)
 
 
 def existaAvantaje(B):
@@ -151,7 +142,6 @@ def existaAvantaje(B):
 	return {
 		"canal_testeri": B.modulCanalTesteri() is not None,
 		"forum": _modulExista("Screens.HdsForumReceptor"),
-		"asistenta": _paginaArata("/asistenta", "Screens.HdsAsistenta"),
 	}
 
 
@@ -626,7 +616,6 @@ __STIL_PAGINI__
       <details class="rm" id="r-acum"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><div class="t"><b>Ce trimit acum</b><span data-rand="acum"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
         <div class="corp"><pre class="text" id="ultimul"></pre></div>
       </details>
-      <a class="rm ascuns" href="/asistenta" id="r-asistenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><div class="t"><b>Cere ajutor de la distanță</b><span data-rand="asistenta"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
       <a class="rm ascuns" href="/probe" id="r-probe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><div class="t"><b>Probele receptorului</b><span data-rand="probe"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></a>
       <div class="rm ascuns" id="canalTesteri"><label class="rm-bifa" for="canalTesteriBifa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5M4 20v-5h5"/></svg><div class="t"><b id="canalTesteriEticheta"></b><span id="canalTesteriNota"></span></div><input type="checkbox" id="canalTesteriBifa"></label></div>
       <details class="rm" id="r-public"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><div class="t"><b>Apariția publică</b><span data-rand="public"></span></div><span class="valoare" id="valoarePublic"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
@@ -749,7 +738,6 @@ function arata(d){
   $("valoarePublic").textContent = d.public || "";
   document.querySelectorAll(".forum").forEach(function(e){ e.classList.toggle("ascuns", !d.legare_forum); });
   var pagini = (d.pagini || []).map(function(p){ return p[0]; });
-  $("r-asistenta").classList.toggle("ascuns", pagini.indexOf("/asistenta") === -1);
   $("r-probe").classList.toggle("ascuns", pagini.indexOf("/probe") === -1);
   var ct = d.canal_testeri;
   $("canalTesteri").classList.toggle("ascuns", !ct);
@@ -878,7 +866,6 @@ TEXTE_PAGINA = {
 		N_("Datele pe care le trimit"),
 		N_("Salvează"),
 		N_("Ce trimit acum"),
-		N_("Cere ajutor de la distanță"),
 		N_("Probele receptorului"),
 		N_("Apariția publică"),
 		N_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără "

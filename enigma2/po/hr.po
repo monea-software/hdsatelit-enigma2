@@ -7215,7 +7215,7 @@ msgid "Apariția publică"
 msgstr "Javni profil"
 
 msgid "Apasă Caută SAP pentru a descoperi sesiuni MABR în rețea."
-msgstr "Pritisni Traži SAP kako bi otkrio MABR sesije u mreži."
+msgstr "Pritisni Traži SAP za pronalaženje MABR sesija u mreži."
 
 msgid "Apasă Caută pentru a descoperi sesiuni MABR în rețea."
 msgstr "Pritisni Traži za otkrivanje MABR sesija u mreži."
@@ -17616,7 +17616,7 @@ msgid "Flux schimbat: %s"
 msgstr "Stream promijenjen: %s"
 
 msgid "Fluxul %s e criptat si nu se poate desface."
-msgstr "Struja %s je šifrirana i ne može se raspakirati."
+msgstr "Stream %s je šifriran i ne može se raspakirati."
 
 #, python-format
 msgid ""
@@ -33898,7 +33898,7 @@ msgid "Rewind speeds"
 msgstr "Brzine premotavanja"
 
 msgid "Rezerva la pornirea postului"
-msgstr "Rezerva pri pokretanju postaje"
+msgstr "Rezerva pri pokretanju kanala"
 
 msgid "Rezerva nu e una din listă."
 msgstr "Rezerva nije jedna s popisa."
@@ -44587,7 +44587,7 @@ msgid "de"
 msgstr "za"
 
 msgid "de acasă"
-msgstr "kućni"
+msgstr "od kuće"
 
 msgid "de ales, DVB-S2 nu primește Auto"
 msgstr "treba odabrati, DVB-S2 ne prihvaća Auto"
@@ -46687,7 +46687,7 @@ msgid "pixeli"
 msgstr "pikseli"
 
 msgid "placa Wi-Fi a receptorului recepționează numai 2,4 GHz"
-msgstr "Wi-Fi kartica prijamnika čuje samo 2,4 GHz"
+msgstr "Wi-Fi kartica prijamnika prima samo 2,4 GHz"
 
 #, python-format
 msgid "placa Wi-Fi nu s-a legat la rețeaua %s"
@@ -47065,7 +47065,7 @@ msgid "remove selected satellite"
 msgstr "ukloni odabrani satelit"
 
 msgid "repeat playlist"
-msgstr "ponavljaj playlistu"
+msgstr "ponavljaj popis za reprodukciju"
 
 msgid "repeated"
 msgstr "ponovljeno"
@@ -47232,7 +47232,7 @@ msgid "save playlist"
 msgstr "spremi playlistu"
 
 msgid "save playlist on exit"
-msgstr "spremi playlistu pri izlazu"
+msgstr "spremi popis za reprodukciju pri izlazu"
 
 msgid "scan done!"
 msgstr "pretraživanje završeno!"
@@ -51581,3 +51581,15 @@ msgstr "−1 min"
 #~ msgstr ""
 #~ "vaš dreambox može biti sada nemoguće za koristiti. Molim konzultirajte se "
 #~ "s korisničkim uputama za daljnju pomoć prije rebootanja vašeg dreambox-a."
+
+msgid "Ce am găsit și ce am făcut"
+msgstr "Što smo pronašli i što smo učinili"
+
+msgid "Mulțumim că ne-ai lăsat să te ajutăm."
+msgstr "Hvala što smo ti mogli pomoći."
+
+msgid "Ultimele concluzii"
+msgstr "Posljednji zaključci"
+
+msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
+msgstr "zaključci tima (što smo pronašli i što smo učinili), prikazani na prijamniku dok ne pritisneš OK"

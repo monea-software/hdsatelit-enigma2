@@ -11,7 +11,7 @@
 #   Screens/HdsForumReceptor.py), si in dreapta ultimele mesaje de pe forum; cine are acordul pe o nota mai veche vede
 #   intai ecranul acordului. Dupa "Sunt de acord" ramane aici, in meniul testerului: randuri cu pictograma si un rand
 #   scurt despre ce face fiecare (forumul primul, mesajul, "Ce am trimis", raspunsurile echipei, datele, "Ce trimit
-#   acum", asistenta de la distanta, aparitia publica, nota, iesirea cu stergerea), iar in dreapta panoul testerului
+#   acum", aparitia publica, nota, iesirea cu stergerea), iar in dreapta panoul testerului
 #   (din ce data, numele de pe forum, ultima trimitere, cati testeri are modelul, identificatorul).
 # - HdsBetaAcord: felurile de date, toate pornite din fabrica, cu comutatoare (OK, Stanga sau Dreapta le schimba);
 #   randul scurt al randului ales sub lista; numele si e-mailul optionale (OK: tastatura de pe ecran); bifa notei,
@@ -100,7 +100,6 @@ GLIFE = {
 	"date": "dns",
 	"acum": "editor-canale",
 	"probe": "verificare-disc",
-	"asistenta": "conexiune",
 	"canal_testeri": "reincarca",
 	"public": "licente",
 	"nota": "mod-sigur",
@@ -301,19 +300,6 @@ def _scurt(text, maxim):
 	return text[:maxim].rsplit(" ", 1)[0] + "..."
 
 
-def ecranAsistenta():
-	"""Ecranul Cere ajutor de la distanta (modulul asistentei: Screens.HdsAsistenta.HdsAsistenta, numai cu
-	SystemInfo["HdsAsistenta"] adevarat, pus de mytest.py), sau None: randul nu apare."""
-	try:
-		from Components.SystemInfo import SystemInfo
-		if not SystemInfo.get("HdsAsistenta"):
-			return None
-		from Screens.HdsAsistenta import HdsAsistenta
-		return HdsAsistenta
-	except Exception:
-		return None
-
-
 def randCanalTesteri(A):
 	"""Randul Primeste intai versiunile pentru testeri: Da/Nu (modulul canalului testerilor) si starea."""
 	pornit = B.canalTesteriPornit(A)
@@ -363,7 +349,6 @@ def avantaje():
 	exista = {
 		"canal_testeri": B.modulCanalTesteri() is not None,
 		"forum": ecranForum() is not None,
-		"asistenta": ecranAsistenta() is not None,
 	}
 	return [(glif, titlu, rand) for _cheie, glif, titlu, rand in B.avantaje(exista)]
 
@@ -620,7 +605,6 @@ class HdsBetaTester(Screen):
 		("date", B.N_("Datele pe care le trimit")),
 		("acum", B.N_("Ce trimit acum")),
 		("probe", B.N_("Probele receptorului")),
-		("asistenta", B.N_("Cere ajutor de la distanță")),
 		("canal_testeri", ""),          # eticheta si starea vin din Components.HdsActualizari (canalul testerilor)
 		("public", B.N_("Apariția publică")),
 		("nota", B.N_("Nota de confidențialitate")),
@@ -864,7 +848,7 @@ class HdsBetaTester(Screen):
 		for cheie, text in felul:
 			if cheie == "forum" and ecranForum() is None:
 				continue
-			if (cheie == "probe" and ecranProbe() is None) or (cheie == "asistenta" and ecranAsistenta() is None):
+			if cheie == "probe" and ecranProbe() is None:
 				continue
 			scurt = B.RANDURI_MENIU.get(cheie, "") if inscris else B.RANDURI_VIZITATOR.get(cheie, "")
 			glif = GLIFE.get(cheie, "")
@@ -962,10 +946,6 @@ class HdsBetaTester(Screen):
 			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=5)
 		elif cheie == "probe":
 			e = ecranProbe()
-			if e is not None:
-				self.session.open(e)
-		elif cheie == "asistenta":
-			e = ecranAsistenta()
 			if e is not None:
 				self.session.open(e)
 		elif cheie == "canal_testeri":

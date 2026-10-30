@@ -22,6 +22,8 @@
 import os
 
 MASINA_V10 = "viper4k"
+# familia libreader (acelasi SDK HiSilicon al producatorului, demonul libreader, driverele hi_*): V10 si Octagon
+MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m")
 NUME_V10 = "Amiko Viper 4K V10"
 FISIER_REGULI = "etc/hdsatelit-model"
 FISIER_BOXTYPE = "proc/stb/info/boxtype"
@@ -64,6 +66,15 @@ def esteV10(radacina=None):
 	cheie = radacina or ""
 	if cheie not in _cache:
 		_cache[cheie] = masinaDinReguli(radacina) == MASINA_V10 or tipPlaca(radacina) == MASINA_V10
+	return _cache[cheie]
+
+
+def familiaLibreader(radacina=None):
+	"""True pe placile familiei libreader (primul Amiko Viper 4K V10, Octagon SF8008 si SF8008 MINI): regulile
+	imaginii (machinebuild=) sau driverul (/proc/stb/info/boxtype) spun una din MASINI_LIBREADER"""
+	cheie = "libreader:" + (radacina or "")
+	if cheie not in _cache:
+		_cache[cheie] = masinaDinReguli(radacina) in MASINI_LIBREADER or tipPlaca(radacina) in MASINI_LIBREADER
 	return _cache[cheie]
 
 

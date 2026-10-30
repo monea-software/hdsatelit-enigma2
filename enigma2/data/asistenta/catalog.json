@@ -106,6 +106,15 @@
       "args": [
         {"nume": "text", "tipar": "^.{1,200}$", "cerut": true}
       ]
+    },
+    {
+      "op": "concluzii",
+      "grup": "Probe",
+      "fel": "proba",
+      "text": "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK",
+      "args": [
+        {"nume": "text", "tipar": "(?s)^.{1,2000}$", "cerut": true, "max_semne": 2000}
+      ]
     }
   ]
 }
