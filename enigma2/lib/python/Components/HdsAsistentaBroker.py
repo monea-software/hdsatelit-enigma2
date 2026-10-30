@@ -6,7 +6,10 @@
 # a fost deja verificata (semnatura si tiparele argumentelor) de HdsAsistenta.py; aici se ruleaza numai operatia ceruta
 # si se intoarce raspunsul, filtrat si plafonat.
 #
-# Nivelul A: numai citiri si trei probe (captura OSD, un mesaj pe ecran, concluziile echipei pe ecran). Nimic nu scrie pe disc in afara jurnalului
+# Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura OSD, un mesaj pe ecran, concluziile
+# echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
+# (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B"; ecranele private
+# (Components/HdsAsistentaControl.py) raman inchise si la B. Nimic nu scrie pe disc in afara jurnalului
 # sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti; nu exista
 # nicio cale libera de fisier (jurnalele se citesc dupa nume, din /home/root/logs). Iesirea trece intai prin filtrul de
 # secrete (Components/HdsModSigur.SECRET: parole, chei, jetoane) si prin mascarea adreselor MAC; caile si setarile
@@ -41,7 +44,9 @@ _CAM = re.compile(r"(?i)cam[ds]?(?![a-z])|card(?:d\b|[_.-]?serv)|(?<![a-z])[gs]b
 	r"radeg[a]st|constcw|tuxbox/config|/var/keys|\.key\b|\.cfg\b")
 
 RASPUNS_MAX = 1024 * 1024           # 1 MB de raspuns (text sau captura)
-CAPTURA_MAX = 2 * 1024 * 1024       # o captura PNG poate fi mai mare; se plafoneaza aparte
+CAPTURA_MAX = 2 * 1024 * 1024       # o captura (JPEG mic de la 0.6.15; PNG inainte) se plafoneaza aparte
+# op-urile de control: numai la nivelul B (omul a lasat bifat "Control complet")
+CONTROL = ("taste", "text")
 TERMEN_S = 20                       # cat asteapta un extern
 MAX_RANDURI_JURNAL = 2000
 
@@ -341,9 +346,68 @@ def op_captura(ctx, args):
 	octeti = faca()
 	if not octeti:
 		return Rezultat(1, text="(captura nu s-a putut face acum)")
+	if isinstance(octeti, str):
+		# refuzul unelte (ecran privat): textul lui
+		return Rezultat(1, text=octeti)
 	if len(octeti) > CAPTURA_MAX:
 		return Rezultat(1, text="(captura prea mare)")
-	return Rezultat(0, octeti=octeti, tip="png")
+	tip = "jpg" if octeti[:3] == b"\xff\xd8\xff" else "png"
+	return Rezultat(0, octeti=octeti, tip=tip)
+
+
+def op_ecran(ctx, args):
+	"""Textul ecranului de sus (stiva, listele cu randul ales, setarile, textele), ca echipa sa mearga prin meniuri fara
+	poze; un ecran privat da numai "(ecran privat)" si clasa (Components/HdsAsistentaControl.textEcran)."""
+	citeste = ctx.get("ecran")
+	if citeste is None:
+		return Rezultat(1, text="(ecranul nu se poate citi)")
+	text = citeste()
+	if text is None:
+		return Rezultat(1, text="(ecranul nu a raspuns la timp)")
+	return Rezultat(0, text=text)
+
+
+def _controlPermis(ctx):
+	return ctx.get("nivel") == "B"
+
+
+TEXT_FARA_CONTROL = "(control oprit: asistenta a fost pornita fara Control complet)"
+
+
+def op_taste(ctx, args):
+	"""Tastele telecomenzii (lista alba, cel mult MAX_TASTE), apasate pe rand pe firul enigma2; raspunsul spune ce s-a
+	apasat si da textul ecranului de dupa. Pe un ecran privat merge numai EXIT."""
+	if not _controlPermis(ctx):
+		return Rezultat(1, text=TEXT_FARA_CONTROL)
+	from Components import HdsAsistentaControl as C
+	lista, greseli = C.imparteTaste(args[0])
+	if greseli:
+		return Rezultat(1, text="(taste necunoscute: %s)" % " ".join(greseli[:10]))
+	if not lista or len(lista) > C.MAX_TASTE:
+		return Rezultat(1, text="(intre 1 si %d taste pe cerere)" % C.MAX_TASTE)
+	apasa = ctx.get("taste")
+	if apasa is None:
+		return Rezultat(1, text="(tastele nu se pot trimite)")
+	rez = apasa(lista)
+	if rez is None:
+		return Rezultat(1, text="(receptorul nu a terminat tastele la timp)")
+	cod, text = rez
+	return Rezultat(cod, text=text)
+
+
+def op_text(ctx, args):
+	"""Un text scris in campul deschis (tastatura de pe ecran sau randul de setare in modul text); refuzat pe ecranele
+	si campurile private."""
+	if not _controlPermis(ctx):
+		return Rezultat(1, text=TEXT_FARA_CONTROL)
+	scrie = ctx.get("text")
+	if scrie is None:
+		return Rezultat(1, text="(textul nu se poate scrie)")
+	rez = scrie(args[0])
+	if rez is None:
+		return Rezultat(1, text="(receptorul nu a raspuns la timp)")
+	cod, text = rez
+	return Rezultat(cod, text=text)
 
 
 def op_mesaj(ctx, args):
@@ -384,6 +448,9 @@ TABEL = {
 	"captura": op_captura,
 	"mesaj": op_mesaj,
 	"concluzii": op_concluzii,
+	"ecran": op_ecran,
+	"taste": op_taste,
+	"text": op_text,
 }
 
 

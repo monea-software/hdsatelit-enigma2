@@ -22,7 +22,8 @@
 #   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
 #                                  concluzii ale echipei
 #   GET  /api/asistenta-catalog    lista operatiilor in limba receptorului
-#   POST /api/asistenta-cere?accept=1   Start (accept=1: randul "Accept termenii și condițiile" bifat)
+#   POST /api/asistenta-cere?accept=1&control=1   Start (accept=1: randul "Accept termenii și condițiile" bifat;
+#                                       control=1: randul "Control complet" bifat, nivelul B; altfel nivelul A)
 #   POST /api/asistenta-opreste    opreste
 #   GET  /asistenta                pagina
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A).
@@ -99,7 +100,8 @@ def cere(argumente, A=None, B=None, de_incredere=False):
 		from Screens import HdsAsistentaSemn as Semn
 		from .meniu_comun_web import sesiune
 		if de_incredere:
-			reusit, mesaj = Semn.pornesteWeb(sesiune())
+			nivel = "B" if str(argumente.get("control", "")) == "1" else "A"
+			reusit, mesaj = Semn.pornesteWeb(sesiune(), nivel=nivel)
 		else:
 			reusit, mesaj = Semn.cerereWeb(sesiune())
 	except Exception as e:
@@ -144,15 +146,16 @@ def bandaWeb(A=None):
 
 
 def _argumente(request):
-	"""Argumentele lui Start: numai accept (randul bifat), taiat la o marime sigura."""
+	"""Argumentele lui Start: accept (randul bifat) si control (randul "Control complet"), taiate la o marime sigura."""
 	args = getattr(request, "args", None) or {}
 	rez = {}
-	valori = args.get(b"accept")
-	if valori:
-		v = valori[0]
-		if isinstance(v, bytes):
-			v = v[:8].decode("utf-8", "replace")
-		rez["accept"] = v[:2]
+	for nume in ("accept", "control"):
+		valori = args.get(nume.encode("ascii"))
+		if valori:
+			v = valori[0]
+			if isinstance(v, bytes):
+				v = v[:8].decode("utf-8", "replace")
+			rez[nume] = v[:2]
 	return rez
 
 
@@ -275,8 +278,9 @@ PAGINA = """<!DOCTYPE html>
   <p>Funcția nu e disponibilă pe această imagine.</p>
 </section>
 <section class="card ascuns" id="pornire">
-  <p class="scurt">Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O oprești oricând.</p>
+  <p class="scurt">Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând.</p>
   <label class="bifa"><input type="checkbox" id="accept" checked><span>Accept <a href="#" id="termeni">termenii și condițiile</a></span></label>
+  <label class="bifa"><input type="checkbox" id="control" checked><span>Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale.</span></label>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
 </section>
@@ -339,7 +343,7 @@ document.addEventListener("keydown", function(e){ if(e.key==="Escape"){ $("ferea
 $("accept").addEventListener("change", function(){ if($("accept").checked){ mesaj("mesaj",""); } });
 $("porneste").addEventListener("click", function(){
   if(!$("accept").checked){ mesaj("mesaj", "Fără bifă, asistența nu pornește.", true); return; }
-  var q=new URLSearchParams(); q.set("accept","1");
+  var q=new URLSearchParams(); q.set("accept","1"); if($("control").checked){ q.set("control","1"); }
   mesaj("mesaj", "Se pornește...");
   cerere("/api/asistenta-cere","POST",q).then(function(d){ var activa=!!d.stare && d.stare!=="oprit"; mesaj("mesaj", activa ? "" : d.message, !d.result); arata(d); }).catch(function(){ mesaj("mesaj", nuRaspunde(), true); }); });
 $("opreste").addEventListener("click", function(){ mesaj("mesajOprire", "Se oprește...");
@@ -357,9 +361,10 @@ TEXTE_PAGINA = {
 		N_("Asistență de la distanță"),
 		N_("Se citește starea..."),
 		N_("Funcția nu e disponibilă pe această imagine."),
-		N_("Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O "
-			"oprești oricând."),
+		N_("Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
+		N_("Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; "
+			"niciodată cheile, liniile modulelor de acces sau datele tale personale."),
 		N_("Start"),
 		N_("Oprește"),
 		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),

@@ -13,8 +13,12 @@
 #     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
 #     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
-#   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura numai a meniurilor (OSD),
-#     refuzata cat ecranul "Acces SSH" e deschis (parola lui root pe ecran), punerea unui mesaj si a concluziilor;
+#   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura numai a meniurilor (OSD), JPEG
+#     mic, refuzata pe ecranele private (Components/HdsAsistentaControl.py: modulele de acces, Accesul SSH, parolele,
+#     Wi-Fi-ul, beta testerul), punerea unui mesaj si a concluziilor, si controlul (nivelul B): textul ecranului (op
+#     "ecran"), tastele telecomenzii (op "taste", una pe tic de eTimer) si textul intr-un camp (op "text"), toate pe firul
+#     enigma2 (Control.PeFir: reactor.callFromThread, iar ceasul controlerului goleste coada ca plasa); cat ruleaza un
+#     op de control, banda de sus spune "HD Satelit lucrează acum pe receptorul tău";
 #   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (de pe receptor sau din web) si reluarea
 #     dupa repornirea interfetei (chemata din mytest.py).
 # Nu se importa la incarcarea mytest.py nimic greu; functiile se cheama la nevoie.
@@ -26,10 +30,13 @@ from enigma import eTimer
 from Screens.Screen import Screen
 from Components.Sources.StaticText import StaticText
 from Components import HdsAsistenta as A
+from Components import HdsAsistentaControl as Control
 
 GRAB = "/usr/bin/grab"
 CAPTURA_TERMEN_S = 8
-CAPTURA_LATIME = 1280
+# captura: JPEG mic (pe Octagon SF8008 un PNG al meniurilor trecea de 2 MB)
+CAPTURA_LATIME = 960
+CAPTURA_CALITATE = 70
 
 
 def _jurnal(text):
@@ -139,6 +146,11 @@ class Controler(object):
 
 	def _tic(self):
 		import time
+		# plasa: lucrul cerut de firul sesiunii pe firul enigma2, daca trezirea prin reactor n-a ajuns
+		try:
+			_peFir.goleste()
+		except Exception as e:
+			_jurnal("coada: %r" % (e,))
 		ses = A.sesiune()
 		activa = ses is not None and ses.activa()
 		# mesajele: la rand, fiecare cel putin MESAJ_S secunde (si dupa oprire, cele ramase in coada)
@@ -176,7 +188,10 @@ class Controler(object):
 				self.banda.hide()
 				return
 			# mereu: ca e pornita si pana cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si de unde se opreste
-			self.banda.pune(A.textPana(ses, banda=True), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
+			if _lucreazaAcum():
+				self.banda.pune(_(A.TEXT_LUCREAZA), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
+			else:
+				self.banda.pune(A.textPana(ses, banda=True), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
 			self.banda.show()
 
 	def _ecranAsistenta(self):
@@ -226,17 +241,119 @@ def instaleaza(session):
 
 # ---------------------------------------------------------------- uneltele receptorului date brokerului
 
-def _captura():
-	"""O captura numai a meniurilor (OSD), ca octeti PNG; None cand nu se poate sau cand ecranul „Acces SSH" e deschis."""
+def _lucreazaAcum():
 	try:
-		from Components import HdsAccesSsh
-		if HdsAccesSsh.ecranDeschis():
-			return None
+		return A.lucreazaAcum()
 	except Exception:
-		pass
+		return False
+
+
+def _trezeste(functie):
+	"""Pune functia pe firul enigma2 (e2reactor: callFromThread trezeste bucla)."""
+	from twisted.internet import reactor
+	reactor.callFromThread(functie)
+
+
+# lucrul pe firul enigma2 cerut de firul sesiunii (textul ecranului, tastele, textul, verificarea ecranului privat)
+_peFir = Control.PeFir(trezeste=_trezeste)
+# cat asteapta firul sesiunii un raspuns de pe firul enigma2
+TERMEN_FIR_S = 15
+# ceasurile sirurilor de taste in lucru
+_vii = set()
+
+
+def _session():
+	c = _controler[0]
+	return c.session if c is not None else None
+
+
+def _stivaAcum():
+	s = _session()
+	return Control.stiva(s) if s is not None else []
+
+
+def _privatAcum():
+	"""(privat, clasa) pentru stiva de acum; pe firul enigma2."""
+	return Control.privat(_stivaAcum(), Control._sshDeschis())
+
+
+def _ecranText():
+	"""Textul ecranului (op "ecran"), citit pe firul enigma2."""
+	def lucru(gata):
+		gata(Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis()))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _taste(lista):
+	"""Tastele (op "taste"): una pe tic de eTimer, pe firul enigma2; apoi, dupa LINISTE_MS, textul ecranului.
+	-> (cod, text) sau None dupa termen."""
+	def lucru(gata):
+		sir = Control.SirTaste(lista, _stivaAcum)
+		ceas = eTimer()
+		stare = {"liniste": False}
+
+		def tic():
+			if stare.get("terminat"):
+				ceas.stop()
+				return
+			if stare["liniste"]:
+				ceas.stop()
+				stare["terminat"] = True
+				_vii.discard(ceas)
+				ecran = Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis())
+				cap = "taste trimise: %s" % (" ".join(sir.trimise) or "(niciuna)")
+				if sir.oprit:
+					cap += "\n" + sir.oprit
+				gata((1 if sir.oprit else 0, cap + "\n\n" + ecran))
+				return
+			try:
+				mai_sunt = sir.pas()
+			except Exception as e:
+				_jurnal("tasta: %r" % (e,))
+				sir.oprit = "eroare: %s" % type(e).__name__
+				mai_sunt = False
+			if not mai_sunt:
+				stare["liniste"] = True
+				ceas.start(Control.LINISTE_MS, False)
+		ceas.callback.append(tic)
+		# tinut viu cat merge (altfel ciclul ceas <-> tic poate fi strans de gunoier)
+		_vii.add(ceas)
+		tic()
+		if not stare["liniste"]:
+			ceas.start(Control.PAUZA_MS, False)
+	return _peFir.cere(lucru, Control.asteptareTaste(len(lista)))
+
+
+def _text(text):
+	"""Textul in campul deschis (op "text"), pe firul enigma2. -> (cod, mesaj) sau None dupa termen."""
+	def lucru(gata):
+		from Components import HdsMouseEcran
+		s = _session()
+		ecrane = _stivaAcum()
+		mouse = HdsMouseEcran.MouseEcran(lambda: s.current_dialog if s is not None else None,
+			apasa=lambda cod: Control.apasaTasta(cod))
+		cod, mesaj = Control.scrieText(ecrane, text, Control.modAscii(), mouse.text, Control._sshDeschis())
+		if cod == 0:
+			mesaj += "\n\n" + Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis())
+		gata((cod, mesaj))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _captura():
+	"""O captura numai a meniurilor (OSD), JPEG mic; None cand nu se poate, textul refuzului pe un ecran privat."""
+	privat = _peFir.cere(lambda gata: gata(_privatAcum()), TERMEN_FIR_S) if _session() is not None else None
+	if privat is None:
+		try:
+			from Components import HdsAccesSsh
+			if HdsAccesSsh.ecranDeschis():
+				return "(ecran privat: HdsAccesSsh; captura refuzata)"
+		except Exception:
+			pass
+	elif privat[0]:
+		return "(ecran privat: %s; captura refuzata)" % privat[1]
 	try:
-		p = subprocess.Popen([GRAB, "-o", "-s", "-r", str(CAPTURA_LATIME)], stdout=subprocess.PIPE,
-			stderr=subprocess.DEVNULL)
+		p = subprocess.Popen([GRAB, "-q", "-o", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
+			stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 	except Exception:
 		return None
 	try:
@@ -253,6 +370,9 @@ def _captura():
 def ctxReceptor(session):
 	ctx = {}
 	ctx["captura"] = _captura
+	ctx["ecran"] = _ecranText
+	ctx["taste"] = _taste
+	ctx["text"] = _text
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
 		ctx["concluzii"] = _controler[0].cereConcluzii
@@ -292,13 +412,14 @@ TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: 
 TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor acum.")
 
 
-def pornesteWeb(session):
+def pornesteWeb(session, nivel="A"):
 	"""Pornirea din pagina web a unui browser de incredere (conectat cu codul de pe receptor): un clic, ca Start de pe
-	receptor (durata implicita, fara intrebari). -> (reusit, mesaj)."""
+	receptor (durata implicita, fara intrebari); nivel "B" cu randul "Control complet" bifat. -> (reusit, mesaj)."""
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
-	return porneste(session, nivel="A", durata_min=A.DURATA_IMPLICITA_MIN, de_la="web")
+	return porneste(session, nivel=nivel if nivel in A.NIVELE else "A", durata_min=A.DURATA_IMPLICITA_MIN,
+		de_la="web")
 
 
 def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):

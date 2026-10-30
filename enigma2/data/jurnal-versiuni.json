@@ -1,6 +1,77 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.15",
+   "build": "0000615202610301800",
+   "data": "30.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Asistența de la distanță are acum Control complet: echipa îți poate configura receptorul prin meniuri (antena, canalele, instalări din feedul oficial), fără setările modulelor de acces și fără datele tale personale.",
+     "en": "Remote assistance now has Full control: the team can set up your receiver through the menus (dish, channels, installs from the official feed), never the access module settings or your personal data.",
+     "de": "Die Fernhilfe hat jetzt Volle Kontrolle: das Team kann deinen Receiver über die Menüs einrichten (Antenne, Sender, Installationen aus dem offiziellen Feed), nie die Einstellungen der Zugangsmodule oder deine persönlichen Daten.",
+     "fr": "L'assistance à distance a maintenant le Contrôle complet : l'équipe peut configurer ton récepteur par les menus (antenne, chaînes, installations depuis le flux officiel), jamais les réglages des modules d'accès ni tes données personnelles.",
+     "es": "La asistencia remota tiene ahora Control completo: el equipo puede configurar tu receptor desde los menús (antena, canales, instalaciones del feed oficial), nunca los ajustes de los módulos de acceso ni tus datos personales.",
+     "it": "L'assistenza remota ha ora il Controllo completo: il team può configurare il tuo ricevitore dai menu (antenna, canali, installazioni dal feed ufficiale), mai le impostazioni dei moduli di accesso né i tuoi dati personali.",
+     "hu": "A távsegítségnek most Teljes vezérlése is van: a csapat a menükön át beállíthatja a vevődet (antenna, csatornák, telepítés a hivatalos feedből), a hozzáférési modulok beállításai és a személyes adataid nélkül.",
+     "cs": "Vzdálená pomoc má teď Plné ovládání: tým může nastavit tvůj přijímač přes nabídky (anténa, kanály, instalace z oficiálního feedu), nikdy nastavení přístupových modulů ani tvé osobní údaje.",
+     "pl": "Pomoc zdalna ma teraz Pełną kontrolę: zespół może skonfigurować twój odbiornik przez menu (antena, kanały, instalacje z oficjalnego feedu), nigdy ustawień modułów dostępu ani twoich danych osobowych.",
+     "pt": "A assistência remota tem agora Controlo completo: a equipa pode configurar o teu recetor pelos menus (antena, canais, instalações do feed oficial), nunca as definições dos módulos de acesso nem os teus dados pessoais.",
+     "nl": "De hulp op afstand heeft nu Volledige bediening: het team kan je ontvanger via de menu's instellen (schotel, zenders, installaties uit de officiële feed), nooit de instellingen van de toegangsmodules of je persoonsgegevens.",
+     "ru": "У удалённой помощи теперь есть Полное управление: команда может настроить твой ресивер через меню (антенна, каналы, установка из официального фида), никогда настройки модулей доступа и твои личные данные.",
+     "tr": "Uzaktan yardımda artık Tam kontrol var: ekip alıcını menülerden ayarlayabilir (çanak, kanallar, resmi akıştan kurulumlar), erişim modülü ayarları ve kişisel verilerin hariç."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Ecranele modulelor de acces, ale parolelor, ale Wi-Fi-ului și ale accesului SSH rămân închise pentru echipă; fiecare tastă apăsată apare în jurnalul asistenței.",
+     "en": "The screens of the access modules, passwords, Wi-Fi and SSH access stay closed to the team; every key it presses shows in the assistance log.",
+     "de": "Die Bildschirme der Zugangsmodule, der Passwörter, des WLANs und des SSH-Zugangs bleiben für das Team gesperrt; jede gedrückte Taste steht im Protokoll der Fernhilfe.",
+     "fr": "Les écrans des modules d'accès, des mots de passe, du Wi-Fi et de l'accès SSH restent fermés à l'équipe ; chaque touche appuyée apparaît dans le journal de l'assistance.",
+     "es": "Las pantallas de los módulos de acceso, de las contraseñas, del Wi-Fi y del acceso SSH siguen cerradas para el equipo; cada tecla pulsada aparece en el registro de la asistencia.",
+     "it": "Le schermate dei moduli di accesso, delle password, del Wi-Fi e dell'accesso SSH restano chiuse al team; ogni tasto premuto compare nel registro dell'assistenza.",
+     "hu": "A hozzáférési modulok, a jelszavak, a Wi-Fi és az SSH-hozzáférés képernyői zárva maradnak a csapat előtt; minden lenyomott gomb megjelenik a segítség naplójában.",
+     "cs": "Obrazovky přístupových modulů, hesel, Wi-Fi a přístupu SSH zůstávají pro tým zavřené; každé stisknuté tlačítko je v deníku pomoci.",
+     "pl": "Ekrany modułów dostępu, haseł, Wi-Fi i dostępu SSH pozostają dla zespołu zamknięte; każdy naciśnięty klawisz widać w dzienniku pomocy.",
+     "pt": "Os ecrãs dos módulos de acesso, das palavras-passe, do Wi-Fi e do acesso SSH continuam fechados à equipa; cada tecla premida aparece no registo da assistência.",
+     "nl": "De schermen van de toegangsmodules, wachtwoorden, wifi en SSH-toegang blijven dicht voor het team; elke ingedrukte toets staat in het logboek van de hulp.",
+     "ru": "Экраны модулей доступа, паролей, Wi-Fi и доступа SSH остаются закрытыми для команды; каждая нажатая кнопка видна в журнале помощи.",
+     "tr": "Erişim modüllerinin, parolaların, Wi-Fi'ın ve SSH erişiminin ekranları ekibe kapalı kalır; basılan her tuş yardım günlüğünde görünür."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Captura meniurilor din asistență e acum o poză mică (JPEG), deci merge și pe Octagon SF8008.",
+     "en": "The menu capture in the assistance is now a small picture (JPEG), so it also works on Octagon SF8008.",
+     "de": "Die Aufnahme der Menüs in der Fernhilfe ist jetzt ein kleines Bild (JPEG) und geht auch auf Octagon SF8008.",
+     "fr": "La capture des menus dans l'assistance est maintenant une petite image (JPEG), elle marche donc aussi sur Octagon SF8008.",
+     "es": "La captura de los menús en la asistencia es ahora una imagen pequeña (JPEG), así que funciona también en Octagon SF8008.",
+     "it": "La cattura dei menu nell'assistenza è ora un'immagine piccola (JPEG), quindi funziona anche su Octagon SF8008.",
+     "hu": "A segítségben a menük képe most kis kép (JPEG), így Octagon SF8008-on is működik.",
+     "cs": "Snímek nabídek v pomoci je teď malý obrázek (JPEG), takže funguje i na Octagon SF8008.",
+     "pl": "Zrzut menu w pomocy jest teraz małym obrazem (JPEG), więc działa też na Octagon SF8008.",
+     "pt": "A captura dos menus na assistência é agora uma imagem pequena (JPEG), por isso também funciona no Octagon SF8008.",
+     "nl": "De opname van de menu's in de hulp is nu een kleine afbeelding (JPEG), dus het werkt ook op Octagon SF8008.",
+     "ru": "Снимок меню в помощи теперь маленькая картинка (JPEG), поэтому он работает и на Octagon SF8008.",
+     "tr": "Yardımdaki menü görüntüsü artık küçük bir resim (JPEG), bu yüzden Octagon SF8008'de de çalışıyor."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Numele limbilor din listă sunt traduse în limba aleasă, iar meniul în lituaniană are etichetele scrise corect.",
+     "en": "The language names in the list are translated into the chosen language, and the Lithuanian menu has its labels written correctly.",
+     "de": "Die Namen der Sprachen in der Liste sind in die gewählte Sprache übersetzt, und das litauische Menü hat richtig geschriebene Beschriftungen.",
+     "fr": "Les noms des langues de la liste sont traduits dans la langue choisie, et le menu en lituanien a ses libellés bien écrits.",
+     "es": "Los nombres de los idiomas de la lista están traducidos al idioma elegido, y el menú en lituano tiene las etiquetas bien escritas.",
+     "it": "I nomi delle lingue nell'elenco sono tradotti nella lingua scelta, e il menu in lituano ha le etichette scritte bene.",
+     "hu": "A listában a nyelvek neve a választott nyelven jelenik meg, és a litván menü feliratai helyesen vannak írva.",
+     "cs": "Názvy jazyků v seznamu jsou přeložené do zvoleného jazyka a litevská nabídka má správně napsané popisky.",
+     "pl": "Nazwy języków na liście są przetłumaczone na wybrany język, a menu po litewsku ma poprawnie zapisane etykiety.",
+     "pt": "Os nomes das línguas na lista estão traduzidos para a língua escolhida, e o menu em lituano tem as etiquetas bem escritas.",
+     "nl": "De namen van de talen in de lijst zijn vertaald in de gekozen taal, en het Litouwse menu heeft goed geschreven labels.",
+     "ru": "Названия языков в списке переведены на выбранный язык, а в литовском меню подписи написаны правильно.",
+     "tr": "Listedeki dil adları seçilen dile çevrildi ve Litvanca menünün etiketleri doğru yazıldı."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.14",
    "build": "0000614202610301000",
    "data": "30.10.2026",

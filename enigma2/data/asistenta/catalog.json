@@ -115,6 +115,31 @@
       "args": [
         {"nume": "text", "tipar": "(?s)^.{1,2000}$", "cerut": true, "max_semne": 2000}
       ]
+    },
+    {
+      "op": "ecran",
+      "grup": "Ecran",
+      "fel": "citire",
+      "text": "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private",
+      "args": []
+    },
+    {
+      "op": "taste",
+      "grup": "Control",
+      "fel": "control",
+      "text": "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)",
+      "args": [
+        {"nume": "taste", "tipar": "^[a-z0-9+:-]{1,16}( [a-z0-9+:-]{1,16}){0,19}$", "cerut": true}
+      ]
+    },
+    {
+      "op": "text",
+      "grup": "Control",
+      "fel": "control",
+      "text": "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)",
+      "args": [
+        {"nume": "text", "tipar": "^[^\\x00-\\x1f\\x7f]{1,200}$", "cerut": true}
+      ]
     }
   ]
 }

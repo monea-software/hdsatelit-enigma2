@@ -77,13 +77,15 @@ IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
-VERSIUNE_TEXT = 4
+# (5: randul "Control complet", nivelul B)
+VERSIUNE_TEXT = 5
 # durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
 # fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
 DURATA_PERMANENTA = 0
 DURATE_MIN = (120, 720, 1440, 10080, 43200, DURATA_PERMANENTA)
 DURATA_IMPLICITA_MIN = 120
-NIVELE = ("A",)
+# A: citiri si probe; B: si controlul (tastele telecomenzii, textul in campuri), cu randul "Control complet" bifat
+NIVELE = ("A", "B")
 PAS_INTREBARE_S = 3                    # cat de des intreaba serverul cat e ceva de facut
 PAS_RAR_S = 30                         # cat de des, dupa ACTIV_S fara nicio cerere (asistenta pornita mult timp)
 ACTIV_S = 10 * 60
@@ -134,24 +136,48 @@ INFORMARE = N_(
 
 # despre durata, pus dupa paragraful "Cât timp e pornită..." al informarii (in web si pe receptor)
 TEXT_DURATE = N_("Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e "
-	"pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic.")
+	"pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic.")
+
+# paragraful "Cum merge" al informarii, cu controlul (nivelul B); inlocuieste la afisare paragraful al treilea din
+# INFORMARE (acela spune numai ce face nivelul A), ca restul textului sa ramana cu traducerile lui
+TEXT_CUM_MERGE = N_("Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o "
+	"cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale "
+	"jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet "
+	"bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să "
+	"schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula "
+	"comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale "
+	"accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate "
+	"doar ieși. Fiecare cerere apare în jurnal, pe ecran.")
+# al catelea paragraf din INFORMARE e "Cum merge" (numaratoarea de la 0)
+_PARAGRAF_CUM_MERGE = 2
 
 
 def textInformare():
 	parti = _t(INFORMARE).split("\n\n")
+	if len(parti) > _PARAGRAF_CUM_MERGE:
+		parti[_PARAGRAF_CUM_MERGE] = _t(TEXT_CUM_MERGE)
 	parti.insert(min(4, len(parti)), _t(TEXT_DURATE))
 	return "\n\n".join(parti)
 
 
 # Pagina de pornire (pe receptor si in web): numai randul scurt TEXT_SCURT, randul bifat dinainte TEXT_ACCEPT si Start.
 # Termenii si conditiile intregi (textTermeni) se deschid la cerere: OK pe rand (receptor) sau legatura din fraza (web).
-TEXT_SCURT = N_("Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O "
-	"oprești oricând.")
+TEXT_SCURT = N_("Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând.")
+# al doilea rand bifat dinainte al paginii de pornire (nivelul B); debifat = nivelul A (numai citiri si probe)
+TEXT_CONTROL = N_("Control complet")
+TEXT_CONTROL_LUNG = N_("Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din "
+	"feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale.")
+TEXT_FARA_CONTROL = N_("Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic.")
+# banda de sus cat echipa apasa taste sau scrie (op-urile de control)
+TEXT_LUCREAZA = N_("HD Satelit lucrează acum pe receptorul tău")
+# cat ramane banda "lucrează acum" dupa ultimul op de control (secunde)
+LUCREAZA_S = 20
 TEXT_ACCEPT = N_("Accept termenii și condițiile")
 TEXT_TERMENI = N_("Termenii și condițiile")
 TEXT_FARA_BIFA = N_("Fără bifă, asistența nu pornește.")
-TEXT_NIVEL = N_("Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură "
-	"arată numai meniurile, nu imaginea canalului). Poți opri oricând.")
+TEXT_NIVEL = N_("Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură "
+	"arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, "
+	"afară de ecranele private. Poți opri oricând.")
 TEXT_ACORD = N_("Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau "
 	"acordul unui părinte.")
 
@@ -700,11 +726,25 @@ class Sesiune(object):
 			return
 		seq, op, args = date["seq"], date["op"], date["args"]
 		intrare = Catalog.gaseste(op)
-		fel = _t("citire") if (intrare and intrare["fel"] == "citire") else _t("probă")
+		fel_cat = intrare["fel"] if intrare else ""
+		fel = {"citire": _t("citire"), "control": _t("control")}.get(fel_cat, _t("probă"))
 		eticheta = _t(intrare["text"]) if intrare else op
-		self.jurnal.adauga("%s: %s" % (fel, eticheta))
-		_anunta()
-		rez = Broker.ruleaza(op, args, self.ctx)
+		if op == "taste" and args:
+			# omul vede ce taste apasa echipa
+			eticheta = "%s: %s" % (eticheta, args[0])
+		elif op == "text" and args:
+			eticheta = "%s: %s" % (eticheta, _t("%d semne") % len(args[0]))
+		if fel_cat == "control" and self.nivel != "B":
+			self.jurnal.adauga(_t("cerere refuzată: %s") % _t("control oprit"))
+			rez = Broker.Rezultat(1, text=Broker.TEXT_FARA_CONTROL)
+		else:
+			self.jurnal.adauga("%s: %s" % (fel, eticheta))
+			if fel_cat == "control":
+				_ultimControl[0] = _acum()
+			_anunta()
+			rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel))
+			if fel_cat == "control":
+				_ultimControl[0] = _acum()
 		self.jurnal.adauga(_t("    răspuns: cod %d, %d octeți") % (rez.cod_iesire, rez.marime()))
 		self._trimite_raspuns(seq, op, rez)
 		self.ultim_seq = seq
@@ -730,6 +770,16 @@ class Sesiune(object):
 
 	def _asteapta_pas(self, s):
 		self._stop.wait(s)
+
+
+# cand a rulat ultimul op de control (ceasul monoton): banda de sus arata TEXT_LUCREAZA cat timp e proaspat
+_ultimControl = [None]
+
+
+def lucreazaAcum():
+	"""True cat echipa lucreaza pe receptor (un op de control in ultimele LUCREAZA_S secunde)."""
+	t = _ultimControl[0]
+	return t is not None and _acum() - t < LUCREAZA_S
 
 
 def _seq_din(exterior):
