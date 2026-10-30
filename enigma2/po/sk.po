@@ -55077,3 +55077,90 @@ msgstr "Podmienky používania"
 
 msgid "cerere trimisă, aștept echipa"
 msgstr "žiadosť odoslaná, čakám na tím"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "Tím HD Satelit vidí cez internet stav tvojho prijímača, aby ti pomohol. Môžeš to kedykoľvek vypnúť."
+
+msgid "Control complet"
+msgstr "Plná kontrola"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Plná kontrola: tím môže prechádzať menu, meniť nastavenia, vyhľadávať kanály a inštalovať z oficiálneho feedu; nikdy kľúče, linky prístupových modulov ani tvoje osobné údaje."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Bez Plnej kontroly: tím iba číta stav prijímača, bez toho, aby čokoľvek zmenil."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit teraz pracuje na tvojom prijímači"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Ako to funguje: tvoj prijímač sa pýta servera HD Satelit cez šifrované spojenie, či preň máme požiadavku. Môžeme žiadať len operácie z pevného zoznamu, napísaného v obraze: čítania stavu, denníkov a textu na obrazovke, snímku menu a správu napísanú na obrazovke. So zaškrtnutou Plnou kontrolou môže tím aj stláčať tlačidlá diaľkového ovládača a písať do textových polí, aby prechádzal menu, menil nastavenia, vyhľadával kanály a inštaloval z oficiálneho feedu, ako keby držal diaľkový ovládač. Nemôžeme spúšťať voľné príkazy a nemôžeme sa dostať k iným zariadeniam v tvojom dome. Obrazovky prístupových modulov, hesiel, prístupu SSH, siete Wi-Fi a tvojich osobných údajov zostávajú zatvorené: tam tím nič nevidí a môže len odísť. Každá požiadavka sa objaví v denníku, na obrazovke."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start ju zapne na 2 hodiny. Kedykoľvek ju vypneš, z prijímača alebo z webovej stránky. Kým je zapnutá, tím môže kedykoľvek vstúpiť, ale robí len to, čo je v pevnom zozname; bez Plnej kontroly nič nezmení."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Bez Plnej kontroly: čítania a testy (operácie z pevného zoznamu, hlavne čítania; snímka zobrazuje len menu, nie obraz kanála). S Plnou kontrolou: aj tlačidlá diaľkového ovládača a text do polí, okrem súkromných obrazoviek. Kedykoľvek to môžeš vypnúť."
+
+msgid "Ecran"
+msgstr "Obrazovka"
+
+msgid "Control"
+msgstr "Ovládanie"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "text otvorenej obrazovky na prijímači (menu, vybraný riadok, nastavenia), bez súkromných obrazoviek"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "tlačidlá diaľkového ovládača, ako keby tím držal diaľkový ovládač (len s Plnou kontrolou)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "text napísaný do otvoreného poľa na obrazovke (len s Plnou kontrolou, nikdy do hesiel)"
+
+msgid "control"
+msgstr "ovládanie"
+
+msgid "control oprit"
+msgstr "ovládanie vypnuté"
+
+msgid "%d semne"
+msgstr "%d znakov"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "otvorený kanál: služba, transpondér, tuner a signál (bez ničoho z modulov podmieneného prístupu)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "transpondéry zo zoznamu kanálov (bez kanálov a bez ničoho osobného)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "spustí kanál z tvojho zoznamu (len s Plná kontrola)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "zmení nastavenie (obraz, zvuk, rozhranie, tunery, čas, sprievodca, sieť; nikdy heslá, kľúče ani osobné údaje; len s Plná kontrola)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "nainštaluje plugin alebo modul z oficiálneho feedu HD Satelit (bez jeho konfigurácie a kľúčov; len s Plná kontrola)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "odinštaluje plugin alebo modul (len s Plná kontrola)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "reštartuje rozhranie alebo prijímač s oznámením na obrazovke; asistencia pokračuje po reštarte (len s Plná kontrola)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit teraz reštartuje rozhranie prijímača. Asistencia pokračuje po reštarte."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit teraz reštartuje prijímač. Asistencia pokračuje po reštarte."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "Tím HD Satelit vstúpi cez internet do tvojho prijímača, aby ti pomohol: môže sa pohybovať v ponukách, meniť nastavenia, hľadať kanály a inštalovať z oficiálneho feedu, bez kľúčov a liniek prístupových modulov a bez tvojich osobných údajov. Kedykoľvek ju vypneš."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Ako to funguje: tvoj prijímač sa pýta servera HD Satelit prostredníctvom šifrovaného spojenia, či preňho máme požiadavku. Môžeme žiadať iba operácie z pevného zoznamu, napísaného v obraze: čítania stavu, logov a textu na obrazovke, snímku ponúk, správu napísanú na obrazovke, tlačidlá diaľkového ovládača a text z polí, aby sme prechádzali ponukami, menili nastavenia, hľadali kanály a inštalovali z oficiálneho feedu, ako keby sme držali diaľkový ovládač. Nemôžeme spúšťať voľné príkazy a nemôžeme sa dostať k iným zariadeniam v tvojom dome. Obrazovky prístupových modulov, hesiel, prístupu SSH, siete Wi-Fi a tvojich osobných údajov zostávajú zatvorené: tam tím nič nevidí a môže iba odísť. Každá požiadavka sa objaví v logu, na obrazovke."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start ju zapne na 2 hodiny. Vypneš ju kedykoľvek, z prijímača alebo z webovej stránky. Kým je zapnutá, tím môže kedykoľvek vstúpiť, ale robí iba to, čo je v pevnom zozname."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Asistencia je kompletná: čítania, testy a ovládanie prijímača cez ponuky, z pevného zoznamu. Snímka zobrazuje iba ponuky, nie obraz kanála. Súkromné obrazovky zostávajú zatvorené. Kedykoľvek môžeš zastaviť."

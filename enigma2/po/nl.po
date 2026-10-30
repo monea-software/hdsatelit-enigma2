@@ -59018,3 +59018,90 @@ msgstr "Laatste conclusies"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "de conclusies van het team (wat we hebben gevonden en wat we hebben gedaan), op de ontvanger getoond tot je op OK drukt"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "Het team van HD Satelit ziet via internet de status van je receiver om je te helpen. Je kunt het op elk moment uitzetten."
+
+msgid "Control complet"
+msgstr "Volledige controle"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Volledige controle: het team kan door menu's navigeren, instellingen wijzigen, zenders zoeken en installeren vanuit de officiële feed; nooit de sleutels, de lijnen van de conditional access modules of je persoonlijke gegevens."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Zonder Volledige controle: het team leest alleen de status van de receiver, zonder iets te wijzigen."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit werkt nu op je receiver."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Zo werkt het: je receiver vraagt de server van HD Satelit via een versleutelde verbinding of we een verzoek voor hem hebben. We kunnen alleen handelingen uit een vaste lijst aanvragen die in de image staat: uitlezingen van de status, van de logboeken en van de tekst op het scherm, een schermafbeelding van de menu's en een bericht op het scherm. Met Volledige controle aangevinkt kan het team ook de toetsen van de afstandsbediening indrukken en in tekstvelden schrijven, om door menu's te gaan, instellingen te wijzigen, zenders te zoeken en te installeren vanuit de officiële feed, alsof het de afstandsbediening vasthoudt. We kunnen geen vrije commando's uitvoeren en we kunnen niet bij andere apparaten in je huis komen. De schermen van de conditional access modules, van wachtwoorden, van SSH-toegang, van het Wi-Fi-netwerk en van je persoonlijke gegevens blijven gesloten: daar ziet het team niets en kan het alleen verlaten. Elk verzoek verschijnt in het logboek, op het scherm."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start zet het voor 2 uur aan. Je kunt het op elk moment uitzetten, vanaf de receiver of via de webpagina. Zolang het aanstaat, kan het team op elk moment binnenkomen, maar doet het alleen wat in de vaste lijst staat; zonder Volledige controle wijzigt het niets."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Zonder Volledige controle: uitlezingen en tests (handelingen uit een vaste lijst, voornamelijk uitlezingen; een schermafbeelding toont alleen de menu's, niet het beeld van de zender). Met Volledige controle: ook de toetsen van de afstandsbediening en tekst in velden, behalve de privéschermen. Je kunt het op elk moment uitzetten."
+
+msgid "Ecran"
+msgstr "Scherm"
+
+msgid "Control"
+msgstr "Controle"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "de tekst van het geopende scherm op de receiver (het menu, de gekozen regel, de instellingen), zonder de privéschermen"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "de toetsen van de afstandsbediening, alsof het team de afstandsbediening vasthoudt (alleen met Volledige controle)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "een tekst geschreven in het geopende veld op het scherm (alleen met Volledige controle, nooit in wachtwoorden)"
+
+msgid "control"
+msgstr "controle"
+
+msgid "control oprit"
+msgstr "controle uit"
+
+msgid "%d semne"
+msgstr "%d tekens"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "het geopende kanaal: de service, de transponder, de tuner en het signaal (zonder iets van de toegangsmodules)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "de transponders uit de zenderlijst (zonder zenders en zonder iets persoonlijks)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "start een zender uit je lijst (alleen met Volledige controle)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "verander een instelling (beeld, geluid, interface, tuners, tijd, gids, netwerk; nooit wachtwoorden, sleutels of persoonlijke gegevens; alleen met Volledige controle)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "installeer een plugin of een module uit de officiële HD Satelit pakketfeed (zonder de configuratie en sleutels ervan; alleen met Volledige controle)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "verwijder een plugin of een module (alleen met Volledige controle)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "herstart de interface of de ontvanger, met aankondiging op het scherm; de assistentie gaat verder na de herstart (alleen met Volledige controle)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit herstart nu de interface van de ontvanger. De assistentie gaat verder na de herstart."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit herstart nu de ontvanger. De assistentie gaat verder na de herstart."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "Het HD Satelit-team gaat via internet naar je receiver om je te helpen: het kan door menu's navigeren, instellingen wijzigen, zenders zoeken en installeren vanuit de officiële feed, zonder de sleutels en abonnementslijnen van de conditional access modules en zonder je persoonlijke gegevens. Je zet het op elk moment uit."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Zo werkt het: je receiver vraagt aan de HD Satelit-server, via een versleutelde verbinding, of wij een verzoek voor hem hebben. We kunnen alleen handelingen uit een vaste lijst vragen, die in de image staat: het uitlezen van de status, van de logs en van de tekst op het scherm, een schermafbeelding van de menu's, een bericht op het scherm, de toetsen van de afstandsbediening en de tekst uit velden, om door menu's te gaan, instellingen te wijzigen, zenders te zoeken en te installeren vanuit de officiële feed, alsof we de afstandsbediening vasthouden. We kunnen geen vrije commando's uitvoeren en we kunnen niet bij andere apparaten in je huis komen. De schermen van de conditional access modules, van de wachtwoorden, van de SSH-toegang, van het Wi-Fi-netwerk en van je persoonlijke gegevens blijven gesloten: daar ziet het team niets en kan het alleen maar weggaan. Elk verzoek verschijnt in de log, op het scherm."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start zet het aan voor 2 uur. Je zet het op elk moment uit, vanaf de receiver of via de webpagina. Zolang het aanstaat, kan het team op elk moment binnenkomen, maar het doet alleen wat in de vaste lijst staat."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "De ondersteuning is compleet: uitlezingen, tests en de bediening van de receiver via de menu's, uit de vaste lijst. Een schermafbeelding toont alleen de menu's, niet het beeld van de zender. De privéschermen blijven gesloten. Je kunt op elk moment stoppen."

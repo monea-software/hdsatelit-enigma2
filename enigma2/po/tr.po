@@ -58183,3 +58183,90 @@ msgstr "Son sonuçlar"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "ekibin sonuçları (ne bulduk ve ne yaptık), OK'a basana kadar alıcıda gösterilir"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit ekibi, sana yardım etmek için alıcının durumunu internet üzerinden görür. Onu istediğin zaman durdurabilirsin."
+
+msgid "Control complet"
+msgstr "Tam kontrol"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Tam kontrol: ekip menülerde gezinebilir, ayarları değiştirebilir, kanal arayabilir ve resmi paket deposundan kurulum yapabilir; asla anahtarlar, erişim modüllerinin hatları ya da kişisel verilerin değil."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Tam kontrol olmadan: ekip sadece alıcının durumunu okur, hiçbir şeyi değiştirmeden."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit şu anda alıcında çalışıyor"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Nasıl çalışır: alıcın, şifreli bir bağlantı üzerinden HD Satelit sunucusuna, onun için bir isteğimiz olup olmadığını sorar. Sadece imajda yazılı sabit bir listedeki işlemleri isteyebiliriz: durumun, günlüklerin ve ekrandaki metnin okunması, menülerin bir ekran görüntüsü ve ekranda yazılı bir mesaj. Tam kontrol işaretliyken, ekip ayrıca kumandanın tuşlarına basabilir ve metin alanlarına yazabilir; menülerde gezinmek, ayarları değiştirmek, kanal aramak ve resmi paket deposundan kurulum yapmak için, sanki kumandayı tutuyormuş gibi. Serbest komut çalıştıramayız ve evindeki başka cihazlara erişemeyiz. Erişim modüllerinin, parolaların, SSH erişiminin, Wi-Fi ağının ve kişisel verilerinin ekranları kapalı kalır: orada ekip hiçbir şey görmez ve sadece çıkabilir. Her istek ekrandaki günlükte görünür."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start onu 2 saatliğine başlatır. Onu istediğin zaman durdurabilirsin, alıcıdan veya web sayfasından. Açık olduğu sürece ekip istediği zaman girebilir, ama sadece sabit listede olanı yapar; Tam kontrol olmadan hiçbir şeyi değiştirmez."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Tam kontrol olmadan: okumalar ve testler (sabit bir listedeki işlemler, çoğunlukla okumalar; bir ekran görüntüsü sadece menüleri gösterir, kanal görüntüsünü değil). Tam kontrol ile: hem kumandanın tuşları hem de alanlara metin, özel ekranlar hariç. İstediğin zaman durdurabilirsin."
+
+msgid "Ecran"
+msgstr "Ekran"
+
+msgid "Control"
+msgstr "Kontrol"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "alıcıda açık ekranın metni (menü, seçili satır, ayarlar), özel ekranlar hariç"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "kumandanın tuşları, sanki ekip kumandayı tutuyormuş gibi (sadece Tam kontrol ile)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "ekranda açık alana yazılmış bir metin (sadece Tam kontrol ile, asla parolalarda değil)"
+
+msgid "control"
+msgstr "kontrol"
+
+msgid "control oprit"
+msgstr "kontrol durduruldu"
+
+msgid "%d semne"
+msgstr "%d karakter"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "açık kanal: servis, transponder, tuner ve sinyal (koşullu erişim modüllerinden hiçbir şey olmadan)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "kanal listesindeki transponderler (kanallar olmadan ve kişisel hiçbir şey olmadan)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "listenden bir kanal başlat (yalnızca Tam kontrol ile)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "bir ayarı değiştir (görüntü, ses, arayüz, tunerler, saat, rehber, ağ; asla parolalar, anahtarlar veya kişisel veriler; yalnızca Tam kontrol ile)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "HD Satelit resmi paket deposundan bir eklenti veya modül kur (kendi yapılandırması ve anahtarları olmadan; yalnızca Tam kontrol ile)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "bir eklentiyi veya modülü kaldır (yalnızca Tam kontrol ile)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "arayüzü veya alıcıyı ekranda duyuruyla yeniden başlat; destek yeniden başlatmadan sonra devam eder (yalnızca Tam kontrol ile)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit şimdi alıcının arayüzünü yeniden başlatıyor. Destek yeniden başlatmadan sonra devam eder."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit şimdi alıcıyı yeniden başlatıyor. Destek yeniden başlatmadan sonra devam eder."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Satelit ekibi sana yardım etmek için internet üzerinden alıcına girer: menülerde gezinebilir, ayarları değiştirebilir, kanal arayabilir ve resmi paket deposundan kurabilir, erişim modüllerinin anahtarları ve hatları olmadan ve kişisel verilerin olmadan. İstediğin zaman kapatırsın."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Nasıl çalışır: Alıcın, şifreli bir bağlantı üzerinden HD Satelit sunucusuna, onun için bir isteğimiz olup olmadığını sorar. Yalnızca imajda yazılı sabit bir listedeki işlemleri isteyebiliriz: durumun, günlüklerin ve ekrandaki metnin okumaları, menülerin bir ekran görüntüsü, ekranda yazılı bir mesaj, uzaktan kumanda tuşları ve alanlardaki metin, böylece menülerde gezinir, ayarları değiştirir, kanal arar ve resmi paket deposundan kurarız, sanki uzaktan kumandayı tutuyormuşuz gibi. Serbest komutlar çalıştıramayız ve evindeki diğer cihazlara ulaşamayız. Erişim modüllerinin, parolaların, SSH erişiminin, Wi-Fi ağının ve kişisel verilerinin ekranları kapalı kalır: orada ekip hiçbir şey görmez ve yalnızca çıkabilir. Her istek günlükte, ekranda görünür."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start onu 2 saatliğine başlatır. İstediğin zaman alıcıdan veya web sayfasından kapatırsın. Açık olduğu sürece ekip istediği zaman girebilir, ama yalnızca sabit listede olanı yapar."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Destek tamdır: sabit listeden okumalar, denemeler ve menüler aracılığıyla alıcının kontrolü. Bir ekran görüntüsü yalnızca menüleri gösterir, kanal görüntüsünü göstermez. Özel ekranlar kapalı kalır. İstediğin zaman kapatabilirsin."

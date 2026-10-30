@@ -9,8 +9,9 @@
 # Un clic, fara pasi in plus:
 # - HdsAsistentaAlege: pagina de pornire. Numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și
 #   condițiile" (Stanga/Dreapta schimba bifa; OK deschide HdsAsistentaTermeni, fereastra derulanta cu textul intreg,
-#   A.textTermeni) si Verde "Start". Start porneste pe loc, fara nicio intrebare: durata A.DURATA_IMPLICITA_MIN,
-#   nevoia "Nimic anume". Fara bifa, Start nu porneste si pagina spune scurt de ce.
+#   A.textTermeni) si Verde "Start". Start porneste pe loc asistenta completa (nivelul B: citirile si controlul prin
+#   meniuri, afara de ecranele private), fara nicio intrebare: durata A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume".
+#   Fara bifa de acord, Start nu porneste si pagina spune scurt de ce.
 # - HdsAsistenta: intrarea din meniu. Cat asistenta e oprita deschide pe loc pagina de pornire (la prima executie,
 #   onFirstExecBegin: un ecran modal se deschide numai cand cel de dedesubt ruleaza); iesirea de pe pagina fara Start
 #   inchide si intrarea. Cat e pornita arata numai pana cand e pornita (A.textPana) si, dedesubt, jurnalul (fiecare
@@ -376,8 +377,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 			self._fara_bifa = True
 			self._puneText()
 			return
-		# fara intrebari: durata implicita, nevoia "Nimic anume"
-		reusit, mesaj = Semn.porneste(self.session, nivel="A", durata_min=A.DURATA_IMPLICITA_MIN, de_la=self.de_la)
+		# fara intrebari: asistenta completa, durata implicita, nevoia "Nimic anume"
+		reusit, mesaj = Semn.porneste(self.session, nivel=A.NIVEL_PORNIRE, durata_min=A.DURATA_IMPLICITA_MIN,
+			de_la=self.de_la)
 		if not reusit:
 			# de ce n-a pornit, pe pagina (o fereastra deschisa inainte de close ar lasa pagina sub ea)
 			self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + (mesaj or ""))

@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.6.14],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.6.17],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 

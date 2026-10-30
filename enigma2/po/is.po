@@ -57107,3 +57107,90 @@ msgstr "−1 mín"
 #~ msgstr ""
 #~ "Dreamboxið þitt gæti verið óstöðugt núna.  Athugaðu leiðbeiningar um "
 #~ "aðstoð með að endurræsa Dreamboxið."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "HD Satelit teymið sér stöðu móttakarans þíns í gegnum internetið til að hjálpa þér. Þú getur stöðvað það hvenær sem er."
+
+msgid "Control complet"
+msgstr "Full stjórn"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Full stjórn: teymið getur farið um valmyndir, breytt stillingum, leitað að rásum og sett upp úr opinberu veitunni; aldrei lyklana, áskriftarlínur aðgangseininganna eða persónuleg gögn þín."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Án Fullrar stjórnar: teymið les aðeins stöðu móttakarans, án þess að breyta neinu."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit vinnur núna á móttakaranum þínum"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hvernig það virkar: móttakarinn þinn spyr HD Satelit netþjóninn, um dulkóðaða tengingu, hvort við höfum beiðni fyrir hann. Við getum aðeins beðið um aðgerðir af föstum lista sem skráður er í image: lestur á stöðu, annálum og texta á skjánum, skjámynd af valmyndum og skilaboð skrifuð á skjáinn. Þegar hakað er við Fulla stjórn getur teymið einnig ýtt á hnappa fjarstýringarinnar og skrifað í textareiti til að fara um valmyndir, breyta stillingum, leita að rásum og setja upp úr opinberu veitunni, eins og það héldi á fjarstýringunni. Við getum ekki keyrt frjálsar skipanir og getum ekki náð í önnur tæki á heimili þínu. Skjáir aðgangseininga, lykilorða, SSH-aðgangs, Wi-Fi netkerfisins og persónulegra gagna þinna haldast lokaðir: þar sér teymið ekkert og getur aðeins farið út. Hver beiðni birtist í annálinum, á skjánum."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start ræsir það í 2 klukkustundir. Þú getur stöðvað það hvenær sem er, úr móttakaranum eða af vefsíðunni. Á meðan það er í gangi getur teymið farið inn hvenær sem er, en gerir aðeins það sem er á fasta listanum; án Fullrar stjórnar breytir það engu."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Án Fullrar stjórnar: lestur og prófanir (aðgerðir af föstum lista, aðallega lestur; skjámynd sýnir aðeins valmyndirnar, ekki rásarmyndina). Með Fullri stjórn: einnig hnappar fjarstýringarinnar og texti í reitum, fyrir utan einkaskjái. Þú getur stöðvað hvenær sem er."
+
+msgid "Ecran"
+msgstr "Skjár"
+
+msgid "Control"
+msgstr "Stjórn"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "texti opna skjásins á móttakaranum (valmyndin, valin lína, stillingarnar), án einkaskjáa"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "hnappar fjarstýringarinnar, eins og teymið héldi á fjarstýringunni (aðeins með Fullri stjórn)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "texti skrifaður í opinn reit á skjánum (aðeins með Fullri stjórn, aldrei í lykilorð)"
+
+msgid "control"
+msgstr "stjórn"
+
+msgid "control oprit"
+msgstr "stjórn stöðvuð"
+
+msgid "%d semne"
+msgstr "%d stafir"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "opna rásin: þjónustan, sendisvarinn, móttakarinn og merkið (án nokkurs frá aðgangseiningunum)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "sendisvararnir úr rásalistanum (án rása og án nokkurs persónulegs)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "ræstu rás af listanum þínum (aðeins með Fullri stjórn)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "breyttu stillingu (mynd, hljóð, viðmót, móttakarar, tími, dagskrárvísir, netkerfi; aldrei lykilorð, lyklar eða persónuleg gögn; aðeins með Fullri stjórn)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "settu upp viðbót eða einingu úr opinberu HD Satelit veitunni (án stillinga hennar og lykla; aðeins með Fullri stjórn)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "fjarlægðu viðbót eða einingu (aðeins með Fullri stjórn)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "endurræstu viðmótið eða móttakarann, með tilkynningu á skjánum; fjaraðstoðin heldur áfram eftir endurræsingu (aðeins með Fullri stjórn)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit endurræsir nú viðmót móttakarans. Fjaraðstoðin heldur áfram eftir endurræsingu."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit endurræsir nú móttakarann. Fjaraðstoðin heldur áfram eftir endurræsingu."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "HD Satelit teymið fer inn í móttakarann þinn í gegnum internetið til að hjálpa þér: það getur farið um valmyndir, breytt stillingum, leitað að rásum og sett upp úr opinbera straumnum, án lykla og lína aðgangseininganna og án persónuupplýsinga þinna. Þú getur stöðvað það hvenær sem er."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hvernig það virkar: móttakarinn þinn spyr HD Satelit netþjóninn, í gegnum dulkóðaða tengingu, hvort við eigum beiðni fyrir hann. Við getum aðeins beðið um aðgerðir af föstum lista, skrifuðum í myndinni: lestur á stöðu, á atvikaskrám og á texta af skjánum, skjámynd af valmyndunum, skilaboð skrifuð á skjáinn, hnappa fjarstýringarinnar og textann í reitunum, til að fara um valmyndir, breyta stillingum, leita að rásum og setja upp úr opinbera straumnum, eins og við héldum á fjarstýringunni. Við getum ekki keyrt frjálsar skipanir og við komumst ekki að öðrum tækjum á heimili þínu. Skjáirnir aðgangseininganna, lykilorðanna, SSH-aðgangsins, Wi-Fi netsins og persónuupplýsinga þinna haldast lokaðir: þar sér teymið ekkert og getur aðeins farið út. Sérhver beiðni birtist í atvikaskránni, á skjánum."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start kveikir á því í 2 klukkustundir. Þú getur slökkt á því hvenær sem er, af móttakaranum eða af vefsíðunni. Á meðan kveikt er á því getur teymið farið inn hvenær sem er, en það gerir aðeins það sem er á fasta listanum."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "Aðstoðin er fullkomin: lestur, prófanir og stjórnun móttakarans í gegnum valmyndir, af fasta listanum. Skjámynd sýnir aðeins valmyndirnar, ekki mynd rásarinnar. Einkaskjáir haldast lokaðir. Þú getur stöðvað hvenær sem er."

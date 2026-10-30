@@ -53477,3 +53477,90 @@ msgstr "Últimas conclusões"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "as conclusões da equipa (o que encontrámos e o que fizemos), mostradas no recetor até carregares em OK"
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "A equipa HD Satelit vê pela internet o estado do teu recetor, para te ajudar. Podes desligá-la a qualquer momento."
+
+msgid "Control complet"
+msgstr "Controlo total"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Controlo total: a equipa pode navegar nos menus, alterar definições, procurar canais e instalar a partir do feed oficial; nunca as chaves, as linhas dos módulos de acesso nem os teus dados pessoais."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Sem Controlo total: a equipa apenas lê o estado do recetor, sem alterar nada."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit está agora a trabalhar no teu recetor"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Como funciona: o teu recetor pergunta ao servidor HD Satelit, através de uma ligação encriptada, se temos um pedido para ele. Só podemos pedir operações de uma lista fixa, escrita na imagem: leituras do estado, dos registos e do texto no ecrã, uma captura dos menus e uma mensagem escrita no ecrã. Com Controlo total selecionado, a equipa também pode premir as teclas do telecomando e escrever nos campos de texto, para navegar pelos menus, alterar definições, procurar canais e instalar a partir do feed oficial, como se tivesse o telecomando na mão. Não podemos executar comandos livres nem chegar a outros aparelhos da tua casa. Os ecrãs dos módulos de acesso, das palavras-passe, do acesso SSH, da rede Wi-Fi e dos teus dados pessoais permanecem fechados: aí a equipa não vê nada e só pode sair. Cada pedido aparece no registo, no ecrã."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start liga-a durante 2 horas. Podes desligá-la a qualquer momento, no recetor ou na página web. Enquanto está ligada, a equipa pode entrar a qualquer momento, mas só faz o que está na lista fixa; sem Controlo total não altera nada."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Sem Controlo total: leituras e testes (operações de uma lista fixa, principalmente leituras; uma captura mostra apenas os menus, não a imagem do canal). Com Controlo total: também as teclas do telecomando e o texto nos campos, exceto nos ecrãs privados. Podes parar a qualquer momento."
+
+msgid "Ecran"
+msgstr "Ecrã"
+
+msgid "Control"
+msgstr "Controlo"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "texto do ecrã aberto no recetor (o menu, a linha selecionada, as definições), sem os ecrãs privados"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "as teclas do telecomando, como se a equipa tivesse o telecomando na mão (apenas com Controlo total)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "um texto escrito no campo aberto no ecrã (apenas com Controlo total, nunca em palavras-passe)"
+
+msgid "control"
+msgstr "controlo"
+
+msgid "control oprit"
+msgstr "controlo desligado"
+
+msgid "%d semne"
+msgstr "%d caracteres"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "o canal aberto: o serviço, o transponder, o sintonizador e o sinal (sem nada dos módulos de acesso)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "os transponders da lista de canais (sem canais e sem nada pessoal)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "inicia um canal da tua lista (apenas com Full control)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "muda uma definição (imagem, som, interface, sintonizadores, hora, guia, rede; nunca palavras-passe, chaves ou dados pessoais; apenas com Full control)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "instala um plugin ou um módulo do feed oficial HD Satelit (sem a configuração e as chaves dele; apenas com Full control)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "desinstala um plugin ou um módulo (apenas com Full control)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "reinicia a interface ou o recetor, com aviso no ecrã; a assistência continua após reiniciar (apenas com Full control)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit reinicia agora a interface do recetor. A assistência continua após reiniciar."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit reinicia agora o recetor. A assistência continua após reiniciar."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "A equipa HD Satelit entra pela internet no teu recetor, para te ajudar: pode navegar nos menus, alterar definições, procurar canais e instalar a partir do feed oficial, sem as chaves e as linhas dos módulos de acesso e sem os teus dados pessoais. Podes desligá-la a qualquer momento."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Como funciona: o teu recetor pergunta ao servidor HD Satelit, através de uma ligação encriptada, se temos um pedido para ele. Podemos pedir apenas operações de uma lista fixa, escrita na imagem: leituras do estado, dos registos e do texto no ecrã, uma captura dos menus, uma mensagem escrita no ecrã, as teclas do telecomando e o texto nos campos, para navegarmos pelos menus, alterarmos definições, procurarmos canais e instalarmos a partir do feed oficial, como se estivéssemos a segurar o telecomando. Não podemos executar comandos livres e não podemos chegar a outros aparelhos da tua casa. Os ecrãs dos módulos de acesso, das palavras-passe, do acesso SSH, da rede Wi-Fi e dos teus dados pessoais permanecem fechados: aí a equipa não vê nada e só pode sair. Cada pedido aparece no registo, no ecrã."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "O Start liga-a durante 2 horas. Podes desligá-la a qualquer momento, a partir do recetor ou da página web. Enquanto está ligada, a equipa pode entrar a qualquer momento, mas só faz o que está na lista fixa."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "A assistência é completa: leituras, testes e controlo do recetor através dos menus, da lista fixa. Uma captura mostra apenas os menus, não a imagem do canal. Os ecrãs privados permanecem fechados. Podes desligar a qualquer momento."

@@ -53206,3 +53206,90 @@ msgstr "−1 min"
 #~ msgstr ""
 #~ "jo Dreambox is miskien no net brûkber. sjoch yn de hanlieding foar jo jo "
 #~ "Dreambox opnij starte."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute. O oprești oricând."
+msgstr "It HD Satelit-team sjocht fia it ynternet de status fan dyn ûntfanger om dy te helpen. Do kinst it op elk momint stopje."
+
+msgid "Control complet"
+msgstr "Folsleine kontrôle"
+
+msgid "Control complet: echipa poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial; niciodată cheile, liniile modulelor de acces sau datele tale personale."
+msgstr "Folsleine kontrôle: it team kin troch menu's navigearje, ynstellingen feroarje, nei kanalen sykje en ynstallearje fan de offisjele feed; nea de kaaien, de abonnemintsrigels fan de tagongsmodules of dyn persoanlike gegevens."
+
+msgid "Fără Control complet: echipa doar citește starea receptorului, fără să schimbe nimic."
+msgstr "Sûnder Folsleine kontrôle: it team lêst allinnich de status fan de ûntfanger, sûnder wat te feroarjen."
+
+msgid "HD Satelit lucrează acum pe receptorul tău"
+msgstr "HD Satelit wurket no op dyn ûntfanger"
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor și un mesaj scris pe ecran. Cu Control complet bifat, echipa poate și apăsa tastele telecomenzii și scrie în câmpurile de text, ca să meargă prin meniuri, să schimbe setări, să caute canale și să instaleze din feedul oficial, ca și cum ar ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hoe't it wurket: dyn ûntfanger freget de HD Satelit-tsjinner, fia in fersifere ferbining, oft wy in fersyk foar him hawwe. Wy kinne allinnich operaasjes freegje út in fêste list dy't yn it image stiet: it lêzen fan de status, fan de lochten en fan de tekst op it skerm, in skermôfbylding fan de menu's en in berjocht skreaun op it skerm. Mei Folsleine kontrôle oanfinkt kin it team ek de toetsen fan de ôfstânsbetsjinning yndrukke en yn tekstfjilden skriuwe om troch menu's te gean, ynstellingen te wizigjen, nei kanalen te sykjen en te ynstallearjen fan de offisjele feed, krekt as hâldt it de ôfstânsbetsjinning fêst. Wy kinne gjin frije opdrachten útfiere en wy kinne net by oare apparaten yn dyn hûs komme. De skermen fan de tagongsmodules, fan wachtwurden, fan SSH-tagong, fan it Wi-Fi-netwurk en fan dyn persoanlike gegevens bliuwe sletten: dêr sjocht it team neat en kin allinnich mar ferlitte. Elk fersyk ferskynt yn it loch, op it skerm."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă; fără Control complet nu schimbă nimic."
+msgstr "Start set it foar 2 oeren oan. Do kinst it op elk momint stopje, fan de ûntfanger of fan de webside ôf. Safolle as it oan stiet, kin it team op elk momint yngean, mar docht allinnich wat yn de fêste list stiet; sûnder Folsleine kontrôle feroaret it neat."
+
+msgid "Fără Control complet: citiri și probe (operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Cu Control complet: și tastele telecomenzii și textul în câmpuri, afară de ecranele private. Poți opri oricând."
+msgstr "Sûnder Folsleine kontrôle: lêzingen en tests (operaasjes út in fêste list, benammen lêzingen; in skermôfbylding toant allinnich de menu's, net it byld fan it kanaal). Mei Folsleine kontrôle: ek de toetsen fan de ôfstânsbetsjinning en tekst yn fjilden, útsein de privee skermen. Do kinst op elk momint stopje."
+
+msgid "Ecran"
+msgstr "Skerm"
+
+msgid "Control"
+msgstr "Kontrôle"
+
+msgid "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"
+msgstr "de tekst fan it iepene skerm op de ûntfanger (it menu, de keazen rigel, de ynstellingen), sûnder de privee skermen"
+
+msgid "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"
+msgstr "de toetsen fan de ôfstânsbetsjinning, krekt as hâldt it team de ôfstânsbetsjinning fêst (allinnich mei Folsleine kontrôle)"
+
+msgid "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"
+msgstr "in tekst skreaun yn it iepene fjild op it skerm (allinnich mei Folsleine kontrôle, nea yn wachtwurden)"
+
+msgid "control"
+msgstr "kontrôle"
+
+msgid "control oprit"
+msgstr "kontrôle út"
+
+msgid "%d semne"
+msgstr "%d tekens"
+
+msgid "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"
+msgstr "it iepene kanaal: de tsjinst, de transponder, de tuner en it sinjaal (sûnder eat fan de tagongsmodules)"
+
+msgid "transponderele din lista de canale (fără canale și fără nimic personal)"
+msgstr "de transponders út de kanalenlist (sûnder kanalen en sûnder eat persoanliks)"
+
+msgid "pornește un canal din lista ta (numai cu Control complet)"
+msgstr "start in kanaal út dyn list (allinnich mei Folsleine kontrôle)"
+
+msgid "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)"
+msgstr "feroarje in ynstelling (byld, lûd, ynterface, tuners, tiid, gids, netwurk; nea wachtwurden, kaaien of persoanlike gegevens; allinnich mei Folsleine kontrôle)"
+
+msgid "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)"
+msgstr "ynstallearje in plugin of in module út de offisjele HD Satelit-feed (sûnder de konfiguraasje en kaaien dêrfan; allinnich mei Folsleine kontrôle)"
+
+msgid "dezinstalează un plugin sau un modul (numai cu Control complet)"
+msgstr "ferwiderje in plugin of in module (allinnich mei Folsleine kontrôle)"
+
+msgid "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)"
+msgstr "start de ynterface of de ûntfanger op 'e nij, mei berjocht op it skerm; help op ôfstân giet troch nei it op 'e nij starten (allinnich mei Folsleine kontrôle)"
+
+msgid "HD Satelit repornește acum interfața receptorului. Asistența continuă după repornire."
+msgstr "HD Satelit start no de ynterface fan de ûntfanger op 'e nij. Help op ôfstân giet troch nei it op 'e nij starten."
+
+msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
+msgstr "HD Satelit start no de ûntfanger op 'e nij. Help op ôfstân giet troch nei it op 'e nij starten."
+
+msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
+msgstr "It HD Satelit-team giet fia it ynternet op dyn ûntfanger, om dy te helpen: it kin yn menu's navigearje, ynstellings feroarje, kanalen sykje en út de offisjele feed ynstallearje, sûnder de kaaien en linen fan 'e tagongsmodules en sûnder dyn persoanlike gegevens. Do kinst it altyd útsette."
+
+msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
+msgstr "Hoe't it wurket: dyn ûntfanger freget de HD Satelit-tsjinner, fia in fersifere ferbining, oft wy in fersyk foar him hawwe. Wy kinne allinne operaasjes út in fêste list freegje, dy't yn 'e image skreaun is: it ôflêzen fan 'e steat, fan 'e logs en fan 'e tekst op it skerm, in skermôfbylding fan 'e menu's, in berjocht dat op it skerm skreaun is, de toetsen fan 'e ôfstânsbetsjinning en de tekst yn fjilden, om troch de menu's te gean, ynstellings te feroarjen, kanalen te sykjen en út de offisjele feed te ynstallearjen, krekt as oft wy de ôfstânsbetsjinning fêsthâlde. Wy kinne gjin frije kommando's útfiere en wy kinne net by oare apparaten yn dyn hûs komme. De skermen fan 'e tagongsmodules, fan 'e wachtwurden, fan 'e SSH-tagong, fan it Wi-Fi-netwurk en fan dyn persoanlike gegevens bliuwe ticht: dêr sjocht it team neat en kin it allinne fuortgean. Elk fersyk ferskynt yn 'e log, op it skerm."
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
+msgstr "Start set it foar 2 oeren oan. Do kinst it altyd útsette, fan 'e ûntfanger ôf of fan 'e webside ôf. Salang't it oan stiet, kin it team altyd ynkomme, mar it docht allinne wat yn 'e fêste list stiet."
+
+msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
+msgstr "De stipe is folslein: ôflêzen, testen en kontrôle oer de ûntfanger fia menu's, út de fêste list. In skermôfbylding lit allinne de menu's sjen, net it byld fan it kanaal. De priveeskermen bliuwe ticht. Do kinst altyd útsette."

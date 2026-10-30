@@ -7,7 +7,7 @@
 # toate de aici (data/asistenta/catalog.json), deci lista vazuta de om nu poate sa difere de ce se poate face.
 #
 # O operatie are: op (numele scurt, trimis in cererea semnata), grup si text (pentru om, traduse la afisare), fel
-# („citire" sau „proba", pentru randul din jurnal) si args (zero sau mai multi, fiecare cu un tipar strict). Validarea
+# („citire", „proba" sau „control"; control = numai la nivelul B, cu "Control complet" bifat de om) si args (zero sau mai multi, fiecare cu un tipar strict). Validarea
 # unei cereri (valideaza) nu ruleaza nimic: verifica numai ca op e in catalog si ca argumentele se potrivesc tiparelor.
 # Rularea insasi o face Components/HdsAsistentaBroker.py, care are cate o functie pentru fiecare op; o proba
 # (test_asistenta_broker.py) cere ca orice op din catalog sa aiba o functie si invers, ca sa nu existe o operatie
@@ -26,7 +26,7 @@ CALE_IMPLICITA = "/usr/share/enigma2/asistenta/catalog.json"
 CALE_PC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "data", "asistenta",
 	"catalog.json")
 
-FELURI = ("citire", "proba")
+FELURI = ("citire", "proba", "control")
 # un nume de op: litere mici, cifre si cratima; niciodata inceput cu cratima
 _OP = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _NUME_ARG = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -63,6 +63,20 @@ TEXTE_CATALOG = (
 	N_("o captură a ecranului (numai meniurile, fără imaginea canalului)"),
 	N_("un mesaj scris pe ecranul televizorului"),
 	N_("concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"),
+	N_("Ecran"), N_("Control"),
+	N_("textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private"),
+	N_("tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"),
+	N_("un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"),
+	N_("canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)"),
+	N_("transponderele din lista de canale (fără canale și fără nimic personal)"),
+	N_("pornește un canal din lista ta (numai cu Control complet)"),
+	N_("schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date "
+		"personale; numai cu Control complet)"),
+	N_("instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu "
+		"Control complet)"),
+	N_("dezinstalează un plugin sau un modul (numai cu Control complet)"),
+	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control "
+		"complet)"),
 )
 
 
