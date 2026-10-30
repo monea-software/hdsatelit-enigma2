@@ -8,7 +8,9 @@
 # Pagina de pornire are numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și condițiile" (in
 # fraza, chiar cuvintele "termenii și condițiile" sunt legatura care deschide textul intreg, A.textTermeni, intr-o
 # fereastra peste pagina) si butonul Start. Pornita, pagina arata numai pana cand e pornita, butonul Oprește si
-# jurnalul. Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa.
+# jurnalul. Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa. Cand echipa a
+# trimis concluzii (op "concluzii"), pagina le arata sub jurnal, si dupa oprire: "Ce am găsit și ce am făcut", textul
+# si multumirile (A.stareConcluzii).
 # Start dintr-un browser conectat cu codul de pe receptor (acelasi nivel asociat ca la Acces SSH) porneste pe loc
 # (Screens/HdsAsistentaSemn.pornesteWeb). Dintr-un browser fara cod (orice aparat din reteaua locala) deschide pe
 # receptor aceeasi pagina de pornire si porneste numai Start apasat acolo (HdsAsistentaSemn.cerereWeb): altfel orice
@@ -17,7 +19,8 @@
 # meniu_comun_web.pagina).
 #
 # Rute (poarta comuna meniu_comun_web; ce schimba ceva cere, cu cookie, POST si antetul CSRF):
-#   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod)
+#   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
+#                                  concluzii ale echipei
 #   GET  /api/asistenta-catalog    lista operatiilor in limba receptorului
 #   POST /api/asistenta-cere?accept=1   Start (accept=1: randul "Accept termenii și condițiile" bifat)
 #   POST /api/asistenta-opreste    opreste
@@ -62,7 +65,16 @@ def stare(request=None, A=None, B=None):
 		"ramas_s": s.get("ramas_s", 0), "jurnal": s.get("jurnal", []), "nivel": s.get("nivel"),
 		"durata_implicita": s.get("durata_implicita"),
 		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
-		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or ""}
+		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or "",
+		"concluzii": _concluzii(A)}
+
+
+def _concluzii(A):
+	"""Ultimele concluzii ale echipei ({"text", "ora_text"}) sau None; un modul vechi fara ele da None."""
+	try:
+		return A.stareConcluzii()
+	except Exception:
+		return None
 
 
 def catalog(A=None):
@@ -250,6 +262,8 @@ PAGINA = """<!DOCTYPE html>
   .fereastra h2{font-size:1.1rem;margin:0 0 10px;}
   .fereastra .termeni{overflow:auto;flex:1;margin:0 0 12px;}
   .fereastra .termeni p{font-size:.9rem;line-height:1.5;margin:0 0 8px;}
+  .concluzii h2{font-size:1.1rem;margin:0 0 6px;}
+  .concluzii .text{white-space:pre-wrap;word-break:break-word;line-height:1.5;margin:0 0 10px;}
   .ascuns{display:none;}
 </style>
 </head>
@@ -273,6 +287,12 @@ PAGINA = """<!DOCTYPE html>
   <p class="nota ascuns" id="asteptare">Te anunțăm când intrăm. Poți folosi receptorul între timp.</p>
   <p class="nota">Jurnalul asistenței</p>
   <pre class="jurnal" id="jurnal"></pre>
+</section>
+<section class="card concluzii ascuns" id="concluzii">
+  <h2>Ce am găsit și ce am făcut</h2>
+  <p class="nota" id="concluziiOra"></p>
+  <p class="text" id="concluziiText"></p>
+  <p class="nota">Mulțumim că ne-ai lăsat să te ajutăm.</p>
 </section>
 </main>
 <div class="fereastra ascuns" id="fereastra" role="dialog" aria-modal="true" aria-labelledby="titluTermeni">
@@ -302,6 +322,9 @@ function arata(d){
   $("stare").textContent = d.pana_text || "";
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";
+  var c = d.concluzii;
+  $("concluzii").classList.toggle("ascuns", !(c && c.text));
+  if(c && c.text){ $("concluziiText").textContent = c.text; $("concluziiOra").textContent = c.ora_text || ""; }
 }
 function citeste(){
   return cerere("/api/asistenta").then(function(d){
@@ -343,6 +366,8 @@ TEXTE_PAGINA = {
 		N_("Jurnalul asistenței"),
 		N_("Termenii și condițiile"),
 		N_("Închide"),
+		N_("Ce am găsit și ce am făcut"),
+		N_("Mulțumim că ne-ai lăsat să te ajutăm."),
 	),
 	"js": (
 		N_("Receptorul nu răspunde."),

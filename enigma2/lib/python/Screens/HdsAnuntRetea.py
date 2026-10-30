@@ -52,7 +52,9 @@ class HdsAnuntRetea(Screen):
 		self.ceasTasta.callback.append(self.ascunde)
 		self.legat = False
 
-	def anunta(self, text, cheie):
+	def anunta(self, text, cheie, durata_ms=None, ascunde_la_tasta=True):
+		"""Arata textul cu pictograma cheie. durata_ms: cat sta (implicit DURATA_MS); ascunde_la_tasta=False: nu
+		dispare la prima tasta (mesajele echipei din asistenta stau tot timpul lor; tastele merg oricum mai departe)."""
 		self["text"].setText(text)
 		cale = _cale_poza(cheie)
 		try:
@@ -67,8 +69,8 @@ class HdsAnuntRetea(Screen):
 		except Exception as e:
 			_jurnal("pictograma: %r" % (e,))
 		self.show()
-		self.ceas.start(DURATA_MS, True)
-		self._leaga(True)
+		self.ceas.start(int(durata_ms or DURATA_MS), True)
+		self._leaga(bool(ascunde_la_tasta))
 
 	def ascunde(self):
 		self.ceas.stop()

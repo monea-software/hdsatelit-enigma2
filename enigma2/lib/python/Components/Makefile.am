@@ -37,7 +37,7 @@ install_PYTHON = \
 	HdsStareMeniu.py HdsDale.py HdsCautaSetari.py HdsAccesCanale.py HdsBazaCanale.py HdsBazaPornire.py HdsFisierSigur.py \
 	HdsSetariDinCopie.py HdsCopieSetari.py HdsCulegereCanale.py HdsCulegereTotala.py HdsCapLista.py HdsImportSurse.py HdsImportAltaImagine.py HdsImportExtra.py HdsImportRetea.py HdsLatimeText.py HdsModSigur.py \
 	HdsCursorLista.py HdsSageti.py \
-	HdsProcesor.py HdsInregistrariProgramate.py HdsDecodare.py HdsPortal.py HdsLocInregistrari.py HdsLicente.py HdsSubtitrariFilm.py HdsTeletext.py HdsTeletextCopie.py HdsFilmRedare.py HdsSunet.py \
+	HdsProcesor.py HdsInregistrariProgramate.py HdsDecodare.py HdsPortal.py HdsLocInregistrari.py HdsLicente.py HdsSubtitrariFilm.py HdsTeletext.py HdsTeletextCopie.py HdsFilmRedare.py HdsSunet.py HdsProcFundal.py \
 	HdsRadioSetari.py HdsRadioAnaliza.py HdsRadioDesen.py HdsRadioDate.py HdsRdsText.py \
 	HdsEcm.py HdsPasiDecriptare.py HdsStareRetea.py HdsComutareRetea.py HdsWifiCanale.py HdsAparateRetea.py HdsTemporizare.py HdsEcranNegru.py HdsAnalizaFlux.py HdsHbbtv.py HdsHbbtvPornire.py HdsHbbtvAplicatii.py HdsCarusel.py HdsCaruselDemux.py HdsCaruselServer.py HdsAfisaj.py HdsAfisajLitere.py HdsAfisajDate.py \
 	HdsAfisajPersonaj.py \

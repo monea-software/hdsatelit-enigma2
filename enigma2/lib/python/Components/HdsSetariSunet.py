@@ -190,12 +190,28 @@ def iesiriDinText(text):
 	return rez
 
 
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citestePlacaText(cale):
+	try:
+		with open(cale, "rb") as f:
+			return f.read(MAX_OCTETI_PLACA).decode("utf-8", "replace")
+	except (IOError, OSError):
+		return None
+
+
 def citestePlaca(rad=None):
 	"""Iesirile placii (iesiriDinText) sau None cand /proc/msp/sound0 lipseste (alt receptor, PC)."""
-	try:
-		with open(_cale(rad, PLACA), "rb") as f:
-			text = f.read(MAX_OCTETI_PLACA).decode("utf-8", "replace")
-	except (IOError, OSError):
+	text = _procFundal(_citestePlacaText, _cale(rad, PLACA))
+	if text is None:
 		return None
 	return iesiriDinText(text)
 

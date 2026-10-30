@@ -575,14 +575,32 @@ def _secunde(m):
 	return _("Mai sunt %d secunde") % n
 
 
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citesteIrText(cale):
+	try:
+		with open(cale) as f:
+			return f.read(8192)
+	except (OSError, IOError):
+		return None
+
+
 def _citeste_ir():
 	if S.contor_ir is None:
 		return
-	try:
-		with open(_cale_ir()) as f:
-			S.ir = S.contor_ir.fereastra(f.read(8192))
-	except (OSError, IOError):
+	text = _procFundal(_citesteIrText, _cale_ir())
+	if text is None:
 		S.contor_ir = None
+		return
+	S.ir = S.contor_ir.fereastra(text)
 
 
 def _captura_cititor(D):

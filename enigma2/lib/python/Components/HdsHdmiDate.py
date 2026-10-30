@@ -79,7 +79,17 @@ def cale(radacina, relativ):
 	return os.path.join(radacina or '/', relativ)
 
 
-def citeste_text(cale_fisier):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def citeste_text_direct(cale_fisier):
 	"""Continutul unui fisier text (cel mult MAX_OCTETI), sau None daca lipseste ori nu se poate citi."""
 	try:
 		with open(cale_fisier, 'rb') as f:
@@ -92,12 +102,22 @@ def citeste_text(cale_fisier):
 		return None
 
 
-def citeste_binar(cale_fisier):
+def citeste_text(cale_fisier):
+	"""Ca citeste_text_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(citeste_text_direct, cale_fisier)
+
+
+def citeste_binar_direct(cale_fisier):
 	try:
 		with open(cale_fisier, 'rb') as f:
 			return f.read(MAX_OCTETI)
 	except Exception:
 		return None
+
+
+def citeste_binar(cale_fisier):
+	"""Ca citeste_binar_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(citeste_binar_direct, cale_fisier)
 
 
 def citeste_dosar(cale_dosar, doar=None):

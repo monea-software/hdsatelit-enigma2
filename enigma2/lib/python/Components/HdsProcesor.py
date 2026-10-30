@@ -184,12 +184,27 @@ def cale(c):
 	return os.path.join(RADACINA, c.lstrip("/"))
 
 
-def _citeste(c, maxim=16384):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def _citeste_direct(c, maxim=16384):
 	try:
 		with io.open(cale(c), "r", encoding="utf-8", errors="replace") as f:
 			return f.read(maxim)
 	except (IOError, OSError):
 		return None
+
+
+def _citeste(c, maxim=16384):
+	"""Ca _citeste_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(_citeste_direct, c, maxim)
 
 
 def _intreg(valoare, implicit=0):

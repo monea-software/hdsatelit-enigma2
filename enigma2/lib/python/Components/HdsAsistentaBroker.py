@@ -6,7 +6,7 @@
 # a fost deja verificata (semnatura si tiparele argumentelor) de HdsAsistenta.py; aici se ruleaza numai operatia ceruta
 # si se intoarce raspunsul, filtrat si plafonat.
 #
-# Nivelul A: numai citiri si doua probe (captura OSD, un mesaj pe ecran). Nimic nu scrie pe disc in afara jurnalului
+# Nivelul A: numai citiri si trei probe (captura OSD, un mesaj pe ecran, concluziile echipei pe ecran). Nimic nu scrie pe disc in afara jurnalului
 # sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti; nu exista
 # nicio cale libera de fisier (jurnalele se citesc dupa nume, din /home/root/logs). Iesirea trece intai prin filtrul de
 # secrete (Components/HdsModSigur.SECRET: parole, chei, jetoane) si prin mascarea adreselor MAC; caile si setarile
@@ -134,6 +134,8 @@ def op_info(ctx, args):
 	cod, disc = _ruleaza(["df", "-h"], limita=16384)
 	parti.append("Disc:\n" + disc.strip())
 	parti.append("Temperaturi:\n" + _temperaturi(ctx))
+	# ce operatii stie receptorul acesta (unealta echipei alege dupa ele, de pilda "concluzii" din 0.6.13)
+	parti.append("Operatii asistenta: " + " ".join(sorted(TABEL)))
 	return Rezultat(0, text="\n\n".join(p for p in parti if p))
 
 
@@ -354,6 +356,18 @@ def op_mesaj(ctx, args):
 	return Rezultat(0, text="mesaj aratat pe ecran: " + text)
 
 
+def op_concluzii(ctx, args):
+	"""Concluziile echipei la finalul asistentei (ce am gasit si ce am facut): pastrate pe receptor si aratate intr-o
+	fereastra care sta pana la OK, apoi o data la sfarsitul sesiunii, cu multumirile. Raspunsul nu repeta textul."""
+	pune = ctx.get("concluzii")
+	if pune is None:
+		return Rezultat(1, text="(concluziile nu se pot arata)")
+	semne = pune(args[0])
+	if not semne:
+		return Rezultat(1, text="(concluzii goale)")
+	return Rezultat(0, text="concluzii aratate pe ecran: %d semne" % int(semne))
+
+
 TABEL = {
 	"info": op_info,
 	"placa": op_placa,
@@ -369,6 +383,7 @@ TABEL = {
 	"setari": op_setari,
 	"captura": op_captura,
 	"mesaj": op_mesaj,
+	"concluzii": op_concluzii,
 }
 
 
