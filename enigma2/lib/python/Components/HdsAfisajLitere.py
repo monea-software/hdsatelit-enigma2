@@ -197,8 +197,9 @@ _SPECIALE = {
 	u"\u00a0": " ",
 }
 
-# Semnele care dispar (ghilimelele, apostroful, punctul, semnul exclamarii) si cele care devin spatiu.
-_DISPAR = set(u"\"'`.!\u201c\u201d\u201e\u201f\u2018\u2019\u201a\u00ab\u00bb\u2039\u203a")
+# Semnele care dispar (ghilimelele, apostroful, punctul, semnul exclamarii, punctul median U+00B7 din "l.l" catalan,
+# pe care NFKD il scoate si din U+0140) si cele care devin spatiu.
+_DISPAR = set(u"\"'`.!\u201c\u201d\u201e\u201f\u2018\u2019\u201a\u00ab\u00bb\u2039\u203a\u00b7")
 _SPATIU = set(u",;:|*#&@$^~\t\r\n")
 
 # Chirilica: U+0430 .. U+044F (a .. ya), dupa litera mica.

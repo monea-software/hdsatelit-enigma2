@@ -22742,8 +22742,8 @@ msgstr ""
 msgid "Meniul receptorului nu se poate citi."
 msgstr "Меню ресивера не можна прочитати."
 
-msgid "Meniurile traduse complet în 13 limbi."
-msgstr "Меню повністю перекладено на 13 мов."
+msgid "Meniurile traduse complet în 28 de limbi."
+msgstr "Меню повністю перекладено на 28 мов."
 
 msgid ""
 "Meniurile, bara de informații, subtitrarea și ghidul receptorului, peste "
@@ -32416,7 +32416,7 @@ msgid "Receptorul nu a putut citi setările sunetului."
 msgstr "Приймач не зміг прочитати налаштування звуку."
 
 msgid "Receptorul nu a putut citi setările video."
-msgstr "Реసీвер не зміг прочитати налаштування відео."
+msgstr "Ресивер не зміг прочитати налаштування відео."
 
 msgid "Receptorul nu a putut citi setările."
 msgstr "Приймач не зміг прочитати налаштування."
@@ -54435,9 +54435,6 @@ msgstr "−1 хв"
 #~ msgid "Standby Fan %d Voltage"
 #~ msgstr "Напруга вентилятора в очікуванні %d"
 
-#
-#~ msgid "Start"
-#~ msgstr "Початок"
 
 #
 #~ msgid "Start Webinterface"
@@ -56825,3 +56822,201 @@ msgstr "Останні висновки"
 
 msgid "concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"
 msgstr "висновки команди (що ми знайшли і що зробили), показані на ресивері, доки ти не натиснеш OK"
+
+msgid "256QAM e numai la DVB-T2"
+msgstr "256QAM є лише в DVB-T2"
+
+msgid "256QAM e numai la DVB-T2: alege DVB-T2 la Sistem sau altă modulație."
+msgstr "256QAM є лише в DVB-T2: вибери DVB-T2 у полі Система або іншу модуляцію."
+
+msgid "Accept"
+msgstr "Прийняти"
+
+msgid "Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"
+msgstr "Я приймаю <a href=\"#\" id=\"termeni\">умови використання</a>"
+
+msgid "Accept termenii și condițiile"
+msgstr "Я приймаю умови використання"
+
+msgid "Acceptă nota nouă"
+msgstr "Прийняти нове повідомлення"
+
+msgid "Alegere necunoscută: %s."
+msgstr "Невідомий вибір: %s."
+
+msgid "Altceva"
+msgstr "Інше"
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic."
+msgstr "Твій запит із кодом нижче в нас. Тобі нічого не потрібно робити."
+
+msgid "Am primit cererea ta, cu codul de mai jos. Nu trebuie să faci nimic. Mai sunt %s."
+msgstr "Твій запит із кодом нижче в нас. Тобі нічого не потрібно робити. Залишилося %s."
+
+msgid "Antenă terestră (DVB-T/T2)"
+msgstr "Ефірна антена (DVB-T/T2)"
+
+msgid "Asistență de la distanță pornită până la %s"
+msgstr "Дистанційна допомога увімкнена до %s"
+
+msgid "Asistență de la distanță pornită, fără sfârșit"
+msgstr "Дистанційна допомога увімкнена без терміну"
+
+msgid "Cablu (DVB-C)"
+msgstr "Кабель (DVB-C)"
+
+msgid "Canale și scanare"
+msgstr "Канали й пошук"
+
+msgid "Citește nota întreagă"
+msgstr "Прочитати повідомлення повністю"
+
+msgid "Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum."
+msgstr "Натиснувши «Прийняти», ти погоджуєшся з новим повідомленням, і ресивер знову надсилає дані, які ти позначив раніше."
+
+msgid "Cu ce te ajutăm?"
+msgstr "З чим тобі допомогти?"
+
+msgid "Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau acordul unui părinte."
+msgstr "Коли рядок позначено, «Старт» підтверджує, що ти погоджуєшся з цими умовами і що тобі щонайменше 16 років або в тебе є згода одного з батьків."
+
+msgid "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."
+msgstr "Коли канал не працює (немає сигналу, немає зображення, помилка декодування), журнал зберігає назву й технічні дані цього каналу, щоб ми могли з’ясувати чому. Які канали ти дивишся, коли все працює, не надсилається."
+
+msgid "Dacă vrei, alege cu ce te ajutăm și scrie pe scurt ce se întâmplă (OK deschide lista sau tastatura). Nu e obligatoriu: Verde pornește oricum."
+msgstr "Якщо хочеш, вибери, з чим тобі допомогти, і коротко напиши, що відбувається (OK відкриває список або клавіатуру). Це не обов’язково: Зелена кнопка все одно запускає."
+
+msgid "Dai acces la distanță permanent, până îl oprești tu, nivel „Citire și probe”. Pornind, confirmi că ai cel puțin 16 ani sau acordul unui părinte. Poți opri oricând. Pornești?"
+msgstr "Ти надаєш дистанційний доступ постійно, доки сам його не зупиниш, рівень «Читання та перевірки». Запускаючи, ти підтверджуєш, що тобі щонайменше 16 років або в тебе є згода одного з батьків. Ти можеш зупинити його будь-коли. Запустити?"
+
+msgid "Datele bifate de tine pleacă din nou, ca până acum."
+msgstr "Позначені тобою дані знову надсилаються, як раніше."
+
+msgid "Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei."
+msgstr "Команда HD Satelit підключилася. Можеш користуватися ресивером як зазвичай."
+
+msgid "Echipa HD Satelit vede prin internet starea receptorului tău, ca să te ajute, fără să schimbe nimic. O oprești oricând."
+msgstr "Команда HD Satelit бачить через інтернет стан твого ресивера, щоб допомогти тобі, нічого не змінюючи. Ти можеш зупинити її будь-коли."
+
+msgid "Fiecare frecvență se încearcă DVB-T2 și DVB-T."
+msgstr "Кожна частота перевіряється в DVB-T2 і в DVB-T."
+
+msgid "Fără bifă, asistența nu pornește."
+msgstr "Без позначки допомога не запускається."
+
+msgid "Imaginea sau sunetul"
+msgstr "Зображення або звук"
+
+msgid "Legat la"
+msgstr "Підключено до"
+
+msgid "Modulația aleasă nu e primită. Alege alta."
+msgstr "Вибрана модуляція не приймається. Вибери іншу."
+
+msgid "Mulțumim. Receptorul trimite din nou datele bifate."
+msgstr "Дякуємо. Ресивер знову надсилає позначені дані."
+
+msgid "Nimic anume"
+msgstr "Нічого конкретного"
+
+msgid "Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe jurnalele, citește ce e nou și acceptă."
+msgstr "Повідомлення про конфіденційність для бета-тестерів змінилося. Щоб ресивер і далі надсилав журнали, прочитай, що нового, і прийми його."
+
+msgid "Nota de confidențialitate s-a schimbat"
+msgstr "Повідомлення про конфіденційність змінилося"
+
+msgid "Nota întreagă e la adresa:"
+msgstr "Повне повідомлення за адресою:"
+
+msgid "Nu pot deschide Asistența de la distanță pe receptor acum."
+msgstr "Не можу зараз відкрити дистанційну допомогу на ресивері."
+
+msgid "OK pe rândul de sus: termenii și condițiile."
+msgstr "OK на рядку вище: умови використання."
+
+msgid "Oprești oricând din %s"
+msgstr "Зупинити будь-коли: %s"
+
+msgid "Pe ecran, cu săgețile. EXIT te întoarce aici."
+msgstr "На екрані, стрілками. EXIT повертає сюди."
+
+msgid "Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo."
+msgstr "На ресивері відкрилася дистанційна допомога: натисни там «Старт»."
+
+msgid "Poate rămâne pornită cât alegi tu: 2 ore, 12 ore, o zi, o săptămână, o lună sau permanent. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "Вона може залишатися увімкненою стільки, скільки ти вибереш: 2 години, 12 годин, добу, тиждень, місяць або постійно. Ти вимикаєш її будь-коли, на ресивері або на веб-сторінці. Поки вона увімкнена, команда може підключитися будь-коли, але виконує лише читання та перевірки з фіксованого списку й нічого не змінює."
+
+msgid "Pornirea receptorului"
+msgstr "Запуск ресивера"
+
+msgid "Pornită până la %s."
+msgstr "Увімкнена до %s."
+
+msgid "Pornită, fără sfârșit; o poți opri oricând."
+msgstr "Увімкнена без терміну; можеш вимкнути її будь-коли."
+
+msgid "Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea nu pleacă de pe receptor."
+msgstr "Ресивер також надсилає відбиток, обчислений за його платою, щоб його рахували лише один раз, навіть якщо він встановлений у кількох слотах або перевстановлений. За відбитком не можна дізнатися MAC-адресу чи серійний номер, і вони не залишають ресивер."
+
+msgid "Sau citește pe telefon:"
+msgstr "Або прочитай на телефоні:"
+
+msgid "Scrie pe scurt (opțional)"
+msgstr "Напиши коротко (необов’язково)"
+
+msgid "Setările tunerelor nu se pot citi: %s"
+msgstr "Не вдається прочитати налаштування тюнерів: %s"
+
+msgid "Start"
+msgstr "Старт"
+
+msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai citirile și probele din lista fixă, fără să schimbe nimic."
+msgstr "«Старт» вмикає її на 2 години. Ти можеш зупинити її будь-коли, на ресивері або на веб-сторінці. Поки вона увімкнена, команда може підключитися будь-коли, але виконує лише читання та перевірки з фіксованого списку й нічого не змінює."
+
+msgid "Te anunțăm când intrăm. Poți folosi receptorul între timp."
+msgstr "Ми повідомимо тобі, коли підключимося. Тим часом можеш користуватися ресивером."
+
+msgid "Termenii și condițiile"
+msgstr "Умови використання"
+
+msgid "Trimiterea e oprită"
+msgstr "Надсилання зупинено"
+
+msgid "Trimiterea e oprită până accepți nota nouă."
+msgstr "Надсилання зупинено, доки ти не приймеш нове повідомлення."
+
+msgid "Tunerul %s nu e combinat (terestru și cablu)."
+msgstr "Тюнер %s не комбінований (ефір і кабель)."
+
+msgid "Tunerul nu e dat."
+msgstr "Тюнер не вказано."
+
+msgid "Wi-Fi și rețea"
+msgstr "Wi-Fi і мережа"
+
+msgid "cerere trimisă, aștept echipa"
+msgstr "запит надіслано, чекаю на команду"
+
+msgid "lățime de bandă pe care imaginea nu o știe (numai 8, 7, 6, 5, 10, 1,712 MHz și Auto)"
+msgstr "ширина смуги, якої образ не знає (лише 8, 7, 6, 5, 10, 1,712 МГц і Auto)"
+
+msgid "modulație pe care imaginea nu o știe"
+msgstr "модуляція, якої образ не знає"
+
+msgid "o lună"
+msgstr "30 днів"
+
+msgid "o săptămână"
+msgstr "7 днів"
+
+msgid "o zi"
+msgstr "доба"
+
+msgid "permanent"
+msgstr "постійно"
+
+msgid "reluată după repornire"
+msgstr "відновлена після перезапуску"
+
+msgid "Îți amintim mâine."
+msgstr "Ми нагадаємо завтра."

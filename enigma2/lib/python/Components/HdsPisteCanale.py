@@ -1526,7 +1526,7 @@ def textCulegeri():
 	"""Alegerile setarii, [(valoare, text tradus acum)], pentru pagina web; pe televizor aceleasi texte vin din
 	alegeriCulegere(), traduse de ConfigSelection la afisare."""
 	return [(CULEGERE_OPRITA, _("Oprită")), (CULEGERE_CANAL, _("Numai canalul privit")),
-		(CULEGERE_TRANSPONDER, _("%s (netestat)") % _("Tot transponderul"))]
+		(CULEGERE_TRANSPONDER, _("Tot transponderul"))]
 
 
 def N_(text):
@@ -1536,10 +1536,10 @@ def N_(text):
 
 def alegeriCulegere():
 	"""Alegerile setarii ca msgid-uri netraduse: setarea se face din InitUsageConfig, inaintea limbii alese, iar
-	ConfigSelection traduce descrierile la afisare (getText, getMulti). Aceleasi texte romanesti ca textCulegeri();
-	„(netestat)” e aici in msgid, deci se scoate in amandoua locurile."""
+	ConfigSelection traduce descrierile la afisare (getText, getMulti). Aceleasi texte romanesti ca textCulegeri(),
+	fara semne de stare (Components/HdsStareMeniu.py: starea nu se arata)."""
 	return [(CULEGERE_OPRITA, N_("Oprită")), (CULEGERE_CANAL, N_("Numai canalul privit")),
-		(CULEGERE_TRANSPONDER, N_("Tot transponderul (netestat)"))]
+		(CULEGERE_TRANSPONDER, N_("Tot transponderul"))]
 
 
 def initConfig():

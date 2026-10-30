@@ -17,7 +17,8 @@ import xml.etree.ElementTree
 
 from Screens.Setup import Setup, getSetupTitle
 
-# HDSatelit: semnele „(în lucru)” / „(netestat)” din atributul stare= al lui menu.xml
+# HDSatelit: numele intrarilor prin Components/HdsStareMeniu (starea din atributul stare= al lui menu.xml, al carei
+# semn nu se mai arata)
 #; aceeasi functie pune semnul si in interfata web. Fara modul, numele
 # simplu: meniul merge oricum.
 try:
@@ -26,9 +27,12 @@ except ImportError:
 	def _hdsTextNod(nod, traducere, text=None):
 		return text if text is not None else traducere(nod.get("text") or "??")
 try:
-	from Components.HdsStareMeniu import stare as _hdsStare
+	from Components.HdsStareMeniu import stare as _hdsStare, aratata as _hdsAratata
 except ImportError:
 	def _hdsStare(nod):
+		return None
+
+	def _hdsAratata(starea):
 		return None
 
 # HDSatelit: meniul cu dale (aspectul "dale" din config.skin.layout_meniu): 3 dale pe rand, cu pictograma, nume, cifra si
@@ -580,7 +584,8 @@ class Menu(Screen):
 		"""Ce nu se schimba la mutare pentru intrarea i: numele rupt, daca incape, cifra, starea, pictograma."""
 		g = self._dalaGeom
 		simplu = x[4] if len(x) > 4 else x[0]
-		stare = x[5] if len(x) > 5 else None
+		# eticheta „NETESTAT” / „ÎN LUCRU” a dalei numai pentru starile aratate (Components/HdsStareMeniu.py: niciuna)
+		stare = _hdsAratata(x[5] if len(x) > 5 else None)
 		glif = (x[6] if len(x) > 6 else None) or HdsDale.GLIF_INTRARE
 		maxim = g["nume_l"] - HdsDale.REZERVA_NUME
 		randuri, incape = HdsDale.rupeNume(simplu, lambda t: self._dalaLatime(t, g["nume_font"]), maxim)

@@ -1,6 +1,77 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.14",
+   "build": "0000614202610301000",
+   "data": "30.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Meniurile se pot alege acum în încă 15 limbi: slovacă, croată, sârbă, slovenă, greacă, suedeză, daneză, norvegiană, finlandeză, estonă, lituaniană, letonă, catalană, islandeză și frizonă.",
+     "en": "The menus can now be chosen in 15 more languages: Slovak, Croatian, Serbian, Slovenian, Greek, Swedish, Danish, Norwegian, Finnish, Estonian, Lithuanian, Latvian, Catalan, Icelandic and Frisian.",
+     "de": "Die Menüs gibt es jetzt in 15 weiteren Sprachen: Slowakisch, Kroatisch, Serbisch, Slowenisch, Griechisch, Schwedisch, Dänisch, Norwegisch, Finnisch, Estnisch, Litauisch, Lettisch, Katalanisch, Isländisch und Friesisch.",
+     "fr": "Les menus existent maintenant en 15 langues de plus : slovaque, croate, serbe, slovène, grec, suédois, danois, norvégien, finnois, estonien, lituanien, letton, catalan, islandais et frison.",
+     "es": "Los menús se pueden elegir ahora en 15 idiomas más: eslovaco, croata, serbio, esloveno, griego, sueco, danés, noruego, finés, estonio, lituano, letón, catalán, islandés y frisón.",
+     "it": "I menu si possono scegliere ora in altre 15 lingue: slovacco, croato, serbo, sloveno, greco, svedese, danese, norvegese, finlandese, estone, lituano, lettone, catalano, islandese e frisone.",
+     "hu": "A menük most még 15 nyelven választhatók: szlovák, horvát, szerb, szlovén, görög, svéd, dán, norvég, finn, észt, litván, lett, katalán, izlandi és fríz.",
+     "cs": "Nabídky si teď můžeš vybrat v dalších 15 jazycích: slovenština, chorvatština, srbština, slovinština, řečtina, švédština, dánština, norština, finština, estonština, litevština, lotyština, katalánština, islandština a fríština.",
+     "pl": "Menu możesz teraz wybrać w 15 kolejnych językach: słowacki, chorwacki, serbski, słoweński, grecki, szwedzki, duński, norweski, fiński, estoński, litewski, łotewski, kataloński, islandzki i fryzyjski.",
+     "pt": "Os menus podem agora ser escolhidos em mais 15 línguas: eslovaco, croata, sérvio, esloveno, grego, sueco, dinamarquês, norueguês, finlandês, estónio, lituano, letão, catalão, islandês e frísio.",
+     "nl": "De menu's zijn nu te kiezen in nog 15 talen: Slowaaks, Kroatisch, Servisch, Sloveens, Grieks, Zweeds, Deens, Noors, Fins, Ests, Litouws, Lets, Catalaans, IJslands en Fries.",
+     "ru": "Меню теперь можно выбрать ещё на 15 языках: словацкий, хорватский, сербский, словенский, греческий, шведский, датский, норвежский, финский, эстонский, литовский, латышский, каталанский, исландский и фризский.",
+     "tr": "Menüler artık 15 dilde daha seçilebiliyor: Slovakça, Hırvatça, Sırpça, Slovence, Yunanca, İsveççe, Danca, Norveççe, Fince, Estonca, Litvanca, Letonca, Katalanca, İzlandaca ve Frizce."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Meniurile și setările nu mai arată semnul „netestat”: toată imaginea e beta.",
+     "en": "Menus and settings no longer show the “untested” mark: all the software is in beta.",
+     "de": "Menüs und Einstellungen zeigen das Zeichen „ungetestet“ nicht mehr: die ganze Software ist Beta.",
+     "fr": "Les menus et les réglages n'affichent plus la mention « non testé » : tout le logiciel est en bêta.",
+     "es": "Los menús y los ajustes ya no muestran la marca «sin probar»: todo el software está en beta.",
+     "it": "Menu e impostazioni non mostrano più il segno «non testato»: tutto il software è in beta.",
+     "hu": "A menük és a beállítások már nem mutatják a „nem tesztelt” jelet: az egész szoftver béta.",
+     "cs": "Nabídky a nastavení už neukazují značku „netestováno“: celý software je beta.",
+     "pl": "Menu i ustawienia nie pokazują już znaku „nietestowane”: całe oprogramowanie jest w wersji beta.",
+     "pt": "Os menus e as definições já não mostram a marca «não testado»: todo o software está em beta.",
+     "nl": "Menu's en instellingen tonen het teken „niet getest” niet meer: alle software is bèta.",
+     "ru": "Меню и настройки больше не показывают пометку «не проверено»: вся программа в бета-версии.",
+     "tr": "Menüler ve ayarlar artık “test edilmedi” işaretini göstermiyor: yazılımın tamamı beta."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008 combo: căutarea pe cablu (DVB-C) găsește canalele, confirmat de un beta tester pe un receptor adevărat.",
+     "en": "Octagon SF8008 combo: the cable search (DVB-C) finds the channels, confirmed by a beta tester on a real receiver.",
+     "de": "Octagon SF8008 combo: der Kabelsuchlauf (DVB-C) findet die Sender, von einem Beta-Tester auf einem echten Receiver bestätigt.",
+     "fr": "Octagon SF8008 combo : la recherche sur le câble (DVB-C) trouve les chaînes, confirmé par un beta testeur sur un vrai récepteur.",
+     "es": "Octagon SF8008 combo: la búsqueda por cable (DVB-C) encuentra los canales, confirmado por un beta tester en un receptor real.",
+     "it": "Octagon SF8008 combo: la ricerca via cavo (DVB-C) trova i canali, confermato da un beta tester su un ricevitore vero.",
+     "hu": "Octagon SF8008 combo: a kábeles keresés (DVB-C) megtalálja a csatornákat, egy béta tesztelő igazi vevőn megerősítette.",
+     "cs": "Octagon SF8008 combo: vyhledávání na kabelu (DVB-C) najde kanály, potvrdil to beta tester na skutečném přijímači.",
+     "pl": "Octagon SF8008 combo: wyszukiwanie w kablu (DVB-C) znajduje kanały, potwierdził to beta tester na prawdziwym odbiorniku.",
+     "pt": "Octagon SF8008 combo: a pesquisa por cabo (DVB-C) encontra os canais, confirmado por um beta tester num recetor verdadeiro.",
+     "nl": "Octagon SF8008 combo: het zoeken op de kabel (DVB-C) vindt de zenders, bevestigd door een bètatester op een echte ontvanger.",
+     "ru": "Octagon SF8008 combo: поиск по кабелю (DVB-C) находит каналы, подтвердил бета-тестер на настоящем ресивере.",
+     "tr": "Octagon SF8008 combo: kablo araması (DVB-C) kanalları buluyor, bir beta test kullanıcısı gerçek bir alıcıda doğruladı."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Mulțumim beta testerilor care au ajutat la această versiune: Marius.",
+     "en": "Thanks to the beta testers who helped with this version: Marius.",
+     "de": "Danke an die Beta-Tester, die bei dieser Version geholfen haben: Marius.",
+     "fr": "Merci aux beta testeurs qui ont aidé pour cette version : Marius.",
+     "es": "Gracias a los beta testers que ayudaron con esta versión: Marius.",
+     "it": "Grazie ai beta tester che hanno aiutato con questa versione: Marius.",
+     "hu": "Köszönjük a béta tesztelőknek, akik segítettek ennél a verziónál: Marius.",
+     "cs": "Děkujeme beta testerům, kteří pomohli s touto verzí: Marius.",
+     "pl": "Dziękujemy beta testerom, którzy pomogli przy tej wersji: Marius.",
+     "pt": "Obrigado aos beta testers que ajudaram nesta versão: Marius.",
+     "nl": "Dank aan de bètatesters die bij deze versie hebben geholpen: Marius.",
+     "ru": "Спасибо бета-тестерам, которые помогли с этой версией: Marius.",
+     "tr": "Bu sürüme yardım eden beta test kullanıcılarına teşekkürler: Marius."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.13",
    "build": "0000613202610300300",
    "data": "30.10.2026",

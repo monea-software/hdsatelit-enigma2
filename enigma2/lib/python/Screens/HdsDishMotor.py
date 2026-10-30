@@ -851,7 +851,7 @@ class HdsDishMotorEcran(HdsDishMotor):
 			# textul listei are loc pentru doua randuri in skin (ChoiceBox, 836 x 88)
 			titlu = "%s\n%s" % (titlu, _("Locul antenei: %s") % HdsLocul.textLoc())
 		# primul rand schimba locul antenei (acelasi pentru toate tunerele), restul sunt satelitii
-		lista.insert(0, (_("%s (netestat)") % _("Schimbă locul antenei"), "loc"))
+		lista.insert(0, (_("Schimbă locul antenei"), "loc"))
 		self.session.openWithCallback(self._satelitAles, HdsMotorAlegere, title=titlu, list=lista, keys=[], selection=ales + 1)
 
 	def _satelitAles(self, rezultat):

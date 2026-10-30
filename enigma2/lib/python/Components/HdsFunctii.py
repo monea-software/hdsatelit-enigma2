@@ -21,10 +21,10 @@
 #
 # Starea pe receptor sta intr-un singur loc, ca la meniu (Components/HdsStareMeniu.py): atributul stare= al intrarii din
 # data/menu.xml. O functie cu meniu= ia starea cea mai rea dintre intrarile ei, la fiecare afisare:
-#   "netestat"  functia apare cu semnul "(netestat)", tradus ca in meniu;
+#   "netestat"  functia apare ca oricare alta: semnul nu se mai arata (Components/HdsStareMeniu.py, STARI_ARATATE);
 #   "in-lucru"  functia nu apare deloc (pe pagina nu se promite nimic).
-# Cand semnul se scoate din menu.xml dupa proba pe receptor, el dispare si de aici, fara alta schimbare. O functie fara
-# intrare de meniu are starea in probat= (True numai cu proba scrisa pe receptor; altfel "(netestat)").
+# O functie fara intrare de meniu are starea in probat= (True numai cu proba scrisa pe receptor), folosita de probe si
+# de lista functiilor de pe site.
 #
 # Nimic din enigma2 la incarcare: modulul se foloseste si din probele de pe PC. Textele se traduc la afisare (_ pus de
 # Components/Language.py), deci asistentul le arata in limba aleasa chiar atunci.
@@ -156,7 +156,7 @@ GRUPE = (
 		Functie(N_("Telecomenzi: proba tastelor pe telecomanda desenată și o telecomandă USB asociată."),
 			meniu=("hds_telecomenzi",), cod=("lib/python/Screens/HdsTelecomenzi.py",), versiune="0.1.2",
 			cuvant="Utilitar pentru telecomenzi"),
-		Functie(N_("Meniurile traduse complet în 13 limbi."),
+		Functie(N_("Meniurile traduse complet în 28 de limbi."),
 			meniu=("language_setup",), cod=("po/ro.po", "po/de.po", "po/tr.po"), versiune="0.1.0",
 			cuvant="tradusă în treisprezece limbi"),
 	)),
