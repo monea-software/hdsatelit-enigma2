@@ -33,7 +33,7 @@ install_PYTHON = \
 	HdsPisteLimbi.py HdsTelecomenziDate.py HdsSubtitrariAspect.py HdsAccel2D.py HdsOcrSubtitrari.py HdsOcrModele.py HdsOcrLimbaGhicita.py \
 	HdsTraducereSubtitrari.py HdsStandbyTv.py HdsQr.py HdsConfigurareTraducere.py HdsTraducereEpg.py \
 	HdsTraducereTexte.py HdsTraducereTeletext.py \
-	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsJurnaleSloturi.py HdsMemorieDriver.py HdsStocare.py HdsPazaModel.py HdsDiagnostic.py HdsPlatforma.py \
+	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsMemorieDriver.py HdsStocare.py HdsPazaModel.py HdsDiagnostic.py HdsPlatforma.py \
 	HdsStareMeniu.py HdsDale.py HdsCautaSetari.py HdsAccesCanale.py HdsBazaCanale.py HdsBazaPornire.py HdsFisierSigur.py \
 	HdsSetariDinCopie.py HdsCopieSetari.py HdsCulegereCanale.py HdsCulegereTotala.py HdsCapLista.py HdsImportSurse.py HdsImportAltaImagine.py HdsImportExtra.py HdsImportRetea.py HdsLatimeText.py HdsModSigur.py \
 	HdsCursorLista.py HdsSageti.py \

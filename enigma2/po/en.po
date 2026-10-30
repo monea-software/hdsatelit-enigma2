@@ -57560,3 +57560,54 @@ msgstr "Start turns it on for 2 hours. You can stop it at any time, from the rec
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "The assistance is complete: readings, tests and control of the receiver through the menus, from the fixed list. A capture shows only the menus, not the channel picture. The private screens stay closed. You can stop it at any time."
+
+msgid "Pornește alte imagini"
+msgstr "Start other images"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "You choose the image and press OK: the receiver restarts into it. The list shows the images installed in the receiver's memory."
+
+msgid "Caut imaginile instalate..."
+msgstr "I'm searching for the installed images..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "Slot %(loc)s: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "Slot %(loc)s: %(imagine)s, currently running"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "Slot %(loc)s: %(imagine)s, can't start"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "On the USB stick: %(imagine)s, currently running"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "The images on the USB stick are chosen from the USB stick's menu."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "I didn't find any other images installed in the receiver's memory."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "The receiver restarts into image %s. Continue?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "This is the currently running image."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "The image in slot %s can't start (the kernel or the system is missing), so I don't choose it."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "The chosen slot is no longer in the list. Open the list again."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "I couldn't write the choice, so the receiver stays in the current image."
+
+msgid "Imagine fără nume"
+msgstr "Image without a name"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "The receiver restarts into the image chosen from its memory. On the receiver: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "The receiver restarts into image %s. The web interface here responds again when you start the HD Satelit image back up."

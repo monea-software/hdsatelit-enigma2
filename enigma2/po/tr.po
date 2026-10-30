@@ -58270,3 +58270,54 @@ msgstr "Start onu 2 saatliğine başlatır. İstediğin zaman alıcıdan veya we
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "Destek tamdır: sabit listeden okumalar, denemeler ve menüler aracılığıyla alıcının kontrolü. Bir ekran görüntüsü yalnızca menüleri gösterir, kanal görüntüsünü göstermez. Özel ekranlar kapalı kalır. İstediğin zaman kapatabilirsin."
+
+msgid "Pornește alte imagini"
+msgstr "Diğer imajları başlat"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Bir imaj seç ve OK'ye bas: receiver seçtiğin imaja yeniden başlar. Liste, receiver'ın belleğinde kurulu imajları gösterir."
+
+msgid "Caut imaginile instalate..."
+msgstr "Kurulu imajları arıyorum..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "Slot %(loc)s: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "Slot %(loc)s: %(imagine)s, şu an çalışan"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "Slot %(loc)s: %(imagine)s, başlatılamıyor"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "USB bellekte: %(imagine)s, şu an çalışan"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "USB bellekteki imajlar USB bellek menüsünden seçilir."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "Receiver belleğinde başka kurulu imaj bulamadım."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "Receiver %s imajına yeniden başlayacak. Devam edilsin mi?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Bu, şu an çalışan imaj."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "%s slotundaki imaj başlatılamıyor (çekirdek veya sistem eksik), bu yüzden seçmiyorum."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "Seçilen slot artık listede yok. Listeyi yeniden aç."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "Seçimi kaydedemedim, bu yüzden receiver şu anki imajda kalıyor."
+
+msgid "Imagine fără nume"
+msgstr "İsimsiz imaj"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "Receiver kendi belleğinden seçilen imaja yeniden başlayacak. Receiver'da: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "Receiver %s imajına yeniden başlayacak. Buradaki web arayüzü, HD Satelit imajına geri döndüğünde yeniden yanıt verir."

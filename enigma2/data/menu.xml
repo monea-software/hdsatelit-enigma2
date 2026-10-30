@@ -616,13 +616,12 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<item text="Restart Box" entryID="restart" pictograma="repornire" web="/alimentare?f=receptor" weight="30">
 			<screen module="Standby" screen="TryQuitMainloop">2</screen>
 		</item>
-		<!-- ascuns cat imaginea nu are multiboot: TryQuitMainloop(0) doar reporneste interfata (enigma2.sh nu face nimic la
-		     codul 0); SystemInfo["HdsMultiboot"] se pune cand pornirea de pe stick exista -->
-		<item text="Return to Flash" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
-			<code><![CDATA[
-from Screens.Standby import TryQuitMainloop
-self.session.open(TryQuitMainloop, 0)
-]]></code>
+		<!-- Porneste alte imagini (Screens/HdsPornireMultipla.py, Components/HdsPornireMultipla.py): imaginile instalate
+		     in celelalte locuri din memorie, una aleasa, STARTUP scris sigur, apoi repornirea in ea. Numai pe receptoarele
+		     cu mai multe locuri (Octagon SF8008 si SF8008 MINI): SystemInfo["HdsMultiboot"] (Components/SystemInfo.py).
+		     entryID-ul vechi ramane (cautarea, ajutorul si probele il stiu). In web: cardul flash din /alimentare. -->
+		<item text="Pornește alte imagini" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
+			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
 		</item>
 		<item text="Deep Standby (Power Off)" entryID="deep_standby" pictograma="oprire" web="/alimentare?f=oprire" weight="60">
 			<screen module="Standby" screen="TryQuitMainloop">1</screen>

@@ -6,13 +6,14 @@
 #
 # Orice ecran sau setare de pe receptor are pereche in interfata web. Pe televizor grupul are sase intrari (data/menu.xml):
 #   Oprire programata (sleep, Screens/SleepTimerEdit.py), Standby (standby, Screens/Standby.Standby), Reporneste
-#   interfata (restart_enigma, TryQuitMainloop 3), Reporneste receptorul (restart, TryQuitMainloop 2), Inapoi la
-#   imaginea din memoria interna (return_to_flash, TryQuitMainloop 0, numai cu SystemInfo["HdsMultiboot"], pe care azi
-#   nu-l pune nimic, deci cardul lipseste ca si intrarea) si Oprire completa (deep_standby, TryQuitMainloop 1).
+#   interfata (restart_enigma, TryQuitMainloop 3), Reporneste receptorul (restart, TryQuitMainloop 2), Porneste alte
+#   imagini (return_to_flash, Screens/HdsPornireMultipla.py, numai cu SystemInfo["HdsMultiboot"]: Octagon SF8008 si
+#   SF8008 MINI; altfel cardul lipseste ca si intrarea) si Oprire completa (deep_standby, TryQuitMainloop 1).
 #   Aici: un card pentru fiecare, cu aceleasi setari si actiuni, plus starea receptorului. Meniul web trimite
 #   ?f=somn|standby|interfata|receptor|flash|oprire, iar pagina aduce cardul acela primul.
 #
-# O SINGURA LOGICA: Components/HdsAlimentare.py (ecranul opririi programate o foloseste si el).
+# O SINGURA LOGICA: Components/HdsAlimentare.py (ecranul opririi programate o foloseste si el) si, pentru cardul flash
+# (imaginile instalate in celelalte locuri si alegerea uneia), Components/HdsPornireMultipla.py, ca ecranul.
 #
 # Standby-ul, repornirile si oprirea se fac in doi pasi (meniu_comun_web: intrebarea, apoi un cod de unica folosinta),
 # numai din browserul conectat (nu cu ?token=). Apoi se deschide pe televizor acelasi ecran ca din meniu, dupa 1,5 s, ca
@@ -29,6 +30,10 @@
 #   POST /api/alimentare-fa?ce=standby|interfata|receptor|flash|oprire&pas=intreaba   intrebarea si codul
 #   POST /api/alimentare-fa?ce=...&cod=<cod>                fapta: ecranul de pe televizor peste 1,5 s
 #   POST /api/alimentare-fa?ce=...&pas=renunta              codul nu mai e bun
+#   GET  /api/pornire-multipla                             imaginile instalate in locurile din memorie (cardul flash;
+#                                                          monteaza partitia userdata, deci nu in starea de la 10 s)
+#   POST /api/alimentare-fa?ce=flash&loc=<N>&pas=intreaba / &cod=<cod>   alegerea imaginii din locul N: STARTUP scris
+#                                                          (HdsPornireMultipla.reporneste), apoi TryQuitMainloop 2
 #   GET  /alimentare[?f=...]                                pagina
 #
 # FIRUL: totul pe firul enigma2 si scurt (cateva atribute, o cautare in ghidul TV). Fisierul nu importa nimic din
@@ -37,7 +42,8 @@
 DUPA_MS = 1500
 CONFIRMARE = "alimentare"
 CHEI_SOMN = ("fapta", "minute", "actiune", "intreaba")
-CHEI_FA = ("ce", "pas", "cod")
+CHEI_FA = ("ce", "pas", "cod", "loc")
+CACHE_IMAGINI_S = 15
 # ?f= din meniul web -> cardul paginii (aceleasi chei ca HdsAlimentare.ACTIUNI, plus somn)
 CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "oprire")
 # entryID-urile din data/menu.xml, pentru drumul de pe televizor al fiecarui card
@@ -59,6 +65,77 @@ def _a(A=None):
 		return A
 	from Components import HdsAlimentare
 	return HdsAlimentare
+
+
+def _pm(PM=None):
+	if PM is not None:
+		return PM
+	from Components import HdsPornireMultipla
+	return HdsPornireMultipla
+
+
+_imagini = {}
+
+
+def _faraMultiboot():
+	return _t("Imaginea nu are altă memorie din care să pornească, deci intrarea nu e nici pe televizor.")
+
+
+def imagini(PM=None, SystemInfo=None, proaspat=False):
+	"""Pentru GET /api/pornire-multipla: imaginile instalate (randurile ca pe receptor) si nota."""
+	if not _si(SystemInfo).get("HdsMultiboot"):
+		return {"result": False, "message": _faraMultiboot()}
+	import time
+	PM = _pm(PM)
+	acum = time.time()
+	if proaspat or not _imagini.get("stare") or acum - _imagini.get("cand", 0) > CACHE_IMAGINI_S:
+		_imagini["stare"] = PM.publice(PM.locuri())
+		_imagini["cand"] = acum
+	rez = {"result": True}
+	rez.update(_imagini["stare"])
+	return rez
+
+
+def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A):
+	"""Cardul flash: alegerea imaginii din locul `loc`, in doi pasi, apoi repornirea in ea."""
+	MC = _mc()
+	if not SI.get("HdsMultiboot"):
+		return {"result": False, "message": _faraMultiboot()}
+	loc = argumente.get("loc", "")
+	if not (0 < len(loc) <= 2 and loc.isdigit()):
+		return {"result": False, "message": _t("Acțiune necunoscută.")}
+	tinta = "flash:" + loc
+	pas = argumente.get("pas", "")
+	if pas == "renunta":
+		MC.uita(CONFIRMARE, tinta)
+		return {"result": True, "message": _t("Nu s-a făcut nimic.")}
+	if sesiune is None:
+		return {"result": False, "message": _faraSesiune()}
+	if getattr(_standby(Standby), "inTryQuitMainloop", False):
+		MC.uita(CONFIRMARE, tinta)
+		return {"result": False, "message": _t("Pe televizor așteaptă deja o întrebare de oprire sau de repornire. "
+			"Răspunde acolo.")}
+	PM = _pm(PM)
+	if pas == "intreaba":
+		stare = imagini(PM, SI, proaspat=True)
+		gasit = [l for l in stare.get("locuri", []) if l["fel"] == "emmc" and l["loc"] == loc]
+		if not gasit:
+			return {"result": False, "message": _t(PM.NEGASIT)}
+		if gasit[0]["acum"]:
+			return {"result": False, "message": _t(PM.DEJA)}
+		if not gasit[0]["alegere"]:
+			return {"result": False, "message": _t(PM.REFUZ) % loc}
+		r = A.stareReceptor(sesiune, Standby=_standby(Standby), job_manager=job_manager)
+		return MC.raspunsIntrebare(CONFIRMARE, tinta, _t(PM.INTREBARE) % gasit[0]["imagine"], _t(PM.BUTON),
+			[x for x in _detalii("flash", r)])
+	if not MC.verifica(CONFIRMARE, tinta, argumente.get("cod", "")):
+		return MC.codGresit()
+	intreaba = A.vaIntreba(sesiune)
+	ok, text = PM.reporneste(sesiune, loc, dupa_ms=DUPA_MS, fabrica_ceas=fabrica_ceas, Standby=Standby)
+	_imagini.clear()
+	if not ok:
+		return {"result": False, "message": text}
+	return {"result": True, "ce": "flash", "intreaba": bool(intreaba), "message": _dupa("flash", intreaba, text)}
 
 
 def _si(SystemInfo=None):
@@ -207,7 +284,7 @@ def _detalii(ce, r):
 	return d
 
 
-def _dupa(ce, intreaba):
+def _dupa(ce, intreaba, imagine=""):
 	if intreaba:
 		return _t("Pe televizor se cere o confirmare: o înregistrare e în curs sau începe curând, sau lucrează ceva în "
 			"fundal. Se face numai dacă răspunzi Da acolo.")
@@ -218,21 +295,21 @@ def _dupa(ce, intreaba):
 	if ce == "receptor":
 		return _t("Receptorul se repornește. Pagina se reîncarcă singură când răspunde din nou.")
 	if ce == "flash":
-		return _t("Receptorul pornește din memoria internă.")
+		return _t("Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi "
+			"imaginea HD Satelit.") % imagine
 	return _t("Receptorul se oprește.")
 
 
-def fa(argumente, A=None, sesiune=None, SystemInfo=None, Standby=None, job_manager=None, fabrica_ceas=None):
+def fa(argumente, A=None, sesiune=None, SystemInfo=None, Standby=None, job_manager=None, fabrica_ceas=None, PM=None):
 	"""POST /api/alimentare-fa: standby, repornirile si oprirea, in doi pasi. Refuzul pentru ?token= il da resursa."""
 	A = _a(A)
 	SI = _si(SystemInfo)
 	MC = _mc()
 	ce = argumente.get("ce", "")
+	if ce == "flash":
+		return _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A)
 	if ce not in A.CHEI:
 		return {"result": False, "message": _t("Acțiune necunoscută.")}
-	if ce == "flash" and not SI.get("HdsMultiboot"):
-		return {"result": False, "message": _t("Imaginea nu are altă memorie din care să pornească, deci intrarea nu "
-			"e nici pe televizor.")}
 	pas = argumente.get("pas", "")
 	if pas == "renunta":
 		MC.uita(CONFIRMARE, ce)
@@ -258,7 +335,7 @@ def fa(argumente, A=None, sesiune=None, SystemInfo=None, Standby=None, job_manag
 
 
 def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None,
-		fabrica_ceas=None, configfile=None):
+		fabrica_ceas=None, configfile=None, PM=None):
 	"""({nume: resursa de sub /api}, {nume: resursa paginii}). `baza` e HdsJsonResource din plugin.py; `sesiune` e o
 	functie care intoarce sesiunea enigma2 (implicit cea tinuta de plugin.py)."""
 	MC = _mc()
@@ -301,12 +378,21 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 				return self._eroare(request, refuz, 403)
 			try:
 				arg = MC.argumente(request, CHEI_FA, 40)
-				return self._raspunde(request, fa(arg, A, _ses(), SystemInfo, Standby, job_manager, fabrica_ceas))
+				return self._raspunde(request, fa(arg, A, _ses(), SystemInfo, Standby, job_manager, fabrica_ceas, PM))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 		def render_GET(self, request):
 			return self.render_POST(request)   # cu ?token= refuzat; din browser poarta cere POST
+
+	class ImaginiResource(baza):
+		"""GET /api/pornire-multipla: numai citire (monteaza partitia userdata pentru o clipa)."""
+
+		def render_GET(self, request):
+			try:
+				return self._raspunde(request, imagini(PM, SystemInfo))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 	class PaginaResource(resource.Resource):
 		"""GET /alimentare: pagina Standby si repornire."""
@@ -319,6 +405,7 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 		b"alimentare": StareResource(),
 		b"alimentare-somn": SomnResource(),
 		b"alimentare-fa": FaResource(),
+		b"pornire-multipla": ImaginiResource(),
 	}
 	return api, {b"alimentare": PaginaResource()}
 
@@ -396,9 +483,10 @@ __STIL_PAGINI__
       <div class="butoane"><button type="button" class="rosu" data-fa="receptor">Repornește receptorul</button></div>
     </section>
     <section class="card ascuns" id="card-flash">
-      <h2>Înapoi la imaginea din memoria internă</h2>
-      <p class="nota">Receptorul pornește imaginea din memoria lui internă în locul celei de acum. Pe televizor: __DRUM_FLASH__.</p>
-      <div class="butoane"><button type="button" class="rosu" data-fa="flash">Înapoi la imaginea din memoria internă</button></div>
+      <h2>Pornește alte imagini</h2>
+      <p class="nota" id="imaginiNota">Caut imaginile instalate...</p>
+      <div id="imaginiLista"></div>
+      <p class="nota">Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__.</p>
     </section>
     <section class="card" id="card-oprire">
       <h2>Oprire completă</h2>
@@ -448,7 +536,32 @@ function arata(d){
     $("somnCanal").disabled = true;
   }
   (d.carduri || []).forEach(function(c){ var e = $("card-" + c.ce); if(e){ e.classList.toggle("ascuns", !c.vizibil); } });
+  if(!imaginiCitite && !$("card-flash").classList.contains("ascuns")){ citesteImagini(); }
   var b = document.querySelector("button[data-fa=standby]"); if(b){ b.disabled = !!r.standby; }
+}
+var imaginiCitite = false;
+function citesteImagini(){
+  imaginiCitite = true;
+  cerere("/api/pornire-multipla").then(function(d){
+    var l = $("imaginiLista"); l.textContent = "";
+    $("imaginiNota").textContent = d.result ? d.nota : (d.message || "");
+    (d.locuri || []).forEach(function(x, i){
+      var r = document.createElement("div"); r.className = "status-linie";
+      var s = document.createElement("span"); s.textContent = (d.randuri || [])[i] || x.imagine; r.appendChild(s);
+      if(x.alegere){
+        var b = document.createElement("button"); b.type = "button"; b.className = "rosu"; b.textContent = "Pornește";
+        b.addEventListener("click", function(){ faImagine(x.loc); }); r.appendChild(b);
+      }
+      l.appendChild(r);
+    });
+  }).catch(function(){ $("imaginiNota").textContent = "Receptorul nu a putut citi starea."; });
+}
+function faImagine(loc){
+  var q = new URLSearchParams(); q.set("ce", "flash"); q.set("loc", loc);
+  cuConfirmare("/api/alimentare-fa", q, function(d){
+    if(d.result && d.intreaba){ setTimeout(citeste, 3000); }
+    else if(d.result){ asteapta = true; }
+  });
 }
 function citeste(){
   return cerere("/api/alimentare").then(function(d){
@@ -483,7 +596,7 @@ function fa(ce){
   var q = new URLSearchParams(); q.set("ce", ce);
   cuConfirmare("/api/alimentare-fa", q, function(d){
     if(!d.result){ return; }
-    if((d.ce === "interfata" || d.ce === "receptor" || d.ce === "flash") && !d.intreaba){ asteaptaRevenirea(); }
+    if((d.ce === "interfata" || d.ce === "receptor") && !d.intreaba){ asteaptaRevenirea(); }
     else if(d.ce === "standby" || d.intreaba){ setTimeout(citeste, 3000); }
   });
 }
@@ -547,9 +660,9 @@ TEXTE_PAGINA = {
 		N_("Repornește receptorul"),
 		N_("Repornește tot receptorul; durează mai mult decât repornirea interfeței. Pe televizor: "
 			"__DRUM_RECEPTOR__."),
-		N_("Înapoi la imaginea din memoria internă"),
-		N_("Receptorul pornește imaginea din memoria lui internă în locul celei de acum. Pe televizor: "
-			"__DRUM_FLASH__."),
+		N_("Pornește alte imagini"),
+		N_("Caut imaginile instalate..."),
+		N_("Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."),
 		N_("Oprire completă"),
 		N_("Receptorul se oprește de tot și se pornește din nou din butonul de pornire al telecomenzii. Pe "
 			"televizor: __DRUM_OPRIRE__."),
@@ -567,6 +680,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a putut citi starea."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Se trimite..."),
+		N_("Pornește"),
 	),
 }
 

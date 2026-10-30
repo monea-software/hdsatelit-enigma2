@@ -56382,3 +56382,54 @@ msgstr "A Start 2 órára kapcsolja be. Bármikor leállíthatod, a vevőkészü
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "A támogatás teljes: leolvasások, próbák és a vevőkészülék menükön keresztüli vezérlése a rögzített listából. Egy képernyőmentés csak a menüket mutatja, nem a csatorna képét. A privát képernyők zárva maradnak. Bármikor leállíthatod."
+
+msgid "Pornește alte imagini"
+msgstr "Más image-ek indítása"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Kiválasztod az image-et, és megnyomod az OK gombot: a receiver újraindul benne. A lista a receiver memóriájába telepített image-eket mutatja."
+
+msgid "Caut imaginile instalate..."
+msgstr "Keresem a telepített image-eket..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "%(loc)s. slot: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "%(loc)s. slot: %(imagine)s, most fut"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "%(loc)s. slot: %(imagine)s, nem tud elindulni"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "A sticken: %(imagine)s, most fut"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "A sticken lévő image-eket a stick menüjéből választhatod ki."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "Nem találtam más telepített image-eket a receiver memóriájában."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "A receiver újraindul a(z) %s image-ben. Folytatod?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Ez a most futó image."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "A(z) %s. slotban lévő image nem tud elindulni (hiányzik a kernel vagy a rendszer), ezért nem lehet kiválasztani."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "A kiválasztott slot már nincs a listában. Nyisd meg újra a listát."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "Nem tudtam elmenteni a választást, ezért a receiver a mostani image-ben marad."
+
+msgid "Imagine fără nume"
+msgstr "Névtelen image"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "A receiver újraindul a memóriájából kiválasztott image-ben. A receiveren: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "A receiver újraindul a(z) %s image-ben. Az itteni webes felület akkor válaszol újra, amikor visszatérsz a HD Satelit image-hez."

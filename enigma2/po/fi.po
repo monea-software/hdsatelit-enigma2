@@ -56680,3 +56680,54 @@ msgstr "Start käynnistää sen 2 tunniksi. Voit pysäyttää sen milloin tahans
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "Tuki on täydellistä: lukemisia, testejä ja vastaanottimen hallintaa valikoiden kautta, kiinteästä listasta. Kuvakaappaus näyttää vain valikot, ei kanavan kuvaa. Yksityiset näytöt pysyvät suljettuina. Voit lopettaa milloin tahansa."
+
+msgid "Pornește alte imagini"
+msgstr "Käynnistä muut imaget"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Valitset imagen ja painat OK: vastaanotin käynnistyy uudelleen siihen. Lista näyttää vastaanottimen muistiin asennetut imaget."
+
+msgid "Caut imaginile instalate..."
+msgstr "Etsin asennettuja imageja..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "Paikka %(loc)s: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "Paikka %(loc)s: %(imagine)s, nyt käynnissä"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "Paikka %(loc)s: %(imagine)s, ei voi käynnistyä"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "Muistitikulla: %(imagine)s, nyt käynnissä"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "Muistitikulla olevat imaget valitaan tikun valikosta."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "En löytänyt muita vastaanottimen muistiin asennettuja imageja."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "Vastaanotin käynnistyy uudelleen imageen %s. Haluatko jatkaa?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Tämä on nyt käynnissä oleva image."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "Paikan %s image ei voi käynnistyä (kernel tai järjestelmä puuttuu), joten en valitse sitä."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "Valittu paikka ei ole enää listalla. Avaa lista uudelleen."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "En pystynyt kirjoittamaan valintaa, joten vastaanotin pysyy nykyisessä imagessa."
+
+msgid "Imagine fără nume"
+msgstr "Nimetön image"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "Vastaanotin käynnistyy uudelleen muististaan valittuun imageen. Vastaanottimella: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "Vastaanotin käynnistyy uudelleen imageen %s. Tämä verkkokäyttöliittymä vastaa taas, kun käynnistät HD Satelit -imagen takaisin."

@@ -29,7 +29,7 @@ install_PYTHON = \
 	HdsAjutor.py \
 	ScanerMaiMultiSateliti.py ScanerCablu.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
-	HdsPaznic.py HdsJurnaleSloturi.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
+	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
