@@ -1,0 +1,67 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Programul de logare al lui Telnet (portul 23): inetd (/etc/hds-telnet-inetd.conf) porneste pentru fiecare legatura
+# `busybox telnetd -i -l /usr/sbin/hds-telnet-poarta`, iar telnetd il porneste pe acesta in terminalul legaturii.
+# Adresa omului se afla din socketul lui telnetd (procesul parinte: in modul -i socketul e pe fd 0) si din /proc/net/tcp:
+# - din reteaua de acasa (retelele din hds-ssh-retele-locale.conf, aceleasi ca la SSH si FTP), cu „Fara parola in
+#   reteaua locala” pornita (o regula „-” in hds-ssh-retea-locala.conf): intrebarea „login:” ca la orice receptor, apoi
+#   root intra fara parola (login -f root); un alt nume merge la login obisnuit;
+# - din reteaua de acasa, cu optiunea oprita: login obisnuit, cu parola receptorului;
+# - din afara casei, sau cand adresa nu se poate afla sigur: legatura se inchide. Nicio eroare nu duce la un shell.
+# Variabilele sunt numai pentru probele de pe PC (HDS_TELNET_PROC: /proc fals; HDS_TELNET_LOGIN: programul login).
+
+PROC=${HDS_TELNET_PROC:-/proc}
+RETELE=${HDS_TELNET_RETELE:-/etc/security/hds-ssh-retele-locale.conf}
+REGULA=${HDS_TELNET_REGULA:-/etc/security/hds-ssh-retea-locala.conf}
+LOGIN=${HDS_TELNET_LOGIN:-/bin/login}
+
+inchide() {
+	printf 'Telnet: numai din reteaua de acasa / home network only.\r\n'
+	sleep 1
+	exit 1
+}
+
+# socketul lui telnetd: socket:[INODE] pe fd 0 al procesului parinte
+s=$(readlink "$PROC/$PPID/fd/0" 2>/dev/null)
+case $s in
+	socket:\[*\]) i=${s#socket:[}; i=${i%]} ;;
+	*) inchide ;;
+esac
+case $i in ''|*[!0-9]*) inchide ;; esac
+
+# adresa celuilalt capat (IPv4, /proc/net/tcp: hex in ordinea octetilor din memorie) si verdictul: acasa sau afara
+loc=$(awk -v inod="$i" -v retele="$RETELE" '
+	function hx(t,   k, v) { v = 0; t = toupper(t); for (k = 1; k <= length(t); k++) v = v * 16 + index("0123456789ABCDEF", substr(t, k, 1)) - 1; return v }
+	function nr(a,   p) { if (split(a, p, ".") != 4) return -1; return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+	FNR == NR {
+		if ($10 == inod && !gasit) {
+			split($3, x, ":")
+			if (length(x[1]) == 8) { ip = ((hx(substr(x[1], 7, 2)) * 256 + hx(substr(x[1], 5, 2))) * 256 + hx(substr(x[1], 3, 2))) * 256 + hx(substr(x[1], 1, 2)); gasit = 1 }
+		}
+		next
+	}
+	/^\+ *: *root *:/ {
+		sub(/^\+ *: *root *:/, "")
+		n = split($0, r, " ")
+		for (k = 1; k <= n; k++) {
+			if (split(r[k], q, "/") != 2 || q[2] !~ /^[0-9]+$/ || q[2] > 32) continue
+			b = nr(q[1]); if (b < 0) continue
+			bloc = 2 ^ (32 - q[2])
+			if (gasit && int(ip / bloc) == int(b / bloc)) acasa = 1
+		}
+	}
+	END { print (gasit && acasa) ? "acasa" : "afara" }
+' "$PROC/net/tcp" "$RETELE" 2>/dev/null)
+
+[ "$loc" = acasa ] || inchide
+if grep -q '^-' "$REGULA" 2>/dev/null; then
+	printf '%s login: ' "$(hostname 2>/dev/null || echo receptor)"
+	nume=""
+	read -r nume || exit 1
+	nume=$(printf '%s' "$nume" | tr -d '\r')
+	[ "$nume" = root ] && exec "$LOGIN" -f root
+	exec "$LOGIN" -- "$nume"
+fi
+exec "$LOGIN"

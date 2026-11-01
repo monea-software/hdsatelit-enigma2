@@ -344,6 +344,80 @@ def _randuriLista(nume, comp):
 	return randuri
 
 
+# flagurile unei referinte de serviciu (lib/service/iservice.h)
+_FLAG_DOSAR = 7          # isDirectory | mustDescent | canDescent
+_FLAG_MARCAJ = 64        # isMarker
+_FLAG_ASCUNS = 512       # isInvisible
+
+
+def _cheieServiciu(ref):
+	f = getattr(ref, "toCompareString", None) or getattr(ref, "toString", None)
+	try:
+		return f() if callable(f) else ""
+	except Exception:
+		return ""
+
+
+def _numeServiciu(ref, centru):
+	nume = ""
+	try:
+		nume = ref.getName() or ""
+		if not nume:
+			info = centru.info(ref)
+			nume = (info.getName(ref) if info is not None else "") or ""
+	except Exception:
+		pass
+	# semnele de evidentiere din numele de canal (0x86/0x87, in UTF-8 C2 86 / C2 87)
+	for semn in ("\xc2\x86", "\xc2\x87", "\x86", "\x87"):
+		nume = nume.replace(semn, "")
+	return " ".join(nume.split())
+
+
+def _randuriServicii(nume, comp):
+	"""Lista de canale sau de buchete (Components/ServiceList: eListbox cu eListboxServiceContent, fara lista Python):
+	numele din radacina ei, cu randul ales, fara referinte. Lista de canale nu e privata; ecranele modulelor de acces,
+	parolele si celelalte raman private (ecranPrivat). None cand comp nu e o lista de servicii."""
+	f = getattr(comp, "getRootServices", None)
+	if not callable(f) or not callable(getattr(comp, "getCurrent", None)):
+		return None
+	try:
+		from enigma import eServiceCenter, eServiceReference
+		centru = eServiceCenter.getInstance()
+		refs = [eServiceReference(s) for s in f()]
+		curent = comp.getCurrent()
+		ales_cheie = _cheieServiciu(curent) if curent is not None and curent.valid() else ""
+	except Exception as e:
+		_jurnal("lista de canale: %s" % e)
+		return None
+	randuri = []
+	ales = None
+	for ref in refs:
+		flags = getattr(ref, "flags", 0) or 0
+		if flags & _FLAG_ASCUNS:
+			continue
+		n = _numeServiciu(ref, centru) or "(fără nume)"
+		if flags & _FLAG_MARCAJ:
+			n = "--- %s ---" % n
+		elif (flags & _FLAG_DOSAR) == _FLAG_DOSAR:
+			n += " (buchet)"
+		if ales is None and ales_cheie and _cheieServiciu(ref) == ales_cheie:
+			ales = len(randuri)
+		randuri.append(n)
+	if not randuri:
+		return ['Lista "%s": goală' % nume]
+	n = len(randuri)
+	inceput = 0
+	if ales is not None and ales >= RANDURI_LISTA // 3:
+		inceput = max(0, min(ales - RANDURI_LISTA // 3, n - RANDURI_LISTA))
+	sfarsit = min(n, inceput + RANDURI_LISTA)
+	rez = ['Lista "%s" (rândul %s din %d):' % (nume, (ales + 1) if ales is not None else "?", n)]
+	for i in range(inceput, sfarsit):
+		rez.append("%s [%d] %s" % (">" if i == ales else " ", i + 1, randuri[i]))
+	if sfarsit < n:
+		rez.append("  ... încă %d rânduri" % (n - sfarsit))
+	return rez
+
+
 def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	"""Textul ecranului de sus, pentru echipa: stiva (clasele si titlurile), listele cu randul ales, setarile
 	"eticheta = valoare", textele si tastele colorate. Ecran privat: numai "(ecran privat)" si clasele."""
@@ -370,6 +444,8 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 		if nume == "Title":
 			continue
 		r = _randuriLista(nume, comp)
+		if r is None:
+			r = _randuriServicii(nume, comp)
 		if r is not None:
 			liste.extend(r)
 			continue

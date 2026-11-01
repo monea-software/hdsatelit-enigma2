@@ -1279,7 +1279,7 @@ def gen_buchete_raspuns(argumente_, M=None):
 # se folosesc mai rar; Favorite la urma; la fel la radio:
 # "Toate canalele", buchetele omului, posturile din satelit ale releelor (DVB-T2, DAB+), Favorite. Numai ordinea din
 # pagina: bouquets.tv / bouquets.radio raman neatinse, deci numerele telecomenzii de pe televizor nu se schimba.
-BUCHETE_RELEE = ("userbouquet.hds_t2.tv", "userbouquet.hds_dab.radio")
+BUCHETE_RELEE = ("userbouquet.hds_t2.tv", "userbouquet.hds_abertis.tv", "userbouquet.hds_dab.radio")
 
 
 def ordineWeb(buchete, toate):

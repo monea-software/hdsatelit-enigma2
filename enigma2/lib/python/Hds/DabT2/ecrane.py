@@ -50,6 +50,8 @@ def text_stare(feed, scurt=False, tp=None):
         return _('In zona testata nu era semnal (antena 90 cm); poate merge in alte zone')
     if stare == 'nu_se_decodeaza':
         return _('Nu se decodeaza')
+    if stare == 'criptat' or str((feed or {}).get('acces') or '').upper() == 'BISS':
+        return _('Criptat (BISS)')
     return ''
 
 

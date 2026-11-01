@@ -100,6 +100,9 @@ def compune(tip_plugin, sref, feed, tp, sid=None, post=None, releu=None, semnal=
         rez['tip'] = 'T2-MI'
         rez['sursa'] = 'HDSatelit T2-MI'
         rez['t2'] = {'plp_id': _int(feed.get('plp')), 't2mi_pid': _int(feed.get('pid'))}
+        if fel == 'abertis':
+            # bara canalului scrie „DVB-T” si PID-ul (Components/Converter/HdsInfo._t2_name), nu „DVB-T2” si PLP-ul
+            rez['t2']['fel'] = 'abertis'
     return rez
 
 

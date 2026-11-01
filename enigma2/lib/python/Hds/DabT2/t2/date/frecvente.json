@@ -1,6 +1,6 @@
 {
  "versiune": 1,
- "actualizat": "2026-09-14",
+ "actualizat": "2026-10-29",
  "transpondere": [
   {
    "id": "p390_11760h",
@@ -805,6 +805,1712 @@
    ]
   },
   {
+   "id": "p3300_11222h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11222000,
+   "pol": "H",
+   "sr": 30000000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11222h_ab2025",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2025,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Extremadura (Abertis 2025, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Extremadura, RNE Radio 1 Extremadura, RNE Radio 5 Extremadura",
+     "purtator": {
+      "sid": 3025,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 504,
+       "nume": "TVE La 1 Extremadura (BISS)",
+       "tip": 25,
+       "tsid": 1109,
+       "onid": 8916
+      },
+      {
+       "sid": 505,
+       "nume": "RNE Radio 1 Extremadura (BISS)",
+       "tip": 2,
+       "tsid": 1109,
+       "onid": 8916
+      },
+      {
+       "sid": 506,
+       "nume": "RNE Radio 5 Extremadura (BISS)",
+       "tip": 2,
+       "tsid": 1109,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm",
+     "stare_verificare": "criptat"
+    },
+    {
+     "id": "p3300_11222h_ab2026",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2026,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE La Rioja (Abertis 2026, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 La Rioja, RNE Radio 1 La Rioja, RNE Radio 5 La Rioja",
+     "purtator": {
+      "sid": 3026,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 524,
+       "nume": "TVE La 1 La Rioja (BISS)",
+       "tip": 25,
+       "tsid": 1011,
+       "onid": 8916
+      },
+      {
+       "sid": 525,
+       "nume": "RNE Radio 1 La Rioja (BISS)",
+       "tip": 2,
+       "tsid": 1011,
+       "onid": 8916
+      },
+      {
+       "sid": 526,
+       "nume": "RNE Radio 5 La Rioja (BISS)",
+       "tip": 2,
+       "tsid": 1011,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11222h_ab2027",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2027,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Murcia (Abertis 2027, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Murcia, RNE Radio 1 Murcia, RNE Radio 5 Murcia",
+     "purtator": {
+      "sid": 3027,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 544,
+       "nume": "TVE La 1 Murcia (BISS)",
+       "tip": 25,
+       "tsid": 1013,
+       "onid": 8916
+      },
+      {
+       "sid": 545,
+       "nume": "RNE Radio 1 Murcia (BISS)",
+       "tip": 2,
+       "tsid": 1013,
+       "onid": 8916
+      },
+      {
+       "sid": 546,
+       "nume": "RNE Radio 5 Murcia (BISS)",
+       "tip": 2,
+       "tsid": 1013,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11222h_ab2028",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2028,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Valencia (Abertis 2028, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Valencia, RNE Radio 1 Valencia, RNE Radio 5 Valencia",
+     "purtator": {
+      "sid": 3028,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 574,
+       "nume": "TVE La 1 Valencia (BISS)",
+       "tip": 25,
+       "tsid": 1016,
+       "onid": 8916
+      },
+      {
+       "sid": 575,
+       "nume": "RNE Radio 1 Valencia (BISS)",
+       "tip": 2,
+       "tsid": 1016,
+       "onid": 8916
+      },
+      {
+       "sid": 576,
+       "nume": "RNE Radio 5 Valencia (BISS)",
+       "tip": 2,
+       "tsid": 1016,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11222h_ab2050",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2050,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Nac (Abertis 2050, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Teledeporte, TVE La 2, Canal 24 Horas, Radio 4 RNE",
+     "purtator": {
+      "sid": 3050,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 380,
+       "nume": "Teledeporte (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 388,
+       "nume": "TVE La 2 (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 383,
+       "nume": "Canal 24 Horas (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 387,
+       "nume": "Radio 4 RNE (BISS)",
+       "tip": 2,
+       "tsid": 1051,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm",
+     "stare_verificare": "criptat"
+    },
+    {
+     "id": "p3300_11222h_ab2060",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2060,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RTVE/SAPEC (Abertis 2060, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "24hHD HEVC Sat, La1HD HEVC Sat, La2HD HEVC Sat",
+     "purtator": {
+      "sid": 3060,
+      "tsid": 60020,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 1,
+       "nume": "24hHD HEVC Sat (BISS)",
+       "tip": 31,
+       "tsid": 1,
+       "onid": 1
+      },
+      {
+       "sid": 534,
+       "nume": "La1HD HEVC Sat (BISS)",
+       "tip": 31,
+       "tsid": 1,
+       "onid": 1
+      },
+      {
+       "sid": 538,
+       "nume": "La2HD HEVC Sat (BISS)",
+       "tip": 31,
+       "tsid": 1,
+       "onid": 1
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    }
+   ],
+   "verificat_pe_receptor": "2026-10-27"
+  },
+  {
+   "id": "p3300_11302h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11302000,
+   "pol": "H",
+   "sr": 30000000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.20",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11302h_ab2270",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2270,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Nac (Abertis 2270, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "tdp HD, 24h HD, La 2 HD",
+     "purtator": {
+      "sid": 3270,
+      "tsid": 60022,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 380,
+       "nume": "tdp HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 383,
+       "nume": "24h HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 388,
+       "nume": "La 2 HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm",
+     "stare_verificare": "criptat"
+    },
+    {
+     "id": "p3300_11302h_ab2271",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2271,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Navarra (Abertis 2271, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Navarra, RNE Radio 1 Navarra, RNE Radio 5 Navarra",
+     "purtator": {
+      "sid": 3271,
+      "tsid": 60022,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 554,
+       "nume": "La 1 HD Navarra (BISS)",
+       "tip": 25,
+       "tsid": 1014,
+       "onid": 8916
+      },
+      {
+       "sid": 555,
+       "nume": "RNE Radio 1 Navarra (BISS)",
+       "tip": 2,
+       "tsid": 1014,
+       "onid": 8916
+      },
+      {
+       "sid": 556,
+       "nume": "RNE Radio 5 Navarra (BISS)",
+       "tip": 2,
+       "tsid": 1014,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11302h_ab2272",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2272,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Asturias (Abertis 2272, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Asturias, RNE Radio 1 Asturias, RNE Radio 5 Asturias",
+     "purtator": {
+      "sid": 3272,
+      "tsid": 60022,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 434,
+       "nume": "La 1 HD Asturias (BISS)",
+       "tip": 25,
+       "tsid": 1002,
+       "onid": 8916
+      },
+      {
+       "sid": 435,
+       "nume": "RNE Radio 1 Asturias (BISS)",
+       "tip": 2,
+       "tsid": 1002,
+       "onid": 8916
+      },
+      {
+       "sid": 436,
+       "nume": "RNE Radio 5 Asturias (BISS)",
+       "tip": 2,
+       "tsid": 1002,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11302h_ab2273",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2273,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Aragon (Abertis 2273, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Aragon, RNE Radio 1 Aragon, RNE Radio 5 Aragon",
+     "purtator": {
+      "sid": 3273,
+      "tsid": 60022,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 424,
+       "nume": "TVE La 1 Aragon (BISS)",
+       "tip": 25,
+       "tsid": 1101,
+       "onid": 8916
+      },
+      {
+       "sid": 425,
+       "nume": "RNE Radio 1 Aragon (BISS)",
+       "tip": 2,
+       "tsid": 1101,
+       "onid": 8916
+      },
+      {
+       "sid": 426,
+       "nume": "RNE Radio 5 Aragon (BISS)",
+       "tip": 2,
+       "tsid": 1101,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11302h_ab2274",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2274,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Cantabria (Abertis 2274, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Cantabria, RNE Radio 1 Cantabria, RNE Radio 5 Cantabria",
+     "purtator": {
+      "sid": 3274,
+      "tsid": 60022,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 474,
+       "nume": "TVE La 1 Cantabria (BISS)",
+       "tip": 25,
+       "tsid": 1006,
+       "onid": 8916
+      },
+      {
+       "sid": 475,
+       "nume": "RNE Radio 1 Cantabria (BISS)",
+       "tip": 2,
+       "tsid": 1006,
+       "onid": 8916
+      },
+      {
+       "sid": 476,
+       "nume": "RNE Radio 5 Cantabria (BISS)",
+       "tip": 2,
+       "tsid": 1006,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    }
+   ],
+   "verificat_pe_receptor": "2026-10-27"
+  },
+  {
+   "id": "p3300_11347h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11347490,
+   "pol": "H",
+   "sr": 20858000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.20",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11347h_ab2302",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2302,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "TDT Extremadura (Abertis 2302, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Canal Extremadura TV, Canal Extremadura Radio",
+     "purtator": {
+      "sid": 3302,
+      "tsid": 60023,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 10680,
+       "nume": "Canal Extremadura TV (BISS)",
+       "tip": 25,
+       "tsid": 1009,
+       "onid": 8916
+      },
+      {
+       "sid": 10682,
+       "nume": "Canal Extremadura Radio (BISS)",
+       "tip": 2,
+       "tsid": 1009,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11347h_ab2303",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2303,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "TPA (Abertis 2303, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "A7 (Televisión del Principáu d'Asturies 7)",
+     "purtator": {
+      "sid": 3303,
+      "tsid": 60023,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 10220,
+       "nume": "A7 (Televisión del Principáu d'Asturies 7) (BISS)",
+       "tip": 1,
+       "tsid": 5200,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11347h_ab2305",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2305,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "Abertis Telecom (Abertis 2305, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVG (Televisión de Galicia)",
+     "purtator": {
+      "sid": 3305,
+      "tsid": 60023,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 1,
+       "nume": "TVG (Televisión de Galicia) (BISS)",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 1
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11347h_ab2306",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2306,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "TDT.Envio SAT (Abertis 2306, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "CyL7 (Castilla y León TV7)",
+     "purtator": {
+      "sid": 3306,
+      "tsid": 60023,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 2,
+       "nume": "CyL7 (Castilla y León TV7) (BISS)",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 1
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11347h_ab2308",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2308,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "Televisió de Catalunya (Abertis 2308, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "SX3/33, 3Cat Info, Esport 3, TV3 Catalunya, IB3 Global, Catalunya Ràdio, Catalunya Informacio, Catalunya Musica, ICat Catalunya",
+     "purtator": {
+      "sid": 3308,
+      "tsid": 60023,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 806,
+       "nume": "SX3/33 (BISS)",
+       "tip": 25,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 807,
+       "nume": "3Cat Info (BISS)",
+       "tip": 25,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 808,
+       "nume": "Esport 3 (BISS)",
+       "tip": 25,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 813,
+       "nume": "TV3 Catalunya (BISS)",
+       "tip": 25,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 815,
+       "nume": "IB3 Global (BISS)",
+       "tip": 25,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 809,
+       "nume": "Catalunya Ràdio (BISS)",
+       "tip": 2,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 810,
+       "nume": "Catalunya Informacio (BISS)",
+       "tip": 2,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 811,
+       "nume": "Catalunya Musica (BISS)",
+       "tip": 2,
+       "tsid": 101,
+       "onid": 8916
+      },
+      {
+       "sid": 812,
+       "nume": "ICat Catalunya (BISS)",
+       "tip": 2,
+       "tsid": 101,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    }
+   ],
+   "verificat_pe_receptor": "2026-10-27"
+  },
+  {
+   "id": "p3300_11382h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11382000,
+   "pol": "H",
+   "sr": 30000000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11382h_ab2520",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2520,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE N/Ac (Abertis 2520, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Teledeporte, Canal 24 Horas, RNE Radio 4",
+     "purtator": {
+      "sid": 3520,
+      "tsid": 60025,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 380,
+       "nume": "Teledeporte (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 383,
+       "nume": "Canal 24 Horas (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 387,
+       "nume": "RNE Radio 4 (BISS)",
+       "tip": 2,
+       "tsid": 1051,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm",
+     "stare_verificare": "criptat"
+    },
+    {
+     "id": "p3300_11382h_ab2521",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2521,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Baleares (Abertis 2521, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Baleares, La 2 HD Baleares, RNE Radio 1 Baleares, RNE Radio 5 Baleares",
+     "purtator": {
+      "sid": 3521,
+      "tsid": 60025,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 444,
+       "nume": "La 1 HD Baleares (BISS)",
+       "tip": 25,
+       "tsid": 1003,
+       "onid": 8916
+      },
+      {
+       "sid": 448,
+       "nume": "La 2 HD Baleares (BISS)",
+       "tip": 25,
+       "tsid": 1003,
+       "onid": 8916
+      },
+      {
+       "sid": 445,
+       "nume": "RNE Radio 1 Baleares (BISS)",
+       "tip": 2,
+       "tsid": 1003,
+       "onid": 8916
+      },
+      {
+       "sid": 446,
+       "nume": "RNE Radio 5 Baleares (BISS)",
+       "tip": 2,
+       "tsid": 1003,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11382h_ab2522",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2522,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Castilla La Mancha (Abertis 2522, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Castilla La Mancha, La 2 HD Castilla La Mancha, RNE Radio 1 Castilla La Mancha, RNE Radio 5 Castilla La Mancha",
+     "purtator": {
+      "sid": 3522,
+      "tsid": 60025,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 464,
+       "nume": "La 1 HD Castilla La Mancha (BISS)",
+       "tip": 25,
+       "tsid": 1005,
+       "onid": 8916
+      },
+      {
+       "sid": 468,
+       "nume": "La 2 HD Castilla La Mancha (BISS)",
+       "tip": 25,
+       "tsid": 1005,
+       "onid": 8916
+      },
+      {
+       "sid": 465,
+       "nume": "RNE Radio 1 Castilla La Mancha (BISS)",
+       "tip": 2,
+       "tsid": 1005,
+       "onid": 8916
+      },
+      {
+       "sid": 466,
+       "nume": "RNE Radio 5 Castilla La Mancha (BISS)",
+       "tip": 2,
+       "tsid": 1005,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11382h_ab2523",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2523,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Andalucia (Abertis 2523, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Andalucia, La 2 HD Andalucia, RNE Radio 1 Andalucia, RNE Radio 5 Andalucia",
+     "purtator": {
+      "sid": 3523,
+      "tsid": 60025,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 414,
+       "nume": "La 1 HD Andalucia (BISS)",
+       "tip": 25,
+       "tsid": 1000,
+       "onid": 8916
+      },
+      {
+       "sid": 418,
+       "nume": "La 2 HD Andalucia (BISS)",
+       "tip": 25,
+       "tsid": 1000,
+       "onid": 8916
+      },
+      {
+       "sid": 415,
+       "nume": "RNE Radio 1 Andalucia (BISS)",
+       "tip": 2,
+       "tsid": 1000,
+       "onid": 8916
+      },
+      {
+       "sid": 416,
+       "nume": "RNE Radio 5 Andalucia (BISS)",
+       "tip": 2,
+       "tsid": 1000,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_11382h_ab2524",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 2524,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Castilla y Leon (Abertis 2524, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Castilla y Leon, La 2 HD Castilla y Leon, RNE Radio 1 Castilla y Leon, RNE Radio 5 Castilla y Leon",
+     "purtator": {
+      "sid": 3524,
+      "tsid": 60025,
+      "onid": 1
+     },
+     "programe": [
+      {
+       "sid": 454,
+       "nume": "La 1 HD Castilla y Leon (BISS)",
+       "tip": 25,
+       "tsid": 1004,
+       "onid": 8916
+      },
+      {
+       "sid": 458,
+       "nume": "La 2 HD Castilla y Leon (BISS)",
+       "tip": 25,
+       "tsid": 1004,
+       "onid": 8916
+      },
+      {
+       "sid": 455,
+       "nume": "RNE Radio 1 Castilla y Leon (BISS)",
+       "tip": 2,
+       "tsid": 1004,
+       "onid": 8916
+      },
+      {
+       "sid": 456,
+       "nume": "RNE Radio 5 Castilla y Leon (BISS)",
+       "tip": 2,
+       "tsid": 1004,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "antena_verificare": "90 cm"
+    }
+   ],
+   "verificat_pe_receptor": "2026-10-27"
+  },
+  {
+   "id": "p3300_11502v",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11502120,
+   "pol": "V",
+   "sr": 10200000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11502v_ab801",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 801,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "Asturias TDT (Abertis 801, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "A7 (Televisión del Principáu d'Asturies 7), A8 (Televisión del Principáu d'Asturies 8), Radio Langreo, Radio RPA",
+     "purtator": {
+      "sid": 1801,
+      "tsid": 60028,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 10220,
+       "nume": "A7 (Televisión del Principáu d'Asturies 7) (BISS)",
+       "tip": 25,
+       "tsid": 5200,
+       "onid": 8916
+      },
+      {
+       "sid": 10225,
+       "nume": "A8 (Televisión del Principáu d'Asturies 8) (BISS)",
+       "tip": 25,
+       "tsid": 5200,
+       "onid": 8916
+      },
+      {
+       "sid": 10234,
+       "nume": "Radio Langreo (BISS)",
+       "tip": 2,
+       "tsid": 5200,
+       "onid": 8916
+      },
+      {
+       "sid": 10235,
+       "nume": "Radio RPA (BISS)",
+       "tip": 2,
+       "tsid": 5200,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    }
+   ]
+  },
+  {
+   "id": "p3300_11653h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11653100,
+   "pol": "H",
+   "sr": 19680000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11653h_ab301",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 301,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Canarias (Abertis 301, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Teledeporte Canarias, Canal 24 Horas Canarias, La 1 HD Canarias, La 2 HD Canarias, RNE Radio 4 Canarias, RNE Radio 1 Canarias, RNE Radio 5 Tenerife, RNE Radio 5 Las Palmas",
+     "purtator": {
+      "sid": 1301,
+      "tsid": 60003,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 480,
+       "nume": "Teledeporte Canarias (BISS)",
+       "tip": 25,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 483,
+       "nume": "Canal 24 Horas Canarias (BISS)",
+       "tip": 25,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 484,
+       "nume": "La 1 HD Canarias (BISS)",
+       "tip": 25,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 488,
+       "nume": "La 2 HD Canarias (BISS)",
+       "tip": 25,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 482,
+       "nume": "RNE Radio 4 Canarias (BISS)",
+       "tip": 2,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 485,
+       "nume": "RNE Radio 1 Canarias (BISS)",
+       "tip": 2,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 486,
+       "nume": "RNE Radio 5 Tenerife (BISS)",
+       "tip": 2,
+       "tsid": 1007,
+       "onid": 8916
+      },
+      {
+       "sid": 487,
+       "nume": "RNE Radio 5 Las Palmas (BISS)",
+       "tip": 2,
+       "tsid": 1007,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_11653h_ab303",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 303,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE2 (Abertis 303, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Antena 3, La Sexta, Neox, Nova",
+     "purtator": {
+      "sid": 1303,
+      "tsid": 60003,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 149,
+       "nume": "Antena 3 (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 151,
+       "nume": "La Sexta (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 153,
+       "nume": "Neox (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 154,
+       "nume": "Nova (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    }
+   ]
+  },
+  {
+   "id": "p3300_11674h",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 11674850,
+   "pol": "H",
+   "sr": 15750000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_11674h_ab420",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 420,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Nac (Abertis 420, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TDP HD, 24h HD, La 2 HD, Radio 4 RNE",
+     "purtator": {
+      "sid": 1420,
+      "tsid": 60004,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 380,
+       "nume": "TDP HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 383,
+       "nume": "24h HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 388,
+       "nume": "La 2 HD (BISS)",
+       "tip": 25,
+       "tsid": 1051,
+       "onid": 8916
+      },
+      {
+       "sid": 387,
+       "nume": "Radio 4 RNE (BISS)",
+       "tip": 2,
+       "tsid": 1051,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_11674h_ab421",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 421,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Pais Vasco (Abertis 421, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "La 1 HD Pais Vasco, RNE Radio 1 Pais Vasco, RNE Radio 5 Pais Vasco",
+     "purtator": {
+      "sid": 1421,
+      "tsid": 60004,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 564,
+       "nume": "La 1 HD Pais Vasco (BISS)",
+       "tip": 25,
+       "tsid": 1015,
+       "onid": 8916
+      },
+      {
+       "sid": 565,
+       "nume": "RNE Radio 1 Pais Vasco (BISS)",
+       "tip": 2,
+       "tsid": 1015,
+       "onid": 8916
+      },
+      {
+       "sid": 566,
+       "nume": "RNE Radio 5 Pais Vasco (BISS)",
+       "tip": 2,
+       "tsid": 1015,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_11674h_ab423",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 423,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Galicia (Abertis 423, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TVE La 1 Galicia, RNE Radio 1 Galicia, RNE Radio 5 Galicia",
+     "purtator": {
+      "sid": 1423,
+      "tsid": 60004,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 514,
+       "nume": "TVE La 1 Galicia (BISS)",
+       "tip": 25,
+       "tsid": 1010,
+       "onid": 8916
+      },
+      {
+       "sid": 515,
+       "nume": "RNE Radio 1 Galicia (BISS)",
+       "tip": 2,
+       "tsid": 1010,
+       "onid": 8916
+      },
+      {
+       "sid": 516,
+       "nume": "RNE Radio 5 Galicia (BISS)",
+       "tip": 2,
+       "tsid": 1010,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    }
+   ]
+  },
+  {
+   "id": "p3300_12548v",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 12548500,
+   "pol": "V",
+   "sr": 29600000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_12548v_ab701",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 701,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE1 (Abertis 701, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Squirrel, Squirrel 2, DMAX, VEO7, Radio Marca, Cadena 100, Radio María España, BOM Radio",
+     "purtator": {
+      "sid": 1701,
+      "tsid": 60007,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 201,
+       "nume": "Squirrel (BISS)",
+       "tip": 25,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 202,
+       "nume": "Squirrel 2 (BISS)",
+       "tip": 25,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 277,
+       "nume": "DMAX (BISS)",
+       "tip": 25,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 278,
+       "nume": "VEO7 (BISS)",
+       "tip": 25,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 280,
+       "nume": "Radio Marca (BISS)",
+       "tip": 2,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 282,
+       "nume": "Cadena 100 (BISS)",
+       "tip": 2,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 283,
+       "nume": "Radio María España (BISS)",
+       "tip": 2,
+       "tsid": 14,
+       "onid": 8916
+      },
+      {
+       "sid": 306,
+       "nume": "BOM Radio (BISS)",
+       "tip": 2,
+       "tsid": 14,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_12548v_ab702",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 702,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE2 (Abertis 702, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Antena 3, La Sexta, Neox, Nova",
+     "purtator": {
+      "sid": 1702,
+      "tsid": 60007,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 149,
+       "nume": "Antena 3 (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 151,
+       "nume": "La Sexta (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 153,
+       "nume": "Neox (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      },
+      {
+       "sid": 154,
+       "nume": "Nova (BISS)",
+       "tip": 25,
+       "tsid": 15,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_12548v_ab703",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 703,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE3 (Abertis 703, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "FDF, Divinity, Telecinco HD, Cuatro HD",
+     "purtator": {
+      "sid": 1703,
+      "tsid": 60007,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 188,
+       "nume": "FDF (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 189,
+       "nume": "Divinity (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 190,
+       "nume": "Telecinco HD (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 191,
+       "nume": "Cuatro HD (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    }
+   ]
+  },
+  {
+   "id": "p3300_12583v",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 12583140,
+   "pol": "V",
+   "sr": 16900000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_12583v_ab8008",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8008,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE2 (Abertis 8008, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Clan HD, La 1 UHD, DKISS, Radio Clasica HQ RNE, Radio3 HQ RNE, Radio Exterior RNE, Kiss FM, Hit FM, esRadio, Cadena SER, Los 40, Cadéna Dial",
+     "purtator": {
+      "sid": 1008,
+      "tsid": 60008,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 40001,
+       "nume": "Clan HD (BISS)",
+       "tip": 25,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 40003,
+       "nume": "La 1 UHD (BISS)",
+       "tip": 31,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41001,
+       "nume": "DKISS (BISS)",
+       "tip": 25,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 40005,
+       "nume": "Radio Clasica HQ RNE (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 40006,
+       "nume": "Radio3 HQ RNE (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 40007,
+       "nume": "Radio Exterior RNE (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41002,
+       "nume": "Kiss FM (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41003,
+       "nume": "Hit FM (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41004,
+       "nume": "esRadio (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41005,
+       "nume": "Cadena SER (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41006,
+       "nume": "Los 40 (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      },
+      {
+       "sid": 41007,
+       "nume": "Cadéna Dial (BISS)",
+       "tip": 2,
+       "tsid": 40000,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    }
+   ]
+  },
+  {
    "id": "p3300_12631v",
    "pozitie": 3300,
    "satelit": "Hispasat 30W",
@@ -816,10 +2522,85 @@
    "sistem": "DVB-S2",
    "modulatie": "8PSK",
    "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
    "acces": "FTA",
-   "confirmat": "2026-10-27",
-   "verificat_pe_receptor": "2026-10-27",
+   "confirmat": "2026-10-29",
    "feeduri": [
+    {
+     "id": "p3300_12631v_ab8001",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8001,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Madrid (Abertis 8001, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TDP HD Madrid, 24h HD Madrid, La 1 HD Madrid, La 2 HD Madrid, RNE Radio Nacional de España, RNE Radio 5, RNE Radio 4",
+     "purtator": {
+      "sid": 1001,
+      "tsid": 60002,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 530,
+       "nume": "TDP HD Madrid (BISS)",
+       "tip": 25,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 533,
+       "nume": "24h HD Madrid (BISS)",
+       "tip": 25,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 534,
+       "nume": "La 1 HD Madrid (BISS)",
+       "tip": 25,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 538,
+       "nume": "La 2 HD Madrid (BISS)",
+       "tip": 25,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 535,
+       "nume": "RNE Radio Nacional de España (BISS)",
+       "tip": 2,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 536,
+       "nume": "RNE Radio 5 (BISS)",
+       "tip": 2,
+       "tsid": 1012,
+       "onid": 8916
+      },
+      {
+       "sid": 537,
+       "nume": "RNE Radio 4 (BISS)",
+       "tip": 2,
+       "tsid": 1012,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "stare_verificare": "fara_semnal_in_zona_testata",
+     "antena_verificare": "90 cm"
+    },
     {
      "id": "p3300_12631v_ab8002",
      "tip": "t2",
@@ -827,14 +2608,367 @@
      "pid": 8002,
      "pid_sigur": true,
      "plp": null,
-     "nume": "Telemadrid (Abertis)",
+     "nume": "Telemadrid (Abertis 8002)",
      "tara": "Spania",
      "acces": "FTA",
-     "canale": "Telemadrid HDR (UHD, HEVC), BOM (HD), Telemadrid HD, LA OTRA HD, Onda Madrid (radio)",
-     "confirmat": "2026-10-27",
+     "canale": "Telemadrid HDR, BOM, Telemadrid HD, LA OTRA HD, ONDA MADRID",
+     "purtator": {
+      "sid": 1002,
+      "tsid": 60002,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 421,
+       "nume": "Telemadrid HDR",
+       "tip": 31
+      },
+      {
+       "sid": 423,
+       "nume": "BOM",
+       "tip": 25
+      },
+      {
+       "sid": 425,
+       "nume": "Telemadrid HD",
+       "tip": 25
+      },
+      {
+       "sid": 15240,
+       "nume": "LA OTRA HD",
+       "tip": 25
+      },
+      {
+       "sid": 10068,
+       "nume": "ONDA MADRID",
+       "tip": 2
+      }
+     ],
+     "confirmat": "2026-10-29",
      "verificat_pe_receptor": "2026-10-27",
      "stare_verificare": "fara_semnal_in_zona_testata",
      "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p3300_12631v_ab8003",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8003,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE4 (Abertis 8003, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "Mega España, Trece España, Energy España, Boing España, Onda Cero, Europa FM España, Melodía FM, COPE Radio, Rock FM Definitivo",
+     "purtator": {
+      "sid": 1003,
+      "tsid": 60002,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 155,
+       "nume": "Mega España (BISS)",
+       "tip": 25,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 170,
+       "nume": "Trece España (BISS)",
+       "tip": 25,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 192,
+       "nume": "Energy España (BISS)",
+       "tip": 25,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 193,
+       "nume": "Boing España (BISS)",
+       "tip": 25,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 156,
+       "nume": "Onda Cero (BISS)",
+       "tip": 2,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 157,
+       "nume": "Europa FM España (BISS)",
+       "tip": 2,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 158,
+       "nume": "Melodía FM (BISS)",
+       "tip": 2,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 171,
+       "nume": "COPE Radio (BISS)",
+       "tip": 2,
+       "tsid": 17,
+       "onid": 8916
+      },
+      {
+       "sid": 172,
+       "nume": "Rock FM Definitivo (BISS)",
+       "tip": 2,
+       "tsid": 17,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29",
+     "verificat_pe_receptor": "2026-10-27",
+     "stare_verificare": "fara_semnal_in_zona_testata",
+     "antena_verificare": "90 cm"
+    }
+   ],
+   "verificat_pe_receptor": "2026-10-27"
+  },
+  {
+   "id": "p3300_12671v",
+   "pozitie": 3300,
+   "satelit": "Hispasat 30W",
+   "fascicul": "Europe",
+   "banda": "Ku",
+   "frecventa": 12671000,
+   "pol": "V",
+   "sr": 30000000,
+   "sistem": "DVB-S2",
+   "modulatie": "8PSK",
+   "fec": "3/4",
+   "is_id": null,
+   "pls_cod": null,
+   "pls_mod": null,
+   "rolloff": "0.35",
+   "acces": "BISS",
+   "confirmat": "2026-10-29",
+   "feeduri": [
+    {
+     "id": "p3300_12671v_ab8000",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8000,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "Cellnex (Abertis 8000, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "ALERTA",
+     "purtator": {
+      "sid": 1000,
+      "tsid": 60001,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 110,
+       "nume": "ALERTA (BISS)",
+       "tip": 1,
+       "tsid": 1,
+       "onid": 1
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_12671v_ab8004",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8004,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE5 (Abertis 8004, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "A3Series, BeMad tv HD, Realmadrid TV HD, TEN, LOS40 Classic, LOS40 Urban, Radiolé",
+     "purtator": {
+      "sid": 1004,
+      "tsid": 60001,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 101,
+       "nume": "A3Series (BISS)",
+       "tip": 25,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 102,
+       "nume": "BeMad tv HD (BISS)",
+       "tip": 25,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 103,
+       "nume": "Realmadrid TV HD (BISS)",
+       "tip": 25,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 104,
+       "nume": "TEN (BISS)",
+       "tip": 25,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 105,
+       "nume": "LOS40 Classic (BISS)",
+       "tip": 2,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 106,
+       "nume": "LOS40 Urban (BISS)",
+       "tip": 2,
+       "tsid": 18,
+       "onid": 8916
+      },
+      {
+       "sid": 107,
+       "nume": "Radiolé (BISS)",
+       "tip": 2,
+       "tsid": 18,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_12671v_ab8005",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8005,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "MPE3 (Abertis 8005, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "FDF, Divinity, Telecinco HD, Cuatro HD",
+     "purtator": {
+      "sid": 1005,
+      "tsid": 60001,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 188,
+       "nume": "FDF (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 189,
+       "nume": "Divinity (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 190,
+       "nume": "Telecinco HD (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      },
+      {
+       "sid": 191,
+       "nume": "Cuatro HD (BISS)",
+       "tip": 25,
+       "tsid": 16,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
+    },
+    {
+     "id": "p3300_12671v_ab8006",
+     "tip": "t2",
+     "fel": "abertis",
+     "pid": 8006,
+     "pid_sigur": true,
+     "plp": null,
+     "nume": "RGE Catalunya (Abertis 8006, BISS)",
+     "tara": "Spania",
+     "acces": "BISS",
+     "canale": "TDP HD Cataluña, 24h HD Cataluña, La 1 HD Cataluña, La 2 HD Cataluña, RNE Radio 1 Cataluña, RNE Radio 5 Cataluña, RNE Radio 4 Cataluña",
+     "purtator": {
+      "sid": 1006,
+      "tsid": 60001,
+      "onid": 0
+     },
+     "programe": [
+      {
+       "sid": 490,
+       "nume": "TDP HD Cataluña (BISS)",
+       "tip": 25,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 493,
+       "nume": "24h HD Cataluña (BISS)",
+       "tip": 25,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 494,
+       "nume": "La 1 HD Cataluña (BISS)",
+       "tip": 25,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 498,
+       "nume": "La 2 HD Cataluña (BISS)",
+       "tip": 25,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 495,
+       "nume": "RNE Radio 1 Cataluña (BISS)",
+       "tip": 2,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 496,
+       "nume": "RNE Radio 5 Cataluña (BISS)",
+       "tip": 2,
+       "tsid": 1008,
+       "onid": 8916
+      },
+      {
+       "sid": 497,
+       "nume": "RNE Radio 4 Cataluña (BISS)",
+       "tip": 2,
+       "tsid": 1008,
+       "onid": 8916
+      }
+     ],
+     "confirmat": "2026-10-29"
     }
    ]
   }

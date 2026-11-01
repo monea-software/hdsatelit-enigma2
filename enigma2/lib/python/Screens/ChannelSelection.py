@@ -1195,7 +1195,7 @@ class ChannelSelectionBase(Screen):
 		self["key_yellow"] = Button(_("Provider"))
 		self["key_blue"] = Button(hdsEtichetaBuchete())
 		# HDSatelit: cautarea de canale (Screens/HdsCautareCanale.py), in bara de jos a skinului HDSatelit
-		self["key_text"] = StaticText("TEXT  Căutare")
+		self["key_text"] = StaticText("TEXT  " + _("Căutare"))
 		self["HdsCautareActions"] = ActionMap(["HdsCautareActions"],
 			{
 				"cautare": self.hdsCautare,

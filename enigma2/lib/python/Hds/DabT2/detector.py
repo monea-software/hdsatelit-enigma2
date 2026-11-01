@@ -16,6 +16,12 @@ Standarde: ISO/IEC 13818-1 (PAT, PMT), EN 300 468 (SDT, descriptori, T2MI_descri
 EN 301 192 (datagram_section MPE), TS 102 821 (EDI: PF, AF, TAG), TS 102 693 (deti), EN 300 401 (FIC),
 TS 102 773 (T2-MI: antet 6 octeti + CRC32, pointer la PUSI), EN 300 799 (ETI, FSYNC), ITU-T G.704 (FAS).
 
+TS in PID (fluxurile de distributie de pe 30W, felul abertis): un PID cu stream_type 0x90 intr-un program fara imagine
+si sunet e luat direct drept flux TS in PID, fara proba de sectiuni MPE (nu poarta sectiuni): pe receptor PMT-ul
+ajunge (pachetele vin numai prin 8001, ca la T2-MI), deci feed-ul se confirma la invatarea prin releu; cu pachete TS
+(pe PC) se verifica aici: payload-urile puse cap la cap au 0x47 la fiecare 188 de octeti, sau pachetele au bitii de
+criptare (flux criptat, BISS).
+
 Pe receptor:  python3 detector.py [dab|t2|toate] [timp_max_s]   (tunerul trebuie tinut acordat de altcineva)
 Merge si cu Python 2.7 (imagini vechi): acolo datele se citesc prin bytearray, ca indexul sa dea numere.
 """
@@ -90,6 +96,7 @@ TIP_VIDEO = {0x01, 0x02, 0x10, 0x1B, 0x20, 0x24, 0x42, 0x33}
 TIP_AUDIO = {0x03, 0x04, 0x0F, 0x11, 0x1C, 0x81, 0x87}
 TIP_DSMCC = {0x0A, 0x0B, 0x0C, 0x0D}
 TIP_IGNORAT = {0x86}                    # SCTE-35
+TIP_TS_IN_PID = 0x90                    # PID-ul de date al purtatorilor de pe 30W (un TS terestru intreg in payload)
 # descriptori care arata ca un stream_type 0x06 e sunet, subtitrare, teletext, AIT sau carusel
 DESC_NU_E_AL_NOSTRU = {0x0A, 0x13, 0x14, 0x45, 0x46, 0x56, 0x59, 0x6A, 0x6F, 0x7A, 0x7B, 0x7C}
 EXT_T2MI = 0x11
@@ -584,6 +591,30 @@ def verifica_t2mi(blocuri, pid, max_pachete=4000):
             'tipuri': sorted(tipuri), 'plp_uri': sorted(plp), 't2mi_stream_id': sorted(fluxuri), 'ts': stat}
 
 
+def verifica_ts_in_pid(blocuri, pid, max_pachete=3000):
+    """Payload-urile PID-ului puse cap la cap sunt un TS intreg (0x47 la fiecare 188 de octeti, cel putin 20 de
+    pachete interioare la rand), sau pachetele sunt criptate (bitii TSC: nu se poate citi nimic din ele). -> dict."""
+    stat = {'pachete': 0, 'salturi_cc': 0, 'sincron_pierdut': 0, 'erori_ts': 0, 'criptat': 0}
+    buf = bytearray()
+    for _pusi, sarcina in _sarcini_ts(blocuri, pid, stat):
+        if sarcina is None:
+            continue
+        buf += sarcina
+        if stat['pachete'] >= max_pachete or len(buf) > 188 * 400:
+            break
+    interioare = 0
+    for o in range(0, min(188, len(buf))):
+        n = 0
+        while o + 188 * n < len(buf) and buf[o + 188 * n] == 0x47:
+            n += 1
+        interioare = max(interioare, n)
+        if interioare >= 20:
+            break
+    criptat = stat['pachete'] > 0 and stat['criptat'] * 2 >= stat['pachete']
+    return {'confirmat': interioare >= 20 or (criptat and stat['pachete'] >= 20), 'criptat': criptat,
+            'pachete_interioare': interioare, 'ts': stat}
+
+
 def verifica_eti(blocuri, pid, max_octeti=400000):
     """ETI-NI (FSYNC alternant) sau ETI-NA (FAS G.704 la 64 de octeti), cu 0 sau 12 octeti de umplutura."""
     stat = {'pachete': 0, 'salturi_cc': 0, 'sincron_pierdut': 0, 'erori_ts': 0, 'criptat': 0}
@@ -732,6 +763,7 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
             continue
         if not s[5] & 0x01:
             continue
+        stare['tsid'] = (s[3] << 8) | s[4]
         ultima[0] = s[7]
         vazute.add(s[6])
         pat.update(_pat(s))
@@ -767,11 +799,15 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
             break
 
     # ---- clasificare
-    mpe, private, t2 = [], [], []
+    def fara_imagine_si_sunet(prog):
+        return not any(st in TIP_VIDEO or st in TIP_AUDIO for _p, st in (rez['programe'].get(prog) or {}).get('es', []))
+    mpe, private, t2, tsp = [], [], [], []
     for pid, e in sorted(es_toate.items()):
         st, tg = e['stream_type'], set(e['taguri'])
         if e['t2mi']:
             t2.append((pid, 'T2MI_descriptor in PMT (EN 300 468 6.4.14)'))
+        elif st == TIP_TS_IN_PID and vrea_t2 and not tg & DESC_NU_E_AL_NOSTRU and fara_imagine_si_sunet(e['program']):
+            tsp.append((pid, 'stream_type 0x90 intr-un program fara imagine si sunet (TS in PID)'))
         elif st in TIP_VIDEO or st in TIP_AUDIO or st in TIP_IGNORAT:
             continue
         elif e['dbid'] == DBID_MPE:
@@ -792,13 +828,15 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
         if isinstance(pid, int) and pid not in in_pmt:
             if f.get('fel') == 'edi':
                 mpe.append((pid, 'din lista (nu apare in PMT)'))
+            elif f.get('tip') == 't2' and f.get('fel') == 'abertis':
+                tsp.append((pid, 'din lista (nu apare in PMT)'))
             elif f.get('tip') == 't2':
                 t2.append((pid, 'din lista (nu apare in PMT)'))
             else:
                 private.append((pid, 'din lista (nu apare in PMT)'))
             in_pmt.add(pid)
     if not vrea_t2:
-        t2 = []
+        t2, tsp = [], []
     if not vrea_dab:
         mpe = []                       # PID-urile private se probeaza scurt ca sa fie scoase cele MPE
 
@@ -901,6 +939,33 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
             rez['feeduri'].append(f)
         else:
             rez['alte_ip'].append({'pid': pid, 'ip': ip, 'port': port, 'pachete': pachete, 'octeti': octeti})
+
+    # ---- TS in PID (felul abertis): purtatorul e programul PID-ului (SID-ul lui, tsid-ul din PAT)
+    for idx, (pid, motiv) in enumerate(tsp):
+        prog = nume_program(pid)
+        f = {'id': 'det_ab_%04x' % pid, 'tip': 't2', 'fel': 'abertis', 'pid': pid, 'plp': None,
+             'nume': 'Abertis %d' % pid, 'confirmat': False, 'motiv': motiv, 'program': prog,
+             'cunoscut': dupa_cheie.get((pid,))}
+        if prog:
+            f['purtator'] = {'sid': prog}
+            if stare.get('tsid') is not None:
+                f['purtator']['tsid'] = stare['tsid']
+        if pachete_ts is not None and termen_total - ceas() > 0.3:
+            buget = max(0.3, (termen_total - ceas()) / (len(tsp) - idx))
+            try:
+                v = verifica_ts_in_pid(list(citeste(pachete_ts, pid, termen(min(1.5, buget)))), pid)
+                if v['confirmat']:
+                    f.update(confirmat=True, criptat=v['criptat'],
+                             motiv=motiv + ('; pachete criptate' if v['criptat'] else
+                                            '; TS interior: %d pachete aliniate' % v['pachete_interioare']))
+                    rez['feeduri'].append(f)
+                    continue
+                f['motiv'] += '; TS citit, neconfirmat (%d pachete)' % v['ts']['pachete']
+            except Exception as ex:       # sursa TS poate cadea; detectorul nu
+                f['motiv'] += '; TS indisponibil: %s' % ex.__class__.__name__
+        else:
+            f['motiv'] += '; pe receptor se confirma prin releu (portul 8001)'
+        rez['candidati'].append(f)
 
     # ---- T2-MI si ETI: pe sectiuni nu se vad; confirmare doar din TS
     candidati_ts = [(p, m, 't2') for p, m in t2] + [(p, m, '?') for p, m in fara_sectiuni]
@@ -1079,6 +1144,7 @@ if sys.version_info[0] < 3:
     _pat, _pmt, _sdt = _cu_bytearray(_pat), _cu_bytearray(_pmt), _cu_bytearray(_sdt)
     udp_din_sectiune_mpe = _cu_bytearray(udp_din_sectiune_mpe)
     verifica_t2mi, verifica_eti = _blocuri_bytearray(verifica_t2mi), _blocuri_bytearray(verifica_eti)
+    verifica_ts_in_pid = _blocuri_bytearray(verifica_ts_in_pid)
     _sectiune_valida_3 = sectiune_valida
 
     def sectiune_valida(s):

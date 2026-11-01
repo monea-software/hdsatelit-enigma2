@@ -2002,6 +2002,11 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/dabt2-seteaza?cheie=tasta|dosar|latime|nedecodabile&amp;valoare=..</code>: setările ferestrei, aceleași ca pe televizor</li>
   <li><code>POST /api/dabt2-manual?fel=dab|t2&amp;nume=..&amp;grade=..&amp;emisfera=E|V&amp;frecventa=..&amp;...</code>: un flux adăugat de mână, cu aceleași câmpuri și limite ca „Adaugă manual”</li>
   <li><code>POST /api/dabt2-televizor?fel=dab|t2</code>: deschide fereastra pe televizor</li>
+  <li><code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire</li>
+  <li><code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)</li>
+  <li><code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs</li>
+  <li><code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite</li>
+  <li><code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe</li>
   <li><code>POST /api/scanare-televizor?id=&lt;entryID&gt;</code>: deschide pe televizor ecranul unei intrări din cele două secțiuni</li>
   <li><code>GET /api/antena?lat=&lt;grade&gt;&amp;lon=&lt;grade&gt;</code>: tunerele, LNB-ul, semnalul canalului curent și unghiurile antenei spre fiecare satelit (numai citire)</li>
   <li><code>GET /api/lnb?slot=N</code>: LNB-urile tunerului, cu valorile, alegerile și „Probă de calcul” (numai citire)</li>
@@ -3955,6 +3960,10 @@ def _construiesteResurse():
 	# Fereastra „Fluxuri și setări” (Hds/DabT2/ecrane.EcranPrincipal): fluxurile, actiunile, setarile, Despre.
 	from . import dabt2_web
 	_DABT2, _DABT2_PAGINA = dabt2_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	# ---------------------------------------------------------------- cautarea oarba pe satelit (oarba_web.py)
+	# Aceeasi cautare ca ecranul „Căutare oarbă pe satelit” (Screens/ScanerOarba.py), din Components/HdsCautareOarba.py.
+	from . import oarba_web
+	_OARBA, _OARBA_PAGINA = oarba_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- Parola receptorului (acces_ssh_web.py)
 	# Aceeasi stare si aceleasi comenzi ca ecranul "Parola receptorului" al receptorului (Screens/HdsAccesSsh.py,
 	# Components/HdsAccesSsh.py): parola lui root pentru FTP, SSH si SFTP, cheile SSH, "Fără parolă în rețeaua locală",
@@ -4291,7 +4300,7 @@ def _construiesteResurse():
 			self.putChild(b"locul-internet", _ANTENA[b"locul-internet"])
 			self.putChild(b"locul-internet-stare", _ANTENA[b"locul-internet-stare"])
 			# limbile, telecomenzile, meniul, setarile din setup.xml, informatiile
-			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR):
+			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _OARBA):
 				for nume_ruta, resursa in rute_lot.items():
 					self.putChild(nume_ruta, resursa)
 			self.putChild(b"portal", _PORTAL[b"portal"])
@@ -4357,6 +4366,7 @@ def _construiesteResurse():
 			self.putChild(b"accel", _ACCEL_PAGINA)
 			self.putChild(b"cautare", _CAUTARE_PAGINA)
 			self.putChild(b"dabt2", _DABT2_PAGINA)
+			self.putChild(b"oarba", _OARBA_PAGINA)
 			self.putChild(b"ceas", _CEAS_PAGINA)
 			self.putChild(b"video", _VIDEO_PAGINA)
 			self.putChild(b"sunet", _SUNET_PAGINA)
@@ -5015,6 +5025,17 @@ TEXTE_PAGINA = {
 		N_("<code>POST "
 			"/api/dabt2-manual?fel=dab|t2&amp;nume=..&amp;grade=..&amp;emisfera=E|V&amp;frecventa=..&amp;...</code>: un flux adăugat de mână, cu aceleași câmpuri și limite ca „Adaugă manual”"),
 		N_("<code>POST /api/dabt2-televizor?fel=dab|t2</code>: deschide fereastra pe televizor"),
+		N_("<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile "
+			"(<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării "
+			"(<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, "
+			"<code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"),
+		N_("<code>POST "
+			"/api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: "
+			"pornește căutarea oarbă (pe televizor se deschide ecranul ei)"),
+		N_("<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"),
+		N_("<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi "
+			"găsite"),
+		N_("<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"),
 		N_("<code>POST /api/scanare-televizor?id=&lt;entryID&gt;</code>: deschide pe televizor ecranul unei "
 			"intrări din cele două secțiuni"),
 		N_("<code>GET /api/antena?lat=&lt;grade&gt;&amp;lon=&lt;grade&gt;</code>: tunerele, LNB-ul, "

@@ -3779,7 +3779,7 @@ INSTRUCTIUNI = {
 		"depasire": N_("Traducerea se oprește (eroarea 456). Nu se plătește nimic singur; pentru mai mult trebuie un plan "
 			"plătit."),
 		"sursa": u"https://support.deepl.com/hc/en-us/articles/360021200939-DeepL-API-plans",
-		"pagina_cheie": u"https://www.deepl.com/your-account/keys",
+		"pagina_cheie": u"https://www.deepl.com/en/your-account/keys",
 		"verificat": u"21.10.2026",
 	},
 	"groq": {

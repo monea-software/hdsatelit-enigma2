@@ -32,6 +32,9 @@
 			<item level="0" text="Mai mulți sateliți" entryID="hds_satelit_mai_multi" pictograma="sateliti" web="/scanare/satelit/mai-multi" weight="30">
 				<screen module="ScanerMaiMultiSateliti" screen="ScanerMaiMultiSateliti" />
 			</item>
+			<item level="0" text="Căutare oarbă" entryID="hds_satelit_oarba" pictograma="satelit" web="/oarba" weight="35">
+				<screen module="ScanerOarba" screen="ScanerOarba" />
+			</item>
 			<item level="0" text="După operator" entryID="hds_satelit_operator" pictograma="operator" web="/scanare/satelit/operator" weight="40">
 				<screen module="ScanerSatelit" screen="ScanerSatelit">"operator"</screen>
 			</item>

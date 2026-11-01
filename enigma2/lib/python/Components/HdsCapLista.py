@@ -59,7 +59,7 @@ ETICHETE_CAI = tuple((marcaj, ETICHETE_FEL[fel]) for fel, marcaj in CAI_FLUXURI)
 
 # buchetele DAB+ / DVB-T2 din satelit (Hds/DabT2/profil.py): marcajele lor sunt capete de ansamblu („MUX DAB+: DR
 # Deutschland”), aratate fara iconita marcajului (o agrafa, skin_default/icons/marker.png); vezi ServiceList.setRoot
-BUCHETE_CAPETE = ("userbouquet.hds_dab.radio", "userbouquet.hds_t2.tv")
+BUCHETE_CAPETE = ("userbouquet.hds_dab.radio", "userbouquet.hds_t2.tv", "userbouquet.hds_abertis.tv")
 
 
 def buchet_cu_capete(cale_radacina):

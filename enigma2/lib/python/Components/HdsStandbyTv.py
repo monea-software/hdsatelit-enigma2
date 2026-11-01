@@ -36,6 +36,10 @@
 #     data to receive" (kern.warn), deci citirea la 100 ms umplea dmesg cu 10 randuri pe secunda. Acolo read() se face
 #     numai cand poll(0) arata un mesaj in coada, plus o citire de control la CITIRE_SIGURA_MS: daca aceea gaseste un
 #     mesaj pe care poll nu l-a aratat, poll nu e de incredere pe receptorul acesta si citirea revine la fiecare pas.
+#     Tot acolo read() se face intr-un fir de fundal (CITIRE_ASTEAPTA_S): pe unele placi ale familiei driverul ignora
+#     O_NONBLOCK si read() asteapta un mesaj la nesfarsit (in jurnalul nucleului "hdmicec read: receive cmd error"
+#     cand e intrerupt), iar pe firul principal asta oprea interfata. O citire care nu se intoarce in CITIRE_BLOCATA_S
+#     opreste CEC pana la repornirea interfetei (nici citiri, nici scrieri) si apare in pagina web ca „nu raspunde”.
 # Nodul e deschis tot timpul pe un receptor care il are: numele receptorului pe televizor (lista intrarilor HDMI) vine
 # numai prin CEC. Partea pornita din fabrica e cea mai mica de care e nevoie pentru nume si nu schimba nimic pe
 # televizor: dupa deschidere (ANUNT_MS) <Report Physical Address> 0x84 si <Set OSD Name> 0x47 (repetate la
@@ -113,6 +117,8 @@ ANUNT_INCERCARI = 12
 CITIRE_MS = 400             # citirea mesajelor primite, cat nodul e deschis
 CITIRI_PE_PAS = 8
 CITIRE_SIGURA_MS = 5000     # familia libreader: o citire si cand poll(0) nu arata nimic (paza pentru un poll care minte)
+CITIRE_ASTEAPTA_S = 0.2     # familia libreader: cat asteapta firul principal citirea facuta in fundal
+CITIRE_BLOCATA_S = 1.0      # o citire care nu se intoarce in atat opreste CEC pana la repornirea interfetei
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
 
@@ -633,11 +639,17 @@ class Cec(object):
 	intrebarile televizorului, trimiterea si starea ultimului mesaj."""
 
 	def __init__(self, deschide=None, scrieFd=None, inchide=None, ioctl=None, ceas=None, timer=None, citesteFd=None,
-			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None, poll=None, dupaPoll=None):
+			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None, poll=None, dupaPoll=None,
+			inFir=None):
 		self.deschideFd = deschide or os.open
 		self.pollFd = poll or areDate
 		self.dupaPoll = dupaPoll     # None = aflat la deschidere (citireDupaPoll); False dupa un poll care a mintit
 		self.citireSigura = None     # cand s-a facut ultima citire de control (familia libreader)
+		self.inFir = inFir           # None = ca dupaPoll la prima citire: read() intr-un fir de fundal
+		self.blocat = False          # o citire nu s-a intors: CEC oprit pana la repornirea interfetei
+		self._fir = None             # citirea in curs (firul, rezultatul, cand a pornit)
+		self._firRezultat = None
+		self._firPornit = 0.0
 		self.scrieFd = scrieFd or os.write
 		self.inchideFd = inchide or os.close
 		self.citesteFd = citesteFd or os.read
@@ -742,6 +754,7 @@ class Cec(object):
 				except Exception:
 					pass
 		self.tampon = bytearray()
+		self._fir = self._firRezultat = None
 		if self.fd is None:
 			return
 		try:
@@ -780,7 +793,7 @@ class Cec(object):
 	def trimite(self, destinatie, cod, parametri=b""):
 		"""Un mesaj; True daca driverul l-a trimis (write > 0). Coada mesajelor primite nu se goleste aici: o intrebare
 		a televizorului venita intre doi pasi ai citirii trebuie sa primeasca raspuns."""
-		if self.fd is None:
+		if self.fd is None or self.blocat:
 			return False
 		date = cadru(destinatie, cod, parametri)
 		try:
@@ -858,12 +871,18 @@ class Cec(object):
 
 	def citeste(self):
 		"""Tot ce e acum in coada driverului, impartit in inregistrari; fiecare primeste raspunsul ei. Intoarce cate
-		inregistrari s-au citit. Nu blocheaza: read() da 0 cand coada e goala."""
-		if self.fd is None:
+		inregistrari s-au citit. Nu blocheaza: read() da 0 cand coada e goala (pe familia libreader citirea e in fundal,
+		vezi _citeste)."""
+		if self.fd is None or self.blocat:
+			return 0
+		if self._fir is not None and self._fir.is_alive() and self.ceas() - self._firPornit >= CITIRE_BLOCATA_S:
+			self._blocheaza()
 			return 0
 		control = False
 		if self.dupaPoll is None:
 			self.dupaPoll = citireDupaPoll()
+		if self.inFir is None:
+			self.inFir = bool(self.dupaPoll)
 		if self.dupaPoll:
 			are = self.pollFd(self.fd)
 			if are is False:
@@ -875,7 +894,7 @@ class Cec(object):
 		inainte = len(self.tampon)
 		for _i in range(CITIRI_PE_PAS):
 			try:
-				date = self.citesteFd(self.fd, 256)
+				date = self._citeste(256)
 			except (IOError, OSError) as e:
 				if getattr(e, "errno", None) not in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
 					_jurnal("citirea CEC: %s" % e, "cec-citeste")
@@ -897,6 +916,55 @@ class Cec(object):
 			except Exception as e:
 				_jurnal("raspunsul CEC: %r" % (e,), "cec-raspuns")
 		return n
+
+	def _citeste(self, n):
+		"""Un read() pe nod. Pe familia libreader printr-un fir de fundal, asteptat cel mult CITIRE_ASTEAPTA_S; o citire
+		care nu s-a intors in CITIRE_BLOCATA_S opreste CEC (_blocheaza). Intoarce datele (b"" = nimic), None cand nu se
+		poate citi acum (o citire inca in curs sau nodul blocat); o eroare a lui read() trece mai departe."""
+		if self.blocat:
+			return None
+		if not self.inFir:
+			return self.citesteFd(self.fd, n)
+		fir = self._fir
+		if fir is None:
+			import threading
+			rez = {}
+			citeste, fd = self.citesteFd, self.fd
+
+			def lucreaza():
+				try:
+					rez["date"] = citeste(fd, n)
+				except Exception as e:
+					rez["eroare"] = e
+			fir = threading.Thread(target=lucreaza, name="HdsCecCitire")
+			fir.daemon = True
+			self._fir, self._firRezultat, self._firPornit = fir, rez, self.ceas()
+			fir.start()
+		fir.join(CITIRE_ASTEAPTA_S)
+		if fir.is_alive():
+			if self.ceas() - self._firPornit >= CITIRE_BLOCATA_S:
+				self._blocheaza()
+			return None
+		rez = self._firRezultat or {}
+		self._fir = self._firRezultat = None
+		if "eroare" in rez:
+			raise rez["eroare"]
+		return rez.get("date", b"")
+
+	def _blocheaza(self):
+		"""Citirea din nod nu s-a intors (driverul asteapta un mesaj): CEC oprit pana la repornirea interfetei, fara alte
+		citiri si fara scrieri, care ar putea astepta acelasi driver; firul ramas in read() e de fundal."""
+		self.blocat = True
+		self.raspunde = False
+		for t in (self.timerCitire, self.timerAnunt):
+			if t is not None:
+				try:
+					t.stop()
+				except Exception:
+					pass
+		self._noteaza("blocat")
+		_jurnal("CEC: citirea din %s nu s-a intors de %.1f s (driverul asteapta un mesaj); CEC oprit pana la repornirea "
+			"interfetei" % (CEC, self.ceas() - self._firPornit), "cec-blocat")
 
 	def _inregistrare(self):
 		"""(destinatia, codul, parametrii) de la inceputul tamponului, sau None daca nu e una intreaga. Un inceput de
@@ -1628,6 +1696,7 @@ class StandbyTv(object):
 			"cec_porneste": bool(c.cec_porneste.value),
 			"cec_deschis": self.cec.deschis(),
 			"cec_raspunde": self.cec.raspunde,
+			"cec_blocat": bool(self.cec.blocat),
 			"cec_ultimul": dict(self.cec.ultimul) if self.cec.ultimul else None,
 			"cec_primite": self.cec.primite,
 			"cec_golite": self.cec.golite,

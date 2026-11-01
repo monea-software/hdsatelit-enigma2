@@ -19,14 +19,57 @@
 # - tot numai la prima pornire dupa flash, `hds-ssh-stick prima` in fundal: cheile publice din dosarul hdsatelit/ssh de
 #   pe stickul de flash (acolo urca-pe-stick-016.sh pune cheia calculatorului) intra in authorized_keys, o singura data
 #   (semnul /etc/hdsatelit-ssh/stick-citit); dupa aceea cheile noi intra numai din ecranul Acces SSH sau din web.
+# - Telnet (portul 23, ca la celelalte imagini): `busybox inetd /etc/hds-telnet-inetd.conf`, cu programul de logare
+#   hds-telnet-poarta: din casa root intra direct cand „Fara parola in reteaua locala” e pornita, altfel cu parola; din
+#   afara casei legatura se inchide. `hds-ssh telnet` il porneste numai pe el (la instalarea pachetului din feed);
+# - o singura data dupa actualizarea pachetului (semnul /etc/hdsatelit-ssh/regula-implicita): regula „Fara parola in
+#   reteaua locala” ramasa exact cea veche din pachet (oprita, nealeasa de om) devine cea noua, pornita; o regula aleasa
+#   de om ramane cum a lasat-o.
 # Parola nu trece niciodata prin acest script.
 
 PAROLA=/usr/sbin/hds-ssh-parola
 STICK=/usr/sbin/hds-ssh-stick
 SSH=/home/root/.ssh
+REGULA=/etc/security/hds-ssh-retea-locala.conf
+REGULA_NOUA=/usr/share/hdsatelit-ssh/hds-ssh-retea-locala.conf
+SEMN_REGULA=/etc/hdsatelit-ssh/regula-implicita
+INETD_CONF=/etc/hds-telnet-inetd.conf
+INETD_PID=/var/run/hds-telnet-inetd.pid
+
+# regula din pachetele de pana la r2, oprita; numai aceasta, octet cu octet, se inlocuieste
+regula_veche() {
+	printf '%s\n' "# „Fără parolă în rețeaua locală” (Setări > Rețea & Conexiuni > Acces SSH): OPRITĂ." \
+		"# Fisierul il scrie ecranul „Acces SSH” (Components/HdsAccesSsh.py); pam_access il citeste la fiecare logare prin" \
+		"# dropbear (/etc/pam.d/dropbear). Numai o regula „-” care se potriveste lasa root sa intre fara parola; regula de mai jos" \
+		"# se potriveste cu oricine si trimite la verificarea parolei." \
+		"+ : ALL : ALL"
+}
+
+regula_implicita() {
+	[ -f "$SEMN_REGULA" ] && return 0
+	if [ -f "$REGULA_NOUA" ] && regula_veche | cmp -s - "$REGULA"; then
+		cp -f "$REGULA_NOUA" "$REGULA.nou" && chmod 644 "$REGULA.nou" && mv -f "$REGULA.nou" "$REGULA"
+	fi
+	mkdir -p /etc/hdsatelit-ssh && : > "$SEMN_REGULA"
+}
+
+telnet_porneste() {
+	[ -f "$INETD_CONF" ] && [ -x /usr/sbin/hds-telnet-poarta ] || return 0
+	if [ -f "$INETD_PID" ] && kill -0 "$(cat "$INETD_PID" 2>/dev/null)" 2>/dev/null; then
+		return 0
+	fi
+	# in prim-plan (-f), pus in fundal de noi: pidul e chiar al lui, fara asteptare la pornirea receptorului
+	busybox inetd -f "$INETD_CONF" < /dev/null > /dev/null 2>&1 &
+	echo $! > "$INETD_PID"
+}
 
 case "$1" in
+telnet)
+	telnet_porneste
+	;;
 start|"")
+	regula_implicita
+	telnet_porneste
 	if [ -d "$SSH" ]; then
 		chown root:root "$SSH" 2>/dev/null
 		chmod 700 "$SSH"

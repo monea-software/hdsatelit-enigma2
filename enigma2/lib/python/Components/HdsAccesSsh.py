@@ -889,6 +889,9 @@ def textParola(s):
 	if fel == "lipsa":
 		return _("Nu am putut citi parola lui root.")
 	if fel == "pusa":
+		if s["parola_de_vazut"] and s.get("fara_parola"):
+			return _("Din casă intri direct, fără parolă. Parola se cere numai dacă oprești „Fără parolă în rețeaua locală” "
+				"și se vede aici oricând.")
 		if s["parola_de_vazut"]:
 			return _("Merge numai din rețeaua ta de acasă și se vede aici oricând. Ca s-o schimbi, alege „Schimbă parola”.")
 		if s.get("parola_alta"):
@@ -922,13 +925,12 @@ def textParolaScurt(s):
 
 
 def textAlarme(s):
-	"""Starile periculoase, de la cea mai grava: root fara parola care se primeste, „Fără parolă în rețeaua locală”
-	pornita, dropbear cu -B. Ecranul arata prima, pagina web pe toate."""
+	"""Starile periculoase, de la cea mai grava: root fara parola care se primeste, dropbear cu -B. Ecranul arata prima,
+	pagina web pe toate. „Fără parolă în rețeaua locală” nu e alarma: vine pornita (din casa se intra direct, ca la
+	celelalte imagini; din afara casei numai cu cheia)."""
 	alarme = []
 	if _goalaDeschisa(s):
 		alarme.append(_("Atenție: root nu are parolă și oricine din rețea intră pe receptor."))
-	if s.get("fara_parola"):
-		alarme.append(_("Atenție: „Fără parolă în rețeaua locală” e pornit. Oricine din rețeaua ta de acasă intră pe receptor."))
 	if s.get("fara_dovada") and not _goalaDeschisa(s):
 		alarme.append(_("Atenție: serverul SSH e pornit cu -B și primește conturi fără parolă."))
 	return alarme
@@ -937,8 +939,8 @@ def textAlarme(s):
 def textEticheta(s):
 	"""Randul de deasupra parolei: pentru ce merge parola (FTP numai cand serverul FTP asculta)."""
 	if s.get("ftp"):
-		return _("Parola lui root, aceeași pentru FTP, SSH și SFTP")
-	return _("Parola lui root, aceeași pentru SSH și SFTP")
+		return _("Parola lui root, aceeași pentru FTP, SSH, SFTP și Telnet")
+	return _("Parola lui root, aceeași pentru SSH, SFTP și Telnet")
 
 
 def textChei(s):
@@ -954,14 +956,14 @@ def textCum(adresa, ftp=False):
 	if not adresa:
 		return _("Adresa receptorului în rețea nu e cunoscută.")
 	if ftp:
-		return _("FTP sau SFTP: %s, utilizatorul root · SSH: ssh root@%s") % (adresa, adresa)
-	return _("Te conectezi de pe calculator cu: ssh root@%s") % adresa
+		return _("FTP, SFTP, Telnet: %s, utilizatorul root · SSH: ssh root@%s") % (adresa, adresa)
+	return _("Te conectezi de pe calculator cu: ssh root@%s sau telnet %s") % (adresa, adresa)
 
 
 def textFaraParola(pornit):
 	if pornit:
-		return _("Fără parolă în rețeaua locală: pornit. Oricine din rețeaua ta de acasă intră pe receptor fără parolă.")
-	return _("Fără parolă în rețeaua locală: oprit.")
+		return _("Fără parolă în rețeaua locală: pornit. Din casă intri direct, fără parolă; din afara casei numai cu o cheie.")
+	return _("Fără parolă în rețeaua locală: oprit. Și din casă se cere parola.")
 
 
 def _comentariuScurt(c):

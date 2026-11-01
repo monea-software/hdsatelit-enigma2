@@ -348,10 +348,19 @@ def cauta_in_lista(lista, tp, feed):
 
 def feed_candidat_t2(candidat, tp):
     """Un PID cu T2MI_descriptor pe care detectorul nu l-a putut confirma (pe receptor T2-MI vine numai prin 8001):
-    feed de incercat prin releu, cu PLP 0 (cel folosit de toate multiplexurile din lista)."""
+    feed de incercat prin releu, cu PLP 0 (cel folosit de toate multiplexurile din lista). Un PID TS in PID (felul
+    abertis, stream_type 0x90 intr-un program fara imagine si sunet): feed abertis, cu purtatorul lui (SID-ul
+    programului, tsid-ul din PAT)."""
     pid = candidat.get('pid')
     if not isinstance(pid, int) or not 0 < pid < 8191:
         return None
+    if candidat.get('fel') == 'abertis':
+        f = {'id': 'det_ab_%d_%d_%04x' % (int(tp.get('pozitie') or 0), int(tp.get('frecventa') or 0) // 1000, pid),
+             'tip': 't2', 'fel': 'abertis', 'pid': pid, 'plp': None,
+             'nume': candidat.get('serviciu') or 'Abertis %d' % pid, 'confirmat': True}
+        if isinstance(candidat.get('purtator'), dict):
+            f['purtator'] = dict(candidat['purtator'])
+        return f
     return {'id': 'det_t2_%d_%d_%04x' % (int(tp.get('pozitie') or 0), int(tp.get('frecventa') or 0) // 1000, pid),
             'tip': 't2', 'fel': 't2mi', 'pid': pid, 'plp': 0,
             'nume': candidat.get('serviciu') or 'DVB-T2 PID %d' % pid, 'confirmat': True}
@@ -379,14 +388,25 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
         if liste._acelasi_transponder(t, tp) and any(f.get('tip') == profil.tip for f in t.get('feeduri', [])):
             are_in_lista = True
     noi = []
-    if profil.tip == 't2' and not are_in_lista:
+    if profil.tip == 't2':
+        # T2-MI: numai pe un transponder fara feed-uri in lista; TS in PID (abertis): orice PID pe care lista nu il are
+        # pe acest transponder (fluxurile noi de pe 30W se gasesc singure)
+        din_lista = set()
+        for t in lista.get('transpondere', []):
+            if liste._acelasi_transponder(t, tp):
+                din_lista.update(f.get('pid') for f in t.get('feeduri', []) if f.get('tip') == 't2')
         vazute = set(f.get('pid') for f in feeduri)
         for c in candidati or []:
-            if isinstance(c, dict) and c.get('tip') == 't2' and c.get('pid') not in vazute:
-                f = feed_candidat_t2(c, tp)
-                if f is not None:
-                    vazute.add(f['pid'])
-                    noi.append(f)
+            if not (isinstance(c, dict) and c.get('tip') == 't2' and c.get('pid') not in vazute):
+                continue
+            if c.get('fel') == 'abertis' and c.get('pid') in din_lista:
+                continue
+            if c.get('fel') != 'abertis' and are_in_lista:
+                continue
+            f = feed_candidat_t2(c, tp)
+            if f is not None:
+                vazute.add(f['pid'])
+                noi.append(f)
     n_noi = 0
     if feeduri or noi:
         n_noi = liste.adauga_scanat(profil.tip, tp, feeduri + noi, profil.director)
@@ -394,7 +414,15 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
     memorate = buchete.citeste_servicii(profil)
 
     def stiute(feed):
-        return (memorate.get(buchete._curata_id(feed.get('id'))) or {}).get('servicii') or []
+        # programele scrise in lista (felul abertis) se iau ca invatate: transponderul tocmai s-a prins, iar un flux
+        # criptat nu se poate citi prin releu fara modulul de acces al omului
+        x = (memorate.get(buchete._curata_id(feed.get('id'))) or {}).get('servicii') or []
+        if not x and feed.get('programe'):
+            fid = buchete._curata_id(feed.get('id'))
+            if buchete.salveaza_servicii(profil, fid, feed.get('programe')):
+                memorate[fid] = {'servicii': buchete._servicii_curate(profil, feed.get('programe'))}
+            x = (memorate.get(fid) or {}).get('servicii') or []
+        return x
 
     gasite, de_invatat, chei = [], [], set()
     for f in feeduri + noi:

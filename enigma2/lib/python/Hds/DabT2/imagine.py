@@ -75,6 +75,27 @@ def controlor_t2():
     return controlor(_profil.T2, CALE_T2)
 
 
+def dupa_scanare(pozitii=None):
+    """Dupa o scanare obisnuita (Components/ServiceScan.py, la sfarsit): daca lista DVB-T2 are fluxuri cu programele
+    scrise in ea (felul abertis, 30W) pe una din pozitiile scanate (`pozitii`, None = oricare), buchetul lor si
+    purtatorii din lamedb se refac in fundal, ca transponderele prinse acum sa-si aiba canalele in lista fara alt pas.
+    Nu arunca; nimic de facut = nicio scriere."""
+    try:
+        poz = set(int(p) % 3600 for p in pozitii) if pozitii is not None else None
+        if poz is not None and not poz:
+            return False                      # numai cablu sau terestru
+        c = controlor_t2()
+        for tp in c.lista().get('transpondere', []):
+            if (poz is None or int(tp.get('pozitie') or -1) in poz) and \
+                    any(f.get('programe') for f in tp.get('feeduri', [])):
+                c.reface_in_fundal()
+                jurnal.noteaza('imagine', 'dupa scanare: buchetele si purtatorii DVB-T2 refacuti in fundal')
+                return True
+    except Exception:
+        jurnal.eroare('imagine', 'refacerea dupa scanare')
+    return False
+
+
 def _sterge_fisierele_vechi():
     for cale in FISIERE_VECHI:
         try:

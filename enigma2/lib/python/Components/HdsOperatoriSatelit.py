@@ -228,7 +228,7 @@ def transponder_nucleu(op):
         'orbital_position': int(op['pozitie']),
         'system': sistem,
         'modulation': MODULATIE.get(t.get('modulatie'), -1) if sistem == 1 else 1,
-        'rolloff': 0,
+        'rolloff': {'0.25': 1, '0.20': 2}.get(str(t.get('rolloff')), 0) if sistem == 1 else 0,
         'pilot': 2,
     }
     if cere_multistream(op):
@@ -254,6 +254,7 @@ def transponder_hdscomun(op):
         'is_id': t.get('flux'),
         'pls_mod': pls.get('mod') if pls else None,
         'pls_cod': pls.get('cod') if pls else None,
+        'rolloff': t.get('rolloff'),
         'feeduri': [],
     }
 

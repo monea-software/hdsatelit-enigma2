@@ -5991,6 +5991,16 @@
 		<eLabel position="32,680" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="preview" position="32,692" size="1176,160" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
+	<!-- cautarea oarba pe satelit (Screens/ScanerOarba.py): aceleasi cote ca scanerul de satelit; la cautare, in lista
+	     cate un transponder pe rand (frecventa, polarizarea, rata) cu starea lui in dreapta (găsit, nou, se caută) -->
+	<screen name="ScanerOarba" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsScanerBaza1240" />
+		<widget source="lista" render="Listbox" position="32,104" size="1176,564" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColor="hdsText" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(16, 0), size=(440, 47), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=0), MultiContentEntryText(pos=(472, 0), size=(672, 47), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=2, color=MultiContentTemplateColor(3))], "fonts": [gFont("HdsRegular", 32), gFont("HdsBold", 30)], "itemHeight": 47}</convert>
+		</widget>
+		<eLabel position="32,680" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="preview" position="32,692" size="1176,160" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	</screen>
 	<!-- fereastra de alegere a scanerelor: titlul (numele campului) in placa, randurile desenate de AlegereDinLista pe
 	     toata latimea (parametrul HdsAlegereScanerRand), 17 randuri de 48; `text` (titlul, pentru alte skinuri) ascuns -->
 	<screen name="HdsAlegereScaner" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">

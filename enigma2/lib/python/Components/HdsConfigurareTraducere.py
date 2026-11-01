@@ -627,7 +627,7 @@ def ceFaci(fel, serviciu, nume=u"", local=False, adresa=u"", corp=b"", cod=None,
 			return _t("Copiaz-o întreagă din portal (resursa Translator, „Keys and Endpoint”, KEY 1), fără spații, și "
 				"verifică regiunea: scrisă exact ca în portal (de exemplu westeurope), sau Global dacă resursa e globală.")
 		if serviciu == "deepl":
-			return _t("Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/your-account/keys), fără spații. "
+			return _t("Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/en/your-account/keys), fără spații. "
 				"Trebuie o cheie de la DeepL API, nu de la traducătorul obișnuit.")
 		if serviciu == "openai":
 			pagina = {"Groq": "console.groq.com/keys", "OpenRouter": "openrouter.ai/settings/keys",

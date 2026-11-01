@@ -24,20 +24,29 @@ Formatele (citite in eDVBDB din enigma2 7.6):
   lamedb5 (5): „t:ns:tsid:onid,s:...[,MIS/PLS:is_id:cod:mod]" si „s:sid:ns:tsid:onid:tip:0:0,"nume",p:...,c:00pid,f:4".
 7.6 citeste doar lamedb; lamedb5 se actualizeaza doar daca exista deja (imaginile care il folosesc il au).
 
-Editarea e sigura: fisierul se desparte in blocuri; ale noastre se recunosc dupa furnizorul „HDSatelit T2-MI" (servicii)
-si dupa ONID-ul 4844 fara alte servicii pe el (transpondere). Tot restul ramane octet cu octet. Un fisier care nu
+Felul abertis (fluxurile de distributie de pe 30W) are purtatorul ADEVARAT, serviciul de pe satelit al fluxului (SID-ul
+lui, transponderul scanat de receptor), cu furnizorul „Abertis 30°W” (FURNIZOR_ABERTIS) si numele fluxului, ca omul
+sa-l recunoasca in lista (scanarea il lasa fara nume, „11222H SID 0xbd1”, la un furnizor „DVB-S2 8PSK 11222H ...”):
+PMT-ul citit (f:01), PID-ul de date tinut minte (c:18), CAID-ul BISS tinut minte la fluxurile BISS. Se scrie pentru
+feed-urile active si pentru orice flux din lista al carui serviciu scanat e deja in lamedb (il inlocuieste, cu acelasi
+tip); un transponder nou se scrie numai pentru un feed activ.
+
+Editarea e sigura: fisierul se desparte in blocuri; ale noastre se recunosc dupa furnizorul „HDSatelit T2-MI" sau
+„Abertis 30°W" (servicii) si dupa ONID-ul 4844 fara alte servicii pe el (transpondere). Tot restul ramane octet cu octet. Un fisier care nu
 se intelege nu se atinge. Daca rezultatul e identic, nu se scrie nimic. Inainte de scriere se pastreaza o copie
 (lamedb.hds-copie), apoi fisier temporar + os.replace.
 """
 import os
 
-from . import compat, jurnal, tuner
+from . import abertis, compat, jurnal, tuner
 
 FURNIZOR = 'HDSatelit T2-MI'
 # Si HdsDab scrie purtatori, pentru ETI in TS (ts2na, ts2na12, tsniv2ni) prin 8001. Fiecare plugin isi
 # recunoaste doar serviciile lui dupa furnizor, deci unul nu le sterge pe ale celuilalt; un transponder ONID 4844
 # ramane cat il foloseste oricare dintre ele.
 FURNIZORI = {'t2': FURNIZOR, 'dab': 'HDSatelit ETI'}
+FURNIZOR_ABERTIS = compat.text_nativ(u'Abertis 30\u00b0W')     # octeti UTF-8 pe 2.7, ca restul textului lamedb
+TIP_DATE = 100                 # tipul unui serviciu de date (asa il scrie scanarea pe purtatorii fara SDT)
 FELURI_ETI = ('ts2na', 'ts2na12', 'tsniv2ni')
 ONID = 0x4844
 CALE4 = '/etc/enigma2/lamedb'
@@ -65,16 +74,107 @@ def _al_tipului(f, tip):
     return f.get('tip') == 't2'
 
 
-def purtatori(lista, active=None, tip='t2'):
+def _nume_purtator(f, pid):
+    """„Abertis 2050 RGE Nac (BISS)”: numele fluxului din lista, fara „(Abertis ...)” de la capat."""
+    import re
+    nume = re.sub(r'\s*\(Abertis[^)]*\)\s*$', '', compat.text_nativ(f.get('nume') or '')).strip()
+    nume = nume.replace('"', '').replace(',', ' ').strip()
+    if not nume or nume.startswith('Abertis'):
+        nume = ''
+    biss = str(f.get('acces') or '').upper() == 'BISS'
+    return ('Abertis %d %s%s' % (pid, nume, ' (BISS)' if biss else '')).replace('  ', ' ').strip()
+
+
+def _ns_satelit(p):
+    return (p['orbital_position'] << 16) | ((p['frequency'] // 1000) & 0x7FFF) | ((p['polarisation'] & 1) << 15)
+
+
+def _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=False):
+    """Felul abertis: purtatorul e serviciul adevarat al fluxului (SID-ul lui, transponderul de pe satelit), cu PMT-ul
+    citit si cu PID-ul de date tinut minte (abertis.py, punctul 1). Transponderul: cel din lamedb-ul receptorului cu
+    aceeasi pozitie, polarizare si frecventa (+-2 MHz), cu cheia lui (namespace, tsid, onid); altfel tsid/onid din
+    lista (feed['purtator']) si namespace-ul cu frecventa. Tipul: al serviciului scanat cu aceeasi cheie, altfel 100
+    (date). doar_scanat: None daca serviciul nu e deja in lamedb (pentru feed-urile care nu sunt active). Fara tsid si
+    onid: None (ramane purtatorul nostru)."""
+    tp_reali = tp_reali or {'tp': [], 'sv': {}}
+    pt = f.get('purtator') or {}
+    sid = abertis.sid_purtator(f)
+    ns = tsid = onid = None
+    for t in tp_reali.get('tp') or []:
+        if t['poz'] == p['orbital_position'] and t['pol'] == p['polarisation'] and \
+                abs(t['khz'] - p['frequency']) <= 2000 and (t['is_id'] < 0 or p['is_id'] < 0 or t['is_id'] == p['is_id']):
+            if (sid, t['ns'], t['tsid'], t['onid']) in tp_reali['sv'] or ns is None:
+                ns, tsid, onid = t['ns'], t['tsid'], t['onid']
+    if ns is None:
+        ns = _ns_satelit(p)
+        tsid, onid = pt.get('tsid'), pt.get('onid')
+    try:
+        tsid, onid = int(tsid) & 0xFFFF, int(onid) & 0xFFFF
+    except (TypeError, ValueError):
+        return None
+    tip = tp_reali['sv'].get((sid, ns, tsid, onid))
+    if tip is None and doar_scanat:
+        return None
+    tip = TIP_DATE if tip is None else tip
+    return {'cheie': cheie, 'parametri': p, 'pid': pid, 'ns': ns, 'tsid': tsid, 'onid': onid, 'sid': sid, 'tip': tip,
+            'nume': _nume_purtator(f, pid), 'furnizor': FURNIZOR_ABERTIS, 'real': True,
+            'biss': str(f.get('acces') or '').upper() == 'BISS',
+            'ref': '1:0:%X:%X:%X:%X:%X:0:0:0:' % (tip, sid, tsid, onid, ns)}
+
+
+def _purtator_strain(f, p, pid, cheie, tp_reali):
+    """Fluxul are purtatorul altui automat (furnizorul ABERTIS, „Abertis PID n”) in lamedb: referinta lui, pentru
+    releul nostru; serviciul lui nu se atinge. None daca nu e in lamedb."""
+    x = _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=True)
+    if x is None:
+        return None
+    x.update(strain=True, real=False)
+    return x
+
+
+def tp_reali_din(text4):
+    """Ce stie lamedb-ul receptorului despre satelit: {'tp': [{ns, tsid, onid, poz, khz, pol, is_id}] (fara ale
+    noastre, ONID 4844), 'sv': {(sid, ns, tsid, onid): tip}}."""
+    rez = {'tp': [], 'sv': {}}
+    try:
+        _antet, tp, sv, _coada = desparte4(text4 or '')
+    except Stricat:
+        return rez
+    for b in tp:
+        try:
+            ns, tsid, onid = [int(x, 16) for x in b[0].split(':')[:3]]
+            if onid == ONID or not b[1].lstrip().startswith('s '):
+                continue
+            c = b[1].lstrip()[2:].split(':')
+            poz = int(c[4])
+            rez['tp'].append({'ns': ns, 'tsid': tsid, 'onid': onid, 'poz': poz + 3600 if poz < 0 else poz,
+                              'khz': int(c[0]), 'pol': int(c[2]), 'is_id': int(c[11]) if len(c) > 11 else -1})
+        except (ValueError, IndexError):
+            continue
+    for b in sv:
+        try:
+            parti = b[0].split(':')
+            rez['sv'][tuple(int(parti[k], 16) for k in range(4))] = int(parti[4])
+        except (ValueError, IndexError):
+            continue
+    return rez
+
+
+def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
     """Lista unita de feed-uri -> purtatorii necesari (unul pe transponder + PID T2-MI), in ordine stabila.
 
     active: multimea id-urilor de feed ACTIVE (invatate sau pornite de utilizator); doar pentru ele se scrie un
     purtator (lamedb-ul utilizatorului nu primeste cate o intrare pentru fiecare feed din
-    lista). None = toate feed-urile T2 din lista (doar pentru probe si unelte)."""
+    lista). None = toate feed-urile T2 din lista (doar pentru probe si unelte).
+    Felul abertis: purtatorul adevarat (_purtator_real) cand se stiu tsid/onid, si pentru feed-urile care nu sunt
+    active, daca serviciul lor scanat e deja in lamedb (numele si furnizorul pe care omul le recunoaste); fluxurile de
+    care se ocupa alt automat (straine = abertis.fluxuri_straine()) primesc numai referinta purtatorului lor
+    (strain=True, nimic scris)."""
     rez, vazute = [], set()
     for tp in lista.get('transpondere', []):
         feeduri = [f for f in tp.get('feeduri', []) if _al_tipului(f, tip) and f.get('pid') is not None
-                   and (active is None or _curata_id(f.get('id')) in active)]
+                   and (active is None or _curata_id(f.get('id')) in active
+                        or (tip == 't2' and str(f.get('fel') or '') == 'abertis' and tp_reali is not None))]
         if not feeduri:
             continue
         p = tuner.parametri(tp)
@@ -87,6 +187,19 @@ def purtatori(lista, active=None, tip='t2'):
             if cheie in vazute:
                 continue
             vazute.add(cheie)
+            if tip == 't2' and str(f.get('fel') or '') == 'abertis':
+                activ = active is None or _curata_id(f.get('id')) in active
+                if straine is not None and abertis.e_strain(f, straine):
+                    x = _purtator_strain(f, p, pid, cheie, tp_reali)
+                    if x is not None:
+                        rez.append(x)
+                    continue
+                real = _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=not activ)
+                if real is not None:
+                    rez.append(real)
+                    continue
+                if not activ:
+                    continue
             ns = (p['orbital_position'] << 16) | ((p['frequency'] // 1000) & 0x7FFF) | ((p['polarisation'] & 1) << 15)
             tsid = _crc16('tp:' + cheie.rsplit(':', 1)[0]) or 1
             sid = (_crc16('sid:' + cheie) if tip == 't2' else _crc16('sid-eti:' + cheie)) or 1
@@ -96,12 +209,22 @@ def purtatori(lista, active=None, tip='t2'):
     return rez
 
 
-def purtator_pentru(lista, tp, feed):
+def purtator_pentru(lista, tp, feed, cale4=None, radacina_cam='/'):
+    """Purtatorul feed-ului care porneste, acelasi pe care il scrie actualizeaza (la felul abertis: transponderul si
+    tipul din lamedb-ul receptorului, sau purtatorul altui automat), ca releul sa ceara exact referinta din lamedb."""
     p = tuner.parametri(tp)
     cheie = '%d:%d:%d:%d:%d' % (p['orbital_position'], p['frequency'] // 1000, p['polarisation'], p['is_id'],
                                 int(feed.get('pid') or 0) & 0x1FFF)
     tip = 'dab' if feed.get('tip') == 'dab' else 't2'
-    for x in purtatori({'transpondere': [dict(tp, feeduri=[feed])]}, tip=tip):
+    tp_reali = straine = None
+    if tip == 't2' and str(feed.get('fel') or '') == 'abertis':
+        text4 = _text_sau_gol(_citeste(cale4 or CALE4))
+        tp_reali = tp_reali_din(text4)
+        try:
+            straine = abertis.fluxuri_straine(radacina_cam, lamedb_text=text4)
+        except Exception:
+            straine = None
+    for x in purtatori({'transpondere': [dict(tp, feeduri=[feed])]}, tip=tip, tp_reali=tp_reali, straine=straine):
         if x['cheie'] == cheie:
             return x
     return None
@@ -128,7 +251,16 @@ def bloc_transponder4(x):
     return ['%08x:%04x:%04x' % (x['ns'], x['tsid'], x['onid']), linie, '/']
 
 
+def _ca_biss(x):
+    return ',C:%04x' % abertis.CAID_BISS if x.get('biss', True) else ''
+
+
 def bloc_serviciu4(x):
+    if x.get('real'):
+        # PMT citit (f:01, numai fara SDT), PID-ul de date in c:18 (cDATAPID, pus in fluxul 8001 de
+        # servicedvbrecord.cpp), CAID-ul BISS tinut minte la fluxurile BISS; tipul serviciului scanat
+        return ['%04x:%08x:%04x:%04x:%d:0:0' % (x['sid'], x['ns'], x['tsid'], x['onid'], x.get('tip', TIP_DATE)),
+                x['nume'], 'p:%s,c:18%04x%s,f:01' % (x.get('furnizor', FURNIZOR), x['pid'], _ca_biss(x))]
     return ['%04x:%08x:%04x:%04x:1:0:0' % (x['sid'], x['ns'], x['tsid'], x['onid']), x['nume'],
             'p:%s,c:00%04x,c:03%04x,f:04' % (x.get('furnizor', FURNIZOR), x['pid'], x['pid'])]
 
@@ -140,6 +272,10 @@ def linie_transponder5(x):
 
 
 def linie_serviciu5(x):
+    if x.get('real'):
+        return 's:%04x:%08x:%04x:%04x:%d:0:0,"%s",p:%s,c:18%04x%s,f:1' % (
+            x['sid'], x['ns'], x['tsid'], x['onid'], x.get('tip', TIP_DATE), x['nume'], x.get('furnizor', FURNIZOR),
+            x['pid'], _ca_biss(x))
     # c:TTPPPP: tipul pe 2 cifre, PID-ul pe 4 cifre hex (cu %x un PID sub 0x1000 iesea altfel decat il
     # scrie enigma2 si fisierul parea mereu schimbat)
     return 's:%04x:%08x:%04x:%04x:1:0:0,"%s",p:%s,c:00%04x,c:03%04x,f:4' % (
@@ -187,6 +323,24 @@ def desparte4(text):
     return randuri[0], tp, sv, randuri[i + 1:]
 
 
+def _cheie_sv(cheie):
+    """(sid, ns, tsid, onid) dintr-o cheie de serviciu, oricare ar fi tipul si restul campurilor; None daca nu se
+    intelege."""
+    try:
+        parti = cheie.split(':')
+        return tuple(int(parti[k], 16) for k in range(4))
+    except (ValueError, IndexError):
+        return None
+
+
+def _al_nostru_furnizor(rand_p, furnizori):
+    return any(rand_p == 'p:%s' % f or rand_p.startswith('p:%s,' % f) for f in furnizori)
+
+
+def _furnizorii(furnizor):
+    return (furnizor, FURNIZOR_ABERTIS) if furnizor == FURNIZOR else (furnizor,)
+
+
 def _cheie_tp_din_serviciu4(cheie):
     parti = cheie.split(':')
     return '%s:%s:%s' % (parti[1].lower(), parti[2].lower(), parti[3].lower())
@@ -194,9 +348,19 @@ def _cheie_tp_din_serviciu4(cheie):
 
 def compune4(text, lista_purtatori, furnizor=FURNIZOR):
     antet, tp, sv, coada = desparte4(text)
-    sv_straine = [b for b in sv if not (b[2] == 'p:%s' % furnizor or b[2].startswith('p:%s,' % furnizor))]
+    furnizori = _furnizorii(furnizor)
+    lista_purtatori = [x for x in lista_purtatori if not x.get('strain')]
+    # purtatorii adevarati (felul abertis) iau locul serviciului scanat cu aceeasi cheie (un serviciu de date fara
+    # nume, „11222H SID 0xbd1”), oricare i-ar fi tipul; transponderul lor e al receptorului si ramane, sau se scrie
+    # daca lipseste
+    reali = set((x['sid'], x['ns'], x['tsid'], x['onid']) for x in lista_purtatori if x.get('real'))
+    sv_straine = [b for b in sv if not _al_nostru_furnizor(b[2], furnizori) and _cheie_sv(b[0]) not in reali]
     folosite = set(_cheie_tp_din_serviciu4(b[0]) for b in sv_straine)
-    ale_noastre = set(bloc_transponder4(x)[0] for x in lista_purtatori)
+    tp_existente = set(b[0].lower() for b in tp)
+    lista_purtatori = [x for x in lista_purtatori
+                       if not (x.get('real') and bloc_transponder4(x)[0].lower() in tp_existente)] + \
+        [dict(x, fara_tp=True) for x in lista_purtatori if x.get('real') and bloc_transponder4(x)[0].lower() in tp_existente]
+    ale_noastre = set(bloc_transponder4(x)[0] for x in lista_purtatori if not x.get('real'))
     tp_pastrate = []
     for b in tp:
         k = b[0].lower()
@@ -204,7 +368,7 @@ def compune4(text, lista_purtatori, furnizor=FURNIZOR):
         if k in ale_noastre or (onid_nostru and k not in folosite):
             continue
         tp_pastrate.append(b)
-    noi_tp = [bloc_transponder4(x) for x in lista_purtatori]
+    noi_tp = [bloc_transponder4(x) for x in lista_purtatori if not x.get('fara_tp')]
     noi_sv = [bloc_serviciu4(x) for x in lista_purtatori]
     randuri = [antet, 'transponders']
     for b in tp_pastrate + noi_tp:
@@ -223,10 +387,17 @@ def compune5(text, lista_purtatori, furnizor=FURNIZOR):
         randuri.pop()
     if not randuri or not randuri[0].startswith('eDVB services /5/'):
         raise Stricat('antet lamedb5 necunoscut')
+    furnizori = _furnizorii(furnizor)
+    lista_purtatori = [x for x in lista_purtatori if not x.get('strain')]
+    reali = set((x['sid'], x['ns'], x['tsid'], x['onid']) for x in lista_purtatori if x.get('real'))
+
+    def al_nostru_s(r):
+        return any((',p:%s,' % f) in r or r.endswith(',p:%s' % f) for f in furnizori) or \
+            (reali and _cheie_sv(r[2:].split(',', 1)[0]) in reali)
     pastrate_s, t_linii, altele = [], [], []
     for r in randuri[1:]:
         if r.startswith('s:'):
-            if (',p:%s,' % furnizor) in r or r.endswith(',p:%s' % furnizor):
+            if al_nostru_s(r):
                 continue
             pastrate_s.append(r)
         elif r.startswith('t:'):
@@ -238,7 +409,11 @@ def compune5(text, lista_purtatori, furnizor=FURNIZOR):
         parti = r[2:].split(',', 1)[0].split(':')
         if len(parti) >= 4:
             folosite.add('%s:%s:%s' % (parti[1].lower(), parti[2].lower(), parti[3].lower()))
-    ale_noastre = set(linie_transponder5(x).split(',', 1)[0][2:] for x in lista_purtatori)
+    t_existente = set(r[2:].split(',', 1)[0].lower() for r in t_linii)
+    # transponderul unui purtator adevarat e al receptorului: ramane; se scrie numai daca lipseste
+    lista_t = [x for x in lista_purtatori if not (x.get('real') and
+                                                  linie_transponder5(x).split(',', 1)[0][2:].lower() in t_existente)]
+    ale_noastre = set(linie_transponder5(x).split(',', 1)[0][2:] for x in lista_t if not x.get('real'))
     t_pastrate = []
     for r in t_linii:
         k = r[2:].split(',', 1)[0].lower()
@@ -248,12 +423,12 @@ def compune5(text, lista_purtatori, furnizor=FURNIZOR):
     # ordinea fisierului se pastreaza (comentariile raman unde le-a pus enigma2); ale noastre vin dupa ultima linie
     # de acelasi fel
     sterse_t = set(r for r in t_linii) - set(t_pastrate)
-    noi_t = [linie_transponder5(x) for x in lista_purtatori]
+    noi_t = [linie_transponder5(x) for x in lista_t]
     noi_s = [linie_serviciu5(x) for x in lista_purtatori]
     rez = [randuri[0]]
     ultim_t = ultim_s = None
     for r in randuri[1:]:
-        if r.startswith('s:') and ((',p:%s,' % furnizor) in r or r.endswith(',p:%s' % furnizor)):
+        if r.startswith('s:') and al_nostru_s(r):
             continue
         if r.startswith('t:') and r in sterse_t:
             continue
@@ -354,17 +529,25 @@ def _scrie(cale, text_vechi, text_nou):
         raise
 
 
-def actualizeaza(lista, cale4=None, cale5=None, reincarca=True, active=None, tip='t2'):
+def _text_sau_gol(t):
+    return t if isinstance(t, str) else ''
+
+
+def actualizeaza(lista, cale4=None, cale5=None, reincarca=True, active=None, tip='t2', radacina_cam='/'):
     """Pune in lamedb (si lamedb5 daca exista) purtatorii feed-urilor active si ii scoate pe ai nostri care nu mai
-    sunt necesari. -> {'schimbat', 'purtatori', 'eroare'}. Nu arunca. `active`: vezi purtatori()."""
+    sunt necesari. -> {'schimbat', 'purtatori', 'eroare'}. Nu arunca. `active`: vezi purtatori(). Configurarea
+    modulului de acces nu se atinge (abertis.py, punctul 2); radacina_cam e radacina in care se cauta automatele
+    altora (abertis.fluxuri_straine), pentru probe."""
     cale4 = cale4 or CALE4
     cale5 = cale5 or CALE5
     rez = {'schimbat': False, 'purtatori': 0, 'eroare': None}
     try:
         furnizor = FURNIZORI.get(tip, FURNIZOR)
-        p = purtatori(lista, active, tip if tip in FURNIZORI else 't2')
-        rez['purtatori'] = len(p)
         vechi4 = _citeste(cale4)
+        straine = abertis.fluxuri_straine(radacina_cam, lamedb_text=_text_sau_gol(vechi4)) if tip == 't2' else None
+        p = purtatori(lista, active, tip if tip in FURNIZORI else 't2',
+                      tp_reali_din(_text_sau_gol(vechi4)) if tip == 't2' else None, straine)
+        rez['purtatori'] = len([x for x in p if not x.get('strain')])
         baza4 = vechi4 if vechi4 is not None else 'eDVB services /4/\ntransponders\nend\nservices\nend\n'
         try:
             nou4 = compune4(baza4, p, furnizor)
@@ -385,7 +568,8 @@ def actualizeaza(lista, cale4=None, cale5=None, reincarca=True, active=None, tip
             except Stricat as e:
                 jurnal.noteaza('lamedb', 'lamedb5 nu se intelege (%s), nu il ating' % e)
         if rez['schimbat']:
-            _de_scos.update(refs_ale_noastre4(vechi4 or '', furnizor) | set(x['ref'] for x in p))
+            _de_scos.update(refs_ale_noastre4(vechi4 or '', furnizor) |
+                            set(x['ref'] for x in p if not x.get('strain')))
             jurnal.noteaza('lamedb', '%d purtatori %s scrisi' % (len(p), furnizor))
             if reincarca:
                 reincarca_servicii()
@@ -450,8 +634,9 @@ def refs_ale_noastre4(text, furnizor=FURNIZOR):
     except Stricat:
         return set()
     rez = set()
+    furnizori = _furnizorii(furnizor)
     for b in sv:
-        if not (b[2] == 'p:%s' % furnizor or b[2].startswith('p:%s,' % furnizor)):
+        if not _al_nostru_furnizor(b[2], furnizori):
             continue
         parti = b[0].split(':')
         try:

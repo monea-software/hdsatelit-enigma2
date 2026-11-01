@@ -36,6 +36,15 @@ schimbat de utilizator (#DESCRIPTION diferit de numele nostru) ramane.
 Scrierea e atomica (fisier temporar in acelasi director, fsync, os.replace). Daca nimic nu s-a schimbat, nu se
 scrie nimic si nu se reincarca nimic. Nu se atinge lamedb: serviciile cu URL nu au nevoie de el, deci ajunge
 eDVBDB.reloadBouquets(), fara reloadServicelist.
+
+Fluxurile de distributie de pe 30W (felul abertis, un multiplex terestru purtat intr-un PID) stau intr-un buchet al lor,
+„Abertis 30°W” (BUCHET_ABERTIS), facut si tinut la zi la fel; „DVB-T2 din satelit” ramane al celorlalte. Programele
+scrise in lista (cheia `programe` a feed-ului) intra in buchet numai cand receptorul prinde transponderul, ca posturile
+publicate pe stb.
+
+Dublurile: acelasi multiplex de pe doua pozitii (acelasi nume si aceleasi servicii) intra o singura data (cel de pe un
+transponder prins, altfel primul din lista), iar intr-un multiplex DVB-T2 serviciile cu acelasi nume si acelasi tip
+(MX-7: 12 SID-uri „DSNS Informed”) intra o singura data, cu primul SID. Ce iese asa dispare din buchet la refacere.
 """
 import json
 import os
@@ -48,6 +57,13 @@ from . import profil as _profil
 GAZDA = '127.0.0.1'
 DIRECTOR_ENIGMA2 = '/etc/enigma2'
 TIP_MARCAJ = 0x48440000       # „HD" in hex: marcajele noastre au al treilea camp 4844xxxx
+BUCHET_ABERTIS = 'userbouquet.hds_abertis.tv'
+NUME_BUCHET_ABERTIS = u'Abertis 30\u00b0W'
+
+
+def e_abertis(feed):
+    """Feed-ul e un flux de distributie de pe 30W (felul abertis): sta in buchetul BUCHET_ABERTIS."""
+    return (feed or {}).get('tip') == 't2' and str((feed or {}).get('fel') or '') == 'abertis'
 NS_T2 = 0xEEEE0000            # spatiul de nume terestru, cu octetii de jos din feed
 
 
@@ -479,15 +495,18 @@ def salveaza_servicii(profil, feed_id, lista, director=None):
 
 def servicii_feed(profil, feed, memorate, stb=None, tp=None, prinse=None):
     """Serviciile unui feed: cele invatate de receptor (servicii.json), altfel cele publicate pe stb.hdsatelit.com
-    (servicii-stb.json, numai cand receptorul prinde transponderul feed-ului: `prinse`), altfel cele din lista
-    (posturi / servicii)."""
+    (servicii-stb.json), altfel programele scrise in lista (`programe`), aceste doua numai cand receptorul prinde
+    transponderul feed-ului (`prinse`), altfel cele din lista (posturi / servicii)."""
     din_cache = (memorate.get(_curata_id(feed.get('id'))) or {}).get('servicii')
     if din_cache:
         return _servicii_curate(profil, din_cache)
-    if stb and tp is not None and prins(tp, prinse):
+    are_prins = tp is not None and prins(tp, prinse)
+    if stb and are_prins:
         publicate = servicii_stb_pentru(profil, feed, tp, stb)
         if publicate:
             return publicate
+    if feed.get('programe') and are_prins:
+        return _servicii_curate(profil, feed.get('programe'))
     return _servicii_curate(profil, feed.get('posturi') or feed.get('servicii'))
 
 
@@ -651,31 +670,69 @@ def nume_afisate(servicii):
     return ['%s (%d)' % (s['nume'], s['sid']) if numar[s['nume']] > 1 else s['nume'] for s in servicii]
 
 
-def intrari_noi(profil, lista, memorate, stb=None, prinse=None):
-    """Lista unita de feed-uri -> [(feed_id, cheie, linie_service, nume)] in ordinea listei."""
+def _fara_dubluri_in_feed(servicii):
+    """Serviciile unui multiplex DVB-T2 fara cele cu acelasi nume si acelasi tip ca unul de dinainte (MX-7 da 12 SID-uri
+    „DSNS Informed”, acelasi program): ramane primul. Acelasi nume pe tipuri diferite ramane (nume_afisate)."""
+    rez, vazute = [], set()
+    for s in servicii:
+        k = (s['nume'], s.get('tip'))
+        if k in vazute:
+            continue
+        vazute.add(k)
+        rez.append(s)
+    return rez
+
+
+def _feeduri_de_pus(profil, lista, memorate, stb, prinse, abertis):
+    """[(tp, feed, servicii)] ale buchetului, in ordinea listei, fara dublurile intre pozitii: acelasi nume de
+    multiplex cu aceleasi servicii pe alt transponder intra o singura data (cel de pe un transponder prins, altfel
+    primul). abertis: True = numai felul abertis (buchetul lor), False = fara el, None = toate."""
     rez = []
     for tp in lista.get('transpondere', []):
         for feed in tp.get('feeduri', []):
             if feed.get('tip') != profil.tip:
                 continue
+            if abertis is not None and e_abertis(feed) != abertis:
+                continue
             servicii = servicii_feed(profil, feed, memorate, stb, tp, prinse)
             if not servicii:
                 continue
-            fid = _curata_id(feed.get('id'))
-            nume_feed = nume_marcaj(profil, feed.get('nume') or fid)
-            ref = ref_marcaj(fid)
-            rez.append((fid, _cheie('#SERVICE ' + ref), '#SERVICE %s%s' % (ref, nume_feed), nume_feed))
-            for s, nume in zip(servicii, nume_afisate(servicii)):
-                if profil.tip == 'dab':
-                    ref = ref_dab(profil, fid, s['sid'])
-                else:
-                    ref = ref_t2(profil, feed, s)
-                linie = '#SERVICE %s:%s' % (ref, nume)
-                rez.append((fid, _cheie(linie), linie, nume))
+            if profil.tip == 't2':
+                servicii = _fara_dubluri_in_feed(servicii)
+            rez.append((tp, feed, servicii))
+    semne = {}
+    for i, (_tp, feed, servicii) in enumerate(rez):
+        semn = (_curata_nume(feed.get('nume') or ''), tuple((s['sid'], s['nume']) for s in servicii))
+        semne.setdefault(semn, []).append(i)
+    pastrate = set()
+    for idx in semne.values():
+        prinsi = [i for i in idx if prinse and prins(rez[i][0], prinse)]
+        pastrate.add((prinsi or idx)[0])
+    return [x for i, x in enumerate(rez) if i in pastrate]
+
+
+def intrari_noi(profil, lista, memorate, stb=None, prinse=None, abertis=None):
+    """Lista unita de feed-uri -> [(feed_id, cheie, linie_service, nume)] in ordinea listei. abertis: True = numai
+    fluxurile de pe 30W (buchetul lor); None = la DVB-T2 toate celelalte, la DAB toate."""
+    if abertis is None and profil.tip == 't2':
+        abertis = False
+    rez = []
+    for _tp, feed, servicii in _feeduri_de_pus(profil, lista, memorate, stb, prinse, abertis):
+        fid = _curata_id(feed.get('id'))
+        nume_feed = nume_marcaj(profil, feed.get('nume') or fid)
+        ref = ref_marcaj(fid)
+        rez.append((fid, _cheie('#SERVICE ' + ref), '#SERVICE %s%s' % (ref, nume_feed), nume_feed))
+        for s, nume in zip(servicii, nume_afisate(servicii)):
+            if profil.tip == 'dab':
+                ref = ref_dab(profil, fid, s['sid'])
+            else:
+                ref = ref_t2(profil, feed, s)
+            linie = '#SERVICE %s:%s' % (ref, nume)
+            rez.append((fid, _cheie(linie), linie, nume))
     return rez
 
 
-def compune(profil, text_vechi, noi):
+def compune(profil, text_vechi, noi, nume_buchet=None):
     """Textul nou al buchetului. Pastreaza ordinea si intrarile utilizatorului."""
     _, vechi = _intrari(text_vechi)
     dupa_cheie = dict((cheie, (fid, linie, nume)) for fid, cheie, linie, nume in noi)
@@ -708,7 +765,7 @@ def compune(profil, text_vechi, noi):
                 loc = i + 1
                 break
         rez.insert(loc, (fid, linie, '#DESCRIPTION %s' % nume))
-    linii = ['#NAME %s' % profil.nume_buchet]
+    linii = ['#NAME %s' % (nume_buchet or profil.nume_buchet)]
     for _, linie, desc in rez:
         linii.append(linie)
         if desc:
@@ -716,21 +773,22 @@ def compune(profil, text_vechi, noi):
     return '\n'.join(linii) + '\n'
 
 
-def linie_index(profil):
-    return '#SERVICE 1:7:%d:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % (profil.tip_index, profil.buchet)
+def linie_index(profil, fisier=None):
+    return '#SERVICE 1:7:%d:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % (profil.tip_index,
+                                                                                fisier or profil.buchet)
 
 
-def asigura_index(profil, director):
+def asigura_index(profil, director, fisier=None):
     """Adauga buchetul in bouquets.radio / bouquets.tv doar daca lipseste. -> True daca a scris."""
     cale = os.path.join(director, profil.index_buchete)
     text = _citeste_text(cale)
-    if text is not None and ('"%s"' % profil.buchet) in text:
+    if text is not None and ('"%s"' % (fisier or profil.buchet)) in text:
         return False
     if text is None:
         text = '#NAME %s\n' % ('Bouquets (Radio)' if profil.tip_index == 2 else 'Bouquets (TV)')
     if not text.endswith('\n'):
         text += '\n'
-    text += linie_index(profil) + '\n'
+    text += linie_index(profil, fisier) + '\n'
     scrie_atomic(cale, text.encode('utf-8'))
     return True
 
@@ -742,19 +800,26 @@ def reface(profil, lista, director=None, director_date=None, reincarca=True):
     try:
         memorate = citeste_servicii(profil, director_date)
         stb = citeste_servicii_stb(profil, director_date)
-        prinse = transpondere_prinse(profil, director_date) if stb else None
+        cu_programe = any(f.get('programe') for t in lista.get('transpondere', []) for f in t.get('feeduri', []))
+        prinse = transpondere_prinse(profil, director_date) if (stb or cu_programe) else None
         noi = intrari_noi(profil, lista, memorate, stb, prinse)
-        rez['feeduri'] = len(set(fid for fid, _, _, _ in noi))
-        rez['intrari'] = len([1 for _, c, _, _ in noi if not _e_marcaj_nostru(c)])
-        cale = os.path.join(director, profil.buchet)
-        vechi = _citeste_text(cale)
-        nou = compune(profil, vechi or '', noi)
+        noi_ab = intrari_noi(profil, lista, memorate, stb, prinse, abertis=True) if profil.tip == 't2' else []
+        rez['feeduri'] = len(set(fid for fid, _, _, _ in noi + noi_ab))
+        rez['intrari'] = len([1 for _, c, _, _ in noi + noi_ab if not _e_marcaj_nostru(c)])
         schimbat = False
-        if nou != vechi:
-            scrie_atomic(cale, nou.encode('utf-8'))
-            schimbat = True
-        if asigura_index(profil, director):
-            schimbat = True
+        de_scris = [(profil.buchet, None, noi)]
+        # buchetul fluxurilor de pe 30W: facut la primul program al lor, refacut cat exista (unul golit ramane gol)
+        if noi_ab or os.path.exists(os.path.join(director, BUCHET_ABERTIS)):
+            de_scris.append((BUCHET_ABERTIS, NUME_BUCHET_ABERTIS, noi_ab))
+        for fisier, nume_b, intrari in de_scris:
+            cale = os.path.join(director, fisier)
+            vechi = _citeste_text(cale)
+            nou = compune(profil, vechi or '', intrari, nume_b)
+            if nou != vechi:
+                scrie_atomic(cale, nou.encode('utf-8'))
+                schimbat = True
+            if asigura_index(profil, director, fisier):
+                schimbat = True
         rez['schimbat'] = schimbat
         if schimbat:
             jurnal.noteaza(profil.eticheta, 'buchet refacut: %d intrari din %d feed-uri'

@@ -149,6 +149,20 @@ namespace hdster
 		return (a > b ? a - b : b - a) < 1000000;
 	}
 
+	/* frecventa (Hz) salvata dupa cautare: cea spusa de tuner dupa prindere, afara de cazul in care e imposibila (in afara
+	 * benzii terestre de 47-862 MHz, sau la peste 2 MHz de cea ceruta, adica alt canal): atunci ramane cea ceruta. Un
+	 * tuner combinat DVB-T2/C poate spune frecventa intr-o unitate bruta (2068836 pentru 482 MHz, chiar negativa dupa o
+	 * cautare automata), iar acordarea pe ea nu mai prinde nimic. Fara frecventa ceruta (0) ramane cea spusa, daca e posibila. */
+	inline unsigned int frecventaSalvata(unsigned int ceruta, long spusa)
+	{
+		if (spusa < 47000000L || spusa > 862000000L)
+			return ceruta;
+		unsigned int s = (unsigned int)spusa;
+		if (ceruta == 0)
+			return s;
+		return (s > ceruta ? s - ceruta : ceruta - s) > 2000000 ? ceruta : s;
+	}
+
 	/* descriptorul T2 (EN 300 468, 6.4.6.3) -> valorile din structura */
 	inline int latimeDinDescriptorT2(int cod)
 	{

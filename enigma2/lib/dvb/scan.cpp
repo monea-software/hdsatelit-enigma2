@@ -1225,7 +1225,8 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 		{
 			case iDVBFrontend::feTerrestrial:
 			{
-				// frecventa, sistemul (DVB-T / DVB-T2) si PLP-ul spuse de tuner dupa prindere (getTransponderData)
+				// frecventa (numai cand e posibila: hdster::frecventaSalvata), sistemul (DVB-T / DVB-T2) si PLP-ul spuse de
+				// tuner dupa prindere (getTransponderData)
 				if (it == m_tuner_data.end())
 					break;
 				eDVBFrontendParameters *p = (eDVBFrontendParameters*)&(*ch->second);
@@ -1233,7 +1234,7 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 				p->getDVBT(parm);
 				PyObject *val = PyDict_GetItemString(it->second, "frequency");
 				if (val && PyLong_Check(val))
-					parm.frequency = PyLong_AsLong(val);
+					parm.frequency = hdster::frecventaSalvata(parm.frequency, PyLong_AsLong(val));
 				val = PyDict_GetItemString(it->second, "system");
 				if (val && PyLong_Check(val))
 					parm.system = hdster::sistemNormalizat(PyLong_AsLong(val));

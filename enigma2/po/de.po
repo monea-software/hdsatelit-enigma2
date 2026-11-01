@@ -14034,9 +14034,9 @@ msgstr "Kopier ihn ganz aus dem Portal (Translator-Ressource, „Keys and Endpoi
 #: lib/python/Components/HdsConfigurareTraducere.py
 msgid ""
 "Copiaz-o întreagă din pagina cheilor DeepL "
-"(www.deepl.com/your-account/keys), fără spații. Trebuie o cheie de la DeepL "
+"(www.deepl.com/en/your-account/keys), fără spații. Trebuie o cheie de la DeepL "
 "API, nu de la traducătorul obișnuit."
-msgstr "Kopier ihn ganz von der Seite der DeepL-Schlüssel (www.deepl.com/your-account/keys), ohne Leerzeichen. Es muss ein Schlüssel von DeepL API sein, nicht vom normalen Übersetzer."
+msgstr "Kopier ihn ganz von der Seite der DeepL-Schlüssel (www.deepl.com/en/your-account/keys), ohne Leerzeichen. Es muss ein Schlüssel von DeepL API sein, nicht vom normalen Übersetzer."
 
 #: lib/python/Components/HdsConfigurareTraducere.py
 #, python-format
@@ -58236,3 +58236,329 @@ msgstr "Der Receiver startet in das gewählte Image aus seinem Speicher neu. Auf
 
 msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
 msgstr "Der Receiver startet in das Image %s neu. Die Weboberfläche hier antwortet erneut, wenn du das HD Satelit Image wieder startest."
+
+msgid "Din casă intri direct, fără parolă. Parola se cere numai dacă oprești „Fără parolă în rețeaua locală” și se vede aici oricând."
+msgstr "Im Heimnetz loggst du dich direkt ohne Passwort ein. Das Passwort wird nur verlangt, wenn du \"Ohne Passwort im lokalen Netz\" ausschaltest, und du siehst es hier jederzeit."
+
+msgid "Parola lui root, aceeași pentru FTP, SSH, SFTP și Telnet"
+msgstr "Das root-Passwort, dasselbe für FTP, SSH, SFTP und Telnet"
+
+msgid "Parola lui root, aceeași pentru SSH, SFTP și Telnet"
+msgstr "Das root-Passwort, dasselbe für SSH, SFTP und Telnet"
+
+msgid "FTP, SFTP, Telnet: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP, SFTP, Telnet: %s, Benutzer root · SSH: ssh root@%s"
+
+msgid "Te conectezi de pe calculator cu: ssh root@%s sau telnet %s"
+msgstr "Du verbindest dich vom Computer aus mit: ssh root@%s oder telnet %s"
+
+msgid "Fără parolă în rețeaua locală: pornit. Din casă intri direct, fără parolă; din afara casei numai cu o cheie."
+msgstr "Ohne Passwort im lokalen Netz: an. Im Heimnetz loggst du dich direkt ohne Passwort ein; von außerhalb des Heimnetzes nur mit einem Schlüssel."
+
+msgid "Fără parolă în rețeaua locală: oprit. Și din casă se cere parola."
+msgstr "Ohne Passwort im lokalen Netz: aus. Auch im Heimnetz wird das Passwort verlangt."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește."
+msgstr "Im Heimnetz loggst du dich direkt ohne Passwort über SSH, SFTP, FTP und Telnet ein; von außerhalb des Heimnetzes nur mit einem Schlüssel. OK schaltet es aus."
+
+msgid "Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește."
+msgstr "Jetzt wird auch im Heimnetz das Passwort verlangt. Wenn es an ist, loggst du dich im Heimnetz direkt ohne Passwort ein. OK schaltet es ein."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."
+msgstr "Im Heimnetz loggst du dich direkt ohne Passwort über SSH, SFTP, FTP und Telnet ein, solange \"Ohne Passwort im lokalen Netz\" an ist. Von außerhalb des Heimnetzes loggst du dich nur mit einem SSH-Schlüssel ein, der weiter unten eingetragen ist."
+
+msgid "Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. Oprit: și din casă se cere parola."
+msgstr "An (so wie der Receiver ausgeliefert wird): Im Heimnetz loggst du dich direkt ohne Passwort ein; von außerhalb des Heimnetzes nur mit einem Schlüssel. Aus: Auch im Heimnetz wird das Passwort verlangt."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea nu a putut porni."
+msgstr "Die Suche konnte nicht gestartet werden."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit e folosit acum (o înregistrare sau alt ecran). Încearcă după ce se eliberează."
+msgstr "Der Satelliten-Tuner wird gerade verwendet (eine Aufnahme oder ein anderer Bildschirm). Versuch es, wenn er wieder frei ist."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "O căutare oarbă e deja în curs pe acest receptor."
+msgstr "Auf diesem Receiver läuft bereits ein Blindscan."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge încă pe tunerul acestui receptor."
+msgstr "Der Blindscan funktioniert auf dem Tuner dieses Receivers noch nicht."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul nu a mai răspuns, așa că am oprit căutarea."
+msgstr "Der Tuner hat nicht mehr geantwortet, daher wurde die Suche gestoppt."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 1: toată banda o dată, apoi numai unde lipsește un transponder cunoscut."
+msgstr "Stufe 1: das ganze Band einmal, danach nur dort, wo ein bekannter Transponder fehlt."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste."
+msgstr "Stufe 2: auch alle Lücken im Band, erneut in schmalen Fenstern gesucht."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă."
+msgstr "Stufe 3: die Lücken noch einmal, mit anderen Rändern. Die sicherste und längste."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "găsit"
+msgstr "gefunden"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "se caută"
+msgstr "wird gesucht"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "negăsit"
+msgstr "nicht gefunden"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "neverificat"
+msgstr "nicht geprüft"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam un minut"
+msgstr "etwa eine Minute"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cel pe care stă antena acum"
+msgstr "der, auf dem die Antenne gerade steht"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treceri (bandă × polarizare): %d. Durata: %s."
+msgstr "Durchläufe (Band × Polarisation): %d. Dauer: %s."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "%d MHz, %s, %d kSym/s"
+msgstr "%d MHz, %s, %d kSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”."
+msgstr "Der Satelliten-Tuner hat keinen Satelliten konfiguriert. Konfiguriere die Antenne in „Tuner-Einstellungen”."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software."
+msgstr "Das Blindscan-Programm ist auf diesem Receiver nicht installiert. Die Software-Aktualisierung bringt es mit."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Nu e nimic de scanat încă."
+msgstr "Es gibt noch nichts zu scannen."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oscilatorul LNB-ului nu e cunoscut. Verifică LNB-ul în Configurare LNB."
+msgstr "Der LNB-Oszillator ist nicht bekannt. Überprüfe das LNB in LNB-Konfiguration."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Bandă necunoscută."
+msgstr "Unbekanntes Band."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Alege cel puțin o polarizare."
+msgstr "Wähle mindestens eine Polarisation."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam %d minute"
+msgstr "etwa %d Minuten"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Toată banda (joasă și înaltă)"
+msgstr "Gesamtes Band (unteres und oberes)"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda joasă"
+msgstr "Nur unteres Band"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda înaltă"
+msgstr "Nur oberes Band"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Orizontală și verticală"
+msgstr "Horizontal und vertikal"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai orizontală"
+msgstr "Nur horizontal"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai verticală"
+msgstr "Nur vertikal"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oricare"
+msgstr "Beliebig"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1 MSym/s"
+msgstr "1 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2 MSym/s"
+msgstr "2 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "5 MSym/s"
+msgstr "5 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1: toată banda o dată"
+msgstr "1: gesamtes Band einmal"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2: și golurile benzii"
+msgstr "2: und Lücken im Band"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "3: golurile de două ori"
+msgstr "3: Lücken zweimal"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Antena nu se mișcă: pentru alt satelit, pornește întâi un canal de pe el."
+msgstr "Die Antenne bewegt sich nicht: starte für einen anderen Satelliten zuerst einen Kanal von ihm."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Se oprește după bucata de bandă în curs..."
+msgstr "Stoppt nach dem aktuellen Bandabschnitt..."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Gata în %d s. Găsite: %d din %d cunoscute, noi: %d."
+msgstr "Fertig in %d s. Gefunden: %d von %d bekannten, neu: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Scanarea canalelor nu a putut porni."
+msgstr "Der Sendersuchlauf konnte nicht gestartet werden."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta %d din %d: %d%%. Găsite: %d, noi: %d."
+msgstr "Stufe %d von %d: %d%%. Gefunden: %d, neu: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge printr-un LNB Unicable."
+msgstr "Blindscan funktioniert nicht über ein Unicable-LNB."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea a durat prea mult și s-a oprit. Rămân transponderele găsite până atunci."
+msgstr "Die Suche dauerte zu lange und wurde gestoppt. Die bis dahin gefundenen Transponder bleiben erhalten."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oprită."
+msgstr "Gestoppt."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Căutare oarbă pe satelit"
+msgstr "Satelliten-Blindscan"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Polarizările"
+msgstr "Polarisationen"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Treptele căutării"
+msgstr "Suchstufen"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Rata minimă"
+msgstr "Minimale Symbolrate"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, EXIT oprește."
+msgstr "Auf/Ab wählt die Zeile, Links/Rechts oder OK ändert, Grün startet, EXIT stoppt."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Nu pot citi setările tunerului de satelit."
+msgstr "Die Einstellungen des Satelliten-Tuners können nicht gelesen werden."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Banda"
+msgstr "Band"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Transponderele găsite arată că antena stă pe %s."
+msgstr "Die gefundenen Transponder zeigen, dass die Antenne auf %s ausgerichtet ist."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Satelit: %s"
+msgstr "Satellit: %s"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Scanează canalele"
+msgstr "Sender suchen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea a pornit."
+msgstr "Die Suche wurde gestartet."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea se oprește după bucata de bandă în curs."
+msgstr "Die Suche stoppt nach dem aktuellen Bandabschnitt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Scanarea canalelor a pornit pe televizor. Rezultatul se vede pe pagina Scanare și antenă."
+msgstr "Der Sendersuchlauf wurde auf dem Fernseher gestartet. Das Ergebnis ist auf der Seite Suchlauf und Antenne sichtbar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Satelit: <b id=\"satelit\"></b>"
+msgstr "Satellit: <b id=\"satelit\"></b>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Pe televizor: <span>__DRUM__</span>."
+msgstr "Auf dem Fernseher: <span>__DRUM__</span>."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Rata (kSym/s)"
+msgstr "Symbolrate (kSym/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Se pornește scanarea canalelor..."
+msgstr "Sendersuchlauf wird gestartet..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "O altă scanare e deschisă pe televizor. Așteaptă să se termine sau închide-o, apoi încearcă din nou."
+msgstr "Ein anderer Suchlauf ist auf dem Fernseher geöffnet. Warte, bis er beendet ist, oder schließe ihn und versuche es erneut."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Televizorul nu o arată acum (receptorul e în standby sau ecranul nu s-a deschis), dar merge."
+msgstr "Der Fernseher zeigt es gerade nicht an (der Receiver ist im Standby oder der Bildschirm wurde nicht geöffnet), aber es läuft."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Nicio căutare oarbă în curs."
+msgstr "Kein Blindscan im Gange."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "căutarea oarbă pe satelit"
+msgstr "der Satelliten-Blindscan"
+
+#: data/menu.xml
+msgid "Căutare oarbă"
+msgstr "Blindscan"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"
+msgstr "<code>GET /api/oarba</code>: Satelliten-Blindscan: der Satellit, auf den die Antenne gerichtet ist, die Auswahl (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), Vorschau und Status der Suche (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> mit <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); nur lesend"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)"
+msgstr "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: startet den Blindscan (sein Bildschirm öffnet sich auf dem Fernseher)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"
+msgstr "<code>POST /api/oarba-opreste</code>: stoppt den Blindscan nach dem aktuellen Bandabschnitt"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite"
+msgstr "<code>POST /api/oarba-scaneaza</code>: „Sender suchen” auf bekannten und neu gefundenen Transpondern"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
+msgstr "<code>POST /api/oarba-televizor</code>: öffnet den Blindscan-Bildschirm auf dem Fernseher"
+
+msgid "Criptat (BISS)"
+msgstr "Verschlüsselt (BISS)"
+
+msgid "Canale terestre spaniole recepționate din satelit"
+msgstr "Spanische terrestrische Sender, über Satellit empfangen"
+
+msgid "Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V."
+msgstr "Hier erscheinen die spanischen terrestrischen Sender, die über Satellit empfangen werden. Die Liste ist leer: Du hast auf 30°W noch nicht gesucht."
