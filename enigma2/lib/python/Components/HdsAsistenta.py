@@ -77,8 +77,8 @@ IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
-# (5: randul "Control complet", nivelul B; 6: asistenta numai completa, fara rand de ales)
-VERSIUNE_TEXT = 6
+# Regula curenta: ecrane deschise cu secrete mascate; numai modulele de acces raman inchise.
+VERSIUNE_TEXT = 7
 # durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
 # fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
 DURATA_PERMANENTA = 0
@@ -115,24 +115,28 @@ def N_(text):
 	return text
 
 
-# Textul de informare (consimtamantul), acelasi pe televizor si in web. Spune numai ce face versiunea 1 (fara tunel,
-# fara comenzi): ce vedem, ce pastram si cat, cine primeste datele, cum opresti, varsta, contactul.
+# Informarea, aceeasi pe televizor si in web: accesul echipei, secretele mascate, pastrarea datelor si oprirea.
 INFORMARE = N_(
 	"Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a "
-	"receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\n"
-	"Este numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești "
-	"tu, de fiecare dată din nou.\n\n"
-	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. "
-	"Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a "
-	"meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem "
-	"ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\n"
-	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se "
-	"oprește singură.\n\n"
+	"receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n"
+	"\n"
+	"Este numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o "
+	"pornești tu, de fiecare dată din nou.\n"
+	"\n"
+	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere "
+	"pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate "
+	"controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de "
+	"acces rămân închise. Poți opri oricând.\n"
+	"\n"
+	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales "
+	"se oprește singură.\n"
+	"\n"
 	"Ce date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la "
-	"cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de "
-	"internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul "
-	"nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să "
-	"reparăm imaginea și nu le dăm altora.\n\n"
+	"cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa "
+	"ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe "
+	"serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim "
+	"numai ca să reparăm imaginea și nu le dăm altora.\n"
+	"\n"
 	"Operatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să "
 	"ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte.")
 
@@ -141,33 +145,22 @@ INFORMARE = N_(
 TEXT_DURATE = N_("Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e "
 	"pornită, echipa poate intra oricând, dar face numai ce e în lista fixă.")
 
-# paragraful "Cum merge" al informarii, cu controlul (nivelul B); inlocuieste la afisare paragraful al treilea din
-# INFORMARE (acela spune numai ce face nivelul A), ca restul textului sa ramana cu traducerile lui
-TEXT_CUM_MERGE = N_("Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o "
-	"cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale "
-	"jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și "
-	"textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul "
-	"oficial, ca și cum am ține telecomanda. Nu putem rula "
-	"comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale "
-	"accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate "
-	"doar ieși. Fiecare cerere apare în jurnal, pe ecran.")
-# al catelea paragraf din INFORMARE e "Cum merge" (numaratoarea de la 0)
-_PARAGRAF_CUM_MERGE = 2
+# Regula unica pentru pornire, informare si pagina web.
+TEXT_CUM_MERGE = N_(
+	"Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla "
+	"receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces "
+	"rămân închise. Poți opri oricând.")
 
 
 def textInformare():
 	parti = _t(INFORMARE).split("\n\n")
-	if len(parti) > _PARAGRAF_CUM_MERGE:
-		parti[_PARAGRAF_CUM_MERGE] = _t(TEXT_CUM_MERGE)
 	parti.insert(min(4, len(parti)), _t(TEXT_DURATE))
 	return "\n\n".join(parti)
 
 
 # Pagina de pornire (pe receptor si in web): numai randul scurt TEXT_SCURT, randul bifat dinainte TEXT_ACCEPT si Start.
 # Termenii si conditiile intregi (textTermeni) se deschid la cerere: OK pe rand (receptor) sau legatura din fraza (web).
-TEXT_SCURT = N_("Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, "
-	"schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără "
-	"datele tale personale. O oprești oricând.")
+TEXT_SCURT = TEXT_CUM_MERGE
 # banda de sus cat echipa apasa taste sau scrie (op-urile de control)
 TEXT_LUCREAZA = N_("HD Satelit lucrează acum pe receptorul tău")
 # cat ramane banda "lucrează acum" dupa ultimul op de control (secunde)
@@ -175,8 +168,7 @@ LUCREAZA_S = 20
 TEXT_ACCEPT = N_("Accept termenii și condițiile")
 TEXT_TERMENI = N_("Termenii și condițiile")
 TEXT_FARA_BIFA = N_("Fără bifă, asistența nu pornește.")
-TEXT_NIVEL = N_("Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O "
-	"captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând.")
+TEXT_NIVEL = TEXT_CUM_MERGE
 TEXT_ACORD = N_("Cu rândul bifat, Start confirmă că ești de acord cu aceste condiții și că ai cel puțin 16 ani sau "
 	"acordul unui părinte.")
 
@@ -184,7 +176,7 @@ TEXT_ACORD = N_("Cu rândul bifat, Start confirmă că ești de acord cu aceste 
 def textTermeni():
 	"""Textul intreg al termenilor si conditiilor (fereastra derulanta de pe receptor si din web): informarea, nivelul
 	si ce confirma Start (varsta)."""
-	return "\n\n".join((textInformare(), _t(TEXT_NIVEL), _t(TEXT_ACORD)))
+	return "\n\n".join((textInformare(), _t(TEXT_ACORD)))
 
 
 # "Cu ce te ajutam?": optional, pe ecranul de pornire si in pagina web. Cheia aleasa (lista inchisa, aceeasi ca pe

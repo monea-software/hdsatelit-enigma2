@@ -123,6 +123,10 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		self._actualizeazaTextJeton()
 		getattr(self, "onLayoutFinish", []).append(self._tasteMarite)
 
+	def secreteAsistenta(self):
+		# Valorile existente se mascheaza si in explicatiile traduse; nu se creeaza nicio parola.
+		return (config.plugins.hdswebcontrol.token.value, aplicatii_web.parola(creeaza=False))
+
 	def _tasteMarite(self):
 		"""Textul marit (Marimea textului peste 100 %, Components/HdsMarireText): tastele colorate impart randul dupa
 		textele lor, fiecare pe un rand (la 125 % "Deconecteaza browserele" trecea pe doua randuri). La 100 % nu se

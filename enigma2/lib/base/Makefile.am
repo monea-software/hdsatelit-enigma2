@@ -19,6 +19,7 @@ libenigma_base_a_SOURCES = \
 	estring.cpp \
 	etpm.cpp \
 	filepush.cpp \
+	hdsjurnal.cpp \
 	init.cpp \
 	ioprio.cpp \
 	message.cpp \
@@ -44,6 +45,7 @@ baseinclude_HEADERS = \
 	estring.h \
 	etpm.h \
 	filepush.h \
+	hdsjurnal.h \
 	i18n.h \
 	itssource.h \
 	init.h \

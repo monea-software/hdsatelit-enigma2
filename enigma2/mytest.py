@@ -790,6 +790,12 @@ def runScreenTest():
 			HdsBetaTester.porneste(session)
 	except Exception as e:
 		print("[mytest] beta tester:", e)
+	# HDSatelit: jurnalele retelei si ale discurilor (Components/HdsJurnalSistem.py): numai schimbarile, la 30 s
+	try:
+		from Components import HdsJurnalSistem
+		HdsJurnalSistem.porneste()
+	except Exception as e:
+		print("[mytest] jurnalele retelei si discurilor:", e)
 
 	runNextScreen(session, screensToRun)
 

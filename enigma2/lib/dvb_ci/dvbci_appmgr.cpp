@@ -3,6 +3,7 @@
 
 #include <lib/base/eerror.h>
 #include <lib/dvb_ci/dvbci_appmgr.h>
+#include <lib/base/hdsjurnal.h>
 #include <lib/dvb_ci/dvbci_ui.h>
 
 eDVBCIApplicationManagerSession::eDVBCIApplicationManagerSession(eDVBCISlot *tslot)
@@ -50,6 +51,8 @@ int eDVBCIApplicationManagerSession::receivedAPDU(const unsigned char *tag,const
 			eDebug("%s", "");
 
 			eDVBCI_UI::getInstance()->setAppName(slot->getSlotID(), str);
+			/* jurnalul CI (lib/base/hdsjurnal.h): numai starea si numele modulului, nimic de decodare */
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d modul pornit: \"%s\"", slot->getSlotID(), str);
 
 			eDVBCI_UI::getInstance()->setState(slot->getSlotID(), 2);
 			break;

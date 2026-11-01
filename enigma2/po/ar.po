@@ -11355,17 +11355,8 @@ msgstr "يقوم HD Satelit الآن بإعادة تشغيل واجهة جهاز
 msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
 msgstr "يقوم HD Satelit الآن بإعادة تشغيل جهاز الاستقبال. تستمر المساعدة بعد إعادة التشغيل."
 
-msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
-msgstr "يدخل فريق HD Satelit عبر الإنترنت إلى جهاز الاستقبال لديك لمساعدتك: يمكنه التنقل في القوائم وتغيير الإعدادات والبحث عن القنوات والتثبيت من مستودع الحزم الرسمي، دون مفاتيح وحدات الوصول المشروط وخطوط اشتراكها ودون بياناتك الشخصية. يمكنك إيقافها في أي وقت."
-
-msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
-msgstr "كيف تعمل: جهاز الاستقبال لديك يسأل خادم HD Satelit، عبر اتصال مشفر، إن كان لدينا طلب له. لا يمكننا طلب سوى عمليات من قائمة ثابتة مكتوبة في الصورة: قراءات للحالة وللسجلات وللنص الموجود على الشاشة، ولقطة للقوائم، ورسالة مكتوبة على الشاشة، وأزرار جهاز التحكم عن بعد والنص في الحقول، حتى نتنقل في القوائم ونغيّر الإعدادات ونبحث عن القنوات ونثبّت من مستودع الحزم الرسمي، وكأننا نمسك جهاز التحكم عن بعد. لا يمكننا تنفيذ أوامر حرة ولا يمكننا الوصول إلى أجهزة أخرى في منزلك. تبقى شاشات وحدات الوصول المشروط وكلمات المرور ووصول SSH وشبكة Wi-Fi وبياناتك الشخصية مغلقة: هناك لا يرى الفريق شيئًا ولا يمكنه سوى الخروج. يظهر كل طلب في السجل على الشاشة."
-
 msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
 msgstr "Start يشغّلها لمدة ساعتين. يمكنك إيقافها في أي وقت، من جهاز الاستقبال أو من صفحة الويب. وما دامت تعمل، يمكن للفريق الدخول في أي وقت، لكنه يفعل فقط ما هو في القائمة الثابتة."
-
-msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
-msgstr "المساعدة كاملة: قراءات واختبارات والتحكم في جهاز الاستقبال عبر القوائم، من القائمة الثابتة. اللقطة تعرض القوائم فقط، لا صورة القناة. الشاشات الخاصة تبقى مغلقة. يمكنك الإيقاف في أي وقت."
 
 msgid "Pornește alte imagini"
 msgstr "تشغيل إيميجات أخرى"
@@ -11855,3 +11846,76 @@ msgstr "<code>POST /api/oarba-scaneaza</code>: «فحص القنوات» على 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
 msgstr "<code>POST /api/oarba-televizor</code>: يفتح شاشة البحث الأعمى على التلفاز"
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
+msgstr "تتيح المساعدة عن بعد لفريق HD Satelit الاطلاع عبر الإنترنت على الحالة التقنية لجهاز الاستقبال لديك، للعثور على أعطال الصورة في طراز جهازك وإصلاحها بشكل أسرع.\n\nهذه الوظيفة مخصصة لمن يريد مساعدتنا فقط. لا يحتاج إليها جهاز الاستقبال ليعمل. تكون متوقفة حتى تشغلها بنفسك في كل مرة.\n\nكيف تعمل: يسأل جهاز الاستقبال خادم HD Satelit عبر اتصال مشفر عما إذا كان لدينا طلب له. المساعدة كاملة: يرى فريق HD Satelit الشاشات والإعدادات وصورة القناة ويمكنه التحكم في جهاز الاستقبال عبر القوائم. تظهر كلمات المرور وأرقام PIN والمفاتيح على شكل نجوم. تبقى شاشات وحدات الوصول وحدها مغلقة. يمكنك الإيقاف في أي وقت.\n\nترى علامة على الشاشة طوال فترة تشغيلها. يمكنك إيقافها في أي وقت من هنا أو من صفحة الويب، وتتوقف تلقائيا بعد المدة المحددة.\n\nالبيانات التي تصل إلينا: طراز جهاز الاستقبال وإصداره والبلد ووقت الجلسة ومدتها والردود على الطلبات المسجلة في السجل (قد تبين السجلات، من بين أمور أخرى، القنوات التي فتحت ومتى). لا نحتفظ بعنوان الإنترنت لديك. لا نقرأ كلمات المرور أو المفاتيح أو إعدادات بطاقات الوصول أو ملفاتك. تبقى البيانات على خادمنا (Hetzner، ألمانيا؛ يمر الاتصال عبر Cloudflare) لمدة 30 يوما ثم تحذف. نستخدمها فقط لإصلاح الصورة ولا نعطيها للآخرين.\n\nالمسؤول عن البيانات: Monea Eduard (HD Satelit)، contact@hdsatelit.com. يمكنك أن تطلب منا في أي وقت الاطلاع على بيانات جلستك أو حذفها. استخدم الوظيفة فقط إذا كان عمرك 16 عاما على الأقل أو بموافقة أحد الوالدين."
+
+msgid "Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând."
+msgstr "المساعدة كاملة: يرى فريق HD Satelit الشاشات والإعدادات وصورة القناة ويمكنه التحكم في جهاز الاستقبال عبر القوائم. تظهر كلمات المرور وأرقام PIN والمفاتيح على شكل نجوم. تبقى شاشات وحدات الوصول وحدها مغلقة. يمكنك الإيقاف في أي وقت."
+
+msgid "rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)"
+msgstr "الشبكة، بما في ذلك اسم Wi-Fi (عنوان MAC مخفي إلى النصف)"
+
+msgid "setările receptorului, cu secretele ca steluțe, fără modulele de acces"
+msgstr "إعدادات جهاز الاستقبال، مع إظهار الأسرار كنجوم، دون وحدات الوصول"
+
+msgid "captură cu meniurile și imaginea canalului; secretele ca steluțe"
+msgstr "لقطة تشمل القوائم وصورة القناة؛ الأسرار كنجوم"
+
+msgid "textul ecranului, cu secretele ca steluțe; numai modulele de acces rămân închise"
+msgstr "نص الشاشة، مع إظهار الأسرار كنجوم؛ تبقى وحدات الوصول وحدها مغلقة"
+
+msgid "transponderele din lista ta, cu numele canalelor"
+msgstr "الترانسبوندرات في قائمتك مع أسماء القنوات"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planul „Developer” e gratuit, dar numai pentru 1.000.000 de caractere în total, o singură dată, nu în fiecare lună."
+msgstr "خطة «Developer» مجانية، لكنها تتيح إجمالي 1,000,000 حرف لمرة واحدة فقط، وليس كل شهر."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Deschide înscrierea în planul gratuit DeepL API („Developer”): scanează codul QR de aici sau apasă legătura din interfața web."
+msgstr "افتح صفحة التسجيل في خطة DeepL API المجانية («Developer»): امسح رمز QR الموجود هنا أو اضغط على الرابط في واجهة الويب."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Intră în contul tău DeepL sau fă unul nou. Contul de la traducătorul DeepL n-are chei API până nu adaugi acest plan: adresa cheilor te întoarce la pagina contului."
+msgstr "سجّل الدخول إلى حسابك في DeepL أو أنشئ حسابًا جديدًا. حساب مترجم DeepL لا يحتوي على مفاتيح API حتى تضيف هذه الخطة: رابط المفاتيح يعيدك إلى صفحة الحساب."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Completează țara, prenumele, numele și adresa (strada, codul poștal, orașul)."
+msgstr "أدخل البلد والاسم الأول واسم العائلة والعنوان (الشارع، الرمز البريدي، المدينة)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Verify email”, apoi butonul „Verify email” din emailul primit de la DeepL. Pagina nu o închide."
+msgstr "اضغط «Verify email»، ثم زر «Verify email» في الرسالة التي وصلتك من DeepL. اترك الصفحة مفتوحة."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Start building for free”. La pasul „Get API key” apare cheia."
+msgstr "اضغط «Start building for free». يظهر المفتاح في خطوة «Get API key»."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile le găsești oricând în contul DeepL, la „API Keys & Limits” (www.deepl.com/en/your-account/keys): copiezi cheia cu iconița de lângă ea sau faci una nouă cu „Create key”."
+msgstr "يمكنك العثور على المفاتيح في أي وقت في حسابك في DeepL ضمن «API Keys & Limits» (www.deepl.com/en/your-account/keys): انسخ المفتاح بالأيقونة المجاورة له أو أنشئ مفتاحًا جديدًا عبر «Create key»."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Înscrierea în planul gratuit DeepL API („Developer”)"
+msgstr "التسجيل في خطة DeepL API المجانية («Developer»)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile tale DeepL („API Keys & Limits”)"
+msgstr "مفاتيح DeepL الخاصة بك («API Keys & Limits»)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planurile DeepL API și ce include fiecare"
+msgstr "خطط DeepL API وما تتضمنه كل منها"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Pe pagina deschisă intră în contul tău DeepL (sau fă unul) și completează numele și adresa: așa adaugi planul gratuit „Developer”, fără de care contul n-are chei."
+msgstr "في الصفحة التي تُفتح، سجّل الدخول إلى حسابك في DeepL (أو أنشئ حسابًا) وأدخل اسمك وعنوانك: بهذه الطريقة تضيف خطة «Developer» المجانية، التي بدونها لا يحتوي الحساب على مفاتيح."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Confirmă emailul, apasă „Start building for free” și copiază cheia de la „Get API key”. Mai târziu o găsești la „Cheile tale DeepL”, mai jos."
+msgstr "أكّد بريدك الإلكتروني، واضغط «Start building for free» وانسخ المفتاح من خطوة «Get API key». ستجده لاحقًا ضمن «مفاتيح DeepL الخاصة بك» أدناه."
+
+#: lib/python/Screens/HdsAsistenta.py lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."
+msgstr "إذا لم نتصل فورًا، فاترك الطلب نشطًا لمدة 30 دقيقة على الأقل: فقد نكون مشغولين بمساعدة شخص آخر الآن."

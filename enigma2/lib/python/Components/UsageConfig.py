@@ -121,8 +121,9 @@ def InitUsageConfig():
 	config.usage.e1like_radio_mode = ConfigYesNo(default = False)
 	# HDSatelit: sagetile SUS si JOS la privit (Components/HdsSageti.py: bara TV si ecranul radio): lista de canale radio
 	# sau TV, ori canalul urmator si anterior. Numele vechi al setarii ramane (0.1.6 avea numai SUS: "radio", implicit,
-	# si "tv", cand si SUS deschidea lista TV, ca JOS), deci o valoare salvata isi pastreaza intelesul
-	config.usage.hds_sageata_sus = ConfigSelection(default = "radio", choices = [
+	# si "tv", cand si SUS deschidea lista TV, ca JOS), deci o valoare salvata isi pastreaza intelesul. Implicit din
+	# 0.6.20: amandoua lista TV (sus pe radio deruta; cine il vrea il alege din meniu)
+	config.usage.hds_sageata_sus = ConfigSelection(default = "tv", choices = [
 		("radio", N_("Sus lista radio, jos lista TV")), ("tv_radio", N_("Sus lista TV, jos lista radio")),
 		("tv", N_("Ambele deschid lista TV")), ("radio_radio", N_("Ambele deschid lista radio")),
 		("zap", N_("Schimbă canalul (sus: următorul)"))])

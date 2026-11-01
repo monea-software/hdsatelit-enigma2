@@ -9,7 +9,8 @@
  * CE SE SCRIE (un rand JSON pe eveniment, in /home/root/logs/hds-motor.log, rotit in hds-motor.log.1 la 128 KB):
  *   - "comanda": fiecare mesaj de motor dat driverului (eDVBFrontend::sendDiseqc), din secventa unei acordari (cale
  *     "acordare") sau trimis direct din Python (cale "directa"), cu octetii, numele comenzii, unghiul sau pozitia,
- *     raspunsul driverului, cine a cerut-o, canalul si transponderul, pozitia crezuta inainte;
+ *     raspunsul driverului, cine a cerut-o, transponderul, pozitia crezuta inainte; referinta canalului numai in
+ *     randurile unui esec (comanda refuzata, readucerea, mersul intrerupt, proba fara semnal: esec() in .cpp);
  *   - "goto_omis": o acordare pe satelitul pe care nucleul crede ca e deja antena (sec.cpp nu trimite nimic motorului);
  *     la reacordarea dupa pierderea semnalului cel mult un rand la 30 s pe tuner, altfel cel mult unul la 10 minute
  *     (cele sarite se numara in randul urmator);

@@ -277,7 +277,7 @@ PAGINA = """<!DOCTYPE html>
   <p>Funcția nu e disponibilă pe această imagine.</p>
 </section>
 <section class="card ascuns" id="pornire">
-  <p class="scurt">Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând.</p>
+  <p class="scurt">Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând.</p>
   <label class="bifa"><input type="checkbox" id="accept" checked><span>Accept <a href="#" id="termeni">termenii și condițiile</a></span></label>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
@@ -287,6 +287,7 @@ PAGINA = """<!DOCTYPE html>
   <button class="rosu" id="opreste">Oprește</button>
   <p class="mesaj" id="mesajOprire"></p>
   <p class="nota ascuns" id="asteptare">Te anunțăm când intrăm. Poți folosi receptorul între timp.</p>
+  <p class="nota ascuns" id="asteptareNuOpri">Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum.</p>
   <p class="nota">Jurnalul asistenței</p>
   <pre class="jurnal" id="jurnal"></pre>
 </section>
@@ -323,6 +324,7 @@ function arata(d){
   $("pornita").classList.toggle("ascuns", !activa);
   $("stare").textContent = d.pana_text || "";
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
+  $("asteptareNuOpri").classList.toggle("ascuns", d.stare!=="asteapta");
   $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";
   var c = d.concluzii;
   $("concluzii").classList.toggle("ascuns", !(c && c.text));
@@ -359,13 +361,15 @@ TEXTE_PAGINA = {
 		N_("Asistență de la distanță"),
 		N_("Se citește starea..."),
 		N_("Funcția nu e disponibilă pe această imagine."),
-		N_("Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba "
-			"setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele "
-			"tale personale. O oprești oricând."),
+		N_(
+	"Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla "
+	"receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces "
+	"rămân închise. Poți opri oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
 		N_("Start"),
 		N_("Oprește"),
 		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),
+		N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."),
 		N_("Jurnalul asistenței"),
 		N_("Termenii și condițiile"),
 		N_("Închide"),

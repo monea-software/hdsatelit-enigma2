@@ -6,12 +6,10 @@
 # deschis pe receptor (op "ecran"), tastele telecomenzii (op "taste") si scrierea intr-un camp de text (op "text"). Cu
 # textul ecranului si cu tastele, echipa face prin meniuri orice ar face omul cu telecomanda.
 #
-# ECRANELE PRIVATE: modulele de acces (orice ecran al lor, dupa clasa si dupa modul), Accesul SSH, programul de beta
-# testeri (numele, e-mailul), Wi-Fi-ul (retele, parola), VPN-ul, controlul parental (PIN), setarile interfetei web (cheia
-# pentru scripturi), codul de asociere si ORICE ecran care are in lista un camp de parola sau de PIN. Daca unul dintre
+# ECRANELE PRIVATE: numai modulele de acces (orice ecran al lor, dupa clasa si dupa modul). Daca unul dintre
 # ecranele din stiva (nu numai cel de sus) e privat, tot ecranul e privat: "ecran" da numai "(ecran privat)" si clasa,
-# "taste" primeste numai EXIT, "text" si captura sunt refuzate. O tastatura de pe ecran deschisa peste parola Wi-Fi e deci
-# tot privata.
+# "taste" primeste numai EXIT, "text" si captura sunt refuzate. Pe celelalte ecrane se mascheaza valorile secrete;
+# tastatura unui secret si randul secret selectat nu se captureaza si nu primesc op "text".
 #
 # TASTELE: numai din lista alba TASTE (fara POWER si fara oprire), cel mult MAX_TASTE pe cerere, cu PAUZA_MS intre ele,
 # trimise ca tastele adevarate ale telecomenzii (eRCMapper.inject cu dispozitivul nativ, ca in interfata web; fara el,
@@ -27,6 +25,8 @@ import os
 import re
 import threading
 import time
+import unicodedata
+from urllib.parse import unquote
 
 # lista alba a tastelor (numele din cerere -> codul Linux al tastei, ca telecomanda fizica si interfata web)
 TASTE = {
@@ -61,21 +61,51 @@ TEXT_MAXIM = 200
 
 # ecranele private, dupa clasa (numele exact) si dupa tipar (clasa sau modul)
 CLASE_PRIVATE = frozenset((
-	"CamSetup", "CamInfo", "HdsAccesSsh", "HdsVpn", "WlanConnectScreen", "WlanScanScreen", "WlanStatusScreen",
-	"HdsWifiCanaleScreen", "ParentalControlSetup", "ParentalControlChangePin", "ParentalControlEditor",
-	"ParentalControlBouquetEditor", "PinInput", "HdsWebControlSetup", "HdsCodAsociere", "IptvSetup",
+	"CamSetup", "CamInfo",
 ))
 MODULE_PRIVATE = frozenset((
-	"Screens.CamSetup", "Screens.CamInfo", "Screens.Ci", "Screens.HdsAccesSsh", "Screens.HdsVpn",
-	"Screens.HdsBetaTester", "Screens.WlanSetup", "Screens.IptvSetup", "Screens.HdsWebControlSetup",
-	"Screens.HdsCodAsociere", "Screens.ParentalControlSetup",
+	"Screens.CamSetup", "Screens.CamInfo", "Screens.Ci",
 ))
-# orice clasa sau modul cu numele unui modul de acces, al unei parole, al Wi-Fi-ului, al accesului SSH, al VPN-ului sau al
-# programului de beta testeri (ale noastre si ale pluginurilor din afara)
-_TIPAR_PRIVAT = re.compile(r"(?i)(cam|card|parol|passw|wpa|wlan|wifi|ssh|vpn|beta|parental|token|login(?!fo)|email|"
-	r"cheie|chei\b|pinin)")
+# orice clasa sau modul al unui modul de acces, inclusiv pluginurile
+_TIPAR_PRIVAT = re.compile(r"(?i)(cam|card)")
 # campurile de parola si de PIN (clasele elementelor de setari)
 CAMPURI_PRIVATE = ("ConfigPassword", "ConfigPIN")
+
+# Cheile interne si etichetele secretelor, cu sau fara diacritice.
+_SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass|pwd|psk)(?:\b|[._])|token|secret|jeton|"
+	r"chei[ae]|api[ _.-]?key|key(?:\b|[._0-9])|(?:^|[._\s])pin(?:\b|[._0-9])|servicepin|setuppin|"
+	r"auth|cookie|cod[ _.-]?(?:de[ _.-]?)?asociere)")
+_URL_PAROLA = re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^\s/@]*(@)")
+_URL_PARAMETRU = re.compile(r"([?&;])([^=&#;\s]+)=([^&#;\s]*)")
+_ATRIBUIRE = re.compile(r"^([^=:|\n]+)(\s*[=:|]\s*)(.*)$")
+_SECRET_JURNAL = re.compile(r"(?i)(\b(?:password|passwd|passphrase|parol[ăa]|psk|token|secret|pwd|pass|pin|key|"
+	r"api[ _.-]?key|chei[ae](?:[ _.-]?api)?)\s*[=:]\s*)"
+	r"(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+)")
+_BEARER = re.compile(r"(?i)(\bbearer\s+)[a-z0-9._~+/=-]+")
+_ANTET_SECRET = re.compile(r"(?i)(\b(?:authorization|(?:set-)?cookie)\s*[=:]\s*).*$")
+
+
+def cheieSecreta(cheie):
+	text = "".join(c for c in unicodedata.normalize("NFKD", str(cheie)) if not unicodedata.combining(c))
+	return bool(_SECRET.search(text) or re.search(r"(?i)hds_beta\.(?:id|cod)\b", text))
+
+
+def mascheazaSecrete(text):
+	"""Pastreaza etichetele si adresele, inlocuind numai valorile secrete."""
+	randuri = []
+	for rand in (text or "").splitlines():
+		rand = _URL_PAROLA.sub(r"\1***\2", rand)
+		rand = _URL_PARAMETRU.sub(lambda m: m.group(1) + m.group(2) + "=***"
+			if cheieSecreta(unquote(m.group(2))) or m.group(2).lower() in ("pw", "sid", "sessionid", "sig", "signature")
+			else m.group(0), rand)
+		m = _ATRIBUIRE.match(rand)
+		if m and cheieSecreta(m.group(1)):
+			rand = m.group(1) + m.group(2) + "***"
+		rand = _ANTET_SECRET.sub(r"\1***", rand)
+		rand = _SECRET_JURNAL.sub(r"\1***", rand)
+		rand = _BEARER.sub(r"\1***", rand)
+		randuri.append(rand)
+	return "\n".join(randuri)
 
 RANDURI_LISTA = 40          # cate randuri dintr-o lista (in jurul celui ales)
 TEXT_ECRAN_MAX = 16 * 1024
@@ -168,7 +198,7 @@ def _modul(ecran):
 
 
 def _elementPrivat(element):
-	return any(n in CAMPURI_PRIVATE for n in _clase(element))
+	return bool(getattr(element, "hds_asistenta_secret", False)) or any(n in CAMPURI_PRIVATE for n in _clase(element))
 
 
 def _intrariConfig(ecran):
@@ -193,32 +223,223 @@ def _esteElement(x):
 
 
 def ecranPrivat(ecran):
-	"""True daca ecranul e privat: dupa clasa (si clasele de baza), dupa modul, sau fiindca are un camp de parola/PIN."""
+	"""True numai pentru ecranele modulelor de acces, inclusiv clasele de baza si pluginurile."""
 	if ecran is None:
 		return False
 	clase = _clase(ecran)
 	modul = _modul(ecran)
 	if any(c in CLASE_PRIVATE for c in clase) or modul in MODULE_PRIVATE:
 		return True
-	if _TIPAR_PRIVAT.search(type(ecran).__name__) or _TIPAR_PRIVAT.search(modul.rsplit(".", 1)[-1] if modul else ""):
+	if any(_TIPAR_PRIVAT.search(c) for c in clase) or _TIPAR_PRIVAT.search(modul.rsplit(".", 1)[-1] if modul else ""):
 		return True
 	if modul.startswith("Plugins.") and _TIPAR_PRIVAT.search(modul):
 		return True
-	for e in _intrariConfig(ecran):
-		if _elementPrivat(e[1]):
-			return True
 	return False
 
 
 def privat(ecrane, ssh_deschis=False):
-	"""(privat, clasa): primul ecran privat din stiva (oricare, nu numai cel de sus); ssh_deschis = ecranul Accesului
-	SSH e deschis (HdsAccesSsh.ecranDeschis), chiar daca nu e in stiva."""
+	"""(privat, clasa): primul ecran al modulelor de acces din stiva; argumentul SSH ramane pentru compatibilitate."""
 	for e in ecrane:
 		if ecranPrivat(e):
 			return True, type(e).__name__
-	if ssh_deschis:
-		return True, "HdsAccesSsh"
 	return False, ""
+
+
+def _randSecret(rand):
+	return (isinstance(rand, (tuple, list)) and len(rand) >= 2 and _esteElement(rand[1])
+		and (_elementPrivat(rand[1]) or cheieSecreta(rand[0])))
+
+
+def _selectatSecret(ecran):
+	try:
+		componente = list(ecran.values())
+	except Exception:
+		return False
+	for comp in componente:
+		f = getattr(comp, "getCurrent", None)
+		try:
+			if callable(f) and _randSecret(f()):
+				return True
+		except Exception:
+			pass
+		lista = getattr(comp, "list", None)
+		i = _indexAles(comp)
+		if isinstance(lista, (list, tuple)) and i is not None and 0 <= i < len(lista) and _randSecret(lista[i]):
+			return True
+	return False
+
+
+def _inputSecret(comp):
+	return ((_esteElement(comp) and _elementPrivat(comp)) or ("Input" in _clase(comp)
+		and getattr(comp, "type", None) == getattr(comp, "PIN", 1)))
+
+
+def _componentaSecreta(ecran, nume, comp):
+	if nume.startswith("key_"):
+		return False
+	if getattr(comp, "hds_asistenta_secret", False) or _inputSecret(comp) or cheieSecreta(nume):
+		return True
+	# Codul de asociere este impartit in mai multe componente vizuale.
+	return "HdsCodAsociere" in _clase(ecran) and bool(re.match(r"^cod\d*$", nume))
+
+
+def tastaturaSecreta(ecrane, mod_ascii=False):
+	"""Contextul urmareste campul selectat din parinte, inclusiv tastaturile unor pluginuri."""
+	if not ecrane:
+		return False
+	sus = ecrane[-1]
+	if getattr(sus, "hds_asistenta_secret", False):
+		return True
+	try:
+		comp = list(sus.values())
+	except Exception:
+		comp = []
+	if any(_inputSecret(c) for c in comp) or "PinInput" in _clase(sus):
+		return True
+	scriere = (mod_ascii or any(re.search(r"(?i)(keyboard|numericaltextinput|inputbox)", c) for c in _clase(sus))
+		or any("Input" in _clase(c) for c in comp))
+	if not scriere:
+		return False
+	if cheieSecreta(_titlu(sus)):
+		return True
+	for e in ecrane[:-1]:
+		if _selectatSecret(e) or "HdsAccesSsh" in _clase(e) or "HdsCodAsociere" in _clase(e):
+			return True
+	return _selectatSecret(sus)
+
+
+def _secreteEcrane(ecrane):
+	"""Valorile cunoscute se ascund si in proza tradusa, independent de eticheta componentei."""
+	secrete = set()
+	for ecran in ecrane:
+		f = getattr(ecran, "secreteAsistenta", None)
+		valori = list(f() or []) if callable(f) else []
+		for rand in _intrariConfig(ecran):
+			if _randSecret(rand):
+				v = rand[1].value
+				valori.extend(v if isinstance(v, (list, tuple)) else [v])
+		for v in valori:
+			if v is not None and str(v) and str(v) != "***":
+				secrete.add(str(v))
+	return sorted(secrete, key=len, reverse=True)
+
+
+def _ascundeValori(text, secrete):
+	# In URL se pastreaza utilizatorul si gazda chiar daca coincid cu o parola cunoscuta.
+	parti = re.split(r"(?i)([a-z][a-z0-9+.-]*://[^\s]+)", text)
+	for i, parte in enumerate(parti):
+		for secret in secrete:
+			if i % 2 == 0 or "://" in secret:
+				parte = parte.replace(secret, "***")
+		parti[i] = parte
+	return "".join(parti)
+
+
+def _puneText(comp, text):
+	# ScrollLabel.setText revine la prima pagina; captura trebuie sa pastreze pozitia omului.
+	lung = getattr(comp, "long_text", None)
+	pozitie = lung.position() if lung is not None else None
+	comp.setText(text)
+	if pozitie is not None:
+		lung.move(pozitie)
+		if getattr(comp, "total", None):
+			comp.updateScrollbar()
+
+
+def motivRefuzCaptura(ecrane, mod_ascii=False):
+	"""Refuz separat de ecranul privat: textul si navigarea raman disponibile."""
+	e_privat, clasa = privat(ecrane)
+	if e_privat:
+		return "(ecran privat: %s; captura refuzata)" % clasa
+	if tastaturaSecreta(ecrane, mod_ascii) or any(_selectatSecret(e) for e in ecrane):
+		return "(camp secret selectat sau tastatura secreta; captura refuzata)"
+	return ""
+
+
+def mascheazaCaptura(ecrane):
+	"""Mascheaza componentele desenate fara sa schimbe valorile setarilor. Intoarce restaurarea si verificarea."""
+	restaurari, verificari = [], []
+	secrete = _secreteEcrane(ecrane)
+	vazute = set()
+	def amprenta():
+		return tuple((id(e), tuple((n, id(c), tuple(id(r) for r in getattr(c, "list", []))
+			if isinstance(getattr(c, "list", None), (list, tuple)) else ()) for n, c in e.items())) for e in ecrane)
+	initiala = amprenta()
+	try:
+		for ecran in ecrane:
+			for nume, comp in ecran.items():
+				if id(comp) in vazute:
+					continue
+				vazute.add(id(comp))
+				if _componentaSecreta(ecran, nume, comp) and "CanvasSource" in _clase(comp):
+					from Components.HdsMarireText import fontCod
+					try:
+						from skin import factorHds
+						sx, sy, sf = factorHds()
+					except (ImportError, AttributeError):
+						sx, sy, sf = 1.0, 1.0, 1.0
+					vechi = list(comp.drawlist[1])
+					comp.clear()
+					comp.fill(0, 0, 4096, 4096, 0x00ffffff)
+					comp.writeText(round(16 * sx), round(16 * sy), max(1, round(400 * sx)), max(1, round(100 * sy)),
+						0x00000000, 0x00ffffff, fontCod("Regular", max(1, round(48 * sf))), "***")
+					comp.flush()
+					secventa = comp.drawlist[0]
+					def refaceCanvas(comp=comp, vechi=vechi, secventa=secventa):
+						if comp.drawlist[0] == secventa:
+							comp.clear()
+							comp.drawlist[1].extend(vechi)
+							comp.flush()
+					restaurari.append(refaceCanvas)
+					verificari.append(lambda comp=comp, secventa=secventa: comp.drawlist[0] == secventa)
+					continue
+				t = _text(comp)
+				if t is not None:
+					mascat = "***" if _componentaSecreta(ecran, nume, comp) else _ascundeValori(mascheazaSecrete(t), secrete)
+					if mascat != t:
+						setter = getattr(comp, "setText", None)
+						if not callable(setter):
+							raise ValueError("componenta secreta fara setText")
+						_puneText(comp, mascat)
+						restaurari.append(lambda c=comp, vechi=t, nou=mascat: _puneText(c, vechi) if _text(c) == nou else None)
+					verificari.append(lambda c=comp, nou=mascat: _text(c) == nou)
+				lista = getattr(comp, "list", None)
+				if not isinstance(lista, (list, tuple)):
+					continue
+				for rand in lista:
+					if not isinstance(rand, (list, tuple)) or len(rand) < 2 or not _esteElement(rand[1]):
+						continue
+					el = rand[1]
+					secret = _randSecret(rand)
+					valoare = _valoare(el)
+					if not secret and _ascundeValori(mascheazaSecrete(valoare), secrete) == valoare:
+						continue
+					f = getattr(el, "getMulti", None)
+					if not callable(f):
+						raise ValueError("camp secret fara getMulti")
+					propriu = el.__dict__.get("getMulti")
+					# getMulti poate taia schema URL prin visible_width/offset; se mascheaza valoarea intreaga.
+					valoare_mascata = "***" if secret else _ascundeValori(mascheazaSecrete(valoare), secrete)
+					def mascat(selected, valoare=valoare_mascata):
+						return "text", valoare
+					el.getMulti = mascat
+					verificari.append(lambda el=el, mascat=mascat: el.getMulti is mascat)
+					def reface(el=el, propriu=propriu, comp=comp, rand=rand):
+						if propriu is None:
+							del el.getMulti
+						else:
+							el.getMulti = propriu
+						comp.invalidate(rand)
+					restaurari.append(reface)
+					comp.invalidate(rand)
+	except Exception:
+		for f in reversed(restaurari):
+			f()
+		raise
+	def restaureaza():
+		for f in reversed(restaurari):
+			f()
+	return restaureaza, lambda: amprenta() == initiala and all(f() for f in verificari)
 
 
 def _sshDeschis():
@@ -333,7 +554,7 @@ def _randuriLista(nume, comp):
 		e = lista[i]
 		semn = ">" if i == ales else " "
 		if isinstance(e, (list, tuple)) and len(e) >= 2 and _esteElement(e[1]):
-			rand = "%s [%d] %s = %s" % (semn, i + 1, e[0], _valoare(e[1]))
+			rand = "%s [%d] %s = %s" % (semn, i + 1, e[0], "***" if _randSecret(e) else _valoare(e[1]))
 			if i == ales and len(e) > 2 and isinstance(e[2], str) and e[2].strip():
 				rand += "\n      ajutor: " + e[2].strip()
 		else:
@@ -375,8 +596,8 @@ def _numeServiciu(ref, centru):
 
 def _randuriServicii(nume, comp):
 	"""Lista de canale sau de buchete (Components/ServiceList: eListbox cu eListboxServiceContent, fara lista Python):
-	numele din radacina ei, cu randul ales, fara referinte. Lista de canale nu e privata; ecranele modulelor de acces,
-	parolele si celelalte raman private (ecranPrivat). None cand comp nu e o lista de servicii."""
+	numele din radacina ei, cu randul ales, fara referinte. Lista de canale nu e privata; secretele sunt mascate
+	separat. None cand comp nu e o lista de servicii."""
 	f = getattr(comp, "getRootServices", None)
 	if not callable(f) or not callable(getattr(comp, "getCurrent", None)):
 		return None
@@ -428,8 +649,12 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 		return "(ecran privat) %s\nEcrane: %s\nPe un ecran privat merge numai EXIT." % (clasa,
 			" > ".join(type(e).__name__ for e in ecrane))
 	cap = []
+	secrete = _secreteEcrane(ecrane)
+	tastatura_secreta = tastaturaSecreta(ecrane, mod_ascii)
 	for e in ecrane:
 		t = _titlu(e)
+		if e is ecrane[-1] and tastatura_secreta:
+			t = "***"
 		cap.append('%s "%s"' % (type(e).__name__, t) if t else type(e).__name__)
 	sus = ecrane[-1]
 	parti = ["Ecrane: " + " > ".join(cap),
@@ -443,6 +668,9 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	for nume, comp in componente:
 		if nume == "Title":
 			continue
+		if tastatura_secreta and not nume.startswith("key_"):
+			texte.append("  %s: ***" % nume)
+			continue
 		r = _randuriLista(nume, comp)
 		if r is None:
 			r = _randuriServicii(nume, comp)
@@ -450,6 +678,8 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 			liste.extend(r)
 			continue
 		t = _text(comp)
+		if _componentaSecreta(sus, nume, comp):
+			t = "***"
 		if t is None or not t.strip():
 			continue
 		t = " ".join(t.split()) if len(t) < 300 else t.strip()
@@ -466,7 +696,7 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	text = "\n".join(parti)
 	if len(text) > TEXT_ECRAN_MAX:
 		text = text[:TEXT_ECRAN_MAX] + "\n... (taiat)"
-	return text
+	return _ascundeValori(mascheazaSecrete(text), secrete)
 
 
 def modAscii():
@@ -577,6 +807,8 @@ def scrieText(ecrane, text, mod_ascii, scrie, ssh_deschis=False):
 	e_privat, clasa = privat(ecrane, ssh_deschis)
 	if e_privat:
 		return 1, "(ecran privat: %s; textul nu se scrie)" % clasa
+	if tastaturaSecreta(ecrane, mod_ascii) or any(_selectatSecret(e) for e in ecrane):
+		return 1, "(camp secret; textul nu se scrie)"
 	if not mod_ascii:
 		return 1, "(niciun câmp de text deschis: deschide-l întâi, de pilda cu OK pe rand)"
 	text = (text or "")[:TEXT_MAXIM]
@@ -723,13 +955,28 @@ def pachetInFeed(pachet, feeduri, liste="/var/lib/opkg/lists"):
 # ---------------------------------------------------------------- transponderele din lamedb (citire)
 
 def transpondere(text_lamedb, namespace=None, maxim=1500):
-	"""Transponderele din lamedb (numai sectiunea lor: namespace:tsid:onid si parametrii), fara canale si fara nimic
-	al omului; namespace (hex) le alege pe ale unui satelit."""
+	"""Transponderele din lamedb, cu numele canalelor grupate dupa namespace, TSID si ONID."""
+	canale = {}
+	linii = (text_lamedb or "").splitlines()
+	try:
+		i = linii.index("services") + 1
+	except ValueError:
+		i = len(linii)
+	while i + 2 < len(linii) and linii[i].strip() != "end":
+		cheie = linii[i].strip().split(":")
+		nume = " ".join(linii[i + 1].split())[:200]
+		i += 3
+		try:
+			tp = tuple(int(v, 16) for v in cheie[1:4])
+			if len(tp) == 3 and nume:
+				canale.setdefault(tp, []).append(nume)
+		except ValueError:
+			continue
 	randuri = []
 	sectiune = False
 	cap = None
 	ns = namespace.lower().lstrip("0") if namespace else None
-	for rand in (text_lamedb or "").splitlines():
+	for rand in linii:
 		r = rand.strip()
 		if r == "transponders":
 			sectiune = True
@@ -747,6 +994,12 @@ def transpondere(text_lamedb, namespace=None, maxim=1500):
 		if ns is not None and cap.split(":")[0].lower().lstrip("0") != ns:
 			continue
 		randuri.append("%s  %s" % (cap, r))
+		try:
+			nume = canale.get(tuple(int(v, 16) for v in cap.split(":")), [])
+		except ValueError:
+			nume = []
+		if nume:
+			randuri[-1] += "  | Canale: " + ", ".join(nume)
 		if len(randuri) >= maxim:
 			randuri.append("... (taiat la %d)" % maxim)
 			break

@@ -43,6 +43,7 @@ public:
 
 #include <lib/dvb/sec.h>
 #include <lib/dvb/hdsurmamotor.h>
+#include <lib/dvb/hdsjurnaltuner.h>
 class eSecCommandList;
 
 class eDVBFrontend: public iDVBFrontend, public sigc::trackable
@@ -117,6 +118,7 @@ private:
 	/* HDSatelit (urma motorului, lib/dvb/hdsurmamotor.h): ultima acordare a tunerului, cine a cerut-o si ce a hotarat
 	   sec.cpp pentru motor; comenzile secventei o poarta cu ele in urma */
 	hdsurma::Acordare m_hds_acordare;
+	hdsjtuner::Stare m_hds_jurnal; // HDSatelit: jurnalul tunerului (lib/dvb/hdsjurnaltuner.h)
 
 	void feEvent(int);
 	void timeout();

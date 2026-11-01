@@ -26,7 +26,7 @@ Codurile (sistem, polarizare, FEC, modulatie, rolloff, pilot) sunt cele din lib/
   sistem     0 = DVB-S, 1 = DVB-S2
   polarizare 0 = H, 1 = V, 2 = L, 3 = R
   FEC        0 = Auto, 1 = 1/2, 2 = 2/3, 3 = 3/4, 4 = 5/6, 5 = 7/8, 6 = 8/9, ...
-  modulatie  1 = QPSK, 2 = 8PSK
+  modulatie  1 = QPSK, 2 = 8PSK, 3 = QAM16, 4 = 16APSK, 5 = 32APSK
   inversare  2 = Auto
 Atentie: DVB-S2 nu primeste FEC Auto (lib/dvb/frontend.cpp, prepare_sat: "no valid fec for DVB-S2 set
 .. abort"), de aceea pachetele DVB-S2 de mai jos au FEC si modulatie reale, nu Auto.

@@ -13,9 +13,9 @@
 #     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
 #     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
-#   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura numai a meniurilor (OSD), JPEG
-#     mic, refuzata pe ecranele private (Components/HdsAsistentaControl.py: modulele de acces, Accesul SSH, parolele,
-#     Wi-Fi-ul, beta testerul), punerea unui mesaj si a concluziilor, si controlul (nivelul B): textul ecranului (op
+#   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic,
+#     refuzata pe modulele de acces si cat se editeaza un secret; celelalte secrete se deseneaza cu stelute.
+#     Punerea unui mesaj si a concluziilor, si controlul (nivelul B): textul ecranului (op
 #     "ecran"), tastele telecomenzii (op "taste", una pe tic de eTimer) si textul intr-un camp (op "text"), toate pe firul
 #     enigma2 (Control.PeFir: reactor.callFromThread, iar ceasul controlerului goleste coada ca plasa); cat ruleaza un
 #     op de control, banda de sus spune "HD Satelit lucrează acum pe receptorul tău";
@@ -34,7 +34,7 @@ from Components import HdsAsistentaControl as Control
 
 GRAB = "/usr/bin/grab"
 CAPTURA_TERMEN_S = 8
-# captura: JPEG mic (pe Octagon SF8008 un PNG al meniurilor trecea de 2 MB)
+# captura: JPEG mic pentru a ramane sub plafonul brokerului
 CAPTURA_LATIME = 960
 CAPTURA_CALITATE = 70
 
@@ -340,31 +340,49 @@ def _text(text):
 
 
 def _captura():
-	"""O captura numai a meniurilor (OSD), JPEG mic; None cand nu se poate, textul refuzului pe un ecran privat."""
-	privat = _peFir.cere(lambda gata: gata(_privatAcum()), TERMEN_FIR_S) if _session() is not None else None
-	if privat is None:
+	"""Video si OSD, dupa redesenarea secretelor; verificarea si grab raman pe acelasi fir cu ecranele."""
+	def lucru(gata):
+		ecrane = _stivaAcum()
+		motiv = Control.motivRefuzCaptura(ecrane, Control.modAscii())
+		if motiv or _session() is None:
+			gata(motiv or "(captura: ecran indisponibil)")
+			return
 		try:
-			from Components import HdsAccesSsh
-			if HdsAccesSsh.ecranDeschis():
-				return "(ecran privat: HdsAccesSsh; captura refuzata)"
+			restaureaza, verifica = Control.mascheazaCaptura(ecrane)
 		except Exception:
-			pass
-	elif privat[0]:
-		return "(ecran privat: %s; captura refuzata)" % privat[1]
-	try:
-		p = subprocess.Popen([GRAB, "-q", "-o", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
-			stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-	except Exception:
-		return None
-	try:
-		iesire, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
-	except subprocess.TimeoutExpired:
-		try:
-			p.kill()
-		except Exception:
-			pass
-		return None
-	return iesire or None
+			gata("(captura: secretele nu se pot masca)")
+			return
+		ceas = eTimer()
+		def fotografiaza():
+			ceas.stop()
+			_vii.discard(ceas)
+			rez = None
+			try:
+				actuale = _stivaAcum()
+				motiv = Control.motivRefuzCaptura(actuale, Control.modAscii())
+				if [id(e) for e in actuale] != [id(e) for e in ecrane] or not verifica():
+					rez = "(captura: ecran schimbat, incearca din nou)"
+				elif motiv:
+					rez = motiv
+				else:
+					p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
+						stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+					try:
+						rez, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
+					except subprocess.TimeoutExpired:
+						p.kill()
+						p.communicate()
+						rez = None
+			except Exception:
+				pass
+			finally:
+				restaureaza()
+				gata(rez or None)
+		ceas.callback.append(fotografiaza)
+		_vii.add(ceas)
+		# Un tic permite rendererelor sa puna stelutele in framebuffer inainte de grab.
+		ceas.start(100, True)
+	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
 def _canal():

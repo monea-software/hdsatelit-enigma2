@@ -92,7 +92,7 @@ PRAG_ALEGERE = 6
 # veche sau dintr-o cerere web facuta de mana.
 SISTEME = [
     (0, _('DVB-S  (QPSK clasic)')),
-    (1, _('DVB-S2 (8PSK / QPSK)')),
+    (1, 'DVB-S2'),
 ]
 
 # Polarizari
@@ -119,8 +119,7 @@ FEC_VALORI = [
 MODULATII = [
     (0, _('Auto')),
     (1, 'QPSK'),   (2, '8PSK'),   (3, 'QAM16'),
-    (4, 'QAM64'),  (5, '32APSK'), (6, '16APSK'),
-    (7, '64APSK'), (8, '128APSK'),(9, '256APSK'),  # S2X
+    (4, '16APSK'), (5, '32APSK'),
 ]
 
 # Factorul de rotunjire (roll-off): numai valorile din nucleu (0,15, 0,10 si 0,05 sunt DVB-S2X, pe care nu il are)
@@ -158,10 +157,12 @@ SISTEM_DVB_S, SISTEM_DVB_S2 = 0, 1
 FEC_DVBS = [0, 1, 2, 3, 4, 5, 15]        # Auto, 1/2, 2/3, 3/4, 5/6, 7/8, Niciuna (ramura DVB-S primeste Auto)
 FEC_DVBS2 = [1, 7, 2, 3, 8, 4, 5, 6, 9]   # 1/2, 3/5, 2/3, 3/4, 4/5, 5/6, 7/8, 8/9, 9/10; fara Auto
 MOD_DVBS = [0, 1]                        # Auto, QPSK (DVB-S e mereu QPSK)
-MOD_DVBS2 = [1, 2]                       # QPSK, 8PSK (APSK nu exista in structura din nucleu)
+MOD_DVBS2 = [1, 2, 4, 5]                 # QPSK, 8PSK, 16APSK, 32APSK
+FEC_APSK = {4: [2, 3, 8, 4, 6, 9], 5: [3, 8, 4, 6, 9]}
 ROLLOFF_VALIDE = [0, 1, 2]               # 0.35, 0.25, 0.20
 # Perechile (modulatie, FEC) din standardul DVB-S2 (ETSI EN 302 307), oferite cand lipsesc si nu sunt in satellites.xml
-COMBINATII_DVBS2 = [(2, f) for f in (7, 2, 3, 4, 6, 9)] + [(1, f) for f in (1, 7, 2, 3, 8, 4, 6, 9)]
+COMBINATII_DVBS2 = ([(2, f) for f in (7, 2, 3, 4, 6, 9)] + [(1, f) for f in (1, 7, 2, 3, 8, 4, 6, 9)]
+                    + [(m, f) for m in (4, 5) for f in FEC_APSK[m]])
 TOLERANTA_KHZ = 3000                     # cat se poate abate frecventa introdusa de cea din satellites.xml
 # Rata de simbol pe care o primeste driverul tunerului (dmesg: „symbol rate 990000 out of range
 # (1000000..60000000)"). 66 de transpondere din satellites.xml ies din interval: fara verificare ar da 0 canale, fara
@@ -206,7 +207,7 @@ def _coduri_permise(cheie, c, lista):
     """Valorile prin care trec OK, stanga si dreapta: doar cele pe care nucleul le primeste pentru sistemul ales."""
     s2 = _sistem_nucleu(c) == SISTEM_DVB_S2
     if cheie == 'fec':
-        return FEC_DVBS2 if s2 else FEC_DVBS
+        return FEC_APSK.get(_int(c.get('mod'), -1), FEC_DVBS2) if s2 else FEC_DVBS
     if cheie == 'mod':
         return MOD_DVBS2 if s2 else MOD_DVBS
     if cheie == 'rolloff':
@@ -324,6 +325,8 @@ def motiv_refuz(tp):
         if not 0 <= _int(tp.get('pls_code'), 0) <= PLS_COD_MAX:
             return _('codul PLS trebuie să fie între 0 și %d') % PLS_COD_MAX
     if tp['system'] == SISTEM_DVB_S:
+        if tp['modulation'] in FEC_APSK:
+            return _('La DVB-S modulația e numai QPSK (1) sau Auto (0).')
         return None
     if tp['system'] != SISTEM_DVB_S2:
         return _('sistem pe care imaginea nu îl știe')
@@ -331,6 +334,9 @@ def motiv_refuz(tp):
         return _('DVB-S2 fără FEC real, Auto nu e primit')
     if tp['modulation'] not in MOD_DVBS2:
         return _('modulație pe care imaginea nu o știe încă')
+    if tp['modulation'] in FEC_APSK and tp['fec'] not in FEC_APSK[tp['modulation']]:
+        return '%s: FEC %s' % (_nume_valoare(MODULATII, tp['modulation']),
+                              _nume_valoare(FEC_VALORI, tp['fec']))
     return None
 
 
@@ -452,6 +458,8 @@ def transponder_manual(c, transpondere_xml):
             sistem = tp['system'] = SISTEM_DVB_S2
             note.append(_('Multistream există numai în DVB-S2: se caută ca DVB-S2.'))
     if sistem == SISTEM_DVB_S:
+        if tp['modulation'] in FEC_APSK:
+            return None, note, motiv_refuz(tp), None
         if tp['fec'] not in FEC_DVBS:
             tp['fec'] = 0
         if tp['modulation'] not in MOD_DVBS:
@@ -480,9 +488,10 @@ def transponder_manual(c, transpondere_xml):
             tp = proba
             note.append(_('Sistemul, FEC-ul și modulația sunt luate din lista receptorului: %s.') % _descriere_tp(tp))
     if tp['system'] == SISTEM_DVB_S2 and motiv_refuz(tp) is not None:
+        fec_permise = FEC_APSK.get(tp['modulation'], FEC_DVBS2)
         potrivite = [(m, f) for m, f in COMBINATII_DVBS2
                      if (tp['modulation'] not in MOD_DVBS2 or m == tp['modulation'])
-                     and (tp['fec'] not in FEC_DVBS2 or f == tp['fec'])] or list(COMBINATII_DVBS2)
+                     and (tp['fec'] not in fec_permise or f == tp['fec'])] or list(COMBINATII_DVBS2)
         de_ales = [('%s %s' % (_nume_valoare(MODULATII, m), _nume_valoare(FEC_VALORI, f)), (m, f)) for m, f in potrivite]
         return tp, note, None, de_ales
     return tp, note, None, None
@@ -1952,8 +1961,8 @@ class ScanerSatelit(Screen):
     def _eticheta_valoare(self, cheie, tip, lista):
         val = self._config.get(cheie, '')
         if cheie in ('fec', 'mod') and _sistem_nucleu(self._config) == SISTEM_DVB_S2 \
-                and _int(val, -1) not in (FEC_DVBS2 if cheie == 'fec' else MOD_DVBS2):
-            # DVB-S2 nu primeste Auto: valoarea se alege (motivul e in previzualizare)
+                and _int(val, -1) not in _coduri_permise(cheie, self._config, lista):
+            # Valoarea nu e permisa pentru sistemul si modulatia alese; motivul e in previzualizare.
             return _('alege cu stânga sau dreapta')
         if tip == 'numeric':
             return val if val else '-'
@@ -2009,7 +2018,7 @@ class ScanerSatelit(Screen):
     def _cicleaza(self, pas):
         """Trece campul de tip lista la valoarea urmatoare (pas 1) sau anterioara (pas -1), doar prin valorile
         pe care nucleul le primeste pentru sistemul ales (_coduri_permise): la DVB-S2, FEC fara Auto si modulatie
-        QPSK sau 8PSK. Valorile se compara ca text: codurile sunt numere la unele campuri, siruri la altele."""
+        QPSK, 8PSK sau APSK. Valorile se compara ca text: codurile sunt numere la unele campuri, siruri la altele."""
         selectat = self['lista'].getCurrent()
         if not selectat:
             return

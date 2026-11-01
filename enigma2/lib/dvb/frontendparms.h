@@ -30,7 +30,8 @@ struct eDVBFrontendParametersSatellite
 	};
 
 	enum {
-		Modulation_Auto, Modulation_QPSK, Modulation_8PSK, Modulation_QAM16
+		Modulation_Auto, Modulation_QPSK, Modulation_8PSK, Modulation_QAM16,
+		Modulation_16APSK=4, Modulation_32APSK=5
 	};
 
 	// dvb-s2
