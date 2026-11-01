@@ -472,6 +472,7 @@ def stare(T=None):
 		"epg": _stareEpg(),
 		"texte_tradus": _stareTexte(),
 		"gata": list(T.serviciiGata(s)) if hasattr(T, "serviciiGata") else [],
+		"stari_chei": T.chei().stare_chei() if hasattr(T.chei(), "stare_chei") else {},
 	}
 
 
@@ -648,7 +649,18 @@ def cheie(argumente, din_adresa, T=None):
 	valoare = argumente["cheie"]
 	if len(valoare) > MAX_CHEIE_BRUT:
 		return _raspunsCheie(T, False, _t("Cheia e prea lungă. Nu s-a schimbat nimic."))
-	reusit, mesaj = T.chei().schimba(serviciu, valoare)
+	indice = argumente.get("indice", None)
+	if indice is not None and indice != "":
+		try:
+			indice = int(indice)
+		except (ValueError, TypeError):
+			indice = None
+	else:
+		indice = None
+	if indice is not None:
+		reusit, mesaj = T.chei().schimba(serviciu, valoare, indice=indice)
+	else:
+		reusit, mesaj = T.chei().schimba(serviciu, valoare)
 	return _raspunsCheie(T, bool(reusit), mesaj)
 
 
@@ -877,6 +889,10 @@ PAGINA = """<!DOCTYPE html>
     dl.valori.lung{grid-template-columns:1fr;gap:0;} dl.valori.lung dd{margin:0 0 6px;}
     .tabel thead{display:none;} .tabel tr{display:block;padding:6px 0;border-bottom:1px solid var(--bordura);}
     .tabel td{display:inline;border:0;padding:0 8px 0 0;} .tabel td.text{display:block;min-width:0;padding:3px 0 0;} }
+  .cheie-extra-rand{padding:6px 0;border-top:1px solid var(--bordura);}
+  .stare-cheie{font-size:.85rem;display:block;margin:2px 0 4px;}
+  .stare-merge{color:#8fd19e;} .stare-cota,.stare-gresita{color:#ffb4a8;}
+  .stare-nefolosita{color:var(--text-slab);}
 </style>
 </head>
 <body>
@@ -915,6 +931,8 @@ PAGINA = """<!DOCTYPE html>
       <p class="lipsa tot ascuns" id="chei-din-nou"></p>
       <div class="butoane tot"><button type="button" id="cheie-salveaza">Salvează cheia</button><button type="button" id="cheie-sterge">Șterge cheia</button></div>
       <p class="nota tot">Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată.</p>
+      <div id="chei-extra" class="tot"></div>
+      <div class="butoane tot" id="cheie-adauga-bloc"><button type="button" id="cheie-adauga">Adaugă încă o cheie</button></div>
     </div>
     <div class="rand ascuns" id="rand-propriu_raspuns"><label for="alege-propriu_raspuns">Felul răspunsului</label><select id="alege-propriu_raspuns"></select></div>
     <div class="rand ascuns" id="rand-propriu_cale">
@@ -1046,6 +1064,7 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota ascuns" id="instr-curand">Instrucțiunile vin în curând.</p>
     <p class="avertisment ascuns" id="instr-avertisment"></p>
     <ol class="pasi" id="instr-pasi"></ol>
+    <ul class="legaturi ascuns" id="instr-legaturi"></ul>
     <p class="nota" id="instr-cota"></p>
     <p class="nota" id="instr-depasire"></p>
     <p class="nota" id="instr-verificat"></p>
@@ -1137,7 +1156,7 @@ function seVedePropriu(camp, v){
   return true;
 }
 function puneTot(d, fortat){
-  ["valori", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata"].forEach(function(k){
+  ["valori", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei"].forEach(function(k){
     if(d[k] !== undefined){ ultim[k] = d[k]; }
   });
   var v = ultim.valori;
@@ -1203,6 +1222,7 @@ function puneTot(d, fortat){
   puneContorEpg();
   puneContorTexte();
   puneRezerve();
+  puneCheiExtra(v.serviciu);
 }
 function puneContorTexte(){
   var x = ultim.texte_tradus;
@@ -1311,6 +1331,30 @@ function butonPrincipal(cod){
   return bt;
 }
 function salveazaRezerve(l){ var q = new URLSearchParams(); q.set("rezerve", l.join(",")); trimite(q, "mesaj-rezerve"); }
+function puneCheiExtra(serv){
+  var container = $("chei-extra");
+  if(!container){ return; }
+  sterge(container);
+  var stari = (ultim.stari_chei || {})[serv] || [];
+  for(var idx = 1; idx < stari.length; idx++){
+    var s = stari[idx] || {};
+    var div = document.createElement("div"); div.className = "cheie-extra-rand tot";
+    var et = document.createElement("span");
+    et.className = "stare-cheie stare-" + (s.stare || "nefolosita");
+    et.textContent = (idx + 1) + ". " + (s.stare_text || "");
+    div.appendChild(et);
+    var b = document.createElement("div"); b.className = "butoane";
+    var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "Șterge";
+    (function(i){ bt.addEventListener("click", function(){
+      if(!confirm("Ștergi cheia acestui serviciu de pe receptor?")){ return; }
+      var q = new URLSearchParams(); q.set("serviciu", serv); q.set("cheie", ""); q.set("indice", String(i));
+      trimiteCheie(q);
+    }); })(idx);
+    b.appendChild(bt); div.appendChild(b); container.appendChild(div);
+  }
+  var blocAdauga = $("cheie-adauga-bloc");
+  if(blocAdauga){ arata(blocAdauga, stari.length < 10); }
+}
 function paragraf(id, text){ var p = $(id); p.textContent = text || ""; arata(p, !!text); }
 function puneInstructiuni(fortat){
   var s = $("alege-instructiuni");
@@ -1322,6 +1366,17 @@ function puneInstructiuni(fortat){
   var ol = $("instr-pasi"); sterge(ol);
   pasi.forEach(function(p){ var li = document.createElement("li"); li.textContent = p; ol.appendChild(li); });
   arata(ol, !gol);
+  var ul = $("instr-legaturi"), nl = 0;
+  if(ul){
+    sterge(ul);
+    (gol ? [] : (d.legaturi || [])).forEach(function(l){
+      if(!l || !/^https:/.test(l.url || "")){ return; }
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = l.text || l.url;
+      li.appendChild(a); ul.appendChild(li); nl++;
+    });
+    arata(ul, nl > 0);
+  }
   arata($("instr-curand"), gol);
   paragraf("instr-avertisment", gol ? "" : (d.avertisment || ""));
   paragraf("instr-cota", gol || !d.cota ? "" : "Cât e gratuit: " + d.cota);
@@ -1447,6 +1502,28 @@ $("cheie-sterge").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("serviciu", ultim.valori.serviciu); q.set("cheie", "");
   trimiteCheie(q);
 });
+$("cheie-adauga").addEventListener("click", function(){
+  var serv = ultim.valori.serviciu;
+  var stari = (ultim.stari_chei || {})[serv] || [];
+  var idx = stari.length;
+  var container = $("chei-extra");
+  var div = document.createElement("div"); div.className = "cheie-extra-rand tot";
+  var inp = document.createElement("input"); inp.type = "password";
+  inp.placeholder = "lipește cheia aici"; inp.autocomplete = "off";
+  inp.autocapitalize = "off"; inp.spellcheck = "false";
+  div.appendChild(inp);
+  var b = document.createElement("div"); b.className = "butoane";
+  var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "OK";
+  bt.addEventListener("click", function(){
+    var v = inp.value.trim();
+    if(!v){ mesaj("mesaj-traducere", "Scrie sau lipește întâi cheia.", true); return; }
+    inp.value = "";
+    var q = new URLSearchParams(); q.set("serviciu", serv); q.set("cheie", v); q.set("indice", String(idx));
+    trimiteCheie(q);
+  });
+  b.appendChild(bt); div.appendChild(b); container.appendChild(div);
+  if(inp.focus){ inp.focus(); }
+});
 $("rezerva-adauga").addEventListener("click", function(){
   var c = $("alege-rezerva").value;
   if(!c){ return; }
@@ -1534,6 +1611,7 @@ TEXTE_PAGINA = {
 		N_("Salvează cheia"),
 		N_("Șterge cheia"),
 		N_("Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată."),
+		N_("Adaugă încă o cheie"),
 		N_("Felul răspunsului"),
 		N_("Calea traducerii"),
 		N_("Chei și numere (de la 0) despărțite prin punct, de exemplu translatedText sau "
@@ -1649,6 +1727,7 @@ TEXTE_PAGINA = {
 		N_("lipește cheia aici"),
 		N_("Cheie pusă"),
 		N_("Fără cheie"),
+		N_("Șterge"),
 		N_("Tradu bara de jos"),
 		N_("Ce s-a tradus din teletext și HbbTV"),
 		N_("Tradu teletextul"),

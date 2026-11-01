@@ -56388,9 +56388,6 @@ msgstr "(leer)"
 msgid "Ai cerut pornirea din pagina web. Citește, apoi apasă Verde dacă vrei."
 msgstr "Du hast den Start auf der Webseite angefordert. Lies den Text, dann drücke Grün, wenn du willst."
 
-msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o captură a meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu putem schimba setări sau fișiere și nu putem ajunge la alte aparate din casa ta. Fiecare cerere apare în jurnal, pe ecran.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
-msgstr "Mit der Fernunterstützung können die Leute von HD Satelit über das Internet den technischen Zustand deines Receivers sehen, um Fehler des Image auf deinem Modell schneller zu finden und zu beheben.\n\nSie ist nur für alle, die uns helfen wollen. Dein Receiver braucht sie nicht, um zu funktionieren. Sie bleibt aus, bis du sie selbst einschaltest, jedes Mal neu.\n\nSo funktioniert es: Dein Receiver fragt den Server von HD Satelit über eine verschlüsselte Verbindung, ob wir eine Anfrage für ihn haben. Wir können nur Vorgänge aus einer festen Liste anfordern, die im Image steht: Auslesen von Zustand und Protokollen, ein Bildschirmfoto der Menüs und eine geschriebene Nachricht auf dem Bildschirm. Wir können keine Befehle ausführen, keine Einstellungen oder Dateien ändern und keine anderen Geräte bei dir zu Hause erreichen. Jede Anfrage erscheint im Protokoll, auf dem Bildschirm.\n\nSolange sie läuft, siehst du einen Hinweis auf dem Bildschirm. Du kannst sie jederzeit hier oder auf der Webseite beenden, und nach der gewählten Zeit endet sie von selbst.\n\nWelche Daten zu uns kommen: Modell und Version des Receivers, das Land, Uhrzeit und Dauer der Sitzung und die Antworten auf die Anfragen im Protokoll (die Protokolle können unter anderem zeigen, welche Sender wann geöffnet wurden). Wir speichern deine IP-Adresse nicht. Wir lesen keine Passwörter, Schlüssel, Einstellungen von Zugangskarten oder deine Dateien. Die Daten liegen 30 Tage auf unserem Server (Hetzner, Deutschland; die Verbindung läuft über Cloudflare), dann werden sie gelöscht. Wir nutzen sie nur, um das Image zu reparieren, und geben sie nicht an andere weiter.\n\nVerantwortlicher für die Daten: Monea Eduard (HD Satelit), contact@hdsatelit.com. Du kannst uns jederzeit bitten, dir die Daten deiner Sitzung zu zeigen oder sie zu löschen. Nutze die Funktion nur, wenn du mindestens 16 Jahre alt bist oder die Zustimmung eines Elternteils hast."
-
 msgid "Asistență de la distanță activă"
 msgstr "Fernunterstützung aktiv"
 
@@ -57847,6 +57844,24 @@ msgstr "<code>POST /api/acces-ssh-pune</code> (Anfragetext: <code>parola=</code>
 msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"
 msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> verlangt auch <code>confirmat=1</code>): „Ohne Passwort im lokalen Netz“. Das Passwort, der Rohtext und alle Änderungen gehen nur aus einem Browser, der mit dem Code vom Fernseher verbunden ist (sonst 403 mit <code>trebuie_cod</code>), niemals mit <code>?token=</code>; solange der Bildschirm „Receiver-Passwort“ auf dem Receiver geöffnet ist, ebenso <code>/api/remotecontrol</code> und <code>/api/screenshot</code>"
 
+msgid "Raportează canalul ăsta"
+msgstr "Diesen Kanal melden"
+
+msgid "Canalul de acum nu merge: datele lui tehnice pleacă pe loc."
+msgstr "Der aktuelle Kanal geht nicht: seine technischen Daten werden sofort gesendet."
+
+msgid "Ce nu merge la canalul ăsta? Poți lăsa gol și apăsa OK."
+msgstr "Was geht bei diesem Kanal nicht? Du kannst es leer lassen und OK drücken."
+
+msgid "Nu rulează niciun canal acum."
+msgstr "Gerade läuft kein Kanal."
+
+msgid "Raportul canalului a intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "Die Kanalmeldung ist in der Warteschlange und wird gesendet, sobald der Receiver Internet hat."
+
+msgid "Ce nu merge (opțional)"
+msgstr "Was nicht geht (optional)"
+
 msgid "Antenă terestră (DVB-T/T2)"
 msgstr "Terrestrische Antenne (DVB-T/T2)"
 
@@ -58174,17 +58189,8 @@ msgstr "HD Satelit startet jetzt die Benutzeroberfläche des Receivers neu. Die 
 msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
 msgstr "HD Satelit startet jetzt den Receiver neu. Die Unterstützung wird nach dem Neustart fortgesetzt."
 
-msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
-msgstr "Das HD Satelit-Team kommt über das Internet auf deinen Receiver, um dir zu helfen: Es kann in Menüs navigieren, Einstellungen ändern, Kanäle suchen und aus dem offiziellen Feed installieren, ohne die Schlüssel und Linien der Entschlüsselungsmodule und ohne deine persönlichen Daten. Du kannst es jederzeit stoppen."
-
-msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
-msgstr "So funktioniert es: Dein Receiver fragt den HD Satelit-Server über eine verschlüsselte Verbindung, ob wir eine Anfrage für ihn haben. Wir können nur Aktionen aus einer festen Liste anfordern, die im Image steht: Abfragen des Status, der Logs und des Textes auf dem Bildschirm, ein Screenshot der Menüs, eine auf dem Bildschirm geschriebene Meldung, die Tasten der Fernbedienung und der Text aus den Feldern, damit wir durch die Menüs gehen, Einstellungen ändern, Kanäle suchen und aus dem offiziellen Feed installieren, als würden wir die Fernbedienung in der Hand halten. Wir können keine beliebigen Befehle ausführen und nicht an andere Geräte in deinem Haus herankommen. Die Bildschirme der Entschlüsselungsmodule, der Passwörter, des SSH-Zugriffs, des Wi-Fi-Netzes und deiner persönlichen Daten bleiben geschlossen: Dort sieht das Team nichts und kann nur raus. Jede Anfrage erscheint im Log, auf dem Bildschirm."
-
 msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
 msgstr "Start startet es für 2 Stunden. Du kannst es jederzeit stoppen, am Receiver oder über die Webseite. Solange es läuft, kann das Team jederzeit reinkommen, macht aber nur, was in der festen Liste steht."
-
-msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
-msgstr "Die Hilfe ist komplett: Abfragen, Tests und die Steuerung des Receivers über die Menüs, aus der festen Liste. Ein Screenshot zeigt nur die Menüs, nicht das Kanalbild. Die privaten Bildschirme bleiben geschlossen. Du kannst jederzeit stoppen."
 
 msgid "Pornește alte imagini"
 msgstr "Andere Images starten"
@@ -58562,3 +58568,115 @@ msgstr "Spanische terrestrische Sender, über Satellit empfangen"
 
 msgid "Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V."
 msgstr "Hier erscheinen die spanischen terrestrischen Sender, die über Satellit empfangen werden. Die Liste ist leer: Du hast auf 30°W noch nicht gesucht."
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
+msgstr "Mit der Fernunterstützung können die Leute von HD Satelit über das Internet den technischen Zustand deines Receivers sehen, um Fehler des Image auf deinem Modell schneller zu finden und zu beheben.\n\nSie ist nur für alle, die uns helfen wollen. Dein Receiver braucht sie nicht, um zu funktionieren. Sie bleibt aus, bis du sie selbst einschaltest, jedes Mal neu.\n\nSo funktioniert es: Dein Receiver fragt den Server von HD Satelit über eine verschlüsselte Verbindung, ob wir eine Anfrage für ihn haben. Die Unterstützung ist vollständig: Das HD Satelit-Team sieht die Bildschirme, Einstellungen und das Senderbild und kann den Receiver über die Menüs steuern. Passwörter, PINs und Schlüssel erscheinen als Sternchen. Nur die Bildschirme der Zugangsmodule bleiben gesperrt. Du kannst jederzeit beenden.\n\nSolange sie läuft, siehst du einen Hinweis auf dem Bildschirm. Du kannst sie jederzeit hier oder auf der Webseite beenden, und nach der gewählten Zeit endet sie von selbst.\n\nWelche Daten zu uns kommen: Modell und Version des Receivers, das Land, Uhrzeit und Dauer der Sitzung und die Antworten auf die Anfragen im Protokoll (die Protokolle können unter anderem zeigen, welche Sender wann geöffnet wurden). Wir speichern deine IP-Adresse nicht. Wir lesen keine Passwörter, Schlüssel, Einstellungen von Zugangskarten oder deine Dateien. Die Daten liegen 30 Tage auf unserem Server (Hetzner, Deutschland; die Verbindung läuft über Cloudflare), dann werden sie gelöscht. Wir nutzen sie nur, um das Image zu reparieren, und geben sie nicht an andere weiter.\n\nVerantwortlicher für die Daten: Monea Eduard (HD Satelit), contact@hdsatelit.com. Du kannst uns jederzeit bitten, dir die Daten deiner Sitzung zu zeigen oder sie zu löschen. Nutze die Funktion nur, wenn du mindestens 16 Jahre alt bist oder die Zustimmung eines Elternteils hast."
+
+msgid "Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând."
+msgstr "Die Unterstützung ist vollständig: Das HD Satelit-Team sieht die Bildschirme, Einstellungen und das Senderbild und kann den Receiver über die Menüs steuern. Passwörter, PINs und Schlüssel erscheinen als Sternchen. Nur die Bildschirme der Zugangsmodule bleiben gesperrt. Du kannst jederzeit beenden."
+
+msgid "rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)"
+msgstr "das Netzwerk, einschließlich des WLAN-Namens (MAC-Adresse zur Hälfte maskiert)"
+
+msgid "setările receptorului, cu secretele ca steluțe, fără modulele de acces"
+msgstr "Receiver-Einstellungen, mit Geheimnissen als Sternchen, ohne Zugangsmodule"
+
+msgid "captură cu meniurile și imaginea canalului; secretele ca steluțe"
+msgstr "Aufnahme mit Menüs und Senderbild; Geheimnisse als Sternchen"
+
+msgid "textul ecranului, cu secretele ca steluțe; numai modulele de acces rămân închise"
+msgstr "Bildschirmtext, mit Geheimnissen als Sternchen; nur Zugangsmodule bleiben gesperrt"
+
+msgid "transponderele din lista ta, cu numele canalelor"
+msgstr "Transponder aus deiner Liste, mit Sendernamen"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planul „Developer” e gratuit, dar numai pentru 1.000.000 de caractere în total, o singură dată, nu în fiecare lună."
+msgstr "Der Tarif „Developer“ ist kostenlos, bietet aber nur einmalig insgesamt 1.000.000 Zeichen, nicht jeden Monat."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Deschide înscrierea în planul gratuit DeepL API („Developer”): scanează codul QR de aici sau apasă legătura din interfața web."
+msgstr "Öffne die Anmeldung zum kostenlosen DeepL API-Tarif („Developer“): Scanne den QR-Code hier oder klicke auf den Link in der Weboberfläche."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Intră în contul tău DeepL sau fă unul nou. Contul de la traducătorul DeepL n-are chei API până nu adaugi acest plan: adresa cheilor te întoarce la pagina contului."
+msgstr "Melde dich bei deinem DeepL-Konto an oder erstelle ein neues. Das Konto für den DeepL-Übersetzer hat erst API-Schlüssel, wenn du diesen Tarif hinzufügst: Der Link zu den Schlüsseln führt dich zurück zur Kontoseite."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Completează țara, prenumele, numele și adresa (strada, codul poștal, orașul)."
+msgstr "Gib Land, Vorname, Nachname und Adresse (Straße, Postleitzahl, Ort) ein."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Verify email”, apoi butonul „Verify email” din emailul primit de la DeepL. Pagina nu o închide."
+msgstr "Klicke auf „Verify email“ und dann auf die Schaltfläche „Verify email“ in der E-Mail von DeepL. Lass die Seite geöffnet."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Start building for free”. La pasul „Get API key” apare cheia."
+msgstr "Klicke auf „Start building for free“. Im Schritt „Get API key“ erscheint der Schlüssel."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile le găsești oricând în contul DeepL, la „API Keys & Limits” (www.deepl.com/en/your-account/keys): copiezi cheia cu iconița de lângă ea sau faci una nouă cu „Create key”."
+msgstr "Deine Schlüssel findest du jederzeit in deinem DeepL-Konto unter „API Keys & Limits“ (www.deepl.com/en/your-account/keys): Kopiere den Schlüssel über das Symbol daneben oder erstelle mit „Create key“ einen neuen."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Înscrierea în planul gratuit DeepL API („Developer”)"
+msgstr "Anmeldung zum kostenlosen DeepL API-Tarif („Developer“)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile tale DeepL („API Keys & Limits”)"
+msgstr "Deine DeepL-Schlüssel („API Keys & Limits“)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planurile DeepL API și ce include fiecare"
+msgstr "DeepL API-Tarife und ihr jeweiliger Leistungsumfang"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Pe pagina deschisă intră în contul tău DeepL (sau fă unul) și completează numele și adresa: așa adaugi planul gratuit „Developer”, fără de care contul n-are chei."
+msgstr "Melde dich auf der geöffneten Seite bei deinem DeepL-Konto an (oder erstelle eines) und gib deinen Namen und deine Adresse ein: So fügst du den kostenlosen Tarif „Developer“ hinzu, ohne den dein Konto keine Schlüssel hat."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Confirmă emailul, apasă „Start building for free” și copiază cheia de la „Get API key”. Mai târziu o găsești la „Cheile tale DeepL”, mai jos."
+msgstr "Bestätige deine E-Mail-Adresse, klicke auf „Start building for free“ und kopiere den Schlüssel bei „Get API key“. Später findest du ihn weiter unten unter „Deine DeepL-Schlüssel“."
+
+#: lib/python/Screens/HdsAsistenta.py lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."
+msgstr "Wenn wir uns nicht gleich verbinden, lass sie mindestens 30 Minuten eingeschaltet: Vielleicht helfen wir gerade jemand anderem."
+
+msgid "Adaugă încă o cheie"
+msgstr "Weiteren Schlüssel hinzufügen"
+
+msgid "Cheia API %d"
+msgstr "API-Schlüssel %d"
+
+msgid "Cheia API %d pentru %s"
+msgstr "API-Schlüssel %d für %s"
+
+msgid "Cheia este goală."
+msgstr "Der Schlüssel ist leer."
+
+msgid "Cheia nu există."
+msgstr "Der Schlüssel existiert nicht."
+
+msgid "OK: adaugă încă un rând pentru o cheie API suplimentară (de exemplu de pe alt cont)."
+msgstr "OK: fügt eine weitere Zeile für einen zusätzlichen API-Schlüssel hinzu (z. B. von einem anderen Konto)."
+
+msgid "Valoarea antetului %d"
+msgstr "Wert des Headers %d"
+
+msgid "Valoarea antetului %d pentru %s"
+msgstr "Wert des Headers %d für %s"
+
+msgid "cheie greșită"
+msgstr "falscher Schlüssel"
+
+msgid "cota terminată până la %s"
+msgstr "Kontingent erschöpft bis %s"
+
+msgid "merge"
+msgstr "funktioniert"
+
+msgid "nefolosită"
+msgstr "ungenutzt"
+
+msgid "pusă (%s, OK schimbă)"
+msgstr "gesetzt (%s, OK ändern)"

@@ -2884,7 +2884,7 @@ function satelitXml(poz){
 function editeazaTpXml(poz, t){
   var a = t ? t.atribute : {system: "1", modulation: "2", fec_inner: "0", polarization: "0"};
   var campuri = [["frequency", "kHz"], ["symbol_rate", "S/s"], ["polarization", "0 H · 1 V · 2 L · 3 R"], ["fec_inner", "FEC"], ["system", "0 DVB-S · 1 DVB-S2"],
-    ["modulation", "0 " + L("auto") + " · 1 QPSK · 2 8PSK"], ["rolloff", "0 0.35 · 1 0.25 · 2 0.20"],
+    ["modulation", "0 " + L("auto") + " · 1 QPSK · 2 8PSK · 3 QAM16 · 4 16APSK · 5 32APSK"], ["rolloff", "0 0.35 · 1 0.25 · 2 0.20"],
     ["pilot", "0 " + L("oprit") + " · 1 " + L("pornit") + " · 2 " + L("auto")], ["is_id", "MIS"], ["pls_code", "PLS"],
     ["pls_mode", "0 " + L("pls_root") + " · 1 " + L("pls_gold")]];
   var f = campuri.map(function(c){ return [c[0], campTp(c[0] + " (" + c[1] + ")", a[c[0]] !== undefined ? a[c[0]] : "", "text")]; });

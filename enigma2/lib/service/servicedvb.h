@@ -9,6 +9,7 @@
 #include <lib/dvb/eit.h>
 #include <lib/dvb/subtitle.h>
 #include <lib/service/hdssubtitrareceas.h>
+#include <lib/service/hdsjurnalzap.h>
 #include <lib/dvb/teletext.h>
 #include <lib/dvb/radiotext.h>
 #include <lib/base/filepush.h>
@@ -246,6 +247,8 @@ protected:
 	ePtr<eTimer> m_hds_ceas_imagine;
 	int m_hds_ceas_erori;
 	void hdsCeasImagine();
+		/* jurnalul schimbarii de canal (lib/service/hdsjurnalzap.h) */
+	hdsjzap::Zap m_hds_zap;
 	RESULT setFastForward_internal(int ratio, bool final_seek=false);
 		/* the decoder of a recording or of the timeshift buffer paused (true) or playing (false): told to the playback
 		   channel (iDVBPVRChannel::setPlaybackPaused) */

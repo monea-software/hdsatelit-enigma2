@@ -94,14 +94,8 @@
 #ifndef ZAVOR_PROCES
 #define ZAVOR_PROCES "/tmp/hds-blindscan.lock"
 #endif
-/* Calea /dev/hife (SF8008) e scrisa dupa interfata driverului citita din binare, dar nu a mers inca pe un receptor
- * adevarat. Pana la prima proba (cu omul care deschide asistenta) cautarea pe ea porneste numai cand exista semnul de
- * mai jos, pus de mana in /tmp (in RAM: dispare la repornire, nimic ramas pe receptor); altfel placa e socotita
- * necunoscuta, iar omul vede mesajul obisnuit. Sonda (--sonda, numai citiri) merge oricum. Semnul se scoate din program
- * dupa proba. */
-#ifndef HIFE_DESCHIS
-#define HIFE_DESCHIS "/tmp/hds-oarba-hife"
-#endif
+/* Calea /dev/hife (SF8008) e scrisa dupa interfata driverului citita din binare; pornita pentru toti (o functie din
+ * imagine nu se ascunde in spatele unui semn: oamenii o probeaza si vedem daca merge). */
 
 /* ---------------------------------------------------------------- structurile cerute de biblioteca */
 /* Parametrul cautarii (7 cuvinte). Biblioteca citeste polarizarea, tonul, banda IF si raportul. */
@@ -756,7 +750,7 @@ int main(int argc, char **argv) {
 
 	if (sonda && mod_hife) {
 		/* numai citiri: dispozitivul, numele tunerului, cine tine frontend-ul */
-		linie("JURNAL frontend-tinut %d hife-deschis %d", cine_tine_frontend(port_tuner), access(HIFE_DESCHIS, F_OK) == 0);
+		linie("JURNAL frontend-tinut %d", cine_tine_frontend(port_tuner));
 		linie("SONDA 0 hife");
 		return 0;
 	}
@@ -776,11 +770,6 @@ int main(int argc, char **argv) {
 	}
 
 	if (!nr_treceri) { linie("EROARE 2 fara-treceri"); return 2; }
-	if (mod_hife && access(HIFE_DESCHIS, F_OK)) {
-		linie("JURNAL hife-neprobat");
-		linie("EROARE 1 placa-necunoscuta");
-		return 1;
-	}
 	if (!mod_hife) {
 		if (!r.gasit) { linie("EROARE 1 proc-tuner-lipsa"); return 1; }
 		if (!placa_aleasa) { linie("EROARE 1 placa-necunoscuta"); return 1; }

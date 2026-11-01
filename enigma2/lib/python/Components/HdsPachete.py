@@ -101,6 +101,11 @@ _NUME_SURSA = re.compile(r'^[a-z0-9][a-z0-9_.\-]{0,31}\Z')
 _ADRESA_SURSA = re.compile(r'^https?://[A-Za-z0-9](?:[A-Za-z0-9.\-]{0,252})(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%/+\-]*)?\Z')
 # de unde se poate instala un fisier .ipk (ca in Components/Ipkg.py: PACKAGE_FILE_ROOTS, fara dosarul imaginii)
 RADACINI_FISIERE = ('/media', '/hdd', '/mnt', '/autofs', '/tmp')
+# unde mai poate sta calea reala a unui .ipk de instalat (0.6.20): sistemul monteaza stick-urile si discurile in
+# /run/media/<eticheta>-<dispozitiv> (Components/Harddisk.py, SYSTEM_MOUNT_BASE), iar /media/hdd si /hdd sunt legaturi
+# spre acolo; /tmp e o legatura spre /var/volatile/tmp. Fara ele niciun fisier de pe stick sau disc nu se instala
+# din fila Din fisier (reprodus pe receptor)
+RADACINI_REALE = ('/run/media', '/var/volatile/tmp')
 # locurile de retea in care cautarea fisierelor .ipk nu intra singura (doar cand utilizatorul le deschide): cele
 # obisnuite ale imaginilor enigma2 si orice montare de retea din /proc/mounts (tipurile din Components/HdsNavigator.py,
 # plus autofs: o intrare in dosarul automontarii porneste montarea); o sursa //server/... e tot retea
@@ -966,7 +971,7 @@ def scrie_jurnal_rotit(cale, text, maxim=MARIME_JURNAL, sincron=False):
 # ---------------------------------------------------------------- fisiere .ipk de pe stick, disc sau retea
 
 def fisier_ipk_permis(cale, radacina='/'):
-	"""calea reala a unui .ipk care se poate instala (existent, in RADACINI_FISIERE), altfel None"""
+	"""calea reala a unui .ipk care se poate instala (existent, in RADACINI_FISIERE sau RADACINI_REALE), altfel None"""
 	if not isinstance(cale, str) or not cale.startswith('/') or not cale.lower().endswith('.ipk'):
 		return None
 	if any(ord(c) < 32 or c == '\x7f' for c in cale) or not e_utf8(cale):
@@ -981,7 +986,7 @@ def fisier_ipk_permis(cale, radacina='/'):
 		interior = reala
 	if not interior.lower().endswith('.ipk') or not os.path.isfile(reala):
 		return None
-	if not any(interior == r or interior.startswith(r + '/') for r in RADACINI_FISIERE):
+	if not any(interior == r or interior.startswith(r + '/') for r in RADACINI_FISIERE + RADACINI_REALE):
 		return None
 	return interior
 

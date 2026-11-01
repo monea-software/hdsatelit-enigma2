@@ -691,6 +691,12 @@ class VideoOutput:
 				ok = self.lastModeReached and ok
 			else:
 				ok = self.write(current, value) and ok
+		if not self.simulation:
+			try:
+				from Components import HdsJurnalAfisaj  # hds-hdmi.log: modul aplicat, conectarea televizorului
+				HdsJurnalAfisaj.modAplicat(values, ok, self.lastModeReached)
+			except Exception:
+				pass
 		return ok
 
 	def applyConfig(self):

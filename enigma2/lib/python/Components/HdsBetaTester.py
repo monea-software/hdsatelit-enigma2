@@ -186,6 +186,7 @@ NOTA_ACCEPTATA = N_("Mulțumim. Receptorul trimite din nou datele bifate.")
 RANDURI_MENIU = {
 	"forum": N_("Ce scriu testerii acestui receptor; scrii și tu, cu capturi."),
 	"mesaj": N_("O greșeală, o idee sau o întrebare, direct echipei."),
+	"raport_canal": N_("Canalul de acum nu merge: datele lui tehnice pleacă pe loc."),
 	"trimite_acum": N_("Datele bifate pleacă imediat."),
 	"trimise": N_("Ultimele pachete plecate și starea fiecăruia."),
 	"raspunsuri": N_("Ce ți-a răspuns echipa la mesaje."),
@@ -962,15 +963,55 @@ def doarStareBuna(nume, text):
 
 
 def jurnalPermis(nume):
-	"""Jurnalele imaginii din /home/root/logs care pot pleca: cele de cadere si *.log; NU jurnalul sistemului (are
-	adresele retelei si numele Wi-Fi) si nici jurnalele de depanare intregi."""
+	"""Jurnalele imaginii din /home/root/logs care pot pleca: cele de cadere, stivele interfetei pastrate de paznic la un
+	blocaj si *.log; NU jurnalul sistemului (are adresele retelei si numele Wi-Fi) si nici jurnalele de depanare
+	intregi."""
 	if not nume or "/" in nume or nume.startswith("."):
 		return False
 	if nume.startswith("messages") or nume.startswith("syslog") or nume.startswith("Enigma2-debug"):
 		return False
 	if nume.startswith("enigma2_crash_") and nume.endswith(".log"):
 		return True
+	if nume.startswith("enigma2-stive-") and nume.endswith(".txt"):
+		return True
 	return nume.startswith("hds-") and nume.endswith(".log")
+
+
+# stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
+# raspunde): pleaca numai randurile formatului lui, ca in raportul pornirii (hds-raport.sh, rp_stive)
+_STIVA_FIR = re.compile(r"^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$")
+_STIVA_CADRU = re.compile(r'^  File "([A-Za-z0-9_./-]+)", line ([0-9]+) in ([A-Za-z0-9_<>]+)$')
+_STIVA_PYTHON = re.compile(r"python3(\.[0-9]+)?/")
+
+
+def stiveCurate(text):
+	"""Numai randurile stivei: firele fara adresa, cadrele ca fisier, rand si functie, calea taiata la ce urmeaza dupa
+	enigma2/python/ sau python3.N/ (alta cale: „(alt fisier)”); un cadru al unui modul de acces e numai „(modul-acces)”.
+	Fara curata(): regulile lui scot randuri intregi cu nume obisnuite de functii, iar o stiva cu goluri nu spune nimic."""
+	rez = []
+	for rand in (text or "")[:8192].splitlines():
+		m = _STIVA_FIR.match(rand)
+		if m:
+			rez.append("%s (most recent call first):" % m.group(1))
+			continue
+		if rand == "  <no Python frame>":
+			rez.append(rand)
+			continue
+		m = _STIVA_CADRU.match(rand)
+		if not m:
+			continue
+		if "cam" in rand.lower() or esteDeAcces(rand):
+			rez.append("  (modul-acces)")
+			continue
+		cale = m.group(1)
+		i = cale.find("enigma2/python/")
+		if i >= 0:
+			cale = cale[i:]
+		else:
+			p = _STIVA_PYTHON.search(cale)
+			cale = cale[p.start():] if p else "(alt fisier)"
+		rez.append('  File "%s", line %s in %s' % (cale, m.group(2), m.group(3)))
+	return "\n".join(rez)
 
 
 def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JURNALE_PE_ZI):
@@ -1015,7 +1056,11 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		if fel == "eroare" and doarStareBuna(nume, text):
 			vazute[nume] = semn
 			continue
-		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": coada(curata(text))})
+		if nume.startswith("enigma2-stive-"):
+			text = stiveCurate(text)
+		else:
+			text = curata(text)
+		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": coada(text)})
 		vazute[nume] = semn
 	# numele care nu mai exista ies din stare
 	for nume in list(vazute):

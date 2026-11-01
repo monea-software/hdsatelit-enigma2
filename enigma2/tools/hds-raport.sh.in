@@ -304,10 +304,9 @@ rp_cip() {
 }
 
 # the small files of a /proc/stb folder: "name: value" (the first 200 bytes, one line). On the Hi3798MV200 chip ($1 =
-# rp_cip) video/alpha, video/zapmode and audio/* are named, never read: on the SF8008 board of 2024 (info/version
-# 1.2V-20240104) their read handlers in hi_dvb stop the kernel ("Unable to handle kernel paging request" in
-# proc_video_alpha_read, proc_video_zapmode_read and proc_audio_*_read, a new Oops for every file; the reports 559964,
-# 540354 and 742331 of 30.10.2026)
+# rp_cip) video/alpha, video/zapmode and audio/* are named, never read: on some SF8008 boards their read handlers in
+# hi_dvb stop the kernel ("Unable to handle kernel paging request" in proc_video_alpha_read, proc_video_zapmode_read
+# and proc_audio_*_read, a new Oops for every file)
 rp_proc_dosar() {
 	for rp_f in "$2"/*; do
 		[ -f "$rp_f" ] || continue

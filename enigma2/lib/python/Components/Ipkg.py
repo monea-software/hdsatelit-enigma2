@@ -16,7 +16,10 @@ from enigma import eConsoleAppContainer
 _PACKAGE_NAME = re.compile(r'^[a-z0-9][a-z0-9+.\-]{0,120}\Z')
 # where a package file may be installed from: removable and network storage, /tmp (downloads), the defaults of
 # the image (DreamInfoHandler)
-PACKAGE_FILE_ROOTS = ('/media/', '/hdd/', '/mnt/', '/autofs/', '/tmp/', '/usr/share/enigma2/')
+# HDSatelit 0.6.20: the real path is checked, and the system mounts sticks and disks in /run/media/<label>-<device>
+# (/media/hdd and /hdd lead there, Components/Harddisk.py) while /tmp leads to /var/volatile/tmp
+PACKAGE_FILE_ROOTS = ('/media/', '/hdd/', '/mnt/', '/autofs/', '/tmp/', '/run/media/', '/var/volatile/tmp/',
+	'/usr/share/enigma2/')
 _COMMANDS = ('update', 'upgrade', 'install', 'remove', 'list', 'list_installed', 'list-installed', 'list-upgradable')
 # HDSatelit 0.6.8: --download-only, packages from foreign sources are downloaded and read before they are installed
 # (Components/HdsExtensiiLucru.py, packages made only for Python 2)

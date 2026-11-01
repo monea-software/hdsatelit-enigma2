@@ -7843,68 +7843,6 @@ msgstr ""
 "skjámynd af valmyndum. Við lesum ekki lykilorð, lykla, stillingar "
 "aðgangskorta eða skrárnar þínar."
 
-msgid ""
-"Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin "
-"internet, starea tehnică a receptorului tău, ca să găsească și să repare mai "
-"repede defectele imaginii pe modelul tău.\n"
-"\n"
-"Este numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să "
-"meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n"
-"\n"
-"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură "
-"criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o "
-"listă fixă, scrisă în imagine: citiri ale stării și ale jurnalelor, o "
-"captură a meniurilor și un mesaj scris pe ecran. Nu putem rula comenzi, nu "
-"putem schimba setări sau fișiere și nu putem ajunge la alte aparate din casa "
-"ta. Fiecare cerere apare în jurnal, pe ecran.\n"
-"\n"
-"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din "
-"pagina web, iar după timpul ales se oprește singură.\n"
-"\n"
-"Ce date ajung la noi: modelul și versiunea receptorului, țara, ora și durata "
-"sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între "
-"altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. "
-"Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. "
-"Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin "
-"Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm "
-"imaginea și nu le dăm altora.\n"
-"\n"
-"Operatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne "
-"poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește "
-"funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
-msgstr ""
-"Fjaraðstoðin leyfir fólkinu hjá HD Satelit að sjá, í gegnum internetið, "
-"tæknilega stöðu móttakarans þíns, til að finna og laga galla í image-inu á "
-"þinni gerð hraðar.\n"
-"\n"
-"Hún er aðeins fyrir þá sem vilja hjálpa okkur. Móttakarinn þinn þarf ekki á "
-"henni að halda til að virka. Hún er óvirk þar til þú kveikir á henni "
-"sjálfur, í hvert skipti.\n"
-"\n"
-"Svona virkar hún: móttakarinn þinn spyr HD Satelit-þjóninn, í gegnum "
-"dulkóðaða tengingu, hvort við eigum beiðni fyrir hann. Við getum aðeins "
-"beðið um aðgerðir af föstum lista, skrifuðum í image-ið: lestur á stöðu og "
-"atvikaskrám, skjámynd af valmyndum og skilaboð skrifuð á skjáinn. Við getum "
-"ekki keyrt skipanir, ekki breytt stillingum eða skrám og ekki komist í önnur "
-"tæki á heimili þínu. Sérhver beiðni birtist í atvikaskránni, á skjánum.\n"
-"\n"
-"Á meðan hún er virk sérðu merki á skjánum. Þú getur stöðvað hana hvenær sem "
-"er héðan eða af vefsíðunni, og eftir valinn tíma stöðvast hún af sjálfu "
-"sér.\n"
-"\n"
-"Hvaða gögn berast okkur: gerð og útgáfa móttakarans, land, tími og lengd "
-"setunnar og svör við beiðnunum í atvikaskránni (atvikaskrár geta meðal "
-"annars sýnt hvaða rásir voru opnaðar og hvenær). Við geymum ekki IP-tölu "
-"þína. Við lesum ekki lykilorð, lykla, stillingar aðgangskorta eða skrárnar "
-"þínar. Gögnin geymast á þjóninum okkar (Hetzner, Þýskalandi; tengingin fer í "
-"gegnum Cloudflare) í 30 daga, síðan er þeim eytt. Við notum þau aðeins til "
-"að laga image-ið og gefum þau ekki öðrum.\n"
-"\n"
-"Ábyrgðaraðili gagnanna: Monea Eduard (HD Satelit), contact@hdsatelit.com. Þú "
-"getur hvenær sem er beðið okkur að sýna eða eyða gögnum setunnar þinnar. "
-"Notaðu aðgerðina aðeins ef þú ert að minnsta kosti 16 ára eða ert með "
-"samþykki foreldris."
-
 msgid "Asistența de la distanță: o pornești tu și o oprești oricând."
 msgstr "Fjaraðstoð: þú ræsir hana sjálfur og stöðvar hvenær sem er."
 
@@ -57183,17 +57121,8 @@ msgstr "HD Satelit endurræsir nú viðmót móttakarans. Fjaraðstoðin heldur 
 msgid "HD Satelit repornește acum receptorul. Asistența continuă după repornire."
 msgstr "HD Satelit endurræsir nú móttakarann. Fjaraðstoðin heldur áfram eftir endurræsingu."
 
-msgid "Echipa HD Satelit intră prin internet pe receptorul tău, ca să te ajute: poate naviga în meniuri, schimba setări, căuta canale și instala din feedul oficial, fără cheile și liniile modulelor de acces și fără datele tale personale. O oprești oricând."
-msgstr "HD Satelit teymið fer inn í móttakarann þinn í gegnum internetið til að hjálpa þér: það getur farið um valmyndir, breytt stillingum, leitað að rásum og sett upp úr opinbera straumnum, án lykla og lína aðgangseininganna og án persónuupplýsinga þinna. Þú getur stöðvað það hvenær sem er."
-
-msgid "Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Putem cere numai operații dintr-o listă fixă, scrisă în imagine: citiri ale stării, ale jurnalelor și ale textului de pe ecran, o captură a meniurilor, un mesaj scris pe ecran, tastele telecomenzii și textul din câmpuri, ca să mergem prin meniuri, să schimbăm setări, să căutăm canale și să instalăm din feedul oficial, ca și cum am ține telecomanda. Nu putem rula comenzi libere și nu putem ajunge la alte aparate din casa ta. Ecranele modulelor de acces, ale parolelor, ale accesului SSH, ale rețelei Wi-Fi și ale datelor tale personale rămân închise: acolo echipa nu vede nimic și poate doar ieși. Fiecare cerere apare în jurnal, pe ecran."
-msgstr "Hvernig það virkar: móttakarinn þinn spyr HD Satelit netþjóninn, í gegnum dulkóðaða tengingu, hvort við eigum beiðni fyrir hann. Við getum aðeins beðið um aðgerðir af föstum lista, skrifuðum í myndinni: lestur á stöðu, á atvikaskrám og á texta af skjánum, skjámynd af valmyndunum, skilaboð skrifuð á skjáinn, hnappa fjarstýringarinnar og textann í reitunum, til að fara um valmyndir, breyta stillingum, leita að rásum og setja upp úr opinbera straumnum, eins og við héldum á fjarstýringunni. Við getum ekki keyrt frjálsar skipanir og við komumst ekki að öðrum tækjum á heimili þínu. Skjáirnir aðgangseininganna, lykilorðanna, SSH-aðgangsins, Wi-Fi netsins og persónuupplýsinga þinna haldast lokaðir: þar sér teymið ekkert og getur aðeins farið út. Sérhver beiðni birtist í atvikaskránni, á skjánum."
-
 msgid "Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e pornită, echipa poate intra oricând, dar face numai ce e în lista fixă."
 msgstr "Start kveikir á því í 2 klukkustundir. Þú getur slökkt á því hvenær sem er, af móttakaranum eða af vefsíðunni. Á meðan kveikt er á því getur teymið farið inn hvenær sem er, en það gerir aðeins það sem er á fasta listanum."
-
-msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
-msgstr "Aðstoðin er fullkomin: lestur, prófanir og stjórnun móttakarans í gegnum valmyndir, af fasta listanum. Skjámynd sýnir aðeins valmyndirnar, ekki mynd rásarinnar. Einkaskjáir haldast lokaðir. Þú getur stöðvað hvenær sem er."
 
 msgid "Pornește alte imagini"
 msgstr "Ræsa aðrar myndir"
@@ -57571,3 +57500,133 @@ msgstr "<code>POST /api/oarba-scaneaza</code>: «Leita að rásum» á þekktum 
 #: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
 msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
 msgstr "<code>POST /api/oarba-televizor</code>: opnar skjá blindrar leitar í sjónvarpinu"
+
+msgid "Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n\nEste numai pentru cine vrea să ne ajute. Nu e nevoie de ea ca receptorul să meargă. Este oprită până o pornești tu, de fiecare dată din nou.\n\nCum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând.\n\nCât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales se oprește singură.\n\nCe date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim numai ca să reparăm imaginea și nu le dăm altora.\n\nOperatorul datelor: Monea Eduard (HD Satelit), contact@hdsatelit.com. Ne poți cere oricând să vezi sau să ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte."
+msgstr "Fjaraðstoðin leyfir fólkinu hjá HD Satelit að sjá, í gegnum internetið, tæknilega stöðu móttakarans þíns, til að finna og laga galla í image-inu á þinni gerð hraðar.\n\nHún er aðeins fyrir þá sem vilja hjálpa okkur. Móttakarinn þinn þarf ekki á henni að halda til að virka. Hún er óvirk þar til þú kveikir á henni sjálfur, í hvert skipti.\n\nSvona virkar hún: móttakarinn þinn spyr HD Satelit-þjóninn, í gegnum dulkóðaða tengingu, hvort við eigum beiðni fyrir hann. Aðstoðin er full: HD Satelit-teymið sér skjái, stillingar og mynd rásarinnar og getur stjórnað móttakaranum í gegnum valmyndir. Lykilorð, PIN-númer og lyklar birtast sem stjörnur. Aðeins skjáir aðgangseininga eru áfram lokaðir. Þú getur stöðvað hvenær sem er.\n\nÁ meðan hún er virk sérðu merki á skjánum. Þú getur stöðvað hana hvenær sem er héðan eða af vefsíðunni, og eftir valinn tíma stöðvast hún af sjálfu sér.\n\nHvaða gögn berast okkur: gerð og útgáfa móttakarans, land, tími og lengd setunnar og svör við beiðnunum í atvikaskránni (atvikaskrár geta meðal annars sýnt hvaða rásir voru opnaðar og hvenær). Við geymum ekki IP-tölu þína. Við lesum ekki lykilorð, lykla, stillingar aðgangskorta eða skrárnar þínar. Gögnin geymast á þjóninum okkar (Hetzner, Þýskalandi; tengingin fer í gegnum Cloudflare) í 30 daga, síðan er þeim eytt. Við notum þau aðeins til að laga image-ið og gefum þau ekki öðrum.\n\nÁbyrgðaraðili gagnanna: Monea Eduard (HD Satelit), contact@hdsatelit.com. Þú getur hvenær sem er beðið okkur að sýna eða eyða gögnum setunnar þinnar. Notaðu aðgerðina aðeins ef þú ert að minnsta kosti 16 ára eða ert með samþykki foreldris."
+
+msgid "Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând."
+msgstr "Aðstoðin er full: HD Satelit-teymið sér skjái, stillingar og mynd rásarinnar og getur stjórnað móttakaranum í gegnum valmyndir. Lykilorð, PIN-númer og lyklar birtast sem stjörnur. Aðeins skjáir aðgangseininga eru áfram lokaðir. Þú getur stöðvað hvenær sem er."
+
+msgid "rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)"
+msgstr "netið, þar á meðal Wi-Fi-heitið (MAC-vistfangið hálft falið)"
+
+msgid "setările receptorului, cu secretele ca steluțe, fără modulele de acces"
+msgstr "stillingar móttakarans, með leyndarmál sem stjörnur, án aðgangseininga"
+
+msgid "captură cu meniurile și imaginea canalului; secretele ca steluțe"
+msgstr "skjámynd með valmyndum og mynd rásarinnar; leyndarmál sem stjörnur"
+
+msgid "textul ecranului, cu secretele ca steluțe; numai modulele de acces rămân închise"
+msgstr "skjátexti, með leyndarmál sem stjörnur; aðeins aðgangseiningar eru áfram lokaðar"
+
+msgid "transponderele din lista ta, cu numele canalelor"
+msgstr "sendisvararnir úr listanum þínum, með nöfnum rása"
+
+msgid "Raportează canalul ăsta"
+msgstr "Tilkynna um þessa rás"
+
+msgid "Canalul de acum nu merge: datele lui tehnice pleacă pe loc."
+msgstr "Núverandi rás virkar ekki: tæknilegar upplýsingar hennar eru sendar strax."
+
+msgid "Ce nu merge la canalul ăsta? Poți lăsa gol și apăsa OK."
+msgstr "Hvað virkar ekki á þessari rás? Þú getur skilið reitinn eftir auðan og ýtt á OK."
+
+msgid "Nu rulează niciun canal acum."
+msgstr "Engin rás er í spilun núna."
+
+msgid "Ce nu merge (opțional)"
+msgstr "Hvað virkar ekki (valfrjálst)"
+
+msgid "Raportul canalului a intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "Tilkynningin um rásina er komin í biðröð og verður send um leið og móttakarinn hefur internettengingu."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planul „Developer” e gratuit, dar numai pentru 1.000.000 de caractere în total, o singură dată, nu în fiecare lună."
+msgstr "Áskriftin „Developer“ er ókeypis, en 1.000.000 stafa heildarkvótinn er aðeins veittur einu sinni, ekki í hverjum mánuði."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Deschide înscrierea în planul gratuit DeepL API („Developer”): scanează codul QR de aici sau apasă legătura din interfața web."
+msgstr "Opnaðu skráningu í ókeypis DeepL API-áskriftina („Developer“): skannaðu QR-kóðann hér eða smelltu á tengilinn í vefviðmótinu."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Intră în contul tău DeepL sau fă unul nou. Contul de la traducătorul DeepL n-are chei API până nu adaugi acest plan: adresa cheilor te întoarce la pagina contului."
+msgstr "Skráðu þig inn á DeepL-reikninginn þinn eða stofnaðu nýjan. Reikningur fyrir DeepL-þýðandann hefur enga API-lykla fyrr en þú bætir þessari áskrift við: veffang lyklanna vísar þér aftur á reikningssíðuna."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Completează țara, prenumele, numele și adresa (strada, codul poștal, orașul)."
+msgstr "Sláðu inn land, eiginnafn, eftirnafn og heimilisfang (götu, póstnúmer, borg)."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Verify email”, apoi butonul „Verify email” din emailul primit de la DeepL. Pagina nu o închide."
+msgstr "Smelltu á „Verify email“ og síðan á hnappinn „Verify email“ í tölvupóstinum frá DeepL. Haltu síðunni opinni."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Apasă „Start building for free”. La pasul „Get API key” apare cheia."
+msgstr "Smelltu á „Start building for free“. Lykillinn birtist í skrefinu „Get API key“."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile le găsești oricând în contul DeepL, la „API Keys & Limits” (www.deepl.com/en/your-account/keys): copiezi cheia cu iconița de lângă ea sau faci una nouă cu „Create key”."
+msgstr "Þú finnur lyklana þína hvenær sem er á DeepL-reikningnum þínum undir „API Keys & Limits“ (www.deepl.com/en/your-account/keys): afritaðu lykilinn með tákninu við hliðina á honum eða búðu til nýjan með „Create key“."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Înscrierea în planul gratuit DeepL API („Developer”)"
+msgstr "Skráning í ókeypis DeepL API-áskriftina („Developer“)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Cheile tale DeepL („API Keys & Limits”)"
+msgstr "DeepL-lyklarnir þínir („API Keys & Limits“)"
+
+#: lib/python/Components/HdsTraducereSubtitrari.py
+msgid "Planurile DeepL API și ce include fiecare"
+msgstr "DeepL API-áskriftirnar og hvað hver þeirra inniheldur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Pe pagina deschisă intră în contul tău DeepL (sau fă unul) și completează numele și adresa: așa adaugi planul gratuit „Developer”, fără de care contul n-are chei."
+msgstr "Á síðunni sem opnast skaltu skrá þig inn á DeepL-reikninginn þinn (eða stofna nýjan) og slá inn nafn og heimilisfang: þannig bætirðu við ókeypis áskriftinni „Developer“, en án hennar hefur reikningurinn enga lykla."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/traducere_configurare_web.py
+msgid "Confirmă emailul, apasă „Start building for free” și copiază cheia de la „Get API key”. Mai târziu o găsești la „Cheile tale DeepL”, mai jos."
+msgstr "Staðfestu netfangið þitt, smelltu á „Start building for free“ og afritaðu lykilinn í skrefinu „Get API key“. Síðar finnurðu hann undir „DeepL-lyklarnir þínir“ hér fyrir neðan."
+
+#: lib/python/Screens/HdsAsistenta.py lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."
+msgstr "Ef við tengjumst ekki strax skaltu halda beiðninni virkri í að minnsta kosti 30 mínútur: við gætum verið að aðstoða einhvern annan núna."
+
+msgid "Adaugă încă o cheie"
+msgstr "Bæta við öðrum lykli"
+
+msgid "Cheia API %d"
+msgstr "API-lykill %d"
+
+msgid "Cheia API %d pentru %s"
+msgstr "API-lykill %d fyrir %s"
+
+msgid "Cheia este goală."
+msgstr "Lykillinn er tómur."
+
+msgid "Cheia nu există."
+msgstr "Lykillinn er ekki til."
+
+msgid "OK: adaugă încă un rând pentru o cheie API suplimentară (de exemplu de pe alt cont)."
+msgstr "OK: bætir við annarri línu fyrir auka API-lykil (til dæmis af öðrum reikningi)."
+
+msgid "Valoarea antetului %d"
+msgstr "Gildi haussins %d"
+
+msgid "Valoarea antetului %d pentru %s"
+msgstr "Gildi haussins %d fyrir %s"
+
+msgid "cheie greșită"
+msgstr "rangur lykill"
+
+msgid "cota terminată până la %s"
+msgstr "kvóti búinn til %s"
+
+msgid "merge"
+msgstr "virkar"
+
+msgid "nefolosită"
+msgstr "ónotað"
+
+msgid "pusă (%s, OK schimbă)"
+msgstr "stillt (%s, OK breyta)"

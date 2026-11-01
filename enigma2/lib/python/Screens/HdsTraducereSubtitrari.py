@@ -516,6 +516,8 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		}, -2)
 		# randurile de citit (o singura alegere): starea cheii si contorul
 		self.randCheie = ConfigSelection(choices=[("cheie", self._textCheie())], default="cheie")
+		self.randChei = []
+		self.randAdaugaCheie = ConfigSelection(choices=[("adauga", _("OK adaugă"))], default="adauga")
 		self.randContor = ConfigSelection(choices=[("contor", self._textContor())], default="contor")
 		self.randContorEpg = ConfigSelection(choices=[("contor", self._textContorEpg())], default="contor")
 		self.randContorTexte = ConfigSelection(choices=[("contor", self._textContorTexte())], default="contor")
@@ -594,8 +596,20 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			lista.append(getConfigListEntry(_("Serviciile de rezervă"), self.randRezerve))
 		if serv in ("libre", "openai"):
 			lista.append(getConfigListEntry(_("Caută în rețeaua de acasă"), self.randCauta))
-		lista.append(getConfigListEntry(_("Valoarea antetului (cheia)") if serv == "propriu" else _("Cheia API"),
-			self.randCheie))
+		# Chei multiple per serviciu: minim 3 randuri de cheie + rand adauga cheie
+		toate = T.chei().citeste_toate()
+		lista_chei = list(toate.get(serv) or [])
+		n_randuri = max(3, len(lista_chei))
+		while len(self.randChei) < n_randuri:
+			idx = len(self.randChei)
+			self.randChei.append(ConfigSelection(choices=[("cheie", "")], default="cheie"))
+		for idx in range(n_randuri):
+			r = self.randChei[idx]
+			txt = self._textCheieIndice(idx)
+			self._puneValoare(r, "cheie", txt)
+			eticheta = (_("Valoarea antetului %d") if serv == "propriu" else _("Cheia API %d")) % (idx + 1)
+			lista.append(getConfigListEntry(eticheta, r))
+		lista.append(getConfigListEntry(_("Adaugă încă o cheie"), self.randAdaugaCheie))
 		if serv == "azure":
 			lista.append(getConfigListEntry(_("Regiunea (numai dacă resursa nu e Global)"), self._proxi(s.regiune, _("Global"))))
 		if serv == "libre":
@@ -658,6 +672,8 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 					self["config"].setCurrentIndex(i)
 					break
 		self._puneValoare(self.randCheie, "cheie", self._textCheie())
+		for idx, r in enumerate(self.randChei):
+			self._puneValoare(r, "cheie", self._textCheieIndice(idx))
 		self["ajutor"].setText(self._textAjutor())
 
 	def _proxi(self, element, gol):
@@ -712,6 +728,17 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				return _("trebuie pusă din nou (OK o scrie)")
 			return _("lipsește (OK o scrie)")
 		return _("nu trebuie (numai dacă serverul cere)")
+
+	def _textCheieIndice(self, idx):
+		serv = self.setari.serviciu.value
+		chei_s = T.chei().citeste_toate().get(serv) or []
+		if idx >= len(chei_s):
+			return _("lipsește (OK o scrie)")
+		stari = T.chei().stare_chei(serv)
+		if idx < len(stari):
+			txt_stare = stari[idx]["stare_text"]
+			return _("pusă (%s, OK schimbă)") % txt_stare
+		return _("pusă (OK schimbă)")
 
 	@staticmethod
 	def _textContor():
@@ -887,7 +914,9 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				"ghidul, detaliile emisiunii) în limba traducerii, cu aceleași servicii și chei. Consumă din cota "
 				"serviciului, de aceea din fabrică e oprită. Textul deja în limba ta nu se trimite, iar o traducere ținută "
 				"minte nu se mai cere. În detaliile emisiunii, INFO arată textul original.") + ((u" " + lipsa) if lipsa else u"")
-		if e is self.randCheie:
+		if e is self.randAdaugaCheie:
+			return _("OK: adaugă încă un rând pentru o cheie API suplimentară (de exemplu de pe alt cont).")
+		if e is self.randCheie or e in self.randChei:
 			nota = T.notaCheie() if hasattr(T, "notaCheie") and s.serviciu.value not in self._cheiPuse else u""
 			din_nou = T.textCheiDinNou() if hasattr(T, "textCheiDinNou") else u""
 			if din_nou and "cheie" not in T.CERE.get(s.serviciu.value, ()):
@@ -959,6 +988,8 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		self._puneValoare(self.randContorEpg, "contor", self._textContorEpg())
 		self._puneValoare(self.randContorTexte, "contor", self._textContorTexte())
 		self._puneValoare(self.randCheie, "cheie", self._textCheie())
+		for idx, r in enumerate(self.randChei):
+			self._puneValoare(r, "cheie", self._textCheieIndice(idx))
 		if _camp(self.setari, "rezerve") is not None:
 			self._puneValoare(self.randRezerve, "rezerve", self._textRezerve())
 		self._improspateazaProxiurile()
@@ -987,6 +1018,19 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				for fel in X.FELURI:
 					X.instanta(fel).puneContorulLaZero()
 			self._improspateaza()
+			return
+		if e is self.randAdaugaCheie:
+			idx = len(T.chei().citeste_toate().get(s.serviciu.value) or [])
+			self._alegereCheieIndice(idx, ("scrie", "scrie"))
+			return
+		if e in self.randChei:
+			idx = self.randChei.index(e)
+			are_cheie = idx < len(T.chei().citeste_toate().get(s.serviciu.value) or [])
+			titlu = (_("Valoarea antetului %d pentru %s") if s.serviciu.value == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(s.serviciu.value))
+			optiuni = [(_("Scrie cheia nouă"), "scrie")]
+			if are_cheie:
+				optiuni.append((_("Șterge cheia"), "sterge"))
+			self.session.openWithCallback(lambda alegere, i=idx: self._alegereCheieIndice(i, alegere), ChoiceBox, title=titlu, list=optiuni)
 			return
 		if e is self.randCheie:
 			self.session.openWithCallback(self._alegereCheie, ChoiceBox, title=_("Cheia API pentru %s") %
@@ -1083,6 +1127,33 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			self._mesaj(mesaj)
 		self.session.openWithCallback(gata, VirtualKeyBoard, title=_("Cheia API pentru %s") % T.numeServiciu(serv),
 			text=u"")
+
+	def _alegereCheieIndice(self, idx, alegere):
+		if not alegere:
+			return
+		serv = self.setari.serviciu.value
+		if alegere[1] == "sterge":
+			ok, mesaj = T.chei().schimba(serv, None, indice=idx)
+			if ok:
+				self._cheiPuse.discard(serv)
+				self._cheiVechi.pop(serv, None)
+			self._mesaj(mesaj)
+			return
+
+		def gata(text):
+			if text is None or not text.strip():
+				return
+			if serv in getattr(T, "CU_ADRESA", ()) and serv not in self._cheiVechi:
+				try:
+					self._cheiVechi[serv] = (T.chei().citeste().get(serv), T.chei().legaturi().get(serv))
+				except Exception as e:
+					print("[HdsTraducereSubtitrari] cheia de dinainte: %s" % e.__class__.__name__)
+			ok, mesaj = T.chei().schimba(serv, text, indice=idx)
+			if ok and serv in getattr(T, "CU_ADRESA", ()):
+				self._cheiPuse.add(serv)
+			self._mesaj(mesaj)
+		titlu = (_("Valoarea antetului %d pentru %s") if serv == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(serv))
+		self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=u"")
 
 	def _mesaj(self, text):
 		self._facLista()

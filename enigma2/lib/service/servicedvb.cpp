@@ -973,6 +973,12 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_hds_ceas_erori = 0;
 	m_hds_ceas_imagine = eTimer::create(eApp);
 	CONNECT(m_hds_ceas_imagine->timeout, eDVBServicePlay::hdsCeasImagine);
+	/* jurnalul zap-ului: fara eveniment al decodorului dupa FARA_IMAGINE_MS, PTS-ul imaginii spune daca imaginea merge */
+	m_hds_zap.verificare([](void *p) -> bool {
+		eDVBServicePlay *s = static_cast<eDVBServicePlay *>(p);
+		pts_t pts = 0;
+		return s->m_decoder && !s->m_decoder->getPTS(0, pts) && pts > 0;
+	}, this);
 
 	m_subtitle_sync_timer = eTimer::create(eApp);
 
@@ -1041,6 +1047,8 @@ void eDVBServicePlay::serviceEvent(int event)
 		return;
 	}
 	m_tune_state = event;
+	m_hds_zap.eveniment(event, event == eDVBServicePMTHandler::eventTuned ?
+		getFrontendInfo(iDVBFrontend_ENUMS::frontendNumber) : -1);
 
 	switch (event)
 	{
@@ -1213,6 +1221,7 @@ RESULT eDVBServicePlay::start()
 		m_event(this, evStart);	/* a stream starts like a channel: no cue sheet, so the push thread never seeks */
 
 	m_first_program_info = 1;
+	m_hds_zap.pornire(service, !m_is_pvr && !m_is_stream && m_is_primary);
 	ePtr<iTsSource> source = createTsSource(service);
 		/* AIT-ul HbbTV numai pe canalul viu din fereastra principala (nu la fisiere, fluxuri, PiP) si numai cu HbbTV
 		   pornit din setari (0.2.8, setarea principala "HbbTV", config.plugins.hdsnavigator.hbbtv, OPRITA din fabrica):
@@ -1256,6 +1265,7 @@ RESULT eDVBServicePlay::stop()
 		eHdsEgalizator::existent()->serviciuOprit(this);
 	m_hds_sunet_procesor = false;
 	m_hds_ceas_imagine->stop();
+	m_hds_zap.oprire();
 
 		/* add bookmark for last play position */
 	if (m_is_pvr && !m_is_stream)
@@ -2758,6 +2768,7 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 		else
 			m_decoder->set();
 		hdsPozaRadio(vpid);
+		m_hds_zap.program(program, vpid, vpidtype);
 
 		m_decoder->setAudioChannel(achannel);
 
@@ -3733,6 +3744,9 @@ void eDVBServicePlay::setPCMDelay(int delay)
 
 void eDVBServicePlay::video_event(struct iTSMPEGDecoder::videoEvent event)
 {
+	/* pasiv: marimea vine numai din eveniment (nicio cerere in plus la decodor cat porneste imaginea) */
+	m_hds_zap.imagine(event.type == iTSMPEGDecoder::videoEvent::eventSizeChanged ? event.width : -1,
+		event.type == iTSMPEGDecoder::videoEvent::eventSizeChanged ? event.height : -1);
 	switch(event.type) {
 		case iTSMPEGDecoder::videoEvent::eventSizeChanged:
 			m_event((iPlayableService*)this, evVideoSizeChanged);

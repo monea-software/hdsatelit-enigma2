@@ -323,6 +323,10 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 	if ce == "trimite-acum":
 		ok, mesaj = B.trimiteAcum()
 		return {"result": ok, "message": mesaj}
+	if ce == "raport-canal":
+		from Components import HdsRaportCanal  # canalul de acum + ultimele randuri din jurnalele tunerului si zap-ului
+		ok, mesaj = HdsRaportCanal.trimite(None, arg.get("text", ""), B)
+		return {"result": ok, "message": mesaj}
 	if ce == "mesaj":
 		poza = None
 		if arg.get("captura") == "1":
@@ -593,6 +597,12 @@ __STIL_PAGINI__
           <div class="butoane"><button type="button" class="principal" id="trimiteMesaj">Trimite</button></div>
         </div>
       </details>
+      <details class="rm" id="r-raport-canal"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18a12 12 0 0 1 16 0"/><path d="M7.5 14.5a7 7 0 0 1 9 0"/><path d="M12 11v9"/></svg><div class="t"><b>Raportează canalul ăsta</b><span data-rand="raport_canal"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <div class="rand"><label for="textRaportCanal">Ce nu merge (opțional)</label><input type="text" id="textRaportCanal" maxlength="300"></div>
+          <div class="butoane"><button type="button" class="principal" id="trimiteRaportCanal">Trimite</button></div>
+        </div>
+      </details>
       <details class="rm" id="r-raspunsuri"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="m3 7 9 6 9-6"/></svg><div class="t"><b id="titluRaspunsuri">Răspunsurile echipei</b><span data-rand="raspunsuri"></span></div><span class="insigna ascuns" id="insignaRaspunsuri"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
         <div class="corp">
           <pre class="text" id="raspunsuri"></pre>
@@ -806,6 +816,10 @@ $("trimiteMesaj").addEventListener("click", function(){
   fa(q).then(function(){ $("textMesaj").value = ""; });
 });
 $("trimiteAcum").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "trimite-acum"); fa(q); });
+$("trimiteRaportCanal").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("fa", "raport-canal"); q.set("text", $("textRaportCanal").value);
+  fa(q).then(function(){ $("textRaportCanal").value = ""; });
+});
 $("canalTesteriBifa").addEventListener("change", canalTesteri);
 $("cereRaspunsuri").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "raspunsuri"); fa(q); });
 $("r-raspunsuri").addEventListener("toggle", function(){ if($("r-raspunsuri").open && STARE && STARE.insigna_raspunsuri){ var q = new URLSearchParams(); q.set("fa", "raspunsuri"); fa(q); } });
@@ -852,6 +866,8 @@ TEXTE_PAGINA = {
 		N_("Renunț"),
 		N_("Forumul receptorului"),
 		N_("Trimite un mesaj"),
+		N_("Raportează canalul ăsta"),
+		N_("Ce nu merge (opțional)"),
 		N_("Felul"),
 		N_("Ecranul sau funcția (opțional)"),
 		N_("Atașează jurnalul ultimei erori"),

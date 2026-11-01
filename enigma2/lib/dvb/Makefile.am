@@ -21,6 +21,8 @@ libenigma_dvb_a_SOURCES = \
 	esection.cpp \
 	frontend.cpp \
 	hdsait.cpp \
+	hdsjurnaldecodor.cpp \
+	hdsjurnaltuner.cpp \
 	hdspazademux.cpp \
 	hdsretea.cpp \
 	hdsrotire.cpp \
@@ -58,6 +60,8 @@ dvbinclude_HEADERS = \
 	hdscalitate.h \
 	hdscedare.h \
 	hdsgrad.h \
+	hdsjurnaldecodor.h \
+	hdsjurnaltuner.h \
 	hdsmultistream.h \
 	hdspazademux.h \
 	hdspazavideo.h \

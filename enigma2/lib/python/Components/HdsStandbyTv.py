@@ -119,6 +119,7 @@ CITIRI_PE_PAS = 8
 CITIRE_SIGURA_MS = 5000     # familia libreader: o citire si cand poll(0) nu arata nimic (paza pentru un poll care minte)
 CITIRE_ASTEAPTA_S = 0.2     # familia libreader: cat asteapta firul principal citirea facuta in fundal
 CITIRE_BLOCATA_S = 1.0      # o citire care nu se intoarce in atat opreste CEC pana la repornirea interfetei
+SCRIERE_ASTEAPTA_S = 1.0    # familia libreader: o scriere facuta in fundal care nu se intoarce in atat opreste CEC
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
 
@@ -797,10 +798,13 @@ class Cec(object):
 			return False
 		date = cadru(destinatie, cod, parametri)
 		try:
-			n = self.scrieFd(self.fd, date)
+			n = self._scrie(date)
 		except OSError as e:
 			_jurnal("trimiterea CEC %s: %s" % (NUME_MESAJ.get(cod, hex(cod)), e), "cec-trimite")
 			n = 0
+		if n is None:
+			# scrierea a ramas in driver: CEC e oprit (_blocheaza), nimic de notat ca netrimis
+			return False
 		trimis = bool(n and n > 0)
 		self._noteaza("trimis", catre=destinatie & 0x0F, mesaj=NUME_MESAJ.get(cod, "%02x" % cod),
 			date=hexa(bytearray(date)[2:]), ok=trimis)
@@ -951,9 +955,51 @@ class Cec(object):
 			raise rez["eroare"]
 		return rez.get("date", b"")
 
-	def _blocheaza(self):
-		"""Citirea din nod nu s-a intors (driverul asteapta un mesaj): CEC oprit pana la repornirea interfetei, fara alte
-		citiri si fara scrieri, care ar putea astepta acelasi driver; firul ramas in read() e de fundal."""
+	def _cuFir(self):
+		"""Familia libreader: citirile si scrierile pe nod trec prin fire de fundal (inFir, aflat o singura data, si
+		inainte de prima citire, fiindca anuntul de la pornire scrie primul)."""
+		if self.inFir is None:
+			if self.dupaPoll is None:
+				self.dupaPoll = citireDupaPoll()
+			self.inFir = bool(self.dupaPoll)
+		return self.inFir
+
+	def _scrie(self, date):
+		"""Un write() pe nod. Pe familia libreader printr-un fir de fundal, asteptat cel mult SCRIERE_ASTEAPTA_S: pe unele
+		placi SF8008 write() ramane in driver (hdmicec_write, starea D) si ar opri interfata; o scriere care nu s-a
+		intors in atat opreste CEC (_blocheaza), ca la citire. Intoarce ce intoarce write(), None cand nodul e blocat; o
+		eroare a lui write() trece mai departe."""
+		if self.blocat:
+			return None
+		if not self._cuFir():
+			return self.scrieFd(self.fd, date)
+		import threading
+		rez = {}
+		scrie, fd = self.scrieFd, self.fd
+
+		def lucreaza():
+			try:
+				rez["n"] = scrie(fd, date)
+			except Exception as e:
+				rez["eroare"] = e
+		fir = threading.Thread(target=lucreaza, name="HdsCecScriere")
+		fir.daemon = True
+		pornit = self.ceas()
+		fir.start()
+		fir.join(SCRIERE_ASTEAPTA_S)
+		if fir.is_alive():
+			self._blocheaza("scrierea in", pornit)
+			return None
+		if "eroare" in rez:
+			raise rez["eroare"]
+		return rez.get("n", 0)
+
+	def _blocheaza(self, ce="citirea din", pornit=None):
+		"""Citirea din nod sau scrierea in nod nu s-a intors (driverul asteapta): CEC oprit pana la repornirea
+		interfetei, fara alte citiri si fara scrieri, care ar putea astepta acelasi driver; firul ramas in driver e de
+		fundal."""
+		if pornit is None:
+			pornit = self._firPornit
 		self.blocat = True
 		self.raspunde = False
 		for t in (self.timerCitire, self.timerAnunt):
@@ -963,8 +1009,8 @@ class Cec(object):
 				except Exception:
 					pass
 		self._noteaza("blocat")
-		_jurnal("CEC: citirea din %s nu s-a intors de %.1f s (driverul asteapta un mesaj); CEC oprit pana la repornirea "
-			"interfetei" % (CEC, self.ceas() - self._firPornit), "cec-blocat")
+		_jurnal("CEC: %s %s nu s-a intors de %.1f s (driverul asteapta); CEC oprit pana la repornirea interfetei" % (
+			ce, CEC, self.ceas() - pornit), "cec-blocat")
 
 	def _inregistrare(self):
 		"""(destinatia, codul, parametrii) de la inceputul tamponului, sau None daca nu e una intreaga. Un inceput de

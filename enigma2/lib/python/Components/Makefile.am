@@ -7,6 +7,7 @@ SUBDIRS = Sources Converter Renderer HdsSubtitrariInternet
 install_PYTHON = \
 	ActionMap.py GUISkin.py PerServiceDisplay.py components.py              \
 	HdsTransmisie.py \
+	HdsJurnal.py HdsJurnalTuner.py HdsJurnalAfisaj.py HdsJurnalInregistrari.py HdsJurnalSistem.py HdsRaportCanal.py \
 	HdsAlimentare.py HdsResetareFabrica.py HdsCuratenie.py HdsJurnale.py HdsSwap.py HdsDiscuri.py HdsDosareInregistrari.py HdsRetea.py HdsWlan.py HdsDispozitiveIntrare.py HdsTasteRapide.py HdsSkinuri.py HdsDvbISetari.py HdsDvbIIncercare.py HdsDvbIRegistru.py HdsDvbILegare.py HdsDvbIDate.py HdsDvbIRezerva.py HdsMabrSetari.py HdsIptvSurse.py HdsControlParental.py HdsInformatiiCanal.py HdsMedia.py HdsExtensiiLucru.py \
 	Button.py HTMLComponent.py ProgressBar.py TimerList.py config.py        \
 	HTMLSkin.py ServiceList.py VariableText.py                              \

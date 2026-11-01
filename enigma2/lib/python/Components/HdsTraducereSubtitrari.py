@@ -1366,9 +1366,24 @@ MAX_FISIER_CHEI = 64 * 1024
 
 
 def _desface(date):
-	"""continutul decriptat -> (chei {serviciu: cheie}, legaturi {serviciu: origine}), numai valorile bune"""
-	curat = dict((k, v) for k, v in date.items() if k in SERVICII and isinstance(v, str) and
-		curataCheie(v, k == "propriu"))
+	"""continutul decriptat -> (chei {serviciu: [cheie, ...]}, legaturi {serviciu: origine}), numai valorile bune"""
+	curat = {}
+	for k, v in date.items():
+		if k not in SERVICII:
+			continue
+		if isinstance(v, str):
+			c = curataCheie(v, k == "propriu")
+			if c:
+				curat[k] = [c]
+		elif isinstance(v, (list, tuple)):
+			l = []
+			for item in v:
+				if isinstance(item, str):
+					c = curataCheie(item, k == "propriu")
+					if c and c not in l:
+						l.append(c)
+			if l:
+				curat[k] = l
 	leg = date.get(CHEIE_LEGATURI)
 	legaturi = dict((k, v) for k, v in (leg.items() if isinstance(leg, dict) else ())
 		if k in CU_ADRESA and k in curat and isinstance(v, str))
@@ -1508,7 +1523,12 @@ class Chei(object):
 		return os.path.exists(self.cale + SUFIX_CHEI_VECHI) and not os.path.exists(self.cale)
 
 	def citeste(self):
-		"""{serviciu: cheie}; {} daca fisierul lipseste sau nu se poate citi"""
+		"""{serviciu: cheie}; {} daca fisierul lipseste sau nu se poate citi; prima cheie din lista pentru compatibilitate"""
+		chei_toate = self._citesteTot()[0]
+		return dict((k, v[0]) for k, v in chei_toate.items() if v)
+
+	def citeste_toate(self):
+		"""{serviciu: [cheie, ...]}; {} daca fisierul lipseste sau nu se poate citi"""
 		return self._citesteTot()[0]
 
 	def legaturi(self):
@@ -1517,6 +1537,7 @@ class Chei(object):
 
 	def scrie(self, date, legaturi=None):
 		"""cheile (si legaturile lor; None = cele din fisier, pentru cheile ramase) criptate in fisier, plicul v2.
+		date poate contine fie siruri simple (compatibilitate), fie liste de siruri.
 		Nimic nu se scrie cand identitatea nu se poate citi complet (cheile ar ramane legate de o identitate gresita).
 		Dupa o scriere buna, fisierul pus deoparte (<cale>.vechi) se sterge: cheile au fost puse din nou."""
 		ident = self.identitate()
@@ -1525,7 +1546,15 @@ class Chei(object):
 			return False
 		if legaturi is None:
 			legaturi = self.legaturi()
-		continut = dict((k, v) for k, v in date.items() if k in SERVICII and v)
+		continut = {}
+		for k, v in date.items():
+			if k in SERVICII and v:
+				if isinstance(v, (list, tuple)):
+					l = [str(x).strip() for x in v if str(x).strip()]
+					if l:
+						continut[k] = l
+				elif isinstance(v, str) and v.strip():
+					continut[k] = [v.strip()]
 		leg = dict((k, v) for k, v in legaturi.items() if k in CU_ADRESA and k in continut and isinstance(v, str))
 		if leg:
 			continut[CHEIE_LEGATURI] = leg
@@ -1560,21 +1589,51 @@ class Chei(object):
 			pass
 		return True
 
-	def schimba(self, serviciu, valoare, adresa=None):
-		"""pune cheia unui serviciu (valoare goala sau None = o sterge). La serviciile cu adresa cheia se leaga de
-		gazda `adresa` (None = adresa din setari de acum). -> (True/False, mesaj)"""
+	def schimba(self, serviciu, valoare, adresa=None, indice=None):
+		"""pune, inlocuieste sau sterge o cheie a unui serviciu.
+		Daca indice este None:
+		  valoare goala sau None -> sterge TOATE cheile serviciului;
+		  valoare data -> inlocuieste prima cheie (sau adauga daca nu exista).
+		Daca indice este int:
+		  valoare goala sau None -> sterge cheia de la indicele dat;
+		  valoare data -> actualizeaza cheia de la indicele dat (sau adauga la sfarsit daca indice >= lungime).
+		La serviciile cu adresa cheia se leaga de gazda `adresa` (None = adresa din setari de acum).
+		-> (True/False, mesaj)"""
 		if serviciu not in SERVICII:
 			return False, _t("Serviciu necunoscut.")
 		date, legaturi = self._citesteTot()
+		lista = list(date.get(serviciu) or [])
 		if valoare is None or not str(valoare).strip():
-			date.pop(serviciu, None)
-			legaturi.pop(serviciu, None)
-			mesaj = _t("Cheia a fost ștearsă.")
+			if indice is None:
+				date.pop(serviciu, None)
+				legaturi.pop(serviciu, None)
+				mesaj = _t("Cheia a fost ștearsă.")
+			else:
+				if 0 <= indice < len(lista):
+					lista.pop(indice)
+					if lista:
+						date[serviciu] = lista
+					else:
+						date.pop(serviciu, None)
+						legaturi.pop(serviciu, None)
+					mesaj = _t("Cheia a fost ștearsă.")
+				else:
+					return False, _t("Cheia nu există.")
 		else:
 			v = curataCheie(valoare, serviciu == "propriu")
 			if not v:
 				return False, _t("Cheia are caractere care nu pot fi într-o cheie (sau e prea lungă). Nu s-a schimbat nimic.")
-			date[serviciu] = v
+			if indice is None:
+				if lista:
+					lista[0] = v
+				else:
+					lista = [v]
+			elif 0 <= indice < len(lista):
+				lista[indice] = v
+			else:
+				if v not in lista:
+					lista.append(v)
+			date[serviciu] = lista
 			mesaj = _t("Cheia e salvată pe receptor.")
 			if serviciu in CU_ADRESA:
 				legaturi[serviciu] = origine(adresaServiciului(serviciu) if adresa is None else adresa)
@@ -1585,6 +1644,20 @@ class Chei(object):
 			return False, _t("Cheia nu s-a putut salva pe receptor.")
 		instanta().setariSchimbate()
 		return True, mesaj
+
+	def adauga_cheie(self, serviciu, valoare, adresa=None):
+		"""adauga o cheie noua la sfarsitul listei de chei a serviciului"""
+		if serviciu not in SERVICII:
+			return False, _t("Serviciu necunoscut.")
+		if valoare is None or not str(valoare).strip():
+			return False, _t("Cheia este goală.")
+		date, _ = self._citesteTot()
+		lista = list(date.get(serviciu) or [])
+		return self.schimba(serviciu, valoare, adresa=adresa, indice=len(lista))
+
+	def sterge_cheie(self, serviciu, indice):
+		"""sterge cheia de la indicele dat din lista serviciului"""
+		return self.schimba(serviciu, None, indice=indice)
 
 	def legaDeAdresa(self, serviciu, adresa=None):
 		"""cheia deja salvata a unui serviciu cu adresa, legata de gazda `adresa` (None = adresa din setari); numai
@@ -1627,6 +1700,41 @@ class Chei(object):
 		date = self.citeste()
 		return dict((k, k in date) for k in SERVICII)
 
+	def stare_chei(self, serviciu=None):
+		"""starea detaliata a fiecarei chei din lista: {serviciu: [{indice, stare, stare_text, blocat_pana, motiv}]}.
+		starile per cheie: "merge", "cota", "gresita", "nefolosita". Niciodata valoarea cheii."""
+		toate = self.citeste_toate()
+		tr = instanta()
+		acum = tr._acum()
+		servicii = [serviciu] if serviciu and serviciu in SERVICII else SERVICII
+		rez = {}
+		with tr.lacat:
+			blocat_cheie = dict(tr.blocat_cheie)
+			cheie_activa = dict(tr.cheie_activa)
+		for s in servicii:
+			chei_s = toate.get(s) or []
+			l = []
+			idx_act = cheie_activa.get(s, 0)
+			for idx in range(len(chei_s)):
+				b = blocat_cheie.get((s, idx))
+				if b is not None and (b[0] is None or acum < b[0]):
+					ora_str = time.strftime("%H:%M", time.localtime(time.time() + (b[0] - acum))) if b[0] else ""
+					if b[1] == E_CHEIE:
+						st = "gresita"
+						txt = _t("cheie greșită")
+					elif b[1] == E_COTA:
+						st = "cota"
+						txt = (_t("cota terminată până la %s") % ora_str) if ora_str else _t("cota terminată")
+					else:
+						st = "cota"
+						txt = (_t("cota terminată până la %s") % ora_str) if ora_str else _t("cota terminată")
+					l.append({"indice": idx, "stare": st, "stare_text": txt, "blocat_pana": b[0], "motiv": b[1]})
+				elif idx == idx_act:
+					l.append({"indice": idx, "stare": "merge", "stare_text": _t("merge"), "blocat_pana": None, "motiv": None})
+				else:
+					l.append({"indice": idx, "stare": "nefolosita", "stare_text": _t("nefolosită"), "blocat_pana": None, "motiv": None})
+			rez[s] = l
+		return rez if serviciu is None else rez.get(serviciu, [])
 
 _CHEI = [None]
 
@@ -2840,6 +2948,9 @@ class Traducator(object):
 		self.refuzuri = {}			# serviciu -> refuzuri ale cheii la rand (E_CHEIE), sterse la o reusita
 		self.oprite = {}			# serviciu -> {ora, refuzuri, cod, detaliu}: oprit dupa REFUZURI_OPRIRE refuzuri
 		self.oprit_spus = set()		# serviciile oprite al caror mesaj s-a aratat (o data, pana la setari schimbate)
+		self.blocat_cheie = {}		# (serviciu, indice) -> (pana_la, felul erorii, pe_zi)
+		self.cheie_activa = {}		# serviciu -> indicele ultimei chei care a mers (sau care se incearca acum)
+		self.refuzuri_cheie = {}		# (serviciu, indice) -> numar de refuzuri (E_CHEIE)
 		self._asteaptaPornirea = asteaptaPornirea	# probele il inlocuiesc
 		self.generatie_afisata = 0	# cea mai noua pagina data de nucleu (numai pentru stare: nicio pagina nu se mai sare)
 		self.mesaj_spus = False
@@ -2870,6 +2981,9 @@ class Traducator(object):
 			self.caderi.clear()
 			self.refuzuri.clear()
 			self.oprite.clear()
+			self.blocat_cheie.clear()
+			self.cheie_activa.clear()
+			self.refuzuri_cheie.clear()
 		self.oprit_spus.clear()
 		self.mesaj_spus = False
 		self.lipsa_spusa = False
@@ -3125,7 +3239,7 @@ class Traducator(object):
 				iesire = self._trimiteLot(lot)
 			except Exception as e:
 				# firul (unul singur) nu are voie sa moara cu fire = 1: traducerea s-ar opri pana la repornire
-				_jurnal("firul traducerii: %s" % e.__class__.__name__)
+				_jurnal("firul traducerii: %s: %s" % (e.__class__.__name__, e))
 				if lot is None:
 					with self.lacat:
 						self.fire -= 1
@@ -3142,77 +3256,123 @@ class Traducator(object):
 			if self.trezire is not None:
 				self.trezire.trezeste()
 
+	def _cheieLibera(self, serv, idx, acum):
+		"""verifica daca o cheie anume a unui serviciu este libera (nu e blocata temporar); sub lacat"""
+		b = self.blocat_cheie.get((serv, idx))
+		return b is None or (b[0] is not None and acum >= b[0])
+
 	def _trimiteLot(self, lot):
-		"""pe fir: lotul la primul serviciu liber din lant; la o eroare din FELURI_TRECERE serviciul cazut asteapta
-		(durataBlocarii) si cererea trece pe loc la urmatorul serviciu liber. -> (lot, rez, eroare, ms, info)"""
+		"""pe fir: lotul la primul serviciu liber din lant; pentru fiecare serviciu se incearca pe rand cheile
+		disponibile pornind de la ultima care a mers. La cotat/eroare de cheie se trece la urmatoarea cheie a aceluiasi
+		serviciu. Cand toate cheile serviciului sunt blocate, cererea trece la urmatorul serviciu liber din lant.
+		-> (lot, rez, eroare, ms, info)"""
 		info = {"treceri": [], "erori": [], "mesaj": None, "minute": 0, "pe_zi": None, "oprite": [], "revenite": []}
 		eroare = None
 		incercat = False
+		toate_cheile = chei().citeste_toate()
 		for i, cfg in enumerate(lot.lant):
 			serv = cfg["serviciu"]
 			with self.lacat:
 				if not self._liber(serv, self._acum()):
 					continue
-			incercat = True
-			inceput = self._acum()
-			try:
-				rez = traduceAcum(cfg, list(lot.texte), lot.sursa, cfg["tinta"], lot.context, self.termenMs() / 1000.0,
-					self._trimite)
-			except EroareTraducere as e:
-				eroare = e
-			except Exception as e:
-				eroare = EroareTraducere(E_RASPUNS, str(e)[:120])
-			else:
-				with self.lacat:
-					self.caderi.pop(serv, None)
-					self.blocat.pop(serv, None)
-					self.refuzuri.pop(serv, None)
-					if self.oprite.pop(serv, None) is not None:
-						info["revenite"].append(serv)
-				lot.cfg = cfg
-				return (lot, rez, None, int((self._acum() - inceput) * 1000), info)
-			info["erori"].append((cfg, eroare))
+			chei_serv = list(toate_cheile.get(serv) or [])
+			if not chei_serv and cfg.get("cheie"):
+				chei_serv = [cfg["cheie"]]
+			if not chei_serv:
+				chei_serv = [u""]
 			with self.lacat:
+				idx_start = self.cheie_activa.get(serv, 0)
+			n_chei = len(chei_serv)
+			chei_incercate = 0
+			serviciu_reusit = False
+			while chei_incercate < n_chei:
+				idx_curent = (idx_start + chei_incercate) % n_chei
+				chei_incercate += 1
 				acum = self._acum()
-				self.caderi[serv] = self.caderi.get(serv, 0) + 1
-				refuzuri = 1
-				if eroare.fel == E_CHEIE:
-					refuzuri = self.refuzuri[serv] = self.refuzuri.get(serv, 0) + 1
-				urmator = None
-				for c in lot.lant[i + 1:]:
-					if self._liber(c["serviciu"], acum):
-						urmator = c
-						break
-				durata = durataBlocarii(eroare, serv, urmator is not None, self.caderi[serv], refuzuri)
-				if durata is None or durata > 0:
-					self.blocat[serv] = (None if durata is None else acum + durata, eroare.fel, bool(eroare.pe_zi))
-				if eroare.fel == E_CHEIE and opritDupaRefuzuri(refuzuri) and serv not in self.oprite:
-					self.oprite[serv] = {"ora": time.strftime("%H:%M:%S"), "refuzuri": refuzuri, "cod": eroare.cod,
-						"detaliu": getattr(eroare, "detaliu", u"") or (u"HTTP %d" % eroare.cod if eroare.cod else u"")}
-					info["oprite"].append(serv)
-				if eroare.fel == E_COTA and eroare.pe_zi:
-					info["pe_zi"] = serv
-				if urmator is None or not treceLaUrmatorul(eroare) or durata == 0:
+				with self.lacat:
+					if not self._cheieLibera(serv, idx_curent, acum):
+						continue
+				incercat = True
+				cfg_curent = dict(cfg)
+				if chei_serv[idx_curent]:
+					cfg_curent["cheie"] = chei_serv[idx_curent]
+				inceput = self._acum()
+				try:
+					rez = traduceAcum(cfg_curent, list(lot.texte), lot.sursa, cfg_curent["tinta"], lot.context,
+						self.termenMs() / 1000.0, self._trimite)
+				except EroareTraducere as e:
+					eroare = e
+				except Exception as e:
+					eroare = EroareTraducere(E_RASPUNS, str(e)[:120])
+				else:
+					with self.lacat:
+						self.caderi.pop(serv, None)
+						self.blocat.pop(serv, None)
+						self.refuzuri.pop(serv, None)
+						self.blocat_cheie.pop((serv, idx_curent), None)
+						self.refuzuri_cheie.pop((serv, idx_curent), None)
+						self.cheie_activa[serv] = idx_curent
+						if self.oprite.pop(serv, None) is not None:
+							info["revenite"].append(serv)
+					lot.cfg = cfg_curent
+					return (lot, rez, None, int((self._acum() - inceput) * 1000), info)
+				info["erori"].append((cfg_curent, eroare))
+				with self.lacat:
+					acum = self._acum()
+					if eroare.fel in (E_COTA, E_CHEIE):
+						refuzuri_cheie = 1
+						if eroare.fel == E_CHEIE:
+							refuzuri_cheie = self.refuzuri_cheie[(serv, idx_curent)] = self.refuzuri_cheie.get((serv, idx_curent), 0) + 1
+						durata_ch = durataBlocarii(eroare, serv, True, 1, refuzuri_cheie)
+						if durata_ch is None or durata_ch > 0:
+							self.blocat_cheie[(serv, idx_curent)] = (None if durata_ch is None else acum + durata_ch, eroare.fel, bool(eroare.pe_zi))
+				if eroare.fel not in (E_COTA, E_CHEIE):
 					break
-				info["treceri"].append({"ora": time.strftime("%H:%M:%S"), "de_la": serv, "la": urmator["serviciu"],
-					"motiv": eroare.fel, "pe_zi": bool(eroare.pe_zi)})
+			# Daca am ajuns aici (si s-a incercat cel putin o cerere), serviciul nu a reusit
+			if eroare is not None:
+				with self.lacat:
+					acum = self._acum()
+					self.caderi[serv] = self.caderi.get(serv, 0) + 1
+					refuzuri = 1
+					if eroare.fel == E_CHEIE:
+						refuzuri = self.refuzuri[serv] = self.refuzuri.get(serv, 0) + 1
+					urmator = None
+					for c in lot.lant[i + 1:]:
+						if self._liber(c["serviciu"], acum):
+							urmator = c
+							break
+					durata = durataBlocarii(eroare, serv, urmator is not None, self.caderi[serv], refuzuri)
+					if durata is None or durata > 0:
+						self.blocat[serv] = (None if durata is None else acum + durata, eroare.fel, bool(eroare.pe_zi))
+					if eroare.fel == E_CHEIE and opritDupaRefuzuri(refuzuri) and serv not in self.oprite:
+						self.oprite[serv] = {"ora": time.strftime("%H:%M:%S"), "refuzuri": refuzuri, "cod": eroare.cod,
+							"detaliu": getattr(eroare, "detaliu", u"") or (u"HTTP %d" % eroare.cod if eroare.cod else u"")}
+						info["oprite"].append(serv)
+					if eroare.fel == E_COTA and eroare.pe_zi:
+						info["pe_zi"] = serv
+					if urmator is None or not treceLaUrmatorul(eroare) or durata == 0:
+						break
+					info["treceri"].append({"ora": time.strftime("%H:%M:%S"), "de_la": serv, "la": urmator["serviciu"],
+						"motiv": eroare.fel, "pe_zi": bool(eroare.pe_zi)})
+		else:
+			# Daca nu s-a incercat nicio cerere pentru ca toate cheile erau blocate
+			if not incercat:
+				pass
 		with self.lacat:
 			acum = self._acum()
 			if incercat and self._primulLiber(lot.lant, acum) is None:
-				# toate serviciile din lant au cazut: regulile vechi (pauza, mesajul o data)
 				ramase = [b[0] - acum for b in (self.blocat.get(c["serviciu"]) for c in lot.lant) if b and b[0] is not None]
 				pauza = min(ramase) if ramase else PAUZA_S
 				self.pauza_pana = acum + pauza
 				for l in list(self.coada):
 					self.in_lucru.pop(l.cheie, None)
-					# paginile care asteptau in coada nu se mai traduc: renuntarea (originalul cu semn, pe loc)
 					self.abandonate.extend(a[0] for a in l.asteptatori)
 				self.coada.clear()
 				motive = [self.blocat.get(c["serviciu"]) for c in lot.lant]
 				if info["pe_zi"]:
 					info["mesaj"] = "zi"
 				elif all(m and m[1] == E_COTA and not m[2] for m in motive):
-					info["mesaj"] = None		# numai limite pe minut: o pauza scurta, fara mesaj
+					info["mesaj"] = None
 				elif not ramase:
 					info["mesaj"] = "setari"
 				else:
@@ -3766,21 +3926,32 @@ INSTRUCTIUNI = {
 	},
 	"deepl": {
 		"pasi": (
-			N_("Intră pe www.deepl.com/en/pro#api (prețurile DeepL) și alege fila „API”, nu „Translator”."),
-			N_("La planul gratuit „Developer” apasă „Sign up for free”."),
-			N_("Dacă ai deja cont la traducătorul DeepL, ieși din el și fă un cont nou, separat, pentru API."),
-			N_("Termină înscrierea (email și parolă). Planul „Developer” e gratuit și nu trece singur pe plată."),
-			N_("În cont mergi la „API Keys” („API Keys & Limits”). Dacă nu ai nicio cheie, apasă „Create key”, scrie un "
-				"nume și apasă din nou „Create key”."),
-			N_("Copiază cheia cu iconița de lângă ea și pune-o aici."),
+			N_("Deschide înscrierea în planul gratuit DeepL API („Developer”): scanează codul QR de aici sau apasă "
+				"legătura din interfața web."),
+			N_("Intră în contul tău DeepL sau fă unul nou. Contul de la traducătorul DeepL n-are chei API până nu adaugi "
+				"acest plan: adresa cheilor te întoarce la pagina contului."),
+			N_("Completează țara, prenumele, numele și adresa (strada, codul poștal, orașul)."),
+			N_("Apasă „Verify email”, apoi butonul „Verify email” din emailul primit de la DeepL. Pagina nu o închide."),
+			N_("Apasă „Start building for free”. La pasul „Get API key” apare cheia."),
+			N_("Cheile le găsești oricând în contul DeepL, la „API Keys & Limits” (www.deepl.com/en/your-account/keys): "
+				"copiezi cheia cu iconița de lângă ea sau faci una nouă cu „Create key”."),
+			N_("Pune cheia aici."),
 		),
-		"cota": N_("Cont nou (planul „Developer”): 1.000.000 de caractere în total, o singură dată, nu în fiecare lună. "
-			"Cheile vechi (se termină cu :fx) merg în continuare."),
+		"cota": N_("Planul „Developer” e gratuit, dar numai pentru 1.000.000 de caractere în total, o singură dată, nu în "
+			"fiecare lună."),
 		"depasire": N_("Traducerea se oprește (eroarea 456). Nu se plătește nimic singur; pentru mai mult trebuie un plan "
 			"plătit."),
-		"sursa": u"https://support.deepl.com/hc/en-us/articles/360021200939-DeepL-API-plans",
-		"pagina_cheie": u"https://www.deepl.com/en/your-account/keys",
-		"verificat": u"21.10.2026",
+		"sursa": u"https://www.deepl.com/en/pro-api",
+		# QR-ul de pe televizor si butonul din web duc direct la inscrierea in planul gratuit (pasul 2 al paginii lor)
+		"pagina_cheie": u"https://www.deepl.com/en/checkout?productId=api-developer&billingPeriod=yearly&isTrial=false"
+			u"&is_api=true",
+		"legaturi": (
+			(N_("Înscrierea în planul gratuit DeepL API („Developer”)"), u"https://www.deepl.com/en/checkout?productId="
+				u"api-developer&billingPeriod=yearly&isTrial=false&is_api=true"),
+			(N_("Cheile tale DeepL („API Keys & Limits”)"), u"https://www.deepl.com/en/your-account/keys"),
+			(N_("Planurile DeepL API și ce include fiecare"), u"https://www.deepl.com/en/pro-api"),
+		),
+		"verificat": u"01.11.2026",
 	},
 	"groq": {
 		"pasi": (
@@ -3943,9 +4114,9 @@ INSTRUCTIUNI = {
 
 
 def instructiuni(serviciu):
-	"""{titlu, avertisment, eticheta, pasi: [text], cota, depasire, verificat, sursa, pagina_cheie} cu textele traduse
-	(avertisment: gol sau un text de aratat inaintea pasilor, la serviciile la care se poate plati automat;
-	pagina_cheie: adresa pentru codul QR, "" = fara cod)"""
+	"""{titlu, avertisment, eticheta, pasi: [text], cota, depasire, verificat, sursa, pagina_cheie, legaturi} cu textele
+	traduse (avertisment: gol sau un text de aratat inaintea pasilor, la serviciile la care se poate plati automat;
+	pagina_cheie: adresa pentru codul QR, "" = fara cod; legaturi: [{text, url}], paginile oficiale de deschis din web)"""
 	d = INSTRUCTIUNI.get(serviciu) or {}
 	return {
 		"serviciu": serviciu,
@@ -3961,6 +4132,7 @@ def instructiuni(serviciu):
 		"verificat": _t("Verificat pe pagina oficială la %s.") % (d.get("verificat") or VERIFICAT),
 		"sursa": d.get("sursa", u""),
 		"pagina_cheie": d.get("pagina_cheie", u""),
+		"legaturi": [{"text": _t(t), "url": u} for t, u in d.get("legaturi", ())],
 	}
 
 
