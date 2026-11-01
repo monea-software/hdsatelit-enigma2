@@ -2,8 +2,8 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsPornireMultipla.py: ecranul Porneste alte imagini. Meniu > Standby si repornire, numai pe Octagon SF8008 si
-# SF8008 MINI (SystemInfo["HdsMultiboot"]).
+# HdsPornireMultipla.py: ecranul Porneste alte imagini. Meniu > Standby si repornire, numai pe Octagon SF8008,
+# SF8008 MINI si Amiko Viper 4K V10 (SystemInfo["HdsMultiboot"]).
 #
 # La deschidere ecranul cauta imaginile instalate in locurile din memorie (Components/HdsPornireMultipla.py: STARTUP_N
 # de pe partitia bootoptions, nucleul si sistemul fiecarui loc) si le arata, cu imaginea pornita acum marcata; locurile

@@ -42,6 +42,7 @@ is usually caused by not marking PSignals as immutable.
 #include <lib/base/eenv.h>
 #include <lib/base/eerror.h>
 #include <lib/base/etpm.h>
+#include <lib/base/hdsjurnal.h>
 #include <lib/base/nconfig.h>
 #include <lib/base/message.h>
 #include <lib/driver/rc.h>
@@ -506,6 +507,9 @@ PyObject *getBestPlayableServiceReference(const eServiceReference &bouquet_ref, 
 	return Py_None;
 }
 %}
+
+/* jurnalele componentelor (lib/base/hdsjurnal.h), din Components/HdsJurnal.py */
+void hdsJurnalScrie(const char *componenta, const char *nivel, const char *modul, const char *mesaj);
 
 void setTunerTypePriorityOrder(int);
 %{

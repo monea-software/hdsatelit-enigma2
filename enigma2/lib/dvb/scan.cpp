@@ -174,6 +174,7 @@ void eDVBScan::stateChange(iDVBChannel *ch)
 		m_channel_state = state;
 	} else if (state == iDVBChannel::state_failed)
 	{
+		hdsjscan::faraSemnal(m_hds_jurnal);
 		m_ch_unavailable.push_back(m_ch_current);
 		nextChannel();
 	}
@@ -209,6 +210,7 @@ RESULT eDVBScan::nextChannel()
 		SCAN_eDebug("%zd channels scanned, %zd were unavailable.",
 				m_ch_scanned.size(), m_ch_unavailable.size());
 		SCAN_eDebug("%zd channels in database.", m_new_channels.size());
+		hdsjscan::gata(m_hds_jurnal, m_ch_scanned.size(), m_ch_unavailable.size(), m_new_services.size());
 		m_event(evtFinish);
 		return -ENOENT;
 	}
@@ -226,6 +228,7 @@ RESULT eDVBScan::nextChannel()
 	m_chid_current = eDVBChannelID();
 
 	m_channel_state = iDVBChannel::state_idle;
+	hdsjscan::transponder(m_hds_jurnal, m_ch_current, m_new_services.size());
 
 	{
 		/* HDSatelit (urma motorului): motivul acestei acordari */
@@ -1058,6 +1061,7 @@ void eDVBScan::channelDone()
 		}
 	}
 
+	hdsjscan::prins(m_hds_jurnal, m_new_services.size());
 	m_ch_scanned.push_back(m_ch_current);
 
 	for (std::list<ePtr<iDVBFrontendParameters> >::iterator i(m_ch_toScan.begin()); i != m_ch_toScan.end();)
@@ -1106,6 +1110,7 @@ void eDVBScan::start(const eSmartPtrList<iDVBFrontendParameters> &known_transpon
 			m_ch_toScan.push_back(*i);
 	}
 
+	hdsjscan::pornita(m_hds_jurnal, m_ch_toScan.size(), flags);
 	nextChannel();
 }
 

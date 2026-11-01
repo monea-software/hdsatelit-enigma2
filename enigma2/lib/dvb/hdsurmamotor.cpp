@@ -331,6 +331,22 @@ private:
 	bool m_ok, m_primul;
 };
 
+/* randul unui esec: comanda refuzata de driver, readucerea (pornita de pierderea semnalului), mersul intrerupt, proba
+   fara semnal. Numai atunci randul poarta referinta canalului; altfel numai datele tehnice (tunerul, transponderul,
+   satelitul, pozitiile) */
+static bool esec(const Eveniment &e)
+{
+	if (!e.tip)
+		return false;
+	if (!strcmp(e.tip, "comanda"))
+		return e.rezultat < 0;
+	if (!strcmp(e.tip, "readucere"))
+		return true;
+	if (!strcmp(e.tip, "tensiune_rotire") || !strcmp(e.tip, "proba_semnal"))
+		return e.faza && (!strcmp(e.faza, "intrerupta") || !strcmp(e.faza, "fara_semnal"));
+	return false;
+}
+
 size_t formeaza(char *buf, size_t n, const Eveniment &e, const struct timespec &real, const struct timespec &mono,
 	const char *pornire, unsigned long pierdute)
 {
@@ -395,7 +411,7 @@ size_t formeaza(char *buf, size_t n, const Eveniment &e, const struct timespec &
 			j.text("cerere", a.cerere);
 		if (a.python[0])
 			j.text("python", a.python);
-		if (a.canal[0])
+		if (a.canal[0] && esec(e))
 			j.text("canal", a.canal);
 		if (a.tp[0])
 			j.text("tp", a.tp);

@@ -17,6 +17,7 @@ libenigma_service_a_SOURCES = \
 	servicedvb.cpp \
 	hdsegalizator.cpp \
 	hdsfluxhttp.cpp \
+	hdsjurnalzap.cpp \
 	servicedvbrecord.cpp \
 	servicefs.cpp \
 	servicem2ts.cpp
@@ -30,6 +31,7 @@ serviceinclude_HEADERS = \
 	servicedvb.h \
 	hdsegalizator.h \
 	hdsfluxhttp.h \
+	hdsjurnalzap.h \
 	hdsegalizator_dsp.h \
 	hdsegalizator_flux.h \
 	hdssubtitrareceas.h \

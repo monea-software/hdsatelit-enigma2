@@ -6,11 +6,13 @@
 # receptor (Screens/HdsPornireMultipla.py) si pagina web /alimentare (HdsWebControl/alimentare_web.py, cardul flash),
 # deci amandoua arata aceleasi imagini si scriu la fel.
 #
-# Octagon SF8008 si SF8008 MINI au in memorie patru locuri de imagini: nucleul in linuxkernel1-4 (mmcblk0p12-p15) si
-# sistemul in subdosarul linuxrootfs1-4 al partitiei userdata (mmcblk0p16). Incarcatorul citeste la pornire fisierul
-# STARTUP de pe partitia bootoptions (FAT, mmcblk0p3, montata la /boot), langa care stau STARTUP_1..4 (locurile din
-# memorie), STARTUP_5..6 (stickul) si STARTUP_RECOVERY, puse de producator. Alegerea unei imagini = STARTUP_N copiat
-# octet cu octet peste STARTUP, apoi repornirea; nimic altceva nu se scrie (bootargs si p1-p11 raman neatinse).
+# Octagon SF8008, SF8008 MINI si primul Amiko Viper 4K (V10, masina viper4k, aceeasi placa) au in memorie patru
+# locuri de imagini: nucleul in linuxkernel1-4 (mmcblk0p12-p15) si sistemul in subdosarul linuxrootfs1-4 al partitiei
+# userdata (mmcblk0p16); V10 foloseste aceeasi impartire a memoriei. Incarcatorul
+# citeste la pornire fisierul STARTUP de pe partitia bootoptions (FAT, mmcblk0p3, montata la /boot), langa care stau
+# STARTUP_1..4 (locurile din memorie), STARTUP_5..6 (stickul) si STARTUP_RECOVERY, puse de producator. Alegerea unei
+# imagini = STARTUP_N copiat octet cu octet peste STARTUP, apoi repornirea; nimic altceva nu se scrie (bootargs si
+# p1-p11 raman neatinse).
 #
 # SIGURANTA (e pornirea receptorului):
 # - se scrie numai un loc din memorie cu forma stiuta (boot emmcflash0.linuxkernelK '... root=userdata
@@ -32,7 +34,7 @@ import struct
 import subprocess
 import zlib
 
-MASINI = ("sf8008", "sf8008m")
+MASINI = ("sf8008", "sf8008m", "viper4k")
 FISIER_STARTUP = "STARTUP"
 COPIE = "STARTUP.hds-inainte"
 NOU = "STARTUP.hds-nou"
@@ -139,8 +141,8 @@ def linieComanda(radacina=None):
 
 
 def disponibil(radacina=None):
-	"""True pe Octagon SF8008 si SF8008 MINI cu partitia bootoptions (nu cere /boot montat: libreader il monteaza mai
-	tarziu). Pe celelalte receptoare randul din meniu nu apare."""
+	"""True pe Octagon SF8008, SF8008 MINI si Amiko Viper 4K V10 cu partitia bootoptions (nu cere /boot montat:
+	libreader il monteaza mai tarziu). Pe celelalte receptoare randul din meniu nu apare."""
 	try:
 		from Components import HdsPlatforma
 	except ImportError:

@@ -199,6 +199,11 @@ class RecordTimerEntry(timer.TimerEntry, object):
 	def log(self, code, msg):
 		self.log_entries.append((int(time()), code, msg))
 		print("[TIMER]", msg)
+		try:
+			from Components import HdsJurnalInregistrari  # hds-inregistrari.log: numai codurile cunoscute, fara titlu
+			HdsJurnalInregistrari.dinLog(self, code, msg)
+		except Exception:
+			pass
 
 	def calculateFilename(self):
 		service_name = self.service_ref.getServiceName()
@@ -522,6 +527,11 @@ class RecordTimerEntry(timer.TimerEntry, object):
 		self.log(16, "record event %d" % event)
 		if event == iRecordableService.evRecordWriteError:
 			print("WRITE ERROR on recording, disk full?")
+			try:
+				from Components import HdsJurnalInregistrari
+				HdsJurnalInregistrari.eroareScriere(self)
+			except Exception:
+				pass
 			# show notification. the 'id' will make sure that it will be
 			# displayed only once, even if more timers are failing at the
 			# same time. (which is very likely in case of disk fullness)

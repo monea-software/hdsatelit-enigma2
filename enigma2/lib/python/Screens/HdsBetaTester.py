@@ -45,7 +45,7 @@ from Components.Pixmap import Pixmap
 from Components.ScrollLabel import ScrollLabel
 from Components.Sources.CanvasSource import CanvasSource
 from Components.Sources.StaticText import StaticText
-from Components.config import ConfigYesNo, ConfigText, ConfigSelection, getConfigListEntry
+from Components.config import config, ConfigYesNo, ConfigText, ConfigSelection, getConfigListEntry
 from Components import HdsBetaTester as B
 from Screens.MessageBox import MessageBox
 
@@ -94,6 +94,7 @@ CULORI = {
 GLIFE = {
 	"forum": "traducere",
 	"mesaj": "manual",
+	"raport_canal": "semnal",
 	"trimite_acum": "actualizare",
 	"trimise": "jurnal",
 	"raspunsuri": "informatii",
@@ -599,6 +600,7 @@ class HdsBetaTester(Screen):
 	RANDURI = (
 		("forum", B.N_("Forumul receptorului")),
 		("mesaj", B.N_("Trimite un mesaj")),
+		("raport_canal", B.N_("Raportează canalul ăsta")),
 		("trimite_acum", B.N_("Trimite acum")),
 		("trimise", B.N_("Ce am trimis")),
 		("raspunsuri", B.N_("Răspunsurile echipei")),
@@ -677,6 +679,10 @@ class HdsBetaTester(Screen):
 		self.ceasNumar.start(1000, False)
 		self.ceasUltima.start(3000, False)
 		self.reface()
+
+	def secreteAsistenta(self):
+		# Identificatorul ramane ascuns, iar explicatiile din panou pot fi citite.
+		return (config.hds_beta.id.value,)
 
 	# ------------------------------------------------------------ asezarea (dupa skin)
 
@@ -941,6 +947,9 @@ class HdsBetaTester(Screen):
 			return
 		if cheie == "mesaj":
 			self.session.open(HdsBetaMesaj, self.ecran_dedesubt)
+		elif cheie == "raport_canal":
+			from Screens.HdsRaportCanal import deschide as raportCanal  # Components/HdsRaportCanal.py
+			raportCanal(self.session)
 		elif cheie == "trimite_acum":
 			_ok, text = B.trimiteAcum()
 			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=5)
@@ -1554,6 +1563,7 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 		self.nume = ConfigText(default=b.public.value, fixed_size=False)
 		self.email = ConfigText(default="", fixed_size=False)
 		self.cod = ConfigText(default="", fixed_size=False)
+		self.cod.hds_asistenta_secret = True
 		self["text"] = Label(_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la "
 			"modelul tău. Fără parole pe receptor.") + ((" " + _("E-mailul (opțional) îți face un cont pe forum: "
 			"primești o legătură și îți pui parola acolo, de pe orice aparat.")) if self.forum else ""))
@@ -1680,6 +1690,7 @@ class HdsBetaLegareQr(Screen):
 		self["text"] = Label(_("Se cere un cod de legare..."))
 		self["qr"] = CanvasSource()
 		self["adresa"] = Label("")
+		self["qr"].hds_asistenta_secret = True
 		self["key_red"] = Button(_("Înapoi"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], _cuCulori({
 			"cancel": self.close,
@@ -1702,6 +1713,9 @@ class HdsBetaLegareQr(Screen):
 		self._cerere = B.cerereProfil("cod-legare")
 		if self._cerere is not None:
 			self.ceas.start(500, False)
+
+	def secreteAsistenta(self):
+		return (self._adresa, self._adresa.replace("https://", ""))
 
 	def _cereStarea(self):
 		self._incercari += 1

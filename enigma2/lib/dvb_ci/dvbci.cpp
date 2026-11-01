@@ -5,6 +5,7 @@
 #include <lib/base/init.h>
 #include <lib/base/init_num.h>
 #include <lib/base/ebase.h>
+#include <lib/base/hdsjurnal.h>
 
 #include <lib/base/eerror.h>
 #include <lib/base/nconfig.h> // access to python config
@@ -981,6 +982,7 @@ void eDVBCISlot::data(int what)
 	if(what == eSocketNotifier::Priority) {
 		if(state != stateRemoved) {
 			state = stateRemoved;
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d modul scos", getSlotID());
 			while(sendqueue.size())
 			{
 				delete [] sendqueue.top().data;
@@ -999,6 +1001,7 @@ void eDVBCISlot::data(int what)
 
 	if(state != stateInserted) {
 		eDebug("ci inserted in slot %d", getSlotID());
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d modul introdus", getSlotID());
 		state = stateInserted;
 		eDVBCI_UI::getInstance()->setState(getSlotID(),1);
 		notifier->setRequested(eSocketNotifier::Read|eSocketNotifier::Priority);
@@ -1100,6 +1103,7 @@ int eDVBCISlot::getSlotID()
 int eDVBCISlot::reset()
 {
 	eDebug("CI Slot %d: reset requested", getSlotID());
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d resetare ceruta", getSlotID());
 
 	if (state == stateInvalid)
 	{

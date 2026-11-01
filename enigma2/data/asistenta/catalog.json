@@ -27,7 +27,7 @@
       "op": "retea",
       "grup": "Informații",
       "fel": "citire",
-      "text": "rețeaua: cablu sau Wi-Fi, legat sau nu, ruta implicită, DNS (fără numele rețelei, MAC mascat)",
+      "text": "rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)",
       "args": []
     },
     {
@@ -88,14 +88,14 @@
       "op": "setari",
       "grup": "Setări",
       "fel": "citire",
-      "text": "copie filtrată a setărilor (audio, video, interfață, rețea; fără parole și chei)",
+      "text": "setările receptorului, cu secretele ca steluțe, fără modulele de acces",
       "args": []
     },
     {
       "op": "captura",
       "grup": "Probe",
       "fel": "proba",
-      "text": "o captură a ecranului (numai meniurile, fără imaginea canalului)",
+      "text": "captură cu meniurile și imaginea canalului; secretele ca steluțe",
       "args": []
     },
     {
@@ -120,7 +120,7 @@
       "op": "ecran",
       "grup": "Ecran",
       "fel": "citire",
-      "text": "textul ecranului deschis pe receptor (meniul, rândul ales, setările), fără ecranele private",
+      "text": "textul ecranului, cu secretele ca steluțe; numai modulele de acces rămân închise",
       "args": []
     },
     {
@@ -152,7 +152,7 @@
       "op": "transpondere",
       "grup": "Semnal",
       "fel": "citire",
-      "text": "transponderele din lista de canale (fără canale și fără nimic personal)",
+      "text": "transponderele din lista ta, cu numele canalelor",
       "args": [
         {"nume": "namespace", "tipar": "^[0-9a-fA-F]{1,8}$", "cerut": false}
       ]

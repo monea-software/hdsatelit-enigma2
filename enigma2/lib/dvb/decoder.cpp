@@ -6,6 +6,7 @@
 #include <lib/dvb/decoder.h>
 #if HAVE_HISILICON
 #include <lib/dvb/hdspazavideo.h>
+#include <lib/dvb/hdsjurnaldecodor.h>
 #endif
 #if HAVE_DVB_API_VERSION < 3 
 #define audioStatus audio_status
@@ -59,12 +60,20 @@ eDVBAudio::eDVBAudio(eDVBDemux *demux, int dev)
 #endif
 	m_fd = ::open(filename, O_RDWR);
 	if (m_fd < 0)
+	{
+		hdsjdecodor::eroare("audio", dev, "deschiderea", errno);
 		eWarning("%s: %m", filename);
+	}
 #if HAVE_HISILICON_LIBREADER
 	/* boards with libreader: the decoder takes its data from the demux, as the images made for these boards set it
 	   when a decoder is opened (a player that ended without its last commands may have left source MEMORY) */
 	else if (::ioctl(m_fd, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_DEMUX) < 0)
+	{
+		hdsjdecodor::eroare("audio", dev, "AUDIO_SELECT_SOURCE DEMUX", errno);
 		eDebug("AUDIO_SELECT_SOURCE DEMUX failed (%m)");
+	}
+	else
+		hdsjdecodor::sursaDemux("audio", dev);
 #endif
 #if HAVE_DVB_API_VERSION < 3
 	sprintf(filename, "/dev/dvb/card%d/demux%d", demux->adapter, demux->demux);
@@ -112,6 +121,7 @@ int eDVBAudio::setPid(int pid, int type)
 	eDebugNoNewLine("DMX_SET_PES_FILTER(0x%02x) - audio - ", pid);
 	if (::ioctl(m_fd_demux, DMX_SET_PES_FILTER, &pes) < 0)
 	{
+		hdsjdecodor::eroare("audio", m_dev, "DMX_SET_PES_FILTER", errno);
 		eDebug("failed (%m)");
 		return -errno;
 	}
@@ -209,7 +219,10 @@ int eDVBAudio::startPid(int pid, int type)
 
 	eDebugNoNewLine("AUDIO_SET_BYPASS(%d) - ", bypass);
 	if (::ioctl(m_fd, AUDIO_SET_BYPASS_MODE, bypass) < 0)
+	{
+		hdsjdecodor::eroare("audio", m_dev, "AUDIO_SET_BYPASS_MODE", errno, hdsjdecodor::numeAudio(type));
 		eDebug("failed (%m)");
+	}
 	else
 		eDebug("ok");
 
@@ -223,6 +236,7 @@ int eDVBAudio::startPid(int pid, int type)
 	eDebugNoNewLine("DMX_SET_PES_FILTER(0x%02x) - audio - ", pid);
 	if (::ioctl(m_fd_demux, DMX_SET_PES_FILTER, &pes) < 0)
 	{
+		hdsjdecodor::eroare("audio", m_dev, "DMX_SET_PES_FILTER", errno);
 		eDebug("failed (%m)");
 		return -errno;
 	}
@@ -239,7 +253,10 @@ int eDVBAudio::startPid(int pid, int type)
 
 	eDebugNoNewLine("AUDIO_PLAY - ");
 	if (::ioctl(m_fd, AUDIO_PLAY) < 0)
+	{
+		hdsjdecodor::eroare("audio", m_dev, "AUDIO_PLAY", errno);
 		eDebug("failed (%m)");
+	}
 	else
 		eDebug("ok");
 	return 0;
@@ -351,7 +368,10 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 #endif
 	m_fd = ::open(filename, O_RDWR);
 	if (m_fd < 0)
+	{
+		hdsjdecodor::eroare("video", dev, "deschiderea", errno);
 		eWarning("%s: %m", filename);
+	}
 	else
 	{
 		m_sn = eSocketNotifier::create(eApp, m_fd, eSocketNotifier::Priority);
@@ -362,7 +382,12 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 		   source when a decoder is opened; without it live video stays black on video0 (sound, the PiP decoder and
 		   the media player, which sets the source itself, work). setState closes an open still picture first. */
 		if (::ioctl(m_fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX) < 0)
+		{
+			hdsjdecodor::eroare("video", dev, "VIDEO_SELECT_SOURCE DEMUX", errno);
 			eDebug("VIDEO_SELECT_SOURCE DEMUX failed (%m)");
+		}
+		else
+			hdsjdecodor::sursaDemux("video", dev);
 #endif
 	}
 	eDebug("Video Device: %s", filename);
@@ -405,6 +430,7 @@ int eDVBVideo::setPid(int pid)
 	eDebugNoNewLine("DMX_SET_PES_FILTER(0x%02x) - video - ", pid);
 	if (::ioctl(m_fd_demux, DMX_SET_PES_FILTER, &pes) < 0)
 	{
+		hdsjdecodor::eroare("video", m_dev, "DMX_SET_PES_FILTER", errno);
 		eDebug("failed (%m)");
 		return -errno;
 	}
@@ -490,7 +516,10 @@ int eDVBVideo::startPid(int pid, int type)
 
 	eDebugNoNewLine("VIDEO_SET_STREAMTYPE %d - ", streamtype);
 	if (::ioctl(m_fd, VIDEO_SET_STREAMTYPE, streamtype) < 0)
+	{
+		hdsjdecodor::eroare("video", m_dev, "VIDEO_SET_STREAMTYPE", errno, hdsjdecodor::numeVideo(type));
 		eDebug("failed (%m)");
+	}
 	else
 		eDebug("ok");
 
@@ -502,6 +531,7 @@ int eDVBVideo::startPid(int pid, int type)
 	eDebugNoNewLine("DMX_SET_PES_FILTER(0x%02x) - video - ", pid);
 	if (::ioctl(m_fd_demux, DMX_SET_PES_FILTER, &pes) < 0)
 	{
+		hdsjdecodor::eroare("video", m_dev, "DMX_SET_PES_FILTER", errno);
 		eDebug("failed (%m)");
 		return -errno;
 	}
@@ -516,7 +546,10 @@ int eDVBVideo::startPid(int pid, int type)
 	freeze();  // why freeze here?!? this is a problem when only a pid change is requested... because of the unfreeze logic in Decoder::setState
 	eDebugNoNewLine("VIDEO_PLAY - ");
 	if (::ioctl(m_fd, VIDEO_PLAY) < 0)
+	{
+		hdsjdecodor::eroare("video", m_dev, "VIDEO_PLAY", errno);
 		eDebug("failed (%m)");
+	}
 	else
 		eDebug("ok");
 	return 0;
@@ -636,6 +669,7 @@ void eDVBVideo::video_event(int)
 			m_aspect = event.aspect = evt.u.size.aspect_ratio == 0 ? 2 : 3;  // convert dvb api to etsi
 			m_height = event.height = evt.u.size.h;
 			m_width = event.width = evt.u.size.w;
+			hdsjdecodor::evenimentVideo(m_dev, 1, m_width, m_height, m_aspect);
 			/* emit */ m_event(event);
 		}
 		else if (evt.type == VIDEO_EVENT_FRAME_RATE_CHANGED)
@@ -643,6 +677,7 @@ void eDVBVideo::video_event(int)
 			struct iTSMPEGDecoder::videoEvent event;
 			event.type = iTSMPEGDecoder::videoEvent::eventFrameRateChanged;
 			m_framerate = event.framerate = evt.u.frame_rate;
+			hdsjdecodor::evenimentVideo(m_dev, 2, m_framerate, 0, 0);
 			/* emit */ m_event(event);
 		}
 		else if (evt.type == 16 /*VIDEO_EVENT_PROGRESSIVE_CHANGED*/)
@@ -650,6 +685,7 @@ void eDVBVideo::video_event(int)
 			struct iTSMPEGDecoder::videoEvent event;
 			event.type = iTSMPEGDecoder::videoEvent::eventProgressiveChanged;
 			m_progressive = event.progressive = evt.u.frame_rate;
+			hdsjdecodor::evenimentVideo(m_dev, 16, m_progressive, 0, 0);
 			/* emit */ m_event(event);
 		}
 		else if (evt.type == 17 /*VIDEO_EVENT_GAMMA_CHANGED*/)
@@ -660,6 +696,7 @@ void eDVBVideo::video_event(int)
 			event.type = iTSMPEGDecoder::videoEvent::eventGammaChanged;
 			m_gamma = event.gamma = evt.u.frame_rate;
 			eDebug("[eDVBVideo] gamma %d (0 SDR, 1 HDR, 2 HDR10, 3 HLG)", m_gamma);
+			hdsjdecodor::evenimentVideo(m_dev, 17, m_gamma, 0, 0);
 			/* emit */ m_event(event);
 		}
 		else

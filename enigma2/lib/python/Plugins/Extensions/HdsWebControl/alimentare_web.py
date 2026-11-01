@@ -7,8 +7,9 @@
 # Orice ecran sau setare de pe receptor are pereche in interfata web. Pe televizor grupul are sase intrari (data/menu.xml):
 #   Oprire programata (sleep, Screens/SleepTimerEdit.py), Standby (standby, Screens/Standby.Standby), Reporneste
 #   interfata (restart_enigma, TryQuitMainloop 3), Reporneste receptorul (restart, TryQuitMainloop 2), Porneste alte
-#   imagini (return_to_flash, Screens/HdsPornireMultipla.py, numai cu SystemInfo["HdsMultiboot"]: Octagon SF8008 si
-#   SF8008 MINI; altfel cardul lipseste ca si intrarea) si Oprire completa (deep_standby, TryQuitMainloop 1).
+#   imagini (return_to_flash, Screens/HdsPornireMultipla.py, numai cu SystemInfo["HdsMultiboot"]: Octagon SF8008,
+#   SF8008 MINI si Amiko Viper 4K V10; altfel cardul lipseste ca si intrarea) si Oprire completa (deep_standby,
+#   TryQuitMainloop 1).
 #   Aici: un card pentru fiecare, cu aceleasi setari si actiuni, plus starea receptorului. Meniul web trimite
 #   ?f=somn|standby|interfata|receptor|flash|oprire, iar pagina aduce cardul acela primul.
 #

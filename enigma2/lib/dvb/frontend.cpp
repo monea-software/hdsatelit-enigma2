@@ -536,6 +536,7 @@ int eDVBFrontend::openFrontend()
 			m_fd = ::open(m_filename, O_RDWR|O_NONBLOCK);
 			if (m_fd < 0)
 			{
+				hdsjtuner::deschidereCazuta(m_slotid, m_dvbid, errno);
 				eWarning("failed! (%s) %m", m_filename);
 				return -1;
 			}
@@ -632,6 +633,8 @@ int eDVBFrontend::openFrontend()
 				m_simulate_fe->m_dvb_api = m_dvb_api;
 			}
 			eDebugNoSimulate("frontend %d can tune types 0x%x%s", m_dvbid, m_delsys_types, m_dvbt2 ? ", DVB-T2" : "");
+			if (!m_simulate)
+				hdsjtuner::deschis(m_slotid, m_dvbid, fe_info.name, m_delsys_types, m_multistream, m_dvb_api);
 			if (m_type == iDVBFrontend::feSatellite)
 				eDebugNoSimulate("frontend %d: multistream %s, DVB API %d.%d", m_dvbid, m_multistream ? "da" : "nu",
 					m_dvb_api >> 8, m_dvb_api & 0xFF);
@@ -815,6 +818,11 @@ void eDVBFrontend::feEvent(int w)
 		}
 		if (m_state != state)
 		{
+			/* pasiv: nicio citire in plus la driver in clipa blocarii (SNR-ul il citeste interfata cand il arata) */
+			if (state == stateLock && m_hds_jurnal.pornit_ms)
+				hdsjtuner::prins(m_hds_jurnal, m_slotid, -1);
+			else if (state == stateLostLock)
+				hdsjtuner::pierdut(m_hds_jurnal, m_slotid);
 			m_state = state;
 			m_stateChanged(this);
 		}
@@ -826,6 +834,9 @@ void eDVBFrontend::timeout()
 	m_tuning = 0;
 	if (m_state == stateTuning)
 	{
+		fe_status_t hds_stare;
+		hdsjtuner::faraSemnal(m_hds_jurnal, m_slotid,
+			(!m_simulate && m_fd >= 0 && ::ioctl(m_fd, FE_READ_STATUS, &hds_stare) >= 0) ? (int)hds_stare : -1);
 		m_state = stateFailed;
 		m_stateChanged(this);
 	}
@@ -1231,6 +1242,8 @@ static void fillDictWithSatelliteData(ePyObject dict, const FRONTENDPARAMETERS &
 	default: eDebug("got unsupported modulation from frontend! report as QPSK!");
 	case QPSK: tmp = eDVBFrontendParametersSatellite::Modulation_QPSK; break;
 	case PSK_8: tmp = eDVBFrontendParametersSatellite::Modulation_8PSK; break;
+	case APSK_16: tmp = eDVBFrontendParametersSatellite::Modulation_16APSK; break;
+	case APSK_32: tmp = eDVBFrontendParametersSatellite::Modulation_32APSK; break;
 	}
 	PutToDict(dict, "modulation", tmp);
 }
@@ -1735,6 +1748,7 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 			{
 				int voltage = m_sec_sequence.current()++->voltage;
 				eDebugNoSimulate("[SEC] setVoltage %d", voltage);
+				hdsjtuner::tensiune(m_hds_jurnal, voltage);
 				sec_fe->setVoltage(voltage);
 				break;
 			}
@@ -1772,12 +1786,14 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 			}
 			case eSecCommand::SET_TONE:
 				eDebugNoSimulate("[SEC] setTone %d", m_sec_sequence.current()->tone);
+				hdsjtuner::ton(m_hds_jurnal, m_sec_sequence.current()->tone);
 				sec_fe->setTone(m_sec_sequence.current()++->tone);
 				break;
 			case eSecCommand::SEND_DISEQC:
 				/* HDSatelit (urma motorului): comanda pleaca prin radacina lantului (sec_fe), dar acordarea care a pus-o
 				   e a acestui tuner */
 				sec_fe->hdsSendDiseqc(m_sec_sequence.current()->diseqc, &m_hds_acordare);
+				hdsjtuner::diseqc(m_hds_jurnal, m_sec_sequence.current()->diseqc.data, m_sec_sequence.current()->diseqc.len);
 				eDebugNoSimulateNoNewLine("[SEC] sendDiseqc: ");
 				for (int i=0; i < m_sec_sequence.current()->diseqc.len; ++i)
 				    eDebugNoSimulateNoNewLine("%02x", m_sec_sequence.current()->diseqc.data[i]);
@@ -1791,6 +1807,7 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 				break;
 			case eSecCommand::SEND_TONEBURST:
 				eDebugNoSimulate("[SEC] sendToneburst: %d", m_sec_sequence.current()->toneburst);
+				hdsjtuner::toneburst(m_hds_jurnal, m_sec_sequence.current()->toneburst);
 				sec_fe->sendToneburst(m_sec_sequence.current()++->toneburst);
 				break;
 			case eSecCommand::SET_FRONTEND:
@@ -1882,6 +1899,7 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 						eDebugNoSimulate("ok > 4 .. goto %d\n", cmd.steps);
 						setSecSequencePos(cmd.steps);
 						m_hds_rotor_locked = true;
+						hdsjtuner::prins(m_hds_jurnal, m_slotid, signal);
 						m_state = stateLock;
 						m_stateChanged(this);
 						feEvent(-1); // flush events
@@ -2131,9 +2149,18 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			};
 			switch(oparm.sat.modulation)
 			{
+			case eDVBFrontendParametersSatellite::Modulation_Auto:
 			case eDVBFrontendParametersSatellite::Modulation_QPSK: modulation = QPSK; break;
 			case eDVBFrontendParametersSatellite::Modulation_8PSK: modulation = PSK_8; break;
 			case eDVBFrontendParametersSatellite::Modulation_QAM16: modulation = QAM_16; break;
+			case eDVBFrontendParametersSatellite::Modulation_16APSK: modulation = APSK_16; break;
+			case eDVBFrontendParametersSatellite::Modulation_32APSK: modulation = APSK_32; break;
+			default:
+				// valoare necunoscuta (de pilda dintr-o lista adusa din alta parte): QPSK, ca inainte; demodulatorul
+				// recunoaste singur modulatia
+				eDebug("frontend %d: modulatie satelit necunoscuta %d, trimisa ca QPSK", m_dvbid, oparm.sat.modulation);
+				modulation = QPSK;
+				break;
 			};
 			switch(oparm.sat.pilot)
 			{
@@ -2202,6 +2229,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			}
 			if (ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) == -1)
 			{
+				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_PROPERTY", errno);
 				perror("FE_SET_PROPERTY failed");
 				return;
 			}
@@ -2249,6 +2277,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 		{
 			if (ioctl(m_fd, FE_SET_FRONTEND, &parm) == -1)
 			{
+				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_FRONTEND", errno);
 				perror("FE_SET_FRONTEND failed");
 				return;
 			}
@@ -2267,6 +2296,21 @@ RESULT eDVBFrontend::getFrontendType(int &t)
 RESULT eDVBFrontend::prepare_sat(const eDVBFrontendParametersSatellite &feparm, unsigned int tunetimeout)
 {
 	int res;
+	if (feparm.modulation == eDVBFrontendParametersSatellite::Modulation_16APSK ||
+		feparm.modulation == eDVBFrontendParametersSatellite::Modulation_32APSK)
+	{
+		// APSK exista numai in DVB-S2 (si cere DVB API 5); FEC-ul nu se verifica aici: demodulatorul il afla singur,
+		// iar o lista cu FEC gresit nu trebuie sa piarda un canal pe care tunerul il prinde
+		if (feparm.system != eDVBFrontendParametersSatellite::System_DVB_S2)
+		{
+			eDebugNoSimulate("APSK necesita DVB-S2, acordare refuzata");
+			return -EINVAL;
+		}
+#if HAVE_DVB_API_VERSION < 5
+		eDebugNoSimulate("APSK necesita DVB API 5, acordare refuzata");
+		return -EINVAL;
+#endif
+	}
 	if (!m_sec)
 	{
 		eWarning("no SEC module active!");
@@ -2784,6 +2828,7 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 				m_state == stateLostLock ? "reacordare dupa pierderea semnalului" : "acordare");
 			hdsurma::textTp(m_hds_acordare.tp, sizeof(m_hds_acordare.tp), feparm.frequency, feparm.polarisation, feparm.symbol_rate);
 			m_hds_acordare.orbital = feparm.orbital_position;
+			hdsjtuner::acordareSat(m_hds_jurnal, m_slotid, feparm, m_state == stateLostLock);
 		}
 		res=prepare_sat(feparm, timeout);
 		if (res)
@@ -2799,6 +2844,8 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 			res = -EINVAL;
 			goto tune_error;
 		}
+		if (!m_simulate)
+			hdsjtuner::acordareCablu(m_hds_jurnal, m_slotid, feparm, m_state == stateLostLock);
 		res=prepare_cable(feparm);
 		if (res)
 			goto tune_error;
@@ -2816,6 +2863,8 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 			res = -EINVAL;
 			goto tune_error;
 		}
+		if (!m_simulate)
+			hdsjtuner::acordareTerestru(m_hds_jurnal, m_slotid, feparm, m_state == stateLostLock);
 		res=prepare_terrestrial(feparm);
 		if (res)
 			goto tune_error;
@@ -3109,12 +3158,17 @@ RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 		cmdseq.props = p;
 		if (::ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) < 0)
 		{
+			hdsjtuner::sistem(m_slotid, type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T", errno);
 			eWarning("frontend %d: setting the delivery system failed (%m)", m_dvbid);
 			return -EINVAL;
 		}
 	}
 	if (m_type != type)
+	{
 		eDebugNoSimulate("frontend %d switched to %s", m_dvbid, type == iDVBFrontend::feCable ? "cable" : "terrestrial");
+		if (!m_simulate)
+			hdsjtuner::sistem(m_slotid, type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T", 0);
+	}
 	m_type = type;
 	return 0;
 #else

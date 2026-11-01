@@ -12,13 +12,13 @@
 
 # valoarea setarii -> (ce face SUS, ce face JOS)
 SAGETI = {
-	"radio": ("radio", "tv"),        # implicit: SUS lista radio, JOS lista TV (ca pana acum)
+	"radio": ("radio", "tv"),        # SUS lista radio, JOS lista TV (implicitul pana la 0.6.19)
 	"tv_radio": ("tv", "radio"),
-	"tv": ("tv", "tv"),              # amandoua lista TV (0.1.6: "Lista de canale TV")
+	"tv": ("tv", "tv"),              # implicit din 0.6.20: amandoua lista TV (0.1.6: "Lista de canale TV")
 	"radio_radio": ("radio", "radio"),
 	"zap": ("zap", "zap"),
 }
-IMPLICIT = "radio"
+IMPLICIT = "tv"
 
 
 def ce_face(valoare, sus):

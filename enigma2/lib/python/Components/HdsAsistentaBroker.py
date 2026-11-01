@@ -6,13 +6,13 @@
 # a fost deja verificata (semnatura si tiparele argumentelor) de HdsAsistenta.py; aici se ruleaza numai operatia ceruta
 # si se intoarce raspunsul, filtrat si plafonat.
 #
-# Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura OSD, un mesaj pe ecran, concluziile
+# Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura video cu OSD, un mesaj pe ecran, concluziile
 # echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
 # (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B"; ecranele private
 # (Components/HdsAsistentaControl.py) raman inchise si la B. Nimic nu scrie pe disc in afara jurnalului
 # sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti; nu exista
 # nicio cale libera de fisier (jurnalele se citesc dupa nume, din /home/root/logs). Iesirea trece intai prin filtrul de
-# secrete (Components/HdsModSigur.SECRET: parole, chei, jetoane) si prin mascarea adreselor MAC; caile si setarile
+# secrete (parole, chei, jetoane) si prin mascarea adreselor MAC; caile si setarile
 # cartelelor de acces (CAM) nu se citesc deloc.
 #
 # Fiecare op din catalog are aici o functie (TABEL); o proba cere ca cele doua liste sa coincida. Partea de sus nu
@@ -23,19 +23,7 @@ import os
 import re
 import subprocess
 
-try:
-	from Components import HdsModSigur
-	_SECRET = HdsModSigur.SECRET
-except Exception:
-	# acelasi tipar ca in Components/HdsModSigur.py (parole, chei, jetoane, parola in adresa)
-	_SECRET = re.compile(
-		r"(?i)(token|password|passwd|passphrase|parola|psk|secret"
-		r"|pin(?:[.][0-9]+)*\s*=|key(?:[.][0-9]+)*\s*="
-		r"|(?:api|access|private|auth)[ _.-]?key\s*[=:]"
-		r"|[?&;](?:pass|pwd|pw|auth|sid|sessionid|sig|signature)="
-		r"|\bauthorization\s*[=:]|\bbearer\s+[a-z0-9._~+/=-]{6,}"
-		r"|\b(?:set-)?cookie\s*:"
-		r"|[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@)")
+from Components.HdsAsistentaControl import cheieSecreta, mascheazaSecrete
 
 # caile cartelelor de acces si ale modulelor de acces nu se citesc niciodata (nici numele fisierelor nu apar in
 # raspuns): dupa forma, fara numele modulelor (orice cuvant care se termina in cam, camd sau cams, cititoarele de
@@ -54,8 +42,6 @@ CALE_JURNALE = "/home/root/logs"
 IMAGE_VERSION = "/etc/image-version"
 # adresa MAC: ultimii trei octeti mascati
 _MAC = re.compile(r"\b([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){2})(:[0-9A-Fa-f]{2}){3}\b")
-# numele retelei Wi-Fi nu se arata
-_SSID = re.compile(r"(?i)\b(ssid|essid)\b\s*[:=].*$")
 
 
 def _jurnal(text):
@@ -80,13 +66,13 @@ class Rezultat(object):
 # ---------------------------------------------------------------- filtre si plafoane
 
 def mascheaza(text):
-	"""Scoate randurile cu secrete, mascheaza MAC-urile si numele retelelor Wi-Fi. Pastreaza restul."""
+	"""Scoate numai randurile modulelor de acces; secretele devin stelute, SSID-ul ramane vizibil."""
 	randuri = []
 	for rand in (text or "").splitlines():
-		if _SECRET.search(rand) or _CAM.search(rand):
+		if _CAM.search(rand):
 			continue
+		rand = mascheazaSecrete(rand)
 		rand = _MAC.sub(lambda m: m.group(1) + ":xx:xx:xx", rand)
-		rand = _SSID.sub(lambda m: m.group(0).split(":", 1)[0].split("=", 1)[0] + "= (ascuns)", rand)
 		randuri.append(rand)
 	return "\n".join(randuri)
 
@@ -179,6 +165,9 @@ def op_retea(ctx, args):
 	parti.append("Rute:\n" + rute.strip())
 	cod, adrese = _ruleaza(["ip", "-o", "addr"], limita=8192)
 	parti.append("Adrese:\n" + adrese.strip())
+	cod, wifi = _ruleaza(["iw", "dev"], limita=8192)
+	if cod == 0 and wifi.strip():
+		parti.append("Wi-Fi:\n" + wifi.strip())
 	dns = []
 	for rand in _citeste("/etc/resolv.conf", 4096).splitlines():
 		if rand.strip().startswith("nameserver"):
@@ -307,18 +296,8 @@ def op_procese(ctx, args):
 	return Rezultat(0, text="\n".join(randuri))
 
 
-# setari: numai cheile din aceste prefixe tehnice (audio, video, interfata, subtitrari, retea fara parole); nimic
-# altceva nu se copiaza. FARA prefixul generic "config.hds" (ar lasa sa treaca numele si e-mailul testerului,
-# config.hds_beta.nume/email); daca vreodata e nevoie de o setare a noastra, se adauga aici prefixul ei exact.
-SETARI_PERMISE = (
-	"config.av.", "config.osd.", "config.subtitles.", "config.usage.",
-	"config.skin.", "config.misc.rcused", "config.network.",
-	# tunerele (modul, LNB-urile, comutatoarele, motorul): fara secrete; ce nu e in settings e valoarea implicita
-	"config.Nims.",
-)
-# ... afara de cheile care, chiar sub un prefix permis, pot avea ceva personal sau un secret
-SETARI_OPRITE = re.compile(
-	r"(?i)(pass|pwd|parola|psk|secret|token|key|pin|auth|login|user|card|cam|mail|email|nume|name)")
+# Citirea permite setarile tuturor ecranelor deschise; scrierea isi pastreaza lista separata din Control.
+SETARI_PERMISE = ("config.",)
 
 
 def op_setari(ctx, args):
@@ -331,15 +310,14 @@ def op_setari(ctx, args):
 		cheie = rand.split("=", 1)[0]
 		if not any(cheie.startswith(p) for p in SETARI_PERMISE):
 			continue
-		if SETARI_OPRITE.search(cheie):
+		if _CAM.search(cheie):
 			continue
-		randuri.append(rand)
+		randuri.append(mascheazaSecrete(rand))
 	return Rezultat(0, text="\n".join(randuri) or "(nicio setare in lista permisa)")
 
 
 def op_captura(ctx, args):
-	"""O captura numai a meniurilor (OSD), niciodata imaginea canalului; refuzata cat ecranul „Acces SSH" e deschis
-	(parola lui root pe ecran nu trebuie sa ajunga intr-o captura)."""
+	"""O captura video cu OSD; unealta refuza modulele de acces si editarea unui secret."""
 	faca = ctx.get("captura")
 	if faca is None:
 		return Rezultat(1, text="(captura nu e disponibila)")

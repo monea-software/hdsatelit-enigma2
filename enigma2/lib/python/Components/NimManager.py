@@ -276,6 +276,12 @@ class SecConfigure:
 					elif nim.configMode.value == "advanced": #advanced config
 						self.updateAdvanced(sec, x)
 		HdsMotorPozitie.dupaReconfigurare(hds_perechi)
+		# HDSatelit: setarile tunerelor in hds-tuner.log (Components/HdsJurnalTuner.py), numai cand s-au schimbat
+		try:
+			from Components import HdsJurnalTuner
+			HdsJurnalTuner.configurare(self.NimManager)
+		except Exception:
+			pass
 		print("sec config completed")
 
 	def updateAdvanced(self, sec, slotid):

@@ -14,6 +14,7 @@
 #include <lib/dvb/esection.h>
 #include <lib/dvb/db.h>
 #include <lib/dvb/hdsretea.h>
+#include <lib/dvb/hdsjurnaltuner.h>
 
 struct service
 {
@@ -107,6 +108,7 @@ class eDVBScan: public sigc::trackable, public iObject
 	
 	int m_flags;
 	int m_num_new_services; /* HDSatelit: services not in the channel list before this scan, -1 until insertInto */
+	hdsjscan::Stare m_hds_jurnal; /* HDSatelit: jurnalul scanarii (lib/dvb/hdsjurnaltuner.h) */
 	bool m_usePAT;
 	bool m_scan_debug;
 	ePyObject m_additional_tsid_onid_check_func;

@@ -54,6 +54,8 @@ TEXT_OK_TERMENI = N_("OK pe rândul de sus: termenii și condițiile.")
 # cat cererea asteapta echipa: omul poate iesi de pe ecran si se uita mai departe (banda de sus si anuntul de la
 # conectare ii spun ce se intampla)
 TEXT_ASTEPTARE = N_("Te anunțăm când intrăm. Poți folosi receptorul între timp.")
+# cererea ramane valabila cat a ales omul; daca echipa nu intra imediat, omul n-o opreste prea devreme
+TEXT_NU_OPRI = N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum.")
 
 # culorile skinului HDSatelit (rolurile din skin.xml), scrise ca valori pentru skinul de rezerva
 CULORI_SKIN = {
@@ -232,7 +234,7 @@ class HdsAsistenta(Screen):
 		# pornita: numai pana cand ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ..."), jurnalul dedesubt
 		self["antet"].setText(s.get("pana_text") or "")
 		if s.get("stare") == A.ASTEAPTA:
-			jurnal = _(TEXT_ASTEPTARE) + "\n\n" + jurnal
+			jurnal = _(TEXT_ASTEPTARE) + "\n" + _(TEXT_NU_OPRI) + "\n\n" + jurnal
 		self._puneText(jurnal)
 		self["ajutor"].setText(_("Sus/Jos: tot textul"))
 		# cat asistenta merge, Verde nu are ce face: fara text, legenda ei nu apare

@@ -697,7 +697,7 @@ def text_ip(ip):
 
 
 def descriere_retea(plan):
-	"""Texte scurte despre ce aduce planul, fără parolă: ["cablu: DHCP", "Wi-Fi „Acasa”: 192.168.1.50"]."""
+	"""Descrie interfețele importate, numele rețelei și adresarea DHCP sau fixă, fără parole."""
 	rez = []
 	for cheie, eticheta in (("cablu", _("cablu")), ("wifi", "Wi-Fi")):
 		d = (plan or {}).get(cheie)

@@ -106,9 +106,10 @@ PASI_SCURTI = {
 		"plătește nimic."),
 	),
 	"deepl": (
-		N_("Pe pagina deschisă intră în contul DeepL API. Dacă nu ai unul, fă-l gratuit, cu planul „Developer” "
-			"(1.000.000 de caractere, o singură dată)."),
-		N_("La „API Keys” copiază cheia; dacă nu ai niciuna, apasă „Create key”."),
+		N_("Pe pagina deschisă intră în contul tău DeepL (sau fă unul) și completează numele și adresa: așa adaugi "
+			"planul gratuit „Developer”, fără de care contul n-are chei."),
+		N_("Confirmă emailul, apasă „Start building for free” și copiază cheia de la „Get API key”. "
+			"Mai târziu o găsești la „Cheile tale DeepL”, mai jos."),
 	),
 	"groq": (
 		N_("Pe pagina deschisă intră cu emailul sau cu contul tău Google."),
@@ -220,6 +221,8 @@ def servicii(T):
 			"cota": d.get("cota") or "",
 			"depasire": d.get("depasire") or "",
 			"sursa": doarHttps(d.get("sursa", "")),
+			"legaturi": [{"text": l.get("text") or "", "url": doarHttps(l.get("url", ""))}
+				for l in d.get("legaturi") or () if doarHttps(l.get("url", ""))],
 		}
 	return rez
 
@@ -425,7 +428,13 @@ def ascundeCheile(d, T, primite=()):
 	"""Orice text care contine o cheie salvata sau cheia primita in cerere se inlocuieste (a doua plasa)."""
 	valori = []
 	try:
-		valori = [v for v in (T.chei().citeste() or {}).values() if isinstance(v, str)]
+		if hasattr(T.chei(), "citeste_toate"):
+			for lst in (T.chei().citeste_toate() or {}).values():
+				for v in (lst if isinstance(lst, (list, tuple)) else [lst]):
+					if isinstance(v, str):
+						valori.append(v)
+		else:
+			valori = [v for v in (T.chei().citeste() or {}).values() if isinstance(v, str)]
 	except Exception:
 		pass
 	for v in primite:
@@ -772,6 +781,7 @@ PAGINA = r"""<!DOCTYPE html>
     <div id="cheie-pagina-bloc">
       <a class="mare principal ascuns" id="cheie-pagina" target="_blank" rel="noopener noreferrer">Deschide pagina cheii</a>
       <ol class="pasi" id="cheie-pasi"></ol>
+      <ul class="legaturi ascuns" id="cheie-legaturi"></ul>
       <p>Apoi întoarce-te aici și lipește cheia.</p>
       <details id="cheie-toti"><summary>Toți pașii și cât e gratuit</summary>
         <ol class="pasi" id="cheie-toti-pasi"></ol>
@@ -933,6 +943,17 @@ function lista(el, texte){
   (texte || []).forEach(function(t){ var li = document.createElement("li"); li.textContent = t; el.appendChild(li); });
   arata(el, !!(texte && texte.length));
 }
+function legaturi(el, lista){
+  sterge(el);
+  var n = 0;
+  (lista || []).forEach(function(l){
+    if(!l || !eHttps(l.url)){ return; }
+    var li = document.createElement("li"), a = document.createElement("a");
+    a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = l.text || l.url;
+    legatura(a, l.url); li.appendChild(a); el.appendChild(li); n++;
+  });
+  arata(el, n > 0);
+}
 function umple(s, alegeri, valoare){
   sterge(s);
   var gasit = false;
@@ -1068,6 +1089,7 @@ function puneCheie(c){
   arata($("cheie-auto-nota"), auto);
   legatura($("cheie-pagina"), auto ? "" : s.pagina_cheie);
   lista($("cheie-pasi"), auto ? [] : s.pasi_scurti);
+  legaturi($("cheie-legaturi"), auto ? [] : s.legaturi);
   lista($("cheie-toti-pasi"), s.pasi || []);
   paragraf("cheie-cota", s.cota ? "Cât e gratuit: " + s.cota : "");
   paragraf("cheie-depasire", s.depasire ? "La depășire: " + s.depasire : "");

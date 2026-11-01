@@ -63,7 +63,7 @@ FAZE_CU_CITIRE = ("acord", "motor", "prins", "fara_semnal", "pierdut")
 
 # Numele valorilor, pentru afișare. FEC Auto se traduce la folosire.
 NUME_FEC = {1: "1/2", 2: "2/3", 3: "3/4", 4: "5/6", 5: "7/8", 6: "8/9", 7: "3/5", 8: "4/5", 9: "9/10"}
-NUME_MODULATIE = {1: "QPSK", 2: "8PSK"}
+NUME_MODULATIE = {1: "QPSK", 2: "8PSK", 4: "16APSK", 5: "32APSK"}
 NUME_ROLLOFF = {0: "0,35", 1: "0,25", 2: "0,20"}
 
 

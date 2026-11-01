@@ -45,7 +45,7 @@ TARA_IMPLICITA = 'RO'
 # textele din JSON -> codurile lui eDVBFrontendParametersSatellite (lib/dvb/frontendparms.h)
 POLARIZARE = {'H': 0, 'V': 1, 'L': 2, 'R': 3}
 SISTEM = {'DVB-S': 0, 'DVB-S2': 1}
-MODULATIE = {'QPSK': 1, '8PSK': 2, 'QAM16': 3}       # APSK nu exista in nucleu: -1, refuzat de motiv_refuz
+MODULATIE = {'QPSK': 1, '8PSK': 2, 'QAM16': 3, '16APSK': 4, '32APSK': 5}
 FEC = {'1/2': 1, '2/3': 2, '3/4': 3, '5/6': 4, '7/8': 5, '8/9': 6, '3/5': 7, '4/5': 8, '9/10': 9}
 
 _cache = {}
@@ -219,6 +219,7 @@ def transponder_nucleu(op):
     se adauga is_id, pls_mode si pls_code (campuri_multistream)."""
     t = op['transponder']
     sistem = SISTEM.get(t.get('sistem'), -1)
+    modulatie = MODULATIE.get(t.get('modulatie'), -1)
     tp = {
         'frequency': int(t['frecventa']),
         'symbol_rate': int(t['rata']) * 1000,
@@ -227,7 +228,7 @@ def transponder_nucleu(op):
         'inversion': 2,
         'orbital_position': int(op['pozitie']),
         'system': sistem,
-        'modulation': MODULATIE.get(t.get('modulatie'), -1) if sistem == 1 else 1,
+        'modulation': modulatie if sistem == 1 or modulatie in (4, 5) else 1,
         'rolloff': {'0.25': 1, '0.20': 2}.get(str(t.get('rolloff')), 0) if sistem == 1 else 0,
         'pilot': 2,
     }
