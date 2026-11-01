@@ -1,5 +1,5 @@
 {
- "descriere": "Date pentru lista_licente.py: programele din interiorul pachetelor care nu apar in license.manifest, fonturile si listele de canale. O intrare intra in lista din imagine numai daca pachetul ei e instalat si macar una dintre cai exista in radacina (fara cai: numai pachetul). ce = textul de pe ecran, in cele 13 limbi ale imaginii. spdx = textul luat din licentele comune ale OpenEmbedded cand imaginea nu are unul langa fisier (spdx_mereu: si langa el, cand fisierul din imagine nu e textul licentei). texte_in_imagine = textele exacte din imagine (la fonturi si la componente), puse inaintea celor SPDX. reteta = reteta care pune fontul. ale_noastre = retetele facute de noi (in lista primesc al_nostru).",
+ "descriere": "Date pentru lista_licente.py: programele din interiorul pachetelor care nu apar in license.manifest, fonturile si listele de canale. O intrare intra in lista din imagine numai daca pachetul ei e instalat si macar una dintre cai exista in radacina (fara cai: numai pachetul). ce = textul de pe ecran, in cele 13 limbi ale imaginii. spdx = textul luat din licentele comune ale OpenEmbedded cand imaginea nu are unul langa fisier (spdx_mereu: si langa el, cand fisierul din imagine nu e textul licentei). texte_in_imagine = textele exacte din imagine (la fonturi si la componente), puse inaintea celor SPDX. reteta = reteta care pune fontul. ale_noastre = retetele facute de noi (in lista primesc al_nostru). masini = masinile OE pe care intra intrarea (pachetele producatorului: Dinobot pe u57 si u571, Amiko pe viper4k, Octagon pe sf8008); pe alta masina nu intra, iar pe una din ele pachetul lipsa e eroare.",
  "ale_noastre": [
   "enigma2-hdsatelit",
   "hds-navigator",
@@ -12,7 +12,11 @@
  "componente": [
   {
    "nume": "FFmpeg 3.3.2",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/avdec",
    "cai": [
     "/usr/lib/avdec"
@@ -62,7 +66,11 @@
   },
   {
    "nume": "libpng 1.6.32",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/libpng1.6.26.so",
    "cai": [
     "/usr/lib/libpng1.6.26.so"
@@ -87,7 +95,11 @@
   },
   {
    "nume": "libjpeg-turbo",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/libjpeg9b.so",
    "cai": [
     "/usr/lib/libjpeg9b.so"
@@ -112,7 +124,11 @@
   },
   {
    "nume": "libVorbis 1.3.4",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/libHA.AUDIO.VORBIS.codec.so",
    "cai": [
     "/usr/lib/libHA.AUDIO.VORBIS.codec.so"
@@ -137,7 +153,11 @@
   },
   {
    "nume": "libopus",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/libHA.AUDIO.OPUS.codec.so",
    "cai": [
     "/usr/lib/libHA.AUDIO.OPUS.codec.so"
@@ -185,7 +205,11 @@
   },
   {
    "nume": "HiSilicon: hi_*.ko, mali.ko, ddr.ko",
-   "pachet": "dinobot-dvb-modules-u57",
+   "pachet": "dinobot-dvb-modules-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/lib/modules/4.4.35/extra/hi_*.ko, mali.ko, ddr.ko",
    "cai": [
     "/lib/modules/*/extra/hi_*.ko"
@@ -210,7 +234,11 @@
   },
   {
    "nume": "DVB, komession",
-   "pachet": "dinobot-dvb-modules-u57",
+   "pachet": "dinobot-dvb-modules-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/lib/modules/4.4.35/extra/dvbmodule, /usr/bin/komession",
    "cai": [
     "/lib/modules/*/extra/dvbmodule"
@@ -235,7 +263,11 @@
   },
   {
    "nume": "Realtek RTL8188EU (Wi-Fi)",
-   "pachet": "dinobot-dvb-modules-u57",
+   "pachet": "dinobot-dvb-modules-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/lib/modules/4.4.35/extra/rtl8188eu.ko",
    "cai": [
     "/lib/modules/*/extra/rtl8188eu.ko"
@@ -260,7 +292,11 @@
   },
   {
    "nume": "Tuxera NTFS",
-   "pachet": "dinobot-dvb-modules-u57",
+   "pachet": "dinobot-dvb-modules-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/lib/modules/4.4.35/extra/tntfs.ko",
    "cai": [
     "/lib/modules/*/extra/tntfs.ko"
@@ -285,7 +321,11 @@
   },
   {
    "nume": "HiSilicon: libhi_msp, libhi_common, libhiaccel, libHA.AUDIO",
-   "pachet": "dinobot-libs-u57",
+   "pachet": "dinobot-libs-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/lib/libhi_msp.so, libhi_common.so, libhiaccel.so, libHA.AUDIO.*",
    "cai": [
     "/usr/lib/libhi_msp.so"
@@ -335,7 +375,11 @@
   },
   {
    "nume": "showiframe",
-   "pachet": "dinobot-showiframe-u57",
+   "pachet": "dinobot-showiframe-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/bin/showiframe",
    "cai": [
     "/usr/bin/showiframe"
@@ -360,7 +404,11 @@
   },
   {
    "nume": "hihalt, hipmoc",
-   "pachet": "dinobot-hihalt-u57",
+   "pachet": "dinobot-hihalt-${MACHINE}",
+   "masini": [
+    "u57",
+    "u571"
+   ],
    "fisier": "/usr/bin/hihalt, /usr/bin/hipmoc",
    "cai": [
     "/usr/bin/hihalt",
@@ -407,6 +455,775 @@
     "pt": "O carregador do fabricante para a partição loader. Programa fechado.",
     "ru": "Загрузчик производителя для раздела loader. Закрытая программа.",
     "tr": "Üreticinin loader bölümü için yükleyicisi. Kapalı program."
+   }
+  },
+  {
+   "nume": "FFmpeg 3.4.1",
+   "pachet": "amiko-libs-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.FFMPEG_*.decode.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.FFMPEG_DTS.decode.so"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Decodoarele de sunet DTS, E-AC3, LPCM, TrueHD, WMA și WMA Pro ale driverului conțin FFmpeg 3.4.1, construit de fabricantul driverului.",
+    "en": "The DTS, E-AC3, LPCM, TrueHD, WMA and WMA Pro audio decoders of the driver contain FFmpeg 3.4.1, built by the driver maker.",
+    "cs": "Zvukové dekodéry DTS, E-AC3, LPCM, TrueHD, WMA a WMA Pro v ovladači obsahují FFmpeg 3.4.1, sestavený výrobcem ovladače.",
+    "de": "Die Tondecoder DTS, E-AC3, LPCM, TrueHD, WMA und WMA Pro des Treibers enthalten FFmpeg 3.4.1, gebaut vom Hersteller des Treibers.",
+    "es": "Los decodificadores de audio DTS, E-AC3, LPCM, TrueHD, WMA y WMA Pro del controlador contienen FFmpeg 3.4.1, compilado por el fabricante del controlador.",
+    "fr": "Les décodeurs audio DTS, E-AC3, LPCM, TrueHD, WMA et WMA Pro du pilote contiennent FFmpeg 3.4.1, compilé par le fabricant du pilote.",
+    "hu": "Az illesztőprogram DTS, E-AC3, LPCM, TrueHD, WMA és WMA Pro hangdekóderei a gyártó által fordított FFmpeg 3.4.1-et tartalmazzák.",
+    "it": "I decodificatori audio DTS, E-AC3, LPCM, TrueHD, WMA e WMA Pro del driver contengono FFmpeg 3.4.1, compilato dal produttore del driver.",
+    "nl": "De DTS-, E-AC3-, LPCM-, TrueHD-, WMA- en WMA Pro-geluidsdecoders van het stuurprogramma bevatten FFmpeg 3.4.1, gebouwd door de maker ervan.",
+    "pl": "Dekodery dźwięku DTS, E-AC3, LPCM, TrueHD, WMA i WMA Pro sterownika zawierają FFmpeg 3.4.1, zbudowany przez producenta sterownika.",
+    "pt": "Os descodificadores de áudio DTS, E-AC3, LPCM, TrueHD, WMA e WMA Pro do controlador contêm o FFmpeg 3.4.1, compilado pelo fabricante do controlador.",
+    "ru": "Звуковые декодеры DTS, E-AC3, LPCM, TrueHD, WMA и WMA Pro драйвера содержат FFmpeg 3.4.1, собранный производителем драйвера.",
+    "tr": "Sürücünün DTS, E-AC3, LPCM, TrueHD, WMA ve WMA Pro ses kod çözücüleri, sürücü üreticisinin derlediği FFmpeg 3.4.1'i içerir."
+   }
+  },
+  {
+   "nume": "libjpeg 9b",
+   "pachet": "amiko-libs-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libjpeg9b.so",
+   "cai": [
+    "/usr/lib/libjpeg9b.so"
+   ],
+   "licenta": "IJG",
+   "spdx": "IJG",
+   "ce": {
+    "ro": "Biblioteca JPEG din pachetul driverului.",
+    "en": "The JPEG library inside the driver package.",
+    "cs": "Knihovna JPEG v balíčku ovladače.",
+    "de": "Die JPEG-Bibliothek im Treiberpaket.",
+    "es": "La biblioteca JPEG del paquete del controlador.",
+    "fr": "La bibliothèque JPEG du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő JPEG-könyvtár.",
+    "it": "La libreria JPEG nel pacchetto del driver.",
+    "nl": "De JPEG-bibliotheek in het pakket van het stuurprogramma.",
+    "pl": "Biblioteka JPEG w pakiecie sterownika.",
+    "pt": "A biblioteca JPEG do pacote do controlador.",
+    "ru": "Библиотека JPEG в пакете драйвера.",
+    "tr": "Sürücü paketindeki JPEG kütüphanesi."
+   }
+  },
+  {
+   "nume": "libVorbis 1.3.1",
+   "pachet": "amiko-libs-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.VORBIS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.VORBIS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Vorbis din pachetul driverului.",
+    "en": "The Vorbis audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Vorbis v balíčku ovladače.",
+    "de": "Der Vorbis-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Vorbis del paquete del controlador.",
+    "fr": "Le décodeur audio Vorbis du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Vorbis hangdekóder.",
+    "it": "Il decodificatore audio Vorbis nel pacchetto del driver.",
+    "nl": "De Vorbis-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Vorbis w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Vorbis do pacote do controlador.",
+    "ru": "Звуковой декодер Vorbis в пакете драйвера.",
+    "tr": "Sürücü paketindeki Vorbis ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "libopus",
+   "pachet": "amiko-libs-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.OPUS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.OPUS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Opus din pachetul driverului.",
+    "en": "The Opus audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Opus v balíčku ovladače.",
+    "de": "Der Opus-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Opus del paquete del controlador.",
+    "fr": "Le décodeur audio Opus du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Opus hangdekóder.",
+    "it": "Il decodificatore audio Opus nel pacchetto del driver.",
+    "nl": "De Opus-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Opus w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Opus do pacote do controlador.",
+    "ru": "Звуковой декодер Opus в пакете драйвера.",
+    "tr": "Sürücü paketindeki Opus ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "HiSilicon: hi_*.ko, mali.ko, ddr.ko",
+   "pachet": "amiko-dvb-modules-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/lib/modules/4.4.35/extra/hi_*.ko, mali.ko, ddr.ko",
+   "cai": [
+    "/lib/modules/*/extra/hi_*.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverele plăcii receptorului, declarate GPL de fabricant. Fabricantul le dă fără cod sursă.",
+    "en": "The drivers of the receiver board, declared GPL by the maker. The maker ships them without source code.",
+    "cs": "Ovladače desky přijímače, které výrobce označil jako GPL. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Die Treiber der Receiver-Platine, vom Hersteller als GPL angegeben. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "Los controladores de la placa del receptor, declarados GPL por el fabricante. El fabricante los entrega sin código fuente.",
+    "fr": "Les pilotes de la carte du récepteur, déclarés GPL par le fabricant. Le fabricant les fournit sans code source.",
+    "hu": "A vevőkészülék alaplapjának illesztőprogramjai, amelyeket a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja őket.",
+    "it": "I driver della scheda del ricevitore, dichiarati GPL dal produttore. Il produttore li fornisce senza codice sorgente.",
+    "nl": "De stuurprogramma's van de ontvangerkaart, door de maker als GPL opgegeven. De maker levert ze zonder broncode.",
+    "pl": "Sterowniki płyty odbiornika, oznaczone przez producenta jako GPL. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "Os controladores da placa do recetor, declarados GPL pelo fabricante. O fabricante fornece-os sem código-fonte.",
+    "ru": "Драйверы платы ресивера, заявленные производителем как GPL. Производитель поставляет их без исходного кода.",
+    "tr": "Alıcı kartının sürücüleri, üretici tarafından GPL olarak bildirilmiştir. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "DVB: hi-dvb, vtunerc, oled",
+   "pachet": "amiko-dvb-modules-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/lib/modules/4.4.35/extra/hi-dvb.ko, vtunerc.ko, oled.ko, hisi-ir.ko, hisi_keys.ko",
+   "cai": [
+    "/lib/modules/*/extra/hi-dvb.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverul DVB al plăcii (tunerele, legate de nucleul DVB), afișajul din față și telecomanda, declarate GPL de fabricant. Fabricantul le dă fără cod sursă.",
+    "en": "The DVB driver of the board (the tuners, tied to the kernel DVB core), the front display and the remote control, declared GPL by the maker. The maker ships them without source code.",
+    "cs": "Ovladač DVB desky (tunery napojené na jádro DVB), přední displej a dálkové ovládání, které výrobce označil jako GPL. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Der DVB-Treiber der Platine (die Tuner, angebunden an den DVB-Kern des Kernels), die Frontanzeige und die Fernbedienung, vom Hersteller als GPL angegeben. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "El controlador DVB de la placa (los sintonizadores, conectados al núcleo DVB del kernel), la pantalla frontal y el mando a distancia, declarados GPL por el fabricante. El fabricante los entrega sin código fuente.",
+    "fr": "Le pilote DVB de la carte (les tuners, reliés au cœur DVB du noyau), l'afficheur en façade et la télécommande, déclarés GPL par le fabricant. Le fabricant les fournit sans code source.",
+    "hu": "Az alaplap DVB-illesztőprogramja (a tunerek, a kernel DVB-magjához kötve), az előlapi kijelző és a távirányító, amelyeket a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja őket.",
+    "it": "Il driver DVB della scheda (i sintonizzatori, collegati al nucleo DVB del kernel), il display frontale e il telecomando, dichiarati GPL dal produttore. Il produttore li fornisce senza codice sorgente.",
+    "nl": "Het DVB-stuurprogramma van de kaart (de tuners, gekoppeld aan de DVB-kern van de kernel), het frontdisplay en de afstandsbediening, door de maker als GPL opgegeven. De maker levert ze zonder broncode.",
+    "pl": "Sterownik DVB płyty (tunery połączone z rdzeniem DVB jądra), wyświetlacz z przodu i pilot, oznaczone przez producenta jako GPL. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "O controlador DVB da placa (os sintonizadores, ligados ao núcleo DVB do kernel), o visor frontal e o comando, declarados GPL pelo fabricante. O fabricante fornece-os sem código-fonte.",
+    "ru": "DVB-драйвер платы (тюнеры, подключённые к ядру DVB), передний дисплей и пульт, заявленные производителем как GPL. Производитель поставляет их без исходного кода.",
+    "tr": "Kartın DVB sürücüsü (çekirdeğin DVB katmanına bağlı tunerler), ön ekran ve uzaktan kumanda, üretici tarafından GPL olarak bildirilmiştir. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "HiSilicon: libhi_msp, libhi_common, libhigo, libHA.AUDIO",
+   "pachet": "amiko-libs-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libhi_msp.so, libhi_common.so, libhigo.so, libHA.AUDIO.*",
+   "cai": [
+    "/usr/lib/libhi_msp.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Bibliotecile plăcii pentru imagine, sunet și grafică 2D. Programe închise ale fabricantului.",
+    "en": "The board libraries for video, audio and 2D graphics. Closed programs of the maker.",
+    "cs": "Knihovny desky pro obraz, zvuk a 2D grafiku. Uzavřené programy výrobce.",
+    "de": "Die Bibliotheken der Platine für Bild, Ton und 2D-Grafik. Geschlossene Programme des Herstellers.",
+    "es": "Las bibliotecas de la placa para imagen, sonido y gráficos 2D. Programas cerrados del fabricante.",
+    "fr": "Les bibliothèques de la carte pour l'image, le son et le graphisme 2D. Programmes fermés du fabricant.",
+    "hu": "Az alaplap kép-, hang- és 2D-grafikai könyvtárai. A gyártó zárt programjai.",
+    "it": "Le librerie della scheda per immagine, audio e grafica 2D. Programmi chiusi del produttore.",
+    "nl": "De bibliotheken van de kaart voor beeld, geluid en 2D-graphics. Gesloten programma's van de maker.",
+    "pl": "Biblioteki płyty do obrazu, dźwięku i grafiki 2D. Zamknięte programy producenta.",
+    "pt": "As bibliotecas da placa para imagem, som e gráficos 2D. Programas fechados do fabricante.",
+    "ru": "Библиотеки платы для изображения, звука и 2D-графики. Закрытые программы производителя.",
+    "tr": "Kartın görüntü, ses ve 2D grafik kütüphaneleri. Üreticinin kapalı programları."
+   }
+  },
+  {
+   "nume": "showiframe",
+   "pachet": "amiko-showiframe-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/bin/showiframe",
+   "cai": [
+    "/usr/bin/showiframe"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Afișează o imagine fixă la pornire. Program închis al fabricantului.",
+    "en": "Shows a still picture at start-up. Closed program of the maker.",
+    "cs": "Zobrazí statický obrázek při spuštění. Uzavřený program výrobce.",
+    "de": "Zeigt beim Start ein Standbild. Geschlossenes Programm des Herstellers.",
+    "es": "Muestra una imagen fija al arrancar. Programa cerrado del fabricante.",
+    "fr": "Affiche une image fixe au démarrage. Programme fermé du fabricant.",
+    "hu": "Állóképet jelenít meg induláskor. A gyártó zárt programja.",
+    "it": "Mostra un'immagine fissa all'avvio. Programma chiuso del produttore.",
+    "nl": "Toont een stilstaand beeld bij het opstarten. Gesloten programma van de maker.",
+    "pl": "Wyświetla nieruchomy obraz przy uruchamianiu. Zamknięty program producenta.",
+    "pt": "Mostra uma imagem fixa no arranque. Programa fechado do fabricante.",
+    "ru": "Показывает неподвижное изображение при запуске. Закрытая программа производителя.",
+    "tr": "Açılışta sabit bir görüntü gösterir. Üreticinin kapalı programı."
+   }
+  },
+  {
+   "nume": "hihalt",
+   "pachet": "amiko-hihalt-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/bin/hihalt",
+   "cai": [
+    "/usr/bin/hihalt"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Oprirea și pornirea din așteptare. Program închis al fabricantului.",
+    "en": "Shutdown and wake from standby. Closed program of the maker.",
+    "cs": "Vypnutí a probuzení z pohotovostního režimu. Uzavřený program výrobce.",
+    "de": "Ausschalten und Aufwachen aus dem Standby. Geschlossenes Programm des Herstellers.",
+    "es": "Apagado y encendido desde el modo de espera. Programa cerrado del fabricante.",
+    "fr": "Arrêt et réveil depuis la veille. Programme fermé du fabricant.",
+    "hu": "Kikapcsolás és ébresztés készenlétből. A gyártó zárt programja.",
+    "it": "Spegnimento e risveglio dallo standby. Programma chiuso del produttore.",
+    "nl": "Uitschakelen en ontwaken uit stand-by. Gesloten programma van de maker.",
+    "pl": "Wyłączanie i wybudzanie z czuwania. Zamknięty program producenta.",
+    "pt": "Desligar e acordar do modo de espera. Programa fechado do fabricante.",
+    "ru": "Выключение и выход из режима ожидания. Закрытая программа производителя.",
+    "tr": "Kapatma ve bekleme modundan uyanma. Üreticinin kapalı programı."
+   }
+  },
+  {
+   "nume": "libreader",
+   "pachet": "amiko-reader-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/bin/libreader",
+   "cai": [
+    "/usr/bin/libreader"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Serviciul de imagine și sunet al fabricantului (ieșirea HDMI). Program închis.",
+    "en": "The maker's video and audio service (the HDMI output). Closed program.",
+    "cs": "Obrazová a zvuková služba výrobce (výstup HDMI). Uzavřený program.",
+    "de": "Der Bild- und Tondienst des Herstellers (der HDMI-Ausgang). Geschlossenes Programm.",
+    "es": "El servicio de imagen y sonido del fabricante (la salida HDMI). Programa cerrado.",
+    "fr": "Le service d'image et de son du fabricant (la sortie HDMI). Programme fermé.",
+    "hu": "A gyártó kép- és hangszolgáltatása (a HDMI-kimenet). Zárt program.",
+    "it": "Il servizio di immagine e audio del produttore (l'uscita HDMI). Programma chiuso.",
+    "nl": "De beeld- en geluidsdienst van de maker (de HDMI-uitgang). Gesloten programma.",
+    "pl": "Usługa obrazu i dźwięku producenta (wyjście HDMI). Program zamknięty.",
+    "pt": "O serviço de imagem e som do fabricante (a saída HDMI). Programa fechado.",
+    "ru": "Служба изображения и звука производителя (выход HDMI). Закрытая программа.",
+    "tr": "Üreticinin görüntü ve ses hizmeti (HDMI çıkışı). Kapalı program."
+   }
+  },
+  {
+   "nume": "mkupdate",
+   "pachet": "amiko-buildimage",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/sbin/mkupdate",
+   "cai": [
+    "/usr/sbin/mkupdate"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Programul fabricantului care face fișierul de recuperare usb_update.bin. Program închis; imaginea nu îl pornește.",
+    "en": "The maker's program that builds the usb_update.bin recovery file. Closed program; the image does not run it.",
+    "cs": "Program výrobce, který vytváří soubor pro obnovu usb_update.bin. Uzavřený program; obraz ho nespouští.",
+    "de": "Das Programm des Herstellers, das die Wiederherstellungsdatei usb_update.bin erzeugt. Geschlossenes Programm; das Image startet es nicht.",
+    "es": "El programa del fabricante que crea el archivo de recuperación usb_update.bin. Programa cerrado; la imagen no lo ejecuta.",
+    "fr": "Le programme du fabricant qui crée le fichier de récupération usb_update.bin. Programme fermé ; l'image ne le lance pas.",
+    "hu": "A gyártó programja, amely az usb_update.bin helyreállító fájlt készíti. Zárt program; a rendszerkép nem indítja el.",
+    "it": "Il programma del produttore che crea il file di ripristino usb_update.bin. Programma chiuso; l'immagine non lo avvia.",
+    "nl": "Het programma van de maker dat het herstelbestand usb_update.bin maakt. Gesloten programma; de image start het niet.",
+    "pl": "Program producenta, który tworzy plik odzyskiwania usb_update.bin. Program zamknięty; obraz go nie uruchamia.",
+    "pt": "O programa do fabricante que cria o ficheiro de recuperação usb_update.bin. Programa fechado; a imagem não o executa.",
+    "ru": "Программа производителя, создающая файл восстановления usb_update.bin. Закрытая программа; образ её не запускает.",
+    "tr": "Üreticinin usb_update.bin kurtarma dosyasını oluşturan programı. Kapalı program; imaj onu çalıştırmaz."
+   }
+  },
+  {
+   "nume": "ARM Mali",
+   "pachet": "amiko-opengl-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/lib/libMali.so",
+   "cai": [
+    "/usr/lib/libMali.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Biblioteca plăcii video (EGL, OpenGL ES). Program închis.",
+    "en": "The graphics library (EGL, OpenGL ES). Closed program.",
+    "cs": "Knihovna grafického čipu (EGL, OpenGL ES). Uzavřený program.",
+    "de": "Die Grafikbibliothek (EGL, OpenGL ES). Geschlossenes Programm.",
+    "es": "La biblioteca gráfica (EGL, OpenGL ES). Programa cerrado.",
+    "fr": "La bibliothèque graphique (EGL, OpenGL ES). Programme fermé.",
+    "hu": "A grafikus könyvtár (EGL, OpenGL ES). Zárt program.",
+    "it": "La libreria grafica (EGL, OpenGL ES). Programma chiuso.",
+    "nl": "De grafische bibliotheek (EGL, OpenGL ES). Gesloten programma.",
+    "pl": "Biblioteka graficzna (EGL, OpenGL ES). Program zamknięty.",
+    "pt": "A biblioteca gráfica (EGL, OpenGL ES). Programa fechado.",
+    "ru": "Графическая библиотека (EGL, OpenGL ES). Закрытая программа.",
+    "tr": "Grafik kütüphanesi (EGL, OpenGL ES). Kapalı program."
+   }
+  },
+  {
+   "nume": "apploader.bin, fastboot.bin, bootargs.bin",
+   "pachet": "amiko-partitions-${MACHINE}",
+   "masini": [
+    "viper4k"
+   ],
+   "fisier": "/usr/share/apploader.bin, fastboot.bin, bootargs.bin",
+   "cai": [
+    "/usr/share/apploader.bin"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Fișierele de pornire ale fabricantului (încărcătorul, fastboot, bootargs), ca date. Programe închise; imaginea nu le scrie.",
+    "en": "The maker's boot files (the loader, fastboot, bootargs), kept as data. Closed programs; the image does not write them.",
+    "cs": "Spouštěcí soubory výrobce (zavaděč, fastboot, bootargs), uložené jako data. Uzavřené programy; obraz je nezapisuje.",
+    "de": "Die Startdateien des Herstellers (Lader, fastboot, bootargs), als Daten abgelegt. Geschlossene Programme; das Image schreibt sie nicht.",
+    "es": "Los archivos de arranque del fabricante (el cargador, fastboot, bootargs), guardados como datos. Programas cerrados; la imagen no los escribe.",
+    "fr": "Les fichiers de démarrage du fabricant (le chargeur, fastboot, bootargs), gardés comme données. Programmes fermés ; l'image ne les écrit pas.",
+    "hu": "A gyártó indítófájljai (betöltő, fastboot, bootargs), adatként tárolva. Zárt programok; a rendszerkép nem írja ki őket.",
+    "it": "I file di avvio del produttore (il caricatore, fastboot, bootargs), conservati come dati. Programmi chiusi; l'immagine non li scrive.",
+    "nl": "De opstartbestanden van de maker (de lader, fastboot, bootargs), bewaard als gegevens. Gesloten programma's; de image schrijft ze niet.",
+    "pl": "Pliki rozruchowe producenta (program ładujący, fastboot, bootargs), przechowywane jako dane. Programy zamknięte; obraz ich nie zapisuje.",
+    "pt": "Os ficheiros de arranque do fabricante (o carregador, fastboot, bootargs), guardados como dados. Programas fechados; a imagem não os escreve.",
+    "ru": "Загрузочные файлы производителя (загрузчик, fastboot, bootargs), хранятся как данные. Закрытые программы; образ их не записывает.",
+    "tr": "Üreticinin önyükleme dosyaları (yükleyici, fastboot, bootargs), veri olarak tutulur. Kapalı programlar; imaj bunları yazmaz."
+   }
+  },
+  {
+   "nume": "FFmpeg 3.4.1",
+   "pachet": "octagon-libs-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.FFMPEG_*.decode.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.FFMPEG_DTS.decode.so"
+   ],
+   "licenta": "LGPL-2.1-or-later",
+   "spdx": "LGPL-2.1-or-later",
+   "ce": {
+    "ro": "Decodoarele de sunet DTS, E-AC3, LPCM, TrueHD, WMA și WMA Pro ale driverului conțin FFmpeg 3.4.1, construit de fabricantul driverului.",
+    "en": "The DTS, E-AC3, LPCM, TrueHD, WMA and WMA Pro audio decoders of the driver contain FFmpeg 3.4.1, built by the driver maker.",
+    "cs": "Zvukové dekodéry DTS, E-AC3, LPCM, TrueHD, WMA a WMA Pro v ovladači obsahují FFmpeg 3.4.1, sestavený výrobcem ovladače.",
+    "de": "Die Tondecoder DTS, E-AC3, LPCM, TrueHD, WMA und WMA Pro des Treibers enthalten FFmpeg 3.4.1, gebaut vom Hersteller des Treibers.",
+    "es": "Los decodificadores de audio DTS, E-AC3, LPCM, TrueHD, WMA y WMA Pro del controlador contienen FFmpeg 3.4.1, compilado por el fabricante del controlador.",
+    "fr": "Les décodeurs audio DTS, E-AC3, LPCM, TrueHD, WMA et WMA Pro du pilote contiennent FFmpeg 3.4.1, compilé par le fabricant du pilote.",
+    "hu": "Az illesztőprogram DTS, E-AC3, LPCM, TrueHD, WMA és WMA Pro hangdekóderei a gyártó által fordított FFmpeg 3.4.1-et tartalmazzák.",
+    "it": "I decodificatori audio DTS, E-AC3, LPCM, TrueHD, WMA e WMA Pro del driver contengono FFmpeg 3.4.1, compilato dal produttore del driver.",
+    "nl": "De DTS-, E-AC3-, LPCM-, TrueHD-, WMA- en WMA Pro-geluidsdecoders van het stuurprogramma bevatten FFmpeg 3.4.1, gebouwd door de maker ervan.",
+    "pl": "Dekodery dźwięku DTS, E-AC3, LPCM, TrueHD, WMA i WMA Pro sterownika zawierają FFmpeg 3.4.1, zbudowany przez producenta sterownika.",
+    "pt": "Os descodificadores de áudio DTS, E-AC3, LPCM, TrueHD, WMA e WMA Pro do controlador contêm o FFmpeg 3.4.1, compilado pelo fabricante do controlador.",
+    "ru": "Звуковые декодеры DTS, E-AC3, LPCM, TrueHD, WMA и WMA Pro драйвера содержат FFmpeg 3.4.1, собранный производителем драйвера.",
+    "tr": "Sürücünün DTS, E-AC3, LPCM, TrueHD, WMA ve WMA Pro ses kod çözücüleri, sürücü üreticisinin derlediği FFmpeg 3.4.1'i içerir."
+   }
+  },
+  {
+   "nume": "libjpeg 9b",
+   "pachet": "octagon-libs-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libjpeg9b.so",
+   "cai": [
+    "/usr/lib/libjpeg9b.so"
+   ],
+   "licenta": "IJG",
+   "spdx": "IJG",
+   "ce": {
+    "ro": "Biblioteca JPEG din pachetul driverului.",
+    "en": "The JPEG library inside the driver package.",
+    "cs": "Knihovna JPEG v balíčku ovladače.",
+    "de": "Die JPEG-Bibliothek im Treiberpaket.",
+    "es": "La biblioteca JPEG del paquete del controlador.",
+    "fr": "La bibliothèque JPEG du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő JPEG-könyvtár.",
+    "it": "La libreria JPEG nel pacchetto del driver.",
+    "nl": "De JPEG-bibliotheek in het pakket van het stuurprogramma.",
+    "pl": "Biblioteka JPEG w pakiecie sterownika.",
+    "pt": "A biblioteca JPEG do pacote do controlador.",
+    "ru": "Библиотека JPEG в пакете драйвера.",
+    "tr": "Sürücü paketindeki JPEG kütüphanesi."
+   }
+  },
+  {
+   "nume": "libVorbis 1.3.1",
+   "pachet": "octagon-libs-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.VORBIS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.VORBIS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Vorbis din pachetul driverului.",
+    "en": "The Vorbis audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Vorbis v balíčku ovladače.",
+    "de": "Der Vorbis-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Vorbis del paquete del controlador.",
+    "fr": "Le décodeur audio Vorbis du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Vorbis hangdekóder.",
+    "it": "Il decodificatore audio Vorbis nel pacchetto del driver.",
+    "nl": "De Vorbis-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Vorbis w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Vorbis do pacote do controlador.",
+    "ru": "Звуковой декодер Vorbis в пакете драйвера.",
+    "tr": "Sürücü paketindeki Vorbis ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "libopus",
+   "pachet": "octagon-libs-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libHA.AUDIO.OPUS.codec.so",
+   "cai": [
+    "/usr/lib/libHA.AUDIO.OPUS.codec.so"
+   ],
+   "licenta": "BSD-3-Clause",
+   "spdx": "BSD-3-Clause",
+   "ce": {
+    "ro": "Decodorul de sunet Opus din pachetul driverului.",
+    "en": "The Opus audio decoder inside the driver package.",
+    "cs": "Zvukový dekodér Opus v balíčku ovladače.",
+    "de": "Der Opus-Tondecoder im Treiberpaket.",
+    "es": "El decodificador de audio Opus del paquete del controlador.",
+    "fr": "Le décodeur audio Opus du paquet du pilote.",
+    "hu": "Az illesztőprogram-csomagban lévő Opus hangdekóder.",
+    "it": "Il decodificatore audio Opus nel pacchetto del driver.",
+    "nl": "De Opus-geluidsdecoder in het pakket van het stuurprogramma.",
+    "pl": "Dekoder dźwięku Opus w pakiecie sterownika.",
+    "pt": "O descodificador de áudio Opus do pacote do controlador.",
+    "ru": "Звуковой декодер Opus в пакете драйвера.",
+    "tr": "Sürücü paketindeki Opus ses kod çözücüsü."
+   }
+  },
+  {
+   "nume": "HiSilicon: hi_*.ko, mali.ko, ddr.ko",
+   "pachet": "octagon-dvb-modules-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/lib/modules/4.4.35/extra/hi_*.ko, mali.ko, ddr.ko",
+   "cai": [
+    "/lib/modules/*/extra/hi_*.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverele plăcii receptorului, declarate GPL de fabricant. Fabricantul le dă fără cod sursă.",
+    "en": "The drivers of the receiver board, declared GPL by the maker. The maker ships them without source code.",
+    "cs": "Ovladače desky přijímače, které výrobce označil jako GPL. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Die Treiber der Receiver-Platine, vom Hersteller als GPL angegeben. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "Los controladores de la placa del receptor, declarados GPL por el fabricante. El fabricante los entrega sin código fuente.",
+    "fr": "Les pilotes de la carte du récepteur, déclarés GPL par le fabricant. Le fabricant les fournit sans code source.",
+    "hu": "A vevőkészülék alaplapjának illesztőprogramjai, amelyeket a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja őket.",
+    "it": "I driver della scheda del ricevitore, dichiarati GPL dal produttore. Il produttore li fornisce senza codice sorgente.",
+    "nl": "De stuurprogramma's van de ontvangerkaart, door de maker als GPL opgegeven. De maker levert ze zonder broncode.",
+    "pl": "Sterowniki płyty odbiornika, oznaczone przez producenta jako GPL. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "Os controladores da placa do recetor, declarados GPL pelo fabricante. O fabricante fornece-os sem código-fonte.",
+    "ru": "Драйверы платы ресивера, заявленные производителем как GPL. Производитель поставляет их без исходного кода.",
+    "tr": "Alıcı kartının sürücüleri, üretici tarafından GPL olarak bildirilmiştir. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "DVB: hi-dvb, vtunerc, oled",
+   "pachet": "octagon-dvb-modules-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/lib/modules/4.4.35/extra/hi-dvb.ko, vtunerc.ko, oled.ko, hisi-ir.ko, hisi_keys.ko",
+   "cai": [
+    "/lib/modules/*/extra/hi-dvb.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverul DVB al plăcii (tunerele, legate de nucleul DVB), afișajul din față și telecomanda, declarate GPL de fabricant. Fabricantul le dă fără cod sursă.",
+    "en": "The DVB driver of the board (the tuners, tied to the kernel DVB core), the front display and the remote control, declared GPL by the maker. The maker ships them without source code.",
+    "cs": "Ovladač DVB desky (tunery napojené na jádro DVB), přední displej a dálkové ovládání, které výrobce označil jako GPL. Výrobce je dodává bez zdrojového kódu.",
+    "de": "Der DVB-Treiber der Platine (die Tuner, angebunden an den DVB-Kern des Kernels), die Frontanzeige und die Fernbedienung, vom Hersteller als GPL angegeben. Der Hersteller liefert sie ohne Quellcode.",
+    "es": "El controlador DVB de la placa (los sintonizadores, conectados al núcleo DVB del kernel), la pantalla frontal y el mando a distancia, declarados GPL por el fabricante. El fabricante los entrega sin código fuente.",
+    "fr": "Le pilote DVB de la carte (les tuners, reliés au cœur DVB du noyau), l'afficheur en façade et la télécommande, déclarés GPL par le fabricant. Le fabricant les fournit sans code source.",
+    "hu": "Az alaplap DVB-illesztőprogramja (a tunerek, a kernel DVB-magjához kötve), az előlapi kijelző és a távirányító, amelyeket a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja őket.",
+    "it": "Il driver DVB della scheda (i sintonizzatori, collegati al nucleo DVB del kernel), il display frontale e il telecomando, dichiarati GPL dal produttore. Il produttore li fornisce senza codice sorgente.",
+    "nl": "Het DVB-stuurprogramma van de kaart (de tuners, gekoppeld aan de DVB-kern van de kernel), het frontdisplay en de afstandsbediening, door de maker als GPL opgegeven. De maker levert ze zonder broncode.",
+    "pl": "Sterownik DVB płyty (tunery połączone z rdzeniem DVB jądra), wyświetlacz z przodu i pilot, oznaczone przez producenta jako GPL. Producent dostarcza je bez kodu źródłowego.",
+    "pt": "O controlador DVB da placa (os sintonizadores, ligados ao núcleo DVB do kernel), o visor frontal e o comando, declarados GPL pelo fabricante. O fabricante fornece-os sem código-fonte.",
+    "ru": "DVB-драйвер платы (тюнеры, подключённые к ядру DVB), передний дисплей и пульт, заявленные производителем как GPL. Производитель поставляет их без исходного кода.",
+    "tr": "Kartın DVB sürücüsü (çekirdeğin DVB katmanına bağlı tunerler), ön ekran ve uzaktan kumanda, üretici tarafından GPL olarak bildirilmiştir. Üretici bunları kaynak kodu olmadan verir."
+   }
+  },
+  {
+   "nume": "HiSilicon: libhi_msp, libhi_common, libhigo, libHA.AUDIO",
+   "pachet": "octagon-libs-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libhi_msp.so, libhi_common.so, libhigo.so, libHA.AUDIO.*",
+   "cai": [
+    "/usr/lib/libhi_msp.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Bibliotecile plăcii pentru imagine, sunet și grafică 2D. Programe închise ale fabricantului.",
+    "en": "The board libraries for video, audio and 2D graphics. Closed programs of the maker.",
+    "cs": "Knihovny desky pro obraz, zvuk a 2D grafiku. Uzavřené programy výrobce.",
+    "de": "Die Bibliotheken der Platine für Bild, Ton und 2D-Grafik. Geschlossene Programme des Herstellers.",
+    "es": "Las bibliotecas de la placa para imagen, sonido y gráficos 2D. Programas cerrados del fabricante.",
+    "fr": "Les bibliothèques de la carte pour l'image, le son et le graphisme 2D. Programmes fermés du fabricant.",
+    "hu": "Az alaplap kép-, hang- és 2D-grafikai könyvtárai. A gyártó zárt programjai.",
+    "it": "Le librerie della scheda per immagine, audio e grafica 2D. Programmi chiusi del produttore.",
+    "nl": "De bibliotheken van de kaart voor beeld, geluid en 2D-graphics. Gesloten programma's van de maker.",
+    "pl": "Biblioteki płyty do obrazu, dźwięku i grafiki 2D. Zamknięte programy producenta.",
+    "pt": "As bibliotecas da placa para imagem, som e gráficos 2D. Programas fechados do fabricante.",
+    "ru": "Библиотеки платы для изображения, звука и 2D-графики. Закрытые программы производителя.",
+    "tr": "Kartın görüntü, ses ve 2D grafik kütüphaneleri. Üreticinin kapalı programları."
+   }
+  },
+  {
+   "nume": "showiframe",
+   "pachet": "octagon-showiframe-hisi3798mv200",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/bin/showiframe",
+   "cai": [
+    "/usr/bin/showiframe"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Afișează o imagine fixă la pornire. Program închis al fabricantului.",
+    "en": "Shows a still picture at start-up. Closed program of the maker.",
+    "cs": "Zobrazí statický obrázek při spuštění. Uzavřený program výrobce.",
+    "de": "Zeigt beim Start ein Standbild. Geschlossenes Programm des Herstellers.",
+    "es": "Muestra una imagen fija al arrancar. Programa cerrado del fabricante.",
+    "fr": "Affiche une image fixe au démarrage. Programme fermé du fabricant.",
+    "hu": "Állóképet jelenít meg induláskor. A gyártó zárt programja.",
+    "it": "Mostra un'immagine fissa all'avvio. Programma chiuso del produttore.",
+    "nl": "Toont een stilstaand beeld bij het opstarten. Gesloten programma van de maker.",
+    "pl": "Wyświetla nieruchomy obraz przy uruchamianiu. Zamknięty program producenta.",
+    "pt": "Mostra uma imagem fixa no arranque. Programa fechado do fabricante.",
+    "ru": "Показывает неподвижное изображение при запуске. Закрытая программа производителя.",
+    "tr": "Açılışta sabit bir görüntü gösterir. Üreticinin kapalı programı."
+   }
+  },
+  {
+   "nume": "hihalt",
+   "pachet": "octagon-hihalt-hisi3798mv200",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/bin/hihalt",
+   "cai": [
+    "/usr/bin/hihalt"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Oprirea și pornirea din așteptare. Program închis al fabricantului.",
+    "en": "Shutdown and wake from standby. Closed program of the maker.",
+    "cs": "Vypnutí a probuzení z pohotovostního režimu. Uzavřený program výrobce.",
+    "de": "Ausschalten und Aufwachen aus dem Standby. Geschlossenes Programm des Herstellers.",
+    "es": "Apagado y encendido desde el modo de espera. Programa cerrado del fabricante.",
+    "fr": "Arrêt et réveil depuis la veille. Programme fermé du fabricant.",
+    "hu": "Kikapcsolás és ébresztés készenlétből. A gyártó zárt programja.",
+    "it": "Spegnimento e risveglio dallo standby. Programma chiuso del produttore.",
+    "nl": "Uitschakelen en ontwaken uit stand-by. Gesloten programma van de maker.",
+    "pl": "Wyłączanie i wybudzanie z czuwania. Zamknięty program producenta.",
+    "pt": "Desligar e acordar do modo de espera. Programa fechado do fabricante.",
+    "ru": "Выключение и выход из режима ожидания. Закрытая программа производителя.",
+    "tr": "Kapatma ve bekleme modundan uyanma. Üreticinin kapalı programı."
+   }
+  },
+  {
+   "nume": "libreader",
+   "pachet": "octagon-reader-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/bin/libreader",
+   "cai": [
+    "/usr/bin/libreader"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Serviciul de imagine și sunet al fabricantului (ieșirea HDMI). Program închis.",
+    "en": "The maker's video and audio service (the HDMI output). Closed program.",
+    "cs": "Obrazová a zvuková služba výrobce (výstup HDMI). Uzavřený program.",
+    "de": "Der Bild- und Tondienst des Herstellers (der HDMI-Ausgang). Geschlossenes Programm.",
+    "es": "El servicio de imagen y sonido del fabricante (la salida HDMI). Programa cerrado.",
+    "fr": "Le service d'image et de son du fabricant (la sortie HDMI). Programme fermé.",
+    "hu": "A gyártó kép- és hangszolgáltatása (a HDMI-kimenet). Zárt program.",
+    "it": "Il servizio di immagine e audio del produttore (l'uscita HDMI). Programma chiuso.",
+    "nl": "De beeld- en geluidsdienst van de maker (de HDMI-uitgang). Gesloten programma.",
+    "pl": "Usługa obrazu i dźwięku producenta (wyjście HDMI). Program zamknięty.",
+    "pt": "O serviço de imagem e som do fabricante (a saída HDMI). Programa fechado.",
+    "ru": "Служба изображения и звука производителя (выход HDMI). Закрытая программа.",
+    "tr": "Üreticinin görüntü ve ses hizmeti (HDMI çıkışı). Kapalı program."
+   }
+  },
+  {
+   "nume": "mkupdate",
+   "pachet": "octagon-buildimage",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/sbin/mkupdate",
+   "cai": [
+    "/usr/sbin/mkupdate"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Programul fabricantului care face fișierul de recuperare usb_update.bin. Program închis; imaginea nu îl pornește.",
+    "en": "The maker's program that builds the usb_update.bin recovery file. Closed program; the image does not run it.",
+    "cs": "Program výrobce, který vytváří soubor pro obnovu usb_update.bin. Uzavřený program; obraz ho nespouští.",
+    "de": "Das Programm des Herstellers, das die Wiederherstellungsdatei usb_update.bin erzeugt. Geschlossenes Programm; das Image startet es nicht.",
+    "es": "El programa del fabricante que crea el archivo de recuperación usb_update.bin. Programa cerrado; la imagen no lo ejecuta.",
+    "fr": "Le programme du fabricant qui crée le fichier de récupération usb_update.bin. Programme fermé ; l'image ne le lance pas.",
+    "hu": "A gyártó programja, amely az usb_update.bin helyreállító fájlt készíti. Zárt program; a rendszerkép nem indítja el.",
+    "it": "Il programma del produttore che crea il file di ripristino usb_update.bin. Programma chiuso; l'immagine non lo avvia.",
+    "nl": "Het programma van de maker dat het herstelbestand usb_update.bin maakt. Gesloten programma; de image start het niet.",
+    "pl": "Program producenta, który tworzy plik odzyskiwania usb_update.bin. Program zamknięty; obraz go nie uruchamia.",
+    "pt": "O programa do fabricante que cria o ficheiro de recuperação usb_update.bin. Programa fechado; a imagem não o executa.",
+    "ru": "Программа производителя, создающая файл восстановления usb_update.bin. Закрытая программа; образ её не запускает.",
+    "tr": "Üreticinin usb_update.bin kurtarma dosyasını oluşturan programı. Kapalı program; imaj onu çalıştırmaz."
+   }
+  },
+  {
+   "nume": "ARM Mali",
+   "pachet": "octagon-opengl-hisi3798mv200",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/lib/libMali.so",
+   "cai": [
+    "/usr/lib/libMali.so"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Biblioteca plăcii video (EGL, OpenGL ES). Program închis.",
+    "en": "The graphics library (EGL, OpenGL ES). Closed program.",
+    "cs": "Knihovna grafického čipu (EGL, OpenGL ES). Uzavřený program.",
+    "de": "Die Grafikbibliothek (EGL, OpenGL ES). Geschlossenes Programm.",
+    "es": "La biblioteca gráfica (EGL, OpenGL ES). Programa cerrado.",
+    "fr": "La bibliothèque graphique (EGL, OpenGL ES). Programme fermé.",
+    "hu": "A grafikus könyvtár (EGL, OpenGL ES). Zárt program.",
+    "it": "La libreria grafica (EGL, OpenGL ES). Programma chiuso.",
+    "nl": "De grafische bibliotheek (EGL, OpenGL ES). Gesloten programma.",
+    "pl": "Biblioteka graficzna (EGL, OpenGL ES). Program zamknięty.",
+    "pt": "A biblioteca gráfica (EGL, OpenGL ES). Programa fechado.",
+    "ru": "Графическая библиотека (EGL, OpenGL ES). Закрытая программа.",
+    "tr": "Grafik kütüphanesi (EGL, OpenGL ES). Kapalı program."
+   }
+  },
+  {
+   "nume": "apploader.bin, fastboot.bin, bootargs.bin",
+   "pachet": "octagon-partitions-${MACHINE}",
+   "masini": [
+    "sf8008",
+    "sf8008m"
+   ],
+   "fisier": "/usr/share/apploader.bin, fastboot.bin, bootargs.bin",
+   "cai": [
+    "/usr/share/apploader.bin"
+   ],
+   "licenta": "CLOSED",
+   "clasa": "inchisa",
+   "ce": {
+    "ro": "Fișierele de pornire ale fabricantului (încărcătorul, fastboot, bootargs), ca date. Programe închise; imaginea nu le scrie.",
+    "en": "The maker's boot files (the loader, fastboot, bootargs), kept as data. Closed programs; the image does not write them.",
+    "cs": "Spouštěcí soubory výrobce (zavaděč, fastboot, bootargs), uložené jako data. Uzavřené programy; obraz je nezapisuje.",
+    "de": "Die Startdateien des Herstellers (Lader, fastboot, bootargs), als Daten abgelegt. Geschlossene Programme; das Image schreibt sie nicht.",
+    "es": "Los archivos de arranque del fabricante (el cargador, fastboot, bootargs), guardados como datos. Programas cerrados; la imagen no los escribe.",
+    "fr": "Les fichiers de démarrage du fabricant (le chargeur, fastboot, bootargs), gardés comme données. Programmes fermés ; l'image ne les écrit pas.",
+    "hu": "A gyártó indítófájljai (betöltő, fastboot, bootargs), adatként tárolva. Zárt programok; a rendszerkép nem írja ki őket.",
+    "it": "I file di avvio del produttore (il caricatore, fastboot, bootargs), conservati come dati. Programmi chiusi; l'immagine non li scrive.",
+    "nl": "De opstartbestanden van de maker (de lader, fastboot, bootargs), bewaard als gegevens. Gesloten programma's; de image schrijft ze niet.",
+    "pl": "Pliki rozruchowe producenta (program ładujący, fastboot, bootargs), przechowywane jako dane. Programy zamknięte; obraz ich nie zapisuje.",
+    "pt": "Os ficheiros de arranque do fabricante (o carregador, fastboot, bootargs), guardados como dados. Programas fechados; a imagem não os escreve.",
+    "ru": "Загрузочные файлы производителя (загрузчик, fastboot, bootargs), хранятся как данные. Закрытые программы; образ их не записывает.",
+    "tr": "Üreticinin önyükleme dosyaları (yükleyici, fastboot, bootargs), veri olarak tutulur. Kapalı programlar; imaj bunları yazmaz."
+   }
+  },
+  {
+   "nume": "Realtek Bluetooth: rtk_8822cbtusb",
+   "pachet": "octagon-dvb-modules-${MACHINE}",
+   "masini": [
+    "sf8008"
+   ],
+   "fisier": "/lib/modules/4.4.35/extra/rtk_8822cbtusb.ko",
+   "cai": [
+    "/lib/modules/*/extra/rtk_8822cbtusb.ko"
+   ],
+   "licenta": "GPL-2.0-only",
+   "spdx": "GPL-2.0-only",
+   "ce": {
+    "ro": "Driverul Bluetooth al plăcii (Realtek), declarat GPL de fabricant. Fabricantul îl dă fără cod sursă.",
+    "en": "The Bluetooth driver of the board (Realtek), declared GPL by the maker. The maker ships it without source code.",
+    "cs": "Ovladač Bluetooth desky (Realtek), který výrobce označil jako GPL. Výrobce jej dodává bez zdrojového kódu.",
+    "de": "Der Bluetooth-Treiber der Platine (Realtek), vom Hersteller als GPL angegeben. Der Hersteller liefert ihn ohne Quellcode.",
+    "es": "El controlador Bluetooth de la placa (Realtek), declarado GPL por el fabricante. El fabricante lo entrega sin código fuente.",
+    "fr": "Le pilote Bluetooth de la carte (Realtek), déclaré GPL par le fabricant. Le fabricant le fournit sans code source.",
+    "hu": "Az alaplap Bluetooth-illesztőprogramja (Realtek), amelyet a gyártó GPL-esnek jelölt. A gyártó forráskód nélkül adja.",
+    "it": "Il driver Bluetooth della scheda (Realtek), dichiarato GPL dal produttore. Il produttore lo fornisce senza codice sorgente.",
+    "nl": "Het Bluetooth-stuurprogramma van de kaart (Realtek), door de maker als GPL opgegeven. De maker levert het zonder broncode.",
+    "pl": "Sterownik Bluetooth płyty (Realtek), oznaczony przez producenta jako GPL. Producent dostarcza go bez kodu źródłowego.",
+    "pt": "O controlador Bluetooth da placa (Realtek), declarado GPL pelo fabricante. O fabricante fornece-o sem código-fonte.",
+    "ru": "Bluetooth-драйвер платы (Realtek), заявленный производителем как GPL. Производитель поставляет его без исходного кода.",
+    "tr": "Kartın Bluetooth sürücüsü (Realtek), üretici tarafından GPL olarak bildirilmiştir. Üretici onu kaynak kodu olmadan verir."
    }
   },
   {

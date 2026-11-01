@@ -23,6 +23,14 @@
 MAINTAINER = "Monea Software pentru HD Satelit"
 PR:append = ".hds1"
 
+# Sursa fixata la comiterea din imaginea 0.6.0 (pachetul aio-grab 2.0+git135+aea30840 din manifestul ei; lotul
+# imagine-060-v10): reteta OE-Alliance ia ultima comitere de pe master (AUTOREV), iar dupa 24.10.2026 master a primit
+# comiteri noi (capturile altor receptoare), asa ca o constructie noua ar fi pus alt program grab decat cel din imaginea
+# lansata. Fixata, orice imagine noua pe stratul 0.6.0 (V20, V30, V40, V10) are acelasi grab ca 0.6.0.
+# Cu ":pn-aio-grab", ca la dvbmediasink: distributia pune SRCREV:pn-aio-grab ?= AUTOREV (unstable-versions.inc), iar
+# varianta cu override castiga in fata unui SRCREV simplu (probat: cu SRCREV simplu a iesit tot git137).
+SRCREV:pn-aio-grab = "aea30841a8a15f534c57bb8474f2f26cd8cf48c8"
+
 inherit hds-fara-nume
 
 do_configure:prepend() {
