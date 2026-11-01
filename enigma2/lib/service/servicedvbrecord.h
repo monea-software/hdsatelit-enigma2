@@ -62,6 +62,8 @@ private:
 	
 	int doPrepare();
 	int doRecord();
+	/* PID-urile tinute minte in lamedb (randurile c:), pentru fluxul local in teava (serverul 8001) */
+	void adaugaPidTinuteMinte(std::set<int> &pids);
 
 		/* "decodeaza mai tarziu" (setDecodareMaiTarziu): semnul, serviciul era pe televizor la pornire si ce s-a scris
 		   ultima data in <fisier>.hdsdecodare (se rescrie numai cand se schimba) */

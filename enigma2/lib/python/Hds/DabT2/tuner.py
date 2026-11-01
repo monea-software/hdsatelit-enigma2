@@ -49,6 +49,9 @@ SISTEM = {'DVB-S': 0, 'DVB-S2': 1, 'DVB-S2X': 1}
 MODULATIE = {'AUTO': 0, 'QPSK': 1, '8PSK': 2, 'QAM16': 3, '16APSK': 4, '32APSK': 5}
 FEC = {'AUTO': 0, '1/2': 1, '2/3': 2, '3/4': 3, '5/6': 4, '7/8': 5, '8/9': 6, '3/5': 7, '4/5': 8, '9/10': 9}
 PLS_MOD = {'ROOT': 0, 'GOLD': 1, 'COMBO': 2}
+# roll-off-ul DVB-S2 (eDVBFrontendParametersSatellite): implicit 0,35; unele transpondere nu se prind pe HiSilicon cu
+# alt roll-off decat al lor (30W 11347 H: numai cu 0,20, ca in lista receptorului facuta de scanarea din NIT)
+ROLLOFF = {'0.35': 0, '0.25': 1, '0.20': 2, '0.2': 2}
 
 POZITIE_NECUNOSCUTA = 9999
 PAS_MS = 500
@@ -63,6 +66,16 @@ def _int(v, implicit=0):
         return int(v)
     except (TypeError, ValueError):
         return implicit
+
+
+def _rolloff(v):
+    """'0.20' / '0,20' / 2 -> codul enigma2; lipsa sau necunoscut -> 0 (0,35)."""
+    if v is None:
+        return 0
+    s = str(v).replace(',', '.')
+    if s in ROLLOFF:
+        return ROLLOFF[s]
+    return _int(v, 0) if s.isdigit() and _int(v, 0) in (0, 1, 2) else 0
 
 
 def parametri(tp):
@@ -88,7 +101,7 @@ def parametri(tp):
         'modulation': MODULATIE.get(str(tp.get('modulatie', 'QPSK')).upper(), 1),
         'fec': FEC.get(str(tp.get('fec', 'auto')).upper(), 0),
         'inversion': 2,
-        'rolloff': 0,
+        'rolloff': _rolloff(tp.get('rolloff')),
         'pilot': 2,
         'is_id': is_id,
         'pls_mode': PLS_MOD.get(str(pls).upper(), _int(pls, 0)) if pls is not None else 0,

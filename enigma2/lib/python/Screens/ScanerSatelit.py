@@ -1343,7 +1343,8 @@ class CautareFluxuri(object):
             # referinta cu numele la capat, ca linia din buchet: un serviciu cu URL isi ia numele numai de aici
             # (fara el, bara si ecranul radio ar arata SID-ul)
             p['ref'] = '%s:%s' % (p['ref'], nume)
-        return {'id': fid, 'nume': str(feed.get('nume') or fid), 'posturi': lista, 'stare': 'gata', 'numar': len(lista)}
+        return {'id': fid, 'nume': str(feed.get('nume') or fid), 'posturi': lista, 'stare': 'gata', 'numar': len(lista),
+                'abertis': str(feed.get('fel') or '') == 'abertis'}
 
     def _invata_urmatorul(self):
         if self.faza not in ('salvare', 'invatare'):
@@ -1396,6 +1397,9 @@ class CautareFluxuri(object):
         n = len(self.posturi())
         profil, _cale = profil_hdscomun(self.profil_tip)
         nume_buchet = _(profil.nume_buchet)
+        if self.gasite and all(g.get('abertis') for g in self.gasite):
+            # fluxurile de pe 30W stau in buchetul lor (Hds/DabT2/buchete.BUCHET_ABERTIS)
+            nume_buchet = u'Abertis 30°W'
         if not n:
             if self.profil_tip == 'dab':
                 text = _('Pe %s nu am găsit niciun post DAB+.') % _descriere_hdscomun(self.tp)

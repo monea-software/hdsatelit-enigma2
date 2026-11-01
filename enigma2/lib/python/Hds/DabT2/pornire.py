@@ -75,18 +75,27 @@ from .limba import _
 STAT_T2 = '/tmp/hdst2mi-stat.json'      # statisticile binarului T2 (t2/motor/releu_t2.py STAT_BINAR, t2mi_decap -j)
 
 
-def flux_criptat(cale=STAT_T2):
+def flux_criptat(cale=STAT_T2, prag=1):
     """Binarul T2 a primit pachete pe PID-ul feed-ului, dar toate cu bitii de criptare pusi (si nimic iesit): un flux
-    criptat, nu o lipsa de semnal. Fisierul e mic (sub 16 KB, in /tmp)."""
+    criptat, nu o lipsa de semnal. Fisierul e mic (sub 16 KB, in /tmp); cel al releului de dinainte se sterge la pornirea
+    releului (Controlor._lanseaza_releul). prag: cate pachete criptate cel putin."""
     try:
         with open(cale) as f:
             st = json.load(f)
     except (IOError, OSError, ValueError):
         return False
     try:
-        return int(st.get('criptate') or 0) > 0 and int(st.get('iesite') or 0) == 0
+        return int(st.get('criptate') or 0) >= max(1, prag) and int(st.get('iesite') or 0) == 0
     except (TypeError, ValueError, AttributeError):
         return False
+
+
+# La invatare un flux criptat se lasa dupa atatea pachete criptate fara niciun pachet iesit si dupa cel putin atatea
+# secunde de la pornirea releului, nu dupa cele 40 de secunde ale termenului. Masurat pe 30W: cand modulul de
+# acces decodeaza fluxul, criptate raman 300-800 si pachetele desfacute ies dupa 3-10 s; un flux pe care nu-l decodeaza
+# nimeni vine prin 8001 cu cam 135 de pachete pe secunda (1 MB in 40 s), deci 1500 de pachete criptate = cam 11 s.
+CRIPTATE_SIGUR = 1500
+CRIPTAT_DUPA_S = 12
 
 # Duratele si termenele merg pe ceasul monoton (compat.monoton): nu sare cand ora sistemului se potriveste din retea
 # dupa pornire. time.time() ramane numai pentru ora adevarata (marcajul de pe disc, receptie.json, repunerea din /dabt2).
@@ -522,10 +531,27 @@ class Controlor(object):
             jurnal.eroare(self.et, 'extensia de zap')
             return playref, False
 
+    def _ref_din_adresa_straina(self, text):
+        """Referinta noastra (releul T2, acelasi program) pentru un canal din lista altui automat al fluxurilor de pe
+        30W (abertis.pid_din_adresa_straina), daca PID-ul e un feed abertis din lista; altfel None."""
+        from . import abertis
+        x = abertis.pid_din_adresa_straina(text)
+        if x is None:
+            return None
+        for tp in self.lista().get('transpondere', []):
+            for f in tp.get('feeduri', []):
+                if f.get('tip') == 't2' and str(f.get('fel') or '') == 'abertis' and f.get('pid') == x['pid']:
+                    ref = buchete.ref_t2(self.profil, f, x)
+                    return '%s:%s' % (ref, x['nume']) if x['nume'] else ref
+        return None
+
     def _zap_din_alt_fir(self, nav, playref):
         """Extensia chemata din alt fir: doar citiri de atribute Python, nimic din enigma2, nicio asteptare."""
         text = _ref_text(playref)
         al_nostru = buchete.desparte_ref(self.profil, text) is not None
+        if not al_nostru and self.profil.tip == 't2':
+            from . import abertis
+            al_nostru = abertis.pid_din_adresa_straina(text) is not None
         tine_ceva = self.stare != 'oprit' or self.tuner.canal is not None or self.releu._container is not None
         if not al_nostru and not tine_ceva:
             return playref, False
@@ -570,6 +596,11 @@ class Controlor(object):
             # si o tine ca serviciul curent.
             jurnal.noteaza(self.et, 'referinta veche, redata pe %d (tipul %s)' % (self.profil.port, nou.split(':', 1)[0]))
             playref, text = _ref_dupa_text(playref, nou), nou
+        strain = self._ref_din_adresa_straina(text) if self.profil.tip == 't2' else None
+        if strain is not None:
+            # canal din lista altui automat pentru fluxurile de pe 30W: se reda prin desfacerea noastra, acelasi program
+            jurnal.noteaza(self.et, 'adresa altui automat, redata prin releul nostru: %s' % strain[:100])
+            playref, text = _ref_dupa_text(playref, strain), strain
         parti = buchete.desparte_ref(self.profil, text)
         protectie, self._protectie = self._protectie, None      # doar primul zap dupa pornirea sesiunii
         if (protectie is not None and parti is not None and buchete.cheie_ref(text) == protectie['cheie']
@@ -1242,6 +1273,11 @@ class Controlor(object):
             self.profil.fisier_erori_releu(), compat.interpretor_python(), script, self.profil.fisier_feed(),
             INACTIV_RELEU_S)
         self._arata(_('Pornesc %s') % (self.feed.get('nume') or self.feed.get('id')))
+        if self.profil.tip == 't2':
+            try:
+                os.remove(STAT_T2)              # statisticile releului de dinainte: flux_criptat citeste numai pe ale lui
+            except OSError:
+                pass
         if not self.releu.porneste(comanda):
             self._esec(_('Releul nu a pornit.'))
             return
@@ -1250,6 +1286,7 @@ class Controlor(object):
     def _asteapta_releul(self):
         self._releu_gata = False
         self._termen = _monoton() + TERMEN_RELEU_S
+        self._releu_pornit_la = _monoton()
         if self._timer_asteptare is None:
             from enigma import eTimer
             self._timer_asteptare = eTimer()
@@ -1279,6 +1316,11 @@ class Controlor(object):
                 self._arata(_('Se roteste antena'))
             else:
                 self.rotire = False
+            pornit_la = getattr(self, '_releu_pornit_la', None)
+            if (self.profil.tip == 't2' and self.mod == 'invata' and pornit_la is not None
+                    and _monoton() - pornit_la >= CRIPTAT_DUPA_S and flux_criptat(prag=CRIPTATE_SIGUR)):
+                self._esec(_('Fluxul %s e criptat si nu se poate desface.') % (self.feed.get('nume') or self.feed.get('id')))
+                return
             if _monoton() > self._termen:
                 nume = self.feed.get('nume') or self.feed.get('id')
                 if self.profil.tip == 't2' and flux_criptat():

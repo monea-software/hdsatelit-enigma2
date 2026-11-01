@@ -343,7 +343,7 @@ class HdsDishMotor(Screen):
 		self._pornit = False
 		# `config.usage.showdish` hotaraste numai daca panoul se arata; ceasul bate oricum, ca mutarile
 		# motorului sa se invete si cand panoul e oprit (Components/HdsMotorViteza.py)
-		self._arata = True
+		self._panouPornit = True
 		self._cheie = None
 		self._texte = {}
 		self._sateliti_cheie = None
@@ -382,8 +382,8 @@ class HdsDishMotor(Screen):
 		Nu ne uitam si daca vreun tuner are motor: vechiul Dish.py se uita si el necontenit la `isRotorMoving`,
 		iar o conditie citita o singura data la pornire ar lasa fara panou pe cine tocmai si-a configurat
 		motorul si a schimbat canalul, pana la urmatoarea repornire. Costul in repaus e o intrebare pe secunda."""
-		self._arata = bool(element.value)
-		if not self._arata and self._vazut:
+		self._panouPornit = bool(element.value)
+		if not self._panouPornit and self._vazut:
 			self._vazut = False
 			self.hide()
 		self._porneste()
@@ -414,7 +414,7 @@ class HdsDishMotor(Screen):
 			self._ceas.start(MS_IN_ASTEPTARE, True)
 			return
 		stare = stareMotor()
-		if not self._arata:
+		if not self._panouPornit:
 			# `showdish` oprit: starea s-a citit numai ca sa se invete viteza; nimic pe ecran
 			self._ceas.start(MS_IN_ASTEPTARE, True)
 			return

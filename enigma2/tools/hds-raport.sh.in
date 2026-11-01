@@ -37,7 +37,8 @@
 #   filtru             stdin to stdout through the filter of the report (for the tests on the PC).
 # The report: one text file, raport-<model>-<date>-<time>.txt, kept in /home/root/logs/hds-raport (the last 3) and on
 # every stick; the code from the server goes next to it (<same name>.cod). Its first lines (up to the first empty line)
-# are written by this script from plain values only; everything after them goes through rp_filtru, the rules of
+# are written by this script from plain values only; the last section (the Python stacks of enigma2, rp_stive) keeps
+# only the lines of the faulthandler format; everything else goes through rp_filtru, the rules of
 # Components/HdsDiagnostic.faraDatePersonale: lines with passwords, keys, tokens, users, Wi-Fi networks, serial numbers
 # or CAM data are dropped whole; addresses with a scheme, user:password@, e-mail and IPv6 addresses are hidden whole;
 # IPv4 addresses keep their first two numbers (192.168.x.x), MAC addresses their first three bytes; long hex strings
@@ -295,13 +296,53 @@ rp_coada() {
 	fi
 }
 
-# the small files of a /proc/stb folder: "name: value" (the first 200 bytes, one line)
+# the chip of the receiver, lower case: chip= of the rules of the model, else /proc/stb/info/chipset
+rp_cip() {
+	rp_c=$(rp_regula chip | tr 'A-Z' 'a-z')
+	[ -n "$rp_c" ] || rp_c=$(head -n 1 "$R/proc/stb/info/chipset" 2>/dev/null | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9')
+	echo "$rp_c"
+}
+
+# the small files of a /proc/stb folder: "name: value" (the first 200 bytes, one line). On the Hi3798MV200 chip ($1 =
+# rp_cip) video/alpha, video/zapmode and audio/* are named, never read: on the SF8008 board of 2024 (info/version
+# 1.2V-20240104) their read handlers in hi_dvb stop the kernel ("Unable to handle kernel paging request" in
+# proc_video_alpha_read, proc_video_zapmode_read and proc_audio_*_read, a new Oops for every file; the reports 559964,
+# 540354 and 742331 of 30.10.2026)
 rp_proc_dosar() {
-	for rp_f in "$1"/*; do
+	for rp_f in "$2"/*; do
 		[ -f "$rp_f" ] || continue
 		case ${rp_f##*/} in *event*|*_choices) continue ;; esac
+		case $1:${rp_f#$R/proc/stb/} in
+			*3798mv200:video/alpha|*3798mv200:video/zapmode|*3798mv200:audio/*)
+				echo "${rp_f#$R/proc/stb/}: (necitit pe acest cip)"; continue ;;
+		esac
 		rp_v=$(head -c 200 "$rp_f" 2>/dev/null | tr '\n' ' ')
 		echo "${rp_f#$R/proc/stb/}: $rp_v"
+	done
+}
+
+# the Python stacks of enigma2 kept by the watchdog: the last three $L/enigma2-stive-*.txt (faulthandler of mytest.py,
+# written at SIGRTMIN+7 before the SIGTERM of an interface that no longer answers). Only the lines of the faulthandler
+# format are kept: the thread lines without the address, the frames as file, line and function, the path cut to what
+# follows enigma2/python/ or python3.N/ (any other path: "(alt fisier)"); a frame of an access module (the forms of
+# rp_filtru, and any line with "cam" in it, also when more letters follow) is only "(modul-acces)". Not through
+# rp_filtru: its rules drop whole lines with words such as key,
+# session or user, which are also names of ordinary files and functions, and a stack with holes in it says nothing.
+rp_stive() {
+	rp_sectiune "stivele firelor Python ale enigma2 (paznicul, ultimele trei)"
+	for rp_f in $(ls -t "$L"/enigma2-stive-*.txt 2>/dev/null | head -n 3); do
+		echo "-- ${rp_f##*/}"
+		head -c 8192 "$rp_f" 2>/dev/null | tr -d '\000-\010\013-\037\177' | awk '
+			/^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$/ { sub(/ 0x[0-9A-Fa-f]+ /, " "); print; next }
+			/^  <no Python frame>$/ { print; next }
+			/^  File "[A-Za-z0-9_.\/-]+", line [0-9]+ in [A-Za-z0-9_<>]+$/ {
+				if (tolower($0) ~ /cam|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/) { print "  (modul-acces)"; next }
+				p = $0; sub(/^  File "/, "", p); sub(/", line .*$/, "", p)
+				r = $0; sub(/^  File "[^"]*"/, "", r)
+				if (match(p, /enigma2\/python\//)) p = substr(p, RSTART)
+				else if (match(p, /python3(\.[0-9]+)?\//)) p = substr(p, RSTART)
+				else p = "(alt fisier)"
+				print "  File \"" p "\"" r }'
 	done
 }
 
@@ -396,8 +437,9 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	echo "-- hds-watchdog.log"; rp_coada "$R/home/root/hds-watchdog.log" 120
 	echo "-- hds-restaurare.log"; rp_coada "$L/hds-restaurare.log" 30
 	rp_sectiune "/proc/stb"
+	rp_cipul=$(rp_cip)
 	for rp_d in video vmpeg/0 vmpeg/1 hdmi info fp audio; do
-		[ -d "$R/proc/stb/$rp_d" ] && rp_proc_dosar "$R/proc/stb/$rp_d"
+		[ -d "$R/proc/stb/$rp_d" ] && rp_proc_dosar "$rp_cipul" "$R/proc/stb/$rp_d"
 	done
 	rp_sectiune "decodoarele (cine tine video0 si audio0)"
 	rp_decodor_tinut
@@ -502,6 +544,7 @@ rp_scrie_raport() {
 	rp_nume="raport-$(rp_masina)-$(date '+%Y%m%d-%H%M%S').txt"
 	rp_antet "$1" "$2" "$3" > "$RAM/raport.nou" 2>/dev/null
 	{ rp_corp 2>&1; } | rp_filtru | head -c "$MAX_OCTETI" >> "$RAM/raport.nou" 2>/dev/null
+	rp_stive >> "$RAM/raport.nou" 2>/dev/null
 	cp -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou" 2>/dev/null && mv -f "$RAPOARTE/$rp_nume.nou" "$RAPOARTE/$rp_nume"
 	rm -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou"
 	[ -f "$RAPOARTE/$rp_nume" ] || return 1

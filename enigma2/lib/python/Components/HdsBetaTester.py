@@ -940,6 +940,27 @@ def felJurnal(nume, text):
 	return "eroare", text
 
 
+# jurnalele imaginii care spun numai o stare buna (prima pornire fara dosarul SSH pe stick, serviciile merg, nicio copie
+# a altei imagini): nu pleaca si nu se numara la limita zilei (JURNALE_PE_ZI), altfel ocupau locul erorilor adevarate
+_STARE_BUNA = (
+	("hds-ssh", re.compile(r"prima pornire: niciun dosar hdsatelit/ssh pe stick")),
+	("hds-servicii", re.compile(r"stare ok\b")),
+	("hds-restaurare", re.compile(r"se cauta o copie a altei imagini|0 copii gasite|nicio copie|setarile puse")),
+)
+_CUVINTE_EROARE = re.compile(r"eroare|esec|eșec|error|fail|cazut|căzut|blocat|timeout|traceback|exception", re.I)
+
+
+def doarStareBuna(nume, text):
+	"""Jurnalul se termina cu o stare buna stiuta si nu are niciun cuvant de eroare (atunci nu se trimite)."""
+	randuri = [r for r in (text or "").splitlines() if r.strip()]
+	if not randuri:
+		return False
+	for prefix, buna in _STARE_BUNA:
+		if nume.startswith(prefix):
+			return bool(buna.search(randuri[-1])) and not _CUVINTE_EROARE.search(text)
+	return False
+
+
 def jurnalPermis(nume):
 	"""Jurnalele imaginii din /home/root/logs care pot pleca: cele de cadere si *.log; NU jurnalul sistemului (are
 	adresele retelei si numele Wi-Fi) si nici jurnalele de depanare intregi."""
@@ -991,6 +1012,9 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		if text is None:
 			continue
 		fel, text = felJurnal(nume, text)
+		if fel == "eroare" and doarStareBuna(nume, text):
+			vazute[nume] = semn
+			continue
 		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": coada(curata(text))})
 		vazute[nume] = semn
 	# numele care nu mai exista ies din stare

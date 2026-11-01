@@ -12354,11 +12354,11 @@ msgid "Copiaz-o întreagă din pagina cheilor (%s), fără spații."
 msgstr "Скопіюй його повністю зі сторінки ключів (%s), без пробілів."
 
 msgid ""
-"Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/your-account/"
+"Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/en/your-account/"
 "keys), fără spații. Trebuie o cheie de la DeepL API, nu de la traducătorul "
 "obișnuit."
 msgstr ""
-"Скопіюй його повністю зі сторінки ключів DeepL (www.deepl.com/your-account/"
+"Скопіюй його повністю зі сторінки ключів DeepL (www.deepl.com/en/your-account/"
 "keys), без пробілів. Потрібен ключ від DeepL API, а не від звичайного "
 "перекладача."
 
@@ -57377,3 +57377,380 @@ msgstr "Start вмикає її на 2 години. Ти можеш вимкн�
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "Підтримка повна: зчитування, перевірки й керування ресивером через меню, з фіксованого списку. Знімок показує лише меню, а не зображення каналу. Приватні екрани залишаються закритими. Ти можеш зупинити будь-коли."
+
+msgid "Pornește alte imagini"
+msgstr "Запустити інші образи"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Вибираєш образ і натискаєш OK: ресивер перезавантажується в цей образ. Список показує образи, встановлені в пам'яті ресивера."
+
+msgid "Caut imaginile instalate..."
+msgstr "Шукаю встановлені образи..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "Слот %(loc)s: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "Слот %(loc)s: %(imagine)s, зараз запущений"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "Слот %(loc)s: %(imagine)s, не може запуститися"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "На флешці: %(imagine)s, зараз запущений"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "Образи на флешці вибираються з меню флешки."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "Не знайшов інших встановлених образів у пам'яті ресивера."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "Ресивер перезавантажується в образ %s. Продовжуєш?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Цей образ запущений зараз."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "Образ зі слота %s не може запуститися (немає ядра або системи), тому не вибираю його."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "Вибраний слот більше немає у списку. Відкрий знову список."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "Не вдалося записати вибір, тому ресивер залишається у поточному образі."
+
+msgid "Imagine fără nume"
+msgstr "Образ без імені"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "Ресивер перезавантажується у вибраний образ з його пам'яті. На ресивері: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "Ресивер перезавантажується в образ %s. Вебінтерфейс звідси знову відповідає, коли запустиш назад образ HD Satelit."
+
+msgid "Din casă intri direct, fără parolă. Parola se cere numai dacă oprești „Fără parolă în rețeaua locală” și se vede aici oricând."
+msgstr "З дому входиш напряму, без пароля. Пароль запитується, лише якщо вимкнеш «Без пароля в локальній мережі», і його завжди видно тут."
+
+msgid "Parola lui root, aceeași pentru FTP, SSH, SFTP și Telnet"
+msgstr "Пароль root, той самий для FTP, SSH, SFTP і Telnet"
+
+msgid "Parola lui root, aceeași pentru SSH, SFTP și Telnet"
+msgstr "Пароль root, той самий для SSH, SFTP і Telnet"
+
+msgid "FTP, SFTP, Telnet: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP, SFTP, Telnet: %s, користувач root · SSH: ssh root@%s"
+
+msgid "Te conectezi de pe calculator cu: ssh root@%s sau telnet %s"
+msgstr "Підключаєшся з комп'ютера так: ssh root@%s або telnet %s"
+
+msgid "Fără parolă în rețeaua locală: pornit. Din casă intri direct, fără parolă; din afara casei numai cu o cheie."
+msgstr "Без пароля в локальній мережі: увімкнено. З дому входиш напряму, без пароля; ззовні лише з ключем."
+
+msgid "Fără parolă în rețeaua locală: oprit. Și din casă se cere parola."
+msgstr "Без пароля в локальній мережі: вимкнено. І з дому запитується пароль."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește."
+msgstr "З дому входиш напряму, без пароля, через SSH, SFTP, FTP і Telnet; ззовні лише з ключем. OK вимикає."
+
+msgid "Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește."
+msgstr "Тепер і з дому запитується пароль. Увімкнено: з дому входиш напряму, без пароля. OK вмикає."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."
+msgstr "З дому входиш напряму, без пароля, через SSH, SFTP, FTP і Telnet, поки увімкнено «Без пароля в локальній мережі». Ззовні вхід лише з SSH-ключем, доданим нижче."
+
+msgid "Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. Oprit: și din casă se cere parola."
+msgstr "Увімкнено (як поставляється приймач): з дому входиш напряму, без пароля; ззовні лише з ключем. Вимкнено: і з дому запитується пароль."
+
+msgid "Criptat (BISS)"
+msgstr "Зашифровано (BISS)"
+
+msgid "Canale terestre spaniole recepționate din satelit"
+msgstr "Іспанські ефірні канали, що приймаються із супутника"
+
+msgid "Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V."
+msgstr "Тут відображаються іспанські ефірні канали, що приймаються із супутника. Список порожній: ти ще не запускав пошук на 30° з. д."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea nu a putut porni."
+msgstr "Пошук не вдалося запустити."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit e folosit acum (o înregistrare sau alt ecran). Încearcă după ce se eliberează."
+msgstr "Супутниковий тюнер зараз використовується (запис або інший екран). Спробуй, коли він звільниться."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "O căutare oarbă e deja în curs pe acest receptor."
+msgstr "Сліпий пошук уже виконується на цьому ресивері."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge încă pe tunerul acestui receptor."
+msgstr "Сліпий пошук ще не працює на тюнері цього ресивера."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul nu a mai răspuns, așa că am oprit căutarea."
+msgstr "Тюнер перестав відповідати, тому пошук було зупинено."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 1: toată banda o dată, apoi numai unde lipsește un transponder cunoscut."
+msgstr "Крок 1: весь діапазон один раз, потім лише там, де відсутній відомий транспондер."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste."
+msgstr "Крок 2: і всі прогалини діапазону, повторно перевірені у вузьких вікнах."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă."
+msgstr "Крок 3: прогалини ще раз, з іншими межами. Найнадійніший і найдовший."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "găsit"
+msgstr "знайдено"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "se caută"
+msgstr "пошук"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "negăsit"
+msgstr "не знайдено"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "neverificat"
+msgstr "не перевірено"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam un minut"
+msgstr "близько хвилини"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cel pe care stă antena acum"
+msgstr "той, на який зараз спрямована антена"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treceri (bandă × polarizare): %d. Durata: %s."
+msgstr "Проходи (діапазон × поляризація): %d. Тривалість: %s."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "%d MHz, %s, %d kSym/s"
+msgstr "%d MHz, %s, %d kSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”."
+msgstr "У супутникового тюнера немає налаштованого супутника. Налаштуйте антену в «Налаштування тюнера»."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software."
+msgstr "Програма сліпого пошуку не встановлена на цьому ресивері. Її додасть оновлення ПЗ."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Nu e nimic de scanat încă."
+msgstr "Поки нічого сканувати."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oscilatorul LNB-ului nu e cunoscut. Verifică LNB-ul în Configurare LNB."
+msgstr "Гетеродин LNB невідомий. Перевірте LNB у Налаштування LNB."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Bandă necunoscută."
+msgstr "Невідомий діапазон."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Alege cel puțin o polarizare."
+msgstr "Виберіть хоча б одну поляризацію."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam %d minute"
+msgstr "близько %d хвилин"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Toată banda (joasă și înaltă)"
+msgstr "Весь діапазон (нижній і верхній)"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda joasă"
+msgstr "Лише нижній діапазон"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda înaltă"
+msgstr "Лише верхній діапазон"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Orizontală și verticală"
+msgstr "Горизонтальна та вертикальна"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai orizontală"
+msgstr "Лише горизонтальна"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai verticală"
+msgstr "Лише вертикальна"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oricare"
+msgstr "Будь-яка"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1 MSym/s"
+msgstr "1 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2 MSym/s"
+msgstr "2 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "5 MSym/s"
+msgstr "5 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1: toată banda o dată"
+msgstr "1: весь діапазон один раз"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2: și golurile benzii"
+msgstr "2: і прогалини діапазону"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "3: golurile de două ori"
+msgstr "3: прогалини двічі"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Antena nu se mișcă: pentru alt satelit, pornește întâi un canal de pe el."
+msgstr "Антена не рухається: для іншого супутника спочатку увімкніть канал із нього."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Se oprește după bucata de bandă în curs..."
+msgstr "Зупиняється після поточної ділянки діапазону..."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Gata în %d s. Găsite: %d din %d cunoscute, noi: %d."
+msgstr "Готово за %d с. Знайдено: %d з %d відомих, нових: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Scanarea canalelor nu a putut porni."
+msgstr "Пошук каналів не вдалося запустити."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta %d din %d: %d%%. Găsite: %d, noi: %d."
+msgstr "Крок %d з %d: %d%%. Знайдено: %d, нових: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge printr-un LNB Unicable."
+msgstr "Сліпий пошук не працює через LNB Unicable."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea a durat prea mult și s-a oprit. Rămân transponderele găsite până atunci."
+msgstr "Пошук тривав занадто довго і був зупинений. Знайдені до цього моменту транспондери зберігаються."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oprită."
+msgstr "Зупинено."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Căutare oarbă pe satelit"
+msgstr "Сліпий пошук на супутнику"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Polarizările"
+msgstr "Поляризації"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Treptele căutării"
+msgstr "Кроки пошуку"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Rata minimă"
+msgstr "Мінімальна швидкість потоку"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, EXIT oprește."
+msgstr "Вгору/Вниз обирає рядок, Вліво/Вправо або OK змінює, Зелена запускає, EXIT зупиняє."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Nu pot citi setările tunerului de satelit."
+msgstr "Не вдалося прочитати налаштування супутникового тюнера."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Banda"
+msgstr "Діапазон"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Transponderele găsite arată că antena stă pe %s."
+msgstr "Знайдені транспондери вказують, що антена спрямована на %s."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Satelit: %s"
+msgstr "Сателіт: %s"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Scanează canalele"
+msgstr "Шукати канали"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea a pornit."
+msgstr "Пошук розпочато."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea se oprește după bucata de bandă în curs."
+msgstr "Пошук зупиниться після поточної ділянки діапазону."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Scanarea canalelor a pornit pe televizor. Rezultatul se vede pe pagina Scanare și antenă."
+msgstr "Пошук каналів розпочато на телевізорі. Результат видно на сторінці Пошук каналів та антена."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Satelit: <b id=\"satelit\"></b>"
+msgstr "Сателіт: <b id=\"satelit\"></b>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Pe televizor: <span>__DRUM__</span>."
+msgstr "На телевізорі: <span>__DRUM__</span>."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Rata (kSym/s)"
+msgstr "Швидкість потоку (kSym/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Se pornește scanarea canalelor..."
+msgstr "Запуск пошуку каналів..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "O altă scanare e deschisă pe televizor. Așteaptă să se termine sau închide-o, apoi încearcă din nou."
+msgstr "На телевізорі відкрито інший пошук. Зачекайте на його завершення або закрийте його і спробуйте знову."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Televizorul nu o arată acum (receptorul e în standby sau ecranul nu s-a deschis), dar merge."
+msgstr "Телевізор зараз це не показує (ресивер у режимі очікування або екран не відкрився), але він працює."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Nicio căutare oarbă în curs."
+msgstr "Немає активного сліпого пошуку."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "căutarea oarbă pe satelit"
+msgstr "сліпий пошук на супутнику"
+
+#: data/menu.xml
+msgid "Căutare oarbă"
+msgstr "Сліпий пошук"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"
+msgstr "<code>GET /api/oarba</code>: сліпий пошук на супутнику: супутник, на який спрямована антена, параметри (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), попередній перегляд і стан пошуку (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> з <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); лише читання"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)"
+msgstr "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: запускає сліпий пошук (на телевізорі відкривається його екран)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"
+msgstr "<code>POST /api/oarba-opreste</code>: зупиняє сліпий пошук після поточної ділянки діапазону"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite"
+msgstr "<code>POST /api/oarba-scaneaza</code>: «Шукати канали» на відомих і нових знайдених транспондерах"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
+msgstr "<code>POST /api/oarba-televizor</code>: відкриває екран сліпого пошуку на телевізорі"

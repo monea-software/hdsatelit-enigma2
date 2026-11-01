@@ -37,7 +37,8 @@ TIPURI_RADIO = (2, 10)   # tipurile de serviciu radio (ChannelSelection.service_
 DIRECTOR = "/etc/enigma2"
 # buchetele DAB+ / DVB-T2 din satelit le face si le tine cautarea lor (Hds/DabT2), iar „Last Scanned” il rescrie
 # fiecare scanare (proba din emulator: era a doua intrare in alegerea buchetului): nu sunt buchete de ales aici
-BUCHETE_STRAINE = ("userbouquet.hds_dab.radio", "userbouquet.hds_t2.tv", "userbouquet.LastScanned.tv",
+BUCHETE_STRAINE = ("userbouquet.hds_dab.radio", "userbouquet.hds_t2.tv", "userbouquet.hds_abertis.tv",
+	"userbouquet.LastScanned.tv",
 	"userbouquet.LastScanned.radio")
 
 _FISIER = re.compile(r'FROM BOUQUET "([A-Za-z0-9_.\-]{1,120})"')

@@ -81,6 +81,7 @@ MEMORIE_ES_LIPSA = "lipsa"
 MOTIV_SCANARE = "scanare"
 MOTIV_PISTE = "piste"
 MOTIV_MOTOR = "motor"
+MOTIV_OARBA = "oarba"           # cautarea oarba pe satelit (Components/HdsCautareOarba.py)
 
 
 def _(text):
@@ -430,6 +431,7 @@ def textMotiv(motiv):
 		MOTIV_SCANARE: _("scanarea canalelor"),
 		MOTIV_PISTE: _("citirea pistelor canalelor"),
 		MOTIV_MOTOR: _("rotirea antenei"),
+		MOTIV_OARBA: _("căutarea oarbă pe satelit"),
 	}.get(motiv, motiv)
 
 

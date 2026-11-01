@@ -353,7 +353,7 @@ rz_enigma2() {
 	return 1
 }
 
-# the step of the boot before enigma2: "S41 hds-netguard (rcS)", "3S50 softcam (rc3)", "E2SH enigma2.sh"; the script of
+# the step of the boot before enigma2: "S41 hds-netguard (rcS)", "3S50 <service> (rc3)", "E2SH enigma2.sh"; the script of
 # init.d that runs now is in the command line of its process (a script ending in .sh is read by rc itself: its step
 # is not seen, the last one stays). The command lines of grep and awk are read too: neither may hold the text it
 # looks for as it is (hence [.] in awk)

@@ -669,8 +669,206 @@
       "sursa": "Hds/DabT2/t2/date/frecvente.json, PID T2-MI 4096, PLP 0, FTA. NU a fost prins de noi ('fara_semnal_in_zona_testata'), fiindca fasciculul Ku Fixed 1 nu acopera Gorjul - deci 'probabil', nu 'sigur': lipsa semnalului se explica prin acoperire, nu prin valori gresite. Doua surse in cercetare: LyngSat mux Express-AM6_Ku-Fixed-1_10730-V si satellitescommunity firul 999, confirmat 09.05.2025. Al doilea transponder RSCC, tot cu doua surse: 10713000 V, SR 14180 (Crimeea, acces mixt)."
     },
     {
+      "id": "abertis_es_11222h",
+      "nume": "Abertis 11222 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11222000,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 125 (11222.00 H DVB-S2/8PSK), TSID 60020, 6 fluxuri TS in PID (PID 2025 BISS, PID 2026 BISS, PID 2027 BISS, PID 2028 BISS, PID 2050 BISS, PID 2060 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Masurat pe receptorul nostru (antena 90 cm, 27.10.2026): transponderul se prinde, fluxurile invatate erau criptate pe toate pachetele."
+    },
+    {
+      "id": "abertis_es_11302h",
+      "nume": "Abertis 11302 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11302000,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.20"
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 127 (11302.00 H DVB-S2/8PSK), TSID 60022, 5 fluxuri TS in PID (PID 2270 BISS, PID 2271 BISS, PID 2272 BISS, PID 2273 BISS, PID 2274 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Masurat pe receptorul nostru (antena 90 cm, 27.10.2026): transponderul se prinde, fluxurile invatate erau criptate pe toate pachetele."
+    },
+    {
+      "id": "abertis_es_11347h",
+      "nume": "Abertis 11347 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11347490,
+        "pol": "H",
+        "rata": 20858,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.20"
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 128 (11347.49 H DVB-S2/8PSK), TSID 60023, 5 fluxuri TS in PID (PID 2302 BISS, PID 2303 BISS, PID 2305 BISS, PID 2306 BISS, PID 2308 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Masurat pe receptorul nostru (antena 90 cm, 27.10.2026): transponderul se prinde, fluxurile invatate erau criptate pe toate pachetele."
+    },
+    {
+      "id": "abertis_es_11382h",
+      "nume": "Abertis 11382 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11382000,
+        "pol": "H",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "sigur",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 129 (11382.00 H DVB-S2/8PSK), TSID 60025, 5 fluxuri TS in PID (PID 2520 BISS, PID 2521 BISS, PID 2522 BISS, PID 2523 BISS, PID 2524 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Masurat pe receptorul nostru (antena 90 cm, 27.10.2026): transponderul se prinde, fluxurile invatate erau criptate pe toate pachetele."
+    },
+    {
+      "id": "abertis_es_11502v",
+      "nume": "Abertis 11502 V (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11502120,
+        "pol": "V",
+        "rata": 10200,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 199 (11502.12 V DVB-S2/8PSK), TSID 60028, 1 fluxuri TS in PID (PID 801 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+    },
+    {
+      "id": "abertis_es_11653h",
+      "nume": "Abertis 11653 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11653100,
+        "pol": "H",
+        "rata": 19680,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 206L (11653.10 H DVB-S2/8PSK), TSID 60003, 2 fluxuri TS in PID (PID 301 BISS, PID 303 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+    },
+    {
+      "id": "abertis_es_11674h",
+      "nume": "Abertis 11674 H (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 11674850,
+        "pol": "H",
+        "rata": 15750,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 206U (11674.85 H DVB-S2/8PSK), TSID 60004, 3 fluxuri TS in PID (PID 420 BISS, PID 421 BISS, PID 423 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+    },
+    {
+      "id": "abertis_es_12548v",
+      "nume": "Abertis 12548 V (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 12548500,
+        "pol": "V",
+        "rata": 29600,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 189U (12548.50 V DVB-S2/8PSK), TSID 60007, 3 fluxuri TS in PID (PID 701 BISS, PID 702 BISS, PID 703 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+    },
+    {
+      "id": "abertis_es_12583v",
+      "nume": "Abertis 12583 V (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 12583140,
+        "pol": "V",
+        "rata": 16900,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 190 (12583.14 V DVB-S2/8PSK), TSID 60008, 1 fluxuri TS in PID (PID 8008 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+    },
+    {
       "id": "abertis_es_8002",
-      "nume": "Abertis - Telemadrid (Spania)",
+      "nume": "Abertis 12631 V (Spania)",
       "tari": [
         "ES"
       ],
@@ -683,11 +881,34 @@
         "sistem": "DVB-S2",
         "modulatie": "8PSK",
         "pls": null,
-        "flux": null
+        "flux": null,
+        "rolloff": "0.35"
       },
       "fel": "t2mi",
       "incredere": "probabil",
-      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): Stream 8002 (HSA-67.2) TDT-CAM pe 12631.00 V DVB-S2 8PSK 30000 3/4, purtatorul SID 1002, programele Telemadrid HDR, BOM, Telemadrid HD, LA OTRA HD, Onda Madrid; singurul flux Abertis la care lista nu scrie BISS (celelalte 37 sunt BISS). Formatul: TS terestru intreg in payload-ul PID-ului 8002 (fara T2-MI), desfacut de Hds/DabT2 (t2mi_decap -A, felul abertis). La noi (Gorj, antena 90 cm, 27.10.2026) 12631 V e fara semnal, deci criptarea nu e masurata; drumul imaginii e probat pe receptor cu un flux de proba invelit la fel. Fluxurile Abertis care se prind in Gorj (11222/11302/11347/11382 H) sunt criptate (masurat)."
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 191 (12631.00 V DVB-S2/8PSK), TSID 60002, 3 fluxuri TS in PID (PID 8001 BISS, PID 8002 FTA, PID 8003 BISS), 1 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. La proba noastra (antena 90 cm, 27.10.2026) nu era semnal."
+    },
+    {
+      "id": "abertis_es_12671v",
+      "nume": "Abertis 12671 V (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 12671000,
+        "pol": "V",
+        "rata": 30000,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.35"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 192 (12671.00 V DVB-S2/8PSK), TSID 60001, 4 fluxuri TS in PID (PID 8000 BISS, PID 8004 BISS, PID 8005 BISS, PID 8006 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
     },
     {
       "id": "dab_bundesmux_de",

@@ -27,9 +27,9 @@ install_PYTHON = \
 	HdsEditorCanale.py HdsEditorCanaleLegatura.py HdsEditorCanaleLogica.py HdsEditorCanaleUnelte.py \
 	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsComunPrincipal.py \
 	HdsAjutor.py \
-	ScanerMaiMultiSateliti.py ScanerCablu.py \
+	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
-	HdsPaznic.py HdsJurnaleSloturi.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
+	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsCodAsociere.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \

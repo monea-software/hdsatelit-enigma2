@@ -21,12 +21,12 @@
 
 import time
 
-# ce -> (entryID din data/menu.xml, numarul dat lui TryQuitMainloop; None = ecranul Standby)
+# ce -> (entryID din data/menu.xml, numarul dat lui TryQuitMainloop; None = ecranul Standby). Porneste alte imagini
+# (return_to_flash) nu e aici: alegerea imaginii si repornirea in ea sunt in Components/HdsPornireMultipla.py.
 ACTIUNI = (
 	("standby", "standby", None),
 	("interfata", "restart_enigma", 3),
 	("receptor", "restart", 2),
-	("flash", "return_to_flash", 0),
 	("oprire", "deep_standby", 1),
 )
 CHEI = tuple(a[0] for a in ACTIUNI)

@@ -251,6 +251,31 @@ int eDVBServiceRecord::doPrepare()
 	return 0;
 }
 
+void eDVBServiceRecord::adaugaPidTinuteMinte(std::set<int> &pids)
+{
+	eServiceReferenceDVB ref = m_ref.getParentServiceReference();
+	if (!ref.valid())
+		ref = m_ref;
+	ePtr<eDVBResourceManager> res_mgr;
+	ePtr<iDVBChannelList> db;
+	ePtr<eDVBService> service;
+	if (eDVBResourceManager::getInstance(res_mgr) || res_mgr->getChannelList(db) || db->getService(ref, service))
+		return;
+	for (int x = 0; x < eDVBService::cacheMax; ++x)
+	{
+		if (x == eDVBService::cVTYPE || x == eDVBService::cACHANNEL || x == eDVBService::cAC3DELAY
+			|| x == eDVBService::cPCMDELAY)
+			continue;
+		int pid = service->getCacheEntry((eDVBService::cacheID)x);
+		if (pid == -1)
+			continue;
+		if (x == eDVBService::cSUBTITLE)
+			pid = (pid & 0xFFFF0000) >> 16;
+		if (pid > 0 && pid < 0x1fff && pids.insert(pid).second)
+			eDebug("RECORD: PID tinut minte %04x (c:%02d)", pid, x);
+	}
+}
+
 int eDVBServiceRecord::doRecord()
 {
 	int err = doPrepare();
@@ -391,6 +416,16 @@ int eDVBServiceRecord::doRecord()
 			eDebug(", and the text pid is %04x", program.textPid);
 			if (program.textPid != -1)
 				pids_to_record.insert(program.textPid); // Videotext
+
+			/* HDSatelit: un flux local intr-o teava a procesului (serverul 8001 al imaginii, Hds/DabT2/server8001.py)
+			   primeste si PID-urile tinute minte in lista serviciului (lamedb, randurile c:), ca streamserverul altor
+			   imagini. Asa ajunge si PID-ul de date al unui purtator de pe 30W (TS terestru intreg purtat in PID, cu
+			   stream_type 0x90 in PMT, pe care PMT-ul nu-l da ca imagine sau sunet), cu PMT-ul citit: CA PMT-ul
+			   serviciului adevarat pleaca spre modulul de acces, deci un flux criptat poate fi decriptat de modulul
+			   omului. Inregistrarile in fisier raman neschimbate. Fara cVTYPE, cACHANNEL, cAC3DELAY, cPCMDELAY (nu
+			   sunt PID-uri); din cSUBTITLE numai PID-ul (bitii 16-31). */
+			if (m_filename.compare(0, 14, "/proc/self/fd/") == 0)
+				adaugaPidTinuteMinte(pids_to_record);
 
 			/* "decodeaza mai tarziu": PID-urile ECM ale programului si ale pistelor (din PMT-ul adevarat; din cache
 			   PID-ul ECM e -1), EIT si TDT pentru ora si emisiune; fara EMM */

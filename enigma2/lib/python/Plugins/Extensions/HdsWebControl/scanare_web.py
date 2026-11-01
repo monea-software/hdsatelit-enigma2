@@ -60,8 +60,11 @@ TINTE_SCANARE = {
 	("ScanerCablu", "ScanerCablu"): "cablu",
 	("ScanerTerestru", "ScanerTerestru"): "terestru",
 }
-# „Mai mulți sateliți" are ecranul lui, fara argument
-TINTE_FEL_FIX = {("ScanerMaiMultiSateliti", "ScanerMaiMultiSateliti"): ("satelit", "mai_multi")}
+# „Mai mulți sateliți" si „Căutare oarbă" au ecranul lor, fara argument. Căutarea oarbă se face cu un program
+# (ScanerOarba + hds-blindscan), nu cu ServiceScan; are pagina ei, /oarba (oarba_web.py), la care duce butonul
+# felului (web= din menu.xml).
+TINTE_FEL_FIX = {("ScanerMaiMultiSateliti", "ScanerMaiMultiSateliti"): ("satelit", "mai_multi"),
+                 ("ScanerOarba", "ScanerOarba"): ("satelit", "oarba")}
 
 # tinta din menu.xml -> cartela din sectiunea antenei
 TINTE_ANTENA = {
@@ -2035,6 +2038,8 @@ function alegeGrupul(cheie, fel){
   if(ales){ alegeFelul(ales); } else { S.fel = ""; arata($("formular"), false); scrieAdresa(); }
 }
 function alegeFelul(x){
+  // felul cu pagina lui (web= din menu.xml, in afara lui /scanare: Căutare oarbă -> /oarba) se deschide acolo
+  if(x.web && x.web.indexOf("/scanare") !== 0){ location.href = x.web; return; }
   S.scaner = x.scaner;
   S.fel = x.fel;
   S.valori = {};

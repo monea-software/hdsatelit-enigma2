@@ -654,7 +654,19 @@ if [ -f "$HDS_PAZA_REGULI" ] && [ -f "$HDS_REZERVA" ]; then
 	fi
 fi
 
-if grep -qi '^config.crash.enabledebug=true' /etc/enigma2/settings 2>/dev/null; then
+# the debug log of enigma2: on with the setting crash.enabledebug, and in a diagnostic image (HDS_DEPANARE=1, set only on
+# the branch of that image) while /home/root/logs/enigma2-debug.log is under 8 MB, so that a start which hangs leaves its
+# trail for the start report (tools/hds-raport.sh) without filling the memory
+HDS_DEPANARE=
+hds_dep=
+grep -qi '^config.crash.enabledebug=true' /etc/enigma2/settings 2>/dev/null && hds_dep=1
+if [ "$HDS_DEPANARE" = 1 ]; then
+	hds_dep_m=0
+	[ -f /home/root/logs/enigma2-debug.log ] && hds_dep_m=$(wc -c < /home/root/logs/enigma2-debug.log | tr -cd 0-9)
+	case $hds_dep_m in ''|*[!0-9]*) hds_dep_m=0 ;; esac
+	[ "$hds_dep_m" -lt 8388608 ] && hds_dep=1
+fi
+if [ -n "$hds_dep" ]; then
 	mkdir -p /home/root/logs
 	ENIGMA_DEBUG_LVL=4 ENIGMA_DEBUG_TIME=2 LD_PRELOAD=$LIBS @bindir@/enigma2 >> /home/root/logs/enigma2-debug.log 2>&1
 else

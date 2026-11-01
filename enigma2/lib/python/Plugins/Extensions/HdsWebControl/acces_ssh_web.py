@@ -27,7 +27,7 @@
 #                                                trimite textul lui ca pe o cheie lipita (aceleasi verificari)
 #   POST /api/acces-ssh-stick                    cheile din dosarul hdsatelit/ssh de pe stick
 #   POST /api/acces-ssh-sterge?amprenta=..&confirmat=1   sterge o cheie
-#   POST /api/acces-ssh-fara-parola?pornit=0|1  (pornit=1 cere si confirmat=1)
+#   POST /api/acces-ssh-fara-parola?pornit=0|1  (fara confirmare: pornita e starea obisnuita)
 #   GET  /api/acces-ssh-brut?pagina=<n>          textul brut al unui fisier (fara /etc/shadow si fara parola)
 #   GET  /acces-ssh                              pagina
 # Parola, textul brut si toate cele cu POST: numai nivelul „asociat” (altfel 403 cu „trebuie_cod”).
@@ -239,8 +239,7 @@ def faraParola(request, A=None):
 	pornit = _arg(request, "pornit")
 	if pornit not in ("0", "1"):
 		return {"result": False, "message": _t("Alege pornit sau oprit.")}
-	if pornit == "1" and _arg(request, "confirmat") != "1":
-		return {"result": False, "message": _t("Confirmă: oricine din rețeaua ta de acasă va intra pe receptor fără parolă.")}
+	# fara confirmare: pornita e starea obisnuita (din casa direct; din afara casei numai cu cheia), ca pe receptor
 	return _pornit(A, A.pornesteFaraParola(pornit == "1"), A.textLucrare(A.LUCRARE_FARA_PAROLA))
 
 
@@ -406,8 +405,8 @@ ETICHETE = {
 	"CUM": N_("Cum te conectezi"),
 	"CUM_FTP": N_("FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root și parola de sus:"),
 	"CUM_TEXT": N_("De pe calculator, în terminal:"),
-	"CUM_NOTA": N_("Cu parola se intră numai din rețeaua ta de acasă. Cu o cheie SSH pusă mai jos, calculatorul intră "
-		"fără parolă."),
+	"CUM_NOTA": N_("Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua "
+		"locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."),
 	"CHEI": N_("Cheile SSH"),
 	"LIPESTE": N_("Lipește cheia publică (conținutul fișierului .pub, de exemplu id_ed25519.pub):"),
 	"ADAUGA": N_("Adaugă cheia"),
@@ -418,8 +417,8 @@ ETICHETE = {
 	"STICK_NOTA": N_("De pe stick: pune dosarul hdsatelit/ssh cu fișierul authorized_keys sau cu cheile .pub, bagă "
 		"stickul în receptor, apoi apasă butonul. Nu pune niciodată cheia privată (fișierul fără .pub)."),
 	"FARA": N_("Fără parolă în rețeaua locală"),
-	"FARA_NOTA": N_("Rămâne oprit dacă nu ai un motiv anume. Pornit, oricine din rețeaua ta de acasă intră pe receptor "
-		"fără parolă."),
+	"FARA_NOTA": N_("Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. "
+		"Oprit: și din casă se cere parola."),
 	"BRUT": N_("Text brut (fișierele serverelor SSH și FTP)"),
 	"BRUT_BUTON": N_("Text brut"),
 	"FISIER": N_("Fișierul"),
@@ -443,7 +442,6 @@ TEXTE_JS = {
 	"intrebareSterge": N_("Ștergi cheia %s?"),
 	"scrieParola": N_("Scrie întâi parola nouă."),
 	"intrebareNoua": N_("Faci o parolă nouă? Cea de acum nu mai merge."),
-	"intrebareFara": N_("Pornești intrarea fără parolă? Oricine din rețeaua ta de acasă va intra pe receptor."),
 	"porneste": N_("Pornește"),
 	"opreste": N_("Oprește"),
 	"lipesteIntai": N_("Lipește întâi cheia publică."),
@@ -829,9 +827,7 @@ $("conecteaza").addEventListener("click", function(){
 });
 $("fara").addEventListener("click", function(){
   if(!DATE){ return; }
-  if(DATE.fara_parola){ trimite("/api/acces-ssh-fara-parola", {pornit: "0"}, "fara"); return; }
-  if(!confirm(TXT.intrebareFara)){ return; }
-  trimite("/api/acces-ssh-fara-parola", {pornit: "1", confirmat: "1"}, "fara");
+  trimite("/api/acces-ssh-fara-parola", {pornit: DATE.fara_parola ? "0" : "1"}, "fara");
 });
 // citirea urmatoare: des cat se asteapta rezultatul unei comenzi, apoi la 3 secunde
 function planifica(){ setTimeout(function(){ citeste().then(planifica, planifica); }, ASTEPT === null ? 3000 : 700); }

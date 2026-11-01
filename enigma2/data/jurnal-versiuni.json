@@ -1,6 +1,148 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.19",
+   "build": "0000619202611010910",
+   "data": "01.11.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Căutare oarbă (Scanare > Satelit): receptorul găsește singur transponderele de pe satelit, și pe cele care lipsesc din listă. Deocamdată numai pe V20; pe celelalte receptoare vine mai târziu.",
+     "en": "Blind scan (Channel scan > Satellite): the receiver finds the transponders on the satellite by itself, including those missing from the list. For now only on the V20; the other receivers get it later.",
+     "de": "Blindscan (Sendersuche > Satellit): Der Receiver findet die Transponder des Satelliten selbst, auch die, die in der Liste fehlen. Vorerst nur auf dem V20; die anderen Receiver folgen später.",
+     "fr": "Recherche aveugle (Recherche de chaînes > Satellite) : le récepteur trouve tout seul les transpondeurs du satellite, même ceux absents de la liste. Pour l'instant seulement sur le V20 ; les autres récepteurs suivront.",
+     "es": "Búsqueda ciega (Búsqueda de canales > Satélite): el receptor encuentra solo los transpondedores del satélite, también los que faltan en la lista. Por ahora solo en el V20; los demás receptores, más adelante.",
+     "it": "Ricerca cieca (Ricerca canali > Satellite): il ricevitore trova da solo i transponder del satellite, anche quelli che mancano dalla lista. Per ora solo sul V20; gli altri ricevitori arriveranno più avanti.",
+     "hu": "Vakkeresés (Csatornakeresés > Műhold): a vevő magától megtalálja a műhold transzpondereit, azokat is, amelyek hiányoznak a listából. Egyelőre csak a V20-on; a többi vevőre később jön.",
+     "cs": "Blindscan (Vyhledávání kanálů > Satelit): přijímač sám najde transpondéry satelitu, i ty, které v seznamu chybí. Zatím jen na V20; ostatní přijímače přijdou na řadu později.",
+     "pl": "Blindscan (Wyszukiwanie kanałów > Satelita): odbiornik sam znajduje transpondery satelity, także te, których brakuje na liście. Na razie tylko na V20; pozostałe odbiorniki później.",
+     "pt": "Procura cega (Procura de canais > Satélite): o recetor encontra sozinho os transponders do satélite, também os que faltam na lista. Por agora só no V20; os outros recetores recebem-na mais tarde.",
+     "nl": "Blindscan (Kanalen zoeken > Satelliet): de ontvanger vindt zelf de transponders van de satelliet, ook die in de lijst ontbreken. Voorlopig alleen op de V20; de andere ontvangers volgen later.",
+     "ru": "Слепой поиск (Поиск каналов > Спутник): ресивер сам находит транспондеры спутника, в том числе те, которых нет в списке. Пока только на V20; на другие ресиверы он придёт позже.",
+     "tr": "Kör tarama (Kanal Arama > Uydu): alıcı uydudaki transponderleri kendisi bulur, listede olmayanları da. Şimdilik yalnızca V20'de; diğer alıcılara daha sonra gelecek."
+    },
+    {
+     "fel": "nou",
+     "ro": "Fluxurile Abertis de pe 30°V: toate cele 38 sunt în lista receptorului, cu numele canalelor, într-un buchet al lor, iar căutarea pe satelit le găsește singură.",
+     "en": "The Abertis streams on 30°W: all 38 are in the receiver's list, with the channel names, in their own bouquet, and the satellite search finds them by itself.",
+     "de": "Die Streams von Abertis auf 30°W: Alle 38 stehen mit Sendernamen im eigenen Bouquet in der Receiverliste. Der Satellitensuchlauf findet sie automatisch.",
+     "fr": "Les flux Abertis sur 30°O : les 38 figurent dans la liste du récepteur, avec les noms des chaînes, dans leur propre bouquet. La recherche satellite les trouve automatiquement.",
+     "es": "Los flujos Abertis de 30°O: los 38 están en la lista del receptor, con los nombres de los canales, en su propio bouquet. La búsqueda por satélite los encuentra automáticamente.",
+     "it": "I flussi Abertis a 30°O: tutti e 38 sono nell'elenco del ricevitore, con i nomi dei canali, nel proprio bouquet. La ricerca satellitare li trova automaticamente.",
+     "hu": "Az Abertis adatfolyamai a 30°Ny pozíción: mind a 38 szerepel a vevő listáján, csatornanevekkel, saját csatornacsokorban. A műholdas keresés automatikusan megtalálja őket.",
+     "cs": "Streamy Abertis na 30°Z: všech 38 je v seznamu přijímače, s názvy kanálů a ve vlastní skupině. Satelitní vyhledávání je najde automaticky.",
+     "pl": "Strumienie Abertis na 30°Z: wszystkie 38 znajdziesz na liście odbiornika, z nazwami kanałów, w osobnym bukiecie. Wyszukiwanie satelitarne znajduje je automatycznie.",
+     "pt": "Fluxos Abertis nos 30°O: os 38 estão na lista do recetor, com os nomes dos canais, num bouquet próprio. A pesquisa de satélite encontra-os automaticamente.",
+     "nl": "Abertis-streams op 30°W: alle 38 staan met kanaalnamen in de lijst van de ontvanger, in een eigen boeket. De satellietscan vindt ze automatisch.",
+     "ru": "Потоки Abertis на 30° з. д.: все 38 есть в списке ресивера с названиями каналов, в отдельном букете. Поиск по спутнику находит их автоматически.",
+     "tr": "30°B'deki Abertis akışları: 38'inin tamamı kanal adlarıyla alıcının listesinde, kendi buketinde yer alıyor. Uydu taraması onları otomatik buluyor."
+    },
+    {
+     "fel": "nou",
+     "ro": "Din casă intri direct pe receptor, fără parolă, prin SSH, SFTP, FTP și Telnet (Telnet e pornit acum, numai pentru casă); din afara casei numai cu o cheie.",
+     "en": "From your home network you log in to the receiver directly, without a password, over SSH, SFTP, FTP and Telnet (Telnet is now on, for the home network only); from outside only with a key.",
+     "de": "Aus dem Heimnetz meldest du dich direkt am Receiver an, ohne Passwort, über SSH, SFTP, FTP und Telnet (Telnet ist jetzt an, nur für das Heimnetz); von außen nur mit einem Schlüssel.",
+     "fr": "Depuis ton réseau domestique, tu te connectes directement au récepteur, sans mot de passe, en SSH, SFTP, FTP et Telnet (Telnet est maintenant activé, seulement à la maison) ; depuis l'extérieur, seulement avec une clé.",
+     "es": "Desde tu red doméstica entras al receptor directamente, sin contraseña, por SSH, SFTP, FTP y Telnet (Telnet ya está activado, solo para la red doméstica); desde fuera, solo con una clave.",
+     "it": "Dalla rete di casa entri nel ricevitore direttamente, senza password, via SSH, SFTP, FTP e Telnet (Telnet ora è attivo, solo per la rete di casa); da fuori solo con una chiave.",
+     "hu": "Az otthoni hálózatból jelszó nélkül, közvetlenül lépsz be a vevőre SSH-n, SFTP-n, FTP-n és Telneten (a Telnet most be van kapcsolva, csak otthonra); kívülről csak kulccsal.",
+     "cs": "Z domácí sítě se k přijímači přihlásíš přímo, bez hesla, přes SSH, SFTP, FTP a Telnet (Telnet je teď zapnutý, jen pro domácí síť); zvenku jen s klíčem.",
+     "pl": "Z sieci domowej logujesz się do odbiornika bezpośrednio, bez hasła, przez SSH, SFTP, FTP i Telnet (Telnet jest teraz włączony, tylko dla sieci domowej); z zewnątrz tylko kluczem.",
+     "pt": "A partir da tua rede de casa entras no recetor diretamente, sem palavra-passe, por SSH, SFTP, FTP e Telnet (o Telnet está agora ligado, só para casa); de fora, só com uma chave.",
+     "nl": "Vanuit je thuisnetwerk log je direct in op de ontvanger, zonder wachtwoord, via SSH, SFTP, FTP en Telnet (Telnet staat nu aan, alleen voor het thuisnetwerk); van buitenaf alleen met een sleutel.",
+     "ru": "Из домашней сети ты входишь на ресивер напрямую, без пароля, по SSH, SFTP, FTP и Telnet (Telnet теперь включён, только для домашней сети); извне только с ключом.",
+     "tr": "Ev ağından alıcıya şifresiz, doğrudan SSH, SFTP, FTP ve Telnet ile girersin (Telnet artık açık, yalnızca ev ağı için); dışarıdan yalnızca bir anahtarla."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008 Supreme cu placa din 2024: interfața nu se mai blochează la pornire; citirea HDMI-CEC, pe care driverul plăcii o ținea pe loc, se face acum separat.",
+     "en": "Octagon SF8008 Supreme with the 2024 board: the interface no longer freezes at start; the HDMI-CEC read, which the board driver held up, now runs separately.",
+     "de": "Octagon SF8008 Supreme mit Platine von 2024: Die Oberfläche friert beim Start nicht mehr ein; das vom Platinentreiber blockierte Auslesen von HDMI-CEC läuft jetzt separat.",
+     "fr": "Octagon SF8008 Supreme avec la carte de 2024 : l'interface ne se fige plus au démarrage ; la lecture HDMI-CEC, bloquée par le pilote de la carte, s'exécute maintenant séparément.",
+     "es": "Octagon SF8008 Supreme con placa de 2024: la interfaz ya no se congela al iniciar; la lectura HDMI-CEC, bloqueada por el controlador de la placa, ahora se ejecuta por separado.",
+     "it": "Octagon SF8008 Supreme con scheda del 2024: l'interfaccia non si blocca più all'avvio; la lettura HDMI-CEC, bloccata dal driver della scheda, ora viene eseguita separatamente.",
+     "hu": "Octagon SF8008 Supreme 2024-es alaplappal: a felület már nem fagy le induláskor; az alaplap illesztőprogramja által feltartott HDMI-CEC-olvasás most külön fut.",
+     "cs": "Octagon SF8008 Supreme s deskou z roku 2024: rozhraní už při startu nezamrzá; čtení HDMI-CEC, které zdržoval ovladač desky, teď běží samostatně.",
+     "pl": "Octagon SF8008 Supreme z płytą z 2024 r.: interfejs nie zawiesza się już przy starcie; odczyt HDMI-CEC, blokowany przez sterownik płyty, działa teraz osobno.",
+     "pt": "Octagon SF8008 Supreme com a placa de 2024: a interface já não bloqueia no arranque; a leitura HDMI-CEC, bloqueada pelo controlador da placa, é agora feita em separado.",
+     "nl": "Octagon SF8008 Supreme met de printplaat uit 2024: de interface loopt bij het opstarten niet meer vast; het uitlezen van HDMI-CEC, dat door de printplaatdriver werd vertraagd, draait nu apart.",
+     "ru": "Octagon SF8008 Supreme с платой 2024 года: интерфейс больше не зависает при запуске; чтение HDMI-CEC, которое задерживал драйвер платы, теперь выполняется отдельно.",
+     "tr": "2024 kartlı Octagon SF8008 Supreme: arayüz artık açılışta donmuyor; kart sürücüsünün beklettiği HDMI-CEC okuması artık ayrı çalışıyor."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008 cu tuner combinat DVB-T2 și DVB-C: căutarea terestră păstrează frecvența canalului, deci canalele DVB-T2 găsite (de pildă TVR pe canalul 22) se și văd; caută din nou canalul.",
+     "en": "Octagon SF8008 with the combined DVB-T2 and DVB-C tuner: the terrestrial search keeps the channel frequency, so the DVB-T2 channels it finds (for example TVR on channel 22) also play; search the channel again.",
+     "de": "Octagon SF8008 mit kombiniertem DVB-T2- und DVB-C-Tuner: Der terrestrische Suchlauf behält die Kanalfrequenz, sodass gefundene DVB-T2-Sender (zum Beispiel TVR auf Kanal 22) auch laufen; suche den Kanal erneut.",
+     "fr": "Octagon SF8008 avec tuner combiné DVB-T2 et DVB-C : la recherche terrestre garde la fréquence du canal, donc les chaînes DVB-T2 trouvées (par exemple TVR sur le canal 22) s'affichent aussi ; relance la recherche du canal.",
+     "es": "Octagon SF8008 con sintonizador combinado DVB-T2 y DVB-C: la búsqueda terrestre guarda la frecuencia del canal, así que los canales DVB-T2 encontrados (por ejemplo TVR en el canal 22) también se ven; busca de nuevo el canal.",
+     "it": "Octagon SF8008 con sintonizzatore combinato DVB-T2 e DVB-C: la ricerca terrestre mantiene la frequenza del canale, quindi i canali DVB-T2 trovati (per esempio TVR sul canale 22) si vedono anche; cerca di nuovo il canale.",
+     "hu": "Octagon SF8008 kombinált DVB-T2 és DVB-C tunerrel: a földi keresés megtartja a csatorna frekvenciáját, így a talált DVB-T2 csatornák (például a TVR a 22-es csatornán) meg is jelennek; keresd újra a csatornát.",
+     "cs": "Octagon SF8008 s kombinovaným tunerem DVB-T2 a DVB-C: pozemní vyhledávání si ponechá frekvenci kanálu, takže nalezené stanice DVB-T2 (třeba TVR na kanálu 22) se i zobrazí; vyhledej kanál znovu.",
+     "pl": "Octagon SF8008 z kombinowanym tunerem DVB-T2 i DVB-C: wyszukiwanie naziemne zachowuje częstotliwość kanału, więc znalezione kanały DVB-T2 (na przykład TVR na kanale 22) też się wyświetlają; wyszukaj kanał ponownie.",
+     "pt": "Octagon SF8008 com sintonizador combinado DVB-T2 e DVB-C: a pesquisa terrestre guarda a frequência do canal, por isso os canais DVB-T2 encontrados (por exemplo a TVR no canal 22) também se veem; procura de novo o canal.",
+     "nl": "Octagon SF8008 met gecombineerde DVB-T2- en DVB-C-tuner: het terrestrisch zoeken bewaart de kanaalfrequentie, zodat de gevonden DVB-T2-zenders (bijvoorbeeld TVR op kanaal 22) ook spelen; zoek het kanaal opnieuw.",
+     "ru": "Octagon SF8008 с комбинированным тюнером DVB-T2 и DVB-C: эфирный поиск сохраняет частоту канала, поэтому найденные каналы DVB-T2 (например, TVR на 22-м канале) теперь показывают; найди канал ещё раз.",
+     "tr": "Kombine DVB-T2 ve DVB-C tunerli Octagon SF8008: karasal arama kanal frekansını saklar, böylece bulunan DVB-T2 kanalları (örneğin 22. kanaldaki TVR) da açılır; kanalı yeniden ara."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008 cu placa din 2024: raportul pornirii ratate nu mai citește setările care opresc nucleul și ne trimite și locul din program unde s-a oprit pornirea.",
+     "en": "Octagon SF8008 with the 2024 board: the report of a failed start no longer reads the settings that stop the kernel, and it also sends us the place in the program where the start stopped.",
+     "de": "Octagon SF8008 mit der Platine von 2024: Der Bericht über einen fehlgeschlagenen Start liest nicht mehr die Einstellungen, die den Kernel anhalten, und schickt uns auch die Stelle im Programm, an der der Start stehen blieb.",
+     "fr": "Octagon SF8008 avec la carte de 2024 : le rapport de démarrage raté ne lit plus les réglages qui arrêtent le noyau et nous envoie aussi l'endroit du programme où le démarrage s'est arrêté.",
+     "es": "Octagon SF8008 con la placa de 2024: el informe de un arranque fallido ya no lee los ajustes que detienen el núcleo y también nos envía el punto del programa donde se paró el arranque.",
+     "it": "Octagon SF8008 con la scheda del 2024: il rapporto di un avvio non riuscito non legge più le impostazioni che fermano il kernel e ci invia anche il punto del programma in cui l'avvio si è fermato.",
+     "hu": "Octagon SF8008 a 2024-es lappal: a sikertelen indítás jelentése már nem olvassa a kernelt leállító beállításokat, és elküldi nekünk azt a helyet is a programban, ahol az indítás megállt.",
+     "cs": "Octagon SF8008 s deskou z roku 2024: hlášení o nepovedeném startu už nečte nastavení, která zastaví jádro, a pošle nám i místo v programu, kde se start zastavil.",
+     "pl": "Octagon SF8008 z płytą z 2024 roku: raport z nieudanego uruchomienia nie odczytuje już ustawień, które zatrzymują jądro, i wysyła nam też miejsce w programie, w którym uruchamianie się zatrzymało.",
+     "pt": "Octagon SF8008 com a placa de 2024: o relatório de um arranque falhado já não lê as definições que param o núcleo e envia-nos também o ponto do programa onde o arranque parou.",
+     "nl": "Octagon SF8008 met het bord van 2024: het rapport van een mislukte start leest niet langer de instellingen die de kernel stoppen, en stuurt ons ook de plek in het programma waar de start bleef steken.",
+     "ru": "Octagon SF8008 с платой 2024 года: отчёт о неудачном запуске больше не читает настройки, которые останавливают ядро, и присылает нам ещё и место в программе, где запуск остановился.",
+     "tr": "2024 kartlı Octagon SF8008: başarısız başlatma raporu artık çekirdeği durduran ayarları okumuyor ve başlatmanın programda durduğu yeri de bize gönderiyor."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Rotirea antenei: ecranul nu se mai închide la săgețile sus și jos (mărimea pasului), la oprire sau când arată un mesaj.",
+     "en": "Dish rotation: the screen no longer closes on the up and down arrows (step size), on stop or when it shows a message.",
+     "de": "Antennendrehung: Die Ansicht schließt sich nicht mehr beim Drücken der Pfeile nach oben und unten (Schrittweite), beim Stoppen oder beim Anzeigen einer Meldung.",
+     "fr": "Rotation de l'antenne : l'écran ne se ferme plus avec les flèches haut et bas (taille du pas), lors de l'arrêt ou lorsqu'il affiche un message.",
+     "es": "Rotación de la antena: la pantalla ya no se cierra al pulsar las flechas arriba y abajo (tamaño del paso), al parar o al mostrar un mensaje.",
+     "it": "Rotazione antenna: la schermata non si chiude più con le frecce su e giù (ampiezza del passo), allo stop o quando mostra un messaggio.",
+     "hu": "Antennaforgatás: a képernyő már nem záródik be a fel és le nyilak használatakor (lépésméret), leállításkor vagy üzenet megjelenítésekor.",
+     "cs": "Otáčení paraboly: obrazovka se už nezavírá při použití šipek nahoru a dolů (velikost kroku), při zastavení ani při zobrazení zprávy.",
+     "pl": "Obracanie anteny: ekran nie zamyka się już po użyciu strzałek w górę i w dół (wielkość kroku), przy zatrzymaniu ani przy wyświetlaniu komunikatu.",
+     "pt": "Rotação da antena: o ecrã já não se fecha com as setas para cima e para baixo (tamanho do passo), ao parar ou ao mostrar uma mensagem.",
+     "nl": "Schotel draaien: het scherm sluit niet meer bij de pijlen omhoog en omlaag (stapgrootte), bij stoppen of als het een melding toont.",
+     "ru": "Поворот антенны: экран больше не закрывается при нажатии стрелок вверх и вниз (размер шага), при остановке или показе сообщения.",
+     "tr": "Çanak döndürme: yukarı ve aşağı oklara (adım boyutu) basınca, durdurunca veya bir mesaj gösterildiğinde ekran artık kapanmıyor."
+    }
+   ]
+  },
+  {
+   "versiune": "0.6.18",
+   "build": "0000618202610302331",
+   "data": "30.10.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Octagon SF8008 și SF8008 MINI: Meniu > Standby și repornire > Pornește alte imagini arată imaginile instalate în celelalte locuri din memorie; alegi una și receptorul repornește în ea.",
+     "en": "Octagon SF8008 and SF8008 MINI: Menu > Power & Restart > Start other images lists the images installed in the other slots of the memory; pick one and the receiver restarts into it.",
+     "de": "Octagon SF8008 und SF8008 MINI: Menu > Ein/Aus & Neustart > Andere Images starten zeigt die Images in den anderen Speicherplätzen; wähle eines und der Receiver startet darin neu.",
+     "fr": "Octagon SF8008 et SF8008 MINI : Menu > Alimentation et redémarrage > Démarrer d'autres images montre les images des autres emplacements ; choisis-en une et le récepteur redémarre dessus.",
+     "es": "Octagon SF8008 y SF8008 MINI: Menú > Encendido y reinicio > Arranca otras imágenes muestra las imágenes de las otras ranuras de la memoria; elige una y el receptor se reinicia en ella.",
+     "it": "Octagon SF8008 e SF8008 MINI: Menu > Alimentazione e riavvio > Avvia altre immagini mostra le immagini negli altri slot della memoria; scegline una e il ricevitore si riavvia su di essa.",
+     "hu": "Octagon SF8008 és SF8008 MINI: Menü > Bekapcsolás és újraindítás > Más image-ek indítása mutatja a memória többi helyén telepített image-eket; válassz egyet, és a vevő abban indul újra.",
+     "cs": "Octagon SF8008 a SF8008 MINI: Menu > Napájení a restart > Spustit jiné image ukáže image v ostatních slotech paměti; vyber jeden a přijímač se do něj restartuje.",
+     "pl": "Octagon SF8008 i SF8008 MINI: Menu > Zasilanie i restart > Uruchom inne obrazy pokazuje obrazy w innych slotach pamięci; wybierz jeden, a odbiornik uruchomi się w nim ponownie.",
+     "pt": "Octagon SF8008 e SF8008 MINI: Menu > Energia e Reinício > Inicia outras imagens mostra as imagens dos outros slots da memória; escolhe uma e o recetor reinicia nela.",
+     "nl": "Octagon SF8008 en SF8008 MINI: Menu > Voeding & herstarten > Start andere images toont de images in de andere geheugenplaatsen; kies er een en de ontvanger herstart daarin.",
+     "ru": "Octagon SF8008 и SF8008 MINI: Меню > Питание и перезагрузка > Запустить другие образы показывает образы в других слотах памяти; выбери один, и ресивер перезапустится в нём.",
+     "tr": "Octagon SF8008 ve SF8008 MINI: Menü > Güç ve Yeniden Başlatma > Diğer imajları başlat, bellekteki diğer yuvalarda kurulu imajları gösterir; birini seç, alıcı onunla yeniden başlar."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.17",
    "build": "0000617202610301758",
    "data": "30.10.2026",
@@ -1842,8 +1984,8 @@
     },
     {
      "fel": "nou",
-     "ro": "Intrarea pe receptor prin SSH cere o parolă făcută de receptor la prima pornire sau cheia calculatorului tău, adăugată din Acces SSH, de pe stick sau din pagina web, unde alegi direct fișierul cheii. Telnet e oprit.",
-     "en": "SSH login to the receiver needs a password made by the receiver at first start or your computer's key, added from SSH access, from a stick or from the web page, where you pick the key file directly. Telnet is off."
+     "ro": "Intrarea pe receptor prin SSH cere o parolă făcută de receptor la prima pornire sau cheia calculatorului tău, adăugată din Acces SSH, de pe stick sau din pagina web, unde alegi direct fișierul cheii.",
+     "en": "SSH login to the receiver needs a password made by the receiver at first start or your computer's key, added from SSH access, from a stick or from the web page, where you pick the key file directly."
     },
     {
      "fel": "nou",

@@ -112,6 +112,14 @@ SystemInfo["HdsVpn"] = os.access("/usr/sbin/openvpn", os.X_OK) or os.access("/us
 # inregistrarile "Decodează mai târziu" (Components/HdsDecodare.py) numai cu programul de decodare pe receptor (aceeasi
 # cale ca HdsDecodare.CALE_PROGRAM): fara el randurile din setup.xml (requires="HdsDecodare") si din /setari lipsesc
 SystemInfo["HdsDecodare"] = os.access("/usr/bin/hds-decodare", os.X_OK)
+# Porneste alte imagini (Meniu > Standby si repornire, Components/HdsPornireMultipla.py): numai pe Octagon SF8008 si
+# SF8008 MINI, care au patru locuri de imagini in memorie si partitia bootoptions cu fisierele STARTUP
+try:
+	from Components import HdsPornireMultipla as _pornireMultipla
+	SystemInfo["HdsMultiboot"] = _pornireMultipla.disponibil()
+except Exception as _e:
+	print("[SystemInfo] HdsMultiboot: %r" % (_e,))
+	SystemInfo["HdsMultiboot"] = False
 
 
 class BoxInfoClass:

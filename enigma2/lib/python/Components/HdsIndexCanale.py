@@ -924,8 +924,8 @@ def fisiere_buchete(director):
 			nume = linie.split('FROM BOUQUET "', 1)[1].split('"', 1)[0]
 			if nume and '/' not in nume and nume not in rez:
 				rez.append(nume)
-	for nume in ('userbouquet.hds_t2.tv', 'userbouquet.hds_dab.radio', 'userbouquet.hdsdvbi.tv',
-			'userbouquet.hdsdvbi.radio'):
+	for nume in ('userbouquet.hds_t2.tv', 'userbouquet.hds_abertis.tv', 'userbouquet.hds_dab.radio',
+			'userbouquet.hdsdvbi.tv', 'userbouquet.hdsdvbi.radio'):
 		if nume not in rez and os.path.isfile(os.path.join(director, nume)):
 			rez.append(nume)
 	return rez
@@ -1002,8 +1002,11 @@ def _citeste_text(cale):
 # iar cu „mai multe buchete” oprit (implicit) nici buchetul lor nu se vede. Lista de canale le pune un dosar in
 # „Sateliți” si pagina /canale le pune in lista de buchete (Screens/ChannelSelection.py, canale_web.py).
 # In plus: buchetul "Canale de pe internet (DVB-I)" (Plugins/SystemPlugins/HdsDvbI), mereu in lista, fara nicio
-# scanare: cu "mai multe buchete" oprit sta tot ca dosar in "Sateliti".
+# scanare: cu "mai multe buchete" oprit sta tot ca dosar in "Sateliti". Fluxurile de distributie de pe 30W (felul
+# abertis din Hds/DabT2) au buchetul lor, "Abertis 30°W" (Hds/DabT2/buchete.BUCHET_ABERTIS), facut numai cand are
+# programe.
 BUCHETE_FLUXURI = (('dab', 'radio', 'userbouquet.hds_dab.radio'), ('t2', 'tv', 'userbouquet.hds_t2.tv'),
+	('abertis', 'tv', 'userbouquet.hds_abertis.tv'),
 	('dvbi', 'tv', 'userbouquet.hdsdvbi.tv'), ('dvbi', 'radio', 'userbouquet.hdsdvbi.radio'))
 _buchete_fluxuri = {}
 
@@ -1054,6 +1057,8 @@ def nume_buchet_flux(fel):
 	"""Numele buchetului, tradus acum (in fisier #NAME e scris in romana, la scanare)."""
 	if fel == 'dvbi':
 		return _('Canale de pe internet (DVB-I)')
+	if fel == 'abertis':
+		return u'Abertis 30\u00b0W'
 	return _('DAB+ din satelit') if fel == 'dab' else _('DVB-T2 din satelit')
 
 
@@ -1061,6 +1066,8 @@ def fel_dosar_text(fel):
 	"""Felul dosarului, sub numele lui in panoul din dreapta al listei."""
 	if fel == 'dvbi':
 		return _('Canale primite prin internet, din listele DVB-I ale țării alese')
+	if fel == 'abertis':
+		return _('Canale terestre spaniole recepționate din satelit')
 	return _('Posturi de radio DAB+ recepționate din satelit') if fel == 'dab' else _('Canale DVB-T2 recepționate din satelit')
 
 
@@ -1078,6 +1085,9 @@ def _texte_gol(fel):
 	if fel == 'dvbi':
 		return (_('Aici apar canalele de pe internet (DVB-I) ale țării alese, fără nicio scanare și fără antenă. Lista e goală: încă nu ai ales țara sau listele ei nu s-au descărcat.'),
 			_('Țara se alege în Meniu > Setări > Surse de pe internet > DVB-I (televiziune prin internet).'))
+	if fel == 'abertis':
+		return (_('Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V.'),
+			_('Căutarea e în Meniu > Scanare > Satelit > DVB-T2 prin satelit.'))
 	if fel == 'dab':
 		return (_('Aici apar posturile de radio DAB+ recepționate din satelit. Lista e goală: încă nu ai căutat posturi DAB+.'),
 			_('Căutarea e în Meniu > Scanare > Satelit > DAB+ prin satelit.'))

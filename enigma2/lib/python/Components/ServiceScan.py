@@ -640,6 +640,17 @@ class ServiceScan:
 			return
 		if stare == "terminata":
 			self.hdsPastreazaRetele(corp)
+			self.hdsFluxuriDupaScanare()
+
+	def hdsFluxuriDupaScanare(self):
+		"""La sfarsitul scanarii: fluxurile DVB-T2 prin satelit cu programele scrise in lista (30W) de pe pozitiile
+		scanate isi refac buchetul si purtatorii (Hds/DabT2/imagine.dupa_scanare), in fundal. O eroare de aici nu
+		ajunge la scanare."""
+		try:
+			from Hds.DabT2 import imagine as hds_imagine
+			hds_imagine.dupa_scanare([p for p in self.hdsCeAScanat()["pozitii"] if isinstance(p, int)])
+		except Exception as e:
+			print("[ServiceScan] fluxurile din satelit dupa scanare: %r" % (e,))
 
 	def hdsIstoricSemnal(self, transpondere, stare=None):
 		"""Transponderele pe care tunerul s-a acordat in trecerea de acum intra in istoricul semnalului

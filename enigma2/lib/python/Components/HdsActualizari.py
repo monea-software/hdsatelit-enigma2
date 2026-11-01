@@ -1309,7 +1309,10 @@ class Actualizari(object):
 		rezultat.setdefault('cautat_la', int(time.time()))
 		self.rezultat = rezultat
 		self.faza, self.pas, self.progres = 'liber', '', (0, 0)
-		self._jurnal('cautare: %s' % rezultat.get('stare'))
+		# motivul unei cautari esuate intra si el in jurnal (adresa fara nume si parola, curata); fara el, din jurnalul unui
+		# tester se vedea numai „cautare: eroare”
+		eroare = rezultat.get('eroare')
+		self._jurnal('cautare: %s%s' % (rezultat.get('stare'), (' (%s)' % curata(eroare)[:200]) if eroare else ''))
 		self._schimbat()
 		if self.rapid:
 			self._rapid_dupa_cautare(rezultat)

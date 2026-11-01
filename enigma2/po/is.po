@@ -12361,11 +12361,11 @@ msgid "Copiaz-o întreagă din pagina cheilor (%s), fără spații."
 msgstr "Afritaðu hann allan af lyklasíðunni (%s), án bila."
 
 msgid ""
-"Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/your-account/"
+"Copiaz-o întreagă din pagina cheilor DeepL (www.deepl.com/en/your-account/"
 "keys), fără spații. Trebuie o cheie de la DeepL API, nu de la traducătorul "
 "obișnuit."
 msgstr ""
-"Afritaðu hann allan af lyklasíðu DeepL (www.deepl.com/your-account/keys), án "
+"Afritaðu hann allan af lyklasíðu DeepL (www.deepl.com/en/your-account/keys), án "
 "bila. Það þarf lykil frá DeepL API, ekki frá venjulega þýðandanum."
 
 msgid ""
@@ -57194,3 +57194,380 @@ msgstr "Start kveikir á því í 2 klukkustundir. Þú getur slökkt á því h
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "Aðstoðin er fullkomin: lestur, prófanir og stjórnun móttakarans í gegnum valmyndir, af fasta listanum. Skjámynd sýnir aðeins valmyndirnar, ekki mynd rásarinnar. Einkaskjáir haldast lokaðir. Þú getur stöðvað hvenær sem er."
+
+msgid "Pornește alte imagini"
+msgstr "Ræsa aðrar myndir"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Veldu myndina og ýttu á OK: móttakarinn endurræsir í hana. Listinn sýnir myndirnar sem uppsettar eru í minni móttakarans."
+
+msgid "Caut imaginile instalate..."
+msgstr "Leita að uppsettum myndum..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "Rými %(loc)s: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "Rými %(loc)s: %(imagine)s, í gangi núna"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "Rými %(loc)s: %(imagine)s, getur ekki ræst"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "Á USB-minni: %(imagine)s, í gangi núna"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "Myndirnar á USB-minninu eru valdar úr valmynd USB-minnisins."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "Ég fann ekki aðrar myndir uppsettar í minni móttakarans."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "Móttakarinn endurræsir í myndina %s. Halda áfram?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Þetta er myndin sem er í gangi núna."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "Myndin í rými %s getur ekki ræst (kjarni eða kerfi vantar), svo ég vel hana ekki."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "Valda rýmið er ekki lengur í listanum. Opnaðu listann aftur."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "Ég gat ekki skrifað valið, svo móttakarinn helst í myndinni sem er í gangi núna."
+
+msgid "Imagine fără nume"
+msgstr "Mynd án nafns"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "Móttakarinn endurræsir í valda myndina úr minni móttakarans. Á móttakaranum: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "Móttakarinn endurræsir í myndina %s. Vefviðmótið hér svarar aftur þegar þú ræsir aftur myndina HD Satelit."
+
+msgid "Din casă intri direct, fără parolă. Parola se cere numai dacă oprești „Fără parolă în rețeaua locală” și se vede aici oricând."
+msgstr "Á staðarnetinu tengist þú beint, án lykilorðs. Lykilorðið er aðeins krafist ef þú slökkvir á \"Án lykilorðs á staðarneti\", og það sést hér hvenær sem er."
+
+msgid "Parola lui root, aceeași pentru FTP, SSH, SFTP și Telnet"
+msgstr "Lykilorðið fyrir root, það sama fyrir FTP, SSH, SFTP og Telnet"
+
+msgid "Parola lui root, aceeași pentru SSH, SFTP și Telnet"
+msgstr "Lykilorðið fyrir root, það sama fyrir SSH, SFTP og Telnet"
+
+msgid "FTP, SFTP, Telnet: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP, SFTP, Telnet: %s, notandinn root · SSH: ssh root@%s"
+
+msgid "Te conectezi de pe calculator cu: ssh root@%s sau telnet %s"
+msgstr "Þú tengist frá tölvunni með: ssh root@%s eða telnet %s"
+
+msgid "Fără parolă în rețeaua locală: pornit. Din casă intri direct, fără parolă; din afara casei numai cu o cheie."
+msgstr "Án lykilorðs á staðarneti: kveikt. Á staðarnetinu tengist þú beint, án lykilorðs; fyrir utan staðarnetið aðeins með lykli."
+
+msgid "Fără parolă în rețeaua locală: oprit. Și din casă se cere parola."
+msgstr "Án lykilorðs á staðarneti: slökkt. Líka á staðarnetinu er lykilorðið krafist."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește."
+msgstr "Á staðarnetinu tengist þú beint, án lykilorðs, í gegnum SSH, SFTP, FTP og Telnet; fyrir utan staðarnetið aðeins með lykli. OK slökkvir."
+
+msgid "Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește."
+msgstr "Nú er lykilorðið krafist líka á staðarnetinu. Kveikt: á staðarnetinu tengist þú beint, án lykilorðs. OK kveikir."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."
+msgstr "Á staðarnetinu tengist þú beint, án lykilorðs, í gegnum SSH, SFTP, FTP og Telnet, á meðan \"Án lykilorðs á staðarneti\" er kveikt. Fyrir utan staðarnetið tengir þú þig aðeins með SSH-lykli sem settur er fyrir neðan."
+
+msgid "Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. Oprit: și din casă se cere parola."
+msgstr "Kveikt (eins og móttakarinn kemur): á staðarnetinu tengist þú beint, án lykilorðs; fyrir utan staðarnetið aðeins með lykli. Slökkt: líka á staðarnetinu er lykilorðið krafist."
+
+msgid "Criptat (BISS)"
+msgstr "Dulkóðað (BISS)"
+
+msgid "Canale terestre spaniole recepționate din satelit"
+msgstr "Spænskar jarðbundnar rásir mótteknar um gervihnött"
+
+msgid "Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V."
+msgstr "Hér birtast spænskar jarðbundnar rásir sem tekið er á móti um gervihnött. Listinn er tómur: þú hefur ekki enn leitað á 30°V."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea nu a putut porni."
+msgstr "Leitin gat ekki hafist."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit e folosit acum (o înregistrare sau alt ecran). Încearcă după ce se eliberează."
+msgstr "Gervihnattamóttakarinn er í notkun núna (upptaka eða annar skjár). Reyndu aftur þegar hann losnar."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "O căutare oarbă e deja în curs pe acest receptor."
+msgstr "Blind leit er þegar í gangi á þessum móttakara."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge încă pe tunerul acestui receptor."
+msgstr "Blind leit virkar ekki enn á móttakara þessa tækis."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul nu a mai răspuns, așa că am oprit căutarea."
+msgstr "Móttakarinn svaraði ekki lengur, svo leitin var stöðvuð."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 1: toată banda o dată, apoi numai unde lipsește un transponder cunoscut."
+msgstr "1. þrep: allt bandið einu sinni, síðan aðeins þar sem þekktan sendi vantar."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste."
+msgstr "2. þrep: og öll eyður í bandinu, leitað aftur í þröngum gluggum."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă."
+msgstr "3. þrep: eyðurnar enn einu sinni, með öðrum mörkum. Öruggasta og lengsta leitin."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "găsit"
+msgstr "fannst"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "se caută"
+msgstr "leitar"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "negăsit"
+msgstr "fannst ekki"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "neverificat"
+msgstr "óstaðfest"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam un minut"
+msgstr "um það bil ein mínúta"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cel pe care stă antena acum"
+msgstr "sá sem loftnetið beinist að núna"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treceri (bandă × polarizare): %d. Durata: %s."
+msgstr "Yfirferðir (band × skautun): %d. Lengd: %s."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "%d MHz, %s, %d kSym/s"
+msgstr "%d MHz, %s, %d kSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”."
+msgstr "Gervihnattamóttakarinn hefur engan gervihnött stilltan. Stilltu loftnetið í „Stillingar móttakara”."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software."
+msgstr "Forritið fyrir blinda leit er ekki uppsett á þessum móttakara. Hugbúnaðaruppfærslan kemur með það."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Nu e nimic de scanat încă."
+msgstr "Ekkert til að leita að enn sem komið er."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oscilatorul LNB-ului nu e cunoscut. Verifică LNB-ul în Configurare LNB."
+msgstr "Sveiflukjarni LNB er óþekktur. Athugaðu LNB í LNB stilling."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Bandă necunoscută."
+msgstr "Óþekkt band."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Alege cel puțin o polarizare."
+msgstr "Veldu að minnsta kosti eina skautun."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam %d minute"
+msgstr "um það bil %d mínútur"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Toată banda (joasă și înaltă)"
+msgstr "Allt bandið (lágt og hátt)"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda joasă"
+msgstr "Aðeins lága bandið"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda înaltă"
+msgstr "Aðeins háa bandið"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Orizontală și verticală"
+msgstr "Lárétt og lóðrétt"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai orizontală"
+msgstr "Aðeins lárétt"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai verticală"
+msgstr "Aðeins lóðrétt"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oricare"
+msgstr "Hvaða sem er"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1 MSym/s"
+msgstr "1 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2 MSym/s"
+msgstr "2 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "5 MSym/s"
+msgstr "5 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1: toată banda o dată"
+msgstr "1: allt bandið einu sinni"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2: și golurile benzii"
+msgstr "2: og eyður í bandinu"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "3: golurile de două ori"
+msgstr "3: eyður tvisvar"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Antena nu se mișcă: pentru alt satelit, pornește întâi un canal de pe el."
+msgstr "Loftnetið hreyfist ekki: fyrir annan gervihnött skaltu fyrst ræsa rás frá honum."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Se oprește după bucata de bandă în curs..."
+msgstr "Stöðvast eftir núverandi bandhluta..."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Gata în %d s. Găsite: %d din %d cunoscute, noi: %d."
+msgstr "Lokið á %d s. Fundust: %d af %d þekktum, nýir: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Scanarea canalelor nu a putut porni."
+msgstr "Rásaleit gat ekki hafist."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta %d din %d: %d%%. Găsite: %d, noi: %d."
+msgstr "%d. þrep af %d: %d%%. Fundust: %d, nýir: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge printr-un LNB Unicable."
+msgstr "Blind leit virkar ekki í gegnum Unicable LNB."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea a durat prea mult și s-a oprit. Rămân transponderele găsite până atunci."
+msgstr "Leitin tók of langan tíma og var stöðvuð. Sendarnir sem fundust fram að því haldast."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oprită."
+msgstr "Stöðvað."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Căutare oarbă pe satelit"
+msgstr "Blind gervihnattaleit"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Polarizările"
+msgstr "Skautanir"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Treptele căutării"
+msgstr "Leitarþrep"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Rata minimă"
+msgstr "Lágmarkstáknahraði"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, EXIT oprește."
+msgstr "Upp/Niður velur línu, Vinstri/Hægri eða OK breytir, Grænn ræsir, EXIT stöðvar."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Nu pot citi setările tunerului de satelit."
+msgstr "Ekki er hægt að lesa stillingar gervihnattamóttakara."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Banda"
+msgstr "Band"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Transponderele găsite arată că antena stă pe %s."
+msgstr "Fundnir sendar sýna að loftnetið beinist að %s."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Satelit: %s"
+msgstr "Gervihn: %s"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Scanează canalele"
+msgstr "Leita að rásum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea a pornit."
+msgstr "Leitin er hafin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea se oprește după bucata de bandă în curs."
+msgstr "Leitin stöðvast eftir núverandi bandhluta."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Scanarea canalelor a pornit pe televizor. Rezultatul se vede pe pagina Scanare și antenă."
+msgstr "Rásaleit er hafin í sjónvarpinu. Niðurstaðan sést á síðunni Rásaleit og loftnet."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Satelit: <b id=\"satelit\"></b>"
+msgstr "Gervihn: <b id=\"satelit\"></b>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Pe televizor: <span>__DRUM__</span>."
+msgstr "Í sjónvarpinu: <span>__DRUM__</span>."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Rata (kSym/s)"
+msgstr "Táknahraði (kSym/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Se pornește scanarea canalelor..."
+msgstr "Ræsi rásaleit..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "O altă scanare e deschisă pe televizor. Așteaptă să se termine sau închide-o, apoi încearcă din nou."
+msgstr "Önnur leit er opin í sjónvarpinu. Bíddu þar til henni lýkur eða lokaðu henni og reyndu aftur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Televizorul nu o arată acum (receptorul e în standby sau ecranul nu s-a deschis), dar merge."
+msgstr "Sjónvarpið sýnir það ekki núna (móttakarinn er í biðstöðu eða skjárinn opnaðist ekki), en leitin er í gangi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Nicio căutare oarbă în curs."
+msgstr "Engin blind leit í gangi."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "căutarea oarbă pe satelit"
+msgstr "blind gervihnattaleit"
+
+#: data/menu.xml
+msgid "Căutare oarbă"
+msgstr "Blind leit"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"
+msgstr "<code>GET /api/oarba</code>: blind gervihnattaleit: gervihnötturinn sem loftnetið beinist að, valmöguleikar (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), forskoðun og leitarstaða (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> með <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); aðeins lesr оператив"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)"
+msgstr "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: ræsir blinda leit (skjárinn opnast í sjónvarpinu)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"
+msgstr "<code>POST /api/oarba-opreste</code>: stöðvar blinda leit eftir núverandi bandhluta"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite"
+msgstr "<code>POST /api/oarba-scaneaza</code>: «Leita að rásum» á þekktum og nýjum fundnum sendum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
+msgstr "<code>POST /api/oarba-televizor</code>: opnar skjá blindrar leitar í sjónvarpinu"

@@ -201,10 +201,10 @@ def randuri(s, parola):
 			_("OK șterge cheia. Calculatorul cu această cheie intră apoi numai cu parola.") + "\n" + c["amprenta"]))
 	if s["fara_parola"]:
 		lista.append((_("Fără parolă în rețeaua locală: pornit"), FARA_PAROLA, False,
-			_("OK oprește. Oricine din rețeaua ta de acasă intră acum pe receptor fără parolă.")))
+			_("Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește.")))
 	else:
 		lista.append((_("Fără parolă în rețeaua locală: oprit"), FARA_PAROLA, True,
-			_("Rămâne oprit dacă nu ai un motiv anume. Pornit, oricine din rețeaua ta de acasă intră pe receptor fără parolă.")))
+			_("Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește.")))
 	lista.append((_("Text brut (fișierele serverelor SSH și FTP)"), BRUT, None,
 		_("OK arată fișierele de setări ale serverelor SSH și FTP, așa cum sunt pe receptor.")))
 	lista.append((_("Închide"), INCHIDE, None, ""))
@@ -220,7 +220,7 @@ class HdsAccesSsh(Screen):
 		titlu = _("Parola receptorului")
 		self.setTitle(titlu)
 		self["titlu"] = StaticText(titlu)
-		self["eticheta"] = StaticText(_("Parola lui root, aceeași pentru SSH și SFTP"))
+		self["eticheta"] = StaticText(_("Parola lui root, aceeași pentru SSH, SFTP și Telnet"))
 		self["parola"] = StaticText("")
 		self["despre"] = StaticText("")
 		self["cum"] = StaticText("")
@@ -413,11 +413,9 @@ class HdsAccesSsh(Screen):
 			nume = A.numeCheie(cheie[0]) if cheie else argument
 			self._intreaba(_("Ștergi cheia %s?") % nume, self._confirmaSterge)
 		elif actiune == FARA_PAROLA:
-			if argument:
-				self._intreaba(_("Pornești intrarea fără parolă? Oricine din rețeaua ta de acasă va intra pe receptor."),
-					self._confirmaFaraParola)
-			else:
-				self._porneste_lucrare(lambda: A.pornesteFaraParola(False))
+			# fara intrebare: pornita e starea obisnuita (din casa direct, ca la celelalte imagini), oprita la fel de simplu
+			pornit = bool(argument)
+			self._porneste_lucrare(lambda: A.pornesteFaraParola(pornit))
 
 	def _parolaScrisa(self, text):
 		"""Parola scrisa la tastatura (None cu EXIT): o parola care nu se primeste da motivul si nu schimba nimic."""
@@ -439,10 +437,6 @@ class HdsAccesSsh(Screen):
 	def _confirmaSterge(self, da):
 		if da:
 			self._porneste_lucrare(lambda: A.pornesteSterge(self._deSters))
-
-	def _confirmaFaraParola(self, da):
-		if da:
-			self._porneste_lucrare(lambda: A.pornesteFaraParola(True))
 
 	def _porneste_lucrare(self, porneste):
 		if porneste() is None:

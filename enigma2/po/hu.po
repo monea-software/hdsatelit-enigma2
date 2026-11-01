@@ -14034,9 +14034,9 @@ msgstr "Másold ki egészben a portálról (Translator erőforrás, „Keys and 
 #: lib/python/Components/HdsConfigurareTraducere.py
 msgid ""
 "Copiaz-o întreagă din pagina cheilor DeepL "
-"(www.deepl.com/your-account/keys), fără spații. Trebuie o cheie de la DeepL "
+"(www.deepl.com/en/your-account/keys), fără spații. Trebuie o cheie de la DeepL "
 "API, nu de la traducătorul obișnuit."
-msgstr "Másold ki egészben a DeepL kulcsok oldaláról (www.deepl.com/your-account/keys), szóközök nélkül. A DeepL API kulcsa kell, nem a szokásos fordítóé."
+msgstr "Másold ki egészben a DeepL kulcsok oldaláról (www.deepl.com/en/your-account/keys), szóközök nélkül. A DeepL API kulcsa kell, nem a szokásos fordítóé."
 
 #: lib/python/Components/HdsConfigurareTraducere.py
 #, python-format
@@ -56382,3 +56382,380 @@ msgstr "A Start 2 órára kapcsolja be. Bármikor leállíthatod, a vevőkészü
 
 msgid "Asistența e completă: citiri, probe și controlul receptorului prin meniuri, din lista fixă. O captură arată numai meniurile, nu imaginea canalului. Ecranele private rămân închise. Poți opri oricând."
 msgstr "A támogatás teljes: leolvasások, próbák és a vevőkészülék menükön keresztüli vezérlése a rögzített listából. Egy képernyőmentés csak a menüket mutatja, nem a csatorna képét. A privát képernyők zárva maradnak. Bármikor leállíthatod."
+
+msgid "Pornește alte imagini"
+msgstr "Más image-ek indítása"
+
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria receptorului."
+msgstr "Kiválasztod az image-et, és megnyomod az OK gombot: a receiver újraindul benne. A lista a receiver memóriájába telepített image-eket mutatja."
+
+msgid "Caut imaginile instalate..."
+msgstr "Keresem a telepített image-eket..."
+
+msgid "Locul %(loc)s: %(imagine)s"
+msgstr "%(loc)s. slot: %(imagine)s"
+
+msgid "Locul %(loc)s: %(imagine)s, pornită acum"
+msgstr "%(loc)s. slot: %(imagine)s, most fut"
+
+msgid "Locul %(loc)s: %(imagine)s, nu poate porni"
+msgstr "%(loc)s. slot: %(imagine)s, nem tud elindulni"
+
+msgid "Pe stick: %(imagine)s, pornită acum"
+msgstr "A sticken: %(imagine)s, most fut"
+
+msgid "Imaginile de pe stick se aleg din meniul stickului."
+msgstr "A sticken lévő image-eket a stick menüjéből választhatod ki."
+
+msgid "Nu am găsit alte imagini instalate în memoria receptorului."
+msgstr "Nem találtam más telepített image-eket a receiver memóriájában."
+
+msgid "Receptorul repornește în imaginea %s. Continui?"
+msgstr "A receiver újraindul a(z) %s image-ben. Folytatod?"
+
+msgid "Aceasta e imaginea pornită acum."
+msgstr "Ez a most futó image."
+
+msgid "Imaginea din locul %s nu poate porni (lipsește nucleul sau sistemul), deci nu o aleg."
+msgstr "A(z) %s. slotban lévő image nem tud elindulni (hiányzik a kernel vagy a rendszer), ezért nem lehet kiválasztani."
+
+msgid "Locul ales nu mai e în listă. Deschide din nou lista."
+msgstr "A kiválasztott slot már nincs a listában. Nyisd meg újra a listát."
+
+msgid "Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum."
+msgstr "Nem tudtam elmenteni a választást, ezért a receiver a mostani image-ben marad."
+
+msgid "Imagine fără nume"
+msgstr "Névtelen image"
+
+msgid "Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."
+msgstr "A receiver újraindul a memóriájából kiválasztott image-ben. A receiveren: __DRUM_FLASH__."
+
+msgid "Receptorul repornește în imaginea %s. Interfața web de aici răspunde din nou când pornești înapoi imaginea HD Satelit."
+msgstr "A receiver újraindul a(z) %s image-ben. Az itteni webes felület akkor válaszol újra, amikor visszatérsz a HD Satelit image-hez."
+
+msgid "Din casă intri direct, fără parolă. Parola se cere numai dacă oprești „Fără parolă în rețeaua locală” și se vede aici oricând."
+msgstr "Az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be. A jelszót csak akkor kell megadnod, ha kikapcsolod a \"Jelszó nélkül a helyi hálózaton\" beállítást, és itt bármikor megnézheted."
+
+msgid "Parola lui root, aceeași pentru FTP, SSH, SFTP și Telnet"
+msgstr "A root jelszava, amely az FTP, SSH, SFTP és Telnet esetén is ugyanaz"
+
+msgid "Parola lui root, aceeași pentru SSH, SFTP și Telnet"
+msgstr "A root jelszava, amely az SSH, SFTP és Telnet esetén is ugyanaz"
+
+msgid "FTP, SFTP, Telnet: %s, utilizatorul root · SSH: ssh root@%s"
+msgstr "FTP, SFTP, Telnet: %s, felhasználó: root · SSH: ssh root@%s"
+
+msgid "Te conectezi de pe calculator cu: ssh root@%s sau telnet %s"
+msgstr "A számítógépről így csatlakozol: ssh root@%s vagy telnet %s"
+
+msgid "Fără parolă în rețeaua locală: pornit. Din casă intri direct, fără parolă; din afara casei numai cu o cheie."
+msgstr "Jelszó nélkül a helyi hálózaton: bekapcsolva. Az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be; az otthoni hálózaton kívülről csak kulccsal."
+
+msgid "Fără parolă în rețeaua locală: oprit. Și din casă se cere parola."
+msgstr "Jelszó nélkül a helyi hálózaton: kikapcsolva. Az otthoni hálózatról is meg kell adnod a jelszót."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește."
+msgstr "Az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be SSH, SFTP, FTP és Telnet használatával; az otthoni hálózaton kívülről csak kulccsal. Az OK kikapcsolja."
+
+msgid "Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește."
+msgstr "Most már az otthoni hálózatról is meg kell adnod a jelszót. Bekapcsolva az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be. Az OK bekapcsolja."
+
+msgid "Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."
+msgstr "Az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be SSH, SFTP, FTP és Telnet használatával, amíg a \"Jelszó nélkül a helyi hálózaton\" beállítás be van kapcsolva. Az otthoni hálózaton kívülről csak egy alább hozzáadott SSH-kulccsal jelentkezhetsz be."
+
+msgid "Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. Oprit: și din casă se cere parola."
+msgstr "Bekapcsolva (a vevőkészülék alapbeállítása): az otthoni hálózatról közvetlenül, jelszó nélkül jelentkezel be; az otthoni hálózaton kívülről csak kulccsal. Kikapcsolva: az otthoni hálózatról is meg kell adnod a jelszót."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea nu a putut porni."
+msgstr "A keresés nem tudott elindulni."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit e folosit acum (o înregistrare sau alt ecran). Încearcă după ce se eliberează."
+msgstr "A műholdas tuner éppen használatban van (egy felvétel vagy másik képernyő). Próbáld újra, ha felszabadult."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "O căutare oarbă e deja în curs pe acest receptor."
+msgstr "Már folyamatban van egy vakkeresés ezen a vevőkészüléken."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge încă pe tunerul acestui receptor."
+msgstr "A vakkeresés még nem működik ezen a vevőkészüléken."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul nu a mai răspuns, așa că am oprit căutarea."
+msgstr "A tuner nem válaszolt többé, ezért a keresés leállt."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 1: toată banda o dată, apoi numai unde lipsește un transponder cunoscut."
+msgstr "1. lépés: a teljes sáv egyszer, majd csak ott, ahol hiányzik egy ismert transzponder."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste."
+msgstr "2. lépés: és a sáv összes rése, újra keresve szűk ablakokban."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă."
+msgstr "3. lépés: a rések még egyszer, más margókkal. A legbiztonságosabb és a leghosszabb."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "găsit"
+msgstr "megtalálva"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "se caută"
+msgstr "keresés"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "negăsit"
+msgstr "nem található"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "neverificat"
+msgstr "nem ellenőrzött"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam un minut"
+msgstr "körülbelül egy perc"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cel pe care stă antena acum"
+msgstr "amelyikre az antenna most irányul"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treceri (bandă × polarizare): %d. Durata: %s."
+msgstr "Menetek (sáv × polarizáció): %d. Időtartam: %s."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "%d MHz, %s, %d kSym/s"
+msgstr "%d MHz, %s, %d kSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”."
+msgstr "A műholdas tunerhez nincs műhold beállítva. Állítsd be az antennát a „Tuner beállítások” menüben."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software."
+msgstr "A vakkereső program nincs telepítve erre a vevőkészülékre. A szoftverfrissítés telepíti."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Nu e nimic de scanat încă."
+msgstr "Még nincs mit keresni."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oscilatorul LNB-ului nu e cunoscut. Verifică LNB-ul în Configurare LNB."
+msgstr "Az LNB oszcillátora ismeretlen. Ellenőrizd az LNB-t a LNB beállítás menüben."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Bandă necunoscută."
+msgstr "Ismeretlen sáv."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Alege cel puțin o polarizare."
+msgstr "Válassz legalább egy polarizációt."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "cam %d minute"
+msgstr "körülbelül %d perc"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Toată banda (joasă și înaltă)"
+msgstr "Teljes sáv (alsó és felső)"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda joasă"
+msgstr "Csak alsó sáv"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai banda înaltă"
+msgstr "Csak felső sáv"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Orizontală și verticală"
+msgstr "Vízszintes és függőleges"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai orizontală"
+msgstr "Csak vízszintes"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Numai verticală"
+msgstr "Csak függőleges"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oricare"
+msgstr "Bármelyik"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1 MSym/s"
+msgstr "1 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2 MSym/s"
+msgstr "2 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "5 MSym/s"
+msgstr "5 MSym/s"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "1: toată banda o dată"
+msgstr "1: teljes sáv egyszer"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "2: și golurile benzii"
+msgstr "2: és a sáv rései"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "3: golurile de două ori"
+msgstr "3: a rések kétszer"
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Antena nu se mișcă: pentru alt satelit, pornește întâi un canal de pe el."
+msgstr "Az antenna nem mozog: másik műholdhoz előbb kapcsolj egy csatornájára."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Se oprește după bucata de bandă în curs..."
+msgstr "Leáll a jelenlegi sávszakasz után..."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Gata în %d s. Găsite: %d din %d cunoscute, noi: %d."
+msgstr "Kész %d s alatt. Megtalálva: %d / %d ismert, új: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Scanarea canalelor nu a putut porni."
+msgstr "A csatornakeresés nem tudott elindulni."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Treapta %d din %d: %d%%. Găsite: %d, noi: %d."
+msgstr "%d / %d lépés: %d%%. Megtalálva: %d, új: %d."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea oarbă nu merge printr-un LNB Unicable."
+msgstr "A vakkeresés nem működik Unicable LNB-n keresztül."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Căutarea a durat prea mult și s-a oprit. Rămân transponderele găsite până atunci."
+msgstr "A keresés túl sokáig tartott és leállt. Az addig talált transzponderek megmaradnak."
+
+#: lib/python/Components/HdsCautareOarba.py
+msgid "Oprită."
+msgstr "Leállítva."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Căutare oarbă pe satelit"
+msgstr "Műholdas vakkeresés"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Polarizările"
+msgstr "Polarizációk"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Treptele căutării"
+msgstr "Keresési lépések"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Rata minimă"
+msgstr "Minimális jelsebesség"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, EXIT oprește."
+msgstr "Fel/Le választja a sort, Balra/Jobbra vagy OK módosít, Zöld indít, EXIT leállít."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Nu pot citi setările tunerului de satelit."
+msgstr "A műholdas tuner beállításai nem olvashatók."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Banda"
+msgstr "Sáv"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Transponderele găsite arată că antena stă pe %s."
+msgstr "A megtalált transzponderek szerint az antenna a(z) %s pozícióra irányul."
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Satelit: %s"
+msgstr "Műhold: %s"
+
+#: lib/python/Screens/ScanerOarba.py
+msgid "Scanează canalele"
+msgstr "Csatornák keresése"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea a pornit."
+msgstr "A keresés elindult."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Căutarea se oprește după bucata de bandă în curs."
+msgstr "A keresés leáll a jelenlegi sávszakasz után."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Scanarea canalelor a pornit pe televizor. Rezultatul se vede pe pagina Scanare și antenă."
+msgstr "A csatornakeresés elindult a tévén. Az eredmény a Csatornakeresés és antenna oldalon látható."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Satelit: <b id=\"satelit\"></b>"
+msgstr "Műhold: <b id=\"satelit\"></b>"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Pe televizor: <span>__DRUM__</span>."
+msgstr "A tévén: <span>__DRUM__</span>."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Rata (kSym/s)"
+msgstr "Jelsebesség (kSym/s)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Se pornește scanarea canalelor..."
+msgstr "Csatornakeresés indítása..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "O altă scanare e deschisă pe televizor. Așteaptă să se termine sau închide-o, apoi încearcă din nou."
+msgstr "Egy másik keresés van nyitva a tévén. Várd meg, amíg befejeződik, vagy zárd be, és próbáld újra."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Televizorul nu o arată acum (receptorul e în standby sau ecranul nu s-a deschis), dar merge."
+msgstr "A tévé most nem mutatja (a vevő készenlétben van vagy a képernyő nem nyílt meg), de működik."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/oarba_web.py
+msgid "Nicio căutare oarbă în curs."
+msgstr "Nincs folyamatban vakkeresés."
+
+#: lib/python/Components/HdsPaznic.py
+msgid "căutarea oarbă pe satelit"
+msgstr "műholdas vakkeresés"
+
+#: data/menu.xml
+msgid "Căutare oarbă"
+msgstr "Vakkeresés"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"
+msgstr "<code>GET /api/oarba</code>: műholdas vakkeresés: a műhold, amelyre az antenna irányul, a választások (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), az előnézet és a keresés állapota (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> a következőkkel: <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); csak olvasható"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)"
+msgstr "<code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: elindítja a vakkeresést (megnyílik a képernyője a tévén)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"
+msgstr "<code>POST /api/oarba-opreste</code>: leállítja a vakkeresést a jelenlegi sávszakasz után"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite"
+msgstr "<code>POST /api/oarba-scaneaza</code>: „Csatornák keresése” az ismert és az újonnan talált transzpondereken"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"
+msgstr "<code>POST /api/oarba-televizor</code>: megnyitja a vakkeresés képernyőjét a tévén"
+
+msgid "Criptat (BISS)"
+msgstr "Kódolt (BISS)"
+
+msgid "Canale terestre spaniole recepționate din satelit"
+msgstr "Műholdról vett spanyol földfelszíni csatornák"
+
+msgid "Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V."
+msgstr "Itt jelennek meg a műholdról vett spanyol földfelszíni csatornák. A lista üres: még nem kerestél a 30°Ny pozíción."
