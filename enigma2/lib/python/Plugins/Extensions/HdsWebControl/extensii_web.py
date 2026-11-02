@@ -42,6 +42,11 @@
 
 import os
 
+# Serverele web ale extensiilor instalate (interfeteWeb): dosarele de pluginuri in care sta modulul radacinii unui Site
+DOSARE_PLUGINURI = ("Extensions", "SystemPlugins")
+# dosarul acestei interfete: serverele lui nu sunt ale unei extensii
+DOSAR_PROPRIU = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+
 ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod", "feed", "fel")
 LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80}
 _INCARCARE = [False]      # citirea catalogului pe fir: una singura odata
@@ -135,6 +140,71 @@ def argumente(request):
 
 
 # ------------------------------------------------------------------ starea paginii
+
+def _dosarExtensie(radacina):
+	"""Dosarul pluginului din care vine resursa radacina a unui server web (Plugins.Extensions.<dosar>....), sau None
+	pentru orice altceva (si pentru serverele acestei interfete)."""
+	modul = getattr(type(radacina), "__module__", "") or ""
+	parti = modul.split(".")
+	if len(parti) < 3 or parti[0] != "Plugins" or parti[1] not in DOSARE_PLUGINURI or not parti[2]:
+		return None
+	if parti[2] == DOSAR_PROPRIU:
+		return None
+	return parti[2]
+
+
+def _gazdaLocala(gazda):
+	gazda = (gazda or "").strip().lower()
+	return gazda.startswith("127.") or gazda in ("::1", "localhost") or gazda.startswith("::ffff:127.")
+
+
+def interfeteWeb(selectabile=None, Port=None, Site=None, PortTls=None):
+	"""[(numele extensiei, portul)] pentru serverele web HTTP ale extensiilor instalate care asculta acum in enigma2,
+	pentru randurile din panou (plugin.py, cardul Acum pe receptor). Fara niciun nume scris aici: o extensie care isi
+	porneste interfata web in enigma2 (reactor.listenTCP cu un twisted.web.server.Site) se vede in reactor (e2reactor:
+	`selectables`), iar numele e dosarul ei de plugin, la rulare. Raman pe dinafara: serverele acestei interfete
+	(fabrica lor invelita, WrappingFactory, nu e un Site; si modulul radacinii lor), HTTPS (Port-ul TLS), cele care
+	asculta numai pe 127.0.0.1 / ::1 si orice obiect care nu e un Port deschis. Acelasi dosar si port pe IPv4 si IPv6 =
+	un singur rand. Probele de pe PC dau obiectele si clasele lor. Nu arunca: la orice eroare, lista goala."""
+	try:
+		if Port is None or Site is None:
+			from twisted.internet import tcp
+			from twisted.web import server
+			Port, Site = Port or tcp.Port, Site or server.Site
+			if PortTls is None:
+				try:
+					from twisted.internet import ssl
+					PortTls = getattr(ssl, "Port", None)
+				except Exception:
+					PortTls = None
+		if selectabile is None:
+			import e2reactor
+			selectabile = list(e2reactor.selectables.values())
+	except Exception:
+		return []
+	gasite = []
+	for obiect in selectabile:
+		try:
+			if not isinstance(obiect, Port) or (PortTls is not None and isinstance(obiect, PortTls)):
+				continue
+			if not getattr(obiect, "connected", True):
+				continue
+			fabrica = getattr(obiect, "factory", None)
+			if not isinstance(fabrica, Site):
+				continue
+			dosar = _dosarExtensie(getattr(fabrica, "resource", None))
+			if dosar is None:
+				continue
+			gazda = obiect.getHost()
+			port = int(gazda.port)
+			if _gazdaLocala(getattr(gazda, "host", "")) or not 0 < port < 65536:
+				continue
+		except Exception:
+			continue
+		if (dosar, port) not in gasite:
+			gasite.append((dosar, port))
+	return sorted(gasite, key=lambda x: (x[0].lower(), x[1]))
+
 
 def _cautariFisiere(M):
 	"""{'local': CautareIpk sau None, 'retea': ...}: cele in curs sau ultimele (ale ecranului sau ale paginii)"""

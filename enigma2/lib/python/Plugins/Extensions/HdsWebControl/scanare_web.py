@@ -302,13 +302,15 @@ def _cautaVizibil(nod, id_intrare, nivel):
 	return None
 
 
-def _intrareDupaId(id_intrare):
+def _intrareDupaId(id_intrare, nivel=None):
 	"""(nodul intrarii, sectiunea ei) pentru un entryID din cele doua sectiuni, altfel (None, None). Numai intrarile
 	pe care le arata si televizorul: level= fata de nivelul utilizatorului si requires=, cu aceleasi reguli ca
 	Menu.py: /api/scanare-televizor nu deschide ce televizorul ascunde (de exemplu „Liste implicite de canale”,
-	level 1, pentru un utilizator pe nivelul simplu)."""
+	level 1, pentru un utilizator pe nivelul simplu). `nivel`: alt nivel decat al utilizatorului (NIVEL_ORICE: fara
+	filtrul de nivel, requires= ramane)."""
 	radacina = _radacinaMeniu()
-	nivel = _nivelUtilizator()
+	if nivel is None:
+		nivel = _nivelUtilizator()
 	for _cheie, cheie_meniu in SECTIUNI:
 		sectiune = _nodSectiune(radacina, cheie_meniu)
 		if sectiune is None:
@@ -938,6 +940,10 @@ def N_(text):
 
 
 MESAJ_FARA_SCANARE = N_("Nicio scanare de canale de la pornirea receptorului.")
+# /api/scanare-televizor pentru o intrare ascunsa de nivelul de meniu: numele ei, nivelul cerut (Intermediar sau
+# Expert), randul unde se alege nivelul (Mod de configurare) si drumul din meniu pana la el (deschidePeTelevizor)
+TXT_NIVEL_ASCUNS = N_("„%s” se vede numai cu nivelul de meniu %s. Îl alegi la rândul „%s”, în %s.")
+NIVEL_ORICE = 99            # _intrareDupaId fara filtrul de nivel (nivelurile de meniu sunt 0, 1, 2)
 
 
 def ultima():
@@ -1179,12 +1185,38 @@ def opreste():
 		"stare": stare()}
 
 
+def _nivelIntrare(nod):
+	try:
+		return int(nod.get("level", 0))
+	except (TypeError, ValueError):
+		return 0
+
+
+def _mesajNivel(nod, nivel_cerut):
+	"""Intrarea exista, dar nivelul de meniu al omului o ascunde (pagina deschisa cu alt nivel, o legatura salvata):
+	numele ei, nivelul cerut si unde se alege nivelul, cu numele de pe televizor (randul Setup Mode din ecranul
+	usage_setup, numele nivelurilor din Components/UsageConfig.py)."""
+	nume = _t(nod.get("text") or "") or (nod.get("entryID") or "")
+	nume_nivel = _t("Expert") if nivel_cerut >= 2 else _t("Intermediate")
+	try:
+		from .meniu_web import drumText
+		drum = drumText("usage_setup")
+	except Exception:
+		drum = _t("Meniu")
+	return _t(TXT_NIVEL_ASCUNS) % (nume, nume_nivel, _t("Setup Mode"), drum)
+
+
 def deschidePeTelevizor(id_intrare):
 	"""Deschide pe televizor ecranul unei intrari din cele doua sectiuni (Setari tuner, Configurare LNB, ...). Numai
-	intrari din menu.xml, dupa entryID; modulul, ecranul si argumentele vin din menu.xml, nu din cerere."""
-	nod, sectiune = _intrareDupaId(id_intrare)
+	intrari din menu.xml, dupa entryID; modulul, ecranul si argumentele vin din menu.xml, nu din cerere. O intrare
+	ascunsa de nivelul de meniu al omului nu se deschide, iar raspunsul spune nivelul si unde se alege; una ascunsa
+	de requires= (receptorul n-are functia) sau inexistenta primeste raspunsul de mai jos."""
+	nod, sectiune = _intrareDupaId(id_intrare, NIVEL_ORICE)
 	if nod is None:
 		return {"result": False, "message": _t("Intrarea „%s” nu e în secțiunile de scanare și antenă.") % id_intrare}
+	nivel_cerut = _nivelIntrare(nod)
+	if nivel_cerut > _nivelUtilizator():
+		return {"result": False, "message": _mesajNivel(nod, nivel_cerut)}
 	tinta = _tinta(nod)
 	if not _seDeschidePeTelevizor(tinta):
 		return {"result": False, "message": _t("Această intrare se deschide numai din telecomandă.")}

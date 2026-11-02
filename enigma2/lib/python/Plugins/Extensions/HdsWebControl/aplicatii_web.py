@@ -1638,25 +1638,32 @@ def h_powerstate(c):
 	return _xml(c.r, "e2powerstate", [("e2instandby", "true" if dupa else "false")])
 
 
-def h_message(c):
-	text = curat(c.arg("text", maxim=MAX_MESAJ * 2), MAX_MESAJ, randuri=True)
+def trimiteMesaj(M, text, tip=1, timeout=-1):
+	"""Mesajul pe televizor, pentru aplicatii (h_message: /api/message, /web/message) si pentru caseta Mesaj pe
+	televizor din panou (plugin.py, POST /api/mesaj-televizor): textul curatat (cel mult MAX_MESAJ semne, randurile
+	raman), tipul 1/2/3 (altul: 1), timeout in secunde (cel mult o ora; altfel fereastra ramane pana la OK), cel mult
+	un mesaj la PAUZA_MESAJ_S pentru toti, apoi fereastra din Notifications. -> (bun, textul raspunsului)."""
+	text = curat(text, MAX_MESAJ, randuri=True)
 	if not text:
-		return _comanda(c, False, _t("Mesajul e gol."))
-	tip = c.intreg("type", 1)
+		return False, _t("Mesajul e gol.")
 	if tip not in (1, 2, 3):
 		tip = 1              # 0 (intrebare da/nu) se arata ca informatie: raspunsul nu se intoarce in aplicatie
-	timeout = c.intreg("timeout", -1)
 	timeout = min(timeout, 3600) if timeout and timeout > 0 else -1
 	acum = CEAS()
 	if acum - _ULTIMUL_MESAJ[0] < PAUZA_MESAJ_S:
-		return _comanda(c, False, _t("Prea multe mesaje. Încearcă din nou peste două secunde."))
+		return False, _t("Prea multe mesaje. Încearcă din nou peste două secunde.")
 	_ULTIMUL_MESAJ[0] = acum
 	try:
-		c.M.popup(text, timeout, "hds_aplicatie_mesaj", tip)
+		M.popup(text, timeout, "hds_aplicatie_mesaj", tip)
 	except Exception as eroare:
 		_jurnal("mesaj: %s" % eroare)
-		return _comanda(c, False, _t("Mesajul nu a putut apărea pe televizor."))
-	return _comanda(c, True, _t("Mesajul a apărut pe televizor."))
+		return False, _t("Mesajul nu a putut apărea pe televizor.")
+	return True, _t("Mesajul a apărut pe televizor.")
+
+
+def h_message(c):
+	bun, text = trimiteMesaj(c.M, c.arg("text", maxim=MAX_MESAJ * 2), c.intreg("type", 1), c.intreg("timeout", -1))
+	return _comanda(c, bun, text)
 
 
 # ---------------------------------------------------------------- buchetele si canalele

@@ -4,6 +4,7 @@ from Tools.NumericalTextInput import NumericalTextInput
 from Tools.Directories import resolveFilename, SCOPE_CONFIG, fileExists
 from Components.Harddisk import harddiskmanager
 from copy import copy as copy_copy
+import os
 from os import path as os_path
 from time import localtime, strftime
 from re import compile as re_compile
@@ -1671,22 +1672,13 @@ class Config(ConfigSubsection):
 			self.setSavedValue(tree["config"])
 
 	def saveToFile(self, filename):
+		"""The settings as text (pickle) written to `filename`; returns the text written, or None if the file could
+		not be written (the file on disk then stays as it was)."""
 		text = self.pickle()
-		# a folder chosen on a stick whose file names are not UTF-8 (movie, timeshift or media player folder) comes
-		# with surrogates. open("w") emptied the file, then write() raised UnicodeEncodeError, which is not an
-		# IOError: settings was left empty and every setting was lost at the next start. The text is now encoded
-		# before the file is opened, the surrogates back to the original bytes ("surrogateescape", read back the same
-		# way by loadFromFile); any other lone surrogate becomes '?'.
-		try:
-			data = text.encode("utf-8", "surrogateescape")
-		except UnicodeEncodeError:
-			data = text.encode("utf-8", "replace")
-		try:
-			f = open(filename, "wb")
-			f.write(data)
-			f.close()
-		except IOError:
-			print("Config: Couldn't write %s" % filename)
+		if _scrieSigur(filename, _octetiSetari(text)):
+			return text
+		print("Config: Couldn't write %s" % filename)
+		return None
 
 	def loadFromFile(self, filename, base_file=False):
 		# bytes that are not UTF-8 (a path saved as above) come back as surrogates; strict UTF-8 raised
@@ -1695,11 +1687,102 @@ class Config(ConfigSubsection):
 		self.unpickle(f.readlines(), base_file)
 		f.close()
 
+def _octetiSetari(text):
+	"""The settings text as the bytes of the file. A folder chosen on a stick whose file names are not UTF-8 (movie,
+	timeshift or media player folder) comes with surrogates: they go back to the original bytes ("surrogateescape",
+	read back the same way by loadFromFile); any other lone surrogate becomes '?'. (Encoded before any file is opened:
+	once, open("w") emptied settings, then write() raised UnicodeEncodeError and every setting was lost.)"""
+	try:
+		return text.encode("utf-8", "surrogateescape")
+	except UnicodeEncodeError:
+		return text.encode("utf-8", "replace")
+
+
+# HDSatelit: the last channel, kept on disk by Components/HdsCanalTinut.py (ConfigFile.salveazaSchimbarile)
+CHEI_CANAL = ("config.tv.lastservice", "config.tv.lastroot", "config.radio.lastservice", "config.radio.lastroot")
+
+
+def _canalDinBaza(text, baza):
+	"""`text` (settings as pickle() gives them) with the lines of CHEI_CANAL as they are in `baza` (the text on disk):
+	the same line, or none when `baza` has none; the lines of `baza` missing from `text` go at the end."""
+	def randuri(t):
+		parti = t.split("\n")
+		if parti and parti[-1] == "":
+			parti.pop()
+		return [p + "\n" for p in parti]
+	din_baza = {}
+	for rand in randuri(baza):
+		cheie = rand.split("=", 1)[0]
+		if cheie in CHEI_CANAL and cheie not in din_baza:
+			din_baza[cheie] = rand
+	rez = []
+	puse = set()
+	for rand in randuri(text):
+		cheie = rand.split("=", 1)[0]
+		if cheie in CHEI_CANAL:
+			if cheie in din_baza and cheie not in puse:
+				rez.append(din_baza[cheie])
+				puse.add(cheie)
+			continue
+		rez.append(rand)
+	for cheie in CHEI_CANAL:
+		if cheie in din_baza and cheie not in puse:
+			rez.append(din_baza[cheie])
+	return "".join(rez)
+
+
+def _scrieSigur(filename, data):
+	"""HDSatelit: settings written safely: a new file next to the real one (the target of a symbolic link, so the link
+	stays), flushed to the flash, with the rights of the old file, then put in its place with os.replace; then the
+	folder is flushed too, so the new name survives a power cut. A failed write (disk full, read-only, power cut)
+	leaves the old settings whole. Before, the file was emptied first and then written: a power cut in between, or a
+	write error, left settings empty and every setting was lost. -> True if written. Does not raise."""
+	tinta = os_path.realpath(filename)
+	nou = tinta + ".nou"
+	try:
+		try:
+			vechi = os.stat(tinta)
+		except OSError:
+			vechi = None
+		with open(nou, "wb") as f:
+			f.write(data)
+			f.flush()
+			os.fsync(f.fileno())
+		if vechi is not None:
+			os.chmod(nou, vechi.st_mode & 0o7777)
+			if hasattr(os, "chown"):
+				try:
+					os.chown(nou, vechi.st_uid, vechi.st_gid)
+				except OSError:
+					pass
+		os.replace(nou, tinta)
+	except (IOError, OSError, ValueError):
+		try:
+			os.remove(nou)
+		except OSError:
+			pass
+		return False
+	if os.name == "posix":
+		try:
+			fd = os.open(os_path.dirname(tinta) or ".", os.O_RDONLY)
+			try:
+				os.fsync(fd)
+			finally:
+				os.close(fd)
+		except OSError:
+			pass
+	return True
+
+
 config = Config()
 config.misc = ConfigSubsection()
 
 class ConfigFile:
 	CONFIG_FILE = resolveFilename(SCOPE_CONFIG, "settings")
+	# HDSatelit: the text last written to (or found in) CONFIG_FILE, so the settings saved since then can be written by
+	# salveazaSchimbarile() without writing the same file again and again; None = not known yet (after the start).
+	_scris = None
+	_eroareScriere = False
 
 	def load(self):
 		try:
@@ -1709,7 +1792,39 @@ class ConfigFile:
 
 	def save(self):
 #		config.save()
-		config.saveToFile(self.CONFIG_FILE)
+		text = config.saveToFile(self.CONFIG_FILE)
+		if text is not None:
+			self._scris = text
+
+	def salveazaSchimbarile(self):
+		"""HDSatelit: the settings saved since the last write (element.save(): a menu confirmed with OK or Green, the
+		volume...) go to CONFIG_FILE now, if there are any; nothing is written when nothing changed. Called by the
+		heartbeat of Components/HdsPaznic.py every 10 s, on the main loop. Why: CONFIG_FILE is written by the clean end
+		of enigma2 (mytest.py), and an interface that stopped answering is stopped by hds-watchdog with SIGTERM (then
+		SIGKILL), without that end: what was saved in memory only was lost. Only saved values go to the file (the same
+		text as configfile.save()); a value changed in a screen and not confirmed yet does not. The last channel
+		(CHEI_CANAL) stays as it is on disk: Components/HdsCanalTinut.py keeps it in a file of its own, only after
+		60 s on screen, so a channel on which the interface stopped answering within a minute is not the channel of
+		the next start; the whole writes (configfile.save()) write it as before. The first time, the text on disk is
+		read, so a start alone does not write the file. -> True if written now."""
+		if self._scris is None:
+			try:
+				with open(self.CONFIG_FILE, "rb") as f:
+					self._scris = f.read().decode("utf-8", "surrogateescape")
+			except (IOError, OSError):
+				pass
+		text = _canalDinBaza(config.pickle(), self._scris or "")
+		if text == self._scris:
+			return False
+		if not _scrieSigur(self.CONFIG_FILE, _octetiSetari(text)):
+			if not self._eroareScriere:
+				print("Config: Couldn't write %s (the settings saved since the last write wait for the next try)"
+					% self.CONFIG_FILE)
+			self._eroareScriere = True
+			return False
+		self._scris = text
+		self._eroareScriere = False
+		return True
 
 	def __resolveValue(self, pickles, cmap):
 		key = pickles[0]

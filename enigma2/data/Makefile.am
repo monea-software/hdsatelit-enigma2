@@ -14,6 +14,7 @@ dist_pkgdata_DATA = \
 	jurnal-versiuni.json \
 	keymap.xml \
 	menu.xml \
+	multumiri-testeri.json \
 	nota-testeri.json \
 	operatori-satelit.json \
 	prev.png \

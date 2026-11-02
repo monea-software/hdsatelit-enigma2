@@ -547,6 +547,19 @@ class HdsAbout(InformationBase):
 				_("Imaginea HD Satelit e un proiect independent, fără legătură cu Dream Multimedia, cu fabricantul "
 				"receptorului sau cu alte echipe de imagini.")):
 			l.append(" • " + rand_text)
+		# jos, multumirile pentru toti beta testerii (Components/HdsMultumiri.py): numele din copia de pe receptor sau din
+		# imagine, in ordinea de pe server; lista se improspateaza pe un fir separat, cel mult o data pe zi, si se vede la
+		# urmatoarea deschidere. Un rand cu "•" fara valoare aliniata, deci tabelul il rupe pe randuri, intreg; fara
+		# niciun nume nu apare. O eroare aici nu goleste ecranul.
+		try:
+			from Components import HdsMultumiri
+			HdsMultumiri.porneste()
+			text_multumiri = HdsMultumiri.text(traducere=_)
+			if text_multumiri:
+				l.append("")
+				l.append(" • " + text_multumiri)
+		except Exception as e:
+			print("[Information] multumirile: %r" % (e,))
 		self["text"].setText("\n".join(l))
 
 

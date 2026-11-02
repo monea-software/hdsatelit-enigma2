@@ -813,6 +813,13 @@ class Sesiune(object):
 			# sa nu livreze cereri); apararea impotriva reluarii e ca fiecare cerere e semnata cu id+seq si verificata.
 			seq = _seq_din(exterior)
 			if seq is not None and seq > self.ultim_seq:
+				# si echipa afla ca a fost refuzata (altfel ar astepta un raspuns care nu vine niciodata): un raspuns scurt
+				# cu motivul, numai pentru un seq nou (o cerere reluata nu primeste nimic)
+				try:
+					self._trimite_raspuns(seq, _op_din(exterior), Broker.Rezultat(1,
+						text="(cerere refuzata de receptor: %s)" % motiv))
+				except Exception as e:
+					_jurnal("raspunsul la cererea refuzata: %s" % type(e).__name__)
 				self.ultim_seq = seq
 				self._scrie_stare()
 			return
@@ -887,6 +894,16 @@ def _seq_din(exterior):
 		return int(json.loads(octeti.decode("ascii")).get("seq"))
 	except Exception:
 		return None
+
+
+def _op_din(exterior):
+	"""Numele op-ului dintr-o cerere NEVERIFICATA (numai pentru raspunsul de refuz), sau "?" cand nu are forma unui op."""
+	try:
+		octeti = base64.b64decode((exterior or {}).get("c", "").encode("ascii"), validate=True)
+		op = json.loads(octeti.decode("ascii")).get("op")
+	except Exception:
+		return "?"
+	return op if isinstance(op, str) and re.match(r"^[a-z][a-z0-9-]{0,31}\Z", op) else "?"
 
 
 # ---------------------------------------------------------------- starea globala (o sesiune deodata) si observatorii
