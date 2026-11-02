@@ -1,6 +1,45 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.25",
+   "build": "0000625202611022107",
+   "data": "02.11.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008 cu placa din 2024: receptorul nu se mai repornește singur la un minut după pornire când legătura HDMI-CEC cu televizorul se agață; se opresc doar comenzile CEC.",
+     "en": "Octagon SF8008 with the 2024 board: the receiver no longer restarts by itself a minute after start-up when the HDMI-CEC link to the TV hangs; only the CEC commands stop.",
+     "de": "Octagon SF8008 mit der Platine von 2024: Der Receiver startet nicht mehr eine Minute nach dem Einschalten von selbst neu, wenn die HDMI-CEC-Verbindung zum Fernseher hängt; nur die CEC-Befehle stoppen.",
+     "fr": "Octagon SF8008 avec la carte de 2024 : le récepteur ne redémarre plus tout seul une minute après la mise en marche quand la liaison HDMI-CEC avec le téléviseur se bloque ; seules les commandes CEC s'arrêtent.",
+     "es": "Octagon SF8008 con la placa de 2024: el receptor ya no se reinicia solo un minuto después de encenderse cuando el enlace HDMI-CEC con el televisor se bloquea; solo se detienen los comandos CEC.",
+     "it": "Octagon SF8008 con la scheda del 2024: il ricevitore non si riavvia più da solo un minuto dopo l'accensione quando il collegamento HDMI-CEC con il televisore si blocca; si fermano solo i comandi CEC.",
+     "hu": "Octagon SF8008, 2024-es alaplappal: a vevő már nem indul újra magától egy perccel a bekapcsolás után, ha a tévével való HDMI-CEC kapcsolat elakad; csak a CEC-parancsok állnak le.",
+     "cs": "Octagon SF8008 s deskou z roku 2024: přijímač se už sám nerestartuje minutu po zapnutí, když se spojení HDMI-CEC s televizorem zasekne; zastaví se jen příkazy CEC.",
+     "pl": "Octagon SF8008 z płytą z 2024 roku: odbiornik nie uruchamia się już sam ponownie minutę po włączeniu, gdy połączenie HDMI-CEC z telewizorem się zawiesi; zatrzymują się tylko polecenia CEC.",
+     "pt": "Octagon SF8008 com a placa de 2024: o recetor já não se reinicia sozinho um minuto depois de ligar quando a ligação HDMI-CEC ao televisor bloqueia; só os comandos CEC param.",
+     "nl": "Octagon SF8008 met het bord uit 2024: de ontvanger start niet meer vanzelf opnieuw een minuut na het inschakelen als de HDMI-CEC-verbinding met de tv vastloopt; alleen de CEC-opdrachten stoppen.",
+     "ru": "Octagon SF8008 с платой 2024 года: ресивер больше не перезагружается сам через минуту после включения, если связь HDMI-CEC с телевизором зависает; останавливаются только команды CEC.",
+     "tr": "2024 kartlı Octagon SF8008: TV ile HDMI-CEC bağlantısı takıldığında alıcı, açıldıktan bir dakika sonra artık kendiliğinden yeniden başlamıyor; yalnızca CEC komutları duruyor."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Beta testeri: căderile și blocajele interfeței ajung acum la echipă înaintea jurnalelor obișnuite, cu stivele lor, împreună cu versiunea plăcii receptorului.",
+     "en": "Beta testers: interface crashes and freezes now reach the team ahead of ordinary logs, with their stack traces, together with the receiver's board version.",
+     "de": "Betatester: Abstürze und Hänger der Oberfläche gehen jetzt vor den gewöhnlichen Protokollen ans Team, mit ihren Aufrufstapeln und der Platinenversion des Receivers.",
+     "fr": "Bêta-testeurs : les plantages et blocages de l'interface arrivent maintenant à l'équipe avant les journaux ordinaires, avec leurs piles d'appels et la version de la carte du récepteur.",
+     "es": "Beta testers: los cierres y bloqueos de la interfaz llegan ahora al equipo antes que los registros normales, con sus pilas de llamadas y la versión de la placa del receptor.",
+     "it": "Beta tester: i crash e i blocchi dell'interfaccia arrivano ora al team prima dei registri normali, con le pile di chiamate e la versione della scheda del ricevitore.",
+     "hu": "Bétatesztelők: a felület összeomlásai és lefagyásai most a szokásos naplók előtt jutnak el a csapathoz, a hívási vermükkel és a vevő alaplapjának változatával.",
+     "cs": "Beta testeři: pády a zamrznutí rozhraní teď jdou týmu před běžnými záznamy, i se zásobníky volání a s verzí desky přijímače.",
+     "pl": "Beta testerzy: awarie i zawieszenia interfejsu trafiają teraz do zespołu przed zwykłymi dziennikami, razem ze stosami wywołań i wersją płyty odbiornika.",
+     "pt": "Beta testers: as falhas e bloqueios da interface chegam agora à equipa antes dos registos normais, com as pilhas de chamadas e a versão da placa do recetor.",
+     "nl": "Bètatesters: crashes en vastlopers van de interface gaan nu vóór de gewone logboeken naar het team, met hun aanroepstapels en de bordversie van de ontvanger.",
+     "ru": "Бета-тестеры: сбои и зависания интерфейса теперь отправляются команде раньше обычных журналов, вместе со стеками вызовов и версией платы ресивера.",
+     "tr": "Beta testçileri: arayüz çökmeleri ve donmaları artık normal günlüklerden önce, çağrı yığınlarıyla ve alıcının kart sürümüyle birlikte ekibe gidiyor."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.24",
    "build": "0000624202611021310",
    "data": "02.11.2026",

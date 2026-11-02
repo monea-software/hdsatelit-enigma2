@@ -83,6 +83,10 @@ TRIMISE_MAX = 100
 TIMP_CERERE_S = 20
 JURNAL_MAX = 64 * 1024
 JURNALE_PE_ZI = 3
+# stivele interfetei pastrate de paznic la un blocaj moale, stivele blocajului dur (hds-blocaj-*, scrise inainte de
+# repornirea dura) si caderile enigma2 au limita lor pe zi si pleaca INAINTEA jurnalelor obisnuite: la 0.6.24, trei
+# jurnale hds-*.log mai noi le luau locul (pachetul 225, SF8008, doua blocaje moi fara nicio stiva)
+CADERI_PE_ZI = 6
 PAZNIC_RANDURI = 1000
 ECRANE_MAX = 150
 MESAJE_PE_ZI = 10
@@ -864,6 +868,10 @@ _SECRET = re.compile(r"pass(?:word|wd)?|parol|(?<![a-z])psk|wpa|ssid|token|jeton
 	r"apikey|api_key|(?<![a-z])pin(?![a-z])|cookie|authoriz|bearer|credential|cheie", re.I)
 _IP4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _IP6 = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])")
+# forma prescurtata, cu „::” (fe80::1234, mesajele nucleului despre IPv6 din hds-blocaj-*.txt; 02.11.2026): la stanga
+# si la dreapta nicio litera, ca std::string sau un „::” singur sa ramana
+_IP6_SCURT = re.compile(r"(?<![0-9A-Za-z:])(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::"
+	r"(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?(?![0-9A-Za-z:])")
 _MAC = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])")
 _EMAIL_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _URL = re.compile(r"\b(?:https?|rtsp|rtmp|rtp|udp|ftp|mms|smb|nfs)://[^\s\"'<>]+", re.I)
@@ -896,6 +904,7 @@ def curata(text):
 		rand = _MAC.sub("<mac>", rand)
 		rand = _IP6.sub("<ip>", rand)
 		rand = _IP4.sub(lambda m: m.group(0) if m.group(0).startswith(("0.", "127.")) else "<ip>", rand)
+		rand = _IP6_SCURT.sub(lambda m: m.group(0) if m.group(0) == "::" else "<ip>", rand)
 		rand = _FILM.sub("<fisier>", rand)
 		rez.append(rand[:1000])
 	return "\n".join(rez)
@@ -938,6 +947,8 @@ def felJurnal(nume, text):
 		return "actualizare", text
 	if nume.startswith("hds-extensii"):
 		return "extensii", text
+	if nume.startswith("hds-blocaj-"):
+		return "blocaj", text
 	return "eroare", text
 
 
@@ -974,7 +985,15 @@ def jurnalPermis(nume):
 		return True
 	if nume.startswith("enigma2-stive-") and nume.endswith(".txt"):
 		return True
+	# stivele firelor blocate si coada jurnalului nucleului, scrise de paznic inainte de o repornire dura
+	if nume.startswith("hds-blocaj-") and nume.endswith(".txt"):
+		return True
 	return nume.startswith("hds-") and nume.endswith(".log")
+
+
+def esteCadere(nume):
+	"""Caderile si blocajele (limita lor pe zi, CADERI_PE_ZI, si trimise inaintea jurnalelor obisnuite)."""
+	return nume.startswith("enigma2_crash_") or nume.startswith("enigma2-stive-") or nume.startswith("hds-blocaj-")
 
 
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
@@ -1024,7 +1043,9 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	if stare.get("jurnale_zi") != zi:
 		stare["jurnale_zi"] = zi
 		stare["jurnale_azi"] = 0
+		stare["caderi_azi"] = 0
 	ramase = max(0, maxim - int(stare.get("jurnale_azi", 0)))
+	ramase_caderi = max(0, CADERI_PE_ZI - int(stare.get("caderi_azi", 0)))
 	noi = []
 	try:
 		nume_fisiere = os.listdir(dosar_logs)
@@ -1044,11 +1065,14 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		if vazute.get(nume) == semn:
 			continue
 		noi.append((st.st_mtime, nume, cale_fisier, semn))
-	noi.sort(reverse=True)
+	# intai caderile si blocajele (limita lor), apoi jurnalele obisnuite (limita lor); in fiecare grup, cele mai noi intai
+	noi.sort(key=lambda x: (not esteCadere(x[1]), -x[0]))
 	jurnale = []
+	obisnuite = caderi = 0
 	for mtime, nume, cale_fisier, semn in noi:
-		if len(jurnale) >= ramase:
-			break
+		cadere = esteCadere(nume)
+		if (cadere and caderi >= ramase_caderi) or (not cadere and obisnuite >= ramase):
+			continue
 		text = _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
 		if text is None:
 			continue
@@ -1062,6 +1086,10 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 			text = curata(text)
 		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": coada(text)})
 		vazute[nume] = semn
+		if cadere:
+			caderi += 1
+		else:
+			obisnuite += 1
 	# numele care nu mai exista ies din stare
 	for nume in list(vazute):
 		if nume not in nume_fisiere:
@@ -1069,7 +1097,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	paznic = _randuriNoiPaznic(stare, cale_paznic or CALE_PAZNIC)
 	if not jurnale and not paznic:
 		return None
-	stare["jurnale_azi"] = int(stare.get("jurnale_azi", 0)) + len(jurnale)
+	stare["jurnale_azi"] = int(stare.get("jurnale_azi", 0)) + obisnuite
+	stare["caderi_azi"] = int(stare.get("caderi_azi", 0)) + caderi
 	return {"jurnale": jurnale, "paznic": paznic}
 
 
@@ -1580,9 +1609,11 @@ def dateReceptor(model="", paza=None, radacina=""):
 			dt = _txt(",".join(x.decode("ascii", "replace") for x in f.read(512).split(b"\0") if x))
 	except (OSError, IOError):
 		dt = ""
+	# versiunea placii data de driver (pe SF8008 „1.2V-20240104103144” la placa din 2024): numai primul rand, fara serie
+	versiune_placa = _txt((_citesteMic(_cale(radacina, "/proc/stb/info/version")) or "").strip().split("\n")[0], 60)
 	return {
 		"placa": {"machinebuild": model, "cip": paza.get("cip", ""), "boxtype": paza.get("boxtype", ""), "dt": dt,
-			"procesor": _procesor(radacina), "nuclee": _nuclee(radacina)},
+			"procesor": _procesor(radacina), "nuclee": _nuclee(radacina), "versiune_placa": versiune_placa},
 		"memorie": {"ram_kb": _meminfo(radacina).get("MemTotal"), "emmc_kib": emmc, "nand_kib": _nand(radacina),
 			"partitii": partitii},
 		"tunere": _tunere(radacina),
@@ -2076,8 +2107,8 @@ class Lucru(threading.Thread):
 				stare = citesteStare()
 				self.puse = culegeSiPune(inst, self.sarcini, stare, self.es, self.utilizare_, self.pornire_s,
 					self.reporniri, cerut=not self.auto_zilnic and len(self.sarcini) > 1)
-				chei = ("jurnale", "jurnale_zi", "jurnale_azi", "paznic", "canale_semn", "receptor_suma", "probe_suma",
-					"ultim")
+				chei = ("jurnale", "jurnale_zi", "jurnale_azi", "caderi_azi", "paznic", "canale_semn", "receptor_suma",
+					"probe_suma", "ultim")
 				auto = self.auto_zilnic
 
 				def uneste(s):
