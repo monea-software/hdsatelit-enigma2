@@ -1,17 +1,25 @@
 # HDSatelit Image
 
-Imagine Linux pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea Software pentru HD Satelit
-(hdsatelit.com). Interfața e enigma2 pe Python 3, cu skinul HDSatelit și interfața web proprie. Meniurile sunt
-traduse complet în 13 limbi (română, cehă, engleză, franceză, germană, italiană, maghiară, olandeză, poloneză,
-portugheză, rusă, spaniolă și turcă) și parțial în celelalte.
+Imagine Linux pentru receptoare de satelit cu procesor HiSilicon Hi3798MV200, făcută de Monea Software pentru
+HD Satelit (hdsatelit.com). Interfața e enigma2 pe Python 3, cu tema HDSatelit și interfața web proprie. Meniurile sunt
+traduse în 30 de limbi; câteva traduceri sunt încă incomplete.
 
-Stadiu: versiuni de probă (0.1.x). Prima versiune publică va fi 1.0.0.
+Stadiu: versiune beta publică (0.6.x). Imaginile și actualizările: https://stb.hdsatelit.com/ și feedul imaginii, din
+meniul receptorului.
 
-## Receptorul
+## Receptoarele
 
-- Amiko Viper 4K V20; în OpenEmbedded: mașina `u57`, numele imaginii `viper4kv20`.
-- Procesor HiSilicon Hi3798MV200 (4 nuclee ARM Cortex-A53), memorie internă eMMC.
-- Imaginea e făcută numai pentru acest model.
+| Receptorul | Mașina OpenEmbedded | Stadiul |
+|---|---|---|
+| Amiko Viper 4K V20 | `u57` (`viper4kv20`) | beta |
+| Amiko Viper 4K V30 | `u57` | beta |
+| Amiko Viper 4K V40 | `u571` | la beta testeri |
+| Amiko Viper 4K V10 | `viper4k` | la beta testeri |
+| Octagon SF8008 4K UHD | `sf8008` | la beta testeri |
+| Octagon SF8008 MINI 4K | `sf8008m` | la beta testeri |
+
+- Toate au procesorul HiSilicon Hi3798MV200 (4 nuclee ARM Cortex-A53) și memorie internă eMMC.
+- Fiecare imagine se scrie și pornește numai pe receptorul pentru care e făcută; pe alt model arată numai un mesaj.
 
 ## Licența
 
@@ -74,18 +82,25 @@ blocare: oricine poate construi imaginea din aceste surse, cu schimbările lui, 
 
 # HDSatelit Image (English)
 
-Linux image for the Amiko Viper 4K V20 satellite receiver, made by Monea Software for HD Satelit (hdsatelit.com).
-The user interface is enigma2 on Python 3, with the HDSatelit skin and its own web interface. The menus are fully
-translated into 13 languages (Romanian, Czech, English, French, German, Italian, Hungarian, Dutch, Polish,
-Portuguese, Russian, Spanish and Turkish) and partly into the others.
+Linux image for HiSilicon Hi3798MV200 satellite receivers, made by Monea Software for HD Satelit (hdsatelit.com).
+The user interface is enigma2 on Python 3, with the HDSatelit theme and its own web interface. The menus are
+translated into 30 languages; a few translations are still incomplete.
 
-Status: test versions (0.1.x). The first public version will be 1.0.0.
+Status: public beta (0.6.x). Images and updates: https://stb.hdsatelit.com/ and the image feed, from the receiver menu.
 
-## Receiver
+## Receivers
 
-- Amiko Viper 4K V20; in OpenEmbedded: machine `u57`, image name `viper4kv20`.
-- HiSilicon Hi3798MV200 processor (4 ARM Cortex-A53 cores), eMMC storage.
-- The image is made for this model only.
+| Receiver | OpenEmbedded machine | Status |
+|---|---|---|
+| Amiko Viper 4K V20 | `u57` (`viper4kv20`) | beta |
+| Amiko Viper 4K V30 | `u57` | beta |
+| Amiko Viper 4K V40 | `u571` | with beta testers |
+| Amiko Viper 4K V10 | `viper4k` | with beta testers |
+| Octagon SF8008 4K UHD | `sf8008` | with beta testers |
+| Octagon SF8008 MINI 4K | `sf8008m` | with beta testers |
+
+- All have the HiSilicon Hi3798MV200 processor (4 ARM Cortex-A53 cores) and eMMC storage.
+- Each image is written and starts only on the receiver it is made for; on another model it shows only a message.
 
 ## License
 

@@ -57675,3 +57675,24 @@ msgstr "afrit af stillingum búið til áður en nokkru var breytt"
 msgid "copia setărilor nu s-a putut face: %s"
 msgstr "ekki tókst að búa til afrit af stillingum: %s"
 
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py
+#, python-format
+msgid "„%s” se vede numai cu nivelul de meniu %s. Îl alegi la rândul „%s”, în %s."
+msgstr "„%s“ sést aðeins með valmyndarstiginu %s. Þú velur það í línunni „%s“, í %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+#, python-format
+msgid "%s: interfața web a extensiei"
+msgstr "%s: vefviðmót viðbótarinnar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Mesaj pe televizor"
+msgstr "Skilaboð á sjónvarpinu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Scrie mesajul pentru televizor"
+msgstr "Skrifaðu skilaboðin fyrir sjónvarpið"
+
+msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
+msgstr "Við þökkum öllum beta-prófurum sem tóku þátt í að búa til HD Satelit-image: %s."
+

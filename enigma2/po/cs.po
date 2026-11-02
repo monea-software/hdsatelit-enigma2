@@ -54613,3 +54613,24 @@ msgstr "kopie nastavení vytvořená před jakoukoli změnou"
 msgid "copia setărilor nu s-a putut face: %s"
 msgstr "kopii nastavení se nepodařilo vytvořit: %s"
 
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py
+#, python-format
+msgid "„%s” se vede numai cu nivelul de meniu %s. Îl alegi la rândul „%s”, în %s."
+msgstr "„%s“ se zobrazí jen s úrovní menu %s. Zvolíš ji v řádku „%s“, v %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+#, python-format
+msgid "%s: interfața web a extensiei"
+msgstr "%s: webové rozhraní rozšíření"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Mesaj pe televizor"
+msgstr "Zpráva na televizor"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Scrie mesajul pentru televizor"
+msgstr "Napiš zprávu pro televizor"
+
+msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
+msgstr "Děkujeme všem betatesterům, kteří se podíleli na tvorbě image HD Satelit: %s."
+

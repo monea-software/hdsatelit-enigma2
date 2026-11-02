@@ -15,7 +15,8 @@
 # culegerea, cautarea semnalului, probele LNB) NU trec pe aici: canalul tinut minte ramane al omului.
 #
 # Pe disc: element.save() schimba numai memoria; /etc/enigma2/settings il scrie enigma2 la iesirea curata (mytest.py)
-# si meniurile. Ca canalul sa ramana si dupa o oprire fara iesire curata (paznicul care reporneste o interfata blocata,
+# si meniurile (bataia paznicului scrie la 10 s celelalte setari schimbate, dar lasa canalul cum e pe disc:
+# Components/config.py, CHEI_CANAL). Ca canalul sa ramana si dupa o oprire fara iesire curata (paznicul care reporneste o interfata blocata,
 # repornirea receptorului, curentul), NU se rescrie tot settings, ci numai canalul, intr-un fisier mic al lui
 # (CALE_CANAL), scris sigur (fisier .nou, fsync, rename):
 #   - numai dupa ce canalul tinut minte a ramas SCRIERE_DUPA_S secunde (60) pe ecran: ceasul o ia de la capat la
