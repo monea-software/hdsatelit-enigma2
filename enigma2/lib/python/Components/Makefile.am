@@ -25,7 +25,7 @@ install_PYTHON = \
 	Ipkg.py SelectionList.py Scanner.py SystemInfo.py DreamInfoHandler.py \
 	Task.py language_cache.py Console.py ResourceManager.py TuneTest.py \
 	Keyboard.py Sensors.py FanControl.py VideoOutput.py WlanTools.py WlanControl.py DishMath.py \
-	HdsIndexCanale.py HdsPisteCanale.py HdsIstoricSemnal.py HdsHdmiDate.py HdsJurnalVersiuni.py HdsMotorStare.py HdsNavigator.py HdsPachete.py HdsPython2.py HdsPluginuriExterne.py HdsSursaPachet.py HdsRecuperare.py HdsActualizari.py \
+	HdsIndexCanale.py HdsSemneBaza.py HdsPisteCanale.py HdsIstoricSemnal.py HdsHdmiDate.py HdsJurnalVersiuni.py HdsMotorStare.py HdsNavigator.py HdsPachete.py HdsPython2.py HdsPluginuriExterne.py HdsSursaPachet.py HdsRecuperare.py HdsActualizari.py \
 	HdsAjutor.py \
 	HdsSemnatura.py \
 	HdsFonturiGoogle.py HdsPacheteDTH.py HdsEcranePornire.py HdsCodorMpeg2.py HdsSemnaturaPornire.py \

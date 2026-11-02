@@ -611,6 +611,13 @@ def runScreenTest():
 		HdsPaznic.porneste()
 	except Exception as e:
 		print("[mytest] bataia pentru paznic:", e)
+	# HDSatelit: semnul „$" din lista de canale ia si ce stie baza canalelor (Components/HdsSemneBaza.py): o trecere la
+	# 30 s dupa pornire, steagul 1024 pe canalele codate in baza. Pornirea nu depinde de ea.
+	try:
+		from Components import HdsSemneBaza
+		HdsSemneBaza.porneste()
+	except Exception as e:
+		print("[mytest] semnele din baza canalelor:", e)
 	# HDSatelit: legatura cu routerul si cu internetul (Components/HdsStareRetea.py): pictograma din bare si din web,
 	# mesajul din mijlocul ecranului la pierderea internetului. Citirea pasiva la 3 s pe firul enigma2, verificarea DNS
 	# pe firul ei. Pornirea nu depinde de ea.
