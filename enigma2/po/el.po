@@ -53040,3 +53040,48 @@ msgstr "αχρησιμοποίητο"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "ορίστηκε (%s, OK αλλαγή)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Για να ξέρουμε ποιος δέκτης ζητά βοήθεια, ο δέκτης στέλνει και ένα δακτυλικό αποτύπωμα υπολογισμένο από την πλακέτα, το ίδιο με αυτό που χρησιμοποιείται στο πρόγραμμα δοκιμαστών beta (από αυτό δεν μπορούν να βρεθούν η διεύθυνση MAC ή ο σειριακός αριθμός). Αν είσαι δοκιμαστής beta, ο δέκτης στέλνει και το όνομα που έδωσες κατά την εγγραφή ή, αν δεν έδωσες κάποιο, το όνομα που χρησιμοποιείς δημόσια."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "ένα αρχείο ή ένας φάκελος του συστήματος (/proc, /sys, /etc, /var/log, αρχεία καταγραφής, /tmp), χωρίς μονάδες πρόσβασης, κωδικούς πρόσβασης, κλειδιά ή προσωπικά δεδομένα"
+
+msgid "Semnele din lista de canale"
+msgstr "Σημάδια στη λίστα καναλιών"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Δεξιά από κάθε κανάλι: «$» στα κωδικοποιημένα κανάλια και η πηγή, Δορυφόρος, Καλωδιακή ή Επίγεια. Μπορείς να απενεργοποιήσεις και τα δύο ή μόνο το ένα. Ένα κωδικοποιημένο κανάλι παίρνει το «$» μετά από νέα αναζήτηση καναλιών ή αφού το δεις μία φορά."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "«$» στα κωδικοποιημένα κανάλια και η πηγή"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Μόνο «$» στα κωδικοποιημένα κανάλια"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Μόνο η πηγή (δορυφόρος, καλωδιακή, επίγεια)"
+
+msgid "Fără semne"
+msgstr "Χωρίς σημάδια"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Το αντίγραφο δημιουργείται αυτόματα όταν συνδέεται η ομάδα, πριν από οποιαδήποτε αλλαγή. Το κουμπί επαναφέρει τα κανάλια, τις ρυθμίσεις και το δίκτυο όπως ήταν τότε· η διεπαφή επανεκκινείται."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Αντίγραφο ρυθμίσεων που δημιουργήθηκε όταν συνδέθηκε η ομάδα: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Επανάφερε όπως πριν"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "αντίγραφο ρυθμίσεων που δημιουργήθηκε πριν από οποιαδήποτε αλλαγή"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "δεν ήταν δυνατή η δημιουργία αντιγράφου ρυθμίσεων: %s"
+

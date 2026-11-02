@@ -4,6 +4,7 @@
 #include <lib/gdi/font.h>
 #include <lib/dvb/epgcache.h>
 #include <lib/dvb/pmt.h>
+#include <lib/dvb/db.h>
 #include <lib/python/connections.h>
 
 #include <algorithm>
@@ -319,7 +320,7 @@ void eListboxServiceContent::sort()
 DEFINE_REF(eListboxServiceContent);
 
 eListboxServiceContent::eListboxServiceContent()
-	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_itemheight(25)
+	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_itemheight(25), m_service_marks(0)
 {
 	memset(m_color_set, 0, sizeof(m_color_set));
 	cursorHome();
@@ -344,6 +345,47 @@ void eListboxServiceContent::setPathLabel(const std::string &marker, const std::
 void eListboxServiceContent::clearPathLabels()
 {
 	m_path_labels.clear();
+}
+
+void eListboxServiceContent::setServiceMarks(int marks, const std::string &crypted, const std::string &satellite,
+	const std::string &cable, const std::string &terrestrial)
+{
+	if (marks == m_service_marks && crypted == m_mark_crypted && satellite == m_mark_satellite && cable == m_mark_cable
+		&& terrestrial == m_mark_terrestrial)
+		return;
+	m_service_marks = marks;
+	m_mark_crypted = crypted;
+	m_mark_satellite = satellite;
+	m_mark_cable = cable;
+	m_mark_terrestrial = terrestrial;
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+/* the marks of a DVB service row (setServiceMarks), "" for anything else: read from the service database at paint
+   time, so CAIDs learned at a zap show at once */
+std::string eListboxServiceContent::serviceMarks(const eServiceReference &ref) const
+{
+	if (!m_service_marks || ref.type != eServiceReference::idDVB || !ref.path.empty())
+		return "";
+	std::string marks;
+	if (m_service_marks & markCrypted)
+	{
+		ePtr<eDVBService> service;
+		eDVBDB *db = eDVBDB::getInstance();
+		if (db && !db->getService((const eServiceReferenceDVB&)ref, service) && service &&
+			(!service->m_ca.empty() || (service->m_flags & eDVBService::dxIsScrambledPMT)))
+			marks = m_mark_crypted;
+	}
+	if (m_service_marks & markSource)
+	{
+		unsigned int orbpos = ref.getUnsignedData(4) >> 16;
+		const std::string &source = (orbpos == 0xFFFF) ? m_mark_cable : (orbpos == 0xEEEE) ? m_mark_terrestrial :
+			m_mark_satellite;
+		if (!source.empty())
+			marks += (marks.empty() ? "" : "  ") + source;
+	}
+	return marks;
 }
 
 /* like the streamed services: the list is repainted when a label changes */
@@ -750,6 +792,8 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		{
 			std::map<eServiceReference, std::string>::const_iterator rl = m_ref_labels.find(ref);
 			label = rl != m_ref_labels.end() ? rl->second : pathLabel(ref);
+			if (label.empty())
+				label = serviceMarks(ref);
 			if (!label.empty())
 			{
 				ePtr<eTextPara> measure = new eTextPara(eRect(0, 0, m_itemsize.width(), m_itemsize.height()));

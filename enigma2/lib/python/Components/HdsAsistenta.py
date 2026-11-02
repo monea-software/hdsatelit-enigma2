@@ -6,7 +6,9 @@
 # nicio cheie, nicio legatura pana nu o porneste omul: Meniu > Setari > Asistenta de la distanta (ecranul
 # Screens/HdsAsistenta.py: o pagina cu randul bifat "Accept termenii și condițiile" si Start) sau din pagina web
 # /asistenta (aceeasi pagina). O singura logica pentru receptor si pentru web. Modelul si versiunea trimise serverului
-# sunt cele ale programului de testeri (Components/HdsBetaTester.py), fara sa ceara inscrierea in program.
+# sunt cele ale programului de testeri (Components/HdsBetaTester.py), fara sa ceara inscrierea in program; din 0.6.21
+# si amprenta receptorului, iar la un beta tester inscris si inscrierea (8 cifre) si numele (_cine, spuse in
+# informare: TEXT_CINE), ca echipa sa stie cine cere ajutor.
 #
 # Cum merge (fara tunel, fara shell): dupa consimtamant, receptorul se inregistreaza prin HTTPS la serverul HD Satelit,
 # primeste un cod de 6 cifre si intreaba din cateva in cateva secunde daca are o cerere. Codul ramane intern, intre
@@ -14,7 +16,8 @@
 # nicaieri. O cerere e numai una din catalogul fix (Components/HdsAsistentaCatalog.py), SEMNATA cu cheia noastra;
 # cheia publica sta in pachet (CHEI_ASISTENTA), nu vine de la server, deci un server spart nu poate cere nimic.
 # Fiecare cerere si raspuns apar pe ecranul omului (jurnalul sesiunii) si in web. Pe receptor se scriu numai dosarul
-# temporar al sesiunii (jurnalul) si fisierul ei de stare (STARE_FISIER), sterse amandoua la oprire. Durata: 2 ore
+# temporar al sesiunii (jurnalul) si fisierul ei de stare (STARE_FISIER), sterse amandoua la oprire, si (din 0.6.21)
+# copia setarilor facuta cand intra echipa (DOSAR_COPIE, „Pune înapoi cum era”, ramane dupa oprire). Durata: 2 ore
 # implicit, pana la o luna, sau permanent (de pe pagina de pornire: DURATA_IMPLICITA_MIN); echipa intra oricand cat e
 # pornita (codul nu are termen de aprobare). Se opreste oricand (o tasta, pagina web, banda din web) si singura la
 # sfarsitul duratei alese (niciodata la "permanent").
@@ -73,12 +76,20 @@ STARE_FISIER = os.path.join(DOSAR_STARE, "stare.json")
 # poata reciti (ecranul asistentei si pagina web); fiecare concluzie noua o inlocuieste pe cea de dinainte
 CONCLUZII_FISIER = os.path.join(DOSAR_STARE, "concluzii.json")
 CONCLUZII_MAX = 2000
+# „Pune înapoi cum era” (0.6.21): copia setarilor (Components/HdsCopieSetari.fa_copia) facuta o data pe sesiune, cand
+# echipa intra (starea "conectat"), inaintea primei cereri, aici, in memoria receptorului (in afara DOSAR_STARE). O
+# singura copie de asistenta pe receptor: dosarul intreg se sterge inaintea celei noi. Ramane dupa oprire, ca omul sa
+# poata pune setarile inapoi oricand (ecranul asistentei si pagina web); punerea o face enigma2.sh
+# (HdsCopieSetari.pornire, care verifica toata copia) la repornirea interfetei. Pachetele instalate sau scoase in
+# sesiune NU intra in v1: le scoate echipa, cu op "dezinstaleaza".
+DOSAR_COPIE = "/home/root/hds-asistenta-copie"
 IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
 # Regula curenta: ecrane deschise cu secrete mascate; numai modulele de acces raman inchise.
-VERSIUNE_TEXT = 7
+# v8 (0.6.21): informarea spune si ce trimite _cine (TEXT_CINE)
+VERSIUNE_TEXT = 8
 # durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
 # fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
 DURATA_PERMANENTA = 0
@@ -145,6 +156,12 @@ INFORMARE = N_(
 TEXT_DURATE = N_("Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e "
 	"pornită, echipa poate intra oricând, dar face numai ce e în lista fixă.")
 
+# cine cere ajutor (din 0.6.21, _cine): pus dupa paragraful "Ce date ajung la noi..." al informarii, inaintea
+# operatorului datelor (in web si pe receptor); aceleasi cuvinte despre amprenta ca nota testerilor (NOTA_SCURTA)
+TEXT_CINE = N_("Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la "
+	"programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și "
+	"numele dat la înscriere sau, fără el, numele tău public.")
+
 # Regula unica pentru pornire, informare si pagina web.
 TEXT_CUM_MERGE = N_(
 	"Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla "
@@ -155,6 +172,8 @@ TEXT_CUM_MERGE = N_(
 def textInformare():
 	parti = _t(INFORMARE).split("\n\n")
 	parti.insert(min(4, len(parti)), _t(TEXT_DURATE))
+	# inaintea ultimului paragraf (operatorul datelor), deci dupa "Ce date ajung la noi..."
+	parti.insert(max(len(parti) - 1, 0), _t(TEXT_CINE))
 	return "\n\n".join(parti)
 
 
@@ -470,6 +489,49 @@ def _versiuneImagine():
 	return "necunoscut"
 
 
+NUME_TESTER_MAX = 60
+
+
+def _numePublic(b):
+	"""Numele public al testerului: cel dat de forum, altfel cel tinut in setari (ca betatester_web.numeForum)."""
+	try:
+		from Components import HdsForumReceptor
+		nume = HdsForumReceptor.numePublic()
+	except Exception:
+		nume = ""
+	return nume or b.public.value or ""
+
+
+def _cine():
+	"""Cine cere ajutor, cu datele programului de testeri (Components/HdsBetaTester.py), spuse in informare
+	(TEXT_CINE): "amprenta" = amprenta receptorului (PBKDF2 din MAC si CID, din care acestea nu se pot afla; aceeasi
+	ca in pachetele testerilor, unde primele 8 cifre sunt „Receptorul”); la un beta tester inscris (programul pornit, cu
+	acordul pe nota de acum) si "tester" = primele 8 cifre ale identificatorului inscrierii („Înscrierea”; identificatorul
+	intreg e cheia lui la serverul testerilor si nu pleaca) si "nume" = numele dat la inscriere sau, fara el, numele
+	public. Ce nu se poate afla lipseste; fara nimic, corpul e cel de dinainte. Pe firul sesiunii (amprenta se calculeaza
+	o data pe proces)."""
+	rez = {}
+	B = _beta()
+	if B is None:
+		return rez
+	try:
+		amprenta = B.amprenta()
+		if amprenta:
+			rez["amprenta"] = str(amprenta)[:32]
+	except Exception as e:
+		_jurnal("amprenta: %s" % e)
+	try:
+		b = B.initConfig()
+		if B.inscris(b):
+			rez["tester"] = str(b.id.value)[:8]
+			nume = B.textNume(b.nume.value, NUME_TESTER_MAX) or B.textNume(_numePublic(b), NUME_TESTER_MAX)
+			if nume:
+				rez["nume"] = nume
+	except Exception as e:
+		_jurnal("beta tester: %s" % e)
+	return rez
+
+
 # ---------------------------------------------------------------- jurnalul sesiunii (in memorie + dosar temporar)
 
 class Jurnal(object):
@@ -525,6 +587,7 @@ class Sesiune(object):
 		self.motiv_oprire = ""
 		self.ultim_seq = 0
 		self.pana_la_ora = None            # ora peretelui la care se opreste singura (None la permanent)
+		self.copie_pentru = None           # id-ul sesiunii pentru care s-a incercat copia setarilor (_copia_inainte)
 		self._activ = _acum()              # ultima data cand s-a intamplat ceva (pornire, conectare, cerere)
 		self.dosar = None
 		self.jurnal = None
@@ -613,7 +676,7 @@ class Sesiune(object):
 				json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
 					"nivel": self.nivel, "durata_min": self.durata_min, "pana_la_ora": self.pana_la_ora,
 					"ultim_seq": self.ultim_seq, "limba": self.limba, "dosar": self.dosar, "cod": self.cod,
-					"asteapta": self.stare == ASTEAPTA}, f)
+					"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru}, f)
 			os.replace(nou, STARE_FISIER)
 		except Exception:
 			pass
@@ -639,6 +702,8 @@ class Sesiune(object):
 	def _inregistreaza(self):
 		corp = {"v": PROTOCOL, "model": _model(), "imagine": _versiuneImagine(), "nivel": self.nivel,
 			"durata_min": self.durata_min, "limba": self.limba}
+		# cine cere ajutor (amprenta; la un beta tester si inscrierea si numele), ca echipa sa stie al cui e receptorul
+		corp.update(_cine())
 		# campurile optionale numai cand omul a spus ceva: altfel corpul e cel de dinainte
 		if self.nevoie:
 			corp["nevoie"] = self.nevoie
@@ -685,7 +750,43 @@ class Sesiune(object):
 			self._asteapta_pas(self._pas())
 		return False
 
+	def _copia_inainte(self):
+		"""O data pe sesiune, cand echipa a intrat, inaintea primei cereri: copia setarilor (faCopieAsistenta), pentru
+		„Pune înapoi cum era”. Numai la nivelul B (A nu schimba nimic) si numai cu ctx-ul receptorului
+		(Screens/HdsAsistentaSemn.ctxReceptor), care da ctx["setari_acum"]: settings de acum (config.pickle() pe firul
+		enigma2); daca el nu raspunde la timp (None), fa_copia ia fisierul de pe disc. O sesiune reluata cu acelasi id
+		(fisierul de stare, "copie") nu o mai face; copie_pentru se scrie dupa incercare, reusita sau nu, inaintea
+		primei cereri: dupa ce echipa a schimbat ceva, o copie noua n-ar mai fi „cum era”. O copie ratata e numai un
+		rand in jurnal; sesiunea merge mai departe."""
+		if self.nivel != "B" or not self.id or self.copie_pentru == self.id or self._stop.is_set():
+			return
+		setari_acum = self.ctx.get("setari_acum")
+		if setari_acum is None:
+			return
+		try:
+			text = setari_acum()
+			if text is not None and not isinstance(text, str):
+				text = None
+		except Exception as e:
+			_jurnal("setarile de acum: %s" % type(e).__name__)
+			text = None
+		try:
+			ok, motiv = faCopieAsistenta(text)
+		except Exception as e:
+			ok, motiv = False, type(e).__name__
+		self.copie_pentru = self.id
+		self._scrie_stare()
+		if ok:
+			self.jurnal.adauga(_t(TEXT_COPIE_FACUTA))
+		else:
+			self.jurnal.adauga(_t(TEXT_COPIE_RATATA) % motiv)
+
 	def _bucla_cereri(self):
+		# copia setarilor inaintea primei cereri (si la o sesiune reluata dupa repornire, daca n-a fost incercata)
+		try:
+			self._copia_inainte()
+		except Exception as e:
+			_jurnal("copia setarilor: %s" % type(e).__name__)
 		while not self._stop.is_set():
 			if self.expirata():
 				self.jurnal.adauga(_t("s-a terminat timpul ales"))
@@ -725,6 +826,9 @@ class Sesiune(object):
 			eticheta = "%s: %s" % (eticheta, args[0])
 		elif op == "text" and args:
 			eticheta = "%s: %s" % (eticheta, _t("%d semne") % len(args[0]))
+		elif op == "citeste" and args:
+			# omul vede ce fisier sau dosar citeste echipa
+			eticheta = "%s: %s" % (eticheta, args[0])
 		if fel_cat == "control" and self.nivel != "B":
 			self.jurnal.adauga(_t("cerere refuzată: %s") % _t("control oprit"))
 			rez = Broker.Rezultat(1, text=Broker.TEXT_FARA_CONTROL)
@@ -930,13 +1034,127 @@ def stareConcluzii():
 	return {"text": c["text"], "ora_text": oraSfarsit(c["ora"]) if c["ora"] else ""}
 
 
+# ---------------------------------------------------------------- copia setarilor: „Pune înapoi cum era”
+
+# tasta Albastra pe receptor si butonul din pagina web
+TEXT_PUNE_INAPOI = N_("Pune înapoi cum era")
+# ziua si ora copiei, sus in textul ecranului si in pagina web, cat exista copia (si dupa oprire)
+TEXT_COPIE_DIN = N_("Copia setărilor făcută când a intrat echipa: %s.")
+# randurile jurnalului sesiunii, dupa incercarea copiei
+TEXT_COPIE_FACUTA = N_("copia setărilor făcută înainte de orice schimbare")
+TEXT_COPIE_RATATA = N_("copia setărilor nu s-a putut face: %s")
+
+
+def _copie():
+	"""Components.HdsCopieSetari (copia, lista copiilor, cererea de punere la loc), sau None fara el; probele de pe PC
+	pun modulul lor in sys.modules."""
+	try:
+		from Components import HdsCopieSetari
+		return HdsCopieSetari
+	except Exception as e:
+		_jurnal("copia setarilor: %s" % e)
+		return None
+
+
+def mediuCopie():
+	"""Locul copiei de asistenta, in forma mediilor lui HdsCopieSetari (copii(), cere_punerea): medii() da numai
+	stickurile si discurile montate, deci acesta se da de aici."""
+	return {"punct": DOSAR_COPIE, "id": DOSAR_COPIE, "fel": "disc", "eticheta": "", "dispozitiv": "",
+		"actualizare": False, "nume": _t("Asistență de la distanță")}
+
+
+# copia gasita (dictul lui HdsCopieSetari.copii), tinuta cat nu se schimba dosarul copiilor: stare() e chemata in
+# fiecare secunda de ecran si la 3 secunde de pagina web
+_copieTinuta = {"cheie": None, "copie": None}
+
+
+def copieAsistenta():
+	"""Copia setarilor facuta de asistenta ({"id", "data_text", "acest", ...} ca in HdsCopieSetari.copii), sau None."""
+	C = _copie()
+	if C is None:
+		return None
+	dosar = os.path.join(DOSAR_COPIE, *C.DOSAR_PE_MEDIU.split("/"))
+	try:
+		cheie = (os.stat(dosar).st_mtime_ns, tuple(sorted(os.listdir(dosar))))
+	except OSError:
+		_copieTinuta.update(cheie=None, copie=None)
+		return None
+	if cheie != _copieTinuta["cheie"]:
+		lista = C.copii([mediuCopie()])
+		_copieTinuta.update(cheie=cheie, copie=lista[0] if lista else None)
+	return _copieTinuta["copie"]
+
+
+def faCopieAsistenta(text_setari=None):
+	"""Copia setarilor in DOSAR_COPIE, cu HdsCopieSetari.fa_copia (garda de spatiu a ei ramane: fara loc, nimic scris).
+	Intai dosarul intreg se sterge (copia veche si un .part ramas dupa o cadere de curent), apoi se face din nou (0700:
+	copia are parolele Wi-Fi). fel "automata": citeste_descriere arata orice alta valoare decat "automata" ca „făcută de
+	mână”. Pe firul sesiunii. -> (ok, motiv scurt pentru jurnal)."""
+	C = _copie()
+	if C is None:
+		return False, "HdsCopieSetari"
+	_copieTinuta.update(cheie=None, copie=None)
+	try:
+		if os.path.islink(DOSAR_COPIE):
+			os.remove(DOSAR_COPIE)
+		shutil.rmtree(DOSAR_COPIE, ignore_errors=True)
+		os.makedirs(DOSAR_COPIE, mode=0o700, exist_ok=True)
+		rez = C.fa_copia(DOSAR_COPIE, text_setari, "automata")
+	except Exception as e:
+		_jurnal("copia setarilor: %s" % e)
+		return False, type(e).__name__
+	finally:
+		_copieTinuta.update(cheie=None, copie=None)
+	if isinstance(rez, dict) and rez.get("ok"):
+		return True, ""
+	mesaje = (rez.get("mesaje") if isinstance(rez, dict) else None) or ["?"]
+	return False, str(mesaje[0]).strip().rstrip(".")
+
+
+def stareCopie():
+	"""Pentru ecran si pagina web: {"data_text", "text" (ziua si ora copiei), "intrebare" (aceeasi ca la „Copia
+	setărilor”: HdsCopieSetari.text_intrebare_punere)} sau None cand nu e copie."""
+	c = copieAsistenta()
+	C = _copie()
+	if c is None or C is None:
+		return None
+	return {"data_text": c.get("data_text", ""), "text": _t(TEXT_COPIE_DIN) % c.get("data_text", ""),
+		"intrebare": C.text_intrebare_punere(c)}
+
+
+def cerePunereaInapoi():
+	"""„Pune înapoi cum era”: cererea de punere la loc a copiei de asistenta (HdsCopieSetari.cere_punerea). Repornirea
+	interfetei o cere cel care cheama (ecranul sau pagina web, ca la „Copia setărilor”); copia o pune la loc enigma2.sh
+	(HdsCopieSetari.pornire), fara cod nou de punere. Sesiunea nu se opreste: jurnalul ei spune ce s-a cerut, iar dupa
+	repornire se reia singura (fisierul de stare ramane). -> (ok, mesaj)."""
+	C = _copie()
+	c = copieAsistenta()
+	if C is None or c is None:
+		return False, _t("Copia nu mai este pe mediu.")
+	ok, mesaj = C.cere_punerea(c["id"], [c])
+	ses = _sesiune
+	if ok and ses is not None and ses.activa() and ses.jurnal is not None:
+		ses.jurnal.adauga("%s: %s" % (_t(TEXT_PUNE_INAPOI), mesaj))
+	return ok, mesaj
+
+
+def _stareCopie():
+	try:
+		return stareCopie()
+	except Exception as e:
+		_jurnal("copia setarilor: %s" % e)
+		return None
+
+
 def stare():
-	"""Starea pentru ecran si pentru pagina web."""
+	"""Starea pentru ecran si pentru pagina web; "copie": copia pentru „Pune înapoi cum era” (stareCopie) sau None."""
 	ses = _sesiune
 	if ses is None:
 		return {"stare": OPRIT, "disponibil": disponibil(), "durate": list(DURATE_MIN),
-			"durata_implicita": DURATA_IMPLICITA_MIN, "are_concluzii": ultimeleConcluzii() is not None}
+			"durata_implicita": DURATA_IMPLICITA_MIN, "are_concluzii": ultimeleConcluzii() is not None,
+			"copie": _stareCopie()}
 	return {
+		"copie": _stareCopie(),
 		"are_concluzii": ultimeleConcluzii() is not None,
 		"stare": ses.stare,
 		"disponibil": True,
@@ -990,6 +1208,8 @@ def reia(ctx=None):
 	ses.secret = s["secret"]
 	ses.ultim_seq = int(s.get("ultim_seq", 0))
 	ses.pana_la_ora = pana
+	# copia setarilor deja incercata pentru aceasta sesiune: nu se mai face (Sesiune._copia_inainte)
+	ses.copie_pentru = s.get("copie") if isinstance(s.get("copie"), str) else None
 	# dupa o repornire a receptorului intreg dosarul temporar al jurnalului nu mai exista: altul nou
 	ses.dosar = s.get("dosar")
 	if not ses.dosar or not os.path.isdir(ses.dosar):

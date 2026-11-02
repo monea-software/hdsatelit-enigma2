@@ -55388,3 +55388,48 @@ msgstr "не использован"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "задан (%s, OK изменить)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Чтобы мы знали, какой ресивер запрашивает помощь, он также отправляет отпечаток, вычисленный по плате, который используется и в программе бета-тестеров (по нему нельзя узнать MAC-адрес или серийный номер). Если ты бета-тестер, ресивер также отправляет имя, указанное при регистрации, а если оно не указано, твоё публичное имя."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "системный файл или каталог (/proc, /sys, /etc, /var/log, журналы, /tmp), без модулей доступа, паролей, ключей и персональных данных"
+
+msgid "Semnele din lista de canale"
+msgstr "Значки в списке каналов"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Справа от каждого канала: «$» у закодированных каналов и источник: Спутник, Кабель или Эфир. Можно отключить оба значка или только один. Закодированный канал получает «$» после нового поиска каналов или после того, как ты один раз его посмотришь."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "«$» у закодированных каналов и источник"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Только «$» у закодированных каналов"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Только источник (спутник, кабель, эфир)"
+
+msgid "Fără semne"
+msgstr "Без значков"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Копия создаётся автоматически при подключении команды, до любых изменений. Кнопка восстанавливает каналы, настройки и сеть в том виде, в каком они были тогда; интерфейс перезапускается."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Копия настроек, созданная при подключении команды: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Восстанови как было"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "копия настроек создана до любых изменений"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "не удалось создать копию настроек: %s"
+

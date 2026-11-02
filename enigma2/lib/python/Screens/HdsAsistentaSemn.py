@@ -13,14 +13,16 @@
 #     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
 #     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
-#   - ctxReceptor(session): uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic,
+#   - ctxReceptor(session): settings de acum pentru copia facuta cand intra echipa („Pune înapoi cum era”, setari_acum,
+#     pe firul enigma2) si uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic,
 #     refuzata pe modulele de acces si cat se editeaza un secret; celelalte secrete se deseneaza cu stelute.
 #     Punerea unui mesaj si a concluziilor, si controlul (nivelul B): textul ecranului (op
 #     "ecran"), tastele telecomenzii (op "taste", una pe tic de eTimer) si textul intr-un camp (op "text"), toate pe firul
 #     enigma2 (Control.PeFir: reactor.callFromThread, iar ceasul controlerului goleste coada ca plasa); cat ruleaza un
 #     op de control, banda de sus spune "HD Satelit lucrează acum pe receptorul tău";
 #   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (de pe receptor sau din web) si reluarea
-#     dupa repornirea interfetei (chemata din mytest.py).
+#     dupa repornirea interfetei (chemata din mytest.py);
+#   - puneInapoi(session): Albastru "Pune înapoi cum era" de pe ecranele asistentei (intrebarea, cererea, repornirea).
 # Nu se importa la incarcarea mytest.py nimic greu; functiile se cheama la nevoie.
 
 import subprocess
@@ -476,9 +478,21 @@ def _setare(cheie, valoare):
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
+def _setariAcum():
+	"""settings de acum pentru copia de dinaintea asistentei (A.Sesiune._copia_inainte, „Pune înapoi cum era”):
+	HdsCopieSetari.text_setari_acum (SETARI_FIXE puse, apoi config.pickle()), pe firul enigma2, ca la „Copia setărilor”.
+	-> text sau None (dupa termen sau fara arborele config: copia ia atunci fisierul de pe disc)."""
+	def lucru(gata):
+		from Components import HdsCopieSetari
+		gata(HdsCopieSetari.text_setari_acum())
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
 def ctxReceptor(session):
 	ctx = {}
 	ctx["captura"] = _captura
+	# settings de acum, pentru copia facuta cand intra echipa; numai ctx-ul receptorului il are (si deci face copia)
+	ctx["setari_acum"] = _setariAcum
 	ctx["ecran"] = _ecranText
 	ctx["taste"] = _taste
 	ctx["text"] = _text
@@ -521,6 +535,29 @@ def reia(session):
 		A.reia(ctx=ctxReceptor(session))
 	except Exception as e:
 		_jurnal("reluare: %r" % (e,))
+
+
+def puneInapoi(session):
+	"""Albastru "Pune înapoi cum era" (Screens/HdsAsistenta.py: ecranul asistentei si pagina de pornire): o singura
+	intrebare, cu "Nu" ales (aceeasi ca la „Copia setărilor”: HdsCopieSetari.text_intrebare_punere), apoi cererea
+	(A.cerePunereaInapoi) si repornirea interfetei, ca in Screens/HdsCopieSetari.py; copia o pune la loc enigma2.sh,
+	inaintea interfetei. Sesiunea de asistenta nu se opreste (se reia singura dupa repornire). Aici, nu in
+	Screens/HdsAsistenta.py: acolo Start porneste fara nicio intrebare (regula 0.6.13)."""
+	copie = A.stareCopie()
+	if not copie:
+		return
+	from Screens.MessageBox import MessageBox
+
+	def dupa(da=False):
+		if not da:
+			return
+		ok, mesaj = A.cerePunereaInapoi()
+		if not ok:
+			session.open(MessageBox, mesaj, MessageBox.TYPE_ERROR, timeout=10)
+			return
+		from Screens.Standby import TryQuitMainloop
+		session.open(TryQuitMainloop, 3)
+	session.openWithCallback(dupa, MessageBox, copie["intrebare"], MessageBox.TYPE_YESNO, default=False)
 
 
 TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo.")

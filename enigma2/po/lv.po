@@ -52954,3 +52954,48 @@ msgstr "neizmantots"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "iestatīts (%s, OK mainīt)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Lai mēs zinātu, kurš uztvērējs lūdz palīdzību, uztvērējs nosūta arī no plates aprēķinātu pirksta nospiedumu, tādu pašu kā beta testētāju programmā (no tā nevar uzzināt MAC adresi vai sērijas numuru). Ja tu esi beta testētājs, uztvērējs nosūta arī vārdu, ko norādīji reģistrējoties, vai, ja to nenorādīji, tavu publisko vārdu."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "sistēmas fails vai mape (/proc, /sys, /etc, /var/log, žurnāli, /tmp), bez piekļuves moduļiem, parolēm, atslēgām vai personas datiem"
+
+msgid "Semnele din lista de canale"
+msgstr "Zīmes kanālu sarakstā"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Pa labi no katra kanāla: „$” pie kodētiem kanāliem un avots, Satelīts, Kabelis vai Virszemes. Vari izslēgt abus vai tikai vienu. Kodēts kanāls saņem „$” pēc jaunas kanālu meklēšanas vai pēc tam, kad esi to vienreiz skatījies."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "„$” pie kodētiem kanāliem un avots"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Tikai „$” pie kodētiem kanāliem"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Tikai avots (satelīts, kabelis, virszemes)"
+
+msgid "Fără semne"
+msgstr "Bez zīmēm"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Kopija tiek izveidota automātiski, kad komanda pieslēdzas, pirms jebkādām izmaiņām. Poga atjauno kanālus, iestatījumus un tīklu tādus, kādi tie bija tajā brīdī; saskarne tiek restartēta."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Iestatījumu kopija izveidota, kad komanda pieslēdzās: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Atjauno iepriekšējo stāvokli"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "iestatījumu kopija izveidota pirms jebkādām izmaiņām"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "neizdevās izveidot iestatījumu kopiju: %s"
+

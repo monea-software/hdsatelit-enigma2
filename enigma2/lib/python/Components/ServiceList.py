@@ -507,7 +507,24 @@ class ServiceList(HTMLComponent, GUIComponent):
 		else:
 			self.hdsNumite = set()
 		self.hdsEticheteDvbI()
+		self.hdsSemne()
 		self.selectionChanged()
+
+	# semnele din dreapta randului (config.usage.hds_semne_lista): valoarea setarii -> bitii nucleului
+	SEMNE = {"ambele": 3, "codat": 1, "sursa": 2, "niciunul": 0}
+
+	def hdsSemne(self):
+		"""Semnele randurilor DVB, dupa setare: $ la canalele codate si sursa (Satelit, Cablu, Terestru), desenate de
+		nucleu cand randul n-are alta eticheta (lib/service/listboxservice.cpp, serviceMarks). La fiecare radacina noua:
+		nucleul nu redeseneaza daca nimic nu s-a schimbat, iar o setare schimbata intra la urmatoarea deschidere."""
+		l = self.l
+		if not hasattr(l, "setServiceMarks"):
+			return
+		try:
+			semne = self.SEMNE.get(config.usage.hds_semne_lista.value, 3)
+		except AttributeError:
+			semne = 3
+		l.setServiceMarks(semne, "$", _("Satelit"), _("Cablu"), _("Terestru"))
 
 	def iconitaMarcaj(self, root):
 		"""In buchetele DAB+ / DVB-T2 din satelit marcajele sunt capetele ansamblurilor („MUX DAB+: DR Deutschland”) si

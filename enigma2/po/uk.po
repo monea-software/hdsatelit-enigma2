@@ -57757,3 +57757,106 @@ msgstr "Підтвердь адресу електронної пошти, на�
 #: lib/python/Screens/HdsAsistenta.py lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
 msgid "Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."
 msgstr "Якщо ми не підключимося одразу, залиш запит активним щонайменше на 30 хвилин: можливо, зараз ми допомагаємо комусь іншому."
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Щоб ми знали, який ресивер просить про допомогу, ресивер також надсилає відбиток, обчислений з плати, такий самий, як у програмі бета-тестерів (з нього не можна визначити MAC-адресу або серійний номер). Якщо ти бета-тестер, ресивер також надсилає імʼя, вказане під час реєстрації, а якщо його не вказано, твоє публічне імʼя."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "системний файл або тека (/proc, /sys, /etc, /var/log, журнали, /tmp), без модулів доступу, паролів, ключів чи персональних даних"
+
+msgid "Semnele din lista de canale"
+msgstr "Позначки у списку каналів"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Праворуч від кожного каналу: «$» біля закодованих каналів і джерело: Сателіт, Кабель або Ефір. Можна вимкнути обидві позначки або лише одну. Закодований канал отримує «$» після нового пошуку каналів або після того, як ти один раз його переглянеш."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "«$» біля закодованих каналів і джерело"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Лише «$» біля закодованих каналів"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Лише джерело (сателіт, кабель, ефір)"
+
+msgid "Fără semne"
+msgstr "Без позначок"
+
+# HDSatelit: textele lipsa din uk (02.11.2026), ca ucraineana sa intre in lista de limbi (regula: nimic ascuns)
+msgid "Adaugă încă o cheie"
+msgstr "Додати ще один ключ"
+
+msgid "Canalul de acum nu merge: datele lui tehnice pleacă pe loc."
+msgstr "Поточний канал не працює: його технічні дані надсилаються одразу."
+
+msgid "Ce nu merge (opțional)"
+msgstr "Що не працює (необов'язково)"
+
+msgid "Ce nu merge la canalul ăsta? Poți lăsa gol și apăsa OK."
+msgstr "Що не так із цим каналом? Можна залишити порожнім і натиснути OK."
+
+msgid "Cheia API %d"
+msgstr "Ключ API %d"
+
+msgid "Cheia API %d pentru %s"
+msgstr "Ключ API %d для %s"
+
+msgid "Cheia este goală."
+msgstr "Ключ порожній."
+
+msgid "Cheia nu există."
+msgstr "Ключ не існує."
+
+msgid "Nu rulează niciun canal acum."
+msgstr "Зараз не відтворюється жоден канал."
+
+msgid "OK: adaugă încă un rând pentru o cheie API suplimentară (de exemplu de pe alt cont)."
+msgstr "OK: додає ще один рядок для додаткового ключа API (наприклад, з іншого облікового запису)."
+
+msgid "Raportează canalul ăsta"
+msgstr "Повідомити про цей канал"
+
+msgid "Raportul canalului a intrat în coadă și pleacă îndată ce receptorul are internet."
+msgstr "Звіт про канал у черзі й буде надісланий, щойно ресивер матиме інтернет."
+
+msgid "Valoarea antetului %d"
+msgstr "Значення заголовка %d"
+
+msgid "Valoarea antetului %d pentru %s"
+msgstr "Значення заголовка %d для %s"
+
+msgid "cheie greșită"
+msgstr "неправильний ключ"
+
+msgid "cota terminată până la %s"
+msgstr "квоту вичерпано до %s"
+
+msgid "merge"
+msgstr "працює"
+
+msgid "nefolosită"
+msgstr "не використано"
+
+msgid "pusă (%s, OK schimbă)"
+msgstr "задано (%s, OK змінити)"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Копія створюється автоматично, коли підключається команда, до будь-яких змін. Кнопка відновлює канали, налаштування та мережу в тому стані, у якому вони були тоді; інтерфейс перезапускається."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Копія налаштувань, створена під час підключення команди: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Віднови як було"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "копія налаштувань створена до будь-яких змін"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "не вдалося створити копію налаштувань: %s"
+

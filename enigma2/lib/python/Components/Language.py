@@ -11,7 +11,7 @@ from . import language_cache
 LIMBI_COMPLETE = ("ro_RO", "en_EN", "de_DE", "fr_FR", "es_ES", "it_IT", "hu_HU", "cs_CZ", "pl_PL", "pt_PT", "nl_NL",
 	"ru_RU", "tr_TR",
 	"sk_SK", "hr_HR", "sr_YU", "sl_SI", "el_GR", "sv_SE", "da_DK", "no_NO", "fi_FI", "et_EE", "lt_LT", "lv_LV",
-	"ca_AD", "is_IS", "fy_x-FY")
+	"ca_AD", "is_IS", "fy_x-FY", "uk_UA")
 # Limba meniurilor cand cea salvata (config.osd.language) e ascunsa sau necunoscuta, ca in Converter/HdsLang.py
 # (limba necunoscuta: engleza). Valoarea salvata nu se schimba: tara si limba pistelor o folosesc mai departe, iar cand
 # limba ei intra in LIMBI_COMPLETE, meniurile revin singure in ea.

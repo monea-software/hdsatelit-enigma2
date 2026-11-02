@@ -11919,3 +11919,48 @@ msgstr "أكّد بريدك الإلكتروني، واضغط «Start building f
 #: lib/python/Screens/HdsAsistenta.py lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
 msgid "Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."
 msgstr "إذا لم نتصل فورًا، فاترك الطلب نشطًا لمدة 30 دقيقة على الأقل: فقد نكون مشغولين بمساعدة شخص آخر الآن."
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "حتى نعرف أي جهاز استقبال يطلب المساعدة، يرسل جهاز الاستقبال أيضا بصمة محسوبة من اللوحة، وهي نفسها المستخدمة في برنامج مختبري النسخة التجريبية (لا يمكن معرفة عنوان MAC أو الرقم التسلسلي منها). إذا كنت مختبرا للنسخة التجريبية، يرسل جهاز الاستقبال أيضا الاسم الذي قدمته عند التسجيل أو، إذا لم تقدم اسما، اسمك الظاهر للجميع."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "ملف أو مجلد في النظام (/proc, /sys, /etc, /var/log, السجلات, /tmp)، دون وحدات الوصول أو كلمات المرور أو المفاتيح أو البيانات الشخصية"
+
+msgid "Semnele din lista de canale"
+msgstr "العلامات في قائمة القنوات"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "على يمين كل قناة: «$» للقنوات المشفرة والمصدر: قمر صناعي أو كابل أو أرضي. يمكنك إيقاف العلامتين أو واحدة فقط. تحصل القناة المشفرة على «$» بعد بحث جديد عن القنوات أو بعد أن تشاهدها مرة واحدة."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "«$» للقنوات المشفرة والمصدر"
+
+msgid "Numai „$” la canalele codate"
+msgstr "«$» للقنوات المشفرة فقط"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "المصدر فقط (قمر صناعي، كابل، أرضي)"
+
+msgid "Fără semne"
+msgstr "بدون علامات"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "تُنشأ النسخة تلقائيًا عند اتصال الفريق، قبل إجراء أي تغييرات. يعيد الزر القنوات والإعدادات والشبكة إلى حالتها في ذلك الوقت؛ ويُعاد تشغيل الواجهة."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "نسخة من الإعدادات أُنشئت عند اتصال الفريق: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "أعِد الوضع كما كان"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "نسخة من الإعدادات أُنشئت قبل إجراء أي تغييرات"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "تعذّر إنشاء نسخة من الإعدادات: %s"
+

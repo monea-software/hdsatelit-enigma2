@@ -127,6 +127,11 @@ def InitUsageConfig():
 		("radio", N_("Sus lista radio, jos lista TV")), ("tv_radio", N_("Sus lista TV, jos lista radio")),
 		("tv", N_("Ambele deschid lista TV")), ("radio_radio", N_("Ambele deschid lista radio")),
 		("zap", N_("Schimbă canalul (sus: următorul)"))])
+	# HDSatelit: semnele din dreapta randului in lista de canale (lib/service/listboxservice.cpp, serviceMarks; aplicate in
+	# Components/ServiceList.py, hdsSemne): $ la canalele codate si sursa canalului (satelit, cablu, terestru)
+	config.usage.hds_semne_lista = ConfigSelection(default = "ambele", choices = [
+		("ambele", N_("„$” la canalele codate și sursa")), ("codat", N_("Numai „$” la canalele codate")),
+		("sursa", N_("Numai sursa (satelit, cablu, terestru)")), ("niciunul", N_("Fără semne"))])
 	alegeri_infobar, alegeri_disc = _alegeriCuNumere()
 	config.usage.infobar_timeout = ConfigSelection(default = "8", choices = alegeri_infobar)
 	config.usage.show_infobar_on_zap = ConfigYesNo(default = True)

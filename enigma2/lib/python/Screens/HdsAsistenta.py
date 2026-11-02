@@ -19,9 +19,15 @@
 #   ramane intern, intre receptor, server si echipa. Deschis la o cerere din pagina web (un browser fara cod, vezi
 #   Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire. Cat ecranele asistentei sunt deschise,
 #   banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el starea si pana cand e pornita.
-#   Cand echipa a trimis concluzii (op "concluzii"), Galben "Ultimele concluzii" le deschide din nou.
+#   Cand echipa a trimis concluzii (op "concluzii"), Galben "Ultimele concluzii" le deschide din nou. Cat exista copia
+#   setarilor facuta cand a intrat echipa (A.stareCopie, si dupa oprire), ziua si ora ei sunt pe primul rand al
+#   textului si Albastru "Pune înapoi cum era" o pune la loc: o intrebare (Nu ales), apoi repornirea interfetei
+#   (Screens/HdsAsistentaSemn.puneInapoi: intrebarea nu sta aici, unde Start porneste fara nicio intrebare); sesiunea
+#   nu se opreste. Atunci ajutorul din dreapta jos ramane gol (ar acoperi legenda Albastra).
 # - HdsAsistentaConcluzii: fereastra "Ce am găsit și ce am făcut" (concluziile echipei si multumirile), modala, pana la
 #   OK; o deschide Screens/HdsAsistentaSemn.Controler cand sosesc concluziile si o data la sfarsitul sesiunii.
+# Albastru "Pune înapoi cum era" e si pe pagina de pornire (HdsAsistentaAlege), cu ziua si ora copiei sub text: dupa
+# oprire, intrarea din meniu deschide direct pagina de pornire.
 #
 # Skinul: ecranele sunt in skinul HDSatelit (HDSatelit/skin.xml, cadrul HdsCadru1776); skinul de aici e rezerva pentru
 # alt skin ales, cu aceeasi geometrie (CORP_*); in skin.xml formele se numesc HdsAjutorDistanta (si fereastra
@@ -70,6 +76,7 @@ CULORI_SKIN = {
 	"hdsAmber": "#F5B83D",
 	"key_red": "#E5484D",
 	"key_green": "#46B06A",
+	"key_blue": "#3D7BE0",
 }
 
 # corpul ecranului, acelasi in skin.xml (in cadrul HdsCadru1776) si in skinul de rezerva: starea sus, randul mare
@@ -100,6 +107,14 @@ LEGENDA_GALBEN = """
 		</widget>
 		<widget source="key_yellow" render="Label" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
+# a patra tasta (Albastru "Pune înapoi cum era") pe ecranul asistentei, in skinul de rezerva (pagina de pornire o are
+# in LEGENDA_ALEGE); cat se vede, ajutorul din dreapta jos ramane gol
+LEGENDA_ALBASTRU = """
+		<widget source="key_blue" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,StaticText" position="1316,944" size="6,32" backgroundColor="key_blue" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="key_blue" render="Label" conditional="key_blue" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
+
 CORP_ALEGE = """
 		<widget name="config" position="32,104" size="1712,180" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 		<eLabel position="32,300" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
@@ -128,7 +143,11 @@ LEGENDA_ALEGE = """
 		<widget source="key_yellow" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="888,944" size="6,32" backgroundColor="#F5B83D" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_yellow" render="Label" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
+		<widget source="key_yellow" render="Label" conditional="key_yellow" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,StaticText" position="1316,944" size="6,32" backgroundColor="#3D7BE0" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="key_blue" render="Label" conditional="key_blue" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="Regular;28" foregroundColor="#F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
 
 def _nimic(*_a):
@@ -140,7 +159,8 @@ def _activa(s):
 
 
 class HdsAsistenta(Screen):
-	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA + LEGENDA_GALBEN)
+	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA + LEGENDA_GALBEN +
+		LEGENDA_ALBASTRU)
 
 	def __init__(self, session, din_web=None, nevoie="", detalii=""):
 		Screen.__init__(self, session)
@@ -158,12 +178,13 @@ class HdsAsistenta(Screen):
 		self["key_red"] = StaticText("")
 		self["key_green"] = StaticText("")
 		self["key_yellow"] = StaticText("")
+		self["key_blue"] = StaticText("")
 		actiuni = {
 			"cancel": self.close,
 			"red": self._rosu,
 			"green": self._verde,
 			"yellow": self._galben,
-			"blue": _nimic,
+			"blue": self._albastru,
 		}
 		# toate actiunile hartii de directii legate (fara "unknown action" in jurnal); Sus/Jos deruleaza textul
 		for d, f in (("up", self["text"].pageUp), ("down", self["text"].pageDown), ("left", _nimic), ("right", _nimic)):
@@ -215,9 +236,14 @@ class HdsAsistenta(Screen):
 		self["cod"].setText("")
 		# Galben: ultimele concluzii ale echipei, cand exista (si dupa oprire)
 		self["key_yellow"].setText(_(A.TEXT_ULTIMELE_CONCLUZII) if s.get("are_concluzii") else "")
+		# Albastru: "Pune înapoi cum era", cat exista copia facuta cand a intrat echipa (si dupa oprire); ziua si ora ei
+		# pe primul rand al textului
+		copie = s.get("copie")
+		self["key_blue"].setText(_(A.TEXT_PUNE_INAPOI) if copie else "")
+		sus = copie["text"] if copie else ""
 		if not s.get("disponibil"):
 			self["antet"].setText(_("Funcția nu e disponibilă pe această imagine."))
-			self._puneText("")
+			self._puneText(sus)
 			self["ajutor"].setText("")
 			self["key_green"].setText("")
 			self["key_red"].setText(_("Înapoi"))
@@ -226,7 +252,7 @@ class HdsAsistenta(Screen):
 		if not _activa(s):
 			# oprita (s-a oprit singura cat ecranul era deschis, sau sub pagina de pornire): Verde deschide pagina
 			self["antet"].setText(_("Oprită. O pornești tu, dacă vrei să ne ajuți."))
-			self._puneText(jurnal)
+			self._puneText("\n\n".join(t for t in (sus, jurnal) if t))
 			self["ajutor"].setText("")
 			self["key_green"].setText(_("Start"))
 			self["key_red"].setText(_("Înapoi"))
@@ -235,8 +261,9 @@ class HdsAsistenta(Screen):
 		self["antet"].setText(s.get("pana_text") or "")
 		if s.get("stare") == A.ASTEAPTA:
 			jurnal = _(TEXT_ASTEPTARE) + "\n" + _(TEXT_NU_OPRI) + "\n\n" + jurnal
-		self._puneText(jurnal)
-		self["ajutor"].setText(_("Sus/Jos: tot textul"))
+		self._puneText("\n\n".join(t for t in (sus, jurnal) if t))
+		# cu legenda Albastra, ajutorul (aliniat la dreapta, peste locul ei) ramane gol
+		self["ajutor"].setText("" if copie else _("Sus/Jos: tot textul"))
 		# cat asistenta merge, Verde nu are ce face: fara text, legenda ei nu apare
 		self["key_green"].setText("")
 		self["key_red"].setText(_("Oprește"))
@@ -256,6 +283,9 @@ class HdsAsistenta(Screen):
 		c = A.ultimeleConcluzii()
 		if c:
 			self.session.open(HdsAsistentaConcluzii, c)
+
+	def _albastru(self):
+		Semn.puneInapoi(self.session)
 
 
 class HdsAsistentaConcluzii(Screen):
@@ -344,6 +374,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		self["key_green"] = Button(_("Start"))
 		# Galben: ultimele concluzii ale echipei, cand exista (dupa o sesiune, de aici le reciteste omul)
 		self["key_yellow"] = StaticText(_(A.TEXT_ULTIMELE_CONCLUZII) if A.ultimeleConcluzii() else "")
+		# Albastru: "Pune înapoi cum era", cat exista copia facuta cand a intrat echipa (dupa oprire, de aici)
+		self._copie = A.stareCopie()
+		self["key_blue"] = StaticText(_(A.TEXT_PUNE_INAPOI) if self._copie else "")
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
 			# OK legat aici (harta are OkCancelActions): OK pe rand deschide termenii si conditiile
 			"ok": self.keyOK,
@@ -351,7 +384,7 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 			"red": self.close,
 			"green": self._start,
 			"yellow": self._galben,
-			"blue": _nimic,
+			"blue": self._albastru,
 		}, -2)
 		self._fara_bifa = False
 		self.accept.addNotifier(self._bifa, initial_call=False)
@@ -359,7 +392,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 
 	def _puneText(self):
 		dedesubt = A.TEXT_FARA_BIFA if self._fara_bifa and not self.accept.value else TEXT_OK_TERMENI
-		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + _(dedesubt))
+		# ziua si ora copiei pentru Albastru, la sfarsit
+		copie = ("\n\n" + self._copie["text"]) if self._copie else ""
+		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + _(dedesubt) + copie)
 
 	def _bifa(self, *_a):
 		if self.accept.value:
@@ -373,6 +408,9 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		c = A.ultimeleConcluzii()
 		if c:
 			self.session.open(HdsAsistentaConcluzii, c)
+
+	def _albastru(self):
+		Semn.puneInapoi(self.session)
 
 	def _start(self):
 		if not self.accept.value:

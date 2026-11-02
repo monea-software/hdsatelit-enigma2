@@ -55165,3 +55165,48 @@ msgstr "ubrugt"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "angivet (%s, OK skift)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "For at vi kan se, hvilken modtager der beder om hjælp, sender modtageren også et fingeraftryk beregnet ud fra kortet, det samme som i betatesterprogrammet (ud fra det kan man ikke finde MAC-adressen eller serienummeret). Hvis du er betatester, sender modtageren også det navn, du opgav ved tilmelding, eller dit offentlige navn, hvis du ikke opgav noget navn."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "en systemfil eller systemmappe (/proc, /sys, /etc, /var/log, logfiler, /tmp), uden adgangsmoduler, adgangskoder, nøgler eller personoplysninger"
+
+msgid "Semnele din lista de canale"
+msgstr "Tegn i kanallisten"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Til højre for hver kanal: “$” ved kodede kanaler og kilden, Satellit, Kabel eller Terrestrisk. Du kan slå begge fra eller kun det ene. En kodet kanal får “$” efter en ny kanalsøgning, eller når du har set den én gang."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "“$” ved kodede kanaler og kilden"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Kun “$” ved kodede kanaler"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Kun kilden (satellit, kabel, terrestrisk)"
+
+msgid "Fără semne"
+msgstr "Ingen tegn"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Kopien laves automatisk, når teamet opretter forbindelse, før noget ændres. Knappen gendanner kanalerne, indstillingerne og netværket fra det tidspunkt; grænsefladen genstarter."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Kopi af indstillinger lavet, da teamet oprettede forbindelse: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Gendan tidligere tilstand"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "kopi af indstillinger lavet, før noget blev ændret"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "kopi af indstillinger kunne ikke oprettes: %s"
+
