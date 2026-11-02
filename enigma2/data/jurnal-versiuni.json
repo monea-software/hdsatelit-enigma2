@@ -1,6 +1,29 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.24",
+   "build": "0000624202611021310",
+   "data": "02.11.2026",
+   "intrari": [
+    {
+     "fel": "imbunatatit",
+     "ro": "Lista autorităților de încredere pentru conexiunile sigure (HTTPS) e adusă la zi, la versiunea Mozilla din august 2026: rădăcinile noi sunt adăugate, cele retrase sunt scoase.",
+     "en": "The list of trusted authorities for secure (HTTPS) connections is brought up to date, to the Mozilla version of August 2026: new roots are added, withdrawn ones are removed.",
+     "de": "Die Liste der vertrauenswürdigen Stellen für sichere Verbindungen (HTTPS) ist auf dem neuesten Stand, mit der Mozilla-Version vom August 2026: neue Wurzelzertifikate sind hinzugefügt, zurückgezogene entfernt.",
+     "fr": "La liste des autorités de confiance pour les connexions sécurisées (HTTPS) est mise à jour, à la version Mozilla d'août 2026 : les nouvelles racines sont ajoutées, celles retirées sont supprimées.",
+     "es": "La lista de autoridades de confianza para las conexiones seguras (HTTPS) está actualizada, a la versión de Mozilla de agosto de 2026: se añaden las raíces nuevas y se quitan las retiradas.",
+     "it": "L'elenco delle autorità di fiducia per le connessioni sicure (HTTPS) è aggiornato alla versione Mozilla di agosto 2026: le nuove radici sono aggiunte, quelle ritirate rimosse.",
+     "hu": "A biztonságos (HTTPS) kapcsolatok megbízható hitelesítőinek listája naprakész, a Mozilla 2026. augusztusi változata szerint: az új gyökerek bekerültek, a visszavontak kikerültek.",
+     "cs": "Seznam důvěryhodných autorit pro zabezpečená spojení (HTTPS) je aktuální, ve verzi Mozilla ze srpna 2026: nové kořeny jsou přidány, stažené odebrány.",
+     "pl": "Lista zaufanych urzędów dla bezpiecznych połączeń (HTTPS) jest aktualna, w wersji Mozilli z sierpnia 2026: nowe certyfikaty główne są dodane, wycofane usunięte.",
+     "pt": "A lista de autoridades de confiança para as ligações seguras (HTTPS) está atualizada, na versão Mozilla de agosto de 2026: as raízes novas são acrescentadas e as retiradas são removidas.",
+     "nl": "De lijst met vertrouwde instanties voor beveiligde verbindingen (HTTPS) is bijgewerkt naar de Mozilla-versie van augustus 2026: nieuwe rootcertificaten zijn toegevoegd, ingetrokken verwijderd.",
+     "ru": "Список доверенных центров сертификации для защищённых соединений (HTTPS) обновлён до версии Mozilla от августа 2026 года: новые корневые сертификаты добавлены, отозванные удалены.",
+     "tr": "Güvenli (HTTPS) bağlantılar için güvenilen kuruluşların listesi, Mozilla'nın Ağustos 2026 sürümüne güncellendi: yeni kök sertifikalar eklendi, geri çekilenler kaldırıldı."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.23",
    "build": "0000623202611020915",
    "data": "02.11.2026",
