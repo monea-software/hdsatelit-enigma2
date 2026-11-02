@@ -180,6 +180,20 @@ CONFIRM_HANG_CHECKS = 4      # acelasi fir, aceeasi stare D, acelasi wchan, de a
                               # (~60s la 15s/verificare) inainte sa declaram blocaj CONFIRMAT
 LOG_MAX_BYTES = 262144       # 256 KB -- jurnalul se scurteaza singur peste acest prag
 
+# Firele lasate deoparte de enigma2 (r9, 02.11.2026): pe familia libreader (SF8008, SF8008 MINI, V10) citirea si
+# scrierea HDMI-CEC merg pe un fir de fundal tocmai fiindca driverul hi_hdmicec le poate tine in D pentru totdeauna
+# (placa SF8008 din 2024; Components/HdsStandbyTv.py in depozitul imaginii, comiterile 3b8d8397d si 89866b154):
+# enigma2 opreste atunci CEC si merge mai departe. Un astfel de fir, care nu e firul principal, nu e un blocaj al
+# interfetei. Inainte de r9 paznicul il lua drept unul si repornea dur receptorul la ~1 minut dupa pornire, la fiecare
+# pornire (raportul 867222: SF8008 V3, 0.6.23, interfata pornita dupa 12 s, tid=5106 in hdmicec_write, sysrq la 62 s).
+# Firul principal in D ramane blocaj, oricare i-ar fi wchan-ul.
+# r11: iertarea tine numai cat firul principal e viu. Cand enigma2 iese (repornirea interfetei, SIGTERM-ul nivelului 3,
+# o cadere), un fir ramas in D nu poate muri, firul principal ramane „Z” (zombie) si procesul nu se termina, deci init nu
+# porneste alta interfata: atunci firul CEC ramas e chiar blocajul si se socoteste ca orice alt fir (repornirea dura e
+# singura iesire; fara ea ecranul ar ramane negru pana la oprirea de la comutator).
+WCHAN_FIRE_LASATE_DEOPARTE = ("hdmicec_",)
+STARI_FIR_PRINCIPAL_MORT = ("Z", "X")
+
 # ---- nivelul 3, blocaj moale (bataia enigma2 + HdsWebControl) ----
 SETTINGS_PATH = os.environ.get("HDS_WATCHDOG_SETTINGS", "/etc/enigma2/settings")
 WEBCONTROL_PORT_IMPLICIT = 80       # HdsWebControl/plugin.py, ConfigInteger(default=PORT_IMPLICIT)
@@ -702,10 +716,16 @@ def check_health(prag=None, pids=None):
         return True, "proces %s absent (normal, respawn separat prin inittab)" % TARGET_PROCESS
 
     d_state_now = {}   # (pid, tid) -> (wchan, schimbarile de context; None pentru firul principal sau necitite)
+    lasate = 0         # fire CEC lasate deoparte (WCHAN_FIRE_LASATE_DEOPARTE), in D, neurmarite
     for pid in pids:
+        # firul principal mort (zombie): procesul nu se mai poate termina, deci nimic nu se mai iarta (r11)
+        principal_viu = read_proc_state(pid, pid)[0] not in STARI_FIR_PRINCIPAL_MORT
         for tid in list_threads(pid):
             state, wchan = read_proc_state(pid, tid)
             if state == "D":
+                if principal_viu and tid != pid and (wchan or "").startswith(WCHAN_FIRE_LASATE_DEOPARTE):
+                    lasate += 1
+                    continue
                 d_state_now[(pid, tid)] = (wchan, read_switches(pid, tid) if tid != pid else None)
 
     new_tracking = {}
@@ -733,6 +753,8 @@ def check_health(prag=None, pids=None):
             return True, ("fire in D, inca sub prag (%d urmarite, din care %d se trezesc intre verificari)"
                           % (len(d_state_now), lucreaza))
         return True, "fire in D, inca sub prag (%d urmarite)" % len(d_state_now)
+    if lasate:
+        return True, "sanatos (%d fir CEC lasat deoparte de enigma2, in D)" % lasate
     return True, "sanatos"
 
 

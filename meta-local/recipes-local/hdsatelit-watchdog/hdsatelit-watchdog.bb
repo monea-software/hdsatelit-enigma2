@@ -47,7 +47,18 @@ PV = "0.1.0"
 # la o trecere (dbus, apoi avahi, apoi numele, la verificarile urmatoare), scriptul cu 10 s si asteptare marginita dupa
 # kill(), fara sleep: o trecere ramane mult sub pragul de 60 s al watchdogului HW. Import nou: socket
 # (il aduce deja python3-netclient, pentru http.client), deci RDEPENDS neschimbat.
-PR = "r8"
+# r9 (02.11.2026, dupa 0.6.24): nivelul 2 nu mai socoteste blocat un fir care nu e firul principal si sta in D cu wchan
+# hdmicec_* (WCHAN_FIRE_LASATE_DEOPARTE): enigma2 lasa deoparte firul CEC blocat in driverul hi_hdmicec (SF8008 din
+# 2024), dar paznicul repornea dur receptorul la ~1 minut dupa fiecare pornire. Fara importuri noi, deci RDEPENDS
+# neschimbat.
+# r10 (02.11.2026, tot 0.6.25): actualizarea din meniu reporneste numai interfata, deci paznicul vechi ar fi rulat pana
+# la repornirea receptorului (pe un SF8008 V3, inca o repornire dura). pkg_postinst il opreste curat la instalare
+# (SIGTERM: on_sigterm dezarmeaza watchdogul HW cu 'V' si iese), iar init il porneste din nou din inittab
+# (wdg:3:respawn) cu scriptul nou. Fara importuri noi, deci RDEPENDS neschimbat.
+# r11 (02.11.2026, tot 0.6.25): firul CEC se iarta numai cat firul principal al enigma2 e viu;
+# cand interfata iese si firul ramas in D o tine „Z” (zombie), init nu mai porneste alta interfata, iar paznicul il
+# socoteste din nou blocaj (repornirea dura), altfel ecranul ar ramane negru. Fara importuri noi, deci RDEPENDS neschimbat.
+PR = "r11"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"
@@ -87,3 +98,18 @@ FILES:${PN} = "${bindir}/hds-watchdog.py"
 # selectors.pyc, threading.pyc; python3-core are numai _posixsubprocess, select si fcntl (.so).
 # iproute2-ip: /sbin/ip.iproute2 (stie "blackhole" si "show exact"), acelasi ca in hdsatelit-netguard.
 RDEPENDS:${PN} = "python3-core python3-misc python3-fcntl python3-netclient iproute2-ip"
+
+# Paznicul care merge se opreste curat dupa instalare, ca init sa-l porneasca din nou cu scriptul nou (r10). Numai pe
+# receptor ($D gol): la construirea imaginii nu ruleaza nimic, iar o imagine noua n-are un paznic vechi. Procesul se
+# gaseste dupa linia de comanda din /proc, nu dupa nume (pidof din busybox vede python3). Numai SIGTERM, niciodata
+# SIGKILL: fara 'V' (magic close), watchdogul HW ar reporni receptorul in 60 s.
+pkg_postinst:${PN}() {
+    [ -n "$D" ] && exit 0
+    for p in /proc/[0-9]*; do
+        c=$(tr '\0' ' ' 2>/dev/null < "$p/cmdline") || continue
+        case "$c" in
+            *python3*/usr/bin/hds-watchdog.py*) kill -TERM "${p#/proc/}" 2>/dev/null || true ;;
+        esac
+    done
+    exit 0
+}
