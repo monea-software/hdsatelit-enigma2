@@ -10,7 +10,10 @@
 # fereastra peste pagina) si butonul Start. Pornita, pagina arata numai pana cand e pornita, butonul Oprește si
 # jurnalul. Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa. Cand echipa a
 # trimis concluzii (op "concluzii"), pagina le arata sub jurnal, si dupa oprire: "Ce am găsit și ce am făcut", textul
-# si multumirile (A.stareConcluzii).
+# si multumirile (A.stareConcluzii). Cat exista copia setarilor facuta cand a intrat echipa (A.stareCopie, si dupa
+# oprire), pagina arata ziua si ora ei si butonul "Pune înapoi cum era", perechea tastei Albastre de pe receptor: o
+# intrebare in pagina (aceeasi ca la "Copia setărilor", cu Nu / Da, pune la loc; fara fereastra browserului, ca restul
+# paginii), apoi cererea si repornirea interfetei, ca la /api/copie-setari-pune; sesiunea nu se opreste.
 # Start dintr-un browser conectat cu codul de pe receptor (acelasi nivel asociat ca la Acces SSH) porneste pe loc
 # (Screens/HdsAsistentaSemn.pornesteWeb). Dintr-un browser fara cod (orice aparat din reteaua locala) deschide pe
 # receptor aceeasi pagina de pornire si porneste numai Start apasat acolo (HdsAsistentaSemn.cerereWeb): altfel orice
@@ -25,6 +28,8 @@
 #   POST /api/asistenta-cere?accept=1   Start (accept=1: randul "Accept termenii și condițiile" bifat); asistenta
 #                                       pornita e mereu completa (nivelul B)
 #   POST /api/asistenta-opreste    opreste
+#   POST /api/asistenta-pune-inapoi     "Pune înapoi cum era": cere punerea la loc a copiei de asistenta si reporneste
+#                                       interfata (A.cerePunereaInapoi)
 #   GET  /asistenta                pagina
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A).
 
@@ -67,7 +72,9 @@ def stare(request=None, A=None, B=None):
 		"durata_implicita": s.get("durata_implicita"),
 		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
 		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or "",
-		"concluzii": _concluzii(A)}
+		"concluzii": _concluzii(A),
+		# copia pentru "Pune înapoi cum era" ({"data_text", "text", "intrebare"}) sau None
+		"copie": s.get("copie")}
 
 
 def _concluzii(A):
@@ -115,6 +122,37 @@ def opreste(A=None):
 	reusit, mesaj = A.opreste("de om (web)")
 	rez = stare(None, A)
 	rez.update({"result": bool(reusit), "message": mesaj})
+	return rez
+
+
+def _sesiuneEnigma():
+	try:
+		from .meniu_comun_web import sesiune
+		return sesiune()
+	except Exception:
+		return None
+
+
+def puneInapoi(A=None, sesiune=None):
+	"""POST /api/asistenta-pune-inapoi ("Pune înapoi cum era"): cererea de punere la loc a copiei facute cand a intrat
+	echipa (A.cerePunereaInapoi), apoi repornirea interfetei, ca /api/copie-setari-pune; enigma2.sh pune copia la loc
+	inainte de pornirea interfetei. Sesiunea de asistenta nu se opreste. sesiune: sesiunea enigma2 (probele dau una)."""
+	A = _a(A)
+	if sesiune is None:
+		sesiune = _sesiuneEnigma()
+	if sesiune is None:
+		rez = stare(None, A)
+		rez.update({"result": False, "message": _t("Interfața nu este gata pentru repornire.")})
+		return rez
+	ok, mesaj = A.cerePunereaInapoi()
+	rez = stare(None, A)
+	if not ok:
+		rez.update({"result": False, "message": mesaj})
+		return rez
+	from Screens.Standby import TryQuitMainloop
+	sesiune.open(TryQuitMainloop, 3)
+	rez.update({"result": True,
+		"message": _t("Interfața repornește și pune la loc copia. Pagina se reîncarcă singură.")})
 	return rez
 
 
@@ -198,6 +236,18 @@ def rute(baza, resource, A=None):
 		def render_GET(self, request):
 			return self.render_POST(request)
 
+	class PuneInapoiResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, puneInapoi(A))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class PaginaResource(resource.Resource):
 		isLeaf = True
 
@@ -210,6 +260,7 @@ def rute(baza, resource, A=None):
 		b"asistenta-catalog": CatalogResource(),
 		b"asistenta-cere": CereResource(),
 		b"asistenta-opreste": OpresteResource(),
+		b"asistenta-pune-inapoi": PuneInapoiResource(),
 	}
 	return api, {b"asistenta": PaginaResource()}
 
@@ -264,6 +315,9 @@ PAGINA = """<!DOCTYPE html>
   .fereastra h2{font-size:1.1rem;margin:0 0 10px;}
   .fereastra .termeni{overflow:auto;flex:1;margin:0 0 12px;}
   .fereastra .termeni p{font-size:.9rem;line-height:1.5;margin:0 0 8px;}
+  .intrebare{background:#1b2130;border:1px solid var(--bordura);border-radius:8px;padding:10px;margin-top:10px;line-height:1.45;}
+  .intrebare p{margin:0 0 10px;}
+  .intrebare button{margin:0 8px 0 0;}
   .concluzii h2{font-size:1.1rem;margin:0 0 6px;}
   .concluzii .text{white-space:pre-wrap;word-break:break-word;line-height:1.5;margin:0 0 10px;}
   .ascuns{display:none;}
@@ -291,6 +345,16 @@ PAGINA = """<!DOCTYPE html>
   <p class="nota">Jurnalul asistenței</p>
   <pre class="jurnal" id="jurnal"></pre>
 </section>
+<section class="card ascuns" id="copie">
+  <p class="pana" id="copieText"></p>
+  <p class="nota">Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește.</p>
+  <button class="gri" id="puneInapoi">Pune înapoi cum era</button>
+  <div class="intrebare ascuns" id="intrebareCopie"><p id="intrebareText"></p>
+    <button class="gri" id="copieNu">Nu</button>
+    <button class="rosu" id="copieDa">Da, pune la loc</button>
+  </div>
+  <p class="mesaj" id="mesajCopie"></p>
+</section>
 <section class="card concluzii ascuns" id="concluzii">
   <h2>Ce am găsit și ce am făcut</h2>
   <p class="nota" id="concluziiOra"></p>
@@ -317,6 +381,7 @@ function cerere(cale, metoda, date){
 }
 function mesaj(id,t,e){ var m=$(id); m.textContent=t||""; m.classList.toggle("eroare",!!e); }
 function nuRaspunde(){ return "Receptorul nu răspunde."; }
+var copiaInapoi = null;
 function arata(d){
   var activa = !!d.stare && d.stare!=="oprit";
   $("indisponibil").classList.toggle("ascuns", !!d.disponibil || activa);
@@ -329,6 +394,9 @@ function arata(d){
   var c = d.concluzii;
   $("concluzii").classList.toggle("ascuns", !(c && c.text));
   if(c && c.text){ $("concluziiText").textContent = c.text; $("concluziiOra").textContent = c.ora_text || ""; }
+  copiaInapoi = d.copie || null;
+  $("copie").classList.toggle("ascuns", !copiaInapoi);
+  $("copieText").textContent = copiaInapoi ? (copiaInapoi.text || "") : "";
 }
 function citeste(){
   return cerere("/api/asistenta").then(function(d){
@@ -348,6 +416,15 @@ $("porneste").addEventListener("click", function(){
   cerere("/api/asistenta-cere","POST",q).then(function(d){ var activa=!!d.stare && d.stare!=="oprit"; mesaj("mesaj", activa ? "" : d.message, !d.result); arata(d); }).catch(function(){ mesaj("mesaj", nuRaspunde(), true); }); });
 $("opreste").addEventListener("click", function(){ mesaj("mesajOprire", "Se oprește...");
   cerere("/api/asistenta-opreste","POST", new URLSearchParams()).then(function(d){ mesaj("mesajOprire", d.result ? "" : d.message, !d.result); if(d.result){ mesaj("mesaj", d.message); } arata(d); }).catch(function(){ mesaj("mesajOprire", nuRaspunde(), true); }); });
+$("puneInapoi").addEventListener("click", function(){
+  if(!copiaInapoi){ return; }
+  $("intrebareText").textContent = copiaInapoi.intrebare || "";
+  $("intrebareCopie").classList.remove("ascuns"); $("copieNu").focus(); });
+$("copieNu").addEventListener("click", function(){ $("intrebareCopie").classList.add("ascuns"); });
+$("copieDa").addEventListener("click", function(){
+  $("intrebareCopie").classList.add("ascuns");
+  mesaj("mesajCopie", "Se cere punerea la loc...");
+  cerere("/api/asistenta-pune-inapoi","POST", new URLSearchParams()).then(function(d){ mesaj("mesajCopie", d.message, !d.result); if(d.result){ setTimeout(function(){ location.reload(); }, 20000); } }).catch(function(){ mesaj("mesajCopie", nuRaspunde(), true); }); });
 citeste(); setInterval(citeste, 3000);
 </script>
 </body>
@@ -373,6 +450,11 @@ TEXTE_PAGINA = {
 		N_("Jurnalul asistenței"),
 		N_("Termenii și condițiile"),
 		N_("Închide"),
+		N_("Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, "
+			"setările și rețeaua de atunci; interfața repornește."),
+		N_("Pune înapoi cum era"),
+		N_("Nu"),
+		N_("Da, pune la loc"),
 		N_("Ce am găsit și ce am făcut"),
 		N_("Mulțumim că ne-ai lăsat să te ajutăm."),
 	),
@@ -382,6 +464,7 @@ TEXTE_PAGINA = {
 		N_("Fără bifă, asistența nu pornește."),
 		N_("Se pornește..."),
 		N_("Se oprește..."),
+		N_("Se cere punerea la loc..."),
 	),
 }
 

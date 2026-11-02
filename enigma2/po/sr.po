@@ -58206,3 +58206,48 @@ msgstr "nekorišćeno"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "postavljen (%s, OK promeni)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Da bismo znali koji prijemnik traži pomoć, prijemnik šalje i otisak izračunat sa ploče, isti kao u programu za beta-testere (iz njega se ne može saznati MAC adresa ni serijski broj). Ako si beta-tester, prijemnik šalje i ime navedeno pri registraciji ili, ako nije navedeno, tvoje javno ime."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "системска датотека или фасцикла (/proc, /sys, /etc, /var/log, дневници, /tmp), без приступних модула, лозинки, кључева или личних података"
+
+msgid "Semnele din lista de canale"
+msgstr "Oznake na listi kanala"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Desno od svakog kanala: „$” uz kodirane kanale i izvor, Satelit, Kabl ili Zemaljski. Možeš da isključiš obe ili samo jednu. Kodirani kanal dobija „$” posle nove pretrage kanala ili kada ga jednom pogledaš."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "„$” uz kodirane kanale i izvor"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Samo „$” uz kodirane kanale"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Samo izvor (satelit, kabl, zemaljski)"
+
+msgid "Fără semne"
+msgstr "Bez oznaka"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Kopija se automatski pravi kada se tim poveže, pre bilo kakve promene. Dugme vraća kanale, podešavanja i mrežu u tadašnje stanje; interfejs se ponovo pokreće."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Kopija podešavanja napravljena pri povezivanju tima: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Vrati kako je bilo"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "kopija podešavanja napravljena pre bilo kakve promene"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "kopija podešavanja nije mogla da se napravi: %s"
+

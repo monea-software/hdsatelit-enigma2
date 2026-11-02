@@ -201,6 +201,28 @@ def sigle_pornite():
 		return True
 
 
+def sursa_pornita():
+	"""Setarea "Semnele din lista de canale" (config.usage.hds_semne_lista) cere sursa canalului (ambele, sursa); fara
+	ea (probele de pe PC) sau la orice eroare: da, ca implicitul."""
+	try:
+		import sys
+		return sys.modules["Components.config"].config.usage.hds_semne_lista.value in ("ambele", "sursa")
+	except Exception:
+		return True
+
+
+# sursa canalului, ca pe televizor (Components/ServiceList.py, hdsSemne): pozitia din index -> textul
+SURSE = {"cablu": "Cablu", "terestru": "Terestru"}
+
+
+def _sursa(c):
+	"""Satelit, Cablu sau Terestru pentru un canal DVB (pozitia lui din index), "" pentru fluxuri si fara pozitie."""
+	poz = getattr(c, "poz", None)
+	if getattr(c, "tip", None) not in ("tv", "radio") or poz is None or poz == "":
+		return ""
+	return _t(SURSE.get(poz, "Satelit")) if isinstance(poz, str) else _t("Satelit")
+
+
 def nume_sigla(ref):
 	"""Numele fisierului siglei ca in Renderer/Picon.py (referinta fara nume, „:” -> „_”), numai la canalele DVB."""
 	c = _campuri(ref)
@@ -1302,12 +1324,14 @@ def _cheiFavorite(M, tip):
 
 
 def _semne(c, X):
-	"""Semnele randului (rezolutia, accesul, felul, ansamblul), ca text; "" pentru un rand fara canal in index."""
+	"""Semnele randului (rezolutia, accesul, sursa dupa setare, felul, ansamblul), ca text; "" pentru un rand fara
+	canal in index."""
 	if c is None:
 		return ""
 	fel = X.ETICHETA_TIP.get(c.tip, "") if c.tip not in ("tv", "radio") else ""
 	# la posturile DAB+ / DVB-T2 din satelit si ansamblul (numele marcajului din buchet), ca in cautarea de pe TV
-	return " · ".join(x for x in (c.rez_eticheta, c.eticheta_acces(), fel, getattr(c, "ansamblu", "")) if x)
+	sursa = _sursa(c) if sursa_pornita() else ""
+	return " · ".join(x for x in (c.rez_eticheta, c.eticheta_acces(), sursa, fel, getattr(c, "ansamblu", "")) if x)
 
 
 def _rand_json(r, sigle, X, favorite=None, deosebire=""):

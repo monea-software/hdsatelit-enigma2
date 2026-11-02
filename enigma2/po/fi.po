@@ -57116,3 +57116,48 @@ msgstr "käyttämätön"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "asetettu (%s, OK muuta)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Jotta tiedämme, mikä vastaanotin pyytää apua, vastaanotin lähettää myös emolevystä lasketun sormenjäljen, jota käytetään myös beta-testaajien ohjelmassa (siitä ei voi selvittää MAC-osoitetta eikä sarjanumeroa). Jos olet beta-testaaja, vastaanotin lähettää myös ilmoittautuessasi antamasi nimen tai, jos et antanut nimeä, julkisen nimesi."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "järjestelmän tiedosto tai kansio (/proc, /sys, /etc, /var/log, lokit, /tmp), ilman pääsymoduuleja, salasanoja, avaimia tai henkilötietoja"
+
+msgid "Semnele din lista de canale"
+msgstr "Merkit kanavalistassa"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Jokaisen kanavan oikealla puolella: ”$” salatuissa kanavissa ja lähde, Satelliitti, Kaapeli tai Antenni. Voit poistaa molemmat käytöstä tai vain toisen. Salattu kanava saa ”$”-merkin uuden kanavahaun jälkeen tai kun olet katsonut sitä kerran."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "”$” salatuissa kanavissa ja lähde"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Vain ”$” salatuissa kanavissa"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Vain lähde (satelliitti, kaapeli, antenni)"
+
+msgid "Fără semne"
+msgstr "Ei merkkejä"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Kopio tehdään automaattisesti tiimin liittyessä istuntoon, ennen muutosten tekemistä. Painike palauttaa kanavat, asetukset ja verkon sellaisiksi kuin ne olivat silloin; käyttöliittymä käynnistyy uudelleen."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Asetusten kopio tehty tiimin liittyessä istuntoon: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Palauta ennalleen"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "asetusten kopio tehty ennen muutosten tekemistä"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "asetusten kopiota ei voitu tehdä: %s"
+

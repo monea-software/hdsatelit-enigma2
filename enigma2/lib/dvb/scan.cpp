@@ -1017,6 +1017,9 @@ void eDVBScan::channelDone()
 
 		if (!(m_flags & scanOnlyFree) || !m_pmt_in_progress->second.scrambled) {
 			SCAN_eDebug("add not scrambled!");
+			/* HDSatelit: a service without SDT is scrambled when its PMT has CA descriptors */
+			if (m_pmt_in_progress->second.scrambled)
+				service->m_flags |= eDVBService::dxIsScrambledPMT;
 			std::pair<std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator, bool> i =
 				m_new_services.insert(std::pair<eServiceReferenceDVB, ePtr<eDVBService> >(ref, service));
 			if (i.second)
@@ -1285,6 +1288,9 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 			dvb_service->m_provider_name = service->second->m_provider_name;
 			if (service->second->m_ca.size())
 				dvb_service->m_ca = service->second->m_ca;
+			/* HDSatelit: a known service takes the scrambled flag of this scan too (its SDT is the newest word) */
+			dvb_service->m_flags = (dvb_service->m_flags & ~eDVBService::dxIsScrambledPMT) |
+				(service->second->m_flags & eDVBService::dxIsScrambledPMT);
 			if (!dontRemoveOldFlags) // do not remove new found flags when not wished
 				dvb_service->m_flags &= ~eDVBService::dxNewFound;
 		}
@@ -1374,6 +1380,11 @@ RESULT eDVBScan::processSDT(eDVBNamespace dvbnamespace, const ServiceDescription
 					break;
 				}
 			}
+
+			/* HDSatelit: scrambled or free, as the SDT says (free_CA_mode): kept in the flags, for the mark in the channel
+			   list (lib/service/listboxservice.cpp, serviceMarks) */
+			if ((*s)->getFreeCaMode())
+				service->m_flags |= eDVBService::dxIsScrambledPMT;
 
 			std::pair<std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator, bool> i =
 				m_new_services.insert(std::pair<eServiceReferenceDVB, ePtr<eDVBService> >(ref, service));

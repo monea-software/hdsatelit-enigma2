@@ -224,6 +224,19 @@ def _c(rad, rel):
 	return os.path.join(rad, *rel.split("/"))
 
 
+def mediu_asistenta():
+	"""Copia facuta de Asistenta de la distanta cand intra echipa („Pune înapoi cum era”, 0.6.21) apare si in lista
+	copiilor de aici (omul o vede, o pune la loc sau o sterge), dar nu ca loc pe care se face o copie noua (memoria
+	interna nu se umple cu copii facute de mana). Locul si numele vin din Components/HdsAsistenta.mediuCopie (o singura
+	sursa). -> mediul (pentru copii(), sterge_copia, cere_punerea) sau None fara copie."""
+	try:
+		from Components import HdsAsistenta
+		m = HdsAsistenta.mediuCopie()
+	except Exception:
+		return None
+	return m if os.path.isdir(m.get("punct") or "") else None
+
+
 def dosar_restaurare(rad=None):
 	return _c(radacina(rad), DOSAR_RESTAURARE)
 
@@ -2328,7 +2341,9 @@ def porneste_cautarea(la_sfarsit=None):
 
 	def lucru():
 		m = medii()
-		return m, copii(m)
+		# copia de asistenta numai in lista copiilor, nu si in lista mediilor pe care se face o copie
+		asistenta = mediu_asistenta()
+		return m, copii(m + ([asistenta] if asistenta else []))
 
 	def gata(rez, eroare):
 		if eroare or not rez:

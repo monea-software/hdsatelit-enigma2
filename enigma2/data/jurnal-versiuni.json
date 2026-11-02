@@ -1,6 +1,93 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.21",
+   "build": "0000621202611020200",
+   "data": "02.11.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "În lista de canale: „$” la canalele codate și sursa (Satelit, Cablu, Terestru); le oprești în Setări generale, la „Semnele din lista de canale”. „$” vine după o căutare nouă sau după ce privești canalul.",
+     "en": "In the channel list: “$” on scrambled channels and the source (Satellite, Cable, Terrestrial); turn them off in OSD Preferences, under “Channel list marks”. “$” comes after a new scan or once you watch the channel.",
+     "de": "In der Kanalliste: „$“ bei verschlüsselten Kanälen und die Quelle (Satellit, Kabel, Terrestrisch); abschaltbar in den OSD-Einstellungen unter „Zeichen in der Kanalliste“. Das „$“ erscheint nach einem neuen Suchlauf oder nachdem du den Kanal angesehen hast.",
+     "fr": "Dans la liste des chaînes : « $ » sur les chaînes cryptées et la source (Satellite, Câble, Terrestre) ; désactivables dans Préférences OSD, à « Repères dans la liste des chaînes ». Le « $ » arrive après une nouvelle recherche ou quand tu regardes la chaîne.",
+     "es": "En la lista de canales: «$» en los canales codificados y la fuente (Satélite, Cable, Terrestre); se desactivan en Preferencias de OSD, en «Marcas en la lista de canales». El «$» aparece tras una búsqueda nueva o al ver el canal.",
+     "it": "Nella lista dei canali: «$» sui canali criptati e la sorgente (Satellite, Cavo, Terrestre); si disattivano in Preferenze OSD, alla voce «Segni nella lista dei canali». Il «$» compare dopo una nuova ricerca o quando guardi il canale.",
+     "hu": "A csatornalistában: „$” a kódolt csatornáknál és a forrás (Műhold, Kábel, Földi); az OSD beállításokban, a „Jelek a csatornalistában” pontnál kapcsolhatod ki őket. A „$” új keresés után vagy a csatorna megnézésekor jelenik meg.",
+     "cs": "V seznamu kanálů: „$“ u kódovaných kanálů a zdroj (Satelit, Kabel, Pozemní); vypneš je v Předvolbách OSD, v položce „Značky v seznamu kanálů“. „$“ se objeví po novém vyhledávání nebo když kanál sleduješ.",
+     "pl": "Na liście kanałów: „$” przy kanałach kodowanych i źródło (Satelita, Kablówka, Naziemna); wyłączysz je w Preferencjach OSD, w opcji „Znaki na liście kanałów”. „$” pojawia się po nowym wyszukiwaniu lub gdy obejrzysz kanał.",
+     "pt": "Na lista de canais: «$» nos canais codificados e a origem (Satélite, Cabo, Terrestre); desligas em Preferências OSD, em «Sinais na lista de canais». O «$» aparece após uma nova procura ou quando vês o canal.",
+     "nl": "In de zenderlijst: „$” bij gecodeerde zenders en de bron (Satelliet, Kabel, Terrestrisch); uit te zetten in OSD-voorkeuren, bij „Tekens in de zenderlijst”. Het „$” verschijnt na een nieuwe zoekactie of als je de zender bekijkt.",
+     "ru": "В списке каналов: «$» у кодированных каналов и источник (Спутник, Кабель, Эфир); отключаются в «Настройки OSD», в пункте «Значки в списке каналов». «$» появляется после нового поиска или когда посмотришь канал.",
+     "tr": "Kanal listesinde: şifreli kanallarda «$» ve kaynak (Uydu, Kablo, Karasal); OSD Tercihleri'nde «Kanal listesindeki işaretler» seçeneğinden kapatılır. «$», yeni bir aramadan sonra veya kanalı izlediğinde görünür."
+    },
+    {
+     "fel": "nou",
+     "ro": "Asistența de la distanță spune echipei ce receptor cere ajutor, printr-o amprentă a plăcii (din ea nu se află MAC-ul sau seria), iar la beta testeri și numele dat la înscriere.",
+     "en": "Remote assistance tells the team which receiver asks for help, through a fingerprint of the board (it does not reveal the MAC address or serial number), and for beta testers also the name given at sign-up.",
+     "de": "Die Fernhilfe zeigt dem Team, welcher Receiver um Hilfe bittet, über einen Fingerabdruck der Hardware (daraus lassen sich weder MAC-Adresse noch Seriennummer ermitteln), bei Betatestern auch den Namen aus der Anmeldung.",
+     "fr": "L'assistance à distance indique à l'équipe quel récepteur demande de l'aide, par une empreinte de la carte (elle ne révèle ni l'adresse MAC ni le numéro de série) et, pour les bêta-testeurs, aussi le nom donné à l'inscription.",
+     "es": "La asistencia remota indica al equipo qué receptor pide ayuda, mediante una huella de la placa (no revela la dirección MAC ni el número de serie) y, en los beta testers, también el nombre dado al inscribirse.",
+     "it": "L'assistenza remota indica al team quale ricevitore chiede aiuto, tramite un'impronta della scheda (non rivela l'indirizzo MAC né il numero di serie) e, per i beta tester, anche il nome dato all'iscrizione.",
+     "hu": "A távsegítség megmutatja a csapatnak, melyik vevő kér segítséget, az alaplap ujjlenyomatával (ebből nem derül ki a MAC-cím vagy a sorozatszám), a béta tesztelőknél a jelentkezéskor megadott nevet is.",
+     "cs": "Vzdálená pomoc ukáže týmu, který přijímač žádá o pomoc, pomocí otisku desky (z něj nejde zjistit adresu MAC ani sériové číslo), a u beta testerů i jméno zadané při přihlášení.",
+     "pl": "Zdalna pomoc pokazuje zespołowi, który odbiornik prosi o pomoc, za pomocą odcisku płyty (nie da się z niego odczytać adresu MAC ani numeru seryjnego), a u beta testerów także imię podane przy zapisie.",
+     "pt": "A assistência remota indica à equipa que recetor pede ajuda, através de uma impressão digital da placa (não revela o endereço MAC nem o número de série) e, nos beta testers, também o nome dado na inscrição.",
+     "nl": "Hulp op afstand laat het team zien welke ontvanger om hulp vraagt, via een vingerafdruk van de printplaat (die verraadt het MAC-adres en het serienummer niet), en bij bètatesters ook de naam van de aanmelding.",
+     "ru": "Удалённая помощь сообщает команде, какой ресивер просит помощи, по отпечатку платы (по нему нельзя узнать MAC-адрес или серийный номер), а у бета-тестеров ещё и имя, указанное при записи.",
+     "tr": "Uzaktan yardım, kartın parmak iziyle ekibe hangi alıcının yardım istediğini gösterir (bundan MAC adresi veya seri numarası anlaşılmaz); beta testçilerde kayıtta verilen adı da gösterir."
+    },
+    {
+     "fel": "nou",
+     "ro": "Asistența de la distanță poate citi fișierele de sistem (tunerele, placa, memoria, jurnalele); parolele, cheile, datele tale și modulele de acces rămân închise, iar în jurnalul asistenței vezi fiecare fișier citit.",
+     "en": "Remote assistance can read the system files (tuners, board, memory, logs); passwords, secrets, your data and the access modules stay closed, and the assistance log shows you every file read.",
+     "de": "Die Fernhilfe kann die Systemdateien lesen (Tuner, Platine, Speicher, Protokolle); Passwörter, Schlüssel, deine Daten und die Zugangsmodule bleiben gesperrt, und im Protokoll der Fernhilfe siehst du jede gelesene Datei.",
+     "fr": "L'assistance à distance peut lire les fichiers système (tuners, carte, mémoire, journaux) ; les mots de passe, les clés, tes données et les modules d'accès restent fermés, et le journal de l'assistance te montre chaque fichier lu.",
+     "es": "La asistencia remota puede leer los archivos del sistema (sintonizadores, placa, memoria, registros); las contraseñas, las claves, tus datos y los módulos de acceso siguen cerrados, y en el registro de la asistencia ves cada archivo leído.",
+     "it": "L'assistenza remota può leggere i file di sistema (sintonizzatori, scheda, memoria, registri); password, chiavi, i tuoi dati e i moduli di accesso restano chiusi, e nel registro dell'assistenza vedi ogni file letto.",
+     "hu": "A távsegítség olvashatja a rendszerfájlokat (tunerek, alaplap, memória, naplók); a jelszavak, a kulcsok, az adataid és a hozzáférési modulok zárva maradnak, a távsegítség naplójában pedig minden beolvasott fájlt látsz.",
+     "cs": "Vzdálená pomoc může číst systémové soubory (tunery, deska, paměť, záznamy); hesla, klíče, tvoje údaje a přístupové moduly zůstávají uzavřené a v záznamu pomoci vidíš každý přečtený soubor.",
+     "pl": "Zdalna pomoc może czytać pliki systemowe (tunery, płyta, pamięć, dzienniki); hasła, klucze, twoje dane i moduły dostępu pozostają zamknięte, a w dzienniku pomocy widzisz każdy odczytany plik.",
+     "pt": "A assistência remota pode ler os ficheiros do sistema (sintonizadores, placa, memória, registos); as palavras-passe, as chaves, os teus dados e os módulos de acesso continuam fechados, e no registo da assistência vês cada ficheiro lido.",
+     "nl": "Hulp op afstand kan de systeembestanden lezen (tuners, printplaat, geheugen, logboeken); wachtwoorden, sleutels, je gegevens en de toegangsmodules blijven dicht, en in het logboek van de hulp zie je elk gelezen bestand.",
+     "ru": "Удалённая помощь может читать системные файлы (тюнеры, плата, память, журналы); пароли, ключи, твои данные и модули доступа остаются закрытыми, а в журнале помощи ты видишь каждый прочитанный файл.",
+     "tr": "Uzaktan yardım sistem dosyalarını okuyabilir (tunerler, kart, bellek, günlükler); şifreler, anahtarlar, verilerin ve erişim modülleri kapalı kalır, yardım günlüğünde de okunan her dosyayı görürsün."
+    },
+    {
+     "fel": "nou",
+     "ro": "Asistența de la distanță face o copie a setărilor înainte de prima schimbare; cu tasta Albastră sau din interfața web le pui înapoi cum erau (pluginurile instalate atunci rămân).",
+     "en": "Remote assistance copies the settings before the first change; the Blue button or the web interface puts them back as they were (plugins installed meanwhile stay).",
+     "de": "Die Fernhilfe sichert die Einstellungen vor der ersten Änderung; mit der blauen Taste oder in der Weboberfläche stellst du sie wieder her, wie sie waren (in der Sitzung installierte Plugins bleiben).",
+     "fr": "L'assistance à distance copie les réglages avant le premier changement ; la touche Bleue ou l'interface web les remet comme avant (les plugins installés entre-temps restent).",
+     "es": "La asistencia remota copia los ajustes antes del primer cambio; con la tecla Azul o desde la interfaz web los vuelves a dejar como estaban (los plugins instalados mientras tanto se quedan).",
+     "it": "L'assistenza remota copia le impostazioni prima della prima modifica; con il tasto Blu o dall'interfaccia web le rimetti com'erano (i plugin installati nel frattempo restano).",
+     "hu": "A távsegítség az első változtatás előtt másolatot készít a beállításokról; a Kék gombbal vagy a webes felületen visszaállíthatod őket (a közben telepített bővítmények maradnak).",
+     "cs": "Vzdálená pomoc před první změnou zkopíruje nastavení; Modrým tlačítkem nebo ve webovém rozhraní je vrátíš, jak byla (pluginy nainstalované mezitím zůstanou).",
+     "pl": "Pomoc zdalna kopiuje ustawienia przed pierwszą zmianą; niebieskim klawiszem lub w interfejsie WWW przywracasz je do stanu sprzed zmian (wtyczki zainstalowane w tym czasie zostają).",
+     "pt": "A assistência remota copia as definições antes da primeira alteração; com a tecla Azul ou na interface web voltas a pô-las como estavam (os plugins instalados entretanto ficam).",
+     "nl": "Hulp op afstand kopieert de instellingen vóór de eerste wijziging; met de blauwe toets of in de webinterface zet je ze terug zoals ze waren (plugins die intussen zijn geïnstalleerd blijven).",
+     "ru": "Удалённая помощь копирует настройки перед первым изменением; синей кнопкой или в веб-интерфейсе ты возвращаешь их как было (установленные за это время плагины остаются).",
+     "tr": "Uzaktan yardım, ilk değişiklikten önce ayarların kopyasını alır; Mavi tuşla veya web arayüzünden onları eski hâline döndürürsün (bu arada kurulan eklentiler kalır)."
+    },
+    {
+     "fel": "nou",
+     "ro": "Limba ucraineană se poate alege acum din lista de limbi a meniurilor, pe televizor și în interfața web.",
+     "en": "Ukrainian can now be chosen from the menu language list, on the TV and in the web interface.",
+     "de": "Ukrainisch lässt sich jetzt in der Liste der Menüsprachen wählen, am Fernseher und in der Weboberfläche.",
+     "fr": "L'ukrainien peut maintenant être choisi dans la liste des langues des menus, sur le téléviseur et dans l'interface web.",
+     "es": "El ucraniano ya se puede elegir en la lista de idiomas de los menús, en el televisor y en la interfaz web.",
+     "it": "L'ucraino ora si può scegliere nella lista delle lingue dei menu, sul televisore e nell'interfaccia web.",
+     "hu": "Az ukrán nyelv mostantól kiválasztható a menük nyelvlistájában, a televízión és a webes felületen.",
+     "cs": "Ukrajinštinu teď můžeš zvolit v seznamu jazyků menu, na televizoru i ve webovém rozhraní.",
+     "pl": "Ukraiński można teraz wybrać z listy języków menu, na telewizorze i w interfejsie WWW.",
+     "pt": "O ucraniano já pode ser escolhido na lista de línguas dos menus, no televisor e na interface web.",
+     "nl": "Oekraïens kun je nu kiezen in de lijst met menutalen, op de tv en in de webinterface.",
+     "ru": "Украинский язык теперь можно выбрать в списке языков меню, на телевизоре и в веб-интерфейсе.",
+     "tr": "Ukraynaca artık menü dilleri listesinden, televizyonda ve web arayüzünde seçilebiliyor."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.20",
    "build": "0000620202611011940",
    "data": "01.11.2026",

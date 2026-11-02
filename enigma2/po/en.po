@@ -58055,3 +58055,48 @@ msgstr "unused"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "set (%s, OK change)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "So we know which receiver is asking for help, the receiver also sends a fingerprint computed from the board, the same one used in the beta tester programme (the MAC address or the serial number cannot be worked out from it). If you are a beta tester, the receiver also sends the name you gave when signing up or, if you did not give one, your public name."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "a system file or folder (/proc, /sys, /etc, /var/log, logs, /tmp), excluding access modules, passwords, keys or personal data"
+
+msgid "Semnele din lista de canale"
+msgstr "Channel list marks"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "At the right of each channel: “$” on scrambled channels and the source, Satellite, Cable or Terrestrial. You can turn off both or just one. A scrambled channel gets “$” after a new channel search or after you have watched it once."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "“$” on scrambled channels and the source"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Only “$” on scrambled channels"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Only the source (satellite, cable, terrestrial)"
+
+msgid "Fără semne"
+msgstr "No marks"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "The copy is made automatically when the team connects, before any changes. The button puts back the channels, settings and network as they were then; the interface restarts."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Settings copy made when the team connected: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Put it back as it was"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "settings copy made before any changes"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "settings copy could not be made: %s"
+

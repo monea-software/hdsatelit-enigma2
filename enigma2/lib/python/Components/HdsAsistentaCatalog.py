@@ -50,6 +50,8 @@ TEXTE_CATALOG = (
 	N_("Informații"), N_("Semnal"), N_("Jurnale"), N_("Setări"), N_("Probe"),
 	N_("starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"),
 	N_("placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate"),
+	N_("un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, "
+		"parole, chei sau date personale"),
 	N_("lista pachetelor instalate"),
 	N_("rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)"),
 	N_("tunerele și blocarea semnalului"),

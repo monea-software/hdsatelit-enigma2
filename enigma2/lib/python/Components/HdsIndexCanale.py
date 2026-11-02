@@ -6,7 +6,8 @@
 Ce se citeste, ca text (enigma2 din 2011 nu da din Python CAID-urile si cache-ul unui serviciu):
   - lamedb (/etc/enigma2/lamedb, formatul 3 sau 4 scris de eDVBDB::saveServicelist): tipul serviciului, numele,
     furnizorul, CAID-urile (C:xxxx, din descriptorul CA_identifier al SDT la scanare), cache-ul (c:TTvvvv; 00 = PID
-    video, 05 = tipul video) si steagurile (f:2 = ascuns); transponderul da pozitia orbitala sau cablu / terestru;
+    video, 05 = tipul video) si steagurile (f:2 = ascuns, f:400 = codat la cautare); transponderul da pozitia
+    orbitala sau cablu / terestru;
   - buchetele cu fluxuri: DVB-T2 din satelit (HdsT2mi, http://127.0.0.1:8889/t2/...), DAB+ din satelit (HdsDab,
     http://127.0.0.1:8898/dab/..., referintele vechi pe 8888) si orice alt flux (internet, inclusiv HdsDvbI);
   - masuratorile facute cand un canal a rulat: rezolutia exacta si codecul, din grupa vd a bazei unice
@@ -225,6 +226,8 @@ def eticheta_tip(tip):
 
 FURNIZORI_PURTATORI = ('HDSatelit T2-MI', 'HDSatelit ETI')   # serviciile purtatoare ale HdsT2mi / HdsDab
 DX_DONTSHOW = 2
+# codat dupa cautare (free_CA_mode din SDT, lib/dvb/scan.cpp; aceeasi valoare ca in celelalte imagini)
+DX_CODAT = 1024
 
 POZ_CABLU = 'cablu'
 POZ_TERESTRU = 'terestru'
@@ -747,7 +750,7 @@ def _canal_lamedb(cheie, nume, date, transpondere, frecvente=None):
 	if furnizor.startswith('DVB-') and _FURNIZOR_SCANARE.match(furnizor):
 		furnizor = ''
 	return Canal(nume, ref, '%x:%x:%x:%x' % (sid, ns, tsid, onid), tip, stype, poz, sisteme,
-		'criptat' if caids else 'fta', rez, rez_et, cod, sigur, radio=(tip == 'radio'), ttx_lamedb=tpid is not None,
+		'criptat' if caids or steaguri & DX_CODAT else 'fta', rez, rez_et, cod, sigur, radio=(tip == 'radio'), ttx_lamedb=tpid is not None,
 		furnizor=furnizor, fara_nume=fara_nume, fs_lamedb=formate,
 		tp=(frecvente or {}).get((ns, tsid, onid), ''))
 

@@ -57630,3 +57630,48 @@ msgstr "ónotað"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "stillt (%s, OK breyta)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Til að við vitum hvaða móttakari biður um hjálp sendir móttakarinn líka fingrafar reiknað úr kortinu, það sama og í áætluninni fyrir beta-prófara (út frá því er ekki hægt að fá MAC-vistfangið eða raðnúmerið). Ef þú ert beta-prófari sendir móttakarinn líka nafnið sem þú gafst upp við skráningu eða, ef þú gafst ekkert nafn upp, opinbera nafnið þitt."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "kerfisskrá eða kerfismappa (/proc, /sys, /etc, /var/log, atburðaskrár, /tmp), án aðgangseininga, lykilorða, lykla eða persónuupplýsinga"
+
+msgid "Semnele din lista de canale"
+msgstr "Merki í rásalistanum"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Hægra megin við hverja rás: „$“ á rugluðum rásum og uppruninn, Gervihn, Kapall eða Jarðstöð. Þú getur slökkt á báðum eða bara öðru. Rugluð rás fær „$“ eftir nýja rásaleit eða eftir að þú hefur horft á hana einu sinni."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "„$“ á rugluðum rásum og uppruninn"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Aðeins „$“ á rugluðum rásum"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Aðeins uppruninn (gervihnöttur, kapall, jarðstöð)"
+
+msgid "Fără semne"
+msgstr "Engin merki"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Afritið er búið til sjálfkrafa þegar teymið tengist, áður en nokkru er breytt. Hnappurinn setur rásirnar, stillingarnar og netkerfið aftur í það horf sem þau voru í á þeim tíma; viðmótið endurræsist."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Afrit af stillingum búið til þegar teymið tengdist: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Settu aftur í fyrra horf"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "afrit af stillingum búið til áður en nokkru var breytt"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "ekki tókst að búa til afrit af stillingum: %s"
+

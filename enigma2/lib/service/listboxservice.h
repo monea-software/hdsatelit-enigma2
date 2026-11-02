@@ -136,6 +136,13 @@ public:
 		   an empty number; clearRefNumbers() brings back the counting of the rows */
 	void setRefNumber(const eServiceReference &ref, int number);
 	void clearRefNumbers();
+		/* marks at the right end of a DVB service row, when the row has no other label (complex mode): markCrypted, the
+		   text `crypted` on a scrambled service (CAIDs known in lamedb or the dxIsScrambledPMT flag of the scan), and
+		   markSource, where the service comes from by its namespace (`satellite`, `cable`, `terrestrial`). The texts
+		   are given translated from Python (Components/ServiceList.py, config.usage.hds_semne_lista); 0 = no marks */
+	enum { markCrypted = 1, markSource = 2 };
+	void setServiceMarks(int marks, const std::string &crypted, const std::string &satellite, const std::string &cable,
+		const std::string &terrestrial);
 protected:
 	void cursorHome();
 	void cursorEnd();
@@ -200,6 +207,9 @@ private:
 	std::string pathLabel(const eServiceReference &ref) const;
 	std::map<eServiceReference, std::string> m_ref_labels;
 	std::map<eServiceReference, int> m_ref_numbers;
+	int m_service_marks;
+	std::string m_mark_crypted, m_mark_satellite, m_mark_cable, m_mark_terrestrial;
+	std::string serviceMarks(const eServiceReference &ref) const;
 };
 
 #endif

@@ -312,6 +312,9 @@ public:
 		dxNoDVB=4,  // dont use PMT for this service ( use cached pids )
 		dxHoldName=8,
 		dxNewFound=64,
+		/* HDSatelit: the service is scrambled, as the scan read it (free_CA_mode in the SDT); the same value as in the
+		   other images, so their lists keep the meaning */
+		dxIsScrambledPMT=1024,
 	};
 
 	bool usePMT() const { return !(m_flags & dxNoDVB); }
