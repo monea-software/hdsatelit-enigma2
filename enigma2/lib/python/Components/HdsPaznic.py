@@ -42,6 +42,12 @@
 #      de esecul de la punctul 6. Bataia tine cea mai mica masuratoare din afara standby-ului si intreaba repornirea in
 #      standby (config.hds_paznic.repornire_noapte); stare() da valoarea (memorie_driver) pentru ecran si web. Niciun
 #      mesaj pe televizor.
+#   8. SETARILE PE DISC: dupa fiecare bataie, setarile salvate in memorie de la ultima scriere (un meniu confirmat,
+#      volumul) se scriu in /etc/enigma2/settings (Components/config.py, salveazaSchimbarile), numai cand s-a schimbat
+#      ceva; ultimul canal ramane cum e pe disc (il tine Components/HdsCanalTinut.py, dupa 60 s pe ecran). De ce: settings il scrie iesirea curata a enigma2, iar paznicul opreste o interfata care
+#      nu mai raspunde cu SIGTERM (bucla twisted nu prinde semnalul, deci procesul moare pe loc) si apoi SIGKILL, fara
+#      iesirea curata: ce era numai in memorie se pierdea. Firul principal blocat nu mai schimba nimic, deci tot ce s-a
+#      salvat inainte de blocaj e deja pe disc (afara de ultimele cel mult BATAIE_S secunde).
 #
 # Paznicul placii (watchdog-ul hardware, 60 s) si oprirea la un blocaj de nucleu (fir in stare D) raman mereu pornite;
 # setarea de aici priveste numai repornirea interfetei cand nu mai raspunde.
@@ -134,8 +140,10 @@ def textDurata(secunde):
 class Bataie(object):
 	"""Registrul „ocupat” si bataia scrisa pe disc. Un singur obiect pe proces (bataie())."""
 
-	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None, imagine=None):
+	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None, imagine=None, setari=None):
 		self.cale = cale or CALE_BATAIE
+		self.setari = setari if setari is not None else _salveazaSetarile
+		self.eroareSetari = None
 		self.ceas = ceas or monotonic
 		self.pid = pid if pid is not None else os.getpid()
 		self.rotor = rotor if rotor is not None else _rotorSeMisca
@@ -213,6 +221,20 @@ class Bataie(object):
 		except Exception as e:
 			_jurnal("bataia: %r" % (e,))
 		self.verificaMemoriaDriver()
+		self.salveazaSetarile()
+
+	def salveazaSetarile(self):
+		"""Punctul 8: setarile salvate in memorie de la ultima scriere ajung pe disc, dupa bataie (o scriere inceata pe
+		memoria interna nu intarzie bataia). O eroare intra in jurnal o singura data, pana merge din nou. Nu arunca."""
+		try:
+			self.setari()
+			if self.eroareSetari is not None:
+				_jurnal("setarile se scriu din nou pe disc")
+			self.eroareSetari = None
+		except Exception as e:
+			if self.eroareSetari is None:
+				_jurnal("setarile nu s-au scris pe disc: %r" % (e,))
+			self.eroareSetari = repr(e)
 
 	def verificaMemoriaDriver(self):
 		"""Memoria decodorului (Components/HdsMemorieDriver.py): citirile memoriei (crezute numai dupa un minut sub
@@ -357,6 +379,18 @@ def _imagineAcum():
 
 
 _unic = [None]
+
+
+def _salveazaSetarile():
+	"""Punctul 8, cu configfile din enigma2. Fara Components.config sau fara functia (probele altor module pe PC):
+	nimic, fara rand in jurnal."""
+	try:
+		from Components.config import configfile
+	except ImportError:
+		return
+	scrie = getattr(configfile, "salveazaSchimbarile", None)
+	if scrie is not None:
+		scrie()
 
 
 def bataie():

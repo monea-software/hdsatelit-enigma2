@@ -252,6 +252,8 @@ PARAM_JETON = b"token"
 # - termenul curge de la deschiderea conexiunii (sau de la sfarsitul raspunsului precedent) pana la cererea
 #   intreaga si NU se reia la fiecare octet primit; cat se pregateste raspunsul (captura), e oprit.
 MAX_CORP_CERERE = 64 * 1024
+# caseta Mesaj pe televizor din panou (MesajTelevizorResource): fereastra de pe televizor se inchide singura dupa atat
+MESAJ_TV_S = 10
 MAX_CONEXIUNI = 64
 MAX_CONEXIUNI_PE_ADRESA = 16
 TERMEN_CERERE_S = 20
@@ -1408,8 +1410,11 @@ _PAGINA_PANOU = """<!DOCTYPE html>
   .tl-stare{margin-top:12px;}
   .stare{font-size:.75rem;color:var(--text-slab);margin-top:10px;min-height:1em;}
   form.cauta-setari{max-width:1360px;margin:0 auto 16px;display:flex;gap:8px;}
-  form.cauta-setari input{flex:1;min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
-  form.cauta-setari button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  form.cauta-setari input,form.mesaj-tv input{flex:1;min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
+  form.cauta-setari button,form.mesaj-tv button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  form.mesaj-tv{flex-basis:100%;display:flex;gap:8px;min-width:0;}
+  form.mesaj-tv input{min-width:0;}
+  .nota-rand.eroare{color:#ffb4a8;}
   footer{max-width:1360px;margin:16px auto 0;color:var(--text-slab);font-size:.8rem;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;}
   footer button{background:none;border:none;padding:0;color:#7fb8ff;text-decoration:underline;font:inherit;cursor:pointer;}
 </style>
@@ -1460,7 +1465,11 @@ _PAGINA_PANOU = """<!DOCTYPE html>
       <div class="status-linie" id="stRadio" style="display:none"><a href="/radio">Radio: vezi pagina radio (postul, piesa, barele)</a></div>
       <div class="status-linie"><a href="/canale">Lista de canale: alege și pornește un canal</a></div>
       <div class="status-linie"><a href="/tv">TV în browser: privește canalul live pe acest PC sau telefon</a></div>
-      <div class="status-linie"><a href="/ghid">Ghidul canalului: emisiunile și înregistrarea lor</a></div>
+      <div class="status-linie"><a href="/ghid">Ghidul canalului: emisiunile și înregistrarea lor</a></div>__INTERFETE_WEB__
+      <div class="status-linie cu-nota"><span>Mesaj pe televizor</span>
+        <form class="mesaj-tv" id="formMesajTv" onsubmit="return trimiteMesajTv()"><input type="text" id="textMesajTv" maxlength="500" placeholder="Scrie mesajul pentru televizor" aria-label="Scrie mesajul pentru televizor" autocomplete="off"><button type="submit">Trimite</button></form>
+        <small class="nota-rand" id="stareMesajTv" role="status"></small>
+      </div>
     </div>
   </div>
 </div>
@@ -1488,6 +1497,27 @@ function cerere(cale, metoda){
   var f = document.getElementById("cautaSetari");
   if(f && CFG.jeton){ var t = document.createElement("input"); t.type = "hidden"; t.name = "token"; t.value = CFG.jeton; f.appendChild(t); }
 })();
+// Randurile interfetelor web ale extensiilor instalate (_randuriInterfeteWeb din plugin.py): aceeasi gazda ca panoul,
+// portul extensiei
+(function(){
+  var l = document.querySelectorAll("a[data-port]");
+  for(var i = 0; i < l.length; i++){ l[i].href = "http://" + location.hostname + ":" + l[i].getAttribute("data-port") + "/"; }
+})();
+// Caseta Mesaj pe televizor: POST /api/mesaj-televizor, aceeasi fereastra ca mesajul aplicatiilor de telefon
+// (aplicatii_web.trimiteMesaj); campul se goleste numai dupa ce mesajul a aparut, la o eroare textul ramane
+function trimiteMesajTv(){
+  var camp = document.getElementById("textMesajTv"), st = document.getElementById("stareMesajTv");
+  var text = camp.value.trim();
+  if(!text){ camp.focus(); return false; }
+  st.textContent = "Se trimite...";
+  st.classList.remove("eroare");
+  cerere("/api/mesaj-televizor?text=" + encodeURIComponent(text), "POST").then(function(d){
+    st.textContent = d.message || "";
+    st.classList.toggle("eroare", !d.result);
+    if(d.result){ camp.value = ""; }
+  }).catch(function(){ st.textContent = "Receptorul nu răspunde."; st.classList.add("eroare"); });
+  return false;
+}
 // Telecomanda de langa ecran (tastele le face _htmlTelecomanda din plugin.py): compacta sau toate tastele telecomenzii
 // Viper, cu aceleasi coduri ca telecomanda fizica. Alegerea ramane in acest browser (localStorage; fara el, compacta).
 // O tasta tinuta 0,7 s pleaca drept apasare lunga, ca in pagina /telecomenzi; din tastatura (Enter, spatiu), apasare
@@ -2308,6 +2338,26 @@ def _paginaPrincipala(request):
 	return _traducePagina(_PAGINA_ASOCIERE).encode("utf-8")
 
 
+# randul unei interfete web a unei extensii instalate, in cardul Acum pe receptor (_randuriInterfeteWeb); %s = numele
+# extensiei, la rulare (dosarul ei de plugin)
+TXT_INTERFATA_EXTENSIE = N_("%s: interfața web a extensiei")
+
+
+def _randuriInterfeteWeb():
+	"""Randurile "<Nume>: interfata web a extensiei" pentru serverele web ale extensiilor instalate care asculta acum
+	in enigma2 (extensii_web.interfeteWeb); niciunul cand nu asculta niciunul. Adresa o pune scriptul panoului:
+	aceeasi gazda ca panoul (IP-ul sau numele receptorului), portul extensiei."""
+	try:
+		from . import extensii_web
+		lista = extensii_web.interfeteWeb()
+	except Exception as eroare:
+		print("[HdsWebControl] interfetele web ale extensiilor: %s" % eroare)
+		return ""
+	import html
+	return "".join('\n      <div class="status-linie"><a href="/" data-port="%d">%s</a></div>'
+		% (port, html.escape(_t(TXT_INTERFATA_EXTENSIE) % nume, quote=False)) for nume, port in lista)
+
+
 def _panouCuEcranNegru():
 	"""Panoul principal cu caseta ecranului negru (ecran_negru_web.in_panou); fara modul, panoul de pana acum."""
 	try:
@@ -2316,6 +2366,7 @@ def _panouCuEcranNegru():
 	except Exception as eroare:
 		print("[HdsWebControl] caseta ecranului negru: %s" % eroare)
 		pagina = _traducePagina(_PAGINA_PANOU)
+	pagina = pagina.replace("__INTERFETE_WEB__", _randuriInterfeteWeb())
 	# mouse-ul pe ecranul receptorului si telecomanda pe ecranul intreg (mouse_web.in_panou): scriptul lui, inaintea
 	# scriptului panoului (ultimul </script> ramane al panoului, pentru modulele care se pun inaintea lui)
 	try:
@@ -3106,6 +3157,21 @@ def _construiesteResurse():
 			if not bun:
 				return self._eroare(request, text, cod)
 			return self._raspunde(request, {"result": True, "sRef": text})
+
+	class MesajTelevizorResource(HdsJsonResource):
+		"""POST /api/mesaj-televizor?text=: caseta Mesaj pe televizor de pe prima pagina. Aceeasi functie ca mesajul
+		aplicatiilor de telefon (aplicatii_web.trimiteMesaj: curatarea textului, cel mult un mesaj la 2 s, fereastra
+		pe televizor), cu poarta panoului (cookie, POST, aceeasi origine, antetul CSRF) in locul barierei aplicatiilor;
+		fereastra se inchide singura dupa MESAJ_TV_S secunde (omul din fata televizorului poate sa nu aiba
+		telecomanda)."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			from . import aplicatii_web
+			valori = request.args.get(b"text") or [b""]
+			text = valori[0].decode("utf-8", "replace")[:aplicatii_web.MAX_MESAJ * 2]
+			bun, mesaj = aplicatii_web.trimiteMesaj(aplicatii_web._m(), text, 1, MESAJ_TV_S)
+			return self._raspunde(request, {"result": bool(bun), "message": mesaj})
 
 	class ScreenshotResource(resource.Resource):
 		"""GET /api/screenshot?format=jpg|png&quality=N&width=N&mode=all|video|osd&download=1: captura de ecran prin
@@ -4156,6 +4222,7 @@ def _construiesteResurse():
 			self.putChild(b"remotecontrol", _APLICATII["alege"](b"remotecontrol", RemoteControlResource()))
 			self.putChild(b"mouse", _MOUSE[b"mouse"])
 			self.putChild(b"zap", _APLICATII["alege"](b"zap", ZapResource()))
+			self.putChild(b"mesaj-televizor", MesajTelevizorResource())
 			self.putChild(b"screenshot", ScreenshotResource())
 			self.putChild(b"jurnal", _JURNAL[b"jurnal"])
 			self.putChild(b"motor", MotorResource())
@@ -4760,6 +4827,9 @@ TEXTE_PAGINA = {
 		N_("Lista de canale: alege și pornește un canal"),
 		N_("TV în browser: privește canalul live pe acest PC sau telefon"),
 		N_("Ghidul canalului: emisiunile și înregistrarea lor"),
+		N_("Mesaj pe televizor"),
+		N_("Scrie mesajul pentru televizor"),
+		N_("Trimite"),
 		N_("Deconectează acest browser"),
 		N_("Caută setări: scrie un cuvânt, de exemplu subtitrări"),
 		N_("Caută setări"),
@@ -5281,6 +5351,7 @@ TEXTE_PAGINA = {
 	),
 	"js": (
 		N_("browser deconectat"),
+		N_("Se trimite..."),
 		N_("Trimis:"),
 		N_("(apăsare lungă)"),
 		N_("Tasta nu a ajuns la receptor ("),

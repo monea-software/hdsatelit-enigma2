@@ -56922,3 +56922,24 @@ msgstr "a beállítások másolata még a változtatások előtt készült el"
 msgid "copia setărilor nu s-a putut face: %s"
 msgstr "a beállítások másolatát nem sikerült elkészíteni: %s"
 
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py
+#, python-format
+msgid "„%s” se vede numai cu nivelul de meniu %s. Îl alegi la rândul „%s”, în %s."
+msgstr "A(z) „%s” csak a(z) %s menüszinttel látszik. A(z) „%s” sorban választhatod ki (%s)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+#, python-format
+msgid "%s: interfața web a extensiei"
+msgstr "%s: a bővítmény webes felülete"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Mesaj pe televizor"
+msgstr "Üzenet a tévére"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Scrie mesajul pentru televizor"
+msgstr "Írd be az üzenetet a tévére"
+
+msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
+msgstr "Köszönetet mondunk minden bétatesztelőnek, aki részt vett a HD Satelit image elkészítésében: %s."
+

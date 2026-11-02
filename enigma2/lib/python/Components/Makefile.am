@@ -57,7 +57,7 @@ install_PYTHON = \
 	HdsLamedbSalvare.py \
 	HdsMasuraZap.py \
 	HdsFavorite.py \
-	HdsFunctii.py HdsMarimeText.py HdsMargini.py HdsFontInterfata.py HdsInformatiiTabel.py \
+	HdsFunctii.py HdsMarimeText.py HdsMargini.py HdsFontInterfata.py HdsInformatiiTabel.py HdsMultumiri.py \
 	HdsTemaTv.py \
 	HdsStocareRetea.py HdsReteaProtocoale.py HdsReteaUnealta.py HdsReteaSmb.py \
 	HdsEditorCanale.py HdsEditorCanaleDate.py HdsEditorCanaleUnelte.py HdsEditorSateliti.py HdsEditorSigle.py

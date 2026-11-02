@@ -57161,3 +57161,24 @@ msgstr "asetusten kopio tehty ennen muutosten tekemistä"
 msgid "copia setărilor nu s-a putut face: %s"
 msgstr "asetusten kopiota ei voitu tehdä: %s"
 
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py
+#, python-format
+msgid "„%s” se vede numai cu nivelul de meniu %s. Îl alegi la rândul „%s”, în %s."
+msgstr "”%s” näkyy vain valikkotasolla %s. Valitset sen rivillä ”%s” (%s)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+#, python-format
+msgid "%s: interfața web a extensiei"
+msgstr "%s: laajennuksen web-liittymä"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Mesaj pe televizor"
+msgstr "Viesti televisioon"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py
+msgid "Scrie mesajul pentru televizor"
+msgstr "Kirjoita viesti televisioon"
+
+msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
+msgstr "Kiitämme kaikkia beta-testaajia, jotka osallistuivat HD Satelit -imagen luomiseen: %s."
+

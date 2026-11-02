@@ -1,6 +1,93 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.22",
+   "build": "0000622202611020425",
+   "data": "02.11.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "Setările schimbate nu se mai pierd când paznicul repornește interfața blocată: receptorul le scrie pe disc la fiecare 10 secunde, numai dacă s-a schimbat ceva.",
+     "en": "Changed settings are no longer lost when the watchdog restarts a frozen interface: the receiver writes them to disk every 10 seconds, only when something changed.",
+     "de": "Geänderte Einstellungen gehen nicht mehr verloren, wenn der Wächter eine eingefrorene Oberfläche neu startet: Der Receiver schreibt sie alle 10 Sekunden auf den Speicher, nur wenn sich etwas geändert hat.",
+     "fr": "Les réglages modifiés ne se perdent plus quand le gardien redémarre l'interface bloquée : le récepteur les écrit sur le disque toutes les 10 secondes, seulement si quelque chose a changé.",
+     "es": "Los ajustes cambiados ya no se pierden cuando el vigilante reinicia la interfaz bloqueada: el receptor los escribe en el disco cada 10 segundos, solo si algo ha cambiado.",
+     "it": "Le impostazioni cambiate non si perdono più quando il guardiano riavvia l'interfaccia bloccata: il ricevitore le scrive sul disco ogni 10 secondi, solo se qualcosa è cambiato.",
+     "hu": "A megváltoztatott beállítások már nem vesznek el, amikor az őrző újraindítja a lefagyott felületet: a vevő 10 másodpercenként kiírja őket, csak ha valami változott.",
+     "cs": "Změněná nastavení se už neztratí, když hlídač restartuje zamrzlé rozhraní: přijímač je každých 10 sekund zapíše na disk, jen když se něco změnilo.",
+     "pl": "Zmienione ustawienia nie giną już, gdy strażnik restartuje zawieszony interfejs: odbiornik zapisuje je co 10 sekund, tylko gdy coś się zmieniło.",
+     "pt": "As definições alteradas já não se perdem quando o vigilante reinicia a interface bloqueada: o recetor grava-as a cada 10 segundos, só quando algo mudou.",
+     "nl": "Gewijzigde instellingen gaan niet meer verloren als de waakhond een vastgelopen interface herstart: de ontvanger schrijft ze elke 10 seconden weg, alleen als er iets veranderd is.",
+     "ru": "Изменённые настройки больше не теряются, когда сторож перезапускает зависший интерфейс: ресивер записывает их каждые 10 секунд, только если что-то изменилось.",
+     "tr": "Bekçi donmuş arayüzü yeniden başlattığında değiştirilen ayarlar artık kaybolmuyor: alıcı bir şey değiştiyse onları her 10 saniyede bir kaydediyor."
+    },
+    {
+     "fel": "imbunatatit",
+     "ro": "Scanarea din interfața web spune limpede când o intrare e ascunsă de nivelul de utilizator ales și unde îl schimbi.",
+     "en": "The scan in the web interface clearly says when an entry is hidden by the chosen user level and where you change it.",
+     "de": "Der Suchlauf in der Weboberfläche sagt klar, wenn ein Eintrag durch die gewählte Benutzerstufe ausgeblendet ist, und wo du sie änderst.",
+     "fr": "La recherche dans l'interface web dit clairement quand une entrée est masquée par le niveau d'utilisateur choisi et où le changer.",
+     "es": "La búsqueda en la interfaz web dice claramente cuándo una entrada está oculta por el nivel de usuario elegido y dónde cambiarlo.",
+     "it": "La ricerca nell'interfaccia web dice chiaramente quando una voce è nascosta dal livello utente scelto e dove cambiarlo.",
+     "hu": "A webes felület keresése világosan jelzi, ha egy bejegyzést a választott felhasználói szint elrejt, és hol változtathatod meg.",
+     "cs": "Vyhledávání ve webovém rozhraní jasně řekne, když je položka skrytá zvolenou úrovní uživatele, a kde ji změníš.",
+     "pl": "Skanowanie w interfejsie WWW jasno mówi, kiedy pozycja jest ukryta przez wybrany poziom użytkownika i gdzie go zmienić.",
+     "pt": "A procura na interface web diz claramente quando uma entrada está escondida pelo nível de utilizador escolhido e onde o mudar.",
+     "nl": "Het zoeken in de webinterface zegt duidelijk wanneer een onderdeel verborgen is door het gekozen gebruikersniveau en waar je dat wijzigt.",
+     "ru": "Поиск в веб-интерфейсе ясно сообщает, когда пункт скрыт выбранным уровнем пользователя, и где его изменить.",
+     "tr": "Web arayüzündeki tarama, bir öğe seçilen kullanıcı düzeyi tarafından gizlendiğinde bunu ve düzeyi nereden değiştireceğini açıkça söylüyor."
+    },
+    {
+     "fel": "nou",
+     "ro": "Interfața web are legături spre interfețele web ale extensiilor instalate care au una, pe portul lor.",
+     "en": "The web interface links to the web interfaces of installed extensions that have one, on their own port.",
+     "de": "Die Weboberfläche verlinkt auf die Weboberflächen installierter Erweiterungen, die eine haben, auf ihrem eigenen Port.",
+     "fr": "L'interface web a des liens vers les interfaces web des extensions installées qui en ont une, sur leur propre port.",
+     "es": "La interfaz web tiene enlaces a las interfaces web de las extensiones instaladas que tienen una, en su propio puerto.",
+     "it": "L'interfaccia web ha collegamenti alle interfacce web delle estensioni installate che ne hanno una, sulla loro porta.",
+     "hu": "A webes felület hivatkozik a telepített bővítmények webes felületére, ha van nekik, a saját portjukon.",
+     "cs": "Webové rozhraní má odkazy na webová rozhraní nainstalovaných rozšíření, která nějaké mají, na jejich vlastním portu.",
+     "pl": "Interfejs WWW ma odnośniki do interfejsów WWW zainstalowanych rozszerzeń, które go mają, na ich własnym porcie.",
+     "pt": "A interface web tem ligações para as interfaces web das extensões instaladas que têm uma, na sua própria porta.",
+     "nl": "De webinterface linkt naar de webinterfaces van geïnstalleerde applicaties die er een hebben, op hun eigen poort.",
+     "ru": "В веб-интерфейсе есть ссылки на веб-интерфейсы установленных расширений, у которых они есть, на их собственном порту.",
+     "tr": "Web arayüzü, kurulu eklentilerin web arayüzlerine, kendi portlarında bağlantı veriyor."
+    },
+    {
+     "fel": "nou",
+     "ro": "În panoul interfeței web, caseta „Mesaj pe televizor” trimite un text care apare 10 secunde pe ecranul receptorului.",
+     "en": "On the web interface panel, the “Message on the TV” box sends a text that shows for 10 seconds on the receiver's screen.",
+     "de": "Im Panel der Weboberfläche sendet das Feld „Nachricht auf dem Fernseher“ einen Text, der 10 Sekunden lang auf dem Bildschirm des Receivers erscheint.",
+     "fr": "Dans le panneau de l'interface web, la case « Message sur le téléviseur » envoie un texte qui s'affiche 10 secondes sur l'écran du récepteur.",
+     "es": "En el panel de la interfaz web, el cuadro «Mensaje en el televisor» envía un texto que aparece 10 segundos en la pantalla del receptor.",
+     "it": "Nel pannello dell'interfaccia web, la casella «Messaggio sul televisore» invia un testo che compare per 10 secondi sullo schermo del ricevitore.",
+     "hu": "A webes felület paneljén az „Üzenet a tévére” mező olyan szöveget küld, amely 10 másodpercig látszik a vevő képernyőjén.",
+     "cs": "V panelu webového rozhraní pošle pole „Zpráva na televizor“ text, který se na 10 sekund ukáže na obrazovce přijímače.",
+     "pl": "W panelu interfejsu WWW pole „Wiadomość na telewizorze” wysyła tekst, który przez 10 sekund widać na ekranie odbiornika.",
+     "pt": "No painel da interface web, a caixa «Mensagem no televisor» envia um texto que aparece 10 segundos no ecrã do recetor.",
+     "nl": "In het paneel van de webinterface stuurt het vak „Bericht op de televisie” een tekst die 10 seconden op het scherm van de ontvanger verschijnt.",
+     "ru": "На панели веб-интерфейса поле «Сообщение на телевизор» отправляет текст, который 10 секунд виден на экране ресивера.",
+     "tr": "Web arayüzü panelindeki «Televizyona mesaj» kutusu, alıcının ekranında 10 saniye görünen bir metin gönderiyor."
+    },
+    {
+     "fel": "nou",
+     "ro": "„Despre imagine” are acum mulțumirile pentru toți beta testerii, în ordinea contribuției lor pe forum.",
+     "en": "The About screen now thanks all the beta testers, in the order of their contribution on the forum.",
+     "de": "„Über das Image“ dankt jetzt allen Betatestern, in der Reihenfolge ihres Beitrags im Forum.",
+     "fr": "« À propos de l'image » remercie maintenant tous les bêta-testeurs, dans l'ordre de leur contribution sur le forum.",
+     "es": "«Acerca de la imagen» agradece ahora a todos los beta testers, en el orden de su contribución en el foro.",
+     "it": "«Informazioni sull'immagine» ora ringrazia tutti i beta tester, nell'ordine del loro contributo sul forum.",
+     "hu": "„Az image névjegye” most köszönetet mond minden béta tesztelőnek, a fórumon nyújtott hozzájárulásuk sorrendjében.",
+     "cs": "„O image“ teď děkuje všem beta testerům, v pořadí podle jejich přínosu na fóru.",
+     "pl": "„O obrazie systemu” dziękuje teraz wszystkim beta testerom, w kolejności ich wkładu na forum.",
+     "pt": "«Sobre a imagem» agradece agora a todos os beta testers, pela ordem da sua contribuição no fórum.",
+     "nl": "„Over het image” bedankt nu alle bètatesters, in de volgorde van hun bijdrage op het forum.",
+     "ru": "В разделе «Об образе системы» теперь есть благодарность всем бета-тестерам, в порядке их вклада на форуме.",
+     "tr": "«İmaj hakkında» artık tüm beta testçilere, forumdaki katkılarının sırasına göre teşekkür ediyor."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.21",
    "build": "0000621202611020200",
    "data": "02.11.2026",
