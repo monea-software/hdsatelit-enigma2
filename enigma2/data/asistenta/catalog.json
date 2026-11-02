@@ -17,6 +17,15 @@
       "args": []
     },
     {
+      "op": "citeste",
+      "grup": "Informații",
+      "fel": "citire",
+      "text": "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale",
+      "args": [
+        {"nume": "cale", "tipar": "^/(proc|sys|etc|var/log|home/root/logs|tmp)(/[A-Za-z0-9._+@:,-]+)*/?\\Z", "cerut": true}
+      ]
+    },
+    {
       "op": "pachete",
       "grup": "Informații",
       "fel": "citire",

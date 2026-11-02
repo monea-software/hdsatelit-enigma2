@@ -59231,3 +59231,48 @@ msgstr "inutilisée"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "mise (%s, OK changer)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Pour que nous sachions quel récepteur demande de l'aide, le récepteur envoie aussi une empreinte calculée à partir de la carte, la même que pour le programme des bêta-testeurs (on ne peut en tirer ni l'adresse MAC ni le numéro de série). Si tu es bêta-testeur, le récepteur envoie aussi le nom que tu as donné à l'inscription ou, si tu n'en as pas donné, ton nom public."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "un fichier ou un dossier du système (/proc, /sys, /etc, /var/log, les journaux, /tmp), sans les modules d’accès, les mots de passe, les clés ni les données personnelles"
+
+msgid "Semnele din lista de canale"
+msgstr "Repères dans la liste des chaînes"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "À droite de chaque chaîne : « $ » sur les chaînes cryptées et la source, Satellite, Câble ou Terrestre. Tu peux désactiver les deux ou un seul. Une chaîne cryptée reçoit le « $ » après une nouvelle recherche de chaînes ou après que tu l'as regardée une fois."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "« $ » sur les chaînes cryptées et la source"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Seulement « $ » sur les chaînes cryptées"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Seulement la source (satellite, câble, terrestre)"
+
+msgid "Fără semne"
+msgstr "Aucun repère"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "La copie se fait automatiquement quand l'équipe se connecte, avant toute modification. Le bouton remet en place les chaînes, les réglages et le réseau tels qu'ils étaient à ce moment-là ; l'interface redémarre."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Copie des réglages faite quand l'équipe s'est connectée : %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Remets en place comme avant"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "copie des réglages faite avant toute modification"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "la copie des réglages n'a pas pu être faite : %s"
+

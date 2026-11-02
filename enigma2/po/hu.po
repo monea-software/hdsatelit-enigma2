@@ -56877,3 +56877,48 @@ msgstr "nem használt"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "beállítva (%s, OK módosítás)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Hogy tudjuk, melyik vevő kér segítséget, a vevő a lapból számolt ujjlenyomatot is elküldi, ugyanazt, mint a bétatesztelők programjában (ebből sem a MAC-cím, sem a sorozatszám nem deríthető ki). Ha bétatesztelő vagy, a vevő a jelentkezéskor megadott nevedet is elküldi, vagy ha nem adtál meg nevet, a nyilvános nevedet."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "egy rendszerfájl vagy rendszermappa (/proc, /sys, /etc, /var/log, naplók, /tmp), hozzáférési modulok, jelszavak, kulcsok és személyes adatok nélkül"
+
+msgid "Semnele din lista de canale"
+msgstr "Jelek a csatornalistában"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Minden csatorna jobb oldalán: „$” a kódolt csatornáknál és a forrás, Műhold, Kábel vagy Földi. Kikapcsolhatod mindkettőt vagy csak az egyiket. A kódolt csatorna egy új csatornakeresés után vagy azután kapja meg a „$” jelet, hogy egyszer megnézted."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "„$” a kódolt csatornáknál és a forrás"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Csak „$” a kódolt csatornáknál"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Csak a forrás (műhold, kábel, földi)"
+
+msgid "Fără semne"
+msgstr "Nincsenek jelek"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "A másolat automatikusan elkészül, amikor a csapat csatlakozik, még a változtatások előtt. A gomb visszateszi az akkori csatornákat, beállításokat és hálózatot; a felület újraindul."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Beállítások másolata, amely a csapat csatlakozásakor készült: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Tedd vissza, ahogy volt"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "a beállítások másolata még a változtatások előtt készült el"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "a beállítások másolatát nem sikerült elkészíteni: %s"
+

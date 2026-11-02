@@ -55602,3 +55602,48 @@ msgstr "nepoužitý"
 
 msgid "pusă (%s, OK schimbă)"
 msgstr "zadaný (%s, OK zmeniť)"
+
+# Asistenta de la distanta
+msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
+msgstr "Aby sme vedeli, ktorý prijímač žiada o pomoc, prijímač odosiela aj odtlačok vypočítaný z dosky, rovnaký ako v programe pre beta testerov (nedá sa z neho zistiť MAC adresa ani sériové číslo). Ak si beta tester, prijímač odosiela aj meno uvedené pri registrácii alebo, ak nebolo uvedené, tvoje verejné meno."
+
+
+# Asistenta de la distanta
+msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
+msgstr "systémový súbor alebo priečinok (/proc, /sys, /etc, /var/log, záznamy, /tmp), bez prístupových modulov, hesiel, kľúčov a osobných údajov"
+
+msgid "Semnele din lista de canale"
+msgstr "Značky v zozname kanálov"
+
+msgid "În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată."
+msgstr "Vpravo pri každom kanáli: „$“ pri kódovaných kanáloch a zdroj, Satelit, Kábel alebo Pozemné. Môžeš vypnúť obe alebo len jednu. Kódovaný kanál dostane „$“ po novom vyhľadávaní kanálov alebo potom, čo ho raz pozrieš."
+
+msgid "„$” la canalele codate și sursa"
+msgstr "„$“ pri kódovaných kanáloch a zdroj"
+
+msgid "Numai „$” la canalele codate"
+msgstr "Len „$“ pri kódovaných kanáloch"
+
+msgid "Numai sursa (satelit, cablu, terestru)"
+msgstr "Len zdroj (satelit, kábel, pozemné)"
+
+msgid "Fără semne"
+msgstr "Bez značiek"
+
+
+# Asistenta de la distanta
+msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
+msgstr "Kópia sa vytvorí automaticky pri pripojení tímu, pred akoukoľvek zmenou. Tlačidlo obnoví vtedajší stav kanálov, nastavení a siete; rozhranie sa reštartuje."
+
+msgid "Copia setărilor făcută când a intrat echipa: %s."
+msgstr "Kópia nastavení vytvorená pri pripojení tímu: %s."
+
+msgid "Pune înapoi cum era"
+msgstr "Obnov predchádzajúci stav"
+
+msgid "copia setărilor făcută înainte de orice schimbare"
+msgstr "kópia nastavení vytvorená pred akoukoľvek zmenou"
+
+msgid "copia setărilor nu s-a putut face: %s"
+msgstr "nepodarilo sa vytvoriť kópiu nastavení: %s"
+

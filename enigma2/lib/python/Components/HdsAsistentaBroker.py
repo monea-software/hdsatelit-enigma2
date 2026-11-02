@@ -10,10 +10,11 @@
 # echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
 # (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B"; ecranele private
 # (Components/HdsAsistentaControl.py) raman inchise si la B. Nimic nu scrie pe disc in afara jurnalului
-# sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti; nu exista
-# nicio cale libera de fisier (jurnalele se citesc dupa nume, din /home/root/logs). Iesirea trece intai prin filtrul de
-# secrete (parole, chei, jetoane) si prin mascarea adreselor MAC; caile si setarile
-# cartelelor de acces (CAM) nu se citesc deloc.
+# sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti. O singura
+# operatie primeste o cale (op "citeste", din 0.6.21): numai sub RADACINI_CITIRE, verificata dupa realpath (nicio
+# legatura spre afara, spre discuri sau stick-uri) si niciodata prin LOCURI_OPRITE (modulele de acces, parolele,
+# cheile, jetoanele, datele personale). Iesirea trece intai prin filtrul de secrete (parole,
+# chei, jetoane) si prin mascarea adreselor MAC; caile si setarile cartelelor de acces (CAM) nu se citesc deloc.
 #
 # Fiecare op din catalog are aici o functie (TABEL); o proba cere ca cele doua liste sa coincida. Partea de sus nu
 # importa nimic din enigma2: functiile care au nevoie de receptor (captura, mesaj, memoria decodorului, setarile)
@@ -182,7 +183,133 @@ def op_tunere(ctx, args):
 	stari = _stari_frontend(ctx)
 	if stari:
 		parti.append("Stare frontend:\n" + stari)
+	# placile HiSilicon (V20, V30, V40, SF8008): randul portului din /proc/msp/tuner (i2c, demodulatorul si tunerul,
+	# cu adresele lor; dupa el recunoaste placa hds-blindscan) si numele celorlalte fisiere, de citit cu "citeste"
+	msp = ctx.get("msp", "/proc/msp")
+	if os.path.isfile(os.path.join(msp, "tuner")):
+		parti.append("/proc/msp/tuner:\n" + _citeste(os.path.join(msp, "tuner"), 16384).strip())
+	if os.path.isdir(msp):
+		try:
+			parti.append("/proc/msp (cu citeste): " + " ".join(sorted(os.listdir(msp))))
+		except Exception:
+			pass
 	return Rezultat(0, text="\n\n".join(parti))
+
+
+# ---------------------------------------------------------------- citirea unui fisier sau a unui dosar (op "citeste")
+# Eduard, 01.11.2026 23:40: asistenta vede tot hardware-ul si tot ce e pe receptor, in afara de datele personale si de
+# modulele de acces (CAM si chei). Caile primite au trecut de tiparul din catalog (numai sub RADACINI_CITIRE, fara
+# spatii); aici: realpath (legaturile simbolice si ".." se rezolva, iar locul real trebuie sa ramana sub
+# RADACINI_REALE: /proc/<pid>/fd, /proc/<pid>/root sau o legatura din /tmp spre un disc cad), apoi LOCURI_OPRITE si
+# _CAM pe calea ceruta si pe cea reala. Numai fisiere obisnuite (si cele din /proc, /sys) si dosare: un FIFO sau un
+# socket din /tmp ar tine sesiunea pe loc. Fisierul se citeste prin head (termen si plafon, ca un extern), iar raspunsul
+# trece prin mascheaza (randurile modulelor de acces scoase, secretele ca stelute, MAC-ul pe jumatate).
+RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp")
+# unde duc pe receptor (OE: /var/log -> /var/volatile/log, /tmp -> /var/volatile/tmp)
+RADACINI_REALE = RADACINI_CITIRE + ("/var/volatile/log", "/var/volatile/tmp")
+LOCURI_OPRITE = re.compile(
+	# parolele, cheile, jetoanele si conturile (ale sistemului si ale noastre)
+	r"shadow|passwd|(?:^|[/._-])pass(?:word|phrase)?(?:[/._-]|$)|hdsatelit-ssh|wpa_supplicant|hostapd|dropbear|"
+	r"(?:^|/)\.?ssh(?:/|_|$)|ssl/private|\.pem$|vpn|wireguard|(?:^|/)wg\d|samba|(?:^|/)smb|(?:^|/)ppp(?:/|$)|netrc|"
+	r"(?:^|/)auto\.|jeton|token|secret|parol|chei|key|cred|auth(?!orized)|cookie|conturi|account|"
+	r"^/etc/enigma2/hdsatelit/[^/]*\.bin$|"
+	# memoria si fluxurile nucleului care nu se citesc (sau nu se termina)
+	r"(?:^|/)environ$|kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$|"
+	# setarile intregi si copiile lor (op "setari" le da filtrate), listele si datele omului
+	# (identificatorii placii, seria memoriei, seriile si EEPROM-ul, se citesc: Eduard, 02.11.2026 01:19)
+	r"^/etc/enigma2/settings(?:$|[._~-])|backup|iptv|forum-poze|navigator|browsere")
+# modulele de acces, pe langa _CAM: nici numele lor nu apar in lista unui dosar
+_CAM_FAMILIE = re.compile(r"(?<![a-z])ecm|(?<![a-z])emm|caid|provid|softcam|oscam|ncam|cccam")
+TERMEN_CITIRE_S = 10
+MAX_INTRARI_DOSAR = 2000
+TEXT_CITIRE_OPRITA = "(inchis: modulele de acces, parolele, cheile si datele personale nu se citesc)"
+
+
+def _cam(cale):
+	c = (cale or "").lower()
+	return bool(_CAM.search(c) or _CAM_FAMILIE.search(c))
+
+
+def _oprit(cale):
+	return _cam(cale) or bool(LOCURI_OPRITE.search((cale or "").lower()))
+
+
+def _sub(cale, radacini):
+	return any(cale == r or cale.startswith(r + "/") for r in radacini)
+
+
+def op_citeste(ctx, args):
+	"""Un fisier (continutul, cel mult RASPUNS_MAX) sau un dosar (lista: felul, marimea, numele) de sub
+	RADACINI_CITIRE; ctx["radacina"] muta totul intr-un dosar de proba."""
+	radacina = ctx.get("radacina", "").rstrip("/")
+	cerut = "/" + (args[0] if args else "").strip("/")
+	if not _sub(cerut, RADACINI_CITIRE) or _oprit(cerut):
+		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	try:
+		baza = os.path.realpath(radacina) if radacina else ""
+
+		def _real(cale):
+			plin = os.path.realpath(radacina + cale)
+			if baza and not (plin == baza or plin.startswith(baza + os.sep)):
+				return plin, None
+			return plin, "/" + plin[len(baza):].replace(os.sep, "/").strip("/")
+		real_plin, real = _real(cerut)
+		# radacina ceruta poate fi ea insasi o legatura (de pilda jurnalele mutate pe disc): locul ei real e permis,
+		# numai pentru caile de sub ea
+		_p, rad_real = _real([r for r in RADACINI_CITIRE if _sub(cerut, (r,))][0])
+	except Exception:
+		return Rezultat(1, text="(cale necunoscuta)")
+	reale = RADACINI_REALE + ((rad_real,) if rad_real and rad_real != "/" else ())
+	if real is None or not _sub(real, reale) or _oprit(real):
+		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	try:
+		st = os.stat(real_plin)
+	except Exception:
+		return Rezultat(1, text="(nu exista: %s)" % cerut)
+	import stat as S
+	if S.S_ISDIR(st.st_mode):
+		return Rezultat(0, text=_dosar(real_plin, real))
+	if not S.S_ISREG(st.st_mode):
+		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % cerut)
+	ruleaza = ctx.get("ruleaza", _ruleaza)
+	cod, text = ruleaza(["head", "-c", str(RASPUNS_MAX + 1), real_plin], termen=TERMEN_CITIRE_S)
+	if cod == 124:
+		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (cerut, TERMEN_CITIRE_S))
+	return Rezultat(cod, text=text.replace("\x00", " "))
+
+
+def _dosar(real_plin, real):
+	"""Lista unui dosar: d (dosar), f (fisier, cu marimea), l (legatura, fara tinta: in /proc tintele sunt fisierele
+	deschise, deci si filmele omului), altele cu felul lor; cele oprite apar "(inchis)", iar cele ale modulelor de acces
+	nu apar deloc."""
+	import stat as S
+	try:
+		nume = sorted(os.listdir(real_plin))
+	except Exception as e:
+		return "(nu se poate citi dosarul: %s)" % type(e).__name__
+	randuri = []
+	for n in nume[:MAX_INTRARI_DOSAR]:
+		cale = real.rstrip("/") + "/" + n
+		if _cam(cale):
+			continue
+		try:
+			st = os.lstat(os.path.join(real_plin, n))
+		except Exception:
+			continue
+		if S.S_ISDIR(st.st_mode):
+			fel, marime, arata = "d", "-", n + "/"
+		elif S.S_ISREG(st.st_mode):
+			fel, marime, arata = "f", str(st.st_size), n
+		elif S.S_ISLNK(st.st_mode):
+			fel, marime, arata = "l", "-", n
+		else:
+			fel, marime, arata = "c" if S.S_ISCHR(st.st_mode) else ("p" if S.S_ISFIFO(st.st_mode) else "s"), "-", n
+		if LOCURI_OPRITE.search(cale.lower()):
+			arata += "  (inchis)"
+		randuri.append("%s %10s  %s" % (fel, marime, arata))
+	if len(nume) > MAX_INTRARI_DOSAR:
+		randuri.append("... inca %d" % (len(nume) - MAX_INTRARI_DOSAR))
+	return "%s:\n%s" % (real, "\n".join(randuri) or "(dosar gol)")
 
 
 def _stari_frontend(ctx):
@@ -508,6 +635,7 @@ def op_dezinstaleaza(ctx, args):
 TABEL = {
 	"info": op_info,
 	"placa": op_placa,
+	"citeste": op_citeste,
 	"pachete": op_pachete,
 	"retea": op_retea,
 	"tunere": op_tunere,

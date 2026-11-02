@@ -69,6 +69,7 @@
 			<item level="1" text="Alternative radio mode">config.usage.e1like_radio_mode</item>
 			<!-- sagetile sus si jos la privit (Components/HdsSageti.py: bara TV si ecranul radio); in web: /setari -->
 			<item level="0" text="Săgețile sus și jos la privit" description="Ce fac săgețile sus și jos când te uiți la un canal sau asculți radio, fără niciun meniu deschis: deschid lista de canale radio sau TV, ori schimbă canalul, sus pe următorul și jos pe cel anterior. Merge și cu telecomanda televizorului.">config.usage.hds_sageata_sus</item>
+			<item level="0" text="Semnele din lista de canale" description="În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată.">config.usage.hds_semne_lista</item>
 			<item level="1" text="Action on long powerbutton press">config.usage.on_long_powerpress</item>
 			<item level="1" text="Action on short powerbutton press">config.usage.on_short_powerpress</item>
 			<item level="1" text="Position of finished Timers in Timerlist">config.usage.timerlist_finished_timer_position</item>
