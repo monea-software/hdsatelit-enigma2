@@ -1,6 +1,29 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.23",
+   "build": "0000623202611020915",
+   "data": "02.11.2026",
+   "intrari": [
+    {
+     "fel": "imbunatatit",
+     "ro": "„$” din lista de canale apare acum la toate canalele pe care receptorul le știe codate, din „Scanare detaliată” sau de când le-ai pornit, nu numai după o căutare nouă.",
+     "en": "The \"$\" in the channel list now shows on every channel the receiver knows is encrypted, from \"Detailed scan\" or from an earlier switch, not only after a new search.",
+     "de": "Das „$“ in der Kanalliste erscheint jetzt bei allen Kanälen, die der Receiver als verschlüsselt kennt, aus dem „Detaillierter Suchlauf“ oder vom letzten Umschalten, nicht nur nach einem neuen Suchlauf.",
+     "fr": "Le « $ » de la liste des chaînes s'affiche maintenant sur toutes les chaînes que le récepteur sait cryptées, par la « Recherche détaillée » ou un passage précédent, pas seulement après une nouvelle recherche.",
+     "es": "El «$» de la lista de canales aparece ahora en todos los canales que el receptor sabe codificados, por la «Búsqueda detallada» o por haberlos sintonizado antes, no solo tras una nueva búsqueda.",
+     "it": "Il «$» nella lista canali appare ora su tutti i canali che il ricevitore sa codificati, dalla «Scansione dettagliata» o da una visione precedente, non solo dopo una nuova ricerca.",
+     "hu": "A csatornalista „$” jele most minden olyan csatornánál megjelenik, amelyről a vevő tudja, hogy kódolt, a „Részletes keresés” vagy egy korábbi váltás alapján, nem csak új keresés után.",
+     "cs": "„$“ v seznamu kanálů se teď ukáže u všech kanálů, o kterých přijímač ví, že jsou kódované, z „Podrobné vyhledávání“ nebo z dřívějšího přepnutí, nejen po novém vyhledávání.",
+     "pl": "„$” na liście kanałów pojawia się teraz przy wszystkich kanałach, o których odbiornik wie, że są kodowane, ze „Szczegółowe skanowanie” lub z wcześniejszego przełączenia, nie tylko po nowym skanowaniu.",
+     "pt": "O «$» da lista de canais aparece agora em todos os canais que o recetor sabe codificados, pela «Procura detalhada» ou por já os ter sintonizado, não só depois de uma nova procura.",
+     "nl": "De „$” in de zenderlijst staat nu bij alle zenders waarvan de ontvanger weet dat ze gecodeerd zijn, uit „Gedetailleerd zoeken” of van een eerdere omschakeling, niet alleen na een nieuwe zoekactie.",
+     "ru": "Знак «$» в списке каналов теперь виден у всех каналов, которые ресивер знает как кодированные, по «Подробный поиск» или по прежнему переключению, а не только после нового поиска.",
+     "tr": "Kanal listesindeki «$» artık alıcının şifreli bildiği tüm kanallarda görünüyor, «Ayrıntılı tarama» ya da önceki bir geçiş sayesinde, yalnızca yeni bir aramadan sonra değil."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.22",
    "build": "0000622202611020425",
    "data": "02.11.2026",
