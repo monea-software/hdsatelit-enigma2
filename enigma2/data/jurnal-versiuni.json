@@ -1,6 +1,29 @@
 {
  "versiuni": [
   {
+   "versiune": "0.6.26",
+   "build": "0000626202611031027",
+   "data": "03.11.2026",
+   "intrari": [
+    {
+     "fel": "reparat",
+     "ro": "Octagon SF8008: interfața nu se mai oprește la două minute după pornire când o citire HDMI-CEC rămâne agățată în placă; atunci se opresc numai comenzile CEC.",
+     "en": "Octagon SF8008: the interface no longer stops two minutes after start-up when an HDMI-CEC read hangs in the board; then only the CEC commands stop.",
+     "de": "Octagon SF8008: Die Oberfläche bleibt zwei Minuten nach dem Start nicht mehr stehen, wenn ein HDMI-CEC-Lesevorgang in der Platine hängt; dann stoppen nur die CEC-Befehle.",
+     "fr": "Octagon SF8008 : l'interface ne s'arrête plus deux minutes après le démarrage quand une lecture HDMI-CEC reste bloquée dans la carte ; seules les commandes CEC s'arrêtent alors.",
+     "es": "Octagon SF8008: la interfaz ya no se detiene dos minutos después del arranque cuando una lectura HDMI-CEC se queda colgada en la placa; entonces solo se detienen los comandos CEC.",
+     "it": "Octagon SF8008: l'interfaccia non si ferma più due minuti dopo l'avvio quando una lettura HDMI-CEC resta bloccata nella scheda; allora si fermano solo i comandi CEC.",
+     "hu": "Octagon SF8008: a felület már nem áll le két perccel az indulás után, ha egy HDMI-CEC olvasás elakad a lapon; ilyenkor csak a CEC-parancsok állnak le.",
+     "cs": "Octagon SF8008: rozhraní se už nezastaví dvě minuty po spuštění, když čtení HDMI-CEC uvízne v desce; zastaví se pak jen příkazy CEC.",
+     "pl": "Octagon SF8008: interfejs nie zatrzymuje się już dwie minuty po uruchomieniu, gdy odczyt HDMI-CEC zawiesza się w płycie; wtedy zatrzymują się tylko polecenia CEC.",
+     "pt": "Octagon SF8008: a interface já não para dois minutos depois do arranque quando uma leitura HDMI-CEC fica presa na placa; nesse caso param só os comandos CEC.",
+     "nl": "Octagon SF8008: de interface stopt niet meer twee minuten na het opstarten wanneer een HDMI-CEC-leesactie in het bord blijft hangen; dan stoppen alleen de CEC-commando's.",
+     "ru": "Octagon SF8008: интерфейс больше не останавливается через две минуты после запуска, когда чтение HDMI-CEC зависает в плате; тогда останавливаются только команды CEC.",
+     "tr": "Octagon SF8008: Bir HDMI-CEC okuması kartta takılı kaldığında arayüz artık açılıştan iki dakika sonra durmuyor; bu durumda yalnızca CEC komutları duruyor."
+    }
+   ]
+  },
+  {
    "versiune": "0.6.25",
    "build": "0000625202611022107",
    "data": "02.11.2026",

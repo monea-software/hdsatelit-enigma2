@@ -879,8 +879,12 @@ class Cec(object):
 		vezi _citeste)."""
 		if self.fd is None or self.blocat:
 			return 0
-		if self._fir is not None and self._fir.is_alive() and self.ceas() - self._firPornit >= CITIRE_BLOCATA_S:
-			self._blocheaza()
+		if self._fir is not None and self._fir.is_alive():
+			# o citire e inca in driver: firul principal nu atinge nodul, fiindca poll() sau read() ar astepta in driver
+			# dupa ea si ar opri interfata (stiva unui SF8008: citeste -> areDate -> poll); dupa CITIRE_BLOCATA_S, CEC se
+			# opreste
+			if self.ceas() - self._firPornit >= CITIRE_BLOCATA_S:
+				self._blocheaza()
 			return 0
 		control = False
 		if self.dupaPoll is None:
@@ -973,6 +977,15 @@ class Cec(object):
 			return None
 		if not self._cuFir():
 			return self.scrieFd(self.fd, date)
+		citire = self._fir
+		if citire is not None and citire.is_alive():
+			# o citire e inca in driver: scrierea o asteapta cel mult pana la CITIRE_BLOCATA_S de la pornirea ei, fara
+			# sa atinga nodul; daca nici atunci nu s-a intors, CEC se opreste
+			citire.join(max(0.0, min(SCRIERE_ASTEAPTA_S, CITIRE_BLOCATA_S - (self.ceas() - self._firPornit))))
+			if citire.is_alive():
+				if self.ceas() - self._firPornit >= CITIRE_BLOCATA_S:
+					self._blocheaza()
+				return None
 		import threading
 		rez = {}
 		scrie, fd = self.scrieFd, self.fd
