@@ -50,6 +50,7 @@ from Components.MultiContent import MultiContentEntryText
 from Components import HdsIndexCanale as X
 from Components import HdsPisteCanale as P
 from Components.HdsCampText import Masura
+from Components.HdsTextUnicode import stergeUltimaLitera
 from Tools.BoundFunction import boundFunction
 from Tools.NumericalTextInput import NumericalTextInput
 
@@ -1811,7 +1812,7 @@ class HdsCautareCanale(Screen, HelpableScreen):
 			self.sms.nextKey()
 			self.inAsteptare = ''
 		elif self.text:
-			self.text = self.text[:-1]
+			self.text = stergeUltimaLitera(self.text)
 		else:
 			return 1
 		self._filtreazaText()

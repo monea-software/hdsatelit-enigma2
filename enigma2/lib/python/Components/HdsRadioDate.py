@@ -245,6 +245,7 @@ def rds(service, session=None):
 	except Exception:
 		dec = None
 	if not dec:
+		rez["piesa"] = _piesa_din_flux(service)
 		return rez
 	try:
 		from Components import HdsRdsText as T
@@ -260,6 +261,28 @@ def rds(service, session=None):
 	except Exception:
 		pass
 	return rez
+
+
+def _piesa_din_flux(service):
+	"""Un flux de internet n-are RDS: melodia vine din etichetele fluxului (ICY), cand postul o trimite. Date de pe internet: trec prin
+	aceeasi verificare de text ca RDS. Numele postului pus drept titlu nu e melodie."""
+	try:
+		info = service.info() if service is not None else None
+		if info is None:
+			return u""
+		titlu = _info_text(info, "sTagTitle").strip()
+		artist = _info_text(info, "sTagArtist").strip()
+		if artist and titlu and artist.lower() not in titlu.lower():
+			titlu = u"%s, %s" % (artist, titlu)
+		elif artist and not titlu:
+			titlu = artist
+		if not titlu or u"://" in titlu:
+			return u""
+		from Components import HdsRdsText as T
+		titlu = T.curata(titlu)
+		return titlu if T.e_text_valid(titlu) else u""
+	except Exception:
+		return u""
 
 
 def _info_int(info, nume):
@@ -599,7 +622,16 @@ def text_detalii(d):
 def text_satelit(d):
 	"""Numele satelitului cu pozitia (sau cablu / terestru), scris o singura data pe ecran."""
 	rec = d.get("receptie") or {}
-	return rec.get("satelit") or rec.get("pozitie") or u""
+	if rec.get("satelit") or rec.get("pozitie"):
+		return rec.get("satelit") or rec.get("pozitie")
+	# un post dintr-un loc adaugat de o extensie: eticheta locului (Online), ca in lista
+	try:
+		from Components.HdsLocuriLista import locCanal
+		campuri = _u(d.get("ref") or u"").split(u":")
+		loc = locCanal(campuri[10]) if len(campuri) > 10 else None
+		return _u(loc.get("eticheta") or u"") if loc else u""
+	except Exception:
+		return u""
 
 
 def text_sunet(d):

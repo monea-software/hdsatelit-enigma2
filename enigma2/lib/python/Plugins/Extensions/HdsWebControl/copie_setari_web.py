@@ -96,7 +96,8 @@ def stare(a, M=None):
 		"avertisment": M.text_avertisment(),
 		"ultimul": st["ultimul"],
 		"cerere": bool(M.cerere_in_asteptare()),
-		"punere": M.mesaj_rezultat(rez) if rez else "",
+		# rezultatul punerii la loc si, dupa el, al reinstalarii pachetelor din feeduri (ca pe televizor)
+		"punere": "\n".join(t for t in (M.mesaj_rezultat(rez) if rez else "", M.mesaj_reinstalare()) if t),
 	}
 
 
@@ -250,7 +251,8 @@ PAGINA = """<!DOCTYPE html>
 <section class="card">
   <h2>Fă copia acum</h2>
   <div id="medii"><p class="mesaj">Se caută stickurile și discurile...</p></div>
-  <p class="nota">Copia are canalele, buchetele, listele DAB+ și DVB-T2, setările, rețeaua și Wi-Fi, cheile SSH și
+  <p class="nota">Copia are canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, favoritele și țara de la
+  radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, cheile SSH și
   modulele de acces condiționat. După o actualizare, imaginea nouă o pune singură la loc la prima pornire, dacă
   stickul e băgat.</p>
   <p class="avertisment" id="avertisment"></p>
@@ -276,7 +278,7 @@ PAGINA = """<!DOCTYPE html>
 </section>
 <section class="card ascuns" id="card-punere">
   <h2>Ultima punere la loc</h2>
-  <p class="desc" id="punere"></p>
+  <p class="desc" id="punere" style="white-space:pre-line"></p>
 </section>
 <p class="nota">Pe televizor: Meniu, Setări, Software &amp; Firmware, Copia setărilor.</p>
 </main>
@@ -423,7 +425,8 @@ TEXTE_PAGINA = {
 		N_("Copia setărilor"),
 		N_("Fă copia acum"),
 		N_("Se caută stickurile și discurile..."),
-		N_("Copia are canalele, buchetele, listele DAB+ și DVB-T2, setările, rețeaua și Wi-Fi, cheile SSH "
+		N_("Copia are canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, favoritele și țara de la "
+			"radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, cheile SSH "
 			"și modulele de acces condiționat. După o actualizare, imaginea nouă o pune singură la loc la "
 			"prima pornire, dacă stickul e băgat."),
 		N_("Caută din nou"),

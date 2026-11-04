@@ -167,7 +167,12 @@ int eDerulare::drawLine(gPainter &painter, gFont *font, const eRect &rect, const
 	ePtr<eTextPara> para = new eTextPara(rect);
 	para->setFont(font);
 	para->renderString(text.c_str(), 0);
-	int overflow = para->getBoundBox().right() - rect.right();
+	if (!para->size())
+		return 0;
+	eRect bounds = para->getBoundBox();
+	int overflowLeft = rect.left() - bounds.left();
+	int overflowRight = bounds.right() - rect.right();
+	int overflow = (overflowLeft > 0 ? overflowLeft : 0) + (overflowRight > 0 ? overflowRight : 0);
 	if (overflow <= scrollTolerancePx)
 	{
 			/* it fits: the same drawing as renderText (lib/gdi/grc.cpp), with the line measured here */
@@ -177,8 +182,12 @@ int eDerulare::drawLine(gPainter &painter, gFont *font, const eRect &rect, const
 			para->realign(eTextPara::dirCenter);
 		else if (flags & gPainter::RT_HALIGN_BLOCK)
 			para->realign(eTextPara::dirBlock);
+		else if (flags & gPainter::RT_HALIGN_LEFT_EXPLICIT)
+			para->realign(eTextPara::dirLeft);
 		overflow = 0;
 	}
+	else
+		para->realign(para->isRightToLeft() ? eTextPara::dirRight : eTextPara::dirLeft);
 	int dy = 0;
 	if (flags & gPainter::RT_VALIGN_CENTER)
 	{
@@ -191,8 +200,10 @@ int eDerulare::drawLine(gPainter &painter, gFont *font, const eRect &rect, const
 		return 0;
 	}
 	int dx = scroller ? scroller->shift(overflow) : 0;
+	if (!para->isRightToLeft())
+		dx = -dx;
 	painter.clip(rect);
-	painter.renderPara(para, ePoint(-dx, dy));
+	painter.renderPara(para, ePoint(dx, dy));
 	painter.clippop();
 	return overflow;
 }
@@ -226,9 +237,9 @@ eLabel::eLabel(eWidget *parent, int markedPos): eWidget(parent), m_derulare(this
 	
 	style->getFont(eWindowStyle::fontStatic, m_font);
 	
-		/* default to topleft alignment */
+		/* Keep automatic text direction unless the skin sets halign. */
 	m_valign = alignTop;
-	m_halign = alignLeft;
+	m_halign = alignAuto;
 	
 	m_have_foreground_color = 0;
 	m_have_shadow_color = 0;
@@ -315,7 +326,7 @@ int eLabel::event(int event, void *data, void *data2)
 				flags |= gPainter::RT_VALIGN_BOTTOM;
 	
 			if (m_halign == alignLeft)
-				flags |= gPainter::RT_HALIGN_LEFT;
+				flags |= gPainter::RT_HALIGN_LEFT_EXPLICIT;
 			else if (m_halign == alignCenter)
 				flags |= gPainter::RT_HALIGN_CENTER;
 			else if (m_halign == alignRight)
@@ -334,13 +345,15 @@ int eLabel::event(int event, void *data, void *data2)
 			if (m_overflow > 0)
 			{
 				int dx = m_derulare.shift(m_overflow);
+				if (!m_line->isRightToLeft())
+					dx = -dx;
 				int dy = 0;
 				if (m_valign == alignCenter)
 				{
 					eRect bbox = m_line->getBoundBox();
 					dy = (size().height() - bbox.height()) / 2 - bbox.top();
 				}
-				painter.renderPara(m_line, ePoint(-dx - m_shadow_offset.x(), dy - m_shadow_offset.y()));
+				painter.renderPara(m_line, ePoint(dx - m_shadow_offset.x(), dy - m_shadow_offset.y()));
 				if (m_have_shadow_color)
 				{
 					if (!m_have_foreground_color)
@@ -348,7 +361,7 @@ int eLabel::event(int event, void *data, void *data2)
 					else
 						painter.setForegroundColor(m_foreground_color);
 					painter.setBackgroundColor(m_shadow_color);
-					painter.renderPara(m_line, ePoint(-dx, dy));
+					painter.renderPara(m_line, ePoint(dx, dy));
 				}
 				m_derulare.endPaint(true);
 				return 0;
@@ -488,8 +501,11 @@ void eLabel::measureLine()
 		ePtr<eTextPara> para = new eTextPara(eRect(0, 0, size().width(), size().height()));
 		para->setFont(m_font);
 		para->renderString(m_text.c_str(), 0);
-		int overflow = para->getBoundBox().right() - size().width();
-		if (overflow > scrollTolerancePx)
+		eRect bounds = para->getBoundBox();
+		int overflowLeft = -bounds.left();
+		int overflowRight = bounds.right() - size().width();
+		int overflow = (overflowLeft > 0 ? overflowLeft : 0) + (overflowRight > 0 ? overflowRight : 0);
+		if (para->size() && overflow > scrollTolerancePx)
 		{
 			m_overflow = overflow;
 			m_line = para;

@@ -975,7 +975,7 @@ class HdsBetaTester(Screen):
 			self.session.open(HdsBetaText, _("Nota de confidențialitate"), _(B.NOTA_SCURTA), B.ADRESA_NOTA)
 		elif cheie == "iesire":
 			self.session.openWithCallback(self._dupaIesire, MessageBox, _("Ieși din programul de beta testeri? Serverul "
-				"șterge toate datele trimise de acest receptor, iar pe receptor nu mai rămâne nimic."),
+				"șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."),
 				MessageBox.TYPE_YESNO, default=False)
 
 	def schimbaCanalTesteri(self):

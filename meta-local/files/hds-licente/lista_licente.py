@@ -14,6 +14,10 @@ Intrari (toate scrise de OpenEmbedded inainte de pas):
     textele de licenta ale unei componente sau ale unui font: cele exacte din imagine (texte_in_imagine), altfel
     textul SPDX din licentele comune ale OE (spdx);
     retetele noastre (ale_noastre) primesc in lista semnul al_nostru, iar un font poate numi reteta care il pune.
+    Pachetele producatorului se scriu cu masina in nume ca "${MACHINE}" (dinobot-libs-${MACHINE}); se inlocuieste cu
+    masina constructiei (u57 la V20/V30, u571 la V40), iar in lista se scrie numele inlocuit. Un astfel de pachet e al
+    masinii, deci trebuie sa fie in imagine: lipsa lui e eroare (altfel componentele lui ar disparea din lista fara nicio
+    eroare pe alta masina); fara masina data, eroare.
 
 Iesiri, in <radacina>/usr/share/hdsatelit/licente:
   - lista.json: versiunea, build-ul (version= din /etc/image-version), adresa sursei, un rand pe reteta (versiunea,
@@ -58,6 +62,8 @@ PERMISIVE = set([
 	"Info-ZIP", "Spencer-86", "Beerware", "bzip2", "MIT-CMU", "PostgreSQL", "TCL", "Vim", "Sleepycat", "ICU",
 	# fonturile DejaVu (ttf-dejavu din meta-oe, navigatorul web): LICENSE = "BitstreamVera", fara cratima din SPDX
 	"BitstreamVera",
+	# tiff din oe-core (adus de python3-pillow, 0.7.0): LICENSE = "BSD-4.3TAHOE AND libtiff", licenta proprie, permisiva
+	"libtiff",
 ])
 PREFIXE_PERMISIVE = ("MIT", "BSD-", "Apache-", "PSF-", "Python-", "ZPL-", "AFL-", "OFL-", "Artistic-", "Unicode-",
 	"CC-BY-", "OLDAP-", "Bitstream-", "MPL-2.0-no-copyleft", "HPND-")
@@ -342,11 +348,41 @@ def _clasa_intrare(intrare, erori):
 SCOASE_DUPA_MANIFEST = ("run-postinsts",)
 
 
+SEMN_MASINA = "${MACHINE}"
+
+
+def pachet_pe_masina(c, masina_oe, erori, originale, instalate):
+	"""(pachet, sare): numele pachetului unei intrari din componente.json, cu "${MACHINE}" inlocuit de masina OE; sare =
+	True cand intrarea nu intra in lista (pachetul nu e in imagine). Un pachet cu "${MACHINE}" e al producatorului
+	masinii: lipsa lui (sau masina nedata) e eroare, nu se sare in tacere."""
+	pachet = c.get("pachet")
+	# "masini": intrarea e numai a acestor masini OE (de pilda pachetele producatorului Dinobot pe u57 si u571, cele
+	# Amiko pe viper4k, lotul imagine-060-v10); pe alta masina data nu intra in lista, fara eroare, iar pe una din ele
+	# pachetul e al masinii (lipsa lui e eroare), chiar fara "${MACHINE}" in nume
+	masini = c.get("masini")
+	if masini and masina_oe and masina_oe not in masini:
+		return pachet, True
+	al_masinii = bool(pachet) and (SEMN_MASINA in pachet or bool(masini and masina_oe))
+	if al_masinii and SEMN_MASINA in pachet:
+		if not masina_oe:
+			erori.append("componenta %s: pachetul %s cere masina constructiei (MACHINE)" % (c.get("nume"), pachet))
+			return pachet, True
+		pachet = pachet.replace(SEMN_MASINA, masina_oe)
+	if pachet and pachet not in originale and pachet not in instalate:
+		if al_masinii:
+			erori.append("componenta %s: pachetul producatorului %s nu e in imagine (masina %s)" % (c.get("nume"), pachet,
+				masina_oe))
+		return pachet, True
+	return pachet, False
+
+
 def construieste(license_manifest, licente_dir, arhitecturi, instalate, radacina, date=None, licente_comune=None,
-		versiune="", imagine="", masina="", adresa="", scoase=SCOASE_DUPA_MANIFEST):
+		versiune="", imagine="", masina="", adresa="", scoase=SCOASE_DUPA_MANIFEST, masina_oe=""):
 	"""(lista, texte, erori): lista gata de scris in lista.json, {id: octeti} si erorile care opresc construirea.
 	instalate = {nume in imagine: nume original}, citite din radacina asa cum ramane (dupa _uninstall_unneeded);
-	scoase = pachetele din license.manifest care pot lipsi din radacina (nu intra in lista)."""
+	scoase = pachetele din license.manifest care pot lipsi din radacina (nu intra in lista); masina = numele
+	receptorului scris in lista (MACHINEBUILD); masina_oe = masina OE (MACHINE), pusa in locul lui "${MACHINE}" din
+	numele pachetelor producatorului."""
 	erori = []
 	date_comp = {}
 	if date:
@@ -414,8 +450,8 @@ def construieste(license_manifest, licente_dir, arhitecturi, instalate, radacina
 	componente = []
 	fonturi = []
 	for c in date_comp.get("componente", []):
-		pachet = c.get("pachet")
-		if pachet and pachet not in originale and pachet not in instalate:
+		pachet, sare = pachet_pe_masina(c, masina_oe, erori, originale, instalate)
+		if sare:
 			continue
 		if c.get("cai") and not _exista_in_radacina(radacina, c["cai"]):
 			continue
@@ -455,8 +491,8 @@ def construieste(license_manifest, licente_dir, arhitecturi, instalate, radacina
 	# listele de canale (datele din pachete, cu sursa lor): ca o componenta, cu textul SPDX al licentei
 	liste = []
 	for c in date_comp.get("liste", []):
-		pachet = c.get("pachet")
-		if pachet and pachet not in originale and pachet not in instalate:
+		pachet, sare = pachet_pe_masina(c, masina_oe, erori, originale, instalate)
+		if sare:
 			continue
 		if c.get("cai") and not _exista_in_radacina(radacina, c["cai"]):
 			continue
@@ -613,6 +649,7 @@ def main(argv=None):
 	fa.add_argument("--imagine", default="hdsatelit")
 	fa.add_argument("--masina", default="")
 	fa.add_argument("--adresa", default="")
+	fa.add_argument("--masina-oe", default="", help="masina OE (MACHINE), pusa in locul lui ${MACHINE} din componente.json")
 	ve = sub.add_parser("verifica", help="proba listei din <radacina>")
 	ve.add_argument("--radacina", required=True)
 	ve.add_argument("--license-manifest")
@@ -628,7 +665,7 @@ def main(argv=None):
 					instalate[nume] = original
 		lista, texte, erori = construieste(a.license_manifest, a.licente_dir,
 			[x for x in a.arhitecturi.split(",") if x], instalate, a.radacina, a.date, a.licente_comune,
-			a.versiune, a.imagine, a.masina, a.adresa)
+			a.versiune, a.imagine, a.masina, a.adresa, masina_oe=a.masina_oe)
 		iesire = a.iesire or os.path.join(a.radacina, DOSAR_LISTA)
 		marime = scrie(lista, texte, iesire)
 		rz = lista["rezumat"]

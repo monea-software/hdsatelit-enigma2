@@ -355,9 +355,9 @@ def randuri(v, M=None, tv=False):
 	pornire = ", ".join(x for x in (a.get("pornire_model") or a.get("pornire_masina"), a.get("pornire_oem"),
 		a.get("ram")) if x)
 	if pornire:
+		# numai informativ: ce spune incarcatorul nu se compara (pe Viper 4K V20 MODEL=1G, nu numele modelului)
 		rez.append({"cheie": "pornire", "eticheta": _t(ETICHETE_TV["pornire"]), "citit": scurt(pornire) if tv else
-			pornire, "cerut": "" if nu_se_aplica else (reguli.get("machinebuild") or ""), "stare": STARE_INFO,
-			"cod": ""})
+			pornire, "cerut": "", "stare": STARE_INFO, "cod": ""})
 	return rez
 
 
@@ -369,6 +369,9 @@ def _partitiiTv(M, a, reguli, diferit, citit, cerut):
 	ceruta = M.partitiiDinReguli(reguli.get("partitions")) or [] if reguli else []
 	n_citit = _t("%d partiții") % len(lista)
 	n_cerut = (_t("%d partiții") % len(ceruta)) if ceruta else cerut
+	# paza cere numai primele partitii (HdsPazaModel._diferente): una in plus nu e o nepotrivire
+	if ceruta and not diferit and len(lista) > len(ceruta):
+		n_cerut = _t("cel puțin %s") % n_cerut
 	if not diferit or not cerut:
 		return n_citit, n_cerut
 	try:

@@ -51,6 +51,16 @@ class ServiceName(Converter, object):
 					return ref.toString()
 				except Exception:
 					pass
+			# un flux pornit (servicemp3) nu-si da referinta prin informatii: o stie navigarea, ca sigla lui sa se gaseasca pe bara si pe
+			# ecranul radio
+			if (not v or v == "N/A") and ref is None and self.source.__class__.__name__ == "CurrentService":
+				try:
+					import NavigationInstance
+					acum = NavigationInstance.instance.getCurrentlyPlayingServiceReference()
+					if acum is not None and acum.valid():
+						return acum.toString()
+				except Exception:
+					pass
 			return v
 
 	text = property(getText)

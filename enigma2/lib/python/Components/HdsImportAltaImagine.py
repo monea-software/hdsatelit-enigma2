@@ -353,6 +353,19 @@ def text_rezumat(r):
 	return "\n".join([_("Am adus: %s.") % ", ".join(adus), _("Nu am adus: %s.") % ", ".join(neadus)])
 
 
+def fereastra_rezumat(r):
+	"""Ce primeste MessageBox pentru rezumatul de dupa import: ce s-a adus pe randuri, cu semn, iar ce nu s-a adus intr-o nota. Fraza de
+	deasupra listei vine din traducerea textului intreg, taiata la locul listei."""
+	adus, neadus = parti_rezumat(r)
+	if r.get("intrerupt") or not r.get("ok") or not adus:
+		return {"text": text_rezumat(r), "titlu": _("Canalele din altă imagine"), "fel": "avertisment"}
+	semn = "\x01"
+	fraza = _("Am adus: %s.") % semn
+	sus = fraza.split(semn)[0].rstrip() or fraza.replace(semn, "").strip()
+	puncte = [t[:1].upper() + t[1:] for t in adus] + [("nota", _("Nu am adus: %s.") % ", ".join(neadus))]
+	return {"text": sus, "titlu": _("Canalele din altă imagine"), "fel": "succes", "puncte": puncte}
+
+
 def text_repornire():
 	return _("Setările antenei intră după repornirea interfeței. Repornesc acum?")
 
@@ -638,7 +651,8 @@ def _arata_rezumatul(rad=None):
 		else:
 			repornire()
 
-	Notifications.AddNotificationWithCallback(dupa, MessageBox, text_rezumat(r), type=MessageBox.TYPE_INFO)
+	f = fereastra_rezumat(r)
+	Notifications.AddNotificationWithCallback(dupa, MessageBox, f.pop("text"), type=MessageBox.TYPE_INFO, **f)
 
 
 def _dupa_intrebarea_repornirii(da=False):

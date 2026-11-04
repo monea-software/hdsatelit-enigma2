@@ -4,9 +4,9 @@
 #include <lib/dvb/dvbapi_compat.h>
 #include <lib/base/eerror.h>
 #include <lib/dvb/decoder.h>
+#include <lib/dvb/hdsjurnaldecodor.h>
 #if HAVE_HISILICON
 #include <lib/dvb/hdspazavideo.h>
-#include <lib/dvb/hdsjurnaldecodor.h>
 #endif
 #if HAVE_DVB_API_VERSION < 3 
 #define audioStatus audio_status

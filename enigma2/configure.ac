@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.6.27],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.7.0],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -98,14 +98,14 @@ case "$BOXTYPE" in
 esac
 
 dnl The boards on which the platform daemon is libreader (Octagon SF8008 4K UHD, SF8008 MINI 4K, the first Amiko Viper
-dnl 4K). Their showiframe is a plain program: it selects source MEMORY on video0, writes the picture and exits without
+dnl 4K, Uclan Ustym 4K PRO). Their showiframe is a plain program: it selects source MEMORY on video0, writes the picture and exits without
 dnl selecting the demux again, so video0 stays on MEMORY after the backdrop. The images made for these boards select the
 dnl demux source when a decoder is opened (lib/dvb/decoder.cpp). The Viper 4K V20, V30 and V40 (u5/u4, where showiframe
 dnl is the daemon and one source serves all decoders) and every other machine define nothing.
 AC_MSG_CHECKING([whether boxtype $BOXTYPE is a board with libreader])
 case "$BOXTYPE" in
-	viper4k|sf8008|sf8008m)
-		AC_DEFINE([HAVE_HISILICON_LIBREADER],[1],[Define to 1 on the HiSilicon boards with libreader (viper4k, sf8008, sf8008m): a decoder selects the demux source when it is opened])
+	viper4k|sf8008|sf8008m|ustym4kpro)
+		AC_DEFINE([HAVE_HISILICON_LIBREADER],[1],[Define to 1 on the HiSilicon boards with libreader (viper4k, sf8008, sf8008m, ustym4kpro): a decoder selects the demux source when it is opened])
 		AC_MSG_RESULT([yes])
 		;;
 	*)

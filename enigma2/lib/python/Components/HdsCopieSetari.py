@@ -33,6 +33,10 @@
 #                             pachetul .ipk daca e pe receptor, altfel fisierele lui dupa lista opkg
 #                             (info/<pachet>.list = „opkg files”), informatiile opkg ale pachetului, /etc/tuxbox/config
 #                             si legaturile de pornire; in fisier nu e scris niciun nume de modul sau de fel;
+#   pluginuri.tar.gz          configurarile modificate si datele create in dosarele extensiilor puse de om,
+#                             dupa .list si .conffiles; fara module de acces, legaturi, pyc sau __pycache__;
+#                             cel mult 8 MiB pe fisier de date, cu limitele totale ale celorlalte arhive;
+#                             si .ipk-ul versiunii instalate, daca a ramas pe stick sau in cache;
 #   copie.txt                 formatul, data, felul (manuala / automata), modelul, amprenta receptorului (sha256 al
 #                             adresei MAC a lui eth0, litere mici, fara sfarsit de rand, calculata aici ca in
 #                             copie-de-mana.sh; adresa nu se scrie), versiunea imaginii si md5-ul fiecarui fisier.
@@ -49,6 +53,8 @@
 #     cheile de traducere, conturile subtitrarilor),
 #     machine-id, cheile SSH, sistem.json si modulele de acces conditionat NUMAI pe receptorul copiei (aceeasi amprenta
 #     si acelasi model);
+#   - listele si conturile IPTV, radioul si datele necriptate ale pluginurilor urmeaza stickul si pe alt receptor;
+#     hds_iptv ramane 0700, fisierele 0600, inclusiv cand copia e pe FAT; datele pluginurilor se pun dupa instalare;
 #   - setarile se unesc ca in trusa: pleaca de la copie, pastreaza din setarile de acum PASTREZ si jetonul web, scot
 #     SCOT; instantaneul settings.inainte-de-copie si semnul garzii (.hds-setari-din-copie, secundele din /proc/uptime
 #     si id-ul pornirii) le foloseste garda de caderi din enigma2.sh;
@@ -73,8 +79,9 @@
 # in legaNucleul, dupa verificarea cheilor, fiindca mutaServiciulVechi se uita la randul lipsa) si inainte de
 # config.pickle() la copie. Ce nu e in copie si de ce: inventarul din test_copie_setari_audit_023.py.
 # pornire() (din enigma2.sh) lucreaza numai daca exista o cerere (din meniu sau web) sau daca lipseste semnul primei
-# porniri (prima-pornire); la prima pornire cauta o copie numai daca settings lipseste (imagine proaspat scrisa) si
-# „gata” nu exista: cea mai noua copie a acestui receptor, altfel cea mai noua de acelasi model (numai canalele).
+# porniri (prima-pornire); marcajul inceputa.json reia intai o restaurare intrerupta, chiar cu settings prezent.
+# La prima pornire cauta o copie numai daca settings lipseste si „gata” nu exista: copia identificata in scriere.json,
+# altfel cea mai noua a acestui receptor, altfel cea mai noua de acelasi model (canalele si conturile necriptate).
 # Fara niciuna, numai semnul pentru copia altei imagini (Components/HdsImportAltaImagine.py): dupa pornirea sesiunii
 # (porneste) se cauta copia unei alte imagini si se intreaba daca se aduce.
 #
@@ -101,11 +108,14 @@ DESCRIERE = "copie.txt"
 ARH_SETARI = "setari.tar.gz"
 ARH_RETEA = "retea.tar.gz"
 ARH_ACCES = "acces-conditionat.tar.gz"
+ARH_PLUGINURI = "pluginuri.tar.gz"
+META_PLUGINURI = "hds-pluginuri.json"
+MAX_FISIER_PLUGIN = 8 * 1024 * 1024
 FIS_MASINA = "machine-id"
 FIS_CHEI = "authorized_keys"
 FIS_SISTEM = "sistem.json"
 # o imagine mai veche sare randul md5 al unui fisier pe care nu-l stie (citeste_descriere): copia ramane buna acolo
-FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, FIS_MASINA, FIS_CHEI, FIS_SISTEM)
+FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM)
 SETTINGS_COPIE = "etc/enigma2/settings-fara-token"
 
 DOSAR_RESTAURARE = "home/root/hds-restaurare"
@@ -113,6 +123,7 @@ SEMN_GATA = "gata"
 SEMN_PRIMA = "prima-pornire"
 CERERE = "cerere"
 REZULTAT = "rezultat.json"
+SEMN_INCEPUT = "inceputa.json"
 
 JETON = "config.plugins.hdswebcontrol.token"
 # ca in trusa: din setarile de acum raman modul video ales dupa flash si versiunea vazuta in „Ce e nou”; nu trec din
@@ -329,6 +340,21 @@ def versiune_imagine(rad=None):
 	return "", ""
 
 
+def baza_versiunii(versiune):
+	"""Baza imaginii unei versiuni vazute de om: primele doua parti ("0.7.0" -> "0.7"). O baza noua (alt OpenEmbedded,
+	alt Python, alt OpenSSL) vine numai cu alta versiune de mijloc (0.6.x pe Python 3.13 si libssl.so.3, 0.7.x pe
+	Python 3.14 si OpenSSL 4): binarele unei copii de pe alta baza nu merg aici. "" cand nu se stie."""
+	m = re.match(r"^(\d{1,3})\.(\d{1,3})\.\d{1,3}$", versiune or "")
+	return "%d.%d" % (int(m.group(1)), int(m.group(2))) if m else ""
+
+
+def alta_baza(d, rad=None):
+	"""True cand copia (descrierea ei) e de pe alta baza a imaginii decat cea de acum; o copie fara versiune buna
+	trece drept alta baza (nu se stie pe ce s-a facut); fara versiunea de acum (probe), aceeasi baza."""
+	acum = baza_versiunii(versiune_imagine(rad)[1])
+	return bool(acum) and baza_versiunii(d.get("versiune", "")) != acum
+
+
 def _uptime():
 	u = os.environ.get("HDS_UPTIME")
 	if u:
@@ -359,23 +385,25 @@ def _data_text(t):
 # ---------------------------------------------------------------- mediile
 
 def _dosar_recuperare(rad):
-	"""Dosarul in care Maintenance Mode cauta imaginea pe stick (Components/HdsRecuperare.py, calculul lui
-	showiframe), de exemplu „amiko/viper4kv20/”; „” cand nu se stie."""
+	"""Dosarele in care Maintenance Mode cauta imaginea pe stick (Components/HdsRecuperare.py, calculul lui
+	showiframe), de exemplu [„amiko/viper4kv20/”, „dinobot/u57/”]; [] cand nu se stie."""
 	try:
 		from Components import HdsRecuperare
 	except ImportError:
-		return ""
+		return []
 	try:
-		return HdsRecuperare.dosarPeStick(HdsRecuperare.calculeaza(rad).get("cale", ""))
+		return HdsRecuperare.dosarePeStick(HdsRecuperare.calculeaza(rad))
 	except Exception:
-		return ""
+		return []
 
 
 def este_stick_de_actualizare(punct, dosar_recuperare=""):
-	"""Stickul de pe care se scrie imaginea: are dosarul lui Maintenance Mode sau e2/update/ (ecranul de
+	"""Stickul de pe care se scrie imaginea: are unul din dosarele lui Maintenance Mode sau e2/update/ (ecranul de
 	actualizare din meniu)."""
-	if dosar_recuperare and os.path.isdir(os.path.join(punct, *dosar_recuperare.strip("/").split("/"))):
-		return True
+	dosare = [dosar_recuperare] if isinstance(dosar_recuperare, str) else (dosar_recuperare or [])
+	for dosar in dosare:
+		if dosar and os.path.isdir(os.path.join(punct, *dosar.strip("/").split("/"))):
+			return True
 	return os.path.isdir(os.path.join(punct, "e2", "update"))
 
 
@@ -476,14 +504,18 @@ def _info_tar(nume, st, fel=tarfile.REGTYPE):
 	ti.mtime = int(st.st_mtime) if st is not None else int(time.time())
 	ti.uid = ti.gid = 0
 	ti.uname = ti.gname = "root"
+	if nume == "etc/enigma2/hds_iptv" or nume.startswith("etc/enigma2/hds_iptv/"):
+		ti.mode = 0o700 if fel == tarfile.DIRTYPE else 0o600
 	return ti
 
 
-def _adauga_fisier(tf, cale, nume, st=None):
+def _adauga_fisier(tf, cale, nume, st=None, maxim=None):
 	st = st or os.lstat(cale)
 	ti = _info_tar(nume, st)
 	with open(cale, "rb") as f:
-		date = f.read()
+		date = f.read() if maxim is None else f.read(maxim + 1)
+	if maxim is not None and len(date) > maxim:
+		raise IOError("fisier prea mare")
 	ti.size = len(date)
 	tf.addfile(ti, io.BytesIO(date))
 	return len(date)
@@ -859,6 +891,312 @@ def _nume_copie(dosar_copii, acum, model):
 	return nume
 
 
+def _reinstalare():
+	try:
+		from Components import HdsReinstalare as R
+	except ImportError:  # probe pe PC: modulul incarcat singur, din dosarul Components
+		import HdsReinstalare as R
+	return R
+
+
+def mesaj_reinstalare(rad=None):
+	"""Mesajul ultimei reinstalari a pachetelor din copie (Components/HdsReinstalare.py), pentru pagina web; „” fara."""
+	try:
+		R = _reinstalare()
+		rez = R._citeste_json(os.path.join(R.dosar(radacina(rad)), R.REZULTAT))
+		return R.mesaj(rez) if rez else ""
+	except Exception:
+		return ""
+
+
+def _pluginuri_de_pus(rad, module):
+	"""Numele pluginurilor puse de om (fara pachetele modulelor de acces, care au arhiva lor); [] la o eroare."""
+	try:
+		return [n for n in _reinstalare().pluginuri_puse_de_om(rad, exclus=set(p["nume"] for p in module["pachete"]))
+			if not _nume_de_modul(n)]
+	except Exception as eroare:
+		_jurnal("lista pluginurilor: %s" % eroare.__class__.__name__)
+		return []
+
+
+# ---------------------------------------------------------------- datele pluginurilor
+
+def _cale_plugin(rel):
+	"""Numai locuri de date ale extensiilor, fara identitatea si pornirea sistemului."""
+	if _normalizat(rel) != rel or ":" in rel:
+		return False
+	parti = rel.split("/")
+	if any(p == "__pycache__" or p.endswith(".pyc") or _nume_de_modul(p) for p in parti):
+		return False
+	if rel.startswith("usr/lib/enigma2/python/Plugins/"):
+		return len(parti) >= 8 and all(re.match(r"^[A-Za-z0-9_.+-]+$", p) for p in parti[5:7])
+	if rel.startswith("etc/") and len(parti) >= 2:
+		oprite = ("enigma2", "tuxbox", "opkg", "ssh", "ssl", "pki", "dropbear", "security", "pam.d", "init.d",
+			"network", "default", "systemd", "udev", "cron.d", "cron.daily", "cron.hourly", "cron.weekly", "cron.monthly",
+			"crontabs", "modules-load.d", "modprobe.d", "rcS.d", "passwd", "shadow", "group", "gshadow", "sudoers",
+			"sudoers.d", "machine-id", "fstab", "mtab", "hostname", "hosts", "resolv.conf", "wpa_supplicant.conf",
+			"profile", "profile.d", "environment", "inittab", "ld.so.conf", "ld.so.conf.d", "ld.so.preload",
+			"image-version", "os-release", "hdsatelit-model", "default_gw", "hdsatelit-ssh")
+		return parti[1] not in oprite and not re.match(r"^rc[0-6S]\.d$", parti[1]) and (
+			len(parti) > 2 or parti[1].endswith((".conf", ".json", ".xml", ".ini", ".cfg")))
+	if rel.startswith("home/root/") and len(parti) >= 3:
+		return parti[2] not in (".ssh", ".gnupg", "hds-restaurare", "logs", ".profile", ".bashrc", ".bash_profile",
+			".bash_history", ".ash_history", ".netrc")
+	return False
+
+
+def _radacina_plugin(rel):
+	parti = rel.split("/")
+	if rel.startswith("usr/lib/enigma2/python/Plugins/") and len(parti) >= 7:
+		return "/".join(parti[:7])
+	if rel.startswith("etc/") and len(parti) >= 2 and _cale_plugin(rel if len(parti) > 2 else rel + "/.date"):
+		return "/".join(parti[:2])
+	if rel.startswith("home/root/") and _cale_plugin(rel):
+		n = 4 if parti[2] in (".config", ".cache") else 5 if parti[2:4] == [".local", "share"] else 3
+		return "/".join(parti[:n]) if len(parti) >= n else None
+	return None
+
+
+def _fara_legaturi(rad, rel):
+	cale = rad
+	for p in rel.split("/"):
+		cale = os.path.join(cale, p)
+		if os.path.islink(cale):
+			return False
+	return True
+
+
+def _configurari_plugin(rad, nume):
+	"""Caile declarate configurare si md5-ul original, cand opkg l-a pastrat."""
+	date = _citeste_mic(_c(rad, "var/lib/opkg/info/%s.conffiles" % nume), 1024 * 1024) or b""
+	strofa = _strofe_status(rad).get(nume, "")
+	m = re.search(r"^Conffiles:\s*\n((?:[ \t].*\n?)*)", strofa, re.M)
+	text = date.decode("utf-8", "replace") + "\n" + (m.group(1) if m else "")
+	rez = {}
+	for linie in text.splitlines()[:MAX_MEMBRI]:
+		p = linie.split()
+		if p and p[0].startswith("/"):
+			rel = _normalizat(p[0][1:])
+			if rel and _cale_plugin(rel):
+				rez[rel] = p[1].lower() if len(p) > 1 and re.match(r"^[a-fA-F0-9]{32}$", p[1]) else None
+	# Unele versiuni tin suma numai in md5sums.
+	date = _citeste_mic(_c(rad, "var/lib/opkg/info/%s.md5sums" % nume), 1024 * 1024) or b""
+	for linie in date.decode("utf-8", "replace").splitlines()[:MAX_MEMBRI]:
+		p = linie.split()
+		if len(p) == 2 and re.match(r"^[a-fA-F0-9]{32}$", p[0]):
+			rel = p[1].lstrip("/*")
+			if rel in rez and rez[rel] is None:
+				rez[rel] = p[0].lower()
+	return rez
+
+
+def _ipk_plugin(rad, nume, punct):
+	strofa = _strofe_status(rad).get(nume, "")
+	versiune = _camp(strofa, "Version").split(":", 1)[-1]
+	arh = _camp(strofa, "Architecture")
+	if not versiune or not arh or not re.match(r"^[A-Za-z0-9.+_~-]+$", versiune + arh):
+		return None
+	cautat = "%s_%s_%s.ipk" % (nume, versiune, arh)
+	dosare = [_c(rad, d) for d in DOSARE_IPK] + [punct]
+	dosare += [m["punct"] for m in medii(rad)]
+	for baza in dict.fromkeys(dosare):
+		if not os.path.isdir(baza) or os.path.islink(baza):
+			continue
+		vazute = 0
+		for d, sub, fisiere in os.walk(baza, followlinks=False):
+			adancime = os.path.relpath(d, baza).replace("\\", "/").count("/")
+			sub[:] = sorted(n for n in sub if n != "copii-setari" and not n.startswith(".")
+				and not os.path.islink(os.path.join(d, n))) if adancime < 5 else []
+			vazute += len(fisiere) + len(sub)
+			if vazute > 10000:
+				break
+			cale = os.path.join(d, cautat)
+			if cautat in fisiere and not os.path.islink(cale) and os.path.isfile(cale) and os.path.getsize(cale) <= MAX_ARHIVA:
+				return cale
+	return None
+
+
+def _date_pluginuri(rad, nume_pluginuri, punct):
+	"""Inventar fara continut: lista opkg, configurari, fisiere create ulterior, ipk ramas."""
+	meta, surse = [], {}
+	total = 0
+	for nume in nume_pluginuri:
+		lista = _c(rad, "var/lib/opkg/info/%s.list" % nume)
+		livrate = set(_lista_opkg(lista))
+		config = _configurari_plugin(rad, nume)
+		candidati = set(config)
+		radacini = set(filter(None, (_radacina_plugin(p) for p in livrate)))
+		for rel in sorted(radacini):
+			cale = _c(rad, rel)
+			if not _fara_legaturi(rad, rel) or not os.path.isdir(cale):
+				continue
+			for d, sub, fisiere in os.walk(cale, followlinks=False):
+				sub[:] = sorted(n for n in sub if n != "__pycache__" and not _nume_de_modul(n)
+					and not os.path.islink(os.path.join(d, n)))
+				for f in sorted(fisiere):
+					r = os.path.relpath(os.path.join(d, f), rad).replace("\\", "/")
+					if r not in livrate and _cale_plugin(r):
+						candidati.add(r)
+				if len(candidati) > MAX_MEMBRI:
+					raise IOError("prea multe date ale extensiei")
+		intrare = {"nume": nume, "fisiere": [], "ipk": None, "fara_lista": not bool(livrate), "sarite": 0}
+		for rel in sorted(candidati):
+			cale = _c(rad, rel)
+			if not _fara_legaturi(rad, rel):
+				continue
+			try:
+				st = os.lstat(cale)
+			except OSError:
+				continue
+			if not stat.S_ISREG(st.st_mode):
+				continue
+			if st.st_size > MAX_FISIER_PLUGIN or total + st.st_size > MAX_DECOMPRIMAT - MAX_DESCRIERE \
+					or len(surse) >= MAX_MEMBRI - 2:
+				intrare["sarite"] += 1
+				continue
+			if config.get(rel) and _md5(cale) == config[rel]:
+				continue
+			intrare["fisiere"].append(rel)
+			if rel not in surse:
+				surse[rel] = cale
+				total += st.st_size
+		ipk = _ipk_plugin(rad, nume, punct)
+		if ipk:
+			rel = "hds-ipk/" + os.path.basename(ipk)
+			if total + os.path.getsize(ipk) <= MAX_DECOMPRIMAT - MAX_DESCRIERE and len(surse) < MAX_MEMBRI - 2:
+				intrare["ipk"] = rel
+				surse[rel] = ipk
+				total += os.path.getsize(ipk)
+			else:
+				intrare["sarite"] += 1
+		meta.append(intrare)
+	return meta, surse
+
+
+def _scrie_pluginuri(cale, meta, surse):
+	if not meta:
+		return
+	date = json.dumps({"format": 1, "pluginuri": meta}, ensure_ascii=True).encode("ascii")
+	if len(date) > MAX_DESCRIERE:
+		raise IOError("inventar prea mare")
+	f, tf = _deschide_tar_scriere(cale)
+	try:
+		_adauga_date(tf, META_PLUGINURI, date, 0o600)
+		for rel, sursa in sorted(surse.items()):
+			limita = MAX_ARHIVA if rel.startswith("hds-ipk/") else MAX_FISIER_PLUGIN
+			st = os.lstat(sursa)
+			if not stat.S_ISREG(st.st_mode) or st.st_size > limita:
+				raise IOError("fisier schimbat in timpul copiei")
+			_adauga_fisier(tf, sursa, rel, st, limita)
+	finally:
+		_inchide_tar_scriere(f, tf)
+	if os.path.getsize(cale) > MAX_ARHIVA:
+		raise IOError("arhiva prea mare")
+	if _parcurge(cale, _permis_pluginuri):
+		raise IOError("limitele arhivei pluginurilor")
+
+
+def _permis_pluginuri(nume, m):
+	if not m.isreg():
+		return False
+	if nume == META_PLUGINURI:
+		return m.size <= MAX_DESCRIERE
+	if re.match(r"^hds-ipk/enigma2-plugin-[a-z0-9+.-]+_[A-Za-z0-9.+_~-]+\.ipk$", nume):
+		return m.size <= MAX_ARHIVA
+	return _cale_plugin(nume) and m.size <= MAX_FISIER_PLUGIN
+
+
+def _citeste_pluginuri(cale, nume_pluginuri=None):
+	if os.path.islink(cale) or os.path.getsize(cale) > MAX_ARHIVA:
+		return None, None, _("Arhiva pluginurilor e prea mare sau nu e un fișier obișnuit.")
+	membri, eroare = _citeste_arhiva(cale, _permis_pluginuri, MAX_DECOMPRIMAT)
+	if membri is None:
+		return None, None, eroare
+	try:
+		date = dict((n, (m, d)) for n, m, d in membri)
+		if len(date) != len(membri):
+			raise ValueError()
+		meta = json.loads(date[META_PLUGINURI][1].decode("ascii"))
+		if meta.get("format") != 1 or not isinstance(meta.get("pluginuri"), list) or len(meta["pluginuri"]) > 200:
+			raise ValueError()
+		vazute, folosite = set(), {META_PLUGINURI}
+		for p in meta["pluginuri"]:
+			n = p["nume"]
+			if not isinstance(n, str) or not n.startswith("enigma2-plugin-") or not TIPAR_PACHET.fullmatch(n) or _nume_de_modul(n) or n in vazute \
+					or (nume_pluginuri is not None and n not in nume_pluginuri):
+				raise ValueError()
+			vazute.add(n)
+			if not isinstance(p["fisiere"], list) or len(p["fisiere"]) != len(set(p["fisiere"])):
+				raise ValueError()
+			for rel in p["fisiere"]:
+				if not isinstance(rel, str) or not _cale_plugin(rel) or rel not in date:
+					raise ValueError()
+				folosite.add(rel)
+			ipk = p.get("ipk")
+			if ipk is not None:
+				if not isinstance(ipk, str) or not ipk.startswith("hds-ipk/" + n + "_") or ipk not in date:
+					raise ValueError()
+				folosite.add(ipk)
+		if folosite != set(date):
+			raise ValueError()
+		return meta["pluginuri"], date, None
+	except (ValueError, KeyError, TypeError, AttributeError, UnicodeError):
+		return None, None, _("Lista datelor pluginurilor nu e bună.")
+
+
+def pregateste_pluginuri(dosar, rad):
+	tinta = os.path.join(dosar_restaurare(rad), ARH_PLUGINURI)
+	os.makedirs(os.path.dirname(tinta), exist_ok=True)
+	sursa = os.path.join(dosar, ARH_PLUGINURI)
+	if os.path.isfile(sursa):
+		date = _citeste_mic(sursa, MAX_ARHIVA + 1)
+		if date is None or len(date) > MAX_ARHIVA:
+			raise IOError("arhiva pluginurilor")
+		_scrie_atomic(tinta, date, 0o600)
+	elif os.path.exists(tinta):
+		os.remove(tinta)
+
+
+def ipk_din_copie(rad, nume):
+	cale = os.path.join(dosar_restaurare(rad), ARH_PLUGINURI)
+	if not os.path.isfile(cale):
+		return None
+	meta, date, eroare = _citeste_pluginuri(cale)
+	if eroare:
+		raise IOError("arhiva pluginurilor")
+	for p in meta:
+		if p["nume"] == nume and p.get("ipk"):
+			d = os.path.join(dosar_restaurare(rad), "ipk-pluginuri")
+			os.makedirs(d, mode=0o700, exist_ok=True)
+			tinta = os.path.join(d, os.path.basename(p["ipk"]))
+			_scrie_atomic(tinta, date[p["ipk"]][1], 0o600)
+			return tinta
+	return None
+
+
+def pune_date_plugin(rad, nume):
+	cale = os.path.join(dosar_restaurare(rad), ARH_PLUGINURI)
+	if not os.path.isfile(cale):
+		return 0
+	meta, date, eroare = _citeste_pluginuri(cale)
+	if eroare:
+		raise IOError("arhiva pluginurilor")
+	fisiere = next((p["fisiere"] for p in meta if p["nume"] == nume), [])
+	# Toate tintele se verifica inainte de prima scriere.
+	for rel in fisiere:
+		if not _fara_legaturi(rad, rel) or not _fara_legaturi(rad, rel + ".hds-nou") or os.path.isdir(_c(rad, rel)):
+			raise IOError("tinta pluginului")
+	preg = _Pregatire()
+	try:
+		for rel in fisiere:
+			m, continut = date[rel]
+			preg.scrie(_c(rad, rel), continut, _mod_fisier(m, 0o600))
+		return preg.muta()
+	except Exception:
+		preg.curata()
+		raise
+
+
 def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 	"""Copia setarilor pe mediul montat in `punct`. `text_setari`: settings de acum (config.pickle() pe firul enigma2);
 	fara el, fisierul de pe disc. Intoarce {"ok", "mesaje", "cale", "nume", "marime", "are"}. Ruleaza pe un fir
@@ -873,8 +1211,16 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 	dosar_copii = os.path.join(punct, *DOSAR_PE_MEDIU.split("/"))
 	fisiere = _fisiere_setari(rad)
 	module = module_acces(rad)
+	pluginuri = _pluginuri_de_pus(rad, module)
+	try:
+		meta_pluginuri, surse_pluginuri = _date_pluginuri(rad, pluginuri, punct)
+	except Exception as eroare:
+		_jurnal("inventarul pluginurilor: %s" % eroare.__class__.__name__)
+		mesaje.append(_("Datele pluginurilor nu s-au putut copia. Încearcă din nou."))
+		return rez
 	necesar = REZERVA_SPATIU
 	marimi = [cale for cale, _n, este_dosar in fisiere if not este_dosar]
+	marimi.extend(surse_pluginuri.values())
 	for p in module["pachete"]:
 		marimi.extend(_c(rad, rel) for rel in p["fisiere"])
 		if p["ipk"]:
@@ -953,6 +1299,16 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 			are.append("acces")
 		elif os.path.exists(os.path.join(part, ARH_ACCES)):
 			os.remove(os.path.join(part, ARH_ACCES))
+		_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
+		if meta_pluginuri:
+			are.append("pluginuri")
+			for p in meta_pluginuri:
+				if p["fara_lista"]:
+					mesaje.append(_("%s: lipsesc informațiile extensiei; s-au copiat doar configurările declarate.")
+						% _reinstalare()._scurt(p["nume"]))
+				if p["sarite"]:
+					mesaje.append(_("%s: %d fișiere depășesc limitele copiei și au fost sărite.")
+						% (_reinstalare()._scurt(p["nume"]), p["sarite"]))
 		# setarile omului din afara /etc/enigma2
 		sistem = stare_sistem(rad)
 		if sistem:
@@ -975,6 +1331,8 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 			"versiune=%s" % versiune,
 			"are=%s" % ",".join(are),
 			"pachete_acces=%d" % nr_pachete,
+			# pluginurile puse de om, ca dupa o imagine noua sa fie puse din nou din feeduri (Components/HdsReinstalare.py)
+			"pluginuri=%s" % ",".join(pluginuri),
 		]
 		randuri += ["md5 %s %s" % (n, h) for n, h in md5]
 		_scrie_atomic(os.path.join(part, DESCRIERE), ("\n".join(randuri) + "\n").encode("ascii", "replace"))
@@ -1123,6 +1481,8 @@ def citeste_descriere(dosar):
 	d["versiune"] = re.sub(r"[^0-9A-Za-z.]", "", d.get("versiune", ""))[:16]
 	d["fel"] = "automata" if d.get("fel") == "automata" else "manuala"
 	d["are"] = [a for a in d.get("are", "").split(",") if a]
+	d["pluginuri"] = [n for n in d.get("pluginuri", "").split(",") if TIPAR_PACHET.match(n)
+		and n.startswith("enigma2-plugin-")][:200]
 	return d
 
 
@@ -1539,6 +1899,13 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		_jurnal("arhiva canalelor refuzata, nu scriu nimic")
 		note.append(_("Arhiva canalelor din copie nu e bună (%s); nu s-a pus nimic la loc.") % eroare)
 		return rez
+	meta_pluginuri = []
+	if ARH_PLUGINURI in d["md5"]:
+		meta_pluginuri, _date_plugin, eroare = _citeste_pluginuri(os.path.join(dosar, ARH_PLUGINURI), d["pluginuri"] or None)
+		if eroare:
+			note.append(_("Datele pluginurilor din copie nu sunt bune (%s); nu s-a pus nimic la loc.") % eroare)
+			return rez
+		del _date_plugin
 	retea = None
 	if acest and ARH_RETEA in d["md5"]:
 		retea, eroare = _citeste_arhiva(os.path.join(dosar, ARH_RETEA), _permis_retea, MAX_RETEA * 4)
@@ -1577,9 +1944,27 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	# ce nu s-a pus, pentru rezumatul din jurnal: etc/tuxbox (ca trusa, raman cele din imagine), semnele, fisierele
 	# receptorului pe alt receptor
 	nepus = {"tuxbox": 0, "semne": 0, "proprii": 0}
+	# Marcajul ajunge pe disc inainte de settings sau de orice mutare.
+	try:
+		os.makedirs(dosar_restaurare(rad), exist_ok=True)
+		_scrie_atomic(os.path.join(dosar_restaurare(rad), SEMN_INCEPUT), json.dumps({
+			"copie": os.path.abspath(dosar), "descriere": _md5(os.path.join(dosar, DESCRIERE)),
+			"motiv": rez["motiv"]}, ensure_ascii=True).encode("ascii"), 0o600)
+		_sincronizeaza()
+	except OSError:
+		note.append(_("Restaurarea nu a putut începe. Se reia la pornirea următoare."))
+		rez["reincearca"] = True
+		return rez
 
 	def pune_membru(nume, m, date):
 		if m.isdir():
+			if nume.startswith("etc/enigma2/") and not _exclus_setari(nume[len("etc/enigma2/"):]):
+				if not _fara_legaturi(rad, nume):
+					raise IOError("legatura in tinta")
+				tinta = _c(rad, nume)
+				os.makedirs(tinta, exist_ok=True)
+				os.chmod(tinta, 0o700 if nume == "etc/enigma2/hds_iptv" or nume.startswith("etc/enigma2/hds_iptv/")
+					else _mod_fisier(m, 0o755))
 			return
 		if nume.startswith("etc/tuxbox/"):
 			nepus["tuxbox"] += 1
@@ -1602,10 +1987,16 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		tinta = os.path.join(E, *rel.split("/"))
 		if os.path.islink(tinta) or os.path.isdir(tinta):
 			return
-		canale.scrie(tinta, date, _mod_fisier(m))
+		if rel.startswith("hds_iptv/"):
+			if not _fara_legaturi(rad, nume):
+				raise IOError("legatura in tinta")
+			os.makedirs(os.path.dirname(tinta), mode=0o700, exist_ok=True)
+			os.chmod(_c(rad, "etc/enigma2/hds_iptv"), 0o700)
+		canale.scrie(tinta, date, 0o600 if rel.startswith("hds_iptv/") else _mod_fisier(m))
 		stare_canale["n"] += 1
 
 	try:
+		os.makedirs(E, exist_ok=True)
 		# 1. fisierele din etc/enigma2, langa tinte (a doua trecere prin arhiva, membru cu membru)
 		eroare = _parcurge(arh_setari, _permis_setari, pune_membru)
 		if eroare:
@@ -1744,11 +2135,11 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if "poarta" in sistem_puse:
 			_jurnal("reteaua: interfata implicita pusa la loc (/etc/default_gw)")
 		if sistem and sistem.get("surse_pachete"):
-			pachete = _modul_imagine("Components.HdsPachete")
+			pachete_surse = _modul_imagine("Components.HdsPachete")
 			surse = [tuple(s) for s in sistem["surse_pachete"]]
-			if pachete is not None and pachete.citeste_surse_utilizator(rad) != surse:
-				motiv = pachete.scrie_surse_utilizator(surse, rad)
-				if motiv is None:
+			if pachete_surse is not None and pachete_surse.citeste_surse_utilizator(rad) != surse:
+				motiv_surse = pachete_surse.scrie_surse_utilizator(surse, rad)
+				if motiv_surse is None:
 					sistem_puse.append("surse")
 					_jurnal("sursele de pachete adaugate de om: %d puse la loc" % len(surse))
 				else:
@@ -1759,11 +2150,17 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		canale.curata()
 		rest.curata()
 		_jurnal("mutarea s-a oprit (%s)" % eroare.__class__.__name__)
-		note.append(_("Punerea la loc s-a oprit la jumătate; setările și rețeaua au rămas cele de acum."))
-	# modulele de acces conditionat, la sfarsit (opkg poate dura)
+		note.append(_("Punerea la loc s-a întrerupt. Se reia la pornirea următoare."))
+		return rez
+	# modulele de acces conditionat, la sfarsit (opkg poate dura); de pe alta baza a imaginii numai configurarile si
+	# legaturile, pachetele intra in coada reinstalarii
+	baza_alta = alta_baza(d, rad)
+	if baza_alta:
+		_jurnal("copia e de pe alta baza a imaginii (%s, acum %s): binarele ei nu se copiaza, pachetele se pun din nou "
+			"din feeduri" % (d.get("versiune") or "?", versiune_imagine(rad)[1] or "?"))
 	if acces:
 		try:
-			n, motive = _pune_acces(rad, acces, pachete, porneste_modulele)
+			n, motive = _pune_acces(rad, acces, pachete, porneste_modulele and not baza_alta, baza_alta)
 			if n:
 				pus.append("acces")
 				_jurnal("modulele de acces conditionat: %d fisiere puse la loc" % n)
@@ -1771,8 +2168,27 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		except Exception as eroare:
 			_jurnal("modulele de acces conditionat: %s" % eroare.__class__.__name__)
 			note.append(_("Modulele de acces condiționat nu s-au putut pune la loc."))
+			return rez
+	# Datele necriptate si conturile pluginurilor urmeaza stickul.
+	if d.get("pluginuri") and (acest or any(p["fisiere"] for p in meta_pluginuri)):
+		try:
+			pregateste_pluginuri(dosar, rad)
+			n = _reinstalare().adauga(rad, [(p, "plugin") for p in d["pluginuri"]])
+			pus.append("pluginuri")
+			_jurnal("pluginurile din copie: %d, in coada reinstalarii: %d" % (len(d["pluginuri"]), n))
+		except Exception as eroare:
+			_jurnal("coada pluginurilor: %s" % eroare.__class__.__name__)
+			note.append(_("Pluginurile nu au putut fi pregătite. Se reia la pornirea următoare."))
+			return rez
+	try:
+		nota = _reinstalare().nota_coada(rad)
+		if nota:
+			note.insert(0, nota)
+	except Exception:
+		pass
 	_sincronizeaza()
 	rez["ok"] = bool(pus)
+	rez["incheiata"] = True
 	_jurnal("randuri lamedb: %d; chei settings: %d" % (_numara_randuri(os.path.join(E, "lamedb")), _numara_chei(S)))
 	try:
 		if acest:
@@ -1889,8 +2305,13 @@ def _numara_chei(cale):
 	return sum(1 for r in (date or b"").splitlines() if b"=" in r)
 
 
-def _pune_acces(rad, membri, pachete, porneste_modulele):
-	"""Pune la loc modulele de acces conditionat. Intoarce (numarul fisierelor puse, notele pentru ecran)."""
+def _pune_acces(rad, membri, pachete, porneste_modulele, baza_alta=False):
+	"""Pune la loc modulele de acces conditionat. Intoarce (numarul fisierelor puse, notele pentru ecran).
+	baza_alta: copia e de pe alta baza a imaginii; atunci se pun numai configurarile modulelor (octet cu octet, fara sa
+	fie citite) si legaturile de pornire, iar numele pachetelor intra in coada reinstalarii (Components/HdsReinstalare.py);
+	nici .ipk-ul vechi, nici programele, scripturile sau informatiile opkg ale lui nu se pun."""
+	if baza_alta:
+		return _pune_acces_alta_baza(rad, membri, pachete)
 	note = []
 	pus = 0
 	feluri = feluri_acces(rad)
@@ -1990,6 +2411,37 @@ def _pune_acces(rad, membri, pachete, porneste_modulele):
 	return pus, note
 
 
+def _pune_acces_alta_baza(rad, membri, pachete):
+	"""_pune_acces pentru o copie de pe alta baza a imaginii: configurarile (etc/tuxbox/config) scrise ca atare,
+	legaturile alese si numele pachetelor in coada reinstalarii. Intoarce (fisiere de configurare puse, note)."""
+	pus = 0
+	legaturi = {}
+	sarite = 0
+	for nume, m, date in membri:
+		if nume.startswith(META_ACCES) or m.isdir():
+			continue
+		if m.issym():
+			if TIPAR_LEGATURA_ALEASA.match(nume) or TIPAR_LEGATURA_RC.match(nume):
+				legaturi[nume] = m.linkname
+			continue
+		if not nume.startswith(DOSAR_CONFIG_ACCES) or date is None:
+			sarite += 1
+			continue
+		tinta = _c(rad, nume)
+		if os.path.islink(tinta) or os.path.isdir(tinta):
+			continue
+		d = os.path.dirname(tinta)
+		if not os.path.isdir(d):
+			os.makedirs(d)
+		_scrie_atomic(tinta, date, _mod_fisier(m, 0o644))
+		pus += 1
+	nume_pachete = [p["nume"] for p in pachete if TIPAR_PACHET.match(p.get("nume") or "")]
+	n = _reinstalare().adauga(rad, [(p, "acces") for p in nume_pachete], legaturi)
+	_jurnal("modulele de acces de pe alta baza: %d fisiere de configurare puse ca atare, %d fisiere ale pachetelor "
+		"lasate (binarele bazei vechi), %d pachete in coada reinstalarii" % (pus, sarite, n))
+	return pus, []
+
+
 def _porneste_modulul(rad):
 	"""Scriptul ales al fiecarui fel (/etc/init.d/<fel>, felurile in ordinea lui feluri_acces: intai al modulelor
 	obisnuite), pornit direct cu "start", fara interpretor de comenzi, cu termen; numai daca legatura arata spre un
@@ -2075,9 +2527,28 @@ def _blocuri_nemontate():
 
 
 def _cea_mai_noua(rad):
-	"""(copia aleasa la prima pornire, toate): a acestui receptor, altfel de acelasi model (numai canalele)."""
+	"""Copia scrierii online, altfel regula veche: acest receptor, apoi acelasi model."""
 	toate = copii(rad=rad)
 	model = model_aici(rad)
+	versiune = versiune_imagine(rad)[1]
+	# La actualizarea online data ceasului nu alege copia: identitatea din scriere.json o face.
+	scrieri = []
+	for m in medii(rad):
+		date = _citeste_mic(os.path.join(m["punct"], "hdsatelit", "imagine-noua", "scriere.json"), MAX_DESCRIERE + 1)
+		try:
+			s = json.loads(date.decode("utf-8")) if date and len(date) <= MAX_DESCRIERE else {}
+			if isinstance(s, dict) and isinstance(s.get("copie"), dict) and isinstance(s.get("cand"), int) \
+					and (not versiune or s.get("versiune") == versiune):
+				scrieri.append(s)
+		except (ValueError, UnicodeError):
+			pass
+	for s in sorted(scrieri, key=lambda s: s["cand"], reverse=True):
+		for c in toate:
+			try:
+				if c["acest"] and identitate_copie(c["id"]) == s["copie"]:
+					return c, toate
+			except (OSError, ValueError):
+				continue
 	for c in toate:
 		if c["acest"]:
 			return c, toate
@@ -2085,6 +2556,59 @@ def _cea_mai_noua(rad):
 		if c["model"] == model:
 			return c, toate
 	return None, toate
+
+
+def identitate_copie(dosar):
+	d = citeste_descriere(dosar)
+	if d is None:
+		raise ValueError("copie fara descriere")
+	return {"nume": os.path.basename(dosar.rstrip("/\\")), "descriere": _md5(os.path.join(dosar, DESCRIERE)),
+		"amprenta": d["amprenta"], "model": d["model"]}
+
+
+def _incheie_restaurarea(rad, rez):
+	_scrie_rezultat(rad, rez)
+	if not rez.get("incheiata"):
+		return
+	d = dosar_restaurare(rad)
+	_atinge(os.path.join(d, SEMN_GATA))
+	_atinge(os.path.join(d, SEMN_PRIMA))
+	_sincronizeaza()
+	try:
+		os.remove(os.path.join(d, SEMN_INCEPUT))
+	except FileNotFoundError:
+		pass
+	_sincronizeaza()
+
+
+def _reia_restaurarea(rad, asteapta):
+	cale = os.path.join(dosar_restaurare(rad), SEMN_INCEPUT)
+	if not os.path.exists(cale):
+		return False
+	try:
+		date = _citeste_mic(cale, MAX_DESCRIERE) or b""
+		semn = json.loads(date.decode("ascii"))
+		if not isinstance(semn, dict) or not isinstance(semn.get("copie"), str) or not re.fullmatch(r"[0-9a-f]{32}", semn.get("descriere", "")):
+			raise ValueError()
+	except (ValueError, TypeError, UnicodeError):
+		_jurnal("marcajul restaurarii nu e bun; ramane pentru verificare")
+		return True
+	inceput = time.time()
+	while True:
+		candidati = [semn["copie"]] + [c["id"] for c in copii(rad=rad)]
+		for dosar in dict.fromkeys(candidati):
+			if os.path.isfile(os.path.join(dosar, DESCRIERE)) and _md5(os.path.join(dosar, DESCRIERE)) == semn["descriere"]:
+				_jurnal("reiau restaurarea intrerupta inainte de scurtatura settings")
+				rez = pune_la_loc(dosar, rad, semn.get("motiv", "automat"))
+				_incheie_restaurarea(rad, rez)
+				cerere = os.path.join(dosar_restaurare(rad), CERERE)
+				if rez.get("incheiata") and (_citeste_mic(cerere, 4096) or b"").decode("utf-8", "surrogateescape").strip() == semn["copie"]:
+					anuleaza_cererea(rad)
+				return True
+		if not asteapta or time.time() - inceput >= ASTEPTARE_MEDII_S:
+			_jurnal("copia restaurarii intrerupte nu e pe mediu; reiau cand revine")
+			return True
+		time.sleep(1)
 
 
 def _marcheaza_alta_imagine(rad):
@@ -2108,16 +2632,14 @@ def pornire(rad=None, asteapta=True):
 		os.makedirs(d, exist_ok=True)
 	except OSError:
 		return 0
+	if _reia_restaurarea(rad, asteapta):
+		return 0
 	cerere = os.path.join(d, CERERE)
 	if os.path.isfile(cerere):
 		date = _citeste_mic(cerere, 4096) or b""
-		# cererea se sterge intai: o cadere la punere nu o repeta la fiecare pornire
-		try:
-			os.remove(cerere)
-		except OSError:
-			pass
 		dosar = date.decode("utf-8", "surrogateescape").strip()
 		if not os.path.isfile(os.path.join(dosar, DESCRIERE)):
+			anuleaza_cererea(rad)
 			_jurnal("cererea arata spre o copie care nu mai e pe mediu, nu scriu nimic")
 			_scrie_rezultat(rad, {"ok": False, "pus": [], "note": [_("Copia aleasă nu mai era pe mediu la repornire; "
 				"nu s-a pus nimic la loc.")], "repornire": "nu", "aratat": False, "motiv": "cerere",
@@ -2125,9 +2647,9 @@ def pornire(rad=None, asteapta=True):
 			return 0
 		_jurnal("=== %s, cererea din meniu sau web" % time.strftime("%Y-%m-%d %H:%M:%S"))
 		rez = pune_la_loc(dosar, rad, "cerere")
-		_atinge(os.path.join(d, SEMN_GATA))
-		_atinge(os.path.join(d, SEMN_PRIMA))
-		_scrie_rezultat(rad, rez)
+		_incheie_restaurarea(rad, rez)
+		if rez.get("incheiata"):
+			anuleaza_cererea(rad)
 		return 0
 	prima = os.path.join(d, SEMN_PRIMA)
 	if os.path.exists(prima):
@@ -2137,6 +2659,7 @@ def pornire(rad=None, asteapta=True):
 		_atinge(prima)
 		return 0
 	_jurnal("=== %s, prima pornire a imaginii, caut o copie a setarilor" % time.strftime("%Y-%m-%d %H:%M:%S"))
+	reincearca = False
 	try:
 		inceput = time.time()
 		while True:
@@ -2155,14 +2678,15 @@ def pornire(rad=None, asteapta=True):
 		_jurnal("copia aleasa: %s (%s)" % (os.path.basename(aleasa["id"]), "acest receptor" if aleasa["acest"]
 			else "alt receptor"))
 		rez = pune_la_loc(aleasa["id"], rad, "automat")
-		_atinge(gata)
-		_scrie_rezultat(rad, rez)
+		reincearca = rez.get("reincearca", False)
+		_incheie_restaurarea(rad, rez)
 		return 0
 	finally:
 		# semnul primei porniri se scrie si dupa o eroare neprinsa (un stick sau o copie ciudata): altfel cautarea s-ar
 		# relua la fiecare pornire
 		try:
-			_atinge(prima)
+			if not reincearca and not os.path.exists(os.path.join(d, SEMN_INCEPUT)):
+				_atinge(prima)
 		except OSError:
 			pass
 
@@ -2177,25 +2701,42 @@ def texte_puse(pus):
 		"masina": _("cheile de traducere ale receptorului"),
 		"chei": _("cheile SSH"),
 		"acces": _("modulele de acces condiționat"),
+		"pluginuri": _("pluginurile, pregătite pentru reinstalare"),
 	}
 	return [nume[p] for p in pus if p in nume]
 
 
-def mesaj_rezultat(rez):
-	"""Mesajul scurt de pe televizor (si din web) dupa o punere la loc."""
+def parti_rezultat(rez):
+	"""Rezultatul punerii la loc, pe bucati: (fraza de deasupra, ce s-a pus, cu litera mare, notele). Fraza vine din traducerea
+	textului intreg, taiata la locul listei, ca sa ramana aceeasi in toate limbile."""
 	c = rez.get("copie") or {}
-	puse = texte_puse(rez.get("pus") or [])
+	puse = [t[:1].upper() + t[1:] for t in texte_puse(rez.get("pus") or [])]
 	if puse:
-		text = _("Am pus la loc din copia din %s (imaginea %s): %s.") % (c.get("data_text", ""),
-			c.get("versiune") or "?", ", ".join(puse))
+		semn = "\x01"
+		fraza = _("Am pus la loc din copia din %s (imaginea %s): %s.") % (c.get("data_text", ""), c.get("versiune") or "?", semn)
+		sus = fraza.split(semn)[0].rstrip() or fraza.replace(semn, "").strip()
 	else:
-		text = _("Copia setărilor nu s-a pus la loc.")
+		sus = _("Copia setărilor nu s-a pus la loc.")
+	note = []
 	if rez.get("pus") and not rez.get("acest"):
-		text += " " + _("Copia era de pe alt receptor, deci numai canalele.")
-	note = rez.get("note") or []
-	if note:
-		text += "\n" + "\n".join(note[:3])
-	return text
+		note.append(_("Copia era de pe alt receptor, deci numai canalele."))
+	note.extend((rez.get("note") or [])[:3])
+	return sus, puse, note
+
+
+def mesaj_rezultat(rez):
+	"""Mesajul de dupa o punere la loc, ca text: fraza, apoi cate un lucru pe rand, apoi notele (pagina web si skinurile fara
+	locul randurilor)."""
+	sus, puse, note = parti_rezultat(rez)
+	return "\n".join([sus] + ["\u2022 " + t for t in puse] + note)
+
+
+def fereastra_rezultat(rez, nota=None):
+	"""Ce primeste MessageBox pentru rezultatul punerii la loc, pe televizor: fraza, lista cu ce s-a pus, notele sub ea.
+	nota: inca un rand la capatul notelor."""
+	sus, puse, note = parti_rezultat(rez)
+	puncte = list(puse) + [("nota", n) for n in note + ([nota] if nota else [])]
+	return {"text": sus, "titlu": _("Copia setărilor"), "fel": "succes" if puse else "avertisment", "puncte": puncte}
 
 
 # ---------------------------------------------------------------- pe receptor: setarile, starea comuna, ceasul
@@ -2478,10 +3019,17 @@ def porneste(session):
 		fixeaza_setari(fara=PREFIX_TRADUCERE)
 	except Exception as eroare:
 		_jurnal("setarile scrise mereu: %s" % eroare.__class__.__name__)
+	rez_copie = None
 	try:
+		rez_copie = citeste_rezultat()
 		_arata_rezultatul(session)
 	except Exception as eroare:
 		_jurnal("mesajul punerii la loc: %s" % eroare.__class__.__name__)
+	try:
+		# pluginurile si modulele de acces din copie, din feeduri (nu inainte de repornirea ceruta pentru retea)
+		_reinstalare().porneste(session, rez_copie)
+	except Exception as eroare:
+		_jurnal("reinstalarea pachetelor: %s" % eroare.__class__.__name__)
 	try:
 		# prima pornire fara copie HD Satelit: copia altei imagini, cu intrebare (semnul l-a pus pornire())
 		from Components import HdsImportAltaImagine
@@ -2504,17 +3052,18 @@ def _arata_rezultatul(session):
 	if rez.get("repornire") == "ceruta":
 		rez["repornire"] = "facuta"
 		_scrie_rezultat(radacina(), rez)
-		text = mesaj_rezultat(rez) + "\n" + _("Receptorul repornește o dată acum, ca să intre rețeaua din copie.")
+		fereastra = fereastra_rezultat(rez, _("Receptorul repornește o dată acum, ca să intre rețeaua din copie."))
 
 		def reporneste(*_a):
 			from Screens.Standby import TryQuitMainloop
 			session.open(TryQuitMainloop, 2)
-		Notifications.AddNotificationWithCallback(reporneste, MessageBox, text, type=MessageBox.TYPE_INFO, timeout=15)
+		Notifications.AddNotificationWithCallback(reporneste, MessageBox, fereastra.pop("text"), type=MessageBox.TYPE_INFO, timeout=15, **fereastra)
 		return
 	if not rez.get("aratat"):
 		rez["aratat"] = True
 		_scrie_rezultat(radacina(), rez)
-		Notifications.AddPopup(mesaj_rezultat(rez), MessageBox.TYPE_INFO, 20, "HdsCopieSetari")
+		fereastra = fereastra_rezultat(rez)
+		Notifications.AddPopup(fereastra.pop("text"), MessageBox.TYPE_INFO, 20, "HdsCopieSetari", **fereastra)
 
 
 if __name__ == "__main__":

@@ -626,3 +626,19 @@ def scurtatPeLatime(eticheta, text, latime=None):
 	rez = bun or PUNCTE
 	eticheta.setText(rez)
 	return rez
+
+
+def semneTaste(ecran):
+	"""Semnul colorat al unei taste (eticheta FixedLabel din cadrul temei, cu fundalul key_red...) se vede numai cand tasta are text. Pentru
+	ecranele cu taste Button sau Label: semnul lor nu se poate lega de text din skin."""
+	for r in getattr(ecran, "renderer", ()) or ():
+		inst = getattr(r, "instance", None)
+		atribute = getattr(r, "skinAttributes", None)
+		if inst is None or not atribute:
+			continue
+		tasta = dict(atribute).get("backgroundColor")
+		if tasta in ("key_red", "key_green", "key_yellow", "key_blue") and tasta in ecran:
+			if ecran[tasta].getText():
+				inst.show()
+			else:
+				inst.hide()

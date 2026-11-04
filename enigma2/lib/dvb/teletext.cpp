@@ -189,7 +189,11 @@ eDVBTeletextParser::eDVBTeletextParser(iDVBDemux *demux)
 	setStreamID(0xBD); /* as per en 300 472 */
 	
 	setPageAndMagazine(-1, -1);
-	
+	m_page_open = 0;
+	m_pid = 0;
+	if (!demux)
+		return;
+
 	if (demux->createPESReader(eApp, m_pes_reader))
 		eDebug("failed to create teletext subtitle PES reader!");
 	else

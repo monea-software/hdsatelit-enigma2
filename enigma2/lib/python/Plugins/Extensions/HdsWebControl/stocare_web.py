@@ -76,7 +76,24 @@ def _disc(L, d, automat=None):
 		"liber_text": L.marime(d.get("liber")),
 		"total_text": L.marime(d.get("total")),
 		"stare": stare,
+		# felul, legatura, sistemul de fisiere (ca pe televizor); discul de pe care porneste imaginea
+		"fisa": L.fisaDisc(d, cu_liber=False) if hasattr(L, "fisaDisc") else "",
+		"tip": d.get("tip") or "",
+		"legatura": d.get("legatura") or "",
+		"imagine": bool(d.get("imagine")),
+		# un stick pus pe numai citire: legatura spre verificare (pagina Discurile)
+		"repara": _t("Repară") if d.get("motiv") == "numai_citire" and d.get("dispozitiv") and not d.get("imagine") and
+			not d.get("protejat") else "",
 	}
+
+
+def _necitit(L, n):
+	"""Un disc pe care receptorul nu il poate citi; `disc`: discul intreg (sda), pentru legatura 'Formatează'."""
+	rez = {"dispozitiv": n["dispozitiv"], "nume": n["nume"], "fel": n.get("fel") or "",
+		"disc": L.discul(n["dispozitiv"]) if hasattr(L, "discul") else ""}
+	if hasattr(L, "fisaDisc"):
+		rez["fisa"] = L.fisaDisc(n)
+	return rez
 
 
 def stare(L=None, acum=None):
@@ -108,8 +125,7 @@ def stare(L=None, acum=None):
 		"se_citeste": bool(se_citeste),
 		"discuri": [_disc(L, d, t.get("automat")) for d in discuri],
 		# `disc`: discul intreg (sda), pentru legatura 'Formatează' spre pagina Discurile
-		"necitite": [{"dispozitiv": n["dispozitiv"], "nume": n["nume"], "fel": n.get("fel") or "",
-			"disc": L.discul(n["dispozitiv"]) if hasattr(L, "discul") else ""} for n in necit],
+		"necitite": [_necitit(L, n) for n in necit],
 		"lucru": None,
 	}
 	if lucru is not None and (lucru["stare"] == L.LUCRU_IN_LUCRU or acum - (lucru.get("timp") or 0) < VARSTA_LUCRU):
@@ -295,6 +311,7 @@ PAGINA = """<!DOCTYPE html>
   <section class="card">
     <h2>Cum alege receptorul</h2>
     <p class="nota">La prima înregistrare (tasta roșie, pauză, o emisiune programată din ghid sau de aici), receptorul caută singur stick-urile și hard diskurile. Dacă e unul singur, îl folosește și face pe el dosarul movie. Dacă sunt mai multe, te întreabă o dată pe care și ține minte alegerea; dacă nu răspunzi până pornește o înregistrare programată, ia singur discul cu cel mai mult loc liber. Memoria internă a receptorului nu se folosește niciodată: e prea mică.</p>
+    <p class="nota">Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările rămân și după o actualizare.</p>
   </section>
   <section class="card ascuns" id="cardNecitite">
     <h2>Discuri pe care receptorul nu le poate citi</h2>
@@ -369,6 +386,7 @@ function arata(d){
     var n = document.createElement("td"); n.className = "nume"; n.textContent = k.nume;
     var mic = document.createElement("div"); mic.className = "mic"; mic.textContent = k.punct + (k.fel ? " (" + k.fel + ")" : "");
     n.appendChild(mic);
+    if(k.fisa){ var fi = document.createElement("div"); fi.className = "mic"; fi.textContent = k.fisa; n.appendChild(fi); }
     var l = document.createElement("td"); l.className = "liber"; l.textContent = k.liber_text ? (k.liber_text + " din " + k.total_text) : "";
     var s = document.createElement("td"); s.className = "stare"; s.textContent = k.stare;
     var a = document.createElement("td"); a.className = "actiune";
@@ -379,6 +397,11 @@ function arata(d){
       b.addEventListener("click", function(){ foloseste(k); });
       a.appendChild(b);
       butoane++;
+    }
+    if(k.repara){
+      // verificarea se face in pagina Discurile; aici numai drumul spre ea
+      var rp = document.createElement("a"); rp.href = adresa("/discuri?f=verificare"); rp.textContent = k.repara; rp.style.color = "inherit";
+      a.appendChild(rp);
     }
     tr.appendChild(n); tr.appendChild(l); tr.appendChild(s); tr.appendChild(a); corp.appendChild(tr);
     var r = raspunsPentru(d, k.punct);
@@ -396,7 +419,7 @@ function arata(d){
   $("notaFoloseste").classList.toggle("ascuns", !butoane);
   var nc = $("necitite"); nc.textContent = "";
   (d.necitite || []).forEach(function(k){
-    var li = document.createElement("li"); li.textContent = k.nume;
+    var li = document.createElement("li"); li.textContent = k.nume + (k.fisa ? ": " + k.fisa : "");
     if(k.disc){
       // formatarea se face in pagina Discurile, cu intrebarea ei; aici numai drumul spre ea
       var a = document.createElement("a"); a.href = adresa("/discuri?f=formatare"); a.textContent = "Formatează";
@@ -481,6 +504,9 @@ TEXTE_PAGINA = {
 			"pe el dosarul movie. Dacă sunt mai multe, te întreabă o dată pe care și ține minte alegerea; "
 			"dacă nu răspunzi până pornește o înregistrare programată, ia singur discul cu cel mai mult loc "
 			"liber. Memoria internă a receptorului nu se folosește niciodată: e prea mică."),
+		N_("Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl "
+			"alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările "
+			"rămân și după o actualizare."),
 		N_("Discuri pe care receptorul nu le poate citi"),
 		N_("Receptorul nu le poate citi sistemul de fișiere. Se pot folosi după formatare: cu „Formatează”, "
 			"care deschide pagina Discurile (receptorul întreabă înainte), sau pe un calculator, ca FAT32. "

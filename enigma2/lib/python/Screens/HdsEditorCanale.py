@@ -1729,6 +1729,11 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		return True
 
 	def keyExit(self):
+		if self.lucru and self.s is None:
+			# lista inca se citeste (nimic de pierdut): primul EXIT inchide; sesiunea venita dupa se inchide in
+			# _sesiuneGata, care vede steagul inchis
+			self.close(False)
+			return
 		if self.lucru:
 			self._pune('indiciu', self.lucru)
 			return

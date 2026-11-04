@@ -1388,7 +1388,26 @@ def _tunere():
 						t["usals_text"] = HdsGrade.coordonate(t["usals"]["latitudine"], t["usals"]["longitudine"], 3)
 				t["lnb"] = _lnbTuner(cfg, t["mod"], [p for p, _n in sateliti], n.slot)
 		tunere.append(t)
+	# tunerul B porneste singur daca are semnal (Components/HdsTunerB.py): aceeasi stare ca randul din Setari tuner
+	try:
+		from Components import HdsTunerB
+		auto = HdsTunerB.stare()
+	except Exception:
+		auto = None
+	for t in tunere:
+		if auto and t["slot"] == auto["slot"]:
+			t["auto"] = {"text": auto["text_web"], "proba": auto["ok"] == "proba" and not auto["acum"]}
 	return tunere
+
+
+def probaTunerB():
+	"""POST /api/tuner-b-proba: proba automata a tunerului B, acum (ca OK pe randul din Setari tuner). Proba merge in
+	fundal; pagina citeste rezultatul din /api/antena."""
+	from Components import HdsTunerB
+	motiv = HdsTunerB.incearca_proba1(de_om=True)
+	if motiv:
+		return {"result": False, "message": motiv}
+	return {"result": True}
 
 
 def _felCombinat(nims, slot):
@@ -1765,6 +1784,16 @@ def rute(baza, resource, NOT_DONE_YET):
 		def render_GET(self, request):
 			return self.render_POST(request)     # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class TunerBProbaResource(baza):
+		"""POST /api/tuner-b-proba: proba automata a tunerului B, acum. Cu cookie cere POST, aceeasi origine si CSRF."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			return self._raspunde(request, probaTunerB())
+
+		def render_GET(self, request):
+			return self.render_POST(request)     # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class PaginaResource(resource.Resource):
 		"""GET /scanare[/...] si /antena[/...]: aceeasi pagina, cu sectiunea si felul luate din adresa."""
 		isLeaf = True
@@ -1782,6 +1811,7 @@ def rute(baza, resource, NOT_DONE_YET):
 		b"scanare-televizor": TelevizorResource(),
 		b"antena": AntenaResource(),
 		b"tuner-legat": TunerLegatResource(),
+		b"tuner-b-proba": TunerBProbaResource(),
 	}
 	return api, PaginaResource()
 
@@ -2572,6 +2602,7 @@ function cartelaTunere(c){
     linie(c, "Recepție", tipuri.join(", "));
     linie(c, "Mod", MODURI[t.mod] || t.mod);
     if(t.combinat){ randLegat(c, t); }
+    if(t.auto){ randAuto(c, t); }
     if(t.satelit){
       if(t.diseqc){ linie(c, "Comutare", DISEQC[t.diseqc] || t.diseqc); }
       linie(c, "Motor", t.motor ? "da" : "nu");
@@ -2583,6 +2614,24 @@ function cartelaTunere(c){
     }
   });
   c.appendChild(el("p", "nota", "Setările se schimbă pe televizor, în ecranul Setări tuner."));
+}
+// tunerul B porneste singur daca are semnal: starea probei automate, ca randul din Setari tuner, si "Încearcă din nou"
+function randAuto(c, t){
+  linie(c, "Pornire automată", t.auto.text);
+  if(!t.auto.proba){ return; }
+  var stare = el("p", "nota");
+  var b = el("button", "buton", "Încearcă din nou");
+  b.type = "button";
+  b.onclick = function(){
+    b.disabled = true;
+    mesaj(stare, "Se probează...");
+    cerere("/api/tuner-b-proba", "POST", new URLSearchParams()).then(function(d){
+      if(!d.result){ mesaj(stare, d.message, true); b.disabled = false; return; }
+      setTimeout(incarcaAntena, 12000);
+    }).catch(function(){ mesaj(stare, "Receptorul nu răspunde.", true); b.disabled = false; });
+  };
+  c.appendChild(b);
+  c.appendChild(stare);
 }
 // tunerul combinat DVB-T2/C: "Legat la" (antena terestra sau cablu), aceeasi alegere ca pe televizor
 function randLegat(c, t){

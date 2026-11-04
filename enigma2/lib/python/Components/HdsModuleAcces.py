@@ -30,6 +30,7 @@ Reguli:
     emulator pornit de el fara sesiune proprie). Un script care nu termina nu se opreste: se spune doar ca nu a
     terminat.
 Modulul se incarca si pe PC (probele): enigma se cere numai cand chiar se porneste un script sau un ceas."""
+import codecs
 import os
 import posixpath
 import re
@@ -300,11 +301,13 @@ class Executor(object):
 	def porneste(self, argv, la_final):
 		from enigma import eConsoleAppContainer
 		c = eConsoleAppContainer()
-		lucru = {'container': c, 'iesire': [], 'marime': 0}
+		# eConsoleAppContainer da octeti: decodati pe masura ce vin (un caracter taiat intre doua citiri iese intreg)
+		lucru = {'container': c, 'iesire': [], 'marime': 0,
+			'decodor': codecs.getincrementaldecoder('utf-8')('replace')}
 
 		def date(text):
-			if isinstance(text, bytes):
-				text = text.decode('utf-8', 'replace')
+			if isinstance(text, (bytes, bytearray)):
+				text = lucru['decodor'].decode(text)
 			if lucru['marime'] < IESIRE_MAXIM:
 				lucru['iesire'].append(text[:IESIRE_MAXIM - lucru['marime']])
 				lucru['marime'] += len(text)
@@ -314,6 +317,7 @@ class Executor(object):
 			del c.dataAvail[:]
 			if lucru in _in_lucru:
 				_in_lucru.remove(lucru)
+			date(lucru['decodor'].decode(b'', True))
 			la_final(cod, ''.join(lucru['iesire']))
 
 		c.dataAvail.append(date)

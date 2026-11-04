@@ -129,11 +129,19 @@ def citeste_index(d):
 
 def _scrie_atomic(cale, octeti):
 	nou = cale + ".nou"
-	with open(nou, "wb") as f:
-		f.write(octeti)
-		f.flush()
-		os.fsync(f.fileno())
-	os.replace(nou, cale)
+	try:
+		with open(nou, "wb") as f:
+			f.write(octeti)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(nou, cale)
+	except OSError:
+		# discul nu se poate scrie (plin, scos, montat numai pentru citire dupa erori): nu ramane un .nou pe jumatate
+		try:
+			os.remove(nou)
+		except OSError:
+			pass
+		raise
 
 
 def scrie_index(d, index):
@@ -200,13 +208,17 @@ def salveaza(ref, nume, nucleu=None, d=None, acum=None, max_octeti=None):
 	except OSError:
 		return None
 	fisier = nume_fisier(ref)
-	_scrie_atomic(os.path.join(d, fisier), date)
-	index = citeste_index(d)
 	info = {"nume": nume or "", "data": int(acum if acum is not None else time.time()), "pagini": pagini,
 		"subpagini": subpagini, "octeti": len(date), "fisier": fisier, "pid": pid}
-	index["copii"][ref] = info
-	margineste(d, index, max_octeti if max_octeti is not None else _max_octeti())
-	scrie_index(d, index)
+	try:
+		_scrie_atomic(os.path.join(d, fisier), date)
+		index = citeste_index(d)
+		index["copii"][ref] = info
+		margineste(d, index, max_octeti if max_octeti is not None else _max_octeti())
+		scrie_index(d, index)
+	except OSError:
+		# discul nu se poate scrie: fara copie, iar interfata (copia automata ruleaza din urmaritor) merge mai departe
+		return None
 	rez = dict(info)
 	rez["ref"] = ref
 	return rez
@@ -222,7 +234,10 @@ def sterge(ref, d=None):
 		os.remove(os.path.join(d, c.get("fisier", "")))
 	except OSError:
 		pass
-	scrie_index(d, index)
+	try:
+		scrie_index(d, index)
+	except OSError:
+		return False
 	return True
 
 

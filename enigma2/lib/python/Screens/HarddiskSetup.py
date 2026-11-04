@@ -212,6 +212,8 @@ class HarddiskSetup(Screen):
 class HarddiskSelection(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
+		# titlul din bara de sus: textul intrarii din meniu
+		self.setTitle(_("Format Hard Drive"))
 
 		# hard diskurile si stick-urile USB (Components/HdsDiscuri.discuriOferite, ca pagina web /discuri)
 		tlist = HdsDiscuri.discuriOferite()
@@ -235,6 +237,7 @@ class HarddiskFsckSelection(HarddiskSelection):
 	def __init__(self, session):
 		HarddiskSelection.__init__(self, session)
 		self.skinName = "HarddiskSelection"
+		self.setTitle(_("Check Disk Health"))
 
 	def okbuttonClick(self):
 		selection = self["hddlist"].getCurrent()

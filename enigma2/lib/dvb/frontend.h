@@ -49,6 +49,12 @@ class eSecCommandList;
 class eDVBFrontend: public iDVBFrontend, public sigc::trackable
 {
 public:
+	/* Marcaje monotone, fara citiri suplimentare din driver. SEC include confirmarea motorului. */
+	struct TimpiZap
+	{
+		long long pornire_ms, sec_start_ms, sec_gata_ms, comanda_ms, lock_ms;
+		TimpiZap(): pornire_ms(0), sec_start_ms(0), sec_gata_ms(0), comanda_ms(0), lock_ms(0) {}
+	};
 	enum {
 		NEW_CSW,
 		NEW_UCSW,
@@ -119,12 +125,14 @@ private:
 	   sec.cpp pentru motor; comenzile secventei o poarta cu ele in urma */
 	hdsurma::Acordare m_hds_acordare;
 	hdsjtuner::Stare m_hds_jurnal; // HDSatelit: jurnalul tunerului (lib/dvb/hdsjurnaltuner.h)
+	TimpiZap m_hds_timpi_zap;
 
 	void feEvent(int);
 	void timeout();
 	void tuneLoop();  // called by m_tuneTimer
 	int tuneLoopInt();
 	void setFrontend(bool recvEvents=true);
+	void hdsComandaTuner(bool recvEvents);
 	bool setSecSequencePos(int steps);
 	RESULT switchDeliverySystem(int type, bool t2 = false);
 	static int PriorityOrder;
@@ -146,6 +154,7 @@ public:
 	/* HDSatelit (urma motorului): trimiterea cu acordarea care a pus-o (secventa SEC) sau 0 (trimitere directa) */
 	RESULT hdsSendDiseqc(const eDVBDiseqcCommand &diseqc, const hdsurma::Acordare *acordare);
 	hdsurma::Acordare &hdsAcordare() { return m_hds_acordare; }
+	const TimpiZap &hdsTimpiZap() const { return m_hds_timpi_zap; }
 	/* HDSatelit: acordul de acum din nou, pe ultima acordare reusita de satelit (oparm.sat), ca
 	   reacordarea nucleului dupa pierderea semnalului; `motiv` intra in urma motorului. hdsPoateReacorda: tunerul e
 	   deschis si ultima lui acordare e pe `orbital`. hdsReacordeaza: 0 = acordat, -2 = nu se poate, altfel codul tune() */

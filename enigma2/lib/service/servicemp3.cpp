@@ -10,12 +10,14 @@
 #include <lib/base/object.h>
 #include <lib/dvb/decoder.h>
 #include <lib/dvb/volume.h>
+#include <lib/dvb/epgcache.h>
 #if HAVE_HISILICON
 #include <lib/dvb/hdspazavideo.h>
 #endif
 #include <lib/components/file_eraser.h>
 #include <lib/gui/esubtitle.h>
 #include <lib/service/servicemp3.h>
+#include <lib/service/hdsegalizator.h>
 #include <lib/service/service.h>
 #include <lib/gdi/gpixmap.h>
 
@@ -35,7 +37,8 @@
 #include <endian.h>
 #include <arpa/inet.h>
 
-#define HTTP_TIMEOUT 10
+#define HTTP_TIMEOUT 15
+#define HTTP_PORNIRE 25
 
 /* the film files played here: the extension, the container and whether it carries a picture */
 static const struct
@@ -69,6 +72,9 @@ static const pts_t MARGINE_RELUARE = 60 * 90000LL;
    "notify::source" on its own threads. They get this gate, not the service: stop() closes it before the pipeline is
    handed to the film thread, so a callback that comes during the teardown, or after the service is gone, does nothing.
    The gate lives as long as the pipeline (the service and the film thread both hold it). */
+/* the first number of the teletext pages in the list of subtitles (the streams of a film stay under it, the files are from 100 on) */
+static const int PISTA_TELETEXT = 50;
+
 struct eServiceMP3::Poarta
 {
 	std::mutex lacat;
@@ -112,12 +118,15 @@ struct eServiceMP3::FirFilm
 	int salt_fel;				/* GstSeekFlags */
 	bool schimba_starea;			/* a change of state is waiting: PAUSED when pauza, PLAYING otherwise */
 	bool pauza;
+	bool schimba_sunetul;			/* the sound changes sink (the equalizer on a radio stream): sunet_nou, NULL = by rank */
+	GstElement *sunet_nou;
 	bool opreste, oprit;
 	int ms_oprire;
 	bool scrie;				/* write (or remove, when empty) the cue file after the stop */
 	listaCues de_scris;
 	FirFilm() : pipeline(NULL), citeste(false), citit(false), salt(false), salt_derulare(false), salt_ns(0), salt_fel(0),
-		schimba_starea(false), pauza(false), opreste(false), oprit(false), ms_oprire(0), scrie(false) {}
+		schimba_starea(false), pauza(false), schimba_sunetul(false), sunet_nou(NULL), opreste(false), oprit(false), ms_oprire(0),
+		scrie(false) {}
 };
 
 /* the cue file: pairs of (position, kind), big-endian 64 + 32 bit, as the recordings have them */
@@ -219,6 +228,25 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 	std::unique_lock<std::mutex> l(f->lacat);
 	while (!f->opreste)
 	{
+		if (f->schimba_sunetul)
+		{
+			f->schimba_sunetul = false;
+			GstElement *sink = f->sunet_nou;
+			f->sunet_nou = NULL;
+			l.unlock();
+			/* playbin takes a new sink only in READY or NULL; a stream starts again from its source. The address is set again: a
+			   stream that failed before it was playing (no decoder for the sink of the equalizer) leaves playbin without a group to
+			   start, and PLAYING would fail. */
+			golesteSinkurile(f->pipeline);
+			gst_element_set_state(f->pipeline, GST_STATE_READY);
+			g_object_set(G_OBJECT(f->pipeline), "audio-sink", sink, "uri", f->cale.c_str(), NULL);
+			gst_element_post_message(f->pipeline, gst_message_new_application(GST_OBJECT(f->pipeline),
+				gst_structure_new_empty("hds-sunet-schimbat")));
+			if (gst_element_set_state(f->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+				eDebug("[eServiceMP3] the start after the change of the sound sink failed");
+			l.lock();
+			continue;
+		}
 		if (f->schimba_starea)
 		{
 			f->schimba_starea = false;
@@ -255,6 +283,11 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 			continue;
 		}
 		f->semnal.wait(l);
+	}
+	if (f->sunet_nou)
+	{
+		gst_object_unref(f->sunet_nou);		/* asked and never set: the stop came first */
+		f->sunet_nou = NULL;
 	}
 	l.unlock();
 	std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
@@ -517,6 +550,14 @@ RESULT eStaticServiceMP3Info::getName(const eServiceReference &ref, std::string 
 	return 0;
 }
 
+// XMLTV imported for 4097 references is available to channel rows and progress bars.
+RESULT eStaticServiceMP3Info::getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &evt, time_t start_time)
+{
+	evt = 0;
+	eEPGCache *cache = eEPGCache::getInstance();
+	return ref.type == 4097 && cache ? cache->lookupEventTime(ref, start_time, evt) : -1;
+}
+
 int eStaticServiceMP3Info::getLength(const eServiceReference &ref)
 {
 	return -1;
@@ -552,6 +593,8 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	m_trick_target = 0;
 	m_trick_muted = false;
 	m_prerolled = false;
+	m_hds_egal_flux = false;
+	m_hds_egal_schimbare = false;
 	m_pending_seek = -1;
 	m_pending_ratio = 0;
 	m_watched_to_end = false;
@@ -562,6 +605,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	m_cues_changed = false;
 	m_cues_timer = eTimer::create(eApp);
 	m_start_timer = eTimer::create(eApp);
+	m_epg_timer = eTimer::create(eApp);
 	m_n_video = -1;
 	m_poarta = std::make_shared<Poarta>(this);
 	m_subs_to_pull_handler_id = 0;
@@ -581,6 +625,8 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	m_subtitle_delay_ms = 0;
 	m_vobsub_stream = -1;
 	m_pgs_stream = -1;
+	m_dvbsub_stream = -1;
+	m_ttx_activ = -1;
 	m_picture_index = -1;
 	m_picture_ready = false;
 	m_page_end_pts = -1;
@@ -591,6 +637,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	CONNECT(m_position_timer->timeout, eServiceMP3::positionTick);
 	CONNECT(m_cues_timer->timeout, eServiceMP3::cuesPoll);
 	CONNECT(m_start_timer->timeout, eServiceMP3::startTimeout);
+	CONNECT(m_epg_timer->timeout, eServiceMP3::epgTick);
 	CONNECT(m_subtitle_sync_timer->timeout, eServiceMP3::pushSubtitles);
 	CONNECT(m_external_timer->timeout, eServiceMP3::externalTick);
 	CONNECT(m_pump.recv_msg, eServiceMP3::gstPoll);
@@ -778,6 +825,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 		if ( m_sourceinfo.is_streaming )
 		{
 			g_signal_connect (G_OBJECT (m_gst_playbin), "notify::source", G_CALLBACK (gstHTTPSourceSetAgent), m_poarta.get());
+			g_signal_connect (G_OBJECT (m_gst_playbin), "deep-element-added", G_CALLBACK (gstElementAdded), m_poarta.get());
 		}
 		/* the film thread, with its own references; it waits for its jobs */
 		m_fir = std::make_shared<FirFilm>();
@@ -832,6 +880,7 @@ RESULT eServiceMP3::start()
 	m_state = stRunning;
 	if (m_gst_playbin)
 	{
+		hdsEgalAlege();
 		int video = 0, audio = 0;
 		numaraDecodoare(video, audio);
 		eDebug("eServiceMP3::starting pipeline (video0 open %d, audio0 open %d times before the film)", video, audio);
@@ -855,11 +904,113 @@ RESULT eServiceMP3::start()
 	}
 
 	m_event(this, evStart);
+	if (m_ref.type == 4097 && (m_ref.getUnsignedData(4) & 0xffff0000) == 0xfffe0000)
+		m_epg_timer->start(1000, true);
 	/* without playbin nothing plays: the player is told now */
 	if (!m_gst_playbin)
 		m_event((iPlayableService*)this, evUser+16);
 
 	return 0;
+}
+
+// IPTV has no DVB EIT event handler to refresh now/next at the end of a programme.
+void eServiceMP3::epgTick()
+{
+	if (m_state != stRunning)
+		return;
+	int seconds = 60;
+	ePtr<eServiceEvent> event;
+	if (!getEvent(event, 0) && event)
+	{
+		time_t remaining = event->getBeginTime() + event->getDuration() - ::time(0) + 1;
+		if (remaining > 0 && remaining < seconds)
+			seconds = remaining;
+	}
+	m_epg_timer->start(seconds * 1000, true);
+	m_event(this, evUpdatedEventInfo);
+}
+
+/* the equalizer: only a radio service on a stream; a local file of the media player and a TV stream stay as they were */
+bool eServiceMP3::hdsEgalPotrivit() const
+{
+	return m_gst_playbin && m_sourceinfo.is_streaming && m_ref.getData(0) == 2 && eHdsEgalizator::existent();
+}
+
+void eServiceMP3::hdsEgalAlege()
+{
+	if (!hdsEgalPotrivit())
+		return;
+	eHdsEgalizator *e = eHdsEgalizator::existent();
+	if (!e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica)))
+		return;
+	GstElement *sink = e->sinkFlux();
+	if (!sink)
+	{
+		e->fluxFaraDecodor(m_ref.path, false);
+		e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica));
+		return;
+	}
+	g_object_set(G_OBJECT(m_gst_playbin), "audio-sink", sink, NULL);
+	m_hds_egal_flux = true;
+	eDebug("eServiceMP3::the sound goes through the equalizer");
+}
+
+void eServiceMP3::hdsEgalReaplica()
+{
+	if (m_state != stRunning || !m_fir || !hdsEgalPotrivit())
+		return;
+	eHdsEgalizator *e = eHdsEgalizator::existent();
+	bool vrea = e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica));
+	if (vrea == m_hds_egal_flux)
+		return;
+	GstElement *sink = NULL;
+	if (vrea)
+	{
+		sink = e->sinkFlux();
+		if (!sink)
+		{
+			e->fluxFaraDecodor(m_ref.path, false);
+			e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica));
+			return;
+		}
+	}
+	else
+		sink = gst_element_factory_make("dvbaudiosink", "dvbaudiosink");
+	eDebug("eServiceMP3::the sound changes to %s", vrea ? "the equalizer" : "the decoder of the receiver");
+	m_hds_egal_flux = vrea;
+	m_hds_egal_schimbare = true;
+	/* the tracks and the reasons are found again, as at a start */
+	m_prerolled = false;
+	m_audioStreams.clear();
+	m_refuz.clear();
+	m_capuri_lipsa.clear();
+	m_errorInfo.missing_codec.clear();
+	m_errorInfo.error_message.clear();
+	std::lock_guard<std::mutex> l(m_fir->lacat);
+	if (m_fir->sunet_nou)
+		gst_object_unref(m_fir->sunet_nou);
+	m_fir->sunet_nou = sink;
+	m_fir->schimba_sunetul = true;
+	m_fir->semnal.notify_all();
+}
+
+/* the equalizer screen says what sound the stream has */
+void eServiceMP3::hdsEgalInfo()
+{
+	eHdsEgalizator *e = eHdsEgalizator::existent();
+	if (!m_hds_egal_flux || !e || m_audioStreams.empty())
+		return;
+	std::string nume = m_audioStreams[0].codec;
+	if (nume.find("MP3") != std::string::npos || nume.find("Layer 3") != std::string::npos)
+		nume = "MP3";
+	else if (nume.find("AAC") != std::string::npos)
+		nume = "AAC";
+	else if (nume.find("audio/") == 0)
+		nume.clear();
+	guint debit = 0;
+	if (m_stream_tags && !gst_tag_list_get_uint(m_stream_tags, GST_TAG_BITRATE, &debit))
+		gst_tag_list_get_uint(m_stream_tags, GST_TAG_NOMINAL_BITRATE, &debit);
+	e->fluxInfo(nume, (int)(debit / 1000));
 }
 
 /* a change of state for the film thread (see FirFilm): PAUSED or PLAYING */
@@ -953,6 +1104,9 @@ RESULT eServiceMP3::stop()
 		return -1;
 
 	eDebug("eServiceMP3::stop %s: begin", m_ref.path.c_str());
+	/* the session of the equalizer lets go of the sound card and of the GStreamer thread before the pipeline stops */
+	if (eHdsEgalizator::existent())
+		eHdsEgalizator::existent()->serviciuOprit(this);
 	/* Nothing before the bounded wait asks the sinks or opens the decoder: the position and the length are the last
 	   ones of the play (positionTick, or the target of the fast winding), and the sound muted by the winding comes
 	   back only after the pipeline is stopped. */
@@ -967,6 +1121,7 @@ RESULT eServiceMP3::stop()
 	m_position_timer->stop();
 	m_cues_timer->stop();
 	m_start_timer->stop();
+	m_epg_timer->stop();
 	m_subtitle_sync_timer->stop();
 	m_external_timer->stop();
 
@@ -1541,6 +1696,15 @@ RESULT eServiceMP3::getName(std::string &name)
 	return 0;
 }
 
+// The same reference supplies now/next in the InfoBar and the standard programme information.
+RESULT eServiceMP3::getEvent(ePtr<eServiceEvent> &evt, int nownext)
+{
+	evt = 0;
+	eEPGCache *cache = eEPGCache::getInstance();
+	return m_ref.type == 4097 && cache && (nownext == 0 || nownext == 1)
+		? cache->lookupEventTime(m_ref, -1, evt, nownext) : -1;
+}
+
 int eServiceMP3::getInfo(int w)
 {
 	const gchar *tag = 0;
@@ -1645,6 +1809,9 @@ int eServiceMP3::getInfo(int w)
 
 std::string eServiceMP3::getInfoString(int w)
 {
+	/* the reference of a stream: Components/Converter/HdsCommon.py tells from it what is playing */
+	if ( w == sServiceref && m_sourceinfo.is_streaming )
+		return m_ref.toString();
 	if ( !m_stream_tags && w < sUser && w > 26 )
 		return "";
 	const gchar *tag = 0;
@@ -2009,6 +2176,8 @@ subtype_t getSubtitleType(GstPad* pad, gchar *g_codec=NULL)
 			type = stVOB;
 		else if ( !strcmp(g_type, "subpicture/x-pgs") )
 			type = stPGS;
+		else if ( !strcmp(g_type, "subpicture/x-dvb") )
+			type = stDVB;
 		else if ( !strcmp(g_type, "application/x-subtitle-unknown") )
 			type = felNecunoscut(str);
 		else
@@ -2056,7 +2225,13 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 #endif
 	switch (GST_MESSAGE_TYPE (msg))
 	{
+		case GST_MESSAGE_APPLICATION:
+			if (gst_message_has_name(msg, "hds-sunet-schimbat"))
+				m_hds_egal_schimbare = false;
+			break;
 		case GST_MESSAGE_EOS:
+			if (m_hds_egal_schimbare)
+				break;
 			/* seen to the end: the last position is not kept (a later jump back clears this) */
 			m_watched_to_end = true;
 			m_event((iPlayableService*)this, evEOF);
@@ -2099,6 +2274,8 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				{
 					if ( m_sourceinfo.is_streaming && m_streamingsrc_timeout )
 						m_streamingsrc_timeout->stop();
+					/* Components/HdsIptvRedare.py: the playback has started (the first frame reached the sink) */
+					m_event((iPlayableService*)this, evUser+17);
 				}	break;
 				case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 				{
@@ -2127,6 +2304,28 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			GError *err = NULL;
 			gst_message_parse_error (msg, &err, &debug);
 			eWarning("Gstreamer error: %s (%i) from %s", err->message, err->code, sourceName );
+			/* the old pipeline while the sound changes sink; and a stream the equalizer cannot decode (AAC on the receiver, there is
+			   no decoder for it in the processor): it goes on to the decoder of the receiver, nothing is told to the player */
+			if ( m_hds_egal_schimbare || (m_hds_egal_flux && ((err->domain == GST_CORE_ERROR && err->code == GST_CORE_ERROR_MISSING_PLUGIN) ||
+					(err->domain == GST_STREAM_ERROR && (err->code == GST_STREAM_ERROR_CODEC_NOT_FOUND || err->code == GST_STREAM_ERROR_DECODE)))) )
+			{
+				if ( !m_hds_egal_schimbare && eHdsEgalizator::existent() )
+				{
+					/* a bad piece of a stream is not a missing decoder: the next start of the station tries the equalizer again */
+					if ( err->domain == GST_STREAM_ERROR && err->code == GST_STREAM_ERROR_DECODE )
+						eHdsEgalizator::existent()->fluxEroareDecodare(m_ref.path);
+					else
+					{
+						bool aac = m_capuri_lipsa.find("mpegversion=(int)4") != std::string::npos ||
+							m_capuri_lipsa.find("mpegversion=(int)2") != std::string::npos;
+						eHdsEgalizator::existent()->fluxFaraDecodor(m_ref.path, aac);
+					}
+					hdsEgalReaplica();
+				}
+				g_free (debug);
+				g_error_free (err);
+				break;
+			}
 			const char *fel = "eroare";
 			int eveniment = evUser+16;
 			const std::string &lipsa = m_errorInfo.missing_codec;
@@ -2220,6 +2419,20 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				eDebug("eServiceMP3::/tmp/.id3coverart %d bytes written ", ret);
 				m_event((iPlayableService*)this, evUser+13);
 			}
+			/* a stream that prerolled without caps on its pad (see GST_MESSAGE_ASYNC_DONE): its track comes from the tags */
+			if ( m_sourceinfo.is_streaming && m_prerolled && m_audioStreams.empty() )
+			{
+				gchar *nume = NULL;
+				if ( gst_tag_list_get_string(tags, GST_TAG_AUDIO_CODEC, &nume) && nume )
+				{
+					audioStream audio;
+					audio.language_code = "und";
+					audio.codec = nume;
+					eDebug("eServiceMP3::audio stream from the tags, codec=%s", nume);
+					m_audioStreams.push_back(audio);
+				}
+				g_free (nume);
+			}
 			gst_tag_list_unref(tags);
 			m_event((iPlayableService*)this, evUpdatedInfo);
 			break;
@@ -2264,13 +2477,17 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				gchar *g_codec, *g_lang;
 				GstPad* pad = 0;
 				g_signal_emit_by_name (m_gst_playbin, "get-audio-pad", i, &pad);
-				GstCaps* caps = gst_pad_get_current_caps(pad);  /* GST1.0: gst_pad_get_negotiated_caps -> gst_pad_get_current_caps */
-				if (!caps)
-					continue;
-				GstStructure* str = gst_caps_get_structure(caps, 0);
-				const gchar *g_type = gst_structure_get_name(str);
-				audio.type = gstCheckAudioPad(str);
-				g_codec = g_strdup(g_type);
+				GstCaps* caps = pad ? gst_pad_get_current_caps(pad) : NULL;  /* GST1.0: gst_pad_get_negotiated_caps -> gst_pad_get_current_caps */
+				/* with the sink of the receiver a stream can preroll before its pad has caps: the name then comes from the tags, here
+				   or with the first tag message (GST_MESSAGE_TAG) */
+				g_codec = NULL;
+				if (caps)
+				{
+					GstStructure* str = gst_caps_get_structure(caps, 0);
+					const gchar *g_type = gst_structure_get_name(str);
+					audio.type = gstCheckAudioPad(str);
+					g_codec = g_strdup(g_type);
+				}
 				g_lang = g_strdup_printf ("und");
 				g_signal_emit_by_name (m_gst_playbin, "get-audio-tags", i, &tags);
 				if ( tags && GST_IS_TAG_LIST(tags)  /* GST1.0: gst_is_tag_list -> macro GST_IS_TAG_LIST */ )
@@ -2279,13 +2496,21 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 					gst_tag_list_get_string(tags, GST_TAG_LANGUAGE_CODE, &g_lang);
 					gst_tag_list_unref(tags);
 				}
+				if ( !g_codec && m_stream_tags )
+					gst_tag_list_get_string(m_stream_tags, GST_TAG_AUDIO_CODEC, &g_codec);
+				if ( !g_codec )
+				{
+					g_free (g_lang);
+					continue;
+				}
 				audio.language_code = std::string(g_lang);
 				audio.codec = std::string(g_codec);
 				eDebug("eServiceMP3::audio stream=%i codec=%s language=%s", i, g_codec, g_lang);
 				m_audioStreams.push_back(audio);
 				g_free (g_lang);
 				g_free (g_codec);
-				gst_caps_unref(caps);
+				if ( caps )
+					gst_caps_unref(caps);
 			}
 
 			for (i = 0; i < n_text; i++)
@@ -2323,6 +2548,7 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				g_free (g_lang);
 				g_free (g_codec);
 			}
+			hdsEgalInfo();
 			m_event((iPlayableService*)this, evUpdatedEventInfo);
 			/* the Python side (InfoBarSubtitleSupport, Components/HdsPisteLimbi.py) chooses the subtitle on
 			   evUpdatedInfo; the stream list is complete only now */
@@ -2450,7 +2676,10 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 					const gchar *name = gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory));
 					if (!strcmp(name, "souphttpsrc"))
 					{
-						m_streamingsrc_timeout->start(HTTP_TIMEOUT*1000, true);
+						/* only until the first start: HLS makes a new source for every list and segment, and a timer started after
+						   PLAYING was never stopped, so a playing channel got evEOF after 10 s */
+						if ( GST_STATE(m_gst_playbin) != GST_STATE_PLAYING )
+							m_streamingsrc_timeout->start(HTTP_PORNIRE*1000, true);
 						g_object_set (G_OBJECT (owner), "timeout", HTTP_TIMEOUT, NULL);
 						eDebug("eServiceMP3::GST_STREAM_STATUS_TYPE_CREATE -> setting timeout on %s to %is", name, HTTP_TIMEOUT);
 					}
@@ -2557,6 +2786,11 @@ void eServiceMP3::gstPoll(const Message &msg)
 		if (viu)
 			pullSubtitle();
 	}
+	else if (msg.type == 4)
+	{
+		if (viu)
+			teletextPackets();
+	}
 	else if (msg.type == 3)
 	{
 		if (viu)
@@ -2582,6 +2816,125 @@ GstFlowReturn eServiceMP3::gstCBsubtitleAvail(GstElement *appsink, gpointer user
 	++_this->m_subs_to_pull;
 	_this->m_pump.send(Message(2));
 	return GST_FLOW_OK;
+}
+
+/* ------------------------------------------------------------------ teletext in a transport stream */
+
+void eServiceMP3::gstElementAdded(GstBin *bin, GstBin *sub, GstElement *element, gpointer user_data)
+{
+	GstElementFactory *f = gst_element_get_factory(element);
+	if (f && !strcmp(GST_OBJECT_NAME(f), "tsdemux"))
+		g_signal_connect (element, "pad-added", G_CALLBACK (gstDemuxPadAdded), user_data);
+}
+
+void eServiceMP3::gstDemuxPadAdded(GstElement *element, GstPad *pad, gpointer user_data)
+{
+	GstCaps *caps = gst_pad_get_current_caps(pad);
+	bool teletext = caps && gst_caps_get_size(caps) > 0 &&
+		!strcmp(gst_structure_get_name(gst_caps_get_structure(caps, 0)), "application/x-teletext");
+	if (caps)
+		gst_caps_unref(caps);
+	if (teletext)
+		gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER, gstTeletextBuffer, user_data, NULL);
+}
+
+GstPadProbeReturn eServiceMP3::gstTeletextBuffer(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
+{
+	Poarta *poarta = (Poarta*)user_data;
+	std::lock_guard<std::mutex> lp(poarta->lacat);
+	eServiceMP3 *_this = poarta->serviciu;
+	GstBuffer *b = GST_PAD_PROBE_INFO_BUFFER(info);
+	GstMapInfo map;
+	if (!_this || !b || !gst_buffer_map(b, &map, GST_MAP_READ))
+		return GST_PAD_PROBE_OK;
+	{
+		std::lock_guard<std::mutex> l(_this->m_ttx_lock);
+		/* more than this waiting means the main thread stands: the old packets are of no use anyway */
+		if (_this->m_ttx_coada.size() < 256)
+		{
+			_this->m_ttx_coada.push_back(TeletextPacket());
+			_this->m_ttx_coada.back().pts = GST_BUFFER_PTS(b);
+			_this->m_ttx_coada.back().date.assign(map.data, map.data + map.size);
+		}
+		if (_this->m_ttx_limba.empty())
+		{
+			GstEvent *ev = gst_pad_get_sticky_event(pad, GST_EVENT_TAG, 0);
+			if (ev)
+			{
+				GstTagList *tags = NULL;
+				gchar *limba = NULL;
+				gst_event_parse_tag(ev, &tags);
+				if (tags && gst_tag_list_get_string(tags, GST_TAG_LANGUAGE_CODE, &limba) && limba)
+				{
+					_this->m_ttx_limba = limba;
+					g_free(limba);
+				}
+				gst_event_unref(ev);
+			}
+		}
+	}
+	gst_buffer_unmap(b, &map);
+	_this->m_pump.send(Message(4));
+	return GST_PAD_PROBE_OK;
+}
+
+void eServiceMP3::teletextPackets()
+{
+	std::deque<TeletextPacket> noi;
+	{
+		std::lock_guard<std::mutex> l(m_ttx_lock);
+		noi.swap(m_ttx_coada);
+	}
+	if (!m_ttx)
+	{
+		m_ttx = new eDVBTeletextParser(0);
+		m_ttx->connectNewPage(sigc::mem_fun(*this, &eServiceMP3::teletextPage), m_ttx_connection);
+	}
+	size_t inainte = m_ttx->m_found_subtitle_pages.size();
+	for (std::deque<TeletextPacket>::iterator it = noi.begin(); it != noi.end(); ++it)
+	{
+		/* the parser takes whole PES packets and tsdemux gives their payload: a header with the time of the buffer, 0x24 bytes long,
+		   the size the parser skips */
+		pts_t pts = it->pts / 11111L;
+		std::vector<__u8> pes(9 + 0x24 + it->date.size(), 0xFF);
+		static const __u8 inceput[9] = { 0x00, 0x00, 0x01, 0xBD, 0x00, 0x00, 0x80, 0x80, 0x24 };
+		memcpy(&pes[0], inceput, 9);
+		pes[9] = 0x21 | ((pts >> 29) & 0x0E);
+		pes[10] = (pts >> 22) & 0xFF;
+		pes[11] = ((pts >> 14) & 0xFE) | 1;
+		pes[12] = (pts >> 7) & 0xFF;
+		pes[13] = ((pts << 1) & 0xFE) | 1;
+		if (!it->date.empty())
+			memcpy(&pes[9 + 0x24], &it->date[0], it->date.size());
+		m_ttx->feed(&pes[0], (int)pes.size());
+	}
+	/* a page found later: the menu and the choice by language (Components/HdsPisteLimbi.py) find out */
+	if (m_ttx->m_found_subtitle_pages.size() != inainte)
+		m_event((iPlayableService*)this, evUpdatedInfo);
+	if (!m_subtitle_pages.empty() && !m_subtitle_sync_timer->isActive())
+		pushSubtitles();
+}
+
+void eServiceMP3::teletextPage(const eDVBTeletextSubtitlePage &p)
+{
+	if (m_ttx_activ < 0)
+		return;
+	/* as a text page: the translation and the fonts of the other text subtitles apply to it */
+	SubtitlePage page;
+	page.type = SubtitlePage::Pango;
+	for (unsigned int i = 0; i < p.m_elements.size(); ++i)
+		if (!p.m_elements[i].m_text.empty())
+			page.pango_page.m_elements.push_back(ePangoSubtitlePageElement(p.m_elements[i].m_color, p.m_elements[i].m_text));
+	page.pango_page.m_show_pts = p.m_pts;
+	page.pango_page.m_timeout = p.m_timeout / 90;
+	m_subtitle_pages.push_back(page);
+}
+
+void eServiceMP3::teletextOff()
+{
+	if (m_ttx)
+		m_ttx->setPageAndMagazine(-1, -1);
+	m_ttx_activ = -1;
 }
 
 void eServiceMP3::gstTextpadHasCAPS(GstPad *pad, GParamSpec * unused, gpointer user_data)
@@ -2789,7 +3142,7 @@ void eServiceMP3::pullSubtitle()
 		   (at most MAX_PAGINI), so the text branch never holds the demuxer back. While a subtitle file is shown, the
 		   pages of the container stream are dropped at once. */
 		static const unsigned int MAX_PAGINI = 32;
-		bool arunca = m_external_active >= 0;
+		bool arunca = m_external_active >= 0 || m_ttx_activ >= 0;
 		while (arunca || m_subtitle_pages.size() < MAX_PAGINI)
 		{
 			GstBuffer *buffer = NULL;
@@ -2823,6 +3176,8 @@ void eServiceMP3::pullSubtitle()
 					tip = stVOB;
 				else if (nume_caps && !strcmp(nume_caps, "subpicture/x-pgs"))
 					tip = stPGS;
+				else if (nume_caps && !strcmp(nume_caps, "subpicture/x-dvb"))
+					tip = stDVB;
 				else if (nume_caps && !strcmp(nume_caps, "application/x-subtitle-unknown"))
 					tip = felNecunoscut(gst_caps_get_structure(caps_mostra, 0), &webvtt_matroska);
 				else if (!nume_caps && m_currentSubtitleStream >= 0 && m_currentSubtitleStream < (int)m_subtitleStreams.size())
@@ -2904,6 +3259,28 @@ void eServiceMP3::pullSubtitle()
 						for (unsigned int k = 0; k < pagini.size(); ++k)
 							pagesFromPicture(pagini[k], buf_pos, duration_ns);
 					}
+					else if ( tip == stDVB )
+					{
+						if (!m_dvbsub || m_dvbsub_stream != m_currentSubtitleStream)
+						{
+							m_dvbsub = new eDVBSubtitleParser(0);
+							m_dvbsub->connectNewPage(sigc::mem_fun(*this, &eServiceMP3::dvbSubtitlePage), m_dvbsub_connection);
+							m_dvbsub_stream = m_currentSubtitleStream;
+						}
+						/* the parser takes whole PES packets and tsdemux gives their payload: a header with the time of the
+						   buffer, in the same clock as the other pictures */
+						pts_t pts = buf_pos / 11111L;
+						std::vector<__u8> pes(14 + len);
+						static const __u8 inceput[9] = { 0x00, 0x00, 0x01, 0xBD, 0x00, 0x00, 0x80, 0x80, 0x05 };
+						memcpy(&pes[0], inceput, 9);
+						pes[9] = 0x21 | ((pts >> 29) & 0x0E);
+						pes[10] = (pts >> 22) & 0xFF;
+						pes[11] = ((pts >> 14) & 0xFE) | 1;
+						pes[12] = (pts >> 7) & 0xFF;
+						pes[13] = ((pts << 1) & 0xFE) | 1;
+						memcpy(&pes[14], map.data, len);
+						m_dvbsub->feed(&pes[0], (int)pes.size());
+					}
 					else
 					{
 						eDebug("unsupported subpicture... ignoring");
@@ -2972,15 +3349,33 @@ void eServiceMP3::pagesFromPicture(const eHdsPaginaImagine &p, gint64 pts_ns, gi
 		gol.dvb_timeout = 0;
 		noi.push_back(gol);
 	}
+	pagesIntoQueue(noi);
+}
+
+/* A page of a DVB subtitle stream, from the parser (called from pullSubtitle): it comes with its regions, or without any when
+   the page before it must go. It stays until the next page, as on the channels. */
+void eServiceMP3::dvbSubtitlePage(const eDVBSubtitlePage &p)
+{
+	SubtitlePage pagina;
+	pagina.type = SubtitlePage::Dvb;
+	pagina.dvb_page = p;
+	pagina.dvb_timeout = 0;
+	std::vector<SubtitlePage> noi;
+	noi.push_back(pagina);
+	pagesIntoQueue(noi);
+}
+
+void eServiceMP3::pagesIntoQueue(const std::vector<SubtitlePage> &noi)
+{
 	/* OCR: the picture goes to the recognition now, before its time, so that its text can be ready when it is shown
 	   (as on the channels, eDVBServicePlay::newDVBSubtitlePage); setPage finds it again by its time and pictures */
-	if (m_subtitle_widget && !pagina.dvb_page.m_regions.empty())
+	if (m_subtitle_widget && !noi.empty() && !noi[0].dvb_page.m_regions.empty())
 	{
 		pts_t acum = 0;
 		int ms = 0;
 		if (getPlayPosition(acum) == 0)
-			ms = (int)((pagina.dvb_page.m_show_time + (pts_t)m_subtitle_delay_ms * 90 - acum) / 90);
-		m_subtitle_widget->prefetchPage(pagina.dvb_page, ms > 0 ? ms : 0);
+			ms = (int)((noi[0].dvb_page.m_show_time + (pts_t)m_subtitle_delay_ms * 90 - acum) / 90);
+		m_subtitle_widget->prefetchPage(noi[0].dvb_page, ms > 0 ? ms : 0);
 	}
 	for (unsigned int k = 0; k < noi.size(); ++k)
 	{
@@ -3511,7 +3906,25 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 		/* No m_subs_to_pull_lock around g_object_set: the pages are handled on this thread only (pullSubtitle), the
 		   lock guards the counter, and holding it while playbin switches the stream can stop both sides (see seekTo).
 		   Pages of the old stream still queued are read by the type in their own caps and dropped as late. */
-		if (pid >= 100)
+		teletextOff();
+		if (pid >= PISTA_TELETEXT && pid < 100)
+		{
+			/* a teletext page: the pipeline is not touched */
+			if (!m_ttx || pid - PISTA_TELETEXT >= (int)m_ttx->m_found_subtitle_pages.size())
+			{
+				eDebug("eServiceMP3::enableSubtitles no teletext page %d", pid - PISTA_TELETEXT);
+				return -1;
+			}
+			std::set<eDVBServicePMTHandler::subtitleStream>::iterator pagina = m_ttx->m_found_subtitle_pages.begin();
+			std::advance(pagina, pid - PISTA_TELETEXT);
+			m_ttx->setPageAndMagazine(pagina->teletext_page_number, pagina->teletext_magazine_number);
+			m_ttx_activ = pid;
+			m_external_active = -1;
+			m_external_timer->stop();
+			m_subtitle_pages.clear();
+			m_subtitle_sync_timer->stop();
+		}
+		else if (pid >= 100)
 		{
 			/* a file next to the film: the pipeline is not touched */
 			if (pid - 100 >= (int)m_external_subtitles.size())
@@ -3533,6 +3946,7 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 				m_pgs.reset();
 				m_pgs_stream = pid;
 				m_vobsub_stream = -1;
+				m_dvbsub_stream = -1;
 				g_object_set (G_OBJECT (m_gst_playbin), "current-text", pid, NULL);
 				eDebug ("eServiceMP3::enableSubtitles g_object_set current-text = %i", pid);
 				/* what the appsink still holds came from the old stream */
@@ -3594,6 +4008,7 @@ RESULT eServiceMP3::disableSubtitles(eWidget *parent)
 	m_external_timer->stop();
 	m_external_shown.clear();
 	m_page_end_pts = -1;
+	teletextOff();
 	delete m_subtitle_widget;
 	m_subtitle_widget = 0;
 	return 0;
@@ -3632,6 +4047,27 @@ PyObject *eServiceMP3::getSubtitleList()
 		}
 		}
 		stream_idx++;
+	}
+	/* the teletext subtitle pages: (2, 50 + index, stTeletext, magazine * 256 + page, language) */
+	if (m_ttx)
+	{
+		int k = 0;
+		for (std::set<eDVBServicePMTHandler::subtitleStream>::iterator it = m_ttx->m_found_subtitle_pages.begin(); it != m_ttx->m_found_subtitle_pages.end(); ++it, ++k)
+		{
+			std::string limba;
+			{
+				std::lock_guard<std::mutex> b(m_ttx_lock);
+				limba = m_ttx_limba;
+			}
+			ePyObject tuple = PyTuple_New(5);
+			PyTuple_SET_ITEM(tuple, 0, PyLong_FromLong(2));
+			PyTuple_SET_ITEM(tuple, 1, PyLong_FromLong(PISTA_TELETEXT + k));
+			PyTuple_SET_ITEM(tuple, 2, PyLong_FromLong(int(stTeletext)));
+			PyTuple_SET_ITEM(tuple, 3, PyLong_FromLong(it->teletext_magazine_number * 256 + it->teletext_page_number));
+			PyTuple_SET_ITEM(tuple, 4, PyUnicode_FromString(limba.empty() ? "und" : limba.c_str()));
+			PyList_Append(l, tuple);
+			Py_DECREF(tuple);
+		}
 	}
 	/* the files next to the film: (2, 100 + index, type, 0, language, for the deaf, name) */
 	for (unsigned int i = 0; i < m_external_subtitles.size(); ++i)

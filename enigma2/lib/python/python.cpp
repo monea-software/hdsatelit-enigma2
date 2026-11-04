@@ -7,6 +7,7 @@ extern "C" PyObject *PyInit__enigma(void);
 extern "C" void eBaseInit(void);
 extern "C" void eConsoleInit(void);
 extern void bsodFatal(const char *component);
+extern std::string bsodLogBuffer();
 
 #define SKIP_PART2
 #include <lib/python/python.h>
@@ -210,6 +211,81 @@ int ePython::execute(const std::string &pythonfile, const std::string &funcname)
 	return 0;
 }
 
+/*
+ * HDSatelit: an exception that comes out of a Python function called from C++ (a timer, a key, the output of a console
+ * program) restarted the user interface (bsodFatal), also when it came from a plugin the user installed.
+ * Components.HdsPluginExtern.trateaza(type, value, traceback, call, log) looks at the traceback: the name of the
+ * external plugin when a frame is in one (the crash log, the report and the short message are its work), otherwise
+ * None. call is the "(PyObject_CallObject(...) failed)" line written below, log the end of the log before the error
+ * (for the report). The exception is put back as it was, for PyErr_Print. A missing module or an error in it leaves
+ * everything as before.
+ */
+static std::string hdsPluginExtern(ePyObject pFunc, ePyObject pArgs)
+{
+	std::string name;
+#if PY_VERSION_HEX >= 0x030C0000
+	PyObject *value = PyErr_GetRaisedException();
+	if (!value)
+		return name;
+	PyObject *type = (PyObject *)Py_TYPE(value);
+	PyObject *tb = PyException_GetTraceback(value);
+#else
+	PyObject *type = NULL, *value = NULL, *tb = NULL;
+	PyErr_Fetch(&type, &value, &tb);
+	if (!type)
+		return name;
+	PyErr_NormalizeException(&type, &value, &tb);
+	if (tb && value)
+		PyException_SetTraceback(value, tb);
+#endif
+	/* with no exception set, as PyObject_Str needs; the texts of the line written by ePython::call */
+	PyObject *funcStr = PyObject_Str(pFunc);
+	PyObject *argStr = funcStr ? PyObject_Str(pArgs) : NULL;
+	const char *funcText = funcStr ? PyUnicode_AsUTF8(funcStr) : NULL;
+	const char *argText = argStr ? PyUnicode_AsUTF8(argStr) : NULL;
+	PyErr_Clear();
+	std::string call = std::string("(PyObject_CallObject(") + (funcText ? funcText : "?") + "," + (argText ? argText : "?")
+		+ ") failed)";
+	if (argStr)
+		Org_Py_DECREF(argStr);
+	if (funcStr)
+		Org_Py_DECREF(funcStr);
+	std::string log = bsodLogBuffer();
+	PyObject *callObj = PyUnicode_DecodeUTF8(call.c_str(), (Py_ssize_t)call.size(), "replace");
+	PyObject *logObj = PyUnicode_DecodeUTF8(log.c_str(), (Py_ssize_t)log.size(), "replace");
+	PyObject *module = (callObj && logObj) ? PyImport_ImportModule("Components.HdsPluginExtern") : NULL;
+	PyObject *result = module ? PyObject_CallMethod(module, "trateaza", "OOOOO", type, value ? value : Py_None,
+		tb ? tb : Py_None, callObj, logObj) : NULL;
+	if (result && PyUnicode_Check(result))
+	{
+		const char *text = PyUnicode_AsUTF8(result);
+		if (text)
+			name = text;
+	}
+	if (PyErr_Occurred())
+	{
+		eDebug("[ePython] Components.HdsPluginExtern did not decide, the error is handled as before:");
+		PyErr_Print();
+		name.clear();
+	}
+	if (result)
+		Org_Py_DECREF(result);
+	if (module)
+		Org_Py_DECREF(module);
+	if (logObj)
+		Org_Py_DECREF(logObj);
+	if (callObj)
+		Org_Py_DECREF(callObj);
+#if PY_VERSION_HEX >= 0x030C0000
+	if (tb)
+		Org_Py_DECREF(tb);
+	PyErr_SetRaisedException(value);
+#else
+	PyErr_Restore(type, value, tb);
+#endif
+	return name;
+}
+
 int ePython::call(ePyObject pFunc, ePyObject pArgs)
 {
 	int res = -1;
@@ -226,12 +302,22 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
 			Py_DECREF(pValue);
 		} else
 		{
+			std::string plugin = hdsPluginExtern(pFunc, pArgs);
 		 	PyErr_Print();
 			ePyObject FuncStr = PyObject_Str(pFunc);
 			ePyObject ArgStr = PyObject_Str(pArgs);
 		 	eDebug("(PyObject_CallObject(%s,%s) failed)", PyUnicode_AsUTF8(FuncStr), PyUnicode_AsUTF8(ArgStr));
 			Py_DECREF(FuncStr);
 			Py_DECREF(ArgStr);
+			/* HDSatelit: an error in an external plugin: the traceback is in the log, the user interface goes on */
+			if (!plugin.empty())
+			{
+				eDebug("[ePython] error in the external plugin %s: no restart of the user interface", plugin.c_str());
+				/* nothing may stay set for the next call into Python */
+				if (PyErr_Occurred())
+					PyErr_Clear();
+				return res;
+			}
 		 	bsodFatal(0);
 		}
 	}

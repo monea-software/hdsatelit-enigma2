@@ -30,7 +30,7 @@ class PluginDownloadBrowser(HdsExtensii):
 	REMOVE = 1
 
 	def __init__(self, session, type=0):
-		HdsExtensii.__init__(self, session, fila='extensions' if type == self.DOWNLOAD else 'instalate')
+		HdsExtensii.__init__(self, session, fila='disponibile' if type == self.DOWNLOAD else 'instalate')
 
 
 language.addCallback(languageChanged)

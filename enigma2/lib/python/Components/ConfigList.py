@@ -134,6 +134,9 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 	def postWidgetCreate(self, instance):
 		instance.selectionChanged.get().append(self.selectionChanged)
 		instance.setContent(self.l)
+		if hasattr(instance, "setScrollMargin"):
+			from Components.Renderer.Listbox import margineDerulare  # aici, nu la incarcare: ConfigList se incarca si fara GUI
+			instance.setScrollMargin(margineDerulare())
 	
 	def preWidgetRemove(self, instance):
 		if isinstance(self.current,tuple) and len(self.current) >= 2:

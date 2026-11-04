@@ -392,6 +392,11 @@ class HdsTelecomenzi(Screen):
 
 	# ------------------------------------------------------------------ afișaj
 
+	def _puneTitlu(self, text):
+		"""Titlul ecranului: al lui, in tema Clasic, si cel din bara temei, in Pro"""
+		self['titlu'].setText(text)
+		self.setTitle(text)
+
 	def _culori(self, rosu='', verde='', galben='', albastru=''):
 		"""Butoanele colorate de jos; cele fără rost acum nu se arată."""
 		for nume, text in (('key_red', rosu), ('key_green', verde), ('key_yellow', galben), ('key_blue', albastru)):
@@ -400,6 +405,7 @@ class HdsTelecomenzi(Screen):
 				self[nume].show()
 			else:
 				self[nume].hide()
+		MT.semneTaste(self)
 
 	def _vizibil(self, lista):
 		for nume in ('lista', 'mare', 'detalii', 'istoric'):
@@ -427,7 +433,7 @@ class HdsTelecomenzi(Screen):
 		self.aprinse, self.semne, self.cerut = set(), set(), None
 		self.asteapta_continuare = self.intrebare_proba = False
 		self.contor_ir = None
-		self['titlu'].setText(_('Telecomenzi'))
+		self._puneTitlu(_('Telecomenzi'))
 		randuri = [self._rand(RAND_CITITOR, _('Cititor de coduri'))]
 		if self.proba is not None and self.proba.verificate:
 			# proba începută se reia de unde a rămas; „Începe din nou” o pornește de la zero (revizia, P28)
@@ -513,7 +519,7 @@ class HdsTelecomenzi(Screen):
 		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE) if os.path.exists(self.cale_ir) else None
 		self.ir_aratat = 0
 		self.ev_cititor = None
-		self['titlu'].setText(_('Cititor de coduri'))
+		self._puneTitlu(_('Cititor de coduri'))
 		self['mare'].setText(_('Apasă orice buton.'))
 		self['detalii'].setText(_('Tastele nu fac nimic cât e deschis cititorul; se arată numai codul lor.'))
 		self['istoric'].setText('')
@@ -532,7 +538,7 @@ class HdsTelecomenzi(Screen):
 			self.proba = D.Proba()
 		self.aprinse = set()
 		self.semne = set(self.proba.verificate)
-		self['titlu'].setText(_('Proba tastelor'))
+		self._puneTitlu(_('Proba tastelor'))
 		self._vizibil(False)
 		self['istoric'].setText('')
 		self._culori()
@@ -636,7 +642,7 @@ class HdsTelecomenzi(Screen):
 		# semnalele IR pe care receptorul nu le folosește, cât se așteaptă prima tastă
 		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE) if os.path.exists(self.cale_ir) else None
 		self.ir_aratat = 0
-		self['titlu'].setText(_('Asociază o telecomandă nouă'))
+		self._puneTitlu(_('Asociază o telecomandă nouă'))
 		self._vizibil(False)
 		self['istoric'].setText('')
 		self['mare'].setText(_('Apasă orice buton pe telecomanda nouă.'))
@@ -979,7 +985,7 @@ class HdsTelecomenzi(Screen):
 			return
 		self.mod = TASTE
 		self.telecomanda_taste = t
-		self['titlu'].setText(t['nume'])
+		self._puneTitlu(t['nume'])
 		randuri = []
 		for cod, tinta in sorted(t['taste'].items(), key=lambda kv: D.ORDINE_ASOCIERE.index(D.DUPA_COD[kv[1]][0])):
 			b = D.DUPA_COD[tinta]

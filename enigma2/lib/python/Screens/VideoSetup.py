@@ -103,6 +103,7 @@ class ModeQuestion(MessageBox):
 	files have no screen named ModeQuestion, and without a skin the window would be empty (only the timer runs)."""
 
 	countdown = None
+	secundeInText = True
 
 	def __init__(self, session, text, *args, **kwargs):
 		self.question = text.split("\n")[0]

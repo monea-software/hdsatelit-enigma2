@@ -39,7 +39,12 @@ void eSocketNotifier::stop()
 	if (state)
 	{
 		state=0;
-		context.removeSocketNotifier(this);
+		/*
+		 * o bucla distrusa nu mai are harta notificatoarelor: la iesire, obiectele Python care tin un notificator
+		 * se elibereaza la Py_Finalize, dupa eMain (bucla principala, pe stiva lui main)
+		 */
+		if (eMainloop::isValid(&context))
+			context.removeSocketNotifier(this);
 	}
 }
 
@@ -86,7 +91,9 @@ void eTimer::stop()
 	if (bActive)
 	{
 		bActive=false;
-		context.removeTimer(this);
+		/* ca la eSocketNotifier::stop: dupa ce bucla a fost distrusa nu mai are lista temporizatoarelor */
+		if (eMainloop::isValid(&context))
+			context.removeTimer(this);
 	}
 }
 
@@ -131,11 +138,23 @@ bool eMainloop::isValid(eMainloop *ml)
 
 eMainloop::~eMainloop()
 {
-	existing_loops.remove(this);
-	for (std::map<int, eSocketNotifier*>::iterator it(notifiers.begin());it != notifiers.end();++it)
-		it->second->stop();
+	/*
+	 * stop() scoate notificatorul din harta: iteratorul lui ar ramane spre un nod eliberat (++it pe el sarea peste
+	 * notificatoare si le lasa pornite, cu o bucla moarta). Se ia mereu primul, cat timp harta nu e goala; stop()
+	 * gaseste inca bucla in existing_loops, deci il scoate din harta.
+	 */
+	while (!notifiers.empty())
+	{
+		std::map<int, eSocketNotifier*>::iterator it(notifiers.begin());
+		eSocketNotifier *sn = it->second;
+		size_t inainte = notifiers.size();
+		sn->stop();
+		if (notifiers.size() == inainte)
+			notifiers.erase(it);
+	}
 	while(m_timer_list.begin() != m_timer_list.end())
 		m_timer_list.begin()->stop();
+	existing_loops.remove(this);
 }
 
 void eMainloop::addSocketNotifier(eSocketNotifier *sn)

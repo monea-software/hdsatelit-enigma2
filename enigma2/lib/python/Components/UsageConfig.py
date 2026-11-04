@@ -127,6 +127,11 @@ def InitUsageConfig():
 		("radio", N_("Sus lista radio, jos lista TV")), ("tv_radio", N_("Sus lista TV, jos lista radio")),
 		("tv", N_("Ambele deschid lista TV")), ("radio_radio", N_("Ambele deschid lista radio")),
 		("zap", N_("Schimbă canalul (sus: următorul)"))])
+	# HDSatelit: cum se misca meniurile, listele de alegere si ecranele de setari la marginea ecranului (Components/Renderer/
+	# Listbox.py, margineDerulare -> eListbox.setScrollMargin): rand cu rand, cu doua randuri vazute sub cursor (implicit),
+	# sau pagina cu pagina, ca inainte; lista de canale si ghidul raman pe pagini. Se aplica meniurilor deschise dupa schimbare
+	config.usage.hds_derulare_liste = ConfigSelection(default = "rand", choices = [
+		("rand", N_("Rând cu rând")), ("pagina", N_("Pagină cu pagină"))])
 	# HDSatelit: semnele din dreapta randului in lista de canale (lib/service/listboxservice.cpp, serviceMarks; aplicate in
 	# Components/ServiceList.py, hdsSemne): $ la canalele codate si sursa canalului (satelit, cablu, terestru)
 	config.usage.hds_semne_lista = ConfigSelection(default = "ambele", choices = [
@@ -225,6 +230,13 @@ def InitUsageConfig():
 	config.misc.acces_streamrelay_url = ConfigText(default = "http://127.0.0.1:17999")
 	config.misc.acces_streamrelay_port = ConfigNumber(default = 17999)
 	config.misc.acces_streamrelay_delay = ConfigNumber(default = 50)
+	# 0.7.0 (Stream Relay, Components/HdsStreamRelay.py): adresa releului se scrie si din web (/setari?id=hds_stream_relay;
+	# setari_web.py o primeste numai cu web_text_max)
+	config.misc.acces_streamrelay_url.web_text_max = 64
+	# 0.7.0: fluxurile canalelor (serverul 8001, Hds/DabT2/server8001.py) si pentru
+	# alte aparate din reteaua de acasa (un releu Stream Relay de pe alt receptor); oprita: numai 127.0.0.1, ca pana acum.
+	# Pornita: numai adresele private (192.168.x.x, 10.x.x.x, 172.16-31.x.x), niciodata din internet.
+	config.misc.hds_fluxuri_retea_acasa = ConfigYesNo(default=False)
 	_mutaSetarileVechi()
 
 	config.seek = ConfigSubsection()

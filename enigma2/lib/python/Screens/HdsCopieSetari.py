@@ -201,7 +201,8 @@ class HdsCopieSetariScreen(Screen):
 			if self._cauta:
 				return _("Se caută stickurile, discurile și copiile de pe ele…")
 			return _("Bagă un stick USB sau un disc în receptor, apoi alege „Caută din nou”.")
-		return (_("Copia merge pe %s: canalele, buchetele, listele DAB+ și DVB-T2, setările, rețeaua și Wi-Fi, "
+		return (_("Copia merge pe %s: canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, "
+			"favoritele și țara de la radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, "
 			"cheile SSH și modulele de acces condiționat.") % m["nume"]) + "\n" + C.text_avertisment()
 
 	def _ajutor(self):

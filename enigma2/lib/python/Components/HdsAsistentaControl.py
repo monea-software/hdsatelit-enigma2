@@ -61,7 +61,7 @@ TEXT_MAXIM = 200
 
 # ecranele private, dupa clasa (numele exact) si dupa tipar (clasa sau modul)
 CLASE_PRIVATE = frozenset((
-	"CamSetup", "CamInfo",
+	"CamSetup", "CamInfo", "IptvDateAcces",
 ))
 MODULE_PRIVATE = frozenset((
 	"Screens.CamSetup", "Screens.CamInfo", "Screens.Ci",
@@ -76,6 +76,8 @@ _SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass
 	r"chei[ae]|api[ _.-]?key|key(?:\b|[._0-9])|(?:^|[._\s])pin(?:\b|[._0-9])|servicepin|setuppin|"
 	r"auth|cookie|cod[ _.-]?(?:de[ _.-]?)?asociere)")
 _URL_PAROLA = re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^\s/@]*(@)")
+# adresa unui canal de la un furnizor are contul in cale: /live/<utilizator>/<parola>/<id>.ts (Components/HdsIptvClient.py)
+_URL_CALE_CONT = re.compile(r"(?i)(://[^/\s]+/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/")
 _URL_PARAMETRU = re.compile(r"([?&;])([^=&#;\s]+)=([^&#;\s]*)")
 _ATRIBUIRE = re.compile(r"^([^=:|\n]+)(\s*[=:|]\s*)(.*)$")
 _SECRET_JURNAL = re.compile(r"(?i)(\b(?:password|passwd|passphrase|parol[ăa]|psk|token|secret|pwd|pass|pin|key|"
@@ -95,6 +97,7 @@ def mascheazaSecrete(text):
 	randuri = []
 	for rand in (text or "").splitlines():
 		rand = _URL_PAROLA.sub(r"\1***\2", rand)
+		rand = _URL_CALE_CONT.sub(r"\1***/***/", rand)
 		rand = _URL_PARAMETRU.sub(lambda m: m.group(1) + m.group(2) + "=***"
 			if cheieSecreta(unquote(m.group(2))) or m.group(2).lower() in ("pw", "sid", "sessionid", "sig", "signature")
 			else m.group(0), rand)
@@ -839,7 +842,7 @@ SETARI_SCRIERE = (
 	"config.Nims.", "config.timezone.", "config.epg.", "config.recording.", "config.network.",
 )
 SETARI_OPRITE = re.compile(r"(?i)(pass|pwd|parola|psk|secret|token|key|pin|auth|login|user|card|cam|mail|email|nume|"
-	r"name|ssid|wpa|wlan|hdswebcontrol|hds_beta)")
+	r"name|ssid|wpa|wlan|hdswebcontrol|hds_beta|mount|nfs|cifs|smb|iptv)")
 _CHEIE = re.compile(r"^config(\.[A-Za-z0-9_]{1,40}){1,8}$")
 
 

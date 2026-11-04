@@ -1683,6 +1683,10 @@ class VerificareZilnica(object):
 			tine_minte_indexurile(self.radacina, canal, baza_feed or img['baza'], stare)
 			text, cheie = text_anunt(stare, img)
 			c = config_actualizari()
+			# o versiune noua are fereastra ei pe ecranul obisnuit (Components/HdsImagineOnline.py); ramane anuntul pentru
+			# imaginea noua, cand lista imaginilor nu are una pentru acest receptor
+			if FEREASTRA_ACTIVA and not stare.get('imagine_noua'):
+				text = None
 			if text and cheie != c.anuntat.value:
 				c.anuntat.value = cheie
 				c.anuntat.save()
@@ -1697,6 +1701,7 @@ class VerificareZilnica(object):
 
 
 _verificare = []
+FEREASTRA_ACTIVA = False
 
 
 def porneste():

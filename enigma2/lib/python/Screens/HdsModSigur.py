@@ -49,16 +49,17 @@ PAUZA_REPORNIRE_MS = 1500
 CULORI = {
 	"titlu": ("hdsBrandLight", 0x9FB4FF),
 	"eticheta": ("hdsLabel", 0xAEB9CC),
+	"cartela": ("hdsCell", 0x282D3F),
 	M.NORMAL: ("hdsText", 0xF2F4F8),
 	M.BUN: ("hdsGood", 0x4FD18B),
 	M.ATENTIE: ("hdsAmber", 0xF5B83D),
 	M.RAU: ("hdsBad", 0xFF6B5E),
 	M.STINS: ("hdsDisabled", 0x8A94A6),
 }
-# randurile alegerilor: textul pe fundalul listei si pe banda aleasa (chihlimbar); randul care nu se poate alege are
+# randurile alegerilor: textul pe fundalul listei si pe banda aleasa (albastrul temei); randul care nu se poate alege are
 # banda lui, gri, si textul deschis, ca sa nu arate ca o alegere buna cand cursorul e pe el
 CULOARE_ALEGERE = 0xF2F4F8
-CULOARE_ALEGERE_ALEASA = 0x101828
+CULOARE_ALEGERE_ALEASA = 0xFFFFFF
 BANDA_STINSA = 0x3A4458
 CULOARE_STINSA_ALEASA = 0xC9D2E3
 
@@ -126,7 +127,7 @@ def skinEcran(latime, inaltime):
 		<eLabel position="%(mx)d,%(ly)d" size="%(cl)d,%(linie)d" backgroundColor="#00f5b83d" zPosition="1" />
 		<widget source="mesaj" render="Label" position="%(mx)d,%(my)d" size="%(cl)d,%(mh)d" font="Regular;%(mf)d" halign="left" valign="top" foregroundColor="#00ffffff" backgroundColor="#00101828" transparent="1" zPosition="1" />
 		<widget source="explicatie" render="Label" position="%(mx)d,%(ey)d" size="%(cl)d,%(eh)d" font="Regular;%(ef)d" halign="left" valign="top" foregroundColor="#00d4dae4" backgroundColor="#00101828" transparent="1" zPosition="1" />
-		<widget name="alegeri" position="%(mx)d,%(ay)d" size="%(al)d,%(ah)d" itemHeight="%(ai)d" backgroundColor="#00182236" backgroundColorSelected="#00f5b83d" scrollbarMode="showNever" transparent="0" zPosition="1" />
+		<widget name="alegeri" position="%(mx)d,%(ay)d" size="%(al)d,%(ah)d" itemHeight="%(ai)d" backgroundColor="#00182236" backgroundColorSelected="#00374ea1" scrollbarMode="showNever" transparent="0" zPosition="1" />
 		<widget source="descriere" render="Label" position="%(mx)d,%(dy)d" size="%(cl)d,%(dh)d" font="Regular;%(ef)d" halign="left" valign="top" foregroundColor="#00f2f4f8" backgroundColor="#00101828" transparent="1" zPosition="1" />
 		<widget source="nota" render="Label" position="%(mx)d,%(ny)d" size="%(cl)d,%(nh)d" font="Regular;%(nf)d" halign="left" valign="top" foregroundColor="#00aab4c4" backgroundColor="#00101828" transparent="1" zPosition="1" />
 	</screen>""" % {
@@ -220,7 +221,7 @@ class HdsModSigur(Screen):
 		for cheie, titlu, _desc, se_poate in self.optiuni:
 			rand = [cheie]
 			if not se_poate:
-				# banda gri pe tot randul, peste banda chihlimbar a listei, numai cand cursorul e pe el
+				# banda gri pe tot randul, peste banda aleasa a listei, numai cand cursorul e pe el
 				rand.append(MultiContentEntryText(pos=(0, 0), size=(w, y(72)), font=0, text="", backcolor_sel=BANDA_STINSA))
 			rand.append(MultiContentEntryText(pos=(x(28), 0), size=(w - x(56), y(72)), font=0,
 				flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=titlu, color=CULOARE_ALEGERE if se_poate else stins,
@@ -383,7 +384,7 @@ class HdsModSigurDetalii(Screen):
 		except Exception:
 			self.latime = self.x(1680)
 		self.c = dict((k, _culoare(k)) for k in CULORI)
-		lista.setList([self._intrare(r) for r in M.randuri(M.stare())])
+		lista.setList(self._randuri(M.randuri(M.stare())))
 		self["brut"].hide()
 		self._nota()
 
@@ -395,23 +396,34 @@ class HdsModSigurDetalii(Screen):
 		return MultiContentEntryText(pos=(x, d), size=(w, h - d), font=font, flags=RT_HALIGN_LEFT | RT_VALIGN_TOP,
 			text=text, color=culoare, color_sel=culoare)
 
+	def _randuri(self, randuri):
+		"""Randurile listei: fiecare grupa, de la titlul ei, sta intr-o cartela; intre cartele, un rand gol."""
+		rez = []
+		for r in randuri:
+			if r[0] == "titlu" and rez:
+				# si randul gol se poate alege: lista se deruleaza cu Sus si Jos numai peste randuri cu cheie
+				rez.append(["spatiu"])
+			rez.append(self._intrare(r))
+		return rez
+
 	def _intrare(self, r):
 		c, w = self.c, self.latime
 		le = int(w * 0.30)
+		fond = MultiContentEntryText(pos=(0, 0), size=(w, self.rand), font=0, text="", backcolor=c["cartela"], backcolor_sel=c["cartela"])
 		# primul element e cheia randului: un rand cu None nu se poate alege, iar lista fara randuri de ales nu se
 		# deruleaza cu pageUp/pageDown (banda aleasa are culoarea fundalului, deci nu se vede)
 		if r[0] == "titlu":
-			return [r[0], self._text(0, w, 0, r[1], c["titlu"])]
+			return [r[0], fond, self._text(self.x(20), w - self.x(40), 0, r[1], c["titlu"])]
 		# valorile raman intregi: un rand care nu incape deruleaza (lib/gui/elabel.h)
 		if r[0] == "linie":
 			# un element al listei de deasupra (o extensie oprita), in coloana valorilor
-			return [r[0], self._text(le, w - le, 1, r[1] or "", c[M.NORMAL])]
+			return [r[0], fond, self._text(le, w - le, 1, r[1] or "", c[M.NORMAL])]
 		if r[0] == "nota":
-			return [r[0], self._text(le, w - le, 2, r[1] or "", c["eticheta"])]
+			return [r[0], fond, self._text(le, w - le, 2, r[1] or "", c["eticheta"])]
 		_fel, eticheta, valoare, ton = r
 		culoare = c.get(ton, c[M.NORMAL])
-		return [r[0],
-			self._text(self.x(20), le - self.x(28), 1, eticheta, c["eticheta"]),
+		return [r[0], fond,
+			self._text(self.x(36), le - self.x(44), 1, eticheta, c["eticheta"]),
 			self._text(le, w - le, 1, valoare or "", culoare),
 		]
 

@@ -45,6 +45,21 @@ from RecordTimer import RecordTimerEntry, RecordTimer
 # hack alert!
 from .Menu import MainMenu, mdom
 
+
+class _StreamRelayLaCerere(object):
+	"""HDSatelit 0.7.0: `streamrelay`, numele sub care pluginurile si interfetele web scrise pentru alte imagini cauta
+	Stream Relay (checkService, streamrelayChecker, reload, toggle, data). Modulul (Components/HdsStreamRelay.py) se
+	incarca abia la prima folosire a unui nume, deci importul acestui fisier nu costa nimic in plus."""
+
+	def __getattr__(self, nume):
+		if nume.startswith("__"):
+			raise AttributeError(nume)
+		from Components import HdsStreamRelay
+		return getattr(HdsStreamRelay.releu(), nume)
+
+
+streamrelay = _StreamRelayLaCerere()
+
 class InfoBarDish:
 	def __init__(self):
 		# HDSatelit: in loc de chenarul mic cu o poza care clipeste (Screens/Dish.py, pastrat pentru
@@ -2230,7 +2245,7 @@ class InfoBarInstantRecord:
 			return
 
 		if self.isInstantRecordRunning():
-			self.session.openWithCallback(self.recordQuestionCallback, ChoiceBox, \
+			dlg = self.session.openWithCallback(self.recordQuestionCallback, ChoiceBox, \
 				title=_("A recording is currently running.\nWhat do you want to do?"), \
 				list=((_("stop recording"), "stop"), \
 				(_("add recording (stop after current event)"), "event"), \
@@ -2240,6 +2255,7 @@ class InfoBarInstantRecord:
 				(_("change recording (duration)"), "changeduration"), \
 				(_("change recording (endtime)"), "changeendtime"), \
 				(_("do nothing"), "no")))
+			dlg.setTitle(_("Record"))
 		else:
 			dlg = self.session.openWithCallback(self.recordQuestionCallback, ChoiceBox, \
 				title=_("Start recording?"), \
@@ -2759,6 +2775,29 @@ class InfoBarCueSheetSupport:
 		else:
 			self.cut_list = cue.getCutList()
 
+def _hdsLeagaIptvPe(infobar):
+	"""Fereastra de incarcare si semnele canalelor de internet (Components/HdsIptvRedare.py): evenimentele playerului, pe bara canalelor."""
+	try:
+		from Components import HdsIptvRedare
+		leg = HdsIptvRedare.Legatura(infobar)
+	except Exception as e:
+		print("[InfoBarGenerics] IPTV:", e)
+		return None
+	return leg, ServiceEventTracker(screen=infobar, eventmap=
+		{
+			iPlayableService.evStart: leg.laStart,
+			iPlayableService.evEnd: leg.laEnd,
+			iPlayableService.evVideoSizeChanged: leg.laPornit,
+			iPlayableService.evUser + 17: leg.laPornit,
+			iPlayableService.evBuffering: leg.laTampon,
+			iPlayableService.evEOF: leg.laEsec,
+			iPlayableService.evUser + 10: leg.laEsec,
+			iPlayableService.evUser + 11: leg.laEsec,
+			iPlayableService.evUser + 12: leg.laEsec,
+			iPlayableService.evUser + 16: leg.laEsec,
+		})
+
+
 class InfoBarFilmRefuz:
 	"""Un film din fisier (sau un flux redat de servicemp3, tipul 4097) pe care receptorul nu il poate reda. servicemp3
 	da motivul in sUser+15 si anunta cu evUser+10, +11, +12 sau +16; textele sunt in Components/HdsFilmRedare.py.
@@ -3072,6 +3111,7 @@ class InfoBarServiceErrorPopupSupport:
 		ei spun mesajului cand bara e ecranul din fata. Fara modul sau cu skinul stricat raman ferestrele de eroare."""
 		if not isinstance(self, InfoBarChannelSelection):
 			return
+		self.hdsIptvRedare = _hdsLeagaIptvPe(self)
 		try:
 			from Screens import HdsEcranNegru
 		except ImportError as e:

@@ -29,6 +29,8 @@
 # (Screens/InfoBarGenerics.py, InfoBarFilmRefuz), pagina web (HdsWebControl/filme_web.py) si probele de pe PC.
 # Fisierul nu importa nimic din enigma2 la incarcare.
 
+import re
+
 # eServiceFactoryMP3::id: filmele si muzica din fisiere, fluxurile de pe internet
 TIP_FILM = 4097
 MAX_NUME = 20		# numele unui format in mesajul de pe televizor
@@ -176,6 +178,9 @@ PENTRU_CANAL = {
 }
 
 
+_ADRESA = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>]+")
+
+
 class Verdict(object):
 	"""Ce se spune: titlul (o fraza), detaliul (fraza a doua), randul tehnic (englezeste, poate lipsi) si daca filmul se
 	opreste (refuza) sau merge mai departe."""
@@ -186,7 +191,8 @@ class Verdict(object):
 		self.refuza = refuza
 		self.titlu = titlu
 		self.detaliu = detaliu
-		self.tehnic = tehnic
+		# dupa o redirectionare (canalele IPTV, Components/HdsIptvAdrese.py) mesajul GStreamer poate cuprinde adresa cu parola in ea
+		self.tehnic = _ADRESA.sub("<adresa>", tehnic or "")
 
 	def text(self):
 		"""Textul ferestrei de pe televizor: fraza simpla pe primul rand, explicatia sub ea. Caseta de mesaj a skinului

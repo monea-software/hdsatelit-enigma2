@@ -306,7 +306,11 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 	elif fel == "feed":
 		rez.append({"f": "descarca", "text": _t("Descarcă lista")})
 	elif fel == "adauga":
-		rez.append({"f": "adauga", "text": _t("Adaugă o sursă"), "principal": True})
+		rez.append({"f": "adauga", "text": _t("Adaugă un feed"), "principal": True})
+	elif fel == "dinfisier":
+		rez.append({"f": "dinfisier", "text": _t("Deschide"), "principal": True})
+	elif fel == "pluginsurse":
+		rez.append({"f": "pluginsurse", "text": _t("Deschide"), "principal": True, "nume": obj.titlu})
 	# 0.6.6: sursa deschisa a pluginului, numai cand pachetul are arhiva ei langa el in feed
 	p = L.pachetCuSursa(catalog, fel, obj, extra)
 	if p is not None:
@@ -330,6 +334,8 @@ def _cheie(fel, obj, pluginuri):
 
 def _rand(M, catalog, fel, obj, extra, pluginuri):
 	L, P = M.L, M.P
+	if fel == "sectiune":
+		return {"fel": fel, "titlu": P._curat(obj, 200), "numar": extra}
 	_ic, titlu, sub, insigna, culoare, mic = L.descriereRand(catalog, fel, obj, extra)
 	d = L.detalii(catalog, fel, obj, extra)
 	return {"fel": fel, "cheie": _cheie(fel, obj, pluginuri), "titlu": P._curat(titlu, 200),
@@ -360,11 +366,14 @@ def stare(arg, M, catalog, date=None):
 	file = []
 	if cauta:
 		file.append(("cautare", _t("Căutare: %s") % cauta, len(L.randuriCautare(catalog, pluginuri, cauta))))
-	file += L.file(catalog, len(pluginuri) + len(L.dupaRepornire(catalog, M.plugins)))
-	file.append(("fisiere", _t("Din fișier"), len(fisiere) if gasite else None))
-	file.append(L.filaSurse(catalog))
-	ids = [f[0] for f in file]
+	file += L.file(catalog, L.nrInstalate(catalog, pluginuri, M.plugins))
 	fila = arg.get("fila") or ("cautare" if cauta else "instalate")
+	# Surse feeduri se deschide cu butonul ei, Din fisier din randul din Disponibile, ca pe televizor
+	if fila in ("surse", "fisiere"):
+		file.append(L.filaSurse(catalog))
+	if fila == "fisiere":
+		file.append(("fisiere", _t("Din fișier"), len(fisiere) if gasite else None))
+	ids = [f[0] for f in file]
 	if fila not in ids:
 		fila = "cautare" if cauta else "instalate"
 	filtru = _filtruCerut(arg)
@@ -377,7 +386,7 @@ def stare(arg, M, catalog, date=None):
 		filtruWeb = _filtruWeb(L, catalog, toateRandurile, randuri, filtru, fila)
 	conf = catalog.configurare
 	if not conf.surse:
-		lista = _t("Nicio sursă de pachete")
+		lista = _t("Niciun feed")
 	elif not catalog.surse_cu_lista:
 		lista = _t("Lista nu a fost descărcată")
 	else:
@@ -395,9 +404,9 @@ def stare(arg, M, catalog, date=None):
 		"cauta": cauta,
 		"randuri": [_rand(M, catalog, fel, o, x, pluginuri) for fel, o, x in randuri],
 		# toate actualizarile, si cand filtrul arata numai o parte (butonul spune "toate", ca MENU pe televizor)
-		"tot": [o.nume for o in catalog.actualizari()] if fila == "actualizari" else [],
+		"tot": [o.nume for o in catalog.actualizari()] if fila in ("instalate", "actualizari") else [],
 		"filtru": filtruWeb,
-		"gol": _textGol(fila, cauta, conf.surse, cf),
+		"gol": (L.textGolDisponibile(catalog) if fila == "disponibile" else "") or _textGol(fila, cauta, conf.surse, cf),
 		"lista": lista,
 		"surse": len(conf.surse),
 		"mod_sigur": date["mod_sigur"] if fila == "instalate" else "",
@@ -472,9 +481,9 @@ def _textGol(fila, cauta, surse, cf):
 		if cf["in_curs"] or cf["niciuna"]:
 			return _t("Se caută fișiere .ipk pe stick și disc.") + (" " + _t("Un stick sau un disc răspunde greu.")
 				if cf["lent"] else "")
-		return _t("Niciun fișier .ipk pe stick sau disc. Copiază pachetul pe un stick USB, apoi caută din nou.")
+		return _t("Niciun fișier .ipk pe stick sau disc. Copiază extensia pe un stick USB, apoi caută din nou.")
 	if not surse:
-		return _t("Nicio sursă de pachete. Adaugă una în fila Surse.")
+		return _t("Niciun feed. Adaugă unul din Surse feeduri.")
 	return _t("Nimic aici.")
 
 
@@ -517,8 +526,8 @@ def _notaWeb(L, catalog):
 				return text
 			return _t("Verificat de HD Satelit.") if L.culoareNota(catalog, pachete) == "bun" else ""
 		if len(externe) == 1:
-			return _t("Nu este verificat de HD Satelit. Vine din sursa %s.") % externe[0]
-		return _t("Nu sunt verificate de HD Satelit. Vin din sursele %s.") % ", ".join(externe)
+			return _t("Nu este verificată de HD Satelit. Vine din feedul %s.") % externe[0]
+		return _t("Nu sunt verificate de HD Satelit. Vin din feedurile %s.") % ", ".join(externe)
 	return nota
 
 
@@ -564,7 +573,7 @@ def instaleaza(arg, request, M):
 	catalog = _catalog(M)
 	p = catalog.pachete.get(nume)
 	if p is None or p.instalat or not (p.se_poate_instala or p.python2):
-		return _refuz(_t("Pachetul nu se mai poate instala. Reîncarcă pagina."))
+		return _refuz(_t("Extensia nu se mai poate instala. Reîncarcă pagina."))
 	plan, eroare = M.L.planInstalare(catalog, p, nota=_notaWeb(M.L, catalog))
 	if plan is None:
 		return _refuz(eroare[0])
@@ -620,7 +629,7 @@ def sterge(arg, request, M):
 	catalog = _catalog(M)
 	p = catalog.pachete.get(nume)
 	if p is None or not p.se_poate_sterge:
-		return _refuz(_t("Pachetul nu mai este instalat. Reîncarcă pagina."))
+		return _refuz(_t("Extensia nu mai este instalată. Reîncarcă pagina."))
 	plan, eroare = M.L.planStergere(catalog, p)
 	if plan is None:
 		return _refuz(eroare[0])
@@ -662,7 +671,7 @@ def sursaAdauga(arg, request, M):
 	if refuz:
 		return _refuz(refuz)
 	if not nume:
-		return _refuz(_t("Numele sursei nu poate fi gol."))
+		return _refuz(_t("Numele feedului nu poate fi gol."))
 	catalog = _catalog(M)
 	motiv = P.verifica_sursa(nume, adresa, catalog.configurare.nume_surse())
 	if motiv:
@@ -672,14 +681,14 @@ def sursaAdauga(arg, request, M):
 		eroare = M.L.adaugaSursa(catalog, nume, adresa)
 		if eroare:
 			return _refuz(eroare)
-		rez = {"result": True, "message": _t("Sursa a fost adăugată.")}
+		rez = {"result": True, "message": _t("Feedul a fost adăugat.")}
 		# ca pe televizor: lista sursei noi se descarca imediat
 		if not M.L.descarcareInCurs() and not M.L.lucrareInCurs() and M.program():
 			M.L.pornesteDescarcarea()
-			rez["message"] = _t("Sursa a fost adăugată. Se descarcă lista ei.")
+			rez["message"] = _t("Feedul a fost adăugat. Se descarcă lista lui.")
 		return rez
-	return _doiPasi(request, arg, "extensii-sursa-adauga", tinta, _t("Adaugi sursa %s?") % nume, _t("Adaugă"),
-		[adresa, _t("Pachetele din ea nu sunt verificate de HD Satelit.")], fa)
+	return _doiPasi(request, arg, "extensii-sursa-adauga", tinta, _t("Adaugi feedul %s?") % nume, _t("Adaugă"),
+		[adresa, _t("Extensiile din acest feed nu sunt verificate de HD Satelit.")], fa)
 
 
 def sursaSterge(arg, request, M):
@@ -691,14 +700,14 @@ def sursaSterge(arg, request, M):
 		return _refuz(refuz)
 	catalog = _catalog(M)
 	if nume not in catalog.configurare.nume_surse() or not catalog.configurare.e_a_utilizatorului(nume):
-		return _refuz(_t("Numai sursele adăugate de tine se pot șterge."))
+		return _refuz(_t("Numai feedurile adăugate de tine se pot șterge."))
 
 	def fa():
 		eroare = M.L.stergeSursa(catalog, nume)
 		if eroare:
 			return _refuz(eroare)
-		return {"result": True, "message": _t("Sursa a fost ștearsă.")}
-	return _doiPasi(request, arg, "extensii-sursa-sterge", nume, _t("Ștergi sursa %s?") % nume, _t("Șterge sursa"),
+		return {"result": True, "message": _t("Feedul a fost șters.")}
+	return _doiPasi(request, arg, "extensii-sursa-sterge", nume, _t("Ștergi feedul %s?") % nume, _t("Șterge feedul"),
 		[_t("Extensiile instalate din ea rămân pe receptor.")], fa)
 
 
@@ -753,11 +762,11 @@ def descarcaLista(arg, request, M):
 		return _refuz(_t("Așteaptă să se termine instalarea."))
 	catalog = _catalog(M)
 	if not catalog.configurare.surse:
-		return _refuz(_t("Nicio sursă de pachete. Adaugă una în fila Surse."))
+		return _refuz(_t("Niciun feed. Adaugă unul din Surse feeduri."))
 	if not M.program():
-		return _refuz(_t("Instalarea pachetelor nu este disponibilă în această imagine."))
+		return _refuz(_t("Instalarea extensiilor nu este disponibilă în această imagine."))
 	L.pornesteDescarcarea()
-	return {"result": True, "message": _t("Se descarcă lista de pachete.")}
+	return {"result": True, "message": _t("Se descarcă lista de extensii.")}
 
 
 def _pachetCuSursa(M, catalog, nume):
@@ -873,14 +882,14 @@ def rute(baza, resource, mediu=None):
 					return self._raspunde(request, stare(arg, m, c))
 				if _INCARCARE[0]:
 					return self._raspunde(request, {"result": True, "se_incarca": True,
-						"message": _t("Se citește lista pachetelor...")})
+						"message": _t("Se citește lista extensiilor...")})
 				date = datePrincipale(m)
 
 				def lucru():
 					try:
 						return stare(arg, m, m.L.incarcaCatalog(), date)
 					except Exception as eroare:
-						return {"result": False, "message": _t("Lista pachetelor nu s-a putut citi: %s") % eroare}
+						return {"result": False, "message": _t("Lista extensiilor nu s-a putut citi: %s") % eroare}
 				return m.peFir(request, lucru, _INCARCARE, 60)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
@@ -1000,11 +1009,11 @@ __STIL_PAGINI__
 <body>
 <main>
 <h1>Extensii și aplicații</h1>
-<p class="nota">Extensiile de pe receptor, pachetele din surse, fișierele .ipk de pe stick sau disc și sursele de pachete. Actualizările imaginii sunt în pagina <a href="/actualizari" id="legaturaActualizari">Actualizare software</a>.</p>
+<p class="nota">Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. Actualizările imaginii sunt în pagina <a href="/actualizari" id="legaturaActualizari">Actualizare software</a>.</p>
 <p class="mesaj" id="incarcare">Se citește lista...</p>
 <div id="continut" class="ascuns">
   <section class="card">
-    <h2>Lista pachetelor</h2>
+    <h2>Lista extensiilor</h2>
     <div class="status-linie"><span>Lista</span><span id="lista"></span></div>
     <p class="nota" id="stareText"></p>
     <div class="butoane">
@@ -1035,6 +1044,7 @@ __STIL_PAGINI__
     </div>
   </section>
   <nav class="butoane file" id="file" aria-label="File"></nav>
+  <p class="butoane"><button type="button" id="surseFeed">Surse feeduri</button> <button type="button" id="adaugaFeed" class="ascuns">Adaugă feed</button></p>
   <form class="cautare" id="formCauta">
     <input type="search" id="cauta" maxlength="40" placeholder="Caută o extensie după nume" aria-label="Caută o extensie după nume">
     <button type="submit">Caută</button>
@@ -1050,10 +1060,10 @@ __STIL_PAGINI__
     <p class="nota" id="locuriRetea"></p>
   </section>
   <section class="card ascuns" id="formSursa">
-    <h2>Adaugă o sursă</h2>
-    <div class="rand"><label for="sursaNume">Numele sursei (litere mici, cifre și -)</label><input id="sursaNume" maxlength="32" autocomplete="off"></div>
+    <h2>Adaugă feed</h2>
+    <div class="rand"><label for="sursaNume">Numele feedului (litere mici, cifre și -)</label><input id="sursaNume" maxlength="32" autocomplete="off"></div>
     <div class="rand"><label for="sursaAdresa">Adresa (http:// sau https://)</label><input id="sursaAdresa" maxlength="300" value="https://" autocomplete="off" inputmode="url"></div>
-    <p class="nota">Pachetele din ea apar apoi în file, cu numele sursei. Nu sunt verificate de HD Satelit.</p>
+    <p class="nota">Extensiile din el apar apoi în file, cu numele feedului. Nu sunt verificate de HD Satelit.</p>
     <div class="butoane"><button type="button" id="sursaAdauga" class="principal">Adaugă</button><button type="button" id="sursaRenunta">Renunță</button></div>
   </section>
   <section class="card" id="randuri"></section>
@@ -1093,7 +1103,7 @@ function arataStare(d){
   var p = [];
   if(d.mod_sigur){ p.push(d.mod_sigur); }
   if(d.repornire_ceruta){ p.push("Extensiile noi apar după repornirea interfeței."); }
-  if(!d.opkg){ p.push("Instalarea pachetelor nu este disponibilă în această imagine."); }
+  if(!d.opkg){ p.push("Instalarea extensiilor nu este disponibilă în această imagine."); }
   if(!d.descarcare.in_curs && d.descarcare.cod !== null && d.descarcare.cod !== undefined && d.descarcare.cod !== 0 && d.descarcare.motiv){ p.push("Ultima descărcare (" + d.descarcare.cand + "): " + d.descarcare.motiv); }
   $("stareText").textContent = p.join(" ");
   $("descarca").disabled = d.descarcare.in_curs || !d.surse || !d.opkg;
@@ -1150,6 +1160,7 @@ function arataFile(d){
     f.appendChild(b);
   });
   $("iesi").classList.toggle("ascuns", !d.cauta);
+  $("adaugaFeed").classList.toggle("ascuns", d.fila !== "surse");
 }
 function arataFisiere(d){
   var c = $("fisiere"), cf = d.cautare_fisiere;
@@ -1206,13 +1217,17 @@ function arataFiltru(d, c){
 function arataRanduri(d){
   var c = $("randuri"); c.textContent = "";
   arataFiltru(d, c);
-  if(d.fila === "actualizari" && d.tot.length){
+  if((d.fila === "actualizari" || d.fila === "instalate") && d.tot.length){
     var bt = el("button", "principal", "Actualizează toate"); bt.type = "button";
     bt.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
     var bb = el("div", "butoane"); bb.appendChild(bt); c.appendChild(bb);
   }
-  if(!d.randuri.length){ c.appendChild(el("p", "nota", d.gol)); return; }
+  if(!d.randuri.length || (d.fila === "disponibile" && d.randuri.length === 1)){
+    d.gol.split("\n").forEach(function(t){ c.appendChild(el("p", "nota", t)); });
+    if(!d.randuri.length){ return; }
+  }
   d.randuri.forEach(function(r){
+    if(r.fel === "sectiune"){ c.appendChild(el("h3", "sectiune", r.titlu + " (" + r.numar + ")")); return; }
     var deschis = DESCHIS === r.cheie;
     var rnd = el("div", "rand element" + (deschis ? " ales" : ""));
     rnd.tabIndex = 0; rnd.setAttribute("role", "button"); rnd.setAttribute("aria-expanded", deschis ? "true" : "false");
@@ -1239,9 +1254,13 @@ function actiune(a){
   else if(a.f === "deschide"){ q.set("plugin", String(a.plugin)); q.set("nume", a.nume); trimite("/api/extensii-deschide", q); }
   else if(a.f === "descarca"){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", q); }
   else if(a.f === "sursa"){ q.set("pachet", a.pachet); SURSA = a.pachet; trimite("/api/extensii-sursa-afla", q); }
+  else if(a.f === "dinfisier"){ FILA = "fisiere"; DESCHIS = ""; citeste(); }
+  else if(a.f === "pluginsurse"){ $("cauta").value = a.nume; CAUTA = a.nume; FILA = "cautare"; DESCHIS = ""; citeste(); }
   else if(a.f === "adauga"){ $("formSursa").classList.remove("ascuns"); $("formSursa").scrollIntoView({block: "center"}); $("sursaNume").focus(); }
 }
 function dupaRepornire(d){ if(d && d.result){ setTimeout(function(){ location.reload(); }, 20000); } else { citeste(); } }
+$("adaugaFeed").addEventListener("click", function(){ $("formSursa").classList.remove("ascuns"); $("formSursa").scrollIntoView({block: "center"}); });
+$("surseFeed").addEventListener("click", function(){ FILA = FILA === "surse" || FILA === "fisiere" ? "instalate" : "surse"; DESCHIS = ""; $("formSursa").classList.add("ascuns"); citeste(); });
 $("descarca").addEventListener("click", function(){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", new URLSearchParams()); });
 $("toate").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
 $("reporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
@@ -1285,11 +1304,11 @@ def N_(text):
 TEXTE_PAGINA = {
 	"html": (
 		N_("Extensii și aplicații"),
-		N_("Extensiile de pe receptor, pachetele din surse, fișierele .ipk de pe stick sau disc și sursele "
-			"de pachete. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" "
+		N_("Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. "
+			"Actualizările imaginii sunt în pagina <a href=\"/actualizari\" "
 			"id=\"legaturaActualizari\">Actualizare software</a>."),
 		N_("Se citește lista..."),
-		N_("Lista pachetelor"),
+		N_("Lista extensiilor"),
 		N_("Lista"),
 		N_("Descarcă lista"),
 		N_("Repornește interfața"),
@@ -1299,10 +1318,10 @@ TEXTE_PAGINA = {
 		N_("Fișiere .ipk"),
 		N_("Caută din nou"),
 		N_("Caută și în rețea"),
-		N_("Adaugă o sursă"),
-		N_("Numele sursei (litere mici, cifre și -)"),
+		N_("Adaugă un feed"),
+		N_("Numele feedului (litere mici, cifre și -)"),
 		N_("Adresa (http:// sau https://)"),
-		N_("Pachetele din ea apar apoi în file, cu numele sursei. Nu sunt verificate de HD Satelit."),
+		N_("Extensiile din el apar apoi în file, cu numele feedului. Nu sunt verificate de HD Satelit."),
 		N_("Adaugă"),
 		N_("Renunță"),
 		N_("Aceleași extensii și acțiuni sunt pe televizor, în __DRUM_MENIU__."),
@@ -1316,7 +1335,7 @@ TEXTE_PAGINA = {
 		N_("Se trimite..."),
 		N_("· se descarcă acum"),
 		N_("Extensiile noi apar după repornirea interfeței."),
-		N_("Instalarea pachetelor nu este disponibilă în această imagine."),
+		N_("Instalarea extensiilor nu este disponibilă în această imagine."),
 		N_("Ultima descărcare ("),
 		N_("Extensii care nu au putut porni"),
 		N_("Pornește"),

@@ -2,11 +2,9 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# captura_sigura.py: cand intra si imaginea canalului (decodorul video) intr-o captura de ecran ceruta de interfata web
-# straina din feedul extern (peticul ei cere /api/screenshot de pe receptor; plugin.py, _capturaStraina si
-# ScreenshotResource). Panoul nostru, aplicatiile de telefon (/grab) si scripturile nu trec pe aici, iar modulul se
-# incarca abia la prima captura straina (nimic la pornirea interfetei). Citirea cadrului din decodor (grab fara optiune
-# sau cu -v) loveste driverul video; cat decodorul nu e gata (interfata abia pornita, canalul abia schimbat, standby,
+# captura_sigura.py: bariera codului de asociere pentru toate capturile si paza decodorului pentru cele straine.
+# Citirea cadrului din decodor (grab fara optiune sau cu -v) loveste driverul video; cat decodorul nu e gata
+# (interfata abia pornita, canalul abia schimbat, standby,
 # niciun canal TV) captura se face numai cu afisajul OSD (grab -o), iar una cu imaginea canalului se face cel mult o
 # data la INTERVAL_VIDEO_S: cererile dese (telecomanda straina cere o captura dupa fiecare tasta) primesc ultima poza,
 # daca e mai noua de PASTRARE_S.
@@ -23,6 +21,22 @@ PAUZA_ZAP_S = 5          # dupa pornirea unui canal: decodorul porneste
 INTERVAL_VIDEO_S = 1.5   # cel mult o captura cu imaginea canalului atat de des
 PASTRARE_S = 2.0         # cat se mai da ultima poza unei cereri dese
 TIPURI_RADIO = ("2", "a", "A")   # tipul serviciului din referinta (al treilea camp, hex): radio
+MESAJ_ASOCIERE = "Captura nu este disponibilă acum. Închide fereastra codului de asociere de pe televizor și reîncearcă."
+
+
+def epocaCapturii():
+	try:
+		from Screens.HdsCodAsociere import stareCaptura
+		epoca, deschis = stareCaptura()
+		if type(epoca) is int and epoca >= 0 and deschis is False:
+			return epoca
+	except Exception:
+		pass
+	return None
+
+
+def capturaValida(epoca):
+	return type(epoca) is int and epoca >= 0 and epoca == epocaCapturii()
 
 
 

@@ -60,6 +60,7 @@
 # Modulul nu importa enigma2 la incarcare: tot ce tine de enigma2 trece prin Mediu, inlocuit la probele de pe PC.
 
 import base64
+import codecs
 import collections
 import json
 import os
@@ -529,6 +530,7 @@ class Navigator(object):
 		self._pid = None
 		self._tampon = ""
 		self._tampon_err = ""
+		self._decodoare = {}        # un decodor UTF-8 pe teava (iesirea si erorile vin ca octeti, vezi _text)
 		self._fb_blocat = False
 		self._rc_blocat = False
 		self._taste_legate = False
@@ -765,15 +767,23 @@ class Navigator(object):
 
 	# ------------------------------------------------------------ iesirea procesului
 
+	def _text(self, date, teava):
+		"""Octetii de pe o teava ("iesire" sau "erori") ca text UTF-8. eConsoleAppContainer da octeti; cu un decodor pe
+		teava un caracter taiat intre doua citiri iese intreg, iar jumatatea lui nu se lipeste de cealalta teava."""
+		if not isinstance(date, (bytes, bytearray)):
+			return date
+		d = self._decodoare.get(teava)
+		if d is None:
+			d = self._decodoare[teava] = codecs.getincrementaldecoder("utf-8")("replace")
+		return d.decode(date)
+
 	def _date(self, text):
-		self._tampon = self._randuri(self._tampon + text)
+		self._tampon = self._randuri(self._tampon + self._text(text, "iesire"))
 
 	def _dateErr(self, text):
 		# iesirea de erori (WebKit, GLib, randurile HDS-NAV de eroare): randurile intregi, curatate, raman in _erori
 		# pentru jurnalul erorilor (scris numai la o oprire cu eroare); randurile HDS-NAV se trateaza ca pe iesire
-		if isinstance(text, bytes):
-			text = text.decode("utf-8", "replace")
-		tampon = self._tampon_err + text
+		tampon = self._tampon_err + self._text(text, "erori")
 		for rand in tampon.split("\n")[:-1]:
 			if rand.strip():
 				self._erori.append(curata_rand(rand))

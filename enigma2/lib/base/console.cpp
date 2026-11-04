@@ -230,8 +230,10 @@ void eConsoleAppContainer::readyRead(int what)
 		while((rd = read(fd[0], buf, 2048)) > 0)
 		{
 			buf[rd]=0;
-			/*emit*/ dataAvail(buf);
-			stdoutAvail(buf);
+			/* HDSatelit: the bytes read with their number, not a C string (zero bytes, Python gets bytes) */
+			std::pair<const char*, int> data(buf, rd);
+			/*emit*/ dataAvail(data);
+			stdoutAvail(data);
 			if ( filefd[1] > 0 )
 				{ if (::write(filefd[1], buf, rd) < 0) eDebug("[eConsoleAppContainer] write to output file failed (%m)"); }
 			if (!hungup)
@@ -282,8 +284,9 @@ void eConsoleAppContainer::readyErrRead(int what)
 /*			for ( int i = 0; i < rd; i++ )
 				eDebug("%d = %c (%02x)", i, buf[i], buf[i] );*/
 			buf[rd]=0;
-			/*emit*/ dataAvail(buf);
-			stderrAvail(buf);
+			std::pair<const char*, int> data(buf, rd);
+			/*emit*/ dataAvail(data);
+			stderrAvail(data);
 		}
 	}
 	/* the end of the child is handled on stdout (readyRead); a closed stderr is only no longer watched */
@@ -539,34 +542,52 @@ eConsolePy_execute(eConsolePy* self, PyObject *argt)
 static PyObject *
 eConsolePy_write(eConsolePy* self, PyObject *args)
 {
-	int len;
-	const char *data;
-	int ret = -1;
-	Py_ssize_t argc = PyTuple_Size(args);
-	if (argc > 1)
-		ret = !PyArg_ParseTuple(args, "si", &data, &len);
-	else if (argc == 1)
-	{
-		PyObject *ob;
-		ret = !PyArg_ParseTuple(args, "O", &ob) || !PyUnicode_Check(ob);
-		if (!ret)
-		{
-			Py_ssize_t length;
-			data = PyUnicode_AsUTF8AndSize(ob, &length);
-			/* a text that cannot be encoded as UTF-8 (surrogates from a file name): the caller gets that exception;
-			   it used to return None with the error still set (SystemError in the caller) */
-			if (!data)
-				return NULL;
-			len = length;
-		}
-	}
-	if (ret)
+	/* HDSatelit: text (written as UTF-8) or bytes (bytes, bytearray, anything with a byte buffer), like the plugins
+	   written for the other Python 3 images send. The optional length counts in the units of the object (characters
+	   of a text, as len() gives them, bytes of a buffer) and never goes past its end: the old ("si") form read as
+	   many bytes as the caller said, past the end of the text, and Ipkg gives len() of a text, not its UTF-8 size. */
+	PyObject *ob = NULL;
+	Py_ssize_t len = -1;
+	if (!PyArg_ParseTuple(args, "O|n", &ob, &len))
 	{
 		PyErr_SetString(PyExc_TypeError,
-			"1st arg must be a string, optionaly 2nd arg can be the string length");
+			"1st arg must be a string or bytes, optionaly 2nd arg can be the length");
 		return NULL;
 	}
-	self->cont->write(data, len);
+	if (PyUnicode_Check(ob))
+	{
+		PyObject *part = NULL;
+		if (len >= 0 && len < PyUnicode_GetLength(ob))
+		{
+			part = PyUnicode_Substring(ob, 0, len);
+			if (!part)
+				return NULL;
+		}
+		Py_ssize_t size = 0;
+		/* a text that cannot be encoded as UTF-8 (surrogates from a file name): the caller gets that exception */
+		const char *data = PyUnicode_AsUTF8AndSize(part ? part : ob, &size);
+		if (data)
+			self->cont->write(data, (int)size);
+		if (part)
+			Org_Py_DECREF(part);
+		if (!data)
+			return NULL;
+		Py_RETURN_NONE;
+	}
+	Py_buffer view;
+	if (PyObject_GetBuffer(ob, &view, PyBUF_SIMPLE) < 0)
+	{
+		PyErr_Clear();
+		PyErr_SetString(PyExc_TypeError,
+			"1st arg must be a string or bytes, optionaly 2nd arg can be the length");
+		return NULL;
+	}
+	Py_ssize_t size = view.len;
+	if (len >= 0 && len < size)
+		size = len;
+	/* an empty write is queued too, as before: the caller still gets dataSent */
+	self->cont->write((const char *)view.buf, (int)size);
+	PyBuffer_Release(&view);
 	Py_RETURN_NONE;
 }
 

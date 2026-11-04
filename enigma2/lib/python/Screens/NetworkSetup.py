@@ -32,6 +32,8 @@ class NetworkAdapterSelection(Screen,HelpableScreen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
+		# titlul din bara de sus: textul intrarii din meniu (skinul nu are titlu pentru ecran)
+		self.setTitle(_("Network Connection Setup"))
 		
 		self.wlan_errortext = _("No working wireless network adapter found.\nPlease verify that you have attached a compatible WLAN device and your network is configured correctly.")
 		self.lan_errortext = _("No working local network adapter found.\nPlease verify that you have attached a network cable and your network is configured correctly.")
@@ -202,6 +204,7 @@ class NameserverSetup(Screen, ConfigListScreen, HelpableScreen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
+		self.setTitle(_("DNS Server Settings"))
 		self.backupNameserverList = iNetwork.getNameserverList()[:]
 		print("backup-list:", self.backupNameserverList)
 		

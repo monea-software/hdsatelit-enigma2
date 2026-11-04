@@ -66,7 +66,7 @@
 #   /web/powerstate[?newstate=0|4|5], /web/message?text=[&type=&timeout=]
 #   /web/epgservice?sRef=[&time=&endTime=], /web/epgservicenow?sRef=, /web/epgservicenext?sRef=,
 #   /web/epgnow?bRef=, /web/epgnext?bRef=, /web/epgnownext?bRef=, /web/getcurrent
-#   /web/timerlist, /web/timeradd, /web/timerchange, /web/timerdelete, /web/timercleanup
+#   /web/timerlist, /web/timeradd, /web/timerchange, /web/timerdelete, /web/timercleanup, /web/recordnow, /web/moviedelete
 #   /web/getlocations, /web/getcurrlocation, /web/movielist[?dirname=&tag=], /web/gettags
 #   /web/stream.m3u?ref=[&name=], /web/services.m3u?bRef=, /web/streamcurrentm3u (si streamm3u, servicesm3u)
 #   /web/ts.m3u?file=[&name=] (si tsm3u): lista m3u cu adresa /file a unei inregistrari
@@ -97,7 +97,15 @@
 #   da 503 cu Retry-After (Kodi pastreaza atunci lista veche; o lista goala ar sterge-o), /api/movielist da
 #   „result”: false si mesajul. La fel un dosar care exista, dar nu se poate citi (eroare de disc in timpul citirii).
 #   Un loc strain sau un dosar care lipseste (discul scos): lista goala in XML, „result”: false in JSON.
-# - numai citire: moviedelete, moviemove, movierename nu exista (404); /file da inregistrarile numai pentru redare.
+# - moviemove si movierename nu exista (404); /file da inregistrarile numai pentru redare.
+#
+# COMENZILE PE INREGISTRARI, cu aceeasi poarta (_poarta) ca toate rutele de aici:
+# - /web/recordnow, /api/recordnow: ca tasta RECORD (InfoBar.startInstantRecording), pana la sfarsitul emisiunii;
+#   recordnow=infinite: fara limita. Canalul de acum; canalele care nu se pot inregistra si discul se verifica inainte.
+# - /web/moviedelete, /api/moviedelete (sRef): ca stergerea din lista filmelor (offlineOperations: filmul si fisierele de
+#   langa el), numai dintr-un loc al inregistrarilor (fisierPermis), iar calea reala sta tot acolo (o legatura spre afara
+#   nu trece; pe firul FIR_INREGISTRARI, un disc adormit nu tine televizorul). O inregistrare in curs sau filmul redat
+#   acum nu se sterg.
 #
 # DOSARUL INREGISTRARII (/web/timeradd, /api/timeradd: dirname): un loc al inregistrarilor (_locuri, ca
 # /web/getlocations) se ia pe loc; alt dosar (un subdosar al unui loc, alt disc) trebuie sa fie sub RADACINI_INREGISTRARI
@@ -279,7 +287,7 @@ NUME_API = NUME_API_VECHI + (
 	b"about", b"deviceinfo", b"currenttime", b"tunersignal", b"bouquets", b"getservices", b"getallservices",
 	b"vol", b"powerstate", b"message", b"epgnow", b"epgnext", b"epgnownext", b"epgservice", b"epgservicenow",
 	b"epgservicenext", b"timerlist", b"timeradd", b"timerchange", b"timerdelete", b"timercleanup", b"getlocations",
-	b"getcurrlocation", b"movielist", b"streamm3u", b"servicesm3u", b"tsm3u", b"gettags")
+	b"getcurrlocation", b"movielist", b"streamm3u", b"servicesm3u", b"tsm3u", b"gettags", b"recordnow", b"moviedelete")
 NUME_API_NOI = tuple(n for n in NUME_API if n not in NUME_API_VECHI)
 
 CEAS = time.monotonic       # probele il inlocuiesc
@@ -485,10 +493,24 @@ def fisierPermis(cale, locuri):
 		loc = loc.rstrip("/\\")
 		if not loc:
 			continue
-		for sep in ("/", os.sep):
-			if cale.startswith(loc + sep) and len(cale) > len(loc) + 1:
-				return True
+		for forma in _formeLoc(loc):
+			for sep in ("/", os.sep):
+				if cale.startswith(forma + sep) and len(cale) > len(forma) + 1:
+					return True
 	return False
+
+
+# /hdd e legatura imaginii spre /media/hdd: acelasi loc scris in doua feluri (o aplicatie trimite /media/hdd/movie/...,
+# locurile inregistrarilor au /hdd/movie/), fara citirea discului
+_LEGATURI_LOC = (("/media/hdd", "/hdd"), ("/hdd", "/media/hdd"))
+
+
+def _formeLoc(loc):
+	forme = [loc]
+	for din, spre in _LEGATURI_LOC:
+		if loc == din or loc.startswith(din + "/"):
+			forme.append(spre + loc[len(din):])
+	return forme
 
 
 def adresaFlux(ref, ip):
@@ -1158,6 +1180,60 @@ class _Furnizor(object):
 		except Exception:
 			return ""
 		return "" if not ip or ip.startswith("0.") else ip
+
+	# inregistrarile
+	def inregistreazaAcum(self, fara_limita):
+		"""-> (bun, text). Ca tasta RECORD (InfoBarInstantRecord.instantRecord): inainte canalele care nu se pot inregistra
+		si discul; inregistrarea o pune startInstantRecording (decodarea, suprapunerile, mesajele de pe televizor)."""
+		from Screens.InfoBar import InfoBar
+		from Components import HdsInregistrariProgramate as HIP, HdsStocare
+		from Components.UsageConfig import preferredInstantRecordPath, defaultMoviePath
+		from Tools.Directories import fileExists
+		bara = InfoBar.instance
+		ref = bara.session.nav.getCurrentlyPlayingServiceReference() if bara is not None else None
+		if ref is None or not ref.valid() or ref.getPath():
+			return False, _t("Nu rulează niciun canal.")
+		if HIP.felNeinregistrabil(ref):
+			return False, HIP.mesajNeinregistrabil(ref, _t)
+		dosar = preferredInstantRecordPath()
+		if not dosar or not fileExists(dosar, "w"):
+			dosar = defaultMoviePath()
+		bun, motiv = HdsStocare.verificaDisc(dosar)
+		if not bun:
+			return False, HdsStocare.mesajInregistrare(motiv, dosar)
+		inainte = len(bara.recording)
+		bara.startInstantRecording(limitEvent=not fara_limita)
+		if len(bara.recording) <= inainte:
+			return False, _t("Receptorul nu a putut porni înregistrarea.")
+		# fara ghid, startInstantRecording o numeste „instant record”: atunci numele canalului
+		nume = bara.recording[-1].name
+		if nume == "instant record":
+			nume = self.nume_serviciu(ref.toString()) or nume
+		return True, _t("Înregistrarea a pornit: %s.") % curat(nume)
+
+	def filmFolosit(self, cale):
+		"""Fisierul se inregistreaza sau se reda acum (acelasi loc scris cu /hdd sau cu /media/hdd)."""
+		import NavigationInstance
+		nav = NavigationInstance.instance
+		forme = _formeLoc(cale)
+		for t in nav.RecordTimer.timer_list:
+			if t.isRunning() and "%s.ts" % getattr(t, "Filename", "") in forme:
+				return True
+		acum = nav.getCurrentlyPlayingServiceReference()
+		return acum is not None and acum.getPath() in forme
+
+	def stergeFilm(self, ref):
+		"""-> numele filmului sters, sau None daca nu se poate sterge. Ca Screens/MovieSelection.stergeFilmul, fara
+		intrebare: aplicatia a intrebat omul."""
+		from enigma import eServiceCenter, eServiceReference
+		sc = eServiceCenter.getInstance()
+		film = eServiceReference(ref)
+		info = sc.info(film)
+		nume = info.getName(film) if info is not None else ""
+		operatii = sc.offlineOperations(film)
+		if operatii is None or operatii.deleteFromDisk(1) or operatii.deleteFromDisk(0):
+			return None
+		return nume or os.path.basename(film.getPath())
 
 	# temporizatoarele
 	def rt(self):
@@ -2256,6 +2332,73 @@ def h_timerdelete(c):
 		return _comanda(c, False, _t("Receptorul nu a putut șterge înregistrarea."))
 	_schimbat(rt, t)
 	return _comanda(c, True, _t("Am șters „%s”.") % nume)
+
+
+def h_recordnow(c):
+	if c.M.standby():
+		return _comanda(c, False, _t("Receptorul e în standby. Pornește-l, apoi pornește înregistrarea."))
+	fara_limita = c.arg("recordnow", maxim=16).strip().lower() == "infinite"
+	try:
+		bun, text = c.M.inregistreazaAcum(fara_limita)
+	except Exception as eroare:
+		_jurnal("recordnow: %s" % eroare)
+		bun, text = False, _t("Receptorul nu a putut porni înregistrarea.")
+	return _comanda(c, bun, text)
+
+
+def caleInLoc(cale, locuri):
+	"""Pe firul pentru fisiere: un fisier obisnuit (nu legatura) a carui cale reala sta sub calea reala a unui loc."""
+	try:
+		if os.path.islink(cale) or not os.path.isfile(cale):
+			return False
+		real = os.path.realpath(cale)
+		for loc in locuri:
+			radacina = os.path.realpath(loc.rstrip("/\\") or os.sep).rstrip(os.sep)
+			if radacina and real.startswith(radacina + os.sep):
+				return True
+	except (OSError, ValueError):
+		pass
+	return False
+
+
+def h_moviedelete(c):
+	M = c.M
+	ref = c.arg("sRef", maxim=MAX_REF).strip()
+	if not ref_buna(ref):
+		return _comanda(c, False, _t("Canalul nu are o referință bună."))
+	cale = caleLocala(ref)
+	locuri = _locuri(M)
+	if cale is None or not fisierPermis(cale, locuri):
+		_jurnal("moviedelete: fisier in afara locurilor inregistrarilor, refuzat")
+		return _comanda(c, False, _t("Dosarul cerut nu este printre locurile înregistrărilor."))
+	if M.filmFolosit(cale):
+		return _comanda(c, False, _t("Filmul e folosit acum pe receptor. Încearcă din nou după ce se oprește."))
+	request = c.r
+
+	def lucru():
+		return caleInLoc(cale, locuri)
+
+	def dupa(bun, eroare):
+		if eroare is not None:
+			_jurnal("moviedelete: calea nu s-a verificat: %s" % eroare)
+		try:
+			nume = M.stergeFilm(ref) if bun and eroare is None else None
+		except Exception as e:
+			_jurnal("moviedelete: %s" % e)
+			nume = None
+		if nume is None:
+			corp = _comanda(c, False, _t("Receptorul nu a putut șterge înregistrarea."))
+		else:
+			corp = _comanda(c, True, _t("Am șters „%s”.") % curat(nume))
+		try:
+			if request.method != b"HEAD":
+				request.write(corp)
+			request.finish()
+		except Exception as e:
+			_jurnal("raspunsul stergerii nu a plecat (aplicatie plecata?): %s" % e)
+
+	M.in_fir(lucru, dupa, TERMEN_FILME_S, FIR_INREGISTRARI)
+	return c.NOT_DONE_YET
 
 
 def h_timercleanup(c):
@@ -3447,7 +3590,7 @@ RUTE_WEB = {
 	b"epgnext": h_epgnext, b"epgnownext": h_epgnownext, b"getcurrent": h_getcurrent, b"timerlist": h_timerlist,
 	b"timeradd": h_timeradd, b"timerchange": h_timerchange, b"timerdelete": h_timerdelete,
 	b"timercleanup": h_timercleanup, b"getlocations": h_getlocations, b"getcurrlocation": h_getcurrlocation,
-	b"movielist": h_movielist, b"gettags": h_gettags,
+	b"movielist": h_movielist, b"gettags": h_gettags, b"recordnow": h_recordnow, b"moviedelete": h_moviedelete,
 	b"stream.m3u": h_streamm3u, b"streamm3u": h_streamm3u, b"services.m3u": h_servicesm3u,
 	b"servicesm3u": h_servicesm3u, b"streamcurrentm3u": h_streamcurrentm3u, b"ts.m3u": h_tsm3u, b"tsm3u": h_tsm3u,
 }
@@ -3461,7 +3604,7 @@ RUTE_API = {
 	b"epgservicenext": h_epgservicenext, b"timerlist": h_timerlist, b"timeradd": h_timeradd,
 	b"timerchange": h_timerchange, b"timerdelete": h_timerdelete, b"timercleanup": h_timercleanup,
 	b"getlocations": h_getlocations, b"getcurrlocation": h_getcurrlocation, b"movielist": h_movielist,
-	b"gettags": h_gettags, b"streamm3u": h_streamm3u,
+	b"gettags": h_gettags, b"streamm3u": h_streamm3u, b"recordnow": h_recordnow, b"moviedelete": h_moviedelete,
 	b"servicesm3u": h_servicesm3u, b"tsm3u": h_tsm3u,
 }
 

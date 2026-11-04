@@ -22,6 +22,11 @@
 #      /etc/hostname lipsa, da o cale GOALA, iar showiframe scrie atunci "UPD_PATH:" gol in p6. Ce face
 #      loader-ul Amiko cu o cale goala nu e dovedit.
 # Ce e mai sus vine din dezasamblarea binarului (radare2).
+# ETICHETA GOALA: in pasul 2 binarul copiaza numele fara terminator intr-un tampon de pe stiva negolit (0x29e64-0x29ef0),
+# deci potrivirea depinde de ce era pe stiva. Pe 0.7.0 (V20) dupa nume a urmat gunoi la fiecare pornire (consola:
+# "box_hostname is viper4kv20J7jjj"), calea a iesit goala si eticheta s-a rescris cu "UPD_PATH:" gol. Cu eticheta goala,
+# Maintenance Mode cauta in /dinobot/<BOX_TYPE> (consola: "Searching image files in /newroot/dinobot/u57/"). Cand calea
+# vine din tabelul pe nume (sau nu se afla), `rezerva` = /dinobot/<tip>: imaginea se pune pe stick in ambele dosare.
 #
 # Dosarul din regulile modelului: /etc/hdsatelit-model (scris la construirea imaginii) poate avea „upd_path=”, dosarul
 # ales pentru model (pe Viper 4K V20 chiar calea din tabel pentru viper4kv20). enigma2.sh il pune in
@@ -157,11 +162,16 @@ def calculeaza(radacina="/"):
 		"sursa": SURSA_NECUNOSCUTA,
 		"nume": None,
 		"reguli": dosarDinReguli(radacina),
+		"rezerva": "",
 	}
+	if rez["boxtype"] and all(ch in _CARACTERE_DOSAR for ch in rez["boxtype"]):
+		# ETICHETA GOALA (sus): pana nu se stie ca nu e goala, si dosarul pe care il ia atunci Maintenance Mode
+		rez["rezerva"] = "/dinobot/" + rez["boxtype"]
 	upd = _citeste(c("proc/stb/info/upd_path"), 64)
 	if upd is not None and len(upd) > 1:
 		rez["cale"] = _text(_taie(upd))
 		rez["sursa"] = SURSA_REGULI if rez["reguli"] and rez["cale"] == rez["reguli"] else SURSA_UPD_PATH
+		rez["rezerva"] = ""   # calea data in buffer o ia showiframe asa cum e (fara tamponul de pe stiva)
 		return rez
 	nume = _citeste(c("etc/hostname"), 64)
 	if nume is None:
@@ -173,6 +183,17 @@ def calculeaza(radacina="/"):
 			rez["cale"] = _text(cale)
 			rez["sursa"] = SURSA_NUME
 			break
+	return rez
+
+
+def dosarePeStick(info):
+	"""Dosarele de pe stick in care trebuie pusa imaginea ca Maintenance Mode s-o gaseasca: cel calculat si, cand
+	eticheta poate fi goala, cel de rezerva (ETICHETA GOALA, sus). Fara dubluri, in ordinea asta."""
+	rez = []
+	for cale in (info.get("cale"), info.get("rezerva")):
+		d = dosarPeStick(cale)
+		if d and d not in rez:
+			rez.append(d)
 	return rez
 
 
@@ -216,6 +237,9 @@ def randuriInformatii(info):
 	l = [_("Recuperare prin Maintenance Mode (stick USB):")]
 	dosar = dosarPeStick(info.get("cale"))
 	reguli = info.get("reguli") or ""
+	rezerva = dosarPeStick(info.get("rezerva"))
+	if rezerva and rezerva != dosar:
+		l.append(_("  Pune imaginea pe stick în: %s") % "  ".join(_vizibil(d) for d in dosarePeStick(info)))
 	if dosar:
 		l.append(_("  Dosar pe stick:           %s") % _vizibil(dosar))
 		if info.get("sursa") == SURSA_REGULI:
@@ -244,7 +268,13 @@ def randuriInformatii(info):
 
 def textConfirmare(info):
 	"""O fraza pentru ultima confirmare dinaintea scrierii reale"""
+	dosare = dosarePeStick(info)
+	if len(dosare) > 1:
+		return _("Pentru recuperare, pune imaginea pe stick în dosarele %s și %s.") % (_vizibil(dosare[0]),
+			_vizibil(dosare[1]))
 	dosar = dosarPeStick(info.get("cale"))
 	if dosar:
 		return _("Pentru recuperare, Maintenance Mode caută imaginea pe stick în dosarul %s.") % _vizibil(dosar)
+	if dosare:
+		return _("Pentru recuperare, Maintenance Mode caută imaginea pe stick în dosarul %s.") % _vizibil(dosare[0])
 	return _("Atenție: dosarul de recuperare de pe stick nu se poate afla (vezi Informații Receptor).")

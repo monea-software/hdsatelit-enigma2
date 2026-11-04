@@ -58,7 +58,8 @@ PV = "0.1.0"
 # r11 (02.11.2026, tot 0.6.25): firul CEC se iarta numai cat firul principal al enigma2 e viu;
 # cand interfata iese si firul ramas in D o tine „Z” (zombie), init nu mai porneste alta interfata, iar paznicul il
 # socoteste din nou blocaj (repornirea dura), altfel ecranul ar ramane negru. Fara importuri noi, deci RDEPENDS neschimbat.
-PR = "r11"
+# r12 (04.11.2026, raportul 481062): firul principal al enigma2 mort intr-un Oops, cu celelalte fire vii: repornirea dura
+PR = "r12"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

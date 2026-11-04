@@ -1,0 +1,4 @@
+# datele din files/ (probele, index.json, index.json.sig) raman octet cu octet la orice checkout, si pe Windows: sumele
+# sha256 din index.json si semnatura lui le acopera, iar fa_pachet_probe.py si paza verifica_probe.py le compara
+files/** -text
+*.bb text eol=lf

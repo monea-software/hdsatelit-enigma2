@@ -417,6 +417,8 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self["config"].list = self.list
 
 	def keySave(self):
+		# HDSatelit: omul a salvat ceva pentru tuner, chiar „neconfigurat”: proba automata nu-l mai atinge
+		_tunerB("ales_acum_de_om", self.slotid)
 		old_configured_sats = nimmanager.getConfiguredSats()
 		self.run()
 		new_configured_sats = nimmanager.getConfiguredSats()
@@ -457,6 +459,9 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 	def __init__(self, session, slotid):
 		Screen.__init__(self, session)
 		self.setTitle(_("Tuner configuration"))
+		# HDSatelit: proba automata a tunerului B (Components/HdsTunerB.py) se opreste inainte de citirea setarilor:
+		# in timpul ei modul lui B e pus numai in memorie
+		_tunerB("opreste_proba")
 		self.list = [ ]
 		
 		ServiceStopScreen.__init__(self)
@@ -527,6 +532,15 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self["config"].getCurrent()[1].setValue("3601")
 			self["config"].invalidateCurrent()
 			
+def _tunerB(functie, *argumente):
+	"""Components/HdsTunerB.py: o eroare de acolo nu opreste ecranul tunerului."""
+	try:
+		from Components import HdsTunerB
+		return getattr(HdsTunerB, functie)(*argumente)
+	except Exception as e:
+		print("[Satconfig] tunerul B, %s: %r" % (functie, e))
+	return None
+
 def textNim(x):
 	"""HDSatelit: textul randului unui tuner in alegerea tunerului (felul legaturii, satelitii), scos din
 	NimSelection.updateList neschimbat, ca pagina web a probei DiSEqC sa arate aceleasi randuri ca televizorul."""
@@ -596,6 +610,10 @@ class NimSelection(Screen):
 		self.list = [None] * nimmanager.getSlotCount()
 		self["nimlist"] = List(self.list)
 		self.updateList()
+		if self.__class__ is NimSelection:
+			# randul tunerului B se schimba singur cand se termina proba lui
+			_tunerB("asculta", self.updateList)
+			self.onClose.append(lambda: _tunerB("nu_mai_asculta", self.updateList))
 		
 		self.setResultClass()
 
@@ -615,6 +633,10 @@ class NimSelection(Screen):
 
 	def okbuttonClick(self):
 		nim = self["nimlist"].getCurrent()
+		if nim and nim[0] == "hds_tuner_b":
+			# randul probei automate a tunerului B: proba din nou sau configurarea lui de mana
+			_tunerB("ok_din_ecran", self.session, self.updateList)
+			return
 		nim = nim and nim[3]
 		if nim is not None and not nim.empty and nim.isSupported():
 			self.session.openWithCallback(self.updateList, self.resultclass, nim.slot)
@@ -629,5 +651,9 @@ class NimSelection(Screen):
 			if self.showNim(x):
 				text = textNim(x)
 				self.list.append((slotid, x.friendly_full_description, text, x))
+				# HDSatelit: sub tunerul B, starea probei automate (Components/HdsTunerB.py), cand nu l-a ales omul
+				b = _tunerB("stare") if self.__class__ is NimSelection else None
+				if b and b["slot"] == slotid:
+					self.list.append(("hds_tuner_b", _("Pornire automată"), b["text"], None))
 		# la intoarcerea din setarile unui tuner cursorul ramane pe tunerul lui (cheia: slotul), nu pe primul
 		pune_randurile(self["nimlist"], self.list, cheie=0)

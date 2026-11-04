@@ -123,6 +123,12 @@ static void addToLogbuffer(int level, const std::string &log)
 	addToLogbuffer(log.c_str(), log.size());
 }
 
+/* HDSatelit: the log before an error in an external plugin (lib/python/python.cpp, Components/HdsPluginExtern.py) */
+std::string bsodLogBuffer()
+{
+	return getLogBuffer();
+}
+
 static const std::string getConfigString(const std::string &key, const std::string &defaultValue)
 {
 	/* only the settings file: this runs inside a signal handler, where calling into Python

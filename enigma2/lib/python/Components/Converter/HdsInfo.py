@@ -210,6 +210,9 @@ TYPES = {
 	"TechLeft": ("_tech_left", False, M_BASE),
 	"TechRight": ("_tech_right", False, M_VIDEO),
 	"Satellite": ("_satellite", False, M_BASE),
+	# canalele de internet (Components/HdsIptvAdrese.py): IsIptv = canalul redat e de internet; IptvStare = randul cu starea fluxului
+	"IsIptv": ("_is_iptv", True, M_BASE),
+	"IptvStare": ("_iptv_stare", False, M_VIDEO),
 	# reteaua citita la scanare (Components/HdsRetele.py, numai pe imaginea HDSatelit; altfel gol): numele si ID-ul ei
 	# ("Cablu Targu Jiu · NID 53") si numarul canalului dat de operator ("23"); TechLeft,...,Retea pune numele retelei in
 	# locul cuvantului "Cablu" la cablu
@@ -405,7 +408,7 @@ TYPES = {
 }
 
 # tipurile cu cronometru (textul se schimba cu minutul)
-TIMED = ("_remaining", "_elapsed")
+TIMED = ("_remaining", "_elapsed", "_tech_left", "_iptv_stare")
 
 # Flag,<x>: eticheta flag_<x> cand conditia e adevarata, altfel ""
 # (pe o imagine veche un Label pus dupa ConditionalShowHide nu merge, deci textul vine gata filtrat)
@@ -735,6 +738,17 @@ def cadre_miimi(v):
 	return v
 
 
+# pe un canal de internet nu exista semnal si calitate: in locul lor, raspunsul serverului si viteza (Converter/HdsSignal.py)
+def N_(text):
+	"""Marcaj pentru xgettext, fara efect."""
+	return text
+
+
+ETICHETE_IPTV = {"signal": N_("Răspuns"), "quality": N_("Viteză")}
+SEMN_IPTV = "8897/tv/"
+IPTV_PAS_S = 2
+
+
 class HdsInfo(Converter):
 	def __init__(self, arg):
 		Converter.__init__(self, arg)
@@ -788,7 +802,7 @@ class HdsInfo(Converter):
 		if name == "Label":
 			self._label = parts[1] if len(parts) > 1 else ""
 			self._upper = "Upper" in parts[2:]
-			if self._filters:
+			if self._filters or self._label in ETICHETE_IPTV:
 				self._mask = M_BASE
 			# IfValue=<Tip>: eticheta se scrie numai cand tipul numit da text (sau e adevarat) pentru serviciul redat
 			for p in parts[2:]:
@@ -874,7 +888,7 @@ class HdsInfo(Converter):
 					self._what = None
 					return
 				if self._label is not None and not self._filters and self._ifvalue is None:
-					if C is not None and C.lang_gen() != self._gen:
+					if C is not None and (C.lang_gen() != self._gen or bits & self._mask):
 						self._val = None
 						Converter.changed(self, what)
 					return
@@ -1004,6 +1018,7 @@ class HdsInfo(Converter):
 		"""La aratare si la fiecare tic: text nou pentru widget, apoi urmatoarea trezire."""
 		try:
 			self._val = None
+			self._what = None
 			Converter.changed(self, (self.CHANGED_POLL,))
 			self._arm()
 		except Exception as e:
@@ -1051,6 +1066,8 @@ class HdsInfo(Converter):
 					v = EMPTY
 				else:
 					t = C.tr(self._label)
+					if self._label in ETICHETE_IPTV and self._e_canal_iptv():
+						t = _(ETICHETE_IPTV[self._label])
 					if self._upper:
 						t = C.upper(t)
 					v = (C.out(C.ltr(t)), bool(t))
@@ -1176,7 +1193,55 @@ class HdsInfo(Converter):
 
 	# ------------------------------------------------------------ text
 
+	def _flux_iptv(self, r):
+		"""Starea fluxului, cand canalul redat e de internet (Components/HdsIptvAdrese.py), altfel None. {} = n-a pornit inca."""
+		if r.info() is None or SEMN_IPTV not in (r.sref() or u""):
+			return None
+		try:
+			from Components import HdsIptvAdrese
+			return HdsIptvAdrese.stareCale(r.sref())
+		except ImportError:
+			return None
+
+	def _is_iptv(self, r):
+		return self._flux_iptv(r) is not None
+
+	def _iptv_video(self, r):
+		"""Rezolutia si codecul: serviciul de redare da codecul in etichetele fluxului, H.264 (High Profile)."""
+		return [self._resolution(r), self._video_codec(r) or r.gets("sTagVideoCodec").split(u" (")[0]]
+
+	def _iptv_tampon(self, r, f):
+		"""Cat e in tampon: secundele din releu, cand are ceva; altfel procentul playerului, cand l-a spus. Nimic cand nu se stie, nu 0."""
+		s = f.get("tampon_s")
+		from Components.HdsIptvRedare import textTampon
+		if s:
+			return textTampon(s)
+		try:
+			serviciu = r.service()
+			st = serviciu and serviciu.streamed()
+			p = st.getBufferCharge()[0] if st else 0
+		except Exception:
+			p = 0
+		return _("tampon %d%%") % p if p > 0 else u""
+
+	def _iptv_stare(self, r):
+		self._due = None
+		f = self._flux_iptv(r)
+		if f is None:
+			return u""
+		self._due = C._now() + IPTV_PAS_S
+		from Components.HdsIptvRedare import T_INCARCARE, textRaspuns, textViteza
+		if not f.get("trimis"):
+			return C.join([_(T_INCARCARE), textViteza(f.get("viteza"))])
+		raspuns = textRaspuns(f.get("raspuns_ms"))
+		return C.join([textViteza(f.get("viteza")), self._iptv_tampon(r, f), _("răspuns %s") % raspuns if raspuns else u""] + self._iptv_video(r))
+
 	def _tech_left(self, r):
+		self._due = None
+		f = self._flux_iptv(r)
+		if f is not None:
+			self._due = C._now() + IPTV_PAS_S
+			return C.join(self._iptv_video(r) + [r.gets("sTagAudioCodec").split(u" (")[0], self._iptv_tampon(r, f)])
 		k = r.kind()
 		if not k:
 			return u""
@@ -1224,6 +1289,8 @@ class HdsInfo(Converter):
 		return C.join([self._resolution(r), self._video_codec(r), access])
 
 	def _satellite(self, r):
+		if self._is_iptv(r):
+			return _("Internet")
 		k = r.kind()
 		tp, kk = self._etp(r)
 		if kk == "s":
@@ -1509,8 +1576,9 @@ class HdsInfo(Converter):
 		return r.gets("sProvider")
 
 	def _reference(self, r):
-		"""Referinta serviciului redat, pentru render="Picon" (ca ServiceName Reference, fara .meta)."""
-		return r.sref() if r.info() is not None else u""
+		"""Referinta serviciului redat, pentru render="Picon" (ca ServiceName Reference, fara .meta). Un flux pornit (servicemp3) nu si-o da prin
+		informatii: o stie navigarea, ca sigla lui sa se gaseasca pe bara si pe ecranul radio."""
+		return self._ref_dvbi(r) if r.info() is not None else u""
 
 	def _numar_lista(self, r):
 		"""Numarul canalului redat in lista de canale (0 = fara numar), citit o data pe eveniment pentru toate
@@ -1536,7 +1604,15 @@ class HdsInfo(Converter):
 		if "IfNumber" in opts or "IfNoNumber" in opts:
 			if (self._numar_lista(r) > 0) != ("IfNumber" in opts):
 				return u""
-		return r._memo("nume_serviciu", lambda: _nume_serviciu(i)) or u""
+		nume = r._memo("nume_serviciu", lambda: _nume_serviciu(i)) or u""
+		if nume and SEMN_IPTV in (r.sref() or u""):
+			# canal de internet pornit fara nume (din pagina web, la pornirea receptorului): altfel s-ar vedea cheia lui
+			try:
+				from Components import HdsIptvAdrese
+				return C.u(HdsIptvAdrese.numeCanal(r.sref(), nume))
+			except ImportError:
+				pass
+		return nume
 
 	# ------------------------------------------------------------ pagina tehnica extinsa: transponder
 
@@ -2222,6 +2298,13 @@ class HdsInfo(Converter):
 		if D is None:
 			return False
 		return bool(self._memo_dvbi(r, "are", lambda: D.areDvbI(self._ref_dvbi(r))))
+
+	def _e_canal_iptv(self):
+		"""Canalul redat e de internet, de la furnizorul omului (Components/HdsIptvSurse.py): eticheta spune atunci altceva."""
+		try:
+			return SEMN_IPTV in (C.Reader(self.source, None).sref() or "")
+		except Exception:
+			return False
 
 	def _via_internet(self, r):
 		D = self._date_dvbi()

@@ -2,6 +2,20 @@
 from .Renderer import Renderer
 from enigma import eListbox
 
+# HDSatelit: the rows kept visible below and above the selection in menus, choice lists and settings screens, so
+# the rows that do not fit are seen coming instead of hiding on a next page (eListbox.setScrollMargin; 0 = by page)
+MARGINE_DERULARE = 2
+
+
+def margineDerulare():
+	"""Randurile tinute vazute langa cursor, dupa setarea „Derularea listelor” (config.usage.hds_derulare_liste):
+	MARGINE_DERULARE rand cu rand, 0 pagina cu pagina."""
+	try:
+		from Components.config import config
+		return 0 if config.usage.hds_derulare_liste.value == "pagina" else MARGINE_DERULARE
+	except Exception:
+		return MARGINE_DERULARE
+
 # the listbox renderer is the listbox, but no listbox content.
 # the content will be provided by the source (or converter).
 
@@ -41,6 +55,9 @@ class Listbox(Renderer, object):
 		self.wrap_around = self.wrap_around # trigger
 		self.selection_enabled = self.selection_enabled # trigger
 		self.scrollbarMode = self.scrollbarMode # trigger
+		# HDSatelit: menus move one row at a time, or page by page, after the user's choice (margineDerulare)
+		if hasattr(instance, "setScrollMargin"):
+			instance.setScrollMargin(margineDerulare())
 
 	def preWidgetRemove(self, instance):
 		instance.setContent(None)

@@ -6,6 +6,7 @@ from Components.Language import language
 from Components.ActionMap import ActionMap
 from Components.Sources.StaticText import StaticText
 from Components.Label import Label
+from Components.HdsTextUnicode import stergeUltimaLitera
 try:
 	# HDSatelit: campul de text pe un rand (cand nu mai incape, se vede coada); fara modul, eticheta obisnuita
 	from Components.HdsCampText import CampText
@@ -77,9 +78,10 @@ def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 		
 		else:
 			width = key_bg.size().width()
+			keyText = "\u25cc" + key if len(key) == 1 and "\u064b" <= key <= "\u0652" else key
 			res.extend((
 				MultiContentEntryPixmapAlphaTest(pos=(x, 0), size=(width, 45), png=key_bg),
-				MultiContentEntryText(pos=(x, 0), size=(width, 45), font=0, text=key, flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER)
+				MultiContentEntryText(pos=(x, 0), size=(width, 45), font=0, text=keyText, flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER)
 			))
 		
 		if selectedKey == count:
@@ -214,7 +216,22 @@ class VirtualKeyBoard(Screen):
 		self.buildVirtualKeyBoard()
 
 	def setLang(self):
-		if self.lang == 'de_DE':
+		if self.lang.replace('-', '_').split('_', 1)[0].lower() == 'ar':
+			self.lang = 'ar_AE'
+			self.keys_list = [
+				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
+				["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"],
+				["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط", "ذ"],
+				["ئ", "ء", "ؤ", "ر", "ى", "ة", "و", "ز", "ظ", "،", ".", "CLEAR"],
+				["SHIFT", "SPACE", "؟", "؛", "@", "OK"]]
+			self.shiftkeys_list = [
+				["EXIT", "!", '"', "#", "$", "%", "&", "'", "(", ")", "=", "BACKSPACE"],
+				["َ", "ً", "ُ", "ٌ", "ِ", "ٍ", "ْ", "ّ", "أ", "إ", "آ", "ٱ"],
+				["ـ", "،", "؛", "؟", ":", "/", "\\", "-", "_", "+", "[", "]"],
+				["<", ">", "{", "}", "|", "~", "`", "^", "*", ",", ".", "CLEAR"],
+				["SHIFT", "SPACE", "@", "€", "؟", "OK"]]
+			self.nextLang = 'en_EN'
+		elif self.lang == 'de_DE':
 			self.keys_list = [
 				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
 				["q", "w", "e", "r", "t", "z", "u", "i", "o", "p", "ü", "+"],
@@ -315,7 +332,7 @@ class VirtualKeyBoard(Screen):
 				["A", "S", "D", "F", "G", "H", "J", "K", "L", "\u0218", "\u021a", "\u00c2"],
 				["+", "Z", "X", "C", "V", "B", "N", "M", ";", "?", "*", "CLEAR"],
 				["SHIFT", "SPACE", "<", ">", "\\", "OK"]]
-			self.nextLang = 'en_EN'
+			self.nextLang = 'ar_AE'
 		else:
 			self.keys_list = [
 				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
@@ -332,6 +349,8 @@ class VirtualKeyBoard(Screen):
 			self.lang = 'en_EN'
 			self.nextLang = 'de_DE'		
 		self["country"].setText(self.lang)
+		if hasattr(self["text"], "setRtl"):
+			self["text"].setRtl(self.lang == 'ar_AE')
 		self.max_key=47+len(self.keys_list[4])
 
 	def buildVirtualKeyBoard(self, selectedKey=0):
@@ -357,7 +376,7 @@ class VirtualKeyBoard(Screen):
 		self["list"].setList(list)
 	
 	def backClicked(self):
-		self.text = self["text"].getText()[:-1]
+		self.text = stergeUltimaLitera(self["text"].getText())
 		self["text"].setText(self.text)
 			
 	def okClicked(self):
@@ -387,8 +406,7 @@ class VirtualKeyBoard(Screen):
 			self.close(None)
 		
 		elif text == "BACKSPACE":
-			self.text = self["text"].getText()[:-1]
-			self["text"].setText(self.text)
+			self.backClicked()
 		
 		elif text == "CLEAR":
 			self.text = ""

@@ -100,8 +100,11 @@ class ConfigLNB(Screen, ConfigListScreen):
 			MT.randuriMarite(self["config"])
 		except Exception as e:
 			print("[ConfigLNB] textul marit: %s" % e)
-		# cursorul porneste pe „Tipul LNB-ului”: acolo e singura alegere pe care o face cei mai multi
-		if "tip" in self._chei:
+		# cursorul porneste pe „Tipul LNB-ului”: acolo e singura alegere pe care o face cei mai multi. Pe un receptor cu
+		# doua sau mai multe tunere de satelit (Twin) porneste pe „Tuner”, ca omul sa vada intai ce tuner configureaza
+		if len(getattr(self, "_tunere", None) or ()) > 1 and "tuner" in self._chei:
+			self["config"].setCurrentIndex(self._chei.index("tuner"))
+		elif "tip" in self._chei:
 			self["config"].setCurrentIndex(self._chei.index("tip"))
 		self._randSchimbat()
 

@@ -103,6 +103,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsAdaugate = []
 		# drumurile buchetelor aratate in lista tuturor buchetelor cu numele tradus (hdsNumeleBuchetelor)
 		self.hdsNumite = set()
+		self.hdsSigleCeas = None
+		self.hdsSigleStare = None
+		self.hdsSigleCai = False
 		if hasattr(self.l, "addStreamed"):
 			self.hdsPictogramaTransmis(resolveFilename(SCOPE_CURRENT_SKIN, PICTOGRAMA_TRANSMIS))
 			self.l.setStreamedLabel(_("În rețea"))
@@ -259,7 +262,15 @@ class ServiceList(HTMLComponent, GUIComponent):
 			print("[ServiceList] etichetele DVB-I: %s" % e)
 			legaturi, urluri = {}, set()
 		noi = {}
-		if legaturi or urluri:
+		# canalele de internet care n-au pornit ultima data (Components/HdsIptvSurse.py, un fisier mic): numai in buchete
+		semne = {}
+		try:
+			if "FROM BOUQUET" in self.root.getPath():
+				from Components import HdsIptvSurse as I
+				semne = I.nefunctionale()
+		except Exception as e:
+			print("[ServiceList] semnele IPTV: %s" % e)
+		if legaturi or urluri or semne:
 			randuri = []
 			lista = eServiceCenter.getInstance().list(self.root)
 			while lista is not None:
@@ -275,6 +286,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 					cheie = "%X:%X:%X:%X" % (s.getUnsignedData(1), s.getUnsignedData(2), s.getUnsignedData(3), ns & 0xFFFF0000)
 					if cheie in legaturi:
 						noi[s.toString()] = (s, "DVB-I")
+				elif s.type == 4097 and semne and I.eNefunctional(s.getPath()):
+					noi[s.toString()] = (s, _("IPTV: n-a pornit"))
 				elif s.type == 4097 and urluri:
 					url = s.getPath()
 					if url in urluri:
@@ -339,8 +352,32 @@ class ServiceList(HTMLComponent, GUIComponent):
 			self.onSelectionChanged.remove(fnc)
 
 	def selectionChanged(self):
+		self.hdsSigle()
 		for x in self.onSelectionChanged:
 			x()
+
+	def hdsSigle(self):
+		"""Piconurile locale din randuri; numai viewportul cere sigle IPTV pe worker."""
+		if self.instance is None or not hasattr(self.l, "addPiconPath"):
+			return
+		try:
+			from Components.Renderer.Picon import dosare_sigle, sigle_pornite
+			from Components import HdsIptvSigle as S
+			if not self.hdsSigleCai:
+				for cale in dosare_sigle() + [S.dosar()]:
+					self.l.addPiconPath(cale)
+				self.hdsSigleCai = True
+			pornite = sigle_pornite()
+			self.l.setPiconsEnabled(pornite)
+			stare = (pornite, S.generatie())
+			if stare != self.hdsSigleStare:
+				self.hdsSigleStare = stare
+				self.l.invalidatePicons()
+			if not pornite or self.root is None:
+				return
+			S.cereReferinte(self.l.takePiconRequests().splitlines())
+		except Exception as e:
+			print("[ServiceList] siglele: %s" % type(e).__name__)
 
 	# ---- buchetul Favorite in lista tuturor buchetelor: numele lui implicit din fisier ("Favourites (TV)", textul
 	# englezesc pus de enigma2) se arata tradus, ca in titlul listei (ChannelSelection.getServiceName: "Favorite").
@@ -465,6 +502,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsTransmiseAcum()
 		self.hdsLeagaDvbI(True)
 		self.hdsNumeleBuchetelor()
+		if hasattr(self.l, "addPiconPath"):
+			from enigma import eTimer
+			self.hdsSigleCeas = eTimer()
+			self.hdsSigleCeas.callback.append(self.hdsSigle)
+			self.hdsSigleCeas.start(1500, False)
+			self.hdsSigle()
 
 	def preWidgetRemove(self, instance):
 		instance.setContent(None)
@@ -472,6 +515,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsLeagaInregistrarile(False)
 		self.hdsLeagaTransmise(False)
 		self.hdsLeagaDvbI(False)
+		if self.hdsSigleCeas is not None:
+			self.hdsSigleCeas.stop()
+			self.hdsSigleCeas = None
 
 	def getRoot(self):
 		return self.root
@@ -498,6 +544,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 	def setRoot(self, root, justSet=False):
 		self.root = root
 		self.hdsAdaugate = []
+		if hasattr(self.l, "invalidatePicons"):
+			self.l.invalidatePicons()
 		self.iconitaMarcaj(root)
 		self.hdsInregistrari()
 		self.l.setRoot(root, justSet)
@@ -525,6 +573,13 @@ class ServiceList(HTMLComponent, GUIComponent):
 		except AttributeError:
 			semne = 3
 		l.setServiceMarks(semne, "$", _("Satelit"), _("Cablu"), _("Terestru"))
+		# locurile adaugate de extensii: eticheta lor, dupa adresa canalului; aici, ca o extensie instalata acum sa se vada fara repornire
+		try:
+			from Components.HdsLocuriLista import etichete
+			for marcaj, eticheta in etichete():
+				l.setPathLabel(marcaj, eticheta)
+		except (ImportError, AttributeError) as e:
+			print("[ServiceList] etichetele locurilor: %s" % e)
 
 	def iconitaMarcaj(self, root):
 		"""In buchetele DAB+ / DVB-T2 din satelit marcajele sunt capetele ansamblurilor („MUX DAB+: DR Deutschland”) si
@@ -560,6 +615,7 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.l.FillFinished()
 		self.l.sort()
 		self.hdsEticheteDvbI()
+		self.hdsSigle()
 
 # stuff for multiple marks (edit mode / later multiepg)
 	def clearMarks(self):

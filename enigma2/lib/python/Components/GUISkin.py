@@ -5,6 +5,36 @@ from skin import applyAllAttributes
 from Tools.CList import CList
 from .Sources.StaticText import StaticText
 
+def _intregi(fabrica):
+	"""ePoint/eSize care primesc si numere cu virgula (rotunjite); restul argumentelor trec neschimbate"""
+	def fa(*argumente):
+		return fabrica(*[int(round(a)) if isinstance(a, float) else a for a in argumente])
+	return fa
+
+
+def _execApplet(cod, g, l):
+	"""Codul din skin (applet). Sub o tema externa scrisa pentru Python 2 (pozitii cu "/", deci numere cu virgula, pe
+	care ePoint si eSize nu le primesc: "argument 1 of type 'int'") ePoint si eSize rotunjesc, cat ruleaza codul.
+	Pe temele noastre codul ruleaza exact ca pana acum."""
+	try:
+		from skin import altSkinActiv
+		extern = altSkinActiv()
+	except Exception:
+		extern = False
+	if not extern:
+		exec((cod), g, l)
+		return
+	import enigma
+	vechi = (enigma.ePoint, enigma.eSize)
+	enigma.ePoint, enigma.eSize = _intregi(vechi[0]), _intregi(vechi[1])
+	g = dict(g)
+	g["ePoint"], g["eSize"] = enigma.ePoint, enigma.eSize
+	try:
+		exec((cod), g, l)
+	finally:
+		enigma.ePoint, enigma.eSize = vechi
+
+
 class GUISkin:
 	__module__ = __name__
 
@@ -78,7 +108,7 @@ class GUISkin:
 			# codul din skin (applet) sau o functie gresita nu opreste receptorul: jurnal si mai departe
 			try:
 				if type(f) is not type(self.close): # is this the best way to do this?
-					exec((f), globals(), locals())
+					_execApplet(f, globals(), locals())
 				else:
 					f()
 			except Exception:

@@ -300,11 +300,22 @@ static void blit_8i_to_32_ab(__u32 *dst, __u8 *src, __u32 *pal, int width)
 	{
 #define BLEND(x, y, a) (y + (((x-y) * a)>>8))
 		__u32 srccol = pal[*src++];
+		unsigned char sa = (srccol >> 24) & 0xFF;
+		/* no read of the destination for a transparent or an opaque pixel: the framebuffer has no cache (gPixmap::blit) */
+		if (!sa)
+		{
+			dst++;
+			continue;
+		}
+		if (sa == 0xFF)
+		{
+			*dst++ = srccol;
+			continue;
+		}
 		__u32 dstcol = *dst;
 		unsigned char sb = srccol & 0xFF;
 		unsigned char sg = (srccol >> 8) & 0xFF;
 		unsigned char sr = (srccol >> 16) & 0xFF;
-		unsigned char sa = (srccol >> 24) & 0xFF;
 
 		unsigned char db = dstcol & 0xFF;
 		unsigned char dg = (dstcol >> 8) & 0xFF;
@@ -1107,34 +1118,39 @@ void gPixmap::blit(const gPixmap &src, const eRect &_pos, const gRegion &clip, i
 					}
 				} else if (flag & blitAlphaBlend)
 				{
-					// uh oh. this is only until hardware accel is working.
-
+					/* The destination is usually the framebuffer, which the CPU maps without cache: a read from it costs far
+					 * more than a write (a 576x256 tile took about 100 ms on the Hi3798MV200 with four byte reads per pixel).
+					 * Most pixels of an image are fully transparent or fully opaque and need no read at all; the others read
+					 * the destination once, as one word. The pixels are 0xAARRGGBB words on the little endian boxes. */
 					int width=area.width();
-							// ARGB color space!
-					unsigned char *src=(unsigned char*)srcptr;
-					unsigned char *dst=(unsigned char*)dstptr;
+					const __u32 *src=srcptr;
+					__u32 *dst=dstptr;
 
 #define BLEND(x, y, a) (y + ((x-y) * a)/256)
 					while (width--)
 					{
-						unsigned char sa = src[3];
-						unsigned char sr = src[2];
-						unsigned char sg = src[1];
-						unsigned char sb = src[0];
+						const __u32 s = *src++;
+						const int sa = s >> 24;
 
-						unsigned char da = dst[3];
-						unsigned char dr = dst[2];
-						unsigned char dg = dst[1];
-						unsigned char db = dst[0];
+						if (sa == 0xFF)
+							*dst = s;
+						else if (sa)
+						{
+							const __u32 d = *dst;
+							const int da = d >> 24;
+							const int dr = (d >> 16) & 0xFF;
+							const int dg = (d >> 8) & 0xFF;
+							const int db = d & 0xFF;
+							const int sr = (s >> 16) & 0xFF;
+							const int sg = (s >> 8) & 0xFF;
+							const int sb = s & 0xFF;
 
-						dst[3] = BLEND(0xFF, da, sa);
-						dst[2] = BLEND(sr, dr, sa);
-						dst[1] = BLEND(sg, dg, sa);
-						dst[0] = BLEND(sb, db, sa);
-#undef BLEND
-
-						src += 4; dst += 4;
+							*dst = ((__u32)BLEND(0xFF, da, sa) << 24) | ((__u32)BLEND(sr, dr, sa) << 16)
+								| ((__u32)BLEND(sg, dg, sa) << 8) | (__u32)BLEND(sb, db, sa);
+						}
+						dst++;
 					}
+#undef BLEND
 				} else
 					memcpy(dstptr, srcptr, area.width()*surface->bypp);
 				srcptr+=src.surface->stride/4;

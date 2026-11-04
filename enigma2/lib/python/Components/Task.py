@@ -2,6 +2,8 @@
 # A Job consists of many "Tasks".
 # A task is the run of an external tool, with proper methods for failure handling
 
+import codecs
+
 from Tools.CList import CList
 
 class Job(object):
@@ -189,13 +191,27 @@ class Task(object):
 	def cleanup(self, failed):
 		pass
 	
+	# HDSatelit: the container gives bytes, like on the other Python 3 images; processOutput gets them as they come
+	# (subclasses written for those images decode them) and decodes them as UTF-8 with one decoder per stream, so a
+	# character cut between two reads comes out whole and a half character of stdout does not meet stderr
 	def processStdout(self, data):
+		self._stream = 1
 		self.processOutput(data)
 		
 	def processStderr(self, data):
+		self._stream = 2
 		self.processOutput(data)
 
+	def _decode(self, data):
+		decoders = self.__dict__.setdefault("_decoders", {})
+		stream = getattr(self, "_stream", 1)
+		if stream not in decoders:
+			decoders[stream] = codecs.getincrementaldecoder("utf-8")("replace")
+		return decoders[stream].decode(data)
+
 	def processOutput(self, data):
+		if isinstance(data, (bytes, bytearray)):
+			data = self._decode(data)
 		self.output_line += data
 		while True:
 			i = self.output_line.find('\n')

@@ -315,7 +315,7 @@ def textStare(st):
 			parti.append(_t("Pornită, dar nelegată la nicio rețea Wi-Fi"))
 	else:
 		if st["legatura"]:
-			parti.append(_t("Activă, cablul e bagat") if st["ip"] else _t("Cablul e bagat, fără adresă IP"))
+			parti.append(_t("Activă, cablul e băgat") if st["ip"] else _t("Cablul e băgat, fără adresă IP"))
 		elif st["legatura"] is False:
 			parti.append(_t("Pornită, dar fără cablu"))
 		else:

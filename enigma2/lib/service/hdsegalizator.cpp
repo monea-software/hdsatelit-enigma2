@@ -27,6 +27,10 @@
  * bucata scrisa in tampon are PTS-ul ei (marcajele sesiunii); firul placii compara PTS-ul cadrului care iese cu PTS-ul
  * imaginii (CeasImagine) si hotaraste cu SincronImagine.
  *
+ * Posturile de pe internet (vezi hdsegalizator.h): playbin-ul serviciului -> sinkFlux() -> appsink -> laMostraFlux -> Lant ->
+ * Potrivire (fara potrivirea ceasurilor; firul GStreamer asteapta placa) -> ALSA, sau WAV la proba. m_lacat_flux tine sesiunea
+ * cat prelucreaza firul GStreamer: inchideSesiunea o scoate de sub el inainte s-o stearga.
+ *
  * Volumul: placa aplica volumul enigma2 pe iesiri (atunci si pe sunetul nostru) sau pe pista ei (atunci nu). In modul
  * automat, la fiecare volum sub 100 se citeste o data /proc/msp/sound0: iesirile cu Vol(100) inseamna volum pe pista,
  * deci volumul se aplica aici, pe aceeasi scara ca volume.cpp (63 de trepte de 1 dB). Mutul se aplica mereu aici.
@@ -77,6 +81,7 @@ struct CeasDemux
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -237,7 +242,9 @@ namespace
 	private:
 		void incarcaAcum()
 		{
-			void *l = dlopen("libasound.so.2", RTLD_NOW | RTLD_LOCAL);
+			/* HDS_EGAL_ALSA: proba fara placa de sunet, in emulator, o biblioteca cu aceleasi functii */
+			const char *biblioteca = getenv("HDS_EGAL_ALSA");
+			void *l = biblioteca && *biblioteca ? dlopen(biblioteca, RTLD_NOW | RTLD_LOCAL) : dlopen("libasound.so.2", RTLD_NOW | RTLD_LOCAL);
 			if (!l)
 			{
 				eDebug("[HdsEgalizator] libasound.so.2 lipseste: %s", dlerror());
@@ -575,12 +582,13 @@ namespace
 		int demux, pid, fel;
 		bool tv;              /* canal cu imagine: sunetul se tine dupa ceasul imaginii */
 		std::string fisier, wav;
+		std::string flux;     /* adresa unui post de pe internet: decodeaza playbin-ul serviciului */
 		Sursa(): demux(-1), pid(-1), fel(-1), tv(false) {}
 		bool aceeasi(const Sursa &a) const
 		{
-			return demux == a.demux && pid == a.pid && fel == a.fel && tv == a.tv && fisier == a.fisier;
+			return demux == a.demux && pid == a.pid && fel == a.fel && tv == a.tv && fisier == a.fisier && flux == a.flux;
 		}
-		bool valida() const { return pid >= 0 || !fisier.empty(); }
+		bool valida() const { return pid >= 0 || !fisier.empty() || !flux.empty(); }
 	};
 
 	/* cele 4 stari care se vad in stare() */
@@ -645,6 +653,7 @@ public:
 		std::atomic<int> tv_stare;   /* TV_ASTEAPTA, TV_POTRIVIT, TV_FARA_CEAS, TV_NEPOTRIVIT */
 		std::atomic<double> eroare_tv_ms;
 		std::atomic<unsigned> taceri_tv, aruncari_tv;
+		int fd_audio0;               /* numai o sesiune de flux, cu setFluxAudio0 */
 		uint64_t ultim_ceas_bun;     /* firul placii */
 		int tacere_ramasa;           /* firul placii: cadrele de tacere hotarate de sincron, inca nescrise */
 
@@ -685,7 +694,7 @@ public:
 			ultima_data_ms(0), caderi_alsa(0), eos(false), rampaJos(false), pregain_db(0.0), abatere_ppm(0.0),
 			benzi_active(0), limitari(0), versiune(0), pornit_ms(0), info_decodor(false),
 			esantionare(0), canale(0), pts_baza(0), pts_baza_ok(false), tv_stare(0), eroare_tv_ms(0.0), taceri_tv(0),
-			aruncari_tv(0), ultim_ceas_bun(0), tacere_ramasa(0)
+			aruncari_tv(0), fd_audio0(-1), ultim_ceas_bun(0), tacere_ramasa(0)
 		{
 		}
 	};
@@ -695,7 +704,7 @@ public:
 		pompa(0), m_cerereSpectru(0), m_stare(STARE_OPRIT), m_versiune(1), m_volum_mod(0), m_placa("default"), m_sesiune(0),
 		m_ultim_volum(-1), m_ultim_mut(false), m_volum_aici(true), m_procent(0.0), m_procent_cit(0.0),
 		m_procent_dec(0.0), m_procent_ies(0.0), m_debit(0), m_debit_aprox(true), m_ultim_octeti(0), m_ultim_cadre(0),
-		m_ultim_masura(0), m_suma_octeti(0.0), m_suma_cadre(0.0), m_volumctl(0), m_tv(true), m_potrivire_tv_ms(0)
+		m_ultim_masura(0), m_suma_octeti(0.0), m_suma_cadre(0.0), m_volumctl(0), m_tv(true), m_potrivire_tv_ms(0), m_sesiune_flux(0), m_flux_audio0(false)
 	{
 		for (int i = 0; i < 3; i++)
 			m_ultime_fir[i] = 0;
@@ -827,6 +836,12 @@ public:
 		return m_esuata.valida() && m_esuata.aceeasi(s);
 	}
 
+	void noteazaEsuata(const Sursa &s)
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		m_esuata = s;
+	}
+
 	void uitaEsuata()
 	{
 		std::lock_guard<std::mutex> l(m_lacat);
@@ -834,6 +849,55 @@ public:
 	}
 
 	PyObject *stare(const std::string &post);
+
+	/* ---- fluxurile ---- */
+
+	/* firul enigma2 */
+	void setIesireFlux(const std::string &cale)
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		m_iesire_flux = cale;
+	}
+
+	void setFluxAudio0(bool da) { m_flux_audio0 = da; }
+
+	std::string iesireFlux()
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		return m_iesire_flux;
+	}
+
+	/* motivul pentru care adresa nu are decodor ("" daca n-a fost gasit asa ceva); cel mult cateva zeci de adrese */
+	std::string motivFlux(const std::string &adresa)
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		std::map<std::string, std::string>::const_iterator i = m_fara_decodor.find(adresa);
+		return i == m_fara_decodor.end() ? std::string() : i->second;
+	}
+
+	void retineFlux(const std::string &adresa, const std::string &motiv)
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		if (m_fara_decodor.size() >= 200)
+			m_fara_decodor.clear();
+		m_fara_decodor[adresa] = motiv;
+	}
+
+	void infoFlux(const std::string &codec, int kbit)
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		if (m_sesiune && !m_sesiune->sursa.flux.empty())
+		{
+			m_sesiune->codec = codec;
+			m_sesiune->debit_antet = kbit;
+		}
+	}
+
+	/* firul GStreamer al serviciului */
+#if HAVE_GSTREAMER
+	static GstFlowReturn laMostraFlux(GstElement *sink, gpointer user);
+#endif
+	void mostreFlux(const float *date, int cadre);
 
 	/* ---- firul de control ---- */
 private:
@@ -920,6 +984,9 @@ private:
 	void citesteCeasul(int demux);
 	void notaDebit(Sesiune *s, const std::vector<uint8_t> &es);
 	void deschideSesiunea(const Sursa &cerut);
+	void deschideFlux(Sesiune *s, const Sursa &cerut);
+	bool deschideIesirea(Sesiune *s, const Sursa &sursa, const Sursa &cerut, std::string &placa);
+	void reiaMasurile();
 	void inchideSesiunea();
 	void verifica();
 	void volum();
@@ -951,6 +1018,8 @@ private:
 	std::string m_placa;
 	Sursa m_sursa_dorita, m_esuata;
 	std::string m_ceas_tv;                /* proba ceasului STC: „da”, „nu”, „fara-demux” sau gol */
+	std::string m_iesire_flux;            /* proba: fisierul WAV al sesiunilor de flux */
+	std::map<std::string, std::string> m_fara_decodor;   /* adresa -> motivul: se tine pana la repornire */
 
 	/* numai pe firul de control */
 	Sesiune *m_sesiune;
@@ -969,6 +1038,10 @@ private:
 	std::atomic<int> m_potrivire_tv_ms;
 	std::mutex m_lacat_ceas;
 	CeasImagine m_ceas_imagine;
+	/* sesiunea de flux care primeste mostre; laturi: firul GStreamer al serviciului si firul de control */
+	std::mutex m_lacat_flux;
+	Sesiune *m_sesiune_flux;
+	std::atomic<bool> m_flux_audio0;
 };
 
 /* ------------------------------------------------------------------------ decodoarele din GStreamer */
@@ -1109,7 +1182,7 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	s->cerut = cerut;
 	s->pornit_ms = acumMs();
 	s->tmp.reserve(8192);
-	if (!sursa.fisier.empty())
+	if (!sursa.fisier.empty() || !sursa.flux.empty())
 		s->potrivire.faraPotrivire();
 	else if (sursa.tv)
 		s->potrivire.raportExtern(1.0);     /* TV: raportul il da sincronul cu imaginea */
@@ -1117,6 +1190,11 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 		/* de aici, esec() inchide tot ce s-a deschis in sesiune */
 		std::lock_guard<std::mutex> l(m_lacat);
 		m_sesiune = s;
+	}
+	if (!sursa.flux.empty())
+	{
+		deschideFlux(s, cerut);
+		return;
 	}
 	std::vector<uint8_t> inceput;
 	if (!sursa.fisier.empty())
@@ -1248,50 +1326,9 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 			s->codec = sursa.fel == eHdsEgalizator::felAacLatm ? "AAC (LATM)" : "AAC";
 	}
 
-	/* iesirea: ALSA pentru posturi si pentru proba in timp real (iesirea „alsa”), altfel fisierul WAV al probei */
 	std::string placa;
-	{
-		std::lock_guard<std::mutex> l(m_lacat);
-		placa = m_placa;
-	}
-	if (sursa.fisier.empty() || sursa.wav.compare(0, 4, "alsa") == 0)
-	{
-		if (!alsa.incarca())
-		{
-			esec(cerut, "fara-alsa");
-			return;
-		}
-		if (alsa.iesireOprita(placa) == 1)
-		{
-			esec(cerut, "placa-oprita");
-			return;
-		}
-		/* deschiderea nu asteapta o placa ocupata (firul de control n-ar mai ajunge la intoarcerea pe placa); scrierile
-		   apoi asteapta placa */
-		void *pcm = 0;
-		int r = alsa.open(&pcm, placa.c_str(), Alsa::REDARE, Alsa::NEBLOCANT);
-		if (r >= 0)
-		{
-			{
-				std::lock_guard<std::mutex> l(m_lacat);
-				s->pcm = pcm;
-			}
-			r = alsa.nonblock(pcm, 0);
-			if (r >= 0)
-				r = alsa.set_params(pcm, Alsa::S16_LE, Alsa::RW_INTRETESUT, CANALE, RATA, 1, LATENTA_ALSA_US);
-		}
-		if (r < 0)
-		{
-			eDebug("[HdsEgalizator] placa ALSA %s: %s", placa.c_str(), alsa.strerror(r));
-			esec(cerut, "alsa-refuzat");
-			return;
-		}
-	}
-	else if (!s->wav.deschide(sursa.wav))
-	{
-		esec(cerut, "wav-refuzat");
+	if (!deschideIesirea(s, sursa, cerut, placa))
 		return;
-	}
 
 	/* LATM spre decodorul LATM: cadrele LOAS le desparte firul cititor (LoasCadre), deci fara parser; LATM prin ADTS
 	   merge pe drumul ADTS */
@@ -1352,6 +1389,66 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	s->cititor = std::thread(&eHdsEgalizatorMotor::firCititor, this, s);
 	if (s->pcm)
 		s->iesire = std::thread(&eHdsEgalizatorMotor::firIesire, this, s);
+	reiaMasurile();
+	eDebug("[HdsEgalizator] pornit: %s%s, PID %d, %s, %s%s, iesirea %s", sursa.fisier.empty() ? "demux" : sursa.fisier.c_str(),
+		sursa.tv ? " (TV, dupa ceasul imaginii)" : "", sursa.pid, s->codec.c_str(), decodor.c_str(),
+		s->reimpacheteaza ? " (prin ADTS)" : "", sursa.fisier.empty() ? placa.c_str() : sursa.wav.c_str());
+#else
+	esec(cerut, "fara-gstreamer");
+#endif
+}
+
+/* iesirea: ALSA pentru posturi si pentru proba in timp real (iesirea „alsa”), altfel fisierul WAV al probei. La esec a chemat
+   esec() si intoarce false. */
+bool eHdsEgalizatorMotor::deschideIesirea(Sesiune *s, const Sursa &sursa, const Sursa &cerut, std::string &placa)
+{
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		placa = m_placa;
+	}
+	if (sursa.wav.empty() || sursa.wav.compare(0, 4, "alsa") == 0)
+	{
+		if (!alsa.incarca())
+		{
+			esec(cerut, "fara-alsa");
+			return false;
+		}
+		if (alsa.iesireOprita(placa) == 1)
+		{
+			esec(cerut, "placa-oprita");
+			return false;
+		}
+		/* deschiderea nu asteapta o placa ocupata (firul de control n-ar mai ajunge la intoarcerea pe placa); scrierile
+		   apoi asteapta placa */
+		void *pcm = 0;
+		int r = alsa.open(&pcm, placa.c_str(), Alsa::REDARE, Alsa::NEBLOCANT);
+		if (r >= 0)
+		{
+			{
+				std::lock_guard<std::mutex> l(m_lacat);
+				s->pcm = pcm;
+			}
+			r = alsa.nonblock(pcm, 0);
+			if (r >= 0)
+				r = alsa.set_params(pcm, Alsa::S16_LE, Alsa::RW_INTRETESUT, CANALE, RATA, 1, LATENTA_ALSA_US);
+		}
+		if (r < 0)
+		{
+			eDebug("[HdsEgalizator] placa ALSA %s: %s", placa.c_str(), alsa.strerror(r));
+			esec(cerut, "alsa-refuzat");
+			return false;
+		}
+	}
+	else if (!s->wav.deschide(sursa.wav))
+	{
+		esec(cerut, "wav-refuzat");
+		return false;
+	}
+	return true;
+}
+
+void eHdsEgalizatorMotor::reiaMasurile()
+{
 	m_ultim_volum = -1;
 	m_ultim_octeti = 0;
 	m_ultim_cadre = 0;
@@ -1364,12 +1461,34 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	}
 	for (int i = 0; i < 3; i++)
 		m_ultime_fir[i] = 0;
-	eDebug("[HdsEgalizator] pornit: %s%s, PID %d, %s, %s%s, iesirea %s", sursa.fisier.empty() ? "demux" : sursa.fisier.c_str(),
-		sursa.tv ? " (TV, dupa ceasul imaginii)" : "", sursa.pid, s->codec.c_str(), decodor.c_str(),
-		s->reimpacheteaza ? " (prin ADTS)" : "", sursa.fisier.empty() ? placa.c_str() : sursa.wav.c_str());
-#else
-	esec(cerut, "fara-gstreamer");
-#endif
+}
+
+/* un post de pe internet: numai iesirea si lantul; decodeaza playbin-ul serviciului, iar mostrele vin prin mostreFlux */
+void eHdsEgalizatorMotor::deschideFlux(Sesiune *s, const Sursa &cerut)
+{
+	if (m_flux_audio0.load())
+	{
+		s->fd_audio0 = ::open("/dev/dvb/adapter0/audio0", O_RDWR | O_CLOEXEC);
+		eDebug("[HdsEgalizator] flux: audio0 %s", s->fd_audio0 >= 0 ? "deschis" : "nu se deschide");
+	}
+	std::string placa;
+	if (!deschideIesirea(s, s->sursa, cerut, placa))
+		return;
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		s->lant.seteaza(m_setari);
+		s->versiune = m_versiune;
+	}
+	s->lant.aseazaBenzile();
+	s->lant.rampa(true);
+	if (s->pcm)
+		s->iesire = std::thread(&eHdsEgalizatorMotor::firIesire, this, s);
+	reiaMasurile();
+	{
+		std::lock_guard<std::mutex> l(m_lacat_flux);
+		m_sesiune_flux = s;
+	}
+	eDebug("[HdsEgalizator] pornit: flux %s, iesirea %s", s->sursa.flux.c_str(), s->pcm ? placa.c_str() : s->sursa.wav.c_str());
 }
 
 void eHdsEgalizatorMotor::inchideSesiunea()
@@ -1389,6 +1508,12 @@ void eHdsEgalizatorMotor::inchideSesiunea()
 		s->iesire.join();
 	}
 	s->gata = true;
+	{
+		/* firul GStreamer al serviciului nu mai ajunge la ea: asteptarea din prelucreaza a iesit la rampaJos sau la gata */
+		std::lock_guard<std::mutex> l(m_lacat_flux);
+		if (m_sesiune_flux == s)
+			m_sesiune_flux = 0;
+	}
 #if HAVE_GSTREAMER
 	/* starea NULL deblocheaza si o impingere care asteapta loc in coada (proba din fisier) */
 	if (s->appsrc)
@@ -1408,6 +1533,8 @@ void eHdsEgalizatorMotor::inchideSesiunea()
 	}
 	if (s->pcm)
 		alsa.close(s->pcm);
+	if (s->fd_audio0 >= 0)
+		::close(s->fd_audio0);
 	s->wav.inchide();
 #if HAVE_GSTREAMER
 	if (s->decodor)
@@ -1801,9 +1928,9 @@ void eHdsEgalizatorMotor::prelucreaza(Sesiune *s, const float *date, int cadre, 
 	s->limitari = s->lant.limitari();
 	if (s->pcm)
 	{
-		/* proba din fisier spre placa: fisierul nu are ceas, deci decodarea asteapta placa (tamponul putin peste tinta,
-		   ca iesirea sa porneasca; potrivirea ceasurilor e oprita, raportul ramane 1) */
-		if (!s->sursa.fisier.empty())
+		/* proba din fisier spre placa si posturile de pe internet: ceasul e al placii, deci decodarea o asteapta (tamponul
+		   putin peste tinta, ca iesirea sa porneasca; potrivirea ceasurilor e oprita, raportul ramane 1) */
+		if (!s->sursa.fisier.empty() || !s->sursa.flux.empty())
 			while (!s->gata && !s->rampaJos && s->potrivire.umplere() > s->potrivire.tinta() + RATA / 50)
 				usleep(5000);
 		if (s->sursa.tv && pts90 >= 0)
@@ -1850,6 +1977,25 @@ GstFlowReturn eHdsEgalizatorMotor::laMostra(GstElement *sink, gpointer user)
 	return GST_FLOW_OK;
 }
 
+GstFlowReturn eHdsEgalizatorMotor::laMostraFlux(GstElement *sink, gpointer user)
+{
+	GstSample *m = 0;
+	g_signal_emit_by_name(sink, "pull-sample", &m);
+	if (!m)
+		return GST_FLOW_EOS;
+	GstBuffer *b = gst_sample_get_buffer(m);
+	GstMapInfo h;
+	if (b && gst_buffer_map(b, &h, GST_MAP_READ))
+	{
+		int cadre = (int)(h.size / (sizeof(float) * CANALE));
+		if (cadre > 0)
+			((eHdsEgalizatorMotor *)user)->mostreFlux((const float *)h.data, cadre);
+		gst_buffer_unmap(b, &h);
+	}
+	gst_sample_unref(m);
+	return GST_FLOW_OK;
+}
+
 void eHdsEgalizatorMotor::infoDecodor(Sesiune *s)
 {
 	if (s->info_decodor || !s->decodor || s->cadre.load() == 0)
@@ -1875,6 +2021,24 @@ void eHdsEgalizatorMotor::infoDecodor(Sesiune *s)
 }
 #endif
 
+/* firul GStreamer al serviciului. Fara sesiune (s-a inchis, iar serviciul inca n-a schimbat sink-ul) mostrele se pierd. */
+void eHdsEgalizatorMotor::mostreFlux(const float *date, int cadre)
+{
+	std::lock_guard<std::mutex> l(m_lacat_flux);
+	Sesiune *s = m_sesiune_flux;
+	if (!s || s->gata)
+		return;
+	uint64_t ns0 = procesorFirNs();
+	s->ultima_data_ms = acumMs();
+	prelucreaza(s, date, cadre, -1);
+	uint64_t ns1 = procesorFirNs();
+	if (s->ultim_ns_dec && ns1 > s->ultim_ns_dec)
+		s->ns_dec += ns1 - s->ultim_ns_dec;
+	else
+		s->ns_dec += ns1 - ns0;
+	s->ultim_ns_dec = ns1;
+}
+
 /* ------------------------------------------------------------------------ verificarile firului de control */
 
 void eHdsEgalizatorMotor::verifica()
@@ -1884,7 +2048,8 @@ void eHdsEgalizatorMotor::verifica()
 		return;
 	uint64_t acum = acumMs();
 #if HAVE_GSTREAMER
-	GstBus *bus = gst_element_get_bus(s->pipe);
+	/* un post de pe internet n-are pipeline aici: erorile lui sunt ale serviciului */
+	GstBus *bus = s->pipe ? gst_element_get_bus(s->pipe) : 0;
 	GstMessage *m;
 	while (bus && (m = gst_bus_pop_filtered(bus, (GstMessageType)(GST_MESSAGE_ERROR | GST_MESSAGE_EOS))))
 	{
@@ -1949,7 +2114,8 @@ void eHdsEgalizatorMotor::verifica()
 	}
 	if (ultima == 0)
 	{
-		if (acum - s->pornit_ms > (uint64_t)PRIMA_DATA_MS)
+		/* un post de pe internet se poate conecta mai greu; daca nu raspunde, spune serviciul */
+		if (s->sursa.flux.empty() && acum - s->pornit_ms > (uint64_t)PRIMA_DATA_MS)
 		{
 			esec(s->cerut, "fara-date-la-pornire");
 			return;
@@ -2169,6 +2335,8 @@ namespace
 		bool pauza;            /* serviciul principal e pe pauza (fara timeshift, decodorul placii oprit pe loc) */
 		const void *ceas_probat; /* serviciul pentru care proba ceasului STC e facuta */
 		std::string post;      /* da, oprit, pauza, tv, inregistrare, format, fara-gstreamer, fara-decodor-mpeg/aac, ... */
+		std::string motiv;     /* un post de pe internet fara decodor: motivul de spus la „esuat” */
+		std::string motiv_esuat; /* decodorul a cazut pe flux: motivul, pana cand postul porneste din nou */
 		FataStare(): pornit(false), pauza(false), ceas_probat(0), post("nimic") {}
 	};
 	FataStare fata;
@@ -2262,6 +2430,8 @@ PyObject *eHdsEgalizator::stare()
 {
 	PyObject *d = m_motor->stare(fata.post);
 	puneInt(d, "pornit", fata.pornit ? 1 : 0);
+	if (!fata.motiv.empty())
+		puneText(d, "motiv", fata.motiv);
 	return d;
 }
 
@@ -2306,11 +2476,117 @@ void eHdsEgalizator::opresteFisier()
 	}
 }
 
+void eHdsEgalizator::setIesireFlux(const char *cale)
+{
+	m_motor->setIesireFlux(cale ? cale : "");
+}
+
+void eHdsEgalizator::setFluxAudio0(int da)
+{
+	m_motor->setFluxAudio0(da != 0);
+}
+
+bool eHdsEgalizator::preiaFlux(const void *proprietar, const std::string &adresa, const sigc::slot<void()> &reaplica)
+{
+	m_proprietar = proprietar;
+	m_reaplica = reaplica;
+	fata.motiv.clear();
+	Sursa s;
+	s.flux = adresa;
+	s.wav = m_motor->iesireFlux();
+	std::string motiv, fara_decodor;
+	if (!fata.pornit)
+		motiv = "oprit";
+	else if (!::decodoare().gst)
+		motiv = "fara-gstreamer";
+	else if (s.wav.empty() && !alsa.incarca())
+		motiv = "fara-alsa";
+	else if (!(fara_decodor = m_motor->motivFlux(adresa)).empty())
+	{
+		motiv = fara_decodor == "fara-decodor-aac" ? fara_decodor : std::string("esuat");
+		fata.motiv = fara_decodor;
+	}
+	else if (m_motor->esuata(s))
+	{
+		motiv = "esuat";
+		fata.motiv = fata.motiv_esuat;
+	}
+	if (!motiv.empty())
+	{
+		fata.post = motiv;
+		if (m_motor->activ() && !m_motor->proba())
+		{
+			m_motor->noteazaDorita(Sursa());
+			m_motor->opreste();
+		}
+		return false;
+	}
+	fata.post = "da";
+	if (m_motor->mergeCu(s))
+		return true;
+	m_motor->noteazaDorita(s);
+	m_motor->porneste(s);
+	return true;
+}
+
+GstElement *eHdsEgalizator::sinkFlux()
+{
+#if HAVE_GSTREAMER
+	char text[512];
+	snprintf(text, sizeof(text), "audioconvert ! audioresample ! audio/x-raw,format=F32LE,rate=%d,channels=%d,layout=interleaved ! "
+		"appsink name=iesire emit-signals=true sync=false max-buffers=16 drop=false", RATA, CANALE);
+	GError *err = 0;
+	GstElement *bin = gst_parse_bin_from_description(text, TRUE, &err);
+	if (!bin || err)
+	{
+		eDebug("[HdsEgalizator] sink-ul fluxului nu se face: %s", err ? err->message : "?");
+		if (err)
+			g_error_free(err);
+		if (bin)
+			gst_object_unref(bin);
+		return 0;
+	}
+	GstElement *iesire = gst_bin_get_by_name(GST_BIN(bin), "iesire");
+	if (!iesire)
+	{
+		gst_object_unref(bin);
+		return 0;
+	}
+	g_signal_connect(iesire, "new-sample", G_CALLBACK(&eHdsEgalizatorMotor::laMostraFlux), m_motor);
+	gst_object_unref(iesire);
+	gst_object_set_name(GST_OBJECT(bin), "hdsegal");
+	return bin;
+#else
+	return 0;
+#endif
+}
+
+void eHdsEgalizator::fluxFaraDecodor(const std::string &adresa, bool aac)
+{
+	eDebug("[HdsEgalizator] fluxul %s nu are decodor in procesor (%s): sunetul trece pe placa", adresa.c_str(), aac ? "AAC" : "alt format");
+	m_motor->retineFlux(adresa, aac ? "fara-decodor-aac" : "format-necunoscut");
+}
+
+void eHdsEgalizator::fluxEroareDecodare(const std::string &adresa)
+{
+	eDebug("[HdsEgalizator] decodorul a cazut pe fluxul %s: sunetul trece pe placa", adresa.c_str());
+	Sursa s;
+	s.flux = adresa;
+	m_motor->noteazaEsuata(s);
+	fata.motiv_esuat = "eroare-decodare";
+}
+
+void eHdsEgalizator::fluxInfo(const std::string &codec, int kbit)
+{
+	m_motor->infoFlux(codec, kbit);
+}
+
 bool eHdsEgalizator::preiaSunetul(const void *proprietar, int demux, int pid, int fel, bool radio,
 	const sigc::slot<void()> &reaplica)
 {
 	m_proprietar = proprietar;
 	m_reaplica = reaplica;
+	fata.motiv.clear();
 	std::string motiv;
 	if (!fata.pornit)
 		motiv = "oprit";
@@ -2371,6 +2647,8 @@ void eHdsEgalizator::serviciuOprit(const void *proprietar)
 	m_proprietar = 0;
 	m_reaplica = sigc::slot<void()>();
 	m_motor->uitaEsuata();
+	fata.motiv.clear();
+	fata.motiv_esuat.clear();
 	fata.post = "nimic";
 	fata.pauza = false;
 	fata.ceas_probat = 0;

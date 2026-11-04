@@ -141,7 +141,7 @@ def _limbaSunet(cod):
 # eticheta subtitrarii dupa tipul din lista serviciului (subtype_t, lib/service/servicemp3.h): textul din film e „Text”,
 # un fisier are numele formatului; un tip necunoscut nu mai poate da o eroare de index
 _ETICHETE_TIP = {1: "Text", 2: "SSA", 3: "ASS", 4: "SRT", 5: "VobSub", 6: "PGS", 7: "VTT", 8: "SUB", 9: "SUB",
-	10: "MPL2", 11: "TMPlayer", 12: "SAMI"}
+	10: "MPL2", 11: "TMPlayer", 12: "SAMI", 13: "DVB", 14: "Teletext"}
 # numerele fisierelor de langa film in lista serviciului (Components/HdsSubtitrariFilm.py, INDEX_FISIER)
 _PRIMUL_FISIER = 100
 # randul de la sfarsitul listei subtitrarilor la un film: „Alege alt fișier…” (navigatorul de fisiere)
@@ -429,7 +429,11 @@ class AudioSelection(Screen, ConfigListScreen):
 					elif x[0] == 2:
 						description = _ETICHETE_TIP.get(x[2], _("<unknown>"))
 						number = str(x[1] + 1)	# pista din film, numarata de la 1 (ca in web)
-						if x[1] >= _PRIMUL_FISIER:
+						if x[2] == 14:
+							# o pagina de teletext: numarul paginii, ca pe canalele de satelit
+							number = ""
+							description = "Teletext %d%02x" % ((x[3] >> 8) or 8, x[3] & 0xFF)
+						elif x[1] >= _PRIMUL_FISIER:
 							# un fisier de langa film: formatul si numele scurt; fara numar (100, 101 nu spun nimic)
 							number = ""
 							if len(x) > 6 and x[6]:

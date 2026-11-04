@@ -1,4 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import codecs
+
 from enigma import eConsoleAppContainer
 from Screens.Screen import Screen
 from Components.ActionMap import ActionMap
@@ -37,6 +39,8 @@ class Console(Screen):
 		self.onShown.append(self.updateTitle)
 		
 		self.container = eConsoleAppContainer()
+		# the output comes as bytes: decoded as it comes, a character cut between two reads waits for its end
+		self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
 		self.run = 0
 		self.container.appClosed.append(self.runFinished)
 		self.container.dataAvail.append(self.dataAvail)
@@ -67,6 +71,8 @@ class Console(Screen):
 			return -1
 
 	def runFinished(self, retval):
+		# a cut character left at the end of a command is shown (as U+FFFD), not glued to the next command
+		self.dataAvail(self._decoder.decode(b"", True))
 		self.run += 1
 		if self.run != len(self.cmdlist):
 			if self.executeCommand(self.cmdlist[self.run]): #start of container application failed...
@@ -87,5 +93,8 @@ class Console(Screen):
 			self.container.appClosed.remove(self.runFinished)
 			self.container.dataAvail.remove(self.dataAvail)
 
-	def dataAvail(self, str):
-		self["text"].setText(self["text"].getText() + str)
+	def dataAvail(self, data):
+		if isinstance(data, bytes):
+			data = self._decoder.decode(data)
+		if data:
+			self["text"].setText(self["text"].getText() + data)

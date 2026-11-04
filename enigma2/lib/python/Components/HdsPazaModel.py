@@ -144,7 +144,7 @@ REFUZ_SCHIMBAT = "schimbat"
 
 # tipuri de placa din eticheta si un receptor cunoscut de acel tip (oe-alliance, u571.conf); numai pentru mesaj
 EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40", "sf8008": "Octagon SF8008 4K UHD", "sf8008m": "Octagon SF8008 MINI 4K",
-	"viper4k": "Amiko Viper 4K V10"}
+	"viper4k": "Amiko Viper 4K V10", "ustym4kpro": "Uclan Ustym 4K PRO"}
 # masinile Octagon: recuperarea e din meniul de pornire al receptorului (Recovery From USB), nu Maintenance Mode
 MASINI_OCTAGON = ("sf8008", "sf8008m")
 

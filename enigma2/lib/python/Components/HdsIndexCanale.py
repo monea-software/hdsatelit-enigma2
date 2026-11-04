@@ -33,6 +33,7 @@ Nimic din enigma nu se importa aici: modulul se incarca si pe PC, in teste
 import json
 import os
 import re
+import unicodedata
 
 try:
 	from Components import HdsFisierSigur as _S
@@ -106,7 +107,7 @@ TITLURI = {
 	'lsub': _('Subtitrare'),
 }
 OPTIUNI_FIXE = {
-	'tip': (('tv', 'TV'), ('radio', 'Radio'), ('dab', 'DAB+'), ('t2', 'DVB-T2'), ('internet', _('Internet'))),
+	'tip': (('tv', 'TV'), ('radio', 'Radio'), ('dab', 'DAB+'), ('t2', 'DVB-T2'), ('iptv', 'IPTV'), ('online', 'Online'), ('internet', _('Internet'))),
 	'rez': (('sd', 'SD'), ('720', 'HD 720p'), ('1080', 'Full HD 1080'), ('4k', '4K')),
 	'acces': (('fta', 'FTA'), ('criptat', _('Criptat'))),
 	'cod': (('mpeg2', 'MPEG-2'), ('h264', 'H.264'), ('h265', 'H.265')),
@@ -215,7 +216,7 @@ COD_DIN_VTYPE = {1: 'h264', 7: 'h265'}
 COD_DIN_SVIDEOTYPE = {0: 'mpeg2', 1: 'h264', 7: 'h265'}
 ETICHETA_COD = {'mpeg2': 'MPEG-2', 'h264': 'H.264', 'h265': 'H.265'}
 
-ETICHETA_TIP = {'tv': '', 'radio': 'Radio', 'dab': 'DAB+', 't2': 'DVB-T2', 'internet': 'Internet'}
+ETICHETA_TIP = {'tv': '', 'radio': 'Radio', 'dab': 'DAB+', 't2': 'DVB-T2', 'iptv': 'IPTV', 'online': 'Online', 'internet': 'Internet'}
 _MSGID_TIP = {'radio': 'Radio', 'internet': 'Internet'}
 
 
@@ -317,7 +318,9 @@ def _simplu(text):
 	# lamedb-ului (o data pe fiecare canal)
 	if _ascii(t):
 		return t
-	return t.translate(_TABEL)
+	# Compatibility forms and vowel marks must not split Arabic words.
+	t = unicodedata.normalize('NFKC', t)
+	return ''.join(c for c in t if not unicodedata.category(c).startswith('M')).translate(_TABEL)
 
 
 def _ascii(t):
@@ -396,7 +399,7 @@ _ARE_TTX = frozenset(('ttx',))
 
 # cuvintele dupa care se gasesc si fluxurile noastre (normalizate: „DAB+” -> „dab”, „DVB-T2” -> „dvbt2”), pe langa
 # numele postului si numele ansamblului (marcajul buchetului); vezi cuvinte_flux si Canal.rang
-CUVINTE_FEL = {'dab': ('dab', 'dabplus'), 't2': ('dvbt2', 't2')}
+CUVINTE_FEL = {'dab': ('dab', 'dabplus'), 't2': ('dvbt2', 't2'), 'iptv': ('iptv',)}
 
 
 def cuvinte_flux(tip, ansamblu=''):
@@ -522,6 +525,10 @@ class Canal(object):
 		return ETICHETA_COD.get(self.cod, '')
 
 	def eticheta_pozitie(self):
+		if self.tip == 'iptv':
+			return 'IPTV'
+		if self.tip == 'online':
+			return 'Online'
 		if self.tip == 'internet' and self.poz is None:
 			return 'Internet'
 		return text_pozitie(self.poz)
@@ -931,6 +938,47 @@ def fisiere_buchete(director):
 			'userbouquet.hdsdvbi.tv', 'userbouquet.hdsdvbi.radio'):
 		if nume not in rez and os.path.isfile(os.path.join(director, nume)):
 			rez.append(nume)
+	# grupele furnizorului stau sub un singur rand din bouquets.tv (Components/HdsIptvSurse.py): se urmeaza un nivel in plus
+	if BUCHET_IPTV in rez:
+		rez.extend(n for n in _grupe_iptv(director) if n not in rez)
+	# grupele locurilor adaugate de extensii (Components/HdsLocuriLista.py): numai cele umplute deja au fisier
+	for prefix in _prefixe_locuri():
+		try:
+			rez.extend(n for n in sorted(os.listdir(director)) if n.startswith(prefix) and n not in rez)
+		except OSError:
+			pass
+	return rez
+
+
+def _prefixe_locuri():
+	try:
+		from Components import HdsLocuriLista as L
+		return [d['prefix'] for d in L.locuri()]
+	except Exception:
+		return []
+
+
+def _marcaje_locuri():
+	try:
+		from Components import HdsLocuriLista as L
+		return [d['marcaj'] for d in L.locuri()]
+	except Exception:
+		return []
+
+
+BUCHET_IPTV = 'userbouquet.hdsiptv.tv'
+_PREFIX_GRUPA_IPTV = 'subbouquet.hdsiptv_'
+MARCAJ_IPTV = '127.0.0.1:8897/tv/'
+
+
+def _grupe_iptv(director):
+	text = _citeste_text(os.path.join(director, BUCHET_IPTV)) or ''
+	rez = []
+	for linie in text.splitlines():
+		if 'FROM BOUQUET "' in linie:
+			nume = linie.split('FROM BOUQUET "', 1)[1].split('"', 1)[0]
+			if nume.startswith(_PREFIX_GRUPA_IPTV) and '/' not in nume:
+				rez.append(nume)
 	return rez
 
 
@@ -939,13 +987,17 @@ def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 	pozitii_feed = pozitii_feed or {}
 	rez = []
 	intrari = []
+	grupa = ''
 	for linie in (text or '').splitlines():
 		linie = linie.rstrip('\r')
-		if linie.startswith('#SERVICE '):
+		if linie.startswith('#NAME ') and nume_fisier.startswith(_PREFIX_GRUPA_IPTV):
+			grupa = linie[6:].strip()
+		elif linie.startswith('#SERVICE '):
 			intrari.append([linie[9:].strip(), None])
 		elif linie.startswith('#DESCRIPTION ') and intrari and intrari[-1][1] is None:
 			intrari[-1][1] = linie[13:].strip()
 	radio_buchet = nume_fisier.endswith('.radio')
+	marcaje_locuri = _marcaje_locuri()
 	# marcajul de deasupra: in buchetele DAB+ / DVB-T2 din satelit fiecare ansamblu (feed) are un marcaj cu numele lui
 	# (Hds/DabT2/buchete.py, intrari_noi), urmat de posturile lui
 	marcaj = ''
@@ -976,6 +1028,14 @@ def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 			feed = _feed_din_url(cale, marcaj_dab)
 			c = Canal(nume, ref, cheie_mas, 'dab', stype, pozitii_feed.get(('dab', feed)), (), 'fta', (), '', '',
 				False, buchet=nume_fisier, radio=True, ansamblu=marcaj)
+		elif MARCAJ_IPTV in simpla or (nume_fisier.startswith(_PREFIX_GRUPA_IPTV) or nume_fisier == BUCHET_IPTV) and '://' in simpla:
+			# un canal de la furnizorul omului, si cand e pus de om in alt buchet; grupa furnizorului (#NAME) se cauta si ea
+			c = Canal(nume, ref, cheie_mas, 'iptv', stype, None, (), None, (), '', '', False, buchet=nume_fisier, radio=False,
+				ansamblu=grupa)
+		elif any(m in simpla for m in marcaje_locuri):
+			# un post al unui loc adaugat de o extensie, si cand e pus de om in alt buchet
+			c = Canal(nume, ref, cheie_mas, 'online', stype, None, (), None, (), '', '', False, buchet=nume_fisier,
+				radio=radio_buchet or stype in TIPURI_RADIO)
 		elif MARCAJ_T2 in simpla:
 			feed = _feed_din_url(cale, MARCAJ_T2)
 			radio = stype in TIPURI_RADIO
@@ -1568,7 +1628,7 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 	for b in buchete:
 		canale.extend(citeste_buchet(_citeste_text(os.path.join(director, b)), b, pozitii_feed))
 	# acelasi flux in doua buchete: o singura data. Copia pastrata (de pilda din Favorite, fara marcaj) ia ansamblul
-	# postului DAB+ / DVB-T2 din copia din buchetul lui, unde marcajul de deasupra il da
+	# postului DAB+ / DVB-T2 din copia din buchetul lui, unde marcajul de deasupra il da (la fel grupa unui canal IPTV)
 	vazute, unice = {}, []
 	for c in canale:
 		k = c.cheie_mas or c.ref

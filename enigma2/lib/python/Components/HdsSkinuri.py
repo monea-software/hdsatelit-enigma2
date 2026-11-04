@@ -314,12 +314,13 @@ def _sterge(cale):
 
 
 def _caderiDupa(pornit, caderi=None):
-	"""True cand /tmp/hds-enigma2.caderi are o oprire neasteptata scrisa la sau dupa `pornit` (secunde de uptime)."""
+	"""True cand /tmp/hds-enigma2.caderi are o oprire neasteptata scrisa la sau dupa `pornit` (secunde de uptime). O oprire
+	ceruta (al treilea cuvant: oprire, tools/enigma2.sh.in) nu e vina skinului."""
 	try:
 		with open(caderi or CADERI, encoding="utf-8", errors="replace") as f:
 			for rand in f:
 				p = rand.split()
-				if p and p[0].isdigit() and int(p[0]) >= pornit:
+				if p and p[0].isdigit() and int(p[0]) >= pornit and p[2:3] != ["oprire"]:
 					return True
 	except (IOError, OSError):
 		pass

@@ -83,6 +83,9 @@ FILESYSTEMS_FILE = "/proc/filesystems"
 # restart. Written only when that partition changes.
 HDD_UUID_FILE = "/etc/enigma2/hds-disc-hdd"
 NOT_MOUNTED_FS = ("swap", "LVM2_member", "linux_raid_member", "crypto_LUKS", "zfs_member")
+# the second mount of the disk the image runs from (HarddiskManager.addSystemDisk): the filesystem is already mounted, so
+# it takes milliseconds; a start never waits for it longer than this (seconds)
+SYSTEM_MOUNT_TIMEOUT = 15
 # vfat file names in UTF-8 (the kernel default here is iso8859-1: names from the EPG would be unreadable on a PC)
 UTF8_FS = ("vfat",)
 # udev runs mount.sh before device-info.sh: a known type means mount.sh is done; while it is not known yet (udev
@@ -570,6 +573,22 @@ class Partition:
 			return True
 		return self.mountpoint in [mountpoint for source, mountpoint in readMounts()]
 
+class SystemDiskPartition(Partition):
+	"""The partition of the external disk the image runs from, mounted a second time on a stable name (see
+	HarddiskManager.addSystemDisk). Its device is also on /, so mounted() looks at the stable name only."""
+	def __init__(self, mountpoint, device, description, physdev, removable = False):
+		Partition.__init__(self, mountpoint, device, description, is_hotplug = True)
+		self.system_disk = True
+		self.physdev = physdev
+		self.has_partitions = False
+		self.is_cdrom = False
+		self.usb = "/usb" in physdev
+		self.sata = not self.usb and isSataPhysdev(physdev)
+		self.removable = removable
+
+	def mounted(self):
+		return self.mountpoint in [mountpoint for source, mountpoint in readMounts()]
+
 DEVICEDB_SR = \
 	{"dm8000":
 		{
@@ -647,7 +666,14 @@ class HarddiskManager:
 		except IOError:
 			cmdline = ""
 		self.system_disk = rootDeviceName(cmdline, readMounts())
+		external_root = self.externalRoot()
+		if external_root:
+			self.system_disk = external_root["disc"]
 		self.enumerateBlockDevices()
+		if external_root:
+			# before the sticks, so a fresh receiver has /hdd/movie/ on the disk; a stick that had /media/hdd keeps it
+			# (hddOwnerWaits)
+			self.addSystemDisk(external_root)
 		# partitions the base system mounted before enigma2 started get their stable names now: before any screen (a
 		# timer recording right after a wake-up needs /media/hdd) and before any listener, so a stick present at start
 		# does not raise an "add" event (the media scanner would walk it and show a message over the first screen).
@@ -655,6 +681,63 @@ class HarddiskManager:
 		for device in sorted(self.pending.keys(), key = self.pendingOrder):
 			if device in self.pending:
 				self.mountIfNeeded(device, True, True)
+
+	def externalRoot(self):
+		"""the image runs from a big external disk, in a folder of its partition (Components/HdsStocare.discRadacina)"""
+		try:
+			from Components.HdsStocare import discRadacina
+			return discRadacina()
+		except Exception as err:
+			print("[Harddisk] where the image runs from: %s" % err)
+			return None
+
+	def addSystemDisk(self, root):
+		"""The image runs from a folder of the partition (rootsubdir=), and writing an image deletes that folder (ofgwrite,
+		flash_ext4.c), so recordings must stay outside it: the top of the partition, reachable only through a second
+		mount of the same device (the same filesystem, nothing is formatted or moved). The mount is on a stable name in
+		/media, a tmpfs, so it never outlives a start. The disk stays blacklisted: it is never offered for formatting
+		or checking, and hotplug events leave it alone. A command, not Console: no eTimer runs while modules load; the
+		filesystem is already mounted, so it takes milliseconds."""
+		device = root["partitie"]
+		stable = [m.rstrip("/") for m in findMountpoints(device) if isMediaName(m)]
+		if stable:
+			# enigma2 started again: the mount from before is still there
+			place = stable[0]
+		else:
+			name = self.freeMediaName(deviceUuid(device))
+			if name is None:
+				print("[Harddisk] no free name under %s for %s" % (MEDIA_ROOT, device))
+				return False
+			place = MEDIA_ROOT + name
+			try:
+				if path.islink(place):
+					unlink(place)
+				if not path.isdir(place):
+					makedirs(place)
+			except OSError as err:
+				print("[Harddisk] could not prepare %s: %s" % (place, err))
+				return False
+			args = mountArguments(device, deviceFsType(device), place)
+			if environ.get("HDS_PROBA_MOUNT"):
+				print("[Harddisk] test mode, would run: %s" % " ".join(args[1:]))
+				return False
+			try:
+				done = subprocess.call(list(args[1:]), timeout = SYSTEM_MOUNT_TIMEOUT)
+			except (OSError, subprocess.SubprocessError) as err:
+				print("[Harddisk] mount: %s" % err)
+				done = 1
+			if done != 0 or place not in findMountpoints(device):
+				print("[Harddisk] could not mount %s on %s" % (device, place))
+				self.removeEmptyDir(place)
+				return False
+		try:
+			# o imagine poate porni si de pe un stick mare: il arata ca stick, nu ca hard disk
+			removable = readFile("/sys/block/%s/removable" % root["disc"]) == "1"
+		except (IOError, OSError):
+			removable = False
+		p = SystemDiskPartition(place, device, _("Discul de pornire"), root["real"], removable)
+		self.announceMounted(device, place, p)
+		return True
 
 	def getPartitionInfo(self, part):
 		"""a partition lives under its disk in sysfs (/sys/class/block/sda1 -> .../block/sda/sda1)"""

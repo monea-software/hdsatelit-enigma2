@@ -118,9 +118,12 @@ private:
 	__u8* EITdata;
 	__u8 ByteSize;
 	__u8 type;
+	unsigned short ImportedCost;
 	static descriptorMap descriptors;
 	static __u8 data[4108];
 	static int CacheSize;
+	static int ImportedCount; // HDSatelit: plafon global pentru XMLTV, inclusiv dupa refresh/reincarcare
+	static int ImportedBytes; // rezervare XMLTV separata de ghidul DVB; include noduri si descriptori
 	static bool load(FILE *);
 	static void save(FILE *);
 public:
@@ -315,6 +318,9 @@ public:
 	// HDSatelit: the epg thread writes the cache file now, as at its end (Components/HdsEpgSalvare.py:
 	// at standby and every few hours); false when the thread does not run (no valid time yet) or there is no file
 	bool requestSave();
+	// HDSatelit, implementare proprie: lot limitat de (inceput, durata, titlu, subtitlu, descriere, id).
+	// Numai referinte 4097 cu SID/TSID/ONID nenule; sigur si de pe firul XMLTV (cache_lock).
+	int importEvents(const std::string &reference, SWIG_PYOBJECT(ePyObject) events);
 
 	// called from main thread
 	inline void Lock();

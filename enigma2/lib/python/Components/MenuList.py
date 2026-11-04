@@ -23,6 +23,9 @@ class MenuList(HTMLComponent, GUIComponent):
 		instance.selectionChanged.get().append(self.selectionChanged)
 		if self.enableWrapAround:
 			self.instance.setWrapAround(True)
+		if hasattr(instance, "setScrollMargin"):
+			from Components.Renderer.Listbox import margineDerulare  # aici, nu la incarcare: ConfigList se incarca si fara GUI
+			instance.setScrollMargin(margineDerulare())
 
 	def preWidgetRemove(self, instance):
 		instance.setContent(None)

@@ -10,8 +10,8 @@
 #                   reincarcarea porneste singura, cu starea si rezultatul ca pe televizor. Logica: Components/HdsDvbISetari.
 #   /mabr           DVB-MABR (Screens/HdsDvbMABR.py, in lucru): activ, autodiscover, grupurile multicast (adaugare,
 #                   stergere cu confirmare), cautarea SAP. Logica: Components/HdsMabrSetari.
-#   /iptv           IPTV (Screens/IptvSetup.py, in lucru): lista surselor (adaugare M3U, stergere cu confirmare) si
-#                   config.hds_iptv.* (tipul sursei, M3U, Stalker, Xtream; pe televizor in "Date de acces", Albastru).
+#   /iptv           IPTV (Screens/IptvSetup.py): listele si conturile omului, adaugare (playlist, cont, portal, lista demo),
+#                   actualizare, stergere cu confirmare. Parola merge numai de la browser la receptor, niciodata inapoi.
 #                   Parola Xtream numai se scrie sau se sterge, nu se arata, si se primeste numai din corpul cererii.
 #                   Logica si verificarea textelor: Components/HdsIptvSurse (aceleasi pe televizor).
 #   /interfata-web  Interfata web (Screens/HdsWebControlSetup.py): pornirea si portul (oprirea si mutarea cu confirmare
@@ -33,11 +33,13 @@
 #   POST /api/mabr-seteaza          activ=0|1 | autodiscover=0|1 | adauga=<adresa:port>
 #   POST /api/mabr-sterge           index=N, in doi pasi
 #   POST /api/mabr-cauta            cautarea SAP (5 secunde, pe fir); rezultatul vine in GET
-#   GET  /api/iptv                  starea (fara parola)
-#   POST /api/iptv-seteaza          tip_sursa, m3u_cale, stalker_portal, stalker_mac, xtream_server, xtream_port,
-#                                   xtream_user; xtream_parola (numai din corp); sterge=xtream_parola
-#   POST /api/iptv-adauga           [m3u_cale=...] adauga sursa M3U, ca Galben pe televizor
-#   POST /api/iptv-sterge           index=N, in doi pasi
+#   GET  /api/iptv                  sursele si starea lor (fara parole si fara adrese cu parola)
+#   GET  /api/iptv-grupe            id=<sursa>: tarile si grupele, cu ce se vede
+#   POST /api/iptv-grupe-schimba    id=<sursa>, cheie=<rand> sau tot=ascunde|arata
+#   POST /api/iptv-adauga           fel=m3u|xtream|stalker|demo, nume, adresa | server, utilizator, parola (numai din corp) |
+#                                   portal, mac; lista se aduce pe firul de lucru, rezultatul vine in GET
+#   POST /api/iptv-actualizeaza     [id=<sursa>] o sursa sau toate
+#   POST /api/iptv-sterge           id=<sursa>, in doi pasi
 #   GET  /api/interfata-web-detalii pornirea, portul, browserele (fara cheie)
 #   POST /api/interfata-web-actiune fapta=activ&valoare=0|1 | fapta=port&valoare=N | fapta=deconecteaza |
 #                                   fapta=cheie | fapta=browser_nou; cele periculoase in doi pasi
@@ -46,6 +48,8 @@
 #
 # FIRUL: totul ruleaza pe firul enigma2 si e scurt (fisiere mici); reincarcarea DVB-I si cautarea SAP merg pe firele
 # lor (Components), iar pagina citeste starea din nou. Fisierul nu importa nimic din enigma2 la incarcare.
+
+import time
 
 MAX_TEXT = 512
 
@@ -420,137 +424,201 @@ def cautaMabr(S=None, cale=None):
 
 
 # ================================================================== IPTV
-CAMPURI_IPTV = ("m3u_cale", "stalker_portal", "stalker_mac", "xtream_server", "xtream_port", "xtream_user")
-SECRETE_IPTV = ("xtream_parola",)
 
 
 def _iptv(I=None):
+	"""(HdsIptvSurse, HdsIptvClient, HdsIptvLucru); probele de pe PC dau alt obiect cu aceleasi trei."""
 	if I is not None:
 		return I
-	from Components import HdsIptvSurse
-	return HdsIptvSurse
+	from Components import HdsIptvSurse, HdsIptvClient, HdsIptvLucru
+	return HdsIptvSurse, HdsIptvClient, HdsIptvLucru
 
 
-def _configIptv(I, config=None):
-	if config is None:
-		from Components.config import config
-	return I.initConfigIptv(config)
+def _textCanale(n):
+	try:
+		from Components.HdsIndexCanale import text_numar
+		return text_numar(n)
+	except Exception:
+		return str(n)
 
 
-def _alegeri(el):
-	from .setari_web import _alegeri as a
-	return a(el, "alegere")
+def _textExpirare(ora):
+	try:
+		return (_t(N_("Expiră la %s")) % time.strftime("%d.%m.%Y", time.localtime(int(ora)))) if ora else ""
+	except (TypeError, ValueError, OverflowError, OSError):
+		return ""
 
 
-def stareIptv(I=None, config=None, cale=None):
-	"""GET /api/iptv: lista surselor si setarile; parola Xtream numai ca scrisa / nescrisa."""
-	I = _iptv(I)
-	c = _configIptv(I, config)
-	rez = {"result": True, "surse": [{"tip": tip, "nume": nume, "date": date, "text": I.randSursa((tip, nume, date))}
-		for tip, nume, date in I.incarcaSurse(cale)],
-		"tip_sursa": str(c.tip_sursa.value), "tipuri": _alegeri(c.tip_sursa),
-		"xtream_parola_scrisa": bool(c.xtream_parola.value)}
-	for cheie in CAMPURI_IPTV:
-		rez[cheie] = str(getattr(c, cheie).value)
+def stareIptv(I=None):
+	"""GET /api/iptv: sursele, fara parole si fara adrese cu parola (HdsIptvSurse.publica), plus lista demo, publica, cu acordul
+	fiecarui canal, numai daca e pusa."""
+	S, C, L = _iptv(I)
+	surse = []
+	for p in S.citesteSursePublic():
+		lucreaza = L.inLucru(p["id"])
+		p["lucreaza"] = lucreaza
+		p["fel_text"] = _t(S.NUME_FEL.get(p["fel"], p["fel"]))
+		p["nume"] = p["nume"] or p["fel_text"]
+		p["canale_text"] = _textCanale(p["canale"]) if p["canale"] else ""
+		p["eroare"] = _t(p["eroare"]) if p["eroare"] else ""
+		p["fara_https_text"] = _t(S.T_FARA_HTTPS) if p["fara_https"] else ""
+		p["expira_text"] = _textExpirare(p.get("expira"))
+		p["epg_text"] = _t(N_("Se încarcă ghidul TV...")) if p.get("epg_stare") == "lucreaza" else _t(p.get("epg_mesaj") or "")
+		if p.get("epg_evenimente") and p.get("epg_stare") != "lucreaza":
+			p["epg_text"] += " " + _t(N_("%d programe.")) % p["epg_evenimente"]
+		surse.append(p)
+	rez = {"result": True, "surse": surse, "lucreaza": L.inLucru() or any(p.get("epg_stare") == "lucreaza" for p in surse),
+		"plafon": S.MAX_CANALE, "pot_adauga": len(surse) < S.MAX_SURSE}
+	if any(p["fel"] == "demo" for p in surse):
+		rez["demo"] = C.citesteDemo() or {}
 	return rez
 
 
-def _valoareIptv(I, cheie, text):
-	"""Textul bun pentru `cheie` sau None: aceeasi verificare ca pe televizor (HdsIptvSurse.valoareBuna)."""
-	return I.valoareBuna(cheie, text)
+def rezultatIptv(arg, I=None):
+	"""Ce s-a intamplat cu o sursa ceruta din pagina (dupa ce nu se mai lucreaza la ea)."""
+	S, C, L = _iptv(I)
+	sid = arg.get("id", "")
+	mesaj = L.ultimulMesaj(sid)
+	s = S.sursa(sid)
+	return {"result": not mesaj and s is not None, "lucreaza": L.inLucru(sid), "message": _t(mesaj) if mesaj else "",
+		"sursa": S.publica(s) if s else None}
 
 
 def N_(text):
-	"""Marcaj pentru xgettext (--keyword=N_), fara efect: numele campurilor se traduc la folosire."""
+	"""Marcaj pentru xgettext (--keyword=N_), fara efect: textele se traduc la folosire."""
 	return text
 
 
-# aceleasi nume ca randurile de pe televizor (Components/HdsIptvSurse.NUME_CAMPURI; fisierul nu importa Components la
-# incarcare, deci lista e scrisa si aici, iar probele le compara)
-NUME_CAMPURI_IPTV = {
-	"tip_sursa": N_("Tipul sursei"), "m3u_cale": N_("Playlist M3U/M3U8"), "stalker_portal": N_("Portal Stalker"),
-	"stalker_mac": N_("Adresa MAC"), "xtream_server": N_("Server Xtream"), "xtream_port": N_("Port Xtream"),
-	"xtream_user": N_("Utilizator Xtream"), "xtream_parola": N_("Parola Xtream"),
-}
+CHEI_IPTV = ("fel", "nume", "adresa", "server", "utilizator", "parola", "portal", "mac", "user_agent", "referer")
 
 
-def seteazaIptv(arg, din_adresa=(), I=None, config=None, configfile=None, cale=None):
-	"""POST /api/iptv-seteaza. Toate valorile trebuie sa fie bune, altfel nu se schimba nimic. Parola se ia numai din
-	corp (`din_adresa` = cheile scrise in adresa); un camp gol de parola nu o schimba, sterge=xtream_parola o sterge."""
-	I = _iptv(I)
-	c = _configIptv(I, config)
-	noi = []
-	if "tip_sursa" in arg:
-		v = arg["tip_sursa"]
-		if v not in [a[0] for a in _alegeri(c.tip_sursa)]:
-			return _cuMesaj(stareIptv(I, config, cale), False, _t("Tipul sursei ales nu există."))
-		noi.append((c.tip_sursa, v))
-	for cheie in CAMPURI_IPTV:
-		if cheie in arg:
-			v = _valoareIptv(I, cheie, arg[cheie])
-			if v is None:
-				return _cuMesaj(stareIptv(I, config, cale), False,
-					_t("Valoarea nu e bună pentru %s.") % _t(NUME_CAMPURI_IPTV[cheie]))
-			noi.append((getattr(c, cheie), v))
-	for cheie in SECRETE_IPTV:
-		if cheie in arg and cheie not in din_adresa and arg[cheie]:
-			v = _valoareIptv(I, cheie, arg[cheie])
-			if v is None:
-				return _cuMesaj(stareIptv(I, config, cale), False,
-					_t("Valoarea nu e bună pentru %s.") % _t(NUME_CAMPURI_IPTV[cheie]))
-			noi.append((getattr(c, cheie), v))
-	if arg.get("sterge") in SECRETE_IPTV:
-		noi.append((getattr(c, arg["sterge"]), ""))
-	elif arg.get("sterge"):
-		return _cuMesaj(stareIptv(I, config, cale), False, _t("Nu s-a trimis nicio setare."))
-	if not noi:
-		return _cuMesaj(stareIptv(I, config, cale), False, _t("Nu s-a trimis nicio setare."))
-	for el, v in noi:
-		if el.value != v:
-			el.value = v
-		el.save()
-	_M().salveazaSetari(configfile)
-	return _cuMesaj(stareIptv(I, config, cale), True, _t("Salvat."))
+def adaugaIptv(arg, din_adresa=(), I=None):
+	"""POST /api/iptv-adauga. Parola se ia numai din corp, niciodata din adresa paginii. Se intoarce imediat: lista o aduce firul de
+	lucru, iar pagina urmareste rezultatul."""
+	S, C, L = _iptv(I)
+	fel = arg.get("fel", "")
+	if fel == "demo":
+		sursa = S.sursaDemo()
+	else:
+		date = dict((k, arg[k]) for k in CHEI_IPTV if k in arg and not (k == "parola" and k in din_adresa))
+		sursa, eroare = C.verificaDate(fel, date)
+		if eroare:
+			return _cuMesaj(stareIptv(I), False, _t(eroare))
+	if L.adaugaSiCere(sursa) is None:
+		return _cuMesaj(stareIptv(I), False, _t(C.E_PREA_MULTE))
+	rez = _cuMesaj(stareIptv(I), True, _t("Se verifică legătura cu serverul..."))
+	rez["id"] = sursa["id"]
+	return rez
 
 
-def adaugaIptv(arg, I=None, config=None, configfile=None, cale=None):
-	"""POST /api/iptv-adauga: Galben pe televizor (Adauga sursa M3U), din config.hds_iptv.m3u_cale; m3u_cale= in aceeasi
-	cerere o scrie intai."""
-	I = _iptv(I)
-	c = _configIptv(I, config)
-	if "m3u_cale" in arg:
-		v = _valoareIptv(I, "m3u_cale", arg["m3u_cale"])
-		if v is None:
-			return _cuMesaj(stareIptv(I, config, cale), False, _t("Valoarea nu e bună pentru %s.") % _t(NUME_CAMPURI_IPTV["m3u_cale"]))
-		if c.m3u_cale.value != v:
-			c.m3u_cale.value = v
-		c.m3u_cale.save()
-		_M().salveazaSetari(configfile)
-	surse = I.incarcaSurse(cale)
-	if I.adaugaM3U(surse, c.m3u_cale.value) is None:
-		return _cuMesaj(stareIptv(I, config, cale), False, _t("Scrie întâi calea sau adresa listei M3U."))
-	if not I.salveazaSurse(surse, cale):
-		return _cuMesaj(stareIptv(I, config, cale), False, _t("Setările nu s-au putut salva."))
-	return _cuMesaj(stareIptv(I, config, cale), True, _t("Sursa M3U a fost adăugată."))
+def actualizeazaIptv(arg, I=None):
+	"""POST /api/iptv-actualizeaza: o sursa (id=) sau toate."""
+	S, C, L = _iptv(I)
+	sid = arg.get("id", "")
+	if sid:
+		if S.sursa(sid) is None:
+			return _cuMesaj(stareIptv(I), False, _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou."))
+		L.cere(sid)
+	else:
+		L.cereToate()
+	return _cuMesaj(stareIptv(I), True, _t("Se actualizează..."))
 
 
-def stergeIptv(arg, I=None, config=None, cale=None):
-	"""POST /api/iptv-sterge?index=N: o sursa scoasa, in doi pasi (tinta = randul ei din fisier)."""
-	I = _iptv(I)
-	surse = I.incarcaSurse(cale)
-	i = _index(arg.get("index", ""))
-	if not 0 <= i < len(surse):
-		return _cuMesaj(stareIptv(I, config, cale), False, _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou."))
-	sursa = surse[i]
+def stergeIptv(arg, I=None):
+	"""POST /api/iptv-sterge?id=<sursa>: o sursa scoasa, in doi pasi (tinta = identificatorul ei)."""
+	S, C, L = _iptv(I)
+	sid = arg.get("id", "")
+	s = S.sursa(sid)
+	if s is None:
+		return _cuMesaj(stareIptv(I), False, _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou."))
 
 	def fapta():
-		I.stergeSursa(surse, i)
-		if not I.salveazaSurse(surse, cale):
-			return _cuMesaj(stareIptv(I, config, cale), False, _t("Setările nu s-au putut salva."))
-		return _cuMesaj(stareIptv(I, config, cale), True, _t("Sursa a fost ștearsă."))
+		L.stergeSiReface(sid)
+		return _cuMesaj(stareIptv(I), True, _t("Sursa a fost ștearsă."))
 
-	return _doiPasi(arg, "iptv-sterge", "|".join(sursa), _t("Ștergi sursa IPTV?"), _t("Da, șterge"),
-		[I.randSursa(sursa)], fapta)
+	return _doiPasi(arg, "iptv-sterge", sid, _t("Ștergi sursa?"), _t("Da, șterge"),
+		[s.get("nume") or "", _t("Canalele ei dispar de la rândul IPTV. Cele puse de tine în Favorite rămân, dar nu mai pornesc.")], fapta)
+
+
+def grupeIptv(arg, I=None):
+	"""GET /api/iptv-grupe?id=<sursa>: tarile si grupele, cu ce se vede; aceeasi lista ca ecranul Grupele de pe televizor."""
+	S, C, L = _iptv(I)
+	s = S.sursa(arg.get("id", ""))
+	if not s:
+		return {"result": False, "message": _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou.")}
+	taiate, canale = int(s.get("taiate") or 0), int(s.get("canale") or 0)
+	randuri = S.randuriGrupe(s)
+	for r in randuri:
+		r["text"] = u" \u00b7 ".join([r["nume"]] + ([_t(S.T_GRUPE_N) % r["grupe"]] if r.get("grupe") else []) + [_textCanale(r["canale"])] +
+			([_t(S.T_GRUPE_PARTE)] if r.get("partial") else []))
+	ghid = _t(S.T_GRUPE_TAIATE) % {"vazute": canale, "toate": canale + taiate} if taiate else _t(S.T_GRUPE_GHID)
+	return {"result": True, "randuri": randuri, "ghid": ghid}
+
+
+def schimbaGrupeIptv(arg, I=None):
+	"""POST /api/iptv-grupe: id=<sursa> si cheie=<randul> (schimba bifa) sau tot=ascunde|arata. Se aplica pe loc, ca pe televizor."""
+	S, C, L = _iptv(I)
+	s = S.sursa(arg.get("id", ""))
+	if not s:
+		return {"result": False, "message": _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou.")}
+	catalog = S.citesteCatalog(s)
+	tot = arg.get("tot", "")
+	if tot == "ascunde":
+		ascunse = S.ascundeTot(catalog)
+	elif tot == "arata":
+		ascunse = set()
+	elif arg.get("cheie"):
+		ascunse = S.comutaGrupa(s.get("ascunse"), catalog, arg["cheie"])
+	else:
+		return {"result": False, "message": _t("Eroare pe receptor.")}
+	L.aplicaAscunse(s["id"], ascunse)
+	return grupeIptv({"id": s["id"]}, I)
+
+
+def anteteIptv(arg, din_adresa=(), I=None):
+	"""Antetele sunt numai de scris: nu se intorc in sursa publica."""
+	S, C, L = _iptv(I)
+	s = S.sursa(arg.get("id", ""))
+	if not s or s.get("fel") == "demo":
+		return {"result": False, "message": _t("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou.")}
+	if any(k in din_adresa for k in ("user_agent", "referer")):
+		return {"result": False, "message": _t(N_("Trimite antetele numai din formular."))}
+	date = dict(s, user_agent=arg.get("user_agent", ""), referer=arg.get("referer", ""))
+	sursa, eroare = C.verificaDate(s["fel"], date)
+	if eroare:
+		return {"result": False, "message": _t(eroare)}
+	if L.adaugaSiCere(sursa) is None:
+		return {"result": False, "message": _t(C.E_PREA_MULTE)}
+	return _cuMesaj(stareIptv(I), True, _t(N_("Antetele au fost salvate. Se actualizează sursa...")))
+
+
+def _seriale(Seriale=None):
+	if Seriale is not None:
+		return Seriale
+	from Components import HdsIptvSeriale
+	return HdsIptvSeriale
+
+
+def stareSeriale(arg, Seriale=None):
+	S = _seriale(Seriale)
+	cheie = arg.get("cerere")
+	if not cheie:
+		cheie = S.cere(arg.get("id", ""), arg.get("serial", ""), arg.get("sezon", ""), arg.get("pagina", 0), arg.get("cauta", ""))
+	if not cheie:
+		return {"result": False, "message": _t(S.E_OCUPAT)}
+	rez = S.rezultat(cheie)
+	if rez.get("message"):
+		rez["message"] = _t(rez["message"])
+	return rez
+
+
+def redaSerial(arg, Seriale=None, P=None):
+	S = _seriale(Seriale)
+	ref = S.episodDinPagina(arg.get("cerere", ""), arg.get("episod", ""))
+	if not ref:
+		return {"result": False, "message": _t(S.E_EXPIRAT)}
+	merge, _detaliu, _cod = _plugin(P).zapReferinta(ref)
+	return {"result": bool(merge), "message": _t(N_("Episodul pornește pe televizor.")) if merge else _t(N_("Episodul nu a pornit. Încearcă din nou."))}
 
 
 # ================================================================== interfata web (HdsWebControlSetup)
@@ -818,17 +886,35 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		return cautaMabr(S, cale_mabr)
 
 	def iptv(request):
-		return stareIptv(I, config, cale_iptv)
+		rez = stareIptv(I)
+		sid = _argumente(request, ("id",)).get("id")
+		if sid:
+			rez["rezultat"] = rezultatIptv({"id": sid}, I)
+		return rez
 
-	def iptv_seteaza(request):
-		chei = ("tip_sursa", "sterge") + CAMPURI_IPTV + SECRETE_IPTV
-		return seteazaIptv(_argumente(request, chei), _dinAdresa(request), I, config, configfile, cale_iptv)
+	def iptv_grupe(request):
+		return grupeIptv(_argumente(request, ("id",)), I)
+
+	def iptv_grupe_schimba(request):
+		return schimbaGrupeIptv(_argumente(request, ("id", "cheie", "tot"), 512), I)
 
 	def iptv_adauga(request):
-		return adaugaIptv(_argumente(request, ("m3u_cale",)), I, config, configfile, cale_iptv)
+		return adaugaIptv(_argumente(request, CHEI_IPTV, 2048), _dinAdresa(request), I)
+
+	def iptv_actualizeaza(request):
+		return actualizeazaIptv(_argumente(request, ("id",)), I)
 
 	def iptv_sterge(request):
-		return stergeIptv(_argumente(request, CHEI_PASI), I, config, cale_iptv)
+		return stergeIptv(_argumente(request, ("id", "pas", "cod")), I)
+
+	def sursa_antete(request):
+		return anteteIptv(_argumente(request, ("id", "user_agent", "referer"), 2048), _dinAdresa(request), I)
+
+	def seriale(request):
+		return stareSeriale(_argumente(request, ("id", "serial", "sezon", "pagina", "cauta", "cerere"), 128))
+
+	def seriale_reda(request):
+		return redaSerial(_argumente(request, ("cerere", "episod"), 64), P=P)
 
 	def interfata_web(request):
 		return stareInterfataWeb(P)
@@ -854,9 +940,14 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"mabr-sterge": _schimbare(mabr_sterge, True),
 		b"mabr-cauta": _schimbare(mabr_cauta),
 		b"iptv": _citire(iptv),
-		b"iptv-seteaza": _schimbare(iptv_seteaza),
+		b"iptv-grupe": _citire(iptv_grupe),
+		b"iptv-grupe-schimba": _schimbare(iptv_grupe_schimba),
 		b"iptv-adauga": _schimbare(iptv_adauga),
+		b"iptv-actualizeaza": _schimbare(iptv_actualizeaza),
 		b"iptv-sterge": _schimbare(iptv_sterge, True),
+		b"sursa-antete": _schimbare(sursa_antete),
+		b"seriale": _citire(seriale),
+		b"seriale-reda": _schimbare(seriale_reda),
 		b"interfata-web-detalii": _citire(interfata_web),
 		b"interfata-web-actiune": _schimbare(interfata_web_actiune, True),
 	}
@@ -921,6 +1012,10 @@ __STIL_PAGINI__
   .lista-rand:last-child{border-bottom:0;}
   .lista-rand>span{overflow-wrap:anywhere;min-width:0;}
   .lista-rand button{flex:0 0 auto;}
+  .sursa-actiuni{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
+  #serialeTitlu,#serialeNota,#anteteTitlu{overflow-wrap:anywhere;}
+  #serialeLista .lista-rand>span{white-space:normal;overflow-wrap:anywhere;}
+  @media(max-width:640px){#surse>.lista-rand{align-items:flex-start;flex-wrap:wrap;}.sursa-actiuni{justify-content:flex-start;}}
   .bifa{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;border-bottom:1px solid var(--bordura);cursor:pointer;}
   .bifa:last-child{border-bottom:0;}
   .bifa span{overflow-wrap:anywhere;}
@@ -1202,7 +1297,8 @@ function arataCanal(c){
   $("titlu").textContent = c.nume;
   $("stareCanal").textContent = (STARI[c.stare] || STARI[""]) + (c.cod && c.stare !== "merge" ? " (cod " + c.cod + ")" : "") + ".";
   $("adresaFlux").value = c.url;
-  $("deschide").href = c.url;
+  // adresa vine dintr-o lista din internet: numai adrese de flux, ca un javascript: din lista sa nu ruleze in pagina receptorului
+  if(/^(https?|rtsp|rtmp|mms|udp):/i.test(c.url)){ $("deschide").href = c.url; } else { $("deschide").classList.add("ascuns"); }
   var v = $("video");
   var dash = /[.]mpd($|[?#])/i.test(c.url), hls = /[.]m3u8($|[?#])/i.test(c.url);
   var tip = dash ? "application/dash+xml" : (hls ? "application/vnd.apple.mpegurl" : "");
@@ -1303,86 +1399,284 @@ $("cauta").addEventListener("click", function(){ trimite("/api/mabr-cauta", new 
 citeste();""" + _SFARSIT
 
 
-PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "Televiziune prin IP (IPTV)" + _STIL + """<h1>Televiziune prin IP (IPTV)</h1>
+PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
 <div id="continut" class="ascuns">
   <section class="card">
-    <h2>Surse</h2>
+    <h2>Listele și conturile tale</h2>
     <div id="surse"></div>
+    <p class="nota">Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte.</p>
+    <div class="butoane"><button type="button" id="actualizeaza">Actualizează toate</button></div>
   </section>
   <section class="card">
-    <h2>Adaugă sursă M3U</h2>
-    <div class="rand"><label for="m3u_cale">Playlist M3U/M3U8 (fișier local sau URL)</label>
-      <input type="text" id="m3u_cale" maxlength="512" autocomplete="off" placeholder="/media/hdd/lista.m3u"></div>
-    <div class="butoane"><button type="button" class="principal" id="adauga">Adaugă sursă M3U</button></div>
+    <h2>Adaugă ce ți-a dat furnizorul</h2>
+    <div class="rand"><label for="fel">Ce ai primit</label>
+      <select id="fel"><option value="m3u">Playlist: o adresă sau un fișier de pe stick</option><option value="xtream">Cont: server, utilizator și parolă</option><option value="stalker">Portal: adresa portalului și adresa MAC</option><option value="demo">Listă demo: canale gratuite care permit asta</option></select></div>
+    <div class="rand camp" data-fel="m3u"><label for="adresa">Adresa listei</label>
+      <input type="text" id="adresa" maxlength="2048" autocomplete="off" placeholder="http://"></div>
+    <div class="rand camp" data-fel="xtream"><label for="server">Server</label>
+      <input type="text" id="server" maxlength="512" autocomplete="off" placeholder="http://"></div>
+    <div class="rand camp" data-fel="xtream"><label for="utilizator">Utilizator</label>
+      <input type="text" id="utilizator" maxlength="512" autocomplete="off"></div>
+    <div class="rand camp" data-fel="xtream"><label for="parola">Parolă</label>
+      <input type="password" id="parola" maxlength="512" autocomplete="new-password"></div>
+    <div class="rand camp" data-fel="stalker"><label for="portal">Adresa portalului</label>
+      <input type="text" id="portal" maxlength="512" autocomplete="off" placeholder="http://"></div>
+    <div class="rand camp" data-fel="stalker"><label for="mac">Adresa MAC</label>
+      <input type="text" id="mac" maxlength="17" autocomplete="off" placeholder="00:1A:79:12:34:56"></div>
+    <div class="rand" id="rNume"><label for="nume">Nume (opțional)</label>
+      <input type="text" id="nume" maxlength="100" autocomplete="off"></div>
+    <div class="rand" id="rAgent"><label for="user_agent">Agent utilizator (opțional)</label>
+      <input type="text" id="user_agent" maxlength="2048" autocomplete="off"></div>
+    <div class="rand" id="rReferer"><label for="referer">Referer (opțional)</label>
+      <input type="text" id="referer" maxlength="2048" autocomplete="off"></div>
+    <p class="nota">Agent utilizator și Referer: goale folosesc valorile implicite.</p>
+    <div class="butoane"><button type="button" class="principal" id="adauga">Adaugă</button></div>
+    <p class="nota">Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân.</p>
   </section>
-  <section class="card">
-    <h2>Date de acces</h2>
-    <div class="rand"><label for="tip_sursa">Tipul sursei</label><select id="tip_sursa"></select></div>
-    <div class="rand"><label for="stalker_portal">Portal Stalker/Ministra (adresa)</label>
-      <input type="text" id="stalker_portal" maxlength="512" autocomplete="off"></div>
-    <div class="rand"><label for="stalker_mac">Adresa MAC pentru portal</label>
-      <input type="text" id="stalker_mac" maxlength="17" autocomplete="off" placeholder="00:1A:79:00:00:00"></div>
-    <div class="rand"><label for="xtream_server">Server Xtream Codes</label>
-      <input type="text" id="xtream_server" maxlength="512" autocomplete="off"></div>
-    <div class="rand"><label for="xtream_port">Port Xtream Codes</label>
-      <input type="text" id="xtream_port" maxlength="5" inputmode="numeric" autocomplete="off"></div>
-    <div class="rand"><label for="xtream_user">Utilizator Xtream Codes</label>
-      <input type="text" id="xtream_user" maxlength="512" autocomplete="off"></div>
-    <div class="rand"><label for="xtream_parola">Parola Xtream Codes <span class="nota" id="parolaStare"></span></label>
-      <input type="password" id="xtream_parola" maxlength="512" autocomplete="new-password"></div>
-    <div class="butoane"><button type="button" class="principal" id="salveaza">Salvează</button>
-      <button type="button" class="ascuns" id="stergeParola">Șterge parola</button></div>
-    <p class="nota">Parola nu se arată: o scrii doar când vrei s-o schimbi. Un câmp de parolă gol o lasă cum e.</p>
+  <section class="card ascuns" id="cardDemo">
+    <h2>Lista demo: acordul fiecărui canal</h2>
+    <div id="demo"></div>
   </section>
-  <p class="nota">Ca pe televizor: Portal Stalker și Xtream Codes, deocamdată numai salvarea datelor de acces; conectarea reală vine în etapa următoare. Sursele M3U se țin în listă, dar canalele lor nu apar încă în lista de canale. Intrarea e marcată în lucru și pe televizor, în __DRUM_MENIU__; acolo aceleași date de acces sunt pe tasta albastră, iar tasta galbenă adaugă o sursă M3U.</p>
+  <section class="card ascuns" id="cardGrupe">
+    <h2 id="grupeTitlu">Grupele</h2>
+    <p class="nota" id="grupeGhid"></p>
+    <div class="butoane"><button type="button" id="grupeAscunde">Ascunde tot</button><button type="button" id="grupeArata">Arată tot</button><button type="button" id="grupeInchide">Închide</button></div>
+    <div class="rand"><label for="grupeCauta">Caută o grupă sau o țară</label><input type="text" id="grupeCauta" maxlength="60" autocomplete="off"></div>
+    <div id="grupeLista" style="max-height:60vh;overflow:auto;margin-top:12px"></div>
+  </section>
+  <section class="card ascuns" id="cardAntete">
+    <h2 id="anteteTitlu">Antetele sursei</h2>
+    <p class="nota">Valorile salvate nu se arată. Completează ambele câmpuri; gol revine la valoarea implicită.</p>
+    <div class="rand"><label for="anteteAgent">Agent utilizator (opțional)</label><input type="text" id="anteteAgent" maxlength="2048" autocomplete="off"></div>
+    <div class="rand"><label for="anteteReferer">Referer (opțional)</label><input type="text" id="anteteReferer" maxlength="2048" autocomplete="off"></div>
+    <div class="butoane"><button type="button" id="anteteSalveaza">Salvează antetele</button><button type="button" id="anteteInchide">Închide</button></div>
+  </section>
+  <section class="card ascuns" id="cardSeriale">
+    <h2 id="serialeTitlu">Seriale</h2>
+    <div class="rand" id="serialeCautare"><label for="serialeText">Caută seriale</label><input type="text" id="serialeText" maxlength="80" autocomplete="off"></div>
+    <div class="butoane"><button type="button" id="serialeCauta">Caută</button><button type="button" id="serialeInapoi">Înapoi</button></div>
+    <p class="nota" id="serialeNota"></p>
+    <div id="serialeLista"></div>
+    <div class="butoane"><button type="button" id="serialePrecedenta">Pagina precedentă</button><span id="serialePagina"></span><button type="button" id="serialeUrmatoarea">Pagina următoare</button></div>
+  </section>
+  <p class="nota">Aceleași liste sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
-""" + _COADA + """var CAMPURI = ["m3u_cale", "stalker_portal", "stalker_mac", "xtream_server", "xtream_port", "xtream_user"];
+""" + _COADA + """var ASTEPT = null;
+function el(eticheta, clasa, text){ var e = document.createElement(eticheta); if(clasa){ e.className = clasa; } if(text){ e.textContent = text; } return e; }
+function textSursa(x){
+  var parti = [x.fel_text];
+  if(x.gazda){ parti.push(x.gazda); }
+  if(x.utilizator){ parti.push(x.utilizator); }
+  if(x.canale_text){ parti.push(x.canale_text); }
+  if(x.expira_text){ parti.push(x.expira_text); }
+  return x.nume + " (" + parti.join(", ") + ")";
+}
+function stareSursa(x){
+  if(x.lucreaza){ return "Se încarcă..."; }
+  if(x.eroare){ return x.eroare; }
+  if(x.fara_https_text){ return x.fara_https_text; }
+  if(x.taiate){ return "Lista are prea multe canale: au intrat primele " + String(DATE.plafon) + "."; }
+  return "Merge.";
+}
 var DATE = null;
+function randSursa(x){
+  var d = el("div", "lista-rand");
+  var s = el("span", "", textSursa(x));
+  s.appendChild(document.createElement("br"));
+  s.appendChild(el("small", x.eroare ? "rau" : "", stareSursa(x)));
+  if(x.epg_text){ s.appendChild(document.createElement("br")); s.appendChild(el("small", "", x.epg_text)); }
+  d.appendChild(s);
+  var b = el("span", "sursa-actiuni");
+  if(x.fel === "xtream"){
+    var seriale = el("button", "", "Seriale"); seriale.type = "button";
+    seriale.addEventListener("click", function(){ deschideSeriale(x); }); b.appendChild(seriale);
+  }
+  if(x.fel !== "demo"){
+    var grupe = el("button", "", "Grupele"); grupe.type = "button";
+    grupe.addEventListener("click", function(){ deschideGrupe(x); }); b.appendChild(grupe);
+    var antete = el("button", "", "Antete"); antete.type = "button";
+    antete.addEventListener("click", function(){ deschideAntete(x); }); b.appendChild(antete);
+  }
+  var a = el("button", "", "Actualizează");
+  a.type = "button";
+  a.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("id", x.id); trimite("/api/iptv-actualizeaza", q); });
+  b.appendChild(a);
+  var r = el("button", "rosu", "Șterge");
+  r.type = "button";
+  r.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("id", x.id); cuConfirmare("/api/iptv-sterge", q, dupa); });
+  b.appendChild(r);
+  d.appendChild(b);
+  return d;
+}
+function arataDemo(demo){
+  var c = $("cardDemo");
+  if(!demo || !demo.grupe){ c.classList.add("ascuns"); return; }
+  c.classList.remove("ascuns");
+  var t = [];
+  demo.grupe.forEach(function(g){
+    t.push(el("h3", "", g.nume || ""));
+    (g.canale || []).forEach(function(k){
+      var p = el("p");
+      p.appendChild(el("strong", "", k.nume || ""));
+      if(k.citat){ p.appendChild(document.createElement("br")); p.appendChild(document.createTextNode(k.citat)); }
+      if(k.atribuire){ p.appendChild(document.createElement("br")); p.appendChild(document.createTextNode(k.atribuire)); }
+      if(/^https:[/][/]/.test(k.pagina || "")){
+        p.appendChild(document.createElement("br"));
+        var l = el("a", "extern", k.pagina); l.href = k.pagina; l.rel = "noopener noreferrer"; l.target = "_blank"; p.appendChild(l);
+      }
+      t.push(p);
+    });
+  });
+  pune("demo", t);
+}
 function arata(d){
   DATE = d;
-  var s = (d.surse || []).map(function(x, i){
-    return rand(x.text, "Șterge", function(){ var q = new URLSearchParams(); q.set("index", String(i)); cuConfirmare("/api/iptv-sterge", q, dupa); });
-  });
-  pune("surse", s.length ? s : [gol("Nicio sursă IPTV adăugată încă.")]);
-  var t = $("tip_sursa");
-  if(document.activeElement !== t){
-    t.textContent = "";
-    (d.tipuri || []).forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; t.appendChild(o); });
-    t.value = d.tip_sursa;
-  }
-  CAMPURI.forEach(function(c){ if(document.activeElement !== $(c)){ $(c).value = d[c] || ""; } });
-  $("parolaStare").textContent = d.xtream_parola_scrisa ? "(scrisă)" : "(nescrisă)";
-  $("stergeParola").classList.toggle("ascuns", !d.xtream_parola_scrisa);
+  var s = (d.surse || []).map(randSursa);
+  pune("surse", s.length ? s : [gol("Încă nu ai adăugat nimic.")]);
+  $("actualizeaza").classList.toggle("ascuns", !s.length);
+  arataDemo(d.demo);
+  if(d.lucreaza || ASTEPT){ urmareste(); }
 }
 function dupa(d){ if(d && d.surse){ arata(d); } }
 function trimite(cale, q){
-  mesaj("Se salvează...");
+  mesaj("Se trimite...");
   return cerere(cale, "POST", q).then(function(d){ mesaj(d.message, !d.result); dupa(d); return d; }).catch(nimicNuRaspunde);
+}
+var CEAS = null;
+function urmareste(){
+  if(CEAS){ return; }
+  CEAS = setTimeout(function(){
+    CEAS = null;
+    cerere("/api/iptv" + (ASTEPT ? "?id=" + encodeURIComponent(ASTEPT) : "")).then(function(d){
+      var r = d.rezultat;
+      if(ASTEPT && r && !r.lucreaza){
+        ASTEPT = null;
+        if(r.result){ mesaj("Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."); ["adresa", "server", "utilizator", "parola", "portal", "mac", "nume", "user_agent", "referer"].forEach(function(c){ $(c).value = ""; }); }
+        else { mesaj(r.message, true); }
+      }
+      dupa(d);
+    }).catch(nimicNuRaspunde);
+  }, 1500);
+}
+function arataCampuri(){
+  var f = $("fel").value;
+  $("rNume").classList.toggle("ascuns", f === "demo");
+  $("rAgent").classList.toggle("ascuns", f === "demo");
+  $("rReferer").classList.toggle("ascuns", f === "demo");
+  document.querySelectorAll(".camp").forEach(function(r){ r.classList.toggle("ascuns", r.getAttribute("data-fel") !== f); });
 }
 function citeste(){
   return cerere("/api/iptv").then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi setările."; return; }
-    arataPagina(); arata(d);
+    arataPagina(); arataCampuri(); arata(d);
   }).catch(faraRaspuns);
 }
+$("fel").addEventListener("change", arataCampuri);
+$("actualizeaza").addEventListener("click", function(){ trimite("/api/iptv-actualizeaza", new URLSearchParams()); });
 $("adauga").addEventListener("click", function(){
-  var q = new URLSearchParams(); q.set("m3u_cale", $("m3u_cale").value.trim());
-  trimite("/api/iptv-adauga", q);
+  var f = $("fel").value, q = new URLSearchParams();
+  q.set("fel", f); q.set("nume", $("nume").value.trim());
+  q.set("user_agent", $("user_agent").value.trim()); q.set("referer", $("referer").value.trim());
+  document.querySelectorAll(".camp").forEach(function(r){
+    if(r.getAttribute("data-fel") === f){ r.querySelectorAll("input").forEach(function(i){ q.set(i.id, i.id === "parola" ? i.value : i.value.trim()); }); }
+  });
+  trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; urmareste(); } });
 });
-$("salveaza").addEventListener("click", function(){
-  if(!DATE){ return; }
-  var q = new URLSearchParams(), n = 0;
-  if($("tip_sursa").value !== DATE.tip_sursa){ q.set("tip_sursa", $("tip_sursa").value); n++; }
-  CAMPURI.forEach(function(c){ var v = $(c).value.trim(); if(v !== (DATE[c] || "")){ q.set(c, v); n++; } });
-  if($("xtream_parola").value){ q.set("xtream_parola", $("xtream_parola").value); n++; }
-  if(!n){ mesaj("Nu ai schimbat nimic."); return; }
-  trimite("/api/iptv-seteaza", q).then(function(d){ if(d && d.result){ $("xtream_parola").value = ""; } });
+var ANTETE_ID = "", SR = null, SR_TURA = 0;
+var GRUPE_ID = "", GRUPE_DATE = null;
+function arataGrupe(d){
+  var l = $("grupeLista"); l.textContent = ""; GRUPE_DATE = d;
+  var cauta = $("grupeCauta").value.trim().toLowerCase();
+  $("grupeGhid").textContent = d.ghid || "";
+  (d.randuri || []).forEach(function(r){
+    if(cauta && r.nume.toLowerCase().indexOf(cauta) < 0){ return; }
+    var e = document.createElement("label"); e.style.display = "block"; e.style.padding = "6px 0";
+    var c = document.createElement("input"); c.type = "checkbox"; c.checked = !!r.vizibil;
+    c.addEventListener("change", function(){ schimbaGrupe("cheie", r.cheie); });
+    e.appendChild(c);
+    e.appendChild(document.createTextNode(" " + r.text));
+    l.appendChild(e);
+  });
+}
+function schimbaGrupe(k, v){
+  var q = new URLSearchParams(); q.set("id", GRUPE_ID); q.set(k, v);
+  return trimite("/api/iptv-grupe-schimba", q).then(function(d){ if(d && d.result){ arataGrupe(d); } });
+}
+function deschideGrupe(x){
+  GRUPE_ID = x.id; $("grupeTitlu").textContent = "Grupele" + ": " + x.nume;
+  cerere("/api/iptv-grupe?id=" + encodeURIComponent(x.id)).then(function(d){ if(d && d.result){ arataGrupe(d); } });
+  $("cardGrupe").classList.remove("ascuns"); $("cardGrupe").scrollIntoView({block:"start",behavior:"smooth"});
+}
+$("grupeInchide").addEventListener("click", function(){ $("cardGrupe").classList.add("ascuns"); GRUPE_ID = ""; });
+$("grupeCauta").addEventListener("input", function(){ if(GRUPE_DATE){ arataGrupe(GRUPE_DATE); } });
+$("grupeAscunde").addEventListener("click", function(){ schimbaGrupe("tot", "ascunde"); });
+$("grupeArata").addEventListener("click", function(){ schimbaGrupe("tot", "arata"); });
+function deschideAntete(x){
+  ANTETE_ID = x.id; $("anteteTitlu").textContent = "Antetele sursei" + ": " + x.nume;
+  $("anteteAgent").value = ""; $("anteteReferer").value = "";
+  $("cardAntete").classList.remove("ascuns"); $("cardAntete").scrollIntoView({block:"start",behavior:"smooth"});
+}
+$("anteteInchide").addEventListener("click", function(){ $("cardAntete").classList.add("ascuns"); ANTETE_ID = ""; $("anteteAgent").value = ""; $("anteteReferer").value = ""; });
+$("anteteSalveaza").addEventListener("click", function(){
+  if(!ANTETE_ID){ return; } var q = new URLSearchParams(); q.set("id", ANTETE_ID);
+  q.set("user_agent", $("anteteAgent").value.trim()); q.set("referer", $("anteteReferer").value.trim());
+  trimite("/api/sursa-antete", q).then(function(d){ if(d && d.result){ $("anteteInchide").click(); } });
 });
-$("stergeParola").addEventListener("click", function(){
-  if(!confirm("Ștergi parola Xtream Codes salvată pe receptor?")){ return; }
-  var q = new URLSearchParams(); q.set("sterge", "xtream_parola"); trimite("/api/iptv-seteaza", q);
+function deschideSeriale(x){
+  SR = {id:x.id,nume:x.nume,serial:"",sezon:"",pagina:0,cauta:"",drum:[],cerere:"",ocupat:false};
+  $("serialeText").value = ""; $("cardSeriale").classList.remove("ascuns");
+  $("cardSeriale").scrollIntoView({block:"start",behavior:"smooth"}); incarcaSeriale();
+}
+function butoaneSeriale(){
+  $("serialeCautare").classList.toggle("ascuns", !!SR.serial); $("serialeCauta").classList.toggle("ascuns", !!SR.serial);
+  $("serialeCauta").disabled = SR.ocupat;
+  $("serialePrecedenta").disabled = SR.ocupat || !SR.pagina;
+  $("serialeUrmatoarea").disabled = SR.ocupat || !SR.altele;
+  $("serialePagina").textContent = "Pagina" + " " + String(SR.pagina + 1);
+}
+function incarcaSeriale(){
+  if(!SR){ return; } var tura = ++SR_TURA, q = new URLSearchParams();
+  ["id","serial","sezon","pagina","cauta"].forEach(function(k){ q.set(k, SR[k]); });
+  SR.ocupat = true; SR.cerere = ""; butoaneSeriale(); pune("serialeLista", []);
+  $("serialeNota").textContent = "Se încarcă...";
+  function primeste(d){
+    if(!SR || tura !== SR_TURA){ return; }
+    if(d.lucreaza){ setTimeout(function(){ if(SR && tura === SR_TURA){ cerere("/api/seriale?cerere=" + encodeURIComponent(d.cerere)).then(primeste).catch(esec); } }, 500); return; }
+    SR.ocupat = false; SR.altele = !!d.altele; SR.cerere = d.cerere || ""; butoaneSeriale();
+    if(!d.result){ $("serialeNota").textContent = d.message; return; }
+    $("serialeTitlu").textContent = (d.titlu || SR.nume) + " · " + "Seriale";
+    $("serialeNota").textContent = [d.descriere, d.message].filter(Boolean).join(" ");
+    var randuri = (d.randuri || []).map(function(r){
+      var nume = d.nivel === "sezoane" ? "Sezonul" + " " + r.numar : r.nume;
+      var randNou = rand(nume, d.nivel === "episoade" ? "Redă pe televizor" : "Alege", function(){
+        if(!SR || SR.ocupat || tura !== SR_TURA){ return; }
+        if(d.nivel === "episoade"){
+          var p = new URLSearchParams(); p.set("cerere", SR.cerere); p.set("episod", r.cheie);
+          cerere("/api/seriale-reda", "POST", p).then(function(rez){ mesaj(rez.message, !rez.result); }).catch(nimicNuRaspunde);
+        } else {
+          SR.drum.push({serial:SR.serial,sezon:SR.sezon,pagina:SR.pagina,cauta:SR.cauta});
+          if(d.nivel === "seriale"){ SR.serial = r.id; } else { SR.sezon = r.id; }
+          SR.pagina = 0; incarcaSeriale();
+        }
+      });
+      if(r.descriere || r.durata){ randNou.firstChild.appendChild(document.createElement("br")); randNou.firstChild.appendChild(el("small", "", [r.durata,r.descriere].filter(Boolean).join(" · "))); }
+      return randNou;
+    });
+    pune("serialeLista", randuri.length ? randuri : [gol("Niciun rezultat.")]);
+  }
+  function esec(){ if(SR && tura === SR_TURA){ SR.ocupat = false; butoaneSeriale(); $("serialeNota").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } }
+  cerere("/api/seriale?" + q.toString()).then(primeste).catch(esec);
+}
+$("serialeInapoi").addEventListener("click", function(){
+  if(!SR){ return; }
+  if(SR.drum.length){ var d = SR.drum.pop(); ["serial","sezon","pagina","cauta"].forEach(function(k){ SR[k] = d[k]; }); incarcaSeriale(); }
+  else { SR = null; ++SR_TURA; $("cardSeriale").classList.add("ascuns"); }
 });
+$("serialeCauta").addEventListener("click", function(){ if(SR && !SR.ocupat){ SR.cauta = $("serialeText").value.trim(); SR.pagina = 0; incarcaSeriale(); } });
+$("serialeText").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); $("serialeCauta").click(); } });
+$("serialePrecedenta").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.pagina){ --SR.pagina; incarcaSeriale(); } });
+$("serialeUrmatoarea").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.altele){ ++SR.pagina; incarcaSeriale(); } });
 citeste();""" + _SFARSIT
 
 
@@ -1584,26 +1878,44 @@ TEXTE_PAGINA = {
 		N_("Caută SAP"),
 		N_("Intrarea e marcată în lucru și pe televizor: setările se salvează, dar nicio parte a "
 			"receptorului nu le folosește încă. Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
-		N_("Televiziune prin IP (IPTV)"),
-		N_("Surse"),
-		N_("Adaugă sursă M3U"),
-		N_("Playlist M3U/M3U8 (fișier local sau URL)"),
-		N_("Date de acces"),
-		N_("Tipul sursei"),
-		N_("Portal Stalker/Ministra (adresa)"),
-		N_("Adresa MAC pentru portal"),
-		N_("Server Xtream Codes"),
-		N_("Port Xtream Codes"),
-		N_("Utilizator Xtream Codes"),
-		N_("Parola Xtream Codes <span class=\"nota\" id=\"parolaStare\"></span>"),
-		N_("Salvează"),
-		N_("Șterge parola"),
-		N_("Parola nu se arată: o scrii doar când vrei s-o schimbi. Un câmp de parolă gol o lasă cum e."),
-		N_("Ca pe televizor: Portal Stalker și Xtream Codes, deocamdată numai salvarea datelor de acces; "
-			"conectarea reală vine în etapa următoare. Sursele M3U se țin în listă, dar canalele lor nu apar "
-			"încă în lista de canale. Intrarea e marcată în lucru și pe televizor, în __DRUM_MENIU__; acolo "
-			"aceleași date de acces sunt pe tasta albastră, iar tasta galbenă adaugă o sursă M3U."),
-		N_("/media/hdd/lista.m3u"),
+		N_("http://"),
+		N_("Listele și conturile tale"),
+		N_("Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte."),
+		N_("Actualizează toate"),
+		N_("Adaugă ce ți-a dat furnizorul"),
+		N_("Ce ai primit"),
+		N_("Playlist: o adresă sau un fișier de pe stick"),
+		N_("Cont: server, utilizator și parolă"),
+		N_("Portal: adresa portalului și adresa MAC"),
+		N_("Listă demo: canale gratuite care permit asta"),
+		N_("Adresa listei"),
+		N_("Server"),
+		N_("Utilizator"),
+		N_("Parolă"),
+		N_("Adresa portalului"),
+		N_("Adresa MAC"),
+		N_("Nume (opțional)"),
+		N_("Agent utilizator (opțional)"),
+		N_("Referer (opțional)"),
+		N_("Agent utilizator și Referer: goale folosesc valorile implicite."),
+		N_("Grupele"),
+		N_("Ascunde tot"),
+		N_("Arată tot"),
+		N_("Caută o grupă sau o țară"),
+		N_("Antetele sursei"),
+		N_("Valorile salvate nu se arată. Completează ambele câmpuri; gol revine la valoarea implicită."),
+		N_("Salvează antetele"),
+		N_("Închide"),
+		N_("Seriale"),
+		N_("Caută seriale"),
+		N_("Caută"),
+		N_("Înapoi"),
+		N_("Pagina precedentă"),
+		N_("Pagina următoare"),
+		N_("Adaugă"),
+		N_("Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."),
+		N_("Lista demo: acordul fiecărui canal"),
+		N_("Aceleași liste sunt pe televizor, în __DRUM_MENIU__."),
 		N_("Interfața web"),
 		N_("Interfața web HD Satelit"),
 		N_("Pornire și port"),
@@ -1682,11 +1994,23 @@ TEXTE_PAGINA = {
 		N_("fără nume"),
 		N_("Apasă Caută SAP pentru a descoperi sesiuni MABR în rețea."),
 		N_("Niciun grup adăugat de mână."),
-		N_("Nicio sursă IPTV adăugată încă."),
-		N_("(scrisă)"),
-		N_("(nescrisă)"),
-		N_("Nu ai schimbat nimic."),
-		N_("Ștergi parola Xtream Codes salvată pe receptor?"),
+		N_("Încă nu ai adăugat nimic."),
+		N_("Seriale"),
+		N_("Antete"),
+		N_("Antetele sursei"),
+		N_("Grupele"),
+		N_("Pagina"),
+		N_("Sezonul"),
+		N_("Redă pe televizor"),
+		N_("Alege"),
+		N_("Niciun rezultat."),
+		N_("Se încarcă..."),
+		N_("Lista are prea multe canale: au intrat primele"),
+		N_("Merge."),
+		N_("Actualizează"),
+		N_("Șterge"),
+		N_("Se trimite..."),
+		N_("Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."),
 		N_("Activarea și portul se aplică după repornirea interfeței. Acum interfața ascultă pe portul"),
 		N_(", la adresa"),
 		N_("Oprirea e salvată: după repornirea interfeței, paginile nu mai răspund."),

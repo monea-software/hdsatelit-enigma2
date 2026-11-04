@@ -393,7 +393,14 @@ class Session:
 		# HDSatelit: numaratoarea ecranelor pentru beta testeri (numai cu programul pornit, fara nimic pe disc aici)
 		if HdsBetaTester is not None:
 			HdsBetaTester.numaraEcran(screen)
-		self.execBegin()
+		try:
+			self.execBegin()
+		except Exception:
+			# HDSatelit: ecranul a cazut cand pornea (onExecBegin, onShown, show), dupa ce a devenit ecranul curent: cel de
+			# dedesubt si-a pierdut tastele, el nu le-a primit. Semnul spune ca poate fi inchis (Components/HdsPluginExtern,
+			# numai dupa eroarea unui plugin extern); eroarea merge mai departe ca inainte.
+			dlg.hdsDeschidereEsuata = True
+			raise
 		return dlg
 
 	def close(self, screen, *retval):
@@ -560,6 +567,25 @@ def runScreenTest():
 	except Exception as e:
 		print("[mytest] DAB+ si DVB-T2:", e)
 
+	# HDSatelit 0.7.0: Stream Relay (Components/HdsStreamRelay.py): legatura la zap numai cand lista canalelor exista si
+	# are canale; fara fisierul listei nici modulul nu se incarca (nimic schimbat la zap). Dupa DAB+/DVB-T2, ca extensia
+	# lor de zap sa ramana inaintea celei a releului.
+	try:
+		from os.path import isfile as _esteFisier
+		if _esteFisier("/etc/enigma2/whitelist_streamrelay"):
+			from Components import HdsStreamRelay
+			HdsStreamRelay.porneste()
+	except Exception as e:
+		print("[mytest] Stream Relay:", e)
+
+	# HDSatelit 0.7.0: televiziunea prin internet (Components/HdsIptvLucru.py): adresa locala si improspatarea zilnica, numai
+	# daca omul are surse; fara ele nu ramane nimic pornit.
+	try:
+		from Components import HdsIptvLucru
+		HdsIptvLucru.porneste()
+	except Exception as e:
+		print("[mytest] IPTV:", e)
+
 	# HDSatelit: copia setarilor (Components/HdsCopieSetari.py). Dupa o punere la loc facuta de enigma2.sh, mesajul scurt
 	# cu ce s-a pus intra in coada de notificari INAINTEA lui „Ce e nou” (coada se deschide in ordine): cand reteaua din
 	# copie intra numai la pornirea receptorului, mesajul spune ca receptorul reporneste o data si o face singur dupa
@@ -618,6 +644,13 @@ def runScreenTest():
 		HdsSemneBaza.porneste()
 	except Exception as e:
 		print("[mytest] semnele din baza canalelor:", e)
+	# HDSatelit: al doilea tuner de satelit porneste singur daca are semnal (Components/HdsTunerB.py): o proba in fundal
+	# la 90 s dupa pornire, a doua in standby; nimic pe ecran. Fara al doilea tuner sau cu el ales de om nu face nimic.
+	try:
+		from Components import HdsTunerB
+		HdsTunerB.porneste(session)
+	except Exception as e:
+		print("[mytest] tunerul B:", e)
 	# HDSatelit: legatura cu routerul si cu internetul (Components/HdsStareRetea.py): pictograma din bare si din web,
 	# mesajul din mijlocul ecranului la pierderea internetului. Citirea pasiva la 3 s pe firul enigma2, verificarea DNS
 	# pe firul ei. Pornirea nu depinde de ea.
@@ -647,6 +680,13 @@ def runScreenTest():
 		HdsActualizari.porneste()
 	except Exception as e:
 		print("[mytest] actualizarile prin pachete:", e)
+	# HDSatelit: imaginea completa de pe internet (Components/HdsImagineOnline.py): fereastra singura pentru o versiune noua,
+	# actualizarea din standby si verificarea de dupa o scriere. Pornirea nu depinde de ea.
+	try:
+		from Components import HdsImagineOnline
+		HdsImagineOnline.porneste(session)
+	except Exception as e:
+		print("[mytest] imaginea de pe internet:", e)
 	# HDSatelit: VPN-ul (Components/HdsVpn.py), numai cu programele lui in imagine (SystemInfo["HdsVpn"]): urmareste un
 	# VPN care merge (repornirea interfetei nu il opreste) si il porneste cand omul a cerut asta la pornirea
 	# receptorului. Pornirea receptorului nu depinde de el.
@@ -803,6 +843,13 @@ def runScreenTest():
 		HdsJurnalSistem.porneste()
 	except Exception as e:
 		print("[mytest] jurnalele retelei si discurilor:", e)
+	# HDSatelit: rapoartele erorilor din pluginurile externe ramase netrimise (Components/HdsPluginExtern): reincercate
+	# la 15 minute, pe un fir; numai cand coada are ceva
+	try:
+		from Components import HdsPluginExtern
+		HdsPluginExtern.porneste()
+	except Exception as e:
+		print("[mytest] rapoartele pluginurilor externe:", e)
 
 	runNextScreen(session, screensToRun)
 

@@ -1,6 +1,10 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
+#include <fcntl.h>
 #include <stdint.h>
+#include <string>
+#include <unistd.h>
 #include <lib/actions/action.h>
+#include <lib/base/eerror.h>
 #include <lib/base/init.h>
 #include <lib/base/init_num.h>
 #include <lib/actions/actionids.h>
@@ -161,9 +165,45 @@ struct call_entry
 	call_entry(eWidget *widget, void *arg, void *arg2): m_widget(widget), m_widget_arg(arg), m_widget_arg2(arg2) { }
 };
 
+/*
+ * HDSatelit: the governor set by the maker's script (interactive, timer_rate 200 ms, go_hispeed_load 99) looks at the load
+ * every 200 ms and rises only at a full load, so the receiver stays at its lowest step, 400 MHz, 97% of the time and the
+ * drawing after a key runs there. A key asks at once for the governor's hispeed_freq (1,2 GHz, never above the limit set
+ * by Components/HdsProcesor.py) for half a second after the last press, the way the phones do at a touch. Without this
+ * file (another governor, another receiver, the PC) nothing happens.
+ */
+static void hdsCpuAfterKey()
+{
+	static const char dir[] = "/sys/devices/system/cpu/cpufreq/interactive/";
+	static int boost_fd = -2;
+	if (boost_fd == -2)
+	{
+		boost_fd = ::open((std::string(dir) + "boostpulse").c_str(), O_WRONLY | O_CLOEXEC);
+		if (boost_fd >= 0)
+		{
+			int duration_fd = ::open((std::string(dir) + "boostpulse_duration").c_str(), O_WRONLY | O_CLOEXEC);
+			if (duration_fd >= 0)
+			{
+				if (::write(duration_fd, "500000", 6) < 0)
+					eDebug("[eActionMap] boostpulse_duration: %m");
+				::close(duration_fd);
+			}
+		}
+	}
+	if (boost_fd >= 0 && ::write(boost_fd, "1", 1) < 0)
+	{
+		eDebug("[eActionMap] boostpulse: %m");
+		::close(boost_fd);
+		boost_fd = -1;
+	}
+}
+
 void eActionMap::keyPressed(const std::string &device, int key, int flags)
 {
 	std::list<call_entry> call_list;
+
+	if (flags != eRCKey::flagBreak)
+		hdsCpuAfterKey();
 
 	if (flags == eRCKey::flagMake)
 	{

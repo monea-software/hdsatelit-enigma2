@@ -1,18 +1,20 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# libdvdread pentru redarea DVD-urilor copiate necriptate (dosar VIDEO_TS sau fisier .iso). Fara biblioteca de
-# decriptare CSS: reteta OE nu o leaga, dar codul original o incarca la rulare (dlopen) daca o gaseste pe sistem.
-# Peticul 0001-dvd-input-fara-decriptare.patch scoate incarcarea si functiile care o folosesc; ramane numai citirea
-# directa a sectoarelor. Constructia se opreste daca biblioteca ar fi legata la compilare, daca libdvdread.so (curatat
-# de simboluri, ca in pachet) mai pomeneste biblioteca de decriptare sau daca mai cere dlopen.
+# NUMAI pentru stratul OE-Alliance 6.0 (pregateste-strat-60.sh il pune peste meta-local/recipes-local/libdvdread):
+# libdvdread 7.1.1 (meson) in locul lui 6.1.3 (autotools) din 5.6. Acelasi scop: DVD-uri copiate necriptate (dosar
+# VIDEO_TS sau fisier .iso), fara biblioteca de decriptare CSS. In 7.x reteta OE o cere prin PACKAGECONFIG (pornit
+# implicit), deci se scoate de acolo; codul original o incarca la rulare (dlopen) daca o gaseste pe sistem, iar
+# peticul 0001-dvd-input-fara-decriptare.patch (refacut pentru 7.1.1) scoate incarcarea si functiile care o folosesc.
+# Constructia se opreste daca biblioteca ar fi legata la compilare, daca libdvdread.so (curatat de simboluri, ca in
+# pachet) mai pomeneste biblioteca de decriptare sau daca mai cere dlopen.
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI += "file://0001-dvd-input-fara-decriptare.patch"
 
 PR:append = ".hds1"
 
-EXTRA_OECONF += "--without-libdvdcss"
+PACKAGECONFIG:remove = "libdvdcss"
 
 do_configure:append() {
 	if grep -q '^#define HAVE_DVDCSS_DVDCSS_H' ${B}/config.h; then

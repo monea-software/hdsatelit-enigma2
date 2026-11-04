@@ -120,7 +120,7 @@ def citeste_binar(cale_fisier):
 	return _procFundal(citeste_binar_direct, cale_fisier)
 
 
-def citeste_dosar(cale_dosar, doar=None):
+def citeste_dosar(cale_dosar, doar=None, fara=()):
 	"""{nume: valoare fara spatii la capete} pentru fisierele dintr-un dosar /proc/stb/... Fisierele *_apply nu se
 	citesc (pe unele receptoare scrierea sau chiar citirea lor declanseaza ceva). `doar` = numele dorite."""
 	rez = {}
@@ -129,7 +129,7 @@ def citeste_dosar(cale_dosar, doar=None):
 	except Exception:
 		return rez
 	for n in nume:
-		if n.endswith('_apply') or (doar is not None and n not in doar):
+		if n.endswith('_apply') or n in fara or (doar is not None and n not in doar):
 			continue
 		p = os.path.join(cale_dosar, n)
 		if not os.path.isfile(p):
@@ -505,7 +505,9 @@ def citeste(radacina='/', anterior=None, brut=False):
 			if s.disp and not brut:
 				break
 
-		s.video = citeste_dosar(cale(radacina, STB_VIDEO), None if brut else ('videomode', 'videomode_preferred'))
+		# pe unele placi SF8008 citirea acestor doua opreste nucleul (hi_dvb), ca la fisierele de sunet: pagina bruta le sare
+		s.video = citeste_dosar(cale(radacina, STB_VIDEO), None if brut else ('videomode', 'videomode_preferred'),
+			('alpha', 'zapmode') if os.path.isdir(cale(radacina, 'proc/msp')) else ())
 		s.vmpeg = citeste_dosar(cale(radacina, STB_VMPEG), None if brut else ('xres', 'yres', 'progressive', 'framerate', 'gamma'))
 		s.audio = citeste_sunet(radacina, brut)
 		if brut:

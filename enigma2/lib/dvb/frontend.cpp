@@ -818,6 +818,8 @@ void eDVBFrontend::feEvent(int w)
 		}
 		if (m_state != state)
 		{
+			if (state == stateLock && m_hds_timpi_zap.pornire_ms && !m_hds_timpi_zap.lock_ms)
+				m_hds_timpi_zap.lock_ms = hdsjurnal::monotonMs();
 			/* pasiv: nicio citire in plus la driver in clipa blocarii (SNR-ul il citeste interfata cand il arata) */
 			if (state == stateLock && m_hds_jurnal.pornit_ms)
 				hdsjtuner::prins(m_hds_jurnal, m_slotid, -1);
@@ -1731,6 +1733,8 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 
 	if ( m_sec_sequence && m_sec_sequence.current() != m_sec_sequence.end() )
 	{
+		if (!m_simulate && m_state == stateTuning && !m_hds_timpi_zap.sec_start_ms)
+			m_hds_timpi_zap.sec_start_ms = hdsjurnal::monotonMs();
 		long *sec_fe_data = sec_fe->m_data;
 //		eDebugNoSimulate("tuneLoop %d\n", m_sec_sequence.current()->cmd);
 		delay = 0;
@@ -1899,6 +1903,12 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 						eDebugNoSimulate("ok > 4 .. goto %d\n", cmd.steps);
 						setSecSequencePos(cmd.steps);
 						m_hds_rotor_locked = true;
+						if (!m_hds_timpi_zap.lock_ms)
+						{
+							m_hds_timpi_zap.lock_ms = hdsjurnal::monotonMs();
+							if (!m_hds_timpi_zap.sec_gata_ms)
+								m_hds_timpi_zap.sec_gata_ms = m_hds_timpi_zap.lock_ms;
+						}
 						hdsjtuner::prins(m_hds_jurnal, m_slotid, signal);
 						m_state = stateLock;
 						m_stateChanged(this);
@@ -2127,6 +2137,14 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 	return delay;
 }
 
+void eDVBFrontend::hdsComandaTuner(bool recvEvents)
+{
+	/* La motor pot exista mai multe comenzi; ramane ultima, pana la semnalul confirmat. */
+	m_hds_timpi_zap.comanda_ms = hdsjurnal::monotonMs();
+	if (recvEvents)
+		m_hds_timpi_zap.sec_gata_ms = m_hds_timpi_zap.comanda_ms;
+}
+
 void eDVBFrontend::setFrontend(bool recvEvents)
 {
 	if (!m_simulate)
@@ -2227,6 +2245,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 				p[7].cmd = DTV_TUNE;
 				cmdseq.num = 8;
 			}
+			hdsComandaTuner(recvEvents);
 			if (ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) == -1)
 			{
 				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_PROPERTY", errno);
@@ -2266,6 +2285,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			cmdseq.num = n;
 			eDebug("frontend %d: %s %d Hz, latime %d Hz, PLP %d", m_dvbid, t2 ? "DVB-T2" : "DVB-T", parm_frequency,
 				hdster::latimeHz(oparm.ter.bandwidth), plp);
+			hdsComandaTuner(recvEvents);
 			if (ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) == -1)
 			{
 				perror("FE_SET_PROPERTY failed");
@@ -2275,6 +2295,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 		else
 #endif
 		{
+			hdsComandaTuner(recvEvents);
 			if (ioctl(m_fd, FE_SET_FRONTEND, &parm) == -1)
 			{
 				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_FRONTEND", errno);
@@ -2743,6 +2764,9 @@ RESULT eDVBFrontend::prepare_terrestrial(const eDVBFrontendParametersTerrestrial
 
 RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 {
+	m_hds_timpi_zap = TimpiZap();
+	if (!m_simulate)
+		m_hds_timpi_zap.pornire_ms = hdsjurnal::monotonMs();
 	unsigned int timeout = 5000;
 	eDebugNoSimulate("(%d)tune", m_dvbid);
 
@@ -2851,6 +2875,8 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 			goto tune_error;
 
 		m_sec_sequence.push_back( eSecCommand(eSecCommand::START_TUNE_TIMEOUT, timeout) );
+		// tunerul combinat trecut de pe T2 pe cablu: alimentarea antenei se opreste (setVoltage, hdsAlimentareAntena)
+		m_sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, iDVBFrontend::voltageOff) );
 		m_sec_sequence.push_back( eSecCommand(eSecCommand::SET_FRONTEND, 1) );
 		break;
 	}
@@ -2912,8 +2938,29 @@ RESULT eDVBFrontend::connectStateChange(const sigc::slot<void(iDVBFrontend*)> &s
 	return 0;
 }
 
+// HDSatelit: alimentarea antenei terestre (setarea de 5 V). Pe receptoarele care au fisierul (SF8008 combo) tensiunea nu
+// vine din FE_SET_VOLTAGE, ci din /proc/stb/frontend/<n>/active_antenna_power; unde nu exista, nu face nimic.
+static void hdsAlimentareAntena(int slot, const char *stare)
+{
+	char nume[64];
+	snprintf(nume, sizeof(nume), "/proc/stb/frontend/%d/active_antenna_power", slot);
+	FILE *f = fopen(nume, "w");
+	if (f)
+	{
+		fputs(stare, f);
+		fclose(f);
+	}
+}
+
 RESULT eDVBFrontend::setVoltage(int voltage)
 {
+	if (!m_simulate)
+	{
+		if (voltage == voltageOff)
+			hdsAlimentareAntena(m_slotid, "off");
+		else if (voltage == voltage13 && m_type == feTerrestrial)
+			hdsAlimentareAntena(m_slotid, "on");
+	}
 	if (m_type == feCable)
 		return -1;
 #if HAVE_DVB_API_VERSION < 3

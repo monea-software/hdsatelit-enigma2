@@ -30,6 +30,14 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b4a4deb94acc9916ca04ba6c5e4d0700"
 # PR ".hds2" (era ".hds1", al licentei): continutul lui terrestrial.xml s-a schimbat la aceeasi versiune.
 PR:append = ".hds2"
 
+# Sursa fixata la comiterea din imaginea 0.6.0 (pachetul tuxbox-common 1.0+git1030+194f4de0 din manifestul ei; lotul
+# imagine-060-v10): reteta OE-Alliance ia ultima comitere de pe master (AUTOREV), iar dupa 24.10.2026 master a primit
+# cables.xml schimbat, asa ca o constructie noua ar fi pus alte liste de cablu decat imaginea lansata. Fixata, orice
+# imagine noua pe stratul 0.6.0 (V20, V30, V40, V10) are aceleasi liste ca 0.6.0; listele noi vin cu o imagine noua.
+# Cu ":pn-tuxbox-common", ca la dvbmediasink: distributia pune SRCREV:pn-tuxbox-common ?= AUTOREV
+# (unstable-versions.inc), iar varianta cu override castiga in fata unui SRCREV simplu.
+SRCREV:pn-tuxbox-common = "194f4de3c3e78d3f4823589f2f65dd0adf15fb32"
+
 inherit hds-fara-nume
 
 do_install:append() {

@@ -1,0 +1,39 @@
+# HD Satelit: regulile garzii de model pentru Uclan Ustym 4K PRO (masina ustym4kpro), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina ustym4kpro e stratul producatorului meta-uclan, o copie a lui meta-octagon (SF8008): nucleul linux-uclan 4.4.35
+# (defconfig ustym4kpro), pachetul de drivere ustym4kpro-hiko 20230804 (hi-dvb.ko face /proc/stb; compilat din aceeasi
+# sursa ca cel SF8008 20240104), aceeasi impartire a memoriei interne ca SF8008 (lotul ustym4kpro). Valorile vin din
+# pachetele publice ale producatorului, verificate pe SHA-256:
+#   boxtype  /proc/stb/info/boxtype din hi-dvb.ko = "ustym4kpro" (singurul sir prin care modulul difera de cel SF8008);
+#   hw       antetul deviceinfo.bin din ustym4kpro-partitions-20220326 (fisier identic cu cel SF8008):
+#            MAGICNUM=deviceinfo OUI=00000003 HW=00000001;
+#   partitions, kernel_part, rootfs_part: bootargs.bin din acelasi pachet (blkdevparts, root=/dev/mmcblk0p16
+#            rootsubdir=linuxrootfs1, kernel=/dev/mmcblk0p12, MODEL=ustym4kpro); MTD_KERNEL si MTD_ROOTFS din
+#            ustym4kpro.conf (meta-uclan);
+#   kernel_kib 16384: linuxkernel1 are 16 MB.
+# Nucleul si sistemul sunt in partitiile cu numele linuxkernel1 si userdata (sistemul intr-un subdosar al lui userdata,
+# linuxrootfs1), ca pe SF8008: kernel_name si rootfs_name le dau garzii (enigma2.sh si Components/HdsPazaModel.py).
+# Tipul placii vine din driverul imaginii care ruleaza (hi-dvb.ko il da constant, "ustym4kpro", pe orice placa), deci
+# dovedeste driverul, nu receptorul; cipul, antetul deviceinfo si tabela sunt aceleasi ca la SF8008. Semnul receptorului
+# e MODEL= din bootargs-ul lui (ustym4kpro; Components/HdsPazaModel.informatiiPornire), aratat numai informativ:
+# nemasurat pe un aparat.
+# upd_path lipseste dinadins: recuperarea e arhiva de recuperare a producatorului (usb_update.bin), ca pe SF8008.
+# emmc_min_kib nu se pune: marimea memoriei interne nu e masurata de nimeni pentru noi.
+# Se inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=ustym4kpro.
+format=1
+distro=hdsatelit
+model=Uclan Ustym 4K PRO
+machine=ustym4kpro
+machinebuild=ustym4kpro
+chip=Hi3798MV200
+boxtype=ustym4kpro
+hw=00000001
+partitions=boot:1M,bootargs:1M,bootoptions:1M,baseparam:3M,pqparam:4M,logo:4M,deviceinfo:4M,softwareinfo:4M,loaderdb:4M,loader:32M,trustedcore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p12
+kernel_kib=16384
+rootfs_part=mmcblk0p16
+confirmat=nu

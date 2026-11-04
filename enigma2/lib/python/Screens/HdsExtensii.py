@@ -4,14 +4,14 @@
 """Gestionarul de extensii HDSatelit (meniul principal > Extensii; Software > Extensii). Doar in imaginea HDSatelit.
 
 Un singur ecran, ca magazinul de aplicatii al unui televizor:
- - file sus (Stanga/Dreapta): Pe receptor (extensiile instalate; OK le deschide, ca vechiul PluginBrowser),
-   Actualizari (doar cand sunt), cate o fila pentru fiecare categorie care chiar are pachete in surse, Din fisier
+ - file sus (Stanga/Dreapta): Instalate (tot ce e instalat; OK deschide pluginurile, ca vechiul PluginBrowser),
+   Disponibile (ce se poate lua din surse, pe feeduri si sectiuni, plus randul Din fisier), Din fisier
    (.ipk de pe stick, disc sau retea) si Surse (feedurile HD Satelit si Pluginuri externe, cate un rand fiecare, si
    sursele adaugate de utilizator);
  - lista (Sus/Jos, P+/P- pe pagini): icoana, nume, descriere scurta, sursa, versiune, marime, insigne;
  - detaliile randului ales, mereu in dreapta;
- - OK = actiunea principala (Deschide, Instaleaza, Actualizeaza), rosu Sterge, verde actiunea principala (in fila
-   Actualizari: Actualizeaza tot), galben Cauta dupa nume, albastru Descarca lista; EXIT un pas inapoi (iese din
+ - OK = actiunea principala (Deschide, Instaleaza, Actualizeaza), rosu Sterge sau Actualizeaza, verde Surse feeduri,
+   galben Cauta dupa nume, albastru Filtreaza (in Surse feeduri: verde Adauga feed, albastru Descarca lista), INFO sursa pachetului; EXIT un pas inapoi (iese din
    cautare, apoi inchide ecranul).
 Instalarea, stergerea, actualizarea: HdsExtensiiActiune (confirmare cu sursa, versiunea si marimea, apoi progres pe
 loc: un semn care se misca si un jurnal scurt). opkg porneste doar prin Components/Ipkg.py (lista de argumente, nume
@@ -76,6 +76,8 @@ MESAJ_CAUTA_RETEA = N_('Se caută deja în rețea.')
 # care nu e prima incepe cu „…”; o pagina sta pe ecran cat sa se poata citi (PAGINA_SEMNE_PE_S), intre cele doua
 # limite, apoi urmeaza cealalta; dupa ultima vine iar prima
 CONTINUARE = '…'
+# cate valori au randul lor in tabele (_puneValori)
+RANDURI_VALORI = 6
 PAGINA_SEMNE_PE_S = 15
 PAGINA_MIN_MS = 6000
 PAGINA_MAX_MS = 20000
@@ -218,6 +220,39 @@ def _valoriPotrivite(eticheta, valori, rezerva):
 	return '\n'.join(rez)
 
 
+def _randuriValori(ecran, nume):
+	"""Etichetele valorilor, cate una pe rand (nume0, nume1...), cu Label: pot derula, un Label cu mai multe randuri nu."""
+	for i in range(RANDURI_VALORI):
+		ecran['%s%d' % (nume, i)] = Label('')
+
+
+def _puneValori(ecran, nume, valori, rezerva):
+	"""Valorile unui tabel: fiecare intreaga, pe randul ei, iar ce nu incape deruleaza, ca in restul imaginii. Skinul are randurile nume0...;
+	altul, ramane cu un singur Label, cu valorile scurtate. Intoarce cate randuri s-au aratat pe randurile separate."""
+	baza = ecran[nume]
+	prim = ecran['%s0' % nume]
+	if getattr(prim, 'skinAttributes', None) is None or len(valori) > RANDURI_VALORI:
+		for i in range(RANDURI_VALORI):
+			ecran['%s%d' % (nume, i)].setText('')
+		baza.setText(_valoriPotrivite(baza, valori, rezerva))
+		return 0
+	baza.setText('')
+	from enigma import fontRenderClass
+	rand = int(fontRenderClass.getInstance().getLineHeight(baza.instance.getFont()) or 0) or prim.instance.size().height()
+	p = baza.instance.position()
+	for i in range(RANDURI_VALORI):
+		w = ecran['%s%d' % (nume, i)]
+		if i < len(valori):
+			w.setText(P._curat(valori[i], 400).replace('\n', ' '))
+			w.instance.move(ePoint(p.x(), p.y() + i * rand))
+			w.instance.resize(eSize(baza.instance.size().width(), rand))
+			w.show()
+		else:
+			w.setText('')
+			w.hide()
+	return len(valori)
+
+
 _categorie_plugin = L.categoriePlugin
 
 
@@ -307,6 +342,8 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.setTitle(_t(TITLU))
 
 		self.filaInitiala = fila
+		self.surseDeschise = fila == 'surse'
+		self.fisiereDeschise = fila == 'fisiere'
 		self.catalog = P.Catalog()
 		self.pluginuri = []
 		self.fisiere = None            # [FisierIpk] de pe stick, disc, memorie: cautate in fundal la intrarea in fila Din fisier
@@ -341,6 +378,8 @@ class HdsExtensii(Screen, HelpableScreen):
 		self['dInsigna'] = Label('')
 		self['dEtichete'] = Label('')
 		self['dValori'] = Label('')
+		_randuriValori(self, 'dValori')
+		self.nValori = 0
 		self['dDescriere'] = Label('')
 		self['dIndiciu'] = Label('')
 		self['key_red'] = Button('')
@@ -373,9 +412,10 @@ class HdsExtensii(Screen, HelpableScreen):
 			'blue': (self.keyAlbastru, 'Descarcă lista de pachete'),
 		}, -1)
 		# P+/P- (si |<< >>|) pe pagini: contextul listei de canale; tastele colorate din el merg la aceleasi functii
-		# MENU (0.6.6): Actualizeaza toate (0.6.6), din orice fila, cand sunt actualizari (mouse: clic pe rotita)
-		self['pagini'] = ActionMap(['ChannelSelectBaseActions', 'MenuActions'], {
+		# MENU: Actualizeaza tot, din orice fila, cand sunt actualizari
+		self['pagini'] = ActionMap(['ChannelSelectBaseActions', 'MenuActions', 'EPGSelectActions'], {
 			'menu': self.keyMeniu,
+			'info': self.keySursa,
 			'nextBouquet': self.keyPaginaSus,
 			'prevBouquet': self.keyPaginaJos,
 			'nextMarker': self.keyPaginaJos,
@@ -535,9 +575,12 @@ class HdsExtensii(Screen, HelpableScreen):
 		file = []
 		if self.cautare:
 			file.append(('cautare', '„%s”' % self.cautare, len(self._randuriCautare())))
-		file += L.file(self.catalog, len(self.pluginuri) + len(self._dupaRepornire()))
-		file.append(('fisiere', _t('Din fișier'), len(self.fisiere) + len(self.fisiereRetea or ()) if self.fisiere is not None else None))
-		file.append(L.filaSurse(self.catalog))
+		file += L.file(self.catalog, L.nrInstalate(self.catalog, self.pluginuri, plugins))
+		# Surse feeduri si Din fisier nu stau sus cu celelalte: se deschid cu tasta verde, din Disponibile, si dispar la iesire
+		if self.surseDeschise or idCurent == 'surse':
+			file.append(L.filaSurse(self.catalog))
+		if self.fisiereDeschise or idCurent == 'fisiere':
+			file.append(('fisiere', _t('Din fișier'), len(self.fisiere) + len(self.fisiereRetea or ()) if self.fisiere is not None else None))
 		self.file = file
 		ids = [i for i, _e, _n in file]
 		if idCurent in ids:
@@ -546,7 +589,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			self.fila = min(self.fila, len(file) - 1)
 
 	def _idFila(self):
-		return self.file[self.fila][0] if self.file else 'instalate'
+		return self.file[self.fila][0] if self.file and self.fila < len(self.file) else 'instalate'
 
 	def _pachetPlugin(self, plugin):
 		return L.pachetPlugin(self.catalog, plugin)
@@ -724,7 +767,21 @@ class HdsExtensii(Screen, HelpableScreen):
 		ic, titlu, subtitlu, insigna, culoare, mic = L.descriereRand(self.catalog, fel, obj, extra)
 		return (ic, titlu, subtitlu, insigna, (c[culoare], c['intunecat']) if culoare else None, mic)
 
+	def _randSectiune(self, titlu, numar):
+		"""Titlul unei sectiuni din feed: bara colorata, textul si numarul; nu se poate alege."""
+		c = self.c
+		W = self.latime
+		H = self.inaltime
+		f = W / 1100.0
+		bara = max(4, int(8 * f))
+		return [None, MultiContentEntryText(pos=(0, int(H * 0.28)), size=(bara, int(H * 0.44)), font=0, text='',
+				backcolor=c['titlu'], backcolor_sel=c['titlu']),
+			MultiContentEntryText(pos=(bara + int(14 * f), 0), size=(max(40, W - bara - int(70 * f)), H), font=0,
+				flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text='%s  (%d)' % (titlu, numar), color=c['titlu'], color_sel=c['titlu'])]
+
 	def _rand(self, fel, obj, extra):
+		if fel == 'sectiune':
+			return self._randSectiune(obj, extra)
 		c = self.c
 		W = self.latime
 		H = self.inaltime
@@ -771,15 +828,24 @@ class HdsExtensii(Screen, HelpableScreen):
 		self._deseneazaFile()
 		if self.randuri:
 			i = max(0, min(i, len(self.randuri) - 1))
+			# pe titlul unei sectiuni nu sta cursorul: textul lui are culoarea randului ales, deci randul ar parea gol
+			while i < len(self.randuri) - 1 and self.randuri[i][0] == 'sectiune':
+				i += 1
 			self['lista'].moveToIndex(i)
-			self['gol'].hide()
-		else:
+		# in Disponibile fara pachete ramane randul Din fisier, iar textul spune de ce nu e nimic
+		if not self.randuri or (fid == 'disponibile' and len(self.randuri) == 1):
 			self['gol'].setText(self._textGol(fid))
 			self['gol'].show()
+		else:
+			self['gol'].hide()
 		self._laSchimbare()
 
 	def _textGol(self, fid):
 		surse = self.catalog.configurare.surse
+		if fid == 'disponibile':
+			text = L.textGolDisponibile(self.catalog)
+			if text:
+				return text
 		if fid == 'instalate':
 			# 0.2.6: aici sunt numai extensiile puse de om; functiile imaginii sunt in meniu
 			return _('Nu ai extensii instalate. Funcțiile imaginii sunt în meniu; extensii noi adaugi din celelalte file, cu '
@@ -789,9 +855,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		if fid == 'fisiere':
 			if self.cautareFisiere is not None:
 				return _t('Se caută fișiere .ipk pe stick și disc.') + ('\n' + _t('Un stick sau un disc răspunde greu.') if self.anuntatLent else '')
-			return _t('Niciun fișier .ipk pe stick sau disc.\nCopiază pachetul pe un stick USB, apoi apasă albastru.')
+			return _t('Niciun fișier .ipk pe stick sau disc.\nCopiază extensia pe un stick USB, apoi apasă albastru.')
 		if not surse:
-			return _t('Nicio sursă de pachete. Adaugă una în fila Surse.')
+			return _t('Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde.')
 		return _t('Nimic aici.')
 
 	def _selectat(self):
@@ -848,7 +914,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		self['dInsigna'].setText(P._curat(d['insigna'], 400).replace('\n', ' '))
 		self._setCuloare('dInsigna', d['culoare'])
 		self['dEtichete'].setText('\n'.join(d['etichete']))
-		self['dValori'].setText(_valoriPotrivite(self['dValori'], d['valori'], 30))
+		self.nValori = _puneValori(self, 'dValori', d['valori'], 30)
 		self._asazaDescrierea(P._curat(d['descriere'], 1500))
 		self['dIndiciu'].setText(d['indiciu'])
 
@@ -906,7 +972,10 @@ class HdsExtensii(Screen, HelpableScreen):
 		jos = yEtichete + self['dEtichete'].instance.calculateSize().height()
 		try:
 			v = self['dValori']
-			if v.getText() and v.instance is not None:
+			if getattr(self, 'nValori', 0):
+				rand = self['dValori0'].instance.size().height()
+				jos = max(jos, v.instance.position().y() + self.nValori * rand)
+			elif v.getText() and v.instance is not None:
 				jos = max(jos, v.instance.position().y() + v.instance.calculateSize().height())
 		except (KeyError, AttributeError) as eroare:
 			print('[HdsExtensii] valorile detaliilor: %s' % eroare)
@@ -965,10 +1034,33 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self._idFila() == 'actualizari' and self.randuri:
 			verde = N_('Actualizează toate')
 		# numele tastelor raman chei (L.taste); se traduc la afisare
+		# verde: Surse feeduri, oriunde randul se deschide cu OK (Eduard, 04.11.2026)
+		if self._idFila() == 'surse':
+			verde = N_('Adaugă feed')
+		elif self._idFila() != 'fisiere':
+			verde = N_('Surse feeduri')
+		# rosu nu sta degeaba (Eduard, 04.11.2026): actualizeaza ce are versiune noua; unde randul nu se poate sterge, in
+		# Instalate actualizeaza tot, daca e ceva
+		if fel == 'plugin' and extra is not None and extra.actualizare:
+			rosu = N_('Actualizează')
+		elif not rosu and L.filtruActiv(self.filtru, self._idFila()):
+			rosu = N_('Arată tot')
+		elif not rosu and self._idFila() == 'instalate' and self.catalog.actualizari():
+			rosu = N_('Actualizează tot')
 		self['key_red'].setText(_t(rosu))
 		self['key_green'].setText(_t(verde))
-		albastru = L.tastaAlbastra(self.catalog, fel, obj, extra) if fel != 'retea' else ''
-		self['key_blue'].setText(_t('Caută fișiere') if self._idFila() == 'fisiere' else _t(albastru or 'Descarcă lista'))
+		fid = self._idFila()
+		if fid == 'fisiere':
+			self['key_blue'].setText(_t('Caută fișiere'))
+		elif fid == 'surse':
+			self['key_blue'].setText(_t('Descarcă lista'))
+		else:
+			self['key_blue'].setText(_t('Filtrează'))
+		try:
+			from Components.HdsMarireText import semneTaste
+			semneTaste(self)
+		except ImportError:  # probele de pe PC
+			pass
 
 	def _stare(self):
 		if self.descarca is not None:
@@ -989,6 +1081,11 @@ class HdsExtensii(Screen, HelpableScreen):
 				return
 		parti = []
 		culoare = 'eticheta'
+		filtru = L.textStareFiltru(self.catalog, L.randuri(self.catalog, fid, self.pluginuri, plugins, self.cautare), self.filtru,
+			fid) if fid not in ('fisiere', 'surse') else ''
+		if filtru:
+			parti.append(filtru)
+			culoare = 'chihlimbar'
 		if fid == 'fisiere':
 			if self.cautareFisiere is not None:
 				parti.append(_t('Se caută fișiere .ipk pe stick și disc'))
@@ -1004,17 +1101,14 @@ class HdsExtensii(Screen, HelpableScreen):
 				parti.append(_t('cele mai noi %d') % len(self.fisiere or ()))
 		elif fid == 'surse':
 			n = L.numarSurse(self.catalog)
-			parti.append(_t('%d surse') % n if n != 1 else _t('o sursă'))
+			parti.append(_t('%d feeduri') % n if n != 1 else _t('un feed'))
 		elif fid == 'cautare':
 			parti.append(_t('Rezultatele căutării'))
-		n_act = len(self.catalog.actualizari())
-		if n_act >= 2 and fid != 'actualizari':
-			parti.append(_t('MENU actualizează toate (%d)') % n_act)
 		if fid not in ('fisiere',):
 			if not conf.surse:
-				parti.append(_t('nicio sursă de pachete'))
+				parti.append(_t('niciun feed'))
 			elif not self.catalog.surse_cu_lista:
-				parti.append(_t('lista nu a fost descărcată: albastru o descarcă'))
+				parti.append(_t('lista nu a fost descărcată încă'))
 			else:
 				parti.append(_t('lista din %s') % P.text_varsta(self.catalog.varsta_liste))
 		if not opkgProgram():
@@ -1023,7 +1117,8 @@ class HdsExtensii(Screen, HelpableScreen):
 			self['stare'].setText(' · '.join(['Extensiile noi apar după repornirea interfeței'] + parti))
 			self._setCuloare('stare', 'chihlimbar')
 			return
-		self['stare'].setText(' · '.join(parti))
+		text = ' · '.join(parti)
+		self['stare'].setText(text[:1].upper() + text[1:])
 		self._setCuloare('stare', culoare)
 
 	# ------------------------------------------------------------ descarcarea listei (opkg update), in fundal
@@ -1049,16 +1144,16 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._mesaj(_t('Lista se descarcă deja. Încearcă din nou peste un minut.'), 'chihlimbar')
 			return
 		if not self.catalog.configurare.surse:
-			self._mesaj(_t('Nicio sursă de pachete. Adaugă una în fila Surse.'), 'chihlimbar')
+			self._mesaj(_t('Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde.'), 'chihlimbar')
 			return
 		if not opkgProgram():
-			self._mesaj(_t('Instalarea pachetelor nu este disponibilă în această imagine.'), 'chihlimbar')
+			self._mesaj(_t('Instalarea extensiilor nu este disponibilă în această imagine.'), 'chihlimbar')
 			return
 		self.mesajStare = ''
 		self.liniiDescarcare = []
 		self.descarca = IpkgComponent()
 		self.descarca.addCallback(self._evenimentDescarcare)
-		self['stare'].setText(_t('Se descarcă lista de pachete'))
+		self['stare'].setText(_t('Se descarcă lista de extensii'))
 		self._setCuloare('stare', 'chihlimbar')
 		self._semn()
 		# pornita si tinuta in Components/HdsExtensiiLucru.py (ora ultimei descarcari, jurnalul, pagina web o vede)
@@ -1139,9 +1234,25 @@ class HdsExtensii(Screen, HelpableScreen):
 		# selectie (randul 0, apoi cel tinut minte), iar un mesaj pus chiar atunci (sfarsitul descarcarii) trebuie sa ramana.
 		inainte = self['lista'].getSelectionIndex()
 		miscare()
+		self._treciPesteSectiune(inainte)
 		if self.mesajStare and self['lista'].getSelectionIndex() != inainte:
 			self.mesajStare = ''
 			self._stare()
+
+	def _treciPesteSectiune(self, inainte):
+		"""Cursorul nu sta pe un titlu de sectiune: merge mai departe in acelasi sens; la capatul listei ramane unde era."""
+		lista = self['lista']
+		acum = lista.getSelectionIndex()
+		if self._selectat()[0] != 'sectiune':
+			return
+		pas = 1 if acum >= inainte else -1
+		i = acum + pas
+		while 0 <= i < len(self.randuri):
+			if self.randuri[i][0] != 'sectiune':
+				lista.moveToIndex(i)
+				return
+			i += pas
+		lista.moveToIndex(inainte)
 
 	def keyUp(self):
 		self._muta(self['lista'].up)
@@ -1173,6 +1284,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self._idFila() == 'cautare' or self.cautare:
 			self._iesiDinCautare()
 			return
+		if self._idFila() in ('surse', 'fisiere') and self.filaInitiala != self._idFila():
+			self._inchideSurse()
+			return
 		self.close()
 
 	def keyOk(self):
@@ -1201,6 +1315,17 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._cautaInRetea()
 		elif fel == 'adauga':
 			self._adaugaSursa()
+		elif fel == 'actualizeaza':
+			self._actualizeazaTot()
+		elif fel == 'dinfisier':
+			self._deschideFila('fisiere')
+		elif fel == 'pluginsurse':
+			self.surseDeschise = False
+			self.cautare = obj.titlu
+			self.filaDinaintea = 'instalate'
+			self._construiesteFile()
+			self.fila = 0
+			self._arataFila()
 		elif fel in ('sursa', 'feed'):
 			self._descarcaLista()
 		elif fel == 'filtru':
@@ -1225,6 +1350,12 @@ class HdsExtensii(Screen, HelpableScreen):
 		self._arataFila(pastreaza=False)
 
 	def keyVerde(self):
+		if self._idFila() == 'surse':
+			self._alegeAdaugare()
+			return
+		if self._idFila() != 'fisiere':
+			self._deschideFila('surse')
+			return
 		fel, obj, extra = self._selectat()
 		inl, stare = L.inlocuitorRand(self.catalog, fel, obj, extra)
 		if stare == 'instalabil':
@@ -1238,6 +1369,25 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._planActualizare([extra])
 		else:
 			self.keyOk()
+
+	def _alegeAdaugare(self):
+		"""Adauga feed: manual (numele si adresa) sau automat (pluginul de feeduri din Monea Software); Eduard, 04.11.2026"""
+		self.session.openWithCallback(self._dupaAlegereAdaugare, MessageBox, '', type=MessageBox.TYPE_YESNO, titlu=_t('Adaugă feed'),
+			list=[(_t('Adaugă manual'), 'manual'), (_t('Adaugă automat'), 'automat')])
+
+	def _dupaAlegereAdaugare(self, alegere=None):
+		if alegere not in ('manual', 'automat'):
+			return
+		if alegere == 'manual':
+			self._adaugaSursa()
+			return
+		p = self.catalog.pachete.get(L.PACHET_FEEDURI)
+		if p is None:
+			self._mesaj(_t('Pluginul de feeduri din Monea Software nu e încă disponibil.'), 'chihlimbar')
+		elif p.instalat:
+			self._mesaj(_t('Pluginul de feeduri e deja instalat.'), 'bun')
+		else:
+			self._planInstalare(p)
 
 	def _reporneste(self):
 		# din lista (OK sau verde pe un rand „După repornire”) se intreaba intai: TryQuitMainloop intreaba doar cand
@@ -1253,24 +1403,64 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def keyRosu(self):
 		fel, obj, extra = self._selectat()
-		if fel == 'plugin' and extra is not None and extra.se_poate_sterge:
+		if fel == 'plugin' and extra is not None and extra.actualizare:
+			self._planActualizare([extra])
+		elif fel == 'plugin' and extra is not None and extra.se_poate_sterge:
 			self._planStergere(extra)
 		elif fel == 'pachet' and obj.se_poate_sterge:
 			self._planStergere(obj)
 		elif fel == 'sursa' and self.catalog.configurare.e_a_utilizatorului(obj[0]):
 			self._stergeSursa(obj[0])
-		elif fel == 'filtru' and L.filtruActiv(obj, extra[0]):
+		elif L.filtruActiv(self.filtru, self._idFila()):
 			self.filtru = L.filtruGol()
 			self._arataFila()
+		elif self._idFila() == 'instalate' and self.catalog.actualizari():
+			self._actualizeazaTot()
 
 	def keyMeniu(self):
-		"""Actualizeaza toate: toate pachetele instalate cu versiune noua, din orice feed; la unul singur, actualizarea
+		self._actualizeazaTot()
+
+	def _deschideFila(self, fid):
+		if self._idFila() not in ('surse', 'fisiere'):
+			self.filaDinainteaSurse = self._idFila()
+		if fid == 'surse':
+			self.surseDeschise = True
+		else:
+			self.fisiereDeschise = True
+		self._construiesteFile()
+		self.fila = [i for i, _e, _n in self.file].index(fid)
+		self.mesajStare = ''
+		self._arataFila()
+
+	def _inchideSurse(self):
+		"""Din Din fisier inapoi la Surse feeduri, din Surse feeduri inapoi la fila de dinainte"""
+		fid = self._idFila()
+		self.fisiereDeschise = False
+		if fid != 'fisiere':
+			self.surseDeschise = False
+		tinta = 'surse' if fid == 'fisiere' and self.surseDeschise else (self.filaDinainteaSurse or 'instalate')
+		self.fila = 0
+		self.file = []
+		self._construiesteFile()
+		ids = [i for i, _e, _n in self.file]
+		self.fila = ids.index(tinta) if tinta in ids else 0
+		self.mesajStare = ''
+		self._arataFila()
+
+	def _actualizeazaTot(self):
+		"""Actualizeaza tot: toate pachetele instalate cu versiune noua, din orice feed; la unul singur, actualizarea
 		lui (ca din randul lui)"""
 		pachete = self.catalog.actualizari()
 		if not pachete:
 			self._mesaj(_t('Nicio actualizare de instalat.'), 'bun')
 			return
 		self._planActualizare(pachete)
+
+	def keySursa(self):
+		"""INFO: sursa deschisa a pachetului ales, cand are arhiva ei in feed"""
+		fel, obj, extra = self._selectat()
+		if L.pachetCuSursa(self.catalog, fel, obj, extra) is not None:
+			self._descarcaSursa(fel, obj, extra)
 
 	def keyGalben(self):
 		self.session.openWithCallback(self._dupaCautare, VirtualKeyBoard, title=_t('Caută o extensie după nume'), text=self.cautare)
@@ -1286,6 +1476,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			if self.fisiereRetea is not None and self.cautareRetea is None and self.locuriRetea:
 				self._cautaFisiere(retea=True)
 			self._arataFila()
+			return
+		if self._idFila() != 'surse':
+			self._alegeFiltru()
 			return
 		fel, obj, extra = self._selectat()
 		if L.pachetCuSursa(self.catalog, fel, obj, extra) is not None:
@@ -1342,7 +1535,9 @@ class HdsExtensii(Screen, HelpableScreen):
 	# ------------------------------------------------------------ pluginuri
 
 	def _pluginPentru(self, p):
-		return L.pluginPentru(self.pluginuri, p)
+		# Un plugin care s-a trecut numai in lista butonului albastru (WHERE_EXTENSIONSMENU) porneste si de aici: altfel OK
+		# spunea numai „instalat si la zi”, iar omul nu afla cum il deschide
+		return L.pluginPentru(self.pluginuri, p) or L.pluginPentru(plugins.getPlugins(PluginDescriptor.WHERE_EXTENSIONSMENU), p)
 
 	def _pornestePlugin(self, plugin):
 		try:
@@ -1377,8 +1572,8 @@ class HdsExtensii(Screen, HelpableScreen):
 				return nota
 			return _t('Verificat de HD Satelit.') if self._culoareNota(pachete) == 'bun' else ''
 		if len(externe) == 1:
-			return _t('Nu este verificat de HD Satelit. Vine din sursa %s.') % externe[0]
-		return _t('Nu sunt verificate de HD Satelit. Vin din sursele %s.') % ', '.join(externe)
+			return _t('Nu este verificată de HD Satelit. Vine din feedul %s.') % externe[0]
+		return _t('Nu sunt verificate de HD Satelit. Vin din feedurile %s.') % ', '.join(externe)
 
 	def _culoareNota(self, pachete):
 		"""verde cand totul vine din sursa HD Satelit, altfel chihlimbar"""
@@ -1447,33 +1642,15 @@ class HdsExtensii(Screen, HelpableScreen):
 	# ------------------------------------------------------------ surse
 
 	def _adaugaSursa(self):
-		self.session.openWithCallback(self._numeSursa, VirtualKeyBoard,
-			title=_t('Numele sursei: litere mici, cifre și -'), text='')
+		# fereastra „Adaugă feed”: numele, adresa si nota intr-un singur loc (Screens/HdsAdaugaFeed.py)
+		from Screens.HdsAdaugaFeed import HdsAdaugaFeed
+		self.session.openWithCallback(self._dupaFeed, HdsAdaugaFeed, self.catalog.configurare.nume_surse())
 
-	def _numeSursa(self, text):
-		if text is None:
+	def _dupaFeed(self, rez):
+		if not rez:
 			return
-		nume = P.curata_nume_sursa(text)
-		if not nume:
-			self._mesaj(_t('Numele sursei nu poate fi gol.'), 'chihlimbar')
-			return
-		self.numeSursaNoua = nume
-		self.session.openWithCallback(self._adresaSursa, VirtualKeyBoard,
-			title=_t('Adresa sursei „%s” (http:// sau https://)') % nume, text='https://')
-
-	def _adresaSursa(self, text):
-		if text is None:
-			return
-		adresa = (text or '').strip()
-		nume = self.numeSursaNoua
-		motiv = P.verifica_sursa(nume, adresa, self.catalog.configurare.nume_surse())
-		if motiv:
-			self.session.open(MessageBox, motiv, type=MessageBox.TYPE_INFO)
-			return
-		self.adresaSursaNoua = adresa
-		self.session.openWithCallback(self._confirmaSursa, MessageBox,
-			_t('Adaugi sursa „%s”?\n%s\nPachetele din ea nu sunt verificate de HD Satelit.') % (nume, adresa),
-			type=MessageBox.TYPE_YESNO)
+		self.numeSursaNoua, self.adresaSursaNoua = rez
+		self._confirmaSursa(True)
 
 	def _confirmaSursa(self, da):
 		if not da:
@@ -1489,7 +1666,7 @@ class HdsExtensii(Screen, HelpableScreen):
 	def _stergeSursa(self, nume):
 		self.sursaDeSters = nume
 		self.session.openWithCallback(self._confirmaStergereSursa, MessageBox,
-			_t('Ștergi sursa „%s”?\nExtensiile instalate din ea rămân pe receptor.') % nume, type=MessageBox.TYPE_YESNO, default=False)
+			_t('Ștergi feedul „%s”?\nExtensiile instalate din el rămân pe receptor.') % nume, type=MessageBox.TYPE_YESNO, default=False)
 
 	def _confirmaStergereSursa(self, da):
 		if not da:
@@ -1549,6 +1726,7 @@ class HdsExtensiiActiune(Screen):
 		self['subtitlu'] = Label(P._curat(plan.get('subtitlu', ''), 130))       # doua randuri
 		self['etichete'] = Label('\n'.join(a for a, _b in plan.get('randuri', ())))
 		self['valori'] = Label('\n'.join(P._curat(b, 80) for _a, b in plan.get('randuri', ())))
+		_randuriValori(self, 'valori')
 		self['nota'] = Label(plan.get('nota', ''))
 		self['stare'] = Label('')
 		self['pista'] = Label('')
@@ -1624,8 +1802,8 @@ class HdsExtensiiActiune(Screen):
 				pass
 		if self.plan.get('nota'):
 			self._setCuloare('nota', self.plan.get('notaCuloare') or 'chihlimbar')
-		# valorile, acum masurate pe latimea widget-ului (in __init__ nu exista inca): randul „Fișierul” era taiat la margine
-		self['valori'].setText(_valoriPotrivite(self['valori'], [b for _a, b in self.plan.get('randuri', ())], 60))
+		# valorile, acum ca widgeturile au marimea (in __init__ nu o au inca); ce nu incape deruleaza
+		_puneValori(self, 'valori', [b for _a, b in self.plan.get('randuri', ())], 60)
 		for w in ('stare', 'pista', 'semn', 'jurnal'):
 			self[w].hide()
 		if self.python2:
@@ -1841,6 +2019,7 @@ class HdsSursaDescarcare(Screen):
 		self['subtitlu'] = Label('')
 		self['etichete'] = Label('')
 		self['valori'] = Label('')
+		_randuriValori(self, 'valori')
 		self['nota'] = Label('')
 		self['stare'] = Label('')
 		self['pista'] = Label('')
@@ -1927,7 +2106,7 @@ class HdsSursaDescarcare(Screen):
 
 	def _randuri(self, randuri):
 		self['etichete'].setText('\n'.join(a for a, _b in randuri))
-		self['valori'].setText(_valoriPotrivite(self['valori'], [b for _a, b in randuri], 60))
+		_puneValori(self, 'valori', [b for _a, b in randuri], 60)
 
 	def _verifica(self):
 		d = self.d

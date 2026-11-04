@@ -1,0 +1,5 @@
+# datele din files/ (index.json, *.dat) raman octet cu octet la orice checkout, si pe Windows: le compara
+# fa_ajutor_receptor.py --verifica si paza verifica_ajutor.py, iar ro.dat/en.dat incep cu dictionarul (text), deci git
+# le-ar putea lua drept text; reteta ramane cu LF (bitbake, test_ajutor_receptor_date.py)
+files/** -text
+*.bb text eol=lf

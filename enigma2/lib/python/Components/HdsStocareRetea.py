@@ -1573,7 +1573,10 @@ def dosareServer(fel, gazda, utilizator=u"", ident=None, parola=None, gata=None)
 	"""Dosarele pe care le da un server (exporturile NFS; partajarile SMB prin Components/HdsReteaSmb, daca exista),
 	pe un fir. gata({ok, cod, mesaj, dosare})."""
 	if parola is None and ident:
-		parola = parole().parola(ident)
+		# parola salvata pleaca numai spre serverul ei, nu spre o gazda scrisa intre timp in formular
+		vechi = locuri().dupaId(ident)
+		if vechi and vechi.get("gazda") == gazda:
+			parola = parole().parola(ident)
 
 	def lucru():
 		try:
@@ -1905,6 +1908,9 @@ def salveaza(date, parola=None, ident=None):
 		if montat and any(vechi.get(k) != loc.get(k) for k in ("fel", "gazda", "dosar", "port", "utilizator",
 				"citire")):
 			return None, _t("Demontează întâi locul, apoi schimbă-l.")
+		# alt server: parola veche nu i se trimite, omul o scrie din nou
+		if parola is None and vechi.get("gazda") != loc.get("gazda"):
+			parola = u""
 	try:
 		loc = L.pune(loc)
 	except ValueError:

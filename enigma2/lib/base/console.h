@@ -6,6 +6,7 @@
 #include <lib/base/ebase.h>
 #include <lib/python/connections.h>
 #include <queue>
+#include <utility>
 
 struct queue_data
 {
@@ -45,9 +46,10 @@ public:
 	void write( const char *data, int len );
 	void setFileFD(int num, int fd) { if (num >= 0 && num <= 2) filefd[num] = fd; }
 	bool running() { return (fd[0]!=-1) && (fd[1]!=-1) && (fd[2]!=-1); }
-	PSignal1<void, const char*> dataAvail;
-	PSignal1<void, const char*> stdoutAvail;
-	PSignal1<void, const char*> stderrAvail;
+	/* HDSatelit: the bytes read and their number (Python gets bytes, see PyFrom in lib/python/connections.h) */
+	PSignal1<void, std::pair<const char*, int> > dataAvail;
+	PSignal1<void, std::pair<const char*, int> > stdoutAvail;
+	PSignal1<void, std::pair<const char*, int> > stderrAvail;
 	PSignal1<void,int> dataSent;
 	PSignal1<void,int> appClosed;
 };

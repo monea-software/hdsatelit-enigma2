@@ -334,7 +334,93 @@ def skinIntrebare(latime, inaltime, randuri_mesaj=9, randuri_tehnic=6):
 	}
 
 
-class HdsPazaModelRefuz(Screen):
+class _FereastraAsezata(object):
+	"""Ferestrele mari din tema (HdsPazaModelRefuz, HdsPazaModelIntrebare; design-web-stitch/skin-pro/mesaje): inaltimea dupa text, ca
+	sa nu ramana goluri mari. Skinul le cere avand widgetul cardTehnic; skinRefuz si skinIntrebare raman asezate fix."""
+
+	def _puneDecor(self):
+		try:
+			from Components.Label import Label
+		except ImportError:  # probele de pe PC, fara Label
+			return
+		for nume in ("felBara", "ramaDr", "ramaJos", "cardTehnic", "linieJos"):
+			self[nume] = Label("")
+		self["eticheta_tehnic"] = Label(_("Detalii"))
+		self.onLayoutFinish.append(self._aseaza)
+
+	def _instantaSursei(self, nume):
+		for r in getattr(self, "renderer", []) or []:
+			if getattr(r, "source", None) is self[nume] and getattr(r, "instance", None) is not None:
+				return r.instance
+		return None
+
+	def _aseaza(self):
+		try:
+			# orice componenta are instanta; numai cele din skin au atribute
+			if self["cardTehnic"].skinAttributes is not None:
+				self._aseazaDupaText()
+		except Exception as eroare:
+			print("[HdsPazaModel] asezarea ferestrei: %s" % eroare)
+
+	def _aseazaDupaText(self):
+		from enigma import eSize, ePoint, fontRenderClass
+		ecran = getDesktop(0).size().height()
+
+		def px(v):
+			return int(round(v * ecran / 1080.0))
+		randare = fontRenderClass.getInstance()
+
+		def inaltimeText(w, maxima):
+			rand = int(randare.getLineHeight(w.getFont()) or 0) or px(40)
+			nevoie = max(1, -(-(w.calculateSize().height() - 2) // rand)) * rand
+			return min(nevoie, max(rand, (maxima // rand) * rand))
+		mesaj, tehnic, nota = self._instantaSursei("mesaj"), self._instantaSursei("tehnic"), self._instantaSursei("nota")
+		card, eticheta, linie = self["cardTehnic"].instance, self["eticheta_tehnic"].instance, self["linieJos"].instance
+		alegeri = self["alegeri"].instance if "alegeri" in self else None
+		spatiu = px(16)
+		inaltimeAlegeri = (spatiu + alegeri.size().height()) if alegeri is not None else 0
+		jos = spatiu + 1 + px(12) + nota.size().height() + px(14)
+		loc = ecran - 2 * px(20) - mesaj.position().y() - inaltimeAlegeri - jos
+		cuTehnic = bool(self["tehnic"].text)
+		# randurile tehnice au dreptul la cel putin 4 randuri, textul simplu la restul
+		inaltimeEticheta = eticheta.size().height()
+		rezervaTehnic = (spatiu + px(10) + inaltimeEticheta + px(10) + 4 * px(36)) if cuTehnic else 0
+		hMesaj = inaltimeText(mesaj, loc - rezervaTehnic)
+		mesaj.resize(eSize(mesaj.size().width(), hMesaj))
+		y = mesaj.position().y() + hMesaj
+		if cuTehnic:
+			y += spatiu
+			card.move(ePoint(card.position().x(), y))
+			eticheta.move(ePoint(eticheta.position().x(), y + px(10)))
+			ty = y + px(10) + inaltimeEticheta
+			hTehnic = inaltimeText(tehnic, loc - hMesaj - spatiu - px(10) - inaltimeEticheta - px(10))
+			tehnic.move(ePoint(tehnic.position().x(), ty))
+			tehnic.resize(eSize(tehnic.size().width(), hTehnic))
+			hCard = px(10) + inaltimeEticheta + hTehnic + px(10)
+			card.resize(eSize(card.size().width(), hCard))
+			y += hCard
+		else:
+			for w in (card, eticheta, tehnic):
+				w.hide()
+		if alegeri is not None:
+			y += spatiu
+			alegeri.move(ePoint(alegeri.position().x(), y))
+			y += alegeri.size().height()
+		y += spatiu
+		linie.move(ePoint(linie.position().x(), y))
+		y += 1 + px(12)
+		nota.move(ePoint(nota.position().x(), y))
+		y += nota.size().height() + px(14)
+		for nume in ("felBara", "ramaDr"):
+			w = self[nume].instance
+			w.resize(eSize(w.size().width(), y))
+		self["ramaJos"].instance.move(ePoint(0, y - 1))
+		latime = self.instance.size().width()
+		self.instance.resize(eSize(latime, y))
+		self.instance.move(ePoint(self.instance.position().x(), max(0, (ecran - y) // 2)))
+
+
+class HdsPazaModelRefuz(Screen, _FereastraAsezata):
 	"""text: refuzul pazei pentru un pachet (Components.HdsPazaModel.textRefuz); OK sau EXIT inchide."""
 
 	def __init__(self, session, text, titlu=None):
@@ -348,13 +434,14 @@ class HdsPazaModelRefuz(Screen):
 		self["mesaj"] = StaticText(mesaj)
 		self["tehnic"] = StaticText(tehnic)
 		self["nota"] = StaticText(_("OK sau EXIT închide fereastra."))
+		self._puneDecor()
 		self["actiuni"] = ActionMap(["OkCancelActions"], {
 			"ok": self.close,
 			"cancel": self.close,
 		}, -1)
 
 
-class HdsPazaModelIntrebare(Screen):
+class HdsPazaModelIntrebare(Screen, _FereastraAsezata):
 	"""O intrebare cu doua alegeri; close(True) pentru prima („Da ...”), close(False) pentru „Nu” sau EXIT.
 	text: textul simplu, apoi, dupa un rand gol, randurile tehnice (ca la texteRefuz). implicit_da: alegerea de la
 	deschidere."""
@@ -371,6 +458,7 @@ class HdsPazaModelIntrebare(Screen):
 		self["tehnic"] = StaticText(tehnic)
 		self["alegeri"] = MenuList([da or _("Da"), nu or _("Nu")])
 		self["nota"] = StaticText(_("Săgețile sus și jos aleg, OK confirmă, EXIT înseamnă „Nu”."))
+		self._puneDecor()
 		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions"], {
 			"ok": self._ok,
 			"cancel": self._nu,
@@ -430,7 +518,8 @@ class HdsPazaModel(Screen):
 		self["mesaj"] = StaticText(t["mesaj"])
 		self["h_citit"] = StaticText(_("Citit pe receptor"))
 		self["h_cerut"] = StaticText(_("Cerut de software"))
-		self["h_cod"] = StaticText(_("Cod"))
+		# coloana codurilor are antet numai cand vreun rand are cod
+		self["h_cod"] = StaticText(_("Cod") if any(r.get("cod") for r in t["randuri"]) else "")
 		for i in range(RANDURI_MAX):
 			r = t["randuri"][i] if i < len(t["randuri"]) else {}
 			self["r%d_e" % i] = StaticText(r.get("eticheta", ""))

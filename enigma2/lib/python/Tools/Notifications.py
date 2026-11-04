@@ -39,8 +39,9 @@ def RemovePopup(id):
 
 from Screens.MessageBox import MessageBox
 
-def AddPopup(text, type, timeout, id = None):
+# optiuni: ce mai primeste MessageBox (titlu, fel, puncte)
+def AddPopup(text, type, timeout, id = None, **optiuni):
 	if id is not None:
 		RemovePopup(id)
 	print("AddPopup, id =", id)
-	AddNotificationWithID(id, MessageBox, text = text, type = type, timeout = timeout, close_on_any_key = True)
+	AddNotificationWithID(id, MessageBox, text = text, type = type, timeout = timeout, close_on_any_key = True, **optiuni)

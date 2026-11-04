@@ -222,6 +222,8 @@ protected:
 	void gotNewEvent();
 	
 	void serviceEvent(int event);
+	void hdsInfoLiveReady();
+	void hdsEtapaZap(int etapa, long long t);
 	void serviceEventTimeshift(int event);
 	sigc::signal<void(iPlayableService*, int)> m_event;
 	
@@ -231,6 +233,7 @@ protected:
 		   without the file parts of a recording (meta, cuts, eit, seeking, pause, bookmarks) */
 	int m_is_stream;
 	int m_first_program_info;
+	bool m_hds_amana_gui, m_hds_seekable_amana;
 	
 	std::string m_timeshift_file, m_timeshift_file_next;
 	int m_timeshift_fd;

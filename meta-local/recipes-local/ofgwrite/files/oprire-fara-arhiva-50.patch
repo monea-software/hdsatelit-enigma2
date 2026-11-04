@@ -1,0 +1,25 @@
+HDSatelit, ramura 5.0 (OE-Alliance 6.0): daca dupa mutarea montarii arhiva imaginii nu se mai vede (de exemplu dosarul de
+montare nu s-a putut face), ofgwrite se opreste si reporneste receptorul INAINTE de orice stergere: radacina ramane
+intreaga. Pana acum eroarea mutarii se ignora, radacina se stergea, iar tar nu mai gasea arhiva (REGULI-FLASH-RECEPTOR.md,
+Regula 1b). Pe 5.0 mesajele merg prin show_error si au traducere; pe master, oprire-fara-arhiva.patch.
+
+--- a/ofgwrite.c
++++ b/ofgwrite.c
+@@ -1356,6 +1356,17 @@
+ 		mount(oldroot_path, rootfs_mount_point, NULL, MS_MOVE, NULL);
+ 	}
+
++	// HDSatelit: fara arhiva la locul ei nu se sterge nimic (radacina e inca intreaga): oprire si repornire
++	if (rootfs_filename[0] != '\0' && access(rootfs_filename, R_OK) != 0)
++	{
++		my_printf("Image file not found after moving mountpoint: %s\n", rootfs_filename);
++		show_error(N_("The mounts could not be moved to the flash environment."), N_("Nothing was flashed."),
++			FB_REBOOT, 30);
++		fb_wait(30);
++		reboot(LINUX_REBOOT_CMD_RESTART);
++		return 0;
++	}
++
+ 	// umount all unneeded filesystems
+ 	while (mountlist != NULL)
+ 	{

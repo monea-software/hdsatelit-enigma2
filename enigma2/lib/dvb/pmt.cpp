@@ -1,6 +1,7 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/base/nconfig.h> // access to python config
 #include <lib/base/eerror.h>
+#include <lib/base/hdsjurnal.h>
 #include <lib/dvb/pmt.h>
 #include <lib/dvb/specs.h>
 #include <lib/dvb/dvb.h>
@@ -26,7 +27,7 @@ eDVBServicePMTHandler::eDVBServicePMTHandler()
 	:m_ca_servicePtr(0), m_dvb_scan(0), m_decode_demux_num(0xFF), m_no_pat_entry_delay(eTimer::create()),
 	m_ait_wanted(false), m_ait_pid(-1), m_ait_version(-1), m_ait_retry(eTimer::create()), m_ait_signal(eTimer::create()),
 	m_yields_to_zap(false), m_yielding_channel(0), m_yielding_uses(0),
-	m_ca_din_memorie(false), m_ca_din_memorie_trimis(false), m_decodare_mai_tarziu(false)
+	m_ca_din_memorie(false), m_ca_din_memorie_trimis(false), m_info_live_amana(false), m_decodare_mai_tarziu(false)
 {
 	m_use_decode_demux = 0;
 	m_pmt_pid = -1;
@@ -83,6 +84,7 @@ void eDVBServicePMTHandler::channelStateChanged(iDVBChannel *channel)
 				/* decodorul a pornit din PID-urile tinute minte (si demuxul lui e stiut): la un canal criptat cu PMT-ul
 				   tinut minte, CA PMT-ul pleaca acum, nu dupa PAT si PMT */
 				trimiteCaDinMemorie();
+				notificaInfoLive();
 			}
 		}
 	} else if ((m_last_channel_state != iDVBChannel::state_failed) && 
@@ -117,6 +119,8 @@ void eDVBServicePMTHandler::PMTready(int error)
 		serviceEvent(eventNoPMT);
 	else
 	{
+		if (m_ca_din_memorie && !m_pvr_channel)
+			etapaZap(zapPmtPrimit, hdsjurnal::monotonMs());
 		m_have_cached_program = false;
 		serviceEvent(eventNewProgramInfo);
 		if (m_decodare_mai_tarziu && !m_pvr_channel)
@@ -138,6 +142,7 @@ void eDVBServicePMTHandler::PMTready(int error)
 				else
 					demuxes[1]=demuxes[0];
 				eDVBCAService::register_service(m_reference, demuxes, m_ca_servicePtr);
+				urmaresteCaPmt();
 				eDVBCIInterfaces::getInstance()->recheckPMTHandlers();
 			}
 			else if (m_ca_din_memorie_trimis)
@@ -161,6 +166,7 @@ void eDVBServicePMTHandler::PMTready(int error)
 		}
 			/* dupa decodor si dupa camuri: AIT-ul nu intarzie pornirea canalului */
 		updateAIT();
+		notificaInfoLive();
 	}
 }
 
@@ -234,9 +240,30 @@ void eDVBServicePMTHandler::trimiteCaDinMemorie()
 	eDVBCAService::register_service(m_reference, demuxes, m_ca_servicePtr);
 	if (!m_ca_servicePtr)
 		return;
+	urmaresteCaPmt();
 	m_ca_din_memorie_trimis = true;
 	eDebug("[eDVBServicePMTHandler] CA PMT din memorie pentru %s", m_reference.toString().c_str());
 	m_ca_servicePtr->buildCAPMT(it->second);
+}
+
+void eDVBServicePMTHandler::urmaresteCaPmt()
+{
+	if (m_ca_din_memorie && m_ca_servicePtr && !m_ca_timpi_connection.connected())
+		m_ca_timpi_connection = m_ca_servicePtr->caPmtTrimis.connect(
+			sigc::mem_fun(*this, &eDVBServicePMTHandler::caPmtTrimis));
+}
+
+void eDVBServicePMTHandler::caPmtTrimis(long long t)
+{
+	etapaZap(zapCaPmtTrimis, t);
+}
+
+void eDVBServicePMTHandler::notificaInfoLive()
+{
+	if (!m_info_live_amana)
+		return;
+	m_info_live_amana = false;
+	infoLiveReady();
 }
 
 void eDVBServicePMTHandler::sendEventNoPatEntry()
@@ -264,7 +291,7 @@ void eDVBServicePMTHandler::PATready(int)
 				++cnt;
 				if (eServiceID((*program)->getProgramNumber()) == m_reference.getServiceID())
 					pmtpid = (*program)->getProgramMapPid();
-				if (++cnt == 1 && pmtpid_single == -1 && pmtpid == -1)
+				if (cnt == 1 && pmtpid_single == -1 && pmtpid == -1)
 				{
 					pmtpid_single = (*program)->getProgramMapPid();
 					service_id_single = (*program)->getProgramNumber();
@@ -1110,6 +1137,8 @@ void eDVBServicePMTHandler::updateYieldingUses()
 
 void eDVBServicePMTHandler::free()
 {
+	m_info_live_amana = false;
+	m_ca_timpi_connection.disconnect();
 	/* the yielding uses go back while this handler still holds the channel */
 	clearYieldingUses();
 	m_dvb_scan = 0;
@@ -1679,6 +1708,8 @@ void eDVBCAService::sendCAPMT()
 
 	if ( write(m_sock, m_capmt, wp) == wp )
 	{
+		if (!caPmtTrimis.empty())
+			caPmtTrimis(hdsjurnal::monotonMs());
 		m_sendstate=0xFFFFFFFF;
 		eDebug("[eDVBCAService] send %d bytes",wp);
 		eDVBChannelID chid;

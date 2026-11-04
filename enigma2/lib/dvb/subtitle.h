@@ -123,8 +123,10 @@ class eDVBSubtitleParser
 	bool m_seen_eod;
 	eSize m_display_size;
 public:
+	/* demux = 0: a player that gets the PES packets itself gives them to feed(); every page of the stream is taken */
 	eDVBSubtitleParser(iDVBDemux *demux);
 	virtual ~eDVBSubtitleParser();
+	void feed(__u8 *pkt, int len) { subtitle_process_pes(pkt, len); }
 	int start(int pid, int composition_page_id, int ancillary_page_id);
 	int stop();
 	void connectNewPage(const sigc::slot<void(const eDVBSubtitlePage&)> &slot, ePtr<eConnection> &connection);

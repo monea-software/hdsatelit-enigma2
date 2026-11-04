@@ -7,7 +7,8 @@
 eListbox::eListbox(eWidget *parent) :
 	eWidget(parent), m_scrollbar_mode(showNever), m_prev_scrollbar_page(-1),
 	m_content_changed(false), m_content_width(-1), m_enabled_wrap_around(false), m_top(0), m_selected(0), m_itemheight(25),
-	m_items_per_page(0), m_selection_enabled(1), m_scrollbar(NULL), m_style(), m_derulare(this)
+	m_items_per_page(0), m_scroll_margin(0), m_redraw_on_selection(true), m_selection_enabled(1), m_scrollbar(NULL), m_style(),
+	m_derulare(this)
 {
 //	setContent(new eListboxStringContent());
 
@@ -58,6 +59,27 @@ void eListbox::setScrollbarMode(int mode)
 void eListbox::setWrapAround(bool state)
 {
 	m_enabled_wrap_around = state;
+}
+
+void eListbox::setScrollMargin(int rows)
+{
+	m_scroll_margin = rows > 0 ? rows : 0;
+	if (m_content && m_items_per_page)
+		moveSelection(justCheck);
+}
+
+void eListbox::setRedrawOnSelection(bool redraw)
+{
+	m_redraw_on_selection = redraw;
+}
+
+void eListbox::entryPartChanged(int index, int x, int width)
+{
+	if ((m_top <= index) && (index < (m_top + m_items_per_page)))
+	{
+		gRegion inv = eRect(x, m_itemheight * (index-m_top), width, m_itemheight);
+		invalidate(inv);
+	}
 }
 
 void eListbox::setContent(iListboxContent *content)
@@ -206,15 +228,33 @@ void eListbox::moveSelection(long dir)
 	
 		/* now, look wether the current selection is out of screen */
 	m_selected = m_content->cursorGet();
-	while (m_selected < m_top)
+	if (m_scroll_margin > 0 && m_items_per_page > 2 * m_scroll_margin)
 	{
-		m_top -= m_items_per_page;
+			/* HDSatelit: row by row (setScrollMargin): the selection stays at least m_scroll_margin rows from the
+			   bottom and the top edge while there are more rows beyond them; the last page is aligned at the bottom */
+		int jos = m_items_per_page - 1 - m_scroll_margin;
+		if (m_selected - m_top > jos)
+			m_top = m_selected - jos;
+		if (m_selected - m_top < m_scroll_margin)
+			m_top = m_selected - m_scroll_margin;
+		int ultimul_top = m_content->size() - m_items_per_page;
+		if (m_top > ultimul_top)
+			m_top = ultimul_top;
 		if (m_top < 0)
 			m_top = 0;
 	}
-	while (m_selected >= m_top + m_items_per_page)
-		/* m_top should be always valid here as it's selected */
-		m_top += m_items_per_page;
+	else
+	{
+		while (m_selected < m_top)
+		{
+			m_top -= m_items_per_page;
+			if (m_top < 0)
+				m_top = 0;
+		}
+		while (m_selected >= m_top + m_items_per_page)
+			/* m_top should be always valid here as it's selected */
+			m_top += m_items_per_page;
+	}
 
 	if (oldsel != m_selected)
 	{
@@ -227,7 +267,7 @@ void eListbox::moveSelection(long dir)
 
 	if (m_top != oldtop)
 		invalidate();
-	else if (m_selected != oldsel)
+	else if (m_selected != oldsel && m_redraw_on_selection)
 	{
    /* redraw the old and newly selected */
 		gRegion inv = eRect(0, m_itemheight * (m_selected-m_top), size().width(), m_itemheight);
@@ -296,15 +336,27 @@ void eListbox::updateScrollBar()
 	}
 	if (m_items_per_page && entries)
 	{
-		int curVisiblePage = m_top / m_items_per_page;
+			/* HDSatelit: row by row (setScrollMargin) the bar follows the first visible row, not the page */
+		int curVisiblePage = m_scroll_margin > 0 ? m_top : m_top / m_items_per_page;
 		if (m_prev_scrollbar_page != curVisiblePage)
 		{
 			m_prev_scrollbar_page = curVisiblePage;
-			int pages = entries / m_items_per_page;
-			if ((pages*m_items_per_page) < entries)
-				++pages;
-			int start=(m_top*100)/(pages*m_items_per_page);
-			int vis=(m_items_per_page*100+pages*m_items_per_page-1)/(pages*m_items_per_page);
+			int start, vis;
+			if (m_scroll_margin > 0)
+			{
+				start = (m_top * 100) / entries;
+				vis = (m_items_per_page * 100 + entries - 1) / entries;
+				if (vis > 100)
+					vis = 100;
+			}
+			else
+			{
+				int pages = entries / m_items_per_page;
+				if ((pages*m_items_per_page) < entries)
+					++pages;
+				start=(m_top*100)/(pages*m_items_per_page);
+				vis=(m_items_per_page*100+pages*m_items_per_page-1)/(pages*m_items_per_page);
+			}
 			if (vis < 3)
 				vis=3;
 			m_scrollbar->setStartEnd(start,start+vis);

@@ -132,6 +132,9 @@ EXCEPTIE = re.compile(r"^\s*(?:[<\[][^>\]]*[>\]]\s*)?([A-Za-z_][A-Za-z0-9_.]*(?:
 ETICHETA = re.compile(r"^\s*(?:<[^>]{0,40}>\s*)?\[([A-Za-z0-9_][A-Za-z0-9_.+-]{0,63})\]")
 # antetul raportului text scris de mytest.py (handleScreenCrash), inaintea Traceback-ului
 ANTET_RAPORT_TEXT = ("HD Satelit:", "Ecran: ", "Eroare: ")
+# raportul unei erori dintr-un plugin extern (Components/HdsPluginExtern.ANTET, acelasi text): interfata a mers mai
+# departe, deci nu e cauza unei opriri; ultimaEroare il sare
+ANTET_PLUGIN_EXTERN = b"HD Satelit: raport de eroare, plugin extern"
 
 NORMAL, BUN, ATENTIE, RAU, STINS = "normal", "bun", "atentie", "rau", "stins"
 
@@ -414,13 +417,14 @@ def _uptime():
 
 
 def opririRecente(acum=None, cale=None):
-	"""[(secunde de la oprire, cod)] din numaratoarea din RAM, numai cele din ultimele 10 minute, cele noi primele."""
+	"""[(secunde de la oprire, cod)] din numaratoarea din RAM, numai cele din ultimele 10 minute, cele noi primele. O oprire
+	ceruta (al treilea cuvant „oprire”: SIGTERM fara paznic) nu e o cadere: nu se numara, ca in tools/enigma2.sh.in."""
 	text = _citesteText(cale or CADERI, 64 * 1024) or ""
 	acum = _uptime() if acum is None else acum
 	rez = []
 	for rand in text.split("\n"):
 		parti = rand.split()
-		if len(parti) < 2 or not parti[0].isdigit() or not parti[1].isdigit():
+		if len(parti) < 2 or not parti[0].isdigit() or not parti[1].isdigit() or parti[2:3] == ["oprire"]:
 			continue
 		t, cod = int(parti[0]), int(parti[1])
 		if acum is None or (t <= acum and acum - t <= FEREASTRA_S):
@@ -682,8 +686,17 @@ def analizaRaport(cale, ora=None, imagine=None, pe_disc=None):
 	return rez
 
 
+def ePluginExtern(cale):
+	"""Raportul e al unei erori dintr-un plugin extern, dupa care interfata a mers mai departe (inceputul fisierului)."""
+	try:
+		with open(cale, "rb") as f:
+			return f.read(len(ANTET_PLUGIN_EXTERN)) == ANTET_PLUGIN_EXTERN
+	except (IOError, OSError):
+		return False
+
+
 def ultimaEroare(imagine=None, pe_disc=None):
-	for cale, ora in rapoarte()[:3]:
+	for cale, ora in [r for r in rapoarte() if not ePluginExtern(r[0])][:3]:
 		r = analizaRaport(cale, ora, imagine, pe_disc)
 		if r is not None:
 			return r

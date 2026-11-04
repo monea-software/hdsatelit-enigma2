@@ -426,6 +426,10 @@ class HdsEcranRadio(Screen):
 			iPlayableService.evUpdatedRassInteractivePicMask: leg.laRds,
 			iPlayableService.evTunedIn: leg.laInfo,
 			iPlayableService.evTuneFailed: leg.laInfo,
+			iPlayableService.evEOF: leg.laEroareFlux,
+			iPlayableService.evUser + 10: leg.laEroareFlux,
+			iPlayableService.evUser + 12: leg.laEroareFlux,
+			iPlayableService.evUser + 16: leg.laEroareFlux,
 		})
 		self.panza = None
 		self.margine = (0, 0)
@@ -1096,6 +1100,7 @@ class LegaturaRadio(object):
 		self.tOkLung.callback.append(self._okTinut)
 		self.tOkScurt = eTimer()
 		self.tOkScurt.callback.append(self._okScurt)
+		self.flux_cazut = False
 		self.tAnunt = eTimer()
 		self.tAnunt.callback.append(self._ascundeAnunt)
 		self.tSalvare = eTimer()
@@ -1177,6 +1182,7 @@ class LegaturaRadio(object):
 			_jurnal("evStart: %s: %s" % (type(e).__name__, e))
 
 	def _laStart(self):
+		self.flux_cazut = False
 		self.tSfarsit.stop()
 		ref, ref_text = RD.ref_curenta(self.session)
 		try:
@@ -1185,6 +1191,8 @@ class LegaturaRadio(object):
 			service = None
 		radio = bool(ref_text) and self._barPrincipala() and RD.este_post_radio(service, ref_text)
 		self._opresteAnaliza()
+		self.tAnunt.stop()
+		self.ecran["anunt"].hide()
 		self.radio = radio
 		self.ascuns_de_om = False
 		self.analiza_pid = None
@@ -1238,6 +1246,20 @@ class LegaturaRadio(object):
 			self.radio = False
 			self.ascunde()
 			self._hartaActiva(False)
+
+	def laEroareFlux(self):
+		"""Un post de pe internet nu raspunde (evEOF, evUser+10, +12, +16 din servicemp3): se spune pe ecran, pana la urmatorul post."""
+		# OK in lista pe acelasi post il porneste din nou (ChannelSelectionRadio.channelSelected); evStart sterge semnul
+		self.flux_cazut = True
+		try:
+			if self.radio and self.vizibil and not self.in_odihna:
+				ref_text = RD.ref_curenta(self.session)[1]
+				campuri = ref_text.split(u":") if ref_text else []
+				if len(campuri) > 10 and campuri[10]:
+					self.tAnunt.stop()
+					self.ecran.anunta(u"%s: %s" % (RD.text_nume(self.d or {}), _("Nu răspunde")))
+		except Exception as e:
+			_jurnal("eroarea fluxului: %s: %s" % (type(e).__name__, e))
 
 	def laInfo(self):
 		try:
@@ -1526,10 +1548,17 @@ class LegaturaRadio(object):
 			self._aseaza(False, cheie)
 		elif acum - self.post_pornit_la >= ASTEPTARE_DATE_S:
 			self._aseaza(True, cheie)
-		if cheie and cheie not in self.sigle:
+		# la un flux, sigla poate veni de pe internet dupa ce postul a pornit: se cauta pana apare
+		este_flux = len((d.get("ref") or u"").split(u":")) > 10 and bool((d.get("ref") or u"").split(u":")[10])
+		if cheie and (cheie not in self.sigle or (este_flux and self.sigle.get(cheie) is False)):
 			if len(self.sigle) > 500:
 				self.sigle.clear()
-			self.sigle[cheie] = self._areSigla(d.get("ref"))
+			are = self._areSigla(d.get("ref"))
+			if are and self.sigle.get(cheie) is False:
+				r = self.ecran._sigla()
+				if r is not None:
+					r.changed((r.CHANGED_ALL,))
+			self.sigle[cheie] = are
 		self.ecran.aseazaFaraSigla(self.sigle.get(cheie) is False)
 
 	def _aseaza(self, strans, cheie=None):
@@ -1544,11 +1573,12 @@ class LegaturaRadio(object):
 	def _areSigla(self, ref_text):
 		"""True / False daca postul are sigla pe disc; None cand nu se poate afla (atunci caseta ramane)."""
 		try:
-			from Components.Renderer.Picon import cauta_sigla
+			from Components.Renderer.Picon import cauta_sigla, sigle_pornite
 		except Exception:
 			return None
 		try:
-			return bool(cauta_sigla(ref_text or ""))
+			# cu siglele oprite din setari, Picon nu arata nimic, iar caseta ar ramane goala
+			return sigle_pornite() and bool(cauta_sigla(ref_text or ""))
 		except Exception:
 			return None
 

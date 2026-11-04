@@ -365,11 +365,37 @@ class HdsSignal(Poll, Converter):
 			return C.percent16(st.get(key))
 		return None
 
+	def _iptv(self):
+		"""Starea fluxului, cand canalul redat e de internet (Components/HdsIptvAdrese.py), altfel None."""
+		r = C.Reader(self.source, None)
+		sref = r.sref() if r.info() is not None else u""
+		if not sref or "8897/tv/" not in sref:
+			return None
+		try:
+			from Components import HdsIptvAdrese
+			return HdsIptvAdrese.stareCale(sref)
+		except Exception as e:
+			C.log_once("HdsSignal iptv", e)
+			return None
+
 	def _signal(self):
+		f = self._iptv()
+		if f is not None:
+			# timpul de raspuns al serverului, in locul semnalului: bara plina pana la 100 ms, goala la o secunda
+			ms = f.get("raspuns_ms")
+			if ms is None:
+				return (u"", 0)
+			return (u"%d ms" % ms, max(5, min(100, 110 - ms // 10)))
 		p = self._pct("power")
 		return (u"%d%%" % p, p) if p is not None else (u"", 0)
 
 	def _quality(self):
+		f = self._iptv()
+		if f is not None:
+			# viteza, in locul calitatii; bara arata cat e in tampon (plina de la 5 secunde)
+			from Components.HdsIptvRedare import textViteza
+			s = f.get("tampon_s")
+			return (textViteza(f.get("viteza")), min(100, int((s or 0) * 20)))
 		p = self._pct("quality")
 		return (u"%d%%" % p, p) if p is not None else (u"", 0)
 

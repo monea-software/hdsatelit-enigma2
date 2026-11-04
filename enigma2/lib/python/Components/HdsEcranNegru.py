@@ -596,8 +596,9 @@ def cadre_din_text(text):
 
 
 def cadre_hisilicon(citeste=None):
-	"""Cadrele iesite din decodoarele video care ruleaza (suma vdec00 si vdec01), sau None cand nu se pot citi.
-	Un decodor oprit nu adauga nimic; fara niciun decodor se intoarce 0."""
+	"""Cadrele iesite din decodoarele video care ruleaza (suma vdec00 si vdec01), sau None cand nu se pot citi (fisierele lipsesc sau firul de
+	citire e ocupat: dupa un flux de internet driverul poate tine citirea cat se inchide playerul). Un decodor oprit nu adauga nimic.
+	Inainte, necititul dadea 0, adica "nicio imagine", si aparea "Fara imagine" peste un canal cu imagine buna."""
 	citeste = citeste or _citeste_proc
 	total = 0
 	gasit = False
@@ -609,7 +610,7 @@ def cadre_hisilicon(citeste=None):
 		if rez[0]:
 			total += rez[1]
 	if not gasit:
-		return 0
+		return None
 	return total
 
 
@@ -863,6 +864,10 @@ class Urmaritor(object):
 					self.cadre_la = acum
 				self.cadre_prev = n
 				vazut = self.cadre_la >= self.pornit_la
+				if not vazut and self.video_ev:
+					# marimea imaginii a venit dupa pornire, dar contorul nu s-a miscat deloc: contorul nu spune nimic despre acest decodor
+					# (de pilda dupa un flux de internet); fara cadre deloc nu vine nici marimea, deci nu e ecran negru
+					return True, 0.0
 				baza = self.cadre_la if vazut else self.pornit_la
 				return (vazut and acum - self.cadre_la < PRAG_CADRE), max(0.0, acum - baza)
 		vazut = self.video_ev or inaltime > 0

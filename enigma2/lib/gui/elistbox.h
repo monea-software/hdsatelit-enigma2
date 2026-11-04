@@ -97,6 +97,14 @@ public:
 	};
 	void setScrollbarMode(int mode);
 	void setWrapAround(bool);
+		/* HDSatelit: 0 = the list jumps a whole page when the selection leaves it (the old way, the default);
+		   n > 0 = the list moves one row at a time and keeps n rows visible below and above the selection while
+		   there are more rows, so the rows that do not fit are seen coming instead of hiding on a next page */
+	void setScrollMargin(int rows);
+		/* HDSatelit: for a list whose rows hold several cells (the tile menu): the selection does not change how a row
+		   looks, so moving it redraws nothing, and only the cell that changed is redrawn (x, width in the list) */
+	void setRedrawOnSelection(bool redraw);
+	void entryPartChanged(int index, int x, int width);
 
 	void setContent(iListboxContent *content);
 
@@ -185,6 +193,8 @@ private:
 	int m_top, m_selected;
 	int m_itemheight;
 	int m_items_per_page;
+	int m_scroll_margin;
+	bool m_redraw_on_selection;
 	int m_selection_enabled;
 	ePtr<iListboxContent> m_content;
 	eSlider *m_scrollbar;

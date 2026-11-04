@@ -112,7 +112,9 @@ class InputDeviceSelection(Screen,HelpableScreen):
 				devicepng = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/icons/input_mouse.png"))
 		else:
 			devicepng = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/icons/input_rcnew.png"))
-		return((device, description, devicepng, divpng))	
+		# skinul HDSatelit arata randul cu StringList, care ia primul element al tuplului; celelalte skinuri, cu sablonul de
+		# sus, iau elementul 1: numele sta pe amandoua, iar dispozitivul la coada
+		return((description, description, devicepng, divpng, device))
 
 	def updateList(self):
 		self.list = []
@@ -126,7 +128,7 @@ class InputDeviceSelection(Screen,HelpableScreen):
 		selection = self["list"].getCurrent()
 		self.currentIndex = self["list"].getIndex()
 		if selection is not None:
-			self.session.openWithCallback(self.DeviceSetupClosed, InputDeviceSetup, selection[0])
+			self.session.openWithCallback(self.DeviceSetupClosed, InputDeviceSetup, selection[4])
 
 	def DeviceSetupClosed(self, *ret):
 		self.updateList()
@@ -220,7 +222,7 @@ class InputDeviceSetup(Screen, ConfigListScreen):
 
 	def selectionChanged(self):
 		if self["config"].getCurrent() == self.enableEntry:
-			self["introduction"].setText(_("Current device: ") + str(iInputDevices.getDeviceAttribute(self.inputDevice, 'name')) )
+			self["introduction"].setText(_("Current device: ") + _(str(iInputDevices.getDeviceAttribute(self.inputDevice, 'name'))))
 		else:
 			self["introduction"].setText(_("Current value: ") + self.getCurrentValue() + _(" ms"))
 

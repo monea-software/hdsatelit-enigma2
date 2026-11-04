@@ -252,6 +252,9 @@ PARAM_JETON = b"token"
 # - termenul curge de la deschiderea conexiunii (sau de la sfarsitul raspunsului precedent) pana la cererea
 #   intreaga si NU se reia la fiecare octet primit; cat se pregateste raspunsul (captura), e oprit.
 MAX_CORP_CERERE = 64 * 1024
+# Octetii corpurilor retinute, pe firul reactorului; cookie-ul prezent nu dovedeste autentificarea.
+MAX_RAM_CORPURI = 32 * 1024 * 1024
+_ram_corpuri = 0
 # caseta Mesaj pe televizor din panou (MesajTelevizorResource): fereastra de pe televizor se inchide singura dupa atat
 MESAJ_TV_S = 10
 MAX_CONEXIUNI = 64
@@ -299,12 +302,13 @@ MAX_CORP_CAPTURA = 4 * 1024 * 1024
 
 def corpMareMedia(are_cookie, adresa, aceeasi_origine):
 	"""True cand o bucata spre CALE_URCARE_MEDIA poate avea MAX_CORP_MEDIA octeti (la fel poza ecranului de pornire
-	spre CALE_URCARE_POZA, MAX_CORP_POZA: aceeasi problema, urcarea nu mergea fara cod): cererea are cookie-ul de sesiune (un
-	browser asociat cu cod; o pagina straina nu il poate trimite, SameSite=Strict), sau e a unui browser intrat fara cod
+	spre CALE_URCARE_POZA, MAX_CORP_POZA: aceeasi problema, urcarea nu mergea fara cod): cererea are cookie-ul de sesiune,
+	sau e a unui browser intrat fara cod
 	(adresa din reteaua locala unde codul nu se cere, aceeasi conditie ca in _sesiuneDinCerere) care vine chiar dintr-o
 	pagina a receptorului (Origin/Referer = Host, `aceeasi_origine`). Browserul intrat fara cod nu primeste cookie, iar cu
 	limita mica urcarea din pagina /player nu mergea deloc in configuratia implicita; cererea de aceeasi origine taie
-	corpurile mari trimise de o pagina straina deschisa in browserul cuiva din casa. Altfel ramane limita mica."""
+	corpurile mari trimise de o pagina straina deschisa in browserul cuiva din casa. Cookie-ul este doar un indiciu pentru
+	limita, nu autentificare: toate corpurile au si plafonul comun MAX_RAM_CORPURI, iar accesul se verifica in ruta."""
 	if are_cookie:
 		return True
 	return bool(aceeasi_origine) and _esteAdresaLocala(adresa) and not codInReteaLocala()
@@ -3211,6 +3215,12 @@ def _construiesteResurse():
 				request.setResponseCode(eroare[0])
 				request.setHeader(b"content-type", b"application/json; charset=utf-8")
 				return json.dumps({"result": False, "message": eroare[1]}).encode("utf-8")
+			from . import captura_sigura as CS
+			epoca_captura = CS.epocaCapturii()
+			if epoca_captura is None:
+				request.setResponseCode(403)
+				request.setHeader(b"content-type", b"application/json; charset=utf-8")
+				return json.dumps({"result": False, "message": CS.MESAJ_ASOCIERE}).encode("utf-8")
 			# cat ecranul "Parola receptorului" e deschis pe receptor, captura numai pentru un browser conectat cu codul
 			# (parola se vede mare pe ecran)
 			refuz = acces_ssh_web.refuzEcranDeschis(request)
@@ -3243,14 +3253,13 @@ def _construiesteResurse():
 				return json.dumps({"result": False, "message": "mode trebuie sa fie 'all', 'video' sau 'osd'"}).encode("utf-8")
 			descarcare = request.args.get(b"download", [b""])[0] == b"1"
 
-			# Paza capturii (captura_sigura.py) NUMAI pentru capturile interfetei web straine (_capturaStraina): imaginea
+			# Paza decodorului (captura_sigura.py) NUMAI pentru capturile interfetei web straine (_capturaStraina): imaginea
 			# canalului (decodorul video) numai cand driverul e gata, cel mult o data la 1,5 s; altfel numai afisajul OSD,
 			# refuz la mode=video, sau ultima poza la cereri dese. Panoul, aplicatiile de telefon (/grab) si scripturile
 			# raman numai cu barierele comune (o captura odata, termenul), ca inainte de paza.
 			pazita = _capturaStraina(request)
 			ce, motiv = "da", ""
 			if pazita:
-				from . import captura_sigura as CS
 				ce, motiv = CS.decide(mod_captura)
 				if ce == "refuz":
 					request.setResponseCode(503)
@@ -3285,7 +3294,7 @@ def _construiesteResurse():
 					pass
 
 			nume_fisier = _numeCaptura(mod_captura, "png" if format_cerut == "png" else "jpg") if descarcare else None
-			cheie_pastrare = tuple(comanda)
+			cheie_pastrare = (epoca_captura, tuple(comanda))
 			if ce == "des":
 				pastrata = CS.dinPastrare(cheie_pastrare)
 				if pastrata is None:
@@ -3317,7 +3326,9 @@ def _construiesteResurse():
 				_captura_in_curs = False  # bariera se ridica inainte de orice, chiar daca scrierea raspunsului cade mai jos
 				stare, rezultat = perechea
 				try:
-					if stare == "lipsa":
+					if not CS.capturaValida(epoca_captura):
+						_eroareJson(403, CS.MESAJ_ASOCIERE)
+					elif stare == "lipsa":
 						_eroareJson(500, "unealta 'grab' nu e disponibila pe acest sistem")
 					elif stare == "timeout":
 						_eroareJson(504, "captura a durat prea mult (peste %ds)" % timeout_s)
@@ -4050,6 +4061,10 @@ def _construiesteResurse():
 	# repornirea pe calea sigura; aceeasi lucrare ca pe televizor (Components/HdsActualizari.py).
 	from . import actualizari_web
 	_ACTUALIZARI, _ACTUALIZARI_PAGINA = actualizari_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	# ---------------------------------------------------------------- imaginea de pe internet (imagine_online_web.py)
+	# Perechea ferestrei „Imagine nouă de pe internet” (Screens/HdsImagineOnline.py): aceeasi lucrare ca pe televizor.
+	from . import imagine_online_web
+	_IMAGINE_ONLINE, _IMAGINE_ONLINE_PAGINA = imagine_online_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- egalizatorul (egalizator_web.py)
 	# Perechea ecranului Meniu > Audio > Egalizator (Screens/HdsEgalizator.py, Components/HdsEgalizator.py).
 	from . import egalizator_web
@@ -4255,6 +4270,8 @@ def _construiesteResurse():
 			self.putChild(b"antena", _SCANARE[b"antena"])
 			# tunerul combinat DVB-T2/C: "Legat la" din cartela tunerelor (scanare_web.TunerLegatResource)
 			self.putChild(b"tuner-legat", _SCANARE[b"tuner-legat"])
+			# tunerul B porneste singur: "Încearcă din nou" din cartela tunerelor (scanare_web.TunerBProbaResource)
+			self.putChild(b"tuner-b-proba", _SCANARE[b"tuner-b-proba"])
 			self.putChild(b"piste", _PISTE[b"piste"])
 			self.putChild(b"pista-audio", _PISTE[b"pista-audio"])
 			for nume in (b"ghid", b"ghid-emisiune", b"ghid-temporizator"):
@@ -4366,6 +4383,9 @@ def _construiesteResurse():
 			# locul antenei dupa adresa de internet: pornirea cautarii (POST) si starea ei (GET)
 			self.putChild(b"locul-internet", _ANTENA[b"locul-internet"])
 			self.putChild(b"locul-internet-stare", _ANTENA[b"locul-internet-stare"])
+			# imaginea de pe internet (imagine_online_web.py)
+			for nume_ruta, resursa in _IMAGINE_ONLINE.items():
+				self.putChild(nume_ruta, resursa)
 			# limbile, telecomenzile, meniul, setarile din setup.xml, informatiile
 			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _OARBA):
 				for nume_ruta, resursa in rute_lot.items():
@@ -4483,6 +4503,7 @@ def _construiesteResurse():
 			self.putChild(b"paza-model", _PAZA_MODEL_PAGINA)
 			self.putChild(b"actualizare", _ACTUALIZARE_PAGINA)
 			self.putChild(b"actualizari", _ACTUALIZARI_PAGINA)
+			self.putChild(b"imagine-online", _IMAGINE_ONLINE_PAGINA)
 			self.putChild(b"ghid", _GHID_PAGINA)
 			self.putChild(b"scanare-detaliata", _CULEGERE_CANALE_PAGINA)
 			self.putChild(b"culegere-canale", _CULEGERE_CANALE_PAGINA)   # adresa veche a aceleiasi pagini
@@ -4516,12 +4537,13 @@ def _construiesteServer(radacina):
 	class _CerereHds(server.Request):
 		"""Twisted citea corpul intreg (in memorie sau intr-un fisier din /tmp, tot RAM pe receptor) si
 		il parsa pe firul enigma2 INAINTE de orice ruta si de orice verificare. Aici corpul are cel mult
-		MAX_CORP_CERERE octeti: un Content-Length mai mare primeste 413 si conexiunea se inchide inainte sa se
+		limita rutei: un Content-Length mai mare primeste 413 si conexiunea se inchide inainte sa se
 		citeasca ceva din corp; un corp fara lungime (chunked) se numara bucata cu bucata. Corpul sta mereu in
-		memorie (e mic), niciodata in /tmp.
+		memorie, niciodata in /tmp, iar toate cererile impart MAX_RAM_CORPURI pana se termina sau se inchid.
 		Tot aici, in process(), poarta antetului Host, pentru orice cale."""
 		_respinsa = False
 		_primit = 0
+		_retinut = 0
 		_limita = MAX_CORP_CERERE
 
 		def _limitaCorpului(self):
@@ -4566,15 +4588,8 @@ def _construiesteServer(radacina):
 			return None
 
 		def _areCookieDeSesiune(self):
-			"""Cookie-ul nostru de sesiune EXISTA in cerere? (gasire de securitate)
-
-			Limita mare de corp se da numai cererilor care macar par sa vina dintr-un browser asociat. Fara
-			asta, oricine din retea putea trimite 8 MB pe calea de urcare si corpul se strangea in memoria lui
-			enigma2 INAINTE de orice verificare de acces: 64 de conexiuni x 8 MB = 512 MB pe un receptor cu 822.
-			Aici nu se verifica daca sesiunea e buna (aceea se face in render, unde se stie si adresa, si
-			CSRF-ul): se cere doar sa existe cookie-ul, ceea ce taie trimiterile anonime. La orice indoiala
-			ramane limita mica.
-			"""
+			"""Doar prezenta cookie-ului, pentru compatibilitatea urcarilor; nu dovedeste o sesiune valida.
+			Bugetul comun de memorie se aplica si unui cookie inventat. Accesul si CSRF-ul se verifica in ruta."""
 			try:
 				antete = self.requestHeaders.getRawHeaders(b"cookie") or []
 				cautat = (NUME_COOKIE + "=").encode("ascii")
@@ -4589,6 +4604,9 @@ def _construiesteServer(radacina):
 			return False
 
 		def gotLength(self, length):
+			self._elibereazaCorp()
+			self._respinsa = False
+			self._primit = 0
 			self.content = io.BytesIO()
 			self._limita = self._limitaCorpului()
 			if self._limita > MAX_CORP_CERERE:
@@ -4602,29 +4620,67 @@ def _construiesteServer(radacina):
 				self._respingeCorpMare()
 
 		def handleContentChunk(self, data):
+			global _ram_corpuri
 			if self._respinsa:
 				return
-			self._primit += len(data)
-			if self._primit > self._limita:
+			marime = len(data)
+			if self._primit + marime > self._limita:
 				self._respingeCorpMare()
 				return
-			self.content.write(data)
+			if _ram_corpuri + marime > MAX_RAM_CORPURI:
+				self._respingeCorpMare(buget=True)
+				return
+			_ram_corpuri += marime
+			self._retinut += marime
+			try:
+				self.content.write(data)
+			except Exception:
+				self._elibereazaCorp()
+				raise
+			self._primit += marime
+
+		def _elibereazaCorp(self):
+			global _ram_corpuri
+			_ram_corpuri -= self._retinut
+			self._retinut = 0
+			continut = getattr(self, "content", None)
+			self.content = None
+			if continut is not None:
+				continut.close()
+
+		def finish(self):
+			try:
+				return server.Request.finish(self)
+			finally:
+				self._elibereazaCorp()
+
+		def connectionLost(self, reason):
+			try:
+				return server.Request.connectionLost(self, reason)
+			finally:
+				self._elibereazaCorp()
 
 		def requestReceived(self, command, path, version):
 			if self._respinsa:
 				return  # raspunsul 413 a plecat deja, conexiunea se inchide
-			server.Request.requestReceived(self, command, path, version)
+			try:
+				server.Request.requestReceived(self, command, path, version)
+			except Exception:
+				self._elibereazaCorp()
+				raise
 
-		def _respingeCorpMare(self):
+		def _respingeCorpMare(self, buget=False):
 			if self._respinsa:
 				return
 			self._respinsa = True
+			self._elibereazaCorp()
 			self.content = io.BytesIO()
 			# fara "100 Continue" dupa refuz (curl il cere la corpurile mari, iar canalul il trimite dupa gotLength)
 			self.requestHeaders.removeHeader(b"expect")
 			canal = self.channel
-			_jurnalRar("corp", "cerere respinsa: corp mai mare de %d octeti, de la %s" % (self._limita, _adresaClient(self)))
-			corp = json.dumps({"result": False, "message": "cererea e prea mare"}).encode("utf-8")
+			mesaj = "memoria corpurilor de cerere e ocupata" if buget else "cererea e prea mare"
+			_jurnalRar("corp", "cerere respinsa: %s (limita %d octeti), de la %s" % (mesaj, self._limita, _adresaClient(self)))
+			corp = json.dumps({"result": False, "message": mesaj}).encode("utf-8")
 			# scris direct pe conexiune: cererea nu e inca intreaga (metoda si calea nu sunt puse in Request)
 			canal.transport.write(b"HTTP/1.1 413 Payload Too Large\r\n"
 				b"Content-Type: application/json; charset=utf-8\r\n"

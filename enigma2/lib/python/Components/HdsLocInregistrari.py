@@ -40,6 +40,19 @@
 # - ecranul (Screens/HdsLocInregistrari.py) face acelasi lucru cand e deschis de la tasta rosie, de la timeshift sau
 #   din notificari; din meniu arata discul care va fi folosit, fara „nu am unde”.
 #
+# Discul de pe care porneste imaginea (Components/HdsStocare.discRadacina, Components/Harddisk.addSystemDisk): apare ca orice
+# disc, sub numele Discul de pornire, iar dosarul movie sta in varful partitiei, in afara dosarului imaginii, deci ramane
+# si dupa o actualizare. Daca nu e tinut minte alt disc bun, receptorul il alege singur, fara intrebare: e mare si nu are
+# limita de 4 GB a unui stick FAT32 (decizie, DE_CE_PORNIRE). Cat merge o inregistrare pe el, un ceas o opreste sub
+# LIBER_OPRIRE liberi (pazesteDiscPornire): acelasi disc tine si setarile receptorului.
+#
+# Ce se arata despre fiecare disc (fisaDisc): felul, legatura (legatura(), din /sys), sistemul de fisiere, locul liber si
+# marimea, daca porneste imaginea de pe el; din meniu, cele FISE_PE_ECRAN dintai in caseta de detalii, celelalte in explicatia
+# randului lor, iar in pagina web pentru toate.
+#
+# Un stick pe care nucleul l-a pus pe numai citire dupa o eroare (motivul numai_citire): randul de reparat (ACT_REPARA)
+# porneste verificarea existenta (Components/HdsDiscuri.verifica), dupa care stickul se poate scrie din nou.
+#
 # Pe firul enigma2, realpath se face numai pe caile discurilor locale (_canonicSigur): pe o partajare de retea cazuta,
 # lstat poate bloca firul. Firele de citire si de pregatire folosesc realpath oriunde.
 #
@@ -87,6 +100,21 @@ ACT_INCHIDE = "inchide"
 # un stick sau un disc pe care receptorul nu il poate citi: randul deschide ecranul de formatare existent
 # (Screens/HarddiskSetup.py, cu alegerea sistemului de fisiere si intrebarea lui); aici nu se formateaza nimic
 ACT_FORMATEAZA = "formateaza"
+# un stick pus de nucleu pe numai citire: randul porneste verificarea existenta (Components/HdsDiscuri.verifica)
+ACT_REPARA = "repara"
+
+# felul unui disc (fisaDisc)
+TIP_STICK = "stick"
+TIP_DISC = "disc"
+TIP_CARD = "card"
+TIP_RETEA = "retea"
+# cate fise de disc incap in caseta de detalii a ecranului, langa explicatiile locului (5 randuri)
+FISE_PE_ECRAN = 3
+# viteza din /sys/.../speed (Mb/s) a dispozitivului USB -> legatura negociata
+LEGATURI_USB = {"1.5": "USB 1.1", "12": "USB 1.1", "480": "USB 2.0", "5000": "USB 3.0", "10000": "USB 3.1", "20000": "USB 3.2"}
+SISTEME_FISIERE = {"vfat": "FAT32", "msdos": "FAT", "ntfs": "NTFS", "ntfs3": "NTFS", "fuseblk": "NTFS", "exfat": "exFAT"}
+# motivele pentru care un disc nu e bun, dar locul liber se poate citi
+MOTIVE_CU_SPATIU = ("numai_citire", "plin")
 
 # decizia de dupa o citire (decizie())
 DEC_BUN = "bun"             # locul e un disc bun: nimic de facut
@@ -98,6 +126,7 @@ DE_CE_RETINUT = "retinut"   # discul folosit data trecuta
 DE_CE_SINGUR = "singur"     # singurul disc bun conectat
 DE_CE_LIBER = "liber"       # la un temporizator, cu mai multe discuri: cel cu cel mai mult loc liber
 DE_CE_ALES = "ales"         # ales de om la intrebare (ecranul deschis de la tasta rosie, timeshift, programare)
+DE_CE_PORNIRE = "pornire"   # discul de pe care porneste imaginea, niciun alt disc tinut minte
 
 # setarea care tine minte discul inregistrarilor (identitate())
 SETARE_DISC = "hds_disc_inregistrari"
@@ -248,13 +277,27 @@ def esteAmovibil(dispozitiv, citeste=None):
 		return None
 
 
-def numeDispozitiv(descriere, dispozitiv, amovibil=None):
-	"""Numele aratat omului: modelul citit de pe dispozitiv („Cruzer Blade (sda1)”), sau felul lui („Stick USB (sda1)”,
-	„Hard disk (sdb1)”) cand modelul lipseste sau e unul generic, fara inteles pentru om („USB_DRIVE”, „Flash Disk”;
-	Components/HdsNavigator.isGenericModel, acelasi fel ca in navigatorul de fisiere)."""
+def etichetaDinMontare(real, dispozitiv):
+	"""Eticheta discului, din montarea facuta de udev: /run/media/<eticheta>-<dispozitiv> (Components/Harddisk.py);
+	sir gol pentru alta montare, pentru un disc fara eticheta (/run/media/sda1) si pentru „NO NAME” al FAT-ului."""
+	cale = (real or "").rstrip("/")
+	baza, sufix = os.path.basename(cale), "-%s" % (dispozitiv or "")
+	if not dispozitiv or not cale.startswith("/run/media/") or len(baza) <= len(sufix) or not baza.endswith(sufix):
+		return ""
+	eticheta = baza[:-len(sufix)].strip()
+	return "" if eticheta.upper().replace("_", " ") == "NO NAME" else eticheta
+
+
+def numeDispozitiv(descriere, dispozitiv, amovibil=None, eticheta=""):
+	"""Numele aratat omului: eticheta discului, cand are una („HD SATELIT (sda1)”); altfel modelul citit de pe dispozitiv
+	(„Cruzer Blade (sda1)”), sau felul lui („Stick USB (sda1)”, „Hard disk (sdb1)”) cand modelul lipseste sau e unul
+	generic, fara inteles pentru om („USB_DRIVE”, „Flash Disk”; Components/HdsNavigator.isGenericModel, acelasi fel ca
+	in navigatorul de fisiere)."""
 	from Components import HdsNavigator
 	model = (descriere or "").split(" (Partition")[0].strip()
-	if not model or model.startswith("External Storage") or HdsNavigator.isGenericModel(model):
+	if eticheta:
+		model = eticheta
+	elif not model or model.startswith("External Storage") or HdsNavigator.isGenericModel(model):
 		model = _("USB Stick") if amovibil else _("Harddisk")
 	else:
 		# descrierile locurilor fixe din Components/Harddisk.py („Harddisk”, „USB Stick”, „Card”) au traduceri; in
@@ -263,6 +306,64 @@ def numeDispozitiv(descriere, dispozitiv, amovibil=None):
 	if dispozitiv:
 		return "%s (%s)" % (model, dispozitiv)
 	return model
+
+
+def felDisc(dispozitiv, amovibil=None):
+	"""Felul discului, dupa nume si /sys/block/<disc>/removable; sir gol cand nu se stie."""
+	if (dispozitiv or "").startswith("mmcblk"):
+		return TIP_CARD
+	if amovibil is None:
+		return ""
+	return TIP_STICK if amovibil else TIP_DISC
+
+
+def legatura(dispozitiv, realpath=None, citeste=None):
+	"""USB 2.0, USB 3.0, SATA sau sir gol: viteza negociata a dispozitivului USB (fisierul speed, urcand din dosarul discului
+	din /sys), portul ATA; sir gol cand nu se poate afla sigur. Numai /sys, deci merge pe firul enigma2."""
+	d = discul(dispozitiv)
+	if not d or d.startswith("mmcblk"):
+		return ""
+	citeste = citeste or _stocare()._citesteSys
+	try:
+		cale = (realpath or os.path.realpath)("/sys/block/%s/device" % d)
+		if "/usb" not in cale:
+			return "SATA" if re.search(r"/ata[0-9]+/", cale + "/") else ""
+		while "/usb" in cale:
+			viteza = citeste(cale + "/speed")
+			if viteza:
+				return LEGATURI_USB.get(viteza.strip(), "")
+			cale = cale.rsplit("/", 1)[0]
+	except Exception as eroare:
+		print("[HdsLocInregistrari] legatura lui %s: %s" % (d, eroare))
+	return ""
+
+
+def _textFel(tip):
+	return {TIP_STICK: _("USB Stick"), TIP_DISC: _("Harddisk"), TIP_CARD: _("Card"), TIP_RETEA: _("Rețea")}.get(tip, "")
+
+
+def fisaDisc(d, cu_liber=True):
+	"""Ce e discul, pe scurt: felul, legatura, sistemul de fisiere, locul liber si marimea (`cu_liber`: tabelul paginii web le
+	are in coloana lor), daca porneste imaginea de pe el."""
+	parti = [_textFel(d.get("tip")), d.get("legatura") or ""]
+	fel = d.get("fel") or ""
+	parti.append(SISTEME_FISIERE.get(fel, fel))
+	if cu_liber and d.get("liber") is not None:
+		parti.append(_("liber %s din %s") % (marime(d["liber"]), marime(d.get("total"))))
+	elif cu_liber and d.get("total"):
+		parti.append(marime(d["total"]))
+	if d.get("imagine"):
+		parti.append(_("de aici pornește imaginea"))
+	return ", ".join(x for x in parti if x)
+
+
+def _marimeNecitit(dispozitiv, citeste=None):
+	"""Marimea unei partitii nemontate, din /sys/class/block/<partitie>/size (sectoare de 512 octeti), sau None."""
+	try:
+		text = (citeste or _stocare()._citesteSys)("/sys/class/block/%s/size" % dispozitiv)
+		return int(text) * 512 if text else None
+	except (ValueError, TypeError, AttributeError):
+		return None
 
 
 def _uuidDin(dispozitiv):
@@ -329,7 +430,7 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 			if retea is not None and punct not in vazute:
 				vazute.add(punct)
 				rez.append({"punct": punct, "real": punct, "dispozitiv": "", "nume": retea[1], "fel": fel,
-					"id": "retea:" + retea[0]})
+					"id": "retea:" + retea[0], "tip": TIP_RETEA, "legatura": "", "imagine": False})
 			continue
 		if fel in in_memorie or fel == "autofs":
 			continue
@@ -350,9 +451,15 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 			"punct": punct,
 			"real": real,
 			"dispozitiv": dispozitiv,
-			"nume": numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil),
+			# discul de pornire are numele lui, tradus acum: isGenericModel (numai litere latine) l-ar lua in rusa drept un model
+			# fara inteles, iar descrierea partitiei e facuta la incarcare
+			"nume": "%s (%s)" % (_("Discul de pornire"), dispozitiv) if getattr(p, "system_disk", False) else
+				numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, etichetaDinMontare(real, dispozitiv)),
 			"fel": fel,
 			"id": identitate(dispozitiv, real, uuid),
+			"tip": felDisc(dispozitiv, amovibil),
+			"legatura": legatura(dispozitiv, citeste=citeste) if dispozitiv else "",
+			"imagine": bool(getattr(p, "system_disk", False)),
 		})
 	return rez
 
@@ -383,10 +490,14 @@ def necitite(hm=None, fel_fs=None):
 			fel = None
 		if fel in NOT_MOUNTED_FS:
 			continue
+		amovibil = getattr(p, "removable", None)
 		rez.append({
 			"dispozitiv": dispozitiv,
-			"nume": numeDispozitiv(getattr(p, "description", ""), dispozitiv, getattr(p, "removable", None)),
+			"nume": numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil),
 			"fel": fel or "",
+			"tip": felDisc(dispozitiv, amovibil),
+			"legatura": legatura(dispozitiv),
+			"total": _marimeNecitit(dispozitiv),
 		})
 	return rez
 
@@ -499,7 +610,10 @@ def citesteStare(cand, cale_loc, verifica=None, statvfs=None, isdir=None, realpa
 		d = dict(c)
 		b, m = verifica(c["punct"] + "/")
 		d["bun"], d["motiv"] = bool(b), m
-		d["liber"], d["total"] = _spatiu(c["punct"], statvfs) if b else (None, None)
+		d["liber"], d["total"] = _spatiu(c["punct"], statvfs) if b or m in MOTIVE_CU_SPATIU else (None, None)
+		if m == "numai_citire" and c.get("dispozitiv"):
+			# protejat din comutatorul lui (/sys/block/<disc>/ro): verificarea n-ar folosi la nimic
+			d["protejat"] = _stocare()._citesteSys("/sys/block/%s/ro" % discul(c["dispozitiv"])) == "1"
 		try:
 			d["are_movie"] = bool(isdir(c["punct"] + "/" + DOSAR_FILME))
 		except (OSError, TypeError, ValueError):
@@ -833,6 +947,7 @@ def textMotivDisc(motiv):
 	return {
 		"ram": _("este în memoria RAM a receptorului"),
 		"intern": _("este memoria internă a receptorului"),
+		"imagine": _("este în dosarul imaginii, care se șterge la o actualizare"),
 		"mic": _("are mai puțin de 64 MB"),
 		"scriere": _("pe el nu se poate scrie"),
 		"lipsa": _("nu mai răspunde"),
@@ -859,6 +974,7 @@ DE_CE_TEXT = {
 	DE_CE_SINGUR: N_("Este singurul stick sau disc conectat."),
 	DE_CE_LIBER: N_("Dintre discurile conectate, are cel mai mult loc liber."),
 	DE_CE_ALES: N_("Țin minte alegerea."),
+	DE_CE_PORNIRE: N_("De pe el pornește imaginea. Înregistrările stau în afara imaginii, deci rămân și după o actualizare."),
 }
 
 
@@ -948,7 +1064,11 @@ def decizie(stare, retinut="", scop=SCOP_INREGISTRARE):
 	# un loc din retea (id "retea:...") se ia singur numai cand e cel tinut minte (ales anume de om): altfel un NAS cu
 	# mult loc liber ar castiga mereu, si cand serverul e stins la ora inregistrarii; la intrebare apare dupa discuri
 	locale = [d for d in buni if not str(d.get("id") or "").startswith("retea:")]
-	if len(locale) == 1:
+	pornire = [d for d in locale if d.get("imagine")]
+	if pornire:
+		# fara intrebare: e discul mare de pe care porneste imaginea, fara limita de 4 GB a unui stick FAT32
+		rez.update(fel=DEC_DISC, disc=pornire[0], de_ce=DE_CE_PORNIRE)
+	elif len(locale) == 1:
 		rez.update(fel=DEC_DISC, disc=locale[0], de_ce=DE_CE_SINGUR)
 	elif len(locale) > 1:
 		# sortarea pastreaza ordinea discurilor (hdd, usb, ...) la loc liber egal
@@ -1014,6 +1134,8 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 		discuri = [dict(c, bun=None, motiv="", liber=None, total=None, are_movie=None,
 			folosit=bool(folosit_punct) and c["punct"] == folosit_punct) for c in cand]
 	rai = [d for d in discuri if d.get("bun") is False]
+	de_reparat = [d for d in rai if d.get("motiv") == "numai_citire" and d.get("dispozitiv") and not d.get("imagine") and
+		not d.get("protejat")]
 	# nu se stie inca: meniul inainte de prima citire (motiv None); ecranul care lucreaza singur, pana la o citire
 	# terminata a locului lui (altfel ar arata „nu am unde” o clipa, apoi ar pregati discul)
 	necunoscut = motiv is None or (singur and not citit)
@@ -1124,6 +1246,13 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 				randuri.append({"text": rand, "actiune": ACT_FOLOSESTE, "punct": d["punct"], "detaliu": _detaliuRand(d)})
 	for d in rai:
 		detalii_disc.append(_("„%s” nu se poate folosi: %s.") % (d["nume"], textMotivDisc(d.get("motiv"))))
+	if not necunoscut and not (singur and automat):
+		# nucleul pune singur pe numai citire un stick cu o eroare; dupa verificare se poate scrie din nou (explicatia, in randul
+		# lui: caseta de detalii e deja plina in germana si rusa)
+		for d in de_reparat:
+			randuri.append({"text": _("Repară „%s”") % d["nume"], "actiune": ACT_REPARA, "punct": None,
+				"disc": discul(d["dispozitiv"]), "detaliu": _("Verifică stick-ul, îi repară erorile și se poate scrie "
+					"din nou pe el. Nu se formatează nimic.")})
 	for n in necit:
 		detalii_disc.append(_("„%s” nu poate fi citit de receptor. Îl poți formata aici sau pe un calculator, ca FAT32. "
 			"Formatarea șterge tot de pe el.") % n["nume"])
@@ -1135,9 +1264,18 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 	if se_citeste and stare is None and cand and not necunoscut:
 		detalii_disc.append(_("Se citesc discurile..."))
 	randuri.append({"text": _("Închide"), "actiune": ACT_INCHIDE, "punct": None, "detaliu": ""})
+	fise = []
+	if scop == SCOP_MENIU and not necunoscut:
+		# din meniu: ce e fiecare disc; ce nu incape in caseta de detalii, in explicatia randului lui
+		bune = [d for d in discuri if d.get("bun") is not False]
+		fise = [_("„%s”: %s.") % (d["nume"], fisaDisc(d)) for d in bune[:FISE_PE_ECRAN]]
+		for d in bune[FISE_PE_ECRAN:]:
+			for r in randuri:
+				if r["punct"] == d["punct"]:
+					r["detaliu"] = ("%s. %s" % (fisaDisc(d), r["detaliu"])).strip()
 	return {"titlu": titlu, "text": text, "detaliu": " ".join(x for x in detalii_loc + detalii_disc if x),
 		"detaliu_loc": " ".join(x for x in detalii_loc if x), "randuri": randuri, "bun": bun, "automat": automat,
-		"intrebare": intrebare, "cauta": necunoscut}
+		"intrebare": intrebare, "cauta": necunoscut, "fise": fise}
 
 
 def _randIntrebare(d):
@@ -1351,6 +1489,105 @@ def tineMinte(cale, config=None, configfile=None, cand=None, realpath=None, tabe
 		configfile.save()
 	print("[HdsLocInregistrari] recording on %s: this disk is remembered (%s)" % (punct, ident[0]))
 	return True
+
+
+# ------------------------------------------------------------------ paza discului de pornire
+
+# sub atat liber pe discul de pe care porneste imaginea, o inregistrare pornita pe el se opreste: acelasi disc tine si
+# setarile receptorului, iar un disc plin le-ar strica la urmatoarea salvare
+LIBER_OPRIRE = 1024 ** 3
+PAS_PAZA_MS = 60000
+ID_MESAJ_PAZA = "HdsDiscPornirePlin"
+_ceasPaza = []      # eTimer-ul pazei (tinut aici, altfel GC-ul l-ar culege)
+
+
+def _peDisculPornirii(cale, cand=None, realpath=None, tabel=None):
+	"""`cale` duce pe discul de pe care porneste imaginea (in lista discurilor, cu imagine adevarat). Fara nicio atingere de disc pe
+	o cale de retea (_canonicSigur)."""
+	if not cale:
+		return False
+	cand = candidati() if cand is None else cand
+	punct, _radacina = disculLocului(cale, cand, realpath, tabel)
+	return bool(punct) and any(c["punct"] == punct and c.get("imagine") for c in cand)
+
+
+def pazesteDiscPornire(cale, ceas=None):
+	"""Dupa ce o inregistrare porneste pe un disc bun (RecordTimer.hdsVerificaDisc): daca e discul de pornire, ceasul pazei
+	merge cat tine inregistrarea. True daca ceasul a pornit acum."""
+	try:
+		if _ceasPaza or not _peDisculPornirii(cale):
+			return False
+		c = (ceas or _ceasEnigma)(pasPaza)
+		_ceasPaza.append(c)
+		c.start(PAS_PAZA_MS, False)
+		return True
+	except Exception as eroare:
+		print("[HdsLocInregistrari] paza discului de pornire: %s" % eroare)
+		return False
+
+
+def inregistrariPeDisculPornirii(temporizatoare=None, cand=None, realpath=None, tabel=None):
+	"""Inregistrarile care merg acum pe discul de pornire."""
+	if temporizatoare is None:
+		import NavigationInstance
+		temporizatoare = NavigationInstance.instance.RecordTimer.timer_list
+	cand = candidati() if cand is None else cand
+	return [t for t in temporizatoare if not getattr(t, "justplay", False) and t.isRunning() and
+		_peDisculPornirii(getattr(t, "Filename", ""), cand, realpath, tabel)]
+
+
+def _opresteInregistrarea(timer):
+	"""Opreste inregistrarea de acum. removeEntry ar sterge si repetarea unei inregistrari programate zilnic sau saptamanal; asa,
+	ea ramane pentru data viitoare (Timer.doActivate: processRepeated), cand discul poate avea din nou loc."""
+	import NavigationInstance
+	lista = NavigationInstance.instance.RecordTimer
+	if getattr(timer, "repeated", 0):
+		timer.autoincrease = False
+		timer.abort()
+		lista.timeChanged(timer)
+		lista.saveTimer()
+	else:
+		lista.removeEntry(timer)
+
+
+def _anuntaPaza():
+	try:
+		from Screens.MessageBox import MessageBox
+		from Tools import Notifications
+		Notifications.AddPopup(text=_("Am oprit înregistrarea: pe discul de pornire a rămas mai puțin de 1 GB liber. Fă loc "
+			"ștergând înregistrările de care nu mai ai nevoie."), type=MessageBox.TYPE_ERROR, timeout=0, id=ID_MESAJ_PAZA)
+	except ImportError:
+		pass
+
+
+def pasPaza(liber=None, inregistrari=None, opreste=None, anunta=None):
+	"""Un pas al pazei, din eTimer-ul ei, pe firul enigma2 (statvfs pe radacina, ext4: nu parcurge discul). Fara
+	inregistrari pe discul de pornire ceasul se opreste; sub LIBER_OPRIRE liberi ele se opresc, cu un mesaj. Intoarce cate s-au
+	oprit. Timeshift-ul nu se opreste aici: are nevoie de omul care se uita, iar la 3 GB pe ora nu ajunge la disc plin."""
+	try:
+		lista = inregistrariPeDisculPornirii() if inregistrari is None else inregistrari
+		if not lista:
+			for c in _ceasPaza:
+				c.stop()
+			del _ceasPaza[:]
+			return 0
+		liber = _stocare().liberOcteti("/") if liber is None else liber
+		if liber is None or liber >= LIBER_OPRIRE:
+			return 0
+		print("[HdsLocInregistrari] the disk the image runs from is almost full (%d MB): stopping %d recordings" % (
+			liber // (1024 * 1024), len(lista)))
+		for t in lista:
+			(opreste or _opresteInregistrarea)(t)
+		(anunta or _anuntaPaza)()
+		return len(lista)
+	except Exception as eroare:
+		print("[HdsLocInregistrari] paza discului de pornire: %s" % eroare)
+		return 0
+
+
+def uitaPaza():
+	"""Pentru probe."""
+	del _ceasPaza[:]
 
 
 def laProgramare(dirname=None, justplay=False):

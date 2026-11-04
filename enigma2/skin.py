@@ -1109,8 +1109,10 @@ def loadSkinData(desktop):
 			skinWarning("%s: %s" % (path, e))
 			print_exc()
 
-def lookupScreen(name, style_id):
+def lookupScreen(name, style_id, numaiHds=False):
 	for (path, skin) in dom_skins:
+		if numaiHds and not esteDinHds(path):
+			continue
 		# first, find the corresponding screen element
 		for x in skin.findall("screen"):
 			if x.attrib.get('name', '') == name:
@@ -1123,6 +1125,25 @@ def lookupScreen(name, style_id):
 				if (style_id != 2 and screen_style_id == -1) or screen_style_id == style_id:
 					return x, path
 	return None, None
+
+def panouLipsa(element, style_id, visited = None):
+	"""Numele primului <panel name="X"/> din element (sau din panourile lui) pe care niciun skin nu-l are; None daca
+	toate se gasesc. Fara avertismente: le da expandPanels."""
+	if visited is None:
+		visited = set()
+	for child in element:
+		if child.tag != "panel":
+			continue
+		panel_name = child.attrib.get("name")
+		if not panel_name or panel_name in visited:
+			continue
+		panel, panel_path = lookupScreen(panel_name, style_id)
+		if panel is None:
+			return panel_name
+		lipsa = panouLipsa(panel, style_id, visited | {panel_name})
+		if lipsa:
+			return lipsa
+	return None
 
 def expandPanels(element, skin_path, style_id, screen_name, visited = None):
 	"""children of a screen, with every <panel name="X"/> replaced by the children of screen X
@@ -1238,6 +1259,19 @@ def readSkin(screen, skin, names, desktop):
 			# use this name for debug output
 			name = n
 			break
+
+	# HDSatelit, numai temele externe: un ecran al temei care cere un panou pe care tema nu-l are ramane fara elementele
+	# panoului (o tema reala: menu_mainmenu -> panel menulist: meniul fara lista, iar OK cadea in Sources/List). Atunci
+	# se ia ecranul HDSatelit pentru unul din nume (Menu), daca il avem; altfel ramane al temei, ca pana acum.
+	if myscreen is not None and path is not None and not esteDinHds(path):
+		lipsa = panouLipsa(myscreen, style_id)
+		if lipsa:
+			for n in names:
+				alNostru, caleNoastra = lookupScreen(n, style_id, numaiHds=True)
+				if alNostru is not None:
+					skinWarning("%s: panel %s not found, HDSatelit screen %s used" % (name, lipsa, n))
+					myscreen, path, name = alNostru, caleNoastra, n
+					break
 
 	# otherwise try embedded skin
 	if myscreen is None:

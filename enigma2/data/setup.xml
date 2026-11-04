@@ -8,25 +8,29 @@
 		<setup key="timezone" title="Timezone">
 			<item level="0" text="Timezone">config.timezone.val</item>
 		</setup>
-		<setup key="avsetup" title="A/V Settings">
-			<!-- Color Format si TV System numai unde pot schimba ceva (Components/AVSwitch.py: HdsFormatCuloareAnalog, HdsSistemTv) -->
-			<item level="0" text="Color Format" requires="HdsFormatCuloareAnalog">config.av.colorformat</item>
-			<item level="0" text="Aspect Ratio">config.av.aspectratio</item>
-			<item level="0" text="TV System" requires="HdsSistemTv">config.av.tvsystem</item>
-			<item level="1" text="WSS on 4:3">config.av.wss</item>
-			<item level="1" text="AC3 default" description="Yes: on channels with several sound tracks the first track that is not MPEG starts (usually AC3 or DD+). No: the first track of the channel starts, or the one chosen last time.">config.av.defaultac3</item>
-			<item level="1" text="General AC3 delay (ms)" requires="CanAC3Delay" description="Delay of the AC3 sound against the picture, on all channels. It is used from the next channel change.">config.av.generalAC3delay</item>
-			<item level="1" text="General PCM delay (ms)" requires="CanPCMDelay" description="Delay of the stereo sound against the picture, on all channels. It is used from the next channel change.">config.av.generalPCMdelay</item>
+		<setup key="avsetup" title="Sound Output &amp; Downmix">
 			<!-- iesirea sunetului (Components/HdsSunet.py): Automat dupa ce anunta televizorul prin HDMI, Manual dupa randurile
 			     AC3 / DTS downmix de dedesubt; pista AC3 aleasa singura numai cand AC3 pleaca neschimbat; in web: /sunet -->
-			<item level="1" text="Ieșirea sunetului" requires="HdsSunet" description="Micșorează întâi volumul televizorului. Automat: AC3 și DTS pleacă neschimbate (5.1) numai spre un televizor care le primește. Manual: după rândurile de mai jos.">config.av.hds_sunet_iesire</item>
+			<item level="0" text="Ieșirea sunetului" requires="HdsSunet" description="Micșorează întâi volumul televizorului. Automat: AC3 și DTS pleacă neschimbate (5.1) numai spre un televizor care le primește. Manual: după rândurile de mai jos.">config.av.hds_sunet_iesire</item>
 			<item level="1" text="Alege singur pista AC3" requires="HdsSunetPista" stare="netestat" description="Da: când AC3 pleacă neschimbat, receptorul pornește pista AC3 (de obicei 5.1) în aceeași limbă. O pistă aleasă de mână nu se schimbă.">config.av.hds_sunet_pista51</item>
 			<!-- pe „Ieșirea sunetului: Automat” randurile AC3 / DTS downmix nu se folosesc: ascunse, ca in web (/sunet) -->
-			<item level="1" text="AC3 downmix" requires="CanDownmixAC3" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns AC3 sound into stereo. No: AC3 sound goes unchanged to the TV or sound system (5.1 sound), which must know AC3, otherwise there is no sound.">config.av.downmix_ac3</item>
-			<item level="1" text="DTS downmix" requires="CanDownmixDTS" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns DTS sound into stereo. No: DTS sound goes unchanged to the TV or sound system; if it does not know DTS, there is no sound. Many TVs do not know DTS.">config.av.downmix_dts</item>
+			<item level="0" text="AC3 downmix" requires="CanDownmixAC3" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns AC3 sound into stereo. No: AC3 sound goes unchanged to the TV or sound system (5.1 sound), which must know AC3, otherwise there is no sound.">config.av.downmix_ac3</item>
+			<item level="0" text="DTS downmix" requires="CanDownmixDTS" conditional="config.av.hds_sunet_iesire.value != 'auto'" description="Yes: the receiver turns DTS sound into stereo. No: DTS sound goes unchanged to the TV or sound system; if it does not know DTS, there is no sound. Many TVs do not know DTS.">config.av.downmix_dts</item>
 			<!-- DTS recodat in AC3 (Components/HdsSunet.py, elementul hdsdtsac3 din 0.4.0): numai cu elementul in imagine;
 			     merge si pe Automat (AC3-ul recodat pleaca pe calea AC3); in web: /sunet -->
 			<item level="1" text="DTS recodat în AC3" requires="HdsSunetDtsAc3" stare="netestat" description="Da: receptorul recodează în AC3 (5.1) sunetul DTS al filmelor, pentru un amplificator sau televizor care primește AC3, dar nu DTS. AC3 trebuie să plece neschimbat (Ieșirea sunetului pe Automat sau Downmix AC3 pe Nu). Se aplică de la următorul film pornit.">config.av.hds_dts_ac3</item>
+			<item level="1" text="AC3 default" description="Yes: on channels with several sound tracks the first track that is not MPEG starts (usually AC3 or DD+). No: the first track of the channel starts, or the one chosen last time.">config.av.defaultac3</item>
+			<item level="1" text="General AC3 delay (ms)" requires="CanAC3Delay" description="Delay of the AC3 sound against the picture, on all channels. It is used from the next channel change.">config.av.generalAC3delay</item>
+			<item level="1" text="General PCM delay (ms)" requires="CanPCMDelay" description="Delay of the stereo sound against the picture, on all channels. It is used from the next channel change.">config.av.generalPCMdelay</item>
+		</setup>
+		<!-- formatul imaginii (din 0.7.0 separat de iesirea sunetului, unde nu avea ce cauta): Meniu > Imagine > Formatul
+		     imaginii; in web: /setari?id=hds_imagine_tv. Color Format si TV System numai unde pot schimba ceva
+		     (Components/AVSwitch.py: HdsFormatCuloareAnalog, HdsSistemTv) -->
+		<setup key="hds_imagine_tv" title="Formatul imaginii">
+			<item level="0" text="Color Format" requires="HdsFormatCuloareAnalog">config.av.colorformat</item>
+			<item level="0" text="Aspect Ratio" description="Forma ecranului televizorului: 16:9 la televizoarele late de azi, 4:3 la cele vechi. Ce se face cu emisiunile 4:3 se alege în Setări video avansate, la „Imaginea 4:3”.">config.av.aspectratio</item>
+			<item level="0" text="TV System" requires="HdsSistemTv">config.av.tvsystem</item>
+			<item level="1" text="WSS on 4:3">config.av.wss</item>
 			<item level="1" text="Auto scart switching" requires="ScartSwitch">config.av.vcrswitch</item>
 			<item level="1" text="Picture Sharpness" requires="CanScalerSharpness">config.av.scaler_sharpness</item>
 		</setup>
@@ -41,8 +45,8 @@
 			<item level="0" text="Întârzierea sunetului pe HDMI" requires="HdsSunetIntarziere" description="Când buzele se mișcă după sunet, întârzie sunetul spre televizor. Sunetul se poate numai întârzia, nu grăbi.">config.hds_setari_sunet.intarziere_hdmi</item>
 			<item level="0" text="Întârzierea sunetului pe optic" requires="HdsSunetIntarziere" description="La fel, pentru bara de sunet sau amplificatorul legat la ieșirea optică a receptorului.">config.hds_setari_sunet.intarziere_optic</item>
 		</setup>
-		<setup key="usage" title="Customize">
-			<item level="0" text="Setup Mode">config.usage.setup_level</item>
+		<setup key="usage" title="OSD Preferences">
+			<item level="0" text="Setup Mode" description="Câte setări se văd în meniuri: Simplu arată numai ce se folosește des, Intermediar și Expert arată tot mai multe.">config.usage.setup_level</item>
 			<item level="0" text="What to show at startup">config.usage.hds_pornire</item>
 			<item level="1" text="2D acceleration on the video card (after GUI restart)" requires="HdsAccel2D" description="On at first: the big fills of the screen are done by the video card, the rest by the processor. If problems appear, the receiver goes back by itself to drawing without acceleration. Used from the next start of the interface.">config.usage.hds_accel_2d</item>
 			<!-- modul procesorului (Components/HdsProcesor.py); acelasi rand in ecranul Procesor si in web la /procesor -->
@@ -69,6 +73,8 @@
 			<item level="1" text="Alternative radio mode">config.usage.e1like_radio_mode</item>
 			<!-- sagetile sus si jos la privit (Components/HdsSageti.py: bara TV si ecranul radio); in web: /setari -->
 			<item level="0" text="Săgețile sus și jos la privit" description="Ce fac săgețile sus și jos când te uiți la un canal sau asculți radio, fără niciun meniu deschis: deschid lista de canale radio sau TV, ori schimbă canalul, sus pe următorul și jos pe cel anterior. Merge și cu telecomanda televizorului.">config.usage.hds_sageata_sus</item>
+			<!-- derularea meniurilor (Components/Renderer/Listbox.py, margineDerulare); in web: /setari?id=usage -->
+			<item level="0" text="Derularea listelor" description="Cum se mișcă meniurile, listele de alegere și ecranele de setări când cursorul ajunge la marginea ecranului. Rând cu rând: lista urcă un rând și vezi mereu încă două rânduri sub cursor, deci observi că mai sunt rânduri. Pagină cu pagină: lista sare pe pagina următoare, ca înainte. Lista de canale și ghidul rămân pe pagini.">config.usage.hds_derulare_liste</item>
 			<item level="0" text="Semnele din lista de canale" description="În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată.">config.usage.hds_semne_lista</item>
 			<item level="1" text="Action on long powerbutton press">config.usage.on_long_powerpress</item>
 			<item level="1" text="Action on short powerbutton press">config.usage.on_short_powerpress</item>
@@ -189,5 +195,14 @@
 		     starea de acum, prin atributul hdsStare al setarii, Screens/Setup.py); in web: cardul IPv6 din /retea -->
 		<setup key="hds_ipv6" title="IPv6">
 			<item level="0" text="IPv6" description="Nu (din fabrică): plăcile de rețea nu au adrese IPv6, iar clientul IPv6 nu pornește; rețeaua merge pe IPv4, ca până acum. Da: receptorul primește și adrese IPv6, dacă rețeaua ta le dă. Se aplică pe loc.">config.usage.hds_ipv6</item>
+		</setup>
+		<!-- Stream Relay (0.7.0, Components/HdsStreamRelay.py): adresa, portul si intarzierea releului (config.misc.acces_streamrelay_*,
+		     Components/UsageConfig.py); canalele se aleg din meniul listei de canale. In web: /setari?id=hds_stream_relay si
+		     butonul de langa stea din lista de canale (canale_web.py) -->
+		<setup key="hds_stream_relay" title="Stream Relay">
+			<item level="0" text="Adresa releului" stare="netestat" description="Unde rulează releul care decodează canalele alese pentru Stream Relay: pe acest receptor (127.0.0.1) sau pe alt aparat din rețeaua de acasă, dacă e pornit rândul Fluxuri pentru alte aparate din rețeaua de acasă. Se ia numai adresa; portul e în rândul următor. Altă adresă nu se folosește: canalele pornesc direct.">config.misc.acces_streamrelay_url</item>
+			<item level="0" text="Portul releului" stare="netestat" description="Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay.">config.misc.acces_streamrelay_port</item>
+			<item level="0" text="Întârzierea la schimbarea canalului (ms)" stare="netestat" description="Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale.">config.misc.acces_streamrelay_delay</item>
+			<item level="0" text="Fluxuri pentru alte aparate din rețeaua de acasă" stare="netestat" description="Oprită (din fabrică), fluxurile canalelor rămân numai pe acest receptor. Pornită, le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x), de exemplu un releu Stream Relay de pe alt receptor; din internet, niciodată.">config.misc.hds_fluxuri_retea_acasa</item>
 		</setup>
 </setupxml>

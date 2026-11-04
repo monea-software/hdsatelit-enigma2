@@ -181,6 +181,7 @@ CUVINTE = {
 	"language_setup": N_("limba meniului"),
 	"parental_setup": N_("PIN copii"),
 	"hds_software_update": N_("versiune nouă"),
+	"hds_imagine_online": N_("versiune nouă"),
 	"hds_actualizari": N_("actualizări pachete update opkg"),
 	"factory_reset": N_("fabrică"),
 	"hds_webcontrol_setup": N_("interfața web telefon"),

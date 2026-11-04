@@ -675,6 +675,8 @@ void gDC::exec(const gOpcode *o)
 			para->realign(eTextPara::dirCenter);
 		else if (flags & gPainter::RT_HALIGN_BLOCK)
 			para->realign(eTextPara::dirBlock);
+		else if (flags & gPainter::RT_HALIGN_LEFT_EXPLICIT)
+			para->realign(eTextPara::dirLeft);
 		
 		ePoint offset = m_current_offset;
 		

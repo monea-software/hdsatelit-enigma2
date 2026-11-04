@@ -538,9 +538,12 @@
 	     (Screens/HdsAnuntRetea.py, Components/HdsStareRetea.py): nemodal, dispare singur dupa 6 s sau la orice tasta,
 	     tasta merge mai departe; pictograma de 96x72 din retea/<cheie>@2x.png -->
 	<screen name="HdsAnuntRetea" position="460,465" size="1000,150" backgroundColor="hdsPanelDialog" flags="wfNoBorder" zPosition="10">
-		<eLabel position="0,0" size="1000,2" backgroundColor="hdsLine" zPosition="1" />
-		<widget name="pictograma" position="24,39" size="96,72" alphatest="blend" zPosition="2" />
-		<widget name="text" position="140,10" size="836,130" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="2" />
+		<eLabel position="0,0" size="1000,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaDr" conditional="ramaDr" position="999,0" size="1,150" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaJos" conditional="ramaJos" position="0,149" size="1000,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="felBara" conditional="felBara" position="0,0" size="16,150" backgroundColor="hdsBrandLight" zPosition="2" />
+		<widget name="pictograma" position="36,39" size="96,72" alphatest="blend" zPosition="2" />
+		<widget name="text" position="152,10" size="824,130" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="2" />
 	</screen>
 
 	<!-- ========== Pagina tehnica (design.md 6.5), pe tot ecranul: 72,40 1776x1000, acelasi chenar ca ecranul Audio. Implicita; varianta fereastra de dedesubt se alege din panoul skinului. Capul (0-160) ca in fereastra; paginile marite pe inaltime (continut 168-888), stratul DVB-T2 / DAB la 888 (textul in zona sigura EBU). ========== -->
@@ -1525,9 +1528,37 @@
 	     autoResize() exista doar pe unele imagini (pe altele e gol sau lipseste) si se cheama numai dintr-un <applet>,
 	     adica cod Python in skin, pe care regulile skinului il interzic (o exceptie acolo = cadere la orice mesaj).
 	     Imaginea HDSatelit strange singura fereastra dupa text (parametrul MessageBoxDupaText din <hdsparameters>). -->
-	<screen name="HdsMessageBoxBase" position="410,390" size="1100,300">
-		<widget name="text" conditional="text" position="32,16" size="1036,148" font="HdsRegular;34" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget name="list" conditional="list" position="32,172" size="1036,112" itemHeight="56" textOffset="20,0" valign="center" font="HdsRegular;34" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+	<screen name="HdsMessageBoxBase" position="0,0" size="1100,460">
+		<eLabel position="0,0" size="1100,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaDr" conditional="ramaDr" position="1099,0" size="1,460" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaJos" conditional="ramaJos" position="0,459" size="1100,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="felBara" conditional="felBara" position="0,0" size="16,460" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="felSemn" conditional="felSemn" position="48,34" size="20,20" backgroundColor="hdsBrand" zPosition="2" />
+		<widget source="Title" render="Label" position="84,16" size="700,56" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget source="secunde" render="Label" conditional="secunde" position="790,16" size="278,56" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="top" noWrap="1" zPosition="2" />
+		<eLabel position="48,80" size="1020,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="text" conditional="text" position="48,96" size="1020,132" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget name="list" conditional="list" position="48,240" size="1020,112" itemHeight="56" textOffset="24,0" valign="center" font="HdsBold;32" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="semn0" conditional="semn0" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct0" conditional="punct0" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn1" conditional="semn1" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct1" conditional="punct1" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn2" conditional="semn2" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct2" conditional="punct2" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn3" conditional="semn3" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct3" conditional="punct3" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn4" conditional="semn4" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct4" conditional="punct4" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn5" conditional="semn5" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct5" conditional="punct5" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn6" conditional="semn6" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct6" conditional="punct6" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="semn7" conditional="semn7" position="48,240" size="14,14" backgroundColor="hdsBrand" zPosition="2" />
+		<widget name="punct7" conditional="punct7" position="78,240" size="990,50" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget name="linieNote" conditional="linieNote" position="48,360" size="1020,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="linieJos" conditional="linieJos" position="48,390" size="1020,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="tastaOk" conditional="tastaOk" position="48,404" size="64,40" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsCell" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget name="indiciu" conditional="indiciu" position="124,404" size="944,40" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
 		<widget name="icon" conditional="icon" position="0,0" size="1,1" transparent="1" zPosition="0" />
 		<widget name="ErrorPixmap" conditional="ErrorPixmap" position="0,0" size="1,1" transparent="1" zPosition="0" />
 		<widget name="InfoPixmap" conditional="InfoPixmap" position="0,0" size="1,1" transparent="1" zPosition="0" />
@@ -1535,18 +1566,15 @@
 		<widget name="WarningPixmap" conditional="WarningPixmap" position="0,0" size="1,1" transparent="1" zPosition="0" />
 		<widget name="rc" conditional="rc" position="0,0" size="1,1" transparent="1" zPosition="0" />
 		<panel name="HdsIndicatoriTelecomanda" />
-		<widget name="autoresize" conditional="autoresize" position="0,0" size="1036,40" font="HdsRegular;34" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="0" />
+		<widget name="autoresize" conditional="autoresize" position="0,0" size="1020,40" font="HdsRegular;32" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="0" />
 	</screen>
-	<screen name="MessageBox" position="410,390" size="1100,300" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1100,2" backgroundColor="hdsLine" zPosition="1" />
+	<screen name="MessageBox" position="410,310" size="1100,460" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsMessageBoxBase" />
 	</screen>
-	<screen name="MessageBoxSimple" position="410,390" size="1100,300" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1100,2" backgroundColor="hdsLine" zPosition="1" />
+	<screen name="MessageBoxSimple" position="410,310" size="1100,460" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsMessageBoxBase" />
 	</screen>
-	<screen name="MessageBoxWizard" position="410,390" size="1100,300" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1100,2" backgroundColor="hdsLine" zPosition="1" />
+	<screen name="MessageBoxWizard" position="410,310" size="1100,460" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsMessageBoxBase" />
 	</screen>
 
@@ -1570,13 +1598,20 @@
 	     rosie, din meniu si din notificari. Sursele: titlu, text (fraza simpla, 3 randuri), detaliu (explicatia, mai
 	     mic, 5 randuri: textele cele mai lungi, in germana si rusa), rand (explicatia randului ales, 2 randuri); lista
 	     „list” (Folosește „<disc>” pentru înregistrări, Închide), 5 randuri. -->
-	<screen name="HdsLocInregistrari" position="360,158" size="1200,764" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1200,2" backgroundColor="hdsLine" zPosition="1" />
-		<widget source="titlu" render="Label" position="40,24" size="1120,60" font="HdsBold;42" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="1" />
-		<widget source="text" render="Label" position="40,92" size="1120,140" font="HdsRegular;34" valign="top" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget source="detaliu" render="Label" position="40,236" size="1120,180" font="HdsRegular;26" valign="top" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget name="list" position="40,428" size="1120,240" itemHeight="48" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,0" zPosition="2" />
-		<widget source="rand" render="Label" position="40,676" size="1120,72" font="HdsRegular;26" valign="top" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	<screen name="HdsLocInregistrari" position="360,40" size="1200,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<eLabel position="0,0" size="1200,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaDr" conditional="ramaDr" position="1199,0" size="1,1000" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaJos" conditional="ramaJos" position="0,999" size="1200,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="felBara" conditional="felBara" position="0,0" size="16,1000" backgroundColor="hdsBrandLight" zPosition="2" />
+		<eLabel position="48,34" size="20,20" backgroundColor="hdsBrandLight" zPosition="2" />
+		<widget source="titlu" render="Label" position="84,16" size="1084,56" font="HdsBold;36" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="2" />
+		<eLabel position="48,80" size="1120,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="text" render="Label" position="48,96" size="1120,140" font="HdsBold;32" valign="top" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget name="cardDetaliu" conditional="cardDetaliu" position="48,244" size="1120,276" backgroundColor="hdsCell" zPosition="1" />
+		<widget source="detaliu" render="Label" position="72,256" size="1072,252" font="HdsRegular;26" valign="top" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" zPosition="2" />
+		<widget name="list" position="48,532" size="1120,280" itemHeight="56" textOffset="24,0" valign="center" font="HdsBold;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget name="semnRand" conditional="semnRand" position="48,834" size="14,14" backgroundColor="hdsBrandLight" zPosition="2" />
+		<widget source="rand" render="Label" position="78,828" size="1090,108" font="HdsRegular;26" valign="top" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
 	</screen>
 	<!-- HdsLicente (Screens/HdsLicente.py): programele din imagine si licentele lor, de la Meniu > Informatii sistem.
 	     Sursele: titlu, text (starea listei, 2 randuri si la literele de 130 %), autor (al cui e imaginea, 1 rand), detaliu
@@ -1675,8 +1710,8 @@
 		<panel name="LocationBox" />
 	</screen>
 
-	<!-- ajutorul pentru scrierea cu cifrele telecomenzii: jos dreapta, deasupra zonei de burtiera -->
-	<screen name="NumericalTextInputHelpDialog" position="1224,652" size="592,352" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+	<!-- ajutorul pentru scrierea cu cifrele telecomenzii: jos dreapta, deasupra zonei de burtiera, la dreapta ferestrelor late de 1240 (x 72-1312), ca sa nu fie acoperit -->
+	<screen name="NumericalTextInputHelpDialog" position="1320,652" size="592,352" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<eLabel position="0,0" size="592,2" backgroundColor="hdsLine" zPosition="1" />
 		<widget name="key1" conditional="key1" position="12,12" size="184,76" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsTrack" halign="center" valign="center" zPosition="1" />
 		<widget name="key2" conditional="key2" position="204,12" size="184,76" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsTrack" halign="center" valign="center" zPosition="1" />
@@ -1732,10 +1767,10 @@
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="230,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="414,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="598,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="46,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="230,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="414,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="598,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="46,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="230,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="414,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="598,488" size="162,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<!-- ========== Cadrul ferestrelor mari (Menu, Setup, lista de canale, EPG): cap cu titlu si ceas, butoane jos ==========
 	     fereastra la 72,40, inalta 1000; textele in zona sigura (y 58-1024) -->
@@ -1767,10 +1802,10 @@
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="282,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="516,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="750,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="282,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="516,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="750,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="282,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="516,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="750,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsCadru1240" position="0,0" size="1240,1000">
 		<eLabel position="0,0" size="1240,2" backgroundColor="hdsLine" zPosition="1" />
@@ -1800,10 +1835,10 @@
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="342,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="636,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="930,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="342,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="636,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="930,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="342,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="636,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="930,936" size="270,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsCadru1776" position="0,0" size="1776,1000">
 		<eLabel position="0,0" size="1776,2" backgroundColor="hdsLine" zPosition="1" />
@@ -1833,10 +1868,10 @@
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="476,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="904,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
 	<!-- semnele care se misca pe poza telecomenzii in ghiduri si in ajutor (ShowRemoteControl, Rc: indicatorU0-15, indicatorL0-15).
@@ -1903,9 +1938,11 @@
 	</screen>
 	<screen name="Menu" position="72,40" size="1000,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsMenuBase" />
+		<panel name="HdsMenuListaJos" />
 	</screen>
 	<screen name="MainMenu" position="72,40" size="1000,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsMenuBase" />
+		<panel name="HdsMenuListaJos" />
 	</screen>
 
 	<!-- ========== Meniul cu dale (Screens/Menu.py cu aspectul dale, Components/HdsDale.py) ========== -->
@@ -1929,15 +1966,27 @@
 	</screen>
 	<screen name="HdsMenuDaleJos" position="0,0" size="1776,1000">
 		<widget source="dala_t_ok" render="Label" position="32,942" size="56,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
-		<widget source="dala_ok" render="Label" position="96,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_ok" render="Label" position="96,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_exit" render="Label" position="262,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
-		<widget source="dala_exit" render="Label" position="342,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_exit" render="Label" position="342,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_cifre" render="Label" position="508,942" size="60,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
-		<widget source="dala_cifre" render="Label" position="576,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_cifre" render="Label" position="576,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_text" render="Label" position="742,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
-		<widget source="dala_text" render="Label" position="822,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_text" render="Label" position="822,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="988,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
-		<widget source="dala_galben" render="Label" position="1012,936" size="200,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_galben" render="Label" position="1012,936" size="200,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<screen name="HdsMenuListaJos" position="0,0" size="1000,1000">
+		<widget source="dala_t_ok" render="Label" position="32,942" size="56,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_ok" render="Label" position="94,936" size="112,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_t_exit" render="Label" position="214,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_exit" render="Label" position="292,936" size="112,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_t_cifre" render="Label" position="412,942" size="60,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_cifre" render="Label" position="478,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_t_text" render="Label" position="590,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="dala_text" render="Label" position="668,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="780,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="Label" position="802,936" size="166,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="MenuDale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
@@ -2027,11 +2076,11 @@
 		<widget name="stare" position="442,692" size="1036,40" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
 		<eLabel position="442,744" size="1036,1" backgroundColor="hdsDivider" zPosition="3" />
 		<eLabel position="442,772" size="6,32" backgroundColor="key_red" zPosition="3" />
-		<widget name="key_red" position="458,764" size="320,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="key_red" position="458,764" size="320,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="left" valign="center" noWrap="1" zPosition="3" />
 		<eLabel position="794,772" size="6,32" backgroundColor="key_green" zPosition="3" />
-		<widget name="key_green" position="810,764" size="320,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="key_green" position="810,764" size="320,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="left" valign="center" noWrap="1" zPosition="3" />
 		<eLabel position="1146,772" size="6,32" backgroundColor="key_yellow" zPosition="3" />
-		<widget name="key_yellow" position="1162,764" size="316,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="key_yellow" position="1162,764" size="316,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="left" valign="center" noWrap="1" zPosition="3" />
 	</screen>
 	<!-- Fontul interfetei (Screens/HdsFontInterfata.py, Components/HdsFontInterfata.py): familiile in stanga (randurile
 	     le deseneaza codul: numele si, in dreapta lui, "folosit acum" sau "fara literele limbii"), proba familiei de sub
@@ -2227,10 +2276,10 @@
 		<widget source="key_blue" render="FixedLabel" position="1244,612" size="6,32" backgroundColor="key_blue" zPosition="4">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_red" render="Label" position="408,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_green" render="Label" position="692,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_yellow" render="Label" position="976,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_blue" render="Label" position="1260,606" size="268,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_red" render="Label" position="408,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_green" render="Label" position="692,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_yellow" render="Label" position="976,606" size="260,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_blue" render="Label" position="1260,606" size="268,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
 	</screen>
 	<!-- Limba sunetului si a subtitrarilor (Screens/HdsPisteLimbi.py): alegerile, ajutorul si randul canalului de acum
 	     (memorie) unul sub altul; la textul marit codul le potriveste pana deasupra tastelor -->
@@ -2287,10 +2336,10 @@
 		<widget source="key_blue" render="FixedLabel" position="1304,752" size="6,32" backgroundColor="key_blue" zPosition="4">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_red" render="Label" position="288,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_green" render="Label" position="632,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_yellow" render="Label" position="976,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
-		<widget source="key_blue" render="Label" position="1320,746" size="328,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_red" render="Label" position="288,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_green" render="Label" position="632,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_yellow" render="Label" position="976,746" size="320,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
+		<widget source="key_blue" render="Label" position="1320,746" size="328,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="4" />
 	</screen>
 	<screen name="HdsTraducereInstructiuni" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
@@ -2328,39 +2377,72 @@
 	     alegerile, descrierea si nota pana la marginea de jos a ecranului); aici culorile si fonturile skinului.
 	     Ce s-a intamplat (HdsModSigurDetalii): randurile pe grupe (desenate de cod) sau, in locul lor, textul brut. -->
 	<screen name="HdsModSigur" position="0,0" size="1920,1080" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<widget source="titlu" render="Label" position="160,56" size="1600,76" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<eLabel position="160,140" size="1600,4" backgroundColor="hdsAmber" zPosition="1" />
-		<widget source="mesaj" render="Label" position="160,166" size="1600,120" font="HdsRegular;42" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
+		<eLabel position="0,0" size="24,1080" backgroundColor="hdsBad" zPosition="1" />
+		<eLabel position="160,76" size="36,36" backgroundColor="hdsBad" zPosition="1" />
+		<widget source="titlu" render="Label" position="212,56" size="1548,76" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
+		<eLabel position="160,140" size="1600,1" backgroundColor="hdsLine" zPosition="1" />
+		<widget source="mesaj" render="Label" position="160,166" size="1600,120" font="HdsBold;38" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
 		<widget source="explicatie" render="Label" position="160,294" size="1600,170" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget name="alegeri" position="160,480" size="980,216" itemHeight="72" foregroundColor="hdsText" backgroundColor="hdsCell" backgroundColorSelected="hdsAmber" transparent="0" scrollbarMode="showNever" zPosition="1" />
+		<widget name="alegeri" position="160,480" size="980,216" itemHeight="72" foregroundColor="hdsText" backgroundColor="hdsCell" backgroundColorSelected="hdsBrand" transparent="0" scrollbarMode="showNever" zPosition="1" />
 		<widget source="descriere" render="Label" position="160,712" size="1600,150" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
 		<widget source="nota" render="Label" position="160,880" size="1600,140" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
 	</screen>
 	<screen name="HdsModSigurDetalii" position="0,0" size="1920,1080" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<widget source="titlu" render="Label" position="120,56" size="1680,64" font="HdsBold;46" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="120,126" size="1680,4" backgroundColor="hdsAmber" zPosition="1" />
+		<eLabel position="0,0" size="24,1080" backgroundColor="hdsBad" zPosition="1" />
+		<eLabel position="120,74" size="28,28" backgroundColor="hdsBad" zPosition="1" />
+		<widget source="titlu" render="Label" position="164,56" size="1636,64" font="HdsBold;46" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="120,126" size="1680,1" backgroundColor="hdsLine" zPosition="1" />
 		<widget name="lista" position="120,140" size="1680,800" itemHeight="41" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" backgroundColorSelected="hdsPanelSolid" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 		<widget name="brut" position="120,140" size="1680,800" font="HdsRegular;27" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" zPosition="3" />
-		<eLabel position="120,948" size="1680,1" backgroundColor="hdsDivider" zPosition="1" />
+		<eLabel position="120,948" size="1680,1" backgroundColor="hdsLine" zPosition="1" />
 		<widget source="nota" render="Label" position="120,958" size="1360,56" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<widget source="key_blue" render="FixedLabel" position="1510,970" size="6,32" backgroundColor="key_blue" zPosition="1">
-			<convert type="ConditionalShowHide" />
-		</widget>
-		<widget source="key_blue" render="Label" position="1526,958" size="274,56" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="FixedLabel" position="1510,978" size="16,16" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_blue" render="Label" position="1536,958" size="264,56" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
-	<!-- Televiziune prin IP (Screens/IptvSetup.py): listele adaugate si ghidul de jos; Date de acces: campurile si ghidul -->
-	<screen name="IptvSetup" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<panel name="HdsCadru1240" />
-		<widget name="lista" position="32,104" size="1176,540" itemHeight="60" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,0" zPosition="2" />
-		<eLabel position="32,656" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
-		<widget name="ghid" position="32,668" size="1176,244" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	<!-- IPTV (Screens/IptvSetup.py): cartelele surselor, alegerea felului, formularul unei surse si lista demo -->
+	<screen name="IptvSetup" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 	</screen>
-	<screen name="IptvDateAcces" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<panel name="HdsCadru1240" />
-		<widget name="config" position="32,104" size="1176,420" itemHeight="60" font="HdsRegular;32" secondfont="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
-		<eLabel position="32,536" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
-		<widget source="ghid" render="Label" position="32,548" size="1176,364" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	<screen name="IptvAlege" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+	</screen>
+	<screen name="IptvDateAcces" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget source="ghid" render="Label" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="config" position="32,168" size="1712,392" itemHeight="72" font="HdsRegular;34" secondfont="HdsBold;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<eLabel position="32,580" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="stare" position="32,596" size="1712,312" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	</screen>
+	<screen name="IptvDespre" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1712,804" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
+	</screen>
+
+	<screen name="IptvGrupe" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
+	</screen>
+	<screen name="IptvSeriale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
+	</screen>
+	<screen name="IptvTextSerial" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="text" position="32,104" size="1712,804" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
+	</screen>
+	<!-- canalul de internet se incarca (Screens/HdsIptvIncarcare.py): mic, peste imagine, sub casetele de sus ale barii -->
+	<screen name="HdsIptvIncarcare" position="center,150" size="760,130" backgroundColor="hdsPanelDialog" flags="wfNoBorder" zPosition="1">
+		<eLabel position="0,0" size="760,3" backgroundColor="hdsBrand" zPosition="1" />
+		<widget name="text" position="28,18" size="500,46" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="mic" position="532,18" size="200,46" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />
+		<widget name="bara" position="28,84" size="704,14" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="1" />
 	</screen>
 
 	<!-- Manager jurnale (Screens/LogManager.py): lista jurnalelor; jurnalul deschis (text lung, litera ingusta, ca sa
@@ -2616,10 +2698,12 @@
 	<!-- mesajul de dupa captura (Components/HdsCapturi.py il arata 3 secunde si il ascunde; fara harta de taste): sus in
 	     dreapta, in zona sigura a televizorului, deasupra oricarui ecran -->
 	<screen name="HdsCapturaSalvata" position="936,54" size="888,124" backgroundColor="hdsPanelSolid" flags="wfNoBorder" zPosition="99">
-		<widget name="bara" position="0,0" size="6,124" backgroundColor="hdsBrand" zPosition="1" />
-		<widget name="titlu" position="28,14" size="840,48" font="HdsBold;32" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget name="detaliu" position="28,66" size="840,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="0,122" size="888,2" backgroundColor="hdsBrand" zPosition="1" />
+		<eLabel position="0,0" size="888,1" backgroundColor="hdsLine" zPosition="1" />
+		<eLabel position="887,0" size="1,124" backgroundColor="hdsLine" zPosition="1" />
+		<eLabel position="0,123" size="888,1" backgroundColor="hdsLine" zPosition="1" />
+		<widget name="bara" position="0,0" size="16,124" backgroundColor="hdsGood" zPosition="1" />
+		<widget name="titlu" position="40,14" size="828,48" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget name="detaliu" position="40,66" size="828,40" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
 	<!-- Beta tester (Screens/HdsBetaTester.py): testerul (lista cu randurile desenate de cod: pictograma meniului,
@@ -2868,7 +2952,7 @@
 		<widget source="key_blue" render="FixedLabel" position="1100,942" size="6,32" backgroundColor="key_blue" zPosition="6">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_blue" render="Label" position="1116,936" size="244,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget source="key_blue" render="Label" position="1116,936" size="244,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="6" />
 	</screen>
 
 	<!-- Actualizari de pachete si Copia setarilor (Screens/HdsActualizari.py, HdsCopieSetari.py): aveau deja asezarea
@@ -2924,23 +3008,23 @@
 	     meniu (HdsDishMotorEcran) are dedesubt comenzile, limitele, mesajul, semnalul si tastele (bara_* + key_*) -->
 	<screen name="HdsDishMotor" position="285,182" size="1350,717" backgroundColor="hdsPanelSolid" flags="wfNoBorder" zPosition="150">
 		<eLabel position="0,0" size="1350,4" backgroundColor="hdsBrandLight" zPosition="1" />
-		<widget source="titlu" render="Label" position="30,21" size="1290,60" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
+		<widget source="titlu" render="Label" position="30,21" size="1290,60" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="canvas" render="Canvas" position="30,90" size="1290,375" zPosition="1" />
 		<widget source="plecare" render="Label" position="30,477" size="420,96" font="HdsRegular;32" foregroundColor="#00b99cff" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
 		<widget source="curent" render="Label" position="465,477" size="420,96" font="HdsRegular;32" foregroundColor="#0038b6ff" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="top" zPosition="1" />
 		<widget source="tinta" render="Label" position="900,477" size="420,96" font="HdsRegular;32" foregroundColor="#00ffc250" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="top" zPosition="1" />
-		<widget source="ramas" render="Label" position="30,582" size="1290,45" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
+		<widget source="ramas" render="Label" position="30,582" size="1290,45" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="detaliu" render="Label" position="30,630" size="1290,39" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="viteza" render="Label" position="30,669" size="1290,39" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsDishMotorEcran" position="285,40" size="1350,993" backgroundColor="hdsPanelSolid" flags="wfNoBorder" zPosition="150">
 		<eLabel position="0,0" size="1350,4" backgroundColor="hdsBrandLight" zPosition="1" />
-		<widget source="titlu" render="Label" position="30,21" size="1290,60" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
+		<widget source="titlu" render="Label" position="30,21" size="1290,60" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="canvas" render="Canvas" position="30,90" size="1290,375" zPosition="1" />
 		<widget source="plecare" render="Label" position="30,477" size="420,96" font="HdsRegular;32" foregroundColor="#00b99cff" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
 		<widget source="curent" render="Label" position="465,477" size="420,96" font="HdsRegular;32" foregroundColor="#0038b6ff" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="top" zPosition="1" />
 		<widget source="tinta" render="Label" position="900,477" size="420,96" font="HdsRegular;32" foregroundColor="#00ffc250" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="top" zPosition="1" />
-		<widget source="ramas" render="Label" position="30,582" size="1290,45" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
+		<widget source="ramas" render="Label" position="30,582" size="1290,45" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="detaliu" render="Label" position="30,630" size="1290,39" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<widget source="viteza" render="Label" position="30,669" size="1290,39" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="30,714" size="1290,2" backgroundColor="hdsTrack" zPosition="1" />
@@ -2975,13 +3059,13 @@
 		<widget source="mesaj" render="Label" position="48,796" size="1304,36" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="1" />
 		<eLabel position="48,846" size="1304,1" backgroundColor="hdsTrack" zPosition="1" />
 		<eLabel position="48,874" size="28,16" backgroundColor="key_red" zPosition="2" />
-		<widget source="key_red" render="Label" position="88,862" size="200,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_red" render="Label" position="88,862" size="200,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="300,874" size="28,16" backgroundColor="key_green" zPosition="2" />
-		<widget source="key_green" render="Label" position="340,862" size="230,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_green" render="Label" position="340,862" size="230,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="590,874" size="28,16" backgroundColor="key_yellow" zPosition="2" />
-		<widget source="key_yellow" render="Label" position="630,862" size="290,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_yellow" render="Label" position="630,862" size="290,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="940,874" size="28,16" backgroundColor="key_blue" zPosition="2" />
-		<widget source="key_blue" render="Label" position="980,862" size="320,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_blue" render="Label" position="980,862" size="320,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsDvbIAlegeTara" position="580,120" size="760,840" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
 		<eLabel position="0,0" size="760,2" backgroundColor="hdsBrand" zPosition="1" />
@@ -2990,9 +3074,9 @@
 		<widget name="list" position="42,150" size="676,560" itemHeight="56" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,11" zPosition="2" />
 		<eLabel position="42,738" size="676,1" backgroundColor="hdsTrack" zPosition="1" />
 		<eLabel position="42,776" size="28,16" backgroundColor="key_red" zPosition="2" />
-		<widget source="key_red" render="Label" position="82,764" size="220,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_red" render="Label" position="82,764" size="220,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="330,776" size="28,16" backgroundColor="key_green" zPosition="2" />
-		<widget source="key_green" render="Label" position="370,764" size="300,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_green" render="Label" position="370,764" size="300,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsDvbIAvansat" position="260,120" size="1400,840" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
 		<eLabel position="0,0" size="1400,2" backgroundColor="hdsBrand" zPosition="1" />
@@ -3001,23 +3085,54 @@
 		<widget name="lista" position="48,146" size="1304,576" itemHeight="64" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="20,15" zPosition="2" />
 		<eLabel position="48,746" size="1304,1" backgroundColor="hdsTrack" zPosition="1" />
 		<eLabel position="48,784" size="28,16" backgroundColor="key_red" zPosition="2" />
-		<widget source="key_red" render="Label" position="88,772" size="200,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_red" render="Label" position="88,772" size="200,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="300,784" size="28,16" backgroundColor="key_green" zPosition="2" />
-		<widget source="key_green" render="Label" position="340,772" size="230,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_green" render="Label" position="340,772" size="230,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="590,784" size="28,16" backgroundColor="key_yellow" zPosition="2" />
-		<widget source="key_yellow" render="Label" position="630,772" size="290,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_yellow" render="Label" position="630,772" size="290,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="940,784" size="28,16" backgroundColor="key_blue" zPosition="2" />
-		<widget source="key_blue" render="Label" position="980,772" size="320,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="key_blue" render="Label" position="980,772" size="320,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+	</screen>
+	<screen name="HdsAdaugaFeed" position="410,314" size="1100,452" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<eLabel position="0,0" size="1100,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="1099,0" size="1,452" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,451" size="1100,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,0" size="16,452" backgroundColor="hdsBrand" zPosition="2" />
+		<eLabel position="48,34" size="20,20" backgroundColor="hdsBrand" zPosition="2" />
+		<widget source="Title" render="Label" position="84,16" size="984,56" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="48,80" size="1020,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="fond0" conditional="fond0" position="48,96" size="1020,72" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="et0" position="72,96" size="210,72" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="val0" position="292,96" size="756,72" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="fond1" conditional="fond1" position="48,176" size="1020,72" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="et1" position="72,176" size="210,72" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="val1" position="292,176" size="756,72" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="48,276" size="14,14" backgroundColor="hdsWarn" zPosition="2" />
+		<widget name="nota" position="78,262" size="990,44" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="semnEroare" conditional="semnEroare" position="48,318" size="14,14" backgroundColor="hdsBad" zPosition="2" />
+		<widget name="eroare" position="78,306" size="990,72" font="HdsRegular;26" foregroundColor="hdsBad" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<eLabel position="48,384" size="1020,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="tastaOk" position="48,398" size="64,40" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsCell" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="indiciu" render="Label" position="124,398" size="360,40" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="500,410" size="16,16" backgroundColor="key_red" zPosition="2" />
+		<widget source="key_red" render="Label" position="526,398" size="250,40" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="790,410" size="16,16" backgroundColor="key_green" zPosition="2" />
+		<widget source="key_green" render="Label" position="816,398" size="252,40" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsDvbIOprit" position="460,320" size="1000,440" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<eLabel position="0,0" size="1000,6" backgroundColor="hdsWarn" zPosition="1" />
-		<widget source="titlu" render="Label" position="48,40" size="904,52" font="HdsBold;36" foregroundColor="hdsWarn" backgroundColor="hdsPanelSolid" transparent="1" valign="center" zPosition="1" />
-		<widget source="text" render="Label" position="48,112" size="904,200" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="1" />
-		<eLabel position="48,336" size="904,1" backgroundColor="hdsTrack" zPosition="1" />
-		<eLabel position="48,376" size="28,16" backgroundColor="key_green" zPosition="2" />
-		<widget source="key_green" render="Label" position="88,364" size="260,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="360,376" size="28,16" backgroundColor="key_red" zPosition="2" />
-		<widget source="key_red" render="Label" position="400,364" size="260,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="0,0" size="1000,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="999,0" size="1,440" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,439" size="1000,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,0" size="16,440" backgroundColor="hdsWarn" zPosition="2" />
+		<eLabel position="48,34" size="20,20" backgroundColor="hdsWarn" zPosition="2" />
+		<widget source="titlu" render="Label" position="84,16" size="884,56" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="48,80" size="920,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="text" render="Label" position="48,96" size="920,240" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="top" zPosition="1" />
+		<eLabel position="48,352" size="920,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="48,386" size="16,16" backgroundColor="key_green" zPosition="2" />
+		<widget source="key_green" render="Label" position="74,370" size="280,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="370,386" size="16,16" backgroundColor="key_red" zPosition="2" />
+		<widget source="key_red" render="Label" position="396,370" size="280,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsDvbIReloadNow" position="580,430" size="760,220" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
 		<eLabel position="0,0" size="760,2" backgroundColor="hdsBrand" zPosition="1" />
@@ -3025,15 +3140,21 @@
 		<eLabel position="40,166" size="28,16" backgroundColor="key_red" zPosition="2" />
 		<widget name="buton_rosu" position="80,154" size="300,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
-	<screen name="HdsDvbIAdaugaURL" position="510,400" size="900,280" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<eLabel position="0,0" size="900,2" backgroundColor="hdsBrand" zPosition="1" />
-		<widget name="eticheta" position="40,24" size="820,36" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" zPosition="1" />
-		<widget name="input" position="40,70" size="820,56" font="HdsRegular;26" foregroundColor="white" backgroundColor="hdsBrand" halign="left" valign="center" zPosition="1" />
-		<widget name="eroare" position="40,136" size="820,36" font="HdsRegular;22" foregroundColor="hdsBad" backgroundColor="hdsPanelSolid" transparent="1" halign="left" zPosition="1" />
-		<eLabel position="40,212" size="28,16" backgroundColor="key_green" zPosition="2" />
-		<widget name="buton_verde" position="80,200" size="300,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="420,212" size="28,16" backgroundColor="key_red" zPosition="2" />
-		<widget name="buton_rosu" position="460,200" size="300,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+	<screen name="HdsDvbIAdaugaURL" position="510,390" size="900,300" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
+		<eLabel position="0,0" size="900,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="899,0" size="1,300" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,299" size="900,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="0,0" size="16,300" backgroundColor="hdsBrandLight" zPosition="2" />
+		<eLabel position="48,34" size="20,20" backgroundColor="hdsBrandLight" zPosition="2" />
+		<widget name="eticheta" position="84,16" size="784,56" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="48,80" size="820,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="input" position="48,96" size="820,56" font="HdsRegular;28" foregroundColor="white" backgroundColor="hdsBrand" halign="left" valign="center" zPosition="1" />
+		<widget name="eroare" position="48,160" size="820,44" font="HdsRegular;24" foregroundColor="hdsBad" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
+		<eLabel position="48,216" size="820,1" backgroundColor="hdsLine" zPosition="2" />
+		<eLabel position="48,246" size="16,16" backgroundColor="key_green" zPosition="2" />
+		<widget name="buton_verde" position="74,230" size="300,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="400,246" size="16,16" backgroundColor="key_red" zPosition="2" />
+		<widget name="buton_rosu" position="426,230" size="300,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 
 	<!-- DVB-MABR, IP multicast (Screens/HdsDvbMABR.py): starea, lista, sesiunile; tastele au alte nume (buton_*), deci
@@ -3194,19 +3315,35 @@
 	     cod, culorile si fonturile skinului. Ecranul diagnosticului pornirii (fostul HdsPazaModel pe tot ecranul) isi
 	     face skinul in cod, dupa randurile citite (numele HdsDiagnosticPornireEcran, fara forma aici). -->
 	<screen name="HdsPazaModelIntrebare" position="260,95" size="1400,889" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<eLabel position="0,0" size="1400,4" backgroundColor="hdsAmber" zPosition="1" />
-		<widget source="titlu" render="Label" position="50,25" size="1300,65" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<widget source="mesaj" render="Label" position="50,105" size="1300,369" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="tehnic" render="Label" position="50,484" size="1300,198" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget name="alegeri" position="50,697" size="600,112" font="HdsRegular;32" itemHeight="56" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" foregroundColorSelected="hdsMarkedText" backgroundColorSelected="hdsAmber" transparent="0" zPosition="1" />
-		<widget source="nota" render="Label" position="50,824" size="1300,45" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
+		<eLabel position="0,0" size="1400,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaDr" conditional="ramaDr" position="1399,0" size="1,889" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaJos" conditional="ramaJos" position="0,888" size="1400,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="felBara" conditional="felBara" position="0,0" size="20,889" backgroundColor="hdsWarn" zPosition="2" />
+		<eLabel position="60,38" size="28,28" backgroundColor="hdsWarn" zPosition="2" />
+		<widget source="titlu" render="Label" position="104,20" size="1236,64" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="60,96" size="1280,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="mesaj" render="Label" position="60,112" size="1280,300" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="2" />
+		<widget name="cardTehnic" conditional="cardTehnic" position="60,424" size="1280,200" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="eticheta_tehnic" conditional="eticheta_tehnic" position="84,434" size="1232,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="tehnic" render="Label" position="84,470" size="1232,144" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="left" valign="top" zPosition="2" />
+		<widget name="linieJos" conditional="linieJos" position="60,817" size="1280,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="nota" render="Label" position="60,829" size="1280,44" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<widget name="alegeri" position="60,640" size="1280,112" font="HdsBold;32" itemHeight="56" textOffset="24,0" valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" foregroundColorSelected="white" backgroundColorSelected="hdsBrand" transparent="1" zPosition="2" />
 	</screen>
 	<screen name="HdsPazaModelRefuz" position="260,140" size="1400,800" backgroundColor="hdsPanelSolid" flags="wfNoBorder">
-		<eLabel position="0,0" size="1400,4" backgroundColor="hdsAmber" zPosition="1" />
-		<widget source="titlu" render="Label" position="50,25" size="1300,65" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
-		<widget source="mesaj" render="Label" position="50,105" size="1300,330" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="tehnic" render="Label" position="50,445" size="1300,275" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="1" />
-		<widget source="nota" render="Label" position="50,735" size="1300,45" font="HdsRegular;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" zPosition="1" />
+		<eLabel position="0,0" size="1400,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaDr" conditional="ramaDr" position="1399,0" size="1,800" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="ramaJos" conditional="ramaJos" position="0,799" size="1400,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget name="felBara" conditional="felBara" position="0,0" size="20,800" backgroundColor="hdsBad" zPosition="2" />
+		<eLabel position="60,38" size="28,28" backgroundColor="hdsBad" zPosition="2" />
+		<widget source="titlu" render="Label" position="104,20" size="1236,64" font="HdsBold;44" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="60,96" size="1280,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="mesaj" render="Label" position="60,112" size="1280,300" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="top" zPosition="2" />
+		<widget name="cardTehnic" conditional="cardTehnic" position="60,424" size="1280,200" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="eticheta_tehnic" conditional="eticheta_tehnic" position="84,434" size="1232,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="tehnic" render="Label" position="84,470" size="1232,144" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="left" valign="top" zPosition="2" />
+		<widget name="linieJos" conditional="linieJos" position="60,728" size="1280,1" backgroundColor="hdsLine" zPosition="2" />
+		<widget source="nota" render="Label" position="60,740" size="1280,44" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 
 	<!-- Telecomenzi (Screens/HdsTelecomenzi.py): desenul telecomenzii in stanga (poza si tastele aprinse le face codul,
@@ -3220,13 +3357,13 @@
 		<widget name="detalii" position="400,276" size="1424,300" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" zPosition="1" />
 		<widget name="istoric" position="400,584" size="1424,306" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" zPosition="1" />
 		<widget name="ajutor" position="400,898" size="1424,66" font="HdsRegular;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelSolid" transparent="1" valign="center" zPosition="1" />
-		<eLabel position="400,980" size="6,32" backgroundColor="key_red" zPosition="1" />
+		<widget source="Title" render="FixedLabel" conditional="key_red" position="400,980" size="6,32" backgroundColor="key_red" zPosition="1" />
 		<widget name="key_red" position="416,972" size="330,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="756,980" size="6,32" backgroundColor="key_green" zPosition="1" />
+		<widget source="Title" render="FixedLabel" conditional="key_green" position="756,980" size="6,32" backgroundColor="key_green" zPosition="1" />
 		<widget name="key_green" position="772,972" size="330,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="1112,980" size="6,32" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="Title" render="FixedLabel" conditional="key_yellow" position="1112,980" size="6,32" backgroundColor="key_yellow" zPosition="1" />
 		<widget name="key_yellow" position="1128,972" size="330,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<eLabel position="1468,980" size="6,32" backgroundColor="key_blue" zPosition="1" />
+		<widget source="Title" render="FixedLabel" conditional="key_blue" position="1468,980" size="6,32" backgroundColor="key_blue" zPosition="1" />
 		<widget name="key_blue" position="1484,972" size="330,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
@@ -3262,11 +3399,11 @@
 		<widget zPosition="1" name="detalii" position="1325,726" size="461,230" font="HdsRegular;23" foregroundColor="hdsText2" backgroundColor="hdsRadioBack" transparent="1" />
 		
 		<widget source="key_red" render="FixedLabel" position="96,984" size="6,32" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" position="403,984" size="6,32" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" position="710,984" size="6,32" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<!-- Locuri din rețea (Screens/HdsLocuriRetea.py): același tipar ca "Ce aparate sunt în rețea" (lista în stânga, caseta
 	     cu explicația și detaliile în dreapta), cu tasta albastră (Caută în casă). Editarea locului folosește Setup. -->
@@ -3282,13 +3419,13 @@
 		<widget zPosition="1" name="detalii" position="1325,726" size="461,230" font="HdsRegular;23" foregroundColor="hdsText2" backgroundColor="hdsRadioBack" transparent="1" />
 		
 		<widget source="key_red" render="FixedLabel" position="96,984" size="6,32" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" position="403,984" size="6,32" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" position="710,984" size="6,32" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" position="1075,984" size="6,32" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsLocReteaCautare" position="0,0" size="1920,1080" backgroundColor="hdsRadioBack" flags="wfNoBorder">
 		<widget zPosition="1" noWrap="1" name="titlu" position="96,54" size="1690,58" font="HdsRegular;42" foregroundColor="hdsText" backgroundColor="hdsRadioBack" transparent="1" />
@@ -3302,13 +3439,13 @@
 		<widget zPosition="1" name="detalii" position="1325,726" size="461,230" font="HdsRegular;23" foregroundColor="hdsText2" backgroundColor="hdsRadioBack" transparent="1" />
 		
 		<widget source="key_red" render="FixedLabel" position="96,984" size="6,32" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" position="403,984" size="6,32" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" position="710,984" size="6,32" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" position="1075,984" size="6,32" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsLocReteaRasfoire" position="0,0" size="1920,1080" backgroundColor="hdsRadioBack" flags="wfNoBorder">
 		<widget zPosition="1" noWrap="1" name="titlu" position="96,54" size="1690,58" font="HdsRegular;42" foregroundColor="hdsText" backgroundColor="hdsRadioBack" transparent="1" />
@@ -3322,13 +3459,13 @@
 		<widget zPosition="1" name="detalii" position="1325,726" size="461,230" font="HdsRegular;23" foregroundColor="hdsText2" backgroundColor="hdsRadioBack" transparent="1" />
 		
 		<widget source="key_red" render="FixedLabel" position="96,984" size="6,32" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="112,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" position="403,984" size="6,32" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="419,974" size="272,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" position="710,984" size="6,32" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="726,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" position="1075,984" size="6,32" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" position="1091,974" size="330,52" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsWifiCanaleScreen" position="0,0" size="1920,1080" backgroundColor="hdsRadioBack" flags="wfNoBorder">
 		<widget zPosition="1" name="titlu" position="143,54" size="1654,75" font="HdsRegular;41" valign="center" noWrap="1" foregroundColor="hdsText" backgroundColor="hdsRadioBack" transparent="1" />
@@ -3396,11 +3533,11 @@
 		<widget zPosition="5" name="lista" position="143,186" size="1654,771" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsRadioBack" />
 		
 		<widget source="key_red" render="FixedLabel" position="143,982" size="6,32" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_red" render="Label" position="159,973" size="266,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="159,973" size="266,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" position="444,982" size="6,32" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_green" render="Label" position="460,973" size="266,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="460,973" size="266,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" position="745,982" size="6,32" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
-		<widget source="key_yellow" render="Label" position="761,973" size="322,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="761,973" size="322,51" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
 	<!-- VPN (Screens/HdsVpn.py): starea mare (una din patru culori), detaliile, lista, randul ales, mesajul, ajutorul si
@@ -3420,11 +3557,11 @@
 		<widget source="key_green" render="FixedLabel" position="876,886" size="6,32" backgroundColor="key_green" zPosition="6">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_green" render="Label" position="892,880" size="214,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget source="key_green" render="Label" position="892,880" size="214,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="6" />
 		<widget source="key_yellow" render="FixedLabel" position="1130,886" size="6,32" backgroundColor="key_yellow" zPosition="6">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_yellow" render="Label" position="1146,880" size="214,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget source="key_yellow" render="Label" position="1146,880" size="214,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="6" />
 	</screen>
 
 	<!-- Calculatorul unghiurilor (Screens/PositionerSetup.py): locul si satelitul, rezultatul si ghidul -->
@@ -3464,7 +3601,7 @@
 		<widget source="key_red" render="FixedLabel" position="40,394" size="6,32" backgroundColor="key_red" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_red" render="Label" position="56,386" size="600,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="56,386" size="600,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
 	<!-- Editorul marcajelor unei inregistrari (Plugins/Extensions/HdsCutListEditor): detaliul sus si marcajele -->
@@ -3583,6 +3720,9 @@
 	     post de radio (planul video are doar poza de radio) sau fara semnal (ar ramane ultimul cadru). -->
 	<screen name="HdsChannelSelectionVideo" position="72,40" size="1776,1000">
 		<widget source="session.VideoPicture" render="Pig" position="1104,104" size="640,360" backgroundColor="transparent" zPosition="2" />
+		<!-- canal de internet: viteza, tamponul, raspunsul serverului, rezolutia si codecul, pe marginea de jos a imaginii -->
+		<widget source="session.CurrentService" render="FixedLabel" position="1104,424" size="640,40" backgroundColor="hdsPanelDialog" zPosition="3"><convert type="HdsInfo">IsIptv</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="1112,424" size="624,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">IptvStare,Short,Fit=HdsCond:26:624</convert></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="1104,104" size="640,360" backgroundColor="hdsCell" zPosition="3">
 			<convert type="HdsInfo">HasService</convert>
 			<convert type="ConditionalShowHide">Invert</convert>
@@ -3682,10 +3822,10 @@
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="348,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="648,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="948,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="348,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="648,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="948,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="348,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="648,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="948,936" size="268,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<screen name="HdsListaCanaleBase" position="72,40" size="1776,1000">
 		<eLabel position="0,0" size="1776,96" backgroundColor="hdsPanelDialog" zPosition="0" />
@@ -3849,6 +3989,9 @@
 	     felul canalului ales sta sub numele lui. Cu un canal TV pornit textele sunt goale (nimic peste imagine). -->
 	<screen name="HdsListaCanaleVideo" position="72,40" size="1776,1000">
 		<widget source="session.VideoPicture" render="Pig" position="1104,104" size="640,360" backgroundColor="transparent" zPosition="2" />
+		<!-- canal de internet: viteza, tamponul, raspunsul serverului, rezolutia si codecul, pe marginea de jos a imaginii -->
+		<widget source="session.CurrentService" render="FixedLabel" position="1104,424" size="640,40" backgroundColor="hdsPanelDialog" zPosition="3"><convert type="HdsInfo">IsIptv</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="1112,424" size="624,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">IptvStare,Short,Fit=HdsCond:26:624</convert></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="1104,104" size="640,360" backgroundColor="hdsCell" zPosition="3">
 			<convert type="HdsInfo">HasService</convert>
 			<convert type="ConditionalShowHide">Invert</convert>
@@ -4090,15 +4233,15 @@
 		<widget source="nota" render="Label" position="32,456" size="1712,36" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="32,498" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
 		<eLabel position="32,514" size="6,32" backgroundColor="key_red" zPosition="1" />
-		<widget source="key_red" render="Label" position="48,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" position="48,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="460,514" size="6,32" backgroundColor="key_green" zPosition="1" />
-		<widget source="key_green" render="Label" position="476,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" position="476,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="888,514" size="6,32" backgroundColor="key_yellow" zPosition="1" />
-		<widget source="key_yellow" render="Label" position="904,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="904,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" position="1316,514" size="6,32" backgroundColor="key_blue" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
-		<widget source="key_blue" render="Label" position="1332,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" position="1332,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<!-- Afisajul din fata (Screens/HdsAfisaj.py), pe tot ecranul: sus desenul mare al celor 4 cifre (previzualizare,
 	     desenat din cod, netransparent, ca animatia sa nu clipeasca) si numele, formatul si nota randului ales; dedesubt
@@ -4456,25 +4599,25 @@
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_red" objectTypes="key_red,Button,Label" position="32,494" size="6,32" backgroundColor="key_red" zPosition="1" />
 		<widget name="key_red" conditional="key_red" objectTypes="key_red,Button,Label" position="48,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" conditional="ScreenPath" objectTypes="key_green,StaticText" position="460,494" size="6,32" backgroundColor="key_green" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_green" objectTypes="key_green,Button,Label" position="460,494" size="6,32" backgroundColor="key_green" zPosition="1" />
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="476,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="888,494" size="6,32" backgroundColor="key_yellow" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="888,494" size="6,32" backgroundColor="key_yellow" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="904,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1316,494" size="6,32" backgroundColor="key_blue" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1316,494" size="6,32" backgroundColor="key_blue" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1332,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,486" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="bouquetlist" conditional="bouquetlist" position="32,104" size="480,300" font="HdsRegular;30" itemHeight="60" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" zPosition="5" />
 		<widget name="list1" conditional="list1" position="32,104" size="300,300" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
 		<widget name="currCh1" conditional="currCh1" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
@@ -4536,25 +4679,25 @@
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_red" objectTypes="key_red,Button,Label" position="32,328" size="6,32" backgroundColor="key_red" zPosition="1" />
 		<widget name="key_red" conditional="key_red" objectTypes="key_red,Button,Label" position="48,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="48,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_green" render="FixedLabel" conditional="ScreenPath" objectTypes="key_green,StaticText" position="460,328" size="6,32" backgroundColor="key_green" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_green" objectTypes="key_green,Button,Label" position="460,328" size="6,32" backgroundColor="key_green" zPosition="1" />
 		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="476,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="476,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_yellow" render="FixedLabel" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="888,328" size="6,32" backgroundColor="key_yellow" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="888,328" size="6,32" backgroundColor="key_yellow" zPosition="1" />
 		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="904,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="904,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget source="key_blue" render="FixedLabel" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1316,328" size="6,32" backgroundColor="key_blue" zPosition="1">
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="Title" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1316,328" size="6,32" backgroundColor="key_blue" zPosition="1" />
 		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1332,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
-		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1332,320" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 		<widget name="bouquetlist" conditional="bouquetlist" position="32,96" size="480,208" font="HdsRegular;30" itemHeight="52" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" zPosition="5" />
 		<widget name="list1" conditional="list1" position="32,96" size="300,208" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
 		<widget name="currCh1" conditional="currCh1" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
@@ -6073,6 +6216,17 @@
 		<eLabel position="32,596" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="preview" position="32,608" size="1176,244" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
+	<!-- Lista de sateliți (Screens/HdsListaSateliti.py): aceeași fereastră ca listele implicite (HdsScanerBaza1240: cadrul,
+	     starea), lista `lista` pe două coloane (acțiunea sau poziția și numele satelitului; la schimbări tipul lor),
+	     starea listei și lămurirea rândului luminat în `preview`. Aceleași cote în skinul de rezervă (eticheta 744). -->
+	<screen name="HdsListaSateliti" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsScanerBaza1240" />
+		<widget source="lista" render="Listbox" position="32,104" size="1176,480" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColor="hdsText" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(16, 0), size=(744, 60), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=0), MultiContentEntryText(pos=(776, 0), size=(368, 60), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=2, color=MultiContentTemplateColor(3))], "fonts": [gFont("HdsRegular", 32), gFont("HdsBold", 30)], "itemHeight": 60}</convert>
+		</widget>
+		<eLabel position="32,596" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="preview" position="32,608" size="1176,244" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+	</screen>
 	<screen name="TunerScreen" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1240" />
 		<widget name="config" conditional="config" position="32,104" size="1176,600" itemHeight="60" font="HdsRegular;32" secondfont="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" />
@@ -6812,6 +6966,12 @@
 		<eLabel position="1196,476" size="516,1" backgroundColor="hdsDivider" zPosition="2" />
 		<widget name="dEtichete" position="1196,490" size="148,176" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" noWrap="1" zPosition="3" />
 		<widget name="dValori" position="1350,490" size="378,176" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" noWrap="1" zPosition="3" />
+		<widget name="dValori0" position="1350,490" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
+		<widget name="dValori1" position="1350,519" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
+		<widget name="dValori2" position="1350,548" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
+		<widget name="dValori3" position="1350,577" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
+		<widget name="dValori4" position="1350,606" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
+		<widget name="dValori5" position="1350,635" size="378,29" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" noWrap="1" zPosition="3" />
 		<widget name="dDescriere" position="1196,676" size="516,172" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" zPosition="3" />
 		<widget name="dIndiciu" position="1196,856" size="516,40" font="HdsCond;26" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
 	</screen>
@@ -6825,6 +6985,12 @@
 		<eLabel position="40,224" size="1160,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="etichete" position="40,244" size="260,200" font="HdsCond;30" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="2" />
 		<widget name="valori" position="310,244" size="890,200" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" noWrap="1" zPosition="2" />
+		<widget name="valori0" position="310,244" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget name="valori1" position="310,284" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget name="valori2" position="310,324" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget name="valori3" position="310,364" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget name="valori4" position="310,404" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
+		<widget name="valori5" position="310,444" size="890,40" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" noWrap="1" zPosition="2" />
 		<widget name="nota" position="40,456" size="1160,88" font="HdsRegular;28" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
 		<widget name="stare" position="40,452" size="1160,48" font="HdsBold;30" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
 		<widget name="pista" position="40,508" size="1160,8" backgroundColor="hdsTrack" zPosition="2" />

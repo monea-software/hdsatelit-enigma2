@@ -125,6 +125,9 @@ class HdsEcranNegru(Screen):
 					self[nume] = ProgressBar()
 				else:
 					self[nume] = Label(u"")
+		# bara felului si marginile, numai in tema Pro; tin toata inaltimea (_aseazaRanduri)
+		for nume in ("felBara", "ramaDr", "ramaJos"):
+			self[nume] = Label(u"")
 		self["semnal_text"].setText(E._t(E.T_SEMNAL))
 		self["calitate_text"].setText(E._t(E.T_CALITATE))
 		self["fapta_tasta"].setText(u"OK")
@@ -339,6 +342,11 @@ class HdsEcranNegru(Screen):
 			sus = max(0, min(sus, ecran - inaltime_noua))
 		self.instance.resize(eSize(fw, inaltime_noua))
 		self.instance.move(ePoint(fx, sus))
+		if "felBara" in self and self["felBara"].skinAttributes is not None:
+			for nume in ("felBara", "ramaDr"):
+				w = self[nume].instance
+				w.resize(eSize(w.size().width(), inaltime_noua))
+			self["ramaJos"].instance.move(ePoint(0, inaltime_noua - 1))
 
 	def _jos_inainte(self, i):
 		# randul de dinainte din skin (un rand optional pe care skinul nu il are se sare)

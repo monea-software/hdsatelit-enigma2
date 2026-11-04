@@ -370,8 +370,8 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 			mc.uita("beta-iesire")
 			return {"result": True, "message": _t("Nu s-a făcut nimic.")}
 		if arg.get("pas") == "intreaba":
-			return mc.raspunsIntrebare("beta-iesire", "", _t("Ieși din programul de beta testeri? Serverul șterge toate "
-				"datele trimise de acest receptor, iar pe receptor nu mai rămâne nimic."), _t("Da, ieși și șterge"))
+			return mc.raspunsIntrebare("beta-iesire", "", _t("Ieși din programul de beta testeri? Serverul șterge datele "
+				"acestei înscrieri. Înscrierile din alte sloturi rămân."), _t("Da, ieși și șterge"))
 		if not mc.verifica("beta-iesire", "", arg.get("cod", "")):
 			return mc.codGresit()
 		ok, mesaj = B.iesire(b)

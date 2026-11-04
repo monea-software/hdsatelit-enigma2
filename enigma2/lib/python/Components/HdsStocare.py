@@ -14,14 +14,34 @@
 # Aceeasi regula ca in Components/HdsFonturiGoogle.py (_altaPartitie, _esteInMemorie); nu o import de acolo, pentru
 # ca acelea sunt functii interne ale altui modul, cu probele lor. De unit intr-un singur loc.
 #
+# Radacina pe un disc extern (discRadacina): imaginea poate porni de pe un disc USB sau SATA (pornire multipla: root=UUID=...
+# rootsubdir=linuxrootfs14 in /proc/cmdline, /dev/sdc1 pe / in /proc/mounts). Radacina e atunci un SUBDOSAR al partitiei, pe
+# care scrierea unei imagini il sterge cu tot ce e in el (ofgwrite, flash_ext4.c: rm pe /oldroot_remount/<subdosar>). Locul care
+# ramane e varful partitiei, in afara subdosarului: Components/Harddisk.py il monteaza a doua oara pe un nume stabil. Prin acea
+# montare discul e un loc bun; prin montarea radacinii (/home/root/, /movie) locul primeste motivul imagine. Radacina in
+# memoria interna a receptorului, si cu mai multe locuri de imagini pe ea, ramane motivul intern, ca inainte.
+#
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
 import os
+import re
 
 # Sistemele de fisiere care stau in RAM: nu supravietuiesc nici macar unei reporniri (ca in HdsFonturiGoogle.py).
 FS_IN_MEMORIE = ("tmpfs", "ramfs", "devtmpfs", "overlay", "squashfs", "rootfs")
 # Sub atat nu e un loc de inregistrari (tmpfs-ul de /media are 64 KB; un minut HD are ~50 MB).
 MINIM_DISC = 64 * 1024 * 1024
+# Discul de pe care porneste imaginea e un loc de inregistrari numai de la aceasta marime (cam patru ore pe un canal HD)
+MINIM_RADACINA = 16 * 1000 ** 3
+# Pe discul imaginii nu se porneste o inregistrare sub atat: el tine si setarile receptorului
+LIBER_MINIM_RADACINA = 2 * 1024 ** 3
+# bitul de numai citire din statvfs.f_flag (os.ST_RDONLY nu exista pe PC)
+ST_RDONLY = 1
+_ATA_RX = re.compile(r"/ata[0-9]+/")
+_DISC_SD_RX = re.compile(r"^sd[a-z]+$")
+_DISC_MMC_RX = re.compile(r"^mmcblk[0-9]+$")
+_SUBDOSAR_RX = re.compile(r"(?:^|\s)rootsubdir=([A-Za-z0-9_]+)(?:\s|$)")
+# dosarele imaginilor si ale datelor lor, in varful unei partitii cu pornire multipla
+_DOSAR_IMAGINE_RX = re.compile(r"^(linuxrootfs[0-9]+|userdata[0-9]*)$")
 
 
 def _(text):
@@ -57,30 +77,124 @@ def montarePentru(cale, montari=None, realpath=None):
 	return potrivit
 
 
-def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=None):
-	"""(bun, motiv): motiv e „” cand locul e un disc adevarat, altfel unul din „lipsa”, „ram”, „intern”, „mic”, „scriere”.
-	`cale` e dosarul inregistrarilor (sau al timeshift-ului). Parametrii in plus sunt pentru probele de pe PC."""
+def _citesteSys(cale):
+	try:
+		with open(cale, "r", encoding="utf-8", errors="replace") as f:
+			return f.read().strip()
+	except (OSError, IOError):
+		return ""
+
+
+def _cmdline():
+	return _citesteSys("/proc/cmdline")
+
+
+def _discExtern(disc, real, citeste):
+	"""Discul nu e memoria interna: sd* pe USB sau pe un port ATA, mmcblk numai card (device/type SD; memoria interna
+	eMMC are MMC). Orice altceva (ubi, mtd, un nume necunoscut) ramane memorie interna."""
+	if _DISC_SD_RX.match(disc):
+		return "/usb" in real or _ATA_RX.search(real + "/") is not None
+	if _DISC_MMC_RX.match(disc):
+		return citeste("/sys/block/%s/device/type" % disc) == "SD"
+	return False
+
+
+_radacina = {}
+
+
+def uitaRadacina():
+	"""Pentru probe: discul radacinii nu se schimba cat merge receptorul, deci se afla o singura data."""
+	_radacina.clear()
+
+
+def discRadacina(cmdline=None, st_dev=None, statvfs=None, realpath=None, citeste=None):
+	"""{partitie, disc, subdosar, real} cand imaginea porneste de pe un disc extern destul de mare, dintr-un subdosar al
+	partitiei, altfel None. Numele vine din numerele radacinii (stat, /sys/dev/block), nu din /proc/mounts si nici din
+	root= : acolo pot sta /dev/root sau UUID=... Numai /sys si /proc, deci merge pe firul enigma2; o singura data."""
+	proba = cmdline is not None or st_dev is not None
+	if "rez" in _radacina and not proba:
+		return _radacina["rez"]
+	rez = None
+	try:
+		rez = _afla(cmdline, st_dev, statvfs, realpath, citeste)
+	except (OSError, IOError, AttributeError, ValueError, TypeError):
+		rez = None
+	if not proba:
+		_radacina["rez"] = rez
+	return rez
+
+
+def _afla(cmdline, st_dev, statvfs, realpath, citeste):
+	citeste = citeste or _citesteSys
+	realpath = realpath or os.path.realpath
+	statvfs = statvfs or getattr(os, "statvfs", None)
+	if st_dev is None:
+		st_dev = os.stat("/").st_dev
+	mare, mic = os.major(st_dev), os.minor(st_dev)
+	if not mare:
+		# overlay, ubifs, nfs: fara dispozitiv de bloc
+		return None
+	real = realpath("/sys/dev/block/%d:%d" % (mare, mic))
+	parti = real.split("/")
+	if "block" not in parti or parti.index("block") + 1 >= len(parti):
+		return None
+	disc, partitie = parti[parti.index("block") + 1], parti[-1]
+	if not _discExtern(disc, real, citeste):
+		return None
+	cmd = _cmdline() if cmdline is None else cmdline
+	gasit = _SUBDOSAR_RX.search(cmd or "")
+	if gasit is None:
+		# imaginea ocupa toata partitia: scrierea unei imagini sterge tot de pe ea, deci acolo nu e niciun loc care ramane
+		return None
+	s = statvfs("/")
+	if s.f_blocks * s.f_frsize < MINIM_RADACINA:
+		return None
+	return {"partitie": partitie, "disc": disc, "subdosar": gasit.group(1), "real": real}
+
+
+def _inDosarImagine(cale, punct, radacina, realpath=None):
+	"""Calea, vazuta prin a doua montare a partitiei, duce in dosarul imaginii de acum sau al altei imagini de pe disc."""
+	cale = (realpath or os.path.realpath)(cale)
+	primul = cale[len(punct.rstrip("/")):].lstrip("/").split("/")[0]
+	return primul == radacina.get("subdosar") or _DOSAR_IMAGINE_RX.match(primul) is not None
+
+
+def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=None, radacina=None):
+	"""(bun, motiv): motiv e sir gol cand locul e un disc adevarat, altfel unul din lipsa, ram, intern, imagine, mic,
+	plin, numai_citire, scriere. `cale` e dosarul inregistrarilor (sau al timeshift-ului). Parametrii in plus sunt
+	pentru probele de pe PC (`radacina`: rezultatul lui discRadacina; False: radacina in memoria interna)."""
 	statvfs = statvfs or getattr(os, "statvfs", None)
 	if not cale or not os.path.isdir(cale):
 		return False, "lipsa"
 	m = montarePentru(cale, montari, realpath)
 	if m is not None and m[1] in FS_IN_MEMORIE:
 		return False, "ram"
+	pe_radacina = False
 	try:
 		if dev_radacina is None:
 			dev_radacina = os.stat("/").st_dev
-		if os.stat(cale).st_dev == dev_radacina:
-			return False, "intern"
+		pe_radacina = os.stat(cale).st_dev == dev_radacina
 	except (OSError, IOError):
 		return False, "lipsa"
+	if pe_radacina:
+		if radacina is None:
+			radacina = discRadacina()
+		if not radacina:
+			return False, "intern"
+		if m is None or m[0] == "/" or _inDosarImagine(cale, m[0], radacina, realpath):
+			# prin montarea radacinii, sau prin a doua montare in dosarul unei imagini: scrierea unei imagini il sterge
+			return False, "imagine"
 	try:
 		s = statvfs(cale)
 		if s.f_blocks * s.f_frsize < MINIM_DISC:
 			return False, "mic"
+		if pe_radacina and int(s.f_bavail) * int(s.f_frsize) < LIBER_MINIM_RADACINA:
+			return False, "plin"
 	except (OSError, IOError, AttributeError, TypeError):
 		return False, "lipsa"
 	if not os.access(cale, os.W_OK):
-		return False, "scriere"
+		# nucleul pune singur pe numai citire un FAT cu o eroare (errors=remount-ro), iar statvfs merge mai departe
+		return False, "numai_citire" if int(getattr(s, "f_flag", 0) or 0) & ST_RDONLY else "scriere"
 	return True, ""
 
 
@@ -89,7 +203,10 @@ def textMotiv(motiv, cale):
 		"lipsa": _("locul „%s” nu există: nu este montat niciun disc acolo"),
 		"ram": _("locul „%s” este în memoria RAM a receptorului, nu pe un disc"),
 		"intern": _("locul „%s” este pe memoria internă a receptorului, prea mică pentru înregistrări"),
+		"imagine": _("locul „%s” este în dosarul imaginii, care se șterge la o actualizare"),
 		"mic": _("discul din „%s” are mai puțin de 64 MB"),
+		"plin": _("pe discul din „%s” au rămas mai puțin de 2 GB liberi"),
+		"numai_citire": _("pe „%s” se poate numai citi, nu și scrie"),
 		"scriere": _("pe „%s” nu se poate scrie"),
 	}.get(motiv, _("locul „%s” nu este un disc")) % cale
 

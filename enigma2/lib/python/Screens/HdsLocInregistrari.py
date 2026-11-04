@@ -13,6 +13,8 @@
 #   stick sau un hard disk, iar unul pus cat e deschis ecranul duce mai departe singur;
 # - din meniu (scop „meniu”): locul de acum sau discul care va fi folosit la prima inregistrare, spatiul liber si
 #   discurile; nu face nimic singur; ramane deschis dupa o alegere;
+# - din meniu arata si ce e fiecare disc (felul, legatura, sistemul de fisiere, locul liber, de pe care porneste imaginea), cate
+#   un rand in caseta de detalii; un stick pus de nucleu pe numai citire are un rand de reparat: un singur OK, verificarea existenta;
 # - numai cu un mesaj (`mesaj` = (text, detaliu)): ce a ales receptorul in fundal (Components/HdsLocInregistrari
 #   .anuntaScurt), cu randul „Închide”; se inchide singur dupa MESAJ_FUNDAL_S, fara nicio citire.
 # Numai sagetile si OK. Logica si textele sunt in Components/HdsLocInregistrari.py (aceleasi in pagina web /stocare):
@@ -135,6 +137,13 @@ class HdsLocInregistrari(Screen):
 		self["detaliu"] = StaticText("")
 		self["list"] = MenuList([])
 		self["rand"] = StaticText("")
+		# piesele ferestrei din tema (numai in skinul HDSatelit)
+		try:
+			from Components.Label import Label
+			for nume in ("felBara", "ramaDr", "ramaJos", "cardDetaliu", "semnRand"):
+				self[nume] = Label("")
+		except ImportError:  # probele de pe PC, fara Label
+			pass
 		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions"], {
 			"ok": self.ok,
 			"cancel": self.inchide,
@@ -177,8 +186,8 @@ class HdsLocInregistrari(Screen):
 			# ce s-a ales in fundal: fraza, explicatia, „Închide”; fara citiri, se inchide singur
 			self._ales = True
 			text, detaliu = self._doarMesaj
-			self["text"].setText(text)
-			self["detaliu"].setText(detaliu)
+			self._puneText(text)
+			self._puneDetaliu(detaliu)
 			self._randuri = [{"text": _("Închide"), "actiune": L.ACT_INCHIDE, "punct": None, "detaliu": ""}]
 			self["list"].setList([r["text"] for r in self._randuri])
 			self._randAles()
@@ -227,8 +236,8 @@ class HdsLocInregistrari(Screen):
 		pornit, mesaj = L.foloseste(d["punct"], self._cand, self._scop, de_ce=dec["de_ce"])
 		if not pornit:
 			# alt disc se pregateste chiar acum (din pagina web): se citeste din nou dupa el
-			self["text"].setText(mesaj)
-			self["detaliu"].setText("")
+			self._puneText(mesaj)
+			self._puneDetaliu("")
 			self._ceas.start(PAS_MS * 4, True)
 			return True
 		self._incepeLucrul(d["punct"])
@@ -239,8 +248,8 @@ class HdsLocInregistrari(Screen):
 		self._punctAles = punct
 		self._asteaptaDin = time()
 		text, detaliu = L.textLucru(L.stareLucru())
-		self["text"].setText(text)
-		self["detaliu"].setText(detaliu)
+		self._puneText(text)
+		self._puneDetaliu(detaliu)
 		self._randuriLucru()
 		self._ceas.start(PAS_MS, True)
 
@@ -290,8 +299,11 @@ class HdsLocInregistrari(Screen):
 		if t is None:
 			return
 		text, detaliu = self._mesaj if self._mesaj is not None else (t["text"], t["detaliu"])
-		self["text"].setText(text)
-		self["detaliu"].setText(detaliu)
+		if t.get("fise") and self._mesaj is None:
+			# din meniu: un rand pentru fiecare disc, sub explicatiile locului (nu si sub un mesaj scurt, care isi are detaliul lui)
+			detaliu = "\n".join([detaliu] + t["fise"]) if detaliu else "\n".join(t["fise"])
+		self._puneText(text)
+		self._puneDetaliu(detaliu)
 		index = self["list"].getSelectionIndex() if self._randuri else 0
 		ales = self._randuri[index]["punct"] if 0 <= index < len(self._randuri) else None
 		if self._punctAles is not None:
@@ -328,13 +340,104 @@ class HdsLocInregistrari(Screen):
 			self["rand"].setText(self._randuri[index]["detaliu"])
 		else:
 			self["rand"].setText("")
+		self._aseaza()
+
+	def _puneText(self, text):
+		self["text"].setText(text)
+		self._aseaza()
+
+	def _puneDetaliu(self, text):
+		self["detaliu"].setText(text)
+		self._aseaza()
+
+	def _instantaSursei(self, nume):
+		for r in getattr(self, "renderer", []) or []:
+			if getattr(r, "source", None) is self[nume] and getattr(r, "instance", None) is not None:
+				return r.instance
+		return None
+
+	def _aseaza(self):
+		"""Fereastra din tema (design-web-stitch/skin-pro/anoste/loc-inregistrari): fraza, cartela cu explicatia, lista si randul
+		ales, una sub alta, cat cere textul, fara goluri, iar fereastra ramane pe acelasi centru. Skinul o cere cu widgetul
+		cardDetaliu; skinul de rezerva ramane asezat fix."""
+		# orice componenta are instanta; numai cele din skin au atribute
+		if "cardDetaliu" not in self or self["cardDetaliu"].skinAttributes is None or self.instance is None:
+			return
+		try:
+			self._aseazaDupaText(self["cardDetaliu"].instance)
+		except Exception as eroare:
+			print("[HdsLocInregistrari] asezarea ferestrei: %s" % eroare)
+
+	def _aseazaDupaText(self, card):
+		from enigma import eSize, ePoint, fontRenderClass
+		ecran = getDesktop(0).size().height()
+
+		def px(v):
+			return int(round(v * ecran / 1080.0))
+		randare = fontRenderClass.getInstance()
+
+		def inaltimeText(w):
+			rand = int(randare.getLineHeight(w.getFont()) or 0) or px(36)
+			return max(1, -(-(w.calculateSize().height() - 2) // rand)) * rand
+		text, detaliu, rand = self._instantaSursei("text"), self._instantaSursei("detaliu"), self._instantaSursei("rand")
+		lista = self["list"].instance
+		if None in (text, detaliu, rand, lista):
+			return
+		spatiu = px(16)
+		y = text.position().y()
+		h = inaltimeText(text)
+		text.resize(eSize(text.size().width(), h))
+		y += h
+		if self["detaliu"].getText():
+			y += spatiu
+			card.show()
+			detaliu.show()
+			card.move(ePoint(card.position().x(), y))
+			detaliu.move(ePoint(detaliu.position().x(), y + px(12)))
+			h = inaltimeText(detaliu)
+			detaliu.resize(eSize(detaliu.size().width(), h))
+			card.resize(eSize(card.size().width(), h + px(24)))
+			y += h + px(24)
+		else:
+			card.hide()
+			detaliu.hide()
+		randuri = len(self._randuri)
+		if randuri:
+			y += spatiu
+			lista.show()
+			lista.move(ePoint(lista.position().x(), y))
+			h = min(randuri, 5) * lista.getItemHeight()
+			lista.resize(eSize(lista.size().width(), h))
+			y += h
+		else:
+			lista.hide()
+		semn = self["semnRand"].instance
+		if self["rand"].getText():
+			y += px(12)
+			rand.show()
+			semn.show()
+			linie = int(randare.getLineHeight(rand.getFont()) or 0) or px(36)
+			rand.move(ePoint(rand.position().x(), y))
+			h = inaltimeText(rand)
+			rand.resize(eSize(rand.size().width(), h))
+			semn.move(ePoint(semn.position().x(), y + (linie - semn.size().height()) // 2))
+			y += h
+		else:
+			rand.hide()
+			semn.hide()
+		y += px(24)
+		self["felBara"].instance.resize(eSize(self["felBara"].instance.size().width(), y))
+		self["ramaDr"].instance.resize(eSize(self["ramaDr"].instance.size().width(), y))
+		self["ramaJos"].instance.move(ePoint(0, y - 1))
+		self.instance.resize(eSize(self.instance.size().width(), y))
+		self.instance.move(ePoint(self.instance.position().x(), max(0, (ecran - y) // 2)))
 
 	def _mesajNou(self, text, detaliu=""):
 		"""Un mesaj tinut peste textele citirilor pana la o tasta sau MESAJ_MS."""
 		self._mesaj = (text, detaliu)
 		self._ceasMesaj.start(MESAJ_MS, True)
-		self["text"].setText(text)
-		self["detaliu"].setText(detaliu)
+		self._puneText(text)
+		self._puneDetaliu(detaliu)
 
 	def _stergeMesaj(self):
 		if self._mesaj is not None:
@@ -382,6 +485,8 @@ class HdsLocInregistrari(Screen):
 			self.close(True)
 		elif r["actiune"] == L.ACT_FORMATEAZA:
 			self._formateaza(r.get("disc"))
+		elif r["actiune"] == L.ACT_REPARA:
+			self._repara(r.get("disc"))
 		elif r["actiune"] == L.ACT_ACTUAL:
 			if self._scop == L.SCOP_MENIU:
 				self._mesajNou(_("Înregistrările se salvează deja aici."))
@@ -419,6 +524,32 @@ class HdsLocInregistrari(Screen):
 		else:
 			self.session.openWithCallback(self._dupaFormatare, HarddiskSelection)
 
+	def _repara(self, disc):
+		"""Randul 'Repară' al unui stick pus pe numai citire: un singur OK, explicatia e deja pe ecran. Lucrarea existenta
+		(Components/HdsDiscuri.verifica, cu ecranul de asteptare HarddiskWait); un stick folosit acum nu se atinge."""
+		from Components import HdsDiscuri
+		from Screens.HarddiskSetup import HarddiskSetup, HarddiskWait
+		hdd = HdsDiscuri.discul(disc) if disc else None
+		if hdd is None:
+			self._mesajNou(_("Discul ales nu mai este conectat. Alege din nou."))
+			return
+		if HdsDiscuri.inLucru():
+			self._mesajNou(_("Se lucrează deja la un disc. Așteaptă să se termine."))
+			return
+		refuz = HdsDiscuri.motiveRefuz(hdd.device, HdsDiscuri.stareInregistrari())
+		if refuz:
+			self._mesajNou(refuz[0][1])
+			return
+		self.session.openWithCallback(self._dupaReparare, HarddiskWait, hdd, HarddiskSetup.HARDDISK_CHECK)
+
+	def _dupaReparare(self, reusit=None):
+		if reusit is None:
+			self._mesajNou(_("Se lucrează deja la un disc. Așteaptă să se termine."))
+		elif not reusit:
+			from Components import HdsDiscuri
+			self._mesajNou(HdsDiscuri.textLucru(HdsDiscuri.stareLucru()))
+		self._dupaFormatare()
+
 	def _dupaFormatare(self, *rezultat):
 		if self._lucreaza or self._ales:
 			return
@@ -437,7 +568,7 @@ class HdsLocInregistrari(Screen):
 			return
 		text, detaliu = L.textLucru(lucru)
 		if lucru["stare"] == L.LUCRU_IN_LUCRU or (lucru["stare"] == L.LUCRU_GATA and not lucru["aplicat"]):
-			self["text"].setText(text)
+			self._puneText(text)
 			self._randuriLucru()
 			self._ceas.start(PAS_MS, True)
 			return
@@ -453,8 +584,8 @@ class HdsLocInregistrari(Screen):
 				self._mesajNou(text, detaliu)
 				return
 			self._ales = True
-			self["text"].setText(text)
-			self["detaliu"].setText(detaliu)
+			self._puneText(text)
+			self._puneDetaliu(detaliu)
 			self._randuri = [{"text": _("Continuă"), "actiune": L.ACT_INCHIDE, "punct": None, "detaliu": ""}]
 			self["list"].setList([r["text"] for r in self._randuri])
 			self._randAles()

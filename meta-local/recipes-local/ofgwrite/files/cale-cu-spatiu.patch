@@ -1,0 +1,15 @@
+HDSatelit: dosarul de montare al stickului se cere cu ghilimele. Fara ele, pe un stick cu spatiu in eticheta
+(/run/media/HD SATELIT-sda1) dosarul nu se creeaza, mutarea montarii cade fara sa opreasca scrierea, radacina se
+sterge, iar tar nu mai gaseste arhiva: receptorul ramane fara sistem.
+
+--- a/ofgwrite.c
++++ b/ofgwrite.c
+@@ -1175,7 +1175,7 @@
+
+ 	// create maybe needed directory for image files mountpoint
+ 	char path[1000];
+-	snprintf(path, sizeof(path), "mkdir -p /newroot/%s", rootfs_mount_point);
++	snprintf(path, sizeof(path), "mkdir -p \"/newroot/%s\"", rootfs_mount_point);
+ 	ret += system(path);
+
+ 	if (ret != 0)

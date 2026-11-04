@@ -142,7 +142,7 @@ def stareDispozitive():
 	rez = []
 	for x, nume, tip in HD.lista(D, config):
 		s = HD.sectiune(x, config)
-		rez.append({"dispozitiv": x, "nume": nume, "tip": tip if tip in TIPURI else "",
+		rez.append({"dispozitiv": x, "nume": _t(nume), "tip": tip if tip in TIPURI else "",
 			"activ": bool(s.enabled.value), "repetare": int(s.repeat.value), "intarziere": int(s.delay.value),
 			"repetare_limite": _glisor(s.repeat), "intarziere_limite": _glisor(s.delay)})
 	return {"result": True, "dispozitive": rez}
@@ -186,7 +186,7 @@ def seteazaDispozitiv(request):
 				else:
 					intarziere = n
 	tinta = "%s|%d|%s|%s" % (x, activ, repetare, intarziere)
-	nume = D.getDeviceName(x)
+	nume = _t(D.getDeviceName(x))
 
 	def fapta():
 		HD.aplica(x, activ, repetare, intarziere, D, config, _dep("configfile"))

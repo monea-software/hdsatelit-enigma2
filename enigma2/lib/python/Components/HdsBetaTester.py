@@ -200,7 +200,7 @@ RANDURI_MENIU = {
 	"canal_testeri": N_("Versiunile noi ajung întâi la tine."),
 	"public": N_("Numele cu care apari pe forum și pe site."),
 	"nota": N_("Ce date pleacă, cine le primește, cât se păstrează."),
-	"iesire": N_("Serverul șterge tot ce a trimis acest receptor."),
+	"iesire": N_("Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."),
 	"nota_noua": NOTA_OPRITA,
 }
 RANDURI_VIZITATOR = {
@@ -858,14 +858,15 @@ def potIntreba(stare):
 
 # ------------------------------------------------------------------ curatarea textelor
 
-# despre accesul conditionat, fara numele modulelor: orice cuvant terminat in „cam” / „camd” (cu cifre dupa), cartelele,
+# despre accesul conditionat, fara numele modulelor: orice cuvant terminat in „cam” / „camd” (cu cifre dupa), si cand e lipit
+# de urmatorul cu litera mare („SoftcamSetup”, „CamInfo”: „camera” ramane), numele lipite de orice („softcammanager”), cartelele,
 # ECM / EMM / CAID, interfetele CI, descifrarea, cuvintele de trei litere „?box” si protocoalele „cs123x”
-_ACCES = re.compile(r"[a-z0-9]*cams?d?[0-9]*(?![a-z])|card|cartel|(?<![a-z])ecm|(?<![a-z])emm|caid|provid|"
+_ACCES = re.compile(r"[a-z0-9]*cams?d?[0-9]*(?!(?-i:[a-z]))|softcam|oscam|ncam|cccam|card|cartel|(?<![a-z])ecm|(?<![a-z])emm|caid|provid|"
 	r"(?<![a-z])ca[_ ]?(?:pmt|info|service|handler|descr)|(?<![a-z])ci[0-9+_ ]|ci\+|ciplus|dvbapi|descifr|decript|"
 	r"decrypt|descramb|scrambl|criptat|biss|(?<![a-z])cw(?![a-z])|(?<![a-z])[a-z]box(?![a-z])|(?<![a-z])cs[0-9]{3}x|"
 	r"(?<![a-z])sc[0-9]|abonament|subscription|reader|keyserver", re.I)
-_SECRET = re.compile(r"pass(?:word|wd)?|parol|(?<![a-z])psk|wpa|ssid|token|jeton|secret|(?<![a-z])key(?![a-z])|"
-	r"apikey|api_key|(?<![a-z])pin(?![a-z])|cookie|authoriz|bearer|credential|cheie", re.I)
+_SECRET = re.compile(r"pass(?:word|wd)?|pwd|parol|(?<![a-z])psk|wpa|ssid|token|jeton|secret|(?<![a-z])key(?![a-z])|"
+	r"apikey|api_key|(?<![a-z])pin(?![a-z])|cookie|authoriz|bearer|credential|cheie|eyJ[\w-]{8,}\.[\w-]{8,}", re.I)
 _IP4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _IP6 = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])")
 # forma prescurtata, cu „::” (fe80::1234, mesajele nucleului despre IPv6 din hds-blocaj-*.txt; 02.11.2026): la stanga
@@ -925,9 +926,12 @@ _DATA_XML = re.compile(r"<crashdate>(.*?)</crashdate>", re.S)
 
 
 def felJurnal(nume, text):
-	"""(fel, text de trimis) pentru un jurnal din /home/root/logs: nucleu (scris de bsod), ecran (ecran cazut),
-	actualizare, extensii, eroare."""
+	"""(fel, text de trimis) pentru un jurnal din /home/root/logs: nucleu (scris de bsod), plugin_extern (eroare intr-un
+	plugin extern, interfata a mers mai departe: Components/HdsPluginExtern), ecran (ecran cazut), actualizare,
+	extensii, eroare."""
 	if nume.startswith("enigma2_crash_"):
+		if text.startswith("HD Satelit: raport de eroare, plugin extern"):
+			return "plugin_extern", text
 		if text.startswith("HD Satelit: raport de eroare"):
 			return "ecran", text
 		m = _CDATA_JURNAL.search(text)

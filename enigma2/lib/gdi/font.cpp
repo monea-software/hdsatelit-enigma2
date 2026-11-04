@@ -685,10 +685,10 @@ nprint:	isprintable=0;
 	}
 	bboxValid=false;
 	calc_bbox();
-	if (dir & FRIBIDI_MASK_RTL)
+	doTopBottomReordering = (dir & FRIBIDI_MASK_RTL) != 0;
+	if (doTopBottomReordering)
 	{
 		realign(dirRight);
-		doTopBottomReordering=true;
 	}
 
 	if (charCount)
@@ -938,7 +938,7 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 void eTextPara::realign(int dir)	// der code hier ist ein wenig merkwuerdig.
 {
 	glyphString::iterator begin(glyphs.begin()), c(glyphs.begin()), end(glyphs.begin()), last;
-	if (dir==dirLeft)
+	if (dir==dirLeft && !isRightToLeft())
 		return;
 	while (c != glyphs.end())
 	{
@@ -969,10 +969,11 @@ void eTextPara::realign(int dir)	// der code hier ist ein wenig merkwuerdig.
 
 		switch (dir)
 		{
+		case dirLeft:
 		case dirRight:
 		case dirCenter:
 		{
-			int offset=area.width()-linelength;
+			int offset=dir==dirLeft ? 0 : area.width()-linelength;
 			if (dir==dirCenter)
 				offset/=2;
 			offset+=area.left();

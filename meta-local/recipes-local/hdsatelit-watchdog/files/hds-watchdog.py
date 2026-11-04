@@ -164,6 +164,7 @@ import fcntl
 import http.client
 import os
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -727,6 +728,10 @@ def check_health(prag=None, pids=None):
                     lasate += 1
                     continue
                 d_state_now[(pid, tid)] = (wchan, read_switches(pid, tid) if tid != pid else None)
+        # r12, raportul 481062: un Oops opreste numai firul care l-a facut. Firul principal ramane Z, celelalte fire raman vii
+        # si nu sunt in D, deci procesul nu se termina si init nu porneste alta interfata: ecran negru pentru totdeauna
+        if not principal_viu and not any(cheie[0] == pid for cheie in d_state_now) and len(list_threads(pid)) > 1:
+            d_state_now[(pid, pid)] = ("fir-principal-mort", None)
 
     new_tracking = {}
     hang_detail = None
@@ -1476,13 +1481,23 @@ def culegere_de_noapte():
     """True cat programul de noapte al culegerii canalelor (hds-culegere-noapte.py, separat de enigma2, fara semn in
     bataie) ruleaza: pid-ul din CULEGERE_PID_PATH e al unui proces viu. Un fisier care nu se poate citi conteaza ca
     „ruleaza”."""
+    descriptor = None
     try:
-        with open(CULEGERE_PID_PATH) as f:
-            text = f.read(64).strip()
+        descriptor = os.open(CULEGERE_PID_PATH, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
+        stare = os.fstat(descriptor)
+        if not stat.S_ISREG(stare.st_mode) or stare.st_uid != 0 or stare.st_size > 64:
+            return True
+        text = os.read(descriptor, 64).decode("ascii").strip()
     except FileNotFoundError:
         return False
-    except OSError:
+    except (OSError, UnicodeError):
         return True
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     try:
         pid = int(text)
     except ValueError:

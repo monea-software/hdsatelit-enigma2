@@ -38,8 +38,10 @@ class eDVBTeletextParser: public iObject, public ePESParser, public sigc::tracka
 {
 	DECLARE_REF(eDVBTeletextParser);
 public:
+	/* demux = 0: a player that gets the PES packets itself gives them to feed() */
 	eDVBTeletextParser(iDVBDemux *demux);
 	virtual ~eDVBTeletextParser();
+	void feed(__u8 *pkt, int len) { processPESPacket(pkt, len); }
 	int start(int pid);
 	void setPageAndMagazine(int page, int magazine);
 	void setMagazine(int magazine);

@@ -67,6 +67,7 @@ public:
 	static RESULT register_service( const eServiceReferenceDVB &ref, int demux_nums[2], eDVBCAService *&caservice );
 	static RESULT unregister_service( const eServiceReferenceDVB &ref, int demux_nums[2], eTable<ProgramMapSection> *ptr );
 	void buildCAPMT(eTable<ProgramMapSection> *ptr);
+	sigc::signal<void(long long)> caPmtTrimis;
 };
 
 #endif
@@ -140,6 +141,11 @@ class eDVBServicePMTHandler: public sigc::trackable
 	bool m_ca_din_memorie_trimis;
 	void trimiteCaDinMemorie();
 	void tinePmtMinte(eTable<ProgramMapSection> *ptr);
+	sigc::connection m_ca_timpi_connection;
+	void urmaresteCaPmt();
+	void caPmtTrimis(long long t);
+	bool m_info_live_amana;
+	void notificaInfoLive();
 
 		/* inregistrarea "decodeaza mai tarziu" (setDecodareMaiTarziu, din eDVBServiceRecord): serviciul nu se inscrie la
 		   modulul de acces conditionat si nici la modulele CI, deci nimeni nu trimite chei pentru PID-urile lui si
@@ -176,6 +182,11 @@ public:
 	};
 #ifndef SWIG
 	sigc::signal<void(int)> serviceEvent;
+	/* Numai GUI live; serviceEvent isi pastreaza ordinea pentru ceilalti. */
+	sigc::signal<void()> infoLiveReady;
+	void amanaInfoLive() { m_info_live_amana = true; }
+	enum { zapPmtPrimit, zapCaPmtTrimis };
+	sigc::signal<void(int, long long)> etapaZap;
 
 	struct videoStream
 	{

@@ -17,6 +17,12 @@ class Screen(dict, GUISkin):
 
 	global_screen = None
 
+	# steagul ecranelor care primesc raspunsuri de pe un fir din fundal: ecranul pune self.inchis (sau self._inchis)
+	# = False in __init__; doClose goleste __dict__, deci un raspuns venit dupa inchidere citeste valoarea clasei (True)
+	# si iese, in loc de AttributeError (care opreste enigma2 din ceasul firului)
+	inchis = True
+	_inchis = True
+
 	def __init__(self, session, parent = None):
 		dict.__init__(self)
 		self.skinName = self.__class__.__name__

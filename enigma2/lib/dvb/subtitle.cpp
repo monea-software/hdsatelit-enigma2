@@ -302,7 +302,7 @@ int eDVBSubtitleParser::subtitle_process_segment(__u8 *segment)
 	segment_length |= *segment++;
 	if (segment_type == 0xFF)
 		return segment_length + 6;
-	if (page_id != m_composition_page_id && page_id != m_ancillary_page_id)
+	if (m_composition_page_id >= 0 && page_id != m_composition_page_id && page_id != m_ancillary_page_id)
 		return segment_length + 6;
 //	eDebug("have %d bytes of segment data", segment_length);
 
@@ -1231,6 +1231,10 @@ eDVBSubtitleParser::eDVBSubtitleParser(iDVBDemux *demux)
 	:m_pages(0), m_display_size(720,576)
 {
 	setStreamID(0xBD);
+
+	m_composition_page_id = m_ancillary_page_id = -1;
+	if (!demux)
+		return;
 
 	if (demux->createPESReader(eApp, m_pes_reader))
 		eDebug("failed to create dvb subtitle PES reader!");

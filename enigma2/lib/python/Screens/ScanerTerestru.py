@@ -340,7 +340,12 @@ class ScanerTerestru(EcranScaner):
         # PLP gol inseamna PLP-ul implicit al multiplexului; in lista se scrie asa, nu „-”
         if cheie == 'plp' and not str(self._config.get('plp', '')).strip():
             return _('Implicit')
-        return EcranScaner._eticheta_valoare(self, cheie, tip, optiuni)
+        text = EcranScaner._eticheta_valoare(self, cheie, tip, optiuni)
+        if cheie == 'canal' and self._config.get(cheie):
+            # in rand numai canalul si frecventa (judetele MUX1 nu incap si se taiau); ele raman in lista de alegere si
+            # in descrierea de jos
+            text = text.split(' (')[0]
+        return text
 
     def alegeri(self, camp):
         return alegeri(camp)

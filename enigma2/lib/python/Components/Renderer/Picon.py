@@ -97,16 +97,34 @@ def dosare_sigle(dosar="picon"):
 	return gasite
 
 
+def _dosare_locuri():
+	"""Dosarele de sigle ale locurilor adaugate de extensii (Components/HdsLocuriLista.py); acolo poate fi si JPEG."""
+	try:
+		from Components.HdsLocuriLista import dosareSigle
+		return dosareSigle()
+	except Exception:
+		return []
+
+
 def cauta_sigla(sref, dosar="picon"):
 	"""Calea siglei unui serviciu, sau "" cand nu e niciuna. Numai verificari de existenta a fisierelor."""
 	cai = dosare_sigle(dosar)
-	if not cai:
-		return ""
+	locuri = _dosare_locuri() if dosar == "picon" else []
 	for nume in nume_sigle(sref):
 		for cale in cai:
 			png = cale + nume + ".png"
 			if fileExists(png):
 				return png
+		for cale in locuri:
+			for extensie in (".png", ".jpg"):
+				if fileExists(cale + nume + extensie):
+					return cale + nume + extensie
+	if dosar == "picon":
+		try:
+			from Components import HdsIptvSigle
+			return HdsIptvSigle.cauta(sref)
+		except Exception:
+			pass
 	return ""
 
 
@@ -122,6 +140,8 @@ class Picon(Renderer):
 		# vecini: textul atributului de skin (Components/HdsPiconBare); hdsAre: se vede acum o sigla adevarata
 		self.vecini = ""
 		self.hdsAre = False
+		self.hdsSigleGeneratie = -1
+		self.hdsSigleCeas = None
 		try:
 			from Components.HdsPiconBare import inregistreaza
 			inregistreaza(self)
@@ -157,6 +177,16 @@ class Picon(Renderer):
 			if what[0] != self.CHANGED_CLEAR:
 				sref = self.source.text or ""
 				if sigle_pornite():
+					try:
+						from Components import HdsIptvSigle
+						HdsIptvSigle.cereReferinte([sref])
+						if self.hdsSigleCeas is None:
+							from enigma import eTimer
+							self.hdsSigleCeas = eTimer()
+							self.hdsSigleCeas.callback.append(self.hdsSigleTic)
+							self.hdsSigleCeas.start(1500, False)
+					except Exception:
+						pass
 					pngname = self.nameCache.get(sref, "")
 					# o sigla stearsa intre timp (dosarul scos, stickul luat) nu mai tine locul pe bare
 					if pngname != "" and not fileExists(pngname):
@@ -172,12 +202,49 @@ class Picon(Renderer):
 			if pngname == "": # no picon for service found
 				pngname = self.implicita(sref)
 			if self.pngname != pngname:
-				self.instance.setPixmapFromFile(pngname)
+				if pngname.lower().endswith(".jpg"):
+					from enigma import loadJPG
+					pixmap = loadJPG(pngname)
+					if pixmap:
+						self.instance.setPixmap(pixmap)
+					else:
+						are = False
+						pngname = self.implicita(sref)
+						self.instance.setPixmapFromFile(pngname)
+				else:
+					self.instance.setPixmapFromFile(pngname)
 				self.pngname = pngname
 			if are != self.hdsAre:
 				self.hdsAre = are
 				if self.vecini:
 					_anunta(self)
+
+	def hdsSigleTic(self):
+		try:
+			from Components import HdsIptvSigle
+			generatie = HdsIptvSigle.generatie()
+			if generatie != self.hdsSigleGeneratie:
+				self.hdsSigleGeneratie = generatie
+				self.nameCache.clear()
+				self.pngname = ""
+				self.changed((self.CHANGED_DEFAULT,))
+		except Exception:
+			pass
+
+	def onShow(self):
+		Renderer.onShow(self)
+		if self.hdsSigleCeas is not None:
+			self.hdsSigleCeas.start(1500, False)
+		self.hdsSigleTic()
+
+	def onHide(self):
+		Renderer.onHide(self)
+		if self.hdsSigleCeas is not None:
+			self.hdsSigleCeas.stop()
+
+	def preWidgetRemove(self, instance):
+		if self.hdsSigleCeas is not None:
+			self.hdsSigleCeas.stop()
 
 	def implicita(self, sref):
 		"""Imaginea pentru serviciul fara sigla: dupa tip (defaultPerType), altfel picon_default."""

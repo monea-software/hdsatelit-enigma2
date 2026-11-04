@@ -22,6 +22,14 @@ import re
 NUME_DISPOZITIV = re.compile(r"^event[0-9]{1,3}$")
 
 
+def N_(text):
+	return text
+
+
+# numele telecomenzilor native din nucleu, pentru traduceri: ecranul si pagina web le trec prin _
+NUME_DIN_NUCLEU = (N_("dreambox advanced remote control (native)"), N_("dreambox remote control (native)"))
+
+
 def _d(D=None):
 	if D is not None:
 		return D

@@ -1,4 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import codecs
+
 from .Screen import Screen
 from Screens.DefaultWizard import DefaultWizard
 from .ServiceScan import ServiceScan
@@ -148,11 +150,31 @@ class CableTransponderSearchSupport:
 
 	def cableTransponderSearchClosed(self, retval):
 		print("cableTransponderSearch finished", retval)
+		# the last line, when the tool ends it without a newline
+		rest = getattr(self, "_cableRest", "")
+		if getattr(self, "_cableDecoder", None) is not None:
+			rest += self._cableDecoder.decode(b"", True)
+		self._cableRest = ""
+		if rest.strip():
+			self.getCableTransponderLine(rest)
 		self.cable_search_session.close(True)
 
-	def getCableTransponderData(self, str):
+	def getCableTransponderData(self, data):
+		# HDSatelit: the output of the scan tool comes as bytes, in pieces that need not be whole lines (on bytes the
+		# test data[0] == 'OK' below was never true): decoded as it comes, one whole line at a time
+		if isinstance(data, (bytes, bytearray)):
+			if getattr(self, "_cableDecoder", None) is None:
+				self._cableDecoder = codecs.getincrementaldecoder("utf-8")("replace")
+			data = self._cableDecoder.decode(data)
+		lines = (getattr(self, "_cableRest", "") + data).replace("\r", "\n").split("\n")
+		self._cableRest = lines.pop()
+		for line in lines:
+			self.getCableTransponderLine(line)
+
+	def getCableTransponderLine(self, str):
 		data = str.split()
-		if len(data):
+		# a line with one word only (no frequency) is not a transponder and not progress
+		if len(data) >= 2:
 			if data[0] == 'OK':
 				print(str)
 				parm = eDVBFrontendParametersCable()
@@ -196,6 +218,8 @@ class CableTransponderSearchSupport:
 					self.cableTransponderSearchFinished()
 					return
 		self.__tlist = [ ]
+		self._cableDecoder = codecs.getincrementaldecoder("utf-8")("replace")
+		self._cableRest = ""
 		self.cable_search_container = eConsoleAppContainer()
 		self.cable_search_container.appClosed.append(self.cableTransponderSearchClosed)
 		self.cable_search_container.dataAvail.append(self.getCableTransponderData)

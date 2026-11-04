@@ -152,6 +152,7 @@ public:
 	};
 
 	void realign(int dir);
+	bool isRightToLeft() const { return doTopBottomReordering; }
 
 	const eRect & getBoundBox()
 	{

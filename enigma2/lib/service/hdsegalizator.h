@@ -29,8 +29,15 @@
  * (demultiplexorul sau fisierul), firul GStreamer (decodarea si prelucrarea), „hds-egal-ies” (placa de sunet). Fiecare
  * isi masoara timpul de procesor (CLOCK_THREAD_CPUTIME_ID); stare() da suma, in procente dintr-un nucleu.
  *
+ * Posturile de radio de pe internet (lib/service/servicemp3.cpp, referinte radio pe flux): decodarea o face playbin-ul
+ * serviciului, iar sunetul lui ajunge aici prin sinkFlux() (appsink cu F32, 48 kHz, stereo). Sesiunea nu are alt pipeline si
+ * nici cititor: numai Lant si placa. Ceasul il da placa: firul GStreamer al serviciului asteapta cand tamponul e plin, deci
+ * reteaua e franata de TCP si nu e nevoie de potrivirea ceasurilor. preiaFlux() are acelasi rost ca preiaSunetul(); schimbarea
+ * setarii „pornit” sau o cadere cheama reaplicarea serviciului, care schimba sink-ul (READY, sink nou, PLAYING). Un flux fara
+ * decodor in procesor (AAC, pe receptor) se tine minte pana la repornire, ca data viitoare sa porneasca direct pe placa.
+ *
  * Proba fara receptor (emulator, PC): pornesteDinFisier() trece un fisier TS sau un flux audio pe acelasi drum, cu
- * iesirea intr-un fisier WAV.
+ * iesirea intr-un fisier WAV. setIesireFlux() trimite la fel intr-un WAV sesiunile de flux.
  */
 
 #ifndef __lib_service_hdsegalizator_h
@@ -44,6 +51,7 @@
 
 #ifndef SWIG
 class eHdsEgalizatorMotor;
+typedef struct _GstElement GstElement;
 #endif
 
 class eHdsEgalizator
@@ -98,6 +106,11 @@ public:
 	   -> 0 pornit, altfel motivul se vede in stare() */
 	int pornesteDinFisier(const char *cale, int pid, const char *iesire);
 	void opresteFisier();
+	/* proba: sesiunile de flux scriu in fisierul WAV `cale`, cat de repede vin datele (gol: placa de sunet) */
+	void setIesireFlux(const char *cale);
+	/* 1: cat merge o sesiune de flux, audio0 sta deschis. Implicit 0: la radio pe DVB, cu sunetul prin procesor, nici decodorul placii nu
+	   deschide audio0 (PID -1, lib/dvb/decoder.cpp), iar ALSA merge asa. Rezerva, daca vreun receptor tace fara el. */
+	void setFluxAudio0(int da);
 
 	/* starea s-a schimbat (pe firul enigma2): 1 merge, 2 oprit, 3 eroare (sunetul s-a intors pe placa), 4 fara date,
 	   5 proba din fisier gata */
@@ -108,6 +121,17 @@ public:
 	   demultiplexorului de date (-1 la inregistrari, timeshift, fisiere), radio = serviciul nu are imagine.
 	   -> true cand sunetul trece prin procesor (decodorul placii nu-l mai porneste). */
 	bool preiaSunetul(const void *proprietar, int demux, int pid, int fel, bool radio, const sigc::slot<void()> &reaplica);
+	/* din servicemp3.cpp (firul enigma2), la pornirea unui post de radio pe flux si la fiecare reaplicare.
+	   -> true cand sunetul trece prin procesor: atunci serviciul pune sinkFlux() in loc de sink-ul placii. */
+	bool preiaFlux(const void *proprietar, const std::string &adresa, const sigc::slot<void()> &reaplica);
+	/* elementul pentru „audio-sink” al lui playbin; NULL fara GStreamer. Mostrele ajung la sesiunea de flux, oricare ar fi ea. */
+	GstElement *sinkFlux();
+	/* playbin n-are decodor pentru sunetul acestei adrese; se tine minte. aac: textul despre brevete, altfel „nu s-a recunoscut” */
+	void fluxFaraDecodor(const std::string &adresa, bool aac);
+	/* decodorul a cazut pe aceasta adresa, poate numai o bucata stricata: sunetul trece pe placa pana cand postul porneste din nou */
+	void fluxEroareDecodare(const std::string &adresa);
+	/* ce a aflat playbin despre sunet: numele din etichete, debitul in kbit/s (0: nu se stie) */
+	void fluxInfo(const std::string &codec, int kbit);
 	/* serviciul principal se opreste */
 	void serviciuOprit(const void *proprietar);
 	/* serviciul principal e pus pe pauza sau porneste din nou (pause() / unpause()): sunetul din procesor se opreste

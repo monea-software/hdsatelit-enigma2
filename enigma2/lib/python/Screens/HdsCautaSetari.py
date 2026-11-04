@@ -25,6 +25,7 @@ from Components.ActionMap import ActionMap, HelpableActionMap
 from Components.Button import Button
 from Components.Label import Label
 from Components.HdsCampText import CampText
+from Components.HdsTextUnicode import stergeUltimaLitera
 from Components.MenuList import MenuList
 from Components.MultiContent import MultiContentEntryText
 from Components import HdsCautaSetari as C
@@ -380,7 +381,7 @@ class HdsCautaSetari(Screen, HelpableScreen):
 			self.sms.nextKey()
 			self.inAsteptare = ''
 		elif self.text:
-			self.text = self.text[:-1]
+			self.text = stergeUltimaLitera(self.text)
 		else:
 			return 1
 		self._cautaAmanat()

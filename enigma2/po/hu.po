@@ -1358,7 +1358,7 @@ msgid "DVD File Browser"
 msgstr "DVD Fájlkezelő"
 
 msgid "Dale"
-msgstr "Dale"
+msgstr "Csempék"
 
 #
 msgid "Danish"
@@ -6032,19 +6032,19 @@ msgstr "marker hozzáadása"
 
 #
 msgid "add recording (enter recording duration)"
-msgstr "felvétel hozzáadása (adja meg a felvétel hosszát)"
+msgstr "Felvétel hozzáadása (adja meg a felvétel hosszát)"
 
 #
 msgid "add recording (enter recording endtime)"
-msgstr "felvétel hozzáadása (adja meg a felvétel vége időpontját)"
+msgstr "Felvétel hozzáadása (adja meg a felvétel vége időpontját)"
 
 #
 msgid "add recording (indefinitely)"
-msgstr "felvétel hozzáadása (korlátlan)"
+msgstr "Felvétel hozzáadása (korlátlan)"
 
 #
 msgid "add recording (stop after current event)"
-msgstr "felvétel hozzáadása (esemény után leáll)"
+msgstr "Felvétel hozzáadása (esemény után leáll)"
 
 #
 msgid "add service to bouquet"
@@ -6113,11 +6113,11 @@ msgstr "kék"
 
 #
 msgid "change recording (duration)"
-msgstr "felvétel módosítása (hossz)"
+msgstr "Felvétel módosítása (hossz)"
 
 #
 msgid "change recording (endtime)"
-msgstr "felvétel módosítása (vége időpont)"
+msgstr "Felvétel módosítása (vége időpont)"
 
 msgid "checking the password"
 msgstr "jelszó ellenőrzése"
@@ -6213,11 +6213,11 @@ msgstr "ne változtassa meg"
 
 #
 msgid "do nothing"
-msgstr "ne csináljon semmit"
+msgstr "Ne csináljon semmit"
 
 #
 msgid "don't record"
-msgstr "ne vegye fel"
+msgstr "Ne vegye fel"
 
 #
 msgid "done!"
@@ -6854,7 +6854,7 @@ msgstr "bejegyzés leállítása"
 
 #
 msgid "stop recording"
-msgstr "felvétel megállítása"
+msgstr "Felvétel megállítása"
 
 #
 msgid "stop timeshift"
@@ -16998,7 +16998,6 @@ msgstr "A vevő magától, a háttérben ellenőrzi, hogy van-e internet: egy ki
 msgid "Canalul nu trimite descrierea pistelor (imagine și sunet), deci browserul nu știe ce să redea. Încearcă din nou."
 msgstr "A csatorna nem küldi el a sávok leírását (kép és hang), ezért a böngésző nem tudja, mit játsszon le. Próbáld újra."
 
-
 #: data/menu.xml
 msgid "Trecerea singură pe altă rețea"
 msgstr "Önálló átváltás másik hálózatra"
@@ -17328,11 +17327,11 @@ msgid "Pornită, dar nelegată la nicio rețea Wi-Fi"
 msgstr "Bekapcsolva, de nem csatlakozik egyik Wi-Fi-hálózathoz sem"
 
 #: lib/python/Components/HdsRetea.py
-msgid "Activă, cablul e bagat"
+msgid "Activă, cablul e băgat"
 msgstr "Aktív, a kábel csatlakoztatva"
 
 #: lib/python/Components/HdsRetea.py
-msgid "Cablul e bagat, fără adresă IP"
+msgid "Cablul e băgat, fără adresă IP"
 msgstr "A kábel csatlakoztatva, IP-cím nélkül"
 
 #: lib/python/Components/HdsRetea.py
@@ -33789,7 +33788,6 @@ msgstr "A tévé nem váltott át erre a csatornára."
 msgid "Receptorul e în standby."
 msgstr "A vevő készenlétben van."
 
-
 #: lib/python/Plugins/Extensions/HdsWebControl/vezi_live_web.py
 msgid "Vezi live"
 msgstr "Élő nézés"
@@ -33990,7 +33988,6 @@ msgstr "Mongol"
 msgid "Latin"
 msgstr "Latin"
 
-
 #: lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
 msgid "Actualizează rapid"
 msgstr "Gyors frissítés"
@@ -34065,7 +34062,6 @@ msgstr "A frissítés települt. A tévén választ vár az újraindításról s
 #: lib/python/Components/HdsActualizari.py
 msgid "Repornirea a fost refuzată pe televizor. Actualizarea se folosește după ce repornești interfața."
 msgstr "Az újraindítást elutasították a tévén. A frissítés a felület újraindítása után lép életbe."
-
 
 #: lib/python/Screens/HdsTraducereSubtitrari.py
 msgid "Tradu teletextul"
@@ -34191,7 +34187,6 @@ msgstr "Az oldal eredetiben (AUDIO)"
 #: lib/python/Screens/HdsTeletext.py
 msgid "Pagina tradusă (AUDIO)"
 msgstr "Az oldal lefordítva (AUDIO)"
-
 
 #~ msgid ""
 #~ "\n"
@@ -54569,16 +54564,13 @@ msgstr "egy napló utolsó sorai"
 msgid "un mesaj scris pe ecranul televizorului"
 msgstr "egy üzenet a tévé képernyőjén"
 
-
 # Asistenta de la distanta
 msgid "Nivel: Citire și probe (putem rula numai operații dintr-o listă fixă, în principal citiri; o captură arată numai meniurile, nu imaginea canalului). Poți opri oricând."
 msgstr "Szint: Olvasás és tesztek (csak egy rögzített lista műveleteit futtathatjuk, főleg olvasásokat; a képernyőkép csak a menüket mutatja, a csatorna képét nem). Bármikor leállíthatod."
 
-
 # Asistenta de la distanta
 msgid "Pornirea se cere numai dintr-un browser conectat cu codul de pe televizor."
 msgstr "Az indítást csak a tévén látható kóddal csatlakoztatott böngészőből lehet kérni."
-
 
 # Asistenta de la distanta
 msgid "(gol)"
@@ -56882,7 +56874,6 @@ msgstr "beállítva (%s, OK módosítás)"
 msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
 msgstr "Hogy tudjuk, melyik vevő kér segítséget, a vevő a lapból számolt ujjlenyomatot is elküldi, ugyanazt, mint a bétatesztelők programjában (ebből sem a MAC-cím, sem a sorozatszám nem deríthető ki). Ha bétatesztelő vagy, a vevő a jelentkezéskor megadott nevedet is elküldi, vagy ha nem adtál meg nevet, a nyilvános nevedet."
 
-
 # Asistenta de la distanta
 msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
 msgstr "egy rendszerfájl vagy rendszermappa (/proc, /sys, /etc, /var/log, naplók, /tmp), hozzáférési modulok, jelszavak, kulcsok és személyes adatok nélkül"
@@ -56904,7 +56895,6 @@ msgstr "Csak a forrás (műhold, kábel, földi)"
 
 msgid "Fără semne"
 msgstr "Nincsenek jelek"
-
 
 # Asistenta de la distanta
 msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
@@ -56943,31 +56933,329 @@ msgstr "Írd be az üzenetet a tévére"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Köszönetet mondunk minden bétatesztelőnek, aki részt vett a HD Satelit image elkészítésében: %s."
 
-#: lib/python (0.6.27, numele stickului)
+msgid "Derularea listelor"
+msgstr "Listák görgetése"
+
+msgid "Rând cu rând"
+msgstr "Soronként"
+
+msgid "Pagină cu pagină"
+msgstr "Oldalanként"
+
+msgid "Cum se mișcă meniurile, listele de alegere și ecranele de setări când cursorul ajunge la marginea ecranului. Rând cu rând: lista urcă un rând și vezi mereu încă două rânduri sub cursor, deci observi că mai sunt rânduri. Pagină cu pagină: lista sare pe pagina următoare, ca înainte. Lista de canale și ghidul rămân pe pagini."
+msgstr "Hogyan mozognak a menük, a választólisták és a beállítási képernyők, amikor a kurzor a képernyő széléhez ér. Soronként: a lista egy sorral feljebb lép, és a kurzor alatt mindig látsz még két sort, így észreveszed, hogy vannak további sorok. Oldalanként: a lista a következő oldalra ugrik, mint eddig. A csatornalista és a műsorújság oldalanként marad."
+
+msgid "Pluginul extern %s a avut o eroare."
+msgstr "Hiba történt a(z) %s külső bővítményben."
+
+msgid "Receptorul merge mai departe."
+msgstr "A vevő tovább működik."
+
+msgid "Echipa HD Satelit a primit datele erorii și va încerca să o rezolve."
+msgstr "A HD Satelit csapata megkapta a hiba adatait, és megpróbálja kijavítani."
+
+msgid "Datele erorii ajung la echipa HD Satelit imediat ce receptorul are internet."
+msgstr "A hiba adatai eljutnak a HD Satelit csapatához, amint a vevőnek lesz internetkapcsolata."
+
+msgid "Pluginul a fost scris pentru alt fel de imagine și nu înțelege încă un răspuns al receptorului."
+msgstr "A bővítményt másfajta image-hez írták, és még nem érti a vevő egyik válaszát."
+
+msgid "Pluginul e făcut pentru imaginile vechi (Python 2) și nu poate rula așa pe această imagine."
+msgstr "A bővítmény régi image-ekhez (Python 2) készült, és így nem futhat ezen az image-en."
+
+msgid "Pluginului îi lipsește o componentă de care are nevoie."
+msgstr "A bővítményből hiányzik egy szükséges összetevő."
+
+msgid "Pluginul cere un ecran pe care tema de acum nu îl are."
+msgstr "A bővítmény olyan képernyőt kér, amely a jelenlegi témában nincs meg."
+
+msgid "Pluginul nu a putut lua date de pe internet."
+msgstr "A bővítmény nem tudott adatokat letölteni az internetről."
+
+msgid "Pluginul nu a găsit un fișier sau nu a putut scrie pe disc."
+msgstr "A bővítmény nem talált egy fájlt, vagy nem tudott írni a lemezre."
+
+msgid "Pluginul a avut o eroare internă."
+msgstr "Belső hiba történt a bővítményben."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Pluginurile din copia setărilor, puse din nou: %s."
+msgstr "A beállítások mentéséből újratelepített bővítmények: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Nu există încă pentru imaginea aceasta: %s."
+msgstr "Ehhez a képfájlhoz még nem érhető el: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Nu s-au putut instala acum: %s."
+msgstr "Most nem sikerült telepíteni: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Interfața repornește o dată acum, ca pluginurile noi să se încarce."
+msgstr "A felület most egyszer újraindul, hogy az új bővítmények betöltődjenek."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Pluginurile și modulele de acces se pun din nou din internet, în câteva minute."
+msgstr "A bővítmények és a hozzáférési modulok néhány percen belül újra települnek az internetről."
+
+#, python-format
+msgid "locul „%s” este în dosarul imaginii, care se șterge la o actualizare"
+msgstr "a(z) „%s” hely az image mappájában van, amelyet a frissítés töröl"
+
+#, python-format
+msgid "pe discul din „%s” au rămas mai puțin de 2 GB liberi"
+msgstr "a(z) „%s” lemezén 2 GB-nál kevesebb szabad hely maradt"
+
+#, python-format
+msgid "pe „%s” se poate numai citi, nu și scrie"
+msgstr "„%s” csak olvasható, nem írható"
+
+msgid "Discul de pornire"
+msgstr "Indítólemez"
+
+#, python-format
+msgid "liber %s din %s"
+msgstr "szabad %s / %s"
+
+msgid "de aici pornește imaginea"
+msgstr "innen indul az image"
+
+msgid "este în dosarul imaginii, care se șterge la o actualizare"
+msgstr "az image mappájában van, amelyet a frissítés töröl"
+
+msgid "De pe el pornește imaginea. Înregistrările stau în afara imaginii, deci rămân și după o actualizare."
+msgstr "Az image erről indul. A felvételek az image-en kívül vannak, így frissítés után is megmaradnak."
+
+#, python-format
+msgid "Repară „%s”"
+msgstr "„%s” javítása"
+
+msgid "Verifică stick-ul, îi repară erorile și se poate scrie din nou pe el. Nu se formatează nimic."
+msgstr "Ellenőrzi az adathordozót, kijavítja a hibáit, és újra írható lesz. Semmit nem formáz."
+
+#, python-format
+msgid "„%s”: %s."
+msgstr "„%s”: %s."
+
+msgid "Am oprit înregistrarea: pe discul de pornire a rămas mai puțin de 1 GB liber. Fă loc ștergând înregistrările de care nu mai ai nevoie."
+msgstr "Leállítottam a felvételt: az indítólemezen 1 GB-nál kevesebb szabad hely maradt. Törölj olyan felvételeket, amelyekre már nincs szükséged."
+
+msgid "Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările rămân și după o actualizare."
+msgstr "Ha az image nagy lemezről indul, itt „Indítólemez” néven jelenik meg, és a vevő magától ezt választja, ha nem választottál másik lemezt. A movie mappa az image-en kívül van, így a felvételek frissítés után is megmaradnak."
+
+#: data/setup.xml
+msgid "Forma ecranului televizorului: 16:9 la televizoarele late de azi, 4:3 la cele vechi. Ce se face cu emisiunile 4:3 se alege în Setări video avansate, la „Imaginea 4:3”."
+msgstr "A tévé képernyőjének alakja: 16:9 a mai széles tévéknél, 4:3 a régieknél. Hogy mi legyen a 4:3-as műsorokkal, a speciális videobeállításokban, a „4:3-as kép” sorban választod ki."
+
+#: data/setup.xml
+msgid "Câte setări se văd în meniuri: Simplu arată numai ce se folosește des, Intermediar și Expert arată tot mai multe."
+msgstr "Hány beállítást mutatnak a menük: az Egyszerű csak a gyakran használtakat, a Közepes és a Szakértő egyre többet."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Pornire automată"
+msgstr "Automatikus indítás"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: pornit singur: a găsit semnal"
+msgstr "%s tuner: magától bekapcsolt: van jel"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: verificare automată în așteptare"
+msgstr "%s tuner: automatikus ellenőrzés várakozik"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: configurarea automată n-a reușit."
+msgstr "%s tuner: az automatikus beállítás nem sikerült."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "OK: încearcă din nou"
+msgstr "OK: újra"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: se probează singur când merge un canal pe tunerul %s."
+msgstr "%s tuner: magától próbálkozik, amikor a(z) %s tuneren csatorna megy."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "OK: încearcă acum"
+msgstr "OK: próba most"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: se probează..."
+msgstr "%s tuner: próba folyik..."
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Pornește un canal de satelit pe tunerul %s, apoi încearcă din nou."
+msgstr "Indíts egy műholdas csatornát a(z) %s tuneren, majd próbáld újra."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Se înregistrează sau urmează o înregistrare. Proba se face după aceea."
+msgstr "Felvétel folyik vagy hamarosan kezdődik. A próba utána lesz."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Un canal se trimite acum în rețea. Proba se face după aceea."
+msgstr "Egy csatorna a hálózatra megy. A próba utána lesz."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Închide imaginea în imagine, apoi încearcă din nou."
+msgstr "Zárd be a kép a képben ablakot, majd próbáld újra."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Ecranul tunerului e deschis."
+msgstr "A tuner képernyője nyitva van."
+
+#: lib/python (lotul de seara 0.7.0)
 msgid "nu se scrie: numele stickului are spații"
 msgstr "nem íródik: a pendrive nevében szóköz van"
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "nu se scrie: numele stickului are semne neacceptate"
 msgstr "nem íródik: a pendrive nevében nem elfogadott jel van"
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 #, python-format
 msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
 msgstr "Az írás leállt: a pendrive nevében szóköz van (%s). Semmi sem íródott."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 #, python-format
 msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
 msgstr "Az írás leállt: a pendrive nevében nem elfogadott jel van (%s). Semmi sem íródott."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
 msgstr "Ezzel a névvel az írás törölné a vevő rendszerét, mielőtt beolvasná a képfájlt."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
 msgstr "Tedd a pendrive-ot egy számítógépbe, nevezd át szóköz és jelek nélkül (például HDSATELIT), majd tedd vissza a vevőbe."
+
+#: lib/python (lotul de seara 0.7.0)
+msgid "Fără semnal: verifică cablul antenei"
+msgstr "Nincs jel: ellenőrizd az antennakábelt"
+
+#: lib/python (lotul de seara 0.7.0)
+#, python-format
+msgid "  Pune imaginea pe stick în: %s"
+msgstr "  Tedd a képfájlt a pendrive-on ide: %s"
+
+#: lib/python (lotul de seara 0.7.0)
+#, python-format
+msgid "Pentru recuperare, pune imaginea pe stick în dosarele %s și %s."
+msgstr "A helyreállításhoz tedd a képfájlt a pendrive-on a %s és a %s mappába."
+
+#: lib/python/Components/NimManager.py
+msgid "not available"
+msgstr "nincs"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay"
+msgstr "Stream Relay"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adaugă la Stream Relay"
+msgstr "Hozzáadás a Stream Relay-hez"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Scoate din Stream Relay"
+msgstr "Eltávolítás a Stream Relay-ből"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Lista Stream Relay nu s-a putut schimba."
+msgstr "A Stream Relay listát nem sikerült módosítani."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adresa releului"
+msgstr "Relay címe"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Unde rulează releul care decodează canalele alese pentru Stream Relay: pe acest receptor (127.0.0.1) sau pe alt aparat din rețeaua de acasă, dacă e pornit rândul Fluxuri pentru alte aparate din rețeaua de acasă. Se ia numai adresa; portul e în rândul următor. Altă adresă nu se folosește: canalele pornesc direct."
+msgstr "Hol fut a relay, amely dekódolja a Stream Relay-hez választott csatornákat: ezen a vevőn (127.0.0.1), vagy az otthoni hálózat egy másik eszközén, ha be van kapcsolva az Adatfolyamok más eszközöknek az otthoni hálózaton sor. Csak a cím számít; a port a következő sorban van. Más cím nem használható: a csatornák közvetlenül indulnak."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Portul releului"
+msgstr "Relay portja"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay."
+msgstr "A port, amelyen a relay a dekódolt csatornákat adja (gyárilag 17999). Ha a relay nem válaszol, a csatorna közvetlenül indul, mint Stream Relay nélkül."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Întârzierea la schimbarea canalului (ms)"
+msgstr "Késleltetés csatornaváltáskor (ms)"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale."
+msgstr "Mennyit vár a vevő, amikor egy relay-en át fogott csatornáról egy másikra vált, hogy a relay elengedje a régi csatornát. A csatornák a csatornalista menüjéből kerülnek a Stream Relay-be."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Fluxuri pentru alte aparate din rețeaua de acasă"
+msgstr "Adatfolyamok más eszközöknek az otthoni hálózaton"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Oprită (din fabrică), fluxurile canalelor rămân numai pe acest receptor. Pornită, le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x), de exemplu un releu Stream Relay de pe alt receptor; din internet, niciodată."
+msgstr "Kikapcsolva (gyári): a csatornák adatfolyamai csak ezen a vevőn maradnak. Bekapcsolva: az otthoni hálózat eszközei (192.168.x.x, 10.x.x.x, 172.16-31.x.x címek) is kérhetik őket, például egy másik vevőn futó Stream Relay; az internetről soha."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay nu răspunde la %s:%d. Verifică adresa și portul din setările Stream Relay."
+msgstr "A Stream Relay nem válaszol itt: %s:%d. Ellenőrizd a címet és a portot a Stream Relay beállításaiban."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay a oprit fluxul canalului."
+msgstr "A Stream Relay leállította a csatorna adatfolyamát."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Numai canalele din satelit, cablu sau terestru pot intra în Stream Relay."
+msgstr "Csak műholdas, kábeles vagy földi csatornák kerülhetnek a Stream Relay-be."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "%s este acum în Stream Relay."
+msgstr "%s most már a Stream Relay-ben van."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "%s nu mai este în Stream Relay."
+msgstr "%s már nincs a Stream Relay-ben."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Scoate din Stream Relay:"
+msgstr "Eltávolítás a Stream Relay-ből:"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adaugă la Stream Relay:"
+msgstr "Hozzáadás a Stream Relay-hez:"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay nu s-a schimbat."
+msgstr "A Stream Relay nem változott."
+
+#: lib/python/Screens/InputDeviceSetup.py
+msgid "dreambox advanced remote control (native)"
+msgstr "A vevő távirányítója"
+
+#: lib/python/Screens/InputDeviceSetup.py
+msgid "dreambox remote control (native)"
+msgstr "A vevő távirányítója"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Înregistrarea a pornit: %s."
+msgstr "A felvétel elindult: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Receptorul nu a putut porni înregistrarea."
+msgstr "A vevő nem tudta elindítani a felvételt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Receptorul e în standby. Pornește-l, apoi pornește înregistrarea."
+msgstr "A vevő készenlétben van. Kapcsold be, majd indítsd el a felvételt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Filmul e folosit acum pe receptor. Încearcă din nou după ce se oprește."
+msgstr "A filmet most használja a vevő. Próbáld újra, ha leállt."
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Cea mai nouă compatibilă"
@@ -57239,25 +57527,759 @@ msgstr "A program további üzenetei, fordítás nélkül:"
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
 msgstr "Ez csak ellenőrzés volt: a vevőre nem íródott semmi."
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+msgid "Atenție"
+msgstr "Figyelem"
+
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+#, python-format
+msgid "Se închide în %d s"
+msgstr "Bezárul %d mp múlva"
+
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+msgid "Adaugă feed"
+msgstr "Feed hozzáadása"
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Da, actualizează"
+msgstr "Igen, frissítés"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Există o imagine nouă pentru receptorul tău: %s. Acum ai %s. O instalez acum? Canalele și setările tale rămân."
+msgstr "Új image van a vevőkészülékedhez: %s. Most ez van rajta: %s. Telepítsem most? A csatornáid és a beállításaid megmaradnak."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Există o versiune nouă pentru receptorul tău: %s. Acum ai %s. O instalez acum? Canalele și setările tale rămân."
+msgstr "Új verzió van a vevőkészülékedhez: %s. Most ez van rajta: %s. Telepítsem most? A csatornáid és a beállításaid megmaradnak."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Pune un stick USB și apasă din nou."
+msgstr "Dugj be egy pendrive-ot, és nyomd meg újra."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Pe stick nu e destul loc: trebuie %d MB liberi."
+msgstr "A pendrive-on nincs elég hely: %d MB szabad hely kell."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Receptorul rulează acum de pe stick sau dintr-un loc necunoscut, deci nu pun singur imaginea nouă. O poți lua de pe site."
+msgstr "A vevőkészülék most pendrive-ról vagy ismeretlen helyről fut, ezért nem telepítem magamtól az új image-et. Letöltheted a webhelyről."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Numele stickului are spații sau semne cu care scrierea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "A pendrive nevében szóköz vagy olyan jel van, amellyel az írás nem működik. Változtasd meg a nevét számítógépen (például HDSATELIT), és nyomd meg újra."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Ai cea mai nouă imagine pentru receptorul tău."
+msgstr "A legújabb image van a vevőkészülékeden."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Legătura la internet s-a întrerupt. Apasă din nou: descărcarea continuă de unde a rămas."
+msgstr "Megszakadt az internetkapcsolat. Nyomd meg újra: a letöltés ott folytatódik, ahol abbamaradt."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Serverul de actualizări nu răspunde acum. Încearcă mai târziu."
+msgstr "A frissítési szerver most nem válaszol. Próbáld újra később."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a scris nimic."
+msgstr "Az image-ek listáját nem a HD Satelit írta alá. Semmi sem íródott ki."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nouă nu se găsește pe server. Încearcă mai târziu."
+msgstr "Az új image nem található a szerveren. Próbáld újra később."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea descărcată nu se potrivește. Nu s-a scris nimic. Apasă din nou ca s-o descarc iar."
+msgstr "A letöltött image nem egyezik. Semmi sem íródott ki. Nyomd meg újra, és újra letöltöm."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nu este pentru acest receptor. Nu s-a scris nimic."
+msgstr "Ez az image nem ehhez a vevőkészülékhez való. Semmi sem íródott ki."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Stickul a fost scos sau are o eroare. Nu s-a scris nimic."
+msgstr "A pendrive-ot kihúzták, vagy hibás. Semmi sem íródott ki."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a scris nimic."
+msgstr "A beállítások másolata nem készült el a pendrive-on. Semmi sem íródott ki."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Verificarea de dinainte de scriere n-a ieșit bine. Nu s-a scris nimic."
+msgstr "Az írás előtti ellenőrzés nem sikerült. Semmi sem íródott ki."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Oprit. Nu s-a scris nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Leállítva. Semmi sem íródott ki. Ha újra megnyomod, a letöltés ott folytatódik, ahol abbamaradt."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nouă nu s-a scris. Receptorul a rămas pe %s."
+msgstr "Az új image nem íródott ki. A vevőkészülék ezen maradt: %s."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se caută imaginea nouă..."
+msgstr "Az új image keresése..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se descarcă imaginea pe stick: %d%% (%d din %d MB)."
+msgstr "Az image letöltése a pendrive-ra: %d%% (%d / %d MB)."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se verifică imaginea de pe stick..."
+msgstr "A pendrive-on lévő image ellenőrzése..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se pregătește imaginea pe stick..."
+msgstr "Az image előkészítése a pendrive-on..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se face copia completă pe stick..."
+msgstr "A teljes másolat készítése a pendrive-ra..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se verifică totul înainte de scriere..."
+msgstr "Minden ellenőrzése az írás előtt..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Scrierea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Az írás megvárja a felvétel végét, és magától elindul."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea se scrie acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Az image írása folyamatban. Ne kapcsold ki a vevőkészüléket: magától újraindul, a csatornák és a beállítások pedig maguktól visszatérnek."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Actualizare singură în standby"
+msgstr "Automatikus frissítés készenlétben"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "imaginea și pachetele"
+msgstr "az image és a csomagok"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "numai imaginea"
+msgstr "csak az image"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "numai pachetele"
+msgstr "csak a csomagok"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imagine nouă de pe internet"
+msgstr "Új image az internetről"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Alte imagini"
+msgstr "Más image-ek"
+
+msgid "Surse feeduri"
+msgstr "Feedforrások"
+
+msgid "Deocamdată nu e nimic nou de descărcat."
+msgstr "Egyelőre nincs új letöltenivaló."
+
+msgid "Adaugă un feed"
+msgstr "Új feed hozzáadása"
+
+msgid "Adresa unui feed de pe internet"
+msgstr "Internetes feed címe"
+
+msgid "Instalate"
+msgstr "Telepítve"
+
+msgid "Disponibile"
+msgstr "Elérhetők"
+
+msgid "Fișiere .ipk de pe stick, de pe disc sau din rețea"
+msgstr ".ipk fájlok pendrive-ról, lemezről vagy hálózatról"
+
+msgid "Mai multe surse, automat"
+msgstr "Több forrás, automatikusan"
+
+msgid "Un plugin din Monea Software le adaugă singur"
+msgstr "A Monea Software egyik bővítménye automatikusan hozzáadja őket"
+
+msgid "De actualizat"
+msgstr "Frissíthetők"
+
+msgid "Oficială"
+msgstr "Hivatalos"
+
+#, python-format
+msgid "Toate extensiile cu o versiune nouă: %d"
+msgstr "Új verzióval rendelkező bővítmények: %d"
+
+msgid "Roșu actualizează"
+msgstr "Piros: Frissítés"
+
+msgid "INFO descarcă sursa"
+msgstr "INFO: forrás letöltése"
+
+msgid "Sursa oficială HD Satelit"
+msgstr "A HD Satelit hivatalos forrása"
+
+#, python-format
+msgid "%s: ai instalat toate extensiile lui (%d)."
+msgstr "%s: minden bővítményét telepítetted (%d)."
+
+#, python-format
+msgid "%s: nu are deocamdată nicio extensie."
+msgstr "%s: egyelőre nincs benne bővítmény."
+
+msgid "OK repornește interfața acum"
+msgstr "OK: felület újraindítása most"
+
+msgid "Se instalează versiunea nouă pentru toate extensiile de mai jos."
+msgstr "Az alábbi bővítmények mindegyikének új verziója települ."
+
+msgid "OK actualizează"
+msgstr "OK: Frissítés"
+
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din rețea."
+msgstr "Egy .ipk fájlt telepítesz pendrive-ról, lemezről vagy hálózatról."
+
+msgid "În feedul Monea Software există un plugin care adaugă singur mai multe surse. Îl găsești la Disponibile."
+msgstr "A Monea Software feedben van egy bővítmény, amely automatikusan több forrást is hozzáad. Az Elérhetők között találod."
+
+msgid "OK îl arată"
+msgstr "OK: megjelenítés"
+
+msgid "Feed de pe internet"
+msgstr "Internetes feed"
+
+msgid "Scrii un nume scurt și adresa feedului (începe cu http:// sau https://). Extensiile din el apar apoi la Disponibile, cu numele feedului. Nu sunt verificate de HD Satelit."
+msgstr "Adj meg egy rövid nevet és a feed címét (http:// vagy https:// kezdetű). A benne lévő bővítmények ezután az Elérhetők között jelennek meg, a feed nevével. Ezeket a HD Satelit nem ellenőrizte."
+
+msgid "Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde."
+msgstr "Nincs feed. A Feedforrások menüben a zöld gombbal adhatsz hozzá egyet."
+
+msgid "Pluginul de feeduri din Monea Software nu e încă disponibil."
+msgstr "A Monea Software feedeket hozzáadó bővítménye még nem érhető el."
+
+msgid "Pluginul de feeduri e deja instalat."
+msgstr "A feedeket hozzáadó bővítmény már telepítve van."
+
+msgid "lista nu a fost descărcată încă"
+msgstr "a lista még nincs letöltve"
+
+msgid "Adaugă manual"
+msgstr "Kézi hozzáadás"
+
+msgid "Adaugă automat"
+msgstr "Automatikus hozzáadás"
 
 msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
 msgstr "A pendrive-ra nem lehet írni, ezért az írás nem indul el. A vevőn semmi sem változott."
+#: lib/python/Screens/IptvSetup.py
+msgid "Legătura cu acest server nu este criptată, fiindcă furnizorul nu are HTTPS."
+msgstr "A kapcsolat ezzel a szerverrel nincs titkosítva, mert a szolgáltató nem használ HTTPS-t."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Cont"
+msgstr "Fiók"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portal"
+msgstr "Portál"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listă demo"
+msgstr "Demólista"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul a refuzat utilizatorul sau parola. Verifică-le și încearcă din nou."
+msgstr "A szerver elutasította a felhasználót vagy a jelszót. Ellenőrizd őket, és próbáld újra."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Abonamentul a expirat sau este oprit. Vorbește cu furnizorul tău."
+msgstr "Az előfizetés lejárt vagy fel van függesztve. Beszélj a szolgáltatóddal."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul nu răspunde. Verifică adresa și internetul, apoi încearcă din nou."
+msgstr "A szerver nem válaszol. Ellenőrizd a címet és az internetet, aztán próbáld újra."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu este o listă de canale. Verifică adresa dată de furnizor."
+msgstr "Ezen a címen nincs csatornalista. Ellenőrizd a szolgáltatótól kapott címet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista nu are niciun canal pe care receptorul să-l poată porni."
+msgstr "A listában nincs egyetlen csatorna sem, amelyet a vevő el tudna indítani."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista este prea mare pentru receptor."
+msgstr "A lista túl nagy a vevő számára."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu răspunde un server de tip Xtream. Verifică serverul și portul."
+msgstr "Ezen a címen nem válaszol Xtream szerver. Ellenőrizd a szervert és a portot."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu răspunde un portal. Verifică adresa dată de furnizor."
+msgstr "Ezen a címen nem válaszol portál. Ellenőrizd a szolgáltatótól kapott címet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portalul a refuzat adresa MAC. Verifică adresa MAC dată de furnizor."
+msgstr "A portál elutasította a MAC-címet. Ellenőrizd a szolgáltatótól kapott MAC-címet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Fișierul nu se poate citi. Verifică stickul și încearcă din nou."
+msgstr "A fájl nem olvasható. Ellenőrizd az USB-kulcsot, és próbáld újra."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa nu este bună. Scrie adresa dată de furnizor, cu http sau https."
+msgstr "A cím nem érvényes. Írd be a szolgáltatótól kapott címet, http vagy https előtaggal."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul are un certificat de securitate nevalid, așa că legătura s-a oprit."
+msgstr "A szerver biztonsági tanúsítványa érvénytelen, ezért a kapcsolat megszakadt."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Numele nu este bun. Scrie un nume mai scurt, fără semne speciale."
+msgstr "A név nem érvényes. Írj be rövidebb nevet, különleges karakterek nélkül."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie utilizatorul primit de la furnizor."
+msgstr "Írd be a szolgáltatótól kapott felhasználónevet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie parola primită de la furnizor."
+msgstr "Írd be a szolgáltatótól kapott jelszót."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa MAC nu este bună. Se scrie așa: 00:1A:79:12:34:56."
+msgstr "A MAC-cím nem érvényes. Így kell írni: 00:1A:79:12:34:56."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ai ajuns la numărul cel mai mare de surse. Șterge una ca să poți adăuga alta."
+msgstr "Elérted a források legnagyobb számát. Törölj egyet, hogy újat tudj hozzáadni."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista demo nu s-a putut descărca. Verifică internetul și încearcă din nou."
+msgstr "A demólistát nem sikerült letölteni. Ellenőrizd az internetet, és próbáld újra."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se verifică legătura cu serverul..."
+msgstr "A szerverrel való kapcsolat ellenőrzése..."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "A csatornák a csatornalistában jelennek meg, a Műholdak alatt, az IPTV sorban."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se încarcă"
+msgstr "Betöltés"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Nu merge"
+msgstr "Nem működik"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Fără HTTPS"
+msgstr "HTTPS nélkül"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Alege ce ți-a dat furnizorul."
+msgstr "Válaszd ki, amit a szolgáltatód adott."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Gata: %s. Le găsești în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Kész: %s. A csatornalistában találod meg őket, a Műholdak alatt, az IPTV sorban."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Lista are prea multe canale: au intrat primele %d."
+msgstr "A listában túl sok a csatorna: az első %d került be."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Câteva rânduri din listă nu se pot folosi și au fost sărite: %d."
+msgstr "A lista néhány sora nem használható, ezért kimaradt: %d."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă o listă, un cont sau un portal"
+msgstr "Lista, fiók vagy portál hozzáadása"
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Ștergi %s? Canalele ei dispar de la rândul IPTV. Cele puse de tine în Favorite rămân, dar nu mai pornesc."
+msgstr "Törlöd: %s? A csatornái eltűnnek az IPTV sorból. A Kedvencek közé tett csatornák megmaradnak, de már nem indulnak el."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "De pe stick"
+msgstr "USB-kulcsról"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parola nu se arată. Un rând gol o lasă cum e."
+msgstr "A jelszó nem látszik. Az üres sor úgy hagyja, ahogy van."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Alege un fișier .m3u sau .m3u8 de pe stick."
+msgstr "Válassz egy .m3u vagy .m3u8 fájlt az USB-kulcsról."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă lista sau contul primit de la furnizorul tău. Canalele apar singure în lista de canale."
+msgstr "Add hozzá a szolgáltatótól kapott listát vagy fiókot. A csatornák maguktól megjelennek a csatornalistában."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canal IPTV"
+msgstr "IPTV-csatorna"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "OK adaugă lista sau contul tău"
+msgstr "Az OK hozzáadja a listádat vagy a fiókodat"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se actualizează..."
+msgstr "Frissítés..."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ștergi sursa?"
+msgstr "Törlöd a forrást?"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele ei dispar de la rândul IPTV. Cele puse de tine în Favorite rămân, dar nu mai pornesc."
+msgstr "A csatornái eltűnnek az IPTV sorból. A Kedvencek közé tett csatornák megmaradnak, de már nem indulnak el."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listele și conturile tale"
+msgstr "A listáid és a fiókjaid"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte."
+msgstr "A csatornák maguktól megjelennek a csatornalistában, a Műholdak alatt, az IPTV sorban. Beteheted őket a Kedvencek közé és bármelyik csokorba, mint a többit."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă ce ți-a dat furnizorul"
+msgstr "Add hozzá, amit a szolgáltatód adott"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ce ai primit"
+msgstr "Amit kaptál"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Playlist: o adresă sau un fișier de pe stick"
+msgstr "Lejátszási lista: egy cím vagy egy fájl az USB-kulcsról"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Cont: server, utilizator și parolă"
+msgstr "Fiók: szerver, felhasználónév és jelszó"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portal: adresa portalului și adresa MAC"
+msgstr "Portál: a portál címe és a MAC-cím"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listă demo: canale gratuite care permit asta"
+msgstr "Demólista: ingyenes csatornák, amelyek ezt engedik"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa listei"
+msgstr "A lista címe"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Server"
+msgstr "Szerver"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Utilizator"
+msgstr "Felhasználónév"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parolă"
+msgstr "Jelszó"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa portalului"
+msgstr "A portál címe"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Nume (opțional)"
+msgstr "Név (nem kötelező)"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."
+msgstr "A jelszó nem látszik, és nem is megy vissza. Ha ugyanazt a fiókot újra hozzáadod másik jelszóval, a Kedvencek közötti csatornák megmaradnak."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista demo: acordul fiecărui canal"
+msgstr "Demólista: minden csatorna engedélye"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Aceleași liste sunt pe televizor, în __DRUM_MENIU__."
+msgstr "Ugyanezek a listák a televízión is megvannak, itt: __DRUM_MENIU__."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Încă nu ai adăugat nimic."
+msgstr "Még nem adtál hozzá semmit."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Merge."
+msgstr "Működik."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Kész. A csatornák a csatornalistában vannak, a Műholdak alatt, az IPTV sorban."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie adresa listei sau alege fișierul de pe stick cu tasta galbenă. OK deschide tastatura."
+msgstr "Írd be a lista címét, vagy válaszd ki a fájlt az USB-kulcsról a sárga gombbal. Az OK megnyitja a billentyűzetet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie datele primite de la furnizor. OK deschide tastatura."
+msgstr "Írd be a szolgáltatótól kapott adatokat. Az OK megnyitja a billentyűzetet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie adresa portalului și adresa MAC primite de la furnizor. OK deschide tastatura."
+msgstr "Írd be a szolgáltatótól kapott portálcímet és MAC-címet. Az OK megnyitja a billentyűzetet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "O adresă de internet sau un fișier de pe stick."
+msgstr "Egy internetcím vagy egy fájl az USB-kulcsról."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Server, utilizator și parolă."
+msgstr "Szerver, felhasználónév és jelszó."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa portalului și adresa MAC."
+msgstr "A portál címe és a MAC-cím."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canale gratuite care permit asta, cu acordul lor la vedere."
+msgstr "Ingyenes csatornák, amelyek ezt engedik, az engedélyükkel együtt láthatóan."
+
+msgid "Se verifică extensia înainte de instalare."
+msgstr "Bővítmény ellenőrzése telepítés előtt."
+
+msgid "Extensia e făcută pentru imaginile vechi, cu Python 2."
+msgstr "A bővítmény a régi, Python 2-t használó image-ekhez készült."
+
+msgid "Alt feed"
+msgstr "Másik feed"
+
+msgid "Lista extensiilor s-a descărcat."
+msgstr "A bővítmények listája letöltve."
+
+msgid "Lista extensiilor nu s-a putut descărca."
+msgstr "Nem sikerült letölteni a bővítmények listáját."
+
+msgid "OK alege feedul sau felul extensiilor arătate."
+msgstr "OK: feed vagy bővítménytípus kiválasztása."
+
+msgid "OK alege feedul extensiilor arătate."
+msgstr "OK: a megjelenített bővítmények feedjének kiválasztása."
+
+msgid "Mai multe feeduri, automat"
+msgstr "Több feed automatikusan"
+
+msgid "Extensie"
+msgstr "Bővítmény"
+
+msgid "Instalarea extensiilor nu este disponibilă în această imagine."
+msgstr "Ebben az image-ben nem érhető el a bővítmények telepítése."
+
+msgid "Feed"
+msgstr "Feed"
+
+msgid "O poți instala din nou oricând, din același feed."
+msgstr "Bármikor újratelepítheted ugyanabból a feedből."
+
+msgid "Nu se află în niciun feed, deci nu se va mai putea instala din nou de aici."
+msgstr "Egyik feedben sem található, ezért innen később nem lehet újratelepíteni."
+
+msgid "Filtru: toate extensiile"
+msgstr "Szűrő: minden bővítmény"
+
+msgid "Feedul oficial HD Satelit"
+msgstr "A HD Satelit hivatalos feedje"
+
+msgid "Numele extensiei nu este valid. Nu se instalează."
+msgstr "A bővítmény neve érvénytelen. Nem lesz telepítve."
+
+msgid "Un nume de extensie nu este valid. Nu se actualizează."
+msgstr "Az egyik bővítmény neve érvénytelen. Nem lesz frissítve."
+
+msgid "Numele extensiei nu este valid. Nu se șterge."
+msgstr "A bővítmény neve érvénytelen. Nem lesz törölve."
+
+#, python-format
+msgid "Nu este verificată de HD Satelit. Extensie dintr-un fișier %s: %s"
+msgstr "A HD Satelit nem ellenőrizte. Bővítmény egy %s fájlból: %s"
+
+msgid "Extensia vine dintr-un feed extern și nu este verificată de HD Satelit."
+msgstr "A bővítmény külső feedből származik, és a HD Satelit nem ellenőrizte."
+
+#, python-format
+msgid "Versiunea %s din feedul %s e făcută pentru Python 2 și nu se instalează."
+msgstr "A(z) %s verzió a(z) %s feedben Python 2-höz készült, ezért nem lesz telepítve."
+
+msgid "Roșu șterge feedul · Albastru descarcă lista"
+msgstr "Piros: feed törlése · Kék: lista letöltése"
+
+msgid "Șterge feedul"
+msgstr "Feed törlése"
+
+msgid "Detaliile extensiei nu s-au putut citi"
+msgstr "Nem sikerült beolvasni a bővítmény adatait"
+
+msgid "Feed extern, neverificat de HD Satelit"
+msgstr "Külső feed, a HD Satelit nem ellenőrizte"
+
+msgid "Extensiile din acest feed nu sunt verificate de HD Satelit. Instalează doar ce cunoști."
+msgstr "A HD Satelit nem ellenőrizte az ebben a feedben található bővítményeket. Csak olyat telepíts, amit ismersz."
+
+msgid "În feedul Monea Software există un plugin care adaugă singur mai multe feeduri. Îl găsești la Disponibile."
+msgstr "A Monea Software feedben van egy bővítmény, amely automatikusan hozzáad több feedet. Az Elérhető lapon találod."
+
+msgid "Arată numai extensiile dintr-un feed (HD Satelit, Monea Software, feedurile tale) sau de un anumit fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu extensii."
+msgstr "Csak egy adott feed (HD Satelit, Monea Software, saját feedjeid) bővítményeit vagy egy adott típusú bővítményt jelenít meg. A szűrő addig marad érvényben, amíg a Bővítmények menüben vagy, és minden bővítménylapra vonatkozik."
+
+msgid "Toate extensiile"
+msgstr "Minden bővítmény"
+
+msgid "Alte extensii au nevoie de aceasta. Șterge-le întâi pe ele."
+msgstr "Más bővítményeknek szükségük van erre. Előbb azokat töröld."
+
+msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
+msgstr "A bővítmény már nincs a feedben. Töltsd le újra a listát a kék gombbal."
+
+msgid "Extensia nu este făcută pentru acest receptor."
+msgstr "A bővítmény nem ehhez a vevőhöz készült."
+
+msgid "Semnătura feedului nu se potrivește. Extensia nu a fost instalată."
+msgstr "A feed aláírása nem egyezik. A bővítmény nem lett telepítve."
+
+msgid "Extensia ar scrie peste fișierele alteia. Nu a fost instalată."
+msgstr "A bővítmény felülírná egy másik bővítmény fájljait. Nem lett telepítve."
+
+msgid "Fișierul extensiei nu se poate citi."
+msgstr "A bővítmény fájlja nem olvasható."
+
+msgid "Extensia nu este instalată."
+msgstr "A bővítmény nincs telepítve."
+
+#, python-format
+msgid "Există deja un feed cu numele „%s”."
+msgstr "Már létezik „%s” nevű feed."
+
+#, python-format
+msgid "Fișierul feedurilor nu s-a putut scrie (%s)."
+msgstr "Nem sikerült menteni a feedeket tartalmazó fájlt (%s)."
+
+#, python-format
+msgid "Lista feedului %s este la zi"
+msgstr "A(z) %s feed listája naprakész"
+
+msgid "Niciun feed"
+msgstr "Nincs feed"
+
+msgid "Niciun fișier .ipk pe stick sau disc. Copiază extensia pe un stick USB, apoi caută din nou."
+msgstr "Nincs .ipk fájl a pendrive-on vagy a lemezen. Másold a bővítményt egy USB pendrive-ra, majd keress újra."
+
+msgid "Niciun feed. Adaugă unul din Surse feeduri."
+msgstr "Nincs feed. Adj hozzá egyet a Feedforrások menüben."
+
+msgid "Se descarcă lista de extensii."
+msgstr "Bővítmények listájának letöltése."
+
+msgid "Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "A vevőn és a feedekben található bővítmények, a pendrive-on vagy lemezen lévő .ipk fájlok és a feedek. Az image frissítései a <a href=\"/actualizari\" id=\"legaturaActualizari\">Szoftverfrissítés</a> oldalon találhatók."
+
+msgid "Lista extensiilor"
+msgstr "Bővítmények listája"
+
+msgid "Numele feedului (litere mici, cifre și -)"
+msgstr "A feed neve (kisbetűk, számok és -)"
+
+msgid "Extensiile din el apar apoi în file, cu numele feedului. Nu sunt verificate de HD Satelit."
+msgstr "A benne található bővítmények ezután a lapokon jelennek meg, a feed nevével. A HD Satelit nem ellenőrizte őket."
+
+#, python-format
+msgid "Nu sunt verificate de HD Satelit. Vin din feedurile %s."
+msgstr "A HD Satelit nem ellenőrizte őket. Ezekből a feedekből származnak: %s."
+
+msgid "Extensia nu se mai poate instala. Reîncarcă pagina."
+msgstr "A bővítmény már nem telepíthető. Töltsd újra az oldalt."
+
+msgid "Extensia nu mai este instalată. Reîncarcă pagina."
+msgstr "A bővítmény már nincs telepítve. Töltsd újra az oldalt."
+
+msgid "Numele feedului nu poate fi gol."
+msgstr "A feed neve nem lehet üres."
+
+msgid "Feedul a fost adăugat."
+msgstr "A feed hozzáadva."
+
+msgid "Feedul a fost adăugat. Se descarcă lista lui."
+msgstr "A feed hozzáadva. A listájának letöltése folyamatban."
+
+#, python-format
+msgid "Adaugi feedul %s?"
+msgstr "Hozzáadod a(z) %s feedet?"
+
+msgid "Extensiile din acest feed nu sunt verificate de HD Satelit."
+msgstr "A HD Satelit nem ellenőrizte az ebben a feedben található bővítményeket."
+
+msgid "Numai feedurile adăugate de tine se pot șterge."
+msgstr "Csak az általad hozzáadott feedek törölhetők."
+
+msgid "Feedul a fost șters."
+msgstr "A feed törölve."
+
+#, python-format
+msgid "Ștergi feedul %s?"
+msgstr "Törlöd a(z) %s feedet?"
+
+#, python-format
+msgid "Nu este verificată de HD Satelit. Vine din feedul %s."
+msgstr "A HD Satelit nem ellenőrizte. Ebből a feedből származik: %s."
+
+msgid "Se citește lista extensiilor..."
+msgstr "Bővítmények listájának beolvasása..."
+
+#, python-format
+msgid "Lista extensiilor nu s-a putut citi: %s"
+msgstr "Nem sikerült beolvasni a bővítmények listáját: %s"
+
+msgid "Numele feedului: litere mici, cifre și -"
+msgstr "A feed neve: kisbetűk, számok és -"
+
+msgid "Niciun fișier .ipk pe stick sau disc.\nCopiază extensia pe un stick USB, apoi apasă albastru."
+msgstr "Nincs .ipk fájl a pendrive-on vagy a lemezen.\nMásold a bővítményt egy USB pendrive-ra, majd nyomd meg a kék gombot."
+
+msgid "Se descarcă lista de extensii"
+msgstr "Bővítmények listájának letöltése"
+
+#, python-format
+msgid "Ștergi feedul „%s”?\nExtensiile instalate din el rămân pe receptor."
+msgstr "Törlöd a(z) „%s” feedet?\nAz ebből telepített bővítmények a vevőn maradnak."
+
+msgid "niciun feed"
+msgstr "nincs feed"
+
+msgid "un feed"
+msgstr "egy feed"
+
+#, python-format
+msgid "%d feeduri"
+msgstr "%d feed"
 
 #, python-format
 msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
-msgstr "A szoftver vevőre telepítéséhez használható kép, Maintenance Mode használatával (%s)."
+msgstr "Image a vevő szoftverének karbantartási módban (%s) történő telepítéséhez."
 
 msgid "Nu s-a instalat nimic pe receptor."
 msgstr "Semmi sem lett telepítve a vevőre."
 
 msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
-msgstr "Ez a szoftver nem jelzi, hogy melyik vevőhöz készült, ezért más típushoz is tartozhat. A HD Satelit szoftver a 0.1.6-os verziótól jelzi ezt; régebbi verziót vagy mástól származó képet csak USB pendrive-ról lehet telepíteni, a vevő gyártójának útmutatása szerint."
+msgstr "Ez a szoftver nem jelzi, hogy melyik vevőhöz készült, ezért lehet, hogy más típusú vevőhöz való. A HD Satelit szoftver a 0.1.6-os verziótól jelzi ezt; régebbi verzió vagy más által készített image csak USB pendrive-ról telepíthető, a vevő gyártójának útmutatása szerint."
 
 msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
 msgstr "Itt csak azt látod, hogy mi van a pendrive-on, és telepíthető-e. A telepítés a tévén történik, előtte egy próbafuttatással és két kérdéssel:"
 
 msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
-msgstr "A HD Satelit szoftver csak akkor telepíthető, ha ehhez a vevőhöz készült, és a fájljai épek (ezt a tévén, az OK megnyomásakor ellenőrizzük). A nem HD Satelit kép csak figyelmeztetés után telepíthető, mert azt nem tudjuk ellenőrizni."
+msgstr "A HD Satelit szoftver csak akkor telepíthető, ha ehhez a vevőhöz készült, és a fájljai sértetlenek (az ellenőrzés a tévén, az OK megnyomásakor történik). A nem HD Satelit image csak figyelmeztetés után telepíthető, mert nem tudjuk ellenőrizni."
 
 msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
 msgstr "A telepítő nem tudta megfelelően azonosítani a szoftvert, ezért nem telepíti. A vevőn semmi sem változott."
@@ -57269,7 +58291,7 @@ msgid "Receptorul are o singură pereche de nucleu și sistem în memoria intern
 msgstr "A vevő belső memóriájában csak egy rendszermag és a hozzá tartozó rendszer van (nincs multiboot): ha az új szoftver nem indul el, csak kézzel, a Maintenance Mode használatával lehet helyreállítani. Telepítés előtt a beállításokat és a csatornalistát átmásoljuk a pendrive-ra."
 
 msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
-msgstr "A képnek USB pendrive-on kell lennie. Belső memóriából soha nem lehet telepíteni: a telepítés éppen azokat a fájlokat törölné, amelyeket olvas, és a vevő többé nem indulna el.\n\nMásold a szoftvert (kernel.bin, rootfs.tar.bz2, imageversion) egy USB pendrive-ra, csatlakoztasd a pendrive-ot, és próbáld újra. Semmi sem lett telepítve."
+msgstr "Az image-nek USB pendrive-on kell lennie. A belső memóriából soha nem telepíthető: a telepítés törölné az éppen olvasott fájlokat, és a vevő többé nem indulna el.\n\nMásold a szoftvert (kernel.bin, rootfs.tar.bz2, imageversion) egy USB pendrive-ra, csatlakoztasd a pendrive-ot, és próbáld újra. Semmi sem lett telepítve."
 
 #, python-format
 msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
@@ -57307,14 +58329,14 @@ msgstr "Ez csak ellenőrzés volt: semmi sem lett telepítve a vevőre."
 
 #, python-format
 msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
-msgstr "A telepítés leállítva: a kép fájljai a vevő belső memóriájában vannak (%s)."
+msgstr "A telepítés leállt: az image fájljai a vevő belső memóriájában vannak (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
 msgstr "A telepítés leállítva: a pendrive neve szóközt tartalmaz (%s). Semmi sem lett telepítve."
 
 msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
-msgstr "Ezzel a névvel a telepítés törölné a vevő rendszerét, mielőtt beolvasná a képet."
+msgstr "Ezzel a névvel a telepítés törölné a vevő rendszerét, mielőtt beolvasná az image-et."
 
 msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
 msgstr "A szoftver azonosítása sikerült: a rendszermagot, a rendszert és a hozzájuk tartozó partíciókat is megtaláltuk. A vevőre telepítéshez nyomd meg az OK vagy a zöld gombot."
@@ -57330,11 +58352,11 @@ msgstr "A pendrive-ra nem lehet írni, ezért a telepítés nem indul el. A vev�
 
 #, python-format
 msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
-msgstr "A telepítés leállítva: nem sikerült ellenőrizni, hol vannak a kép fájljai (%s)."
+msgstr "A telepítés leállt: nem sikerült ellenőrizni, hol vannak az image fájljai (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
-msgstr "A telepítés leállítva: a kép fájljai nem USB pendrive-on vannak (%s)."
+msgstr "A telepítés leállt: az image fájljai nem USB pendrive-on vannak (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
@@ -57355,13 +58377,13 @@ msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schim
 msgstr "A pendrive neve szóközt vagy olyan karaktereket tartalmaz, amelyekkel a telepítés nem működik. Nevezd át a számítógépen (például HDSATELIT névre), majd nyomd meg újra."
 
 msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
-msgstr "A képek listáján nincs HD Satelit aláírás. Semmi sem lett telepítve."
+msgstr "Az image-ek listáján nincs HD Satelit-aláírás. Semmi sem lett telepítve."
 
 msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
-msgstr "A letöltött kép nem megfelelő. Semmi sem lett telepítve. Nyomd meg újra, hogy ismét letöltsem."
+msgstr "A letöltött image nem megfelelő. Semmi sem lett telepítve. Nyomd meg újra, hogy ismét letöltsem."
 
 msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
-msgstr "A kép nem ehhez a vevőhöz készült. Semmi sem lett telepítve."
+msgstr "Az image nem ehhez a vevőhöz való. Semmi sem lett telepítve."
 
 msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
 msgstr "A pendrive-ot eltávolították, vagy hiba van rajta. Semmi sem lett telepítve."
@@ -57377,7 +58399,7 @@ msgstr "Leállítva. Semmi sem lett telepítve. Ha újra megnyomod, a letöltés
 
 #, python-format
 msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
-msgstr "Az új kép nem lett telepítve. A vevőn a(z) %s maradt."
+msgstr "Az új image telepítése nem sikerült. A vevőn továbbra is ez maradt: %s."
 
 msgid "Se verifică totul înainte de instalare..."
 msgstr "Minden ellenőrzése telepítés előtt..."
@@ -57386,4 +58408,327 @@ msgid "Instalarea așteaptă să se termine înregistrarea și pornește singur�
 msgstr "A telepítés megvárja a felvétel végét, majd magától elindul."
 
 msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
-msgstr "A kép telepítése folyamatban van. Ne kapcsold ki a vevőt: magától újraindul, a csatornák és a beállítások pedig automatikusan visszaállnak."
+msgstr "Az image telepítése folyamatban van. Ne kapcsold ki a vevőt: magától újraindul, a csatornák és a beállítások pedig automatikusan visszaállnak."
+
+msgid "Se instalează și se verifică nucleul Dream A..."
+msgstr "A Dream A rendszermag telepítése és ellenőrzése..."
+
+msgid "Instalarea a eșuat"
+msgstr "A telepítés sikertelen"
+
+msgid "Finalizat"
+msgstr "Befejezve"
+
+#, python-format
+msgid "Pasul %d din %d"
+msgstr "%d. lépés, összesen %d"
+
+msgid "Doar verificare, nu se instalează nimic"
+msgstr "Csak ellenőrzés, semmi sem lesz telepítve"
+
+msgid "Nu opri receptorul"
+msgstr "Ne kapcsold ki a vevőt"
+
+#, python-format
+msgid "Repornire în %d s"
+msgstr "Újraindítás %d mp múlva"
+
+msgid "Se instalează nucleul ext4..."
+msgstr "Az ext4 rendszermag telepítése..."
+
+msgid "Se șterge sistemul vechi..."
+msgstr "A régi rendszer törlése..."
+
+msgid "Se dezarhivează sistemul..."
+msgstr "A rendszer kicsomagolása..."
+
+msgid "Se șterge nucleul vechi..."
+msgstr "A régi rendszermag törlése..."
+
+msgid "Se instalează nucleul..."
+msgstr "A rendszermag telepítése..."
+
+msgid "Se copiază sistemul..."
+msgstr "A rendszer másolása..."
+
+msgid "Se instalează sistemul..."
+msgstr "A rendszer telepítése..."
+
+msgid "Enigma2 și serviciile nu au putut fi oprite."
+msgstr "Nem sikerült leállítani az Enigma2-t és a szolgáltatásokat."
+
+msgid "Se așteaptă oprirea Enigma2..."
+msgstr "Várakozás az Enigma2 leállására..."
+
+msgid "Enigma2 nu a putut fi oprit."
+msgstr "Nem sikerült leállítani az Enigma2-t."
+
+msgid "Enigma2 pornește din nou. Nu s-a instalat nimic."
+msgstr "Az Enigma2 újraindul. Semmi sem lett telepítve."
+
+msgid "Nu s-a putut pregăti instalarea."
+msgstr "Nem sikerült előkészíteni a telepítést."
+
+msgid "Nu s-au putut pregăti partițiile pentru instalare."
+msgstr "Nem sikerült előkészíteni a partíciókat a telepítéshez."
+
+msgid "Partiția sistemului nu a putut fi montată din nou."
+msgstr "Nem sikerült újracsatolni a rendszerpartíciót."
+
+msgid "Partiția sistemului nu a putut fi montată doar pentru citire."
+msgstr "Nem sikerült csak olvashatóként csatolni a rendszerpartíciót."
+
+msgid "Sistemul nu a putut fi dezarhivat. Imaginea instalată nu poate porni în această stare."
+msgstr "Nem sikerült kicsomagolni a rendszert. A telepített image ebben az állapotban nem tud elindulni."
+
+msgid "Instalează o copie de siguranță."
+msgstr "Telepíts egy biztonsági másolatot."
+
+msgid "Verificarea s-a încheiat cu succes."
+msgstr "Az ellenőrzés sikeresen befejeződött."
+
+msgid "Nucleul a fost instalat."
+msgstr "A rendszermag telepítve."
+
+msgid "Nucleul nu a putut fi instalat. Imaginea instalată nu poate porni în această stare."
+msgstr "Nem sikerült telepíteni a rendszermagot. A telepített image ebben az állapotban nem tud elindulni."
+
+msgid "Se închid procesele..."
+msgstr "A folyamatok leállítása..."
+
+msgid "Se sincronizează fișierele..."
+msgstr "A fájlok szinkronizálása..."
+
+msgid "Se opresc Enigma2 și serviciile..."
+msgstr "Az Enigma2 és a szolgáltatások leállítása..."
+
+msgid "Se montează partiția sistemului..."
+msgstr "A rendszerpartíció csatolása..."
+
+msgid "Partiția sistemului nu a putut fi montată."
+msgstr "Nem sikerült csatolni a rendszerpartíciót."
+
+msgid "Sistemul nu a putut fi instalat. Imaginea instalată nu poate porni în această stare."
+msgstr "Nem sikerült telepíteni a rendszert. A telepített image ebben az állapotban nem tud elindulni."
+
+msgid "Se creează kernel.img..."
+msgstr "A kernel.img létrehozása..."
+
+msgid "Imaginea a fost instalată."
+msgstr "Az image telepítve."
+
+#, python-format
+msgid "Blocuri defecte: %d (fără risc dacă numărul nu crește)"
+msgstr "Hibás blokkok: %d (nem jelent kockázatot, ha a számuk nem nő)"
+
+msgid "Se instalează imaginea UBI..."
+msgstr "Az UBI image telepítése..."
+
+msgid "Se formatează blocurile de memorie rămase..."
+msgstr "A fennmaradó memóriablokkok formázása..."
+
+msgid "ofgwrite - creat de Betacentauri"
+msgstr "ofgwrite - készítette: Betacentauri"
+
+msgid "Se conectează la server..."
+msgstr "Kapcsolódás a szerverhez..."
+
+msgid "Se încarcă canalul..."
+msgstr "Csatorna betöltése..."
+
+msgid "Pornește imaginea..."
+msgstr "Az image indítása..."
+
+msgid "Se reîncarcă..."
+msgstr "Újratöltés..."
+
+#, python-format
+msgid "tampon %s s"
+msgstr "puffer %s s"
+
+msgid "Bifă = se vede în lista de canale. Canalele puse în Favorite merg în continuare."
+msgstr "Pipa = látható a csatornalistában. A Kedvencekhez adott csatornák továbbra is működnek."
+
+#, python-format
+msgid "Se văd %(vazute)d din %(toate)d de canale. Ascunde ce nu vrei, ca să încapă restul."
+msgstr "Látható csatornák: %(vazute)d / %(toate)d. Rejtsd el, ami nem kell, hogy a többi elférjen."
+
+#, python-format
+msgid "%d grupe"
+msgstr "%d csoport"
+
+msgid "o parte ascunse"
+msgstr "néhány elrejtve"
+
+#, python-format
+msgid "Abonamentul a expirat la %s. Vorbește cu furnizorul tău."
+msgstr "Az előfizetés lejárt: %s. Fordulj a szolgáltatódhoz."
+
+msgid "Sunt prea multe conexiuni deschise pe acest abonament. Oprește redarea pe celălalt aparat și încearcă din nou."
+msgstr "Túl sok kapcsolat van megnyitva ezzel az előfizetéssel. Állítsd le a lejátszást a másik készüléken, és próbáld újra."
+
+msgid "Canalul nu mai este la această adresă. Furnizorul l-a scos sau l-a mutat."
+msgstr "A csatorna ezen a címen már nem érhető el. A szolgáltató törölte vagy áthelyezte."
+
+msgid "S-au făcut prea multe cereri către server. Mai încearcă peste puțin."
+msgstr "Túl sok kérés érkezett a szerverhez. Próbáld újra egy kicsit később."
+
+#, python-format
+msgid "Furnizorul a refuzat redarea acestui canal (cod %d). Dacă abonamentul permite o singură redare, oprește-o pe celălalt aparat."
+msgstr "A szolgáltató elutasította a csatorna lejátszását (hibakód: %d). Ha az előfizetés egyszerre csak egy lejátszást enged, állítsd le a másik készüléken."
+
+#, python-format
+msgid "Serverul furnizorului are o problemă acum (cod %d). Mai încearcă peste puțin."
+msgstr "A szolgáltató szerverén most hiba van (hibakód: %d). Próbáld újra egy kicsit később."
+
+msgid "User-Agent sau Referer nu este bun. Folosește valorile primite de la furnizor, fără rânduri noi."
+msgstr "Hibás a User-Agent vagy a Referer. Használd a szolgáltatótól kapott értékeket, sortörés nélkül."
+
+msgid "Răspuns"
+msgstr "Válasz"
+
+msgid "Viteză"
+msgstr "Sebesség"
+
+#, python-format
+msgid "tampon %d%%"
+msgstr "puffer %d%%"
+
+#, python-format
+msgid "răspuns %s"
+msgstr "válasz %s"
+
+msgid "IPTV: n-a pornit"
+msgstr "IPTV: nem indult el"
+
+msgid "Agent utilizator (opțional)"
+msgstr "Felhasználói ügynök (opcionális)"
+
+msgid "Referer (opțional)"
+msgstr "Referer (opcionális)"
+
+msgid "Se încarcă ghidul TV..."
+msgstr "Műsorújság betöltése..."
+
+msgid "Grupele"
+msgstr "Csoportok"
+
+msgid "Ascunde tot"
+msgstr "Összes elrejtése"
+
+msgid "Seriale"
+msgstr "Sorozatok"
+
+msgid "Niciun rezultat."
+msgstr "Nincs találat."
+
+#, python-format
+msgid "Expiră la %s"
+msgstr "Lejárat: %s"
+
+msgid "Caută o grupă sau o țară"
+msgstr "Csoport vagy ország keresése"
+
+msgid "Agent utilizator și Referer: goale folosesc valorile implicite."
+msgstr "Felhasználói ügynök és Referer: üresen az alapértelmezett értékek érvényesek."
+
+msgid "Descriere"
+msgstr "Leírás"
+
+#, python-format
+msgid "Sezonul %s"
+msgstr "%s. évad"
+
+#, python-format
+msgid "Caut: %s. EXIT arată iar toată lista."
+msgstr "Ezt keresem: %s. Az EXIT újra megjeleníti a teljes listát."
+
+#, python-format
+msgid "Pagina %d"
+msgstr "%d. oldal"
+
+msgid "Caută seriale"
+msgstr "Sorozatok keresése"
+
+msgid "Nu există descriere."
+msgstr "Nincs leírás."
+
+#, python-format
+msgid "%d programe."
+msgstr "%d műsor."
+
+#, python-format
+msgid "Episodul %s"
+msgstr "%s. epizód"
+
+msgid "Episodul nu a pornit. Încearcă din nou."
+msgstr "Az epizód nem indult el. Próbáld újra."
+
+msgid "Antetele sursei"
+msgstr "A forrás fejlécei"
+
+msgid "Valorile salvate nu se arată. Completează ambele câmpuri; gol revine la valoarea implicită."
+msgstr "A mentett értékek nem jelennek meg. Töltsd ki mindkét mezőt; üresen az alapértelmezett érték áll vissza."
+
+msgid "Salvează antetele"
+msgstr "Fejlécek mentése"
+
+msgid "Pagina precedentă"
+msgstr "Előző oldal"
+
+msgid "Antete"
+msgstr "Fejlécek"
+
+msgid "Sezonul"
+msgstr "Évad"
+
+msgid "Lista are prea multe canale: au intrat primele"
+msgstr "Túl sok csatorna van a listában: csak az elsők kerültek be"
+
+msgid "Antetele au fost salvate. Se actualizează sursa..."
+msgstr "A fejlécek mentése sikerült. A forrás frissül..."
+
+msgid "Trimite antetele numai din formular."
+msgstr "A fejléceket csak az űrlapon küldd el."
+
+msgid "Episodul pornește pe televizor."
+msgstr "Az epizód a tévén indul."
+
+msgid "Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."
+msgstr "A szerver törli ennek a regisztrációnak az adatait. A többi helyen lévő regisztráció megmarad."
+
+msgid "Ghidul TV pentru canalele de internet cere actualizarea imaginii. Actualizează imaginea și încearcă din nou."
+msgstr "Az internetes csatornák műsorújságához frissíteni kell az image-et. Frissítsd az image-et, és próbáld újra."
+
+msgid "Ghidul TV nu s-a putut descărca. Verifică internetul și încearcă din nou."
+msgstr "Nem sikerült letölteni a műsorújságot. Ellenőrizd az internetkapcsolatot, és próbáld újra."
+
+msgid "Ghidul TV este actualizat."
+msgstr "A műsorújság frissült."
+
+msgid "Furnizorul nu a trimis programe pentru canalele din listă."
+msgstr "A szolgáltató nem küldött műsoradatokat a listán szereplő csatornákhoz."
+
+msgid "Alege un cont pentru seriale."
+msgstr "Válassz fiókot a sorozatokhoz."
+
+msgid "Serialul sau sezonul ales nu mai este disponibil."
+msgstr "A kiválasztott sorozat vagy évad már nem érhető el."
+
+msgid "Se încarcă alte pagini. Încearcă din nou peste câteva clipe."
+msgstr "További oldalak betöltése folyamatban. Próbáld újra néhány pillanat múlva."
+
+msgid "Pagina a expirat. Deschide din nou lista de seriale."
+msgstr "Az oldal lejárt. Nyisd meg újra a sorozatlistát."
+
+msgid "Lista de seriale nu a răspuns la timp. Încearcă o căutare mai precisă."
+msgstr "A sorozatlista nem válaszolt időben. Próbálj pontosabban keresni."
+
+msgid "Serialul are prea multe sezoane. Sunt afișate primele 500."
+msgstr "A sorozatnak túl sok évada van. Az első 500 jelenik meg."
+
+msgid "Ieși din programul de beta testeri? Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."
+msgstr "Kilépsz a bétatesztelői programból? A szerver törli ennek a regisztrációnak az adatait. A többi helyen lévő regisztráció megmarad."
+
+msgid "http://"
+msgstr "http://"

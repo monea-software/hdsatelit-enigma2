@@ -671,6 +671,13 @@ void eDVBDB::saveServicelist()
 	saveServicelist(eEnv::resolve("${sysconfdir}/enigma2/lamedb").c_str());
 }
 
+/* The internet channels of the owner's provider (Components/HdsIptvSurse.py): tens of thousands of channels in hundreds of groups.
+   Their files are read when a group is opened, so that reloadBouquets stays fast and the groups nobody opens take no memory. */
+static bool isLazyBouquet(const std::string &name)
+{
+	return name.compare(0, 19, "subbouquet.hdsiptv_") == 0 || name == "userbouquet.hdsiptv.tv";
+}
+
 void eDVBDB::loadBouquet(const char *path)
 {
 	std::string bouquet_name = path;
@@ -769,7 +776,8 @@ void eDVBDB::loadBouquet(const char *path)
 						snprintf(buf, 256, "FROM BOUQUET \"%s\" ORDER BY bouquet", path.c_str());
 						tmp.path = buf;
 					}
-					loadBouquet(path.c_str());
+					if (!isLazyBouquet(path))
+						loadBouquet(path.c_str());
 				}
 				list.push_back(tmp);
 				e = &list.back();
@@ -1577,6 +1585,11 @@ RESULT eDVBDB::getBouquet(const eServiceReference &ref, eBouquet* &bouquet)
 	}
 	std::map<std::string, eBouquet>::iterator i =
 		m_bouquets.find(str);
+	if (i == m_bouquets.end() && isLazyBouquet(str))
+	{
+		loadBouquet(str.c_str());
+		i = m_bouquets.find(str);
+	}
 	if (i == m_bouquets.end())
 	{
 		bouquet = 0;
@@ -1591,7 +1604,11 @@ RESULT eDVBDB::startQuery(ePtr<iDVBChannelListQuery> &query, eDVBChannelQuery *q
 	if ( source.path.find("FROM") != std::string::npos )
 	{
 		if ( source.path.find("BOUQUET") != std::string::npos )
+		{
+			if (isLazyBouquet(q->m_bouquet_name) && m_bouquets.find(q->m_bouquet_name) == m_bouquets.end())
+				loadBouquet(q->m_bouquet_name.c_str());
 			query = new eDVBDBBouquetQuery(this, source, q);
+		}
 		else if ( source.path.find("SATELLITES") != std::string::npos )
 			query = new eDVBDBSatellitesQuery(this, source, q);
 		else if ( source.path.find("PROVIDERS") != std::string::npos )

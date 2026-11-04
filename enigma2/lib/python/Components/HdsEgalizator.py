@@ -264,7 +264,8 @@ def _curataSetari(d):
 
 def cheiePost(ref):
 	"""Cheia unui post: primele 10 campuri ale referintei (fara nume si cale), cu litere mici; None la fisiere si
-	fluxuri (setarile pe post sunt numai pentru posturi)."""
+	fluxuri (setarile pe post sunt numai pentru posturi). Un post de radio pe flux cu numere proprii (locurile adaugate de extensii)
+	e un post; un rand facut de mana, cu numerele zero, nu: toate ar avea aceeasi cheie."""
 	if ref is None:
 		return None
 	text = ref if isinstance(ref, str) else ref.toString()
@@ -272,7 +273,8 @@ def cheiePost(ref):
 	if len(parti) < 10 or not parti[0].isdigit():
 		return None
 	if len(parti) > 10 and parti[10].strip():
-		return None             # redare din fisier sau flux
+		if parti[2].lower() != "2" or not any(p.strip("0") for p in parti[3:7]):
+			return None         # redare din fisier sau flux
 	return ":".join(p.lower() for p in parti[:10]) + ":"
 
 

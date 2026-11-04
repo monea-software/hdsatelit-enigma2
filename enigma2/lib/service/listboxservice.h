@@ -136,6 +136,12 @@ public:
 		   an empty number; clearRefNumbers() brings back the counting of the rows */
 	void setRefNumber(const eServiceReference &ref, int number);
 	void clearRefNumbers();
+		/* Optional per-service picons, from local directories only. Python owns discovery and downloads;
+		   paint decodes only visible rows, with a bounded pixmap cache. Missing picons keep the usual row. */
+	void addPiconPath(const std::string &path);
+	void setPiconsEnabled(bool enabled);
+	void invalidatePicons();
+	std::string takePiconRequests();
 		/* marks at the right end of a DVB service row, when the row has no other label (complex mode): markCrypted, the
 		   text `crypted` on a scrambled service (CAIDs known in lamedb or the dxIsScrambledPMT flag of the scan), and
 		   markSource, where the service comes from by its namespace (`satellite`, `cable`, `terrestrial`). The texts
@@ -210,6 +216,12 @@ private:
 	int m_service_marks;
 	std::string m_mark_crypted, m_mark_satellite, m_mark_cable, m_mark_terrestrial;
 	std::string serviceMarks(const eServiceReference &ref) const;
+	bool m_picons_enabled;
+	std::vector<std::string> m_picon_paths;
+	std::map<std::string, std::pair<ePtr<gPixmap>, unsigned long> > m_picon_cache;
+	unsigned long m_picon_clock;
+	std::set<std::string> m_picon_requests;
+	ePtr<gPixmap> servicePicon(const eServiceReference &ref);
 };
 
 #endif

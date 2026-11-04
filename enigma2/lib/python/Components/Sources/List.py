@@ -51,7 +51,9 @@ to generate HTML."""
 
 	@cached
 	def getCurrent(self):
-		return self.master is not None and self.master.current
+		# HDSatelit: o tema fara lista pentru sursa (numai un convertor ca StringListSelection, care n-are current) nu mai
+		# opreste interfata la OK: nu e nimic ales
+		return self.master is not None and getattr(self.master, "current", None)
 
 	current = property(getCurrent)
 

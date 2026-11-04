@@ -37,6 +37,9 @@ _monoton = compat.monoton
 
 ET = '8001'
 GAZDA = '127.0.0.1'
+# 0.7.0: cu setarea "Fluxuri pentru alte aparate din reteaua de acasa" pornita serverul asculta pe toate interfetele,
+# dar primeste numai adresele private (adresa_permisa); oprita, numai 127.0.0.1, ca pana acum
+GAZDA_RETEA = '0.0.0.0'
 PORT = 8001
 SESIUNI_MAX = 2
 TERMEN_CERERE_S = 5.0        # cat asteapta firul sesiunii randul GET
@@ -69,6 +72,33 @@ def ref_din_cerere(date):
         return None
     ref = parti[1][1:].replace('%3A', ':').replace('%3a', ':')
     return ref if REF_BUNA.match(ref) else None
+
+
+def adresa_privata(ip):
+    """0.7.0: True pentru o adresa IPv4 din reteaua de acasa (10.x.x.x, 172.16-31.x.x, 192.168.x.x)."""
+    try:
+        a = [int(x) for x in str(ip).split('.')]
+    except ValueError:
+        return False
+    if len(a) != 4 or not all(0 <= x <= 255 for x in a):
+        return False
+    return a[0] == 10 or (a[0] == 172 and 16 <= a[1] <= 31) or (a[0] == 192 and a[1] == 168)
+
+
+def adresa_permisa(ip, retea):
+    """Cine poate cere un flux: 127.0.0.1 mereu; cu setarea "Fluxuri pentru alte aparate din reteaua de acasa"
+    pornita si adresele private; din internet niciodata."""
+    return ip == GAZDA or (bool(retea) and adresa_privata(ip))
+
+
+def retea_pornita():
+    """Setarea config.misc.hds_fluxuri_retea_acasa (Components/UsageConfig.py, implicit oprita); fara ea (probele de pe
+    PC, alt cod) sau la orice eroare: oprita."""
+    try:
+        import sys
+        return bool(sys.modules['Components.config'].config.misc.hds_fluxuri_retea_acasa.value)
+    except Exception:
+        return False
 
 
 def cale_teava(fd):
@@ -225,6 +255,8 @@ class Server(object):
 
     def __init__(self, gazda=GAZDA, port=PORT, sesiuni_max=SESIUNI_MAX):
         self.gazda, self.port, self.sesiuni_max = gazda, port, sesiuni_max
+        self.retea = gazda == GAZDA_RETEA    # 0.7.0: se primesc si adresele private (adresa_permisa)
+        self._ascultare = None               # (notificatorul, manierul) soclului de ascultare: schimba_reteaua
         self.sock = None
         self.sesiuni = []
         self.oprit = False
@@ -258,6 +290,7 @@ class Server(object):
                 n = eSocketNotifier(fd, 1)
                 self._maniere.append(compat.conecteaza(n.callback, fn))
                 self._notificatori.append(n)
+            self._ascultare = (self._notificatori[0], self._maniere[0])
             self._ceas = eTimer()
             self._maniere.append(compat.conecteaza_timer(self._ceas, self._verifica))
             jurnal.noteaza(ET, 'serverul local de flux asculta pe %s:%d' % (self.gazda, self.port))
@@ -295,13 +328,76 @@ class Server(object):
                     pass
             self._trezire = None
 
+    def schimba_reteaua(self, pornita):
+        """0.7.0, firul principal, la schimbarea setarii retelei de acasa: soclul de ascultare se leaga din nou
+        (GAZDA_RETEA pornita, GAZDA oprita); oprita, sesiunile cerute din retea se opresc. Sesiunile de pe 127.0.0.1
+        raman. Daca noua legare nu merge, se revine la cea de dinainte. -> True daca serverul asculta. Nu arunca."""
+        pornita = bool(pornita)
+        self.retea = pornita
+        if not pornita:
+            for ses in list(self.sesiuni):
+                if ses.adresa and ses.adresa[0] != GAZDA:
+                    self._opreste_inregistrarea(ses)
+        gazda = GAZDA_RETEA if pornita else GAZDA
+        if self.sock is None or gazda == self.gazda:
+            return self.sock is not None
+        vechea = self.gazda
+        self._inchide_ascultarea()
+        if self._asculta(gazda):
+            jurnal.noteaza(ET, 'serverul local de flux asculta acum pe %s:%d' % (gazda, self.port))
+            return True
+        jurnal.noteaza(ET, 'serverul local de flux nu poate asculta pe %s:%d; ramane pe %s' % (gazda, self.port, vechea))
+        self.retea = vechea == GAZDA_RETEA
+        return self._asculta(vechea)
+
+    def _inchide_ascultarea(self):
+        if self._ascultare is not None:
+            n, manier = self._ascultare
+            self._ascultare = None
+            compat.deconecteaza(manier)
+            if manier in self._maniere:
+                self._maniere.remove(manier)
+            if n in self._notificatori:
+                self._notificatori.remove(n)
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+
+    def _asculta(self, gazda):
+        s = None
+        try:
+            from enigma import eSocketNotifier
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((gazda, self.port))
+            s.listen(4)
+            s.setblocking(False)
+            n = eSocketNotifier(s.fileno(), 1)
+            manier = compat.conecteaza(n.callback, self._accepta)
+        except Exception as e:
+            jurnal.noteaza(ET, 'legarea pe %s:%d: %s' % (gazda, self.port, e))
+            if s is not None:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+            return False
+        self.sock, self.gazda = s, gazda
+        self._maniere.append(manier)
+        self._notificatori.append(n)
+        self._ascultare = (n, manier)
+        return True
+
     def _accepta(self, _ce=None):
         while self.sock is not None:
             try:
                 conn, adresa = self.sock.accept()
             except (OSError, socket.error):
                 return
-            if adresa and adresa[0] != '127.0.0.1':
+            if adresa and not adresa_permisa(adresa[0], self.retea):
                 conn.close()
                 continue
             ses = Sesiune(self, conn, adresa)
@@ -373,6 +469,13 @@ class Server(object):
                 ses.eroare = 'serviciul nu se poate inregistra (referinta necunoscuta)'
                 return
             ses.rec = rec
+            # Stream Relay (0.7.0, Components/HdsStreamRelay.py): un canal din lista se da releului criptat, cu PID-urile
+            # ECM si fara inscriere la modulul de acces (drumul inregistrarilor "Decodeaza mai tarziu"), fiindca il
+            # decodeaza releul; fara fisierul listei nu se incarca nimic
+            if _in_stream_relay(ses.ref):
+                pune = getattr(rec, 'setDecodareMaiTarziu', None)
+                if pune is None or pune(True, False) != 0:
+                    jurnal.noteaza(ET, 'Stream Relay: fluxul criptat nu se poate cere pentru %s' % ses.ref)
             # releele cedeaza tunerul la zap (extensia de zap din pornire.py opreste sesiunile 8001 inainte de
             # alocare): marcata asa (lib/dvb/hdscedare.h), inregistrarea nu mai face gri in lista de canale
             # canalele pe care televizorul le poate porni; cu un enigma2 fara functie, nimic
@@ -538,6 +641,18 @@ def _termen_trimitere(conn, secunde):
     return False
 
 
+def _in_stream_relay(ref):
+    """True daca `ref` e in lista Stream Relay (Components/HdsStreamRelay.py); fara fisierul listei, False fara import."""
+    try:
+        if not os.path.isfile('/etc/enigma2/whitelist_streamrelay'):
+            return False
+        from Components import HdsStreamRelay
+        return HdsStreamRelay.releu().checkService(ref)
+    except Exception:
+        jurnal.eroare(ET, 'lista Stream Relay')
+        return False
+
+
 def _neblocant(fd):
     import fcntl
     fl = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -551,11 +666,22 @@ def porneste():
     """Din imagine.porneste (firul principal). O singura data pe proces. -> serverul sau None."""
     if _server:
         return _server[0]
-    s = Server()
+    s = Server(gazda=GAZDA_RETEA if retea_pornita() else GAZDA)
     if s.porneste():
         _server.append(s)
+        _urmareste_reteaua(s)
         return s
     return None
+
+
+def _urmareste_reteaua(s):
+    """0.7.0: la schimbarea setarii retelei de acasa (televizor sau web) serverul se leaga din nou, pe loc."""
+    try:
+        import sys
+        element = sys.modules['Components.config'].config.misc.hds_fluxuri_retea_acasa
+    except Exception:
+        return
+    element.addNotifier(lambda el: s.schimba_reteaua(el.value), initial_call=False)
 
 
 def opreste():

@@ -3,7 +3,7 @@ installdir = $(pkglibdir)/python/Screens
 
 install_PYTHON = \
 	AudioSelection.py ChannelSelection.py InfoBar.py HdsFontInterfata.py \
-	HdsTransmisie.py \
+	HdsTransmisie.py HdsAdaugaFeed.py \
 	Menu.py MessageBox.py Screen.py ServiceScan.py TimerEdit.py \
 	HdsRaportCanal.py \
 	MovieSelection.py Setup.py About.py HarddiskSetup.py FixedMenu.py \
@@ -22,7 +22,7 @@ install_PYTHON = \
 	Information.py Time.py CamSetup.py CamInfo.py LogManager.py HdsStartWizard.py \
 	SkinSelector.py Satfinder.py ConfigLNB.py HdsDvbI.py HdsDvbMABR.py \
 	ScanerSatelit.py HdsScanareFluxuri.py ScanerTerestru.py FontSetup.py OSDCalibration.py PositionerSetup.py \
-	ButtonSetup.py IptvSetup.py SwapManager.py HdsWebControlSetup.py \
+	ButtonSetup.py IptvSetup.py HdsIptvIncarcare.py SwapManager.py HdsWebControlSetup.py \
 	HdsSoftwareUpdate.py TempFanControl.py CleanupWizard.py \
 	HdsCrashlogAutoSubmit.py HdsCautareCanale.py HdsCautaSetari.py HdsHdmiInfo.py HdsExtensii.py HdsDishMotor.py \
 	HdsEditorCanale.py HdsEditorCanaleLegatura.py HdsEditorCanaleLogica.py HdsEditorCanaleUnelte.py \
@@ -34,7 +34,7 @@ install_PYTHON = \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
-	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsDescarcareSubtitrari.py \
+	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
 	HdsNavigatorWeb.py HdsTemaInterfata.py HdsAnuntRetea.py HdsUnelteRetea.py \

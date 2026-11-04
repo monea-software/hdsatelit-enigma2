@@ -28,6 +28,7 @@ Nimic din acest fisier nu importa enigma2 la incarcare.
 from __future__ import absolute_import, unicode_literals
 
 import bisect
+import codecs
 import time
 
 
@@ -929,6 +930,8 @@ class _ProcesReceptor(object):
         self._la_rand = la_rand
         self._la_iesire = la_iesire
         self._rest = ''
+        # eConsoleAppContainer da octeti: decodati pe masura ce vin (un caracter taiat intre doua citiri iese intreg)
+        self._decodor = codecs.getincrementaldecoder('utf-8')('replace')
         self.c = eConsoleAppContainer()
         self.c.dataAvail.append(self._date)
         self.c.appClosed.append(self._inchis)
@@ -936,14 +939,15 @@ class _ProcesReceptor(object):
             raise RuntimeError('execute')
 
     def _date(self, data):
-        if isinstance(data, bytes):
-            data = data.decode('utf-8', 'ignore')
+        if isinstance(data, (bytes, bytearray)):
+            data = self._decodor.decode(data)
         self._rest += data
         while '\n' in self._rest:
             linie, self._rest = self._rest.split('\n', 1)
             self._la_rand(linie)
 
     def _inchis(self, cod):
+        self._rest += self._decodor.decode(b'', True)
         if self._rest:
             self._la_rand(self._rest)
             self._rest = ''

@@ -556,6 +556,15 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 		rez.update({"merge": False, "motiv": text, "avertizare": ""})
 	else:
 		rez.update({"merge": True, "motiv": "", "avertizare": text})
+	# 0.7.0 Stream Relay: un canal din lista vine de la releu (Components/HdsTransmisie.py, adresaReleu), deci nu se
+	# refuza ca "criptat"; daca releul nu raspunde acum, motivul lui, pe loc (legatura se incearca cel mult 0,5 s)
+	releu = T.adresaReleu(ref) if hasattr(T, "adresaReleu") else None
+	if releu is not None:
+		rez["releu"] = True
+		if not T.releuAsculta(releu):
+			motiv_releu = _t(T.TEXT_RELEU_OPRIT) % (releu[0], releu[1])
+			rez.update({"merge": False, "motiv": motiv_releu, "avertizare": "", "extern": False,
+				"extern_motiv": motiv_releu})
 	# un canal MPEG-2 trece ca "merge" cand pagina trimite wasm=1 (are playerul wasm); fluxul e acelasi, numai redarea
 	# din pagina difera (player.js alege playerul dupa "video")
 	return rez
@@ -851,6 +860,10 @@ def scrieOsd(request, rez, fereastra=None):
 def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 	"""Verificarea stratului pe un fir (P._AsteptareCaptura: rezultatul vine inapoi pe firul enigma2 printr-un pipe si un
 	eTimer, nu prin reactor.callLater sau callFromThread, care in reactorul imaginii pot lasa bucla sa doarma)."""
+	from . import captura_sigura as CS
+	epoca_captura = CS.epocaCapturii()
+	if epoca_captura is None:
+		return scrieOsd(request, {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)})
 	if asteptare is None:
 		from . import plugin as P
 		asteptare = P._AsteptareCaptura
@@ -875,6 +888,10 @@ def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 			print("[tv_web] stratul: raspunsul nu a plecat (client plecat?): %r" % (e,))
 
 	def _rezultat(rez):
+		if gata[0]:
+			return
+		if not CS.capturaValida(epoca_captura):
+			rez = {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)}
 		# fereastra de acum, cand pleaca raspunsul (verificarea a durat)
 		_incheie(scrieOsd(request, rez, fereastraStrat(S)))
 
@@ -1385,6 +1402,10 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			refuz, _s, _b, _a = _poartaPagina(self, request)
 			if refuz is not None:
 				return refuz
+			from . import captura_sigura as CS
+			epoca_captura = CS.epocaCapturii()
+			if epoca_captura is None:
+				return self._raspunde(request, {"result": False, "message": _t(CS.MESAJ_ASOCIERE)}, 403)
 			try:
 				from . import acces_ssh_web
 				refuz_ssh = acces_ssh_web.refuzEcranDeschis(request)
@@ -1405,6 +1426,8 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			fereastra = fereastraStrat(S)
 			rez = S.dinMemorie(latime, etag)
 			if rez is not None:
+				if not CS.capturaValida(epoca_captura):
+					return self._raspunde(request, {"result": False, "message": _t(CS.MESAJ_ASOCIERE)}, 403)
 				return scrieOsd(request, rez, fereastra)
 			if _osd_fire[0] >= OSD_FIRE_MAX:
 				request.setHeader(b"retry-after", b"1")

@@ -7,7 +7,7 @@
 #
 # Transmisiile canalelor spre browser (pagina web /tv, Components/HdsTransmisie.py): cine se uita, la ce canal, de
 # cand, cat s-a trimis; ROSU opreste toate transmisiile. Setarile: transmisia permisa (implicit Da), permisa si in
-# standby (implicit Nu), cel mult cate transmisii odata (1 sau 2, implicit 1), oprirea cand nu se mai uita nimeni (10
+# standby (implicit Da, din 0.7.0), cel mult cate transmisii odata (1 sau 2, implicit 1), oprirea cand nu se mai uita nimeni (10
 # s, 20 s, 1 minut; implicit 1 minut). Dedesubt: cate canale noi se mai pot deschide pana la repornirea receptorului
 # (memoria driverului video) si ultimele transmisii incheiate, cu motivul. Aceleasi setari, aceeasi lista si acelasi
 # buton in interfata web: /tv (HdsWebControl/tv_web.py).

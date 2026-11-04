@@ -5,11 +5,8 @@
 #include <lib/gui/ewidget.h>
 
 #ifndef SWIG
-	/* HDSatelit: a one-line text that does not fit in its box scrolls instead of being cut. The text stays ~2 s at
-	   its beginning, moves slowly to the left until its end is visible, stays ~2 s, comes back to the beginning and
-	   starts again. A text that fits is drawn exactly as before and never moves. One timer serves all the boxes that
-	   scroll at a time; each tick redraws only those boxes (a label, or the selected row of a list), and a box that
-	   is not visible stops until it is drawn again. The owner (eLabel, eListbox) gives the widget and the redraw. */
+	/* One-line overflow waits at the start, scrolls towards the end, waits and repeats.
+	   RTL starts at the right. One timer redraws only visible scrolling widgets. */
 class eDerulare
 {
 public:
@@ -20,12 +17,10 @@ public:
 		/* around a paint of the box: the scroll goes as far as the widest text that overflowed in it */
 	void beginPaint();
 	void endPaint(bool painted);
-		/* during the paint: how far a text that overflows by `overflow` px is moved to the left now */
+		/* Scroll distance; the drawing chooses the sign from the text direction. */
 	int shift(int overflow);
-		/* One line of text in `rect`, like gPainter::renderText(rect, text, flags) with `font` set. When it does not
-		   fit, it is drawn left aligned from its beginning, cut cleanly at the edge of `rect` (no "..."), and moved by
-		   `scroller` when one is given (the selected row of a list, a label). A text with several lines (RT_WRAP in a
-		   box of two lines or more, or a new line in it) is drawn as before. Returns the overflow in px (0: fits). */
+		/* One line in rect; overflow scrolls from the logical beginning (right for RTL).
+		   Multiline text keeps its wrapping. Returns the overflow in px (0: fits). */
 	static int drawLine(gPainter &painter, gFont *font, const eRect &rect, const std::string &text, int flags, eDerulare *scroller);
 		/* true when `text` is surely narrower than `width` px with `font`, without measuring it */
 	static bool surelyFits(const std::string &text, const gFont *font, int width);
@@ -60,7 +55,8 @@ public:
 		alignCenter,
 		alignRight,
 		alignBottom=alignRight,
-		alignBlock
+		alignBlock,
+		alignAuto
 	};
 	
 	void setVAlign(int align);

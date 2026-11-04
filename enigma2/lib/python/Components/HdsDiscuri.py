@@ -32,8 +32,8 @@
 # sterse) nu scrie nimic; Harddisk.mountIfNeeded asteapta deci tipul nou si monteaza numai dupa mkfs.
 #
 # VERIFICAREA (verifica): fiecare partitie cu ext2, ext3 sau ext4 (fsck.ext4 -f -p) sau FAT (fsck.fat -a), apoi fiecare
-# montare de dinainte se pune la loc exact cum era (acelasi loc, acelasi tip, aceleasi optiuni), deci legaturile
-# /media/hdd si /media/usb raman bune.
+# montare de dinainte se pune la loc cum era (acelasi loc, acelasi tip, aceleasi optiuni; dupa o verificare reusita, pentru
+# scriere, si daca nucleul o pusese pe numai citire la o eroare), deci legaturile /media/hdd si /media/usb raman bune.
 #
 # INAINTE DE LUCRU (cu discul ales):
 #   - continut(): ce se pierde, spus pe nume: copiile setarilor HD Satelit (hdsatelit/copii-setari, citite de
@@ -729,11 +729,20 @@ def _demonteaza(montari, u):
 	return True, facute
 
 
-def _monteazaLaLoc(montari, u):
-	"""Pune la loc montarile de dinainte (cele mai scurte locuri intai), cu acelasi tip si aceleasi optiuni."""
+def _pentruScriere(optiuni):
+	"""Optiunile unei montari, cu ro inlocuit de rw: dupa o verificare reusita, un disc pus de nucleu pe numai citire la o
+	eroare (errors=remount-ro) trebuie sa se poata scrie din nou. Numai optiunea intreaga: errors=remount-ro ramane."""
+	return ",".join("rw" if o == "ro" else o for o in (optiuni or "").split(","))
+
+
+def _monteazaLaLoc(montari, u, scriere=False):
+	"""Pune la loc montarile de dinainte (cele mai scurte locuri intai), cu acelasi tip si aceleasi optiuni (`scriere`: pentru
+	scriere, si daca erau pe numai citire)."""
 	bun = True
 	for sursa, loc, tip, optiuni in sorted(montari, key=lambda x: len(x[1])):
 		u.faDosar(loc)
+		if scriere:
+			optiuni = _pentruScriere(optiuni)
 		if u.ruleaza(("mount", "-t", tip, "-o", optiuni, sursa, loc)) != 0:
 			_jurnal("mount %s %s a cazut" % (sursa, loc))
 			bun = False
@@ -843,7 +852,7 @@ def verifica(disc, unelte=None, verifica_nume=True):
 			r = 0 if res in (0, 1) else E_FSCK
 		if r != 0 and (rezultat == 0 or r == E_NEREPARABIL):
 			rezultat = r
-	if not _monteazaLaLoc(montari, u) and rezultat == 0:
+	if not _monteazaLaLoc(montari, u, scriere=rezultat == 0) and rezultat == 0:
 		rezultat = E_MONTARE
 	return rezultat, (montari[0][1] if montari else "")
 

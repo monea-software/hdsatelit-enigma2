@@ -35,6 +35,10 @@
 # singur tuner de satelit, un canal de satelit merge NUMAI de pe transponderul televizorului (in standby, al canalului
 # de dinainte): inregistrarea imparte atunci canalul televizorului (eDVBResourceManager il refoloseste), deci nu se
 # reacordeaza tunerul si nu pleaca nicio comanda spre motor (comenzile motorului pleaca numai dintr-o acordare, sec.cpp).
+# IN STANDBY, FARA MOTOR: televizorul nu tine tunerul, iar fara motor nicio acordare nu misca antena (un comutator DiSEqC
+# nu misca nimic), deci merge orice canal, de pe orice satelit si orice frecventa, daca tunerul e liber (ca pe imaginile
+# clasice). Cu motor ramane regula de mai sus (satelitul si frecventa canalului de dinainte). La iesirea din standby
+# televizorul castiga, ca la orice zap (_laZap, cedeaza).
 # Doua porniri noi (inregistrari noi) au intre ele cel putin PAUZA_COMUTARE_S: comutarile foarte rapide nu mai ajung la
 # driver si la modulul de acces ca o rafala.
 #
@@ -291,7 +295,7 @@ def _jurnal(text):
 # ---------------------------------------------------------------- setarile
 
 def initConfig():
-	"""config.hds_transmisie: permis (Da), standby (Nu), sesiuni_max (1), asteptare (60 s). Ascunse (nu sunt pe
+	"""config.hds_transmisie: permis (Da), standby (Da, din 0.7.0), sesiuni_max (1), asteptare (60 s). Ascunse (nu sunt pe
 	televizor si nici in pagina; se schimba in /etc/enigma2/settings cu enigma2 oprit): criptate (Da), criptate_pauza
 	(PAUZA_CRIPTAT_S secunde) si criptate_varsta (VARSTA_CRIPTAT_S secunde)."""
 	from Components.config import config
@@ -300,7 +304,7 @@ def initConfig():
 	from Components.config import ConfigSubsection, ConfigYesNo, ConfigSelection, ConfigInteger
 	config.hds_transmisie = ConfigSubsection()
 	config.hds_transmisie.permis = ConfigYesNo(default=True)
-	config.hds_transmisie.standby = ConfigYesNo(default=False)
+	config.hds_transmisie.standby = ConfigYesNo(default=True)
 	config.hds_transmisie.sesiuni_max = ConfigSelection(default=SESIUNI_IMPLICIT,
 		choices=[(s, s) for s in SESIUNI_PERMISE])
 	config.hds_transmisie.asteptare = ConfigSelection(default=str(ASTEPTARE_IMPLICITA_S), choices=alegeriAsteptare())
@@ -798,6 +802,7 @@ class Sesiune(object):
 		self.fir = None
 		self.lacat = threading.Lock()
 		self.client_nou = None           # (fd, la_plecare), pus de firul principal, luat de firul sesiunii
+		self.releu = None                # 0.7.0: (gazda, port, cheie) pentru un canal din lista Stream Relay
 		self.ac3 = False                 # browserul reda AC-3 (pista AC-3 ramane in PMT, vezi RescrierePsi)
 		self.pista = None                # PID-ul pistei audio alese din pagina (None = alegerea obisnuita)
 		self.piste = []                  # pistele audio din PMT (puse de firul sesiunii, din RescrierePsi.piste)
@@ -847,14 +852,14 @@ class Manager(object):
 
 	def __init__(self, setari=None, memorie=None, tuner=None, inregistrare=None, programator=None, ceas=None,
 			perete=None, contor=None, tv=None, in_standby=None, navigatie=None, doar_frecventa_tv=None, criptat=None,
-			inregistrari=None, jurnal_cam=None):
+			inregistrari=None, jurnal_cam=None, cu_motor=None):
 		self.setari = setari or Setari()
 		self.sesiuni = []
 		self.jurnal = collections.deque(maxlen=JURNAL_MAX)
 		self.oprite = {}                 # cine -> (motiv, cand): ce i se spune paginii dupa o oprire
 		self._memorie = memorie or memorieDriver
 		self._tuner = tuner or tunerLiber
-		self._inregistrare = inregistrare or InregistrareInTeava()
+		self._inregistrare = inregistrare or InregistrareSauReleu()
 		self._programator = programator  # f(functie): pune functia pe firul principal (probele o cheama pe loc)
 		self._ceas = ceas                # obiect cu start(ms) / stop(), sau None (se face un eTimer)
 		self._monoton = monoton
@@ -866,6 +871,8 @@ class Manager(object):
 		self._doar_frecventa_tv = doar_frecventa_tv or doarFrecventaTv
 		self._criptat = criptat or canalCriptat
 		self._doar_frecventa_citit = (None, True)   # (cand, valoare): /api/tv-canale o cere pentru fiecare canal
+		self._cu_motor = cu_motor or cuMotor
+		self._cu_motor_citit = (None, True)
 		self._ultima_pornire = None      # ceasul monoton al ultimei inregistrari noi
 		self.pauza_comutare_s = PAUZA_COMUTARE_S
 		self._lacat = threading.Lock()
@@ -1247,6 +1254,8 @@ class Manager(object):
 		# televizor (sau, in standby, a canalului de dinainte)
 		ref_tv = self._tv()
 		poz = pozitieSatelit(curata)
+		if poz is not None and self._in_standby() and not self.cuMotor():
+			poz = None   # IN STANDBY, FARA MOTOR (sus): orice satelit si orice frecventa, daca tunerul e liber
 		if poz is not None:
 			poz_tv = pozitieSatelit(ref_tv) if ref_tv else None
 			if poz_tv is None:
@@ -1266,6 +1275,15 @@ class Manager(object):
 		if cand is None or acum - cand >= DOAR_FRECVENTA_S or acum < cand:
 			valoare = bool(self._doar_frecventa_tv())
 			self._doar_frecventa_citit = (acum, valoare)
+		return valoare
+
+	def cuMotor(self):
+		"""Are receptorul o antena cu motor? Citit cel mult o data la DOAR_FRECVENTA_S (ca doarFrecventaTv)."""
+		cand, valoare = self._cu_motor_citit
+		acum = self._monoton()
+		if cand is None or acum - cand >= DOAR_FRECVENTA_S or acum < cand:
+			valoare = bool(self._cu_motor())
+			self._cu_motor_citit = (acum, valoare)
 		return valoare
 
 	def _acelasiTransponderCuOVie(self, ref, ignora=None):
@@ -1291,7 +1309,9 @@ class Manager(object):
 		if not ok:
 			return None, motiv
 		criptat = bool(self._criptat(ref))
-		if criptat and not self.setari.criptate():
+		# 0.7.0: un canal din lista Stream Relay vine decodat de la releu, deci nu se refuza ca "criptat"
+		releu = adresaReleu(refCurata(ref) or ref)
+		if criptat and not self.setari.criptate() and releu is None:
 			return None, CRIPTAT_OPRIT
 		curata = refCurata(ref)
 		preluata = a_mea is not None and bool(fereastra) and bool(a_mea.fereastra) and a_mea.fereastra != fereastra
@@ -1355,6 +1375,7 @@ class Manager(object):
 			ses.decriptare = DECRIPTARE_ASTEAPTA
 			self._jurnal_cam.marcheaza()
 		self._pornesteTrezirea()
+		ses.releu = releu
 		eroare = self._inregistrare.porneste(ses)
 		if eroare:
 			self._opresteInregistrarea(ses)
@@ -1537,7 +1558,8 @@ class Manager(object):
 			elif standby and not self.setari.standby():
 				self._opresteAcum(s, _("Receptorul a intrat în standby."), cod="standby")
 			elif self._inregistrare.eroare(s):
-				self._opresteAcum(s, _("Canalul nu mai poate fi primit (tunerul s-a pierdut sau a fost luat)."),
+				text = getattr(self._inregistrare, "textEroare", lambda s_: None)(s)
+				self._opresteAcum(s, text or _("Canalul nu mai poate fi primit (tunerul s-a pierdut sau a fost luat)."),
 					fortat=True, cod="tuner")
 			elif (s.ultim_octet_mon or s.inceput_mon) + FARA_DATE_S < acum and not self._faraDateCriptat(s):
 				self._opresteAcum(s, _("Canalul nu mai trimite date."), cod="fara_date")
@@ -2670,6 +2692,225 @@ class InregistrareInTeava(object):
 			return 0
 
 
+# ------------------------------------------------------------------ Stream Relay (0.7.0)
+# 0.7.0: TV in browser, "Vezi live" si playerele externe (VLC, Kodi) merg si pe canalele din
+# lista Stream Relay (Components/HdsStreamRelay.py). Pentru ele sesiunea nu inregistreaza serviciul: ia fluxul de la
+# releu (http://<gazda>:<port>/<canal>, adresa si portul din setarile Stream Relay), care l-a cerut la randul lui
+# serverului de flux al imaginii (Hds/DabT2/server8001.py) si l-a decodat. Un fir muta raspunsul releului in teava
+# sesiunii; restul e ca la o inregistrare (firul sesiunii, RescrierePsi, verificarea imaginii clare). Releul care nu
+# raspunde: TEXT_RELEU_OPRIT, pe loc (legatura se incearca cel mult TERMEN_RELEU_S). Fara fisierul listei nimic din toate
+# acestea nu se incarca (adresaReleu se intoarce dupa un singur stat).
+
+FISIER_RELEU = "/etc/enigma2/whitelist_streamrelay"
+TERMEN_RELEU_S = 0.5              # legatura cu releul (pe receptor sau in reteaua de acasa: raspunsul vine pe loc)
+CITIRE_RELEU_S = 1.0              # recv-ul firului: atat cel mult, ca oprirea sa se vada repede
+ANTET_RELEU_MAX = 16384
+TEXT_RELEU_OPRIT = N_("Stream Relay nu răspunde la %s:%d. Verifică adresa și portul din setările Stream Relay.")
+TEXT_RELEU_CAZUT = N_("Stream Relay a oprit fluxul canalului.")
+
+
+def adresaReleu(ref, fisier=FISIER_RELEU):
+	"""(gazda, port, cheia canalului) cand `ref` e in lista Stream Relay si releul se poate folosi (pe receptor sau in
+	reteaua de acasa permisa: HdsStreamRelay.releuPermis); altfel None. Fara fisierul listei: None, fara niciun import."""
+	if not os.path.isfile(fisier):
+		return None
+	try:
+		from Components import HdsStreamRelay as SR
+		k = SR.cheie(ref)
+		r = SR.releu()
+		if not k or k not in r.chei():
+			return None
+		gazda, port, _intarziere = r.configurare()
+		if not SR.releuPermis(gazda):
+			return None
+		return ("127.0.0.1" if gazda == "localhost" else gazda), port, k
+	except Exception as e:
+		_jurnal("Stream Relay: %r" % (e,))
+		return None
+
+
+def releuAsculta(adresa, termen=TERMEN_RELEU_S):
+	"""True daca releul (gazda, port, ...) primeste legaturi acum."""
+	s = None
+	try:
+		import socket
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.settimeout(termen)
+		s.connect((adresa[0], adresa[1]))
+		return True
+	except Exception:
+		return False
+	finally:
+		if s is not None:
+			s.close()
+
+
+class _FluxReleu(object):
+	"""Locul inregistrarii pentru o sesiune prin releu (ses.rec): firul care cere canalul releului si muta raspunsul in
+	capatul de scriere al tevii. stop() si getError() ca la o inregistrare enigma2. Capatul de scriere il inchide cine
+	termina ultimul: firul (daca mai scria la oprire) sau firul principal (dupa ce firul s-a incheiat)."""
+
+	def __init__(self, sock, w, gazda, cale):
+		self.sock, self.w, self.gazda, self.cale = sock, w, gazda, cale
+		self.eroare = 0
+		self.oprit = False
+		self.octeti = 0
+		self._lacat = threading.Lock()
+		self._iesit = False
+		self._inchide_w = False
+		self.fir = threading.Thread(target=self._muta, name="hdstv-releu")
+		self.fir.daemon = True
+
+	def start(self):
+		self.fir.start()
+		return 0
+
+	def stop(self):
+		with self._lacat:
+			self.oprit = True
+		import socket
+		try:
+			self.sock.shutdown(socket.SHUT_RDWR)
+		except Exception:
+			pass
+		try:
+			self.sock.close()
+		except Exception:
+			pass
+
+	def getError(self):
+		return self.eroare
+
+	def predaScrierea(self, asteapta_s=1.0):
+		"""Dupa stop(), din firul principal: True daca firul s-a incheiat si capatul de scriere se poate inchide acum;
+		altfel il inchide firul cand iese."""
+		self.fir.join(asteapta_s)
+		with self._lacat:
+			if self._iesit:
+				return True
+			self._inchide_w = True
+			return False
+
+	def _scrie(self, date):
+		vedere = memoryview(date)
+		while len(vedere):
+			if self.oprit:
+				return False
+			n = os.write(self.w, vedere)
+			vedere = vedere[n:]
+		self.octeti += len(date)
+		return True
+
+	def _muta(self):
+		try:
+			self.sock.settimeout(CITIRE_RELEU_S * 3)
+			cerere = "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: HDSatelit\r\nConnection: close\r\n\r\n" % (
+				self.cale, self.gazda)
+			self.sock.sendall(cerere.encode("ascii"))
+			antet = b""
+			while b"\r\n\r\n" not in antet:
+				date = self.sock.recv(4096)
+				if not date:
+					raise IOError("releul a inchis legatura inainte de antet")
+				antet += date
+				if len(antet) > ANTET_RELEU_MAX:
+					raise IOError("antetul releului e prea lung")
+			cap, rest = antet.split(b"\r\n\r\n", 1)
+			stare = cap.split(b"\r\n", 1)[0].split()
+			if len(stare) < 2 or stare[1] != b"200":
+				raise IOError("releul a raspuns %r" % (cap.split(b"\r\n", 1)[0][:80],))
+			self.sock.settimeout(CITIRE_RELEU_S)
+			if rest and not self._scrie(rest):
+				return
+			import socket
+			while not self.oprit:
+				try:
+					date = self.sock.recv(BLOC)
+				except socket.timeout:
+					continue
+				if not date:
+					raise IOError("releul a inchis fluxul")
+				if not self._scrie(date):
+					return
+		except Exception as e:
+			if not self.oprit:
+				self.eroare = -1
+				_jurnal("Stream Relay %s: %s" % (self.cale, e))
+		finally:
+			with self._lacat:
+				self._iesit = True
+				inchide = self._inchide_w
+			if inchide:
+				_inchideFd(self.w)
+
+
+class FluxReleuInTeava(object):
+	"""Sursa sesiunilor unui canal din lista Stream Relay (ses.releu = (gazda, port, cheie)): fluxul releului, nu tunerul."""
+
+	def porneste(self, ses):
+		"""-> None daca merge, altfel motivul (text pentru om)."""
+		import socket
+		gazda, port, cale = ses.releu
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.settimeout(TERMEN_RELEU_S)
+		try:
+			s.connect((gazda, port))
+		except Exception as e:
+			s.close()
+			_jurnal("Stream Relay %s:%d nu raspunde: %r" % (gazda, port, e))
+			return _(TEXT_RELEU_OPRIT) % (gazda, port)
+		r, w = os.pipe()
+		ses.r, ses.w = r, w
+		try:
+			import fcntl
+			fcntl.fcntl(w, F_SETPIPE_SZ, TEAVA_OCTETI)
+		except Exception:
+			pass
+		ses.rec = _FluxReleu(s, w, gazda, cale)
+		ses.rec.start()
+		return None
+
+	def opreste(self, ses):
+		rec, ses.rec = ses.rec, None
+		w, ses.w = ses.w, None
+		if rec is not None:
+			rec.stop()
+			if not rec.predaScrierea():
+				return               # capatul de scriere il inchide firul releului, cand iese
+		if w is not None:
+			_inchideFd(w)
+
+	@staticmethod
+	def eroare(ses):
+		rec = ses.rec
+		return rec.getError() if isinstance(rec, _FluxReleu) else 0
+
+
+class InregistrareSauReleu(object):
+	"""Sursa implicita a managerului: releul pentru sesiunile canalelor din lista Stream Relay (ses.releu), altfel
+	inregistrarea in teava, ca pana acum."""
+
+	def __init__(self, inregistrare=None, releu=None):
+		self.inregistrare = inregistrare or InregistrareInTeava()
+		self.releu = releu or FluxReleuInTeava()
+
+	def _pentru(self, ses):
+		return self.releu if getattr(ses, "releu", None) else self.inregistrare
+
+	def porneste(self, ses):
+		return self._pentru(ses).porneste(ses)
+
+	def opreste(self, ses):
+		return self._pentru(ses).opreste(ses)
+
+	def eroare(self, ses):
+		return self._pentru(ses).eroare(ses)
+
+	def textEroare(self, ses):
+		"""Textul opririi la o eroare a sursei: al releului pentru sesiunile prin releu, altfel None (textul tunerului)."""
+		return _(TEXT_RELEU_CAZUT) if getattr(ses, "releu", None) else None
+
+
 def folosiriCanalelor():
 	"""Canalele tunerelor ocupate acum, cu folosirile lor (eDVBResourceManager.getChannelUseCounts, lib/dvb/hdscedare.h):
 	[{"tsid", "onid", "ns" (hex), "folosiri", "cedabile" (ale inregistrarilor care cedeaza la zap), "cache"}].
@@ -2711,6 +2952,17 @@ def doarFrecventaTv():
 		return len(HdsLnb.tunereSatelit()) <= 1
 	except Exception as e:
 		_jurnal("motorul si tunerele nu se pot citi (%r): numai frecventa televizorului" % (e,))
+		return True
+
+
+def cuMotor():
+	"""True cand un tuner de satelit are antena cu motor (USALS / DiSEqC 1.2). Daca nu se poate afla, True (paza cea
+	mai sigura: in standby ramane regula frecventei canalului de dinainte)."""
+	try:
+		from Components import HdsMotorTuner
+		return bool(HdsMotorTuner.tunereCuMotor())
+	except Exception as e:
+		_jurnal("motorul nu se poate citi (%r): in standby numai frecventa canalului de dinainte" % (e,))
 		return True
 
 

@@ -21,6 +21,8 @@
 #include <dvbsi++/descriptor_tag.h>
 
 int eventData::CacheSize=0;
+int eventData::ImportedCount=0;
+int eventData::ImportedBytes=0;
 descriptorMap eventData::descriptors;
 __u8 eventData::data[4108];
 extern const uint32_t crc32_table[256];
@@ -55,8 +57,13 @@ const eServiceReference &handleGroup(const eServiceReference &ref)
 }
 
 eventData::eventData(const eit_event_struct* e, int size, int type)
-	:ByteSize(size&0xFF), type(type&0xFF)
+	:ByteSize(size&0xFF), type(type&0xFF), ImportedCost(type == 32 ? (e ? size + 768 : 3072) : 0)
 {
+	if (ImportedCost)
+	{
+		++ImportedCount;
+		ImportedBytes += ImportedCost;
+	}
 	if (!e)
 		return;
 
@@ -147,6 +154,11 @@ const eit_event_struct* eventData::get() const
 
 eventData::~eventData()
 {
+	if (ImportedCost)
+	{
+		--ImportedCount;
+		ImportedBytes -= ImportedCost;
+	}
 	if ( ByteSize )
 	{
 		CacheSize -= ByteSize;
@@ -161,7 +173,7 @@ eventData::~eventData()
 				descriptorPair &p = it->second;
 				if (!--p.first) // no more used descriptor
 				{
-					CacheSize -= it->second.second[1];
+					CacheSize -= it->second.second[1]+2; // descriptor header is part of CacheSize, too
 					delete [] it->second.second;  	// free descriptor memory
 					descriptors.erase(it);	// remove entry from descriptor map
 				}
@@ -263,6 +275,177 @@ bool eEPGCache::requestSave()
 		return false;
 	messages.send(Message(Message::save));
 	return true;
+}
+
+/* HDSatelit clean-room XMLTV import: ordinary DVB descriptors, with the explicit UTF-8 marker
+   understood by our existing event parser. Python never supplies raw EIT or descriptor bytes. */
+static bool hdsEpgText(ePyObject value, std::string &text, size_t limit)
+{
+	if (!PyUnicode_Check(value))
+		return false;
+	const char *utf8 = PyUnicode_AsUTF8(value);
+	if (!utf8)
+	{
+		PyErr_Clear();
+		return false;
+	}
+	size_t len = strnlen(utf8, limit + 1);
+	if (len > limit)
+	{
+		len = limit;
+		while (len && (static_cast<unsigned char>(utf8[len]) & 0xc0) == 0x80)
+			--len;
+	}
+	text.assign(utf8, len);
+	return true;
+}
+
+static unsigned char hdsEpgBcd(int value)
+{
+	return ((value / 10) << 4) | (value % 10);
+}
+
+int eEPGCache::importEvents(const std::string &reference, ePyObject events)
+{
+	// Narrow public entry point: no changes to DVB service priorities or EIT reception.
+	eServiceReference ref(reference);
+	if (ref.type != 4097 || !PyList_Check(events))
+		return 0;
+	uniqueEPGKey key(ref); // SID/ONID/TSID belong to the reference also when type is 4097
+	if (key.sid <= 0 || key.sid > 65535 || key.onid <= 0 || key.onid > 65535 || key.tsid <= 0 || key.tsid > 65535)
+		return 0;
+	const Py_ssize_t count = PyList_Size(events);
+	if (count < 0 || count > 128)
+		return 0;
+	time_t now = ::time(0);
+	int imported = 0;
+	singleLock lock(cache_lock);
+	std::pair<eventMap,timeMap> &service = eventDB[key];
+	// uniqueEPGKey deliberately uses only DVB fields. A collision must never alter DVB data.
+	for (eventMap::const_iterator item = service.first.begin(); item != service.first.end(); ++item)
+		if (item->second->type != 32)
+			return 0;
+	if (service.first.size() > 256)
+		return 0;
+	// A refresh does not accumulate expired data while waiting for the regular cleaner.
+	for (timeMap::iterator it = service.second.begin(); it != service.second.end(); )
+	{
+		if (it->first + it->second->getDuration() <= now)
+		{
+			eventData *old = it->second;
+			service.first.erase(old->getEventID());
+			service.second.erase(it++);
+			delete old;
+		}
+		else
+			++it;
+	}
+	for (Py_ssize_t i = 0; i < count; ++i)
+	{
+		ePyObject row = PyList_GET_ITEM(events, i); // borrowed
+		if (!PyTuple_Check(row) || PyTuple_Size(row) != 6)
+			continue;
+		ePyObject startObject = PyTuple_GET_ITEM(row, 0), durationObject = PyTuple_GET_ITEM(row, 1), idObject = PyTuple_GET_ITEM(row, 5);
+		if (!PyLong_Check(startObject) || !PyLong_Check(durationObject) || !PyLong_Check(idObject))
+			continue;
+		long long startValue = PyLong_AsLongLong(startObject);
+		long duration = PyLong_AsLong(durationObject), eventId = PyLong_AsLong(idObject);
+		if (PyErr_Occurred())
+		{
+			PyErr_Clear();
+			continue;
+		}
+		if (startValue < 0 || startValue > static_cast<long long>(now) + 7 * 86400 ||
+			duration <= 0 || duration > 86400 || startValue + duration <= now || eventId < 0 || eventId > 65535)
+			continue;
+		time_t start = static_cast<time_t>(startValue);
+		if (static_cast<long long>(start) != startValue)
+			continue;
+		std::string title, subtitle, description;
+		if (!hdsEpgText(PyTuple_GET_ITEM(row, 2), title, 180) || title.empty() ||
+			!hdsEpgText(PyTuple_GET_ITEM(row, 3), subtitle, 60) || !hdsEpgText(PyTuple_GET_ITEM(row, 4), description, 1800))
+			continue;
+		// Same start replaces the same entry. Probe a free 16-bit id on a collision.
+		timeMap::iterator existing = service.second.find(start);
+		if (existing != service.second.end())
+			eventId = existing->second->getEventID();
+		else
+		{
+			if (!eventId)
+				eventId = 1;
+			while (service.first.find(eventId) != service.first.end())
+				eventId = eventId == 65535 ? 1 : eventId + 1;
+		}
+		struct tm utc;
+		if (!gmtime_r(&start, &utc))
+			continue;
+		long long mjd = startValue / 86400 + 40587;
+		if (mjd > 65535)
+			continue;
+		std::vector<unsigned char> data(12, 0);
+		data[0] = eventId >> 8; data[1] = eventId & 255;
+		data[2] = mjd >> 8; data[3] = mjd & 255;
+		data[4] = hdsEpgBcd(utc.tm_hour); data[5] = hdsEpgBcd(utc.tm_min); data[6] = hdsEpgBcd(utc.tm_sec);
+		data[7] = hdsEpgBcd(duration / 3600); data[8] = hdsEpgBcd(duration / 60 % 60); data[9] = hdsEpgBcd(duration % 60);
+		data.push_back(0x4d); data.push_back(7 + title.size() + subtitle.size());
+		data.push_back('u'); data.push_back('n'); data.push_back('d');
+		data.push_back(title.size() + 1); data.push_back(0x15);
+		data.insert(data.end(), title.begin(), title.end());
+		data.push_back(subtitle.size() + 1); data.push_back(0x15);
+		data.insert(data.end(), subtitle.begin(), subtitle.end());
+		// At most eight extended descriptors; every fragment is a complete UTF-8 string.
+		std::vector<std::string> parts;
+		for (size_t pos = 0; pos < description.size(); )
+		{
+			size_t end = std::min(pos + 248, description.size());
+			while (end < description.size() && end > pos && (static_cast<unsigned char>(description[end]) & 0xc0) == 0x80)
+				--end;
+			parts.push_back(description.substr(pos, end - pos));
+			pos = end;
+		}
+		for (size_t part = 0; part < parts.size(); ++part)
+		{
+			data.push_back(0x4e); data.push_back(7 + parts[part].size());
+			data.push_back((part << 4) | (parts.size() - 1));
+			data.push_back('u'); data.push_back('n'); data.push_back('d');
+			data.push_back(0); data.push_back(parts[part].size() + 1); data.push_back(0x15);
+			data.insert(data.end(), parts[part].begin(), parts[part].end());
+		}
+		data[10] = ((data.size() - 12) >> 8) & 15;
+		data[11] = (data.size() - 12) & 255;
+		// A moved programme replaces imported intervals that overlap it; both indices stay consistent.
+		int oldCost = 0, oldCount = 0;
+		for (timeMap::const_iterator item = service.second.begin(); item != service.second.end() && item->first < start + duration; ++item)
+			if (item->first + item->second->getDuration() > start)
+			{
+				oldCost += item->second->ImportedCost;
+				++oldCount;
+			}
+		// Reserve descriptor payload plus allocation/map overhead, independently of the DVB guide.
+		if (service.first.size() - oldCount >= 256 || eventData::ImportedCount - oldCount >= 40000 ||
+			eventData::ImportedBytes - oldCost + data.size() + 768 > 32 * 1024 * 1024)
+			continue;
+		eventData *event = new eventData(reinterpret_cast<const eit_event_struct*>(&data[0]), data.size(), 32);
+		for (timeMap::iterator item = service.second.begin(); item != service.second.end() && item->first < start + duration; )
+		{
+			if (item->first + item->second->getDuration() > start)
+			{
+				eventData *old = item->second;
+				service.first.erase(old->getEventID());
+				service.second.erase(item++);
+				delete old;
+			}
+			else
+				++item;
+		}
+		service.first[eventId] = event;
+		service.second[start] = event;
+		++imported;
+	}
+	// Refused batches cannot leave an unlimited number of empty map entries.
+	if (service.first.empty())
+		eventDB.erase(key);
+	return imported;
 }
 
 void eEPGCache::timeUpdated()
@@ -1152,7 +1335,22 @@ void eEPGCache::load()
 	}
 #endif // ENABLE_PRIVATE_EPG
 	if (ok)
+	{
+		// Descriptor storage follows the events in epg.dat. Restore the actual import reservation now.
+		for (eventCache::iterator service = eventDB.begin(); service != eventDB.end(); ++service)
+			for (eventMap::iterator item = service->second.first.begin(); item != service->second.first.end(); ++item)
+			{
+				eventData *event = item->second;
+				if (event->ImportedCost)
+				{
+					const eit_event_struct *eit = event->get();
+					unsigned short cost = EIT_LOOP_SIZE + HILO(eit->descriptors_loop_length) + 768;
+					eventData::ImportedBytes += cost - event->ImportedCost;
+					event->ImportedCost = cost;
+				}
+			}
 		eDebug("[EPGC] %d events read from %s", cnt, m_filename);
+	}
 	else
 	{
 		/* load runs before any EIT data arrives: everything in the cache came from this file */
@@ -1668,6 +1866,27 @@ RESULT eEPGCache::lookupEventTime(const eServiceReference &service, time_t t, co
 	{
 		if (t==-1)
 			t = ::time(0);
+		if (service.type == 4097)
+		{
+			// An imported schedule can contain a single current event, or begin after the query.
+			// Never decrement begin(); an ongoing last event remains usable when lower_bound is end().
+			timeMap &times = It->second.second;
+			timeMap::iterator item = direction < 0 ? times.lower_bound(t) : times.upper_bound(t);
+			if (direction <= 0)
+			{
+				if (item == times.begin())
+					return -1;
+				--item;
+				if (!direction && t >= item->first + item->second->getDuration())
+					return -1;
+			}
+			if (item == times.end())
+				return -1;
+			if (item->second->type != 32)
+				return -1; // do not expose DVB data on a colliding stream reference
+			result = item->second;
+			return 0;
+		}
 		timeMap::iterator i = direction <= 0 ? It->second.second.lower_bound(t) :  // find > or equal
 			It->second.second.upper_bound(t); // just >
 		if ( i != It->second.second.end() )
@@ -1744,6 +1963,8 @@ RESULT eEPGCache::lookupEventId(const eServiceReference &service, int event_id, 
 		eventMap::iterator i( It->second.first.find( event_id ));
 		if ( i != It->second.first.end() )
 		{
+			if (service.type == 4097 && i->second->type != 32)
+				return -1;
 			result = i->second;
 			return 0;
 		}
@@ -1801,7 +2022,21 @@ RESULT eEPGCache::startTimeQuery(const eServiceReference &service, time_t begin,
 	if ( It != eventDB.end() && It->second.second.size() )
 	{
 		m_timemap_cursor = It->second.second.lower_bound(begin);
-		if ( m_timemap_cursor != It->second.second.end() )
+		if (ref.type == 4097)
+		{
+			for (eventMap::const_iterator item = It->second.first.begin(); item != It->second.first.end(); ++item)
+				if (item->second->type != 32)
+					return -1;
+			if (m_timemap_cursor != It->second.second.begin() &&
+				(m_timemap_cursor == It->second.second.end() || m_timemap_cursor->first != begin))
+			{
+				timeMap::iterator previous = m_timemap_cursor;
+				--previous;
+				if (begin < previous->first + previous->second->getDuration())
+					m_timemap_cursor = previous;
+			}
+		}
+		else if ( m_timemap_cursor != It->second.second.end() )
 		{
 			if ( m_timemap_cursor->first != begin )
 			{
@@ -2148,9 +2383,9 @@ PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 				continue;
 			}
 			eServiceReference ref(handleGroup(eServiceReference(servicestr)));
-			if (ref.type != eServiceReference::idDVB)
+			if (ref.type != eServiceReference::idDVB && ref.type != 4097)
 			{
-				/* a stream (4097, 5001...) has no DVB guide in this cache. With 'X' (one result per query) it still
+				/* An unsupported stream type has no guide in this cache. With 'X' (one result per query) it still
 				   gets its empty row, like every DVB service without an event: callers that ask for a whole bouquet
 				   pair the results with the services by position */
 				if (forceReturnOne)
@@ -2173,7 +2408,7 @@ PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 
 			// redirect subservice querys to parent service
 			eServiceReferenceDVB &dvb_ref = (eServiceReferenceDVB&)ref;
-			if (dvb_ref.getParentTransportStreamID().get()) // linkage subservice
+			if (ref.type == eServiceReference::idDVB && dvb_ref.getParentTransportStreamID().get()) // linkage subservice
 			{
 				eServiceCenterPtr service_center;
 				if (!eServiceCenter::getPrivInstance(service_center))

@@ -22,8 +22,9 @@
 import os
 
 MASINA_V10 = "viper4k"
-# familia libreader (acelasi SDK HiSilicon al producatorului, demonul libreader, driverele hi_*): V10 si Octagon
-MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m")
+# familia libreader (acelasi SDK HiSilicon al producatorului, demonul libreader, driverele hi_*): V10, Octagon si Uclan
+# Ustym 4K PRO (stratul meta-uclan e o copie a lui meta-octagon; aceleasi drivere afara de hi-dvb.ko, din aceeasi sursa)
+MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m", "ustym4kpro")
 NUME_V10 = "Amiko Viper 4K V10"
 FISIER_REGULI = "etc/hdsatelit-model"
 FISIER_BOXTYPE = "proc/stb/info/boxtype"
@@ -70,7 +71,7 @@ def esteV10(radacina=None):
 
 
 def familiaLibreader(radacina=None):
-	"""True pe placile familiei libreader (primul Amiko Viper 4K V10, Octagon SF8008 si SF8008 MINI): regulile
+	"""True pe placile familiei libreader (primul Amiko Viper 4K V10, Octagon SF8008, SF8008 MINI, Uclan Ustym 4K PRO): regulile
 	imaginii (machinebuild=) sau driverul (/proc/stb/info/boxtype) spun una din MASINI_LIBREADER"""
 	cheie = "libreader:" + (radacina or "")
 	if cheie not in _cache:

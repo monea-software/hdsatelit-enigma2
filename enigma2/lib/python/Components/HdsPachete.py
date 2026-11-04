@@ -17,6 +17,7 @@ Modulul nu depinde de enigma, ca sa poata fi incercat si pe PC (parametrul radac
 import os
 import posixpath
 import re
+import stat
 import tarfile
 import io
 import time
@@ -356,6 +357,9 @@ def _cale(radacina, p):
 	return os.path.join(radacina, p.lstrip('/'))
 
 
+DOSAR_INFO = '/var/lib/opkg/info'
+
+
 class Configurare(object):
 	def __init__(self):
 		self.surse = []                 # (nume, adresa)
@@ -363,7 +367,7 @@ class Configurare(object):
 		self.arhitecturi = {}           # arhitectura -> prioritate
 		self.lists_dir = '/var/lib/opkg/lists'
 		self.status_file = '/var/lib/opkg/status'
-		self.info_dir = '/var/lib/opkg/info'
+		self.info_dir = DOSAR_INFO
 		self.cache_dir = '/var/cache/opkg'  # option cache_dir: pachetele descarcate (in RAM pe receptor)
 		self.semnatura = False          # option check_signature 1
 
@@ -518,7 +522,7 @@ def _dependente(text):
 
 class Pachet(object):
 	__slots__ = ('nume', 'categorie', 'titlu', 'subtitlu', 'descriere', 'versiune', 'versiune_instalata',
-		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'fisier', 'arhiva',
+		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'sectiune', 'fisier', 'arhiva',
 		'python2')
 
 	def __init__(self, nume):
@@ -536,6 +540,7 @@ class Pachet(object):
 		self.din_imagine = False
 		self.arhitectura = ''
 		self.dosar_plugin = ''
+		self.sectiune = ''              # Section din lista sursei, cu litere mici
 		self.fisier = ''                # Filename din lista sursei (calea pachetului fata de adresa sursei)
 		self.arhiva = ''                # arhiva sursei de langa pachet (randul "Source archive:" din descriere)
 		# versiunea din surse e numai pentru Python 2 (dupa Depends din lista, Components/HdsPython2.py): (cod, detaliu)
@@ -704,6 +709,7 @@ def incarca(radacina='/'):
 			p.depinde = _dependente(s.get('depends', ''))
 			p.texte(*_text_descriere(s))
 			p.fisier = s.get('filename', '')
+			p.sectiune = s.get('section', '').strip().lower()
 			p.arhiva = arhiva_sursa(s.get('description', ''))
 			# 0.6.8: dupa Depends (None = nu se stie, False = cere ceva din Python 3, altfel motivul Python 2)
 			v2 = H.din_control(s)
@@ -764,6 +770,19 @@ def incarca(radacina='/'):
 	return cat
 
 
+def marime_din_fisiere(nume, dosar_info=None):
+	"""Cati octeti ocupa fisierele obisnuite ale unui pachet instalat, din info_dir/<pachet>.list; 0 daca nu se stie."""
+	total = 0
+	for r in _randuri(os.path.join(dosar_info or DOSAR_INFO, nume + '.list')):
+		try:
+			s = os.lstat(r.split('\t', 1)[0].strip())
+		except (OSError, ValueError):
+			continue
+		if stat.S_ISREG(s.st_mode):
+			total += s.st_size
+	return total
+
+
 def _randuri(cale):
 	try:
 		with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
@@ -807,7 +826,7 @@ def verifica_sursa(nume, adresa, existente=()):
 	if not nume or not _NUME_SURSA.match(nume):
 		return _t('Numele poate avea doar litere mici, cifre și semnele - _ . (cel mult 32).')
 	if nume in existente:
-		return _t('Există deja o sursă cu numele „%s”.') % nume
+		return _t('Există deja un feed cu numele „%s”.') % nume
 	if not adresa or len(adresa) > 300 or not _ADRESA_SURSA.match(adresa):
 		return _t('Adresa trebuie să înceapă cu http:// sau https:// și să nu aibă spații sau semne speciale.')
 	return None
@@ -854,7 +873,7 @@ def scrie_surse_utilizator(surse, radacina='/'):
 			os.remove(nou)
 		except OSError:
 			pass
-		return _t('Fișierul surselor nu s-a putut scrie (%s).') % (getattr(e, 'strerror', None) or e)
+		return _t('Fișierul feedurilor nu s-a putut scrie (%s).') % (getattr(e, 'strerror', None) or e)
 	return None
 
 
@@ -1376,7 +1395,7 @@ def linie_jurnal(linie, titluri=None):
 		return 'pas', _t('%s %s este deja la zi') % (t(m.group(1)), m.group(2))
 	m = _RE_LISTA.match(l)
 	if m:
-		return 'pas', _t('Lista sursei %s este la zi') % m.group(1)
+		return 'pas', _t('Lista feedului %s este la zi') % m.group(1)
 	if l.startswith('Signature check'):
 		return 'pas', _t('Semnătura listei a fost verificată')
 	# randurile care doar repeta eroarea spusa deja (motivul e pe randul de dinainte); textele lui opkg, in engleza
@@ -1417,22 +1436,22 @@ def motiv_eroare(linii, implicit=N_('Operațiunea nu a reușit.'), ceas=True):
 		if m:
 			return m
 	if 'is depended upon by' in t or 'dependent' in t and 'remove' in t:
-		return _t('Alte extensii au nevoie de acest pachet. Șterge-le întâi pe ele.')
+		return _t('Alte extensii au nevoie de aceasta. Șterge-le întâi pe ele.')
 	if 'unknown package' in t or 'cannot find package' in t or 'no candidates to install' in t:
-		return _t('Pachetul nu se mai află în sursă. Descarcă din nou lista (tasta albastră).')
+		return _t('Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră).')
 	if 'incompatible with the architectures' in t or 'not compatible with' in t:
-		return _t('Pachetul nu este făcut pentru acest receptor.')
+		return _t('Extensia nu este făcută pentru acest receptor.')
 	if 'signature' in t and ('fail' in t or 'invalid' in t or 'bad' in t):
-		return _t('Semnătura sursei nu se potrivește. Pachetul nu a fost instalat.')
+		return _t('Semnătura feedului nu se potrivește. Extensia nu a fost instalată.')
 	if 'mismatch' in t:
 		return _t('Fișierul descărcat este deteriorat. Încearcă din nou.')
 	if 'failed to download' in t or 'wget' in t or 'curl' in t or 'download failed' in t or 'network is unreachable' in t \
 			or 'bad address' in t or 'could not resolve' in t or 'timed out' in t or 'connection refused' in t:
 		return _t('Nu s-a putut descărca. Verifică legătura la internet.')
 	if 'clash' in t or 'file conflicts' in t:
-		return _t('Pachetul ar scrie peste fișierele altui pachet. Nu a fost instalat.')
+		return _t('Extensia ar scrie peste fișierele alteia. Nu a fost instalată.')
 	if 'malformed' in t or 'error unpacking' in t or 'not a valid' in t or 'failed to extract' in t:
-		return _t('Fișierul pachetului nu se poate citi.')
+		return _t('Fișierul extensiei nu se poate citi.')
 	if 'not installed' in t and 'remove' in t:
-		return _t('Pachetul nu este instalat.')
+		return _t('Extensia nu este instalată.')
 	return _t(implicit)

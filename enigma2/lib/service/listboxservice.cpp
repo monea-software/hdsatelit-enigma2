@@ -2,12 +2,16 @@
 #include <lib/service/listboxservice.h>
 #include <lib/service/service.h>
 #include <lib/gdi/font.h>
+#include <lib/gdi/epng.h>
 #include <lib/dvb/epgcache.h>
 #include <lib/dvb/pmt.h>
 #include <lib/dvb/db.h>
 #include <lib/python/connections.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <sys/stat.h>
 
 void eListboxServiceContent::addService(const eServiceReference &service, bool beforeCurrent)
 {
@@ -64,6 +68,7 @@ void eListboxServiceContent::FillFinished()
 void eListboxServiceContent::setRoot(const eServiceReference &root, bool justSet)
 {
 	m_list.clear();
+	m_picon_requests.clear();
 	m_root = root;
 
 	if (justSet)
@@ -320,11 +325,179 @@ void eListboxServiceContent::sort()
 DEFINE_REF(eListboxServiceContent);
 
 eListboxServiceContent::eListboxServiceContent()
-	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_itemheight(25), m_service_marks(0)
+	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_itemheight(25), m_service_marks(0), m_picons_enabled(false), m_picon_clock(0)
 {
 	memset(m_color_set, 0, sizeof(m_color_set));
 	cursorHome();
 	eServiceCenter::getInstance(m_service_center);
+}
+
+void eListboxServiceContent::addPiconPath(const std::string &path)
+{
+	if (!path.empty() && m_picon_paths.size() < 10 && std::find(m_picon_paths.begin(), m_picon_paths.end(), path) == m_picon_paths.end())
+		m_picon_paths.push_back(path.back() == '/' ? path : path + '/');
+}
+
+void eListboxServiceContent::setPiconsEnabled(bool enabled)
+{
+	if (m_picons_enabled == enabled)
+		return;
+	m_picons_enabled = enabled;
+	invalidatePicons();
+}
+
+void eListboxServiceContent::invalidatePicons()
+{
+	m_picon_cache.clear();
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+std::string eListboxServiceContent::takePiconRequests()
+{
+	std::string result;
+	for (const auto &ref : m_picon_requests)
+		result += ref + '\n';
+	m_picon_requests.clear();
+	return result;
+}
+
+/* The native decoders allocate their surface before returning. Check the file header FIRST,
+   also for manually installed picons: a small compressed image can claim a huge surface. */
+static bool hdsSmallPicon(const std::string &file, bool png)
+{
+	FILE *in = fopen(file.c_str(), "rb");
+	if (!in)
+		return false;
+	unsigned char b[24];
+	bool valid = false;
+	if (png)
+	{
+		if (fread(b, 1, sizeof(b), in) == sizeof(b) && !memcmp(b, "\x89PNG\r\n\x1a\n", 8)
+			&& b[8] == 0 && b[9] == 0 && b[10] == 0 && b[11] == 13 && !memcmp(b + 12, "IHDR", 4))
+		{
+			unsigned long w = ((unsigned long)b[16] << 24) | ((unsigned long)b[17] << 16) | (b[18] << 8) | b[19];
+			unsigned long h = ((unsigned long)b[20] << 24) | ((unsigned long)b[21] << 16) | (b[22] << 8) | b[23];
+			valid = w && h && w <= 512 && h <= 512;
+		}
+	}
+	else if (fread(b, 1, 2, in) == 2 && b[0] == 255 && b[1] == 0xd8)
+	{
+		while (ftell(in) >= 0 && ftell(in) < 256 * 1024)
+		{
+			if (fgetc(in) != 255)
+				break;
+			int marker;
+			do { marker = fgetc(in); } while (marker == 255);
+			if (marker <= 0 || marker == 0xda || marker == 0xd9 || fread(b, 1, 2, in) != 2)
+				break;
+			int length = (b[0] << 8) | b[1];
+			if (length < 2)
+				break;
+			if (marker == 0xc0 || marker == 0xc1 || marker == 0xc2)
+			{
+				if (length >= 8 && fread(b, 1, 6, in) == 6)
+				{
+					int h = (b[1] << 8) | b[2], w = (b[3] << 8) | b[4];
+					valid = b[0] == 8 && (b[5] == 1 || b[5] == 3) && w > 0 && h > 0 && w <= 512 && h <= 512;
+				}
+				break;
+			}
+			if ((marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc)
+				|| fseek(in, length - 2, SEEK_CUR))
+				break;
+		}
+	}
+	fclose(in);
+	return valid;
+}
+
+ePtr<gPixmap> eListboxServiceContent::servicePicon(const eServiceReference &ref)
+{
+	ePtr<gPixmap> pic;
+	if (!m_picons_enabled || ref.flags & (eServiceReference::isDirectory | eServiceReference::isMarker))
+		return pic;
+	/* Capture actual painted rows, so alphabetic lists, Favorites and custom sorted lists all
+	   request the right channels. Python drains these requests; paint itself never uses the network. */
+	if ((ref.getUnsignedData(4) & 0xffff0000) == 0xfffe0000 && m_picon_requests.size() < 64)
+		m_picon_requests.insert(ref.toString());
+	std::string text = ref.toString(), base;
+	std::vector<std::string> fields;
+	size_t start = 0;
+	for (int i = 0; i < 10; ++i)
+	{
+		size_t end = text.find(':', start);
+		if (end == std::string::npos)
+			return pic;
+		fields.push_back(text.substr(start, end - start));
+		start = end + 1;
+	}
+	auto makeName = [](const std::vector<std::string> &f) {
+		std::string n;
+		for (size_t i = 0; i < f.size(); ++i)
+			n += (i ? "_" : "") + f[i];
+		while (!n.empty() && n.back() == '_')
+			n.pop_back();
+		return n;
+	};
+	base = makeName(fields);
+	auto cached = m_picon_cache.find(base);
+	if (cached != m_picon_cache.end())
+	{
+		cached->second.second = ++m_picon_clock;
+		return cached->second.first;
+	}
+	std::vector<std::string> names(1, base);
+	if (fields[2] != "1" && fields[2] != "0")
+	{
+		auto f = fields;
+		f[2] = "1";
+		names.push_back(makeName(f));
+	}
+	if (fields[0] == "4097" || fields[0] == "5001" || fields[0] == "5002" || fields[0] == "5003" || fields[0] == "8193" || fields[0] == "8739")
+	{
+		fields[0] = "1";
+		names.push_back(makeName(fields));
+		fields[2] = "1";
+		names.push_back(makeName(fields));
+	}
+	for (const auto &name : names)
+	{
+		for (const auto &path : m_picon_paths)
+		{
+			for (const char *ext : {".png", ".jpg"})
+			{
+				std::string file = path + name + ext;
+				struct stat st;
+				if (stat(file.c_str(), &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > 256 * 1024)
+					continue;
+				if (!hdsSmallPicon(file, ext[1] == 'p'))
+					continue;
+				if (ext[1] == 'p')
+					loadPNG(pic, file.c_str());
+				else
+					loadJPG(pic, file.c_str());
+				if (pic && (pic->size().width() > 512 || pic->size().height() > 512))
+					pic = 0;
+				if (pic)
+					break;
+			}
+			if (pic)
+				break;
+		}
+		if (pic)
+			break;
+	}
+	/* At most 64 decoded logos (64 MiB for maximum-size RGBA files), including misses.
+	   Evict one least-recently-used entry; no full cache flush while scrolling. */
+	if (m_picon_cache.size() >= 64)
+	{
+		auto oldest = std::min_element(m_picon_cache.begin(), m_picon_cache.end(),
+			[](const auto &a, const auto &b) { return a.second.second < b.second.second; });
+		m_picon_cache.erase(oldest);
+	}
+	m_picon_cache[base] = std::make_pair(pic, ++m_picon_clock);
+	return pic;
 }
 
 void eListboxServiceContent::setPathLabel(const std::string &marker, const std::string &label)
@@ -811,6 +984,9 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		int labels_left = label_width ? label_right - label_width : (mark_width ? mark_right - mark_width : 0);
 
 		int xoffset=0;  // used as offset when painting the folder/marker symbol or the serviceevent progress
+		ePtr<gPixmap> service_picon;
+		if (isPlayable && m_visual_mode == visModeComplex)
+			service_picon = servicePicon(ref);
 
 		for (int e = 0; e < celElements; ++e)
 		{
@@ -860,6 +1036,20 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				}
 				case celServiceName:
 				{
+					if (service_picon && area.height() > 4)
+					{
+						int slot = std::min(96, area.height() * 2), h = area.height() - 4;
+						int w = std::max(1, service_picon->size().width() * h / std::max(1, service_picon->size().height()));
+						if (w > slot)
+						{
+							h = std::max(1, h * slot / w);
+							w = slot;
+						}
+						eRect where(area.left() + xoffs + (slot - w) / 2, area.top() + (area.height() - h) / 2, w, h);
+						where.moveBy(offset);
+						painter.blitScale(service_picon, where, eRect(), gPainter::BT_ALPHABLEND);
+						xoffs += slot + 8;
+					}
 					if (service_info)
 						service_info->getName(*m_cursor, text);
 					if (labels_left)

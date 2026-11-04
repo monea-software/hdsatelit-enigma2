@@ -1476,6 +1476,9 @@ class HdsSoftwareUpdate(Screen):
 	def _verificareGata(self, iesire, retval, extra_args=None):
 		self._ocupat = False
 		self._faza = "rezultat"
+		# programul de instalare, chiar si la verificare, goleste ecranul cand termina: fara asta ramaneau numai textele schimbate, pe negru
+		self.hide()
+		self.show()
 		self._ultimaIesire = iesire or _("(fără nicio ieșire de la ofgwrite)")
 		cale = (self._candidatAles or {}).get("cale_finala") or ""
 		self._arataCorect = retval == 0 and _simulareAratacorect(self._ultimaIesire) and \
@@ -1575,7 +1578,7 @@ class HdsSoftwareUpdate(Screen):
 		"""Comanda reala, DETASATA de acest proces: "init 4" opreste Enigma2 (deci si acest ecran) inainte ca ofgwrite sa
 		apuce sa scrie. In sesiune noua (start_new_session): init opreste la schimbarea nivelului tot grupul de procese
 		al lui enigma2.sh, deci o comanda pornita simplu cu "&" murea odata cu Enigma2, iar ofgwrite nu mai pornea:
-		receptorul ramanea cu ecranul negru, fara interfata (proba pe .122, 04.11.2026). Nu Console/ePopen, legat de
+		receptorul ramanea cu ecranul negru, fara interfata (proba pe receptor, 04.11.2026). Nu Console/ePopen, legat de
 		bucla de evenimente a acestui proces.
 		Intoarce None daca a pornit, sau textul refuzului daca paznicul a oprit scrierea."""
 		refuz = self._refuzMediu(cale_pachet) or self._refuzPazaInainteDeScriere(cale_pachet)
@@ -1586,6 +1589,12 @@ class HdsSoftwareUpdate(Screen):
 		except OSError as eroare:
 			print("[HdsSoftwareUpdate] jurnalul scrierii nu se poate deschide: %s" % eroare)
 			return _("Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic.")
+		env_ofgwrite = None  # textele ferestrei programului, in limba omului; fara ele, engleza. Comanda ramane aceeasi
+		try:
+			from Components.HdsTexteOfgwrite import scrieTexteOfgwrite
+			env_ofgwrite = scrieTexteOfgwrite()
+		except Exception as eroare:
+			print("[HdsSoftwareUpdate] textele programului de instalare: %s" % eroare)
 		_bazaCanalelor("flash")
 		comanda = (
 			"echo '[hds] init 4 (opresc Enigma2 ca sa nu concureze cu scrierea)'; "
@@ -1597,5 +1606,5 @@ class HdsSoftwareUpdate(Screen):
 		) % (CALE_OFGWRITE, shlex.quote(cale_pachet))
 		with jurnal:
 			subprocess.Popen(["/bin/sh", "-c", comanda], stdin=subprocess.DEVNULL, stdout=jurnal, stderr=subprocess.STDOUT,
-				close_fds=True, start_new_session=True)
+				close_fds=True, start_new_session=True, env=env_ofgwrite)
 		return None

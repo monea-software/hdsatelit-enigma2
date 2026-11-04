@@ -125,6 +125,18 @@ def primaMare(text):
 			pass
 	return text[0].upper() + text[1:]
 
+def hdsInStreamRelay(ref):
+	"""HDSatelit 0.7.0: None daca `ref` nu poate intra in Stream Relay (nu e un canal DVB), altfel True/False dupa lista
+	(Components/HdsStreamRelay.py, incarcat abia la meniul listei)."""
+	try:
+		from Components import HdsStreamRelay
+		if not HdsStreamRelay.potrivit(ref):
+			return None
+		return HdsStreamRelay.releu().checkService(ref)
+	except Exception as e:
+		print("[ChannelSelection] Stream Relay: %s" % e)
+		return None
+
 def append_when_current_valid(current, menu, args, level = 0, key = ""):
 	if current and current.valid() and level <= config.usage.setup_level.index:
 		menu.append(ChoiceEntryComponent(key, (primaMare(args[0]),) + tuple(args[1:])))
@@ -188,6 +200,10 @@ class ChannelContextMenu(Screen):
 							append_when_current_valid(current, menu, (_("add to parental protection"), boundFunction(self.addParentalProtection, csel.getCurrentSelection())), level = 0)
 						else:
 							append_when_current_valid(current, menu, (_("remove from parental protection"), boundFunction(self.removeParentalProtection, csel.getCurrentSelection())), level = 0)
+					# HDSatelit 0.7.0: Stream Relay (Components/HdsStreamRelay.py), numai la canalele DVB
+					in_releu = hdsInStreamRelay(current)
+					if in_releu is not None:
+						append_when_current_valid(current, menu, (_("Scoate din Stream Relay") if in_releu else _("Adaugă la Stream Relay"), boundFunction(self.hdsStreamRelay, current)), level = 0)
 					if haveBouquets:
 						bouquets = self.csel.getBouquetList()
 						if bouquets is None:
@@ -205,7 +221,8 @@ class ChannelContextMenu(Screen):
 					# HDSatelit: dosarul listei unei retele (numerele operatorului) nu e un satelit: nu se sterge si nu
 					# se copiaza ca buchet (cererea nucleului din spatele lui are toate canalele locului)
 					dosarRetea = HdsRetele is not None and HdsRetele.e_cale_de_retea(current_sel_path)
-					if current_root.getPath().find('FROM SATELLITES') != -1 and not dosarRetea:
+					# nici 'IPTV' si grupele lui: nu sunt sateliti, canalele nu stau in lamedb
+					if current_root.getPath().find('FROM SATELLITES') != -1 and not dosarRetea and not hds_e_dosar_iptv(current_sel_path) and not hds_e_dosar_loc(current_sel_path):
 						append_when_current_valid(current, menu, (_("remove selected satellite"), self.removeSatelliteServices), level = 0)
 					if haveBouquets:
 						if not inBouquet and current_sel_path.find("PROVIDERS") == -1 and not dosarRetea:
@@ -292,6 +309,16 @@ class ChannelContextMenu(Screen):
 	def addParentalProtection(self, service):
 		from Components.ParentalControl import parentalControl
 		parentalControl.protectService(service.toCompareString())
+		self.close()
+
+	def hdsStreamRelay(self, service):
+		"""HDSatelit 0.7.0: canalul pus in Stream Relay sau scos (Components/HdsStreamRelay.py); daca e canalul de pe
+		televizor, porneste din nou, ca schimbarea sa se vada."""
+		from Components import HdsStreamRelay
+		ok, _in_lista = HdsStreamRelay.releu().toggle(self.session.nav, service)
+		if not ok:
+			self.session.openWithCallback(self.close, MessageBox, _("Lista Stream Relay nu s-a putut schimba."), MessageBox.TYPE_ERROR)
+			return
 		self.close()
 
 	def removeParentalProtection(self, service):
@@ -848,15 +875,48 @@ service_types_radio = '1:7:2:0:0:0:0:0:0:0:(type == 2) || (type == 10)'
 # (test_lista_canale_pornire.py).
 HDS_POZ_CABLU = 0xFFFF
 HDS_POZ_TERESTRU = 0xEEEE
+# 'IPTV' in lista pe sateliti, ca un loc: nu vine din nucleu (canalele lui stau numai in buchete, Components/HdsIptvSurse.py)
+HDS_POZ_IPTV = 0xFFFE
+HDS_CALE_IPTV = 'hdsiptv'
+
+
+def hds_e_dosar_iptv(cale):
+	"""Calea unui dosar din 'IPTV': radacina lui sau o grupa a furnizorului."""
+	return 'FROM BOUQUET' in (cale or "") and HDS_CALE_IPTV in cale
+
+
+# locurile adaugate de extensii (Components/HdsLocuriLista.py), dupa IPTV: 0xFF00, 0xFF01, ... in ordinea registrului
+HDS_POZ_LOC = 0xFF00
+HDS_LOCURI_MAX = 0xFE
+
+
+def hds_e_poz_loc(poz):
+	return HDS_POZ_LOC <= poz < HDS_POZ_LOC + HDS_LOCURI_MAX
+
+
+def hds_e_dosar_loc(cale):
+	"""Calea unui dosar al unui loc adaugat de o extensie: radacina lui sau o grupa."""
+	if 'FROM BOUQUET' not in (cale or ""):
+		return False
+	try:
+		from Components import HdsLocuriLista as L
+		return L.locDosar(cale) is not None
+	except Exception as e:
+		print("[ChannelSelection] locurile extensiilor: %s" % e)
+		return False
 
 
 def hds_cheie_satelit(poz):
 	"""Locul unui rand din lista „Sateliți" dupa pozitia lui (namespace >> 16, fara semn): cablul primul, apoi
-	terestrul, apoi satelitii dupa pozitie, ca in nucleu (vestul ca negativ: 30,0W, ..., 0,8W, 4,8E, ..., 42,0E)."""
+	terestrul, apoi IPTV, apoi satelitii dupa pozitie, ca in nucleu (vestul ca negativ: 30,0W, ..., 0,8W, 4,8E, ..., 42,0E)."""
 	if poz == HDS_POZ_CABLU:
 		return (0, 0)
 	if poz == HDS_POZ_TERESTRU:
 		return (1, 0)
+	if poz == HDS_POZ_IPTV:
+		return (1, 1)
+	if hds_e_poz_loc(poz):
+		return (1, 2 + poz - HDS_POZ_LOC)
 	if poz > 1800:
 		poz -= 3600
 	return (2, poz)
@@ -923,6 +983,8 @@ def hds_text_antet(nume, n, deschis, text_numar, neprins=False):
 	"""Numele randului-antet al unui loc: semnul starii, numele locului si cate canale are; la o pozitie ale carei
 	canale au venit din alta lista si pe care acest receptor n-a receptionat niciodata semnal
 	(Components/HdsIstoricSemnal.aduse_fara_semnal), un semn scurt la sfarsit."""
+	if n is None:  # un loc care nu stie cate canale are (lista se umple dosar cu dosar)
+		return u"%s %s" % (HDS_SEMN_DESCHIS if deschis else HDS_SEMN_INCHIS, nume)
 	text = u"%s %s \u00b7 %s" % (HDS_SEMN_DESCHIS if deschis else HDS_SEMN_INCHIS, nume, text_numar(n))
 	return text + u" \u00b7 " + _("din altă listă, fără semnal aici") if neprins else text
 
@@ -948,6 +1010,12 @@ def hds_poz_din_text(text):
 		return int(parti[6] or "0", 16) >> 16
 	except ValueError:
 		return None
+
+
+def hds_fara_nume(sc, ref):
+	"""Serviciul DVB nu are nume in lamedb: eDVBService::getName da atunci „(...)”."""
+	info = sc.info(ref)
+	return info is not None and info.getName(ref) == "(...)"
 
 
 def hds_numara_pe_pozitii(texte):
@@ -1050,6 +1118,15 @@ def hds_semnatura_lamedb(cale=HDS_LAMEDB):
 
 def hds_uita_numerele():
 	_hds_numere.clear()
+
+
+def hds_flux_cazut():
+	"""Postul de pe internet care merge acum a cazut (Screens/HdsEcranRadio.py, laEroareFlux): OK pe el trebuie sa-l porneasca din nou."""
+	try:
+		from Screens.InfoBar import InfoBar
+		return bool(getattr(getattr(InfoBar.instance, "hdsRadio", None), "flux_cazut", False))
+	except Exception:
+		return False
 
 
 def hds_ecran_radio_dupa_ok():
@@ -1270,6 +1347,9 @@ class ChannelSelectionBase(Screen):
 	def getBouquetNumOffset(self, bouquet):
 		if not config.usage.multibouquet.value:
 			return 0
+		# grupele unui loc adaugat de o extensie: numerele incep de la 1, ca pe ecranul radio
+		if hds_e_dosar_loc(bouquet.getPath()):
+			return 0
 		str = bouquet.toString()
 		offsetCount = 0
 		if str not in self.bouquetNumOffsetCache:
@@ -1440,6 +1520,11 @@ class ChannelSelectionBase(Screen):
 		del self.servicePath[:]
 
 	def enterPath(self, ref, justSet=False):
+		# un dosar al unui loc adaugat de o extensie: grupa se umple cand omul intra in ea (Components/HdsLocuriLista.py)
+		if hds_e_dosar_loc(ref.getPath()):
+			from Components import HdsLocuriLista as L
+			if L.laIntrare(ref.getPath(), lambda r=ref: self.hdsDupaIntrareLoc(r)):
+				return
 		self.servicePath.append(ref)
 		self.setRoot(ref, justSet)
 
@@ -1547,6 +1632,11 @@ class ChannelSelectionBase(Screen):
 					continue
 				unsigned_orbpos = service.getUnsignedData(4) >> 16
 				intrari.append((unsigned_orbpos, (unsigned_orbpos, service, self.hdsNumeLoc(service))))
+		iptv = self.hdsAntetIptv()
+		if iptv is not None:
+			intrari.append((HDS_POZ_IPTV, (HDS_POZ_IPTV, iptv, "IPTV")))
+		for poz, antet, nume_loc in self.hdsAnteteLocuri():
+			intrari.append((poz, (poz, antet, nume_loc)))
 		grupe = hds_ordoneaza_sateliti(intrari)
 		self.hdsIntrariSateliti = [(poz, service) for poz, service, nume in grupe]
 		if inchise:
@@ -1555,7 +1645,7 @@ class ChannelSelectionBase(Screen):
 		elif canonic:
 			self.hdsDeschise = self.hdsDeschiseCanonic(canal)
 		numere = self.hdsNumerePeLocuri() if grupe else {}
-		neprinse = hds_pozitii_neprinse([poz for poz, service, nume in grupe])
+		neprinse = hds_pozitii_neprinse([poz for poz, service, nume in grupe if poz != HDS_POZ_IPTV and not hds_e_poz_loc(poz)])
 		self.hdsBlocuri = [ ]
 		self.hdsRandToate = None
 		n = 0
@@ -1568,8 +1658,16 @@ class ChannelSelectionBase(Screen):
 			n += 1
 		for poz, service, nume in grupe:
 			deschis = poz in self.hdsDeschise
-			canale = self.hdsCanaleLoc(service) if deschis else [ ]
-			numar = len(canale) if deschis else numere.get(poz, 0)
+			if poz == HDS_POZ_IPTV:
+				# sub antet stau grupele furnizorului (sau canalele, cand lista n-are grupe); numarul e al canalelor
+				canale = self.hdsRanduriIptv(service) if deschis else [ ]
+				numar = self.hdsNumarIptv()
+			elif hds_e_poz_loc(poz):
+				canale = self.hdsRanduriLoc(service) if deschis else [ ]
+				numar = None
+			else:
+				canale = self.hdsCanaleLoc(service) if deschis else [ ]
+				numar = len(canale) if deschis else numere.get(poz, 0)
 			service.setName(hds_text_antet(nume, numar, deschis, self.hdsTextNumar, poz in neprinse))
 			self.servicelist.addService(service)
 			randuri_extra = hds_randuri_extra(extra.get(poz, [ ]))
@@ -1607,6 +1705,13 @@ class ChannelSelectionBase(Screen):
 		if cursor is not None and self.hdsInLista(cursor) and self.hdsPuneCursorul(cursor):
 			pass
 		elif prev is not None:
+			# intoarcerea dintr-o grupa IPTV cu blocul inchis (VERDE): grupa nu e in lista, cursorul pe antet
+			if hds_e_dosar_iptv(prev.getPath()) and HDS_POZ_IPTV not in self.hdsDeschise:
+				prev = self.hdsAntetIptv() or prev
+			elif hds_e_dosar_loc(prev.getPath()):
+				poz_loc = self.hdsPozDosarLoc(prev.getPath())
+				if poz_loc is not None and poz_loc not in self.hdsDeschise:
+					prev = self.hdsAntetLoc(poz_loc) or prev
 			self.setCurrentSelection(prev)
 		else:
 			self.hdsCursorPeCanal(canal)
@@ -1629,7 +1734,208 @@ class ChannelSelectionBase(Screen):
 				generatie = HdsRetele.generatie()
 			except Exception as e:
 				print("[ChannelSelection] fisierul retelelor: %s" % e)
-		return (hds_semnatura_lamedb(), self.hdsFurnizoriNou(), generatie)
+		return (hds_semnatura_lamedb(), self.hdsFurnizoriNou(), generatie, self.hdsSemnIptv(), self.hdsSemnLocuri())
+
+	# ---------------------------------------------------------------- locurile adaugate de extensii (Components/HdsLocuriLista.py)
+	# La fel ca 'IPTV': un rand ca Astra sau Cablu, cu dosarele extensiei sub el. Nimic de aici nu stie ce extensie e.
+
+	def hdsModLoc(self):
+		return "radio" if self.mode == MODE_RADIO else "tv"
+
+	def hdsLocuri(self):
+		"""Locurile acestei liste (TV sau radio), cu pozitia lor. O extensie dezinstalata isi pierde aici randul si buchetele."""
+		try:
+			from Components import HdsLocuriLista as L
+			return [(HDS_POZ_LOC + i, d) for i, d in enumerate(L.locuri(self.hdsModLoc())[:HDS_LOCURI_MAX])]
+		except Exception as e:
+			print("[ChannelSelection] locurile extensiilor: %s" % e)
+			return [ ]
+
+	def hdsAnteteLocuri(self):
+		# o problema a unei extensii nu strica lista: se reface la fiecare deschidere
+		try:
+			from Components import HdsLocuriLista as L
+			L.curataOrfane()
+			return [(poz, eServiceReference(L.refRadacina(d)), d["nume"]) for poz, d in self.hdsLocuri()]
+		except Exception as e:
+			print("[ChannelSelection] locurile extensiilor: %s" % e)
+			return []
+
+	def hdsAntetLoc(self, poz):
+		for p, intrare in self.hdsIntrariSateliti:
+			if p == poz:
+				return intrare
+		return None
+
+	def hdsSemnLocuri(self):
+		try:
+			from Components import HdsLocuriLista as L
+			return L.semnatura(self.hdsModLoc())
+		except Exception:
+			return None
+
+	def hdsRanduriLoc(self, antet):
+		"""Randurile de sub antet, in ordinea extensiei: dosare, marcaje sau canale."""
+		try:
+			lista = eServiceCenter.getInstance().list(antet)
+			randuri = (lista.getContent("R", False) or [ ]) if lista is not None else [ ]
+			for r in randuri:
+				if r.flags & eServiceReference.isDirectory:
+					r.setName(r.getName() or ServiceReference(r).getServiceName())
+			return randuri
+		except Exception as e:
+			print("[ChannelSelection] randurile locului: %s" % e)
+			return [ ]
+
+	def hdsPozDosarLoc(self, cale):
+		from Components import HdsLocuriLista as L
+		d = L.locDosar(cale, self.hdsModLoc())
+		if d is not None:
+			for poz, x in self.hdsLocuri():
+				if x["id"] == d["id"]:
+					return poz
+		return None
+
+	def hdsPozLocCanal(self, canal):
+		"""Pozitia locului unui canal, dupa adresa lui; None pentru orice alt canal."""
+		if canal is None or not canal.valid() or not canal.getPath() or canal.flags & (eServiceReference.isDirectory | eServiceReference.isMarker):
+			return None
+		try:
+			from Components import HdsLocuriLista as L
+			d = L.locCanal(canal.getPath(), self.hdsModLoc())
+		except Exception:
+			return None
+		if d is not None:
+			for poz, x in self.hdsLocuri():
+				if x["id"] == d["id"]:
+					return poz
+		return None
+
+	def hdsDosarLoc(self, canal, poz):
+		"""Dosarul de sub antet care are canalul (si un nivel mai jos); antetul, cand nu e in niciunul."""
+		antet = self.hdsAntetLoc(poz)
+		if antet is None:
+			return None
+		cale = canal.getPath()
+		sc = eServiceCenter.getInstance()
+		dedesubt = [ ]
+		for rand in self.hdsRanduriLoc(antet):
+			if rand.flags & eServiceReference.isDirectory:
+				lista = sc.list(rand)
+				randuri = (lista.getContent("R", False) or [ ]) if lista is not None else [ ]
+				if any(c.getPath() == cale for c in randuri):
+					return rand
+				dedesubt += [r for r in randuri if r.flags & eServiceReference.isDirectory]
+		for rand in dedesubt:
+			lista = sc.list(rand)
+			if lista is not None and any(c.getPath() == cale for c in (lista.getContent("R", False) or [ ])):
+				return rand
+		return antet
+
+	def hdsDupaIntrareLoc(self, ref):
+		"""Extensia a schimbat grupa `ref` (s-a umplut sau a dat eroare): daca lista e inca pe ea, se arata din nou."""
+		try:
+			if not self.execing:
+				return
+			root = self.getRoot()
+			if root is not None and root.valid() and root == ref:
+				cursor = self.getCurrentSelection()
+				self.setRoot(root)
+				if cursor is not None and cursor.valid():
+					self.setCurrentSelection(cursor)
+			self.hdsPuneListaGoala()
+		except Exception as e:
+			print("[ChannelSelection] grupa locului: %s" % e)
+
+	# ---------------------------------------------------------------- 'IPTV' in lista pe sateliti (Components/HdsIptvSurse.py)
+	# Un rand ca Astra sau Cablu, cu grupele furnizorului sub el. Canalele stau numai in buchetele lor, deci nu intra in 'Toate' si
+	# nici in buchetele omului decat daca le pune el. In lista radio randul lipseste.
+
+	def hdsAntetIptv(self):
+		if self.mode != MODE_TV:
+			return None
+		try:
+			from Components import HdsIptvSurse as I
+			return eServiceReference(I.refRadacina())
+		except Exception as e:
+			print("[ChannelSelection] IPTV: %s" % e)
+			return None
+
+	def hdsNumarIptv(self):
+		try:
+			from Components import HdsIptvSurse as I
+			return I.numarCanale()
+		except Exception as e:
+			print("[ChannelSelection] IPTV: %s" % e)
+			return 0
+
+	def hdsSemnIptv(self):
+		try:
+			from Components import HdsIptvSurse as I
+			return I.semnaturaRadacina()
+		except Exception:
+			return None
+
+	def hdsIptvAreSurse(self):
+		try:
+			from Components import HdsIptvSurse as I
+			return I.areSurse()
+		except Exception:
+			return False
+
+	def hdsRanduriIptv(self, antet):
+		"""Randurile de sub antet, in ordinea furnizorului: grupele, cu numarul lor de canale, marcajele surselor (cand sunt mai
+		multe) sau canalele unei liste fara grupe."""
+		try:
+			from Components import HdsIptvSurse as I
+			lista = eServiceCenter.getInstance().list(antet)
+			randuri = (lista.getContent("R", False) or [ ]) if lista is not None else [ ]
+			numere = I.numarDupaFisier()
+			for r in randuri:
+				if r.flags & eServiceReference.isDirectory:
+					cale = r.getPath()
+					fisier = cale.split('FROM BOUQUET "', 1)[-1].split('"', 1)[0]
+					nume = r.getName() or ServiceReference(r).getServiceName()
+					if fisier in numere:
+						nume = u"%s \u00b7 %s" % (nume, self.hdsTextNumar(numere[fisier]))
+					r.setName(nume)
+			return randuri
+		except Exception as e:
+			print("[ChannelSelection] randurile IPTV: %s" % e)
+			return [ ]
+
+	def hdsDosarIptv(self, canal):
+		"""Grupa din care face parte un canal IPTV; antetul, cand nu e in nicio grupa (lista fara grupe, sursa stearsa)."""
+		antet = self.hdsAntetIptv()
+		if antet is None:
+			return None
+		from Components import HdsIptvSurse as I
+		fisier = I.grupaCanalului(canal.getPath())
+		if fisier:
+			semn = 'FROM BOUQUET "%s"' % fisier
+			for rand in self.hdsRanduriIptv(antet):
+				if semn in rand.getPath():
+					return rand
+		return antet
+
+	def hdsECanalIptv(self, canal):
+		return canal is not None and canal.valid() and HdsCapLista is not None and \
+			HdsCapLista.felul(canal.type, canal.flags, canal.getUnsignedData(0), canal.getPath()) == "iptv"
+
+	def hdsEDosarDeIntrat(self, intrare):
+		"""Dosarul in care intra lista, ca sa ramana pe canal: buchetele DAB+ / DVB-T2 din satelit si dosarele 'IPTV'."""
+		return intrare is not None and (hds_e_dosar_iptv(intrare.getPath()) or hds_e_dosar_loc(intrare.getPath()) or
+			any(intrare == f for f in self.hdsIntrariFluxuri.values()))
+
+	def hdsDeschideIptv(self):
+		"""OK pe 'IPTV' fara nicio sursa: ecranul unde omul isi adauga lista sau contul."""
+		from Screens.IptvSetup import IptvSetup
+		self.session.openWithCallback(self.hdsDupaIptv, IptvSetup)
+
+	def hdsDupaIptv(self, *rezultat):
+		if self.hdsPeRadacinaSateliti():
+			self.hdsDeschise.add(HDS_POZ_IPTV)
+			self.hdsRefaSateliti(cursor=self.hdsAntetIptv())
 
 	def hdsNumeLoc(self, service):
 		"""Numele locului unui dosar din „Sateliți”: satelitul din lista tunerelor, „Cablu”, „Terestru”, sau pozitia."""
@@ -1680,7 +1986,8 @@ class ChannelSelectionBase(Screen):
 		try:
 			lista = eServiceCenter.getInstance().list(eServiceReference("%s ORDER BY name" % self.service_types))
 			if lista is not None:
-				texte = lista.getContent("S", False) or [ ]
+				# fara serviciile fara nume, ca lista deschisa (hdsCanaleLoc): numarul nu se schimba la deschidere
+				texte = [s for s, nume in (lista.getContent("SN", False) or [ ]) if nume != "(...)"]
 		except Exception as e:
 			print("[ChannelSelection] numerele locurilor: %s" % e)
 		numere = hds_numara_pe_pozitii(texte)
@@ -1694,10 +2001,16 @@ class ChannelSelectionBase(Screen):
 		return numere
 
 	def hdsCanaleLoc(self, service):
-		"""Canalele unui loc deschis, in ordinea dupa nume a dosarului lui (ca dupa OK pe dosar, inainte)."""
+		"""Canalele unui loc deschis, in ordinea dupa nume a dosarului lui (ca dupa OK pe dosar, inainte), fara serviciile
+		fara nume: lamedb le are de la scanare (semnalul nu le da nume), nucleul le arata „(...)” si le sorteaza ultimele
+		(lib/dvb/db.cpp), deci se cauta numai la coada listei."""
 		try:
-			lista = eServiceCenter.getInstance().list(service)
-			return (lista.getContent("R", True) or [ ]) if lista is not None else [ ]
+			sc = eServiceCenter.getInstance()
+			lista = sc.list(service)
+			canale = (lista.getContent("R", True) or [ ]) if lista is not None else [ ]
+			while canale and hds_fara_nume(sc, canale[-1]):
+				canale.pop()
+			return canale
 		except Exception as e:
 			print("[ChannelSelection] canalele locului: %s" % e)
 			return [ ]
@@ -1713,7 +2026,10 @@ class ChannelSelectionBase(Screen):
 	def hdsDeschiseCanonic(self, canal=None):
 		"""Starea de la deschiderea listei: deschis numai locul canalului (implicit cel de acum; niciunul pentru un
 		canal fara loc)."""
-		poz = self.hdsPozCanal(canal if canal is not None else self.hdsCanalulCurent())
+		canal = canal if canal is not None else self.hdsCanalulCurent()
+		poz = self.hdsPozLocCanal(canal)
+		if poz is None:
+			poz = HDS_POZ_IPTV if self.hdsECanalIptv(canal) else self.hdsPozCanal(canal)
 		if poz is not None and any(p == poz for p, intrare in self.hdsIntrariSateliti):
 			return set([poz])
 		return set()
@@ -1733,6 +2049,11 @@ class ChannelSelectionBase(Screen):
 			return False
 		if ref.flags & (eServiceReference.isDirectory | eServiceReference.isMarker):
 			return True
+		if self.hdsECanalIptv(ref):
+			return HDS_POZ_IPTV in self.hdsDeschise
+		poz_loc = self.hdsPozLocCanal(ref)
+		if poz_loc is not None:
+			return poz_loc in self.hdsDeschise
 		poz = self.hdsPozCanal(ref)
 		return poz is not None and poz in self.hdsDeschise
 
@@ -1743,6 +2064,15 @@ class ChannelSelectionBase(Screen):
 		if poz is not None and poz in self.hdsDeschise and self.hdsPuneCursorul(canal):
 			return
 		intrare = self.hdsIntrareSatelit(canal)
+		if self.hdsECanalIptv(canal):
+			# canalul sta sub antet numai intr-o lista fara grupe; cu 'IPTV' inchis, cursorul pe antet
+			if HDS_POZ_IPTV not in self.hdsDeschise:
+				intrare = self.hdsAntetIptv()
+			elif intrare is not None and intrare == self.hdsAntetIptv() and self.hdsPuneCursorul(canal):
+				return
+		poz_loc = self.hdsPozLocCanal(canal)
+		if poz_loc is not None and poz_loc not in self.hdsDeschise:
+			intrare = self.hdsAntetLoc(poz_loc)
 		if intrare is not None:
 			self.setCurrentSelection(intrare)
 		else:
@@ -1813,6 +2143,9 @@ class ChannelSelectionBase(Screen):
 		poz = self.hdsLocAntet(cur)
 		if poz is None:
 			return False
+		if poz == HDS_POZ_IPTV and not self.hdsIptvAreSurse():
+			self.hdsDeschideIptv()
+			return True
 		if poz in self.hdsDeschise:
 			self.hdsDeschise.discard(poz)
 		else:
@@ -1898,6 +2231,11 @@ class ChannelSelectionBase(Screen):
 			fel = HdsCapLista.felul(canal.type, canal.flags, canal.getUnsignedData(0), canal.getPath())
 			if fel in ("dab", "t2"):
 				return getattr(self, "hdsIntrariFluxuri", {}).get(fel)
+			if fel == "iptv":
+				return self.hdsDosarIptv(canal)
+			if fel == "loc":
+				poz_loc = self.hdsPozLocCanal(canal)
+				return self.hdsDosarLoc(canal, poz_loc) if poz_loc is not None else None
 		poz = self.hdsPozCanal(canal)
 		for p, intrare in self.hdsIntrariSateliti:
 			if poz is not None and p == poz:
@@ -2551,7 +2889,11 @@ class ChannelSelectionBase(Screen):
 				dosar, despre, despre2 = self.hdsDespreDosar(ref)
 		text = {"tv": _("Canal TV"), "radio": _("Post de radio"), "flux": _("Flux de internet"),
 			"date": _("Serviciu de date"), "dab": _("Post DAB+ din satelit"),
-			"t2": _("Program DVB-T2 din satelit")}.get(fel, dosar)
+			"t2": _("Program DVB-T2 din satelit"), "iptv": _("Canal IPTV")}.get(fel, dosar)
+		if fel == "loc":
+			from Components import HdsLocuriLista as L
+			d = L.locCanal(ref.getPath())
+			text = d.get("fel", "") if d else ""
 		if self["hdsFelAles"].getText() != text:
 			self["hdsFelAles"].setText(text)
 		if self["hdsDespreAles"].getText() != despre:
@@ -2566,6 +2908,8 @@ class ChannelSelectionBase(Screen):
 		poz = self.hdsLocAntet(ref)
 		if poz is None:
 			return ""
+		if poz == HDS_POZ_IPTV and not self.hdsIptvAreSurse():
+			return _("OK adaugă lista sau contul tău")
 		return _("OK ascunde canalele") if poz in self.hdsDeschise else _("OK arată canalele")
 
 	# ---------------------------------------------------------------- buchetele DAB+ / DVB-T2 din satelit
@@ -2615,6 +2959,15 @@ class ChannelSelectionBase(Screen):
 			return None
 		return fel
 
+	def hdsTextGolLoc(self, root=None):
+		"""Peste o grupa goala a unui loc adaugat de o extensie: „Se incarca...” sau eroarea."""
+		if root is None:
+			root = self.getRoot()
+		if root is None or not root.valid() or not hds_e_dosar_loc(root.getPath()) or self.hdsAreCanale(root):
+			return ""
+		from Components import HdsLocuriLista as L
+		return L.textGol(root.getPath())
+
 	def hdsPuneListaGoala(self, root=None):
 		"""Textul peste lista: ce e buchetul DAB+ / DVB-T2 si cum se umple, numai cat e gol."""
 		if not getattr(self, "hdsCapPornit", False):
@@ -2624,6 +2977,8 @@ class ChannelSelectionBase(Screen):
 		if fel is not None:
 			from Components import HdsIndexCanale as X
 			text = X.text_buchet_gol(fel)
+		else:
+			text = self.hdsTextGolLoc(root)
 		if self["hdsListaGoala"].getText() != text:
 			self["hdsListaGoala"].setText(text)
 
@@ -2810,7 +3165,8 @@ class ChannelSelectionBase(Screen):
 			return
 		ref = None if oprit else self.hdsRefPornit()
 		pornit = ref is not None and ref.valid()
-		radio = pornit and HdsCapLista.e_radio(ref.type, ref.getUnsignedData(0))
+		# si un post de radio pe flux (tipul de serviciu e tot radio)
+		radio = pornit and ref.getUnsignedData(0) in HdsCapLista.TIPURI_RADIO
 		eticheta = _("Acum pe receptor") if radio else ""
 		nume = ServiceReference(ref).getServiceName() if radio else ""
 		if not pornit and self.mode == MODE_RADIO:
@@ -3225,7 +3581,7 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 		self.hdsNormalizeaza()
 		canal = self.hdsCanalulCurent()
 		intrare = self.hdsIntrareSatelit(canal)
-		if intrare is not None and any(intrare == f for f in self.hdsIntrariFluxuri.values()):
+		if self.hdsEDosarDeIntrat(intrare):
 			self.enterPath(intrare)
 			self.setCurrentSelection(canal)
 			return False
@@ -3255,7 +3611,7 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 		if self.hdsArataCanalul(canal):
 			return
 		intrare = self.hdsIntrareSatelit(canal)
-		if intrare is not None and any(intrare == f for f in self.hdsIntrariFluxuri.values()):
+		if self.hdsEDosarDeIntrat(intrare):
 			self.enterPath(intrare)
 			self.setCurrentSelection(canal)
 
@@ -3590,7 +3946,27 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 				self.history[self.history_pos] = tmp
 			self.setHistoryPath()
 
+	def hdsUrcaDinIptv(self):
+		"""EXIT intr-o grupa IPTV: o treapta in sus, la lista satelitilor, cu randul IPTV deschis si cursorul pe grupa. Grupele sunt multe, iar
+		omul le rasfoieste; abia pe lista satelitilor EXIT inchide lista. -> True daca a urcat."""
+		if getattr(self, "movemode", False) or getattr(self, "bouquet_mark_edit", OFF) != OFF or len(self.servicePath) < 2:
+			return False
+		root = self.getRoot()
+		if root is None or not hds_e_dosar_iptv(root.getPath()):
+			return False
+		prev = self.pathUp(True)
+		sus = self.servicePath[-1]
+		if self.hdsPeRadacinaSateliti():
+			self.hdsDeschise.add(HDS_POZ_IPTV)
+			self.hdsUmpleSateliti(sus, prev, canonic=False)
+		else:
+			self.setRoot(sus)
+			self.setCurrentSelection(prev)
+		return True
+
 	def cancel(self):
+		if self.hdsUrcaDinIptv():
+			return
 		if self.revertMode is None:
 			self.restoreRoot()
 			lastservice=eServiceReference(self.lastservice.value)
@@ -3867,8 +4243,9 @@ class ChannelSelectionRadio(ChannelSelectionBase, ChannelSelectionEdit, ChannelS
 			cur_root = self.getRoot()
 			if not cur_root or not (cur_root.flags & eServiceReference.isGroup):
 				playingref = self.session.nav.getCurrentlyPlayingServiceReference()
-				if playingref is None or playingref != ref:
-					self.session.nav.playService(ref)
+				cazut = hds_flux_cazut()
+				if playingref is None or playingref != ref or cazut:
+					self.session.nav.playService(ref, forceRestart=cazut)
 					config.radio.lastservice.value = ref.toString()
 					config.radio.lastservice.save()
 				self.saveRoot()

@@ -960,6 +960,8 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_skipmode = m_fastforward = m_slowmotion = 0;
 	
 	CONNECT(m_service_handler.serviceEvent, eDVBServicePlay::serviceEvent);
+	CONNECT(m_service_handler.infoLiveReady, eDVBServicePlay::hdsInfoLiveReady);
+	CONNECT(m_service_handler.etapaZap, eDVBServicePlay::hdsEtapaZap);
 	CONNECT(m_service_handler_timeshift.serviceEvent, eDVBServicePlay::serviceEventTimeshift);
 	CONNECT(m_event_handler.m_eit_changed, eDVBServicePlay::gotNewEvent);
 
@@ -970,6 +972,7 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	
 	m_tune_state = -1;
 	m_hds_sunet_procesor = m_hds_poza_radio = false;
+	m_hds_amana_gui = m_hds_seekable_amana = false;
 	m_hds_ceas_erori = 0;
 	m_hds_ceas_imagine = eTimer::create(eApp);
 	CONNECT(m_hds_ceas_imagine->timeout, eDVBServicePlay::hdsCeasImagine);
@@ -1047,6 +1050,14 @@ void eDVBServicePlay::serviceEvent(int event)
 		return;
 	}
 	m_tune_state = event;
+	if (m_is_primary && !m_is_pvr && !m_is_stream &&
+		(event == eDVBServicePMTHandler::eventTuned || event == eDVBServicePMTHandler::eventTuneFailed))
+	{
+		eUsePtr<iDVBChannel> channel;
+		ePtr<iDVBFrontend> fe;
+		if (!m_service_handler.getChannel(channel) && channel && !channel->getFrontend(fe) && fe)
+			m_hds_zap.acordare(static_cast<eDVBFrontend*>(fe.operator->())->hdsTimpiZap());
+	}
 	m_hds_zap.eveniment(event, event == eDVBServicePMTHandler::eventTuned ?
 		getFrontendInfo(iDVBFrontend_ENUMS::frontendNumber) : -1);
 
@@ -1084,17 +1095,25 @@ void eDVBServicePlay::serviceEvent(int event)
 	case eDVBServicePMTHandler::eventNewProgramInfo:
 	{
 		eDebug("eventNewProgramInfo %d %d", m_timeshift_enabled, m_timeshift_active);
+		m_hds_amana_gui = m_is_primary && !m_is_pvr && !m_is_stream &&
+			!m_timeshift_enabled && !m_timeshift_active;
 		if (m_timeshift_enabled)
 			updateTimeshiftPids();
 		if (!m_timeshift_active)
 			updateDecoder();
+		m_hds_amana_gui = false;
 		if (m_first_program_info & 1 && m_is_pvr && !m_is_stream)
 		{
 			m_first_program_info &= ~1;
 			seekTo(0);
 		}
 		if (!m_timeshift_active)
-			m_event((iPlayableService*)this, evUpdatedInfo);
+		{
+			if (m_is_primary && !m_is_pvr && !m_is_stream && !m_timeshift_enabled)
+				m_service_handler.amanaInfoLive();
+			else
+				m_event((iPlayableService*)this, evUpdatedInfo);
+		}
 		break;
 	}
 	case eDVBServicePMTHandler::eventPreStart:
@@ -1107,6 +1126,31 @@ void eDVBServicePlay::serviceEvent(int event)
 		m_event((iPlayableService*)this, evSOF);
 		break;
 	}
+}
+
+void eDVBServicePlay::hdsInfoLiveReady()
+{
+	ePtr<eDVBServicePlay> keep(this);
+	m_hds_zap.programGata();
+	if (m_is_primary && !m_is_pvr && !m_is_stream && !m_timeshift_enabled && !m_timeshift_active)
+	{
+		if (m_hds_seekable_amana)
+		{
+			m_hds_seekable_amana = false;
+			m_event((iPlayableService*)this, evSeekableStatusChanged);
+			/* Un ascultator poate opri serviciul sau poate cere alt zap. */
+			eUsePtr<iDVBChannel> channel;
+			if (m_service_handler.getChannel(channel) || !channel)
+				return;
+		}
+		m_event((iPlayableService*)this, evUpdatedInfo);
+	}
+}
+
+void eDVBServicePlay::hdsEtapaZap(int etapa, long long t)
+{
+	m_hds_zap.marcaj(etapa == eDVBServicePMTHandler::zapPmtPrimit ?
+		hdsjzap::Zap::PMT_PRIMIT : hdsjzap::Zap::CA_PMT_TRIMIS, t);
 }
 
 void eDVBServicePlay::serviceEventTimeshift(int event)
@@ -1266,6 +1310,7 @@ RESULT eDVBServicePlay::stop()
 	m_hds_sunet_procesor = false;
 	m_hds_ceas_imagine->stop();
 	m_hds_zap.oprire();
+	m_hds_amana_gui = m_hds_seekable_amana = false;
 
 		/* add bookmark for last play position */
 	if (m_is_pvr && !m_is_stream)
@@ -2763,12 +2808,13 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 				m_decoder->setRadioPic(radio_pic);
 		}
 
-		if (mustPlay)
-			m_decoder->play();
-		else
-			m_decoder->set();
+		int decoder_result = mustPlay ? m_decoder->play() : m_decoder->set();
+		if (!decoder_result)
+			m_hds_zap.marcaj(hdsjzap::Zap::DECODOR_PREGATIT);
 		hdsPozaRadio(vpid);
 		m_hds_zap.program(program, vpid, vpidtype);
+		if (!m_hds_amana_gui)
+			m_hds_zap.programGata();
 
 		m_decoder->setAudioChannel(achannel);
 
@@ -2787,7 +2833,12 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 	m_have_video_pid = (vpid > 0 && vpid < 0x2000);
 
 	if (sendSeekableStateChanged)
-		m_event((iPlayableService*)this, evSeekableStatusChanged);
+	{
+		if (m_hds_amana_gui)
+			m_hds_seekable_amana = true;
+		else
+			m_event((iPlayableService*)this, evSeekableStatusChanged);
+	}
 }
 
 void eDVBServicePlay::loadCuesheet()

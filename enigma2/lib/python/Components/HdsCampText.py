@@ -50,6 +50,7 @@ class CampText(Label):
 	pe aici. getText() da textul intreg, ca la Label."""
 
 	def __init__(self, text=""):
+		self.rtl = False
 		self.aliniereSkin = "left"   # alinierea din skin (halign); fara ea, la stanga
 		self.alinierePusa = None     # ce am pus noi pe eticheta; None = a ramas cea din skin
 		Label.__init__(self, text)
@@ -66,7 +67,25 @@ class CampText(Label):
 
 	def setText(self, text):
 		Label.setText(self, text)
+		if self.rtl:
+			self._arataRtl()
 		self.potriveste()
+
+	def postWidgetCreate(self, instance):
+		Label.postWidgetCreate(self, instance)
+		if self.rtl:
+			self._arataRtl()
+
+	def setRtl(self, rtl):
+		self.rtl = bool(rtl)
+		self._arataRtl()
+		self.potriveste()
+
+	def _arataRtl(self):
+		inst = getattr(self, "instance", None)
+		if inst is not None:
+			# The direction mark is display-only; getText keeps the original value.
+			inst.setText(("\u200f" if self.rtl else "") + (self.getText() or ""))
 
 	def potriveste(self):
 		"""Alinierea dupa latimea textului de acum; schimbata pe eticheta numai cand chiar se schimba (setHAlign
@@ -74,7 +93,10 @@ class CampText(Label):
 		inst = getattr(self, "instance", None)
 		if inst is None:
 			return
-		dorita = "right" if preaLat(inst) else self.aliniereSkin
+		if self.rtl:
+			dorita = "left" if preaLat(inst) else "right"
+		else:
+			dorita = "right" if preaLat(inst) else self.aliniereSkin
 		if dorita == (self.alinierePusa or self.aliniereSkin):
 			return
 		try:

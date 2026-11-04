@@ -463,10 +463,10 @@ def modelNecesar(limba, implicit=IMPLICIT_FARA_LIMBA):
 
 # Pistele playerului de filme (lib/service/servicemp3.cpp, getSubtitleList): (2, index, tip, 0, limba[, ...]), tipul dupa
 # subtype_t din lib/service/servicemp3.h. Cele desenate ca poza (stVOB = 5: DVD VobSub; stPGS = 6: Blu-ray PGS; din film
-# sau dintr-un fisier .idx/.sup de langa el) ajung la widget ca pagini DVB (paginaDvb), deci se citesc la fel, cu limba
-# pistei; cele text sunt deja text.
+# sau dintr-un fisier .idx/.sup de langa el; stDVB = 13: pista DVB a unui canal de internet) ajung la widget ca pagini DVB
+# (paginaDvb), deci se citesc la fel, cu limba pistei; cele text sunt deja text.
 FEL_FILM = 2
-TIPURI_POZA_FILM = (5, 6)
+TIPURI_POZA_FILM = (5, 6, 13)
 
 
 def estePozaFilm(pista):

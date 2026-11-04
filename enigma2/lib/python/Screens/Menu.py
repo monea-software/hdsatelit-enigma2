@@ -392,8 +392,10 @@ class Menu(Screen):
 		self._dalaInceput = 0
 		self._dalaGata = False
 		self._dalaMut = False
+		self._dalaInstanta = None
 		self._alesInitial = self._indexDupaEntryID(alegere)
 
+		self._surseJos()
 		if self._modDale:
 			if self._alesInitial is not None:
 				self._dalaAles = self._alesInitial
@@ -469,6 +471,19 @@ class Menu(Screen):
 			self["menu"].setIndex(i)
 		return True
 
+	def _surseJos(self):
+		"""Linia de jos, in ambele moduri (panoul HdsMenuDaleJos sau HdsMenuListaJos din skin): numele tastelor nu se
+		traduc; tasta galbena spune forma in care trece meniul."""
+		self["dala_t_ok"] = StaticText("OK")
+		self["dala_t_exit"] = StaticText("EXIT")
+		self["dala_t_cifre"] = StaticText("1-9")
+		self["dala_t_text"] = StaticText("TEXT")
+		self["dala_ok"] = StaticText(_("Deschide"))
+		self["dala_exit"] = StaticText(_("Înapoi"))
+		self["dala_cifre"] = StaticText(_("Direct"))
+		self["dala_text"] = StaticText(_("Caută"))
+		self["dala_galben"] = StaticText(_("Listă") if self._modDale else _("Dale"))
+
 	# ------------------------------------------------------------ modul dale
 	def _dalaSurse(self):
 		from Components.Label import Label
@@ -484,16 +499,6 @@ class Menu(Screen):
 		self["dala_sageata_jos"] = Pixmap()
 		self["dala_bara"] = Slider(0, 1)
 		self["dala_masura"] = Label("")
-		# tastele din linia de jos: numele tastelor nu se traduc
-		self["dala_t_ok"] = StaticText("OK")
-		self["dala_t_exit"] = StaticText("EXIT")
-		self["dala_t_cifre"] = StaticText("1-9")
-		self["dala_t_text"] = StaticText("TEXT")
-		self["dala_ok"] = StaticText(_("Deschide"))
-		self["dala_exit"] = StaticText(_("Înapoi"))
-		self["dala_cifre"] = StaticText(_("Direct"))
-		self["dala_text"] = StaticText(_("Caută"))
-		self["dala_galben"] = StaticText(_("Listă"))
 		self._textLucru = _("ÎN LUCRU")
 		self._textNetestat = _("NETESTAT")
 
@@ -525,6 +530,14 @@ class Menu(Screen):
 		except Exception:
 			pass
 		self["menu"].onSelectionChanged.append(self._dalaSelectieLista)
+		# randul ales nu arata altfel (dala aleasa vine din tuplu): mutarea lui nu redeseneaza nimic
+		self._dalaInstanta = None
+		for r in self.renderer:
+			inst = getattr(r, "instance", None)
+			if hasattr(inst, "entryPartChanged"):
+				self._dalaInstanta = inst
+				inst.setRedrawOnSelection(False)
+				break
 		n = len(self._flatlist)
 		self._dalaAles = max(0, min(self._dalaAles, n - 1))
 		self._dalaInceput = HdsDale.fereastra(self._dalaAles // HdsDale.COLOANE, 0, HdsDale.randuri(n))
@@ -663,14 +676,29 @@ class Menu(Screen):
 		self._dalaMut = True
 		try:
 			randuri = sorted(set((vechi // HdsDale.COLOANE, nou // HdsDale.COLOANE)))
+			lista = self["menu"].list
 			for r in randuri:
 				k = r - self._dalaInceput
-				if 0 <= k < self["menu"].count():
-					self["menu"].modifyEntry(k, self._construiesteRandDala(r))
+				if 0 <= k < len(lista):
+					lista[k] = self._construiesteRandDala(r)
 			self["menu"].index = nou // HdsDale.COLOANE - self._dalaInceput
 		finally:
 			self._dalaMut = False
+		self._dalaRedeseneaza(vechi)
+		self._dalaRedeseneaza(nou)
 		self._dalaStare()
+
+	def _dalaRedeseneaza(self, i):
+		"""Se redeseneaza numai dala i (cu stralucirea din jur), nu tot randul: celelalte doua nu s-au schimbat."""
+		n = HdsDale.COLOANE
+		k = i // n - self._dalaInceput
+		inst = self._dalaInstanta
+		if inst is None:
+			self["menu"].entry_changed(k)
+			return
+		g, s = self._dalaGeom, self._dalaScara
+		st = g["stralucire"]
+		inst.entryPartChanged(k, s.x(HdsDale.DALE_X[i % n] - st), s.l(HdsDale.LATIME_DALA + 2 * st))
 
 	def _dalaSelectieLista(self):
 		"""Lista s-a mutat singura (Pagina +/-, CH +/-): aceeasi coloana pe randul ales de ea."""

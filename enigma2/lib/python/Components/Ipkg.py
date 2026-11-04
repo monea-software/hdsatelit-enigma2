@@ -1,4 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import codecs
 import os
 import re
 import time
@@ -138,6 +139,8 @@ class IpkgComponent:
 		self.callbackList = []
 		self.retval = None
 		self.fetchedList = []
+		# the output of opkg comes as bytes; decoded as it comes (a character cut between two reads waits for its end)
+		self._decoder = None
 		self.setCurrentCommand()
 
 	def setCurrentCommand(self, command = None):
@@ -155,6 +158,7 @@ class IpkgComponent:
 			self.callCallbacks(self.EVENT_DONE, -1)
 			return
 		print("[Ipkg] executing", program, arguments)
+		self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
 		self.cmd.appClosed.append(self.cmdFinished)
 		self.cmd.dataAvail.append(self.cmdData)
 		if self.cmd.execute(program, 'opkg', *arguments):
@@ -184,6 +188,11 @@ class IpkgComponent:
 			self.cmd.dataAvail.remove(self.cmdData)
 		except ValueError:
 			pass
+		if self._decoder is not None:
+			rest = self._decoder.decode(b'', True)
+			self._decoder = None
+			if rest:
+				self.cache = (self.cache or '') + rest
 		if self.cache:
 			rest, self.cache = self.cache, None
 			self.parseLine(rest)
@@ -192,7 +201,11 @@ class IpkgComponent:
 
 	def cmdData(self, data):
 		if isinstance(data, bytes):
-			data = data.decode('utf-8', 'replace')
+			if self._decoder is None:
+				self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
+			data = self._decoder.decode(data)
+			if not data:
+				return
 		if self.cache is None:
 			self.cache = data
 		else:

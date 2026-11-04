@@ -324,6 +324,8 @@ class RecordTimerEntry(timer.TimerEntry, object):
 			if HdsLocInregistrari is not None:
 				try:
 					HdsLocInregistrari.tineMinte(loc)
+					# pe discul de pe care porneste imaginea, un ceas o opreste inainte sa se umple (acelasi disc tine si setarile)
+					HdsLocInregistrari.pazesteDiscPornire(loc)
 				except Exception as eroare:
 					print("[RecordTimer] remembered disk: %s" % eroare)
 			return True

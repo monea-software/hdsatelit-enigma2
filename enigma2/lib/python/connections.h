@@ -3,6 +3,7 @@
 #define __lib_python_connections_h
 
 #include <libsig_comp.h>
+#include <utility>
 
 #include <lib/python/python.h>
 
@@ -36,6 +37,20 @@ inline PyObject *PyFrom(const char *c)
 	{
 		PyErr_Clear();
 		r = PyUnicode_FromString("");
+	}
+	return r;
+}
+
+/* HDSatelit: the output of a console program (eConsoleAppContainer) goes to Python as bytes with the length read, like
+   on the other Python 3 images: the plugins written for them do data.decode() or b"" + data, and the data can hold
+   zero bytes (a picture) or a UTF-8 character cut between two reads. */
+inline PyObject *PyFrom(const std::pair<const char*, int> &p)
+{
+	PyObject *r = PyBytes_FromStringAndSize(p.first, p.first && p.second > 0 ? p.second : 0);
+	if (!r)
+	{
+		PyErr_Clear();
+		r = PyBytes_FromStringAndSize("", 0);
 	}
 	return r;
 }

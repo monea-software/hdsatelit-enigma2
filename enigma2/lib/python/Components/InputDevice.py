@@ -66,7 +66,8 @@ class inputDevices:
 		except OSError:
 			devices = []
 
-		for evdev in devices:
+		gasite = []
+		for evdev in sorted(devices):
 			if not evdev.startswith("event"): # mice and other non evdev nodes have no name
 				continue
 			try:
@@ -85,11 +86,19 @@ class inputDevices:
 			if self.name:
 				if self.name == 'dreambox front panel':
 					continue
-				if self.name == "dreambox advanced remote control (native)" and config.misc.rcused.value != 0:
-					continue
-				if self.name == "dreambox remote control (native)" and config.misc.rcused.value == 0:
-					continue
-				self.Devices[evdev] = {'name': self.name, 'type': self.getInputDeviceType(self.name, fel),'enabled': False, 'configuredName': None }
+				gasite.append((evdev, self.name, fel))
+
+		# alegerea intre cele doua telecomenzi native (config.misc.rcused) are rost numai cand exista amandoua; pe
+		# receptoarele cu una singura (ex. numai „advanced”), ea ramane in lista, altfel ecranul ar fi gol
+		nume = set(n for _e, n, _f in gasite)
+		ambele = "dreambox advanced remote control (native)" in nume and "dreambox remote control (native)" in nume
+		for evdev, name, fel in gasite:
+			if ambele and name == "dreambox advanced remote control (native)" and config.misc.rcused.value != 0:
+				continue
+			if ambele and name == "dreambox remote control (native)" and config.misc.rcused.value == 0:
+				continue
+			self.name = name
+			self.Devices[evdev] = {'name': name, 'type': self.getInputDeviceType(name, fel), 'enabled': False, 'configuredName': None}
 	
 
 	def getInputDeviceType(self,name, fel=None):

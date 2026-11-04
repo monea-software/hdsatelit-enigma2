@@ -41,6 +41,10 @@
 #   - timpul maxim trecut fara semnal (`asteptare_trecuta`: hdsRotorArrived = 1 si tot timpul maxim trecut): numai
 #     faptele masurate (cat s-a asteptat, ca semnalul nu a venit), fara "a ajuns", fara antena desenata pe tinta;
 #   - `ramas_text`: randul de sub bara, acelasi pe televizor si in web, cand cifrele obisnuite nu se pot spune.
+# CABLUL: comanda spre motor nu are raspuns, deci fara cablu antena pare ca se roteste, iar nucleul asteapta degeaba
+# semnalul (~90 s). Cand tot timpul maxim trece fara semnal (`asteptare_trecuta`; oprirea dupa curent inseamna ca
+# motorul raspunde, deci cablul e), titlul panoului (acelasi pe televizor si in web) spune o data pe
+# canal sa se verifice cablul (`indemn_cablu`), iar panoul ramane MILISECUNDE_INDEMN_CABLU ca sa se poata citi.
 
 import sys
 import time
@@ -54,6 +58,12 @@ except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
 
 # cat timp ramane ecranul dupa ce motorul s-a oprit, ca utilizatorul sa apuce sa vada ca a ajuns
 MILISECUNDE_DUPA_SOSIRE = 6000
+# cat ramane panoul dupa o mutare terminata fara semnal, cand spune sa se verifice cablul (o data pe canal)
+MILISECUNDE_INDEMN_CABLU = 15000
+# aceeasi mutare, citita de mai multe ori: ora opririi (acum - de cand s-a oprit) se misca cel mult cu atat
+MARJA_INDEMN_MS = 2000
+# canalul (sau, fara canal, tunerul si pozitia) -> ora opririi mutarii la care s-a spus de cablu
+_INDEMNURI = {}
 # cat poate fi notata oprirea in nucleu dupa oprirea trimisa de comenzi si sa fie tot a ei (setRotorMoving(false) e chemat
 # chiar inainte de ora opririi tinuta de comenzi; doua ceasuri, deci o marja)
 MARJA_OPRIRE_MS = 200
@@ -353,7 +363,7 @@ def _stareNucleu():
 			de_cand = int(sec.hdsRotorStoppedMs(slot))
 		except Exception:
 			return stare
-		if de_cand < 0 or de_cand > MILISECUNDE_DUPA_SOSIRE:
+		if de_cand < 0 or de_cand > max(MILISECUNDE_DUPA_SOSIRE, MILISECUNDE_INDEMN_CABLU):
 			return stare
 		stare["a_ajuns"] = True
 
@@ -407,7 +417,39 @@ def _stareNucleu():
 
 	_faptele(stare, trecut_ms)
 	stare["stare_text"] = _textStare(stare)
+	indemnCablu(stare, de_cand)
+	if stare["a_ajuns"] and de_cand > MILISECUNDE_DUPA_SOSIRE and not stare["indemn_cablu"]:
+		stare["activ"] = False
 	return stare
+
+
+def _canalTv():
+	try:
+		import NavigationInstance
+		ref = NavigationInstance.instance.getCurrentlyPlayingServiceOrGroup()
+		return ref.toString() if ref else None
+	except Exception:
+		return None
+
+
+def indemnCablu(stare, de_cand, acum_ms=None, canal=None):
+	"""CABLUL (sus): dupa tot timpul maxim fara semnal, o singura data pe canal, titlul spune sa se verifice cablul
+	(`indemn_cablu` = True). Aceeasi mutare citita din nou (televizorul si pagina web) pastreaza indemnul."""
+	stare["indemn_cablu"] = False
+	if not (stare.get("a_ajuns") and stare.get("asteptare_trecuta")) or de_cand is None or de_cand < 0:
+		return
+	acum = int(time.monotonic() * 1000) if acum_ms is None else acum_ms
+	oprita = acum - de_cand
+	cheie = canal if canal is not None else _canalTv()
+	if not cheie:
+		cheie = "%s:%s" % (stare.get("slot"), stare.get("la_orbital"))
+	vazut = _INDEMNURI.get(cheie)
+	if vazut is None:
+		_INDEMNURI[cheie] = oprita
+	elif abs(vazut - oprita) > MARJA_INDEMN_MS:
+		return
+	stare["indemn_cablu"] = True
+	stare["stare_text"] = _("Fără semnal: verifică cablul antenei")
 
 
 def _faptele(stare, trecut_ms):

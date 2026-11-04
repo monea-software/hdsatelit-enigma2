@@ -9,6 +9,8 @@
 # Fereastra e nemodala (session.instantiateDialog): nu ia tastele nimanui. Dispare singura dupa DURATA_MS sau la
 # prima tasta apasata; tasta aceea merge mai departe la ce e pe ecran (bara, lista, aplicatia pe tot ecranul).
 # Skinul HDSatelit o are (HdsAnuntRetea in skin.xml); in alt skin se foloseste cea de aici, scalata dupa ecran.
+# Un text care nu incape (mesajul unui plugin extern, Components/HdsPluginExtern: patru fraze) face fereastra si textul
+# mai inalte, centrate pe ecran; un text care incape lasa marimile din skin (_potriveste).
 
 from enigma import eActionMap, eTimer
 
@@ -46,11 +48,15 @@ class HdsAnuntRetea(Screen):
 		Screen.__init__(self, session)
 		self["pictograma"] = Pixmap()
 		self["text"] = Label("")
+		# bara si marginile ferestrei din tema (numai in skinul HDSatelit); tin toata inaltimea
+		for nume in ("felBara", "ramaDr", "ramaJos"):
+			self[nume] = Label("")
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.ascunde)
 		self.ceasTasta = eTimer()
 		self.ceasTasta.callback.append(self.ascunde)
 		self.legat = False
+		self._marimi = None
 
 	def anunta(self, text, cheie, durata_ms=None, ascunde_la_tasta=True):
 		"""Arata textul cu pictograma cheie. durata_ms: cat sta (implicit DURATA_MS); ascunde_la_tasta=False: nu
@@ -68,9 +74,37 @@ class HdsAnuntRetea(Screen):
 				self["pictograma"].hide()
 		except Exception as e:
 			_jurnal("pictograma: %r" % (e,))
+		self._potriveste()
 		self.show()
 		self.ceas.start(int(durata_ms or DURATA_MS), True)
 		self._leaga(bool(ascunde_la_tasta))
+
+	def _potriveste(self):
+		"""Inaltimea ferestrei dupa text: marimile din skin, iar cand textul nu incape in eticheta, eticheta si fereastra
+		cresc cu cat lipseste (cel mult pana la marginile ecranului) si fereastra ramane centrata pe acelasi loc."""
+		try:
+			from enigma import ePoint, eSize, getDesktop
+			fer, et = self.instance, self["text"].instance
+			if fer is None or et is None:
+				return
+			if self._marimi is None:
+				self._marimi = (fer.size().width(), fer.size().height(), fer.position().x(), fer.position().y(),
+					et.size().width(), et.size().height())
+			fl, fh, fx, fy, el, eh = self._marimi
+			et.resize(eSize(el, eh))
+			from Components.HdsMarireText import inaltimeText
+			plus = max(0, inaltimeText(et) + 8 - eh)
+			plus = min(plus, max(0, getDesktop(0).size().height() - fh - 40))
+			et.resize(eSize(el, eh + plus))
+			fer.resize(eSize(fl, fh + plus))
+			fer.move(ePoint(fx, max(0, fy - plus // 2)))
+			if self["felBara"].skinAttributes is not None:
+				for nume in ("felBara", "ramaDr"):
+					w = self[nume].instance
+					w.resize(eSize(w.size().width(), fh + plus))
+				self["ramaJos"].instance.move(ePoint(0, fh + plus - 1))
+		except Exception as e:
+			_jurnal("marimea mesajului: %r" % (e,))
 
 	def ascunde(self):
 		self.ceas.stop()
@@ -95,13 +129,16 @@ class HdsAnuntRetea(Screen):
 _fereastra = [None]
 
 
-def arata(session, text, cheie):
-	"""Arata mesajul (sau il inlocuieste pe cel de pe ecran) pentru DURATA_MS."""
+def arata(session, text, cheie, durata_ms=None):
+	"""Arata mesajul (sau il inlocuieste pe cel de pe ecran) pentru durata_ms (implicit DURATA_MS)."""
 	if not text:
 		return
 	try:
 		if _fereastra[0] is None:
 			_fereastra[0] = session.instantiateDialog(HdsAnuntRetea)
-		_fereastra[0].anunta(text, cheie)
+		if durata_ms:
+			_fereastra[0].anunta(text, cheie, durata_ms)
+		else:
+			_fereastra[0].anunta(text, cheie)
 	except Exception as e:
 		_jurnal("arata: %r" % (e,))

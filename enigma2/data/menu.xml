@@ -252,7 +252,7 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="DVB-MABR (IP Multicast)" entryID="mabr_config" pictograma="multicast" web="/mabr" weight="40" stare="in-lucru">
 				<screen module="HdsDvbMABR" screen="HdsDvbMABRSetup" />
 			</item>
-			<item level="0" text="IPTV (M3U / Stalker / Xtream)" entryID="hds_iptv_setup" pictograma="lista-redare" web="/iptv" weight="50" stare="in-lucru">
+			<item level="0" text="IPTV (M3U / Stalker / Xtream)" entryID="hds_iptv_setup" pictograma="lista-redare" web="/iptv" weight="50" stare="netestat">
 				<screen module="IptvSetup" screen="IptvSetup" />
 			</item>
 			<item level="0" text="HdsWebControl (Web Interface)" entryID="hds_webcontrol_setup" pictograma="interfata-web" web="/interfata-web" weight="60">
@@ -273,6 +273,10 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<!-- rezolutia, frecventa, culorile HDMI si ce se vede la schimbarea canalului (Screens/VideoSetup.py); in web: /video -->
 			<item level="0" text="Advanced Video Setup" entryID="video_setup" pictograma="video-avansat" weight="20" web="/video">
 				<screen module="VideoSetup" screen="VideoSetup" />
+			</item>
+			<!-- raportul de aspect, WSS, claritatea (setup.xml hds_imagine_tv; din 0.7.0 scoase din ecranul iesirii sunetului) -->
+			<item level="0" text="Formatul imaginii" entryID="hds_imagine_tv" pictograma="video-avansat" weight="22" web="/setari?id=hds_imagine_tv">
+				<setup id="hds_imagine_tv" />
 			</item>
 			<!-- calitatea imaginii: profilurile SD / HD / 4K x SDR / HDR10 / HLG ale blocului de calitate al placii si iesirea HDR
 			     (Screens/HdsCalitateImagine.py, Components/HdsCalitateImagine.py). Sta langa setarile video fiindca e tot
@@ -431,6 +435,12 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Informații despre decriptare" entryID="cam_info" pictograma="decriptare-info" weight="20" web="/acces-conditionat">
 				<screen module="CamInfo" screen="CamInfo" />
 			</item>
+			<!-- Stream Relay (0.7.0, Components/HdsStreamRelay.py): setarile releului (sectiunea hds_stream_relay din setup.xml);
+			     canalele se pun si se scot din meniul listei de canale. In web: /setari?id=hds_stream_relay si butonul de langa
+			     stea din lista de canale -->
+			<item level="0" text="Stream Relay" entryID="hds_stream_relay" pictograma="transmisie" weight="30" web="/setari?id=hds_stream_relay" stare="netestat">
+				<setup id="hds_stream_relay" />
+			</item>
 			<!-- "Common Interface (CI Slots)" (ci_setup, Ci.CiSelection) scos din meniu: Viper 4K V20 nu are slot CI. Pe
 			     receptor enigma2 scrie la pornire "found 0 common interface slots" si nu exista /dev/ci*; configuratia masinii
 			     u57 (meta-dinobot) nu are "ci" in MACHINE_FEATURES. Intrarea era oricum ascunsa (requires="CommonInterface"). -->
@@ -450,6 +460,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<item level="0" text="Imagine nouă de pe stick" entryID="hds_software_update" pictograma="stick" weight="15" web="/actualizare">
 				<screen module="HdsSoftwareUpdate" screen="HdsSoftwareUpdate" />
+			</item>
+			<!-- imaginea completa luata de pe internet direct pe stick, cu o singura apasare (Components/HdsImagineOnline.py);
+			     aceeasi fereastra apare singura pe ecranul obisnuit cand exista o versiune noua. In web: /imagine-online. -->
+			<item level="0" text="Imagine nouă de pe internet" entryID="hds_imagine_online" pictograma="stick" weight="15" web="/imagine-online">
+				<screen module="HdsImagineOnline" screen="HdsImagineOnline" />
 			</item>
 			<!-- copia setarilor pe stick sau disc si punerea ei la loc, de mana sau singura la prima pornire dupa scrierea
 			     unei imagini noi (Components/HdsCopieSetari.py, Screens/HdsCopieSetari.py); in web: /copie-setari. Langa

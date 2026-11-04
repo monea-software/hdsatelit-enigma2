@@ -1165,6 +1165,33 @@ _SUNET_TEHNIC = frozenset((u"stereo", u"mono", u"dual", u"dolby", u"digital", u"
 	u"zweikanal", u"zweikanalton", u"atmos", u"2ch", u"6ch", u"pcm"))
 
 
+# codurile ISO 639 ale pistelor de sunet care nu sunt o limba: aceleasi etichete ca ecranul AUDIO (Screens/AudioSelection.py)
+# si playerul din web (HdsWebControl/player.js), din traducerile imaginii
+_SUNET_NEDEFINIT = (u"und", u"unk", u"xxx", u"---")
+_SUNET_DESCRIERE = (u"qad", u"nar")
+
+
+def _tradus(text):
+	try:
+		return u(_(text))  # noqa: F821
+	except NameError:
+		return u(text)
+
+
+def _eticheta_fara_limba(low):
+	"""Eticheta unui cod de pista care nu e o limba (litere mici), sau None pentru orice alt text: „Nedefinită” (und),
+	„Descriere audio” (qad, nar), „Altă limbă” (mis), originala (qaa-qtz, tabelul skinului)."""
+	if low in _SUNET_NEDEFINIT:
+		return _tradus(u"Nedefinită")
+	if low in _SUNET_DESCRIERE:
+		return _tradus(u"Descriere audio")
+	if low == u"mis":
+		return _tradus(u"Altă limbă")
+	if len(low) == 3 and low[0] == u"q" and u"a" <= low[1] <= u"t" and u"a" <= low[2] <= u"z":
+		return tr(u"lang_qaa")
+	return None
+
+
 def varianta_pistei(text):
 	"""Ce spune textul componentei din EIT despre o pista audio cand nu e o limba si nici numai felul sunetului:
 	„Audiodeskription”, „Originalton”, „Klare Sprache” (asa cum il trimite postul). Gol pentru „Stereo”, „Dolby
@@ -1173,6 +1200,9 @@ def varianta_pistei(text):
 	if not t or language_name(t):
 		return u""
 	low = t.lower()
+	eticheta = _eticheta_fara_limba(low)
+	if eticheta is not None:
+		return eticheta
 	for ch in u"/,;:()[]|":
 		low = low.replace(ch, u" ")
 	cuvinte = low.split()
@@ -3985,7 +4015,17 @@ TEMP_FILES = (
 )
 
 
-def read_small(path, limit=16384):
+def _procFundal(functie, *argumente):
+	# fisierele driverului (/proc/msp, /proc/hisi), citite de pe firul principal: prin firul de fundal
+	# (Components/HdsProcFundal.py); fara modul (probele de pe PC), direct
+	try:
+		from Components import HdsProcFundal
+	except Exception:
+		return functie(*argumente)
+	return HdsProcFundal.citeste(functie, *argumente)
+
+
+def read_small_direct(path, limit=16384):
 	"""Continutul unui fisier mic ca text, sau None daca lipseste."""
 	try:
 		if not os.path.exists(path):
@@ -3999,6 +4039,11 @@ def read_small(path, limit=16384):
 		return None
 
 
+def read_small(path, limit=16384):
+	"""Ca read_small_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
+	return _procFundal(read_small_direct, path, limit)
+
+
 def _kv_file(text):
 	d = {}
 	for line in (text or u"").splitlines():
@@ -4007,6 +4052,25 @@ def _kv_file(text):
 		k, v = line.split(u"=", 1)
 		d[k.strip().lower()] = v.strip().strip(u"'\"")
 	return d
+
+
+# regulile modelului pentru care e construita imaginea (aceleasi ca in Components/HdsPazaModel.py)
+HDSATELIT_MODEL = "/etc/hdsatelit-model"
+
+
+def _model_din_reguli():
+	"""(marca, model) din primul „model=” al regulilor modelului: „Amiko Viper 4K V20” -> (u"Amiko", u"Viper 4K
+	V20"); numai litere, cifre, spatii si . _ - + ( ), cel mult 60 de caractere; (u"", u"") fara fisier sau cheie"""
+	for line in (read_small(HDSATELIT_MODEL) or u"").splitlines():
+		line = line.strip()
+		if line.startswith(u"#") or u"=" not in line:
+			continue
+		k, v = line.split(u"=", 1)
+		if k.strip() == u"model":
+			v = u"".join(ch for ch in v.strip() if ch.isalnum() or ch in u" ._-+()").strip()[:60]
+			marca, _sep, rest = v.partition(u" ")
+			return (marca, rest.strip()) if rest.strip() else (u"", v)
+	return u"", u""
 
 
 _box = {"val": None}
@@ -4040,20 +4104,33 @@ def box_info():
 			info["model"] = iv.get(u"machine_name", u"")
 			info["distro"] = info["distro"] or iv.get(u"distro", u"") or iv.get(u"creator", u"")
 			info["version"] = info["version"] or iv.get(u"version", u"")
+		# numele din regulile modelului (pe V20 acelasi ca textul de mai jos); textul scris aici ramane rezerva
+		marca_reguli, model_reguli = _model_din_reguli()
 		if not info["model"]:
-			try:
-				bt = (read_small("/proc/stb/info/boxtype", 64) or u"").strip().lower()
-				hn = (read_small("/etc/hostname", 64) or u"").strip().lower()
-				if bt == u"u57" or u"viper4k" in hn:
-					info["brand"] = info["brand"] or u"Amiko"
-					info["model"] = u"Viper 4K V20" if u"viper4kv20" in hn else u"Viper 4K"
-			except Exception:
-				pass
+			if model_reguli:
+				info["brand"] = info["brand"] or marca_reguli
+				info["model"] = model_reguli
+			else:
+				try:
+					bt = (read_small("/proc/stb/info/boxtype", 64) or u"").strip().lower()
+					hn = (read_small("/etc/hostname", 64) or u"").strip().lower()
+					# primul Viper 4K (V10): driverul spune viper4k si numele de gazda e viper4k (fara v20)
+					if bt == u"viper4k" or hn == u"viper4k":
+						info["brand"] = info["brand"] or u"Amiko"
+						info["model"] = u"Viper 4K V10"
+					elif bt == u"u57" or u"viper4k" in hn:
+						info["brand"] = info["brand"] or u"Amiko"
+						info["model"] = u"Viper 4K V20" if u"viper4kv20" in hn else u"Viper 4K"
+				except Exception:
+					pass
 		elif info["model"].lower() == u"viper 4k":
-			# numele gazdei pus de imagine spune sigur varianta placii (viper4kv20)
-			hn = (read_small("/etc/hostname", 64) or u"").strip().lower()
-			if u"viper4kv20" in hn:
-				info["model"] = u"Viper 4K V20"
+			if model_reguli:
+				info["model"] = model_reguli
+			else:
+				# numele gazdei pus de imagine spune sigur varianta placii (viper4kv20)
+				hn = (read_small("/etc/hostname", 64) or u"").strip().lower()
+				if u"viper4kv20" in hn:
+					info["model"] = u"Viper 4K V20"
 		if not info["soc"]:
 			info["soc"] = (read_small(CHIPSET_FILE, 256) or u"").strip()
 		cpu = read_small(PROC_CPUINFO, 65536) or u""

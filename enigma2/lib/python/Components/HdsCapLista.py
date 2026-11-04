@@ -49,12 +49,19 @@ DOSAR_SAU_MARCAJ = 1 | 64  # eServiceReference.isDirectory | isMarker
 
 # posturile DAB+ / DVB-T2 din satelit: fluxuri de la releele locale ale imaginii (Hds/DabT2/buchete.py); releul DAB+
 # asculta pe 8898 (Hds/DabT2/profil.py), referintele vechi pe 8888 raman posturi DAB+
-CAI_FLUXURI = (("dab", "127.0.0.1:8898/dab/"), ("dab", "127.0.0.1:8888/dab/"), ("t2", "127.0.0.1:8889/t2/"))
+# canalele de internet ale omului (Components/HdsIptvSurse.py) au adresa locala 8897: eticheta IPTV sta si in buchetele amestecate
+CAI_FLUXURI = (("dab", "127.0.0.1:8898/dab/"), ("dab", "127.0.0.1:8888/dab/"), ("t2", "127.0.0.1:8889/t2/"),
+	("iptv", "127.0.0.1:8897/tv/"))
+
+# adresele canalelor locurilor adaugate de extensii (Components/HdsLocuriLista.py pune lista aici): felul lor e „loc”
+CAI_EXTRA = []
 
 # eticheta felului, la fel in toate limbile: in dreapta randului din lista de canale (lib/service/listboxservice.cpp,
 # setPathLabel), in bara de informatii si in cautare
-ETICHETE_FEL = {"dab": "DAB+", "t2": "DVB-T2"}
-ETICHETE_CAI = tuple((marcaj, ETICHETE_FEL[fel]) for fel, marcaj in CAI_FLUXURI)
+ETICHETE_FEL = {"dab": "DAB+", "t2": "DVB-T2", "iptv": "IPTV"}
+# fluxurile care nu se pot redirectiona dintr-o adresa HTTP stau in buchet cu adresa lor (HdsIptvSurse.adresaDirecta)
+ETICHETE_CAI = tuple((marcaj, ETICHETE_FEL[fel]) for fel, marcaj in CAI_FLUXURI) + (("rtsp://", "IPTV"), ("rtmp://", "IPTV"),
+	("mms://", "IPTV"), ("udp://", "IPTV"))
 
 
 # buchetele DAB+ / DVB-T2 din satelit (Hds/DabT2/profil.py): marcajele lor sunt capete de ansamblu („MUX DAB+: DR
@@ -69,20 +76,24 @@ def buchet_cu_capete(cale_radacina):
 
 
 def fel_flux(cale):
-	"""'dab' / 't2' pentru calea (sau referinta ca text) unui post DAB+ / DVB-T2 din satelit, altfel None."""
+	"""'dab' / 't2' / 'iptv' pentru calea (sau referinta ca text) unui post DAB+ / DVB-T2 din satelit sau a unui canal de
+	internet al omului, altfel None."""
 	if not cale:
 		return None
 	c = cale.replace("%3a", ":").replace("%3A", ":")
 	for fel, marcaj in CAI_FLUXURI:
 		if marcaj in c:
 			return fel
+	for marcaj in CAI_EXTRA:
+		if marcaj in c:
+			return "loc"
 	return None
 
 
 def felul(tip_ref, steaguri, tip_serviciu, cale=""):
 	"""Felul canalului dupa referinta: "tv", "radio", "flux" (orice referinta care nu e DVB: flux de internet,
-	fisier), "date" (un serviciu DVB de alt tip), "dab" / "t2" (un post DAB+ / DVB-T2 din satelit, dupa cale) sau None
-	pentru un dosar sau un marcaj."""
+	fisier), "date" (un serviciu DVB de alt tip), "dab" / "t2" (un post DAB+ / DVB-T2 din satelit, dupa cale), "iptv" (un
+	canal de la furnizorul omului, dupa cale) sau None pentru un dosar sau un marcaj."""
 	if steaguri & DOSAR_SAU_MARCAJ:
 		return None
 	fel = fel_flux(cale)

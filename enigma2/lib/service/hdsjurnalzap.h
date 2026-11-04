@@ -8,8 +8,8 @@
  * al decodorului video, stop.
  *
  * CE SE SCRIE:
- *   INFO  zap reusit: tunerul, timpii pasilor de la cerere (acordare = canalul primit, program = PMT citit si
- *         decodorul pornit, imagine = primul eveniment al decodorului video; pe V20 vine la ~0,5-1 s dupa primul cadru
+ *   INFO  zap reusit: tunerul, timpii pasilor de la cerere (acordare = canalul primit, program = PID-uri date
+ *         decodorului, inclusiv din cache; imagine = primul eveniment video; pe V20 vine la ~0,5-1 s dupa primul cadru
  *         aratat, iar dupa o repornire cu aceeasi marime a imaginii nu vine deloc: atunci la FARA_IMAGINE_MS se
  *         intreaba PTS-ul decodorului), codecurile, marimea imaginii, criptat
  *         da/nu. FARA canal: nici numele, nici referinta, nici transponderul (acelea sunt in hds-tuner.log, dupa ora).
@@ -46,7 +46,13 @@ public:
 	void eveniment(int ev, int slot);
 	/* updateDecoder: programul citit si PID-ul video dat decodorului (vpid <= 0 = fara imagine, radio) */
 	void program(const eDVBServicePMTHandler::program &p, int vpid, int vtip);
-	/* video_event: primul eveniment al decodorului = prima imagine */
+	/* Finalizare radio dupa incercarea CA PMT. */
+	void programGata();
+	enum { PMT_PRIMIT, DECODOR_PREGATIT, CA_PMT_TRIMIS, EVENIMENT_VIDEO, NR_MARCAJE };
+	/* Timpi absoluti monotoni; zero cere o singura citire de ceas. */
+	void marcaj(int etapa, long long t = 0);
+	void acordare(const eDVBFrontend::TimpiZap &t);
+	/* video_event: primul eveniment; nu confirma primul cadru HDMI. */
 	void imagine(int latime, int inaltime);
 	/* stop() */
 	void oprire();
@@ -59,12 +65,15 @@ private:
 	void *m_ctx;
 	bool m_activ, m_esec, m_avert;
 	long long m_t0, m_t_acordat, m_t_program, m_t_imagine;
+	long long m_marcaje[NR_MARCAJE], m_t_comanda, m_t_blocare;
+	long m_sec_ms;
 	int m_slot, m_vpid, m_vtip, m_apid, m_atip, m_criptat, m_sid;
 	eServiceReferenceDVB m_ref;
 	ePtr<eTimer> m_ceas;
 	void faraImagine();
 	void scrieEsec(const char *nivel, const char *motiv);
 	void textCanal(char *buf, size_t n);
+	void textMarcaje(char *buf, size_t n) const;
 };
 
 }

@@ -440,6 +440,9 @@ class HdsDishMotor(Screen):
 		if self._texte.get(nume) != text:
 			self._texte[nume] = text
 			self[nume].setText(text)
+			# bara temei arata titlul ferestrei, nu randul ei de stare
+			if nume == "titlu" and text:
+				self.setTitle(text)
 
 	def _scrie(self, stare):
 		self._pune("titlu", stare["stare_text"])
@@ -745,8 +748,10 @@ class HdsDishMotorEcran(HdsDishMotor):
 			"7": self._nimic, "8": self._nimic, "9": self._nimic,
 		}, -1)
 		panou_automat_oprit("ecran", True)
-		# aici ceasul bate indiferent de `config.usage.showdish`: utilizatorul a cerut anume ecranul
+		# aici ceasul bate indiferent de `config.usage.showdish`: utilizatorul a cerut anume ecranul; prima bataie indata, nu
+		# dupa o secunda (ecranul sta gol pana la ea)
 		self._porneste()
+		self._ceas.start(0, True)
 
 	# ------------------------------------------------------------------ comenzile
 
@@ -951,7 +956,16 @@ class HdsDishMotorEcran(HdsDishMotor):
 		self._pune("key_yellow", _("Poziții memorate"))
 		self._pune("key_blue", _("Limite"))
 		if d.get("oprire_automata_s") is None:
-			bucati.append(_("Tunerul %s are motor") % d["tuner"])
+			# inainte de prima comanda starea nu are tunerul: numele tunerelor cu motor, din setarile lor
+			tuner = d.get("tuner") or ""
+			if not tuner:
+				try:
+					from Components import HdsMotorTuner
+					tuner = ", ".join(n for _s, n in HdsMotorTuner.tunereCuMotor())
+				except Exception:
+					tuner = ""
+			if tuner:
+				bucati.append(_("Tunerul %s are motor") % tuner)
 		bucati.append(_("Pas: %d") % d["pas"])
 		if d.get("oprire_automata_s") is not None:
 			# cat merge motorul, locul numelui tunerului il ia oprirea automata (altfel randul se taie la „6 min 8 s")
@@ -1018,7 +1032,8 @@ class HdsDishMotorEcran(HdsDishMotor):
 			self._deseneaza(stare)
 			self._ceas.start(MS_IN_ALUNECARE if stare.get("alunecare") else MS_IN_MISCARE, True)
 		else:
-			self._pune("titlu", _("Antena nu se roteste"))
+			# fereastra n-are bara de titlu: pana la prima miscare randul de sus e numele ecranului
+			self._pune("titlu", _("Rotirea antenei"))
 			self._pune("plecare", "")
 			self._pune("curent", "")
 			self._pune("tinta", "")

@@ -49,6 +49,16 @@ TOLERANTA_EXPIRARE_S = 2.0
 
 # ferestrele deschise acum (de obicei una): plugin.py le inchide pe toate cand se conecteaza un aparat
 _deschise = []
+_stare_capturii = (0, False)
+
+
+def stareCaptura():
+	return _stare_capturii
+
+
+def _schimbaStareaCapturii():
+	global _stare_capturii
+	_stare_capturii = (_stare_capturii[0] + 1, bool(_deschise))
 
 
 def grupeCod(cod):
@@ -159,6 +169,7 @@ class HdsCodAsociere(Screen):
 		self.onLayoutFinish.append(self._porneste)
 		self.onClose.append(self._laInchidere)
 		_deschise.append(self)
+		_schimbaStareaCapturii()
 
 	def _porneste(self):
 		self._limiteazaCifrele()
@@ -241,3 +252,4 @@ class HdsCodAsociere(Screen):
 		self._ceas.stop()
 		if self in _deschise:
 			_deschise.remove(self)
+			_schimbaStareaCapturii()

@@ -213,8 +213,10 @@ LOCURI_OPRITE = re.compile(
 	r"(?:^|/)\.?ssh(?:/|_|$)|ssl/private|\.pem$|vpn|wireguard|(?:^|/)wg\d|samba|(?:^|/)smb|(?:^|/)ppp(?:/|$)|netrc|"
 	r"(?:^|/)auto\.|jeton|token|secret|parol|chei|key|cred|auth(?!orized)|cookie|conturi|account|"
 	r"^/etc/enigma2/hdsatelit/[^/]*\.bin$|"
-	# memoria si fluxurile nucleului care nu se citesc (sau nu se termina)
-	r"(?:^|/)environ$|kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$|"
+	# parola Wi-Fi a unor drivere si conturile de DNS dinamic stau in fisiere cu nume obisnuite
+	r"^/etc/wireless(?:/|$)|rt2870sta|inadyn|(?:^|[/._-])ddns|no-?ip|"
+	# memoria si fluxurile nucleului care nu se citesc (sau nu se termina); linia de comanda a unui proces poate tine o parola
+	r"(?:^|/)environ$|kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$|^/proc/\d+/(?:task/\d+/)?cmdline$|"
 	# setarile intregi si copiile lor (op "setari" le da filtrate), listele si datele omului
 	# (identificatorii placii, seria memoriei, seriile si EEPROM-ul, se citesc: Eduard, 02.11.2026 01:19)
 	r"^/etc/enigma2/settings(?:$|[._~-])|backup|iptv|forum-poze|navigator|browsere")

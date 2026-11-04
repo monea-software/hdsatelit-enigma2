@@ -42,7 +42,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.6.0+git${SRCPV}"
+PV = "0.7.0+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -66,6 +66,53 @@ do_configure:append() {
 		grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
 			bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure sau masina lipseste din lista din configure.ac"
 	fi
+}
+
+# Primul Amiko Viper 4K (V10, masina viper4k, lotul imagine-060-v10; codul de la 0.6.3): pe el nu exista demonul
+# Dinobot care mapeaza memoria pozelor si a filmelor (showiframe Amiko afiseaza un cadru si iese, platforma o tine
+# libreader), deci paza scrierilor pe video0/audio0 din lib/dvb/hdspazavideo.h (maparea de 34 611 200 o in
+# /proc/vmallocinfo) ar refuza orice film, flux IPTV si poza radio. HDS_FARA_MEMORIE_ES=1 face ca paza sa lase
+# scrierile fara sa citeasca nimic. NUMAI pe viper4k: pe u57 si u571 (V20, V30, V40) CXXFLAGS ramane neschimbat, deci
+# si paza. Paza de mai jos opreste constructia pe viper4k daca sursa nu mai stie macro-ul (comitere mai veche de 0.6.3);
+# construieste-060.sh verifica in jurnalul do_compile ca macro-ul a ajuns la compilator pe viper4k si numai acolo.
+CXXFLAGS:append:viper4k = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:viper4k() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+}
+# Octagon SF8008 (masina sf8008, lotul imagine-060-sf8008): aceeasi platforma ca V10 (libreader, showiframe care numai
+# afiseaza un cadru, fara maparea Dinobot), deci aceeasi paza oprita si aceeasi verificare; configure.ac pune sf8008 in
+# HAVE_HISILICON.
+CXXFLAGS:append:sf8008 = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:sf8008() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+}
+# Octagon SF8008 MINI 4K (masina sf8008m, lotul imagine-060-sf8008m): aceeasi platforma ca SF8008 (libreader,
+# showiframe care numai afiseaza un cadru), deci aceeasi paza oprita si aceeasi verificare; configure.ac pune sf8008m in
+# HAVE_HISILICON.
+CXXFLAGS:append:sf8008m = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:sf8008m() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+}
+# Uclan Ustym 4K PRO (masina ustym4kpro, lotul ustym4kpro): aceeasi platforma ca SF8008 (libreader, showiframe care
+# numai afiseaza un cadru; driverele aceleasi afara de hi-dvb.ko, compilat din aceeasi sursa), deci aceeasi paza oprita
+# si aceeasi verificare; configure.ac pune ustym4kpro in HAVE_HISILICON si in familia libreader.
+CXXFLAGS:append:ustym4kpro = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:ustym4kpro() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: configure.ac nu stie masina in familia libreader"
 }
 
 # Pachetul tine de masina, nu numai de procesor: configure primeste --with-boxtype=${MACHINE} (HAVE_HISILICON pe
@@ -96,9 +143,28 @@ RDEPENDS:${PN} = " \
     python3-shell python3-pickle python3-email python3-mime python3-misc python3-math \
     python3-json python3-crypt python3-compression \
     python3-cryptography \
+    python3-future python3-image python3-mmap python3-netifaces python3-pexpect python3-pillow python3-process \
+    python3-puremagic python3-pyopenssl python3-pyusb python3-requests python3-six python3-treq python3-trio \
     "
+
+# Pluginurile externe: bibliotecile de mai sus (ultimele doua randuri) le pune OE-Alliance in toate imaginile, iar scripturile
+# de instalare ale multor pluginuri cheama comanda „python”, care pe aceasta baza nu exista
+FILES:${PN} += "${bindir}/python"
+do_install:append() {
+    install -d ${D}${bindir}
+    ln -sf python3 ${D}${bindir}/python
+}
 
 # libhiaccel.so se incarca cu dlopen (nu e NEEDED): pachetul care o da e numai recomandat; in imagine vine oricum
 # (dinobot-libs-u57 vine prin MACHINE_ESSENTIAL_EXTRA_RDEPENDS, vezi packagegroups/hdsatelit-base.bb; pe receptorul de proba e
 # dinobot-libs-u57 20210604-r2)
 RRECOMMENDS:${PN} += "${@bb.utils.contains("MACHINE_FEATURES", "hiaccel", "dinobot-libs-${MACHINE}", "", d)}"
+
+# Urmarirea pornirii (tools/hds-rezerva.sh) priveste ca pornire in dubiu orice pornire fara semnul
+# /etc/hds-interfata-pornita. O instalare prin actualizare din meniu inseamna ca interfata a mers pe receptor, deci
+# semnul se pune atunci (numai pe receptor: la constructia imaginii $D e plin si nu se face nimic).
+pkg_postinst:${PN}() {
+if [ -z "$D" ] && [ -f /etc/hdsatelit-model ] && [ ! -f /etc/hds-interfata-pornita ]; then
+	printf 'imagine=actualizare\n' > /etc/hds-interfata-pornita
+fi
+}

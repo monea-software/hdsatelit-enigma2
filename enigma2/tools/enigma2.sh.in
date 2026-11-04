@@ -564,13 +564,14 @@ fi
 # in the web interface (the request file), or, at the first start of a freshly written image (no prima-pornire mark;
 # the program then looks for a copy only when settings is missing and the mark "gata" of the flash kit is not there),
 # the newest copy of this receiver found on a stick or disc. Same rules, mark and crash guard as the flash kit hook
-# below, which then finds "gata" and writes nothing. A usual start runs no command here (two file tests). The program
+# below, which then finds "gata" and writes nothing. An interrupted restore resumes even with settings present.
+# A usual start runs no command here. The program
 # writes only names and numbers to its log; it always exits 0, so the start never depends on it. The variables are
 # only for the tests on the PC; init sets none of them.
 HDS_RESTAURARE=${HDS_RESTAURARE:-/home/root/hds-restaurare}
 HDS_COPIE_MODUL=${HDS_COPIE_MODUL:-@libdir@/enigma2/python/Components/HdsCopieSetari.py}
 HDS_COPIE_JURNAL=${HDS_COPIE_JURNAL:-/home/root/logs/hds-restaurare.log}
-if [ "$hds_paza" = potrivit ] && { [ -f "$HDS_RESTAURARE/cerere" ] || [ ! -e "$HDS_RESTAURARE/prima-pornire" ]; } &&
+if [ "$hds_paza" = potrivit ] && { [ -f "$HDS_RESTAURARE/inceputa.json" ] || [ -f "$HDS_RESTAURARE/cerere" ] || [ ! -e "$HDS_RESTAURARE/prima-pornire" ]; } &&
 	[ -f "$HDS_COPIE_MODUL" ]; then
 	mkdir -p "${HDS_COPIE_JURNAL%/*}" 2>/dev/null
 	python3 -E -s -B "$HDS_COPIE_MODUL" pornire >> "$HDS_COPIE_JURNAL" 2>&1
@@ -708,7 +709,8 @@ ret=$?
 #   python   an uncaught Python exception (file, line and error from the crash log): never the TDE's doing;
 #   c++      a fatal signal, with the library of PC and whether a TDE call was running (lib/gdi/accel.cpp);
 #   eroare   another fatal error of enigma2 (eFatal);
-#   oprire   SIGTERM that hds-watchdog did not send (init, a person, a script): asked for, not a crash;
+#   oprire   SIGTERM that hds-watchdog did not send (init, a person, a script): asked for, not a crash: it stays in the
+#            count and in the small log, but it brings no pause, no safe mode (so no report) and no crash guard;
 #   memorie  the kernel killed enigma2 (out of memory, in dmesg);
 #   paznic   the end asked for by hds-watchdog (above);
 #   necunoscuta  a signal without crash report and without any of the above.
@@ -804,7 +806,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	esac
 	echo "$acum $ret$tde_lucrat" >> "$HDS_CADERI"
 	tail -n 20 "$HDS_CADERI" > "$HDS_CADERI.nou" 2>/dev/null && mv -f "$HDS_CADERI.nou" "$HDS_CADERI"
-	recente=$(awk -v a="$acum" '$1 + 600 >= a' "$HDS_CADERI" 2>/dev/null | wc -l)
+	recente=$(awk -v a="$acum" '$1 + 600 >= a && $3 != "oprire"' "$HDS_CADERI" 2>/dev/null | wc -l)
 	recente=$((recente + 0))
 	recente_placa=$(awk -v a="$acum" '$1 + 600 >= a && $3 == "placa"' "$HDS_CADERI" 2>/dev/null | wc -l)
 	recente_placa=$((recente_placa + 0))
@@ -840,7 +842,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		echo "$cand accelerarea 2D oprita automat dupa $recente_placa opriri neasteptate cu placa 2D lucrand" \
 			>> "$HDS_CADERI_JURNAL"
 	fi
-	if [ "$recente" -ge 5 ]; then
+	if [ "$recente" -ge 5 ] && [ "$cauza" != "oprire" ]; then
 		sleep "$HDS_CADERI_PAUZA"
 	fi
 fi
@@ -851,7 +853,7 @@ fi
 # safe mode began, the code and the seconds since 1970 (compared with the time in the name of the last crash report:
 # no time zone in either).
 if { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${recente:-0}" -ge "$HDS_MOD_SIGUR_PRAG" ] &&
-	[ ! -f "$HDS_MOD_SIGUR_SEMN" ]; then
+	[ "${cauza:-}" != "oprire" ] && [ ! -f "$HDS_MOD_SIGUR_SEMN" ]; then
 	printf 'pornit=%s\ncaderi=%s\ncod=%s\nora=%s\n' "$acum" "$recente" "$ret" "$(date +%s)" > "$HDS_MOD_SIGUR_SEMN" 2>/dev/null
 	echo "$(date '+%Y-%m-%d %H:%M:%S') modul sigur: $recente opriri neasteptate in 10 minute, la pornirea urmatoare numai extensiile imaginii" >> "$HDS_CADERI_JURNAL"
 fi
@@ -862,7 +864,7 @@ fi
 # next start puts the previous settings back by itself and stays in safe mode (block before the hook). An error in
 # the code of the image is not helped by this: the ends go on, with the pause above, and ssh stays usable.
 if { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${HDS_MOD_SIGUR:-}" = 1 ] && [ -f "$HDS_MOD_SIGUR_SEMN" ] &&
-	[ "$((HDS_MOD_SIGUR_PRAG2 + 0))" -gt 0 ]; then
+	[ "${cauza:-}" != "oprire" ] && [ "$((HDS_MOD_SIGUR_PRAG2 + 0))" -gt 0 ]; then
 	echo "oprire=$acum" >> "$HDS_MOD_SIGUR_SEMN" 2>/dev/null
 	hds_ms_n=$(grep -c '^oprire=' "$HDS_MOD_SIGUR_SEMN" 2>/dev/null)
 	if [ "$((hds_ms_n + 0))" -ge "$HDS_MOD_SIGUR_PRAG2" ] && ! grep -q '^automat=' "$HDS_MOD_SIGUR_SEMN" 2>/dev/null &&
@@ -885,8 +887,8 @@ if [ -f "$HDS_SETARI_SEMN" ]; then
 	[ -n "$acum" ] || acum=$(date +%s)
 	semn=$(head -n 1 "$HDS_SETARI_SEMN" 2>/dev/null | tr -cd 0-9 | cut -c1-12 | sed 's/^0*//')
 	caderi_setari=0
-	if [ -n "$semn" ] && { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; }; then
-		caderi_setari=$(awk -v s="$semn" -v a="$acum" '$1 >= s && $1 + 600 >= a' "$HDS_CADERI" 2>/dev/null | wc -l)
+	if [ -n "$semn" ] && { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${cauza:-}" != "oprire" ]; then
+		caderi_setari=$(awk -v s="$semn" -v a="$acum" '$1 >= s && $1 + 600 >= a && $3 != "oprire"' "$HDS_CADERI" 2>/dev/null | wc -l)
 		caderi_setari=$((caderi_setari + 0))
 	fi
 	if [ -z "$semn" ]; then

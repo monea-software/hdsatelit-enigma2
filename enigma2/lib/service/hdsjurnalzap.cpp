@@ -56,6 +56,9 @@ Zap::Zap()
 	m_ceas(eTimer::create(eApp))
 {
 	CONNECT(m_ceas->timeout, Zap::faraImagine);
+	memset(m_marcaje, 0, sizeof(m_marcaje));
+	m_t_comanda = m_t_blocare = 0;
+	m_sec_ms = -1;
 }
 
 void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
@@ -65,6 +68,9 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 	m_esec = m_avert = false;
 	m_t0 = hdsjurnal::monotonMs();
 	m_t_acordat = m_t_program = m_t_imagine = 0;
+	memset(m_marcaje, 0, sizeof(m_marcaje));
+	m_t_comanda = m_t_blocare = 0;
+	m_sec_ms = -1;
 	m_slot = m_vpid = m_vtip = m_apid = m_atip = m_criptat = -1;
 	m_sid = 0;
 	if (masurat)
@@ -74,6 +80,32 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 static long dupa(long long t0, long long t)
 {
 	return t ? (long)(t - t0) : -1;
+}
+
+void Zap::marcaj(int etapa, long long t)
+{
+	if (m_activ && etapa >= 0 && etapa < NR_MARCAJE && !m_marcaje[etapa])
+		m_marcaje[etapa] = t ? t : hdsjurnal::monotonMs();
+}
+
+void Zap::acordare(const eDVBFrontend::TimpiZap &t)
+{
+	/* Un transponder reutilizat pastreaza marcajele acordarii vechi. */
+	if (!m_activ || t.pornire_ms < m_t0 || t.comanda_ms < m_t0)
+		return;
+	m_t_comanda = t.comanda_ms;
+	m_t_blocare = t.lock_ms;
+	if (t.sec_start_ms >= m_t0 && t.sec_gata_ms >= t.sec_start_ms)
+		m_sec_ms = (long)(t.sec_gata_ms - t.sec_start_ms);
+}
+
+void Zap::textMarcaje(char *buf, size_t n) const
+{
+	snprintf(buf, n, " | zap_t0 %lld ms | marcaje: pmt %ld ms, decodor %ld ms, ca_pmt %ld ms, "
+		"comanda_tuner %ld ms, sec %ld ms, blocare %ld ms, pachet_video -1 ms, eveniment_video %ld ms",
+		m_t0, dupa(m_t0, m_marcaje[PMT_PRIMIT]), dupa(m_t0, m_marcaje[DECODOR_PREGATIT]),
+		dupa(m_t0, m_marcaje[CA_PMT_TRIMIS]), dupa(m_t0, m_t_comanda), m_sec_ms,
+		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]));
 }
 
 void Zap::textCanal(char *buf, size_t n)
@@ -133,10 +165,12 @@ void Zap::textCanal(char *buf, size_t n)
 void Zap::scrieEsec(const char *nivel, const char *motiv)
 {
 	char canal[600];
+	char marcaje[320];
+	textMarcaje(marcaje, sizeof(marcaje));
 	textCanal(canal, sizeof(canal));
 	long long acum = hdsjurnal::monotonMs();
-	hdsjurnal::scrief(COMPONENTA, nivel, "zap", "%c %s dupa %ld ms (acordare %ld ms, program %ld ms) | %s", litera(m_slot),
-		motiv, (long)(acum - m_t0), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), canal);
+	hdsjurnal::scrief(COMPONENTA, nivel, "zap", "%c %s dupa %ld ms (acordare %ld ms, program %ld ms)%s | %s", litera(m_slot),
+		motiv, (long)(acum - m_t0), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), marcaje, canal);
 }
 
 void Zap::eveniment(int ev, int slot)
@@ -191,14 +225,22 @@ void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 		m_ceas->start(rest < 1000 ? 1000 : rest, true);
 		return;
 	}
-	/* fara imagine (radio): zap-ul se incheie la program */
+}
+
+void Zap::programGata()
+{
+	if (!m_activ || !m_t_program || (m_vpid > 0 && m_vpid < 0x2000))
+		return;
+	/* Radio: randul final asteapta si CA PMT. */
 	m_activ = false;
 	char sunet[48] = "fara";
 	if (m_apid > 0)
 		snprintf(sunet, sizeof(sunet), "%s", codecSunet(m_atip));
+	char marcaje[320];
+	textMarcaje(marcaje, sizeof(marcaje));
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit fara imagine (radio): acordare %ld ms, program %ld ms"
-		" | sunet %s | criptat %s", litera(m_slot), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), sunet,
-		m_criptat ? "da" : "nu");
+		" | sunet %s | criptat %s%s", litera(m_slot), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), sunet,
+		m_criptat ? "da" : "nu", marcaje);
 }
 
 void Zap::imagine(int latime, int inaltime)
@@ -206,6 +248,7 @@ void Zap::imagine(int latime, int inaltime)
 	if (!m_activ || m_t_imagine || !m_t_program)
 		return;
 	m_t_imagine = hdsjurnal::monotonMs();
+	m_marcaje[EVENIMENT_VIDEO] = m_t_imagine;
 	m_ceas->stop();
 	m_activ = false;
 	char sunet[48] = "fara";
@@ -214,10 +257,12 @@ void Zap::imagine(int latime, int inaltime)
 	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
 	if (latime > 0 && inaltime > 0)
 		snprintf(marime, sizeof(marime), " %dx%d", latime, inaltime);
+	char marcaje[320];
+	textMarcaje(marcaje, sizeof(marcaje));
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c %s: acordare %ld ms, program %ld ms, imagine %ld ms | video %s"
-		"%s | sunet %s | criptat %s", litera(m_slot), m_avert ? "imagine tarzie" : "reusit", dupa(m_t0, m_t_acordat),
+		"%s | sunet %s | criptat %s%s", litera(m_slot), m_avert ? "imagine tarzie" : "reusit", dupa(m_t0, m_t_acordat),
 		dupa(m_t0, m_t_program), dupa(m_t0, m_t_imagine), codecVideo(m_vtip), marime, sunet,
-		m_criptat ? "da" : "nu");
+		m_criptat ? "da" : "nu", marcaje);
 }
 
 void Zap::faraImagine()
@@ -231,10 +276,12 @@ void Zap::faraImagine()
 		char sunet[48] = "fara";
 		if (m_apid > 0)
 			snprintf(sunet, sizeof(sunet), "%s", codecSunet(m_atip));
+		char marcaje[320];
+		textMarcaje(marcaje, sizeof(marcaje));
 		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "
-			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s", litera(m_slot),
+			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s%s", litera(m_slot),
 			dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), (int)FARA_IMAGINE_MS, codecVideo(m_vtip), sunet,
-			m_criptat ? "da" : "nu");
+			m_criptat ? "da" : "nu", marcaje);
 		return;
 	}
 	m_avert = true;

@@ -2,8 +2,14 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 """Feedul pluginurilor externe (0.6.6): pluginuri luate de la altii, construite de Monea
-Software din sursa lor publica si tinute pe moneasoftware.com, cate un dosar pe arhitectura procesorului:
-  https://moneasoftware.com/apps/hdsatelit-enigma2/feed/<arhitectura>   (si feed-proba/<arhitectura>, numai pentru probe)
+Software din sursa lor publica si tinute pe moneasoftware.com, cate un dosar pe arhitectura procesorului.
+Fiecare baza a imaginii are dosarul ei, fiindca pachetele unei baze nu merg pe alta (aceeasi arhitectura opkg):
+  0.7.x (OE-Alliance 6.0, Python 3.14, OpenSSL 4):  https://moneasoftware.com/apps/hdsatelit-enigma2/feed-070/<arhitectura>
+                                                    (si feed-070-proba/<arhitectura>, numai pentru probe)
+  0.6.x (Python 3.13, libssl.so.3), DOSARE_VECHI:   .../feed/<arhitectura> si feed-proba/<arhitectura>
+Imaginea aceasta nu foloseste niciodata un dosar vechi: o sursa cu adresa lui, adaugata de om sau venita dintr-o copie
+a setarilor facuta pe 0.6.x, se scoate din fisierul surselor omului (inlocuirea_vechilor), iar o lista descarcata de la
+o adresa veche se sterge, ca opkg sa nu instaleze din ea inainte de urmatorul opkg update.
 Feedul pluginurilor noastre ramane pe stb.hdsatelit.com (Components/HdsActualizari.py, reteta hdsatelit-feed).
 
 Imaginea il pune singura in /etc/opkg/hds-pluginuri-externe.conf, la pornirea interfetei (mytest.py): asa vine si printr-o
@@ -32,16 +38,19 @@ except ImportError:  # probe pe PC: modulul incarcat singur, din dosarul Compone
 FISIER = '/etc/opkg/hds-pluginuri-externe.conf'
 NUME_SURSA = 'pluginuri-externe'
 GAZDA = 'moneasoftware.com'
-DOSAR = '/apps/hdsatelit-enigma2/feed'
+DOSAR = '/apps/hdsatelit-enigma2/feed-070'
 ADRESA = 'https://' + GAZDA + DOSAR
+# dosarele bazelor vechi (0.6.x), pe care imaginea aceasta nu le foloseste
+DOSARE_VECHI = ('/apps/hdsatelit-enigma2/feed', '/apps/hdsatelit-enigma2/feed-proba')
 ANTET = '# HD Satelit: feedul pluginurilor externe (Monea Software, moneasoftware.com). Il scrie imaginea la pornire.'
 # pachetele de baza ale imaginii, construite pentru procesor (nu pentru masina sau pentru toate): Architecture lor e
 # arhitectura procesorului; primul gasit hotaraste
 PACHETE_PROCESOR = ('python3-core', 'libc6', 'busybox', 'opkg')
 FARA_PROCESOR = ('all', 'any', 'noarch')
 _ARH = re.compile(r'^[a-z0-9][a-z0-9_\-]{0,63}\Z')
-# calea unui dosar al feedului: /apps/hdsatelit-enigma2/feed/<arh> (public) sau feed-proba/<arh>
-_CALE = re.compile(r'^/apps/hdsatelit-enigma2/feed(-proba)?/([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
+# calea unui dosar al feedului: DOSAR/<arh> (public) sau DOSAR-proba/<arh>
+_CALE = re.compile(r'^' + re.escape(DOSAR) + r'(-proba)?/([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
+_CALE_VECHE = re.compile(r'^(?:%s)/[a-z0-9][a-z0-9_\-]{0,63}/?\Z' % '|'.join(re.escape(d) for d in DOSARE_VECHI))
 
 
 def _jurnal(text):
@@ -65,9 +74,45 @@ def e_feed_extern(adresa):
 
 
 def e_feed_extern_public(adresa):
-	"""True pentru un dosar al feedului public (nu feed-proba)"""
+	"""True pentru un dosar al feedului public (nu cel de proba)"""
 	m = _potrivire(adresa)
 	return m is not None and not m.group(1)
+
+
+def e_feed_extern_vechi(adresa):
+	"""True pentru un dosar al feedului extern al unei baze vechi (DOSARE_VECHI), prin http sau https"""
+	try:
+		parti = urlsplit(adresa or '')
+		gazda = (parti.hostname or '').lower()
+	except ValueError:
+		return False
+	if parti.scheme not in ('http', 'https') or gazda != GAZDA:
+		return False
+	return _CALE_VECHE.match(parti.path or '') is not None
+
+
+def inlocuirea_vechilor(radacina='/'):
+	"""Scoate din fisierul surselor omului (HdsPachete.FISIER_SURSE_UTILIZATOR) sursele cu adresa feedului extern al
+	unei baze vechi: pachetele de acolo nu merg pe imaginea aceasta, iar feedul ei il pune pune_feedul. Intoarce cate
+	surse au fost scoase (0 daca nu era nimic de scos sau fisierul nu s-a putut scrie)."""
+	surse = P.citeste_surse_utilizator(radacina)
+	ramase = [(n, a) for n, a in surse if not e_feed_extern_vechi(a)]
+	if len(ramase) == len(surse):
+		return 0
+	motiv = P.scrie_surse_utilizator(ramase, radacina)
+	if motiv:
+		_jurnal('sursele vechi nu s-au putut scoate')
+		return 0
+	return len(surse) - len(ramase)
+
+
+def _sterge_lista(radacina, conf):
+	"""Lista descarcata a sursei noastre (lists_dir/NUME_SURSA), ca opkg sa nu instaleze din lista adresei de dinainte
+	pana la urmatorul opkg update"""
+	try:
+		os.remove(os.path.join(P._cale(radacina, conf.lists_dir), NUME_SURSA))
+	except OSError:
+		pass
 
 
 def adresa_pentru(arhitectura):
@@ -175,7 +220,14 @@ def pune_feedul(radacina='/'):
 		acum = None
 	if acum is not None and not acum.startswith(ANTET):
 		return 'strain', ''
+	scoase = inlocuirea_vechilor(radacina)
+	if scoase:
+		_jurnal('surse cu adresa feedului unei baze vechi scoase: %d' % scoase)
 	for nume, adresa, fisier in _surse_din_alte_fisiere(radacina):
+		if e_feed_extern_vechi(adresa) and nume != NUME_SURSA:
+			# intr-un fisier strain (pus cu o comanda): nu se atinge, dar nu tine locul feedului acestei baze
+			_jurnal('o sursa straina are adresa feedului unei baze vechi: %s' % os.path.basename(fisier))
+			continue
 		if nume == NUME_SURSA or e_feed_extern_public(adresa):
 			if acum is not None:
 				try:
@@ -193,6 +245,9 @@ def pune_feedul(radacina='/'):
 	eroare = _scrie(cale, text)
 	if eroare:
 		return 'eroare', eroare
+	if acum is not None:
+		# adresa s-a schimbat (alta arhitectura sau fisierul unei baze vechi): lista veche nu mai e buna
+		_sterge_lista(radacina, conf)
 	return 'scris', arh
 
 

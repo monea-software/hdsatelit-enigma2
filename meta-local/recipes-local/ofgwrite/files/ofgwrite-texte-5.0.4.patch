@@ -1,0 +1,401 @@
+From: HDSatelit
+Subject: [PATCH] Optional bounded display translations from Enigma2
+
+Base: oe-alliance/ofgwrite 5.0.4, 9ef59e0a50d4ad37db1fbbeeb0c6e11be64f5108.
+Display text only. Enigma2 reads the file before init 4 and passes its snapshot
+in OFGWRITE_TEXTS. Direct calls load a regular file before the internal UI stop.
+Missing or invalid data selects English. Existing flash paths and writes unchanged.
+
+diff --git a/fb.c b/fb.c
+index e0b44bc..de4f9b3 100644
+--- a/fb.c
++++ b/fb.c
+@@ -122,6 +122,12 @@ static const lv_font_t *ttf(lv_font_t **font, int size)
+ 	return *font ? *font : LV_FONT_DEFAULT;
+ }
+ 
++/* All labels, including formatted text, pass the bounded UTF-8 guard. */
++static void display_label(lv_obj_t *label, const char *text)
++{
++	lv_label_set_text(label, i18n_display_text(text));
++}
++
+ /* Framebuffer */
+ 
+ static uint32_t *pixel(int x, int y)
+@@ -272,7 +278,7 @@ static void glass(lv_obj_t *obj, uint32_t color)
+ static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
+ {
+ 	lv_obj_t *obj = lv_label_create(parent);
+-	lv_label_set_text(obj, "");
++	display_label(obj, "");
+ 	lv_obj_set_style_text_font(obj, font, 0);
+ 	lv_obj_set_style_text_color(obj, lv_color_hex(color), 0);
+ 	return obj;
+@@ -343,8 +349,8 @@ static void build(void)
+ 		lv_obj_set_style_base_dir(window, LV_BASE_DIR_RTL, 0);
+ 
+ 	header = row(window, px(44), COLOR_SURFACE);
+-	lv_label_set_text(label(header, text, COLOR_TEXT), "ofgwrite - written by Betacentauri");
+-	lv_label_set_text(ltr(label(header, small, COLOR_MUTED)), version_text);
++	display_label(label(header, text, COLOR_TEXT), tr(N_("ofgwrite - written by Betacentauri")));
++	display_label(ltr(label(header, small, COLOR_MUTED)), version_text);
+ 
+ 	body = box(window);
+ 	lv_obj_set_width(body, LV_PCT(100));
+@@ -370,7 +376,7 @@ static void build(void)
+ 		lv_obj_set_flex_flow(detail, LV_FLEX_FLOW_ROW);
+ 		lv_obj_set_style_pad_column(detail, px(6), 0);
+ 		detail_label = label(detail, small, COLOR_MUTED);
+-		lv_label_set_text(label(detail, small, COLOR_MUTED), "\xC2\xB7");
++		display_label(label(detail, small, COLOR_MUTED), "\xC2\xB7");
+ 		detail_percent = ltr(label(detail, small, COLOR_MUTED));
+ 	}
+ 	info_label = wrapped(body, small, COLOR_WARN);
+@@ -426,7 +432,7 @@ static void show_card(void)
+ 	fill(inner, error ? COLOR_RED_GROUND : COLOR_OK_GROUND);
+ 	lv_obj_set_style_border_color(inner, lv_color_hex(error ? COLOR_RED_LINE : COLOR_OK_LINE), 0);
+ 	lv_obj_set_style_text_color(card_title, lv_color_hex(error ? COLOR_RED : COLOR_OK), 0);
+-	lv_label_set_text(card_title, error ? tr(N_("Flashing failed")) : tr(N_("Done")));
++	display_label(card_title, error ? tr(N_("Flashing failed")) : tr(N_("Done")));
+ 	lv_obj_set_style_text_color(footer_left, lv_color_hex(error ? COLOR_RED : COLOR_OK), 0);
+ }
+ 
+@@ -454,24 +460,24 @@ static void update_labels(void)
+ 	if (percent > overall_percent || card_kind == CARD_SUCCESS)
+ 		overall_percent = card_kind == CARD_SUCCESS ? 100 : percent;
+ 	snprintf(text, sizeof(text), "%d %%", overall_percent);
+-	lv_label_set_text(percent_label, text);
++	display_label(percent_label, text);
+ 	lv_obj_set_width(overall_fill, LV_PCT(overall_percent));
+ 	lv_obj_set_width(step_fill, LV_PCT(step_percent));
+ 	snprintf(text, sizeof(text), tr(N_("Step %d of %d")), step, step > steps_total ? step : steps_total);
+ 	lv_obj_invalidate(detail_row);  /* Narrower, it moves to the middle and would leave its old ends behind. */
+-	lv_label_set_text(detail_label, text);
++	display_label(detail_label, text);
+ 	snprintf(text, sizeof(text), "%d %%", step_percent);
+-	lv_label_set_text(detail_percent, text);
++	display_label(detail_percent, text);
+ 	if (card_kind == CARD_NONE && checking) {
+ 		lv_obj_set_style_text_color(footer_left, lv_color_hex(COLOR_MUTED), 0);
+-		lv_label_set_text(footer_left, tr(N_("Check only, nothing is written")));
++		display_label(footer_left, tr(N_("Check only, nothing is written")));
+ 	} else if (card_kind == CARD_NONE) {
+ 		snprintf(text, sizeof(text), "\xE2\x9A\xA0 %s", tr(N_("Do not switch off the receiver")));
+-		lv_label_set_text(footer_left, text);
++		display_label(footer_left, text);
+ 	} else
+-		lv_label_set_text(footer_left, countdown_text);
++		display_label(footer_left, countdown_text);
+ 	snprintf(text, sizeof(text), "%ld:%02ld", (long)(seconds / 60), (long)(seconds % 60));
+-	lv_label_set_text(footer_right, text);
++	display_label(footer_right, text);
+ }
+ 
+ /* Draws the window, progress alone at most every REDRAW_MS. */
+@@ -731,7 +737,7 @@ int set_step(char *str)
+ void set_step_without_incr(char *str)
+ {
+ 	if (step_label)
+-		lv_label_set_text(step_label, tr(str));
++		display_label(step_label, tr(str));
+ 	if (window)  /* Lines and bars get shorter, their old ends would stay without Enigma2's redraws. */
+ 		lv_obj_invalidate(window);
+ 	draw(1);
+@@ -746,7 +752,7 @@ void set_step_progress(int percent)
+ void set_info_text(char *str)
+ {
+ 	if (info_label) {
+-		lv_label_set_text(info_label, str);
++		display_label(info_label, str);
+ 		lv_obj_set_hidden(info_label, false);
+ 	}
+ 	draw(1);
+@@ -773,8 +779,8 @@ static void show_message(enum card_kind kind, const char *message, const char *a
+ 	set_countdown(seconds);
+ 	if (card) {
+ 		show_card();
+-		lv_label_set_text(card_text, tr(message));
+-		lv_label_set_text(card_advice, advice ? tr(advice) : "");
++		display_label(card_text, tr(message));
++		display_label(card_advice, advice ? tr(advice) : "");
+ 		if (advice)
+ 			lv_obj_set_hidden(card_advice, false);
+ 		else
+diff --git a/i18n.c b/i18n.c
+index 8664280..04172ce 100644
+--- a/i18n.c
++++ b/i18n.c
+@@ -1,77 +1,199 @@
+ #include "i18n.h"
+ 
+-#include <stdio.h>
++#include <fcntl.h>
++#include <stdint.h>
++#include <stdlib.h>
+ #include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
+ 
+-#define SETTINGS "/etc/enigma2/settings"
+-#define BOXINFO "/usr/lib/enigma.info"
++/* Optional display data only. All storage is static; errors mean English. */
++#define TEXT_FILE "/tmp/.ofgwrite-texte"
++#define TEXT_ENV "OFGWRITE_TEXTS"
++#define TEXT_LIMIT 32768
++#define ENTRY_LIMIT 128
++#define KEY_LIMIT 255
++#define VALUE_LIMIT 768
+ 
+-static int chosen = -1;  /* Index in i18n_languages, -1 for English. */
++static char data[TEXT_LIMIT + 1];
++static struct { const char *english; const char *translated; } entries[ENTRY_LIMIT];
++static size_t entry_count;
++static int ready, right_to_left, initialized;
+ 
+-/* The value of key in a file of key=value lines, without quotes; 0 when missing. */
+-static int file_value(const char *path, const char *key, char *value, size_t size)
++/* A Unicode scalar, or zero bytes for an invalid/truncated sequence. */
++static size_t utf8_scalar(const unsigned char *p, size_t left, uint32_t *scalar)
+ {
+-	char line[256];
+-	size_t length = strlen(key);
+-	int found = 0;
+-	FILE *file = fopen(path, "r");
+-	if (!file)
++	size_t n;
++	uint32_t value;
++	if (!left)
+ 		return 0;
+-	while (fgets(line, sizeof(line), file))
+-		if (!strncmp(line, key, length) && line[length] == '=') {
+-			char *start = line + length + 1;
+-			start += strspn(start, "'\"");
+-			start[strcspn(start, "'\"\r\n")] = '\0';
+-			snprintf(value, size, "%s", start);
+-			found = value[0] != '\0';
+-		}
+-	fclose(file);
+-	return found;
++	if (p[0] < 0x80) { *scalar = p[0]; return 1; }
++	if (p[0] >= 0xc2 && p[0] <= 0xdf) { n = 2; value = p[0] & 0x1f; }
++	else if (p[0] >= 0xe0 && p[0] <= 0xef) { n = 3; value = p[0] & 0x0f; }
++	else if (p[0] >= 0xf0 && p[0] <= 0xf4) { n = 4; value = p[0] & 0x07; }
++	else return 0;
++	if (n > left)
++		return 0;
++	for (size_t i = 1; i < n; ++i) {
++		if ((p[i] & 0xc0) != 0x80) return 0;
++		value = (value << 6) | (p[i] & 0x3f);
++	}
++	if ((n == 3 && value < 0x800) || (n == 4 && value < 0x10000) ||
++		(value >= 0xd800 && value <= 0xdfff) || value > 0x10ffff)
++		return 0;
++	*scalar = value;
++	return n;
++}
++
++static int valid_text(const char *text)
++{
++	size_t left = strlen(text);
++	const unsigned char *p = (const unsigned char *)text;
++	while (left) {
++		uint32_t scalar;
++		size_t n = utf8_scalar(p, left, &scalar);
++		if (!n || scalar < 0x20 || (scalar >= 0x7f && scalar <= 0x9f)) return 0;
++		p += n;
++		left -= n;
++	}
++	return 1;
++}
++
++/* Only exact %d, %s and %% tokens, in the original order. No widths, stars,
++ * positional arguments, length modifiers, %n or other conversions from data. */
++static int same_formats(const char *english, const char *translated)
++{
++	for (;;) {
++		english = strchr(english, '%');
++		translated = strchr(translated, '%');
++		if (!english || !translated) return !english && !translated;
++		if (!(english[1] == 'd' || english[1] == 's' || english[1] == '%') ||
++			english[1] != translated[1]) return 0;
++		english += 2;
++		translated += 2;
++	}
++}
++
++/* The upstream catalog is a key whitelist, never a fallback language. */
++static const char *known_key(const char *text)
++{
++	static const char credit[] = "ofgwrite - written by Betacentauri";
++	if (!strcmp(text, credit)) return credit;
++	for (int i = 0; i < translation_count; ++i)
++		if (!strcmp(text, translations[i].text)) return translations[i].text;
++	return NULL;
++}
++
++static int parse(size_t length)
++{
++	char *line = data, *end = data + length, *newline;
++	if (!length || memchr(data, '\0', length)) return 0;
++	data[length] = '\0';
++	newline = strchr(line, '\n');
++	if (!newline) return 0;
++	*newline = '\0';
++	if (!strcmp(line, "OFGWRITE-TEXTS-1\tltr")) right_to_left = 0;
++	else if (!strcmp(line, "OFGWRITE-TEXTS-1\trtl")) right_to_left = 1;
++	else return 0;
++	line = newline + 1;
++	while (line < end) {
++		newline = strchr(line, '\n');
++		if (!newline) return 0;
++		*newline = '\0';
++		if (!strcmp(line, "OFGWRITE-END")) return newline + 1 == end;
++		char *tab = strchr(line, '\t');
++		if (!tab || strchr(tab + 1, '\t') || entry_count == ENTRY_LIMIT) return 0;
++		*tab++ = '\0';
++		if (!*line || !*tab || strlen(line) > KEY_LIMIT || strlen(tab) > VALUE_LIMIT ||
++			!valid_text(line) || !valid_text(tab) || !same_formats(line, tab)) return 0;
++		const char *key = known_key(line);
++		if (!key) return 0;
++		for (size_t i = 0; i < entry_count; ++i)
++			if (entries[i].english == key) return 0;
++		entries[entry_count].english = key;
++		entries[entry_count++].translated = tab;
++		line = newline + 1;
++	}
++	return 0;  /* No partial catalog when the file is truncated. */
+ }
+ 
+-/* Like Enigma2: config.osd.language, else config.misc.locale, else the default of the brand. */
+-static void enigma2_language(char *locale, size_t size)
++/* Direct invocation: regular file only, no FIFO/symlink, no retry loop.
++ * The caller runs once before its own UI stop and before pivot_root. */
++static size_t read_file(void)
+ {
+-	char brand[64] = "";
+-	if (file_value(SETTINGS, "config.osd.language", locale, size) ||
+-		file_value(SETTINGS, "config.misc.locale", locale, size))
+-		return;
+-	file_value(BOXINFO, "displaybrand", brand, sizeof(brand));
+-	if (!strcmp(brand, "Atto.TV"))
+-		snprintf(locale, size, "pt_BR");
+-	else if (!strcmp(brand, "Zgemma"))
+-		snprintf(locale, size, "en_US");
+-	else if (!strcmp(brand, "Beyonwiz"))
+-		snprintf(locale, size, "en_AU");
+-	else
+-		snprintf(locale, size, "de_DE");
++	struct stat st;
++	size_t used = 0;
++	int fd = open(TEXT_FILE, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
++	if (fd < 0) return 0;
++	if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid != geteuid() ||
++		st.st_size <= 0 || st.st_size > TEXT_LIMIT) {
++		close(fd);
++		return 0;
++	}
++	while (used < sizeof(data)) {
++		ssize_t n = read(fd, data + used, sizeof(data) - used);
++		if (n < 0) { used = 0; break; }
++		if (!n) break;
++		used += (size_t)n;
++	}
++	close(fd);
++	return used == (size_t)st.st_size && used <= TEXT_LIMIT ? used : 0;
+ }
+ 
+ void i18n_init(const char *language)
+ {
+-	char locale[32];
+-	if (language && *language)
+-		snprintf(locale, sizeof(locale), "%s", language);
+-	else
+-		enigma2_language(locale, sizeof(locale));
+-	chosen = -1;
+-	for (int i = 0; i < 3; ++i)
+-		if (!strncmp(locale, i18n_languages[i], 2))
+-			chosen = i;
++	const char *snapshot;
++	size_t length;
++	(void)language;  /* Retained API; direction is part of the snapshot. */
++	if (initialized) return;
++	initialized = 1;
++	snapshot = getenv(TEXT_ENV);
++	if (snapshot) {
++		/* Enigma2 reads BEFORE init 4. Empty means English and forbids a
++		 * later disk read, even if a stale translation file remains. */
++		length = strnlen(snapshot, TEXT_LIMIT + 1);
++		if (length > TEXT_LIMIT) return;
++		memcpy(data, snapshot, length);
++	} else length = read_file();
++	ready = parse(length);
++	if (!ready) { entry_count = 0; right_to_left = 0; }
+ }
+ 
+ const char *tr(const char *text)
+ {
+-	if (chosen < 0 || !text)
+-		return text;
+-	for (int i = 0; i < translation_count; ++i)
+-		if (!strcmp(translations[i].text, text))
+-			return translations[i].translated[chosen] && *translations[i].translated[chosen] ?
+-				translations[i].translated[chosen] : text;
++	if (ready && text)
++		for (size_t i = 0; i < entry_count; ++i)
++			if (!strcmp(entries[i].english, text)) return entries[i].translated;
+ 	return text;
+ }
+ 
+ int i18n_rtl(void)
+ {
+-	return chosen >= 0 && !strcmp(i18n_languages[chosen], "ar");
++	return ready && entry_count && right_to_left;
++}
++
++/* LVGL copies each label immediately. Valid UTF-8 also for snprintf outputs
++ * cut mid-character; malformed bytes/controls become '?'. No allocation. */
++const char *i18n_display_text(const char *text)
++{
++	static char clean[1024];
++	size_t used = 0, left = text ? strnlen(text, sizeof(clean) - 1) : 0;
++	const unsigned char *p = (const unsigned char *)text;
++	while (left && used < sizeof(clean) - 1) {
++		uint32_t scalar;
++		size_t n = utf8_scalar(p, left, &scalar);
++		if (!n || scalar < 0x20 || (scalar >= 0x7f && scalar <= 0x9f)) {
++			clean[used++] = '?';
++			p++;
++			left--;
++		} else {
++			if (n > sizeof(clean) - 1 - used) break;
++			memcpy(clean + used, p, n);
++			used += n;
++			p += n;
++			left -= n;
++		}
++	}
++	clean[used] = '\0';
++	return clean;
+ }
+diff --git a/i18n.h b/i18n.h
+index 82c3e9b..ca128e6 100644
+--- a/i18n.h
++++ b/i18n.h
+@@ -14,11 +14,15 @@ extern const char *const i18n_languages[3];
+ extern const struct translation translations[];
+ extern const int translation_count;
+ 
+-/* The language of Enigma2, or language when set; English without a translation. Before pivot_root. */
++/* One optional snapshot, once, before the internal UI stop and pivot_root.
++ * Enigma2 passes OFGWRITE_TEXTS from memory; direct invocation reads the file.
++ * language stays for API compatibility; the snapshot selects RTL. */
+ void i18n_init(const char *language);
+ /* text in the chosen language, else text itself. */
+ const char *tr(const char *text);
+ /* 1 for a language written from the right. */
+ int i18n_rtl(void);
++/* Bounded valid UTF-8 for one immediate lv_label_set_text; no allocation. */
++const char *i18n_display_text(const char *text);
+ 
+ #endif

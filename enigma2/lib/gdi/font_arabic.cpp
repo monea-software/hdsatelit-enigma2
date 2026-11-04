@@ -1,7 +1,6 @@
 /*
  * This was taken from pango. 
  * Modified for enigma by Felix Domke <tmbinc@gmx.net>.
- * I removed support for vowels and ligatures. Sorry.
  *
  * Original header:
  *
@@ -13,7 +12,6 @@
  */
 
 #include <vector>
-#include <lib/base/eerror.h>
 
 typedef struct
 {
@@ -21,21 +19,6 @@ typedef struct
 	int count;
 	unsigned long charshape[4];
 } shapestruct;
-
-typedef struct
-{
-	unsigned long basechar;
-	char numshapes;
-} charstruct;
-
-static void
-charstruct_init (charstruct * s)
-{
-  s->basechar = 0;
-  s->numshapes = 1;
-}
-
-#define connects_to_left(a)	 ((a).numshapes > 2)
 
 /* The Unicode order is always 'isolated, final, initial, medial'. */
 
@@ -214,53 +197,72 @@ charshape (unsigned long s, int which)
 	return s;
 }
 
+static bool
+is_arabic_mark(unsigned long letter)
+{
+	return (letter >= 0x064B && letter <= 0x065F) || letter == 0x0670;
+}
+
+static unsigned long
+lam_alef(unsigned long alef)
+{
+	switch (alef)
+	{
+	case ALEFMADDA: return LAM_ALEFMADDA;
+	case ALEFHAMZA: return LAM_ALEFHAMZA;
+	case ALEFHAMZABELOW: return LAM_ALEFHAMZABELOW;
+	case ALEF: return LAM_ALEF;
+	default: return 0;
+	}
+}
+
 void
 shape (std::vector<unsigned long> &string, const std::vector<unsigned long> &text)
 {
-	string.reserve(text.size());
-
-	charstruct oldchar, curchar;
-	int which;
-	unsigned long nextletter;
-
-	charstruct_init (&oldchar);
-	charstruct_init (&curchar);
-	
-	for (std::vector<unsigned long>::const_iterator i(text.begin());
+	string.reserve(string.size() + text.size());
+	bool previous_connects = false;
+	for (std::vector<unsigned long>::const_iterator i = text.begin();
 			i != text.end(); ++i)
 	{
-		nextletter = *i;
-		int nc = shapecount (nextletter);
-		
-		if (nc == 1)
-			which = 0;				/* final or isolated */
-		else
-			which = 2;				/* medial or initial */
-		if (connects_to_left (oldchar))
-			which++;
-		which = which % (curchar.numshapes);
-		curchar.basechar = charshape (curchar.basechar, which);
-			/* get rid of oldchar */
-		if (oldchar.basechar)
-			string.push_back(oldchar.basechar);
-		oldchar = curchar;		/* new values in oldchar */
+		unsigned long letter = *i;
+		if (is_arabic_mark(letter))
+		{
+			string.push_back(letter);
+			continue;
+		}
 
-			/* init new curchar */
-		charstruct_init (&curchar);
-		curchar.basechar = nextletter;
-		curchar.numshapes = nc;
+		std::vector<unsigned long>::const_iterator last = i;
+		std::vector<unsigned long>::const_iterator next = i + 1;
+		while (next != text.end() && is_arabic_mark(*next))
+			++next;
+
+		int count = shapecount(letter);
+		if (letter == LAM && next != text.end())
+		{
+			unsigned long ligature = lam_alef(*next);
+			if (ligature)
+			{
+				letter = ligature;
+				count = 2;
+				last = next++;
+				while (next != text.end() && is_arabic_mark(*next))
+					++next;
+			}
+		}
+
+		int which = previous_connects && count > 1 ? 1 : 0;
+		if (count > 2 && next != text.end() && shapecount(*next) > 1)
+			which += 2;
+		if (letter)
+			string.push_back(charshape(letter, which));
+		previous_connects = count > 2;
+
+		/* Keep marks between the two ligature letters. */
+		while (i != last)
+		{
+			++i;
+			if (i != last)
+				string.push_back(*i);
+		}
 	}
-
-	/* Handle last char */
-	if (connects_to_left (oldchar))
-		which = 1;
-	else
-		which = 0;
-	which = which % (curchar.numshapes);
-	curchar.basechar = charshape (curchar.basechar, which);
-
-	if (oldchar.basechar != 0)
-		string.push_back(oldchar.basechar);
-	if (curchar.basechar != 0)
-		string.push_back(curchar.basechar);
 }

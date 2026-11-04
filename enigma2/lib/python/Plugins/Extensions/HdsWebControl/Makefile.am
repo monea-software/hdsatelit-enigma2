@@ -7,7 +7,7 @@ install_PYTHON = \
 	acces_ssh_web.py \
 	acces_web.py \
 	pasi_decriptare_web.py \
-	actualizare_web.py \
+	actualizare_web.py imagine_online_web.py \
 	actualizari_web.py \
 	afisaj_web.py \
 	ajutor_web.py \

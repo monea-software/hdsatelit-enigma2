@@ -252,7 +252,7 @@ class HdsDvbISetup(Screen):
         self._mesajPana = 0
         self._inchis = False
         titlu = _('Canale de pe internet (DVB-I)')
-        self.setTitle(_('DVB-I: Configurare'))
+        self.setTitle(titlu)
         self['titlu'] = StaticText(titlu)
         for k in CULORI_STARE:
             self['stare_' + k] = StaticText('')
@@ -572,10 +572,11 @@ class HdsDvbIAvansat(Screen):
         Screen.__init__(self, session)
         self._config = _citeste_config()
         self._construieste_lista()
-        self.setTitle(_('DVB-I: avansat'))
+        self.setTitle(_('Adrese puse de mână și liste predefinite'))
         self['titlu'] = StaticText(_('Adrese puse de mână și liste predefinite'))
         self['stare'] = StaticText(S.textStare(self._config))
-        self['lista'] = MenuList(self._intrari)
+        self['lista'] = ListaRanduri()
+        self['lista'].setList(self._randuri())
         self['key_red'] = StaticText(_('Înapoi'))
         self['key_green'] = StaticText(_('Reîncarcă'))
         self['key_yellow'] = StaticText(_('Pornit/Oprit'))
@@ -600,24 +601,29 @@ class HdsDvbIAvansat(Screen):
 
         self._intrari.append((_('--- Liste predefinite ---'), None))
         for cheie, descriere, _adresa, _tara in S.listePredefinite():
-            marcaj = '[✓] ' if cheie in predefinite_active else '[  ] '
-            self._intrari.append((marcaj + descriere, ('predefinit', cheie)))
+            self._intrari.append((descriere, ('predefinit', cheie), cheie in predefinite_active))
 
         self._intrari.append((_('--- Adrese proprii ---'), None))
         for i, url in enumerate(self._config.get('url_uri', [])):
             # adresa intreaga: un rand care nu incape deruleaza (lib/gui/elabel.h)
             self._intrari.append(('  ' + url, ('url', i)))
 
+    def _randuri(self):
+        """Randurile desenate: cele predefinite au casuta lor, bifata sau nu"""
+        lista = self['lista']
+        return [lista.intrare(r[0], r[2] if len(r) > 2 else None, 1160) for r in self._intrari]
+
     def _reactualizeaza(self):
         """Reconstruieste lista si actualizeaza starea."""
         self._construieste_lista()
-        self['lista'].setList(self._intrari)
+        self['lista'].setList(self._randuri())
         self['stare'].setText(S.textStare(self._config))
         _scrie_config(self._config)
 
     def toggle_selectat(self):
         """OK pe o intrare predefinita o activeaza/dezactiveaza."""
-        selectat = self['lista'].getCurrent()
+        index = self['lista'].getSelectionIndex()
+        selectat = self._intrari[index] if 0 <= index < len(self._intrari) else None
         if not selectat or not selectat[1]:
             return
         tip, valoare = selectat[1]

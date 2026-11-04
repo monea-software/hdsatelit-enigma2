@@ -4793,7 +4793,7 @@ msgstr "Aktivere disse nettverksinnstillingene for %s?"
 msgid "Activă"
 msgstr "Aktiv"
 
-msgid "Activă, cablul e bagat"
+msgid "Activă, cablul e băgat"
 msgstr "Aktiv, kabelen er koblet til"
 
 msgid "Actualizare"
@@ -8995,7 +8995,7 @@ msgstr "Kabel"
 msgid "Cablu (DVB-C)"
 msgstr "Kabel (DVB-C)"
 
-msgid "Cablul e bagat, fără adresă IP"
+msgid "Cablul e băgat, fără adresă IP"
 msgstr "Kabel tilkoblet, ingen IP-adresse"
 
 msgid ""
@@ -14023,7 +14023,7 @@ msgstr ""
 "fra en forelder. Du kan stoppe den når som helst. Starte?"
 
 msgid "Dale"
-msgstr "Dale"
+msgstr "Ruter"
 
 msgid "Danemarca"
 msgstr "Danmark"
@@ -43823,16 +43823,16 @@ msgid "add marker"
 msgstr "legg til markør"
 
 msgid "add recording (enter recording duration)"
-msgstr "legg til opptak (angi opptaksvarighet)"
+msgstr "Legg til opptak (angi opptaksvarighet)"
 
 msgid "add recording (enter recording endtime)"
-msgstr "legg til opptak (angi sluttid for opptaket)"
+msgstr "Legg til opptak (angi sluttid for opptaket)"
 
 msgid "add recording (indefinitely)"
-msgstr "legg til opptak (ubegrenset)"
+msgstr "Legg til opptak (ubegrenset)"
 
 msgid "add recording (stop after current event)"
-msgstr "legg til opptak (stopp etter gjeldende sending)"
+msgstr "Legg til opptak (stopp etter gjeldende sending)"
 
 msgid "add service to bouquet"
 msgstr "legg til kanal i bukett"
@@ -44340,10 +44340,10 @@ msgid "certificatul serverului nu se poate verifica; verifică ora receptorului"
 msgstr "servercertifikatet kan ikke bekreftes; sjekk klokka på mottakeren"
 
 msgid "change recording (duration)"
-msgstr "endre opptak (varighet)"
+msgstr "Endre opptak (varighet)"
 
 msgid "change recording (endtime)"
-msgstr "endre opptak (sluttid)"
+msgstr "Endre opptak (sluttid)"
 
 msgid "checking the password"
 msgstr "sjekker passordet"
@@ -44875,13 +44875,13 @@ msgid "do not change"
 msgstr "ikke endre"
 
 msgid "do nothing"
-msgstr "gjør ingenting"
+msgstr "Gjør ingenting"
 
 msgid "doar schimbă canalul"
 msgstr "bare bytter kanal"
 
 msgid "don't record"
-msgstr "ikke ta opp"
+msgstr "Ikke ta opp"
 
 msgid "done!"
 msgstr "ferdig!"
@@ -47707,7 +47707,7 @@ msgid "stop entry"
 msgstr "stopp oppføring"
 
 msgid "stop recording"
-msgstr "stopp opptak"
+msgstr "Stopp opptak"
 
 msgid "stop timeshift"
 msgstr "stopp timeshift"
@@ -51406,7 +51406,6 @@ msgstr "−1 min"
 #~ "\n"
 #~ "Venligst velg en annen."
 
-
 #
 #~ msgid "Start Webinterface"
 #~ msgstr "Start WebInterface"
@@ -52795,7 +52794,6 @@ msgstr "angitt (%s, OK endre)"
 msgid "Ca să știm ce receptor cere ajutor, trimite și o amprentă calculată din placă, aceeași ca la programul de beta testeri (din ea nu se pot afla adresa MAC sau seria). Dacă ești beta tester, trimite și numele dat la înscriere sau, fără el, numele tău public."
 msgstr "For at vi skal vite hvilken mottaker som ber om hjelp, sender mottakeren også et fingeravtrykk beregnet fra kortet, det samme som i programmet for betatestere (MAC-adressen eller serienummeret kan ikke utledes fra det). Hvis du er betatester, sender mottakeren også navnet du oppga da du meldte deg på, eller, hvis du ikke oppga noe navn, det offentlige navnet ditt."
 
-
 # Asistenta de la distanta
 msgid "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale"
 msgstr "en systemfil eller systemmappe (/proc, /sys, /etc, /var/log, logger, /tmp), uten tilgangsmoduler, passord, nøkler eller personopplysninger"
@@ -52817,7 +52815,6 @@ msgstr "Bare kilden (satellitt, kabel, bakkenett)"
 
 msgid "Fără semne"
 msgstr "Ingen tegn"
-
 
 # Asistenta de la distanta
 msgid "Copia se face singură când intră echipa, înainte de orice schimbare. Butonul pune la loc canalele, setările și rețeaua de atunci; interfața repornește."
@@ -52856,31 +52853,329 @@ msgstr "Skriv meldingen til TV-en"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Vi takker alle betatestere som har bidratt til å lage HD Satelit-imaget: %s."
 
-#: lib/python (0.6.27, numele stickului)
+msgid "Derularea listelor"
+msgstr "Rulling av lister"
+
+msgid "Rând cu rând"
+msgstr "Rad for rad"
+
+msgid "Pagină cu pagină"
+msgstr "Side for side"
+
+msgid "Cum se mișcă meniurile, listele de alegere și ecranele de setări când cursorul ajunge la marginea ecranului. Rând cu rând: lista urcă un rând și vezi mereu încă două rânduri sub cursor, deci observi că mai sunt rânduri. Pagină cu pagină: lista sare pe pagina următoare, ca înainte. Lista de canale și ghidul rămân pe pagini."
+msgstr "Hvordan menyer, valglister og innstillingsskjermer beveger seg når markøren når kanten av skjermen. Rad for rad: listen flytter seg én rad, og du ser alltid to rader til under markøren, så du merker at det er flere. Side for side: listen hopper til neste side, som før. Kanallisten og guiden forblir på sider."
+
+msgid "Pluginul extern %s a avut o eroare."
+msgstr "Den eksterne utvidelsen %s fikk en feil."
+
+msgid "Receptorul merge mai departe."
+msgstr "Mottakeren fortsetter å virke."
+
+msgid "Echipa HD Satelit a primit datele erorii și va încerca să o rezolve."
+msgstr "HD Satelit-teamet har mottatt feildataene og vil prøve å løse problemet."
+
+msgid "Datele erorii ajung la echipa HD Satelit imediat ce receptorul are internet."
+msgstr "Feildataene når HD Satelit-teamet så snart mottakeren har internett."
+
+msgid "Pluginul a fost scris pentru alt fel de imagine și nu înțelege încă un răspuns al receptorului."
+msgstr "Utvidelsen er skrevet for en annen type image og forstår ennå ikke et svar fra mottakeren."
+
+msgid "Pluginul e făcut pentru imaginile vechi (Python 2) și nu poate rula așa pe această imagine."
+msgstr "Utvidelsen er laget for gamle image (Python 2) og kan ikke kjøre slik på dette imaget."
+
+msgid "Pluginului îi lipsește o componentă de care are nevoie."
+msgstr "Utvidelsen mangler en komponent den trenger."
+
+msgid "Pluginul cere un ecran pe care tema de acum nu îl are."
+msgstr "Utvidelsen ber om en skjerm som nåværende utseende ikke har."
+
+msgid "Pluginul nu a putut lua date de pe internet."
+msgstr "Utvidelsen kunne ikke hente data fra internett."
+
+msgid "Pluginul nu a găsit un fișier sau nu a putut scrie pe disc."
+msgstr "Utvidelsen fant ikke en fil eller kunne ikke skrive til disken."
+
+msgid "Pluginul a avut o eroare internă."
+msgstr "Utvidelsen fikk en intern feil."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Pluginurile din copia setărilor, puse din nou: %s."
+msgstr "Programtillegg fra kopien av innstillingene, installert på nytt: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Nu există încă pentru imaginea aceasta: %s."
+msgstr "Ikke tilgjengelig ennå for dette bildet: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Nu s-au putut instala acum: %s."
+msgstr "Kunne ikke installeres nå: %s."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Interfața repornește o dată acum, ca pluginurile noi să se încarce."
+msgstr "Grensesnittet starter på nytt én gang nå, så de nye programtilleggene lastes."
+
+#: lib/python/Components/HdsReinstalare.py
+msgid "Pluginurile și modulele de acces se pun din nou din internet, în câteva minute."
+msgstr "Programtillegg og tilgangsmoduler installeres på nytt fra internett om noen minutter."
+
+#, python-format
+msgid "locul „%s” este în dosarul imaginii, care se șterge la o actualizare"
+msgstr "stedet «%s» ligger i fastvarens mappe, som en oppdatering sletter"
+
+#, python-format
+msgid "pe discul din „%s” au rămas mai puțin de 2 GB liberi"
+msgstr "på disken for «%s» er det mindre enn 2 GB ledig"
+
+#, python-format
+msgid "pe „%s” se poate numai citi, nu și scrie"
+msgstr "«%s» kan bare leses, ikke skrives til"
+
+msgid "Discul de pornire"
+msgstr "Oppstartsdisk"
+
+#, python-format
+msgid "liber %s din %s"
+msgstr "%s ledig av %s"
+
+msgid "de aici pornește imaginea"
+msgstr "fastvaren starter herfra"
+
+msgid "este în dosarul imaginii, care se șterge la o actualizare"
+msgstr "den ligger i fastvarens mappe, som en oppdatering sletter"
+
+msgid "De pe el pornește imaginea. Înregistrările stau în afara imaginii, deci rămân și după o actualizare."
+msgstr "Fastvaren starter fra den. Opptakene ligger utenfor fastvaren, så de blir også etter en oppdatering."
+
+#, python-format
+msgid "Repară „%s”"
+msgstr "Reparer «%s»"
+
+msgid "Verifică stick-ul, îi repară erorile și se poate scrie din nou pe el. Nu se formatează nimic."
+msgstr "Sjekker minnepinnen og reparerer feilene, så kan den skrives til igjen. Ingenting formateres."
+
+#, python-format
+msgid "„%s”: %s."
+msgstr "«%s»: %s."
+
+msgid "Am oprit înregistrarea: pe discul de pornire a rămas mai puțin de 1 GB liber. Fă loc ștergând înregistrările de care nu mai ai nevoie."
+msgstr "Jeg stoppet opptaket: det er mindre enn 1 GB ledig på oppstartsdisken. Frigjør plass ved å slette opptak du ikke lenger trenger."
+
+msgid "Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările rămân și după o actualizare."
+msgstr "Når fastvaren starter fra en stor disk, vises den her som «Oppstartsdisk», og mottakeren velger den selv, med mindre du har valgt en annen disk. Mappen movie ligger utenfor fastvaren, så opptakene blir også etter en oppdatering."
+
+#: data/setup.xml
+msgid "Forma ecranului televizorului: 16:9 la televizoarele late de azi, 4:3 la cele vechi. Ce se face cu emisiunile 4:3 se alege în Setări video avansate, la „Imaginea 4:3”."
+msgstr "Formen på TV-skjermen: 16:9 for dagens brede TV-er, 4:3 for gamle. Hva som skjer med 4:3-programmer, velger du i de avanserte videoinnstillingene, ved «4:3-bilde»."
+
+#: data/setup.xml
+msgid "Câte setări se văd în meniuri: Simplu arată numai ce se folosește des, Intermediar și Expert arată tot mai multe."
+msgstr "Hvor mange innstillinger menyene viser: Enkel viser bare det som brukes ofte, Middels og Ekspert viser stadig flere."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Pornire automată"
+msgstr "Automatisk start"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: pornit singur: a găsit semnal"
+msgstr "Tuner %s: startet av seg selv: fant signal"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: verificare automată în așteptare"
+msgstr "Tuner %s: automatisk kontroll venter"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: configurarea automată n-a reușit."
+msgstr "Tuner %s: det automatiske oppsettet lyktes ikke."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "OK: încearcă din nou"
+msgstr "OK: prøv igjen"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: se probează singur când merge un canal pe tunerul %s."
+msgstr "Tuner %s: tester seg selv når en kanal går på tuner %s."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "OK: încearcă acum"
+msgstr "OK: prøv nå"
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Tuner %s: se probează..."
+msgstr "Tuner %s: tester..."
+
+#: lib/python/Components/HdsTunerB.py
+#, python-format
+msgid "Pornește un canal de satelit pe tunerul %s, apoi încearcă din nou."
+msgstr "Start en satellittkanal på tuner %s, og prøv så igjen."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Se înregistrează sau urmează o înregistrare. Proba se face după aceea."
+msgstr "Et opptak pågår eller starter snart. Testen kommer etterpå."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Un canal se trimite acum în rețea. Proba se face după aceea."
+msgstr "En kanal strømmes nå på nettverket. Testen kommer etterpå."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Închide imaginea în imagine, apoi încearcă din nou."
+msgstr "Lukk bilde i bilde, og prøv så igjen."
+
+#: lib/python/Components/HdsTunerB.py
+msgid "Ecranul tunerului e deschis."
+msgstr "Tunerskjermen er åpen."
+
+#: lib/python (lotul de seara 0.7.0)
 msgid "nu se scrie: numele stickului are spații"
 msgstr "skrives ikke: navnet på minnepinnen har mellomrom"
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "nu se scrie: numele stickului are semne neacceptate"
 msgstr "skrives ikke: navnet på minnepinnen har tegn som ikke godtas"
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 #, python-format
 msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
 msgstr "Skrivingen stoppet: navnet på minnepinnen har mellomrom (%s). Ingenting ble skrevet."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 #, python-format
 msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
 msgstr "Skrivingen stoppet: navnet på minnepinnen har tegn som ikke godtas (%s). Ingenting ble skrevet."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
 msgstr "Med dette navnet ville skrivingen slette mottakerens system før bildet leses."
 
-#: lib/python (0.6.27, numele stickului)
+#: lib/python (lotul de seara 0.7.0)
 msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
 msgstr "Sett minnepinnen i en datamaskin, gi den et navn uten mellomrom og tegn (for eksempel HDSATELIT), og sett den så tilbake i mottakeren."
+
+#: lib/python (lotul de seara 0.7.0)
+msgid "Fără semnal: verifică cablul antenei"
+msgstr "Ingen signal: sjekk antennekabelen"
+
+#: lib/python (lotul de seara 0.7.0)
+#, python-format
+msgid "  Pune imaginea pe stick în: %s"
+msgstr "  Legg bildet på minnepinnen i: %s"
+
+#: lib/python (lotul de seara 0.7.0)
+#, python-format
+msgid "Pentru recuperare, pune imaginea pe stick în dosarele %s și %s."
+msgstr "For gjenoppretting, legg bildet på minnepinnen i mappene %s og %s."
+
+#: lib/python/Components/NimManager.py
+msgid "not available"
+msgstr "ingen"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay"
+msgstr "Stream Relay"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adaugă la Stream Relay"
+msgstr "Legg til i Stream Relay"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Scoate din Stream Relay"
+msgstr "Fjern fra Stream Relay"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Lista Stream Relay nu s-a putut schimba."
+msgstr "Stream Relay-listen kunne ikke endres."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adresa releului"
+msgstr "Reléets adresse"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Unde rulează releul care decodează canalele alese pentru Stream Relay: pe acest receptor (127.0.0.1) sau pe alt aparat din rețeaua de acasă, dacă e pornit rândul Fluxuri pentru alte aparate din rețeaua de acasă. Se ia numai adresa; portul e în rândul următor. Altă adresă nu se folosește: canalele pornesc direct."
+msgstr "Hvor reléet som dekoder kanalene valgt for Stream Relay kjører: på denne mottakeren (127.0.0.1) eller på en annen enhet i hjemmenettverket, hvis linjen Strømmer for andre enheter i hjemmenettverket er slått på. Bare adressen brukes; porten står på neste linje. Andre adresser brukes ikke: kanalene starter direkte."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Portul releului"
+msgstr "Reléets port"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay."
+msgstr "Porten der reléet gir de dekodede kanalene (17999 fra fabrikken). Hvis reléet ikke svarer, starter kanalen direkte, som uten Stream Relay."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Întârzierea la schimbarea canalului (ms)"
+msgstr "Forsinkelse ved kanalbytte (ms)"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale."
+msgstr "Hvor lenge mottakeren venter, fra én kanal via reléet til en annen, slik at reléet slipper den gamle kanalen. Kanaler legges til i Stream Relay fra menyen i kanallisten."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Fluxuri pentru alte aparate din rețeaua de acasă"
+msgstr "Strømmer for andre enheter i hjemmenettverket"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Oprită (din fabrică), fluxurile canalelor rămân numai pe acest receptor. Pornită, le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x), de exemplu un releu Stream Relay de pe alt receptor; din internet, niciodată."
+msgstr "Av (fabrikkinnstilling): kanalstrømmene blir bare på denne mottakeren. På: enheter i hjemmenettverket (adresser 192.168.x.x, 10.x.x.x, 172.16-31.x.x) kan også be om dem, for eksempel et Stream Relay på en annen mottaker; aldri fra internett."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay nu răspunde la %s:%d. Verifică adresa și portul din setările Stream Relay."
+msgstr "Stream Relay svarer ikke på %s:%d. Kontroller adressen og porten i innstillingene for Stream Relay."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay a oprit fluxul canalului."
+msgstr "Stream Relay stoppet kanalstrømmen."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Numai canalele din satelit, cablu sau terestru pot intra în Stream Relay."
+msgstr "Bare satellitt-, kabel- eller bakkenettkanaler kan legges til i Stream Relay."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "%s este acum în Stream Relay."
+msgstr "%s er nå i Stream Relay."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "%s nu mai este în Stream Relay."
+msgstr "%s er ikke lenger i Stream Relay."
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Scoate din Stream Relay:"
+msgstr "Fjern fra Stream Relay:"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Adaugă la Stream Relay:"
+msgstr "Legg til i Stream Relay:"
+
+#: lib/python/Components/HdsStreamRelay.py
+msgid "Stream Relay nu s-a schimbat."
+msgstr "Stream Relay ble ikke endret."
+
+#: lib/python/Screens/InputDeviceSetup.py
+msgid "dreambox advanced remote control (native)"
+msgstr "Mottakerens fjernkontroll"
+
+#: lib/python/Screens/InputDeviceSetup.py
+msgid "dreambox remote control (native)"
+msgstr "Mottakerens fjernkontroll"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Înregistrarea a pornit: %s."
+msgstr "Opptaket er startet: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Receptorul nu a putut porni înregistrarea."
+msgstr "Mottakeren kunne ikke starte opptaket."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Receptorul e în standby. Pornește-l, apoi pornește înregistrarea."
+msgstr "Mottakeren er i standby. Slå den på, og start så opptaket."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py
+msgid "Filmul e folosit acum pe receptor. Încearcă din nou după ce se oprește."
+msgstr "Filmen er i bruk på mottakeren. Prøv igjen når den har stoppet."
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Cea mai nouă compatibilă"
@@ -53152,25 +53447,759 @@ msgstr "Andre meldinger fra programmet, ikke oversatt:"
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
 msgstr "Dette var bare en kontroll: ingenting ble skrevet til mottakeren."
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+msgid "Atenție"
+msgstr "Advarsel"
+
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+#, python-format
+msgid "Se închide în %d s"
+msgstr "Lukkes om %d s"
+
+#: lib/python/Screens/MessageBox.py (0.7.0, ferestrele de mesaj)
+msgid "Adaugă feed"
+msgstr "Legg til feed"
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Da, actualizează"
+msgstr "Ja, oppdater"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Există o imagine nouă pentru receptorul tău: %s. Acum ai %s. O instalez acum? Canalele și setările tale rămân."
+msgstr "Det finnes et nytt image for mottakeren din: %s. Nå har du %s. Skal jeg installere det nå? Kanalene og innstillingene dine blir værende."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Există o versiune nouă pentru receptorul tău: %s. Acum ai %s. O instalez acum? Canalele și setările tale rămân."
+msgstr "Det finnes en ny versjon for mottakeren din: %s. Nå har du %s. Skal jeg installere den nå? Kanalene og innstillingene dine blir værende."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Pune un stick USB și apasă din nou."
+msgstr "Sett inn en USB-minnepinne og trykk igjen."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Pe stick nu e destul loc: trebuie %d MB liberi."
+msgstr "Det er ikke nok plass på minnepinnen: det trengs %d MB ledig."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Receptorul rulează acum de pe stick sau dintr-un loc necunoscut, deci nu pun singur imaginea nouă. O poți lua de pe site."
+msgstr "Mottakeren kjører nå fra en minnepinne eller fra et ukjent sted, så jeg installerer ikke det nye imaget selv. Du kan hente det fra nettstedet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Numele stickului are spații sau semne cu care scrierea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Navnet på minnepinnen har mellomrom eller tegn som skrivingen ikke virker med. Bytt navnet på en datamaskin (for eksempel HDSATELIT) og trykk igjen."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Ai cea mai nouă imagine pentru receptorul tău."
+msgstr "Du har det nyeste imaget for mottakeren din."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Legătura la internet s-a întrerupt. Apasă din nou: descărcarea continuă de unde a rămas."
+msgstr "Internettforbindelsen ble brutt. Trykk igjen: nedlastingen fortsetter der den stoppet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Serverul de actualizări nu răspunde acum. Încearcă mai târziu."
+msgstr "Oppdateringsserveren svarer ikke nå. Prøv igjen senere."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a scris nimic."
+msgstr "Listen over images er ikke signert av HD Satelit. Ingenting ble skrevet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nouă nu se găsește pe server. Încearcă mai târziu."
+msgstr "Det nye imaget finnes ikke på serveren. Prøv igjen senere."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea descărcată nu se potrivește. Nu s-a scris nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Det nedlastede imaget stemmer ikke. Ingenting ble skrevet. Trykk igjen, så laster jeg det ned på nytt."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nu este pentru acest receptor. Nu s-a scris nimic."
+msgstr "Dette imaget er ikke for denne mottakeren. Ingenting ble skrevet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Stickul a fost scos sau are o eroare. Nu s-a scris nimic."
+msgstr "Minnepinnen ble tatt ut eller har en feil. Ingenting ble skrevet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a scris nimic."
+msgstr "Innstillingskopien kunne ikke lages på minnepinnen. Ingenting ble skrevet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Verificarea de dinainte de scriere n-a ieșit bine. Nu s-a scris nimic."
+msgstr "Kontrollen før skrivingen gikk ikke bra. Ingenting ble skrevet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Oprit. Nu s-a scris nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Stoppet. Ingenting ble skrevet. Hvis du trykker igjen, fortsetter nedlastingen der den stoppet."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea nouă nu s-a scris. Receptorul a rămas pe %s."
+msgstr "Det nye imaget ble ikke skrevet. Mottakeren ble værende på %s."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se caută imaginea nouă..."
+msgstr "Søker etter det nye imaget..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se descarcă imaginea pe stick: %d%% (%d din %d MB)."
+msgstr "Laster ned imaget til minnepinnen: %d%% (%d av %d MB)."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se verifică imaginea de pe stick..."
+msgstr "Kontrollerer imaget på minnepinnen..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se pregătește imaginea pe stick..."
+msgstr "Forbereder imaget på minnepinnen..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se face copia completă pe stick..."
+msgstr "Lager den fullstendige kopien på minnepinnen..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Se verifică totul înainte de scriere..."
+msgstr "Kontrollerer alt før skrivingen..."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Scrierea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Skrivingen venter til opptaket er ferdig og starter så av seg selv."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imaginea se scrie acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Imaget skrives nå. Ikke slå av mottakeren: den starter på nytt av seg selv, og kanaler og innstillinger kommer tilbake av seg selv."
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Actualizare singură în standby"
+msgstr "Oppdater av seg selv i standby"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "imaginea și pachetele"
+msgstr "imaget og pakkene"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "numai imaginea"
+msgstr "bare imaget"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "numai pachetele"
+msgstr "bare pakkene"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Imagine nouă de pe internet"
+msgstr "Nytt image fra internett"
+
+#: lib/python/Components/HdsImagineOnline.py
+msgid "Alte imagini"
+msgstr "Andre images"
+
+msgid "Surse feeduri"
+msgstr "Feedkilder"
+
+msgid "Deocamdată nu e nimic nou de descărcat."
+msgstr "Det er foreløpig ikke noe nytt å laste ned."
+
+msgid "Adaugă un feed"
+msgstr "Legg til en feed"
+
+msgid "Adresa unui feed de pe internet"
+msgstr "Adressen til en feed på internett"
+
+msgid "Instalate"
+msgstr "Installerte"
+
+msgid "Disponibile"
+msgstr "Tilgjengelige"
+
+msgid "Fișiere .ipk de pe stick, de pe disc sau din rețea"
+msgstr ".ipk-filer fra USB-pinne, disk eller nettverk"
+
+msgid "Mai multe surse, automat"
+msgstr "Flere kilder, automatisk"
+
+msgid "Un plugin din Monea Software le adaugă singur"
+msgstr "En plugin fra Monea Software legger dem til automatisk"
+
+msgid "De actualizat"
+msgstr "Kan oppdateres"
+
+msgid "Oficială"
+msgstr "Offisiell"
+
+#, python-format
+msgid "Toate extensiile cu o versiune nouă: %d"
+msgstr "Alle utvidelser med en ny versjon: %d"
+
+msgid "Roșu actualizează"
+msgstr "Rød: Oppdater"
+
+msgid "INFO descarcă sursa"
+msgstr "INFO: Last ned kilden"
+
+msgid "Sursa oficială HD Satelit"
+msgstr "Den offisielle HD Satelit-kilden"
+
+#, python-format
+msgid "%s: ai instalat toate extensiile lui (%d)."
+msgstr "%s: du har installert alle utvidelsene derfra (%d)."
+
+#, python-format
+msgid "%s: nu are deocamdată nicio extensie."
+msgstr "%s: har foreløpig ingen utvidelser."
+
+msgid "OK repornește interfața acum"
+msgstr "OK: Start grensesnittet på nytt nå"
+
+msgid "Se instalează versiunea nouă pentru toate extensiile de mai jos."
+msgstr "Den nye versjonen installeres for alle utvidelsene nedenfor."
+
+msgid "OK actualizează"
+msgstr "OK: Oppdater"
+
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din rețea."
+msgstr "Du installerer en .ipk-fil fra en USB-pinne, en disk eller nettverket."
+
+msgid "În feedul Monea Software există un plugin care adaugă singur mai multe surse. Îl găsești la Disponibile."
+msgstr "I feedet til Monea Software finnes det en plugin som legger til flere kilder automatisk. Du finner den under Tilgjengelige."
+
+msgid "OK îl arată"
+msgstr "OK: Vis den"
+
+msgid "Feed de pe internet"
+msgstr "Feed fra internett"
+
+msgid "Scrii un nume scurt și adresa feedului (începe cu http:// sau https://). Extensiile din el apar apoi la Disponibile, cu numele feedului. Nu sunt verificate de HD Satelit."
+msgstr "Skriv inn et kort navn og adressen til feedet (begynner med http:// eller https://). Utvidelsene derfra vises deretter under Tilgjengelige, med navnet på feedet. De er ikke kontrollert av HD Satelit."
+
+msgid "Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde."
+msgstr "Ingen feed. Legg til en under Feedkilder med den grønne knappen."
+
+msgid "Pluginul de feeduri din Monea Software nu e încă disponibil."
+msgstr "Feed-pluginen fra Monea Software er ikke tilgjengelig ennå."
+
+msgid "Pluginul de feeduri e deja instalat."
+msgstr "Feed-pluginen er allerede installert."
+
+msgid "lista nu a fost descărcată încă"
+msgstr "listen er ikke lastet ned ennå"
+
+msgid "Adaugă manual"
+msgstr "Legg til manuelt"
+
+msgid "Adaugă automat"
+msgstr "Legg til automatisk"
 
 msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
 msgstr "Det er ikke mulig å skrive til USB-pinnen, så skrivingen starter ikke. Ingenting er endret på mottakeren."
+#: lib/python/Screens/IptvSetup.py
+msgid "Legătura cu acest server nu este criptată, fiindcă furnizorul nu are HTTPS."
+msgstr "Forbindelsen til denne serveren er ikke kryptert, fordi leverandøren ikke har HTTPS."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Cont"
+msgstr "Konto"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portal"
+msgstr "Portal"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listă demo"
+msgstr "Demoliste"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul a refuzat utilizatorul sau parola. Verifică-le și încearcă din nou."
+msgstr "Serveren avviste brukernavnet eller passordet. Sjekk dem og prøv igjen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Abonamentul a expirat sau este oprit. Vorbește cu furnizorul tău."
+msgstr "Abonnementet er utløpt eller stoppet. Snakk med leverandøren din."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul nu răspunde. Verifică adresa și internetul, apoi încearcă din nou."
+msgstr "Serveren svarer ikke. Sjekk adressen og internett, og prøv igjen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu este o listă de canale. Verifică adresa dată de furnizor."
+msgstr "På denne adressen finnes det ingen kanalliste. Sjekk adressen du fikk av leverandøren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista nu are niciun canal pe care receptorul să-l poată porni."
+msgstr "Listen har ingen kanal som mottakeren kan starte."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista este prea mare pentru receptor."
+msgstr "Listen er for stor for mottakeren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu răspunde un server de tip Xtream. Verifică serverul și portul."
+msgstr "På denne adressen svarer ingen Xtream-server. Sjekk serveren og porten."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "La această adresă nu răspunde un portal. Verifică adresa dată de furnizor."
+msgstr "På denne adressen svarer ingen portal. Sjekk adressen du fikk av leverandøren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portalul a refuzat adresa MAC. Verifică adresa MAC dată de furnizor."
+msgstr "Portalen avviste MAC-adressen. Sjekk MAC-adressen du fikk av leverandøren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Fișierul nu se poate citi. Verifică stickul și încearcă din nou."
+msgstr "Filen kan ikke leses. Sjekk minnepinnen og prøv igjen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa nu este bună. Scrie adresa dată de furnizor, cu http sau https."
+msgstr "Adressen er ikke gyldig. Skriv adressen du fikk av leverandøren, med http eller https."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Serverul are un certificat de securitate nevalid, așa că legătura s-a oprit."
+msgstr "Serveren har et ugyldig sikkerhetssertifikat, så forbindelsen ble stoppet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Numele nu este bun. Scrie un nume mai scurt, fără semne speciale."
+msgstr "Navnet er ikke gyldig. Skriv et kortere navn uten spesialtegn."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie utilizatorul primit de la furnizor."
+msgstr "Skriv brukernavnet du fikk av leverandøren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie parola primită de la furnizor."
+msgstr "Skriv passordet du fikk av leverandøren."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa MAC nu este bună. Se scrie așa: 00:1A:79:12:34:56."
+msgstr "MAC-adressen er ikke gyldig. Den skrives slik: 00:1A:79:12:34:56."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ai ajuns la numărul cel mai mare de surse. Șterge una ca să poți adăuga alta."
+msgstr "Du har nådd det høyeste antallet kilder. Slett en for å kunne legge til en annen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista demo nu s-a putut descărca. Verifică internetul și încearcă din nou."
+msgstr "Demolisten kunne ikke lastes ned. Sjekk internett og prøv igjen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se verifică legătura cu serverul..."
+msgstr "Forbindelsen til serveren sjekkes..."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Kanalene vises i kanallisten, under Satellitter, på IPTV-raden."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se încarcă"
+msgstr "Laster"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Nu merge"
+msgstr "Virker ikke"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Fără HTTPS"
+msgstr "Uten HTTPS"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Alege ce ți-a dat furnizorul."
+msgstr "Velg det leverandøren din har gitt deg."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Gata: %s. Le găsești în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Ferdig: %s. Du finner dem i kanallisten, under Satellitter, på IPTV-raden."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Lista are prea multe canale: au intrat primele %d."
+msgstr "Listen har for mange kanaler: de første %d ble lagt inn."
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Câteva rânduri din listă nu se pot folosi și au fost sărite: %d."
+msgstr "Noen rader i listen kan ikke brukes og ble hoppet over: %d."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă o listă, un cont sau un portal"
+msgstr "Legg til en liste, en konto eller en portal"
+
+#: lib/python/Screens/IptvSetup.py
+#, python-format
+msgid "Ștergi %s? Canalele ei dispar de la rândul IPTV. Cele puse de tine în Favorite rămân, dar nu mai pornesc."
+msgstr "Slette %s? Kanalene forsvinner fra IPTV-raden. De du har lagt i Favoritter, blir, men starter ikke lenger."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "De pe stick"
+msgstr "Fra minnepinnen"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parola nu se arată. Un rând gol o lasă cum e."
+msgstr "Passordet vises ikke. En tom rad lar det stå som det er."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Alege un fișier .m3u sau .m3u8 de pe stick."
+msgstr "Velg en .m3u- eller .m3u8-fil fra minnepinnen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă lista sau contul primit de la furnizorul tău. Canalele apar singure în lista de canale."
+msgstr "Legg til listen eller kontoen du fikk av leverandøren din. Kanalene vises av seg selv i kanallisten."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canal IPTV"
+msgstr "IPTV-kanal"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "OK adaugă lista sau contul tău"
+msgstr "OK legger til listen eller kontoen din"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Se actualizează..."
+msgstr "Oppdaterer..."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ștergi sursa?"
+msgstr "Slette kilden?"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele ei dispar de la rândul IPTV. Cele puse de tine în Favorite rămân, dar nu mai pornesc."
+msgstr "Kanalene forsvinner fra IPTV-raden. De du har lagt i Favoritter, blir, men starter ikke lenger."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listele și conturile tale"
+msgstr "Listene og kontoene dine"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte."
+msgstr "Kanalene vises av seg selv i kanallisten, under Satellitter, på IPTV-raden. Du kan legge dem i Favoritter og i en hvilken som helst bukett, som de andre."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adaugă ce ți-a dat furnizorul"
+msgstr "Legg til det leverandøren din har gitt deg"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Ce ai primit"
+msgstr "Det du har fått"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Playlist: o adresă sau un fișier de pe stick"
+msgstr "Spilleliste: en adresse eller en fil fra minnepinnen"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Cont: server, utilizator și parolă"
+msgstr "Konto: server, brukernavn og passord"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Portal: adresa portalului și adresa MAC"
+msgstr "Portal: adressen til portalen og MAC-adressen"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Listă demo: canale gratuite care permit asta"
+msgstr "Demoliste: gratis kanaler som tillater det"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa listei"
+msgstr "Adressen til listen"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Server"
+msgstr "Server"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Utilizator"
+msgstr "Brukernavn"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parolă"
+msgstr "Passord"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa portalului"
+msgstr "Adressen til portalen"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Nume (opțional)"
+msgstr "Navn (valgfritt)"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."
+msgstr "Passordet vises ikke og sendes ikke tilbake. Hvis du legger til den samme kontoen igjen med et annet passord, blir kanalene i Favoritter."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Lista demo: acordul fiecărui canal"
+msgstr "Demoliste: tillatelsen til hver kanal"
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Aceleași liste sunt pe televizor, în __DRUM_MENIU__."
+msgstr "De samme listene finnes på TV-en, i __DRUM_MENIU__."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Încă nu ai adăugat nimic."
+msgstr "Du har ikke lagt til noe ennå."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Merge."
+msgstr "Virker."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Ferdig. Kanalene er i kanallisten, under Satellitter, på IPTV-raden."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie adresa listei sau alege fișierul de pe stick cu tasta galbenă. OK deschide tastatura."
+msgstr "Skriv adressen til listen, eller velg filen fra minnepinnen med den gule knappen. OK åpner tastaturet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie datele primite de la furnizor. OK deschide tastatura."
+msgstr "Skriv inn opplysningene du fikk av leverandøren. OK åpner tastaturet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Scrie adresa portalului și adresa MAC primite de la furnizor. OK deschide tastatura."
+msgstr "Skriv adressen til portalen og MAC-adressen du fikk av leverandøren. OK åpner tastaturet."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "O adresă de internet sau un fișier de pe stick."
+msgstr "En internettadresse eller en fil fra minnepinnen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Server, utilizator și parolă."
+msgstr "Server, brukernavn og passord."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Adresa portalului și adresa MAC."
+msgstr "Adressen til portalen og MAC-adressen."
+
+#: lib/python/Screens/IptvSetup.py
+msgid "Canale gratuite care permit asta, cu acordul lor la vedere."
+msgstr "Gratis kanaler som tillater det, med tillatelsen synlig."
+
+msgid "Se verifică extensia înainte de instalare."
+msgstr "Utvidelsen kontrolleres før installasjon."
+
+msgid "Extensia e făcută pentru imaginile vechi, cu Python 2."
+msgstr "Utvidelsen er laget for eldre image med Python 2."
+
+msgid "Alt feed"
+msgstr "Annen feed"
+
+msgid "Lista extensiilor s-a descărcat."
+msgstr "Listen over utvidelser er lastet ned."
+
+msgid "Lista extensiilor nu s-a putut descărca."
+msgstr "Kunne ikke laste ned listen over utvidelser."
+
+msgid "OK alege feedul sau felul extensiilor arătate."
+msgstr "OK: Velg feed eller typen utvidelser som vises."
+
+msgid "OK alege feedul extensiilor arătate."
+msgstr "OK: Velg feeden for utvidelsene som vises."
+
+msgid "Mai multe feeduri, automat"
+msgstr "Flere feeder automatisk"
+
+msgid "Extensie"
+msgstr "Utvidelse"
+
+msgid "Instalarea extensiilor nu este disponibilă în această imagine."
+msgstr "Installasjon av utvidelser er ikke tilgjengelig i dette imaget."
+
+msgid "Feed"
+msgstr "Feed"
+
+msgid "O poți instala din nou oricând, din același feed."
+msgstr "Du kan når som helst installere den på nytt fra samme feed."
+
+msgid "Nu se află în niciun feed, deci nu se va mai putea instala din nou de aici."
+msgstr "Den finnes ikke i noen feed, så du vil ikke kunne installere den på nytt herfra."
+
+msgid "Filtru: toate extensiile"
+msgstr "Filter: alle utvidelser"
+
+msgid "Feedul oficial HD Satelit"
+msgstr "Den offisielle HD Satelit-feeden"
+
+msgid "Numele extensiei nu este valid. Nu se instalează."
+msgstr "Navnet på utvidelsen er ugyldig. Den blir ikke installert."
+
+msgid "Un nume de extensie nu este valid. Nu se actualizează."
+msgstr "Navnet på en utvidelse er ugyldig. Den blir ikke oppdatert."
+
+msgid "Numele extensiei nu este valid. Nu se șterge."
+msgstr "Navnet på utvidelsen er ugyldig. Den blir ikke slettet."
+
+#, python-format
+msgid "Nu este verificată de HD Satelit. Extensie dintr-un fișier %s: %s"
+msgstr "Den er ikke kontrollert av HD Satelit. Utvidelse fra en %s-fil: %s"
+
+msgid "Extensia vine dintr-un feed extern și nu este verificată de HD Satelit."
+msgstr "Utvidelsen kommer fra en ekstern feed og er ikke kontrollert av HD Satelit."
+
+#, python-format
+msgid "Versiunea %s din feedul %s e făcută pentru Python 2 și nu se instalează."
+msgstr "Versjon %s fra feeden %s er laget for Python 2 og blir ikke installert."
+
+msgid "Roșu șterge feedul · Albastru descarcă lista"
+msgstr "Rød: Slett feeden · Blå: Last ned listen"
+
+msgid "Șterge feedul"
+msgstr "Slett feeden"
+
+msgid "Detaliile extensiei nu s-au putut citi"
+msgstr "Kunne ikke lese informasjonen om utvidelsen"
+
+msgid "Feed extern, neverificat de HD Satelit"
+msgstr "Ekstern feed, ikke kontrollert av HD Satelit"
+
+msgid "Extensiile din acest feed nu sunt verificate de HD Satelit. Instalează doar ce cunoști."
+msgstr "Utvidelsene i denne feeden er ikke kontrollert av HD Satelit. Installer bare det du kjenner til."
+
+msgid "În feedul Monea Software există un plugin care adaugă singur mai multe feeduri. Îl găsești la Disponibile."
+msgstr "I feeden fra Monea Software finnes det et programtillegg som automatisk legger til flere feeder. Du finner det under Tilgjengelige."
+
+msgid "Arată numai extensiile dintr-un feed (HD Satelit, Monea Software, feedurile tale) sau de un anumit fel. Filtrul rămâne cât stai în Extensii și se aplică în toate filele cu extensii."
+msgstr "Vis bare utvidelser fra én feed (HD Satelit, Monea Software eller dine egne feeder) eller av en bestemt type. Filteret beholdes så lenge du er i Utvidelser, og gjelder i alle fanene med utvidelser."
+
+msgid "Toate extensiile"
+msgstr "Alle utvidelser"
+
+msgid "Alte extensii au nevoie de aceasta. Șterge-le întâi pe ele."
+msgstr "Andre utvidelser trenger denne. Slett dem først."
+
+msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
+msgstr "Utvidelsen finnes ikke lenger i feeden. Last ned listen på nytt med blå knapp."
+
+msgid "Extensia nu este făcută pentru acest receptor."
+msgstr "Utvidelsen er ikke laget for denne mottakeren."
+
+msgid "Semnătura feedului nu se potrivește. Extensia nu a fost instalată."
+msgstr "Signaturen til feeden stemmer ikke. Utvidelsen ble ikke installert."
+
+msgid "Extensia ar scrie peste fișierele alteia. Nu a fost instalată."
+msgstr "Utvidelsen ville overskrevet filene til en annen utvidelse. Den ble ikke installert."
+
+msgid "Fișierul extensiei nu se poate citi."
+msgstr "Kan ikke lese filen til utvidelsen."
+
+msgid "Extensia nu este instalată."
+msgstr "Utvidelsen er ikke installert."
+
+#, python-format
+msgid "Există deja un feed cu numele „%s”."
+msgstr "Det finnes allerede en feed med navnet «%s»."
+
+#, python-format
+msgid "Fișierul feedurilor nu s-a putut scrie (%s)."
+msgstr "Kunne ikke skrive filen med feeder (%s)."
+
+#, python-format
+msgid "Lista feedului %s este la zi"
+msgstr "Listen for feeden %s er oppdatert"
+
+msgid "Niciun feed"
+msgstr "Ingen feeder"
+
+msgid "Niciun fișier .ipk pe stick sau disc. Copiază extensia pe un stick USB, apoi caută din nou."
+msgstr "Ingen .ipk-filer på USB-pinnen eller disken. Kopier utvidelsen til en USB-pinne, og søk på nytt."
+
+msgid "Niciun feed. Adaugă unul din Surse feeduri."
+msgstr "Ingen feeder. Legg til en under Feedkilder."
+
+msgid "Se descarcă lista de extensii."
+msgstr "Laster ned listen over utvidelser."
+
+msgid "Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "Utvidelser på mottakeren, utvidelser fra feed, .ipk-filer på USB-pinne eller disk og feed. Oppdateringer av imaget finnes på siden <a href=\"/actualizari\" id=\"legaturaActualizari\">Programvareoppdatering</a>."
+
+msgid "Lista extensiilor"
+msgstr "Liste over utvidelser"
+
+msgid "Numele feedului (litere mici, cifre și -)"
+msgstr "Navn på feeden (små bokstaver, tall og -)"
+
+msgid "Extensiile din el apar apoi în file, cu numele feedului. Nu sunt verificate de HD Satelit."
+msgstr "Utvidelsene i den vises deretter i fanene, med navnet på feeden. De er ikke kontrollert av HD Satelit."
+
+#, python-format
+msgid "Nu sunt verificate de HD Satelit. Vin din feedurile %s."
+msgstr "De er ikke kontrollert av HD Satelit. De kommer fra feedene %s."
+
+msgid "Extensia nu se mai poate instala. Reîncarcă pagina."
+msgstr "Utvidelsen kan ikke lenger installeres. Last siden på nytt."
+
+msgid "Extensia nu mai este instalată. Reîncarcă pagina."
+msgstr "Utvidelsen er ikke lenger installert. Last siden på nytt."
+
+msgid "Numele feedului nu poate fi gol."
+msgstr "Navnet på feeden kan ikke være tomt."
+
+msgid "Feedul a fost adăugat."
+msgstr "Feeden er lagt til."
+
+msgid "Feedul a fost adăugat. Se descarcă lista lui."
+msgstr "Feeden er lagt til. Laster ned listen fra den."
+
+#, python-format
+msgid "Adaugi feedul %s?"
+msgstr "Vil du legge til feeden %s?"
+
+msgid "Extensiile din acest feed nu sunt verificate de HD Satelit."
+msgstr "Utvidelsene i denne feeden er ikke kontrollert av HD Satelit."
+
+msgid "Numai feedurile adăugate de tine se pot șterge."
+msgstr "Du kan bare slette feeder du har lagt til selv."
+
+msgid "Feedul a fost șters."
+msgstr "Feeden er slettet."
+
+#, python-format
+msgid "Ștergi feedul %s?"
+msgstr "Vil du slette feeden %s?"
+
+#, python-format
+msgid "Nu este verificată de HD Satelit. Vine din feedul %s."
+msgstr "Den er ikke kontrollert av HD Satelit. Den kommer fra feeden %s."
+
+msgid "Se citește lista extensiilor..."
+msgstr "Leser listen over utvidelser..."
+
+#, python-format
+msgid "Lista extensiilor nu s-a putut citi: %s"
+msgstr "Kunne ikke lese listen over utvidelser: %s"
+
+msgid "Numele feedului: litere mici, cifre și -"
+msgstr "Navn på feeden: små bokstaver, tall og -"
+
+msgid "Niciun fișier .ipk pe stick sau disc.\nCopiază extensia pe un stick USB, apoi apasă albastru."
+msgstr "Ingen .ipk-filer på USB-pinnen eller disken.\nKopier utvidelsen til en USB-pinne, og trykk deretter på blå knapp."
+
+msgid "Se descarcă lista de extensii"
+msgstr "Laster ned listen over utvidelser"
+
+#, python-format
+msgid "Ștergi feedul „%s”?\nExtensiile instalate din el rămân pe receptor."
+msgstr "Vil du slette feeden «%s»?\nUtvidelsene som er installert fra den, blir værende på mottakeren."
+
+msgid "niciun feed"
+msgstr "ingen feeder"
+
+msgid "un feed"
+msgstr "én feed"
+
+#, python-format
+msgid "%d feeduri"
+msgstr "%d feeder"
 
 #, python-format
 msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
-msgstr "Bildet for å installere programvare på mottakeren via Maintenance Mode (%s)."
+msgstr "Imaget for å installere programvaren på mottakeren via vedlikeholdsmodus (%s)."
 
 msgid "Nu s-a instalat nimic pe receptor."
 msgstr "Ingenting ble installert på mottakeren."
 
 msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
-msgstr "Denne programvaren oppgir ikke hvilken mottaker den er laget for, så den kan være ment for en annen type mottaker. HD Satelit-programvaren oppgir dette fra versjon 0.1.6. Eldre versjoner eller bilder fra andre kan bare installeres med en USB-pinne, slik mottakerprodusenten beskriver."
+msgstr "Denne programvaren oppgir ikke hvilken mottaker den er laget for, så den kan være for en annen type mottaker. HD Satelit-programvaren oppgir dette fra versjon 0.1.6. En eldre versjon eller et image fra andre må installeres fra en USB-pinne, slik produsenten av mottakeren beskriver."
 
 msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
 msgstr "Her ser du bare hva som ligger på USB-pinnen, og om det kan installeres. Selve installasjonen gjøres på TV-en, med en simulering og to spørsmål først:"
 
 msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
-msgstr "HD Satelit-programvaren kan bare installeres hvis den er laget for denne mottakeren og filene er intakte (dette sjekkes på TV-en når du trykker OK). Et bilde som ikke er fra HD Satelit, kan bare installeres etter en advarsel, fordi vi ikke kan kontrollere det."
+msgstr "HD Satelit-programvaren installeres bare hvis den er laget for denne mottakeren og filene er intakte (dette sjekkes på TV-en når du trykker OK). Et image som ikke er fra HD Satelit, installeres bare etter en advarsel, fordi vi ikke kan kontrollere det."
 
 msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
 msgstr "Installasjonsprogrammet kunne ikke gjenkjenne programvaren riktig, så den blir ikke installert. Ingenting er endret på mottakeren."
@@ -53182,7 +54211,7 @@ msgid "Receptorul are o singură pereche de nucleu și sistem în memoria intern
 msgstr "Mottakeren har bare ett sett med kjerne og system i internminnet (uten multiboot). Hvis den nye programvaren ikke starter, må mottakeren gjenopprettes manuelt via Maintenance Mode. Før installasjonen kopieres innstillingene og kanallisten til USB-pinnen."
 
 msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
-msgstr "Bildet må ligge på en USB-pinne. Det kan aldri installeres fra internminnet: installasjonen ville slettet filene den selv leser, og mottakeren ville ikke startet igjen.\n\nKopier programvaren (kernel.bin, rootfs.tar.bz2, imageversion) til en USB-pinne, sett inn USB-pinnen og prøv igjen. Ingenting ble installert."
+msgstr "Imaget må ligge på en USB-pinne. Det installeres aldri fra internminnet: installasjonen ville slettet filene den selv leser fra, og mottakeren ville ikke lenger kunne starte.\n\nKopier programvaren (kernel.bin, rootfs.tar.bz2, imageversion) til en USB-pinne, sett inn USB-pinnen og prøv igjen. Ingenting er installert."
 
 #, python-format
 msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
@@ -53220,14 +54249,14 @@ msgstr "Dette var bare en kontroll: ingenting ble installert på mottakeren."
 
 #, python-format
 msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
-msgstr "Installasjonen er stoppet: bildefilene ligger i mottakerens internminne (%s)."
+msgstr "Installasjonen er stoppet: filene til imaget ligger i mottakerens internminne (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
 msgstr "Installasjonen er stoppet: navnet på USB-pinnen inneholder mellomrom (%s). Ingenting ble installert."
 
 msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
-msgstr "Med dette navnet ville installasjonen slettet mottakerens system før den fikk lest bildet."
+msgstr "Med dette navnet ville installasjonen slettet mottakerens system før imaget ble lest."
 
 msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
 msgstr "Programvaren ble gjenkjent riktig: kjernen, systemet og partisjonene deres ble funnet. Trykk OK eller den grønne knappen for å installere den på mottakeren."
@@ -53243,11 +54272,11 @@ msgstr "Det går ikke an å skrive til USB-pinnen, så installasjonen starter ik
 
 #, python-format
 msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
-msgstr "Installasjonen er stoppet: vi kunne ikke kontrollere hvor bildefilene ligger (%s)."
+msgstr "Installasjonen er stoppet: vi kunne ikke kontrollere hvor filene til imaget ligger (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
-msgstr "Installasjonen er stoppet: bildefilene ligger ikke på en USB-pinne (%s)."
+msgstr "Installasjonen er stoppet: filene til imaget ligger ikke på en USB-pinne (%s)."
 
 #, python-format
 msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
@@ -53268,13 +54297,13 @@ msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schim
 msgstr "Navnet på USB-pinnen inneholder mellomrom eller tegn som installasjonen ikke støtter. Endre navnet på en datamaskin (for eksempel til HDSATELIT), og trykk igjen."
 
 msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
-msgstr "Bildelisten er ikke signert av HD Satelit. Ingenting ble installert."
+msgstr "Listen over image er ikke signert av HD Satelit. Ingenting er installert."
 
 msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
-msgstr "Det nedlastede bildet stemmer ikke. Ingenting ble installert. Trykk igjen, så laster jeg det ned på nytt."
+msgstr "Det nedlastede imaget passer ikke. Ingenting er installert. Trykk igjen for å laste det ned på nytt."
 
 msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
-msgstr "Bildet er ikke laget for denne mottakeren. Ingenting ble installert."
+msgstr "Imaget er ikke laget for denne mottakeren. Ingenting er installert."
 
 msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
 msgstr "USB-pinnen er tatt ut eller har en feil. Ingenting ble installert."
@@ -53290,7 +54319,7 @@ msgstr "Stoppet. Ingenting ble installert. Hvis du trykker igjen, fortsetter ned
 
 #, python-format
 msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
-msgstr "Det nye bildet ble ikke installert. Mottakeren bruker fortsatt %s."
+msgstr "Det nye imaget ble ikke installert. Mottakeren bruker fortsatt %s."
 
 msgid "Se verifică totul înainte de instalare..."
 msgstr "Alt kontrolleres før installasjonen..."
@@ -53299,4 +54328,327 @@ msgid "Instalarea așteaptă să se termine înregistrarea și pornește singur�
 msgstr "Installasjonen venter til opptaket er ferdig og starter deretter automatisk."
 
 msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
-msgstr "Bildet installeres nå. Ikke slå av mottakeren: den starter automatisk på nytt, og kanalene og innstillingene gjenopprettes automatisk."
+msgstr "Imaget installeres nå. Ikke slå av mottakeren: den starter på nytt av seg selv, og kanalene og innstillingene gjenopprettes automatisk."
+
+msgid "Se instalează și se verifică nucleul Dream A..."
+msgstr "Installerer og kontrollerer Dream A-kjernen..."
+
+msgid "Instalarea a eșuat"
+msgstr "Installasjonen mislyktes"
+
+msgid "Finalizat"
+msgstr "Fullført"
+
+#, python-format
+msgid "Pasul %d din %d"
+msgstr "Trinn %d av %d"
+
+msgid "Doar verificare, nu se instalează nimic"
+msgstr "Kun kontroll, ingenting installeres"
+
+msgid "Nu opri receptorul"
+msgstr "Ikke slå av mottakeren"
+
+#, python-format
+msgid "Repornire în %d s"
+msgstr "Starter på nytt om %d s"
+
+msgid "Se instalează nucleul ext4..."
+msgstr "Installerer ext4-kjernen..."
+
+msgid "Se șterge sistemul vechi..."
+msgstr "Sletter det gamle systemet..."
+
+msgid "Se dezarhivează sistemul..."
+msgstr "Pakker ut systemet..."
+
+msgid "Se șterge nucleul vechi..."
+msgstr "Sletter den gamle kjernen..."
+
+msgid "Se instalează nucleul..."
+msgstr "Installerer kjernen..."
+
+msgid "Se copiază sistemul..."
+msgstr "Kopierer systemet..."
+
+msgid "Se instalează sistemul..."
+msgstr "Installerer systemet..."
+
+msgid "Enigma2 și serviciile nu au putut fi oprite."
+msgstr "Kunne ikke stoppe Enigma2 og tjenestene."
+
+msgid "Se așteaptă oprirea Enigma2..."
+msgstr "Venter på at Enigma2 skal stoppe..."
+
+msgid "Enigma2 nu a putut fi oprit."
+msgstr "Kunne ikke stoppe Enigma2."
+
+msgid "Enigma2 pornește din nou. Nu s-a instalat nimic."
+msgstr "Enigma2 starter igjen. Ingenting ble installert."
+
+msgid "Nu s-a putut pregăti instalarea."
+msgstr "Kunne ikke forberede installasjonen."
+
+msgid "Nu s-au putut pregăti partițiile pentru instalare."
+msgstr "Kunne ikke klargjøre partisjonene for installasjon."
+
+msgid "Partiția sistemului nu a putut fi montată din nou."
+msgstr "Kunne ikke montere systempartisjonen på nytt."
+
+msgid "Partiția sistemului nu a putut fi montată doar pentru citire."
+msgstr "Kunne ikke montere systempartisjonen som skrivebeskyttet."
+
+msgid "Sistemul nu a putut fi dezarhivat. Imaginea instalată nu poate porni în această stare."
+msgstr "Systemet kunne ikke pakkes ut. Det installerte imaget kan ikke starte i denne tilstanden."
+
+msgid "Instalează o copie de siguranță."
+msgstr "Installer en sikkerhetskopi."
+
+msgid "Verificarea s-a încheiat cu succes."
+msgstr "Kontrollen er fullført uten feil."
+
+msgid "Nucleul a fost instalat."
+msgstr "Kjernen er installert."
+
+msgid "Nucleul nu a putut fi instalat. Imaginea instalată nu poate porni în această stare."
+msgstr "Kjernen kunne ikke installeres. Det installerte imaget kan ikke starte i denne tilstanden."
+
+msgid "Se închid procesele..."
+msgstr "Avslutter prosessene..."
+
+msgid "Se sincronizează fișierele..."
+msgstr "Synkroniserer filene..."
+
+msgid "Se opresc Enigma2 și serviciile..."
+msgstr "Stopper Enigma2 og tjenestene..."
+
+msgid "Se montează partiția sistemului..."
+msgstr "Monterer systempartisjonen..."
+
+msgid "Partiția sistemului nu a putut fi montată."
+msgstr "Kunne ikke montere systempartisjonen."
+
+msgid "Sistemul nu a putut fi instalat. Imaginea instalată nu poate porni în această stare."
+msgstr "Systemet kunne ikke installeres. Det installerte imaget kan ikke starte i denne tilstanden."
+
+msgid "Se creează kernel.img..."
+msgstr "Oppretter kernel.img..."
+
+msgid "Imaginea a fost instalată."
+msgstr "Imaget er installert."
+
+#, python-format
+msgid "Blocuri defecte: %d (fără risc dacă numărul nu crește)"
+msgstr "Defekte blokker: %d (ingen risiko så lenge antallet ikke øker)"
+
+msgid "Se instalează imaginea UBI..."
+msgstr "Installerer UBI-imaget..."
+
+msgid "Se formatează blocurile de memorie rămase..."
+msgstr "Formaterer de gjenværende minneblokkene..."
+
+msgid "ofgwrite - creat de Betacentauri"
+msgstr "ofgwrite - laget av Betacentauri"
+
+msgid "Se conectează la server..."
+msgstr "Kobler til serveren..."
+
+msgid "Se încarcă canalul..."
+msgstr "Laster kanalen..."
+
+msgid "Pornește imaginea..."
+msgstr "Starter imaget..."
+
+msgid "Se reîncarcă..."
+msgstr "Laster på nytt..."
+
+#, python-format
+msgid "tampon %s s"
+msgstr "buffer %s s"
+
+msgid "Bifă = se vede în lista de canale. Canalele puse în Favorite merg în continuare."
+msgstr "Hake = vises i kanallisten. Kanaler som er lagt til i Favoritter, virker fortsatt."
+
+#, python-format
+msgid "Se văd %(vazute)d din %(toate)d de canale. Ascunde ce nu vrei, ca să încapă restul."
+msgstr "Viser %(vazute)d av %(toate)d kanaler. Skjul dem du ikke vil ha, så blir det plass til resten."
+
+#, python-format
+msgid "%d grupe"
+msgstr "%d grupper"
+
+msgid "o parte ascunse"
+msgstr "noen er skjult"
+
+#, python-format
+msgid "Abonamentul a expirat la %s. Vorbește cu furnizorul tău."
+msgstr "Abonnementet utløp %s. Kontakt leverandøren din."
+
+msgid "Sunt prea multe conexiuni deschise pe acest abonament. Oprește redarea pe celălalt aparat și încearcă din nou."
+msgstr "Det er for mange åpne tilkoblinger på dette abonnementet. Stopp avspillingen på den andre enheten og prøv igjen."
+
+msgid "Canalul nu mai este la această adresă. Furnizorul l-a scos sau l-a mutat."
+msgstr "Kanalen finnes ikke lenger på denne adressen. Leverandøren har fjernet eller flyttet den."
+
+msgid "S-au făcut prea multe cereri către server. Mai încearcă peste puțin."
+msgstr "Det er sendt for mange forespørsler til serveren. Prøv igjen om litt."
+
+#, python-format
+msgid "Furnizorul a refuzat redarea acestui canal (cod %d). Dacă abonamentul permite o singură redare, oprește-o pe celălalt aparat."
+msgstr "Leverandøren tillater ikke avspilling av denne kanalen (kode %d). Hvis abonnementet bare tillater én avspilling om gangen, må du stoppe avspillingen på den andre enheten."
+
+#, python-format
+msgid "Serverul furnizorului are o problemă acum (cod %d). Mai încearcă peste puțin."
+msgstr "Leverandørens server har problemer nå (kode %d). Prøv igjen om litt."
+
+msgid "User-Agent sau Referer nu este bun. Folosește valorile primite de la furnizor, fără rânduri noi."
+msgstr "User-Agent eller Referer er feil. Bruk verdiene du fikk fra leverandøren, uten linjeskift."
+
+msgid "Răspuns"
+msgstr "Svar"
+
+msgid "Viteză"
+msgstr "Hastighet"
+
+#, python-format
+msgid "tampon %d%%"
+msgstr "buffer %d%%"
+
+#, python-format
+msgid "răspuns %s"
+msgstr "svar %s"
+
+msgid "IPTV: n-a pornit"
+msgstr "IPTV: startet ikke"
+
+msgid "Agent utilizator (opțional)"
+msgstr "Brukeragent (valgfritt)"
+
+msgid "Referer (opțional)"
+msgstr "Referer (valgfritt)"
+
+msgid "Se încarcă ghidul TV..."
+msgstr "Laster TV-guiden..."
+
+msgid "Grupele"
+msgstr "Gruppene"
+
+msgid "Ascunde tot"
+msgstr "Skjul alt"
+
+msgid "Seriale"
+msgstr "Serier"
+
+msgid "Niciun rezultat."
+msgstr "Ingen treff."
+
+#, python-format
+msgid "Expiră la %s"
+msgstr "Utløper %s"
+
+msgid "Caută o grupă sau o țară"
+msgstr "Søk etter en gruppe eller et land"
+
+msgid "Agent utilizator și Referer: goale folosesc valorile implicite."
+msgstr "Brukeragent og Referer: tomme felt bruker standardverdiene."
+
+msgid "Descriere"
+msgstr "Beskrivelse"
+
+#, python-format
+msgid "Sezonul %s"
+msgstr "Sesong %s"
+
+#, python-format
+msgid "Caut: %s. EXIT arată iar toată lista."
+msgstr "Søker: %s. EXIT viser hele listen igjen."
+
+#, python-format
+msgid "Pagina %d"
+msgstr "Side %d"
+
+msgid "Caută seriale"
+msgstr "Søk etter serier"
+
+msgid "Nu există descriere."
+msgstr "Ingen beskrivelse."
+
+#, python-format
+msgid "%d programe."
+msgstr "%d programmer."
+
+#, python-format
+msgid "Episodul %s"
+msgstr "Episode %s"
+
+msgid "Episodul nu a pornit. Încearcă din nou."
+msgstr "Episoden startet ikke. Prøv igjen."
+
+msgid "Antetele sursei"
+msgstr "Kildens headere"
+
+msgid "Valorile salvate nu se arată. Completează ambele câmpuri; gol revine la valoarea implicită."
+msgstr "Lagrede verdier vises ikke. Fyll ut begge feltene; tomme felt tilbakestilles til standardverdien."
+
+msgid "Salvează antetele"
+msgstr "Lagre headere"
+
+msgid "Pagina precedentă"
+msgstr "Forrige side"
+
+msgid "Antete"
+msgstr "Headere"
+
+msgid "Sezonul"
+msgstr "Sesong"
+
+msgid "Lista are prea multe canale: au intrat primele"
+msgstr "Listen har for mange kanaler: bare de første ble tatt med"
+
+msgid "Antetele au fost salvate. Se actualizează sursa..."
+msgstr "Headerne er lagret. Oppdaterer kilden..."
+
+msgid "Trimite antetele numai din formular."
+msgstr "Send headerne bare via skjemaet."
+
+msgid "Episodul pornește pe televizor."
+msgstr "Episoden starter på TV-en."
+
+msgid "Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."
+msgstr "Serveren sletter dataene for denne registreringen. Registreringer på andre plasser beholdes."
+
+msgid "Ghidul TV pentru canalele de internet cere actualizarea imaginii. Actualizează imaginea și încearcă din nou."
+msgstr "TV-guiden for internettkanaler krever at imaget oppdateres. Oppdater imaget og prøv igjen."
+
+msgid "Ghidul TV nu s-a putut descărca. Verifică internetul și încearcă din nou."
+msgstr "TV-guiden kunne ikke lastes ned. Sjekk internettforbindelsen og prøv igjen."
+
+msgid "Ghidul TV este actualizat."
+msgstr "TV-guiden er oppdatert."
+
+msgid "Furnizorul nu a trimis programe pentru canalele din listă."
+msgstr "Leverandøren har ikke sendt programinformasjon for kanalene i listen."
+
+msgid "Alege un cont pentru seriale."
+msgstr "Velg en konto for serier."
+
+msgid "Serialul sau sezonul ales nu mai este disponibil."
+msgstr "Den valgte serien eller sesongen er ikke lenger tilgjengelig."
+
+msgid "Se încarcă alte pagini. Încearcă din nou peste câteva clipe."
+msgstr "Flere sider lastes inn. Prøv igjen om litt."
+
+msgid "Pagina a expirat. Deschide din nou lista de seriale."
+msgstr "Siden har utløpt. Åpne serielisten på nytt."
+
+msgid "Lista de seriale nu a răspuns la timp. Încearcă o căutare mai precisă."
+msgstr "Serielisten svarte ikke i tide. Prøv et mer presist søk."
+
+msgid "Serialul are prea multe sezoane. Sunt afișate primele 500."
+msgstr "Serien har for mange sesonger. De første 500 vises."
+
+msgid "Ieși din programul de beta testeri? Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."
+msgstr "Vil du melde deg ut av betatestprogrammet? Serveren sletter dataene for denne registreringen. Registreringer på andre plasser beholdes."
+
+msgid "http://"
+msgstr "http://"

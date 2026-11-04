@@ -7,6 +7,8 @@
 #include <lib/dvb/pmt.h>
 #include <lib/dvb/subtitle.h>
 #include <lib/dvb/teletext.h>
+#include <deque>
+#include <mutex>
 #include <gst/gst.h>
 /* for subtitles */
 #include <lib/gui/esubtitle.h>
@@ -45,8 +47,11 @@ class eStaticServiceMP3Info: public iStaticServiceInformation
 	eStaticServiceMP3Info();
 public:
 	RESULT getName(const eServiceReference &ref, std::string &name);
+	RESULT getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &evt, time_t start_time=-1);
 	int getLength(const eServiceReference &ref);
 	int getInfo(const eServiceReference &ref, int w);
+	/* a stream or a file needs no tuner: the channel list does not paint it grey while a DVB channel plays (the base class says 0) */
+	int isPlayable(const eServiceReference &ref, const eServiceReference &ignore, bool simulate=false) { return 1; }
 };
 
 typedef struct _GstElement GstElement;
@@ -57,7 +62,7 @@ typedef enum { atUnknown, atMPEG, atMP3, atAC3, atDTS, atAAC, atPCM, atOGG, atFL
    (MKV, MP4, AVI); the values from stWebVTT on name the format of a subtitle file next to the film (read by
    Components/HdsSubtitrariFilm.py; stSRT, stSSA, stASS, stVOB and stPGS are used for files as well). */
 typedef enum { stUnknown, stPlainText, stSSA, stASS, stSRT, stVOB, stPGS,
-	stWebVTT, stMicroDVD, stSubViewer, stMPL2, stTMPlayer, stSAMI } subtype_t;
+	stWebVTT, stMicroDVD, stSubViewer, stMPL2, stTMPlayer, stSAMI, stDVB, stTeletext } subtype_t;
 typedef enum { ctNone, ctMPEGTS, ctMPEGPS, ctMKV, ctAVI, ctMP4, ctVCD, ctCDA } containertype_t;
 
 class eServiceMP3: public iPlayableService, public iPauseableService,
@@ -113,6 +118,7 @@ public:
 
 		// iServiceInformation
 	RESULT getName(std::string &name);
+	RESULT getEvent(ePtr<eServiceEvent> &evt, int nownext);
 	int getInfo(int w);
 	std::string getInfoString(int w);
 	PyObject *getInfoObject(int w);
@@ -236,6 +242,15 @@ private:
 	void positionTick();
 	/* PAUSED (true) or PLAYING (false), set on the film thread */
 	void cereStarea(bool pauza);
+	/* The equalizer on a radio stream (lib/service/hdsegalizator.h): the sound goes through the sink of the equalizer, not to the
+	   decoder of the receiver. hdsEgalAlege: at the start, before the pipeline leaves NULL. hdsEgalReaplica: the setting changed or
+	   the way through the processor failed, the film thread changes the sink (READY, new sink, PLAYING). What the old pipeline
+	   still sends until the change is done (m_hds_egal_schimbare, ended by a message on the bus) is not an error of the stream. */
+	bool m_hds_egal_flux, m_hds_egal_schimbare;
+	bool hdsEgalPotrivit() const;
+	void hdsEgalAlege();
+	void hdsEgalReaplica();
+	void hdsEgalInfo();
 	/* the cue file: read on the film thread after start(), m_cues_timer looks for the result */
 	std::multiset<std::pair<pts_t, unsigned int> > m_cue_entries;
 	bool m_cues_loaded, m_cues_changed;
@@ -246,6 +261,8 @@ private:
 	std::string m_capuri_lipsa;	/* the whole type of the last stream without a way to the decoder */
 	void refuza(const char *fel, const std::string &capuri, const std::string &text);
 	ePtr<eTimer> m_start_timer;
+	ePtr<eTimer> m_epg_timer;
+	void epgTick();
 	void startTimeout();
 	int m_n_video;			/* video streams at the last ASYNC_DONE, -1 unknown */
 	std::shared_ptr<Poarta> m_poarta;
@@ -312,6 +329,30 @@ private:
 	int m_vobsub_stream;		/* the stream whose palette is in m_vobsub, -1 none */
 	eHdsPgs m_pgs;
 	int m_pgs_stream;
+	ePtr<eDVBSubtitleParser> m_dvbsub;	/* a DVB subtitle stream of a transport stream (internet channels) */
+	ePtr<eConnection> m_dvbsub_connection;
+	int m_dvbsub_stream;
+	void dvbSubtitlePage(const eDVBSubtitlePage &p);
+	/* teletext in a transport stream: playbin does not take it as a text stream, so its packets are read at the demuxer (a probe on the
+	   streaming thread, a queue, then the parser on the main thread). The subtitle pages found are listed from number 50 on. */
+	struct TeletextPacket
+	{
+		gint64 pts;
+		std::vector<__u8> date;
+	};
+	ePtr<eDVBTeletextParser> m_ttx;
+	ePtr<eConnection> m_ttx_connection;
+	std::mutex m_ttx_lock;
+	std::deque<TeletextPacket> m_ttx_coada;
+	std::string m_ttx_limba;
+	int m_ttx_activ;		/* the number of the page shown, -1 none */
+	void teletextPackets();
+	void teletextPage(const eDVBTeletextSubtitlePage &p);
+	void teletextOff();
+	static void gstElementAdded(GstBin *bin, GstBin *sub, GstElement *element, gpointer user_data);
+	static void gstDemuxPadAdded(GstElement *element, GstPad *pad, gpointer user_data);
+	static GstPadProbeReturn gstTeletextBuffer(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
+	void pagesIntoQueue(const std::vector<SubtitlePage> &noi);
 	void pagesFromPicture(const eHdsPaginaImagine &p, gint64 pts_ns, gint64 duration_ns);
 
         std::list<SubtitlePage> m_subtitle_pages;
