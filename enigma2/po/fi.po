@@ -57182,3 +57182,447 @@ msgstr "Kirjoita viesti televisioon"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Kiitämme kaikkia beta-testaajia, jotka osallistuivat HD Satelit -imagen luomiseen: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "ei kirjoiteta: muistitikun nimessä on välilyöntejä"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "ei kirjoiteta: muistitikun nimessä on merkkejä, joita ei hyväksytä"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Kirjoitus pysäytetty: muistitikun nimessä on välilyöntejä (%s). Mitään ei kirjoitettu."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Kirjoitus pysäytetty: muistitikun nimessä on merkkejä, joita ei hyväksytä (%s). Mitään ei kirjoitettu."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Tällä nimellä kirjoitus poistaisi vastaanottimen järjestelmän ennen kuin levykuva luetaan."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Laita muistitikku tietokoneeseen, nimeä se uudelleen ilman välilyöntejä ja merkkejä (esimerkiksi HDSATELIT) ja laita se takaisin vastaanottimeen."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Uusin yhteensopiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Yhteensopiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Ei yhteensopiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "ei voi asentaa: muistitikun nimessä on välilyöntejä"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "ei voi asentaa: muistitikun nimessä on merkkejä, joita ei hyväksytä"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "ei voi asentaa: voi olla toisentyyppiselle vastaanottimelle"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "ei voi asentaa: on toisentyyppiselle vastaanottimelle"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "ei voi asentaa: tiedostot ovat vaurioituneet"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "ei voi asentaa: tiedostot ovat vaurioituneet tai muuttuneet"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "ei voi asentaa: vastaanotinta ei voida tarkistaa"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Ohjelmisto: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Etsitään vastaanottimen ohjelmistoa muistitikulta ja levyltä…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Etsitään vastaanottimen ohjelmistoa muistitikulta ja levyltä..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Etsi vastaanottimen ohjelmistoa uudelleen"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Löytyi yksi ohjelmistoversio. Paina OK, niin se tarkistetaan."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Löytyi %d ohjelmistoversiota. Valitse yksi ja paina OK, niin se tarkistetaan."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Tarkista ohjelmisto"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Vastaanottimen ohjelmistoa ei löytynyt muistitikulta eikä levyltä."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Liitä muistitikku, jossa on vastaanottimen ohjelmisto: .zip-arkisto verkkosivustolta tai kansio e2/update, jossa kernel.bin ja rootfs.tar.bz2. Paina sitten OK kohdassa ”Etsi vastaanottimen ohjelmistoa uudelleen”."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Ohjelmiston tarkistus"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Kyllä, tarkista ohjelmisto"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Imagen on oltava USB-muistitikulla. Sisäisestä muistista ei koskaan kirjoiteta: kirjoitus poistaisi juuri ne tiedostot, joita se lukee, ja vastaanotin ei enää käynnistyisi.\n\nKopioi ohjelmisto (kernel.bin, rootfs.tar.bz2, imageversion) USB-muistitikulle, kytke tikku ja yritä uudelleen. Mitään ei kirjoitettu."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Ohjelmistoa ei voitu purkaa: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Ohjelmisto kopioidaan puhtaaseen kansioon muistitikulle. Kestää enintään minuutin."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Tarkistetaan, että ohjelmisto on ehjä (tarkistussummat). Kestää muutaman sekunnin."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Ohjelmistoa ei voitu lukea muistitikulta (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Ohjelmisto tunnistettiin oikein: ydin, järjestelmä ja niiden osiot löytyivät. Paina OK tai Vihreää kirjoittaaksesi sen vastaanottimeen."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Kirjoitusohjelma ei tunnistanut ohjelmistoa oikein, joten sitä ei kirjoiteta. Vastaanottimessa ei muuttunut mikään."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Tämä ohjelmisto ei kerro, mille vastaanottimelle se on tehty, joten se voi olla toisentyyppiselle vastaanottimelle. HD Satelit -ohjelmisto kertoo sen versiosta 0.1.6 alkaen; vanhempi versio tai jonkun muun image kirjoitetaan vain USB-muistitikulla, kuten vastaanottimen valmistaja kuvaa."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Tämän ohjelmiston vastaanotintiedot ovat vaurioituneet tai toisesta versiosta, joten ei voida tarkistaa, mille vastaanottimelle se on."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Ohjelmisto on vaurioitunut tai muuttunut: tiedostoilla %s ei ole odotettua tarkistussummaa. Kopioi se uudelleen muistitikulle."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Ohjelmisto on vaurioitunut tai muuttunut: tiedostolla %s ei ole odotettua tarkistussummaa. Kopioi se uudelleen muistitikulle."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Ohjelmiston tiedostot muuttuivat tarkistuksen jälkeen. Tarkista se uudelleen."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Ohjelmistoa ei voi asentaa"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Vastaanotin ei voinut lukea ohjelmistoa muistitikulta."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Löydetyt ohjelmistoversiot: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "HD Satelit -ohjelmisto kirjoitetaan vain, jos se on tehty tälle vastaanottimelle ja sen tiedostot ovat ehjät (tarkistetaan televisiossa, kun painat OK). Image, joka ei ole HD Satelit, kirjoitetaan vain varoituksen jälkeen, koska emme voi tarkistaa sitä."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Tarkistamaton"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Ei ole HD Satelit -image. Emme tiedä, onko se yhteensopiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Tämä ei ole HD Satelit -image, vaan %s. Emme tiedä, onko se yhteensopiva tämän vastaanottimen kanssa, koska se ei ole meidän emmekä voi tarkistaa sitä."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Jos sitä ei ole tehty tälle vastaanotinmallille, vastaanotin ei ehkä käynnisty, ennen kuin se palautetaan muistitikulta."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Jos asennat sen, se korvaa HD Satelit -imagen. Asetukset ja kanavaluettelo kopioidaan ensin muistitikulle."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Image, joka ei ole HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Kyllä, jatka"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Näytä, mitä ofgwrite analysoi"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Piilota, mitä ofgwrite analysoi"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Ohjelmistoa tarkistetaan: vastaanottimeen ei kirjoiteta mitään. Odota muutama sekunti äläkä sammuta sitä."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Järjestelmän ydin löytyi (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Järjestelmä löytyi (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Järjestelmä on muodossa, joka voidaan kirjoittaa (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Tiedostot ovat muistitikulla (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Ydin kirjoitetaan sisäiseen muistiin, paikkaan %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Järjestelmä kirjoitetaan sisäiseen muistiin, paikkaan %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "Järjestelmän ydintä ei löytynyt tästä ohjelmistosta."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "Järjestelmää ei löytynyt tästä ohjelmistosta."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Ytimen paikkaa ei löytynyt sisäisestä muistista."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Järjestelmän paikkaa ei löytynyt sisäisestä muistista."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Järjestelmän muotoa ei tunnisteta."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Ydin on liian suuri paikkaansa sisäisessä muistissa."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Järjestelmä on liian suuri paikkaansa sisäisessä muistissa."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Virheitä ei löytynyt."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Löytyi virhe, ja ohjelma pysähtyi (koodi %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Ohjelman muut viestit, kääntämättömät:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Tämä oli vain tarkistus: vastaanottimeen ei kirjoitettu mitään."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "USB-tikulle ei voi kirjoittaa, joten kirjoitusta ei aloiteta. Vast.otin on ennallaan."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Kuva ohjelmiston asentamiseen Vast.ottimeen huoltotilassa (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Vast.ottimeen ei asennettu mitään."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Tässä ohjelmistossa ei kerrota, mille Vast.ottimelle se on tehty, joten se voi olla tarkoitettu toisenlaiselle Vast.ottimelle. HD Satelit -ohjelmistossa tämä tieto on versiosta 0.1.6 alkaen. Vanhempi versio tai jonkun muun tekemä kuva asennetaan vain USB-tikulta Vast.ottimen valmistajan ohjeiden mukaan."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Tässä näkyy vain USB-tikun sisältö ja se, voiko sen asentaa. Asennus tehdään television kautta. Sitä ennen tehdään koeajo ja kysytään kaksi vahvistusta:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "HD Satelit -ohjelmisto asennetaan vain, jos se on tehty tälle Vast.ottimelle ja sen tiedostot ovat ehjiä (tämä tarkistetaan television kautta, kun painat OK). Muun kuin HD Satelit -kuvan asentamisesta näytetään ensin varoitus, koska emme voi tarkistaa sitä."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Asennusohjelma ei tunnistanut ohjelmistoa oikein, joten sitä ei asenneta. Vast.ottimessa ei muutettu mitään."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Nyt tehdään vain tarkistus eli koeajo: Vast.ottimeen ei asenneta mitään. Jatkatko?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Vast.ottimen sisäisessä muistissa on vain yksi ydin ja järjestelmä (ei monikäynnistystä): jos uusi ohjelmisto ei käynnisty, ainoa korjaustapa on käyttää huoltotilaa käsin. Asetukset ja kanavaluettelo kopioidaan USB-tikulle ennen asennusta."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Kuvan on oltava USB-tikulla. Sitä ei koskaan asenneta sisäisestä muistista: asennus poistaisi tiedostot, joita se itse lukee, eikä Vast.otin enää käynnistyisi.\n\nKopioi ohjelmisto (kernel.bin, rootfs.tar.bz2, imageversion) USB-tikulle, liitä USB-tikku ja yritä uudelleen. Mitään ei asennettu."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Uusi ohjelmisto asennetaan nykyisen tilalle (sisäisen muistin kansioon %s): jos se ei käynnisty, korjaus tehdään käsin valmistajan palautuspaketilla USB-tikulta. Asetukset ja kanavaluettelo kopioidaan USB-tikulle ennen asennusta."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Ohjelma pystyy asentamaan tässä muodossa olevan järjestelmän (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Järjestelmä asennetaan sisäiseen muistiin kohteen %s tilalle."
+
+msgid "Instalarea este oprită"
+msgstr "Asennus on pysäytetty"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Ohjelmistoa tarkistetaan: Vast.ottimeen ei asenneta mitään. Odota muutama sekunti äläkä sammuta sitä."
+
+msgid "Da, instalează acum"
+msgstr "Joo, asenna nyt"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Asennus jatkuu ilman varmuuskopiota valintasi mukaisesti."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Asennatko ohjelmiston Vast.ottimeen nyt?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Ydin asennetaan sisäiseen muistiin kohteen %s tilalle."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Tämä oli vain tarkistus: Vast.ottimeen ei asennettu mitään."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Asennus on pysäytetty: kuvan tiedostot ovat Vast.ottimen sisäisessä muistissa (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Asennus on pysäytetty: USB-tikun nimessä on välilyöntejä (%s). Mitään ei asennettu."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Tällä nimellä asennus poistaisi Vast.ottimen järjestelmän ennen kuvan lukemista."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Ohjelmisto tunnistettiin oikein: ydin, järjestelmä ja niiden osiot löytyivät. Asenna se Vast.ottimeen painamalla OK tai vihreää painiketta."
+
+msgid "Instalează pe receptor"
+msgstr "Asenna Vast.ottimeen"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Asennus ei käynnistynyt, koska varmuuskopiota ei ole. Vast.ottimeen ei asennettu mitään. Tarkista USB-tikku ja paina sitten vihreää painiketta uudelleen."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "USB-tikulle ei voi kirjoittaa, joten asennus ei käynnisty. Vast.ottimessa ei muutettu mitään."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Asennus on pysäytetty: kuvan tiedostojen sijaintia ei voitu tarkistaa (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Asennus on pysäytetty: kuvan tiedostot eivät ole USB-tikulla (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Asennus on pysäytetty: USB-tikun nimessä on kiellettyjä merkkejä (%s). Mitään ei asennettu."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Varmuuskopion luominen epäonnistui (%s).\n\nJatkatko ilman varmuuskopiota? Kanavaluettelo, asetukset ja kanavien tiedot katoavat asennuksessa."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Asennus on käynnistynyt (käyttöliittymä voi sulkeutua milloin tahansa, se on normaalia). Loki: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Uutta ohjelmistoa asennetaan nyt Vast.ottimeen. Älä irrota Vast.ottimen virtajohtoa äläkä poista USB-tikkua asennuksen aikana. Käyttöliittymä sulkeutuu, ja Vast.otin käynnistyy lopuksi itsestään uudelleen."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "USB-tikun nimessä on välilyöntejä tai merkkejä, joiden vuoksi asennus ei onnistu. Vaihda nimi tietokoneella (esimerkiksi HDSATELIT) ja paina uudelleen."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Kuvaluettelossa ei ole HD Satelitin allekirjoitusta. Mitään ei asennettu."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Ladattu kuva ei täsmää. Mitään ei asennettu. Paina uudelleen, niin lataan sen uudestaan."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Kuva ei ole tarkoitettu tälle Vast.ottimelle. Mitään ei asennettu."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "USB-tikku on irrotettu tai siinä on virhe. Mitään ei asennettu."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Asetuksia ei voitu varmuuskopioida USB-tikulle. Mitään ei asennettu."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Asennusta edeltävä tarkistus epäonnistui. Mitään ei asennettu."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Pysäytetty. Mitään ei asennettu. Jos painat uudelleen, lataus jatkuu siitä, mihin se jäi."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Uutta kuvaa ei asennettu. Vast.ottimeen jäi %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Kaikki tarkistetaan ennen asennusta..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Asennus odottaa tallennuksen päättymistä ja käynnistyy sitten itsestään."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Kuvaa asennetaan nyt. Älä sammuta Vast.otinta: se käynnistyy itsestään uudelleen, ja kanavat sekä asetukset palautuvat automaattisesti."

@@ -279,7 +279,7 @@ def skinRefuz(latime, inaltime):
 	x, y = _scara(latime, inaltime)
 	fl, fh = x(1400), y(800)
 	return """
-	<screen name="HdsPazaModelRefuz" position="center,center" size="%(fl)d,%(fh)d" flags="wfNoBorder" backgroundColor="#00101828" title="Pachetul nu se scrie">
+	<screen name="HdsPazaModelRefuz" position="center,center" size="%(fl)d,%(fh)d" flags="wfNoBorder" backgroundColor="#00101828" title="Software-ul nu se poate instala">
 		<eLabel position="0,0" size="%(fl)d,%(linie)d" backgroundColor="#00f5b83d" zPosition="1" />
 		<widget source="titlu" render="Label" position="%(mx)d,%(ty)d" size="%(cl)d,%(th)d" font="Regular;%(tf)d" halign="left" valign="center" foregroundColor="#00ffffff" backgroundColor="#00101828" transparent="1" zPosition="1" />
 		<widget source="mesaj" render="Label" position="%(mx)d,%(my)d" size="%(cl)d,%(mh)d" font="Regular;%(mf)d" halign="left" valign="top" foregroundColor="#00f2f4f8" backgroundColor="#00101828" transparent="1" zPosition="1" />
@@ -341,7 +341,7 @@ class HdsPazaModelRefuz(Screen):
 		marime = getDesktop(0).size()
 		self.skin = skinRefuz(marime.width(), marime.height())
 		Screen.__init__(self, session)
-		titlu = titlu or _("Pachetul nu se scrie")
+		titlu = titlu or _("Software-ul nu se poate instala")
 		mesaj, tehnic = texteRefuz(text)
 		self.setTitle(titlu)
 		self["titlu"] = StaticText(titlu)

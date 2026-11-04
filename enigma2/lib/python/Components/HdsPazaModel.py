@@ -896,7 +896,7 @@ def textPentruPachet(marcaj):
 	"""„Acest pachet (HD Satelit 0.1.6) este pentru receptorul ...” (refuzul unui pachet pentru alt receptor)"""
 	valori = {"model": marcaj.get("model") or "?", "hw": marcaj.get("hw") or "?", "cip": marcaj.get("chip") or "?",
 		"versiune": marcaj.get("version") or "?"}
-	return _("Acest pachet (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor "
+	return _("Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor "
 		"%(cip)s).") % valori
 
 
@@ -1089,29 +1089,27 @@ def verificaPachet(text_marcaj, radacina=None, a=None):
 def textRefuz(cod, marcaj=None, a=None, nepotriviri=None, fisier=None):
 	"""Textul refuzului unui pachet; paragraful simplu se termina mereu cu „Nu s-a scris nimic pe receptor.”, iar
 	randurile tehnice (daca sunt) vin dupa un rand gol. `fisier`: un nume sau o lista de nume (la REFUZ_SUMA)."""
-	nimic = _("Nu s-a scris nimic pe receptor.")
+	nimic = _("Nu s-a instalat nimic pe receptor.")
 	if cod == REFUZ_FARA_MARCAJ:
-		t = _("Din pachet lipsește semnul receptorului, deci nu se poate verifica pentru ce receptor este. Îl au "
-			"pachetele HD Satelit de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie "
-			"numai cu un stick USB, cum arată producătorul receptorului.")
+		t = _("Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului.")
 	elif cod == REFUZ_MARCAJ_STRICAT:
-		t = _("Semnul receptorului din pachet este stricat sau de altă versiune, deci nu se poate verifica pentru ce "
-			"receptor este pachetul.")
+		t = _("Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica "
+			"pentru ce receptor este.")
 	elif cod == REFUZ_ALT_RECEPTOR:
 		t = textPentruPachet(marcaj or {}) + "\n" + textAlTau(a or {}, marcaj, nepotriviri)
 	elif cod == REFUZ_NECITIT:
-		t = _("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că pachetul este "
-			"pentru el.")
+		t = _("Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software "
+			"este pentru el.")
 	elif cod == REFUZ_SUMA:
 		nume = [fisier] if isinstance(fisier, str) else list(fisier or [])
 		if len(nume) > 1:
-			t = _("Pachetul este stricat sau schimbat: %s nu au suma de control din semnul pachetului. Copiază din nou "
-				"pachetul pe stick.") % ", ".join(nume)
+			t = _("Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou "
+				"pe stick.") % ", ".join(nume)
 		else:
-			t = _("Pachetul este stricat sau schimbat: %s nu are suma de control din semnul pachetului. Copiază din nou "
-				"pachetul pe stick.") % (nume[0] if nume else "?")
+			t = _("Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou "
+				"pe stick.") % (nume[0] if nume else "?")
 	elif cod == REFUZ_SCHIMBAT:
-		t = _("Fișierele pachetului s-au schimbat după verificare. Verifică din nou pachetul.")
+		t = _("Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou.")
 	else:
 		t = ""
 	t = (t + "\n" + nimic) if t else nimic
@@ -1124,24 +1122,24 @@ def textRefuz(cod, marcaj=None, a=None, nepotriviri=None, fisier=None):
 
 
 def scurtRefuz(cod):
-	"""Cateva cuvinte pentru randul pachetului din lista (refuzurile incep toate cu „nu se scrie”)"""
+	"""Cateva cuvinte pentru randul pachetului din lista (refuzurile incep toate cu „nu se poate instala”)"""
 	if cod == PACHET_BUN:
 		return _("pentru acest receptor, se verifică la OK")
 	if cod == REFUZ_FARA_MARCAJ:
-		return _("nu se scrie: fără semnul receptorului")
+		return _("nu se poate instala: poate fi pentru alt tip de receptor")
 	if cod == REFUZ_ALT_RECEPTOR:
-		return _("nu se scrie: pentru alt receptor")
+		return _("nu se poate instala: este pentru alt tip de receptor")
 	if cod == REFUZ_MARCAJ_STRICAT:
-		return _("nu se scrie: semnul pachetului e stricat")
+		return _("nu se poate instala: fișierele sunt stricate")
 	if cod in (REFUZ_SUMA, REFUZ_SCHIMBAT):
-		return _("nu se scrie: pachet stricat sau schimbat")
-	return _("nu se scrie: receptorul nu se poate verifica")
+		return _("nu se poate instala: fișierele sunt stricate sau schimbate")
+	return _("nu se poate instala: receptorul nu se poate verifica")
 
 
 def randSusRefuz(cod):
 	"""Randul de sus al ecranului de actualizare dupa un refuz: „Nu se scrie: ... Nu s-a scris nimic pe receptor.”"""
 	scurt = scurtRefuz(cod)
-	return "%s%s. %s" % (scurt[:1].upper(), scurt[1:], _("Nu s-a scris nimic pe receptor."))
+	return "%s%s. %s" % (scurt[:1].upper(), scurt[1:], _("Nu s-a instalat nimic pe receptor."))
 
 
 def sumeSha256(dosar, oprit=None):

@@ -507,7 +507,7 @@ def citeste(radacina='/', anterior=None, brut=False):
 
 		s.video = citeste_dosar(cale(radacina, STB_VIDEO), None if brut else ('videomode', 'videomode_preferred'))
 		s.vmpeg = citeste_dosar(cale(radacina, STB_VMPEG), None if brut else ('xres', 'yres', 'progressive', 'framerate', 'gamma'))
-		s.audio = citeste_dosar(cale(radacina, STB_AUDIO), None if brut else ('ac3', 'dts'))
+		s.audio = citeste_sunet(radacina, brut)
 		if brut:
 			s.texte[STB_HDMI] = _text_dosar(citeste_dosar(cale(radacina, STB_HDMI)))
 		if not s.moduri and s.video.get('videomode_preferred'):
@@ -524,6 +524,28 @@ def _text_dosar(valori):
 	if not valori:
 		return None
 	return '\n'.join('%s: %s' % (k, v) for k, v in sorted(valori.items()))
+
+
+def citeste_sunet(radacina, brut):
+	"""Fisierele de sunet. Pe HiSilicon se citesc numai listele *_choices: pe unele placi SF8008 citirea celorlalte opreste
+	nucleul (proc_audio_*_read din hi_dvb, raportul 481062); ac3 si dts vin din ce a scris imaginea, cu AC3 / DTS gol
+	(„nescris”) cat nu s-a scris nimic."""
+	dosar = cale(radacina, STB_AUDIO)
+	if not os.path.isdir(cale(radacina, 'proc/msp')):
+		return citeste_dosar(dosar, None if brut else ('ac3', 'dts'))
+	try:
+		nume = sorted(os.listdir(dosar))
+	except Exception:
+		return {}
+	rez = citeste_dosar(dosar, [n for n in nume if n.endswith('_choices')]) if brut else {}
+	try:
+		from Components.AVSwitch import AUDIO_SCRIS
+	except Exception:
+		AUDIO_SCRIS = {}
+	for n in ('ac3', 'dts'):
+		if n in nume:
+			rez[n] = AUDIO_SCRIS.get(n, '')
+	return rez
 
 
 def pagini_brute(stare):

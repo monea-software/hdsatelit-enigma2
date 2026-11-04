@@ -53106,3 +53106,447 @@ msgstr "Γράψε το μήνυμα για την τηλεόραση"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Ευχαριστούμε όλους τους δοκιμαστές beta που συμμετείχαν στη δημιουργία του λογισμικού HD Satelit: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "δεν γράφεται: το όνομα του USB έχει κενά"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "δεν γράφεται: το όνομα του USB έχει μη αποδεκτούς χαρακτήρες"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Η εγγραφή σταμάτησε: το όνομα του USB έχει κενά (%s). Δεν γράφτηκε τίποτα."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Η εγγραφή σταμάτησε: το όνομα του USB έχει μη αποδεκτούς χαρακτήρες (%s). Δεν γράφτηκε τίποτα."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Με αυτό το όνομα, η εγγραφή θα έσβηνε το σύστημα του δέκτη πριν διαβάσει την εικόνα."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Βάλε το USB σε έναν υπολογιστή, μετονόμασέ το χωρίς κενά και σύμβολα (για παράδειγμα HDSATELIT) και ξανάβαλέ το στον δέκτη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Η νεότερη συμβατή"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Συμβατή"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Μη συμβατή"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "δεν μπορεί να εγκατασταθεί: το όνομα του στικάκι έχει κενά"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "δεν μπορεί να εγκατασταθεί: το όνομα του στικάκι έχει μη αποδεκτούς χαρακτήρες"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "δεν μπορεί να εγκατασταθεί: μπορεί να είναι για άλλον τύπο δέκτη"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "δεν μπορεί να εγκατασταθεί: είναι για άλλον τύπο δέκτη"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "δεν μπορεί να εγκατασταθεί: τα αρχεία είναι κατεστραμμένα"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "δεν μπορεί να εγκατασταθεί: τα αρχεία είναι κατεστραμμένα ή τροποποιημένα"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "δεν μπορεί να εγκατασταθεί: ο δέκτης δεν μπορεί να επαληθευτεί"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Λογισμικό: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Αναζητείται λογισμικό δέκτη στο στικάκι και στον δίσκο…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Αναζητείται λογισμικό δέκτη στο στικάκι και στον δίσκο..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Αναζήτησε ξανά λογισμικό δέκτη"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Βρέθηκε μία έκδοση λογισμικού. Πάτησε OK για να ελεγχθεί."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Βρέθηκαν %d εκδόσεις λογισμικού. Διάλεξε μία και πάτησε OK για να ελεγχθεί."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Έλεγχος λογισμικού"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Δεν βρέθηκε λογισμικό δέκτη στο στικάκι ή στον δίσκο."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Τοποθέτησε ένα στικάκι με λογισμικό δέκτη: το αρχείο .zip από τον ιστότοπο ή τον φάκελο e2/update με kernel.bin και rootfs.tar.bz2. Μετά πάτησε OK στο «Αναζήτησε ξανά λογισμικό δέκτη»."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Έλεγχος του λογισμικού"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Ναι, έλεγξε το λογισμικό"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Το image πρέπει να βρίσκεται σε στικάκι USB. Από την εσωτερική μνήμη δεν γίνεται ποτέ εγγραφή: η εγγραφή θα διέγραφε τα ίδια τα αρχεία που διαβάζει και ο δέκτης δεν θα ξεκινούσε πλέον.\n\nΑντίγραψε το λογισμικό (kernel.bin, rootfs.tar.bz2, imageversion) σε ένα στικάκι USB, τοποθέτησε το στικάκι και δοκίμασε ξανά. Δεν γράφτηκε τίποτα."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Δεν έγινε αποσυμπίεση του λογισμικού: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Το λογισμικό αντιγράφεται σε έναν καθαρό φάκελο στο στικάκι. Διαρκεί έως ένα λεπτό."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Ελέγχεται αν το λογισμικό είναι ακέραιο (αθροίσματα ελέγχου). Διαρκεί μερικά δευτερόλεπτα."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Το λογισμικό δεν μπόρεσε να διαβαστεί από το στικάκι (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Το λογισμικό αναγνωρίστηκε σωστά: βρέθηκαν ο πυρήνας, το σύστημα και οι κατατμήσεις τους. Πάτησε OK ή Πράσινο για να το γράψεις στον δέκτη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Το λογισμικό δεν αναγνωρίστηκε σωστά από το πρόγραμμα εγγραφής, άρα δεν γράφεται. Στον δέκτη δεν άλλαξε τίποτα."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Αυτό το λογισμικό δεν αναφέρει για ποιον δέκτη έχει φτιαχτεί, άρα μπορεί να είναι για άλλον τύπο δέκτη. Το λογισμικό HD Satelit το αναφέρει από την έκδοση 0.1.6· μια παλαιότερη έκδοση ή ένα image από κάποιον άλλον γράφεται μόνο με στικάκι USB, όπως περιγράφει ο κατασκευαστής του δέκτη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Τα στοιχεία του δέκτη σε αυτό το λογισμικό είναι κατεστραμμένα ή από άλλη έκδοση, άρα δεν μπορεί να επαληθευτεί για ποιον δέκτη είναι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Το λογισμικό είναι κατεστραμμένο ή τροποποιημένο: %s δεν έχουν το αναμενόμενο άθροισμα ελέγχου. Αντίγραψέ το ξανά στο στικάκι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Το λογισμικό είναι κατεστραμμένο ή τροποποιημένο: %s δεν έχει το αναμενόμενο άθροισμα ελέγχου. Αντίγραψέ το ξανά στο στικάκι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Τα αρχεία του λογισμικού άλλαξαν μετά τον έλεγχο. Έλεγξέ το ξανά."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Το λογισμικό δεν μπορεί να εγκατασταθεί"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Ο δέκτης δεν μπόρεσε να διαβάσει το λογισμικό από το στικάκι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Εκδόσεις λογισμικού που βρέθηκαν: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Το λογισμικό HD Satelit γράφεται μόνο αν έχει φτιαχτεί για αυτόν τον δέκτη και τα αρχεία του είναι ακέραια (ελέγχεται στην τηλεόραση, με το OK). Ένα image που δεν είναι HD Satelit γράφεται μόνο μετά από προειδοποίηση, γιατί δεν μπορούμε να το επαληθεύσουμε."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Μη επαληθευμένη"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Δεν είναι image HD Satelit. Δεν ξέρουμε αν είναι συμβατό"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Δεν είναι image HD Satelit, αλλά %s. Δεν ξέρουμε αν είναι συμβατό με αυτόν τον δέκτη, γιατί δεν είναι δικό μας και δεν μπορούμε να το επαληθεύσουμε."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Αν δεν έχει φτιαχτεί για αυτό το μοντέλο δέκτη, ο δέκτης μπορεί να μην ξεκινά μέχρι να γίνει ανάκτηση από στικάκι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Αν το εγκαταστήσεις, αντικαθιστά το image HD Satelit. Οι ρυθμίσεις και η λίστα καναλιών αντιγράφονται πρώτα στο στικάκι."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Image που δεν είναι HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Ναι, συνέχισε"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Δες τι ανέλυσε το ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Απόκρυψη όσων ανέλυσε το ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Γίνεται έλεγχος του λογισμικού: δεν γράφεται τίποτα στον δέκτη. Περίμενε μερικά δευτερόλεπτα και μην τον απενεργοποιήσεις."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Βρήκε τον πυρήνα του συστήματος (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Βρήκε το σύστημα (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Το σύστημα έχει μορφή που μπορεί να γράψει (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Τα αρχεία βρίσκονται στο στικάκι (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Ο πυρήνας θα γραφτεί στην εσωτερική μνήμη, στη θέση %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Το σύστημα θα γραφτεί στην εσωτερική μνήμη, στη θέση %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "Δεν βρήκε τον πυρήνα του συστήματος σε αυτό το λογισμικό."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "Δεν βρήκε το σύστημα σε αυτό το λογισμικό."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Δεν βρήκε τη θέση του πυρήνα στην εσωτερική μνήμη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Δεν βρήκε τη θέση του συστήματος στην εσωτερική μνήμη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Δεν αναγνωρίζει τη μορφή του συστήματος."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Ο πυρήνας είναι πολύ μεγάλος για τη θέση του στην εσωτερική μνήμη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Το σύστημα είναι πολύ μεγάλο για τη θέση του στην εσωτερική μνήμη."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Δεν βρήκε κανένα σφάλμα."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Βρήκε σφάλμα και σταμάτησε (κωδικός %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Άλλα μηνύματα του προγράμματος, αμετάφραστα:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Αυτό ήταν μόνο έλεγχος: δεν γράφτηκε τίποτα στον δέκτη."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "Δεν είναι δυνατή η εγγραφή στο στικάκι, οπότε η εγγραφή δεν ξεκινά. Δεν έχει αλλάξει τίποτα στον δέκτη."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Η εικόνα για την εγκατάσταση του λογισμικού στον δέκτη μέσω της λειτουργίας συντήρησης (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Δεν εγκαταστάθηκε τίποτα στον δέκτη."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Αυτό το λογισμικό δεν αναφέρει για ποιον δέκτη προορίζεται, οπότε μπορεί να είναι για άλλον τύπο δέκτη. Το λογισμικό HD Satelit το αναφέρει από την έκδοση 0.1.6 και μετά· μια παλαιότερη έκδοση ή μια εικόνα από άλλον δημιουργό εγκαθίσταται μόνο με στικάκι USB, σύμφωνα με τις οδηγίες του κατασκευαστή του δέκτη."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Εδώ φαίνεται μόνο τι υπάρχει στο στικάκι και αν μπορεί να εγκατασταθεί. Η εγκατάσταση γίνεται στην τηλεόραση, με προσομοίωση και δύο ερωτήσεις πριν ξεκινήσει:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Το λογισμικό HD Satelit εγκαθίσταται μόνο αν προορίζεται για αυτόν τον δέκτη και τα αρχεία του δεν έχουν αλλοιωθεί (ο έλεγχος γίνεται στην τηλεόραση, όταν πατήσεις OK). Μια εικόνα που δεν είναι HD Satelit εγκαθίσταται μόνο μετά από προειδοποίηση, επειδή δεν μπορούμε να την ελέγξουμε."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Το λογισμικό δεν αναγνωρίστηκε σωστά από το πρόγραμμα εγκατάστασης, οπότε δεν θα εγκατασταθεί. Δεν άλλαξε τίποτα στον δέκτη."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Τώρα γίνεται μόνο ένας έλεγχος (μια προσομοίωση): δεν εγκαθίσταται τίποτα στον δέκτη. Συνεχίζεις;"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Ο δέκτης έχει ένα μόνο ζεύγος πυρήνα και συστήματος στην εσωτερική μνήμη (χωρίς δυνατότητα πολλαπλής εκκίνησης): αν το νέο λογισμικό δεν ξεκινήσει, η μόνη λύση είναι η χειροκίνητη αποκατάσταση μέσω της λειτουργίας συντήρησης. Πριν από την εγκατάσταση, οι ρυθμίσεις και η λίστα καναλιών αντιγράφονται στο στικάκι."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Η εικόνα πρέπει να βρίσκεται σε στικάκι USB. Δεν γίνεται ποτέ εγκατάσταση από την εσωτερική μνήμη: η εγκατάσταση θα έσβηνε τα ίδια τα αρχεία που διαβάζει και ο δέκτης δεν θα ξεκινούσε ξανά.\n\nΑντίγραψε το λογισμικό (kernel.bin, rootfs.tar.bz2, imageversion) σε στικάκι USB, σύνδεσε το στικάκι και δοκίμασε ξανά. Δεν εγκαταστάθηκε τίποτα."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Το νέο λογισμικό εγκαθίσταται στη θέση αυτού που λειτουργεί τώρα (ο φάκελος %s στην εσωτερική μνήμη): αν δεν ξεκινήσει, η αποκατάσταση γίνεται χειροκίνητα, με το αρχείο ανάκτησης του κατασκευαστή σε στικάκι. Πριν από την εγκατάσταση, οι ρυθμίσεις και η λίστα καναλιών αντιγράφονται στο στικάκι."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Το πρόγραμμα μπορεί να εγκαταστήσει το σύστημα σε αυτή τη μορφή (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Το σύστημα θα εγκατασταθεί στην εσωτερική μνήμη, στη θέση %s."
+
+msgid "Instalarea este oprită"
+msgstr "Η εγκατάσταση διακόπηκε"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Γίνεται έλεγχος του λογισμικού: δεν εγκαθίσταται τίποτα στον δέκτη. Περίμενε λίγα δευτερόλεπτα και μην τον απενεργοποιήσεις."
+
+msgid "Da, instalează acum"
+msgstr "Ναι, εγκατάσταση τώρα"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Η εγκατάσταση συνεχίζεται χωρίς αντίγραφο ασφαλείας, όπως επέλεξες."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Θέλεις να εγκαταστήσεις τώρα το λογισμικό στον δέκτη;"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Ο πυρήνας θα εγκατασταθεί στην εσωτερική μνήμη, στη θέση %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Αυτό ήταν μόνο ένας έλεγχος: δεν εγκαταστάθηκε τίποτα στον δέκτη."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Η εγκατάσταση διακόπηκε: τα αρχεία της εικόνας βρίσκονται στην εσωτερική μνήμη του δέκτη (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Η εγκατάσταση διακόπηκε: το στικάκι έχει κενά στο όνομά του (%s). Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Με αυτό το όνομα, η εγκατάσταση θα έσβηνε το σύστημα του δέκτη πριν διαβάσει την εικόνα."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Το λογισμικό αναγνωρίστηκε σωστά: βρέθηκαν ο πυρήνας, το σύστημα και τα διαμερίσματά τους. Πάτησε OK ή το πράσινο κουμπί για να το εγκαταστήσεις στον δέκτη."
+
+msgid "Instalează pe receptor"
+msgstr "Εγκατάσταση στον δέκτη"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Η εγκατάσταση δεν ξεκίνησε, επειδή δεν υπάρχει αντίγραφο ασφαλείας. Δεν εγκαταστάθηκε τίποτα στον δέκτη. Έλεγξε το στικάκι και μετά πάτησε ξανά το πράσινο κουμπί."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "Δεν μπορεί να γραφτεί τίποτα στο στικάκι, οπότε η εγκατάσταση δεν ξεκινά. Δεν άλλαξε τίποτα στον δέκτη."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Η εγκατάσταση διακόπηκε: δεν μπορέσαμε να ελέγξουμε πού βρίσκονται τα αρχεία της εικόνας (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Η εγκατάσταση διακόπηκε: τα αρχεία της εικόνας δεν βρίσκονται σε στικάκι USB (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Η εγκατάσταση διακόπηκε: το στικάκι έχει μη αποδεκτούς χαρακτήρες στο όνομά του (%s). Δεν εγκαταστάθηκε τίποτα."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Δεν ήταν δυνατή η δημιουργία αντιγράφου ασφαλείας (%s).\n\nΣυνεχίζεις χωρίς αντίγραφο; Η λίστα καναλιών, οι ρυθμίσεις και τα δεδομένα των καναλιών θα χαθούν κατά την εγκατάσταση."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Η εγκατάσταση ξεκίνησε (το περιβάλλον χρήσης μπορεί να κλείσει ανά πάσα στιγμή, είναι φυσιολογικό). Αρχείο καταγραφής: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Το νέο λογισμικό εγκαθίσταται τώρα στον δέκτη. Μη βγάλεις τον δέκτη από την πρίζα και μην αφαιρέσεις το στικάκι όσο διαρκεί η εγκατάσταση· το περιβάλλον χρήσης κλείνει και ο δέκτης επανεκκινείται μόνος του στο τέλος."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Το στικάκι έχει κενά ή χαρακτήρες στο όνομά του που εμποδίζουν την εγκατάσταση. Άλλαξε το όνομά του στον υπολογιστή (για παράδειγμα HDSATELIT) και πάτησε ξανά."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Η λίστα εικόνων δεν είναι υπογεγραμμένη από το HD Satelit. Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Η εικόνα που κατέβηκε δεν ταιριάζει. Δεν εγκαταστάθηκε τίποτα. Πάτησε ξανά για να την κατεβάσω πάλι."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Η εικόνα δεν προορίζεται για αυτόν τον δέκτη. Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "Το στικάκι αφαιρέθηκε ή έχει σφάλμα. Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Δεν ήταν δυνατή η αντιγραφή των ρυθμίσεων στο στικάκι. Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Ο έλεγχος πριν από την εγκατάσταση δεν ολοκληρώθηκε σωστά. Δεν εγκαταστάθηκε τίποτα."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Διακόπηκε. Δεν εγκαταστάθηκε τίποτα. Αν πατήσεις ξανά, η λήψη θα συνεχιστεί από εκεί που σταμάτησε."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Η νέα εικόνα δεν εγκαταστάθηκε. Ο δέκτης παρέμεινε στο %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Γίνεται έλεγχος όλων πριν από την εγκατάσταση..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Η εγκατάσταση περιμένει να ολοκληρωθεί η εγγραφή και θα ξεκινήσει αυτόματα."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Η εικόνα εγκαθίσταται τώρα. Μην απενεργοποιήσεις τον δέκτη: θα επανεκκινηθεί μόνος του και τα κανάλια και οι ρυθμίσεις θα επανέλθουν αυτόματα."

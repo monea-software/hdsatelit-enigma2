@@ -57696,3 +57696,447 @@ msgstr "Skrifaðu skilaboðin fyrir sjónvarpið"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Við þökkum öllum beta-prófurum sem tóku þátt í að búa til HD Satelit-image: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "ekki skrifað: heiti minnislykilsins er með bilum"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "ekki skrifað: heiti minnislykilsins er með óleyfðum táknum"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Skrifun stöðvuð: heiti minnislykilsins er með bilum (%s). Ekkert var skrifað."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Skrifun stöðvuð: heiti minnislykilsins er með óleyfðum táknum (%s). Ekkert var skrifað."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Með þessu heiti myndi skrifunin eyða kerfi móttakarans áður en myndin er lesin."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Settu minnislykilinn í tölvu, endurnefndu hann án bila og tákna (til dæmis HDSATELIT) og settu hann svo aftur í móttakarann."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Nýjasta samhæfa"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Samhæf"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Ósamhæf"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "ekki hægt að setja upp: nafn USB-lykilsins inniheldur bil"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "ekki hægt að setja upp: nafn USB-lykilsins inniheldur stafi sem eru ekki leyfðir"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "ekki hægt að setja upp: gæti verið fyrir aðra tegund móttakara"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "ekki hægt að setja upp: er fyrir aðra tegund móttakara"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "ekki hægt að setja upp: skrárnar eru skemmdar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "ekki hægt að setja upp: skrárnar eru skemmdar eða breyttar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "ekki hægt að setja upp: ekki er hægt að athuga móttakarann"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Hugbúnaður: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Leitað að móttakarahugbúnaði á USB-lykli og diski…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Leitað að móttakarahugbúnaði á USB-lykli og diski..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Leita aftur að móttakarahugbúnaði"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Ein hugbúnaðarútgáfa fannst. Ýttu á OK til að láta athuga hana."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Fjöldi hugbúnaðarútgáfa sem fundust: %d. Veldu eina og ýttu á OK til að láta athuga hana."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Athugaðu hugbúnaðinn"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Enginn móttakarahugbúnaður fannst á USB-lykli eða diski."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Tengdu USB-lykil með móttakarahugbúnaði: .zip-skjalið af vefsíðunni eða möppuna e2/update með kernel.bin og rootfs.tar.bz2. Ýttu síðan á OK á „Leita aftur að móttakarahugbúnaði“."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Athugun hugbúnaðarins"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Já, athugaðu hugbúnaðinn"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Myndin verður að vera á USB-lykli. Ekkert er nokkurn tíma skrifað úr innra minni: skrif myndi eyða einmitt skránum sem það les og móttakarinn myndi ekki lengur ræsa.\n\nAfritaðu hugbúnaðinn (kernel.bin, rootfs.tar.bz2, imageversion) á USB-lykil, settu lykilinn í og reyndu aftur. Ekkert var skrifað."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Ekki tókst að afþjappa hugbúnaðinn: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Hugbúnaðurinn er afritaður í hreina möppu á USB-lykli. Þetta tekur allt að eina mínútu."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Athugað er hvort hugbúnaðurinn sé heill (prófsummur). Þetta tekur nokkrar sekúndur."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Ekki tókst að lesa hugbúnaðinn af USB-lykli (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Hugbúnaðurinn var rétt þekktur: kjarni, kerfi og sneiðar þeirra fundust. Ýttu á OK eða Græna til að skrifa hann á móttakara."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Skrifforritið þekkti hugbúnaðinn ekki rétt, svo hann er ekki skrifaður. Ekkert breyttist á móttakaranum."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Þessi hugbúnaður segir ekki fyrir hvaða móttakara hann er gerður, svo hann gæti verið fyrir aðra tegund móttakara. HD Satelit-hugbúnaður segir það frá útgáfu 0.1.6; eldri útgáfa eða image frá öðrum er aðeins skrifað með USB-lykli, eins og framleiðandi móttakarans lýsir."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Móttakaragögnin í þessum hugbúnaði eru skemmd eða úr annarri útgáfu, svo ekki er hægt að athuga fyrir hvaða móttakara hann er."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Hugbúnaðurinn er skemmdur eða breyttur: %s hafa ekki væntanlega prófsummu. Afritaðu hann aftur á USB-lykilinn."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Hugbúnaðurinn er skemmdur eða breyttur: %s hefur ekki væntanlega prófsummu. Afritaðu hann aftur á USB-lykilinn."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Skrár hugbúnaðarins breyttust eftir athugun. Athugaðu hann aftur."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Ekki er hægt að setja hugbúnaðinn upp"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Móttakarinn gat ekki lesið hugbúnaðinn af USB-lyklinum."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Hugbúnaðarútgáfur sem fundust: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "HD Satelit-hugbúnaður er aðeins skrifaður ef hann er gerður fyrir þennan móttakara og skrár hans eru heilar (athugað á sjónvarpinu, þegar ýtt er á OK). Image sem er ekki HD Satelit er aðeins skrifað eftir viðvörun, því við getum ekki athugað það."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Óstaðfest"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Ekki HD Satelit-image. Við vitum ekki hvort það er samhæft"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Þetta er ekki HD Satelit-image, heldur %s. Við vitum ekki hvort það er samhæft þessum móttakara, því það er ekki okkar og við getum ekki athugað það."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Ef það er ekki gert fyrir þessa móttakaragerð gæti móttakarinn ekki ræst fyrr en hann er endurheimtur af USB-lykli."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Ef þú setur það upp kemur það í stað HD Satelit-image. Stillingar og rásalisti eru fyrst afrituð á USB-lykilinn."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Image sem er ekki HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Já, halda áfram"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Sjá hvað ofgwrite greindi"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Fela hvað ofgwrite greindi"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Verið er að athuga hugbúnaðinn: ekkert er skrifað á móttakarann. Bíddu í nokkrar sekúndur og ekki slökkva á honum."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Fann kjarna kerfisins (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Fann kerfið (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Kerfið er á sniði sem hægt er að skrifa (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Skrárnar eru á USB-lyklinum (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Kjarninn verður skrifaður í innra minni, á staðinn %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Kerfið verður skrifað í innra minni, á staðinn %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "Fann ekki kjarna kerfisins í þessum hugbúnaði."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "Fann ekki kerfið í þessum hugbúnaði."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Fann ekki stað kjarnans í innra minni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Fann ekki stað kerfisins í innra minni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Þekkir ekki snið kerfisins."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Kjarninn er of stór fyrir sinn stað í innra minni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Kerfið er of stórt fyrir sinn stað í innra minni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Fann enga villu."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Fann villu og stöðvaðist (kóði %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Önnur skilaboð forritsins, óþýdd:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Þetta var aðeins athugun: ekkert var skrifað á móttakarann."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "Ekki er hægt að skrifa á USB-lykilinn, svo skrifun fer ekki af stað. Engu hefur verið breytt á móttakaranum."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Myndin til að setja hugbúnað upp á móttakaranum með Maintenance Mode (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Ekkert var sett upp á móttakaranum."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Þessi hugbúnaður gefur ekki upp fyrir hvaða móttakara hann er gerður og gæti því verið ætlaður annarri gerð móttakara. HD Satelit hugbúnaðurinn gefur þetta upp frá útgáfu 0.1.6; eldri útgáfu eða mynd frá öðrum er aðeins hægt að setja upp með USB-lykli, samkvæmt leiðbeiningum framleiðanda móttakarans."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Hér sést aðeins hvað er á USB-lyklinum og hvort hægt sé að setja það upp. Uppsetningin fer fram á sjónvarpinu, með prufukeyrslu og tveimur spurningum áður en hún hefst:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "HD Satelit hugbúnaðurinn er aðeins settur upp ef hann er gerður fyrir þennan móttakara og skrárnar hans eru heilar (þetta er athugað á sjónvarpinu þegar ýtt er á OK). Mynd sem er ekki frá HD Satelit er aðeins sett upp eftir viðvörun, því við getum ekki sannreynt hana."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Uppsetningarforritið þekkti hugbúnaðinn ekki rétt og því verður hann ekki settur upp. Engu var breytt á móttakaranum."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Nú fer aðeins fram athugun (prufukeyrsla): ekkert verður sett upp á móttakaranum. Viltu halda áfram?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Móttakarinn hefur aðeins einn kjarna og eitt kerfi í innra minni (án fjölræsingar): ef nýi hugbúnaðurinn ræsist ekki er aðeins hægt að laga það handvirkt með Maintenance Mode. Fyrir uppsetningu eru stillingar og rásalisti afrituð á USB-lykilinn."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Myndin verður að vera á USB-lykli. Aldrei er sett upp úr innra minni: uppsetningin myndi eyða skránum sem hún er að lesa og móttakarinn myndi ekki lengur ræsast.\n\nAfritaðu hugbúnaðinn (kernel.bin, rootfs.tar.bz2, imageversion) á USB-lykil, tengdu lykilinn og reyndu aftur. Ekkert var sett upp."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Nýi hugbúnaðurinn kemur í stað þess sem er í gangi núna (mappan %s í innra minni): ef hann ræsist ekki þarf að laga það handvirkt með endurheimtarsafni framleiðandans á USB-lykli. Fyrir uppsetningu eru stillingar og rásalisti afrituð á USB-lykilinn."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Forritið getur sett upp kerfið á þessu sniði (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Kerfið verður sett upp í innra minni í stað %s."
+
+msgid "Instalarea este oprită"
+msgstr "Uppsetning stöðvuð"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Verið er að athuga hugbúnaðinn: ekkert er sett upp á móttakaranum. Bíddu í nokkrar sekúndur og ekki slökkva á honum."
+
+msgid "Da, instalează acum"
+msgstr "Já, setja upp núna"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Uppsetningin heldur áfram án öryggisafrits, eins og þú valdir."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Viltu setja hugbúnaðinn upp á móttakaranum núna?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Kjarninn verður settur upp í innra minni í stað %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Þetta var aðeins athugun: ekkert var sett upp á móttakaranum."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Uppsetning stöðvuð: skrár myndarinnar eru í innra minni móttakarans (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Uppsetning stöðvuð: heiti USB-lykilsins inniheldur bil (%s). Ekkert var sett upp."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Með þessu heiti myndi uppsetningin eyða kerfi móttakarans áður en hún læsi myndina."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Hugbúnaðurinn þekktist rétt: kjarninn, kerfið og disksneiðar þeirra fundust. Ýttu á OK eða græna hnappinn til að setja hann upp á móttakaranum."
+
+msgid "Instalează pe receptor"
+msgstr "Setja upp á móttakara"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Uppsetningin hófst ekki því ekkert öryggisafrit er til. Ekkert var sett upp á móttakaranum. Athugaðu USB-lykilinn og ýttu svo aftur á græna hnappinn."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "Ekki er hægt að skrifa á USB-lykilinn og því hefst uppsetningin ekki. Engu var breytt á móttakaranum."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Uppsetning stöðvuð: ekki tókst að staðfesta hvar skrár myndarinnar eru geymdar (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Uppsetning stöðvuð: skrár myndarinnar eru ekki á USB-lykli (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Uppsetning stöðvuð: heiti USB-lykilsins inniheldur óleyfileg tákn (%s). Ekkert var sett upp."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Ekki tókst að búa til öryggisafrit (%s).\n\nViltu halda áfram án öryggisafrits? Rásalistinn, stillingarnar og rásagögnin tapast við uppsetningu."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Uppsetningin er hafin (viðmótið getur stöðvast hvenær sem er, það er eðlilegt). Annáll: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Nú er verið að setja nýja hugbúnaðinn upp á móttakaranum. Ekki taka móttakarann úr sambandi eða fjarlægja USB-lykilinn meðan á uppsetningu stendur; viðmótið stöðvast og móttakarinn endurræsist sjálfkrafa að lokum."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Heiti USB-lykilsins inniheldur bil eða tákn sem uppsetningin ræður ekki við. Breyttu heitinu í tölvu (til dæmis í HDSATELIT) og ýttu aftur."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Listinn yfir myndir er ekki undirritaður af HD Satelit. Ekkert var sett upp."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Myndin sem var sótt passar ekki. Ekkert var sett upp. Ýttu aftur svo ég sæki hana á ný."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Myndin er ekki ætluð þessum móttakara. Ekkert var sett upp."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "USB-lykillinn var fjarlægður eða villa er á honum. Ekkert var sett upp."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Ekki tókst að afrita stillingarnar á USB-lykilinn. Ekkert var sett upp."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Athugunin fyrir uppsetningu tókst ekki. Ekkert var sett upp."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Stöðvað. Ekkert var sett upp. Ef þú ýtir aftur heldur niðurhalið áfram þar sem frá var horfið."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Nýja myndin var ekki sett upp. Móttakarinn er enn á %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Verið er að athuga allt fyrir uppsetningu..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Uppsetningin bíður þar til upptökunni lýkur og hefst þá sjálfkrafa."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Nú er verið að setja myndina upp. Ekki slökkva á móttakaranum: hann endurræsist sjálfkrafa og rásirnar og stillingarnar koma sjálfkrafa aftur."

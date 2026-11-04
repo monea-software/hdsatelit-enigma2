@@ -68,15 +68,22 @@ def pachete(U, H, discuri):
 	rez = []
 	for c in U.cautaCandidati(discuri):
 		cod, text = c.get("paza") or (H.REFUZ_NECITIT, "")
+		# numele stickului (Tools/MediuImagine.pregatesteNumeStick): refuz numai daca montarea nu s-a putut muta, ca in
+		# lista de pe televizor
+		stick = getattr(U, "scurtNumeStick", lambda m: None)(c.get("nume_stick"))
 		rez.append({
-			"nume": U._numePachet(c),
+			"nume": U.numeImagineStraina(c) if c.get("fel") == "straina" else U._numePachet(c),
+			"fel": c.get("fel") or "",
+			"stare": U.textFel(c["fel"]) if c.get("fel") else "",
 			"versiune": c.get("versiune") or "",
-			"mediu": c["disc"].description or c["disc"].mountpoint,
+			"mediu": "  ·  ".join(x for x in (c["disc"].description or c["disc"].mountpoint, c.get("usb")) if x),
 			"tip": c["tip"],
 			"cod": cod,
-			"bun": cod == H.PACHET_BUN,
-			"verdict": H.scurtRefuz(cod),
-			"text": text or "",
+			"bun": cod == H.PACHET_BUN and not stick,
+			"verdict": stick or (_t("Nu este imagine HD Satelit. Nu știm dacă este compatibilă")
+				if c.get("fel") == "straina" else H.scurtRefuz(cod)),
+			"text": (_t("Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu "
+				"HDSATELIT), apoi introdu-l din nou în receptor.") if stick else "") or text or "",
 		})
 	return rez
 
@@ -175,11 +182,11 @@ def _e(text):
 def texte():
 	"""Textele scrise de scriptul paginii, traduse pe receptor"""
 	return {
-		"citeste": _t("Se caută pachetele pe stick și pe disc..."),
-		"niciunul": _t("Niciun pachet găsit pe mediile montate acum."),
+		"citeste": _t("Se caută software de receptor pe stick și pe disc..."),
+		"niciunul": _t("Nu am găsit software de receptor pe stick sau pe disc."),
 		"nuRaspunde": _t("Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."),
-		"eroare": _t("Receptorul nu a putut citi pachetele."),
-		"gasite": _t("Pachete găsite: %d."),
+		"eroare": _t("Receptorul nu a putut citi software-ul de pe stick."),
+		"gasite": _t("Variante de software găsite: %d."),
 		"pentru": _t("Software-ul de acum este pentru %s."),
 	}
 
@@ -191,12 +198,10 @@ def pagina_text(stil, config_pagina, limba="ro"):
 		"__CONFIG__": config_pagina,
 		"__TEXTE__": json.dumps(texte(), ensure_ascii=False).replace("</", "<\\/"),
 		"__T_TITLU__": _e(_t("Imagine nouă de pe stick")),
-		"__T_CAUTA__": _e(_t("Caută din nou pachetele")),
-		"__T_NOTA__": _e(_t("Aici se vede numai ce este pe stick și dacă se poate scrie. Scrierea se face pe televizor, "
-			"cu simularea și două întrebări înainte:")),
+		"__T_CAUTA__": _e(_t("Caută din nou software de receptor")),
+		"__T_NOTA__": _e(_t("Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:")),
 		"__DRUM_MENIU__": _drumMeniu("hds_software_update"),
-		"__T_PAZA__": _e(_t("Un pachet se scrie numai dacă are semnul receptorului, semnul este pentru acest receptor "
-			"și fișierele lui sunt întregi (sumele se verifică pe televizor, la OK).")),
+		"__T_PAZA__": _e(_t("Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica.")),
 	}
 	# o singura trecere: un nume venit din browser (in __CONFIG__) nu poate fi luat drept semn __X__
 	return re.sub(r"__[A-Z_]+__", lambda m: valori.get(m.group(0), m.group(0)), _traducePagina(PAGINA))
@@ -214,10 +219,20 @@ PAGINA = u"""<!DOCTYPE html>
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:14px 16px;margin:0 0 10px;}
   .card.bun{border-color:var(--verde);}
   .card.rau{border-color:#f5b83d;}
-  .verdict{font-weight:bold;margin:0 0 4px;}
+  .card.bun{border-color:#3b82f6;}
+  .card.noua{border-color:#4fd18b;}
+  .card.rau{border-color:#ff6b5e;}
+  .cap{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 6px;}
+  .semn{width:16px;height:16px;flex:none;background:#ff6b5e;}
+  .card.bun .semn,.card.bun .eticheta{background:#3b82f6;}
+  .card.straina{border-color:#f5b83d;}
+  .card.straina .semn,.card.straina .eticheta{background:#f5b83d;color:#10162a;}
+  .card.noua .semn,.card.noua .eticheta{background:#4fd18b;color:#10162a;}
+  .eticheta{margin-left:auto;padding:4px 10px;background:#ff6b5e;color:#fff;font-weight:bold;font-size:.85rem;text-transform:uppercase;}
+  .verdict{margin:0 0 4px;font-size:.9rem;}
   .card.bun .verdict{color:#a8e6b4;}
   .card.rau .verdict{color:#ffb4a8;}
-  .nume{margin:0;overflow-wrap:anywhere;}
+  .nume{margin:0;font-weight:bold;flex:1 1 200px;overflow-wrap:anywhere;}
   .detalii{color:var(--text-slab);font-size:.86rem;margin:4px 0 0;overflow-wrap:anywhere;}
   .motiv{color:var(--text-slab);font-size:.86rem;line-height:1.45;margin:8px 0 0;white-space:pre-line;overflow-wrap:anywhere;}
   .nota{color:var(--text-slab);font-size:.85rem;margin:6px 0 10px;line-height:1.45;}
@@ -260,9 +275,13 @@ function arata(d){
   if(d.model){ sus += " " + T.pentru.replace("%s", d.model + (d.versiune ? " (HD Satelit " + d.versiune + ")" : "")); }
   $("mesaj").textContent = sus;
   p.forEach(function(x){
-    var c = element("section", "card " + (x.bun ? "bun" : "rau"));
-    c.appendChild(element("p", "verdict", x.verdict));
-    c.appendChild(element("p", "nume", x.nume));
+    var c = element("section", "card " + (x.bun ? "bun" : "rau") + (x.fel === "noua" || x.fel === "straina" ? " " + x.fel : ""));
+    var cap = element("div", "cap");
+    cap.appendChild(element("span", "semn"));
+    cap.appendChild(element("p", "nume", x.nume));
+    if(x.stare){ cap.appendChild(element("span", "eticheta", x.stare)); }
+    c.appendChild(cap);
+    c.appendChild(element("p", "verdict", x.verdict.charAt(0).toUpperCase() + x.verdict.slice(1)));
     c.appendChild(element("p", "detalii", [x.versiune && x.nume.indexOf(x.versiune) === -1 ? x.versiune : "", x.mediu].filter(Boolean).join("  ·  ")));
     if(x.text){ c.appendChild(element("p", "motiv", x.text)); }
     l.appendChild(c);

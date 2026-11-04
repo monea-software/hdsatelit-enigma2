@@ -559,7 +559,7 @@ def continut(puncte):
 		rez.append(_("Copiile de siguranță ale setărilor HD Satelit: %d (cea mai nouă: %s). Restaurarea de la prima "
 			"pornire nu le mai găsește.") % (len(copii), copii[-1]))
 	for i in imagini:
-		rez.append(_("Imaginea pentru scrierea receptorului din Maintenance Mode (%s).") % i)
+		rez.append(_("Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s).") % i)
 	if alte_imagini:
 		rez.append(_("Alte imagini pentru receptor: %s.") % ", ".join(sorted(alte_imagini)[:5]))
 	if filme:

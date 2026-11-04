@@ -57,9 +57,9 @@
 # Scrierea reala foloseste "init 4" inainte de ofgwrite (procedura probata), NU flag-ul
 # "-f" al lui ofgwrite. "init 4" opreste Enigma2 (si tot runlevel-ul 3) — inclusiv procesul
 # Python care ruleaza acest ecran — deci secventa init-4+ofgwrite NU poate rula ca o functie
-# normala, sincrona, in acest proces: e pornita ca o comanda shell DETASATA (os.system cu "&"),
-# care supravietuieste mortii Enigma2 (proces copil, nu e omorat doar pentru ca parintele
-# dispare). Iesirea ei se scrie intr-un fisier jurnal PE ACELASI MEDIU montat (nu in /tmp, care
+# normala, sincrona, in acest proces: e pornita ca o comanda shell DETASATA, in sesiune noua,
+# care supravietuieste mortii Enigma2 (init opreste tot grupul de procese al lui enigma2.sh).
+# Iesirea ei se scrie intr-un fisier jurnal PE ACELASI MEDIU montat (nu in /tmp, care
 # poate sa nu supravietuiasca unei scrieri reale a radacinii), pentru control ulterior.
 #
 # TESTARE: intai emulator (ruleaza.sh) — tot fluxul (cautare, lista, confirmare, simulare,
@@ -70,12 +70,16 @@
 # PAZNIC: inainte de dezarhivare si inainte de fiecare ofgwrite se verifica, cu
 # Tools/MediuImagine.py, ca fisierele stau pe un stick USB (sau in RAM). O data, un ofgwrite -r cu
 # imaginea in /root (pe mmcblk0p10, chiar radacina rescrisa) a lasat receptorul fara sistem.
+# Tot acolo, numele stickului (MediuImagine.pregatesteNumeStick): ofgwrite fara peticul ghilimelelor goleste radacina
+# cand punctul de montare al stickului are spatii; montarea se muta singura intr-un dosar fara spatii, fara nicio
+# intrebare. Numai daca mutarea nu merge, pachetul nu se scrie si omul afla ce nume sa-i dea stickului.
 
 import glob
 import os
 import re
 import shlex
 import shutil
+import subprocess
 import time
 import zipfile
 
@@ -89,7 +93,7 @@ from Components.Console import Console
 from Components.Harddisk import harddiskmanager
 
 from Screens.MessageBox import MessageBox
-from Tools.MediuImagine import verificaMediuScriere, REFUZ_INTERN, REFUZ_LIPSA
+from Tools.MediuImagine import verificaMediuScriere, pregatesteNumeStick, versiuneUsb, REFUZ_INTERN, REFUZ_LIPSA, REFUZ_SPATII
 from Components import HdsPazaModel
 
 NUME_KERNEL = "kernel.bin"
@@ -248,6 +252,20 @@ def _bazaCanalelor(cerere):
 		print("[HdsSoftwareUpdate] baza canalelor (%s): %s" % (cerere, eroare))
 
 
+def _copieCompleta(mountpoint):
+	"""Copia setarilor (Components/HdsCopieSetari) chiar inainte de instalare, ca la imaginea online: prima pornire a imaginii noi
+	pune ultima copie de pe stick. Fara ea ar pune una mai veche si s-ar pierde ce a adaugat omul de atunci (conturile de televiziune
+	prin internet, Favoritele, setarile pluginurilor). Intoarce None sau textul erorii."""
+	try:
+		from Components import HdsCopieSetari
+		rez = HdsCopieSetari.fa_copia(mountpoint, HdsCopieSetari.text_setari_acum(), fel="automata")
+	except Exception as eroare:
+		return str(eroare) or eroare.__class__.__name__
+	if rez.get("ok") and rez.get("cale"):
+		return None
+	return " ".join(rez.get("mesaje") or []) or "?"
+
+
 def _creeazaBackupSetari(mountpoint, date_hds=True):
 	"""Copia din antetul de mai sus, intr-un dosar nou pe mediul dat. Nu arunca niciodata; intoarce
 	(dosar_sau_None, lista_fisierelor_copiate, eroare_sau_None). O eroare inseamna copie incompleta."""
@@ -353,17 +371,37 @@ def _candidatDinFolder(disc):
 	return None
 
 
+def _radacinaPachet(intrari):
+	"""Dosarul din arhiva care tine kernel.bin si rootfs.tar.bz2: e2/update, ca la noi, sau alt dosar (arhivele altor
+	echipe, <producator>/<model>/). None daca nu e niciunul. Se scrie numai dupa simulare."""
+	toate = set(intrari)
+	sufix = "/".join(SUBCALE_UPDATE) + "/"
+	bune = []
+	for n in intrari:
+		if n == NUME_KERNEL or n.endswith("/" + NUME_KERNEL):
+			radacina = n[: -len(NUME_KERNEL)]
+			if radacina + NUME_ROOTFS in toate:
+				bune.append(radacina)
+	if len(bune) < 2:
+		return bune[0] if bune else None
+	# arhiva cu mai multe modele: numai dosarul acestui receptor, altfel nu se ghiceste
+	model = (HdsPazaModel.citesteReguli() or {}).get("machinebuild", "")
+	ale_lui = [r for r in bune if model and model in r.split("/")]
+	if len(ale_lui) == 1:
+		return ale_lui[0]
+	ale_noastre = [r for r in bune if r.endswith(sufix)]
+	return ale_noastre[0] if len(ale_noastre) == 1 else None
+
+
 def _candidatiDinZipuri(disc):
 	"""Scaneaza DOAR radacina discului (fara subfoldere — conventie proprie, simpla) pentru
-	fisiere .zip care contin, oriunde in interior, structura e2/update/kernel.bin +
-	e2/update/rootfs.tar.bz2. Nu dezarhiveaza acum — doar detecteaza si citeste versiunea."""
+	fisiere .zip care contin, oriunde in interior, kernel.bin si rootfs.tar.bz2 in acelasi dosar
+	(_radacinaPachet). Nu dezarhiveaza acum — doar detecteaza si citeste versiunea."""
 	rezultat = []
 	try:
 		nume_fisiere = os.listdir(disc.mountpoint)
 	except OSError:
 		return rezultat
-	sufix_kernel = "/".join(SUBCALE_UPDATE) + "/" + NUME_KERNEL
-	sufix_rootfs = "/".join(SUBCALE_UPDATE) + "/" + NUME_ROOTFS
 	for nume in sorted(nume_fisiere):
 		if not nume.lower().endswith(".zip"):
 			continue
@@ -375,17 +413,15 @@ def _candidatiDinZipuri(disc):
 				originale = {}
 				for n in z.namelist():
 					originale.setdefault(n.replace("\\", "/"), n)
-				intrari = list(originale)
-				potriviri_kernel = [n for n in intrari if n.endswith(sufix_kernel)]
-				potriviri_rootfs = [n for n in intrari if n.endswith(sufix_rootfs)]
-				if not potriviri_kernel or not potriviri_rootfs:
+				radacina = _radacinaPachet(list(originale))
+				if radacina is None:
 					continue
-				radacina = potriviri_kernel[0][: -len(NUME_KERNEL)]
 				versiune = None
 				nume_versiune = radacina + NUME_VERSIUNE
 				if nume_versiune in originale:
 					try:
-						continut = z.read(originale[nume_versiune]).decode("utf-8", "replace")
+						with z.open(originale[nume_versiune]) as f_versiune:
+							continut = f_versiune.read(HdsPazaModel.MARIME_MAXIMA_TEXT).decode("utf-8", "replace")
 						versiune = next((l.strip() for l in continut.splitlines() if l.strip()), None)
 					except Exception:
 						versiune = None
@@ -432,7 +468,7 @@ def pazaPachet(c, a=None):
 def cautaCandidati(discuri=None):
 	"""Toate pachetele de actualizare de pe `discuri` (implicit mediile montate acum), fiecare cu verdictul pazei
 	(„paza”). Amprenta receptorului se citeste o singura data, pentru toate pachetele. Cu `discuri` dat, functia
-	atinge numai fisiere (interfata web o cheama pe un fir separat)."""
+	atinge numai fisiere si, la un stick cu spatii in nume, montarea lui (interfata web o cheama pe un fir separat)."""
 	if discuri is None:
 		discuri = _discuriMontate()
 	candidati = []
@@ -449,7 +485,19 @@ def cautaCandidati(discuri=None):
 			a = None
 		for c in candidati:
 			c["paza"] = pazaPachet(c, a)
+			c["nume_stick"] = pregatesteNumeStick(c["disc"].mountpoint)[0]
+			c["usb"] = versiuneUsb(c["disc"].mountpoint)
+		asazaPachete(candidati)
 	return candidati
+
+
+def scurtNumeStick(motiv):
+	"""Verdictul din lista cand stickul are un nume cu care ofgwrite nu poate scrie (None: numele e bun)."""
+	if motiv == REFUZ_SPATII:
+		return _("nu se poate instala: numele stickului are spații")
+	if motiv:
+		return _("nu se poate instala: numele stickului are semne neacceptate")
+	return None
 
 
 def _numePachet(c):
@@ -475,8 +523,8 @@ RANDURI_CONFIRMARE = (9, 4)
 
 def textVerificare(c):
 	"""Intrebarea de dinaintea simularii, pentru pachetul `c`"""
-	return _("Pachetul: %s") % "  ·  ".join(_numeSiVersiune(c)) + "\n" + \
-		_("Acum se face numai o verificare (o simulare): nu se scrie nimic pe receptor. Continui?")
+	return _("Software: %s") % "  ·  ".join(_numeSiVersiune(c)) + "\n" + \
+		_("Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?")
 
 
 def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar=""):
@@ -486,28 +534,250 @@ def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar=""):
 	singura pereche de partitii (V20, V30, V40), textul de pana acum."""
 	sus = _("Atenție: o înregistrare este în curs chiar acum.") + "\n" if inregistrare else ""
 	tehnic = (recuperare.strip() + "\n" if recuperare and recuperare.strip() else "") + \
-		_("Pachet: %s") % "  ·  ".join(_numeSiVersiune(c))
+		_("Software: %s") % "  ·  ".join(_numeSiVersiune(c))
 	if subdosar:
-		pereche = _("Noul software se scrie peste cel care rulează acum (dosarul %s din memoria internă): dacă nu "
-			"pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de "
-			"scriere, setările și lista de canale se copiază pe stick.") % subdosar
+		pereche = _("Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick.") % subdosar
 	else:
-		pereche = _("Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă "
-			"noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de scriere, setările "
-			"și lista de canale se copiază pe stick.")
-	return sus + _("Noul software se scrie acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât "
-		"timp scrie; interfața se oprește, iar receptorul repornește singur la final.") + "\n" + pereche + "\n" + \
-		_("Scrii acum software-ul pe receptor?") + "\n\n" + tehnic
+		pereche = _("Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick.")
+	return sus + _("Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final.") + "\n" + pereche + "\n" + \
+		_("Instalezi acum software-ul pe receptor?") + "\n\n" + tehnic
 
 
 def _descriereCandidat(c):
-	"""Randul pachetului in lista: verdictul pazei (refuzurile incep cu „nu se scrie”), numele, versiunea si mediul;
-	ce e mai putin important sta la dreapta, unde randul se poate taia."""
+	"""Pachetul pe un singur rand de text: verdictul pazei (refuzurile incep cu „nu se scrie”), numele, versiunea si
+	mediul. E cheia randului din lista; pe ecran randul il deseneaza _intrariPachet."""
 	sursa = c["disc"].description or c["disc"].mountpoint
 	parti = _numeSiVersiune(c) + [sursa]
-	if c.get("paza"):
+	stick = scurtNumeStick(c.get("nume_stick"))
+	if stick:
+		parti.insert(0, stick)
+	elif c.get("paza"):
 		parti.insert(0, HdsPazaModel.scurtRefuz(c["paza"][0]))
 	return "  ·  ".join(parti)
+
+
+# ---------------------------------------------------------------- ordinea si starea pachetelor (Eduard, 04.11.2026)
+# Fiecare imagine e o cartela a ei, cu semn colorat in fata si cu starea scrisa mare: cea mai noua compatibila, apoi
+# celelalte compatibile, apoi cele incompatibile. Cea mai noua compatibila sta prima, deci OK o alege direct.
+# Desenul: design-web-stitch/skin-pro/imagine-de-pe-stick.png.
+FEL_NOUA = "noua"
+FEL_BUNA = "buna"
+FEL_STRAINA = "straina"
+FEL_REA = "rea"
+_NUME_IMAGINE_RX = re.compile(r"hdsatelit-(\d+(?:\.\d+)+)(?:\S*?[-_](20\d{6})(?!\d))?", re.I)
+_NUME_STRAIN_RX = re.compile(r"^([^\W\d][^-_]*)[-_ ]+(\d+(?:\.\d+)*)")
+
+
+def _literaMare(text):
+	return text[:1].upper() + text[1:]
+
+
+def versiuneSiData(c):
+	"""((0, 7, 0), "20261104") din numele imaginii (hdsatelit-0.7.0-viper4kv20-20261104); ((), "") pentru alte nume"""
+	nume_zip = os.path.basename(c.get("cale_zip") or "")
+	for text in (c.get("versiune") or "", nume_zip):
+		m = _NUME_IMAGINE_RX.search(text)
+		if m:
+			return tuple(int(x) for x in m.group(1).split(".")), m.group(2) or ""
+	return (), ""
+
+
+def _compatibil(c):
+	return (c.get("paza") or (None,))[0] == HdsPazaModel.PACHET_BUN and not c.get("nume_stick")
+
+
+def _deLaAltii(c):
+	"""Imagine fara semn si fara nume HD Satelit: de la alta echipa sau de la producator. Se poate instala, dar omul e
+	anuntat la OK ca nu stim daca e compatibila: nu e a noastra si nu o putem verifica (Eduard, 04.11.2026)."""
+	return (c.get("paza") or (None,))[0] == HdsPazaModel.REFUZ_FARA_MARCAJ and not versiuneSiData(c)[0]
+
+
+def numeImagineStraina(c):
+	"""Numele imaginii altora, cum e scris in fisierele ei: imageversion, apoi numele arhivei („nume-7.6-model-data” da
+	„nume 7.6”). Textul vine din arhiva, deci se curata; in cod nu e scris niciun nume de imagine."""
+	nume_zip = os.path.splitext(os.path.basename(c.get("cale_zip") or ""))[0]
+	curate = [re.sub(r"[^\w .+-]", "", t, flags=re.U).strip()[:60] for t in (c.get("versiune") or "", nume_zip) if "=" not in t]
+	for text in curate:
+		m = _NUME_STRAIN_RX.match(text)
+		if m:
+			return "%s %s" % (m.group(1), m.group(2))
+	for text in curate:
+		if text:
+			return text
+	return _numePachet(c)
+
+
+def textImagineStraina(c):
+	"""Ce i se spune omului despre imaginea altora: sus in lista si in avertismentul de la OK"""
+	return _("Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne "
+		"aparține și nu o putem verifica.") % numeImagineStraina(c)
+
+
+def textAvertismentStrain(c):
+	"""Intrebarea de la OK pe imaginea altora; se termina cu intrebarea, „Nu” e ales"""
+	return textImagineStraina(c) + "\n" + \
+		_("Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea "
+		"de pe stick.") + "\n" + \
+		_("Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick.") + \
+		"\n" + _("Continui?")
+
+
+def asazaPachete(candidati):
+	"""Ordinea din lista si felul fiecarui pachet („fel”), in aceeasi lista: compatibilele primele, cea mai noua intai,
+	apoi cele de la alte echipe si la sfarsit cele incompatibile."""
+	# la aceeasi versiune si data decide numele arhivei, in care data sta tot la sfarsit
+	candidati.sort(key=lambda c: versiuneSiData(c) + (os.path.basename(c.get("cale_zip") or ""),), reverse=True)
+	candidati.sort(key=lambda c: 0 if _compatibil(c) else (1 if _deLaAltii(c) else 2))
+	for i, c in enumerate(candidati):
+		if _compatibil(c):
+			c["fel"] = FEL_NOUA if i == 0 else FEL_BUNA
+		elif _deLaAltii(c):
+			c["fel"] = FEL_STRAINA
+			c["paza"] = (c["paza"][0], textImagineStraina(c))
+		else:
+			c["fel"] = FEL_REA
+	return candidati
+
+
+def textGasite(n):
+	"""Randul de sus al listei"""
+	if n == 1:
+		return _("Am găsit o variantă de software. Apasă OK ca să fie verificată.")
+	return _("Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată.") % n
+
+
+def textFel(fel):
+	"""Eticheta starii, pe cartela si in pagina web"""
+	if fel == FEL_NOUA:
+		return _("Cea mai nouă compatibilă")
+	if fel == FEL_BUNA:
+		return _("Compatibilă")
+	if fel == FEL_STRAINA:
+		return _("Neverificată")
+	return _("Incompatibilă")
+
+
+def titluPachet(c):
+	"""Randul mare al cartelei: „HD Satelit 0.7.0, 04.11.2026”; numele pachetului cand nu e o imagine HD Satelit"""
+	versiune, data = versiuneSiData(c)
+	if c.get("fel") == FEL_STRAINA:
+		return _literaMare(numeImagineStraina(c))
+	if not versiune:
+		return _literaMare(_numePachet(c)) if c["tip"] == "folder" else _numePachet(c)
+	titlu = "HD Satelit %s" % ".".join(str(x) for x in versiune)
+	return titlu + (", %s.%s.%s" % (data[6:8], data[4:6], data[:4]) if data else "")
+
+
+def detaliuPachet(c):
+	"""Randul mic al cartelei: de ce nu se instaleaza, numele fisierului (daca nu e deja in titlu), stickul si viteza lui"""
+	parti = []
+	if c.get("fel") == FEL_STRAINA:
+		parti.append(_("Nu este imagine HD Satelit. Nu știm dacă este compatibilă"))
+	elif not _compatibil(c):
+		parti.append(_literaMare(scurtNumeStick(c.get("nume_stick")) or HdsPazaModel.scurtRefuz((c.get("paza") or (None,))[0])))
+	if versiuneSiData(c)[0]:
+		parti.append(_literaMare(_numePachet(c)) if c["tip"] == "folder" else _numePachet(c))
+	parti.append(c["disc"].description or c["disc"].mountpoint)
+	if c.get("usb"):
+		parti.append(c["usb"])
+	return "  ·  ".join(parti)
+
+
+# culorile din tema si rezerva pentru alt skin; fondul si chenarul cartelei, din desenul Stitch
+_CULORI_LISTA = {
+	"fond": ("hdsPanelSolid", 0x10162A),
+	"chenar": ("hdsTrack", 0x2A3350),
+	"fond_ales": (None, 0x16234D),
+	"chenar_ales": ("hdsBrand", 0x374EA1),
+	"text": ("hdsText", 0xF2F4F8),
+	"text_ales": ("hdsSelText", 0xFFFFFF),
+	"mic": ("hdsText2", 0xC9D2E3),
+	"sters": ("hdsLabel", 0xAEB9CC),
+	"pe_verde": ("hdsPanelSolid", 0x10162A),
+	"alb": ("white", 0xFFFFFF),
+}
+_CULOARE_FEL = {
+	FEL_NOUA: ("hdsGood", 0x4FD18B),
+	FEL_BUNA: (None, 0x3B82F6),
+	FEL_STRAINA: ("hdsAmber", 0xF5B83D),
+	FEL_REA: ("hdsBad", 0xFF6B5E),
+}
+
+
+def _culoareTema(nume, rezerva):
+	if nume:
+		try:
+			from skin import colorNames
+			return colorNames[nume].argb() & 0xFFFFFF
+		except Exception:
+			pass
+	return rezerva
+
+
+def _culoriLista():
+	c = dict((k, _culoareTema(*v)) for k, v in _CULORI_LISTA.items())
+	c.update(dict((k, _culoareTema(*v)) for k, v in _CULOARE_FEL.items()))
+	return c
+
+
+def _cartela(lat, inalt, gol, c, chenar, margine=0):
+	"""Dreptunghiurile cartelei: spatiul de sub ea si cel din dreapta (cu acelasi fond si pe randul ales, ca sa nu se
+	lipeasca de vecina), chenarul si fondul"""
+	from Components.MultiContent import MultiContentEntryText as T
+	sus = inalt - gol
+	return [
+		T(pos=(0, sus), size=(lat + margine, gol), font=0, text="", backcolor=c["fond"], backcolor_sel=c["fond"]),
+		T(pos=(lat, 0), size=(margine, sus), font=0, text="", backcolor=c["fond"], backcolor_sel=c["fond"]),
+		T(pos=(0, 0), size=(lat, sus), font=0, text="", backcolor=c["chenar"], backcolor_sel=c["chenar_ales"]),
+		T(pos=(chenar, chenar), size=(lat - 2 * chenar, sus - 2 * chenar), font=0, text="", backcolor=c["fond"],
+			backcolor_sel=c["fond_ales"]),
+	]
+
+
+def _intrariPachet(p, lat, inalt, f, c, margine=0):
+	"""Randul din lista pentru pachetul `p`: cheia (textul lui pe un rand), cartela, semnul in fata, titlul, randul mic
+	si eticheta starii. `f`: scara fata de 1920 px."""
+	from enigma import RT_HALIGN_CENTER, RT_HALIGN_LEFT, RT_VALIGN_CENTER
+	from Components.MultiContent import MultiContentEntryText as T
+	gol, chenar = int(14 * f), max(2, int(3 * f))
+	sus = inalt - gol
+	semn, x = int(30 * f), int(26 * f)
+	xt = x + semn + int(26 * f)
+	fel = p.get("fel") or FEL_REA
+	culoare = c[fel]
+	eticheta = textFel(fel)
+	le = int(len(eticheta) * 19 * f) + int(44 * f)
+	he = int(66 * f)
+	xe = lat - le - int(26 * f)
+	lt = max(10, xe - xt - int(20 * f))
+	titlu = c["sters"] if fel == FEL_REA else c["text"]
+	mic = c["sters"] if fel == FEL_REA else c["mic"]
+	pe_eticheta = c["pe_verde"] if fel in (FEL_NOUA, FEL_STRAINA) else c["alb"]
+	st = RT_HALIGN_LEFT | RT_VALIGN_CENTER
+	return [_descriereCandidat(p)] + _cartela(lat, inalt, gol, c, chenar, margine) + [
+		T(pos=(x, (sus - semn) // 2), size=(semn, semn), font=0, text="", backcolor=culoare, backcolor_sel=culoare),
+		T(pos=(xt, int(12 * f)), size=(lt, int(50 * f)), font=0, flags=st, text=titluPachet(p), color=titlu,
+			color_sel=c["text_ales"], backcolor=c["fond"], backcolor_sel=c["fond_ales"]),
+		T(pos=(xt, int(62 * f)), size=(lt, int(38 * f)), font=1, flags=st, text=detaliuPachet(p), color=mic,
+			color_sel=c["mic"], backcolor=c["fond"], backcolor_sel=c["fond_ales"]),
+		T(pos=(xe, (sus - he) // 2), size=(le, he), font=2, flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=eticheta,
+			color=pe_eticheta, color_sel=pe_eticheta, backcolor=culoare, backcolor_sel=culoare),
+	]
+
+
+def _intrariSimple(text, lat, inalt, f, c, margine=0):
+	"""Randul fara stare („Caută din nou software de receptor”, „Nu am găsit...”): cartela, semn mic si text"""
+	from enigma import RT_HALIGN_LEFT, RT_VALIGN_CENTER
+	from Components.MultiContent import MultiContentEntryText as T
+	gol, chenar = int(14 * f), max(2, int(3 * f))
+	sus = inalt - gol
+	semn, x = int(16 * f), int(33 * f)
+	xt = x + semn + int(33 * f)
+	return [text] + _cartela(lat, inalt, gol, c, chenar, margine) + [
+		T(pos=(x, (sus - semn) // 2), size=(semn, semn), font=0, text="", backcolor=c["sters"], backcolor_sel=c["alb"]),
+		T(pos=(xt, chenar), size=(max(10, lat - xt - int(26 * f)), sus - 2 * chenar), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
+			text=text, color=c["text"], color_sel=c["text_ales"], backcolor=c["fond"], backcolor_sel=c["fond_ales"]),
+	]
 
 
 def _spatiuSuficient(mountpoint, octeti_necesari):
@@ -656,6 +926,78 @@ def _simulareAratacorect(iesire, cmdline=None):
 	return bool(are_kernel and are_rootfs and are_dispozitive and not are_eroare)
 
 
+# Ce spune ofgwrite la simulare, pe intelesul omului (Eduard, 04.11.2026: „tot ce spune ăla să fie translatat în limbajul
+# uman”). Randurile fara rost pentru om nu se arata; ce nu e in tabel ramane cum e, la sfarsit, ca sa nu se piarda o eroare.
+_ANALIZA_FARA_ROST = re.compile(
+	r"^(FBIO_|ofgwrite Utility|Author:|Based upon:|Use at your own risk|Don't use it|Flashing (rootfs|kernel)|Flash rootfs|Untar:|"
+	r"Delete rootfs|Creating directory|"
+	r"Searching image files|Found mounted |Found /proc/mtd|Device:|Using (kernel|rootfs) mtd device|Read /proc/cmdline|"
+	r"Kexec mode|Chkroot mode|Current (rootfs|kernel|root sub dir) is:|Syncing filesystem|daemonize|Successfully|Checking E2|"
+	r"E2 is stopped|Boxname detect)", re.I)
+
+
+def textNerecunoscut():
+	return _("Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic.")
+
+
+def _analizaRand(rand):
+	"""Propozitia pentru un rand al lui ofgwrite, "" daca nu e nimic de spus omului, None daca randul nu e cunoscut"""
+	m = re.match(r"Found (?:tar\.xz )?(kernel|rootfs|nfi) file: (.*)$", rand, re.I)
+	if m:
+		nume = os.path.basename(m.group(2).strip())
+		if m.group(1).lower() == "kernel":
+			return _("A găsit nucleul sistemului (%s).") % nume
+		return _("A găsit sistemul (%s).") % nume
+	m = re.match(r"Found (\w+) rootfs$", rand, re.I)
+	if m:
+		return _("Programul poate instala sistemul în acest format (%s).") % m.group(1)
+	m = re.match(r"Found mountpoint for rootfs file: (.*)$", rand, re.I)
+	if m:
+		return _("Fișierele stau pe stick (%s).") % os.path.basename(m.group(1).strip())
+	m = re.match(r"(?:Found|Using) cmdline (kernel|rootfs) device: (\S+)", rand, re.I)
+	if m:
+		loc = os.path.basename(m.group(2))
+		if m.group(1).lower() == "kernel":
+			return _("Nucleul se va instala în memoria internă, în locul %s.") % loc
+		return _("Sistemul se va instala în memoria internă, în locul %s.") % loc
+	jos = rand.lower()
+	for semn, text in (
+			("no kernel file was found", _("Nu a găsit nucleul sistemului în acest software.")),
+			("no rootfs file was found", _("Nu a găsit sistemul în acest software.")),
+			("no kernel device was found", _("Nu a găsit locul nucleului în memoria internă.")),
+			("no rootfs device was found", _("Nu a găsit locul sistemului în memoria internă.")),
+			("rootfs type is unknown", _("Nu recunoaște formatul sistemului.")),
+			("kernel file is bigger", _("Nucleul este prea mare pentru locul lui din memoria internă.")),
+			("rootfs file is bigger", _("Sistemul este prea mare pentru locul lui din memoria internă."))):
+		if semn in jos:
+			return text
+	return "" if _ANALIZA_FARA_ROST.match(rand) else None
+
+
+def analizaPeIntelesulOmului(iesire, cod, recunoscut=True):
+	"""Textul pentru „Vezi ce a analizat ofgwrite”: rezultatul, ce a gasit, ce nu e tradus si ca nu s-a scris nimic"""
+	randuri, necunoscute = [], []
+	for rand in (iesire or "").splitlines():
+		rand = rand.strip()
+		if not rand:
+			continue
+		text = _analizaRand(rand)
+		if text is None:
+			necunoscute.append(rand)
+		elif text and text not in randuri:
+			randuri.append(text)
+	if cod != 0:
+		sus = _("A găsit o eroare și s-a oprit (codul %d).") % cod
+	elif recunoscut:
+		sus = _("Nu a găsit nicio eroare.")
+	else:
+		sus = textNerecunoscut()
+	rez = [sus] + ["•  " + r for r in randuri]
+	if necunoscute:
+		rez += ["", _("Alte mesaje ale programului, netraduse:")] + necunoscute
+	return "\n".join(rez + ["", _("Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor.")])
+
+
 def skinActualizare(latime, inaltime):
 	"""Skinul ecranului, socotit la deschidere pentru `latime` x `inaltime` (asezarea e gandita pe 1920x1080: fereastra
 	1500x820, litere de 28). Niciun skin nu are un bloc HdsSoftwareUpdate, deci acesta e folosit in orice skin."""
@@ -703,10 +1045,15 @@ class HdsSoftwareUpdate(Screen):
 		self._lucrare = None
 		self._opreste = False
 		self._semnVerificat = None
+		self._analizaVazuta = False
+		# marimea cartelelor pana la _pregatesteLista (citita din skin)
+		self._latimeRand, self._inaltimeRand, self._scaraRand, self._margineRand = 1688, 124, 1.0, 24
+		self._culoriRand = _culoriLista()
 		self.onClose.append(self._laInchidere)
 
-		self["detaliu"] = Label(_("Se caută pachete de actualizare pe mediile montate (USB/HDD)…"))
-		self["lista"] = MenuList([])
+		self["detaliu"] = Label(_("Se caută software de receptor pe stick și pe disc…"))
+		from enigma import eListboxPythonMultiContent
+		self["lista"] = MenuList([], content=eListboxPythonMultiContent)
 		self["iesire"] = ScrollLabel("")
 		self["iesire"].hide()
 		self["key_red"] = Button(_("Înapoi"))
@@ -720,13 +1067,42 @@ class HdsSoftwareUpdate(Screen):
 				"red": self._inapoi,
 				"ok": self._ok,
 				"green": self._ok,
-				"yellow": self._reincarca,
+				"yellow": self._galben,
 				"up": self._sus,
 				"down": self._jos,
 			}, -2)
 
+		self.onLayoutFinish.append(self._pregatesteLista)
 		self.onLayoutFinish.append(self._reincarca)
 		getattr(self, "onLayoutFinish", []).append(self._cozileDetaliului)
+
+	def _pregatesteLista(self):
+		"""Fonturile si marimea cartelelor, din latimea listei din skin (pe tema HD Satelit 1712 px, la 1920 pe ecran).
+		Marimea textului (Marimea fonturi) creste si literele, si cartela."""
+		from enigma import getDesktop, gFont
+		lista = self["lista"]
+		try:
+			import skin
+			p = int(skin.getFontScalePercent())
+		except Exception:
+			p = 100
+		scara = getDesktop(0).size().width() / 1920.0
+		f = scara * p / 100.0
+		self._inaltimeRand = int(123 * f)     # 5 cartele incap in lista de 616 px a temei, fara bara de derulare
+		lista.l.setFont(0, gFont("Regular", int(34 * f)))
+		lista.l.setFont(1, gFont("Regular", int(25 * f)))
+		lista.l.setFont(2, gFont("Bold", int(27 * f)))
+		lista.l.setItemHeight(self._inaltimeRand)
+		self._scaraRand = f
+		latime = lista.instance.size().width()
+		self._margineRand = int(24 * scara)
+		self._latimeRand = latime - self._margineRand
+
+	def _randPachet(self, c):
+		return _intrariPachet(c, self._latimeRand, self._inaltimeRand, self._scaraRand, self._culoriRand, self._margineRand)
+
+	def _randSimplu(self, text):
+		return _intrariSimple(text, self._latimeRand, self._inaltimeRand, self._scaraRand, self._culoriRand, self._margineRand)
 
 	def _cozileDetaliului(self):
 		"""Textul marit (Marimea textului peste 100 %, Components/HdsMarireText): detaliul de sus are loc si pentru cozile
@@ -740,9 +1116,18 @@ class HdsSoftwareUpdate(Screen):
 
 	# -------------------------------------------------------------- navigare in lista
 
+	def _detaliuRand(self):
+		"""Sus in lista, tot textul pentru randul ales, pe mai multe randuri, ca sa nu se taie: pe cartela nu incape."""
+		c = self._candidatSelectat()
+		if c is not None and c.get("fel") == FEL_STRAINA:
+			self["detaliu"].setText(textImagineStraina(c))
+		elif self._candidati:
+			self["detaliu"].setText(textGasite(len(self._candidati)))
+
 	def _sus(self):
 		if not self._ocupat and self._faza == "lista":
 			self["lista"].up()
+			self._detaliuRand()
 		elif self._faza in ("verificare", "rezultat"):
 			# HDSatelit: iesirea simularii poate fi mai lunga decat caseta ei
 			self["iesire"].pageUp()
@@ -750,13 +1135,39 @@ class HdsSoftwareUpdate(Screen):
 	def _jos(self):
 		if not self._ocupat and self._faza == "lista":
 			self["lista"].down()
+			self._detaliuRand()
 		elif self._faza in ("verificare", "rezultat"):
 			self["iesire"].pageDown()
 
+	def _galben(self):
+		"""Tasta galbena: dupa simulare arata sau ascunde ce a analizat ofgwrite; in rest reface lista."""
+		if self._scriereRealaPornita:
+			return
+		if self._faza == "rezultat":
+			self._arataAnaliza(not self._analizaVazuta)
+		else:
+			self._reincarca()
+
+	def _arataAnaliza(self, arata):
+		"""Ce a analizat ofgwrite se vede numai cand o cere omul (Eduard, 04.11.2026)."""
+		self._analizaVazuta = arata
+		if arata:
+			self["lista"].hide()
+			self["iesire"].show()
+			self._buton("key_yellow", _("Ascunde ce a analizat ofgwrite"))
+		else:
+			self["iesire"].hide()
+			self["lista"].show()
+			self._buton("key_yellow", _("Vezi ce a analizat ofgwrite"))
+
 	def _inapoi(self):
-		"""Inapoi / EXIT. In timpul copierii in dosarul curat si al sumelor (fir separat) inchide ecranul: _laInchidere
-		opreste firul la urmatoarea bucata. Numai in timpul simularii (ofgwrite -n) ecranul asteapta."""
+		"""Inapoi / EXIT. Dupa simulare intoarce la lista. In timpul copierii in dosarul curat si al sumelor (fir separat)
+		inchide ecranul: _laInchidere opreste firul la urmatoarea bucata. Numai in timpul simularii (ofgwrite -n) ecranul
+		asteapta."""
 		if self._ocupat and self._faza == "verificare":
+			return
+		if self._faza == "rezultat" and not self._scriereRealaPornita:
+			self._reincarca()
 			return
 		self._console.killAll()
 		self.close()
@@ -784,43 +1195,43 @@ class HdsSoftwareUpdate(Screen):
 		if c is None or not any(x is c for x in self._candidati):
 			return
 		c["paza"] = (cod, text)
-		index = self["lista"].getSelectionIndex()
-		self["lista"].setList([_descriereCandidat(x) for x in self._candidati] + [_("Caută din nou pachetele")])
-		self["lista"].moveToIndex(index)
+		asazaPachete(self._candidati)
+		self["lista"].setList([self._randPachet(x) for x in self._candidati] + [self._randSimplu(_("Caută din nou software de receptor"))])
+		self["lista"].moveToIndex(0)
 
 	# -------------------------------------------------------------- faza 1: cautare
 
 	def _reincarca(self):
-		"""Lista pachetelor; ultimul rand, „Caută din nou pachetele”, reface lista cu OK (ca tasta galbena)."""
+		"""Lista imaginilor; ultimul rand, „Caută din nou software de receptor”, reface lista cu OK (ca tasta galbena)."""
 		if self._ocupat:
 			return
 		self._faza = "lista"
 		self["iesire"].hide()
 		self["lista"].show()
-		self["detaliu"].setText(_("Se caută pachete de actualizare pe mediile montate (USB/HDD)…"))
+		self["detaliu"].setText(_("Se caută software de receptor pe stick și pe disc…"))
 		eroare_cautare = None
 		try:
 			self._candidati = cautaCandidati()
 		except Exception as eroare:
 			self._candidati = []
 			eroare_cautare = eroare
-		cauta_din_nou = _("Caută din nou pachetele")
+		cauta_din_nou = self._randSimplu(_("Caută din nou software de receptor"))
 		if self._candidati:
-			randuri = [_descriereCandidat(c) for c in self._candidati]
+			randuri = [self._randPachet(c) for c in self._candidati]
 			self["lista"].setList(randuri + [cauta_din_nou])
+			self["lista"].moveToIndex(0)
 			self["detaliu"].setText(
-				_("Pachete găsite: %d. Alege unul și apasă OK ca să fie verificat.") % len(self._candidati)
+				textGasite(len(self._candidati))
 			)
-			self._buton("key_green", _("Verifică pachetul"))
+			self._buton("key_green", _("Verifică software-ul"))
 		else:
-			self["lista"].setList([_("Niciun pachet găsit pe mediile montate acum."), cauta_din_nou])
+			self["lista"].setList([self._randSimplu(_("Nu am găsit software de receptor pe stick sau pe disc.")), cauta_din_nou])
 			if eroare_cautare is not None:
 				self["detaliu"].setText(_("Eroare la căutare: %s") % eroare_cautare)
 			else:
 				self["detaliu"].setText(
-					_("Conectează un stick cu pachetul de actualizare (dosarul e2/update cu kernel.bin și "
-					  "rootfs.tar.bz2, sau o arhivă .zip cu aceeași structură), apoi apasă OK pe „Caută din nou "
-					  "pachetele”.")
+					_("Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și "
+					  "rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”.")
 				)
 			self._buton("key_green", "")
 		self._buton("key_yellow", _("Reîncarcă"))
@@ -845,17 +1256,22 @@ class HdsSoftwareUpdate(Screen):
 		if self._faza == "lista":
 			candidat = self._candidatSelectat()
 			if candidat is None:
-				# „Caută din nou pachetele” (sau randul „Niciun pachet găsit”)
+				# „Caută din nou software de receptor” (sau randul „Nu am găsit...”)
 				self._reincarca()
 				return
 			self._semnVerificat = None
+			if candidat.get("fel") == FEL_STRAINA:
+				self._candidatAles = candidat
+				self._intreaba(self._dupaConfirmareVerificare, textAvertismentStrain(candidat),
+					_("Imagine care nu este HD Satelit"), _("Da, continuă"), False, RANDURI_CONFIRMARE)
+				return
 			cod, text = candidat.get("paza") or pazaPachet(candidat)
 			if cod != HdsPazaModel.PACHET_BUN:
 				self._refuzPaza(text, cod)
 				return
 			self._candidatAles = candidat
-			self._intreaba(self._dupaConfirmareVerificare, textVerificare(candidat), _("Verificarea pachetului"),
-				_("Da, verifică pachetul"), True, RANDURI_VERIFICARE)
+			self._intreaba(self._dupaConfirmareVerificare, textVerificare(candidat), _("Verificarea software-ului"),
+				_("Da, verifică software-ul"), True, RANDURI_VERIFICARE)
 		elif self._faza == "rezultat" and self._arataCorect and not self._scriereRealaPornita:
 			self._intreabaFlashReal()
 
@@ -869,27 +1285,45 @@ class HdsSoftwareUpdate(Screen):
 		intoarce textul scurt al refuzului. ofgwrite nu porneste niciodata dupa un refuz."""
 		permis, motiv, dispozitiv, punct = verificaMediuScriere(cale)
 		if permis:
-			return None
+			return self._refuzNumeStick(cale)
 		if dispozitiv:
 			unde = _("%s, montat pe %s") % (dispozitiv, punct)
 		else:
 			unde = cale
 		if motiv == REFUZ_INTERN:
-			scurt = _("Scrierea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s).") % unde
+			scurt = _("Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s).") % unde
 		elif motiv == REFUZ_LIPSA:
-			scurt = _("Scrierea este oprită: nu am putut verifica unde stau fișierele imaginii (%s).") % unde
+			scurt = _("Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s).") % unde
 		else:
-			scurt = _("Scrierea este oprită: fișierele imaginii nu stau pe un stick USB (%s).") % unde
+			scurt = _("Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s).") % unde
 		# fereastra de mesaj a skinului are loc pentru trei randuri; textul intreg merge in fereastra refuzurilor
 		explicatie = _(
-			"Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: "
-			"scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\n"
-			"Copiază pachetul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, "
-			"introdu stickul și încearcă din nou. Nu s-a scris nimic."
+			"Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
 		)
 		from Screens.HdsPazaModel import HdsPazaModelRefuz
 		self.session.open(HdsPazaModelRefuz, scurt + "\n" + explicatie.replace("\n\n", "\n"),
-			_("Scrierea este oprită"))
+			_("Instalarea este oprită"))
+		return scurt
+
+	def _refuzNumeStick(self, cale):
+		"""None daca ofgwrite poate scrie de pe stickul acesta (o montare cu spatii se muta singura, aici, chiar inainte
+		de scriere); altfel arata in fereastra refuzurilor ce nume sa-i dea omul stickului si intoarce textul scurt. Cu
+		programul de scriere reparat trec si spatiile."""
+		motiv, punct = pregatesteNumeStick(cale)
+		if not motiv:
+			return None
+		nume = os.path.basename(punct or "") or cale
+		if motiv == REFUZ_SPATII:
+			scurt = _("Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic.") % nume
+		elif motiv == REFUZ_LIPSA:
+			scurt = _("Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s).") % cale
+		else:
+			scurt = _("Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic.") % nume
+		explicatie = _("Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea.") + "\n" + \
+			_("Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu "
+				"HDSATELIT), apoi introdu-l din nou în receptor.")
+		from Screens.HdsPazaModel import HdsPazaModelRefuz
+		self.session.open(HdsPazaModelRefuz, scurt + "\n" + explicatie, _("Instalarea este oprită"))
 		return scurt
 
 	def _pregatesteSiVerifica(self):
@@ -902,14 +1336,14 @@ class HdsSoftwareUpdate(Screen):
 		try:
 			marime = _marimePachet(candidat)
 		except OSError as eroare:
-			self._eroareInapoiLaLista(_("Nu am putut dezarhiva pachetul: %s") % eroare)
+			self._eroareInapoiLaLista(_("Nu am putut dezarhiva software-ul: %s") % eroare)
 			return
 		if not _spatiuSuficient(candidat["disc"].mountpoint, marime):
 			self._eroareInapoiLaLista(_("Spațiu insuficient pe %s pentru dezarhivare.") % candidat["disc"].mountpoint)
 			return
 		self._ocupat = True
 		self._opreste = False
-		self["detaliu"].setText(_("Se copiază pachetul într-un dosar curat pe stick. Durează până la un minut."))
+		self["detaliu"].setText(_("Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		self._lucrare = HdsPazaModel.LucrareFundal(
@@ -920,7 +1354,7 @@ class HdsSoftwareUpdate(Screen):
 		self._lucrare = None
 		self._ocupat = False
 		if eroare or not cale:
-			self._eroareInapoiLaLista(_("Nu am putut dezarhiva pachetul: %s") % (eroare or "?"))
+			self._eroareInapoiLaLista(_("Nu am putut dezarhiva software-ul: %s") % (eroare or "?"))
 			return
 		candidat["cale_finala"] = cale
 		self._pornesteSumele(cale)
@@ -934,7 +1368,7 @@ class HdsSoftwareUpdate(Screen):
 			sus = HdsPazaModel.randSusRefuz(cod)
 		else:
 			sus = text.split("\n")[0]
-			nimic = _("Nu s-a scris nimic pe receptor.")
+			nimic = _("Nu s-a instalat nimic pe receptor.")
 			if nimic not in sus:
 				sus = "%s %s" % (sus, nimic)
 		self._eroareInapoiLaLista(sus)
@@ -948,12 +1382,17 @@ class HdsSoftwareUpdate(Screen):
 		"""Marcajul din dosarul pachetului fata de receptor (repede), apoi sumele SHA-256 pe un fir separat; simularea
 		porneste numai dupa ce sumele ies bune."""
 		cod, text, marcaj = HdsPazaModel.verificaPachet(_textMarcaj(os.path.join(cale, NUME_MARCAJ)))
+		if self._primitDupaAvertisment(cod):
+			# fara semn nu sunt sume de verificat; se tine minte numai ca fisierele nu se schimba pana la scriere
+			self._semnVerificat = (cale, HdsPazaModel.semnFisiere(cale))
+			self._porneesteVerificare(cale)
+			return
 		if cod != HdsPazaModel.PACHET_BUN:
 			self._refuzPaza(text, cod)
 			return
 		self._ocupat = True
 		self._opreste = False
-		self["detaliu"].setText(_("Se verifică dacă pachetul este întreg (sumele de control). Durează câteva secunde."))
+		self["detaliu"].setText(_("Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		semn = HdsPazaModel.semnFisiere(cale)
@@ -965,8 +1404,8 @@ class HdsSoftwareUpdate(Screen):
 		self._lucrare = None
 		self._ocupat = False
 		if eroare or sume is None:
-			self._refuzPaza(_("Pachetul nu s-a putut citi de pe stick (%s).") % (eroare or "?") + "\n" +
-				_("Nu s-a scris nimic pe receptor."))
+			self._refuzPaza(_("Software-ul nu s-a putut citi de pe stick (%s).") % (eroare or "?") + "\n" +
+				_("Nu s-a instalat nimic pe receptor."))
 			return
 		gresite = HdsPazaModel.sumeGresite(marcaj, sume)
 		if gresite:
@@ -982,15 +1421,21 @@ class HdsSoftwareUpdate(Screen):
 		self._semnVerificat = (cale, semn)
 		self._porneesteVerificare(cale)
 
+	def _primitDupaAvertisment(self, cod):
+		"""Imaginea altora, pe care omul a primit-o dupa avertisment: tot fara semn. Daca intre timp are un semn, intra
+		la paza obisnuita."""
+		return cod == HdsPazaModel.REFUZ_FARA_MARCAJ and (self._candidatAles or {}).get("fel") == FEL_STRAINA
+
 	def _refuzPazaInainteDeScriere(self, cale):
 		"""Pe firul enigma2, chiar inainte de copie si de init 4: marcajul, amprenta si fisierele neschimbate de la
 		sume. Intoarce textul refuzului (si il arata), sau None."""
 		cod, text, _marcaj = HdsPazaModel.verificaPachet(_textMarcaj(os.path.join(cale, NUME_MARCAJ)))
-		if cod == HdsPazaModel.PACHET_BUN and (not self._semnVerificat or self._semnVerificat[0] != cale or
+		trece = cod == HdsPazaModel.PACHET_BUN or self._primitDupaAvertisment(cod)
+		if trece and (not self._semnVerificat or self._semnVerificat[0] != cale or
 				HdsPazaModel.semnFisiere(cale) != self._semnVerificat[1]):
 			text = HdsPazaModel.textRefuz(HdsPazaModel.REFUZ_SCHIMBAT)
-			cod = HdsPazaModel.REFUZ_SCHIMBAT
-		if cod == HdsPazaModel.PACHET_BUN:
+			trece = False
+		if trece:
 			return None
 		self._arataRefuzPaza(text)
 		return text.split("\n")[0]
@@ -1001,7 +1446,7 @@ class HdsSoftwareUpdate(Screen):
 		self["iesire"].hide()
 		self["lista"].show()
 		self["detaliu"].setText(mesaj)
-		self._buton("key_green", _("Verifică pachetul") if self._candidati else "")
+		self._buton("key_green", _("Verifică software-ul") if self._candidati else "")
 		self._buton("key_yellow", _("Reîncarcă"))
 
 	def _blocheazaScrierea(self, mesaj):
@@ -1018,10 +1463,11 @@ class HdsSoftwareUpdate(Screen):
 			return
 		self._faza = "verificare"
 		self._ocupat = True
-		self["lista"].hide()
-		self["iesire"].show()
-		self["iesire"].setText(_("Se face simularea scrierii (ofgwrite -n): nu se scrie nimic…"))
-		self["detaliu"].setText(_("Așteaptă câteva secunde și nu opri receptorul."))
+		self["iesire"].hide()
+		self["lista"].show()
+		self["iesire"].setText("")
+		self["lista"].setList([self._randPachet(self._candidatAles)] if self._candidatAles else [])
+		self["detaliu"].setText(_("Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		comanda = "%s -n -r -k %s" % (CALE_OFGWRITE, shlex.quote(cale_pachet))
@@ -1032,21 +1478,16 @@ class HdsSoftwareUpdate(Screen):
 		self._faza = "rezultat"
 		self._ultimaIesire = iesire or _("(fără nicio ieșire de la ofgwrite)")
 		cale = (self._candidatAles or {}).get("cale_finala") or ""
-		self._arataCorect = _simulareAratacorect(self._ultimaIesire) and _ofgwriteAGasitPachetul(self._ultimaIesire, cale)
-		self._buton("key_yellow", _("Reîncarcă"))
-		self["iesire"].setText(
-			(_("Cod de ieșire: %d\n\n") % retval) +
-			self._ultimaIesire +
-			_("\n\n(Simulare: nu s-a scris nimic pe receptor, orice ar spune textul de mai sus; ofgwrite scrie "
-			  "„Successfully flashed” și la simulare.)")
-		)
+		self._arataCorect = retval == 0 and _simulareAratacorect(self._ultimaIesire) and \
+			_ofgwriteAGasitPachetul(self._ultimaIesire, cale)
+		self._arataAnaliza(False)
+		print("[HdsSoftwareUpdate] simularea, cod %s:\n%s" % (retval, self._ultimaIesire))
+		self["iesire"].setText(analizaPeIntelesulOmului(iesire, retval, self._arataCorect))
 		if self._arataCorect:
-			self["detaliu"].setText(_("Pachetul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost "
-				"găsite. Apasă OK sau Verde ca să îl scrii pe receptor."))
-			self._buton("key_green", _("Scrie pe receptor"))
+			self["detaliu"].setText(_("Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."))
+			self._buton("key_green", _("Instalează pe receptor"))
 		else:
-			self["detaliu"].setText(_("Pachetul nu a fost recunoscut corect de ofgwrite, deci nu se scrie. Mesajele "
-				"programului sunt mai jos."))
+			self["detaliu"].setText(textNerecunoscut())
 			self._buton("key_green", "")
 
 	# -------------------------------------------------------------- faza 4: confirmare 2 + scriere reala
@@ -1061,7 +1502,7 @@ class HdsSoftwareUpdate(Screen):
 			pass
 		self._intreaba(self._dupaConfirmareFlashReal,
 			textUltimaConfirmare(self._candidatAles, inregistrare, self._textRecuperare(), subdosarRadacina()),
-			_("Ultima confirmare"), _("Da, scrie acum"), False, RANDURI_CONFIRMARE)
+			_("Ultima confirmare"), _("Da, instalează acum"), False, RANDURI_CONFIRMARE)
 
 	def _textRecuperare(self):
 		"""Fraza cu dosarul de pe stick in care cauta Maintenance Mode, calculat ca showiframe
@@ -1088,13 +1529,13 @@ class HdsSoftwareUpdate(Screen):
 		mountpoint = self._candidatAles["disc"].mountpoint
 		_bazaCanalelor("copie")
 		folder_backup, fisiere_copiate, eroare_backup = _creeazaBackupSetari(mountpoint)
+		eroare_backup = eroare_backup or _copieCompleta(mountpoint)
 		if eroare_backup:
 			# copie cazuta: scrierea asteapta raspunsul omului; implicit „Nu”
 			self.session.openWithCallback(
 				self._dupaIntrebareFaraCopie,
 				MessageBox,
-				_("Copia de siguranță nu s-a putut face (%s).\n\n"
-				  "Continui fără copie? Lista de canale, setările și datele canalelor se pierd la scriere.") % eroare_backup,
+				_("Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare.") % eroare_backup,
 				MessageBox.TYPE_YESNO, default=False
 			)
 			return
@@ -1109,11 +1550,10 @@ class HdsSoftwareUpdate(Screen):
 		ca scrierea sa se poata cere din nou dupa ce stickul e reparat."""
 		if not raspuns or self._candidatAles is None:
 			self._scriereRealaPornita = False
-			self["detaliu"].setText(_("Scrierea nu a pornit, pentru că nu există copie de siguranță. Nu s-a scris nimic "
-				"pe receptor. Verifică stickul, apoi apasă din nou Verde."))
+			self["detaliu"].setText(_("Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."))
 			return
 		self._pornesteScrierea(self._candidatAles["cale_finala"], self._candidatAles["disc"].mountpoint,
-			_("Scrierea continuă fără copie de siguranță, cum ai ales."))
+			_("Instalarea continuă fără copie de siguranță, cum ai ales."))
 
 	def _pornesteScrierea(self, cale_pachet, mountpoint, mesaj_backup):
 		cale_jurnal = os.path.join(mountpoint, "hds-actualizare-jurnal.txt")
@@ -1126,29 +1566,36 @@ class HdsSoftwareUpdate(Screen):
 			return
 		self["detaliu"].setText(
 			mesaj_backup + "\n" +
-			_("Scrierea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s") % cale_jurnal
+			_("Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s") % cale_jurnal
 		)
 		self._buton("key_green", "")
+		self._buton("key_yellow", "")
 
 	def _porneesteFlashReal(self, cale_pachet, cale_jurnal):
-		"""Comanda reala, DETASATA de acest proces: "init 4" opreste Enigma2 (deci si acest
-		ecran) inainte ca ofgwrite sa apuce sa scrie — procedura probata. Nu se
-		poate astepta sincron un callback dintr-un proces care urmeaza sa fie omorat; de-aici
-		os.system() cu "&" (proces copil independent, care supravietuieste mortii parintelui),
-		nu Console/ePopen (legat de bucla de evenimente a acestui proces Enigma2).
+		"""Comanda reala, DETASATA de acest proces: "init 4" opreste Enigma2 (deci si acest ecran) inainte ca ofgwrite sa
+		apuce sa scrie. In sesiune noua (start_new_session): init opreste la schimbarea nivelului tot grupul de procese
+		al lui enigma2.sh, deci o comanda pornita simplu cu "&" murea odata cu Enigma2, iar ofgwrite nu mai pornea:
+		receptorul ramanea cu ecranul negru, fara interfata (proba pe .122, 04.11.2026). Nu Console/ePopen, legat de
+		bucla de evenimente a acestui proces.
 		Intoarce None daca a pornit, sau textul refuzului daca paznicul a oprit scrierea."""
 		refuz = self._refuzMediu(cale_pachet) or self._refuzPazaInainteDeScriere(cale_pachet)
 		if refuz:
 			return refuz
+		try:
+			jurnal = open(cale_jurnal, "wb")
+		except OSError as eroare:
+			print("[HdsSoftwareUpdate] jurnalul scrierii nu se poate deschide: %s" % eroare)
+			return _("Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic.")
 		_bazaCanalelor("flash")
 		comanda = (
-			"{ echo '[hds] init 4 (opresc Enigma2 ca sa nu concureze cu scrierea)'; "
+			"echo '[hds] init 4 (opresc Enigma2 ca sa nu concureze cu scrierea)'; "
 			"init 4; "
 			"sleep 3; "
 			"echo '[hds] pornesc scrierea reala'; "
 			"%s -r -k %s; "
-			"echo \"[hds] ofgwrite s-a intors, cod: $?\"; "
-			"} > %s 2>&1 &"
-		) % (CALE_OFGWRITE, shlex.quote(cale_pachet), shlex.quote(cale_jurnal))
-		os.system(comanda)
+			"echo \"[hds] ofgwrite s-a intors, cod: $?\""
+		) % (CALE_OFGWRITE, shlex.quote(cale_pachet))
+		with jurnal:
+			subprocess.Popen(["/bin/sh", "-c", comanda], stdin=subprocess.DEVNULL, stdout=jurnal, stderr=subprocess.STDOUT,
+				close_fds=True, start_new_session=True)
 		return None

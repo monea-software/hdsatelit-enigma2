@@ -11989,3 +11989,726 @@ msgstr "إرسال"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "نشكر جميع مختبري النسخة التجريبية الذين شاركوا في إنشاء صورة نظام HD Satelit: %s."
 
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "الأحدث المتوافقة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "متوافقة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "غير متوافقة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "لا يمكن التثبيت: اسم الفلاشة يحتوي على مسافات"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "لا يمكن التثبيت: اسم الفلاشة يحتوي على رموز غير مقبولة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "لا يمكن التثبيت: قد يكون لنوع آخر من أجهزة الاستقبال"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "لا يمكن التثبيت: إنه لنوع آخر من أجهزة الاستقبال"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "لا يمكن التثبيت: الملفات تالفة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "لا يمكن التثبيت: الملفات تالفة أو متغيرة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "لا يمكن التثبيت: لا يمكن فحص جهاز الاستقبال"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "البرنامج: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "جارٍ البحث عن برنامج جهاز الاستقبال على الفلاشة والقرص…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "جارٍ البحث عن برنامج جهاز الاستقبال على الفلاشة والقرص..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "ابحث من جديد عن برنامج جهاز الاستقبال"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "وجدت إصدارًا واحدًا من البرنامج. اضغط OK ليتم فحصه."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "عدد إصدارات البرنامج التي وجدتها: %d. اختر واحدًا واضغط OK ليتم فحصه."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "افحص البرنامج"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "لم أجد برنامج جهاز الاستقبال على الفلاشة أو القرص."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "ضع فلاشة عليها برنامج جهاز الاستقبال: ملف .zip من الموقع أو المجلد e2/update مع kernel.bin و rootfs.tar.bz2. ثم اضغط OK على «ابحث من جديد عن برنامج جهاز الاستقبال»."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "فحص البرنامج"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "نعم، افحص البرنامج"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "يجب أن يكون الإيميج على فلاشة USB. لا تتم الكتابة أبدًا من الذاكرة الداخلية: فالكتابة ستمسح الملفات نفسها التي تقرأها ولن يعمل جهاز الاستقبال بعدها.\n\nانسخ البرنامج (kernel.bin, rootfs.tar.bz2, imageversion) إلى فلاشة USB، وضع الفلاشة وحاول من جديد. لم تتم كتابة أي شيء."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "لم أستطع فك ضغط البرنامج: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "يُنسخ البرنامج إلى مجلد نظيف على الفلاشة. يستغرق ذلك حتى دقيقة واحدة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "يُفحص هل البرنامج كامل (مجاميع التحقق). يستغرق ذلك بضع ثوانٍ."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "تعذرت قراءة البرنامج من الفلاشة (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "تم التعرف على البرنامج بشكل صحيح: وُجدت النواة والنظام وأقسامهما. اضغط OK أو الأخضر لكتابته على جهاز الاستقبال."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "لم يتعرف برنامج الكتابة على البرنامج بشكل صحيح، لذلك لن تتم كتابته. لم يتغير شيء على جهاز الاستقبال."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "هذا البرنامج لا يذكر لأي جهاز استقبال صُنع، لذلك قد يكون لنوع آخر من أجهزة الاستقبال. برنامج HD Satelit يذكر ذلك منذ الإصدار 0.1.6؛ أما الإصدار الأقدم أو الإيميج من جهة أخرى فلا يُكتب إلا بفلاشة USB، كما يوضح مصنّع جهاز الاستقبال."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "بيانات جهاز الاستقبال في هذا البرنامج تالفة أو من إصدار آخر، لذلك لا يمكن التحقق من جهاز الاستقبال المخصص له."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "البرنامج تالف أو متغير: %s ليس لها مجموع التحقق المتوقع. انسخه من جديد إلى الفلاشة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "البرنامج تالف أو متغير: %s ليس له مجموع التحقق المتوقع. انسخه من جديد إلى الفلاشة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "تغيرت ملفات البرنامج بعد الفحص. افحصه من جديد."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "لا يمكن تثبيت البرنامج"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "لم يستطع جهاز الاستقبال قراءة البرنامج من الفلاشة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "إصدارات البرنامج التي وُجدت: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "لا يُكتب برنامج HD Satelit إلا إذا كان مصنوعًا لهذا الجهاز وكانت ملفاته كاملة (يتم الفحص على التلفزيون، عند OK). أما الإيميج الذي ليس من HD Satelit فلا يُكتب إلا بعد تحذير، لأننا لا نستطيع فحصه."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "غير مفحوصة"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "ليس إيميج HD Satelit. لا نعرف إن كان متوافقًا"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "هذا ليس إيميج HD Satelit، بل %s. لا نعرف إن كان متوافقًا مع جهاز الاستقبال هذا، لأنه ليس لنا ولا نستطيع فحصه."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "إذا لم يكن مصنوعًا لطراز جهاز الاستقبال هذا، فقد لا يعمل الجهاز إلى أن تتم استعادته من فلاشة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "إذا ثبّته فسيحل محل إيميج HD Satelit. تُنسخ الإعدادات وقائمة القنوات أولًا إلى الفلاشة."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Continui?"
+msgstr "هل تتابع؟"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "إيميج ليس من HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "نعم، تابع"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "اعرض ما حلّله ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "أخفِ ما حلّله ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "يُفحص البرنامج: لا تتم كتابة أي شيء على جهاز الاستقبال. انتظر بضع ثوانٍ ولا تطفئه."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "وجد نواة النظام (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "وجد النظام (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "النظام بصيغة يستطيع كتابتها (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "الملفات موجودة على الفلاشة (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "ستُكتب النواة في الذاكرة الداخلية، في الموضع %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "سيُكتب النظام في الذاكرة الداخلية، في الموضع %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "لم يجد نواة النظام في هذا البرنامج."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "لم يجد النظام في هذا البرنامج."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "لم يجد موضع النواة في الذاكرة الداخلية."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "لم يجد موضع النظام في الذاكرة الداخلية."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "لا يتعرف على صيغة النظام."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "النواة أكبر من موضعها في الذاكرة الداخلية."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "النظام أكبر من موضعه في الذاكرة الداخلية."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "لم يجد أي خطأ."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "وجد خطأ وتوقف (الرمز %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "رسائل أخرى من البرنامج، غير مترجمة:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "كان هذا فحصًا فقط: لم تتم كتابة أي شيء على جهاز الاستقبال."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
+msgstr "هذا البرنامج (HD Satelit %(versiune)s) مخصص لجهاز الاستقبال %(model)s (اللوحة %(hw)s، المعالج %(cip)s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software este pentru el."
+msgstr "لم أستطع قراءة معالج جهاز الاستقبال أو أقسامه، لذلك لا يمكن إثبات أن هذا البرنامج مخصص له."
+
+msgid "Pe disc nu e niciun sistem de fișiere pe care receptorul îl poate verifica (ext2, ext3, ext4 sau FAT)."
+msgstr "لا يوجد على القرص نظام ملفات يستطيع جهاز الاستقبال فحصه (ext2 أو ext3 أو ext4 أو FAT)."
+
+msgid "ext4: pentru înregistrări și timeshift, fișiere oricât de mari; un calculator cu Windows nu îl citește"
+msgstr "ext4: للتسجيلات والإيقاف المؤقت للبث، ويدعم الملفات بأي حجم؛ لا يستطيع كمبيوتر يعمل بنظام Windows قراءته"
+
+msgid "ext4: pentru înregistrări și timeshift"
+msgstr "ext4: للتسجيلات والإيقاف المؤقت للبث"
+
+msgid "FAT32: se citește pe orice calculator; un fișier are cel mult 4 GB, deci o înregistrare lungă se rupe în bucăți"
+msgstr "FAT32: يمكن قراءته على أي كمبيوتر؛ الحد الأقصى لحجم الملف 4 GB، لذلك يُقسَّم التسجيل الطويل إلى أجزاء"
+
+msgid "FAT32: se citește pe orice calculator"
+msgstr "FAT32: يمكن قراءته على أي كمبيوتر"
+
+msgid "Da, verifică"
+msgstr "نعم، افحص"
+
+msgid "Da, formatează"
+msgstr "نعم، هيّئ"
+
+msgid "Da, inițializează"
+msgstr "نعم، جهّز"
+
+#, python-format
+msgid "Verifici sistemul de fișiere de pe %s? Poate dura mult."
+msgstr "هل تريد فحص نظام الملفات على %s؟ قد يستغرق ذلك وقتًا طويلًا."
+
+#, python-format
+msgid "Model: %s"
+msgstr "الطراز: %s"
+
+#, python-format
+msgid "Capacitate: %s"
+msgstr "السعة: %s"
+
+msgid "Discul se demontează cât ține verificarea; înregistrările și timeshift-ul nu pot scrie pe el."
+msgstr "يُفصل القرص عن النظام طوال مدة الفحص؛ ولا يمكن حفظ التسجيلات أو بيانات الإيقاف المؤقت للبث عليه."
+
+msgid "Lucrare necunoscută."
+msgstr "مهمة غير معروفة."
+
+msgid "Sistemul de fișiere ales nu se poate pune pe acest disc."
+msgstr "لا يمكن استخدام نظام الملفات المحدد على هذا القرص."
+
+msgid "Se lucrează deja la un disc. Așteaptă să se termine."
+msgstr "هناك عملية جارية على قرص بالفعل. انتظر حتى تنتهي."
+
+#, python-format
+msgid "Copiile de siguranță ale setărilor HD Satelit: %d (cea mai nouă: %s). Restaurarea de la prima pornire nu le mai găsește."
+msgstr "النسخ الاحتياطية لإعدادات HD Satelit: %d (أحدثها: %s). لن تعثر عليها أداة الاستعادة عند التشغيل الأول."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "الصورة المخصصة لتثبيت البرنامج على جهاز الاستقبال عبر وضع الصيانة (%s)."
+
+#, python-format
+msgid "Alte imagini pentru receptor: %s."
+msgstr "صور أخرى لجهاز الاستقبال: %s."
+
+#, python-format
+msgid "Înregistrări: %d (dosarul movie)."
+msgstr "التسجيلات: %d (المجلد movie)."
+
+#, python-format
+msgid "Fișierul de swap (%s)."
+msgstr "ملف الذاكرة البديلة (%s)."
+
+#, python-format
+msgid "Ocupat acum pe disc: %s."
+msgstr "المساحة المستخدمة حاليًا على القرص: %s."
+
+msgid "Timeshift-ul (pauza) scrie acum pe acest disc."
+msgstr "تُحفظ بيانات الإيقاف المؤقت للبث الآن على هذا القرص."
+
+msgid "O înregistrare e în curs."
+msgstr "هناك تسجيل جارٍ."
+
+#, python-format
+msgid "Formatezi stick-ul %s cu %s? Toate datele de pe el se pierd."
+msgstr "هل تريد تهيئة ذاكرة USB ‏%s بنظام %s؟ ستُفقد جميع البيانات الموجودة عليها."
+
+#, python-format
+msgid "Inițializezi discul %s? Toate datele de pe disc se pierd."
+msgstr "هل تريد تجهيز القرص %s؟ ستُفقد جميع البيانات الموجودة عليه."
+
+#, python-format
+msgid "Partiția %s e montată în %s."
+msgstr "القسم %s موصول بالنظام في %s."
+
+msgid "Se pierd și:"
+msgstr "ستُفقد أيضًا:"
+
+#, python-format
+msgid "O înregistrare scrie acum pe acest disc: %s."
+msgstr "يُحفظ تسجيل الآن على هذا القرص: %s."
+
+#, python-format
+msgid "Receptorul ține deschis un fișier de pe disc (de pildă un film care se redă): %s."
+msgstr "يستخدم جهاز الاستقبال ملفًا مفتوحًا على القرص (مثل فيلم قيد التشغيل): %s."
+
+#, python-format
+msgid "O înregistrare începe în mai puțin de %d minute."
+msgstr "سيبدأ تسجيل خلال أقل من %d دقائق."
+
+#, python-format
+msgid "Swap-ul e pornit pe acest disc (%s). Oprește-l întâi din Fișier de swap."
+msgstr "الذاكرة البديلة مفعّلة على هذا القرص (%s). أوقفها أولًا من خيار ملف الذاكرة البديلة."
+
+msgid "model necunoscut"
+msgstr "طراز غير معروف"
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "لم يُثبَّت أي شيء على جهاز الاستقبال."
+
+#, python-format
+msgid "Acest software este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
+msgstr "هذا البرنامج مخصص لجهاز الاستقبال %(model)s (اللوحة %(hw)s، المعالج %(cip)s)."
+
+#, python-format
+msgid "Receptorul tău: %(model)s, placa %(hw)s, procesor %(cip)s."
+msgstr "جهاز الاستقبال لديك: %(model)s، اللوحة %(hw)s، المعالج %(cip)s."
+
+msgid "Procesorul"
+msgstr "المعالج"
+
+msgid "Placa (antetul partiției deviceinfo)"
+msgstr "اللوحة (ترويسة القسم deviceinfo)"
+
+msgid "Partițiile din memorie"
+msgstr "أقسام الذاكرة"
+
+msgid "Partițiile nucleului și ale sistemului"
+msgstr "أقسام النواة والنظام"
+
+msgid "Tipul plăcii spus de driver"
+msgstr "نوع اللوحة حسب برنامج التشغيل"
+
+msgid "Tipul plăcii din eticheta receptorului"
+msgstr "نوع اللوحة حسب ملصق جهاز الاستقبال"
+
+msgid "Memoria internă (eMMC)"
+msgstr "الذاكرة الداخلية (eMMC)"
+
+msgid "Receptorul nu poate fi recunoscut"
+msgstr "تعذّر التعرّف على جهاز الاستقبال"
+
+msgid "Software pentru alt receptor"
+msgstr "برنامج لجهاز استقبال آخر"
+
+msgid "Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."
+msgstr "لحماية جهاز الاستقبال من التلف، لن يكتب البرنامج أي شيء في ذاكرته ولن يتابع التشغيل."
+
+msgid "Model neconfirmat: software pentru testeri"
+msgstr "طراز غير مؤكّد: برنامج للمختبرين"
+
+msgid "Paza de model nu se aplică aici"
+msgstr "التحقق من الطراز لا ينطبق هنا"
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "لا يحدد هذا البرنامج جهاز الاستقبال الذي صُمم له، لذلك قد يكون مخصصًا لنوع آخر من أجهزة الاستقبال. يحدد برنامج HD Satelit ذلك منذ الإصدار 0.1.6؛ أما الإصدارات الأقدم أو الصور من مصادر أخرى، فلا تُثبَّت إلا باستخدام ذاكرة USB، حسب تعليمات الشركة المصنّعة لجهاز الاستقبال."
+
+msgid "pentru acest receptor, se verifică la OK"
+msgstr "لهذا الجهاز، ويُتحقق منه عند الضغط على OK"
+
+#, python-format
+msgid "cel puțin %s"
+msgstr "%s على الأقل"
+
+#, python-format
+msgid "un receptor %s"
+msgstr "جهاز استقبال %s"
+
+msgid "nimic"
+msgstr "لا شيء"
+
+#, python-format
+msgid "Eticheta din memoria receptorului: %s"
+msgstr "العلامة التعريفية في ذاكرة جهاز الاستقبال: %s"
+
+msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
+msgstr "لم يُحمَّل برنامج تشغيل اللوحة، لذلك تعذّرت قراءة نوعها والتأكد من أن هذا البرنامج مخصص لها."
+
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
+msgstr "أعد تثبيت البرنامج المناسب باستخدام ذاكرة USB، حسب تعليمات الشركة المصنّعة لجهاز الاستقبال (في أجهزة Octagon: اضغط مطولًا على زر الاستعداد في جهاز الاستقبال عند تشغيله، ثم اختر الاستعادة من USB)."
+
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Amiko: Maintenance Mode)."
+msgstr "أعد تثبيت البرنامج المناسب باستخدام ذاكرة USB، حسب تعليمات الشركة المصنّعة لجهاز الاستقبال (في أجهزة Amiko: وضع الصيانة)."
+
+msgid "Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma."
+msgstr "لم يُؤكَّد هذا الطراز بعد على جهاز استقبال فعلي. يعمل البرنامج، لكنه مخصص للمختبرين فقط: أرسل إلينا القيم أدناه أو ورقة مواصفات جهاز الاستقبال حتى نتمكن من تأكيده."
+
+msgid "Receptorul este cel potrivit"
+msgstr "جهاز الاستقبال هو الجهاز المناسب"
+
+msgid "Software-ul care rulează nu are semnul receptorului (de exemplu în emulatorul de pe calculator), deci paza de model nu verifică nimic."
+msgstr "البرنامج الذي يعمل الآن لا يحمل علامة تعريف جهاز الاستقبال (مثلًا عند تشغيله في محاكي على الكمبيوتر)، لذلك لا يجري التحقق من الطراز."
+
+msgid "Acum toate valorile se potrivesc."
+msgstr "جميع القيم متطابقة الآن."
+
+#, python-format
+msgid "cel mult %s"
+msgstr "%s على الأكثر"
+
+#, python-format
+msgid "un receptor %(tip)s (de exemplu %(model)s)"
+msgstr "جهاز استقبال %(tip)s (مثل %(model)s)"
+
+msgid "un receptor cu memoria internă mai mare"
+msgstr "جهاز استقبال بذاكرة داخلية أكبر"
+
+msgid "un receptor cu memoria internă mai mică"
+msgstr "جهاز استقبال بذاكرة داخلية أصغر"
+
+msgid "necunoscută"
+msgstr "غير معروفة"
+
+#, python-format
+msgid "%(ce)s: așteptat %(asteptat)s, găsit %(gasit)s."
+msgstr "%(ce)s: المتوقع %(asteptat)s، الموجود %(gasit)s."
+
+msgid "Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software."
+msgstr "جهاز الاستقبال هذا متوافق: المعالج واللوحة والأقسام تطابق متطلبات البرنامج."
+
+#, python-format
+msgid "un receptor cu memoria internă mai mare (de exemplu %s)"
+msgstr "جهاز استقبال بذاكرة داخلية أكبر (مثل %s)"
+
+#, python-format
+msgid "un receptor cu memoria internă mai mică (de exemplu %s)"
+msgstr "جهاز استقبال بذاكرة داخلية أصغر (مثل %s)"
+
+#, python-format
+msgid "%(ce)s: așteptat %(asteptat)s, dar nu s-a putut citi."
+msgstr "%(ce)s: المتوقع %(asteptat)s، لكن تعذّرت قراءته."
+
+#, python-format
+msgid "%(ce)s: pe locul %(loc)d așteptat %(asteptat)s, găsit %(gasit)s."
+msgstr "%(ce)s: في الموضع %(loc)d، المتوقع %(asteptat)s، الموجود %(gasit)s."
+
+msgid "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."
+msgstr "جهاز الاستقبال لا يستجيب. تأكد من أنه يعمل ومتصل بالشبكة نفسها."
+
+#, python-format
+msgid "Software-ul de acum este pentru %s."
+msgstr "البرنامج الحالي مخصص لـ %s."
+
+msgid "(HD Satelit"
+msgstr "(HD Satelit"
+
+msgid "Imagine nouă de pe stick"
+msgstr "صورة جديدة من ذاكرة USB"
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "تعرض هذه الصفحة فقط ما يوجد على ذاكرة USB وما إذا كان يمكن تثبيته. يتم التثبيت على التلفزيون، بعد محاكاة العملية وسؤالين للتأكيد:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "لا يُثبَّت برنامج HD Satelit إلا إذا كان مخصصًا لجهاز الاستقبال هذا وكانت ملفاته سليمة (يُتحقق من ذلك على التلفزيون عند الضغط على OK). أما الصورة التي ليست من HD Satelit، فلا تُثبَّت إلا بعد عرض تحذير، لأننا لا نستطيع التحقق منها."
+
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "وصّل ذاكرة USB بالكمبيوتر، وغيّر اسمها إلى اسم بلا مسافات أو رموز (مثل HDSATELIT)، ثم أعد توصيلها بجهاز الاستقبال."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "لم يتعرّف برنامج التثبيت على البرنامج بشكل صحيح، لذلك لن يُثبَّت. لم يتغير أي شيء على جهاز الاستقبال."
+
+msgid "dosarul e2/update"
+msgstr "المجلد e2/update"
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "ستُجرى الآن عملية تحقق فقط (محاكاة): لن يُثبَّت أي شيء على جهاز الاستقبال. هل تريد المتابعة؟"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "يحتوي جهاز الاستقبال على زوج واحد فقط من النواة والنظام في الذاكرة الداخلية (بلا إقلاع متعدد): إذا لم يعمل البرنامج الجديد، فالطريقة الوحيدة للإصلاح هي استخدام وضع الصيانة يدويًا. قبل التثبيت، تُنسخ الإعدادات وقائمة القنوات إلى ذاكرة USB."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "يجب أن تكون الصورة على ذاكرة USB. لا يُجرى التثبيت أبدًا من الذاكرة الداخلية: إذ سيحذف التثبيت الملفات نفسها التي يقرأها، ولن يعمل جهاز الاستقبال بعدها.\n\nانسخ البرنامج (kernel.bin, rootfs.tar.bz2, imageversion) إلى ذاكرة USB، ثم وصّلها وحاول مرة أخرى. لم يُثبَّت أي شيء."
+
+msgid "versiune necunoscută"
+msgstr "إصدار غير معروف"
+
+msgid "Atenție: o înregistrare este în curs chiar acum."
+msgstr "تنبيه: هناك تسجيل جارٍ الآن."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "سيُثبَّت البرنامج الجديد بدلًا من البرنامج الذي يعمل الآن (المجلد %s في الذاكرة الداخلية): إذا لم يعمل، فيجب إصلاحه يدويًا باستخدام أرشيف الاستعادة الخاص بالشركة المصنّعة على ذاكرة USB. قبل التثبيت، تُنسخ الإعدادات وقائمة القنوات إلى ذاكرة USB."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "يستطيع البرنامج تثبيت النظام بهذا التنسيق (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "سيُثبَّت النظام في الذاكرة الداخلية بدلًا من %s."
+
+msgid "Reîncarcă"
+msgstr "إعادة تحميل"
+
+msgid "Instalarea este oprită"
+msgstr "تم إيقاف التثبيت"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "جارٍ التحقق من البرنامج: لن يُثبَّت أي شيء على جهاز الاستقبال. انتظر بضع ثوانٍ ولا تطفئه."
+
+msgid "(fără nicio ieșire de la ofgwrite)"
+msgstr "(لا توجد أي مخرجات من ofgwrite)"
+
+msgid "Ultima confirmare"
+msgstr "التأكيد الأخير"
+
+msgid "Da, instalează acum"
+msgstr "نعم، ثبّت الآن"
+
+msgid "Niciun fișier de setări/canale găsit de copiat (receptor neconfigurat încă); nimic de pierdut."
+msgstr "لم يُعثر على ملفات إعدادات أو قنوات لنسخها (لم يُضبط جهاز الاستقبال بعد)؛ لا يوجد ما يمكن فقدانه."
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "سيستمر التثبيت بلا نسخة احتياطية، حسب اختيارك."
+
+#, python-format
+msgid "spațiu insuficient pe %s"
+msgstr "المساحة غير كافية على %s"
+
+msgid "lista de canale (lamedb) nu e întreagă"
+msgstr "قائمة القنوات (lamedb) غير مكتملة"
+
+#, python-format
+msgid "%d fișiere nu s-au putut copia (%s)"
+msgstr "تعذّر نسخ %d من الملفات (%s)"
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "هل تريد تثبيت البرنامج على جهاز الاستقبال الآن؟"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "ستُثبَّت النواة في الذاكرة الداخلية بدلًا من %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "كانت هذه عملية تحقق فقط: لم يُثبَّت أي شيء على جهاز الاستقبال."
+
+#, python-format
+msgid "%s, montat pe %s"
+msgstr "%s، موصول بالنظام في %s"
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "تم إيقاف التثبيت: ملفات الصورة موجودة في الذاكرة الداخلية لجهاز الاستقبال (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "تم إيقاف التثبيت: اسم ذاكرة USB يحتوي على مسافات (%s). لم يُثبَّت أي شيء."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "بهذا الاسم، سيحذف التثبيت نظام جهاز الاستقبال قبل قراءة الصورة."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "تم التعرّف على البرنامج بشكل صحيح: عُثر على النواة والنظام والأقسام الخاصة بهما. اضغط على OK أو الزر الأخضر لتثبيته على جهاز الاستقبال."
+
+msgid "Instalează pe receptor"
+msgstr "تثبيت على جهاز الاستقبال"
+
+#, python-format
+msgid "Setări/canale copiate în %s (%d fișiere)."
+msgstr "نُسخت الإعدادات والقنوات إلى %s (%d من الملفات)."
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "لم يبدأ التثبيت لعدم وجود نسخة احتياطية. لم يُثبَّت أي شيء على جهاز الاستقبال. افحص ذاكرة USB، ثم اضغط على الزر الأخضر مرة أخرى."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "لا يمكن الكتابة على ذاكرة USB، لذلك لن يبدأ التثبيت. لم يتغير أي شيء على جهاز الاستقبال."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "تم إيقاف التثبيت: تعذّر التحقق من مكان ملفات الصورة (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "تم إيقاف التثبيت: ملفات الصورة ليست على ذاكرة USB (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "تم إيقاف التثبيت: اسم ذاكرة USB يحتوي على رموز غير مقبولة (%s). لم يُثبَّت أي شيء."
+
+#, python-format
+msgid "Spațiu insuficient pe %s pentru dezarhivare."
+msgstr "المساحة غير كافية على %s لفك الضغط."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "تعذّر إنشاء النسخة الاحتياطية (%s).\n\nهل تريد المتابعة بلا نسخة؟ ستُفقد قائمة القنوات والإعدادات وبيانات القنوات عند التثبيت."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "بدأ التثبيت (قد تتوقف الواجهة في أي لحظة، وهذا طبيعي). السجل: %s"
+
+#, python-format
+msgid "Eroare la căutare: %s"
+msgstr "خطأ في البحث: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "جارٍ تثبيت البرنامج الجديد على جهاز الاستقبال. لا تفصل جهاز الاستقبال عن الكهرباء ولا تنزع ذاكرة USB أثناء التثبيت؛ ستتوقف الواجهة، وسيُعاد تشغيل جهاز الاستقبال تلقائيًا عند الانتهاء."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "اسم ذاكرة USB يحتوي على مسافات أو رموز تمنع التثبيت. غيّر اسمها على الكمبيوتر (مثل HDSATELIT) واضغط مرة أخرى."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "قائمة الصور غير موقّعة من HD Satelit. لم يتم تثبيت أي شيء."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "الصورة التي تم تنزيلها غير مطابقة. لم يتم تثبيت أي شيء. اضغط مرة أخرى لأعيد تنزيلها."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "الصورة غير مخصصة لجهاز الاستقبال هذا. لم يتم تثبيت أي شيء."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "تم نزع ذاكرة USB أو حدث خطأ فيها. لم يتم تثبيت أي شيء."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "تعذّر حفظ نسخة من الإعدادات على ذاكرة USB. لم يتم تثبيت أي شيء."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "فشل التحقق قبل التثبيت. لم يتم تثبيت أي شيء."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "تم الإيقاف. لم يتم تثبيت أي شيء. إذا ضغطت مرة أخرى، فسيستأنف التنزيل من حيث توقف."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "لم يتم تثبيت الصورة الجديدة. بقي جهاز الاستقبال على %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "جارٍ التحقق من كل شيء قبل التثبيت..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "ينتظر التثبيت انتهاء التسجيل، ثم يبدأ تلقائيًا."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "جارٍ تثبيت الصورة الآن. لا تطفئ جهاز الاستقبال: سيُعاد تشغيله تلقائيًا، وستعود القنوات والإعدادات تلقائيًا."
