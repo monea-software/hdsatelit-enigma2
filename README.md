@@ -3,6 +3,8 @@
 Sursa imaginii Enigma2 HD Satelit 0.7.0 (beta) pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea
 Software pentru HD Satelit. Interfața e enigma2 pe Python 3, cu skinul HDSatelit și interfața web proprie.
 
+Aceeași sursă este și a celorlalte modele cu imaginea 0.7.0: Amiko Viper 4K V10, V30 și V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K și Uclan Ustym 4K PRO. Rețetele lor sunt în `meta-local/`.
+
 Imaginea gata construită și pașii de instalare de pe stick: https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
 
 [English below](#hd-satelit-070-beta-for-the-amiko-viper-4k-v20)
@@ -115,6 +117,8 @@ contact@hdsatelit.com
 Source code of the HD Satelit Enigma2 image 0.7.0 (beta) for the Amiko Viper 4K V20 satellite receiver, made by
 Monea Software for HD Satelit. The user interface is enigma2 on Python 3, with the HDSatelit skin and its own web
 interface.
+
+The same source covers the other models with the 0.7.0 image: Amiko Viper 4K V10, V30 and V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K and Uclan Ustym 4K PRO. Their recipes are in `meta-local/`.
 
 The ready-built image and the steps to install it from a USB stick:
 https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
