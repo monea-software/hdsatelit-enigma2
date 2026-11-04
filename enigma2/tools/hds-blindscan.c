@@ -635,6 +635,10 @@ static void *lucru_hife(void *arg) {
 	int feid = (int)port_tuner;
 	if (ioctl(hf, HIFE_ALEGE, &feid) < 0) { linie("EROARE %d hife-alege", errno); cod_lucru = 1; goto gata; }
 
+	/* Si2166: firul din nucleu (si2166_blindscan_thread) inmulteste limitele cu 1000, deci cere kSym/s. Cu Sym/s, dupa depasire si
+	 * impachetarea pe 16 biti, intervalul cautat iese 16960-18711 kSym/s si scapa transpondere care se prind la acordare directa */
+	uint32_t impartitor = strstr(nume_nim, "Si2166") ? 1000u : 1u;
+	linie("JURNAL hife-rate %u %u", HIFE_RATA_MIN / impartitor, HIFE_RATA_MAX / impartitor);
 	linie("PORNIT %d %llu", nr_treceri, (unsigned long long)khz_total);
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
 		Trecere *t = &treceri[i];
@@ -650,7 +654,7 @@ static void *lucru_hife(void *arg) {
 		for (uint32_t a0 = t->if_start; a0 < t->if_stop && !cerere_oprire; a0 += pas) {
 			uint32_t a1 = a0 + pas + SUPRAPUNERE_KHZ;
 			if (a1 > t->if_stop || t->if_stop - a1 < FELIE_MIN_KHZ) a1 = t->if_stop;
-			HifeParam p = { a0 / 1000u, (a1 + 999u) / 1000u, HIFE_RATA_MIN, HIFE_RATA_MAX, 0 };
+			HifeParam p = { a0 / 1000u, (a1 + 999u) / 1000u, HIFE_RATA_MIN / impartitor, HIFE_RATA_MAX / impartitor, 0 };
 			khz_felie = a1 - a0 > pas ? pas : a1 - a0;
 			uint64_t tf = ms_acum();
 			int n = -1;

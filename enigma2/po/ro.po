@@ -145,7 +145,7 @@ msgid "(empty)"
 msgstr "(gol)"
 
 msgid "(fără nicio ieșire de la ofgwrite)"
-msgstr ""
+msgstr "(fără nicio ieșire de la ofgwrite)"
 
 msgid "(jurnal gol)"
 msgstr ""
@@ -1652,7 +1652,7 @@ msgstr ""
 
 #, python-format
 msgid "Eroare la căutare: %s"
-msgstr ""
+msgstr "Eroare la căutare: %s"
 
 msgid "Eroare la restaurare: %s"
 msgstr ""
@@ -3717,7 +3717,7 @@ msgid "Rewind speeds"
 msgstr "Viteze de derulare înapoi"
 
 msgid "Reîncarcă"
-msgstr ""
+msgstr "Reîncarcă"
 
 msgid ""
 "Reîncărcare terminată cu succes.\n"
@@ -4338,7 +4338,7 @@ msgid "Spanish"
 msgstr "Spaniolă"
 
 msgid "Spațiu insuficient pe %s pentru dezarhivare."
-msgstr ""
+msgstr "Spațiu insuficient pe %s pentru dezarhivare."
 
 msgid "Spectru inversat:"
 msgstr ""
@@ -6146,7 +6146,7 @@ msgid "user defined"
 msgstr "definit de utilizator"
 
 msgid "versiune necunoscută"
-msgstr ""
+msgstr "versiune necunoscută"
 
 msgid "vertical"
 msgstr "vertical"
@@ -6191,7 +6191,7 @@ msgid "zapped"
 msgstr "comutat"
 
 msgid "Înapoi"
-msgstr ""
+msgstr "Înapoi"
 
 msgid "Închide"
 msgstr ""
@@ -7522,7 +7522,7 @@ msgid "Antena se roteste"
 msgstr "Antena se rotește"
 
 msgid "necunoscut"
-msgstr ""
+msgstr "necunoscut"
 
 msgid "Antena se oprește"
 msgstr ""
@@ -9160,7 +9160,7 @@ msgstr ""
 #: lib/python/Screens/HdsSoftwareUpdate.py:416
 #, python-format
 msgid "%s, montat pe %s"
-msgstr ""
+msgstr "%s, montat pe %s"
 
 #: lib/python/Screens/HdsSoftwareUpdate.py:420
 #, python-format
@@ -9208,11 +9208,11 @@ msgstr ""
 #: lib/python/Screens/HdsSoftwareUpdate.py:555
 #, python-format
 msgid "Setări/canale copiate în %s (%d fișiere)."
-msgstr ""
+msgstr "Setări/canale copiate în %s (%d fișiere)."
 
 #: lib/python/Screens/HdsSoftwareUpdate.py:557
 msgid "Niciun fișier de setări/canale găsit de copiat (receptor neconfigurat încă); nimic de pierdut."
-msgstr ""
+msgstr "Niciun fișier de setări/canale găsit de copiat (receptor neconfigurat încă); nimic de pierdut."
 
 #: lib/python/Screens/HdsTelecomenzi.py:280
 msgid "Pagina web folosește acum telecomenzile."
@@ -9232,7 +9232,7 @@ msgstr ""
 
 #: lib/python/Screens/HdsTelecomenzi.py:367
 msgid "oprită"
-msgstr ""
+msgstr "oprită"
 
 #: lib/python/Screens/HdsTelecomenzi.py:369
 msgid "o tastă asociată"
@@ -10017,7 +10017,7 @@ msgstr ""
 
 #: lib/python/Components/HdsPisteCanale.py:1183
 msgid "Continui?"
-msgstr ""
+msgstr "Continui?"
 
 #: lib/python/Components/HdsPisteCanale.py:1407
 msgid "Oprit."
@@ -25245,11 +25245,11 @@ msgstr ""
 
 #: lib/python/Components/HdsPazaModel.py:752
 msgid "Model neconfirmat: software pentru testeri"
-msgstr ""
+msgstr "Model neconfirmat: software pentru testeri"
 
 #: lib/python/Components/HdsPazaModel.py:753
 msgid "Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma."
-msgstr ""
+msgstr "Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma."
 
 #: lib/python/Components/HdsTraducereSubtitrari.py:2281
 msgid "Azure refuză cheia în toate regiunile încercate (HTTP 401): cheia nu mai e bună, resursa sau abonamentul sunt oprite, ori resursa e într-o regiune din afara listei."
@@ -33102,26 +33102,26 @@ msgstr "Același ecran e pe televizor, în %s."
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "un receptor %(tip)s (de exemplu %(model)s)"
-msgstr ""
+msgstr "un receptor %(tip)s (de exemplu %(model)s)"
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "un receptor %s"
-msgstr ""
+msgstr "un receptor %s"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "model necunoscut"
-msgstr ""
+msgstr "model necunoscut"
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
-msgstr ""
+msgstr "Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "Acest software este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
-msgstr ""
+msgstr "Acest software este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s)."
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
@@ -33131,95 +33131,95 @@ msgstr ""
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "Receptorul tău: %(model)s, placa %(hw)s, procesor %(cip)s."
-msgstr ""
+msgstr "Receptorul tău: %(model)s, placa %(hw)s, procesor %(cip)s."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Procesorul"
-msgstr ""
+msgstr "Procesorul"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Placa (antetul partiției deviceinfo)"
-msgstr ""
+msgstr "Placa (antetul partiției deviceinfo)"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Partițiile din memorie"
-msgstr ""
+msgstr "Partițiile din memorie"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Partițiile nucleului și ale sistemului"
-msgstr ""
+msgstr "Partițiile nucleului și ale sistemului"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Tipul plăcii spus de driver"
-msgstr ""
+msgstr "Tipul plăcii spus de driver"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Tipul plăcii din eticheta receptorului"
-msgstr ""
+msgstr "Tipul plăcii din eticheta receptorului"
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "%(ce)s: așteptat %(asteptat)s, dar nu s-a putut citi."
-msgstr ""
+msgstr "%(ce)s: așteptat %(asteptat)s, dar nu s-a putut citi."
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "%(ce)s: pe locul %(loc)d așteptat %(asteptat)s, găsit %(gasit)s."
-msgstr ""
+msgstr "%(ce)s: pe locul %(loc)d așteptat %(asteptat)s, găsit %(gasit)s."
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "%(ce)s: așteptat %(asteptat)s, găsit %(gasit)s."
-msgstr ""
+msgstr "%(ce)s: așteptat %(asteptat)s, găsit %(gasit)s."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "nimic"
-msgstr ""
+msgstr "nimic"
 
 #: lib/python/Components/HdsPazaModel.py
 #, python-format
 msgid "Eticheta din memoria receptorului: %s"
-msgstr ""
+msgstr "Eticheta din memoria receptorului: %s"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Receptorul nu poate fi recunoscut"
-msgstr ""
+msgstr "Receptorul nu poate fi recunoscut"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software este pentru el."
-msgstr ""
+msgstr "Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software este pentru el."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Software pentru alt receptor"
-msgstr ""
+msgstr "Software pentru alt receptor"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."
-msgstr ""
+msgstr "Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Amiko: Maintenance Mode)."
-msgstr ""
+msgstr "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Amiko: Maintenance Mode)."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Receptorul este cel potrivit"
-msgstr ""
+msgstr "Receptorul este cel potrivit"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software."
-msgstr ""
+msgstr "Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Paza de model nu se aplică aici"
-msgstr ""
+msgstr "Paza de model nu se aplică aici"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Software-ul care rulează nu are semnul receptorului (de exemplu în emulatorul de pe calculator), deci paza de model nu verifică nimic."
-msgstr ""
+msgstr "Software-ul care rulează nu are semnul receptorului (de exemplu în emulatorul de pe calculator), deci paza de model nu verifică nimic."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Acum toate valorile se potrivesc."
-msgstr ""
+msgstr "Acum toate valorile se potrivesc."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Nu s-a scris nimic pe receptor."
@@ -33253,7 +33253,7 @@ msgstr ""
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "pentru acest receptor, se verifică la OK"
-msgstr ""
+msgstr "pentru acest receptor, se verifică la OK"
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "nu se scrie: fără semnul receptorului"
@@ -33298,7 +33298,7 @@ msgstr ""
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "dosarul e2/update"
-msgstr ""
+msgstr "dosarul e2/update"
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 #, python-format
@@ -33311,7 +33311,7 @@ msgstr ""
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Atenție: o înregistrare este în curs chiar acum."
-msgstr ""
+msgstr "Atenție: o înregistrare este în curs chiar acum."
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 #, python-format
@@ -33398,7 +33398,7 @@ msgstr ""
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Ultima confirmare"
-msgstr ""
+msgstr "Ultima confirmare"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/paza_model_web.py
 msgid "lipsește (nu se verifică)"
@@ -33475,7 +33475,7 @@ msgstr ""
 
 #: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py
 msgid "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."
-msgstr ""
+msgstr "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py
 msgid "Receptorul nu a putut citi pachetele."
@@ -33489,7 +33489,7 @@ msgstr ""
 #: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py
 #, python-format
 msgid "Software-ul de acum este pentru %s."
-msgstr ""
+msgstr "Software-ul de acum este pentru %s."
 
 #: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py
 msgid "Aici se vede numai ce este pe stick și dacă se poate scrie. Scrierea se face pe televizor, cu simularea și două întrebări înainte:"
@@ -39307,16 +39307,16 @@ msgstr ""
 #: lib/python/Screens/HdsSoftwareUpdate.py
 #, python-format
 msgid "spațiu insuficient pe %s"
-msgstr ""
+msgstr "spațiu insuficient pe %s"
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "lista de canale (lamedb) nu e întreagă"
-msgstr ""
+msgstr "lista de canale (lamedb) nu e întreagă"
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 #, python-format
 msgid "%d fișiere nu s-au putut copia (%s)"
-msgstr ""
+msgstr "%d fișiere nu s-au putut copia (%s)"
 
 #: lib/python/Screens/HdsSoftwareUpdate.py
 #, python-format
@@ -45961,11 +45961,11 @@ msgstr "Versiunea %s din sursa %s e făcută pentru Python 2 și nu se instaleaz
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
-msgstr ""
+msgstr "Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el."
 
 #: lib/python/Components/HdsPazaModel.py
 msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
-msgstr ""
+msgstr "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."
 
 #: data/menu.xml
 msgid "Diagnosticul pornirii"
@@ -51705,3 +51705,447 @@ msgstr "Scrie mesajul pentru televizor"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "nu se scrie: numele stickului are spații"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "nu se scrie: numele stickului are semne neacceptate"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Cea mai nouă compatibilă"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Compatibilă"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Incompatibilă"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "nu se poate instala: numele stickului are spații"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "nu se poate instala: numele stickului are semne neacceptate"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "nu se poate instala: poate fi pentru alt tip de receptor"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "nu se poate instala: este pentru alt tip de receptor"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "nu se poate instala: fișierele sunt stricate"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "nu se poate instala: fișierele sunt stricate sau schimbate"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "nu se poate instala: receptorul nu se poate verifica"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Software: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Se caută software de receptor pe stick și pe disc…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Se caută software de receptor pe stick și pe disc..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Caută din nou software de receptor"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Verifică software-ul"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Nu am găsit software de receptor pe stick sau pe disc."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Verificarea software-ului"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Da, verifică software-ul"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Nu am putut dezarhiva software-ul: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Software-ul nu s-a putut citi de pe stick (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Software-ul nu se poate instala"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Receptorul nu a putut citi software-ul de pe stick."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Variante de software găsite: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Neverificată"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Imagine care nu este HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Da, continuă"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Vezi ce a analizat ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Ascunde ce a analizat ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "A găsit nucleul sistemului (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "A găsit sistemul (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Sistemul are un format pe care îl poate scrie (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Fișierele stau pe stick (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Nucleul se va scrie în memoria internă, în locul %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Sistemul se va scrie în memoria internă, în locul %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "Nu a găsit nucleul sistemului în acest software."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "Nu a găsit sistemul în acest software."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Nu a găsit locul nucleului în memoria internă."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Nu a găsit locul sistemului în memoria internă."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Nu recunoaște formatul sistemului."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Nucleul este prea mare pentru locul lui din memoria internă."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Sistemul este prea mare pentru locul lui din memoria internă."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Nu a găsit nicio eroare."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "A găsit o eroare și s-a oprit (codul %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Alte mesaje ale programului, netraduse:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Nu s-a instalat nimic pe receptor."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Programul poate instala sistemul în acest format (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Sistemul se va instala în memoria internă, în locul %s."
+
+msgid "Instalarea este oprită"
+msgstr "Instalarea este oprită"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+
+msgid "Da, instalează acum"
+msgstr "Da, instalează acum"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Instalarea continuă fără copie de siguranță, cum ai ales."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Instalezi acum software-ul pe receptor?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Nucleul se va instala în memoria internă, în locul %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+
+msgid "Instalează pe receptor"
+msgstr "Instalează pe receptor"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Se verifică totul înainte de instalare..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."

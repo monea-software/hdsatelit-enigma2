@@ -17,8 +17,8 @@
 #   biblioteci, dar nu pe acesta), formatul pleaca neschimbat daca aparatul il primeste, altfel nu are alta cale.
 # In Automat setarile manuale nu se ating: raman pentru „Manual”. O schimbare a lor facuta de om (isChanged: valoarea
 # difera de cea salvata) trece iesirea pe „Manual”; refacerea lor (renuntare, incarcare, pornire) nu.
-# Scrierea in /proc/stb/audio trece prin AVSwitch.writeAudioChoice, numai cand valoarea difera de cea din fisier
-# (showiframe poate reactiona la fiecare scriere).
+# Scrierea in /proc/stb/audio trece prin AVSwitch.writeAudioChoice, numai cand valoarea difera de cea din fisier, iar pe
+# HiSilicon de ultima scrisa (showiframe poate reactiona la fiecare scriere; _faraCitireDriver spune de ce nu se citeste).
 # Reevaluarea in Automat: la pornire, la schimbarea setarii si la pornirea fiecarui canal (evStart, inainte sa
 # porneasca sunetul), cel mult o data la PAUZA_CITIRE_S dupa o citire valida; dupa o citire fara EDID (televizor
 # stins sau inca nepregatit), la fiecare pornire de canal.
@@ -541,9 +541,18 @@ def automat():
 	return el is not None and el.value == IESIRE_AUTO and areComutatoare()
 
 
+def _faraCitireDriver():
+	"""Pe HiSilicon fisierele din /proc/stb/audio nu se citesc: pe unele placi SF8008 functia de citire din hi_dvb opreste
+	nucleul (proc_audio_ac3_read, pointer NULL; raportul 481062, 0.6.26). Firul principal al enigma2 moare la pornire,
+	procesul ramane zombie si ecranul negru. Ce e in comutator e ultima valoare scrisa de imagine (AVSwitch.AUDIO_SCRIS)."""
+	return os.path.isdir(_cale(None, "proc/msp"))
+
+
 def _valoareNod(nume):
 	try:
-		from Components.AVSwitch import audioRoot
+		from Components.AVSwitch import AUDIO_SCRIS, audioRoot
+		if _faraCitireDriver():
+			return AUDIO_SCRIS.get(nume)
 		with open(os.path.join(audioRoot(), nume)) as f:
 			return f.read().strip()
 	except Exception:

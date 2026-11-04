@@ -9,8 +9,10 @@
 # citeste(functie, cale, *argumente): functia de citire a modulului (aceeasi forma a rezultatului ca pana acum) se
 # ruleaza intr-un fir daemon, asteptat cel mult ASTEPTARE_S (o citire buna din /proc ia sub o milisecunda); altfel se
 # intoarce ce s-a citit ultima data pentru aceeasi cale si aceleasi argumente (None la inceput = nu se stie). O citire
-# care nu se termina in TIMP_S marcheaza driverul "blocat" pana la repornirea interfetei: nu se mai porneste niciun fir
-# (altfel s-ar strange fire blocate) si se intoarce numai ce e citit deja. Un singur fir de citire odata.
+# care nu se termina in TIMP_S marcheaza driverul "blocat" cat timp firul ei e tot acolo: nu se mai porneste niciun fir
+# (altfel s-ar strange fire blocate) si se intoarce numai ce e citit deja. Cand citirea se termina, chiar tarziu, driverul
+# nu mai e blocat: o citire lenta o data (la schimbari repezi de canal) nu are voie sa tina pana la repornirea interfetei,
+# ca atunci lista imaginilor refuza tot („receptorul nu se poate verifica”). Un singur fir de citire odata.
 # Pe alte fire decat cel principal (analiza fluxului, firele web care au deja firul lor) si pentru celelalte fisiere
 # citirea ramane directa, ca inainte. Fisierul nu importa nimic din enigma2: probele de pe PC il incarca asa cum e.
 
@@ -41,16 +43,21 @@ def eDriver(cale):
 
 
 def blocat():
-	"""True dupa o citire a driverului care n-a raspuns in TIMP_S (pana la repornirea interfetei)."""
+	"""True cat timp o citire a driverului nu raspunde de mai mult de TIMP_S."""
 	_verificaFirul()
 	return _STARE["blocat"]
 
 
 def _verificaFirul():
 	fir = _STARE["fir"]
-	if not _STARE["blocat"] and fir is not None and fir.is_alive() and time.time() - _STARE["pornit_t"] > TIMP_S:
+	if fir is None or not fir.is_alive():
+		if _STARE["blocat"]:
+			_STARE["blocat"] = False
+			_jurnal("citirea lui %s s-a terminat dupa %.1f s: citesc din nou driverul" % (_STARE["cale"], time.time() - _STARE["pornit_t"]))
+		return
+	if not _STARE["blocat"] and time.time() - _STARE["pornit_t"] > TIMP_S:
 		_STARE["blocat"] = True
-		_jurnal("citirea lui %s nu raspunde de %.1f s: nu mai citesc driverul pana la repornirea interfetei"
+		_jurnal("citirea lui %s nu raspunde de %.1f s: nu mai citesc driverul cat timp nu se termina"
 			% (_STARE["cale"], time.time() - _STARE["pornit_t"]))
 
 
@@ -70,10 +77,8 @@ def _citesteInFir(cheie, functie, argumente):
 	durata = time.time() - t0
 	with _LACAT:
 		_CITITE[cheie] = date
-	if durata > TIMP_S and not _STARE["blocat"]:
-		_STARE["blocat"] = True
-		_jurnal("citirea lui %s a durat %.1f s: nu mai citesc driverul pana la repornirea interfetei"
-			% (argumente[0] if argumente else "?", durata))
+	if durata > TIMP_S:
+		_jurnal("citirea lui %s a durat %.1f s" % (argumente[0] if argumente else "?", durata))
 
 
 def citeste(functie, cale, *argumente):

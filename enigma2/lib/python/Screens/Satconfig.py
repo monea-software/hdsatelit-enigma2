@@ -425,6 +425,9 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self.deleteConfirmed((None, "no"))
 
 	def deleteConfirmed(self, confirmed):
+		# HDSatelit: EXIT pe intrebare inchide fereastra fara raspuns (None): e ca „Nu” pentru acest satelit, nu o cadere
+		if confirmed is None:
+			confirmed = (None, "no")
 		if confirmed[1] == "yes" or confirmed[1] == "yestoall":
 			eDVBDB.getInstance().removeServices(-1, -1, -1, self.satpos_to_remove)
 
