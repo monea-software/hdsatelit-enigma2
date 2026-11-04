@@ -20,6 +20,8 @@ STB_AUDIO = "/proc/stb/audio/"
 AUDIO_CHOICES = {}   # nume -> lista driverului (*_choices), citita o data, in InitAVSwitch
 # nodurile pe care toggleAC3Downmix tocmai le-a scris: notificatorul setarii nu le mai scrie a doua oara
 AUDIO_WRITTEN_BY_KEY = set()
+# nume -> ultima valoare scrisa: pe HiSilicon comutatoarele nu se citesc din driver (HdsSunet._valoareNod)
+AUDIO_SCRIS = {}
 
 
 def audioRoot():
@@ -123,6 +125,7 @@ def writeAudioChoice(name, value, root=None):
 	except (IOError, OSError) as err:
 		print("[AVSwitch] writing %s to %s failed: %s" % (value, path, err))
 		return False
+	AUDIO_SCRIS[name] = value
 	print("[AVSwitch] %s = %s" % (path, value))
 	return True
 

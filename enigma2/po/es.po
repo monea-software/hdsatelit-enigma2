@@ -59618,3 +59618,447 @@ msgstr "Escribe el mensaje para el televisor"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Damos las gracias a todos los probadores beta que han participado en la creación de la imagen HD Satelit: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "no se escribe: el nombre del pendrive tiene espacios"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "no se escribe: el nombre del pendrive tiene caracteres no admitidos"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Escritura detenida: el nombre del pendrive tiene espacios (%s). No se ha escrito nada."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Escritura detenida: el nombre del pendrive tiene caracteres no admitidos (%s). No se ha escrito nada."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Con este nombre, la escritura borraría el sistema del receptor antes de leer la imagen."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Pon el pendrive en un ordenador, cámbiale el nombre por uno sin espacios ni símbolos (por ejemplo HDSATELIT) y vuelve a conectarlo al receptor."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "La más reciente compatible"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Compatible"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Incompatible"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "no se puede instalar: el nombre de la memoria USB tiene espacios"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "no se puede instalar: el nombre de la memoria USB tiene caracteres no admitidos"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "no se puede instalar: puede ser para otro tipo de receptor"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "no se puede instalar: es para otro tipo de receptor"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "no se puede instalar: los archivos están dañados"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "no se puede instalar: los archivos están dañados o modificados"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "no se puede instalar: el receptor no se puede comprobar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Software: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Buscando software de receptor en la memoria USB y en el disco…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Buscando software de receptor en la memoria USB y en el disco..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Buscar software de receptor de nuevo"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Se ha encontrado una versión de software. Pulsa OK para que se compruebe."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Se han encontrado %d versiones de software. Elige una y pulsa OK para que se compruebe."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Comprobar el software"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "No se ha encontrado software de receptor en la memoria USB ni en el disco."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Conecta una memoria USB con software de receptor: el archivo .zip del sitio web o la carpeta e2/update con kernel.bin y rootfs.tar.bz2. Después pulsa OK en «Buscar software de receptor de nuevo»."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Comprobación del software"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Sí, comprobar el software"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "La imagen tiene que estar en una memoria USB. Desde la memoria interna nunca se escribe: la escritura borraría los mismos archivos que lee y el receptor ya no arrancaría.\n\nCopia el software (kernel.bin, rootfs.tar.bz2, imageversion) en una memoria USB, conéctala y vuelve a intentarlo. No se ha escrito nada."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "No se ha podido descomprimir el software: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "El software se copia a una carpeta limpia en la memoria USB. Tarda hasta un minuto."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Se comprueba si el software está completo (sumas de control). Tarda unos segundos."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "El software no se ha podido leer de la memoria USB (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "El software se ha reconocido correctamente: se encontraron el núcleo, el sistema y sus particiones. Pulsa OK o Verde para escribirlo en el receptor."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "El programa de escritura no ha reconocido bien el software, así que no se escribe. En el receptor no ha cambiado nada."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Este software no indica para qué receptor está hecho, así que puede ser para otro tipo de receptor. El software HD Satelit lo indica desde la versión 0.1.6; una versión anterior o una imagen de terceros solo se escribe con una memoria USB, como indica el fabricante del receptor."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Los datos del receptor en este software están dañados o son de otra versión, así que no se puede comprobar para qué receptor es."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "El software está dañado o modificado: %s no tienen la suma de control esperada. Cópialo de nuevo en la memoria USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "El software está dañado o modificado: %s no tiene la suma de control esperada. Cópialo de nuevo en la memoria USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Los archivos del software han cambiado después de la comprobación. Compruébalo de nuevo."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "El software no se puede instalar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "El receptor no ha podido leer el software de la memoria USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Versiones de software encontradas: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "El software HD Satelit solo se escribe si está hecho para este receptor y sus archivos están completos (se comprueba en el televisor, al pulsar OK). Una imagen que no es HD Satelit solo se escribe después de una advertencia, porque no podemos comprobarla."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Sin comprobar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "No es una imagen HD Satelit. No sabemos si es compatible"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "No es una imagen HD Satelit, sino %s. No sabemos si es compatible con este receptor, porque no es nuestra y no podemos comprobarla."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Si no está hecha para este modelo de receptor, el receptor puede quedarse sin arrancar hasta que se recupere desde una memoria USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Si la instalas, sustituye a la imagen HD Satelit. Los ajustes y la lista de canales se copian primero en la memoria USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Imagen que no es HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Sí, continuar"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Ver lo que ha analizado ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Ocultar lo que ha analizado ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Comprobando el software: no se escribe nada en el receptor. Espera unos segundos y no lo apagues."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Ha encontrado el núcleo del sistema (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Ha encontrado el sistema (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "El sistema tiene un formato que puede escribir (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Los archivos están en la memoria USB (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "El núcleo se escribirá en la memoria interna, en la ubicación %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "El sistema se escribirá en la memoria interna, en la ubicación %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "No ha encontrado el núcleo del sistema en este software."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "No ha encontrado el sistema en este software."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "No ha encontrado la ubicación del núcleo en la memoria interna."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "No ha encontrado la ubicación del sistema en la memoria interna."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "No reconoce el formato del sistema."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "El núcleo es demasiado grande para su ubicación en la memoria interna."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "El sistema es demasiado grande para su ubicación en la memoria interna."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "No ha encontrado ningún error."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Ha encontrado un error y se ha detenido (código %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Otros mensajes del programa, sin traducir:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Ha sido solo una comprobación: no se ha escrito nada en el receptor."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "No se puede escribir en el USB, así que no se inicia la escritura. No se ha cambiado nada en el receptor."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "La imagen para instalar el software en el receptor mediante el modo de mantenimiento (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "No se ha instalado nada en el receptor."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Este software no indica para qué receptor está hecho, así que podría ser para otro modelo. El software de HD Satelit lo indica desde la versión 0.1.6; las versiones anteriores o las imágenes de otros solo se pueden instalar con un USB, siguiendo las instrucciones del fabricante del receptor."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Aquí solo se muestra lo que hay en el USB y si se puede instalar. La instalación se hace desde el televisor, con una simulación y dos preguntas antes de empezar:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "El software de HD Satelit solo se instala si está hecho para este receptor y sus archivos están completos (se comprueba en el televisor al pulsar OK). Las imágenes que no son de HD Satelit solo se instalan tras mostrar un aviso, porque no podemos verificarlas."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "El instalador no ha reconocido correctamente el software, así que no se instalará. No se ha cambiado nada en el receptor."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Ahora solo se hará una comprobación (una simulación): no se instalará nada en el receptor. ¿Quieres continuar?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "El receptor solo tiene un núcleo y un sistema en la memoria interna (sin multiboot): si el nuevo software no arranca, la única forma de recuperarlo es usar manualmente el modo de mantenimiento. Antes de la instalación, los ajustes y la lista de canales se copian al USB."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "La imagen debe estar en un USB. Nunca se instala desde la memoria interna: la instalación borraría los propios archivos que está leyendo y el receptor dejaría de arrancar.\n\nCopia el software (kernel.bin, rootfs.tar.bz2, imageversion) a un USB, conéctalo e inténtalo de nuevo. No se ha instalado nada."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "El nuevo software sustituirá al que está funcionando ahora (la carpeta %s de la memoria interna): si no arranca, tendrás que recuperarlo manualmente con el archivo de recuperación del fabricante en un USB. Antes de la instalación, los ajustes y la lista de canales se copian al USB."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "El programa puede instalar el sistema en este formato (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "El sistema se instalará en la memoria interna, en lugar de %s."
+
+msgid "Instalarea este oprită"
+msgstr "La instalación está detenida"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Se está comprobando el software: no se está instalando nada en el receptor. Espera unos segundos y no lo apagues."
+
+msgid "Da, instalează acum"
+msgstr "Sí, instalar ahora"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "La instalación continúa sin copia de seguridad, como has elegido."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "¿Quieres instalar ahora el software en el receptor?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "El núcleo se instalará en la memoria interna, en lugar de %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Esto solo ha sido una comprobación: no se ha instalado nada en el receptor."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "La instalación está detenida: los archivos de la imagen están en la memoria interna del receptor (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "La instalación está detenida: el nombre del USB contiene espacios (%s). No se ha instalado nada."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Con este nombre, la instalación borraría el sistema del receptor antes de leer la imagen."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "El software se ha reconocido correctamente: se han encontrado el núcleo, el sistema y sus particiones. Pulsa OK o el botón verde para instalarlo en el receptor."
+
+msgid "Instalează pe receptor"
+msgstr "Instalar en el receptor"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "La instalación no ha comenzado porque no hay copia de seguridad. No se ha instalado nada en el receptor. Comprueba el USB y vuelve a pulsar el botón verde."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "No se puede escribir en el USB, así que la instalación no comenzará. No se ha cambiado nada en el receptor."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "La instalación está detenida: no hemos podido comprobar dónde están los archivos de la imagen (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "La instalación está detenida: los archivos de la imagen no están en un USB (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "La instalación está detenida: el nombre del USB contiene caracteres no admitidos (%s). No se ha instalado nada."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "No se ha podido crear la copia de seguridad (%s).\n\n¿Quieres continuar sin ella? La lista de canales, los ajustes y los datos de los canales se perderán al instalar."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "La instalación ha comenzado (la interfaz puede cerrarse en cualquier momento, es normal). Registro: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "El nuevo software se está instalando en el receptor. No desenchufes el receptor ni retires el USB durante la instalación; la interfaz se cerrará y el receptor se reiniciará solo al terminar."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "El nombre del USB contiene espacios o caracteres que impiden la instalación. Cámbiale el nombre en el ordenador (por ejemplo, HDSATELIT) y vuelve a pulsar."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "La lista de imágenes no está firmada por HD Satelit. No se ha instalado nada."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "La imagen descargada no coincide. No se ha instalado nada. Pulsa de nuevo para que la descargue otra vez."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "La imagen no es para este receptor. No se ha instalado nada."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "Se ha retirado el USB o tiene un error. No se ha instalado nada."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "No se ha podido guardar la copia de los ajustes en el USB. No se ha instalado nada."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "La comprobación previa a la instalación ha fallado. No se ha instalado nada."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Detenido. No se ha instalado nada. Si vuelves a pulsar, la descarga continuará desde donde se quedó."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "La nueva imagen no se ha instalado. El receptor sigue con %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Se está comprobando todo antes de la instalación..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "La instalación está esperando a que termine la grabación y comenzará automáticamente."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "La imagen se está instalando. No apagues el receptor: se reiniciará solo y los canales y los ajustes se restaurarán automáticamente."

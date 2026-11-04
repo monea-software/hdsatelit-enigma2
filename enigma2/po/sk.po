@@ -55668,3 +55668,447 @@ msgstr "Napíš správu pre televízor"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Ďakujeme všetkým beta testerom, ktorí sa podieľali na tvorbe image HD Satelit: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "nezapíše sa: názov USB kľúča obsahuje medzery"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "nezapíše sa: názov USB kľúča obsahuje nepovolené znaky"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Zápis zastavený: názov USB kľúča obsahuje medzery (%s). Nič sa nezapísalo."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Zápis zastavený: názov USB kľúča obsahuje nepovolené znaky (%s). Nič sa nezapísalo."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "S týmto názvom by zápis vymazal systém prijímača skôr, než načíta obraz."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Vlož USB kľúč do počítača, premenuj ho bez medzier a znakov (napríklad HDSATELIT) a potom ho vráť do prijímača."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Najnovšia kompatibilná"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Kompatibilná"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Nekompatibilná"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "nedá sa nainštalovať: názov USB kľúča obsahuje medzery"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "nedá sa nainštalovať: názov USB kľúča obsahuje nepodporované znaky"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "nedá sa nainštalovať: môže byť pre iný typ prijímača"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "nedá sa nainštalovať: je pre iný typ prijímača"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "nedá sa nainštalovať: súbory sú poškodené"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "nedá sa nainštalovať: súbory sú poškodené alebo zmenené"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "nedá sa nainštalovať: prijímač sa nedá overiť"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Softvér: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Hľadá sa softvér prijímača na USB kľúči a na disku…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Hľadá sa softvér prijímača na USB kľúči a na disku..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Znova hľadať softvér prijímača"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Našla sa jedna verzia softvéru. Stlač OK, aby sa skontrolovala."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Počet nájdených verzií softvéru: %d. Vyber jednu a stlač OK, aby sa skontrolovala."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Skontroluj softvér"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Na USB kľúči ani na disku sa nenašiel softvér prijímača."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Pripoj USB kľúč so softvérom prijímača: archív .zip z webovej stránky alebo priečinok e2/update s kernel.bin a rootfs.tar.bz2. Potom stlač OK na „Znova hľadať softvér prijímača“."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Kontrola softvéru"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Áno, skontroluj softvér"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Image musí byť na USB kľúči. Z vnútornej pamäti sa nikdy nezapisuje: zápis by odstránil práve tie súbory, ktoré číta, a prijímač by už nenaštartoval.\n\nSkopíruj softvér (kernel.bin, rootfs.tar.bz2, imageversion) na USB kľúč, zasuň kľúč a skús to znova. Nič sa nezapísalo."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Softvér sa nepodarilo rozbaliť: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Softvér sa kopíruje do čistého priečinka na USB kľúči. Trvá to až minútu."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Kontroluje sa, či je softvér kompletný (kontrolné súčty). Trvá to niekoľko sekúnd."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Softvér sa nepodarilo prečítať z USB kľúča (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Softvér bol správne rozpoznaný: jadro, systém a ich oddiely boli nájdené. Stlač OK alebo Zelené, aby sa zapísal na prijímač."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Zapisovací program softvér správne nerozpoznal, preto sa nezapíše. Na prijímači sa nič nezmenilo."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Tento softvér neuvádza, pre ktorý prijímač je určený, takže môže byť pre iný typ prijímača. Softvér HD Satelit to uvádza od verzie 0.1.6; staršia verzia alebo image od niekoho iného sa zapíše iba pomocou USB kľúča, ako to uvádza výrobca prijímača."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Údaje o prijímači v tomto softvéri sú poškodené alebo z inej verzie, takže sa nedá overiť, pre ktorý prijímač je."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Softvér je poškodený alebo zmenený: %s nemajú očakávaný kontrolný súčet. Skopíruj ho na USB kľúč znova."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Softvér je poškodený alebo zmenený: %s nemá očakávaný kontrolný súčet. Skopíruj ho na USB kľúč znova."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Súbory softvéru sa po kontrole zmenili. Skontroluj ho znova."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Softvér sa nedá nainštalovať"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Prijímač nedokázal prečítať softvér z USB kľúča."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Nájdené verzie softvéru: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Softvér HD Satelit sa zapíše iba vtedy, ak je určený pre tento prijímač a jeho súbory sú kompletné (kontroluje sa na televízore, po stlačení OK). Image, ktorý nie je HD Satelit, sa zapíše iba po upozornení, pretože ho nemôžeme overiť."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Neoverená"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Nie je to image HD Satelit. Nevieme, či je kompatibilný"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Nie je to image HD Satelit, ale %s. Nevieme, či je kompatibilný s týmto prijímačom, pretože nie je náš a nemôžeme ho overiť."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Ak nie je určený pre tento model prijímača, prijímač nemusí naštartovať, kým sa neobnoví z USB kľúča."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Ak ho nainštaluješ, nahradí image HD Satelit. Nastavenia a zoznam kanálov sa najprv skopírujú na USB kľúč."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Image, ktorý nie je HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Áno, pokračovať"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Zobraziť, čo ofgwrite analyzoval"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Skryť, čo ofgwrite analyzoval"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Softvér sa kontroluje: na prijímač sa nič nezapisuje. Počkaj niekoľko sekúnd a nevypínaj ho."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Našiel jadro systému (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Našiel systém (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Systém má formát, ktorý vie zapísať (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Súbory sú na USB kľúči (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Jadro sa zapíše do vnútornej pamäte, na miesto %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Systém sa zapíše do vnútornej pamäte, na miesto %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "V tomto softvéri nenašiel jadro systému."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "V tomto softvéri nenašiel systém."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Nenašiel miesto jadra vo vnútornej pamäti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Nenašiel miesto systému vo vnútornej pamäti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Nerozpoznáva formát systému."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Jadro je príliš veľké pre svoje miesto vo vnútornej pamäti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Systém je príliš veľký pre svoje miesto vo vnútornej pamäti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Nenašiel žiadnu chybu."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Našiel chybu a zastavil sa (kód %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Ďalšie správy programu, nepreložené:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Bola to iba kontrola: na prijímač sa nič nezapísalo."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "Na USB kľúč sa nedá zapisovať, preto sa zápis nespustí. Na prijímači sa nič nezmenilo."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Obraz na inštaláciu softvéru do prijímača v režime údržby (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Do prijímača sa nič nenainštalovalo."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Tento softvér neuvádza, pre ktorý prijímač je určený, takže môže byť pre iný typ prijímača. Softvér HD Satelit to uvádza od verzie 0.1.6; staršiu verziu alebo obraz od iného autora možno nainštalovať iba z USB kľúča podľa pokynov výrobcu prijímača."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Tu sa zobrazuje iba obsah USB kľúča a to, či ho možno nainštalovať. Inštalácia sa spúšťa na televízore, najprv prebehne simulácia a zobrazia sa dve otázky:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Softvér HD Satelit sa nainštaluje iba vtedy, ak je určený pre tento prijímač a jeho súbory sú neporušené (overí sa to na televízore po stlačení OK). Obraz, ktorý nie je od HD Satelit, sa nainštaluje až po upozornení, pretože ho nevieme overiť."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Inštalačný program softvér správne nerozpoznal, preto sa nenainštaluje. V prijímači sa nič nezmenilo."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Teraz prebehne iba kontrola (simulácia): do prijímača sa nič nenainštaluje. Pokračovať?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Prijímač má vo vnútornej pamäti iba jednu dvojicu jadra a systému (bez multibootu): ak sa nový softvér nespustí, jedinou možnosťou opravy je ručný postup v režime údržby. Pred inštaláciou sa nastavenia a zoznam kanálov skopírujú na USB kľúč."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Obraz musí byť na USB kľúči. Z vnútornej pamäte sa nikdy neinštaluje: inštalácia by vymazala práve tie súbory, ktoré číta, a prijímač by sa už nespustil.\n\nSkopíruj softvér (kernel.bin, rootfs.tar.bz2, imageversion) na USB kľúč, vlož ho do prijímača a skús to znova. Nič sa nenainštalovalo."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Nový softvér sa nainštaluje namiesto toho, ktorý práve beží (priečinok %s vo vnútornej pamäti): ak sa nespustí, opravu treba vykonať ručne pomocou archívu na obnovu od výrobcu na USB kľúči. Pred inštaláciou sa nastavenia a zoznam kanálov skopírujú na USB kľúč."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Program dokáže nainštalovať systém v tomto formáte (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Systém sa nainštaluje do vnútornej pamäte namiesto %s."
+
+msgid "Instalarea este oprită"
+msgstr "Inštalácia je zastavená"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Prebieha kontrola softvéru: do prijímača sa nič neinštaluje. Počkaj niekoľko sekúnd a nevypínaj ho."
+
+msgid "Da, instalează acum"
+msgstr "Áno, inštalovať teraz"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Inštalácia pokračuje bez zálohy podľa tvojej voľby."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Chceš teraz nainštalovať softvér do prijímača?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Jadro sa nainštaluje do vnútornej pamäte namiesto %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Bola to iba kontrola: do prijímača sa nič nenainštalovalo."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Inštalácia je zastavená: súbory obrazu sú uložené vo vnútornej pamäti prijímača (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Inštalácia je zastavená: názov USB kľúča obsahuje medzery (%s). Nič sa nenainštalovalo."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "S týmto názvom by inštalácia vymazala systém prijímača ešte pred načítaním obrazu."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Softvér bol správne rozpoznaný: našlo sa jadro, systém aj ich oddiely. Stlač OK alebo zelené tlačidlo a nainštaluj ho do prijímača."
+
+msgid "Instalează pe receptor"
+msgstr "Inštalovať do prijímača"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Inštalácia sa nespustila, pretože neexistuje záloha. Do prijímača sa nič nenainštalovalo. Skontroluj USB kľúč a potom znova stlač zelené tlačidlo."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "Na USB kľúč sa nedá zapisovať, preto sa inštalácia nespustí. V prijímači sa nič nezmenilo."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Inštalácia je zastavená: nepodarilo sa nám overiť, kde sú uložené súbory obrazu (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Inštalácia je zastavená: súbory obrazu nie sú uložené na USB kľúči (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Inštalácia je zastavená: názov USB kľúča obsahuje nepovolené znaky (%s). Nič sa nenainštalovalo."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Zálohu sa nepodarilo vytvoriť (%s).\n\nPokračovať bez zálohy? Zoznam kanálov, nastavenia a údaje kanálov sa pri inštalácii stratia."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Inštalácia sa spustila (rozhranie sa môže kedykoľvek vypnúť, je to normálne). Záznam: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Do prijímača sa práve inštaluje nový softvér. Počas inštalácie neodpájaj prijímač zo zásuvky ani nevyberaj USB kľúč; rozhranie sa vypne a prijímač sa po dokončení sám reštartuje."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Názov USB kľúča obsahuje medzery alebo znaky, s ktorými inštalácia nefunguje. Premenuj ho v počítači (napríklad na HDSATELIT) a stlač znova."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Zoznam obrazov nie je podpísaný HD Satelit. Nič sa nenainštalovalo."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Stiahnutý obraz nie je správny. Nič sa nenainštalovalo. Stlač znova a stiahnem ho ešte raz."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Obraz nie je určený pre tento prijímač. Nič sa nenainštalovalo."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "USB kľúč bol odpojený alebo má chybu. Nič sa nenainštalovalo."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Zálohu nastavení sa nepodarilo vytvoriť na USB kľúči. Nič sa nenainštalovalo."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Kontrola pred inštaláciou neprebehla úspešne. Nič sa nenainštalovalo."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Zastavené. Nič sa nenainštalovalo. Ak stlačíš znova, sťahovanie bude pokračovať od miesta, kde sa zastavilo."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Nový obraz sa nenainštaloval. Prijímač naďalej používa %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Prebieha kontrola všetkého pred inštaláciou..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Inštalácia čaká na dokončenie nahrávania a potom sa spustí automaticky."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Obraz sa práve inštaluje. Nevypínaj prijímač: sám sa reštartuje a kanály aj nastavenia sa automaticky obnovia."

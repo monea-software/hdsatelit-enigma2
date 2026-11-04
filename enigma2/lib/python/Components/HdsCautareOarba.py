@@ -117,6 +117,7 @@ MESAJE_EROARE = {
     'blocat': N_('Tunerul nu a mai răspuns, așa că am oprit căutarea.'),
 }
 MESAJ_EROARE_ALTA = N_('Căutarea nu a putut porni.')
+CALE_JURNAL = '/home/root/logs/hds-blindscan.log'
 
 
 # ---------------------------------------------------------------- frecventa si benzile LNB-ului
@@ -798,9 +799,19 @@ class Cautare(object):
             for g in self.gasite:
                 g['orbital_position'] = int(poz)
 
+    def _salveaza_jurnal(self):
+        """Randurile programului de la ultima cautare, de citit dupa aceea: in memorie se pierd la repornirea interfetei."""
+        try:
+            with open(CALE_JURNAL, 'w') as f:
+                for etapa, cuvant, valori in self.jurnal:
+                    f.write('%s %s %s\n' % (etapa, cuvant, valori))
+        except (IOError, OSError):
+            pass
+
     def _termina(self, faza, cod=''):
         self.faza = faza
         self.t_sfarsit = self._ceas()
+        self._salveaza_jurnal()
         if cod and not self.cod_eroare:
             self.cod_eroare = cod
         if faza == EROARE:

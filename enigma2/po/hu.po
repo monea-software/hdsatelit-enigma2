@@ -56943,3 +56943,447 @@ msgstr "Írd be az üzenetet a tévére"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Köszönetet mondunk minden bétatesztelőnek, aki részt vett a HD Satelit image elkészítésében: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "nem íródik: a pendrive nevében szóköz van"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "nem íródik: a pendrive nevében nem elfogadott jel van"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Az írás leállt: a pendrive nevében szóköz van (%s). Semmi sem íródott."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Az írás leállt: a pendrive nevében nem elfogadott jel van (%s). Semmi sem íródott."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Ezzel a névvel az írás törölné a vevő rendszerét, mielőtt beolvasná a képfájlt."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Tedd a pendrive-ot egy számítógépbe, nevezd át szóköz és jelek nélkül (például HDSATELIT), majd tedd vissza a vevőbe."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Legújabb kompatibilis"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Kompatibilis"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Nem kompatibilis"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "nem telepíthető: az USB-kulcs neve szóközöket tartalmaz"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "nem telepíthető: az USB-kulcs neve nem elfogadott karaktereket tartalmaz"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "nem telepíthető: lehet, hogy másik vevőtípushoz készült"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "nem telepíthető: másik vevőtípushoz készült"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "nem telepíthető: a fájlok sérültek"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "nem telepíthető: a fájlok sérültek vagy módosultak"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "nem telepíthető: a vevő nem ellenőrizhető"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Szoftver: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Vevőszoftver keresése az USB-kulcson és a lemezen…"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Vevőszoftver keresése az USB-kulcson és a lemezen..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Vevőszoftver ismételt keresése"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Találtam egy szoftververziót. Nyomd meg az OK gombot az ellenőrzéshez."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "%d szoftververziót találtam. Válassz egyet, és nyomd meg az OK gombot az ellenőrzéshez."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Szoftver ellenőrzése"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Nem találtam vevőszoftvert az USB-kulcson vagy a lemezen."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Dugj be egy USB-kulcsot vevőszoftverrel: a webhelyről származó .zip archívumot vagy az e2/update mappát a kernel.bin és rootfs.tar.bz2 fájlokkal. Ezután nyomd meg az OK gombot a „Vevőszoftver ismételt keresése” soron."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "A szoftver ellenőrzése"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Igen, ellenőrizd a szoftvert"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Az image-nek USB-kulcson kell lennie. Belső memóriából soha nem történik írás: az írás éppen azokat a fájlokat törölné, amelyeket olvas, és a vevő többé nem indulna el.\n\nMásold a szoftvert (kernel.bin, rootfs.tar.bz2, imageversion) egy USB-kulcsra, dugd be a kulcsot, és próbáld újra. Semmi sem íródott."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Nem sikerült kicsomagolni a szoftvert: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "A szoftver egy tiszta mappába másolódik az USB-kulcson. Ez legfeljebb egy percig tart."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Ellenőrzöm, hogy a szoftver hiánytalan-e (ellenőrzőösszegek). Néhány másodpercig tart."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "A szoftvert nem sikerült beolvasni az USB-kulcsról (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "A szoftver felismerése sikerült: a kernel, a rendszer és a partícióik megvannak. Nyomd meg az OK vagy a Zöld gombot, hogy felírd a vevőre."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Az író program nem ismerte fel helyesen a szoftvert, ezért nem íródik fel. A vevőn nem változott semmi."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Ez a szoftver nem mondja meg, melyik vevőhöz készült, ezért lehet, hogy másik vevőtípushoz való. A HD Satelit szoftver a 0.1.6-os verziótól megmondja ezt; régebbi verzió vagy más forrásból származó image csak USB-kulccsal írható fel, ahogy a vevő gyártója leírja."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "A vevő adatai ebben a szoftverben sérültek vagy másik verzióból valók, ezért nem ellenőrizhető, melyik vevőhöz készült."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "A szoftver sérült vagy módosult: a következő fájlok ellenőrzőösszege nem a várt: %s. Másold újra az USB-kulcsra."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "A szoftver sérült vagy módosult: a(z) %s ellenőrzőösszege nem a várt. Másold újra az USB-kulcsra."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "A szoftver fájljai megváltoztak az ellenőrzés után. Ellenőrizd újra."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "A szoftver nem telepíthető"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "A vevő nem tudta beolvasni a szoftvert az USB-kulcsról."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Talált szoftververziók: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "A HD Satelit szoftver csak akkor íródik fel, ha ehhez a vevőhöz készült, és a fájljai hiánytalanok (a tévén történik az ellenőrzés, az OK megnyomásakor). A nem HD Satelit image csak figyelmeztetés után íródik fel, mert nem tudjuk ellenőrizni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Nem ellenőrzött"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "Nem HD Satelit image. Nem tudjuk, hogy kompatibilis-e"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "Ez nem HD Satelit image, hanem %s. Nem tudjuk, hogy kompatibilis-e ezzel a vevővel, mert nem a miénk, és nem tudjuk ellenőrizni."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Ha nem ehhez a vevőmodellhez készült, előfordulhat, hogy a vevő nem indul el, amíg USB-kulcsról helyre nem állítják."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Ha telepíted, lecseréli a HD Satelit image-et. A beállítások és a csatornalista először az USB-kulcsra másolódnak."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Nem HD Satelit image"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Igen, folytasd"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Mutasd, mit elemzett az ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Rejtsd el, mit elemzett az ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "A szoftver ellenőrzése folyik: a vevőre nem íródik semmi. Várj néhány másodpercet, és ne kapcsold ki."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Megtalálta a rendszer kernelét (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Megtalálta a rendszert (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "A rendszer formátuma olyan, amelyet fel tud írni (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "A fájlok az USB-kulcson vannak (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "A kernel a belső memóriába íródik, a(z) %s helyre."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "A rendszer a belső memóriába íródik, a(z) %s helyre."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "Nem találta meg a rendszer kernelét ebben a szoftverben."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "Nem találta meg a rendszert ebben a szoftverben."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Nem találta meg a kernel helyét a belső memóriában."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Nem találta meg a rendszer helyét a belső memóriában."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Nem ismeri fel a rendszer formátumát."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "A kernel túl nagy a helyéhez a belső memóriában."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "A rendszer túl nagy a helyéhez a belső memóriában."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Nem talált hibát."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Hibát talált és leállt (kód: %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "A program további üzenetei, fordítás nélkül:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "Ez csak ellenőrzés volt: a vevőre nem íródott semmi."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "A pendrive-ra nem lehet írni, ezért az írás nem indul el. A vevőn semmi sem változott."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "A szoftver vevőre telepítéséhez használható kép, Maintenance Mode használatával (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Semmi sem lett telepítve a vevőre."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Ez a szoftver nem jelzi, hogy melyik vevőhöz készült, ezért más típushoz is tartozhat. A HD Satelit szoftver a 0.1.6-os verziótól jelzi ezt; régebbi verziót vagy mástól származó képet csak USB pendrive-ról lehet telepíteni, a vevő gyártójának útmutatása szerint."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Itt csak azt látod, hogy mi van a pendrive-on, és telepíthető-e. A telepítés a tévén történik, előtte egy próbafuttatással és két kérdéssel:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "A HD Satelit szoftver csak akkor telepíthető, ha ehhez a vevőhöz készült, és a fájljai épek (ezt a tévén, az OK megnyomásakor ellenőrizzük). A nem HD Satelit kép csak figyelmeztetés után telepíthető, mert azt nem tudjuk ellenőrizni."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "A telepítő nem tudta megfelelően azonosítani a szoftvert, ezért nem telepíti. A vevőn semmi sem változott."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Most csak ellenőrzés történik (próbafuttatás): semmi sem lesz telepítve a vevőre. Folytatod?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "A vevő belső memóriájában csak egy rendszermag és a hozzá tartozó rendszer van (nincs multiboot): ha az új szoftver nem indul el, csak kézzel, a Maintenance Mode használatával lehet helyreállítani. Telepítés előtt a beállításokat és a csatornalistát átmásoljuk a pendrive-ra."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "A képnek USB pendrive-on kell lennie. Belső memóriából soha nem lehet telepíteni: a telepítés éppen azokat a fájlokat törölné, amelyeket olvas, és a vevő többé nem indulna el.\n\nMásold a szoftvert (kernel.bin, rootfs.tar.bz2, imageversion) egy USB pendrive-ra, csatlakoztasd a pendrive-ot, és próbáld újra. Semmi sem lett telepítve."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Az új szoftver a jelenleg futó helyére kerül (a belső memória %s mappájába): ha nem indul el, kézzel kell helyreállítani, a gyártó helyreállító archívumával, pendrive-ról. Telepítés előtt a beállításokat és a csatornalistát átmásoljuk a pendrive-ra."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "A program tudja telepíteni a rendszert ebben a formátumban (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "A rendszer a belső memóriába kerül, a(z) %s helyére."
+
+msgid "Instalarea este oprită"
+msgstr "A telepítés leállítva"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "A szoftver ellenőrzése folyamatban: semmi sem lesz telepítve a vevőre. Várj néhány másodpercet, és ne kapcsold ki."
+
+msgid "Da, instalează acum"
+msgstr "Igen, telepítés most"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "A telepítés biztonsági mentés nélkül folytatódik, ahogy választottad."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Telepíted most a szoftvert a vevőre?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "A rendszermag a belső memóriába kerül, a(z) %s helyére."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "Ez csak ellenőrzés volt: semmi sem lett telepítve a vevőre."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "A telepítés leállítva: a kép fájljai a vevő belső memóriájában vannak (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "A telepítés leállítva: a pendrive neve szóközt tartalmaz (%s). Semmi sem lett telepítve."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "Ezzel a névvel a telepítés törölné a vevő rendszerét, mielőtt beolvasná a képet."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "A szoftver azonosítása sikerült: a rendszermagot, a rendszert és a hozzájuk tartozó partíciókat is megtaláltuk. A vevőre telepítéshez nyomd meg az OK vagy a zöld gombot."
+
+msgid "Instalează pe receptor"
+msgstr "Telepítés a vevőre"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "A telepítés nem indult el, mert nincs biztonsági mentés. Semmi sem lett telepítve a vevőre. Ellenőrizd a pendrive-ot, majd nyomd meg újra a zöld gombot."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "A pendrive-ra nem lehet írni, ezért a telepítés nem indul el. A vevőn semmi sem változott."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "A telepítés leállítva: nem sikerült ellenőrizni, hol vannak a kép fájljai (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "A telepítés leállítva: a kép fájljai nem USB pendrive-on vannak (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "A telepítés leállítva: a pendrive neve nem megengedett karaktereket tartalmaz (%s). Semmi sem lett telepítve."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Nem sikerült elkészíteni a biztonsági mentést (%s).\n\nFolytatod mentés nélkül? A csatornalista, a beállítások és a csatornák adatai elvesznek a telepítés során."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "A telepítés elindult (a kezelőfelület bármikor leállhat, ez normális). Napló: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Az új szoftver telepítése folyamatban van a vevőn. Telepítés közben ne húzd ki a vevőt a konnektorból, és ne távolítsd el a pendrive-ot; a kezelőfelület leáll, a vevő pedig a végén magától újraindul."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "A pendrive neve szóközt vagy olyan karaktereket tartalmaz, amelyekkel a telepítés nem működik. Nevezd át a számítógépen (például HDSATELIT névre), majd nyomd meg újra."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "A képek listáján nincs HD Satelit aláírás. Semmi sem lett telepítve."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "A letöltött kép nem megfelelő. Semmi sem lett telepítve. Nyomd meg újra, hogy ismét letöltsem."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "A kép nem ehhez a vevőhöz készült. Semmi sem lett telepítve."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "A pendrive-ot eltávolították, vagy hiba van rajta. Semmi sem lett telepítve."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Nem sikerült menteni a beállításokat a pendrive-ra. Semmi sem lett telepítve."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "A telepítés előtti ellenőrzés sikertelen volt. Semmi sem lett telepítve."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Leállítva. Semmi sem lett telepítve. Ha újra megnyomod, a letöltés onnan folytatódik, ahol abbamaradt."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Az új kép nem lett telepítve. A vevőn a(z) %s maradt."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Minden ellenőrzése telepítés előtt..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "A telepítés megvárja a felvétel végét, majd magától elindul."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "A kép telepítése folyamatban van. Ne kapcsold ki a vevőt: magától újraindul, a csatornák és a beállítások pedig automatikusan visszaállnak."

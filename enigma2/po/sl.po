@@ -53403,3 +53403,447 @@ msgstr "Napiši sporočilo za televizor"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Zahvaljujemo se vsem beta preizkuševalcem, ki so sodelovali pri izdelavi image-a HD Satelit: %s."
 
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are spații"
+msgstr "se ne zapiše: ime ključka USB ima presledke"
+
+#: lib/python (0.6.27, numele stickului)
+msgid "nu se scrie: numele stickului are semne neacceptate"
+msgstr "se ne zapiše: ime ključka USB ima nedovoljene znake"
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are spații (%s). Nu s-a scris nimic."
+msgstr "Zapisovanje ustavljeno: ime ključka USB ima presledke (%s). Nič ni bilo zapisano."
+
+#: lib/python (0.6.27, numele stickului)
+#, python-format
+msgid "Scrierea este oprită: numele stickului are semne neacceptate (%s). Nu s-a scris nimic."
+msgstr "Zapisovanje ustavljeno: ime ključka USB ima nedovoljene znake (%s). Nič ni bilo zapisano."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Cu acest nume, scrierea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "S tem imenom bi zapisovanje izbrisalo sistem sprejemnika, preden prebere sliko."
+
+#: lib/python (0.6.27, numele stickului)
+msgid "Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu HDSATELIT), apoi introdu-l din nou în receptor."
+msgstr "Vstavi ključek USB v računalnik, preimenuj ga brez presledkov in znakov (na primer HDSATELIT), nato ga vrni v sprejemnik."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Cea mai nouă compatibilă"
+msgstr "Najnovejša združljiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Compatibilă"
+msgstr "Združljiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Incompatibilă"
+msgstr "Nezdružljiva"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are spații"
+msgstr "ni mogoče namestiti: ime ključka USB vsebuje presledke"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: numele stickului are semne neacceptate"
+msgstr "ni mogoče namestiti: ime ključka USB vsebuje nedovoljene znake"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: poate fi pentru alt tip de receptor"
+msgstr "ni mogoče namestiti: morda je za drugo vrsto sprejemnika"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: este pentru alt tip de receptor"
+msgstr "ni mogoče namestiti: je za drugo vrsto sprejemnika"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate"
+msgstr "ni mogoče namestiti: datoteke so poškodovane"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: fișierele sunt stricate sau schimbate"
+msgstr "ni mogoče namestiti: datoteke so poškodovane ali spremenjene"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "nu se poate instala: receptorul nu se poate verifica"
+msgstr "ni mogoče namestiti: sprejemnika ni mogoče preveriti"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software: %s"
+msgstr "Programska oprema: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc…"
+msgstr "Iščem programsko opremo sprejemnika na ključku USB in na disku …"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se caută software de receptor pe stick și pe disc..."
+msgstr "Iščem programsko opremo sprejemnika na ključku USB in na disku ..."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Caută din nou software de receptor"
+msgstr "Znova poišči programsko opremo sprejemnika"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Am găsit o variantă de software. Apasă OK ca să fie verificată."
+msgstr "Najdena je bila ena različica programske opreme. Pritisni OK, da se preveri."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Am găsit %d variante de software. Alege una și apasă OK ca să fie verificată."
+msgstr "Število najdenih različic programske opreme: %d. Izberi eno in pritisni OK, da se preveri."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verifică software-ul"
+msgstr "Preveri programsko opremo"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu am găsit software de receptor pe stick sau pe disc."
+msgstr "Na ključku USB in na disku ni bilo najdene programske opreme sprejemnika."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”."
+msgstr "Vtakni ključek USB s programsko opremo sprejemnika: arhiv .zip s spletnega mesta ali mapo e2/update z datotekama kernel.bin in rootfs.tar.bz2. Nato pritisni OK na »Znova poišči programsko opremo sprejemnika«."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Verificarea software-ului"
+msgstr "Preverjanje programske opreme"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, verifică software-ul"
+msgstr "Da, preveri programsko opremo"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se scrie niciodată: scrierea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a scris nimic."
+msgstr "Image mora biti na ključku USB. Iz notranjega pomnilnika se nikoli ne piše: pisanje bi izbrisalo prav datoteke, ki jih bere, in sprejemnik se ne bi več zagnal.\n\nPrekopiraj programsko opremo (kernel.bin, rootfs.tar.bz2, imageversion) na ključek USB, vtakni ključek in poskusi znova. Nič ni bilo zapisano."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu am putut dezarhiva software-ul: %s"
+msgstr "Programske opreme ni bilo mogoče razširiti: %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."
+msgstr "Programska oprema se kopira v čisto mapo na ključku USB. Traja do ene minute."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."
+msgstr "Preverja se, ali je programska oprema cela (kontrolne vsote). Traja nekaj sekund."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul nu s-a putut citi de pe stick (%s)."
+msgstr "Programske opreme ni bilo mogoče prebrati s ključka USB (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl scrii pe receptor."
+msgstr "Programska oprema je bila pravilno prepoznana: jedro, sistem in njihove particije so bili najdeni. Pritisni OK ali Zeleno, da jo zapišeš na sprejemnik."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu a fost recunoscut corect de programul de scriere, deci nu se scrie. Pe receptor nu s-a schimbat nimic."
+msgstr "Program za pisanje ni pravilno prepoznal programske opreme, zato se ne zapiše. Na sprejemniku se ni nič spremenilo."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se scrie numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "Ta programska oprema ne pove, za kateri sprejemnik je narejena, zato je morda za drugo vrsto sprejemnika. Programska oprema HD Satelit to pove od različice 0.1.6; starejša različica ali image od koga drugega se zapiše samo s ključkom USB, kot opisuje proizvajalec sprejemnika."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este."
+msgstr "Podatki o sprejemniku v tej programski opremi so poškodovani ali iz druge različice, zato ni mogoče preveriti, za kateri sprejemnik je."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Programska oprema je poškodovana ali spremenjena: %s nimajo pričakovane kontrolne vsote. Ponovno jo kopiraj na ključek."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick."
+msgstr "Programska oprema je poškodovana ali spremenjena: %s nima pričakovane kontrolne vsote. Ponovno jo kopiraj na ključek."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou."
+msgstr "Datoteke programske opreme so se po preverjanju spremenile. Preveri jo znova."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul nu se poate instala"
+msgstr "Programske opreme ni mogoče namestiti"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Receptorul nu a putut citi software-ul de pe stick."
+msgstr "Sprejemnik ni mogel prebrati programske opreme s ključka USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Variante de software găsite: %d."
+msgstr "Najdene različice programske opreme: %d."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Software-ul HD Satelit se scrie numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se scrie numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Programska oprema HD Satelit se zapiše samo, če je narejena za ta sprejemnik in so njene datoteke cele (preveri se na televizorju, ob pritisku na OK). Image, ki ni HD Satelit, se zapiše samo po opozorilu, ker ga ne moremo preveriti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Neverificată"
+msgstr "Nepreverjena"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu este imagine HD Satelit. Nu știm dacă este compatibilă"
+msgstr "To ni image HD Satelit. Ne vemo, ali je združljiv"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne aparține și nu o putem verifica."
+msgstr "To ni image HD Satelit, ampak %s. Ne vemo, ali je združljiv s tem sprejemnikom, ker ni naš in ga ne moremo preveriti."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă nu este făcută pentru modelul acestui receptor, receptorul poate rămâne fără pornire până la recuperarea de pe stick."
+msgstr "Če ni narejen za ta model sprejemnika, se sprejemnik morda ne bo zagnal, dokler ga ne obnoviš s ključka USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick."
+msgstr "Če ga namestiš, nadomesti image HD Satelit. Nastavitve in seznam kanalov se najprej kopirajo na ključek USB."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Imagine care nu este HD Satelit"
+msgstr "Image, ki ni HD Satelit"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Da, continuă"
+msgstr "Da, nadaljuj"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Vezi ce a analizat ofgwrite"
+msgstr "Poglej, kaj je analiziral ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Ascunde ce a analizat ofgwrite"
+msgstr "Skrij, kaj je analiziral ofgwrite"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Se verifică software-ul: nu se scrie nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Programska oprema se preverja: na sprejemnik se nič ne zapisuje. Počakaj nekaj sekund in ga ne izklapljaj."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit nucleul sistemului (%s)."
+msgstr "Našel je jedro sistema (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit sistemul (%s)."
+msgstr "Našel je sistem (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul are un format pe care îl poate scrie (%s)."
+msgstr "Sistem ima format, ki ga lahko zapiše (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Fișierele stau pe stick (%s)."
+msgstr "Datoteke so na ključku USB (%s)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Nucleul se va scrie în memoria internă, în locul %s."
+msgstr "Jedro se bo zapisalo v notranji pomnilnik, na mesto %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "Sistemul se va scrie în memoria internă, în locul %s."
+msgstr "Sistem se bo zapisal v notranji pomnilnik, na mesto %s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nucleul sistemului în acest software."
+msgstr "V tej programski opremi ni našel jedra sistema."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit sistemul în acest software."
+msgstr "V tej programski opremi ni našel sistema."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul nucleului în memoria internă."
+msgstr "Ni našel mesta jedra v notranjem pomnilniku."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit locul sistemului în memoria internă."
+msgstr "Ni našel mesta sistema v notranjem pomnilniku."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu recunoaște formatul sistemului."
+msgstr "Ne prepozna formata sistema."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nucleul este prea mare pentru locul lui din memoria internă."
+msgstr "Jedro je preveliko za svoje mesto v notranjem pomnilniku."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Sistemul este prea mare pentru locul lui din memoria internă."
+msgstr "Sistem je prevelik za svoje mesto v notranjem pomnilniku."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Nu a găsit nicio eroare."
+msgstr "Ni našel nobene napake."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+#, python-format
+msgid "A găsit o eroare și s-a oprit (codul %d)."
+msgstr "Našel je napako in se ustavil (koda %d)."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Alte mesaje ale programului, netraduse:"
+msgstr "Druga sporočila programa, neprevedena:"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py
+msgid "Aceasta a fost numai o verificare: nu s-a scris nimic pe receptor."
+msgstr "To je bilo samo preverjanje: na sprejemnik ni bilo nič zapisano."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește scrierea. Pe receptor nu s-a schimbat nimic."
+msgstr "Na USB ključ ni mogoče pisati, zato se zapisovanje ne začne. Na sprejemniku se ni nič spremenilo."
+
+#, python-format
+msgid "Imaginea pentru instalarea software-ului pe receptor prin Maintenance Mode (%s)."
+msgstr "Slika za namestitev programske opreme na sprejemnik v načinu Maintenance Mode (%s)."
+
+msgid "Nu s-a instalat nimic pe receptor."
+msgstr "Na sprejemnik ni bilo nič nameščeno."
+
+msgid "Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului."
+msgstr "V tej programski opremi ni podatka, za kateri sprejemnik je namenjena, zato je lahko za drug model. Programska oprema HD Satelit ta podatek vsebuje od različice 0.1.6 naprej; starejšo različico ali sliko drugega ponudnika lahko namestiš samo z USB ključem po navodilih proizvajalca sprejemnika."
+
+msgid "Aici se vede numai ce este pe stick și dacă se poate instala. Instalarea se face pe televizor, cu simularea și două întrebări înainte:"
+msgstr "Tukaj vidiš samo, kaj je na USB ključu in ali je namestitev mogoča. Namestitev poteka na televizorju, pred njo pa se izvede simulacija in prikažeta dve vprašanji:"
+
+msgid "Software-ul HD Satelit se instalează numai dacă este făcut pentru acest receptor și fișierele lui sunt întregi (se verifică pe televizor, la OK). O imagine care nu este HD Satelit se instalează numai după un avertisment, pentru că nu o putem verifica."
+msgstr "Programsko opremo HD Satelit je mogoče namestiti samo, če je namenjena temu sprejemniku in so njene datoteke nepoškodovane (to se preveri na televizorju ob pritisku na OK). Sliko, ki ni HD Satelit, je mogoče namestiti šele po opozorilu, ker je ne moremo preveriti."
+
+msgid "Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic."
+msgstr "Namestitveni program programske opreme ni pravilno prepoznal, zato je ne bo namestil. Na sprejemniku se ni nič spremenilo."
+
+msgid "Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?"
+msgstr "Zdaj bo potekalo samo preverjanje (simulacija): na sprejemnik se ne bo nič namestilo. Želiš nadaljevati?"
+
+msgid "Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Sprejemnik ima v notranjem pomnilniku samo eno jedro in en sistem (brez možnosti zagona več sistemov): če se nova programska oprema ne zažene, je sprejemnik mogoče obnoviti samo ročno v načinu Maintenance Mode. Pred namestitvijo se nastavitve in seznam kanalov kopirajo na USB ključ."
+
+msgid "Imaginea trebuie să fie pe un stick USB. Din memoria internă nu se instalează niciodată: instalarea ar șterge chiar fișierele pe care le citește și receptorul nu ar mai porni.\n\nCopiază software-ul (kernel.bin, rootfs.tar.bz2, imageversion) pe un stick USB, introdu stickul și încearcă din nou. Nu s-a instalat nimic."
+msgstr "Slika mora biti na USB ključu. Iz notranjega pomnilnika je nikoli ni mogoče namestiti: namestitev bi izbrisala prav datoteke, ki jih bere, in sprejemnik se ne bi več zagnal.\n\nKopiraj programsko opremo (kernel.bin, rootfs.tar.bz2, imageversion) na USB ključ, vstavi ključ in poskusi znova. Nič ni bilo nameščeno."
+
+#, python-format
+msgid "Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick."
+msgstr "Nova programska oprema se bo namestila namesto tiste, ki trenutno deluje (mapa %s v notranjem pomnilniku): če se ne zažene, bo treba sprejemnik obnoviti ročno s proizvajalčevim obnovitvenim arhivom na USB ključu. Pred namestitvijo se nastavitve in seznam kanalov kopirajo na USB ključ."
+
+#, python-format
+msgid "Programul poate instala sistemul în acest format (%s)."
+msgstr "Program lahko namesti sistem v tej obliki (%s)."
+
+#, python-format
+msgid "Sistemul se va instala în memoria internă, în locul %s."
+msgstr "Sistem bo nameščen v notranji pomnilnik namesto %s."
+
+msgid "Instalarea este oprită"
+msgstr "Namestitev je ustavljena"
+
+msgid "Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."
+msgstr "Preverjanje programske opreme: na sprejemnik se ne namešča nič. Počakaj nekaj sekund in ga ne izklapljaj."
+
+msgid "Da, instalează acum"
+msgstr "Da, namesti zdaj"
+
+msgid "Instalarea continuă fără copie de siguranță, cum ai ales."
+msgstr "Namestitev se nadaljuje brez varnostne kopije, kot si izbral."
+
+msgid "Instalezi acum software-ul pe receptor?"
+msgstr "Želiš zdaj namestiti programsko opremo na sprejemnik?"
+
+#, python-format
+msgid "Nucleul se va instala în memoria internă, în locul %s."
+msgstr "Jedro bo nameščeno v notranji pomnilnik namesto %s."
+
+msgid "Aceasta a fost numai o verificare: nu s-a instalat nimic pe receptor."
+msgstr "To je bilo samo preverjanje: na sprejemnik ni bilo nič nameščeno."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii stau pe memoria internă a receptorului (%s)."
+msgstr "Namestitev je ustavljena: datoteke slike so v notranjem pomnilniku sprejemnika (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are spații (%s). Nu s-a instalat nimic."
+msgstr "Namestitev je ustavljena: ime USB ključa vsebuje presledke (%s). Nič ni bilo nameščeno."
+
+msgid "Cu acest nume, instalarea ar șterge sistemul receptorului înainte să citească imaginea."
+msgstr "S tem imenom bi namestitev izbrisala sistem sprejemnika, še preden bi prebrala sliko."
+
+msgid "Software-ul a fost recunoscut corect: nucleul, sistemul și partițiile lor au fost găsite. Apasă OK sau Verde ca să îl instalezi pe receptor."
+msgstr "Programska oprema je bila pravilno prepoznana: najdeni so bili jedro, sistem in njuni particiji. Pritisni OK ali zeleno tipko, da jo namestiš na sprejemnik."
+
+msgid "Instalează pe receptor"
+msgstr "Namesti na sprejemnik"
+
+msgid "Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."
+msgstr "Namestitev se ni začela, ker ni varnostne kopije. Na sprejemnik ni bilo nič nameščeno. Preveri USB ključ in znova pritisni zeleno tipko."
+
+msgid "Pe stick nu se poate scrie, deci nu pornește instalarea. Pe receptor nu s-a schimbat nimic."
+msgstr "Na USB ključ ni mogoče pisati, zato se namestitev ne začne. Na sprejemniku se ni nič spremenilo."
+
+#, python-format
+msgid "Instalarea este oprită: nu am putut verifica unde stau fișierele imaginii (%s)."
+msgstr "Namestitev je ustavljena: ni bilo mogoče preveriti, kje so datoteke slike (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: fișierele imaginii nu stau pe un stick USB (%s)."
+msgstr "Namestitev je ustavljena: datoteke slike niso na USB ključu (%s)."
+
+#, python-format
+msgid "Instalarea este oprită: numele stickului are semne neacceptate (%s). Nu s-a instalat nimic."
+msgstr "Namestitev je ustavljena: ime USB ključa vsebuje nedovoljene znake (%s). Nič ni bilo nameščeno."
+
+#, python-format
+msgid "Copia de siguranță nu s-a putut face (%s).\n\nContinui fără copie? Lista de canale, setările și datele canalelor se pierd la instalare."
+msgstr "Varnostne kopije ni bilo mogoče ustvariti (%s).\n\nŽeliš nadaljevati brez kopije? Pri namestitvi se izgubijo seznam kanalov, nastavitve in podatki kanalov."
+
+#, python-format
+msgid "Instalarea a pornit (interfața se poate opri oricând, e normal). Jurnal: %s"
+msgstr "Namestitev se je začela (vmesnik se lahko kadar koli zapre, kar je običajno). Dnevnik: %s"
+
+msgid "Noul software se instalează acum pe receptor. Nu opri receptorul din priză și nu scoate stickul cât timp se instalează; interfața se oprește, iar receptorul repornește singur la final."
+msgstr "Nova programska oprema se zdaj namešča na sprejemnik. Med namestitvijo sprejemnika ne odklapljaj iz elektrike in ne odstranjuj USB ključa; vmesnik se zapre, sprejemnik pa se na koncu sam znova zažene."
+
+msgid "Numele stickului are spații sau semne cu care instalarea nu merge. Schimbă-i numele în calculator (de exemplu HDSATELIT) și apasă din nou."
+msgstr "Ime USB ključa vsebuje presledke ali znake, zaradi katerih namestitev ne deluje. Preimenuj ga na računalniku (na primer v HDSATELIT) in znova pritisni."
+
+msgid "Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat nimic."
+msgstr "Seznam slik ni podpisan s podpisom HD Satelit. Nič ni bilo nameščeno."
+
+msgid "Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar."
+msgstr "Prenesena slika ne ustreza. Nič ni bilo nameščeno. Pritisni znova, da jo še enkrat prenesem."
+
+msgid "Imaginea nu este pentru acest receptor. Nu s-a instalat nimic."
+msgstr "Slika ni namenjena temu sprejemniku. Nič ni bilo nameščeno."
+
+msgid "Stickul a fost scos sau are o eroare. Nu s-a instalat nimic."
+msgstr "USB ključ je bil odstranjen ali ima napako. Nič ni bilo nameščeno."
+
+msgid "Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic."
+msgstr "Kopije nastavitev ni bilo mogoče ustvariti na USB ključu. Nič ni bilo nameščeno."
+
+msgid "Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic."
+msgstr "Preverjanje pred namestitvijo ni bilo uspešno. Nič ni bilo nameščeno."
+
+msgid "Oprit. Nu s-a instalat nimic. Dacă apeși din nou, descărcarea continuă de unde a rămas."
+msgstr "Ustavljeno. Nič ni bilo nameščeno. Če znova pritisneš, se prenos nadaljuje tam, kjer se je ustavil."
+
+#, python-format
+msgid "Imaginea nouă nu s-a instalat. Receptorul a rămas pe %s."
+msgstr "Nova slika ni bila nameščena. Na sprejemniku je ostala %s."
+
+msgid "Se verifică totul înainte de instalare..."
+msgstr "Preverjanje vsega pred namestitvijo..."
+
+msgid "Instalarea așteaptă să se termine înregistrarea și pornește singură."
+msgstr "Namestitev čaka na konec snemanja in se bo začela samodejno."
+
+msgid "Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure."
+msgstr "Slika se zdaj namešča. Ne izklapljaj sprejemnika: sam se bo znova zagnal, kanali in nastavitve pa se bodo samodejno obnovili."
