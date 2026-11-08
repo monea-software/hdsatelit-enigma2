@@ -2,10 +2,13 @@
 installdir = $(pkglibdir)/python/Screens
 
 install_PYTHON = \
+	HdsParteaDoua.py \
+	Timers.py TagEditor.py SkinSelection.py \
 	AudioSelection.py ChannelSelection.py InfoBar.py HdsFontInterfata.py \
 	HdsTransmisie.py HdsAdaugaFeed.py \
+	HdsRadioOnline.py \
 	Menu.py MessageBox.py Screen.py ServiceScan.py TimerEdit.py \
-	HdsRaportCanal.py \
+	HdsRaportCanal.py Processing.py \
 	MovieSelection.py Setup.py About.py HarddiskSetup.py FixedMenu.py \
 	Satconfig.py ScanSetup.py NetworkSetup.py Ci.py TimerEntry.py Volume.py \
 	EpgSelection.py EventView.py Mute.py Standby.py ServiceInfo.py \
@@ -26,7 +29,7 @@ install_PYTHON = \
 	HdsSoftwareUpdate.py TempFanControl.py CleanupWizard.py \
 	HdsCrashlogAutoSubmit.py HdsCautareCanale.py HdsCautaSetari.py HdsHdmiInfo.py HdsExtensii.py HdsDishMotor.py \
 	HdsEditorCanale.py HdsEditorCanaleLegatura.py HdsEditorCanaleLogica.py HdsEditorCanaleUnelte.py \
-	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsComunPrincipal.py \
+	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsGalerieSigle.py HdsComunPrincipal.py \
 	HdsAjutor.py \
 	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
@@ -34,9 +37,11 @@ install_PYTHON = \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
+	HdsAfisajColor.py \
 	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
-	HdsNavigatorWeb.py HdsTemaInterfata.py HdsAnuntRetea.py HdsUnelteRetea.py \
-	HdsLocuriRetea.py HdsBetaTester.py HdsForumReceptor.py
-
+	HdsNavigatorWeb.py HdsTemaInterfata.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
+	HdsLocuriRetea.py HdsBetaTester.py HdsForumReceptor.py \
+	Opkg.py NetworkServices.py DVD.py \
+	TaskList.py Toast.py

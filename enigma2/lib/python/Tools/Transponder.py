@@ -141,3 +141,26 @@ def ConvertToHumanReadable(tp, type = None):
 		if x not in ret:
 			ret[x] = tp[x]
 	return ret
+
+# numele cerute de pluginuri: canalele terestre din Europa
+def getChannelNumber(frequency, nim):
+	mhz = frequency / 1000000.0 if frequency > 1000000 else frequency / 1000.0
+	if 174 < mhz < 230:
+		d = mhz + 1.5
+		return str(int(((d - 177.5) / 7) + 5))
+	if 470 <= mhz < 863:
+		return str(int((mhz - 474) / 8) + 21)
+	return ""
+
+
+def channel2frequency(channel, nim):
+	channel = int(channel)
+	if 5 <= channel <= 12:
+		return (177500 + 7000 * (channel - 5)) * 1000
+	if 21 <= channel <= 69:
+		return (474000 + 8000 * (channel - 21)) * 1000
+	return None
+
+
+def supportedChannels(nim):
+	return True

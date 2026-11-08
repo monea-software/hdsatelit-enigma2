@@ -16,9 +16,9 @@ class lamedb(datasource):
 		return [("read file", self.read), ("print all", self.printAll)]
 	
 	def read(self):
-		inputfile = open(self.filename, "r")
-		lines = inputfile.readlines()
-		inputfile.close()
+		# Se folosesc numai campurile numerice ale transponderelor, nu numele.
+		with open(self.filename, "rb") as inputfile:
+			lines = [rand.decode("latin-1") for rand in inputfile]
 		
 		versionstring = lines[0].split('/')
 		version = int(versionstring[1])
@@ -79,4 +79,4 @@ class lamedb(datasource):
 					tmp_transponder["tsid"] = transponder[0]
 					tmp_transponder["onid"] = transponder[0]
 				self.addTransponder(sat, tmp_transponder)
-				  
+

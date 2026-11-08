@@ -6,6 +6,7 @@
 
 eListbox::eListbox(eWidget *parent) :
 	eWidget(parent), m_scrollbar_mode(showNever), m_prev_scrollbar_page(-1),
+	m_scrollbar_slider_border_width(1),
 	m_content_changed(false), m_content_width(-1), m_enabled_wrap_around(false), m_top(0), m_selected(0), m_itemheight(25),
 	m_items_per_page(0), m_scroll_margin(0), m_redraw_on_selection(true), m_selection_enabled(1), m_scrollbar(NULL), m_style(),
 	m_derulare(this)
@@ -21,6 +22,8 @@ eListbox::eListbox(eWidget *parent) :
 
 eListbox::~eListbox()
 {
+	if (m_content && m_content->m_listbox == this)
+		m_content->setListbox(0);
 	if (m_scrollbar)
 		delete m_scrollbar;
 	
@@ -45,7 +48,7 @@ void eListbox::setScrollbarMode(int mode)
 	{
 		m_scrollbar = new eSlider(this);
 		m_scrollbar->hide();
-		m_scrollbar->setBorderWidth(1);
+		m_scrollbar->setBorderWidth(m_scrollbar_slider_border_width);
 		m_scrollbar->setOrientation(eSlider::orVertical);
 		m_scrollbar->setRange(0,100);
 	}
@@ -54,6 +57,14 @@ void eListbox::setScrollbarMode(int mode)
 	m_content_changed = true;
 	if (m_items_per_page)
 		updateScrollBar();
+}
+
+void eListbox::setScrollbarSliderBorderWidth(int width)
+{
+	// La noi, cadrul barei este desenat deja de eSlider.
+	m_scrollbar_slider_border_width = width > 0 ? width : 0;
+	if (m_scrollbar)
+		m_scrollbar->setBorderWidth(m_scrollbar_slider_border_width);
 }
 
 void eListbox::setWrapAround(bool state)
@@ -84,6 +95,9 @@ void eListbox::entryPartChanged(int index, int x, int width)
 
 void eListbox::setContent(iListboxContent *content)
 {
+	// Continutul Python poate fi refolosit dupa inchiderea ecranului.
+	if (m_content && m_content->m_listbox == this)
+		m_content->setListbox(0);
 	m_content = content;
 	if (content)
 		m_content->setListbox(this);

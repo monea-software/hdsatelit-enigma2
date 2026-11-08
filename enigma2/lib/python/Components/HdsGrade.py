@@ -107,6 +107,13 @@ def limba():
 		valoare = sys.modules["Components.config"].config.osd.language.value
 	except Exception:
 		return LIMBA_IMPLICITA
+	# limba textelor de acum (engleza cand cea aleasa nu are catalog; Components/Language.limbaInterfata)
+	try:
+		lg = sys.modules.get("Components.Language")
+		ui = lg.limbaInterfata() if lg is not None and hasattr(lg, "limbaInterfata") else ""
+		valoare = ui or valoare
+	except Exception:
+		pass
 	if not valoare:
 		return LIMBA_IMPLICITA
 	return codLimba(valoare)

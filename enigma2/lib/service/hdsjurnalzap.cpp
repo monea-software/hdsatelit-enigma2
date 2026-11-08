@@ -205,11 +205,12 @@ void Zap::eveniment(int ev, int slot)
 
 void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 {
-	if (!m_activ || m_t_program)
+	if (!m_activ)
 		return;
-	m_t_program = hdsjurnal::monotonMs();
-	m_vpid = vpid;
-	m_vtip = vtip;
+	/* Primul program vine de obicei din memoria listei de canale, la cateva ms dupa acordare, adesea fara sunet. PMT-ul adevarat cheama din
+	   nou: timpul ramane al primului, datele randului final sunt ale ultimului. */
+	if (!m_t_program)
+		m_t_program = hdsjurnal::monotonMs();
 	m_criptat = p.caids.empty() ? 0 : 1;
 	if (!p.audioStreams.empty())
 	{
@@ -218,13 +219,25 @@ void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 		m_apid = p.audioStreams[i].pid;
 		m_atip = p.audioStreams[i].type;
 	}
-	if (vpid > 0 && vpid < 0x2000)
+	else
+		m_apid = m_atip = -1;
+	m_vpid = vpid;
+	m_vtip = vtip;
+	if (vpid > 0 && vpid < 0x2000 && !m_avert && !m_ceas->isActive())
 	{
-		long trecut = (long)(m_t_program - m_t0);
+		long trecut = (long)(hdsjurnal::monotonMs() - m_t0);
 		long rest = FARA_IMAGINE_MS - trecut;
 		m_ceas->start(rest < 1000 ? 1000 : rest, true);
-		return;
 	}
+}
+
+void Zap::textSunet(char *buf, size_t n) const
+{
+	if (m_apid > 0)
+		snprintf(buf, n, "%s", codecSunet(m_atip));
+	else
+		/* "fara" numai dupa PMT: memoria listei de canale nu tine sunetul la multe canale, deci nu spune nimic despre canal */
+		snprintf(buf, n, "%s", m_marcaje[PMT_PRIMIT] ? "fara" : "nestiut (PMT nesosit)");
 }
 
 void Zap::programGata()
@@ -233,9 +246,8 @@ void Zap::programGata()
 		return;
 	/* Radio: randul final asteapta si CA PMT. */
 	m_activ = false;
-	char sunet[48] = "fara";
-	if (m_apid > 0)
-		snprintf(sunet, sizeof(sunet), "%s", codecSunet(m_atip));
+	char sunet[48];
+	textSunet(sunet, sizeof(sunet));
 	char marcaje[320];
 	textMarcaje(marcaje, sizeof(marcaje));
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit fara imagine (radio): acordare %ld ms, program %ld ms"
@@ -251,9 +263,8 @@ void Zap::imagine(int latime, int inaltime)
 	m_marcaje[EVENIMENT_VIDEO] = m_t_imagine;
 	m_ceas->stop();
 	m_activ = false;
-	char sunet[48] = "fara";
-	if (m_apid > 0)
-		snprintf(sunet, sizeof(sunet), "%s", codecSunet(m_atip));
+	char sunet[48];
+	textSunet(sunet, sizeof(sunet));
 	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
 	if (latime > 0 && inaltime > 0)
 		snprintf(marime, sizeof(marime), " %dx%d", latime, inaltime);
@@ -273,9 +284,8 @@ void Zap::faraImagine()
 	{
 		/* imaginea merge, numai evenimentul a lipsit: reusit, fara canal, fara timpul primei imagini */
 		m_activ = false;
-		char sunet[48] = "fara";
-		if (m_apid > 0)
-			snprintf(sunet, sizeof(sunet), "%s", codecSunet(m_atip));
+		char sunet[48];
+		textSunet(sunet, sizeof(sunet));
 		char marcaje[320];
 		textMarcaje(marcaje, sizeof(marcaje));
 		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "

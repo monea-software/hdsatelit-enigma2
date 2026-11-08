@@ -189,9 +189,9 @@
       "op": "instaleaza",
       "grup": "Control",
       "fel": "control",
-      "text": "instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu Control complet)",
+      "text": "instalează un pachet din feedul oficial HD Satelit (numai cu Control complet)",
       "args": [
-        {"nume": "pachet", "tipar": "^enigma2-plugin-[a-z0-9][a-z0-9.+-]{0,62}$", "cerut": true}
+        {"nume": "pachet", "tipar": "^[a-z0-9][a-z0-9+.-]{0,255}\\Z", "cerut": true}
       ]
     },
     {

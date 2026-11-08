@@ -23,11 +23,13 @@ protected:
 	int lcdfd;
 	int _stride;
 	int locked;
+	int hds_update;
 #endif
 public:
 	int lock();
 	void unlock();
 	int islocked() { return locked; }
+	void setHdsUpdate(int enabled) { hds_update = !!enabled; }
 	bool detected() { return lcdfd >= 0; }
 #ifndef SWIG
 	eLCD();

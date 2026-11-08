@@ -20,8 +20,9 @@
 # pagina de setari (<setup id> -> /setari?id=), altfel, daca ecranul se poate deschide din web, legatura spre /meniu
 # cu semnul TV (acolo e „Deschide pe televizor”); intrarile care nu se deschid din web (cod, oprire, repornire) nu se
 # arata, iar o grupa fara nimic de aratat nu se arata deloc (ele raman in /meniu, cu motivul). In plus fata de
-# televizor: grupa „Principal” (paginile tastelor telecomenzii: canale, ghid, radio, film, sunet, teletext, cautare),
-# fiecare numai cand ruta ei exista, si la sfarsit „Alte pagini”: legaturile din registrul paginilor web
+# televizor: Panou sus, apoi meniul TV, apoi Alte pagini cu paginile din afara meniului TV.
+# Scurtaturile tastelor telecomenzii se adauga numai la final, daca nu sunt deja in meniul TV.
+# Alte pagini foloseste si legaturile din registrul paginilor web
 # (plugin._REGISTRU_PAGINI, fostul subsol „Toate paginile” al panoului, scos din pagina in 0.3.0; pe un plugin.py mai
 # vechi, subsolul panoului) care nu sunt nici in menu.xml, nici in „Principal”.
 #
@@ -185,17 +186,19 @@ def N_(text):
 	return text
 
 
-# grupa „Principal”: paginile pe care televizorul le deschide din taste, nu din MENU (OK, EPG, RADIO, PVR, AUDIO,
-# TEXT); fiecare numai cand ruta exista pe receptor (de exemplu /teletext numai cu teletextul in imagine)
+# Pagina principala ramane deasupra meniului TV.
 PRINCIPAL = (
 	("/", N_("Panou")),
+)
+# Paginile tastelor, fara loc in MENU, apar la final numai cand ruta exista.
+PAGINI_TASTE = (
 	("/canale", N_("Canale")),
+	("/cautare", N_("Căutare canale")),
 	("/ghid", N_("Ghidul canalului")),
 	("/radio", N_("Radio")),
 	("/filme", N_("Filmul de acum")),
 	("/piste", N_("Sunet și subtitrări")),
 	("/teletext", N_("Teletext")),
-	("/cautare", N_("Căutare canale")),
 )
 # bara de jos de pe telefon (ecranele Stitch de telefon): (cale, text, iconita); „Mai mult” deschide meniul
 BARA_JOS = (
@@ -877,6 +880,10 @@ html.hds-meniu-deschis .hds-meniu{transform:none;visibility:visible;}
 .hds-cauta button{min-height:44px;padding:0 12px;border-radius:8px;border:1px solid var(--bordura);
   background:var(--buton);color:var(--text);font:inherit;font-weight:600;cursor:pointer;}
 .hds-meniu ul{list-style:none;margin:0;padding:0 0 4px;}
+.hds-pictograma{display:inline-block;background:currentColor;
+  -webkit-mask:var(--hds-pictograma) center/contain no-repeat;
+  mask:var(--hds-pictograma) center/contain no-repeat;}
+html[data-tema="pro"] .hds-meniu details>summary .hds-ic.hds-pictograma{display:inline-block;}
 .hds-meniu details>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;}
 .hds-meniu details>summary::-webkit-details-marker{display:none;}
 .hds-meniu details>summary::after{content:"";flex:none;margin-left:auto;width:6px;height:6px;
@@ -1223,12 +1230,15 @@ def _cale(href):
 
 def _intrare(c):
 	"""O intrare din meniu_web.arbore() -> {"text", "href", "tv", "id"} sau None (nu se deschide din web)."""
+	comun = {"text": c["text"], "id": c.get("id") or ""}
+	if c.get("pictograma"):
+		comun["pictograma"] = c["pictograma"]
 	if c.get("web"):
-		return {"text": c["text"], "href": c["web"], "tv": False, "id": c.get("id") or ""}
+		return dict(comun, href=c["web"], tv=False)
 	if c.get("setup"):
-		return {"text": c["text"], "href": "/setari?id=" + c["setup"], "tv": False, "id": c.get("id") or ""}
+		return dict(comun, href="/setari?id=" + c["setup"], tv=False)
 	if c.get("televizor") and c.get("id"):
-		return {"text": c["text"], "href": "/meniu#i-" + c["id"], "tv": True, "id": c["id"]}
+		return dict(comun, href="/meniu#i-" + c["id"], tv=True)
 	return None
 
 
@@ -1247,7 +1257,8 @@ def _grupa(g, adancime):
 		href = ""   # pagina grupei e deja la una dintre intrari (de exemplu Acces condiționat)
 	if not copii and not href:
 		return None
-	return {"text": g.get("text") or "", "href": href, "copii": copii, "id": g.get("id") or ""}
+	return {"text": g.get("text") or "", "href": href, "copii": copii, "id": g.get("id") or "",
+		"pictograma": g.get("pictograma") or ""}
 
 
 def _toateCaile(lista, rez):
@@ -1295,7 +1306,9 @@ def meniu(arbore, legaturi, rute):
 	grupe.extend(tv)
 	vazute = _toateCaile(grupe, set())
 	alte = []
-	for href, text in legaturi:
+	# Mai intai tastele uzuale, apoi registrul; paginile TV isi pastreaza locul din XML.
+	taste = [(h, _t(t)) for h, t in PAGINI_TASTE if h.strip("/") in rute]
+	for href, text in taste + list(legaturi):
 		if href not in vazute:
 			vazute.add(href)
 			alte.append({"text": text, "href": href, "tv": False})
@@ -1351,7 +1364,11 @@ def _cuJeton(href, jeton):
 
 
 def _iconita(x, sus):
-	"""Iconita unei legaturi: numai pe randurile de sus (Principal si intrarile de sus); altfel nimic."""
+	"""Pictograma TV din XML; pentru paginile web raman simbolurile cadrului."""
+	glif = x.get("pictograma") or ""
+	if calePictograma("meniu-" + glif + ".png"):
+		return ('<span class="hds-ic hds-pictograma" aria-hidden="true" '
+			'style="--hds-pictograma:url(/cadru/meniu-%s.png)"></span>' % glif)
 	if not sus:
 		return u""
 	nume = ICONITE_MENIU.get(x.get("id") or "") or ICONITE_MENIU.get(_cale(x.get("href") or "")) or "alte"
@@ -1378,7 +1395,7 @@ def _contine(x, cale):
 def _grupaHtml(g, cale, jeton, clasa):
 	deschis = g.get("fel") == "principal" or _contine(g, cale)
 	sus = clasa == "hds-grupa"
-	ic = _ic(ICONITE_MENIU.get(g.get("id") or "", "alte")) if sus and g.get("fel") == "grupa" else u""
+	ic = _iconita(g, sus) if g.get("fel") == "grupa" or g.get("pictograma") else u""
 	parti = [u'<details class="%s"%s><summary>%s%s</summary><ul>' % (clasa, " open" if deschis else "", ic,
 		_e(g["text"]))]
 	if g.get("href"):
@@ -1396,7 +1413,9 @@ def meniuHtml(grupe, cale, jeton=""):
 	"""Grupele ca <details> (fara JavaScript se deschid si se inchid singure), pagina curenta cu aria-current."""
 	parti = []
 	for g in grupe:
-		if "copii" in g:
+		if g.get("fel") == "principal" and len(g.get("copii", [])) == 1:
+			parti.append(u"<ul>%s</ul>" % _legaturaHtml(g["copii"][0], cale, jeton, "hds-sus", sus=True))
+		elif "copii" in g:
 			parti.append(_grupaHtml(g, cale, jeton, "hds-grupa"))
 		else:
 			parti.append(u"<ul>%s</ul>" % _legaturaHtml(g, cale, jeton, "hds-sus", sus=True))
@@ -1853,8 +1872,10 @@ def _ruteRadacina(request):
 
 def _cheieCache(rute, legaturi):
 	from . import scanare_web
+	cale = scanare_web._caleMeniu()
 	try:
-		semn = os.path.getmtime(scanare_web._caleMeniu())
+		stare = os.stat(cale)
+		semn = (stare.st_mtime_ns, stare.st_size)
 	except OSError:
 		semn = None
 	try:
@@ -1862,7 +1883,7 @@ def _cheieCache(rute, legaturi):
 		limba = config.osd.language.value
 	except Exception:
 		limba = ""
-	return (semn, limba, scanare_web._nivelUtilizator(), tuple(sorted(rute)), legaturi)
+	return (cale, semn, limba, scanare_web._nivelUtilizator(), tuple(sorted(rute)), legaturi)
 
 
 def grupeMeniu(rute, legaturi):
@@ -1987,8 +2008,16 @@ def imbracaRaspuns(request, corp):
 		return corp
 
 
-# ------------------------------------------------------------------ fonturile (/cadru/<nume>.ttf)
+# ------------------------------------------------------------------ fonturile si pictogramele TV
 _FONTURI_CITITE = {}
+
+
+def calePictograma(nume):
+	"""Numai un glif local al meniului TV, fara cai primite de la client."""
+	if not re.fullmatch(r"meniu-[a-z0-9-]{1,40}\.png", nume):
+		return None
+	cale = os.path.join(os.path.dirname(_caleSkin()), "meniu", "deschis", nume[6:])
+	return cale if os.path.isfile(cale) else None
 
 
 def caleFont(nume, dosare=None):
@@ -2002,8 +2031,7 @@ def caleFont(nume, dosare=None):
 
 
 def rute(resource):
-	"""Resursa /cadru: numai cele trei fonturi ale skinului (FONTURI), fara poarta, ca /favicon.ico (antetul Host e
-	verificat inainte, in _CerereHds.process); citite o data, tinute in memorie (~170 KB) si o saptamana in browser."""
+	"""Resursa /cadru: fonturile si pictogramele locale, fara setari sau actiuni."""
 	class CadruResource(resource.Resource):
 		isLeaf = True
 
@@ -2014,6 +2042,8 @@ def rute(resource):
 			date = _FONTURI_CITITE.get(nume)
 			if date is None:
 				cale = caleFont(nume)
+				if cale is None:
+					cale = calePictograma(nume)
 				if cale is not None:
 					try:
 						with open(cale, "rb") as f:
@@ -2025,7 +2055,7 @@ def rute(resource):
 				request.setResponseCode(404)
 				request.setHeader(b"content-type", b"text/plain; charset=utf-8")
 				return b"nu exista"
-			request.setHeader(b"content-type", b"font/ttf")
+			request.setHeader(b"content-type", b"image/png" if nume.endswith(".png") else b"font/ttf")
 			request.setHeader(b"cache-control", b"public, max-age=604800")
 			return date
 

@@ -42,7 +42,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.0+git${SRCPV}"
+PV = "0.7.1+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -114,6 +114,19 @@ do_configure:append:ustym4kpro() {
 	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
 		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: configure.ac nu stie masina in familia libreader"
 }
+# GigaBlue UHD TRIO 4K (masina gbmv200, modelul gbtrio4k, lotul modele-noi-0611): aceeasi platforma ca SF8008 si
+# Ustym (libreader, showiframe care numai afiseaza un cadru, aceeasi arhiva showiframe; 93 din 105 fisiere ale driverelor
+# identice cu cele Octagon sau Uclan), deci aceeasi paza oprita si aceeasi verificare; configure.ac pune gbmv200
+# (--with-boxtype=${MACHINE}) in HAVE_HISILICON si in familia libreader.
+CXXFLAGS:append:gbtrio4k = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:gbtrio4k() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: configure.ac nu stie masina in familia libreader"
+}
 
 # Pachetul tine de masina, nu numai de procesor: configure primeste --with-boxtype=${MACHINE} (HAVE_HISILICON pe
 # u5x/u4x: poza radio, alegerea demux-ului, inregistrarea citita fara blocare) si --with-libhiaccel dupa
@@ -130,6 +143,31 @@ FILES:${PN} += " \
     ${datadir}/meta \
     ${sysconfdir}/image-version \
     "
+# Receptoarele cu memorie interna mica (suprascrierea hdsflashmic, conf/distro/hdsatelit.conf; Vu+ Solo SE, lotul
+# mips-solose, 06.11.2026): fiecare limba a interfetei (/usr/share/enigma2/po/<limba>, ~0,6 MB comprimata in UBIFS, 33 de
+# limbi = ~19 MB) intra in pachetul ei, enigma2-hdsatelit-po-<limba>, in feedul imaginii; in imagine raman romana si
+# engleza (hotararea lui Eduard, 06.11.2026: „pastrezi numai ce trebuie neaparat, de pilda romana si engleza”). O limba
+# lipsa nu strica nimic: Components/Language.py ramane pe limba de dinainte („Selected language does not exist!”).
+# Pachetul tine de masina (PACKAGE_ARCH mai jos), deci impartirea nu ajunge pe masinile cu eMMC, unde totul ramane intr-un
+# singur pachet, ca pana acum.
+PACKAGES_DYNAMIC:append:hdsflashmic = " ^${PN}-po-.*"
+# ${PN}-po-toate (componenta hdsatelit-partea-doua, 06.11.2026 seara): un pachet gol care depinde de TOATE limbile facute
+# aici, ca partea a doua de pe stick (hdsatelit-partea-doua-continut) sa le ceara fara sa stie lista; lista o da chiar
+# impartirea de mai jos, deci o limba noua intra singura.
+PACKAGES:append:hdsflashmic = " ${PN}-po-toate"
+ALLOW_EMPTY:${PN}-po-toate = "1"
+FILES:${PN}-po-toate = ""
+python populate_packages:prepend:hdsflashmic () {
+    dosar = d.expand('${datadir}/enigma2/po')
+    limbi = do_split_packages(d, dosar, r'^([a-zA-Z_]+)$', d.expand('${PN}-po-%s'), 'Traducerea interfetei HD Satelit: %s',
+        allow_dirs=True, prepend=True)
+    if not limbi:
+        bb.fatal('enigma2-hdsatelit: impartirea limbilor nu a facut niciun pachet po-*')
+    d.setVar('RDEPENDS:' + d.expand('${PN}-po-toate'), ' '.join(sorted(limbi)))
+    d.setVar('SUMMARY:' + d.expand('${PN}-po-toate'), 'Toate limbile interfetei HD Satelit (%d)' % len(limbi))
+}
+RDEPENDS:${PN}:append:hdsflashmic = " ${PN}-po-ro ${PN}-po-en"
+
 # t2mi_decap (decapsulatorul T2-MI) sta sub python/Hds/DabT2/t2/bin: .debug-ul lui, altfel QA debug-files
 FILES:${PN}-dbg += "${libdir}/enigma2/python/.debug ${libdir}/enigma2/python/*/.debug \
     ${libdir}/enigma2/python/Hds/DabT2/t2/bin/.debug"
@@ -141,7 +179,7 @@ DEPENDS += "python3-cryptography"
 RDEPENDS:${PN} = " \
     python3-core python3-codecs python3-xml python3-threading python3-fcntl python3-netclient \
     python3-shell python3-pickle python3-email python3-mime python3-misc python3-math \
-    python3-json python3-crypt python3-compression \
+    python3-json python3-crypt python3-compression python3-multiprocessing \
     python3-cryptography \
     python3-future python3-image python3-mmap python3-netifaces python3-pexpect python3-pillow python3-process \
     python3-puremagic python3-pyopenssl python3-pyusb python3-requests python3-six python3-treq python3-trio \

@@ -36,6 +36,9 @@
 #     "hex"}]}]: tot ce a anuntat reteaua, si frecventele neacordate (lib/dvb/hdsretea.h). In "lcn", "vizibil"
 #     lipseste la fel, la randurile din 0x86; un 0x86 citit ca numere nu mai apare in "privati".
 #
+# "pozitii_fara_tv" (cheia apare numai la o scanare cu mai multe pozitii, cand una n-a dat niciun canal TV): [{"poz",
+# "radio", "prinse", "incercate"}], aceleasi pozitii ca randul de la sfarsitul scanarii de pe ecran.
+#
 # Pastrare: in memorie si in /tmp/hds-scanare-ultima.json (RAM): ramane dupa o repornire a interfetei (paznicul o
 # reporneste uneori noaptea, intre o scanare si citirea ei), dispare la repornirea receptorului si nu scrie in memoria
 # flash (dupa o scanare a unui satelit intreg fisierul are sute de KB). Se tine raspunsul gata facut (octeti), ca ruta
@@ -58,6 +61,8 @@ MOD_SATELIT = {0: "auto", 1: "QPSK", 2: "8PSK", 3: "16QAM"}  # modulation_type d
 FEC = {1: "1/2", 2: "2/3", 3: "3/4", 4: "5/6", 5: "7/8", 6: "8/9", 7: "3/5", 8: "4/5", 9: "9/10", 15: "fara"}
 # cand acelasi serviciu are mai multe numere: HD simulcast (0x88), NorDig v2 (0x87), 0x83, apoi 0x86 (PDS 0x1A0)
 PRIORITATE_LCN = {0x88: 0, 0x87: 1, 0x83: 2, 0x86: 3}
+TIPURI_TV = frozenset((1, 17, 22, 25, 31, 32, 134, 195))       # ca service_types_tv din Screens/ChannelSelection.py
+TIPURI_RADIO = frozenset((2, 10))                              # ca service_types_radio
 
 _STARE = {"octeti": None, "citit_fisier": False}
 
@@ -244,6 +249,29 @@ def _pozitii(lista_scanare, rulate):
 	return pozitii
 
 
+def pozitii_fara_tv(corp):
+	"""Din corp(): [(pozitia, posturi radio, transpondere prinse, transpondere incercate)] pentru pozitiile cercetate fara
+	niciun canal TV, in ordinea cercetarii; [] la o scanare de o singura pozitie (rezumatul o spune deja). O pozitie fara
+	TV nu apare in lista TV a omului (lista arata o pozitie numai cu un serviciu care trece filtrul ei)."""
+	incercate, prinse, tv, radio = {}, {}, set(), {}
+	for t in corp.get("transpondere", []):
+		poz = t.get("poz")
+		if poz is not None:
+			poz %= 3600
+			incercate[poz] = incercate.get(poz, 0) + 1
+			if t.get("semnal"):
+				prinse[poz] = prinse.get(poz, 0) + 1
+	if len(incercate) < 2:
+		return []
+	for s in corp.get("servicii", []):
+		poz = int(s["cheie"].split(":")[1], 16) >> 16
+		if s["tip"] in TIPURI_TV:
+			tv.add(poz)
+		elif s["tip"] in TIPURI_RADIO:
+			radio[poz] = radio.get(poz, 0) + 1
+	return [(p, radio.get(p, 0), prinse.get(p, 0), n) for p, n in incercate.items() if p not in tv]
+
+
 def _felDin(lista_scanare):
 	"""Felul scanarii: "hds_fel" din lista (ecranele si web-ul il pun), altfel felul receptiei."""
 	for trecere in lista_scanare or []:
@@ -321,6 +349,9 @@ class Scanare(object):
 			"eroare": "; ".join(erori) or None, "transpondere": transpondere, "servicii": servicii}
 		if retele:
 			rez["retele"] = retele
+		fara_tv = pozitii_fara_tv(rez)
+		if fara_tv:
+			rez["pozitii_fara_tv"] = [{"poz": p, "radio": r, "prinse": c, "incercate": n} for p, r, c, n in fara_tv]
 		return rez
 
 	def publica(self, stare=None, acum=None):

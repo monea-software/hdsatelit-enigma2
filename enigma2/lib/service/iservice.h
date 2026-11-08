@@ -41,9 +41,13 @@ public:
 		hasSortKey=16,		// has a sort key in data[3]. not having a sort key implies 0.
 		sort1=32,					// sort key is 1 instead of 0
 		isMarker=64,			// Marker
-		isGroup=128			// is a group of services
+		isGroup=128,			// is a group of services
+		isNumberedMarker=256,	// a marker that counts in the numbering of the channels
+		isInvisible=512		// a service or marker that a list does not show
 	};
 	int flags; // flags will NOT be compared.
+	/* the number of the channel in its list, for the plugins that ask; 0 when the list does not number */
+	inline int getChannelNum() const { return 0; }
 
 	inline int getSortKey() const { return (flags & hasSortKey) ? data[3] : ((flags & sort1) ? 1 : 0); }
 
@@ -373,6 +377,9 @@ public:
 			   ca text "pid:stream_type:inregistrare" in hex, despartite prin virgula (pmt.h, pisteNecunoscute);
 			   gol cand nu sunt sau PMT-ul nu e citit. Pentru mesajul cu numele formatului (HdsEcranNegru.py) */
 		sPisteNecunoscute,
+		sHBBTVUrl,
+		/* Radio online: snapshot tehnic si spectru pasiv (servicemp3); dict fara adresa sau etichete personale. */
+		sHdsRadioOnline,
 
 		sUser = 0x100
 	};

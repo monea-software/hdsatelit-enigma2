@@ -57,7 +57,12 @@ start)
 			done
 		} > "$CADERE.nou" 2> /dev/null && mv -f "$CADERE.nou" "$CADERE"
 		rm -f "$CADERE.nou"
-		sync
+		if [ -x /sbin/hds-mountall ]; then
+			# Pe modelele cu media in fundal, salvam numai discul jurnalului.
+			sync -f "$D"
+		else
+			sync
+		fi
 	fi
 	;;
 stop)

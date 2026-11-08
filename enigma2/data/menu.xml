@@ -241,6 +241,9 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 		<!-- Surse Internet: DVB-I, HbbTV, DVB-MABR -->
 		<menu key="internet_sources" weight="15" level="0" text="Internet Sources" entryID="internet_sources_selection" pictograma="surse-internet">
 			<id val="internet_sources" />
+			<item level="0" text="Radio online" entryID="hds_radio_online" pictograma="radio" web="/radio-online" weight="5">
+				<screen module="HdsRadioOnline" screen="HdsRadioOnline" />
+			</item>
 			<item level="0" text="DVB-I Setup (TV over Internet)" entryID="dvbi_setup" pictograma="tv-internet" web="/dvb-i" weight="10">
 				<screen module="HdsDvbI" screen="HdsDvbISetup" />
 			</item>
@@ -401,6 +404,14 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="Front Panel Display" requires="Display" entryID="lcd_setup" pictograma="afisaj-luminozitate" web="/setari?id=lcd" weight="40">
 				<setup id="lcd" />
 			</item>
+			<item level="0" text="Afișaj și LED" entryID="hds_vfd_producator"
+				pictograma="afisaj" weight="41" requires="HdsVfdProducator"
+				web="/functii-imagine?id=afisaj">
+				<code>
+from Components.HdsFunctiiImagine import deschide
+deschide(self.session, "afisaj")
+				</code>
+			</item>
 			<item level="1" text="Font Size" entryID="hds_font_setup" pictograma="marime-text" weight="45" web="/marime-text">
 				<screen module="FontSetup" screen="FontSetup" />
 			</item>
@@ -422,6 +433,10 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Ecran de pornire" entryID="hds_ecran_pornire" pictograma="ecran-pornire" weight="47" web="/ecrane">
 				<screen module="HdsEcranPornire" screen="HdsEcranPornire" />
 			</item>
+			<item level="0" text="Sigle de pornire" entryID="hds_galerie_sigle"
+				pictograma="ecran-pornire" weight="48" web="/sigle-pornire">
+				<screen module="HdsGalerieSigle" screen="HdsGalerieSigle" />
+			</item>
 		</menu>
 
 		<!-- Categoria 7: Acces condiționat (modulele de acces, serverele de carduri, CI). Pagina web /acces-conditionat
@@ -441,9 +456,12 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Stream Relay" entryID="hds_stream_relay" pictograma="transmisie" weight="30" web="/setari?id=hds_stream_relay" stare="netestat">
 				<setup id="hds_stream_relay" />
 			</item>
-			<!-- "Common Interface (CI Slots)" (ci_setup, Ci.CiSelection) scos din meniu: Viper 4K V20 nu are slot CI. Pe
-			     receptor enigma2 scrie la pornire "found 0 common interface slots" si nu exista /dev/ci*; configuratia masinii
-			     u57 (meta-dinobot) nu are "ci" in MACHINE_FEATURES. Intrarea era oricum ascunsa (requires="CommonInterface"). -->
+			<!-- Sloturile CI apar dupa detectia hardware, inclusiv cand nu au modul introdus.
+			     Aceeasi intrare este folosita in lista si in meniul cu dale. -->
+			<item level="0" text="Common Interface" entryID="ci_setup" web="/common-interface"
+			      requires="CommonInterface" pictograma="modul-ci" weight="40">
+				<screen module="Ci" screen="CiSelection" />
+			</item>
 		</menu>
 
 		<!-- Categoria 8: Software & Pachete -->
@@ -529,6 +547,9 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 		<!-- Categoria 10: Sistem & Dispozitive -->
 		<menu key="system_menu" weight="100" level="0" text="System &amp; Devices" entryID="system_selection" pictograma="sistem">
 			<id val="system_menu" />
+			<item level="0" text="Partea a doua pe stick" entryID="hds_partea_doua" pictograma="stick" weight="11" web="/partea-doua" requires="HdsParteaDoua" stare="netestat">
+				<screen module="HdsParteaDoua" screen="HdsParteaDoua" />
+			</item>
 			<!-- ceasul (NTP, transponder, fake-hwclock, Components/HdsCeas.py); in web: /ceas.
 			     Paznicul receptorului; in web: /paznic. -->
 			<item level="0" text="Date &amp; Time Settings" entryID="time_setup" pictograma="ceas" weight="10" web="/ceas">
@@ -551,6 +572,14 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="Remote Control Setup" entryID="input_device_setup" pictograma="telecomanda" web="/dispozitive-intrare" weight="20">
 				<screen module="InputDeviceSetup" screen="InputDeviceSelection" />
 			</item>
+			<item level="0" text="Codul telecomenzii" entryID="hds_cod_telecomanda"
+				pictograma="telecomanda" weight="20" requires="HdsCodTelecomanda"
+				web="/functii-imagine?id=telecomanda">
+				<code>
+from Components.HdsFunctiiImagine import deschide
+deschide(self.session, "telecomanda")
+				</code>
+			</item>
 			<!-- cititor de coduri, proba tastelor, asocierea altei telecomenzi (Screens/HdsTelecomenzi.py).
 			     In web: /telecomenzi. -->
 			<item level="0" text="Telecomenzi" entryID="hds_telecomenzi" pictograma="telecomenzi" weight="21" web="/telecomenzi" stare="netestat">
@@ -559,9 +588,9 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="1" text="External Keyboard" entryID="keyboard_setup" pictograma="tastatura" web="/setari?id=keyboard" weight="30">
 				<setup id="keyboard" />
 			</item>
-			<!-- Butoane colorate si taste rapide, fara semnul "in lucru": apasarea lunga e legata in bara
-			     (Screens/InfoBar.py, HdsTasteColorateActions) -->
-			<item level="1" text="Buttons &amp; Quick Keys" entryID="hds_button_setup" pictograma="taste-colorate" web="/taste-rapide" weight="35">
+			<!-- Alocarea tastelor barei, aceeasi pe televizor si in web. -->
+			<item level="0" text="Buttons &amp; Quick Keys" entryID="hds_button_setup"
+				pictograma="taste-colorate" web="/taste-rapide" weight="35">
 				<screen module="ButtonSetup" screen="HdsButtonSetup" />
 			</item>
 			<!-- iesirea HDMI si televizorul in standby (Components/HdsStandbyTv.py, sectiunea hds_standby_tv din setup.xml);

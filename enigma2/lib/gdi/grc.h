@@ -163,13 +163,14 @@ class gRC: public iObject, public sigc::trackable
 #ifndef SYNC_PAINT
 	static void *thread_wrapper(void *ptr);
 	pthread_t the_thread;
-	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 #endif
+	pthread_mutex_t mutex;
 	void *thread();
 
 	gOpcode queue[MAXSIZE];
 	int rp, wp;
+	bool m_rendering;
 
 	eFixedMessagePump<int> m_notify_pump;
 	void recv_notify(const int &i);
@@ -188,6 +189,7 @@ public:
 	virtual ~gRC();
 
 	void submit(const gOpcode &o);
+	bool isIdle(); /* queue empty and no dequeued command still executing */
 
 	sigc::signal<void()> notify;
 	

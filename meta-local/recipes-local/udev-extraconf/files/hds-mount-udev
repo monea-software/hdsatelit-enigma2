@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com si hdsatelit.com
+# SPDX-License-Identifier: GPL-2.0-only
+# O intrare fstab are un singur responsabil cat ruleaza montarea ei.
+case "$ACTION" in
+	add|change)
+		if [ -x /sbin/hds-mountall ] && /sbin/hds-mountall detine; then
+			exit 0
+		fi
+		;;
+esac
+exec /etc/udev/scripts/mount-sistem.sh "$@"

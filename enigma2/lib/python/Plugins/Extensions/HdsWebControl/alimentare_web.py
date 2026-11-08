@@ -31,20 +31,22 @@
 #   POST /api/alimentare-fa?ce=standby|interfata|receptor|flash|oprire&pas=intreaba   intrebarea si codul
 #   POST /api/alimentare-fa?ce=...&cod=<cod>                fapta: ecranul de pe televizor peste 1,5 s
 #   POST /api/alimentare-fa?ce=...&pas=renunta              codul nu mai e bun
-#   GET  /api/pornire-multipla                             imaginile instalate in locurile din memorie (cardul flash;
-#                                                          monteaza partitia userdata, deci nu in starea de la 10 s)
+#   GET  /api/pornire-multipla                             imaginile din memorie, de pe card si de pe stick (cardul flash;
+#                                                          monteaza partitii, deci pe un fir, si nu in starea de la 10 s)
 #   POST /api/alimentare-fa?ce=flash&loc=<N>&pas=intreaba / &cod=<cod>   alegerea imaginii din locul N: STARTUP scris
 #                                                          (HdsPornireMultipla.reporneste), apoi TryQuitMainloop 2
 #   GET  /alimentare[?f=...]                                pagina
 #
-# FIRUL: totul pe firul enigma2 si scurt (cateva atribute, o cautare in ghidul TV). Fisierul nu importa nimic din
-# enigma2 la incarcare: probele de pe PC dau modulul lor (A), sesiunea, config, SystemInfo si Standby.
+# FIRUL: pe firul enigma2 si scurt (cateva atribute, o cautare in ghidul TV), in afara de lista imaginilor, citita pe un
+# fir separat. Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A), sesiunea, config,
+# SystemInfo si Standby.
 
 DUPA_MS = 1500
 CONFIRMARE = "alimentare"
 CHEI_SOMN = ("fapta", "minute", "actiune", "intreaba")
 CHEI_FA = ("ce", "pas", "cod", "loc")
 CACHE_IMAGINI_S = 15
+TIMP_FIR_IMAGINI_S = 60
 # ?f= din meniul web -> cardul paginii (aceleasi chei ca HdsAlimentare.ACTIUNI, plus somn)
 CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "oprire")
 # entryID-urile din data/menu.xml, pentru drumul de pe televizor al fiecarui card
@@ -76,10 +78,29 @@ def _pm(PM=None):
 
 
 _imagini = {}
+_citireImagini = [False]
 
 
 def _faraMultiboot():
 	return _t("Imaginea nu are altă memorie din care să pornească, deci intrarea nu e nici pe televizor.")
+
+
+def _semnDiscuri(PM):
+	"""Discurile puse acum (se pune sau se scoate unul = lista tinuta minte nu mai e buna)."""
+	semn = getattr(PM, "semnDiscuri", None)
+	return semn() if semn is not None else None
+
+
+def _dinCache(PM):
+	"""Lista tinuta minte, cat e proaspata si discurile sunt aceleasi; None altfel."""
+	import time
+	if not _imagini.get("stare") or time.time() - _imagini.get("cand", 0) > CACHE_IMAGINI_S:
+		return None
+	if _imagini.get("semn") != _semnDiscuri(PM):
+		return None
+	rez = {"result": True}
+	rez.update(_imagini["stare"])
+	return rez
 
 
 def imagini(PM=None, SystemInfo=None, proaspat=False):
@@ -88,13 +109,26 @@ def imagini(PM=None, SystemInfo=None, proaspat=False):
 		return {"result": False, "message": _faraMultiboot()}
 	import time
 	PM = _pm(PM)
-	acum = time.time()
-	if proaspat or not _imagini.get("stare") or acum - _imagini.get("cand", 0) > CACHE_IMAGINI_S:
-		_imagini["stare"] = PM.publice(PM.locuri())
-		_imagini["cand"] = acum
+	rez = None if proaspat else _dinCache(PM)
+	if rez is not None:
+		return rez
+	semn = _semnDiscuri(PM)
+	_imagini["stare"] = PM.publice(PM.locuri())
+	_imagini["cand"] = time.time()
+	_imagini["semn"] = semn
 	rez = {"result": True}
 	rez.update(_imagini["stare"])
 	return rez
+
+
+def imaginiLaIntrebare(PM, SI):
+	"""Lista pentru intrebarea de dinainte de alegere: cea citita pe fir de pagina, cat timp o avem (alegerea verifica din
+	nou locul ales, deci o lista mai veche nu poate porni nimic gresit); o citire pe loc numai cand nu e deloc."""
+	if _imagini.get("stare"):
+		rez = {"result": True}
+		rez.update(_imagini["stare"])
+		return rez
+	return imagini(PM, SI, proaspat=True)
 
 
 def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A):
@@ -118,14 +152,14 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 			"Răspunde acolo.")}
 	PM = _pm(PM)
 	if pas == "intreaba":
-		stare = imagini(PM, SI, proaspat=True)
-		gasit = [l for l in stare.get("locuri", []) if l["fel"] == "emmc" and l["loc"] == loc]
+		stare = imaginiLaIntrebare(PM, SI)
+		gasit = [l for l in stare.get("locuri", []) if l["loc"] == loc]
 		if not gasit:
 			return {"result": False, "message": _t(PM.NEGASIT)}
 		if gasit[0]["acum"]:
 			return {"result": False, "message": _t(PM.DEJA)}
 		if not gasit[0]["alegere"]:
-			return {"result": False, "message": _t(PM.REFUZ) % loc}
+			return {"result": False, "message": gasit[0].get("refuz") or _t(PM.REFUZ) % loc}
 		r = A.stareReceptor(sesiune, Standby=_standby(Standby), job_manager=job_manager)
 		return MC.raspunsIntrebare(CONFIRMARE, tinta, _t(PM.INTREBARE) % gasit[0]["imagine"], _t(PM.BUTON),
 			[x for x in _detalii("flash", r)])
@@ -387,11 +421,21 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 			return self.render_POST(request)   # cu ?token= refuzat; din browser poarta cere POST
 
 	class ImaginiResource(baza):
-		"""GET /api/pornire-multipla: numai citire (monteaza partitia userdata pentru o clipa)."""
+		"""GET /api/pornire-multipla: numai citire, pe un fir separat (monteaza partitii numai pentru citit, pentru o clipa).
+		Cat merge o citire, o alta cerere primeste "in_curs" si pagina intreaba din nou."""
 
 		def render_GET(self, request):
 			try:
-				return self._raspunde(request, imagini(PM, SystemInfo))
+				if not _si(SystemInfo).get("HdsMultiboot"):
+					return self._raspunde(request, imagini(PM, SystemInfo))
+				gata = _dinCache(_pm(PM))
+				if gata is not None:
+					return self._raspunde(request, gata)
+				if _citireImagini[0]:
+					return self._raspunde(request, {"result": True, "in_curs": True, "locuri": [], "randuri": [],
+						"nota": _t(_pm(PM).CAUT)})
+				return MC.peFir(request, lambda: imagini(PM, SystemInfo, proaspat=True), _citireImagini, TIMP_FIR_IMAGINI_S,
+					fabrica_ceas)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -487,7 +531,7 @@ __STIL_PAGINI__
       <h2>Pornește alte imagini</h2>
       <p class="nota" id="imaginiNota">Caut imaginile instalate...</p>
       <div id="imaginiLista"></div>
-      <p class="nota">Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__.</p>
+      <p class="nota">Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__.</p>
     </section>
     <section class="card" id="card-oprire">
       <h2>Oprire completă</h2>
@@ -546,6 +590,9 @@ function citesteImagini(){
   cerere("/api/pornire-multipla").then(function(d){
     var l = $("imaginiLista"); l.textContent = "";
     $("imaginiNota").textContent = d.result ? d.nota : (d.message || "");
+    // o citire e deja in curs: mai intreb peste o clipa; cu mai multe discuri puse, lista se reface la urmatoarea citire a paginii
+    if(d.in_curs){ setTimeout(citesteImagini, 1500); return; }
+    if(d.mai_multe_discuri){ imaginiCitite = false; }
     (d.locuri || []).forEach(function(x, i){
       var r = document.createElement("div"); r.className = "status-linie";
       var s = document.createElement("span"); s.textContent = (d.randuri || [])[i] || x.imagine; r.appendChild(s);
@@ -663,7 +710,7 @@ TEXTE_PAGINA = {
 			"__DRUM_RECEPTOR__."),
 		N_("Pornește alte imagini"),
 		N_("Caut imaginile instalate..."),
-		N_("Receptorul repornește în imaginea aleasă din memoria lui. Pe receptor: __DRUM_FLASH__."),
+		N_("Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__."),
 		N_("Oprire completă"),
 		N_("Receptorul se oprește de tot și se pornește din nou din butonul de pornire al telecomenzii. Pe "
 			"televizor: __DRUM_OPRIRE__."),

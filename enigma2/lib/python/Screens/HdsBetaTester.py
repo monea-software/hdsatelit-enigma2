@@ -680,10 +680,6 @@ class HdsBetaTester(Screen):
 		self.ceasUltima.start(3000, False)
 		self.reface()
 
-	def secreteAsistenta(self):
-		# Identificatorul ramane ascuns, iar explicatiile din panou pot fi citite.
-		return (config.hds_beta.id.value,)
-
 	# ------------------------------------------------------------ asezarea (dupa skin)
 
 	def _asezare(self):
@@ -904,9 +900,10 @@ class HdsBetaTester(Screen):
 		self["numar"].setText(numar)
 		for nume_w in ("numar_fundal", "numar_bara", "numar"):
 			_arata(self[nume_w], bool(numar))
+		# Mascat chiar pe ecran, ca panoul sa poata fi citit si capturat fara identificator.
 		self["identificator"].setText(_("Identificatorul tău: %s\nAcordul din %s, nota de confidențialitate "
 			"versiunea %d.\nPentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.")
-			% (b.id.value, B.oraLocala(b.acord.value), int(b.nota.value)))
+			% ("***", B.oraLocala(b.acord.value), int(b.nota.value)))
 
 	def _invitatie(self):
 		numar = B.randNumar()

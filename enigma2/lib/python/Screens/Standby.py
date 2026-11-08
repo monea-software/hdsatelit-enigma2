@@ -25,13 +25,6 @@ def _standbyTv(functie):
 class Standby(Screen):
 	def Power(self):
 		print("leave standby")
-		#set input to encoder
-		if _ARE_AVS:
-			self.avswitch.setInput("ENCODER")
-		#restart last played service
-		#unmute adc
-		self.leaveMute()
-		#kill me
 		self.close(True)
 
 	def setMute(self):
@@ -89,6 +82,11 @@ class Standby(Screen):
 		# iesirea HDMI pornita inaintea canalului (pornirile se suprapun), dupa inStandby = None (privirea culorilor
 		# HDMI nu mai vede standby-ul); la orice iesire: tasta, web, temporizator
 		_standbyTv("laIesire")
+		if _ARE_AVS:
+			self.avswitch.setInput("ENCODER")
+		# Scoatem mutul dupa pornirea HDMI, inaintea reluarii canalului.
+		# Driverul poate pierde unmute trimis cat iesirea este oprita.
+		self.leaveMute()
 		if self.prev_running_service:
 			self.session.nav.playService(self.prev_running_service)
 		elif self.paused_service:
@@ -125,6 +123,12 @@ from time import time
 from Components.Task import job_manager
 
 inTryQuitMainloop = False
+
+# HDSatelit: numele codurilor de iesire cerute de pluginurile altor imagini (TryQuitMainloop(session, QUIT_RESTART)); aceleasi valori
+# ca in tools/enigma2.sh.in (1 oprire, 2 repornirea receptorului, 3 repornirea interfetei)
+QUIT_SHUTDOWN = 1
+QUIT_REBOOT = 2
+QUIT_RESTART = 3
 
 class TryQuitMainloop(MessageBox):
 	def __init__(self, session, retvalue=1, timeout=-1, default_yes = True):
@@ -188,6 +192,10 @@ class TryQuitMainloop(MessageBox):
 				scrie_acum()
 			except Exception as e:
 				print("[TryQuitMainloop] canalul tinut minte: %r" % (e,))
+			# HDSatelit: la oprirea completa (nu la repornire) televizorul primeste prin CEC acelasi mesaj ca la intrarea
+			# in standby, cand e aleasa „Stinge si televizorul (CEC)” (Components/HdsStandbyTv.py)
+			if self.retval == 1:
+				_standbyTv("laOprire")
 			quitMainloop(self.retval)
 		else:
 			MessageBox.close(self, True)

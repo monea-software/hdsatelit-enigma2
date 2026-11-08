@@ -1,6 +1,6 @@
 {
  "versiune": 1,
- "actualizat": "2026-10-29",
+ "actualizat": "2026-11-06",
  "transpondere": [
   {
    "id": "p390_11760h",
@@ -110,6 +110,20 @@
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
      "antena_verificare": "90 cm"
+    },
+    {
+     "id": "p235_12285v_plp0_pid4096",
+     "tip": "t2",
+     "fel": "t2mi",
+     "pid": 4096,
+     "pid_sigur": true,
+     "plp": 0,
+     "nume": "KRRT Ucraina (criptat BISS)",
+     "tara": "Ucraina",
+     "acces": "BISS",
+     "canale": "Al doilea flux T2-MI de pe 12285 V, al operatorului KRRT; criptat BISS, deci se vede numai cu cheia lui",
+     "confirmat": "2026-11-05",
+     "stare_verificare": "criptat"
     }
    ]
   },

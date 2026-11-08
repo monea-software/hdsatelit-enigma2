@@ -132,7 +132,11 @@ class GUISkin:
 	def removeSummary(self, summary):
 		self.summaries.remove(summary)
 
+	# HDSatelit: titlul ecranului tinut si ca screenTitle, numele din alte imagini; pluginurile lor il citesc pe orice ecran
+	screenTitle = ""
+
 	def setTitle(self, title):
+		self.screenTitle = title
 		if self.instance:
 			self.instance.setTitle(title)
 		self["Title"].text = title

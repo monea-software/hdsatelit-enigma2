@@ -1137,6 +1137,8 @@ class Actualizari(object):
 		self._lista_ipkg = []
 		self._de_instalat = []
 		self._neconfigurate_inainte = None
+		self._partea_doua_detasa = False
+		self._partea_doua_lacat = None
 		# stare.json semnat al ultimei cautari (pachetele se verifica cu el la instalare),
 		# adresa lui si baza feedului
 		self._semnat = None
@@ -1173,6 +1175,12 @@ class Actualizari(object):
 
 	def poate_porni(self):
 		"""('' daca se poate porni o cautare sau o instalare, altfel textul de ce nu)"""
+		try:
+			from Components import HdsParteaDoua
+			if HdsParteaDoua.lucrare.ocupat:
+				return _t('Asteapta sa se termine instalarea partii a doua pe stick.')
+		except ImportError:
+			pass
 		if self.repornire:
 			return _t('Actualizarea s-a instalat. Repornește interfața înainte de altceva.')
 		if self.faza != 'liber':
@@ -1405,6 +1413,22 @@ class Actualizari(object):
 		argumente = argumente_instalare(cai)
 		if argumente is None:
 			return self._descarcare_cazuta(('descarcare', 'opkg nu primeste pachetele descarcate'), nume)
+		try:
+			from Components import HdsParteaDoua
+			if HdsParteaDoua.citesteConf(self.radacina) and HdsParteaDoua.radacinaNand(self.radacina):
+				self._partea_doua_lacat = HdsParteaDoua.ocupaOperatia(self.radacina)
+				if self._partea_doua_lacat is None:
+					return self._descarcare_cazuta(('descarcare', _t('Partea a doua de pe stick este in lucru.')), nume)
+			self._partea_doua_detasa = HdsParteaDoua.detaseazaPentruBaza(self.radacina)
+		except ImportError:
+			pass
+		except Exception as e:
+			try:
+				HdsParteaDoua.dupaActualizareaBazei(self.radacina, actualizeaza=False)
+			except Exception as eroare:
+				self._jurnal('refacerea legaturilor spre stick: %s' % eroare)
+			self._elibereaza_lacatul_partii_doua()
+			return self._descarcare_cazuta(('descarcare', 'Legaturile spre stick nu se pot detasa: %s' % e), nume)
 		self.pas = _t('Se pregătește instalarea...')
 		self._schimbat()
 		ipkg = self._ipkg = IpkgComponent()
@@ -1431,7 +1455,31 @@ class Actualizari(object):
 		ipkg.addCallback(eveniment)
 		self._jurnal('opkg %s' % ' '.join(argumente))
 		ipkg.setCurrentCommand(IpkgComponent.CMD_INSTALL)
-		ipkg.runCmd(argumente)
+		try:
+			ipkg.runCmd(argumente)
+		except Exception as e:
+			ipkg.removeCallback(eveniment)
+			self._ipkg = None
+			self._refa_legaturile_partii_doua()
+			self._elibereaza_lacatul_partii_doua()
+			self._partea_doua_detasa = False
+			return self._descarcare_cazuta(('descarcare', curata(e)), nume)
+
+	def _refa_legaturile_partii_doua(self):
+		if self._partea_doua_detasa:
+			try:
+				from Components import HdsParteaDoua
+				return HdsParteaDoua.dupaActualizareaBazei(self.radacina, actualizeaza=False)
+			except Exception as e:
+				self._jurnal('refacerea legaturilor spre stick: %s' % curata(e))
+
+	def _elibereaza_lacatul_partii_doua(self):
+		if self._partea_doua_lacat is not None:
+			try:
+				from Components import HdsParteaDoua
+				HdsParteaDoua.elibereazaOperatia(self._partea_doua_lacat)
+			finally:
+				self._partea_doua_lacat = None
 
 	def _dupa_instalare(self, cod):
 		radacina = self.radacina
@@ -1446,10 +1494,22 @@ class Actualizari(object):
 				straine = [n for n in P.pachete_neconfigurate(radacina, conf) if n not in ramase]
 			except Exception:
 				straine = None
-			return ramase, straine
+			parte2 = (True, '')
+			if self._partea_doua_detasa:
+				try:
+					from Components import HdsParteaDoua
+					parte2 = HdsParteaDoua.dupaActualizareaBazei(radacina, actualizeaza=not ramase,
+						lacat=self._partea_doua_lacat)
+				except Exception as e:
+					parte2 = (False, curata(e))
+			return ramase, straine, parte2
 
 		def gata(rez, eroare):
-			ramase, straine = rez if rez and not eroare else (None, None)
+			ramase, straine, parte2 = rez if rez and not eroare else (None, None, (False, ''))
+			# Chiar si verificarea status-ului poate esua dupa o instalare partiala.
+			self._refa_legaturile_partii_doua()
+			self._elibereaza_lacatul_partii_doua()
+			self._partea_doua_detasa = False
 			# un pachet ramas neconfigurat ACUM, care nu era asa inainte (o dependinta adusa de instalare, al carei
 			# postinst a cazut), e o greseala a instalarii, nu un pachet strain
 			noi = None if straine is None or inainte is None else [n for n in straine if n not in inainte]
@@ -1473,6 +1533,9 @@ class Actualizari(object):
 				self.rezultat = dict(self.rezultat, stare='instalata', poate_instala=False,
 					avertismente=list(straine) if cod != 0 else [])
 				self.mesaj = _t('Actualizarea s-a instalat. Interfața trebuie repornită ca să o folosească.')
+				if not parte2[0]:
+					self.mesaj += ' ' + _t('Partea a doua de pe stick nu s-a actualizat: %s') % parte2[1]
+					self._jurnal('partea a doua: ' + parte2[1])
 				if cod != 0:
 					self._jurnal('opkg a iesit cu %s, dar toate pachetele actualizarii au versiunea noua: instalarea e '
 						'reusita; pachete neconfigurate in receptor (nu ale actualizarii): %s' % (cod,

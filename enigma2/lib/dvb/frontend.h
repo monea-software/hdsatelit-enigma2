@@ -39,11 +39,17 @@ public:
 #endif
 };
 
+/* HDSatelit: contoarele citirilor starii tunerelor (lib/dvb/hdscitirifrontend.h), din Python:
+   enigma.getFrontendReadCounts() -> {"cereri", "din_memorie", "ioctl", "ioctl_direct", "erori", "us_ioctl", "ttl_ms",
+   "ttl_lent_ms"}; numere pe 32 de biti fara semn care se dau peste cap (se folosesc diferentele) */
+PyObject *getFrontendReadCounts();
+
 #ifndef SWIG
 
 #include <lib/dvb/sec.h>
 #include <lib/dvb/hdsurmamotor.h>
 #include <lib/dvb/hdsjurnaltuner.h>
+#include <lib/dvb/hdscitirifrontend.h>
 class eSecCommandList;
 
 class eDVBFrontend: public iDVBFrontend, public sigc::trackable
@@ -92,6 +98,7 @@ private:
 	bool m_multistream; // FE_CAN_MULTISTREAM: filtrul de flux (ISI) si PLS-ul se pot cere
 	bool m_dvbt2;       // DTV_ENUM_DELSYS are SYS_DVBT2 (numai pentru jurnal: acordarea DVB-T2 se incearca oricum)
 	int m_dvb_api;      // DTV_API_VERSION citit din frontend (major << 8 | minor), 0 = necitit
+	int m_hds_fbc_set;  // grupul confirmat de driver, -1 fara FBC
 	char m_filename[128];
 	char m_description[128];
 #if HAVE_DVB_API_VERSION < 3
@@ -126,6 +133,11 @@ private:
 	hdsurma::Acordare m_hds_acordare;
 	hdsjtuner::Stare m_hds_jurnal; // HDSatelit: jurnalul tunerului (lib/dvb/hdsjurnaltuner.h)
 	TimpiZap m_hds_timpi_zap;
+	/* HDSatelit: memoria citirilor starii (lib/dvb/hdscitirifrontend.h): o citire a fiecarei valori pe secunda, impartita
+	   de toti cititorii; direct = fara memorie (bucla SEC, timeout()) */
+	hdscitiri::Memorie m_hds_citiri;
+	unsigned int hdsCitesteBrut(int fel, bool direct, int &err);
+	int hdsCiteste(int type, bool direct);
 
 	void feEvent(int);
 	void timeout();
@@ -141,6 +153,11 @@ public:
 	virtual ~eDVBFrontend();
 
 	int readInputpower();
+	bool hdsSameFbcSet(const eDVBFrontend &other) const
+	{
+		return m_type == feSatellite && other.m_type == feSatellite
+			&& m_hds_fbc_set >= 0 && m_hds_fbc_set == other.m_hds_fbc_set;
+	}
 	RESULT getFrontendType(int &type);
 	RESULT tune(const iDVBFrontendParameters &where);
 	RESULT prepare_sat(const eDVBFrontendParametersSatellite &, unsigned int timeout);

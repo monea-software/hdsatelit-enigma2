@@ -1,0 +1,91 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com si hdsatelit.com
+# SPDX-License-Identifier: GPL-2.0-only
+# Numai mediile optionale merg in fundal. Sistemul ramane sincron.
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+ACTIV=/dev/.hds-mountall-activ
+
+detine_sursa() {
+	identificator=$(printf '%b' "$sursa")
+	case "$identificator" in
+		UUID=*) [ -n "$ID_FS_UUID" ] && [ "${identificator#UUID=}" = "$ID_FS_UUID" ] ;;
+		LABEL=*) [ -n "$ID_FS_LABEL" ] && [ "${identificator#LABEL=}" = "$ID_FS_LABEL" ] ;;
+		PARTUUID=*)
+			[ -n "$ID_PART_ENTRY_UUID" ] &&
+			[ "${identificator#PARTUUID=}" = "$ID_PART_ENTRY_UUID" ] ;;
+		/dev/*)
+			[ -n "$DEVNAME" ] || return 1
+			[ "$identificator" = "$DEVNAME" ] && return 0
+			real=$(readlink -f "$identificator")
+			[ -n "$real" ] && [ "$real" = "$(readlink -f "$DEVNAME")" ] ;;
+		*) return 1 ;;
+	esac
+}
+
+montat() {
+	while read -r sursa loc rest; do
+		[ "$loc" = "$1" ] && return 0
+	done < /proc/mounts
+	return 1
+}
+
+montari() {
+	while read -r sursa punct tip opt rest || [ -n "$sursa" ]; do
+		case "$sursa" in ''|\#*) continue ;; esac
+		case ",$opt," in *,noauto,*|*,_netdev,*) continue ;; esac
+		case "$tip" in
+			swap|nfs|nfs4|smbfs|cifs|ncp|ncpfs|coda|ocfs2|gfs|gfs2|ceph)
+				continue ;;
+		esac
+		case "$tip:$punct" in
+			proc:*|sysfs:*|devtmpfs:*|tmpfs:*|devpts:*|*:/media) fel=sistem ;;
+			*:/media/*) fel=media ;;
+			*) fel=sistem ;;
+		esac
+		if [ "$1" = detine ]; then
+			[ "$fel" = media ] && detine_sursa && return 0
+			continue
+		fi
+		[ "$fel" = "$1" ] || continue
+		montat "$punct" && continue
+		# fstab scrie spatiul ca \040. Nu evaluam continutul ca shell.
+		loc=$(printf '%b' "$punct")
+		read -r timp rest < /proc/uptime
+		printf '%s inceput %s\n' "$timp" "$punct"
+		mount "$loc"
+		cod=$?
+		read -r timp rest < /proc/uptime
+		printf '%s sfarsit %s cod=%s\n' "$timp" "$punct" "$cod"
+	done < /etc/fstab
+	[ "$1" != detine ]
+}
+
+if [ "$1" = detine ]; then
+	[ -d "$ACTIV" ] || exit 1
+	montari detine
+	exit $?
+fi
+
+# Un bind poate depinde de un disc media. Pastram atunci ordinea initiala.
+while read -r sursa punct tip opt rest || [ -n "$sursa" ]; do
+	case "$sursa" in ''|\#*) continue ;; esac
+	case ",$opt," in *,noauto,*|*,_netdev,*) continue ;; esac
+	case ",$opt," in
+		*,bind,*|*,rbind,*)
+			mount -a -t nonfs,nfs4,smbfs,cifs,ncp,ncpfs,coda,ocfs2,gfs,gfs2,ceph -O no_netdev 2>/dev/null
+			[ -x /sbin/swapon ] && swapon -a
+			exit 0 ;;
+	esac
+done < /etc/fstab
+
+# Fara mount -a in fundal: /usr, /var, /boot si tmpfs sunt necesare acum.
+montari sistem
+mkdir "$ACTIV" 2>/dev/null || exit 0
+(
+	trap 'rmdir "$ACTIV" 2>/dev/null' EXIT
+	montari media
+	# Un swapfile poate fi pe mediul care abia se monteaza.
+	[ -x /sbin/swapon ] && swapon -a
+) < /dev/null >> /dev/.hds-mountall.log 2>&1 &
+exit 0

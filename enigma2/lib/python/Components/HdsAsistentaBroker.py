@@ -24,7 +24,8 @@ import os
 import re
 import subprocess
 
-from Components.HdsAsistentaControl import cheieSecreta, mascheazaSecrete
+from Components.HdsAsistentaControl import cheieSecreta, mascheazaConturi, mascheazaSecrete
+from Components.HdsProcFundal import nodOprit
 
 # caile cartelelor de acces si ale modulelor de acces nu se citesc niciodata (nici numele fisierelor nu apar in
 # raspuns): dupa forma, fara numele modulelor (orice cuvant care se termina in cam, camd sau cams, cititoarele de
@@ -85,10 +86,14 @@ def _taie(text, limita=RASPUNS_MAX):
 	return octeti[:limita].decode("utf-8", "ignore") + "\n... (raspuns taiat la %d octeti)" % limita
 
 
-def _citeste(cale, maxim=RASPUNS_MAX):
+def _citeste(cale, maxim=RASPUNS_MAX, lista=False):
 	try:
 		with open(cale, "rb") as f:
-			return f.read(maxim + 1).decode("utf-8", "replace")
+			date = f.read(maxim + 1)
+		if lista:
+			from Components.HdsListeText import text_lista
+			return text_lista(date)
+		return date.decode("utf-8", "replace")
 	except Exception as e:
 		return "(nu se poate citi %s: %s)" % (os.path.basename(cale), type(e).__name__)
 
@@ -145,11 +150,38 @@ def _temperaturi(ctx):
 	return "\n".join(randuri) or "(fara senzori)"
 
 
+def _textePornire(ctx):
+	"""Textele fisierelor de pornire (STARTUP, STARTUP_<cifre>, STARTUP_RECOVERY) de pe partitia de pornire, ca sa se vada
+	forma locurilor de pe card fara niciun pas al omului. Nimic altceva din dosar: nici alte fisiere, nici subdosare, nici
+	legaturi; numai text ASCII de cel mult 4 KiB pe fisier."""
+	baza = ctx.get("boot", "/boot")
+	randuri = []
+	try:
+		nume = sorted(os.listdir(baza))
+	except OSError:
+		return "(nu se poate citi)"
+	for n in nume:
+		cale = os.path.join(baza, n)
+		if not re.match(r"^STARTUP(_[0-9]{1,3}|_RECOVERY)?$", n) or os.path.islink(cale) or not os.path.isfile(cale):
+			continue
+		try:
+			with open(cale, "rb") as f:
+				date = f.read(4097)
+		except (IOError, OSError):
+			continue
+		if len(date) > 4096 or not re.match(rb"^[\t\r\n -~]*$", date):
+			randuri.append("%s: (alt continut, %d octeti)" % (n, len(date)))
+		else:
+			randuri.append("%s: %s" % (n, date.decode("ascii").strip()))
+	return "\n".join(randuri) or "(niciun fisier)"
+
+
 def op_placa(ctx, args):
 	parti = [
 		"Procesor:\n" + _citeste("/proc/cpuinfo", 16384).strip(),
 		"Linia de comanda: " + _citeste("/proc/cmdline", 4096).strip(),
 		"Partitii:\n" + _citeste("/proc/partitions", 8192).strip(),
+		"Fisierele de pornire:\n" + _textePornire(ctx),
 		"Module:\n" + _citeste("/proc/modules", 32768).strip(),
 	]
 	return Rezultat(0, text="\n\n".join(parti))
@@ -208,6 +240,8 @@ RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp
 # unde duc pe receptor (OE: /var/log -> /var/volatile/log, /tmp -> /var/volatile/tmp)
 RADACINI_REALE = RADACINI_CITIRE + ("/var/volatile/log", "/var/volatile/tmp")
 LOCURI_OPRITE = re.compile(
+	# Datele exploratorului si copiile editorului raman numai la proprietar.
+	r"hds-fisiere|\.hds-inainte(?:$|/)|"
 	# parolele, cheile, jetoanele si conturile (ale sistemului si ale noastre)
 	r"shadow|passwd|(?:^|[/._-])pass(?:word|phrase)?(?:[/._-]|$)|hdsatelit-ssh|wpa_supplicant|hostapd|dropbear|"
 	r"(?:^|/)\.?ssh(?:/|_|$)|ssl/private|\.pem$|vpn|wireguard|(?:^|/)wg\d|samba|(?:^|/)smb|(?:^|/)ppp(?:/|$)|netrc|"
@@ -225,6 +259,8 @@ _CAM_FAMILIE = re.compile(r"(?<![a-z])ecm|(?<![a-z])emm|caid|provid|softcam|osca
 TERMEN_CITIRE_S = 10
 MAX_INTRARI_DOSAR = 2000
 TEXT_CITIRE_OPRITA = "(inchis: modulele de acces, parolele, cheile si datele personale nu se citesc)"
+# fisierele din /proc/stb pe care restul imaginii nu le citeste (Components/HdsProcFundal.nodOprit): numele da, continutul nu
+TEXT_NOD_OPRIT = "(necitit: pe aceasta placa citirea poate opri nucleul sau poate astepta la nesfarsit)"
 
 
 def _cam(cale):
@@ -234,6 +270,11 @@ def _cam(cale):
 
 def _oprit(cale):
 	return _cam(cale) or bool(LOCURI_OPRITE.search((cale or "").lower()))
+
+
+def _hisilicon(ctx):
+	"""Placa are /proc/msp, ca in Components/HdsSunet.py; probele dau ctx["msp"] sau ctx["radacina"]."""
+	return os.path.isdir(ctx.get("msp") or ctx.get("radacina", "").rstrip("/") + "/proc/msp")
 
 
 def _sub(cale, radacini):
@@ -247,6 +288,9 @@ def op_citeste(ctx, args):
 	cerut = "/" + (args[0] if args else "").strip("/")
 	if not _sub(cerut, RADACINI_CITIRE) or _oprit(cerut):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	hisilicon = _hisilicon(ctx)
+	if nodOprit(cerut, hisilicon):
+		return Rezultat(1, text=TEXT_NOD_OPRIT)
 	try:
 		baza = os.path.realpath(radacina) if radacina else ""
 
@@ -264,13 +308,16 @@ def op_citeste(ctx, args):
 	reale = RADACINI_REALE + ((rad_real,) if rad_real and rad_real != "/" else ())
 	if real is None or not _sub(real, reale) or _oprit(real):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	# dupa legaturi si dupa "..": tot acelasi fisier
+	if nodOprit(real, hisilicon):
+		return Rezultat(1, text=TEXT_NOD_OPRIT)
 	try:
 		st = os.stat(real_plin)
 	except Exception:
 		return Rezultat(1, text="(nu exista: %s)" % cerut)
 	import stat as S
 	if S.S_ISDIR(st.st_mode):
-		return Rezultat(0, text=_dosar(real_plin, real))
+		return Rezultat(0, text=_dosar(real_plin, real, hisilicon))
 	if not S.S_ISREG(st.st_mode):
 		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % cerut)
 	ruleaza = ctx.get("ruleaza", _ruleaza)
@@ -280,7 +327,7 @@ def op_citeste(ctx, args):
 	return Rezultat(cod, text=text.replace("\x00", " "))
 
 
-def _dosar(real_plin, real):
+def _dosar(real_plin, real, hisilicon=False):
 	"""Lista unui dosar: d (dosar), f (fisier, cu marimea), l (legatura, fara tinta: in /proc tintele sunt fisierele
 	deschise, deci si filmele omului), altele cu felul lor; cele oprite apar "(inchis)", iar cele ale modulelor de acces
 	nu apar deloc."""
@@ -308,6 +355,8 @@ def _dosar(real_plin, real):
 			fel, marime, arata = "c" if S.S_ISCHR(st.st_mode) else ("p" if S.S_ISFIFO(st.st_mode) else "s"), "-", n
 		if LOCURI_OPRITE.search(cale.lower()):
 			arata += "  (inchis)"
+		elif not S.S_ISDIR(st.st_mode) and nodOprit(cale, hisilicon):
+			arata += "  (necitit)"
 		randuri.append("%s %10s  %s" % (fel, marime, arata))
 	if len(nume) > MAX_INTRARI_DOSAR:
 		randuri.append("... inca %d" % (len(nume) - MAX_INTRARI_DOSAR))
@@ -333,13 +382,16 @@ def _stari_frontend(ctx):
 def op_decodor(ctx, args):
 	baza = ctx.get("stb", "/proc/stb")
 	tinte = ("avs", "audio", "video", "vmpeg", "sync", "stream")
+	hisilicon = _hisilicon(ctx)
 	randuri = []
 	for rad, _dirs, fisiere in _umbla(baza):
 		for f in fisiere:
 			if any(t in rad or t in f for t in tinte):
 				cale = os.path.join(rad, f)
-				val = _citeste(cale, 256).strip().replace("\n", " ")
-				randuri.append("%s = %s" % (cale[len(baza):].lstrip("/"), val))
+				rel = cale[len(baza):].lstrip("/\\")
+				# numai numele: citirea fisierelor din lista opreste nucleul pe unele placi (Components/HdsProcFundal.nodOprit)
+				val = "(necitit)" if nodOprit(rel, hisilicon) else _citeste(cale, 256).strip().replace("\n", " ")
+				randuri.append("%s = %s" % (rel, val))
 			if len(randuri) > 400:
 				break
 	return Rezultat(0, text="\n".join(randuri) or "(fara date de decodor)")
@@ -427,6 +479,8 @@ def op_procese(ctx, args):
 
 # Citirea permite setarile tuturor ecranelor deschise; scrierea isi pastreaza lista separata din Control.
 SETARI_PERMISE = ("config.",)
+# o setare care tine chiar numele de utilizator al unui cont (adresele trec prin mascheaza, ca orice text)
+_CHEIE_CONT = re.compile(r"(?i)(?:^|[._])(?:user|username|usr|uname|login|utilizator)[0-9]*$")
 
 
 def op_setari(ctx, args):
@@ -441,7 +495,9 @@ def op_setari(ctx, args):
 			continue
 		if _CAM.search(cheie):
 			continue
-		randuri.append(mascheazaSecrete(rand))
+		if _CHEIE_CONT.search(cheie):
+			rand = cheie + "=***"
+		randuri.append(mascheazaConturi(mascheazaSecrete(rand)))
 	return Rezultat(0, text="\n".join(randuri) or "(nicio setare in lista permisa)")
 
 
@@ -557,7 +613,7 @@ def op_transpondere(ctx, args):
 	"""Transponderele din lista de canale (lamedb), numai sectiunea lor, eventual ale unui singur satelit (namespace)."""
 	from Components import HdsAsistentaControl as C
 	cale = ctx.get("lamedb", "/etc/enigma2/lamedb")
-	text = _citeste(cale, 8 * 1024 * 1024)
+	text = _citeste(cale, 8 * 1024 * 1024, lista=True)
 	return Rezultat(0, text=C.transpondere(text, args[0] if args and args[0] else None))
 
 
@@ -599,8 +655,9 @@ def _opkg(ctx, actiune, pachet):
 	from Components import HdsAsistentaControl as C
 	if not _controlPermis(ctx):
 		return Rezultat(1, text=TEXT_FARA_CONTROL)
-	if not C.PACHET.match(pachet or ""):
-		return Rezultat(1, text="(numai pluginurile si modulele din feed: enigma2-plugin-...)")
+	tipar = C.PACHET_INSTALARE if actiune == "install" else C.PACHET
+	if not tipar.match(pachet or ""):
+		return Rezultat(1, text="(nume de pachet nepermis)")
 	ruleaza = ctx.get("opkg", _ruleaza)
 	feeduri = C.feeduriNoastre(ctx.get("opkg_conf", "/etc/opkg"))
 	if not feeduri:
@@ -625,7 +682,7 @@ def _opkg(ctx, actiune, pachet):
 
 
 def op_instaleaza(ctx, args):
-	"""Un plugin sau un modul din feedurile noastre oficiale (opkg install); configurarea si cheile modulelor nu."""
+	"""Un pachet din feedurile noastre oficiale (opkg install)."""
 	return _opkg(ctx, "install", args[0])
 
 

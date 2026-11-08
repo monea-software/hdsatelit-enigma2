@@ -5,6 +5,13 @@ import enigma
 enigma.eTimer = eBaseImpl.eTimer
 enigma.eSocketNotifier = eBaseImpl.eSocketNotifier
 enigma.eConsoleAppContainer = eConsoleImpl.eConsoleAppContainer
+# HDSatelit: functiile mici din enigma ale altor imagini (getBoxType, checkInternetAccess...), facute in Python, pentru pluginurile
+# lor (Components/HdsEnigmaCompat.py); ce exista deja nu se schimba
+try:
+	from Components import HdsEnigmaCompat
+	HdsEnigmaCompat.completeaza(enigma)
+except Exception as e:
+	print("[mytest] numele enigma pentru pluginuri:", e)
 
 # HDSatelit: stivele tuturor firelor Python in /tmp/enigma2-stive.txt la semnalul SIGRTMIN+7. hds-watchdog il trimite
 # inainte de SIGTERM-ul unei interfete care nu mai raspunde si pastreaza copia in /home/root/logs (enigma2-stive-*.txt):
@@ -117,12 +124,22 @@ config.misc.useTransponderTime.addNotifier(useTransponderTimeChanged)
 profile("Twisted")
 try:
 	import twisted.python.runtime
-	twisted.python.runtime.platform.supportsThreads = lambda: False
+	# Pastram firele active pentru utilizatorii Twisted de la pornire.
+	# e2reactor merge si daca baza fusese incarcata deja fara fire.
+	twisted.python.runtime.platform.supportsThreads = lambda: True
 
 	import e2reactor
 	e2reactor.install()
 
 	from twisted.internet import reactor
+
+	# HDSatelit: adresa data ca text la getPage, downloadPage, putChild (pluginuri trecute de pe Python 2) se face octeti
+	# (Components/HdsEnigmaCompat.py)
+	try:
+		from Components import HdsEnigmaCompat
+		HdsEnigmaCompat.completeazaTwisted()
+	except Exception as e:
+		print("[mytest] twisted pentru pluginuri:", e)
 
 	def runReactor():
 		reactor.run(installSignalHandlers=False)
@@ -297,6 +314,16 @@ class Session:
 			print("[HDS-SAFE] Eroare scriere crashlog:", e)
 
 		print("[HDS-SAFE] Eroare la deschiderea ecranului %s (%d/3): %s" % (str(screen), self.screen_error_count, str(error)))
+		# HDSatelit: un modul Python lipsa din feedul nostru se instaleaza singur (Components/HdsModuleLipsa.py); pluginul din stiva
+		try:
+			from Components import HdsModuleLipsa
+			if HdsModuleLipsa.modulDinEroare(error):
+				from Components import HdsPluginExtern
+				p = HdsPluginExtern._pluginSiCadru(getattr(error, "__traceback__", None))
+				if p:
+					HdsModuleLipsa.dinExceptie(error, HdsPluginExtern.PREFIX_PLUGINURI + p[0] + "/" + p[1], p[1])
+		except Exception as e:
+			print("[HDS-SAFE] modulul lipsa:", e)
 
 		if self.screen_error_count >= 3:
 			print("[HDS-SAFE] 3 erori consecutive in 30 de secunde. Se reporneste interfata GUI...")
@@ -327,6 +354,9 @@ class Session:
 		return self.doInstantiateDialog(screen, arguments, kwargs, self.summary_desktop)
 
 	def doInstantiateDialog(self, screen, arguments, kwargs, desktop):
+		# HDSatelit: zPosition e al ferestrei, nu un argument al constructorului ecranului.
+		kwargs = kwargs.copy()
+		zPosition = kwargs.pop("zPosition", None)
 		# create dialog
 		dlg = self.create(screen, arguments, **kwargs)
 		if dlg is None:
@@ -334,6 +364,9 @@ class Session:
 
 		# read skin data
 		readSkin(dlg, None, dlg.skinName, desktop)
+		if zPosition is not None:
+			dlg.skinAttributes = [(key, value) for key, value in dlg.skinAttributes if key != "zPosition"]
+			dlg.skinAttributes.append(("zPosition", str(zPosition)))
 
 		# create GUI view of this dialog
 		assert desktop is not None
@@ -555,6 +588,8 @@ def runScreenTest():
 	profile("Init:Session")
 	nav = Navigation(config.misc.isNextRecordTimerAfterEventActionAuto.value)
 	session = Session(desktop = getDesktop(0), summary_desktop = getDesktop(1), navigation = nav)
+	from Components import HdsJurnalAfisaj
+	HdsJurnalAfisaj.leagaSesiune(session)
 
 	CiHandler.setSession(session)
 
@@ -676,6 +711,12 @@ def runScreenTest():
 	# HDSatelit: actualizarile prin pachete (Components/HdsActualizari.py): config-ul si verificarea zilnica (la 5
 	# minute dupa pornire, apoi o data pe zi; numai anunta, nu instaleaza nimic). Pornirea nu depinde de ea.
 	try:
+		from Components import HdsParteaDoua
+		from Components.SystemInfo import SystemInfo as infoSistem
+		infoSistem["HdsParteaDoua"] = bool(HdsParteaDoua.citesteConf()) and HdsParteaDoua.radacinaNand()
+	except Exception as e:
+		print("[mytest] profilul partii a doua:", e)
+	try:
 		from Components import HdsActualizari
 		HdsActualizari.porneste()
 	except Exception as e:
@@ -715,6 +756,14 @@ def runScreenTest():
 		HdsProcesor.porneste()
 	except Exception as e:
 		print("[mytest] procesorul:", e)
+	# HDSatelit: raportul de procesor (Components/HdsProcesorRaport.py): firul principal peste 80% dintr-un nucleu
+	# neintrerupt 2 minute -> o fereastra de 10 s culeasa si trimisa singura prin canalul rapoartelor de pornire, o data
+	# pe pornire; omul nu face nimic. Un fir care masoara la 10 s; pornirea nu depinde de el.
+	try:
+		from Components import HdsProcesorRaport
+		HdsProcesorRaport.porneste()
+	except Exception as e:
+		print("[mytest] raportul de procesor:", e)
 	# HDSatelit: locurile din retea (Components/HdsStocareRetea.py): numai cele la care omul a ales "Montat si dupa
 	# repornire" se monteaza in fundal, la 30 s dupa pornire, intr-un proces copil cu termen; nimic altceva nu se cauta
 	# si nu se monteaza singur. Pornirea nu depinde de ele.
@@ -819,6 +868,12 @@ def runScreenTest():
 			session.openWithCallback(boundFunction(runNextScreen, session, screensToRun[1:]), screen, *args)
 		else:
 			session.open(screen, *args)
+		if screen is Screens.InfoBar.InfoBar:
+			try:
+				from Screens.HdsParteaDoua import pornesteParteaDoua
+				pornesteParteaDoua(session)
+			except Exception as e:
+				print("[mytest] partea a doua:", e)
 
 	config.misc.epgcache_filename.addNotifier(setEPGCachePath)
 	# HDSatelit: ghidul se scrie si la intrarea in standby si o data la 6 ore, nu numai la iesire
@@ -850,6 +905,13 @@ def runScreenTest():
 		HdsPluginExtern.porneste()
 	except Exception as e:
 		print("[mytest] rapoartele pluginurilor externe:", e)
+	# HDSatelit: pluginurile cazute la pornire fiindca le lipsea un modul Python din feedul nostru il primesc acum, in fundal, cu un
+	# mesaj mic (Components/HdsModuleLipsa.py), dupa ce interfata a pornit
+	try:
+		from Components import HdsModuleLipsa
+		HdsModuleLipsa.porneste(session)
+	except Exception as e:
+		print("[mytest] modulele lipsa ale pluginurilor:", e)
 
 	runNextScreen(session, screensToRun)
 
@@ -974,6 +1036,8 @@ except Exception as e:
 	print("[mytest] semnatura de pornire:", e)
 try:
 	from Components import HdsEcranePornire
+	from Components import HdsGalerieSigle
+	HdsGalerieSigle.configureRadio(config.misc.radiopic.value)
 	HdsEcranePornire.verificaLaPornire()
 except Exception as e:
 	print("[mytest] ecranul de pornire:", e)

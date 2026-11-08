@@ -53794,6 +53794,9 @@ msgstr "Skriuw it berjocht foar de tv"
 msgid "Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s."
 msgstr "Wy betankje alle bêtatesters dy't meiwurke hawwe oan it meitsjen fan it HD Satelit-image: %s."
 
+msgid "Cu albastru: beta testerii care și-au trimis propriul receptor la HD Satelit, pentru probe și pentru îmbunătățirea imaginii E2 HD Satelit."
+msgstr "Yn it blau: de bêtatesters dy't harren eigen ûntfanger nei HD Satelit stjoerd hawwe, om te testen en om it E2 HD Satelit-image te ferbetterjen."
+
 msgid "Derularea listelor"
 msgstr "Skowen fan listen"
 
@@ -55593,3 +55596,3964 @@ msgstr "Wolst it programma foar bêtatesters ferlitte? De server wisket de gegev
 
 msgid "http://"
 msgstr "http://"
+
+msgid "citirea listei de pluginuri"
+msgstr "it lêzen fan de pluginlist"
+
+#, python-format
+msgid "încărcarea pluginului %s"
+msgstr "it laden fan de plugin %s"
+
+#, python-format
+msgid "Se instalează modulul %s pentru %s."
+msgstr "De module %s wurdt ynstallearre foar %s."
+
+#, python-format
+msgid "Se instalează modulul %s"
+msgstr "De module %s wurdt ynstallearre"
+
+#, python-format
+msgid "Modulul %s se instalează în curând"
+msgstr "De module %s wurdt meikoarten ynstallearre"
+
+#, python-format
+msgid "Lipsește modulul %s. Nu s-a putut instala: %s"
+msgstr "De module %s ûntbrekt. Ynstallaasje net slagge: %s"
+
+#, python-format
+msgid "Modulul %s nu s-a instalat: %s"
+msgstr "De module %s is net ynstallearre: %s"
+
+#, python-format
+msgid "Modulul %s s-a instalat. Deschide din nou %s."
+msgstr "De module %s is ynstallearre. Iepenje %s opnij."
+
+#, python-format
+msgid "%s este gata."
+msgstr "%s is klear."
+
+#, python-format
+msgid "%s tot nu pornește: %s"
+msgstr "%s start noch altyd net: %s"
+
+msgid "Feedul HD Satelit nu are modulul."
+msgstr "De pakketboarne fan HD Satelit hat de module net."
+
+msgid "Altă sursă are o versiune mai nouă; nu o instalez singur."
+msgstr "In oare boarne hat in nijere ferzje; ik ynstallearje dy net automatysk."
+
+#, python-format
+msgid "modulul %s"
+msgstr "de module %s"
+
+msgid "Numele pachetului nu este valid."
+msgstr "De pakketnamme is net jildich."
+
+#: lib/python/Components/HdsExtensiiLucru.py:1394
+#, python-format
+msgid "%d extensii"
+msgstr "Utwreidingen: %d"
+
+#: lib/python/Components/HdsExtensiiLucru.py:2091
+#, python-format
+msgid "%d pachete"
+msgstr "Pakketten: %d"
+
+#: lib/python/Components/HdsExtensiiLucru.py:2078
+#, python-format
+msgid "%d pluginuri"
+msgstr "Plugins: %d"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1391
+#, python-format
+msgid "%s (acum %s)"
+msgstr "%s (no %s)"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1394
+#, python-format
+msgid "Actualizezi %d extensii?"
+msgstr "Utwreidingen (%d) bywurkje?"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1390
+#, python-format
+msgid "Actualizezi %s?"
+msgstr "%s bywurkje?"
+
+#: lib/python/Screens/HdsExtensii.py:410
+msgid "Acțiunea principală"
+msgstr "Haadaksje"
+
+#: lib/python/Screens/HdsExtensii.py:412
+msgid "Descarcă lista de pachete"
+msgstr "Pakketlist downloade"
+
+#: lib/python/Screens/HdsExtensii.py:391
+msgid "Deschide, instalează sau actualizează"
+msgstr "Iepenje, ynstallearje of bywurkje"
+
+#: lib/python/Components/PluginComponent.py:351
+msgid "Descriere greșită a pluginului"
+msgstr "Unjildige plugin-beskriuwing"
+
+#: lib/python/Screens/HdsExtensii.py:1551
+#, python-format
+msgid "Extensia %s nu a putut porni.\n%s"
+msgstr "Utwreiding %s koe net starte.\n%s"
+
+#: lib/python/Screens/HdsExtensii.py:1119
+msgid "Extensiile noi apar după repornirea interfeței"
+msgstr "Nije útwreidingen ferskine nei it opnij starten fan de ynterface"
+
+#: lib/python/Screens/HdsExtensii.py:398
+msgid "Fila din dreapta"
+msgstr "Ljepper rjochts"
+
+#: lib/python/Screens/HdsExtensii.py:397
+msgid "Fila din stânga"
+msgstr "Ljepper lofts"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1962 lib/python/Components/HdsExtensiiLucru.py:1966
+#, python-format
+msgid "Gata. %s"
+msgstr "Klear. %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:919
+#, python-format
+msgid "Instalat, versiunea %s"
+msgstr "Ynstallearre, ferzje %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1343 lib/python/Components/HdsExtensiiLucru.py:1550
+#, python-format
+msgid "Instalezi %s?"
+msgstr "%s ynstallearje?"
+
+#: lib/python/Components/PluginComponent.py:63
+#, python-format
+msgid "Lipsește modulul %s"
+msgstr "Module %s ûntbrekt"
+
+#: lib/python/Components/PluginComponent.py:368
+msgid "Necesită repornirea interfeței"
+msgstr "Fereasket in werstart fan de brûkersynterface"
+
+#: lib/python/Components/PluginComponent.py:349
+msgid "Nu are funcția Plugins"
+msgstr "Hat gjin Plugins-funksje"
+
+#: lib/python/Components/HdsExtensiiLucru.py:751 lib/python/Components/HdsExtensiiLucru.py:776
+msgid "Nu pornește"
+msgstr "Kin net opstarte"
+
+#: lib/python/Components/PluginComponent.py:349 lib/python/Components/PluginComponent.py:351 lib/python/Components/PluginComponent.py:360
+#, python-format
+msgid "Nu s-a încărcat: %s"
+msgstr "Upload mislearre: %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:909
+msgid "OK arată motivul"
+msgstr "OK lit de reden sjen"
+
+#: lib/python/Components/PluginComponent.py:347
+msgid "Oprit în modul sigur"
+msgstr "Utskeakele yn feilige modus"
+
+#: lib/python/Components/HdsExtensiiLucru.py:925
+#, python-format
+msgid "ocupă %s"
+msgstr "nimt %s yn beslach"
+
+#: lib/python/Components/HdsExtensiiLucru.py:2090
+msgid "un pachet"
+msgstr "ien pakket"
+
+#: lib/python/Components/HdsExtensiiLucru.py:2077
+msgid "un plugin"
+msgstr "ien plugin"
+
+#: lib/python/Screens/HdsExtensii.py:409
+msgid "Șterge extensia sau sursa"
+msgstr "Utwreiding of boarne fuortsmite"
+#. Fisa 36: pagina web Common Interface.
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Comanda CI a fost trimisă."
+msgstr "It CI-kommando is ferstjoerd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Comanda CI nu se poate executa acum."
+msgstr "It CI-kommando kin no net útfierd wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Comandă CI necunoscută."
+msgstr "Unbekend CI-kommando."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Comenzile CI cer POST."
+msgstr "CI-kommando's fereaskje POST."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Meniul MMI al modulului se folosește pe televizor. Citirea lui din web ar putea consuma mesajul destinat televizorului."
+msgstr "It MMI-menu fan de module wurdt op de televyzje brûkt. As it fia it web lêzen wurdt, kin it berjocht foar de televyzje ferlern gean."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Modul pregătit."
+msgstr "Module klear."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Receptorul nu are sloturi CI."
+msgstr "De ûntfanger hat gjin CI-slots."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Se citesc sloturile CI..."
+msgstr "CI-slots wurde lêzen..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Setare CI nevalidă."
+msgstr "Unjildige CI-ynstelling."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Slot CI nevalid."
+msgstr "Unjildich CI-slot."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Sloturile CI nu se pot citi acum."
+msgstr "CI-slots kinne no net lêzen wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py
+msgid "Stare CI necunoscută."
+msgstr "Unbekende CI-status."
+#. Fisa 37: limba diagnosticului de pornire si a rezervei.
+msgid "Boot partitions read from the running slot; they do not identify the receiver."
+msgstr "De partysjes wurde lêzen út it aktive slot; se identifisearje de ûntfanger net."
+
+msgid "Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic."
+msgstr "As der neat feroaret, ferskynt hjir gau de diagnosekoade."
+
+msgid "De obicei pornirea durează sub un minut."
+msgstr "It opstarten duorret meastal minder as in minút."
+
+msgid "Device tree model"
+msgstr "Model (device tree)"
+
+msgid "HD Satelit pornește…"
+msgstr "HD Satelit start…"
+
+msgid "Model (DT)"
+msgstr "Model (DT)"
+
+#, python-format
+msgid "Pasul pornirii: %s"
+msgstr "Opstartstap: %s"
+
+msgid "Pornirea durează mai mult decât de obicei…"
+msgstr "It opstarten duorret langer as oars…"
+
+msgid "Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj."
+msgstr "It opstarten is stoppe foar de ynterface, by de stap dy't op it display stiet."
+
+msgid "Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Uclan Ustym 4K PRO: butonul RECOVERY din spate)."
+msgstr "Set de goede software werom mei in USB-stick neffens de ynstruksjes fan de fabrikant fan de ûntfanger (by Uclan Ustym 4K PRO: de RECOVERY-knop oan de efterkant)."
+
+msgid "Săgețile sus și jos aleg, OK confirmă, EXIT înseamnă Nu."
+msgstr "De pylken omheech en omleech kieze, OK befêstiget, EXIT betsjut Nee."
+
+msgid "The boot slot could not be read; partitions do not block startup."
+msgstr "It opstartslot koe net lêzen wurde; de partysjes blokkearje it opstarten net."
+
+msgid "The device tree identifies another receiver model."
+msgstr "De device tree wiist op in oar ûntfangermodel."
+
+#. Fisa 37: limba diagnosticului de pornire si a rezervei.
+msgid "This receiver matches the hardware required by the software."
+msgstr "Dizze ûntfanger hat de hardware dy't de software freget."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:319
+msgid " - Pune sigla"
+msgstr " - Logo ynstelle"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:1916 lib/python/Screens/ChannelSelection.py:1009
+#, python-format
+msgid "%(loc)s · numai radio, %(numar)s"
+msgstr "%(loc)s · allinich radio, %(numar)s"
+
+#: lib/python/Components/ServiceScan.py:762
+#, python-format
+msgid "%(pozitie)s (numai radio: %(numar)d)"
+msgstr "%(pozitie)s (allinich radio: %(numar)d)"
+
+#: lib/python/Components/HdsTasteRapide.py:45
+#, python-format
+msgid "%d (apăsare lungă)"
+msgstr "%d (lang yndrukke)"
+
+#: lib/python/Components/HdsRadioMeniu.py:29
+#, python-format
+msgid "%d kbit/s"
+msgstr "%d kbit/s"
+
+#: lib/python/Screens/HdsParteaDoua.py:70
+#, python-format
+msgid "%s (%d MiB liberi)"
+msgstr "%s (%d MiB frij)"
+
+#: lib/python/Components/ServiceScan.py:772
+#, python-format
+msgid "%s (cu semnal, dar fără canale)"
+msgstr "%s (sinjaal, mar gjin kanalen)"
+
+#: lib/python/Components/ServiceScan.py:769
+#, python-format
+msgid "%s (fără semnal)"
+msgstr "%s (gjin sinjaal)"
+
+#: pluginuri-feed/RadioOnline/motor.py:310
+#, python-format
+msgid "%s nu răspunde. Alege alt post."
+msgstr "%s antwurdet net. Kies in oare sender."
+
+#: pluginuri-feed/RadioOnline/motor.py:315
+#, python-format
+msgid "%s nu răspunde. Trec la următorul: %s."
+msgstr "%s antwurdet net. Troch nei de folgjende: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:94
+#, python-format
+msgid "%s s"
+msgstr "%s s"
+
+#: lib/python/Screens/HdsEgalizator.py:466
+#, python-format
+msgid "%s, %s. Sus și jos: cu 1 dB mai mult sau mai puțin, între −24 și +18 dB."
+msgstr "%s, %s. Op en del: ferheegje of ferleegje mei 1 dB, fan −24 oant +18 dB."
+
+#: lib/python/Components/HdsCopieSetari.py:1338
+#, python-format
+msgid "%s: %d fișiere depășesc limitele copiei și au fost sărite."
+msgstr "%s: %d-bestannen binne boppe de reservekopygrinzen en waarden oerslein."
+
+#: pluginuri-feed/RadioOnline/ecran.py:427 pluginuri-feed/RadioOnline/locuri.py:112 pluginuri-feed/RadioOnline/web.py:333
+#, python-format
+msgid "%s: cele mai ascultate posturi"
+msgstr "%s: meast beharke senders"
+
+#: lib/python/Components/HdsCopieSetari.py:1335
+#, python-format
+msgid "%s: lipsesc informațiile extensiei; s-au copiat doar configurările declarate."
+msgstr "%s: tafoegingynformaasje ûntbrekt; allinnich de ferklearre konfiguraasje triemmen waarden kopiearre."
+
+#: lib/python/Components/HdsJurnalAfisaj.py:240
+#, python-format
+msgid "%s; fără reaplicare"
+msgstr "%s; sûnder opnij ta te passen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/limba_interfata_web.py:89 lib/python/Screens/LanguageSelection.py:123
+msgid "(pe stick)"
+msgstr "(op de stick)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py:5466
+msgid ": interfața web a modulului"
+msgstr ": de webynterface fan de module"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/plugin.py:5140
+msgid "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code>"
+msgstr "<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> fereasket ek <code>confirmat=1</code>): de opsje Sûnder wachtwurd op it lokale netwurk. It wachtwurd, de platte tekst en alle wizigingen binne allinnich beskikber fia in browser dy’t mei de koade op de tv keppele is (oars 403 mei <code>trebuie_cod</code>), nea mei <code>?token=</code>; salang’t it skerm Wachtwurd fan de ûntfanger op de ûntfanger iepen is, jildt itselde foar <code>/api/remotecontrol</code>"
+
+#: lib/python/Components/HdsTasteRapide.py:61
+msgid "AUDIO"
+msgstr "AUDIO"
+
+#: lib/python/Components/HdsTasteRapide.py:42
+msgid "AUDIO (apăsare lungă)"
+msgstr "AUDIO (lang yndrukke)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:35
+msgid "Acces la fișiere deschis în acest browser."
+msgstr "Triem tagong is ynskeakele yn dizze browser."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:496
+msgid "Accesul extern se schimbă numai din casă, după introducerea parolei receptorului."
+msgstr "Eksterne tagong kin allinich wizige wurde fan do thúsnetwurk, nei it ynfieren fan it ûntfangerwachtwurd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:34
+msgid "Accesul la fișiere a expirat. Introdu din nou parola receptorului."
+msgstr "Triem tagong is ferrûn. Fier it wachtwurd fan de ûntfanger nochris yn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:592
+msgid "Accesul la fișiere din afara casei este oprit sau cererea nu vine din browser."
+msgstr "Triemtagong fan bûten do thúsnetwurk is útskeakele, of it fersyk komt net fan in browser."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:131
+msgid "Accesul la fișiere din afara casei este oprit."
+msgstr "Triemtagong fan bûten do thúsnetwurk is útskeakele."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:162
+msgid "Această acțiune cere POST."
+msgstr "Dizze aksje fereasket POST."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:402
+msgid "Această setare se schimbă de pe televizor."
+msgstr "Feroarje dizze ynstelling op de tv."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:506
+#, python-format
+msgid "Aceleași alegeri sunt pe televizor, în %s."
+msgstr "Deselde karren steane ek op de televyzje, yn %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:294
+msgid "Aceleași setări pentru afișajul din față și pentru televizor."
+msgstr "Deselde ynstellingen foar it frontdisplay en foar de televyzje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:912
+msgid "Acest flux special al nucleului nu poate fi descărcat din interfața web."
+msgstr "Dizze spesjale kernelstream kin net downloade wurde fia de webynterface."
+
+#: pluginuri-feed/HdsImaginiE2/date.py:19
+msgid "Acest plugin funcționează numai cu HD Satelit 0.7.0."
+msgstr "Dizze plugin wurket allinnich mei HD Satelit 0.7.0."
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:132 pluginuri-feed/HdsFeeduri/web.py:72
+msgid "Activează"
+msgstr "Ynskeakelje"
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:92
+msgid "Activează / Dezactivează"
+msgstr "Ynskeakelje / Utskeakelje"
+
+#: pluginuri-feed/HdsFeeduri/plugin.py:33
+msgid "Activează sau dezactivează feeduri externe"
+msgstr "Eksterne pakketboarnen yn- of útskeakelje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:102 lib/python/Screens/HdsParteaDoua.py:57
+msgid "Actualizeaza partea a doua"
+msgstr "Oanfolling bywurkje"
+
+#: lib/python/Components/HdsParteaDoua.py:48
+msgid "Acum sunt disponibile limbile. Navigatorul si recunoasterea textului nu sunt inca disponibile pentru acest model."
+msgstr "De talen binne no beskikber. De browser en de tekstherkenning binne foar dit model noch net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:107
+msgid "Acțiunea nu este disponibilă."
+msgstr "De aksje is net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:62
+msgid "Acțiuni"
+msgstr "Aksjes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:70
+msgid "Adaugă la scurtături"
+msgstr "Tafoegje oan fluchtoetsen"
+
+#: lib/python/Components/HdsParteaDoua.py:805
+msgid "Adresa din afara dosarului offline"
+msgstr "Adres bûten de offline map"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:122
+msgid "Adresa postului de radio nu poate fi redată în browser."
+msgstr "De URL fan it radiostasjon kin net yn 'e browser spile wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:116 lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:118
+msgid "Adresa postului de radio nu se poate afla acum."
+msgstr "De URL fan it radiostasjon is no net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:1357
+msgid "Adresa postului nu a putut fi aflată. Încearcă din nou."
+msgstr "De URL fan it stasjon koe net fûn wurde. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:231
+msgid "Adresele interfețelor web nu s-au putut citi."
+msgstr "De webynterface-adressen koene net lêzen wurde."
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:132 pluginuri-feed/HdsFeeduri/web.py:73
+msgid "Adăugat manual"
+msgstr "Sels tafoege"
+
+#: lib/python/Components/HdsAfisajCompat.py:27
+#, python-format
+msgid "Afisaj folosit de: %s"
+msgstr "Display brûkt troch: %s"
+
+#: lib/python/Components/HdsAfisajColor.py:171
+#, python-format
+msgid "Afisajul nu primeste comanda live: %s"
+msgstr "It display nimt it live-kommando net oan: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:99
+msgid "Afișaj (Formt/DispMode)"
+msgstr "Display (Formt/DispMode)"
+
+#: data/menu.xml:407
+msgid "Afișaj și LED"
+msgstr "Display en LED"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:61
+#, python-format
+msgid "Afișate: %s din %s"
+msgstr "Toand: %s fan %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:113
+msgid "Ai modificări nesalvate. Le abandonezi?"
+msgstr "Do hawwe net bewarre wizigingen. Wegwerpje se?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:531
+msgid "Ai schimbări nesalvate. Salvează le păstrează."
+msgstr "Do hast net bewarre wizigingen. Druk op Bewarje om se net kwyt te reitsjen."
+
+#: lib/python/Components/HdsTasteRapide.py:52
+msgid "Albastru (apăsare scurtă)"
+msgstr "Blau (koart yndrukke)"
+
+#: pluginuri-feed/HdsImaginiE2/web.py:39
+msgid "Alege Da sau Nu."
+msgstr "Kies Ja of Nee."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:487 lib/python/Screens/HdsAfisaj.py:610
+msgid "Alege Nu ca să reapară pictograma și lista de rotire."
+msgstr "Kies Nee, dan komme it ikoan en de wikseljende list wer werom."
+
+#: pluginuri-feed/HdsImaginiE2/plugin.py:49
+msgid "Alege dacă apar imaginile altor echipe în meniu"
+msgstr "Kies oft systeemimages fan oare teams yn it menu komme"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:598
+msgid "Alege dosarul destinație."
+msgstr "Kies de bestimmingsmap."
+
+#: lib/python/Components/HdsLocInregistrari.py:1370
+msgid "Alege numele sub care apare discul în /media. Automat păstrează alegerea receptorului."
+msgstr "Kies de namme wêrûnder it stasjon ferskynt yn /media. Automatysk brûkt de kar fan de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:751
+msgid "Alege o funcție pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită păstrează comportamentul de acum. Cifrele lungi se alocă în afara timeshiftului."
+msgstr "Kies in funksje foar elke toets, wylst do tv sjochst. De gewoane funksje feroaret neat oan it hjoeddeistige gedrach. Lang yndrukken fan de sifertoetsen jildt bûten timeshift."
+
+#: lib/python/Screens/HdsGalerieSigle.py:218
+msgid "Alege o siglă și apasă OK."
+msgstr "Kies in logo en druk op OK."
+
+#: lib/python/Screens/HdsVremea.py:276
+msgid "Alege orașul"
+msgstr "Kies in stêd"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:318
+msgid "Alege orașul din listă, apoi salvează."
+msgstr "Kies in stêd út de list en bewarje dan."
+
+#: lib/python/Screens/HdsParteaDoua.py:69
+msgid "Alege stickul pentru partea a doua"
+msgstr "Kies de stick foar de oanfolling"
+
+#: lib/python/Screens/ButtonSetup.py:42
+msgid "Alege tasta cu SUS/JOS și funcția cu OK sau STÂNGA/DREAPTA. Funcția obișnuită păstrează comportamentul de acum. Cifrele lungi se alocă în afara timeshiftului."
+msgstr "Kies de toets mei OMHEECH/OMLEECH en de funksje mei OK of LOFTS/RJOCHTS. De gewoane funksje feroaret neat oan it hjoeddeistige gedrach. Lang yndrukken fan de sifertoetsen jildt bûten timeshift."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:94
+msgid "Alege un efect din listă."
+msgstr "Kies in effekt út de list."
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:91 pluginuri-feed/HdsFeeduri/web.py:71
+msgid "Alege un feed. OK îl activează sau îl dezactivează."
+msgstr "Kies in pakketboarne. OK skeakelt dy yn of út."
+
+#: pluginuri-feed/RadioOnline/ecran.py:431 pluginuri-feed/RadioOnline/web.py:333
+#, python-format
+msgid "Alege un gen. Se arată posturile din %s."
+msgstr "Kies in sjenre. De senders út %s wurde toand."
+
+#: lib/python/Components/Harddisk.py:1220
+msgid "Alege un nume din listă."
+msgstr "Kies in namme út de list."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:103
+msgid "Alege un nume simplu, fără separatori de cale."
+msgstr "Kies in maklike namme sûnder paadskiedingstekens."
+
+#: pluginuri-feed/RadioOnline/web.py:336
+msgid "Alege un post ca să îl asculți în browser."
+msgstr "Kies in stjoerder om yn de browser nei te harkjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:107
+msgid "Alege un post de radio online din lista de canale."
+msgstr "Kies in online radiostasjon út 'e kanaallist."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:1349
+msgid "Alege un post de radio online din listă."
+msgstr "Kies in online radiostasjon út 'e list."
+
+#: pluginuri-feed/RadioOnline/motor.py:246
+msgid "Alege un post și apasă OK."
+msgstr "Kies in sender en druk op OK."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:105
+msgid "Alege un singur element pentru această acțiune."
+msgstr "Selektearje ien item foar dizze aksje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:35
+msgid "Alege un stick disponibil."
+msgstr "Kies in beskikbere stick."
+
+#: pluginuri-feed/RadioOnline/ecran.py:435 pluginuri-feed/RadioOnline/web.py:334
+msgid "Alege țara. Lista se deschide pe ea și data viitoare."
+msgstr "Kies in lannamme. De list iepenet dêr de folgjende kear ek mei."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:124 pluginuri-feed/HdsImaginiE2/web.py:47
+msgid "Alegerea a fost salvată."
+msgstr "De kar is bewarre."
+
+#: lib/python/Components/HdsVremea.py:149
+msgid "Alegerea nu este validă."
+msgstr "De kar is net jildich."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:126 pluginuri-feed/HdsImaginiE2/web.py:43
+msgid "Alegerea nu s-a putut salva. Încearcă din nou."
+msgstr "De kar koe net bewarre wurde. Besykje opnij."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:93 pluginuri-feed/HdsImaginiE2/web.py:84
+msgid "Alegerea se păstrează și după repornirea receptorului."
+msgstr "De kar bliuwt bewarre nei in werstart fan de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:503
+msgid "Alegerile bifate trec pe rând, fiecare cât ai ales."
+msgstr "De oankruste karren komme om bar, elk sa lang as do keazen hast."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:91 pluginuri-feed/HdsImaginiE2/web.py:82
+msgid "Alegi dacă imaginile altor echipe apar în meniul imaginii."
+msgstr "Kies oft systeemimages fan oare teams yn it menu foar systeemimages komme."
+
+#: lib/python/Components/HdsPornireMultipla.py:100
+msgid "Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile din memoria receptorului și de pe card sau stick."
+msgstr "Kies in systeemimage en druk op OK: de ûntfanger start dêrmei opnij. De list lit systeemimages sjen yn de ynterne opslach fan de ûntfanger en op in kaart of USB-stick."
+
+#: lib/python/Components/HdsParteaDoua.py:1007 lib/python/Components/HdsParteaDoua.py:1030 lib/python/Components/HdsParteaDoua.py:561 lib/python/Components/HdsParteaDoua.py:818 lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:38 lib/python/Screens/HdsParteaDoua.py:80
+msgid "Alta operatie este in lucru sau interfata trebuie repornita."
+msgstr "Der rint in oare operaasje of de ynterface moat opnij starte."
+
+#: pluginuri-feed/RadioOnline/ecran.py:298 pluginuri-feed/RadioOnline/ecran.py:437 pluginuri-feed/RadioOnline/locuri.py:129 pluginuri-feed/RadioOnline/web.py:332
+msgid "Alte liste"
+msgstr "Oare listen"
+
+#: lib/python/Components/HdsRadioOnline.py:64
+msgid "Altă instalare rulează acum. Încearcă din nou mai târziu."
+msgstr "In oare ynstallaasje rint. Besykje it letter nochris."
+
+#: pluginuri-feed/RadioOnline/ecran.py:691 pluginuri-feed/RadioOnline/web.py:256
+#, python-format
+msgid "Am trimis votul pentru %s."
+msgstr "De stim foar %s is ferstjoerd."
+
+#: pluginuri-feed/RadioOnline/date.py:51
+msgid "Ambient"
+msgstr "Ambient"
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:92 pluginuri-feed/HdsImaginiE2/web.py:83
+msgid "Apare în meniul imaginilor"
+msgstr "Yn it menu foar systeemimages sjen litte"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:589
+msgid "Apasă OK: verific stickul, îi repar erorile și citesc lista din nou. Nu se formatează nimic."
+msgstr "Druk op OK om de USB-stick te kontrolearjen, flaters te reparearjen en de list opnij te lêzen. Neat sil wurde opmakke."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:142
+msgid "Apasă Redă pentru a porni sunetul și vizualizatorul."
+msgstr "Druk op Play om de audio en visualiser te begjinnen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:318
+msgid "Apasă poza pentru a pune sigla. Se vede la următoarea pornire."
+msgstr "Klik op de ôfbylding om it logo yn te stellen. It is te sjen by de folgjende start."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1908 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1961
+msgid "Arată adresa"
+msgstr "Adres sjen litte"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:74
+msgid "Arată mai multe"
+msgstr "Lit mear sjen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py:408 lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py:446
+msgid "Arată parola nouă"
+msgstr "Lit nij wachtwurd sjen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:339
+msgid "Argument repetat în cerere."
+msgstr "Werhelle argumint yn fersyk."
+
+#: lib/python/Components/HdsParteaDoua.py:784
+msgid "Arhiva IPK stricata"
+msgstr "Skansearre IPK-argyf"
+
+#: lib/python/Components/HdsCopieSetari.py:1139
+msgid "Arhiva pluginurilor e prea mare sau nu e un fișier obișnuit."
+msgstr "It plugin-argyf is te grut of is gjin gewoane triem."
+
+#: pluginuri-feed/RadioOnline/web.py:335
+msgid "Ascultare în browser"
+msgstr "Harkjen yn de browser"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vezi_live_web.py:46
+msgid "Ascultă live"
+msgstr "Harkje live"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vezi_live_web.py:47
+#, python-format
+msgid "Ascultă live postul %s"
+msgstr "Harkje nei %s live"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vezi_live_web.py:48
+#, python-format
+msgid "Ascultă live: %s"
+msgstr "Harkje live: %s"
+
+#: pluginuri-feed/RadioOnline/web.py:335
+msgid "Ascultă în browser"
+msgstr "Harkje yn de browser"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1962
+msgid "Ascunde adresa"
+msgstr "Adres ferbergje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py:447
+msgid "Ascunde parola nouă"
+msgstr "Nij wachtwurd ferbergje"
+
+#: lib/python/Components/HdsActualizari.py:1181
+msgid "Asteapta sa se termine instalarea partii a doua pe stick."
+msgstr "Wachtsje oant de ynstallaasje fan de oanfolling op de stick klear is."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:102 lib/python/Screens/HdsParteaDoua.py:56
+msgid "Asteapta..."
+msgstr "Wachtsje..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:301
+msgid "Automat după fusul orar sau țară"
+msgstr "Automatysk neffens tiidsône of regio"
+
+#: lib/python/Screens/HdsVremea.py:176
+msgid "Automat, după fusul orar sau țară"
+msgstr "Automatysk, neffens tiidsône of regio"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:320
+msgid "Autor: "
+msgstr "Makker: "
+
+#: lib/python/Screens/HdsGalerieSigle.py:156
+#, python-format
+msgid "Autor: %s"
+msgstr "Makker: %s"
+
+#: lib/python/Screens/HdsVremea.py:191
+msgid "Azi"
+msgstr "Hjoed"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:55
+msgid "Așteaptă pornirea completă a receptorului, apoi reîncarcă pagina."
+msgstr "Wachtsje oant de ûntfanger hielendal opstarten is en laad dan de side opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:140
+msgid "Barele apar când începe sunetul."
+msgstr "De balken ferskine as de audio begjint."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:985
+msgid "Blocul încărcat trebuie să aibă cel mult 64 KiB."
+msgstr "It opladen blok mei net mear wêze as 64 KiB."
+
+#: pluginuri-feed/RadioOnline/date.py:49
+msgid "Blues"
+msgstr "Blues"
+
+#: pluginuri-feed/RadioOnline/web.py:344
+msgid "Browserul a refuzat redarea. Apasă din nou „Ascultă în browser”."
+msgstr "De browser hat it ôfspyljen wegere. Druk nochris op “Harkje yn de browser”."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:146
+msgid "Browserul blochează sunetul prin HTTP într-o pagină HTTPS. Deschide interfața receptorului prin HTTP sau alege un post cu adresă HTTPS."
+msgstr "De browser blokkearret HTTP-audio op in HTTPS-side. Iepenje de ynterface fan 'e ûntfanger fia HTTP of kies in stasjon mei in HTTPS-adres."
+
+#: pluginuri-feed/RadioOnline/web.py:343
+msgid "Browserul nu a putut reda postul. Postul poate fi indisponibil sau formatul nu este acceptat."
+msgstr "De browser koe de stjoerder net ôfspylje. De stjoerder is miskien net beskikber of it formaat wurdt net stipe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:145
+msgid "Browserul nu poate reda formatul audio al acestui post."
+msgstr "De browser kin it audioformaat fan dit stasjon net spielje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:565
+msgid "Bucata încărcată este prea mare."
+msgstr "It opladen stik is te grut."
+
+#: lib/python/Components/HdsVremea.py:265
+msgid "Burniță"
+msgstr "Motrein"
+
+#: lib/python/Components/HdsTasteRapide.py:71
+msgid "CH+"
+msgstr "CH+"
+
+#: lib/python/Components/HdsTasteRapide.py:72
+msgid "CH-"
+msgstr "CH-"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:98
+msgid "Cablu HDMI la captură"
+msgstr "HDMI-kabel by de statusopname"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:44
+msgid "Cale"
+msgstr "Paad"
+
+#: lib/python/Components/HdsParteaDoua.py:808
+msgid "Cale offline nepermisa"
+msgstr "Net tastien offline paad"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:94
+msgid "Calea conține caractere nepermise."
+msgstr "It paad befettet ûnjildige tekens."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:265
+msgid "Calea iese din rădăcina permisă."
+msgstr "It paad giet bûten de tastiene root-map."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:64
+msgid "Calea nu este un dosar sau conține o legătură simbolică. Deschide ținta legăturii înainte de scriere."
+msgstr "It paad is gjin map of befettet in symboalyske keppeling. Iepenje it doel fan de keppeling foar it skriuwen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:65
+msgid "Calea nu este un fișier obișnuit."
+msgstr "It paad is gjin gewoane triem."
+
+#: pluginuri-feed/RadioOnline/ecran.py:365 pluginuri-feed/RadioOnline/locuri.py:116 pluginuri-feed/RadioOnline/web.py:143
+msgid "Calitate înaltă"
+msgstr "Hege kwaliteit"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:3865
+msgid "Canalele anterioare"
+msgstr "Foarige kanalen"
+
+#: lib/python/Components/HdsStreamRelay.py:107
+msgid "Canalele se adaugă din lista de canale (MENU pe canal > Adaugă la Stream Relay) sau din pagina Canale a interfeței web (butonul SR)."
+msgstr "Foegje kanalen ta út 'e kanaallist (MENU op in kanaal > Taheakje oan Stream Relay) of fan 'e kanalenpagina fan 'e webynterface (SR-knop)."
+
+#: lib/python/Components/HdsTasteRapide.py:79
+msgid "Canalul anterior (<)"
+msgstr "Foarige kanaal (<)"
+
+#: lib/python/Components/HdsTransmisie.py:2773
+msgid "Canalul nu este în lista de servicii a receptorului. Refă lista de canale și încearcă din nou."
+msgstr "It kanaal stiet net yn de tsjinstlist fan de ûntfanger. Bou de kanaallist op 'e nij en besykje it nochris."
+
+#: lib/python/Components/HdsTransmisie.py:2781
+msgid "Canalul nu poate porni acum. Încearcă din nou după eliberarea tunerului."
+msgstr "It kanaal kin no net begjinne. Besykje it nochris as de tuner frij is."
+
+#: lib/python/Components/HdsTransmisie.py:2777
+msgid "Canalul nu se poate primi acum. Verifică lista de canale și dacă tunerul este liber."
+msgstr "It kanaal kin no net ûntfongen wurde. Kontrolearje de kanaallist en oft de tuner beskikber is."
+
+#: lib/python/Components/HdsStreamRelay.py:103
+msgid "Canalul pornește fără Stream Relay."
+msgstr "It kanaal begjint sûnder Stream Relay."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py:2315
+msgid "Canalul sau identificatorul emisiunii nu este bun."
+msgstr "It kanaal of de id fan it programma is net jildich."
+
+#: lib/python/Components/HdsTasteRapide.py:80
+msgid "Canalul următor (>)"
+msgstr "Folgjende kanaal (>)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:84 lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:87
+msgid "Captură"
+msgstr "Capture"
+
+#: lib/python/Screens/HdsVremea.py:140
+msgid "Caută oraș"
+msgstr "Stêd sykje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:302
+msgid "Caută un oraș după nume"
+msgstr "Stêd sykje op namme"
+
+#: pluginuri-feed/RadioOnline/ecran.py:695 pluginuri-feed/RadioOnline/locuri.py:123 pluginuri-feed/RadioOnline/web.py:327
+msgid "Caută un post"
+msgstr "Sykje in sender"
+
+#: lib/python/Components/HdsVremea.py:263
+msgid "Ceață"
+msgstr "Mist"
+
+#: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/web.py:326
+msgid "Cele mai ascultate"
+msgstr "Meast beharke"
+
+#: pluginuri-feed/RadioOnline/ecran.py:364 pluginuri-feed/RadioOnline/locuri.py:113 pluginuri-feed/RadioOnline/web.py:143
+msgid "Cele mai votate"
+msgstr "Measte stimmen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:297
+msgid "Celsius (°C)"
+msgstr "Celsius (°C)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:144
+msgid "Cererea nu are codul de protecție al panoului."
+msgstr "It fersyk mist de befeiligingskoade fan it paniel."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:139
+msgid "Cererea nu vine din pagina receptorului."
+msgstr "It fersyk komt net fan de side fan de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:782
+msgid "Codificarea fișierului nu este validă."
+msgstr "De triemkodearring is ûnjildich."
+
+#: data/menu.xml:575
+msgid "Codul telecomenzii"
+msgstr "Koade fan de betsjinning"
+
+#: pluginuri-feed/HdsFeeduri/web.py:74
+msgid "Compatibilitate Python 3.14"
+msgstr "Kompatibiliteit mei Python 3.14"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:88
+msgid "Completează câmpul."
+msgstr "Folje it fjild yn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:96
+msgid "Componentele «..» nu sunt permise."
+msgstr "De «..»-paadkomponinten binne net tastien."
+
+#: lib/python/Screens/HdsEgalizator.py:514
+msgid "Comprimare activă"
+msgstr "Kompresje ynskeakele"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:637
+msgid "Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri."
+msgstr "Kompresje is ynskeakele. Kies in oare foarynstelling of oanpasse in band om it út te skeakeljen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py:2317
+msgid "Comutarea obligatorie înaintea înregistrării nu este disponibilă."
+msgstr "Ferplicht oerskeakeljen foar de opname is net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:142
+msgid "Conectează browserul la panoul receptorului."
+msgstr "Koppelje de browser mei it paniel fan de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1095
+msgid "Configurări module de acces"
+msgstr "Module-ynstellingen foar betingsten"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:716
+msgid "Confirmarea a expirat sau a fost deja folosită. Verifică din nou selecția."
+msgstr "De befêstiging is ferrûn of is al brûkt. Kontrolearje do seleksje nochris."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:544
+msgid "Confirmarea a expirat. Cere din nou ștergerea."
+msgstr "De befêstiging is ferrûn. Fersyk wer wiskjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:712
+msgid "Confirmarea ștergerii nu este validă."
+msgstr "De wiskbefêstiging is ûnjildich."
+
+#: lib/python/Components/HdsParteaDoua.py:876
+msgid "Conflict cu fisierele bazei."
+msgstr "Konflikt mei de triemmen fan it basisimage."
+
+#: lib/python/Components/HdsParteaDoua.py:851
+msgid "Continutul cere o alta imagine sau alt canal."
+msgstr "De oanfolling freget in oar image of in oar kanaal."
+
+#: lib/python/Components/HdsParteaDoua.py:876
+msgid "Continutul este la zi."
+msgstr "De oanfolling is by de tiid."
+
+#: lib/python/Components/HdsParteaDoua.py:907
+msgid "Continutul este pe stick, dar exista un conflict cu baza: "
+msgstr "De oanfolling stiet op de stick, mar der is in konflikt mei it basisimage: "
+
+#: lib/python/Components/HdsParteaDoua.py:789
+msgid "Control IPK prea mare"
+msgstr "IPK-kontrôletriem te grut"
+
+#: lib/python/Components/HdsParteaDoua.py:796
+msgid "Controlul IPK lipseste"
+msgstr "IPK-kontrôletriem ûntbrekt"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:472 lib/python/Screens/HdsAfisaj.py:150
+msgid "Controlul afișajului"
+msgstr "Displaybetsjinning"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/copie_setari_web.py:428
+msgid "Copia are canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, favoritele și țara de la radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, cheile SSH și modulele de acces condiționat. După o actualizare, imaginea nouă o pune singură la loc la prima pornire, dacă stickul e băgat."
+msgstr "De reservekopy befettet kanalen, boeketten, DAB+- en DVB-T2-listen, IPTV-listen, akkounts en portalen, radiofavoriten en de keazen lannamme, plugins mei har ynstellingen, systeemynstellingen, netwurk en Wi-Fi, SSH-kaaien en modules foar betingste tagong. Nei in fernijing set it nije systeemimage de reservekopy automatysk werom by de earste start as de USB-stick oansletten is."
+
+#: lib/python/Screens/HdsCopieSetari.py:204
+#, python-format
+msgid "Copia merge pe %s: canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, favoritele și țara de la radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, cheile SSH și modulele de acces condiționat."
+msgstr "De reservekopy wurdt bewarre op %s: kanalen, boeketten, DAB+- en DVB-T2-listen, IPTV-listen, akkounts en portalen, radiofavoriten en de keazen lannamme, plugins mei har ynstellingen, systeemynstellingen, netwurk en Wi-Fi, SSH-kaaien en modules foar betingste tagong."
+
+#: lib/python/Components/HdsEgalizator.py:95
+msgid "Cor (chorus)"
+msgstr "Chorus"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:348
+msgid "Corpul cererii este prea mare."
+msgstr "It fersyktekst is te grut."
+
+#: pluginuri-feed/RadioOnline/date.py:48
+msgid "Country"
+msgstr "Country"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:100
+msgid "Culoare (OutColorSpace)"
+msgstr "Kleur (OutColorSpace)"
+
+#: data/setup.xml:85
+msgid "Da: sigla canalului se vede pe bara de informații, pe a doua bară, în lista de canale și în ghid, iar în interfața web în lista de canale, dacă receptorul o are (în dosarele de sigle din memoria lui sau de pe orice disc montat, după referință ori după numele canalului; o aduce și importul din altă imagine). Pe bare, textele se mută la dreapta numai cât se vede sigla. Nu: nicio siglă."
+msgstr "Ja: it kanaallogo is te sjen yn de ynformaasjebalke, yn de twadde balke, yn de kanaallist en yn de gids, en yn de webynterface yn de kanaallist, as de ûntfanger it hat (yn de logomappen yn syn opslach of op in oankeppele skiif, op referinsje of op kanaalnamme; ek in ymport út in oar image bringt it mei). Yn de balken skowe de teksten allinnich safier nei rjochts as it logo romte nimt. Nee: gjin logo."
+
+#: pluginuri-feed/RadioOnline/date.py:38
+msgid "Dance"
+msgstr "Dance"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:96
+msgid "Date /proc/msp"
+msgstr "Gegevens /proc/msp"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:136
+msgid "Date tehnice"
+msgstr "Technyske gegevens"
+
+#: lib/python/Screens/HdsVremea.py:200
+msgid "Datele apar automat când sunt disponibile."
+msgstr "De gegevens ferskine automatysk as se beskikber binne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:351
+msgid "Datele cererii nu sunt valide."
+msgstr "De fersykgegevens binne ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:193
+msgid "Datele contului se trimit numai în corpul cererii."
+msgstr "Accountdetails moatte allinich stjoerd wurde yn it fersyklichem."
+
+#: lib/python/Components/HdsCopieSetari.py:1934
+#, python-format
+msgid "Datele pluginurilor din copie nu sunt bune (%s); nu s-a pus nimic la loc."
+msgstr "De plugingegevens yn 'e reservekopy binne ûnjildich (%s); neat waard restaurearre."
+
+#: lib/python/Components/HdsCopieSetari.py:1247
+msgid "Datele pluginurilor nu s-au putut copia. Încearcă din nou."
+msgstr "De plugin-gegevens koene gjin reservekopy makke wurde. Besykje opnij."
+
+#: lib/python/Components/HdsTransmisie.py:449
+msgid "Datele purtătorului DAB+ lipsesc. Refă lista de fluxuri DAB+."
+msgstr "De DAB+-dragergegevens ûntbrekke. Meitsje de DAB+-streamlist opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:1056
+msgid "Debit sunet"
+msgstr "Audio bitrate"
+
+#: lib/python/Components/HdsRadioMeniu.py:29
+msgid "Debitul nu este disponibil"
+msgstr "Bitrate net beskikber"
+
+#: lib/python/Components/HdsAfisaj.py:392
+msgid "Deloc"
+msgstr "Gjin"
+
+#: lib/python/Components/HdsParteaDoua.py:758
+msgid "Dependinta lipseste: "
+msgstr "Ofhinklikheid ûntbrekt: "
+
+#: lib/python/Components/HdsParteaDoua.py:741
+msgid "Dependinte incompatibile: "
+msgstr "Net kompatibele ôfhinklikheden: "
+
+#: lib/python/Components/HdsTasteRapide.py:70
+msgid "Derulare înainte"
+msgstr "Foarút spoelje"
+
+#: lib/python/Components/HdsTasteRapide.py:69
+msgid "Derulare înapoi"
+msgstr "Efterút spoelje"
+
+#: lib/python/Components/HdsParteaDoua.py:880
+msgid "Descarc si verific pachetele pe stick..."
+msgstr "Pakketten wurde downloade en kontrolearre op de stick..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:137 lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:145
+msgid "Deschide Radio online"
+msgstr "Iepenje online radio"
+
+#: lib/python/Screens/CamSetup.py:388
+msgid "Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea."
+msgstr "Iepenje it adres yn in browser op in telefoan of kompjûter op itselde netwurk."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:57
+msgid "Deschide ecranul pe televizor pentru a-l folosi din această pagină."
+msgstr "Iepenje it skerm op de televyzje om it fan dizze side út te brûken."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:356
+msgid "Deschide editorul pe televizor"
+msgstr "Bewurker iepenje op de televyzje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:31
+msgid "Deschide fișierele"
+msgstr "Bestannen iepenje"
+
+#: pluginuri-feed/HdsImaginiE2/web.py:86
+msgid "Deschide meniul imaginilor"
+msgstr "Menu foar systeemimages iepenje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:345 lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:356
+msgid "Deschide setările pe televizor"
+msgstr "Ynstellingen iepenje op de televyzje"
+
+#: pluginuri-feed/HdsFeeduri/web.py:94 pluginuri-feed/HdsImaginiE2/web.py:112 pluginuri-feed/RadioOnline/web.py:312
+msgid "Deschide întâi panoul receptorului și conectează browserul."
+msgstr "Iepenje earst it paniel fan de ûntfanger en ferbyn dizze browser."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:81
+msgid "Deschide ținta legăturii"
+msgstr "Iepenje keppeling doel"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:845
+msgid "Destinația a apărut între timp. Reîncarcă lista."
+msgstr "De bestimming is yntusken ferskynd. Ferfarskje de list."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:641
+msgid "Destinația nu poate fi elementul sursă sau un subdosar al lui."
+msgstr "De bestimming kin net it boarne-item of ien fan syn submappen wêze."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1021
+msgid "Destinația s-a schimbat în timpul salvării încărcării."
+msgstr "De bestimming is feroare by it opslaan fan de upload."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1008 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1041 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1048
+msgid "Destinația s-a schimbat în timpul încărcării."
+msgstr "De bestimming feroare by it uploaden."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:966
+msgid "Destinația trebuie să fie un fișier obișnuit."
+msgstr "De bestimming moat in gewoan triem wêze."
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:132 pluginuri-feed/HdsFeeduri/web.py:72
+msgid "Dezactivează"
+msgstr "Utskeakelje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:958
+msgid "Dimensiunea încărcării nu este validă."
+msgstr "De uploadgrutte is ûnjildich."
+
+#: pluginuri-feed/RadioOnline/ecran.py:427 pluginuri-feed/RadioOnline/web.py:331
+msgid "Din toată lumea: cele mai ascultate posturi"
+msgstr "Oeral op ierde: meast beharke senders"
+
+#: lib/python/Components/Harddisk.py:1589 lib/python/Components/Harddisk.py:334
+#, python-format
+msgid "Disc %s: metadate indisponibile"
+msgstr "Drive %s: metadata net beskikber"
+
+#: lib/python/Components/Harddisk.py:1168 lib/python/Components/Harddisk.py:1217 lib/python/Components/Harddisk.py:1226
+msgid "Discul nu are un UUID cunoscut sau nu mai este conectat."
+msgstr "It stasjon hat gjin bekende UUID of is net mear ferbûn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1104
+msgid "Discuri /media"
+msgstr "Skiven /media"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1104
+msgid "Discuri /run/media"
+msgstr "Skiven /run/media"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:517
+msgid "Dispozitivele, socketurile și conductele nu pot fi copiate."
+msgstr "Apparaten, sockets en kommunikaasjepipen kinne net kopiearre wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:720
+msgid "Dosar de setări:"
+msgstr "Ynstellingsmap:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:27
+msgid "Dosarele și fișierele receptorului, direct în browser."
+msgstr "De mappen en bestannen fan de ûntfanger, direkt yn do browser."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:723
+msgid "Dosarul de setări nu a putut fi determinat."
+msgstr "De ynstellingsmap koe net fêststeld wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:46
+msgid "Dosarul de sus"
+msgstr "Parent map"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:83
+msgid "Dosarul destinație"
+msgstr "Bestimmingsmap"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:72
+msgid "Dosarul este gol."
+msgstr "De map is leech."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:70
+msgid "Dosarul nu este gol."
+msgstr "De map is net leech."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:721
+msgid "Dosarul nu există încă."
+msgstr "De map bestiet noch net."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:165
+msgid "Dosarul nu poate fi deschis pentru scriere. Deschide mai întâi ținta legăturii simbolice."
+msgstr "De map kin net iepene wurde foar skriuwen. Iepenje earst it doel fan 'e symboalyske keppeling."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:563
+msgid "Dosarul s-a schimbat în timpul operației."
+msgstr "De map is feroare tidens de operaasje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:170
+msgid "Dosarul s-a schimbat. Reîncarcă lista."
+msgstr "De map is feroare. Ferfarskje de list."
+
+#: lib/python/Components/HdsAfisaj.py:503 lib/python/Components/HdsAfisajColor.py:152
+msgid "Driverul nu ofera acest mod live pe afisaj."
+msgstr "De driver stipet dizze live-modus op it display net."
+
+#: lib/python/Components/HdsTasteRapide.py:54
+msgid "EPG"
+msgstr "EPG"
+
+#: lib/python/Screens/HdsRadioOnline.py:51
+msgid "EXIT: Înapoi"
+msgstr "EXIT: Werom"
+
+#: lib/python/Components/HdsEgalizator.py:93
+msgid "Ecou"
+msgstr "Echo"
+
+#: lib/python/Components/HdsEgalizator.py:93
+msgid "Ecou dublu (ping-pong)"
+msgstr "Dûbele echo (ping-pong)"
+
+#: lib/python/Components/HdsEcranePornire.py:640
+msgid "Ecranul de pornire a fost schimbat. Se vede la urmatoarea pornire a receptorului."
+msgstr "It opstartskerm is feroare. It is te sjen by de folgjende start fan de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:64
+msgid "Editează textul"
+msgstr "Tekst bewurkje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:110
+msgid "Editor de text"
+msgstr "Tekstbewurker"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:115
+msgid "Editorul a fost închis. Marcajele se păstrează la fiecare schimbare."
+msgstr "De bewurker is ticht. De markearrings wurde by elke wiziging bewarre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:748 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:761 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:874 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:900
+msgid "Editorul acceptă fișiere de cel mult 1 MiB."
+msgstr "De bewurker aksepteart bestannen oant 1 MiB."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:640 lib/python/Screens/HdsEgalizator.py:342 lib/python/Screens/HdsEgalizator.py:516
+msgid "Efecte speciale"
+msgstr "Spesjale effekten"
+
+#: lib/python/Components/HdsEgalizator.py:743
+msgid "Efectele speciale nu se aud aici."
+msgstr "Spesjale effekten kinne hjir net heard wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:104
+#, python-format
+msgid "Elemente neprelucrate: %s."
+msgstr "Net ferwurke items: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:102
+msgid "Elemente prelucrate"
+msgstr "Ferwurke items"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:103
+#, python-format
+msgid "Elemente prelucrate: %s."
+msgstr "Ferwurke items: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:567
+msgid "Elementul s-a schimbat în timpul operației."
+msgstr "It item feroare tidens de operaasje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:628
+msgid "Elementul s-a schimbat."
+msgstr "It item is feroare."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:124
+msgid "Elimină scurtătura"
+msgstr "Fluchtoets fuortsmite"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py:2324
+msgid "Emisiunea nu mai este în ghidul de programe."
+msgstr "It programma stiet net mear yn de programmagids."
+
+#: pluginuri-feed/RadioOnline/date.py:43
+msgid "Emisiuni vorbite"
+msgstr "Praatprogramma's"
+
+#: lib/python/Components/Task.py:441
+msgid "Error code"
+msgstr "Flaterkoade"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:746
+msgid "Este necesar un fișier obișnuit; legăturile simbolice nu sunt urmărite."
+msgstr "In gewoane triem is fereaske; symboalyske keppelings wurde net folge."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:110 pluginuri-feed/HdsFeeduri/web.py:50
+msgid "Este necesară imaginea HD Satelit 0.7.0 cu Python 3.14 și OE 6.0."
+msgstr "HD Satelit 0.7.0 mei Python 3.14 en OE 6.0 is nedich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:92
+msgid "Este necesară o cale absolută validă."
+msgstr "In jildich absolút paad is fereaske."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/disc_web.py:1133
+msgid "Eticheta:"
+msgstr "Label:"
+
+#: pluginuri-feed/HdsFeeduri/motor.py:43 pluginuri-feed/HdsFeeduri/motor.py:47
+msgid "Evidența feedurilor nu se poate citi."
+msgstr "De registraasje fan pakketboarnen kin net lêzen wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:473 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:61 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:644
+msgid "Există deja un element cu acest nume."
+msgstr "In item mei dizze namme bestiet al."
+
+#: pluginuri-feed/HdsFeeduri/date.py:15
+msgid "Extensiile din aceste feeduri nu sunt verificate de HD Satelit și pot să nu meargă cu imaginea. Continui?"
+msgstr "HD Satelit hat de útwreidingen út dizze pakketboarnen net kontrolearre en se wurkje mooglik net mei it systeemimage. Trochgean?"
+
+#: lib/python/Components/HdsTasteRapide.py:62
+msgid "FAV"
+msgstr "FAV"
+
+#: lib/python/Components/HdsTasteRapide.py:43
+msgid "FAV (apăsare lungă)"
+msgstr "FAV (lang yndrukke)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:298
+msgid "Fahrenheit (°F)"
+msgstr "Fahrenheit (°F)"
+
+#: pluginuri-feed/RadioOnline/ecran.py:549
+msgid "Favorit"
+msgstr "Favoryt"
+
+#: pluginuri-feed/HdsFeeduri/motor.py:142
+msgid "Feed activat."
+msgstr "Pakketboarne ynskeakele."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:123
+msgid "Feed dezactivat."
+msgstr "Pakketboarne útskeakele."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:113
+msgid "Feed necunoscut."
+msgstr "Unbekende pakketboarne."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:125
+msgid "Feedul există deja manual. Îl poți modifica din Extensii și aplicații, Surse."
+msgstr "De pakketboarne is al sels tafoege. Feroarje dy ûnder ‘Utwreidingen en apps’, ‘Boarnen’."
+
+#: lib/python/Components/HdsParteaDoua.py:847
+msgid "Feedul nu poate fi verificat: "
+msgstr "De feed kin net kontrolearre wurde: "
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:91 pluginuri-feed/HdsFeeduri/plugin.py:33 pluginuri-feed/HdsFeeduri/web.py:71
+msgid "Feeduri de la alte echipe"
+msgstr "Pakketboarnen fan oare teams"
+
+#: pluginuri-feed/HdsFeeduri/motor.py:165
+msgid "Feedurile proprii au fost eliminate."
+msgstr "De pakketboarnen fan dizze plugin binne fuorthelle."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:51
+msgid "Filtrează numele din lista încărcată"
+msgstr "Filter nammen yn 'e laden list"
+
+#: lib/python/Components/HdsEcranePornire.py:635
+msgid "Fisierul ecranului este prea mare."
+msgstr "De triem fan it skerm is te grut."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:77
+msgid "Fișier"
+msgstr "Triem"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:50
+msgid "Fișier nou"
+msgstr "Nije triem"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:112
+msgid "Fișier salvat."
+msgstr "Triem bewarre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:79
+msgid "Fișier special"
+msgstr "Spesjaal triem"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:26 lib/python/Plugins/Extensions/HdsWebControl/plugin.py:1153
+msgid "Fișiere"
+msgstr "Triemmen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:698
+msgid "Fișierele din /boot pornesc nucleul receptorului. Ștergerea lor poate împiedica pornirea și poate cere rescrierea imaginii."
+msgstr "De bestannen yn /boot begjinne de kernel fan de ûntfanger. It wiskjen fan se kin it opstarten foarkomme en fereaskje dat de ôfbylding opnij wurdt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:133
+msgid "Fișierele se deschid numai din browser, cu parola receptorului."
+msgstr "Bestannen kinne allinich iepene wurde fanút in browser mei it ûntfangerwachtwurd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:212
+msgid "Fișierele se trimit numai în corpul cererii."
+msgstr "Bestannen moatte allinich yn it fersyklichem ferstjoerd wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:878
+msgid "Fișierul a fost modificat în altă parte. Reîncarcă-l înainte de salvare."
+msgstr "De triem is earne oars wizige. Ferfarskje it foardat do opslaan."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:116
+msgid "Fișierul a fost schimbat pe receptor. Reîncarcă-l înainte de a salva."
+msgstr "It triem is feroare op de ûntfanger. Ferfarskje it foardat do opslaan."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:888
+msgid "Fișierul are terminatori de linie amestecați. Editorul păstrează formatul pentru modificări cu același număr de linii; pentru adăugarea sau ștergerea liniilor folosește un editor care păstrează fiecare terminator."
+msgstr "De triem hat mingde rigelúteinen. De bewurker bewarret it formaat as it oantal rigels itselde bliuwt; brûk foar it tafoegjen of wiskjen fan rigels in bewurker dy’t elk rigelútein bewarret."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:786
+msgid "Fișierul conține date binare și nu poate fi editat ca text."
+msgstr "It triem befettet binêre gegevens en kin net as tekst bewurke wurde."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:36 pluginuri-feed/HdsFeeduri/motor.py:55
+msgid "Fișierul de evidență nu este sigur."
+msgstr "De registraasjetriem is net feilich."
+
+#: lib/python/Components/HdsRadioOnline.py:74
+msgid "Fișierul descărcat nu se poate folosi. Încearcă din nou."
+msgstr "It ynladen triem kin net brûkt wurde. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:122
+msgid "Fișierul există. Confirmi înlocuirea lui?"
+msgstr "It triem bestiet. It ferfange?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:764
+msgid "Fișierul s-a schimbat în timpul citirii."
+msgstr "De triem feroare by it lêzen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:851
+msgid "Fișierul s-a schimbat în timpul salvării. Reîncarcă-l."
+msgstr "It triem is feroare by it opslaan. Reload it."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:921
+msgid "Fișierul s-a schimbat."
+msgstr "De triem is feroare."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:847
+msgid "Fișierul s-a schimbat. Reîncarcă-l înainte de salvare."
+msgstr "De triem is feroare. Ferfarskje it foardat do opslaan."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:753
+msgid "Fișierul s-a schimbat. Reîncarcă-l."
+msgstr "De triem is feroare. Reload it."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:60
+msgid "Fișierul sau dosarul nu mai există."
+msgstr "De triem of map bestiet net mear."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1140
+msgid "Fișierul scurtăturilor nu este valid. Păstrează-l pentru verificare înainte de modificare."
+msgstr "De triem mei fluchkeppelingen is ûnjildich. Bewarje dy foar kontrôle foardat do der wat oan feroarest."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:115
+msgid "Fișierul se salvează cu codarea și sfârșiturile de linie citite de pe receptor."
+msgstr "It triem wurdt opslein mei de kodearring en rigelúteinen lêzen fan de ûntfanger."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:81
+msgid "Fișierul surselor conține rânduri manuale care trebuie păstrate. Modificarea a fost oprită."
+msgstr "De boarnetriem befettet sels tafoege rigels dy’t bewarre bliuwe moatte. De wiziging is stoppe."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:71
+msgid "Fișierul surselor nu este sigur."
+msgstr "De boarnetriem is net feilich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:509
+msgid "Fișierul sursă s-a schimbat în timpul copierii."
+msgstr "It boarnetriem is feroare by it kopiearjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:496
+msgid "Fișierul sursă s-a schimbat."
+msgstr "It boarnetriem is feroare."
+
+#: lib/python/Components/HdsEgalizator.py:95
+msgid "Flanger"
+msgstr "Flanger"
+
+#: lib/python/Components/HdsTransmisie.py:433
+msgid "Fluxul DAB+ nu mai este în listă. Refă buchetele DAB+."
+msgstr "De DAB+-stream stiet net mear yn de list. Meitsje de DAB+-boeketten opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:103 lib/python/Screens/HdsParteaDoua.py:75
+msgid "Folosesc spatiu pe acest stick pentru limbile suplimentare? Fisierele existente raman."
+msgstr "Romte op dizze stick brûke foar ekstra talen? Besteande triemmen bliuwe stean."
+
+#: lib/python/Components/HdsParteaDoua.py:778
+msgid "Format IPK necunoscut"
+msgstr "Unbekend IPK-formaat"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:42 lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:51
+msgid "Funcția nu este disponibilă pe acest receptor."
+msgstr "De funksje is net beskikber op dizze ûntfanger."
+
+#: lib/python/Components/HdsTasteRapide.py:10
+msgid "Funcția obișnuită"
+msgstr "Gewoane funksje"
+
+#: lib/python/Components/HdsVremea.py:271
+msgid "Furtună"
+msgstr "Tongerbui"
+
+#: lib/python/Components/ServiceScan.py:773
+#, python-format
+msgid "Fără canale TV: %s"
+msgstr "Gjin tv-kanalen: %s"
+
+#: lib/python/Components/HdsEgalizator.py:93
+msgid "Fără efecte"
+msgstr "Gjin effekten"
+
+#: lib/python/Components/HdsEgalizator.py:98
+msgid "Fără voce (karaoke)"
+msgstr "Sûnder sang (karaoke)"
+
+#: lib/python/Components/HdsTasteRapide.py:51
+msgid "Galben (apăsare scurtă)"
+msgstr "Giel (koart yndrukke)"
+
+#: lib/python/Screens/HdsGalerieSigle.py:224
+msgid "Galeria nu este disponibilă. Verifică internetul și reîncearcă."
+msgstr "De galery is net beskikber. Kontrolearje de ynternetferbining en besykje it wer."
+
+#: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:126 pluginuri-feed/RadioOnline/web.py:326
+msgid "Genuri"
+msgstr "Sjenres"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:71
+msgid "Golește selecția"
+msgstr "Seleksje wiskje"
+
+#: lib/python/Components/HdsAfisaj.py:405 lib/python/Components/HdsAfisajCompat.py:27
+msgid "HD Satelit"
+msgstr "HD Satelit"
+
+#: pluginuri-feed/RadioOnline/date.py:40
+msgid "Hip-hop"
+msgstr "Hip-hop"
+
+#: pluginuri-feed/RadioOnline/date.py:41
+msgid "Hituri"
+msgstr "Hits"
+
+#: lib/python/Components/HdsTasteRapide.py:53
+msgid "INFO"
+msgstr "INFO"
+
+#: lib/python/Components/HdsTasteRapide.py:41
+msgid "INFO (apăsare lungă)"
+msgstr "INFO (lang yndrukke)"
+
+#: lib/python/Components/HdsParteaDoua.py:793
+msgid "IPK cu script sau control neauditat: "
+msgstr "IPK mei net kontrolearre skript of kontrôletriem: "
+
+#: lib/python/Components/HdsAfisaj.py:383 lib/python/Components/HdsAfisaj.py:455 lib/python/Components/HdsAfisajColor.py:257
+msgid "Imaginea cu OSD"
+msgstr "Ofbylding mei OSD"
+
+#: lib/python/Components/HdsPornireMultipla.py:104
+msgid "Imaginea de acum rulează de pe card sau stick, dar nu îi găsesc locul printre cele de pornire."
+msgstr "It hjoeddeiske image draait fan kaart of USB-stick, mar de opstartposysje is net fûn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:484 lib/python/Screens/HdsAfisaj.py:149
+msgid "Imaginea de pe televizor"
+msgstr "Ofbylding fan de televyzje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:486 lib/python/Screens/HdsAfisaj.py:609
+msgid "Imaginea de pe televizor are prioritate."
+msgstr "De ôfbylding fan de televyzje giet foar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:309 lib/python/Screens/HdsGalerieSigle.py:27
+msgid "Imaginea de pornire"
+msgstr "Opstartôfbylding"
+
+#: lib/python/Components/HdsParteaDoua.py:576
+msgid "Imaginea ruleaza deja de pe disc. Partea a doua nu este necesara."
+msgstr "It image draait al fan in skiif. De oanfolling is net nedich."
+
+#: pluginuri-feed/HdsImaginiE2/date.py:14 pluginuri-feed/HdsImaginiE2/ecran.py:90 pluginuri-feed/HdsImaginiE2/plugin.py:49 pluginuri-feed/HdsImaginiE2/web.py:81
+msgid "Imagini E2 de la alte echipe"
+msgstr "E2-systeemimages fan oare teams"
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:111 pluginuri-feed/HdsImaginiE2/web.py:87
+#, python-format
+msgid "Imagini disponibile: %d"
+msgstr "Beskikbere systeemimages: %d"
+
+#: pluginuri-feed/HdsFeeduri/date.py:20 pluginuri-feed/HdsFeeduri/date.py:26
+msgid "Index comun pentru SF8008 și Viper V20. Python 3.14; compatibilitatea extensiilor nu este garantată."
+msgstr "Mienskiplike yndeks foar SF8008 en Viper V20. Python 3.14; kompatibiliteit fan útwreidingen wurdt net garandearre."
+
+#: pluginuri-feed/HdsFeeduri/date.py:23
+msgid "Index comun pentru SF8008 și Viper V20. Python 3.9; extensiile pot fi incompatibile cu Python 3.14."
+msgstr "Mienskiplike yndeks foar SF8008 en Viper V20. Python 3.9; útwreidingen kinne ynkompatibel wêze mei Python 3.14."
+
+#: pluginuri-feed/HdsFeeduri/date.py:29
+msgid "Index pentru OE 6.0 și arhitectura comună SF8008 / Viper V20. Compatibilitatea cu Python 3.14 este neștiută."
+msgstr "Yndeks foar OE 6.0 en de mienskiplike SF8008 / Viper V20-arsjitektuer. Kompatibiliteit mei Python 3.14: ûnbekend."
+
+#: lib/python/Components/HdsParteaDoua.py:860
+msgid "Indexul pachetelor nu este cel semnat: "
+msgstr "De pakketyndeks is net de ûndertekene: "
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:1604
+msgid "Instalarea din meniu nu este disponibilă pe acest model. Folosește arhiva pentru flash și metoda de instalare a receptorului. Imaginea USB se instalează din managerul de multi-imagine."
+msgstr "Ynstallearje fia it menu is op dit model net beskikber. Brûk it argyf foar flashen en de ynstallaasjemetoade fan de ûntfanger. It USB-image wurdt ynstallearre fia de multiboot-behearder."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:89
+msgid "Instalarea se confirmă din pagina Radio online."
+msgstr "Befêstigje de ynstallaasje op de side Ynternetradio."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:97 lib/python/Screens/HdsParteaDoua.py:27
+msgid "Instaleaza / actualizeaza"
+msgstr "Ynstallearje / bywurkje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/limba_interfata_web.py:112
+msgid "Instaleaza limbile din Partea a doua pe stick, apoi alege limba din nou."
+msgstr "Ynstallearje de talen út de oanfolling op de stick en kies dan de taal opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:102 lib/python/Screens/HdsParteaDoua.py:57
+msgid "Instaleaza pe stick"
+msgstr "Op de stick ynstallearje"
+
+#: lib/python/Components/HdsParteaDoua.py:902
+msgid "Instalez pachetele verificate..."
+msgstr "Kontrolearre pakketten wurde ynstallearre..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:89
+msgid "Integritatea capturii"
+msgstr "Yntegriteit fan de momintopname"
+
+#: pluginuri-feed/HdsFeeduri/web.py:46 pluginuri-feed/HdsFeeduri/web.py:86 pluginuri-feed/HdsImaginiE2/web.py:103 pluginuri-feed/HdsImaginiE2/web.py:59 pluginuri-feed/RadioOnline/web.py:109 pluginuri-feed/RadioOnline/web.py:303
+msgid "Interfața web a receptorului nu e pornită."
+msgstr "De webynterface fan de ûntfanger rint net."
+
+#: lib/python/Screens/CamSetup.py:387
+#, python-format
+msgid "Interfața web: %s"
+msgstr "Webynterface: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:147
+msgid "Introdu parola receptorului. Sesiunea de fișiere durează 30 de minute."
+msgstr "Fier it wachtwurd fan de ûntfanger yn. De triemsesje duorret 30 minuten."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:29
+msgid "Introdu parola utilizatorului root al receptorului. Se cere o dată în această sesiune a browserului."
+msgstr "Fier it wachtwurd fan de root-brûker fan de ûntfanger yn. It wurdt ien kear per browsersesje frege."
+
+#: pluginuri-feed/HdsFeeduri/web.py:74
+msgid "Intrări"
+msgstr "Ynfieringen"
+
+#: pluginuri-feed/RadioOnline/date.py:37
+msgid "Jazz"
+msgstr "Jazz"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:299
+msgid "Kelvin (K)"
+msgstr "Kelvin (K)"
+
+#: lib/python/Components/HdsTasteRapide.py:64
+msgid "LIST (player media)"
+msgstr "LIST (mediaspiler)"
+
+#: lib/python/Screens/HdsGalerieSigle.py:28
+msgid "La radio"
+msgstr "By radio"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:53
+msgid "Lasă fișierele aici"
+msgstr "Sleep bestannen hjirhinne"
+
+#: pluginuri-feed/RadioOnline/motor.py:293
+#, python-format
+msgid "Legătura cu %s s-a întrerupt. Încerc din nou."
+msgstr "De ferbining mei %s is ferbrutsen. Ik besykje it nochris."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:343
+msgid "Legătura simbolică are o țintă nepermisă."
+msgstr "De symboalyske keppeling hat in net tastien doel."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:340
+msgid "Legăturile simbolice formează o buclă."
+msgstr "De symboalyske keppelingen foarmje in lus."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:66
+msgid "Legăturile simbolice nu sunt urmărite la scriere. Deschide mai întâi ținta legăturii."
+msgstr "By skriuwen wurde symboalyske keppelingen net folge. Iepenje earst it doel."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:158
+msgid "Legăturile simbolice nu sunt urmărite."
+msgstr "Symboalyske keppelingen wurde net folge."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:80
+#, python-format
+msgid "Legătură către %s"
+msgstr "Keppeling nei %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:78
+msgid "Legătură simbolică"
+msgstr "Symboalyske keppeling"
+
+#: lib/python/Screens/LanguageSelection.py:72
+msgid "Limba aleasa lipseste din baza. Deschid instalarea limbilor pe stick?"
+msgstr "De keazen taal ûntbrekt yn it basisimage. Taalynstallaasje op de stick iepenje?"
+
+#: pluginuri-feed/RadioOnline/ecran.py:365 pluginuri-feed/RadioOnline/locuri.py:131 pluginuri-feed/RadioOnline/locuri.py:187 pluginuri-feed/RadioOnline/web.py:143
+msgid "Limbi"
+msgstr "Talen"
+
+#: lib/python/Components/HdsParteaDoua.py:909
+msgid "Limbile sunt pe stick. Lasa stickul in receptor. Reporneste interfata pentru a le vedea."
+msgstr "De talen steane op de stick. Lit de stick yn de ûntfanger. Start de ynterface opnij om se te sjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:264
+msgid "Lipsește ce se schimbă: lista, evenimente, asteptare, viteza, luminozitate, luminozitate_noapte, noapte_de_la, noapte_pana_la, text, oras, control_afisaj, tema_afisaj, minutar, cronometru sau previzualizare."
+msgstr "It ûntbrekt wat feroare wurde moat: lista, evenimente, asteptare, viteza, luminozitate, luminozitate_noapte, noapte_de_la, noapte_pana_la, text, oras, control_afisaj, tema_afisaj, minutar, cronometru of previzualizare."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:137
+msgid "Lipsește originea cererii."
+msgstr "De oarsprong fan it fersyk ûntbrekt."
+
+#: lib/python/Components/HdsReinstalare.py:452
+#, python-format
+msgid "Lipsește și fișierul .ipk din copie pentru: %s."
+msgstr "Yn de reservekopy ûntbrekt ek it .ipk-triem foar: %s."
+
+#: lib/python/Components/HdsStreamRelay.py:106
+msgid "Lista Stream Relay e goală, deci niciun canal nu trece prin releu."
+msgstr "De Stream Relay-list is leech, dus gjin kanalen wurde troch it estafette stjoerd."
+
+#: lib/python/Components/HdsStreamRelay.py:108
+msgid "Lista Stream Relay nu se poate citi; rămâne cea de dinainte."
+msgstr "De Stream Relay-list kin net lêzen wurde; de foarige list bliuwt aktyf."
+
+#: lib/python/Components/HdsStreamRelay.py:105
+#, python-format
+msgid "Lista Stream Relay: %s."
+msgstr "Stream Relay-list: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2225
+msgid "Lista are prea multe canale pentru un singur playlist. Alege o listă sau un filtru mai restrâns."
+msgstr "De list hat tefolle kanalen foar ien playlist. Kies in lytsere list of in smeller filter."
+
+#: lib/python/Components/HdsCopieSetari.py:1172
+msgid "Lista datelor pluginurilor nu e bună."
+msgstr "De plugingegevenslist is ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1098
+msgid "Lista de canale și setările"
+msgstr "Kanaallist en ynstellings"
+
+#: lib/python/Components/HdsRadioOnline.py:70
+msgid "Lista de programe nu a putut fi verificată. Încearcă din nou mai târziu."
+msgstr "De softwarepakketlist koe net kontrolearre wurde. Besykje it letter nochris."
+
+#: lib/python/Components/HdsRadioOnline.py:193 lib/python/Components/HdsRadioOnline.py:259
+msgid "Lista de programe nu s-a putut descărca. Verifică legătura la internet."
+msgstr "De softwarepakketlist koe net ynladen wurde. Kontrolearje dyn ynternetferbining."
+
+#: lib/python/Components/HdsTasteRapide.py:15
+msgid "Lista extensiilor (ca ALBASTRU)"
+msgstr "List mei útwreidingen (lykas BLAU)"
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:114 pluginuri-feed/HdsImaginiE2/web.py:88
+msgid "Lista imaginilor nu se poate citi."
+msgstr "De list mei systeemimages kin net lêzen wurde."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:128 pluginuri-feed/HdsImaginiE2/web.py:45
+msgid "Lista imaginilor nu se poate înregistra în meniu."
+msgstr "De list mei systeemimages kin net oan it menu tafoege wurde."
+
+#: pluginuri-feed/RadioOnline/locuri.py:223
+msgid "Lista posturilor nu s-a putut încărca din cauza unei erori în plugin. Încearcă din nou."
+msgstr "De stjoerderlist koe troch in flater yn de plugin net laden wurde. Besykje it nochris."
+
+#: pluginuri-feed/RadioOnline/ecran.py:212 pluginuri-feed/RadioOnline/web.py:330
+#, python-format
+msgid "Lista posturilor: %s"
+msgstr "Senderlist: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:99
+msgid "Lista setărilor s-a schimbat. Reîncarcă pagina."
+msgstr "De list mei ynstellingen is feroare. Laad de side opnij."
+
+#: lib/python/Components/HdsPornireMultipla.py:113
+#, python-format
+msgid "Locul %(loc)s nu se alege: %(motiv)s."
+msgstr "Slot %(loc)s kin net selektearre wurde: %(motiv)s."
+
+#: lib/python/Components/HdsPornireMultipla.py:91
+#, python-format
+msgid "Locul %(loc)s, pe card sau stick: %(imagine)s"
+msgstr "Slot %(loc)s, op kaart as USB-stasjon: %(imagine)s"
+
+#: lib/python/Components/HdsPornireMultipla.py:93
+#, python-format
+msgid "Locul %(loc)s, pe card sau stick: %(imagine)s, nu poate porni"
+msgstr "Slot %(loc)s, op kaart of USB-stasjon: %(imagine)s, kin net opstarte"
+
+#: lib/python/Components/HdsPornireMultipla.py:94
+#, python-format
+msgid "Locul %(loc)s, pe card sau stick: %(imagine)s, nu se alege: %(motiv)s"
+msgstr "Slot %(loc)s, op kaart of USB-stasjon: %(imagine)s, kin net selektearre wurde: %(motiv)s"
+
+#: lib/python/Components/HdsPornireMultipla.py:92
+#, python-format
+msgid "Locul %(loc)s, pe card sau stick: %(imagine)s, pornită acum"
+msgstr "Slot %(loc)s, op kaart as USB-stasjon: %(imagine)s, op it stuit rinnend"
+
+#: lib/python/Components/HdsPornireMultipla.py:112
+#, python-format
+msgid "Locul %s are o formă de pornire pe care nu o cunosc, deci nu îl aleg."
+msgstr "Slot %s hat in ûnbekend opstartformaat, dus it kin net selektearre wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:231
+msgid "Lucrarea nu există în această sesiune."
+msgstr "De baan bestiet net yn dizze sesje."
+
+#: lib/python/Components/HdsTasteRapide.py:74
+msgid "MENU"
+msgstr "MENU"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:3866
+msgid "Mai multe canale"
+msgstr "Mear kanalen"
+
+#: pluginuri-feed/RadioOnline/motor.py:308
+msgid "Mai multe posturi la rând nu au răspuns. Verifică legătura la internet sau alege alt post."
+msgstr "Meardere senders efter inoar antwurden net. Kontrolearje de ynternetferbining of kies in oare sender."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:349
+msgid "Marcajele se păstrează imediat. START și STOP delimitează porțiunile care se redau; ce rămâne în afara lor este sărit. Ștergerea și un STOP fără START cer confirmare pe televizor, din telecomandă."
+msgstr "De markearrings wurde fuortendaliks bewarre. START en STOP begrinzgje de dielen dy't ôfspile wurde; wat dêrbûten falt, wurdt oerslein. Wiskjen en in STOP sûnder START freegje befêstiging op de televyzje, mei de betsjinning."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:505
+msgid "Mesajele scurte trec în fața listei câteva secunde."
+msgstr "Koarte berjochten geane in pear sekonden foar de list."
+
+#: pluginuri-feed/RadioOnline/date.py:47
+msgid "Metal"
+msgstr "Metal"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:135 lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:462
+msgid "Metoda cererii nu este permisă."
+msgstr "De fersykmetoade is net tastien."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:100
+msgid "MiB liberi"
+msgstr "MiB frij"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:101
+msgid "MiB pe stick, fara stergerea fisierelor existente."
+msgstr "MiB op de stick, sûnder besteande triemmen te wiskjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:108
+msgid "Mod la 24 Hz (videomode_24hz)"
+msgstr "24 Hz modus (videomode_24hz)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:106
+msgid "Mod la 50 Hz (videomode_50hz)"
+msgstr "50 Hz modus (videomode_50hz)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:107
+msgid "Mod la 60 Hz (videomode_60hz)"
+msgstr "60 Hz modus (videomode_60hz)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:105
+msgid "Mod video (videomode)"
+msgstr "Fideomodus (videomode)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:56
+msgid "Modificat"
+msgstr "wizige"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:114
+msgid "Modificări nesalvate"
+msgstr "Net bewarre wizigingen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:117
+msgid "Modificările au fost anulate."
+msgstr "De wizigingen binne annulearre."
+
+#: lib/python/Components/HdsStreamRelay.py:100
+#, python-format
+msgid "Modulul de acces %s nu rulează, de aceea Stream Relay nu răspunde. Pornește-l din Meniu > Acces condiționat sau din pagina Module de acces condiționat."
+msgstr "Tagongsmodule %s draait net, dus Stream Relay reagearret net. Start de module fia Menu > Betingste tagong of de side Modules foar betingste tagong."
+
+#: lib/python/Components/HdsStreamRelay.py:102
+#, python-format
+msgid "Modulul de acces %s rulează, dar nu dă Stream Relay pe portul %d. Pornește Stream Relay în setările modulului sau pune portul lui în setările Stream Relay."
+msgstr "Tagongsmodule %s draait, mar biedt gjin Stream Relay op poarte %d. Skeakelje Stream Relay yn by de moduleynstellingen of fier de poarte yn by de Stream Relay-ynstellingen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:126
+msgid "Mută scurtătura mai jos"
+msgstr "Ferpleats fluchkeppeling nei ûnderen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:125
+msgid "Mută scurtătura mai sus"
+msgstr "Ferpleats fluchkeppeling omheech"
+
+#: pluginuri-feed/RadioOnline/date.py:36
+msgid "Muzică clasică"
+msgstr "Klassike muzyk"
+
+#: pluginuri-feed/RadioOnline/date.py:39
+msgid "Muzică electronică"
+msgstr "Elektroanyske muzyk"
+
+#: pluginuri-feed/RadioOnline/date.py:46
+msgid "Muzică latino"
+msgstr "Latynske muzyk"
+
+#: pluginuri-feed/RadioOnline/date.py:35
+msgid "Muzică populară"
+msgstr "Folksmuzyk"
+
+#: pluginuri-feed/RadioOnline/date.py:42
+msgid "Muzică retro"
+msgstr "Oldies"
+
+#: lib/python/Screens/HdsVremea.py:191
+msgid "Mâine"
+msgstr "Moarn"
+
+#: lib/python/Components/HdsStreamRelay.py:101
+msgid "Niciun modul de acces nu e pornit, de aceea Stream Relay nu răspunde. Alege unul în Meniu > Acces condiționat."
+msgstr "Gjin tagongsmodule draait, dus Stream Relay reagearret net. Kies ien yn Menu > Betingste tagong."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:73
+msgid "Niciun nume nu se potrivește filtrului."
+msgstr "Gjin nammen oerienkomme mei it filter."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:100 lib/python/Screens/HdsParteaDoua.py:42
+msgid "Niciun stick legat"
+msgstr "Gjin stick keppele"
+
+#: lib/python/Components/HdsVremea.py:269
+msgid "Ninsoare"
+msgstr "Snie"
+
+#: lib/python/Components/HdsVremea.py:261
+msgid "Noros"
+msgstr "Bewolkt"
+
+#: lib/python/Plugins/Plugin.py:204
+#, python-format
+msgid "Nu a putut porni: %s"
+msgstr "Koe net starte: %s"
+
+#: pluginuri-feed/RadioOnline/locuri.py:262 pluginuri-feed/RadioOnline/web.py:330
+msgid "Nu ai încă posturi favorite."
+msgstr "Do hast noch gjin favorite senders."
+
+#: pluginuri-feed/RadioOnline/ecran.py:406
+msgid "Nu ai încă posturi favorite. Pe orice post, apasă tasta verde."
+msgstr "Do hast noch gjin favorite senders. Druk by in sender op de griene toets."
+
+#: lib/python/Components/HdsPornireMultipla.py:105
+msgid "Nu am găsit alte imagini instalate, nici în memorie, nici pe card sau stick."
+msgstr "Gjin oare ynstallearre images fûn yn de ynterne opslach, op kaart of USB-stick."
+
+#: pluginuri-feed/RadioOnline/ecran.py:408 pluginuri-feed/RadioOnline/locuri.py:263 pluginuri-feed/RadioOnline/web.py:141 pluginuri-feed/RadioOnline/web.py:201 pluginuri-feed/RadioOnline/web.py:235 pluginuri-feed/RadioOnline/web.py:289 pluginuri-feed/RadioOnline/web.py:329
+msgid "Nu am găsit posturi."
+msgstr "Gjin senders fûn."
+
+#: lib/python/Components/HdsRadioOnline.py:148 lib/python/Components/HdsRadioOnline.py:156
+msgid "Nu am putut citi lista de programe. Încearcă din nou."
+msgstr "De softwarepakketlist koe net lêzen wurde. Besykje opnij."
+
+#: lib/python/Components/Harddisk.py:1184
+#, python-format
+msgid "Nu am putut face legătura %s. Încearcă din nou."
+msgstr "De keppeling %s koe net oanmakke wurde. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:316 lib/python/Screens/HdsGalerieSigle.py:175
+msgid "Nu am putut termina. Încearcă din nou."
+msgstr "It is net slagge om ôf te meitsjen. Besykje it wer."
+
+#: lib/python/Components/HdsRadioOnline.py:177
+msgid "Nu am putut verifica Radio online. Încearcă din nou."
+msgstr "Online radio koe net kontrolearre wurde. Besykje opnij."
+
+#: lib/python/Components/Harddisk.py:1232
+msgid "Nu am putut ține minte numele discului. Încearcă din nou."
+msgstr "De skiifnamme koe net bewarre wurde. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py:86 lib/python/Screens/HdsSoftwareUpdate.py:655 lib/python/Screens/HdsSoftwareUpdate.py:777
+msgid "Nu este imagine HD Satelit și nu o putem verifica"
+msgstr "Dit is gjin HD Satelit-image en kin net kontrolearre wurde"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:67
+msgid "Nu mai este spațiu disponibil pe disc."
+msgstr "Der is gjin frije skiifromte oer."
+
+#: pluginuri-feed/RadioOnline/locuri.py:224
+msgid "Nu pot ajunge la lista posturilor. Verifică legătura la internet și încearcă din nou."
+msgstr "De senderlist is net te berikken. Kontrolearje de ynternetferbining en besykje it nochris."
+
+#: pluginuri-feed/RadioOnline/locuri.py:218
+msgid "Nu pot verifica serverul listei. Verifică ora receptorului și încearcă din nou."
+msgstr "De tsjinner fan de list kin net kontrolearre wurde. Kontrolearje de klok fan de ûntfanger en besykje it nochris."
+
+#: lib/python/Screens/HdsVremea.py:273
+msgid "Nu s-a găsit niciun oraș. Încearcă alt nume."
+msgstr "Gjin stêd fûn. Besykje in oare namme."
+
+#: lib/python/Components/HdsRadioOnline.py:76
+msgid "Nu s-a putut descărca Radio online. Verifică legătura la internet."
+msgstr "Online radio koe net ynladen wurde. Kontrolearje dyn ynternetferbining."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/stocare_web.py:190
+msgid "Nu s-a trimis niciun nume."
+msgstr "Gjin namme is ferstjoerd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:319
+msgid "Nu s-au găsit orașe. Încearcă un alt nume."
+msgstr "Gjin stêden fûn. Besykje in oare namme."
+
+#: pluginuri-feed/HdsFeeduri/motor.py:144 pluginuri-feed/HdsFeeduri/motor.py:167
+#, python-format
+msgid "Nu s-au putut salva feedurile: %s"
+msgstr "De pakketboarnen koene net bewarre wurde: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:305
+msgid "Nu se afișează"
+msgstr "Wurdt net sjen litten"
+
+#: pluginuri-feed/RadioOnline/motor.py:246
+msgid "Nu se ascultă nimic"
+msgstr "Der spilet neat"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:809
+msgid "Nu se poate crea un fișier temporar."
+msgstr "In tydlik triem kin net oanmakke wurde."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:112 pluginuri-feed/HdsImaginiE2/web.py:88
+msgid "Nu sunt imagini în listă."
+msgstr "Der steane gjin systeemimages yn de list."
+
+#: lib/python/Screens/Menu.py:141 lib/python/Screens/Menu.py:535
+msgid "Nu sunt informații despre emisiunea următoare."
+msgstr "Der is gjin ynformaasje oer it folgjende programma."
+
+#: lib/python/Screens/InfoBarGenerics.py:1940
+msgid "Nu sunt pluginuri care se pot deschide acum."
+msgstr "Gjin plugins kinne op it stuit iepene wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:42
+msgid "Nu sunt scurtături. Alege un dosar sau un fișier și adaugă-l aici."
+msgstr "Der binne gjin fluchkeppelingen. Kies in map of triem en foegje dy hjir ta."
+
+#: lib/python/Screens/HdsGalerieSigle.py:219
+msgid "Nu sunt încă sigle pentru locul ales. Poți pune înapoi sigla HD Satelit."
+msgstr "Der binne noch gjin logo's foar it keazen plak. Do kinst it HD Satelit-logo weromsette."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:312
+msgid "Nu sunt încă sigle pentru locul ales. Revino mai târziu sau pune înapoi sigla HD Satelit."
+msgstr "Der binne noch gjin logo's foar it keazen plak. Kom letter werom of set it HD Satelit-logo werom."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:544
+msgid "Nu transmite nimic spre această fereastră."
+msgstr "Der wurdt neat nei dit finster streamd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:916
+msgid "Numai fișierele obișnuite pot fi descărcate."
+msgstr "Allinich gewoane bestannen kinne wurde downloade."
+
+#: lib/python/Components/HdsAfisaj.py:382 lib/python/Components/HdsAfisaj.py:454 lib/python/Components/HdsAfisajColor.py:257
+msgid "Numai imaginea"
+msgstr "Allinnich de ôfbylding"
+
+#: lib/python/Components/Harddisk.py:1175 lib/python/Components/Harddisk.py:1222
+#, python-format
+msgid "Numele %s este ocupat de alt disc sau dosar. Alege alt nume."
+msgstr "De namme %s wurdt al brûkt troch in oare skiif of map. Kies in oare namme."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:106
+msgid "Numele este prea lung."
+msgstr "De namme is te lang."
+
+#: lib/python/Components/HdsLocInregistrari.py:322 lib/python/Plugins/Extensions/HdsWebControl/stocare_web.py:598 lib/python/Screens/HdsLocInregistrari.py:552 lib/python/Screens/HdsLocInregistrari.py:564
+msgid "Numele nu se poate schimba acum."
+msgstr "De namme kin no net feroare wurde."
+
+#: lib/python/Screens/HdsVremea.py:247
+msgid "Numele orașului"
+msgstr "Namme fan de stêd"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:69
+msgid "Numele sau calea este prea lungă."
+msgstr "De namme of it paad is te lang."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:123
+msgid "Numele scurtăturii"
+msgstr "Namme fan fluchkeppeling"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1154
+msgid "Numele scurtăturii trebuie să aibă între 1 și 120 de caractere."
+msgstr "De fluchkeppelingnamme moat tusken 1 en 120 tekens befetsje."
+
+#: lib/python/Components/Harddisk.py:1179
+msgid "Numele se va schimba după ce se oprește înregistrarea sau timeshift-ul de pe acest disc."
+msgstr "De namme feroaret as de opname of timeshift op dizze skiif stopt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/stocare_web.py:597
+msgid "Numele în /media"
+msgstr "Namme yn /media"
+
+#: lib/python/Components/HdsLocInregistrari.py:1368
+#, python-format
+msgid "Numele în /media (%s): %s"
+msgstr "Namme yn /media (%s): %s"
+
+#: lib/python/Components/Harddisk.py:1234
+msgid "Numele în /media a fost schimbat."
+msgstr "De namme yn /media is feroare."
+
+#: lib/python/Screens/HdsLocInregistrari.py:556
+#, python-format
+msgid "Numele în /media pentru „%s”"
+msgstr "Namme yn /media foar \"%s\""
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:349
+msgid "O componentă a căii nu este un dosar."
+msgstr "In paadkomponint is gjin map."
+
+#: lib/python/Screens/HdsEgalizator.py:514
+msgid "OK / Jos"
+msgstr "OK / Omleech"
+
+#: lib/python/Screens/HdsAfisaj.py:591
+msgid "OK alege orașul și unitatea comună a temperaturii."
+msgstr "OK kiest de stêd en de mienskiplike temperatuerienheid."
+
+#: lib/python/Screens/HdsVremea.py:141
+msgid "OK alege. Stânga și Dreapta schimbă unitatea sau locul afișării. Alegerile se păstrează imediat.\n\nUnitatea și orașul sunt comune cu afișajul din față și cu interfața web."
+msgstr "OK kiest. Lofts en Rjochts feroarje de ienheid of it plak fan werjefte. De karren wurde fuortendaliks bewarre.\n\nDe ienheid en de stêd binne mienskiplik mei it frontdisplay en de webynterface."
+
+#: lib/python/Screens/HdsEgalizator.py:454
+msgid "OK sau Jos: intri la 31 Hz. Reglezi benzile și Nivel, apoi OK salvează în presetarea „Manual”. La modificare, comprimarea se oprește."
+msgstr "OK of Omleech: begjin by 31 Hz. Stel de bannen en it Nivo yn; OK bewarret yn de foarynstelling ‘Sels ynstelle’. Wizigjen skeakelt kompresje út."
+
+#: lib/python/Screens/HdsEgalizator.py:478
+msgid "OK sau Jos: reglezi coloanele. EXIT: ieși."
+msgstr "OK of Omleech: pas de kolommen oan. EXIT: slute."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:97
+msgid "OK, Stânga, Dreapta: schimbă"
+msgstr "OK, Lofts, Rjochts: feroarje"
+
+#: lib/python/Screens/HdsEgalizator.py:482
+msgid "OK: alegi un efect special. EXIT: ieși."
+msgstr "OK: kies in spesjaal effekt. EXIT: slute."
+
+#: lib/python/Screens/HdsGalerieSigle.py:163
+msgid "OK: citește din nou galeria de pe internet."
+msgstr "OK: lêst de galery opnij fan it ynternet."
+
+#: lib/python/Screens/HdsEgalizator.py:463
+msgid "OK: deschizi lista de efecte. Sus și jos în listă: asculți pe loc. OK păstrează alegerea, EXIT revine la efectul anterior."
+msgstr "OK: iepenje de effektenlist. Omheech en Omleech yn de list: daliks harkje. OK bewarret de kar, EXIT set it foarige effekt werom."
+
+#: lib/python/Screens/HdsRadioOnline.py:111 lib/python/Screens/HdsRadioOnline.py:131
+msgid "OK: Încearcă din nou"
+msgstr "OK: Besykje opnij"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:103
+msgid "OSD (GP0 Output)"
+msgstr "OSD (GP0 Output)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:1063 lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:1351 lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:143
+msgid "Online"
+msgstr "Online"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:38
+msgid "Operatia a pornit."
+msgstr "De operaasje is begûn."
+
+#: lib/python/Components/HdsParteaDoua.py:974
+#, python-format
+msgid "Operatia s-a oprit: %s"
+msgstr "De operaasje is stoppe: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:381
+msgid "Operația a fost oprită."
+msgstr "De operaasje waard stoppe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:583
+msgid "Operația cerută nu există."
+msgstr "De frege operaasje bestiet net."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:155
+msgid "Operația nu a reușit. Verifică fișierul, spațiul și drepturile."
+msgstr "De operaasje mislearre. Kontrolearje it triem, frije romte en tagongsrjochten."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:72
+msgid "Operația pe disc nu a reușit."
+msgstr "De skiifbewurking mislearre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1176
+msgid "Operația pentru scurtături nu este disponibilă."
+msgstr "De fluchkeppelingoperaasje is net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:574
+msgid "Operația solicitată nu este disponibilă."
+msgstr "De frege operaasje is net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:96
+msgid "Operațiune oprită."
+msgstr "Operaasje stoppe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:95
+msgid "Operațiunea s-a încheiat."
+msgstr "De operaasje is klear."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:98
+msgid "Operațiuni și transferuri"
+msgstr "Operaasje en oerstappen"
+
+#: lib/python/Components/HdsTasteRapide.py:24
+msgid "Oprește timeshift"
+msgstr "Timeshift stopje"
+
+#: pluginuri-feed/RadioOnline/web.py:338
+msgid "Oprește în browser"
+msgstr "Stopje yn de browser"
+
+#: lib/python/Components/HdsTasteRapide.py:30
+msgid "Oprire receptor"
+msgstr "Untfanger útsette"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:97
+msgid "Oprirea păstrează fișierele deja prelucrate; verifică dosarul destinație."
+msgstr "Stoppen bewarret de al ferwurke triemmen; kontrolearje de doelmap."
+
+#: lib/python/Screens/HdsAfisaj.py:466 lib/python/Screens/HdsVremea.py:139 lib/python/Screens/HdsVremea.py:198
+msgid "Oraș automat"
+msgstr "Automatyske stêd"
+
+#: lib/python/Screens/HdsVremea.py:179
+#, python-format
+msgid "Oraș: %s"
+msgstr "Stêd: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:317
+msgid "Orașele nu se pot căuta acum."
+msgstr "Stêden kinne no net socht wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:136 lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:320
+msgid "Orașele nu se pot căuta acum. Încearcă din nou."
+msgstr "Stêden kinne no net socht wurde. Besykje it wer."
+
+#: lib/python/Screens/HdsVremea.py:270
+msgid "Orașul nu se poate căuta acum. Încearcă mai târziu."
+msgstr "De stêd kin no net socht wurde. Besykje it letter."
+
+#: lib/python/Components/HdsAfisajDate.py:2141
+msgid "Orașul vremii"
+msgstr "Stêd foar it waar"
+
+#: lib/python/Components/HdsAfisajDate.py:2137
+msgid "Orașul și unitatea se aleg în setările vremii."
+msgstr "De stêd en de ienheid wurde keazen yn de waarynstellingen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:989
+msgid "Ordinea blocurilor încărcate nu este validă."
+msgstr "De folchoarder fan uploade brokken is ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1172
+msgid "Ordinea scurtăturilor nu este validă."
+msgstr "De fluchkeppelingopdracht is ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:40
+msgid "Organizează"
+msgstr "Organisearje"
+
+#: lib/python/Components/HdsTasteRapide.py:67
+msgid "PAUZĂ"
+msgstr "PAUZE"
+
+#: lib/python/Components/HdsTasteRapide.py:66
+msgid "PLAY"
+msgstr "PLAY"
+
+#: lib/python/Components/HdsTasteRapide.py:76
+msgid "PORTAL"
+msgstr "PORTAL"
+
+#: lib/python/Components/HdsTasteRapide.py:63
+msgid "PVR / VIDEO (înregistrări)"
+msgstr "PVR / VIDEO (opnames)"
+
+#: lib/python/Components/HdsParteaDoua.py:883
+msgid "Pachet neverificat sau descarcare oprita: "
+msgstr "Net kontrolearre pakket of stoppe download: "
+
+#: lib/python/Components/HdsParteaDoua.py:879
+msgid "Pachete pentru alt model"
+msgstr "Pakketten foar in oar model"
+
+#: lib/python/Components/HdsParteaDoua.py:631
+msgid "Pachetele locale trebuie verificate din starea semnata."
+msgstr "Lokale pakketten moatte kontrolearre wurde tsjin de ûndertekene status."
+
+#: lib/python/Components/HdsParteaDoua.py:744
+msgid "Pachetul lipseste din feedul semnat: "
+msgstr "It pakket ûntbrekt yn de ûndertekene feed: "
+
+#: lib/python/Components/HdsParteaDoua.py:749
+msgid "Pachetul nu este inca auditat pentru stick: "
+msgstr "It pakket is noch net kontrolearre foar de stick: "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:422
+msgid "Pagina solicitată nu este validă."
+msgstr "De frege side is ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:424
+msgid "Pagina trebuie să conțină între 1 și 500 de elemente."
+msgstr "De side moat tusken 1 en 500 items befetsje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:77
+msgid "Parola receptorului nu este corectă sau nu poate fi verificată."
+msgstr "It wachtwurd fan de ûntfanger is ferkeard of kin net ferifiearre wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_ssh_web.py:201
+msgid "Parola se trimite numai în corpul cererii."
+msgstr "It wachtwurd moat allinich yn it fersyklichem ferstjoerd wurde."
+
+#: lib/python/Components/HdsActualizari.py:1421
+msgid "Partea a doua de pe stick este in lucru."
+msgstr "De oanfolling op de stick wurdt no ferwurke."
+
+#: lib/python/Components/HdsActualizari.py:1537
+#, python-format
+msgid "Partea a doua de pe stick nu s-a actualizat: %s"
+msgstr "De oanfolling op de stick is net bywurke: %s"
+
+#: data/menu.xml:550 lib/python/Plugins/Extensions/HdsWebControl/limba_interfata_web.py:332 lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:96 lib/python/Screens/HdsParteaDoua.py:24
+msgid "Partea a doua pe stick"
+msgstr "Oanfolling op USB"
+
+#: lib/python/Components/HdsParteaDoua.py:990
+msgid "Partea a doua se foloseste numai cu imaginea de baza in memoria interna mica."
+msgstr "De oanfolling wurdt allinnich brûkt as it basisimage yn in lytse ynterne opslach stiet."
+
+#: lib/python/Components/HdsVremea.py:259
+msgid "Parțial noros"
+msgstr "Foar in part bewolkt"
+
+#: lib/python/Components/HdsAfisajDate.py:2134
+msgid "Pe afișajul color arată și pictograma vremii."
+msgstr "Op it kleurdisplay lit it ek it waarikoan sjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:310
+msgid "Pe afișajul din față, alege vremea din lista de rotire."
+msgstr "Kies op it frontdisplay it waar yn de wiksellist."
+
+#: lib/python/Components/HdsPornireMultipla.py:90
+#, python-format
+msgid "Pe card sau stick: %(imagine)s, pornită acum"
+msgstr "Op kaart of USB-stasjon: %(imagine)s, op it stuit rinnend"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:307
+msgid "Pe ecranul principal"
+msgstr "Op it haadskerm"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/actualizare_web.py:85 lib/python/Screens/HdsSoftwareUpdate.py:781
+msgid "Pe stick se poate numai citi"
+msgstr "It USB-stasjon is allinnich-lês"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:1509
+#, python-format
+msgid "Pe stick se poate numai citi, deci copiez software-ul într-un dosar curat pe „%s”. Durează până la un minut."
+msgstr "It USB-stasjon is allinich lêzen, sadat de software wurdt kopiearre nei in skjinne map op \"%s\". Dit duorret oant in minút."
+
+#: lib/python/Components/HdsAsistentaControl.py:325 lib/python/Plugins/Extensions/HdsWebControl/captura_sigura.py:51
+msgid "Pe televizor e deschis un ecran cu parolă. Se vede numai acolo."
+msgstr "In wachtwurdskerm is iepen op 'e TV. It is allinnich te sjen dêr."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:587
+#, python-format
+msgid "Pe „%s” se poate numai citi, după o eroare a stickului, deci software-ul nu se poate pregăti pe el."
+msgstr "\"%s\" is allinich lêzen nei in USB-stasjonflater, sadat de software der net op taret wurde kin."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:591
+#, python-format
+msgid "Pe „%s” se poate numai citi. Copiază software-ul pe alt stick și încearcă din nou."
+msgstr "\"%s\" is allinnich-lêzen. Kopiearje de software nei in oar USB-stasjon en besykje it nochris."
+
+#: pluginuri-feed/RadioOnline/date.py:52
+msgid "Pentru copii"
+msgstr "Foar bern"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:107
+msgid "Pentru descărcare, selectează fișiere. Deschide dosarele pentru a alege conținutul lor."
+msgstr "Selektearje triemmen om te downloaden. Iepenje mappen om de items deryn te selektearjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:314
+msgid "Pentru locul ales mai sus. Funcționează și fără internet."
+msgstr "Foar it plak dat hjirboppe keazen is. Wurket ek sûnder ynternet."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:57
+msgid "Permisiuni"
+msgstr "Tastimmingen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:62 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:63
+msgid "Permisiunile nu permit această operație."
+msgstr "De tagongsrjochten tastean dizze operaasje net ta."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:607
+msgid "Permisiunile nu sunt valide."
+msgstr "De tagongsrjochten binne ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:622
+msgid "Permisiunile pot fi schimbate numai pentru fișiere și dosare obișnuite."
+msgstr "Tastimmingen kinne allinich wizige wurde foar gewoane bestannen en mappen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:605
+msgid "Permisiunile trebuie scrise în format octal, de exemplu 0755."
+msgstr "Tastimmingen moatte skreaun wurde yn oktaal formaat, bygelyks 0755."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:85
+msgid "Permisiunile în format octal, de exemplu 0644 pentru un fișier sau 0755 pentru un dosar. Se aplică elementelor selectate, fără parcurgerea subdosarelor."
+msgstr "Rjochten yn oktale notaasje, bygelyks 0644 foar in triem of 0755 foar in map. Jildt foar selektearre items, sûnder submappen te trochrinne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:36
+msgid "Permite accesul la fișiere din afara casei"
+msgstr "Tastean triem tagong fan bûten it hûs"
+
+#: lib/python/Components/HdsEgalizator.py:96
+msgid "Phaser"
+msgstr "Phaser"
+
+#: lib/python/Screens/InfoBar.py:260
+msgid "PiP nu este disponibil pe acest receptor."
+msgstr "PiP is net beskikber op dizze ûntfanger."
+
+#: lib/python/Components/HdsAfisaj.py:393
+msgid "Piconul cu numele si ora"
+msgstr "Picon mei namme en tiid"
+
+#: lib/python/Components/HdsAfisaj.py:392
+msgid "Piconul singur"
+msgstr "Allinnich picon"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:485 lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:539 lib/python/Screens/HdsAfisaj.py:149 lib/python/Screens/HdsAfisaj.py:503
+msgid "Pictograma canalului"
+msgstr "Kanaalikoan"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2577
+msgid "Playlistul a fost revocat între timp. Descarcă-l din nou."
+msgstr "De playlist is yntusken ynlutsen. Download it nochris."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2575
+msgid "Playlistul nu s-a putut salva pe receptor. Încearcă din nou."
+msgstr "De playlist koe net opslein wurde op de ûntfanger. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2548
+msgid "Playlistul se descarcă numai cu browserul conectat."
+msgstr "De playlist kin allinnich ynladen wurde wylst de browser oanmeld is."
+
+#: lib/python/Components/HdsVremea.py:267
+msgid "Ploaie"
+msgstr "Rein"
+
+#: lib/python/Components/HdsAfisajCompat.py:25
+msgid "Plugin cu acces direct"
+msgstr "Plugin mei direkte tagong"
+
+#: lib/python/Components/HdsTasteRapide.py:161
+#, python-format
+msgid "Plugin indisponibil (%s)"
+msgstr "Plugin net beskikber (%s)"
+
+#: lib/python/Components/HdsTasteRapide.py:170
+#, python-format
+msgid "Plugin: %s"
+msgstr "Plugin: %s"
+
+#: lib/python/Screens/InfoBar.py:209
+msgid "Pluginul alocat tastei nu mai este disponibil."
+msgstr "De plugin dy't oan de toets keppele is, is net mear beskikber."
+
+#: lib/python/Components/HdsAfisaj.py:398 lib/python/Components/HdsAfisajCompat.py:26
+msgid "Pluginul sau tema de afisaj"
+msgstr "Plugin of displaytema"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1094
+msgid "Pluginuri de sistem"
+msgstr "Systeemplugins"
+
+#: lib/python/Components/HdsCopieSetari.py:2212
+msgid "Pluginurile nu au putut fi pregătite. Se reia la pornirea următoare."
+msgstr "De plugins koene net wurde taret. Dit sil opnij gean by de folgjende boot."
+
+#: lib/python/Components/HdsReinstalare.py:441
+msgid "Pluginurile și modulele de acces se pun din nou din internet sau din copie, cu setările lor."
+msgstr "Plugins en tagongsmodules wurde mei har ynstellingen weromset fan it ynternet of de reservekopy."
+
+#: lib/python/Components/HdsTasteRapide.py:27
+msgid "Pornește sau oprește PiP"
+msgstr "PiP oan- of útsette"
+
+#: lib/python/Components/HdsTasteRapide.py:23
+msgid "Pornește timeshift"
+msgstr "Timeshift starte"
+
+#: pluginuri-feed/RadioOnline/locuri.py:287
+msgid "Post de radio online"
+msgstr "Online radiostjoerder"
+
+#: lib/python/Components/HdsTransmisie.py:3061 lib/python/Components/HdsTransmisie.py:3077 lib/python/Hds/DabT2/pornire.py:470
+msgid "Postul DAB+ nu se poate porni."
+msgstr "It DAB+-stasjon kin net starte wurde."
+
+#: pluginuri-feed/RadioOnline/web.py:342
+msgid "Postul folosește HTTP și nu poate fi ascultat dintr-o pagină HTTPS. Deschide pagina receptorului prin HTTP."
+msgstr "De stjoerder brûkt HTTP en kin net fan in HTTPS-side ôf beharke wurde. Iepenje de side fan de ûntfanger fia HTTP."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:147
+msgid "Postul nu a început redarea. Încearcă din nou."
+msgstr "It stasjon begon net te spyljen. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:144
+msgid "Postul nu răspunde sau legătura cu el s-a întrerupt."
+msgstr "It stasjon reagearret net of de ferbining dêrmei is ferlern gien."
+
+#: pluginuri-feed/RadioOnline/web.py:345
+msgid "Postul nu răspunde în browser. Încearcă din nou."
+msgstr "De stjoerder reagearret net yn de browser. Besykje it nochris."
+
+#: pluginuri-feed/RadioOnline/web.py:341
+msgid "Postul ăsta nu se poate asculta în browser."
+msgstr "Dizze stjoerder kin net yn de browser beharke wurde."
+
+#: lib/python/Screens/HdsRadioOnline.py:47 pluginuri-feed/RadioOnline/plugin.py:53
+msgid "Posturi de radio de pe internet"
+msgstr "Ynternetradiostasjons"
+
+#: pluginuri-feed/RadioOnline/ecran.py:364 pluginuri-feed/RadioOnline/locuri.py:115 pluginuri-feed/RadioOnline/web.py:143
+msgid "Posturi noi"
+msgstr "Nije stjoerders"
+
+#: pluginuri-feed/RadioOnline/ecran.py:516 pluginuri-feed/RadioOnline/ecran.py:526 pluginuri-feed/RadioOnline/web.py:331
+#, python-format
+msgid "Posturi: %d"
+msgstr "Senders: %d"
+
+#: pluginuri-feed/RadioOnline/ecran.py:429
+msgid "Posturile tale favorite"
+msgstr "Dyn favorite senders"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1158
+msgid "Pot fi păstrate cel mult 64 de scurtături."
+msgstr "Der kinne op syn heechst 64 fluchkeppelingen bewarre wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:538
+msgid "Poza nu este disponibilă."
+msgstr "De ôfbylding is net beskikber."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:357
+msgid "Poziția curentă: "
+msgstr "Hjoeddeistige posysje: "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:52
+msgid "Poți trage aici mai multe fișiere pentru a le încărca în dosarul deschis."
+msgstr "Do kinst hjir mear triemmen hinne slepe om se nei de iepen map te uploaden."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:73
+msgid "Prea multe parole greșite. Încearcă peste cinci minute."
+msgstr "Tefolle ferkearde wachtwurden. Besykje it oer fiif minuten nochris."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:61
+msgid "Previzualizarea este prea mare."
+msgstr "It foarbyld is te grut."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:321
+msgid "Previzualizarea nu este disponibilă."
+msgstr "It foarbyld is net beskikber."
+
+#: lib/python/Screens/HdsGalerieSigle.py:241
+msgid "Previzualizarea nu este disponibilă.\nPoți încerca din nou alegând sigla."
+msgstr "It foarbyld is net beskikber.\nDo kinst it opnij besykje troch it logo te kiezen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:320 lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:67 lib/python/Screens/HdsGalerieSigle.py:239 lib/python/Screens/HdsGalerieSigle.py:269
+msgid "Previzualizarea nu poate fi citită."
+msgstr "It foarbyld kin net lêzen wurde."
+
+#: lib/python/Plugins/Plugin.py:210
+#, python-format
+msgid "Problemă cu tastele: %s"
+msgstr "Knopprobleem: %s"
+
+#: lib/python/Components/HdsAfisajCompat.py:26
+msgid "Program extern"
+msgstr "Ekstern programma"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1096
+msgid "Programele modulelor"
+msgstr "Programma’s fan tagongsmodules"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:134
+msgid "Programul emisiunilor"
+msgstr "Programgids"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:558 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:686
+msgid "Punctele de montare nu pot fi șterse. Selectează conținutul lor după ce deschizi discul."
+msgstr "Oankeppelpunten kinne net wiske wurde. Iepenje earst de skiif en selektearje dan de items deryn."
+
+#: pluginuri-feed/RadioOnline/ecran.py:452 pluginuri-feed/RadioOnline/ecran.py:455 pluginuri-feed/RadioOnline/web.py:328
+msgid "Pune la favorite"
+msgstr "Oan favoriten taheakje"
+
+#: lib/python/Screens/HdsParteaDoua.py:51
+msgid "Pune un stick USB montat, cu loc liber suficient."
+msgstr "Stek in oankeppele USB-stick yn mei genôch frije romte."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:313 lib/python/Screens/HdsGalerieSigle.py:135
+msgid "Pune înapoi sigla HD Satelit"
+msgstr "HD Satelit-logo weromsette"
+
+#: lib/python/Components/HdsCopieSetari.py:2184
+msgid "Punerea la loc s-a întrerupt. Se reia la pornirea următoare."
+msgstr "It weromsetten is ûnderbrutsen. It giet fierder by de folgjende start."
+
+#: pluginuri-feed/HdsFeeduri/web.py:75
+msgid "Python în index"
+msgstr "Python yn de yndeks"
+
+#: lib/python/Components/HdsTasteRapide.py:78
+msgid "RADIO"
+msgstr "RADIO"
+
+#: data/menu.xml:244 lib/python/Components/HdsRadioMeniu.py:28 lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:937 lib/python/Plugins/Extensions/HdsWebControl/radio_live_web.py:123 lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:144 lib/python/Screens/HdsRadioOnline.py:46 lib/python/Screens/HdsRadioOnline.py:80 pluginuri-feed/RadioOnline/ecran.py:209 pluginuri-feed/RadioOnline/locuri.py:132 pluginuri-feed/RadioOnline/locuri.py:191 pluginuri-feed/RadioOnline/locuri.py:287 pluginuri-feed/RadioOnline/plugin.py:53 pluginuri-feed/RadioOnline/web.py:326
+msgid "Radio online"
+msgstr "Online radio"
+
+#: lib/python/Components/HdsRadioOnline.py:172
+msgid "Radio online este disponibil pentru instalare."
+msgstr "Online radio is beskikber foar ynstallaasje."
+
+#: lib/python/Components/HdsRadioOnline.py:26
+msgid "Radio online nu e instalat. Îl instalez acum?"
+msgstr "Online radio is net ynstallearre. Ynstallearje it no?"
+
+#: lib/python/Components/HdsRadioOnline.py:68
+msgid "Radio online nu este disponibil pentru acest receptor."
+msgstr "Online radio is net beskikber foar dizze ûntfanger."
+
+#: lib/python/Components/HdsRadioOnline.py:168 lib/python/Components/HdsRadioOnline.py:66
+msgid "Radio online nu este disponibil în feedul acestui receptor."
+msgstr "Ynternetradio is net beskikber yn de pakketboarne fan dizze ûntfanger."
+
+#: lib/python/Screens/HdsRadioOnline.py:129
+msgid "Radio online nu poate porni acum. Încearcă din nou."
+msgstr "Online radio kin no net begjinne. Besykje opnij."
+
+#: lib/python/Components/HdsRadioOnline.py:234 lib/python/Components/HdsRadioOnline.py:252
+msgid "Radio online nu s-a instalat. Încearcă din nou."
+msgstr "Online radio wie net ynstallearre. Besykje opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:64
+msgid "Radio online nu se poate deschide acum. Încearcă din nou."
+msgstr "Online radio kin no net iepene wurde. Besykje opnij."
+
+#: lib/python/Components/HdsRadioOnline.py:219
+msgid "Radio online nu se poate instala acum. Încearcă din nou mai târziu."
+msgstr "Online radio kin no net ynstalleare wurde. Besykje it letter nochris."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:936
+msgid "Radio prin cablu"
+msgstr "Kabelradio"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:936
+msgid "Radio prin satelit"
+msgstr "Satellytradio"
+
+#: lib/python/Components/HdsEgalizator.py:97
+msgid "Radio vechi"
+msgstr "Alde radio"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:133
+msgid "Radio în direct"
+msgstr "Live radio"
+
+#: lib/python/Screens/HdsParteaDoua.py:113
+#, python-format
+msgid "Receptorul are memorie interna putina. Folosesc %d MiB de pe stick pentru limbile suplimentare?"
+msgstr "De ûntfanger hat min ynterne opslach. %d MiB op de stick brûke foar ekstra talen?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:165
+msgid "Receptorul lucrează deja cu fișiere. Încearcă din nou."
+msgstr "De ûntfanger wurket al mei triemmen. Besykje opnij."
+
+#: pluginuri-feed/HdsImaginiE2/web.py:89
+msgid "Receptorul nu a răspuns. Încearcă din nou."
+msgstr "De ûntfanger hat net reagearre. Besykje opnij."
+
+#: lib/python/Components/HdsAfisaj.py:505
+msgid "Receptorul nu are ecran color."
+msgstr "De ûntfanger hat gjin kleurdisplay."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:108 lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:317
+msgid "Receptorul nu răspunde. Verifică legătura și încearcă din nou."
+msgstr "De ûntfanger reagearret net. Kontrolearje de ferbining en besykje it opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py:713
+msgid "Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__."
+msgstr "De ûntfanger start opnij mei it keazen systeemimage út de ynterne opslach of fan in kaart of USB-stick. Op de ûntfanger: __DRUM_FLASH__."
+
+#: lib/python/Screens/HdsParteaDoua.py:28
+msgid "Reciteste"
+msgstr "Opnij lêze"
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:92 pluginuri-feed/HdsFeeduri/web.py:73
+msgid "Recitește starea"
+msgstr "Status fernije"
+
+#: lib/python/Components/HdsTransmisie.py:3116
+msgid "Redarea DAB+ s-a oprit. Verifică semnalul purtătorului și dacă tunerul este liber."
+msgstr "It ôfspyljen fan DAB+ is stoppe. Kontrolearje it draachsinjaal en oft de tuner frij is."
+
+#: pluginuri-feed/RadioOnline/web.py:340
+msgid "Redarea în browser a fost oprită."
+msgstr "It ôfspyljen yn de browser is stoppe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:596
+msgid "Redenumirea necesită un element și un nume nou."
+msgstr "Foar in oare namme binne ien item en in nije namme nedich."
+
+#: pluginuri-feed/RadioOnline/date.py:50
+msgid "Reggae"
+msgstr "Reggae"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:636 lib/python/Screens/HdsEgalizator.py:514
+msgid "Reglaj manual"
+msgstr "Eigen ynstelling"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:159 lib/python/Screens/HdsEgalizator.py:467
+msgid "Reglaj salvat în presetarea „Manual”."
+msgstr "Ynstelling bewarre yn de eigen preset."
+
+#: lib/python/Components/HdsTransmisie.py:1344 lib/python/Hds/DabT2/pornire.py:458
+msgid "Releul DAB+ este folosit acum pentru alt flux. Oprește mai întâi acea redare."
+msgstr "It DAB+-relais wurdt no foar in oare stream brûkt. Stopje earst dat ôfspyljen."
+
+#: pluginuri-feed/RadioOnline/date.py:45
+msgid "Religie"
+msgstr "Religy"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:1239
+msgid "Repară stickul"
+msgstr "USB-stick reparearje"
+
+#: lib/python/Components/HdsParteaDoua.py:954
+msgid "Reporneste interfata dupa actualizarea bazei."
+msgstr "Start de ynterface opnij nei it bywurkjen fan it basisimage."
+
+#: lib/python/Components/HdsTasteRapide.py:32
+msgid "Repornire interfață"
+msgstr "Ynterface opnij starte"
+
+#: lib/python/Components/HdsTasteRapide.py:31
+msgid "Repornire receptor"
+msgstr "Untfanger opnij starte"
+
+#: lib/python/Components/HdsCopieSetari.py:1983
+msgid "Restaurarea nu a putut începe. Se reia la pornirea următoare."
+msgstr "It weromsetten koe net begjinne. It giet fierder by de folgjende start."
+
+#: lib/python/Components/HdsEgalizator.py:94
+msgid "Reverb cameră"
+msgstr "Keamergalm"
+
+#: lib/python/Components/HdsEgalizator.py:94
+msgid "Reverb catedrală"
+msgstr "Katedraalgalm"
+
+#: lib/python/Components/HdsEgalizator.py:94
+msgid "Reverb sală"
+msgstr "Sealgalm"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:310
+msgid "Rezoluția este aleasă automat pentru receptor."
+msgstr "De resolúsje wurdt automatysk keazen foar de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:319
+msgid "Rezoluție aleasă automat: "
+msgstr "Automatysk keazen resolúsje: "
+
+#: pluginuri-feed/RadioOnline/ecran.py:439
+#, python-format
+msgid "Rezultatele căutării: %s"
+msgstr "Sykresultaten: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:117
+msgid "Reîncarcă fișierul"
+msgstr "Triem opnij lade"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:310 lib/python/Screens/HdsGalerieSigle.py:136
+msgid "Reîncarcă galeria"
+msgstr "Galery opnij lade"
+
+#: lib/python/Components/HdsTasteRapide.py:49
+msgid "Roșu (apăsare scurtă)"
+msgstr "Read (koart yndrukke)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:357
+msgid "Rădăcina este protejată."
+msgstr "De haadmap is beskerme."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:276
+msgid "Rădăcina și dosarele de bază ale sistemului sunt protejate."
+msgstr "De haadmap en de basismappen fan it systeem binne beskerme."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:53
+msgid "Răspunde la fereastra de pe televizor, folosind telecomanda."
+msgstr "Antwurdzje op it finster op de televyzje mei de betsjinning."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:346
+msgid "START păstrare aici"
+msgstr "START: fan hjir ôf bewarje"
+
+#: lib/python/Components/HdsTasteRapide.py:68
+msgid "STOP"
+msgstr "STOP"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:346
+msgid "STOP păstrare aici"
+msgstr "STOP: oant hjir bewarje"
+
+#: lib/python/Components/HdsTasteRapide.py:73
+msgid "SUBT"
+msgstr "SUBT"
+
+#: lib/python/Components/HdsAfisaj.py:552 lib/python/Components/HdsAfisaj.py:561
+msgid "Salvat. Tema se aplica dupa repornirea interfetei."
+msgstr "Bewarre. It tema wurdt tapast nei it opnij starten fan de ynterface."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:358
+msgid "Sari aici"
+msgstr "Hjirhinne springe"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:473 lib/python/Screens/HdsAfisaj.py:599
+msgid "Schimbarea se aplică după salvare."
+msgstr "De wiziging wurdt tapast nei it bewarjen."
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:96
+msgid "Schimbă alegerea"
+msgstr "Kar feroarje"
+
+#: pluginuri-feed/RadioOnline/ecran.py:452 pluginuri-feed/RadioOnline/web.py:328
+msgid "Scoate de la favorite"
+msgstr "Ut favoriten helje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:86
+msgid "Scrie 3 sau 4 cifre între 0 și 7."
+msgstr "Fier 3 of 4 sifers tusken 0 en 7 yn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:315
+msgid "Scrie cel puțin două litere din numele orașului."
+msgstr "Typ op syn minst twa letters fan de namme fan de stêd."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:87
+msgid "Scrie un nume fără /, diferit de „.” și „..”."
+msgstr "Fier in namme sûnder / yn, oars as “.” en “..”."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:270
+msgid "Scrierea în /proc, /sys și /dev nu este permisă."
+msgstr "Skriuwen yn /proc, /sys en /dev is net tastien."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:293
+msgid "Scrierea în sistemele de fișiere /proc, /sys și /dev, inclusiv prin aliasuri, nu este permisă."
+msgstr "Skriuwen yn de triemsystemen /proc, /sys en /dev, ek fia oare nammen of paden, is net tastien."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:128
+msgid "Scurtătura a fost eliminată. Fișierul a rămas pe receptor."
+msgstr "De fluchkeppeling is fuorthelle. De triem stiet noch op de ûntfanger."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1162 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1168
+msgid "Scurtătura nu mai există."
+msgstr "De fluchkeppeling bestiet net mear."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:39
+msgid "Scurtături"
+msgstr "Fluchkeppelingen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:43
+msgid "Scurtăturile sunt păstrate pe receptor și sunt aceleași în toate browserele."
+msgstr "Fluchkeppelingen wurde op de ûntfanger bewarre en binne yn alle browsers itselde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:127
+msgid "Scurtătură adăugată."
+msgstr "Fluchkeppeling tafoege."
+
+#: pluginuri-feed/RadioOnline/ecran.py:539 pluginuri-feed/RadioOnline/ecran.py:543 pluginuri-feed/RadioOnline/motor.py:237 pluginuri-feed/RadioOnline/motor.py:245
+msgid "Se ascultă"
+msgstr "Spilet"
+
+#: pluginuri-feed/RadioOnline/web.py:339
+msgid "Se ascultă în browser."
+msgstr "Spilet yn de browser."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:345
+msgid "Se așteaptă date în format JSON."
+msgstr "Gegevens yn JSON-formaat wurde ferwachte."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:316
+msgid "Se caută orașele..."
+msgstr "Stêden wurde socht..."
+
+#: lib/python/Screens/HdsVremea.py:254
+msgid "Se caută orașul..."
+msgstr "De stêd wurdt socht..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:96
+msgid "Se citeste starea..."
+msgstr "Status wurdt lêzen..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:722
+msgid "Se citește dosarul de setări..."
+msgstr "De ynstellingsmap wurdt lêzen..."
+
+#: pluginuri-feed/RadioOnline/ecran.py:545 pluginuri-feed/RadioOnline/motor.py:235
+msgid "Se conectează"
+msgstr "Ferbine"
+
+#: pluginuri-feed/RadioOnline/web.py:339
+msgid "Se conectează în browser…"
+msgstr "Ferbining meitsje yn de browser…"
+
+#: lib/python/Components/HdsRadioOnline.py:276
+msgid "Se descarcă Radio online..."
+msgstr "Online radio wurdt ynladen..."
+
+#: lib/python/Components/HdsRadioOnline.py:181
+msgid "Se descarcă lista de programe..."
+msgstr "De programmalist wurdt ynladen..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:322 lib/python/Screens/HdsGalerieSigle.py:201
+msgid "Se descarcă și se pune sigla. Așteaptă câteva clipe..."
+msgstr "It logo wurdt downloade en ynsteld. Wachtsje efkes..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/radio_online_web.py:137
+msgid "Se deschide Radio online..."
+msgstr "Online radio wurdt iepene..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:101
+msgid "Se folosesc"
+msgstr "Yn gebrûk:"
+
+#: lib/python/Screens/HdsParteaDoua.py:49
+#, python-format
+msgid "Se folosesc %d MiB pe stick, fara stergerea fisierelor existente."
+msgstr "Yn gebrûk: %d MiB op de stick, sûnder besteande triemmen te wiskjen."
+
+#: lib/python/Components/HdsRadioOnline.py:224
+msgid "Se instalează Radio online..."
+msgstr "Online radio wurdt ynstallearre..."
+
+#: lib/python/Components/HdsAfisajColor.py:78
+msgid "Se lucreaza"
+msgstr "Dwaande"
+
+#: lib/python/Screens/HdsGalerieSigle.py:167
+msgid "Se lucrează. Așteaptă câteva clipe."
+msgstr "Dwaande. Wachtsje efkes."
+
+#: lib/python/Components/HdsRadioOnline.py:276
+msgid "Se pregătește programul de radio..."
+msgstr "It radioprogramma wurdt taret..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:108 lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:96
+msgid "Se pune deja o siglă. Așteaptă câteva clipe."
+msgstr "Der wurdt al in logo ynsteld. Wachtsje efkes."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:324 lib/python/Screens/HdsGalerieSigle.py:197
+msgid "Se pune înapoi sigla HD Satelit..."
+msgstr "It HD Satelit-logo wurdt weromset..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:37
+msgid "Se schimbă numai din rețeaua locală. Accesul din afara casei cere în continuare un browser asociat și parola receptorului."
+msgstr "Dit kin allinnich út it lokale netwurk wei feroare wurde. Foar tagong fan bûten it hûs binne noch altyd in keppele browser en it wachtwurd fan de ûntfanger nedich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:33
+msgid "Se verifică accesul..."
+msgstr "Tagong wurdt kontrolearre..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:118
+#, python-format
+msgid "Se încarcă %s"
+msgstr "%s wurdt laden"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:311 lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:325 lib/python/Screens/HdsGalerieSigle.py:186
+msgid "Se încarcă galeria de pe internet..."
+msgstr "De galery wurdt fan it ynternet laden..."
+
+#: lib/python/Screens/HdsGalerieSigle.py:85
+msgid "Se încarcă galeria..."
+msgstr "De galery wurdt laden..."
+
+#: pluginuri-feed/RadioOnline/ecran.py:356 pluginuri-feed/RadioOnline/locuri.py:258 pluginuri-feed/RadioOnline/web.py:329
+msgid "Se încarcă lista…"
+msgstr "List wurdt laden…"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:319 lib/python/Screens/HdsGalerieSigle.py:157
+msgid "Se încarcă previzualizarea..."
+msgstr "It foarbyld wurdt laden..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:60
+#, python-format
+msgid "Selectate: %s"
+msgstr "Selektearre: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:59
+#, python-format
+msgid "Selectează %s"
+msgstr "Selektearje %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:106
+msgid "Selectează mai întâi un fișier sau un dosar."
+msgstr "Selektearje earst in triem of map."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:58
+msgid "Selectează toate fișierele afișate"
+msgstr "Alle werjûne triemmen selektearje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:461
+msgid "Selectează între 1 și 100 de elemente."
+msgstr "Selektearje tusken 1 en 100 items."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:722
+msgid "Selecția s-a schimbat. Confirmă din nou ștergerea."
+msgstr "De seleksje is feroare. Befêstigje it wiskjen opnij."
+
+#: lib/python/Screens/Menu.py:533
+msgid "Semnal / tuner"
+msgstr "Sinjaal / tuner"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:101
+msgid "Semnal TMDS"
+msgstr "TMDS-sinjaal"
+
+#: lib/python/Components/HdsVremea.py:257
+msgid "Senin"
+msgstr "Helder"
+
+#: pluginuri-feed/RadioOnline/locuri.py:220
+msgid "Serverul listei a răspuns greșit. Încearcă din nou peste puțin timp."
+msgstr "De tsjinner fan de list joech in ferkeard antwurd. Besykje it aanst nochris."
+
+#: lib/python/Components/HdsTransmisie.py:429
+msgid "Serviciul DAB+ nu este pregătit. Încearcă din nou după pornirea receptorului."
+msgstr "De DAB+-tsjinst is net klear. Besykje it opnij nei it starten fan de ûntfanger."
+
+#: lib/python/Components/HdsVremea.py:139
+msgid "Setare necunoscută."
+msgstr "Unbekende ynstelling."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:38
+msgid "Setarea accesului din afara casei a fost salvată."
+msgstr "De ynstelling foar tagong fan bûten it hûs is bewarre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/acces_conditionat_web.py:697
+msgid "Setările Stream Relay"
+msgstr "Ynstellingen fan Stream Relay"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:322
+msgid "Setările au fost salvate."
+msgstr "De ynstellingen binne bewarre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:323
+msgid "Setările nu au fost salvate."
+msgstr "De ynstellingen binne net bewarre."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:344 lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:354
+msgid "Setările receptorului"
+msgstr "Ynstellingen fan de ûntfanger"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/functii_imagine_web.py:347
+msgid "Setările se schimbă și pe televizor. Salvează sau anulează când ai terminat. Dacă apare o confirmare, răspunde cu telecomanda."
+msgstr "De ynstellingen feroarje ek op de televyzje. Bewarje of annulearje as do klear bist. As der in befêstiging ferskynt, antwurdzje dan mei de betsjinning."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:325
+msgid "Setările vremii nu se pot citi acum."
+msgstr "De waarynstellingen kinne no net lêzen wurde."
+
+#: lib/python/Screens/HdsGalerieSigle.py:161
+msgid "Sigla HD Satelit\n\nOK: o pune înapoi pentru locul ales."
+msgstr "HD Satelit-logo\n\nOK: set it werom foar it keazen plak."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:324
+msgid "Sigla HD Satelit a fost pusă înapoi."
+msgstr "It HD Satelit-logo is weromset."
+
+#: lib/python/Screens/HdsGalerieSigle.py:226
+msgid "Sigla a fost pusă."
+msgstr "It logo is ynsteld."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:323
+msgid "Sigla a fost pusă. Se vede la următoarea pornire."
+msgstr "It logo is ynsteld. It is te sjen by de folgjende start."
+
+#: lib/python/Screens/HdsGalerieSigle.py:227
+msgid "Sigla nu a fost schimbată. Încearcă din nou."
+msgstr "It logo is net feroare. Besykje it wer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:309 lib/python/Screens/HdsGalerieSigle.py:26
+msgid "Sigla timpurie a receptorului"
+msgstr "Ier logo fan de ûntfanger"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:308
+msgid "Sigle create de comunitatea HD Satelit. Alege unde apare, apoi apasă poza ca să o pui pe receptor."
+msgstr "Logo's makke troch de HD Satelit-mienskip. Kies wêr't it ferskynt en klik dan op de ôfbylding om it op de ûntfanger te setten."
+
+#: data/menu.xml:436 lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:307 lib/python/Plugins/Extensions/HdsWebControl/plugin.py:1156 lib/python/Screens/HdsGalerieSigle.py:61
+msgid "Sigle de pornire"
+msgstr "Opstartlogo's"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:313
+msgid "Siglele comunității"
+msgstr "Logo's fan de mienskip"
+
+#: lib/python/Components/HdsEditorSigle.py:714
+msgid "Siglele se caută și după numele canalului. Canalele cu același nume pot folosi aceeași siglă."
+msgstr "Logo's wurde ek socht op kanaalnamme. Kanalen mei deselde namme kinne itselde logo brûke."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:68
+msgid "Sistemul de fișiere este doar pentru citire."
+msgstr "It triemsysteem kin allinnich lêzen wurde."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:213
+msgid "Sistemul nu oferă mutare atomică fără suprascriere pentru dosare. Copiază dosarul și verifică rezultatul înainte de ștergere."
+msgstr "It systeem kin mappen net atomêr ferpleatse sûnder oerskriuwen. Kopiearje de map en kontrolearje it resultaat foar it wiskjen."
+
+#: lib/python/Components/HdsVremea.py:257
+msgid "Soare"
+msgstr "Sinnich"
+
+#: pluginuri-feed/RadioOnline/date.py:44
+msgid "Sport"
+msgstr "Sportprogramma’s"
+
+#: lib/python/Components/HdsEgalizator.py:95
+msgid "Stadion"
+msgstr "Stadioneffekt"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:76
+msgid "Stare OSD și ieșire HDMI"
+msgstr "OSD-status en HDMI-útfier"
+
+#: lib/python/Components/HdsVremea.py:272
+msgid "Stare necunoscută"
+msgstr "Unbekende status"
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:120 pluginuri-feed/HdsFeeduri/web.py:54 pluginuri-feed/HdsFeeduri/web.py:75
+msgid "Starea feedurilor nu se poate citi."
+msgstr "De status fan pakketboarnen kin net lêzen wurde."
+
+#: lib/python/Components/HdsStareOsd.py:210
+msgid "Starea ieșirii nu este disponibilă"
+msgstr "De útfierstatus is net beskikber"
+
+#: lib/python/Components/HdsAfisajDate.py:2138
+msgid "Starea vremii"
+msgstr "Waarsituaasje"
+
+#: lib/python/Components/HdsEgalizator.py:97
+msgid "Stereo lărgit"
+msgstr "Breder stereo"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/partea_doua_web.py:100 lib/python/Screens/HdsParteaDoua.py:42
+msgid "Stick montat"
+msgstr "Stick oankeppele"
+
+#: lib/python/Components/HdsParteaDoua.py:581
+msgid "Stickul ales nu mai este disponibil sau nu are loc."
+msgstr "De keazen stick is net mear beskikber of hat gjin romte."
+
+#: lib/python/Components/HdsParteaDoua.py:889
+msgid "Stickul contine scripturi de pachet care nu sunt auditate."
+msgstr "De stick befettet net kontrolearre pakketskripts."
+
+#: lib/python/Components/HdsParteaDoua.py:47
+msgid "Stickul cu partea a doua lipseste. Limbile de pe el nu sunt disponibile acum. Pune stickul si reporneste receptorul."
+msgstr "De stick mei de oanfolling ûntbrekt. De talen derop binne no net beskikber. Stek de stick yn en start de ûntfanger opnij."
+
+#: lib/python/Components/HdsParteaDoua.py:833
+msgid "Stickul partii a doua nu este montat. Pune-l si reporneste receptorul."
+msgstr "De stick mei de oanfolling is net oankeppele. Stek him yn en start de ûntfanger opnij."
+
+#: lib/python/Components/HdsStreamRelay.py:104
+#, python-format
+msgid "Stream Relay răspunde la %s:%d."
+msgstr "Stream Relay reagearret op %s:%d."
+
+#: lib/python/Screens/HdsGalerieSigle.py:81
+msgid "Stânga / Dreapta: unde apare. Sus / Jos: alege sigla. OK: pune sigla. EXIT: înapoi."
+msgstr "Lofts / Rjochts: wêr't it ferskynt. Omheech / Omleech: logo kieze. OK: logo ynstelle. EXIT: werom."
+
+#: pluginuri-feed/RadioOnline/ecran.py:213
+msgid "Stânga, Dreapta: altă filă"
+msgstr "Links, Rjochts: oar ljepblêd"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/egalizator_web.py:638
+msgid "Stânga/dreapta: coloana. Sus/jos: 1 dB. Enter: salvezi Manual. Escape: căsuțe."
+msgstr "Lofts/rjochts: kolom. Omheech/omleech: 1 dB. Enter: eigen preset bewarje. Escape: werom nei de fakjes."
+
+#: lib/python/Screens/HdsEgalizator.py:484
+msgid "Stânga/dreapta: coloana. Sus/jos: 1 dB. OK: salvezi Manual. EXIT: căsuțe."
+msgstr "Lofts/rjochts: kolom. Omheech/omleech: 1 dB. OK: eigen preset bewarje. EXIT: werom nei de fakjes."
+
+#: lib/python/Components/HdsTasteRapide.py:26 lib/python/Screens/InfoBar.py:353
+msgid "Subcanale"
+msgstr "Subkanalen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:756
+msgid "Subcanalele se pot aloca unei taste sau se găsesc în Lista extensiilor."
+msgstr "Subkanalen kinne oan in toets keppele wurde of steane yn de list mei útwreidingen."
+
+#: pluginuri-feed/RadioOnline/web.py:337
+msgid "Sunetul vine direct de la post. Televizorul continuă redarea."
+msgstr "It lûd komt streekrjocht fan de stjoerder. It ôfspyljen op de televyzje giet troch."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:962
+msgid "Sunt deja prea multe încărcări în curs."
+msgstr "Der rinne al te folle uploads."
+
+#: lib/python/Components/HdsPornireMultipla.py:110
+msgid "Sunt mai multe discuri puse în receptor, iar la pornire numele lor se pot încurca și receptorul n-ar mai porni. Scoate discurile de care nu ai nevoie, apoi alege din nou."
+msgstr "Der binne mear skiven mei de ûntfanger ferbûn. By it starten kinne de nammen trochinoar reitsje, sadat de ûntfanger net start. Helje de skiven fuort dy't net nedich binne en kies opnij."
+
+#: lib/python/Components/HdsPornireMultipla.py:102
+msgid "Sunt mai multe discuri puse în receptor, iar la pornire numele lor se pot încurca. Scoate discurile de care nu ai nevoie: lista se actualizează singură."
+msgstr "Der binne mear skiven mei de ûntfanger ferbûn. By it starten kinne de nammen trochinoar reitsje. Helje de skiven fuort dy't net nedich binne: de list wurdt fansels bywurke."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:537
+msgid "Sunt prea multe confirmări în așteptare."
+msgstr "Der wachtsje te folle befêstigingen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:192
+msgid "Sunt prea multe lucrări în listă. Încearcă mai târziu."
+msgstr "Der steane te folle taken yn de list. Besykje it letter."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:81
+msgid "Sunt prea multe sesiuni de fișiere deschise."
+msgstr "Der binne te folle iepen triemsesjes."
+
+#: lib/python/Components/HdsParteaDoua.py:838
+msgid "Sursa partii a doua lipseste sau cere o alta imagine."
+msgstr "De boarne fan de oanfolling ûntbrekt of freget in oar image."
+
+#: lib/python/Components/HdsRadioDate.py:770
+#, python-format
+msgid "Sursa: %s"
+msgstr "Boarne: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:1056
+msgid "Sursă"
+msgstr "Boarne"
+
+#: lib/python/Screens/HdsEgalizator.py:340
+msgid "Sus/jos: asculți efectul. OK: păstrezi. EXIT: revii la efectul anterior."
+msgstr "Omheech/omleech: it effekt beharkje. OK: bewarje. EXIT: werom nei it foarige effekt."
+
+#: lib/python/Components/HdsTasteRapide.py:60
+msgid "TEXT"
+msgstr "TEXT"
+
+#: lib/python/Components/HdsTasteRapide.py:75
+msgid "TIMER"
+msgstr "TIMER"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:474 lib/python/Screens/HdsAfisaj.py:150
+msgid "Tema afișajului"
+msgstr "Displaytema"
+
+#: lib/python/Components/HdsAfisajCompat.py:25
+msgid "Tema de afisaj aleasa"
+msgstr "Keazen displaytema"
+
+#: po/ro.po
+msgid "Tema de afisaj nu este instalata."
+msgstr "It displaytema is net ynstallearre."
+
+#: lib/python/Components/HdsAfisaj.py:500
+msgid "Tema de afisaj nu exista."
+msgstr "It displaytema bestiet net."
+
+#: po/ro.po
+msgid "Tema de afisaj nu poate fi citita."
+msgstr "It displaytema kin net lêzen wurde."
+
+#: po/ro.po
+msgid "Tema de afisaj se aplica la repornirea interfetei."
+msgstr "It displaytema wurdt tapast by it opnij starten fan de ynterface."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:475 lib/python/Screens/HdsAfisaj.py:601
+msgid "Tema se aplică după repornirea interfeței."
+msgstr "It tema wurdt tapast nei it opnij starten fan de ynterface."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1099
+msgid "Teme"
+msgstr "Tema's"
+
+#: lib/python/Components/HdsAfisajDate.py:2135
+msgid "Temperatura de afară"
+msgstr "Bûtentemperatuer"
+
+#: lib/python/Components/HdsAfisajDate.py:2146
+msgid "Temperatura maximă de azi"
+msgstr "Heechste temperatuer fan hjoed"
+
+#: lib/python/Components/HdsAfisajDate.py:2150
+msgid "Temperatura maximă de mâine"
+msgstr "Heechste temperatuer fan moarn"
+
+#: lib/python/Components/HdsAfisajDate.py:2144
+msgid "Temperatura minimă de azi"
+msgstr "Leechste temperatuer fan hjoed"
+
+#: lib/python/Components/HdsAfisajDate.py:2148
+msgid "Temperatura minimă de mâine"
+msgstr "Leechste temperatuer fan moarn"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:504
+msgid "Textele se văd întregi, iar Personajul are poze color."
+msgstr "De teksten binne hielendal te sjen, en it Personaazje hat kleurôfbyldings."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:891
+msgid "Textul conține caractere binare nepermise."
+msgstr "De tekst befettet binêre tekens dy't net tastien binne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:872
+msgid "Textul sau versiunea editorului nu este validă."
+msgstr "De tekst of de ferzje fan de bewurker is ûnjildich."
+
+#: pluginuri-feed/RadioOnline/ecran.py:425 pluginuri-feed/RadioOnline/ecran.py:433 pluginuri-feed/RadioOnline/locuri.py:110
+msgid "Toată lumea"
+msgstr "Oeral op ierde"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:91
+msgid "Tranziție în lot"
+msgstr "Oergong binnen de batch"
+
+#: lib/python/Components/HdsEgalizator.py:96
+msgid "Tremolo"
+msgstr "Tremolo"
+
+#: lib/python/Components/HdsTransmisie.py:1382
+msgid "Tunerul de satelit este ocupat. Acest flux DAB+ are nevoie de un tuner liber."
+msgstr "De satellyttuner is beset. Dizze DAB+-stream hat in frije tuner nedich."
+
+#: lib/python/Components/HdsTransmisie.py:1381
+msgid "Tunerul de satelit nu este liber încă. Încearcă din nou peste câteva secunde."
+msgstr "De satellyttuner is noch net frij. Besykje it oer in pear sekonden opnij."
+
+#: lib/python/Hds/DabT2/pornire.py:461
+msgid "Tunerul este folosit acum pentru alt flux din satelit."
+msgstr "De tuner wurdt no foar in oare satellytstream brûkt."
+
+#: lib/python/Components/HdsTransmisie.py:2775
+msgid "Tunerul este ocupat de televizor sau de o înregistrare. Încearcă din nou după eliberarea lui."
+msgstr "De tuner is yn gebrûk foar tv of in opname. Besykje it opnij as de tuner frij is."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:594
+msgid "Un nume nou poate fi folosit pentru un singur element."
+msgstr "In nije namme kin mar foar ien item brûkt wurde."
+
+#: lib/python/Components/HdsParteaDoua.py:634
+msgid "Un pachet nu este cel semnat. Nu se instaleaza."
+msgstr "In pakket is net it ûndertekene. It wurdt net ynstallearre."
+
+#: lib/python/Components/HdsParteaDoua.py:579
+msgid "Un stick este deja legat. Pune acel stick si reporneste receptorul."
+msgstr "Der is al in stick keppele. Stek dy stick yn en start de ûntfanger opnij."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/galerie_sigle_web.py:309
+msgid "Unde apare sigla"
+msgstr "Wêr't it logo ferskynt"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:898
+msgid "Unele caractere nu pot fi reprezentate în codificarea originală."
+msgstr "Guon tekens kinne net yn de oarspronklike kodearring werjûn wurde."
+
+#: lib/python/Screens/HdsVremea.py:181
+#, python-format
+msgid "Unitate: %s"
+msgstr "Ienheid: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:296
+msgid "Unitatea temperaturii"
+msgstr "Temperatuerienheid"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:143
+#, python-format
+msgid "Urmează: %s"
+msgstr "Folgjende: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:794
+msgid "Valorile implicite sunt pregătite. Apasă Salvează pentru a le păstra."
+msgstr "De standertwearden binne klearset. Druk op Bewarje om se net kwyt te reitsjen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:94
+msgid "Vechimea capturii"
+msgstr "Leeftiid fan de statusopname"
+
+#: lib/python/Components/HdsRadioOnline.py:143
+msgid "Verific dacă Radio online este disponibil..."
+msgstr "Ik kontrolearje oft Online radio beskikber is..."
+
+#: lib/python/Components/HdsParteaDoua.py:844
+msgid "Verific semnatura feedului..."
+msgstr "De hantekening fan de feed wurdt kontrolearre..."
+
+#: pluginuri-feed/HdsFeeduri/web.py:74
+msgid "Verificat"
+msgstr "Kontrolearre"
+
+#: pluginuri-feed/HdsFeeduri/ecran.py:151
+#, python-format
+msgid "Verificat: %(data)s · Intrări: %(numar)d · Compatibilitate Python 3.14: %(python)s"
+msgstr "Kontrolearre: %(data)s · Ynfieringen: %(numar)d · Kompatibiliteit mei Python 3.14: %(python)s"
+
+#: lib/python/Components/HdsRadioOnline.py:72
+msgid "Verifică data și ora receptorului, apoi încearcă din nou."
+msgstr "Kontrolearje datum en tiid fan de ûntfanger en besykje it dan opnij."
+
+#: lib/python/Components/HdsEgalizator.py:96
+msgid "Vibrato"
+msgstr "Vibrato"
+
+#: lib/python/Screens/HdsAfisaj.py:622
+msgid "Viteza, luminozitatea, textul tău, alt oraș, vremea și ceasurile."
+msgstr "Snelheid, helderheid, dyn tekst, in oare stêd, it waar en timers."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:141
+msgid "Vizualizatorul nu este disponibil pentru acest flux."
+msgstr "De lûdfisualisaasje is net beskikber foar dizze stream."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:139
+msgid "Vizualizatorul sunetului"
+msgstr "Lûdfisualisaasje"
+
+#: pluginuri-feed/RadioOnline/web.py:338
+msgid "Volum în browser"
+msgstr "Folume yn de browser"
+
+#: pluginuri-feed/RadioOnline/ecran.py:223 pluginuri-feed/RadioOnline/web.py:332
+msgid "Votează"
+msgstr "Stim"
+
+#: pluginuri-feed/RadioOnline/ecran.py:691 pluginuri-feed/RadioOnline/web.py:256
+#, python-format
+msgid "Votul pentru %s nu s-a primit. Încearcă peste 10 minute."
+msgstr "De stim foar %s is net ûntfongen. Besykje it oer 10 minuten nochris."
+
+#: lib/python/Components/HdsAfisajDate.py:85 lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:293 lib/python/Screens/HdsAfisaj.py:149 lib/python/Screens/HdsTemaInterfata.py:89 lib/python/Screens/HdsVremea.py:129
+msgid "Vremea"
+msgstr "Waar"
+
+#: lib/python/Components/HdsAfisajDate.py:2130
+msgid "Vremea acum"
+msgstr "It waar no"
+
+#: lib/python/Components/HdsVremea.py:161
+msgid "Vremea este setată."
+msgstr "It waar is ynsteld."
+
+#: lib/python/Screens/HdsVremea.py:199
+msgid "Vremea nu este disponibilă acum."
+msgstr "It waar is no net beskikber."
+
+#: lib/python/Screens/HdsVremea.py:182
+#, python-format
+msgid "Vremea pe TV: %s"
+msgstr "Waar op tv: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:304
+msgid "Vremea pe televizor"
+msgstr "Waar op de televyzje"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tema_tv_web.py:342
+msgid "Vremea pe televizor și pe afișaj"
+msgstr "Waar op de televyzje en it display"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/afisaj_web.py:471
+msgid "Vremea: orașul și unitatea temperaturii"
+msgstr "Waar: stêd en temperatuerienheid"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:87
+msgid "actualizată"
+msgstr "aktueel"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:39
+#, python-format
+msgid "aplicat %s | %s"
+msgstr "tapast %s | %s"
+
+#: lib/python/Components/Harddisk.py:1550
+msgid "capacitate indisponibilă"
+msgstr "kapasiteit net beskikber"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:268
+msgid "citire HDMI întârziată; fără reaplicare și fără alt fir de citire"
+msgstr "HDMI-útlêzing fertrage; net opnij tapasse en gjin ekstra lêstried"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:159
+msgid "citire-veche"
+msgstr "net mear aktuele útlêzing"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:103
+msgid "claritatea nu se poate deduce din culoarea raportată"
+msgstr "de byldskerpte kin net út it melde kleurformaat ôflaat wurde"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:89
+msgid "completă"
+msgstr "folslein"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:198
+msgid "conectare"
+msgstr "ferbining"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:173
+msgid "conectare-necunoscută"
+msgstr "ferbiningsstatus ûnbekend"
+
+#: lib/python/Components/VideoOutput.py:1111
+msgid "configurare sau scanare în curs; fără reaplicare"
+msgstr "ynstelle of sykjen dwaande; net opnij tapasse"
+
+#: lib/python/Components/HdsAfisajDate.py:451
+msgid "cu unitatea întreagă, derulat"
+msgstr "mei de hiele ienheid, rôljend"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:194
+msgid "deconectare"
+msgstr "ferbining ferbrutsen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:98
+msgid "deconectat"
+msgstr "net ferbûn"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:96
+msgid "disponibile"
+msgstr "beskikber"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:211
+msgid "după-reaplicare"
+msgstr "nei opnij tapassen"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:273
+msgid "după-reaplicare-citire-indisponibilă"
+msgstr "nei opnij tapassen: útlêzing net beskikber"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:164
+msgid "după-reaplicare-citire-veche"
+msgstr "nei opnij tapassen: net mear aktuele útlêzing"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:176
+msgid "după-reaplicare-stare-necunoscută"
+msgstr "nei opnij tapassen: status ûnbekend"
+
+#: lib/python/Components/HdsLocInregistrari.py:439
+#, python-format
+msgid "eticheta %s"
+msgstr "label %s"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:201
+msgid "fereastră de protecție după reaplicare; numai diagnostic"
+msgstr "beskermingsperioade nei opnij tapassen; allinnich diagnoaze"
+
+#: lib/python/Components/HdsParteaDoua.py:611
+#, python-format
+msgid "fisierul nu s-a putut face: %s"
+msgstr "De triem koe net makke wurde: %s"
+
+#: lib/python/Components/HdsParteaDoua.py:615
+#, python-format
+msgid "fisierul nu se monteaza: %s"
+msgstr "De triem kin net oankeppele wurde: %s"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:88
+msgid "fișierele de rată diferă de setarea aleasă"
+msgstr "de bestannen foar de ferfarskingsfrekwinsje ferskille fan de keazen ynstelling"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:86
+msgid "fișierele de rată nu se pot verifica"
+msgstr "de bestannen foar de ferfarskingsfrekwinsje kinne net kontrolearre wurde"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:229
+msgid "fișierele de rată nu se pot verifica; fără reaplicare"
+msgstr "de bestannen foar de ferfarskingsfrekwinsje kinne net kontrolearre wurde; net opnij tapasse"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:94
+msgid "formatul efectiv diferă de cel ales"
+msgstr "it feitlike formaat ferskilt fan it keazen formaat"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:92
+msgid "formatul nu se poate compara"
+msgstr "it formaat kin net ferlike wurde"
+
+#: lib/python/Components/HdsPornireMultipla.py:96
+msgid "formă necunoscută"
+msgstr "ûnbekende opstartyndieling"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:99
+msgid "geometria GP0 diferă de ieșirea aleasă"
+msgstr "de GP0-geometry ferskilt fan de keazen útgong"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:97
+msgid "geometria GP0 lipsește"
+msgstr "GP0-geometry ûntbrekt"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:141
+#, python-format
+msgid "id=%d %s"
+msgstr "id=%d %s"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:213
+#, python-format
+msgid "id=%d verificare=%s; claritatea necesită probă vizuală"
+msgstr "id=%d kontrôle=%s; de byldskerpte moat fisueel kontrolearre wurde"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:136
+#, python-format
+msgid "id=%s faza=%s ales=%s după_canal=%s %s"
+msgstr "id=%s faze=%s keazen=%s per_kanaal=%s %s"
+
+#: lib/python/Components/VideoOutput.py:1102
+msgid "ieșirea 4K nu este disponibilă"
+msgstr "4K-útfier net beskikber"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:89
+msgid "incompletă"
+msgstr "ûnfolslein"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:96
+msgid "indisponibile"
+msgstr "net beskikber"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:84
+msgid "indisponibilă"
+msgstr "net beskikber"
+
+#: lib/python/Components/HdsAsistentaCatalog.py:77
+msgid "instalează un pachet din feedul oficial HD Satelit (numai cu Control complet)"
+msgstr "ynstallearje in pakket út de offisjele HD Satelit pakketfeed (allinnich mei Folsleine kontrôle)"
+
+#: lib/python/Components/HdsParteaDoua.py:612
+msgid "leg stickul"
+msgstr "De stick wurdt keppele..."
+
+#: lib/python/Components/HdsJurnalAfisaj.py:108
+msgid "legătura 4K este încă neconfirmată"
+msgstr "de 4K-ferbining is noch net befêstige"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:244
+msgid "limită de protecție: cel mult trei încercări pe oră, la minimum 60 s"
+msgstr "beskermingslimyt: maksimaal trije kear yn it oere, mei op syn minst 60 s dertusken"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:80
+msgid "lipsă"
+msgstr "ûntbrekt"
+
+#: lib/python/Components/HdsPornireMultipla.py:95
+msgid "mai multe discuri puse"
+msgstr "meardere skiven oansletten"
+
+#: lib/python/Components/VideoOutput.py:1108
+msgid "margini de ecran configurate; geometria nu se verifică automat"
+msgstr "skermrannen ynsteld; de geometry wurdt net automatysk kontrolearre"
+
+#: lib/python/Components/HdsStareOsd.py:216
+#, python-format
+msgid "mod %(mod)s | disp %(disp)s | OutColorSpace %(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | rate 50:%(hz50)s 60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | proaspat %(proaspat)s complet %(complet)s tranzitie %(tranzitie)s | HPD %(HPD)s UnHPD %(UnHPD)s RsenCon %(RsenCon)s RsenDis %(RsenDis)s"
+msgstr "modus %(mod)s | disp %(disp)s | OutColorSpace %(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | frekwinsjes 50:%(hz50)s 60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | aktueel %(proaspat)s folslein %(complet)s oergong %(tranzitie)s | HPD %(HPD)s UnHPD %(UnHPD)s RsenCon %(RsenCon)s RsenDis %(RsenDis)s"
+
+#: lib/python/Components/HdsParteaDoua.py:574
+msgid "modelul nu are descrierea partii a doua"
+msgstr "It model hat gjin beskriuwing fan de oanfolling."
+
+#: lib/python/Components/HdsJurnalAfisaj.py:233
+msgid "modul ales nu este 4K; fără reaplicare"
+msgstr "de keazen modus is gjin 4K; net opnij tapasse"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:38
+msgid "modul refuzat de driver"
+msgstr "modus wegere troch it stjoerprogramma"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:253
+#, python-format
+msgid "motiv=%s scris=%s restart_cerut=%s; aștept proba efectivă"
+msgstr "reden=%s skreaun=%s opnij_starten_frege=%s; wachtsje op de feitlike útlêzing"
+
+#: pluginuri-feed/HdsFeeduri/date.py:19 pluginuri-feed/HdsFeeduri/date.py:22 pluginuri-feed/HdsFeeduri/date.py:25 pluginuri-feed/HdsFeeduri/date.py:28 pluginuri-feed/HdsFeeduri/web.py:75
+msgid "neștiut"
+msgstr "ûnbekend"
+
+#: lib/python/Components/HdsPornireMultipla.py:98
+msgid "nu pot citi partiția imaginii"
+msgstr "de partysje fan it image kin net lêzen wurde"
+
+#: lib/python/Components/VideoOutput.py:1118
+msgid "nu rulează un canal live; fără reaplicare"
+msgstr "der spilet gjin livekanaal; net opnij tapasse"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:38
+msgid "o setare refuzată de driver"
+msgstr "in ynstelling is troch it stjoerprogramma wegere"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:129
+msgid "octeți"
+msgstr "bytes"
+
+#: lib/python/Components/HdsPornireMultipla.py:97
+msgid "partiția nu este prezentă sau UUID-ul nu este unic"
+msgstr "de partysje ûntbrekt of de UUID dêrfan is net unyk"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:291
+msgid "paza HDMI nu a putut prelua proba; următoarea verificare rămâne programată"
+msgstr "de HDMI-bewaking koe gjin útlêzing krije; de folgjende kontrôle bliuwt pland"
+
+#: lib/python/Components/HdsAfisajDate.py:450
+msgid "pe patru poziții"
+msgstr "op fjouwer posysjes"
+
+#: lib/python/Components/HdsParteaDoua.py:585
+#, python-format
+msgid "pe stick exista deja %s; nu il suprascriu"
+msgstr "%s stiet al op de stick; it wurdt net oerskreaun."
+
+#: lib/python/Components/HdsParteaDoua.py:588
+#, python-format
+msgid "pe stick nu sunt %d MiB liberi"
+msgstr "Op de stick is gjin %d MiB frij."
+
+#: lib/python/Components/HdsPaznic.py:624
+#, python-format
+msgid "pluginul extern %s"
+msgstr "eksterne plugin %s"
+
+#: lib/python/Components/HdsCopieSetari.py:2786
+msgid "pluginurile, pregătite pentru reinstalare"
+msgstr "plugins klear foar opnij ynstallearjen"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:38
+msgid "primit"
+msgstr "akseptearre"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:226
+msgid "probă incompletă; fără reaplicare"
+msgstr "ûnfolsleine útlêzing; net opnij tapasse"
+
+#: lib/python/Screens/ScanerSatelit.py:359
+#, python-format
+msgid "rata de simbol %d kSymb/s e peste cea mai mare pe care o primește tunerul (%d kSymb/s)"
+msgstr "de symboalsnelheid fan %d kSymb/s is heger as it maksimum fan de tuner (%d kSymb/s)"
+
+#: lib/python/Screens/ScanerSatelit.py:357
+#, python-format
+msgid "rata de simbol %d kSymb/s e sub cea mai mică pe care o primește tunerul (%d kSymb/s)"
+msgstr "de symboalsnelheid fan %d kSymb/s is leger as it minimum fan de tuner (%d kSymb/s)"
+
+#: lib/python/Components/VideoOutput.py:1104
+msgid "receptorul este în standby; fără reaplicare"
+msgstr "de ûntfanger stiet yn stand-by; net opnij tapasse"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:236
+msgid "recuperare amânată pentru protejarea redării"
+msgstr "herstel útsteld om it ôfspyljen te beskermjen"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:207
+msgid "recuperare oprită pentru protejarea redării"
+msgstr "herstel útskeakele om it ôfspyljen te beskermjen"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1097
+msgid "satellites.xml"
+msgstr "satellites.xml"
+
+#: lib/python/Components/HdsParteaDoua.py:591
+msgid "scriu fisierul pe stick"
+msgstr "De triem wurdt nei de stick skreaun..."
+
+#: lib/python/Components/HdsJurnalAfisaj.py:223
+msgid "setarea video s-a schimbat; încercare anulată"
+msgstr "byldynstelling feroare; besykjen annulearre"
+
+#: lib/python/Components/VideoOutput.py:1106
+msgid "setări video neconfirmate; fără reaplicare"
+msgstr "byldynstellingen net befêstige; net opnij tapasse"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:214
+msgid "stare incompletă sau deconectată"
+msgstr "ûnfolsleine status of ferbining ferbrutsen"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:106
+msgid "starea TMDS nu se poate compara"
+msgstr "de TMDS-status kin net ferlike wurde"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:109
+msgid "starea expusă este coerentă"
+msgstr "de melde status is gearhingjend"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:132
+msgid "starea receptorului nu se poate verifica"
+msgstr "de status fan de ûntfanger kin net kontrolearre wurde"
+
+#: lib/python/Components/VideoOutput.py:1124
+msgid "starea redării nu se poate verifica; fără reaplicare"
+msgstr "de ôfspylstatus kin net kontrolearre wurde; net opnij tapasse"
+
+#: lib/python/Components/HdsParteaDoua.py:623
+msgid "stickul e pregatit"
+msgstr "De stick is klear."
+
+#: lib/python/Components/HdsParteaDoua.py:638
+msgid "stickul partii a doua nu e montat"
+msgstr "De stick mei de oanfolling is net oankeppele."
+
+#: lib/python/Components/HdsPornireMultipla.py:99
+msgid "suportul UUID al nucleului ales nu este dovedit"
+msgstr "UUID-stipe fan de keazen kernel is net befêstige"
+
+#: lib/python/Components/HdsAfisajDate.py:2133
+msgid "temperatura, starea și orașul"
+msgstr "temperatuer, waarsituaasje en stêd"
+
+#: lib/python/Components/VideoOutput.py:1120
+msgid "timeshift în curs; fără reaplicare"
+msgstr "tiidferskowing dwaande; net opnij tapasse"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:87
+msgid "veche"
+msgstr "net mear aktueel"
+
+#: lib/python/Components/HdsParteaDoua.py:601
+msgid "verific fisierul"
+msgstr "De triem wurdt kontrolearre..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/informatii_web.py:103
+#, python-format
+msgid "x=%s, y=%s; %s x %s"
+msgstr "x=%s, y=%s; %s x %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:308
+msgid "În ambele locuri"
+msgstr "Op beide plakken"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:306
+msgid "În bara de informații"
+msgstr "Yn de ynformaasjebalke"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:100
+msgid "În lucru"
+msgstr "Dwaande"
+
+#: pluginuri-feed/HdsImaginiE2/ecran.py:94 pluginuri-feed/HdsImaginiE2/web.py:85
+msgid "În meniul «Imagine nouă de pe internet», alege «Alte imagini»."
+msgstr "Kies yn it menu ‘Nij image fan ynternet’ foar ‘Oare images’."
+
+#: pluginuri-feed/RadioOnline/ecran.py:364 pluginuri-feed/RadioOnline/locuri.py:114 pluginuri-feed/RadioOnline/web.py:143
+msgid "În tendințe"
+msgstr "Yn opkomst"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:48
+msgid "Încarcă fișiere"
+msgstr "Bestannen oplade"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:32
+msgid "Închide accesul"
+msgstr "Tagong slute"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:120
+#, python-format
+msgid "Încărcare oprită: %s"
+msgstr "Opladen stoppe: %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:951
+msgid "Încărcarea a expirat sau nu mai există."
+msgstr "It opladen is ferrûn of bestiet net mear."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:991
+msgid "Încărcarea depășește dimensiunea declarată."
+msgstr "De oplaad is grutter as de opjûne grutte."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1002
+msgid "Încărcarea este incompletă."
+msgstr "It opladen is ûnfolslein."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:947
+msgid "Încărcarea nu este validă."
+msgstr "It opladen is ûnjildich."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:560
+msgid "Încărcarea nu există în această sesiune."
+msgstr "De oplaad bestiet net yn dizze sesje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:119
+#, python-format
+msgid "Încărcat: %s"
+msgstr "Opladen: %s"
+
+#: lib/python/Components/HdsTasteRapide.py:22
+msgid "Înregistrare imediată"
+msgstr "Direkte opname"
+
+#: lib/python/Components/HdsTasteRapide.py:21 lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:1103
+msgid "Înregistrări"
+msgstr "Opnamen"
+
+#: lib/python/Components/HdsJurnalAfisaj.py:220
+msgid "înainte-reaplicare"
+msgstr "foar opnij tapassen"
+
+#: lib/python/Components/VideoOutput.py:1114
+msgid "înregistrare în curs sau navigare indisponibilă; fără reaplicare"
+msgstr "opname dwaande of navigaasje net beskikber; net opnij tapasse"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:704
+msgid "Ștergerea este definitivă, inclusiv pentru conținutul dosarelor selectate."
+msgstr "It wiskjen is definityf, ek foar alles yn de selektearre mappen."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:700
+msgid "Ștergi configurări ale sistemului. Se pot pierde canalele, accesul la rețea ori pornirea serviciilor receptorului."
+msgstr "Do wiskest systeemynstellingen. Kanalen, netwurktagong of tsjinsten fan de ûntfanger kinne net mear wurkje."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:539
+msgid "Ștergi definitiv fișierele alese?"
+msgstr "De selektearre bestannen definityf wiskje?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:702
+msgid "Ștergi programe sau fișiere ale sistemului. Pluginurile, interfața ori pornirea receptorului pot înceta să funcționeze."
+msgstr "Do wiskest systeemprogramma's of systeembestannen. Plugins, de ynterface of de ûntfanger kinne net mear wurkje of net mear opstarte."
+
+#: pluginuri-feed/RadioOnline/date.py:34
+msgid "Știri"
+msgstr "Nijs"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:82
+msgid "Ținta legăturii simbolice nu poate fi deschisă."
+msgstr "It doel fan de symboalyske keppeling kin net iepene wurde."
+
+#: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
+msgid "Țări"
+msgstr "Lannen"

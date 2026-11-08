@@ -198,6 +198,7 @@ class ServiceScan:
 		# rezultatul scanarii pentru /api/scanare-ultima (Components/HdsScanareUltima.py); None pana la prima trecere
 		# sau pe un nucleu fara getFoundServices
 		self.hdsUltima = None
+		self.hdsFaraTv = []
 		# retelele citite din NIT la sfarsitul scanarii (Components/HdsRetele.rezumat) si caseta lor de pe ecran:
 		# {"titlu", "nume", "date", "indiciu"} (etichetele ecranului HDSatelit); fara caseta, randuri in rezumat
 		self.hdsRetele = []
@@ -636,6 +637,7 @@ class ServiceScan:
 				eroare = "trecerea %d: %s" % (self.run + 1, self.Errors.get(getattr(self, "errorcode", 1), self.Errors[1]))
 			self.hdsUltima.trecere(self.run, transpondere, servicii, eroare, retele)
 			corp = self.hdsUltima.publica(stare)
+			self.hdsFaraTv = corp.get("pozitii_fara_tv", [])
 		except Exception as e:
 			print("[ServiceScan] rezultatul pentru web: %r" % (e,))
 			return
@@ -744,6 +746,32 @@ class ServiceScan:
 			return _("Reception: %s") % ", ".join(sats + places)
 		return ""
 
+	def hdsRandFaraTv(self):
+		"""La o scanare cu mai multe pozitii, randul cu pozitiile pe care lista TV n-o sa le arate si de ce: fara semnal,
+		numai radio, sau semnal fara niciun canal. None cand toate pozitiile au dat canale TV."""
+		if not self.hdsFaraTv:
+			return None
+		try:
+			from Components.HdsGrade import pozitieOrbitala
+		except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
+			from HdsGrade import pozitieOrbitala
+		fara_semnal, radio, fara_canale = [], [], []
+		for x in self.hdsFaraTv:
+			nume = pozitieOrbitala(x["poz"]) or str(x["poz"])
+			if x["radio"]:
+				radio.append(_("%(pozitie)s (numai radio: %(numar)d)") % {"pozitie": nume, "numar": x["radio"]})
+			elif x["prinse"]:
+				fara_canale.append(nume)
+			else:
+				fara_semnal.append(nume)
+		parti = []
+		if fara_semnal:
+			parti.append(_("%s (fără semnal)") % ", ".join(fara_semnal))
+		parti.extend(radio)
+		if fara_canale:
+			parti.append(_("%s (cu semnal, dar fără canale)") % ", ".join(fara_canale))
+		return _("Fără canale TV: %s") % "; ".join(parti)
+
 	def resultLines(self):
 		lines = []
 		services = self.foundServices
@@ -783,6 +811,9 @@ class ServiceScan:
 			if unavailable is not None:
 				line += ", " + _("without signal: %d") % unavailable
 			lines.append(line)
+		fara_tv = self.hdsRandFaraTv()
+		if fara_tv:
+			lines.append(fara_tv)
 		places = self.scannedPlaces()
 		# la cablu si terestru caseta retelei spune mai mult decat "Recepție: Cablu" (si lasa loc la textul marit)
 		retea = self.hdsReteaPrincipala() if self.hdsAreCaseta() else None

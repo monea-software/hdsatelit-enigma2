@@ -627,7 +627,12 @@ class EcranManual(Screen, ConfigListScreen):
         c['pol'] = NoSave(ConfigSelection(default='H', choices=[('H', _('Orizontala')), ('V', _('Verticala')),
                                                               ('L', _('Circulara stanga')),
                                                               ('R', _('Circulara dreapta'))]))
-        c['sr'] = NoSave(ConfigInteger(default=27500, limits=(1000, 60000)))
+        try:
+            from Components.HdsLimiteTuner import limite_camp_sr
+            limite_sr = limite_camp_sr()
+        except ImportError:
+            limite_sr = (1, 99999)
+        c['sr'] = NoSave(ConfigInteger(default=max(limite_sr[0], min(27500, limite_sr[1])), limits=limite_sr))
         c['sistem'] = NoSave(ConfigSelection(default='DVB-S2', choices=[('DVB-S', 'DVB-S'), ('DVB-S2', 'DVB-S2')]))
         c['modulatie'] = NoSave(ConfigSelection(default='QPSK', choices=[(x, x) for x in
                                                                         ('QPSK', '8PSK', '16APSK', '32APSK')]))

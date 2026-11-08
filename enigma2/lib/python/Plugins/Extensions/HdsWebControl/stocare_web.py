@@ -18,6 +18,7 @@
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/stocare                         locul inregistrarilor, discurile, citirea si pregatirea in curs
 #   POST /api/stocare-foloseste?punct=/media/usb   foloseste discul pentru inregistrari (numai un disc din lista)
+#   POST /api/stocare-nume-media?dispozitiv=sda1&nume=usb2   numele din /media (gol: Automat)
 #   GET  /stocare                             pagina
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2; aici se citesc numai /proc/mounts si /sys, spatiul liber
@@ -66,6 +67,8 @@ def _disc(L, d, automat=None):
 		"punct": d["punct"],
 		"nume": d["nume"],
 		"dispozitiv": d.get("dispozitiv") or "",
+		"eticheta": d.get("eticheta") or "",
+		"nume_media": L.numeMedia(d.get("dispozitiv")) if hasattr(L, "numeMedia") else None,
 		"fel": d.get("fel") or "",
 		"bun": bun,
 		"folosit": bool(d.get("folosit")),
@@ -91,6 +94,9 @@ def _necitit(L, n):
 	"""Un disc pe care receptorul nu il poate citi; `disc`: discul intreg (sda), pentru legatura 'Formatează'."""
 	rez = {"dispozitiv": n["dispozitiv"], "nume": n["nume"], "fel": n.get("fel") or "",
 		"disc": L.discul(n["dispozitiv"]) if hasattr(L, "discul") else ""}
+	# eticheta discului (0.7.1) numai cand are una; pagina n-o foloseste aici, iar forma veche a randului ramane la fel
+	if n.get("eticheta"):
+		rez["eticheta"] = n["eticheta"]
 	if hasattr(L, "fisaDisc"):
 		rez["fisa"] = L.fisaDisc(n)
 	return rez
@@ -159,7 +165,7 @@ def foloseste(argumente, L=None):
 
 def argumente(request):
 	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute."""
-	permise = set(("punct",))
+	permise = set(("punct", "dispozitiv", "nume"))
 	rez = {}
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
 		if isinstance(cheie, bytes):
@@ -171,6 +177,22 @@ def argumente(request):
 			v = v.decode("utf-8", "replace")
 		rez[cheie] = str(v)[:MAX_PUNCT].strip()
 	return rez
+
+
+def alegeNumeMedia(argumente, L=None):
+	"""POST /api/stocare-nume-media: aceeasi alegere ca pe televizor, numai pentru o partitie din lista de acum."""
+	L = _l(L)
+	dispozitiv = argumente.get("dispozitiv", "")
+	cand = L.candidati()
+	if not dispozitiv or dispozitiv not in [c.get("dispozitiv") for c in cand]:
+		rez = {"result": False, "message": _t("Discul ales nu mai este conectat. Alege din nou."), "amanat": False}
+	elif "nume" not in argumente:
+		rez = {"result": False, "message": _t(N_("Nu s-a trimis niciun nume.")), "amanat": False}
+	else:
+		rez = L.alegeNumeMedia(dispozitiv, argumente["nume"])
+	starea = stare(L)
+	starea.update(rez)
+	return starea
 
 
 def rute(baza, resource, L=None):
@@ -197,6 +219,18 @@ def rute(baza, resource, L=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class NumeMediaResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, alegeNumeMedia(argumente(request), L=L))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)
+
 	class PaginaResource(resource.Resource):
 		"""GET /stocare: pagina „Locul înregistrărilor”."""
 		isLeaf = True
@@ -207,6 +241,7 @@ def rute(baza, resource, L=None):
 	api = {
 		b"stocare": StareResource(),
 		b"stocare-foloseste": FolosesteResource(),
+		b"stocare-nume-media": NumeMediaResource(),
 	}
 	return api, PaginaResource()
 
@@ -263,6 +298,8 @@ PAGINA = """<!DOCTYPE html>
   button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   button.verde{background:var(--verde);border-color:var(--verde);color:#fff;}
   button:disabled{opacity:.5;cursor:default;}
+  .nume-media{display:block;margin-top:8px;font-size:.85rem;color:var(--text-slab);}
+  .nume-media select{display:block;max-width:100%;min-height:44px;margin-top:4px;padding:6px 10px;border:1px solid var(--bordura);border-radius:8px;background:#242a33;color:var(--text);font:inherit;}
   table{width:100%;border-collapse:collapse;font-size:.92rem;}
   td,th{padding:8px 6px;border-bottom:1px solid var(--bordura);text-align:left;vertical-align:middle;}
   th{color:var(--text-slab);font-weight:normal;}
@@ -333,6 +370,8 @@ var RASPUNS = null;
 var LUCRU_LA_CERERE = null;
 var ULTIMA = null;
 var ULTIMUL_MESAJ = "";
+var NUME_RASPUNS = null;
+var NUME_OCUPAT = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -369,8 +408,22 @@ function raspunsPentru(d, punct){
   if(d.lucru && d.lucru.punct === punct && (inLucru(d) || CERUT === punct)){ return dinLucru(d.lucru); }
   return null;
 }
+function alegereNumeMedia(k, ocupat){
+  var info = k.nume_media;
+  if(!info || !(info.alegeri || []).length){ return null; }
+  var et = document.createElement("label"); et.className = "nume-media"; et.appendChild(document.createTextNode("Numele în /media"));
+  var s = document.createElement("select");
+  info.alegeri.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); });
+  s.value = info.valoare || "";
+  s.disabled = ocupat || NUME_OCUPAT !== null;
+  s.addEventListener("change", function(){ schimbaNumeMedia(k, s.value); });
+  et.appendChild(s);
+  if(info.mesaj){ var m = document.createElement("div"); m.className = "nota"; m.textContent = info.mesaj; et.appendChild(m); }
+  return et;
+}
 function arata(d){
   ULTIMA = d;
+  if(NUME_RASPUNS && NUME_RASPUNS.amanat && (d.discuri || []).some(function(k){ return k.dispozitiv === NUME_RASPUNS.dispozitiv && k.nume_media && !k.nume_media.amanat; })){ NUME_RASPUNS = null; }
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   $("text").textContent = d.text || "";
   $("text").classList.toggle("rau", !d.bun && !d.se_citeste && !d.intrebare);
@@ -387,13 +440,14 @@ function arata(d){
     var mic = document.createElement("div"); mic.className = "mic"; mic.textContent = k.punct + (k.fel ? " (" + k.fel + ")" : "");
     n.appendChild(mic);
     if(k.fisa){ var fi = document.createElement("div"); fi.className = "mic"; fi.textContent = k.fisa; n.appendChild(fi); }
+    var alegere = alegereNumeMedia(k, ocupat); if(alegere){ n.appendChild(alegere); }
     var l = document.createElement("td"); l.className = "liber"; l.textContent = k.liber_text ? (k.liber_text + " din " + k.total_text) : "";
     var s = document.createElement("td"); s.className = "stare"; s.textContent = k.stare;
     var a = document.createElement("td"); a.className = "actiune";
     if(k.bun !== false && !k.folosit){
       var b = document.createElement("button"); b.type = "button"; b.className = "verde";
       b.textContent = (ocupat && d.lucru.punct === k.punct) ? "Se pregătește..." : "Folosește pentru înregistrări";
-      b.disabled = ocupat;
+      b.disabled = ocupat || NUME_OCUPAT !== null;
       b.addEventListener("click", function(){ foloseste(k); });
       a.appendChild(b);
       butoane++;
@@ -404,7 +458,7 @@ function arata(d){
       a.appendChild(rp);
     }
     tr.appendChild(n); tr.appendChild(l); tr.appendChild(s); tr.appendChild(a); corp.appendChild(tr);
-    var r = raspunsPentru(d, k.punct);
+    var r = NUME_RASPUNS && NUME_RASPUNS.dispozitiv === k.dispozitiv ? NUME_RASPUNS : raspunsPentru(d, k.punct);
     if(r){
       aratat = true;
       tr.classList.add("cu-raspuns");
@@ -437,6 +491,7 @@ function arata(d){
     if(RASPUNS && !lucruNouPe(d, CERUT)){ sus = RASPUNS; }
     else if(d.lucru && d.lucru.punct === CERUT && (lucruNou(d.lucru) || !RASPUNS)){ sus = dinLucru(d.lucru); }
   }
+  if(!aratat && NUME_RASPUNS){ sus = NUME_RASPUNS; }
   var m = $("mesaj");
   m.classList.toggle("ascuns", !sus);
   if(sus){
@@ -455,6 +510,7 @@ function citeste(){
 }
 function foloseste(k){
   if(!confirm("Înregistrările se vor salva pe „" + k.nume + "”. Dacă pe el nu există dosarul movie, receptorul îl face. Nu se șterge nimic. Continui?")){ return; }
+  NUME_RASPUNS = null;
   var q = new URLSearchParams(); q.set("punct", k.punct);
   CERUT = k.punct;
   LUCRU_LA_CERERE = (ULTIMA && ULTIMA.lucru) ? ULTIMA.lucru.timp : null;
@@ -465,6 +521,21 @@ function foloseste(k){
     if(d.discuri){ arata(d); } else { citeste(); }
   }).catch(function(){
     RASPUNS = {punct: k.punct, text: "Receptorul nu răspunde.", detaliu: "", eroare: true};
+    if(ULTIMA){ arata(ULTIMA); }
+  });
+}
+function schimbaNumeMedia(k, nume){
+  var q = new URLSearchParams(); q.set("dispozitiv", k.dispozitiv); q.set("nume", nume);
+  NUME_OCUPAT = k.dispozitiv;
+  NUME_RASPUNS = {dispozitiv: k.dispozitiv, text: "Se trimite...", detaliu: "", eroare: false};
+  if(ULTIMA){ arata(ULTIMA); }
+  cerere("/api/stocare-nume-media", "POST", q).then(function(d){
+    NUME_OCUPAT = null;
+    NUME_RASPUNS = {dispozitiv: k.dispozitiv, text: d.message || "Numele nu se poate schimba acum.", detaliu: "", eroare: !d.result, amanat: !!d.amanat};
+    if(d.discuri){ arata(d); } else { citeste(); }
+  }).catch(function(){
+    NUME_OCUPAT = null;
+    NUME_RASPUNS = {dispozitiv: k.dispozitiv, text: "Receptorul nu răspunde.", detaliu: "", eroare: true};
     if(ULTIMA){ arata(ULTIMA); }
   });
 }
@@ -523,6 +594,8 @@ TEXTE_PAGINA = {
 		N_("din"),
 		N_("Se pregătește..."),
 		N_("Folosește pentru înregistrări"),
+		N_("Numele în /media"),
+		N_("Numele nu se poate schimba acum."),
 		N_("Formatează"),
 		N_("Receptorul nu a putut citi discurile."),
 		N_("Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."),

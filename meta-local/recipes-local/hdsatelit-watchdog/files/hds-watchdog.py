@@ -238,6 +238,15 @@ STIVE_PREFIX = "enigma2-stive-"
 OPRIRE_PATH = os.environ.get("HDS_WATCHDOG_OPRIRE", "/tmp/hds-paznic.oprire")
 UPTIME_PATH = os.environ.get("HDS_WATCHDOG_UPTIME", "/proc/uptime")
 
+# ---- viata enigma2 (071): numai jurnal si stive, fara o hotarare noua de repornire ----
+IESIRE_PATH = os.environ.get("HDS_WATCHDOG_IESIRE", "/tmp/hds-enigma2.iesire")  # HDS_IESIRE in enigma2.sh
+IESIRE_MAX_OCTETI = 4096     # semnul mic din RAM se citeste marginit, chiar daca fisierul e stricat
+PRIMA_BATAIE_LUNGA_S = 90    # numai o prima bataie mai tarzie de atat are rand propriu in jurnal
+STIVE_FARA_BATAIE_S = 180    # prima copie a stivelor, de la pornirea procesului, daca nu a batut deloc
+STIVE_FARA_BATAIE_DIN_NOU_S = 600  # a doua si ultima copie pentru acelasi proces fara nicio bataie
+
+_viata_enigma2 = None        # pid, parinte, pornit_la (/proc/uptime), prima_bataie (intarziere), stive (0..2)
+
 # ---- nivelul 5, decodorul video fara memorie (lotul paza-cadere-023, 05.10.2026) ----
 KMSG_PATH = os.environ.get("HDS_WATCHDOG_KMSG", "/dev/kmsg")
 MESAJE_PATH = os.environ.get("HDS_WATCHDOG_MESAJE", "/home/root/logs/messages")
@@ -764,8 +773,16 @@ def check_health(prag=None, pids=None):
 
 
 def open_watchdog():
+    """Deschide watchdogul HW. Daca lipseste sau il tine altcineva (pe unele receptoare Vu+ 4K /dev/watchdog nu e
+    al nostru), paznicul merge mai departe fara partea HW: altfel cadea la pornire, init il repornea in bucla
+    (respawning too fast) si receptorul ramanea fara paznic, fara niciun rand in jurnal."""
     global _placa_secunde
-    fd = os.open(DEVICE_PATH, os.O_WRONLY)
+    try:
+        fd = os.open(DEVICE_PATH, os.O_WRONLY)
+    except OSError as e:
+        log("watchdog HW indisponibil, %s (%s): paznicul merge fara el, repornirea la blocaj numai prin sysrq" % (
+            DEVICE_PATH, e))
+        return None
     try:
         buf = struct.pack("I", 0)
         buf = fcntl.ioctl(fd, WDIOC_GETTIMEOUT, buf)
@@ -779,12 +796,16 @@ def open_watchdog():
 
 
 def pet(fd):
+    if fd is None:
+        return
     os.write(fd, b"\0")
 
 
 def disarm_and_close(fd):
     """Oprire CURATA -- doar la opriri/reporniri normale, intentionate ale sistemului (SIGTERM de la
     init la schimbare de runlevel), NU la blocaj. 'V' (magic close) cere driverului sa dezarmeze."""
+    if fd is None:
+        return
     try:
         os.write(fd, b"V")
     except OSError:
@@ -857,10 +878,10 @@ def _marime(cale):
         return -1
 
 
-def cere_stivele(pid):
-    """Inainte de SIGTERM: enigma2 scrie stivele tuturor firelor Python in STIVE_PATH (faulthandler, din semnal, merge
-    si cu firul principal blocat); partea noua se copiaza in CRASH_LOG_DIR/enigma2-stive-<data>.txt, cu ultimele
-    CRASH_LOG_PASTRATE pastrate. -> calea copiei sau None. Nu arunca."""
+def cere_stivele(pid, anunta=True):
+    """La diagnostic sau inainte de SIGTERM: enigma2 scrie stivele tuturor firelor Python in STIVE_PATH (din semnal,
+    merge si cu firul principal blocat); partea noua se copiaza in CRASH_LOG_DIR/enigma2-stive-<data>.txt, cu ultimele
+    CRASH_LOG_PASTRATE pastrate. -> calea copiei sau None. anunta=False: apelantul scrie randul cu motivul. Nu arunca."""
     if not _prinde_semnalul(pid, STIVE_SEMNAL):
         return None
     inainte = max(_marime(STIVE_PATH), 0)
@@ -898,17 +919,135 @@ def cere_stivele(pid):
     except OSError as e:
         log("stivele enigma2 nu s-au putut pastra: %s" % e)
         return None
-    log("stivele firelor Python ale enigma2 pid=%d pastrate in %s" % (pid, cale))
+    if anunta:
+        log("stivele firelor Python ale enigma2 pid=%d pastrate in %s" % (pid, cale))
     return cale
 
 
 def uptime_secunde():
     """Secundele intregi din /proc/uptime (acelasi ceas ca enigma2.sh: cut -d. -f1 /proc/uptime), sau None."""
+    up = uptime_precis()
+    return int(up) if up is not None else None
+
+
+def uptime_precis():
+    """/proc/uptime cu fractiunile de secunda, pentru compararea pornirii procesului cu bataia monotona."""
     try:
         with open(UPTIME_PATH) as f:
-            return int(float(f.read(64).split()[0]))
+            up = float(f.read(64).split()[0])
+        return up if 0 <= up < float("inf") else None
     except (OSError, ValueError, IndexError):
         return None
+
+
+def citeste_pornirea_enigma2(pid):
+    """(parinte, pornit_la) din /proc/PID/stat, ori None. Campul 22 e in tacuri SC_CLK_TCK, pe ceasul uptime.
+    Numele procesului poate contine spatii si paranteze; campurile se numara numai dupa ultima paranteza."""
+    try:
+        with open(os.path.join(PROC_DIR, str(pid), "stat")) as f:
+            text = f.read(2048)
+        campuri = text[text.rindex(")") + 2:].split()
+        tata, tacuri = int(campuri[1]), int(campuri[19])
+        hz = os.sysconf("SC_CLK_TCK")
+        if tata <= 0 or tacuri < 0 or hz <= 0:
+            return None
+        return tata, tacuri / float(hz)
+    except (AttributeError, OSError, ValueError, IndexError, TypeError):
+        return None
+
+
+def citeste_iesirea_enigma2(proces):
+    """Semnul enigma2.sh numai pentru parintele vechi si numai dupa pornirea lui; altfel None.
+    Nu foloseste mtime sau ora de perete si nu presupune ca pid-ul a fost asteptat de acest paznic."""
+    if proces["parinte"] is None or proces["pornit_la"] is None:
+        return None
+    try:
+        with open(IESIRE_PATH, encoding="utf-8", errors="replace") as f:
+            text = f.read(IESIRE_MAX_OCTETI)
+        d = {}
+        for rand in text.splitlines():
+            cheie, semn, valoare = rand.partition("=")
+            if semn:
+                d[cheie.strip()] = valoare.strip()
+        cod, tata, up = int(d["cod"]), int(d["parinte"]), int(d["uptime"])
+        if tata != proces["parinte"] or not up > proces["pornit_la"] or not 0 <= cod <= 255:
+            return None
+        return {"cod": cod, "parinte": tata, "uptime": up, "fel": d.get("fel", ""),
+                "cauza": d.get("cauza", ""), "motiv_fel": d.get("motiv_fel", "")}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def descrie_iesirea_enigma2(iesire):
+    """Textul codului pentru un singur rand de jurnal; fara efecte si fara newline din semnul shell-ului."""
+    if iesire is None:
+        return "cod necunoscut"
+    cod, fel = iesire["cod"], iesire["fel"]
+    if cod == 3:
+        descriere = "repornirea interfetei"
+    else:
+        descriere = {"repornire": "repornirea interfetei", "oprire": "oprire",
+                     "receptor": "repornirea receptorului", "semnal": "semnal", "python": "eroare Python"}.get(fel, "")
+        if not descriere and cod > 128:
+            descriere = "semnal"
+        motiv = " ".join((iesire["cauza"] or iesire["motiv_fel"]).split())[:240]
+        if motiv:
+            descriere = "%s: %s" % (descriere, motiv) if descriere else motiv
+    return "cod %d%s" % (cod, " (%s)" % descriere if descriere else "")
+
+
+def jurnal_iesire_enigma2(proces, uptime_acum):
+    """Un singur rand despre procesul vechi; uptime din semnul corelat da durata exacta, nu pasul de 15 s."""
+    iesire = citeste_iesirea_enigma2(proces)
+    sfarsit = iesire["uptime"] if iesire is not None else uptime_acum
+    durata = ("%d s" % max(0, int(sfarsit - proces["pornit_la"]))
+              if sfarsit is not None and proces["pornit_la"] is not None else "necunoscut")
+    prima = ("prima bataie dupa %d s" % proces["prima_bataie"]
+             if proces["prima_bataie"] is not None else "fara nicio bataie")
+    log("enigma2 pid=%d a iesit: %s, a mers %s, %s" %
+        (proces["pid"], descrie_iesirea_enigma2(iesire), durata, prima))
+
+
+def pas_viata_enigma2(acum, pid_enigma2, bataie, diagnostic=True):
+    """Observa procesul si prima bataie; stive la 180 si 600 s fara nicio bataie. Nicio recuperare sau asteptare noua.
+    acum e monoton (ca bataia); inceputul si durata sunt pe /proc/uptime. Metadatele raman dupa disparitia din /proc.
+    O bataie veche, dinaintea procesului ori din viitor, nu poate opri diagnosticul pornirii.
+    diagnostic=False pastreaza jurnalul vietii fara a cere stive cand repornirea dura e deja in curs."""
+    global _viata_enigma2
+    up = uptime_precis()
+    pornire = citeste_pornirea_enigma2(pid_enigma2) if pid_enigma2 is not None else None
+    vechi = _viata_enigma2
+    schimbat = vechi is not None and (pid_enigma2 != vechi["pid"] or (
+        pornire is not None and vechi["pornit_la"] is not None and pornire[1] != vechi["pornit_la"]))
+    if schimbat:
+        _viata_enigma2 = None  # chiar daca jurnalul nu poate fi scris, acelasi proces nu se anunta de doua ori
+        jurnal_iesire_enigma2(vechi, up)
+    if pid_enigma2 is None:
+        return
+    if _viata_enigma2 is None:
+        _viata_enigma2 = {"pid": pid_enigma2, "parinte": None, "pornit_la": None,
+                          "prima_bataie": None, "stive": 0}
+    proces = _viata_enigma2
+    if proces["pornit_la"] is None and pornire is not None:
+        proces["parinte"], proces["pornit_la"] = pornire
+    if up is None or proces["pornit_la"] is None:
+        return
+    varsta = up - proces["pornit_la"]
+    if proces["prima_bataie"] is None and bataie is not None and bataie["pid"] == pid_enigma2:
+        intarziere = varsta - (acum - bataie["bataie"])
+        if 0 <= intarziere <= varsta and bataie["bataie"] <= acum:
+            proces["prima_bataie"] = int(round(intarziere))
+            if intarziere > PRIMA_BATAIE_LUNGA_S:
+                log("enigma2 pid=%d prima bataie dupa %d s de la pornire" % (pid_enigma2, proces["prima_bataie"]))
+    if proces["prima_bataie"] is not None or not diagnostic:
+        return
+    praguri = (STIVE_FARA_BATAIE_S, STIVE_FARA_BATAIE_DIN_NOU_S)
+    if proces["stive"] < len(praguri) and varsta >= praguri[proces["stive"]]:
+        proces["stive"] += 1  # se incearca o data la fiecare prag, inclusiv daca procesul nu poate da stivele
+        cale = cere_stivele(pid_enigma2, anunta=False)
+        rezultat = ("stivele firelor Python pastrate in %s" % cale if cale else
+                    "stivele firelor Python nu s-au putut pastra")
+        log("enigma2 pid=%d fara nicio bataie de %d s de la pornire: %s" % (pid_enigma2, int(varsta), rezultat))
 
 
 def parinte(pid):
@@ -2105,6 +2244,12 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
         interfata, asteptare = setari_paznic()
     except Exception:
         interfata, asteptare = INTERFATA_IMPLICIT, ASTEPTARE_IMPLICITA_S
+    # Jurnalul vietii vine dupa hranire. Cand repornirea dura e deja ceruta urmarim iesirea, fara stive noi.
+    try:
+        pas_viata_enigma2(acum, pid_enigma2, bataie, diagnostic=not confirmed)
+    except Exception as e:
+        log("eroare la jurnalul vietii enigma2: %r" % (e,))
+
     # Nivelul 3 (blocaj moale) -- independent de nivelul 2 de mai sus, dar sarit daca o repornire
     # dura e deja in curs (fara rost sa mai trimitem SIGTERM catre un sistem care oricum reporneste).
     # O eroare neprevazuta aici nu are voie sa opreasca bucla (hranirea watchdogului HW).

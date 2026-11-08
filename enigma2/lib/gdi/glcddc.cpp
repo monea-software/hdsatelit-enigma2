@@ -35,7 +35,7 @@ void gLCDDC::exec(const gOpcode *o)
 	switch (o->opcode)
 	{
 	case gOpcode::flush:
-//		if (update)
+		if (update)
 			lcd->update();
 	default:
 		gDC::exec(o);

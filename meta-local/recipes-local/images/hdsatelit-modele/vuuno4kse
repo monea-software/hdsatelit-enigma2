@@ -1,0 +1,26 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Uno 4K SE (masina vuuno4kse), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom (06.11.2026): receptor Broadcom, fara /proc/msp/sys, fara blkdevparts in /proc/cmdline si fara
+# partitia deviceinfo. Garda citeste atunci cipul din /proc/stb/info/chipset, tipul placii din /proc/stb/info/vumodel
+# (cand nu exista /proc/stb/info/boxtype, ca getBoxProc din Tools/StbHardware.py al altor imagini), sistemul din root= al
+# lui /proc/cmdline si nucleul din kernel_part= de mai jos (partitia trebuie sa existe in /proc/partitions, de acolo si
+# marimea). hw= si partitions= sunt "-": pe aceasta familie nu se citesc si nu se compara.
+# chip= si boxtype= din tabelul proc_rw_info al driverului (dvb-bcm7252sse.ko din
+# vuplus-dvb-proxy-vuuno4kse-4.1.20-20250706.r1): chipset=7252s, vumodel=uno4kse.
+# kernel_part=mmcblk0p1, rootfs_part=mmcblk0p4 din vuuno4kse.conf; root=/dev/mmcblk0p4 fortat in defconfig.
+# kernel_kib: nemasurat (0, de completat din fisa unui tester). Pe stick: dosarul vuplus/uno4kse.
+format=1
+distro=hdsatelit
+model=Vu+ Uno 4K SE
+machine=vuuno4kse
+machinebuild=vuuno4kse
+chip=7252s
+boxtype=uno4kse
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=0
+rootfs_part=mmcblk0p4
+confirmat=nu
+familie=broadcom

@@ -10,7 +10,8 @@
 # - aceleasi randuri, in aceeasi ordine, cu aceleasi reguli ca Setup.addItems: level= fata de nivelul utilizatorului
 #   (config.usage.setup_level), requires= din SystemInfo, randurile ConfigNothing sarite;
 # - acelasi text, tradus, cu semnul „(în lucru)” / „(netestat)” din stare= (Components/HdsStareMeniu.py), si acelasi
-#   text de ajutor (description=);
+#   text de ajutor (description=); starea de acum a setarilor cu atributul hdsStare (pe televizor deasupra ajutorului,
+#   de pilda IPv6 si Stream Relay) o data, deasupra randurilor;
 # - aceleasi alegeri: luate chiar din setarea config (ConfigSelection / ConfigBoolean / ConfigInteger / ConfigSlider),
 #   / ConfigNumber, nu scrise a doua oara. ConfigSet (alegere multipla, de pilda vitezele de derulare): o bifa pentru
 #   fiecare alegere, trimise ca lista despartita prin virgula; valoarea se pune ca toggleChoice de pe televizor (lista in
@@ -161,12 +162,16 @@ def _element(config, cale):
 	return obiect
 
 
-def _fel(el):
-	"""'bool', 'alegere', 'multime', 'numar', 'glisor', 'cifre', 'text' sau 'citire', dupa clasa setarii (numele
+def _fel(el, nod=None):
+	"""'bool', 'alegere', 'multime', 'numar', 'glisor', 'cifre', 'text', 'secret' sau 'citire', dupa clasa setarii (numele
 	claselor din config.py)."""
 	clase = [c.__name__ for c in type(el).__mro__]
 	if "ConfigNothing" in clase:
 		return None
+	from Components.HdsAsistentaControl import _elementPrivat, cheieSecreta
+	if (_elementPrivat(el) or (nod is not None and
+		any(cheieSecreta(text) for text in (nod.text or "", nod.get("text", ""))))):
+		return "secret"        # aceeasi regula pentru clasa, marcaj, cale si eticheta ca pe ecranul receptorului
 	if "ConfigBoolean" in clase:
 		return "bool"
 	if "ConfigSelection" in clase:
@@ -231,7 +236,7 @@ def _randuri(cheie, config, SystemInfo=None):
 		if not _cerinta(x.get("requires"), SystemInfo):
 			continue
 		el = _element(config, x.text)
-		if el is None or _fel(el) is None:
+		if el is None or _fel(el, x) is None:
 			continue
 		rez.append((x, el))
 		if len(rez) >= MAX_RANDURI:
@@ -259,7 +264,10 @@ def _alegeriMultime(el):
 
 def _descriere(el, fel):
 	d = {"fel": fel}
-	if fel == "bool":
+	if fel == "secret":
+		# Nu citim nici valoarea, nici getText(): raspunsul GET ramane sigur si cand televizorul arata parola.
+		d["valoare_text"] = "\u2022" * 8
+	elif fel == "bool":
 		d["valoare"] = "1" if el.value else "0"
 		d["alegeri"] = _alegeri(el, fel)
 	elif fel == "alegere":
@@ -292,12 +300,29 @@ def ecran(cheie, config=None, SystemInfo=None):
 	if nod is None:
 		return {"result": False, "message": _t("Ecranul de setări „%s” nu există.") % cheie[:40]}
 	randuri = []
+	stare = []
 	for i, (x, el) in enumerate(_randuri(cheie, config, SystemInfo)):
-		r = _descriere(el, _fel(el))
+		r = _descriere(el, _fel(el, x))
 		r.update(nr=i, text=_textStare(x), ajutor=_t(x.get("description")) if x.get("description") else "",
 			setare=(x.text or "").strip())
 		randuri.append(r)
-	return {"result": True, "id": cheie, "titlu": _t(nod.get("title", "")), "randuri": randuri}
+		for t in _stareSetare(el):
+			if t not in stare:
+				stare.append(t)
+	return {"result": True, "id": cheie, "titlu": _t(nod.get("title", "")), "randuri": randuri, "stare": stare}
+
+
+def _stareSetare(el):
+	"""Randurile starii de acum ale unei setari (atributul hdsStare, ca pe televizor in Screens/Setup.py, deasupra
+	ajutorului), aratate o data, deasupra randurilor ecranului; [] fara el sau la o eroare."""
+	f = getattr(el, "hdsStare", None)
+	if f is None:
+		return []
+	try:
+		return [str(t) for t in (f() or []) if t][:8]
+	except Exception as eroare:
+		_jurnal("starea setarii: %s" % eroare)
+		return []
 
 
 def _valoareNoua(el, fel, text):
@@ -369,11 +394,14 @@ def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
 			rez.update(result=False, message=_t("Lista setărilor s-a schimbat. Pagina se încarcă din nou."))
 			return rez
 		x, el = randuri[i]
-		fel = _fel(el)
+		fel = _fel(el, x)
 		v = _valoareNoua(el, fel, text)
 		if v is None:
 			rez = ecran(cheie, config, SystemInfo)
-			rez.update(result=False, message=_t("Valoarea „%s” nu e bună pentru „%s”.") % (text[:40], _textStare(x)))
+			if fel == "secret":
+				rez.update(result=False, message=_t("Această setare se schimbă de pe televizor."))
+			else:
+				rez.update(result=False, message=_t("Valoarea „%s” nu e bună pentru „%s”.") % (text[:40], _textStare(x)))
 			return rez
 		noi.append((el, v))
 	if not noi:
@@ -706,7 +734,7 @@ PAGINA = """<!DOCTYPE html>
   <p class="mesaj" id="codReteaMesaj"></p>
 </section>
 <div id="continut" class="ascuns">
-  <section class="card"><div id="randuri"></div>
+  <section class="card"><div id="stare" class="ascuns"></div><div id="randuri"></div>
     <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button></div>
   </section>
   <p class="nota">Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de alegeri se schimbă de pe televizor.</p>
@@ -780,6 +808,9 @@ function arata(d){
   DATE = d;
   $("titlu").textContent = d.titlu;
   document.title = d.titlu;
+  var st = $("stare"); st.textContent = "";
+  (d.stare || []).forEach(function(t){ var p = document.createElement("p"); p.className = "nota"; p.textContent = t; st.appendChild(p); });
+  st.classList.toggle("ascuns", !(d.stare && d.stare.length));
   var c = $("randuri"); c.textContent = "";
   var ales = null;
   d.randuri.forEach(function(r){

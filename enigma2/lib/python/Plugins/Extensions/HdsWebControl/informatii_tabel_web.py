@@ -44,11 +44,29 @@ def _vechi():
 	return V
 
 
-def informatii(pagina, Information=None, D=None, T=None, V=None):
-	"""GET /api/informatii: ce da informatii_web.informatii, plus sectiunile tabelului."""
+def albastre(pagina, M=None):
+	"""Pe pagina „despre”: [[text, [[bucata, albastru], ...]], ...], randurile fara valoare desenate pe bucati, ca pe
+	televizor (Screens/Information.py, HdsAbout._albastre): randul de multumiri cu numele albastre ale testerilor care
+	si-au trimis propriul receptor la HD Satelit si legenda lui. [] pe alte pagini, fara niciun albastru sau la o eroare
+	(randurile raman, fara culoare)."""
+	if pagina != "despre":
+		return []
+	try:
+		if M is None:
+			from Components import HdsMultumiri as M
+		return [[t, [[b, bool(a)] for b, a in bucati]] for t, bucati in M.bucati_albastre(traducere=_t).items()]
+	except Exception as e:
+		print("[informatii_tabel_web] albastrul: %r" % (e,))
+		return []
+
+
+def informatii(pagina, Information=None, D=None, T=None, V=None, M=None):
+	"""GET /api/informatii: ce da informatii_web.informatii, plus sectiunile tabelului si, pe „despre”, randurile cu
+	bucati albastre (albastre())."""
 	rez = (V or _vechi()).informatii(pagina, Information=Information, D=D)
 	if rez.get("result") and rez.get("text") is not None:
 		rez["sectiuni"] = (T or _tabel()).sectiuni(rez["text"])
+		rez["albastre"] = albastre(pagina, M)
 	return rez
 
 
@@ -116,6 +134,9 @@ PAGINA = """<!DOCTYPE html>
   nav.file{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;}
   nav.file button,.unelte button{min-height:40px;padding:6px 12px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;font-size:.88rem;cursor:pointer;}
   nav.file button.ales{background:var(--albastru);border-color:var(--albastru);color:#fff;}
+  nav.file a{display:inline-flex;align-items:center;min-height:44px;padding:6px 12px;
+    border:1px solid var(--bordura);border-radius:8px;color:var(--text);text-decoration:none;}
+  nav.file a[aria-current]{background:var(--albastru);border-color:var(--albastru);color:#fff;}
   .unelte{display:flex;justify-content:flex-end;margin:0 0 8px;}
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:16px;margin:0 0 12px;}
   .coloane{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:4px 28px;}
@@ -130,6 +151,7 @@ PAGINA = """<!DOCTYPE html>
   .bara i{display:block;height:100%;background:#9fb4ff;}
   pre.text{font-family:monospace;font-size:.85rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;margin:0;}
   .bun{color:#7fdc9a;} .atentie{color:#f5b83d;} .rau{color:#ff8a80;} .stins{color:var(--text-slab);}
+  .albastru{display:inline-block;color:#0a5bc4;background:#fff;border:1px solid #0a5bc4;border-radius:999px;padding:0 .5em;margin:1px .15em;font-weight:600;line-height:1.35;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
   .nota{color:var(--text-slab);font-size:.85rem;margin:6px 0 0;line-height:1.45;}
 </style>
@@ -161,12 +183,31 @@ function el(tag, clasa, text){ var e = document.createElement(tag); if(clasa){ e
 function file(d){
   var n = $("file"); n.textContent = "";
   (d.pagini || []).forEach(function(p){
-    var b = el("button", p.id === ALES ? "ales" : "", p.titlu); b.type = "button";
-    b.addEventListener("click", function(){ ALES = p.id; history.replaceState(null, "", "/informatii/" + p.id); citeste(); });
+    var b = el("a", "", p.titlu); b.href = adresa(p.href);
+    if(p.href === "/informatii/" + ALES){ b.setAttribute("aria-current", "page"); }
     n.appendChild(b);
   });
 }
-function tabel(sectiuni){
+// randurile fara valoare cu bucati albastre (Despre imagine: numele testerilor care si-au trimis receptorul, legenda), ca
+// pe televizor: o bucata albastra e o eticheta (text albastru pe fundal alb); dupa ea un spatiu, daca textul nu incepe cu
+// semn de punctuatie (legenda vine fara spatiul de dupa eticheta)
+function albastre(lista){
+  var h = {};
+  (lista || []).forEach(function(x){ if(x && typeof x[0] === "string" && Array.isArray(x[1])){ h[x[0]] = x[1]; } });
+  return h;
+}
+function randAlbastru(bucati){
+  var s = el("span", "v");
+  bucati.forEach(function(b, i){
+    var t = String(b[0]);
+    if(b[1]){ s.appendChild(el("span", "albastru", t)); return; }
+    if(i && bucati[i - 1][1] && !/^[ ,.;:!?)]/.test(t)){ t = " " + t; }
+    s.appendChild(document.createTextNode(t));
+  });
+  return s;
+}
+function tabel(sectiuni, cuAlbastru){
+  var A = albastre(cuAlbastru);
   var g = el("div", "coloane");
   sectiuni.forEach(function(s){
     var d = el("div", "sect");
@@ -174,7 +215,8 @@ function tabel(sectiuni){
     s.randuri.forEach(function(r){
       if(r.subtitlu !== undefined){ d.appendChild(el("h4", "", r.subtitlu)); return; }
       var rd = el("div", "r" + (r.valoare ? "" : " lat"));
-      rd.appendChild(el("span", r.valoare ? "e" : "v", r.eticheta));
+      if(!r.valoare && Object.prototype.hasOwnProperty.call(A, r.eticheta)){ rd.appendChild(randAlbastru(A[r.eticheta])); }
+      else { rd.appendChild(el("span", r.valoare ? "e" : "v", r.eticheta)); }
       if(r.valoare){ rd.appendChild(el("span", "v", r.valoare)); }
       if(r.bara !== null && r.bara !== undefined){ var b = el("div", "bara"); var i = el("i"); i.style.width = Math.max(0, Math.min(100, r.bara)) + "%"; b.appendChild(i); rd.appendChild(b); }
       d.appendChild(rd);
@@ -203,7 +245,7 @@ function arata(){
   $("brut").style.visibility = d.text !== undefined ? "visible" : "hidden";
   $("brut").textContent = BRUT ? "Tabel" : "Text brut";
   if(d.text !== undefined && (BRUT || !d.sectiuni)){ c.appendChild(el("pre", "text", d.text)); return; }
-  c.appendChild(d.sectiuni ? tabel(d.sectiuni) : hdmi(d.coloane));
+  c.appendChild(d.sectiuni ? tabel(d.sectiuni, d.albastre) : hdmi(d.coloane));
 }
 function citeste(){
   cerere("/api/informatii?pagina=" + encodeURIComponent(ALES)).then(function(d){

@@ -73,6 +73,12 @@
 # Tot acolo, numele stickului (MediuImagine.pregatesteNumeStick): ofgwrite fara peticul ghilimelelor goleste radacina
 # cand punctul de montare al stickului are spatii; montarea se muta singura intr-un dosar fara spatii, fara nicio
 # intrebare. Numai daca mutarea nu merge, pachetul nu se scrie si omul afla ce nume sa-i dea stickului.
+#
+# Stickul pus de nucleu pe numai citire dupa o eroare: dosarul curat nu se poate face pe el, dar arhiva se citeste. Cu cei mai putini
+# pasi pentru om: intai alt disc USB pe care paznicul de mai sus il primeste, pe care se poate scrie si care are loc (dosarul curat,
+# copia setarilor si jurnalul merg acolo, fara nicio intrebare). Discul de pe care ruleaza imaginea (primul Viper 4K pornit de pe un
+# disc extern) nu intra: e chiar dispozitivul radacinii, pe care ofgwrite il rescrie, iar paznicul il refuza. Fara alt disc: un rand
+# „Repară” primul in lista, cu aceeasi lucrare ca in Screens/HdsLocInregistrari.py, un singur OK, apoi lista se citeste din nou.
 
 import glob
 import os
@@ -487,8 +493,102 @@ def cautaCandidati(discuri=None):
 			c["paza"] = pazaPachet(c, a)
 			c["nume_stick"] = pregatesteNumeStick(c["disc"].mountpoint)[0]
 			c["usb"] = versiuneUsb(c["disc"].mountpoint)
+			marcheazaMediu(c, discuri)
 		asazaPachete(candidati)
 	return candidati
+
+
+def stickNumaiCitire(punct):
+	"""True cand pe `punct` se poate numai citi: aceeasi verificare ca la locul inregistrarilor (Components/HdsStocare.verificaDisc)."""
+	try:
+		from Components import HdsStocare
+		return HdsStocare.verificaDisc(punct.rstrip("/") + "/")[1] == "numai_citire"
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] starea stickului: %s" % eroare)
+		return False
+
+
+def discDeReparat(disc):
+	"""Discul intreg de verificat („sdb”) pentru partitia `disc`; „” fara dispozitiv sau cu stickul protejat din comutatorul lui, unde
+	verificarea n-ar folosi la nimic."""
+	try:
+		from Components import HdsLocInregistrari, HdsStocare
+		dispozitiv = getattr(disc, "device", None) or ""
+		nume = HdsLocInregistrari.discul(dispozitiv) if dispozitiv else ""
+		if not nume or HdsStocare._citesteSys("/sys/block/%s/ro" % nume) == "1":
+			return ""
+		return nume
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] discul de reparat: %s" % eroare)
+		return ""
+
+
+def _numeBunPentruOfgwrite(punct):
+	"""Numele montarii, fara sa mute nimic: discul acesta nu e al pachetului, iar pe el poate merge o inregistrare."""
+	from Tools.MediuImagine import verificaNumeStick
+	return not verificaNumeStick(punct)[0]
+
+
+def locDezarhivare(c, discuri):
+	"""Alt disc pentru dosarul curat, cand pe stickul pachetului se poate numai citi: primit de paznic (un disc USB, nu dispozitivul
+	radacinii), bun de scris, cu nume bun pentru ofgwrite si cu loc pentru pachet. None cand nu e niciunul."""
+	try:
+		from Components import HdsStocare
+		marime = _marimePachet(c)
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] alt disc: %s" % eroare)
+		return None
+	for disc in discuri:
+		punct = disc.mountpoint
+		if punct == c["disc"].mountpoint:
+			continue
+		try:
+			permis, motiv, _d, _p = verificaMediuScriere(punct)
+			if not permis or motiv != "usb" or not HdsStocare.verificaDisc(punct.rstrip("/") + "/")[0]:
+				continue
+			if not _numeBunPentruOfgwrite(punct) or not _spatiuSuficient(punct, marime):
+				continue
+		except Exception as eroare:
+			print("[HdsSoftwareUpdate] alt disc %s: %s" % (punct, eroare))
+			continue
+		return punct
+	return None
+
+
+def marcheazaMediu(c, discuri):
+	"""Pune in pachet „numai_citire” (stickul lui), „loc_lucru” (unde se face dosarul curat; None: nicaieri) si „disc_reparat” (ce se
+	verifica la OK, cand nu e alt loc)."""
+	punct = c["disc"].mountpoint
+	c["numai_citire"] = stickNumaiCitire(punct)
+	c["loc_lucru"] = punct
+	c["disc_reparat"] = ""
+	if c["numai_citire"]:
+		c["loc_lucru"] = locDezarhivare(c, discuri)
+		if not c["loc_lucru"]:
+			c["disc_reparat"] = discDeReparat(c["disc"])
+
+
+def faraLoc(c):
+	"""Pachetul sta pe un stick pus pe numai citire si nu e alt disc unde sa se pregateasca."""
+	return bool(c.get("numai_citire")) and not c.get("loc_lucru")
+
+
+def locLucru(c):
+	return c.get("loc_lucru") or c["disc"].mountpoint
+
+
+def numeMediu(c):
+	return c["disc"].description or c["disc"].mountpoint
+
+
+def textStickCazut(c, cu_ok=True):
+	"""Sus in lista, cand pachetul nu are unde sa se pregateasca. `cu_ok`: si ce face OK (pagina web are legatura ei, nu OK)."""
+	if c.get("disc_reparat"):
+		text = _("Pe „%s” se poate numai citi, după o eroare a stickului, deci software-ul nu se poate pregăti pe el.") % numeMediu(c)
+		if cu_ok:
+			text += " " + _("Apasă OK: verific stickul, îi repar erorile și citesc lista din nou. Nu se formatează nimic.")
+		return text
+	return _("Pe „%s” se poate numai citi. Copiază software-ul pe alt stick și încearcă din nou.") % numeMediu(c)
 
 
 def scurtNumeStick(motiv):
@@ -551,6 +651,8 @@ def _descriereCandidat(c):
 	stick = scurtNumeStick(c.get("nume_stick"))
 	if stick:
 		parti.insert(0, stick)
+	elif c.get("fel") == FEL_STRAINA:
+		parti.insert(0, _("Nu este imagine HD Satelit și nu o putem verifica"))
 	elif c.get("paza"):
 		parti.insert(0, HdsPazaModel.scurtRefuz(c["paza"][0]))
 	return "  ·  ".join(parti)
@@ -672,9 +774,11 @@ def detaliuPachet(c):
 	"""Randul mic al cartelei: de ce nu se instaleaza, numele fisierului (daca nu e deja in titlu), stickul si viteza lui"""
 	parti = []
 	if c.get("fel") == FEL_STRAINA:
-		parti.append(_("Nu este imagine HD Satelit. Nu știm dacă este compatibilă"))
+		parti.append(_("Nu este imagine HD Satelit și nu o putem verifica"))
 	elif not _compatibil(c):
 		parti.append(_literaMare(scurtNumeStick(c.get("nume_stick")) or HdsPazaModel.scurtRefuz((c.get("paza") or (None,))[0])))
+	if faraLoc(c) and c.get("fel") != FEL_REA:
+		parti.append(_("Pe stick se poate numai citi"))
 	if versiuneSiData(c)[0]:
 		parti.append(_literaMare(_numePachet(c)) if c["tip"] == "folder" else _numePachet(c))
 	parti.append(c["disc"].description or c["disc"].mountpoint)
@@ -824,9 +928,10 @@ def _copiazaDosar(candidat, tinta, oprit=None):
 
 
 def _pregatesteDosarCurat(candidat, oprit=None):
-	"""Dosarul curat al pachetului, pe acelasi mediu: <mediu>/.hds-actualizare-extrasa/e2/update, golit si umplut numai
-	cu fisierele pachetului (din zip sau din dosarul e2/update). Ruleaza pe un fir separat. Intoarce calea dosarului."""
-	tinta = os.path.join(candidat["disc"].mountpoint, FOLDER_DEZARHIVARE, *SUBCALE_UPDATE)
+	"""Dosarul curat al pachetului, pe acelasi mediu (pe alt disc, cand stickul e pe numai citire: locLucru):
+	<mediu>/.hds-actualizare-extrasa/e2/update, golit si umplut numai cu fisierele pachetului (din zip sau din dosarul e2/update).
+	Ruleaza pe un fir separat. Intoarce calea dosarului."""
+	tinta = os.path.join(locLucru(candidat), FOLDER_DEZARHIVARE, *SUBCALE_UPDATE)
 	if os.path.isdir(tinta):
 		shutil.rmtree(tinta, ignore_errors=True)
 	os.makedirs(tinta, exist_ok=True)
@@ -1034,6 +1139,7 @@ class HdsSoftwareUpdate(Screen):
 		self.setTitle(_("Imagine nouă de pe stick"))
 		self._console = Console()
 		self._candidati = []
+		self._reparari = []   # randurile „Repară” din capul listei: [{"disc", "nume", "text"}]
 		self._candidatAles = None
 		self._ultimaIesire = ""
 		self._arataCorect = False
@@ -1118,11 +1224,19 @@ class HdsSoftwareUpdate(Screen):
 
 	def _detaliuRand(self):
 		"""Sus in lista, tot textul pentru randul ales, pe mai multe randuri, ca sa nu se taie: pe cartela nu incape."""
+		r = self._reparareSelectata()
 		c = self._candidatSelectat()
-		if c is not None and c.get("fel") == FEL_STRAINA:
+		if r is not None:
+			self["detaliu"].setText(r["text"])
+		elif c is not None and c.get("fel") != FEL_REA and faraLoc(c):
+			self["detaliu"].setText(textStickCazut(c))
+		elif c is not None and c.get("fel") == FEL_STRAINA:
 			self["detaliu"].setText(textImagineStraina(c))
 		elif self._candidati:
 			self["detaliu"].setText(textGasite(len(self._candidati)))
+		if self._candidati:
+			repara = r is not None or (c is not None and c.get("fel") != FEL_REA and bool(c.get("disc_reparat")))
+			self._buton("key_green", _("Repară stickul") if repara else _("Verifică software-ul"))
 
 	def _sus(self):
 		if not self._ocupat and self._faza == "lista":
@@ -1196,7 +1310,7 @@ class HdsSoftwareUpdate(Screen):
 			return
 		c["paza"] = (cod, text)
 		asazaPachete(self._candidati)
-		self["lista"].setList([self._randPachet(x) for x in self._candidati] + [self._randSimplu(_("Caută din nou software de receptor"))])
+		self["lista"].setList(self._randuriLista())
 		self["lista"].moveToIndex(0)
 
 	# -------------------------------------------------------------- faza 1: cautare
@@ -1215,15 +1329,17 @@ class HdsSoftwareUpdate(Screen):
 		except Exception as eroare:
 			self._candidati = []
 			eroare_cautare = eroare
+		self._reparari = self._randuriReparare()
 		cauta_din_nou = self._randSimplu(_("Caută din nou software de receptor"))
 		if self._candidati:
-			randuri = [self._randPachet(c) for c in self._candidati]
-			self["lista"].setList(randuri + [cauta_din_nou])
+			self["lista"].setList(self._randuriLista())
 			self["lista"].moveToIndex(0)
 			self["detaliu"].setText(
 				textGasite(len(self._candidati))
 			)
 			self._buton("key_green", _("Verifică software-ul"))
+			if self._reparari:
+				self._detaliuRand()
 		else:
 			self["lista"].setList([self._randSimplu(_("Nu am găsit software de receptor pe stick sau pe disc.")), cauta_din_nou])
 			if eroare_cautare is not None:
@@ -1236,11 +1352,41 @@ class HdsSoftwareUpdate(Screen):
 			self._buton("key_green", "")
 		self._buton("key_yellow", _("Reîncarcă"))
 
-	def _candidatSelectat(self):
+	def _randuriReparare(self):
+		"""Cate un rand „Repară” pentru fiecare stick pe numai citire cu un pachet care s-ar putea instala si fara alt loc."""
+		rez = []
+		for c in self._candidati:
+			if c.get("fel") != FEL_REA and faraLoc(c) and c.get("disc_reparat") and not any(r["disc"] == c["disc_reparat"] for r in rez):
+				rez.append({"disc": c["disc_reparat"], "nume": numeMediu(c), "text": textStickCazut(c)})
+		return rez
+
+	def _randuriLista(self):
+		return [self._randSimplu(_("Repară „%s”") % r["nume"]) for r in self._reparari] + [self._randPachet(c) for c in self._candidati] + \
+			[self._randSimplu(_("Caută din nou software de receptor"))]
+
+	def _reparareSelectata(self):
 		index = self["lista"].getSelectionIndex()
+		if 0 <= index < len(self._reparari):
+			return self._reparari[index]
+		return None
+
+	def _candidatSelectat(self):
+		index = self["lista"].getSelectionIndex() - len(self._reparari)
 		if self._candidati and 0 <= index < len(self._candidati):
 			return self._candidati[index]
 		return None
+
+	def _repara(self, disc):
+		"""Un singur OK: aceeasi lucrare si acelasi ecran de asteptare ca randul „Repară” din Locul inregistrarilor."""
+		from Screens.HdsLocInregistrari import pornesteReparare
+		pornesteReparare(self.session, disc, self["detaliu"].setText, self._dupaReparare)
+
+	def _dupaReparare(self, reusit=None):
+		from Screens.HdsLocInregistrari import textDupaReparare
+		self._reincarca()
+		text = textDupaReparare(reusit)
+		if text:
+			self["detaliu"].setText(text)
 
 	# -------------------------------------------------------------- faza 2: alegere + confirmare 1
 
@@ -1254,12 +1400,22 @@ class HdsSoftwareUpdate(Screen):
 		if self._ocupat:
 			return
 		if self._faza == "lista":
+			reparare = self._reparareSelectata()
+			if reparare is not None:
+				self._repara(reparare["disc"])
+				return
 			candidat = self._candidatSelectat()
 			if candidat is None:
 				# „Caută din nou software de receptor” (sau randul „Nu am găsit...”)
 				self._reincarca()
 				return
 			self._semnVerificat = None
+			if candidat.get("fel") != FEL_REA and faraLoc(candidat):
+				if candidat.get("disc_reparat"):
+					self._repara(candidat["disc_reparat"])
+				else:
+					self["detaliu"].setText(textStickCazut(candidat))
+				return
 			if candidat.get("fel") == FEL_STRAINA:
 				self._candidatAles = candidat
 				self._intreaba(self._dupaConfirmareVerificare, textAvertismentStrain(candidat),
@@ -1329,7 +1485,13 @@ class HdsSoftwareUpdate(Screen):
 	def _pregatesteSiVerifica(self):
 		"""Dosarul curat al pachetului, pe un fir separat, apoi sumele si simularea."""
 		candidat = self._candidatAles
-		refuz = self._refuzMediu(candidat["disc"].mountpoint)
+		# stickul poate sa fi cazut dupa ce s-a citit lista
+		marcheazaMediu(candidat, _discuriMontate())
+		if faraLoc(candidat):
+			self._reincarca()
+			return
+		punct = locLucru(candidat)
+		refuz = self._refuzMediu(punct)
 		if refuz:
 			self._eroareInapoiLaLista(refuz)
 			return
@@ -1338,12 +1500,15 @@ class HdsSoftwareUpdate(Screen):
 		except OSError as eroare:
 			self._eroareInapoiLaLista(_("Nu am putut dezarhiva software-ul: %s") % eroare)
 			return
-		if not _spatiuSuficient(candidat["disc"].mountpoint, marime):
-			self._eroareInapoiLaLista(_("Spațiu insuficient pe %s pentru dezarhivare.") % candidat["disc"].mountpoint)
+		if not _spatiuSuficient(punct, marime):
+			self._eroareInapoiLaLista(_("Spațiu insuficient pe %s pentru dezarhivare.") % punct)
 			return
 		self._ocupat = True
 		self._opreste = False
-		self["detaliu"].setText(_("Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."))
+		if candidat.get("numai_citire"):
+			self["detaliu"].setText(_("Pe stick se poate numai citi, deci copiez software-ul într-un dosar curat pe „%s”. Durează până la un minut.") % punct)
+		else:
+			self["detaliu"].setText(_("Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		self._lucrare = HdsPazaModel.LucrareFundal(
@@ -1354,6 +1519,11 @@ class HdsSoftwareUpdate(Screen):
 		self._lucrare = None
 		self._ocupat = False
 		if eroare or not cale:
+			# stickul a cazut pe numai citire chiar acum: lista arata ce se poate face, in locul erorii brute
+			marcheazaMediu(candidat, _discuriMontate())
+			if candidat.get("numai_citire"):
+				self._reincarca()
+				return
 			self._eroareInapoiLaLista(_("Nu am putut dezarhiva software-ul: %s") % (eroare or "?"))
 			return
 		candidat["cale_finala"] = cale
@@ -1429,6 +1599,13 @@ class HdsSoftwareUpdate(Screen):
 	def _refuzPazaInainteDeScriere(self, cale):
 		"""Pe firul enigma2, chiar inainte de copie si de init 4: marcajul, amprenta si fisierele neschimbate de la
 		sume. Intoarce textul refuzului (si il arata), sau None."""
+		# Pe NAND nu pornim scrierea automata, nici dintr-un sistem USB.
+		if HdsPazaModel.nand(HdsPazaModel.citesteReguli()):
+			text = _("Instalarea din meniu nu este disponibilă pe acest model. "
+				"Folosește arhiva pentru flash și metoda de instalare a receptorului. "
+				"Imaginea USB se instalează din managerul de multi-imagine.")
+			self._arataRefuzPaza(text)
+			return text
 		cod, text, _marcaj = HdsPazaModel.verificaPachet(_textMarcaj(os.path.join(cale, NUME_MARCAJ)))
 		trece = cod == HdsPazaModel.PACHET_BUN or self._primitDupaAvertisment(cod)
 		if trece and (not self._semnVerificat or self._semnVerificat[0] != cale or
@@ -1529,7 +1706,7 @@ class HdsSoftwareUpdate(Screen):
 			return
 		self._scriereRealaPornita = True  # o singura scriere reala per deschidere a ecranului
 
-		mountpoint = self._candidatAles["disc"].mountpoint
+		mountpoint = locLucru(self._candidatAles)
 		_bazaCanalelor("copie")
 		folder_backup, fisiere_copiate, eroare_backup = _creeazaBackupSetari(mountpoint)
 		eroare_backup = eroare_backup or _copieCompleta(mountpoint)
@@ -1555,7 +1732,7 @@ class HdsSoftwareUpdate(Screen):
 			self._scriereRealaPornita = False
 			self["detaliu"].setText(_("Instalarea nu a pornit, pentru că nu există copie de siguranță. Nu s-a instalat nimic pe receptor. Verifică stickul, apoi apasă din nou Verde."))
 			return
-		self._pornesteScrierea(self._candidatAles["cale_finala"], self._candidatAles["disc"].mountpoint,
+		self._pornesteScrierea(self._candidatAles["cale_finala"], locLucru(self._candidatAles),
 			_("Instalarea continuă fără copie de siguranță, cum ai ales."))
 
 	def _pornesteScrierea(self, cale_pachet, mountpoint, mesaj_backup):

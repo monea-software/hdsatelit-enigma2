@@ -89,6 +89,19 @@ def _procFundal(functie, *argumente):
 	return HdsProcFundal.citeste(functie, *argumente)
 
 
+def _noduri():
+	"""Lista comuna a fisierelor din /proc/stb care nu se citesc (Components/HdsProcFundal.py)."""
+	try:
+		from Components import HdsProcFundal
+		return HdsProcFundal
+	except ImportError:  # probele de pe PC, cu alt pachet Components: fisierul de langa acesta
+		import importlib.util
+		spec = importlib.util.spec_from_file_location("HdsProcFundal", os.path.join(os.path.dirname(os.path.abspath(__file__)), "HdsProcFundal.py"))
+		m = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(m)
+		return m
+
+
 def citeste_text_direct(cale_fisier):
 	"""Continutul unui fisier text (cel mult MAX_OCTETI), sau None daca lipseste ori nu se poate citi."""
 	try:
@@ -507,7 +520,7 @@ def citeste(radacina='/', anterior=None, brut=False):
 
 		# pe unele placi SF8008 citirea acestor doua opreste nucleul (hi_dvb), ca la fisierele de sunet: pagina bruta le sare
 		s.video = citeste_dosar(cale(radacina, STB_VIDEO), None if brut else ('videomode', 'videomode_preferred'),
-			('alpha', 'zapmode') if os.path.isdir(cale(radacina, 'proc/msp')) else ())
+			_noduri().VIDEO_OPRITE_HISILICON if os.path.isdir(cale(radacina, 'proc/msp')) else ())
 		s.vmpeg = citeste_dosar(cale(radacina, STB_VMPEG), None if brut else ('xres', 'yres', 'progressive', 'framerate', 'gamma'))
 		s.audio = citeste_sunet(radacina, brut)
 		if brut:
@@ -539,7 +552,7 @@ def citeste_sunet(radacina, brut):
 		nume = sorted(os.listdir(dosar))
 	except Exception:
 		return {}
-	rez = citeste_dosar(dosar, [n for n in nume if n.endswith('_choices')]) if brut else {}
+	rez = citeste_dosar(dosar, [n for n in nume if not _noduri().nodOprit('audio/' + n, True)]) if brut else {}
 	try:
 		from Components.AVSwitch import AUDIO_SCRIS
 	except Exception:

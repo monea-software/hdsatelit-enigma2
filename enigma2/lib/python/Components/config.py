@@ -118,8 +118,20 @@ class ConfigElement(object):
 			for x in self.notifiers_final:
 				x(self)
 
-	def addNotifier(self, notifier, initial_call = True, immediate_feedback = True):
+	def clearNotifiers(self):
+		self.notifiers = []
+		self.notifiers_final = []
+
+	def removeNotifier(self, notifier):
+		"""Takes a notifier out, also one added with extra_args; one that was not added changes nothing."""
+		for lista in (self.notifiers, self.notifiers_final):
+			for x in [x for x in lista if x == notifier or getattr(x, "functie", None) == notifier]:
+				lista.remove(x)
+
+	def addNotifier(self, notifier, initial_call = True, immediate_feedback = True, extra_args = None):
 		assert callable(notifier), "notifiers must be callable"
+		if extra_args is not None:
+			notifier = _NotificareCuArgumente(notifier, extra_args)
 		if immediate_feedback:
 			self.notifiers.append(notifier)
 		else:
@@ -163,6 +175,13 @@ KEY_NUMBERS = list(range(12, 12+10))
 KEY_0 = 12
 KEY_9 = 12+9
 
+class ActionKeys:
+	"""Codurile de taste cerute de pluginuri, identice cu KEY_*."""
+	LEFT = KEY_LEFT
+	RIGHT = KEY_RIGHT
+	NUMBER_0 = KEY_0
+
+
 def getKeyNumber(key):
 	assert key in KEY_NUMBERS
 	return key - KEY_0
@@ -185,14 +204,14 @@ class choicesList(object): # XXX: we might want a better name for this
 
 	def __list__(self):
 		if self.type == choicesList.LIST_TYPE_LIST:
-			ret = [not isinstance(x, tuple) and x or x[0] for x in self.choices]
+			ret = [x[0] if isinstance(x, tuple) else x for x in self.choices]
 		else:
 			ret = list(self.choices.keys())
 		return ret or [""]
 
 	def __iter__(self):
 		if self.type == choicesList.LIST_TYPE_LIST:
-			ret = [not isinstance(x, tuple) and x or x[0] for x in self.choices]
+			ret = [x[0] if isinstance(x, tuple) else x for x in self.choices]
 		else:
 			ret = self.choices
 		return iter(ret or [""])
@@ -209,7 +228,14 @@ class choicesList(object): # XXX: we might want a better name for this
 		return list(self.choices.keys())[index]
 
 	def index(self, value):
-		return self.__list__().index(value)
+		lista = self.__list__()
+		try:
+			return lista.index(value)
+		except ValueError:
+			# ConfigSelectionNumber da .value ca numar, iar alegerile lui sunt text (cum asteapta pluginurile): cautam si dupa text
+			if not isinstance(value, str):
+				return [str(x) for x in lista].index(str(value))
+			raise
 
 	def __setitem__(self, index, value):
 		if self.type == choicesList.LIST_TYPE_LIST:
@@ -276,7 +302,7 @@ class descriptionList(choicesList): # XXX: we might want a better name for this
 # (id, desc)-tuples (or just only the ids, in case the id
 # will be used as description)
 #
-# all ids MUST be plain strings.
+# Identificatorii se salveaza ca text; la citire se reface tipul din choices.
 #
 class ConfigSelection(ConfigElement):
 	def __init__(self, choices, default = None):
@@ -308,6 +334,16 @@ class ConfigSelection(ConfigElement):
 		self.changed()
 
 	def tostring(self, val):
+		return str(val)
+
+	def fromstring(self, val):
+		# Pastreaza identificatorii text existenti, inclusiv la choices cu tipuri mixte.
+		for choice in self.choices:
+			if isinstance(choice, str) and choice == val:
+				return choice
+		for choice in self.choices:
+			if str(choice) == val:
+				return choice
 		return val
 
 	def getValue(self):
@@ -386,7 +422,7 @@ class ConfigSelection(ConfigElement):
 #
 boolean_descriptions = {False: "false", True: "true"}
 class ConfigBoolean(ConfigElement):
-	def __init__(self, default = False, descriptions = boolean_descriptions):
+	def __init__(self, default = False, descriptions = boolean_descriptions, graphic = True):
 		ConfigElement.__init__(self)
 		self.descriptions = descriptions
 		self.value = self.last_value = self.default = default
@@ -399,14 +435,21 @@ class ConfigBoolean(ConfigElement):
 		elif key == KEY_END:
 			self.value = True
 
+	def _valoareBool(self):
+		# unele pluginuri pun textul "true"/"false" in loc de True/False (vavoo, raportul 415353): se citeste ca valoare
+		v = self.value
+		if isinstance(v, str):
+			return v.strip().lower() in ("true", "1", "yes", "on", "enable", "enabled")
+		return bool(v)
+
 	def getText(self):
-		descr = self.descriptions[self.value]
+		descr = self.descriptions[self._valoareBool()]
 		if descr:
 			return _(descr)
 		return descr
 
 	def getMulti(self, selected):
-		descr = self.descriptions[self.value]
+		descr = self.descriptions[self._valoareBool()]
 		if descr:
 			return ("text", _(descr))
 		return ("text", descr)
@@ -1051,13 +1094,32 @@ class ConfigSelectionNumber(ConfigSelection):
 	def setValue(self, val):
 		ConfigSelection.setValue(self, str(val))
 
+	# Cum asteapta pluginurile: .value e numarul intreg. Fara randul acesta proprietatea venea din ConfigSelection si
+	# intorcea textul (de pilda Vavoo facea "30" * 2 = "3030" si cadea la comparatie).
+	value = property(getValue, setValue)
+
+	# default si alegerile raman text; comparam ca text, ca valoarea implicita sa nu para schimbata
+	def save(self):
+		if self.save_disabled or (str(self.value) == str(self.default) and not self.save_forced):
+			self.saved_value = None
+		else:
+			self.saved_value = self.tostring(self.value)
+		if self.callNotifiersOnSaveAndCancel:
+			self.changed()
+
+	def isChanged(self):
+		sv = self.saved_value
+		if sv is None and str(self.value) == str(self.default):
+			return False
+		return self.tostring(self.value) != sv
+
 	def handleKey(self, key):
 		if not self.wraparound:
 			if key == KEY_RIGHT:
-				if len(self.choices) == (self.choices.index(self.value) + 1):
+				if len(self.choices) == (self.choices.index(str(self.value)) + 1):
 					return
 			if key == KEY_LEFT:
-				if self.choices.index(self.value) == 0:
+				if self.choices.index(str(self.value)) == 0:
 					return
 		ConfigSelection.handleKey(self, key)
 
@@ -1558,6 +1620,12 @@ class ConfigSubDict(dict, object):
 # __setattr__.
 # If you don't understand this, try adding
 # __setattr__ to a usual exisiting class and you will.
+class SetareLipsa(AttributeError, KeyError):
+	"""A setting that does not exist. The plugins ask hasattr(config.plugins, "x") or catch AttributeError; the code that catches KeyError keeps working."""
+	def __str__(self):
+		return AttributeError.__str__(self)
+
+
 class ConfigSubsection(object):
 	def __init__(self):
 		self.__dict__["content"] = ConfigSubsectionContent()
@@ -1577,7 +1645,10 @@ class ConfigSubsection(object):
 			value.load()
 
 	def __getattr__(self, name):
-		return self.content.items[name]
+		try:
+			return self.content.items[name]
+		except KeyError:
+			raise SetareLipsa(name) from None
 
 	def getSavedValue(self):
 		res = self.content.stored_values
@@ -1854,7 +1925,8 @@ configfile = ConfigFile()
 configfile.load()
 
 def getConfigListEntry(*args):
-	assert len(args) > 1, "getConfigListEntry needs a minimum of two arguments (descr, configElement)"
+	# un singur element e un rand de titlu, care nu se poate alege (ConfigList il sare, elistboxcontent.cpp il deseneaza)
+	assert len(args) > 0, "getConfigListEntry needs at least a description"
 	return args
 
 def updateConfigElement(element, newelement):
@@ -1883,3 +1955,20 @@ def updateConfigElement(element, newelement):
 ##configfile.save()
 #config.save()
 #print config.pickle()
+
+class _NotificareCuArgumente:
+	"""addNotifier(f, extra_args=[a, b]): f(element, [a, b]); f(element, a, b) cand asa o cere pluginul nu se poate sti, deci ca in celelalte imagini: lista intreaga."""
+	def __init__(self, functie, extra_args):
+		self.functie = functie
+		self.extra_args = extra_args
+
+	def __call__(self, element):
+		return self.functie(element, self.extra_args)
+
+
+# callback-uri la salvarea unui ecran de setari: cheia e numele ecranului
+setupOnSave = {}
+
+
+def setOnSaveCallback(setup, callback):
+	setupOnSave[setup] = callback

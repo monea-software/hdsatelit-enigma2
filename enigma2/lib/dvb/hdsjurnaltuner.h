@@ -12,14 +12,16 @@
  *               deschiderea cazuta (EROARE, cu errno).
  *   [acordare]  INFO la semnal prins: parametrii, comenzile LNB din secventa (tensiunea, tonul 22 kHz, DiSEqC 1.0/1.1,
  *               Unicable, toneburst, motorul), cat a durat pana la semnal, SNR-ul; AVERT la "fara semnal" dupa
- *               timpul de asteptare, cu bitii de stare ai driverului (semnal, purtatoare, viterbi, sincronizare);
+ *               timpul de asteptare, cu bitii de stare ai driverului (semnal, purtatoare, viterbi, sincronizare) si nivelul
+ *               semnalului in procente (deosebeste "nu vine nimic" de "vine, dar nu decodeaza");
  *               EROARE cand driverul refuza parametrii (FE_SET_PROPERTY / FE_SET_FRONTEND, errno).
  *   [semnal]    AVERT la semnalul pierdut dupa ce era prins; reacordarile dupa pierdere au frana (un rand la 30 s pe
  *               tuner, cele sarite numarate in randul urmator), ca o ploaie sa nu impinga din fisier restul.
  *   [sistem]    schimbarea sistemului pe un tuner combinat (DVB-C <-> DVB-T), reusita sau refuzata.
  * SCANAREA (/home/root/logs/hds-scanare.log, namespace hdsjscan, chemat din scan.cpp): pornirea (cate transpondere,
- * steagurile), fiecare transponder (parametrii; prins in cat timp si cate servicii noi, sau fara semnal dupa cat
- * timp) si sfarsitul (cercetate, fara semnal, servicii gasite, durata). Fara numele serviciilor gasite.
+ * steagurile), fiecare transponder (parametrii; prins in cat timp, cate servicii noi, SNR-ul, nivelul semnalului si cat
+ * a durat citirea lor, sau fara semnal dupa cat timp) si sfarsitul (cercetate, fara semnal, servicii gasite, durata). Fara
+ * numele serviciilor gasite.
  * Exemplu: "2026-10-29T08:14:02Z [INFO] [acordare] A DVB-S2 8PSK 11054 H 27500 3/4 19.2E | lnb 18V 22k DiSEqC1.0
  *   port 2 | semnal in 412 ms snr 12.40 dB"
  *
@@ -70,9 +72,10 @@ void diseqc(Stare &s, const unsigned char *d, int len);
 void toneburst(Stare &s, int b);
 
 /* rezultatul: semnal prins (snr_db100 = SNR in sutimi de dB, < 0 necunoscut), fara semnal dupa timpul de asteptare
-   (status = bitii FE_READ_STATUS, < 0 necunoscuti), semnal pierdut, parametri refuzati de driver */
+   (status = bitii FE_READ_STATUS, < 0 necunoscuti; nivel = FE_READ_SIGNAL_STRENGTH, 0..65535, < 0 necunoscut), semnal
+   pierdut, parametri refuzati de driver */
 void prins(Stare &s, int slot, int snr_db100);
-void faraSemnal(Stare &s, int slot, int status);
+void faraSemnal(Stare &s, int slot, int status, int nivel = -1);
 void pierdut(Stare &s, int slot);
 void refuzat(Stare &s, int slot, const char *apel, int err);
 
@@ -92,13 +95,17 @@ struct Stare
 {
 	long long pornit_ms, tp_ms;
 	size_t servicii_inainte;
+	int fara_citiri;        /* o citire de semnal a durat prea mult: scanarea asta nu mai citeste semnalul */
 	char tp[160];
 	Stare();
 };
 
 void pornita(Stare &s, size_t transpondere, int steaguri);
 void transponder(Stare &s, iDVBFrontendParameters *p, size_t servicii);
-void prins(Stare &s, size_t servicii);
+/* scanarea cu jurnal (nu cautarea din fundal de la zap) si fara o citire lenta pana acum: se poate citi semnalul */
+bool citesteSemnal(const Stare &s);
+/* snr_db100 si nivel ca la hdsjtuner; citire_ms = cat au durat cele doua citiri, < 0 cand nu s-au facut */
+void prins(Stare &s, size_t servicii, int snr_db100 = -1, int nivel = -1, long citire_ms = -1);
 void faraSemnal(Stare &s);
 void gata(Stare &s, size_t cercetate, size_t fara_semnal, size_t servicii);
 

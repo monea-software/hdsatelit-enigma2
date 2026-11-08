@@ -716,8 +716,8 @@ def _extensiiMeniu(nod):
 		return []
 	try:
 		from Components.PluginComponent import plugins
-		f = getattr(plugins, "getPluginsForMenu", None)
-		lista = (f(ident) or []) if f is not None else []
+		from Components.HdsPluginuriImagine import meniuriUtilizator
+		lista = meniuriUtilizator(plugins, ident)
 	except Exception as eroare:
 		_jurnal("extensiile meniului %s: %s" % (ident, eroare))
 		return []

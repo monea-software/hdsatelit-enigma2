@@ -21,6 +21,14 @@ def AddNotificationWithCallback(fnc, screen, *args, **kwargs):
 def AddNotificationWithID(id, screen, *args, **kwargs):
 	__AddNotification(None, screen, id, *args, **kwargs)
 
+def AddModalNotification(text, timeout=-1, default=True, typeIcon=None, windowTitle=None, callback=None, type=None, **kwargs):
+	"""HDSatelit: numele cerut de pluginurile altor imagini: o intrebare (MessageBox) in coada notificarilor, raspunsul la callback"""
+	from Screens.MessageBox import MessageBox
+	if type is None:
+		type = typeIcon if typeIcon is not None else MessageBox.TYPE_YESNO
+	kwargs.update(timeout=timeout, default=default, typeIcon=typeIcon, windowTitle=windowTitle)
+	AddNotificationWithCallback(callback, MessageBox, text, type, **kwargs)
+
 # we don't support notifications with callback and ID as this
 # would require manually calling the callback on cancelled popups.
 

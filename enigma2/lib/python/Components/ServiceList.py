@@ -21,6 +21,11 @@ def N_(text):
 PICTOGRAMA_TRANSMIS = "liste/transmis.png"
 
 
+def _cauta_sigla_lista(sref, nume):
+	from Components.Renderer.Picon import cauta_sigla
+	return cauta_sigla(sref, nume=nume or None)
+
+
 def refs_inregistrate(nav=None):
 	"""Canalele care se inregistreaza acum, ca texte de referinta, sortate: inregistrarile programate si cele pornite
 	cu REC care merg (RecordTimer, starea 'ruleaza'), fara cele numai de pornit canalul (justplay). () fara navigare."""
@@ -361,15 +366,18 @@ class ServiceList(HTMLComponent, GUIComponent):
 		if self.instance is None or not hasattr(self.l, "addPiconPath"):
 			return
 		try:
-			from Components.Renderer.Picon import dosare_sigle, sigle_pornite
+			from Components.Renderer.Picon import dosare_sigle, generatie_sigle, sigle_pornite
 			from Components import HdsIptvSigle as S
 			if not self.hdsSigleCai:
-				for cale in dosare_sigle() + [S.dosar()]:
-					self.l.addPiconPath(cale)
+				if hasattr(self.l, "setPiconResolver"):
+					self.l.setPiconResolver(_cauta_sigla_lista)
+				else:
+					for cale in dosare_sigle() + [S.dosar()]:
+						self.l.addPiconPath(cale)
 				self.hdsSigleCai = True
 			pornite = sigle_pornite()
 			self.l.setPiconsEnabled(pornite)
-			stare = (pornite, S.generatie())
+			stare = (pornite, generatie_sigle(), S.generatie())
 			if stare != self.hdsSigleStare:
 				self.hdsSigleStare = stare
 				self.l.invalidatePicons()
@@ -518,6 +526,22 @@ class ServiceList(HTMLComponent, GUIComponent):
 		if self.hdsSigleCeas is not None:
 			self.hdsSigleCeas.stop()
 			self.hdsSigleCeas = None
+		if hasattr(self.l, "setPiconResolver"):
+			self.l.setPiconResolver(None)
+		self.hdsSigleCai = False
+
+	def onShow(self):
+		GUIComponent.onShow(self)
+		if self.hdsSigleCeas is not None:
+			from Components.Renderer.Picon import resetPiconPath
+			resetPiconPath()
+			self.hdsSigleCeas.start(1500, False)
+			self.hdsSigle()
+
+	def onHide(self):
+		GUIComponent.onHide(self)
+		if self.hdsSigleCeas is not None:
+			self.hdsSigleCeas.stop()
 
 	def getRoot(self):
 		return self.root
@@ -540,6 +564,14 @@ class ServiceList(HTMLComponent, GUIComponent):
 
 	def setPlayableIgnoreService(self, ref):
 		self.l.setIgnoreService(ref)
+
+	def resetRoot(self):
+		# HDSatelit: numele din alte imagini (RefreshBouquet): buchetul de acum citit din nou, cu cursorul pe acelasi loc
+		if self.root is None:
+			return
+		index = self.getCurrentIndex()
+		self.setRoot(self.root, False)
+		self.moveToIndex(index)
 
 	def setRoot(self, root, justSet=False):
 		self.root = root
@@ -697,3 +729,18 @@ class ServiceList(HTMLComponent, GUIComponent):
 				self.setMode(self.mode)
 		return True
 
+def refreshServiceList(configElement=None):
+	"""Numele cerut de pluginuri: lista de canale se reface."""
+	from Screens.InfoBar import InfoBar
+	if InfoBar.instance is not None and InfoBar.instance.servicelist:
+		InfoBar.instance.servicelist.setMode()
+
+
+class PiconLoader:
+	# Numele cerut la import; siglele se cauta prin mecanismul existent al imaginii.
+	def getPicon(self, service):
+		from Components.Renderer.Picon import getPiconName, sigle_pornite
+		if not sigle_pornite():
+			return None
+		cale = getPiconName(service)
+		return LoadPixmap(path=cale, cached=True) if cale else None

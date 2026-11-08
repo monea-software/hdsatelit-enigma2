@@ -4,6 +4,7 @@
 
 #include <libsig_comp.h>
 #include <utility>
+#include <initializer_list>
 
 #include <lib/python/python.h>
 
@@ -35,7 +36,8 @@ inline PyObject *PyFrom(const char *c)
 	PyObject *r = c ? PyUnicode_DecodeUTF8(c, (Py_ssize_t)strlen(c), "replace") : NULL;
 	if (!r)
 	{
-		PyErr_Clear();
+		if (PyErr_Occurred())
+			PyErr_Print();
 		r = PyUnicode_FromString("");
 	}
 	return r;
@@ -49,10 +51,38 @@ inline PyObject *PyFrom(const std::pair<const char*, int> &p)
 	PyObject *r = PyBytes_FromStringAndSize(p.first, p.first && p.second > 0 ? p.second : 0);
 	if (!r)
 	{
-		PyErr_Clear();
+		if (PyErr_Occurred())
+			PyErr_Print();
 		r = PyBytes_FromStringAndSize("", 0);
 	}
 	return r;
+}
+
+/* Ia referintele valorilor. Un esec nu ajunge ca NULL in callback. */
+inline PyObject *signalArgs(std::initializer_list<PyObject *> values)
+{
+	PyObject *args = PyTuple_New(values.size());
+	bool ok = args != NULL;
+	Py_ssize_t index = 0;
+	for (PyObject *value : values)
+	{
+		if (args && value)
+			PyTuple_SET_ITEM(args, index, value);
+		else if (value)
+			Org_Py_DECREF(value);
+		if (!value)
+			ok = false;
+		++index;
+	}
+	if (!ok)
+	{
+		if (args)
+			Org_Py_DECREF(args);
+		if (PyErr_Occurred())
+			PyErr_Print();
+		return NULL;
+	}
+	return args;
 }
 
 template <class R>
@@ -63,9 +93,12 @@ public:
 	{
 		if (m_list)
 		{
-			PyObject *pArgs = PyTuple_New(0);
-			callPython(pArgs);
-			Org_Py_DECREF(pArgs);
+			PyObject *pArgs = signalArgs({});
+			if (pArgs)
+			{
+				callPython(pArgs);
+				Org_Py_DECREF(pArgs);
+			}
 		}
 		return sigc::signal<R()>::operator()();
 	}
@@ -79,10 +112,12 @@ public:
 	{
 		if (m_list)
 		{
-			PyObject *pArgs = PyTuple_New(1);
-			PyTuple_SET_ITEM(pArgs, 0, PyFrom(a0));
-			callPython(pArgs);
-			Org_Py_DECREF(pArgs);
+			PyObject *pArgs = signalArgs({PyFrom(a0)});
+			if (pArgs)
+			{
+				callPython(pArgs);
+				Org_Py_DECREF(pArgs);
+			}
 		}
 		return sigc::signal<R(V0)>::operator()(a0);
 	}
@@ -96,11 +131,12 @@ public:
 	{
 		if (m_list)
 		{
-			PyObject *pArgs = PyTuple_New(2);
-			PyTuple_SET_ITEM(pArgs, 0, PyFrom(a0));
-			PyTuple_SET_ITEM(pArgs, 1, PyFrom(a1));
-			callPython(pArgs);
-			Org_Py_DECREF(pArgs);
+			PyObject *pArgs = signalArgs({PyFrom(a0), PyFrom(a1)});
+			if (pArgs)
+			{
+				callPython(pArgs);
+				Org_Py_DECREF(pArgs);
+			}
 		}
 		return sigc::signal<R(V0, V1)>::operator()(a0, a1);
 	}
@@ -114,12 +150,12 @@ public:
 	{
 		if (m_list)
 		{
-			PyObject *pArgs = PyTuple_New(3);
-			PyTuple_SET_ITEM(pArgs, 0, PyFrom(a0));
-			PyTuple_SET_ITEM(pArgs, 1, PyFrom(a1));
-			PyTuple_SET_ITEM(pArgs, 2, PyFrom(a2));
-			callPython(pArgs);
-			Org_Py_DECREF(pArgs);
+			PyObject *pArgs = signalArgs({PyFrom(a0), PyFrom(a1), PyFrom(a2)});
+			if (pArgs)
+			{
+				callPython(pArgs);
+				Org_Py_DECREF(pArgs);
+			}
 		}
 		return sigc::signal<R(V0, V1, V2)>::operator()(a0, a1, a2);
 	}

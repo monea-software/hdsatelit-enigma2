@@ -93,6 +93,21 @@
     vorbire_clara: "vorbire clară",
     imaginea_merge: "Imaginea merge.",
     fara_imagine: "Canalul nu trimite imagine acum.",
+    radio_live: "Radio în direct",
+    radio_program: "Programul emisiunilor",
+    radio_piesa: "Piesa și textul radio",
+    radio_tehnic: "Date tehnice",
+    radio_fara_text: "Nu a sosit încă niciun text radio.",
+    radio_fara_epg: "Postul nu transmite programul emisiunilor.",
+    radio_bare: "Vizualizatorul sunetului",
+    radio_bare_asteapta: "Barele apar când începe sunetul.",
+    radio_bare_indisponibile: "Vizualizatorul nu este disponibil pentru acest flux.",
+    radio_sunet_blocat: "Apasă Redă pentru a porni sunetul și vizualizatorul.",
+    radio_urmeaza: "Urmează: %s",
+    radio_retea: "Postul nu răspunde sau legătura cu el s-a întrerupt.",
+    radio_format: "Browserul nu poate reda formatul audio al acestui post.",
+    radio_nesecurizat: "Browserul blochează sunetul prin HTTP într-o pagină HTTPS. Deschide interfața receptorului prin HTTP sau alege un post cu adresă HTTPS.",
+    radio_asteptare: "Postul nu a început redarea. Încearcă din nou.",
     fara_pmt: "Canalul nu trimite descrierea pistelor (imagine și sunet), deci browserul nu știe ce să redea. Încearcă din nou.",
     // numele limbilor pistelor de sunet (LIMBI: codul din PMT -> cheia)
     l_deu: "Germană",
@@ -232,6 +247,23 @@
     ".hp-cadru canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block;}",
     /* imaginea playerului wasm (MPEG-2): sub stratul receptorului, primeste apasarea ca <video> */
     ".hp-cadru canvas.hp-imagine{pointer-events:auto;background:#000;}",
+    ".hp-radio{position:absolute;inset:0;box-sizing:border-box;display:flex;flex-direction:column;gap:4%;padding:4%;background:radial-gradient(ellipse at 20% 0,#203a62,#0b1226 75%);overflow:auto;}",
+    ".hp-radio-antet{display:flex;align-items:center;gap:18px;min-height:44px;flex:none;}",
+    ".hp-radio-sigla{width:15%;max-width:100px;max-height:80px;object-fit:contain;flex:none;}",
+    ".hp-radio-titlu{min-width:0;flex:1;}",
+    ".hp-radio-titlu small{display:block;color:#81c7fb;font-size:.75rem;margin-bottom:4px;}",
+    ".hp-radio-nume{font-size:clamp(1rem,3vw,2rem);font-weight:650;line-height:1.3;}",
+    ".hp-radio-rand{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:4.5em;line-height:1.45;scrollbar-width:thin;}",
+    ".hp-radio-corp{display:grid;grid-template-columns:1.15fr 1fr;gap:6%;min-height:0;flex:1;overflow:auto;scrollbar-width:thin;}",
+    ".hp-radio-corp section{min-width:0;overflow:auto;scrollbar-width:thin;}",
+    ".hp-radio h3{margin:0 0 6px;font-size:.72rem;letter-spacing:.04em;color:#81c7fb;}",
+    ".hp-radio-piesa{font-size:1.05rem;font-weight:600;margin-bottom:4px;}",
+    ".hp-radio-program{margin-top:14px;}",
+    ".hp-radio-detalii,.hp-radio-tehnic,.hp-radio-urmatoare{font-size:.78rem;color:#b8c8de;}",
+    ".hp-radio-vizualizator{height:23%;min-height:35px;flex:none;position:relative;}",
+    ".hp-radio canvas.hp-radio-bare{position:static;width:100%;height:100%;display:block;}",
+    ".hp-radio-bare-stare{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:.75rem;color:#9db3cd;padding:4px;overflow:auto;}",
+    "@media(max-width:560px){.hp-radio{padding:3%;gap:3%;}.hp-radio-antet{gap:10px;}.hp-radio-sigla{max-height:48px;}.hp-radio-corp{gap:4%;}.hp-radio-titlu small,.hp-radio h3{font-size:.62rem;}.hp-radio-detalii,.hp-radio-tehnic,.hp-radio-urmatoare,.hp-radio-bare-stare{font-size:.65rem;}.hp-radio-piesa{font-size:.8rem;}.hp-radio-program{margin-top:8px;}}",
     /* imaginea in fereastra televizorului (_fereastra: left/top/width/height in procente), cu o trecere scurta */
     ".hp-cadru video,.hp-cadru canvas.hp-imagine{transition:left .2s ease-out,top .2s ease-out,width .2s ease-out,height .2s ease-out;}",
     "@media (prefers-reduced-motion:reduce){.hp-cadru video,.hp-cadru canvas.hp-imagine{transition:none;}}",
@@ -484,6 +516,10 @@
     var video = document.createElement("video");
     video.playsInline = true;
     video.setAttribute("playsinline", "");
+    // Posturile online au propriul element, fara legatura Web Audio: serverele lor pot sa nu permita CORS.
+    var audio = document.createElement("audio");
+    audio.preload = "none";
+    audio.className = "hp-ascuns";
     // imaginea playerului wasm (canalele MPEG-2): intre <video> si stratul receptorului, ascunsa cat nu e folosita
     var imagine = document.createElement("canvas");
     imagine.className = "hp-imagine hp-ascuns";
@@ -493,7 +529,32 @@
     var canvas = document.createElement("canvas");
     canvas.width = 960; canvas.height = 540;
     canvas.setAttribute("aria-hidden", "true");
-    cadru.appendChild(video); cadru.appendChild(imagine); cadru.appendChild(canvas);
+    cadru.appendChild(video); cadru.appendChild(audio); cadru.appendChild(imagine); cadru.appendChild(canvas);
+    var radio = el("div", "hp-radio hp-ascuns");
+    var radioAntet = el("div", "hp-radio-antet"), radioSigla = el("img", "hp-radio-sigla hp-ascuns");
+    radioSigla.alt = "";
+    var radioTitlu = el("div", "hp-radio-titlu"), radioNume = el("div", "hp-radio-nume hp-radio-rand");
+    var radioDetalii = el("div", "hp-radio-detalii hp-radio-rand");
+    radioTitlu.appendChild(el("small", "", tx("radio_live")));
+    radioTitlu.appendChild(radioNume); radioTitlu.appendChild(radioDetalii);
+    radioAntet.appendChild(radioSigla); radioAntet.appendChild(radioTitlu); radio.appendChild(radioAntet);
+    var radioCorp = el("div", "hp-radio-corp"), radioStanga = el("section"), radioDreapta = el("section");
+    radioStanga.appendChild(el("h3", "", tx("radio_piesa")));
+    var radioPiesa = el("div", "hp-radio-piesa hp-radio-rand"), radioText = el("div", "hp-radio-rand");
+    radioStanga.appendChild(radioPiesa); radioStanga.appendChild(radioText);
+    radioDreapta.appendChild(el("h3", "", tx("radio_tehnic")));
+    var radioTehnic = el("div", "hp-radio-tehnic hp-radio-rand");
+    radioDreapta.appendChild(radioTehnic);
+    radioDreapta.appendChild(el("h3", "hp-radio-program", tx("radio_program")));
+    var radioEpg = el("div", "hp-radio-rand"), radioUrmatoare = el("div", "hp-radio-urmatoare hp-radio-rand");
+    radioDreapta.appendChild(radioEpg); radioDreapta.appendChild(radioUrmatoare);
+    radioCorp.appendChild(radioStanga); radioCorp.appendChild(radioDreapta); radio.appendChild(radioCorp);
+    var radioViz = el("div", "hp-radio-vizualizator"), radioBenzi = el("canvas", "hp-radio-bare");
+    radioBenzi.width = 640; radioBenzi.height = 96;
+    radioBenzi.setAttribute("role", "img"); radioBenzi.setAttribute("aria-label", tx("radio_bare"));
+    var radioBareStare = el("div", "hp-radio-bare-stare", tx("radio_bare_asteapta"));
+    radioViz.appendChild(radioBenzi); radioViz.appendChild(radioBareStare); radio.appendChild(radioViz);
+    cadru.appendChild(radio);
     var mesaj = el("div", "hp-mesaj hp-ascuns");
     mesaj.setAttribute("role", "status");
     // semnul trecerii pe alt canal: roata, titlul (ce se intampla) si numele canalului
@@ -563,7 +624,17 @@
     this.e = {radacina: r, ecran: ecran, cadru: cadru, video: video, imagine: imagine, canvas: canvas, mesaj: mesaj, bara: bara, reda: bReda,
       mut: bMut, volum: volum, pista: selPista, sub: selSub, bifa: bifa, comutator: comutator, plin: bPlin, stop: bStop,
       stare: stare, detalii: detalii, tehnic: tehnic, extra: extra, semn: semn, semnTitlu: semnTitlu, semnSub: semnSub,
-      pasi: pasi};
+      pasi: pasi, audio: audio, radio: radio, radioNume: radioNume, radioDetalii: radioDetalii, radioSigla: radioSigla,
+      radioPiesa: radioPiesa, radioText: radioText, radioTehnic: radioTehnic, radioEpg: radioEpg,
+      radioUrmatoare: radioUrmatoare, radioBenzi: radioBenzi, radioBareStare: radioBareStare};
+    this.e.radioRanduri = [radioNume, radioDetalii, radioPiesa, radioText, radioTehnic, radioEpg, radioUrmatoare];
+    this.e.radioRanduri.forEach(function(rand){
+      rand.addEventListener("mouseenter", function(){ rand._hpHover = true; });
+      rand.addEventListener("mouseleave", function(){ rand._hpHover = false; rand._hpAsteapta = Date.now() + 1600; });
+      rand.addEventListener("focusin", function(){ rand._hpFocus = true; });
+      rand.addEventListener("focusout", function(){ rand._hpFocus = false; rand._hpAsteapta = Date.now() + 1600; });
+      ["wheel", "touchstart"].forEach(function(tip){ rand.addEventListener(tip, function(){ rand._hpAsteapta = Date.now() + 8000; }, {passive: true}); });
+    });
     this.ctx = canvas.getContext("2d");
     video.volume = Math.max(0, Math.min(1, parseInt(volum.value, 10) / 100));
 
@@ -571,6 +642,7 @@
     video.addEventListener("play", function(){ self._butoane(); });
     video.addEventListener("pause", function(){ self._butoane(); });
     video.addEventListener("volumechange", function(){ self._butoane(); });
+    ["play", "pause", "volumechange"].forEach(function(tip){ audio.addEventListener(tip, function(){ self._butoane(); }); });
     video.addEventListener("click", function(){ if(video.paused){ self.comutaRedarea(); } });
     imagine.addEventListener("click", function(){ if(self._media().paused){ self.comutaRedarea(); } });
     video.addEventListener("error", function(){
@@ -579,11 +651,13 @@
     // sunetul si volumul: pe imaginea de acum (<video> sau playerul wasm); <video> tine minte alegerea pentru amandoua
     bMut.addEventListener("click", function(){
       var m = self._media();
+      self._reiaRadioSunet();
       m.muted = !m.muted;
       video.muted = m.muted;
     });
     volum.addEventListener("input", function(){
       var m = self._media();
+      self._reiaRadioSunet();
       m.volume = parseInt(volum.value, 10) / 100;
       if(m.volume > 0){ m.muted = false; }
       video.volume = m.volume; video.muted = m.muted;
@@ -609,8 +683,12 @@
     r.addEventListener("keydown", function(e){
       if(e.key === "Escape" && r.classList.contains("hp-plin-css")){ self.comutaEcranul(); e.stopPropagation(); }
     });
-    this._vizibil = function(){ if(!document.hidden){ self._stratAcum(); } };
+    this._vizibil = function(){ if(!document.hidden){ self._stratAcum(); self._radioDeseneaza(); self._radioDeruleaza(); } };
     document.addEventListener("visibilitychange", this._vizibil);
+    this._radioMarime = function(){ self._radioDeruleaza(); };
+    window.addEventListener("resize", this._radioMarime);
+    this._pleaca = function(){ self.opreste(true, true); };
+    window.addEventListener("pagehide", this._pleaca);
     this._fereastra(null);
     this._butoane();
     this._piste([]);
@@ -676,6 +754,121 @@
     this._semn("");
     this._pasiOpreste();
     this._stareReluata();
+  };
+  // Datele sunt ale postului acestei ferestre, chiar cand televizorul reda alt canal.
+  Player.prototype._radioArata = function(d){
+    var este = !!(d && d.radio), p = (d && d.radio_date) || {}, t = p.texte || {}, x = p.date || {};
+    this.radio = este;
+    this.e.radio.classList.toggle("hp-ascuns", !este);
+    this.e.sub.classList.toggle("hp-ascuns", este);
+    this.e.comutator.classList.toggle("hp-ascuns", este);
+    if(!este){
+      clearTimeout(this._ceasRadio); this._ceasRadio = null;
+      clearTimeout(this._ceasRadioText); this._ceasRadioText = null;
+      return;
+    }
+    if(x.ref && this.ref && refCheie(x.ref) !== refCheie(this.ref)){ t = {}; x = {}; p = {}; }
+    var ep = x.epg || {}, rds = x.rds || {};
+    function pune(e, text){
+      text = text || "";
+      if(e.textContent !== text){ e.textContent = text; e.scrollTop = 0; e._hpAsteapta = Date.now() + 1600; e._hpLaCapat = false; }
+    }
+    pune(this.e.radioNume, t.nume || x.nume || d.nume || this.nume);
+    pune(this.e.radioDetalii, t.detalii);
+    pune(this.e.radioPiesa, rds.piesa);
+    pune(this.e.radioText, rds.text || (!rds.piesa ? tx("radio_fara_text") : ""));
+    pune(this.e.radioTehnic, [t.sunet, t.transponder, t.satelit, t.semnal].filter(Boolean).join("\n"));
+    pune(this.e.radioEpg, ep.acum ? [t.acum_ora, ep.acum.titlu, t.ramas].filter(Boolean).join("  ") : (t.epg_lipsa || tx("radio_fara_epg")));
+    var urm = t.urmatoare || (ep.urmatoare || []).map(function(e){ return e.titlu || ""; });
+    pune(this.e.radioUrmatoare, urm.length ? txs("radio_urmeaza", urm.join("\n")) : "");
+    if(this._radioSigla !== (p.sigla || "")){
+      this._radioSigla = p.sigla || "";
+      var sigla = this.e.radioSigla;
+      sigla.classList.toggle("hp-ascuns", !this._radioSigla);
+      sigla.onerror = function(){ sigla.classList.add("hp-ascuns"); };
+      if(this._radioSigla){ sigla.src = "/api/canale-sigla?p=" + encodeURIComponent(this._radioSigla); }
+      else { sigla.removeAttribute("src"); }
+    }
+    this._radioDeruleaza();
+  };
+  // Textul lung se deruleaza lent, numai cat postul este vizibil. Citirea manuala are intaietate.
+  Player.prototype._radioDeruleaza = function(){
+    var self = this;
+    clearTimeout(self._ceasRadioText); self._ceasRadioText = null;
+    if(!self.radio || !self.pornit || self.distrus || document.hidden){ return; }
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches){ return; }
+    var acum = Date.now(), are = false;
+    self.e.radioRanduri.forEach(function(rand){
+      var maxim = rand.scrollHeight - rand.clientHeight;
+      if(!(maxim > 2)){ rand.removeAttribute("tabindex"); return; }
+      rand.setAttribute("tabindex", "0"); are = true;
+      if(rand._hpHover || rand._hpFocus || acum < (rand._hpAsteapta || 0)){ return; }
+      if(rand.scrollTop >= maxim - 1){
+        if(!rand._hpLaCapat){ rand._hpLaCapat = true; rand._hpAsteapta = acum + 2200; }
+        else { rand.scrollTop = 0; rand._hpLaCapat = false; rand._hpAsteapta = acum + 1600; }
+      } else { rand.scrollTop += 1; }
+    });
+    if(are){ self._ceasRadioText = setTimeout(function(){ self._radioDeruleaza(); }, 100); }
+  };
+  Player.prototype._reiaRadioSunet = function(){
+    var self = this;
+    if(this._radioContext && this._radioContext.state === "suspended"){
+      this._radioContext.resume().then(function(){ self._radioAnalizor(); }).catch(function(){});
+    }
+  };
+  Player.prototype._radioAnalizor = function(){
+    var self = this;
+    if(!self.radio){ return; }
+    if(self.felJucator === "radio-online"){
+      self.e.radioBareStare.textContent = tx("radio_bare_indisponibile");
+      return;
+    }
+    var Context = window.AudioContext || window.webkitAudioContext;
+    if(!Context){ self.e.radioBareStare.textContent = tx("radio_bare_indisponibile"); return; }
+    try {
+      if(!self._radioContext){ self._radioContext = new Context(); }
+      var ctx = self._radioContext;
+      function leaga(){
+        if(self.distrus || !self.radio){ return; }
+        if(ctx.state !== "running"){
+          self.e.radioBareStare.textContent = tx("radio_sunet_blocat"); return;
+        }
+        if(!self._radioSursa){
+          self._radioAnaliza = ctx.createAnalyser(); self._radioAnaliza.fftSize = 256;
+          self._radioAnaliza.smoothingTimeConstant = 0.72;
+          self._radioNiveluri = new Uint8Array(self._radioAnaliza.frequencyBinCount);
+          self._radioSursa = ctx.createMediaElementSource(self.e.video);
+          self._radioSursa.connect(self._radioAnaliza); self._radioAnaliza.connect(ctx.destination);
+        }
+        self._radioDeseneaza();
+      }
+      if(ctx.state === "suspended"){ ctx.resume().then(leaga).catch(function(){ self.e.radioBareStare.textContent = tx("radio_sunet_blocat"); }); }
+      else { leaga(); }
+    } catch(e){ self.e.radioBareStare.textContent = tx("radio_bare_indisponibile"); }
+  };
+  // Benzile se calculeaza numai din sunetul decodat de pagina; fara date nu se inventeaza miscare.
+  Player.prototype._radioDeseneaza = function(){
+    var self = this;
+    clearTimeout(self._ceasRadio); self._ceasRadio = null;
+    if(!self.radio || !self.pornit || self.distrus || document.hidden || self.felJucator === "radio-online"){ return; }
+    var c = self.e.radioBenzi, g = c.getContext("2d"), m = self._media();
+    g.clearRect(0, 0, c.width, c.height);
+    if(!self._radioAnaliza){ self._radioAnalizor(); return; }
+    var merge = self._radioContext.state === "running" && !m.paused && !m.muted && m.volume > 0;
+    self.e.radioBareStare.textContent = merge ? "" : tx(self._radioContext.state === "suspended" ? "radio_sunet_blocat" : "radio_bare_asteapta");
+    if(merge){
+      self._radioAnaliza.getByteFrequencyData(self._radioNiveluri);
+      var n = 28, date = self._radioNiveluri, latime = c.width / n;
+      g.fillStyle = "#69c7ee";
+      for(var i = 0; i < n; i++){
+        var inceput = Math.floor(Math.pow(i / n, 2) * date.length), sfarsit = Math.max(inceput + 1, Math.floor(Math.pow((i + 1) / n, 2) * date.length));
+        var v = 0;
+        for(var j = inceput; j < sfarsit; j++){ v += date[j]; }
+        var h = v / (sfarsit - inceput) / 255 * c.height;
+        if(h > 0){ g.fillRect(i * latime + 2, c.height - h, latime - 4, h); }
+      }
+    }
+    self._ceasRadio = setTimeout(function(){ self._radioDeseneaza(); }, 50);
   };
   Player.prototype.stare = function(text, eroare, tehnic){
     this.e.stare.textContent = text || "";
@@ -792,7 +985,7 @@
   };
   // imaginea de acum pentru butoane: playerul wasm (aceleasi proprietati ca <video>) sau elementul <video>
   Player.prototype._media = function(){
-    return (this.felJucator === "wasm" && this.jucator) ? this.jucator : this.e.video;
+    return ((this.felJucator === "wasm" || this.felJucator === "radio-online") && this.jucator) ? this.jucator : this.e.video;
   };
   Player.prototype._butoane = function(){
     var v = this._media(), merge = !!this.jucator;
@@ -878,7 +1071,11 @@
     self.inLucru = true;
     // starea ceruta inainte de aceasta pornire nu mai conteaza (_citesteStarea): proba de noapte 13-14.10, RTL Television
     self._porniri = (self._porniri || 0) + 1;
+    var pornire = self._porniri;
+    function viu(){ return !self.distrus && pornire === self._porniri; }
+    function verificaViu(){ if(!viu()){ var e = new Error(); e.anulata = true; throw e; } }
     self._opresteJucatorul();
+    self._radioArata(null);
     self.ref = ref || "";
     self.nume = nume || "";
     self._sePorneste();
@@ -895,18 +1092,26 @@
       if(preia){ q.set("preia", "1"); }
       return q;
     }
-    Promise.all([incarcaMpegts().catch(function(e){ eroareMse = e; }), incarcaSunet()]).then(function(){
-      mse = !!(window.mpegts && mpegts.getFeatureList && mpegts.getFeatureList().mseLivePlayback);
-      if(!mse && !pt.wasm){ throw faraMse(); }
+    function incarcaRedarea(){
+      return Promise.all([incarcaMpegts().catch(function(e){ eroareMse = e; }), incarcaSunet()]).then(function(){
+        verificaViu();
+        mse = !!(window.mpegts && mpegts.getFeatureList && mpegts.getFeatureList().mseLivePlayback);
+        if(!mse && !pt.wasm){ throw faraMse(); }
+      });
+    }
+    Promise.resolve().then(function(){
+      verificaViu();
       if(self.urmeaza){
         // urmeaza televizorul: o singura cerere; receptorul alege canalul de acum al televizorului (fara tv-stare si
         // tv-verifica: tv-porneste face aceleasi verificari)
-        var q = q0(); q.set("urmeaza", "1");
-        return self._cerere("/api/tv-porneste?" + q.toString(), "POST");
+        return incarcaRedarea().then(function(){
+          var q = q0(); q.set("urmeaza", "1");
+          return self._cerere("/api/tv-porneste?" + q.toString(), "POST");
+        });
       }
       return self._cerere("/api/tv-stare").then(function(st){
+        verificaViu();
         self.ultimaStare = st;
-        if(!st.permis){ throw new Error(tx("oprita_setari")); }
         var tv = st.tv && st.tv.ref;
         if(!self.ref){
           if(!tv){ throw new Error(tx("tv_gol")); }
@@ -916,8 +1121,16 @@
         var q = q0(); q.delete("preia"); q.set("ref", self.ref);
         return self._cerere("/api/tv-verifica?" + q.toString());
       }).then(function(v){
+        verificaViu();
         if(!v.result){ throw new Error(v.message || tx("neverificat")); }
         self.nume = self.nume || v.nume || "";
+        if(v.online && v.radio){
+          // Adresa online se rezolva separat; navigatia si transmisiile televizorului raman independente.
+          self.urmeaza = false; self.peTv = false; self.cuWasm = false;
+          if(self.sesiune && self.sesiune.id && !self.sesiune.online){ self._elibereaza(self.sesiune.id); }
+          return self._cerere("/api/tv-radio?ref=" + encodeURIComponent(self.ref)).then(function(d){ d.online = true; return d; });
+        }
+        if(!self.ultimaStare.permis){ throw new Error(tx("oprita_setari")); }
         self.peTv = !!v.pe_tv;
         if(!v.merge){
           if(v.muta_tv && self.o.mutaTv){
@@ -932,12 +1145,18 @@
         if(v.pe_tv && self.o.urmeazaPeTv){ self.urmeaza = true; }
         // imaginea MPEG-2 / MPEG-1: playerul wasm (HdsPlayerWasm, /tv/hds-player.js) in locul lui mpegts.js, pe acelasi
         // /api/tv-flux; receptorul trimite fluxul la fel
-        self.cuWasm = pt.wasm && imagineWasm(v.video);
-        if(!self.cuWasm && !mse){ throw faraMse(); }
-        var q = q0(); q.set("ref", self.ref);
-        return self._cerere("/api/tv-porneste?" + q.toString(), "POST").then(function(d){ d._verificare = v; return d; });
+        return incarcaRedarea().then(function(){
+          self.cuWasm = pt.wasm && imagineWasm(v.video);
+          if(!self.cuWasm && !mse){ throw faraMse(); }
+          var q = q0(); q.set("ref", self.ref);
+          return self._cerere("/api/tv-porneste?" + q.toString(), "POST").then(function(d){ d._verificare = v; return d; });
+        });
       });
     }).then(function(d){
+      if(!viu()){
+        if(d.result && d.id && !d.online){ self._elibereaza(d.id, true); }
+        return;
+      }
       self.inLucru = false;
       if(d.mutare){ self._mutaTv(self.ref, self.nume); return; }
       if(self._dupa){
@@ -968,7 +1187,8 @@
       self.reconectari = [];
       self._decodareLa = 0;
       self._stareAcum();
-      self.e.bifa.checked = self.peTv ? citesteLocal("hdsStrat", "1") === "1" : false;
+      self._radioArata(d);
+      self.e.bifa.checked = self.peTv && !self.radio ? citesteLocal("hdsStrat", "1") === "1" : false;
       self.e.comutator.title = self.peTv ? tx("afisaj_titlu") : tx("afisaj_alt");
       if(self.urmeaza){
         self.tv = {ref: d.ref || self.ref, nume: self.nume, standby: !!(self.tv && self.tv.standby && refCheie(self.tv.ref) === refCheie(d.ref))};
@@ -976,10 +1196,11 @@
         self._asculta();
       }
       self._jucator();
-      self._ceasStare();
+      if(!d.online){ self._ceasStare(); }
       self._strat();
-      self._citestePistele();
+      if(!d.online){ self._citestePistele(); } else { self._piste([]); }
     }).catch(function(e){
+      if(!viu() || e.anulata){ return; }
       self.inLucru = false;
       if(self._dupa){ var dupa = self._dupa; self._dupa = null; self.porneste("", "", dupa.preia); return; }
       self.mesaj(e.message || tx("nu_raspunde"), self.urmeaza ? tx("incearca") : "", function(){ self._dinNou(); });
@@ -1032,10 +1253,11 @@
   Player.prototype._jucator = function(){
     var self = this;
     self._opresteJucatorul();
+    if(self.sesiune && self.sesiune.online){ self._jucatorRadioOnline(); return; }
     if(self.cuWasm){ self._jucatorWasm(); return; }
     var v = self.e.video;
     self.e.imagine.classList.add("hp-ascuns");
-    v.classList.remove("hp-ascuns");
+    v.classList.toggle("hp-ascuns", self.radio);
     self.felJucator = "mse";
     // sunetul AC-3 decodat in pagina (browserul nu-l reda): convertorul primeste PES-urile AC-3 de la mpegts.js si da
     // cadre FLAC; daca decodorul lui nu porneste, pagina porneste din nou fara AC-3 (receptorul il scoate din PMT)
@@ -1046,7 +1268,7 @@
       faraAc3Wasm();
       self._dinNou();
     }}) : null;
-    self.jucator = mpegts.createPlayer({type: "mpegts", isLive: true, url: "/api/tv-flux"}, {
+    self.jucator = mpegts.createPlayer({type: "mpegts", isLive: true, url: "/api/tv-flux", hasVideo: !self.radio}, {
       enableWorker: false, enableStashBuffer: false, lazyLoad: false, autoCleanupSourceBuffer: true,
       liveBufferLatencyChasing: true, liveBufferLatencyMaxLatency: 3.0, liveBufferLatencyMinRemain: 0.8,
       headers: self._antete(), hdsSunetAc3: self._sunetAc3 || undefined
@@ -1069,7 +1291,53 @@
     v.addEventListener("playing", function(){ if(self.jucator === j){ self._primulCadru(); } }, {once: true});
     self._paziAntena();
     self._paziCadrele();
+    self._radioAnalizor();
     self._butoane();
+  };
+
+  Player.prototype._jucatorRadioOnline = function(){
+    var self = this, a = self.e.audio, d = self.sesiune || {};
+    var generatie = self._generatie;
+    function curent(){ return self.jucator === a && generatie === self._generatie; }
+    var url;
+    try { url = new URL(d.radio_url, location.href); } catch(e) {}
+    function eroare(cheie, cod){
+      if(generatie !== self._generatie || (self.jucator && self.jucator !== a)){ return; }
+      self._opresteJucatorul();
+      self.mesaj(tx(cheie), tx("incearca"), function(){ self._dinNou(); });
+      self.stare(tx(cheie), true, cod ? "MediaError " + cod : "");
+    }
+    if(!url || !/^https?:$/.test(url.protocol)){ eroare("radio_format"); return; }
+    if(location.protocol === "https:" && url.protocol === "http:"){ eroare("radio_nesecurizat"); return; }
+    self.e.video.classList.add("hp-ascuns"); self.e.imagine.classList.add("hp-ascuns");
+    self.felJucator = "radio-online"; self.jucator = a;
+    a.volume = self.e.video.volume; a.muted = self.e.video.muted;
+    function asteapta(){
+      if(self._ceasRadioOnline){ return; }
+      self._ceasRadioOnline = setTimeout(function(){ if(curent() && !a.paused){ eroare("radio_asteptare"); } }, 15000);
+    }
+    a.onplaying = function(){
+      if(!curent()){ return; }
+      clearTimeout(self._ceasRadioOnline); self._ceasRadioOnline = null;
+      self._primulCadru();
+    };
+    a.onwaiting = a.onstalled = function(){ if(curent() && !a.paused){ asteapta(); } };
+    a.onerror = function(){
+      if(!curent()){ return; }
+      var cod = a.error && a.error.code;
+      eroare(cod === 2 ? "radio_retea" : (cod === 3 || cod === 4 ? "radio_format" : "sunet"), cod);
+    };
+    a.src = url.href;
+    self._sePorneste();
+    var p = a.play();
+    asteapta();
+    if(p && p.catch){ p.catch(function(e){
+      if(!curent()){ return; }
+      if(e && e.name === "NotSupportedError"){ eroare("radio_format"); return; }
+      clearTimeout(self._ceasRadioOnline); self._ceasRadioOnline = null;
+      self.mesaj(tx("apasa_reda"), tx("reda"), function(){ a.play().then(function(){ self.mesaj(""); }).catch(function(){}); });
+    }); }
+    self._radioAnalizor(); self._butoane();
   };
 
   // imaginea MPEG-2 / MPEG-1: playerul wasm pe al doilea canvas; butoanele il folosesc prin _media()
@@ -1128,11 +1396,17 @@
     // o incarcare a playerului wasm inca in lucru nu mai porneste nimic
     this._generatie = (this._generatie || 0) + 1;
     clearTimeout(this._ceasCadre); this._ceasCadre = null;
+    clearTimeout(this._ceasRadio); this._ceasRadio = null;
+    clearTimeout(this._ceasRadioOnline); this._ceasRadioOnline = null;
+    this.e.radioBenzi.getContext("2d").clearRect(0, 0, this.e.radioBenzi.width, this.e.radioBenzi.height);
     if(this._sunetAc3){ try { this._sunetAc3.inchide(); } catch(e) {} this._sunetAc3 = null; }
     this._imagineVine(false);
     if(this.jucator){
       if(this.felJucator === "wasm"){
         try { this.jucator.opreste(); } catch(e) {}
+      } else if(this.felJucator === "radio-online"){
+        this.e.audio.onplaying = null; this.e.audio.onerror = null; this.e.audio.onwaiting = null; this.e.audio.onstalled = null;
+        try { this.e.audio.pause(); this.e.audio.removeAttribute("src"); this.e.audio.load(); } catch(e) {}
       } else {
         try { this.jucator.pause(); this.jucator.unload(); this.jucator.detachMediaElement(); this.jucator.destroy(); } catch(e) {}
       }
@@ -1142,8 +1416,15 @@
     this._butoane();
   };
 
-  Player.prototype.opreste = function(trimite){
-    var era = this.pornit;
+  Player.prototype._elibereaza = function(id, pleaca){
+    if(!id){ return Promise.resolve(); }
+    var cale = "/api/tv-opreste?id=" + encodeURIComponent(id);
+    return fetch(cale, {method: "POST", cache: "no-store", credentials: "same-origin", headers: this._antete(), keepalive: !!pleaca}).catch(function(){});
+  };
+  Player.prototype.opreste = function(trimite, pleaca){
+    var d = this.sesiune;
+    this._porniri = (this._porniri || 0) + 1;
+    this.inLucru = false;
     clearTimeout(this._reia); this._reia = null;
     clearTimeout(this._ceasRepede); this._ceasRepede = null;
     if(trimite){
@@ -1157,6 +1438,7 @@
     this.e.imagine.classList.add("hp-ascuns");
     this.e.video.classList.remove("hp-ascuns");
     this.pornit = false;
+    this._radioArata(null);
     this.sesiune = null;
     this._seDecripteaza = false;
     this._pasiOpreste();
@@ -1172,7 +1454,7 @@
     this._piste([]);
     this._subtitrari(null);
     this.mesaj("");
-    if(trimite && era){ this._cerere("/api/tv-opreste", "POST").catch(function(){}); }
+    if(trimite && d && d.id && !d.online){ this._elibereaza(d.id, pleaca); }
   };
 
   Player.prototype.distruge = function(trimite){
@@ -1181,6 +1463,9 @@
     this.urmeaza = false;
     if(this._ePlin()){ this.comutaEcranul(); }
     document.removeEventListener("visibilitychange", this._vizibil);
+    window.removeEventListener("pagehide", this._pleaca);
+    window.removeEventListener("resize", this._radioMarime);
+    if(this._radioContext){ this._radioContext.close().catch(function(){}); this._radioContext = null; }
     this.distrus = true;
     if(this.e.radacina.parentNode){ this.e.radacina.parentNode.removeChild(this.e.radacina); }
   };
@@ -1372,7 +1657,7 @@
     var self = this;
     clearTimeout(self.ceasStare);
     self.ceasStare = setTimeout(function(){
-      if(!self.pornit || self.distrus){ return; }
+      if(!self.pornit || self.distrus || (self.sesiune && self.sesiune.online)){ return; }
       if(document.hidden){ self._ceasStare(); return; }
       self._citesteStarea().then(function(){ self._ceasStare(); });
     }, self._seDecripteaza ? 1000 : 3000);
@@ -1380,6 +1665,7 @@
 
   Player.prototype._citesteStarea = function(){
     var self = this;
+    if(self.sesiune && self.sesiune.online){ return Promise.resolve(); }
     // un raspuns cerut inaintea unei porniri noi e al sesiunii vechi: fluxul wasm oprit de un zap pe alta frecventa
     // (EarlyEof) cere starea, iar raspunsul ("oprita: zap", fara sesiune) venea dupa ce canalul nou pornise deja si il
     // oprea cu mesajul zap-ului (proba de noapte 13-14.10, RTL Television)
@@ -1409,6 +1695,12 @@
       }
       self.peTv = !!(d.tv && d.tv.ref && a.ref && d.tv.ref.toUpperCase() === a.ref.toUpperCase());
       self._piste(a.piste, a.pista);
+      var radioInainte = self.radio;
+      self._radioArata(a);
+      if(self.radio !== radioInainte){
+        self.e.video.classList.toggle("hp-ascuns", self.radio || self.felJucator === "wasm");
+        if(self.radio){ self.e.bifa.checked = false; self._strat(); self._radioAnalizor(); }
+      }
       self._avertizarePmt(a);
       if(a.video && imagineWasm(a.video) && poate().wasm && !self.cuWasm && !self.inLucru){
         // formatul nu se stia la pornire, iar PMT-ul fluxului arata MPEG-2: imaginea trece pe playerul wasm
@@ -1617,7 +1909,8 @@
   };
 
   Player.prototype.comutaRedarea = function(){
-    var v = this.e.video;
+    var v = this._media();
+    this._reiaRadioSunet();
     if(!this.jucator){ return; }
     if(this.felJucator === "wasm"){
       // playerul wasm reia singur din direct (ce se vede acum pe televizor)
@@ -1633,7 +1926,8 @@
           if(capat - v.currentTime > 3){ v.currentTime = capat - 0.5; }
         }
       } catch(e) {}
-      v.play();
+      var p = v.play();
+      if(p && p.catch){ p.catch(function(){}); }
     } else {
       v.pause();
     }
@@ -1641,7 +1935,7 @@
 
   // ------------------------------------------------------------ stratul receptorului
   Player.prototype._stratPornit = function(){
-    return this.pornit && this.e.bifa.checked && !this.distrus;
+    return this.pornit && !this.radio && this.e.bifa.checked && !this.distrus;
   };
   Player.prototype._strat = function(){
     if(this._stratPornit()){
@@ -1673,6 +1967,17 @@
       // fereastra imaginii pe televizor: si pe 304 (lista s-a inchis, iar stratul gol nu s-a mai schimbat)
       fereastra = fereastraDin(r.headers.get("x-hds-video"));
       if(r.status === 304){ return null; }
+      if(r.status === 403){
+        // Un ecran privat sterge imediat si cadrele deja asteptate in browser.
+        self.coada = [];
+        self.etag = "";
+        self.ctx.clearRect(0, 0, self.e.canvas.width, self.e.canvas.height);
+        self._fereastraCoada = undefined;
+        self._fereastra(null);
+        fereastra = undefined;
+        urmatoarea = 1000;
+        return r.json().then(function(d){ self.stare(d.message || ""); return null; });
+      }
       if(r.status === 503){ urmatoarea = 1000; return null; }
       if(!r.ok){ urmatoarea = 3000; return null; }
       var m = /^(\d+)x(\d+)$/.exec(r.headers.get("x-hds-osd") || "");
@@ -1814,11 +2119,11 @@
     }).catch(function(e){ self.stare(e.message || tx("m3u_rau"), true); });
   };
 
-  function descarcaPlaylist(corp, csrf){
+  function descarcaPlaylist(corp, csrf, cale){
     var optiuni = {method: "POST", cache: "no-store", credentials: "same-origin",
       headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: corp.toString()};
     if(csrf){ optiuni.headers["X-HDS-CSRF"] = csrf; }
-    return fetch("/api/tv-m3u", optiuni).then(function(r){
+    return fetch(cale || "/api/tv-m3u", optiuni).then(function(r){
       if(!r.ok){
         return r.json().catch(function(){ return {}; }).then(function(d){ throw new Error(d.message || txs("m3u_http", r.status)); });
       }

@@ -62,9 +62,10 @@ RASPUNS_400 = b'HTTP/1.0 400 Bad Request\r\nConnection: Close\r\n\r\n'
 
 def ref_din_cerere(date):
     """Cererea HTTP (octeti, cel putin primul rand) -> referinta DVB, sau None: alt verb, alta cale, cale de fisier,
-    caractere straine. Codarea %3A a doua puncte se primeste."""
+    caractere straine. Codarea %3A a doua puncte se primeste. Releele de flux termina randurile numai cu \\n, deci se
+    primesc ambele feluri."""
     try:
-        rand = bytes(date).split(b'\r\n', 1)[0].decode('ascii')
+        rand = bytes(date).split(b'\n', 1)[0].rstrip(b'\r').decode('ascii')
     except (UnicodeDecodeError, ValueError):
         return None
     parti = rand.split(' ')
@@ -130,7 +131,7 @@ class Sesiune(object):
     def _citeste_cererea(self):
         self.conn.settimeout(TERMEN_CERERE_S)
         date = bytearray()
-        while b'\r\n\r\n' not in date and len(date) < 4096:
+        while b'\r\n\r\n' not in date and b'\n\n' not in date and len(date) < 4096:
             b = self.conn.recv(4096)
             if not b:
                 break

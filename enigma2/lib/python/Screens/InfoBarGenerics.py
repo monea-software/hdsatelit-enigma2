@@ -882,6 +882,17 @@ class SimpleServicelist:
 			return None
 		return self.services[self.current]
 
+def hdsPornestePlugin(plugin, session, servicelist=None):
+	"""runPlugin din bara si din playerul de filme. Un descriptor se deschide dupa semnatura lui (PluginDescriptor.deschide);
+	randurile imaginii din tasta SUB (Screens/AudioSelection.py) sunt functii simple, cu session= si eventual servicelist=."""
+	deschide = getattr(plugin, "deschide", None)
+	if deschide is not None:
+		deschide(session, servicelist)
+	elif servicelist is not None:
+		plugin(session = session, servicelist = servicelist)
+	else:
+		plugin(session = session)
+
 class InfoBarEPG:
 	""" EPG - Opens an EPG list when the showEPGList action fires """
 	def __init__(self):
@@ -1084,8 +1095,9 @@ class InfoBarEPG:
 			self.openSingleServiceEPG()
 
 	def runPlugin(self, plugin):
-		plugin(session = self.session, servicelist = self.servicelist)
-		
+		# in bara aceasta metoda vine inaintea lui InfoBarPlugins.runPlugin: orice plugin din tasta albastra trece pe aici
+		hdsPornestePlugin(plugin, self.session, self.servicelist)
+
 	def EventInfoPluginChosen(self, answer):
 		if answer is not None:
 			answer[1]()
@@ -1659,6 +1671,10 @@ class InfoBarShowMovies:
 # activated (currently time-shifting).
 
 class InfoBarTimeshift:
+	def checkTimeshiftRunning(self, returnFunction):
+		"""Numele cerut de pluginuri: inainte de zap se intreaba daca oprim timeshiftul; aici raspunsul e mereu da."""
+		returnFunction(True)
+
 	def __init__(self):
 		self["TimeshiftActions"] = HelpableActionMap(self, "InfobarTimeshiftActions",
 			{
@@ -1911,14 +1927,20 @@ class InfoBarExtensions:
 					extensionsList.remove(extension)
 				else:
 					extensionsList.remove(extension)
-		list.extend([(x[0](), x) for x in extensionsList])
+		# randurile ramase fara tasta (lista lunga) arata ca si celelalte numai cand sunt disponibile
+		list.extend([(x[0](), x) for x in extensionsList if x[2]()])
 
-		keys += [""] * len(extensionsList)
+		keys += [""] * (len(list) - len(keys))
 		if not list:
 			# 0.2.6: functiile imaginii sunt in meniu, deci fara extensii puse de om lista
-			# e goala: un mesaj in locul unei ferestre fara niciun rand
-			self.session.open(MessageBox, _("Nu ai extensii instalate. Le poți adăuga din meniu, la Extensii și aplicații."),
-				MessageBox.TYPE_INFO, timeout=8)
+			# e goala: un mesaj in locul unei ferestre fara niciun rand. Extensii sunt, dar nu se pot deschide de aici: unul
+			# care cere lista de canale, in playerul de filme
+			from Components.HdsExtensiiLucru import pluginuriDeDeschis
+			if pluginuriDeDeschis(plugins):
+				text = _("Nu sunt pluginuri care se pot deschide acum.")
+			else:
+				text = _("Nu ai extensii instalate. Le poți adăuga din meniu, la Extensii și aplicații.")
+			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
 			return
 		self.session.openWithCallback(self.extensionCallback, ChoiceBox, title=_("Please choose an extension..."), list = list, keys = keys, skin_name = "ExtensionsList")
 
@@ -1927,7 +1949,6 @@ class InfoBarExtensions:
 			answer[1][1]()
 
 from Tools.BoundFunction import boundFunction
-import inspect
 
 # depends on InfoBarExtensions
 
@@ -1939,19 +1960,31 @@ class InfoBarPlugins:
 		return name
 
 	def getPluginList(self):
+		"""Lista tastei albastre: aceleasi pluginuri ca in Extensii (plugins.pluginuriDeDeschis), dupa nume, fara cele care
+		cer lista de canale acolo unde ea nu exista (playerul de filme). Dupa ele, ce e pe receptor si nu se poate deschide
+		acum, cu motivul scurt langa nume; OK arata motivul intreg."""
+		from Components.HdsExtensiiLucru import pluginuriDeDeschis, indisponibile
 		l = []
-		for p in plugins.getPlugins(where = PluginDescriptor.WHERE_EXTENSIONSMENU):
-		  args = inspect.getfullargspec(p.fnc).args
-		  if len(args) == 1 or len(args) == 2 and isinstance(self, InfoBarChannelSelection):
-			  l.append(((boundFunction(self.getPluginName, p.name), boundFunction(self.runPlugin, p), lambda: True), None, p.name))
-		l.sort(key = lambda e: e[2]) # sort by name
+		cuLista = isinstance(self, InfoBarChannelSelection)
+		for p in pluginuriDeDeschis(plugins):
+			if cuLista or not p.cereListaCanale():
+				motiv = p.motivDeschidere()
+				nume = "%s · %s" % (p.name, motiv) if motiv else str(p.name)
+				l.append(((boundFunction(self.getPluginName, nume), boundFunction(self.runPlugin, p), lambda: True), None, str(p.name)))
+		l.sort(key = lambda e: e[2].lower()) # sort by name
+		for e in indisponibile(plugins):
+			nume = "%s · %s" % (e["nume"], e["motiv"])
+			l.append(((boundFunction(self.getPluginName, nume), boundFunction(self.hdsMotivPlugin, e), lambda: True), None, e["nume"]))
 		return l
 
 	def runPlugin(self, plugin):
 		if isinstance(self, InfoBarChannelSelection):
-			plugin(session = self.session, servicelist = self.servicelist)
+			hdsPornestePlugin(plugin, self.session, self.servicelist)
 		else:
-			plugin(session = self.session)
+			hdsPornestePlugin(plugin, self.session)
+
+	def hdsMotivPlugin(self, e):
+		self.session.open(MessageBox, plugins.textMotiv(e), MessageBox.TYPE_INFO)
 
 from Components.Task import job_manager
 class InfoBarJobman:
@@ -1974,6 +2007,11 @@ class InfoBarJobman:
 
 # depends on InfoBarExtensions
 class InfoBarPiP:
+	# numele cerut de pluginuri: zap-ul in fereastra PiP
+	def togglePipzap(self):
+		if self.session.pipshown and hasattr(self.servicelist, "togglePipzap"):
+			self.servicelist.togglePipzap()
+
 	def __init__(self):
 		try:
 			self.session.pipshown
@@ -2336,8 +2374,9 @@ class InfoBarSubserviceSelection:
 	def __init__(self):
 		self["SubserviceSelectionAction"] = HelpableActionMap(self, "InfobarSubserviceSelectionActions",
 			{
-				# HDSatelit: VERDE scurt; in bara (Screens/InfoBar.py, InfoBar.subserviceSelection) subcanalele canalului
-				# cand le are, altfel actiunea aleasa in Butoane colorate si taste rapide (implicit Extensii si aplicatii)
+				# HDSatelit: VERDE scurt; in bara (Screens/InfoBar.py, InfoBar.subserviceSelection) actiunea aleasa in Butoane
+				# colorate si taste rapide (implicit Extensii si aplicatii); subcanalele numai daca nu e aleasa niciuna, altfel
+				# sunt un rand in lista tastei albastre
 				"subserviceSelection": (self.subserviceSelection, _("Extensiile sau ce ai ales pentru VERDE (subcanalele, când există)")),
 			})
 
@@ -2904,6 +2943,11 @@ class InfoBarFilmRefuz:
 			leave((True, "movielist"))
 
 
+# Numele cerut de ecranele pluginurilor: aceleasi evenimente si mesaje de eroare ale playerului imaginii.
+# Nu se atinge tratarea acordarii DVB din InfoBarServiceErrorPopupSupport.
+InfoBarGstreamerErrorPopupSupport = InfoBarFilmRefuz
+
+
 class InfoBarSummary(Screen):
 	skin = """
 	<screen position="0,0" size="132,64">
@@ -3215,3 +3259,78 @@ class InfoBarServiceErrorPopupSupport:
 			Notifications.AddPopup(text = error, type = MessageBox.TYPE_ERROR, timeout = 5, id = "ZapError")
 		else:
 			Notifications.RemovePopup(id = "ZapError")
+
+# ---------------------------------------------------------------- pozitia de redare, numele cerute de pluginuri (fluxuri fara fisier .cuts)
+_FISIER_POZITII = "/etc/enigma2/resumepoints.pkl"
+_POZITII_MAXIM = 50
+resumePointCache = {}
+_pozitiiIncarcate = [False]
+
+
+def loadResumePoints():
+	import pickle
+	try:
+		with open(_FISIER_POZITII, "rb") as f:
+			return pickle.load(f)
+	except Exception as e:
+		print("[InfoBarGenerics] pozitiile de redare:", e)
+		return {}
+
+
+def _pozitii():
+	if not _pozitiiIncarcate[0]:
+		_pozitiiIncarcate[0] = True
+		resumePointCache.update(loadResumePoints())
+	return resumePointCache
+
+
+def saveResumePoints():
+	import pickle
+	try:
+		with open(_FISIER_POZITII, "wb") as f:
+			pickle.dump(_pozitii(), f, pickle.HIGHEST_PROTOCOL)
+	except Exception as e:
+		print("[InfoBarGenerics] pozitiile de redare:", e)
+
+
+def setResumePoint(session):
+	serviciu = session.nav.getCurrentService()
+	ref = session.nav.getCurrentlyPlayingServiceOrGroup()
+	cautare = serviciu and serviciu.seek()
+	if not cautare or ref is None:
+		return
+	pozitie = cautare.getPlayPosition()
+	if pozitie[0]:
+		return
+	lungime = cautare.getLength()
+	pozitii = _pozitii()
+	pozitii[ref.toString()] = [int(time()), pozitie[1], lungime[1] if lungime and not lungime[0] else None]
+	if len(pozitii) > _POZITII_MAXIM:
+		del pozitii[min(pozitii, key=lambda k: pozitii[k][0])]
+	saveResumePoints()
+
+
+def getResumePoint(session):
+	ref = session.nav.getCurrentlyPlayingServiceOrGroup()
+	if ref is not None:
+		rand = _pozitii().get(ref.toString())
+		if rand:
+			rand[0] = int(time())
+			return rand[1]
+	return None
+
+
+def delResumePoint(ref):
+	if _pozitii().pop(ref.toString(), None) is not None:
+		saveResumePoints()
+
+
+class InfoBarScreenSaver:
+	"""Mixin cerut de playerul extern; protectia de ecran ramane oprita.
+	Nu porneste cronometre si nu leaga taste in lipsa unei protectii a imaginii.
+	"""
+	def __init__(self):
+		pass
+
+	def ScreenSaverTimerStart(self):
+		return None

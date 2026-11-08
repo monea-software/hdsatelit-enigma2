@@ -52,6 +52,8 @@ IESIRE_RANDURI = 3       # cate randuri din raspunsul scriptului se arata
 PROGRAME_MAXIM = 64
 ECM_MAXIM = 4096
 DESCRIERE_MAXIM = 120
+CONFIG_WEB_MAXIM = 256 * 1024
+SCRIPT_CONFIG_MAXIM = 64 * 1024
 
 _SUFIX_BUN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$')
 _STERS = ' (deleted)'
@@ -266,6 +268,296 @@ def feluri_de_aratat(sistem=None):
 		st = citeste(sistem, fel)
 		if i == 0 or st.emulatoare:
 			rez.append(st)
+	return rez
+
+
+def dosar_configurare_web(argumente):
+	"""Aceeasi conventie ca intrare_cam: -c DOSAR, --config-dir DOSAR sau --config-dir=DOSAR."""
+	dosar = None
+	for i, a in enumerate(argumente):
+		if a in ('-c', '--config-dir') and i + 1 < len(argumente):
+			dosar = argumente[i + 1]
+		elif a.startswith('--config-dir='):
+			dosar = a.split('=', 1)[1]
+	if not dosar or not dosar.startswith('/') or any(ord(c) < 32 or ord(c) == 127 for c in dosar):
+		return None
+	return posixpath.normpath(dosar)
+
+
+_SPATII_SCRIPT = ' \t\r\n'
+_SEMNE_SCRIPT = ';&|<>'
+# Randurile care nu pornesc modulul: utilitarele scripturilor si interpretoarele de comenzi, recunoscute dupa nume
+# (sh si toate cele care se termina in sh), ca argumentul lor -c (o comanda) sa nu fie luat drept dosar.
+_UNELTE_SCRIPT = ('echo', 'printf', 'test', '[', 'cat', 'env')
+_INTERPRETOR_SCRIPT = re.compile(r'^[a-z]{0,3}sh$')
+
+
+def _imparte_cuvinte(text):
+	"""Imparte un rand de script in cuvinte, fara sa-l ruleze: spatiile despart cuvintele, un sir de semne ;&|<> e un
+	cuvant al lui, '...' pastreaza tot, in "..." backslash scapa numai " si backslash, afara backslash scapa orice semn,
+	# in afara ghilimelelor incepe un comentariu (si in mijlocul unui cuvant: _cuvinte_config_script scapa dinainte #
+	care in shell nu ar incepe un comentariu). Ghilimele neinchise sau backslash la sfarsit -> ValueError.
+	Aceleasi reguli ca shlex.shlex(text, posix=True, punctuation_chars=';&|<>') cu whitespace_split, pe care regula
+	ecranului CAM nu il lasa in acest fisier (proba de echivalenta: teste/test_module_cuvinte_script_071.py)."""
+	cuvinte, cuvant, are_cuvant, i, n = [], [], False, 0, len(text)
+	while i < n:
+		c = text[i]
+		if c in _SPATII_SCRIPT:
+			if are_cuvant:
+				cuvinte.append(''.join(cuvant))
+				cuvant, are_cuvant = [], False
+			i += 1
+		elif c in _SEMNE_SCRIPT:
+			if are_cuvant:
+				cuvinte.append(''.join(cuvant))
+				cuvant, are_cuvant = [], False
+			j = i
+			while j < n and text[j] in _SEMNE_SCRIPT:
+				j += 1
+			cuvinte.append(text[i:j])
+			i = j
+		elif c == '#':
+			break
+		elif c == '\\':
+			if i + 1 >= n:
+				raise ValueError('No escaped character')
+			cuvant.append(text[i + 1])
+			are_cuvant = True
+			i += 2
+		elif c == "'":
+			j = text.find("'", i + 1)
+			if j < 0:
+				raise ValueError('No closing quotation')
+			cuvant.append(text[i + 1:j])
+			are_cuvant = True
+			i = j + 1
+		elif c == '"':
+			i += 1
+			while True:
+				if i >= n:
+					raise ValueError('No closing quotation')
+				d = text[i]
+				if d == '"':
+					i += 1
+					break
+				if d == '\\' and i + 1 < n and text[i + 1] in '"\\':
+					cuvant.append(text[i + 1])
+					i += 2
+				else:
+					cuvant.append(d)
+					i += 1
+			are_cuvant = True
+		else:
+			cuvant.append(c)
+			are_cuvant = True
+			i += 1
+	if are_cuvant:
+		cuvinte.append(''.join(cuvant))
+	return cuvinte
+
+
+_PARTI_SHELL = re.compile(r"""'[^']*'|"(?:\\.|[^"\\])*"|\\.|[^'"\\]+""")
+_EXPANSIUNE_SHELL = re.compile(r'\\.|\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))|\$|`')
+_ATRIBUIRE_CONFIG = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)=')
+_MARCA_CONFIG = re.compile('\x01([0-9]+)\x02')
+
+
+def _cuvinte_config_script(linie, valori):
+	"""Numai cuvinte si variabile simple; fara evaluarea shellului sau a substituirilor de comenzi."""
+	if '\x01' in linie or '\x02' in linie:
+		return []
+	inlocuiri = []
+	atribuire = re.match(r'^\s*(?:(?:export|readonly|local)\s+)?[A-Za-z_][A-Za-z0-9_]*=', linie)
+	def parte(m):
+		text = m.group(0)
+		if text.startswith(("'", '\\')):
+			return text
+		if not text.startswith('"'):
+			# _imparte_cuvinte (ca shlex) ia orice # ca inceput de comentariu; shellul numai la inceput de cuvant.
+			text = ''.join('\\#' if c == '#' and m.start() + i > 0 and
+				linie[m.start() + i - 1] not in ' \t\r\n;&|<>()' else c for i, c in enumerate(text))
+		def expansiune(v):
+			if v.group(0).startswith('\\'):
+				return v.group(0)
+			valoare = valori.get(v.group(1) or v.group(2))
+			# Fara citate, shellul poate desparti valoarea sau extinde un tipar de fisiere.
+			if not atribuire and not text.startswith('"') and valoare is not None and re.search(r'[\s*?\[]', valoare):
+				valoare = None
+			inlocuiri.append(valoare)
+			return '\x01%d\x02' % (len(inlocuiri) - 1)
+		return _EXPANSIUNE_SHELL.sub(expansiune, text)
+	try:
+		cuvinte = _imparte_cuvinte(_PARTI_SHELL.sub(parte, linie))
+		for i, cuvant in enumerate(cuvinte):
+			if any(inlocuiri[int(m.group(1))] is None for m in _MARCA_CONFIG.finditer(cuvant)):
+				return []
+			cuvinte[i] = _MARCA_CONFIG.sub(lambda m: inlocuiri[int(m.group(1))], cuvant)
+		return cuvinte
+	except ValueError:
+		return []
+
+
+def dosar_configurare_din_script(text):
+	"""Argumentele unei porniri directe sau start-stop-daemon, cu atribuiri simple. Ambiguu -> necunoscut."""
+	valori, dosare, nivel = {}, set(), 0
+	for linie in text[:SCRIPT_CONFIG_MAXIM].replace('\\\r\n', '').replace('\\\n', '').splitlines():
+		if re.match(r'^\s*(if|case|for|while|until)\b', linie):
+			nivel += 1
+		elif re.match(r'^\s*(fi|esac|done)\b', linie):
+			nivel = max(0, nivel - 1)
+		cuvinte = _cuvinte_config_script(linie, valori)
+		if not cuvinte:
+			# O atribuire dinamica ulterioara nu trebuie sa lase valabila vechea valoare.
+			atribuire = re.match(r'^\s*(?:(?:export|readonly|local)\s+)?([A-Za-z_][A-Za-z0-9_]*)=', linie)
+			if atribuire:
+				valori.pop(atribuire.group(1), None)
+			continue
+		for i, cuvant in enumerate(cuvinte):
+			if cuvant and all(c in ';&|<>' for c in cuvant):
+				if any(_ATRIBUIRE_CONFIG.match(c) for c in cuvinte[i + 1:]):
+					# Nu evaluam comenzi in lant sau atribuiri conditionate prin && / ||.
+					for c in cuvinte:
+						m = _ATRIBUIRE_CONFIG.match(c)
+						if m:
+							valori.pop(m.group(1), None)
+					cuvinte = []
+				else:
+					cuvinte = cuvinte[:i]
+				break
+		if cuvinte and cuvinte[0] in ('export', 'readonly', 'local'):
+			cuvinte = cuvinte[1:]
+		while cuvinte and _ATRIBUIRE_CONFIG.match(cuvinte[0]):
+			nume, valoare = cuvinte.pop(0).split('=', 1)
+			if nivel:
+				valori.pop(nume, None)
+			else:
+				valori[nume] = valoare
+		if cuvinte and cuvinte[0] == 'exec':
+			cuvinte = cuvinte[1:]
+		if not cuvinte:
+			continue
+		program = cuvinte[0]
+		nume_program = posixpath.basename(program)
+		if nume_program in _UNELTE_SCRIPT or _INTERPRETOR_SCRIPT.match(nume_program):
+			continue
+		if posixpath.basename(program) == 'start-stop-daemon':
+			# Optiunile modulului sunt dupa --; cele ale uneltei nu sunt configurarea modulului.
+			if '--start' not in cuvinte or '--' not in cuvinte:
+				continue
+			if 'DAEMON' in valori:
+				if '--exec' not in cuvinte or cuvinte[cuvinte.index('--exec') + 1:][:1] != [valori['DAEMON']]:
+					continue
+			cuvinte = cuvinte[cuvinte.index('--') + 1:]
+		elif not program.startswith('/'):
+			continue
+		elif 'DAEMON' in valori and program != valori['DAEMON']:
+			continue
+		dosar = dosar_configurare_web(cuvinte)
+		if dosar is not None:
+			dosare.add(dosar)
+	return next(iter(dosare)) if len(dosare) == 1 else None
+
+
+def dosare_configurare(sistem=None, stari=None):
+	"""Dosarul fiecarui modul, inclusiv oprit/neales. Numai argumente, scripturi si stat, pe fir separat."""
+	sistem = sistem or SistemAcces()
+	stari = feluri_de_aratat(sistem) if stari is None else stari
+	rez = []
+	for st in stari:
+		for e in st.emulatoare:
+			dosar = None
+			for pid in e.pids[:PROGRAME_MAXIM]:
+				try:
+					argumente = sistem.citeste('/proc/%d/cmdline' % pid, 8192).split('\0')[1:]
+					dosar = dosar_configurare_web(argumente)
+				except (OSError, IOError, ValueError):
+					continue
+				if dosar is not None:
+					break
+			if dosar is None:
+				try:
+					dosar = dosar_configurare_din_script(sistem.citeste(e.cale, SCRIPT_CONFIG_MAXIM))
+				except (OSError, IOError, ValueError):
+					pass
+			rez.append({'fel': st.fel, 'sufix': e.sufix, 'dosar': dosar.rstrip('/') + '/' if dosar else '',
+				'exista': bool(dosar and os.path.isdir(sistem.cale(dosar)))})
+	return rez
+
+
+def nume_configurari_web(comm, exe):
+	"""Nume de proces/executabil si radacina lor, in aceeasi ordine ca navigatorul; fara nume de module in cod."""
+	rez = []
+	for nume in (comm, posixpath.basename(exe or '')):
+		for n in (nume, re.split(r'[-_.]', nume or '')[0]):
+			if n and _SUFIX_BUN.match(n) and n + '.conf' not in rez:
+				rez.append(n + '.conf')
+	return rez
+
+
+def port_web_din_randuri(randuri):
+	"""Numai httpport din [webif]. Nu pastreaza si nu intoarce alte setari; + inseamna HTTPS."""
+	sectiune = ''
+	for rand in randuri:
+		r = rand.decode('utf-8', 'replace') if isinstance(rand, bytes) else rand
+		r = r.split('#', 1)[0].split(';', 1)[0].strip()
+		if r.startswith('[') and r.endswith(']'):
+			sectiune = r[1:-1].strip().lower()
+		elif sectiune == 'webif' and re.match(r'^httpport\s*=', r, re.IGNORECASE):
+			valoare = r.split('=', 1)[1].strip()
+			if not re.match(r'^\+?[0-9]{1,5}$', valoare):
+				return None
+			port = int(valoare)
+			return {'port': port, 'protocol': 'https' if valoare.startswith('+') else 'http'} if 0 < port < 65536 else None
+	return None
+
+
+def _port_web_configurare(sistem, cale):
+	"""Citire limitata, rand cu rand; continutul configurarii nu se copiaza si nu se scrie in jurnal."""
+	def randuri(fisier):
+		ramas = CONFIG_WEB_MAXIM
+		while ramas > 0:
+			rand = fisier.readline(ramas + 1)
+			if not rand or len(rand) > ramas:
+				return
+			ramas -= len(rand)
+			yield rand
+	try:
+		with open(sistem.cale(cale), 'rb') as fisier:
+			return port_web_din_randuri(randuri(fisier))
+	except (OSError, IOError, ValueError):
+		return None
+
+
+def interfete_web(sistem=None, stari=None):
+	"""Numai portul/protocolul modulelor active din configurarea lor, fara conexiuni. Se cheama pe un fir separat."""
+	sistem = sistem or SistemAcces()
+	stari = feluri_de_aratat(sistem) if stari is None else stari
+	rez = []
+	for st in stari:
+		for e in st.emulatoare:
+			for pid in e.pids[:PROGRAME_MAXIM]:
+				baza = '/proc/%d' % pid
+				try:
+					argumente = sistem.citeste(baza + '/cmdline', 8192).split('\0')[1:]
+					dosar = dosar_configurare_web(argumente)
+					if dosar is None:
+						continue
+					comm = sistem.citeste(baza + '/comm', 256).strip()
+					exe = sistem.legatura(baza + '/exe')
+				except (OSError, IOError, ValueError):
+					continue
+				if exe.endswith(_STERS):
+					exe = exe[:-len(_STERS)]
+				for nume in nume_configurari_web(comm, exe):
+					cale = posixpath.join(dosar, nume)
+					if not os.path.isfile(sistem.cale(cale)):
+						continue
+					interfata = _port_web_configurare(sistem, cale)
+					if interfata:
+						rez.append(dict(interfata, fel=st.fel, sufix=e.sufix))
+					break
+				if rez and rez[-1]['fel'] == st.fel and rez[-1]['sufix'] == e.sufix:
+					break
 	return rez
 
 

@@ -1,6 +1,336 @@
 {
  "versiuni": [
   {
+   "versiune": "0.7.1",
+   "build": "0071202611081030",
+   "data": "08.11.2026",
+   "intrari": [
+    {
+     "fel": "nou",
+     "ro": "Vu+ Solo SE (memorie de 256 MB): imaginea întreagă se poate porni de pe un stick, din meniul de pornire multiplă al imaginii din flash. Pentru cine vrea imaginea direct în flash, rămâne varianta cu completarea pe stick.",
+     "cs": "Vu+ Solo SE (paměť 256 MB): celé image lze spustit z USB disku, z nabídky vícenásobného spouštění image ve flash paměti. Kdo chce image přímo ve flash paměti, má dál variantu s doplňkovým obsahem na USB.",
+     "de": "Vu+ Solo SE (256 MB Speicher): Das komplette Image lässt sich von einem USB-Stick starten, über das Multiboot-Menü des Images im Flash. Wer das Image direkt im Flash haben möchte, kann weiterhin die Variante mit Zusatzinhalten auf dem Stick nutzen.",
+     "en": "Vu+ Solo SE (256 MB memory): the full software can now start from a USB stick, from the multiboot menu of the software in flash. For the software directly in flash, the version with the rest on a USB stick remains.",
+     "es": "Vu+ Solo SE (256 MB de memoria): la imagen completa se puede arrancar desde una memoria USB, desde el menú de arranque múltiple de la imagen en la flash. Si quieres la imagen directamente en la flash, sigue disponible la variante con contenido adicional en USB.",
+     "fr": "Vu+ Solo SE (256 Mo de mémoire) : l’image complète peut démarrer depuis une clé USB, à partir du menu multiboot de l’image en flash. Si tu veux l’image directement en flash, la variante avec le contenu supplémentaire sur clé USB reste disponible.",
+     "hu": "Vu+ Solo SE (256 MB memória): a teljes image elindítható pendrive-ról, a flashben lévő image többszörös indítási menüjéből. Aki az image-et közvetlenül a flashben szeretné, továbbra is választhatja azt a változatot, amelynek kiegészítő tartalma USB-n van.",
+     "it": "Vu+ Solo SE (256 MB di memoria): l'immagine completa si può avviare da una chiavetta USB, dal menu di avvio multiplo dell'immagine nella flash. Chi vuole l'immagine direttamente nella flash può usare ancora la variante con il contenuto aggiuntivo su USB.",
+     "nl": "Vu+ Solo SE (256 MB geheugen): het volledige image kan vanaf een USB-stick worden gestart, via het multiboot-menu van het image in het flashgeheugen. Wil je het image direct in het flashgeheugen, dan blijft de variant met extra inhoud op USB beschikbaar.",
+     "pl": "Vu+ Solo SE (256 MB pamięci): cały obraz można uruchomić z pendrive'a, z menu wielokrotnego rozruchu obrazu w pamięci flash. Kto chce mieć obraz bezpośrednio we flashu, nadal może wybrać wariant z dodatkową zawartością na USB.",
+     "pt": "Vu+ Solo SE (256 MB de memória): a imagem completa pode arrancar a partir de uma pen USB, no menu de arranque múltiplo da imagem na flash. Para quem quer a imagem diretamente na flash, continua disponível a variante com conteúdo adicional na pen.",
+     "ru": "Vu+ Solo SE (память 256 МБ): весь образ можно запустить с флешки, из меню мультизагрузки образа во флеш-памяти. Для тех, кто хочет образ прямо во флеш-памяти, остаётся вариант с дополнительным содержимым на USB.",
+     "tr": "Vu+ Solo SE (256 MB bellek): imajın tamamı, flash bellekteki imajın çoklu açılış menüsünden bir USB bellekten başlatılabiliyor. İmajı doğrudan flash belleğe kurmak isteyenler için USB bellekte ek içerik bulunan sürüm de duruyor.",
+     "uk": "Vu+ Solo SE (пам'ять 256 МБ): увесь образ системи можна запустити з флешки, з меню мультизавантаження образу у флеш-пам'яті. Для тих, хто хоче образ просто у флеш-пам'яті, залишається варіант із додатковим вмістом на USB."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pluginurile care vin cu imaginea (afișajul din față, codul telecomenzii la GigaBlue și celelalte) nu mai apar în lista de pluginuri: setările lor sunt în meniu și în interfața web.",
+     "cs": "Pluginy, které jsou součástí image (přední displej, kód dálkového ovladače u GigaBlue a další), už nejsou v seznamu pluginů: jejich nastavení najdeš v nabídce a ve webovém rozhraní.",
+     "de": "Die Plugins, die zum Image gehören (Frontanzeige, Fernbedienungscode bei GigaBlue und die übrigen), stehen nicht mehr in der Pluginliste: Ihre Einstellungen findest du im Menü und in der Weboberfläche.",
+     "en": "The plugins that come with the software (front display, GigaBlue remote control code and the others) no longer appear in the plugin list: their settings are in the menu and in the web interface.",
+     "es": "Los plugins que vienen con la imagen (pantalla frontal, código del mando en GigaBlue y los demás) ya no aparecen en la lista de plugins: sus ajustes están en el menú y en la interfaz web.",
+     "fr": "Les plugins fournis avec l’image (afficheur en façade, code de la télécommande sur GigaBlue et les autres) n’apparaissent plus dans la liste des plugins : leurs réglages sont dans le menu et dans l’interface web.",
+     "hu": "Az image-dzsel érkező bővítmények (előlapi kijelző, a távirányító kódja GigaBlue-n és a többi) már nem jelennek meg a bővítménylistában: a beállításaik a menüben és a webes felületen vannak.",
+     "it": "I plugin che fanno parte dell'immagine (display frontale, codice del telecomando su GigaBlue e gli altri) non compaiono più nell'elenco dei plugin: le loro impostazioni sono nel menu e nell'interfaccia web.",
+     "nl": "De plugins die bij het image horen (frontdisplay, code van de afstandsbediening bij GigaBlue en de andere) staan niet meer in de pluginlijst: hun instellingen staan in het menu en in de webinterface.",
+     "pl": "Wtyczki dostarczane z obrazem (wyświetlacz przedni, kod pilota w GigaBlue i pozostałe) nie pojawiają się już na liście wtyczek: ich ustawienia są w menu i w interfejsie WWW.",
+     "pt": "Os plugins que vêm com a imagem (visor frontal, código do telecomando nos GigaBlue e os restantes) já não aparecem na lista de plugins: as definições deles estão no menu e na interface web.",
+     "ru": "Плагины, которые входят в образ (передний дисплей, код пульта на GigaBlue и остальные), больше не показываются в списке плагинов: их настройки находятся в меню и в веб-интерфейсе.",
+     "tr": "İmajla birlikte gelen eklentiler (ön ekran, GigaBlue'da kumanda kodu ve diğerleri) artık eklenti listesinde görünmüyor: ayarları menüde ve web arayüzünde.",
+     "uk": "Плагіни, які входять до образу системи (передній дисплей, код пульта на GigaBlue та інші), більше не показуються в списку плагінів: їхні налаштування є в меню і у вебінтерфейсі."
+    },
+    {
+     "fel": "nou",
+     "ro": "Tastele se aleg după preferință: tasta albastră scurtă și alte taste (stânga și dreapta pentru volum sau pentru lista de canale, OK pentru lista de canale sau pentru bara de informații), la televizor și în interfața web.",
+     "cs": "Tlačítka si nastavíš podle sebe: krátký stisk modrého tlačítka a další tlačítka (vlevo a vpravo pro hlasitost nebo seznam kanálů, OK pro seznam kanálů nebo informační lištu), na televizoru i ve webovém rozhraní.",
+     "de": "Die Tasten lassen sich nach Wunsch belegen: die blaue Taste kurz gedrückt und weitere Tasten (links und rechts für die Lautstärke oder die Senderliste, OK für die Senderliste oder die Informationsleiste), am Fernseher und in der Weboberfläche.",
+     "en": "You can choose what the buttons do: a short press of the blue button and other buttons (left and right for volume or the channel list, OK for the channel list or the information bar), on the TV and on the web.",
+     "es": "Las teclas se eligen a tu gusto: la pulsación corta de la tecla azul y otras teclas (izquierda y derecha para el volumen o la lista de canales, OK para la lista de canales o la barra de información), en el televisor y en la interfaz web.",
+     "fr": "Les touches se choisissent selon tes préférences : l’appui court sur la touche bleue et d’autres touches (gauche et droite pour le volume ou la liste des canaux, OK pour la liste des canaux ou la barre d’informations), sur le téléviseur et dans l’interface web.",
+     "hu": "A gombok kedved szerint állíthatók: a kék gomb rövid nyomása és más gombok (balra és jobbra a hangerőhöz vagy a csatornalistához, OK a csatornalistához vagy az információs sávhoz), a tévén és a webes felületen.",
+     "it": "I tasti si scelgono come preferisci: la pressione breve del tasto blu e altri tasti (sinistra e destra per il volume o per la lista dei canali, OK per la lista dei canali o per la barra delle informazioni), sul televisore e nell'interfaccia web.",
+     "nl": "De toetsen stel je naar wens in: kort indrukken van de blauwe toets en andere toetsen (links en rechts voor het volume of de zenderlijst, OK voor de zenderlijst of de informatiebalk), op de tv en in de webinterface.",
+     "pl": "Przyciski ustawisz według uznania: krótkie naciśnięcie niebieskiego przycisku i inne przyciski (lewo i prawo do głośności lub listy kanałów, OK do listy kanałów lub paska informacji), na telewizorze i w interfejsie WWW.",
+     "pt": "As teclas escolhem-se como preferires: a pressão curta da tecla azul e outras teclas (esquerda e direita para o volume ou para a lista de canais, OK para a lista de canais ou para a barra de informações), no televisor e na interface web.",
+     "ru": "Кнопки можно настроить по своему вкусу: короткое нажатие синей кнопки и другие кнопки (влево и вправо для громкости или списка каналов, OK для списка каналов или информационной панели), на телевизоре и в веб-интерфейсе.",
+     "tr": "Tuşlar isteğine göre ayarlanabiliyor: mavi tuşa kısa basış ve diğer tuşlar (ses veya kanal listesi için sol ve sağ, kanal listesi veya bilgi çubuğu için OK), televizyonda ve web arayüzünde.",
+     "uk": "Кнопки можна налаштувати на свій смак: коротке натискання синьої кнопки та інші кнопки (ліворуч і праворуч для гучності або списку каналів, OK для списку каналів або інформаційної панелі), на телевізорі і у вебінтерфейсі."
+    },
+    {
+     "fel": "nou",
+     "ro": "Asistența echipei se poate porni și din interfața web, fără telecomandă.",
+     "cs": "Podporu týmu lze spustit i z webového rozhraní, bez dálkového ovladače.",
+     "de": "Die Unterstützung durch das Team lässt sich auch über die Weboberfläche starten, ohne Fernbedienung.",
+     "en": "Support from the team can also be started from the web interface, without the remote control.",
+     "es": "La asistencia del equipo también se puede iniciar desde la interfaz web, sin el mando.",
+     "fr": "L’assistance de l’équipe peut aussi être lancée depuis l’interface web, sans télécommande.",
+     "hu": "A csapat segítségnyújtása a webes felületről is elindítható, távirányító nélkül.",
+     "it": "L'assistenza del team si può avviare anche dall'interfaccia web, senza telecomando.",
+     "nl": "Ondersteuning door het team kan ook via de webinterface worden gestart, zonder afstandsbediening.",
+     "pl": "Pomoc techniczną zespołu można też uruchomić z interfejsu WWW, bez pilota.",
+     "pt": "A assistência da equipa também pode ser iniciada a partir da interface web, sem telecomando.",
+     "ru": "Поддержку команды можно запустить и из веб-интерфейса, без пульта.",
+     "tr": "Ekibin desteği, kumanda olmadan web arayüzünden de başlatılabiliyor.",
+     "uk": "Дистанційну допомогу команди можна запустити й з вебінтерфейсу, без пульта."
+    },
+    {
+     "fel": "nou",
+     "ro": "Pe receptoarele cu afișaj color: ceasul, canalul, sigla și vremea, cu mai multe aspecte de ales.",
+     "cs": "Na přijímačích s barevným displejem: hodiny, kanál, logo a počasí, s několika vzhledy na výběr.",
+     "de": "Auf Receivern mit Farbdisplay: Uhr, Sender, Logo und Wetter, mit mehreren Ansichten zur Auswahl.",
+     "en": "On receivers with a colour display: the clock, channel, logo and weather, with several layouts to choose from.",
+     "es": "En los receptores con pantalla en color: el reloj, el canal, el logo y el tiempo, con varios aspectos para elegir.",
+     "fr": "Sur les récepteurs avec afficheur couleur : l’horloge, le canal, le logo et la météo, avec plusieurs présentations au choix.",
+     "hu": "A színes kijelzős vevőkön: óra, csatorna, logó és időjárás, több választható megjelenéssel.",
+     "it": "Sui ricevitori con display a colori: orologio, canale, logo e meteo, con diversi aspetti tra cui scegliere.",
+     "nl": "Op ontvangers met een kleurendisplay: klok, zender, logo en weer, met meerdere weergaven om uit te kiezen.",
+     "pl": "W odbiornikach z kolorowym wyświetlaczem: zegar, kanał, logo i pogoda, z kilkoma wyglądami do wyboru.",
+     "pt": "Nos recetores com visor a cores: o relógio, o canal, o logótipo e o tempo, com vários aspetos à escolha.",
+     "ru": "На ресиверах с цветным дисплеем: часы, канал, логотип и погода, с несколькими вариантами оформления на выбор.",
+     "tr": "Renkli ekranı olan alıcılarda: saat, kanal, logo ve hava durumu, seçilebilecek birkaç görünümle.",
+     "uk": "На ресиверах із кольоровим дисплеєм: годинник, канал, логотип і погода, з кількома варіантами вигляду на вибір."
+    },
+    {
+     "fel": "nou",
+     "ro": "Siglele canalelor se găsesc pe orice stick sau disc pus în receptor și după numele canalului, nu numai după referință.",
+     "cs": "Loga kanálů se najdou na jakémkoli USB disku nebo disku připojeném k přijímači a také podle názvu kanálu, nejen podle reference.",
+     "de": "Senderlogos werden auf jedem USB-Stick oder Laufwerk am Receiver gefunden und auch über den Sendernamen, nicht nur über die Referenz.",
+     "en": "Channel logos are found on any USB stick or drive connected to the receiver, and also by channel name, not only by reference.",
+     "es": "Los logos de los canales se encuentran en cualquier memoria USB o disco conectado al receptor y también por el nombre del canal, no solo por la referencia.",
+     "fr": "Les logos des canaux sont trouvés sur n’importe quelle clé USB ou disque branché au récepteur, et aussi d’après le nom du canal, pas seulement d’après la référence.",
+     "hu": "A csatornalogók bármelyik, a vevőhöz csatlakoztatott pendrive-on vagy lemezen megtalálhatók, és a csatorna neve alapján is, nem csak a hivatkozás szerint.",
+     "it": "I logo dei canali si trovano su qualsiasi chiavetta o disco collegato al ricevitore e anche in base al nome del canale, non solo al riferimento.",
+     "nl": "Zenderlogo's worden gevonden op elke USB-stick of schijf in de ontvanger, en ook op zendernaam, niet alleen op referentie.",
+     "pl": "Logo kanałów są wyszukiwane na każdym pendrivie lub dysku podłączonym do odbiornika, a także według nazwy kanału, nie tylko według referencji.",
+     "pt": "Os logótipos dos canais são encontrados em qualquer pen ou disco ligado ao recetor e também pelo nome do canal, não só pela referência.",
+     "ru": "Логотипы каналов находятся на любой флешке или диске, подключённых к ресиверу, а также по названию канала, а не только по ссылке.",
+     "tr": "Kanal logoları alıcıya takılı herhangi bir USB bellekte veya diskte, yalnızca referansa göre değil kanal adına göre de bulunuyor.",
+     "uk": "Логотипи каналів знаходяться на будь-якій флешці чи диску, підключених до ресивера, а також за назвою каналу, а не лише за посиланням."
+    },
+    {
+     "fel": "nou",
+     "ro": "Meniul Common Interface apare și pe Vu+ 4K, cu pagina lui în interfața web.",
+     "cs": "Nabídka Common Interface se zobrazuje i na Vu+ 4K, s vlastní stránkou ve webovém rozhraní.",
+     "de": "Das Common-Interface-Menü erscheint auch auf Vu+ 4K, mit eigener Seite in der Weboberfläche.",
+     "en": "The Common Interface menu also appears on Vu+ 4K, with its own page in the web interface.",
+     "es": "El menú Common Interface aparece también en los Vu+ 4K, con su página en la interfaz web.",
+     "fr": "Le menu Common Interface s’affiche aussi sur les Vu+ 4K, avec sa page dans l’interface web.",
+     "hu": "A Common Interface menü a Vu+ 4K vevőkön is megjelenik, saját oldallal a webes felületen.",
+     "it": "Il menu Common Interface compare anche sui Vu+ 4K, con la sua pagina nell'interfaccia web.",
+     "nl": "Het Common Interface-menu verschijnt ook op Vu+ 4K, met een eigen pagina in de webinterface.",
+     "pl": "Menu Common Interface pojawia się także w Vu+ 4K, z własną stroną w interfejsie WWW.",
+     "pt": "O menu Common Interface aparece também nos Vu+ 4K, com a sua página na interface web.",
+     "ru": "Меню Common Interface появилось и на Vu+ 4K, со своей страницей в веб-интерфейсе.",
+     "tr": "Common Interface menüsü Vu+ 4K'da da görünüyor ve web arayüzünde kendi sayfası var.",
+     "uk": "Меню Common Interface з'явилося і на Vu+ 4K, зі своєю сторінкою у вебінтерфейсі."
+    },
+    {
+     "fel": "nou",
+     "ro": "Imaginea pornește și din sloturile de pornire multiplă pe Vu+ 4K. Ecranul care verifică receptorul la pornire e în limba ta.",
+     "cs": "Image se spouští i ze slotů vícenásobného spouštění na Vu+ 4K. Obrazovka, která při spuštění kontroluje přijímač, je ve tvém jazyce.",
+     "de": "Das Image startet auf Vu+ 4K auch aus den Multiboot-Slots. Der Bildschirm, der den Receiver beim Start prüft, erscheint in deiner Sprache.",
+     "en": "The software also starts from the multiboot slots on Vu+ 4K. The screen that checks the receiver at startup is in your language.",
+     "es": "La imagen arranca también desde las ranuras de arranque múltiple en los Vu+ 4K. La pantalla que comprueba el receptor al arrancar está en tu idioma.",
+     "fr": "L’image démarre aussi depuis les emplacements multiboot sur les Vu+ 4K. L’écran qui vérifie le récepteur au démarrage est dans ta langue.",
+     "hu": "Az image a Vu+ 4K vevők többszörös indítási slotjaiból is elindul. Az indításkor a vevőt ellenőrző képernyő a te nyelveden jelenik meg.",
+     "it": "L'immagine si avvia anche dagli slot di avvio multiplo sui Vu+ 4K. La schermata che controlla il ricevitore all'avvio è nella tua lingua.",
+     "nl": "Het image start op Vu+ 4K ook vanuit de multiboot-slots. Het scherm dat de ontvanger bij het opstarten controleert, staat in jouw taal.",
+     "pl": "Obraz uruchamia się także ze slotów wielokrotnego rozruchu w Vu+ 4K. Ekran, który sprawdza odbiornik przy starcie, jest w twoim języku.",
+     "pt": "A imagem arranca também a partir das ranhuras de arranque múltiplo nos Vu+ 4K. O ecrã que verifica o recetor no arranque está no teu idioma.",
+     "ru": "Образ запускается и из слотов мультизагрузки на Vu+ 4K. Экран, который проверяет ресивер при запуске, теперь на твоём языке.",
+     "tr": "İmaj, Vu+ 4K'da çoklu açılış yuvalarından da başlıyor. Açılışta alıcıyı denetleyen ekran senin dilinde.",
+     "uk": "Образ системи запускається і зі слотів мультизавантаження на Vu+ 4K. Екран, який перевіряє ресивер під час запуску, тепер твоєю мовою."
+    },
+    {
+     "fel": "nou",
+     "ro": "Meniul interfeței web are aceeași ordine ca meniul receptorului, ca să găsești pe web ce știi de pe televizor.",
+     "cs": "Nabídka webového rozhraní má stejné pořadí jako nabídka přijímače, abys na webu našel to, co znáš z televizoru.",
+     "de": "Das Menü der Weboberfläche hat dieselbe Reihenfolge wie das Menü des Receivers, damit du im Web findest, was du vom Fernseher kennst.",
+     "en": "The web interface menu has the same order as the receiver menu, so you can find on the web what you know from the TV.",
+     "es": "El menú de la interfaz web tiene el mismo orden que el menú del receptor, para que encuentres en la web lo que conoces del televisor.",
+     "fr": "Le menu de l’interface web suit le même ordre que le menu du récepteur, pour que tu retrouves sur le web ce que tu connais du téléviseur.",
+     "hu": "A webes felület menüje ugyanabban a sorrendben van, mint a vevő menüje, hogy a weben is megtaláld, amit a tévéről ismersz.",
+     "it": "Il menu dell'interfaccia web ha lo stesso ordine del menu del ricevitore, così trovi sul web ciò che conosci dal televisore.",
+     "nl": "Het menu van de webinterface heeft dezelfde volgorde als het menu van de ontvanger, zodat je op het web vindt wat je van de tv kent.",
+     "pl": "Menu interfejsu WWW ma tę samą kolejność co menu odbiornika, żebyś w sieci znalazł to, co znasz z telewizora.",
+     "pt": "O menu da interface web tem a mesma ordem que o menu do recetor, para encontrares na web o que conheces do televisor.",
+     "ru": "Меню веб-интерфейса идёт в том же порядке, что и меню ресивера, чтобы в вебе ты находил то, что знаешь по телевизору.",
+     "tr": "Web arayüzünün menüsü alıcının menüsüyle aynı sırada; böylece televizyondan bildiğin şeyleri web'de de bulursun.",
+     "uk": "Меню вебінтерфейсу має той самий порядок, що й меню ресивера, щоб у вебі ти знаходив те, що знаєш із телевізора."
+    },
+    {
+     "fel": "reparat",
+     "ro": "GigaBlue UHD TRIO 4K: sunetul nu se mai pierde după stand-by sau la schimbarea canalului, tunerul nu mai rămâne ocupat, Wi-Fi merge cu stick USB și o cădere a interfeței e reparată.",
+     "cs": "GigaBlue UHD TRIO 4K: zvuk se už neztrácí po pohotovostním režimu ani při přepnutí kanálu, tuner už nezůstává obsazený, Wi-Fi funguje s USB adaptérem a jeden pád rozhraní je opraven.",
+     "de": "GigaBlue UHD TRIO 4K: Der Ton geht nach dem Standby oder beim Senderwechsel nicht mehr verloren, der Tuner bleibt nicht mehr belegt, Wi-Fi funktioniert mit USB-Stick und ein Absturz der Oberfläche ist behoben.",
+     "en": "GigaBlue UHD TRIO 4K: the sound is no longer lost after standby or when changing channel, the tuner no longer stays busy, Wi-Fi works with a USB stick and an interface crash has been fixed.",
+     "es": "GigaBlue UHD TRIO 4K: el sonido ya no se pierde después del modo de espera ni al cambiar de canal, el sintonizador ya no se queda ocupado, el Wi-Fi funciona con un adaptador USB y se ha corregido un cierre inesperado de la interfaz.",
+     "fr": "GigaBlue UHD TRIO 4K : le son ne se perd plus après la veille ou au changement de canal, le tuner ne reste plus occupé, le Wi-Fi fonctionne avec une clé USB et un plantage de l’interface est corrigé.",
+     "hu": "GigaBlue UHD TRIO 4K: a hang már nem vész el készenlét után vagy csatornaváltáskor, a tuner nem marad foglalt, a Wi-Fi működik USB-adapterrel, és javítottunk egy felületösszeomlást.",
+     "it": "GigaBlue UHD TRIO 4K: l'audio non si perde più dopo lo standby o al cambio canale, il tuner non resta più occupato, il Wi-Fi funziona con la chiavetta USB ed è stato risolto un blocco dell'interfaccia.",
+     "nl": "GigaBlue UHD TRIO 4K: het geluid valt niet meer weg na stand-by of bij het wisselen van zender, de tuner blijft niet meer bezet, wifi werkt met een USB-stick en een crash van de interface is verholpen.",
+     "pl": "GigaBlue UHD TRIO 4K: dźwięk nie znika już po trybie czuwania ani przy zmianie kanału, tuner nie pozostaje zajęty, Wi-Fi działa z adapterem USB, a jedna awaria interfejsu została naprawiona.",
+     "pt": "GigaBlue UHD TRIO 4K: o som já não se perde depois do modo de espera nem ao mudar de canal, o sintonizador já não fica ocupado, o Wi-Fi funciona com pen USB e foi corrigida uma falha da interface.",
+     "ru": "GigaBlue UHD TRIO 4K: звук больше не пропадает после ждущего режима или при переключении канала, тюнер больше не остаётся занятым, Wi-Fi работает с USB-адаптером, исправлено падение интерфейса.",
+     "tr": "GigaBlue UHD TRIO 4K: ses artık bekleme modundan sonra veya kanal değiştirirken kaybolmuyor, tuner meşgul kalmıyor, Wi-Fi USB adaptörle çalışıyor ve bir arayüz çökmesi giderildi.",
+     "uk": "GigaBlue UHD TRIO 4K: звук більше не зникає після режиму очікування чи під час перемикання каналу, тюнер більше не залишається зайнятим, Wi-Fi працює з USB-адаптером, виправлено одне падіння інтерфейсу."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Vu+ 4K și GigaBlue: pornirea e mai rapidă, interfața nu mai așteaptă discurile; pe tunerele FBC acordarea e mai rapidă. Vu+ Solo 4K: afișajul din față arată din nou ora și canalul.",
+     "cs": "Vu+ 4K a GigaBlue: spuštění je rychlejší, rozhraní už nečeká na disky; na tunerech FBC je ladění rychlejší. Vu+ Solo 4K: přední displej znovu ukazuje čas a kanál.",
+     "de": "Vu+ 4K und GigaBlue: Der Start ist schneller, die Oberfläche wartet nicht mehr auf die Laufwerke; auf FBC-Tunern ist das Abstimmen schneller. Vu+ Solo 4K: Die Frontanzeige zeigt wieder Uhrzeit und Sender.",
+     "en": "Vu+ 4K and GigaBlue: startup is faster and the interface no longer waits for the drives; tuning is faster on FBC tuners. Vu+ Solo 4K: the front display shows the time and channel again.",
+     "es": "Vu+ 4K y GigaBlue: el arranque es más rápido y la interfaz ya no espera a los discos; en los sintonizadores FBC la sintonización es más rápida. Vu+ Solo 4K: la pantalla frontal vuelve a mostrar la hora y el canal.",
+     "fr": "Vu+ 4K et GigaBlue : le démarrage est plus rapide, l’interface n’attend plus les disques ; sur les tuners FBC, l’accord est plus rapide. Vu+ Solo 4K : l’afficheur en façade montre de nouveau l’heure et le canal.",
+     "hu": "Vu+ 4K és GigaBlue: gyorsabb az indítás, a felület már nem vár a lemezekre; az FBC tunereken gyorsabb a hangolás. Vu+ Solo 4K: az előlapi kijelző ismét mutatja az időt és a csatornát.",
+     "it": "Vu+ 4K e GigaBlue: l'avvio è più veloce, l'interfaccia non aspetta più i dischi; sui tuner FBC la sintonizzazione è più rapida. Vu+ Solo 4K: il display frontale mostra di nuovo l'ora e il canale.",
+     "nl": "Vu+ 4K en GigaBlue: het opstarten gaat sneller en de interface wacht niet meer op de schijven; op FBC-tuners gaat het afstemmen sneller. Vu+ Solo 4K: het frontdisplay toont weer de tijd en de zender.",
+     "pl": "Vu+ 4K i GigaBlue: uruchamianie jest szybsze, interfejs nie czeka już na dyski; na tunerach FBC dostrajanie jest szybsze. Vu+ Solo 4K: wyświetlacz przedni znów pokazuje godzinę i kanał.",
+     "pt": "Vu+ 4K e GigaBlue: o arranque é mais rápido e a interface já não espera pelos discos; nos sintonizadores FBC a sintonização é mais rápida. Vu+ Solo 4K: o visor frontal volta a mostrar a hora e o canal.",
+     "ru": "Vu+ 4K и GigaBlue: запуск быстрее, интерфейс больше не ждёт диски; на тюнерах FBC настройка быстрее. Vu+ Solo 4K: передний дисплей снова показывает время и канал.",
+     "tr": "Vu+ 4K ve GigaBlue: açılış daha hızlı, arayüz artık diskleri beklemiyor; FBC tunerlerde kanal ayarı daha hızlı. Vu+ Solo 4K: ön ekran yeniden saati ve kanalı gösteriyor.",
+     "uk": "Vu+ 4K і GigaBlue: запуск швидший, інтерфейс більше не чекає на диски; на тюнерах FBC налаштування швидше. Vu+ Solo 4K: передній дисплей знову показує час і канал."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Vu+ Solo SE: procesorul nu mai stă aproape de 100%, iar fluxurile din rețea nu mai opresc interfața.",
+     "cs": "Vu+ Solo SE: procesor už neběží téměř na 100% a streamy ze sítě už nezastavují rozhraní.",
+     "de": "Vu+ Solo SE: Der Prozessor läuft nicht mehr fast bei 100%, und Streams aus dem Netzwerk bringen die Oberfläche nicht mehr zum Stillstand.",
+     "en": "Vu+ Solo SE: the processor no longer runs at almost 100%, and network streams no longer stop the interface.",
+     "es": "Vu+ Solo SE: el procesador ya no está casi al 100%, y los flujos de la red ya no detienen la interfaz.",
+     "fr": "Vu+ Solo SE : le processeur ne tourne plus presque à 100%, et les flux réseau n’arrêtent plus l’interface.",
+     "hu": "Vu+ Solo SE: a processzor már nem fut közel 100%-on, és a hálózati adatfolyamok már nem állítják le a felületet.",
+     "it": "Vu+ Solo SE: il processore non resta più vicino al 100%, e i flussi dalla rete non fermano più l'interfaccia.",
+     "nl": "Vu+ Solo SE: de processor draait niet meer bijna op 100%, en netwerkstreams laten de interface niet meer vastlopen.",
+     "pl": "Vu+ Solo SE: procesor nie pracuje już prawie na 100%, a strumienie z sieci nie zatrzymują interfejsu.",
+     "pt": "Vu+ Solo SE: o processador já não fica perto dos 100%, e os fluxos da rede já não param a interface.",
+     "ru": "Vu+ Solo SE: процессор больше не загружен почти на 100%, а потоки из сети больше не останавливают интерфейс.",
+     "tr": "Vu+ Solo SE: işlemci artık %100'e yakın çalışmıyor ve ağdan gelen yayınlar arayüzü durdurmuyor.",
+     "uk": "Vu+ Solo SE: процесор більше не завантажений майже на 100%, а потоки з мережі більше не зупиняють інтерфейс."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Mai multe pluginuri merg acum: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio și altele care cereau funcții pe care imaginea nu le avea. Un plugin care cade nu mai oprește interfața.",
+     "cs": "Teď funguje více pluginů: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio a další, které potřebovaly funkce, jež image neměl. Plugin, který spadne, už nezastaví rozhraní.",
+     "de": "Mehr Plugins funktionieren jetzt: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio und weitere, die Funktionen brauchten, die das Image nicht hatte. Ein abstürzendes Plugin hält die Oberfläche nicht mehr an.",
+     "en": "More plugins now work: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio and others that needed functions the software did not have. A plugin that crashes no longer stops the interface.",
+     "es": "Ahora funcionan más plugins: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio y otros que necesitaban funciones que la imagen no tenía. Un plugin que falla ya no detiene la interfaz.",
+     "fr": "Davantage de plugins fonctionnent maintenant : KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio et d’autres qui demandaient des fonctions que l’image n’avait pas. Un plugin qui plante n’arrête plus l’interface.",
+     "hu": "Most már több bővítmény működik: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio és mások, amelyek olyan funkciókat kértek, amelyek az image-ből hiányoztak. Egy összeomló bővítmény már nem állítja le a felületet.",
+     "it": "Ora funzionano più plugin: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio e altri che richiedevano funzioni che l'immagine non aveva. Un plugin che si blocca non ferma più l'interfaccia.",
+     "nl": "Meer plugins werken nu: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio en andere die functies nodig hadden die het image niet had. Een plugin die crasht, legt de interface niet meer stil.",
+     "pl": "Teraz działa więcej wtyczek: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio i inne, które potrzebowały funkcji, jakich obraz nie miał. Wtyczka, która ulegnie awarii, nie zatrzymuje już interfejsu.",
+     "pt": "Agora funcionam mais plugins: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio e outros que precisavam de funções que a imagem não tinha. Um plugin que falha já não para a interface.",
+     "ru": "Теперь работает больше плагинов: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio и другие, которым нужны были функции, которых не было в образе. Упавший плагин больше не останавливает интерфейс.",
+     "tr": "Artık daha fazla eklenti çalışıyor: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio ve imajda olmayan işlevler isteyen diğerleri. Çöken bir eklenti artık arayüzü durdurmuyor.",
+     "uk": "Тепер працює більше плагінів: KeyAdder, XStreamity, BouquetMakerXtream, TiviMateE2, OAWeather, UltraAudio та інші, яким були потрібні функції, яких не було в образі системи. Плагін, що падає, більше не зупиняє інтерфейс."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Listele de canale cu litere speciale (făcute în alte programe) se citesc fără să piardă canale.",
+     "cs": "Seznamy kanálů se speciálními znaky (vytvořené v jiných programech) se načtou, aniž by se ztratily kanály.",
+     "de": "Senderlisten mit Sonderzeichen (aus anderen Programmen) werden gelesen, ohne dass Sender verloren gehen.",
+     "en": "Channel lists with special characters (made in other programs) are read without losing channels.",
+     "es": "Las listas de canales con caracteres especiales (hechas en otros programas) se leen sin perder canales.",
+     "fr": "Les listes de canaux avec des caractères spéciaux (faites dans d’autres programmes) sont lues sans perdre de canaux.",
+     "hu": "A különleges karaktereket tartalmazó csatornalisták (más programokkal készítve) csatornavesztés nélkül töltődnek be.",
+     "it": "Le liste dei canali con caratteri speciali (create in altri programmi) vengono lette senza perdere canali.",
+     "nl": "Zenderlijsten met speciale tekens (gemaakt in andere programma's) worden gelezen zonder dat er zenders verloren gaan.",
+     "pl": "Listy kanałów ze znakami specjalnymi (zrobione w innych programach) są wczytywane bez utraty kanałów.",
+     "pt": "As listas de canais com carateres especiais (feitas noutros programas) são lidas sem perder canais.",
+     "ru": "Списки каналов со специальными символами (сделанные в других программах) читаются без потери каналов.",
+     "tr": "Özel karakterler içeren kanal listeleri (başka programlarda hazırlanmış) kanal kaybı olmadan okunuyor.",
+     "uk": "Списки каналів зі спеціальними символами (зроблені в інших програмах) читаються без втрати каналів."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Scanarea găsește numele canalelor și pe frecvențele care le anunță altfel.",
+     "cs": "Vyhledávání najde názvy kanálů i na frekvencích, které je ohlašují jinak.",
+     "de": "Der Suchlauf findet die Sendernamen auch auf Frequenzen, die sie anders melden.",
+     "en": "The scan finds channel names even on frequencies that announce them differently.",
+     "es": "La búsqueda encuentra los nombres de los canales también en las frecuencias que los anuncian de otra forma.",
+     "fr": "La recherche trouve les noms des canaux aussi sur les fréquences qui les annoncent autrement.",
+     "hu": "A keresés azokon a frekvenciákon is megtalálja a csatornaneveket, amelyek másképp közlik őket.",
+     "it": "La scansione trova i nomi dei canali anche sulle frequenze che li annunciano in modo diverso.",
+     "nl": "Het zoeken vindt de zendernamen ook op frequenties die ze anders aankondigen.",
+     "pl": "Wyszukiwanie znajduje nazwy kanałów także na częstotliwościach, które podają je inaczej.",
+     "pt": "A pesquisa encontra os nomes dos canais também nas frequências que os anunciam de outra forma.",
+     "ru": "Поиск находит названия каналов и на частотах, которые передают их иначе.",
+     "tr": "Tarama, kanal adlarını onları farklı biçimde bildiren frekanslarda da buluyor.",
+     "uk": "Пошук знаходить назви каналів і на частотах, які передають їх інакше."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Meniul principal: când un canal nu are ghid de programe, scrie asta clar; numele receptorului derulează când nu încape.",
+     "cs": "Hlavní nabídka: když kanál nemá programového průvodce, jasně to napíše; název přijímače se posouvá, když se nevejde.",
+     "de": "Hauptmenü: Wenn ein Sender keinen Programmführer hat, steht das deutlich da; der Name des Receivers läuft durch, wenn er nicht hineinpasst.",
+     "en": "Main menu: when a channel has no programme guide, it says so clearly; the receiver name scrolls when it does not fit.",
+     "es": "Menú principal: cuando un canal no tiene guía de programación, lo indica claramente; el nombre del receptor se desplaza cuando no cabe.",
+     "fr": "Menu principal : quand un canal n’a pas de guide des programmes, il l’indique clairement ; le nom du récepteur défile quand il ne tient pas.",
+     "hu": "Főmenü: ha egy csatornának nincs műsorújságja, ezt egyértelműen kiírja; a vevő neve görget, ha nem fér ki.",
+     "it": "Menu principale: quando un canale non ha la guida dei programmi, lo scrive chiaramente; il nome del ricevitore scorre quando non entra.",
+     "nl": "Hoofdmenu: als een zender geen programmagids heeft, staat dat er duidelijk; de naam van de ontvanger schuift door als hij niet past.",
+     "pl": "Menu główne: gdy kanał nie ma przewodnika programowego, jest to jasno napisane; nazwa odbiornika przewija się, gdy się nie mieści.",
+     "pt": "Menu principal: quando um canal não tem guia de programação, isso é indicado com clareza; o nome do recetor desliza quando não cabe.",
+     "ru": "Главное меню: когда у канала нет телегида, это ясно написано; название ресивера прокручивается, если не помещается.",
+     "tr": "Ana menü: bir kanalın program rehberi yoksa bunu açıkça yazıyor; alıcının adı sığmadığında kayıyor.",
+     "uk": "Головне меню: коли канал не має програми передач, це чітко написано; назва ресивера прокручується, якщо не вміщується."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Programele de pe calculator pentru lista de canale merg acum direct cu receptorul, fără niciun plugin în plus.",
+     "cs": "Programy v počítači pro seznam kanálů nyní fungují přímo s přijímačem, bez dalšího pluginu.",
+     "de": "PC-Programme für die Kanalliste funktionieren jetzt direkt mit dem Receiver, ohne zusätzliches Plugin.",
+     "en": "PC programs for the channel list now work directly with the receiver, without any extra plugin.",
+     "es": "Los programas de PC para la lista de canales funcionan ahora directamente con el receptor, sin ningún plugin adicional.",
+     "fr": "Les programmes PC pour la liste des chaînes fonctionnent maintenant directement avec le récepteur, sans plugin supplémentaire.",
+     "hu": "A csatornalistához használt számítógépes programok most közvetlenül működnek a vevővel, további bővítmény nélkül.",
+     "it": "I programmi per PC per la lista dei canali ora funzionano direttamente con il ricevitore, senza plugin aggiuntivi.",
+     "nl": "Pc-programma's voor de zenderlijst werken nu rechtstreeks met de ontvanger, zonder extra plug-in.",
+     "pl": "Programy na komputer do listy kanałów działają teraz bezpośrednio z odbiornikiem, bez dodatkowej wtyczki.",
+     "pt": "Os programas de PC para a lista de canais funcionam agora diretamente com o recetor, sem plugin adicional.",
+     "ru": "Программы на компьютере для списка каналов теперь работают с ресивером напрямую, без дополнительного плагина.",
+     "tr": "Kanal listesi için bilgisayar programları artık ek bir eklenti olmadan doğrudan alıcıyla çalışıyor.",
+     "uk": "Програми на комп'ютері для списку каналів тепер працюють із ресивером напряму, без додаткового плагіна."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Rapoartele trimise automat de receptor sunt mai precise, fără alarme false despre lipsa imaginii.",
+     "cs": "Zprávy, které přijímač posílá automaticky, jsou přesnější, bez falešných poplachů kvůli chybějícímu obrazu.",
+     "de": "Die Berichte, die der Receiver automatisch sendet, sind genauer, ohne Fehlalarme wegen eines fehlenden Bildes.",
+     "en": "The reports the receiver sends automatically are more accurate, without false alarms about a missing picture.",
+     "es": "Los informes que el receptor envía automáticamente son más precisos, sin falsas alarmas por falta de imagen.",
+     "fr": "Les rapports envoyés automatiquement par le récepteur sont plus précis, sans fausses alertes d’absence d’image à l’écran.",
+     "hu": "A vevő által automatikusan küldött jelentések pontosabbak, hiányzó képről szóló téves riasztások nélkül.",
+     "it": "I rapporti inviati automaticamente dal ricevitore sono più precisi, senza falsi allarmi per l'assenza di immagine.",
+     "nl": "De rapporten die de ontvanger automatisch verstuurt, zijn nauwkeuriger, zonder valse meldingen over een ontbrekend beeld.",
+     "pl": "Raporty wysyłane automatycznie przez odbiornik są dokładniejsze, bez fałszywych alarmów o braku obrazu.",
+     "pt": "Os relatórios enviados automaticamente pelo recetor são mais precisos, sem falsos alarmes sobre falta de imagem no ecrã.",
+     "ru": "Отчёты, которые ресивер отправляет автоматически, стали точнее, без ложных тревог об отсутствии изображения.",
+     "tr": "Alıcının otomatik gönderdiği raporlar daha doğru; görüntü olmadığına dair yanlış alarmlar yok.",
+     "uk": "Звіти, які ресивер надсилає автоматично, стали точнішими, без хибних тривог про відсутність зображення."
+    },
+    {
+     "fel": "reparat",
+     "ro": "Pornirea multiplă arată și imaginile instalate pe stick (de pildă pe Octagon SF8008, sloturile de la 5 în sus) și le poate porni.",
+     "cs": "Vícenásobné spouštění ukazuje i image nainstalované na USB disku (například na Octagon SF8008 sloty od 5 výše) a umí je spustit.",
+     "de": "Der Multiboot zeigt auch die auf dem USB-Stick installierten Images (zum Beispiel auf Octagon SF8008 die Slots ab 5) und kann sie starten.",
+     "en": "Multiboot also shows the images installed on a USB stick (for example on Octagon SF8008, slots 5 and up) and can start them.",
+     "es": "El arranque múltiple muestra también las imágenes instaladas en una memoria USB (por ejemplo en Octagon SF8008, las ranuras a partir de la 5) y puede arrancarlas.",
+     "fr": "Le multiboot affiche aussi les images installées sur clé USB (par exemple sur Octagon SF8008, les emplacements à partir de 5) et peut les démarrer.",
+     "hu": "A többszörös indítás a pendrive-ra telepített image-eket is mutatja (például Octagon SF8008-on az 5-ös és afölötti slotokat), és el is tudja indítani őket.",
+     "it": "L'avvio multiplo mostra anche le immagini installate sulla chiavetta USB (per esempio su Octagon SF8008, gli slot dal 5 in su) e le può avviare.",
+     "nl": "Multiboot toont ook de images die op een USB-stick zijn geïnstalleerd (bijvoorbeeld op Octagon SF8008 de slots vanaf 5) en kan ze starten.",
+     "pl": "Wielokrotny rozruch pokazuje także obrazy zainstalowane na pendrivie (na przykład w Octagon SF8008 sloty od 5 w górę) i może je uruchomić.",
+     "pt": "O arranque múltiplo mostra também as imagens instaladas na pen USB (por exemplo, no Octagon SF8008, as ranhuras a partir da 5) e consegue arrancá-las.",
+     "ru": "Мультизагрузка показывает и образы, установленные на флешке (например, на Octagon SF8008 слоты с 5-го и выше), и может их запустить.",
+     "tr": "Çoklu açılış, USB belleğe kurulu imajları da gösteriyor (örneğin Octagon SF8008'de 5 ve üstü yuvalar) ve onları başlatabiliyor.",
+     "uk": "Мультизавантаження показує і образи, встановлені на флешці (наприклад, на Octagon SF8008 слоти від 5-го і вище), і може їх запустити."
+    }
+   ]
+  },
+  {
    "versiune": "0.7.0",
    "build": "0070202611022254",
    "data": "04.11.2026",
@@ -19,7 +349,8 @@
      "pl": "Obraz korzysta z nowej bazy z Pythonem 3.14 oraz zaktualizowanymi bibliotekami do bezpiecznych połączeń i odtwarzania filmów.",
      "pt": "A imagem usa uma nova base, com Python 3.14 e bibliotecas atualizadas para ligações seguras e reprodução de filmes.",
      "ru": "Образ использует новую основу с Python 3.14 и обновлёнными библиотеками для безопасных подключений и воспроизведения фильмов.",
-     "tr": "İmaj, Python 3.14 ve güvenli bağlantılar ile film oynatma için güncellenmiş kitaplıklar içeren yeni bir altyapı kullanıyor."
+     "tr": "İmaj, Python 3.14 ve güvenli bağlantılar ile film oynatma için güncellenmiş kitaplıklar içeren yeni bir altyapı kullanıyor.",
+     "uk": "Образ системи використовує нову основу з Python 3.14 та оновленими бібліотеками для безпечних з’єднань і відтворення фільмів."
     },
     {
      "fel": "nou",
@@ -35,7 +366,8 @@
      "pl": "Ekran Rozszerzenia ma zakładki Zainstalowane i Dostępne. Możesz dodawać źródła feed i instalować rozszerzenia z plików .ipk z pendrive'a, dysku lub sieci.",
      "pt": "O ecrã Extensões tem os separadores Instaladas e Disponíveis. Podes adicionar feeds e instalar extensões a partir de ficheiros .ipk numa pen USB, num disco ou na rede.",
      "ru": "На экране «Расширения» есть вкладки «Установленные» и «Доступные». Можешь добавлять feed и устанавливать расширения из файлов .ipk с флешки, диска или по сети.",
-     "tr": "Eklentiler ekranında Kurulu ve Kullanılabilir sekmeleri bulunuyor. feed ekleyebilir, USB bellek, disk veya ağdaki .ipk dosyalarından eklenti kurabilirsin."
+     "tr": "Eklentiler ekranında Kurulu ve Kullanılabilir sekmeleri bulunuyor. feed ekleyebilir, USB bellek, disk veya ağdaki .ipk dosyalarından eklenti kurabilirsin.",
+     "uk": "Екран «Розширення» має вкладки «Встановлені» та «Доступні». Можна додавати feed і встановлювати розширення з файлів .ipk на флешці, диску або в мережі."
     },
     {
      "fel": "nou",
@@ -51,7 +383,8 @@
      "pl": "Nowy obraz można pobrać z internetu i zainstalować bezpośrednio z menu, bez komputera. Odbiornik sprawdza obraz przed instalacją, a przerwane pobieranie można wznowić.",
      "pt": "A nova imagem pode ser descarregada da internet e instalada diretamente pelo menu, sem computador. O recetor verifica a imagem antes da instalação e, se a transferência for interrompida, pode ser retomada.",
      "ru": "Новый образ можно скачать из интернета и установить прямо из меню, без компьютера. Ресивер проверяет образ перед установкой, а прерванную загрузку можно продолжить.",
-     "tr": "Yeni imaj internetten indirilip bilgisayar gerekmeden doğrudan menüden kurulabilir. Alıcı, kurulumdan önce imajı kontrol eder ve yarıda kalan indirmeye devam edilebilir."
+     "tr": "Yeni imaj internetten indirilip bilgisayar gerekmeden doğrudan menüden kurulabilir. Alıcı, kurulumdan önce imajı kontrol eder ve yarıda kalan indirmeye devam edilebilir.",
+     "uk": "Новий образ системи можна завантажити з інтернету й установити прямо з меню, без комп’ютера. Ресивер перевіряє образ перед установленням, а перерване завантаження можна продовжити."
     },
     {
      "fel": "nou",
@@ -67,7 +400,8 @@
      "pl": "Pełna kopia zapasowa zachowuje teraz także wtyczki wraz z ich danymi i ustawieniami. Podczas przywracania dostępne wtyczki są ponownie instalowane ze źródła feed lub zapisanego pliku instalacyjnego, a następnie otrzymują zachowane ustawienia.",
      "pt": "A cópia de segurança completa inclui agora também os plugins, com os seus dados e definições. Durante o restauro, os que estiverem disponíveis são reinstalados a partir do feed ou do ficheiro de instalação guardado, sendo depois aplicadas as definições guardadas.",
      "ru": "Полная резервная копия теперь сохраняет и плагины вместе с их данными и настройками. При восстановлении доступные плагины устанавливаются заново из feed или сохранённого установочного файла, после чего к ним применяются сохранённые настройки.",
-     "tr": "Tam yedek artık eklentileri de verileri ve ayarlarıyla birlikte saklıyor. Geri yükleme sırasında, mevcut olan eklentiler feed üzerinden veya kaydedilmiş kurulum dosyasından yeniden kuruluyor, ardından saklanan ayarları geri yükleniyor."
+     "tr": "Tam yedek artık eklentileri de verileri ve ayarlarıyla birlikte saklıyor. Geri yükleme sırasında, mevcut olan eklentiler feed üzerinden veya kaydedilmiş kurulum dosyasından yeniden kuruluyor, ardından saklanan ayarları geri yükleniyor.",
+     "uk": "Повна резервна копія тепер зберігає і плагіни з їхніми даними та налаштуваннями. Під час відновлення доступні плагіни встановлюються знову з feed або зі збереженого файлу встановлення, а потім отримують збережені налаштування."
     },
     {
      "fel": "nou",
@@ -83,7 +417,8 @@
      "pl": "Możesz dodać telewizję przez internet w ramach swojego abonamentu, korzystając z listy lub konta otrzymanego od dostawcy. Kanały pojawiają się na liście kanałów jako satelita i można je dodać do Ulubionych.",
      "pt": "Podes adicionar televisão pela internet com a tua subscrição, usando a lista ou a conta que recebeste do fornecedor. Os canais aparecem como um satélite na lista de canais e podem ser adicionados aos Favoritos.",
      "ru": "Можешь добавить телевидение через интернет по своей подписке, используя список или учётную запись от провайдера. Каналы отображаются в списке каналов как отдельный спутник, и их можно добавить в избранное.",
-     "tr": "Sağlayıcından aldığın listeyi veya hesabı kullanarak kendi aboneliğinle internet televizyonu ekleyebilirsin. Kanallar, kanal listesinde bir uydu gibi görünür ve Favorilere eklenebilir."
+     "tr": "Sağlayıcından aldığın listeyi veya hesabı kullanarak kendi aboneliğinle internet televizyonu ekleyebilirsin. Kanallar, kanal listesinde bir uydu gibi görünür ve Favorilere eklenebilir.",
+     "uk": "Можна додати телебачення через інтернет за власною передплатою, використовуючи список або обліковий запис від постачальника. Канали з’являються у списку каналів як окремий супутник, і їх можна додати до «Обраного»."
     },
     {
      "fel": "nou",
@@ -99,7 +434,8 @@
      "pl": "Po zainstalowaniu wtyczki Radio online stacje internetowe pojawiają się na zwykłej liście stacji radiowych, w osobnym miejscu, jako satelita. Korektor dźwięku działa także w stacjach MP3, a ustawienia są zapamiętywane osobno dla każdej stacji.",
      "pt": "Com o plugin Rádio online instalado, as estações da internet aparecem na lista de rádio habitual, numa secção separada, como um satélite. O equalizador também funciona nas estações MP3, com ajustes guardados para cada estação.",
      "ru": "С установленным плагином «Онлайн-радио» интернет-радиостанции появляются в обычном списке радио, в отдельном разделе, как спутник. Эквалайзер работает и на MP3-радиостанциях, а настройки сохраняются для каждой станции отдельно.",
-     "tr": "Çevrimiçi radyo eklentisi kuruluysa internet radyo istasyonları, normal radyo listesinde ayrı bir uydu gibi görünür. Ekolayzır MP3 radyo istasyonlarında da çalışır ve her istasyonun ayarları ayrı ayrı saklanır."
+     "tr": "Çevrimiçi radyo eklentisi kuruluysa internet radyo istasyonları, normal radyo listesinde ayrı bir uydu gibi görünür. Ekolayzır MP3 radyo istasyonlarında da çalışır ve her istasyonun ayarları ayrı ayrı saklanır.",
+     "uk": "Якщо встановлено плагін «Інтернет-радіо», інтернет-радіостанції з’являються у звичайному списку радіо, в окремому місці, як супутник. Еквалайзер працює і на станціях MP3, а налаштування зберігаються для кожної станції."
     },
     {
      "fel": "nou",
@@ -115,7 +451,8 @@
      "pl": "Okna komunikatów i wiele ekranów ustawień zostało przebudowanych w motywie Pro. Mają teraz czytelniejsze tytuły i wskaźniki. Tytuły i wiersze szczegółów, które się nie mieszczą, są przewijane.",
      "pt": "As janelas de mensagens e vários ecrãs de definições foram redesenhados no tema Pro, com títulos e indicadores mais claros. Os títulos e as linhas de detalhes que não cabem no ecrã passam a deslizar.",
      "ru": "Окна сообщений и несколько экранов настроек переработаны в теме Pro: заголовки и индикаторы стали понятнее. Заголовки и строки с подробностями, которые не помещаются на экране, прокручиваются.",
-     "tr": "Mesaj pencereleri ve birçok ayar ekranı, Pro temasında daha anlaşılır başlıklar ve göstergelerle yenilendi. Ekrana sığmayan başlıklar ve ayrıntı satırları kaydırılır."
+     "tr": "Mesaj pencereleri ve birçok ayar ekranı, Pro temasında daha anlaşılır başlıklar ve göstergelerle yenilendi. Ekrana sığmayan başlıklar ve ayrıntı satırları kaydırılır.",
+     "uk": "Вікна повідомлень і кілька екранів налаштувань перероблено в темі Pro, з чіткішими заголовками й індикаторами. Заголовки та рядки з подробицями, які не вміщуються, прокручуються."
     },
     {
      "fel": "nou",
@@ -131,7 +468,8 @@
      "pl": "Interfejs jest dostępny także po arabsku, z arabską klawiaturą ekranową i wyszukiwaniem w tym języku. Poprawiono łączenie liter, wyrównanie i przewijanie tekstu od prawej strony.",
      "pt": "A interface também está disponível em árabe, com teclado árabe no ecrã e pesquisa nessa língua. Foram corrigidas a ligação entre letras, o alinhamento e a deslocação do texto a partir da direita.",
      "ru": "Интерфейс теперь доступен и на арабском языке, с арабской экранной клавиатурой и поиском на этом языке. Исправлены соединение букв, выравнивание и прокрутка текста справа налево.",
-     "tr": "Arayüz artık Arapça olarak da kullanılabiliyor; ekran klavyesi ve arama da Arapçayı destekliyor. Harflerin birleşimi, hizalama ve metnin sağdan kaydırılması düzeltildi."
+     "tr": "Arayüz artık Arapça olarak da kullanılabiliyor; ekran klavyesi ve arama da Arapçayı destekliyor. Harflerin birleşimi, hizalama ve metnin sağdan kaydırılması düzeltildi.",
+     "uk": "Інтерфейс доступний і арабською мовою, з арабською екранною клавіатурою та пошуком цією мовою. Виправлено з’єднання літер, вирівнювання та прокручування тексту справа."
     },
     {
      "fel": "nou",
@@ -147,7 +485,8 @@
      "pl": "Okno instalatora wyświetla postęp i komunikaty w języku wybranym w odbiorniku.",
      "pt": "A janela do programa de instalação mostra o progresso e as mensagens na língua escolhida no recetor.",
      "ru": "Окно программы установки показывает ход установки и сообщения на языке, выбранном в ресивере.",
-     "tr": "Kurulum penceresi, ilerlemeyi ve mesajları alıcıda seçilen dilde gösterir."
+     "tr": "Kurulum penceresi, ilerlemeyi ve mesajları alıcıda seçilen dilde gösterir.",
+     "uk": "Вікно програми встановлення показує перебіг і повідомлення мовою, вибраною на ресивері."
     },
     {
      "fel": "reparat",
@@ -163,7 +502,8 @@
      "pl": "Usunięto luki w zabezpieczeniach, aby lepiej chronić dane osobowe podczas korzystania z pomocy technicznej i interfejsu WWW.",
      "pt": "Foram corrigidos problemas de segurança para proteger melhor os dados pessoais na assistência e na interface web.",
      "ru": "Устранены уязвимости для лучшей защиты личных данных при обращении в поддержку и в веб-интерфейсе.",
-     "tr": "Destek işlemlerinde ve web arayüzünde kişisel verileri daha iyi korumak için güvenlik açıkları giderildi."
+     "tr": "Destek işlemlerinde ve web arayüzünde kişisel verileri daha iyi korumak için güvenlik açıkları giderildi.",
+     "uk": "Виправлено проблеми безпеки для кращого захисту особистих даних у дистанційній допомозі та у вебінтерфейсі."
     },
     {
      "fel": "reparat",
@@ -179,7 +519,8 @@
      "pl": "Jeśli przywracanie kopii zapasowej zostanie przerwane, odbiornik wznowi je przy następnym uruchomieniu, korzystając z tej samej kopii.",
      "pt": "Se o restauro de uma cópia de segurança for interrompido, o recetor retoma-o no arranque seguinte, usando a mesma cópia.",
      "ru": "Если восстановление из резервной копии прервано, ресивер продолжит его при следующем включении, используя ту же копию.",
-     "tr": "Bir yedeğin geri yüklenmesi yarıda kalırsa alıcı, bir sonraki açılışta aynı yedeği kullanarak işleme devam eder."
+     "tr": "Bir yedeğin geri yüklenmesi yarıda kalırsa alıcı, bir sonraki açılışta aynı yedeği kullanarak işleme devam eder.",
+     "uk": "Якщо відновлення копії перервано, ресивер продовжить його під час наступного запуску, використовуючи ту саму копію."
     },
     {
      "fel": "reparat",
@@ -195,7 +536,8 @@
      "pl": "Niektóre błędy zewnętrznych rozszerzeń nie powodują już ponownego uruchomienia interfejsu, a ich przyczyna jest wyświetlana w oknie.",
      "pt": "Alguns erros das extensões externas já não fazem reiniciar a interface, e a causa é apresentada numa janela.",
      "ru": "Некоторые ошибки сторонних расширений больше не вызывают перезапуск интерфейса, а их причина отображается в отдельном окне.",
-     "tr": "Harici eklentilerdeki bazı hatalar artık arayüzün yeniden başlamasına neden olmuyor ve hatanın nedeni bir pencerede gösteriliyor."
+     "tr": "Harici eklentilerdeki bazı hatalar artık arayüzün yeniden başlamasına neden olmuyor ve hatanın nedeni bir pencerede gösteriliyor.",
+     "uk": "Деякі помилки сторонніх розширень більше не перезапускають інтерфейс, а причина показується у вікні."
     },
     {
      "fel": "reparat",
@@ -211,7 +553,8 @@
      "pl": "Usunięto przyczynę awarii podczas zamykania lub ponownego uruchamiania interfejsu. Celowe wyłączenie nie jest już uznawane za awarię i nie włącza przez pomyłkę trybu awaryjnego.",
      "pt": "Foi corrigida uma falha que podia ocorrer ao fechar ou reiniciar a interface. Um encerramento pedido já não é confundido com uma falha nem ativa o modo de segurança por engano.",
      "ru": "Устранена одна из причин сбоя при закрытии или перезапуске интерфейса. Штатное завершение работы больше не принимается за сбой и не приводит к случайному включению безопасного режима.",
-     "tr": "Arayüz kapatılırken veya yeniden başlatılırken çökmeye neden olan bir sorun giderildi. İstenen bir kapatma işlemi artık çökme olarak algılanmıyor ve yanlışlıkla güvenli modu etkinleştirmiyor."
+     "tr": "Arayüz kapatılırken veya yeniden başlatılırken çökmeye neden olan bir sorun giderildi. İstenen bir kapatma işlemi artık çökme olarak algılanmıyor ve yanlışlıkla güvenli modu etkinleştirmiyor.",
+     "uk": "Усунено одну з причин збою під час закриття або перезапуску інтерфейсу. Запитану зупинку більше не плутають зі збоєм, і вона більше не вмикає помилково безпечний режим."
     },
     {
      "fel": "nou",
@@ -227,7 +570,8 @@
      "pl": "W „Lokalizacji nagrań” zobaczysz typ dysku, połączenie USB i wolne miejsce. Pendrive, który po błędzie przeszedł w tryb tylko do odczytu, można tu naprawić bez formatowania.",
      "pt": "Em «Local das gravações», podes ver o tipo de disco, a ligação USB e o espaço livre. Uma pen USB que tenha passado a só de leitura após um erro pode ser reparada aqui, sem formatação.",
      "ru": "В разделе «Место хранения записей» видны тип диска, подключение USB и свободное место. Здесь можно восстановить работу флешки, которая после ошибки стала доступна только для чтения, без форматирования.",
-     "tr": "\"Kayıt konumu\" bölümünde disk türünü, USB bağlantısını ve boş alanı görebilirsin. Bir hata sonrasında salt okunur duruma geçen USB bellek, biçimlendirmeden buradan onarılabilir."
+     "tr": "\"Kayıt konumu\" bölümünde disk türünü, USB bağlantısını ve boş alanı görebilirsin. Bir hata sonrasında salt okunur duruma geçen USB bellek, biçimlendirmeden buradan onarılabilir.",
+     "uk": "У розділі «Місце для записів» видно тип диска, підключення USB і вільне місце. Флешку, яка після помилки перейшла в режим лише для читання, можна полагодити звідси без форматування."
     },
     {
      "fel": "nou",
@@ -243,7 +587,8 @@
      "pl": "Z kompatybilnych aplikacji na telefon możesz rozpocząć nagrywanie lub usunąć nagranie z odbiornika. Trwające nagrania i odtwarzany film są chronione przed usunięciem.",
      "pt": "Nas aplicações de telemóvel compatíveis, podes iniciar uma gravação ou apagar uma do recetor. As gravações em curso e o filme em reprodução estão protegidos contra eliminação.",
      "ru": "Из совместимых приложений на телефоне можешь запустить запись или удалить запись с ресивера. Текущие записи и воспроизводимый фильм защищены от удаления.",
-     "tr": "Uyumlu telefon uygulamalarından kayıt başlatabilir veya alıcıdaki bir kaydı silebilirsin. Devam eden kayıtlar ve oynatılan film silinmeye karşı korunur."
+     "tr": "Uyumlu telefon uygulamalarından kayıt başlatabilir veya alıcıdaki bir kaydı silebilirsin. Devam eden kayıtlar ve oynatılan film silinmeye karşı korunur.",
+     "uk": "Із сумісних застосунків для телефона можна запустити запис або видалити запис із ресивера. Записи, що тривають, і фільм, який відтворюється, захищені від видалення."
     },
     {
      "fel": "nou",
@@ -259,7 +604,8 @@
      "pl": "Menu i ekrany ustawień przewijają się wiersz po wierszu. W Ustawieniach ogólnych możesz też wybrać przewijanie strona po stronie.",
      "pt": "Os menus e os ecrãs de definições deslocam-se linha a linha. Nas Definições gerais, também podes escolher a deslocação página a página.",
      "ru": "Меню и экраны настроек прокручиваются построчно. В общих настройках можешь выбрать и постраничную прокрутку.",
-     "tr": "Menüler ve ayar ekranları satır satır kaydırılır. Genel ayarlar bölümünden sayfa sayfa kaydırmayı da seçebilirsin."
+     "tr": "Menüler ve ayar ekranları satır satır kaydırılır. Genel ayarlar bölümünden sayfa sayfa kaydırmayı da seçebilirsin.",
+     "uk": "Меню та екрани налаштувань прокручуються рядок за рядком. У «Загальних налаштуваннях» можна вибрати й посторінкове прокручування."
     },
     {
      "fel": "reparat",
@@ -275,7 +621,8 @@
      "pl": "Menu szybciej reagują na pilota, także podczas przechodzenia między kafelkami.",
      "pt": "Os menus respondem mais depressa ao comando, incluindo quando passas de um mosaico para outro.",
      "ru": "Меню быстрее реагируют на пульт, в том числе при переходе между плитками.",
-     "tr": "Menüler, kutucuklar arasında geçiş yaparken de kumandaya daha hızlı tepki veriyor."
+     "tr": "Menüler, kutucuklar arasında geçiş yaparken de kumandaya daha hızlı tepki veriyor.",
+     "uk": "Меню швидше реагують на пульт, зокрема під час переходу від однієї плитки до іншої."
     },
     {
      "fel": "reparat",
@@ -291,7 +638,8 @@
      "pl": "Edytor kanałów zamyka się po pierwszym naciśnięciu EXIT, także podczas wczytywania listy, bez ponownego uruchamiania interfejsu.",
      "pt": "O editor de canais fecha-se logo ao premir EXIT uma vez, mesmo enquanto a lista está a carregar, sem reiniciar a interface.",
      "ru": "Редактор каналов закрывается с первого нажатия EXIT, даже во время загрузки списка, без перезапуска интерфейса.",
-     "tr": "Kanal düzenleyici, liste yüklenirken bile EXIT tuşuna ilk basışta arayüzü yeniden başlatmadan kapanıyor."
+     "tr": "Kanal düzenleyici, liste yüklenirken bile EXIT tuşuna ilk basışta arayüzü yeniden başlatmadan kapanıyor.",
+     "uk": "Редактор каналів закривається з першого натискання EXIT, навіть поки завантажується список, і не перезапускає інтерфейс."
     },
     {
      "fel": "reparat",
@@ -307,7 +655,8 @@
      "pl": "Tworzenie kopii teletekstu nie powoduje już zatrzymania interfejsu, gdy na dysku nie można zapisywać plików.",
      "pt": "A cópia do teletexto já não faz parar a interface se o disco deixar de permitir guardar ficheiros.",
      "ru": "Сохранение телетекста больше не приводит к остановке интерфейса, если на диск больше нельзя записывать файлы.",
-     "tr": "Disk artık dosya kaydetmeye izin vermediğinde teletekst kopyası arayüzün durmasına neden olmuyor."
+     "tr": "Disk artık dosya kaydetmeye izin vermediğinde teletekst kopyası arayüzün durmasına neden olmuyor.",
+     "uk": "Копіювання телетексту більше не зупиняє інтерфейс, якщо диск уже не дає змоги зберігати файли."
     },
     {
      "fel": "reparat",
@@ -323,7 +672,8 @@
      "pl": "Octagon SF8008 z tunerem hybrydowym: zasilanie anteny naziemnej napięciem 5 V działa na kanałach DVB-T2, gdy jest włączone w ustawieniach, i wyłącza się przy odbiorze telewizji kablowej.",
      "pt": "Octagon SF8008 com sintonizador combinado: a alimentação de 5 V da antena terrestre funciona nos canais DVB-T2 quando está ativada nas definições e desliga-se nos canais por cabo.",
      "ru": "Octagon SF8008 с комбинированным тюнером: питание эфирной антенны 5 В работает на каналах DVB-T2, если включено в настройках, и отключается на кабельных каналах.",
-     "tr": "Kombine tunerli Octagon SF8008: Karasal antenin 5 V beslemesi, ayarlardan etkinleştirildiğinde DVB-T2 kanallarında çalışır ve kablolu kanallarda kapanır."
+     "tr": "Kombine tunerli Octagon SF8008: Karasal antenin 5 V beslemesi, ayarlardan etkinleştirildiğinde DVB-T2 kanallarında çalışır ve kablolu kanallarda kapanır.",
+     "uk": "Octagon SF8008 з комбінованим тюнером: живлення 5 В для ефірної антени працює на каналах DVB-T2, коли його ввімкнено в налаштуваннях, і вимикається на кабелі."
     },
     {
      "fel": "reparat",
@@ -339,7 +689,8 @@
      "pl": "Gdy zewnętrzny motyw nie może wyświetlić listy menu głównego, odbiornik korzysta z własnej listy bez zatrzymywania interfejsu.",
      "pt": "Quando um tema externo não consegue apresentar a lista do menu principal, o recetor usa a sua própria lista, sem parar a interface.",
      "ru": "Если сторонняя тема не может отобразить список главного меню, ресивер использует собственный список без остановки интерфейса.",
-     "tr": "Harici bir tema ana menü listesini gösteremediğinde alıcı, arayüzü durdurmadan kendi listesini kullanır."
+     "tr": "Harici bir tema ana menü listesini gösteremediğinde alıcı, arayüzü durdurmadan kendi listesini kullanır.",
+     "uk": "Коли стороння тема не може показати список головного меню, ресивер використовує власний список і не зупиняє інтерфейс."
     },
     {
      "fel": "reparat",
@@ -355,7 +706,8 @@
      "pl": "Możesz oglądać kanały w przeglądarce także wtedy, gdy odbiornik jest w trybie czuwania, również z innego satelity, jeśli antena nie ma obrotnicy i jest dostępny wolny tuner.",
      "pt": "Podes ver canais no navegador mesmo quando o recetor está em modo de espera, incluindo de outro satélite, desde que a antena não tenha motor e haja um sintonizador livre.",
      "ru": "Можешь смотреть каналы в браузере, даже когда ресивер находится в режиме ожидания, в том числе с другого спутника, если антенна без мотора и есть свободный тюнер.",
-     "tr": "Alıcı bekleme modundayken de tarayıcıdan kanal izleyebilirsin. Anten motorlu değilse ve boşta bir tuner varsa başka bir uydudaki kanalları da izleyebilirsin."
+     "tr": "Alıcı bekleme modundayken de tarayıcıdan kanal izleyebilirsin. Anten motorlu değilse ve boşta bir tuner varsa başka bir uydudaki kanalları da izleyebilirsin.",
+     "uk": "Можна дивитися канали в браузері, навіть коли ресивер у режимі очікування, зокрема з іншого супутника, якщо антена без мотора і є вільний тюнер."
     }
    ]
   },

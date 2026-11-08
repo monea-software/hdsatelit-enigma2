@@ -36,7 +36,8 @@ import struct
 import sys
 import zlib
 
-LIMBI = ("ro", "en", "de", "fr", "es", "it", "hu", "cs", "pl", "pt", "nl", "ru", "tr")
+LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk')
+CALE_SETARI = "/etc/enigma2/settings"
 FORUM = "https://stb.hdsatelit.com/forum/"
 EMAIL = "contact@hdsatelit.com"
 
@@ -64,6 +65,7 @@ TEXTE = {
 		"E105": "Partițiile din memoria receptorului sunt așezate altfel.",
 		"E106": "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime.",
 		"E107": "Memoria internă are altă mărime decât la modelul pentru care e software-ul.",
+		"E108": "Arborele dispozitivelor arată alt model de receptor.",
 		"E199": "O altă valoare a receptorului nu se potrivește.",
 		"E201": "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat.",
 		"E202": "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat.",
@@ -101,6 +103,7 @@ TEXTE = {
 		"E105": "The partitions in the memory of the receiver are laid out differently.",
 		"E106": "The kernel or system partition is in another place or has another size.",
 		"E107": "The internal memory has another size than on the model the software is made for.",
+		"E108": "The device tree identifies another receiver model.",
 		"E199": "Another value of the receiver does not match.",
 		"E201": "The processor could not be read: the processor driver did not load.",
 		"E202": "The board type could not be read: the board driver did not load.",
@@ -187,9 +190,6 @@ def texteDiagnostic(dosar_python):
 	if not dosar_python or not os.path.isdir(os.path.join(dosar_python, "Components")):
 		return {}
 	try:
-		import builtins
-		if not hasattr(builtins, "_"):
-			builtins._ = lambda s: s
 		sys.path.insert(0, dosar_python)
 		from Components import HdsDiagnostic
 		t = getattr(HdsDiagnostic, "TEXTE_REZERVA", None)
@@ -199,11 +199,14 @@ def texteDiagnostic(dosar_python):
 		return {}
 
 
-def alegeLimba(date, texte_diag):
-	limba = (date.get("limba") or "").split("_")[0].lower()
-	if limba in TEXTE or limba in texte_diag:
-		return limba
-	return "en"
+def alegeLimba(date, texte_diag, cale_setari=None):
+	"""Setarea salvata este citita si cand date.txt vine de la o pornire mai veche."""
+	setari = citesteDate(CALE_SETARI if cale_setari is None else cale_setari)
+	valoare = setari.get("config.osd.language", "")
+	if not re.fullmatch(r"[A-Za-z]{2,3}(?:[_-][A-Za-z0-9-]+)?", valoare):
+		return "en"
+	limba = re.split("[_-]", valoare, 1)[0].lower()
+	return limba if limba in LIMBI else "en"
 
 
 def texte(limba, texte_diag):
@@ -736,7 +739,7 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
 # ---------------------------------------------------------------- pornirea
 
 def argumente(argv):
-	a = {"--date": "", "--dosar": "", "--python": "", "--fb": "", "--jurnal": "", "--geometrie": ""}
+	a = {"--date": "", "--dosar": "", "--python": "", "--fb": "", "--jurnal": "", "--geometrie": "", "--setari": CALE_SETARI}
 	fara_fb = False
 	i = 0
 	while i < len(argv):
@@ -757,7 +760,7 @@ def main(argv):
 		print("fara cod in %s" % a["--date"])
 		return 1
 	texte_diag = texteDiagnostic(a["--python"])
-	limba = alegeLimba(date, texte_diag)
+	limba = alegeLimba(date, texte_diag, a["--setari"])
 	t = texte(limba, texte_diag)
 	t_en = texte("en", texte_diag) if limba != "en" else t
 	jurnal = jurnalCaderi(a["--jurnal"]) if a["--jurnal"] else []

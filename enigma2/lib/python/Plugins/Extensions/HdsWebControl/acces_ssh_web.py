@@ -32,9 +32,10 @@
 #   GET  /acces-ssh                              pagina
 # Parola, textul brut si toate cele cu POST: numai nivelul „asociat” (altfel 403 cu „trebuie_cod”).
 # Comenzile pornesc o lucrare pe firul modulului (una deodata, comuna cu televizorul) si raspund pe loc; pagina citeste
-# rezultatul din GET /api/acces-ssh („lucrare”) si il arata langa butoanele casetei din care a pornit. Parola se cere
-# din nou cand se schimba „parola_semn” (inode si ora fisierului parolei, nimic din parola) sau cand se termina o
-# lucrare "parola-noua" ori "pune-parola", niciodata cat merge o lucrare.
+# rezultatul din GET /api/acces-ssh ("lucrare") si il arata langa butoanele casetei din care a pornit. Pagina arata
+# puncte pana la apasarea butonului "Arata parola", care singur cere POST. Ascunderea, schimbarea "parola_semn"
+# (inode si ora fisierului parolei, nimic din parola) si lucrarile "parola-noua" / "pune-parola" sterg textul primit.
+# Urmatoarea afisare cere din nou butonul, niciodata cat merge o lucrare.
 # Etichetele paginii si mesajele din script trec prin _t() (ETICHETE, TEXTE_JS), iar lang e limba receptorului.
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 si citesc numai cateva fisiere mici; ce scrie sau porneste un
@@ -195,6 +196,9 @@ def brut(request, A=None):
 def pune(request, A=None):
 	"""Parola aleasa de om (corp: parola=), verificata intai aici, cu motivul pe intelesul omului."""
 	A = _a(A)
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	if "parola" in _cheiDinAdresa(request):
+		return {"result": False, "message": _t("Parola se trimite numai în corpul cererii.")}
 	text = _arg(request, "parola", A.MAX_PAROLA + 1)
 	motiv = A.motivParola(text)
 	if motiv:
@@ -400,6 +404,8 @@ ETICHETE = {
 	"PAROLA": N_("Parola lui root, aceeași pentru SSH și SFTP"),
 	"SCHIMBA": N_("Schimbă parola"),
 	"PAROLA_NOUA": N_("Parola nouă"),
+	"ARATA_PAROLA": N_("Arată parola"),
+	"ARATA_PAROLA_NOUA": N_("Arată parola nouă"),
 	"PAROLA_NOUA_NOTA": N_("4-64 de semne: litere fără diacritice, cifre și semne, fără spații. Cea veche nu mai merge."),
 	"NOUA": N_("Fă o parolă nouă"),
 	"CUM": N_("Cum te conectezi"),
@@ -435,6 +441,10 @@ TEXTE_JS = {
 	"nuRaspunde": N_("Receptorul nu răspunde."),
 	"seTrimite": N_("Se trimite..."),
 	"parolaNumaiCod": N_("Parola se vede numai dintr-un browser conectat cu codul de pe televizor."),
+	"arataParola": N_("Arată parola"),
+	"ascundeParola": N_("Ascunde parola"),
+	"arataParolaNoua": N_("Arată parola nouă"),
+	"ascundeParolaNoua": N_("Ascunde parola nouă"),
 	"faParolaNoua": N_("Fă o parolă nouă"),
 	"faParola": N_("Fă o parolă"),
 	"sterge": N_("Șterge"),
@@ -546,9 +556,11 @@ PAGINA = """<!DOCTYPE html>
   <section class="card" id="casetaParola">
     <h2 id="eticheta">__T_PAROLA__</h2>
     <p class="parola ascuns" id="parola"></p>
+    <button type="button" class="ascuns" id="arataParola" aria-pressed="false">__T_ARATA_PAROLA__</button>
     <p class="text" id="textParola"></p>
     <div class="butoane">
-      <input id="parolaNoua" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="__T_PAROLA_NOUA__" aria-label="__T_PAROLA_NOUA__">
+      <input id="parolaNoua" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="__T_PAROLA_NOUA__" aria-label="__T_PAROLA_NOUA__">
+      <button type="button" id="arataParolaNoua" aria-pressed="false">__T_ARATA_PAROLA_NOUA__</button>
       <button type="button" class="verde" id="schimba">__T_SCHIMBA__</button>
       <button type="button" id="noua">__T_NOUA__</button>
     </div>
@@ -600,8 +612,8 @@ var MAX_FISIER = __MAX_TEXT__;
 var TXT = __TEXTE_JS__;
 var DATE = null;
 var ASTEPT = null;
-// parola se cere o data pentru fiecare parola: din nou cand se schimba semnul ei sau cand se termina o parola noua
-var PAROLA_CERUTA = false;
+// GET-ul si incarcarea paginii nu cer parola; numai butonul Arata face POST.
+var PAROLA = "", PAROLA_OCUPATA = false, TURA_PAROLA = 0, PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 var SEMN_PAROLA = null;
 var ULTIMA_VAZUTA = null;
 var BRUT_VIZIBIL = false;
@@ -631,33 +643,42 @@ function mesaj(text, eroare, caseta){
   m.classList.toggle("eroare", !!eroare);
   if(text && m.scrollIntoView){ m.scrollIntoView({block: "nearest"}); }
 }
-// lucrarile care schimba parola: cat merg, parola veche nu mai ramane pe ecran; dupa ele se cere din nou
+// Lucrarile care schimba parola si raspunsurile vechi nu mai pot lasa parola veche pe ecran.
 function schimbaParola(nume){ return nume === "parola-noua" || nume === "pune-parola"; }
+function uitaParola(){ PAROLA = ""; PAROLA_OCUPATA = false; TURA_PAROLA++; }
+function ascundeParolaNoua(){
+  $("parolaNoua").type = "password";
+  $("arataParolaNoua").textContent = TXT.arataParolaNoua;
+  $("arataParolaNoua").setAttribute("aria-pressed", "false");
+}
 function arataParola(d){
   $("eticheta").textContent = d.text_eticheta;
   $("textParola").textContent = d.text_parola;
   $("noua").textContent = d.fel_parola === "pusa" ? TXT.faParolaNoua : TXT.faParola;
-  ["noua", "schimba", "parolaNoua"].forEach(function(id){ $(id).classList.toggle("ascuns", !d.program); });
+  ["noua", "schimba", "parolaNoua", "arataParolaNoua"].forEach(function(id){ $(id).classList.toggle("ascuns", !d.program); });
   var p = $("parola");
-  if(d.parola_semn !== SEMN_PAROLA){ SEMN_PAROLA = d.parola_semn; PAROLA_CERUTA = false; }
+  var b = $("arataParola");
+  if(d.parola_semn !== SEMN_PAROLA){ SEMN_PAROLA = d.parola_semn; uitaParola(); }
+  if(d.lucreaza && PAROLA_OCUPATA){ uitaParola(); }
+  b.classList.toggle("ascuns", !d.asociat || !d.parola_de_vazut);
+  b.disabled = !!d.lucreaza || PAROLA_OCUPATA;
+  b.textContent = PAROLA ? TXT.ascundeParola : TXT.arataParola;
+  b.setAttribute("aria-pressed", PAROLA ? "true" : "false");
   if(!d.parola_de_vazut || schimbaParola(d.lucreaza)){
     // starea in cateva cuvinte, ca pe receptor; cat se pune o parola noua, cea veche nu mai ramane pe ecran
-    PAROLA_CERUTA = false;
+    uitaParola();
+    b.textContent = TXT.arataParola; b.setAttribute("aria-pressed", "false");
     p.textContent = schimbaParola(d.lucreaza) ? d.text_lucreaza : d.text_parola_scurt;
     p.classList.add("scurt"); p.classList.remove("ascuns");
     return;
   }
   if(!d.asociat){
-    p.textContent = ""; p.classList.add("ascuns"); PAROLA_CERUTA = false;
+    p.textContent = ""; p.classList.add("ascuns"); uitaParola();
     $("textParola").textContent = TXT.parolaNumaiCod;
     return;
   }
-  if(PAROLA_CERUTA || d.lucreaza){ return; }
-  PAROLA_CERUTA = true;
-  cerere("/api/acces-ssh-parola", "POST", new URLSearchParams()).then(function(r){
-    if(r.result){ p.textContent = r.parola; p.classList.remove("scurt"); p.classList.remove("ascuns"); }
-    else { PAROLA_CERUTA = false; }
-  }).catch(function(){ PAROLA_CERUTA = false; });
+  p.textContent = PAROLA || PUNCTE;
+  p.classList.remove("scurt"); p.classList.remove("ascuns");
 }
 function arataChei(d, ocupat){
   var n = (d.chei || []).length;
@@ -699,7 +720,7 @@ function arata(d){
   var ocupat = !!d.lucreaza;
   if(d.ultima && d.ultima.id !== ULTIMA_VAZUTA){
     ULTIMA_VAZUTA = d.ultima.id;
-    if(schimbaParola(d.ultima.nume) && d.ultima.reusit){ PAROLA_CERUTA = false; }
+    if(schimbaParola(d.ultima.nume) && d.ultima.reusit){ uitaParola(); ascundeParolaNoua(); }
   }
   arataAlarme(d);
   arataParola(d);
@@ -708,7 +729,7 @@ function arata(d){
   $("textFara").textContent = d.text_fara_parola;
   $("fara").textContent = d.fara_parola ? TXT.opreste : TXT.porneste;
   $("fara").className = d.fara_parola ? "verde" : "";
-  ["schimba", "parolaNoua", "noua", "adauga", "adaugaFisier", "stick", "fara"].forEach(function(id){ $(id).disabled = ocupat || !d.asociat; });
+  ["schimba", "parolaNoua", "arataParolaNoua", "noua", "adauga", "adaugaFisier", "stick", "fara"].forEach(function(id){ $(id).disabled = ocupat || !d.asociat; });
   $("randFtp").classList.toggle("ascuns", !d.ftp);
   $("comutaBrut").disabled = !d.asociat;
   $("conectare").classList.toggle("ascuns", d.asociat);
@@ -722,7 +743,7 @@ function arata(d){
   else if(d.ultima && ((ASTEPT !== null && d.ultima.id >= ASTEPT) || VAZUT_LUCRAND)){
     mesaj(d.ultima.mesaj, !d.ultima.reusit, d.ultima.caseta);
     if(ASTEPT !== null && d.ultima.nume === "adauga-chei" && d.ultima.reusit){ $("cheie").value = ""; }
-    if(ASTEPT !== null && d.ultima.nume === "pune-parola" && d.ultima.reusit){ $("parolaNoua").value = ""; }
+    if(ASTEPT !== null && d.ultima.nume === "pune-parola" && d.ultima.reusit){ $("parolaNoua").value = ""; ascundeParolaNoua(); }
     ASTEPT = null; VAZUT_LUCRAND = false;
   }
 }
@@ -746,16 +767,38 @@ function trimite(cale, valori, caseta){
   }).catch(function(){ mesaj(TXT.nuRaspunde, true, caseta); });
 }
 // parola aleasa: receptorul o verifica (4-64 de semne ASCII vizibile) si spune motivul cand nu o primeste
+$("arataParola").addEventListener("click", function(){
+  if(PAROLA){ uitaParola(); if(DATE){ arataParola(DATE); } return; }
+  if(!DATE || !DATE.asociat || !DATE.parola_de_vazut || DATE.lucreaza || PAROLA_OCUPATA){ return; }
+  var tura = ++TURA_PAROLA, semn = SEMN_PAROLA;
+  PAROLA_OCUPATA = true; arataParola(DATE);
+  cerere("/api/acces-ssh-parola", "POST", new URLSearchParams()).then(function(r){
+    if(tura !== TURA_PAROLA || !DATE || !DATE.asociat || DATE.lucreaza || semn !== SEMN_PAROLA){ return; }
+    PAROLA_OCUPATA = false;
+    if(r.result && r.parola_semn === semn){ PAROLA = r.parola || ""; }
+    else { mesaj(r.message || TXT.necitit, true, "parola"); }
+    arataParola(DATE);
+  }).catch(function(){
+    if(tura !== TURA_PAROLA){ return; }
+    PAROLA_OCUPATA = false; mesaj(TXT.nuRaspunde, true, "parola"); if(DATE){ arataParola(DATE); }
+  });
+});
+$("arataParolaNoua").addEventListener("click", function(){
+  var ascunsa = $("parolaNoua").type === "password";
+  $("parolaNoua").type = ascunsa ? "text" : "password";
+  this.textContent = ascunsa ? TXT.ascundeParolaNoua : TXT.arataParolaNoua;
+  this.setAttribute("aria-pressed", ascunsa ? "true" : "false");
+});
 $("schimba").addEventListener("click", function(){
   var t = $("parolaNoua").value;
   if(!t){ mesaj(TXT.scrieParola, true, "parola"); $("parolaNoua").focus(); return; }
-  PAROLA_CERUTA = false;
+  uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); }
   trimite("/api/acces-ssh-pune", {parola: t}, "parola");
 });
 $("parolaNoua").addEventListener("keydown", function(e){ if(e.key === "Enter"){ $("schimba").click(); } });
 $("noua").addEventListener("click", function(){
   if(DATE && DATE.fel_parola === "pusa" && !confirm(TXT.intrebareNoua)){ return; }
-  PAROLA_CERUTA = false;
+  uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); }
   trimite("/api/acces-ssh-parola-noua", {confirmat: "1"}, "parola");
 });
 $("adauga").addEventListener("click", function(){
@@ -830,6 +873,9 @@ $("fara").addEventListener("click", function(){
   trimite("/api/acces-ssh-fara-parola", {pornit: DATE.fara_parola ? "0" : "1"}, "fara");
 });
 // citirea urmatoare: des cat se asteapta rezultatul unei comenzi, apoi la 3 secunde
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden){ uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); } }
+});
 function planifica(){ setTimeout(function(){ citeste().then(planifica, planifica); }, ASTEPT === null ? 3000 : 700); }
 citeste().then(planifica, planifica);
 </script>

@@ -142,7 +142,7 @@ rz_cod_paza() {
 	elif ! grep -qE '^stare=(potrivit|nepotrivit)$' "$HDS_PAZA_STARE" 2>/dev/null; then rz_c=E291
 	elif grep -qx 'stare=nepotrivit' "$HDS_PAZA_STARE" 2>/dev/null; then
 		rz_np=" $(sed -n 's/^nepotriviri=//p' "$HDS_PAZA_STARE" | head -n 1) "
-		for rz_k in cip:01 boxtype:02 eticheta:03 emmc:07 hw:04 partitii:05 kernel:06; do
+		for rz_k in cip:01 boxtype:02 dt:08 eticheta:03 emmc:07 hw:04 partitii:05 kernel:06; do
 			case $rz_np in *" ${rz_k%:*} "*)
 				rz_v=$(sed -n "s/^${rz_k%:*}=//p" "$HDS_PAZA_STARE" | head -n 1)
 				case $rz_v in ''|'!') rz_c=E2${rz_k#*:} ;; *) rz_c=E1${rz_k#*:} ;; esac
@@ -200,7 +200,7 @@ rz_date() {
 		[ -f "$D/cauza" ] && echo "cauza=$(head -n 1 "$D/cauza" | rz_filtru | cut -c1-200)"
 		[ -f "$D/porniri" ] && echo "porniri=$(wc -l < "$D/porniri" | tr -cd 0-9)"
 		# the fields of the guard, as the guard wrote them (plain characters)
-		grep -E '^(stare|nepotriviri|treapta|avertismente|cip|hw|partitii|kernel|boxtype|eticheta|emmc|reguli)=' \
+		grep -E '^(stare|nepotriviri|treapta|avertismente|cip|hw|partitii|kernel|boxtype|eticheta|emmc|dt|slot|reguli)=' \
 			"$HDS_PAZA_STARE" 2>/dev/null | cut -c1-300
 		[ -f "$D/drivere" ] && grep '^lipsa=' "$D/drivere"
 		rz_ml=$(rz_module_lipsa)
@@ -247,7 +247,8 @@ rz_ecran() {
 	rz_py=""
 	[ -f "$HDS_REZERVA_ECRAN" ] && command -v python3 > /dev/null 2>&1 || return 0
 	timeout 120 python3 -I -S -B "$HDS_REZERVA_ECRAN" --date "$D/date.txt" --dosar "$D" --python "$HDS_REZERVA_PYTHON" \
-		--fb "$HDS_REZERVA_FB" --jurnal "$HDS_CADERI_JURNAL" >> "$D/ecran.log" 2>&1 &
+		--fb "$HDS_REZERVA_FB" --jurnal "$HDS_CADERI_JURNAL" --setari "$HDS_REZERVA_SETARI" \
+		>> "$D/ecran.log" 2>&1 &
 	rz_py=$!
 }
 

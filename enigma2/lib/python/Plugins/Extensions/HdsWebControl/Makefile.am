@@ -9,6 +9,7 @@ install_PYTHON = \
 	pasi_decriptare_web.py \
 	actualizare_web.py imagine_online_web.py \
 	actualizari_web.py \
+	partea_doua_web.py \
 	afisaj_web.py \
 	ajutor_web.py \
 	antena_web.py \
@@ -24,6 +25,8 @@ install_PYTHON = \
 	cautare_web.py \
 	vezi_live_web.py \
 	ceas_web.py \
+	ci_web.py \
+	functii_imagine_web.py \
 	culegere_canale_web.py \
 	culori_web.py \
 	copie_setari_web.py \
@@ -32,6 +35,7 @@ install_PYTHON = \
 	descarcare_subtitrari_web.py \
 	ecran_negru_web.py \
 	ecran_pornire_web.py \
+	galerie_sigle_web.py \
 	egalizator_web.py \
 	filme_web.py \
 	font_interfata_web.py \
@@ -58,6 +62,9 @@ install_PYTHON = \
 	unelte_retea_web.py \
 	internet_web.py \
 	intrari_web.py \
+	fisiere_core.py \
+	fisiere_web.py \
+	fisiere_pagina.py \
 	media_web.py \
 	extensii_web.py \
 	diseqc_web.py \
@@ -79,6 +86,8 @@ install_PYTHON = \
 	portal_web.py \
 	procesor_web.py \
 	radio_web.py \
+	radio_live_web.py \
+	radio_online_web.py \
 	scanare_import_web.py \
 	scanare_liste_web.py \
 	scanare_web.py \
@@ -95,6 +104,7 @@ install_PYTHON = \
 	telecomenzi_web.py \
 	temporizatoare_web.py \
 	tema_tv_web.py \
+	vremea_web.py \
 	traducere_pagini.py \
 	video_web.py \
 	vpn_web.py \

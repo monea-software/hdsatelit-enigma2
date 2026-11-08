@@ -58,6 +58,11 @@ import os
 import time
 
 try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
+try:
 	from Components import HdsBazaCanale as B
 	from Components import HdsIndexCanale as X
 	from Components import HdsPisteCanale as P
@@ -325,7 +330,7 @@ class RezerveLamedb(object):
 		if semn != self._semn:
 			try:
 				with open(self.cale, "rb") as f:
-					text = f.read(MAX_LAMEDB).decode("utf-8", "replace")
+					text = text_lista(f.read(MAX_LAMEDB))
 			except (IOError, OSError):
 				return False
 			self.citiri += 1

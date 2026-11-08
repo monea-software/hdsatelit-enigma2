@@ -18,6 +18,9 @@ RDEPENDS:${PN}:append:sf8008 = " ${HDS_WIFI_PURTAT}"
 RDEPENDS:${PN}:append:sf8008m = " ${HDS_WIFI_PURTAT}"
 # Uclan Ustym 4K PRO (ustym4kpro): la fel ca pe SF8008 si MINI (nucleul linux-uclan e tot 4.4.35)
 RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_WIFI_PURTAT}"
+# GigaBlue UHD TRIO 4K (MACHINEBUILD gbtrio4k): la fel (nucleul linux-gigablue e tot 4.4.35)
+PR:append:gbtrio4k = ".hds1"
+RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_WIFI_PURTAT}"
 
 pkg_postinst:${PN}:sf8008 () {
 if [ -z "$D" ]; then
@@ -44,6 +47,18 @@ exit 0
 }
 
 pkg_postinst:${PN}:ustym4kpro () {
+if [ -z "$D" ]; then
+	depmod -a 2>/dev/null || :
+	for m in /sys/bus/usb/devices/*/modalias; do
+		if [ -e "$m" ] && [ ! -e "${m%/modalias}/driver" ]; then
+			modprobe -q "$(cat "$m")" 2>/dev/null || :
+		fi
+	done
+fi
+exit 0
+}
+
+pkg_postinst:${PN}:gbtrio4k () {
 if [ -z "$D" ]; then
 	depmod -a 2>/dev/null || :
 	for m in /sys/bus/usb/devices/*/modalias; do

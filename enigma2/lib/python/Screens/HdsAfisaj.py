@@ -108,6 +108,7 @@ FONTURI_CLASA = {"ales": 26, "detaliu": 20, "titlu_grupe": 20, "titlu_alegeri": 
 
 # setarile din „Setări”: (cheia din config.hds_afisaj, eticheta, alegerile)
 SETARILE = (
+	("control_afisaj", "Controlul afișajului", A.alegeriControlAfisaj),
 	("viteza", "Viteza derulării", A.alegeriViteza),
 	("luminozitate", "Luminozitatea, ziua", A.alegeriLuminozitate),
 	("luminozitate_noapte", "Luminozitatea, noaptea", A.alegeriLuminozitateNoapte),
@@ -116,10 +117,25 @@ SETARILE = (
 	("text", "Textul tău", None),
 	("oras", "Ora din alt oraș", A.alegeriOras),
 )
+SETARI_COLOR = (
+	("tema_afisaj", "Tema afișajului", "alegeriTemaAfisaj"),
+	("color_live", "Imaginea de pe televizor", "alegeriColorLive"),
+	("color_picon", "Pictograma canalului", "alegeriColorPicon"),
+)
+
+
+def setariDisponibile():
+	"""Setarile comune si cele ale afisajului color, numai cand acesta exista."""
+	if getattr(A, "esteColor", lambda: False)():
+		return SETARILE + tuple((k, e, getattr(A, a)) for k, e, a in SETARI_COLOR)
+	return SETARILE
+
+
 # randurile din „Setări” care fac ceva pe loc, fara salvare (ceasurile afisajului): (cheia, eticheta, alegerile)
 ACTIUNI = (
 	("minutar", "Minutarul", A.alegeriMinutar),
 	("cronometru", "Cronometrul", A.alegeriCronometru),
+	("vremea", "Vremea", None),
 )
 
 
@@ -130,7 +146,8 @@ def N_(text):
 # etichetele setarilor, pentru xgettext (SETARILE le da fara _() ca sa fie traduse la afisare)
 _ETICHETE_SETARI = (N_("Viteza derulării"), N_("Luminozitatea, ziua"), N_("Luminozitatea, noaptea"),
 	N_("Noaptea începe"), N_("Noaptea se termină"), N_("Textul tău"), N_("Ora din alt oraș"), N_("Minutarul"),
-	N_("Cronometrul"))
+	N_("Cronometrul"), N_("Imaginea de pe televizor"), N_("Pictograma canalului"), N_("Vremea"),
+	N_("Controlul afișajului"), N_("Tema afișajului"))
 
 
 def _jurnal(text):
@@ -375,7 +392,8 @@ class Lucru(object):
 		self.lista = A.citesteLista(c.lista.value)
 		self.evenimente = A.citesteEvenimente(c.evenimente.value)
 		self.asteptare = c.asteptare.value
-		self.setari = dict((k, getattr(c, k).value) for k, _e, _a in SETARILE)
+		self.setari = dict((k, A.stare().get("tema_afisaj", "") if k == "tema_afisaj" else getattr(c, k).value)
+			for k, _e, _a in setariDisponibile())
 		self.personaj = dict((k, getattr(c, k).value) for k in P.CHEI)
 
 	def cheie(self):
@@ -442,6 +460,10 @@ def _cfg():
 
 def textActiune(cheie):
 	"""Starea de acum a unui ceas al afisajului (minutarul, cronometrul), ca text."""
+	if cheie == "vremea":
+		from Components import HdsVremea as V
+		s = V.setari()
+		return "%s, %s" % (s.get("oras_nume") or _("Oraș automat"), s.get("unitate", "C"))
 	return A.textMinutar() if cheie == "minutar" else A.textCronometru()
 
 
@@ -451,7 +473,7 @@ def textSetare(cheie, valoare):
 		if not valoare:
 			return _("niciunul")
 		return D.orasDinNume(dict(D.fusurile()).get(valoare, valoare))
-	for k, _e, alegeri in SETARILE:
+	for k, _e, alegeri in setariDisponibile():
 		if k != cheie:
 			continue
 		if alegeri is None:
@@ -469,14 +491,20 @@ def textStare(s):
 	"""Ce arata afisajul acum (dupa HdsAfisaj.stare()), sau de ce nu arata nimic."""
 	if not s.get("disponibil"):
 		return _("Receptorul acesta nu are afișaj în față.")
+	compatibilitate = s.get("compatibilitate") or {}
+	if compatibilitate.get("cedat") and compatibilitate.get("text"):
+		return compatibilitate["text"]
 	if not s.get("pornit"):
 		return _("Afișajul pornește după ce receptorul termină pornirea.")
 	if not s.get("scris"):
 		return _("Afișajul nu primește textul. Repornește receptorul.")
-	if s.get("text"):
+	text = s.get("color_text") if s.get("color") else s.get("text")
+	if s.get("color") and not text and s.get("color_imagine"):
+		text = _("Pictograma canalului") if s["color_imagine"] == "picon" else P.titlu()
+	if text:
 		if s.get("in_asteptare"):
-			return _("În așteptare, afișajul arată: %s") % s["text"]
-		return _("Acum afișajul arată: %s") % s["text"]
+			return _("În așteptare, afișajul arată: %s") % text
+		return _("Acum afișajul arată: %s") % text
 	return _("Acum afișajul este stins.")
 
 
@@ -559,17 +587,27 @@ def texteSus(fel, ob, exemplu=False, setari=None, stare=None, personaj=None):
 		return _(i.d.eticheta), SEPARATOR.join(parti), nota
 	if fel == "actiune":
 		eticheta = _([e for k, e, _a in ACTIUNI if k == ob][0])
+		if ob == "vremea":
+			return eticheta, textActiune(ob), _("OK alege orașul și unitatea comună a temperaturii.")
 		return eticheta, textActiune(ob), _("OK pornește sau oprește, pe loc. Se vede când e în lista de rotire "
 			"(grupa „Ora și data”).")
 	if fel == "setare":
-		eticheta = _([e for k, e, _a in SETARILE if k == ob][0])
+		eticheta = _([e for k, e, _a in setariDisponibile() if k == ob][0])
 		detaliu = textSetare(ob, (setari or {}).get(ob)) or u""
-		if ob == "text":
+		if ob == "control_afisaj":
+			nota = ((stare or {}).get("compatibilitate") or {}).get("text") or u""
+			nota = u" ".join(p for p in (nota, _("Schimbarea se aplică după salvare.")) if p)
+		elif ob == "tema_afisaj":
+			nota = _("Tema se aplică după repornirea interfeței.")
+		elif ob == "text":
 			nota = _("OK deschide tastatura. Textul apare când „Textul tău” e în lista de rotire.")
 		elif ob in ("luminozitate", "luminozitate_noapte", "noapte_de_la", "noapte_pana_la"):
 			nota = _("OK alege valoarea. Luminozitatea se aplică după salvare.")
 		elif ob == "oras":
 			nota = _("OK alege orașul. Ora lui apare când „Ora din alt oraș” e în lista de rotire.")
+		elif ob in ("color_live", "color_picon"):
+			nota = _("Imaginea de pe televizor are prioritate.") + " "
+			nota += _("Alege Nu ca să reapară pictograma și lista de rotire.")
 		else:
 			nota = _("OK alege valoarea.")
 		return eticheta, detaliu, nota
@@ -578,7 +616,10 @@ def texteSus(fel, ob, exemplu=False, setari=None, stare=None, personaj=None):
 		if g in (CAUTA, SALVEAZA):
 			return titluGrupa(g), notaGrupa(g), u""
 		if g == SETARI:
-			return _("Setări"), _("Viteza, luminozitatea, textul tău, alt oraș, minutarul și cronometrul."), \
+			cine = ((stare or {}).get("compatibilitate") or {}).get("text")
+			if cine:
+				return _("Setări"), cine, _("OK alege valoarea.")
+			return _("Setări"), _("Viteza, luminozitatea, textul tău, alt oraș, vremea și ceasurile."), \
 				_("OK alege valoarea.")
 		if g == PERSONAJ:
 			return P.titlu(), P.detaliuGrupa(personaj), P.notaGrupa()
@@ -653,6 +694,9 @@ class HdsAfisaj(Screen, HelpableScreen):
 		self.salvat = self.lucru.cheie()
 		self.previzualizat = False         # ecranul a trimis afisajului o lista nesalvata
 		self.valori = A.Valori(session)
+		self.color = getattr(A, "esteColor", lambda: False)()
+		self.colorDeLa = time.time()
+		self.pozeColor = {}
 		self.coloana = COL_GRUPE
 		self.randuriGrupe = [CAUTA] + [g for g, _n in D.GRUPE] + [PERSONAJ, SETARI, SALVEAZA]
 		self.grupa = D.GRUPE[0][0]         # grupa aratata in coloana din mijloc
@@ -835,7 +879,7 @@ class HdsAfisaj(Screen, HelpableScreen):
 			text=u"%s" % (text or u""), color=culoare, color_sel=culoareAleasa or self.c["alb"])
 
 	def _rand(self, w, h, linii, casuta=None, desen=None, exemplu=False, dreapta=u"", culoareDreapta=None,
-			margine=MARGINE_DREAPTA):
+			margine=MARGINE_DREAPTA, imagine=None):
 		"""Un rand: casuta (None = fara, True/False = bifata sau nu), una sau doua linii de text [(text, font, culoare)],
 		un text mic la dreapta (pe a doua linie cand sunt doua) si desenul mic. Primul element nu e None: randul se
 		poate alege (eListboxPythonMultiContent)."""
@@ -857,7 +901,19 @@ class HdsAfisaj(Screen, HelpableScreen):
 					backcolor=c["bun"], backcolor_sel=c["bun"]))
 			x += lat + int(14 * f)
 		capat = w - int(margine * f)     # loc pentru bara de derulare a listei
-		if desen is not None:
+		if imagine:
+			hd = max(24, h - int(8 * f))
+			ld = int(hd * 1.5)
+			capat -= ld
+			e.extend(self._intrariPoza(imagine, capat, (h - hd) // 2, ld, hd))
+			capat -= int(12 * f)
+		elif self.color and desen is not None:
+			ld = min(int(w * 0.38), max(int(80 * f),
+				int(latimeText(desen, *self.fonturi[1])) + int(12 * f)))
+			capat -= ld
+			e.append(self._text(capat, 0, ld, h, desen, 1, c["text2"]))
+			capat -= int(12 * f)
+		elif desen is not None:
 			hd = int(min(h, self.inaltime) * 0.56)
 			ld = latimeDesen(hd)
 			capat -= ld
@@ -884,6 +940,38 @@ class HdsAfisaj(Screen, HelpableScreen):
 			e.append(self._text(x, sus - int(2 * f), lat2, jos, text, font, culoare or c["eticheta"],
 				culoareAleasa=0xDDE3EE))
 		return e
+
+	def _intrariPoza(self, imagine, x, y, w, h):
+		"""PNG local, micsorat in caseta lui fara sa schimbe proportiile."""
+		try:
+			import os
+			from Components import HdsAfisajColor as C
+			from Components.MultiContent import MultiContentEntryPixmapAlphaBlend
+			from Tools.LoadPixmap import LoadPixmap
+			cale = (getattr(getattr(A, "_afisaj", None), "_picon", "") if imagine == "picon"
+				else os.path.join(os.path.dirname(C.DOSAR), imagine))
+			png = self.pozeColor.get(cale)
+			if png is None:
+				png = LoadPixmap(cale, cached=True) if cale else None
+				self.pozeColor[cale] = png
+			if png is not None:
+				marime = png.size()
+				k = min(float(w) / marime.width(), float(h) / marime.height())
+				lat, inalt = int(marime.width() * k), int(marime.height() * k)
+				return [MultiContentEntryPixmapAlphaBlend(pos=(x + (w - lat) // 2, y + (h - inalt) // 2),
+					size=(lat, inalt), png=png, flags=1)]
+		except Exception as e:
+			_jurnal("poza personajului: %r" % (e,))
+		return []
+
+	def _textColor(self, d, f, citeste=True):
+		"""Valoarea intreaga, sau exemplul, pastrand literele si semnele ei."""
+		from Components import HdsAfisajColor as C
+		pereche = D.pereche(d, f, self.valori.valoare(d)) if citeste else None
+		exemplu = pereche is None
+		if exemplu:
+			pereche = D.pereche(d, f, D.exemplu(d, f))
+		return C.textColor(pereche, time.time() - self.colorDeLa, d.id, f.id), exemplu
 
 	def _randMesaj(self, w, h, text, culoare):
 		"""Un rand cu un mesaj (lista goala, OK salveaza): pe o linie daca incape, altfel pe doua, cu literele mici."""
@@ -912,10 +1000,16 @@ class HdsAfisaj(Screen, HelpableScreen):
 		st = self.desene.get(cheie)
 		acum = time.time()
 		if citeste and (st is None or st[2] is None or acum - st[2] >= REIMPROSPATARE_MS / 1000.0 or acum < st[2]):
-			desen, exemplu = self.valori.desen(d, f, self._viteza())
-			st = ((desen.cadre[0] if desen is not None else [L.GOL] * L.LATIME), exemplu, acum)
+			if self.color:
+				text, exemplu = self._textColor(d, f)
+				st = (text, exemplu, acum)
+			else:
+				desen, exemplu = self.valori.desen(d, f, self._viteza())
+				st = ((desen.cadre[0] if desen is not None else [L.GOL] * L.LATIME), exemplu, acum)
 			self.desene[cheie] = st
 		elif st is None:
+			if self.color:
+				return self._textColor(d, f, False)
 			cheieEx = (cheie, self._viteza())
 			masti = self.exemple.get(cheieEx)
 			if masti is None:
@@ -974,7 +1068,8 @@ class HdsAfisaj(Screen, HelpableScreen):
 				self.randuriAlegeri = []
 				titlu = titluGrupa(g)
 		elif g == SETARI:
-			self.randuriAlegeri = [("setare", k) for k, _e, _a in SETARILE] + [("actiune", k) for k, _e, _a in ACTIUNI]
+			self.randuriAlegeri = [("setare", k) for k, _e, _a in setariDisponibile()]
+			self.randuriAlegeri += [("actiune", k) for k, _e, _a in ACTIUNI]
 			titlu = titluGrupa(g)
 		elif g == PERSONAJ:
 			self.randuriAlegeri = [("psetare", k) for k in P.CHEI] + [("expresie", e.id) for e in P.EXPRESII]
@@ -1006,7 +1101,7 @@ class HdsAfisaj(Screen, HelpableScreen):
 			eticheta = [e for k, e, _a in ACTIUNI if k == cheie][0]
 			valoare = textActiune(cheie)
 		else:
-			eticheta = [e for k, e, _a in SETARILE if k == cheie][0]
+			eticheta = [e for k, e, _a in setariDisponibile() if k == cheie][0]
 			valoare = textSetare(cheie, self.lucru.setari.get(cheie))
 		return self._facut(("s", cheie, valoare), lambda: self._rand(w, h, [(_(eticheta), 0, None),
 			(valoare, 1, self.c["text2"])]))
@@ -1021,6 +1116,10 @@ class HdsAfisaj(Screen, HelpableScreen):
 	def _randExpresie(self, w, h, id_):
 		"""O expresie a personajului: numele, cand apare, desenul mic al cadrului ei de cap."""
 		e = P.expresie(id_)
+		if self.color:
+			imagine = "afisaj-color/480x320/personaj/%s.png" % id_
+			return self._facut(("ec", id_), lambda: self._rand(w, h,
+				[(P.nume(e), 0, None), (P.cand(e), 1, None)], imagine=imagine))
 		return self._facut(("e", id_), lambda: self._rand(w, h, [(P.nume(e), 0, None), (P.cand(e), 1, None)],
 			desen=e.cadre[e.fata]))
 
@@ -1091,6 +1190,9 @@ class HdsAfisaj(Screen, HelpableScreen):
 		self.valori.reimprospateaza()
 		self._deseneazaAlegeri()
 		self._deseneazaRotirea()
+		fel, ob = self._randAles()
+		if (fel == "setare" and ob == "control_afisaj") or (fel == "grupa" and ob == SETARI):
+			self._actualizeazaDetaliul()
 
 	def _focus(self):
 		for col, nume in ((COL_GRUPE, "grupe"), (COL_ALEGERI, "alegeri"), (COL_ROTIRE, "rotire")):
@@ -1128,20 +1230,27 @@ class HdsAfisaj(Screen, HelpableScreen):
 		stare = None
 		if fel == "alegere":
 			d, f = ob
-			desen, exemplu = self.valori.desen(d, f, viteza, singur=True)
-			self.desenMare = (desen, exemplu, (d, f, False))
+			if self.color:
+				_text, exemplu = self._textColor(d, f)
+			else:
+				desen, exemplu = self.valori.desen(d, f, viteza, singur=True)
+				self.desenMare = (desen, exemplu, (d, f, False))
 		elif fel == "rotire":
-			desen, exemplu = self.valori.desen(ob.d, ob.f, viteza, singur=True)
-			if desen is not None and ob.eticheta:
-				desen = A.cuEticheta(ob.d, desen)
-			self.desenMare = (desen, exemplu, (ob.d, ob.f, ob.eticheta))
+			if self.color:
+				_text, exemplu = self._textColor(ob.d, ob.f)
+			else:
+				desen, exemplu = self.valori.desen(ob.d, ob.f, viteza, singur=True)
+				if desen is not None and ob.eticheta:
+					desen = A.cuEticheta(ob.d, desen)
+				self.desenMare = (desen, exemplu, (ob.d, ob.f, ob.eticheta))
 		elif fel == "expresie":
 			# expresia cadru cu cadru, ca pe afisaj; nu are valoare de recitit
 			self.desenMare = (P.desen(P.expresie(ob)), False, None)
 		elif fel is None:
 			# coloana din mijloc fara randuri de ales (Caută inainte de cautare, Salvează și ieși): textele grupei
 			fel, ob = "grupa", self.grupa
-		if fel == "grupa" and ob not in (CAUTA, SALVEAZA, SETARI, PERSONAJ):
+		if (fel == "grupa" and ob not in (CAUTA, SALVEAZA, PERSONAJ)) or \
+				(fel == "setare" and ob == "control_afisaj"):
 			try:
 				stare = A.stare()
 			except Exception as e:
@@ -1153,6 +1262,7 @@ class HdsAfisaj(Screen, HelpableScreen):
 		self["nota"].setText(nota)
 		self.cadru = 0
 		self.citit = 0.0
+		self.colorDeLa = time.time()
 		self._deseneazaMare()
 
 	def _masti(self):
@@ -1166,6 +1276,9 @@ class HdsAfisaj(Screen, HelpableScreen):
 		return desen.cadre[self.cadru % len(desen.cadre)], exemplu
 
 	def _deseneazaMare(self):
+		if self.color:
+			self._deseneazaColor()
+			return
 		masti, exemplu = self._masti()
 		w, h = self.dimensiuni.get("previzualizare", (520, 190))
 		hd = int(h * 0.72)
@@ -1174,9 +1287,56 @@ class HdsAfisaj(Screen, HelpableScreen):
 		e = [None] + intrariDesen(masti, x, (h - hd) // 2, hd, exemplu, stinse=True)
 		self["previzualizare"].setList([e])
 
+	def _deseneazaColor(self):
+		"""Personajul in PNG, iar datele cu text intreg, pe cate linii au nevoie."""
+		from Components import HdsAfisajColor as C
+		fel, ob = self._randAles()
+		text, imagine = u"", None
+		if fel == "expresie":
+			imagine = C.pozaExpresie(P.expresie(ob), self.cadru)
+		elif fel in ("alegere", "rotire"):
+			d, f = ob if fel == "alegere" else (ob.d, ob.f)
+			text, _exemplu = self._textColor(d, f)
+		else:
+			stare = A.stare()
+			text, imagine = stare.get("color_text") or u"", stare.get("color_imagine")
+		w, h = self.dimensiuni.get("previzualizare", (520, 190))
+		e = [None, MultiContentEntryText(pos=(0, 0), size=(w, h), font=0, text="",
+			backcolor=SEG_FUNDAL, backcolor_sel=SEG_FUNDAL)]
+		if imagine:
+			e.extend(self._intrariPoza(imagine, 0, 0, w, h))
+		else:
+			familie = self.fonturi[0][0]
+			margine = max(6, int(12 * self.f))
+			marime = min(self.fonturi[0][1], max(12, h // 3))
+			while True:
+				linii, linie = [], u""
+				for c in text:
+					if c == u"\n" or (linie and latimeText(linie + c, familie, marime) > w - 2 * margine):
+						linii.append(linie)
+						linie = u"" if c == u"\n" else c
+					else:
+						linie += c
+				linii.append(linie)
+				pas = inaltimeLinie(marime)
+				if len(linii) * pas <= h - 2 * margine or marime <= 6:
+					break
+				marime -= 1
+			self["previzualizare"].l.setFont(2, gFont(familie, marime))
+			y = max(margine, (h - len(linii) * pas) // 2)
+			for linie in linii:
+				e.append(self._text(margine, y, w - 2 * margine, pas, linie, 2, self.c["alb"]))
+				y += pas
+		self["previzualizare"].setList([e])
+
 	def _bate(self):
 		"""Animatia desenului mare: cadrul urmator la durata lui; valoarea se reciteste cel mult o data pe secunda."""
 		if self.inchis:
+			return
+		if self.color and (self.desenMare is None or self.desenMare[0] is None):
+			self.valori.reimprospateaza()
+			self._deseneazaMare()
+			self.timer.start(PAS_STATIC_MS, True)
 			return
 		ms = PAS_STATIC_MS
 		if self.desenMare is not None and self.desenMare[0] is not None:
@@ -1269,6 +1429,10 @@ class HdsAfisaj(Screen, HelpableScreen):
 
 	def _alegeActiunea(self, cheie):
 		"""Minutarul sau cronometrul: pornit sau oprit pe loc (sunt ceasuri ale afisajului, nu setari)."""
+		if cheie == "vremea":
+			from Screens.HdsVremea import HdsVremea
+			self.session.openWithCallback(self._dupaVremea, HdsVremea)
+			return
 		eticheta, alegeri = [(e, a) for k, e, a in ACTIUNI if k == cheie][0]
 		lista = [(t, v) for v, t in alegeri()]
 
@@ -1283,6 +1447,13 @@ class HdsAfisaj(Screen, HelpableScreen):
 			self._actualizeazaDetaliul()
 			self["nota"].setText(mesaj)
 		self.session.openWithCallback(gata, ChoiceBox, title=_(eticheta), list=lista)
+
+	def _dupaVremea(self, *args):
+		self.desene.clear()
+		self.randuriFacute.clear()
+		self._deseneazaAlegeri()
+		self._deseneazaRotirea()
+		self._actualizeazaDetaliul()
 
 	def _cereText(self, dupa=None):
 		def gata(text):
@@ -1300,7 +1471,7 @@ class HdsAfisaj(Screen, HelpableScreen):
 		if cheie == "text":
 			self._cereText()
 			return
-		alegeri = [a for k, _e, a in SETARILE if k == cheie][0]()
+		alegeri = [a for k, _e, a in setariDisponibile() if k == cheie][0]()
 		acum = self.lucru.setari.get(cheie)
 		lista = [(t, v) for v, t in alegeri]
 		sel = max(0, [v for v, _t in alegeri].index(acum)) if acum in [v for v, _t in alegeri] else 0
@@ -1310,7 +1481,7 @@ class HdsAfisaj(Screen, HelpableScreen):
 				return
 			self.lucru.setari[cheie] = r[1]
 			self._schimbat()
-		titlu = _([e for k, e, _a in SETARILE if k == cheie][0])
+		titlu = _([e for k, e, _a in setariDisponibile() if k == cheie][0])
 		self.session.openWithCallback(gata, ChoiceBox, title=titlu, list=lista, selection=sel)
 
 	def _meniuRotire(self):

@@ -31,22 +31,8 @@ import os
 import re
 import sys
 
-try:
-	_
-except NameError:
-	def _(text):
-		return text
-
-
 def _t(text):
-	"""Traducerea enigma2 de acum (builtins._), sau textul insusi"""
-	if not text:
-		return text or ""
-	try:
-		import builtins
-		return builtins.__dict__.get("_", _)(text)
-	except Exception:
-		return text
+	return traduce(text)
 
 
 def N_(text):
@@ -69,6 +55,7 @@ CODURI = (
 	("E105", GRUPA_ALT_RECEPTOR, N_("Partițiile din memoria receptorului sunt așezate altfel.")),
 	("E106", GRUPA_ALT_RECEPTOR, N_("Partiția nucleului sau a sistemului e în alt loc sau are altă mărime.")),
 	("E107", GRUPA_ALT_RECEPTOR, N_("Memoria internă are altă mărime decât la modelul pentru care e software-ul.")),
+	("E108", GRUPA_ALT_RECEPTOR, N_("The device tree identifies another receiver model.")),
 	("E199", GRUPA_ALT_RECEPTOR, N_("O altă valoare a receptorului nu se potrivește.")),
 	("E201", GRUPA_NECITIT, N_("Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat.")),
 	("E202", GRUPA_NECITIT, N_("Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat.")),
@@ -94,11 +81,11 @@ COD_MOD_SIGUR = "E301"
 COD_MOD_SIGUR_CADE = "E302"
 
 # cheile pazei de model in ordinea codului principal si ultimele doua cifre ale codului lor
-ORDINE_CHEI = ("cip", "boxtype", "eticheta", "emmc", "hw", "partitii", "kernel")
+ORDINE_CHEI = ("cip", "boxtype", "dt", "eticheta", "emmc", "hw", "partitii", "kernel")
 CIFRE_CHEI = {"cip": "01", "boxtype": "02", "eticheta": "03", "hw": "04", "partitii": "05", "kernel": "06",
-	"emmc": "07"}
+	"emmc": "07", "dt": "08"}
 # cheile care nu au cod „necitit” (o valoare lipsa nu hotaraste nimic): raman E1xx
-FARA_NECITIT = ("eticheta", "emmc")
+FARA_NECITIT = ("eticheta", "emmc", "dt")
 
 # titlurile grupelor (aceleasi texte ca mesajul pazei de model, Components/HdsPazaModel.mesajPornire)
 TITLURI = {
@@ -255,6 +242,7 @@ STARE_INFO = "info"
 ETICHETE_TV = {
 	"cip": N_("Procesor"),
 	"boxtype": N_("Tip placă (driver)"),
+	"dt": N_("Model (DT)"),
 	"eticheta": N_("Etichetă"),
 	"hw": N_("Placă (HW)"),
 	"emmc": N_("Memorie internă"),
@@ -263,7 +251,7 @@ ETICHETE_TV = {
 	"tunere": N_("Tunere"),
 	"pornire": N_("Model (încărcător)"),
 }
-ORDINE_TV = ("cip", "boxtype", "eticheta", "hw", "emmc", "kernel", "partitii")
+ORDINE_TV = ("cip", "boxtype", "dt", "eticheta", "hw", "emmc", "kernel", "partitii")
 # valorile numai informative din amprenta (Components/HdsPazaModel.informatiiPornire, cand exista): ce spune
 # incarcatorul receptorului in /proc/cmdline si driverul
 CHEI_INFORMATIVE = ("pornire_masina", "pornire_oem", "pornire_model", "ram", "tip_tunere", "chipset",
@@ -321,20 +309,23 @@ def randuri(v, M=None, tv=False):
 			cod = codCheie(cheie, nep[cheie])
 		elif cheie in avert:
 			stare, cod = STARE_AVERTISMENT, ""
-		elif nu_se_aplica or (cheie == "eticheta" and not citit):
+		elif nu_se_aplica or (cheie in ("eticheta", "dt") and not citit):
 			stare, cod = STARE_INFO, ""
 		elif not citit:
 			# necitit, dar fara sa hotarasca (treapta a doua): nu se arata ca potrivit
 			stare, cod = STARE_AVERTISMENT, ""
 		else:
 			stare, cod = STARE_BUN, ""
+		if v.get("partitii_informative") and cheie in ("kernel", "partitii"):
+			cerut, stare, cod = "", STARE_INFO, ""
 		if not citit:
-			citit = _t("lipsește (nu se verifică)") if cheie == "eticheta" else _t("nu s-a putut citi")
+			citit = _t("lipsește (nu se verifică)") if cheie in ("eticheta", "dt") else _t("nu s-a putut citi")
 		if cheie == "emmc" and liber:
 			citit = _t("%(marime)s, liber %(liber)d MiB") % {"marime": citit, "liber": liber[0]}
 		if tv:
 			if cheie == "partitii":
-				citit, cerut = _partitiiTv(M, a_v, reguli, cheie in nep or cheie in avert, citit, cerut)
+				citit, cerut = _partitiiTv(M, a_v, {} if v.get("partitii_informative") else reguli,
+					cheie in nep or cheie in avert, citit, cerut)
 			elif cheie == "kernel":
 				citit, cerut = _faraDisc(citit), _faraDisc(cerut)
 			citit, cerut = scurt(citit), scurt(cerut)
@@ -446,6 +437,12 @@ def rugaminte():
 def ceFaci():
 	return _t("Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, "
 		"cum arată producătorul receptorului.")
+
+
+def notaSlot(v):
+	"""Nota slotului pornit, numai la o pornire de multiboot trecuta (Components/HdsPazaModel: nota_slot)"""
+	text = v.get("nota_slot")
+	return _t(text) if text else ""
 
 
 def textAdresa(adresa):
@@ -561,6 +558,8 @@ def textComplet(v, M=None, adresa="", jurnale_=None):
 	if toate:
 		r.append(rugaminte())
 		r.append(_t("Forumul: %s") % FORUM)
+	if notaSlot(v):
+		r.append(notaSlot(v))
 	r.append("")
 	r.extend(dateCheie(v, M, adresa))
 	for titlu_j, text_j in jurnale_ or []:
@@ -729,42 +728,227 @@ def jurnale(dosar=None, cale_caderi=None, cu_nucleu=True):
 
 # ------------------------------------------------------------------ calea de rezerva (fara enigma2)
 
-def _limbaSetari(cale="/etc/enigma2/settings"):
-	text = _citesteText(cale, 1 << 20) or ""
-	m = re.search(r"^config\.osd\.language=([A-Za-z]{2,3})", text, re.M)
-	return m.group(1).lower() if m else "ro"
-
-
-def _instaleazaLimba(limba, dosar="/usr/share/enigma2/po"):
-	try:
-		import gettext
-		gettext.translation("enigma2", dosar, languages=[limba]).install()
-	except Exception:
-		pass
-
-
-LIMBI = ("cs", "de", "en", "es", "fr", "hu", "it", "nl", "pl", "pt", "ro", "ru", "tr")
+CALE_SETARI = "/etc/enigma2/settings"
 DOSAR_PO = "/usr/share/enigma2/po"
-# textele caii de rezerva care nu sunt pe ecranul din interfata
-TEXT_PAGINA_REZERVA = N_("Toate datele, de copiat, din calculator sau telefon:")
-TEXT_REINCERCARE = N_("Interfața se încearcă din nou peste %d minute.")
-TEXT_CODURI = N_("Coduri:")
+LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk')
+
+
+def _codLimba(valoare):
+	valoare = str(valoare or "").strip()
+	if not re.fullmatch(r"[A-Za-z]{2,3}(?:[_-][A-Za-z0-9-]+)?", valoare):
+		return "en"
+	limba = re.split("[_-]", valoare, 1)[0].lower()
+	return limba if limba in LIMBI else "en"
+
+
+def _limbaSetari(cale=None):
+	text = _citesteText(CALE_SETARI if cale is None else cale, 1 << 20) or ""
+	valoare = ""
+	for rand in text.splitlines():
+		if rand.startswith("config.osd.language="):
+			valoare = rand.split("=", 1)[1]
+	return _codLimba(valoare)
+
+
+# Textele engleze raman disponibile si fara fisierele .mo.
+TEXTE_ENGLEZA = {
+	"%(ce)s: așteptat %(asteptat)s, dar nu s-a putut citi.": "%(ce)s: expected %(asteptat)s, but it could not be read.",
+	"%(ce)s: așteptat %(asteptat)s, găsit %(gasit)s.": "%(ce)s: expected %(asteptat)s, found %(gasit)s.",
+	"%(ce)s: pe locul %(loc)d așteptat %(asteptat)s, găsit %(gasit)s.": "%(ce)s: at position %(loc)d expected %(asteptat)s, found %(gasit)s.",
+	"%(marime)s, liber %(liber)d MiB": "%(marime)s, %(liber)d MiB free",
+	"%d partiții": "%d partitions",
+	"Acest software (HD Satelit %(versiune)s) este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s).": "This software (HD Satelit %(versiune)s) is for the %(model)s receiver (board %(hw)s, processor %(cip)s).",
+	"Acest software este pentru receptorul %(model)s (placa %(hw)s, procesor %(cip)s).": "This software is for the %(model)s receiver (board %(hw)s, processor %(cip)s).",
+	"Acest software nu spune pentru ce receptor este făcut, deci poate fi pentru alt tip de receptor. Software-ul HD Satelit spune asta de la versiunea 0.1.6; o versiune mai veche sau o imagine de la altcineva se instalează numai cu un stick USB, cum arată producătorul receptorului.": "This software does not say which receiver it is made for, so it may be for a different type of receiver. HD Satelit software includes this information from version 0.1.6 onwards; an older version or an image from someone else can only be installed using a USB stick, following the receiver manufacturer's instructions.",
+	"Acum toate valorile se potrivesc.": "All values match now.",
+	"Alte coduri: %s.": "Other codes: %s.",
+	"Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe.": "So as not to damage the receiver, the software writes nothing to its memory and does not start any further.",
+	"Cerut de software": "Required by the software",
+	"Citit pe receptor": "Read on the receiver",
+	"Cod": "Code",
+	"Coduri:": "Codes:",
+	"Da": "Yes",
+	"Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic.": "If nothing changes, the diagnostic code appears here soon.",
+	"Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este.": "The receiver data in this software is damaged or from another version, so we cannot check which receiver it is for.",
+	"De obicei pornirea durează sub un minut.": "The start usually takes less than a minute.",
+	"Detalii": "Details",
+	"Device tree model": "Device tree model",
+	"Diagnosticul pornirii": "Startup diagnostics",
+	"Driverele receptorului lipsesc sau nu s-au încărcat.": "The receiver's drivers are missing or did not load.",
+	"Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el.": "The board driver was not loaded, so the board type could not be read and it cannot be proven that this software is for it.",
+	"Driverul spune alt tip de placă decât cel pentru care e făcut software-ul.": "The driver reports a different board type from the one the software is made for.",
+	"Eticheta din memoria receptorului spune alt tip de placă.": "The label in the receiver's memory names another board type.",
+	"Eticheta din memoria receptorului: %s": "Label in the receiver's memory: %s",
+	"Etichetă": "Label",
+	"Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou.": "The software files changed after the check. Check it again.",
+	"Forumul: %s": "Forum: %s",
+	"Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s.": "Take a photo of this screen and send it to the forum where you found the software or to %s.",
+	"Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la contact@hdsatelit.com.": "Take a photo of this screen and send it to the forum where you found the software or to contact@hdsatelit.com.",
+	"HD Satelit %(versiune)s pentru %(model)s": "HD Satelit %(versiune)s for %(model)s",
+	"HD Satelit pornește…": "HD Satelit is starting…",
+	"Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur.": "The interface crashed several times at startup and started in safe mode.",
+	"Interfața cade și în modul sigur.": "The interface crashes in safe mode too.",
+	"Interfața nu a apărut în 5 minute: s-a blocat la pornire.": "The interface did not appear within 5 minutes: it got stuck at startup.",
+	"Interfața nu pornește": "The interface does not start",
+	"Interfața nu pornește deloc.": "The interface does not start at all.",
+	"Interfața s-a oprit la pornire din alt motiv.": "The interface stopped at startup for another reason.",
+	"Interfața se încearcă din nou peste %d minute.": "The interface is tried again in %d minutes.",
+	"Memoria internă (eMMC)": "Internal memory (eMMC)",
+	"Memoria internă are altă mărime decât la modelul pentru care e software-ul.": "The internal memory has a different size from the model the software is for.",
+	"Memorie internă": "Internal memory",
+	"Model (încărcător)": "Model (bootloader)",
+	"Model neconfirmat: software pentru testeri": "Unconfirmed model: software for testers",
+	"Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma.": "This model is not yet confirmed on a real receiver. The software starts, but it is only for testers: send us the values below or the receiver sheet, so we can confirm it.",
+	"Nu": "No",
+	"Nu am putut citi procesorul sau partițiile receptorului, deci nu se poate dovedi că acest software este pentru el.": "The processor or the partitions of the receiver could not be read, so it cannot be proven that this software is for it.",
+	"Nu s-a instalat nimic pe receptor.": "Nothing has been installed on the receiver.",
+	"Nucleu și sistem": "Kernel and system",
+	"Nucleul: driverele și erorile": "Kernel: drivers and errors",
+	"O altă valoare a receptorului nu se potrivește.": "Another value of the receiver does not match.",
+	"OK sau EXIT închide fereastra.": "OK or EXIT closes the window.",
+	"Opririle interfeței": "Interface stops",
+	"Partiția nucleului sau a sistemului e în alt loc sau are altă mărime.": "The kernel or system partition is in another place or has another size.",
+	"Partiția nucleului sau a sistemului nu s-a găsit.": "The kernel or system partition was not found.",
+	"Partiții": "Partitions",
+	"Partițiile din memoria receptorului sunt așezate altfel.": "The partitions in the receiver's memory are laid out differently.",
+	"Partițiile din memorie": "Partitions in memory",
+	"Partițiile nu s-au putut citi din linia de pornire.": "The partitions could not be read from the boot command line.",
+	"Partițiile nucleului și ale sistemului": "Kernel and system partitions",
+	"Pasul pornirii: %s": "Start step: %s",
+	"Paza de model nu se aplică aici": "The model guard does not apply here",
+	"Placa (antetul partiției deviceinfo)": "Board (header of the deviceinfo partition)",
+	"Placa nu s-a putut citi din antetul de fabrică.": "The board could not be read from the factory header.",
+	"Placa receptorului (antetul de fabrică) este alta.": "The receiver's board (factory header) is a different one.",
+	"Placă (HW)": "Board (HW)",
+	"Pornirea a reușit. Câteva valori diferă de cele așteptate: modelul nu este încă confirmat.": "The start succeeded. Some values differ from the expected ones: the model is not confirmed yet.",
+	"Pornirea a reușit: receptorul se potrivește cu software-ul.": "The start succeeded: the receiver matches the software.",
+	"Pornirea durează mai mult decât de obicei…": "The start takes longer than usual…",
+	"Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj.": "The start stopped before the interface, at the step shown on the display.",
+	"Procesor": "Processor",
+	"Procesorul": "Processor",
+	"Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat.": "The processor could not be read: the processor driver did not load.",
+	"Procesorul receptorului nu este cel pentru care e făcut software-ul.": "The receiver's processor is not the one the software is made for.",
+	"Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Amiko: Maintenance Mode).": "Put the right software back with a USB stick, as the receiver's manufacturer describes (on Amiko: Maintenance Mode).",
+	"Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB).": "Put the right software back with a USB stick, as the receiver's manufacturer describes (on Octagon: hold Standby on the receiver while switching on, then Recovery From USB).",
+	"Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului (la Uclan Ustym 4K PRO: butonul RECOVERY din spate).": "Put the right software back with a USB stick, as the receiver manufacturer describes (on Uclan Ustym 4K PRO: the rear RECOVERY button).",
+	"Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.": "This receiver matches: the processor, the board and the partitions are the ones the software requires.",
+	"Receptorul este cel potrivit": "This is the right receiver",
+	"Receptorul nu poate fi recunoscut": "The receiver cannot be recognized",
+	"Receptorul tău: %(model)s, placa %(hw)s, procesor %(cip)s.": "Your receiver: %(model)s, board %(hw)s, processor %(cip)s.",
+	"Semnul receptorului din software este stricat.": "The receiver mark in the software is damaged.",
+	"Software pentru alt receptor": "Software for another receiver",
+	"Software-ul care rulează nu are semnul receptorului (de exemplu în emulatorul de pe calculator), deci paza de model nu verifică nimic.": "The running software has no receiver mark (for example in the emulator on the computer), so the model guard checks nothing.",
+	"Software-ul este stricat sau schimbat: %s nu are suma de control așteptată. Copiază-l din nou pe stick.": "The software is damaged or changed: %s does not have the expected checksum. Copy it to the stick again.",
+	"Software-ul este stricat sau schimbat: %s nu au suma de control așteptată. Copiază-l din nou pe stick.": "The software is damaged or changed: %s do not have the expected checksum. Copy it to the stick again.",
+	"Software-ul nu scrie nimic în memoria receptorului. Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului.": "The software writes nothing to the receiver's memory. Put the right software back with a USB stick, as the receiver's manufacturer describes.",
+	"Software-ul nu se poate instala": "The software cannot be installed",
+	"Săgețile sus și jos aleg, OK confirmă, EXIT înseamnă Nu.": "Use the up and down arrows to choose, OK to confirm, EXIT means No.",
+	"Tip placă (driver)": "Board type (driver)",
+	"Tipul plăcii din eticheta receptorului": "Board type in the receiver label",
+	"Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat.": "The board type could not be read: the board driver did not load.",
+	"Tipul plăcii spus de driver": "Board type reported by the driver",
+	"Toate datele, de copiat, din calculator sau telefon:": "All the data, to copy, from a computer or phone:",
+	"Toate datele, în interfața web a receptorului, la pagina %s": "All the data, in the receiver's web interface, on the page %s",
+	"Toate datele, în interfața web: %s": "All the data, in the web interface: %s",
+	"Tunere": "Tuners",
+	"Ultima eroare a interfeței": "Last interface error",
+	"Verificarea de la pornire nu a dat niciun rezultat.": "The check at startup gave no result.",
+	"cel mult %s": "at most %s",
+	"cel puțin %s": "at least %s",
+	"lipsește (nu se verifică)": "missing (not checked)",
+	"locul %(loc)d: %(intrare)s": "place %(loc)d: %(intrare)s",
+	"model necunoscut": "unknown model",
+	"necunoscut": "unknown",
+	"necunoscută": "unknown",
+	"niciunul găsit": "none found",
+	"nimic": "nothing",
+	"nu s-a putut citi": "could not be read",
+	"nu se poate instala: este pentru alt tip de receptor": "cannot be installed: it is for another type of receiver",
+	"nu se poate instala: fișierele sunt stricate": "cannot be installed: the files are damaged",
+	"nu se poate instala: fișierele sunt stricate sau schimbate": "cannot be installed: the files are damaged or changed",
+	"nu se poate instala: poate fi pentru alt tip de receptor": "cannot be installed: it may be for another type of receiver",
+	"nu se poate instala: receptorul nu se poate verifica": "cannot be installed: the receiver cannot be checked",
+	"pentru acest receptor, se verifică la OK": "for this receiver, checked at OK",
+	"un receptor %(tip)s (de exemplu %(model)s)": "a %(tip)s receiver (for example %(model)s)",
+	"un receptor %s": "a %s receiver",
+	"un receptor cu memoria internă mai mare": "a receiver with a larger internal memory",
+	"un receptor cu memoria internă mai mare (de exemplu %s)": "a receiver with a larger internal memory (for example %s)",
+	"un receptor cu memoria internă mai mică": "a receiver with a smaller internal memory",
+	"un receptor cu memoria internă mai mică (de exemplu %s)": "a receiver with a smaller internal memory (for example %s)",
+}
+
+TEXT_SLOT_NECITIT = N_("The boot slot could not be read; partitions do not block startup.")
+TEXT_SLOT_CITIT = N_("Boot partitions read from the running slot; they do not identify the receiver.")
+TEXTE_ROMANA = {
+	TEXT_SLOT_NECITIT: "Slotul de pornire nu s-a putut citi; partițiile nu opresc pornirea.",
+	TEXT_SLOT_CITIT: "Partițiile sunt citite din slotul pornit; ele nu identifică receptorul.",
+	"The device tree identifies another receiver model.": "Arborele dispozitivelor arată alt model de receptor.",
+	"Device tree model": "Model (arborele dispozitivelor)",
+	"This receiver matches the hardware required by the software.": "Receptorul acesta are componentele cerute de software.",
+}
 
 
 def _traducator(limba, dosar_po=DOSAR_PO):
-	"""gettext-ul limbii din fisierele .mo ale imaginii, sau textul insusi (romana, fara fisier)"""
-	if limba and limba != "ro":
-		try:
-			import gettext
-			return gettext.translation("enigma2", dosar_po, languages=[limba]).gettext
-		except Exception:
-			pass
-	return lambda text: text
+	"""Catalogul limbii alese, cu engleza la un text lipsa sau netradus."""
+	limba = _codLimba(limba)
+	if limba == "ro":
+		return lambda text: TEXTE_ROMANA.get(text, text)
+	catalog = None
+	try:
+		import gettext
+		catalog = gettext.translation("enigma2", dosar_po, languages=[limba]).gettext
+	except Exception:
+		pass
+
+	def tr(text):
+		tradus = catalog(text) if catalog else text
+		return tradus if tradus and tradus != text else TEXTE_ENGLEZA.get(text, text)
+	return tr
+
+
+def limbaDiagnostic(limba=None, cale_setari=None, dosar_po=None):
+	"""Limba salvata si traducatorul ei, fara sa schimbe limba globala a interfetei."""
+	limba = _limbaSetari(cale_setari) if limba is None else _codLimba(limba)
+	return limba, _traducator(limba, DOSAR_PO if dosar_po is None else dosar_po)
+
+
+_LIMBA_DIAGNOSTIC = None
+_TRADUCATOR_DIAGNOSTIC = None
+
+
+def pregatesteLimba(limba=None, cale_setari=None, dosar_po=None):
+	global _LIMBA_DIAGNOSTIC, _TRADUCATOR_DIAGNOSTIC
+	_LIMBA_DIAGNOSTIC, _TRADUCATOR_DIAGNOSTIC = limbaDiagnostic(limba, cale_setari, dosar_po)
+	return _LIMBA_DIAGNOSTIC
+
+
+def traduce(text):
+	if not text:
+		return text or ""
+	if _TRADUCATOR_DIAGNOSTIC is None:
+		pregatesteLimba()
+	return _TRADUCATOR_DIAGNOSTIC(text)
+
+
+def _instaleazaLimba(limba, dosar=DOSAR_PO):
+	pregatesteLimba(limba, dosar_po=dosar)
+
+
+TEXT_PAGINA_REZERVA = N_("Toate datele, de copiat, din calculator sau telefon:")
+TEXT_REINCERCARE = N_("Interfața se încearcă din nou peste %d minute.")
+TEXT_CODURI = N_("Coduri:")
+TEXTE_PORNIRE = {
+	"porneste": N_("HD Satelit pornește…"),
+	"pasul": N_("Pasul pornirii: %s"),
+	"obisnuit": N_("De obicei pornirea durează sub un minut."),
+	"lent": N_("Pornirea durează mai mult decât de obicei…"),
+	"lent2": N_("Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic."),
+	"E306": N_("Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj."),
+}
 
 
 def texteRezervaLimba(limba, dosar_po=DOSAR_PO):
-	"""Toate textele caii de rezerva intr-o limba: titlu_E1, titlu_E2, titlu_E3, rugaminte, pagina, reincercare
-	(cu %d = minutele), coduri si fraza fiecarui cod sub cheia lui (E101 ... E309). Din traducerile interfetei."""
+	"""Textele rezervei din acelasi catalog ca ecranul, cu baza engleza."""
 	tr = _traducator(limba, dosar_po)
 	rez = {"titlu_E1": tr(TITLURI[GRUPA_ALT_RECEPTOR]), "titlu_E2": tr(TITLURI[GRUPA_NECITIT]),
 		"titlu_E3": tr(TITLURI[GRUPA_INTERFATA]),
@@ -773,6 +957,7 @@ def texteRezervaLimba(limba, dosar_po=DOSAR_PO):
 		"forum": FORUM, "email": EMAIL}
 	for cod, _g, text in CODURI:
 		rez[cod] = tr(text)
+	rez.update((cheie, tr(text)) for cheie, text in TEXTE_PORNIRE.items())
 	return rez
 
 
@@ -802,21 +987,9 @@ class _TexteRezerva(dict):
 TEXTE_REZERVA = _TexteRezerva()
 
 
-def texteRezerva(cod, limba=None, dosar_po=DOSAR_PO):
-	"""Textele pentru imaginea pe ecran si pagina caii de rezerva (enigma2 nu ruleaza), in limba receptorului (din
-	/etc/enigma2/settings, sau `limba`), din aceleasi traduceri ca interfata (.mo): {titlu, cod, text, rugaminte, forum,
-	email, pagina}. Fara traducere (sau limba romana) textele raman romanesti."""
-	limba = limba or _limbaSetari()
-	traducere = None
-	if limba != "ro":
-		try:
-			import gettext
-			traducere = gettext.translation("enigma2", dosar_po, languages=[limba]).gettext
-		except Exception:
-			traducere = None
-
-	def tr(text):
-		return traducere(text) if traducere else text
+def texteRezerva(cod, limba=None, dosar_po=DOSAR_PO, cale_setari=None):
+	"""Textele unui cod in limba salvata, sau in cea ceruta explicit pentru probe."""
+	_limba, tr = limbaDiagnostic(limba, cale_setari, dosar_po)
 	return {"titlu": tr(TITLURI[grupaCod(cod)]), "cod": cod, "text": tr(_TEXTE.get(cod, "")),
 		"rugaminte": tr("Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la %s.") % EMAIL,
 		"forum": FORUM, "email": EMAIL, "pagina": tr("Toate datele, în interfața web: %s")}
@@ -842,8 +1015,7 @@ def main(argv=None):
 	aici = os.path.dirname(os.path.abspath(__file__))
 	sys.path.insert(0, os.path.dirname(aici))
 	limba = optiune("--limba", "") or _limbaSetari()
-	if limba != "ro":
-		_instaleazaLimba(limba)
+	pregatesteLimba(limba)
 	from Components import HdsPazaModel as M
 	radacina = optiune("--radacina", None)
 	v = M.verdict(radacina)

@@ -14,12 +14,11 @@
 # oprire), pagina arata ziua si ora ei si butonul "Pune înapoi cum era", perechea tastei Albastre de pe receptor: o
 # intrebare in pagina (aceeasi ca la "Copia setărilor", cu Nu / Da, pune la loc; fara fereastra browserului, ca restul
 # paginii), apoi cererea si repornirea interfetei, ca la /api/copie-setari-pune; sesiunea nu se opreste.
-# Start dintr-un browser conectat cu codul de pe receptor (acelasi nivel asociat ca la Acces SSH) porneste pe loc
-# (Screens/HdsAsistentaSemn.pornesteWeb). Dintr-un browser fara cod (orice aparat din reteaua locala) deschide pe
-# receptor aceeasi pagina de pornire si porneste numai Start apasat acolo (HdsAsistentaSemn.cerereWeb): altfel orice
-# aparat din casa ar putea da acces la receptor fara stirea omului. Oprirea merge din orice browser din reteaua
-# locala (a opri nu primejduieste pe nimeni). Cat asistenta e activa, paginile web au sus o banda (bandaWeb, pusa de
-# meniu_comun_web.pagina).
+# Start porneste pe loc din orice browser acceptat de poarta locala, cu termenii bifati.
+# Nu cere asocierea cu codul de pe televizor. HdsAsistentaSemn.pornesteWeb anunta pe receptor
+# ca a pornit din web, fara sa ceara o apasare acolo. Exteriorul ramane respins de poarta comuna.
+# Oprirea merge din orice browser acceptat. Cat asistenta e activa, paginile web au sus
+# o banda (bandaWeb, pusa de meniu_comun_web.pagina).
 #
 # Rute (poarta comuna meniu_comun_web; ce schimba ceva cere, cu cookie, POST si antetul CSRF):
 #   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
@@ -52,15 +51,6 @@ def _a(A=None):
 		return A
 	from Components import HdsAsistenta
 	return HdsAsistenta
-
-
-def _asociat(request):
-	"""True daca cererea vine dintr-un browser conectat cu codul de pe receptor (Start porneste atunci pe loc)."""
-	try:
-		from . import acces_ssh_web
-		return acces_ssh_web.nivel(request) == "asociat"
-	except Exception:
-		return False
 
 
 def stare(request=None, A=None, B=None):
@@ -216,8 +206,8 @@ def rute(baza, resource, A=None):
 
 		def render_POST(self, request):
 			try:
-				# pentru oricine; browserul conectat cu codul porneste pe loc, altul deschide pagina pe receptor
-				return self._raspunde(request, cere(_argumente(request), A, de_incredere=_asociat(request)))
+				# Poarta comuna a verificat reteaua locala si cererea; Start nu mai cere codul TV.
+				return self._raspunde(request, cere(_argumente(request), A, de_incredere=True))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 

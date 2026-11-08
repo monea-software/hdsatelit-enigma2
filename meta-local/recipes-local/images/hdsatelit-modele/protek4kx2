@@ -1,0 +1,32 @@
+# HD Satelit: regulile garzii de model pentru Protek 4K X2 (masina u57), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Aceeasi masina ca V20 si V30: acelasi pachet de drivere (u57-drivers 20211209), acelasi nucleu, aceleasi partitii. In
+# stratul masinii difera numele, telecomanda (protek3) si dosarul imaginii.
+# Valorile hw, partitions si kernel_kib sunt cele de la V20 si au fost citite la fel pe un receptor care se numeste
+# protek4kx2 (raportul unui tester, 05.11.2026: HW=U5SLIM, aceeasi tabela, nucleu 32768 KiB). Numele de retea nu dovedeste
+# modelul, iar nicio valoare de la placa nu deosebeste un Protek 4K X2 de un V30; dupa ce un om confirma receptorul de pe
+# eticheta lui, randul confirmat=nu se scoate.
+# upd_path: dosarul in care Maintenance Mode cauta imaginea pe stick; enigma2.sh il scrie in /proc/stb/info/upd_path
+# inainte de showiframe. Tabelul fix de nume din showiframe-ul u57 are viper4kv20 si protek4kx1, dar nu protek4kx2: fara
+# upd_path eticheta ar ramane cu UPD_PATH gol, iar loaderul ar cauta in dinobot/u57/. /e2/update, ca toate imaginile publice
+# pentru acest receptor (dosarul imaginii din stratul masinii, scris de ele la pornire in acelasi nod): un receptor venit
+# de pe ele are deja eticheta /e2/update, showiframe nu rescrie p6, iar arhivele lor merg inapoi fara redenumiri.
+# emmc_min_kib nu se pune: singura masuratoare (7634944 KiB, 8 GB) e de pe o placa neconfirmata si nu stim daca toate
+# receptoarele de acest model au 8 GB, iar imaginea pe un V20 merge (aceleasi drivere), deci nu e un caz periculos, ca la V30.
+# Imaginea V20 pe acest receptor e refuzata de limita ei de memorie (EMMC_IMPLICIT, cel mult 5 GiB).
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=protek4kx2.
+format=1
+distro=hdsatelit
+model=Protek 4K X2
+machine=u57
+machinebuild=protek4kx2
+chip=Hi3798MV200
+boxtype=u57
+hw=U5SLIM
+partitions=boot:1M,bootargs:1M,baseparam:4M,pqparam:4M,logo:4M,deviceinfo:4M,loader:32M,trustedcore:8M,kernel:32M,rootfs
+kernel_part=mmcblk0p9
+kernel_kib=32768
+rootfs_part=mmcblk0p10
+upd_path=/e2/update
+confirmat=nu

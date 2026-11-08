@@ -3,6 +3,7 @@ import sys
 from Tools.CList import CList
 from traceback import print_exc
 from functools import reduce
+from Components.HdsAsistentaControl import schimbaComponentaWeb
 
 # errors already written to the log, as (class name, message): each one is logged once
 _reportedErrors = set()
@@ -97,6 +98,8 @@ class Element(object):
 
 	# default action: push downstream
 	def changed(self, *args, **kwargs):
+		if not self.sources:
+			schimbaComponentaWeb(self)
 		self.cache = { }
 		# a converter or renderer that fails (for example from a newer skin) does not stop the others
 		for element in self.downstream_elements:

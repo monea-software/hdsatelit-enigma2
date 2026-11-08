@@ -130,6 +130,21 @@ TEXTE_PLAYER = {
 	"vorbire_clara": N_("vorbire clară"),
 	# mesajele paginii: "Imaginea merge." numai cat vin cadre adevarate; mesajul pazei cadrelor (player.js, paza cadrelor)
 	"imaginea_merge": N_("Imaginea merge."),
+	"radio_live": N_("Radio în direct"),
+	"radio_program": N_("Programul emisiunilor"),
+	"radio_piesa": N_("Piesa și textul radio"),
+	"radio_tehnic": N_("Date tehnice"),
+	"radio_fara_text": N_("Nu a sosit încă niciun text radio."),
+	"radio_fara_epg": N_("Postul nu transmite programul emisiunilor."),
+	"radio_bare": N_("Vizualizatorul sunetului"),
+	"radio_bare_asteapta": N_("Barele apar când începe sunetul."),
+	"radio_bare_indisponibile": N_("Vizualizatorul nu este disponibil pentru acest flux."),
+	"radio_sunet_blocat": N_("Apasă Redă pentru a porni sunetul și vizualizatorul."),
+	"radio_urmeaza": N_("Urmează: %s"),
+	"radio_retea": N_("Postul nu răspunde sau legătura cu el s-a întrerupt."),
+	"radio_format": N_("Browserul nu poate reda formatul audio al acestui post."),
+	"radio_nesecurizat": N_("Browserul blochează sunetul prin HTTP într-o pagină HTTPS. Deschide interfața receptorului prin HTTP sau alege un post cu adresă HTTPS."),
+	"radio_asteptare": N_("Postul nu a început redarea. Încearcă din nou."),
 	"fara_imagine": N_("Canalul nu trimite imagine acum."),
 	# fara PMT-ul fluxului dupa player.js FARA_PMT_MS (HdsTransmisie, PMT-UL LIPSA)
 	"fara_pmt": N_("Canalul nu trimite descrierea pistelor (imagine și sunet), deci browserul nu știe ce să redea. Încearcă din nou."),
@@ -243,7 +258,7 @@ ANTET_FLUX = (b"HTTP/1.1 200 OK\r\n"
 	b"Connection: close\r\n"
 	b"Server: HDSatelit\r\n\r\n")
 CSP_TV = (b"default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; "
-	b"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; media-src 'self' blob:; connect-src 'self'; "
+	b"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; media-src 'self' blob: http: https:; connect-src 'self'; "
 	b"worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 FISIER_JS = "mpegts.js"
 FISIER_LICENTA = "mpegts-licenta.txt"
@@ -292,7 +307,10 @@ def argumente(request, chei=("ref", "id", "hevc", "ac3", "wasm", "permis", "stan
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:64].strip()
+		text = str(v).strip()
+		# Referintele DAB/online includ adresa fluxului, mult peste lungimea DVB.
+		# O referinta prea lunga se respinge intreaga, nu se reda o adresa taiata.
+		rez[cheie] = (text if len(text) <= 8192 else "") if cheie == "ref" else text[:64]
 	return rez
 
 
@@ -316,6 +334,17 @@ def numeCanal(ref):
 		return ""
 
 
+def _refPagina(ref):
+	# Playerul comun din Canale citeste si starea TV, inclusiv cand pe receptor merge un flux.
+	from .canale_web import ref_publica
+	return ref_publica(ref or "")
+
+
+def _numePagina(nume):
+	from .canale_web import curat
+	return curat(nume)
+
+
 # ---------------------------------------------------------------- starea si canalele
 
 def stare(cine, H=None, M=None, ref_tv=None, nume_tv=None):
@@ -332,11 +361,34 @@ def stare(cine, H=None, M=None, ref_tv=None, nume_tv=None):
 		"a_mea": a_mea.descriere(T.monoton()) if a_mea is not None else None,
 		"oprita": {"motiv": oprita[0], "ora": int(oprita[1]), "cod": oprita[2] if len(oprita) > 2 else None}
 			if (oprita and a_mea is None) else None,
-		"tv": {"ref": ref_tv or "", "nume": nume_tv if nume_tv is not None else (numeCanal(ref_tv) if ref_tv else "")},
+		"tv": {"ref": _refPagina(ref_tv), "nume": _numePagina(nume_tv if nume_tv is not None else (numeCanal(ref_tv) if ref_tv else ""))},
 		"asteptari": [[s, T.textDurata(s)] for s in T.ASTEPTARI_PERMISE_S],
 		"in_standby": bool(T.inStandby()),
 	})
+	if a_mea is not None:
+		d["a_mea"].update(dateRadio(a_mea.ref, a_mea.nume, a_mea, T, ref_tv))
 	return d
+
+
+def dateRadio(ref, nume, ses=None, T=None, ref_tv=None):
+	"""Date scurte ale postului sesiunii, niciodata ale altui canal de pe TV."""
+	T = T or _T()
+	c = T.campuriRef(ref)
+	radio = bool(c and c[0] in TIPURI_RADIO)
+	if not radio:
+		return {"radio": False}
+	try:
+		from . import radio_web
+		serviciu = getattr(ses, "rec", None)
+		if ref_tv and T.refCurata(ref_tv) == T.refCurata(ref):
+			serviciu = T.serviciuTv()
+		controlor = getattr(ses, "dab_controlor", None)
+		receptie_flux = controlor.receptie_web(ref) if controlor is not None else None
+		d = radio_web.stare_flux(ref, nume, serviciu, getattr(ses, "piste", None), receptie_flux=receptie_flux)
+		return {"radio": True, "radio_date": d}
+	except Exception:
+		# Datele optionale nu opresc sunetul; fara jurnal cu referinte URL.
+		return {"radio": True, "radio_date": {"date": {"ref": ref, "nume": nume}, "texte": {"nume": nume}}}
 
 
 def _continut(ref):
@@ -392,7 +444,7 @@ def canale(H=None, M=None, ref_tv=None, continut=None, radacina=None, hevc=False
 			for ref, nume in (continut(q) if q else []):
 				adauga(ref, nume, "frecventa")
 		except Exception as e:
-			print("[tv_web] canalele frecventei: %r" % (e,))
+			print("[tv_web] canalele frecventei: %s" % type(e).__name__)
 	if radacina is None:
 		radacina = _radacinaTv()
 	if radacina:
@@ -400,7 +452,7 @@ def canale(H=None, M=None, ref_tv=None, continut=None, radacina=None, hevc=False
 			for ref, nume in continut(radacina):
 				adauga(ref, nume, "lista")
 		except Exception as e:
-			print("[tv_web] lista televizorului: %r" % (e,))
+			print("[tv_web] lista televizorului: %s" % type(e).__name__)
 	if serviciu is None:
 		serviciu = T.serviciuTv()
 	for c in rez:
@@ -436,7 +488,7 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 			return {"result": False, "fara_canal": True, "ref": "", "message": _t("Pe televizor nu merge acum niciun canal.")}
 		ref = T.refCurata(ref_tv)
 		if ref is None:
-			return {"result": False, "fara_canal": True, "ref": ref_tv,
+			return {"result": False, "fara_canal": True, "ref": _refPagina(ref_tv),
 				"message": _t("Pe televizor merge acum ceva ce nu se poate transmite în browser.")}
 	else:
 		ref = T.refCurata(argumente_.get("ref", ""))
@@ -475,17 +527,21 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 		avertizare = T.avertizarePmt(ses.video, ses.piste, ses.ac3, ses.wasm)
 	else:
 		avertizare = T.potrivire(info["video"], [], hevc, ac3, wasm)[1]
-	return {"result": True, "id": ses.id, "ref": ses.ref, "nume": ses.nume, "avertizare": avertizare,
+	rez = {"result": True, "id": ses.id, "ref": ses.ref, "nume": ses.nume, "avertizare": avertizare,
 		"video": info["video"], "audio": info["audio"], "urmeaza": urmeaza,
 		"pe_tv": bool(ref_tv) and T.refCurata(ref_tv) == ses.ref, "decriptare": getattr(ses, "decriptare", None)}
+	rez.update(dateRadio(ses.ref, ses.nume, ses, T, ref_tv))
+	return rez
 
 
-def opreste(argumente_, cine, H=None, M=None):
+def opreste(argumente_, cine, H=None, M=None, fereastra=""):
 	"""POST /api/tv-opreste: o sesiune dupa id (din lista sesiunilor) sau sesiunea acestui browser."""
 	m = _m(H, M)
 	sid = argumente_.get("id", "")
 	if not sid:
 		ses = m.sesiunePentru(cine) if cine else None
+		if ses is not None and fereastra and getattr(ses, "fereastra", "") != fereastra:
+			return {"result": True, "message": _t("Nu transmite nimic spre această fereastră.")}
 		if ses is None:
 			return {"result": True, "message": _t("Nu transmite nimic spre acest browser.")}
 		sid = ses.id
@@ -527,6 +583,12 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 	"""GET /api/tv-verifica: merge canalul acum in browser (aceleasi verificari ca pornirea, fara inregistrare) si intr-un
 	player extern (VLC reda si MPEG-2, deci acolo conteaza numai tunerul, antena, limitele si memoria)."""
 	T = _T(H)
+	from . import radio_live_web
+	ref_online = radio_live_web.online_ref(argumente_.get("ref", ""))
+	if ref_online:
+		return {"result": True, "merge": True, "online": True, "radio": True,
+			"ref": argumente_["ref"], "nume": "", "extern": False, "pe_tv": False,
+			"motiv": "", "avertizare": "", "video": "", "audio": []}
 	m = _m(H, M)
 	ref = T.refCurata(argumente_.get("ref", ""))
 	if ref is None:
@@ -556,13 +618,15 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 		rez.update({"merge": False, "motiv": text, "avertizare": ""})
 	else:
 		rez.update({"merge": True, "motiv": "", "avertizare": text})
+	rez.update(dateRadio(ref, rez["nume"], T=T, ref_tv=ref_tv))
 	# 0.7.0 Stream Relay: un canal din lista vine de la releu (Components/HdsTransmisie.py, adresaReleu), deci nu se
 	# refuza ca "criptat"; daca releul nu raspunde acum, motivul lui, pe loc (legatura se incearca cel mult 0,5 s)
 	releu = T.adresaReleu(ref) if hasattr(T, "adresaReleu") else None
 	if releu is not None:
 		rez["releu"] = True
 		if not T.releuAsculta(releu):
-			motiv_releu = _t(T.TEXT_RELEU_OPRIT) % (releu[0], releu[1])
+			motiv_releu = T.motivReleuOprit(releu[0], releu[1]) if hasattr(T, "motivReleuOprit") else \
+				_t(T.TEXT_RELEU_OPRIT) % (releu[0], releu[1])
 			rez.update({"merge": False, "motiv": motiv_releu, "avertizare": "", "extern": False,
 				"extern_motiv": motiv_releu})
 	# un canal MPEG-2 trece ca "merge" cand pagina trimite wasm=1 (are playerul wasm); fluxul e acelasi, numai redarea
@@ -580,12 +644,14 @@ def urmeaza(ref_stiut, standby_stiut, cheie, scrie, H=None, M=None, nume_canal=N
 	nume_canal = nume_canal or numeCanal
 
 	def raspuns(ref, standby, plin=False):
-		d = {"result": True, "tv": {"ref": ref or "", "nume": nume_canal(ref) if ref else ""}, "in_standby": bool(standby)}
+		d = {"result": True, "tv": {"ref": _refPagina(ref), "nume": _numePagina(nume_canal(ref) if ref else "")}, "in_standby": bool(standby)}
 		if plin:
 			d["plin"] = True
 		return d
 
 	ref, standby = m.starePentruUrmarire()
+	if ref_stiut == _refPagina(ref):
+		ref_stiut = ref  # identificatorul opac al canalului actual nu inseamna o schimbare de canal
 	if not T._acelasiTv(ref, ref_stiut) or standby != bool(standby_stiut):
 		return raspuns(ref, standby), None
 	gata = [False]
@@ -831,6 +897,7 @@ def scrieOsd(request, rez, fereastra=None):
 	"""Raspunsul stratului (pe firul enigma2): 200 cu BGRA gzip, 304, sau eroare JSON. `fereastra` (fereastraStrat): pe
 	orice raspuns, in antetul x-hds-video; pe 304 tot el spune paginii ca lista s-a inchis cand stratul nu s-a mai
 	schimbat (evideo.cpp pune ecranul intreg la 100 ms dupa ce ecranul cu fereastra a disparut)."""
+	request.setHeader(b"cache-control", b"no-store, private")
 	cod = rez.get("cod")
 	if fereastra:
 		request.setHeader(b"x-hds-video", fereastra.encode("ascii"))
@@ -863,7 +930,7 @@ def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 	from . import captura_sigura as CS
 	epoca_captura = CS.epocaCapturii()
 	if epoca_captura is None:
-		return scrieOsd(request, {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)})
+		return scrieOsd(request, {"cod": 403, "mesaj": CS.mesajRefuz()})
 	if asteptare is None:
 		from . import plugin as P
 		asteptare = P._AsteptareCaptura
@@ -891,7 +958,7 @@ def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 		if gata[0]:
 			return
 		if not CS.capturaValida(epoca_captura):
-			rez = {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)}
+			rez = {"cod": 403, "mesaj": CS.mesajRefuz()}
 		# fereastra de acum, cand pleaca raspunsul (verificarea a durat)
 		_incheie(scrieOsd(request, rez, fereastraStrat(S)))
 
@@ -1199,7 +1266,8 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 		def render_POST(self, request):
 			try:
 				_s, browser, adresa = _browser(request)
-				return self._raspunde(request, opreste(argumente(request), cineDinBrowser(browser, adresa), H, M))
+				return self._raspunde(request, opreste(argumente(request), cineDinBrowser(browser, adresa), H, M,
+					fereastra=fereastraDin(request)))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -1267,6 +1335,31 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 				return self._raspunde(request, verifica(argumente(request), cineDinBrowser(browser, adresa), H, M))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	class RadioResource(baza):
+		"""Rezolvarea postului online pe fir separat; nu atinge navigatia TV."""
+
+		def render_GET(self, request):
+			refuz, _secret, _browser_, _adresa = _poartaPagina(self, request)
+			if refuz is not None:
+				return refuz
+			from . import radio_live_web, canale_web
+			ref = argLung(request, b"ref", 8192)
+			if not radio_live_web.online_ref(ref):
+				return self._eroare(request, _t("Alege un post de radio online din listă."), 400)
+			inchisa = []
+			request.notifyFinish().addErrback(lambda _e: inchisa.append(True))
+
+			def gata(rezultat, eroare):
+				if inchisa:
+					return
+				corp = rezultat if eroare is None and rezultat is not None else {
+					"result": False, "message": _t("Adresa postului nu a putut fi aflată. Încearcă din nou.")}
+				request.write(self._raspunde(request, corp))
+				request.finish()
+
+			canale_web._m().in_fir(lambda: radio_live_web.rezolva(ref), gata, fel="radio-online", termen_s=20)
+			return amanat
 
 	class UrmeazaResource(baza):
 		"""GET /api/tv-urmeaza?ref=&standby=0|1: cererea lunga a paginii care urmeaza televizorul (urmeaza()). Numai
@@ -1394,25 +1487,18 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 	class OsdResource(baza):
-		"""GET /api/tv-osd?l=<latimea afisata>: stratul grafic (osd_strat.py). Poarta fluxului (browser, antet CSRF,
-		aceeasi origine) si, cat ecranul "Acces SSH" e deschis pe televizor, numai un browser conectat cu codul (parola
-		e mare pe ecran). Raspunsul gata facut pleaca de pe firul enigma2; o verificare a stratului ruleaza pe un fir."""
+		"""GET /api/tv-osd?l=<latimea afisata>: stratul grafic, refuzat tuturor pe ecranele cu secrete.
+		Raspunsul gata facut pleaca de pe firul enigma2; o verificare a stratului ruleaza pe un fir."""
 
 		def render_GET(self, request):
+			request.setHeader(b"cache-control", b"no-store, private")
 			refuz, _s, _b, _a = _poartaPagina(self, request)
 			if refuz is not None:
 				return refuz
 			from . import captura_sigura as CS
 			epoca_captura = CS.epocaCapturii()
 			if epoca_captura is None:
-				return self._raspunde(request, {"result": False, "message": _t(CS.MESAJ_ASOCIERE)}, 403)
-			try:
-				from . import acces_ssh_web
-				refuz_ssh = acces_ssh_web.refuzEcranDeschis(request)
-			except Exception:
-				refuz_ssh = None
-			if refuz_ssh is not None:
-				return self._raspunde(request, refuz_ssh, 403)
+				return self._raspunde(request, {"result": False, "message": CS.mesajRefuz()}, 403)
 			try:
 				latime = int(argumente(request).get("l") or 960)
 			except ValueError:
@@ -1427,7 +1513,7 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			rez = S.dinMemorie(latime, etag)
 			if rez is not None:
 				if not CS.capturaValida(epoca_captura):
-					return self._raspunde(request, {"result": False, "message": _t(CS.MESAJ_ASOCIERE)}, 403)
+					return self._raspunde(request, {"result": False, "message": CS.mesajRefuz()}, 403)
 				return scrieOsd(request, rez, fereastra)
 			if _osd_fire[0] >= OSD_FIRE_MAX:
 				request.setHeader(b"retry-after", b"1")
@@ -1444,6 +1530,7 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 		b"tv-osd": OsdResource(),
 		b"tv-pista": PistaResource(),
 		b"tv-verifica": VerificaResource(),
+		b"tv-radio": RadioResource(),
 		b"tv-urmeaza": UrmeazaResource(),
 		b"tv-m3u": M3uResource(),
 		b"tv-acces": AccesResource(),

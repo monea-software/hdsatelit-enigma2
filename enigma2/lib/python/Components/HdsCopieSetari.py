@@ -52,7 +52,9 @@
 #     temporizatoarele, discul ales, treapta probata a procesorului si fisierele criptate cu identitatea receptorului:
 #     cheile de traducere, conturile subtitrarilor),
 #     machine-id, cheile SSH, sistem.json si modulele de acces conditionat NUMAI pe receptorul copiei (aceeasi amprenta
-#     si acelasi model);
+#     si acelasi model); din sistem.json, „Fără parolă în rețeaua locală” oprita se pune numai cand e alegerea omului
+#     (regula_ssh_aleasa: copia de la VERSIUNE_FARA_PAROLA_PORNITA incoace), iar repara_regula_ssh (din porneste)
+#     porneste o data regula oprita pusa inainte dintr-o copie mai veche;
 #   - listele si conturile IPTV, radioul si datele necriptate ale pluginurilor urmeaza stickul si pe alt receptor;
 #     hds_iptv ramane 0700, fisierele 0600, inclusiv cand copia e pe FAT; datele pluginurilor se pun dupa instalare;
 #   - setarile se unesc ca in trusa: pleaca de la copie, pastreaza din setarile de acum PASTREZ si jetonul web, scot
@@ -158,6 +160,15 @@ FISIERE_RETEA = ("etc/network/interfaces", "etc/resolv.conf", "etc/wpa_supplican
 # setarile omului din afara /etc/enigma2 (sistem.json): regula „Fără parolă în rețeaua locală” (Components/HdsAccesSsh.py),
 # sursele de pachete adaugate (Components/HdsPachete.py), interfata implicita (Screens/NetworkSetup.py, fara rand nou)
 FIS_REGULA_SSH = "etc/security/hds-ssh-retea-locala.conf"
+# „Fără parolă în rețeaua locală” oprita se crede numai din copiile facute de aceasta versiune incoace. Pana la 0.6.18
+# oprita era cea din fabrica (nealeasa de om); de la 0.6.19 (pachetul hdsatelit-ssh r3) regula vine pornita, dar
+# punerea la loc de pana la 0.7.0 o scria oprita dintr-o copie veche, iar copiile facute apoi (si cele automate, zilnice)
+# o duceau mai departe. Oprita intr-o copie mai veche nu se pune la loc: ramane cea a imaginii (pornita); cine o
+# oprise de mana pe 0.6.19-0.7.0 o opreste o data din nou. Din copiile de la aceasta versiune incoace se pune.
+VERSIUNE_FARA_PAROLA_PORNITA = (0, 7, 1)
+# semnul (in DOSAR_RESTAURARE) verificarii facute o singura data dupa actualizare: regula oprita pusa la loc dintr-o
+# copie veche de o imagine care inca o punea (repara_regula_ssh)
+SEMN_REGULA_SSH = "regula-ssh-verificata"
 FIS_SURSE = "etc/opkg/hds-surse-utilizator.conf"
 FIS_POARTA = "etc/default_gw"
 TIPAR_INTERFATA = re.compile(r"^[A-Za-z0-9._-]{1,15}\n?\Z")
@@ -346,6 +357,23 @@ def baza_versiunii(versiune):
 	Python 3.14 si OpenSSL 4): binarele unei copii de pe alta baza nu merg aici. "" cand nu se stie."""
 	m = re.match(r"^(\d{1,3})\.(\d{1,3})\.\d{1,3}$", versiune or "")
 	return "%d.%d" % (int(m.group(1)), int(m.group(2))) if m else ""
+
+
+def versiune_tuplu(versiune):
+	"""(0, 6, 19) din "0.6.19"; None cand versiunea nu are aceasta forma."""
+	m = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", versiune or "")
+	return tuple(int(x) for x in m.groups()) if m else None
+
+
+def regula_ssh_aleasa(versiune, pornita):
+	"""True cand „Fără parolă în rețeaua locală” din copie (pornita sau nu) e alegerea omului si se pune la loc: pornita
+	oricand; oprita numai intr-o copie de la VERSIUNE_FARA_PAROLA_PORNITA incoace (inainte oprita putea fi cea din
+	fabrica sau una mostenita de la o punere la loc). O copie fara versiune buna: oprita nu se pune (ramane cea a
+	imaginii)."""
+	if pornita:
+		return True
+	v = versiune_tuplu(versiune)
+	return v is not None and v >= VERSIUNE_FARA_PAROLA_PORNITA
 
 
 def alta_baza(d, rad=None):
@@ -2070,7 +2098,10 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
 		# 5. setarile omului din afara /etc/enigma2 (numai pe acest receptor; sursele de pachete dupa mutare, prin
 		# scrierea lui HdsPachete)
-		if sistem and "ssh_fara_parola" in sistem:
+		if sistem and "ssh_fara_parola" in sistem and not regula_ssh_aleasa(d.get("versiune"), sistem["ssh_fara_parola"]):
+			_jurnal("SSH: regula 'Fara parola in reteaua locala' oprita in copia %s, mai veche decat %s (nealeasa sigur de "
+				"om): ramane cea a imaginii" % (d.get("versiune") or "?", ".".join(str(x) for x in VERSIUNE_FARA_PAROLA_PORNITA)))
+		elif sistem and "ssh_fara_parola" in sistem:
 			ssh = _modul_imagine("Components.HdsAccesSsh")
 			tinta = _c(rad, FIS_REGULA_SSH)
 			if ssh is not None and not os.path.islink(tinta):
@@ -2623,6 +2654,57 @@ def _marcheaza_alta_imagine(rad):
 		_jurnal("semnul copiei altei imagini: %s" % eroare.__class__.__name__)
 
 
+_TIPAR_OPRITA = "SSH: regula 'Fara parola in reteaua locala' pusa la loc: oprita"
+_TIPAR_BAZA = re.compile(r"copia e de pe alta baza a imaginii \((\d{1,3}\.\d{1,3}\.\d{1,3}),")
+
+
+def repara_regula_ssh(rad=None):
+	"""O singura data (semnul SEMN_REGULA_SSH): pe un receptor pe care o punere la loc a scris „Fără parolă în rețeaua
+	locală” oprita dintr-o copie mai veche decat VERSIUNE_FARA_PAROLA_PORNITA (nealeasa sigur de om, vezi acolo), regula
+	devine din nou pornita, cum vine imaginea. Dovada: in hds-restaurare.log, ultima punere care a scris regula oprita;
+	versiunea copiei din randul „alta baza” al aceleiasi puneri sau, fara el (aceeasi baza), din rezultat.json (copia
+	ultimei puneri). Regula schimbata intre timp (alt text decat cel scris de punerea la loc) ramane cum e. Chemata din
+	porneste(session) la fiecare pornire a interfetei: dupa semn, numai un stat. Intoarce True cand a pornit-o; nu
+	arunca."""
+	rad = radacina(rad)
+	semn = os.path.join(dosar_restaurare(rad), SEMN_REGULA_SSH)
+	if os.path.exists(semn):
+		return False
+	pornita = False
+	try:
+		jurnal = ""
+		try:
+			with open(cale_jurnal(rad), "rb") as f:
+				f.seek(0, 2)
+				f.seek(max(0, f.tell() - 1024 * 1024))
+				jurnal = f.read().decode("utf-8", "replace")
+		except (OSError, IOError):
+			pass
+		poz = jurnal.rfind(_TIPAR_OPRITA)
+		if poz >= 0:
+			inceput = jurnal.rfind("=== ", 0, poz)
+			sfarsit = jurnal.find("=== ", poz)
+			bloc = jurnal[max(inceput, 0):sfarsit if sfarsit >= 0 else len(jurnal)]
+			m = _TIPAR_BAZA.search(bloc)
+			if m:
+				versiune = m.group(1)
+			else:
+				versiune = str(((citeste_rezultat(rad) or {}).get("copie") or {}).get("versiune") or "")
+			ssh = _modul_imagine("Components.HdsAccesSsh")
+			tinta = _c(rad, FIS_REGULA_SSH)
+			if (not regula_ssh_aleasa(versiune, False) and ssh is not None and not os.path.islink(tinta)
+					and _citeste_mic(tinta, 64 * 1024) == ssh.textRegula(False).encode("utf-8")):
+				_scrie_atomic(tinta, ssh.textRegula(True).encode("utf-8"), 0o644)
+				pornita = True
+				_jurnal("SSH: regula 'Fara parola in reteaua locala' oprita la punerea copiei %s (nealeasa sigur de om): "
+					"PORNITA, ca in imagine" % (_curat_jurnal(versiune) or "?"))
+		os.makedirs(os.path.dirname(semn), exist_ok=True)
+		_atinge(semn)
+	except Exception as eroare:
+		_jurnal("regula SSH: %s" % eroare.__class__.__name__)
+	return pornita
+
+
 def pornire(rad=None, asteapta=True):
 	"""Chemata din enigma2.sh inainte de enigma2: cererea din meniu sau web, altfel prima pornire a imaginii.
 	Intoarce 0 mereu (pornirea receptorului nu depinde de copie)."""
@@ -3014,6 +3096,9 @@ def porneste(session):
 		config_copie()
 	except Exception as eroare:
 		_jurnal("setarile copiei: %s" % eroare.__class__.__name__)
+	# o singura data: regula SSH oprita pusa la loc dintr-o copie veche (pe un receptor actualizat din feed enigma2.sh
+	# nu mai cheama pornire(), deci verificarea se face aici; repara_regula_ssh nu arunca)
+	repara_regula_ssh()
 	try:
 		# cele ale traducerii le scrie legaNucleul, dupa verificarea cheilor (Components/HdsTraducereSubtitrari.py)
 		fixeaza_setari(fara=PREFIX_TRADUCERE)

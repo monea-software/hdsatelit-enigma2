@@ -125,6 +125,12 @@ def codLimba(config=None):
 	"""Codul limbii meniului (ro din ro_RO)."""
 	try:
 		if config is None:
+			# limba textelor de acum (engleza cand cea aleasa nu are catalog; Components/Language.limbaInterfata)
+			import sys
+			lg = sys.modules.get("Components.Language")
+			ui = lg.limbaInterfata() if lg is not None and hasattr(lg, "limbaInterfata") else ""
+			if ui:
+				return ui.split("_")[0].lower()
 			from Components.config import config
 		return str(config.osd.language.value).split("_")[0].lower()
 	except Exception:

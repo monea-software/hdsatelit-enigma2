@@ -578,11 +578,7 @@ _GRUP = re.compile(r'group-title="([^"]*)"', re.I)
 
 def citeste_m3u(text):
 	"""[(grupa, nume, adresa)] dintr-un m3u / m3u8 (EXTINF, EXTGRP)."""
-	if isinstance(text, bytes):
-		try:
-			text = text.decode("utf-8")
-		except UnicodeDecodeError:
-			text = text.decode("latin-1")
+	text = D.text_lista(text)
 	rez = []
 	nume, grupa, grupa_ext = None, "", ""
 	for rand in text.replace("\r", "").split("\n"):

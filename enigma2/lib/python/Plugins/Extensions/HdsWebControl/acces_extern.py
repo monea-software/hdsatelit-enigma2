@@ -46,7 +46,8 @@ FISIER = "/etc/enigma2/hds-acces-flux.json"
 DURATA_CANAL_S = 7 * 86400
 DURATA_LISTA_S = 30 * 86400
 MAX_CHEI = 64
-MAX_CANALE = 2000
+MAX_CANALE = 50000
+MAX_REFERINTE_CHEI = 100000  # toate playlisturile impreuna; maximum doua exporturi complete de 50.000
 MAX_APARATE = 16
 MAX_NUME_APARAT = 40
 FOLOSIT_SALVARE_S = 3600
@@ -111,6 +112,12 @@ class Magazin(object):
 		self._ceas = ceas
 		self._aleator = aleator
 		self._chei = None
+		self._coada_salvari = None
+		self._generatie_salvare = 0
+		self._salvat = 0
+		self._esuat = 0
+		self._confirmat = 0
+		self._ultima_salvare = None
 
 	# ------------------------------------------------------------ discul
 	def _incarca(self):
@@ -134,19 +141,94 @@ class Magazin(object):
 				self._chei[c.id] = c
 
 	def _salveaza(self):
+		self._confirma_salvari()
 		date = {"versiune": 1, "chei": [c.dict() for c in self._chei.values()]}
-		nou = self._cale + ".nou"
+		self._generatie_salvare += 1
+		generatie = self._generatie_salvare
+		# Din prima lista mare, TOATE salvarile acestui magazin trec prin acelasi fir. Coada retine cel mult
+		# ultima fotografie; scrierea in curs se termina inaintea ei. Nu exista un writer sincron concurent.
+		if self._coada_salvari is not None or any(len(c.canale or ()) > 2000 for c in self._chei.values()):
+			import queue
+			if self._coada_salvari is None:
+				import threading
+				self._coada_salvari = queue.Queue(maxsize=1)
+				fir = threading.Thread(target=self._scrie_coada, name="HdsWebPlaylisturi", daemon=True)
+				try:
+					fir.start()
+				except Exception:
+					self._coada_salvari = None
+					self._esuat = generatie
+					return False
+			try:
+				self._coada_salvari.put_nowait((generatie, date))
+			except queue.Full:
+				try:
+					self._coada_salvari.get_nowait()
+					self._coada_salvari.task_done()
+				except queue.Empty:
+					pass
+				self._coada_salvari.put_nowait((generatie, date))
+			return True
+		ok = self._scrie_date(date)
+		if ok:
+			self._salvat = generatie
+			self._ultima_salvare = (generatie, date)
+			self._confirma_salvari()
+		else:
+			self._esuat = generatie
+		return ok
+
+	def _scrie_date(self, date):
+		import tempfile
+		nou = None
 		try:
-			with io.open(nou, "w", encoding="utf-8") as f:
+			fd, nou = tempfile.mkstemp(prefix=".hds-flux-", dir=os.path.dirname(self._cale) or ".")
+			with io.open(fd, "w", encoding="utf-8") as f:
 				json.dump(date, f, ensure_ascii=False)
 			os.chmod(nou, 0o600)
 			os.replace(nou, self._cale)
-			for c in self._chei.values():
-				c.folosit_salvat = c.folosit
 			return True
 		except (IOError, OSError) as e:
 			print("[HdsWebControl] acces_extern: nu pot scrie %s: %s" % (self._cale, e))
 			return False
+		finally:
+			if nou and os.path.exists(nou):
+				try:
+					os.remove(nou)
+				except OSError:
+					pass
+
+	def _scrie_coada(self):
+		while True:
+			generatie, date = self._coada_salvari.get()
+			try:
+				if self._scrie_date(date):
+					self._ultima_salvare = (generatie, date)
+					self._salvat = generatie
+				else:
+					self._esuat = generatie
+			except Exception:
+				self._esuat = generatie
+				print("[HdsWebControl] acces_extern: salvarea playlisturilor nu a reusit")
+			finally:
+				self._coada_salvari.task_done()
+
+	def _confirma_salvari(self):
+		x = self._ultima_salvare
+		if x is None or x[0] <= self._confirmat:
+			return
+		self._confirmat = x[0]
+		for d in x[1]["chei"]:
+			c = (self._chei or {}).get(d["id"])
+			if c is not None:
+				c.folosit_salvat = max(c.folosit_salvat, d.get("folosit", 0))
+
+	def stare_salvare(self, generatie):
+		"""True dupa scrierea fotografiei cerute (sau uneia mai noi), False la eroare, None cat se lucreaza."""
+		self._confirma_salvari()
+		if self._salvat >= generatie:
+			return True
+		return False if self._esuat >= generatie else None
 
 	# ------------------------------------------------------------ cheile
 	def curata(self):
@@ -182,6 +264,11 @@ class Magazin(object):
 			(nume or "")[:80], proprietar or "", (proprietar_nume or "")[:60], acum, acum + durata_s if durata_s else 0,
 			dict(sursa) if (fel == "aparat" and isinstance(sursa, dict)) else None)
 		self._chei[id_] = c
+		while sum(len(x.canale or ()) for x in self._chei.values()) > MAX_REFERINTE_CHEI:
+			altele = [x for x in self._chei.values() if x.id != id_ and x.fel != "aparat"]
+			if not altele:
+				break
+			del self._chei[min(altele, key=lambda x: x.creat).id]
 		self._salveaza()
 		return id_ + secret, c
 
@@ -206,6 +293,7 @@ class Magazin(object):
 
 	def _noteaza(self, c):
 		"""Ultima folosire: in memorie mereu; pe disc numai la aparate, cel mult o data la FOLOSIT_SALVARE_S."""
+		self._confirma_salvari()
 		c.folosit = self._ceas()
 		if c.fel == "aparat" and c.folosit - c.folosit_salvat >= FOLOSIT_SALVARE_S:
 			self._salveaza()

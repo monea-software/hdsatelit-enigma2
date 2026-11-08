@@ -28,7 +28,8 @@
 #
 # ZAP (cost zero fara lista): legatura la Navigation.playServiceExtensions se pune numai cat lista are canale (la
 # pornire, numai daca fisierul exista: mytest.py). Pentru un canal din lista:
-#  - daca nimic nu asculta la adresa releului (releul oprit), canalul porneste direct, ca fara Stream Relay;
+#  - daca nimic nu asculta la adresa releului (releul oprit), canalul porneste direct, ca fara Stream Relay, iar pe
+#    televizor apare de ce (motivReleu, mai jos);
 #  - altfel playerul primeste referinta releului (aceeasi, cu spatiul de nume + 1, ca serverul de flux, la care releul
 #    cere canalul adevarat, sa nu ia redarea drept acelasi serviciu; calea http://<gazda>:<port>/<referinta>), iar
 #    referinta din navigatie ramane cea a canalului: bara, ghidul, sigla si lista de canale vad canalul obisnuit;
@@ -39,12 +40,23 @@
 # Pentru pluginurile scrise pentru alte imagini, Screens/InfoBarGenerics.streamrelay da acelasi obiect (releu()):
 # checkService(ref), streamrelayChecker(ref) -> (ref, prin_releu), reload(), toggle(nav, ref), data.
 #
+# DE CE NU RASPUNDE RELEUL (motivReleu, 0.7.1): pe receptor releul il da modulul de acces; cand nu raspunde, textul spune
+# cauza vazuta de om, dupa modulele citite ca in ecranul „Module de acces condiționat” (Components/HdsModuleAcces.py,
+# toate felurile, fara niciun nume de modul in cod): niciun modul ales; modulul ales nu ruleaza; modulul ruleaza, dar nu
+# da releul pe port; altfel (releu pe alt aparat, citire cazuta) adresa si portul. La zap, un canal din lista cu releul
+# care nu raspunde porneste direct, ca inainte, iar pe televizor apare o data motivul (mesaj scurt, care se inchide
+# singur; acelasi motiv iar numai dupa REPETARE_MESAJ_S). STAREA (stare(), liniiStare()): cate canale are lista, de
+# unde se adauga, daca releul raspunde si de ce nu; o arata ecranul setarilor Stream Relay (atributul hdsStare al
+# setarilor, Screens/Setup.py), aceeasi pagina in web (setari_web.py) si pagina Acces condiționat din web
+# (acces_conditionat_web.py).
+#
 # Partea de sus a fisierului nu importa nimic din enigma2 (probele de pe PC); legaturile cu enigma2 au importuri tarzii.
 
 import errno
 import os
 import socket
 import threading
+import time
 
 FISIER = "/etc/enigma2/whitelist_streamrelay"
 PORT_IMPLICIT = 17999
@@ -54,6 +66,46 @@ MAX_CANALE = 2000
 MAX_OCTETI = 256 * 1024
 # steagurile referintei care nu sunt canale: dosar, coborare, marcaj (eServiceReference)
 _FARA_CANAL = 1 | 2 | 64
+# mesajul de pe televizor cand releul nu raspunde la zap: cat sta (s) si dupa cat se arata iar acelasi motiv (s)
+TIMP_MESAJ_S = 8
+REPETARE_MESAJ_S = 600
+
+
+def N_(text):
+	"""Marcaj pentru xgettext (po/Makefile.am, --keyword=N_), fara efect: textele se traduc la folosire."""
+	return text
+
+
+def _t(text):
+	"""Traducerea enigma2 (functia _ din builtins), sau textul insusi pe PC."""
+	try:
+		import builtins
+		return builtins._(text)
+	except (AttributeError, ImportError, NameError):
+		return text
+
+
+def ngettext(unu, multe, n):
+	"""Pluralul tradus (Components/HdsPlural.ngettext: o Forma, al carei % merge si cand forma pentru 1 n-are numarul,
+	in romana „un canal”, „2 canale”); pe PC, forma romaneasca fara traducere."""
+	try:
+		from Components.HdsPlural import ngettext as plural
+		return plural(unu, multe, n)
+	except Exception:
+		return unu if n == 1 else multe
+
+
+# acelasi text ca HdsTransmisie.TEXT_RELEU_OPRIT (TV in browser): adresa si portul
+TEXT_RELEU_OPRIT = N_("Stream Relay nu răspunde la %s:%d. Verifică adresa și portul din setările Stream Relay.")
+TEXT_RELEU_FARA_MODUL = N_("Modulul de acces %s nu rulează, de aceea Stream Relay nu răspunde. Pornește-l din Meniu > Acces condiționat sau din pagina Module de acces condiționat.")
+TEXT_RELEU_NICIUN_MODUL = N_("Niciun modul de acces nu e pornit, de aceea Stream Relay nu răspunde. Alege unul în Meniu > Acces condiționat.")
+TEXT_RELEU_MODUL_FARA_RELEU = N_("Modulul de acces %s rulează, dar nu dă Stream Relay pe portul %d. Pornește Stream Relay în setările modulului sau pune portul lui în setările Stream Relay.")
+TEXT_PORNESTE_DIRECT = N_("Canalul pornește fără Stream Relay.")
+TEXT_RELEU_MERGE = N_("Stream Relay răspunde la %s:%d.")
+TEXT_LISTA = N_("Lista Stream Relay: %s.")
+TEXT_LISTA_GOALA = N_("Lista Stream Relay e goală, deci niciun canal nu trece prin releu.")
+TEXT_DE_UNDE = N_("Canalele se adaugă din lista de canale (MENU pe canal > Adaugă la Stream Relay) sau din pagina Canale a interfeței web (butonul SR).")
+TEXT_NUMAI_CITIRE = N_("Lista Stream Relay nu se poate citi; rămâne cea de dinainte.")
 
 
 def _jurnal(text):
@@ -123,15 +175,120 @@ def textReleu(cheie_canal, gazda, port, nume=""):
 	return "%s%s:%s" % (":".join(parti[:10]) + ":", cale.replace(":", "%3a"), nume)
 
 
+# ------------------------------------------------------------------ de ce nu raspunde releul (0.7.1)
+
+def _moduleAcces(H=None):
+	"""Modulele de acces de pe receptor, ca in ecranul „Module de acces condiționat” (toate felurile):
+	{"ruleaza": [sufixele celor care ruleaza], "alese": [sufixele celor alese care nu ruleaza]}, sau None cand nu se
+	pot citi sau receptorul n-are niciun fel de module (nu se stie nimic despre ele). `H` e Components.HdsModuleAcces
+	(probele dau unul fals)."""
+	try:
+		if H is None:
+			from Components import HdsModuleAcces as H
+		ruleaza, alese = [], []
+		stari = H.feluri_de_aratat(H.SistemAcces())
+		if not stari:
+			return None
+		for st in stari:
+			for e in st.emulatoare:
+				if e.pids:
+					ruleaza.append(e.sufix)
+				elif e.ales:
+					alese.append(e.sufix)
+		return {"ruleaza": ruleaza, "alese": alese}
+	except Exception as e:
+		_jurnal("modulele de acces nu se pot citi: %r" % (e,))
+		return None
+
+
+def motivReleu(gazda, port, H=None):
+	"""Textul pentru releul care nu raspunde, cu cauza vazuta de om. Pe receptor (127.0.0.1) releul il da modulul de
+	acces: niciun modul ales, modulul ales oprit, modulul care ruleaza fara releu pe port; altfel (alt aparat, citire
+	cazuta) adresa si portul."""
+	if gazda in ("127.0.0.1", "localhost", "::1"):
+		m = _moduleAcces(H)
+		if m is not None:
+			if m["ruleaza"]:
+				return _t(TEXT_RELEU_MODUL_FARA_RELEU) % (m["ruleaza"][0], port)
+			if m["alese"]:
+				return _t(TEXT_RELEU_FARA_MODUL) % m["alese"][0]
+			return _t(TEXT_RELEU_NICIUN_MODUL)
+	return _t(TEXT_RELEU_OPRIT) % (gazda, port)
+
+
+def stare(r=None, H=None):
+	"""Starea Stream Relay pentru ecranul setarilor si web: {"canale": numarul canalelor din lista, "numai_citire",
+	"gazda", "port", "permis" (adresa se foloseste), "asculta" (releul raspunde; None cand lista e goala: nu se
+	verifica), "motiv" (de ce nu raspunde, "" altfel), "linii": randurile pentru om}."""
+	r = r or releu()
+	H = H or getattr(r, "_module", None)
+	chei = r.chei()
+	gazda, port, _intarziere = r.configurare()
+	gazda = "127.0.0.1" if gazda == "localhost" else gazda
+	rez = {"canale": len(chei), "numai_citire": r.numaiCitire, "gazda": gazda, "port": port,
+		"permis": gazda in GAZDE_LOCALE or releuInRetea(gazda), "asculta": None, "motiv": ""}
+	linii = []
+	if r.numaiCitire:
+		linii.append(_t(TEXT_NUMAI_CITIRE))
+	if chei:
+		linii.append(_t(TEXT_LISTA) % (ngettext("%d canal", "%d canale", len(chei)) % len(chei)))
+		rez["asculta"] = r.asculta(gazda, port)
+		if rez["asculta"]:
+			linii.append(_t(TEXT_RELEU_MERGE) % (gazda, port))
+		else:
+			rez["motiv"] = motivReleu(gazda, port, H)
+			linii.append(rez["motiv"])
+	else:
+		linii.append(_t(TEXT_LISTA_GOALA))
+	linii.append(_t(TEXT_DE_UNDE))
+	rez["linii"] = linii
+	return rez
+
+
+# ultima stare ceruta de ecranul setarilor: (ora, randurile); ecranul o cere la fiecare rand ales si la 3 s, iar un releu
+# pe alt aparat care nu raspunde ar tine firul enigma2 TERMEN_VERIFICARE_S la fiecare cerere
+_STARE_RECENTA = [None, []]
+STARE_RECENTA_S = 2.5
+
+
+def liniiStare(ceas=time.time):
+	"""Randurile starii pentru ecranul setarilor Stream Relay (atributul hdsStare al setarilor, Screens/Setup.py) si
+	pagina lui web; aceleasi randuri cel mult STARE_RECENTA_S."""
+	acum = ceas()
+	cand, linii = _STARE_RECENTA
+	if cand is not None and 0 <= acum - cand < STARE_RECENTA_S:
+		return list(linii)
+	try:
+		linii = stare()["linii"]
+	except Exception as e:
+		_jurnal("starea: %r" % (e,))
+		linii = []
+	_STARE_RECENTA[0], _STARE_RECENTA[1] = acum, list(linii)
+	return linii
+
+
+def _anuntaPeTelevizor(text):
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_INFO, TIMP_MESAJ_S, "HdsStreamRelay")
+	except Exception as e:
+		_jurnal("mesajul de pe televizor: %r" % (e,))
+
+
 # ------------------------------------------------------------------ lista
 
 class Releu(object):
 	"""Lista canalelor si legatura la zap. Un singur obiect pe proces (releu())."""
 
-	def __init__(self, fisier=FISIER, extensii=None, configurare=None):
+	def __init__(self, fisier=FISIER, extensii=None, configurare=None, anunta=None, module=None, ceas=None):
 		self.fisier = fisier
 		self._extensii = extensii      # lista Navigation.playServiceExtensions (probele dau una a lor)
 		self._configurare = configurare  # (gazda, port, intarziere_ms) pentru probe; altfel din config
+		self._anunta = anunta or _anuntaPeTelevizor   # mesajul de pe televizor (probele dau o functie a lor)
+		self._module = module          # Components.HdsModuleAcces (probele dau unul fals)
+		self._ceasMesaj = ceas or time.time
+		self._ultimulMesaj = (None, 0.0)  # (textul, ora) ultimului mesaj despre releul care nu raspunde
 		self._chei = []
 		self._amprenta = None
 		self._citit = False
@@ -349,6 +506,7 @@ class Releu(object):
 		gazda, port, intarziere = self.configurare()
 		if not self.asculta("127.0.0.1" if gazda == "localhost" else gazda, port):
 			_jurnal("releul nu raspunde la %s:%d: canalul porneste direct" % (gazda, port))
+			self._mesajReleuOprit("127.0.0.1" if gazda == "localhost" else gazda, port)
 			return playref
 		if vechi and intarziere > 0:
 			self._asteapta = (nav, playref, text)
@@ -358,6 +516,20 @@ class Releu(object):
 			self._prinReleu = True
 			return playref, True
 		return playref
+
+	def _mesajReleuOprit(self, gazda, port):
+		"""Pe televizor, de ce canalul din lista porneste fara releu (motivReleu); acelasi motiv se arata din nou numai
+		dupa REPETARE_MESAJ_S, ca zap-urile prin lista sa nu-l aduca la fiecare canal. Nicio eroare nu opreste zap-ul."""
+		try:
+			motiv = motivReleu(gazda, port, self._module)
+			acum = self._ceasMesaj()
+			vechi, cand = self._ultimulMesaj
+			if motiv == vechi and 0 <= acum - cand < REPETARE_MESAJ_S:
+				return
+			self._ultimulMesaj = (motiv, acum)
+			self._anunta(motiv + " " + _t(TEXT_PORNESTE_DIRECT))
+		except Exception as e:
+			_jurnal("mesajul releului: %r" % (e,))
 
 	def _reda(self, nav, text):
 		from enigma import eServiceReference

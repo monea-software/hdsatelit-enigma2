@@ -112,10 +112,10 @@ def _font(alias, marime):
 
 
 def _limba():
-	"""„ro" cand interfata e in romana, altfel „en" (intrarile jurnalului au textele in cele doua limbi)."""
+	"""Limba interfetei, doua litere. O intrare fara text in limba aceea se arata in engleza (Components/HdsJurnalVersiuni.text)."""
 	try:
 		from Components.Language import language
-		return 'ro' if str(language.getLanguage() or '').startswith('ro') else 'en'
+		return str(language.getLanguage() or 'ro')[:2].lower()
 	except Exception:
 		return 'ro'
 

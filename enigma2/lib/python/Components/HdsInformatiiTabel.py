@@ -198,6 +198,49 @@ def rupt(text, latime, font="HdsCond", marime=28, latime_urmare=None):
 	return rez
 
 
+def latime_text(text, font="HdsCond", marime=28):
+	"""Latimea textului in puncte, cu aceleasi masuri ca rupt() si scurtat()."""
+	return _latimeText().latime(text or "", FAMILII.get(font, font), int(marime))
+
+
+def eticheta_margini(inaltime=42):
+	"""Eticheta alba a unei bucati albastre (numele testerului care si-a trimis receptorul, exemplul din legenda), intr-un
+	rand de `inaltime` puncte: (margine, gol, sus) = cat se lasa in eticheta la stanga si la dreapta textului, golul de dupa
+	ea si cat ramane liber sus si jos. Fiecare eticheta lungeste randul cu 2 * margine + gol (vezi loc_etichete)."""
+	return max(3, int(inaltime) // 10), max(3, int(inaltime) // 10), max(3, int(inaltime) // 7)
+
+
+def loc_etichete(bucati, inaltime=42):
+	"""Cate puncte iau in plus etichetele bucatilor albastre ale unui rand (scazute din latimea data lui rupt_bucati, ca
+	randurile sa incapa si cu etichetele)."""
+	margine, gol, _sus = eticheta_margini(inaltime)
+	return sum(1 for _b, albastru in bucati if albastru) * (2 * margine + gol)
+
+
+def rupt_bucati(bucati, latime, font="HdsCond", marime=28, latime_urmare=None):
+	"""Un rand facut din bucati [(text, albastru)] (randul de multumiri din „Despre imagine”, cu numele testerilor care
+	si-au trimis receptorul albastre), rupt exact ca rupt() pe textul lipit: aceleasi randuri, la aceleasi locuri.
+	Intoarce [[(text, albastru), ...] pe fiecare rand]; un nume rupt intre doua randuri ramane albastru pe amandoua.
+	Randurile lui rupt() sunt bucati din text, in ordine (rupe numai la spatii si, la un cuvant prea lung, intre
+	litere), deci fiecare se gaseste in text dupa cel dinainte."""
+	text = "".join(b for b, _a in bucati)
+	capete, poz = [], 0
+	for b, albastru in bucati:
+		capete.append((poz, poz + len(b), bool(albastru)))
+		poz += len(b)
+	rez, cursor = [], 0
+	for r in rupt(text, latime, font, marime, latime_urmare):
+		inceput = text.find(r, cursor) if r else cursor
+		if inceput < 0:
+			rez.append([(r, False)])
+			continue
+		sfarsit = inceput + len(r)
+		cursor = sfarsit
+		rez.append([(text[max(a, inceput):min(b, sfarsit)], albastru) for a, b, albastru in capete
+			if max(a, inceput) < min(b, sfarsit)] or [(r, False)])
+	return rez
+
+
 def rupt_pereche(eticheta, valoare, latime_eticheta, latime_valoare, font_eticheta, font_valoare):
 	"""Eticheta si valoarea unui rand de tabel, fiecare rupta pe randurile ei (rupt, cu fontul ei: (familie, marime)),
 	puse alaturi: [(eticheta, valoare)], cel putin una; sub cea mai scurta locul ramane gol. Asa nici eticheta nu mai

@@ -22,26 +22,28 @@ void *gRC::thread_wrapper(void *ptr)
 
 gRC *gRC::instance=0;
 
-gRC::gRC(): rp(0), wp(0)
+gRC::gRC(): rp(0), wp(0), m_rendering(false)
 #ifdef SYNC_PAINT
 ,m_notify_pump(eApp, 0)
 #else
 ,m_notify_pump(eApp, 1)
 #endif
+,m_spinner_enabled(0), m_prev_idle_count(0)
 {
 	ASSERT(!instance);
+	pthread_mutex_init(&mutex, 0);
+#ifndef SYNC_PAINT
+	pthread_cond_init(&cond, 0);
+#endif
 	instance=this;
 	CONNECT(m_notify_pump.recv_msg, gRC::recv_notify);
 #ifndef SYNC_PAINT
-	pthread_mutex_init(&mutex, 0);
-	pthread_cond_init(&cond, 0);
 	int res = pthread_create(&the_thread, 0, thread_wrapper, this);
 	if (res)
 		eFatal("RC thread couldn't be created");
 	else
 		eDebug("RC thread created successfully");
 #endif
-	m_spinner_enabled = 0;
 }
 
 DEFINE_REF(gRC);
@@ -57,16 +59,16 @@ gRC::~gRC()
 	eDebug("waiting for gRC thread shutdown");
 	pthread_join(the_thread, 0);
 	eDebug("gRC thread has finished");
+	pthread_cond_destroy(&cond);
 #endif
+	pthread_mutex_destroy(&mutex);
 }
 
 void gRC::submit(const gOpcode &o)
 {
 	while(1)
 	{
-#ifndef SYNC_PAINT
 		pthread_mutex_lock(&mutex);
-#endif
 		int tmp=wp+1;
 		if ( tmp == MAXSIZE )
 			tmp=0;
@@ -74,8 +76,9 @@ void gRC::submit(const gOpcode &o)
 		{
 #ifndef SYNC_PAINT
 			pthread_cond_signal(&cond);  // wakeup gdi thread
+#endif
 			pthread_mutex_unlock(&mutex);
-#else
+#ifdef SYNC_PAINT
 			thread();
 #endif
 			//printf("render buffer full...\n");
@@ -89,11 +92,13 @@ void gRC::submit(const gOpcode &o)
 		queue[wp++]=o;
 		if ( wp == MAXSIZE )
 			wp = 0;
-		if (o.opcode==gOpcode::flush||o.opcode==gOpcode::shutdown||o.opcode==gOpcode::notify)
 #ifndef SYNC_PAINT
+		if (o.opcode==gOpcode::flush||o.opcode==gOpcode::shutdown||o.opcode==gOpcode::notify)
 			pthread_cond_signal(&cond);  // wakeup gdi thread
 		pthread_mutex_unlock(&mutex);
 #else
+		pthread_mutex_unlock(&mutex);
+		if (o.opcode==gOpcode::flush||o.opcode==gOpcode::shutdown||o.opcode==gOpcode::notify)
 			thread(); // paint
 #endif
 		break;
@@ -103,41 +108,44 @@ void gRC::submit(const gOpcode &o)
 void *gRC::thread()
 {
 	int need_notify = 0;
-#ifndef SYNC_PAINT
 	while (1)
 	{
-#else
-	while (rp != wp)
-	{
-#endif
-#ifndef SYNC_PAINT
 		pthread_mutex_lock(&mutex);
+#ifdef SYNC_PAINT
+		/* A synchronous exec may submit more commands; the outer renderer drains them. */
+		if (m_rendering)
+		{
+			pthread_mutex_unlock(&mutex);
+			break;
+		}
 #endif
 		if ( rp != wp )
 		{
+			m_rendering = true;
 				/* make sure the spinner is not displayed when we something is painted */
 			disableSpinner();
 
 			gOpcode o(queue[rp++]);
 			if ( rp == MAXSIZE )
 				rp=0;
-#ifndef SYNC_PAINT
 			pthread_mutex_unlock(&mutex);
-#endif
-			if (o.opcode==gOpcode::shutdown)
-				break;
-			else if (o.opcode==gOpcode::notify)
+			if (o.opcode==gOpcode::notify)
 				need_notify = 1;
 			else if (o.opcode==gOpcode::setCompositing)
 			{
 				m_compositing = o.parm.setCompositing;
 				m_compositing->Release();
-			} else if(o.dc)
+			} else if(o.opcode!=gOpcode::shutdown && o.dc)
 			{
 				o.dc->exec(&o);
 				// o.dc is a gDC* filled with grabref... so we must release it here
 				o.dc->Release();
 			}
+			pthread_mutex_lock(&mutex);
+			m_rendering = false;
+			pthread_mutex_unlock(&mutex);
+			if (o.opcode==gOpcode::shutdown)
+				break;
 		}
 		else
 		{
@@ -191,6 +199,9 @@ void *gRC::thread()
 					disableSpinner();
 			}
 			pthread_mutex_unlock(&mutex);
+#else
+			pthread_mutex_unlock(&mutex);
+			break;
 #endif
 		}
 	}
@@ -208,6 +219,14 @@ void gRC::recv_notify(const int &i)
 gRC *gRC::getInstance()
 {
 	return instance;
+}
+
+bool gRC::isIdle()
+{
+	pthread_mutex_lock(&mutex);
+	bool idle = (rp == wp) && !m_rendering;
+	pthread_mutex_unlock(&mutex);
+	return idle;
 }
 
 void gRC::enableSpinner()

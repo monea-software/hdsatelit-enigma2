@@ -8,7 +8,7 @@ except Exception:
 	_can_measure = False
 
 from Tools.Directories import fileExists, resolveFilename, SCOPE_PLUGINS
-from Tools.HardwareInfo import HardwareInfo
+from Tools.HardwareInfo import HardwareInfo, getModelName
 
 SystemInfo = { }
 
@@ -36,11 +36,33 @@ def countFrontpanelLEDs():
 SystemInfo["NumFrontpanelLEDs"] = countFrontpanelLEDs()
 SystemInfo["FrontpanelDisplay"] = fileExists("/dev/dbox/oled0") or fileExists("/dev/dbox/lcd0")
 SystemInfo["FrontpanelDisplayGrayscale"] = fileExists("/dev/dbox/oled0")
+# Pluginurile pot intreba inainte de InitLcd. Citim instanta deja creata de
+# Enigma2; detectia nu deschide din Python un alt dispozitiv.
+try:
+	from enigma import eDBoxLCD
+	_afisaj_nativ = eDBoxLCD.getInstance()
+	SystemInfo["Display"] = bool(_afisaj_nativ is not None and _afisaj_nativ.detected())
+except Exception:
+	SystemInfo["Display"] = False
 SystemInfo["DeepstandbySupport"] = HardwareInfo().get_device_name() != "dm800"
+# Functiile producatorului apar numai cu pachetul pus in imaginea modelului.
+def _functieImagine(nume):
+	try:
+		from Components.HdsFunctiiImagine import disponibil
+		return disponibil(nume)
+	except Exception as eroare:
+		print("[SystemInfo] HdsFunctiiImagine (%s): %r" % (nume, eroare))
+		return False
+
+
+SystemInfo["HdsVfdProducator"] = _functieImagine("afisaj")
+SystemInfo["HdsCodTelecomanda"] = _functieImagine("telecomanda")
+# Receptoarele imaginii nu au codor H.265. Decodarea H.265 nu inseamna codare.
+SystemInfo["HasH265Encoder"] = False
 
 
 try:
-	_device_name = HardwareInfo().get_device_name()
+	_device_name = getModelName()
 except Exception:
 	_device_name = ""
 
@@ -76,16 +98,18 @@ SystemInfo["displaydistro"] = "HD Satelit"
 SystemInfo["displaytype"] = ""
 # masina pentru pluginuri (machinebuild, model, boxtype): intai cea din regulile imaginii (/etc/hdsatelit-model:
 # viper4kv20, viper4kv30, viper4kv40...), fiindca driverul placii scrie in /proc/stb/info/model un nume vechi de
-# Dreambox ("dm8000"), iar un plugin care se uita la masina ar crede ca ruleaza pe alt receptor. HardwareInfo ramane
-# cum il da driverul: NimManager isi alege dupa el pragul de curent al motorului antenei.
-SystemInfo["machinebuild"] = _about_mb or _device_name or "viper4k"
+# Dreambox ("dm8000"), iar un plugin ar crede ca ruleaza pe alt receptor.
+# Numele brut din HardwareInfo ramane pentru consumatorii hardware.
+SystemInfo["machinebuild"] = _device_name or _about_mb or "unknown"
 SystemInfo["model"] = SystemInfo["machinebuild"]
 SystemInfo["boxtype"] = SystemInfo["machinebuild"]
 SystemInfo["socfamily"] = "hisilicon" if "hisilicon" in _chipset_text.lower() else ""
 try:
-	SystemInfo["ArchIsARM"] = 1 if os.uname().machine.lower().startswith(("arm", "aarch64")) else 0
+	_arhitectura = os.uname().machine.lower()
 except Exception:
-	SystemInfo["ArchIsARM"] = 0
+	_arhitectura = ""
+SystemInfo["architecture"] = _arhitectura
+SystemInfo["ArchIsARM"] = int(_arhitectura.startswith(("arm", "aarch64")))
 SystemInfo["oe"] = "OE-Alliance 5.5"
 # versiunea imaginii din /etc/image-version ("0.6.7"), aceeasi ca in Despre; fara numar de constructie separat, ca
 # pluginurile care le lipesc ("versiune.constructie") sa arate numai versiunea
@@ -156,3 +180,26 @@ class BoxInfoClass:
 
 
 BoxInfo = BoxInfoClass()
+
+# numele cerute de pluginuri
+def getBoxDisplayName():
+	return (BoxInfo.getItem("displaybrand") or BoxInfo.getItem("brand") or "", BoxInfo.getItem("displaymodel") or BoxInfo.getItem("model") or "")
+
+
+def getBoxType():
+	return BoxInfo.getItem("model") or ""
+
+
+def getMachineName():
+	return BoxInfo.getItem("displaymodel") or BoxInfo.getItem("model") or ""
+
+
+MODEL = BoxInfo.getItem("model")
+DISPLAYBRAND = BoxInfo.getItem("displaybrand") or BoxInfo.getItem("brand") or ""
+
+# Tipul imaginii este acelasi pe care il arata pagina Despre.
+try:
+	IMAGETYPE = _about.getImageTypeString()
+except (AttributeError, NameError):
+	IMAGETYPE = ""
+SystemInfo.setdefault("imagetype", IMAGETYPE)

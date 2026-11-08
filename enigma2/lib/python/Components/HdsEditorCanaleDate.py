@@ -10,8 +10,9 @@
 #   de 4), se scrie numai formatul 4. Un transponder are blocul lui (cheie, randurile de parametri, „/”), un serviciu trei
 #   randuri (cheia sid:ns:tsid:onid:tip:numar, numele, datele p:,c:,C:,f:). Ce nu s-a schimbat se scrie octet cu octet
 #   din randurile citite; ce s-a schimbat se scrie in forma lui saveServicelist (hex mic, %04x / %08x);
-# - fgets cu tampon de 256: un rand de 255 de octeti sau mai mult se rupe si strica tot restul fisierului, deci numele,
-#   furnizorul si randurile buchetelor scrise de aici se scurteaza (pe granita unui caracter UTF-8) sub LUNGIME_MAXIMA;
+# - textul introdus explicit de om se scurteaza sub LUNGIME_MAXIMA, pe granita UTF8;
+#   randurile existente se pastreaza intregi, inclusiv dupa o schimbare de steaguri;
+#   cititorul C++ al imaginii aduna randul complet din fragmente, fara vechea limita de 256 de octeti;
 # - buchetele: „#NAME”, apoi „#SERVICE <referinta>” cu „#DESCRIPTION <text>” numai imediat dupa el; citirea se opreste la
 #   primul rand gol, deci nu se scrie niciun rand gol; enigma2 scrie CRLF (eBouquet::flushChanges), la fel aici. Un
 #   buchet se incarca recursiv din oricare referinta cu FROM BOUQUET (sub-buchete, alternative). Fisierele
@@ -27,9 +28,14 @@ import os
 import re
 import unicodedata
 
+try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
 ANTET4 = "eDVB services /4/"
 SFARSIT = "Have a lot of bugs!"
-LUNGIME_MAXIMA = 250          # octeti pe rand, sub tamponul de 256 al lui fgets (cu sfarsitul de rand)
+LUNGIME_MAXIMA = 250          # octeti pentru textul introdus explicit in editor
 DIRECTOR = "/etc/enigma2"
 SATELITI = "/etc/tuxbox/satellites.xml"
 
@@ -150,7 +156,7 @@ class Referinta(object):
 		if len(parti) > 10:
 			self.cale = parti[10]
 		if len(parti) > 11:
-			self.nume = decodeaza(parti[11])
+			self.nume = text_lista(decodeaza(parti[11]))
 
 	@property
 	def valida(self):
@@ -329,12 +335,13 @@ class Transponder(object):
 
 class Serviciu(object):
 	"""Un serviciu din lamedb. `cheie_rand` = randul cheii asa cum a fost citit (None cand s-a schimbat)."""
-	__slots__ = ("sid", "ns", "tsid", "onid", "tip", "rest", "nume", "date", "brut", "_d")
+	__slots__ = ("sid", "ns", "tsid", "onid", "tip", "rest", "nume", "date", "brut", "_d", "_nume_brut")
 
 	def __init__(self, sid, ns, tsid, onid, tip, nume, date, rest="0", brut=None):
 		self.sid, self.ns, self.tsid, self.onid, self.tip = sid, ns, tsid, onid, tip
 		self.rest = rest                    # campurile cheii de dupa tip (numarul si ce mai urmeaza), ca text
-		self.nume = nume
+		self._nume_brut = nume
+		self.nume = text_lista(nume)
 		self.date = date                    # randul 3, intreg
 		self.brut = brut                    # (cheie, nume, date) citite; None: se scrie din campuri
 		self._d = None
@@ -387,7 +394,7 @@ class Serviciu(object):
 
 	@property
 	def furnizor(self):
-		return self._desparte()[0]
+		return text_lista(self._desparte()[0])
 
 	@property
 	def steaguri(self):
@@ -458,14 +465,14 @@ class Serviciu(object):
 			date = self.date
 		else:
 			date = scrie_date(f, cache, caids, st, alte)
-		return Serviciu(self.sid, self.ns, self.tsid, self.onid, self.tip, self.nume if nume is None else nume, date,
+		return Serviciu(self.sid, self.ns, self.tsid, self.onid, self.tip, self._nume_brut if nume is None else nume, date,
 			self.rest)
 
 	def randuri(self):
 		if self.brut is not None:
 			return self.brut
 		cheie = "%04x:%08x:%04x:%04x:%d:%s" % (self.sid, self.ns, self.tsid, self.onid, self.tip, self.rest or "0")
-		return (cheie, taie_octeti(self.nume, LUNGIME_MAXIMA), _date_scurtate(self.date))
+		return (cheie, self._nume_brut, self.date)
 
 
 def scrie_date(furnizor, cache, caids, steaguri, alte=()):
@@ -479,23 +486,6 @@ def scrie_date(furnizor, cache, caids, steaguri, alte=()):
 		parti.append("f:%x" % steaguri)
 	parti.extend(alte)
 	return ",".join(parti)
-
-
-def _date_scurtate(date):
-	"""Randul de date sub LUNGIME_MAXIMA: intai se scurteaza furnizorul, apoi pleaca CAID-urile de la coada."""
-	if len(date.encode("utf-8", "surrogateescape")) <= LUNGIME_MAXIMA:
-		return date
-	parti = date.split(",")
-	if parti and parti[0].startswith("p:"):
-		parti[0] = "p:" + taie_octeti(parti[0][2:], 40)
-	while len(",".join(parti).encode("utf-8", "surrogateescape")) > LUNGIME_MAXIMA:
-		for i in range(len(parti) - 1, -1, -1):
-			if parti[i].startswith("C:"):
-				del parti[i]
-				break
-		else:
-			break
-	return taie_octeti(",".join(parti), LUNGIME_MAXIMA)
 
 
 class Lamedb(object):
@@ -644,6 +634,7 @@ def _citeste5(randuri):
 	db = Lamedb()
 	db.versiune = 5
 	for rand in randuri[1:]:
+		rand = text_lista(rand)
 		if rand.startswith("t:"):
 			bucati = rand[2:].split(",")
 			parti = bucati[0].split(":")
@@ -714,12 +705,14 @@ def _citeste5(randuri):
 
 class Intrare(object):
 	"""Un rand de buchet. id = numarul stabil din sesiune; ref = textul referintei; descriere = #DESCRIPTION sau None."""
-	__slots__ = ("id", "ref", "descriere", "_r")
+	__slots__ = ("id", "ref", "descriere", "_r", "_ref_brut", "_descriere_bruta")
 
 	def __init__(self, id_, ref, descriere=None):
 		self.id = id_
-		self.ref = ref
-		self.descriere = descriere
+		self._ref_brut = ref
+		self._descriere_bruta = descriere
+		self.ref = text_lista(ref)
+		self.descriere = text_lista(descriere) if descriere is not None else None
 		self._r = None
 
 	@property
@@ -742,22 +735,26 @@ class Intrare(object):
 
 	def cu(self, ref=None, descriere=False):
 		"""O intrare noua cu acelasi id (descriere=False: ramane cea de acum)."""
-		return Intrare(self.id, self.ref if ref is None else ref, self.descriere if descriere is False else descriere)
+		if descriere is not False and descriere is not None:
+			descriere = curat_nume(descriere, LUNGIME_MAXIMA - 13)
+		return Intrare(self.id, self._ref_brut if ref is None else ref,
+			self._descriere_bruta if descriere is False else descriere)
 
 	def randuri(self):
-		r = ["#SERVICE " + self.ref]
+		r = ["#SERVICE " + self._ref_brut]
 		if self.descriere:
-			r.append("#DESCRIPTION " + taie_octeti(self.descriere, LUNGIME_MAXIMA - 13))
+			r.append("#DESCRIPTION " + self._descriere_bruta)
 		return r
 
 
 class Buchet(object):
 	"""Un fisier de buchet: nume (#NAME intreg, cu „ (TV)” cand il are), intrari (tuplu de Intrare)."""
-	__slots__ = ("id", "nume", "intrari", "crlf")
+	__slots__ = ("id", "nume", "intrari", "crlf", "_nume_brut")
 
 	def __init__(self, id_, nume, intrari, crlf=True):
 		self.id = id_
-		self.nume = nume
+		self._nume_brut = nume
+		self.nume = text_lista(nume)
 		self.intrari = tuple(intrari)
 		self.crlf = crlf
 
@@ -766,12 +763,14 @@ class Buchet(object):
 		return self.id.endswith(".radio")
 
 	def cu(self, nume=None, intrari=None):
-		return Buchet(self.id, self.nume if nume is None else nume, self.intrari if intrari is None else intrari,
+		if nume is not None:
+			nume = curat_nume(nume, LUNGIME_MAXIMA - 6)
+		return Buchet(self.id, self._nume_brut if nume is None else nume, self.intrari if intrari is None else intrari,
 			self.crlf)
 
 	def text(self):
 		sf = "\r\n" if self.crlf else "\n"
-		r = ["#NAME " + taie_octeti(self.nume, LUNGIME_MAXIMA - 6)]
+		r = ["#NAME " + self._nume_brut]
 		for i in self.intrari:
 			r.extend(i.randuri())
 		return sf.join(r) + sf

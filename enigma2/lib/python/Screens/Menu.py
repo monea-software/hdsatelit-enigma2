@@ -83,6 +83,77 @@ def aspectDale():
 		return False
 
 
+def _pregatestePanouriMeniu(skin):
+	"""Corecteaza in memorie panoul propriu, inclusiv tema Pro din pachetul separat."""
+	areUrmatoarea = False
+	for cale, radacina in skin.dom_skins:
+		if not skin.esteDinHds(cale):
+			continue
+		for panou in radacina.findall("screen[@name='HdsMenuBase']"):
+			areTitlu = panou.find("widget[@source='meniu_semnal_titlu']") is not None
+			for widget in list(panou.findall("widget")):
+				if widget.get("render") != "Label":
+					continue
+				if widget.get("source") == "meniu_urmatoarea":
+					areUrmatoarea = True
+				conversii = widget.findall("convert")
+				if len(conversii) != 1:
+					continue
+				conv = conversii[0]
+				text = (conv.text or "").strip()
+				if (widget.get("source") == "session.Event_Next" and
+					conv.get("type") == "EventName" and text == "Name"):
+					widget.set("source", "meniu_urmatoarea")
+					widget.remove(conv)
+					areUrmatoarea = True
+				if conv.get("type") != "HdsInfo":
+					continue
+				if text.split(",", 1)[0] == "BoxName":
+					# Un rand intreg, aliniat la inceput, foloseste derularea din eLabel.
+					widget.set("noWrap", "1")
+					widget.set("halign", "left")
+				if not areTitlu and text.split(",", 1)[0] == "Satellite":
+					# Titlul si satelitul impart primul rand al casetei semnalului.
+					x, y = [int(v) for v in widget.get("position").split(",")]
+					w, h = [int(v) for v in widget.get("size").split(",")]
+					jumatate = w // 2
+					atribute = dict(widget.attrib)
+					atribute.update(source="meniu_semnal_titlu", halign="left",
+						position="%d,%d" % (x, y), size="%d,%d" % (jumatate - 16, h),
+						noWrap="1", foregroundColor="hdsBrandLight")
+					xml.etree.ElementTree.SubElement(panou, "widget", atribute)
+					widget.set("position", "%d,%d" % (x + jumatate, y))
+					widget.set("size", "%d,%d" % (w - jumatate, h))
+					widget.set("noWrap", "1")
+					areTitlu = True
+	return areUrmatoarea
+
+
+def _sursaUrmatoarei(sursa):
+	"""Pastreaza titlul si traducerea EPG, cu un mesaj cand emisiunea lipseste."""
+	from Components.Converter.EventName import EventName
+	from Components.Sources.Source import Source
+
+	class Urmatoarea(EventName, Source):
+		def getText(self):
+			text = EventName.getText(self)
+			return text if text and text.strip() else _(
+				"Nu sunt informații despre emisiunea următoare.")
+
+		def destroy(self):
+			# Modul dale poate inchide sursa fara sa fi desenat panoul din dreapta.
+			for sursa in getattr(self, "sources", ()):
+				if self in sursa.downstream_elements:
+					sursa.disconnectDownstream(self)
+			Source.destroy(self)
+
+		text = property(getText)
+
+	urmatoarea = Urmatoarea("Name")
+	urmatoarea.connect(sursa)
+	return urmatoarea
+
+
 class boundFunction:
 	def __init__(self, fnc, *args):
 		self.fnc = fnc
@@ -360,7 +431,8 @@ class Menu(Screen):
 
 		if menuID is not None:
 			# plugins
-			for l in plugins.getPluginsForMenu(menuID):
+			from Components.HdsPluginuriImagine import meniuriUtilizator
+			for l in meniuriUtilizator(plugins, menuID):
 				# check if a plugin overrides an existing menu
 				plugin_menuid = l[2]
 				for x in list:
@@ -396,6 +468,14 @@ class Menu(Screen):
 		self._alesInitial = self._indexDupaEntryID(alegere)
 
 		self._surseJos()
+		self._panouMeniu()
+		# panoul radio online din tema Pro nu are voie sa strice meniul
+		try:
+			from Components.HdsRadioMeniu import PanouRadioMeniu
+			self._radioMeniu = PanouRadioMeniu(self)
+		except Exception as e:
+			print("[Menu] panoul radio: %s" % type(e).__name__)
+			self._radioMeniu = None
 		if self._modDale:
 			if self._alesInitial is not None:
 				self._dalaAles = self._alesInitial
@@ -448,6 +528,18 @@ class Menu(Screen):
 
 	def _listaAlege(self):
 		self["menu"].setIndex(self._alesInitial)
+
+	def _panouMeniu(self):
+		self["meniu_semnal_titlu"] = StaticText(_("Semnal / tuner"))
+		self["meniu_urmatoarea"] = StaticText(_(
+			"Nu sunt informații despre emisiunea următoare."))
+		try:
+			import skin
+			if not _pregatestePanouriMeniu(skin):
+				return
+			self["meniu_urmatoarea"] = _sursaUrmatoarei(self.session.screen["Event_Next"])
+		except Exception as e:
+			print("[Menu] panoul emisiunii urmatoare: %s" % type(e).__name__)
 
 	def _indexDupaEntryID(self, entryID):
 		if entryID is None:

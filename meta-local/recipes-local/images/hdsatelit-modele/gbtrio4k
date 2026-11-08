@@ -1,0 +1,39 @@
+# HD Satelit: regulile garzii de model pentru GigaBlue UHD TRIO 4K (masina gbmv200, MACHINEBUILD gbtrio4k), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina gbmv200 e stratul producatorului meta-gigablue (MACHINEBUILD gbip4k, gbtrio4k, gbtrio4kpro): nucleul
+# linux-gigablue 4.4.35 (defconfig gbmv200), familia libreader ca Octagon SF8008 si Uclan Ustym 4K PRO (reader, libreader,
+# partitii, mkupdate, _recovery_emmc.zip). Valorile vin din pachetele publice ale producatorului, verificate pe SHA-256
+# (lotul modele-noi-0611):
+#   boxtype  /proc/stb/info/boxtype din hi-dvb.ko (gbtrio4k-hiko-20230224) = "gbmv200" (functia info_boxtype_read);
+#            modelul placii sta separat, in /proc/stb/info/gbmodel ("trio4k", scris de acelasi driver);
+#   hw       antetul deviceinfo.bin din gbtrio4k-partitions-20221111 (fisier identic cu cel SF8008):
+#            MAGICNUM=deviceinfo OUI=00000003 HW=00000001;
+#   partitions, kernel_part, rootfs_part: bootargs.bin din acelasi pachet (aceeasi blkdevparts ca SF8008,
+#            root=/dev/mmcblk0p16 rootsubdir=linuxrootfs1, kernel=/dev/mmcblk0p12, MODEL=gbtrio4k); MTD_KERNEL si
+#            MTD_ROOTFS din gigablue-oem.inc (meta-gigablue, randurile gbtrio4k);
+#   kernel_kib 16384: linuxkernel1 are 16 MB.
+# Nucleul si sistemul sunt in partitiile cu numele linuxkernel1 si userdata (sistemul intr-un subdosar al lui userdata,
+# linuxrootfs1), ca pe SF8008: kernel_name si rootfs_name le dau garzii (enigma2.sh si Components/HdsPazaModel.py).
+# Tipul placii vine din driverul imaginii care ruleaza (hi-dvb.ko il da constant, "gbmv200", pe orice placa), deci
+# dovedeste driverul, nu receptorul: gbip4k si gbtrio4kpro au acelasi tip. Semnul receptorului e MODEL= din bootargs-ul
+# lui (gbtrio4k; Components/HdsPazaModel.informatiiPornire), aratat numai informativ: nemasurat pe un aparat.
+# upd_path lipseste dinadins: recuperarea e arhiva de recuperare a producatorului (usb_update.bin), ca pe SF8008.
+# emmc_min_kib nu se pune: marimea memoriei interne nu e masurata de nimeni pentru noi.
+# Se inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=gbtrio4k.
+format=1
+distro=hdsatelit
+model=GigaBlue UHD TRIO 4K
+machine=gbmv200
+machinebuild=gbtrio4k
+chip=Hi3798MV200
+boxtype=gbmv200
+hw=00000001
+partitions=boot:1M,bootargs:1M,bootoptions:1M,baseparam:3M,pqparam:4M,logo:4M,deviceinfo:4M,softwareinfo:4M,loaderdb:4M,loader:32M,trustedcore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p12
+kernel_kib=16384
+rootfs_part=mmcblk0p16
+confirmat=nu

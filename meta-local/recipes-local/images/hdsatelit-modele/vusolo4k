@@ -1,0 +1,31 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Solo 4K (masina vusolo4k), NECONFIRMAT
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom (06.11.2026): receptor Broadcom, fara /proc/msp/sys, fara blkdevparts in /proc/cmdline si fara
+# partitia deviceinfo. Garda citeste atunci cipul din /proc/stb/info/chipset, tipul placii din /proc/stb/info/vumodel
+# (cand nu exista /proc/stb/info/boxtype, ca getBoxProc din Tools/StbHardware.py al altor imagini), sistemul din root= al
+# lui /proc/cmdline si nucleul din kernel_part= de mai jos (partitia trebuie sa existe in /proc/partitions, de acolo si
+# marimea). hw= si partitions= sunt "-": pe aceasta familie nu se citesc si nu se compara.
+# Valorile chip= si boxtype= sunt cele fixe din tabelul proc_rw_info al driverului (dvb-bcm7376.ko din
+# vuplus-dvb-proxy-vusolo4k-3.14.28-20190424.r1, unelte/tabel_ko.py in lucru-sesiune/oe-60/vuplus4k): chipset=7376,
+# vumodel=solo4k (model=dm8000 e acelasi pe toate Vu+, deci nu deosebeste nimic). Ca boxtype la HiSilicon, ele dovedesc
+# driverul imaginii care ruleaza; driverul se incarca numai pe placa cu acel cip (Nexus).
+# kernel_part si rootfs_part: MTD_KERNEL=mmcblk0p1 si MTD_ROOTFS=mmcblk0p4 din vusolo4k.conf (OE-Alliance 6.0), iar
+# nucleul porneste mereu cu root=/dev/mmcblk0p4 (CONFIG_CMDLINE_FORCE in defconfig-ul vusolo4k).
+# kernel_kib: nemasurat (0 = de completat din fisa unui tester; pana atunci un avertisment).
+# Pe stick incarcatorul Vu+ citeste numai dosarul vuplus/solo4k, deci upd_path nu se pune (nu exista nici nodul
+# /proc/stb/info/upd_path pe Vu+).
+format=1
+distro=hdsatelit
+model=Vu+ Solo 4K
+machine=vusolo4k
+machinebuild=vusolo4k
+chip=7376
+boxtype=solo4k
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=0
+rootfs_part=mmcblk0p4
+confirmat=nu
+familie=broadcom

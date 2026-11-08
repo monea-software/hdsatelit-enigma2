@@ -2,37 +2,34 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsTasteRapide.py: setarile ecranului "Butoane colorate si taste rapide" (Screens/ButtonSetup.py, HdsButtonSetup),
-# aceleasi pe televizor si in interfata web (HdsWebControl/intrari_web.py, pagina /taste-rapide): cele patru butoane
-# colorate (apasare lunga), VERDE apasat scurt, cele noua actiuni de ales, config.hds_buttons.* si salvarea (Verde:
-# save() pe fiecare rand). Mutate din ecran; ecranul le ia de aici.
-#
-# VERDE apasat scurt in bara (Screens/InfoBar.py, InfoBar.subserviceSelection, harta InfobarSubserviceSelectionActions
-# din data/keymap.xml, la eliberare): pe un canal cu subcanale lista lor, ca inainte; altfel actiunea din
-# config.hds_buttons.green_short, implicit pagina de pluginuri (PluginBrowser), cum face VERDE si in alte imagini.
-# Inainte VERDE scurt nu facea nimic pe un canal fara subcanale. Aceleasi actiuni de ales ca la apasarea lunga.
-#
-# Apasarea lunga in bara (Screens/InfoBar.py, harta HdsTasteColorateActions din data/keymap.xml): ApasareLunga de mai
-# jos, cu aceeasi logica de trei pasi ca POWER (mytest.py, PowerKey), AUDIO si FAV: apasarea sterge semnul si lasa
-# tasta mai departe (apasarea scurta ramane cum era, fara intarziere), apasarea lunga (flagLong, la a patra repetare,
-# main/enigma.cpp) face actiunea aleasa si pune semnul, eliberarea cu semn e oprita (nu mai face si actiunea scurta).
-#
-# cauta_meniu: un <menu> din data/menu.xml dupa <id val="...">, cautat in tot arborele (radacina e <menuxml>, cu un
-# singur copil, meniul principal); folosit de POWER lung (meniul "shutdown") si de actiunea "info" ("information").
-#
-# Textele se traduc la incarcarea modulului, ca inainte in ecran (modulul se incarca dupa alegerea limbii). Nimic din
-# enigma2 nu se importa la incarcare: config se ia la folosire.
+# Setarile comune ale ecranului si paginii /taste-rapide.
+# Functia obisnuita lasa tasta pe hartile barei, dupa telecomanda si canal.
+# Numele setarilor vechi raman valabile. Nicio dependenta nativa la import.
 
 ACTIUNI_DISPONIBILE = [
+	("default", _("Funcția obișnuită")),
 	("none", _("Nimic")),
 	("epg", _("Ghid programe (EPG)")),
 	("menu", _("Meniu principal")),
-	("plugins", _("Plugins & Applications")),    # numele din meniul principal: Extensii si aplicatii (PluginBrowser)
+	("plugins", _("Plugins & Applications")),
+	("extensions", _("Lista extensiilor (ca ALBASTRU)")),
 	("info", _("Informații sistem")),
 	("audio", _("Selectare pistă audio")),
 	("subtitle", _("Subtitrări")),
 	("channellist", _("Lista de canale")),
-	# captura ecranului (Components/HdsCapturi.py), pentru telecomenzile fara tasta de captura
+	("favourites", _("Favorite")),
+	("movies", _("Înregistrări")),
+	("record", _("Înregistrare imediată")),
+	("timeshift", _("Pornește timeshift")),
+	("timeshift_stop", _("Oprește timeshift")),
+	("teletext", _("Teletext")),
+	("subservices", _("Subcanale")),
+	("pip", _("Pornește sau oprește PiP")),
+	("timers", _("Înregistrări programate")),
+	("standby", _("Standby")),
+	("shutdown", _("Oprire receptor")),
+	("reboot", _("Repornire receptor")),
+	("restart", _("Repornire interfață")),
 	("captura", _("Captură de ecran")),
 ]
 
@@ -41,14 +38,67 @@ BUTOANE = [
 	("green", _("Verde (apăsare lungă)")),
 	("yellow", _("Galben (apăsare lungă)")),
 	("blue", _("Albastru (apăsare lungă)")),
+	("info_long", _("INFO (apăsare lungă)")),
+	("audio_long", _("AUDIO (apăsare lungă)")),
+	("fav_long", _("FAV (apăsare lungă)")),
 ]
+BUTOANE += [("number_%d_long" % n, _("%d (apăsare lungă)") % n)
+	for n in range(10)]
 
-# apasarea scurta: numai VERDE (celelalte culori au in bara actiunile lor obisnuite)
 SCURTE = [
+	("red_short", _("Roșu (apăsare scurtă)")),
 	("green_short", _("Verde (apăsare scurtă)")),
+	("yellow_short", _("Galben (apăsare scurtă)")),
+	("blue_short", _("Albastru (apăsare scurtă)")),
+	("info_short", _("INFO")),
+	("epg_short", _("EPG")),
+	("up_short", _("Sus")),
+	("down_short", _("Jos")),
+	("left_short", _("Stânga")),
+	("right_short", _("Dreapta")),
+	("ok_short", _("OK")),
+	("text_short", _("TEXT")),
+	("audio_short", _("AUDIO")),
+	("fav_short", _("FAV")),
+	("video_short", _("PVR / VIDEO (înregistrări)")),
+	("list_short", _("LIST (player media)")),
+	("record_short", _("REC")),
+	("play_short", _("PLAY")),
+	("pause_short", _("PAUZĂ")),
+	("stop_short", _("STOP")),
+	("rewind_short", _("Derulare înapoi")),
+	("forward_short", _("Derulare înainte")),
+	("channelup_short", _("CH+")),
+	("channeldown_short", _("CH-")),
+	("subtitle_short", _("SUBT")),
+	("menu_short", _("MENU")),
+	("timer_short", _("TIMER")),
+	("portal_short", _("PORTAL")),
+	("tv_short", _("TV")),
+	("radio_short", _("RADIO")),
+	("previous_short", _("Canalul anterior (<)")),
+	("next_short", _("Canalul următor (>)")),
 ]
 
-VALORI_IMPLICITE = {"red": "channellist", "green": "audio", "yellow": "subtitle", "blue": "epg", "green_short": "plugins"}
+VALORI_IMPLICITE = dict((k, "default") for k, _text in SCURTE + BUTOANE)
+VALORI_IMPLICITE.update(red="channellist", green="audio", yellow="subtitle",
+	blue="epg", green_short="plugins", blue_short="extensions")
+
+# Tasta fizica, setarea scurta, setarea lunga, scurta la eliberare.
+# Numerele pastreaza selectia canalului la apasare pana li se aloca ceva lung.
+LEGATURI_TASTE = [
+	("red", "red_short", "red", True),
+	("green", "green_short", "green", True),
+	("yellow", "yellow_short", "yellow", True),
+	("blue", "blue_short", "blue", True),
+	("info", "info_short", "info_long", True),
+	("audio", "audio_short", "audio_long", True),
+	("fav", "fav_short", "fav_long", True),
+]
+LEGATURI_TASTE += [(k[:-6], k, None, False) for k, _text in SCURTE
+	if k not in [x[1] for x in LEGATURI_TASTE]]
+LEGATURI_TASTE += [("number_%d" % n, None, "number_%d_long" % n, True)
+	for n in range(10)]
 
 
 def _config(config=None):
@@ -59,31 +109,152 @@ def _config(config=None):
 
 
 def initConfigButtonSetup(config=None):
-	# hasattr(config, ...) NU e sigur: ConfigSubsection.__getattr__ arunca KeyError (nu AttributeError) pentru o cheie
-	# lipsa, iar hasattr() din Python 3 prinde doar AttributeError (explicatia completa in HdsWebControl/plugin.py).
+	# Verificam dictionarul: unele versiuni de ConfigSubsection arunca KeyError.
 	config = _config(config)
+	from Components.config import ConfigSubsection, ConfigSelection
 	if "hds_buttons" not in config.content.items:
-		from Components.config import ConfigSubsection, ConfigSelection
 		config.hds_buttons = ConfigSubsection()
-		for cheie, _text in BUTOANE + SCURTE:
-			setattr(config.hds_buttons, cheie,
-				ConfigSelection(default=VALORI_IMPLICITE.get(cheie, "none"), choices=ACTIUNI_DISPONIBILE))
-	return config.hds_buttons
+	b = config.hds_buttons
+	for cheie, _text in SCURTE + BUTOANE:
+		if cheie not in b.content.items:
+			# Alegerea unui plugin lipsa trebuie pastrata si la pornire.
+			veche = b.content.stored_values.get(cheie, "")
+			alegeri = _cu_indisponibile(ACTIUNI_DISPONIBILE, [veche])
+			setattr(b, cheie, ConfigSelection(
+				default=VALORI_IMPLICITE[cheie], choices=alegeri))
+	return b
+
+
+def pluginuri_alocabile(pluginuri=None):
+	"""Identificatori fara pozitia pluginului in inventar."""
+	from hashlib import sha256
+	if pluginuri is None:
+		from Components.PluginComponent import plugins
+		pluginuri = plugins.pluginuriDeDeschis()
+	grupe = {}
+	for p in pluginuri:
+		f = p.fnc
+		f = getattr(f, "func", f)
+		cale = (p.path or "").replace("\\", "/").split("/Plugins/")[-1]
+		ident = "\n".join((cale, getattr(f, "__module__", ""),
+			getattr(f, "__qualname__", getattr(f, "__name__", ""))))
+		grupe.setdefault(ident, []).append(p)
+	rez = {}
+	ambigue = set()
+	for ident, grupa in grupe.items():
+		for p in grupa:
+			# Unele pluginuri expun mai multe actiuni prin aceeasi functie.
+			# Numai acolo folosim si eticheta, ca fiecare sa poata fi aleasa.
+			text = ident if len(grupa) == 1 else ident + "\n" + str(p.name)
+			cheie = "plugin:" + sha256(text.encode("utf-8")).hexdigest()
+			if cheie in rez and rez[cheie] != p:
+				ambigue.add(cheie)
+			rez[cheie] = p
+	# Nu pornim alt plugin daca doi descriptori au aceeasi identitate.
+	return dict((k, p) for k, p in rez.items() if k not in ambigue)
+
+
+def _cu_indisponibile(alegeri, valori):
+	rez = list(alegeri)
+	for v in valori:
+		if v.startswith("plugin:") and v not in dict(rez):
+			rez.append((v, _("Plugin indisponibil (%s)") % v[-8:]))
+	return rez
+
+
+def actualizeaza_alegeri(config=None, pluginuri=None):
+	"""La deschiderea ecranului sau paginii, cu inventarul instalat acum."""
+	b = initConfigButtonSetup(config)
+	lista = pluginuri_alocabile(pluginuri)
+	alegeri = ACTIUNI_DISPONIBILE + [
+		(k, _("Plugin: %s") % p.name) for k, p in sorted(
+			lista.items(), key=lambda x: (str(x[1].name).lower(), x[0]))]
+	alegeri = _cu_indisponibile(alegeri,
+		[getattr(b, k).value for k, _text in SCURTE + BUTOANE])
+	for k, _text in SCURTE + BUTOANE:
+		getattr(b, k).setChoices(alegeri, default=VALORI_IMPLICITE[k])
+	return b
 
 
 def salveaza(config=None):
-	"""Verde pe ecran: save() pe fiecare rand (apasarea lunga a celor patru butoane si VERDE scurt)."""
+	"""Aceeasi salvare pe televizor si in web."""
 	b = initConfigButtonSetup(config)
 	for cheie, _text in BUTOANE + SCURTE:
 		getattr(b, cheie).save()
 
 
 def actiune_aleasa(buton, config=None):
-	"""Actiunea salvata pentru apasarea lunga a butonului ("red", "green", "yellow", "blue") sau pentru VERDE apasat
-	scurt ("green_short"); "none" pentru un buton necunoscut."""
+	"""Valoarea curenta, fara recitirea pluginurilor la fiecare tasta."""
 	if buton not in dict(BUTOANE + SCURTE):
 		return "none"
 	return getattr(initConfigButtonSetup(config), buton).value
+
+
+def actiuni_harta(trateaza):
+	return dict((tasta + "_" + faza,
+		lambda t=tasta, f=faza: trateaza(t, f))
+		for tasta, _scurta, _lunga, _elib in LEGATURI_TASTE
+		for faza in ("m", "r", "l", "b"))
+
+
+class AlocareTaste(object):
+	"""0 lasa tasta mai departe, 1 o consuma. Niciun ceas suplimentar."""
+
+	def __init__(self, porneste, numar, disponibila, config=None):
+		self.porneste = porneste
+		self.numar = numar
+		self.disponibila = disponibila
+		self.config = config
+		self.lungi = set()
+		self.legaturi = dict((x[0], x[1:]) for x in LEGATURI_TASTE)
+
+	def eveniment(self, tasta, faza):
+		if faza == "m":
+			self.lungi.discard(tasta)
+		if not self.disponibila(tasta):
+			return 0
+		scurta, lunga, la_eliberare = self.legaturi[tasta]
+		a = actiune_aleasa(scurta, self.config) if scurta else "default"
+		l = actiune_aleasa(lunga, self.config) if lunga else "default"
+		if l == "default" and tasta in ("red", "green", "yellow", "blue"):
+			l = VALORI_IMPLICITE[tasta]
+		# VERDE isi pastreaza traseul vechi pentru cele doua valori istorice.
+		proprie = a != "default"
+		if tasta == "green" and a in ("plugins", "none"):
+			proprie = False
+		if tasta == "blue" and a == "extensions":
+			proprie = False
+		numeric = tasta.startswith("number_") and l != "default"
+		if faza == "m":
+			if numeric or (proprie and la_eliberare):
+				return 1
+			if proprie and not la_eliberare:
+				self.porneste(tasta, a)
+				return 1
+			return 0
+		if faza == "l":
+			if lunga and l != "default":
+				# Nimic la culori pastreaza sensul vechi: fara actiune lunga.
+				if l == "none" and tasta in ("red", "green", "yellow", "blue"):
+					return int(proprie)
+				self.lungi.add(tasta)
+				self.porneste(tasta, l)
+				return 1
+			if proprie and la_eliberare and tasta in ("info", "audio", "fav"):
+				self.lungi.add(tasta)
+			return int(proprie and not la_eliberare)
+		if faza == "b":
+			if tasta in self.lungi:
+				self.lungi.discard(tasta)
+				return 1
+			if numeric:
+				self.numar(int(tasta[7:]))
+				return 1
+			if proprie:
+				if la_eliberare:
+					self.porneste(tasta, a)
+				return 1
+		return int(numeric or proprie)
 
 
 def cauta_meniu(radacina, id_meniu):

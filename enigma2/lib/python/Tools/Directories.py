@@ -46,6 +46,17 @@ SCOPE_DEFAULTPARTITIONMOUNTDIR = 15
 SCOPE_METADIR = 16
 SCOPE_CURRENT_PLUGIN = 17
 
+# numele cerute de pluginuri
+SCOPE_GUISKIN = SCOPE_ACTIVE_SKIN = SCOPE_CURRENT_SKIN
+SCOPE_LCDSKIN = 21
+SCOPE_ACTIVE_LCDSKIN = SCOPE_CURRENT_LCDSKIN = 22
+SCOPE_TIMESHIFT = SCOPE_HDD
+SCOPE_LIBDIR = 18
+SCOPE_SKINS = SCOPE_SKIN
+SCOPE_PLUGIN = SCOPE_PLUGINS
+SCOPE_PLUGIN_ABSOLUTE = 19
+SCOPE_PLUGIN_RELATIVE = 20
+
 PATH_CREATE = 0
 PATH_DONTCREATE = 1
 PATH_FALLBACK = 2
@@ -60,6 +71,7 @@ defaultPaths = {
 
 		SCOPE_SKIN: (eEnv.resolve("${datadir}/enigma2/"), PATH_DONTCREATE),
 		SCOPE_SKIN_IMAGE: (eEnv.resolve("${datadir}/enigma2/"), PATH_DONTCREATE),
+		SCOPE_LCDSKIN: (eEnv.resolve("${datadir}/enigma2/display/"), PATH_DONTCREATE),
 		SCOPE_HDD: ("/hdd/movie/", PATH_DONTCREATE),
 		SCOPE_MEDIA: ("/media/", PATH_DONTCREATE),
 		SCOPE_PLAYLIST: (eEnv.resolve("${sysconfdir}/enigma2/playlist/"), PATH_CREATE),
@@ -90,6 +102,20 @@ def runFileCommand(args):
 		return 127
 
 def resolveFilename(scope, base = "", path_prefix = None):
+	if scope == SCOPE_LIBDIR:
+		return os_path.join(eEnv.resolve("${libdir}/"), base)
+	if scope in (SCOPE_PLUGIN_ABSOLUTE, SCOPE_PLUGIN_RELATIVE):
+		# un fisier din dosarul pluginului care intreaba, dupa cine a chemat
+		from sys import _getframe
+		cine = os_path.normpath(_getframe(1).f_code.co_filename)
+		radacina = os_path.normpath(defaultPaths[SCOPE_PLUGINS][0])
+		if cine.startswith(radacina + os_path.sep):
+			parti = cine[len(radacina) + 1:].split(os_path.sep)
+			if len(parti) > 2:
+				if scope == SCOPE_PLUGIN_RELATIVE:
+					return os_path.join(parti[0], parti[1], base)
+				return os_path.join(radacina, parti[0], parti[1], base)
+		return base
 	if base[0:2] == "~/":
 		# you can only use the ~/ if we have a prefix directory
 		assert path_prefix is not None
@@ -99,7 +125,19 @@ def resolveFilename(scope, base = "", path_prefix = None):
 	if base[0:1] == '/':
 		return base
 
-	if scope == SCOPE_CURRENT_SKIN:
+	if scope == SCOPE_CURRENT_LCDSKIN:
+		from Components.config import config
+		tmp = defaultPaths[SCOPE_SKIN]
+		ales = getattr(getattr(config.skin, "display_skin", None), "value", "")
+		if ales:
+			for radacina in (tmp[0], defaultPaths[SCOPE_LCDSKIN][0]):
+				xml = os_path.join(radacina, ales)
+				if fileExists(xml):
+					candidat = os_path.join(os_path.dirname(xml), base)
+					if fileExists(candidat):
+						return candidat
+		path = defaultPaths[SCOPE_LCDSKIN][0]
+	elif scope == SCOPE_CURRENT_SKIN:
 		from Components.config import config
 		tmp = defaultPaths[SCOPE_SKIN]
 		pos = config.skin.primary_skin.value.rfind('/')
@@ -112,6 +150,9 @@ def resolveFilename(scope, base = "", path_prefix = None):
 				# HDSatelit: cu alt skin ales, imaginile ecranelor HD Satelit pe care acela nu le are vin din skinul
 				# imaginii (incarcat dupa el ca rezerva, skin.py)
 				path = tmp[0] + "HDSatelit/"
+			elif fileExists(tmp[0] + "skin_default/" + base):
+				# pictogramele comune cerute cu calea scurta (icons/lock_on.png), cum le cer pluginurile
+				path = tmp[0] + "skin_default/"
 			else:
 				path = tmp[0]
 		else:
@@ -336,3 +377,114 @@ def isPluginInstalled(pluginName, pluginFile='plugin', pluginType=None):
 				return True
 	return False
 
+# ---------------------------------------------------------------- numele cerute de pluginuri
+def fileCheck(f, mode="r"):
+	return fileExists(f, mode) and f or ""
+
+
+def fileHas(f, content, mode="r"):
+	try:
+		with open(f, mode, encoding="utf-8", errors="replace") as fd:
+			return content in fd.read()
+	except OSError:
+		return False
+
+
+def fileReadLine(filename, default=None, source="", debug=False):
+	try:
+		with open(filename, "r", encoding="utf-8", errors="replace") as fd:
+			return fd.read().strip().replace("\0", "")
+	except OSError:
+		return default
+
+
+def fileReadLines(filename, default=None, source="", debug=False):
+	try:
+		with open(filename, "r", encoding="utf-8", errors="replace") as fd:
+			return fd.read().splitlines()
+	except OSError:
+		return default
+
+
+def fileWriteLine(filename, line, source="", debug=False):
+	try:
+		with open(filename, "w", encoding="utf-8") as fd:
+			fd.write(str(line))
+		return 1
+	except OSError:
+		return 0
+
+
+def fileAppendLine(filename, line, source="", debug=False):
+	try:
+		with open(filename, "a", encoding="utf-8") as fd:
+			fd.write(str(line))
+		return 1
+	except OSError:
+		return 0
+
+
+def fileWriteLines(filename, lines, source="", debug=False):
+	try:
+		with open(filename, "w", encoding="utf-8") as fd:
+			fd.write("\n".join(lines) if isinstance(lines, list) else str(lines))
+			if isinstance(lines, list) and lines:
+				fd.write("\n")
+		return 1
+	except OSError:
+		return 0
+
+
+def fileReadXML(filename, default=None, *args, **kwargs):
+	from xml.etree.ElementTree import fromstring, parse
+	try:
+		with open(filename, "r", encoding="utf-8") as fd:
+			return parse(fd).getroot()
+	except Exception as e:
+		print("[Directories] XML %s: %s" % (filename, e))
+	if default:
+		try:
+			return fromstring(default)
+		except Exception as e:
+			print("[Directories] XML implicit: %s" % e)
+	return None
+
+
+def sanitizeFilename(filename, maximum=255):
+	"""Un nume de fisier fara semne interzise, cat incape pe disc."""
+	import re
+	nume = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', "_", str(filename)).strip(" .")
+	if not nume:
+		return "_"
+	baza, extensie = os_path.splitext(nume)
+	return baza[:maximum - len(extensie)] + extensie
+
+
+def shellquote(text):
+	return "'%s'" % str(text).replace("'", "'\\''")
+
+
+copyFile = copyfile
+
+
+def moveFiles(fileList):
+	"""[(sursa, destinatie), ...]; la o eroare ce s-a mutat se pune la loc"""
+	import shutil
+	mutate = []
+	try:
+		for sursa, destinatie in fileList:
+			shutil.move(sursa, destinatie)
+			mutate.append((sursa, destinatie))
+	except Exception:
+		for sursa, destinatie in reversed(mutate):
+			try:
+				shutil.move(destinatie, sursa)
+			except Exception as e:
+				print("[Directories] mutarea inapoi: %s" % e)
+		raise
+
+
+def defaultRecordingLocation(candidate=None):
+	if candidate and pathExists(candidate):
+		return candidate
+	return resolveFilename(SCOPE_HDD)

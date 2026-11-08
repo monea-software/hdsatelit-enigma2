@@ -129,7 +129,11 @@ gSurface::~gSurface()
 	if (type)
 	{
 		if (data_phys)
-			gAccel::getInstance()->accelFree(data_phys);
+		{
+			// La iesire, Python poate lasa imagini dupa inchiderea managerului.
+			if (gAccel *accel = gAccel::getInstance())
+				accel->accelFree(data_phys);
+		}
 		else
 			delete [] (unsigned char*)data;
 

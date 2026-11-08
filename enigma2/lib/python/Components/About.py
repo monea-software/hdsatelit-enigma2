@@ -296,3 +296,45 @@ class About:
 		return _("%d h %d min") % (hours, minutes)
 
 about = About()
+
+# numele cerute de pluginuri, pe obiectul about
+def _tipImagine(self):
+	return "release"
+
+
+About.getImageTypeString = _tipImagine
+About.getChipSetString = lambda self: self.getChipset()
+About.getCPUString = lambda self: self.getCPUInfo()
+
+
+def GetIPsFromNetworkInterfaces():
+	"""[(interfata, adresa IPv4)] pentru interfetele cu adresa, fara lo; numele din About.py al altor imagini (RefreshBouquet).
+	Citit cu SIOCGIFCONF, ca la ele; o eroare da lista goala."""
+	import array
+	import socket
+	import struct
+	import sys
+	marime_rand = 40 if sys.maxsize > 2 ** 32 else 32
+	rez = []
+	try:
+		import fcntl
+		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		try:
+			cate = 8
+			while True:
+				lungime = cate * marime_rand
+				zona = array.array("B", bytes(lungime))
+				folosit = struct.unpack("iL", fcntl.ioctl(s.fileno(), 0x8912, struct.pack("iL", lungime, zona.buffer_info()[0])))[0]
+				if folosit < lungime:
+					break
+				cate *= 2
+		finally:
+			s.close()
+		date = zona.tobytes()
+		for i in range(0, folosit, marime_rand):
+			nume = date[i:i + 16].split(b"\0", 1)[0].decode("ascii", "replace")
+			if nume and nume != "lo":
+				rez.append((nume, socket.inet_ntoa(date[i + 20:i + 24])))
+	except (ImportError, OSError, ValueError, struct.error) as e:
+		print("[About] GetIPsFromNetworkInterfaces:", e)
+	return rez

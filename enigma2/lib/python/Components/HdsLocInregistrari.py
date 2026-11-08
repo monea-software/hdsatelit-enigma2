@@ -102,6 +102,7 @@ ACT_INCHIDE = "inchide"
 ACT_FORMATEAZA = "formateaza"
 # un stick pus de nucleu pe numai citire: randul porneste verificarea existenta (Components/HdsDiscuri.verifica)
 ACT_REPARA = "repara"
+ACT_NUME_MEDIA = "nume_media"
 
 # felul unui disc (fisaDisc)
 TIP_STICK = "stick"
@@ -288,6 +289,94 @@ def etichetaDinMontare(real, dispozitiv):
 	return "" if eticheta.upper().replace("_", " ") == "NO NAME" else eticheta
 
 
+def etichetaDispozitiv(dispozitiv, real=""):
+	"""Eticheta sistemului de fisiere, inclusiv cand montarea nu o contine in nume."""
+	try:
+		from Components.Harddisk import deviceLabel
+		eticheta = deviceLabel(dispozitiv) if dispozitiv else ""
+	except (ImportError, AttributeError):
+		eticheta = ""
+	return eticheta or etichetaDinMontare(real, dispozitiv)
+
+
+def numeMedia(dispozitiv, hm=None):
+	"""Aceleasi alegeri ale numelui din /media pentru televizor si pagina web."""
+	gol = {"valoare": "", "alegeri": [], "amanat": False, "mesaj": ""}
+	if not dispozitiv:
+		return gol
+	try:
+		if hm is None:
+			from Components.Harddisk import harddiskmanager as hm
+		return hm.mediaNameInfo(dispozitiv)
+	except (ImportError, AttributeError):
+		return gol
+
+
+def alegeNumeMedia(dispozitiv, nume, hm=None):
+	"""Salveaza alegerea prin managerul de discuri; el verifica numele si folosirea discului."""
+	try:
+		if hm is None:
+			from Components.Harddisk import harddiskmanager as hm
+		return hm.setMediaName(dispozitiv, nume)
+	except (ImportError, AttributeError):
+		return {"result": False, "message": _("Numele nu se poate schimba acum."), "amanat": False}
+
+
+def mutaCaiMedia(vechi, nou, config=None, configfile=None, temporizatoare=None):
+	"""Pastreaza dosarele alese si programarile cand dispare un nume din /media. Numai calea exacta si dosarele ei.
+	`temporizatoare`: obiectul RecordTimer (timer_list, saveTimer), fara schimbarea fisierelor deja pregatite."""
+	vechi, nou = (vechi or "").rstrip("/"), (nou or "").rstrip("/")
+	if not vechi or not nou or vechi == nou:
+		return []
+	if config is None:
+		config = getattr(_modulSetari(), "config", None)
+
+	def muta(cale):
+		if isinstance(cale, str) and (cale == vechi or cale.startswith(vechi + "/")):
+			return nou + cale[len(vechi):]
+		return cale
+
+	schimbate = []
+	for sectiune, nume_setari in (("usage", ("default_path", "instantrec_path", "timer_path", "timeshift_path",
+			"allowed_timeshift_paths")), ("movielist", ("videodirs", "last_videodir"))):
+		try:
+			grup = getattr(config, sectiune)
+		except (AttributeError, KeyError):
+			continue
+		for nume in nume_setari:
+			try:
+				element = getattr(grup, nume)
+				valoare = element.value
+			except (AttributeError, KeyError):
+				continue
+			dest = [muta(cale) for cale in valoare] if isinstance(valoare, (list, tuple)) else muta(valoare)
+			if isinstance(valoare, tuple):
+				dest = tuple(dest)
+			if dest != valoare:
+				element.value = dest
+				element.save()
+				schimbate.append(nume)
+	if schimbate:
+		if configfile is None:
+			configfile = getattr(_modulSetari(), "configfile", None)
+		if configfile is not None:
+			configfile.save()
+	if temporizatoare is None:
+		navigare = getattr(sys.modules.get("NavigationInstance"), "instance", None)
+		temporizatoare = getattr(navigare, "RecordTimer", None)
+	programari_schimbate = False
+	for timer in list(getattr(temporizatoare, "timer_list", None) or []):
+		cale = getattr(timer, "dirname", None)
+		dest = muta(cale)
+		if dest != cale:
+			timer.dirname = dest
+			programari_schimbate = True
+	if programari_schimbate:
+		temporizatoare.saveTimer()
+		schimbate.append("temporizatoare")
+	return schimbate
+
+
 def numeDispozitiv(descriere, dispozitiv, amovibil=None, eticheta=""):
 	"""Numele aratat omului: eticheta discului, cand are una („HD SATELIT (sda1)”); altfel modelul citit de pe dispozitiv
 	(„Cruzer Blade (sda1)”), sau felul lui („Stick USB (sda1)”, „Hard disk (sdb1)”) cand modelul lipseste sau e unul
@@ -346,6 +435,8 @@ def fisaDisc(d, cu_liber=True):
 	"""Ce e discul, pe scurt: felul, legatura, sistemul de fisiere, locul liber si marimea (`cu_liber`: tabelul paginii web le
 	are in coloana lor), daca porneste imaginea de pe el."""
 	parti = [_textFel(d.get("tip")), d.get("legatura") or ""]
+	if d.get("eticheta"):
+		parti.append(_("eticheta %s") % d["eticheta"])
 	fel = d.get("fel") or ""
 	parti.append(SISTEME_FISIERE.get(fel, fel))
 	if cu_liber and d.get("liber") is not None:
@@ -430,7 +521,7 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 			if retea is not None and punct not in vazute:
 				vazute.add(punct)
 				rez.append({"punct": punct, "real": punct, "dispozitiv": "", "nume": retea[1], "fel": fel,
-					"id": "retea:" + retea[0], "tip": TIP_RETEA, "legatura": "", "imagine": False})
+					"id": "retea:" + retea[0], "tip": TIP_RETEA, "legatura": "", "imagine": False, "eticheta": ""})
 			continue
 		if fel in in_memorie or fel == "autofs":
 			continue
@@ -447,6 +538,7 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 		amovibil = getattr(p, "removable", None)
 		if amovibil is None and dispozitiv:
 			amovibil = esteAmovibil(dispozitiv, citeste)
+		eticheta = etichetaDispozitiv(dispozitiv, real)
 		rez.append({
 			"punct": punct,
 			"real": real,
@@ -454,7 +546,8 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 			# discul de pornire are numele lui, tradus acum: isGenericModel (numai litere latine) l-ar lua in rusa drept un model
 			# fara inteles, iar descrierea partitiei e facuta la incarcare
 			"nume": "%s (%s)" % (_("Discul de pornire"), dispozitiv) if getattr(p, "system_disk", False) else
-				numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, etichetaDinMontare(real, dispozitiv)),
+				numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, eticheta),
+			"eticheta": eticheta,
 			"fel": fel,
 			"id": identitate(dispozitiv, real, uuid),
 			"tip": felDisc(dispozitiv, amovibil),
@@ -491,9 +584,11 @@ def necitite(hm=None, fel_fs=None):
 		if fel in NOT_MOUNTED_FS:
 			continue
 		amovibil = getattr(p, "removable", None)
+		eticheta = etichetaDispozitiv(dispozitiv)
 		rez.append({
 			"dispozitiv": dispozitiv,
-			"nume": numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil),
+			"nume": numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, eticheta),
+			"eticheta": eticheta,
 			"fel": fel or "",
 			"tip": felDisc(dispozitiv, amovibil),
 			"legatura": legatura(dispozitiv),
@@ -1263,6 +1358,16 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 				"disc": disc_intreg, "detaliu": _("Deschide formatarea. Înainte să șteargă ceva, receptorul te întreabă.")})
 	if se_citeste and stare is None and cand and not necunoscut:
 		detalii_disc.append(_("Se citesc discurile..."))
+	if scop == SCOP_MENIU and not necunoscut:
+		for d in discuri:
+			info = numeMedia(d.get("dispozitiv"))
+			if not info.get("alegeri"):
+				continue
+			ales = info.get("valoare") or ""
+			text_nume = next((a[1] for a in info["alegeri"] if a[0] == ales), _("Automat"))
+			randuri.append({"text": _("Numele în /media (%s): %s") % (d["dispozitiv"], text_nume),
+				"actiune": ACT_NUME_MEDIA, "punct": d["punct"], "dispozitiv": d["dispozitiv"], "nume": d["nume"],
+				"detaliu": info.get("mesaj") or _("Alege numele sub care apare discul în /media. Automat păstrează alegerea receptorului.")})
 	randuri.append({"text": _("Închide"), "actiune": ACT_INCHIDE, "punct": None, "detaliu": ""})
 	fise = []
 	if scop == SCOP_MENIU and not necunoscut:

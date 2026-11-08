@@ -1033,7 +1033,7 @@ def cancelVideo(previous, nav, restart, output=None):
 		applyNow(nav, output)
 
 
-def timeshiftOn(nav):
+def timeshiftOn(nav, necunoscut=False):
 	"""True if timeshift runs for the service playing now (starting it again would lose the buffer)"""
 	try:
 		from Screens.InfoBar import InfoBar
@@ -1046,10 +1046,10 @@ def timeshiftOn(nav):
 		timeshift = service and service.timeshift()
 		return bool(timeshift and timeshift.isTimeshiftActive())
 	except Exception:
-		return False
+		return necunoscut
 
 
-def restartService(nav):
+def restartService(nav, necunoscut=False):
 	"""starts the channel playing now again, so the platform daemon uses the new rate files at once (it reads them
 	only when a video starts: on the u57 receiver, values written minutes before were used only at the next
 	zap). Not for a recording or stream played from a path (it would start again from the beginning) and not
@@ -1062,7 +1062,7 @@ def restartService(nav):
 	if ref.getPath():
 		print("[VideoOutput] %s is played from a path: not started again, the mode is used at the next start" % ref.toString())
 		return False
-	if timeshiftOn(nav):
+	if timeshiftOn(nav, necunoscut=necunoscut):
 		print("[VideoOutput] timeshift runs: the channel is not started again, the mode is used at the next start")
 		return False
 	print("[VideoOutput] the channel starts again, so the new video mode is used now")
@@ -1070,14 +1070,74 @@ def restartService(nav):
 	return True
 
 
-def applyNow(nav, output=None):
+def applyNow(nav, output=None, necunoscut=False):
 	"""after the mode files were written (a new mode or a restore): True when the mode written is on screen now,
 	either because the driver has no rate files (videomode is used at once) or because the channel playing was
 	started again; False when it is used only when a channel starts (nothing playing, recording or timeshift)"""
 	output = output or videoOutput
 	if output is None or not output.hasRates():
 		return True
-	return restartService(nav)
+	return restartService(nav, necunoscut=necunoscut)
+
+
+def hdmiRecoveryContext(nav, output=None, sesiune=None):
+	"""Verificari in memorie, inaintea oricarei scrieri automate in driver."""
+	output = output or videoOutput
+	mode = configElement("hds_videomode")
+	rate = configElement(VideoOutput.RATE_ATTR)
+	mod = mode.value if mode is not None else None
+	byChannel = bool(rate is not None and rate.value)
+	expected = rateModes(mod, byChannel, output.rateChoices) if output is not None and mod else {}
+	context = {"mod": mod, "rate_by_channel": byChannel,
+		"moduri_asteptate": tuple(set(expected.values())) or (mod,),
+		"rate_asteptate": dict((RATE_FILE[hz], value) for hz, value in expected.items()),
+		"identitate": (mod, byChannel), "permis": False, "motiv": ""}
+	try:
+		sectiuni = getattr(getattr(config, "content", None), "items", {})
+		osd = sectiuni.get("osd")
+		margini = getattr(getattr(osd, "content", None), "items", {})
+		calibrare = any(el is not None and (int(el.value) != 0 or el.isChanged())
+			for el in (margini.get(nume) for nume in ("cal_left", "cal_top", "cal_width", "cal_height")))
+		if output is None or output.simulation or not mod or not mod.startswith("2160p"):
+			context["motiv"] = _("ieșirea 4K nu este disponibilă")
+		elif inStandby():
+			context["motiv"] = _("receptorul este în standby; fără reaplicare")
+		elif videoChanged():
+			context["motiv"] = _("setări video neconfirmate; fără reaplicare")
+		elif calibrare:
+			context["motiv"] = _("margini de ecran configurate; geometria nu se verifică automat")
+		elif sesiune is not None and any("Scan" in cls.__name__ or "Wizard" in cls.__name__
+			or cls.__name__ == "VideoSetup" for cls in type(getattr(sesiune, "current_dialog", None)).__mro__):
+			context["motiv"] = _("configurare sau scanare în curs; fără reaplicare")
+		elif nav is None or nav.getRecordings() or (getattr(nav, "RecordTimer", None) is not None
+			and nav.RecordTimer.isRecording()):
+			context["motiv"] = _("înregistrare în curs sau navigare indisponibilă; fără reaplicare")
+		else:
+			ref = nav.getCurrentlyPlayingServiceReference()
+			if ref is None or ref.getPath() or nav.getCurrentService() is None:
+				context["motiv"] = _("nu rulează un canal live; fără reaplicare")
+			elif timeshiftOn(nav, necunoscut=True):
+				context["motiv"] = _("timeshift în curs; fără reaplicare")
+			else:
+				context["permis"] = True
+	except Exception:
+		context["motiv"] = _("starea redării nu se poate verifica; fără reaplicare")
+	return context
+
+
+def reapplyHdmi(nav, output=None, asteptat=None, sesiune=None):
+	"""Reaplica numai modul curent si politica ratelor, fara schimbarea configuratiei."""
+	output = output or videoOutput
+	context = hdmiRecoveryContext(nav, output, sesiune)
+	rezultat = {"scris": False, "restart_cerut": False, "motiv": context["motiv"]}
+	if not context["permis"] or (asteptat is not None and context["identitate"] != asteptat.get("identitate")):
+		return rezultat
+	ok = output.apply({"videomode": context["mod"], "rate_by_channel": context["rate_by_channel"]})
+	rezultat["scris"] = bool(ok and output.lastModeReached)
+	if rezultat["scris"]:
+		# True inseamna cerere de restart, nu confirmare hardware. Urmeaza citirea MSP.
+		rezultat["restart_cerut"] = bool(output.hasRates() and applyNow(nav, output, necunoscut=True))
+	return rezultat
 
 
 def initPolicy(output):
@@ -1112,6 +1172,95 @@ def initPolicy(output):
 		output.writePolicy(element.value)
 	return element
 
+
+class _VideoConfigView(ConfigSelection):
+	"""O setare citita la fiecare acces, fara scriere sau salvare proprie."""
+	def __init__(self, read, choices):
+		self._read = read
+		ConfigSelection.__init__(self, choices=choices, default=read())
+		self.disableSave()
+
+	def getValue(self):
+		return self._read()
+
+	def setValue(self, value):
+		# Pluginul poate incerca sa scrie; reglajele imaginii raman singura sursa.
+		pass
+
+	value = property(getValue, setValue)
+	# Nici incarcarea ulterioara a unor setari nu poate salva o valoare a vederii.
+	saved_value = property(lambda self: None, lambda self, value: None)
+
+	def load(self):
+		self.saved_value = None
+
+	def save(self):
+		self.saved_value = None
+
+	def cancel(self):
+		self.saved_value = None
+
+	def isChanged(self):
+		return False
+
+	def getText(self):
+		return self.value
+
+	def getMulti(self, selected):
+		return ("text", self.value)
+
+
+def initVideoCompat(output):
+	"""Portul digital, rezolutia si ratele citite din reglajele video ale imaginii."""
+	from Components.config import ConfigSubDict
+
+	def currentMode():
+		element = configElement("hds_videomode")
+		return element.value if element is not None else ""
+
+	def currentRate(group):
+		mode = currentMode()
+		if not mode:
+			return ""
+		element = configElement(VideoOutput.RATE_ATTR)
+		byChannel = element is not None and element.value
+		previous = output.splitMode(modes, mode, byChannel)[1]
+		chosen = output.rateAfterResolution(modes, group, previous)
+		if chosen == AUTO_RATE:
+			return AUTO_RATE
+		rate = modeParts(chosen)[1] if chosen else None
+		return rate + "Hz" if rate else ""
+
+	modes = output.choices.get("videomode", [])
+	groups = [value for value, label in resolutionChoices(modes)]
+	# VideoHardware expune deja numai iesirea digitala; HDMI este numele ei aici.
+	config.av.videoport = _VideoConfigView(lambda: "HDMI", ["HDMI"])
+	modeViews = configElement("videomode")
+	if modeViews is None:
+		modeViews = ConfigSubDict()
+		config.av.videomode = modeViews
+	modeViews["HDMI"] = _VideoConfigView(lambda: groupKey(currentMode()), groups)
+	rateViews = configElement("videorate")
+	if rateViews is None:
+		rateViews = ConfigSubDict()
+		config.av.videorate = rateViews
+	for group in groups:
+		choices = []
+		for mode in groupModes(modes, group):
+			rate = modeParts(mode)[1]
+			value = rate + "Hz" if rate else ""
+			if value not in choices:
+				choices.append(value)
+		if output.autoMode(modes, group) is not None:
+			choices.append(AUTO_RATE)
+		rateViews[group] = _VideoConfigView(lambda group=group: currentRate(group), choices)
+	# Unele pluginuri folosesc si numele complet din driver, de exemplu 1080p24.
+	for mode in modes:
+		if mode in rateViews:
+			continue
+		rate = modeParts(mode)[1]
+		value = rate + "Hz" if rate else ""
+		rateViews[mode] = _VideoConfigView(lambda value=value: value, [value])
 
 def InitVideoOutput(root=None, msp=MSP, pidFile=DAEMON_PID, timer=None):
 	"""msp, pidFile and timer: the HdmiColors sources (other ones only in the tests on a PC)"""
@@ -1175,4 +1324,9 @@ def InitVideoOutput(root=None, msp=MSP, pidFile=DAEMON_PID, timer=None):
 			default=COLOR_DEFAULT)
 		setattr(config.av, COLOR_ATTR, element)
 		colors.start(element.value)
+	# numele cerute de pluginurile altor imagini (config.av.videoport, videomode, videorate): o greseala aici nu opreste modul video
+	try:
+		initVideoCompat(videoOutput)
+	except Exception as e:
+		print("[VideoOutput] setarile video pentru pluginuri: %r" % (e,))
 	return videoOutput

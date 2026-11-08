@@ -37,8 +37,11 @@
 #        si grupa canalului de pe televizor (numai fara text si fara filtre)
 #   GET  /api/canale-lista?fila=&buchet=toate&grupa=<cheie>&de_la=&cate=  randurile unei grupe (pagini pana la
 #        MAX_PAGINA_GRUPA)
+#   GET  /api/canale-lista|canale-buchete?...&progres=1  202 cat se pregateste raspunsul, apoi raspunsul complet;
+#        browserul intreaba din nou dupa dupa_ms, fara sa reporneasca lucrul sau sa tina o conexiune lunga
 #   GET  /api/canale-epg?refs=r1,r2,...             emisiunea de acum si urmatoarea, cel mult MAX_EPG canale
 #   GET  /api/canale-acum                           canalul de pe televizor
+#   POST /api/canale-exporta?fila=&buchet=&text=&<grup>=v1,v2  playlistul intregii selectii, pregatit pe felii si fir
 #   POST /api/canale-porneste?fila=&buchet=&ref=    porneste canalul pe televizor
 #   POST /api/canale-favorit?fila=&buchet=&ref=&vrea=1|0  canalul in Favorite (1) sau scos (0): steluta randului
 #   POST /api/canale-stream-relay?fila=&buchet=&ref=&vrea=1|0  canalul in Stream Relay (1) sau scos (0): butonul SR
@@ -52,8 +55,8 @@
 # /cautare (vezi_live_web.py, pus in pagina de vezi_live_web.inPagina); aici raman numai mutaTv (televizorul trece pe
 # canal prin /api/canale-porneste) si strangerea listei. Playerul verifica intai canalul (/api/tv-verifica) si, daca nu
 # se poate reda acum in browser, arata motivul fara sa porneasca nimic; "Descarca playlist (M3U)" ramane (VLC reda si
-# MPEG-2). "Exporta playlist (M3U)" ia lista asa cum e aleasa si filtrata acum (paginile /api/canale-lista) si cere
-# fisierul la POST /api/tv-m3u (tv_web.py, acces_extern.py): adresele au cheia playlistului, nu jetonul API. Pagina are
+# MPEG-2). "Exporta playlist (M3U)" trimite selectia la POST /api/canale-exporta; receptorul parcurge intreaga lista
+# pe felii si formateaza fisierul pe un fir: adresele au cheia playlistului, nu jetonul API. Pagina are
 # politica continutului paginii /tv (tv_web.CSP_TV): scripturile de pe receptor si redarea prin MediaSource (blob:).
 # "Adresa fixa pentru un aparat" (aparate_web.py): lista si filtrele de acum devin sursa unui aparat din casa (cheie
 # fara termen, playlist citit din nou la fiecare cerere, ghid XMLTV); fereastra, stilul, scriptul comun (si deschiderea
@@ -79,6 +82,9 @@
 # doua lucrari) ar tine firul fara ca tastele si soclurile sa fie citite. Cu un singur ceas pus la 1 ms dupa felie,
 # poll() ruleaza intre oricare doua felii, oricate lucrari ar fi. Bariere: cel mult o constructie in curs pe fel (a doua
 # cerere asteapta rezultatul primei); termen TERMEN_S (504), cel mult MAX_LUCRARI in lucru (503).
+# Browserul foloseste progres=1: cel mult MAX_PREGATIRI lucrari continua intre cereri scurte (202), cu termenul
+# TERMEN_PREGATIRE_S. O cautare inlocuita nu mai intreaba dupa raspuns si cedeaza locul sub presiune; 503 se reincearca
+# numai cat cititorul mai este activ. Raspunsul terminat se consuma o data, iar listele si cautarile raman in memorie.
 # Cautarea siglelor pe disc si citirea lor ruleaza pe doua fire separate, cu termen pe fiecare lucrare, iar rezultatul
 # se preda firului enigma2 printr-un eTimer (reactor.callLater nu trezeste bucla enigma2).
 # Indexul cautarii (memoria comuna a modulului HdsIndexCanale, pe care o schimba si ecranul de cautare) se ia ca la
@@ -91,24 +97,28 @@
 import os
 import re
 import time
+import hashlib
+import hmac
 
 TOATE = "toate"
 TIPURI = ("tv", "radio")
 MAX_EPG = 50
 MAX_PAGINA = 200
-MAX_PAGINA_GRUPA = 500    # randurile unei grupe din „Toate canalele” (grupa=), pe pagini mai mari: se cer toate odata
+MAX_PAGINA_GRUPA = 500    # limita API pentru grupa=; browserul cere numai 100 de randuri o data
 IMPLICIT_PAGINA = 100
 MAX_TEXT = 40
 MAX_NUME = 128
 MAX_TITLU = 256
 MAX_REF = 600
 MAX_SIGLA = 256 * 1024
-BUGET_S = 0.020
+BUGET_S = 0.008
 ASTEAPTA_INDEX_MS = 100   # pauza intre doua priviri dupa indexul pregatit in fundal
 JURNAL_FELIE_S = 0.050
 PAUZA_MS = 1              # intre doua felii (vezi FIRUL: un ceas de 0 ms nu lasa poll() sa ruleze)
 UNITATE = 50              # intrari (randuri, canale) pe un pas de generator
 TERMEN_S = 10             # o cerere pe felii care nu termina in atat primeste 504
+TERMEN_PREGATIRE_S = 120  # pregatire ceruta cu progres=1; fiecare raspuns HTTP ramane scurt
+MAX_PREGATIRI = 4         # lucrari independente de conexiunea HTTP; polling-ul nu ocupa un loc
 MAX_LUCRARI = 8           # cereri pe felii in lucru deodata; peste: 503
 ASTEAPTA_BARIERA_MS = 10  # cat doarme o cerere care asteapta constructia aceleiasi liste
 VIATA_LISTA_S = 60
@@ -124,10 +134,28 @@ MARCAJ = 64          # eServiceReference.isMarker
 DOSAR = 1            # eServiceReference.isDirectory
 
 _REF = re.compile(r"^\d{1,4}:\d{1,5}(:[0-9A-Fa-f]{1,8}){8}:")
-_NUME_SIGLA = re.compile(r"^[0-9A-Fa-f]{1,8}(_[0-9A-Fa-f]{1,8}){9}$")
+_NUME_SIGLA = re.compile(r"(?:[0-9A-Fa-f]{1,8}(?:_[0-9A-Fa-f]{1,8}){9}|[a-z0-9]+)\Z")
 _FISIER_BUCHET = re.compile(r'FROM BOUQUET "([A-Za-z0-9_.\-]{1,120})"')
 _ID_BUCHET = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
 _CONTROL = re.compile(u"[\u0000-\u001f\u007f-\u009f\ud800-\udfff]")
+_SECRET_REF = os.urandom(32)
+_REF_PUBLIC = re.compile(r"^canal-[0-9a-f]{32}$")
+
+
+def ref_publica(ref):
+	"""Referintele cu o cale raman numai pe receptor; identificatorul nu permite recuperarea adresei.
+	Se calculeaza din flux fara numele de la coada si cu campurile scrise la fel (hex mic), ca acelasi canal din buchet si
+	de pe televizor (care il poate scrie cu alt nume) sa aiba acelasi identificator, deci sa fie marcat in lista."""
+	c = _campuri(ref)
+	if c is not None and c[1]:
+		flux = "%d:%d:%x:%x:%x:%x:%x:%x:%x:%x:%s" % (tuple(c[0]) + (c[1],))
+		return "canal-" + hmac.new(_SECRET_REF, flux.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+	return ref
+
+
+def cheie_publica(ref, cheie):
+	p = ref_publica(ref)
+	return p if p != ref else cheie
 
 
 def _t(text):
@@ -157,6 +185,8 @@ def curat(text, maxim=MAX_NUME):
 	if isinstance(text, bytes):
 		text = text.decode("utf-8", "replace")
 	text = _CONTROL.sub("", str(text)).strip()
+	if re.search(r"(?i)[a-z][a-z0-9+.-]*(?::|%3a)//", text):
+		return "?"
 	return text[:maxim]
 
 
@@ -164,7 +194,8 @@ def curat(text, maxim=MAX_NUME):
 
 def ref_buna(text):
 	"""O referinta de serviciu cu forma enigma2 (tip:steaguri:8 campuri hex:...), fara caractere de control."""
-	return bool(text) and len(text) <= MAX_REF and _REF.match(text) is not None and _CONTROL.search(text) is None
+	return bool(text) and (bool(_REF_PUBLIC.fullmatch(text)) or
+		(len(text) <= MAX_REF and _REF.match(text) is not None and _CONTROL.search(text) is None))
 
 
 def _campuri(ref):
@@ -229,14 +260,31 @@ def _sursa(c):
 
 
 def nume_sigla(ref):
-	"""Numele fisierului siglei ca in Renderer/Picon.py (referinta fara nume, „:” -> „_”), numai la canalele DVB."""
+	"""Numele local ca in Renderer/Picon.py, pentru DVB si referinte radio audio HTTP(S)."""
 	c = _campuri(ref)
 	if c is None:
 		return None
 	campuri, cale = c
-	if campuri[0] != 1 or cale or campuri[1] & (MARCAJ | DOSAR):
+	if campuri[1] & (MARCAJ | DOSAR):
 		return None
-	return "%d_%d_" % (campuri[0], campuri[1]) + "_".join("%X" % v for v in campuri[2:10])
+	if cale or campuri[0] != 1:
+		if (campuri[0] not in (1, 4097, 5001, 5002, 5003, 8193, 8739) or campuri[1] != 0
+				or campuri[2] not in (2, 10) or not ref_buna(ref)):
+			return None
+		from urllib.parse import unquote, urlsplit
+		adresa = unquote(cale)
+		if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in adresa) or "\\" in adresa:
+			return None
+		try:
+			u = urlsplit(adresa)
+			if u.scheme.lower() not in ("http", "https") or not u.hostname or u.username is not None or u.password is not None:
+				return None
+			if u.port is not None and not 0 < u.port < 65536:
+				return None
+		except ValueError:
+			return None
+	nume = "%d_%d_" % (campuri[0], campuri[1]) + "_".join("%X" % v for v in campuri[2:10])
+	return nume if _NUME_SIGLA.match(nume) else None
 
 
 def fisier_buchet(ref):
@@ -325,7 +373,7 @@ class _Fir(object):
 		try:
 			dupa(rezultat, eroare)
 		except Exception as e:
-			_jurnal("predarea unei lucrari: %s" % e)
+			_jurnal("predarea unei lucrari: %s" % type(e).__name__)
 
 	def _verifica(self):
 		while self.gata:
@@ -427,6 +475,11 @@ class _Furnizor(object):
 
 	def director(self):
 		return self.X.DIRECTOR
+
+	def debite_radio(self):
+		from Components import HdsBazaCanale as B
+		b = B.baza_existenta()
+		return b, b.versiune_grupe(("br",)) if b is not None else None
 
 	def acum(self):
 		return time.time()
@@ -570,7 +623,7 @@ class _Furnizor(object):
 				if acum is not None and R.cheie(acum) == R.cheie(ref):
 					nav.playService(acum, forceRestart=True)
 			except Exception as e:
-				_jurnal("Stream Relay: canalul de pe televizor nu a pornit din nou: %s" % e)
+				_jurnal("Stream Relay: canalul de pe televizor nu a pornit din nou: %s" % type(e).__name__)
 		return ok, in_lista
 
 	def lista_in_editare(self):
@@ -582,13 +635,19 @@ class _Furnizor(object):
 		return sl is not None and (bool(sl.movemode) or sl.bouquet_mark_edit != CS.OFF)
 
 	def cai_sigle(self):
-		"""Caile lui Renderer/Picon.py, in aceeasi ordine, cu dosarul „picon”."""
+		"""Pe fir: aceleasi dosare ca pe televizor, inclusiv discurile montate."""
+		from Components.Renderer.Picon import dosare_sigle
+		cai = tuple(dosare_sigle())
 		try:
-			from enigma import eEnv
-			prima = eEnv.resolve("${datadir}/enigma2/picon/")
+			from Components.HdsLocuriLista import dosareSigle
+			cai += tuple(dosareSigle())
 		except Exception:
-			prima = "/usr/share/enigma2/picon/"
-		return (prima, "/media/cf/picon/", "/media/usb/picon/")
+			pass
+		return cai
+
+	def generatie_sigle(self):
+		from Components.Renderer.Picon import generatie_sigle
+		return generatie_sigle()
 
 	def mai_tarziu(self, functie, ms=0):
 		self._ceasuri.mai_tarziu(functie, ms)
@@ -615,20 +674,31 @@ def _m(M=None):
 # ---------------------------------------------------------------- memoria
 
 _MEMORIE = {"buchete": {}, "liste": {}, "numarari": {}, "fatete": {}, "epg": {}, "sigle": None, "sigle_ora": 0.0,
-	"sigle_in_curs": False, "sigle_pornit": 0.0, "sigle_octeti": {}, "canale_index": (None, None)}
+	"sigle_in_curs": False, "sigle_pornit": 0.0, "sigle_octeti": {}, "sigle_generatie": None,
+	"canale_index": (None, None), "pregatiri": {}}
 MAX_FATETE = 16
 
 
 def uita():
 	"""Goleste toata memoria (probele)."""
+	_uita_pregatiri()
 	_MEMORIE.update({"buchete": {}, "liste": {}, "numarari": {}, "fatete": {}, "epg": {}, "sigle": None, "sigle_ora": 0.0,
-		"sigle_in_curs": False, "sigle_pornit": 0.0, "sigle_octeti": {}, "canale_index": (None, None)})
+		"sigle_in_curs": False, "sigle_pornit": 0.0, "sigle_octeti": {}, "sigle_generatie": None,
+		"canale_index": (None, None), "pregatiri": {}})
 	_IN_CURS.clear()
 
 
 def uita_listele():
 	"""Buchetele, listele si numararile din memorie (dupa o schimbare facuta de aici in buchete)."""
+	_uita_pregatiri()
 	_MEMORIE.update({"buchete": {}, "liste": {}, "numarari": {}, "fatete": {}})
+
+
+def _uita_pregatiri():
+	for stare in _MEMORIE["pregatiri"].values():
+		if stare["lucru"].viu():
+			stare["lucru"].opreste()
+	_MEMORIE["pregatiri"].clear()
 
 
 def semnatura(director):
@@ -639,7 +709,7 @@ def semnatura(director):
 	except OSError:
 		return ()
 	for n in nume:
-		if n == "lamedb" or n.startswith("bouquets.") or n.startswith("userbouquet."):
+		if n == "lamedb" or n.startswith(("bouquets.", "userbouquet.", "subbouquet.")):
 			try:
 				st = os.stat(os.path.join(director, n))
 				rez.append((n, st.st_mtime, st.st_size))
@@ -684,6 +754,8 @@ def gen_canale_index(index):
 			k = c.cheie_mas or c.ref
 			if k not in harta:
 				harta[k] = c
+			if ref_publica(c.ref) != c.ref:
+				harta[ref_publica(c.ref)] = c
 			numar["radio" if c.radio else "tv"] += 1
 		_MEMORIE["canale_index"] = (index, (harta, numar))
 		return harta, numar
@@ -721,15 +793,23 @@ class Lista(object):
 		self.index = index
 		self.randuri = []
 		self.dupa_ref = {}
+		self.dupa_public = {}
 		self.dupa_cheie = {}
 		self.poz_cheie = {}
 		self.canale = 0
 		self.refs_epg = set()
 		self.grupe = None       # [(cheia grupei, numele, [randuri])], facute o data (gen_grupe)
+		self.poz_grupe = {}     # cheia canalului -> (grupa, pozitia); salt direct la canalul de pe televizor
+		self.cautari = {}        # rezultate complete, comune tuturor paginilor aceleiasi cautari
+		self.deosebiri = {}      # deosebirile tuturor rezultatelor, calculate o data pe cautare/grupa
+		self.parinti_grupe = {}
+		self.radio_valori = {}
+		self.radio_versiune = None
 
 	def adauga(self, r):
 		if not r.marcaj:
 			self.dupa_ref.setdefault(r.ref, r)
+			self.dupa_public.setdefault(ref_publica(r.ref), r)
 			self.dupa_cheie.setdefault(r.k, r)
 			self.poz_cheie.setdefault(r.k, len(self.randuri))
 			self.canale += 1
@@ -778,7 +858,7 @@ def surse_fluxuri(M, tip):
 	try:
 		return [(X.ref_buchet_flux(fisier), X.nume_buchet_flux(fel)) for fel, fisier in f(tip, M.director())]
 	except Exception as e:
-		_jurnal("buchetele DAB+ / DVB-T2: %s" % e)
+		_jurnal("buchetele DAB+ / DVB-T2: %s" % type(e).__name__)
 		return []
 
 
@@ -806,6 +886,11 @@ def _gen_construieste_buchete(M, tip, sem):
 	buchete = []
 	numar = 0
 	for i, (ref, nume) in enumerate(surse):
+		if fisier_buchet(ref) == getattr(M.X, "BUCHET_IPTV", "userbouquet.hdsiptv.tv"):
+			# Grupele online vin din indexul citit pe fir, niciodata prin getContent pe toate fluxurile.
+			index = yield from gen_index(M)
+			numar += getattr(index, "numar_radacina_online", 0)
+			continue
 		intrari = []
 		canale = 0
 		dosare = 0
@@ -847,15 +932,38 @@ def gen_lista(M, tip, id_, viata=VIATA_LISTA_S):
 		lambda: _gen_construieste_lista(M, tip, id_, index, sem, viata)))
 
 
+def _nume_lista_radio(id_):
+	return {"radio_satelit": _t("Radio prin satelit"), "radio_cablu": _t("Radio prin cablu"),
+		"radio_online": _t("Radio online")}[id_]
+
+
+RADIO_LISTE = ("radio_satelit", "radio_cablu", "radio_online")
+
+
+def sursa_radio(c):
+	if c.tip == "dab":
+		return "dab"
+	if c.tip == "t2":
+		return "satelit"
+	if c.tip in ("iptv", "online", "internet"):
+		return "online"
+	if c.poz == "cablu":
+		return "cablu"
+	if c.poz == "terestru":
+		return "terestru"
+	return "satelit" if c.poz is not None else ""
+
+
 def _gen_construieste_lista(M, tip, id_, index, sem, viata):
 	X = M.X
-	if id_ == TOATE:
-		lista = Lista(tip, TOATE, _t("Toate canalele"), None, index)
+	virtual = tip == "radio" and id_ in RADIO_LISTE
+	if id_ == TOATE or virtual:
+		lista = Lista(tip, id_, _nume_lista_radio(id_) if virtual else _t("Toate canalele"), None, index)
 		radio = tip == "radio"
 		for i, c in enumerate(index.canale):
 			if i % UNITATE == UNITATE - 1:
 				yield
-			if bool(c.radio) == radio:
+			if bool(c.radio) == radio and (not virtual or sursa_radio(c) == id_[6:]):
 				lista.adauga(Rand(c.cheie_mas or c.ref, c.ref, curat(c.nume_afisat() if hasattr(c, "nume_afisat") else c.nume) or "?", X, canal=c))
 	else:
 		buchete = yield from gen_buchete(M, tip, viata)
@@ -889,7 +997,21 @@ def gen_numarare(M, lista):
 	nu depinde de ce e ales). Grupele cu o singura optiune nu se arata (cele ale pistelor de la una)."""
 	X = M.X
 	index = lista.index
-	cheie = (lista.tip, lista.id, id(index), index.masurari_marcaj[1], index.piste_aplicate)
+	baza, versiune = M.debite_radio() if lista.tip == "radio" and hasattr(M, "debite_radio") else (None, None)
+	if lista.tip == "radio" and (not lista.radio_valori or lista.radio_versiune != versiune):
+		valori = {}
+		for i, r in enumerate(lista.randuri):
+			if i % UNITATE == UNITATE - 1:
+				yield
+			if r.canal is None:
+				continue
+			d = baza.cauta(r.ref) if baza is not None else None
+			br = d.get("br") if isinstance(d, dict) else None
+			debit = br[2] if isinstance(br, (list, tuple)) and len(br) > 2 else None
+			debit = str(int(debit)) if isinstance(debit, (int, float)) and 0 < debit < 100000 else ""
+			valori[id(r.canal)] = {"sursa": sursa_radio(r.canal), "debit": debit}
+		lista.radio_valori, lista.radio_versiune = valori, versiune
+	cheie = (lista.tip, lista.id, id(index), index.masurari_marcaj[1], index.piste_aplicate, versiune)
 	vechi = _MEMORIE["numarari"].get((lista.tip, lista.id))
 	if vechi is not None and vechi[0] == cheie and vechi[1] is lista:
 		return vechi[2]
@@ -917,6 +1039,8 @@ def _gen_numara(X, lista, cheie):
 				d[m] = d.get(m, 0) + 1
 	grupuri = []
 	for i, g in enumerate(X.GRUPURI):
+		if lista.tip == "radio" and g not in ("acces", "poz", "fsunet", "msunet", "psunet", "lsunet"):
+			continue
 		optiuni = []
 		for v, eticheta, _n in index.optiuni.get(g, ()):
 			bit = index.biti[g].get(v, 0)
@@ -928,6 +1052,18 @@ def _gen_numara(X, lista, cheie):
 			titlu = X.semnPiste(X.titlu(g)) if g in X.GRUPURI_PISTE else X.titlu(g)
 			grupuri.append((g, titlu, optiuni))
 		yield
+	if lista.tip == "radio":
+		for g, titlu in (("sursa", _t("Sursă")), ("debit", _t("Debit sunet"))):
+			numere = {}
+			for i, v in enumerate(lista.radio_valori.values()):
+				if i % UNITATE == UNITATE - 1:
+					yield
+				if v[g]:
+					numere[v[g]] = numere.get(v[g], 0) + 1
+			etichete = {"satelit": _t("Satelit"), "cablu": _t("Cablu"), "dab": "DAB+", "online": _t("Online"), "terestru": _t("Terestru")}
+			optiuni = [(v, etichete[v] if g == "sursa" else v + " kbit/s", n) for v, n in sorted(numere.items())]
+			if optiuni:
+				grupuri.append((g, titlu, optiuni))
 	_MEMORIE["numarari"][(lista.tip, lista.id)] = (cheie, lista, grupuri)
 	return grupuri
 
@@ -942,6 +1078,8 @@ def gen_fatete(M, lista, grupuri, sel, text="", X=None):
 	q = X.normalizeaza(text or "") if X is not None else ""
 	if not sel and not q:
 		return grupuri
+	if lista.tip == "radio":
+		return (yield from gen_fatete_radio(lista, grupuri, sel, q, M.X))
 	index = lista.index
 	cheie = (id(lista), index.masurari_marcaj[1], index.piste_aplicate, q,
 		tuple(sorted((g, tuple(sorted(map(str, v)))) for g, v in sel.items())))
@@ -980,6 +1118,36 @@ def gen_fatete(M, lista, grupuri, sel, text="", X=None):
 	return rez
 
 
+def _trece_radio(lista, c, sel, omite=None):
+	v = lista.radio_valori.get(id(c), {})
+	return all(g == omite or not sel.get(g) or v.get(g) in sel[g] for g in ("sursa", "debit"))
+
+
+def gen_fatete_radio(lista, grupuri, sel, q, X):
+	"""Numaratoare pe intreaga selectie radio; filtrele de sursa/debit folosesc aceleasi reguli SAU/SI."""
+	index = lista.index
+	standard = {g: v for g, v in sel.items() if g in X.GRUPURI}
+	conditii = {g: index.conditii({k: v for k, v in standard.items() if k != g}) for g, _t, _o in grupuri}
+	numere = {g: {v: 0 for v, _e, _n in o} for g, _t, o in grupuri}
+	for i, r in enumerate(lista.randuri):
+		if i % UNITATE == UNITATE - 1:
+			yield
+		c = r.canal
+		if c is None or r.marcaj or (q and q not in r.cheie_nume and not c.se_potriveste(q)):
+			continue
+		for g, _titlu, optiuni in grupuri:
+			if not _trece_radio(lista, c, sel, g) or not all(index.masca(c, j, fel) & m for j, m, fel in conditii[g]):
+				continue
+			for v, _e, _n in optiuni:
+				if g in ("sursa", "debit"):
+					trece = lista.radio_valori.get(id(c), {}).get(g) == v
+				else:
+					trece = bool(c.masti[X.GRUPURI.index(g)] & index.biti[g].get(v, 0))
+				if trece:
+					numere[g][v] += 1
+	return [(g, titlu, [(v, e, numere[g][v]) for v, e, _n in o]) for g, titlu, o in grupuri]
+
+
 def selectie(argumente_, grupuri):
 	"""{grup: set(valori)} numai cu valorile care exista in grupele listei (o valoare necunoscuta se ignora)."""
 	sel = {}
@@ -1003,15 +1171,15 @@ def gen_filtreaza(lista, text, sel, X, cheie_acum=None):
 	q = X.normalizeaza(text or "")
 	if not q and not sel:
 		return lista.randuri, lista.canale, (lista.poz_cheie.get(cheie_acum, -1) if cheie_acum else -1)
-	voie = None
-	if sel:
-		potrivite = lista.index.filtreaza("", sel)
-		yield
-		voie = set()
-		for i, c in enumerate(potrivite):
-			if i % UNITATE == UNITATE - 1:
-				yield
-			voie.add(id(c))
+	cheie = (q, tuple(sorted((g, tuple(sorted(map(str, v)))) for g, v in sel.items())), cheie_acum,
+		lista.index.masurari_marcaj[1], lista.index.piste_aplicate, lista.radio_versiune)
+	vechi = lista.cautari.get(cheie)
+	if vechi is not None:
+		return vechi
+	# Aceleasi conditii ca Index.filtreaza, aplicate aici in pasi scurti; apelul sau sincron ar parcurge
+	# intregul index intr-un singur pas al generatorului, inainte ca planificatorul sa poata ceda firul.
+	standard = {g: v for g, v in sel.items() if g in X.GRUPURI}
+	conditii = lista.index.conditii(standard) if standard else ()
 	inceput, rest = [], []
 	acum_inceput = acum_rest = -1
 	for poz, r in enumerate(lista.randuri):
@@ -1019,7 +1187,9 @@ def gen_filtreaza(lista, text, sel, X, cheie_acum=None):
 			yield
 		if r.marcaj:
 			continue
-		if voie is not None and (r.canal is None or id(r.canal) not in voie):
+		if lista.tip == "radio" and not _trece_radio(lista, r.canal, sel):
+			continue
+		if conditii and (r.canal is None or not all(lista.index.masca(r.canal, i, fel) & m for i, m, fel in conditii)):
 			continue
 		if q:
 			if q in r.cheie_nume:
@@ -1046,7 +1216,11 @@ def gen_filtreaza(lista, text, sel, X, cheie_acum=None):
 		acum_poz = len(inceput) + acum_rest
 	else:
 		acum_poz = -1
-	return gasite, len(gasite), acum_poz
+	rez = gasite, len(gasite), acum_poz
+	lista.cautari[cheie] = rez
+	while len(lista.cautari) > 8:
+		del lista.cautari[next(iter(lista.cautari))]
+	return rez
 
 
 # ---------------------------------------------------------------- „Toate canalele” pe grupe, ca lista de pe televizor
@@ -1055,7 +1229,7 @@ def gen_filtreaza(lista, text, sel, X, cheie_acum=None):
 # numarul de canale; dupa ele posturile DVB-T2 / DAB+ din satelit (pe televizor: dosarele lor, dupa sateliti) si, la
 # urma, ce nu are loc (fluxurile de internet). Posturile unui loc adaugat de o extensie (Components/HdsLocuriLista.py) au grupa lor,
 # dupa cablu si terestru, ca randul lor de pe televizor. Cererea grupe=1 da antetele; grupa=<cheie> da randurile unei grupe, pe
-# pagini. Pagina deschide grupa canalului de pe televizor si cere celelalte in fundal.
+# pagini. Toate grupele pornesc inchise; butonul canalului curent cere direct pagina lui.
 GRUPA_ALTE = "alte"
 GRUPA_ONLINE = "online"
 
@@ -1069,7 +1243,7 @@ def cheie_grupa(c):
 	tip = getattr(c, "tip", None)
 	if tip in ("dab", "t2"):
 		return tip
-	if tip == "online":
+	if tip in ("online", "internet", "iptv"):
 		return GRUPA_ONLINE
 	poz = getattr(c, "poz", None)
 	if poz is None or poz == "":
@@ -1113,7 +1287,7 @@ def _nume_loc(c):
 		from Components import HdsLocuriLista as L
 		d = L.locCanal(getattr(c, "ref", ""))
 	except Exception as e:
-		_jurnal("locul canalului: %s" % e)
+		_jurnal("locul canalului: %s" % type(e).__name__)
 		d = None
 	return d["nume"] if d else "Online"
 
@@ -1122,17 +1296,84 @@ def gen_grupe(lista, X):
 	"""Grupele listei (numai „Toate canalele”), facute o data pe lista: [(cheie, nume, [randuri])], in ordinea paginii."""
 	if lista.grupe is not None:
 		return lista.grupe
+	return (yield from gen_unul_pe_fel(("grupe", id(lista)), lambda: _gen_grupe(lista, X)))
+
+
+def _gen_grupe(lista, X):
+	# O pregatire intrerupta se poate relua, fara numere ramase de la incercarea abandonata.
+	lista.parinti_grupe = {}
+	lista.poz_grupe = {}
 	pe_cheie = {}
 	primul = {}
+	online = {}
+	for i, (fisier, identitate, furnizor, nume) in enumerate(getattr(lista.index, "grupe_online", ())):
+		if i % UNITATE == UNITATE - 1:
+			yield
+		p = "p-" + hashlib.sha256(identitate.encode("utf-8")).hexdigest()[:24]
+		k = "g-" + hashlib.sha256(fisier.encode("utf-8")).hexdigest()[:24]
+		online[fisier] = (k, curat(nume), p)
+		lista.parinti_grupe.setdefault(p, {"g": p, "nume": curat(furnizor), "n": 0})
+	lista.parinte_grupa = {}
+	lista.nume_grupe = {}
+	apartenente = {}
+	for fisier, refs in getattr(lista.index, "grupe_online_canale", {}).items():
+		meta = online.get(fisier)
+		if meta is not None:
+			for i, ref in enumerate(refs):
+				if i % UNITATE == UNITATE - 1:
+					yield
+				apartenente.setdefault(ref, []).append(meta)
 	for i, r in enumerate(lista.randuri):
 		if i % UNITATE == UNITATE - 1:
 			yield
 		if r.marcaj:
 			continue
-		k = cheie_grupa(r.canal)
-		pe_cheie.setdefault(k, []).append(r)
+		c = r.canal
+		meta = online.get(getattr(c, "buchet", None))
+		metadate = apartenente.get(r.k, [meta] if meta is not None else ())
+		if metadate:
+			for j, (k, nume, p) in enumerate(metadate):
+				if j % UNITATE == UNITATE - 1:
+					yield
+				lista.parinte_grupa[k] = p
+				lista.nume_grupe[k] = nume
+				lista.parinti_grupe[p]["n"] += 1
+				randuri = pe_cheie.setdefault(k, [])
+				lista.poz_grupe.setdefault(r.k, (k, len(randuri)))
+				randuri.append(r)
+				primul.setdefault(k, c)
+			continue
+		else:
+			k = cheie_grupa(c)
+			if getattr(c, "tip", None) == "iptv":
+				# O lista veche fara metadate ramane online; numele grupei este cel din buchet.
+				k = "g-" + hashlib.sha256((c.buchet or c.ansamblu or "iptv").encode("utf-8")).hexdigest()[:24]
+				lista.nume_grupe[k] = curat(c.ansamblu) or _t("Online")
+		randuri = pe_cheie.setdefault(k, [])
+		lista.poz_grupe.setdefault(r.k, (k, len(randuri)))
+		randuri.append(r)
 		primul.setdefault(k, r.canal)
-	lista.grupe = [(k, nume_grupa(k, primul[k], X), pe_cheie[k]) for k in sorted(pe_cheie, key=lambda k: ordine_grupa(k, X))]
+	# In grupele existente se pastreaza inclusiv ordinea si repetarile din buchetul receptorului.
+	for fisier, refs in getattr(lista.index, "grupe_online_canale", {}).items():
+		meta = online.get(fisier)
+		if meta is None or meta[0] not in pe_cheie:
+			continue
+		k = meta[0]
+		randuri, vazute = [], set()
+		for i, ref in enumerate(refs):
+			if i % UNITATE == UNITATE - 1:
+				yield
+			r = lista.dupa_cheie.get(ref)
+			if r is not None:
+				if r.k not in vazute and lista.poz_grupe.get(r.k, (None,))[0] == k:
+					lista.poz_grupe[r.k] = (k, len(randuri))
+				vazute.add(r.k)
+				randuri.append(r)
+		pe_cheie[k] = randuri
+	ordine_online = {m[0]: i for i, m in enumerate(online.values())}
+	def ordine(k):
+		return (1, 1, ordine_online[k]) if k in ordine_online else ordine_grupa(k, X)
+	lista.grupe = [(k, lista.nume_grupe.get(k) or nume_grupa(k, primul[k], X), pe_cheie[k]) for k in sorted(pe_cheie, key=ordine)]
 	return lista.grupe
 
 
@@ -1202,14 +1443,14 @@ def _acum(M):
 	try:
 		ref = M.ref_acum()
 	except Exception as e:
-		_jurnal("canalul de acum: %s" % e)
+		_jurnal("canalul de acum: %s" % type(e).__name__)
 	if not ref:
 		return {"ref": None, "cheie": None, "nume": ""}
 	try:
 		nume = curat(M.nume_serviciu(ref))
 	except Exception:
 		nume = ""
-	return {"ref": ref, "cheie": M.X.cheie_din_ref(ref) or ref, "nume": nume}
+	return {"ref": ref_publica(ref), "cheie": cheie_publica(ref, M.X.cheie_din_ref(ref) or ref), "nume": nume}
 
 
 def _transmise(M):
@@ -1224,29 +1465,39 @@ def _transmise(M):
 	rez = set()
 	for r in refs:
 		try:
-			rez.add(M.X.cheie_din_ref(r) or r)
+			rez.add(cheie_publica(r, M.X.cheie_din_ref(r) or r))
 		except Exception:
-			rez.add(r)
+			rez.add(ref_publica(r))
 	return sorted(rez)
 
 
 def _cautaSigle(cai):
-	"""Pe fir: fisierele .png din caile siglelor (prima cale care are numele castiga, ca in Picon.findPicon)."""
+	"""Pe fir: siglele dupa referinta sau nume; prima cale castiga, apoi PNG inainte de JPEG."""
 	gasite = {}
 	for d in cai:
 		try:
 			nume = os.listdir(d)
 		except OSError:
 			continue
-		for n in nume:
-			if n.endswith(".png") and _NUME_SIGLA.match(n[:-4]) and n[:-4] not in gasite:
+		for n in sorted(nume, key=lambda n: not n.endswith(".png")):
+			if n.endswith((".png", ".jpg")) and _NUME_SIGLA.match(n[:-4]) and n[:-4] not in gasite:
 				gasite[n[:-4]] = os.path.join(d, n)
 	return gasite
+
+
+def _generatie_sigle(M):
+	"""Uita indexul si octetii dupa montarea sau scoaterea unui disc; fara I/O aici."""
+	functie = getattr(M, "generatie_sigle", None)
+	generatie = functie() if functie is not None else 0
+	if generatie != _MEMORIE["sigle_generatie"]:
+		_MEMORIE.update({"sigle": None, "sigle_ora": 0.0, "sigle_octeti": {}, "sigle_generatie": generatie})
+	return generatie
 
 
 def porneste_cautarea_siglelor(M):
 	"""Cauta siglele pe disc pe firul „cautare”, cel mult o cautare deodata. O cautare cazuta sau peste termen lasa
 	siglele de dinainte (sau niciuna); se reincearca dupa VIATA_SIGLE_S."""
+	generatie = _generatie_sigle(M)
 	if _MEMORIE["sigle_in_curs"]:
 		return
 	_MEMORIE["sigle_in_curs"] = True
@@ -1254,27 +1505,32 @@ def porneste_cautarea_siglelor(M):
 
 	def gata(rezultat, eroare):
 		_MEMORIE["sigle_in_curs"] = False
+		if generatie != _generatie_sigle(M):
+			return
 		if eroare is not None:
-			_jurnal("cautarea siglelor: %s %s" % (eroare.__class__.__name__, eroare))
+			_jurnal("cautarea siglelor: %s" % type(eroare).__name__)
 			rezultat = _MEMORIE["sigle"]
 		else:
 			_MEMORIE["sigle_octeti"] = {}
 		_MEMORIE["sigle"] = rezultat or {}
 		_MEMORIE["sigle_ora"] = M.acum()
 
-	cai = tuple(M.cai_sigle())
-	M.in_fir(lambda: _cautaSigle(cai), gata, fel="cautare", termen_s=TERMEN_CAUTARE_S)
+	M.in_fir(lambda: _cautaSigle(M.cai_sigle()), gata, fel="cautare", termen_s=TERMEN_CAUTARE_S)
 
 
 def gen_sigle(M):
 	"""Siglele stiute. Se asteapta numai prima cautare, cel mult ASTEAPTA_SIGLE_S de la pornirea ei; dupa aceea cererile
 	merg fara sigle pana vine rezultatul (o montare moarta nu mai intarzie fiecare cerere). O reimprospatare dupa
 	VIATA_SIGLE_S nu se asteapta: raman siglele de dinainte."""
+	_generatie_sigle(M)
 	if _MEMORIE["sigle"] is None or M.acum() - _MEMORIE["sigle_ora"] >= VIATA_SIGLE_S:
 		porneste_cautarea_siglelor(M)
 	while (_MEMORIE["sigle"] is None and _MEMORIE["sigle_in_curs"]
 			and time.monotonic() - _MEMORIE["sigle_pornit"] < ASTEAPTA_SIGLE_S):
 		yield 50
+		_generatie_sigle(M)
+		if _MEMORIE["sigle"] is None and not _MEMORIE["sigle_in_curs"]:
+			porneste_cautarea_siglelor(M)
 	return _MEMORIE["sigle"] or {}
 
 
@@ -1284,6 +1540,7 @@ LA_FIR = object()
 def cere_sigla(M, nume, dupa):
 	"""Octetii siglei `nume` (una gasita de cautare). -> octetii pe loc (din memorie), None (necunoscuta), sau LA_FIR:
 	citirea merge pe firul "citire" si raspunsul vine prin dupa(octeti sau None), pe firul enigma2."""
+	generatie = _generatie_sigle(M)
 	sigle = _MEMORIE["sigle"] or {}
 	if not _NUME_SIGLA.match(nume or "") or nume not in sigle:
 		return None
@@ -1297,7 +1554,8 @@ def cere_sigla(M, nume, dupa):
 			return f.read(MAX_SIGLA + 1)
 
 	def gata(rezultat, eroare):
-		if eroare is not None or not rezultat or len(rezultat) > MAX_SIGLA:
+		if (generatie != _generatie_sigle(M) or sigle is not _MEMORIE["sigle"]
+				or eroare is not None or not rezultat or len(rezultat) > MAX_SIGLA):
 			dupa(None)
 			return
 		memorie = _MEMORIE["sigle_octeti"]
@@ -1329,7 +1587,7 @@ def gen_buchete_raspuns(argumente_, M=None):
 	try:
 		pe_tv = M.lista_tv(tip)
 	except Exception as e:
-		_jurnal("lista de pe televizor: %s" % e)
+		_jurnal("lista de pe televizor: %s" % type(e).__name__)
 		pe_tv = None
 	if pe_tv:
 		fisier = fisier_buchet(pe_tv)
@@ -1355,6 +1613,17 @@ def gen_buchete_raspuns(argumente_, M=None):
 		# canalul de pe televizor nu e in niciun buchet: lista intreaga, prima din pagina (ordineWeb)
 		ales = TOATE
 	lista = ordineWeb([{"id": b["id"], "nume": b["nume"], "numar": b["numar"]} for b in buchete], toate)
+	if tip == "radio":
+		numere = {k: 0 for k in RADIO_LISTE}
+		for i, c in enumerate(index.canale):
+			if i % UNITATE == UNITATE - 1:
+				yield
+			k = "radio_" + sursa_radio(c)
+			if c.radio and k in numere:
+				numere[k] += 1
+		virtuale = [{"id": k, "nume": _nume_lista_radio(k), "numar": n} for k, n in numere.items() if n]
+		lista = lista[:1] + virtuale + lista[1:]
+		lista = [b for b in lista if b["numar"] > 0]
 	return 200, {"result": True, "tip": tip, "buchete": lista, "ales": ales, "multibuchet": bool(M.multibuchet()),
 		"poz_acum": str(poz_acum) if poz_acum not in (None, "") else None}
 
@@ -1381,7 +1650,7 @@ def _cheiFavorite(M, tip):
 	try:
 		return M.chei_favorite(tip)
 	except Exception as e:
-		_jurnal("Favorite: %s" % e)
+		_jurnal("Favorite: %s" % type(e).__name__)
 		return set()
 
 
@@ -1395,7 +1664,7 @@ def _semne(c, X):
 	sursa = _sursa(c) if sursa_pornita() else ""
 	if sursa == fel:
 		fel = ""
-	return " · ".join(x for x in (c.rez_eticheta, c.eticheta_acces(), sursa, fel, getattr(c, "ansamblu", "")) if x)
+	return " · ".join(curat(x) for x in ("" if c.radio else c.rez_eticheta, c.eticheta_acces(), sursa, fel, getattr(c, "ansamblu", "")) if x)
 
 
 def _cheiReleu(M):
@@ -1403,14 +1672,27 @@ def _cheiReleu(M):
 	try:
 		return M.chei_stream_relay()
 	except Exception as e:
-		_jurnal("Stream Relay: %s" % e)
+		_jurnal("Stream Relay: %s" % type(e).__name__)
 		return None
+
+
+def _sigla_rand(r, sigle):
+	"""Aceeasi ordine ca pe televizor, cautata numai in indexul din memorie."""
+	if not sigle:
+		return None
+	try:
+		from Components.Renderer.Picon import nume_sigle, nume_cautate_canal
+	except ImportError:
+		candidate = (r.sigla,)  # Fara motorul de afisare ramane referinta exacta.
+	else:
+		candidate = tuple(nume_sigle(r.ref)) + tuple(nume_cautate_canal(r.nume))
+	return next((nume for nume in candidate if nume in sigle), None)
 
 
 def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None):
 	if r.marcaj:
 		return {"m": 1, "nume": r.nume}
-	d = {"k": r.k, "ref": r.ref, "nume": r.nume}
+	d = {"k": cheie_publica(r.ref, r.k), "ref": ref_publica(r.ref), "nume": r.nume}
 	if favorite and r.k in favorite:
 		d["f"] = 1
 	if releu is not None:
@@ -1424,13 +1706,14 @@ def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None):
 		d["n"] = r.n
 	if r.epg:
 		d["e"] = r.epg
-	if r.sigla and sigle and r.sigla in sigle:
-		d["s"] = r.sigla
+	sigla = _sigla_rand(r, sigle)
+	if sigla:
+		d["s"] = sigla
 	semne = _semne(r.canal, X)
 	if semne:
 		d["semne"] = semne
 	if deosebire:
-		d["d"] = deosebire
+		d["d"] = curat(deosebire)
 	dvbi = _eticheta_dvbi(r.ref)
 	if dvbi:
 		d["dvbi"] = dvbi
@@ -1464,15 +1747,27 @@ def _eticheta_dvbi(ref):
 	return ""
 
 
-def gen_deosebiri(randuri, X):
+def gen_deosebiri(randuri, X, lista=None):
 	"""Ce deosebeste randurile care arata la fel (acelasi nume si aceleasi semne; pozitia nu se vede in rand, deci intra
 	printre deosebiri): HdsIndexCanale.deosebiri_treptat pe toate randurile gasite, in pasi de UNITATE. -> {id(rand):
 	text}."""
 	f = getattr(X, "deosebiri_treptat", None)
 	if f is None:
 		return {}
-	return (yield from f(randuri, nume=lambda r: r.cheie_nume, vizibil=lambda r: (r.nume, _semne(r.canal, X)),
-		canal=lambda r: None if r.marcaj else r.canal, pas=UNITATE))
+	cheie = (id(randuri), sursa_pornita(), lista.index.masurari_marcaj[1], lista.index.piste_aplicate) if lista else None
+	if lista is not None and cheie in lista.deosebiri:
+		return lista.deosebiri[cheie][1]
+
+	def fa():
+		rez = yield from f(randuri, nume=lambda r: r.cheie_nume, vizibil=lambda r: (r.nume, _semne(r.canal, X)),
+			canal=lambda r: None if r.marcaj else r.canal, pas=UNITATE)
+		if lista is not None:
+			lista.deosebiri[cheie] = (randuri, rez)
+			while len(lista.deosebiri) > 8:
+				del lista.deosebiri[next(iter(lista.deosebiri))]
+		return rez
+
+	return (yield from gen_unul_pe_fel(("deosebiri", id(lista), id(randuri), cheie), fa))
 
 
 def gen_lista_raspuns(argumente_, M=None):
@@ -1483,6 +1778,8 @@ def gen_lista_raspuns(argumente_, M=None):
 	if tip is None:
 		return 400, {"result": False, "message": _t("Fila se alege cu tv sau radio.")}
 	id_ = argumente_.get("buchet") or TOATE
+	if X.normalizeaza((argumente_.get("text") or "")[:MAX_TEXT]):
+		id_ = TOATE
 	if id_ != TOATE and not _ID_BUCHET.match(id_):
 		return 400, {"result": False, "message": _t("Lista aleasă nu există pe receptor."), "camp": "buchet"}
 	de_la = _intreg(argumente_.get("de_la"), 0, 0, 1000000)
@@ -1495,14 +1792,17 @@ def gen_lista_raspuns(argumente_, M=None):
 		return 404, {"result": False, "message": _t("Lista aleasă nu există pe receptor. Reîncarcă pagina."),
 			"camp": "buchet"}
 	grupuri = yield from gen_numarare(M, lista)
-	# setarea "Siglele canalelor (piconuri)" oprita: randurile fara sigla, ca pe televizor
-	sigle = (yield from gen_sigle(M)) if sigle_pornite() else {}
 	text = (argumente_.get("text") or "")[:MAX_TEXT]
 	sel = selectie(argumente_, grupuri)
 	acum = _acum(M)
+	r_acum = lista.dupa_public.get(acum["ref"])
+	cheie_acum = r_acum.k if r_acum is not None else acum["cheie"]
 	pe_grupe = lista.id == TOATE and not X.normalizeaza(text) and not sel
 	if pe_grupe and argumente_.get("grupe") == "1":
 		return 200, (yield from gen_antete(M, X, lista, tip, acum, grupuri, sel))
+	# Antetele nu au sigle si vin fara cautarea lor. Numai prima pagina de randuri asteapta cautarea initiala,
+	# pe fir separat si cel mult ASTEAPTA_SIGLE_S; urmatoarele pagini refolosesc rezultatul.
+	sigle = (yield from gen_sigle(M)) if sigle_pornite() else {}
 	if de_la == 0 and not grupa:
 		# numerele din pagina: cate canale ar ramane cu fiecare optiune bifata, tinand cont de celelalte grupe alese
 		grupuri = yield from gen_fatete(M, lista, grupuri, sel, text, X)
@@ -1513,13 +1813,14 @@ def gen_lista_raspuns(argumente_, M=None):
 		grupe = yield from gen_grupe(lista, X)
 		gasite = next((randuri for k, _n, randuri in grupe if k == grupa), [])
 		canale = len(gasite)
-		acum_poz = next((i for i, r in enumerate(gasite) if acum["cheie"] and r.k == acum["cheie"]), -1)
+		loc = lista.poz_grupe.get(cheie_acum)
+		acum_poz = loc[1] if loc is not None and loc[0] == grupa else -1
 	else:
-		gasite, canale, acum_poz = yield from gen_filtreaza(lista, text, sel, X, acum["cheie"])
+		gasite, canale, acum_poz = yield from gen_filtreaza(lista, text, sel, X, cheie_acum)
 	bucata = gasite[de_la:de_la + cate]
 	favorite = _cheiFavorite(M, tip)
 	releu = _cheiReleu(M)
-	deosebiri = yield from gen_deosebiri(gasite, X)
+	deosebiri = yield from gen_deosebiri(gasite, X, lista)
 	randuri = []
 	for i, r in enumerate(bucata):
 		if i % UNITATE == UNITATE - 1:
@@ -1594,16 +1895,41 @@ def _text_grupa(X, n, neprins):
 	return text + u" · " + _t("din altă listă, fără semnal aici") if neprins else text
 
 
+def gen_numai_radio(M, X, grupe):
+	"""Fila TV: pozitiile de satelit numai cu radio, ca randul lor din lista de pe televizor (Screens/ChannelSelection.py,
+	hds_locuri_numai_radio): [{"g", "text", "n", "inainte_de": cheia grupei TV dinaintea careia sta sau None}]. Fila TV nu le
+	are in grupe, deci altfel pozitia n-ar aparea nicaieri; clicul trece pe fila Radio."""
+	index = yield from gen_index(M)
+	tv = set(k for k, _nume, _randuri in grupe)
+	numere, primul = {}, {}
+	for i, c in enumerate(index.canale):
+		if i % UNITATE == UNITATE - 1:
+			yield
+		if c.radio:
+			k = cheie_grupa(c)
+			if k.isdigit() and k not in tv:
+				numere[k] = numere.get(k, 0) + 1
+				primul.setdefault(k, c)
+	rez = []
+	for k in sorted(numere, key=lambda k: ordine_grupa(k, X)):
+		urmatoarea = next((g for g, _nume, _randuri in grupe if ordine_grupa(g, X) > ordine_grupa(k, X)), None)
+		rez.append({"g": k, "n": numere[k], "inainte_de": urmatoarea, "text": _t("%(loc)s · numai radio, %(numar)s") % {
+			"loc": nume_grupa(k, primul[k], X), "numar": X.ngettext("%d post", "%d posturi", numere[k]) % numere[k]}})
+	return rez
+
+
 def gen_antete(M, X, lista, tip, acum, grupuri, sel):
 	"""GET /api/canale-lista cu grupe=1 („Toate canalele” fara text si fara filtre): antetele grupelor, cu numarul de
 	canale, si grupa canalului de pe televizor (pagina o deschide pe ea)."""
 	grupe = yield from gen_grupe(lista, X)
+	numai_radio = (yield from gen_numai_radio(M, X, grupe)) if tip == "tv" else []
 	neprinse = grupe_neprinse([k for k, _nume, _randuri in grupe])
 	acum_grupa = None
 	if acum["cheie"]:
-		r = lista.dupa_cheie.get(acum["cheie"])
+		r = lista.dupa_public.get(acum["ref"]) or lista.dupa_cheie.get(acum["cheie"])
 		if r is not None:
-			acum_grupa = cheie_grupa(r.canal)
+			acum_grupa = lista.poz_grupe.get(r.k, (None, -1))[0]
+	parinti = [dict(p, nt=X.text_numar(p["n"])) for p in lista.parinti_grupe.values() if p["n"]]
 	return {
 		"result": True,
 		"tip": tip,
@@ -1619,8 +1945,11 @@ def gen_antete(M, X, lista, tip, acum, grupuri, sel):
 		"acum": acum,
 		"acum_poz": -1,
 		"acum_grupa": acum_grupa,
+		"acum_grupa_poz": lista.poz_grupe.get(r.k, (None, -1))[1] if acum_grupa else -1,
+		"parinti": parinti,
 		"grupe": [{"g": k, "nume": nume, "n": len(randuri), "nt": _text_grupa(X, len(randuri), k in neprinse),
-			"neprins": k in neprinse} for k, nume, randuri in grupe],
+			"neprins": k in neprinse, "p": lista.parinte_grupa.get(k)} for k, nume, randuri in grupe],
+		"numai_radio": numai_radio,
 		"grupuri": _grupuri_json(grupuri, sel, X),
 		"ora": int(M.acum()),
 	}
@@ -1665,7 +1994,7 @@ def epg(argumente_, M=None):
 				if tupla:
 					perechi.setdefault(tupla[0], []).append(tupla)
 		except Exception as e:
-			_jurnal("EPG: %s" % e)
+			_jurnal("EPG: %s" % type(e).__name__)
 		for r in lipsa:
 			doua = perechi.get(r, [])
 			e_acum = _emisiune(doua[0]) if len(doua) > 0 else None
@@ -1690,7 +2019,7 @@ def stare_acum(M=None):
 				emisiune = _emisiune(tupla)
 				break
 		except Exception as e:
-			_jurnal("EPG acum: %s" % e)
+			_jurnal("EPG acum: %s" % type(e).__name__)
 	try:
 		standby = bool(M.in_standby())
 	except Exception:
@@ -1724,7 +2053,7 @@ def gen_porneste(argumente_, M=None):
 	ok, motiv = M.zap(ref_lista, tip, ref_buchet, canal)
 	if not ok:
 		return 409, {"result": False, "message": motiv or _t("Canalul nu a pornit.")}
-	_jurnal("pornit din web: %s" % nume)
+	_jurnal("pornit din web")
 	return 200, {"result": True, "message": _t("Pornește pe televizor: %s") % nume, "acum": _acum(M)}
 
 
@@ -1755,7 +2084,7 @@ def gen_favorit(argumente_, M=None):
 	try:
 		in_editare = M.lista_in_editare()
 	except Exception as e:
-		_jurnal("lista de pe televizor: %s" % e)
+		_jurnal("lista de pe televizor: %s" % type(e).__name__)
 		in_editare = False
 	if in_editare:
 		return 409, {"result": False,
@@ -1765,7 +2094,7 @@ def gen_favorit(argumente_, M=None):
 	if not rez.ok:
 		return 409, {"result": False, "message": mesaj}
 	uita_listele()
-	_jurnal("Favorite din web: %s %s" % (nume, rez.fapta))
+	_jurnal("Favorite din web: %s" % rez.fapta)
 	return 200, {"result": True, "f": 1 if rez.in_buchet else 0, "message": mesaj}
 
 
@@ -1796,7 +2125,7 @@ def gen_stream_relay(argumente_, M=None):
 	try:
 		cheie_releu = M.stream_relay().cheie(ref_lista)
 	except Exception as e:
-		_jurnal("Stream Relay: %s" % e)
+		_jurnal("Stream Relay: %s" % type(e).__name__)
 		cheie_releu = None
 	if not cheie_releu:
 		return 400, {"result": False, "message": _t("Numai canalele din satelit, cablu sau terestru pot intra în Stream Relay."),
@@ -1804,7 +2133,7 @@ def gen_stream_relay(argumente_, M=None):
 	ok, in_lista = M.pune_stream_relay(ref_lista, vrea == "1")
 	if not ok:
 		return 409, {"result": False, "message": _t("Lista Stream Relay nu s-a putut schimba.")}
-	_jurnal("Stream Relay din web: %s %s" % (nume, "pus" if in_lista else "scos"))
+	_jurnal("Stream Relay din web: %s" % ("pus" if in_lista else "scos"))
 	mesaj = (_t("%s este acum în Stream Relay.") if in_lista else _t("%s nu mai este în Stream Relay.")) % nume
 	return 200, {"result": True, "sr": 1 if in_lista else 0, "message": mesaj}
 
@@ -1817,6 +2146,14 @@ def gen_gaseste(M, tip, id_, ref):
 	`canal` (din index) numai la TOATE: il cere drumul cautarii de pe televizor; dintr-un buchet drumul e al lui
 	zapToNumber si nu il foloseste."""
 	X = M.X
+	if _REF_PUBLIC.fullmatch(ref) or (tip == "radio" and id_ in RADIO_LISTE):
+		lista = yield from gen_lista(M, tip, id_, None)
+		if lista is None:
+			return None
+		rand = lista.dupa_public.get(ref)
+		if rand is None:
+			return False
+		return rand.ref, rand.nume, lista.ref_buchet, rand.canal if lista.ref_buchet is None else None
 	k = X.cheie_din_ref(ref) or ref
 	vechi = _MEMORIE["liste"].get((tip, id_))
 	if vechi is not None and vechi[0][:2] == (semnatura(M.director()), M.multibuchet()):
@@ -1856,6 +2193,42 @@ def gen_gaseste(M, tip, id_, ref):
 
 
 # ---------------------------------------------------------------- executorul pe felii
+
+def gen_exporta(argumente_, M=None, H=None, A=None):
+	"""Referintele si numele intregii selectii, in pasi scurti. Nici paginarea browserului, nici limita vechiului
+	POST cu referinte nu taie lista; se pastreaza regulile referintelor exportabile din tv_web.m3u."""
+	if H is None:
+		from Components import HdsTransmisie as H
+	if A is None:
+		from . import acces_extern as A
+	M = _m(M)
+	tip = _tip(argumente_)
+	if tip is None:
+		return 400, {"result": False, "message": _t("Fila se alege cu tv sau radio.")}
+	id_ = argumente_.get("buchet") or TOATE
+	if id_ != TOATE and not _ID_BUCHET.match(id_):
+		return 400, {"result": False, "message": _t("Lista aleasă nu există pe receptor."), "camp": "buchet"}
+	lista = yield from gen_lista(M, tip, id_)
+	if lista is None:
+		return 404, {"result": False, "message": _t("Lista aleasă nu există pe receptor. Reîncarcă pagina.")}
+	grupuri = yield from gen_numarare(M, lista)
+	sel = selectie(argumente_, grupuri)
+	gasite, _numar, _poz = yield from gen_filtreaza(lista, (argumente_.get("text") or "")[:MAX_TEXT], sel, M.X)
+	refs, canale, vazute = [], [], set()
+	for i, r in enumerate(gasite):
+		if i % UNITATE == UNITATE - 1:
+			yield
+		ref = H.refCurata(r.ref) if not r.marcaj else None
+		if ref is None or ref in vazute:
+			continue
+		if len(refs) >= A.MAX_CANALE:
+			return 413, {"result": False, "message": _t("Lista are prea multe canale pentru un singur playlist. Alege o listă sau un filtru mai restrâns.")}
+		vazute.add(ref)
+		refs.append(ref)
+		canale.append((ref, r.nume))
+	if not canale:
+		return 400, {"result": False, "message": _t("Alege un canal din listă.")}
+	return 200, (refs, canale)
 
 class _Planificator(object):
 	"""Lucrarile pe felii ale unui furnizor, cu un singur ceas. O bataie ruleaza o singura felie (a primei lucrari
@@ -1999,7 +2372,7 @@ class PeBucati(object):
 			return
 		except Exception as e:
 			self._masoara(inceput)
-			_jurnal("eroare: %s" % e)
+			_jurnal("eroare: %s" % type(e).__name__)
 			self._termina(500, {"result": False, "message": _t("Eroare pe receptor.")})
 			return
 		self._masoara(inceput)
@@ -2036,6 +2409,61 @@ def ruleaza_tot(gen):
 		return sfarsit.value
 
 
+def lista_progres(argumente_, M=None, buchete=False):
+	"""O bucata a listei, pregatita independent de durata conexiunii HTTP. 202 inseamna ca browserul poate
+	intreba din nou: lucrul deja facut ramane pe planificator, nu se ia de la capat dupa termenul unei cereri.
+	Cel mult MAX_PREGATIRI lucrari; raspunsurile terminate se consuma la prima citire, fara un ceas permanent.
+	Cele fara cititor se opresc la urmatoarea cerere dupa 30 s, ori la TERMEN_PREGATIRE_S chiar fara alte cereri."""
+	M = _m(M)
+	acum = time.monotonic()
+	mem = _MEMORIE["pregatiri"]
+	sem = (semnatura(M.director()), M.multibuchet())
+	for k, stare in list(mem.items()):
+		vechi = (acum - stare["terminat"] > 2) if stare["rez"] is not None else (acum - stare["vazut"] > 30)
+		if stare["sem"] != sem or vechi:
+			if stare["lucru"].viu():
+				stare["lucru"].opreste()
+			del mem[k]
+	a = dict((k, v) for k, v in argumente_.items() if k != "progres")
+	cheie = ("buchete" if buchete else "lista", tuple(sorted(a.items())))
+	stare = mem.get(cheie)
+	if stare is None:
+		# O cautare inlocuita in browser nu mai intreaba dupa rezultatul ei. Sub presiune eliberam mai intai
+		# cea mai veche asemenea lucrare; cititorii activi intreaba la 200 ms si isi pastreaza locul.
+		active = [(k, s) for k, s in mem.items() if s["lucru"].viu()]
+		if len(active) >= MAX_PREGATIRI:
+			k_vechi, veche = min(active, key=lambda intrare: intrare[1]["vazut"])
+			if acum - veche["vazut"] >= 0.5:
+				veche["lucru"].opreste()
+				del mem[k_vechi]
+		if sum(1 for s in mem.values() if s["lucru"].viu()) >= MAX_PREGATIRI or _planificator(M).numar() >= MAX_LUCRARI:
+			return 503, {"result": False, "ocupat": True, "dupa_ms": 400,
+				"message": _t("Receptorul are prea multe cereri în lucru. Încearcă din nou.")}
+		stare = {"sem": sem, "vazut": acum, "rez": None, "lucru": None, "terminat": 0}
+
+		def gata(cod, corp):
+			stare["rez"] = (cod, corp)
+			stare["terminat"] = time.monotonic()
+
+		gen = gen_buchete_raspuns(a, M) if buchete else gen_lista_raspuns(a, M)
+		stare["lucru"] = PeBucati(gen, gata, M, termen_s=TERMEN_PREGATIRE_S)
+		mem[cheie] = stare
+		stare["lucru"].porneste()
+		# Pagini terminate, nu lucrari: o limita separata tine memoria marginita chiar la derulare indelungata.
+		for k in list(mem):
+			if len(mem) <= 32:
+				break
+			if k != cheie and not mem[k]["lucru"].viu():
+				del mem[k]
+	stare["vazut"] = acum
+	if stare["rez"] is not None:
+		del mem[cheie]
+		return stare["rez"]
+	lucru = stare["lucru"]
+	return 202, {"result": True, "pregatire": True, "dupa_ms": 200,
+		"lucru": {"felii": lucru.felii, "felie_max_ms": round(lucru.maxim_s * 1000, 1)}}
+
+
 # ---------------------------------------------------------------- resursele
 
 def rute(baza, resource, NOT_DONE_YET=None, M=None):
@@ -2047,7 +2475,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 			request.write(date)
 			request.finish()
 		except Exception as e:
-			_jurnal("raspunsul nu a plecat (browser plecat?): %s" % e)
+			_jurnal("raspunsul nu a plecat (browser plecat?): %s" % type(e).__name__)
 
 	class _PeFelii(baza):
 		"""Raspunsul se face pe felii; browserul care inchide conexiunea opreste lucrul."""
@@ -2076,6 +2504,10 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 			return gen_buchete_raspuns(a, Mx)
 
 		def render_GET(self, request):
+			a = argumente(request)
+			if a.get("progres") == "1":
+				cod, corp = lista_progres(a, M, buchete=True)
+				return self._raspunde(request, corp, cod)
 			return self._porneste(request)
 
 	class ListaResource(_PeFelii):
@@ -2085,6 +2517,10 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 			return gen_lista_raspuns(a, Mx)
 
 		def render_GET(self, request):
+			a = argumente(request)
+			if a.get("progres") == "1":
+				cod, corp = lista_progres(a, M)
+				return self._raspunde(request, corp, cod)
 			return self._porneste(request)
 
 	class PornesteResource(_PeFelii):
@@ -2100,6 +2536,76 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 
 		def render_GET(self, request):
 			return self._porneste(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class ExportaResource(baza):
+		"""POST cu selectia, nu cu zeci de mii de referinte. Numele vin din lista pregatita, fara apeluri Enigma
+		pentru fiecare canal; serializarea, persistenta mare si textul M3U ruleaza pe fire separate."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			from . import acces_extern as A, aparate_web as AW, tv_web as TV, plugin as P
+			if P.PARAM_JETON in request.args:
+				return self._eroare(request, _t("Playlistul se descarcă numai cu browserul conectat."), 403)
+			Mx = _m(M)
+			if _planificator(Mx).numar() >= MAX_LUCRARI:
+				return self._eroare(request, _t("Receptorul are prea multe cereri în lucru. Încearcă din nou."), 503)
+			gazda = P._antet(request, b"host") or ""
+			if not A.gazdaBuna(gazda):
+				return self._eroare(request, _t("Adresa receptorului din cerere nu e bună."), 400)
+			a = argumente(request)
+			_s, browser = P._sesiuneDinCerere(request)
+			adresa = P._adresaClient(request) or ""
+			cine = TV.cineDinBrowser(browser, adresa)
+			nume_browser = (browser or {}).get("nume") or adresa
+			eticheta = curat(a.get("nume") or "canale", 80)
+			grup = curat(a.get("grup") or "", 80)
+			raspuns_inceput = [False]
+
+			def gen():
+				cod, rezultat = yield from gen_exporta(a, Mx)
+				if cod != 200:
+					return cod, rezultat
+				refs, canale = rezultat
+				magazin = A.magazin()
+				cheie, _c = magazin.creeaza("lista", refs, cine, nume_browser, eticheta)
+				generatie = magazin._generatie_salvare
+				while magazin.stare_salvare(generatie) is None:
+					yield 50
+				if not magazin.stare_salvare(generatie):
+					return 503, {"result": False, "message": _t("Playlistul nu s-a putut salva pe receptor. Încearcă din nou.")}
+				if magazin._chei.get(_c.id) is not _c:
+					return 409, {"result": False, "message": _t("Playlistul a fost revocat între timp. Descarcă-l din nou.")}
+				octeti = yield from AW.gen_pe_fir(Mx,
+					lambda: A.textM3u(gazda, cheie, canale, grup).encode("utf-8", "replace"), fel="export")
+				fisier = A.numeFisier(["hdsatelit", eticheta])
+				raspuns_inceput[0] = True
+				request.setResponseCode(200)
+				request.setHeader(b"content-type", b"audio/x-mpegurl; charset=utf-8")
+				request.setHeader(b"cache-control", b"no-store")
+				request.setHeader(b"x-content-type-options", b"nosniff")
+				request.setHeader(b"content-disposition", ('attachment; filename="%s"' % fisier).encode("ascii"))
+				request.setHeader(b"content-length", str(len(octeti)).encode("ascii"))
+				yield from AW.gen_scrie(request, (octeti[i:i + 65536] for i in range(0, len(octeti), 65536)))
+				return None, None
+
+			def gata(cod, corp):
+				try:
+					if cod is not None and raspuns_inceput[0]:
+						request.transport.loseConnection()
+						return  # un M3U deja inceput nu primeste niciodata un corp JSON de eroare
+					if cod is not None:
+						request.write(self._raspunde(request, corp, cod))
+					request.finish()
+				except Exception:
+					pass
+
+			lucru = PeBucati(gen(), gata, Mx, termen_s=TERMEN_PREGATIRE_S)
+			try:
+				request.notifyFinish().addErrback(lucru.opreste)
+			except Exception:
+				pass
+			lucru.porneste()
+			return NOT_DONE_YET
 
 	class FavoritResource(_PeFelii):
 		"""POST /api/canale-favorit: schimba Favorite pe receptor; trece inaintea listelor in lucru."""
@@ -2138,7 +2644,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 				cod, corp = epg(argumente(request), M)
 				return self._raspunde(request, corp, cod)
 			except Exception as e:
-				_jurnal("EPG: %s" % e)
+				_jurnal("EPG: %s" % type(e).__name__)
 				return self._eroare(request, _t("Eroare pe receptor."), 500)
 			finally:
 				_masoaraDirect("EPG", inceput)
@@ -2152,7 +2658,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 				cod, corp = stare_acum(M)
 				return self._raspunde(request, corp, cod)
 			except Exception as e:
-				_jurnal("acum: %s" % e)
+				_jurnal("acum: %s" % type(e).__name__)
 				return self._eroare(request, _t("Eroare pe receptor."), 500)
 			finally:
 				_masoaraDirect("acum", inceput)
@@ -2172,7 +2678,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 						request.write(self._png(request, rezultat))
 					request.finish()
 				except Exception as e:
-					_jurnal("sigla nu a plecat (browser plecat?): %s" % e)
+					_jurnal("sigla nu a plecat (browser plecat?): %s" % type(e).__name__)
 
 			octeti = cere_sigla(Mx, nume, dupa)
 			if octeti is LA_FIR:
@@ -2182,8 +2688,14 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 			return self._png(request, octeti)
 
 		def _png(self, request, octeti):
+			if octeti.startswith(b"\x89PNG\r\n\x1a\n"):
+				fel = b"image/png"
+			elif octeti.startswith(b"\xff\xd8\xff"):
+				fel = b"image/jpeg"
+			else:
+				return self._eroare(request, _t("Sigla nu există pe receptor."), 404)
 			request.setResponseCode(200)
-			request.setHeader(b"content-type", b"image/png")
+			request.setHeader(b"content-type", fel)
 			request.setHeader(b"cache-control", b"private, max-age=86400")
 			request.setHeader(b"x-content-type-options", b"nosniff")
 			return octeti
@@ -2201,6 +2713,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		b"canale-epg": EpgResource(),
 		b"canale-acum": AcumResource(),
 		b"canale-porneste": PornesteResource(),
+		b"canale-exporta": ExportaResource(),
 		b"canale-favorit": FavoritResource(),
 		b"canale-stream-relay": StreamRelayResource(),
 		b"canale-sigla": SiglaResource(),
@@ -2458,12 +2971,12 @@ __APARATE_DIALOG__
 <script src="/tv/player.js"></script>
 <script>
 var CFG = __CONFIG__;
-var PAGINA = 100, PAGINA_GRUPA = 500;
+var PAGINA = 100, PAGINA_GRUPA = 100;
 var S = {transmise: [], tip: "tv", buchet: null, text: "", ales: {}, randuri: [], gata: true, urm: 0, gen: 0, incarca: false,
   filtreEl: {}, semnFiltre: null,
   epg: {}, el: {}, coada: [], epgInCurs: false, ofset: 0, acum: null, acumPoz: -1, pornire: false, grupuri: [],
   fundal: 0, grupat: false, grupe: [], deschise: {}, grupaAcum: null, elGrupe: {}, spreAcum: false, coadaGrupe: [],
-  grupaInCurs: false};
+  grupaInCurs: false, grupaAcumPoz: -1, bucheteGen: 0};
 // emisiunile se cer numai pentru randurile care ajung aproape de ecran (o grupa inchisa sau toate grupele deschise nu
 // cer sute de canale deodata)
 var VEDERE = window.IntersectionObserver ? new IntersectionObserver(function(intrari){
@@ -2477,9 +2990,14 @@ var VEDERE = window.IntersectionObserver ? new IntersectionObserver(function(int
   cereEpg(cer);
 }, {rootMargin: "600px"}) : null;
 // paginile listei tinute minte in browser (cheia = cererea), ca trecerea la toata lista sa nu mai astepte receptorul
-var MEMORIE = {}, MEMORIE_MS = 120000;
+var MEMORIE = {}, MEMORIE_MS = 15000;
 function dinMemorie(q){ var x = MEMORIE[q]; return (x && Date.now() - x.t < MEMORIE_MS) ? x.d : null; }
-function tineMinte(q, d){ if(d && d.result){ MEMORIE[q] = {t: Date.now(), d: d}; } }
+function tineMinte(q, d){
+  if(d && d.result && !d.pregatire){
+    MEMORIE[q] = {t: Date.now(), d: d};
+    while(Object.keys(MEMORIE).length > 16){ delete MEMORIE[Object.keys(MEMORIE)[0]]; }
+  }
+}
 var ceasText = null, ceasMesaj = null, ceasFiltre = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
@@ -2498,6 +3016,20 @@ function cerere(cale, metoda, date){
     return r.json().catch(function(){ return {result: false, message: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
   });
 }
+// Fiecare raspuns vine imediat. Pregatirea intreaga ramane pe receptor intre doua intrebari, chiar la index rece;
+// un raspuns vechi nu poate porni alta intrebare dupa schimbarea cautarii, filei sau listei.
+function cerereLista(cale, activ){
+  cale += (cale.indexOf("?") === -1 ? "?" : "&") + "progres=1";
+  function pas(){
+    if(activ && !activ()){ return Promise.resolve(null); }
+    return cerere(cale).then(function(d){
+      if(activ && !activ()){ return null; }
+      if(!d.pregatire && !d.ocupat){ return d; }
+      return new Promise(function(resolve){ setTimeout(resolve, Math.max(100, Math.min(1000, d.dupa_ms || 200))); }).then(pas);
+    });
+  }
+  return pas();
+}
 function el(tag, clasa, text){
   var e = document.createElement(tag);
   if(clasa){ e.className = clasa; }
@@ -2515,10 +3047,11 @@ function mesaj(text, eroare){
   if(ceasMesaj){ clearTimeout(ceasMesaj); }
   if(text){ ceasMesaj = setTimeout(function(){ m.classList.add("ascuns"); }, 4000); }
 }
+function buchetActiv(){ return S.text ? "toate" : (S.buchet || "toate"); }
 function parametri(de_la){
   var q = new URLSearchParams();
   q.set("fila", S.tip);
-  q.set("buchet", S.buchet || "toate");
+  q.set("buchet", buchetActiv());
   if(S.text){ q.set("text", S.text); }
   Object.keys(S.ales).forEach(function(g){ if(S.ales[g].length){ q.set(g, S.ales[g].join(",")); } });
   q.set("de_la", de_la);
@@ -2535,26 +3068,30 @@ function arataFila(){
   $("filaRadio").setAttribute("aria-selected", S.tip === "radio" ? "true" : "false");
 }
 function incarcaBuchete(){
+  var gen = ++S.bucheteGen, tip = S.tip;
+  S.gen += 1; S.fundal += 1;
   arataFila();
   $("numar").textContent = "Se citește lista...";
-  return cerere("/api/canale-buchete?fila=" + S.tip).then(function(d){
+  return cerereLista("/api/canale-buchete?fila=" + tip, function(){ return gen === S.bucheteGen && tip === S.tip; }).then(function(d){
+    if(!d || gen !== S.bucheteGen){ return; }
     if(!d.result){ $("numar").textContent = d.message || "Listele nu s-au putut citi."; return; }
     var s = $("buchet"); gol(s);
     d.buchete.forEach(function(b){
       var o = el("option", "", b.nume + " (" + b.numar + ")"); o.value = b.id; s.appendChild(o);
     });
-    // implicit "Toate canalele", pe grupe ca lista "Sateliti" de pe televizor: grupa canalului de pe televizor
-    // deschisa, cu canalul marcat si adus in vedere; celelalte grupe inchise, cerute in fundal
+    // Initial vin numai antetele din lista receptorului. Randurile se cer cand omul deschide grupa.
     S.buchet = "toate";
     s.value = "toate";
     incarcaLista();
-  }).catch(function(){ $("numar").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+  }).catch(function(){ if(gen === S.bucheteGen){ $("numar").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } });
 }
 function cuFiltre(){ return Object.keys(S.ales).some(function(g){ return S.ales[g].length; }); }
 // "Toate canalele" fara text si fara filtre = pe grupe; altfel lista plata, peste toate canalele listei alese
 function eGrupat(){ return S.buchet === "toate" && !S.text && !cuFiltre(); }
 function incarcaLista(){
   S.gen += 1;
+  S.fundal += 1;
+  S.inceput = 0; S.inainteEl = null;
   S.randuri = []; S.gata = false; S.urm = 0; S.el = {}; S.coada = []; S.elGrupe = {}; S.coadaGrupe = [];
   S.grupaInCurs = false;
   if(VEDERE){ VEDERE.disconnect(); }
@@ -2568,24 +3105,23 @@ function incarcaGrupele(gen){
   S.incarca = true;
   var q = new URLSearchParams();
   q.set("fila", S.tip); q.set("buchet", "toate"); q.set("grupe", "1");
-  return cerere("/api/canale-lista?" + q.toString()).then(function(d){
-    if(gen !== S.gen){ return; }
+  return cerereLista("/api/canale-lista?" + q.toString(), function(){ return gen === S.gen; }).then(function(d){
+    if(!d || gen !== S.gen){ return; }
     S.incarca = false;
     S.gata = true;
     if(!d.result){ $("numar").textContent = d.message || "Lista nu s-a putut citi."; return; }
     potriveste(d.ora);
     primaPagina(d);
     S.grupe = d.grupe || [];
+    S.numaiRadio = d.numai_radio || [];
     S.grupaAcum = d.acum_grupa || null;
+    S.grupaAcumPoz = typeof d.acum_grupa_poz === "number" ? d.acum_grupa_poz : -1;
     $("laAcum").classList.toggle("ascuns", !S.grupaAcum);
+    S.parinti = d.parinti || [];
     deseneazaGrupele();
-    if(!Object.keys(S.deschise).some(function(k){ return S.deschise[k]; }) && S.grupaAcum){
-      S.deschise[S.grupaAcum] = true;
-      S.spreAcum = true;
-    }
+    if(S.spreAcum && S.grupaAcum){ S.deschise[S.grupaAcum] = true; }
     S.grupe.forEach(function(g){ if(S.deschise[g.g]){ deschideGrupa(g.g); } });
     arataToate();
-    preincarca(S.tip);
   }).catch(function(){
     if(gen !== S.gen){ return; }
     S.incarca = false;
@@ -2594,6 +3130,8 @@ function incarcaGrupele(gen){
 }
 function deseneazaGrupele(){
   var l = $("lista");
+  gol(l);
+  S.elGrupe = {};
   if(S.grupe.length > 1){
     var li = el("li", "toate-grupele");
     var b = el("button", "buton"); b.type = "button"; b.id = "toateGrupele";
@@ -2601,7 +3139,35 @@ function deseneazaGrupele(){
     li.appendChild(b);
     l.appendChild(li);
   }
+  // pozitiile numai cu radio, fiecare la locul ei intre sateliti; clicul duce pe fila Radio, ca OK pe randul de pe televizor
+  function randuriRadio(inainte){
+    (S.numaiRadio || []).forEach(function(r){
+      if(r.inainte_de !== inainte){ return; }
+      var li = el("li", "grupa numai-radio");
+      var b = el("button", "antet"); b.type = "button";
+      b.appendChild(el("span", "nume-grupa", r.text));
+      b.addEventListener("click", function(){ $("filaRadio").click(); });
+      li.appendChild(b); l.appendChild(li);
+    });
+  }
+  var parinti = {};
+  (S.parinti || []).forEach(function(p){
+    var li = el("li", "grupa furnizor"), b = el("button", "antet"); b.type = "button";
+    b.setAttribute("aria-expanded", "false");
+    b.appendChild(el("span", "semn")); b.appendChild(el("span", "nume-grupa", p.nume));
+    b.appendChild(el("span", "nr-grupa", p.nt || String(p.n)));
+    var ol = el("ol", "lista grupa-canale ascuns");
+    b.addEventListener("click", function(){
+      var deschis = b.getAttribute("aria-expanded") !== "true";
+      b.setAttribute("aria-expanded", deschis ? "true" : "false"); ol.classList.toggle("ascuns", !deschis);
+      if(!deschis){ S.grupe.forEach(function(g){ if(g.p === p.g){ inchideGrupa(g.g); } }); arataToate(); }
+    });
+    li.appendChild(b); li.appendChild(ol); parinti[p.g] = {li: li, b: b, ol: ol};
+  });
   S.grupe.forEach(function(g){
+    randuriRadio(g.g);
+    var parinte = parinti[g.p], tinta = parinte ? parinte.ol : l;
+    if(parinte && !parinte.li.parentNode){ l.appendChild(parinte.li); }
     var li = el("li", "grupa");
     var b = el("button", "antet"); b.type = "button"; b.setAttribute("aria-expanded", "false");
     b.appendChild(el("span", "semn"));
@@ -2609,9 +3175,11 @@ function deseneazaGrupele(){
     b.appendChild(el("span", "nr-grupa", g.nt || String(g.n)));
     var ol = el("ol", "lista grupa-canale ascuns");
     b.addEventListener("click", function(){ comutaGrupa(g.g); });
-    li.appendChild(b); li.appendChild(ol); l.appendChild(li);
-    S.elGrupe[g.g] = {g: g, b: b, ol: ol, incarcat: false, cerut: false};
+    li.appendChild(b); li.appendChild(ol); tinta.appendChild(li);
+    var start = g.g === S.grupaAcum && S.grupaAcumPoz >= 0 ? Math.floor(S.grupaAcumPoz / PAGINA_GRUPA) * PAGINA_GRUPA : 0;
+    S.elGrupe[g.g] = {g: g, b: b, ol: ol, parinte: parinte, incarcat: false, cerut: false, deLa: start, urm: start, gata: false};
   });
+  randuriRadio(null);
   arataToate();
 }
 function toateDeschise(){ return S.grupe.length > 0 && S.grupe.every(function(g){ return S.deschise[g.g]; }); }
@@ -2623,6 +3191,8 @@ function comutaGrupa(k){
   if(S.deschise[k]){ inchideGrupa(k); } else { deschideGrupa(k); }
   arataToate();
 }
+// butonul de sus: deschide toate grupele (fiecare isi cere prima pagina, pe rand, prin coada grupelor) sau le inchide pe toate
+// afara de grupa canalului de pe televizor
 function comutaToate(){
   if(toateDeschise()){
     S.grupe.forEach(function(g){ if(g.g !== S.grupaAcum){ inchideGrupa(g.g); } });
@@ -2642,81 +3212,107 @@ function deschideGrupa(k){
   var o = S.elGrupe[k];
   S.deschise[k] = true;
   if(!o){ return; }
+  if(o.parinte){ o.parinte.b.setAttribute("aria-expanded", "true"); o.parinte.ol.classList.remove("ascuns"); }
   o.b.setAttribute("aria-expanded", "true");
   o.ol.classList.remove("ascuns");
   if(o.incarcat){ if(k === S.grupaAcum && S.spreAcum){ aduAcum(); } return; }
-  if(!o.cerut){
-    o.cerut = true;
-    o.ol.appendChild(el("li", "grupa-incarca", "Se citesc canalele..."));
-    S.coadaGrupe.push(k);
-    pompaGrupe();
-  }
+  cereGrupaPagina(k, false);
 }
 // randurile unei grupe, pagina cu pagina, o grupa odata (receptorul primeste cel mult o cerere de grupa deodata);
-// paginile cerute deja in fundal vin din memoria browserului
-function cerereGrupa(tip, k, de_la){
+// fiecare deschidere cere o singura pagina; continuarea se cere prin butoanele de la capetele paginii
+function cerereGrupa(tip, k, de_la, gen){
   var q = new URLSearchParams();
   q.set("fila", tip); q.set("buchet", "toate"); q.set("grupa", k); q.set("de_la", de_la); q.set("cate", PAGINA_GRUPA);
   var cheie = q.toString(), m = dinMemorie(cheie);
-  return (m ? Promise.resolve(m) : cerere("/api/canale-lista?" + cheie)).then(function(d){
-    if(!m){ tineMinte(cheie, d); }
+  return (m ? Promise.resolve(m) : cerereLista("/api/canale-lista?" + cheie, function(){ return gen === S.gen && S.deschise[k]; })).then(function(d){
+    if(!m && gen === S.gen){ tineMinte(cheie, d); }
     return d;
   });
 }
+function cereGrupaPagina(k, inainte){
+  var o = S.elGrupe[k];
+  if(!o || o.cerut){ return; }
+  o.cerut = true;
+  o.incarcare = el("li", "grupa-incarca", "Se citesc canalele...");
+  o.ol.appendChild(o.incarcare);
+  S.coadaGrupe.push({k: k, deLa: inainte ? Math.max(0, o.deLa - PAGINA_GRUPA) : o.urm, inainte: inainte});
+  pompaGrupe();
+}
+function butoaneGrupa(k, o){
+  [o.inainte, o.mai].forEach(function(b){ if(b && b.parentNode){ b.parentNode.removeChild(b); } });
+  o.inainte = o.mai = null;
+  function buton(text, inainte){
+      var li = el("li", "grupa-incarca"), b = el("button", "buton hds-derulant", text); b.type = "button";
+    b.addEventListener("click", function(){ cereGrupaPagina(k, inainte); }); li.appendChild(b); return li;
+  }
+  if(o.deLa > 0){ o.inainte = buton("Canalele anterioare", true); o.ol.insertBefore(o.inainte, o.ol.firstChild); }
+  if(!o.gata){ o.mai = buton("Mai multe canale", false); o.ol.appendChild(o.mai); }
+}
 function pompaGrupe(){
   if(S.grupaInCurs || !S.coadaGrupe.length){ return; }
-  var k = S.coadaGrupe.shift(), o = S.elGrupe[k], gen = S.gen, de_la = 0;
-  if(!o){ pompaGrupe(); return; }
+  var lucru = S.coadaGrupe.shift(), k = lucru.k, o = S.elGrupe[k], gen = S.gen, de_la = lucru.deLa;
+  if(!o || !S.deschise[k]){ if(o){ o.cerut = false; if(o.incarcare){ o.incarcare.remove(); } } pompaGrupe(); return; }
   S.grupaInCurs = true;
   function gata(){ S.grupaInCurs = false; pompaGrupe(); }
-  function urmatoarea(){
-    cerereGrupa(S.tip, k, de_la).then(function(d){
+  cerereGrupa(S.tip, k, de_la, gen).then(function(d){
       if(gen !== S.gen){ return; }
+      if(!d){ o.cerut = false; if(o.incarcare){ o.incarcare.remove(); } gata(); return; }
+      if(o.incarcare && o.incarcare.parentNode){ o.incarcare.parentNode.removeChild(o.incarcare); }
+      o.cerut = false;
       if(!d.result){
-        gol(o.ol); o.ol.appendChild(el("li", "grupa-incarca eroare", d.message || "Grupa nu s-a putut citi."));
-        o.cerut = false; gata(); return;
+        mesaj(d.message || "Grupa nu s-a putut citi.", true);
+        butoaneGrupa(k, o); gata(); return;
       }
       potriveste(d.ora);
-      if(de_la === 0){ gol(o.ol); }
-      deseneaza(d.randuri, o.ol);
-      de_la += d.randuri.length;
-      if(!d.gata && d.randuri.length){ urmatoarea(); return; }
+      var fragment = document.createDocumentFragment();
+      deseneaza(d.randuri, fragment);
+      if(lucru.inainte){ o.ol.insertBefore(fragment, o.ol.firstChild); o.deLa = de_la; }
+      else { o.ol.appendChild(fragment); o.urm = de_la + d.randuri.length; o.gata = d.gata || !d.randuri.length; }
       o.incarcat = true;
+      butoaneGrupa(k, o);
       if(k === S.grupaAcum && S.spreAcum && S.deschise[k]){ aduAcum(); }
       gata();
     }).catch(function(){
       if(gen !== S.gen){ return; }
       o.cerut = false;
-      gol(o.ol); o.ol.appendChild(el("li", "grupa-incarca eroare", "Receptorul nu răspunde."));
+      if(o.incarcare && o.incarcare.parentNode){ o.incarcare.parentNode.removeChild(o.incarcare); }
+      mesaj("Receptorul nu răspunde.", true); butoaneGrupa(k, o);
       gata();
     });
-  }
-  urmatoarea();
 }
 function aduAcum(){
   S.spreAcum = false;
   var o = S.acum && S.el[S.acum] && S.el[S.acum].filter(function(x){ return x.b.offsetParent !== null; })[0];
   if(o){ o.b.scrollIntoView({block: "center"}); o.b.focus({preventScroll: true}); }
 }
-function pagina(de_la, gen){
+function pagina(de_la, gen, inainte){
   S.incarca = true;
   var q = parametri(de_la).toString(), m = dinMemorie(q);
-  return (m ? Promise.resolve(m) : cerere("/api/canale-lista?" + q)).then(function(d){
-    if(!m){ tineMinte(q, d); }
-    if(gen !== S.gen){ return; }
+  return (m ? Promise.resolve(m) : cerereLista("/api/canale-lista?" + q, function(){ return gen === S.gen; })).then(function(d){
+    if(!m && gen === S.gen){ tineMinte(q, d); }
+    if(!d || gen !== S.gen){ return; }
     S.incarca = false;
     if(!d.result){ $("numar").textContent = d.message || "Lista nu s-a putut citi."; S.gata = true; return; }
     potriveste(d.ora);
     if(de_la === 0){ primaPagina(d); }
-    deseneaza(d.randuri);
-    S.urm = de_la + d.randuri.length;
-    S.gata = d.gata;
+    var fragment = document.createDocumentFragment();
+    deseneaza(d.randuri, fragment);
+    if(inainte){ $("lista").insertBefore(fragment, $("lista").firstChild); S.inceput = de_la; }
+    else { $("lista").appendChild(fragment); S.urm = de_la + d.randuri.length; S.gata = d.gata; }
+    if(S.inainteEl && S.inainteEl.parentNode){ S.inainteEl.parentNode.removeChild(S.inainteEl); }
+    S.inainteEl = null;
+    if(S.inceput > 0){
+      var li = el("li", "grupa-incarca"), b = el("button", "buton", "Canalele anterioare"); b.type = "button";
+      b.addEventListener("click", function(){ if(!S.incarca){ pagina(Math.max(0, S.inceput - PAGINA), S.gen, true); } });
+      li.appendChild(b); $("lista").insertBefore(li, $("lista").firstChild); S.inainteEl = li;
+    }
     if(S.gata){ $("subsol").textContent = d.canale ? "Sfârșitul listei." : ""; }
-    maiDeparte();
+    butonMaiMulte();
   }).catch(function(){
     if(gen !== S.gen){ return; }
     S.incarca = false;
     $("numar").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.";
+    butonMaiMulte();
   });
 }
 function primaPagina(d){
@@ -2735,27 +3331,16 @@ function primaPagina(d){
   if(d.acum){ marcheaza(d.acum.cheie); }
   if(d.transmise){ marcheazaTransmise(d.transmise); }
 }
-// grupele lui "Toate canalele" cerute in fundal, una dupa alta, rar, ca receptorul sa nu fie incarcat; deschiderea
-// unei grupe (si "Deschide toate canalele pe toti satelitii") vine apoi din memoria browserului. Se opreste cand se
-// schimba fila.
-function preincarca(tip){
-  var rand = ++S.fundal, i = 0, de_la = 0;
-  function urmatoarea(){
-    if(rand !== S.fundal || tip !== S.tip || i >= S.grupe.length){ return; }
-    var k = S.grupe[i].g, o = S.elGrupe[k];
-    if(de_la === 0 && o && (o.incarcat || o.cerut)){ i += 1; setTimeout(urmatoarea, 0); return; }
-    cerereGrupa(tip, k, de_la).then(function(d){
-      if(!d || !d.result){ return; }
-      if(d.gata || !d.randuri.length){ i += 1; de_la = 0; } else { de_la += d.randuri.length; }
-      setTimeout(urmatoarea, 300);
-    }).catch(function(){});
-  }
-  setTimeout(urmatoarea, 500);
-}
 function maiDeparte(){
-  if(S.grupat || S.gata || S.incarca){ return; }
-  var r = $("capat").getBoundingClientRect();
-  if(r.top < window.innerHeight + 800){ pagina(S.urm, S.gen); }
+  // Continuarea este ceruta explicit, inclusiv la cautare.
+}
+function butonMaiMulte(){
+  var vechi = $("lista").querySelectorAll(".mai-lista");
+  Array.prototype.forEach.call(vechi, function(e){ e.remove(); });
+  if(S.gata){ return; }
+  var li = el("li", "grupa-incarca mai-lista"), b = el("button", "buton hds-derulant", "Mai multe canale"); b.type = "button";
+  b.addEventListener("click", function(){ if(!S.incarca){ b.disabled = true; pagina(S.urm, S.gen); } });
+  li.appendChild(b); $("lista").appendChild(li);
 }
 // aceleasi grupe si optiuni ca pe ecran (s-au schimbat numai numerele, dupa o bifa): numerele se pun pe loc, iar lista
 // deschisa ramane deschisa
@@ -2889,9 +3474,9 @@ __LIVE_JS__
 // aleasa; antena se poate roti, ca la orice zap), apoi imaginea urmeaza televizorul (player.js)
 function mutaTv(ref){
   var q = new URLSearchParams();
-  q.set("fila", S.tip); q.set("buchet", S.buchet || "toate"); q.set("ref", ref);
+  q.set("fila", S.tip); q.set("buchet", buchetActiv()); q.set("ref", ref);
   return cerere("/api/canale-porneste", "POST", q).then(function(d){
-    if(d.result && d.acum){ marcheaza(d.acum.cheie); arataAcum(d.acum, null); setTimeout(citesteAcum, 1500); }
+    if(d.result && d.acum){ MEMORIE = {}; marcheaza(d.acum.cheie); arataAcum(d.acum, null); setTimeout(citesteAcum, 1500); }
     return d;
   });
 }
@@ -2899,6 +3484,10 @@ function textAles(){
   // numele listei alese si filtrele bifate, pentru numele fisierului si grupul din playlist
   var s = $("buchet"), parti = [];
   var b = s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent : "", k = b.lastIndexOf(" (");
+  if(S.text && s && s.options){
+    Array.prototype.forEach.call(s.options, function(o){ if(o.value === "toate"){ b = o.textContent; } });
+    k = b.lastIndexOf(" (");
+  }
   if(k > 0){ b = b.slice(0, k); }
   S.grupuri.forEach(function(g){
     (g.optiuni || []).forEach(function(x){ if((S.ales[g.g] || []).indexOf(x.v) !== -1){ parti.push(x.eticheta); } });
@@ -2910,23 +3499,17 @@ function exportaPlaylist(){
   var buton = $("exportM3u");
   buton.disabled = true;
   mesaj(TL.se_strange);
-  var refs = [], vazute = {}, q = parametri(0), numar = "";
-  q.set("cate", "200");
-  function pas(de_la){
-    q.set("de_la", de_la);
-    return cerere("/api/canale-lista?" + q.toString()).then(function(d){
-      if(!d.result){ throw new Error(d.message || TL.nu_s_a_facut); }
-      if(de_la === 0){ numar = d.numar || ""; }
-      (d.randuri || []).forEach(function(r){ if(r.ref && !r.m && !vazute[r.ref]){ vazute[r.ref] = 1; refs.push(r.ref); } });
-      if(!d.gata && (d.randuri || []).length && refs.length < MAX_EXPORT){ return pas(de_la + d.randuri.length); }
-    });
-  }
-  pas(0).then(function(){
-    var t = textAles();
-    // numarul listei, cand intra toata in playlist
-    return liveDescarca(refs, t.lista || "HD Satelit", [t.lista].concat(t.filtre).filter(Boolean).join(" ") || "canale",
-      refs.length < MAX_EXPORT ? numar : "");
-  }).catch(function(e){ mesaj(e.message || TL.nu_s_a_facut, true); })
+  // Receptorul parcurge selectia intreaga in felii. Corpul cererii ramane mic, indiferent cate canale sunt,
+  // iar schimbarea cautarii intre timp nu schimba selectia deja trimisa pentru acest export.
+  var q = parametri(0), t = textAles();
+  q.delete("de_la"); q.delete("cate");
+  q.set("grup", (t.lista || "HD Satelit").slice(0, 80));
+  q.set("nume", ([t.lista].concat(t.filtre).filter(Boolean).join(" ") || "canale").slice(0, 80));
+  Promise.resolve().then(function(){
+    if(!window.HdsPlayer){ throw new Error(TL.fara_player); }
+    return window.HdsPlayer.descarcaPlaylist(q, CFG.csrf, "/api/canale-exporta");
+  }).then(function(fisier){ mesaj(TL.descarcat.replace("%s", fisier)); })
+    .catch(function(e){ mesaj(e.message || TL.nu_s_a_facut, true); })
     .then(function(){ buton.disabled = false; });
 }
 $("exportM3u").addEventListener("click", exportaPlaylist);
@@ -2941,7 +3524,7 @@ function deschideAparat(){
     inapoi: $("aparatFix"), campuri: function(){
       var filtre = {};
       Object.keys(S.ales).forEach(function(g){ if(S.ales[g].length){ filtre[g] = S.ales[g]; } });
-      return {sursa: "filtru", buchet: S.buchet || "toate", text: S.text || "", filtre: JSON.stringify(filtre)};
+      return {sursa: "filtru", buchet: buchetActiv(), text: S.text || "", filtre: JSON.stringify(filtre)};
     }});
 }
 $("aparatFix").addEventListener("click", deschideAparat);
@@ -3011,7 +3594,7 @@ function deseneaza(randuri, tinta){
       li.appendChild(g);
       // imaginea live a acestui canal, in fereastra de pe pagina (playerul comun, vezi_live_web.py); in titlul ferestrei
       // si ce il deosebeste de randurile care arata la fel
-      li.appendChild(liveButon({ref: r.ref, nume: r.d ? r.nume + " (" + r.d + ")" : r.nume}, {mutaTv: mutaTv}));
+      li.appendChild(liveButon({ref: r.ref, nume: r.d ? r.nume + " (" + r.d + ")" : r.nume}, {mutaTv: mutaTv, radio: S.tip === "radio"}));
     }
     l.appendChild(li);
     var obiect = {b: b, et: et, tr: tr, acum: acum, urm: urm, progres: progres, umplut: umplut, r: r, i: i, st: st, sr: sr, li: li};
@@ -3108,10 +3691,10 @@ function porneste(r, b){
   S.pornire = true;
   b.classList.add("trimis");
   var q = new URLSearchParams();
-  q.set("fila", S.tip); q.set("buchet", S.buchet || "toate"); q.set("ref", r.ref);
+  q.set("fila", S.tip); q.set("buchet", buchetActiv()); q.set("ref", r.ref);
   cerere("/api/canale-porneste", "POST", q).then(function(d){
     mesaj(d.message || (d.result ? "Pornește pe televizor." : "Canalul nu a pornit."), !d.result);
-    if(d.result && d.acum){ marcheaza(d.acum.cheie); arataAcum(d.acum, null); setTimeout(citesteAcum, 1500); }
+    if(d.result && d.acum){ MEMORIE = {}; marcheaza(d.acum.cheie); arataAcum(d.acum, null); setTimeout(citesteAcum, 1500); }
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); })
     .then(function(){ S.pornire = false; b.classList.remove("trimis"); });
 }
@@ -3128,13 +3711,14 @@ function favorit(r, st, li){
   if(!vrea && !window.confirm("Scoți " + (r.nume || "canalul") + " din Favorite?")){ return; }
   st.disabled = true;
   var q = new URLSearchParams();
-  q.set("fila", S.tip); q.set("buchet", S.buchet || "toate"); q.set("ref", r.ref); q.set("vrea", String(vrea));
+  q.set("fila", S.tip); q.set("buchet", buchetActiv()); q.set("ref", r.ref); q.set("vrea", String(vrea));
   cerere("/api/canale-favorit", "POST", q).then(function(d){
     mesaj(d.message || (d.result ? "Gata." : "Favorite nu s-au schimbat."), !d.result);
     if(!d.result){ return; }
     // acelasi canal poate sta de doua ori in lista: toate stelutele lui
+    MEMORIE = {};
     (S.el[r.k] || []).forEach(function(o){ if(o.st){ puneStea(o, d.f); } });
-    if(!d.f && S.buchet === "userbouquet.favourites." + S.tip){
+    if(!d.f && !S.text && S.buchet === "userbouquet.favourites." + S.tip){
       // in lista Favorite randul scos dispare
       (S.el[r.k] || []).forEach(function(o){ if(o.li && o.li.parentNode){ o.li.parentNode.removeChild(o.li); } });
     }
@@ -3152,11 +3736,12 @@ function streamRelay(r, b){
   var vrea = r.sr ? 0 : 1;
   b.disabled = true;
   var q = new URLSearchParams();
-  q.set("fila", S.tip); q.set("buchet", S.buchet || "toate"); q.set("ref", r.ref); q.set("vrea", String(vrea));
+  q.set("fila", S.tip); q.set("buchet", buchetActiv()); q.set("ref", r.ref); q.set("vrea", String(vrea));
   cerere("/api/canale-stream-relay", "POST", q).then(function(d){
     mesaj(d.message || (d.result ? "Gata." : "Stream Relay nu s-a schimbat."), !d.result);
     if(!d.result){ return; }
     // acelasi canal poate sta de doua ori in lista: toate butoanele lui
+    MEMORIE = {};
     (S.el[r.k] || []).forEach(function(o){ if(o.sr){ puneSr(o, d.sr); } });
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); })
     .then(function(){ b.disabled = false; });
@@ -3179,28 +3764,29 @@ function citesteAcum(){
   }).catch(function(){});
 }
 function laAcum(){
+  var vazut = S.acum && S.el[S.acum] && S.el[S.acum][0];
+  if(vazut){
+    if(S.grupat){
+      Object.keys(S.elGrupe).forEach(function(k){ if(S.elGrupe[k].ol.contains(vazut.li)){ deschideGrupa(k); } });
+      arataToate();
+    }
+    vazut.b.scrollIntoView({block: "center"}); vazut.b.focus({preventScroll: true}); return;
+  }
   if(S.grupat){
-    // grupa canalului de pe televizor se deschide (daca era inchisa), apoi canalul vine in vedere
-    if(!S.grupaAcum){ return; }
-    S.spreAcum = true;
-    deschideGrupa(S.grupaAcum);
-    arataToate();
+    // Canalul se poate schimba intre timp de pe televizor. Antetele proaspete dau grupa si pagina lui exacta.
+    S.deschise = {}; if(S.grupaAcum){ S.deschise[S.grupaAcum] = true; } S.spreAcum = true; incarcaLista();
     return;
   }
   if(S.acumPoz < 0){ return; }
-  var gen = S.gen;
-  function incearca(){
+  var gen = ++S.gen, start = Math.floor(S.acumPoz / PAGINA) * PAGINA;
+  if(VEDERE){ VEDERE.disconnect(); }
+  gol($("lista")); S.el = {}; S.randuri = []; S.coada = []; S.inceput = start; S.inainteEl = null;
+  S.gata = false; S.urm = start;
+  pagina(start, gen).then(function(){
     if(gen !== S.gen){ return; }
-    if(S.randuri.length > S.acumPoz){
-      var o = S.el[S.acum] && S.el[S.acum][0];
-      if(o){ o.b.scrollIntoView({block: "center"}); o.b.focus({preventScroll: true}); }
-      return;
-    }
-    if(S.gata){ return; }
-    if(S.incarca){ setTimeout(incearca, 150); return; }
-    pagina(S.urm, gen).then(incearca);
-  }
-  incearca();
+    var o = S.acum && S.el[S.acum] && S.el[S.acum][0];
+    if(o){ o.b.scrollIntoView({block: "center"}); o.b.focus({preventScroll: true}); }
+  });
 }
 $("filaTv").addEventListener("click", function(){ if(S.tip !== "tv"){ S.tip = "tv"; S.ales = {}; S.deschise = {}; S.fundal += 1; incarcaBuchete(); } });
 $("filaRadio").addEventListener("click", function(){ if(S.tip !== "radio"){ S.tip = "radio"; S.ales = {}; S.deschise = {}; S.fundal += 1; incarcaBuchete(); } });
@@ -3276,6 +3862,8 @@ TEXTE_PAGINA = {
 		N_("Închide ceilalți sateliți"),
 		N_("Deschide toate canalele pe toți sateliții"),
 		N_("Se citesc canalele..."),
+		N_("Canalele anterioare"),
+		N_("Mai multe canale"),
 		N_("Grupa nu s-a putut citi."),
 		N_("Receptorul nu răspunde."),
 		N_("Sfârșitul listei."),

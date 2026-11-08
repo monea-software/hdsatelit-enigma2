@@ -4,11 +4,12 @@ profile("LOAD:ElementTree")
 import xml.etree.ElementTree
 import re
 from os import path
+from glob import glob
 from traceback import print_exc
 
 profile("LOAD:enigma_skin")
 from enigma import eSize, ePoint, gFont, eWindow, eLabel, ePixmap, eWindowStyleManager, \
-	addFont, gRGB, eWindowStyleSkinned
+	addFont, gRGB, eWindowStyleSkinned, getDesktop
 from Components.config import ConfigSubsection, ConfigText, ConfigSelection, config
 from Components.Converter.Converter import Converter
 from Components.Sources.Source import Source, ObsoleteSource
@@ -52,18 +53,145 @@ class SkinError(Exception):
 		return "{%s}: %s" % (config.skin.primary_skin.value, self.msg)
 
 dom_skins = [ ]
+_surseSkin = {}
+_xmlAfisaj = set()
 
 def loadSkin(name, scope = SCOPE_SKIN):
 	# read the skin
 	filename = resolveFilename(scope, name)
 	mpath = path.dirname(filename) + "/"
-	dom_skins.append((mpath, xml.etree.ElementTree.parse(filename).getroot()))
+	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	dom_skins.append((mpath, radacina))
+	_surseSkin[id(radacina)] = name
+	return radacina
 
 # skins are loaded in order of priority: the skin with the highest priority is loaded last
 # (usually the user-provided skin). loadSingleSkinData (colors, fonts, window style) is applied
 # in ascending priority; dom_skins keeps the screens in descending priority, so the first screen
 # found is used.
 config.skin = ConfigSubsection()
+
+AFISAJ_HDS = "HDSatelit/display/skin_display.xml"
+
+
+def afisajImplicit():
+	# Geometria vine din driver, inclusiv cand imaginea porneste prin NeoBoot.
+	try:
+		s = getDesktop(1).size()
+		if (s.width(), s.height()) in ((480, 320), (400, 240), (800, 480)):
+			return AFISAJ_HDS
+	except Exception:
+		pass
+	return ""
+
+
+config.skin.display_skin = ConfigText(default=afisajImplicit())
+# Alegerea explicita a temei proprii se pastreaza si cand coincide cu implicitul.
+config.skin.display_skin.save_forced = True
+
+
+def fisierAfisaj(nume):
+	filename = resolveFilename(SCOPE_SKIN, nume)
+	if not fileExists(filename) and not path.isabs(nume):
+		filename = resolveFilename(SCOPE_SKIN, path.join("display", nume))
+	return filename
+
+
+def citesteAfisaj(nume):
+	"""Citeste un XML LCD fara sa schimbe setarea salvata sau numele ecranelor."""
+	filename = fisierAfisaj(nume)
+	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	if radacina.tag != "skin" or not radacina.findall("screen"):
+		raise ValueError("fisierul nu contine ecrane de afisaj")
+	for tip in ("output", "windowstyle"):
+		if any(c.get("id") not in ("1", "2") for c in radacina.findall(tip)):
+			raise ValueError("fisierul contine un desktop care nu este LCD")
+	if any(c.get("id") not in (None, "1", "2") for c in radacina.findall("screen")):
+		raise ValueError("fisierul contine ecrane care nu sunt LCD")
+	# Un XML LCD separat poate omite id. El nu trebuie sa intre pe televizor.
+	try:
+		stil = str(getDesktop(1).getStyleID())
+	except Exception:
+		stil = "1"
+	if stil not in ("1", "2"):
+		stil = "1"
+	for ecran in radacina.findall("screen"):
+		if ecran.get("id") is None:
+			ecran.set("id", stil)
+	return filename, radacina
+
+
+def incarcaAfisaj(skin_tv=None, rezerva=False):
+	"""Tema LCD explicita, apoi tema TV; rezerva proprie se incarca dupa ele."""
+	if rezerva:
+		alegeri = [afisajImplicit()]
+	elif _mediu.get("HDS_MOD_SIGUR") == "1":
+		return
+	else:
+		ales = config.skin.display_skin.value
+		explicit = getattr(config.skin.display_skin, "saved_value", None) is not None
+		alegeri = [ales] if ales and (ales != AFISAJ_HDS or explicit) else []
+		if not alegeri and skin_tv and not explicit:
+			alegeri = [path.join(path.dirname(skin_tv), "skin_display.xml").replace("\\", "/")]
+	for nume in alegeri:
+		if nume == AFISAJ_HDS and not afisajImplicit():
+			continue
+		if not nume or not fileExists(fisierAfisaj(nume)):
+			continue
+		if any(_surseSkin.get(id(r)) == nume for _p, r in dom_skins):
+			continue
+		try:
+			filename, radacina = citesteAfisaj(nume)
+			dom_skins.append((path.dirname(filename) + "/", radacina))
+			_surseSkin[id(radacina)] = nume
+			_xmlAfisaj.add(id(radacina))
+			return
+		except Exception as err:
+			skinNotice("afisajul %s nu s-a incarcat: %s" % (nume, err))
+
+
+def afisajExternActiv():
+	"""Sursa LCD externa incarcata; un Summary TV generic nu ocupa afisajul."""
+	for _dosar, radacina in dom_skins:
+		nume = _surseSkin.get(id(radacina), "")
+		if id(radacina) in _xmlAfisaj:
+			return "" if nume == AFISAJ_HDS else nume
+		if not nume or nume in ("HDSatelit/skin.xml", "HDSatelit/skin_pro.xml", "skin_default.xml"):
+			continue
+		if any(
+			e.get("id") in ("1", "2") for e in radacina.findall("screen")):
+			return nume
+	return ""
+
+
+def listaAfisaje(pastreaza_ales=True):
+	"""(cale, eticheta) pentru XML-urile LCD instalate; alegerea lipsa ramane vizibila."""
+	radacina = resolveFilename(SCOPE_SKIN, "")
+	alegeri = [(AFISAJ_HDS, "HD Satelit")]
+	for filename in sorted(glob(path.join(radacina, "**", "skin_display*.xml"), recursive=True)):
+		nume = path.relpath(filename, radacina).replace(path.sep, "/")
+		if nume != AFISAJ_HDS:
+			alegeri.append((nume, nume))
+	ales = config.skin.display_skin.value
+	if pastreaza_ales and ales and ales not in [n for n, _e in alegeri]:
+		alegeri.append((ales, ales))
+	return alegeri
+
+
+def alegeAfisaj(nume, salveaza=True):
+	"""Valideaza alegerea explicita. Ecranele se aplica la repornirea interfetei."""
+	if nume not in [n for n, _e in listaAfisaje(False)]:
+		return False, "Tema de afisaj nu este instalata."
+	try:
+		citesteAfisaj(nume)
+	except Exception:
+		return False, "Tema de afisaj nu poate fi citita."
+	config.skin.display_skin.value = nume
+	config.skin.display_skin.save()
+	if salveaza:
+		from Components.config import configfile
+		configfile.save()
+	return True, "Tema de afisaj se aplica la repornirea interfetei."
 # HDSatelit: skinul ales in Skin Selection (televizor) si in /skin (web), cu pornirea sigura din
 # Components/HdsSkinuri.py: daca skinul ales lipseste, nu e un skin, are XML stricat sau interfata s-a oprit neasteptat la
 # pornirea cu el, se incarca numai HDSatelit/skin.xml si omul afla de ce. HDSatelit/skin.xml se incarca mereu, dupa
@@ -122,6 +250,9 @@ if _skinRefuz:
 	config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
 	config.skin.primary_skin.save()
 
+# Ecranele utilizatorului raman primele. Tema LCD aleasa precede tema TV.
+incarcaAfisaj(skinAles)
+
 # Tema Pro: fisierul are numai <screen> (ecrane si panouri); se incarca inaintea lui skin.xml, deci lookupScreen ia
 # ecranul Pro cand exista si pe cel din skin.xml cand nu. Culorile, fonturile si restul raman ale lui skin.xml (cu
 # paleta aleasa). Dupa skin_user.xml, ca adaugirile omului sa ramana deasupra. Tema e o varianta a skinului HDSatelit:
@@ -144,6 +275,9 @@ if skinAles is not None:
 		_HdsSkinuri.incarcareCazuta(skinAles, err)
 		config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
 		config.skin.primary_skin.save()
+
+# Rezerva LCD nu acopera ecranele explicite ale temei TV externe.
+incarcaAfisaj(rezerva=True)
 
 try:
 	loadSkin("HDSatelit/skin.xml")
@@ -465,6 +599,11 @@ def scaraEcran(element, skin_path, desktop, modul = None):
 	sau None cand nu se schimba nimic (vezi mai sus: baza ecranului, culorile si fonturile)"""
 	try:
 		if desktop.getStyleID() != 0:
+			lcd_path = path.dirname(resolveFilename(SCOPE_SKIN, AFISAJ_HDS))
+			if skin_path and path.normpath(skin_path) == path.normpath(lcd_path):
+				s = desktop.size()
+				if s.width() > 0 and s.height() > 0:
+					return ScaraEcran((480, 320), (s.width(), s.height()))
 			return None
 		s = desktop.size()
 		ecran = (s.width(), s.height())
@@ -639,8 +778,19 @@ def parseColor(s):
 		try:
 			return colorNames[s]
 		except KeyError:
+			# HDSatelit: pluginurile altor imagini cer culorile de baza dupa nume (parseColor("red")), pe care le are skinul
+			# implicit al acelor imagini; numai cand skinul nostru nu are numele
+			if s.lower() in CULORI_DE_BAZA:
+				return gRGB(CULORI_DE_BAZA[s.lower()])
 			raise SkinError("color '%s' must be #aarrggbb or valid named color" % (s))
 	return gRGB(int(s[1:], 0x10))
+
+# HDSatelit: culorile de baza dupa nume, #aarrggbb (aa = 00 opac, ff transparent), cand skinul nu le defineste
+CULORI_DE_BAZA = {"black": 0x00000000, "white": 0x00ffffff, "red": 0x00ff0000, "green": 0x0000ff00, "blue": 0x000000ff,
+	"yellow": 0x00ffff00, "grey": 0x00808080, "gray": 0x00808080, "darkgrey": 0x00404040, "darkgray": 0x00404040,
+	"lightgrey": 0x00c0c0c0, "lightgray": 0x00c0c0c0, "orange": 0x00ffa500, "transparent": 0xff000000,
+	# numele de rol din skinurile altor imagini: textul alb pe fundal negru
+	"foreground": 0x00ffffff, "background": 0x00000000}
 
 def parseParameter(s):
 	"""'1, 2, -3' -> (1, 2, -3); '7' -> 7. ValueError when a part is not a whole number."""
@@ -1393,3 +1543,127 @@ def readSkin(screen, skin, names, desktop):
 			screen.additionalWidgets.append(w)
 		except Exception as e:
 			skinWarning("%s/<%s>: %s" % (name, w_tag, e))
+
+# ---------------------------------------------------------------- numele cerute de pluginuri
+colors = colorNames
+GUI_SKIN_ID = 0
+
+
+class AttributeParser:
+	"""Pluginurile intreaba numai hasattr(AttributeParser, "..."); atributele temelor se aplica mai sus, in applySingleAttribute."""
+	pass
+
+
+def getSkinFactor(screen=GUI_SKIN_ID):
+	from enigma import getDesktop
+	return getDesktop(screen).size().height() / 720.0
+
+
+def applySkinFactor(*valori):
+	factor = getSkinFactor()
+	rez = tuple(int(x * factor) if isinstance(x, (int, float)) else x for x in valori)
+	return rez[0] if len(rez) == 1 else rez
+
+
+# HDSatelit: doua nume din skin.py al altor imagini, cerute de pluginurile lor (GraphMultiEPG,
+# RemoteControlSelection, PiconCockpit). parseScale: un numar din tema, intreg sau o formula cu f, factorul temei fata de 720.
+def parseScale(s):
+	try:
+		return int(s)
+	except (TypeError, ValueError):
+		pass
+	try:
+		return int(eval(str(s), {"__builtins__": {}}, {"f": getSkinFactor()}))
+	except Exception as e:
+		print("[Skin] parseScale: %r nu se poate calcula: %s" % (s, e))
+		return 0
+
+
+def findSkinScreen(names):
+	"""Primul nume din lista pentru care tema are ecran, sau None (atunci pluginul isi da singur skinul)."""
+	if not isinstance(names, (list, tuple)):
+		names = [names]
+	for nume in names:
+		if lookupScreen(nume, GUI_SKIN_ID)[0] is not None:
+			return nume
+	return None
+
+
+def parseBoolean(attribute, value):
+	return value.lower() in ("1", attribute, "enabled", "on", "true", "yes")
+
+
+# ------------------------------------------------------- culorile si fonturile listelor din pluginuri
+# HDSatelit: pluginurile scrise pentru alt fel de Enigma2 cer skin.TemplatedColors, skin.TemplatedListFonts si skin.componentSizes.
+# Culorile vin din culorile cu nume ale skinului curent (rolurile ferestrei nu se copiaza aici: blocul windowstyle ramane neatins);
+# pluginurile intreaba daca o cheie exista si au valoarea lor cand lipseste.
+
+
+class TemplatedColors:
+	@property
+	def colors(self):
+		"""Culorile skinului curent ca intregi ARGB; o cheie lipsa ramane in grija pluginului."""
+		rez = { }
+		for nume, culoare in colorNames.items():
+			try:
+				rez[nume] = int(culoare.argb())
+			except (AttributeError, TypeError, ValueError):
+				pass
+		return rez
+
+
+class TemplatedListFonts:
+	SMALLER = "Smaller"
+	SMALL = "Small"
+	MEDIUM = "Medium"
+	BIG = "Big"
+	_MARIMI = {SMALLER: 16, SMALL: 18, MEDIUM: 20, BIG: 22}
+
+	def _font(self, rol):
+		# Body da fata skinului; randurile fixe ale pluginurilor au nevoie de marimi mai mici.
+		fata = "Regular"
+		body = fonts.get("Body")
+		if isinstance(body, (tuple, list)) and len(body) == 3 and isinstance(body[0], str) and body[0]:
+			fata = body[0]
+		alias = fonts.get(rol)
+		if alias:
+			try:
+				nume, marime, inaltime = alias
+				marime = int(marime)
+				if isinstance(nume, str) and nume and marime > 0:
+					return nume, marime
+			except (TypeError, ValueError, OverflowError):
+				pass
+		return fata, self._MARIMI.get(rol, self._MARIMI[self.MEDIUM])
+
+	def face(self, rol):
+		return self._font(rol)[0]
+
+	def size(self, rol):
+		return _hds_scaleaza(self._font(rol)[1])
+
+
+class _DimensiuniComponente(dict):
+	# Nu reinterpretam parameters: pluginurile au valori implicite pentru fiecare dimensiune.
+	ITEM_WIDTH = "itemWidth"
+	ITEM_HEIGHT = "itemHeight"
+
+	def __missing__(self, nume):
+		valori = { }
+		self[nume] = valori
+		return valori
+
+	def itemHeight(self, nume, implicit):
+		try:
+			inaltime = int(self[nume].get(self.ITEM_HEIGHT, implicit))
+			if inaltime > 0:
+				return inaltime
+		except (TypeError, ValueError, OverflowError):
+			pass
+		return implicit
+
+
+componentSizes = _DimensiuniComponente()
+
+# Numele clasei cerut de pluginuri foloseste aceleasi chei si acelasi registru.
+ComponentSizes = _DimensiuniComponente

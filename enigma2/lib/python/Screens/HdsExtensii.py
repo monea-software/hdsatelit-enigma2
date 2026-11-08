@@ -45,7 +45,6 @@ except ImportError:  # probe pe PC: dosarul Components in sys.path
 	import HdsExtensiiLucru as L
 # descarcarea sursei unui plugin (0.6.6): modulul luat prin HdsExtensiiLucru (acelasi si pentru pagina web)
 S = L.S
-from Plugins.Plugin import PluginDescriptor
 from Tools.Directories import resolveFilename, SCOPE_PLUGINS, SCOPE_SKIN_IMAGE
 
 def _t(text):
@@ -97,6 +96,7 @@ CULORI = {
 	'rau': ('hdsBad', 0xFF6B5E),
 	'intunecat': ('hdsMarkedText', 0x10162A),
 	'alb': ('white', 0xFFFFFF),
+	'titlu': ('hdsBrandLight', 0x9FB4FF),   # titlul unei sectiuni din lista (_randSectiune)
 }
 
 ICOANA_INSTALATE = 'extensii'
@@ -388,14 +388,14 @@ class HdsExtensii(Screen, HelpableScreen):
 		self['key_blue'] = Button(_t('Descarcă lista'))
 
 		self['actiuni'] = HelpableActionMap(self, 'OkCancelActions', {
-			'ok': (self.keyOk, 'Deschide, instalează sau actualizează'),
-			'cancel': (self.keyCancel, 'Înapoi'),
+			'ok': (self.keyOk, _t('Deschide, instalează sau actualizează')),
+			'cancel': (self.keyCancel, _t('Înapoi')),
 		}, -1)
 		self['directii'] = HelpableActionMap(self, 'DirectionActions', {
-			'up': (self.keyUp, 'Rândul de sus'),
-			'down': (self.keyDown, 'Rândul de jos'),
-			'left': (self.keyLeft, 'Fila din stânga'),
-			'right': (self.keyRight, 'Fila din dreapta'),
+			'up': (self.keyUp, _t('Rândul de sus')),
+			'down': (self.keyDown, _t('Rândul de jos')),
+			'left': (self.keyLeft, _t('Fila din stânga')),
+			'right': (self.keyRight, _t('Fila din dreapta')),
 			'upRepeated': self.keyUp,
 			'downRepeated': self.keyDown,
 			'leftRepeated': self.keyLeft,
@@ -406,10 +406,10 @@ class HdsExtensii(Screen, HelpableScreen):
 			'rightUp': self._nimic,
 		}, -1)
 		self['culori'] = HelpableActionMap(self, 'ColorActions', {
-			'red': (self.keyRosu, 'Șterge extensia sau sursa'),
-			'green': (self.keyVerde, 'Acțiunea principală'),
-			'yellow': (self.keyGalben, 'Caută după nume'),
-			'blue': (self.keyAlbastru, 'Descarcă lista de pachete'),
+			'red': (self.keyRosu, _t('Șterge extensia sau sursa')),
+			'green': (self.keyVerde, _t('Acțiunea principală')),
+			'yellow': (self.keyGalben, _t('Caută după nume')),
+			'blue': (self.keyAlbastru, _t('Descarcă lista de pachete')),
 		}, -1)
 		# P+/P- (si |<< >>|) pe pagini: contextul listei de canale; tastele colorate din el merg la aceleasi functii
 		# MENU: Actualizeaza tot, din orice fila, cand sunt actualizari
@@ -441,7 +441,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.timerIntoarcere.callback.append(self._verificaSchimbari)
 
 		self.onLayoutFinish.append(self._pregateste)
-		self.onFirstExecBegin.append(self._avertismente)
+		# la intrare nicio fereastra peste lista: motivul fiecarui plugin sta pe randul lui. Ce a mai ramas de anuntat s-a vazut
+		# la pornire (mytest.py); fereastra ramane numai dupa o instalare (_dupaActiune)
+		self.onFirstExecBegin.append(plugins.resetWarnings)
 		self.onShow.append(self._laAratare)
 		self.onClose.append(self._laInchidere)
 
@@ -532,7 +534,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		except Exception as e:
 			_jurnal('catalogul nu s-a putut citi: %s' % e)
 			self.catalog = P.Catalog()
-		self.pluginuri = list(plugins.getPlugins(PluginDescriptor.WHERE_PLUGINMENU))
+		self.pluginuri = L.pluginuriDeDeschis(plugins)
 		_jurnal('catalog: %d pachete, %d surse (%d cu lista), %d pluginuri, %.0f ms' % (len(self.catalog.pachete),
 			len(self.catalog.configurare.surse), len(self.catalog.surse_cu_lista), len(self.pluginuri), (time.time() - t) * 1000))
 		self.semnCatalog = self._semnCatalog()
@@ -595,7 +597,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		return L.pachetPlugin(self.catalog, plugin)
 
 	def _randuriCautare(self):
-		return L.randuriCautare(self.catalog, self.pluginuri, self.cautare)
+		return L.randuriCautare(self.catalog, self.pluginuri, self.cautare, plugins)
 
 	def _randuriFila(self, fila):
 		if fila == 'fisiere':
@@ -611,7 +613,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			self.filtru, fila)
 
 	def _dupaRepornire(self):
-		"""pachetele instalate care au un plugin inca neincarcat (instalat acum, porneste dupa repornirea interfetei)"""
+		"""pachetele instalate cu un plugin amanat pana la repornirea interfetei"""
 		return L.dupaRepornire(self.catalog, plugins)
 
 	# ------------------------------------------------------------ fisierele .ipk, cautate in fundal
@@ -1041,7 +1043,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			verde = N_('Surse feeduri')
 		# rosu nu sta degeaba (Eduard, 04.11.2026): actualizeaza ce are versiune noua; unde randul nu se poate sterge, in
 		# Instalate actualizeaza tot, daca e ceva
-		if fel == 'plugin' and extra is not None and extra.actualizare:
+		if fel in ('plugin', 'indisponibil') and extra is not None and extra.actualizare:
 			rosu = N_('Actualizează')
 		elif not rosu and L.filtruActiv(self.filtru, self._idFila()):
 			rosu = N_('Arată tot')
@@ -1114,7 +1116,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if not opkgProgram():
 			parti.append(_t('instalarea nu este disponibilă în această imagine'))
 		elif getattr(plugins, 'restartRequired', False):
-			self['stare'].setText(' · '.join(['Extensiile noi apar după repornirea interfeței'] + parti))
+			self['stare'].setText(' · '.join([_t('Extensiile noi apar după repornirea interfeței')] + parti))
 			self._setCuloare('stare', 'chihlimbar')
 			return
 		text = ' · '.join(parti)
@@ -1293,6 +1295,8 @@ class HdsExtensii(Screen, HelpableScreen):
 		fel, obj, extra = self._selectat()
 		if fel == 'plugin':
 			self._pornestePlugin(obj)
+		elif fel == 'indisponibil':
+			self._arataMotiv(obj)
 		elif fel == 'pachet':
 			if extra == 'repornire':
 				self._reporneste()
@@ -1303,10 +1307,11 @@ class HdsExtensii(Screen, HelpableScreen):
 				self._planInstalare(obj)
 			elif obj.instalat:
 				plugin = self._pluginPentru(obj)
+				motiv = L.indisponibilPachet(self.catalog, plugins, obj) if plugin is None else None
 				if plugin is not None:
 					self._pornestePlugin(plugin)
-				elif obj.dosar_plugin and getattr(plugins, 'restartRequired', False):
-					self._mesaj(_t('%s pornește după repornirea interfeței.') % obj.titlu, 'chihlimbar')
+				elif motiv is not None:
+					self._arataMotiv(motiv)
 				else:
 					self._mesaj(_t('%s este instalat și la zi.') % obj.titlu, 'bun')
 		elif fel == 'fisier':
@@ -1403,9 +1408,9 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def keyRosu(self):
 		fel, obj, extra = self._selectat()
-		if fel == 'plugin' and extra is not None and extra.actualizare:
+		if fel in ('plugin', 'indisponibil') and extra is not None and extra.actualizare:
 			self._planActualizare([extra])
-		elif fel == 'plugin' and extra is not None and extra.se_poate_sterge:
+		elif fel in ('plugin', 'indisponibil') and extra is not None and extra.se_poate_sterge:
 			self._planStergere(extra)
 		elif fel == 'pachet' and obj.se_poate_sterge:
 			self._planStergere(obj)
@@ -1535,18 +1540,26 @@ class HdsExtensii(Screen, HelpableScreen):
 	# ------------------------------------------------------------ pluginuri
 
 	def _pluginPentru(self, p):
-		# Un plugin care s-a trecut numai in lista butonului albastru (WHERE_EXTENSIONSMENU) porneste si de aici: altfel OK
-		# spunea numai „instalat si la zi”, iar omul nu afla cum il deschide
-		return L.pluginPentru(self.pluginuri, p) or L.pluginPentru(plugins.getPlugins(PluginDescriptor.WHERE_EXTENSIONSMENU), p)
+		return L.pluginPentru(self.pluginuri, p)
 
 	def _pornestePlugin(self, plugin):
 		try:
-			plugin(session=self.session)
+			plugin.deschide(self.session, L.listaCanale())
 		except Exception as e:
 			import traceback
 			traceback.print_exc()
-			self.session.open(MessageBox, 'Extensia „%s” nu a putut porni.\n%s' % (plugin.name, P._curat(str(e), 200)),
+			self.session.open(MessageBox,
+				_t('Extensia %s nu a putut porni.\n%s') % (plugin.name, P._curat(str(e), 200)),
 				type=MessageBox.TYPE_ERROR)
+		# randul arata motivul unei deschideri cazute, iar cea reusita il sterge
+		self._arataFila()
+
+	def _arataMotiv(self, e):
+		"""OK pe un plugin care nu se poate deschide: repornirea, cand asteapta numai atat, altfel motivul intreg"""
+		if e['fel'] == 'repornire':
+			self._reporneste()
+		else:
+			self.session.open(MessageBox, plugins.textMotiv(e), type=MessageBox.TYPE_INFO)
 
 	# ------------------------------------------------------------ planurile pentru HdsExtensiiActiune
 	# (Components/HdsExtensiiLucru.py: aceleasi planuri si pentru pagina web; ecranul da functiile lui opkgArguments

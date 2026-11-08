@@ -322,7 +322,7 @@ class Tuner(object):
         return max(0, int(self._termen - (_monoton() - self._inceput)))
 
     # ---- acordul
-    def acordeaza(self, tp, la_gata, la_stare=None):
+    def acordeaza(self, tp, la_gata, la_stare=None, fara_motor=False):
         """Porneste acordul. la_gata(ok, mesaj) se cheama o singura data. Intoarce False daca a cazut imediat."""
         self.elibereaza()
         self._la_gata, self._la_stare = la_gata, la_stare
@@ -335,6 +335,9 @@ class Tuner(object):
             return False
         poz = p['orbital_position']
         self.slot, self._rotor = alege_slot(poz)
+        fara_comanda_motor = bool(fara_motor and self._rotor)
+        if fara_motor:
+            self._rotor = False       # transmisia web nu porneste miscarea sau recuperarea pozitiei motorului
         try:
             from enigma import (eDVBFrontendParameters, eDVBFrontendParametersSatellite,
                                 eDVBResourceManager)
@@ -358,7 +361,7 @@ class Tuner(object):
             except Exception:
                 pass   # imagini mai vechi nu au is_id / pls
         fp = eDVBFrontendParameters()
-        fp.setDVBS(s, False)
+        fp.setDVBS(s, fara_comanda_motor)
         self._p, self._poz, self._fp, self._tp_cerut = p, poz, fp, tp
         self._alocare_pana = _monoton() + ALOCARE_MAX_S
         return self._aloca_si_acordeaza()

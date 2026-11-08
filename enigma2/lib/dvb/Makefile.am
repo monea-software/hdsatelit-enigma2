@@ -59,7 +59,9 @@ dvbinclude_HEADERS = \
 	hdsait.h \
 	hdscalitate.h \
 	hdscedare.h \
+	hdscitirifrontend.h \
 	hdsgrad.h \
+	hdslistetext.h \
 	hdsjurnaldecodor.h \
 	hdsjurnaltuner.h \
 	hdsmultistream.h \

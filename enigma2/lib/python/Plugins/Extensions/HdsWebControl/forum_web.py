@@ -463,6 +463,9 @@ def pozaCaptura(arg, C=None):
 def capturaFa(C=None):
 	"""POST /api/captura-fa: captura pe un fir (paza imaginii se citeste aici, pe firul enigma2)."""
 	C = _c(C)
+	motiv = C.motivRefuzCaptura()
+	if motiv:
+		return {"result": False, "message": motiv}
 	n = _capturaInCurs()
 	if n is not None:
 		return {"result": True, "lucrare": n}

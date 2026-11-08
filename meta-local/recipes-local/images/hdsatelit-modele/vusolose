@@ -1,0 +1,37 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Solo SE (masina vusolose, Broadcom BCM7241, MIPS), NECONFIRMAT
+# Primul receptor cu memorie NAND (stocare=nand): nu are eMMC, nici partitia deviceinfo, nici /proc/msp/sys. Garda din
+# enigma2.sh si Components/HdsPazaModel.py citesc atunci, in locul lor:
+# - cipul din /proc/stb/info/chipset (driverul dvb-bcm7241.ko al pachetului vuplus-dvb-proxy-vusolose 20190429 face
+#   nodul; sirul „7241” e in modul), scris aici cum il da driverul (ca la Vu+ 4K) si comparat fara „bcm” in fata, ca
+#   sa fie la fel „7241” si „bcm7241”;
+# - tipul placii din /proc/stb/info/vumodel (acelasi driver; sirul „solose” e in modul), daca exista, altfel
+#   /proc/stb/info/boxtype;
+# - partitiile din /proc/mtd, in ordine (mtd0, mtd1 ...), cu numele curatate (orice alt semn decat litere, cifre si _
+#   devine _: „rootfs(redundant)” -> rootfs_redundant_) si marimile in KiB.
+# hw=- : placa nu are antet de fabrica (HW=) de citit; garda nu il cere.
+# Valorile partitiilor: jurnalele de pornire publicate ale unui Solo SE de 256 MB (V1) si ale unui Solo SE V2 de 512 MB
+# (cercetare-web/RAPORT.md A4, lotul mips-solose 06.11.2026): mtd0 rootfs (225 MiB pe V1, 481 MiB pe V2, de aceea fara
+# marime), mtd1 rootfs(redundant) peste aceleasi limite, mtd2 kernel 7 MiB (7168 KiB, la fel pe amandoua), mtd3 mac 1 MiB.
+# MTD_KERNEL=mtd2 si MTD_ROOTFS=mtd0 sunt cele din vusolose.conf (OE-A 6.0, 87fb81188).
+# confirmat=nu: treapta a doua; hotarasc cipul, tipul placii si locul nucleului si al sistemului; tabela partitiilor si
+# marimea nucleului sunt numai avertismente, pana cand un tester citeste /proc/mtd pe receptorul lui.
+# Fara upd_path: pe Vu+ dosarul de pe stick (vuplus/solose) il stie incarcatorul CFE, nu un nod al driverului.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=vusolose.
+# familie=broadcom (unirea cu lotul vuplus4k, 06.11.2026 seara): aceeasi familie ca Vu+ Solo 4K, Uno 4K SE si Duo 4K
+# (cipul si tipul placii din driverul Vu+, placa fara antet de fabrica); stocare=nand spune in plus ca tabela si locul
+# nucleului si al sistemului vin din /proc/mtd (pe eMMC Vu+ vin din /proc/cmdline).
+format=1
+distro=hdsatelit
+model=Vu+ Solo SE
+machine=vusolose
+machinebuild=vusolose
+chip=7241
+boxtype=solose
+hw=-
+partitions=rootfs,rootfs_redundant_,kernel:7M,mac:1M
+kernel_part=mtd2
+kernel_kib=7168
+rootfs_part=mtd0
+stocare=nand
+confirmat=nu
+familie=broadcom

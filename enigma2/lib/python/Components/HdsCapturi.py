@@ -319,7 +319,7 @@ def limiteazaMemoria(dosar=None):
 			total -= marime
 
 
-def _salveaza(octeti, extensie, l, acum=None):
+def _salveaza(octeti, extensie, l, acum=None, valida=None):
 	"""Scrie poza in locul `l` -> (reusit, cale_sau_mesaj)."""
 	dosar = l["dosar"]
 	with _lacat:
@@ -336,6 +336,9 @@ def _salveaza(octeti, extensie, l, acum=None):
 			return False, _t("Nu mai e loc pe stick pentru capturi.")
 		n = _numeNou(dosar, extensie, acum)
 		c = os.path.join(dosar, n)
+		# Discul sau zavorul au putut astepta: nu salva o captura invalidata intre timp de un ecran cu secrete.
+		if valida is not None and not valida():
+			return False, _mesajRefuzCaptura(_paza())
 		try:
 			_scrie(c, octeti)
 		except (OSError, IOError) as e:
@@ -358,12 +361,40 @@ def inStandby():
 
 
 def _paza():
-	"""Paza capturilor din interfata web (cand intra imaginea canalului), sau None."""
+	"""Paza comuna a secretelor si a decodorului, sau None (captura refuzata)."""
 	try:
 		from Plugins.Extensions.HdsWebControl import captura_sigura
 		return captura_sigura
 	except Exception:
 		return None
+
+
+def _stareCaptura():
+	cs = _paza()
+	try:
+		return cs, cs.epocaCapturii()
+	except Exception:
+		return cs, None
+
+
+def _capturaValida(cs, epoca):
+	try:
+		return bool(cs.capturaValida(epoca))
+	except Exception:
+		return False
+
+
+def _mesajRefuzCaptura(cs):
+	try:
+		return cs.mesajRefuz()
+	except Exception:
+		return _t("Captura nu s-a putut face.")
+
+
+def motivRefuzCaptura():
+	"""Poarta pe firul interfetei, comuna butonului local si paginii forumului; fara paza se refuza."""
+	cs, epoca = _stareCaptura()
+	return "" if _capturaValida(cs, epoca) else _mesajRefuzCaptura(cs)
 
 
 def imagineaCanalului():
@@ -418,8 +449,11 @@ def _ruleaza(comanda):
 		return None, b""
 
 
-def _fa(cu_imagine=None, loc=None):
+def _fa(cu_imagine=None, loc=None, paza=None):
 	"""fa(), plus daca stick-ul e amovibil (pentru mesajul de dupa captura) -> (reusit, cale_sau_mesaj, loc, amovibil)."""
+	cs, epoca = paza if paza is not None else _stareCaptura()
+	if not _capturaValida(cs, epoca):
+		return False, _mesajRefuzCaptura(cs), loc or MEMORIE, False
 	lista_locuri = locuri()
 	l = _loc(loc, lista_locuri) if loc else locImplicit(lista_locuri)
 	cheie = l["cheie"] if l else (loc or MEMORIE)
@@ -431,17 +465,20 @@ def _fa(cu_imagine=None, loc=None):
 	if cu_imagine is None:
 		cu_imagine = imagineaCanalului()
 	if cu_imagine:
-		cs = _paza()
 		if cs is not None:
 			try:
 				cs.incepeVideo()
 			except Exception:
 				pass
+	if not _capturaValida(cs, epoca):
+		return False, _mesajRefuzCaptura(cs), cheie, amovibil
 	cod, date = _ruleaza(_comandaGrab(cu_imagine))
+	if not _capturaValida(cs, epoca):
+		return False, _mesajRefuzCaptura(cs), cheie, amovibil
 	if cod != 0 or not date.startswith(_JPEG) or len(date) < CAPTURA_MINIMA:
 		_jurnal("grab: cod %s, %d octeti" % (cod, len(date or b"")))
 		return False, _t("Captura nu s-a putut face."), cheie, amovibil
-	ok, rez = _salveaza(date, "jpg", l)
+	ok, rez = _salveaza(date, "jpg", l, valida=lambda: _capturaValida(cs, epoca))
 	return ok, rez, cheie, amovibil
 
 
@@ -488,6 +525,8 @@ class LucrareCaptura(threading.Thread):
 		threading.Thread.__init__(self, name="hds-captura")
 		self.daemon = True
 		self.cu_imagine = cu_imagine
+		# Fotografia ceruta inaintea unui secret nu poate incepe dupa ce acesta s-a deschis/inchis.
+		self.paza = _stareCaptura()
 		self.loc_cerut = loc
 		self.gata = False
 		self.reusit = False
@@ -498,7 +537,7 @@ class LucrareCaptura(threading.Thread):
 
 	def run(self):
 		try:
-			ok, rez, self.loc, self.amovibil = _fa(self.cu_imagine, self.loc_cerut)
+			ok, rez, self.loc, self.amovibil = _fa(self.cu_imagine, self.loc_cerut, self.paza)
 			self.reusit = ok
 			if ok:
 				self.cale = rez

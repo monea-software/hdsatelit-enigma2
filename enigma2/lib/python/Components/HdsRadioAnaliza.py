@@ -1134,6 +1134,83 @@ class Flux(object):
 # ---------------------------------------------------------------- sursele de date
 
 
+class AnalizorOnline(object):
+	"""Acelasi contract ca Analizor, peste copia pasiva a serviciului GStreamer deja redat.
+	Nu deschide alta conexiune, demultiplexor sau decodor si nu asteapta un fir. Nucleul expira
+	spectrul cand nu mai vin mostre; oprirea nu poate lasa barele postului vechi pe cel nou."""
+
+	def __init__(self, service, citeste=None, ceas=time.monotonic):
+		if citeste is None:
+			from Components.HdsRadioDate import date_online
+			citeste = date_online
+		self.service = service
+		self.citeste = citeste
+		self.ceas = ceas
+		self.flux = self
+		self.info = {}
+		self._stare = STARE_ASTEAPTA
+		self._nivele = None
+		self._oprit = False
+		self._fir = None  # contractul de succesiune al analizorului DVB; online nu creeaza fir Python
+		self._ultima = None
+
+	def porneste(self, inainte=None):
+		self._actualizeaza()
+
+	def opreste(self):
+		self._oprit = True
+		self.service = None
+		self._nivele = None
+		self.info = {}
+		self._stare = STARE_OPRIT
+
+	def oprit(self):
+		return self._oprit
+
+	def viu(self):
+		return not self._oprit
+
+	def _actualizeaza(self):
+		acum = self.ceas()
+		if self._oprit or self._ultima is not None and 0 <= acum - self._ultima < 0.03:
+			return
+		self._ultima = acum
+		try:
+			d = self.citeste(self.service) or {}
+		except Exception:
+			d = {}
+		self.info = {k: d[k] for k in ("codec", "debit", "debit_aprox", "esantionare", "canale") if k in d}
+		if not self.info.get("esantionare"):
+			self.info.pop("esantionare", None)
+		self.info["format"] = "online"
+		self._nivele = None
+		try:
+			f0, f1 = d.get("spectru") or (None, None)
+			def canal(f):
+				if f is None or len(f) != 32:
+					return None
+				return [max(0, min(63, int(round(x)))) for x in f if math.isfinite(x)]
+			f0, f1 = canal(f0), canal(f1)
+			if f0 is not None and len(f0) == 32 and (f1 is None or len(f1) == 32):
+				self._nivele = (32, f0, f1)
+		except (TypeError, ValueError, OverflowError):
+			pass
+		self._stare = STARE_BARE if self._nivele is not None else STARE_ASTEAPTA
+
+	@property
+	def stare(self):
+		self._actualizeaza()
+		return self._stare
+
+	def nivele(self, fereastra=0.06):
+		self._actualizeaza()
+		return self._nivele
+
+	def descriere(self):
+		self._actualizeaza()
+		return dict(self.info, stare=self._stare, motiv="")
+
+
 class SursaDemux(object):
 	"""Filtrul PES pe PID-ul audio, pe unul din demultiplexoarele date (in ordine)."""
 

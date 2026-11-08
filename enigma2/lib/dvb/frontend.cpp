@@ -475,10 +475,30 @@ DEFINE_REF(eDVBFrontend);
 
 int eDVBFrontend::PriorityOrder=0;
 
+static int hdsGrupFbc(int adap, int fe)
+{
+	// Proc numeroteaza tunerele interne. Nu confundam un adaptor USB cu ele.
+	if (adap != 0)
+		return -1;
+	char cale[96];
+	snprintf(cale, sizeof(cale), "/proc/stb/frontend/%d/fbc_set_id", fe);
+	FILE *fisier = fopen(cale, "r");
+	int rezultat = -1;
+	if (fisier)
+	{
+		int grup;
+		char rest;
+		if (fscanf(fisier, "%d %c", &grup, &rest) == 1 && grup >= 0)
+			rezultat = grup;
+		fclose(fisier);
+	}
+	return rezultat;
+}
+
 eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFrontend *simulate_fe)
 	:m_simulate(simulate), m_enabled(false), m_type(-1), m_simulate_fe(simulate_fe), m_dvbid(fe), m_slotid(fe)
 	,m_fd(-1), m_rotor_mode(false), m_need_rotor_workaround(false), m_can_handle_dvbs2(false), m_delsys_types(0)
-	,m_multistream(false), m_dvbt2(false), m_dvb_api(0)
+	,m_multistream(false), m_dvbt2(false), m_dvb_api(0), m_hds_fbc_set(hdsGrupFbc(adap, fe))
 	,m_state(stateClosed), m_timeout(0), m_tuneTimer(0)
 #if HAVE_DVB_API_VERSION < 3
 	,m_secfd(-1)
@@ -490,7 +510,6 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
 #else
 	sprintf(m_filename, "/dev/dvb/adapter%d/frontend%d", adap, fe);
 #endif
-
 	m_timeout = eTimer::create(eApp);
 	CONNECT(m_timeout->timeout, eDVBFrontend::timeout);
 
@@ -522,6 +541,7 @@ int eDVBFrontend::openFrontend()
 
 	m_state=stateIdle;
 	m_tuning=0;
+	m_hds_citiri.goleste(); /* tuner deschis din nou: nimic tinut de dinainte (hdscitirifrontend.h) */
 
 #if HAVE_DVB_API_VERSION < 3
 	FrontendInfo fe_info;
@@ -725,6 +745,7 @@ int eDVBFrontend::closeFrontend(bool force, bool no_delayed)
 
 		if (m_sec && !m_simulate)
 			m_sec->setRotorMoving(m_slotid, false);
+		m_hds_citiri.goleste(); /* tuner inchis: nimic tinut (hdscitirifrontend.h) */
 		if (!::close(m_fd))
 			m_fd=-1;
 		else
@@ -764,7 +785,7 @@ void eDVBFrontend::feEvent(int w)
 	{
 		eDVBRegisteredFrontend *linked_fe = (eDVBRegisteredFrontend*)tmp;
 		sec_fe = linked_fe->m_frontend;
-		sec_fe->getData(LINKED_NEXT_PTR, tmp);
+		sec_fe->getData(LINKED_PREV_PTR, tmp);
 	}
 	while (1)
 	{
@@ -825,6 +846,7 @@ void eDVBFrontend::feEvent(int w)
 				hdsjtuner::prins(m_hds_jurnal, m_slotid, -1);
 			else if (state == stateLostLock)
 				hdsjtuner::pierdut(m_hds_jurnal, m_slotid);
+			m_hds_citiri.goleste(); /* starea s-a schimbat: valorile tinute nu mai sunt ale ei (hdscitirifrontend.h) */
 			m_state = state;
 			m_stateChanged(this);
 		}
@@ -836,9 +858,13 @@ void eDVBFrontend::timeout()
 	m_tuning = 0;
 	if (m_state == stateTuning)
 	{
-		fe_status_t hds_stare;
-		hdsjtuner::faraSemnal(m_hds_jurnal, m_slotid,
-			(!m_simulate && m_fd >= 0 && ::ioctl(m_fd, FE_READ_STATUS, &hds_stare) >= 0) ? (int)hds_stare : -1);
+		/* drumul de esec, dupa timpul de asteptare (5-20 s): nivelul deosebeste "nu vine nimic" de "vine, dar nu decodeaza";
+		   citire directa, fara memoria tunerului (lib/dvb/hdscitirifrontend.h) */
+		bool hds_citeste = m_hds_jurnal.pornit_ms && !m_simulate && m_fd >= 0;
+		int hds_err = 0;
+		int hds_stare = hds_citeste ? (int)hdsCitesteBrut(hdscitiri::STARE, true, hds_err) : -1;
+		hdsjtuner::faraSemnal(m_hds_jurnal, m_slotid, (hds_citeste && !hds_err) ? hds_stare : -1,
+			hds_citeste ? hdsCiteste(signalPower, true) : -1);
 		m_state = stateFailed;
 		m_stateChanged(this);
 	}
@@ -852,7 +878,52 @@ static inline uint32_t fe_udiv(uint32_t a, uint32_t b)
 	return (a + b / 2) / b;
 }
 
+/* HDSatelit (lib/dvb/hdscitirifrontend.h): toti cititorii (Python, scanarea, convertoarele) trec prin memoria tunerului:
+   o citire a fiecarei valori pe secunda, impartita. Bucla SEC si timeout() citesc direct (hdsCiteste(..., true)). */
 int eDVBFrontend::readFrontendData(int type)
+{
+	return hdsCiteste(type, false);
+}
+
+/* o citire bruta prin memoria tunerului; 0 sau errno (ERANGE nu e eroare, ca inainte) */
+unsigned int eDVBFrontend::hdsCitesteBrut(int fel, bool direct, int &err)
+{
+	hdscitiri::CeasMonoton ceas;
+	int fd = m_fd;
+	switch (fel)
+	{
+		case hdscitiri::BER:
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::BER, direct, ceas, [fd](unsigned int &v) {
+				uint32_t x = 0;
+				int r = ::ioctl(fd, FE_READ_BER, &x);
+				v = x;
+				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+		case hdscitiri::SNR:
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::SNR, direct, ceas, [fd](unsigned int &v) {
+				uint16_t x = 0;
+				int r = ::ioctl(fd, FE_READ_SNR, &x);
+				v = x;
+				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+		case hdscitiri::NIVEL:
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::NIVEL, direct, ceas, [fd](unsigned int &v) {
+				uint16_t x = 0;
+				int r = ::ioctl(fd, FE_READ_SIGNAL_STRENGTH, &x);
+				v = x;
+				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+		default:
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::STARE, direct, ceas, [fd](unsigned int &v) {
+#if HAVE_DVB_API_VERSION < 3
+				FrontendStatus x = 0;
+#else
+				fe_status_t x = (fe_status_t)0;
+#endif
+				int r = ::ioctl(fd, FE_READ_STATUS, &x);
+				v = (unsigned int)x;
+				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+	}
+}
+
+int eDVBFrontend::hdsCiteste(int type, bool direct)
 {
 	switch(type)
 	{
@@ -861,8 +932,10 @@ int eDVBFrontend::readFrontendData(int type)
 			uint32_t ber=0;
 			if (!m_simulate)
 			{
-				if (ioctl(m_fd, FE_READ_BER, &ber) < 0 && errno != ERANGE)
-					eDebug("FE_READ_BER failed (%m)");
+				int err = 0;
+				ber = hdsCitesteBrut(hdscitiri::BER, direct, err);
+				if (err)
+					eDebug("FE_READ_BER failed (%s)", strerror(err));
 			}
 			return ber;
 		}
@@ -876,8 +949,10 @@ int eDVBFrontend::readFrontendData(int type)
 			uint16_t snr=0;
 			if (m_simulate)
 				return 0;
-			if (ioctl(m_fd, FE_READ_SNR, &snr) < 0 && errno != ERANGE)
-				eDebug("FE_READ_SNR failed (%m)");
+			int hds_err = 0;
+			snr = (uint16_t)hdsCitesteBrut(hdscitiri::SNR, direct, hds_err);
+			if (hds_err)
+				eDebug("FE_READ_SNR failed (%s)", strerror(hds_err));
 			else if (!strcmp(m_description, "BCM4501 (internal)"))
 			{
 				float SDS_SNRE = snr << 16;
@@ -1049,8 +1124,10 @@ int eDVBFrontend::readFrontendData(int type)
 			uint16_t strength=0;
 			if (!m_simulate)
 			{
-				if (ioctl(m_fd, FE_READ_SIGNAL_STRENGTH, &strength) < 0 && errno != ERANGE)
-					eDebug("FE_READ_SIGNAL_STRENGTH failed (%m)");
+				int err = 0;
+				strength = (uint16_t)hdsCitesteBrut(hdscitiri::NIVEL, direct, err);
+				if (err)
+					eDebug("FE_READ_SIGNAL_STRENGTH failed (%s)", strerror(err));
 			}
 			return strength;
 		}
@@ -1063,8 +1140,14 @@ int eDVBFrontend::readFrontendData(int type)
 #endif
 			if (!m_simulate)
 			{
-				if ( ioctl(m_fd, FE_READ_STATUS, &status) < 0 && errno != ERANGE )
-					eDebug("FE_READ_STATUS failed (%m)");
+				int err = 0;
+#if HAVE_DVB_API_VERSION < 3
+				status = (FrontendStatus)hdsCitesteBrut(hdscitiri::STARE, direct, err);
+#else
+				status = (fe_status_t)hdsCitesteBrut(hdscitiri::STARE, direct, err);
+#endif
+				if (err)
+					eDebug("FE_READ_STATUS failed (%s)", strerror(err));
 				return !!(status&FE_HAS_LOCK);
 			}
 			return 1;
@@ -1078,8 +1161,14 @@ int eDVBFrontend::readFrontendData(int type)
 #endif
 			if (!m_simulate)
 			{
-				if ( ioctl(m_fd, FE_READ_STATUS, &status) < 0 && errno != ERANGE )
-					eDebug("FE_READ_STATUS failed (%m)");
+				int err = 0;
+#if HAVE_DVB_API_VERSION < 3
+				status = (FrontendStatus)hdsCitesteBrut(hdscitiri::STARE, direct, err);
+#else
+				status = (fe_status_t)hdsCitesteBrut(hdscitiri::STARE, direct, err);
+#endif
+				if (err)
+					eDebug("FE_READ_STATUS failed (%s)", strerror(err));
 				return !!(status&FE_HAS_SYNC);
 			}
 			return 1;
@@ -1501,6 +1590,26 @@ void eDVBFrontend::getFrontendStatus(ePyObject dest)
 	}
 }
 
+/* HDSatelit: contoarele citirilor starii tunerelor (toate tunerele, lib/dvb/hdscitirifrontend.h), pentru raportul de
+   procesor (Components/HdsProcesorRaport.py). Numere pe 32 de biti fara semn, care se pot da peste cap: se folosesc
+   diferentele. ttl_ms: TTL-ul memoriei pe I2C obisnuit si pe I2C foarte lent. */
+PyObject *getFrontendReadCounts()
+{
+	hdscitiri::Contoare &c = hdscitiri::contoare();
+	ePyObject d = PyDict_New();
+	if (!d)
+		Py_RETURN_NONE;
+	PutToDict(d, "cereri", ePyObject(PyLong_FromUnsignedLong(c.cereri.load(std::memory_order_relaxed))));
+	PutToDict(d, "din_memorie", ePyObject(PyLong_FromUnsignedLong(c.din_memorie.load(std::memory_order_relaxed))));
+	PutToDict(d, "ioctl", ePyObject(PyLong_FromUnsignedLong(c.ioctl.load(std::memory_order_relaxed))));
+	PutToDict(d, "ioctl_direct", ePyObject(PyLong_FromUnsignedLong(c.ioctl_direct.load(std::memory_order_relaxed))));
+	PutToDict(d, "erori", ePyObject(PyLong_FromUnsignedLong(c.erori.load(std::memory_order_relaxed))));
+	PutToDict(d, "us_ioctl", ePyObject(PyLong_FromUnsignedLong(c.us_ioctl.load(std::memory_order_relaxed))));
+	PutToDict(d, "ttl_ms", (long)hdscitiri::TTL_MS);
+	PutToDict(d, "ttl_lent_ms", (long)hdscitiri::TTL_LENT_MS);
+	return d;
+}
+
 void eDVBFrontend::getTransponderData(ePyObject dest, bool original)
 {
 	if (dest && PyDict_Check(dest))
@@ -1717,7 +1826,9 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 		if (tmp == -1 && sec_fe != this && !prev->m_inuse) {
 			int state = sec_fe->m_state;
 			// workaround to put the kernel frontend thread into idle state!
-			if (state != eDVBFrontend::stateIdle && state != stateClosed)
+			// O radacina FBC alimenteaza grupul si cand nu demoduleaza ea.
+			if (state != eDVBFrontend::stateIdle && state != stateClosed
+				&& !hdsSameFbcSet(*sec_fe))
 			{
 				sec_fe->closeFrontend(true);
 				state = sec_fe->m_state;
@@ -1882,12 +1993,13 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 					break;
 				}
 				int signal = 0;
-				int isLocked = readFrontendData(locked);
+				/* citiri directe (fara memoria tunerului): pasii motorului cer starea de acum */
+				int isLocked = hdsCiteste(locked, true);
 				m_idleInputpower[0] = m_idleInputpower[1] = 0;
 				--m_timeoutCount;
 				if (!m_timeoutCount && m_retryCount > 0)
 					--m_retryCount;
-				if (isLocked && ((abs((signal = readFrontendData(signalQualitydB)) - cmd.lastSignal) < 40) || !cmd.lastSignal))
+				if (isLocked && ((abs((signal = hdsCiteste(signalQualitydB, true)) - cmd.lastSignal) < 40) || !cmd.lastSignal))
 				{
 					if (cmd.lastSignal)
 						eDebugNoSimulate("[SEC] locked step %d ok (%d %d)", cmd.okcount, signal, cmd.lastSignal);
@@ -2441,6 +2553,13 @@ RESULT eDVBFrontend::prepare_sat(const eDVBFrontendParametersSatellite &feparm, 
 				case eDVBFrontendParametersSatellite::FEC_9_10:
 					parm_u_qpsk_fec_inner = FEC_S2_QPSK_9_10;
 					break;
+#if HAVE_DVB_API_VERSION >= 5
+				// listele de canale facute de alte programe au des FEC automat si la DVB-S2; driverul il afla singur
+				// (pe Vu+ Solo SE toate canalele de pe 42E erau refuzate inainte de tuner)
+				case eDVBFrontendParametersSatellite::FEC_Auto:
+					parm_u_qpsk_fec_inner = FEC_AUTO;
+					break;
+#endif
 				default:
 					eDebugNoSimulate("no valid fec for DVB-S2 set.. abort !!");
 					return -EINVAL;
@@ -2830,7 +2949,7 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 			{
 				eDVBRegisteredFrontend *linked_fe = (eDVBRegisteredFrontend*)tmp;
 				sec_fe = linked_fe->m_frontend;
-				sec_fe->getData(LINKED_NEXT_PTR, tmp);
+				sec_fe->getData(LINKED_PREV_PTR, tmp);
 			}
 			eDebug("(fe%d) reset diseqc after leave rotor mode!", m_dvbid);
 			sec_fe->m_data[CSW] = sec_fe->m_data[UCSW] = sec_fe->m_data[TONEBURST] = -1; // reset diseqc
@@ -2914,6 +3033,7 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 
 	if (!m_simulate)
 	{
+		m_hds_citiri.goleste(); /* acordare noua: nimic tinut din acordarea de dinainte (hdscitirifrontend.h) */
 		m_tuneTimer->start(0,true);
 		m_tuning = 1;
 		if (m_state != stateTuning)

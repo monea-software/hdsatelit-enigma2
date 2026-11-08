@@ -41,7 +41,7 @@ LEGATURA = '<a href="/afisaj">Afișajul din față</a>'
 MAX_LISTA_TEXT = 2000
 MAX_TEXT = 120
 MAX_VALOARE = 40
-MAX_ARGUMENTE = 16
+MAX_ARGUMENTE = 20
 # previzualizarea din pagina tine atat fara o cerere noua a paginii (pagina o reinnoieste la 10 s cat are schimbari
 # nesalvate): o pagina inchisa fara „Salvează” sau „Renunță” nu lasa afisajul pe lista nesalvata
 TERMEN_PREVIZUALIZARE_S = 120
@@ -78,6 +78,21 @@ def _d(D=None):
 def _p():
 	from Components import HdsAfisajPersonaj
 	return HdsAfisajPersonaj
+
+
+def _esteColor(A):
+	return bool(getattr(A, "esteColor", lambda: False)())
+
+
+def _colorAlegere(A, D, d, f, v=None, color=None):
+	"""Textul integral al valorii sau al exemplului, pentru previzualizarea color."""
+	if not (_esteColor(A) if color is None else color):
+		return {}
+	from Components import HdsAfisajColor as C
+	pereche = D.pereche(d, f, v.valoare(d)) if v is not None else None
+	if pereche is None:
+		pereche = D.pereche(d, f, D.exemplu(d, f))
+	return {"color_text": C.textColor(pereche, 0, d.id, f.id)}
 
 
 # ---------------------------------------------------------------- datele
@@ -119,17 +134,19 @@ def _descriere(D, d, f):
 		"format": _t(f.eticheta) if len(d.formate) > 1 else "", "grupa": d.grupa, "scurt": scurt, "nota": _nota(D, d)}
 
 
-def _intrare(A, D, v, i, viteza):
+def _intrare(A, D, v, i, viteza, color=None):
 	desen, exemplu = v.desen(i.d, i.f, viteza)
 	rez = _descriere(D, i.d, i.f)
 	rez.update({"durata": i.durata, "durata_text": A.textDurata(i.durata), "eticheta": bool(i.eticheta),
 		"desen": _desen(desen) if desen is not None else None, "exemplu": exemplu})
+	rez.update(_colorAlegere(A, D, i.d, i.f, v, color))
 	return rez
 
 
-def _alegeri(A, D, alegeri, viteza, v=None):
+def _alegeri(A, D, alegeri, viteza, v=None, color=None):
 	"""Randurile unei grupe (sau ale cautarii) cu desenul valorii de acum, altfel al exemplului."""
 	rez = []
+	color = _esteColor(A) if color is None else color
 	for d, f in alegeri:
 		if v is None:
 			desen, exemplu = D.desenExemplu(d, f, viteza), True
@@ -137,6 +154,7 @@ def _alegeri(A, D, alegeri, viteza, v=None):
 			desen, exemplu = v.desen(d, f, viteza)
 		x = _descriere(D, d, f)
 		x.update({"desen": _desen(desen) if desen is not None else None, "exemplu": exemplu})
+		x.update(_colorAlegere(A, D, d, f, v, color))
 		rez.append(x)
 	return rez
 
@@ -157,10 +175,15 @@ def _limba():
 
 
 def catalog(A=None, D=None):
-	"""Toate alegerile cu desenul exemplului (cautarea din pagina); tinut minte pe limba si pe viteza."""
+	"""Exemplele se tin minte dupa limba, viteza si unitatea temperaturii."""
 	A, D = _a(A), _d(D)
 	viteza = _viteza(A)
-	cheie = (_limba(), viteza)
+	try:
+		from Components import HdsVremea
+		unitate = HdsVremea.setari().get("unitate", "C")
+	except (ImportError, AttributeError, KeyError):
+		unitate = "C"
+	cheie = (_limba(), viteza, _esteColor(A), unitate)
 	if cheie not in _CATALOG:
 		_CATALOG.clear()
 		_CATALOG[cheie] = _alegeri(A, D, D.toateAlegerile(), viteza)
@@ -178,14 +201,16 @@ def stare(A=None, D=None, grupa=None, cu_catalog=False, cu_orase=False):
 	"""Pentru GET /api/afisaj. Fusurile orasului (cateva sute) numai cu cu_orase: pagina le cere o singura data."""
 	A, D = _a(A), _d(D)
 	s = A.stare()
+	color = _esteColor(A)
 	rez = {"result": True}
 	rez.update(s)
 	viteza = _viteza(A)
 	v = _valori(A)
 	lista = A.citesteLista(s["lista"])
 	evenimente = A.citesteEvenimente(s["evenimente"])
-	rez["lista_intrari"] = [_intrare(A, D, v, i, viteza) for i in lista]
+	rez["lista_intrari"] = [_intrare(A, D, v, i, viteza, color) for i in lista]
 	rez["alegeri_setari"] = {
+		"control_afisaj": [list(a) for a in A.alegeriControlAfisaj()],
 		"asteptare": [list(a) for a in A.alegeriAsteptare()],
 		"viteza": [list(a) for a in A.alegeriViteza()],
 		"luminozitate": [list(a) for a in A.alegeriLuminozitate()],
@@ -195,9 +220,20 @@ def stare(A=None, D=None, grupa=None, cu_catalog=False, cu_orase=False):
 		"minutar": [list(a) for a in A.alegeriMinutar()],
 	}
 	P = _p()
+	if color:
+		rez["alegeri_setari"]["tema_afisaj"] = [list(a) for a in A.alegeriTemaAfisaj()]
+		rez["alegeri_setari"]["color_live"] = [list(a) for a in A.alegeriColorLive()]
+		rez["alegeri_setari"]["color_picon"] = [list(a) for a in A.alegeriColorPicon()]
 	for cheie in P.CHEI:
 		rez["alegeri_setari"][cheie] = [list(a) for a in P.ALEGERI[cheie]()]
 	rez["personaj_expresii"] = P.pentruWeb()
+	if color:
+		from Components import HdsAfisajColor as C
+		for expresie in rez["personaj_expresii"]:
+			id_ = expresie["id"]
+			e = P.expresie(id_)
+			expresie["color_imagine"] = "afisaj-color/480x320/personaj/%s.png" % id_
+			expresie["color_cadre"] = [C.pozaExpresie(e, n) for n in range(len(e.cadre))]
 	if cu_orase:
 		rez["alegeri_setari"]["oras"] = [[v, D.orasDinNume(t) if v else t] for v, t in A.alegeriOras()]
 	rez["durate"] = [[dur, A.textDurata(dur)] for dur in A.DURATE]
@@ -219,18 +255,20 @@ def stare(A=None, D=None, grupa=None, cu_catalog=False, cu_orase=False):
 	rez["max_lista"] = A.MAX_LISTA
 	if grupa and grupa in [g for g, _n in D.GRUPE]:
 		rez["grupa"] = grupa
-		rez["alegeri"] = _alegeri(A, D, D.alegeriGrupa(grupa), viteza, v)
+		rez["alegeri"] = _alegeri(A, D, D.alegeriGrupa(grupa), viteza, v, color)
 	if cu_catalog:
 		rez["catalog"] = catalog(A, D)
 	return rez
 
 
 MESAJ_FARA_ALEGERE = N_("Lipsește ce se schimbă: lista, evenimente, asteptare, viteza, luminozitate, "
-	"luminozitate_noapte, noapte_de_la, noapte_pana_la, text, oras, minutar, cronometru sau previzualizare.")
+	"luminozitate_noapte, noapte_de_la, noapte_pana_la, text, oras, control_afisaj, tema_afisaj, minutar, cronometru "
+	"sau previzualizare.")
 MESAJ_PREVIZUALIZARE = N_("Afișajul arată lista de pe pagină. Nu e salvată încă.")
 MESAJ_FARA_PREVIZUALIZARE = N_("Afișajul arată din nou lista salvată.")
 CHEI_SETEAZA = ("lista", "evenimente", "asteptare", "viteza", "luminozitate", "luminozitate_noapte", "noapte_de_la",
-	"noapte_pana_la", "text", "functionare", "oras", "personaj", "personaj_ritm", "personaj_noaptea")
+	"noapte_pana_la", "text", "functionare", "oras", "personaj", "personaj_ritm", "personaj_noaptea", "color_live",
+	"color_picon", "control_afisaj", "tema_afisaj")
 
 
 def seteaza(argumente, A=None, D=None):
@@ -306,7 +344,8 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		maxim = {"lista": MAX_LISTA_TEXT, "evenimente": MAX_LISTA_TEXT, "text": MAX_TEXT}.get(cheie, MAX_VALOARE)
+		maxim = {"lista": MAX_LISTA_TEXT, "evenimente": MAX_LISTA_TEXT, "text": MAX_TEXT,
+			"tema_afisaj": 1024}.get(cheie, MAX_VALOARE)
 		rez[cheie] = u"%s" % v
 		rez[cheie] = rez[cheie][:maxim] if cheie == "text" else rez[cheie][:maxim].strip()
 	return rez
@@ -366,7 +405,46 @@ def pagina(request):
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))
+	if b"imagine" in request.args:
+		valori = request.args.get(b"imagine") or [b""]
+		cale = valori[0].decode("ascii", "replace") if isinstance(valori[0], bytes) else valori[0]
+		return imagine(request, cale)
 	return pagina_text(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
+
+
+def imagine(request, cale):
+	"""Numai PNG din catalogul local al afisajului, dupa poarta paginii."""
+	import os
+	import re
+	from Components import HdsAfisajColor as C
+	potrivire = r"^afisaj-color/(480x320|400x240)/(personaj/[a-z0-9_]+|stari/[0-9]{2})\.png$"
+	date, fisier, tip = None, None, b"image/png"
+	if re.fullmatch(potrivire, cale):
+		baza = os.path.realpath(C.DOSAR)
+		local = os.path.realpath(os.path.join(os.path.dirname(baza), cale))
+		if local.startswith(baza + os.sep):
+			fisier = local
+	elif cale == "picon":
+		fisier = getattr(getattr(_a(), "_afisaj", None), "_picon", None)
+	if fisier:
+		try:
+			with open(fisier, "rb") as f:
+				date = f.read(2 * 1024 * 1024 + 1)
+			if len(date) > 2 * 1024 * 1024:
+				date = None
+			elif cale == "picon" and date.startswith(b"\xff\xd8"):
+				tip = b"image/jpeg"
+			elif not date.startswith(b"\x89PNG\r\n\x1a\n"):
+				date = None
+		except (IOError, OSError):
+			pass
+	if date is None:
+		request.setResponseCode(404)
+		request.setHeader(b"content-type", b"text/plain; charset=utf-8")
+		return b"nu exista"
+	request.setHeader(b"content-type", tip)
+	request.setHeader(b"cache-control", b"no-store" if cale == "picon" else b"private, max-age=86400")
+	return date
 
 
 def _drumMeniu(id_intrare):
@@ -390,6 +468,11 @@ ETICHETE = {
 	"CAUTA_EXEMPLU": N_("De exemplu: temperatura, canal, volumul."),
 	"ROTIRE": N_("Lista de rotire"),
 	"SETARI": N_("Setări"),
+	"VREMEA": N_("Vremea: orașul și unitatea temperaturii"),
+	"CONTROL_AFISAJ": N_("Controlul afișajului"),
+	"CONTROL_NOTA": N_("Schimbarea se aplică după salvare."),
+	"TEMA_AFISAJ": N_("Tema afișajului"),
+	"TEMA_NOTA": N_("Tema se aplică după repornirea interfeței."),
 	"ASTEPTARE": N_("În așteptare"),
 	"VITEZA": N_("Viteza derulării"),
 	"LUMINA_ZI": N_("Luminozitatea, ziua"),
@@ -398,6 +481,10 @@ ETICHETE = {
 	"NOAPTE_PANA_LA": N_("Noaptea se termină"),
 	"TEXT": N_("Textul tău"),
 	"ORAS": N_("Ora din alt oraș"),
+	"COLOR_LIVE": N_("Imaginea de pe televizor"),
+	"COLOR_PICON": N_("Pictograma canalului"),
+	"COLOR_NOTA1": N_("Imaginea de pe televizor are prioritate."),
+	"COLOR_NOTA2": N_("Alege Nu ca să reapară pictograma și lista de rotire."),
 	"CEASURI": N_("Ceasurile afișajului"),
 	"MINUTAR": N_("Minutarul"),
 	"CRONOMETRU": N_("Cronometrul"),
@@ -412,6 +499,12 @@ ETICHETE = {
 # nota de sub alegeri: %s e drumul din meniul televizorului (HTML facut de meniu_web.drumHtml)
 NOTA = N_("Afișajul din fața receptorului are 4 cifre. Alegerile bifate trec pe rând, fiecare cât ai ales; un text "
 	"lung se derulează. Mesajele scurte trec în fața listei câteva secunde. Aceleași alegeri sunt pe televizor, în %s.")
+NOTA_COLOR = (
+	N_("Alegerile bifate trec pe rând, fiecare cât ai ales."),
+	N_("Textele se văd întregi, iar Personajul are poze color."),
+	N_("Mesajele scurte trec în fața listei câteva secunde."),
+	N_("Aceleași alegeri sunt pe televizor, în %s."),
+)
 
 # mesajele scriptului, traduse pe receptor si date paginii ca JSON (TXT); starea afisajului are aceleasi texte ca
 # ecranul de pe televizor
@@ -435,13 +528,15 @@ TEXTE_JS = {
 	"jos": N_("Mută mai jos"),
 	"scoate": N_("Scoate din listă"),
 	"eticheta": N_("eticheta"),
-	"nesalvat": N_("Ai schimbări nesalvate. Afișajul le arată deja; Salvează le păstrează."),
+	"nesalvat": N_("Ai schimbări nesalvate. Salvează le păstrează."),
 	"max_lista": N_("Lista de rotire poate avea cel mult %d alegeri."),
 	"evenimente": N_("Mesajele scurte trec în fața listei câteva secunde, când se întâmplă ceva."),
 	"asteptare": N_("În așteptare: alegi una"),
 	"acum": N_("Acum pe afișaj"),
 	"text_gol": N_("Îl scrii în Setări, la „Textul tău”."),
 	"durata": N_("Durata: %s"),
+	"poza_lipsa": N_("Poza nu este disponibilă."),
+	"pictograma": N_("Pictograma canalului"),
 }
 
 
@@ -458,10 +553,18 @@ def pagina_text(stil, config_pagina):
 		text = text.replace("__T_%s__" % cheie, html.escape(_t(eticheta), quote=True))
 	for cheie, eticheta in _p().ETICHETE_WEB.items():
 		text = text.replace("__P_%s__" % cheie, html.escape(_t(eticheta), quote=True))
-	nota = html.escape(_t(NOTA), quote=False)
+	nota = _t(NOTA)
+	try:
+		if _esteColor(_a()):
+			nota = " ".join(_t(parte) for parte in NOTA_COLOR)
+	except (ImportError, AttributeError):
+		pass
+	nota = html.escape(nota, quote=False)
 	nota = nota.replace("%s", _drumMeniu("hds_afisaj"), 1) if "%s" in nota else nota
+	texte_js = dict((k, _t(v)) for k, v in TEXTE_JS.items())
+	texte_js["personaj"] = _p().titlu()
 	return (text.replace("__LIMBA__", _limba()).replace("__NOTA__", nota)
-		.replace("__TEXTE_JS__", _json(dict((k, _t(v)) for k, v in TEXTE_JS.items())))
+		.replace("__TEXTE_JS__", _json(texte_js))
 		.replace("__STIL_COMUN__", stil).replace("__CONFIG__", config_pagina))
 
 
@@ -478,6 +581,12 @@ PAGINA = """<!DOCTYPE html>
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:14px;margin:0 0 12px;}
   .sus{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;}
   .mare svg{display:block;max-width:100%;height:auto;}
+  .mare.color{width:300px;max-width:100%;min-height:110px;background:#0b0b0b;color:#f2f4f8;
+    padding:12px;border-radius:8px;box-sizing:border-box;}
+  .mare.color img{display:block;width:100%;height:auto;}
+  .color-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:1.15rem;line-height:1.4;}
+  .color-mic{max-width:40%;font-size:.85rem;overflow-wrap:anywhere;color:var(--text-slab);}
+  .color-poza{width:72px;height:48px;object-fit:contain;flex:0 0 auto;}
   .ales-nume{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
   .ales-detaliu{margin:0 0 4px;}
   .ales-nota,.nota{color:var(--text-slab);font-size:.85rem;line-height:1.45;margin:0;}
@@ -556,7 +665,15 @@ PAGINA = """<!DOCTYPE html>
   </div>
   <section class="card">
     <h2>__T_SETARI__</h2>
+    <p><a id="vremeaLegatura" href="/vremea">__T_VREMEA__</a></p>
     <div class="setari">
+      <div class="setare">
+        <label for="s_control_afisaj">__T_CONTROL_AFISAJ__</label>
+        <select id="s_control_afisaj" data-cheie="control_afisaj"
+          aria-describedby="s_control_stare control_nota"></select>
+        <p class="nota" id="s_control_stare" role="status"></p>
+        <p class="nota" id="control_nota">__T_CONTROL_NOTA__</p>
+      </div>
       <div class="setare"><label for="s_asteptare">__T_ASTEPTARE__</label><select id="s_asteptare" data-cheie="asteptare"></select></div>
       <div class="setare"><label for="s_viteza">__T_VITEZA__</label><select id="s_viteza" data-cheie="viteza"></select></div>
       <div class="setare"><label for="s_luminozitate">__T_LUMINA_ZI__</label><select id="s_luminozitate" data-cheie="luminozitate"></select></div>
@@ -565,7 +682,21 @@ PAGINA = """<!DOCTYPE html>
       <div class="setare"><label for="s_noapte_pana_la">__T_NOAPTE_PANA_LA__</label><select id="s_noapte_pana_la" data-cheie="noapte_pana_la"></select></div>
       <div class="setare"><label for="s_text">__T_TEXT__</label><input id="s_text" maxlength="60" data-cheie="text"></div>
       <div class="setare"><label for="s_oras">__T_ORAS__</label><select id="s_oras" data-cheie="oras"></select></div>
+      <div class="setare color-setare ascuns">
+        <label for="s_tema_afisaj">__T_TEMA_AFISAJ__</label>
+        <select id="s_tema_afisaj" data-cheie="tema_afisaj" aria-describedby="tema_nota"></select>
+        <p class="nota" id="tema_nota">__T_TEMA_NOTA__</p>
+      </div>
+      <div class="setare color-setare ascuns">
+        <label for="s_color_live">__T_COLOR_LIVE__</label>
+        <select id="s_color_live" data-cheie="color_live"></select>
+      </div>
+      <div class="setare color-setare ascuns">
+        <label for="s_color_picon">__T_COLOR_PICON__</label>
+        <select id="s_color_picon" data-cheie="color_picon"></select>
+      </div>
     </div>
+    <p class="nota color-setare ascuns">__T_COLOR_NOTA1__ __T_COLOR_NOTA2__</p>
   </section>
   <section class="card">
     <h2>__T_CEASURI__</h2>
@@ -616,6 +747,7 @@ function adresa(cale){
   if(!CFG.jeton){ return cale; }
   return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
 }
+$("vremeaLegatura").href = adresa("/vremea");
 function optiuniCerere(metoda, date){
   var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
@@ -656,16 +788,43 @@ function svg(masti, inaltime, exemplu){
   p.push("</svg>");
   return p.join("");
 }
-function mic(desen, exemplu){ var s = el("span"); s.innerHTML = svg(desen ? desen.cadre[0] : [0, 0, 0, 0], 30, exemplu); return s.firstChild; }
+function pozaColor(cale, clasa, nume){
+  var p = el("img", clasa); p.src = adresa("/afisaj?imagine=" + encodeURIComponent(cale)); p.alt = nume || "";
+  p.addEventListener("error", function(){
+    if(p.parentNode){ p.parentNode.replaceChild(el("span", "color-text", TXT.poza_lipsa), p); }
+  });
+  return p;
+}
+function mic(desen, exemplu, a){
+  if(S && S.color){ return el("span", "color-mic", a && a.color_text || ""); }
+  var s = el("span"); s.innerHTML = svg(desen ? desen.cadre[0] : [0, 0, 0, 0], 30, exemplu); return s.firstChild;
+}
+function colorMare(c, text, imagine, nume){
+  c.textContent = ""; c.classList.add("color"); c.removeAttribute("aria-hidden");
+  if(imagine){ c.appendChild(pozaColor(imagine, "", nume)); }
+  else { c.appendChild(el("div", "color-text", text || "")); }
+}
 // ---------------------------------------------------------------- desenul mare, animat
 function arataMare(){
   if(CEAS){ clearTimeout(CEAS); CEAS = null; }
   var d = ALES && ALES.desen, masti = S ? S.masti : [0, 0, 0, 0], ex = false;
   if(d){ masti = d.cadre[CADRU % d.cadre.length]; ex = !!ALES.exemplu; }
-  $("mare").innerHTML = svg(masti, 110, ex);
+  var pm = $("personajMare"), personaj = ALES && ALES.grupa === "personaj";
+  if(S && S.color){
+    var imagine = ALES ? ALES.color_imagine : S.color_imagine;
+    if(personaj && ALES.color_cadre && ALES.color_cadre.length){
+      imagine = ALES.color_cadre[CADRU % ALES.color_cadre.length];
+    }
+    var text = ALES ? ALES.color_text : S.color_text;
+    colorMare($("mare"), text, imagine, ALES ? ALES.data : TXT.acum);
+    if(pm){ pm.textContent = ""; pm.classList.toggle("color", !!personaj);
+      if(personaj){ colorMare(pm, "", imagine, ALES.data); } }
+  } else {
+    $("mare").innerHTML = svg(masti, 110, ex);
   // expresia aleasa a personajului si langa lista ei, cadru cu cadru
-  var pm = $("personajMare"); if(pm){ pm.innerHTML = (ALES && ALES.grupa === "personaj") ? svg(masti, 80, false) : ""; }
-  if(d && d.cadre.length > 1){
+    if(pm){ pm.innerHTML = personaj ? svg(masti, 80, false) : ""; }
+  }
+  if(d && d.cadre.length > 1 && (!(S && S.color) || personaj)){
     var ms = d.durate[CADRU % d.cadre.length] || 1000;
     CEAS = setTimeout(function(){ CADRU = (CADRU + 1) % d.cadre.length; arataMare(); }, Math.max(100, ms));
   }
@@ -681,9 +840,11 @@ function alege(a, detaliu, nota){
 function lucruDinStare(s){
   var ev = {}; (s.evenimente || "").split(",").forEach(function(p){ if(p){ var q = p.split(":"); ev[q[0]] = q[1]; } });
   return {lista: (s.lista_intrari || []).map(function(i){ return {id: i.id, durata: i.durata, eticheta: i.eticheta}; }),
-    evenimente: ev, setari: {asteptare: s.asteptare, viteza: s.viteza, luminozitate: s.luminozitate,
+    evenimente: ev, setari: {control_afisaj: s.control_afisaj || "auto",
+    asteptare: s.asteptare, viteza: s.viteza, luminozitate: s.luminozitate,
     luminozitate_noapte: s.luminozitate_noapte, noapte_de_la: s.noapte_de_la, noapte_pana_la: s.noapte_pana_la, text: s.text_tau || "",
-    oras: s.oras || "", personaj: s.personaj, personaj_ritm: s.personaj_ritm, personaj_noaptea: s.personaj_noaptea}};
+    oras: s.oras || "", personaj: s.personaj, personaj_ritm: s.personaj_ritm, personaj_noaptea: s.personaj_noaptea,
+    tema_afisaj: s.tema_afisaj || "", color_live: s.color_live || "nu", color_picon: s.color_picon || "nu"}};
 }
 function textLista(){ return LUCRU.lista.map(function(i){ return i.id + (i.durata ? "@" + i.durata : "") + (i.eticheta ? "+e" : ""); }).join(","); }
 function textEvenimente(){ return Object.keys(LUCRU.evenimente).sort().map(function(k){ return k + ":" + LUCRU.evenimente[k]; }).join(","); }
@@ -691,6 +852,9 @@ function schimbat(){ return S && (textLista() !== S.lista || textEvenimente() !=
   ["asteptare", "viteza", "luminozitate", "luminozitate_noapte", "noapte_de_la", "noapte_pana_la", "personaj", "personaj_ritm",
     "personaj_noaptea"].some(function(k){ return LUCRU.setari[k] !== S[k]; }) ||
   (LUCRU.setari.oras || "") !== (S.oras || "") ||
+  (LUCRU.setari.control_afisaj || "auto") !== (S.control_afisaj || "auto") ||
+  (S.color && (LUCRU.setari.tema_afisaj || "") !== (S.tema_afisaj || "")) ||
+  (S.color && ["color_live", "color_picon"].some(function(k){ return LUCRU.setari[k] !== (S[k] || "nu"); })) ||
   LUCRU.setari.text !== (S.text_tau || "")); }
 function vizibilSchimbat(){ return S && (textLista() !== S.lista || LUCRU.setari.asteptare !== S.asteptare); }
 function bifat(a){
@@ -768,7 +932,7 @@ function deseneazaAlegeri(){
     var b = el("button", "rand hds-derulant-rand" + (ALES && ALES.id === a.id ? " ales" : "")); b.type = "button"; b.dataset.cheie = "a:" + a.id;
     var casuta = el("span", "casuta" + (bifat(a) ? " bifat" : "")); b.appendChild(casuta);
     b.appendChild(linii(a));
-    b.appendChild(mic(a.desen, a.exemplu));
+    b.appendChild(mic(a.desen, a.exemplu, a));
     b.addEventListener("click", function(){ comuta(a); alege(a); pastreaza(deseneazaAlegeri); });
     b.addEventListener("focus", function(){ alege(a); });
     b.addEventListener("mouseenter", function(){ alege(a); });
@@ -788,7 +952,7 @@ function deseneazaRotirea(){
     var jos = [a.format || "", i.eticheta && a.scurt ? a.scurt : "", TXT.durata.replace("%s", textDurata(i.durata))].filter(Boolean).join(" \\u00b7 ");
     l.appendChild(el("span", "mic hds-derulant", jos));
     sus.appendChild(l);
-    sus.appendChild(mic(a.desen, a.exemplu));
+    sus.appendChild(mic(a.desen, a.exemplu, a));
     sus.addEventListener("click", function(){ alege(a); });
     d.appendChild(sus);
     var u = el("div", "unelte");
@@ -813,6 +977,8 @@ function deseneazaRotirea(){
 }
 function textDurata(d){ var t = ""; (S.durate || []).forEach(function(p){ if(String(p[0]) === String(d)){ t = p[1]; } }); return t; }
 function deseneazaSetari(){
+  $("s_control_stare").textContent = (S.compatibilitate && S.compatibilitate.text) || "";
+  document.querySelectorAll(".color-setare").forEach(function(e){ e.classList.toggle("ascuns", !S.color); });
   document.querySelectorAll(".setare select[data-cheie]").forEach(function(s){
     var cheie = s.dataset.cheie; if(document.activeElement === s){ return; }
     var alegeri = cheie === "oras" ? (ORASE || []) : (S.alegeri_setari[cheie] || []);
@@ -843,13 +1009,19 @@ function ceas(cheie, valoare){
   }).catch(function(){ mesaj(TXT.nu_raspunde, true); });
 }
 // ---------------------------------------------------------------- personajul: expresiile
-function expresie(x){ return {id: "personaj:" + x.id, data: x.nume, text: x.nume, format: x.cand, desen: x.desen, exemplu: false, nota: "", grupa: "personaj"}; }
+function expresie(x){ return {id: "personaj:" + x.id, data: x.nume, text: x.nume, format: x.cand, desen: x.desen,
+  color_imagine: x.color_imagine, color_cadre: x.color_cadre, exemplu: false, nota: "", grupa: "personaj"}; }
 function deseneazaPersonaj(){
   var c = $("expresii"); c.textContent = "";
   (S.personaj_expresii || []).forEach(function(x){
     var a = expresie(x);
     var b = el("button", "rand hds-derulant-rand" + (ALES && ALES.id === a.id ? " ales" : "")); b.type = "button"; b.dataset.cheie = "p:" + x.id;
-    var s = el("span"); s.innerHTML = svg(x.desen.cadre[x.fata] || x.desen.cadre[0], 30, false); b.appendChild(s.firstChild);
+    if(S.color){ b.appendChild(pozaColor(x.color_imagine, "color-poza", x.nume)); }
+    else {
+      var s = el("span");
+      s.innerHTML = svg(x.desen.cadre[x.fata] || x.desen.cadre[0], 30, false);
+      b.appendChild(s.firstChild);
+    }
     var l = el("span", "linii"); l.appendChild(el("span", "nume", x.nume)); l.appendChild(el("span", "mic hds-derulant", x.cand)); b.appendChild(l);
     // clic: desenul mare o arata cadru cu cadru, iar afisajul adevarat o data
     b.addEventListener("click", function(){ alege(a); pastreaza(deseneazaPersonaj); arataPeAfisaj(x.id); });
@@ -867,7 +1039,10 @@ function deseneazaTot(){ pastreaza(function(){ deseneazaGrupe(); deseneazaAleger
 function trimitePrevizualizarea(){
   var q = new URLSearchParams(); q.set("previzualizare", "1"); q.set("lista", textLista()); q.set("asteptare", LUCRU.setari.asteptare);
   PREV = true;
-  return cerere("/api/afisaj-seteaza", "POST", q).then(function(d){ if(!d.result){ mesaj(d.message, true); } else { S.masti = d.masti; S.text = d.text; } }).catch(function(){});
+  return cerere("/api/afisaj-seteaza", "POST", q).then(function(d){
+    if(!d.result){ mesaj(d.message, true); }
+    else { S.masti = d.masti; S.text = d.text; S.color_text = d.color_text; S.color_imagine = d.color_imagine; }
+  }).catch(function(){});
 }
 function opresteSubPrevizualizarea(){
   var q = new URLSearchParams(); q.set("previzualizare", "0");
@@ -881,11 +1056,16 @@ function dupaSchimbare(){
 }
 // ---------------------------------------------------------------- citirea
 function stareAcum(d){
-  var acum;
+  var acum, text = d.color ? d.color_text : d.text;
+  var compatibilitate = d.compatibilitate || {};
+  if(d.color && !text && d.color_imagine){ text = d.color_imagine === "picon" ? TXT.pictograma : TXT.personaj; }
   if(!d.disponibil){ acum = TXT.fara_afisaj; }
+  else if(compatibilitate.cedat && compatibilitate.text){ acum = compatibilitate.text; }
   else if(!d.pornit){ acum = TXT.nepornit; }
   else if(!d.scris){ acum = TXT.nu_primeste; }
-  else if(d.text){ acum = (d.in_asteptare ? TXT.arata_asteptare : TXT.arata).replace("%s", d.text); }
+  else if(text){
+    acum = (d.in_asteptare ? TXT.arata_asteptare : TXT.arata).replace("%s", text);
+  }
   else { acum = TXT.stins; }
   return acum;
 }
@@ -895,6 +1075,7 @@ function primeste(d){
   tine(d.lista_intrari);
   tine(d.catalog);
   tine(d.alegeri);
+  if(d.color && ALES && ALES.grupa !== "personaj" && CUNOSCUTE[ALES.id]){ ALES = CUNOSCUTE[ALES.id]; }
   if(d.alegeri_setari && d.alegeri_setari.oras){ ORASE = d.alegeri_setari.oras; }
   S = d;
   if(prima || !schimbat()){ LUCRU = lucruDinStare(d); }
@@ -903,6 +1084,7 @@ function primeste(d){
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   deseneazaTot();
   if(!ALES){ alege(null, stareAcum(d), ""); }
+  else if(d.color){ arataMare(); }
 }
 function citesteGrupa(g){
   cerere("/api/afisaj?grupa=" + encodeURIComponent(g)).then(function(d){ if(d.result){ primeste(d); } }).catch(function(){ mesaj(TXT.nu_raspunde, true); });
@@ -926,11 +1108,17 @@ document.querySelectorAll("[data-ce]").forEach(function(b){ b.addEventListener("
 $("s_text").addEventListener("input", function(){ LUCRU.setari.text = $("s_text").value; mesaj(schimbat() ? TXT.nesalvat : ""); });
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("lista", textLista()); q.set("evenimente", textEvenimente());
-  ["asteptare", "viteza", "luminozitate", "luminozitate_noapte", "noapte_de_la", "noapte_pana_la", "text", "oras", "personaj",
+  ["control_afisaj", "asteptare", "viteza", "luminozitate", "luminozitate_noapte", "noapte_de_la",
+    "noapte_pana_la", "text", "oras", "personaj",
     "personaj_ritm", "personaj_noaptea"].forEach(function(k){ q.set(k, LUCRU.setari[k] || ""); });
+  if(S.color){
+    q.set("tema_afisaj", LUCRU.setari.tema_afisaj || "");
+    ["color_live", "color_picon"].forEach(function(k){ q.set(k, LUCRU.setari[k] || "nu"); });
+  }
   mesaj(TXT.se_salveaza);
   cerere("/api/afisaj-seteaza", "POST", q).then(function(d){
-    mesaj(d.message, !d.result || (d.pornit && !d.scris));
+    var cedat = d.compatibilitate && d.compatibilitate.cedat;
+    mesaj(d.message, !d.result || (d.pornit && !d.scris && !cedat));
     if(d.result){ PREV = false; S = null; primeste(d); }
   }).catch(function(){ mesaj(TXT.nu_raspunde, true); });
 });

@@ -20,6 +20,8 @@ if test -n "$DVB_API_VERSION"; then
 	AC_MSG_NOTICE([found dvb api version $DVB_API_VERSION])
 	AC_DEFINE(HAVE_DVB,1,[Define to 1 if you have the dvb includes])
 	AC_DEFINE_UNQUOTED(HAVE_DVB_API_VERSION,$DVB_API_VERSION,[Define to the version of the dvb api])
+	dnl enigma2.pc: pluginurile compilate pe headerele instalate (lib/dvb/idvb.h cere HAVE_DVB_API_VERSION) primesc aceeasi valoare
+	AC_SUBST(DVB_API_VERSION)
 else
 	AC_MSG_ERROR([can't find dvb headers])
 fi

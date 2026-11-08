@@ -13,6 +13,7 @@
  *         aratat, iar dupa o repornire cu aceeasi marime a imaginii nu vine deloc: atunci la FARA_IMAGINE_MS se
  *         intreaba PTS-ul decodorului), codecurile, marimea imaginii, criptat
  *         da/nu. FARA canal: nici numele, nici referinta, nici transponderul (acelea sunt in hds-tuner.log, dupa ora).
+ *         sunet: codecul; "fara" numai dupa ce a sosit PMT-ul si n-are sunet; "nestiut" cand randul se scrie inaintea PMT-ului.
  *   AVERT/EROARE la esec, CU canalul (ca sa se afle exact canalul care nu merge): numele, referinta, pozitia,
  *         transponderul, sistemul, SID-ul, PID-urile si codecurile; motivul: fara resurse (tuner ocupat), fara PAT,
  *         serviciul lipsa din PAT, fara PMT, acordare esuata, configurare gresita, fara imagine dupa
@@ -74,6 +75,7 @@ private:
 	void scrieEsec(const char *nivel, const char *motiv);
 	void textCanal(char *buf, size_t n);
 	void textMarcaje(char *buf, size_t n) const;
+	void textSunet(char *buf, size_t n) const;
 };
 
 }

@@ -1319,7 +1319,8 @@ def _pagina(request, sablon):
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))
-	return sablon.replace("__STIL_COMUN__", P._STIL_COMUN).replace("__CONFIG__", config_pagina).encode("utf-8", "replace")
+	return sablon.replace("__STIL_COMUN__", P._STIL_COMUN).replace("__CONFIG__", config_pagina).replace(
+		"__MENIU_ANTENA__", subsolMeniu()).encode("utf-8", "replace")
 
 
 def paginaLnb(request):
@@ -1378,13 +1379,20 @@ _STIL_PAGINI = """
 """
 
 # Legaturile din subsolul celor trei pagini: aceleasi locuri ca in subsolul panoului.
-_SUBSOL = """<footer>
-  <a href="/antena">Orientarea și setarea antenei</a>
-  <a href="/antena/lnb">Configurare LNB</a>
-  <a href="/motor">Rotirea antenei</a>
-  <a href="/antena/locul">Locul antenei</a>
-  <a href="/antena/semnal">Găsire semnal</a>
-</footer>"""
+_SUBSOL = "<footer>__MENIU_ANTENA__</footer>"
+
+
+def subsolMeniu():
+	"""Legaturile antenei in ordinea TV, fara o lista separata."""
+	from html import escape
+	try:
+		from .meniu_web import sectiune
+	except ImportError:
+		return ""
+	g = sectiune("hds_antena") or {}
+	noduri = [g] + g.get("copii", [])
+	return "\n".join('<a href="%s">%s</a>' % (escape(c["web"], quote=True), escape(c["text"]))
+		for c in noduri if c.get("web"))
 
 # Ajutoarele de JavaScript ale paginilor (aceleasi ca in pagina /antena): adresa cu jetonul in modul jeton, cererea cu
 # antetul CSRF si keepalive la inchiderea paginii, elemente create numai cu textContent (niciun text venit din receptor

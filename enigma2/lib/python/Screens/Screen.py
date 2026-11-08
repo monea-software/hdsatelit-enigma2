@@ -9,6 +9,7 @@ profile("LOAD:GUIComponent")
 from Components.GUIComponent import GUIComponent
 profile("LOAD:eRCInput")
 from enigma import eRCInput
+from Components.HdsAsistentaControl import schimbaEcranWeb, schimbaComponentaWeb
 
 class Screen(dict, GUISkin):
 
@@ -23,6 +24,10 @@ class Screen(dict, GUISkin):
 	inchis = True
 	_inchis = True
 
+	def __setitem__(self, nume, componenta):
+		dict.__setitem__(self, nume, componenta)
+		schimbaComponentaWeb(componenta)
+
 	def __init__(self, session, parent = None):
 		dict.__init__(self)
 		self.skinName = self.__class__.__name__
@@ -33,6 +38,8 @@ class Screen(dict, GUISkin):
 		self.onClose = [ ]
 		self.onFirstExecBegin = [ ]
 		self.onExecBegin = [ ]
+		# pluginurile altora isi pun aici functii chemate la iesirea ecranului din executie (ca in celelalte imagini)
+		self.onExecEnd = [ ]
 		self.onShown = [ ]
 
 		self.onShow = [ ]
@@ -112,6 +119,8 @@ class Screen(dict, GUISkin):
 #		assert self.session != None, "execEnd on non-execing screen!"
 #		self.session = None
 		self.execing = False
+		for x in list(getattr(self, "onExecEnd", ())):
+			x()
 	
 	# never call this directly - it will be called from the session!
 	def doClose(self):
@@ -154,6 +163,7 @@ class Screen(dict, GUISkin):
 			return
 		self.shown = True
 		self.already_shown = True
+		schimbaEcranWeb(self, True)
 		self.instance.show()
 		for x in self.onShow:
 			x()
@@ -165,6 +175,7 @@ class Screen(dict, GUISkin):
 		if not self.shown or not self.instance:
 			return
 		self.shown = False
+		schimbaEcranWeb(self, False)
 		self.instance.hide()
 		for x in self.onHide:
 			x()
@@ -175,6 +186,13 @@ class Screen(dict, GUISkin):
 	def __repr__(self):
 		return str(type(self))
 
+	def callLater(self, function):
+		"""function() on the next pass of the main loop"""
+		from enigma import eTimer
+		self.__ceasMaiTarziu = eTimer()
+		self.__ceasMaiTarziu.callback.append(function)
+		self.__ceasMaiTarziu.start(0, True)
+
 	def getRelatedScreen(self, name):
 		if name == "session":
 			return self.session.screen
@@ -184,3 +202,22 @@ class Screen(dict, GUISkin):
 			return self.global_screen
 		else:
 			return None
+
+class ScreenSummary(Screen):
+	"""The small screen of a plugin on the display of the receiver: the clock and the title of the screen, unless the theme has its own <name>Summary."""
+	skin = """
+	<screen position="0,0" size="132,64">
+		<widget source="global.CurrentTime" render="Label" position="0,0" size="132,20" font="Regular;16" halign="center" valign="center">
+			<convert type="ClockToText">WithSeconds</convert>
+		</widget>
+		<widget source="Title" render="Label" position="0,24" size="132,40" font="Regular;18" halign="center" valign="center" />
+	</screen>"""
+
+	def __init__(self, session, parent):
+		from Components.Sources.StaticText import StaticText
+		Screen.__init__(self, session, parent=parent)
+		titlu = parent.getTitle() if hasattr(parent, "getTitle") else ""
+		self["Title"] = StaticText(titlu)
+		nume = parent.skinName if isinstance(parent.skinName, list) else [parent.skinName]
+		self.skinName = ["%sSummary" % x for x in nume] + ["%s_summary" % x for x in nume] + ["ScreenSummary"]
+		self.skin = parent.__dict__.get("skinSummary", self.skin)

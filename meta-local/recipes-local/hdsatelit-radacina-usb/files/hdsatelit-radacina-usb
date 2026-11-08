@@ -1,0 +1,12 @@
+#!/bin/sh
+# Radacina live decide daca sunt necesare fstab si swap pentru USB.
+# Fara motor ori la eroare, pornirea receptorului continua.
+MOTOR=/usr/lib/enigma2/python/Components/HdsRadacinaUsb.py
+case "$1" in
+	start)
+		[ -f "$MOTOR" ] && [ -x /usr/bin/python3 ] || exit 0
+		timeout 20 /usr/bin/python3 "$MOTOR" \
+			> /tmp/hdsatelit-radacina-usb.log 2>&1 || :
+		;;
+esac
+exit 0

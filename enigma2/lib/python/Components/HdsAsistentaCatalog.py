@@ -74,8 +74,7 @@ TEXTE_CATALOG = (
 	N_("pornește un canal din lista ta (numai cu Control complet)"),
 	N_("schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date "
 		"personale; numai cu Control complet)"),
-	N_("instalează un plugin sau un modul din feedul oficial HD Satelit (fără configurarea și cheile lui; numai cu "
-		"Control complet)"),
+	N_("instalează un pachet din feedul oficial HD Satelit (numai cu Control complet)"),
 	N_("dezinstalează un plugin sau un modul (numai cu Control complet)"),
 	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control "
 		"complet)"),

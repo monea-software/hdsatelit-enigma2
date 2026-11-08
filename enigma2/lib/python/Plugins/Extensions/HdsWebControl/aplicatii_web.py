@@ -66,6 +66,9 @@
 #   /web/powerstate[?newstate=0|4|5], /web/message?text=[&type=&timeout=]
 #   /web/epgservice?sRef=[&time=&endTime=], /web/epgservicenow?sRef=, /web/epgservicenext?sRef=,
 #   /web/epgnow?bRef=, /web/epgnext?bRef=, /web/epgnownext?bRef=, /web/getcurrent
+#   /web/epgbouquet?bRef=[&time=&endTime=], /web/epgmulti?bRef=[&time=&endTime=], /web/epgsearch?search=
+#   /web/servicelistreload?mode=0|1|2|3|4, /web/subservices, /web/streamsubservices[?sRef=], /web/external
+#   /web/timeraddbyeventid?sRef=&eventid=[&justplay=&dirname=&tags=]
 #   /web/timerlist, /web/timeradd, /web/timerchange, /web/timerdelete, /web/timercleanup, /web/recordnow, /web/moviedelete
 #   /web/getlocations, /web/getcurrlocation, /web/movielist[?dirname=&tag=], /web/gettags
 #   /web/stream.m3u?ref=[&name=], /web/services.m3u?bRef=, /web/streamcurrentm3u (si streamm3u, servicesm3u)
@@ -76,6 +79,8 @@
 #   /api/timerlist, /api/timeradd, /api/timerchange, /api/timerdelete, /api/timercleanup, /api/getlocations,
 #   /api/getcurrlocation, /api/movielist[?dirname=&tag=], /api/gettags, /api/streamm3u, /api/servicesm3u,
 #   /api/tsm3u?file=
+#   /api/servicelistreload, /api/subservices, /api/streamsubservices, /api/getcurrent, /api/signal, /api/settings,
+#   /api/external, /api/epgbouquet, /api/epgmulti, /api/epgsearch, /api/timeraddbyeventid, /api/getsatellites
 #   /picon/<referinta cu _>.png, /file?file=<calea unei sigle sau a unei inregistrari>[&action=stream] (REDAREA),
 #   /grab?format=&mode=&r= (captura)
 # /web/session raspunde 404 dinadins: clientii merg fara sesiune la 404.
@@ -287,7 +292,9 @@ NUME_API = NUME_API_VECHI + (
 	b"about", b"deviceinfo", b"currenttime", b"tunersignal", b"bouquets", b"getservices", b"getallservices",
 	b"vol", b"powerstate", b"message", b"epgnow", b"epgnext", b"epgnownext", b"epgservice", b"epgservicenow",
 	b"epgservicenext", b"timerlist", b"timeradd", b"timerchange", b"timerdelete", b"timercleanup", b"getlocations",
-	b"getcurrlocation", b"movielist", b"streamm3u", b"servicesm3u", b"tsm3u", b"gettags", b"recordnow", b"moviedelete")
+	b"getcurrlocation", b"movielist", b"streamm3u", b"servicesm3u", b"tsm3u", b"gettags", b"recordnow", b"moviedelete",
+	b"servicelistreload", b"subservices", b"streamsubservices", b"getcurrent", b"signal", b"settings", b"external",
+	b"epgbouquet", b"epgmulti", b"epgsearch", b"timeraddbyeventid", b"getsatellites")
 NUME_API_NOI = tuple(n for n in NUME_API if n not in NUME_API_VECHI)
 
 CEAS = time.monotonic       # probele il inlocuiesc
@@ -601,7 +608,8 @@ def uita():
 
 
 def formaParola(text):
-	"""Parola fara despartitori si fara majuscule: „K7PM-3XQA-9FHE” e aceeasi cu „k7pm3xqa9fhe”."""
+	"""Numai parola pentru aplicatii, facuta de _genereaza(): fara despartitori si majuscule, inclusiv la lipire.
+	Nu se foloseste pentru parola lui root sau una aleasa de om: acolo cratimele si celelalte semne raman literale."""
 	return "".join(ch for ch in (text or "").lower() if ch in LITERE_PAROLA or ch.isdigit())
 
 
@@ -959,6 +967,100 @@ class _Furnizor(object):
 		except Exception:
 			return ""
 
+	def reincarcaListe(self, mod):
+		"""Citeste fisierele primite de la editor si reface listele, fara schimbarea canalului redat."""
+		if mod not in (0, 1, 2, 3, 4):
+			raise ValueError("mode")
+		from Screens.InfoBar import InfoBar
+		bara = InfoBar.instance
+		selectoare = []
+		if bara is not None:
+			if getattr(bara, "servicelist", None) is not None:
+				selectoare.append(bara.servicelist)
+			# Radioul clasic poate avea o lista separata, deschisa peste bara TV.
+			dialog = getattr(getattr(bara, "session", None), "current_dialog", None)
+			if dialog is not None and dialog not in selectoare:
+				from Screens.ChannelSelection import ChannelSelectionRadio
+				if isinstance(dialog, ChannelSelectionRadio):
+					selectoare.append(dialog)
+		if any(getattr(s, "movemode", False) or getattr(s, "bouquet_mark_edit", 0) for s in selectoare):
+			raise RuntimeError("channel list is being edited")
+		if mod in (0, 1, 2):
+			from enigma import eDVBDB
+			db = eDVBDB.getInstance()
+			if mod in (0, 1):
+				db.reloadServicelist()
+			if mod in (0, 2):
+				db.reloadBouquets()
+		elif mod == 3:
+			from Components.NimManager import nimmanager
+			# Cititorul nativ adauga in liste. Le golim ca doua cereri sa nu dubleze retelele.
+			liste = ("satList", "cablesList", "terrestrialsList")
+			dictionare = ("satellites", "transponders", "transponderscable", "transpondersterrestrial")
+			vechi = dict((n, list(getattr(nimmanager, n))) for n in liste)
+			date = dict((n, getattr(nimmanager, n)) for n in dictionare)
+			try:
+				for n in liste:
+					getattr(nimmanager, n)[:] = []
+				nimmanager.readTransponders()
+			except Exception:
+				for n, valori in vechi.items():
+					getattr(nimmanager, n)[:] = valori
+				for n, valori in date.items():
+					setattr(nimmanager, n, valori)
+				raise
+		else:
+			from Components.ParentalControl import parentalControl
+			parentalControl.open()
+		self._cw().uita_listele()
+		for selector in selectoare:
+			radacina = selector.getRoot()
+			selectat = selector.getCurrentSelection()
+			selector.bouquetNumOffsetCache = {}
+			if radacina is not None and radacina.valid():
+				selector.setRoot(radacina)
+				if selectat is not None and selectat.valid():
+					selector.setCurrentSelection(selectat)
+
+	def subservicii(self, flux=False):
+		"""Subcanalele serviciului redat. Lista nativa nu include aici canalul parinte."""
+		import NavigationInstance
+		nav = NavigationInstance.instance
+		serviciu = nav.getCurrentService() if nav is not None else None
+		sub = serviciu.subServices() if serviciu is not None else None
+		if sub is None:
+			return []
+		rez = []
+		for i in range(max(0, min(MAX_SERVICII, sub.getNumberOfSubservices()))):
+			ref = sub.getSubservice(i)
+			if ref is not None and ref.valid():
+				rez.append((ref.toString(), ref.getName() or self.nume_serviciu(ref.toString())))
+		return rez
+
+	def sateliti(self, tip):
+		"""Directoarele native ale satelitilor; interogarea este facuta aici, nu primita din retea."""
+		radacina = "%s FROM SATELLITES ORDER BY satellitePosition" % self._cm().tipuri_servicii(tip)
+		return [(r, n) for r, n in self.continut(radacina) if "FROM PROVIDER" not in r][:MAX_SERVICII]
+
+	def eveniment_id(self, ref, eventid):
+		from enigma import eEPGCache, eServiceReference
+		ev = eEPGCache.getInstance().lookupEventId(eServiceReference(ref), eventid)
+		if ev is None:
+			return None
+		return _eveniment((ev.getEventId(), ev.getBeginTime(), ev.getDuration(), ev.getEventName(),
+			ev.getShortDescription(), ev.getExtendedDescription()))
+
+	def cauta_epg(self, text, descriere=False):
+		from enigma import eEPGCache
+		fel = eEPGCache.PARTIAL_TITLE_SEARCH
+		if descriere:
+			fel = getattr(eEPGCache, "FULL_DESCRIPTION_SEARCH", None)
+			if fel is None:
+				fel = getattr(eEPGCache, "PARTIAL_DESCRIPTION_SEARCH", None)
+			if fel is None:
+				return []
+		return eEPGCache.getInstance().search(("IBDTSERN", 128, fel, text, eEPGCache.NO_CASE_CHECK)) or []
+
 	def epg(self, cerere):
 		from enigma import eEPGCache
 		return eEPGCache.getInstance().lookupEvent(cerere) or []
@@ -1289,9 +1391,9 @@ class _Furnizor(object):
 
 	# redarea (/file): firul fiecarui flux, predarea pe firul enigma2, termenul deschiderii
 	def predaPeFir(self, functie):
-		"""Chemata din firul unui flux: `functie` ruleaza pe firul enigma2. reactor.callFromThread: in e2reactor (din
-		0.1.7) pune apelul in coada si trezeste bucla prin waker, si cu supportsThreads() pus pe False de mytest.py
-		(test_e2reactor_trezire.py, test_callFromThread_trezeste_bucla)."""
+		"""Preda functia pe firul enigma2.
+		e2reactor.callFromThread pune apelul in coada si trezeste bucla.
+		"""
 		from twisted.internet import reactor
 		reactor.callFromThread(functie)
 
@@ -1414,7 +1516,7 @@ def h_deviceinfo(c):
 		("e2enigmaversion", i["enigma"]),
 		("e2imageversion", i["imagine"]),
 		("e2webifversion", VERSIUNE_WEBIF),
-		("e2fpversion", None),
+		("e2fpversion", ""),
 		("e2devicename", i["nume"]),
 		("e2distroversion", NUME_IMAGINE),
 		("e2frontends", [("e2frontend", [("e2name", t["name"]), ("e2model", t["type"] or "DVB")]) for t in i["tunere"]]),
@@ -1456,12 +1558,13 @@ def h_about(c):
 	prima = i["retea"][0] if i["retea"] else {"mac": "", "dhcp": False, "ip": "", "mask": "", "gw": ""}
 	disc = i["discuri"][0] if i["discuri"] else {"model": "", "capacity": "", "free": ""}
 	return _xml(c.r, "e2abouts", [("e2about", [
-		("e2oeversion", None),
+		# OpenWebif lasa gol ce nu stie; textul „None” ajungea in clienti (proba pe Supreme, 06.11)
+		("e2oeversion", ""),
 		("e2enigmaversion", i["enigma"]),
 		("e2distroversion", NUME_IMAGINE),
 		("e2imageversion", i["imagine"]),
 		("e2webifversion", VERSIUNE_WEBIF),
-		("e2fpversion", None),
+		("e2fpversion", ""),
 		("e2model", i["nume"]),
 		("e2lanmac", prima["mac"]),
 		("e2landhcp", prima["dhcp"]),
@@ -1512,7 +1615,16 @@ def h_signal(c):
 
 def h_settings(c):
 	setari = c.M.setari() or [("config.recording.margin_before", "0"), ("config.recording.margin_after", "0")]
+	if c.fel == "api":
+		return _json(c.r, {"result": True, "settings": [[curat(n), curat(v)] for n, v in setari]})
 	return _xml(c.r, "e2settings", [("e2setting", [("e2settingname", n), ("e2settingvalue", v)]) for n, v in setari])
+
+
+def h_external(c):
+	# Nu anuntam extensii cu adrese proprii pe care aceasta interfata nu le ofera.
+	if c.fel == "api":
+		return _json(c.r, {"plugins": []})
+	return _xml(c.r, "e2webifexternals", [])
 
 
 # ---------------------------------------------------------------- starea (statusinfo), canalul, tastele, volumul
@@ -1742,6 +1854,53 @@ def h_message(c):
 	return _comanda(c, bun, text)
 
 
+def h_servicelistreload(c):
+	# Textele fac parte din protocolul editorilor de canale si raman neschimbate.
+	texte = {0: "reloaded both", 1: "reloaded servicelist", 2: "reloaded bouquets",
+		3: "reloaded transponders", 4: "reloaded parentalcontrol white-/blacklist"}
+	mod = c.intreg("mode") if b"mode" in c.r.args else 0
+	if mod not in texte:
+		return _comanda(c, False, "missing or wrong parameter mode")
+	try:
+		c.M.reincarcaListe(mod)
+	except Exception as eroare:
+		_jurnal("servicelistreload %d: %s" % (mod, eroare))
+		return _comanda(c, False, "reloading failed")
+	return _comanda(c, True, texte[mod])
+
+
+def _subservicii(c, flux=False):
+	ref = c.arg("sRef", maxim=MAX_REF).strip() if flux else ""
+	ref = ref or c.M.ref_acum() or ""
+	lista = []
+	if ref_buna(ref):
+		lista.append((ref, curat(c.M.nume_serviciu(ref)) or "N/A"))
+		vazute = {ref}
+		try:
+			# Subcanalele vin din serviciul curent si pentru cererile de flux.
+			for r, n in c.M.subservicii(flux):
+				if ref_buna(r) and r not in vazute:
+					lista.append((r, curat(n)))
+					vazute.add(r)
+				if len(lista) >= MAX_SERVICII:
+					break
+		except Exception as eroare:
+			_jurnal("subservices: %s" % eroare)
+	if not lista:
+		lista = [("N/A", "N/A")]
+	if c.fel == "api":
+		return _json(c.r, {"services": [{"servicereference": r, "servicename": n} for r, n in lista]})
+	return _xml(c.r, "e2servicelist", [("e2service", [("e2servicereference", r), ("e2servicename", n)]) for r, n in lista])
+
+
+def h_subservices(c):
+	return _subservicii(c)
+
+
+def h_streamsubservices(c):
+	return _subservicii(c, True)
+
+
 # ---------------------------------------------------------------- buchetele si canalele
 
 def _buchete(M, tip):
@@ -1784,6 +1943,12 @@ def _buchetPermis(M, ref):
 	for tip in ("tv", "radio"):
 		if any(r == ref for r, _n in _buchete(M, tip)):
 			return tip, ref
+	sateliti = getattr(M, "sateliti", None)
+	if sateliti is not None:
+		for tip in ("tv", "radio"):
+			# Numai adrese generate de receptor, niciodata interogari alese de client.
+			if any(r == ref for r, _n in sateliti(tip)):
+				return tip, ref
 	return None
 
 
@@ -2002,6 +2167,18 @@ def h_getcurrent(c):
 	nume = curat(M.nume_serviciu(ref)) if ref else ""
 	s = (M.serviciu_info() or {}) if ref else {}
 	acum = int(M.acum())
+	if c.fel == "api":
+		info = _serviciuJson(M)
+		info.update({"bqref": "", "bqname": "", "hbbtvurl": curat(s.get("hbbtvurl"), MAX_REF)})
+		info["name"] = info["name"] or nume
+		rez = {"info": info}
+		for cheie, fel in (("now", 0), ("next", 1)):
+			ev = evenimentul(M, ref, fel) if ref else None
+			e = _evJson(ev, ref, nume, acum)
+			e.update({"remaining": max(0, ev["begin"] + ev["dur"] - acum) if ev else 0,
+				"genre": "", "genreid": 0, "rating": 0, "ratingcountry": "", "provider": curat(s.get("provider"))})
+			rez[cheie] = e
+		return _json(c.r, rez)
 	evenimente = [_evXml(evenimentul(M, ref, f) if ref else None, ref, nume, acum) for f in (0, 1)]
 	return _xml(c.r, "e2currentserviceinformation", [
 		("e2service", [("e2servicereference", ref or "None"), ("e2servicename", nume or "None"),
@@ -2010,6 +2187,145 @@ def h_getcurrent(c):
 				s.get("height", 0)))]),
 		("e2eventlist", evenimente),
 	])
+
+
+# ---------------------------------------------------------------- ghidul si navigarea folosite de clientii de telefon
+
+def _epgLaMoment(M, canale, moment):
+	"""Cate o emisiune pe canal, inclusiv randurile goale. Steagul X pastreaza ordinea cererilor."""
+	harta = [(ref, nume, ref_epg(ref)) for ref, nume in canale[:MAX_EVENIMENTE]]
+	cereri = ["IBDTSEX"] + [(epgref, 0, moment) for _ref, _nume, epgref in harta if epgref]
+	try:
+		gasite = list(M.epg(cereri)) if len(cereri) > 1 else []
+	except Exception as eroare:
+		_jurnal("EPG la ora ceruta: %s" % eroare)
+		gasite = []
+	pe_rand = len(gasite) != len(cereri) - 1
+	randuri = []
+	poz = 0
+	for ref, nume, epgref in harta:
+		ev = None
+		if epgref:
+			if pe_rand:
+				try:
+					ev = next((_eveniment(t) for t in M.epg(["IBDTSE", (epgref, 0, moment)])), None)
+				except Exception as eroare:
+					_jurnal("EPG la ora ceruta: %s" % eroare)
+			else:
+				ev = _eveniment(gasite[poz])
+			poz += 1
+		randuri.append((ev, ref, nume))
+	return randuri
+
+
+def _ghidPeBuchet(c, multi=False):
+	bref = _bref(c)
+	if bref is None:
+		return _lista(c, [])
+	moment = c.intreg("time") if b"time" in c.r.args else -1
+	if moment is None or moment < -1:
+		return _lista(c, [])
+	if moment == 0:
+		moment = -1
+	minute = c.intreg("endTime") if b"endTime" in c.r.args else (-1 if multi else 0)
+	if minute is None or minute < -1:
+		return _lista(c, [])
+	canale = _canale(c.M, bref)
+	if minute == 0:
+		return _lista(c, _epgLaMoment(c.M, canale, moment))
+	# endTime este un numar de minute. Fara limita ceruta, cel mult o saptamana si MAX_EVENIMENTE randuri.
+	minute = MINUTE_GHID if minute == -1 else min(minute, MINUTE_GHID)
+	randuri = []
+	for ref, nume in canale[:MAX_EVENIMENTE]:
+		epgref = ref_epg(ref)
+		if not epgref:
+			continue
+		try:
+			for t in c.M.epg(["IBDTSE", (epgref, 0, moment, minute)]):
+				ev = _eveniment(t)
+				if ev is not None:
+					randuri.append((ev, ref, nume))
+				if len(randuri) >= MAX_EVENIMENTE:
+					return _lista(c, randuri)
+		except Exception as eroare:
+			_jurnal("EPG buchet pe interval: %s" % eroare)
+	return _lista(c, randuri)
+
+
+def h_epgbouquet(c):
+	return _ghidPeBuchet(c)
+
+
+def h_epgmulti(c):
+	return _ghidPeBuchet(c, True)
+
+
+def h_epgsearch(c):
+	text = curat(c.arg("search", maxim=MAX_NUME + 1), MAX_NUME + 1).strip()
+	if not text or len(text) > MAX_NUME:
+		return _lista(c, [])
+	sfarsit = c.intreg("endtime") if b"endtime" in c.r.args else 0
+	if sfarsit is None or sfarsit < 0:
+		return _lista(c, [])
+	randuri = []
+	try:
+		for t in c.M.cauta_epg(text, b"full" in c.r.args):
+			ev = _eveniment(t)
+			if ev is None or len(t) < 8 or not eCanal(t[6]):
+				continue
+			if sfarsit and ev["begin"] > sfarsit:
+				continue
+			randuri.append((ev, t[6], curat(t[7])))
+			if len(randuri) >= 128:
+				break
+	except Exception as eroare:
+		_jurnal("cautarea EPG: %s" % eroare)
+	return _lista(c, randuri)
+
+
+def h_getsatellites(c):
+	"""Forma JSON ceruta de dreamDroid. Referintele sunt numai cele emise de lista nativa."""
+	tip = "radio" if c.arg("stype").strip().lower() == "radio" else "tv"
+	lista = []
+	for ref, nume in c.M.sateliti(tip):
+		if ref_buna(ref) and steaguri(ref) & DOSAR:
+			lista.append({"name": curat(nume), "service": ref})
+		if len(lista) >= MAX_SERVICII:
+			break
+	return _json(c.r, {"satellites": lista})
+
+
+class _CerereDinEveniment(_Cerere):
+	"""Datele EPG completeaza cererea numai pentru timeradd, fara schimbarea argumentelor HTTP."""
+	def __init__(self, baza, valori):
+		self.__dict__.update(baza.__dict__)
+		self.valori = valori
+
+	def arg(self, nume, implicit="", maxim=MAX_ARG):
+		if nume in self.valori:
+			return str(self.valori[nume])[:maxim]
+		return super(_CerereDinEveniment, self).arg(nume, implicit, maxim)
+
+
+def h_timeraddbyeventid(c):
+	ref = _sref(c)
+	epgref = ref_epg(ref) if ref else None
+	eventid = c.intreg("eventid")
+	if epgref is None or eventid is None or not 0 <= eventid <= 65535:
+		return _comanda(c, False, _t("Canalul sau identificatorul emisiunii nu este bun."))
+	if c.intreg("always_zap", 0):
+		return _comanda(c, False, _t("Comutarea obligatorie înaintea înregistrării nu este disponibilă."))
+	try:
+		ev = c.M.eveniment_id(epgref, eventid)
+	except Exception as eroare:
+		_jurnal("emisiunea ceruta pentru inregistrare: %s" % eroare)
+		ev = None
+	if ev is None or ev.get("id") != eventid:
+		return _comanda(c, False, _t("Emisiunea nu mai este în ghidul de programe."))
+	inainte, dupa = c.M.T().margini()
+	valori = {"sRef": ref, "eit": eventid, "begin": ev["begin"] - max(0, inainte) * 60,
+		"end": ev["begin"] + ev["dur"] + max(0, dupa) * 60, "name": ev["title"], "description": ev["short"]}
+	return h_timeradd(_CerereDinEveniment(c, valori))
 
 
 # ---------------------------------------------------------------- temporizatoarele
@@ -2151,7 +2467,7 @@ def _campuriTemporizator(c, t=None):
 	if rep is not None:
 		campuri["repeated"] = rep & 127
 	eit = c.intreg("eit")
-	if eit is not None and eit > 0:
+	if eit is not None and eit >= 0:
 		campuri["eit"] = eit
 	# DOSARUL INREGISTRARII: un loc se ia pe loc; alt dosar il verifica h_timeradd pe firul pentru fisiere
 	loc = curat(c.arg("dirname", maxim=MAX_CALE + 1), MAX_CALE + 1).strip()
@@ -3593,6 +3909,10 @@ RUTE_WEB = {
 	b"movielist": h_movielist, b"gettags": h_gettags, b"recordnow": h_recordnow, b"moviedelete": h_moviedelete,
 	b"stream.m3u": h_streamm3u, b"streamm3u": h_streamm3u, b"services.m3u": h_servicesm3u,
 	b"servicesm3u": h_servicesm3u, b"streamcurrentm3u": h_streamcurrentm3u, b"ts.m3u": h_tsm3u, b"tsm3u": h_tsm3u,
+	b"servicelistreload": h_servicelistreload, b"subservices": h_subservices, b"streamsubservices": h_streamsubservices,
+	b"external": h_external,
+	b"epgbouquet": h_epgbouquet, b"epgmulti": h_epgmulti, b"epgsearch": h_epgsearch,
+	b"timeraddbyeventid": h_timeraddbyeventid,
 }
 
 RUTE_API = {
@@ -3606,6 +3926,10 @@ RUTE_API = {
 	b"getlocations": h_getlocations, b"getcurrlocation": h_getcurrlocation, b"movielist": h_movielist,
 	b"gettags": h_gettags, b"streamm3u": h_streamm3u, b"recordnow": h_recordnow, b"moviedelete": h_moviedelete,
 	b"servicesm3u": h_servicesm3u, b"tsm3u": h_tsm3u,
+	b"servicelistreload": h_servicelistreload, b"subservices": h_subservices, b"streamsubservices": h_streamsubservices,
+	b"getcurrent": h_getcurrent, b"signal": h_signal, b"settings": h_settings, b"external": h_external,
+	b"epgbouquet": h_epgbouquet, b"epgmulti": h_epgmulti, b"epgsearch": h_epgsearch,
+	b"timeraddbyeventid": h_timeraddbyeventid, b"getsatellites": h_getsatellites,
 }
 
 

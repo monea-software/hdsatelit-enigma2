@@ -69,7 +69,7 @@ class NumberActionMap(ActionMap):
 class HelpableActionMap(ActionMap):
 	"""An Actionmap which automatically puts the actions into the helpList.
 
-	Note that you can only use ONE context here!"""
+	The context can also be a list; the help goes with the first one."""
 	
 	# sorry for this complicated code.
 	# it's not more than converting a "documented" actionmap 
@@ -79,7 +79,10 @@ class HelpableActionMap(ActionMap):
 	# the collected helpstrings (with correct context, action) is
 	# added to the screen's "helpList", which will be picked up by
 	# the "HelpableScreen".
-	def __init__(self, parent, context, actions = { }, prio=0):
+	def __init__(self, parent, context, actions = None, prio=0, description=None):
+		actions = actions or { }
+		contexte = list(context) if isinstance(context, (list, tuple)) else [context]
+		self.description = description
 		alist = [ ]
 		adict = { }
 		for (action, funchelp) in actions.items():
@@ -90,6 +93,24 @@ class HelpableActionMap(ActionMap):
 			else:
 				adict[action] = funchelp
 
-		ActionMap.__init__(self, [context], adict, prio)
+		ActionMap.__init__(self, contexte, adict, prio)
 
-		parent.helpList.append((self, context, alist))
+		parent.helpList.append((self, contexte[0], alist))
+
+# numele cerute de pluginuri
+def loadKeymap(filename, replace=False):
+	import keymapparser
+	if replace:
+		keymapparser.removeKeymap(filename)
+	keymapparser.readKeymap(filename)
+
+
+def removeKeymap(filename):
+	import keymapparser
+	keymapparser.removeKeymap(filename)
+
+
+class HelpableNumberActionMap(NumberActionMap, HelpableActionMap):
+	def __init__(self, parent, contexts, actions=None, prio=0, description=None):
+		# NumberActionMap trateaza tastele 0-9; textele de ajutor le pune HelpableActionMap
+		HelpableActionMap.__init__(self, parent, contexts, actions or {}, prio)

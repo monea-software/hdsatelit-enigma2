@@ -189,6 +189,20 @@ def muta_loc(la, pas, n, k, copie):
 	return max(0, min(int(la) + int(pas), maxim_loc(n, k, copie)))
 
 
+def muta_loc_circular(la, pas, n, k, copie):
+	"""Ca muta_loc, pentru o tasta Sus / Jos apasata: de la primul loc Sus duce la ultimul, de la ultimul Jos duce la primul."""
+	maxim = maxim_loc(n, k, copie)
+	nou = int(la) + int(pas)
+	if nou < 0:
+		return maxim
+	return 0 if nou > maxim else nou
+
+
+def rand_circular(i, pas, n):
+	"""Randul dupa o tasta Sus / Jos apasata, intr-o lista de n randuri, cu trecere de la un capat la celalalt."""
+	return (int(i) + int(pas)) % n if n else 0
+
+
 def loc_capat(la, n, k, copie):
 	"""Tasta galbena in MUTA / COPIAZA: la inceput; daca e deja acolo, la sfarsit."""
 	return maxim_loc(n, k, copie) if la == 0 else 0

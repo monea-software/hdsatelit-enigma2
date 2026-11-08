@@ -411,6 +411,31 @@ void eWidgetDesktop::paint()
 	}
 }
 
+bool eWidgetDesktop::requestCaptureRedraw()
+{
+	/* Called on the GUI thread after hiding a secret window. A timeout is not a redraw acknowledgement. */
+	m_require_redraw = 1;
+	if (!m_screen.m_dc || m_screen.m_dc->islocked() || !gRC::getInstance())
+		return false;
+	invalidate(gRegion(eRect(ePoint(0, 0), m_screen.m_screen_size)));
+	paint();
+	if (m_comp_mode == cmBuffered)
+	{
+		redrawComposition(0);
+		/* redrawComposition(0) has no notify/flush opcode to wake the renderer. */
+		gPainter painter(m_screen.m_dc);
+		painter.flush();
+	}
+	return true;
+}
+
+bool eWidgetDesktop::captureReady()
+{
+	/* m_require_redraw belongs to the GUI thread; isIdle locks the rendering queue. */
+	gRC *rc = gRC::getInstance();
+	return m_screen.m_dc && !m_screen.m_dc->islocked() && !m_require_redraw && rc && rc->isIdle();
+}
+
 void eWidgetDesktop::setDC(gDC *dc)
 {
 	m_screen.m_dc = dc;

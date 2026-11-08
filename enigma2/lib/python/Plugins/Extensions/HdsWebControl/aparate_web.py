@@ -98,14 +98,10 @@ VIATA_PLAYLIST_S = 300
 MAX_LISTE_APARAT = 4
 TERMEN_FIR_S = 60             # partea de pe fir a unui playlist (copia indexului -> text)
 PAS_INDEX = 500               # canale din index citite pe firul enigma2 intre doua cedari
-# MAX_CANALE_APARAT: cate canale primeste un aparat. Masurat pe PC (8500 de servicii pe 9 locuri, 7847 TV):
-# prima facere ~10 us pe canal (76 ms; pe firul enigma2 18
-# pasi, cel mai lung 0,55 ms, 2,9 ms in total, restul pe fir), textul M3U 1,2 MB, o cerere din memorie 2 ms
-# (str.replace + encode), ghidul fara emisiuni ~3 us pe canal (plus un lookupEvent pe canal pe receptor). Python pe
-# ARM-ul receptorului e de ~15-30 de ori mai incet decat pe PC: la 8000 de canale ~1-2,5 s prima cerere (pe fir,
-# interfata nu sta) si ~0,1 s din memorie. Peste atat creste si ghidul (cate un lookupEvent pe canal) si playerele se
-# misca greu cu lista; omul alege atunci un satelit sau o lista (pagina il anunta).
-MAX_CANALE_APARAT = 8000
+# Plafon de protectie pentru liste mari. Copierea indexului este segmentata, iar sortarea, M3U si aplicarea adresei
+# ruleaza pe firul de lucru. Memoria ramane limitata la MAX_LISTE_APARAT playlisturi si MAX_GHIDURI ghiduri gzip;
+# ghidul pastreaza toate canalele listei, dar emisiunile raman limitate de MAX_OCTETI_XML.
+MAX_CANALE_APARAT = 50000
 MAX_EMISIUNI_CANAL = 700
 MAX_TITLU = 200
 MAX_SUBTITLU = 200
@@ -385,9 +381,11 @@ def gen_brute(sursa, F, C, tv_poz):
 	X = F.X
 	fel = (sursa or {}).get("fel")
 	if fel in ("toate", "grupa", "selectie"):
-		index = F.index()
-		yield
-		canale = list(index.canale)
+		index = yield from C.gen_index(F)
+		canale = []
+		for inceput in range(0, len(index.canale), PAS_INDEX):
+			canale.extend(index.canale[inceput:inceput + PAS_INDEX])
+			yield
 		nume = {}
 		for i, c in enumerate(canale):
 			if i % PAS_INDEX == PAS_INDEX - 1:
@@ -409,7 +407,11 @@ def gen_brute(sursa, F, C, tv_poz):
 	if fel == "buchet":
 		lista = yield from C.gen_lista(F, "tv", sursa.get("id") or "")
 		if lista is not None:
-			rez = [(r.ref, r.nume, lista.nume, r.sigla, r.n) for r in lista.randuri if not r.marcaj]
+			for i, r in enumerate(lista.randuri):
+				if i % C.UNITATE == C.UNITATE - 1:
+					yield
+				if not r.marcaj:
+					rez.append((r.ref, r.nume, lista.nume, r.sigla, r.n))
 	elif fel == "filtru":
 		lista = yield from C.gen_lista(F, "tv", sursa.get("buchet") or C.TOATE)
 		if lista is not None:
@@ -530,8 +532,7 @@ def _gen_fa_lista(sursa, F, C, H, A, semn, sem, tv_poz):
 	inceput = time.monotonic()
 	brute = yield from gen_brute(sursa, F, C, tv_poz)
 	sigle = yield from C.gen_sigle(F)
-	sigle = frozenset(sigle or ())
-	canale, total, sablon = yield from gen_pe_fir(F, lambda: faLista(brute(), sigle, A, H, C))
+	canale, total, sablon = yield from gen_pe_fir(F, lambda: faLista(brute(), frozenset(sigle or ()), A, H, C))
 	lista = ListaAparat(semn, sem, canale, total, sablon, int((time.monotonic() - inceput) * 1000))
 	_LISTE.pop(semn, None)
 	_LISTE[semn] = lista
@@ -926,7 +927,7 @@ def _m3u(request, amanat, cheie_text, cheie, cap, F, C, A, P, H):
 		inceput = time.monotonic()
 		facute = _NUMAR[0]
 		lista = yield from gen_lista_aparat(cheie.sursa or {}, Fx, C, H, A)
-		text = aplicaSablon(lista.sablon, gazda, cheie_text).encode("utf-8", "replace")
+		text = yield from gen_pe_fir(Fx, lambda: aplicaSablon(lista.sablon, gazda, cheie_text).encode("utf-8", "replace"))
 		request.setResponseCode(200)
 		request.setHeader(b"content-type", b"audio/x-mpegurl; charset=utf-8")
 		request.setHeader(b"cache-control", b"no-store")

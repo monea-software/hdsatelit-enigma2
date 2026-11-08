@@ -45,6 +45,11 @@ import re
 import threading
 import time
 
+try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
 # versiunea Notei de confidentialitate (situl-imaginii/date/nota-testeri.json); 2 = cu amprenta receptorului
 NOTA = 2
 PROTOCOL = 1
@@ -983,6 +988,9 @@ def jurnalPermis(nume):
 	intregi."""
 	if not nume or "/" in nume or nume.startswith("."):
 		return False
+	# Auditul exploratorului ramane local; nici copiile editorului nu pleaca.
+	if nume.startswith("hds-fisiere.log") or ".hds-inainte" in nume:
+		return False
 	if nume.startswith("messages") or nume.startswith("syslog") or nume.startswith("Enigma2-debug"):
 		return False
 	if nume.startswith("enigma2_crash_") and nume.endswith(".log"):
@@ -996,8 +1004,9 @@ def jurnalPermis(nume):
 
 
 def esteCadere(nume):
-	"""Caderile si blocajele (limita lor pe zi, CADERI_PE_ZI, si trimise inaintea jurnalelor obisnuite)."""
-	return nume.startswith("enigma2_crash_") or nume.startswith("enigma2-stive-") or nume.startswith("hds-blocaj-")
+	"""Caderile, blocajele si hds-caderi.log (limita CADERI_PE_ZI, inaintea jurnalelor obisnuite)."""
+	return (nume == "hds-caderi.log" or nume.startswith("enigma2_crash_") or
+		nume.startswith("enigma2-stive-") or nume.startswith("hds-blocaj-"))
 
 
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
@@ -1262,7 +1271,7 @@ def culegeCanale(stare, cale_lamedb=None, acum=None, cerut=False):
 		return None
 	try:
 		with open(cale_lamedb or CALE_LAMEDB, "rb") as f:
-			text = f.read(16 * 1024 * 1024).decode("utf-8", "replace")
+			text = text_lista(f.read(16 * 1024 * 1024))
 	except (OSError, IOError):
 		return None
 	stare["canale_semn"] = semn
@@ -2204,16 +2213,23 @@ def mesaj(fel, text, ecran="", cu_jurnal=False, captura=None, b=None, contor=Non
 def capturaOsd(latime=CAPTURA_LATIME):
 	"""Captura numai a meniurilor (grab -o: fara imaginea canalului), JPEG, cel mult CAPTURA_MAX; sau None."""
 	try:
+		from Plugins.Extensions.HdsWebControl import captura_sigura as CS
+		epoca = CS.epocaCapturii()
+		if epoca is None:
+			return None
 		import subprocess
 		p = subprocess.run(["grab", "-q", "-s", "-o", "-j", "80", "-r", str(latime)], stdout=subprocess.PIPE,
 			stderr=subprocess.DEVNULL, timeout=20)
 		date = p.stdout
+		if not CS.capturaValida(epoca):
+			return None
 		if p.returncode == 0 and date[:2] == b"\xff\xd8" and len(date) <= CAPTURA_MAX:
 			return date
 		if len(date) > CAPTURA_MAX:
 			p = subprocess.run(["grab", "-q", "-s", "-o", "-j", "60", "-r", "640"], stdout=subprocess.PIPE,
 				stderr=subprocess.DEVNULL, timeout=20)
-			if p.returncode == 0 and p.stdout[:2] == b"\xff\xd8" and len(p.stdout) <= CAPTURA_MAX:
+			if (CS.capturaValida(epoca) and p.returncode == 0
+					and p.stdout[:2] == b"\xff\xd8" and len(p.stdout) <= CAPTURA_MAX):
 				return p.stdout
 	except Exception as e:
 		_jurnal("captura: %s" % e)

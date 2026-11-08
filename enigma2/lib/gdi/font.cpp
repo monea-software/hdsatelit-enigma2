@@ -131,7 +131,29 @@ std::string fontRenderClass::AddFont(const std::string &filename, const std::str
 	singleLock s(ftlock);
 
 	if ((error=FT_New_Face(library, filename.c_str(), 0, &face)))
-		eFatal(" failed: %s", strerror(error));
+	{
+		/*
+		 * A font that cannot be read (a plugin asks for a file the image does not have) must not stop the interface: eFatal
+		 * here, with ftlock held, blocked the main thread for good, because the error screen needs the same lock. The name
+		 * goes to the Regular font, so the text of that plugin is still drawn.
+		 */
+		fontListEntry *rezerva = font;
+		for (fontListEntry *f = font; f; f = f->next)
+			if (f->face == "Regular")
+				rezerva = f;
+		eDebug(" failed: FreeType error %d, the name %s %s", error, name.c_str(), rezerva ? "goes to the Regular font" : "stays without a font");
+		if (!rezerva)
+		{
+			delete n;
+			return "";
+		}
+		n->filename = rezerva->filename;
+		n->scale = rezerva->scale;
+		n->face = name;
+		n->next = font;
+		font = n;
+		return n->face;
+	}
 
 	n->filename=filename;
 	n->face=name;

@@ -952,6 +952,7 @@ PAGINA = """<!DOCTYPE html>
 <body>
 <main>
 <h1>Filmul de acum</h1>
+<p><a id="editorMarcaje" href="/functii-imagine?id=marcaje">Editor marcaje</a></p>
 <p class="mesaj" id="incarcare">Se citește filmul...</p>
 <div id="continut" class="ascuns">
   <section class="card">
@@ -1008,6 +1009,7 @@ function adresa(cale){
   if(!CFG.jeton){ return cale; }
   return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
 }
+$("editorMarcaje").href=adresa("/functii-imagine?id=marcaje");
 function cerere(cale, metoda, date){
   var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
@@ -1176,6 +1178,7 @@ setInterval(function(){ citeste(false); }, 2000);
 TEXTE_PAGINA = {
 	"html": (
 		N_("Filmul de acum"),
+		N_("Editor marcaje"),
 		N_("Se citește filmul..."),
 		N_("Filmul"),
 		N_("Niciun film nu merge acum. Pornește unul din lista de mai jos sau de pe televizor, din lista de "

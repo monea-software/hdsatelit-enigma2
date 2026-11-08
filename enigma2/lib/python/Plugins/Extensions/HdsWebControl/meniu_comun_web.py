@@ -103,10 +103,10 @@ def codGresit():
 	return {"result": False, "message": _t("Confirmarea a expirat sau nu e pentru această acțiune. Încearcă din nou.")}
 
 
-def argumente(request, chei, lung=200):
+def argumente(request, chei, lung=200, limita=24):
 	"""{cheie: text} pentru cheile din `chei` (fara token), cel mult `lung` caractere fiecare."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:24]:
+	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:limita]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in chei:

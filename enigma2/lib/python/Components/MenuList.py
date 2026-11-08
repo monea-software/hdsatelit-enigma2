@@ -1,6 +1,7 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from .HTMLComponent import HTMLComponent
 from .GUIComponent import GUIComponent
+from Components.HdsAsistentaControl import schimbaComponentaWeb
 
 from enigma import eListboxPythonStringContent, eListbox
 
@@ -43,6 +44,7 @@ class MenuList(HTMLComponent, GUIComponent):
 
 	def setList(self, list):
 		self.list = list
+		schimbaComponentaWeb(self)
 		self.l.setList(self.list)
 
 	def moveToIndex(self, idx):
@@ -64,6 +66,32 @@ class MenuList(HTMLComponent, GUIComponent):
 	def down(self):
 		if self.instance is not None:
 			self.instance.moveSelection(self.instance.moveDown)
+
+	def top(self):
+		if self.instance is not None:
+			self.instance.moveSelection(self.instance.moveTop)
+
+	def bottom(self):
+		if self.instance is not None:
+			self.instance.moveSelection(self.instance.moveEnd)
+
+	# numele din celelalte imagini
+	moveUp = goLineUp = up
+	moveDown = goLineDown = down
+	goPageUp = pageUp
+	goPageDown = pageDown
+	moveTop = goTop = top
+	moveBottom = goBottom = bottom
+	getCurrentIndex = getSelectedIndex
+
+	def setCurrentIndex(self, idx):
+		self.moveToIndex(idx)
+
+	def getList(self):
+		return self.list
+
+	def count(self):
+		return len(self.list)
 
 	def selectionEnabled(self, enabled):
 		if self.instance is not None:

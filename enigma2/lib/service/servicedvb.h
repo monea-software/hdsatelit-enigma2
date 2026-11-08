@@ -246,6 +246,14 @@ protected:
 	bool m_hds_sunet_procesor, m_hds_poza_radio;
 	void hdsReaplicaSunetul();
 	void hdsPozaRadio(int vpid);
+		/* The previous online radio releases ALSA/audio0 on its worker. Keep decoder commands on the main loop,
+		   but postpone them until both audio paths have released the device (including a slow GStreamer stop). */
+	ePtr<eTimer> m_hds_radio_eliberare;
+	bool m_hds_radio_asteapta, m_hds_radio_decoder_amanat, m_hds_radio_seekable_amanat, m_hds_radio_renunta;
+	long long m_hds_radio_de_la;
+	enum { HDS_RADIO_ELIBERARE_MS = 3000 };
+	bool hdsAmanaDupaRadio(bool decoder, bool seekable = false);
+	void hdsRadioEliberat();
 		/* egalizatorul la canalele TV: PTS-ul imaginii trimis motorului la 100 ms (hdsCeasImagine) */
 	ePtr<eTimer> m_hds_ceas_imagine;
 	int m_hds_ceas_erori;

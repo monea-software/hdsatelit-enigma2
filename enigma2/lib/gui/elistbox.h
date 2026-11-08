@@ -96,6 +96,7 @@ public:
 		showNever
 	};
 	void setScrollbarMode(int mode);
+	void setScrollbarSliderBorderWidth(int width);
 	void setWrapAround(bool);
 		/* HDSatelit: 0 = the list jumps a whole page when the selection leaves it (the old way, the default);
 		   n > 0 = the list moves one row at a time and keeps n rows visible below and above the selection while
@@ -184,6 +185,7 @@ protected:
 
 private:
 	int m_scrollbar_mode, m_prev_scrollbar_page;
+	int m_scrollbar_slider_border_width;
 	bool m_content_changed;
 		/* HDSatelit: the width the rows were last given (updateScrollBar); when the scroll bar comes or goes it
 		   changes, and then every row is drawn again (not only the old and the new selected one) */

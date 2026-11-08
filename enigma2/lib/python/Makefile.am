@@ -47,5 +47,7 @@ CLEANFILES = enigma.py enigma_python.cpp
 installdir = $(pkglibdir)/python
 
 install_PYTHON = \
-	enigma.py
+	Scheduler.py \
+	enigma.py \
+	imp.py
 

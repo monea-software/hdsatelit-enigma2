@@ -8,7 +8,24 @@
 
 import os, sys
 
-f = open(sys.argv[1]).readlines()
+if sys.version_info[0] >= 3:
+	try:
+		from Components.HdsListeText import text_lista
+	except ImportError:
+		baza = os.path.dirname(os.path.abspath(__file__))
+		for cale in (os.path.join(baza, "..", "lib", "enigma2", "python"),
+			os.path.join(baza, "..", "lib64", "enigma2", "python"),
+			os.path.join(baza, "..", "lib", "python")):
+			if os.path.isfile(os.path.join(cale, "Components", "HdsListeText.py")):
+				sys.path.insert(0, cale)
+				break
+		from Components.HdsListeText import text_lista
+else:
+	# Utilitarul vechi pe Python 2 lucra deja cu octeti, inclusiv in numele fisierelor.
+	text_lista = lambda text: text
+
+with open(sys.argv[1], "rb") as sursa:
+	f = [text_lista(rand).replace("\r\n", "\n") for rand in sursa]
 
 f = f[f.index("services\n")+1:-3]
 

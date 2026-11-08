@@ -344,10 +344,12 @@ def _text(text):
 def _captura():
 	"""Video si OSD, dupa redesenarea secretelor; verificarea si grab raman pe acelasi fir cu ecranele."""
 	def lucru(gata):
+		from Plugins.Extensions.HdsWebControl import captura_sigura as CS
+		epoca = CS.epocaCapturii()
 		ecrane = _stivaAcum()
 		motiv = Control.motivRefuzCaptura(ecrane, Control.modAscii())
-		if motiv or _session() is None:
-			gata(motiv or "(captura: ecran indisponibil)")
+		if epoca is None or motiv or _session() is None:
+			gata(motiv or CS.mesajRefuz())
 			return
 		try:
 			restaureaza, verifica = Control.mascheazaCaptura(ecrane)
@@ -362,7 +364,9 @@ def _captura():
 			try:
 				actuale = _stivaAcum()
 				motiv = Control.motivRefuzCaptura(actuale, Control.modAscii())
-				if [id(e) for e in actuale] != [id(e) for e in ecrane] or not verifica():
+				if not CS.capturaValida(epoca):
+					rez = CS.mesajRefuz()
+				elif [id(e) for e in actuale] != [id(e) for e in ecrane] or not verifica():
 					rez = "(captura: ecran schimbat, incearca din nou)"
 				elif motiv:
 					rez = motiv
@@ -371,6 +375,8 @@ def _captura():
 						stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 					try:
 						rez, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
+						if not CS.capturaValida(epoca):
+							rez = CS.mesajRefuz()
 					except subprocess.TimeoutExpired:
 						p.kill()
 						p.communicate()
@@ -565,20 +571,28 @@ TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor ac
 
 
 def pornesteWeb(session, nivel=None):
-	"""Pornirea din pagina web a unui browser de incredere (conectat cu codul de pe receptor): un clic, ca Start de pe
-	receptor (asistenta completa, durata implicita, fara intrebari). -> (reusit, mesaj)."""
+	"""Start din web, dupa poarta locala: porneste direct si anunta pe receptor.
+	Asistenta completa, durata implicita, fara intrebari. -> (reusit, mesaj)."""
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
-	return porneste(session, nivel=nivel if nivel in A.NIVELE else A.NIVEL_PORNIRE, durata_min=A.DURATA_IMPLICITA_MIN,
+	reusit, mesaj = porneste(session, nivel=nivel if nivel in A.NIVELE else A.NIVEL_PORNIRE,
+		durata_min=A.DURATA_IMPLICITA_MIN,
 		de_la="web")
+	if reusit:
+		try:
+			from Screens import HdsAnuntRetea
+			HdsAnuntRetea.arata(session,
+				"%s (%s)" % (_("Asistența a pornit."), _("din pagina web")), "info")
+		except Exception as e:
+			_jurnal("anuntul pornirii din web: %r" % (e,))
+	return reusit, mesaj
 
 
 def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
-	"""Pornirea ceruta dintr-un browser fara cod (oricine din reteaua locala): pe receptor se deschide pagina de pornire
-	(randul bifat si Start); porneste numai Start apasat acolo, ca un aparat oarecare din casa sa nu poata da acces la
-	receptor fara stirea omului. durata_min, nevoie si detalii raman in semnatura pentru apelurile vechi; pornirea e cea
-	de pe pagina. -> (reusit, mesaj) numai despre faptul ca s-a deschis pagina."""
+	"""Rezerva pentru apelurile fara incredere: deschide pagina de pornire pe receptor.
+	Porneste numai la Start apasat acolo. Parametrii raman pentru apelurile vechi.
+	Ruta web locala foloseste pornesteWeb. -> (reusit, mesaj) despre deschiderea paginii."""
 	if session is None:
 		return False, _(TEXT_WEB_NU_POT)
 	ses = A.sesiune()

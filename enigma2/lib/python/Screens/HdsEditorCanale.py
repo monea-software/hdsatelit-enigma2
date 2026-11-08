@@ -500,8 +500,8 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			'down': (self.keyDown, _('Rândul de jos')),
 			'left': (self.keyLeft, _('Coloana din stânga')),
 			'right': (self.keyRight, _('Coloana din dreapta')),
-			'upRepeated': self.keyUp,
-			'downRepeated': self.keyDown,
+			'upRepeated': boundFunction(self._mutaCursor, -1),
+			'downRepeated': boundFunction(self._mutaCursor, 1),
 			'leftRepeated': self._nimic,
 			'rightRepeated': self._nimic,
 			'upUp': self._nimic,
@@ -1560,13 +1560,15 @@ class HdsEditorCanale(Screen, HelpableScreen):
 	def _nimic(self):
 		pass
 
+	# O tasta Sus / Jos apasata trece de la un capat al listei la celalalt, si cu randurile in mana. Tinuta apasata se opreste
+	# la capat (altfel lista ar sari inapoi la inceput sub deget), ca si rotita mouse-ului, paginile si Selecteaza.
 	def keyUp(self):
-		self._mutaCursor(-1)
+		self._mutaCursor(-1, circular=True)
 
 	def keyDown(self):
-		self._mutaCursor(1)
+		self._mutaCursor(1, circular=True)
 
-	def _mutaCursor(self, pas, pagina=False):
+	def _mutaCursor(self, pas, pagina=False, circular=False):
 		if self._asteapta():
 			return
 		if self.scrieText:
@@ -1576,14 +1578,21 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		if self.mana is not None:
 			k = len(self.mana['randuri'])
 			n = len(self.baza)
-			self.mana['la'] = L.muta_loc(self.mana['la'], pas * (self.randuriPagina if pagina else 1), n, k,
-				self.mana['copie'] or self.mana['din'] != self.mana['tinta'])
+			copie = self.mana['copie'] or self.mana['din'] != self.mana['tinta']
+			if circular:
+				self.mana['la'] = L.muta_loc_circular(self.mana['la'], pas, n, k, copie)
+			else:
+				self.mana['la'] = L.muta_loc(self.mana['la'], pas * (self.randuriPagina if pagina else 1), n, k, copie)
 			self._arataMana()
 			return
 		lista = self[self._numeLista(self.focus)]
 		if not self.randuri[self.focus]:
 			return
-		if pagina:
+		i = self._index_curent()
+		n = len(self.randuri[self.focus])
+		if circular and not 0 <= i + pas < n:
+			lista.moveToIndex(L.rand_circular(i, pas, n))
+		elif pagina:
 			if pas < 0:
 				lista.pageUp()
 			else:

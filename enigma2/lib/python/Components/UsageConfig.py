@@ -8,6 +8,8 @@ import os
 
 config.usage = ConfigSubsection()
 config.usage.keymap = ConfigText(default = eEnv.resolve("${datadir}/enigma2/keymap.xml"))
+# Temele LCD citesc valoarea prin ConfigEntryTest si arata semnul REC intermitent.
+config.usage.blinking_rec_symbol_during_recording = ConfigYesNo(default=True)
 # HDSatelit: releul de flux al modulului de acces, cu nume neutre; valorile salvate sub numele de dinainte trec aici la
 # prima pornire (Components/HdsMutareSetari.py, chemat dupa definirea cheilor din config.misc, mai jos)
 config.usage.acces_streamrelay_url = ConfigText(default = "http://127.0.0.1:17999")
@@ -35,6 +37,16 @@ def _mutaSetarileVechi():
 
 
 _mutaSetarileVechi()
+
+
+def _stareStreamRelay():
+	"""HDSatelit 0.7.1: randurile starii Stream Relay pentru ecranul setarilor (atributul hdsStare, Screens/Setup.py)."""
+	try:
+		from Components import HdsStreamRelay
+		return HdsStreamRelay.liniiStare()
+	except Exception as e:
+		print("[UsageConfig] starea Stream Relay: %s" % e)
+		return []
 
 def N_(text):
 	"""Marcheaza un text pentru traducere fara sa-l traduca acum (xgettext -kN_): ConfigSelection traduce descrierile
@@ -108,6 +120,55 @@ def _traduAlegerileCuNumere():
 			element._descr = None
 	except Exception as eroare:
 		print("[UsageConfig] alegerile cu numere nu s-au tradus: %s" % eroare)
+
+
+def _setariCerutePluginuri():
+	"""Setari pe care imaginea nu le foloseste, citite de pluginuri (config.usage.date...). Nu apar in niciun ecran al nostru;
+	un plugin le poate citi si salva. Ce exista deja nu se atinge."""
+	from Components.config import ConfigInteger, ConfigSubsection, ConfigText, ConfigYesNo, config
+
+	def pune(sectiune, nume, element):
+		if not hasattr(sectiune, nume):
+			setattr(sectiune, nume, element)
+
+	for sectiune in ("autolanguage", "timeshift", "epg", "recording", "subtitles", "misc"):
+		if not hasattr(config, sectiune):
+			setattr(config, sectiune, ConfigSubsection())
+	pune(config.usage, "date", ConfigSubsection())
+	for nume, implicit in (("dayfull", "%a %d.%m.%Y"), ("shortdayfull", "%a %d.%m.%Y"), ("daylong", "%A %d %B %Y"), ("dayshort", "%a %d.%m.%Y"), ("daysmall", "%a %d.%m"), ("full", "%d.%m.%Y"), ("long", "%d %B %Y"), ("short", "%d.%m.%Y"), ("compact", "%d.%m"), ("compressed", "%d%m%y"), ("display", "%d.%m.%Y")):
+		pune(config.usage.date, nume, ConfigText(default=implicit))
+	pune(config.usage, "time", ConfigSubsection())
+	for nume, implicit in (("long", "%T"), ("short", "%R"), ("mins", "%R"), ("wide", False), ("display", "%R")):
+		pune(config.usage.time, nume, ConfigYesNo(default=False) if implicit is False else ConfigText(default=implicit))
+	for nume in ("subnetwork", "subnetwork_terrestrial", "subnetwork_cable", "movielist_trashcan", "check_timeshift"):
+		pune(config.usage, nume, ConfigYesNo(default=True))
+	for nume in ("alternative_number_mode", "sort_settings", "timeshift_skipreturntolive"):
+		pune(config.usage, nume, ConfigYesNo(default=False))
+	pune(config.usage, "servicelist_cursor_behavior", ConfigText(default="keep"))
+	pune(config.usage, "show_menupath", ConfigText(default="small"))
+	pune(config.usage, "pic_resolution", ConfigText(default=""))
+	pune(config.usage, "sleep_timer", ConfigText(default="0"))
+	pune(config.usage, "sleepTimer", ConfigInteger(default=0, limits=(0, 86400)))
+	pune(config.usage, "sleepTimerAction", ConfigText(default="deepstandby"))
+	pune(config.epg, "histminutes", ConfigInteger(default=0, limits=(0, 999)))
+	pune(config.misc, "epgcachepath", ConfigText(default="/etc/enigma2/"))
+	# Ore pentru valoarea initiala a exportului EPG; nucleul nostru nu pastreaza istoric suplimentar.
+	pune(config.misc, "epgcache_outdated_timespan", ConfigInteger(default=0, limits=(0, 168)))
+	pune(config.misc, "prev_wakeup_time", ConfigInteger(default=0, limits=(0, 2147483647)))
+	pune(config.misc, "prev_wakeup_time_type", ConfigInteger(default=0, limits=(0, 9)))
+	pune(config.misc, "lastrotorposition", ConfigInteger(default=9999, limits=(0, 9999)))
+	for i in (1, 2, 3, 4):
+		pune(config.autolanguage, "audio_autoselect%d" % i, ConfigText(default=""))
+	for nume in ("check", "showinfobar", "showInfoBar"):
+		pune(config.timeshift, nume, ConfigYesNo(default=True))
+	for nume in ("skipReturnToLive", "stopWhileRecording", "stopwhilerecording"):
+		pune(config.timeshift, nume, ConfigYesNo(default=False))
+	pune(config.timeshift, "favoriteSaveAction", ConfigText(default="askuser"))
+	pune(config.timeshift, "startDelay", ConfigInteger(default=0, limits=(0, 9999)))
+	pune(config.timeshift, "startdelay", ConfigText(default="0"))
+	pune(config.recording, "zap_margin_after", ConfigInteger(default=0, limits=(0, 999)))
+	pune(config.recording, "zap_margin_before", ConfigInteger(default=0, limits=(0, 999)))
+	pune(config.subtitles, "show", ConfigYesNo(default=True))
 
 
 def InitUsageConfig():
@@ -237,6 +298,12 @@ def InitUsageConfig():
 	# alte aparate din reteaua de acasa (un releu Stream Relay de pe alt receptor); oprita: numai 127.0.0.1, ca pana acum.
 	# Pornita: numai adresele private (192.168.x.x, 10.x.x.x, 172.16-31.x.x), niciodata din internet.
 	config.misc.hds_fluxuri_retea_acasa = ConfigYesNo(default=False)
+	# 0.7.1: in ecranul Stream Relay (Screens/Setup.py) si in pagina lui web (setari_web.py), deasupra ajutorului fiecarui
+	# rand, starea de acum: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu
+	# (HdsStreamRelay.liniiStare; modulul se incarca abia la deschiderea ecranului)
+	for _el in (config.misc.acces_streamrelay_url, config.misc.acces_streamrelay_port, config.misc.acces_streamrelay_delay,
+			config.misc.hds_fluxuri_retea_acasa):
+		_el.hdsStare = _stareStreamRelay
 	_mutaSetarileVechi()
 
 	config.seek = ConfigSubsection()
@@ -371,3 +438,18 @@ def preferredInstantRecordPath():
 def defaultMoviePath():
 	return config.usage.default_path.value
 
+def defaultStorageDevice():
+	"""UUID-ul discului tinut minte pentru /media/hdd; marcajul cerut de plugin cand nu este ales."""
+	return getattr(harddiskmanager, "hdd_uuid", "") or "<undefined>"
+
+
+# la sfarsitul lui InitUsageConfig ramane numai ce a pus imaginea; setarile cerute de pluginuri se pun dupa
+_InitUsageConfigImagine = InitUsageConfig
+
+
+def InitUsageConfig():
+	_InitUsageConfigImagine()
+	try:
+		_setariCerutePluginuri()
+	except Exception as e:
+		print("[UsageConfig] setarile cerute de pluginuri:", e)

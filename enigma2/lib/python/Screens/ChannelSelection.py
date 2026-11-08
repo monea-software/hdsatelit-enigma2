@@ -56,6 +56,7 @@ except ImportError as e:
 profile("ChannelSelection.py after imports")
 
 FLAG_SERVICE_NEW_FOUND = 64 #define in lib/dvb/idvb.h as dxNewFound = 64
+FLAG_IS_DEDICATED_3D = 128 # HDSatelit: numele din alte imagini (canal 3D), cerut de pluginurile lor
 
 class BouquetSelector(Screen):
 	def __init__(self, session, bouquets, selectedFunc, enableWrapAround=False):
@@ -976,6 +977,8 @@ HDS_SEMN_INCHIS = "+"
 HDS_SEMN_DESCHIS = u"\u2212"
 # primul rand al listei pe sateliti: un marcaj cu nume (nu se intra in el si nucleul nu il citeste niciodata ca lista)
 HDS_REF_TOATE = "1:64:0:0:0:0:0:0:0:0:"
+# randul unei pozitii numai cu radio in lista TV: tot un marcaj cu nume, unul pe pozitie (nu se intra in el)
+HDS_REF_NUMAI_RADIO = "1:64:%X:0:0:0:0:0:0:0:"
 HDS_LAMEDB = "/etc/enigma2/lamedb"
 
 
@@ -987,6 +990,23 @@ def hds_text_antet(nume, n, deschis, text_numar, neprins=False):
 		return u"%s %s" % (HDS_SEMN_DESCHIS if deschis else HDS_SEMN_INCHIS, nume)
 	text = u"%s %s \u00b7 %s" % (HDS_SEMN_DESCHIS if deschis else HDS_SEMN_INCHIS, nume, text_numar(n))
 	return text + u" \u00b7 " + _("din altă listă, fără semnal aici") if neprins else text
+
+
+def hds_locuri_numai_radio(pozitii_tv, numere_radio):
+	"""Pozitiile de satelit cu posturi radio si fara niciun canal TV, in ordinea listei 'Sateliți' -> [(pozitia, cate
+	posturi)]. Lista TV nu le-ar arata deloc (nucleul pune o pozitie in lista numai daca are un serviciu de felul listei),
+	iar omul ar crede ca scanarea n-a gasit nimic acolo."""
+	return sorted(((poz, n) for poz, n in numere_radio.items() if n and poz < 3600 and poz not in pozitii_tv),
+		key=lambda x: hds_cheie_satelit(x[0]))
+
+
+def hds_text_numai_radio(nume, n):
+	"""Textul randului: pozitia, 'numai radio' si cate posturi."""
+	try:
+		from Components.HdsIndexCanale import ngettext as plural
+	except ImportError:
+		plural = lambda unu, multe, k: unu if k == 1 else multe
+	return _("%(loc)s · numai radio, %(numar)s") % {"loc": nume, "numar": plural("%d post", "%d posturi", n) % n}
 
 
 def hds_pozitii_neprinse(pozitii):
@@ -1263,6 +1283,9 @@ def hdsEtichetaBuchete():
 
 
 class ChannelSelectionBase(Screen):
+	# numele cerut de pluginuri: zap-ul in fereastra PiP
+	dopipzap = False
+
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		self.setTitle(_("Channel Selection") if _("Channel Selection") != "Channel Selection" else "Selectare canale")
@@ -1304,6 +1327,7 @@ class ChannelSelectionBase(Screen):
 		self.hdsBlocuri = [ ]
 		self.hdsDeschise = set()
 		self.hdsRandToate = None
+		self.hdsRanduriRadio = [ ]
 		self.hdsSemnUmplere = None
 		self.hdsProaspata = True
 
@@ -1345,7 +1369,8 @@ class ChannelSelectionBase(Screen):
 		self.recallBouquetMode()
 
 	def getBouquetNumOffset(self, bouquet):
-		if not config.usage.multibouquet.value:
+		# fara grupa (lista goala, scanare in curs): pluginurile afisajului, ca VFDControl, cer totusi numarul
+		if bouquet is None or not config.usage.multibouquet.value:
 			return 0
 		# grupele unui loc adaugat de o extensie: numerele incep de la 1, ca pe ecranul radio
 		if hds_e_dosar_loc(bouquet.getPath()):
@@ -1639,6 +1664,7 @@ class ChannelSelectionBase(Screen):
 			intrari.append((poz, (poz, antet, nume_loc)))
 		grupe = hds_ordoneaza_sateliti(intrari)
 		self.hdsIntrariSateliti = [(poz, service) for poz, service, nume in grupe]
+		numai_radio = self.hdsLocuriNumaiRadio(grupe)
 		if inchise:
 			# VERDE: lista clasica, toti satelitii inchisi
 			self.hdsDeschise = set()
@@ -1657,6 +1683,10 @@ class ChannelSelectionBase(Screen):
 			self.hdsRandToate = rand
 			n += 1
 		for poz, service, nume in grupe:
+			# pozitiile numai cu radio, fiecare la locul ei intre sateliti
+			while numai_radio and hds_cheie_satelit(numai_radio[0][0]) < hds_cheie_satelit(poz):
+				self.servicelist.addService(numai_radio.pop(0)[1])
+				n += 1
 			deschis = poz in self.hdsDeschise
 			if poz == HDS_POZ_IPTV:
 				# sub antet stau grupele furnizorului (sau canalele, cand lista n-are grupe); numarul e al canalelor
@@ -1683,6 +1713,9 @@ class ChannelSelectionBase(Screen):
 				self.servicelist.addService(c)
 			self.hdsBlocuri.append((poz, n, n + 1 + k, n + k + len(canale)))
 			n += 1 + k + len(canale)
+		for _poz, rand in numai_radio:
+			self.servicelist.addService(rand)
+			n += 1
 		# DAB+ / DVB-T2 din satelit: dosarul buchetului (posturile nu sunt in lamedb, deci nu au satelit aici)
 		self.hdsIntrariFluxuri = self.hdsAdaugaBucheteFluxuri()
 		cur_ref = self.session.nav.getCurrentlyPlayingServiceReference()
@@ -1974,17 +2007,52 @@ class ChannelSelectionBase(Screen):
 		except Exception:
 			return str(n)
 
-	def hdsNumerePeLocuri(self):
-		"""{loc: cate canale} pentru antetele inchise, din lista „Toate” a modului (o singura cerere la nucleu, apoi
-		numai textele referintelor); tinute minte pana se schimba lamedb (data si marimea fisierului)."""
+	def hdsNumePozitie(self, poz):
+		"""Numele unei pozitii de satelit, ca pe antete; numai pozitia cand satelitul nu e in lista tunerelor."""
+		try:
+			nume = str(nimmanager.getSatDescription(poz))
+		except Exception:
+			nume = None
+		try:
+			from Components.HdsGrade import numeSatelit, pozitieOrbitala
+		except ImportError:
+			return nume or str(poz)
+		return (numeSatelit(poz, nume) if nume else pozitieOrbitala(poz)) or str(poz)
+
+	def hdsLocuriNumaiRadio(self, grupe):
+		"""Lista TV pe sateliti: randurile pozitiilor numai cu radio -> [(pozitia, randul)]. Numerele vin din aceeasi citire
+		tinuta minte ca numerele antetelor, deci deschiderea listei nu mai cere nimic nucleului cand lamedb nu s-a schimbat.
+		OK pe rand duce la lista radio (hdsOkPeSateliti). Numai in lista TV care stie sa duca acolo."""
+		self.hdsRanduriRadio = [ ]
+		if self.mode != MODE_TV or not hasattr(self, "hdsTastaRadio"):
+			return [ ]
+		rez = [ ]
+		pozitii_tv = set(poz for poz, service, nume in grupe)
+		for poz, n in hds_locuri_numai_radio(pozitii_tv, self.hdsNumerePeLocuri(service_types_radio)):
+			rand = eServiceReference(HDS_REF_NUMAI_RADIO % (poz + 1))
+			rand.setName(hds_text_numai_radio(self.hdsNumePozitie(poz), n))
+			rez.append((poz, rand))
+		self.hdsRanduriRadio = [rand for poz, rand in rez]
+		return rez
+
+	def hdsEsteRandRadio(self, ref):
+		"""ref e randul unei pozitii numai cu radio din lista TV pe sateliti."""
+		if ref is None or not self.hdsRanduriRadio or not ref.valid() or not (ref.flags & eServiceReference.isMarker):
+			return False
+		return self.hdsPeRadacinaSateliti() and any(ref == rand for rand in self.hdsRanduriRadio)
+
+	def hdsNumerePeLocuri(self, tipuri=None):
+		"""{loc: cate canale} pentru antetele inchise, din lista 'Toate' a modului (sau a tipurilor date; o singura cerere la
+		nucleu, apoi numai textele referintelor); tinute minte pana se schimba lamedb (data si marimea fisierului)."""
+		tipuri = tipuri or self.service_types
 		sem = hds_semnatura_lamedb()
-		cheie = (self.service_types, sem)
+		cheie = (tipuri, sem)
 		if sem is not None and cheie in _hds_numere:
 			return _hds_numere[cheie]
 		inceput = time.time()
 		texte = [ ]
 		try:
-			lista = eServiceCenter.getInstance().list(eServiceReference("%s ORDER BY name" % self.service_types))
+			lista = eServiceCenter.getInstance().list(eServiceReference("%s ORDER BY name" % tipuri))
 			if lista is not None:
 				# fara serviciile fara nume, ca lista deschisa (hdsCanaleLoc): numarul nu se schimba la deschidere
 				texte = [s for s, nume in (lista.getContent("SN", False) or [ ]) if nume != "(...)"]
@@ -2139,6 +2207,9 @@ class ChannelSelectionBase(Screen):
 			else:
 				self.hdsDeschise = locuri
 			self.hdsRefaSateliti(cursor=cur)
+			return True
+		if self.hdsEsteRandRadio(cur):
+			self.hdsTastaRadio()
 			return True
 		poz = self.hdsLocAntet(cur)
 		if poz is None:
@@ -2377,7 +2448,11 @@ class ChannelSelectionBase(Screen):
 			self.servicelist.moveToChar(unichar)
 
 	def getRoot(self):
-		return self.servicelist.getRoot()
+		# pana la prima deschidere a listei, lista n-are radacina; pluginurile (AJPanel, VFDControl) cer toString() pe ea
+		radacina = self.servicelist.getRoot()
+		if radacina is None:
+			radacina = getattr(self, "bouquet_root", None)
+		return radacina
 
 	def getCurrentSelection(self):
 		return self.servicelist.getCurrent()
@@ -4038,6 +4113,11 @@ class ChannelSelectionRadio(ChannelSelectionBase, ChannelSelectionEdit, ChannelS
 		self.onClose.append(self.__onClose)
 
 	def __onClose(self):
+		# Lista se poate inchide si prin Screen.close (post ales dintr-o extensie), fara cancel().
+		# Ascultatorul nu trebuie sa ramana legat de ecranul distrus la urmatorul mesaj RDS.
+		ascultatori = self.infobar.rds_display.onRassInteractivePossibilityChanged
+		if self.RassInteractivePossibilityChanged in ascultatori:
+			ascultatori.remove(self.RassInteractivePossibilityChanged)
 		# EXIT lasa postul de radio pornit: nu se mai porneste canalul TV de dinainte (antena nu se misca). TV porneste
 		# numai cand omul il alege: tasta TV, fila „TV” si „Treci la lista TV” (hdsTastaTV: bara deschide lista TV cu
 		# InfoBar.showTv, care porneste ultimul canal TV) sau un canal TV ales in cautare (hdsLaCanal).
@@ -4089,7 +4169,6 @@ class ChannelSelectionRadio(ChannelSelectionBase, ChannelSelectionEdit, ChannelS
 ########## RDS Radiotext / Rass Support END
 
 	def cancel(self):
-		self.infobar.rds_display.onRassInteractivePossibilityChanged.remove(self.RassInteractivePossibilityChanged)
 		self.info.hide()
 		#set previous tv service
 		self.close(None)

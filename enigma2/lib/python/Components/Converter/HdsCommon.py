@@ -114,6 +114,15 @@ def refresh_lang():
 		raw = mod.config.osd.language.value if mod is not None else None
 	except Exception:
 		raw = None
+	# limba in care sunt textele interfetei acum (Components/Language.limbaInterfata): engleza cand limba aleasa nu are
+	# catalog pe receptor (07.11.2026, Vu+ Solo SE: tema in turca, meniurile in romana si engleza)
+	try:
+		lg = sys.modules.get("Components.Language")
+		ui = lg.limbaInterfata() if lg is not None and hasattr(lg, "limbaInterfata") else ""
+		if ui:
+			raw = ui
+	except Exception:
+		pass
 	if raw == _lang["raw"]:
 		return
 	_lang["raw"] = raw

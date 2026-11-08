@@ -29,7 +29,8 @@ class PluginDownloadBrowser(HdsExtensii):
 	DOWNLOAD = 0
 	REMOVE = 1
 
-	def __init__(self, session, type=0):
+	def __init__(self, session, type=0, needupdate=True, skin_name=None, *argumente, **numite):
+		# needupdate si skin_name: pluginurile altora le dau ca in celelalte imagini; lista se reface oricum, tema e a noastra
 		HdsExtensii.__init__(self, session, fila='disponibile' if type == self.DOWNLOAD else 'instalate')
 
 

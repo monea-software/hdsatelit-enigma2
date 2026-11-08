@@ -36,6 +36,11 @@ import re
 import unicodedata
 
 try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
+try:
 	from Components import HdsFisierSigur as _S
 except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
 	import HdsFisierSigur as _S
@@ -620,6 +625,7 @@ def text_transponder(date):
 
 def citeste_lamedb(text):
 	"""Textul lamedb -> lista de Canal. Un fisier care nu se intelege da lista goala (nu ridica)."""
+	text = text_lista(text)
 	randuri = text.split('\n')
 	if not randuri or not randuri[0].startswith('eDVB services /'):
 		return []
@@ -984,6 +990,7 @@ def _grupe_iptv(director):
 
 def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 	"""Fluxurile dintr-un buchet (referintele DVB fara cale vin din lamedb) -> lista de Canal."""
+	text = text_lista(text or "")
 	pozitii_feed = pozitii_feed or {}
 	rez = []
 	intrari = []
@@ -1055,7 +1062,7 @@ def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 def _citeste_text(cale):
 	try:
 		with open(cale, 'rb') as f:
-			return f.read().decode('utf-8', 'replace')
+			return text_lista(f.read())
 	except (IOError, OSError):
 		return None
 
@@ -1194,6 +1201,9 @@ class Index(object):
 		# serviciile fara nume (numele facut la scanare) la coada; filtrarea pastreaza ordinea
 		canale.sort(key=lambda c: (c.fara_nume, not c.cheie, c.cheie, c.nume.lower()))
 		self.canale = canale
+		self.grupe_online = ()  # (fisier, identitate locala, nume, grupa), citite odata cu buchetele
+		self.grupe_online_canale = {}
+		self.numar_radacina_online = 0
 		self.biti = {}
 		for g in ('tip', 'rez', 'acces', 'cod', 'are', 'fsunet', 'msunet', 'psunet'):
 			self.biti[g] = dict((v, 1 << k) for k, (v, _e) in enumerate(OPTIUNI_FIXE[g]))
@@ -1616,6 +1626,7 @@ def semnatura(director=DIRECTOR, pozitii_feed=None):
 	fluxurilor. Cateva os.stat."""
 	buchete = fisiere_buchete(director)
 	cai = [os.path.join(director, 'lamedb')] + [os.path.join(director, b) for b in buchete]
+	cai.append(os.path.join(director, 'hds_iptv', 'surse.json'))
 	return (director, _semnatura(cai), tuple(sorted((pozitii_feed or {}).items(), key=repr)))
 
 
@@ -1624,9 +1635,16 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 	din enigma2 si nimic comun: se poate chema de pe un fir. -> (semnatura, Index)."""
 	sem = semnatura(director, pozitii_feed)
 	buchete = fisiere_buchete(director)
+	grupe_online = _grupe_online(director, buchete)
+	canonice = {g[0] for g in grupe_online}
 	canale = citeste_lamedb(_citeste_text(os.path.join(director, 'lamedb')) or '')
+	grupe_online_canale = {}
 	for b in buchete:
-		canale.extend(citeste_buchet(_citeste_text(os.path.join(director, b)), b, pozitii_feed))
+		intrari = citeste_buchet(_citeste_text(os.path.join(director, b)), b, pozitii_feed)
+		if b in canonice:
+			grupe_online_canale[b] = [c.cheie_mas or c.ref for c in intrari]
+		canale.extend(intrari)
+	numar_radacina_online = sum(1 for c in canale if c.buchet == BUCHET_IPTV)
 	# acelasi flux in doua buchete: o singura data. Copia pastrata (de pilda din Favorite, fara marcaj) ia ansamblul
 	# postului DAB+ / DVB-T2 din copia din buchetul lui, unde marcajul de deasupra il da (la fel grupa unui canal IPTV)
 	vazute, unice = {}, []
@@ -1634,13 +1652,44 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 		k = c.cheie_mas or c.ref
 		pastrat = vazute.get(k)
 		if pastrat is not None:
+			if c.buchet and (c.buchet in canonice or c.buchet == BUCHET_IPTV or c.buchet.startswith(_PREFIX_GRUPA_IPTV)):
+				pastrat.buchet = c.buchet
+				if c.tip == 'iptv' and pastrat.tip == 'internet':
+					pastrat.tip, pastrat.radio = c.tip, c.radio
 			if not pastrat.ansamblu and c.ansamblu and pastrat.tip == c.tip:
 				pastrat.ansamblu = c.ansamblu
 				pastrat.alte = cuvinte_flux(pastrat.tip, c.ansamblu) if pastrat.tip in CUVINTE_FEL else ()
 			continue
 		vazute[k] = c
 		unice.append(c)
-	return sem, Index(unice, complet=complet)
+	index = Index(unice, complet=complet)
+	index.grupe_online = grupe_online
+	index.grupe_online_canale = grupe_online_canale
+	index.numar_radacina_online = numar_radacina_online
+	return sem, index
+
+
+def _grupe_online(director, buchete):
+	"""Structura existenta a listei receptorului, citita pe fir; niciun cont sau URL nu intra in index."""
+	rez = []
+	try:
+		from Components import HdsIptvSurse as I
+		if director == I.DIRECTOR:
+			rez.extend(I.grupeLista())
+	except ImportError:
+		pass
+	try:
+		from Components import HdsLocuriLista as L
+		for d in L.locuri():
+			for b in buchete:
+				if b != d['buchet'] and not b.startswith(d['prefix']):
+					continue
+				text = _citeste_text(os.path.join(director, b)) or ''
+				nume = next((r[6:].strip() for r in text.splitlines() if r.startswith('#NAME ')), d['nume'])
+				rez.append((b, 'loc_' + d['id'], d['nume'], nume))
+	except ImportError:
+		pass
+	return tuple(rez)
 
 
 def din_memorie(sem=None):

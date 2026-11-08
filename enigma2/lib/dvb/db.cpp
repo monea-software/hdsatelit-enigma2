@@ -4,6 +4,7 @@
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontend.h>
 #include <lib/dvb/hdsgrad.h>
+#include <lib/dvb/hdslistetext.h>
 #include <lib/dvb/hdsmultistream.h>
 #include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/epgcache.h>
@@ -377,6 +378,41 @@ void eDVBDB::parseServiceData(ePtr<eDVBService> s, std::string str)
 	}
 }
 
+/* Un rand intreg, inclusiv dupa expandarea numelor vechi in UTF8.
+   Memoria se refoloseste si tine numai cel mai lung rand, nu tot fisierul.
+   Newline-ul final ajuta parserul vechi si cand ultimul rand se termina la EOF. */
+static char *hdsCitesteRand(FILE *f, std::string &text)
+{
+	char fragment[1024];
+	text.clear();
+	while (fgets(fragment, sizeof(fragment), f))
+	{
+		text += fragment;
+		if (!text.empty() && text[text.size() - 1] == '\n')
+			break;
+	}
+	if (ferror(f))
+	{
+		eWarning("[eDVBDB] eroare la citirea unui rand din lista de canale");
+		text.clear();
+		return 0;
+	}
+	if (text.empty())
+		return 0;
+	if (text[text.size() - 1] == '\n')
+	{
+		if (text.size() > 1 && text[text.size() - 2] == '\r')
+			text.erase(text.size() - 2, 1);
+	}
+	else
+	{
+		if (text[text.size() - 1] == '\r')
+			text.erase(text.size() - 1, 1);
+		text += '\n';
+	}
+	return &text[0];
+}
+
 	/* THIS CODE IS BAD. it should be replaced by somethine better. */
 void eDVBDB::loadServicelist(const char *file)
 {
@@ -387,9 +423,10 @@ void eDVBDB::loadServicelist(const char *file)
 		return;
 	}
 
-	char line[256];
+	std::string rand;
+	char *line = 0;
 	int version=3;
-	if ((!fgets(line, 256, f)) || sscanf(line, "eDVB services /%d/", &version) != 1)
+	if ((!(line = hdsCitesteRand(f, rand))) || sscanf(line, "eDVB services /%d/", &version) != 1)
 	{
 		eDebug("not a valid servicefile");
 		fclose(f);
@@ -397,7 +434,7 @@ void eDVBDB::loadServicelist(const char *file)
 	}
 	eDebug("reading services (version %d)", version);
 	furnizori_reparati = 0;
-	if ((!fgets(line, 256, f)) || strcmp(line, "transponders\n"))
+	if ((!(line = hdsCitesteRand(f, rand))) || strcmp(line, "transponders\n"))
 	{
 		eDebug("services invalid, no transponders");
 		fclose(f);
@@ -408,7 +445,7 @@ void eDVBDB::loadServicelist(const char *file)
 
 	while (!feof(f))
 	{
-		if (!fgets(line, 256, f))
+		if (!(line = hdsCitesteRand(f, rand)))
 			break;
 		if (!strcmp(line, "end\n"))
 			break;
@@ -424,7 +461,7 @@ void eDVBDB::loadServicelist(const char *file)
 		ePtr<eDVBFrontendParameters> feparm = new eDVBFrontendParameters;
 		while (!feof(f))
 		{
-			if (!fgets(line, 256, f))
+			if (!(line = hdsCitesteRand(f, rand)))
 				break;
 			if (!strcmp(line, "/\n"))
 				break;
@@ -491,7 +528,7 @@ void eDVBDB::loadServicelist(const char *file)
 		addChannelToList(channelid, feparm);
 	}
 
-	if ((!fgets(line, 256, f)) || strcmp(line, "services\n"))
+	if ((!(line = hdsCitesteRand(f, rand))) || strcmp(line, "services\n"))
 	{
 		eDebug("services invalid, no services");
 		return;
@@ -503,7 +540,7 @@ void eDVBDB::loadServicelist(const char *file)
 
 	while (!feof(f))
 	{
-		if (!fgets(line, 256, f))
+		if (!(line = hdsCitesteRand(f, rand)))
 			break;
 		if (!strcmp(line, "end\n"))
 			break;
@@ -521,15 +558,15 @@ void eDVBDB::loadServicelist(const char *file)
 						eServiceID(service_id),
 						service_type);
 		count++;
-		if (!fgets(line, 256, f))
+		if (!(line = hdsCitesteRand(f, rand)))
 			break;
 		if (strlen(line))
 			line[strlen(line)-1]=0;
 
-		s->m_service_name = line;
+		s->m_service_name = hdslistetext::textUtf8(line);
 		s->genSortName();
 
-		if (!fgets(line, 256, f))
+		if (!(line = hdsCitesteRand(f, rand)))
 			break;
 		if (strlen(line))
 			line[strlen(line)-1]=0;
@@ -541,6 +578,7 @@ void eDVBDB::loadServicelist(const char *file)
 		}
 		else
 			parseServiceData(s, line);
+		s->m_provider_name = hdslistetext::textUtf8(s->m_provider_name);
 		addService(ref, s);
 	}
 
@@ -721,12 +759,13 @@ void eDVBDB::loadBouquet(const char *path)
 		return;
 	}
 	int entries=0;
-	char line[256];
+	std::string rand;
+	char *line = 0;
 	bool read_descr=false;
 	eServiceReference *e = NULL;
 	while (1)
 	{
-		if (!fgets(line, 256, fp))
+		if (!(line = hdsCitesteRand(fp, rand)))
 			break;
 		line[strlen(line)-1]=0;
 		if (strlen(line) && line[strlen(line)-1]=='\r')
@@ -739,6 +778,7 @@ void eDVBDB::loadBouquet(const char *path)
 			{
 				int offs = line[8] == ':' ? 10 : 9;
 				eServiceReference tmp(line+offs);
+				tmp.name = hdslistetext::textUtf8(tmp.name);
 				// orice serviciu cu referinta citibila intra in buchet, nu numai cele DVB (tipul 1): posturile DAB+ din
 				// satelit sunt fluxuri servicemp3 (4097), la fel multe fluxuri de internet; sarite aici, buchetul
 				// „DAB+ din satelit” ramanea in lista numai cu marcajele. Referintele pe care nu le intelege nimeni
@@ -787,11 +827,11 @@ void eDVBDB::loadBouquet(const char *path)
 			else if (read_descr && !strncmp(line, "#DESCRIPTION", 12))
 			{
 				int offs = line[12] == ':' ? 14 : 13;
-				e->name = line+offs;
+				e->name = hdslistetext::textUtf8(line+offs);
 				read_descr=false;
 			}
 			else if (!strncmp(line, "#NAME ", 6))
-				bouquet.m_bouquet_name=line+6;
+				bouquet.m_bouquet_name=hdslistetext::textUtf8(line+6);
 			continue;
 		}
 	}

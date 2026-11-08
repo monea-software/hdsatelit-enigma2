@@ -14,6 +14,12 @@ PSignal::~PSignal()
 
 void PSignal::callPython(ePyObject tuple)
 {
+	if (!tuple)
+	{
+		if (PyErr_Occurred())
+			PyErr_Print();
+		return;
+	}
 	/* HDSatelit: se merge pe o copie a listei (un tuplu care tine cate o referinta la fiecare functie).
 	   Pe lista vie, cu lungimea luata o singura data, o functie care se scotea pe sine sau pe alta din lista in
 	   timpul chemarii facea ca alta functie sa fie chemata de doua ori, sau ca bucla sa citeasca dupa capatul
@@ -25,7 +31,7 @@ void PSignal::callPython(ePyObject tuple)
 	ePyObject copy = PyList_AsTuple(m_list);
 	if (!copy)
 	{
-		PyErr_Clear();
+		PyErr_Print();
 		return;
 	}
 	Py_ssize_t size = PyTuple_GET_SIZE(copy);
@@ -41,7 +47,8 @@ PyObject *PSignal::get()
 {
 	if (!m_list)
 		m_list = PyList_New(0);
-	Py_INCREF(m_list);
+	if (m_list)
+		Py_INCREF(m_list);
 	return m_list;
 }
 

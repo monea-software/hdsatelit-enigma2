@@ -743,14 +743,14 @@ class HdsEcranRadio(Screen):
 		(egalizatorul) si textul lui, apoi OK; fiecare pus dupa latimea textului dinainte (textele au lungimi diferite
 		in fiecare limba). Cu `ordine` si `x`: numai acele elemente, de la x (randul fara galben si albastru)."""
 		if ordine is None:
-			ordine = ("tastaGalbena", "tastaGalbenaText", "tastaAlbastra", "tastaAlbastraText", "tastaVerde",
-				"tastaVerdeText", "tastaOk")
+			ordine = ("tastaVerde", "tastaVerdeText", "tastaGalbena", "tastaGalbenaText", "tastaAlbastra",
+				"tastaAlbastraText", "tastaOk")
 		inst = [getattr(self[n], "instance", None) for n in ordine]
 		if any(i is None for i in inst):
 			return
 		try:
 			if x is None:
-				x = inst[0].position().x()
+				x = self.geom.get("tastaGalbena", (inst[0].position().x(),))[0]
 			for n, i in zip(ordine, inst):
 				p = i.position()
 				if p.x() != x:
@@ -767,6 +767,8 @@ class HdsEcranRadio(Screen):
 		"""Randul tastelor: GALBEN / ALBASTRU numai cand barele se pot arata (altfel ar schimba o vizualizare care nu se
 		vede); fara ele randul incepe cu VERDE (egalizatorul nu depinde de bare), apoi OK, la stanga."""
 		da = bool(da)
+		self["tastaVerde"].show()
+		self["tastaVerdeText"].show()
 		if da == self.taste_viz:
 			return
 		self.taste_viz = da
@@ -1777,6 +1779,15 @@ class LegaturaRadio(object):
 			sursa = AN.SursaHttp(releu, pid if pid > 0 else None)
 			_jurnal("barele din fluxul releului %s (PID %s)" % (AN.adresa_releu(releu)[2], ("0x%X" % pid) if pid > 0
 				else "din flux"))
+		elif service is not None and RD.adresa_publica(RD.ref_curenta(self.session)[1]):
+			self.analiza_pid = None
+			self.fara_pid = False
+			self.analiza_nevazuta_de = None
+			self.analizor = AN.AnalizorOnline(service)
+			self.analizor.porneste()
+			self._analizor_vechi = None
+			self.fara_date_desenat = False
+			return
 		else:
 			pid = RD.pid_audio(service) if service is not None else -1
 			if pid <= 0:

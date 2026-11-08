@@ -362,6 +362,20 @@ hds_AsCharPtr(PyObject *obj, char **cptr, int *alloc)
 %include <lib/gdi/font.h>
 %include <lib/gdi/gpixmap.h>
 %include <lib/gdi/gmaindc.h>
+/* Pluginurile vechi pot calcula pozitii si marimi cu virgula.
+   Taiem partea zecimala numai la constructorii cu numere.
+   Restul tipurilor si alegerea metodelor raman in grija SWIG. */
+%define HDS_CONSTRUCTOR_INTREGI(Clasa, Numar)
+%pythonprepend Clasa::Clasa %{
+    if len(args) == Numar:
+        args = tuple(int(a) if isinstance(a, float) else a for a in args)
+%}
+%enddef
+
+HDS_CONSTRUCTOR_INTREGI(ePoint, 2)
+HDS_CONSTRUCTOR_INTREGI(eRect, 4)
+HDS_CONSTRUCTOR_INTREGI(eSize, 2)
+
 %include <lib/gdi/epoint.h>
 %include <lib/gdi/erect.h>
 %include <lib/gdi/esize.h>
@@ -394,6 +408,8 @@ hds_AsCharPtr(PyObject *obj, char **cptr, int *alloc)
 %include <lib/gdi/epng.h>
 %include <lib/dvb/volume.h>
 %include <lib/dvb/sec.h>
+/* pentru Python, eEPGCache.save() cere salvarea pe firul ghidului si revine imediat; scrierea insasi ramane privata */
+%rename(save) eEPGCache::saveLater;
 %include <lib/dvb/epgcache.h>
 %include <lib/dvb/frontendparms.h>
 %include <lib/dvb/dvbtime.h>
@@ -473,7 +489,12 @@ RESULT SwigFromPython(ePtr<gPixmap> &result, PyObject *obj)
 #define SWIGTYPE_p_ePtrT_gPixmap_t SWIGTYPE_p_ePtrTgPixmap_t
 #endif
 	if (SWIG_Python_ConvertPtr(obj, (void **)&res, SWIGTYPE_p_ePtrT_gPixmap_t, SWIG_POINTER_EXCEPTION | 0))
+	{
+		/* Desenarea continua fara pixmap, deci exceptia trebuie consumata aici. */
+		if (PyErr_Occurred())
+			PyErr_Print();
 		return -1;
+	}
 	if (!res)
 		return -1;
 	result = *res;

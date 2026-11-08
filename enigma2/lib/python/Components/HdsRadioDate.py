@@ -22,6 +22,8 @@
 # functie publica nu arunca: fara date intorc campuri goale.
 
 import time
+import sys
+from urllib.parse import urlsplit
 
 RADIO_STYPES = (2, 10)
 EPG_ORE = 6
@@ -97,6 +99,62 @@ def este_radio(service, ref_text):
 
 def _cheie_ref(text):
 	return u":".join(_u(text).split(u":")[:10]).lower()
+
+
+def adresa_publica(ref_text):
+	"""Ca la IPTV: numai originea, fara cont, cale, parametri, fragment sau antete ale playerului.
+	Calea poate contine numele si parola chiar si fara userinfo; nu se afiseaza niciodata."""
+	try:
+		campuri = _u(ref_text).split(u":", 10)
+		if len(campuri) != 11:
+			return u""
+		# Referinta scrie ":" din adresa ca %3a, deci un singur ":" ramas desparte numele postului (eServiceReference).
+		camp = campuri[10]
+		parti = camp.split(u":")
+		if len(parti) == 2 and u"@" not in parti[1] and not parti[1].split(u"/", 1)[0].isdigit():
+			camp = parti[0]
+		cale = camp.replace("%3a", ":").replace("%3A", ":")
+		p = urlsplit(cale.split("|", 1)[0])
+		if p.scheme.lower() not in ("http", "https") or not p.hostname:
+			return u""
+		# Referinta RadioOnline este un redirect local. Numai snapshotul deja incarcat de plugin,
+		# fara importarea pluginului, citirea favoritelor sau rezolvarea adresei pe firul enigma2.
+		if p.hostname == "127.0.0.1" and p.port == 8895 and p.path.startswith("/radio/"):
+			modul = sys.modules.get("Plugins.Extensions.RadioOnline.adrese")
+			functie = getattr(modul, "origine_publica", None)
+			public = functie(cale) if functie is not None else u""
+			if public:
+				return public
+		gazda = p.hostname
+		if any(ord(c) < 33 or c in "<>\\%" for c in gazda):
+			return u""
+		if ":" in gazda:
+			gazda = "[" + gazda + "]"
+		port = (":%d" % p.port) if p.port else u""
+		return p.scheme.lower() + "://" + gazda + port
+	except (TypeError, ValueError):
+		return u""
+
+
+def ref_publica(ref_text):
+	"""Referinta pentru JSON/diagnostic; referinta reala ramane numai in navigatie."""
+	text = _u(ref_text)
+	campuri = text.split(u":", 10)
+	if len(campuri) == 11 and campuri[10]:
+		return u":".join(campuri[:10]) + u":" + adresa_publica(text).replace(":", "%3a")
+	return text
+
+
+def date_online(service):
+	"""Copia deja calculata pe firele redarii: nici retea, nici citire de dispozitiv pe firul enigma2."""
+	try:
+		from enigma import iServiceInformation
+		info = service.info() if service is not None else None
+		cheie = getattr(iServiceInformation, "sHdsRadioOnline", None)
+		d = info.getInfoObject(cheie) if info is not None and cheie is not None else None
+		return dict(d) if isinstance(d, dict) else {}
+	except Exception:
+		return {}
 
 
 def ref_curenta(session):
@@ -438,7 +496,7 @@ def _receptie(r, ref_text, C):
 	return rez
 
 
-def _sunet(r, analiza, C):
+def _sunet(r, analiza, C, online=None):
 	rez = {"codec": u"", "limba": u"", "piste": 0, "debit": 0, "debit_masurat": False, "esantionare": 0, "mod": u"",
 		"canale": 0, "lfe": False}
 	if r is not None and C is not None:
@@ -449,6 +507,11 @@ def _sunet(r, analiza, C):
 			rez["limba"] = _u(limba)
 		except Exception:
 			pass
+	if online:
+		for cheie in ("codec", "debit", "esantionare", "canale"):
+			if online.get(cheie):
+				rez[cheie] = online[cheie]
+		rez["debit_masurat"] = bool(online.get("debit_aprox"))
 	if analiza:
 		# felul sunetului il stie analizorul pe orice format (MPEG, AAC, AC-3, E-AC-3, DTS, PCM)
 		if analiza.get("codec") and analiza.get("format"):
@@ -456,7 +519,8 @@ def _sunet(r, analiza, C):
 		for cheie in ("debit", "esantionare", "mod", "canale", "lfe"):
 			if analiza.get(cheie):
 				rez[cheie] = analiza[cheie]
-		rez["debit_masurat"] = bool(analiza.get("format") == "aac" and analiza.get("debit"))
+		if analiza.get("debit"):
+			rez["debit_masurat"] = bool(analiza.get("debit_aprox", analiza.get("format") == "aac"))
 	return rez
 
 
@@ -489,7 +553,8 @@ def date(session, cate_epg=3, analiza=None, acum=None):
 		"rds": rds(service, session),
 		"receptie": _receptie(r, ref_text, C),
 		"semnal": _semnal(service, ref_text, C),
-		"sunet": _sunet(r, analiza, C),
+		"sunet": _sunet(r, analiza, C, date_online(service)),
+		"adresa": adresa_publica(ref_text) if ref_text.startswith("4097:") else u"",
 		"acces": None,
 		"analiza": analiza or {},
 	}
@@ -519,7 +584,8 @@ def rapid(d, session, analiza=None, acum=None, cu_rds=False):
 		except Exception:
 			r = None
 	d["semnal"] = _semnal(service, d.get("ref", u""), C)
-	d["sunet"] = _sunet(r, analiza, C)
+	d["adresa"] = adresa_publica(d.get("ref", u"")) if _u(d.get("ref")).startswith("4097:") else u""
+	d["sunet"] = _sunet(r, analiza, C, date_online(service))
 	d["analiza"] = analiza or {}
 	if cu_rds:
 		d["rds"] = rds(service, session)
@@ -535,6 +601,44 @@ def rapid(d, session, analiza=None, acum=None, cu_rds=False):
 			cur["progres"] = -1
 			cur["ramas_min"] = -1
 		d["epg"] = dict(ep, acum=cur)
+	return d
+
+
+def cu_receptie_flux(d, receptie):
+	"""Completeaza datele din copia in memorie a purtatorului DAB al acestui SID.
+	Fara citirea fisierului comun al skinului, care poate fi al altui post.
+	"""
+	if not receptie or receptie.get("sref_redat") != d.get("ref"):
+		return d
+	d = dict(d)
+	p = receptie.get("purtator") or {}
+
+	class Cititor(object):
+		def kind(self):
+			return "dab_relay"
+
+		def carrier_tp(self):
+			return p
+
+		def _memo(self, cheie, functie):
+			return functie()
+
+	d["receptie"] = _receptie(Cititor(), d.get("ref", ""), _C())
+	semnal = dict(d.get("semnal") or {})
+	semnal.update({"flux": True, "releu": True, "purtator": True,
+		"putere": p.get("semnal"), "procent": p.get("calitate"), "calitate": p.get("calitate"),
+		"blocat": p.get("prins"), "db": None,
+		"tuner": chr(65 + p["tuner"]) if isinstance(p.get("tuner"), int) and 0 <= p["tuner"] <= 25 else ""})
+	d["semnal"] = semnal
+	dab = receptie.get("dab") or {}
+	sunet = dict(d.get("sunet") or {})
+	if dab.get("codec"):
+		sunet["codec"] = dab["codec"]
+	if dab.get("kbit"):
+		sunet["debit"] = dab["kbit"]
+	d["sunet"] = sunet
+	if dab.get("ansamblu"):
+		d["furnizor"] = dab["ansamblu"]
 	return d
 
 
@@ -662,6 +766,8 @@ def text_sunet(d):
 def text_transponder(d):
 	"""11623 MHz, verticală, SR 27500, FEC 3/4 (polarizarea in cuvinte, in limba ecranelor; SR si FEC sunt
 	prescurtarile folosite peste tot pentru rata de simboluri si corectia erorilor)."""
+	if d.get("adresa"):
+		return _t("Sursa: %s") % d["adresa"]
 	rec = d.get("receptie") or {}
 	parti = []
 	if rec.get("frecventa"):

@@ -20,10 +20,15 @@
 #   - numai cu sagetile si OK: OK pe un modul care ruleaza deschide o lista scurta (Oprește, Repornește, Interfața web,
 #     Despre decriptare, si Alege cand nu e ales); pe unul oprit sau pe „Niciunul”, OK face ce face Verde;
 #   - detaliile (memoria si firele procesului, in cuvinte simple) se rescriu numai cand s-a schimbat ceva, iar pagina
-#     derulata cu Stanga / Dreapta ramane la citirea din 5 in 5 secunde.
+#     derulata cu Stanga / Dreapta ramane la citirea din 5 in 5 secunde;
+#   - adresa lizibila a interfetei web sta in detaliile modulului activ. Numai httpport se citeste din configurarea
+#     indicata de proces, pe un fir separat, fara proba de retea; + inseamna HTTPS;
+#   - la sfarsitul detaliilor (0.7.1), Stream Relay: cate canale are lista, de unde se adauga si de ce nu raspunde
+#     releul (Components/HdsStreamRelay.liniiStare), ca in pagina web Acces condiționat.
 # Toata logica e in Components/HdsModuleAcces.py (aceeasi o foloseste interfata web,
 # HdsWebControl/acces_conditionat_web.py); ecranul doar o arata. text_rezultat si pid_de_aratat sunt folosite si de pagina web, ca textele sa fie aceleasi.
 from enigma import eTimer
+import threading
 
 from .Screen import Screen
 from Components.ActionMap import ActionMap
@@ -35,6 +40,30 @@ from Components import HdsModuleAcces
 from Components import HdsInterfeteCam
 
 REIMPROSPATARE = 5000   # ms: starea (ce ruleaza) se reciteste cat timp ecranul e deschis
+
+
+def gazda_interfata_web():
+	"""Adresa din reteaua receptorului, fara cautare DNS sau conexiuni."""
+	try:
+		from Components.Network import iNetwork
+		for adaptor in iNetwork.getConfiguredAdapters():
+			ip = iNetwork.getAdapterAttribute(adaptor, 'ip')
+			if iNetwork.getAdapterAttribute(adaptor, 'up') and ip and len(ip) == 4 and any(ip):
+				return '.'.join(str(x) for x in ip)
+	except Exception:
+		pass
+	import socket
+	return socket.gethostname()
+
+
+def _liniiStreamRelay():
+	"""Randurile Stream Relay de la sfarsitul detaliilor (0.7.1, HdsStreamRelay.liniiStare), sau [] la o eroare."""
+	try:
+		from Components import HdsStreamRelay
+		return HdsStreamRelay.liniiStare()
+	except Exception as e:
+		print("[CamSetup] Stream Relay: %s" % e)
+		return []
 
 
 def _vmrss(sistem, pid):
@@ -227,6 +256,10 @@ class CamSetup(Screen):
 		self.randDetalii = None
 		self.paginaDetalii = 0      # cate pagini s-au derulat in detalii (Stanga / Dreapta), pusa la loc dupa o rescriere
 		self.operatie = None
+		self.interfeteWeb = []
+		self.rezultatWeb = None
+		self.ceasWeb = eTimer()
+		self.ceasWeb.callback.append(self.verificaInterfeteWeb)
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.reimprospateaza)
 		self["lista"].onSelectionChanged.append(self.arataDetalii)
@@ -240,6 +273,8 @@ class CamSetup(Screen):
 
 	def laInchidere(self):
 		self.ceas.stop()
+		self.ceasWeb.stop()
+		del self.ceasWeb.callback[:]
 		del self.ceas.callback[:]
 		if self.operatie is not None and not self.operatie.gata:
 			self.operatie.desprinde(_anunta_dupa_inchidere)
@@ -281,6 +316,37 @@ class CamSetup(Screen):
 						self["lista"].moveToIndex(i)
 						break
 		self.arataDetalii()
+		self.citesteInterfeteWeb()
+
+	def citesteInterfeteWeb(self):
+		"""Configurarea se citeste pe un fir; niciun widget si nicio conexiune din acel fir."""
+		if self.rezultatWeb is not None:
+			return
+		rezultat = {}
+		self.rezultatWeb = rezultat
+		stari = self.stari
+
+		def citeste():
+			try:
+				rezultat['gata'] = HdsModuleAcces.interfete_web(stari=stari)
+			except Exception:
+				rezultat['gata'] = []
+		try:
+			fir = threading.Thread(target=citeste)
+			fir.daemon = True
+			fir.start()
+			self.ceasWeb.start(150, False)
+		except Exception:
+			self.rezultatWeb = None
+
+	def verificaInterfeteWeb(self):
+		rezultat = self.rezultatWeb
+		if rezultat is None or 'gata' not in rezultat:
+			return
+		self.ceasWeb.stop()
+		self.interfeteWeb = rezultat['gata']
+		self.rezultatWeb = None
+		self.arataDetalii()
 
 	def stare(self, fel):
 		for st in self.stari:
@@ -315,6 +381,11 @@ class CamSetup(Screen):
 				randuri += ["  " + r for r in randuri_proces(HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, e.pids)))]
 				randuri.append(_("Apasă OK pentru oprire, repornire sau informații."))
 				randuri.append("INFO: " + _("Despre decriptare"))
+				for interfata in self.interfeteWeb:
+					if interfata['fel'] == fel and interfata['sufix'] == sufix:
+						adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])
+						randuri.append(_("Interfața web: %s") % adresa)
+						randuri.append(_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea."))
 			else:
 				randuri.append(_("Nu rulează."))
 			if e.ales:
@@ -332,6 +403,12 @@ class CamSetup(Screen):
 			randuri.append("")
 			randuri.append(_("Decriptarea de acum (%s):") % HdsModuleAcces.FISIER_ECM)
 			randuri += ["  " + r for r in st.ecm]
+		# 0.7.1: Stream Relay (Components/HdsStreamRelay.liniiStare, aceleasi randuri ca ecranul setarilor lui si pagina
+		# web Acces condiționat): cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu
+		releu = _liniiStreamRelay()
+		if releu:
+			randuri.append("")
+			randuri += releu
 		self.scrieDetalii("\n".join(randuri), rand)
 		self["key_green"].setText(_("Pornește") if ales and e is not None else _("Alege"))
 

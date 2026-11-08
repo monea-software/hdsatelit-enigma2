@@ -350,7 +350,68 @@ def caleLumina():
 
 def disponibil(cale=None):
 	"""Receptorul are afisaj in fata (dispozitivul exista)."""
-	return os.path.exists(cale or DISPOZITIV)
+	if cale is None:
+		try:
+			from Components.HdsFunctiiImagine import disponibil as functieImagine
+		except ImportError:  # probele vechi incarca numai acest modul
+			functieImagine = None
+		if functieImagine is not None and functieImagine("afisaj"):
+			# Un singur controler scrie afisajul: cel al producatorului.
+			return False
+	return os.path.exists(cale or DISPOZITIV) or (cale is None and esteColor())
+
+
+def colorInfo():
+	try:
+		from Components.HdsAfisajColor import detecteaza
+	except ImportError:
+		return None
+	if "info" not in _COLOR:
+		_COLOR["info"] = detecteaza()
+	return _COLOR["info"]
+
+
+_COLOR = {}
+
+
+def esteColor():
+	return colorInfo() is not None
+
+
+def alegeriColorLive():
+	texte = {"nu": _("Nu"), "imagine": _("Numai imaginea"),
+		"osd": _("Imaginea cu OSD")}
+	try:
+		from Components.HdsAfisajColor import IesireLive
+	except ImportError:
+		return [("nu", texte["nu"])]
+	return [(m, texte[m]) for m in IesireLive().capabilitati()]
+
+
+def alegeriColorPicon():
+	return [("nu", _("Deloc")), ("singur", _("Piconul singur")),
+		("nume_ora", _("Piconul cu numele si ora"))]
+
+
+def alegeriControlAfisaj():
+	return [("auto", _("Automat")),
+		("extern", _("Pluginul sau tema de afisaj"))]
+
+
+def alegeriTemaAfisaj():
+	try:
+		import skin
+	except ImportError:
+		return [("HDSatelit/display/skin_display.xml", _("HD Satelit"))]
+	return skin.listaAfisaje()
+
+
+def _temaAfisaj():
+	try:
+		from Components.config import config
+		return config.skin.display_skin.value
+	except AttributeError:
+		return "HDSatelit/display/skin_display.xml"
 
 
 def _migreaza(c):
@@ -374,6 +435,7 @@ def initConfig():
 	from Components.config import ConfigSubsection, ConfigSelection, ConfigText
 	c = ConfigSubsection()
 	config.hds_afisaj = c
+	c.control_afisaj = ConfigSelection(default="auto", choices=alegeriControlAfisaj())
 	c.lista = ConfigText(default=LISTA_IMPLICITA, fixed_size=False)
 	c.functionare = ConfigSelection(default=FUNCTIONARE_IMPLICIT, choices=alegeriFunctionare())
 	c.asteptare = ConfigSelection(default=ASTEPTARE_IMPLICIT, choices=alegeriAsteptare())
@@ -388,6 +450,10 @@ def initConfig():
 	c.personaj = ConfigSelection(default=P.PORNIT_IMPLICIT, choices=P.alegeriPornit())
 	c.personaj_ritm = ConfigSelection(default=P.RITM_IMPLICIT, choices=P.alegeriRitm())
 	c.personaj_noaptea = ConfigSelection(default=P.NOAPTEA_IMPLICIT, choices=P.alegeriNoaptea())
+	c.color_live = ConfigSelection(default="nu", choices=[
+		("nu", _("Nu")), ("imagine", _("Numai imaginea")),
+		("osd", _("Imaginea cu OSD"))])
+	c.color_picon = ConfigSelection(default="nu", choices=alegeriColorPicon())
 	try:
 		_migreaza(c)
 	except Exception as e:
@@ -407,6 +473,7 @@ def _cfg():
 
 # valorile permise ale setarilor cu alegeri (ecranul si pagina web)
 VALORI = {
+	"control_afisaj": ("auto", "extern"),
 	"asteptare": ASTEPTARE,
 	"viteza": VITEZE,
 	"luminozitate": (LUMINA_NESCHIMBATA,) + tuple(str(i) for i in range(1, 8)),
@@ -416,16 +483,26 @@ VALORI = {
 	"personaj": P.PORNIT,
 	"personaj_ritm": P.RITMURI,
 	"personaj_noaptea": P.NOAPTEA,
+	"color_live": ("nu", "imagine", "osd"),
+	"color_picon": ("nu", "singur", "nume_ora"),
 }
 
 
 def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozitate=None, luminozitate_noapte=None,
 		noapte_de_la=None, noapte_pana_la=None, text=None, functionare=None, oras=None, personaj=None, personaj_ritm=None,
-		personaj_noaptea=None):
+		personaj_noaptea=None, color_live=None, color_picon=None,
+		control_afisaj=None, tema_afisaj=None):
 	"""Schimba, salveaza si aplica pe loc (ecranul si pagina web). Intoarce (reusit, mesaj); o valoare straina nu
 	schimba nimic."""
 	from Components.config import configfile
 	c = _cfg()
+	if tema_afisaj is not None and tema_afisaj not in dict(alegeriTemaAfisaj()):
+		return False, _("Tema de afisaj nu exista.")
+	if color_live is not None and color_live != "nu":
+		if not esteColor() or color_live not in dict(alegeriColorLive()):
+			return False, _("Driverul nu ofera acest mod live pe afisaj.")
+	if color_picon is not None and color_picon != "nu" and not esteColor():
+		return False, _("Receptorul nu are ecran color.")
 	if functionare is not None:
 		if functionare not in FUNCTIONARE:
 			return False, _("Alegerea pentru receptorul pornit nu există.")
@@ -443,7 +520,9 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		noi["evenimente"] = scrieEvenimente(ev)
 	valori = {"asteptare": asteptare, "viteza": viteza, "luminozitate": luminozitate,
 		"luminozitate_noapte": luminozitate_noapte, "noapte_de_la": noapte_de_la, "noapte_pana_la": noapte_pana_la,
-		"personaj": personaj, "personaj_ritm": personaj_ritm, "personaj_noaptea": personaj_noaptea}
+		"personaj": personaj, "personaj_ritm": personaj_ritm,
+		"personaj_noaptea": personaj_noaptea, "color_live": color_live,
+		"color_picon": color_picon, "control_afisaj": control_afisaj}
 	for cheie in sorted(VALORI):
 		v = valori[cheie]
 		if v is None:
@@ -459,19 +538,30 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		if oras and oras not in dict(D.fusurile()):
 			return False, _("Valoarea „%s” nu se poate alege aici.") % oras[:20]
 		noi["oras"] = oras
+	if tema_afisaj is not None:
+		import skin
+		reusit, mesaj_tema = skin.alegeAfisaj(tema_afisaj, salveaza=False)
+		if not reusit:
+			return False, _(mesaj_tema)
 	for cheie, v in noi.items():
 		el = getattr(c, cheie)
 		el.value = v
 		el.save()
 	configfile.save()
 	if _afisaj is None:
-		return True, _("Salvat.")
+		return True, (_("Salvat. Tema se aplica dupa repornirea interfetei.")
+			if tema_afisaj is not None else _("Salvat."))
 	_afisaj.citesteSetarile()
 	_afisaj.previzualizare = None
 	_afisaj.previzualizareAsteptare = None
 	_afisaj.previzualizarePana = None
 	_afisaj.lumina = None
 	_afisaj.reporneste()
+	if tema_afisaj is not None:
+		return True, _("Salvat. Tema se aplica dupa repornirea interfetei.")
+	from Components.HdsAfisajCompat import permite
+	if not permite("lcd" if esteColor() else "text"):
+		return True, _("Salvat.")
 	if _afisaj.eroare is not None:
 		return True, _("Salvat, dar afișajul nu primește textul. Repornește receptorul.")
 	return True, _("Salvat. Afișajul s-a schimbat pe loc.")
@@ -784,6 +874,9 @@ class Afisaj(object):
 
 	def scrie(self, sir):
 		"""Scrie sirul de LATIME octeti (text latin-1, din HdsAfisajLitere.octeti) in dispozitiv."""
+		from Components.HdsAfisajCompat import permite
+		if not permite("text", color=False):
+			return False
 		sir = (sir + GOL)[:LATIME]
 		try:
 			fd = os.open(self.cale, _DESCHIDERE)
@@ -810,11 +903,14 @@ class Afisaj(object):
 		if self.oprit:
 			return
 		try:
+			from Components.HdsAfisajCompat import actualizeazaLeduri
+			actualizeazaLeduri()
 			ms = self.pas()
 		except Exception as e:
 			_jurnal("pasul afisajului: %r" % (e,))
 			ms = int(DORMI_MAXIM_S * 1000)
-		self.timer.start(ms, True)
+		# Vedem repede pornirea sau oprirea unui plugin de afisaj.
+		self.timer.start(min(ms, 1000), True)
 
 	def acum(self):
 		"""Un pas pe loc (dupa o schimbare), apoi ceasul se pune din nou."""
@@ -831,6 +927,14 @@ class Afisaj(object):
 
 	def pas(self, acum=None):
 		"""Un pas: cadrul de acum pe afisaj; intoarce cate ms pana la pasul urmator."""
+		from Components.HdsAfisajCompat import permite
+		color = hasattr(self, "infoColor")
+		if not permite("lcd" if color else "text", color=color):
+			self._cedat = True
+			return 1000
+		if getattr(self, "_cedat", False):
+			self._cedat = False
+			self.ultim, self.lumina, self.arata = None, None, None
 		acum = self.ceas() if acum is None else acum
 		self._legaVolumul(True)
 		if self.previzualizarePana is not None and acum + TOLERANTA_S >= self.previzualizarePana:
@@ -1350,6 +1454,10 @@ class Afisaj(object):
 		return int(zi) if zi != LUMINA_NESCHIMBATA else len(TREPTE_LUMINA)
 
 	def _lumineaza(self, acum):
+		from Components.HdsAfisajCompat import permite
+		if not permite("lumina", color=False):
+			self.lumina = None
+			return
 		treapta = self.treaptaDorita(acum)
 		if treapta is None or treapta == self.lumina:
 			return
@@ -1501,7 +1609,12 @@ def porneste(session):
 	initConfig()
 	if _afisaj is not None or not disponibil():
 		return
-	_afisaj = Afisaj(session)
+	info = colorInfo()
+	if info is not None:
+		from Components.HdsAfisajColor import Afisaj as AfisajColor
+		_afisaj = AfisajColor(session, info=info)
+	else:
+		_afisaj = Afisaj(session)
 	_afisaj.acum()
 	_afisaj.mesaj("evenimente.pornire", True)
 
@@ -1608,6 +1721,8 @@ def cifreGata():
 def stare():
 	"""Pentru ecran si pentru GET /api/afisaj."""
 	c = _cfg()
+	from Components.HdsAfisajCompat import stare as stareCompat
+	compat = stareCompat(color=esteColor())
 	if _afisaj is not None:
 		masti = _afisaj.masti() if _afisaj.ultim is not None else [L.GOL] * LATIME
 		in_asteptare = _afisaj.inAsteptare
@@ -1624,7 +1739,10 @@ def stare():
 		"disponibil": disponibil(),
 		"pornit": _afisaj is not None,
 		"in_asteptare": in_asteptare,
-		"scris": scris,
+		"scris": scris and not compat["cedat"],
+		"control_afisaj": c.control_afisaj.value,
+		"compatibilitate": compat,
+		"tema_afisaj": _temaAfisaj(),
 		"masti": list(masti),
 		"desen": L.desenText(masti),
 		"text": text,
@@ -1643,6 +1761,14 @@ def stare():
 		"personaj": c.personaj.value,
 		"personaj_ritm": c.personaj_ritm.value,
 		"personaj_noaptea": c.personaj_noaptea.value,
+		"color": colorInfo(),
+		"color_live": getattr(getattr(c, "color_live", None), "value", "nu"),
+		"color_picon": getattr(getattr(c, "color_picon", None), "value", "nu"),
+		"color_imagine": ("picon" if getattr(_afisaj, "_picon", "")
+			and getattr(_afisaj, "color_imagine", "") == _afisaj._picon
+			else getattr(_afisaj, "color_imagine", "")),
+		"color_text": getattr(_afisaj, "color_text", ""),
+		"color_eroare": getattr(getattr(_afisaj, "live", None), "eroare", ""),
 		"minutar": D.minutarRamas(time.time()),
 		"minutar_text": textMinutar(),
 		"cronometru_text": textCronometru(),

@@ -37,6 +37,8 @@ dist_install_DATA = \
 	input_rcold-configured.png \
 	input_rcold.png \
 	lock_error.png \
+	expandable.png \
+	expanded.png \
 	lock_off.png \
 	lock_on.png \
 	lock.png \

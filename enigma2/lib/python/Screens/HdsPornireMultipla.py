@@ -5,12 +5,17 @@
 # HdsPornireMultipla.py: ecranul Porneste alte imagini. Meniu > Standby si repornire, numai pe Octagon SF8008,
 # SF8008 MINI si Amiko Viper 4K V10 (SystemInfo["HdsMultiboot"]).
 #
-# La deschidere ecranul cauta imaginile instalate in locurile din memorie (Components/HdsPornireMultipla.py: STARTUP_N
-# de pe partitia bootoptions, nucleul si sistemul fiecarui loc) si le arata, cu imaginea pornita acum marcata; locurile
-# goale nu apar. OK (sau VERDE) pe o imagine: o intrebare scurta, apoi STARTUP scris sigur si repornirea receptorului in
-# ea. Daca la repornire receptorul intreaba (o inregistrare, o lucrare) si raspunzi Nu, STARTUP se pune la loc. ROSU
-# inchide. Aceeasi lista si aceeasi alegere in web: cardul flash din /alimentare (HdsWebControl/alimentare_web.py).
+# La deschidere ecranul cauta imaginile instalate in memorie, pe card si pe stick (Components/HdsPornireMultipla.py:
+# STARTUP_N de pe partitia bootoptions, nucleul si sistemul fiecarui loc), pe un fir separat, ca interfata sa nu stea, si le
+# arata, cu imaginea pornita acum marcata; locurile goale nu apar. OK (sau VERDE) pe o imagine: o intrebare scurta, apoi
+# STARTUP scris sigur si repornirea receptorului in ea. Daca la repornire receptorul intreaba (o inregistrare, o lucrare) si
+# raspunzi Nu, STARTUP se pune la loc. Un loc care nu se alege spune de ce pe rand, iar OK arata motivul intreg. Cat ecranul
+# e deschis, lista se reface singura cand se pune sau se scoate un disc. ROSU inchide. Aceeasi lista si aceeasi alegere in
+# web: cardul flash din /alimentare (HdsWebControl/alimentare_web.py).
 # Skinul HDSatelit: forma ecranului HdsNavigatorFavorite (lista + nota, cadrul HdsCadru1240), aceleasi nume de widgeturi.
+
+import threading
+import time
 
 from .Screen import Screen
 from Components.ActionMap import ActionMap
@@ -44,22 +49,67 @@ class HdsPornireMultipla(Screen):
 			"red": self.close,
 		}, -2)
 		self.stare = {"locuri": []}
+		self.citire = None      # ce intoarce firul citirii cat merge
+		self.semn = None        # discurile puse la ultima citire
 		self["lista"].onSelectionChanged.append(self.butoane)
 		from enigma import eTimer
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.citeste)
-		self.onClose.append(self.ceas.stop)
+		self.ceasFir = eTimer()
+		self.ceasFir.callback.append(self.veziFirul)
+		self.ceasDiscuri = eTimer()
+		self.ceasDiscuri.callback.append(self.veziDiscurile)
+		self.onClose.append(self.opresteCeasurile)
 		self.ceas.start(50, True)
 
+	def opresteCeasurile(self):
+		self.ceas.stop()
+		self.ceasFir.stop()
+		self.ceasDiscuri.stop()
+
 	def citeste(self):
-		try:
-			self.stare = P.locuri()
-		except Exception as e:
-			print("[HdsPornireMultipla] %r" % (e,))
-			self.stare = {"locuri": [], "eroare": True}
-		self["lista"].setList([(text, l) for text, l in zip(P.randuri(self.stare), self.stare["locuri"])])
+		"""Citirea listei pe un fir: mounturile si citirile de pe card nu tin interfata pe loc."""
+		if self.citire is not None:
+			return
+		self.citire = citire = {}
+		self.semn = P.semnDiscuri()
+
+		def lucreaza():
+			inceput = time.time()
+			try:
+				stare = P.locuri()
+			except Exception as e:
+				print("[HdsPornireMultipla] %r" % (e,))
+				stare = {"locuri": [], "eroare": True}
+			print("[HdsPornireMultipla] lista: %d locuri in %d ms" % (len(stare["locuri"]), (time.time() - inceput) * 1000))
+			citire["stare"] = stare
+
+		fir = threading.Thread(target=lucreaza, name="HdsPornireMultipla")
+		fir.daemon = True
+		fir.start()
+		self.ceasFir.start(100, False)
+
+	def veziFirul(self):
+		if self.citire is None or "stare" not in self.citire:
+			return
+		self.ceasFir.stop()
+		self.stare, self.citire = self.citire["stare"], None
+		ales = self._ales()
+		randuri = [(text, l) for text, l in zip(P.randuri(self.stare), self.stare["locuri"])]
+		self["lista"].setList(randuri)
+		if ales:
+			for i, (_text, l) in enumerate(randuri):
+				if l["loc"] == ales["loc"]:
+					self["lista"].moveToIndex(i)
+					break
 		self["nota"].setText(P.nota(self.stare))
 		self.butoane()
+		self.ceasDiscuri.start(2000, False)
+
+	def veziDiscurile(self):
+		"""S-a pus sau s-a scos un disc: lista se reface, ca omul sa nu aiba de deschis ecranul din nou."""
+		if self.citire is None and P.semnDiscuri() != self.semn:
+			self.citeste()
 
 	def _ales(self):
 		rand = self["lista"].getCurrent()
@@ -77,11 +127,8 @@ class HdsPornireMultipla(Screen):
 		if l.get("acum"):
 			self.session.open(MessageBox, _(P.DEJA), MessageBox.TYPE_INFO, timeout=5)
 			return
-		if l["fel"] != "emmc":
-			self.session.open(MessageBox, _(P.PE_STICK), MessageBox.TYPE_INFO, timeout=8)
-			return
 		if not l.get("alegere"):
-			self.session.open(MessageBox, _(P.REFUZ) % l["loc"], MessageBox.TYPE_ERROR, timeout=10)
+			self.session.open(MessageBox, P.textRefuz(l), MessageBox.TYPE_ERROR, timeout=10)
 			return
 		self.session.openWithCallback(lambda da, loc=l["loc"]: self.confirmat(da, loc), MessageBox,
 			_(P.INTREBARE) % l["imagine"], MessageBox.TYPE_YESNO, default=True)

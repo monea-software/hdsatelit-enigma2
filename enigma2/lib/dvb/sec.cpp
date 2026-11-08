@@ -391,7 +391,10 @@ RESULT eDVBSatelliteEquipmentControl::prepare(iDVBFrontend &frontend, FRONTENDPA
 					// so we must resend all diseqc stuff (voltage is disabled when the frontend is closed)
 					int state;
 					sec_fe->getState(state);
-					if (!linked_fe->m_inuse && state != eDVBFrontend::stateIdle)
+					// Aceeasi exceptie FBC ca la executarea secventei din frontend.cpp.
+					if (!linked_fe->m_inuse && state != eDVBFrontend::stateIdle
+						&& !static_cast<eDVBFrontend&>(frontend).hdsSameFbcSet(
+							static_cast<eDVBFrontend&>(*sec_fe)))
 						forceChanged = true;
 				}
 			}

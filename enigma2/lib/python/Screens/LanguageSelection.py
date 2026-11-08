@@ -61,8 +61,29 @@ class LanguageSelection(Screen):
 			pos += 1
 
 	def save(self):
+		cod = self["languages"].getCurrent()[0]
+		if cod not in language.lang:
+			from Screens.MessageBox import MessageBox
+			def raspuns(da):
+				if da:
+					from Screens.HdsParteaDoua import HdsParteaDoua
+					self.session.openWithCallback(lambda *args: self._dupaInstalareaLimbii(cod), HdsParteaDoua)
+			self.session.openWithCallback(raspuns, MessageBox,
+				_("Limba aleasa lipseste din baza. Deschid instalarea limbilor pe stick?"),
+				type=MessageBox.TYPE_YESNO, default=False)
+			return
 		self.run()
 		self.close()
+
+	def _dupaInstalareaLimbii(self, cod):
+		self.updateList()
+		if cod in language.lang:
+			for i, x in enumerate(self.list):
+				if x[0] == cod:
+					self["languages"].index = i
+					self.run()
+					self.close()
+					return
 
 	def cancel(self):
 		# HDSatelit: EXIT anuleaza si limba salvata: mutarea cursorului o schimba numai in memorie (run, justlocal), deci
@@ -93,11 +114,13 @@ class LanguageSelection(Screen):
 	def updateList(self):
 		first_time = not self.list
 
-		languageList = language.getLanguageList()
+		languageList = language.getLanguageList(suplimentare=not isinstance(self, LanguageWizard))
 		if not languageList: # no language available => display only english
 			list = [ LanguageEntryComponent("en", _cached("en_EN"), "en_EN") ]
 		else:
-			list = [ LanguageEntryComponent(file = x[1][2].lower(), name = _cached("%s_%s" % x[1][1:3]), index = x[0]) for x in languageList]
+			list = [LanguageEntryComponent(file=x[1][2].lower(),
+				name=(_cached("%s_%s" % x[1][1:3]) or x[1][0]) +
+				(" " + _("(pe stick)") if x[0] not in language.lang else ""), index=x[0]) for x in languageList]
 		self.list = list
 
 		#list.sort(key=lambda x: x[1][7])

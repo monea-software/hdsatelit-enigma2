@@ -18,10 +18,12 @@
 #include <lib/gui/esubtitle.h>
 #include <lib/service/servicemp3.h>
 #include <lib/service/hdsegalizator.h>
+#include <lib/service/hdsradioonline.h>
 #include <lib/service/service.h>
 #include <lib/gdi/gpixmap.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <chrono>
 #include <condition_variable>
@@ -65,6 +67,11 @@ static const int PAS_DERULARE_MS = 500;
 static const int ASTEPTARE_PORNIRE_MS = 30000;
 /* the last position is kept only after the first minute and before the last one (pts, 90 kHz) */
 static const pts_t MARGINE_RELUARE = 60 * 90000LL;
+static std::atomic<unsigned> radiouriInOprire(0);
+/* cat asteapta serviciul urmator un radio care se opreste: un driver sau o retea care nu se mai intorc nu lasa serviciul nou fara pornire */
+static const int ELIBERARE_RADIO_MS = 3000;
+
+bool eServiceMP3::asteaptaEliberareaRadio() { return radiouriInOprire.load() != 0; }
 
 /* ------------------------------------------------------------------ the gate of the GStreamer callbacks */
 
@@ -119,8 +126,13 @@ struct eServiceMP3::FirFilm
 	bool schimba_starea;			/* a change of state is waiting: PAUSED when pauza, PLAYING otherwise */
 	bool pauza;
 	bool schimba_sunetul;			/* the sound changes sink (the equalizer on a radio stream): sunet_nou, NULL = by rank */
+	bool sunet_asteapta_alsa = false;
+	bool radio = false;
+	bool prima_pornire = true;
+	unsigned long long egal_pregatire = 0;
 	GstElement *sunet_nou;
 	bool opreste, oprit;
+	bool radio_in_oprire = false;
 	int ms_oprire;
 	bool scrie;				/* write (or remove, when empty) the cue file after the stop */
 	listaCues de_scris;
@@ -233,13 +245,54 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 			f->schimba_sunetul = false;
 			GstElement *sink = f->sunet_nou;
 			f->sunet_nou = NULL;
+			unsigned long long pregatire = f->egal_pregatire;
+			f->egal_pregatire = 0;
+			/* Numai trecerea EQ -> hardware asteapta ALSA veche. O comanda mai noua
+			   (OFF -> ON rapid) sau stop anuleaza asteptarea si sinkul inca nefolosit. */
+			std::chrono::steady_clock::time_point limita = std::chrono::steady_clock::now() + std::chrono::milliseconds(ELIBERARE_RADIO_MS);
+			while (!f->opreste && !f->schimba_sunetul && std::chrono::steady_clock::now() < limita &&
+				((f->sunet_asteapta_alsa && eHdsEgalizator::asteaptaEliberareaFluxului()) ||
+				(f->radio && f->prima_pornire && (radiouriInOprire.load() || eHdsEgalizator::asteaptaEliberareaFluxului()))))
+				f->semnal.wait_for(l, std::chrono::milliseconds(20));
+			if (f->opreste || f->schimba_sunetul)
+			{
+				if (sink) gst_object_unref(sink);
+				continue;
+			}
 			l.unlock();
 			/* playbin takes a new sink only in READY or NULL; a stream starts again from its source. The address is set again: a
 			   stream that failed before it was playing (no decoder for the sink of the equalizer) leaves playbin without a group to
 			   start, and PLAYING would fail. */
 			golesteSinkurile(f->pipeline);
-			gst_element_set_state(f->pipeline, GST_STATE_READY);
+			GstStateChangeReturn gata = gst_element_set_state(f->pipeline, GST_STATE_READY);
+			GstState acum = GST_STATE_VOID_PENDING;
+			gst_element_get_state(f->pipeline, &acum, NULL, 0);
+			l.lock();
+			if (f->opreste || f->schimba_sunetul)
+			{
+				if (sink) gst_object_unref(sink);
+				continue;
+			}
+			if (gata == GST_STATE_CHANGE_FAILURE || (acum != GST_STATE_NULL && acum != GST_STATE_READY))
+			{
+				if (sink) gst_object_unref(sink);
+				l.unlock();
+				eWarning("[eServiceMP3] radio audio change did not reach READY; ALSA start cancelled");
+				gst_element_post_message(f->pipeline, gst_message_new_application(GST_OBJECT(f->pipeline),
+					gst_structure_new_empty("hds-sunet-schimbat")));
+				GError *err = g_error_new_literal(GST_CORE_ERROR, GST_CORE_ERROR_STATE_CHANGE, "radio audio change failed");
+				gst_element_post_message(f->pipeline, gst_message_new_error(GST_OBJECT(f->pipeline), err, NULL));
+				g_error_free(err);
+				l.lock();
+				continue;
+			}
 			g_object_set(G_OBJECT(f->pipeline), "audio-sink", sink, "uri", f->cale.c_str(), NULL);
+			f->prima_pornire = false;
+			/* Hardware este acum inchis. Confirmarea este valabila numai pentru intentia curenta;
+			   stop sau alt toggle invalideaza tokenul inclusiv daca a ajuns deja in coada motorului. */
+			if (pregatire && eHdsEgalizator::existent())
+				eHdsEgalizator::existent()->fluxPregatit(pregatire);
+			l.unlock();
 			gst_element_post_message(f->pipeline, gst_message_new_application(GST_OBJECT(f->pipeline),
 				gst_structure_new_empty("hds-sunet-schimbat")));
 			if (gst_element_set_state(f->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
@@ -251,6 +304,21 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 		{
 			f->schimba_starea = false;
 			GstState stare = f->pauza ? GST_STATE_PAUSED : GST_STATE_PLAYING;
+			/* Pornirea initiala a oricarui flux sau film: stop-ul unui radio nu mai asteapta, deci sinkul lui poate fi inca
+			   deschis. Nu se deschide nici ALSA noua, nici alt sink, inaintea confirmarii lui NULL. */
+			std::chrono::steady_clock::time_point limita = std::chrono::steady_clock::now() + std::chrono::milliseconds(ELIBERARE_RADIO_MS);
+			while (f->prima_pornire && stare > GST_STATE_READY && !f->opreste && !f->schimba_sunetul &&
+				std::chrono::steady_clock::now() < limita && (radiouriInOprire.load() || eHdsEgalizator::asteaptaEliberareaFluxului()))
+				f->semnal.wait_for(l, std::chrono::milliseconds(20));
+			if (f->opreste || f->schimba_sunetul)
+				continue;
+			if (stare == GST_STATE_PLAYING)
+				f->prima_pornire = false;
+			if (stare == GST_STATE_PLAYING && f->egal_pregatire && eHdsEgalizator::existent())
+			{
+				eHdsEgalizator::existent()->fluxPregatit(f->egal_pregatire);
+				f->egal_pregatire = 0;
+			}
 			l.unlock();
 			if (gst_element_set_state(f->pipeline, stare) == GST_STATE_CHANGE_FAILURE)
 				eDebug("[eServiceMP3] the change to %s failed", gst_element_state_get_name(stare));
@@ -291,8 +359,27 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 	}
 	l.unlock();
 	std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+	/* Poarta este inchisa; bus-ul nu mai trimite callback-uri la oprire. */
+	GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(f->pipeline));
+	if (bus)
+	{
+		gst_bus_set_sync_handler(bus, NULL, NULL, NULL);
+		gst_bus_set_flushing(bus, TRUE);
+		gst_object_unref(bus);
+	}
 	golesteSinkurile(f->pipeline);
-	gst_element_set_state(f->pipeline, GST_STATE_NULL);
+	/* NULL este sincron. La radio, o cadere tranzitorie se reincearca numai pe acest fir, de cel mult 10 ori:
+	   audio0 nu se declara liber la esec, dar serviciul urmator nu ramane nici el fara sfarsit in asteptare. */
+	for (int incercare = 0; ; ++incercare)
+	{
+		if (gst_element_set_state(f->pipeline, GST_STATE_NULL) != GST_STATE_CHANGE_FAILURE || !f->radio_in_oprire || incercare >= 10)
+			break;
+		if (!incercare)
+			eWarning("[eServiceMP3] radio stop failed; the film thread retries NULL");
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	}
+	if (f->radio_in_oprire)
+		--radiouriInOprire;
 	int ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 	l.lock();
 	f->oprit = true;
@@ -539,6 +626,8 @@ RESULT eStaticServiceMP3Info::getName(const eServiceReference &ref, std::string 
 {
 	if ( ref.name.length() )
 		name = ref.name;
+	else if (ref.path.find("://") != std::string::npos)
+		name.clear();
 	else
 	{
 		size_t last = ref.path.rfind('/');
@@ -721,7 +810,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	else
 		uri = g_filename_to_uri(filename, NULL, NULL);
 
-	eDebug("eServiceMP3::playbin uri=%s", uri);
+	eDebug("eServiceMP3::playbin uri=%s", m_sourceinfo.is_streaming ? "[stream]" : uri);
 
 	m_gst_playbin = gst_element_factory_make("playbin", "playbin");  // GST1.0: "playbin2" -> "playbin"
 	if (!m_gst_playbin)
@@ -830,6 +919,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 		/* the film thread, with its own references; it waits for its jobs */
 		m_fir = std::make_shared<FirFilm>();
 		m_fir->pipeline = GST_ELEMENT(gst_object_ref(m_gst_playbin));
+		m_fir->radio = m_sourceinfo.is_streaming && m_ref.getData(0) == 2;
 		m_fir->poarta = m_poarta;
 		m_fir->cale = m_ref.path;
 		std::thread(firFilm, m_fir).detach();
@@ -880,6 +970,8 @@ RESULT eServiceMP3::start()
 	m_state = stRunning;
 	if (m_gst_playbin)
 	{
+		if (m_sourceinfo.is_streaming && m_ref.getData(0) == 2)
+			m_hds_radio = HdsRadioOnline::creeaza();
 		hdsEgalAlege();
 		int video = 0, audio = 0;
 		numaraDecodoare(video, audio);
@@ -941,7 +1033,8 @@ void eServiceMP3::hdsEgalAlege()
 	if (!hdsEgalPotrivit())
 		return;
 	eHdsEgalizator *e = eHdsEgalizator::existent();
-	if (!e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica)))
+	unsigned long long pregatire = 0;
+	if (!e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica), &pregatire))
 		return;
 	GstElement *sink = e->sinkFlux();
 	if (!sink)
@@ -951,6 +1044,10 @@ void eServiceMP3::hdsEgalAlege()
 		return;
 	}
 	g_object_set(G_OBJECT(m_gst_playbin), "audio-sink", sink, NULL);
+	{
+		std::lock_guard<std::mutex> l(m_fir->lacat);
+		m_fir->egal_pregatire = pregatire;
+	}
 	m_hds_egal_flux = true;
 	eDebug("eServiceMP3::the sound goes through the equalizer");
 }
@@ -960,7 +1057,8 @@ void eServiceMP3::hdsEgalReaplica()
 	if (m_state != stRunning || !m_fir || !hdsEgalPotrivit())
 		return;
 	eHdsEgalizator *e = eHdsEgalizator::existent();
-	bool vrea = e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica));
+	unsigned long long pregatire = 0;
+	bool vrea = e->preiaFlux(this, m_ref.path, sigc::mem_fun(*this, &eServiceMP3::hdsEgalReaplica), &pregatire);
 	if (vrea == m_hds_egal_flux)
 		return;
 	GstElement *sink = NULL;
@@ -990,6 +1088,8 @@ void eServiceMP3::hdsEgalReaplica()
 	if (m_fir->sunet_nou)
 		gst_object_unref(m_fir->sunet_nou);
 	m_fir->sunet_nou = sink;
+	m_fir->egal_pregatire = vrea ? pregatire : 0;
+	m_fir->sunet_asteapta_alsa = !vrea;
 	m_fir->schimba_sunetul = true;
 	m_fir->semnal.notify_all();
 }
@@ -1103,8 +1203,11 @@ RESULT eServiceMP3::stop()
 	if (m_state == stStopped)
 		return -1;
 
-	eDebug("eServiceMP3::stop %s: begin", m_ref.path.c_str());
-	/* the session of the equalizer lets go of the sound card and of the GStreamer thread before the pipeline stops */
+	eDebug("eServiceMP3::stop %s: begin", m_sourceinfo.is_streaming ? "[stream]" : m_ref.path.c_str());
+	if (m_hds_radio)
+		m_hds_radio->opreste();
+	/* Cerem oprirea ALSA; bariera din servicedvb asteapta confirmarea inchiderii ALSA/audio0
+	   si NULL al pipeline-ului, fara a astepta pe firul enigma2. */
 	if (eHdsEgalizator::existent())
 		eHdsEgalizator::existent()->serviciuOprit(this);
 	/* Nothing before the bounded wait asks the sinks or opens the decoder: the position and the length are the last
@@ -1175,7 +1278,20 @@ RESULT eServiceMP3::stop()
 	m_fir->scrie = scrie;
 	m_fir->de_scris.swap(de_scris);
 	m_fir->opreste = true;
+	if (m_sourceinfo.is_streaming && m_ref.getData(0) == 2)
+	{
+		m_fir->radio_in_oprire = true;
+		++radiouriInOprire;
+	}
 	m_fir->semnal.notify_all();
+	/* Radio nu asteapta reteaua sau sinkul. FirFilm detine pipeline/Poarta pana la NULL,
+	   iar bariera din servicedvb porneste TV numai dupa eliberarea reala a iesirilor. */
+	if (m_fir->radio_in_oprire)
+	{
+		if (reda_sunetul)
+			sunetulInapoi();
+		return 0;
+	}
 	bool la_timp = m_fir->semnal.wait_for(l, std::chrono::milliseconds(ASTEPTARE_OPRIRE_MS), [this] { return m_fir->oprit; });
 	l.unlock();
 	if (!la_timp)
@@ -1683,6 +1799,11 @@ RESULT eServiceMP3::getName(std::string &name)
 	std::string title = m_ref.getName();
 	if (title.empty())
 	{
+		if (m_sourceinfo.is_streaming)
+		{
+			name.clear();
+			return 0;
+		}
 		name = m_ref.path;
 		/* a stream from the network: the parameters of the address (often an access token) stay off the screen */
 		if (m_sourceinfo.is_streaming)
@@ -1759,6 +1880,7 @@ int eServiceMP3::getInfo(int w)
 	case sTagImage:
 	case sTagPreviewImage:
 	case sTagAttachment:
+	case sHdsRadioOnline:
 		return resIsPyObject;
 	case sTagTrackNumber:
 		tag = GST_TAG_TRACK_NUMBER;
@@ -1929,8 +2051,46 @@ std::string eServiceMP3::getInfoString(int w)
 	return "";
 }
 
+PyObject *eServiceMP3::hdsRadioInfo()
+{
+	if (!m_hds_radio || m_state != stRunning)
+		Py_RETURN_NONE;
+	std::shared_ptr<const HdsRadioOnline::Date> d = m_hds_radio->citeste();
+	int debit = d->debit;
+	bool aproximativ = d->aproximativ;
+	guint tag_debit = 0;
+	if (m_stream_tags && (gst_tag_list_get_uint(m_stream_tags, GST_TAG_BITRATE, &tag_debit) ||
+		gst_tag_list_get_uint(m_stream_tags, GST_TAG_NOMINAL_BITRATE, &tag_debit)) && tag_debit > 0)
+	{
+		debit = tag_debit / 1000;
+		aproximativ = false;
+	}
+	PyObject *rez = Py_BuildValue("{s:s,s:i,s:i,s:i,s:O}", "codec", d->codec.c_str(), "esantionare", d->rata,
+		"canale", d->canale, "debit", debit, "debit_aprox", aproximativ ? Py_True : Py_False);
+	uint64_t acum = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	if (d->bare && acum - d->nivel_ms < 1500)
+	{
+		PyObject *f0 = PyTuple_New(32), *f1 = NULL;
+		if (!d->mono)
+			f1 = PyTuple_New(32);
+		for (int i = 0; i < 32; ++i)
+		{
+			PyTuple_SET_ITEM(f0, i, PyLong_FromLong(d->niv[0][i]));
+			if (f1) PyTuple_SET_ITEM(f1, i, PyLong_FromLong(d->niv[1][i]));
+		}
+		PyObject *sp = PyTuple_Pack(2, f0, f1 ? f1 : Py_None);
+		PyDict_SetItemString(rez, "spectru", sp);
+		Py_DECREF(f0); Py_XDECREF(f1); Py_DECREF(sp);
+	}
+	else
+		PyDict_SetItemString(rez, "spectru", Py_None);
+	return rez;
+}
+
 PyObject *eServiceMP3::getInfoObject(int w)
 {
+	if (w == sHdsRadioOnline)
+		return hdsRadioInfo();
 	const gchar *tag = 0;
 	bool isBuffer = false;
 	switch (w)
@@ -2220,7 +2380,8 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 		string = gst_structure_to_string(gst_message_get_structure(msg));
 	else
 		string = g_strdup(GST_MESSAGE_TYPE_NAME(msg));
-	eDebug("eTsRemoteSource::gst_message from %s: %s", sourceName, string);
+	if (!m_sourceinfo.is_streaming)
+		eDebug("eTsRemoteSource::gst_message from %s: %s", sourceName, string);
 	g_free(string);
 #endif
 	switch (GST_MESSAGE_TYPE (msg))
@@ -2303,7 +2464,10 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			gchar *debug = NULL;
 			GError *err = NULL;
 			gst_message_parse_error (msg, &err, &debug);
-			eWarning("Gstreamer error: %s (%i) from %s", err->message, err->code, sourceName );
+			if (m_sourceinfo.is_streaming)
+				eWarning("Gstreamer stream error: domain=%u code=%i", (unsigned)err->domain, err->code);
+			else
+				eWarning("Gstreamer error: %s (%i) from %s", err->message, err->code, sourceName );
 			/* the old pipeline while the sound changes sink; and a stream the equalizer cannot decode (AAC on the receiver, there is
 			   no decoder for it in the processor): it goes on to the decoder of the receiver, nothing is told to the player */
 			if ( m_hds_egal_schimbare || (m_hds_egal_flux && ((err->domain == GST_CORE_ERROR && err->code == GST_CORE_ERROR_MISSING_PLUGIN) ||
@@ -2365,7 +2529,8 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				fel = "fisier";
 			g_free (debug);
 			bool primul = m_refuz.empty();
-			refuza(fel, m_capuri_lipsa.empty() ? lipsa : m_capuri_lipsa, err->message ? err->message : "");
+			refuza(fel, m_capuri_lipsa.empty() ? lipsa : m_capuri_lipsa,
+				m_sourceinfo.is_streaming ? "stream-error" : (err->message ? err->message : ""));
 			if ( primul )
 			{
 				m_start_timer->stop();
@@ -2428,7 +2593,8 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 					audioStream audio;
 					audio.language_code = "und";
 					audio.codec = nume;
-					eDebug("eServiceMP3::audio stream from the tags, codec=%s", nume);
+					if (!m_sourceinfo.is_streaming)
+						eDebug("eServiceMP3::audio stream from the tags, codec=%s", nume);
 					m_audioStreams.push_back(audio);
 				}
 				g_free (nume);
@@ -2440,6 +2606,9 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 		case GST_MESSAGE_ASYNC_DONE:
 		{
 			if(GST_MESSAGE_SRC(msg) != GST_OBJECT(m_gst_playbin))
+				break;
+			/* the old pipeline while the sound changes sink: playbin may already be in READY, without streams */
+			if (m_hds_egal_schimbare)
 				break;
 
 			bool primul = !m_prerolled;
@@ -2505,7 +2674,8 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				}
 				audio.language_code = std::string(g_lang);
 				audio.codec = std::string(g_codec);
-				eDebug("eServiceMP3::audio stream=%i codec=%s language=%s", i, g_codec, g_lang);
+					if (!m_sourceinfo.is_streaming)
+						eDebug("eServiceMP3::audio stream=%i codec=%s language=%s", i, g_codec, g_lang);
 				m_audioStreams.push_back(audio);
 				g_free (g_lang);
 				g_free (g_codec);
@@ -2587,11 +2757,24 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			{
 				if ( gst_is_missing_plugin_message(msg) )
 				{
-					GstCaps *caps;
-					gst_structure_get (msgstruct, "detail", GST_TYPE_CAPS, &caps, NULL);
-					gchar *text_caps = gst_caps_to_string(caps);
-					std::string codec = text_caps ? text_caps : "";
-					g_free(text_caps);
+					/* detail este caps pentru codec, sir pentru protocol sau element. */
+					const GValue *detail = gst_structure_get_value(msgstruct, "detail");
+					std::string codec;
+					if (detail && GST_VALUE_HOLDS_CAPS(detail))
+					{
+						const GstCaps *caps = gst_value_get_caps(detail);
+						if (caps)
+						{
+							gchar *text_caps = gst_caps_to_string(caps);
+							codec = text_caps ? text_caps : "";
+							g_free(text_caps);
+						}
+					}
+					else if (detail && G_VALUE_HOLDS_STRING(detail))
+					{
+						const gchar *text = g_value_get_string(detail);
+						codec = text ? text : "";
+					}
 					gchar *description = gst_missing_plugin_message_get_description(msg);
 					/* a subtitle stream without a reader (WebVTT or DVB in MKV, TTML in MP4) is skipped by playbin and the
 					   film plays on: it is not a missing codec for the error message of the player */
@@ -2609,7 +2792,6 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 						m_capuri_lipsa = codec.substr(0, 200);
 					}
 					g_free(description);
-					gst_caps_unref(caps);
 				}
 				else
 				{
@@ -2765,6 +2947,8 @@ audiotype_t eServiceMP3::gstCheckAudioPad(GstStructure* structure)
 
 void eServiceMP3::gstPoll(const Message &msg)
 {
+	/* Un ascultator poate opri serviciul din eveniment. */
+	ePtr<eServiceMP3> viuServiciu = this;
 	/* after stop() the pipeline belongs to the film thread: what is still queued is only dropped */
 	bool viu = m_state != stStopped && m_gst_playbin;
 	if (msg.type == 1)
@@ -2825,6 +3009,25 @@ void eServiceMP3::gstElementAdded(GstBin *bin, GstBin *sub, GstElement *element,
 	GstElementFactory *f = gst_element_get_factory(element);
 	if (f && !strcmp(GST_OBJECT_NAME(f), "tsdemux"))
 		g_signal_connect (element, "pad-added", G_CALLBACK (gstDemuxPadAdded), user_data);
+	if (!f)
+		return;
+	const char *fel = gst_element_factory_get_metadata(f, GST_ELEMENT_METADATA_KLASS);
+	if (!fel || !strstr(fel, "Audio") || (!strstr(fel, "Sink") && !strstr(fel, "Decoder")))
+		return;
+	Poarta *poarta = (Poarta *)user_data;
+	std::lock_guard<std::mutex> l(poarta->lacat);
+	if (!poarta->serviciu || !poarta->serviciu->m_hds_radio)
+		return;
+	GstPad *pad = gst_element_get_static_pad(element, "sink");
+	poarta->serviciu->m_hds_radio->leaga(pad);
+	if (pad) gst_object_unref(pad);
+	/* PCM-ul decodorului existent este disponibil si pentru FLAC/Vorbis/Opus, fara a adauga vreun decodor. */
+	if (strstr(fel, "Decoder"))
+	{
+		pad = gst_element_get_static_pad(element, "src");
+		poarta->serviciu->m_hds_radio->leaga(pad);
+		if (pad) gst_object_unref(pad);
+	}
 }
 
 void eServiceMP3::gstDemuxPadAdded(GstElement *element, GstPad *pad, gpointer user_data)
@@ -3626,7 +3829,13 @@ RESULT eServiceMP3::setExternalSubtitleCues(int index, ePyObject cues)
 		c.start_ms = (int)intregPython(PyTuple_GET_ITEM(e, 0), -1);
 		c.end_ms = (int)intregPython(PyTuple_GET_ITEM(e, 1), -1);
 		c.text = textPython(PyTuple_GET_ITEM(e, 2));
-		c.top = PyTuple_Size(e) > 3 && PyObject_IsTrue(PyTuple_GET_ITEM(e, 3)) == 1;
+		int top = PyTuple_Size(e) > 3 ? PyObject_IsTrue(PyTuple_GET_ITEM(e, 3)) : 0;
+		if (top < 0)
+		{
+			PyErr_Print();
+			continue;
+		}
+		c.top = top != 0;
 		if (c.start_ms < 0 || c.end_ms <= c.start_ms || c.text.empty())
 			continue;
 		if (c.text.size() > MAX_TEXT_REPLICA)
@@ -3901,6 +4110,11 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 		return -1;
 	}
 	pid = PyLong_AsLong(PyTuple_GET_ITEM(tuple, 1));
+	if (PyErr_Occurred())
+	{
+		PyErr_Print();
+		return -1;
+	}
 
 	{
 		/* No m_subs_to_pull_lock around g_object_set: the pages are handled on this thread only (pullSubtitle), the

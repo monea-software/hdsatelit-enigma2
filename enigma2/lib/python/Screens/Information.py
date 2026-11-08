@@ -101,8 +101,12 @@ def _dinTotal(folosit, total):
 
 
 # culorile tabelului: din skinul HDSatelit, altfel aceleasi ca numere (0xRRGGBB)
+# „albastru” si „albastru_fond”: eticheta cu numele beta testerilor care si-au trimis propriul receptor la HD Satelit si
+# cea din legenda lor (Despre imagine): text albastru pe fundal alb, ca pe site, pe forum si in pagina web (#0A5BC4 pe
+# #FFFFFF, contrast 6,4:1; fundalul alb ramane alb pe tema inchisa)
 _CULORI = {"titlu": ("hdsBrandLight", 0x9FB4FF), "eticheta": ("hdsLabel", 0xAEB9CC), "valoare": ("hdsText", 0xF2F4F8),
-	"sina": ("hdsTrack", 0x2A3350), "umplere": ("hdsBrandLight", 0x9FB4FF), "linie": ("hdsTrack", 0x2A3350)}
+	"sina": ("hdsTrack", 0x2A3350), "umplere": ("hdsBrandLight", 0x9FB4FF), "linie": ("hdsTrack", 0x2A3350),
+	"albastru": ("hdsTesterTrimis", 0x0A5BC4), "albastru_fond": ("hdsTesterTrimisFond", 0xFFFFFF)}
 
 
 def _culoare(cheie):
@@ -171,6 +175,7 @@ class InformationBase(Screen):
 		self.perPagina = 0
 		self.randuriDesenate = [None, None]
 		self.masura = {}
+		self.bucati = {}
 		self["coloana1"] = MenuList([], content=eListboxPythonMultiContent)
 		self["coloana2"] = MenuList([], content=eListboxPythonMultiContent)
 		self["despartitor"] = Label("")
@@ -280,10 +285,20 @@ class InformationBase(Screen):
 	def populate(self):
 		pass
 
+	def _albastre(self):
+		"""{text: [(bucata, albastru)]}: randurile fara valoare care se deseneaza pe bucati, cu unele bucati albastre
+		(Despre imagine: numele testerilor care si-au trimis receptorul si legenda lor). Aici niciunul."""
+		return {}
+
 	def _deseneaza(self, text):
 		if not self.latimi[0]:
 			return
 		from Components import HdsInformatiiTabel as T
+		try:
+			self.bucati = self._albastre() or {}
+		except Exception as e:
+			self.bucati = {}
+			print("[Information] albastrul: %r" % (e,))
 		coloane = T.coloane(T.sectiuni(text), self.COLOANE)
 		for i in range(2):
 			col = self._incapute(coloane[i] if i < len(coloane) else [], self.latimi[i])
@@ -321,6 +336,30 @@ class InformationBase(Screen):
 				linie = max(2, h // 20)
 				intrare.append(MultiContentEntryText(pos=(0, h - 2 * linie), size=(w, linie), font=0, text="",
 					backcolor=c["linie"], backcolor_sel=c["linie"]))
+			return intrare
+		if r[0] in ("rand_bucati", "urmare_bucati"):
+			# un rand fara valoare desenat pe bucati (_albastre): fiecare bucata la locul ei, dupa latimea masurata a celor
+			# dinainte (HdsLatimeText, cu fontul si marimea valorii; suma iese cel mult cu cativa pixeli mai mare, deci
+			# bucatile nu se suprapun). O bucata albastra e o eticheta: text albastru pe fundal alb, cu margini si un gol dupa
+			# ea (HdsInformatiiTabel.eticheta_margini). Continuarea, ca la "urmare", putin mai la dreapta.
+			from enigma import RT_HALIGN_CENTER
+			x = T.retras(h) if r[0] == "urmare_bucati" else 0
+			nume, marime = self.masura.get(2, ("HdsCond", 36))
+			margine, gol, sus = T.eticheta_margini(h)
+			intrare = [r]
+			for i, (bucata, albastru) in enumerate(r[1]):
+				lat = T.latime_text(bucata, nume, marime)
+				if albastru:
+					cat = max(1, min(w - x, lat + 2 * margine))
+					intrare.append(MultiContentEntryText(pos=(x, sus), size=(cat, max(1, h - 2 * sus)), font=2,
+						flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=bucata, color=c["albastru"], color_sel=c["albastru"],
+						backcolor=c["albastru_fond"], backcolor_sel=c["albastru_fond"]))
+					x += cat + gol
+					continue
+				cat = (w - x) if i == len(r[1]) - 1 else min(w - x, lat + max(4, h // 4))
+				intrare.append(MultiContentEntryText(pos=(x, 0), size=(max(1, cat), h), font=2,
+					flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=bucata, color=c["valoare"], color_sel=c["valoare"]))
+				x += lat
 			return intrare
 		if r[0] == "urmare":
 			# continuarea unui text rupt (_incapute), putin mai la dreapta
@@ -374,6 +413,14 @@ class InformationBase(Screen):
 				rez.append(r)
 				continue
 			_t, eticheta, valoare = r
+			if not valoare and eticheta in getattr(self, "bucati", {}):
+				# randul cu nume albastre (_albastre): rupt ca textul simplu, cu locul etichetelor scazut, ca sa incapa si ele;
+				# fiecare rand cu bucatile lui
+				loc = T.loc_etichete(self.bucati[eticheta], self.inaltime)
+				randuri = T.rupt_bucati(self.bucati[eticheta], w - loc, nume, marime, w - x - loc)
+				rez.append(("rand_bucati", tuple(randuri[0])))
+				rez.extend(("urmare_bucati", tuple(b)) for b in randuri[1:])
+				continue
 			if not valoare:
 				bucati = T.rupt(eticheta, w, nume, marime, w - x)
 				rez.append(("rand", bucati[0], ""))
@@ -472,6 +519,13 @@ class HdsAbout(InformationBase):
 	def __init__(self, session):
 		InformationBase.__init__(self, session, _("Despre imagine"))
 
+	def _albastre(self):
+		"""Randul de multumiri cu etichetele (text albastru pe fundal alb) testerilor care si-au trimis propriul receptor
+		la HD Satelit si legenda lui, cu aceeasi eticheta ca exemplu (Components/HdsMultumiri.bucati_albastre); {} fara
+		niciunul."""
+		from Components import HdsMultumiri
+		return HdsMultumiri.bucati_albastre(traducere=_)
+
 	def populate(self):
 		def rand(eticheta, valoare):
 			# coloana etichetei are 25 de semne; una mai lunga (in alta limba) primeste cel putin doua spatii dupa ":"
@@ -550,14 +604,20 @@ class HdsAbout(InformationBase):
 		# jos, multumirile pentru toti beta testerii (Components/HdsMultumiri.py): numele din copia de pe receptor sau din
 		# imagine, in ordinea de pe server; lista se improspateaza pe un fir separat, cel mult o data pe zi, si se vede la
 		# urmatoarea deschidere. Un rand cu "•" fara valoare aliniata, deci tabelul il rupe pe randuri, intreg; fara
-		# niciun nume nu apare. O eroare aici nu goleste ecranul.
+		# niciun nume nu apare. O eroare aici nu goleste ecranul. Sub el, legenda albastrului, numai cand e macar un
+		# tester care si-a trimis propriul receptor la HD Satelit, ca pe site; tabelul (_albastre) le
+		# deseneaza colorate, iar populate() ramane numai text (pagina web il cheama pe un obiect fals).
 		try:
 			from Components import HdsMultumiri
 			HdsMultumiri.porneste()
-			text_multumiri = HdsMultumiri.text(traducere=_)
+			nume_multumiri, trimisi = HdsMultumiri.lista()
+			text_multumiri = HdsMultumiri.text(nume_multumiri, traducere=_)
 			if text_multumiri:
 				l.append("")
 				l.append(" • " + text_multumiri)
+				legenda = HdsMultumiri.legenda(trimisi, traducere=_)
+				if legenda:
+					l.append(" • " + legenda)
 		except Exception as e:
 			print("[Information] multumirile: %r" % (e,))
 		self["text"].setText("\n".join(l))

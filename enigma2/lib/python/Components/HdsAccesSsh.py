@@ -30,8 +30,10 @@
 # /etc/pam.d/dropbear la fiecare logare. pam_access intoarce „refuzat” numai cand se potriveste o regula „-”; PAM lasa
 # root fara parola numai daca in plus a doua verificare, /etc/security/hds-ssh-retele-locale.conf (fix, din pachet,
 # aceleasi RETELE_LOCALE), spune ca adresa e din rețeaua locala. Orice alt rezultat (nicio regula potrivita, fisier
-# lipsa sau stricat) duce la verificarea parolei. Pornit: regula „-” cu adresele din RETELE_LOCALE, apoi
-# „+ : ALL : ALL”; oprit (implicit): numai „+ : ALL : ALL”. Parola din /etc/shadow nu se goleste niciodata.
+# lipsa sau stricat) duce la verificarea parolei. Pornit (implicit: asa vine din pachetul hdsatelit-ssh, din casa root
+# intra direct prin SSH, SFTP, FTP si Telnet, ca la celelalte imagini): regula „-” cu adresele din RETELE_LOCALE, apoi
+# „+ : ALL : ALL”; oprit (numai ales de om): numai „+ : ALL : ALL”. Parola din /etc/shadow nu se goleste niciodata.
+# Din afara casei parola nu se primeste deloc (SSH numai cu cheia, FTP refuzat, Telnet inchis de hds-telnet-poarta).
 #
 # Rescrierea lui authorized_keys (adaugare, stergere) lucreaza pe octeti: randurile pe care nu le atingem raman octet cu
 # octet, oricat de lungi si in orice codare. Un fisier mai mare decat MAX_FISIER_CHEI nu se rescrie deloc (mesaj, nu

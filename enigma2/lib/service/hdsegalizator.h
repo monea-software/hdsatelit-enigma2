@@ -8,7 +8,7 @@
  * Placa de sunet a receptorului nu are egalizator, deci cat egalizatorul e pornit, sunetul unui post de radio nu mai
  * trece prin decodorul placii: fluxul audio al postului se citeste din demultiplexor (filtru PES, ca cititorul de RDS),
  * se decodeaza in procesor cu GStreamer (MPEG audio cu mpg123; AAC cu decodorul care exista in imagine, LATM prin ADTS:
- * hdsegalizator_flux.h), trece prin prelucrarea din hdsegalizator_dsp.h (10 benzi, Noapte, nivel, limitator) si iese
+ * hdsegalizator_flux.h), trece prin prelucrarea din hdsegalizator_dsp.h (10 benzi, efect, Noapte, nivel, limitator) si iese
  * pe placa ALSA a receptorului (biblioteca libasound se incarca la pornire, cu dlopen).
  * Canalele TV: imaginea o arata placa dupa ceasul ei, deci sunetul din procesor se tine dupa PTS-ul
  * imaginii, citit de servicedvb la 100 ms (VIDEO_GET_PTS, ceasImagine): PTS-ul fiecarui PES audio merge prin GStreamer
@@ -81,6 +81,8 @@ public:
 	void setPornit(int pornit);
 	void setBanda(int banda, double db);
 	void setNoapte(int noapte);
+	/* 0 fara efect; 1..15: ecou, ping-pong, camere, modulatii, stereo, radio, telefon, karaoke. */
+	void setEfect(int efect);
 	void setNivel(double db);
 	void setVolumAici(int mod);
 	void setPlacaAlsa(const char *nume);
@@ -117,13 +119,20 @@ public:
 	PSignal1<void, int> schimbare;
 
 #ifndef SWIG
+	/* True pana cand un flux anterior a eliberat ALSA si audio0, inclusiv o pornire inca in coada.
+	   Citire atomica: servicedvb amana pornirea decodorului cu timer, fara asteptare pe firul enigma2. */
+	static bool asteaptaEliberareaFluxului();
 	/* din servicedvb.cpp (firul enigma2), la fiecare alegere a pistei de sunet a serviciului principal: demux = numarul
 	   demultiplexorului de date (-1 la inregistrari, timeshift, fisiere), radio = serviciul nu are imagine.
 	   -> true cand sunetul trece prin procesor (decodorul placii nu-l mai porneste). */
 	bool preiaSunetul(const void *proprietar, int demux, int pid, int fel, bool radio, const sigc::slot<void()> &reaplica);
 	/* din servicemp3.cpp (firul enigma2), la pornirea unui post de radio pe flux si la fiecare reaplicare.
 	   -> true cand sunetul trece prin procesor: atunci serviciul pune sinkFlux() in loc de sink-ul placii. */
-	bool preiaFlux(const void *proprietar, const std::string &adresa, const sigc::slot<void()> &reaplica);
+	bool preiaFlux(const void *proprietar, const std::string &adresa, const sigc::slot<void()> &reaplica,
+		unsigned long long *pregatire = 0);
+	/* Cu pregatire, preiaFlux doar noteaza intentia. FirFilm confirma dupa READY al sinkului vechi.
+	   Tokenul expirat de stop/alta intentie nu porneste nimic; metoda poate veni de pe worker. */
+	void fluxPregatit(unsigned long long pregatire);
 	/* elementul pentru „audio-sink” al lui playbin; NULL fara GStreamer. Mostrele ajung la sesiunea de flux, oricare ar fi ea. */
 	GstElement *sinkFlux();
 	/* playbin n-are decodor pentru sunetul acestei adrese; se tine minte. aac: textul despre brevete, altfel „nu s-a recunoscut” */

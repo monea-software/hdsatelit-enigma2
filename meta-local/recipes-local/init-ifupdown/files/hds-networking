@@ -73,10 +73,8 @@ case "$1" in
 start)
 	echo -n "Configuring network interfaces... "
 	sysctl -e -p /etc/sysctl.conf >/dev/null 2>&1
-	# lo at once (services on 127.0.0.1); the other interfaces in the background, so that the start never waits for
-	# the network: without a cable or with Wi-Fi only, ifup -a stays in udhcpc for 3 discover rounds (3 x 3 s) before
-	# DHCP goes to the background. ifup runs as its own command (not a subshell), so its command line is not this
-	# script's (the start step read from /proc moves on).
+	# Serviciile locale au nevoie de lo acum. DHCP poate astepta in fundal.
+	# ifup are fluxurile inchise si nu tine scriptul init deschis.
 	ifup lo > /dev/null 2>&1 || :
 	ifup -a < /dev/null > /dev/null 2>&1 &
 	echo "done."

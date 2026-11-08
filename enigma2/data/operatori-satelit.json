@@ -1,6 +1,6 @@
 {
   "versiune": 1,
-  "actualizat": "2026-09-24",
+  "actualizat": "2026-11-06",
   "unitati": {
     "frecventa": "kHz (12687000 = 12687 MHz; jumatatile de MHz se pastreaza, ex. 12031500)",
     "rata": "kSymb/s (27500 = 27500000 simboluri/s)",
@@ -582,6 +582,27 @@
       "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4096, PLP 0. Surse din cercetare: LyngSat Eutelsat-9B, opena.tv firul 64827, balsat.org.ua/sat-t2mi. Al doilea mux, tot 'merge', e pe acelasi transponder cu flux (is_id) 20. Al treilea (12303000 V, flux 30) NU a prins la noi si are o singura sursa - a fost lasat deoparte, e in de-verificat.md."
     },
     {
+      "id": "dasto_ba",
+      "nume": "Multiplex DVB-T2 prin satelit - Dasto Semtel (Bosnia și Herțegovina)",
+      "tari": [
+        "BA"
+      ],
+      "pozitie": 160,
+      "transponder": {
+        "frecventa": 11401500,
+        "pol": "V",
+        "rata": 17500,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json, p160_11401v_plp0): PID T2-MI 4095, PLP 0, dupa logul astra-sm din firele satellites.co.uk 182605 (07.2024) si 183496 (12.2025); LyngSat scrie 11402 V. La proba noastra (Gorj, antena 90 cm, 15.09.2026) nu a prins, de doua ori, desi 16E 11231 V mergea: 'fara_semnal_in_zona_testata'. Un tester il vede in alta imagine, cu T2-MI pe PID 4095 (forumul stb, subiectul 683, mesajele 1281 si 1283, 05-06.11.2026: 11402 V, SR 17500, FEC 3/4); deci probabil, nu sigur, pana prinde la un receptor al nostru."
+    },
+    {
       "id": "mx7_ua",
       "nume": "Multiplex DVB-T2 prin satelit MX-7 (Ucraina)",
       "tari": [
@@ -600,7 +621,7 @@
       },
       "fel": "t2mi",
       "incredere": "sigur",
-      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4097 (partea in clar; 4096 pe acelasi transponder e acelasi mux, dar criptat BISS), PLP 0. Surse din cercetare: LyngSat mux Astra-3C_East_12285-V, KingOfSat pos-23.5E (MX sid 800/801), satellitescommunity firul 3177. DE SPUS LIMPEDE UTILIZATORULUI: dupa proba noastra pe receptor, in clar sunt doar servicii de informare identice ('DSNS Informed'); canalele TV adevarate sunt criptate. Merge tehnic, dar nu aduce programe de privit. Merita totusi pastrat fiindca 23,5 est e pozitia pe care stau deja antenele fixe din Cehia, Slovacia, Ungaria, Polonia."
+      "sursa": "Masurat pe receptorul nostru (Gorj, antena 90 cm, 15.09.2026, stare 'merge') si scris in lista frecventelor T2-MI din imagine (Hds/DabT2/t2/date/frecvente.json). PID T2-MI 4097 (partea in clar), PLP 0; pe acelasi transponder, PID 4096 PLP 0 e al doilea flux T2-MI, al operatorului KRRT, criptat BISS (cercetarea noastra, t2mi.md randul 72; un tester il vede in alta imagine, forumul stb, subiectul 683, mesajele 1281 si 1283), in lista ca p235_12285v_plp0_pid4096. Surse din cercetare: LyngSat mux Astra-3C_East_12285-V, KingOfSat pos-23.5E (MX sid 800/801), satellitescommunity firul 3177. DE SPUS LIMPEDE UTILIZATORULUI: dupa proba noastra pe receptor, in clar sunt doar servicii de informare identice ('DSNS Informed'); canalele TV adevarate sunt criptate. Merge tehnic, dar nu aduce programe de privit. Merita totusi pastrat fiindca 23,5 est e pozitia pe care stau deja antenele fixe din Cehia, Slovacia, Ungaria, Polonia."
     },
     {
       "id": "mx7_ua_48e",

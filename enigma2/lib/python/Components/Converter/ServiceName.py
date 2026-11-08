@@ -8,6 +8,7 @@ class ServiceName(Converter, object):
 	NAME = 0
 	PROVIDER = 1
 	REFERENCE = 2
+	NAME_ONLY = 3
 
 	def __init__(self, type):
 		Converter.__init__(self, type)
@@ -15,6 +16,8 @@ class ServiceName(Converter, object):
 			self.type = self.PROVIDER
 		elif type == "Reference":
 			self.type = self.REFERENCE
+		elif type == "NameOnly":
+			self.type = self.NAME_ONLY
 		else:
 			self.type = self.NAME
 
@@ -35,11 +38,13 @@ class ServiceName(Converter, object):
 			ref = service
 		if info is None:
 			return ""
-		if self.type == self.NAME:
+		if self.type in (self.NAME, self.NAME_ONLY):
 			name = ref and info.getName(ref)
 			if name is None:
 				name = info.getName()
-			return name.replace('\xc2\x86', '').replace('\xc2\x87', '')
+			name = name.replace('\xc2\x86', '').replace('\xc2\x87', '')
+			# Tema LCD cere numai numele, fara numar sau program; '_' este un spatiu.
+			return name.replace('_', ' ') if self.type == self.NAME_ONLY else name
 		elif self.type == self.PROVIDER:
 			return self.getServiceInfoValue(info, iServiceInformation.sProvider, ref)
 		elif self.type == self.REFERENCE:

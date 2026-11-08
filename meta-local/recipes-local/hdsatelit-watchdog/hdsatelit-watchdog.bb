@@ -59,7 +59,10 @@ PV = "0.1.0"
 # cand interfata iese si firul ramas in D o tine „Z” (zombie), init nu mai porneste alta interfata, iar paznicul il
 # socoteste din nou blocaj (repornirea dura), altfel ecranul ar ramane negru. Fara importuri noi, deci RDEPENDS neschimbat.
 # r12 (04.11.2026, raportul 481062): firul principal al enigma2 mort intr-un Oops, cu celelalte fire vii: repornirea dura
-PR = "r12"
+# r13 (06.11.2026, 071): cate un rand la iesirea enigma2 (codul corelat cu parintele si pornirea din /proc), durata si
+# prima bataie; o prima bataie peste 90 s se anunta separat. Fara nicio bataie: numai stive la 180 si 600 s, cel mult
+# doua copii pe proces; nicio hotarare noua de repornire. Fara importuri noi, deci RDEPENDS neschimbat.
+PR = "r13"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

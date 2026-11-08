@@ -206,6 +206,10 @@ class HdsLogManagerViewLog(Screen):
         return HdsJurnale.citesteJurnal(cale_fisier)
 
 
+# Numele cerut de pluginuri pastreaza clasa si skinul propriu al vizualizatorului.
+LogManagerViewLog = HdsLogManagerViewLog
+
+
 class HdsLogManager(Screen):
     """Lista jurnalelor din CALE_JURNALE; OK deschide jurnalul selectat, Galben sterge, Albastru arata info."""
     # HDSatelit: redenumit din `LogManager` -- acelasi motiv ca `HdsLogManagerViewLog` de mai

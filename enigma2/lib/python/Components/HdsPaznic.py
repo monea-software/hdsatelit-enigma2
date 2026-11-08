@@ -48,6 +48,16 @@
 #      nu mai raspunde cu SIGTERM (bucla twisted nu prinde semnalul, deci procesul moare pe loc) si apoi SIGKILL, fara
 #      iesirea curata: ce era numai in memorie se pierdea. Firul principal blocat nu mai schimba nimic, deci tot ce s-a
 #      salvat inainte de blocaj e deja pe disc (afara de ultimele cel mult BATAIE_S secunde).
+#   9. PLUGINURILE EXTERNE CARE TIN FIRUL PRINCIPAL: un plugin al altcuiva face uneori un lucru lung chiar pe firul
+#      principal (AJPanel numara toate fisierele unui dosar inainte de
+#      copiere; altele cheama opkg cu os.system sau citesc o adresa fara termen). La celelalte imagini interfata sta pana
+#      termina; la noi paznicul o oprea dupa 120 s fara bataie. Un fir de supraveghere (SupraveghetorPluginExtern) se
+#      uita la fiecare PAS_PLUGIN_EXTERN_S secunde: cand bataia lipseste de PRAG_PLUGIN_EXTERN_S si stiva firului
+#      principal trece printr-un plugin extern (HdsPluginExtern.pluginDinCale), pune semnul „ocupat”
+#      plugin-extern:<nume> pentru DURATA_PLUGIN_EXTERN_S, cu bataia VECHE in fisier (o tacere ramane tacere), si il
+#      prelungeste cat pluginul inca lucreaza, cel mult TOTAL_PLUGIN_EXTERN_S de la ultima bataie. Dupa aceea, sau cand
+#      firul principal nu mai e intr-un plugin extern, semnul se scoate si paznicul face ce face la orice blocaj
+#      (stivele, repornirea). Prima bataie noua scoate semnul si scrie in jurnal cat a tinut pluginul firul.
 #
 # Paznicul placii (watchdog-ul hardware, 60 s) si oprirea la un blocaj de nucleu (fir in stare D) raman mereu pornite;
 # setarea de aici priveste numai repornirea interfetei cand nu mai raspunde.
@@ -55,6 +65,8 @@
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
 import os
+import sys
+import threading
 import time
 
 CALE_BATAIE = "/var/run/hds-paznic.bataie"
@@ -65,6 +77,8 @@ BATAIE_S = 10                   # cat de des scrie bucla principala bataia
 DURATA_SCANARE_S = 20 * 60      # cat asteapta paznicul dupa ultima bataie a unei scanari (o mutare de motor, un acord greu)
 DURATA_PISTE_S = 10 * 60        # citirea pistelor: pe fiecare transponder asteapta motorul cat merge, apoi 30 s semnalul
 DURATA_MOTOR_S = 6 * 60         # o rotire de la un capat la altul, la viteza cea mai mica presupusa de nucleu
+DURATA_PLUGINURI_S = 5 * 60     # lista de pluginuri citita din nou: cat poate sta importul unui singur plugin
+TOTAL_PLUGINURI_S = 20 * 60     # toata citirea, oricate pluginuri lente ar avea omul; un plugin care nu mai iese se opreste tot
 OCUPAT_MAXIM_S = 6 * 3600       # o inregistrare „ocupat” mai veche de atat se socoteste uitata si se scoate
 INREGISTRARE_CURAND_S = 10 * 60 # o inregistrare care incepe in atatea secunde conteaza ca inregistrare in curs
 
@@ -88,6 +102,16 @@ MOTIV_SCANARE = "scanare"
 MOTIV_PISTE = "piste"
 MOTIV_MOTOR = "motor"
 MOTIV_OARBA = "oarba"           # cautarea oarba pe satelit (Components/HdsCautareOarba.py)
+MOTIV_PLUGINURI = "pluginuri"   # lista de pluginuri citita din nou (Components/PluginComponent.py); pluginuri:<dosar> cat se importa acela
+CHEIE_PLUGINURI = "lista-pluginuri"
+MOTIV_PLUGIN_EXTERN = "plugin-extern"   # plugin-extern:<dosar>: un plugin extern tine firul principal (punctul 9)
+CHEIE_PLUGIN_EXTERN = "plugin-extern"
+
+# punctul 9: pluginurile externe care tin firul principal
+PRAG_PLUGIN_EXTERN_S = 2 * BATAIE_S + 5    # doua batai ratate si putin: un lucru de cateva secunde nu se socoteste
+PAS_PLUGIN_EXTERN_S = 5                    # cat de des se uita firul de supraveghere
+DURATA_PLUGIN_EXTERN_S = 60                # cat asteapta paznicul dupa fiecare privire in care pluginul inca lucreaza
+TOTAL_PLUGIN_EXTERN_S = 10 * 60            # cel mult atat de la ultima bataie; dupa, paznicul face ce face la orice blocaj
 
 
 def _(text):
@@ -158,6 +182,11 @@ class Bataie(object):
 		self.eroareScriere = None
 		self.timer = None
 		self.scrieri = 0
+		# punctul 9: registrul si fisierul se ating si din firul de supraveghere; ultimaBataie = ceasul ultimei scrieri
+		# de pe firul principal (firul de supraveghere scrie cu ea, nu cu ora lui)
+		self.lacat = threading.RLock()
+		self.ultimaBataie = None
+		self.supraveghetor = None
 		# memoria decodorului: cea mai mica masuratoare se tine numai in afara standby-ului
 		self.standby = standby if standby is not None else _inStandby
 
@@ -165,16 +194,18 @@ class Bataie(object):
 
 	def incepe(self, cheie, motiv, durata_s):
 		"""Un lucru lung incepe (sau continua): paznicul asteapta cel putin durata_s de la ultima bataie. Se scrie pe loc."""
-		acum = self.ceas()
-		vechi = self.ocupat.get(cheie)
-		inceput = vechi[2] if vechi else acum
-		self.ocupat[cheie] = [motiv, float(durata_s), inceput, acum + float(durata_s)]
-		self.scrie(acum)
+		with self.lacat:
+			acum = self.ceas()
+			vechi = self.ocupat.get(cheie)
+			inceput = vechi[2] if vechi else acum
+			self.ocupat[cheie] = [motiv, float(durata_s), inceput, acum + float(durata_s)]
+			self.scrie(acum)
 
 	def termina(self, cheie):
 		"""Lucrul s-a terminat (sau s-a oprit): semnul lui dispare. Se scrie pe loc."""
-		if self.ocupat.pop(cheie, None) is not None:
-			self.scrie()
+		with self.lacat:
+			if self.ocupat.pop(cheie, None) is not None:
+				self.scrie()
 
 	def _curata(self, acum):
 		for cheie, (motiv, durata, inceput, pana) in list(self.ocupat.items()):
@@ -207,17 +238,24 @@ class Bataie(object):
 		try:
 			acum = self.ceas()
 			try:
-				if self.rotor():
+				rotor = self.rotor()
+			except Exception as e:
+				rotor = False
+				_jurnal("rotirea antenei nu se poate citi: %r" % (e,))
+			self.citesteRedarea()
+			with self.lacat:
+				if rotor:
 					vechi = self.ocupat.get(MOTIV_MOTOR)
 					self.ocupat[MOTIV_MOTOR] = [MOTIV_MOTOR, float(DURATA_MOTOR_S), vechi[2] if vechi else acum,
 						acum + DURATA_MOTOR_S]
 				else:
 					self.ocupat.pop(MOTIV_MOTOR, None)
-			except Exception as e:
-				_jurnal("rotirea antenei nu se poate citi: %r" % (e,))
-			self.citesteRedarea()
-			self._curata(acum)
-			self.scrie(acum)
+				# punctul 9: firul principal merge din nou, deci pluginul extern a terminat
+				plugin = self.ocupat.pop(CHEIE_PLUGIN_EXTERN, None)
+				if plugin is not None and self.ultimaBataie is not None:
+					_jurnal("%s a tinut firul principal %d s; paznicul a asteptat" % (plugin[0], int(acum - self.ultimaBataie)))
+				self._curata(acum)
+				self.scrie(acum)
 		except Exception as e:
 			_jurnal("bataia: %r" % (e,))
 		self.verificaMemoriaDriver()
@@ -271,19 +309,26 @@ class Bataie(object):
 		except Exception:
 			self.criptat, self.video = -1, -1
 
-	def text(self, acum):
+	def text(self, acum, bataie=None):
+		"""bataie: ceasul scris in campul bataie=; implicit acum (o bataie adevarata, de pe firul principal)."""
 		motive, pana = self.semn(acum)
 		return ("pid=%d\nbataie=%.3f\nocupat=%s\nocupat_pana=%.3f\nredare=%s\ninregistrare=%d\ncriptat=%d\nvideo=%d\n"
-			% (self.pid, acum, ",".join(motive), pana, self.redareFel, self.inregistrare, self.criptat, self.video))
+			% (self.pid, acum if bataie is None else bataie, ",".join(motive), pana, self.redareFel, self.inregistrare,
+			self.criptat, self.video))
 
-	def scrie(self, acum=None):
+	def scrie(self, acum=None, bataieVeche=False):
+		"""bataieVeche: scrierea firului de supraveghere (punctul 9): numai semnul „ocupat” e nou, bataia ramane cea de
+		pe firul principal, ca paznicul sa vada mai departe de cand tace firul."""
 		if acum is None:
 			acum = self.ceas()
 		nou = self.cale + ".nou"
 		try:
-			with open(nou, "w") as f:
-				f.write(self.text(acum))
-			os.replace(nou, self.cale)
+			with self.lacat:
+				with open(nou, "w") as f:
+					f.write(self.text(acum, self.ultimaBataie if bataieVeche else None))
+				os.replace(nou, self.cale)
+				if not bataieVeche:
+					self.ultimaBataie = acum
 			self.scrieri += 1
 			if self.eroareScriere is not None:
 				_jurnal("bataia se scrie din nou in %s" % self.cale)
@@ -300,10 +345,16 @@ class Bataie(object):
 			self.timer.callback.append(self.pas)
 		self.pas()
 		self.timer.start(BATAIE_S * 1000, False)
+		if self.supraveghetor is None:
+			self.supraveghetor = SupraveghetorPluginExtern(self)
+			self.supraveghetor.porneste()
 
 	def opreste(self):
 		if self.timer is not None:
 			self.timer.stop()
+		if self.supraveghetor is not None:
+			self.supraveghetor.opreste()
+			self.supraveghetor = None
 		try:
 			os.remove(self.cale)
 		except OSError:
@@ -376,6 +427,112 @@ def _imagineAcum():
 		return -1, -1
 	from enigma import iServiceInformation
 	return (1 if info.getInfo(iServiceInformation.sIsCrypted) == 1 else 0), info.getInfo(iServiceInformation.sVideoWidth)
+
+
+# ---------------------------------------------------------------- punctul 9: pluginul extern pe firul principal
+
+def _cadrulFiruluiPrincipal():
+	"""Cadrul de acum al firului principal (sys._current_frames), sau None."""
+	try:
+		return sys._current_frames().get(threading.main_thread().ident)
+	except Exception:
+		return None
+
+
+def _pluginDinCale(cale):
+	"""(fel, nume) al pluginului extern din calea unui fisier (aceeasi hotarare ca rapoartele pluginurilor externe)."""
+	from Components.HdsPluginExtern import pluginDinCale
+	return pluginDinCale(cale)
+
+
+def pluginExternInStiva(cadru, pluginDinCale=None, adancime=200):
+	"""Numele pluginului extern al celui mai adanc cadru (cel care lucreaza acum) din stiva care incepe la `cadru`,
+	sau None cand stiva nu trece prin niciun plugin extern."""
+	pluginDinCale = pluginDinCale or _pluginDinCale
+	while cadru is not None and adancime > 0:
+		try:
+			p = pluginDinCale(cadru.f_code.co_filename)
+		except Exception:
+			p = None
+		if p:
+			return p[1]
+		cadru = cadru.f_back
+		adancime -= 1
+	return None
+
+
+class SupraveghetorPluginExtern(object):
+	"""Punctul 9 din capul fisierului. pas() e o singura privire (testele o cheama direct); porneste() o face pe un fir
+	al lui, la fiecare PAS_PLUGIN_EXTERN_S secunde."""
+
+	def __init__(self, bataie, cadru=None, pluginDinCale=None):
+		self.b = bataie
+		self.cadru = cadru or _cadrulFiruluiPrincipal
+		# hotararea se ia o data, aici, pe firul principal: firul de supraveghere nu importa nimic (firul principal poate
+		# sta chiar in importul unui plugin, cu lacatul importurilor luat)
+		if pluginDinCale is None:
+			try:
+				from Components.HdsPluginExtern import pluginDinCale
+			except Exception as e:
+				_jurnal("supravegherea pluginurilor externe fara HdsPluginExtern: %r" % (e,))
+				pluginDinCale = lambda cale: None
+		self.pluginDinCale = pluginDinCale
+		self.anuntat = None     # (ultimaBataie, nume) pentru care s-a scris deja in jurnal
+		self.stop = threading.Event()
+		self.fir = None
+
+	def _scoate(self, acum):
+		if self.b.ocupat.pop(CHEIE_PLUGIN_EXTERN, None) is not None:
+			self.b.scrie(acum, bataieVeche=True)
+
+	def pas(self):
+		"""Intoarce ce a hotarat: "viu" (bataia e proaspata), "nu-e-plugin" (firul principal tace in afara unui
+		plugin extern: paznicul hotaraste ca la orice tacere), "asteapta:<nume>", "prea-mult:<nume>"."""
+		b = self.b
+		acum = b.ceas()
+		ultima = b.ultimaBataie
+		if ultima is None or acum - ultima < PRAG_PLUGIN_EXTERN_S:
+			return "viu"
+		nume = pluginExternInStiva(self.cadru(), self.pluginDinCale)
+		with b.lacat:
+			if b.ultimaBataie != ultima:
+				return "viu"
+			if not nume:
+				self._scoate(acum)
+				return "nu-e-plugin"
+			motiv = "%s:%s" % (MOTIV_PLUGIN_EXTERN, nume)
+			if acum - ultima >= TOTAL_PLUGIN_EXTERN_S:
+				self._scoate(acum)
+				if self.anuntat != (ultima, "prea-mult"):
+					self.anuntat = (ultima, "prea-mult")
+					_jurnal("%s tine firul principal de %d s, peste %d s: paznicul nu mai asteapta"
+						% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+				return "prea-mult:" + nume
+			pana = min(acum + DURATA_PLUGIN_EXTERN_S, ultima + TOTAL_PLUGIN_EXTERN_S)
+			b.ocupat[CHEIE_PLUGIN_EXTERN] = [motiv, float(DURATA_PLUGIN_EXTERN_S), ultima, pana]
+			b.scrie(acum, bataieVeche=True)
+		if self.anuntat != (ultima, nume):
+			self.anuntat = (ultima, nume)
+			_jurnal("%s tine firul principal de %d s; paznicul asteapta cel mult %d s de la ultima bataie"
+				% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+		return "asteapta:" + nume
+
+	def _bucla(self):
+		while not self.stop.wait(PAS_PLUGIN_EXTERN_S):
+			try:
+				self.pas()
+			except Exception as e:
+				_jurnal("supravegherea pluginurilor externe: %r" % (e,))
+
+	def porneste(self):
+		if self.fir is None:
+			self.fir = threading.Thread(target=self._bucla, name="HdsPaznicPluginExtern")
+			self.fir.daemon = True
+			self.fir.start()
+
+	def opreste(self):
+		self.stop.set()
+		self.fir = None
 
 
 _unic = [None]
@@ -461,11 +618,16 @@ def _procesExista(pid):
 
 
 def textMotiv(motiv):
+	if motiv.startswith(MOTIV_PLUGINURI + ":"):
+		return _("încărcarea pluginului %s") % motiv.split(":", 1)[1]
+	if motiv.startswith(MOTIV_PLUGIN_EXTERN + ":"):
+		return _("pluginul extern %s") % motiv.split(":", 1)[1]
 	return {
 		MOTIV_SCANARE: _("scanarea canalelor"),
 		MOTIV_PISTE: _("citirea pistelor canalelor"),
 		MOTIV_MOTOR: _("rotirea antenei"),
 		MOTIV_OARBA: _("căutarea oarbă pe satelit"),
+		MOTIV_PLUGINURI: _("citirea listei de pluginuri"),
 	}.get(motiv, motiv)
 
 

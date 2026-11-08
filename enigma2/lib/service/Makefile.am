@@ -32,6 +32,7 @@ serviceinclude_HEADERS = \
 	hdsegalizator.h \
 	hdsfluxhttp.h \
 	hdsjurnalzap.h \
+	hdsreleut2.h \
 	hdsegalizator_dsp.h \
 	hdsegalizator_flux.h \
 	hdssubtitrareceas.h \
@@ -44,6 +45,7 @@ libenigma_service_a_SOURCES += \
 	hdssubimagini.cpp \
 	servicemp3.cpp
 serviceinclude_HEADERS += \
+	hdsradioonline.h \
 	hdssubimagini.h \
 	servicemp3.h
 endif

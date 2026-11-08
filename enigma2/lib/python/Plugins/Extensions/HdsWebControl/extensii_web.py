@@ -95,11 +95,10 @@ class Mediu(object):
 		return self._plugins
 
 	def pluginuri(self):
-		"""extensiile din fila Pe receptor: aceeasi lista ca ecranul (WHERE_PLUGINMENU)"""
+		"""extensiile care se deschid: acelasi inventar ca ecranul si lista tastei albastre"""
 		if self._pluginuri is not None:
 			return list(self._pluginuri())
-		from Plugins.Plugin import PluginDescriptor
-		return list(self.plugins.getPlugins(PluginDescriptor.WHERE_PLUGINMENU))
+		return self.L.pluginuriDeDeschis(self.plugins)
 
 	def program(self):
 		return self.L.opkgProgram()
@@ -276,6 +275,14 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 			rez.append({"f": "actualizeaza", "text": _t(verde), "pachet": extra.nume, "principal": True})
 		if rosu:
 			rez.append({"f": "sterge", "text": _t(rosu), "pachet": extra.nume, "rosu": True})
+	elif fel == "indisponibil":
+		# motivul sta pe rand si in detalii; aici numai ce se poate face
+		if verde == "Repornește interfața":
+			rez.append({"f": "reporneste", "text": _t(verde), "principal": True})
+		elif verde == "Actualizează":
+			rez.append({"f": "actualizeaza", "text": _t(verde), "pachet": extra.nume, "principal": True})
+		if rosu:
+			rez.append({"f": "sterge", "text": _t(rosu), "pachet": extra.nume, "rosu": True})
 	elif fel == "pachet":
 		if verde == "Repornește interfața":
 			rez.append({"f": "reporneste", "text": _t(verde), "principal": True})
@@ -321,6 +328,8 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 def _cheie(fel, obj, pluginuri):
 	if fel == "plugin":
 		return "plugin:%d" % _indice(pluginuri, obj)
+	if fel == "indisponibil":
+		return "indisponibil:" + obj["path"]
 	if fel == "pachet":
 		return "pachet:" + obj.nume
 	if fel == "fisier":
@@ -365,7 +374,7 @@ def stare(arg, M, catalog, date=None):
 	gasite = _FISIERE["local"] is not None or _FISIERE["retea"] is not None
 	file = []
 	if cauta:
-		file.append(("cautare", _t("Căutare: %s") % cauta, len(L.randuriCautare(catalog, pluginuri, cauta))))
+		file.append(("cautare", _t("Căutare: %s") % cauta, len(L.randuriCautare(catalog, pluginuri, cauta, M.plugins))))
 	file += L.file(catalog, L.nrInstalate(catalog, pluginuri, M.plugins))
 	fila = arg.get("fila") or ("cautare" if cauta else "instalate")
 	# Surse feeduri se deschide cu butonul ei, Din fisier din randul din Disponibile, ca pe televizor
@@ -442,7 +451,7 @@ def _filtruWeb(L, catalog, toate, aratate, filtru, fila):
 	pachete si filtrul nu e activ; textele vin traduse"""
 	if not L.areFiltru(fila):
 		return None
-	total = sum(1 for r in toate if r[0] in ("plugin", "pachet"))
+	total = sum(1 for r in toate if r[0] in L.RANDURI_CU_PACHET)
 	if not total and not L.filtruActiv(filtru, fila):
 		return None
 	feeduri, feluri = L.alegeriFiltru(catalog, toate, fila)
@@ -451,7 +460,7 @@ def _filtruWeb(L, catalog, toate, aratate, filtru, fila):
 	fel = filtru.get("fel", "") if fila in L.FILE_AMESTECATE else ""
 	if fel and fel not in [k for k, _t_ in feluri]:
 		feluri.append((fel, "%s (0)" % L.numeFelFiltru(fel)))
-	n = sum(1 for r in aratate if r[0] in ("plugin", "pachet"))
+	n = sum(1 for r in aratate if r[0] in L.RANDURI_CU_PACHET)
 	return {"feed": filtru.get("feed", ""), "fel": fel, "activ": L.filtruActiv(filtru, fila),
 		"feeduri": [[k, t] for k, t in feeduri], "feluri": [[k, t] for k, t in feluri],
 		"titlu": _t("Filtrul listei"), "eticheta_feed": _t("Feedul"), "eticheta_fel": _t("Felul"),
@@ -732,7 +741,8 @@ def reporneste(arg, request, M):
 		if s is None:
 			return _refuz(_t("Interfața nu este pornită încă."))
 		return M.reporneste(s)
-	return _doiPasi(request, arg, "extensii-reporneste", "", _t("Repornești interfața acum?"), "Repornește interfața",
+	return _doiPasi(request, arg, "extensii-reporneste", "", _t("Repornești interfața acum?"),
+		_t("Repornește interfața"),
 		[_t("Extensiile noi apar după repornire. Imaginea revine în mai puțin de un minut.")], fa)
 
 
@@ -854,11 +864,12 @@ def deschide(arg, request, M):
 	plugin = pluginuri[i]
 	avertismente = len(getattr(M.plugins, "warnings", None) or [])
 	try:
-		plugin(session=s)
+		plugin.deschide(s, M.L.listaCanale())
 	except Exception as eroare:
 		return _refuz(_t("Extensia %s nu a putut porni: %s") % (plugin.name, M.P._curat(str(eroare), 200)))
 	if len(getattr(M.plugins, "warnings", None) or []) > avertismente:
-		return _refuz(_t("Extensia %s nu a putut porni. Mesajul e pe televizor.") % plugin.name)
+		motiv = M.L.motivDeschidere(plugin)
+		return _refuz("%s: %s" % (plugin.name, motiv) if motiv else _t("Extensia %s nu a putut porni. Mesajul e pe televizor.") % plugin.name)
 	return {"result": True, "message": _t("Extensia %s s-a deschis pe televizor.") % plugin.name}
 
 
@@ -1318,7 +1329,8 @@ TEXTE_PAGINA = {
 		N_("Fișiere .ipk"),
 		N_("Caută din nou"),
 		N_("Caută și în rețea"),
-		N_("Adaugă un feed"),
+		N_("Surse feeduri"),
+		N_("Adaugă feed"),
 		N_("Numele feedului (litere mici, cifre și -)"),
 		N_("Adresa (http:// sau https://)"),
 		N_("Extensiile din el apar apoi în file, cu numele feedului. Nu sunt verificate de HD Satelit."),

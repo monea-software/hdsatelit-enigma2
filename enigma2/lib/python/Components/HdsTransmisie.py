@@ -143,6 +143,7 @@ PRAG_GOL_KB = 20 * 1024        # decodorul video cere ~17 MB vmalloc dintr-o buc
 CEAS_MS = 1000
 MEMORIE_S = 10                 # cat de des se reciteste memoria cat exista sesiuni (numai pentru pagina)
 FARA_DATE_S = 15               # o inregistrare fara niciun octet atata timp se opreste (acord pierdut, tuner luat)
+PREGATIRE_DAB_S = 45           # controlorul DAB asteapta releul cel mult 40 s; fara asteptare in firul principal
 TRIMITERE_S = 1.5              # cat poate astepta un browser lent inainte sa fie lasat (teava s-ar umple)
 TEAVA_OCTETI = 1024 * 1024
 F_SETPIPE_SZ = 1031
@@ -397,13 +398,91 @@ def campuriRef(ref):
 		return None
 
 
+_CALE_DAB = re.compile(r'^http%3a//127\.0\.0\.1%3a(?:8898|8888)/dab/([A-Za-z0-9_.-]{1,64})/([0-9]{1,5})(?:\.ts)?$', re.I)
+
+
+def referintaDab(ref):
+	"""Doar adresele releului nostru, cu SID valid. -> referinta TS fara nume, sau None."""
+	p = str(ref or "").split(":")
+	if len(p) < 11 or p[0] not in ("1", "4097") or p[1:3] != ["0", "2"]:
+		return None
+	m = _CALE_DAB.fullmatch(p[10])
+	try:
+		if m is None or not 0 < int(m.group(2)) <= 65535 or int(p[3], 16) != int(m.group(2)):
+			return None
+		if any(int(x, 16) != 0 for x in p[4:10]):
+			return None
+	except ValueError:
+		return None
+	return "1:0:2:%X:0:0:0:0:0:0:http%%3a//127.0.0.1%%3a8898/dab/%s/%d.ts" % (
+		int(m.group(2)), m.group(1), int(m.group(2)))
+
+
+def contextDab(ref):
+	"""Controlorul instalat si purtatorul fizic. Fara pornire sau cereri HTTP."""
+	curata = referintaDab(ref)
+	if curata is None:
+		return None
+	from Hds.DabT2 import coordonator, profil
+	c = coordonator.obtine().controlori.get(profil.DAB.nume)
+	if c is None:
+		return {"ref": curata, "eroare": _("Serviciul DAB+ nu este pregătit. Încearcă din nou după pornirea receptorului.")}
+	feed_id = curata.split("/dab/", 1)[1].split("/", 1)[0]
+	feed, tp = c.cauta_feed(feed_id)
+	if feed is None or tp is None:
+		return {"ref": curata, "eroare": _("Fluxul DAB+ nu mai este în listă. Refă buchetele DAB+.")}
+	try:
+		parinte = "1:0:%X:%X:%X:%X:%X:0:0:0:" % (int(feed.get("tip_serviciu_parinte") or 1),
+			int(feed.get("sid_parinte") or 1), int(tp["tsid"]), int(tp["onid"]), int(tp["namespace"]))
+	except (KeyError, TypeError, ValueError):
+		parinte = None
+	eti = str(feed.get("fel")) in profil.FELURI_ETI
+	if eti:
+		# Exact serviciul pe care controlorul il scrie si releul il cere la 8001. Identitatea DVB difera de
+		# parintele scanat chiar cand frecventa este aceeasi; managerul nu le poate imparti tunerul.
+		from Hds.DabT2 import lamedb
+		x = lamedb.purtator_pentru({}, tp, feed)
+		purtator = x["ref"] if x else None
+	else:
+		purtator = parinte
+	if purtator is None:
+		return {"ref": curata, "eroare": _("Datele purtătorului DAB+ lipsesc. Refă lista de fluxuri DAB+.")}
+	return {"ref": curata, "controlor": c, "feed": feed, "tp": tp, "purtator": purtator,
+		"parinte": parinte, "eti": eti}
+
+
+def referintaTuner(ref):
+	context = contextDab(ref)
+	return context.get("purtator") if context else ref
+
+
+def tunerDabLiber(context):
+	"""Un frontend liber pentru EDI brut sau ETI nescris in lamedb, fara alocare sau acord."""
+	try:
+		from enigma import eDVBFrontendParameters, eDVBFrontendParametersSatellite, eDVBResourceManager
+		from Hds.DabT2 import tuner
+		s = eDVBFrontendParametersSatellite()
+		for cheie, valoare in tuner.parametri(context["tp"]).items():
+			setattr(s, cheie, valoare)
+		fp = eDVBFrontendParameters()
+		fp.setDVBS(s, False)
+		return eDVBResourceManager.getInstance().canAllocateFrontend(fp) > 0
+	except Exception:
+		return False
+
+
 def refCurata(ref):
 	"""Referinta DVB de serviciu cu primele 10 campuri, litere mari, ':' la sfarsit; None pentru orice altceva (cai
 	de fisier, nume adaugate, caractere straine)."""
+	dab = referintaDab(ref)
+	if dab:
+		return dab
 	c = campuriRef(ref)
 	if c is None:
 		return None
 	p = str(ref).split(":")
+	if len(p) > 10 and p[10]:
+		return None
 	if any(len(x) > 8 for x in p[2:10]) or any(x.strip("0123456789abcdefABCDEF") for x in p[2:10]):
 		return None
 	return ":".join(x.upper() for x in p[:10]) + ":"
@@ -411,7 +490,7 @@ def refCurata(ref):
 
 def transponder(ref):
 	"""(ns, tsid, onid) sau None."""
-	c = campuriRef(ref)
+	c = campuriRef(referintaTuner(ref))
 	return (c[4], c[2], c[3]) if c else None
 
 
@@ -433,7 +512,8 @@ def pozitieSatelit(ref):
 	"""Pozitia orbitala din spatiul de nume (in zecimi de grad, peste 1800 = vest) sau None pentru teren / cablu."""
 	if familie(ref) != "sat":
 		return None
-	return (campuriRef(ref)[4] >> 16) & 0xFFFF
+	c = campuriRef(referintaTuner(ref))
+	return ((c[4] >> 16) & 0xFFFF) if c else None
 
 
 # ---------------------------------------------------------------- ce merge in browser
@@ -803,6 +883,8 @@ class Sesiune(object):
 		self.lacat = threading.Lock()
 		self.client_nou = None           # (fd, la_plecare), pus de firul principal, luat de firul sesiunii
 		self.releu = None                # 0.7.0: (gazda, port, cheie) pentru un canal din lista Stream Relay
+		self.dab_controlor = None
+		self.dab_abonament = None
 		self.ac3 = False                 # browserul reda AC-3 (pista AC-3 ramane in PMT, vezi RescrierePsi)
 		self.pista = None                # PID-ul pistei audio alese din pagina (None = alegerea obisnuita)
 		self.piste = []                  # pistele audio din PMT (puse de firul sesiunii, din RescrierePsi.piste)
@@ -1198,6 +1280,8 @@ class Manager(object):
 		trece pe el (zap ca din telecomanda; antena se poate roti, ca la orice zap)? -> None cand nu e cazul (canalul
 		merge asa, standby sau alt refuz: setarile, limita, memoria), (True, None), sau (False, motiv) cand o inregistrare
 		tine tunerul pe alta frecventa. Playerele externe nu muta niciodata televizorul."""
+		if referintaDab(ref):
+			return None
 		curata = refCurata(ref)
 		if curata is None or pozitieSatelit(curata) is None or self._in_standby():
 			return None
@@ -1250,6 +1334,16 @@ class Manager(object):
 		curata = refCurata(ref)
 		if curata is None:
 			return False, _("Alege un canal din listă.")
+		dab = contextDab(curata)
+		if dab:
+			if dab.get("eroare"):
+				return False, dab["eroare"]
+			c = dab["controlor"]
+			if c.stare != "oprit":
+				if c.mod == "invata" or not c.feed or c.feed.get("id") != dab["feed"].get("id"):
+					return False, _("Releul DAB+ este folosit acum pentru alt flux. Oprește mai întâi acea redare.")
+				return True, None       # tunerul feed-ului deja activ este impartit
+			curata = dab["purtator"]
 		# antena nu se roteste niciodata din browser: un canal de satelit merge numai pe pozitia canalului de pe
 		# televizor (sau, in standby, a canalului de dinainte)
 		ref_tv = self._tv()
@@ -1262,11 +1356,30 @@ class Manager(object):
 				return False, _("Pentru un canal de satelit, pornește întâi pe televizor un canal de pe același satelit. Antena nu se rotește din browser.")
 			if poz != poz_tv:
 				return False, _("Canalul e pe alt satelit decât televizorul. Antena ar trebui să se rotească.")
-			if transponder(curata) != transponder(ref_tv) and self.doarFrecventaTv():
+			antena_ref = (dab.get("parinte") or curata) if dab else curata
+			if transponder(antena_ref) != transponder(ref_tv) and self.doarFrecventaTv():
 				return False, _("Pe acest receptor (antenă cu motor sau un singur tuner de satelit) transmisia merge numai cu canalele de pe frecvența televizorului: altfel tunerul s-ar reacorda și antena s-ar putea mișca. Schimbă întâi canalul pe televizor.")
-		if not self._acelasiTransponderCuOVie(curata, ignora) and not self._tuner(curata, ignora.ref if ignora else None):
-			return False, _("Tunerul e folosit acum pe altă frecvență (de televizor sau de o înregistrare). Alege un canal de pe aceeași frecvență cu televizorul.")
+		if dab and not dab["eti"]:
+			# EDI aloca un canal brut: allocateRawChannel cere frontend nefolosit chiar pe aceeasi frecventa.
+			if not tunerDabLiber(dab):
+				return False, self._mesajTunerDab()
+			return True, None
+		if not self._acelasiTransponderCuOVie(curata, ignora):
+			liber = self._tuner(curata, referintaTuner(ignora.ref) if ignora else None)
+			if not liber and dab and dab["eti"]:
+				liber = tunerDabLiber(dab)
+			if not liber:
+				if dab:
+					return False, self._mesajTunerDab()
+				return False, _("Tunerul e folosit acum pe altă frecvență (de televizor sau de o înregistrare). Alege un canal de pe aceeași frecvență cu televizorul.")
 		return True, None
+
+	def _mesajTunerDab(self):
+		# canAllocateFrontend numara si canalul pastrat in cache dupa stop TV (C++: cel mult 3000 ms).
+		# Nu eliberam cache-ul din verificarea paginii si nu alocam un canal brut ca proba.
+		if self._in_standby() and not self._inregistrari() and not self.vii():
+			return _("Tunerul de satelit nu este liber încă. Încearcă din nou peste câteva secunde.")
+		return _("Tunerul de satelit este ocupat. Acest flux DAB+ are nevoie de un tuner liber.")
 
 	def doarFrecventaTv(self):
 		"""Regula antenei cu motor / a unui singur tuner de satelit, citita cel mult o data la DOAR_FRECVENTA_S."""
@@ -1308,9 +1421,9 @@ class Manager(object):
 		ok, motiv = self.poateIncepe(ref, cine)
 		if not ok:
 			return None, motiv
-		criptat = bool(self._criptat(ref))
+		criptat = False if referintaDab(ref) else bool(self._criptat(ref))
 		# 0.7.0: un canal din lista Stream Relay vine decodat de la releu, deci nu se refuza ca "criptat"
-		releu = adresaReleu(refCurata(ref) or ref)
+		releu = None if referintaDab(ref) else adresaReleu(refCurata(ref) or ref)
 		if criptat and not self.setari.criptate() and releu is None:
 			return None, CRIPTAT_OPRIT
 		curata = refCurata(ref)
@@ -1388,7 +1501,7 @@ class Manager(object):
 		if inainte:
 			self._opresteAcum(a_mea, motiv_vechi, reluabila=True)
 			self.oprite.pop(cine, None)
-		if a_mea is None or not inainte:
+		if (a_mea is None or not inainte) and not referintaDab(ses.ref):
 			self._contor()
 		self._anuntaTransmise()
 		ses.fir = threading.Thread(target=self._firSesiune, args=(ses,), name="hdstv")
@@ -1561,7 +1674,7 @@ class Manager(object):
 				text = getattr(self._inregistrare, "textEroare", lambda s_: None)(s)
 				self._opresteAcum(s, text or _("Canalul nu mai poate fi primit (tunerul s-a pierdut sau a fost luat)."),
 					fortat=True, cod="tuner")
-			elif (s.ultim_octet_mon or s.inceput_mon) + FARA_DATE_S < acum and not self._faraDateCriptat(s):
+			elif (s.ultim_octet_mon or s.inceput_mon) + (PREGATIRE_DAB_S if s.dab_abonament and not s.prim_octet_mon else FARA_DATE_S) < acum and not self._faraDateCriptat(s):
 				self._opresteAcum(s, _("Canalul nu mai trimite date."), cod="fara_date")
 			elif not s.cu_client and s.fara_spectator_din + self._asteptareFara(s) < acum:
 				self._opresteAcum(s, _("Nimeni nu se mai uita."), cod="fara_spectator")
@@ -2656,10 +2769,16 @@ class InregistrareInTeava(object):
 		# -255: numai fisierul .meta nu se poate face langa /proc/self/fd/N; inregistrarea e pregatita
 		rez = rec.prepare("/proc/self/fd/%d" % w, int(time.time()), -1, -1, "HDSatelit TV", "", "")
 		if rez not in (0, -255):
-			return _("Tunerul nu poate primi acest canal acum (%d).") % rez
+			if rez == -5:            # lib/dvb/dvb.h: errChannelNotInList
+				return _("Canalul nu este în lista de servicii a receptorului. Refă lista de canale și încearcă din nou.")
+			if rez == -6:            # errAllSourcesBusy
+				return _("Tunerul este ocupat de televizor sau de o înregistrare. Încearcă din nou după eliberarea lui.")
+			_jurnal("pregatirea inregistrarii refuzata: %d" % rez)
+			return _("Canalul nu se poate primi acum. Verifică lista de canale și dacă tunerul este liber.")
 		rez = rec.start()
 		if rez:
-			return _("Canalul nu pornește (%d).") % rez
+			_jurnal("pornirea inregistrarii refuzata: %d" % rez)
+			return _("Canalul nu poate porni acum. Încearcă din nou după eliberarea tunerului.")
 		if self.eroare(ses):
 			return _("Tunerul nu se poate folosi acum.")
 		return None
@@ -2709,6 +2828,18 @@ TEXT_RELEU_OPRIT = N_("Stream Relay nu răspunde la %s:%d. Verifică adresa și 
 TEXT_RELEU_CAZUT = N_("Stream Relay a oprit fluxul canalului.")
 
 
+def motivReleuOprit(gazda, port, H=None):
+	"""Textul pentru releul care nu raspunde, acelasi ca pe televizor (HdsStreamRelay.motivReleu: niciun modul ales,
+	modulul ales oprit, modulul fara releu pe port, altfel adresa si portul). Se cheama numai pentru un canal din lista,
+	deci cand modulul listei e deja incarcat; daca nu se poate incarca, textul cu adresa si portul."""
+	try:
+		from Components import HdsStreamRelay as SR
+		return SR.motivReleu(gazda, port, H)
+	except Exception as e:
+		_jurnal("Stream Relay: %r" % (e,))
+		return _(TEXT_RELEU_OPRIT) % (gazda, port)
+
+
 def adresaReleu(ref, fisier=FISIER_RELEU):
 	"""(gazda, port, cheia canalului) cand `ref` e in lista Stream Relay si releul se poate folosi (pe receptor sau in
 	reteaua de acasa permisa: HdsStreamRelay.releuPermis); altfel None. Fara fisierul listei: None, fara niciun import."""
@@ -2750,8 +2881,9 @@ class _FluxReleu(object):
 	capatul de scriere al tevii. stop() si getError() ca la o inregistrare enigma2. Capatul de scriere il inchide cine
 	termina ultimul: firul (daca mai scria la oprire) sau firul principal (dupa ce firul s-a incheiat)."""
 
-	def __init__(self, sock, w, gazda, cale):
+	def __init__(self, sock, w, gazda, cale, port=None, abonament=None):
 		self.sock, self.w, self.gazda, self.cale = sock, w, gazda, cale
+		self.port, self.abonament = port, abonament
 		self.eroare = 0
 		self.oprit = False
 		self.octeti = 0
@@ -2779,11 +2911,15 @@ class _FluxReleu(object):
 			pass
 
 	def getError(self):
+		if self.abonament is not None and self.abonament['oprit'].is_set() and not self.oprit:
+			return -1
 		return self.eroare
 
-	def predaScrierea(self, asteapta_s=1.0):
+	def predaScrierea(self, asteapta_s=0):
 		"""Dupa stop(), din firul principal: True daca firul s-a incheiat si capatul de scriere se poate inchide acum;
 		altfel il inchide firul cand iese."""
+		if self.fir.ident is None:
+			return True
 		self.fir.join(asteapta_s)
 		with self._lacat:
 			if self._iesit:
@@ -2796,13 +2932,38 @@ class _FluxReleu(object):
 		while len(vedere):
 			if self.oprit:
 				return False
-			n = os.write(self.w, vedere)
+			try:
+				n = os.write(self.w, vedere)
+			except OSError as e:
+				if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+					select.select([], [self.w], [], 0.2)
+					continue
+				raise
 			vedere = vedere[n:]
 		self.octeti += len(date)
 		return True
 
 	def _muta(self):
 		try:
+			if self.abonament is not None:
+				termen = monoton() + PREGATIRE_DAB_S
+				while not self.abonament['gata'].wait(0.1):
+					if self.oprit or self.abonament['oprit'].is_set():
+						return
+					if monoton() >= termen:
+						raise IOError("releul DAB nu a primit date in termen")
+			if self.oprit:
+				return
+			if self.sock is None:
+				import socket
+				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				with self._lacat:
+					if self.oprit:
+						s.close()
+						return
+					self.sock = s
+				s.settimeout(TERMEN_RELEU_S)
+				s.connect((self.gazda, self.port))
 			self.sock.settimeout(CITIRE_RELEU_S * 3)
 			cerere = "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: HDSatelit\r\nConnection: close\r\n\r\n" % (
 				self.cale, self.gazda)
@@ -2837,6 +2998,11 @@ class _FluxReleu(object):
 				self.eroare = -1
 				_jurnal("Stream Relay %s: %s" % (self.cale, e))
 		finally:
+			if self.sock is not None:
+				try:
+					self.sock.close()
+				except Exception:
+					pass
 			with self._lacat:
 				self._iesit = True
 				inchide = self._inchide_w
@@ -2858,7 +3024,7 @@ class FluxReleuInTeava(object):
 		except Exception as e:
 			s.close()
 			_jurnal("Stream Relay %s:%d nu raspunde: %r" % (gazda, port, e))
-			return _(TEXT_RELEU_OPRIT) % (gazda, port)
+			return motivReleuOprit(gazda, port)
 		r, w = os.pipe()
 		ses.r, ses.w = r, w
 		try:
@@ -2886,15 +3052,50 @@ class FluxReleuInTeava(object):
 		return rec.getError() if isinstance(rec, _FluxReleu) else 0
 
 
+class FluxDabInTeava(FluxReleuInTeava):
+	"""Pregateste feed-ul in bucla enigma2; legatura HTTP si copierea merg numai in firul sursei."""
+
+	def porneste(self, ses):
+		context = contextDab(ses.ref)
+		if not context or context.get("eroare"):
+			return (context or {}).get("eroare") or _("Postul DAB+ nu se poate porni.")
+		c = context["controlor"]
+		try:
+			abonament, eroare = c.pregateste_web(context["feed"], context["tp"], ses.ref)
+			if eroare:
+				return eroare
+			ses.dab_controlor, ses.dab_abonament = c, abonament
+			r, w = os.pipe()
+			ses.r, ses.w = r, w
+			_neblocant(w)
+			cale = ses.ref.split(":", 10)[10].split("/dab/", 1)[1]
+			ses.rec = _FluxReleu(None, w, "127.0.0.1", "dab/" + cale, port=8898, abonament=abonament)
+			ses.rec.start()
+			return None
+		except Exception:
+			self.opreste(ses)
+			return _("Postul DAB+ nu se poate porni.")
+
+	def opreste(self, ses):
+		super(FluxDabInTeava, self).opreste(ses)
+		c, ses.dab_controlor = ses.dab_controlor, None
+		abonament, ses.dab_abonament = ses.dab_abonament, None
+		if c is not None and abonament is not None:
+			c.elibereaza_web(abonament)
+
+
 class InregistrareSauReleu(object):
 	"""Sursa implicita a managerului: releul pentru sesiunile canalelor din lista Stream Relay (ses.releu), altfel
 	inregistrarea in teava, ca pana acum."""
 
-	def __init__(self, inregistrare=None, releu=None):
+	def __init__(self, inregistrare=None, releu=None, dab=None):
 		self.inregistrare = inregistrare or InregistrareInTeava()
 		self.releu = releu or FluxReleuInTeava()
+		self.dab = dab or FluxDabInTeava()
 
 	def _pentru(self, ses):
+		if referintaDab(ses.ref):
+			return self.dab
 		return self.releu if getattr(ses, "releu", None) else self.inregistrare
 
 	def porneste(self, ses):
@@ -2908,6 +3109,11 @@ class InregistrareSauReleu(object):
 
 	def textEroare(self, ses):
 		"""Textul opririi la o eroare a sursei: al releului pentru sesiunile prin releu, altfel None (textul tunerului)."""
+		if referintaDab(ses.ref):
+			abonament = getattr(ses, "dab_abonament", None) or {}
+			if abonament.get("mesaj"):
+				return _(abonament["mesaj"])
+			return _("Redarea DAB+ s-a oprit. Verifică semnalul purtătorului și dacă tunerul este liber.")
 		return _(TEXT_RELEU_CAZUT) if getattr(ses, "releu", None) else None
 
 

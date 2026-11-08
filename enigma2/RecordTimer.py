@@ -94,6 +94,16 @@ class AFTEREVENT:
 	DEEPSTANDBY = 2
 	AUTO = 3
 
+def createRecordTimerEntry(sursa):
+	"""HDSatelit: numele din alte imagini (pluginurile lor de EPG): o copie noua a unui temporizator. Se copiaza si ce mai stie
+	temporizatorul nostru din lista lor (descramble, always_zap...); restul nu are loc la noi."""
+	t = RecordTimerEntry(sursa.service_ref, sursa.begin, sursa.end, sursa.name, sursa.description, sursa.eit, disabled=sursa.disabled,
+		justplay=sursa.justplay, afterEvent=sursa.afterEvent, dirname=getattr(sursa, "dirname", None), tags=getattr(sursa, "tags", None))
+	for nume in ("descramble", "record_ecm", "always_zap", "zap_wakeup", "rename_repeat", "conflict_detection", "pipzap"):
+		if hasattr(sursa, nume) and hasattr(t, nume):
+			setattr(t, nume, getattr(sursa, nume))
+	return t
+
 # please do not translate log messages
 def hdsTineMinte(ref):
 	# HDSatelit: canalul pornit de temporizator pentru om ramane canalul de pornire dupa o repornire a interfetei, ca la
@@ -615,6 +625,9 @@ def createTimer(xml):
 class RecordTimer(timer.Timer):
 	def __init__(self):
 		timer.Timer.__init__(self)
+		self.onTimerAdded = []
+		self.onTimerRemoved = []
+		self.onTimerChanged = []
 		
 		self.Filename = Directories.resolveFilename(Directories.SCOPE_CONFIG, "timers.xml")
 		
@@ -622,6 +635,19 @@ class RecordTimer(timer.Timer):
 			self.loadTimer()
 		except IOError:
 			print("unable to load timers from file!")
+
+	def _notificaTemporizator(self, functii, entry):
+		# O extensie care se dezaboneaza sau cade nu opreste celelalte extensii.
+		for functie in tuple(functii):
+			try:
+				functie(entry)
+			except Exception as eroare:
+				print("[RecordTimer] timer callback failed: %s" % eroare)
+
+	def timeChanged(self, entry):
+		timer.Timer.timeChanged(self, entry)
+		if entry is not getattr(self, "_temporizatorInStergere", None):
+			self._notificaTemporizator(self.onTimerChanged, entry)
 
 	def doActivate(self, w):
 		# when activating a timer which has already passed,
@@ -861,6 +887,12 @@ class RecordTimer(timer.Timer):
 		if dosave:
 			self.saveTimer()
 			self.hdsLaProgramare(entry)
+		# o metoda care se poate lua si singura (probele o pun pe un Timer gol): fara ajutoare ale clasei
+		for functie in tuple(getattr(self, "onTimerAdded", ())):
+			try:
+				functie(entry)
+			except Exception as eroare:
+				print("[RecordTimer] timer callback failed: %s" % eroare)
 		return None
 
 	def hdsLaProgramare(self, entry):
@@ -949,7 +981,13 @@ class RecordTimer(timer.Timer):
 		entry.abort()
 		
 		if entry.state != entry.StateEnded:
-			self.timeChanged(entry)
+			# Oprirea face parte din stergere, nu este o modificare separata.
+			anterioara = getattr(self, "_temporizatorInStergere", None)
+			self._temporizatorInStergere = entry
+			try:
+				self.timeChanged(entry)
+			finally:
+				self._temporizatorInStergere = anterioara
 		
 		print("state: ", entry.state)
 		print("in processed: ", entry in self.processed_timers)
@@ -962,6 +1000,11 @@ class RecordTimer(timer.Timer):
 		# now the timer should be in the processed_timers list. remove it from there.
 		self.processed_timers.remove(entry)
 		self.saveTimer()
+		for functie in tuple(getattr(self, "onTimerRemoved", ())):
+			try:
+				functie(entry)
+			except Exception as eroare:
+				print("[RecordTimer] timer callback failed: %s" % eroare)
 
 	def shutdown(self):
 		self.saveTimer()

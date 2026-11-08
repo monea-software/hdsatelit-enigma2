@@ -64,7 +64,52 @@ def _textEcran(clasa, Information=None):
 	return e["text"].text
 
 
-def _hdmi(D=None):
+def _coloanaOsd(O=None):
+	"""Ultima captură comună cu jurnalul; cererea web nu pornește citiri ale driverului."""
+	_ = _t
+	try:
+		if O is None:
+			from Components import HdsStareOsd as O
+		stare = O.ultima()
+	except Exception:
+		stare = None
+	coloana = [{"titlu": _("Stare OSD și ieșire HDMI")}]
+
+	def rand(eticheta, valoare, ton="normal"):
+		lipsa = valoare is None or valoare == ""
+		coloana.append({"eticheta": eticheta, "valoare": _("lipsă") if lipsa else valoare,
+			"ton": "stins" if lipsa else ton})
+
+	if stare is None:
+		rand(_("Captură"), _("indisponibilă"), "stins")
+		return coloana
+	proaspat = bool(stare.get("proaspat"))
+	rand(_("Captură"), _("actualizată") if proaspat else _("veche"), "normal" if proaspat else "atentie")
+	complet = stare.get("complet") is True
+	rand(_("Integritatea capturii"), _("completă") if complet else _("incompletă"), "normal" if complet else "atentie")
+	tranzitie = stare.get("tranzitie")
+	rand(_("Tranziție în lot"), (_("da") if tranzitie else _("nu")) if tranzitie is not None else None,
+		"atentie" if tranzitie else "normal")
+	varsta = stare.get("varsta")
+	rand(_("Vechimea capturii"), (_("%s s") % ("%.1f" % max(0.0, varsta)).replace(".", ","))
+		if varsta is not None else None)
+	rand(_("Date /proc/msp"), _("disponibile") if stare.get("msp") else _("indisponibile"))
+	conectat = stare.get("conectat")
+	rand(_("Cablu HDMI la captură"), (_("conectat") if conectat else _("deconectat")) if conectat is not None else None)
+	rand(_("Afișaj (Formt/DispMode)"), stare.get("disp"))
+	rand(_("Culoare (OutColorSpace)"), stare.get("out_color"))
+	rand(_("Semnal TMDS"), stare.get("tmds"))
+	gp0 = stare.get("gp0")
+	rand(_("OSD (GP0 Output)"), (_("x=%s, y=%s; %s x %s") % tuple(gp0)) if gp0 is not None else None)
+	moduri = stare.get("moduri") or {}
+	rand(_("Mod video (videomode)"), moduri.get("videomode"))
+	rand(_("Mod la 50 Hz (videomode_50hz)"), moduri.get("videomode_50hz"))
+	rand(_("Mod la 60 Hz (videomode_60hz)"), moduri.get("videomode_60hz"))
+	rand(_("Mod la 24 Hz (videomode_24hz)"), moduri.get("videomode_24hz"))
+	return coloana
+
+
+def _hdmi(D=None, O=None):
 	if D is None:
 		from Components import HdsHdmiDate as D
 	ales = None
@@ -84,14 +129,15 @@ def _hdmi(D=None):
 			else:
 				randuri.append({"eticheta": r[1], "valoare": r[2], "ton": r[3]})
 		coloane.append(randuri)
+	coloane.append(_coloanaOsd(O))
 	return {"result": True, "pagina": "hdmi", "titlu": _t(D.TITLU), "coloane": coloane}
 
 
-def informatii(pagina, Information=None, D=None):
+def informatii(pagina, Information=None, D=None, O=None):
 	"""GET /api/informatii?pagina=..."""
-	lista = [{"id": p, "titlu": _t(titlu)} for p, _c, titlu in PAGINI] + [{"id": "hdmi", "titlu": _t("Informații HDMI")}]
+	lista = paginiMeniu()
 	if pagina == "hdmi":
-		rez = _hdmi(D)
+		rez = _hdmi(D, O)
 	else:
 		gasit = [x for x in PAGINI if x[0] == (pagina or "despre")]
 		if not gasit:
@@ -99,7 +145,22 @@ def informatii(pagina, Information=None, D=None):
 		cheie, clasa, titlu = gasit[0]
 		rez = {"result": True, "pagina": cheie, "titlu": _t(titlu), "text": _textEcran(clasa, Information)}
 	rez["pagini"] = lista
+	for p in lista:
+		if p["href"] == "/informatii/" + rez["pagina"]:
+			rez["titlu"] = p["titlu"]
+			break
 	return rez
+
+
+def paginiMeniu():
+	"""Navigarea categoriei vine din acelasi arbore ca pe TV."""
+	try:
+		from .meniu_web import sectiune
+	except ImportError:
+		return []
+	g = sectiune("info_screen") or {}
+	return [{"id": c["web"].rsplit("/", 1)[-1], "titlu": c["text"], "href": c["web"]}
+		for c in g.get("copii", []) if c.get("web")]
 
 
 def rute(baza, resource):
@@ -168,6 +229,9 @@ PAGINA = """<!DOCTYPE html>
   nav.file{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;}
   nav.file button{min-height:40px;padding:6px 12px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;font-size:.88rem;cursor:pointer;}
   nav.file button.ales{background:var(--albastru);border-color:var(--albastru);color:#fff;}
+  nav.file a{display:inline-flex;align-items:center;min-height:44px;padding:6px 12px;
+    border:1px solid var(--bordura);border-radius:8px;color:var(--text);text-decoration:none;}
+  nav.file a[aria-current]{background:var(--albastru);border-color:var(--albastru);color:#fff;}
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:16px;margin:0 0 12px;}
   pre.text{font-family:monospace;font-size:.85rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;margin:0;}
   .coloane{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
@@ -205,8 +269,8 @@ function cerere(cale){
 function file(d){
   var n = $("file"); n.textContent = "";
   (d.pagini || []).forEach(function(p){
-    var b = document.createElement("button"); b.type = "button"; b.textContent = p.titlu; if(p.id === ALES){ b.className = "ales"; }
-    b.addEventListener("click", function(){ ALES = p.id; history.replaceState(null, "", "/informatii/" + p.id); citeste(); });
+    var b = document.createElement("a"); b.href = adresa(p.href); b.textContent = p.titlu;
+    if(p.href === "/informatii/" + ALES){ b.setAttribute("aria-current", "page"); }
     n.appendChild(b);
   });
 }

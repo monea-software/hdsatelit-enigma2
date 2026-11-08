@@ -92,6 +92,7 @@ def _intrare(nod):
 		"id": nod.get("entryID") or "",
 		"text": W._cuSemn(nod),
 		"web": nod.get("web") or "",
+		"pictograma": nod.get("pictograma") or "",
 		"setup": tinta["id"] if tinta is not None and tinta["fel"] == "setup" else "",
 		"televizor": merge,
 		# un text gol nu trece prin _(): gettext ar da antetul fisierului .po; o intrare cu pagina web nu are motiv (pagina
@@ -110,7 +111,7 @@ def _grup(nod, nivel, adancime):
 			elif x.tag == "menu":
 				copii.append(_grup(x, nivel, adancime + 1))
 	return {"tip": "grup", "id": nod.get("entryID") or nod.get("key") or "", "text": W._cuSemn(nod),
-		"web": nod.get("web") or "", "copii": copii}
+		"web": nod.get("web") or "", "pictograma": nod.get("pictograma") or "", "copii": copii}
 
 
 def arbore():
@@ -125,6 +126,22 @@ def arbore():
 	g = _grup(principal, W._nivelUtilizator(), 0)
 	g["text"] = _t("Meniu principal")
 	return {"result": True, "meniu": g}
+
+
+def sectiune(id_meniu):
+	"""Grupa vizibila folosita si de navigarea din paginile categoriei."""
+	def cauta(g):
+		if g.get("id") == id_meniu:
+			return g
+		for c in g.get("copii", []):
+			if c.get("tip") == "grup":
+				gasit = cauta(c)
+				if gasit is not None:
+					return gasit
+		return None
+
+	a = arbore()
+	return cauta(a["meniu"]) if a.get("result") else None
 
 
 def _cauta(nod, id_intrare, nivel, parinti, adancime=0):
@@ -340,6 +357,10 @@ PAGINA = """<!DOCTYPE html>
   .copii{padding:0 12px 8px;}
   .intrare{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;padding:8px 2px;border-top:1px solid var(--bordura);}
   .intrare .nume{font-size:.95rem;}
+  .pictograma{display:inline-block;width:22px;height:22px;flex:none;background:currentColor;
+    -webkit-mask:var(--pictograma) center/contain no-repeat;
+    mask:var(--pictograma) center/contain no-repeat;}
+  .intrare .nume{display:flex;align-items:center;gap:10px;}
   .intrare .actiuni{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
   .intrare .motiv{color:var(--text-slab);font-size:.8rem;}
   .unic{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;margin:0 0 10px;padding:4px 14px;}
@@ -385,6 +406,13 @@ function cerere(cale, metoda, date){
 }
 function mesaj(text, eroare){ var m = $("mesaj"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
 function legatura(href, text){ var a = document.createElement("a"); a.href = adresa(href); a.textContent = text; return a; }
+function pictograma(nume, parinte){
+  if(!/^[a-z0-9-]{1,40}$/.test(nume || "")){ return; }
+  var p = document.createElement("span"); p.className = "pictograma";
+  p.setAttribute("aria-hidden", "true");
+  p.style.setProperty("--pictograma", "url(/cadru/meniu-" + nume + ".png)");
+  parinte.insertBefore(p, parinte.firstChild);
+}
 function deschide(id){
   var q = new URLSearchParams(); q.set("id", id);
   mesaj("Se deschide pe televizor...");
@@ -393,7 +421,8 @@ function deschide(id){
 function intrare(c){
   var div = document.createElement("div"); div.className = "intrare";
   if(c.id){ div.id = "i-" + c.id; }
-  var n = document.createElement("span"); n.className = "nume"; n.textContent = c.text; div.appendChild(n);
+  var n = document.createElement("span"); n.className = "nume"; n.textContent = c.text;
+  pictograma(c.pictograma, n); div.appendChild(n);
   var a = document.createElement("span"); a.className = "actiuni";
   if(c.web){ a.appendChild(legatura(c.web, "Pagina web")); }
   if(c.setup){ a.appendChild(legatura("/setari?id=" + encodeURIComponent(c.setup), "Setări în web")); }
@@ -405,6 +434,7 @@ function intrare(c){
 function grup(g, deschis){
   var d = document.createElement("details"); if(deschis){ d.open = true; }
   var s = document.createElement("summary"); s.appendChild(document.createTextNode(g.text));
+  pictograma(g.pictograma, s);
   if(g.web){ s.appendChild(legatura(g.web, "Pagina web")); }
   d.appendChild(s);
   var c = document.createElement("div"); c.className = "copii";

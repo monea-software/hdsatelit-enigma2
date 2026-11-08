@@ -23,8 +23,10 @@ import os
 
 MASINA_V10 = "viper4k"
 # familia libreader (acelasi SDK HiSilicon al producatorului, demonul libreader, driverele hi_*): V10, Octagon si Uclan
-# Ustym 4K PRO (stratul meta-uclan e o copie a lui meta-octagon; aceleasi drivere afara de hi-dvb.ko, din aceeasi sursa)
-MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m", "ustym4kpro")
+# Ustym 4K PRO (stratul meta-uclan e o copie a lui meta-octagon; aceleasi drivere afara de hi-dvb.ko, din aceeasi sursa),
+# GigaBlue UHD TRIO 4K (regulile spun gbtrio4k, driverul hi-dvb.ko spune gbmv200; 93 din 105 fisiere ale driverelor sunt
+# cele Octagon sau Uclan)
+MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m", "ustym4kpro", "gbtrio4k", "gbmv200")
 NUME_V10 = "Amiko Viper 4K V10"
 FISIER_REGULI = "etc/hdsatelit-model"
 FISIER_BOXTYPE = "proc/stb/info/boxtype"

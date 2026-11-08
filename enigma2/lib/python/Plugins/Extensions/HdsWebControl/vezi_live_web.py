@@ -43,6 +43,9 @@ def _t(text):
 
 TEXTE = {
 	"vezi_live": N_("Vezi live"),
+	"asculta_live": N_("Ascultă live"),
+	"asculta_live_canal": N_("Ascultă live postul %s"),
+	"titlu_radio": N_("Ascultă live: %s"),
 	"vezi_live_canal": N_("Vezi live canalul %s"),
 	"titlu": N_("Vezi live: %s"),
 	"inchide": N_("Închide"),
@@ -107,13 +110,13 @@ function liveDeschide(r, buton, o){
   LIVE.o = o || {};
   if(!window.HdsPlayer){ mesaj(TL.fara_player, true); return; }
   LIVE.buton = buton;
-  $("dialogTitlu").textContent = TL.titlu.replace("%s", r.nume || "");
+  $("dialogTitlu").textContent = (LIVE.o.radio ? TL.titlu_radio : TL.titlu).replace("%s", r.nume || "");
   $("dialogLive").classList.remove("ascuns");
   if(!LIVE.player){
     LIVE.player = HdsPlayer.creeaza($("dialogPlayer"), {csrf: CFG.csrf, jeton: CFG.jeton, m3u: true, textOprire: TL.inchide,
       // canalul de pe televizor (sau cel pe care a trecut televizorul) urmeaza televizorul; titlul spune canalul de acum
       urmeazaPeTv: true, mutaTv: function(ref){ return LIVE.o.mutaTv ? LIVE.o.mutaTv(ref) : Promise.resolve(null); },
-      laCanal: function(nume){ $("dialogTitlu").textContent = TL.titlu.replace("%s", nume || ""); },
+      laCanal: function(nume){ $("dialogTitlu").textContent = (LIVE.o.radio ? TL.titlu_radio : TL.titlu).replace("%s", nume || ""); },
       laOprire: function(){ liveInchide(false); },
       laMotiv: function(motiv){
         // canalul nu se poate reda acum: butonul randului arata motivul, fara alta pornire
@@ -131,8 +134,8 @@ function liveInchide(opreste){
 // butonul "Vezi live" al unui rand
 function liveButon(r, o){
   var v = document.createElement("button");
-  v.type = "button"; v.className = "ghid"; v.textContent = TL.vezi_live;
-  v.setAttribute("aria-label", TL.vezi_live_canal.replace("%s", r.nume || ""));
+  v.type = "button"; v.className = "ghid"; v.textContent = o && o.radio ? TL.asculta_live : TL.vezi_live;
+  v.setAttribute("aria-label", (o && o.radio ? TL.asculta_live_canal : TL.vezi_live_canal).replace("%s", r.nume || ""));
   v.addEventListener("click", function(){ liveDeschide(r, v, o); });
   return v;
 }

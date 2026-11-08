@@ -15,13 +15,16 @@
 # proxy): interfetele web ale modulelor sunt pe /interfete-cam.
 # 0.2.8 (perechea butonului Albastru din ecranul de pe televizor): „Deschide pe televizor” pe
 # cardul „Pagina web a modulului” deschide interfata web a modulului care ruleaza PE TELEVIZOR, in navigatorul imaginii,
-# prin ruta navigatorului (POST /api/navigator-cam, navigator_web.py, aceeasi poarta si acelasi CSRF). Pagina nu afla si
-# nu primeste adresa, utilizatorul sau parola interfetei. Textele noi ale cardului se traduc (TEXTE_CAM, 13 limbi);
+# prin ruta navigatorului (POST /api/navigator-cam, navigator_web.py, aceeasi poarta si acelasi CSRF). Pentru butonul
+# din randul unui modul activ se primesc numai portul si protocolul configurate; gazda este cea din browser.
+# Utilizatorul si parola interfetei nu se citesc aici. Textele noi ale cardului se traduc (TEXTE_CAM, 13 limbi);
 # restul paginii e scris in romana, ca pana acum.
 #
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/acces-conditionat            modulele pe feluri, cine e ales, cine ruleaza, comanda in curs / ultima
+#   GET  /api/acces-conditionat-interfete  portul si protocolul configurate ale modulelor active, citite pe un fir
+#   GET  /api/acces-conditionat-dosare     dosarele de setari ale tuturor modulelor, citite pe un fir
 #   POST /api/acces-conditionat-comanda?cerere=alege|porneste|opreste|reporneste&fel=<fel>[&sufix=<x>]
 #                                          porneste comanda si raspunde pe loc; rezultatul vine apoi prin GET; <fel> e
 #                                          numele felului asa cum il da GET (campul "fel"), citit de pe receptor
@@ -31,9 +34,13 @@
 # inainte pe acelasi receptor), deci paginile si aplicatiile care o iau din GET merg mai departe fara redirectare.
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2. Citirea e cea a ecranului (cateva fisiere mici din
-# /etc/init.d si /proc, HdsModuleAcces.citeste); scripturile ruleaza in eConsoleAppContainer, fara sa fie asteptate.
+# /etc/init.d si /proc, HdsModuleAcces.citeste); configurarile pentru linkuri se citesc separat pe un fir;
+# scripturile ruleaza in eConsoleAppContainer, fara sa fie asteptate.
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul H (Components.HdsModuleAcces) si
 # ecranul E (Screens.CamSetup).
+# 0.7.1: cardul „Stream Relay” (GET da si stream_relay, din Components/HdsStreamRelay.stare): cate canale are lista,
+# de unde se adauga (lista de canale de pe televizor, pagina Canale), daca releul raspunde si de ce nu (modulul ales
+# oprit, niciun modul, modulul fara releu), cu legaturile spre pagina Canale si spre setarile Stream Relay.
 import re
 import time
 
@@ -55,6 +62,8 @@ ETICHETA_ALTE = N_("Servere de carduri")
 
 # comanda pornita din web: pasul de acum si ultimul rezultat (al oricarei comenzi pornite de aici)
 _STARE = {"pas": None, "ultima": None}
+_STEAG_WEB = [False]
+_STEAG_DOSARE = [False]
 
 
 def _t(text):
@@ -116,8 +125,8 @@ def _comanda(H):
 	return {"in_curs": False, "ultima": _STARE["ultima"]}
 
 
-def stare(H=None, E=None):
-	"""Pentru GET /api/acces-conditionat."""
+def stare(H=None, E=None, SR=None):
+	"""Pentru GET /api/acces-conditionat. `SR` e Components.HdsStreamRelay (probele dau unul fals)."""
 	H = _h(H)
 	E = _ecran(E)
 	sistem = H.SistemAcces()
@@ -134,7 +143,20 @@ def stare(H=None, E=None):
 		})
 		decripteaza = decripteaza or bool(st.ecm)
 	return {"result": True, "feluri": feluri, "sufix_gol": H.SUFIX_GOL, "decripteaza_acum": decripteaza,
-		"comanda": _comanda(H)}
+		"comanda": _comanda(H), "stream_relay": _streamRelay(H, SR)}
+
+
+def _streamRelay(H, SR=None):
+	"""Cardul Stream Relay: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu (aceleasi randuri
+	ca ecranul setarilor Stream Relay, HdsStreamRelay.stare), sau None cand nu se pot citi."""
+	try:
+		if SR is None:
+			from Components import HdsStreamRelay as SR
+		s = SR.stare(H=H)
+		return {"canale": s["canale"], "asculta": s["asculta"], "linii": list(s["linii"])}
+	except Exception as eroare:
+		_jurnal("Stream Relay: %r" % (eroare,))
+		return None
 
 
 def _cuMesaj(rez, reusit, mesaj):
@@ -201,7 +223,23 @@ def argumente(request):
 	return rez
 
 
-def rute(baza, resource, H=None, E=None):
+def interfete_web(H=None):
+	"""Date publice limitate la modul, port si protocol; fara sondarea paginii modulului."""
+	try:
+		return {"result": True, "interfete": _h(H).interfete_web()}
+	except Exception:
+		return {"result": False, "interfete": [], "message": _t("Adresele interfețelor web nu s-au putut citi.")}
+
+
+def dosare_configurare(H=None):
+	"""Numai caile si existenta dosarelor; fara continutul fisierelor de setari."""
+	try:
+		return {"result": True, "dosare": _h(H).dosare_configurare()}
+	except Exception:
+		return {"result": False, "dosare": []}
+
+
+def rute(baza, resource, H=None, E=None, pe_fir=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
 
 	class StareResource(baza):
@@ -225,6 +263,26 @@ def rute(baza, resource, H=None, E=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class InterfeteWebResource(baza):
+		def render_GET(self, request):
+			if _STEAG_WEB[0]:
+				return self._raspunde(request, {"result": False, "interfete": []})
+			lucru = pe_fir
+			if lucru is None:
+				from .meniu_comun_web import peFir
+				lucru = peFir
+			return lucru(request, lambda: interfete_web(H), _STEAG_WEB, 10)
+
+	class DosareResource(baza):
+		def render_GET(self, request):
+			if _STEAG_DOSARE[0]:
+				return self._raspunde(request, {"result": False, "dosare": [], "ocupat": True})
+			lucru = pe_fir
+			if lucru is None:
+				from .meniu_comun_web import peFir
+				lucru = peFir
+			return lucru(request, lambda: dosare_configurare(H), _STEAG_DOSARE, 10)
+
 	class PaginaResource(resource.Resource):
 		"""GET /acces-conditionat: pagina „Acces condiționat”."""
 		isLeaf = True
@@ -235,6 +293,8 @@ def rute(baza, resource, H=None, E=None):
 	api = {
 		b"acces-conditionat": StareResource(),
 		b"acces-conditionat-comanda": ComandaResource(),
+		b"acces-conditionat-interfete": InterfeteWebResource(),
+		b"acces-conditionat-dosare": DosareResource(),
 	}
 	return api, PaginaResource()
 
@@ -301,6 +361,8 @@ PAGINA = """<!DOCTYPE html>
   .modul .stanga{min-width:0;flex:1 1 260px;}
   .modul .nume{font-size:1rem;overflow-wrap:anywhere;}
   .modul .detaliu{color:var(--text-slab);font-size:.875rem;margin-top:3px;overflow-wrap:anywhere;line-height:1.4;}
+  .modul .dosar{min-width:0;max-width:100%;}
+  .dosar .cale-dosar{display:block;max-width:100%;color:var(--text);}
   .semn{display:inline-block;font-size:.8rem;border-radius:999px;padding:3px 10px;margin-left:6px;white-space:nowrap;background:#242a33;color:var(--text-slab);vertical-align:middle;}
   .semn.pornit{background:var(--verde);color:#fff;}
   .semn.ales{background:#2d3b66;color:#dfe6ff;}
@@ -308,6 +370,7 @@ PAGINA = """<!DOCTYPE html>
   button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   button.verde{background:var(--verde);border-color:var(--verde);color:#fff;}
   button:disabled{opacity:.5;cursor:default;}
+  .buton-web{display:inline-flex;align-items:center;min-height:44px;min-width:0;max-width:100%;box-sizing:border-box;padding:10px 14px;border-radius:8px;border:1px solid var(--bordura);color:var(--text);text-decoration:none;}
   .acum{font-size:1.02rem;line-height:1.45;margin:0;}
   .nota{color:var(--text-slab);font-size:.875rem;margin:6px 0 0;line-height:1.45;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
@@ -329,6 +392,11 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota" id="comanda"></p>
   </section>
   <div id="feluri"></div>
+  <section class="card ascuns" id="releu">
+    <h2>Stream Relay</h2>
+    <div id="releuStare"></div>
+    <div class="legaturi"><a id="releuCanale" href="/canale">Lista de canale</a><a id="releuSetari" href="/setari?id=hds_stream_relay">Setările Stream Relay</a></div>
+  </section>
   <section class="card">
     <h2>Pe televizor</h2>
     <div class="butoane">
@@ -353,6 +421,13 @@ PAGINA = """<!DOCTYPE html>
 <script>
 var CFG = __CONFIG__;
 var D = null;
+var INTERFETE = [];
+var interfeteInLucru = false;
+var DOSARE = null;
+var dosareInLucru = false;
+var dosareEroare = false;
+var semnaturaLista = null;
+var randuriProcese = [];
 var ocupat = false;
 var astept = false;     // o comanda trimisa de aici merge inca: la sfarsit, rezultatul ei ia locul mesajului
 function $(id){ return document.getElementById(id); }
@@ -361,6 +436,8 @@ function adresa(cale){
   return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
 }
 $("interfete").href = adresa("/interfete-cam");
+$("releuCanale").href = adresa("/canale");
+$("releuSetari").href = adresa("/setari?id=hds_stream_relay");
 function cerere(cale, metoda, date){
   var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
@@ -381,6 +458,14 @@ function el(tip, clasa, text){
   return e;
 }
 function mb(kb){ return (kb / 1024).toFixed(1).replace(".", ",") + " MB"; }
+function adresaInterfataModul(interfata){
+  if(!interfata || (interfata.protocol !== "http" && interfata.protocol !== "https")){ return null; }
+  var port = Number(interfata.port);
+  if(!Number.isInteger(port) || port < 1 || port > 65535){ return null; }
+  var gazda = location.hostname;
+  if(gazda.indexOf(":") !== -1 && gazda.charAt(0) !== "["){ gazda = "[" + gazda + "]"; }
+  return interfata.protocol + "://" + gazda + ":" + port + "/";
+}
 function detaliiProces(m){
   if(!m.ruleaza){ return "Nu rulează."; }
   var t = "Rulează, procesul " + m.pid;
@@ -399,6 +484,23 @@ function buton(text, clasa, fel, cerereNume, sufix, intrebare){
   });
   return b;
 }
+function detaliuDosar(f, m){
+  var loc = el("div", "detaliu dosar");
+  loc.appendChild(el("div", "hds-derulant", "Dosar de setări:"));
+  var d = (DOSARE || []).find(function(d){ return d.fel === f.fel && d.sufix === m.sufix; });
+  if(d && d.dosar){
+    var cale = el(d.exista ? "a" : "span", "cale-dosar hds-derulant", d.dosar);
+    cale.title = d.dosar;
+    // Exploratorul cere browser asociat si autentificarea receptorului, fara jetonul panoului.
+    if(d.exista){ cale.href = "/fisiere?cale=" + encodeURIComponent(d.dosar); }
+    loc.appendChild(cale);
+    if(!d.exista){ loc.appendChild(el("div", "hds-derulant", "Dosarul nu există încă.")); }
+  } else {
+    loc.appendChild(el("div", "hds-derulant", DOSARE === null && !dosareEroare
+      ? "Se citește dosarul de setări..." : "Dosarul de setări nu a putut fi determinat."));
+  }
+  return loc;
+}
 function randModul(f, m){
   var rand = el("div", "modul");
   var stanga = el("div", "stanga");
@@ -407,7 +509,10 @@ function randModul(f, m){
   nume.appendChild(el("span", "semn" + (m.ruleaza ? " pornit" : ""), m.ruleaza ? "rulează" : "oprit"));
   stanga.appendChild(nume);
   if(m.descriere){ stanga.appendChild(el("div", "detaliu", m.descriere)); }
-  stanga.appendChild(el("div", "detaliu", detaliiProces(m) + (m.ales ? " Pornește la fiecare pornire a receptorului." : "")));
+  var proces = el("div", "detaliu", detaliiProces(m) + (m.ales ? " Pornește la fiecare pornire a receptorului." : ""));
+  stanga.appendChild(proces);
+  randuriProcese.push({fel: f.fel, sufix: m.sufix, element: proces});
+  stanga.appendChild(detaliuDosar(f, m));
   rand.appendChild(stanga);
   var b = el("div", "butoane");
   if(!m.ales){
@@ -417,6 +522,14 @@ function randModul(f, m){
     b.appendChild(buton("Pornește", "verde", f.fel, "porneste", m.sufix));
   }
   if(m.ruleaza){
+    INTERFETE.forEach(function(i){
+      if(i.fel !== f.fel || i.sufix !== m.sufix){ return; }
+      var adresaWeb = adresaInterfataModul(i);
+      if(!adresaWeb){ return; }
+      var a = el("a", "buton-web hds-derulant", "Interfața web");
+      a.href = adresaWeb; a.target = "_blank"; a.rel = "noopener noreferrer";
+      b.appendChild(a);
+    });
     b.appendChild(buton("Oprește", "", f.fel, "opreste", m.sufix,
       "Se oprește " + m.sufix + ": canalele criptate nu se mai văd până îl pornești din nou. Continui?"));
   }
@@ -456,26 +569,48 @@ function arata(d){
     astept = false;
     if(c.ultima){ mesaj(c.ultima.text, !c.ultima.ok); }
   }
-  var loc = $("feluri"); loc.textContent = "";
-  (d.feluri || []).forEach(function(f){
-    var card = el("section", "card");
-    card.appendChild(el("h2", "", f.eticheta));
-    if(!f.module.length){
-      card.appendChild(el("p", "nota", "Nu este instalat niciun modul de acces condiționat. După ce se instalează pachetul unui modul, acesta apare aici."));
-    } else {
-      card.appendChild(randNiciunul(f));
-      f.module.forEach(function(m){ card.appendChild(randModul(f, m)); });
-    }
-    if(f.fara_script && f.fara_script.length){
-      card.appendChild(el("p", "nota", "Programe fără script de pornire, care nu se pot porni de aici: " + f.fara_script.join(", ")));
-    }
-    loc.appendChild(card);
-  });
+  // Pastreaza nodurile si derularea cailor cand se schimba numai cifrele proceselor.
+  var semnatura = JSON.stringify(d.feluri || [], function(k, v){
+    return k === "pid" || k === "procese" || k === "memorie" ? undefined : v;
+  }) + JSON.stringify([INTERFETE, DOSARE, DOSARE === null && dosareEroare]);
+  if(semnaturaLista !== semnatura){
+    semnaturaLista = semnatura;
+    randuriProcese = [];
+    var loc = $("feluri"); loc.textContent = "";
+    (d.feluri || []).forEach(function(f){
+      var card = el("section", "card");
+      card.appendChild(el("h2", "", f.eticheta));
+      if(!f.module.length){
+        card.appendChild(el("p", "nota", "Nu este instalat niciun modul de acces condiționat. După ce se instalează pachetul unui modul, acesta apare aici."));
+      } else {
+        card.appendChild(randNiciunul(f));
+        f.module.forEach(function(m){ card.appendChild(randModul(f, m)); });
+      }
+      if(f.fara_script && f.fara_script.length){
+        card.appendChild(el("p", "nota", "Programe fără script de pornire, care nu se pot porni de aici: " + f.fara_script.join(", ")));
+      }
+      loc.appendChild(card);
+    });
+  } else {
+    randuriProcese.forEach(function(r){
+      var f = (d.feluri || []).find(function(f){ return f.fel === r.fel; });
+      var m = f && (f.module || []).find(function(m){ return m.sufix === r.sufix; });
+      if(m){
+        var text = detaliiProces(m) + (m.ales ? " Pornește la fiecare pornire a receptorului." : "");
+        if(r.element.textContent !== text){ r.element.textContent = text; }
+      }
+    });
+  }
   Array.prototype.forEach.call(document.querySelectorAll("#feluri button"), function(b){ b.disabled = ocupat; });
   // pagina web a modulului pe televizor: numai cand ruleaza un modul
   var ruleaza = (d.feluri || []).some(function(f){ return (f.module || []).some(function(m){ return m.ruleaza; }); });
   $("camTv").disabled = !ruleaza;
   $("camFara").classList.toggle("ascuns", ruleaza);
+  // Stream Relay: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu (textele vin traduse)
+  var sr = d.stream_relay, loc2 = $("releuStare");
+  loc2.textContent = "";
+  (sr && sr.linii || []).forEach(function(t, i){ loc2.appendChild(el("p", i ? "nota" : "acum", t)); });
+  $("releu").classList.toggle("ascuns", !sr);
 }
 $("camTv").addEventListener("click", function(){
   mesaj("Se deschide pe televizor...");
@@ -483,11 +618,31 @@ $("camTv").addEventListener("click", function(){
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 });
 function citeste(){
+  citesteInterfete();
+  citesteDosare();
   return cerere("/api/acces-conditionat").then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi modulele."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     arata(d);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+}
+function citesteInterfete(){
+  if(interfeteInLucru){ return; }
+  interfeteInLucru = true;
+  cerere("/api/acces-conditionat-interfete").then(function(d){
+    if(d.result){ INTERFETE = d.interfete || []; if(D){ arata(D); } }
+  }).catch(function(){}).then(function(){ interfeteInLucru = false; });
+}
+function citesteDosare(){
+  if(dosareInLucru){ return; }
+  dosareInLucru = true;
+  return cerere("/api/acces-conditionat-dosare").then(function(d){
+    if(d.result){ DOSARE = d.dosare || []; dosareEroare = false; }
+    else if(!d.ocupat){ dosareEroare = true; }
+  }).catch(function(){ dosareEroare = true; }).then(function(){
+    dosareInLucru = false;
+    if(D){ arata(D); }
+  });
 }
 function trimite(cerereNume, fel, sufix){
   var q = new URLSearchParams();
@@ -537,6 +692,9 @@ TEXTE_PAGINA = {
 		N_("Unele module au o pagină web proprie (setările, cititoarele, liniile)."),
 		N_("Interfețele web ale modulelor"),
 		N_("Aceleași comenzi sunt pe televizor, în __DRUM_MENIU__."),
+		N_("Stream Relay"),
+		N_("Lista de canale"),
+		N_("Setările Stream Relay"),
 	),
 	"js": (
 		N_("browser deconectat"),
@@ -558,6 +716,11 @@ TEXTE_PAGINA = {
 		N_("Se oprește"),
 		N_(": canalele criptate nu se mai văd până îl pornești din nou. Continui?"),
 		N_("Repornește"),
+		N_("Interfața web"),
+		N_("Dosar de setări:"),
+		N_("Dosarul nu există încă."),
+		N_("Se citește dosarul de setări..."),
+		N_("Dosarul de setări nu a putut fi determinat."),
 		N_("Niciunul"),
 		N_("La pornirea receptorului nu pornește niciun modul."),
 		N_("La pornirea receptorului nu va mai porni niciun modul, iar cel de acum se oprește. Continui?"),

@@ -234,6 +234,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>Tema interfeței de pe televizor</h1>
 <p class="sub">Cum arată meniurile, lista de canale, ghidul și barele de informații pe televizor. Tema paginilor web e o altă setare și rămâne cum e.</p>
+<p><a id="vremeaLegatura" href="/vremea">Vremea pe televizor și pe afișaj</a></p>
 <p class="mesaj" id="incarcare">Se citește tema...</p>
 <div id="continut" class="ascuns">
   <p class="mesaj eroare ascuns" id="altSkin"></p>
@@ -253,6 +254,7 @@ function adresa(cale){
   if(!CFG.jeton){ return cale; }
   return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
 }
+$("vremeaLegatura").href = adresa("/vremea");
 function cerere(cale, metoda, date){
   var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
@@ -337,6 +339,7 @@ def N_(text):
 TEXTE_PAGINA = {
 	"html": (
 		N_("Tema interfeței de pe televizor"),
+		N_("Vremea pe televizor și pe afișaj"),
 		N_("Cum arată meniurile, lista de canale, ghidul și barele de informații pe televizor. Tema "
 			"paginilor web e o altă setare și rămâne cum e."),
 		N_("Se citește tema..."),

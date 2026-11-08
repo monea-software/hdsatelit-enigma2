@@ -18,6 +18,12 @@ try:
 except Exception:
 	_masura = None
 
+# ce a spus driverul la pornire ramane pentru pluginuri (Tools/StbHardware.py); fara modul (probele de pe PC), nimic
+try:
+	from Tools.StbHardware import rememberFPWasTimerWakeup
+except ImportError:
+	rememberFPWasTimerWakeup = lambda wasTimerWakeup: None
+
 # TODO: remove pNavgation, eNavigation and rewrite this stuff in python.
 class Navigation:
 	# Punctele de extensie ale zap-ului si ale inregistrarii (atribute de clasa; Hds/DabT2 pune aici DAB+ si DVB-T2).
@@ -49,7 +55,9 @@ class Navigation:
 		self.currentlyPlayingServiceReference = None
 		self.currentlyPlayingService = None
 		self.RecordTimer = RecordTimer.RecordTimer()
-		if getFPWasTimerWakeup():
+		wasTimerWakeup = getFPWasTimerWakeup()
+		rememberFPWasTimerWakeup(wasTimerWakeup)
+		if wasTimerWakeup:
 			clearFPWasTimerWakeup()
 			if getFPWasTimerWakeup(): # sanity check to detect if the FP driver is working correct!
 				print("buggy fp driver detected!!! please update drivers.... ignore timer wakeup!")
@@ -79,7 +87,9 @@ class Navigation:
 		for x in self.record_event:
 			x(rec_service, event)
 
-	def playService(self, ref, checkParentalControl = True, forceRestart = False):
+	def playService(self, ref, checkParentalControl = True, forceRestart = False, adjust = True):
+		# MerlinMusicPlayer cere adjust=False. Zap-ul nostru nu muta selectia listei de canale,
+		# argumentul este acceptat fara o actiune suplimentara asupra listei.
 		m = _masura
 		oldref = self.currentlyPlayingServiceReference
 		if m is None or not ref or (oldref and ref == oldref and not forceRestart):
@@ -96,7 +106,8 @@ class Navigation:
 		if ref and oldref and ref == oldref and not forceRestart:
 			print("ignore request to play already running service(1)")
 			return 0
-		print("playing", ref and ref.toString())
+		# adresa unui flux poate avea cont si parola: in jurnal numai referinta, fara cale
+		print("playing", ref and (":".join(ref.toString().split(":")[:10]) + ":[flux]" if "://" in ref.getPath() else ref.toString()))
 		if ref is None:
 			self.stopService()
 			return 0
@@ -171,6 +182,21 @@ class Navigation:
 	
 	def getCurrentlyPlayingServiceReference(self):
 		return self.currentlyPlayingServiceReference
+
+	# numele din celelalte imagini; aici un grup nu se tine separat de serviciul redat
+	def getCurrentlyPlayingServiceOrGroup(self):
+		return self.currentlyPlayingServiceReference
+
+	def getCurrentServiceReferenceOriginal(self):
+		return self.currentlyPlayingServiceReference
+
+	def wasTimerWakeup(self):
+		# ce a spus driverul la pornire, retinut inainte ca __init__ sa stearga semnul (Tools/StbHardware.py)
+		try:
+			from Tools.StbHardware import getFPWasTimerWakeup as citita
+		except ImportError:
+			from Tools.DreamboxHardware import getFPWasTimerWakeup as citita
+		return bool(citita())
 	
 	def recordService(self, ref, simulate=False):
 		service = None

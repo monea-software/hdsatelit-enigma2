@@ -43,13 +43,21 @@ def InitLcd():
 	config.lcd = ConfigSubsection();
 	if detected:
 		def setLCDbright(configElement):
-			ilcd.setBright(configElement.value);
+			# Numai aplicarea automata a imaginii cedeaza lumina. API-ul
+			# LCD.setBright ramane disponibil pluginului care o foloseste.
+			from Components.HdsAfisajCompat import permite
+			if permite("lumina"):
+				ilcd.setBright(configElement.value);
 
 		def setLCDcontrast(configElement):
-			ilcd.setContrast(configElement.value);
+			from Components.HdsAfisajCompat import permite
+			if permite("lcd"):
+				ilcd.setContrast(configElement.value);
 
 		def setLCDinverted(configElement):
-			ilcd.setInverted(configElement.value);
+			from Components.HdsAfisajCompat import permite
+			if permite("lcd"):
+				ilcd.setInverted(configElement.value);
 
 		standby_default = 0
 

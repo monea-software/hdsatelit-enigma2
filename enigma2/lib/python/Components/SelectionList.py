@@ -43,5 +43,18 @@ class SelectionList(MenuList):
 		self.list[idx] = SelectionEntryComponent(item[0], item[1], item[2], not item[3])
 		self.setList(self.list)
 
+	def toggleAllSelection(self):
+		for i in range(len(self.list)):
+			rand = self.list[i][0]
+			self.list[i] = SelectionEntryComponent(rand[0], rand[1], rand[2], not rand[3])
+		self.setList(self.list)
+
+	def removeSelection(self, description, value):
+		for rand in self.list:
+			if rand[0][0] == description and rand[0][1] == value:
+				self.list.remove(rand)
+				self.setList(self.list)
+				return
+
 	def getSelectionsList(self):
 		return [ (item[0][0], item[0][1], item[0][2]) for item in self.list if item[0][3] ]

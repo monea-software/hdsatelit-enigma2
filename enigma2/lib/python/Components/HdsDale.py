@@ -248,12 +248,28 @@ def dupaCifra(numar, n):
 	return i if 0 <= i < min(n, 9) else None
 
 
-def fereastra(rand, inceput, total, vizibile=RANDURI_VIZIBILE):
-	"""Primul rand vazut pe ecran dupa ce randul ales devine `rand`: fereastra se muta cat mai putin (cate un rand)."""
-	if rand < inceput:
-		inceput = rand
-	elif rand >= inceput + vizibile:
-		inceput = rand - vizibile + 1
+def margineDale(vizibile=RANDURI_VIZIBILE):
+	"""Randurile de dale tinute vazute langa cel ales, ca la liste (setarea "Derularea listelor"): rand cu rand = randul
+	urmator (si cel dinainte) se vede mereu; pagina cu pagina = 0. Cel mult jumatate din fereastra."""
+	try:
+		from Components.Renderer.Listbox import margineDerulare
+		margine = margineDerulare()
+	except Exception:
+		margine = 1
+	return max(0, min(margine, (vizibile - 1) // 2))
+
+
+def fereastra(rand, inceput, total, vizibile=RANDURI_VIZIBILE, margine=None):
+	"""Primul rand vazut pe ecran dupa ce randul ales devine `rand`: fereastra se muta cat mai putin (cate un rand), dar
+	inainte ca randul ales sa ajunga pe marginea ferestrei, ca randul urmator sa se vada mereu (ca la
+	listele din meniu); la inceputul si la sfarsitul meniului fereastra nu iese din dale."""
+	if margine is None:
+		margine = margineDale(vizibile)
+	m = max(0, min(margine, (vizibile - 1) // 2))
+	if rand < inceput + m:
+		inceput = rand - m
+	elif rand > inceput + vizibile - 1 - m:
+		inceput = rand - vizibile + 1 + m
 	return max(0, min(inceput, max(0, total - vizibile)))
 
 

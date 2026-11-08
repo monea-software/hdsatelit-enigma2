@@ -137,6 +137,31 @@ void eWarning(const char* fmt, ...)
 }
 #endif // DEBUG
 
+/* HDSatelit: modulele binare (.so) ale pluginurilor compilate pentru alte imagini cer la incarcare doua nume pentru jurnal:
+   nivelul de detaliu (debugLvl, citit de ele inainte sa scrie) si functia de jurnal cu un camp de semne in fata (eDebugImpl).
+   Fara ele modulul nu se incarca deloc ("undefined symbol"). Aici textul merge pe acelasi drum ca eDebug, cu rand nou la sfarsit
+   daca nu-l are; campul de semne nu schimba nimic. */
+int debugLvl = 4;
+
+void eDebugImpl(int flags, const char* fmt, ...)
+{
+	(void)flags;
+	char buf[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	std::string text(buf);
+	if (text.empty() || text[text.size() - 1] != '\n')
+		text += "\n";
+#ifdef DEBUG
+	singleLock s(DebugLock);
+	logOutput(lvlDebug, text);
+	if (logOutputConsole)
+		fwrite(text.c_str(), 1, text.size(), stderr);
+#endif
+}
+
 void ePythonOutput(const char *string)
 {
 #ifdef DEBUG

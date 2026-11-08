@@ -10,7 +10,8 @@ PV = "0.1.0"
 # r1: hds-jurnal porneste urmarirea pornirii pe pornirile in dubiu (tools/hds-rezerva.sh din enigma2)
 # r2: hds-jurnal porneste la fiecare pornire, in fundal, pasii pornirii si raportul pornirii ratate (tools/hds-raport.sh
 #     din enigma2), cand scriptul exista
-PR = "r2"
+# r3: pornirea cu media in fundal nu sincronizeaza toate discurile.
+PR = "r3"
 
 SRC_URI = "file://hds-jurnal file://hds-wifi-jurnal file://hds-rtl8188fu.conf"
 S = "${UNPACKDIR}"

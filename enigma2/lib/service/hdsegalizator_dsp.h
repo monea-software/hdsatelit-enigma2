@@ -9,9 +9,9 @@
  *
  * Egalizator: 10 benzi la cate o octava (31 Hz ... 16 kHz, centrele 1000 * 2^(i-5) Hz), fiecare banda un filtru cu
  * varf (biquad, formulele publice din „Audio EQ Cookbook”), Q = sqrt(2) (latimea de o octava),
- * castig -12..+12 dB. Calculul e pe double, in forma directa I: la 31 Hz polii sunt foarte aproape de cercul unitate,
- * iar float ar aduce zgomot si oscilatii mici. O banda la 0 dB nu se calculeaza (istoria ei se tine la zi, ca pornirea
- * ei sa nu pocneasca).
+ * castig -24..+18 dB. Calculul e pe double, in forma directa I: la 31 Hz polii sunt foarte aproape de cercul unitate,
+ * iar float ar aduce zgomot si oscilatii mici. O banda la 0 dB nu se calculeaza dupa stingerea reziduului anterior
+ * (istoria ei se tine la zi, ca pornirea ei sa nu pocneasca).
  * Schimbarile nu sar: castigul fiecarei benzi se apropie de tinta cu cel mult PAS_DB pe fiecare bucata de BUCATA cadre
  * (12 dB in ~130 ms), iar coeficientii se refac numai pentru benzile care s-au miscat.
  * Castigul de dinainte (dupa benzi): numai cat cer varfurile adevarate ale sunetului. Varful fiecarei bucati, luat dupa
@@ -58,7 +58,8 @@ namespace hdsegal
 {
 	enum { BENZI = 10, CANALE = 2, RATA = 48000 };
 
-	static const double CASTIG_MAXIM_DB = 12.0;
+	static const double CASTIG_MINIM_DB = -24.0;
+	static const double CASTIG_MAXIM_DB = 18.0;
 	static const double Q_BANDA = 1.41421356237;
 	static const int BUCATA = 128;             /* cadre intre doua apropieri de tinta */
 	static const double PAS_DB = 0.25;         /* cat se misca o banda pe bucata */
@@ -71,6 +72,7 @@ namespace hdsegal
 	static const int SPECTRU_PAS = 4800;       /* un spectru la 100 ms */
 	static const double SPECTRU_MINIM_DB = -90.0;
 	static const double ANTI_DENORMAL = 1e-20;
+	static const double REZIDUU_OCOLIRE = 1e-12; /* cel mult -240 dBFS: istoria filtrului poate fi inlocuita cu intrarea */
 
 	inline double frecventaBanda(int i)
 	{
@@ -110,11 +112,7 @@ namespace hdsegal
 		/* filtru cu varf la f0, castig in dB, factor Q, la rata fs */
 		void varf(double f0, double castig_db, double q, double fs)
 		{
-			if (fabs(castig_db) < 1e-9)
-			{
-				identitate();
-				return;
-			}
+			/* La 0 dB numaratorul egaleaza numitorul, dar polii raman: reziduul vechi se stinge lin. */
 			double A = pow(10.0, castig_db / 40.0);
 			double w0 = 2.0 * M_PI * f0 / fs;
 			double cw = cos(w0);
@@ -158,13 +156,22 @@ namespace hdsegal
 			y2[c] = y1[c];
 			y1[c] = x;
 		}
+
+		bool poateOcoli() const
+		{
+			for (int c = 0; c < CANALE; c++)
+				if (fabs(y1[c] - x1[c]) > REZIDUU_OCOLIRE || fabs(y2[c] - x2[c]) > REZIDUU_OCOLIRE)
+					return false;
+			return true;
+		}
 	};
 
 	/* ---------------------------------------------------------------- setarile lantului */
 	struct Setari
 	{
-		double benzi[BENZI];    /* dB, -12..+12 */
+		double benzi[BENZI];    /* dB, -24..+18 */
 		bool noapte;
+		int efect;              /* 0 = fara efect, 1..15 in ordinea interfetei */
 		double nivel_db;        /* potrivirea tariei fata de sunetul placii, -12..+12 */
 		double volum;           /* 0..1, volumul aplicat aici (1 cand il pune placa) */
 		bool mut;
@@ -174,6 +181,7 @@ namespace hdsegal
 			for (int i = 0; i < BENZI; i++)
 				benzi[i] = 0.0;
 			noapte = false;
+			efect = 0;
 			nivel_db = 0.0;
 			volum = 1.0;
 			mut = false;
@@ -324,6 +332,247 @@ namespace hdsegal
 		std::atomic<unsigned> m_versiune;
 	};
 
+	/* ---------------------------------------------------------------- efectele proprii, stereo, fara intarzierea caii directe
+	 * Memoria se aloca numai la construirea sesiunii, pe firul de control. Cele patru inele se refolosesc;
+	 * resetarea invalideaza numai numarul de esantioane scrise, fara golire mare pe firul audio.
+	 * La schimbare: 30 ms catre sunetul direct, resetare O(1), 30 ms catre efectul nou. Cererile intermediare
+	 * se reunesc in ultima tinta. Calea directa nu se opreste si nu asteapta ecoul/reverberatia.
+	 * Reverberatiile folosesc patru intarzieri, amortizare cu un pol si matrice ortogonala /2;
+	 * bucla are castig cel mult 0,84, deci energia libera scade. Nu exista biblioteci de efecte.
+	 */
+	class Efecte
+	{
+	public:
+		enum { NUMAR = 16, CAPACITATE = 16384, LINII = 4 };
+		Efecte(): m_memorie(CAPACITATE * LINII), m_cerut(0), m_activ(0), m_mix(0.0),
+			m_sin(0.0), m_cos(1.0), m_rotSin(0.0), m_rotCos(1.0), m_feedback(0.0), m_amortizare(0.0),
+			m_umed(0.0), m_jos(0.0), m_sus(0.0)
+		{
+			configureaza(0);
+		}
+
+		void seteaza(int efect) { m_cerut = efect >= 0 && efect < NUMAR ? efect : 0; }
+		bool activa() const { return m_activ != 0 || m_cerut != 0; }
+
+		/* Intoarce varful pentru detectorul deja existent al castigului de dinainte. */
+		double prelucreaza(double *date, int n)
+		{
+			double varf = 0.0;
+			for (int i = 0; i < n; i++)
+			{
+				pas(date + 2 * i);
+				double v = fabs(date[2 * i]) > fabs(date[2 * i + 1]) ? fabs(date[2 * i]) : fabs(date[2 * i + 1]);
+				if (v > varf)
+					varf = v;
+			}
+			/* Oscilatorul recursiv nu cere trigonometrie pe esantion si nu deriva in rulari lungi. */
+			if (m_activ >= 7 && m_activ <= 11)
+			{
+				double norma = 1.0 / sqrt(m_sin * m_sin + m_cos * m_cos);
+				m_sin *= norma;
+				m_cos *= norma;
+			}
+			return varf;
+		}
+
+	private:
+		void configureaza(int efect)
+		{
+			m_activ = efect;
+			for (int i = 0; i < LINII; i++)
+			{
+				m_poz[i] = m_valide[i] = 0;
+				m_intarziere[i] = 1;
+				m_filtrat[i] = m_f1[i] = m_f2[i] = 0.0;
+				for (int c = 0; c < CANALE; c++)
+					m_fazare[c][i] = 0.0;
+			}
+			m_sin = 0.0;
+			m_cos = 1.0;
+			double hz = 0.0;
+			if (efect == 3)
+			{
+				m_intarziere[0] = 1103; m_intarziere[1] = 1429; m_intarziere[2] = 1693; m_intarziere[3] = 2017;
+				m_feedback = 0.55; m_amortizare = 0.42; m_umed = 0.24;
+			}
+			else if (efect == 4)
+			{
+				m_intarziere[0] = 2141; m_intarziere[1] = 2909; m_intarziere[2] = 3469; m_intarziere[3] = 4057;
+				m_feedback = 0.72; m_amortizare = 0.32; m_umed = 0.32;
+			}
+			else if (efect == 5)
+			{
+				m_intarziere[0] = 3911; m_intarziere[1] = 4937; m_intarziere[2] = 6211; m_intarziere[3] = 7919;
+				m_feedback = 0.84; m_amortizare = 0.22; m_umed = 0.38;
+			}
+			else if (efect == 6)
+			{
+				m_intarziere[0] = 5521; m_intarziere[1] = 6673; m_intarziere[2] = 7993; m_intarziere[3] = 11587;
+				m_feedback = 0.69; m_amortizare = 0.18; m_umed = 0.34;
+			}
+			else if (efect == 7) hz = 0.75;
+			else if (efect == 8) hz = 0.23;
+			else if (efect == 9) hz = 0.32;
+			else if (efect == 10) hz = 5.0;
+			else if (efect == 11) hz = 4.2;
+			m_rotSin = sin(2.0 * M_PI * hz / RATA);
+			m_rotCos = cos(2.0 * M_PI * hz / RATA);
+			m_jos = 1.0 - exp(-2.0 * M_PI * (efect == 14 ? 450.0 : 180.0) / RATA);
+			m_sus = 1.0 - exp(-2.0 * M_PI * (efect == 14 ? 2300.0 : 4200.0) / RATA);
+		}
+
+		inline double citeste(int linie, int inapoi) const
+		{
+			if (inapoi > m_valide[linie])
+				return 0.0;
+			int poz = m_poz[linie] - inapoi;
+			if (poz < 0)
+				poz += CAPACITATE;
+			return m_memorie[linie * CAPACITATE + poz];
+		}
+
+		inline double fractionar(int linie, double inapoi) const
+		{
+			int n = (int)inapoi;
+			double t = inapoi - n;
+			return citeste(linie, n) * (1.0 - t) + citeste(linie, n + 1) * t;
+		}
+
+		inline void scrie(int linie, double x)
+		{
+			/* Limita de siguranta a memoriei nu se atinge cu semnal audio normal. */
+			m_memorie[linie * CAPACITATE + m_poz[linie]] = (float)limiteaza(x, -256.0, 256.0);
+			if (++m_poz[linie] == CAPACITATE)
+				m_poz[linie] = 0;
+			if (m_valide[linie] < CAPACITATE)
+				m_valide[linie]++;
+		}
+
+		void pas(double *date)
+		{
+			const double pas_mix = 1.0 / (RAMPA_MS * 0.001 * RATA);
+			if (m_activ != m_cerut)
+			{
+				m_mix -= pas_mix;
+				if (m_mix <= 0.0)
+				{
+					m_mix = 0.0;
+					configureaza(m_cerut);
+				}
+			}
+			else if (m_activ != 0 && m_mix < 1.0)
+			{
+				m_mix += pas_mix;
+				if (m_mix > 1.0)
+					m_mix = 1.0;
+			}
+			if (!m_activ)
+				return;
+			double l = date[0], r = date[1], el = l, er = r;
+			if (m_activ == 1 || m_activ == 2)
+			{
+				int d = m_activ == 1 ? 14880 : 13920;
+				double a = citeste(0, d), b = citeste(1, d);
+				m_filtrat[0] += 0.28 * (a - m_filtrat[0]);
+				m_filtrat[1] += 0.28 * (b - m_filtrat[1]);
+				/* Si intrarea memoriei urca lin: primul ecou nu incepe cu o muchie dupa 310 ms. */
+				scrie(0, m_mix * l + (m_activ == 1 ? 0.38 * m_filtrat[0] : 0.46 * m_filtrat[1]));
+				scrie(1, m_mix * r + (m_activ == 1 ? 0.38 * m_filtrat[1] : 0.46 * m_filtrat[0]));
+				el = 0.82 * l + 0.32 * a;
+				er = 0.82 * r + 0.32 * b;
+			}
+			else if (m_activ >= 3 && m_activ <= 6)
+			{
+				for (int j = 0; j < LINII; j++)
+					m_filtrat[j] += m_amortizare * (citeste(j, m_intarziere[j]) - m_filtrat[j]);
+				double a = m_filtrat[0], b = m_filtrat[1], c = m_filtrat[2], d = m_filtrat[3];
+				scrie(0, 0.4 * m_mix * l + m_feedback * 0.5 * (a + b + c + d));
+				scrie(1, 0.4 * m_mix * r + m_feedback * 0.5 * (a - b + c - d));
+				scrie(2, 0.4 * m_mix * l + m_feedback * 0.5 * (a + b - c - d));
+				scrie(3, 0.4 * m_mix * r + m_feedback * 0.5 * (a - b - c + d));
+				el = (1.0 - m_umed) * l + m_umed * (a + c);
+				er = (1.0 - m_umed) * r + m_umed * (b + d);
+				if (m_activ == 6)
+				{
+					el += 0.14 * citeste(1, 3559);
+					er += 0.14 * citeste(0, 5119);
+				}
+			}
+			else if (m_activ == 7 || m_activ == 8 || m_activ == 11)
+			{
+				double baza = m_activ == 7 ? 600.0 : (m_activ == 8 ? 90.0 : 144.0);
+				double adancime = m_activ == 7 ? 180.0 : (m_activ == 8 ? 80.0 : 96.0);
+				double a = fractionar(0, baza + adancime * m_sin);
+				double b = fractionar(1, baza + adancime * (m_activ == 11 ? m_sin : m_cos));
+				scrie(0, m_mix * l + (m_activ == 8 ? 0.3 * a : 0.0));
+				scrie(1, m_mix * r + (m_activ == 8 ? 0.3 * b : 0.0));
+				/* Vibrato mixat: se pastreaza si aici cale directa fara intarziere (inclusiv la TV). */
+				el = m_activ == 11 ? 0.15 * l + 0.85 * a : 0.74 * l + 0.26 * a;
+				er = m_activ == 11 ? 0.15 * r + 0.85 * b : 0.74 * r + 0.26 * b;
+			}
+			else if (m_activ == 9)
+			{
+				double a = 0.35 + 0.22 * m_sin;
+				for (int c = 0; c < CANALE; c++)
+				{
+					double x = c == 0 ? l : r;
+					for (int j = 0; j < LINII; j++)
+					{
+						double y = -a * x + m_fazare[c][j];
+						m_fazare[c][j] = x + a * y;
+						x = y;
+					}
+					if (c == 0) el = 0.65 * l + 0.35 * x;
+					else er = 0.65 * r + 0.35 * x;
+				}
+			}
+			else if (m_activ == 10)
+			{
+				el = l * (0.77 + 0.23 * m_sin);
+				er = r * (0.77 + 0.23 * m_sin);
+			}
+			else if (m_activ == 12)
+			{
+				el = l + 0.35 * (l - r);
+				er = r + 0.35 * (r - l);
+			}
+			else if (m_activ == 13 || m_activ == 14)
+			{
+				double x = 0.5 * (l + r);
+				m_f1[0] += m_jos * (x - m_f1[0]);
+				x -= m_f1[0];
+				m_f2[0] += m_sus * (x - m_f2[0]);
+				double y = 1.4 * m_f2[0];
+				if (m_activ == 13)
+					y = y / (1.0 + 0.4 * fabs(y));
+				el = er = y;
+			}
+			else if (m_activ == 15)
+			{
+				/* Atenueaza centrul peste 180 Hz; basul central ramane. Nu separa orice voce. */
+				double mijloc = 0.5 * (l + r), lateral = 0.5 * (l - r);
+				m_f1[0] += m_jos * (mijloc - m_f1[0]);
+				el = m_f1[0] + lateral;
+				er = m_f1[0] - lateral;
+			}
+			if (m_activ >= 7 && m_activ <= 11)
+			{
+				double s = m_sin * m_rotCos + m_cos * m_rotSin;
+				m_cos = m_cos * m_rotCos - m_sin * m_rotSin;
+				m_sin = s;
+			}
+			date[0] = l + m_mix * (el - l);
+			date[1] = r + m_mix * (er - r);
+		}
+
+		std::vector<float> m_memorie;
+		int m_cerut, m_activ;
+		double m_mix;
+		int m_poz[LINII], m_valide[LINII], m_intarziere[LINII];
+		double m_filtrat[LINII], m_f1[LINII], m_f2[LINII], m_fazare[CANALE][LINII];
+		double m_sin, m_cos, m_rotSin, m_rotCos, m_feedback, m_amortizare, m_umed, m_jos, m_sus;
+	};
+
 	/* ---------------------------------------------------------------- lantul de prelucrare */
 	class Lant
 	{
@@ -345,12 +594,14 @@ namespace hdsegal
 			bool benziNoi = false;
 			for (int i = 0; i < BENZI; i++)
 			{
-				double g = limiteaza(s.benzi[i], -CASTIG_MAXIM_DB, CASTIG_MAXIM_DB);
+				double g = limiteaza(s.benzi[i], CASTIG_MINIM_DB, CASTIG_MAXIM_DB);
 				if (g != m_s.benzi[i])
 					benziNoi = true;
 				m_s.benzi[i] = g;
 			}
 			m_s.noapte = s.noapte;
+			m_s.efect = s.efect >= 0 && s.efect < Efecte::NUMAR ? s.efect : 0;
+			m_efecte.seteaza(m_s.efect);
 			m_s.nivel_db = limiteaza(s.nivel_db, -12.0, 12.0);
 			m_s.volum = limiteaza(s.volum, 0.0, 1.0);
 			m_s.mut = s.mut;
@@ -457,6 +708,10 @@ namespace hdsegal
 
 		void bucata(float *date, int n)
 		{
+			/* Verificarea reziduului se face o data pe bucata, nu pentru fiecare esantion. */
+			bool ocolite[BENZI];
+			for (int b = 0; b < BENZI; b++)
+				ocolite[b] = m_acum[b] == 0.0 && m_filtre[b].poateOcoli();
 			/* intai benzile, cu varful bucatii dupa ele (castigul de dinainte vede varful bucatii pe care o scaleaza) */
 			double varf_bucata = 0.0;
 			for (int i = 0; i < n; i++)
@@ -465,7 +720,7 @@ namespace hdsegal
 				for (int b = 0; b < BENZI; b++)
 				{
 					Biquad &f = m_filtre[b];
-					if (m_acum[b] == 0.0)
+					if (ocolite[b])
 					{
 						f.ocolire(l, 0);
 						f.ocolire(r, 1);
@@ -482,6 +737,10 @@ namespace hdsegal
 				if (v > varf_bucata)
 					varf_bucata = v;
 			}
+			/* Fara efect: o singura verificare pe bucata, fara acces la memoria efectelor.
+			 * Efectul precede castigul automat, Noapte, Nivel si limitatorul final. */
+			if (m_efecte.activa())
+				varf_bucata = m_efecte.prelucreaza(m_lucru, n);
 			m_varf *= exp(-(double)n / (REVENIRE_VARF_S * RATA));
 			if (varf_bucata > m_varf)
 				m_varf = varf_bucata;
@@ -549,7 +808,15 @@ namespace hdsegal
 					m_limitari++;
 				}
 				else
+				{
 					m_lim += k_lim * (1.0 - m_lim);
+					/* si revenirea trebuie sa respecte plafonul esantionului de acum */
+					if (varf * m_lim > PLAFON)
+					{
+						m_lim = PLAFON / varf;
+						m_limitari++;
+					}
+				}
 				l *= m_lim;
 				r *= m_lim;
 				if (m_fade < m_fade_tinta)
@@ -570,6 +837,7 @@ namespace hdsegal
 		}
 
 		Setari m_s;
+		Efecte m_efecte;
 		Biquad m_filtre[BENZI];
 		double m_acum[BENZI];
 		double m_pregain_minim, m_pregain_tinta, m_pregain, m_varf;

@@ -34,6 +34,10 @@ try:
 except ImportError:  # probe pe PC: modulul incarcat singur, din dosarul Components
 	import HdsPachete as P
 try:
+	from Components import HdsPluginuriImagine as I
+except ImportError:  # probe pe PC
+	import HdsPluginuriImagine as I
+try:
 	from Components.Ipkg import IpkgComponent, opkgArguments, opkgProgram
 except ImportError:  # probe pe PC
 	from Ipkg import IpkgComponent, opkgArguments, opkgProgram
@@ -330,6 +334,10 @@ def stergeSursa(catalog, nume):
 
 # ---------------------------------------------------------------- filele si randurile lor
 
+# randurile care numara si se filtreaza ca extensii; 'indisponibil' = ('indisponibil', randul din indisponibile(), pachetul sau None)
+RANDURI_CU_PACHET = ('plugin', 'pachet', 'indisponibil')
+
+
 def pachetPlugin(catalog, plugin):
 	cale = getattr(plugin, 'path', None)
 	if not cale:
@@ -346,22 +354,71 @@ def pluginPentru(pluginuri, p):
 	return None
 
 
+def pluginuriDeDeschis(plugins):
+	"""Pluginurile omului cu ecran, aceleasi in Extensii, la albastru si in web."""
+	f = getattr(plugins, 'pluginuriDeDeschis', None)
+	return [p for p in f() if not I.pluginImagine(getattr(p, 'path', ''))] if f is not None else []
+
+
+def indisponibile(plugins):
+	"""ce e pe receptor si nu se poate deschide acum, cu motivul (PluginComponent.indisponibile)"""
+	f = getattr(plugins, 'indisponibile', None)
+	return [e for e in f() if not I.pluginImagine(e.get('path', ''))] if f is not None else []
+
+
+def pachetIndisponibil(catalog, e):
+	return catalog.pachet_pentru_dosar(posixpath.normpath(e['path']))
+
+
+def indisponibilPachet(catalog, plugins, p):
+	"""randul din indisponibile() al unui pachet instalat, sau None"""
+	for e in indisponibile(plugins):
+		if pachetIndisponibil(catalog, e) is p:
+			return e
+	return None
+
+
+def listaCanale():
+	"""lista de canale a barei, pentru pluginurile care o cer; None cand bara nu exista inca"""
+	try:
+		from Screens.InfoBar import InfoBar
+		return getattr(InfoBar.instance, 'servicelist', None)
+	except Exception:
+		return None
+
+
+def motivDeschidere(plugin):
+	f = getattr(plugin, 'motivDeschidere', None)
+	return f() if f is not None else ''
+
+
 def dupaRepornire(catalog, plugins):
-	"""pachetele instalate care au un plugin inca neincarcat (instalat acum, porneste dupa repornirea interfetei)"""
-	if not getattr(plugins, 'restartRequired', False):
-		return []
-	incarcate = set(posixpath.normpath(getattr(pl, 'path', '') or '') for pl in plugins.pluginList)
-	rez = [p for p in catalog.pachete.values() if p.instalat and p.dosar_plugin and
-		posixpath.normpath(p.dosar_plugin) not in incarcate]
-	rez.sort(key=lambda p: p.titlu.lower())
-	return rez
+	"""Pachetele instalate cu un plugin amanat efectiv pana la repornirea interfetei (PluginComponent.amanate). Un plugin
+	cazut la import sau oprit in modul sigur nu e aici: repornirea nu il repara, iar randul lui are motivul adevarat."""
+	rez = {}
+	for cale in getattr(plugins, 'amanate', None) or ():
+		if I.pluginImagine(cale):
+			continue
+		p = catalog.pachet_pentru_dosar(posixpath.normpath(cale))
+		if p is not None and p.instalat:
+			rez[p.nume] = p
+	return sorted(rez.values(), key=lambda p: p.titlu.lower())
 
 
 def randuriInstalate(catalog, pluginuri, plugins):
-	"""Fila Instalate: tot ce e pe receptor, o singura data: pluginurile care se deschid, pachetele care asteapta repornirea
-	si restul pachetelor instalate, fara plugin in lista (module de acces, teme). Numarul de pe fila e numarul acestor randuri."""
-	rez = [('plugin', pl, pachetPlugin(catalog, pl)) for pl in pluginuri]
+	"""Fila Instalate: tot ce e pe receptor, o singura data: pluginurile care se deschid, cele care nu se pot deschide (cu
+	motivul), pachetele care asteapta repornirea si restul pachetelor instalate, fara plugin in lista (module de acces,
+	teme). Numarul de pe fila e numarul acestor randuri."""
+	rez = [('plugin', pl, pachetPlugin(catalog, pl)) for pl in pluginuri
+		if not I.pluginImagine(getattr(pl, 'path', ''))]
 	vazute = set(x[2].nume for x in rez if x[2] is not None)
+	for e in indisponibile(plugins):
+		p = pachetIndisponibil(catalog, e)
+		# amanat cu pachet: randul pachetului de mai jos
+		if e['fel'] != 'repornire' or p is None:
+			rez.append(('indisponibil', e, p))
+			if p is not None:
+				vazute.add(p.nume)
 	for p in dupaRepornire(catalog, plugins):
 		rez.append(('pachet', p, 'repornire'))
 		vazute.add(p.nume)
@@ -384,7 +441,7 @@ def _areActualizare(rand):
 
 def nrInstalate(catalog, pluginuri, plugins):
 	"""numarul de pe fila Instalate: numai randurile cu ceva instalat"""
-	return sum(1 for r in randuriInstalate(catalog, pluginuri, plugins) if r[0] in ('plugin', 'pachet'))
+	return sum(1 for r in randuriInstalate(catalog, pluginuri, plugins) if r[0] in RANDURI_CU_PACHET)
 
 
 def deDescarcat(catalog):
@@ -473,18 +530,27 @@ def numarSurse(catalog):
 	return len(feeduri(catalog)) + len(surseSingure(catalog))
 
 
-def randuriCautare(catalog, pluginuri, text):
+def randuriCautare(catalog, pluginuri, text, plugins=None):
 	t = (text or '').strip().lower()
 	rez = []
 	vazute = set()
 	for plugin in pluginuri:
+		if I.pluginImagine(getattr(plugin, 'path', '')):
+			continue
 		nume = (plugin.name or '').lower()
 		if t in nume or t in (plugin.description or '').lower():
 			p = pachetPlugin(catalog, plugin)
 			rez.append(('plugin', plugin, p))
 			if p is not None:
 				vazute.add(p.nume)
-	for p in catalog.cauta(t):
+	gasite = catalog.cauta(t)
+	for e in indisponibile(plugins):
+		p = pachetIndisponibil(catalog, e)
+		if t in str(e['nume']).lower() or p in gasite:
+			rez.append(('indisponibil', e, p))
+			if p is not None:
+				vazute.add(p.nume)
+	for p in gasite:
 		if p.nume not in vazute:
 			rez.append(('pachet', p, None))
 	return rez
@@ -493,7 +559,7 @@ def randuriCautare(catalog, pluginuri, text):
 def randuri(catalog, fila, pluginuri, plugins, cautare=''):
 	"""[(fel, obiect, extra)] ale unei file, afara de Din fisier"""
 	if fila == 'cautare':
-		return randuriCautare(catalog, pluginuri, cautare)
+		return randuriCautare(catalog, pluginuri, cautare, plugins)
 	if fila == 'instalate':
 		return randuriInstalate(catalog, pluginuri, plugins)
 	if fila == 'disponibile':
@@ -537,7 +603,7 @@ def filtruActiv(filtru, fila):
 
 
 def _pachetRand(fel, obj, extra):
-	if fel == 'plugin':
+	if fel in ('plugin', 'indisponibil'):
 		return extra
 	if fel == 'pachet':
 		return obj
@@ -547,7 +613,7 @@ def _pachetRand(fel, obj, extra):
 def feedRand(catalog, fel, obj, extra):
 	"""feedul unui rand cu pachet: FEED_HDS, FEED_EXTERN, FEED_IMAGINE (vine cu imaginea), PREFIX_SURSA + numele sursei
 	omului sau al altei surse, FEED_ALTA (pachet instalat de nicaieri, de pilda din fisier); '' la celelalte randuri"""
-	if fel not in ('plugin', 'pachet'):
+	if fel not in RANDURI_CU_PACHET:
 		return ''
 	p = _pachetRand(fel, obj, extra)
 	if p is None:
@@ -562,6 +628,8 @@ def felRand(catalog, fel, obj, extra):
 	"""categoria unui rand cu pachet (P.CATEGORII), '' la celelalte randuri"""
 	if fel == 'plugin':
 		return extra.categorie if extra is not None else categoriePlugin(getattr(obj, 'path', ''))
+	if fel == 'indisponibil':
+		return extra.categorie if extra is not None else categoriePlugin(obj['path'])
 	if fel == 'pachet':
 		return obj.categorie
 	return ''
@@ -587,7 +655,7 @@ def numeFelFiltru(cheie):
 
 def potrivesteFiltru(catalog, rand, filtru, fila):
 	fel, obj, extra = rand
-	if fel not in ('plugin', 'pachet'):
+	if fel not in RANDURI_CU_PACHET:
 		return True
 	f = filtru or {}
 	if f.get('feed') and feedRand(catalog, fel, obj, extra) != f['feed']:
@@ -602,7 +670,7 @@ def filtreaza(catalog, randuri_, filtru, fila):
 	if not areFiltru(fila) or not filtruActiv(filtru, fila):
 		return list(randuri_)
 	bune = [r for r in randuri_ if potrivesteFiltru(catalog, r, filtru, fila)]
-	return [r for i, r in enumerate(bune) if r[0] != 'sectiune' or (i + 1 < len(bune) and bune[i + 1][0] in ('plugin', 'pachet'))]
+	return [r for i, r in enumerate(bune) if r[0] != 'sectiune' or (i + 1 < len(bune) and bune[i + 1][0] in RANDURI_CU_PACHET)]
 
 
 def _ordineFeed(cheie):
@@ -615,7 +683,7 @@ def alegeriFiltru(catalog, randuri_, fila):
 	feeds = {}
 	kinds = {}
 	for fel, obj, extra in randuri_:
-		if fel not in ('plugin', 'pachet'):
+		if fel not in RANDURI_CU_PACHET:
 			continue
 		k = feedRand(catalog, fel, obj, extra)
 		feeds[k] = feeds.get(k, 0) + 1
@@ -678,9 +746,18 @@ def textStareFiltru(catalog, randuri_, filtru, fila):
 	"""„Filtru: X, 3 din 8”, pentru randul de stare, cand filtrul e activ; altfel ''"""
 	if not areFiltru(fila) or not filtruActiv(filtru, fila):
 		return ''
-	cu_pachet = [r for r in randuri_ if r[0] in ('plugin', 'pachet')]
-	aratate = sum(1 for r in filtreaza(catalog, randuri_, filtru, fila) if r[0] in ('plugin', 'pachet'))
+	cu_pachet = [r for r in randuri_ if r[0] in RANDURI_CU_PACHET]
+	aratate = sum(1 for r in filtreaza(catalog, randuri_, filtru, fila) if r[0] in RANDURI_CU_PACHET)
 	return '%s, %s' % (_t('Filtru: %s') % textFiltru(filtru, fila), _t('%d din %d') % (aratate, len(cu_pachet)))
+
+
+def _insignaIndisponibil(e):
+	"""(insigna, culoarea ei) pentru un plugin care nu se poate deschide acum; motivul intreg sta sub nume"""
+	if e['fel'] == 'repornire':
+		return _t('După repornire'), 'chihlimbar'
+	if e['fel'] == 'mod_sigur':
+		return _t('Oprit'), 'chihlimbar'
+	return _t('Nu pornește'), 'rau'
 
 
 def descriereRand(catalog, fel, obj, extra):
@@ -700,7 +777,19 @@ def descriereRand(catalog, fel, obj, extra):
 			sub = cuSursa(sursaPachet(catalog, p)[0], sub)
 			if p.versiune_instalata:
 				mic.append(p.versiune_instalata)
+		# ultima deschidere a cazut: motivul sta sub nume pana la o deschidere reusita
+		motiv = motivDeschidere(obj)
+		if motiv:
+			sub = motiv
+			if not insigna:
+				insigna, culoare = _t('Nu pornește'), 'rau'
 		return (P.ICOANE.get(cat, 'extensii'), obj.name or '', sub, insigna, culoare, ' · '.join(mic))
+	if fel == 'indisponibil':
+		p = extra
+		cat = p.categorie if p is not None else categoriePlugin(obj['path'])
+		insigna, culoare = _insignaIndisponibil(obj)
+		return (P.ICOANE.get(cat, 'extensii'), p.titlu if p is not None else obj['nume'], obj['motiv'], insigna, culoare,
+			p.versiune_instalata if p is not None and p.versiune_instalata else '')
 	if fel == 'pachet':
 		p = obj
 		if extra == 'repornire':
@@ -797,6 +886,13 @@ def detalii(catalog, fel, obj, extra):
 		text = obj.description or ''
 		if p is not None and p.descriere and p.descriere != text:
 			text = (text + '\n' + p.descriere).strip()
+		# ce nu merge se vede intai: ultima deschidere cazuta, un keymap stricat (pluginul se deschide mai departe)
+		motiv = motivDeschidere(obj)
+		if motiv:
+			d.update(insigna=motiv, culoare='rau')
+		motivTaste = getattr(obj, 'motivTaste', None)
+		if motivTaste is not None and motivTaste():
+			text = (motivTaste() + '\n' + text).strip()
 		d['descriere'] = text
 		ind = [_t('OK deschide')]
 		if p is not None and p.actualizare:
@@ -806,19 +902,36 @@ def detalii(catalog, fel, obj, extra):
 		if areSursa(catalog, p):
 			ind.append(_t('INFO descarcă sursa'))
 		d['indiciu'] = ' · '.join(ind)
+	elif fel == 'indisponibil':
+		p = extra
+		cat = p.categorie if p is not None else categoriePlugin(obj['path'])
+		# fara pachet nu stim de unde vine: nu e neaparat al imaginii
+		s = sursaPachet(catalog, p)[0] if p is not None else ''
+		culoare = _insignaIndisponibil(obj)[1]
+		d.update(icoana=P.ICOANE.get(cat, 'extensii'), titlu=p.titlu if p is not None else obj['nume'], insigna=obj['motiv'], culoare=culoare)
+		rand = [(_t('Versiune'), p.versiune_instalata if p is not None else ''),
+			(_t('Feed'), s),
+			(_t('Locul'), _t(P.ETICHETE.get(cat, N_('Extensii'))))]
+		d['etichete'] = [a for a, b in rand if b]
+		d['valori'] = [b for a, b in rand if b]
+		d['descriere'] = obj['mesaj']
+		ind = [_t('OK repornește interfața acum') if obj['fel'] == 'repornire' else _t('OK arată motivul')]
+		if p is not None and p.se_poate_sterge:
+			ind.append(_t('Roșu șterge'))
+		d['indiciu'] = ' · '.join(ind)
 	elif fel == 'pachet':
 		p = obj
 		s, adresa, hds = sursaPachet(catalog, p)
 		if p.actualizare:
 			d.update(insigna=_t('Actualizare de la %s la %s') % (p.versiune_instalata, p.versiune), culoare='chihlimbar')
 		elif p.instalat:
-			d.update(insigna='Instalat, versiunea %s' % p.versiune_instalata, culoare='bun')
+			d.update(insigna=_t('Instalat, versiunea %s') % p.versiune_instalata, culoare='bun')
 		else:
 			d.update(insigna=_t('Neinstalat'), culoare='eticheta')
 		marime = P.marime_text(p.marime)
 		ocupa = P.marime_text(p.marime_instalat)
 		rand = [(_t('Versiune'), p.versiune or p.versiune_instalata),
-			(_t('Mărime'), ', '.join(x for x in (marime, ocupa and 'ocupă %s' % ocupa) if x)),
+			(_t('Mărime'), ', '.join(x for x in (marime, ocupa and _t('ocupă %s') % ocupa) if x)),
 			(_t('Feed'), s),
 			(_t('Adresa'), P.gazda(adresa) if adresa and not hds else ''),
 			(_t('Categoria'), _t(P.ETICHETE.get(p.categorie, N_('Altele'))))]
@@ -850,7 +963,8 @@ def detalii(catalog, fel, obj, extra):
 			d['indiciu'] = ' · '.join(x for x in (d['indiciu'], _t('INFO descarcă sursa')) if x)
 	elif fel == 'fisier':
 		f = obj
-		rand = [(_t('Extensie'), f.nume or 'necunoscut'), (_t('Versiune'), f.versiune), (_t('Mărime'), P.marime_text(f.marime)),
+		rand = [(_t('Extensie'), f.nume or _t('necunoscut')), (_t('Versiune'), f.versiune),
+			(_t('Mărime'), P.marime_text(f.marime)),
 			(_t('Fișierul'), f.cale_text)]
 		d['etichete'] = [a for a, b in rand if b]
 		d['valori'] = [b for a, b in rand if b]
@@ -998,6 +1112,13 @@ def taste(catalog, fel, obj, extra, pluginuri):
 	rosu = verde = ''
 	if fel == 'plugin':
 		verde = N_('Actualizează') if extra is not None and extra.actualizare else N_('Deschide')
+		if extra is not None and extra.se_poate_sterge:
+			rosu = N_('Șterge')
+	elif fel == 'indisponibil':
+		if obj['fel'] == 'repornire':
+			verde = N_('Repornește interfața')
+		elif extra is not None and extra.actualizare:
+			verde = N_('Actualizează')
 		if extra is not None and extra.se_poate_sterge:
 			rosu = N_('Șterge')
 	elif fel == 'pachet':
@@ -1229,7 +1350,7 @@ def planInstalare(catalog, p, argumente=None, nota=None):
 	rand = [(_t('Versiune'), p.versiune), (_t('Mărime'), P.marime_text(total) or _t('necunoscută')), (_t('Feed'), s)]
 	if dep:
 		rand.append((_t('Se mai instalează'), ', '.join(d.titlu for d in dep[:3]) + (' ' + _t('și încă %d') % (len(dep) - 3) if len(dep) > 3 else '')))
-	plan = {'fel': 'instaleaza', 'titlu': 'Instalezi %s?' % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
+	plan = {'fel': 'instaleaza', 'titlu': _t('Instalezi %s?') % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
 		'icoana': P.ICOANE.get(p.categorie, 'altele'), 'randuri': rand, 'nota': _nota(catalog, [p] + dep, nota),
 		'externe': surseExterne(catalog, [p] + dep), 'notaCuloare': culoareNota(catalog, [p] + dep),
 		'buton': N_('Instalează'), 'argumente': a,
@@ -1276,11 +1397,13 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 			surse.append(s)
 	if len(pachete) == 1:
 		p = pachete[0]
-		titlu, nume, sub, ic = 'Actualizezi %s?' % p.titlu, p.titlu, p.subtitlu, P.ICOANE.get(p.categorie, 'altele')
-		rand = [(_t('Versiune'), '%s (acum %s)' % (p.versiune, p.versiune_instalata))]
+		titlu, nume, sub, ic = (_t('Actualizezi %s?') % p.titlu, p.titlu, p.subtitlu,
+			P.ICOANE.get(p.categorie, 'altele'))
+		rand = [(_t('Versiune'), _t('%s (acum %s)') % (p.versiune, p.versiune_instalata))]
 	else:
 		# "Actualizeaza toate": lista lor, fiecare cu versiunea noua (cel mult trei randuri, apoi "si inca N")
-		titlu, nume, sub, ic = 'Actualizezi %d extensii?' % len(pachete), '%d extensii' % len(pachete), '', 'actualizari'
+		titlu, nume, sub, ic = (_t('Actualizezi %d extensii?') % len(pachete),
+			_t('%d extensii') % len(pachete), '', 'actualizari')
 		lista = [numeCuVersiune(p.titlu, p.versiune) for p in pachete]
 		if len(lista) > 3:
 			lista = lista[:2] + [_t('și încă %d') % (len(lista) - 2)]
@@ -1434,9 +1557,9 @@ def planFisier(f, argumente=None, catalog=None):
 	a = (argumente or opkgArguments)('install', [cale]) if cale else None
 	if a is None:
 		return None, (_t('Fișierul nu se poate instala de aici (nu mai există sau nu e pe stick, disc sau rețea).'), 'rau')
-	rand = [(_t('Extensie'), f.nume or 'necunoscut'), (_t('Versiune'), f.versiune or _t('necunoscută')),
+	rand = [(_t('Extensie'), f.nume or _t('necunoscut')), (_t('Versiune'), f.versiune or _t('necunoscută')),
 		(_t('Mărime'), P.marime_text(f.marime)), (_t('Fișierul'), f.cale_text)]
-	return {'fel': 'fisier', 'titlu': 'Instalezi %s?' % f.titlu, 'nume': f.titlu, 'subtitlu': f.rezumat,
+	return {'fel': 'fisier', 'titlu': _t('Instalezi %s?') % f.titlu, 'nume': f.titlu, 'subtitlu': f.rezumat,
 		'icoana': 'fisier', 'randuri': [r for r in rand if r[1]],
 		# intai fraza despre verificare: o cale lunga (pana la 255 de semne) o impingea sub marginea notei; calea
 		# scurtata la mijloc, ca sa ramana numele fisierului
@@ -1848,11 +1971,12 @@ class Lucrare(object):
 				t = tinte[0]
 				texte = {'instaleaza': _t('Gata. %s a fost instalat.'), 'actualizeaza': _t('Gata. %s a fost actualizat.'),
 					'sterge': _t('Gata. %s a fost șters.')}
-				titlu = texte.get(fel, 'Gata. %s') % numeCuVersiune(t['titlu'], versiuneScurta(t['de'] if fel == 'sterge' else t['la']))
+				titlu = texte.get(fel, _t('Gata. %s')) % numeCuVersiune(t['titlu'],
+					versiuneScurta(t['de'] if fel == 'sterge' else t['la']))
 			else:
 				texte = {'instaleaza': _t('Gata. %s este instalat.'), 'fisier': _t('Gata. %s este instalat.'),
 					'actualizeaza': _t('Gata. %s este la zi.'), 'sterge': _t('Gata. %s a fost șters.')}
-				titlu = self.plan.get('textGata') or (texte.get(fel) or 'Gata. %s') % nume
+				titlu = self.plan.get('textGata') or (texte.get(fel) or _t('Gata. %s')) % nume
 			stare, culoare = _t('Gata'), 'bun'
 			if cod == 0:
 				self._scrie('bun', _t('Terminat fără erori.'))
@@ -1963,8 +2087,8 @@ def _pluginuri(n):
 	except ImportError:
 		pass
 	if n == 1:
-		return "un plugin"
-	return "%d pluginuri" % n
+		return _t("un plugin")
+	return _t("%d pluginuri") % n
 
 
 def _pachete_sursa(n):
@@ -1976,5 +2100,5 @@ def _pachete_sursa(n):
 	except ImportError:
 		pass
 	if n == 1:
-		return "un pachet"
-	return "%d pachete" % n
+		return _t("un pachet")
+	return _t("%d pachete") % n

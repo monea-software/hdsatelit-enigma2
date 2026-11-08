@@ -212,12 +212,14 @@ def reda(a, sesiune=None, S=None):
 
 
 def argumente(request):
-	"""Argumentele cererii (query si corpul formularului) ca text scurt, numai cheile cunoscute; fara token."""
+	"""Argumentele cererii ca text scurt, numai cheile cunoscute; parola numai din corp, fara token."""
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	din_adresa = _cheiDinAdresa(request)
 	rez = {}
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:32]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in CAMPURI:
+		if cheie not in CAMPURI or (cheie == "parola" and cheie in din_adresa):
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):

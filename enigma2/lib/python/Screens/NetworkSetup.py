@@ -67,6 +67,9 @@ class NetworkAdapterSelection(Screen,HelpableScreen):
 			})
 
 		self.adapters = [(iNetwork.getFriendlyAdapterName(x),x) for x in HdsRetea.adaptoare(iNetwork)]
+		self.placiCitite = None
+		self.citesteAdaptoare = False
+		self.inchisa = False
 
 		self.list = []
 		self["list"] = List(self.list)
@@ -78,8 +81,8 @@ class NetworkAdapterSelection(Screen,HelpableScreen):
 		self.stareTimer.callback.append(self.refaStarea)
 		self.stareTimer.start(2000, False)
 
-		if len(self.adapters) == 1:
-			self.onFirstExecBegin.append(self.okbuttonClick)
+		# Lista ramane deschisa si cu o placa, ca sa poata aparea stickul USB.
+		self.onFirstExecBegin.append(self.refaStarea)
 		self.onClose.append(self.cleanup)
 
 	def stari(self):
@@ -87,8 +90,33 @@ class NetworkAdapterSelection(Screen,HelpableScreen):
 			wifi=iNetwork.isWirelessInterface(x[1]))) for x in self.adapters]
 
 	def refaStarea(self):
+		if self.inchisa or self.citesteAdaptoare:
+			return
+		placi = list(iNetwork.getInstalledAdapters())
+		if placi != self.placiCitite:
+			self.placiCitite = placi
+			self.citesteAdaptoare = True
+			if placi:
+				iNetwork.getInterfaces(self.adaptoareCitite)
+			else:
+				# Fara placi, getInterfaces nu are nicio comanda care sa raspunda.
+				self.adaptoareCitite(True)
+			return
 		if self.stari() != getattr(self, "stariVazute", None):
 			self.updateList()
+
+	def adaptoareCitite(self, data):
+		self.citesteAdaptoare = False
+		if self.inchisa:
+			return
+		if data is not True:
+			self.placiCitite = None
+			return
+		# Nu afisam placile vechi ramase in memoria lui iNetwork.
+		instalate = iNetwork.getInstalledAdapters()
+		self.adapters = [(iNetwork.getFriendlyAdapterName(x), x)
+			for x in self.placiCitite if x in instalate]
+		self.updateList()
 
 	def buildInterfaceList(self,iface,name,default,active ):
 		divpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/div-h.png"))
@@ -159,18 +187,19 @@ class NetworkAdapterSelection(Screen,HelpableScreen):
 			self.restartLan()
 
 	def okbuttonClick(self):
+		if self.citesteAdaptoare:
+			return
 		selection = self["list"].getCurrent()
 		if selection is not None:
 			self.session.openWithCallback(self.AdapterSetupClosed, AdapterSetupConfiguration, selection[0])
 
 	def AdapterSetupClosed(self, *ret):
-		if len(self.adapters) == 1:
-			self.close()
-		else:
-			self.updateList()
+		self.refaStarea()
+		self.updateList()
 
 	def cleanup(self):
 		self.stareTimer.stop()
+		self.inchisa = True
 		iNetwork.stopLinkStateConsole()
 		iNetwork.stopRestartConsole()
 		iNetwork.stopGetInterfacesConsole()

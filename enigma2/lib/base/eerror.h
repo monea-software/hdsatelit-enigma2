@@ -116,6 +116,10 @@ extern int logOutputConsole;
 void CHECKFORMAT eFatal(const char*, ...);
 enum { lvlDebug=1, lvlWarning=2, lvlFatal=4 };
 
+/* HDSatelit: numele de jurnal cerute de modulele binare ale pluginurilor compilate pentru alte imagini (eerror.cpp) */
+extern int debugLvl;
+void eDebugImpl(int flags, const char* fmt, ...) __attribute__ ((__format__(__printf__, 2, 3)));
+
 #ifdef DEBUG
     void CHECKFORMAT eDebug(const char*, ...);
     void CHECKFORMAT eDebugNoNewLine(const char*, ...);

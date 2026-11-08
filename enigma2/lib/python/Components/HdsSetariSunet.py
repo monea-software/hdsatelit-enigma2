@@ -884,6 +884,11 @@ def _laEveniment(ev):
 		return
 	if ev == iPlayableService.evStart:
 		try:
+			from Components import HdsJurnalZapAudio
+			HdsJurnalZapAudio.incepe(_STARE["nav"])
+		except Exception:
+			pass
+		try:
 			_aplicaVolum()
 		except Exception as e:
 			_jurnal("volumul la pornirea canalului: %s" % e)
@@ -922,6 +927,11 @@ def _laSchimbareaIesirii(el):
 
 
 def _laStandby(el):
+	try:
+		from Components import HdsJurnalZapAudio
+		HdsJurnalZapAudio.inchide()
+	except Exception:
+		pass
 	try:
 		from Screens.Standby import inStandby
 		if inStandby is not None and _dupaStandby not in inStandby.onClose:

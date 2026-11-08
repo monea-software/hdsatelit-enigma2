@@ -39,6 +39,9 @@ def _t(text):
 		return _(text)  # noqa: F821
 	except NameError:
 		return text
+# fisierul care face dintr-un dosar al pachetului un plugin: plugin.py/.pyc/.pyo sau compilat ca modul nativ (plugin.so,
+# plugin.cpython-314-<arh>.so, plugin.abi3.so), aceleasi ca PluginComponent.numeFisierePlugin
+_FISIER_PLUGIN = re.compile(r'/plugin(?:\.py|\.pyc|\.pyo|\.so|\.cpython-[^/]+\.so|\.abi3\.so)$')
 # ceasul pentru durata cautarii: ora receptorului sare la pornire (TDT, NTP), iar „raspunde greu” nu trebuie sa apara
 # din saritura (Python 2: time.time)
 _ceas = getattr(time, 'monotonic', time.time)
@@ -46,6 +49,10 @@ try:
 	from Components.HdsNavigator import readMountTable, NETWORK_FS
 except ImportError:  # teste pe PC: modulul incarcat singur, din dosarul Components
 	from HdsNavigator import readMountTable, NETWORK_FS
+try:
+	from Components import HdsPluginuriImagine as I
+except ImportError:  # probe pe PC
+	import HdsPluginuriImagine as I
 # pachetele numai pentru Python 2 (0.6.8): dupa lista feedului (Pachet.python2) si dupa fisier (FisierIpk.python2)
 try:
 	from Components import HdsPython2 as H
@@ -112,10 +119,6 @@ RADACINI_REALE = ('/run/media', '/var/volatile/tmp')
 # plus autofs: o intrare in dosarul automontarii porneste montarea); o sursa //server/... e tot retea
 LOCURI_RETEA = ('/media/net', '/media/autofs', '/autofs')
 TIPURI_RETEA = tuple(NETWORK_FS) + ('autofs', 'ncpfs', 'fuse.rclone')
-
-# un pachet e „din imagine" daca a fost instalat odata cu imaginea (in aceeasi fereastra de timp cu primul pachet)
-FEREASTRA_IMAGINE = 6 * 3600
-
 
 def nume_valid(nume):
 	return isinstance(nume, str) and _NUME.match(nume) is not None
@@ -727,18 +730,14 @@ def incarca(radacina='/'):
 	# 2. pachetele instalate
 	status = _cale(radacina, conf.status_file)
 	instalate = []
-	primul = 0
 	for s in citeste_strofe(status):
 		n = s.get('package', '')
 		st = s.get('status', '')
 		if not n or 'installed' not in st.split() or 'not-installed' in st:
 			continue
-		t = _int(s.get('installed-time'))
-		if t and (not primul or t < primul):
-			primul = t
-		instalate.append((n, s, t))
+		instalate.append((n, s))
 	dosar_info = _cale(radacina, conf.info_dir)
-	for n, s, t in instalate:
+	for n, s in instalate:
 		if not n.startswith(PREFIX) or not nume_valid(n):
 			continue
 		p = toate.get(n)
@@ -751,22 +750,27 @@ def incarca(radacina='/'):
 			p.marime_instalat = _int(sursa_text.get('installed-size'))
 			p.depinde = _dependente(s.get('depends', ''))
 		p.versiune_instalata = s.get('version', '') or '?'
-		p.din_imagine = bool(primul and t and t - primul <= FEREASTRA_IMAGINE)
 
 	# 3. ce plugin (dosar) tine fiecare pachet instalat
-	for n, _s, _t in instalate:
+	for n, _s in instalate:
 		if not n.startswith('enigma2'):
 			continue
 		for r in _randuri(os.path.join(dosar_info, n + '.list')):
 			r = r.split('\t', 1)[0].strip()
-			if '/Plugins/' in r and (r.endswith('/plugin.py') or r.endswith('/plugin.pyc')):
+			# si pluginul compilat ca modul nativ (plugin.so, plugin.cpython-314-<arh>.so), ca in PluginComponent.numeFisierePlugin
+			if '/Plugins/' in r and _FISIER_PLUGIN.search(r):
 				dosar = r.rsplit('/', 1)[0]
 				cat.dupa_dosar[dosar] = n
 				if n in toate:
 					toate[n].dosar_plugin = dosar
 
+	# Manifestul ramane cel de la constructie, inclusiv dupa actualizarea unui pachet.
+	# Pastram datele complete pentru dependente; listele extensiilor arata numai ce pune omul.
+	din_imagine = I.pacheteImagine(radacina)
+	for n, p in toate.items():
+		p.din_imagine = n in din_imagine
 	cat._toate = toate
-	cat.pachete = dict((n, p) for n, p in toate.items() if se_arata(n))
+	cat.pachete = dict((n, p) for n, p in toate.items() if se_arata(n) and not p.din_imagine)
 	return cat
 
 

@@ -355,14 +355,14 @@ def _adauga_in_bouquets_master(cale_master, cale_bouquet_nou, nume_bouquet):
     referinta = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % os.path.basename(cale_bouquet_nou)
     try:
         if os.path.exists(cale_master):
-            with open(cale_master, 'r', encoding='utf-8', errors='replace') as f:
+            with open(cale_master, 'r', encoding='utf-8', errors='surrogateescape') as f:
                 continut = f.read()
         else:
             continut = '#NAME Favourites\n'
 
         if os.path.basename(cale_bouquet_nou) not in continut:
             continut = continut.rstrip('\n') + '\n' + referinta + '\n'
-            with open(cale_master, 'w', encoding='utf-8') as f:
+            with open(cale_master, 'w', encoding='utf-8', errors='surrogateescape') as f:
                 f.write(continut)
     except (IOError, OSError) as e:
         print('[HdsDvbI] eroare bouquets master: %s' % e)

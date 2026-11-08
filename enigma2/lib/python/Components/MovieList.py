@@ -1,4 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import os
 import struct
 from .GUIComponent import GUIComponent
 from Tools.FuzzyDate import FuzzyTime
@@ -343,3 +344,58 @@ class MovieList(GUIComponent):
 	
 	def moveDown(self):
 		self.instance.moveSelection(self.instance.moveDown)
+
+# numele cerute de pluginuri
+MOVIE_EXTENSIONS = frozenset((".ts", ".stream", ".mp4", ".mkv", ".mpg", ".mpeg", ".mpe", ".avi", ".vob", ".m2ts", ".mts", ".m4v", ".mov", ".flv", ".wmv", ".divx", ".iso", ".img", ".webm"))
+AUDIO_EXTENSIONS = frozenset((".mp3", ".mp2", ".m4a", ".m2a", ".mka", ".flac", ".ogg", ".oga", ".dts", ".wav", ".wave", ".wma", ".ac3", ".aac"))
+DVD_EXTENSIONS = frozenset((".iso", ".img", ".nrg"))
+IMAGE_EXTENSIONS = frozenset((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".jpe", ".svg"))
+KNOWN_EXTENSIONS = MOVIE_EXTENSIONS | AUDIO_EXTENSIONS | DVD_EXTENSIONS | IMAGE_EXTENSIONS
+
+
+class StubInfo:
+	"""Informatia unui fisier care nu e serviciu: numele, marimea si data din disc."""
+	def getName(self, serviceref):
+		return os.path.split(serviceref.getPath())[1]
+
+	def getLength(self, serviceref):
+		return -1
+
+	def getEvent(self, serviceref, *args):
+		return None
+
+	def isPlayable(self):
+		return True
+
+	def getInfo(self, serviceref, w):
+		try:
+			if w == iServiceInformation.sTimeCreate:
+				return os.stat(serviceref.getPath()).st_ctime
+			if w == iServiceInformation.sFileSize:
+				return os.stat(serviceref.getPath()).st_size
+			if w == iServiceInformation.sDescription:
+				return serviceref.getPath()
+		except OSError:
+			pass
+		return 0
+
+	def getInfoString(self, serviceref, w):
+		return ""
+
+
+justStubInfo = StubInfo()
+
+
+def resetMoviePlayState(cutsFileName, ref=None):
+	"""Scoate pozitia de redare (reperul de tip 3) din fisierul .cuts."""
+	try:
+		with open(cutsFileName, "rb") as f:
+			date = f.read()
+		pastrate = []
+		for i in range(0, len(date) - len(date) % cutsParser.size, cutsParser.size):
+			if cutsParser.unpack_from(date, i)[1] != 3:
+				pastrate.append(date[i:i + cutsParser.size])
+		with open(cutsFileName, "wb") as f:
+			f.write(b"".join(pastrate))
+	except OSError:
+		pass

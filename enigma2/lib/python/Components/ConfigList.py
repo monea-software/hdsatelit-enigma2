@@ -5,6 +5,7 @@ from .config import KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_0, KEY_DELETE, K
 from Components.ActionMap import NumberActionMap, ActionMap
 from enigma import eListbox, eListboxPythonConfigContent, eRCInput, eTimer
 from Screens.MessageBox import MessageBox
+from Components.HdsAsistentaControl import schimbaComponentaWeb
 
 
 # HDSatelit: tastatura de pe ecran la orice camp de text. In orice ecran cu ConfigListScreen
@@ -91,7 +92,7 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 
 	def handleKey(self, key):
 		selection = self.getCurrent()
-		if selection and selection[1].enabled:
+		if selection and len(selection) > 1 and selection[1].enabled:
 			selection[1].handleKey(key)
 			self.invalidateCurrent()
 			if key in KEY_NUMBERS:
@@ -108,12 +109,14 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 			self.instance.moveSelectionTo(index)
 	
 	def invalidateCurrent(self):
+		schimbaComponentaWeb(self)
 		self.l.invalidateEntry(self.l.getCurrentSelectionIndex())
 
 	def invalidate(self, entry):
 		# when the entry to invalidate does not exist, just ignore the request.
 		# this eases up conditional setup screens a lot.
 		if entry in self.__list:
+			schimbaComponentaWeb(self)
 			self.l.invalidateEntry(self.__list.index(entry))
 
 	GUI_WIDGET = eListbox
@@ -147,6 +150,7 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 	def setList(self, l):
 		self.timer.stop()
 		self.__list = l
+		schimbaComponentaWeb(self)
 		self.l.setList(self.__list)
 
 		if l is not None:
@@ -164,7 +168,8 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 	def isChanged(self):
 		is_changed = False
 		for x in self.list:
-			is_changed |= x[1].isChanged()
+			if len(x) > 1:
+				is_changed |= x[1].isChanged()
 
 		return is_changed
 
@@ -209,11 +214,58 @@ class ConfigListScreen:
 		if not self.handleInputHelpers in self["config"].onSelectionChanged:
 			self["config"].onSelectionChanged.append(self.handleInputHelpers)
 
+	# numele cerute de pluginuri
+	def getCurrentEntry(self):
+		cur = self["config"].getCurrent()
+		return cur[0] if cur else ""
+
+	def getCurrentItem(self):
+		cur = self["config"].getCurrent()
+		return cur[1] if cur and len(cur) > 1 else None
+
+	def getCurrentValue(self):
+		item = self.getCurrentItem()
+		return str(item.getText()) if item is not None else ""
+
+	def getCurrentDescription(self):
+		cur = self["config"].getCurrent()
+		return cur[2] if cur and len(cur) > 2 else ""
+
+	def changedEntry(self):
+		for x in getattr(self, "onChangedEntry", ()):
+			x()
+
+	def keySelect(self):
+		self.keyOK()
+
+	def keyText(self):
+		self.KeyText()
+
+	def _mutaLista(self, directie):
+		lista = self["config"].instance
+		if lista is not None:
+			lista.moveSelection(getattr(lista, directie))
+
+	def keyUp(self):
+		self._mutaLista("moveUp")
+
+	def keyDown(self):
+		self._mutaLista("moveDown")
+
+	def keyPageUp(self):
+		self._mutaLista("pageUp")
+
+	def keyPageDown(self):
+		self._mutaLista("pageDown")
+
+	def closeRecursive(self):
+		self.close(True)
+
 	def handleInputHelpers(self):
 		cur = self["config"].getCurrent()
 		# tasta TEXT deschide tastatura pe orice camp de text, si in ecranele fara iconita VKeyIcon (Setup)
 		self["VirtualKB"].setEnabled(bool(cur is not None and len(cur) > 1 and esteTextDeScris(cur[1])))
-		if self["config"].getCurrent() is not None:
+		if self["config"].getCurrent() is not None and len(self["config"].getCurrent()) > 1:
 			if isinstance(self["config"].getCurrent()[1], ConfigText) or isinstance(self["config"].getCurrent()[1], ConfigPassword):
 				if "VKeyIcon" in self:
 					self["VirtualKB"].setEnabled(True)
@@ -298,7 +350,8 @@ class ConfigListScreen:
 		
 	def saveAll(self):
 		for x in self["config"].list:
-			x[1].save()
+			if len(x) > 1:
+				x[1].save()
 
 	# keySave and keyCancel are just provided in case you need them.
 	# you have to call them by yourself.
@@ -311,7 +364,8 @@ class ConfigListScreen:
 			return
 
 		for x in self["config"].list:
-			x[1].cancel()
+			if len(x) > 1:
+				x[1].cancel()
 		self.close()
 
 	def keyCancel(self):

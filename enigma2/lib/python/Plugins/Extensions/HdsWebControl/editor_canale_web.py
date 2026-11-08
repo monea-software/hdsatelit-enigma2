@@ -3446,6 +3446,13 @@ function opresteTragerea(ev){
 }
 
 // ---------------------------------------------------------------- tastele (numai scurtaturi)
+// sageata apasata trece de la un capat al listei la celalalt, ca pe televizor; tinuta apasata sau cu Shift se opreste la capat
+function pasSageata(i, pas, n, ev){
+  var nou = i + pas;
+  if(nou >= 0 && nou < n){ return nou; }
+  if(ev.repeat || ev.shiftKey){ return Math.max(0, Math.min(n - 1, nou)); }
+  return nou < 0 ? n - 1 : 0;
+}
 document.addEventListener("keydown", function(ev){
   if(!S.gata || S.vedere){ if(ev.key === "Escape"){ if(!$("foaie").classList.contains("ascuns")){ inchideFoaia(); } else if(S.vedere){ inchideVederea(); } } return; }
   if(!$("foaie").classList.contains("ascuns")){ if(ev.key === "Escape"){ inchideFoaia(); } return; }
@@ -3462,7 +3469,7 @@ document.addEventListener("keydown", function(ev){
   if(k === "ArrowDown" || k === "ArrowUp"){
     ev.preventDefault();
     if(ctrl && S.nsel){ op({op: k === "ArrowUp" ? "muta_sus" : "muta_jos", buchet: buchetAcum(), ids: idsAlese()}); return; }
-    var nou = Math.max(0, Math.min(n - 1, S.focus + (k === "ArrowDown" ? 1 : -1)));
+    var nou = pasSageata(S.focus, k === "ArrowDown" ? 1 : -1, n, ev);
     if(S.focus < 0){ nou = 0; }
     if(ev.shiftKey){ if(S.ancora < 0){ S.ancora = Math.max(0, S.focus); } S.focus = nou; alegeIntre(S.ancora, nou); }
     else { S.focus = nou; }
@@ -3509,7 +3516,7 @@ function tasteSursa(ev, ctrl, k){
   if(k === "ArrowDown" || k === "ArrowUp"){
     ev.preventDefault();
     if(!n){ return; }
-    var nou = Math.max(0, Math.min(n - 1, S.sfocus + (k === "ArrowDown" ? 1 : -1)));
+    var nou = pasSageata(S.sfocus, k === "ArrowDown" ? 1 : -1, n, ev);
     if(ev.shiftKey){ comutaSSel(nou, true); }
     S.sfocus = nou; VS.laVedere(nou); VS.arata(); redaSel(); return;
   }

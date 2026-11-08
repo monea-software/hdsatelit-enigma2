@@ -50,6 +50,9 @@ public:
 	void invalidate(const gRegion &region, const eWidget *widget = 0, int layer = -1);
 	void paintLayer(eWidget *widget, int layer);
 	void paint();
+	/* Main-thread capture barrier: redraw current windows, then poll until gRC finished. */
+	bool requestCaptureRedraw();
+	bool captureReady();
 	void setDC(gDC *dc);
 	
 	void setBackgroundColor(gRGB col);

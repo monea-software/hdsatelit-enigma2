@@ -8,7 +8,8 @@ Datele stau intr-un singur fisier, instalat langa restul datelor imaginii:
   /usr/share/enigma2/jurnal-versiuni.json   (in depozit: data/jurnal-versiuni.json)
 Forma lui:
   {"versiuni": [{"versiune": "0.2.0", "build": "0010202609241212", "data": "24.09.2026",
-    "intrari": [{"fel": "nou|reparat|imbunatatit", "ro": "text", "en": "text"}]}]}
+    "intrari": [{"fel": "nou|reparat|imbunatatit", "ro": "text", "en": "text", "de": "text", ...}]}]}
+ro si en sunt obligatorii, restul limbilor nu: text() ia limba interfetei, apoi engleza.
 Lista e de la cea mai noua versiune la cea mai veche. „build" e chiar randul version= din /etc/image-version al
 acelui build (Makefile.am), in una din doua forme:
   16 cifre  fiecare parte a versiunii are o cifra (0.3.9): 0 + XYZ + AAAALLZZhhmm, de pilda 0039202610121200;
@@ -118,6 +119,11 @@ def build_curent(cale=None):
 	return ''
 
 
+def _textele(x):
+	"""Felul si textele intrarii, in toate limbile pe care le are."""
+	return dict((k, t) for k, t in x.items() if isinstance(t, str))
+
+
 def _intrare_buna(x):
 	if not isinstance(x, dict):
 		return False
@@ -165,8 +171,7 @@ def versiuni(cale=None):
 			'build': v['build'],
 			'data': v.get('data') if isinstance(v.get('data'), str) else '',
 			'intrari': [
-				{'fel': x['fel'], 'ro': x['ro'], 'en': x['en']}
-				for x in v['intrari'] if _intrare_buna(x)
+				_textele(x) for x in v['intrari'] if _intrare_buna(x)
 			],
 		})
 	# ordinea din fisier e deja de la nou la vechi; o asiguram, ca lista sa nu depinda de cine scrie fisierul

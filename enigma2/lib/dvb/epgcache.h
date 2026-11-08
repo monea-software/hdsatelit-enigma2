@@ -15,6 +15,7 @@
 #define __GNUC_PREREQ(maj, min)  0
 #endif
 
+#include <atomic>
 #include <vector>
 #include <list>
 #include <unordered_map>
@@ -118,15 +119,21 @@ private:
 	__u8* EITdata;
 	__u8 ByteSize;
 	__u8 type;
-	unsigned short ImportedCost;
+	unsigned short ImportedCost; // octetii rezervati de un eveniment importat; bitul EXTERN_COST spune bugetul
 	static descriptorMap descriptors;
 	static __u8 data[4108];
 	static int CacheSize;
 	static int ImportedCount; // HDSatelit: plafon global pentru XMLTV, inclusiv dupa refresh/reincarcare
 	static int ImportedBytes; // rezervare XMLTV separata de ghidul DVB; include noduri si descriptori
+	static int ExternCount; // HDSatelit: acelasi lucru pentru importul extern (pluginuri de ghid), buget separat
+	static int ExternBytes;
 	static bool load(FILE *);
 	static void save(FILE *);
 public:
+	// IMPORT_IPTV: XMLTV-ul nostru (HdsIptvEpg); IMPORT_EXTERN: pluginuri de ghid. Ambele sunt mai mari decat orice sursa
+	// DVB, deci sectionRead si FixOverlapping le inlocuiesc cand soseste fluxul.
+	enum { IMPORT_IPTV = 32, IMPORT_EXTERN = 64, EXTERN_COST = 0x8000 };
+	bool imported() const { return type == IMPORT_IPTV || type == IMPORT_EXTERN; }
 	eventData(const eit_event_struct* e=NULL, int size=0, int type=0);
 	~eventData();
 	const eit_event_struct* get() const;
@@ -147,8 +154,14 @@ public:
 		return fromBCD(EITdata[7])*3600+fromBCD(EITdata[8])*60+fromBCD(EITdata[9]);
 	}
 };
+struct hdsEpgRand;
 #endif
 
+// HDSatelit, regulile firelor pentru cache (eventDB si descriptorii):
+// - se schimba numai pe firul EPG sau cu import_lock + cache_lock tinute (importatorii, de pe firele lor);
+// - save ruleaza pe firul EPG si tine numai import_lock: nu scrie nimeni in timp ce citeste, iar firul
+//   UI, care numai citeste, nu asteapta dupa disc;
+// - nimeni nu asteapta GIL-ul tinand unul dintre lacate si nimeni nu asteapta un lacat de import tinand GIL-ul.
 class eEPGCache: public eMainloop, private eThread, public sigc::trackable
 {
 #ifndef SWIG
@@ -266,7 +279,7 @@ private:
 
 	eventCache eventDB;
 	updateMap channelLastUpdated;
-	static pthread_mutex_t cache_lock, channel_map_lock;
+	static pthread_mutex_t cache_lock, channel_map_lock, import_lock;
 
 #ifdef ENABLE_PRIVATE_EPG
 	contentMaps content_time_tables;
@@ -284,7 +297,7 @@ private:
 #endif
 	void sectionRead(const __u8 *data, int source, channel_data *channel);
 	void gotMessage(const Message &message);
-	void flushEPG(const uniqueEPGKey & s=uniqueEPGKey());
+	void flushData(const uniqueEPGKey & s=uniqueEPGKey());
 	static void discardEvents(eventMap &evMap, timeMap &tmMap);
 	void cleanLoop();
 
@@ -296,6 +309,14 @@ private:
 
 	timeMap::iterator m_timemap_cursor, m_timemap_end;
 	int currentQueryTsidOnid; // needed for getNextTimeEntry.. only valid until next startTimeQuery call
+
+// HDSatelit: cele doua drumuri ale importului (din Python, de pe firele importatorilor)
+	int importIptvEvents(const std::string &reference, ePyObject events);
+	int importIptvRows(const uniqueEPGKey &key, std::vector<hdsEpgRand> &rows, time_t now);
+	int importExternEvents(ePyObject services, ePyObject events);
+	bool importExternRow(const uniqueEPGKey &key, hdsEpgRand &row);
+	std::atomic<int> m_flushPending; // cereri flushEPG() trimise firului EPG si neterminate inca
+	int m_externAcceptate, m_externColiziuni, m_externPlafon; // de la pornire, sub import_lock; pentru jurnal
 #else
 	eEPGCache();
 	~eEPGCache();
@@ -318,9 +339,19 @@ public:
 	// HDSatelit: the epg thread writes the cache file now, as at its end (Components/HdsEpgSalvare.py:
 	// at standby and every few hours); false when the thread does not run (no valid time yet) or there is no file
 	bool requestSave();
-	// HDSatelit, implementare proprie: lot limitat de (inceput, durata, titlu, subtitlu, descriere, id).
-	// Numai referinte 4097 cu SID/TSID/ONID nenule; sigur si de pe firul XMLTV (cache_lock).
-	int importEvents(const std::string &reference, SWIG_PYOBJECT(ePyObject) events);
+	// HDSatelit, implementare proprie. Doua forme, un singur nume, numarul intors = evenimentele primite in ghid:
+	// - (referinta 4097, list de (inceput, durata, titlu, subtitlu, descriere, id)): grupul limitat al XMLTV-ului nostru,
+	//   SID/TSID/ONID nenule, plafoanele lui;
+	// - (referinta sau list/tuple de referinte, list/tuple de (inceput, durata, titlu, subtitlu, descriere[, ...])):
+	//   pluginurile de ghid. Servicii DVB si 4097; fluxul DVB castiga la coliziune, importul umple golurile.
+	// Sigure de pe orice fir Python: GIL-ul nu se tine cat se asteapta lacatele.
+	int importEvents(SWIG_PYOBJECT(ePyObject) services, SWIG_PYOBJECT(ePyObject) events);
+	int importEvent(SWIG_PYOBJECT(ePyObject) service, SWIG_PYOBJECT(ePyObject) events);
+	// Pe firul ghidului, revin imediat (nimic pe firul UI): salvarea, ca requestSave (in Python: save, enigma_python.i), si
+	// golirea intregului ghid. load si timeUpdated raman private: load arunca tot ce nu vine din fisier, timeUpdated
+	// porneste firul inainte de ora.
+	void saveLater();
+	void flushEPG();
 
 	// called from main thread
 	inline void Lock();
@@ -351,7 +382,11 @@ public:
 	enum {
 		SIMILAR_BROADCASTINGS_SEARCH,
 		EXAKT_TITLE_SEARCH,
-		PARTIAL_TITLE_SEARCH
+		PARTIAL_TITLE_SEARCH,
+		START_TITLE_SEARCH,
+		END_TITLE_SEARCH,
+		PARTIAL_DESCRIPTION_SEARCH,
+		CRID_SEARCH
 	};
 	enum {
 		CASE_CHECK,

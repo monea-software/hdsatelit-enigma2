@@ -2,6 +2,7 @@
 import skin
 from .HTMLComponent import HTMLComponent
 from .GUIComponent import GUIComponent
+from Components.HdsAsistentaControl import schimbaComponentaWeb
 from enigma import eLabel, eWidget, eSlider, fontRenderClass, ePoint, eSize
 
 class ScrollLabel(HTMLComponent, GUIComponent):
@@ -71,6 +72,7 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 			text = str(text)
 
 		self.message = text
+		schimbaComponentaWeb(self)
 		if self.long_text is None:
 			return
 		self.long_text.move(ePoint(0,0))
@@ -167,6 +169,19 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 			if self.total-self.pageHeight >= abs( curPos.y() - self.pageHeight ):
 				self.long_text.move( ePoint( curPos.x(), curPos.y() - self.pageHeight ) )
 				self.updateScrollbar()
+
+	def isAtLastPage(self):
+		if self.total is None or self.long_text is None:
+			return True
+		return self.total - self.pageHeight <= abs(self.long_text.position().y())
+
+	def getPos(self):
+		return abs(self.long_text.position().y()) if self.long_text is not None else 0
+
+	def setPos(self, pos):
+		if self.total is not None and self.long_text is not None:
+			self.long_text.move(ePoint(self.long_text.position().x(), -max(0, pos)))
+			self.updateScrollbar()
 
 	def firstPage(self):
 		if self.total is not None and self.long_text is not None:

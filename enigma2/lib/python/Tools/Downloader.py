@@ -1,54 +1,75 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-from twisted.web import client
 from twisted.internet import reactor, defer
 from twisted.python import failure
 
-class HTTPProgressDownloader(client.HTTPDownloader):
-	def __init__(self, url, outfile, headers=None):
-		client.HTTPDownloader.__init__(self, url, outfile, headers=headers, agent="HDSatelit Image HTTP Downloader")
-		self.status = None
-		self.progress_callback = None
-		self.deferred = defer.Deferred()
-
-	def noPage(self, reason):
-		if self.status == "304":
-			print(reason.getErrorMessage())
-			client.HTTPDownloader.page(self, "")
-		else:
-			client.HTTPDownloader.noPage(self, reason)
-
-	def gotHeaders(self, headers):
-		if self.status == "200":
-			if "content-length" in headers:
-				self.totalbytes = int(headers["content-length"][0])
-			else:
-				self.totalbytes = 0
-			self.currentbytes = 0.0
-		return client.HTTPDownloader.gotHeaders(self, headers)
-
-	def pagePart(self, packet):
-		if self.status == "200":
-			self.currentbytes += len(packet)
-		if self.totalbytes and self.progress_callback:
-			self.progress_callback(self.currentbytes, self.totalbytes)
-		return client.HTTPDownloader.pagePart(self, packet)
-
-	def pageEnd(self):
-		return client.HTTPDownloader.pageEnd(self)
-
 class downloadWithProgress:
+	"""start() da un Deferred. Merge prin DownloadWithProgress: pe Python 3 si cu twisted de acum drumul vechi nu mai descarca (client._parse nu mai exista, status e in octeti)."""
 	def __init__(self, url, outputfile, contextFactory=None, *args, **kwargs):
-		scheme, host, port, path = client._parse(url)
-		self.factory = HTTPProgressDownloader(url, outputfile, *args, **kwargs)
-		self.connection = reactor.connectTCP(host, port, self.factory)
+		self.lucru = DownloadWithProgress(url.decode("utf-8") if isinstance(url, bytes) else url, outputfile)
+		self.deferred = defer.Deferred()
+		self.lucru.addEnd(self.deferred.callback)
+		self.lucru.addError(lambda e: self.deferred.errback(failure.Failure(e)))
 
 	def start(self):
-		return self.factory.deferred
+		self.lucru.start()
+		return self.deferred
 
 	def stop(self):
-		print("[stop]")
-		self.connection.disconnect()
+		self.lucru.stop()
 
 	def addProgress(self, progress_callback):
-		print("[addProgress]")
-		self.factory.progress_callback = progress_callback
+		self.lucru.addProgress(progress_callback)
+
+
+class DownloadWithProgress:
+	"""Forma ceruta de pluginuri: addProgress, addEnd, addError, setAgent, start, stop. Descarcarea merge pe un fir, callback-urile pe firul principal."""
+	def __init__(self, url, outputFile):
+		self.url = url
+		self.outputFile = outputFile
+		self.userAgent = "Enigma2"
+		self.progressCallback = None
+		self.endCallback = None
+		self.errorCallback = None
+		self.stopFlag = False
+		self.progress = 0
+		self.totalSize = 0
+
+	def setAgent(self, userAgent):
+		self.userAgent = userAgent
+
+	def addProgress(self, progressCallback):
+		self.progressCallback = progressCallback
+
+	def addEnd(self, endCallback):
+		self.endCallback = endCallback
+
+	def addError(self, errorCallback):
+		self.errorCallback = errorCallback
+
+	def start(self):
+		reactor.callInThread(self._lucreaza)
+		return self
+
+	def stop(self):
+		self.stopFlag = True
+
+	def _lucreaza(self):
+		from urllib.request import Request, urlopen
+		try:
+			with urlopen(Request(self.url, None, {"User-agent": self.userAgent}), timeout=30) as sursa, open(self.outputFile, "wb") as tinta:
+				self.totalSize = int(sursa.headers.get("Content-Length", 0) or 0)
+				while not self.stopFlag:
+					bucata = sursa.read(65536)
+					if not bucata:
+						break
+					tinta.write(bucata)
+					self.progress += len(bucata)
+					if self.progressCallback:
+						reactor.callFromThread(self.progressCallback, self.progress, self.totalSize)
+			if self.stopFlag:
+				return
+			if self.endCallback:
+				reactor.callFromThread(self.endCallback, self.outputFile)
+		except Exception as e:
+			if self.errorCallback:
+				reactor.callFromThread(self.errorCallback, e)

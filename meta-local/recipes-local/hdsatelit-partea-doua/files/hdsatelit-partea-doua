@@ -1,0 +1,16 @@
+#!/bin/sh
+# HD Satelit: partea a doua a imaginii pe stick (componenta hdsatelit-partea-doua). Ruleaza in rc3, S05: inittab porneste
+# enigma2.sh (gui, respawn) numai dupa ce rc 3 (wait) s-a terminat, deci stickul legat e montat si legaturile sunt la zi
+# inainte de Enigma2. Fara descrierea modelului sau fara motor nu face nimic. Nu opreste niciodata pornirea: orice
+# eroare lasa starea in /tmp/hdsatelit-partea-doua.stare si Enigma2 porneste cu baza.
+MOTOR=/usr/lib/enigma2/python/Components/HdsParteaDoua.py
+case "$1" in
+	start)
+		[ -f /etc/hdsatelit-partea-doua.conf ] && [ -f "$MOTOR" ] && [ -x /usr/bin/python3 ] || exit 0
+		timeout 180 /usr/bin/python3 "$MOTOR" porneste > /dev/null 2>&1 || :
+		;;
+	stop|restart|force-reload)
+		# la oprire umountfs demonteaza intai fisierul loop (montat ultimul), apoi stickul
+		;;
+esac
+exit 0

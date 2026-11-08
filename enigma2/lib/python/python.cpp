@@ -173,42 +173,52 @@ int ePython::execFile(const char *file)
 
 int ePython::execute(const std::string &pythonfile, const std::string &funcname)
 {
-	ePyObject pName, pModule, pDict, pFunc, pArgs, pValue;
-	pName = PyUnicode_FromString(pythonfile.c_str());
-
-	pModule = PyImport_Import(pName);
-	Py_DECREF(pName);
-	
-	if (pModule)
+	ePyObject pFunc = resolve(pythonfile, funcname);
+	if (!pFunc)
+		return 1;
+	if (!PyCallable_Check(pFunc))
 	{
-		pDict = PyModule_GetDict(pModule);
-		
-		pFunc = PyDict_GetItemString(pDict, funcname.c_str());
-		
-		if (pFunc && PyCallable_Check(pFunc))
-		{
-			pArgs = PyTuple_New(0);
-				// implement arguments..
-			pValue = PyObject_CallObject(pFunc, pArgs);
-			Py_DECREF(pArgs);
-			if (pValue)
-			{
-				printf("Result of call: %ld\n", PyLong_AsLong(pValue));
-				Py_DECREF(pValue);
-			} else
-			{
-				Py_DECREF(pModule);
-				PyErr_Print();
-				return 1;
-			}
-		}
-	} else
-	{
-		if (PyErr_Occurred())
-			PyErr_Print();
+		Py_DECREF(pFunc);
 		return 1;
 	}
+	ePyObject pArgs = PyTuple_New(0);
+	ePyObject pValue;
+	if (pArgs)
+		pValue = PyObject_CallObject(pFunc, pArgs);
+	Py_XDECREF(pArgs);
+	Py_DECREF(pFunc);
+	if (!pValue)
+	{
+		PyErr_Print();
+		return 1;
+	}
+	long value = PyLong_AsLong(pValue);
+	if (PyErr_Occurred())
+	{
+		PyErr_Print();
+		Py_DECREF(pValue);
+		return 1;
+	}
+	printf("Result of call: %ld\n", value);
+	Py_DECREF(pValue);
 	return 0;
+}
+
+/* Nici diagnosticul unei erori nu trebuie sa lase alta exceptie. */
+static std::string hdsPythonText(ePyObject object)
+{
+	ePyObject str;
+	if (object)
+		str = PyObject_Str(object);
+	else
+		str = PyUnicode_FromString("()");
+	const char *text = str ? PyUnicode_AsUTF8(str) : NULL;
+	std::string result = text ? text : "?";
+	if (PyErr_Occurred())
+		PyErr_Print();
+	if (str)
+		Py_DECREF(str);
+	return result;
 }
 
 /*
@@ -238,18 +248,9 @@ static std::string hdsPluginExtern(ePyObject pFunc, ePyObject pArgs)
 	if (tb && value)
 		PyException_SetTraceback(value, tb);
 #endif
-	/* with no exception set, as PyObject_Str needs; the texts of the line written by ePython::call */
-	PyObject *funcStr = PyObject_Str(pFunc);
-	PyObject *argStr = funcStr ? PyObject_Str(pArgs) : NULL;
-	const char *funcText = funcStr ? PyUnicode_AsUTF8(funcStr) : NULL;
-	const char *argText = argStr ? PyUnicode_AsUTF8(argStr) : NULL;
-	PyErr_Clear();
-	std::string call = std::string("(PyObject_CallObject(") + (funcText ? funcText : "?") + "," + (argText ? argText : "?")
-		+ ") failed)";
-	if (argStr)
-		Org_Py_DECREF(argStr);
-	if (funcStr)
-		Org_Py_DECREF(funcStr);
+	std::string funcText = hdsPythonText(pFunc);
+	std::string argText = hdsPythonText(pArgs);
+	std::string call = "(PyObject_CallObject(" + funcText + "," + argText + ") failed)";
 	std::string log = bsodLogBuffer();
 	PyObject *callObj = PyUnicode_DecodeUTF8(call.c_str(), (Py_ssize_t)call.size(), "replace");
 	PyObject *logObj = PyUnicode_DecodeUTF8(log.c_str(), (Py_ssize_t)log.size(), "replace");
@@ -296,7 +297,11 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
  		if (pValue)
 		{
 			if (PyLong_Check(pValue))
+			{
 				res = PyLong_AsLong(pValue);
+				if (PyErr_Occurred())
+					PyErr_Print();
+			}
 			else
 				res = 0;
 			Py_DECREF(pValue);
@@ -304,11 +309,10 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
 		{
 			std::string plugin = hdsPluginExtern(pFunc, pArgs);
 		 	PyErr_Print();
-			ePyObject FuncStr = PyObject_Str(pFunc);
-			ePyObject ArgStr = PyObject_Str(pArgs);
-		 	eDebug("(PyObject_CallObject(%s,%s) failed)", PyUnicode_AsUTF8(FuncStr), PyUnicode_AsUTF8(ArgStr));
-			Py_DECREF(FuncStr);
-			Py_DECREF(ArgStr);
+			std::string funcText = hdsPythonText(pFunc);
+			std::string argText = hdsPythonText(pArgs);
+			eDebug("(PyObject_CallObject(%s,%s) failed)",
+				funcText.c_str(), argText.c_str());
 			/* HDSatelit: an error in an external plugin: the traceback is in the log, the user interface goes on */
 			if (!plugin.empty())
 			{
@@ -326,20 +330,13 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
 
 ePyObject ePython::resolve(const std::string &pythonfile, const std::string &funcname)
 {
-	ePyObject pName, pModule, pDict, pFunc;
-
-	pName = PyUnicode_FromString(pythonfile.c_str());
-
-	pModule = PyImport_Import(pName);
-	Py_DECREF(pName);
-	
+	ePyObject pModule = PyImport_ImportModule(pythonfile.c_str()), pFunc;
 	if (pModule)
 	{
-		pDict = PyModule_GetDict(pModule);
-		pFunc = PyDict_GetItemString(pDict, funcname.c_str());
-		Py_XINCREF(pFunc);
+		pFunc = PyObject_GetAttrString(pModule, funcname.c_str());
 		Py_DECREF(pModule);
-	} else if (PyErr_Occurred())
+	}
+	if (PyErr_Occurred())
 		PyErr_Print();
 	return pFunc;
 }

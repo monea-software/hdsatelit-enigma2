@@ -27,6 +27,7 @@
 # de pe PC dau modulul lor (B) si setarile lor.
 
 import itertools
+import json
 
 CAMPURI = ("fa", "nume", "email", "nota", "fel", "text", "ecran", "jurnal", "captura", "nume_public", "cod", "pas",
 	"n", "automat") + ("jurnale", "canale", "sistem", "utilizare", "receptor", "probe")
@@ -101,11 +102,11 @@ def stare(B=None, b=None):
 	if inscris:
 		noi = B.raspunsuriNoi()
 		rez.update({
-			"id": b.id.value,
+			"id": "***",
 			"acord": B.oraLocala(b.acord.value),
 			"nota": int(b.nota.value),
 			"trimise": [list(r) for r in B.randuriTrimise()],
-			"ultimul": B.ultimulPachet(),
+			"ultimul": _ultimulDeAfisat(B, b),
 			"raspunsuri": B.textRaspunsuri(),
 			"raspunsuri_noi": B.raspunsuriNoi(),
 			"public": b.public.value,
@@ -273,8 +274,24 @@ BANDA_NOTA = """<section id="hdsNotaNoua" role="alert" style="margin:0 0 16px;pa
 def textIdentificator(B, b):
 	"""Acelasi text ca jos in meniul testerului de pe televizor."""
 	return _t("Identificatorul tău: %s\nAcordul din %s, nota de confidențialitate versiunea %d.\n"
-		"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.") % (b.id.value,
+		"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.") % ("***",
 		B.oraLocala(b.acord.value), int(b.nota.value))
+
+
+def _ultimulDeAfisat(B, b):
+	"""Mascheaza numai identificatorul testerului in copia pentru pagina, inclusiv un pachet al inscrierii vechi."""
+	text = B.ultimulPachet()
+	if not text:
+		return text
+	try:
+		pachet = json.loads(text)
+	except (TypeError, ValueError):
+		# Un mesaj vechi ramane proza; identificatorul cunoscut nu pleaca nici din el.
+		return text.replace(b.id.value, "***") if b.id.value else text
+	if isinstance(pachet, dict) and "id" in pachet:
+		pachet["id"] = "***"
+		return json.dumps(pachet, ensure_ascii=False, indent=1, sort_keys=False)
+	return text
 
 
 def _bife(arg, B):

@@ -59,7 +59,7 @@ def _semn(cale):
 def _scrie(cale, text):
 	"""Atomic: un buchet taiat pe jumatate ar pierde canale."""
 	nou = cale + ".nou"
-	with open(nou, "w", encoding="utf-8", newline="") as f:
+	with open(nou, "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
 		f.write(text)
 		f.flush()
 		os.fsync(f.fileno())
@@ -68,7 +68,7 @@ def _scrie(cale, text):
 
 def _citeste(cale):
 	try:
-		with open(cale, encoding="utf-8", errors="replace", newline="") as f:
+		with open(cale, encoding="utf-8", errors="surrogateescape", newline="") as f:
 			return f.read()
 	except (IOError, OSError):
 		return None

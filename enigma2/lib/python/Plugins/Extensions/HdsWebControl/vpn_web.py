@@ -188,6 +188,9 @@ def setari(request, V=None):
 
 def cont(request, V=None):
 	V = _v(V)
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	if {"nume", "parola"}.intersection(_cheiDinAdresa(request)):
+		return {"result": False, "message": _t("Datele contului se trimit numai în corpul cererii.")}
 	nume = _arg(request, "nume", V.MAX_CAMP_CONT + 1)
 	parola = _arg(request, "parola", V.MAX_CAMP_CONT + 1)
 	reusit, mesaj = V.salveazaCont(nume, parola)
@@ -204,6 +207,9 @@ def contSterge(request, V=None):
 
 def importa(request, V=None):
 	V = _v(V)
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	if "text" in _cheiDinAdresa(request):
+		return {"result": False, "message": _t("Fișierele se trimit numai în corpul cererii.")}
 	nume = _lista(request, "nume")
 	texte = _lista(request, "text")
 	if not nume or len(nume) != len(texte):

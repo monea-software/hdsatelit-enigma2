@@ -613,9 +613,15 @@ def scrie_atomic(cale, octeti):
 def _citeste_text(cale):
     try:
         with open(cale, 'rb') as f:
-            return f.read().decode('utf-8', 'replace')
+            date = f.read()
+            return date if compat.PY2 else date.decode('utf-8', 'surrogateescape')
     except (IOError, OSError):
         return None
+
+
+def _octeti_text(text):
+    """Buchetele vechi raman octet cu octet la adaugarea unui rand."""
+    return compat.text_nativ(text) if compat.PY2 else text.encode('utf-8', 'surrogateescape')
 
 
 def _cheie(linie_service):
@@ -789,7 +795,7 @@ def asigura_index(profil, director, fisier=None):
     if not text.endswith('\n'):
         text += '\n'
     text += linie_index(profil, fisier) + '\n'
-    scrie_atomic(cale, text.encode('utf-8'))
+    scrie_atomic(cale, _octeti_text(text))
     return True
 
 
@@ -816,7 +822,7 @@ def reface(profil, lista, director=None, director_date=None, reincarca=True):
             vechi = _citeste_text(cale)
             nou = compune(profil, vechi or '', intrari, nume_b)
             if nou != vechi:
-                scrie_atomic(cale, nou.encode('utf-8'))
+                scrie_atomic(cale, _octeti_text(nou))
                 schimbat = True
             if asigura_index(profil, director, fisier):
                 schimbat = True

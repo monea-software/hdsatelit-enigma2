@@ -187,17 +187,6 @@ def hdsDeschideSetariVideo(session):
 	session.open(VideoSetup)
 
 
-def hdsApasareLunga(porneste):
-	"""Logica apasarii lungi a butoanelor colorate (Components/HdsTasteRapide.ApasareLunga); None fara modul (atunci
-	harta lasa toate tastele mai departe)."""
-	try:
-		from Components.HdsTasteRapide import ApasareLunga
-	except ImportError as e:
-		print("[InfoBar] apasarea lunga a butoanelor colorate lipseste:", e)
-		return None
-	return ApasareLunga(porneste)
-
-
 def hdsHbbtvDeschisa():
 	"""Aplicatia HbbTV e deschisa acum (Components/HdsHbbtvPornire.deschisa); False fara modul."""
 	try:
@@ -208,16 +197,28 @@ def hdsHbbtvDeschisa():
 
 
 def hdsFaActiuneaLunga(ecran, actiune):
-	"""Actiunea aleasa pentru apasarea lunga a unui buton colorat (Components/HdsTasteRapide.ACTIUNI_DISPONIBILE), cu
-	ecranul tastei ei: EPG (ca tasta EPG), meniul principal (MENU), lista extensiilor, meniul Informatii (ca POWER lung
-	cu meniul lui), pistele audio, subtitrarile, lista de canale (OK)."""
-	if actiune == "epg":
+	"""Actiunile comune ale tastelor, cu ecranele si verificarile lor obisnuite."""
+	if actiune == "none":
+		return
+	elif actiune.startswith("plugin:"):
+		from Components.HdsTasteRapide import pluginuri_alocabile
+		plugin = pluginuri_alocabile().get(actiune)
+		if plugin is None:
+			from Screens.MessageBox import MessageBox
+			ecran.session.open(MessageBox,
+				_("Pluginul alocat tastei nu mai este disponibil."),
+				MessageBox.TYPE_INFO, timeout=6)
+		else:
+			ecran.runPlugin(plugin)
+	elif actiune == "epg":
 		ecran.showEventInfoPlugins()
 	elif actiune == "menu":
 		ecran.mainMenu()
 	elif actiune == "plugins":
 		from Screens.PluginBrowser import PluginBrowser
 		ecran.session.open(PluginBrowser)
+	elif actiune == "extensions":
+		InfoBarExtensions.showExtensionSelection(ecran)
 	elif actiune == "info":
 		from Screens.Menu import MainMenu, mdom
 		from Components.HdsTasteRapide import cauta_meniu
@@ -233,6 +234,35 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		ecran.subtitleSelection()
 	elif actiune == "channellist":
 		ecran.openServiceList()
+	elif actiune == "favourites":
+		ecran.hdsFavorite()
+	elif actiune == "movies":
+		ecran.showMovies()
+	elif actiune == "record":
+		ecran.instantRecord()
+	elif actiune == "timeshift":
+		ecran.startTimeshift()
+	elif actiune == "timeshift_stop":
+		ecran.stopTimeshift()
+	elif actiune == "teletext":
+		ecran.hdsTeletext()
+	elif actiune == "subservices":
+		InfoBarSubserviceSelection.subserviceSelection(ecran)
+	elif actiune == "timers":
+		ecran.hdsListaTimere()
+	elif actiune == "pip":
+		from Components.SystemInfo import SystemInfo
+		if SystemInfo.get("NumVideoDecoders", 1) > 1 and ecran.allowPiP:
+			ecran.showPiP()
+		else:
+			from Screens.MessageBox import MessageBox
+			ecran.session.open(MessageBox,
+				_("PiP nu este disponibil pe acest receptor."),
+				MessageBox.TYPE_INFO, timeout=6)
+	elif actiune in ("standby", "shutdown", "reboot", "restart"):
+		from Components.HdsAlimentare import deschide
+		deschide(ecran.session, {"standby": "standby", "shutdown": "oprire",
+			"reboot": "receptor", "restart": "interfata"}[actiune])
 	elif actiune == "captura":
 		ecran.hdsCaptura()
 	else:
@@ -252,7 +282,8 @@ def hdsActiuneVerdeScurt():
 	"plugins"); "none" fara modul sau cand setarea nu se poate citi (atunci VERDE face ce facea: nimic fara subcanale)."""
 	try:
 		from Components.HdsTasteRapide import actiune_aleasa
-		return actiune_aleasa("green_short")
+		actiune = actiune_aleasa("green_short")
+		return "plugins" if actiune == "default" else actiune
 	except Exception as e:
 		print("[InfoBar] verde scurt: setarea nu se poate citi: %s" % e)
 		return "none"
@@ -297,27 +328,13 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				"captura": (self.hdsCaptura, _("Captură de ecran")),
 			}, prio=2)
 
-		# HDSatelit: apasarea lunga a butoanelor colorate (data/keymap.xml, HdsTasteColorateActions), cu actiunea aleasa
-		# in Butoane colorate si taste rapide (Components/HdsTasteRapide.py, ApasareLunga). Prioritatea -2: harta vede
-		# apasarea inaintea ecranului radio (-1) si a hartilor barei, dar o lasa mai departe, deci apasarea scurta ramane
-		# cum era; eliberarea e oprita numai dupa o apasare lunga facuta.
+		# Numai bara live. Alte ecrane isi pastreaza hartile proprii.
+		from Components.HdsTasteRapide import AlocareTaste, actiuni_harta
 		self.hdsRosuLuat = False
-		self.hdsTasteLungi = hdsApasareLunga(self.hdsPornesteTastaLunga)
-		self["HdsTasteColorateActions"] = HelpableActionMap(self, "HdsTasteColorateActions",
-			{
-				"rosuApasat": lambda: self.hdsTastaApasata("red"),
-				"rosuLung": (lambda: self.hdsTastaTinuta("red"), _("Roșu (apăsare lungă)")),
-				"rosuEliberat": lambda: self.hdsTastaEliberata("red"),
-				"verdeApasat": lambda: self.hdsTastaApasata("green"),
-				"verdeLung": (lambda: self.hdsTastaTinuta("green"), _("Verde (apăsare lungă)")),
-				"verdeEliberat": lambda: self.hdsTastaEliberata("green"),
-				"galbenApasat": lambda: self.hdsTastaApasata("yellow"),
-				"galbenLung": (lambda: self.hdsTastaTinuta("yellow"), _("Galben (apăsare lungă)")),
-				"galbenEliberat": lambda: self.hdsTastaEliberata("yellow"),
-				"albastruApasat": lambda: self.hdsTastaApasata("blue"),
-				"albastruLung": (lambda: self.hdsTastaTinuta("blue"), _("Albastru (apăsare lungă)")),
-				"albastruEliberat": lambda: self.hdsTastaEliberata("blue"),
-			}, prio=-2)
+		self.hdsTasteAlocate = AlocareTaste(self.hdsPornesteTastaLunga,
+			self.keyNumberGlobal, self.hdsTastaDisponibila)
+		self["HdsAlocareTasteActions"] = HelpableActionMap(self,
+			"HdsAlocareTasteActions", actiuni_harta(self.hdsTastaAlocata), prio=-2)
 
 		self.allowPiP = True
 		
@@ -331,6 +348,11 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				InfoBarPlugins, InfoBarServiceErrorPopupSupport, InfoBarFilmRefuz:
 			x.__init__(self)
 
+		# VERDE scurt e al pluginurilor, deci subcanalele sunt un rand in lista tastei albastre, numai cand canalul le are
+		# (implementarea de baza: InfoBar.subserviceSelection deschide actiunea tastei VERDE)
+		self.addExtension((lambda: _("Subcanale"), lambda: InfoBarSubserviceSelection.subserviceSelection(self),
+			lambda: hdsAreSubcanale(self.session)), "red")
+
 		self.helpList.append((self["actions"], "InfobarActions", [("showMovies", _("view recordings..."))]))
 		self.helpList.append((self["actions"], "InfobarActions", [("showRadio", _("hear radio..."))]))
 
@@ -340,6 +362,12 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			})
 
 		self.hdsPornesteEcranRadio()
+		# Panoul vremii citeste aceleasi alegeri ca afisajul si pagina web.
+		try:
+			from Screens.HdsVremea import LegaturaVremea
+			self.hdsVremea = LegaturaVremea(self)
+		except Exception as e:
+			print("[InfoBar] panoul vremii nu a pornit: %s" % e)
 
 		self.current_begin_time=0
 		self.hdsRefEmisiune = None
@@ -606,8 +634,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 
 	def hdsHbbtvRosu(self):
 		rez = hdsHbbtvRosu(self)
-		# ROSU tinut apasat nu mai face si actiunea lunga cand apasarea lui a pornit aplicatia HbbTV (hdsTastaApasata
-		# sterge semnul la fiecare apasare: harta apasarii lungi vine inaintea acesteia)
+		# Dupa pornirea aplicatiei canalului nu mai pornim alta actiune lunga.
 		self.hdsRosuLuat = bool(rez)
 		return rez
 
@@ -620,29 +647,28 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		except Exception as e:
 			print("[InfoBar] captura: %s: %s" % (type(e).__name__, e))
 
-	# butoanele colorate tinute apasat (harta HdsTasteColorateActions); fara modulul HdsTasteRapide, nimic nu se schimba
-	def hdsTastaApasata(self, buton):
-		if buton == "red":
+	def hdsTastaAlocata(self, tasta, faza):
+		if tasta == "red" and faza == "m":
 			self.hdsRosuLuat = False
-		t = getattr(self, "hdsTasteLungi", None)
-		return t.apasat(buton) if t is not None else 0
+		return self.hdsTasteAlocate.eveniment(tasta, faza)
 
-	def hdsTastaTinuta(self, buton):
-		t = getattr(self, "hdsTasteLungi", None)
-		return t.lung(buton) if t is not None else 0
-
-	def hdsTastaEliberata(self, buton):
-		t = getattr(self, "hdsTasteLungi", None)
-		return t.eliberat(buton) if t is not None else 0
-
-	def hdsPornesteTastaLunga(self, buton, actiune):
-		"""Actiunea apasarii lungi (ApasareLunga.porneste) -> True cand s-a facut. ROSU ramane al aplicatiei HbbTV cand
-		apasarea lui a pornit-o sau cand ea e deschisa, iar tastele colorate raman ale ecranului radio cat se vede el:
-		atunci False, si totul merge ca pana acum. O eroare a actiunii ramane numai in jurnal (nimic pe televizor)."""
-		if buton == "red" and (getattr(self, "hdsRosuLuat", False) or hdsHbbtvDeschisa()):
+	def hdsTastaDisponibila(self, tasta):
+		# Aplicatia canalului si ecranul radio isi pastreaza tastele.
+		if hdsHbbtvDeschisa():
+			return False
+		if tasta == "red" and getattr(self, "hdsRosuLuat", False):
 			return False
 		radio = getattr(self, "hdsRadio", None)
 		if radio is not None and radio._tastaColorata():
+			return False
+		# In timeshift cifrele raman ale derularii, inclusiv la tinere.
+		if tasta.startswith("number_") and self.timeshift_enabled:
+			return False
+		return True
+
+	def hdsPornesteTastaLunga(self, buton, actiune):
+		"""Porneste actiunea scurta sau lunga; eroarea nu cade in bara."""
+		if not self.hdsTastaDisponibila(buton):
 			return False
 		try:
 			hdsFaActiuneaLunga(self, actiune)
@@ -652,15 +678,15 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 
 	def subserviceSelection(self):
 		"""VERDE apasat scurt cat te uiti la televizor (harta InfobarSubserviceSelectionActions, la eliberare; dupa o
-		apasare lunga eliberarea e oprita de HdsTasteColorateActions): pe un canal cu subcanale lista lor, ca inainte;
-		altfel actiunea aleasa in Butoane colorate si taste rapide, implicit pagina de pluginuri. Actiunea trece pe
-		aceeasi cale ca apasarea lunga (hdsPornesteTastaLunga): ecranul radio isi pastreaza tastele colorate, o eroare
-		ramane numai in jurnal."""
-		if hdsAreSubcanale(self.session):
-			return InfoBarSubserviceSelection.subserviceSelection(self)
+		apasare lunga eliberarea e oprita de HdsAlocareTasteActions): actiunea aleasa in Butoane colorate si taste rapide,
+		implicit pagina de pluginuri, pe orice canal. Subcanalele sunt in lista tastei albastre; VERDE le arata numai daca nu
+		e aleasa nicio actiune. Actiunea trece pe aceeasi cale ca apasarea lunga (hdsPornesteTastaLunga): ecranul radio isi
+		pastreaza tastele colorate, o eroare ramane numai in jurnal."""
 		actiune = hdsActiuneVerdeScurt()
 		if actiune != "none":
 			self.hdsPornesteTastaLunga("green", actiune)
+		elif hdsAreSubcanale(self.session):
+			return InfoBarSubserviceSelection.subserviceSelection(self)
 
 	def hdsFavorite(self):
 		# ca tasta albastra din lista de canale: lista buchetelor (favoritele), apoi lista se deschide

@@ -254,7 +254,12 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 		Py_ssize_t pos=0;
 		while (PyDict_Next(additional, &pos, &key, &val)) {
 			pfd[i].fd = PyObject_AsFileDescriptor(key);
-			pfd[i++].events = PyLong_AsLong(val);
+			if (PyErr_Occurred())
+				return -1;
+			long events = PyLong_AsLong(val);
+			if (PyErr_Occurred())
+				return -1;
+			pfd[i++].events = events;
 		}
 	}
 
@@ -304,12 +309,27 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 			if (pfd[i].revents)
 			{
 				if (!*res)
+				{
 					*res = PyList_New(0);
-				ePyObject it = PyTuple_New(2);
-				PyTuple_SET_ITEM(it, 0, PyLong_FromLong(pfd[i].fd));
-				PyTuple_SET_ITEM(it, 1, PyLong_FromLong(pfd[i].revents));
-				PyList_Append(*res, it);
+					if (!*res)
+						return -1;
+				}
+				ePyObject it = Py_BuildValue("(ii)", pfd[i].fd,
+					pfd[i].revents);
+				if (!it)
+				{
+					Py_DECREF(*res);
+					*res = 0;
+					return -1;
+				}
+				int append_result = PyList_Append(*res, it);
 				Py_DECREF(it);
+				if (append_result < 0)
+				{
+					Py_DECREF(*res);
+					*res = 0;
+					return -1;
+				}
 			}
 		}
 	}
@@ -393,8 +413,15 @@ PyObject *eMainloop::poll(ePyObject timeout, ePyObject dict)
 		Py_RETURN_NONE;
 
 	int twisted_timeout = (timeout == Py_None) ? 0 : PyLong_AsLong(timeout);
+	if (PyErr_Occurred())
+		return NULL;
 
 	iterate(twisted_timeout, &res, dict);
+	if (PyErr_Occurred())
+	{
+		Py_XDECREF(res);
+		return NULL;
+	}
 	if (res)
 		return res;
 

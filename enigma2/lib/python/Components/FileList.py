@@ -109,7 +109,7 @@ def StorageEntryComponent(partition, path, table = None):
 		table = readMountTable()
 	kind = deviceKind(path, partition.device, table)
 	name = deviceName(path, partition.description, partition.device, kind, table)
-	res = [ (path, True) ]
+	res = [ (path, True, False, False, partition.description if hasattr(partition, "description") else path, None) ]
 	x, y, w, h = getParameterFromSkin("FileListStorageName", (100, 10, 900, 48))[0]
 	res.append((eListboxPythonMultiContent.TYPE_TEXT, x, y, w, h, 2, RT_HALIGN_LEFT | RT_VALIGN_CENTER, name))
 	png, from_skin = getListPixmap("FileListStorageImage", kind, None)
@@ -148,7 +148,7 @@ def StorageEntryComponent(partition, path, table = None):
 
 def FileEntryComponent(name, absolute = None, isDir = False, kind = None):
 	# kind (optional): "parent" or "storage" for the rows that are not a plain folder or file
-	res = [ (absolute, isDir) ]
+	res = [ (absolute, isDir, False, False, name, None) ]
 	rect, skinned = getParameterFromSkin("FileListName", (35, 1, 470, 20))
 	# safeText: a file name with bytes that are not valid UTF-8 would otherwise crash the text drawing (see HdsNavigator)
 	res.append((eListboxPythonMultiContent.TYPE_TEXT, rect[0], rect[1], rect[2], rect[3], 0, RT_HALIGN_LEFT | (skinned and RT_VALIGN_CENTER or 0), safeText(name)))
@@ -174,7 +174,8 @@ class FileList(MenuList):
 		self.showFiles = showFiles
 		self.isTop = isTop
 		# example: matching .nfi and .ts files: "^.*\.(nfi|ts)"
-		self.matchingPattern = matchingPattern
+		# compilat, cum il citesc pluginurile (self.matchingPattern.search); re_compile accepta si un tipar deja compilat
+		self.matchingPattern = re_compile(matchingPattern) if isinstance(matchingPattern, str) else matchingPattern
 		self.inhibitDirs = inhibitDirs or []
 		self.inhibitMounts = inhibitMounts or []
 		# HDSatelit: called after every change of folder (path bar, details panel of the screens)
@@ -398,6 +399,12 @@ class FileList(MenuList):
 
 	def getCurrentDirectory(self):
 		return self.current_directory
+
+	def canDescend(self):
+		return self.canDescent()
+
+	def descend(self):
+		return self.descent()
 
 	def canDescent(self):
 		if self.getSelection() is None:
@@ -625,3 +632,16 @@ class MultiFileSelectList(FileList):
 					self.moveToIndex(i)
 				i += 1
 
+# numele cerute de pluginuri: FileEntryComponent da randul in ordinea asta
+FILE_PATH = 0
+FILE_IS_DIR = 1
+FILE_IS_LINK = 2
+FILE_SELECTED = 3
+FILE_NAME = 4
+FILE_DIR_ICON = 5
+AUDIO_EXTENSIONS = frozenset((".mp3", ".mp2", ".m4a", ".m2a", ".mka", ".flac", ".ogg", ".oga", ".dts", ".wav", ".wave", ".wma", ".ac3", ".aac"))
+DVD_EXTENSIONS = frozenset((".iso", ".img", ".nrg"))
+IMAGE_EXTENSIONS = frozenset((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".jpe", ".svg"))
+MOVIE_EXTENSIONS = frozenset((".ts", ".stream", ".mp4", ".mkv", ".mpg", ".mpeg", ".mpe", ".avi", ".vob", ".m2ts", ".mts", ".m4v", ".mov", ".flv", ".wmv", ".divx", ".webm"))
+RECORDING_EXTENSIONS = frozenset((".ap", ".cuts", ".eit", ".meta", ".sc"))
+KNOWN_EXTENSIONS = MOVIE_EXTENSIONS | AUDIO_EXTENSIONS | DVD_EXTENSIONS | IMAGE_EXTENSIONS

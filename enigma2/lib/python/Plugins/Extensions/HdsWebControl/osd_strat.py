@@ -276,7 +276,7 @@ class Strat(object):
 		epoca = CS.epocaCapturii()
 		if epoca is None:
 			self._stari.clear()
-			return {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)}
+			return {"cod": 403, "mesaj": CS.mesajRefuz()}
 		if latime_fb is None:
 			g = self.fb.geometrie()
 			if g is None:
@@ -300,7 +300,7 @@ class Strat(object):
 			epoca = CS.epocaCapturii()
 			if epoca is None:
 				self._stari.clear()
-				return {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)}
+				return {"cod": 403, "mesaj": CS.mesajRefuz()}
 			g = self.fb.geometrie()
 			if g is None:
 				return {"cod": 503, "mesaj": _t("Stratul grafic nu se poate citi pe acest receptor.")}
@@ -320,7 +320,7 @@ class Strat(object):
 			if not CS.capturaValida(epoca):
 				if self._stari.get(p) is st:
 					self._stari.pop(p, None)
-				return {"cod": 403, "mesaj": _t(CS.MESAJ_ASOCIERE)}
+				return {"cod": 403, "mesaj": CS.mesajRefuz()}
 			return self._raspuns(p, st, etag_client)
 
 	def _raspuns(self, p, st, etag_client):

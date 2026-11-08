@@ -19,6 +19,7 @@
 #include <utility>
 
 class eStaticServiceMP3Info;
+class HdsRadioOnline;
 
 class eSubtitleWidget;
 
@@ -75,6 +76,8 @@ public:
 	/* defined in servicemp3.cpp: the gate of the GStreamer callbacks and the thread of the film */
 	struct Poarta;
 	struct FirFilm;
+	/* Oprirea unui radio GStreamer inca tine iesirea placii; numai citire atomica. */
+	static bool asteaptaEliberareaRadio();
 
 		// iPlayableService
 	RESULT connectEvent(const sigc::slot<void(iPlayableService*, int)> &event, ePtr<eConnection> &connection);
@@ -251,6 +254,8 @@ private:
 	void hdsEgalAlege();
 	void hdsEgalReaplica();
 	void hdsEgalInfo();
+	std::shared_ptr<HdsRadioOnline> m_hds_radio;
+	PyObject *hdsRadioInfo();
 	/* the cue file: read on the film thread after start(), m_cues_timer looks for the result */
 	std::multiset<std::pair<pts_t, unsigned int> > m_cue_entries;
 	bool m_cues_loaded, m_cues_changed;

@@ -45,6 +45,12 @@ try:
 except ImportError:  # probele de pe PC fara Canvas
 	CanvasSource = None
 
+
+def _(text):
+	from Components.HdsDiagnostic import traduce
+	return traduce(text)
+
+
 PAGINA_WEB = "/paza-model"
 PORT_WEB_IMPLICIT = 80
 # portul pe care asculta interfata web, scris de HdsWebControl la pornire (8080 cand 80 era ocupat)
@@ -199,11 +205,12 @@ def textNota(adresa):
 	return HdsDiagnostic.textAdresa(adresa)
 
 
-def texte(verdict, adresa="", din_meniu=False):
+def texte(verdict, adresa="", din_meniu=False, limba=None, cale_setari=None, dosar_po=None):
 	"""Textele ecranului din verdictul lui Components.HdsPazaModel.verdict(): {titlu, software, cod, mesaj, rugaminte,
 	nota, cefaci, coduri, randuri (pentru televizor)}"""
 	from Components import HdsDiagnostic as D
 	from Components import HdsPazaModel as M
+	D.pregatesteLimba(limba, cale_setari, dosar_po)
 	coduri = D.coduri(verdict)
 	cod = coduri[0] if coduri else ""
 	if din_meniu:
@@ -224,6 +231,8 @@ def texte(verdict, adresa="", din_meniu=False):
 		cefaci = _("OK sau EXIT închide fereastra.")
 	else:
 		cefaci = D.ceFaci()
+	if D.notaSlot(verdict):
+		cefaci = D.notaSlot(verdict) + " " + cefaci
 	return {"titlu": titlu, "software": D.software(verdict), "cod": cod, "coduri": coduri, "mesaj": mesaj,
 		"rugaminte": D.rugaminte() if cod else "", "nota": D.textAdresa(adresa), "cefaci": cefaci,
 		"randuri": D.randuri(verdict, tv=True)[:RANDURI_MAX]}
@@ -457,7 +466,7 @@ class HdsPazaModelIntrebare(Screen, _FereastraAsezata):
 		self["mesaj"] = StaticText(mesaj)
 		self["tehnic"] = StaticText(tehnic)
 		self["alegeri"] = MenuList([da or _("Da"), nu or _("Nu")])
-		self["nota"] = StaticText(_("Săgețile sus și jos aleg, OK confirmă, EXIT înseamnă „Nu”."))
+		self["nota"] = StaticText(_("Săgețile sus și jos aleg, OK confirmă, EXIT înseamnă Nu."))
 		self._puneDecor()
 		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions"], {
 			"ok": self._ok,

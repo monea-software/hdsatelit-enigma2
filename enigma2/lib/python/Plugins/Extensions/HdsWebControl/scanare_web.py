@@ -117,7 +117,8 @@ def _radacinaMeniu():
 	"""Radacina lui menu.xml, citita o data si recitita numai cand fisierul se schimba (~30 KB)."""
 	cale = _caleMeniu()
 	try:
-		semn = os.path.getmtime(cale)
+		stare = os.stat(cale)
+		semn = (stare.st_mtime_ns, stare.st_size)
 	except OSError:
 		semn = None
 	if _MENIU["radacina"] is None or _MENIU["cale"] != cale or _MENIU["semn"] != semn:
@@ -1846,11 +1847,16 @@ PAGINA = """<!DOCTYPE html>
   main{max-width:760px;margin:0 auto;}
   h1{font-size:1.25rem;margin:0 0 14px;}
   .file{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;}
-  .file button{flex:1 1 90px;min-height:44px;padding:10px 12px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
-  .file button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .file button,.file>a{flex:1 1 90px;min-height:44px;padding:10px 12px;border-radius:8px;
+    border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  .file>a{display:flex;align-items:center;justify-content:center;text-decoration:none;}
+  .file button[aria-selected="true"],.file button[aria-pressed="true"]{
+    background:var(--accent);border-color:var(--accent);color:#fff;}
   .feluri{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 12px;}
   @media(min-width:560px){.feluri{grid-template-columns:1fr 1fr;}}
-  .feluri button{min-height:44px;padding:10px 12px;border-radius:8px;border:1px solid var(--bordura);background:var(--panou);color:var(--text);font:inherit;text-align:left;cursor:pointer;}
+  .feluri button,.feluri>a{min-height:44px;padding:10px 12px;border-radius:8px;
+    border:1px solid var(--bordura);background:var(--panou);color:var(--text);font:inherit;
+    text-align:left;cursor:pointer;}
   .feluri button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent);}
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:16px;margin:0 0 12px;}
   .card h2{font-size:1rem;margin:0 0 10px;}
@@ -1919,7 +1925,7 @@ PAGINA = """<!DOCTYPE html>
 <div class="mesaj" id="incarcare" role="status">Se citește meniul receptorului...</div>
 
 <section id="panouScanare" class="ascuns">
-  <div class="file" role="tablist" id="grupuri"></div>
+  <div class="file" id="grupuri"></div>
   <div class="feluri" id="feluri"></div>
   <div class="card ascuns" id="formular">
     <h2 id="titluFel"></h2>
@@ -2034,13 +2040,17 @@ function sectiune(cheie){
   for(var i = 0; i < lista.length; i++){ if(lista[i].cheie === cheie){ return lista[i]; } }
   return null;
 }
-function grupuriScanare(){
+function intrariScanare(){
   var s = sectiune("scanare");
-  if(!s){ return []; }
-  var grupuri = s.copii.filter(function(c){ return c.tip === "grup"; });
-  var directe = s.copii.filter(function(c){ return c.tip === "intrare"; });
-  if(directe.length){ grupuri = grupuri.concat([{tip: "grup", cheie: "alte", titlu: "Alte intrări", copii: directe}]); }
-  return grupuri;
+  return s ? s.copii : [];
+}
+function grupuriScanare(){
+  return intrariScanare().filter(function(c){ return c.tip === "grup"; });
+}
+function legaturaScanare(x, clasa){
+  var a = el("a", clasa, x.text);
+  a.href = x.web ? adresa(x.web) : adresa("/meniu") + "#i-" + encodeURIComponent(x.id || "");
+  return a;
 }
 function grup(cheie){
   var g = grupuriScanare();
@@ -2069,11 +2079,15 @@ function alegeSectiunea(cheie){
 function deseneazaGrupuri(){
   var cutie = $("grupuri");
   goleste(cutie);
-  grupuriScanare().forEach(function(g){
+  // Aceeasi ordine ca in XML: intrarile directe raman langa submeniuri.
+  intrariScanare().forEach(function(g){
+    if(g.tip === "intrare"){
+      cutie.appendChild(legaturaScanare(g, ""));
+      return;
+    }
     var b = buton(g.titlu, false, function(){ alegeGrupul(g.cheie, ""); });
     b.className = "";
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", g.cheie === S.grup ? "true" : "false");
+    b.setAttribute("aria-pressed", g.cheie === S.grup ? "true" : "false");
     cutie.appendChild(b);
   });
 }
@@ -2116,6 +2130,7 @@ function alegeFelul(x){
   incarcaCampuri();
 }
 function cartelaTelevizor(x){
+  if(x.web){ return legaturaScanare(x, "buton"); }
   var c = el("div", "card");
   c.appendChild(el("h2", "", x.text));
   c.appendChild(el("p", "nota", "Acest ecran se folosește pe televizor."));
@@ -2799,6 +2814,7 @@ function pornestePagina(){
     var grupuri = grupuriScanare();
     var cheie = a.sectiune === "scanare" && grup(a.a) ? a.a : (grupuri.length ? grupuri[0].cheie : "");
     if(cheie){ alegeGrupul(cheie, a.sectiune === "scanare" ? a.b : ""); }
+    else { deseneazaGrupuri(); }
     if(a.sectiune === "antena"){ S.tintaAntena = a.a; }
     alegeSectiunea(S.sectiune);
     deseneazaStarea(d.stare);
@@ -2838,7 +2854,6 @@ TEXTE_PAGINA = {
 	"js": (
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
-		N_("Alte intrări"),
 		N_("Acest ecran se folosește pe televizor."),
 		N_("Deschide pe televizor"),
 		N_("Se pregătește..."),

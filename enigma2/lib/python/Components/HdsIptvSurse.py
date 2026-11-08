@@ -727,7 +727,7 @@ def leagaIndex():
 	semn = 'FROM BOUQUET "%s"' % BUCHET_RADACINA
 	are = areSurse() and bool(citesteSurse())
 	try:
-		with open(cale, encoding="utf-8", newline="") as f:
+		with open(cale, encoding="utf-8", errors="surrogateescape", newline="") as f:
 			text = f.read()
 	except (IOError, OSError):
 		if not are:
@@ -753,7 +753,7 @@ def leagaIndex():
 			sari = False
 			rez.append(r)
 		text = "".join(rez)
-	_scrie(cale, text.encode("utf-8"), 0o644)
+	_scrie(cale, text.encode("utf-8", "surrogateescape"), 0o644)
 	return True
 
 
@@ -771,6 +771,23 @@ def numarDupaFisier(surse=None):
 				rez[g[0]] = int(g[2])
 			except (IndexError, TypeError, ValueError):
 				pass
+	return rez
+
+
+def grupeLista(surse=None):
+	"""Numai identitatea si numele deja afisate, fara conturi sau adrese. Pe firul de citire al indexului.
+	Se refoloseste grupe_lista, inclusiv lista unica tinuta direct in radacina."""
+	surse = surse if surse is not None else citesteSurse()
+	rez = []
+	for s in surse:
+		grupe = s.get("grupe_lista") or ()
+		for g in grupe:
+			if not isinstance(g, (list, tuple)) or len(g) < 3 or not isinstance(g[0], str):
+				continue
+			if not g[0].startswith(PREFIX_GRUPA) or "/" in g[0] or "\\" in g[0]:
+				continue
+			fisier = BUCHET_RADACINA if len(surse) == 1 and len(grupe) == 1 else g[0]
+			rez.append((fisier, s["id"], numeSursa(s), numeCurat(g[1])))
 	return rez
 
 

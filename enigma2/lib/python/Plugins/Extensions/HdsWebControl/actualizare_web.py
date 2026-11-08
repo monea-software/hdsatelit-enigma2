@@ -71,6 +71,8 @@ def pachete(U, H, discuri):
 		# numele stickului (Tools/MediuImagine.pregatesteNumeStick): refuz numai daca montarea nu s-a putut muta, ca in
 		# lista de pe televizor
 		stick = getattr(U, "scurtNumeStick", lambda m: None)(c.get("nume_stick"))
+		# stickul pus pe numai citire, fara alt disc pentru dezarhivare (U.marcheazaMediu); verificarea e in pagina Discurile
+		fara_loc = bool(c.get("numai_citire")) and not c.get("loc_lucru") and c.get("fel") != "rea"
 		rez.append({
 			"nume": U.numeImagineStraina(c) if c.get("fel") == "straina" else U._numePachet(c),
 			"fel": c.get("fel") or "",
@@ -79,11 +81,12 @@ def pachete(U, H, discuri):
 			"mediu": "  ·  ".join(x for x in (c["disc"].description or c["disc"].mountpoint, c.get("usb")) if x),
 			"tip": c["tip"],
 			"cod": cod,
-			"bun": cod == H.PACHET_BUN and not stick,
-			"verdict": stick or (_t("Nu este imagine HD Satelit. Nu știm dacă este compatibilă")
-				if c.get("fel") == "straina" else H.scurtRefuz(cod)),
+			"bun": cod == H.PACHET_BUN and not stick and not fara_loc,
+			"verdict": stick or (_t("Pe stick se poate numai citi") if fara_loc else "") or (
+				_t("Nu este imagine HD Satelit și nu o putem verifica") if c.get("fel") == "straina" else H.scurtRefuz(cod)),
 			"text": (_t("Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu "
-				"HDSATELIT), apoi introdu-l din nou în receptor.") if stick else "") or text or "",
+				"HDSATELIT), apoi introdu-l din nou în receptor.") if stick else "") or (U.textStickCazut(c, cu_ok=False) if fara_loc else "") or text or "",
+			"repara": _t("Repară") if fara_loc and c.get("disc_reparat") else "",
 		})
 	return rez
 
@@ -284,6 +287,10 @@ function arata(d){
     c.appendChild(element("p", "verdict", x.verdict.charAt(0).toUpperCase() + x.verdict.slice(1)));
     c.appendChild(element("p", "detalii", [x.versiune && x.nume.indexOf(x.versiune) === -1 ? x.versiune : "", x.mediu].filter(Boolean).join("  ·  ")));
     if(x.text){ c.appendChild(element("p", "motiv", x.text)); }
+    if(x.repara){
+      var rp = document.createElement("a"); rp.href = adresa("/discuri?f=verificare"); rp.textContent = x.repara; rp.style.color = "inherit";
+      c.appendChild(rp);
+    }
     l.appendChild(c);
   });
 }

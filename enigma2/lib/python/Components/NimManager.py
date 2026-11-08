@@ -35,6 +35,13 @@ def tryOpen(filename):
 		return None
 	return procFile
 
+
+def inputPowerSlotForNim(nim):
+	"""Curentul LNB este citit de nucleu dupa numarul locului tunerului.
+	Tunerele imaginii nu au o remapare a locurilor pentru aceasta masurare.
+	"""
+	return int(nim)
+
 class SecConfigure:
 	def getConfiguredSats(self):
 		return self.configuredSatellites
@@ -139,7 +146,14 @@ class SecConfigure:
 		print("link tuner", nim1, "to tuner", nim2)
 		if nim2 == (nim1 - 1):
 			self.linkInternally(nim1)
-		sec.setTunerLinked(nim1, nim2)
+		legatura = sec.setTunerLinked(nim1, nim2)
+		if legatura in (0, None):
+			from Components.HdsFbc import ruteaza
+			try:
+				ruteaza(self.NimManager.nim_slots, nim1, self.getRoot(nim1, nim2))
+			except (ValueError, KeyError, IndexError) as eroare:
+				print("[HdsFbc] legatura %d spre %d nu are radacina valida: %s" %
+					(nim1, nim2, eroare))
 		
 	def getRoot(self, slotid, connto):
 		visited = []
@@ -169,6 +183,8 @@ class SecConfigure:
 		self.equal = { }
 
 		nim_slots = self.NimManager.nim_slots
+		from Components.HdsFbc import ruteazaIndependente
+		ruteazaIndependente(nim_slots)
 
 		used_nim_slots = [ ]
 
@@ -539,6 +555,18 @@ def normalizeNimType(type):
 	return NIM_TYPE_ALIASES.get(type, type)
 
 class NIM(object):
+	def isFBCLink(self):
+		return self.fbc_role == 2
+
+	def isFBCRoot(self):
+		return self.fbc_role == 1
+
+	def isFBCTuner(self):
+		return self.fbc_role != 0
+
+	def canBeCompatible(self, what):
+		return self.isCompatible(what)
+
 	def __init__(self, slot, type, description, has_outputs = True, internally_connectable = None, multi_type = {}, frontend_id = None, i2c = None, is_empty = False, multistream = False, s2x = False):
 		self.slot = slot
 		# filtrul de flux (ISI) si PLS-ul DVB-S2: tunerele care se anunta „DVB-S2X" sau „Multistream: yes"
@@ -559,6 +587,8 @@ class NIM(object):
 		self.i2c = i2c
 		self.frontend_id = frontend_id
 		self.__is_empty = is_empty
+		self.fbc_role = 0
+		self.fbc_set_id = None
 
 	def isCompatible(self, what):
 		if not self.isSupported():
@@ -704,6 +734,11 @@ class NimManager:
 
 	def getTranspondersTerrestrial(self, region):
 		return self.transpondersterrestrial[region]
+
+	# HDSatelit: numele cerut de scanarea terestra a altor imagini (TerrestrialScan, vazut pe un receptor): lista regiunilor din
+	# terrestrial.xml, aceeasi pe care o citeste imaginea pentru setarile tunerului
+	def getTerrestrialsList(self):
+		return self.terrestrialsList
 	
 	def getCableDescription(self, nim):
 		return self.cablesList[config.Nims[nim].scan_provider.index][0]
@@ -857,6 +892,10 @@ class NimManager:
 			if not ("multi_type" in entry):
 				entry["multi_type"] = {}
 			self.nim_slots.append(NIM(slot = id, description = entry["name"], type = entry["type"], has_outputs = entry["has_outputs"], internally_connectable = entry["internally_connectable"], multi_type = entry["multi_type"], frontend_id = entry["frontend_device"], i2c = entry["i2c"], is_empty = entry["isempty"], multistream = entry.get("multistream", False), s2x = entry.get("s2x", False)))
+		from Components.HdsFbc import descopera
+		fbc = descopera(self.nim_slots)
+		for tuner in self.nim_slots:
+			tuner.fbc_role, tuner.fbc_set_id = fbc.get(tuner.frontend_id, (0, None))
 
 	def hasNimType(self, chktype):
 		for slot in self.nim_slots:

@@ -5,6 +5,7 @@
 #include <lib/gdi/gpixmap.h>
 #include <lib/gui/elistbox.h>
 #include <lib/service/iservice.h>
+#include <lib/python/python.h>
 #include <map>
 #include <set>
 #include <string>
@@ -15,6 +16,7 @@ class eListboxServiceContent: public virtual iListboxContent
 	DECLARE_REF(eListboxServiceContent);
 public:
 	eListboxServiceContent();
+	~eListboxServiceContent();
 
 	void addService(const eServiceReference &ref, bool beforeCurrent=false);
 	void removeCurrent();
@@ -139,6 +141,7 @@ public:
 		/* Optional per-service picons, from local directories only. Python owns discovery and downloads;
 		   paint decodes only visible rows, with a bounded pixmap cache. Missing picons keep the usual row. */
 	void addPiconPath(const std::string &path);
+	void setPiconResolver(SWIG_PYOBJECT(ePyObject) resolver);
 	void setPiconsEnabled(bool enabled);
 	void invalidatePicons();
 	std::string takePiconRequests();
@@ -221,7 +224,8 @@ private:
 	std::map<std::string, std::pair<ePtr<gPixmap>, unsigned long> > m_picon_cache;
 	unsigned long m_picon_clock;
 	std::set<std::string> m_picon_requests;
-	ePtr<gPixmap> servicePicon(const eServiceReference &ref);
+	ePyObject m_picon_resolver;
+	ePtr<gPixmap> servicePicon(const eServiceReference &ref, const std::string &name);
 };
 
 #endif

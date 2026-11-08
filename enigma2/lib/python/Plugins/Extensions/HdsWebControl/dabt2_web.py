@@ -425,10 +425,15 @@ def manual(argumente, D=None):
 	fel = fel_din(argumente.get("fel"))
 	ctrl = D.controlor(fel)
 	prof = ctrl.profil
+	try:
+		from Components.HdsLimiteTuner import limite_camp_sr
+		min_sr, max_sr = limite_camp_sr()
+	except ImportError:
+		min_sr, max_sr = 1, 99999
 	v = {"nume": (argumente.get("nume") or "").strip()[:40],
 		"pozitie": pozitie_din(argumente.get("grade"), argumente.get("emisfera")),
 		"frecventa": _intreg(argumente, "frecventa", 10700, 12750),
-		"pol": argumente.get("pol"), "sr": _intreg(argumente, "sr", 1000, 60000),
+		"pol": argumente.get("pol"), "sr": _intreg(argumente, "sr", min_sr, max_sr),
 		"sistem": argumente.get("sistem"), "modulatie": argumente.get("modulatie"), "fec": argumente.get("fec"),
 		"pid": _intreg(argumente, "pid", 32, 8190), "multistream": "nu", "is_id": 0, "pls_cod": 0}
 	gresite = []

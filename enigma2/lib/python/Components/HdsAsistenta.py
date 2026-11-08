@@ -5,8 +5,9 @@
 # HdsAsistenta.py: "Asistenta de la distanta", versiunea 1, pentru oricine. Oprita din fabrica; nu ruleaza nimic,
 # nicio cheie, nicio legatura pana nu o porneste omul: Meniu > Setari > Asistenta de la distanta (ecranul
 # Screens/HdsAsistenta.py: o pagina cu randul bifat "Accept termenii și condițiile" si Start) sau din pagina web
-# /asistenta (aceeasi pagina). O singura logica pentru receptor si pentru web. Modelul si versiunea trimise serverului
-# sunt cele ale programului de testeri (Components/HdsBetaTester.py), fara sa ceara inscrierea in program; din 0.6.21
+# /asistenta (aceeasi pagina). O singura logica pentru receptor si pentru web.
+# Modelul vine din Tools.HardwareInfo, versiunea din programul de testeri,
+# fara sa ceara inscrierea in program. Din 0.6.21 se trimit
 # si amprenta receptorului, iar la un beta tester inscris si inscrierea (8 cifre) si numele (_cine, spuse in
 # informare: TEXT_CINE), ca echipa sa stie cine cere ajutor.
 #
@@ -439,32 +440,20 @@ def _beta():
 
 
 def _model():
-	"""Modelul receptorului, acelasi ca la programul de testeri: machinebuild-ul din paza modelului (verdictul
-	„potrivit”), tinut minte de HdsBetaTester sau calculat aici (suntem pe firul sesiunii); altfel cel spus de
-	sistem."""
+	"""Acelasi model ca in rapoartele pluginurilor, fara numele vechi din driver."""
+	from Tools.HardwareInfo import getModelName
+	model = getModelName()
+	if model != "unknown":
+		return model
+	# Rezerva pentru o sesiune care stie deja modelul, dar nu are fisierele.
 	B = _beta()
 	if B is not None:
 		try:
-			m = (B._modelTinut() or ("",))[0] or B.modelSiPaza()[0]
-			if m:
-				return str(m)[:40]
+			model = (B._modelTinut() or ("",))[0] or B.modelSiPaza()[0]
+			if model:
+				return str(model)[:40]
 		except Exception as e:
 			_jurnal("modelul: %s" % e)
-	try:
-		from boxbranding import getMachineBuild
-		m = getMachineBuild()
-		if m:
-			return str(m)[:40]
-	except Exception:
-		pass
-	for cale in ("/proc/stb/info/model", "/proc/stb/info/boxtype"):
-		try:
-			with open(cale) as f:
-				v = f.read().strip()
-			if v:
-				return v[:40]
-		except Exception:
-			continue
 	return "necunoscut"
 
 

@@ -219,10 +219,29 @@ def esteV10(radacina="/"):
 		return False
 
 
+def esteNand(radacina="/"):
+	"""True pe receptoarele cu memorie NAND (stocare=nand in regulile modelului; Vu+ Solo SE, din 0.7.0): acolo nu exista
+	Maintenance Mode, nici eticheta lui; imaginea se scrie de pe stick de incarcatorul receptorului (CFE).
+	Nu arunca niciodata."""
+	date = _citeste(os.path.join(radacina, FISIER_REGULI), 16384)
+	if not date:
+		return False
+	for rand in _text(date).splitlines():
+		rand = rand.strip()
+		if rand.startswith("#") or "=" not in rand:
+			continue
+		cheie, valoare = rand.split("=", 1)
+		if cheie.strip() == "stocare":
+			return valoare.strip() == "nand"
+	return False
+
+
 def seAplica(radacina="/"):
-	"""True numai pe receptoarele Dinobot, unde showiframe scrie eticheta (nu in emulatorul de pe PC si nu pe primul
-	Viper 4K, V10, al carui showiframe nu scrie nimic)"""
-	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe")) and not esteV10(radacina)
+	"""True numai pe receptoarele Dinobot, unde showiframe scrie eticheta (nu in emulatorul de pe PC, nu pe primul
+	Viper 4K, V10, al carui showiframe nu scrie nimic, si nu pe receptoarele cu NAND, unde showiframe e cel obisnuit si
+	nu exista Maintenance Mode)"""
+	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe")) and not esteV10(radacina) and \
+		not esteNand(radacina)
 
 
 def randuriV10():

@@ -1,6 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from .config import config, ConfigSlider, ConfigSelection, ConfigYesNo, \
-	ConfigEnableDisable, ConfigSubsection, ConfigBoolean, ConfigSelectionNumber, ConfigNothing, NoSave
+	ConfigEnableDisable, ConfigSubsection, ConfigBoolean, ConfigSelectionNumber, ConfigNothing, NoSave, ConfigSubDict
 from enigma import eAVSwitch, getDesktop
 from .SystemInfo import SystemInfo
 from os import path as os_path
@@ -160,6 +160,14 @@ def toggleAC3Downmix():
 	return downmix
 
 class AVSwitch:
+	def readAvailableModes(self):
+		"""Modurile driverului, ca lista de nume; lista goala daca nu se pot citi."""
+		try:
+			with open("/proc/stb/video/videomode_choices") as f:
+				return f.read().split()
+		except OSError:
+			return []
+
 	def setInput(self, input):
 		INPUT = { "ENCODER": 0, "SCART": 1, "AUX": 2 }
 		eAVSwitch.getInstance().setInput(INPUT[input])
@@ -220,8 +228,30 @@ class AVSwitch:
 			value = 1 # auto
 		eAVSwitch.getInstance().setWSS(value)
 
+	# HDSatelit: schimbatorul automat de rezolutie al altor imagini cere aceste doua nume pe obiectul AVSwitch (iAVSwitch).
+	# Lista si schimbarea trec prin Plugins/SystemPlugins/Videomode (modurile date de VideoOutput, schimbare temporara, nesalvata).
+	def getModeList(self, port):
+		"""[(rezolutie, [frecvente])] pentru iesirea data; [] cand nu se poate afla"""
+		try:
+			from Plugins.SystemPlugins.Videomode.VideoHardware import video_hw
+			return video_hw.getModeList(port)
+		except Exception as e:
+			print("[AVSwitch] getModeList: %r" % (e,))
+			return []
+
+	def setMode(self, port, mode, rate, force=None):
+		"""schimba temporar rezolutia si frecventa; False pentru o alegere pe care imaginea nu o are"""
+		try:
+			from Plugins.SystemPlugins.Videomode.VideoHardware import video_hw
+			return video_hw.setMode(port, mode, rate)
+		except Exception as e:
+			print("[AVSwitch] setMode: %r" % (e,))
+			return False
+
 def InitAVSwitch():
 	config.av = ConfigSubsection()
+	# Dictionarul cerut la incarcare; gol, fara notificatori si fara schimbari ale modului video.
+	config.av.videorate = ConfigSubDict()
 	config.av.yuvenabled = ConfigBoolean(default=False)
 	colorformat_choices = {"cvbs": _("CVBS"), "rgb": _("RGB"), "svideo": _("S-Video")}
 	
@@ -400,3 +430,6 @@ def InitAVSwitch():
 	else:
 		config.av.scaler_sharpness = NoSave(ConfigNothing())
 
+# numele cerut de pluginuri
+iAVSwitch = AVSwitch()
+avSwitch = iAVSwitch

@@ -1,5 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 import gettext
+import os
 
 from Tools.Directories import SCOPE_LANGUAGE, resolveFilename
 
@@ -17,15 +18,59 @@ LIMBI_COMPLETE = ("ro_RO", "en_EN", "de_DE", "fr_FR", "es_ES", "it_IT", "hu_HU",
 # limba ei intra in LIMBI_COMPLETE, meniurile revin singure in ea.
 LIMBA_REZERVA = "en_EN"
 
+def _puneNgettext(sursa):
+	"""ngettext si pgettext pe langa _, ca in celelalte imagini: pluginurile le cheama fara sa le importe"""
+	import builtins
+	for nume in ("ngettext", "pgettext"):
+		functie = getattr(sursa, nume, None)
+		if functie is not None:
+			setattr(builtins, nume, functie)
+
+def cataloageDisponibile():
+	"""Limbile („tr”, „ro” ...) care au catalogul (po/<lang>/LC_MESSAGES/enigma2.mo) pe receptor, sau None cand dosarul
+	nu are niciun catalog (pe PC, in probe): atunci nu se filtreaza nimic."""
+	try:
+		baza = resolveFilename(SCOPE_LANGUAGE, "")
+		gasite = set(n for n in os.listdir(baza) if os.path.isfile(os.path.join(baza, n, "LC_MESSAGES", "enigma2.mo")))
+	except Exception:
+		return None
+	return gasite or None
+
+
+def areCatalog(lang, cataloage=None):
+	"""True cand catalogul limbii e pe receptor (sau cand nu se poate sti). Pe receptoarele cu memorie mica (Vu+ Solo SE)
+	fiecare limba e un pachet separat in feed (enigma2-hdsatelit-po-<limba>): o limba fara catalog nu se arata in liste
+	si nu se activeaza. Defectul gasit pe 07.11.2026 (primul Solo SE, Ozgur): turca aleasa fara catalog lasa traducerea
+	goala, deci textele HD Satelit ieseau in romana (cheile), cele de baza in engleza, iar tema in turca."""
+	if cataloage is None:
+		cataloage = cataloageDisponibile()
+	return cataloage is None or lang in cataloage
+
+
+def limbaInterfata():
+	"""Limba in care sunt textele interfetei acum („en_EN” cand cea salvata nu are catalog sau e ascunsa), "" inainte de
+	prima activare. Tema (Converter/HdsCommon), separatorul zecimal (HdsGrade) si fontul (HdsFontInterfata) o folosesc pe
+	ea, nu config.osd.language, ca tot ecranul sa fie in aceeasi limba; config.osd.language ramane alegerea omului
+	(limba pistelor, a subtitrarilor, tara)."""
+	try:
+		a = language.activeLanguage
+	except NameError:
+		return ""
+	return a if isinstance(a, str) else ""
+
+
 class Language:
 	def __init__(self):
 		gettext.install('enigma2', resolveFilename(SCOPE_LANGUAGE, ""))
+		_puneNgettext(gettext)
 		self.activeLanguage = 0
 		self.lang = {}
 		self.langlist = []
 		# toate limbile cu catalog, si cele ascunse (pentru language_cache.py, precalcLanguageList)
 		self.toate = {}
 		self.toatelist = []
+		# limbile cu catalog pe receptor (o singura citire a dosarului po; None = nu se filtreaza)
+		self.cataloage = cataloageDisponibile()
 		# FIXME make list dynamically
 		# name, iso-639 language, iso-3166 country. Please don't mix language&country!
 		# also, see "precalcLanguageList" below on how to re-create the language cache after you added a language
@@ -67,7 +112,8 @@ class Language:
 			cheie = str(lang + "_" + country)
 			self.toate[cheie] = ((_(name), lang, country))
 			self.toatelist.append(cheie)
-			if cheie in LIMBI_COMPLETE:
+			# numai limbile traduse complet si cu catalogul pe receptor (areCatalog)
+			if cheie in LIMBI_COMPLETE and areCatalog(lang, self.cataloage):
 				self.lang[cheie] = self.toate[cheie]
 				self.langlist.append(cheie)
 		except:
@@ -75,16 +121,20 @@ class Language:
 
 	def activateLanguage(self, index):
 		if index not in self.lang:
-			# limba ascunsa (nu e in LIMBI_COMPLETE) sau necunoscuta: meniurile in limba de rezerva
-			print("[Language] limba %r nu e in lista, meniurile sunt in %s" % (index, LIMBA_REZERVA))
-			index = LIMBA_REZERVA
+			# limba ascunsa (nu e in LIMBI_COMPLETE), fara catalog pe receptor sau necunoscuta: meniurile in limba de
+			# rezerva (sau in prima limba cu catalog, daca nici ea nu e), toate, nu jumatate in cheile textelor
+			rezerva = LIMBA_REZERVA if LIMBA_REZERVA in self.lang else (self.langlist[0] if self.langlist else LIMBA_REZERVA)
+			print("[Language] limba %r nu e in lista (ascunsa sau fara catalog), meniurile sunt in %s" % (index, rezerva))
+			index = rezerva
 		self._activeaza(index)
 
 	def _activeaza(self, index):
 		try:
 			lang = self.toate[index]
 			print("Activating language " + lang[0])
-			gettext.translation('enigma2', resolveFilename(SCOPE_LANGUAGE, ""), languages=[lang[1]]).install()
+			catalog = gettext.translation('enigma2', resolveFilename(SCOPE_LANGUAGE, ""), languages=[lang[1]])
+			catalog.install()
+			_puneNgettext(catalog)
 			self.activeLanguage = index
 			for x in self.callbacks:
 				x()
@@ -95,8 +145,20 @@ class Language:
 		if index < len(self.langlist):
 			self.activateLanguage(self.langlist[index])
 
-	def getLanguageList(self):
-		return [ (x, self.lang[x]) for x in self.langlist ]
+	def getLanguageList(self, suplimentare=False):
+		# Un catalog nou de pe stick apare fara a salva o limba inexistenta.
+		self.cataloage = cataloageDisponibile()
+		self.langlist = [x for x in self.toatelist if x in LIMBI_COMPLETE and
+			areCatalog(self.toate[x][1], self.cataloage)]
+		self.lang = {x: self.toate[x] for x in self.langlist}
+		if suplimentare:
+			try:
+				from Components import HdsParteaDoua as P
+				if P.citesteConf() and P.radacinaNand():
+					return [(x, self.toate[x]) for x in self.toatelist if x in LIMBI_COMPLETE]
+			except (ImportError, OSError):
+				pass
+		return [(x, self.lang[x]) for x in self.langlist]
 
 	def getActiveLanguage(self):
 		return self.activeLanguage

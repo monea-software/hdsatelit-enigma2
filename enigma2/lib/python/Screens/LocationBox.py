@@ -35,6 +35,9 @@ DEFAULT_INHIBIT_DIRECTORIES = ('/bin', '/boot', '/dev', '/etc', '/home', '/lib',
 DEFAULT_INHIBIT_DEVICES = ('/', '/media')
 
 
+defaultInhibitDirs = ["/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/proc", "/run", "/sbin", "/sys", "/tmp", "/usr", "/var"]
+
+
 class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 	"""Simple Class similar to MessageBox / ChoiceBox but used to choose a folder/pathname combination"""
 

@@ -166,6 +166,79 @@ static bool getConfigBool(const std::string &key, bool defaultValue)
 	return defaultValue;
 }
 
+// Un nume intreg, aceleasi caractere ca in Tools.HardwareInfo.
+static std::string hdsModelToken(const std::string &value)
+{
+	size_t first = value.find_first_not_of(" \t\r\n");
+	if (first == std::string::npos)
+		return "";
+	size_t last = value.find_last_not_of(" \t\r\n");
+	if (last - first + 1 > 40)
+		return "";
+	std::string token = value.substr(first, last - first + 1);
+	for (size_t i = 0; i < token.size(); ++i)
+	{
+		char c = token[i];
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-'))
+			return "";
+	}
+	return token;
+}
+
+// Jurnalul de cadere trebuie sa poata identifica modelul fara Python.
+static std::string hdsReceiverModel()
+{
+	std::ifstream rules("/etc/hdsatelit-model");
+	std::string line;
+	while (std::getline(rules, line))
+	{
+		size_t sep = line.find('=');
+		if (sep == std::string::npos ||
+			hdsModelToken(line.substr(0, sep)) != "machinebuild")
+			continue;
+		std::string model = hdsModelToken(line.substr(sep + 1));
+		if (!model.empty())
+			return model;
+		break;
+	}
+	const char *paths[] = {
+		"/proc/stb/info/boxtype", "/proc/stb/info/vumodel",
+		"/proc/stb/info/hwmodel", "/proc/stb/info/gbmodel", "/proc/stb/info/model"
+	};
+	for (unsigned int i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i)
+	{
+		std::ifstream in(paths[i]);
+		if (!std::getline(in, line))
+			continue;
+		std::string model = hdsModelToken(line);
+		if (i == 1 && !model.empty() && model.compare(0, 2, "vu") != 0)
+			model = hdsModelToken("vu" + model);
+		if (!model.empty())
+			return model;
+	}
+	const char *keys[] = { "machinebuild", "model" };
+	for (unsigned int i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i)
+	{
+		std::ifstream info("/usr/lib/enigma.info");
+		while (std::getline(info, line))
+		{
+			size_t sep = line.find('=');
+			if (sep == std::string::npos || hdsModelToken(line.substr(0, sep)) != keys[i])
+				continue;
+			std::string value = line.substr(sep + 1);
+			size_t first = value.find_first_not_of(" \t\r\n'\"");
+			size_t last = value.find_last_not_of(" \t\r\n'\"");
+			std::string model = first == std::string::npos ? "" :
+				hdsModelToken(value.substr(first, last - first + 1));
+			if (!model.empty())
+				return model;
+			break;
+		}
+	}
+	return "unknown";
+}
+
 /*
  * The crash screen uses the faces HdsBold, HdsRegular and Regular, which the skin registers (skin.xml). A crash
  * before the skin is read (an exception while mytest.py imports its modules) finds none of them, and one under
@@ -301,7 +374,7 @@ void bsodFatal(const char *component)
 		fflush(f);
 
 		xml.open("image");
-		xml.stringFromFile("receivermodel", "/proc/stb/info/model");
+		xml.string("receivermodel", hdsReceiverModel());
 		xml.stringFromFile("kernelcmdline", "/proc/cmdline");
 		xml.stringFromFile("nimsockets", "/proc/bus/nim_sockets");
 		if (!getConfigBool("config.plugins.crashlogautosubmit.sendAnonCrashlog", true)) {

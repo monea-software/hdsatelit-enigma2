@@ -16,6 +16,7 @@
 # Pe alte fire decat cel principal (analiza fluxului, firele web care au deja firul lor) si pentru celelalte fisiere
 # citirea ramane directa, ca inainte. Fisierul nu importa nimic din enigma2: probele de pe PC il incarca asa cum e.
 
+import os
 import threading
 import time
 
@@ -23,6 +24,13 @@ ASTEPTARE_S = 0.2
 TIMP_S = 1.0
 # partile de cale ale fisierelor driverului (si sub o radacina de proba: <dosar>/proc/msp/...)
 DRIVER = ("/proc/msp/", "/proc/hisi/")
+
+# Fisierele din /proc/stb care nu se citesc, o singura lista pentru Python-ul imaginii (Components/HdsHdmiDate.py,
+# Components/HdsAsistentaBroker.py); tools/hds-raport.sh.in e in shell si tine aceeasi lista, iar proba le compara.
+# Pe HiSilicon functiile de citire din hi_dvb opresc nucleul pe unele placi SF8008 (proc_audio_*_read, proc_video_alpha_read,
+# proc_video_zapmode_read: un Oops nou la fiecare fisier). Listele *_choices se citesc: Components/AVSwitch.py le citeste la
+# fiecare pornire. Pe orice placa: *_apply (citirea poate declansa ceva) si *event* (citirea poate astepta).
+VIDEO_OPRITE_HISILICON = ("alpha", "zapmode")
 
 _STARE = {"fir": None, "pornit_t": 0.0, "blocat": False, "cale": ""}
 _CITITE = {}
@@ -40,6 +48,31 @@ def eDriver(cale):
 	except Exception:
 		return False
 	return any(d in c for d in DRIVER)
+
+
+def eHiSilicon(radacina=""):
+	"""True pe placile HiSilicon: au /proc/msp. radacina muta cautarea intr-un dosar de proba."""
+	return os.path.isdir(os.path.join(radacina or "/", "proc", "msp"))
+
+
+def nodOprit(cale, hisilicon):
+	"""True pentru un fisier din /proc/stb care nu se citeste. cale: absoluta, sub o radacina de proba sau relativa la /proc/stb
+	("audio/ac3"); o cale absoluta din alta parte nu e un nod."""
+	c = str(cale).replace("\\", "/")
+	i = c.find("proc/stb/")
+	if i >= 0:
+		c = c[i + len("proc/stb/"):]
+	elif c.startswith("/"):
+		return False
+	c = c.strip("/")
+	nume = c.rsplit("/", 1)[-1]
+	if nume.endswith("_apply") or "event" in nume:
+		return True
+	if not hisilicon:
+		return False
+	if c.startswith("audio/"):
+		return not nume.endswith("_choices")
+	return c.startswith("video/") and nume in VIDEO_OPRITE_HISILICON
 
 
 def blocat():

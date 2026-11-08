@@ -8,6 +8,8 @@
 #include <lib/service/event.h>
 #endif
 
+#include <algorithm>
+#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>  // for usleep
 #include <sys/vfs.h> // for statfs
@@ -23,9 +25,25 @@
 int eventData::CacheSize=0;
 int eventData::ImportedCount=0;
 int eventData::ImportedBytes=0;
+int eventData::ExternCount=0;
+int eventData::ExternBytes=0;
 descriptorMap eventData::descriptors;
 __u8 eventData::data[4108];
 extern const uint32_t crc32_table[256];
+
+/* HDSatelit: plafoanele importului extern (pluginuri de ghid), separate de cele ale XMLTV-ului nostru IPTV. Costul unui
+   eveniment = marimea descriptorilor + EXTERN_COST_NOD (socotit pe ARM32: 2 noduri de map, eventData, EITdata, ~3 noduri
+   de descriptor). Cu 400 de octeti de text, 64 MiB inseamna cam 100000 de evenimente; fisierul de ghid ajunge cel mult
+   la vreo 40 MB (masurat in rapoartele receptoarelor: 400-640 MB RAM disponibil, peste 1,3 GB liberi pe disc). */
+#define EXTERN_PE_SERVICIU 4096         /* 14 zile x ~290 de emisiuni pe zi */
+#define EXTERN_TOTAL 100000
+#define EXTERN_OCTETI (64 * 1024 * 1024)
+#define EXTERN_COST_NOD 256
+#define EXTERN_MEMORIE_MIN_KB (96 * 1024) /* MemAvailable sub care nu se mai primeste nimic */
+#define EXTERN_ORIZONT (14 * 86400)     /* ca sectionRead */
+#define EXTERN_SUPRAPUNERE 300          /* secunde care nu fac coliziune, ca FixOverlapping */
+#define EXTERN_SERVICII_APEL 256
+#define EXTERN_RANDURI_APEL 1024
 
 /* reads exactly count bytes; false when epg.dat is shorter than it claims (truncated or broken) */
 static bool readExact(FILE *f, void *buf, size_t count)
@@ -57,9 +75,15 @@ const eServiceReference &handleGroup(const eServiceReference &ref)
 }
 
 eventData::eventData(const eit_event_struct* e, int size, int type)
-	:ByteSize(size&0xFF), type(type&0xFF), ImportedCost(type == 32 ? (e ? size + 768 : 3072) : 0)
+	:ByteSize(size&0xFF), type(type&0xFF), ImportedCost(type == IMPORT_IPTV ? (e ? size + 768 : 3072)
+		: type == IMPORT_EXTERN ? (EXTERN_COST | (e ? size + EXTERN_COST_NOD : 2 * EXTERN_COST_NOD)) : 0)
 {
-	if (ImportedCost)
+	if (ImportedCost & EXTERN_COST)
+	{
+		++ExternCount;
+		ExternBytes += ImportedCost & ~EXTERN_COST;
+	}
+	else if (ImportedCost)
 	{
 		++ImportedCount;
 		ImportedBytes += ImportedCost;
@@ -154,7 +178,12 @@ const eit_event_struct* eventData::get() const
 
 eventData::~eventData()
 {
-	if (ImportedCost)
+	if (ImportedCost & EXTERN_COST)
+	{
+		--ExternCount;
+		ExternBytes -= ImportedCost & ~EXTERN_COST;
+	}
+	else if (ImportedCost)
 	{
 		--ImportedCount;
 		ImportedBytes -= ImportedCost;
@@ -234,11 +263,14 @@ pthread_mutex_t eEPGCache::cache_lock=
 	PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 pthread_mutex_t eEPGCache::channel_map_lock=
 	PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t eEPGCache::import_lock=
+	PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 DEFINE_REF(eEPGCache)
 
 eEPGCache::eEPGCache()
 	:messages(this,1), cleanTimer(eTimer::create(this)), m_running(0)//, paused(0)
+	,m_flushPending(0), m_externAcceptate(0), m_externColiziuni(0), m_externPlafon(0)
 {
 	eDebug("[EPGC] Initialized EPGCache (wait for setCacheFile call now)");
 
@@ -277,6 +309,23 @@ bool eEPGCache::requestSave()
 	return true;
 }
 
+void eEPGCache::saveLater()
+{
+	requestSave();
+}
+
+void eEPGCache::flushEPG()
+{
+	if (!m_running)
+	{
+		flushData();
+		return;
+	}
+	// firul EPG sterge si reporneste cititoarele; importul extern asteapta sa se termine (importExternEvents)
+	++m_flushPending;
+	messages.send(Message(Message::flush));
+}
+
 /* HDSatelit clean-room XMLTV import: ordinary DVB descriptors, with the explicit UTF-8 marker
    understood by our existing event parser. Python never supplies raw EIT or descriptor bytes. */
 static bool hdsEpgText(ePyObject value, std::string &text, size_t limit)
@@ -305,7 +354,93 @@ static unsigned char hdsEpgBcd(int value)
 	return ((value / 10) << 4) | (value % 10);
 }
 
-int eEPGCache::importEvents(const std::string &reference, ePyObject events)
+/* Un rand citit din Python, gata de pus in ghid: date = evenimentul DVB intreg; id-ul se scrie sub lacat. */
+struct hdsEpgRand
+{
+	time_t start;
+	int duration;
+	int eventId;
+	std::vector<unsigned char> data;
+};
+
+/* Evenimentul DVB: descriptorii obisnuiti 0x4d si 0x4e, cu marcajul UTF-8 pe care il intelege parserul nostru.
+   False cand ora nu incape in format. */
+static bool hdsEpgBuild(hdsEpgRand &row, const std::string &title, const std::string &subtitle, const std::string &description)
+{
+	const time_t start = row.start;
+	const int duration = row.duration;
+	struct tm utc;
+	if (!gmtime_r(&start, &utc))
+		return false;
+	long long mjd = static_cast<long long>(start) / 86400 + 40587;
+	if (mjd > 65535)
+		return false;
+	std::vector<unsigned char> &data = row.data;
+	data.assign(12, 0);
+	data[2] = mjd >> 8; data[3] = mjd & 255;
+	data[4] = hdsEpgBcd(utc.tm_hour); data[5] = hdsEpgBcd(utc.tm_min); data[6] = hdsEpgBcd(utc.tm_sec);
+	data[7] = hdsEpgBcd(duration / 3600); data[8] = hdsEpgBcd(duration / 60 % 60); data[9] = hdsEpgBcd(duration % 60);
+	data.push_back(0x4d); data.push_back(7 + title.size() + subtitle.size());
+	data.push_back('u'); data.push_back('n'); data.push_back('d');
+	data.push_back(title.size() + 1); data.push_back(0x15);
+	data.insert(data.end(), title.begin(), title.end());
+	data.push_back(subtitle.size() + 1); data.push_back(0x15);
+	data.insert(data.end(), subtitle.begin(), subtitle.end());
+	// At most eight extended descriptors; every fragment is a complete UTF-8 string.
+	std::vector<std::string> parts;
+	for (size_t pos = 0; pos < description.size(); )
+	{
+		size_t end = std::min(pos + 248, description.size());
+		while (end < description.size() && end > pos && (static_cast<unsigned char>(description[end]) & 0xc0) == 0x80)
+			--end;
+		parts.push_back(description.substr(pos, end - pos));
+		pos = end;
+	}
+	for (size_t part = 0; part < parts.size(); ++part)
+	{
+		data.push_back(0x4e); data.push_back(7 + parts[part].size());
+		data.push_back((part << 4) | (parts.size() - 1));
+		data.push_back('u'); data.push_back('n'); data.push_back('d');
+		data.push_back(0); data.push_back(parts[part].size() + 1); data.push_back(0x15);
+		data.insert(data.end(), parts[part].begin(), parts[part].end());
+	}
+	data[10] = ((data.size() - 12) >> 8) & 15;
+	data[11] = (data.size() - 12) & 255;
+	return true;
+}
+
+static inline void hdsEpgSetId(std::vector<unsigned char> &data, int eventId)
+{
+	data[0] = eventId >> 8;
+	data[1] = eventId & 255;
+}
+
+int eEPGCache::importEvents(ePyObject services, ePyObject events)
+{
+	if (PyUnicode_Check(services) && PyList_Check(events))
+	{
+		const char *text = PyUnicode_AsUTF8(services);
+		if (!text)
+		{
+			PyErr_Clear();
+			return 0;
+		}
+		std::string reference(text);
+		if (eServiceReference(reference).type == 4097)
+			return importIptvEvents(reference, events);
+	}
+	return importExternEvents(services, events);
+}
+
+int eEPGCache::importEvent(ePyObject service, ePyObject events)
+{
+	return importExternEvents(service, events);
+}
+
+/* Calea stricta a XMLTV-ului nostru: ce se primeste si ce se refuza a ramas acelasi. Randurile se citesc din Python inainte
+   de lacate, iar lacatele se iau fara GIL: lookupEvent cu convertFunc (EpgList) cheama Python sub cache_lock, deci un fir
+   care ar astepta cache_lock tinand GIL-ul s-ar bloca pentru totdeauna cu firul UI. */
+int eEPGCache::importIptvEvents(const std::string &reference, ePyObject events)
 {
 	// Narrow public entry point: no changes to DVB service priorities or EIT reception.
 	eServiceReference ref(reference);
@@ -318,28 +453,7 @@ int eEPGCache::importEvents(const std::string &reference, ePyObject events)
 	if (count < 0 || count > 128)
 		return 0;
 	time_t now = ::time(0);
-	int imported = 0;
-	singleLock lock(cache_lock);
-	std::pair<eventMap,timeMap> &service = eventDB[key];
-	// uniqueEPGKey deliberately uses only DVB fields. A collision must never alter DVB data.
-	for (eventMap::const_iterator item = service.first.begin(); item != service.first.end(); ++item)
-		if (item->second->type != 32)
-			return 0;
-	if (service.first.size() > 256)
-		return 0;
-	// A refresh does not accumulate expired data while waiting for the regular cleaner.
-	for (timeMap::iterator it = service.second.begin(); it != service.second.end(); )
-	{
-		if (it->first + it->second->getDuration() <= now)
-		{
-			eventData *old = it->second;
-			service.first.erase(old->getEventID());
-			service.second.erase(it++);
-			delete old;
-		}
-		else
-			++it;
-	}
+	std::vector<hdsEpgRand> rows;
 	for (Py_ssize_t i = 0; i < count; ++i)
 	{
 		ePyObject row = PyList_GET_ITEM(events, i); // borrowed
@@ -365,6 +479,61 @@ int eEPGCache::importEvents(const std::string &reference, ePyObject events)
 		if (!hdsEpgText(PyTuple_GET_ITEM(row, 2), title, 180) || title.empty() ||
 			!hdsEpgText(PyTuple_GET_ITEM(row, 3), subtitle, 60) || !hdsEpgText(PyTuple_GET_ITEM(row, 4), description, 1800))
 			continue;
+		rows.push_back(hdsEpgRand());
+		hdsEpgRand &nou = rows.back();
+		nou.start = start;
+		nou.duration = duration;
+		nou.eventId = eventId;
+		if (!hdsEpgBuild(nou, title, subtitle, description))
+			rows.pop_back();
+	}
+	int imported = 0;
+	Py_BEGIN_ALLOW_THREADS
+	// Calea IPTV refuza imediat evenimentele primite daca golirea precedenta nu este confirmata.
+	if (m_flushPending.load() == 0)
+	{
+		singleLock writers(import_lock);
+		if (m_flushPending.load() == 0)
+		{
+			singleLock lock(cache_lock);
+			imported = importIptvRows(key, rows, now);
+		}
+	}
+	else
+		eDebug("[EPGC] import IPTV refuzat: golirea ghidului nu este confirmata");
+	Py_END_ALLOW_THREADS
+	return imported;
+}
+
+int eEPGCache::importIptvRows(const uniqueEPGKey &key, std::vector<hdsEpgRand> &rows, time_t now)
+{
+	int imported = 0;
+	std::pair<eventMap,timeMap> &service = eventDB[key];
+	// uniqueEPGKey deliberately uses only DVB fields. A collision must never alter DVB data.
+	for (eventMap::const_iterator item = service.first.begin(); item != service.first.end(); ++item)
+		if (!item->second->imported())
+			return 0;
+	if (service.first.size() > 256)
+		return 0;
+	// A refresh does not accumulate expired data while waiting for the regular cleaner.
+	for (timeMap::iterator it = service.second.begin(); it != service.second.end(); )
+	{
+		if (it->first + it->second->getDuration() <= now)
+		{
+			eventData *old = it->second;
+			service.first.erase(old->getEventID());
+			service.second.erase(it++);
+			delete old;
+		}
+		else
+			++it;
+	}
+	for (size_t i = 0; i < rows.size(); ++i)
+	{
+		hdsEpgRand &row = rows[i];
+		const time_t start = row.start;
+		const int duration = row.duration;
+		long eventId = row.eventId;
 		// Same start replaces the same entry. Probe a free 16-bit id on a collision.
 		timeMap::iterator existing = service.second.find(start);
 		if (existing != service.second.end())
@@ -376,56 +545,20 @@ int eEPGCache::importEvents(const std::string &reference, ePyObject events)
 			while (service.first.find(eventId) != service.first.end())
 				eventId = eventId == 65535 ? 1 : eventId + 1;
 		}
-		struct tm utc;
-		if (!gmtime_r(&start, &utc))
-			continue;
-		long long mjd = startValue / 86400 + 40587;
-		if (mjd > 65535)
-			continue;
-		std::vector<unsigned char> data(12, 0);
-		data[0] = eventId >> 8; data[1] = eventId & 255;
-		data[2] = mjd >> 8; data[3] = mjd & 255;
-		data[4] = hdsEpgBcd(utc.tm_hour); data[5] = hdsEpgBcd(utc.tm_min); data[6] = hdsEpgBcd(utc.tm_sec);
-		data[7] = hdsEpgBcd(duration / 3600); data[8] = hdsEpgBcd(duration / 60 % 60); data[9] = hdsEpgBcd(duration % 60);
-		data.push_back(0x4d); data.push_back(7 + title.size() + subtitle.size());
-		data.push_back('u'); data.push_back('n'); data.push_back('d');
-		data.push_back(title.size() + 1); data.push_back(0x15);
-		data.insert(data.end(), title.begin(), title.end());
-		data.push_back(subtitle.size() + 1); data.push_back(0x15);
-		data.insert(data.end(), subtitle.begin(), subtitle.end());
-		// At most eight extended descriptors; every fragment is a complete UTF-8 string.
-		std::vector<std::string> parts;
-		for (size_t pos = 0; pos < description.size(); )
-		{
-			size_t end = std::min(pos + 248, description.size());
-			while (end < description.size() && end > pos && (static_cast<unsigned char>(description[end]) & 0xc0) == 0x80)
-				--end;
-			parts.push_back(description.substr(pos, end - pos));
-			pos = end;
-		}
-		for (size_t part = 0; part < parts.size(); ++part)
-		{
-			data.push_back(0x4e); data.push_back(7 + parts[part].size());
-			data.push_back((part << 4) | (parts.size() - 1));
-			data.push_back('u'); data.push_back('n'); data.push_back('d');
-			data.push_back(0); data.push_back(parts[part].size() + 1); data.push_back(0x15);
-			data.insert(data.end(), parts[part].begin(), parts[part].end());
-		}
-		data[10] = ((data.size() - 12) >> 8) & 15;
-		data[11] = (data.size() - 12) & 255;
+		hdsEpgSetId(row.data, eventId);
 		// A moved programme replaces imported intervals that overlap it; both indices stay consistent.
 		int oldCost = 0, oldCount = 0;
 		for (timeMap::const_iterator item = service.second.begin(); item != service.second.end() && item->first < start + duration; ++item)
-			if (item->first + item->second->getDuration() > start)
+			if (item->first + item->second->getDuration() > start && !(item->second->ImportedCost & eventData::EXTERN_COST))
 			{
 				oldCost += item->second->ImportedCost;
 				++oldCount;
 			}
 		// Reserve descriptor payload plus allocation/map overhead, independently of the DVB guide.
 		if (service.first.size() - oldCount >= 256 || eventData::ImportedCount - oldCount >= 40000 ||
-			eventData::ImportedBytes - oldCost + data.size() + 768 > 32 * 1024 * 1024)
+			eventData::ImportedBytes - oldCost + row.data.size() + 768 > 32 * 1024 * 1024)
 			continue;
-		eventData *event = new eventData(reinterpret_cast<const eit_event_struct*>(&data[0]), data.size(), 32);
+		eventData *event = new eventData(reinterpret_cast<const eit_event_struct*>(&row.data[0]), row.data.size(), eventData::IMPORT_IPTV);
 		for (timeMap::iterator item = service.second.begin(); item != service.second.end() && item->first < start + duration; )
 		{
 			if (item->first + item->second->getDuration() > start)
@@ -446,6 +579,274 @@ int eEPGCache::importEvents(const std::string &reference, ePyObject events)
 	if (service.first.empty())
 		eventDB.erase(key);
 	return imported;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+   Importul extern: pluginurile de ghid. Forma lor de apel: o lista de referinte si un tuple cu un eveniment de 6 sau 8
+   campuri (al saselea e categoria, nu id-ul). Politica:
+   - fluxul DVB castiga: un eveniment care se suprapune cu unul din flux (sau cu XMLTV-ul nostru) peste EXTERN_SUPRAPUNERE
+     ori incepe la aceeasi ora se refuza si nu se numara; datele din flux nu se schimba niciodata de aici;
+   - peste un eveniment extern: il inlocuieste, deci un reimport nu dubleaza;
+   - cand soseste fluxul, sectionRead si FixOverlapping, neatinse, inlocuiesc evenimentele importate suprapuse;
+   - categoria si ratingul nu se pastreaza: eventData nu tine descriptorii 0x54/0x55 nici pentru flux;
+   - 5001/5002 si altele se refuza: lookupEvent nu le arata, deci "acceptat" n-ar fi adevarat.
+   ------------------------------------------------------------------------------------------------------------------ */
+
+/* Textele pluginului: str, bytes, int (transforma "1984" in numar) sau None (element gol din XML). */
+static bool hdsEpgTextExtern(ePyObject value, std::string &text, size_t limit)
+{
+	PyObject *object = value;
+	if (object == Py_None)
+	{
+		text.clear();
+		return true;
+	}
+	if (PyUnicode_Check(object))
+		return hdsEpgText(value, text, limit);
+	ePyObject converted;
+	if (PyBytes_Check(object))
+		converted = PyUnicode_DecodeUTF8(PyBytes_AS_STRING(object), PyBytes_GET_SIZE(object), "replace");
+	else if (PyLong_Check(object))
+		converted = PyObject_Str(object);
+	else
+		return false;
+	if (!converted)
+	{
+		PyErr_Clear();
+		return false;
+	}
+	bool ok = hdsEpgText(converted, text, limit);
+	Py_DECREF(converted);
+	return ok;
+}
+
+/* Numai serviciile pe care ghidul le poate si arata; sid-ul 0 sunt grupurile si dosarele, iar fara tsid si onid cheia
+   ar fi aceeasi pentru canale diferite. */
+static bool hdsEpgKeyExtern(const std::string &text, uniqueEPGKey &key)
+{
+	eServiceReference ref(text);
+	if (ref.type != eServiceReference::idDVB && ref.type != 4097)
+		return false;
+	if (ref.flags & (eServiceReference::isDirectory | eServiceReference::isMarker | eServiceReference::isGroup))
+		return false;
+	key = uniqueEPGKey(ref);
+	return key.sid > 0 && key.sid <= 65535 && key.tsid >= 0 && key.tsid <= 65535 && key.onid >= 0 && key.onid <= 65535 &&
+		(key.tsid > 0 || key.onid > 0);
+}
+
+static bool hdsEpgAddKey(ePyObject item, std::vector<uniqueEPGKey> &keys)
+{
+	if (!PyUnicode_Check(item))
+		return false;
+	const char *text = PyUnicode_AsUTF8(item);
+	if (!text)
+	{
+		PyErr_Clear();
+		return false;
+	}
+	uniqueEPGKey key;
+	if (!hdsEpgKeyExtern(text, key))
+		return false;
+	// doua referinte ale aceluiasi serviciu (1:0:1 si 1:0:19) sunt o singura intrare in ghid
+	if (std::find(keys.begin(), keys.end(), key) == keys.end())
+		keys.push_back(key);
+	return true;
+}
+
+static inline bool hdsEpgSeq(ePyObject object)
+{
+	return PyList_Check(object) || PyTuple_Check(object);
+}
+
+static inline Py_ssize_t hdsEpgSeqSize(ePyObject object)
+{
+	return PyList_Check(object) ? PyList_Size(object) : PyTuple_Size(object);
+}
+
+static inline ePyObject hdsEpgSeqItem(ePyObject object, Py_ssize_t i)
+{
+	return PyList_Check(object) ? PyList_GET_ITEM(object, i) : PyTuple_GET_ITEM(object, i);
+}
+
+/* Memorie disponibila in KB, -1 cand nu se poate citi. */
+static long hdsEpgMemAvailable()
+{
+	long kb = -1;
+	FILE *f = fopen("/proc/meminfo", "r");
+	if (!f)
+		return kb;
+	char line[128];
+	while (fgets(line, sizeof(line), f))
+		if (sscanf(line, "MemAvailable: %ld", &kb) == 1)
+			break;
+	fclose(f);
+	return kb;
+}
+
+/* Citita rar (sub import_lock): un apel pe eveniment e obisnuit, iar fisierul costa cat cateva inserari.
+   HDS_EPG_MEMORIE_MIN_KB schimba pragul numai pentru probe: pe PC memoria nu se termina. */
+static bool hdsEpgMemorieBuna(int inserari)
+{
+	static long prag = getenv("HDS_EPG_MEMORIE_MIN_KB") ? atol(getenv("HDS_EPG_MEMORIE_MIN_KB")) : EXTERN_MEMORIE_MIN_KB;
+	static int pana = 0;
+	static bool buna = true;
+	pana -= inserari;
+	if (pana <= 0)
+	{
+		pana = 512;
+		long kb = hdsEpgMemAvailable();
+		bool acum = kb < 0 || kb >= prag;
+		if (acum != buna)
+			eDebug("[EPGC] import extern: %s (%ld KB disponibili, prag %ld KB)", acum ? "reluat" : "oprit, memorie putina", kb, prag);
+		buna = acum;
+	}
+	return buna;
+}
+
+int eEPGCache::importExternEvents(ePyObject services, ePyObject events)
+{
+	std::vector<uniqueEPGKey> keys;
+	if (PyUnicode_Check(services))
+		hdsEpgAddKey(services, keys);
+	else if (hdsEpgSeq(services))
+	{
+		const Py_ssize_t count = std::min(hdsEpgSeqSize(services), (Py_ssize_t)EXTERN_SERVICII_APEL);
+		for (Py_ssize_t i = 0; i < count; ++i)
+			hdsEpgAddKey(hdsEpgSeqItem(services, i), keys);
+	}
+	if (keys.empty() || !hdsEpgSeq(events))
+		return 0;
+	const Py_ssize_t count = std::min(hdsEpgSeqSize(events), (Py_ssize_t)EXTERN_RANDURI_APEL);
+	const time_t now = ::time(0);
+	std::vector<hdsEpgRand> rows;
+	for (Py_ssize_t i = 0; i < count; ++i)
+	{
+		ePyObject row = hdsEpgSeqItem(events, i);
+		if (!hdsEpgSeq(row) || hdsEpgSeqSize(row) < 5)
+			continue;
+		ePyObject startObject = hdsEpgSeqItem(row, 0), durationObject = hdsEpgSeqItem(row, 1);
+		if (!PyLong_Check(startObject) || !PyLong_Check(durationObject))
+			continue;
+		long long startValue = PyLong_AsLongLong(startObject);
+		long duration = PyLong_AsLong(durationObject);
+		if (PyErr_Occurred())
+		{
+			PyErr_Clear();
+			continue;
+		}
+		if (startValue < 0 || startValue > static_cast<long long>(now) + EXTERN_ORIZONT ||
+			duration <= 0 || duration > 86400 || startValue + duration <= now)
+			continue;
+		time_t start = static_cast<time_t>(startValue);
+		if (static_cast<long long>(start) != startValue)
+			continue;
+		std::string title, subtitle, description;
+		if (!hdsEpgTextExtern(hdsEpgSeqItem(row, 2), title, 180) || title.empty() ||
+			!hdsEpgTextExtern(hdsEpgSeqItem(row, 3), subtitle, 240 - title.size()) ||
+			!hdsEpgTextExtern(hdsEpgSeqItem(row, 4), description, 1800))
+			continue;
+		rows.push_back(hdsEpgRand());
+		hdsEpgRand &nou = rows.back();
+		nou.start = start;
+		nou.duration = duration;
+		nou.eventId = 0;
+		if (!hdsEpgBuild(nou, title, subtitle, description))
+			rows.pop_back();
+	}
+	if (rows.empty())
+		return 0;
+	int accepted = 0;
+	Py_BEGIN_ALLOW_THREADS
+	// o golire ceruta inainte de import se termina intai, altfel ar lua si evenimentele noi
+	for (int i = 0; m_flushPending.load() > 0 && m_running && i < 3000; ++i)
+		usleep(10000);
+	// La termen sau la oprirea firului, un flush ramas in coada nu permite inserarea.
+	if (m_flushPending.load() == 0)
+	{
+		singleLock writers(import_lock);
+		// O cerere sosita cat asteptam lacatul trebuie si ea terminata inaintea acestor evenimente.
+		if (m_flushPending.load() == 0)
+		{
+			if (hdsEpgMemorieBuna(keys.size() * rows.size()))
+			{
+				singleLock lock(cache_lock);
+				for (size_t k = 0; k < keys.size(); ++k)
+				{
+					for (size_t i = 0; i < rows.size(); ++i)
+						if (importExternRow(keys[k], rows[i]))
+							++accepted;
+					eventCache::iterator it = eventDB.find(keys[k]);
+					if (it != eventDB.end() && it->second.first.empty() && it->second.second.empty())
+						eventDB.erase(it);
+				}
+			}
+			else
+				m_externPlafon += keys.size() * rows.size();
+			m_externAcceptate += accepted;
+		}
+	}
+	else
+		eDebug("[EPGC] import extern refuzat: golirea ghidului nu este confirmata");
+	Py_END_ALLOW_THREADS
+	return accepted;
+}
+
+/* Sub import_lock si cache_lock. */
+bool eEPGCache::importExternRow(const uniqueEPGKey &key, hdsEpgRand &row)
+{
+	std::pair<eventMap,timeMap> &service = eventDB[key];
+	const time_t start = row.start, end = start + row.duration;
+	const int cost = row.data.size() + EXTERN_COST_NOD;
+	int oldCost = 0, oldCount = 0;
+	std::vector<timeMap::iterator> old;
+	// fluxul poate avea si evenimente de mai multe zile; cele mai lungi de doua zile nu sunt program obisnuit
+	for (timeMap::iterator item = service.second.lower_bound(start - 2 * 86400); item != service.second.end() && item->first < end; ++item)
+	{
+		const time_t otherEnd = item->first + item->second->getDuration();
+		const time_t overlap = std::min(end, otherEnd) - std::max(start, item->first);
+		if (item->first != start && overlap <= EXTERN_SUPRAPUNERE)
+			continue;
+		if (!(item->second->ImportedCost & eventData::EXTERN_COST))
+		{
+			++m_externColiziuni;
+			return false;
+		}
+		oldCost += item->second->ImportedCost & ~eventData::EXTERN_COST;
+		++oldCount;
+		old.push_back(item);
+	}
+	if (service.first.size() - oldCount >= EXTERN_PE_SERVICIU || eventData::ExternCount - oldCount >= EXTERN_TOTAL ||
+		eventData::ExternBytes - oldCost + cost > EXTERN_OCTETI)
+	{
+		++m_externPlafon;
+		return false;
+	}
+	for (size_t i = 0; i < old.size(); ++i)
+	{
+		eventData *replaced = old[i]->second;
+		service.first.erase(replaced->getEventID());
+		service.second.erase(old[i]);
+		delete replaced;
+	}
+	// acelasi inceput da acelasi id, deci temporizatoarele legate de id raman valabile la un reimport
+	int eventId = (start / 60) & 0xffff;
+	if (!eventId)
+		eventId = 1;
+	int probe = 0;
+	while (service.first.find(eventId) != service.first.end())
+	{
+		eventId = eventId == 65535 ? 1 : eventId + 1;
+		if (++probe > 65535)
+		{
+			++m_externPlafon;
+			return false;
+		}
+	}
+	hdsEpgSetId(row.data, eventId);
+	eventData *event = new eventData(reinterpret_cast<const eit_event_struct*>(&row.data[0]), row.data.size(), eventData::IMPORT_EXTERN);
+	service.first[eventId] = event;
+	service.second[start] = event;
+	return true;
 }
 
 void eEPGCache::timeUpdated()
@@ -926,7 +1327,7 @@ next:
 	}
 }
 
-void eEPGCache::flushEPG(const uniqueEPGKey & s)
+void eEPGCache::flushData(const uniqueEPGKey & s)
 {
 	eDebug("[EPGC] flushEPG %d", (int)(bool)s);
 	singleLock l(cache_lock);
@@ -974,7 +1375,8 @@ void eEPGCache::flushEPG(const uniqueEPGKey & s)
 		channelLastUpdated.clear();
 		singleLock m(channel_map_lock);
 		for (channelMapIterator it(m_knownChannels.begin()); it != m_knownChannels.end(); ++it)
-			it->second->startEPG();
+			if (it->second->state >= 0) // inainte de DVBChannelRunning cititoarele nu exista
+				it->second->startEPG();
 	}
 	eDebug("[EPGC] %i bytes for cache used", eventData::CacheSize);
 }
@@ -1062,7 +1464,9 @@ void eEPGCache::gotMessage( const Message &msg )
 	switch (msg.type)
 	{
 		case Message::flush:
-			flushEPG(msg.service);
+			flushData(msg.service);
+			if (m_flushPending.load() > 0)
+				--m_flushPending;
 			break;
 		case Message::startChannel:
 		{
@@ -1341,7 +1745,14 @@ void eEPGCache::load()
 			for (eventMap::iterator item = service->second.first.begin(); item != service->second.first.end(); ++item)
 			{
 				eventData *event = item->second;
-				if (event->ImportedCost)
+				if (event->ImportedCost & eventData::EXTERN_COST)
+				{
+					const eit_event_struct *eit = event->get();
+					unsigned short cost = EIT_LOOP_SIZE + HILO(eit->descriptors_loop_length) + EXTERN_COST_NOD;
+					eventData::ExternBytes += cost - (event->ImportedCost & ~eventData::EXTERN_COST);
+					event->ImportedCost = cost | eventData::EXTERN_COST;
+				}
+				else if (event->ImportedCost)
 				{
 					const eit_event_struct *eit = event->get();
 					unsigned short cost = EIT_LOOP_SIZE + HILO(eit->descriptors_loop_length) + 768;
@@ -1427,6 +1838,10 @@ void eEPGCache::save()
 	/* buf is printed above, so it is freed only after the last use */
 	free(buf);
 
+	/* HDSatelit: ce scrie in cache in afara firului acesta sunt numai importatorii, iar ei asteapta aici (fara GIL). Firul
+	   UI numai citeste, deci cache_lock nu se ia: un disc lent nu ajunge sa intarzie schimbarea canalului. */
+	{
+	singleLock writers(import_lock);
 	int cnt=0;
 	unsigned int magic = 0x98765432;
 	fwrite( &magic, sizeof(int), 1, f);
@@ -1477,6 +1892,10 @@ void eEPGCache::save()
 		}
 	}
 #endif
+	if (m_externAcceptate || m_externColiziuni || m_externPlafon)
+		eDebug("[EPGC] import extern de la pornire: %d primite, %d la coliziune, %d peste plafon; in ghid %d evenimente, %d octeti rezervati",
+			m_externAcceptate, m_externColiziuni, m_externPlafon, eventData::ExternCount, eventData::ExternBytes);
+	}
 	// write version string after binary data
 	// has been written to disk.
 	fsync(fileno(f));
@@ -1882,7 +2301,7 @@ RESULT eEPGCache::lookupEventTime(const eServiceReference &service, time_t t, co
 			}
 			if (item == times.end())
 				return -1;
-			if (item->second->type != 32)
+			if (!item->second->imported())
 				return -1; // do not expose DVB data on a colliding stream reference
 			result = item->second;
 			return 0;
@@ -1893,6 +2312,9 @@ RESULT eEPGCache::lookupEventTime(const eServiceReference &service, time_t t, co
 		{
 			if ( direction < 0 || (direction == 0 && i->first > t) )
 			{
+				// Inaintea primei emisiuni nu exista un element anterior.
+				if (i == It->second.second.begin())
+					return -1;
 				timeMap::iterator x = i;
 				--x;
 				if ( x != It->second.second.end() )
@@ -1963,7 +2385,7 @@ RESULT eEPGCache::lookupEventId(const eServiceReference &service, int event_id, 
 		eventMap::iterator i( It->second.first.find( event_id ));
 		if ( i != It->second.first.end() )
 		{
-			if (service.type == 4097 && i->second->type != 32)
+			if (service.type == 4097 && !i->second->imported())
 				return -1;
 			result = i->second;
 			return 0;
@@ -2025,7 +2447,7 @@ RESULT eEPGCache::startTimeQuery(const eServiceReference &service, time_t begin,
 		if (ref.type == 4097)
 		{
 			for (eventMap::const_iterator item = It->second.first.begin(); item != It->second.first.end(); ++item)
-				if (item->second->type != 32)
+				if (!item->second->imported())
 					return -1;
 			if (m_timemap_cursor != It->second.second.begin() &&
 				(m_timemap_cursor == It->second.second.end() || m_timemap_cursor->first != begin))
@@ -2038,7 +2460,7 @@ RESULT eEPGCache::startTimeQuery(const eServiceReference &service, time_t begin,
 		}
 		else if ( m_timemap_cursor != It->second.second.end() )
 		{
-			if ( m_timemap_cursor->first != begin )
+			if (m_timemap_cursor != It->second.second.begin() && m_timemap_cursor->first != begin)
 			{
 				timeMap::iterator x = m_timemap_cursor;
 				--x;
@@ -2698,7 +3120,7 @@ PyObject *eEPGCache::search(ePyObject arg)
 					return NULL;
 				}
 			}
-			else if (tuplesize > 4 && (querytype == 1 || querytype == 2) )
+			else if (tuplesize > 4 && querytype >= EXAKT_TITLE_SEARCH && querytype <= CRID_SEARCH)
 			{
 				ePyObject obj = PyTuple_GET_ITEM(arg, 3);
 				if (PyUnicode_Check(obj))
@@ -2726,7 +3148,43 @@ PyObject *eEPGCache::search(ePyObject arg)
 						if ( data[0] == 0x4D ) // short event descriptor
 						{
 							int title_len = data[5];
-							if ( querytype == 1 )
+							if (querytype == CRID_SEARCH)
+								continue;  // no CRID is kept here: nothing found
+							if (querytype == PARTIAL_DESCRIPTION_SEARCH)
+							{
+								// the text of the short event descriptor comes after the title, with its own length
+								const char *text = (const char*)data + 7 + title_len;
+								const int text_len = data[6 + title_len];
+								for (int idx = 0; text_len - idx >= textlen; ++idx)
+								{
+									if (!(casetype ? strncasecmp(text + idx, str, textlen) : strncmp(text + idx, str, textlen)))
+									{
+										descr[++descridx] = it->first;
+										break;
+									}
+								}
+							}
+							else if (querytype == START_TITLE_SEARCH || querytype == END_TITLE_SEARCH)
+							{
+								int offs = 6;
+								if (data[6] == 0x10)
+								{
+									offs += 3;
+									title_len -= 3;
+								}
+								else if (data[6] > 0 && data[6] < 0x20)
+								{
+									offs += 1;
+									title_len -= 1;
+								}
+								if (title_len < textlen)
+									continue;
+								if (querytype == END_TITLE_SEARCH)
+									offs += title_len - textlen;
+								if (!(casetype ? strncasecmp((const char*)data + offs, str, textlen) : strncmp((const char*)data + offs, str, textlen)))
+									descr[++descridx] = it->first;
+							}
+							else if ( querytype == 1 )
 							{
 								int offs = 6;
 								// skip DVB-Text Encoding!
@@ -2860,7 +3318,7 @@ PyObject *eEPGCache::search(ePyObject arg)
 					tmp-=4;
 				}
 				if ( (querytype == 0 && cnt == descridx) ||
-					 ((querytype == 1 || querytype == 2) && cnt != -1) )
+					 (querytype >= EXAKT_TITLE_SEARCH && querytype <= CRID_SEARCH && cnt != -1) )
 				{
 					const uniqueEPGKey &service = cit->first;
 					eServiceReference ref =

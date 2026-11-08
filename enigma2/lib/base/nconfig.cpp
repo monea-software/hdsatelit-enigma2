@@ -15,12 +15,25 @@ void ePythonConfigQuery::setQueryFunc(ePyObject queryFunc)
 
 RESULT ePythonConfigQuery::getConfigValue(const char *key, std::string &value)
 {
-	if (key && PyCallable_Check(m_queryFunc))
+	if (key && m_queryFunc && PyCallable_Check(m_queryFunc))
 	{
 		ePyObject pArgs = PyTuple_New(1);
-		PyTuple_SET_ITEM(pArgs, 0, PyUnicode_FromString(key));
+		ePyObject pKey = pArgs ? PyUnicode_FromString(key) : ePyObject();
+		if (!pArgs || !pKey)
+		{
+			Py_XDECREF(pArgs);
+			PyErr_Print();
+			return -1;
+		}
+		PyTuple_SET_ITEM(pArgs, 0, pKey);
 		ePyObject pRet = PyObject_CallObject(m_queryFunc, pArgs);
 		Py_DECREF(pArgs);
+		if (!pRet)
+		{
+			/* C++ pastreaza valoarea implicita, dar consuma eroarea Python. */
+			PyErr_Print();
+			return -1;
+		}
 		if (pRet)
 		{
 			if (PyUnicode_Check(pRet))

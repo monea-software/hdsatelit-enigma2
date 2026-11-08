@@ -17,6 +17,11 @@ from __future__ import absolute_import
 import json
 import re
 
+try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
 STEAG_CODAT = 1024
 PORNIRE_S = 30
 CALE_LAMEDB = "/etc/enigma2/lamedb"
@@ -62,11 +67,12 @@ def servicii_lamedb(cale=CALE_LAMEDB):
 	(C:) sau steagul 1024, deci „$" se vede si fara baza. In cheie primele patru campuri sunt hex, tipul e ZECIMAL
 	(lib/dvb/db.cpp: "%x:%x:%x:%x:%d:%d"; 25 = H.264 HD, in referinta 19)."""
 	try:
-		f = open(cale, "r")
+		f = open(cale, "rb")
 	except (IOError, OSError):
 		return
 	with f:
-		linii = f.read().split("\n")
+		text = text_lista(f.read()).replace("\r\n", "\n").replace("\r", "\n")
+		linii = text.split("\n")
 	try:
 		i = linii.index("services") + 1
 	except ValueError:

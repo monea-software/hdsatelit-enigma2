@@ -6,17 +6,21 @@
 # sau sigla altui canal), sigla scoasa, siglele redenumite dupa referinta sau dupa nume si siglele care nu mai sunt ale
 # niciunui canal din lista.
 #
-# CUM CAUTA IMAGINEA (Components/Renderer/Picon.py, cauta_sigla): numai dupa referinta. Numele fisierului e facut din
+# CUM CAUTA IMAGINEA (Components/Renderer/Picon.py, cauta_sigla): intai dupa referinta. Numele fisierului e facut din
 # primele zece campuri ale referintei unite cu "_" (<nume>.png); daca lipseste, cu tipul serviciului 1 (canalele HD 0x19
-# au adesea sigla sub 1_0_1_...), iar la fluxuri (TIPURI_FLUX) si cu tipul referintei 1 (partea DVB). Dosarele: CAI_SIGLE
-# din Picon.py cu "picon" (memoria interna, /media/hdd, /media/usb, /media/mmc, /media/cf, /picon), numai cele care
-# exista; pentru fiecare nume se incearca toate dosarele, apoi numele urmator. Referinta vine din toString (tipul si
+# au adesea sigla sub 1_0_1_...), iar la fluxuri si cu partea DVB.
+# Se incearca si namespace-ul fara subretea. Dosarele sunt cele comune
+# din Picon.py, de pe toate discurile montate. Lista se reface la hotplug,
+# la deschiderea listei de canale sau dupa un minut. Pentru fiecare nume
+# se incearca toate dosarele. Referinta vine din toString (tipul si
 # steagurile in zecimal, celelalte campuri in hex mare, fara zerouri in fata), deci numele de aici se fac la fel, oricum
 # ar fi scrisa referinta primita. picon_default*.png din aceleasi dosare e sigla lipsei: nu se atinge niciodata.
 #
-# DUPA NUME imaginea nu cauta. Numele de aici (nume_dupa_nume: litere si cifre mici, "&" -> "and", "+" -> "plus",
-# "*" -> "star"; forma UTF-8 si forma ASCII fara diacritice) servesc la redenumire si la siglele nefolosite: o sigla cu
-# numele unui canal din lista nu se socoteste nefolosita.
+# DUPA NUME se cauta numai daca lipsesc toate variantele referintei: NFKD, ASCII, "&" -> "and", "+" -> "plus",
+# "*" -> "star", litere mici si numai a-z0-9; apoi fara HD/FHD/UHD/SD/4K.
+# La redenumire se scrie forma ASCII, cand exista, apoi forma UTF-8.
+# Siglele cu oricare dintre aceste nume ale unui
+# canal din lista nu se socotesc nefolosite.
 #
 # SCRIEREA: <cale>.nou, fsync, os.replace (o sigla pe jumatate nu se vede niciodata). Sigla inlocuita sau scoasa ramane
 # o data langa ea ca <nume>.png.vechi (prima; nu se scrie peste ea). O legatura simbolica (pachetele de sigle leaga multe
@@ -36,6 +40,7 @@ import re
 import struct
 import sys
 import threading
+import time
 import unicodedata
 import zlib
 
@@ -47,11 +52,13 @@ except ImportError:  # pe PC, in probe
 	except Exception:
 		_E = None
 
-# dosarele de sigle in ordinea cautarii; None = ale imaginii (Renderer/Picon.CAI_SIGLE cu DOSAR)
+# dosarele de sigle in ordinea cautarii; None = ale imaginii (Renderer/Picon.dosare_sigle)
 DOSARE = None
 DOSAR = "picon"
 # ca Picon.CAI_SIGLE, cand Picon.py nu se poate incarca (${datadir} = /usr/share)
 CAI_IMAGINE = ("/usr/share/enigma2/%s/", "/media/hdd/%s/", "/media/usb/%s/", "/media/mmc/%s/", "/media/cf/%s/", "/%s/")
+# radacinile discurilor, cand Picon.py nu se poate incarca; se pot inlocui in probe
+RADACINI_MEDIA = ("/media", "/run/media")
 # ca Picon.TIPURI_FLUX: tipurile de referinta ale fluxurilor care poarta si partea DVB
 TIPURI_FLUX = ("4097", "5001", "5002", "5003", "8193", "8739")
 
@@ -81,6 +88,7 @@ MODULE_WEB = ("Plugins.Extensions.HdsWebControl.canale_web",)
 MODUL_PICON = "Components.Renderer.Picon"
 
 _ZAVOR = threading.RLock()
+_MEMORIE_DOSARE = {}
 
 
 def _t(text):
@@ -149,6 +157,9 @@ def nume_incercate(ref):
 	baza = _campuri(ref)
 	if baza is None:
 		return []
+	p = _picon()
+	if callable(getattr(p, "nume_sigle", None)):
+		return p.nume_sigle(":".join(baza) + ":")
 	nume = []
 
 	def adauga(c):
@@ -167,6 +178,12 @@ def nume_incercate(ref):
 		if c[2] not in ("1", "0"):
 			c[2] = "1"
 			adauga(c)
+	for n in list(nume):
+		c = n.split("_")
+		namespace = int(c[6], 16)
+		if namespace & 0xffff:
+			c[6] = "%X" % (namespace & 0xffff0000)
+			adauga(c)
 	return nume
 
 
@@ -179,7 +196,7 @@ def nume_dupa_referinta(ref):
 def nume_dupa_nume(nume, utf8=True):
 	"""Numele fisierului (fara .png) dupa numele canalului: litere si cifre mici, "&" -> "and", "+" -> "plus",
 	"*" -> "star", restul scos. utf8=False: forma ASCII (diacriticele scoase; "" daca numele are litere fara forma
-	ASCII). "" pentru un nume fara litere si cifre. Imaginea NU cauta dupa nume (vezi antetul)."""
+	ASCII). "" pentru un nume fara litere si cifre. Forma folosita la scriere si redenumire (vezi antetul)."""
 	if isinstance(nume, bytes):
 		nume = nume.decode("utf-8", "replace")
 	if not nume or not isinstance(nume, str):
@@ -204,10 +221,59 @@ def nume_dupa_nume(nume, utf8=True):
 
 def _nume_posibile(nume):
 	rez = []
-	for n in (nume_dupa_nume(nume, True), nume_dupa_nume(nume, False)):
+	for n in (nume_dupa_nume(nume, False), nume_dupa_nume(nume, True)):
 		if n and n not in rez:
 			rez.append(n)
 	return rez
+
+
+def _picon():
+	"""Modulul imaginii, incarcat numai cand este nevoie; pe PC poate lipsi enigma2."""
+	try:
+		return __import__(MODUL_PICON, fromlist=["dosare_sigle"])
+	except Exception:
+		return None
+
+
+def _nume_cautate(nume):
+	"""Numele de citire comune; nu schimba numele folosite la scriere."""
+	p = _picon()
+	try:
+		return p.nume_cautate_canal(nume)
+	except Exception:
+		n = unicodedata.normalize("NFKD", str(nume or "")).encode("ascii", "ignore").decode("ascii")
+		for a, b in _INLOCUIRI:
+			n = n.replace(a, b)
+		n = re.sub("[^a-z0-9]", "", n.lower())
+	rez = [n] if n else []
+	for coada in ("fhd", "uhd", "hd", "sd", "4k"):
+		if n.endswith(coada) and len(n) > len(coada):
+			rez.append(n[:-len(coada)])
+			break
+	return rez
+
+
+def _nume_canal(ref):
+	"""Numele serviciului, fara enigma2 la incarcare; la un flux se poate afla si dupa URL."""
+	p = _picon()
+	try:
+		return p.nume_canal(ref)
+	except Exception:
+		pass
+	try:
+		from enigma import eServiceCenter, eServiceReference
+		r = eServiceReference(ref)
+		info = eServiceCenter.getInstance().info(r)
+		nume = info.getName(r) if info is not None else ""
+		if nume:
+			return nume
+	except Exception:
+		pass
+	parti = str(ref or "").split(":", 11)
+	if len(parti) > 11 and parti[0] in TIPURI_FLUX:
+		from urllib.parse import unquote
+		return unquote(parti[11])
+	return ""
 
 
 def _nume_de_scris(ref):
@@ -226,14 +292,16 @@ def dosare():
 	"""Toate dosarele de sigle (si cele care nu exista), in ordinea cautarii imaginii, fiecare cu bara la capat."""
 	if DOSARE is not None:
 		return [os.path.join(d, "") for d in DOSARE]
-	cai = None
-	try:
-		from Components.Renderer.Picon import CAI_SIGLE as cai
-	except Exception:
-		cai = None
-	if not cai:
-		cai = CAI_IMAGINE
-	return [os.path.join(c % DOSAR, "") for c in cai]
+	p = _picon()
+	cai = getattr(p, "CAI_SIGLE", None) or CAI_IMAGINE
+	rez = [os.path.join(c % DOSAR, "") for c in cai]
+	vazute = set(_cheie(d) for d in rez)
+	for d in _dosare_cautarii(p, cai):
+		k = _cheie(d)
+		if k not in vazute:
+			vazute.add(k)
+			rez.append(d)
+	return rez
 
 
 def _cheie(cale):
@@ -246,9 +314,45 @@ def _cheie_fisier(cale):
 	return os.path.normcase(os.path.join(os.path.realpath(os.path.dirname(cale)), os.path.basename(cale)))
 
 
+def _dosare_rezerva(cai):
+	"""Aceeasi descoperire ca in Picon, cand modulul imaginii nu este disponibil."""
+	acum = time.time()
+	cheie = (DOSAR, tuple(cai), tuple(RADACINI_MEDIA))
+	mem = _MEMORIE_DOSARE.get(cheie)
+	if mem is not None and 0 <= acum - mem[0] < 60:
+		return list(mem[1])
+	fixe = [c % DOSAR for c in cai]
+	adaugate = []
+	for radacina in RADACINI_MEDIA:
+		try:
+			intrari = os.listdir(radacina)
+		except OSError:
+			continue
+		adaugate.extend(os.path.join(radacina, intrare, DOSAR, "") for intrare in intrari)
+	rez, vazute = [], set()
+	for d in fixe + sorted(adaugate):
+		if os.path.isdir(d):
+			k = _cheie(d)
+			if k not in vazute:
+				vazute.add(k)
+				rez.append(os.path.join(d, ""))
+	_MEMORIE_DOSARE[cheie] = (acum, rez)
+	return list(rez)
+
+
+def _dosare_cautarii(p, cai):
+	try:
+		return [os.path.join(d, "") for d in p.dosare_sigle(DOSAR)]
+	except Exception:
+		return _dosare_rezerva(cai)
+
+
 def dosare_existente():
 	"""Dosarele de sigle care exista acum, in ordinea imaginii; un dosar care e legatura spre altul din lista apare o
 	singura data."""
+	if DOSARE is None:
+		p = _picon()
+		return _dosare_cautarii(p, getattr(p, "CAI_SIGLE", None) or CAI_IMAGINE)
 	rez, vazute = [], set()
 	for d in dosare():
 		if os.path.isdir(d):
@@ -285,13 +389,12 @@ def _gaseste(cai, nume, exista=os.path.lexists):
 
 
 def sigla(ref, nume=""):
-	"""Calea siglei pe care o arata imaginea pentru referinta (aceeasi cautare ca Picon.cauta_sigla), sau None. Cu
-	`nume`, daca dupa referinta nu e niciuna: sigla dupa numele canalului (pe care televizorul NU o arata; se poate
-	redenumi dupa referinta, redenumeste)."""
+	"""Sigla PNG locala a canalului, sau None: intai toate referintele, apoi numele normalizat si fara hd final.
+	Fara `nume`, numele serviciului se afla ca in Picon, numai daca nu s-a gasit o sigla dupa referinta."""
 	cai = dosare_existente()
 	cale = _gaseste(cai, nume_incercate(ref), os.path.isfile)
-	if cale is None and nume:
-		cale = _gaseste(cai, _nume_posibile(nume), os.path.isfile)
+	if cale is None:
+		cale = _gaseste(cai, _nume_cautate(nume or _nume_canal(ref)), os.path.isfile)
 	return cale
 
 
@@ -427,8 +530,8 @@ def _tinta(nume):
 
 def pune(ref, octeti_png, nume=""):
 	"""Sigla `octeti_png` (PNG) pe canalul `ref`, sub numele dupa referinta. Sigla de dinainte cu acelasi nume ramane
-	ca .vechi (o singura data). `nume`: numele canalului (nu schimba unde se scrie: imaginea cauta numai dupa
-	referinta). -> calea scrisa. Eroare cu textul pentru om."""
+	ca .vechi (o singura data). `nume`: numele canalului; nu schimba scrierea dupa referinta.
+	-> calea scrisa. Eroare cu textul pentru om."""
 	n = _nume_de_scris(ref)
 	if isinstance(octeti_png, (bytearray, memoryview)):
 		octeti_png = bytes(octeti_png)
@@ -521,7 +624,8 @@ def _lant(cale):
 def nefolosite(refs_existente, nume_existente=()):
 	"""Siglele (.png) din dosarele de sigle care nu sunt ale niciunui serviciu din lista: nici dupa referinta (toate
 	numele pe care le incearca imaginea, deci si sigla 1_0_1_... a unui canal HD; litere mari sau mici), nici dupa nume
-	(UTF-8 sau ASCII). Raman si picon_default*.png si fisierele la care duce legatura unei sigle folosite. -> [cale], in
+	(forma de citire, inclusiv fara hd final, sau formele de scriere UTF-8 si ASCII). Raman si picon_default*.png si
+	fisierele la care duce legatura unei sigle folosite. -> [cale], in
 	ordinea dosarelor si a numelor."""
 	folosite = set()
 	for r in refs_existente or ():
@@ -529,6 +633,7 @@ def nefolosite(refs_existente, nume_existente=()):
 			folosite.add(n.lower())
 	for nm in nume_existente or ():
 		folosite.update(_nume_posibile(nm))
+		folosite.update(_nume_cautate(nm))
 	tinte = set()
 	candidati = []
 	for d in dosare_existente():
@@ -606,7 +711,8 @@ def sterge_nefolosite(cai):
 
 def avertisment_nume():
 	"""Textul de aratat inainte de redenumirea dupa nume."""
-	return _t("Televizorul caută siglele numai după referință. După redenumirea după nume, nu le mai arată.")
+	return _t("Siglele se caută și după numele canalului. "
+		"Canalele cu același nume pot folosi aceeași siglă.")
 
 
 def redenumeste(fel, perechi):
@@ -680,7 +786,8 @@ def redenumeste(fel, perechi):
 
 def uita_memoria():
 	"""Uita siglele tinute minte in afara: lista gasita de pagina /canale (si de editorul web, care o foloseste),
-	octetii cititi si lista dosarelor din Picon.py. Numai modulele deja incarcate (pe PC nu e niciunul)."""
+	octetii cititi si listele dosarelor din Picon.py si din rezerva locala. Numai modulele deja incarcate."""
+	_MEMORIE_DOSARE.clear()
 	for nume in MODULE_WEB:
 		try:
 			m = sys.modules.get(nume)
@@ -693,8 +800,12 @@ def uita_memoria():
 			_jurnal("memoria %s: %r" % (nume, e))
 	try:
 		p = sys.modules.get(MODUL_PICON)
-		d = getattr(p, "_dosare", None) if p is not None else None
-		if isinstance(d, dict):
-			d.clear()
+		if p is not None:
+			reset = getattr(p, "resetPiconPath", None)
+			if reset is not None:
+				reset()
+			else:
+				# Compatibilitate cu modulele mici folosite de probe si extensii.
+				getattr(p, "_dosare", {}).clear()
 	except Exception as e:
 		_jurnal("memoria dosarelor: %r" % (e,))

@@ -38,7 +38,8 @@
 #   cu marja fata de ambele). Hotaraste in ambele trepte; fara limite (alt model) nu se verifica. Un disc intreg
 #   nelistat nu hotaraste nimic (ca eticheta lipsa): pe un receptor adevarat /proc/partitions il listeaza mereu, iar un
 #   /proc/partitions necitit cade deja la "kernel"; uneltele de pe PC dau uneori numai randurile p9 si p10.
-# Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), arborele dispozitivului, tunerele
+# - DT: un nume explicit de model diferit opreste pornirea; un nume generic nu hotaraste.
+# Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), tunerele
 # si, pentru ecranul de diagnostic si pagina web (informatiiPornire), ce da incarcatorul receptorului in /proc/cmdline
 # (MACHINEBUILD=, OEM= si MODEL= din partitia lui bootargs, pe Octagon de pilda MODEL=sf8008, si mem=), codul tunerelor
 # din driver (/proc/stb/info/type), numele cipului din driver (/proc/stb/info/chipset) si versiunea driverelor din
@@ -60,13 +61,22 @@
 # compara cu marcajul fiecarui pachet (al unui alt model poate avea alte nume).
 # Ce nu se poate citi nu se potriveste: paza cade inchisa.
 #
+# Multiboot (pornireMultiboot, aceeasi regula in garda din enigma2.sh): /proc/cmdline arata alt slot decat cel de baza
+# al regulilor cand kernel= e altul decat /dev/<kernel_part>, cand root= lipseste sau e altul decat /dev/<rootfs_part>
+# (USB, UUID=, alt disc, alta partitie) sau cand rootsubdir= e altul decat linuxrootfs1 (slotul de baza pe HiSilicon).
+# Atunci partitiile (tabela, locul si marimea nucleului si a sistemului) descriu slotul, nu receptorul: daca numai ele
+# nu se potrivesc, receptorul trece (comparaPornire), iar diagnosticul arata slotul pornit si o nota daca nu s-a putut
+# citi. Daca si altceva nu se potriveste (alt receptor), verdictul si lista raman ca pana acum. Pe pornirea obisnuita
+# (slotul de baza), fara cmdline citit si pe NAND partitiile raman dovada, ca inainte. La verificarea unui pachet,
+# compara() pastreaza cerintele stricte din marcaj.
+#
 # Doua trepte. Treapta intai (modelul confirmat pe un receptor adevarat; regulile fara „confirmat=nu”, cum sunt toate
 # cele scrise pana acum): toate cheile de mai sus hotarasc. Treapta a doua (un model nou, cu regulile inca neverificate
 # pe aparat, „confirmat=nu”): hotarasc numai cipul, tipul placii (din driver si din eticheta, fata de lista din
 # „boxtype=”, de exemplu u57,u571) si locul nucleului si al sistemului (partitiile kernel si rootfs pe locurile din
 # reguli, amandoua prezente); placa (HW=), tabela partitiilor si marimea nucleului sunt numai avertismente: interfata
 # porneste, iar o nota arata valorile citite („model neconfirmat”). „boxtype=” poate fi o lista si in treapta intai; o
-# singura valoare se compara ca pana acum.
+# singura valoare se compara ca pana acum. Memoria interna si DT hotarasc in ambele trepte.
 #
 # La pornire hotaraste garda din enigma2.sh (inaintea lui showiframe) si scrie verdictul in /tmp/hds-paza-model.stare
 # (RAM), impreuna cu valorile citite. verdict() foloseste acel fisier ca singura sursa pentru stare si pentru randurile
@@ -85,10 +95,11 @@ import os
 import re
 import threading
 
-try:
-	_
-except NameError:
-	def _(text):
+def _(text):
+	try:
+		from Components.HdsDiagnostic import traduce
+		return traduce(text)
+	except ImportError:
 		return text
 
 FISIER_REGULI = "etc/hdsatelit-model"          # fata de radacina
@@ -106,13 +117,23 @@ OCTETI_ETICHETA = 256
 BLOC_SUMA = 1024 * 1024
 
 # cheile care hotarasc, in ordinea din mesaj; primele cinci se socotesc si cand regulile sunt stricate
-CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta", "emmc")
+CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta", "dt", "emmc")
 CHEI_DE_BAZA = CHEI_AMPRENTA[:5]
 # treapta a doua: cheile care dau numai avertisment (la „kernel” numai marimea; locul hotaraste)
 CHEI_AVERTISMENT = ("hw", "partitii", "kernel")
+# cheile slotului pornit: la o pornire de multiboot nu sunt dovada receptorului (comparaPornire)
+CHEI_SLOT = ("partitii", "kernel")
+# slotul de baza pe HiSilicon (rootsubdir= al pornirii obisnuite)
+SUBDOSAR_BAZA = "linuxrootfs1"
 # cheia si valoarea care pun regulile in treapta a doua (orice alta valoare, sau lipsa, = treapta intai)
 CHEIE_CONFIRMAT = "confirmat"
 NECONFIRMAT = "nu"
+# memoria interna NAND (stocare=nand; Vu+ Solo SE, din 0.7.0): cipul din /proc/stb/info/chipset, tipul placii din
+# /proc/stb/info/vumodel, partitiile din /proc/mtd (mtd0, mtd1 ...), fara antet de fabrica (hw=-), fara eticheta, fara
+# eMMC. Lipsa cheii = eMMC, ca pana acum.
+CHEIE_STOCARE = "stocare"
+STOCARE_NAND = "nand"
+FARA_ANTET = "-"
 # modelele confirmate pe un receptor adevarat DUPA ce imaginea lor a fost construita cu "confirmat=nu" (regulile vin cu
 # imaginea, deci o actualizare prin pachete nu le schimba): Amiko Viper 4K V30, din 0.6.6 (probat de un tester pe
 # un receptor adevarat: merge). Pentru ele nota si mesajul "Model neconfirmat: software pentru testeri" nu mai
@@ -144,9 +165,11 @@ REFUZ_SCHIMBAT = "schimbat"
 
 # tipuri de placa din eticheta si un receptor cunoscut de acel tip (oe-alliance, u571.conf); numai pentru mesaj
 EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40", "sf8008": "Octagon SF8008 4K UHD", "sf8008m": "Octagon SF8008 MINI 4K",
-	"viper4k": "Amiko Viper 4K V10", "ustym4kpro": "Uclan Ustym 4K PRO"}
+	"viper4k": "Amiko Viper 4K V10", "ustym4kpro": "Uclan Ustym 4K PRO", "gbmv200": "GigaBlue UHD TRIO 4K"}
 # masinile Octagon: recuperarea e din meniul de pornire al receptorului (Recovery From USB), nu Maintenance Mode
 MASINI_OCTAGON = ("sf8008", "sf8008m")
+# Ustym 4K PRO are buton RECOVERY in spate (manualul producatorului); textul spune numai butonul: secventa de pornire nu e probata aici
+MASINA_UCLAN = "ustym4kpro"
 
 # memoria interna: limitele pentru regulile care nu le scriu, dupa machinebuild (min_kib, max_kib; None = fara limita)
 EMMC_MAXIM_V20_KIB = 5 * 1024 * 1024
@@ -154,8 +177,49 @@ EMMC_IMPLICIT = {"viper4kv20": (None, EMMC_MAXIM_V20_KIB)}
 # un receptor cunoscut cu memoria interna mai mare / mai mica decat cea ceruta de reguli; numai pentru mesaj
 EXEMPLU_EMMC = {("viper4kv20", "mare"): "Amiko Viper 4K V30", ("viper4kv30", "mica"): "Amiko Viper 4K V20"}
 
-_CARACTERE_SIGURE = re.compile(r"[^A-Za-z0-9_.:/ ,()'+-]")
+_CARACTERE_SIGURE = re.compile(r"[^A-Za-z0-9_.:/ ,()'=?+-]")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+# Familia receptorului (0.7.1, lotul vuplus4k: Vu+ Solo 4K, Uno 4K SE, Duo 4K). Fara cheie: HiSilicon, ca pana acum.
+# Cu „familie=broadcom” amprenta se citeste altfel, fiindca pe Broadcom nu exista /proc/msp/sys, blkdevparts si partitia
+# deviceinfo: cipul din /proc/stb/info/chipset; tipul placii din /proc/stb/info/boxtype sau, cand lipseste,
+# /proc/stb/info/vumodel (ca getBoxProc din Tools/StbHardware.py al altor imagini); sistemul din root= al lui
+# /proc/cmdline; nucleul din kernel= al lui /proc/cmdline (AX HD51, din STARTUP) sau, cand lipseste (Vu+: linia e fortata
+# in nucleu), partitia kernel_part= din reguli, numai daca exista in /proc/partitions. Placa (hw=) si tabela
+# (partitions=, poate fi "-") nu se citesc si nu se compara. Valorile chipset si vumodel sunt fixe in driverul imaginii
+# care ruleaza (ca boxtype pe HiSilicon), deci modelele Broadcom raman cu „confirmat=nu” pana la fisa unui tester.
+# Broadcom cu memorie NAND („familie=broadcom” si „stocare=nand”, Vu+ Solo SE, unirea loturilor vuplus4k si mips-solose):
+# amprenta din amprentaNandDinTexte (cipul, tipul placii, tabela din /proc/mtd), locul nucleului si al sistemului dupa
+# numele partitiilor din /proc/mtd, iar tabela se compara (avertisment in treapta a doua); placa tot nu se compara.
+# Cipul se compara fara „bcm” in fata pe amandoua (_cipFaraBcm); regulile Broadcom il scriu cum il da driverul (7241).
+CHEIE_FAMILIE = "familie"
+FAMILIE_BROADCOM = "broadcom"
+FAMILII = (FAMILIE_BROADCOM,)
+
+# Numai un model explicit din DT poate dovedi alt receptor.
+# Un nume generic al cipului sau un DT lipsa nu hotaraste.
+MODELE_DT = (
+	"solo4k", "uno4k", "uno4kse", "ultimo4k", "zero4k", "duo4k", "duo4kse",
+	"sf8008", "sf8008m", "gbquad4k", "gbue4k", "gbx34k", "gbtrio4k", "gbmv200",
+	"viper4k", "viper4kv20", "viper4kv30", "viper4kv40", "protek4k", "ustym4kpro")
+
+
+def modelDtDiferit(reguli, dt):
+	"""True numai cand DT numeste un model cunoscut, diferit de cel cerut."""
+	def nume(text):
+		text = text.lower()
+		return text[2:] if text.startswith("vu") else text
+	cerute = [nume(x) for x in tipuriPlaca(reguli)]
+	cerute.append(nume(reguli.get("machinebuild", "")))
+	gasite = [nume(x) for x in re.split(r"[^a-z0-9]+", (dt or "").lower())]
+	if any(x in cerute for x in gasite if x in MODELE_DT):
+		return False
+	return any(x in MODELE_DT and x not in cerute for x in gasite)
+
+
+def broadcom(reguli):
+	"""True pentru regulile unui receptor Broadcom („familie=broadcom”)"""
+	return (reguli or {}).get(CHEIE_FAMILIE) == FAMILIE_BROADCOM
 
 
 def radacinaImplicita():
@@ -238,13 +302,17 @@ def reguliValide(reguli, cu_sume=False):
 			return False
 	if reguli.get("format") != FORMAT or reguli.get("distro") != DISTRO:
 		return False
-	if partitiiDinReguli(reguli.get("partitions")) is None:
+	if CHEIE_FAMILIE in reguli and reguli[CHEIE_FAMILIE] not in FAMILII:
+		return False
+	if not (broadcom(reguli) and reguli.get("partitions") == "-") and partitiiDinReguli(reguli.get("partitions")) is None:
 		return False
 	if not reguli.get("kernel_kib", "").isdigit():
 		return False
 	for cheie, _implicit in CHEI_NUME_PARTITII:
 		if reguli.get(cheie) and not re.match(r"^[A-Za-z0-9_]+$", reguli[cheie]):
 			return False
+	if CHEIE_STOCARE in reguli and reguli[CHEIE_STOCARE] != STOCARE_NAND:
+		return False
 	if cu_sume:
 		for cheie in CHEI_SUME:
 			if not _HEX64.match(reguli.get(cheie, "")):
@@ -453,7 +521,7 @@ def caleDinEticheta(eticheta):
 
 def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, antet=None, eticheta=None,
 		board_revision=None, compatibil=None, nim_sockets=None, nume_partitii=("kernel", "rootfs"), tip=None,
-		chipset=None):
+		chipset=None, familie=None, vumodel=None, kernel_part=None):
 	"""Amprenta din ce s-a citit (None = necitit). `antet`: primii 4 KiB ai partitiei deviceinfo, ca octeti (se
 	pastreaza numai HW= si MAGICNUM=); `eticheta`: cei 256 de octeti de la 0x3F6000 ai aceleiasi partitii;
 	`compatibil`: /proc/device-tree/compatible, ca octeti. Folosita de amprenta() si de scripturile de pe PC care
@@ -478,6 +546,8 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 	marimi = _marimiProcPartitions(partitions)
 	a["marimi_partitii"] = marimi
 	a["kernel_part"], a["kernel_kib"], a["rootfs_part"], a["rootfs_kib"] = _loc(lista, marimi, nume_partitii)
+	# multiboot: nucleul locului pornit (kernel= din /proc/cmdline) se arata; verdictul ramane pe tabela (_loc)
+	a["kernel_pornit"], a["rootsubdir"] = nucleuPornit(cmdline)
 	a["emmc_kib"] = marimi.get("mmcblk0", "")
 	campuri = _campuriAntet(antet) if _indexDeviceinfo(brut) is not None else {}
 	a["hw"] = campuri.get("HW", "")
@@ -490,8 +560,29 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 		if rand.startswith("Name:"):
 			tunere.append(curat(rand[5:], 40))
 	a["tunere"] = tunere[:8]
+	if familie == FAMILIE_BROADCOM:
+		# Broadcom (CHEIE_FAMILIE): `vumodel` = /proc/stb/info/vumodel, `kernel_part` = kernel_part= din reguli
+		c = _cuvinteCmdline(cmdline)
+		a["cip"] = _simplu((chipset or "").split("\n")[0])
+		a["boxtype"] = a["boxtype"] or _simplu((vumodel or "").split("\n")[0])
+		a["partitii_lista"] = []
+		a["partitii"] = ""
+		rp = _partitieDinCmdline(c.get("root"))
+		kp = _partitieDinCmdline(c.get("kernel"))
+		if not kp and kernel_part and kernel_part in marimi:
+			kp = kernel_part
+		a["kernel_part"], a["kernel_kib"] = kp, (marimi.get(kp, "") if kp else "")
+		a["rootfs_part"], a["rootfs_kib"] = rp, (marimi.get(rp, "") if rp else "")
+		a["hw"] = a["magicnum"] = a["eticheta"] = ""
 	a.update(informatiiPornire(msp_sys, cmdline, tip, chipset))
+	a.update(slotDinCmdline(cmdline, marimi))
 	return a
+
+
+def _partitieDinCmdline(valoare):
+	"""'mmcblk0p4' din '/dev/mmcblk0p4' (root= sau kernel= din /proc/cmdline); "" pentru orice altceva"""
+	m = re.match(r"^/dev/(mmcblk[0-9]+p[0-9]+)$", valoare or "")
+	return m.group(1) if m else ""
 
 
 def _cuvinteCmdline(cmdline):
@@ -502,6 +593,52 @@ def _cuvinteCmdline(cmdline):
 		if egal and cheie and cheie not in rez:
 			rez[cheie] = valoare
 	return rez
+
+
+def _valoareSlot(c, cheie):
+	"""Valoarea lui kernel=, root= sau rootsubdir= din cuvintele lui /proc/cmdline (_cuvinteCmdline); "" cand lipseste,
+	are alte caractere sau trece de 160 (la fel in garda din enigma2.sh)"""
+	text = c.get(cheie, "")
+	if len(text) > 160 or not re.match(r"^[A-Za-z0-9_./:=+-]+$", text):
+		return ""
+	return text
+
+
+def pornireMultiboot(reguli, cmdline):
+	"""True cand /proc/cmdline arata pornirea dintr-un slot de multiboot, nu din slotul de baza al regulilor: kernel=
+	altul decat /dev/<kernel_part>, root= lipsa sau altul decat /dev/<rootfs_part> (USB, UUID=, alt disc, alta
+	partitie), rootsubdir= altul decat linuxrootfs1. False fara cmdline citit, pe NAND (tabela din /proc/mtd e a
+	receptorului) si cu reguli stricate: atunci partitiile raman dovada. Aceeasi regula in garda din enigma2.sh."""
+	if not (cmdline or "").split() or not reguliValide(reguli) or nand(reguli):
+		return False
+	c = _cuvinteCmdline(cmdline)
+	kernel, root, subdosar = _valoareSlot(c, "kernel"), _valoareSlot(c, "root"), _valoareSlot(c, "rootsubdir")
+	return bool((kernel and kernel != "/dev/" + reguli["kernel_part"]) or root != "/dev/" + reguli["rootfs_part"] or
+		(subdosar and subdosar != SUBDOSAR_BAZA))
+
+
+def slotDinCmdline(cmdline, marimi=None):
+	"""Slotul pornit, numai pentru diagnostic. Nu presupune slotul din reguli."""
+	c = _cuvinteCmdline(cmdline)
+	marimi = marimi or {}
+	def cale(cheie):
+		return _valoareSlot(c, cheie)
+	def partitie(text):
+		m = re.match(r"^/dev/(mmcblk[0-9]+p[0-9]+|sd[a-z]+[0-9]+|nvme[0-9]+n[0-9]+p[0-9]+)$", text)
+		return m.group(1) if m else ""
+	kernel, root = cale("kernel"), cale("root")
+	kp, rp = partitie(kernel), partitie(root)
+	_, rsd = nucleuPornit(cmdline)
+	lizibil = bool(kp in marimi and rp in marimi)
+	nota = ("Boot partitions read from the running slot; they do not identify the receiver." if lizibil else
+		"The boot slot could not be read; partitions do not block startup.")
+	text = textKernel(kp or kernel, marimi.get(kp, ""), rp or root)
+	if not text and root:
+		text = "?, %s" % (rp or root)
+	if rsd:
+		text += " (%s)" % rsd
+	return {"slot_kernel": kernel, "slot_root": root, "slot_lizibil": lizibil,
+		"slot_nota": nota, "slot_text": text, "rootsubdir": rsd}
 
 
 def informatiiPornire(msp_sys=None, cmdline=None, tip=None, chipset=None):
@@ -528,6 +665,16 @@ def octagon(a, reguli=None):
 	return (reguli or {}).get("machine") in MASINI_OCTAGON and not a.get("eticheta")
 
 
+def uclan(a, reguli=None):
+	"""True cand receptorul pare un Uclan: OEM=uclan spus de incarcatorul receptorului; fara OEM=, regulile masinii Ustym si nicio
+	eticheta, ca la octagon(). Numai pentru textul recuperarii."""
+	a = a or {}
+	oem = (a.get("pornire_oem") or "").lower()
+	if oem:
+		return oem == "uclan"
+	return (reguli or {}).get("machine") == MASINA_UCLAN and not a.get("eticheta")
+
+
 def driverLipsa(a):
 	"""True cand tipul placii din driver nu s-a putut citi, dar procesorul da: driverul placii (pe HiSilicon hi-dvb.ko,
 	care face /proc/stb) nu s-a incarcat. Nu e un semn al altui receptor."""
@@ -535,20 +682,85 @@ def driverLipsa(a):
 	return not a.get("boxtype") and bool(a.get("cip"))
 
 
-def _loc(lista, marimi, nume_partitii):
-	"""(kernel_part, kernel_kib, rootfs_part, rootfs_kib) dupa numele partitiilor; "" pentru ce nu se gaseste"""
+def _loc(lista, marimi, nume_partitii, nand=False):
+	"""(kernel_part, kernel_kib, rootfs_part, rootfs_kib) dupa numele partitiilor; "" pentru ce nu se gaseste. Pe NAND
+	partitiile se numesc mtd0, mtd1 ... (de la 0), pe eMMC mmcblk0p1, mmcblk0p2 ... (de la 1)."""
 	nume = [n for n, _k in (lista or [])]
 	kn, rn = nume_partitii
-	kp = ("mmcblk0p%d" % (nume.index(kn) + 1)) if kn in nume else ""
-	rp = ("mmcblk0p%d" % (nume.index(rn) + 1)) if rn in nume else ""
+	if nand:
+		kp = ("mtd%d" % nume.index(kn)) if kn in nume else ""
+		rp = ("mtd%d" % nume.index(rn)) if rn in nume else ""
+	else:
+		kp = ("mmcblk0p%d" % (nume.index(kn) + 1)) if kn in nume else ""
+		rp = ("mmcblk0p%d" % (nume.index(rn) + 1)) if rn in nume else ""
 	return kp, (marimi.get(kp, "") if kp else ""), rp, (marimi.get(rp, "") if rp else "")
+
+
+def nand(reguli):
+	"""True pentru regulile unui receptor cu memorie NAND (stocare=nand; Vu+ Solo SE, din 0.7.0)"""
+	return (reguli or {}).get(CHEIE_STOCARE) == STOCARE_NAND
+
+
+def partitiiDinMtd(text):
+	"""/proc/mtd -> [(nume, kib)] in ordinea mtd0, mtd1 ...; numele curatate ca in garda din enigma2.sh (orice alt semn
+	decat litere, cifre si _ devine _: „rootfs(redundant)” -> rootfs_redundant_); None daca nu se poate citi"""
+	rez = []
+	for rand in (text or "").splitlines():
+		m = re.match(r'^mtd([0-9]+):\s+([0-9a-fA-F]+)\s+[0-9a-fA-F]+\s+"([^"]*)"', rand)
+		if m:
+			rez.append((re.sub(r"[^A-Za-z0-9_]", "_", m.group(3)), int(m.group(2), 16) // 1024))
+	return rez or None
+
+
+def amprentaNandDinTexte(chipset=None, vumodel=None, boxtype=None, mtd=None, nim_sockets=None,
+		nume_partitii=("kernel", "rootfs"), tip=None, compatibil=None, cmdline=None, partitions=None):
+	"""Amprenta unui receptor cu NAND (stocare=nand): cipul din /proc/stb/info/chipset, tipul placii din
+	/proc/stb/info/vumodel (altfel /proc/stb/info/boxtype), partitiile din /proc/mtd. Aceleasi chei ca
+	amprentaDinTexte; hw, eticheta si emmc_kib raman goale (placa nu are antet de fabrica, nici eticheta, nici eMMC)."""
+	a = {}
+	a["cip"] = _simplu((chipset or "").split("\n")[0])
+	bt = _simplu((vumodel or "").split("\n")[0])
+	a["boxtype"] = bt or _simplu((boxtype or "").split("\n")[0])
+	a["board_revision"] = ""
+	lista = partitiiDinMtd(mtd)
+	a["partitii_lista"] = lista or []
+	a["partitii"] = textPartitii(lista)
+	marimi = dict(("mtd%d" % i, kib) for i, (_n, kib) in enumerate(lista or []))
+	a["marimi_partitii"] = marimi
+	a["nand"] = True
+	a["kernel_part"], a["kernel_kib"], a["rootfs_part"], a["rootfs_kib"] = _loc(lista, marimi, nume_partitii, nand=True)
+	a["emmc_kib"] = ""
+	a["hw"] = ""
+	a["magicnum"] = ""
+	a["eticheta"] = ""
+	a["dt"] = curat(",".join(x.decode("ascii", "replace") for x in (compatibil or b"").split(b"\0") if x), 80)
+	tunere = []
+	for rand in (nim_sockets or "").splitlines():
+		rand = rand.strip()
+		if rand.startswith("Name:"):
+			tunere.append(curat(rand[5:], 40))
+	a["tunere"] = tunere[:8]
+	a.update(informatiiPornire(None, cmdline, tip, chipset))
+	a.update(slotDinCmdline(cmdline, _marimiProcPartitions(partitions)))
+	return a
+
+
+def _cipFaraBcm(text):
+	"""'BCM7241' / 'bcm7241' / '7241' -> '7241' (pe Broadcom si pe NAND cipul se compara fara „bcm” in fata, ca in
+	enigma2.sh; driverul Vu+ scrie cipul fara el, iar regulile lui il scriu la fel)"""
+	t = (text or "").lower()
+	return t[3:] if t.startswith("bcm") else t
 
 
 def locNucleu(reguli, a):
 	"""(kernel_part, kernel_kib, rootfs_part, rootfs_kib) ale amprentei `a` dupa numele partitiilor din `reguli`; o
 	amprenta fara marimi (din alta parte decat amprentaDinTexte) da valorile ei."""
 	marimi = a.get("marimi_partitii")
-	if not isinstance(marimi, dict):
+	if isinstance(marimi, dict) and (a.get("nand") or nand(reguli)):
+		# NAND (si Broadcom cu NAND, Vu+ Solo SE): locul dupa numele partitiilor din /proc/mtd (mtd0, mtd1 ...)
+		return _loc(a.get("partitii_lista"), marimi, numePartitii(reguli), nand=True)
+	if not isinstance(marimi, dict) or broadcom(reguli):
+		# Broadcom pe eMMC: locul vine din /proc/cmdline si din reguli (amprentaDinTexte), nu din numele partitiilor
 		return (a.get("kernel_part") or "", a.get("kernel_kib", ""), a.get("rootfs_part") or "",
 			a.get("rootfs_kib", ""))
 	return _loc(a.get("partitii_lista"), marimi, numePartitii(reguli))
@@ -557,15 +769,30 @@ def locNucleu(reguli, a):
 def amprenta(radacina=None, reguli=None):
 	"""Ce spune receptorul despre el acum (amprentaDinTexte cu fisierele de sub `radacina`). Valorile care nu se pot
 	citi sunt "" (cheile hotaratoare) sau lipsesc. Partitia deviceinfo se ia dupa locul ei in blkdevparts. `reguli`:
-	numele partitiilor nucleului si ale sistemului (numePartitii); fara ele "kernel" si "rootfs"."""
+	numele partitiilor nucleului si ale sistemului (numePartitii); fara ele "kernel" si "rootfs". Familia (broadcom())
+	si kernel_part= pentru Broadcom vin din `reguli` sau, fara ele, din regulile imaginii care ruleaza; la fel memoria
+	NAND (nand(): stocare=nand, Vu+ Solo SE), cu amprenta din amprentaNandDinTexte."""
+	fam = reguli if reguli is not None else citesteReguli(radacina)
 	cmdline = _citesteText(_cale(radacina, "proc/cmdline"), 4096)
+	dt = b"\0".join(_citesteOcteti(_cale(radacina, "proc/device-tree/" + nume), 128) or b""
+		for nume in ("bolt/board", "model", "compatible"))
+	if nand(fam):
+		return amprentaNandDinTexte(
+			chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64),
+			vumodel=_citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64),
+			boxtype=_citesteText(_cale(radacina, "proc/stb/info/boxtype"), 4096),
+			mtd=_citesteText(_cale(radacina, "proc/mtd"), 8192),
+			nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192),
+			nume_partitii=numePartitii(fam),
+			tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64), compatibil=dt, cmdline=cmdline,
+			partitions=_citesteText(_cale(radacina, "proc/partitions"), 65536))
 	antet = eticheta = None
 	di = _indexDeviceinfo(blkdevpartsBrut(cmdline))
 	if di is not None:
 		dispozitiv = _cale(radacina, "dev/mmcblk0p%d" % di)
 		antet = _citesteOcteti(dispozitiv, OCTETI_ANTET)
 		eticheta = _citesteOcteti(dispozitiv, OCTETI_ETICHETA, DEPLASARE_ETICHETA)
-	return amprentaDinTexte(
+	a = amprentaDinTexte(
 		msp_sys=_citesteText(_cale(radacina, "proc/msp/sys")),
 		boxtype=_citesteText(_cale(radacina, "proc/stb/info/boxtype"), 4096),
 		cmdline=cmdline,
@@ -573,11 +800,17 @@ def amprenta(radacina=None, reguli=None):
 		antet=antet,
 		eticheta=eticheta,
 		board_revision=_citesteText(_cale(radacina, "proc/stb/info/board_revision"), 64),
-		compatibil=_citesteOcteti(_cale(radacina, "proc/device-tree/compatible"), 256),
+		compatibil=dt,
 		nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192),
 		nume_partitii=numePartitii(reguli),
 		tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64),
-		chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64))
+		chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64),
+		familie=FAMILIE_BROADCOM if broadcom(fam) else None,
+		vumodel=_citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64) if broadcom(fam) else None,
+		kernel_part=(fam or {}).get("kernel_part") if broadcom(fam) else None)
+	# pornirea dintr-un slot de multiboot (pornireMultiboot): partitiile descriu slotul, nu receptorul
+	a["multiboot"] = pornireMultiboot(fam, cmdline)
+	return a
 
 
 def amprentaDinStare(st, baza=None):
@@ -595,6 +828,12 @@ def amprentaDinStare(st, baza=None):
 		a["partitii_lista"] = lista or []
 	if "kernel" in st:
 		a["kernel_text"] = curat(st.get("kernel", ""), 120)
+	if "dt" in st:
+		a["dt"] = curat(st["dt"], 80)
+	if "slot" in st:
+		a["slot_lizibil"] = st["slot"] == "citit"
+		a["slot_nota"] = ("Boot partitions read from the running slot; they do not identify the receiver."
+			if a["slot_lizibil"] else "The boot slot could not be read; partitions do not block startup.")
 	if "eticheta" in st:
 		a["eticheta"] = curat(st.get("eticheta", ""), 120)
 	if "emmc" in st:
@@ -659,11 +898,20 @@ def _diferente(reguli, a):
 	si „kernel_loc” (numai locul nucleului si al sistemului, fara marime). Regulile trebuie sa fie valide."""
 	d = {}
 	cip = a.get("cip", "")
-	if not cip or cip.lower() != reguli["chip"].lower():
+	if nand(reguli) or broadcom(reguli):
+		cip_rau = not cip or _cipFaraBcm(cip) != _cipFaraBcm(reguli["chip"])
+	else:
+		cip_rau = not cip or cip.lower() != reguli["chip"].lower()
+	if cip_rau:
 		d["cip"] = (reguli["chip"], cip)
-	if not a.get("hw") or a.get("hw") != reguli["hw"]:
+	# Broadcom (CHEIE_FAMILIE) si hw=- (placa fara antet de fabrica, NAND): placa nu se citeste, deci nu se compara
+	if not broadcom(reguli) and reguli["hw"] != FARA_ANTET and (not a.get("hw") or a.get("hw") != reguli["hw"]):
 		d["hw"] = (reguli["hw"], a.get("hw", ""))
-	asteptat = partitiiDinReguli(reguli["partitions"])
+	# Broadcom pe eMMC (partitions=-): tabela nu se citeste; pe NAND tabela vine din /proc/mtd si se compara
+	if broadcom(reguli) and (not nand(reguli) or reguli["partitions"] == "-"):
+		asteptat = []
+	else:
+		asteptat = partitiiDinReguli(reguli["partitions"])
 	gasit = a.get("partitii_lista") or []
 	bune = len(gasit) >= len(asteptat)
 	if bune:
@@ -687,6 +935,8 @@ def _diferente(reguli, a):
 		d["eticheta"] = (reguli["boxtype"], tip)
 	if _emmcAfara(reguli, a.get("emmc_kib", "")):
 		d["emmc"] = (asteptat_text(reguli, "emmc"), textEmmc(a.get("emmc_kib", "")))
+	if modelDtDiferit(reguli, a.get("dt")):
+		d["dt"] = (asteptat_text(reguli, "dt"), a["dt"])
 	return d
 
 
@@ -712,6 +962,29 @@ def avertismente(reguli, a):
 	return [(c,) + d[c] for c in CHEI_AVERTISMENT if c in d and not (c == "kernel" and "kernel_loc" in d)]
 
 
+def comparaPornire(reguli, a):
+	"""compara() pentru verdictul de la pornire. La o pornire de multiboot (a["multiboot"], pornireMultiboot) partitiile
+	descriu slotul pornit: cand numai ele nu se potrivesc, receptorul trece. Daca si altceva nu se potriveste (alt
+	receptor), lista ramane intreaga, ca pana acum. Pe pornirea obisnuita partitiile raman dovada."""
+	nepotriviri = compara(reguli, a)
+	if a.get("multiboot") and all(n[0] in CHEI_SLOT for n in nepotriviri):
+		return []
+	return nepotriviri
+
+
+def nucleuPornit(cmdline):
+	"""(partitia nucleului pornit, ex. "mmcblk0p15", rootsubdir) din kernel= si rootsubdir= din /proc/cmdline; "" cand lipsesc
+	sau sunt ciudate."""
+	kp, rsd = "", ""
+	for cuvant in (cmdline or "").split():
+		if cuvant.startswith("kernel=/dev/") and not kp:
+			kp = cuvant[12:]
+		elif cuvant.startswith("rootsubdir=") and not rsd:
+			rsd = cuvant[11:]
+	bun = lambda t: t if t and len(t) <= 32 and all(c.isalnum() or c == "_" for c in t) else ""
+	return bun(kp), bun(rsd)
+
+
 def textKernel(kernel_part, kernel_kib, rootfs_part):
 	"""'mmcblk0p9 32768 KiB, mmcblk0p10'; "" daca partitia nucleului nu s-a gasit (necitit)"""
 	if not kernel_part:
@@ -724,6 +997,13 @@ def valoareGasita(a, cheie):
 	if cheie == "kernel":
 		if "kernel_text" in a:
 			return a["kernel_text"]
+		# multiboot: slotul pornit, asa cum il da /proc/cmdline (ca randul kernel= al garzii)
+		if a.get("multiboot") and "slot_text" in a:
+			return a["slot_text"]
+		kpo = a.get("kernel_pornit") or ""
+		if kpo and a.get("kernel_part") and kpo != a.get("kernel_part"):
+			text = textKernel(kpo, (a.get("marimi_partitii") or {}).get(kpo, ""), a.get("rootfs_part") or "")
+			return text + (" (%s)" % a["rootsubdir"] if a.get("rootsubdir") else "")
 		return textKernel(a.get("kernel_part") or "", a.get("kernel_kib", ""), a.get("rootfs_part") or "")
 	if cheie == "eticheta":
 		return tipDinEticheta(a.get("eticheta"))
@@ -743,6 +1023,8 @@ def asteptat_text(reguli, cheie):
 	if cheie == "kernel":
 		return textKernel(reguli.get("kernel_part", ""), reguli.get("kernel_kib", ""), reguli.get("rootfs_part", ""))
 	if cheie == "eticheta":
+		return reguli.get("boxtype", "")
+	if cheie == "dt":
 		return reguli.get("boxtype", "")
 	if cheie == "emmc":
 		lim = limiteEmmc(reguli)
@@ -766,10 +1048,16 @@ def verifica(radacina=None, reguli=None):
 		return {"stare": STARE_NU_SE_APLICA, "reguli": None, "amprenta": {}, "nepotriviri": [], "avertismente": [],
 			"treapta": 1, "versiune": "", "versiune_baza": ""}
 	a = amprenta(radacina, reguli)
-	nepotriviri = compara(reguli, a)
+	nepotriviri = comparaPornire(reguli, a)
+	# multiboot pe receptorul potrivit: partitiile slotului se arata numai informativ, cu nota slotului
+	informative = bool(a.get("multiboot")) and not nepotriviri
+	avert = [] if nepotriviri else avertismente(reguli, a)
+	if informative:
+		avert = [n for n in avert if n[0] not in CHEI_SLOT]
 	acum, baza = versiuni(reguli, radacina)
 	return {"stare": STARE_NEPOTRIVIT if nepotriviri else STARE_POTRIVIT, "reguli": reguli, "amprenta": a,
-		"nepotriviri": nepotriviri, "avertismente": [] if nepotriviri else avertismente(reguli, a),
+		"nepotriviri": nepotriviri, "avertismente": avert,
+		"partitii_informative": informative, "nota_slot": a.get("slot_nota", "") if informative else "",
 		"treapta": treapta(reguli), "versiune": acum, "versiune_baza": baza}
 
 
@@ -804,6 +1092,9 @@ def verdict(radacina=None, cale_stare=None):
 	if not _stareValida(st):
 		return v
 	a_p = amprentaDinStare(st, v["amprenta"])
+	# garda scrie randul slot= numai la o pornire de multiboot; trecuta, partitiile au fost numai informative
+	v["partitii_informative"] = "slot" in st and st["stare"] == STARE_POTRIVIT
+	v["nota_slot"] = a_p.get("slot_nota", "") if v["partitii_informative"] else ""
 	v["sursa"] = "pornire"
 	v["stare"] = st["stare"]
 	v["amprenta_verdict"] = a_p
@@ -918,6 +1209,7 @@ def eticheteAmprenta():
 		"boxtype": _("Tipul plăcii spus de driver"),
 		"eticheta": _("Tipul plăcii din eticheta receptorului"),
 		"emmc": _("Memoria internă (eMMC)"),
+		"dt": _("Device tree model"),
 	}
 
 
@@ -1008,6 +1300,9 @@ def mesajPornire(v):
 	if octagon(a, reguli):
 		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
 			"(la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."))
+	elif uclan(a, reguli):
+		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
+			"(la Uclan Ustym 4K PRO: butonul RECOVERY din spate)."))
 	else:
 		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
 			"(la Amiko: Maintenance Mode)."))
@@ -1032,8 +1327,10 @@ def mesajStare(v):
 		return mesajNeconfirmat(v)
 	if v.get("stare") == STARE_POTRIVIT:
 		# un model confirmat dupa scrierea imaginii (MODELE_CONFIRMATE) poate avea inca avertismente: randuri tehnice
-		return (_("Receptorul este cel potrivit"), [textPentru(v.get("reguli") or {}, v.get("versiune")),
-			_("Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.")],
+		# la multiboot partitiile slotului nu s-au comparat: fraza nu le pomeneste
+		potrivit = _("This receiver matches the hardware required by the software.") if v.get("partitii_informative") \
+			else _("Receptorul acesta se potrivește: procesorul, placa și partițiile sunt cele cerute de software.")
+		return (_("Receptorul este cel potrivit"), [textPentru(v.get("reguli") or {}, v.get("versiune")), potrivit],
 			randuriTehnice(v.get("avertismente") or []))
 	return (_("Paza de model nu se aplică aici"), [_("Software-ul care rulează nu are semnul receptorului (de exemplu "
 		"în emulatorul de pe calculator), deci paza de model nu verifică nimic.")], [])

@@ -334,8 +334,31 @@ eListboxServiceContent::eListboxServiceContent()
 
 void eListboxServiceContent::addPiconPath(const std::string &path)
 {
-	if (!path.empty() && m_picon_paths.size() < 10 && std::find(m_picon_paths.begin(), m_picon_paths.end(), path) == m_picon_paths.end())
-		m_picon_paths.push_back(path.back() == '/' ? path : path + '/');
+	if (path.empty())
+		return;
+	std::string normalized = path.back() == '/' ? path : path + '/';
+	if (std::find(m_picon_paths.begin(), m_picon_paths.end(), normalized) == m_picon_paths.end())
+	{
+		m_picon_paths.push_back(normalized);
+		invalidatePicons();
+	}
+}
+
+eListboxServiceContent::~eListboxServiceContent()
+{
+	if (Py_IsInitialized())
+		Py_XDECREF(m_picon_resolver);
+}
+
+void eListboxServiceContent::setPiconResolver(ePyObject resolver)
+{
+	ePyObject next;
+	if (resolver && (PyObject*)resolver != Py_None && PyCallable_Check(resolver))
+		next = resolver;
+	Py_XINCREF(next);
+	Py_XDECREF(m_picon_resolver);
+	m_picon_resolver = next;
+	invalidatePicons();
 }
 
 void eListboxServiceContent::setPiconsEnabled(bool enabled)
@@ -412,7 +435,7 @@ static bool hdsSmallPicon(const std::string &file, bool png)
 	return valid;
 }
 
-ePtr<gPixmap> eListboxServiceContent::servicePicon(const eServiceReference &ref)
+ePtr<gPixmap> eListboxServiceContent::servicePicon(const eServiceReference &ref, const std::string &name)
 {
 	ePtr<gPixmap> pic;
 	if (!m_picons_enabled || ref.flags & (eServiceReference::isDirectory | eServiceReference::isMarker))
@@ -422,71 +445,111 @@ ePtr<gPixmap> eListboxServiceContent::servicePicon(const eServiceReference &ref)
 	if ((ref.getUnsignedData(4) & 0xffff0000) == 0xfffe0000 && m_picon_requests.size() < 64)
 		m_picon_requests.insert(ref.toString());
 	std::string text = ref.toString(), base;
-	std::vector<std::string> fields;
-	size_t start = 0;
-	for (int i = 0; i < 10; ++i)
-	{
-		size_t end = text.find(':', start);
-		if (end == std::string::npos)
-			return pic;
-		fields.push_back(text.substr(start, end - start));
-		start = end + 1;
-	}
-	auto makeName = [](const std::vector<std::string> &f) {
-		std::string n;
-		for (size_t i = 0; i < f.size(); ++i)
-			n += (i ? "_" : "") + f[i];
-		while (!n.empty() && n.back() == '_')
-			n.pop_back();
-		return n;
-	};
-	base = makeName(fields);
-	auto cached = m_picon_cache.find(base);
+	const std::string key = text + '\0' + name;
+	auto cached = m_picon_cache.find(key);
 	if (cached != m_picon_cache.end())
 	{
 		cached->second.second = ++m_picon_clock;
 		return cached->second.first;
 	}
-	std::vector<std::string> names(1, base);
-	if (fields[2] != "1" && fields[2] != "0")
+	auto load = [&pic](const std::string &file) {
+		bool png = file.size() >= 4 && file.compare(file.size() - 4, 4, ".png") == 0;
+		struct stat st;
+		if (stat(file.c_str(), &st) || !S_ISREG(st.st_mode)
+			|| st.st_size <= 0 || st.st_size > 256 * 1024)
+			return;
+		if (!hdsSmallPicon(file, png))
+			return;
+		if (png)
+			loadPNG(pic, file.c_str());
+		else
+			loadJPG(pic, file.c_str());
+		if (pic && (pic->size().width() > 512 || pic->size().height() > 512))
+			pic = 0;
+	};
+	if (m_picon_resolver)
 	{
-		auto f = fields;
-		f[2] = "1";
-		names.push_back(makeName(f));
-	}
-	if (fields[0] == "4097" || fields[0] == "5001" || fields[0] == "5002" || fields[0] == "5003" || fields[0] == "8193" || fields[0] == "8739")
-	{
-		fields[0] = "1";
-		names.push_back(makeName(fields));
-		fields[2] = "1";
-		names.push_back(makeName(fields));
-	}
-	for (const auto &name : names)
-	{
-		for (const auto &path : m_picon_paths)
+		// Aceeasi cautare ca pe bare, numai la randurile vizibile iesite din cache.
+		ePyObject args = PyTuple_New(2);
+		ePyObject service = PyUnicode_DecodeUTF8(text.data(), text.size(), "surrogateescape");
+		ePyObject channel = PyUnicode_DecodeUTF8(name.data(), name.size(), "surrogateescape");
+		if (args && service && channel)
 		{
-			for (const char *ext : {".png", ".jpg"})
+			PyTuple_SET_ITEM(args, 0, service);
+			PyTuple_SET_ITEM(args, 1, channel);
+			ePyObject result = PyObject_CallObject(m_picon_resolver, args);
+			if (result && PyUnicode_Check(result))
 			{
-				std::string file = path + name + ext;
-				struct stat st;
-				if (stat(file.c_str(), &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > 256 * 1024)
-					continue;
-				if (!hdsSmallPicon(file, ext[1] == 'p'))
-					continue;
-				if (ext[1] == 'p')
-					loadPNG(pic, file.c_str());
-				else
-					loadJPG(pic, file.c_str());
-				if (pic && (pic->size().width() > 512 || pic->size().height() > 512))
-					pic = 0;
+				ePyObject path = PyUnicode_EncodeFSDefault(result);
+				if (path)
+				{
+					load(std::string(PyBytes_AS_STRING(path), PyBytes_GET_SIZE(path)));
+					Py_DECREF(path);
+				}
+			}
+			Py_XDECREF(result);
+		}
+		else
+		{
+			Py_XDECREF(service);
+			Py_XDECREF(channel);
+		}
+		Py_XDECREF(args);
+		if (PyErr_Occurred())
+			PyErr_Print();
+	}
+	else
+	{
+		std::vector<std::string> fields;
+		size_t start = 0;
+		for (int i = 0; i < 10; ++i)
+		{
+			size_t end = text.find(':', start);
+			if (end == std::string::npos)
+				return pic;
+			fields.push_back(text.substr(start, end - start));
+			start = end + 1;
+		}
+		auto makeName = [](const std::vector<std::string> &f) {
+			std::string n;
+			for (size_t i = 0; i < f.size(); ++i)
+				n += (i ? "_" : "") + f[i];
+			while (!n.empty() && n.back() == '_')
+				n.pop_back();
+			return n;
+		};
+		base = makeName(fields);
+		std::vector<std::string> names(1, base);
+		if (fields[2] != "1" && fields[2] != "0")
+		{
+			auto f = fields;
+			f[2] = "1";
+			names.push_back(makeName(f));
+		}
+		if (fields[0] == "4097" || fields[0] == "5001" || fields[0] == "5002" || fields[0] == "5003" || fields[0] == "8193" || fields[0] == "8739")
+		{
+			fields[0] = "1";
+			names.push_back(makeName(fields));
+			fields[2] = "1";
+			names.push_back(makeName(fields));
+		}
+		for (const auto &name : names)
+		{
+			for (const auto &path : m_picon_paths)
+			{
+				for (const char *ext : {".png", ".jpg"})
+				{
+					std::string file = path + name + ext;
+					load(file);
+					if (pic)
+						break;
+				}
 				if (pic)
 					break;
 			}
 			if (pic)
 				break;
 		}
-		if (pic)
-			break;
 	}
 	/* At most 64 decoded logos (64 MiB for maximum-size RGBA files), including misses.
 	   Evict one least-recently-used entry; no full cache flush while scrolling. */
@@ -496,7 +559,7 @@ ePtr<gPixmap> eListboxServiceContent::servicePicon(const eServiceReference &ref)
 			[](const auto &a, const auto &b) { return a.second.second < b.second.second; });
 		m_picon_cache.erase(oldest);
 	}
-	m_picon_cache[base] = std::make_pair(pic, ++m_picon_clock);
+	m_picon_cache[key] = std::make_pair(pic, ++m_picon_clock);
 	return pic;
 }
 
@@ -901,6 +964,9 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 			/* get service information */
 		ePtr<iStaticServiceInformation> service_info;
 		m_service_center->info(*m_cursor, service_info);
+		std::string service_name;
+		if (service_info)
+			service_info->getName(*m_cursor, service_name);
 		eServiceReference ref = *m_cursor;
 		bool isMarker = ref.flags & eServiceReference::isMarker;
 		bool isPlayable = !(ref.flags & eServiceReference::isDirectory || isMarker);
@@ -986,7 +1052,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		int xoffset=0;  // used as offset when painting the folder/marker symbol or the serviceevent progress
 		ePtr<gPixmap> service_picon;
 		if (isPlayable && m_visual_mode == visModeComplex)
-			service_picon = servicePicon(ref);
+			service_picon = servicePicon(ref, service_name);
 
 		for (int e = 0; e < celElements; ++e)
 		{
@@ -1050,8 +1116,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 						painter.blitScale(service_picon, where, eRect(), gPainter::BT_ALPHABLEND);
 						xoffs += slot + 8;
 					}
-					if (service_info)
-						service_info->getName(*m_cursor, text);
+					text = service_name;
 					if (labels_left)
 						reserved = std::max(0, area.left() + area.width() - labels_left);
 					break;

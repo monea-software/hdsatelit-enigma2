@@ -6,6 +6,24 @@
 #include <algorithm>
 
 /*
+ * A number from Python, also when a plugin passes a float (a division in Python 3 gives one). PyLong_AsLong on a float
+ * returns -1 and leaves a TypeError set; the next Python call of the main loop then fails with SystemError and the
+ * interface restarts, far from the plugin that caused it.
+ */
+static long hdsNumar(PyObject *o)
+{
+	if (PyFloat_Check(o))
+		return (long)PyFloat_AsDouble(o);
+	long v = PyLong_AsLong(o);
+	if (v == -1 && PyErr_Occurred())
+	{
+		PyErr_Clear();
+		return 0;
+	}
+	return v;
+}
+
+/*
     The basic idea is to have an interface which gives all relevant list
     processing functions, and can be used by the listbox to browse trough
     the list.
@@ -139,7 +157,8 @@ iListboxContent::iListboxContent(): m_listbox(0)
 void iListboxContent::setListbox(eListbox *lb)
 {
 	m_listbox = lb;
-	m_listbox->setItemHeight(getItemHeight());
+	if (m_listbox)
+		m_listbox->setItemHeight(getItemHeight());
 }
 
 int iListboxContent::currentCursorSelectable()
@@ -236,6 +255,14 @@ int eListboxPythonStringContent::size()
 void eListboxPythonStringContent::setSize(const eSize &size)
 {
 	m_itemsize = size;
+}
+
+void eListboxPythonStringContent::setItemHeight(int height)
+{
+	// Pastram inaltimea si inainte de atasarea la widget.
+	m_itemheight = height;
+	if (m_listbox)
+		m_listbox->setItemHeight(height);
 }
 
 void eListboxPythonStringContent::paint(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected)
@@ -552,13 +579,13 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 							long val = -1, size = 100;
 							if (pvalue && PyLong_Check(pvalue))
 							{
-								val = PyLong_AsLong(pvalue);
+								val = hdsNumar(pvalue);
 								if (val == -1 && PyErr_Occurred())
 									PyErr_Clear();
 							}
 							if (psize && PyLong_Check(psize))
 							{
-								size = PyLong_AsLong(psize);
+								size = hdsNumar(psize);
 								if (size == -1 && PyErr_Occurred())
 								{
 									PyErr_Clear();
@@ -618,7 +645,7 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 							for (int i = 0; i < entries; ++i)
 							{
 								ePyObject entry = PyList_GET_ITEM(plist, i);
-								int num = PyLong_Check(entry) ? PyLong_AsLong(entry) : -1;
+								int num = PyLong_Check(entry) ? hdsNumar(entry) : -1;
 								if (num == -1 && PyErr_Occurred())
 									PyErr_Clear();
 								if (num >= 0 && num < glyphs)
@@ -640,7 +667,7 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 						for (int i = 0; i < entries; ++i)
 						{
 							ePyObject entry = PyList_GET_ITEM(plist, i);
-							int num = PyLong_Check(entry) ? PyLong_AsLong(entry) : -1;
+							int num = PyLong_Check(entry) ? hdsNumar(entry) : -1;
 
 							if ((num < 0) || (num >= glyphs))
 								eWarning("glyph index %d in PythonConfigList out of bounds!", num);
@@ -886,7 +913,15 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 			if (PyCallable_Check(m_buildFunc))  // when we have a buildFunc then call it
 			{
 				if (PyTuple_Check(items))
+				{
 					buildfunc_ret = items = PyObject_CallObject(m_buildFunc, items);
+					/* Eroarea randului ramane aici, nu la urmatorul apel Python. */
+					if (PyErr_Occurred())
+					{
+						eDebug("eListboxPythonMultiContent: randul %d a esuat", m_cursor);
+						PyErr_Print();
+					}
+				}
 				else
 					eDebug("items is no tuple");
 			}
@@ -954,7 +989,7 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 				goto error_out;
 			}
 
-			int type = PyLong_AsLong(PyTuple_GET_ITEM(item, 0));
+			int type = hdsNumar(PyTuple_GET_ITEM(item, 0));
 
 			switch (type)
 			{
@@ -1001,7 +1036,7 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 
 				if (PyLong_Check(pstring) && data) /* if the string is in fact a number, it refers to the 'data' list. */
 				{
-					pstring = PyTuple_GetItem(data, PyLong_AsLong(pstring));
+					pstring = PyTuple_GetItem(data, hdsNumar(pstring));
 					if (!pstring) /* index outside the 'data' list: IndexError, drawn as <not-a-string> */
 						PyErr_Clear();
 				}
@@ -1012,13 +1047,13 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 
 				std::string text_buffer;
 				const char *string = listboxText(pstring, text_buffer, "<not-a-string>");
-				int x = PyLong_AsLong(px) + offset.x();
-				int y = PyLong_AsLong(py) + offset.y();
-				int width = PyLong_AsLong(pwidth);
-				int height = PyLong_AsLong(pheight);
-				int flags = PyLong_AsLong(pflags);
-				int fnt = PyLong_AsLong(pfnt);
-				int bwidth = pborderWidth ? PyLong_AsLong(pborderWidth) : 0;
+				int x = hdsNumar(px) + offset.x();
+				int y = hdsNumar(py) + offset.y();
+				int width = hdsNumar(pwidth);
+				int height = hdsNumar(pheight);
+				int flags = hdsNumar(pflags);
+				int fnt = hdsNumar(pfnt);
+				int bwidth = pborderWidth ? hdsNumar(pborderWidth) : 0;
 
 				if (m_font.find(fnt) == m_font.end())
 				{
@@ -1134,20 +1169,20 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 						pbackColorSelected=ePyObject();
 				}
 
-				int x = PyLong_AsLong(px) + offset.x();
-				int y = PyLong_AsLong(py) + offset.y();
-				int width = PyLong_AsLong(pwidth);
-				int height = PyLong_AsLong(pheight);
-				int filled = PyLong_AsLong(pfilled_perc);
+				int x = hdsNumar(px) + offset.x();
+				int y = hdsNumar(py) + offset.y();
+				int width = hdsNumar(pwidth);
+				int height = hdsNumar(pheight);
+				int filled = hdsNumar(pfilled_perc);
 
 				if ((filled < 0) && data) /* if the string is in a negative number, it refers to the 'data' list. */
-					filled = PyLong_AsLong(PyTuple_GetItem(data, -filled));
+					filled = hdsNumar(PyTuple_GetItem(data, -filled));
 					
 							/* don't do anything if percent out of range */
 				if ((filled < 0) || (filled > 100))
 					continue;
 
-				int bwidth = pborderWidth ? PyLong_AsLong(pborderWidth) : 2;
+				int bwidth = pborderWidth ? hdsNumar(pborderWidth) : 2;
 
 				eRect rect(x, y, width, height);
 				painter.clip(rect);
@@ -1178,7 +1213,7 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 				{
 					ePtr<gPixmap> pixmap;
 					if (PyLong_Check(ppixmap) && data) /* if the pixmap is in fact a number, it refers to the data list */
-						ppixmap = PyTuple_GetItem(data, PyLong_AsLong(ppixmap));
+						ppixmap = PyTuple_GetItem(data, hdsNumar(ppixmap));
 
 					if (SwigFromPython(pixmap, ppixmap))
 					{
@@ -1216,16 +1251,16 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 				}
 
 				if (PyLong_Check(ppixmap) && data) /* if the pixemap is in fact a number, it refers to the 'data' list. */
-					ppixmap = PyTuple_GetItem(data, PyLong_AsLong(ppixmap));
+					ppixmap = PyTuple_GetItem(data, hdsNumar(ppixmap));
 
 							/* don't do anything if we have 'None' as pixmap */
 				if (ppixmap == Py_None)
 					continue;
 
-				int x = PyLong_AsLong(px) + offset.x();
-				int y = PyLong_AsLong(py) + offset.y();
-				int width = PyLong_AsLong(pwidth);
-				int height = PyLong_AsLong(pheight);
+				int x = hdsNumar(px) + offset.x();
+				int y = hdsNumar(py) + offset.y();
+				int width = hdsNumar(pwidth);
+				int height = hdsNumar(pheight);
 				ePtr<gPixmap> pixmap;
 				if (SwigFromPython(pixmap, ppixmap))
 				{
@@ -1248,6 +1283,50 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 					clearRegion(painter, style, local_style, ePyObject(), ePyObject(), pbackColor, pbackColorSelected, selected, rc, sel_clip, offset, cursorValid, mustClear);
 				}
 
+				const int flags = (size > 8 && PyLong_Check(PyTuple_GET_ITEM(item, 8))) ? hdsNumar(PyTuple_GET_ITEM(item, 8)) : 0;
+				const int alpha = (type == TYPE_PIXMAP_ALPHATEST) ? gPainter::BT_ALPHATEST : (type == TYPE_PIXMAP_ALPHABLEND) ? gPainter::BT_ALPHABLEND : 0;
+				/* the values of BT_SCALE .. BT_VALIGN_BOTTOM from elistboxcontent.h, which only Python sees */
+				enum { scale = 4, keepShape = 8, hCenter = 16, hRight = 32, vCenter = 64, vBottom = 128 };
+				if (flags & (scale | keepShape | hCenter | hRight | vCenter | vBottom))
+				{
+					/* the place of the picture inside its rectangle: scaled, with the same shape or not, then aligned */
+					int w = pixmap->size().width(), h = pixmap->size().height();
+					if ((flags & (scale | keepShape)) && w > 0 && h > 0)
+					{
+						if (flags & keepShape)
+						{
+							if (width * h < height * w)
+							{
+								h = h * width / w;
+								w = width;
+							}
+							else
+							{
+								w = w * height / h;
+								h = height;
+							}
+						}
+						else
+						{
+							w = width;
+							h = height;
+						}
+					}
+					int left = x, top = y;
+					if (flags & hCenter)
+						left += (width - w) / 2;
+					else if (flags & hRight)
+						left += width - w;
+					if (flags & vCenter)
+						top += (height - h) / 2;
+					else if (flags & vBottom)
+						top += height - h;
+					if (flags & (scale | keepShape))
+						painter.blitScale(pixmap, eRect(left, top, w, h), rect, alpha);
+					else
+						painter.blit(pixmap, ePoint(left, top), rect, alpha);
+				}
+				else
 				painter.blit(pixmap, rect.topLeft(), rect, (type == TYPE_PIXMAP_ALPHATEST) ? gPainter::BT_ALPHATEST : (type == TYPE_PIXMAP_ALPHABLEND) ? gPainter::BT_ALPHABLEND : 0);
 				painter.clippop();
 				break;
@@ -1301,6 +1380,8 @@ int eListboxPythonMultiContent::currentCursorSelectable()
 					return retval;
 				}
 				eDebug("call m_selectableFunc failed!!! assume not callable");
+				if (PyErr_Occurred())
+					PyErr_Print();
 			}
 			else
 				eDebug("m_list[m_cursor] is not a tuple!!! assume not callable");
@@ -1336,9 +1417,7 @@ void eListboxPythonMultiContent::setFont(int fnt, gFont *font)
 
 void eListboxPythonMultiContent::setItemHeight(int height)
 {
-	m_itemheight = height;
-	if (m_listbox)
-		m_listbox->setItemHeight(height);
+	eListboxPythonStringContent::setItemHeight(height);
 }
 
 void eListboxPythonMultiContent::setList(ePyObject list)

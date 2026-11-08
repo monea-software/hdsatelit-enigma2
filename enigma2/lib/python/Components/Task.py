@@ -429,3 +429,96 @@ class ReturncodePostcondition(Condition):
 #		return {"device": self.device}
 
 job_manager = JobManager()
+
+class FailedPostcondition(Condition):
+	def __init__(self, exception):
+		self.exception = exception
+
+	def getErrorMessage(self, task):
+		if isinstance(self.exception, int):
+			if hasattr(task, "log"):
+				return "\n".join("".join(task.log).strip().split("\n")[-3:])
+			return _("Error code") + ": %s" % self.exception
+		return str(self.exception)
+
+	def check(self, task):
+		return self.exception is None or self.exception == 0
+
+
+class LoggingTask(Task):
+	"""A task that keeps the output of its program; FailedPostcondition shows the end of it."""
+	def __init__(self, job, name):
+		Task.__init__(self, job, name)
+		self.log = []
+
+	def processOutput(self, data):
+		if isinstance(data, bytes):
+			data = data.decode("utf-8", "replace")
+		print("[Task %s]" % self.name, data[:-1])
+		self.log.append(data)
+
+
+class PythonTask(Task):
+	"""A task whose work is a Python function, on a thread of the reactor; work() may set self.pos."""
+	def _run(self):
+		from enigma import eTimer
+		from twisted.internet import threads
+		self.aborted = False
+		self.pos = 0
+		threads.deferToThread(self.work).addBoth(self.onComplete)
+		self.timer = eTimer()
+		self.timer.callback.append(self.onTimer)
+		self.timer.start(5)
+
+	def work(self):
+		raise NotImplementedError("work")
+
+	def abort(self):
+		self.aborted = True
+		if self.callback is None:
+			self.finish(aborted=True)
+
+	def onTimer(self):
+		self.setProgress(self.pos)
+
+	def onComplete(self, result):
+		self.postconditions.append(FailedPostcondition(result))
+		self.timer.stop()
+		del self.timer
+		self.finish()
+
+
+class ConditionTask(Task):
+	"""A task that waits until check() says True; timeoutCount in seconds, None without a limit."""
+	def __init__(self, job, name, timeoutCount=None):
+		Task.__init__(self, job, name)
+		self.timeoutCount = timeoutCount
+
+	def _run(self):
+		self.triggerCount = 0
+
+	def prepare(self):
+		from enigma import eTimer
+		self.timer = eTimer()
+		self.timer.callback.append(self.trigger)
+		self.timer.start(1000)
+
+	def cleanup(self, failed):
+		if hasattr(self, "timer"):
+			self.timer.stop()
+			del self.timer
+
+	def check(self):
+		return True
+
+	def trigger(self):
+		self.triggerCount += 1
+		try:
+			if self.timeoutCount is not None and self.triggerCount > self.timeoutCount:
+				raise Exception("Timeout elapsed")
+			gata = self.check()
+		except Exception as e:
+			self.postconditions.append(FailedPostcondition(e))
+			gata = True
+		if gata:
+			self.finish()

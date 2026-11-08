@@ -285,6 +285,7 @@ def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistr
 	"""Pentru GET /api/discuri: hard diskurile si stick-urile USB oferite, felul lor, sistemele de fisiere de ales la
 	formatare, lucrarea de acum si inregistrarile care ar opri o lucrare pornita de aici."""
 	D = _d(D)
+	from Components.HdsLocInregistrari import etichetaDispozitiv
 	discuri = []
 	for _text, hdd in D.discuriOferite(hm, sys_block):
 		try:
@@ -295,6 +296,9 @@ def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistr
 		d["magistrala_text"] = _t(d["magistrala"])
 		d["felul"] = _t("USB Stick") if d["detasabil"] else _t("Harddisk")
 		d["sisteme"] = _textSisteme(D, hdd)
+		d["eticheta"] = d.get("eticheta") or etichetaDispozitiv(hdd.device)
+		for p in d.get("partitii") or []:
+			p["eticheta"] = p.get("eticheta") or etichetaDispozitiv(p["nume"], next(iter(p.get("montare") or []), ""))
 		discuri.append(d)
 	inreg = _inregistrari(D, inregistrare)
 	return {
@@ -915,10 +919,14 @@ function arata(d){
     var tr = document.createElement("tr");
     var n = celula(tr, k.model);
     var mic = document.createElement("div"); mic.className = "mic"; mic.textContent = "/dev/" + k.dispozitiv; n.appendChild(mic);
+    if(k.eticheta){ var et = document.createElement("div"); et.className = "mic"; et.textContent = "Eticheta: " + k.eticheta; n.appendChild(et); }
     celula(tr, k.felul + " (" + k.magistrala_text + ")"); celula(tr, k.capacitate);
     var p = celula(tr, "");
     if(!k.partitii.length){ p.textContent = "niciuna"; }
-    k.partitii.forEach(function(x){ var r = document.createElement("div"); r.textContent = x.nume + (x.montare.length ? " în " + x.montare.join(", ") : " (nemontată)"); p.appendChild(r); });
+    k.partitii.forEach(function(x){
+      var r = document.createElement("div"); r.textContent = x.nume + (x.montare.length ? " în " + x.montare.join(", ") : " (nemontată)"); p.appendChild(r);
+      if(x.eticheta){ var et = document.createElement("div"); et.className = "mic"; et.textContent = "Eticheta: " + x.eticheta; p.appendChild(et); }
+    });
     var a = celula(tr, "", "actiuni");
     var oprit = ocupat || opriri.length > 0;
     var b;
@@ -1122,6 +1130,7 @@ TEXTE_PAGINA = {
 		N_("A durat"),
 		N_("în"),
 		N_("(nemontată)"),
+		N_("Eticheta:"),
 		N_("Formatează"),
 		N_("Inițializează"),
 		N_("Verifică"),

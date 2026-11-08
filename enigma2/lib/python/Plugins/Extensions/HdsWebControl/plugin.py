@@ -467,6 +467,11 @@ def _sesiuneDinCerere(request):
 	return None, None
 
 
+def fisiereAfara():
+	initConfigHdsWebControl()
+	return bool(config.plugins.hdswebcontrol.fisiere_afara.value)
+
+
 def _acelasiOriginCerere(request):
 	return acelasiOrigin(_antet(request, b"host"), _antet(request, b"origin"), _antet(request, b"referer"))
 
@@ -827,6 +832,9 @@ def initConfigHdsWebControl():
 		# „Acces din afara casei”: rutele aplicatiilor si din afara retelei locale, numai cu parola pentru aplicatii;
 		# oprit din fabrica (din afara: 403)
 		config.plugins.hdswebcontrol.aplicatii_afara = ConfigYesNo(default=False)
+	if "fisiere_afara" not in config.plugins.hdswebcontrol.content.items:
+		# Separat de aplicatii; se poate porni doar local, dupa parola root.
+		config.plugins.hdswebcontrol.fisiere_afara = ConfigYesNo(default=False)
 	if not config.plugins.hdswebcontrol.token.value:
 		# generat o singura data, salvat imediat pe disc -- ramane stabil intre reporniri chiar daca
 		# userul nu deschide niciodata ecranul de configurare (HdsWebControlSetup) sa-l vada/salveze
@@ -886,18 +894,10 @@ def _grabRamasInViata():
 
 
 class _AsteptareCaptura(object):
-	"""Ruleaza `lucru` intr-un fir separat si aduce rezultatul inapoi pe firul enigma2 fara reactor.callLater si fara
-	reactor.callFromThread, care in reactorul imaginii (e2reactor peste eMainloop) pot lasa bucla sa doarma minute:
-	- callLater: e2reactor.doPoll trimitea eApp.poll(int(secunde * 1000)); un rest sub 1 ms devenea 0, iar 0 inseamna
-	  fara termen, deci bucla nu se mai intorcea in Python pana la un eveniment pe un descriptor Python (alta cerere,
-	  o conexiune inchisa);
-	- callFromThread: mytest.py pune supportsThreads() pe False, iar Twisted foloseste atunci varianta care doar pune
-	  apelul in coada, fara sa trezeasca bucla.
-	Trezirea de aici nu depinde de ele: firul pune rezultatul, apoi scrie un octet intr-un pipe propriu, al carui capat
-	de citire e cititor in reactor (addReader), deci poll() iese pe loc. Plasa de siguranta si termenul: un eTimer
-	(ceasul enigma2, rulat de eMainloop la fiecare trecere, orice termen ar cere Twisted) verifica rezultatul la
-	fiecare ceas_ms si, dupa termen_s, cheama la_termen(). Raspunde o singura data: primul dintre pipe, ceas si termen.
-	Dupa termen firul nu mai scrie in pipe (_abandonat, sub _lacat_captura) si isi inchide singur capatul de scriere."""
+	"""Aduce rezultatul capturii pe firul enigma2 printr-un pipe propriu.
+	Un eTimer verifica rezultatul si termenul. Raspunde o singura data.
+	Dupa abandon, firul nu mai scrie si inchide capatul sau din pipe.
+	"""
 
 	def __init__(self, reactor_, lucru, la_rezultat, la_eroare, la_termen, termen_s, ceas_ms=250, acum=time.monotonic):
 		self._reactor = reactor_
@@ -1097,6 +1097,7 @@ _STIL_COMUN = """
 # noua fara intrare in menu.xml se adauga aici. Randurile au forma de odinioara (doua spatii, <a href="/cale">Nume</a>,
 # cate unul pe rand): _legaturiDisponibile le scoate sau le marcheaza dupa receptor si dupa menu.xml, rand cu rand.
 _REGISTRU_PAGINI = """<footer>
+  <a href="/fisiere">Fișiere</a>
   <a href="/canale">Canale</a>
   <a href="/jurnal">Ce e nou</a>
   <a href="/licente">Licențe</a>
@@ -1106,6 +1107,7 @@ _REGISTRU_PAGINI = """<footer>
   <a href="/motor">Rotirea antenei</a>
   <a href="/antena/semnal">Găsire semnal</a>
   <a href="/ecrane">Ecranul de pornire</a>
+  <a href="/sigle-pornire">Sigle de pornire</a>
   <a href="/acces-conditionat">Acces condiționat</a>
   <a href="/piste">Sunet și subtitrări</a>
   <a href="/subtitrari">Aspectul subtitrărilor</a>
@@ -1148,8 +1150,10 @@ def N_(text):
 # Numele paginilor din registru, pentru xgettext (registrul e un sir, iar _registruTradus le traduce pe rand). Un rand
 # nou in _REGISTRU_PAGINI se scrie si aici (proba textelor panoului le compara).
 _TEXTE_REGISTRU = (
+	N_("Fișiere"),
 	N_("Canale"), N_("Ce e nou"), N_("Licențe"), N_("Scanare"), N_("Orientarea și setarea antenei"),
 	N_("Configurare LNB"), N_("Rotirea antenei"), N_("Găsire semnal"), N_("Ecranul de pornire"),
+	N_("Sigle de pornire"),
 	N_("Acces condiționat"), N_("Sunet și subtitrări"), N_("Aspectul subtitrărilor"), N_("Traducerea subtitrărilor"),
 	N_("Traducerea subtitrărilor: configurare pas cu pas"), N_("Accelerare 2D pe placa video"), N_("Căutare canale"),
 	N_("Data și ora"), N_("Paznicul receptorului"), N_("Forumul receptorului"), N_("TV în browser"),
@@ -1343,6 +1347,8 @@ _PAGINA_PANOU = """<!DOCTYPE html>
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:16px;}
   .card h2{font-size:.95rem;margin:0 0 12px;color:var(--text-slab);text-transform:uppercase;letter-spacing:.04em;}
   .status-linie{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--bordura);font-size:.9rem;}
+  #interfeteModule .status-linie{min-width:0;}
+  #interfeteModule a{display:block;min-width:0;max-width:100%;}
   .status-linie:last-child{border-bottom:none;}
   .status-linie.cu-nota{flex-wrap:wrap;}
   .status-linie .nota-rand{flex-basis:100%;font-size:.8rem;color:var(--text-slab);line-height:1.35;}
@@ -1470,6 +1476,7 @@ _PAGINA_PANOU = """<!DOCTYPE html>
       <div class="status-linie"><a href="/canale">Lista de canale: alege și pornește un canal</a></div>
       <div class="status-linie"><a href="/tv">TV în browser: privește canalul live pe acest PC sau telefon</a></div>
       <div class="status-linie"><a href="/ghid">Ghidul canalului: emisiunile și înregistrarea lor</a></div>__INTERFETE_WEB__
+      <div id="interfeteModule"></div>
       <div class="status-linie cu-nota"><span>Mesaj pe televizor</span>
         <form class="mesaj-tv" id="formMesajTv" onsubmit="return trimiteMesajTv()"><input type="text" id="textMesajTv" maxlength="500" placeholder="Scrie mesajul pentru televizor" aria-label="Scrie mesajul pentru televizor" autocomplete="off"><button type="submit">Trimite</button></form>
         <small class="nota-rand" id="stareMesajTv" role="status"></small>
@@ -1507,6 +1514,36 @@ function cerere(cale, metoda){
   var l = document.querySelectorAll("a[data-port]");
   for(var i = 0; i < l.length; i++){ l[i].href = "http://" + location.hostname + ":" + l[i].getAttribute("data-port") + "/"; }
 })();
+function adresaInterfataModul(interfata){
+  if(!interfata || (interfata.protocol !== "http" && interfata.protocol !== "https")){ return null; }
+  var port = Number(interfata.port);
+  if(!Number.isInteger(port) || port < 1 || port > 65535){ return null; }
+  var gazda = location.hostname;
+  if(gazda.indexOf(":") !== -1 && gazda.charAt(0) !== "["){ gazda = "[" + gazda + "]"; }
+  return interfata.protocol + "://" + gazda + ":" + port + "/";
+}
+function arataInterfeteModule(interfete){
+  var loc = document.getElementById("interfeteModule");
+  if(!loc){ return; }
+  loc.textContent = "";
+  (interfete || []).forEach(function(i){
+    var url = adresaInterfataModul(i);
+    if(!url){ return; }
+    var rand = document.createElement("div"); rand.className = "status-linie";
+    var a = document.createElement("a");
+    a.className = "hds-derulant";
+    a.textContent = i.sufix + ": interfața web a modulului";
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    rand.appendChild(a); loc.appendChild(rand);
+  });
+}
+function citesteInterfeteModule(){
+  if(document.hidden){ setTimeout(citesteInterfeteModule, 5000); return; }
+  cerere("/api/acces-conditionat-interfete").then(function(d){ if(d.result){ arataInterfeteModule(d.interfete); } })
+    .catch(function(){ arataInterfeteModule([]); })
+    .then(function(){ setTimeout(citesteInterfeteModule, 5000); });
+}
+citesteInterfeteModule();
 // Caseta Mesaj pe televizor: POST /api/mesaj-televizor, aceeasi fereastra ca mesajul aplicatiilor de telefon
 // (aplicatii_web.trimiteMesaj); campul se goleste numai dupa ce mesajul a aparut, la o eroare textul ramane
 function trimiteMesajTv(){
@@ -1715,7 +1752,7 @@ function numeCapturaLocal(mod, tip){
   var t = new Date();
   var sufix = mod === "video" ? "-fara-meniu" : (mod === "osd" ? "-meniu" : "");
   return "captura-receptor" + sufix + "-" + t.getFullYear() + "-" + d(t.getMonth() + 1) + "-" + d(t.getDate()) +
-    "-" + d(t.getHours()) + d(t.getMinutes()) + (tip.indexOf("png") !== -1 ? ".png" : ".jpg");
+    "-" + d(t.getHours()) + d(t.getMinutes()) + (tip.indexOf("svg") !== -1 ? ".svg" : (tip.indexOf("png") !== -1 ? ".png" : ".jpg"));
 }
 function numeDinAntet(antet){
   var m = /filename="?([A-Za-z0-9._-]+)"?/.exec(antet || "");
@@ -2014,7 +2051,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/acces-ssh-parola</code>: textul parolei (se vede oricând); <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow)</li>
   <li><code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola aleasă (4-64 de semne: litere fără diacritice, cifre și semne, fără spații); <code>POST /api/acces-ssh-parola-noua?confirmat=1</code>: o parolă nouă la întâmplare</li>
   <li><code>POST /api/acces-ssh-adauga</code> (corp: <code>cheie=</code>), <code>POST /api/acces-ssh-stick</code>, <code>POST /api/acces-ssh-sterge?amprenta=SHA256:..&amp;confirmat=1</code>: cheile publice lipite, cele din dosarul hdsatelit/ssh de pe stick, ștergerea unei chei</li>
-  <li><code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code></li>
+  <li><code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code></li>
   <li><code>GET /api/setari-din-copie</code>: setările importate: câte așteaptă repornirea interfeței (<code>asteapta</code>), proba lor (<code>garda</code>), scoase după opriri neașteptate (<code>cazut</code>), textele stării</li>
   <li><code>POST /api/setari-din-copie-reporneste</code>: repornește interfața, ca setările importate să se unească</li>
   <li><code>GET /api/copie-setari[?cauta=1]</code>: copia setărilor: stickurile și discurile (<code>implicit</code> = stickul de actualizare), copiile găsite (data, versiunea imaginii, acest receptor sau altul), copia automată, ultimul rezultat; niciodată conținutul copiei</li>
@@ -3208,6 +3245,7 @@ def _construiesteResurse():
 			return _verificaAcces(request, schimba_ceva=False)
 
 		def render_GET(self, request):
+			request.setHeader(b"cache-control", b"no-store, private")
 			mod, eroare = self._poarta(request)
 			if eroare is not None or mod == "jeton":
 				request.setHeader(b"Access-Control-Allow-Origin", b"*")  # vezi nota CORS din HdsJsonResource.render
@@ -3218,16 +3256,7 @@ def _construiesteResurse():
 			from . import captura_sigura as CS
 			epoca_captura = CS.epocaCapturii()
 			if epoca_captura is None:
-				request.setResponseCode(403)
-				request.setHeader(b"content-type", b"application/json; charset=utf-8")
-				return json.dumps({"result": False, "message": CS.MESAJ_ASOCIERE}).encode("utf-8")
-			# cat ecranul "Parola receptorului" e deschis pe receptor, captura numai pentru un browser conectat cu codul
-			# (parola se vede mare pe ecran)
-			refuz = acces_ssh_web.refuzEcranDeschis(request)
-			if refuz is not None:
-				request.setResponseCode(403)
-				request.setHeader(b"content-type", b"application/json; charset=utf-8")
-				return json.dumps(refuz).encode("utf-8")
+				return CS.cartusSecret(request)
 			global _captura_in_curs
 			if _captura_in_curs:
 				# bariera serverului, independenta de reprogramarea din /panou (vezi nota de la `_captura_in_curs`)
@@ -3327,7 +3356,7 @@ def _construiesteResurse():
 				stare, rezultat = perechea
 				try:
 					if not CS.capturaValida(epoca_captura):
-						_eroareJson(403, CS.MESAJ_ASOCIERE)
+						request.write(CS.cartusSecret(request))
 					elif stare == "lipsa":
 						_eroareJson(500, "unealta 'grab' nu e disponibila pe acest sistem")
 					elif stare == "timeout":
@@ -3950,6 +3979,8 @@ def _construiesteResurse():
 	# (ecran_pornire_web.py, jurnal_web.py: aceleasi date ca ecranele de pe televizor)
 	from . import ecran_pornire_web, jurnal_web
 	_ECRANE, _ECRANE_PAGINA = ecran_pornire_web.rute(HdsJsonResource, resource)
+	from . import galerie_sigle_web
+	_SIGLE, _SIGLE_PAGINA = galerie_sigle_web.rute(HdsJsonResource, resource)
 	_JURNAL, _JURNAL_PAGINA = jurnal_web.rute(HdsJsonResource, resource)
 
 	# ---------------------------------------------------------------- Data si ora, paznicul receptorului
@@ -3958,6 +3989,9 @@ def _construiesteResurse():
 	from . import ceas_web
 	from . import paznic_web
 	_CEAS, _CEAS_PAGINA = ceas_web.rute(HdsJsonResource, resource)
+	from . import functii_imagine_web
+	_FUNCTII_IMAGINE, _FUNCTII_IMAGINE_PAGINA = functii_imagine_web.rute(
+		HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	_PAZNIC, _PAZNIC_PAGINA = paznic_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- Jurnalele celorlalte sloturi (sloturi_web.py)
 	# Aceeasi cautare si acelasi buton ca ecranul de pe receptor (Screens/HdsJurnaleSloturi.py,
@@ -4061,6 +4095,8 @@ def _construiesteResurse():
 	# repornirea pe calea sigura; aceeasi lucrare ca pe televizor (Components/HdsActualizari.py).
 	from . import actualizari_web
 	_ACTUALIZARI, _ACTUALIZARI_PAGINA = actualizari_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	from . import partea_doua_web
+	_PARTEA_DOUA, _PARTEA_DOUA_PAGINA = partea_doua_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- imaginea de pe internet (imagine_online_web.py)
 	# Perechea ferestrei „Imagine nouă de pe internet” (Screens/HdsImagineOnline.py): aceeasi lucrare ca pe televizor.
 	from . import imagine_online_web
@@ -4105,6 +4141,10 @@ def _construiesteResurse():
 	# rute, deci o ruta cu acelasi nume o inlocuieste pe cea veche.
 	from . import aspect_web
 	_ASPECT_API, _ASPECT_PAGINI = aspect_web.rute(HdsJsonResource, resource)
+	# Exploratorul are propria poarta: parola root obligatorie si fara token API.
+	from . import fisiere_web
+	import sys
+	_FISIERE_API, _FISIERE_PAGINA = fisiere_web.rute(resource, sys.modules[__name__])
 
 	# ---------------------------------------------------------------- Video (video_web.py)
 	# Aceleasi randuri ca Setari > Video (Screens/VideoSetup.py, Components/VideoOutput.py): rezolutia, frecventa,
@@ -4250,6 +4290,8 @@ def _construiesteResurse():
 			self.putChild(b"ecran-urca", _ECRANE[b"ecran-urca"])
 			self.putChild(b"ecran-sterge", _ECRANE[b"ecran-sterge"])
 			self.putChild(b"ecran-la-loc", _ECRANE[b"ecran-la-loc"])
+			for nume, resursa in _SIGLE.items():
+				self.putChild(nume, resursa)
 			self.putChild(b"interfete-cam", InterfeteCamResource())
 			# modulele de acces conditionat (acces_conditionat_web.py)
 			for nume_ruta, resursa in _ACCES.items():
@@ -4322,6 +4364,8 @@ def _construiesteResurse():
 			self.putChild(b"ceas", _CEAS[b"ceas"])
 			self.putChild(b"ceas-seteaza", _CEAS[b"ceas-seteaza"])
 			self.putChild(b"ceas-sincronizeaza", _CEAS[b"ceas-sincronizeaza"])
+			for nume_ruta, resursa in _FUNCTII_IMAGINE.items():
+				self.putChild(nume_ruta, resursa)
 			# setarile video (video_web.py)
 			for nume_ruta, resursa in _VIDEO.items():
 				self.putChild(nume_ruta, resursa)
@@ -4387,7 +4431,7 @@ def _construiesteResurse():
 			for nume_ruta, resursa in _IMAGINE_ONLINE.items():
 				self.putChild(nume_ruta, resursa)
 			# limbile, telecomenzile, meniul, setarile din setup.xml, informatiile
-			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _OARBA):
+			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _PARTEA_DOUA, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _OARBA):
 				for nume_ruta, resursa in rute_lot.items():
 					self.putChild(nume_ruta, resursa)
 			self.putChild(b"portal", _PORTAL[b"portal"])
@@ -4401,6 +4445,8 @@ def _construiesteResurse():
 			for nume_ruta, resursa in _APLICATII["api"].items():
 				self.putChild(nume_ruta, resursa)
 			for nume_ruta, resursa in _ASPECT_API.items():
+				self.putChild(nume_ruta, resursa)
+			for nume_ruta, resursa in _FISIERE_API.items():
 				self.putChild(nume_ruta, resursa)
 			# ajutorul (ajutor_web.py): /api/ajutor, /api/ajutor-pagina, /api/ajutor-cauta, /api/ajutor-ecran
 			for nume_ruta, resursa in _AJUTOR.items():
@@ -4430,6 +4476,7 @@ def _construiesteResurse():
 			resource.Resource.__init__(self)
 			self.putChild(b"api", ApiResource())
 			self.putChild(b"panou", DashboardResource())
+			self.putChild(b"fisiere", _FISIERE_PAGINA)
 			self.putChild(b"asociere", AsociereResource())
 			# telefonul din codul QR de pe televizor (jetonul de unica folosinta, asociere.py)
 			self.putChild(b"t", JetonQrResource())
@@ -4439,6 +4486,7 @@ def _construiesteResurse():
 			self.putChild(b"motor", MotorPaginaResource())
 			self.putChild(b"fonturi", FonturiPaginaResource())
 			self.putChild(b"ecrane", _ECRANE_PAGINA)
+			self.putChild(b"sigle-pornire", _SIGLE_PAGINA)
 			self.putChild(b"interfete-cam", InterfeteCamPaginaResource())
 			self.putChild(b"acces-conditionat", _ACCES_PAGINA)
 			# aceeasi pagina pentru amandoua sectiunile; restul adresei alege grupul si felul (/scanare/satelit/operator)
@@ -4455,6 +4503,7 @@ def _construiesteResurse():
 			self.putChild(b"dabt2", _DABT2_PAGINA)
 			self.putChild(b"oarba", _OARBA_PAGINA)
 			self.putChild(b"ceas", _CEAS_PAGINA)
+			self.putChild(b"functii-imagine", _FUNCTII_IMAGINE_PAGINA)
 			self.putChild(b"video", _VIDEO_PAGINA)
 			self.putChild(b"sunet", _SUNET_PAGINA)
 			self.putChild(b"volum-intarziere", _VOLUM_INTARZIERE_PAGINA)
@@ -4503,6 +4552,7 @@ def _construiesteResurse():
 			self.putChild(b"paza-model", _PAZA_MODEL_PAGINA)
 			self.putChild(b"actualizare", _ACTUALIZARE_PAGINA)
 			self.putChild(b"actualizari", _ACTUALIZARI_PAGINA)
+			self.putChild(b"partea-doua", _PARTEA_DOUA_PAGINA)
 			self.putChild(b"imagine-online", _IMAGINE_ONLINE_PAGINA)
 			self.putChild(b"ghid", _GHID_PAGINA)
 			self.putChild(b"scanare-detaliata", _CULEGERE_CANALE_PAGINA)
@@ -4573,6 +4623,12 @@ def _construiesteServer(radacina):
 				if cale == CALE_URCARE_CAPTURA and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
 						_acelasiOriginCerere(self)):
 					return MAX_CORP_CAPTURA
+				# Numai editorul (limitat la 1 MiB de fisier) are JSON mai mare.
+				# Urcarile folosesc bucati <=64 KiB si bugetul comun de RAM.
+				if cale == b"/api/fisiere-save" and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
+						_acelasiOriginCerere(self)):
+					from .fisiere_web import MAX_SAVE_BODY
+					return MAX_SAVE_BODY
 			except Exception as eroare:
 				_jurnal("nu am putut citi calea cererii pentru limita corpului: %s" % eroare)
 			return MAX_CORP_CERERE
@@ -5085,7 +5141,7 @@ TEXTE_PAGINA = {
 			"<code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate "
 			"schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu "
 			"<code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e "
-			"deschis pe receptor, la fel <code>/api/remotecontrol</code> și <code>/api/screenshot</code>"),
+			"deschis pe receptor, la fel <code>/api/remotecontrol</code>"),
 		N_("<code>GET /api/setari-din-copie</code>: setările importate: câte așteaptă repornirea interfeței "
 			"(<code>asteapta</code>), proba lor (<code>garda</code>), scoase după opriri neașteptate "
 			"(<code>cazut</code>), textele stării"),
@@ -5407,6 +5463,7 @@ TEXTE_PAGINA = {
 	),
 	"js": (
 		N_("browser deconectat"),
+		N_(": interfața web a modulului"),
 		N_("Se trimite..."),
 		N_("Trimis:"),
 		N_("(apăsare lungă)"),

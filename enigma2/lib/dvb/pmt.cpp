@@ -1138,9 +1138,11 @@ void eDVBServicePMTHandler::updateYieldingUses()
 void eDVBServicePMTHandler::free()
 {
 	m_info_live_amana = false;
+	m_no_pat_entry_delay->stop();
 	m_ca_timpi_connection.disconnect();
 	/* the yielding uses go back while this handler still holds the channel */
 	clearYieldingUses();
+	m_scan_event_connection = 0;
 	m_dvb_scan = 0;
 
 	if (m_ca_servicePtr)
@@ -1185,9 +1187,14 @@ void eDVBServicePMTHandler::free()
 	m_PMT.stop();
 	m_PAT.stop();
 	m_service = 0;
+	/* Legaturile tin canalul viu si dupa golirea lui m_channel. */
+	m_channelStateChanged_connection = 0;
+	m_channelEvent_connection = 0;
 	m_channel = 0;
 	m_pvr_channel = 0;
 	m_demux = 0;
+	m_pvr_demux_tmp = 0;
+	m_decode_demux_num = 0xFF;
 }
 
 void eDVBServicePMTHandler::updateAIT()

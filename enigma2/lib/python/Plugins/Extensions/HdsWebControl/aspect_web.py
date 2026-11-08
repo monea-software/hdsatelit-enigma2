@@ -20,7 +20,7 @@
 # incarca nu strica restul: se scrie in jurnal si paginile lui lipsesc.
 
 MODULE = ("marime_text_web", "margini_web", "font_interfata_web", "culori_web", "informatii_tabel_web", "tema_tv_web",
-	"meniu_pagini_web", "playlisturi_web")
+	"meniu_pagini_web", "playlisturi_web", "vremea_web", "ci_web")
 
 
 def rute(baza, resource):

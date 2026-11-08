@@ -14,6 +14,7 @@ from Components.Sources.StaticText import StaticText
 from enigma import eEnv
 
 import xml.etree.ElementTree
+from gettext import dgettext
 
 # HDSatelit: semnele „(în lucru)” / „(netestat)”; fara modul, numele simplu (setarile merg oricum)
 try:
@@ -70,6 +71,30 @@ def imparteAjutorul(text, incape, urmare=AJUTOR_URMARE):
 	return pagini
 
 
+def _xmlPlugin(plugin):
+	"""Radacina setup.xml-ului din dosarul unui plugin (plugin="Extensions/Nume"), sau None cand nu se poate citi."""
+	from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+	cale = resolveFilename(SCOPE_PLUGINS, "%s/setup.xml" % plugin.strip("/"))
+	try:
+		with open(cale, "rb") as f:
+			return xml.etree.ElementTree.parse(f).getroot()
+	except Exception as e:
+		print("[Setup] %s: %r" % (cale, e))
+		return None
+
+
+def _traducere(domeniu):
+	"""Traducerea textelor unui ecran: domeniul pluginului (PluginLanguageDomain), apoi cea a imaginii; fara domeniu,
+	numai cea a imaginii."""
+	if not domeniu:
+		return lambda text: _(text)
+
+	def tradu(text):
+		tradus = dgettext(domeniu, text)
+		return tradus if tradus != text else _(text)
+	return tradu
+
+
 class SetupError(Exception):
     def __init__(self, message):
         self.msg = message
@@ -82,20 +107,26 @@ class SetupSummary(Screen):
 	def __init__(self, session, parent):
 
 		Screen.__init__(self, session, parent = parent)
-		self["SetupTitle"] = StaticText(_(parent.setup_title))
+		# un ecran de plugin nu are neaparat setup_title
+		titlu = getattr(parent, "setup_title", None) or (parent.getTitle() if hasattr(parent, "getTitle") else "")
+		self["SetupTitle"] = StaticText(_(titlu) if titlu else "")
 		self["SetupEntry"] = StaticText("")
 		self["SetupValue"] = StaticText("")
 		self.onShow.append(self.addWatcher)
 		self.onHide.append(self.removeWatcher)
 
 	def addWatcher(self):
+		# HDSatelit: un ecran de plugin cu SetupSummary nu are neaparat lista onChangedEntry (BitrateViewer): o primeste aici
+		if not isinstance(getattr(self.parent, "onChangedEntry", None), list):
+			self.parent.onChangedEntry = []
 		self.parent.onChangedEntry.append(self.selectionChanged)
 		self.parent["config"].onSelectionChanged.append(self.selectionChanged)
 		self.selectionChanged()
 
 	def removeWatcher(self):
-		self.parent.onChangedEntry.remove(self.selectionChanged)
-		self.parent["config"].onSelectionChanged.remove(self.selectionChanged)
+		for lista in (getattr(self.parent, "onChangedEntry", None), self.parent["config"].onSelectionChanged):
+			if lista is not None and self.selectionChanged in lista:
+				lista.remove(self.selectionChanged)
 
 	def selectionChanged(self):
 		self["SetupEntry"].text = self.parent.getCurrentEntry()
@@ -109,23 +140,53 @@ class Setup(ConfigListScreen, Screen):
 		config.usage.setup_level.notifiers.remove(self.levelChanged)
 
 	def levelChanged(self, configElement):
+		if self.faceRandurileSingur():
+			self.createSetup()
+			self.updateDescription()
+			return
 		list = []
 		self.refill(list)
 		self["config"].setList(list)
 		self.updateDescription()
 
 	def refill(self, list):
-		xmldata = setupdom.getroot()
-		for x in xmldata.findall("setup"):
-			if x.get("key") != self.setup:
+		# ecranul unui plugin se cauta intai in setup.xml-ul lui, apoi in cel al imaginii
+		for xmldata in (self.xmlPlugin, setupdom.getroot()):
+			if xmldata is None:
 				continue
-			self.addItems(list, x);
-			self.setup_title = x.get("title", "")
+			gasit = False
+			for x in xmldata.findall("setup"):
+				if x.get("key") != self.setup:
+					continue
+				gasit = True
+				self.addItems(list, x);
+				self.setup_title = x.get("title", "")
+			if gasit:
+				break
 
-	def __init__(self, session, setup):
+	def createSetup(self, appendItems=None, prependItems=None):
+		"""Randurile ecranului din nou, in lista. Un plugin o suprascrie cand isi face randurile singur (ecranul i-o
+		cheama la deschidere) sau o cheama cu randuri in plus."""
+		lista = (prependItems or [])[:]
+		self.refill(lista)
+		lista.extend(appendItems or [])
+		self["config"].setList(lista)
+
+	def faceRandurileSingur(self):
+		return type(self).createSetup is not Setup.createSetup
+
+	def __init__(self, session, setup=None, plugin=None, PluginLanguageDomain=None, **altele):
+		"""setup: cheia din setup.xml; plugin ("Extensions/Nume"): pluginul cu setup.xml-ul propriu in dosarul lui;
+		PluginLanguageDomain: domeniul de traducere al textelor lui. Ecranele imaginii dau numai cheia."""
 		Screen.__init__(self, session)
+		if altele:
+			print("[Setup] parametri necunoscuti, ignorati: %s" % ", ".join(sorted(altele)))
 		# for the skin: first try a setup_<setupID>, then Setup
-		self.skinName = ["setup_" + setup, "Setup" ]
+		self.skinName = ["setup_" + setup, "Setup" ] if setup else ["Setup"]
+		self.plugin = plugin
+		self.xmlPlugin = _xmlPlugin(plugin) if plugin else None
+		self.traducere = _traducere(PluginLanguageDomain)
+		self.setup_title = setup or ""
 
 		self.onChangedEntry = [ ]
 		# id(setare) -> textul de ajutor (atributul description din setup.xml).
@@ -155,8 +216,13 @@ class Setup(ConfigListScreen, Screen):
 		# textul de ajutor al randului curent, in zona „description” a skinului HDSatelit (HdsSetupBase); gol la
 		# randurile fara text
 		self["description"] = Label("")
+		# nota de sub ajutor a unui plugin (setFootnote); ascunsa la toate celelalte ecrane
+		self["footnote"] = Label("")
+		self["footnote"].visible = False
 		self["config"].onSelectionChanged.append(self.updateDescription)
 
+		if self.faceRandurileSingur():
+			self.createSetup()
 		self.changedEntry()
 		self.onLayoutFinish.append(self.layoutFinished)
 		# HDSatelit: o setare cu atributul hdsStare (o functie care da randurile starii de acum, de pilda
@@ -173,7 +239,8 @@ class Setup(ConfigListScreen, Screen):
 	STARE_MS = 3000
 
 	def layoutFinished(self):
-		self.setTitle(_(self.setup_title))
+		if self.setup_title:
+			self.setTitle(self.traducere(self.setup_title))
 		self.updateDescription()
 		if self.hdsCeasStare is not None:
 			self.hdsCeasStare.start(self.STARE_MS, False)
@@ -262,6 +329,9 @@ class Setup(ConfigListScreen, Screen):
 
 	def refaConditionale(self):
 		"""lista din nou dupa conditional=; cursorul ramane pe aceeasi setare (randurile ascunse sunt sub ea)"""
+		if self.faceRandurileSingur():
+			self.createSetup()
+			return
 		lista = []
 		self.refill(lista)
 		vechi = self["config"].list
@@ -276,36 +346,77 @@ class Setup(ConfigListScreen, Screen):
 		self.updateDescription()
 
 	@staticmethod
-	def conditieAdevarata(expresie):
+	def conditieAdevarata(expresie, ecran=None):
 		"""conditional= din setup.xml; o expresie care nu se poate evalua arata randul (fara mesaj cand numai setarea
-		lipseste: modulul care o face nu e instalat)"""
+		lipseste: modulul care o face nu e instalat). In expresie, self este ecranul (setup.xml-ul unui plugin)."""
 		try:
-			return bool(eval(expresie))
+			return bool(eval(expresie, globals(), {"self": ecran}))
 		except (KeyError, AttributeError):
 			return True
 		except Exception as e:
 			print("[Setup] conditional %r: %s" % (expresie, e))
 			return True
 
+	# HDSatelit: lista goala (un plugin care o umple mai tarziu, BouquetCleanup) sau un rand de titlu fara setare nu mai dau eroare;
+	# ca ConfigListScreen din Components/ConfigList.py
 	def getCurrentEntry(self):
-		return self["config"].getCurrent()[0]
+		curent = self["config"].getCurrent()
+		return curent[0] if curent else ""
 
 	def getCurrentValue(self):
-		return str(self["config"].getCurrent()[1].getText())
+		# fara getCurrentItem: SetupSummary o cheama si pe ecrane de plugin care au numai lista (test_compat_lot6_071)
+		curent = self["config"].getCurrent()
+		return str(curent[1].getText()) if curent is not None and len(curent) > 1 and curent[1] is not None else ""
+
+	def getCurrentItem(self):
+		"""Setarea randului curent, sau None."""
+		curent = self["config"].getCurrent()
+		return curent[1] if curent is not None and len(curent) > 1 else None
+
+	def getCurrentDescription(self):
+		return self.descriptions.get(id(self.getCurrentItem()), "")
+
+	def setFootnote(self, footnote):
+		"""Nota de sub ajutor; goala sau None o ascunde."""
+		self["footnote"].setText(footnote or "")
+		self["footnote"].visible = bool(footnote)
+
+	def keyOK(self):
+		self.keySelect()
+
+	def keySelect(self):
+		"""Tasta OK; un plugin o suprascrie ca sa deschida un ecran al lui de pe un rand."""
+		ConfigListScreen.keyOK(self)
 
 	def createSummary(self):
 		return SetupSummary
 
+	def addIf(self, list, nod):
+		"""<if conditional="..."> randuri <else /> randuri </if>, cum scriu pluginurile in setup.xml; se pot imbrica.
+		Lista se reface la fiecare schimbare de valoare, ca la randurile cu conditional=."""
+		self.conditionale = True
+		activ = self.conditieAdevarata(nod.get("conditional", "True"), self)
+		for copil in nod:
+			if copil.tag == "else":
+				activ = not activ
+			elif activ:
+				self.addItems(list, [copil])
+
 	def addItems(self, list, parentNode):
+		# textele se traduc cu domeniul pluginului, cand ecranul are unul
+		_ = self.traducere
 		for x in parentNode:
-			if x.tag == 'item':
+			if x.tag == 'if':
+				self.addIf(list, x)
+			elif x.tag == 'item':
 				item_level = int(x.get("level", 0))
 
 				if not self.levelChanged in config.usage.setup_level.notifiers:
 					config.usage.setup_level.notifiers.append(self.levelChanged)
 					self.onClose.append(self.removeNotifier)
 
-				if item_level > config.usage.setup_level.index:
+				# ecranul unui plugin nu are alt drum spre setarile lui: nivelul nu il lasa gol
+				if item_level > config.usage.setup_level.index and self.plugin is None:
 					continue
 
 				requires = x.get("requires")
@@ -315,13 +426,19 @@ class Setup(ConfigListScreen, Screen):
 				conditional = x.get("conditional")
 				if conditional:
 					self.conditionale = True
-					if not self.conditieAdevarata(conditional):
+					if not self.conditieAdevarata(conditional, self):
 						continue
 
 				# HDSatelit: semnul „(în lucru)” / „(netestat)” din atributul stare= (HdsStareMeniu)
 				item_text = _hdsTextNod(x, _)
 				description = x.get("description")
-				b = eval(x.text or "");
+				try:
+					b = eval(x.text or "");
+				except Exception as e:
+					if self.plugin is None:
+						raise
+					print("[Setup] %s: randul %r: %r" % (self.plugin, x.text, e))
+					continue
 				if b == "":
 					continue
 				#add to configlist

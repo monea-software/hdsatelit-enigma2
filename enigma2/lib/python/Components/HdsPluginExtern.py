@@ -46,6 +46,10 @@
 # pachetul si coada merg pe un fir (Lucru, LucruCoada); nicio cerere HTTP pe firul enigma2. Inchiderea ecranului si
 # mesajul vin dintr-un eTimer. Modulul nu importa nimic din enigma2 la incarcare (probele de pe PC); RADACINA pune un
 # dosar in fata cailor de sistem, numai la probe.
+#
+# PluginComponent cheama raporteazaIncarcare pentru orice plugin care nu se incarca,
+# inclusiv cele ale imaginii. Acelasi raport, cu cauza incarcare, fara mesaj nou
+# si fara inchiderea vreunui ecran. Numele vine din lista, nu se ghiceste din stiva.
 
 import errno
 import fnmatch
@@ -60,6 +64,8 @@ import tarfile
 import threading
 import time
 import traceback
+
+from Tools.HardwareInfo import getModelName
 
 RADACINA = ""
 SERVER = "https://stb.hdsatelit.com/api/testeri/"
@@ -76,7 +82,6 @@ OPKG_LISTE = "/var/lib/opkg/lists"
 OPKG_CONF = "/etc/opkg"
 IMAGE_VERSION = "/etc/image-version"
 ENIGMA_INFO = "/usr/lib/enigma.info"
-MODEL_STB = "/proc/stb/info/model"
 
 # acelasi inceput ca la ecranele cazute din mytest.py ("HD Satelit: raport de eroare, ecran protejat"), ca uneltele care
 # citesc jurnalele sa-l stie; Components/HdsBetaTester.py si Components/HdsModSigur.py il deosebesc dupa el
@@ -117,11 +122,14 @@ PLUGINURI_IMAGINE = frozenset((
 	"SystemPlugins/HdsDvbI",
 	"SystemPlugins/Hotplug",
 	"SystemPlugins/SkinSelector",
+	"SystemPlugins/Videomode",
 ))
 FELURI = ("Extensions", "SystemPlugins")
 
 # cauzele (specificatia, sectiunea 4), in ordinea in care se incearca; nicio cauza inventata: altfel "interna"
 CAUZE = ("octeti-text", "python2", "modul-lipsa", "tema", "internet", "fisier", "interna")
+# La incarcare, motivul pentru om exista deja in lista de pluginuri.
+CAUZA_INCARCARE = "incarcare"
 _OCTETI_TEXT = re.compile(r"can't concat (?:str|bytes) to (?:bytes|str)|can only concatenate str \(not \"bytes\"\) to str"
 	r"|'str' object has no attribute 'decode'|'bytes' object has no attribute 'encode'|a bytes-like object is required"
 	r"|cannot use a (?:string|bytes) pattern on a (?:bytes|string)-like object")
@@ -205,6 +213,35 @@ def _pluginSiCadru(stiva):
 	return gasit
 
 
+# "Cls.metoda() missing 1 required positional argument", "f() takes 2 positional arguments but 3 were given": numele functiei chemate
+_APEL_GRESIT = re.compile(r"^([\w.<>]+)\(\) (?:missing \d+ required|takes \d+|takes from|takes no |got an unexpected keyword|got multiple values)")
+
+
+def _pluginDinApel(tip, valoare, stiva):
+	"""TypeError chiar la chemarea unei functii a unui plugin extern (argumente gresite): stiva nu are niciun cadru din plugin, fiindca functia
+	n-a apucat sa porneasca. De pilda imaginea inchide un ecran cazut cu close() fara valoare, iar callback-ul pluginului cere una (Session.processDelay
+	-> callback(*retval)). Functia chemata se cauta, dupa numele din mesaj, printre variabilele cadrului cel mai adanc; daca e dintr-un plugin extern,
+	intoarce (fel, nume, fisierul relativ, randul primei linii a functiei), altfel None."""
+	if stiva is None or not issubclass(tip, TypeError):
+		return None
+	m = _APEL_GRESIT.match(_text(valoare))
+	if m is None:
+		return None
+	cerut = m.group(1)
+	while stiva.tb_next is not None:
+		stiva = stiva.tb_next
+	for x in list(stiva.tb_frame.f_locals.values()):
+		f = getattr(x, "__func__", x)
+		cod = getattr(f, "__code__", None)
+		if cod is None or getattr(f, "__qualname__", None) not in (cerut, cerut.rsplit(".", 1)[-1]) and getattr(f, "__name__", None) != cerut:
+			continue
+		p = pluginDinCale(cod.co_filename)
+		if p is not None:
+			cale = cod.co_filename.replace("\\", "/")
+			return (p[0], p[1], cale[cale.rindex("/Plugins/") + len("/Plugins/"):], cod.co_firstlineno)
+	return None
+
+
 def cauza(tip, valoare):
 	"""Codul cauzei (CAUZE), dupa tipul exceptiei si mesaj."""
 	clase = set(c.__name__ for c in getattr(tip, "__mro__", (tip,)))
@@ -249,7 +286,7 @@ def trateaza(tip, valoare, stiva, apel=None, jurnal=None):
 		# iesirea ceruta (sys.exit) nu e o eroare: ramane ca inainte
 		if tip is None or issubclass(tip, (SystemExit, KeyboardInterrupt)):
 			return None
-		p = _pluginSiCadru(stiva)
+		p = _pluginSiCadru(stiva) or _pluginDinApel(tip, valoare, stiva)
 	except Exception as e:
 		_jurnal("stiva nu se poate citi: %r" % (e,))
 		return None
@@ -264,13 +301,40 @@ def trateaza(tip, valoare, stiva, apel=None, jurnal=None):
 	return nume
 
 
-def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal, acum=None, mono=None):
+def raporteazaIncarcare(fel, nume, tip, valoare, stiva, etapa="import"):
+	"""Orice plugin cazut la incarcare: acelasi raport anonim, pe fir. Nu arunca."""
+	try:
+		if tip is None or issubclass(tip, (SystemExit, KeyboardInterrupt)):
+			return
+		# Importul nativ si descriptorul pot cadea fara cadru din plugin.
+		# SyntaxError are fisierul si randul in exceptie, nu in stiva.
+		baza = "%s/%s/" % (fel, nume)
+		ultim = baza + "plugin.py:0"
+		pozitii = cadre(stiva)
+		if isinstance(valoare, SyntaxError):
+			pozitii.append((valoare.filename or "", valoare.lineno or 0))
+		for cale, rand in pozitii:
+			cale = cale.replace("\\", "/")
+			semn = "/Plugins/" + baza
+			if semn in cale:
+				ultim = "%s:%d" % (cale.rsplit("/Plugins/", 1)[1], rand)
+		cadru = "incarcare/%s:%s" % (etapa, ultim)
+		apel = "Incarcare %s/%s: %s" % (fel, nume, etapa)
+		_dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, None,
+			incarcare=True)
+	except Exception as e:
+		_jurnal("raportul incarcarii pluginului %s: %r" % (nume, e))
+
+
+def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal,
+		acum=None, mono=None, incarcare=False):
 	acum = time.time() if acum is None else acum
 	mono = time.monotonic() if mono is None else mono
 	st = _pluginuri.setdefault(nume, {"ore": [], "erori": 0, "semnaturi": set(), "aratat": False})
 	st["erori"] += 1
 	st["ore"] = [t for t in st["ore"] if mono - t < 60] + [mono]
-	_deInchis[0] = True
+	if not incarcare:
+		_deInchis[0] = True
 	if len(st["ore"]) > ERORI_PE_MINUT:
 		_jurnal("peste %d erori intr-un minut in pluginul extern %s: interfata merge mai departe" % (ERORI_PE_MINUT, nume))
 		_programeaza()
@@ -282,13 +346,21 @@ def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal, acum=None,
 		_programeaza()
 		return
 	st["semnaturi"].add(sem)
-	cod = cauza(tip, valoare)
+	cod = CAUZA_INCARCARE if incarcare else cauza(tip, valoare)
+	if cod == "modul-lipsa":
+		# un modul Python din feedul nostru se instaleaza singur (Components/HdsModuleLipsa.py); raportul pleaca oricum
+		try:
+			from Components import HdsModuleLipsa
+			HdsModuleLipsa.dinExceptie(valoare, PREFIX_PLUGINURI + fel + "/" + nume, nume)
+		except Exception as e:
+			_jurnal("modulul lipsa: %r" % (e,))
 	raport = compuneRaport(fel, nume, cod, sem, tip, valoare, stiva, apel, jurnal, st["erori"], acum, mono)
 	_jurnal("eroare in pluginul extern %s (%s): interfata merge mai departe; jurnalul si raportul pe fir" % (nume, cod))
 	lucru = Lucru(raport)
 	lucru.start()
-	arata = not st["aratat"]
-	st["aratat"] = True
+	arata = not incarcare and not st["aratat"]
+	if arata:
+		st["aratat"] = True
 	_asteptari.append({"nume": nume, "cauza": cod, "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S,
 		"arata": arata})
 	_programeaza()
@@ -364,11 +436,7 @@ def _valoareInfo(text, cheie):
 
 
 def model():
-	m = _citeste(MODEL_STB, 256).strip().splitlines()
-	if m and m[0].strip():
-		return unRand(m[0], 40)
-	info = _citeste(ENIGMA_INFO, 64 * 1024)
-	return unRand(_valoareInfo(info, "model") or _valoareInfo(info, "machinebuild"), 40)
+	return getModelName(RADACINA)
 
 
 def buildSiVersiune():

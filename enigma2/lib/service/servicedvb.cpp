@@ -1,8 +1,10 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/base/eerror.h>
 #include <lib/base/object.h>
+#include <chrono>
 #include <string>
 #include <lib/service/servicedvb.h>
+#include <lib/service/hdsreleut2.h>
 #include <lib/service/hdsfluxhttp.h>
 #include <lib/service/service.h>
 #include <lib/base/estring.h>
@@ -16,6 +18,9 @@
 #include <lib/components/file_eraser.h>
 #include <lib/service/servicedvbrecord.h>
 #include <lib/service/hdsegalizator.h>
+#if HAVE_GSTREAMER
+#include <lib/service/servicemp3.h>
+#endif
 #include <lib/service/event.h>
 #include <lib/dvb/metaparser.h>
 #include <lib/dvb/tstools.h>
@@ -976,6 +981,10 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_hds_ceas_erori = 0;
 	m_hds_ceas_imagine = eTimer::create(eApp);
 	CONNECT(m_hds_ceas_imagine->timeout, eDVBServicePlay::hdsCeasImagine);
+	m_hds_radio_asteapta = m_hds_radio_decoder_amanat = m_hds_radio_seekable_amanat = m_hds_radio_renunta = false;
+	m_hds_radio_de_la = 0;
+	m_hds_radio_eliberare = eTimer::create(eApp);
+	CONNECT(m_hds_radio_eliberare->timeout, eDVBServicePlay::hdsRadioEliberat);
 	/* jurnalul zap-ului: fara eveniment al decodorului dupa FARA_IMAGINE_MS, PTS-ul imaginii spune daca imaginea merge */
 	m_hds_zap.verificare([](void *p) -> bool {
 		eDVBServicePlay *s = static_cast<eDVBServicePlay *>(p);
@@ -997,6 +1006,7 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 
 eDVBServicePlay::~eDVBServicePlay()
 {
+	m_hds_radio_eliberare->stop();
 	if (m_is_primary && eHdsEgalizator::existent())
 		eHdsEgalizator::existent()->serviciuOprit(this);
 	if (m_is_pvr && !m_is_stream)
@@ -1265,7 +1275,9 @@ RESULT eDVBServicePlay::start()
 		m_event(this, evStart);	/* a stream starts like a channel: no cue sheet, so the push thread never seeks */
 
 	m_first_program_info = 1;
-	m_hds_zap.pornire(service, !m_is_pvr && !m_is_stream && m_is_primary);
+		/* jurnalul zap: canalele de pe tuner si, dintre fluxuri, numai releul T2-MI local (hdsreleut2.h); fluxurile de
+		   internet raman afara */
+	m_hds_zap.pornire(service, !m_is_pvr && m_is_primary && (!m_is_stream || hdsEsteReleuT2(service.path)));
 	ePtr<iTsSource> source = createTsSource(service);
 		/* AIT-ul HbbTV numai pe canalul viu din fereastra principala (nu la fisiere, fluxuri, PiP) si numai cu HbbTV
 		   pornit din setari (0.2.8, setarea principala "HbbTV", config.plugins.hdsnavigator.hbbtv, OPRITA din fabrica):
@@ -1309,6 +1321,8 @@ RESULT eDVBServicePlay::stop()
 		eHdsEgalizator::existent()->serviciuOprit(this);
 	m_hds_sunet_procesor = false;
 	m_hds_ceas_imagine->stop();
+	m_hds_radio_eliberare->stop();
+	m_hds_radio_asteapta = m_hds_radio_decoder_amanat = m_hds_radio_seekable_amanat = false;
 	m_hds_zap.oprire();
 	m_hds_amana_gui = m_hds_seekable_amana = false;
 
@@ -1342,6 +1356,18 @@ RESULT eDVBServicePlay::stop()
 	}
 
 	stopTimeshift(); /* in case timeshift was enabled, remove buffer etc. */
+
+	/* Un plugin poate pastra serviciul oprit. Eliberam acum decodorul,
+	   fara comenzi audio intarziate peste canalul urmator. */
+	m_subtitle_sync_timer->stop();
+	m_external_timer->stop();
+	m_external_active = -1;
+	m_external_shown.clear();
+	m_subtitle_pages.clear();
+	m_dvb_subtitle_pages.clear();
+	delete m_subtitle_widget;
+	m_subtitle_widget = 0;
+	resetTimeshift(0);
 
 	m_service_handler_timeshift.free();
 	m_service_handler.free();
@@ -1962,6 +1988,8 @@ int eDVBServicePlay::getCurrentTrack()
 RESULT eDVBServicePlay::selectTrack(unsigned int i)
 {
 	int ret = selectAudioStream(i);
+	if (ret)
+		return ret;
 
 	if (m_decoder->set())
 		return -5;
@@ -2057,7 +2085,13 @@ int eDVBServicePlay::selectAudioStream(int i)
 	/* egalizatorul din procesor: numai serviciul principal, in direct (demux -1 la inregistrari si timeshift). Cand
 	   sunetul trece prin procesor, decodorul placii primeste PID-ul -1; RDS si memoria PID-ului raman pe `apid`. */
 	int hds_apid = apid;
-	if (m_is_primary)
+	if (hdsAmanaDupaRadio(false))
+	{
+		m_hds_sunet_procesor = false;
+		m_hds_ceas_imagine->stop();
+		hds_apid = -1;
+	}
+	else if (m_is_primary)
 	{
 		int hds_demux = -1;
 		ePtr<iDVBDemux> hds_date;
@@ -2123,6 +2157,50 @@ int eDVBServicePlay::selectAudioStream(int i)
 	h.resetCachedProgram();
 
 	return 0;
+}
+
+bool eDVBServicePlay::hdsAmanaDupaRadio(bool decoder, bool seekable)
+{
+	if (!m_is_primary || m_hds_radio_renunta)
+		return false;
+	bool ocupat = eHdsEgalizator::asteaptaEliberareaFluxului();
+#if HAVE_GSTREAMER
+	ocupat = ocupat || eServiceMP3::asteaptaEliberareaRadio();
+#endif
+	if (!ocupat)
+		return false;
+	long long acum = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	if (!m_hds_radio_asteapta)
+	{
+		m_hds_radio_de_la = acum;
+		eDebug("[eDVBServicePlay] decoder waits for the previous online radio to release the sound");
+	}
+	else if (acum - m_hds_radio_de_la >= HDS_RADIO_ELIBERARE_MS)
+	{
+		/* un driver sau o retea care nu se mai intorc nu lasa canalul fara imagine si fara sunet pana la repornire */
+		eWarning("[eDVBServicePlay] the online radio did not release the sound in %d ms, the decoder starts anyway", HDS_RADIO_ELIBERARE_MS);
+		m_hds_radio_renunta = true;
+		return false;
+	}
+	m_hds_radio_asteapta = true;
+	m_hds_radio_decoder_amanat = m_hds_radio_decoder_amanat || decoder;
+	m_hds_radio_seekable_amanat = m_hds_radio_seekable_amanat || seekable;
+	m_hds_radio_eliberare->start(20, true);
+	return true;
+}
+
+void eDVBServicePlay::hdsRadioEliberat()
+{
+	if (!m_hds_radio_asteapta || hdsAmanaDupaRadio(false))
+		return;
+	bool decoder = m_hds_radio_decoder_amanat;
+	bool seekable = m_hds_radio_seekable_amanat;
+	m_hds_radio_asteapta = m_hds_radio_decoder_amanat = m_hds_radio_seekable_amanat = false;
+	eDebug("[eDVBServicePlay] previous online radio released the sound, decoder resumes");
+	if (decoder)
+		updateDecoder(seekable);
+	else
+		hdsReaplicaSunetul();
 }
 
 void eDVBServicePlay::hdsReaplicaSunetul()
@@ -2499,7 +2577,17 @@ void eDVBServicePlay::setCutList(ePyObject list)
 			continue;
 		}
 		pts_t pts = PyLong_AsLongLong(ppts);
+		if (PyErr_Occurred())
+		{
+			PyErr_Print();
+			continue;
+		}
 		int type = PyLong_AsLong(ptype);
+		if (PyErr_Occurred())
+		{
+			PyErr_Print();
+			continue;
+		}
 		m_cue_entries.insert(cueEntry(pts, type));
 		eDebug("adding %08llx, %d", (unsigned long long)pts, type);
 	}
@@ -2659,6 +2747,17 @@ void eDVBServicePlay::switchToTimeshift()
 
 void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 {
+	/* HiSilicon shares the audio/video player: even starting video before a late audio stop can rebuild it.
+	   The timer retries on the main loop after the online radio workers have closed their devices. */
+	if (hdsAmanaDupaRadio(true, sendSeekableStateChanged))
+		return;
+	/* A fresh PMT may reach here before the retry timer after release: consume the postponed update once. */
+	if (m_hds_radio_asteapta)
+	{
+		sendSeekableStateChanged = sendSeekableStateChanged || m_hds_radio_seekable_amanat;
+		m_hds_radio_eliberare->stop();
+		m_hds_radio_asteapta = m_hds_radio_decoder_amanat = m_hds_radio_seekable_amanat = false;
+	}
 	int vpid = -1, vpidtype = -1, pcrpid = -1, tpid = -1, achannel = -1, ac3_delay=-1, pcm_delay=-1;
 	bool mustPlay = false;
 
@@ -2986,12 +3085,13 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		disableSubtitles(parent);
 
 	ePyObject entry;
-	int tuplesize = PyTuple_Size(tuple);
+	int tuplesize = 0;
 	int type = 0;
 
 	if (!PyTuple_Check(tuple))
 		goto error_out;
 
+	tuplesize = PyTuple_Size(tuple);
 	if (tuplesize < 1)
 		goto error_out;
 
@@ -3001,6 +3101,8 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		goto error_out;
 
 	type = PyLong_AsLong(entry);
+	if (PyErr_Occurred())
+		goto error_out;
 
 	if (type == 2)  // a subtitle file (setExternalSubtitles): (2, 100 + index, ...)
 	{
@@ -3011,6 +3113,8 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		if (!PyLong_Check(entry))
 			goto error_out;
 		numar = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 		if (numar < 100 || numar - 100 >= (int)m_external_subtitles.size())
 		{
 			eDebug("[eDVBServicePlay] no subtitle file %d", numar - 100);
@@ -3054,16 +3158,22 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		if (!PyLong_Check(entry))
 			goto error_out;
 		pid = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		entry = PyTuple_GET_ITEM(tuple, 2);
 		if (!PyLong_Check(entry))
 			goto error_out;
 		page = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		entry = PyTuple_GET_ITEM(tuple, 3);
 		if (!PyLong_Check(entry))
 			goto error_out;
 		magazine = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		m_subtitle_widget = new eSubtitleWidget(parent);
 		m_subtitle_widget->resize(parent->size()); /* full size */
@@ -3086,16 +3196,22 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		if (!PyLong_Check(entry))
 			goto error_out;
 		pid = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		entry = PyTuple_GET_ITEM(tuple, 2);
 		if (!PyLong_Check(entry))
 			goto error_out;
 		composition_page_id = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		entry = PyTuple_GET_ITEM(tuple, 3);
 		if (!PyLong_Check(entry))
 			goto error_out;
 		ancillary_page_id = PyLong_AsLong(entry);
+		if (PyErr_Occurred())
+			goto error_out;
 
 		m_subtitle_widget = new eSubtitleWidget(parent);
 		m_subtitle_widget->resize(parent->size()); /* full size */
@@ -3107,6 +3223,8 @@ RESULT eDVBServicePlay::enableSubtitles(eWidget *parent, ePyObject tuple)
 		goto error_out;
 	return 0;
 error_out:
+	if (PyErr_Occurred())
+		PyErr_Print();
 	eDebug("enableSubtitles needs a tuple as 2nd argument!\n"
 		"for teletext subtitles (0, pid, teletext_page, teletext_magazine)\n"
 		"for dvb subtitles (1, pid, composition_page_id, ancillary_page_id)");
@@ -3501,7 +3619,13 @@ RESULT eDVBServicePlay::setExternalSubtitleCues(int index, ePyObject cues)
 		c.start_ms = (int)hdsIntregPython(PyTuple_GET_ITEM(e, 0), -1);
 		c.end_ms = (int)hdsIntregPython(PyTuple_GET_ITEM(e, 1), -1);
 		c.text = hdsTextPython(PyTuple_GET_ITEM(e, 2));
-		c.top = PyTuple_Size(e) > 3 && PyObject_IsTrue(PyTuple_GET_ITEM(e, 3)) == 1;
+		int top = PyTuple_Size(e) > 3 ? PyObject_IsTrue(PyTuple_GET_ITEM(e, 3)) : 0;
+		if (top < 0)
+		{
+			PyErr_Print();
+			continue;
+		}
+		c.top = top != 0;
 		if (c.start_ms < 0 || c.end_ms <= c.start_ms || c.text.empty())
 			continue;
 		if (c.text.size() > HDS_MAX_TEXT_REPLICA)

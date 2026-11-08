@@ -36,6 +36,11 @@ import os
 import time
 
 try:
+	from Components.HdsListeText import text_lista
+except ImportError:
+	from HdsListeText import text_lista
+
+try:
 	from Components import HdsIndexCanale as X
 	from Components import HdsBazaCanale as B
 except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
@@ -193,7 +198,7 @@ def citeste_lamedb(cale=None):
 	try:
 		st = os.stat(cale)
 		with open(cale, "rb") as f:
-			text = f.read(MAX_LAMEDB).decode("utf-8", "replace")
+			text = text_lista(f.read(MAX_LAMEDB))
 	except (IOError, OSError):
 		return "", None
 	return text, [int(st.st_mtime), int(st.st_size)]

@@ -14,6 +14,8 @@ import select, errno, sys, math
 # Twisted imports
 from twisted.python import log, failure
 from twisted.internet import main, posixbase, error
+from twisted.internet.interfaces import IReactorThreads
+from zope.interface import implementer
 #from twisted.internet.pollreactor import PollReactor, poller
 
 from enigma import getApplication, eTimer
@@ -24,6 +26,32 @@ writes = {}
 selectables = {}
 
 POLL_DISCONNECTED = (select.POLLHUP | select.POLLERR | select.POLLNVAL)
+
+def _fireFaraAsteptare():
+	"""Firele daemon nu tin procesul deschis la iesire.
+	Oprirea pool-ului nu asteapta un plugin blocat in retea.
+	"""
+	import threading
+	try:
+		from twisted.python import threadpool
+	except ImportError:
+		return
+
+	def firFundal(*args, **kwargs):
+		fir = threading.Thread(*args, **kwargs)
+		fir.daemon = True
+		return fir
+
+	def opreste(self):
+		self.joined = True
+		self.started = False
+		self._team.quit()
+
+	threadpool.ThreadPool.threadFactory = staticmethod(firFundal)
+	threadpool.ThreadPool.stop = opreste
+
+
+_fireFaraAsteptare()
 
 class E2SharedPoll:
 	def __init__(self):
@@ -45,6 +73,7 @@ class E2SharedPoll:
 
 poller = E2SharedPoll()
 
+@implementer(IReactorThreads)
 class PollReactor(posixbase.PosixReactorBase):
 	"""A reactor that uses poll(2).
 
@@ -58,6 +87,52 @@ class PollReactor(posixbase.PosixReactorBase):
 	_in_poll = False
 	_timeout_timer = None
 	_timeout_conn = None
+	threadpool = None
+	_threadpoolStartupID = None
+	threadpoolShutdownID = None
+
+	def __init__(self):
+		posixbase.PosixReactorBase.__init__(self)
+		if not self.usingThreads:
+			self._initThreads()
+
+	# ReactorBase defineste aceste metode numai cu supportsThreads=True
+	# la import. Un import mai vechi fara fire nu le poate adauga ulterior.
+	def _initThreads(self):
+		from twisted.internet._resolver import GAIResolver
+		self.installNameResolver(GAIResolver(self, self.getThreadPool))
+		self.usingThreads = True
+
+	def _initThreadPool(self):
+		from twisted.python.threadpool import ThreadPool
+		self.threadpool = ThreadPool(0, 10, "twisted.internet.reactor")
+		self._threadpoolStartupID = self.callWhenRunning(self.threadpool.start)
+		self.threadpoolShutdownID = self.addSystemEventTrigger(
+			"during", "shutdown", self._stopThreadPool)
+
+	def _stopThreadPool(self):
+		# Scoatem si pornirea amanata, daca bucla nu a pornit inca.
+		for trigger in (self._threadpoolStartupID, self.threadpoolShutdownID):
+			if trigger is not None:
+				try:
+					self.removeSystemEventTrigger(trigger)
+				except ValueError:
+					pass
+		self._threadpoolStartupID = None
+		self.threadpoolShutdownID = None
+		self.threadpool.stop()
+		self.threadpool = None
+
+	def getThreadPool(self):
+		if self.threadpool is None:
+			self._initThreadPool()
+		return self.threadpool
+
+	def callInThread(self, _callable, *args, **kwargs):
+		self.getThreadPool().callInThread(_callable, *args, **kwargs)
+
+	def suggestThreadPoolSize(self, size):
+		self.getThreadPool().adjustPoolsize(maxthreads=size)
 
 	def _armTimeout(self, ms):
 		if self._timeout_timer is None:
@@ -74,8 +149,7 @@ class PollReactor(posixbase.PosixReactorBase):
 		self.wakeUp()
 
 	def callFromThread(self, f, *args, **kwargs):
-		"""Queue the call and wake the loop; safe from any thread. mytest.py sets supportsThreads() to False, and
-		then Twisted uses the variant that only queues the call, without waking the loop."""
+		"""Pune apelul in coada si trezeste bucla, de pe orice fir."""
 		assert callable(f), "%r is not callable" % (f,)
 		self.threadCallQueue.append((f, args, kwargs))
 		self.wakeUp()

@@ -10,6 +10,30 @@ except Exception:
 
 
 class InfoBarBase:
+	# pluginurile care vor sa stie cand se deschide un ecran cu redare
+	onInfoBarOpened = []
+	onInfoBarClosed = []
+
+	@staticmethod
+	def connectInfoBarOpened(functie):
+		if functie not in InfoBarBase.onInfoBarOpened:
+			InfoBarBase.onInfoBarOpened.append(functie)
+
+	@staticmethod
+	def disconnectInfoBarOpened(functie):
+		if functie in InfoBarBase.onInfoBarOpened:
+			InfoBarBase.onInfoBarOpened.remove(functie)
+
+	@staticmethod
+	def connectInfoBarClosed(functie):
+		if functie not in InfoBarBase.onInfoBarClosed:
+			InfoBarBase.onInfoBarClosed.append(functie)
+
+	@staticmethod
+	def disconnectInfoBarClosed(functie):
+		if functie in InfoBarBase.onInfoBarClosed:
+			InfoBarBase.onInfoBarClosed.remove(functie)
+
 	def __init__(self, steal_current_service = False):
 		if steal_current_service:
 			ServiceEventTracker.setActiveInfoBar(self, None, None)
@@ -17,9 +41,13 @@ class InfoBarBase:
 			nav = self.session.nav
 			ServiceEventTracker.setActiveInfoBar(self, not steal_current_service and nav.getCurrentService(), nav.getCurrentlyPlayingServiceReference())
 		self.onClose.append(self.__close)
+		for functie in list(InfoBarBase.onInfoBarOpened):
+			functie(self)
 
 	def __close(self):
 		ServiceEventTracker.popActiveInfoBar()
+		for functie in list(InfoBarBase.onInfoBarClosed):
+			functie(self)
 
 class ServiceEventTracker:
 	"""Tracks service events into a screen"""

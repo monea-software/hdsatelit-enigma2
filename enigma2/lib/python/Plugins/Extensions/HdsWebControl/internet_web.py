@@ -13,6 +13,7 @@
 #   /iptv           IPTV (Screens/IptvSetup.py): listele si conturile omului, adaugare (playlist, cont, portal, lista demo),
 #                   actualizare, stergere cu confirmare. Parola merge numai de la browser la receptor, niciodata inapoi.
 #                   Parola Xtream numai se scrie sau se sterge, nu se arata, si se primeste numai din corpul cererii.
+#                   Adresa M3U lipita poate avea contul in ea: mascata implicit, cu Arata/Ascunde numai local.
 #                   Logica si verificarea textelor: Components/HdsIptvSurse (aceleasi pe televizor).
 #   /interfata-web  Interfata web (Screens/HdsWebControlSetup.py): pornirea si portul (oprirea si mutarea cu confirmare
 #                   si avertismentul ca pagina se pierde sau se muta), browserele conectate (deconectarea, cod nou pe
@@ -493,14 +494,14 @@ CHEI_IPTV = ("fel", "nume", "adresa", "server", "utilizator", "parola", "portal"
 
 
 def adaugaIptv(arg, din_adresa=(), I=None):
-	"""POST /api/iptv-adauga. Parola se ia numai din corp, niciodata din adresa paginii. Se intoarce imediat: lista o aduce firul de
+	"""POST /api/iptv-adauga. Parola si adresa M3U se iau numai din corp, niciodata din URL. Se intoarce imediat: lista o aduce firul de
 	lucru, iar pagina urmareste rezultatul."""
 	S, C, L = _iptv(I)
 	fel = arg.get("fel", "")
 	if fel == "demo":
 		sursa = S.sursaDemo()
 	else:
-		date = dict((k, arg[k]) for k in CHEI_IPTV if k in arg and not (k == "parola" and k in din_adresa))
+		date = dict((k, arg[k]) for k in CHEI_IPTV if k in arg and not (k in ("parola", "adresa") and k in din_adresa))
 		sursa, eroare = C.verificaDate(fel, date)
 		if eroare:
 			return _cuMesaj(stareIptv(I), False, _t(eroare))
@@ -1020,6 +1021,8 @@ __STIL_PAGINI__
   .bifa:last-child{border-bottom:0;}
   .bifa span{overflow-wrap:anywhere;}
   .rand input[type=text],.rand input[type=url],.rand input[type=password],.rand input[type=number]{width:100%;}
+  .adresa-secreta{display:flex;flex-wrap:wrap;gap:8px;}
+  .rand .adresa-secreta input{width:auto;min-width:140px;flex:1;}
   a.extern{overflow-wrap:anywhere;}
   .dvbi-grila{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin:0 0 12px;}
   .dvbi-grila .card{margin:0;}
@@ -1413,7 +1416,7 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <div class="rand"><label for="fel">Ce ai primit</label>
       <select id="fel"><option value="m3u">Playlist: o adresă sau un fișier de pe stick</option><option value="xtream">Cont: server, utilizator și parolă</option><option value="stalker">Portal: adresa portalului și adresa MAC</option><option value="demo">Listă demo: canale gratuite care permit asta</option></select></div>
     <div class="rand camp" data-fel="m3u"><label for="adresa">Adresa listei</label>
-      <input type="text" id="adresa" maxlength="2048" autocomplete="off" placeholder="http://"></div>
+      <div class="adresa-secreta"><input type="password" inputmode="url" id="adresa" maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://"><button type="button" id="arataAdresa" aria-controls="adresa" aria-pressed="false">Arată adresa</button></div></div>
     <div class="rand camp" data-fel="xtream"><label for="server">Server</label>
       <input type="text" id="server" maxlength="512" autocomplete="off" placeholder="http://"></div>
     <div class="rand camp" data-fel="xtream"><label for="utilizator">Utilizator</label>
@@ -1559,7 +1562,13 @@ function urmareste(){
     }).catch(nimicNuRaspunde);
   }, 1500);
 }
+function ascundeAdresaLista(){
+  $("adresa").type = "password";
+  $("arataAdresa").textContent = "Arată adresa";
+  $("arataAdresa").setAttribute("aria-pressed", "false");
+}
 function arataCampuri(){
+  ascundeAdresaLista();
   var f = $("fel").value;
   $("rNume").classList.toggle("ascuns", f === "demo");
   $("rAgent").classList.toggle("ascuns", f === "demo");
@@ -1573,6 +1582,13 @@ function citeste(){
   }).catch(faraRaspuns);
 }
 $("fel").addEventListener("change", arataCampuri);
+$("arataAdresa").addEventListener("click", function(){
+  var ascunsa = $("adresa").type === "password";
+  $("adresa").type = ascunsa ? "text" : "password";
+  this.textContent = ascunsa ? "Ascunde adresa" : "Arată adresa";
+  this.setAttribute("aria-pressed", ascunsa ? "true" : "false");
+});
+document.addEventListener("visibilitychange", function(){ if(document.hidden){ ascundeAdresaLista(); } });
 $("actualizeaza").addEventListener("click", function(){ trimite("/api/iptv-actualizeaza", new URLSearchParams()); });
 $("adauga").addEventListener("click", function(){
   var f = $("fel").value, q = new URLSearchParams();
@@ -1581,7 +1597,7 @@ $("adauga").addEventListener("click", function(){
   document.querySelectorAll(".camp").forEach(function(r){
     if(r.getAttribute("data-fel") === f){ r.querySelectorAll("input").forEach(function(i){ q.set(i.id, i.id === "parola" ? i.value : i.value.trim()); }); }
   });
-  trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; urmareste(); } });
+  trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; $("adresa").value = ""; ascundeAdresaLista(); urmareste(); } });
 });
 var ANTETE_ID = "", SR = null, SR_TURA = 0;
 var GRUPE_ID = "", GRUPE_DATE = null;
@@ -1889,6 +1905,7 @@ TEXTE_PAGINA = {
 		N_("Portal: adresa portalului și adresa MAC"),
 		N_("Listă demo: canale gratuite care permit asta"),
 		N_("Adresa listei"),
+		N_("Arată adresa"),
 		N_("Server"),
 		N_("Utilizator"),
 		N_("Parolă"),
@@ -1941,6 +1958,8 @@ TEXTE_PAGINA = {
 			"pagina Setări."),
 	),
 	"js": (
+		N_("Arată adresa"),
+		N_("Ascunde adresa"),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Merge"),
 		N_("Oprit pentru țara ta"),

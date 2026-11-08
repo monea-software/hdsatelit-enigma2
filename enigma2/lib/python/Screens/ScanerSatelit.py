@@ -46,6 +46,7 @@ from Components.Sources.List import List
 from Components.Sources.StaticText import StaticText
 from Components.HdsLatimeText import INDENT
 from Components.HdsCursorLista import pune_randurile
+from Components import HdsLimiteTuner
 from Components.HdsOperatoriSatelit import (FEL_JSON, NUME_TARI, grupe, nume_tara, operator as operator_dupa_id,
                                             operatori, tara_utilizatorului, transponder_hdscomun, transponder_nucleu)
 
@@ -164,9 +165,8 @@ ROLLOFF_VALIDE = [0, 1, 2]               # 0.35, 0.25, 0.20
 COMBINATII_DVBS2 = ([(2, f) for f in (7, 2, 3, 4, 6, 9)] + [(1, f) for f in (1, 7, 2, 3, 8, 4, 6, 9)]
                     + [(m, f) for m in (4, 5) for f in FEC_APSK[m]])
 TOLERANTA_KHZ = 3000                     # cat se poate abate frecventa introdusa de cea din satellites.xml
-# Rata de simbol pe care o primeste driverul tunerului (dmesg: „symbol rate 990000 out of range
-# (1000000..60000000)"). 66 de transpondere din satellites.xml ies din interval: fara verificare ar da 0 canale, fara
-# niciun motiv.
+# Limitele reale vin din FE_GET_INFO, citit in fundal de HdsLimiteTuner, pe fiecare
+# frontend. O margine necunoscuta nu refuza scanarea. Numele vechi raman pentru compatibilitate.
 SR_MIN, SR_MAX = 1000000, 60000000
 # Multistream DVB-S2 (lib/dvb/hdsmultistream.h): fluxul (ISI) e un octet, codul PLS are 18 biti
 ISI_MAX = 255
@@ -310,13 +310,14 @@ def _descriere_hdscomun(tp):
                             _int(tp.get('sr'), 0) // 1000)
 
 
-def motiv_refuz(tp):
+def motiv_refuz(tp, slot=None):
     """De ce ar refuza nucleul transponderul (text), sau None daca il primeste. Aceleasi reguli ca prepare_sat
     si setFrontend din lib/dvb/frontend.cpp."""
     if tp['frequency'] <= 0 or tp['symbol_rate'] <= 0:
         return _('frecvența sau rata de simbol lipsește')
-    if not SR_MIN <= tp['symbol_rate'] <= SR_MAX:
-        return _rata_refuzata(tp['symbol_rate'])
+    motiv = _rata_refuzata(tp['symbol_rate'], slot, tp.get('orbital_position'))
+    if motiv:
+        return motiv
     if tp['polarisation'] not in (0, 1, 2, 3):
         return _('polarizare necunoscută')
     if are_multistream(tp):
@@ -340,10 +341,23 @@ def motiv_refuz(tp):
     return None
 
 
-def _rata_refuzata(sr):
-    """Motivul pentru o rata de simbol in afara limitelor driverului (sr in simboluri/s)."""
-    return _('rata de simbol %d kSymb/s nu e primită de tuner (%d-%d kSymb/s)') % (
-        sr // 1000, SR_MIN // 1000, SR_MAX // 1000)
+def _rata_refuzata(sr, slot=None, pozitie=None):
+    """Motivul numai in afara unei margini cunoscute (sr in simboluri/s), altfel None.
+
+    Zero in text pastreaza marginea nedeclarata de driver, fara sa inventam un prag.
+    """
+    minim, maxim = HdsLimiteTuner.limite_sr(slot, pozitie)
+    if not ((minim is not None and sr < minim) or (maxim is not None and sr > maxim)):
+        return None
+    if minim is not None and maxim is not None:
+        return _('rata de simbol %d kSymb/s nu e primită de tuner (%d-%d kSymb/s)') % (
+            sr // 1000, minim // 1000, maxim // 1000)
+    # driverul spune numai o margine: se arata numai ea, nu un „0” care nu e al tunerului
+    if minim is not None:
+        return _('rata de simbol %d kSymb/s e sub cea mai mică pe care o primește tunerul (%d kSymb/s)') % (
+            sr // 1000, minim // 1000)
+    return _('rata de simbol %d kSymb/s e peste cea mai mare pe care o primește tunerul (%d kSymb/s)') % (
+        sr // 1000, maxim // 1000)
 
 
 def _multistream_din_xml(x):
@@ -354,7 +368,7 @@ def _multistream_din_xml(x):
     return ms if are_multistream(ms) else {}
 
 
-def transpondere_satelit(orbpos, transpondere_xml, multistream=True):
+def transpondere_satelit(orbpos, transpondere_xml, multistream=True, slot=None):
     """Toate transponderele satelitului din satellites.xml (nimmanager.getTransponders(orbpos)), ca in
     ScanSetup.getInitialTransponderList. Tuplul vine din lib/dvb/db.cpp (readSatellites): (0, frecventa kHz,
     SR simb/s, pol, fec, sistem, modulatie, inversare, rolloff, pilot, tsid, onid, is_id, pls_mode, pls_code,
@@ -370,7 +384,7 @@ def transpondere_satelit(orbpos, transpondere_xml, multistream=True):
               'system': x[5], 'modulation': x[6],
               'rolloff': x[8] if x[8] in ROLLOFF_VALIDE else 0, 'pilot': x[9] if x[9] in (0, 1, 2) else 2}
         tp.update(_multistream_din_xml(x))
-        motiv = motiv_refuz(tp)
+        motiv = motiv_refuz(tp, slot)
         if not motiv and not multistream and are_multistream(tp):
             motiv = _('multistream, iar tunerul nu poate alege fluxul')
         if motiv:
@@ -403,7 +417,7 @@ def _fluxuri_in_xml(frecventa_khz, pol, transpondere_xml):
     return rez
 
 
-def transponder_manual(c, transpondere_xml):
+def transponder_manual(c, transpondere_xml, slot=None):
     """Transponderul introdus de mana, adus la valori pe care nucleul le primeste.
     Intoarce (tp, note, eroare, de_ales):
       eroare  = text pentru utilizator cand nu se poate cauta deloc (tp e atunci None);
@@ -413,9 +427,10 @@ def transponder_manual(c, transpondere_xml):
     frecventa, sr = _int(c.get('frecventa'), 0), _int(c.get('sr'), 0)
     if frecventa <= 0 or sr <= 0:
         return None, note, _('Introdu frecvența (MHz) și rata de simbol (kSymb/s) ale transponderului.'), None
-    if not SR_MIN <= sr * 1000 <= SR_MAX:
+    motiv = _rata_refuzata(sr * 1000, slot, _int(c.get('pozitie'), None))
+    if motiv:
         # inainte de alegerea FEC-ului: altfel o rata gresita la DVB-S2 ar fi cerut FEC-ul, nu ar fi spus ce e gresit
-        return None, note, _('Nu se poate căuta: %s.') % _rata_refuzata(sr * 1000), None
+        return None, note, _('Nu se poate căuta: %s.') % motiv, None
     sistem = _int(c.get('sistem'), SISTEM_DVB_S2)
     if sistem in (3, 4):
         return None, note, _('%s: tunerul acestui receptor nu are demodulator pentru acest sistem. '
@@ -459,7 +474,7 @@ def transponder_manual(c, transpondere_xml):
             note.append(_('Multistream există numai în DVB-S2: se caută ca DVB-S2.'))
     if sistem == SISTEM_DVB_S:
         if tp['modulation'] in FEC_APSK:
-            return None, note, motiv_refuz(tp), None
+            return None, note, motiv_refuz(tp, slot), None
         if tp['fec'] not in FEC_DVBS:
             tp['fec'] = 0
         if tp['modulation'] not in MOD_DVBS:
@@ -476,7 +491,7 @@ def transponder_manual(c, transpondere_xml):
             note.append(_('Pe %d MHz lista receptorului are mai multe fluxuri (%s); se caută fără să se aleagă unul. '
                           'Pentru unul anume pune „Multistream” pe Da și scrie fluxul.')
                         % (frecventa, ', '.join(text_multistream(f) for f in fluxuri)))
-    lipsa = tp['fec'] == 0 or (sistem == SISTEM_DVB_S2 and motiv_refuz(tp) is not None)
+    lipsa = tp['fec'] == 0 or (sistem == SISTEM_DVB_S2 and motiv_refuz(tp, slot) is not None)
     if gasit is None:
         note.append(_('%d MHz nu e în lista receptorului pentru acest satelit, se caută cu valorile introduse.')
                     % frecventa)
@@ -484,10 +499,10 @@ def transponder_manual(c, transpondere_xml):
         proba = dict(tp, system=gasit[5], fec=gasit[4], modulation=gasit[6],
                      rolloff=gasit[8] if gasit[8] in ROLLOFF_VALIDE else 0,
                      pilot=gasit[9] if gasit[9] in (0, 1, 2) else 2)
-        if motiv_refuz(proba) is None:
+        if motiv_refuz(proba, slot) is None:
             tp = proba
             note.append(_('Sistemul, FEC-ul și modulația sunt luate din lista receptorului: %s.') % _descriere_tp(tp))
-    if tp['system'] == SISTEM_DVB_S2 and motiv_refuz(tp) is not None:
+    if tp['system'] == SISTEM_DVB_S2 and motiv_refuz(tp, slot) is not None:
         fec_permise = FEC_APSK.get(tp['modulation'], FEC_DVBS2)
         potrivite = [(m, f) for m, f in COMBINATII_DVBS2
                      if (tp['modulation'] not in MOD_DVBS2 or m == tp['modulation'])
@@ -669,7 +684,7 @@ def pregateste(fel, valori, nim=None):
             eroare = _pozitie_nevazuta(p, sateliti, motor, _('Satelitul ales'))
             if eroare:
                 return {'eroare': eroare}
-            bune, rele = transpondere_satelit(p, nim.getTransponders(p), ms)
+            bune, rele = transpondere_satelit(p, nim.getTransponders(p), ms, slot)
             tps += bune
             sarite += len(rele)
         if not tps:
@@ -691,7 +706,7 @@ def pregateste(fel, valori, nim=None):
         nume = dict(sateliti).get(orbpos) or text_pozitie(orbpos)
         transpondere_xml = nim.getTransponders(orbpos)
         if fel == 'satelit':
-            bune, sarite = transpondere_satelit(orbpos, transpondere_xml, ms)
+            bune, sarite = transpondere_satelit(orbpos, transpondere_xml, ms, slot)
             if not bune:
                 if sarite:
                     return {'eroare': _('Satelitul %s are %d transpondere în lista receptorului, dar niciunul cu '
@@ -705,7 +720,7 @@ def pregateste(fel, valori, nim=None):
                 text += ' ' + _('Sărite %d, cu parametri pe care tunerul nu îi primește.') % len(sarite)
             return dict(baza, transpondere=bune, flags=retea, text=text + _text_motor(motor, orbpos))
         if fel == 'transponder':
-            bune, sarite = transpondere_satelit(orbpos, transpondere_xml, ms)
+            bune, sarite = transpondere_satelit(orbpos, transpondere_xml, ms, slot)
             if not bune:
                 return {'eroare': _('Satelitul %s nu are în lista receptorului niciun transponder pe care tunerul '
                                     'să-l primească. Caută cu date introduse manual.') % nume}
@@ -721,7 +736,7 @@ def pregateste(fel, valori, nim=None):
             text += _('Se adaugă și transponderele anunțate în semnal.') if cu_retea \
                 else _('Numai acest transponder.')
             return dict(baza, transpondere=[tp], flags=retea if cu_retea else 0, text=text + _text_motor(motor, orbpos))
-        tp, note, eroare, de_ales = transponder_manual(valori, transpondere_xml)
+        tp, note, eroare, de_ales = transponder_manual(valori, transpondere_xml, slot)
         if eroare:
             return {'eroare': eroare}
         if are_multistream(tp) and not ms:
@@ -748,7 +763,7 @@ def pregateste(fel, valori, nim=None):
     if op['cere_multistream'] and not ms:
         return {'eroare': mesaj_multistream(op['nume'])}
     tp = transponder_nucleu(op)
-    motiv = motiv_refuz(tp)
+    motiv = motiv_refuz(tp, slot)
     if motiv:
         return {'eroare': _('Transponderul operatorului %s nu poate fi acordat: %s.') % (op['nume'], motiv)}
     baza['operator'] = op['id']
@@ -1891,7 +1906,8 @@ class ScanerSatelit(Screen):
             nim = _nimmanager()
             if nim is not None and orbpos is not None:
                 try:
-                    bune, _sarite = transpondere_satelit(orbpos, nim.getTransponders(orbpos), self._multistream)
+                    bune, _sarite = transpondere_satelit(orbpos, nim.getTransponders(orbpos), self._multistream,
+                                                        slot_satelit(nim))
                 except Exception as e:
                     print('[ScanerSatelit] transponderele satelitului %s: %s' % (orbpos, e))
             self._cache_tp[orbpos] = [(cheie_tp(t), _descriere_tp(t)) for t in bune]
@@ -2213,7 +2229,7 @@ class ScanerSatelit(Screen):
     def _porneste(self, lista_tp, slot_sat, flags, text):
         """Poarta finala: niciun transponder nu pleaca spre nucleu daca motiv_refuz gaseste ceva."""
         for tp in lista_tp:
-            motiv = motiv_refuz(tp)
+            motiv = motiv_refuz(tp, slot_sat)
             if motiv:
                 self._eroare(_('Transponderul %s nu poate fi căutat: %s.') % (_descriere_tp(tp), motiv))
                 return

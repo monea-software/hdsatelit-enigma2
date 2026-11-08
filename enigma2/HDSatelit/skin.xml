@@ -2122,6 +2122,40 @@
 		<widget name="nota" position="32,830" size="1712,44" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget name="mesaj" position="32,874" size="1712,44" font="HdsBold;24" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 	</screen>
+	<!-- Setarile comune ale vremii si panoul aratat numai peste televizor. -->
+	<screen name="HdsVremea" position="72,40" size="1776,1000"
+		backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,144" size="990,270" itemHeight="90"
+			font="HdsRegular;34" foregroundColor="hdsText" backgroundColor="hdsPanelDialog"
+			backgroundColorSelected="hdsBrand" foregroundColorSelected="hdsSelText"
+			transparent="1" scrollbarMode="showNever" zPosition="2" />
+		<widget name="pictograma" position="1134,140" size="168,168"
+			alphatest="blend" scale="1" zPosition="2" />
+		<widget name="oras" position="1056,324" size="688,136" font="HdsRegular;34"
+			foregroundColor="hdsText2" transparent="1" zPosition="2" />
+		<widget name="acum" position="1056,474" size="688,138" font="HdsBold;39"
+			foregroundColor="hdsText" transparent="1" zPosition="2" />
+		<widget name="prognoza" position="1056,630" size="688,192" font="HdsRegular;32"
+			foregroundColor="hdsText2" transparent="1" zPosition="2" />
+		<widget name="masura" position="32,144" size="990,90"
+			font="HdsRegular;34" noWrap="1" />
+		<widget name="nota" position="32,466" size="990,286" font="HdsRegular;32"
+			foregroundColor="hdsText2" transparent="1" zPosition="2" />
+		<widget name="mesaj" position="32,784" size="1712,108" font="HdsRegular;32"
+			foregroundColor="hdsAmber" transparent="1" zPosition="2" />
+	</screen>
+	<screen name="HdsVremeaOsd" position="1320,72" size="528,180"
+		backgroundColor="hdsPanel" flags="wfNoBorder" zPosition="3">
+		<widget name="pictograma" position="15,15" size="117,117"
+			alphatest="blend" scale="1" zPosition="1" />
+		<widget name="temperatura" position="147,12" size="366,54" font="HdsBold;40"
+			foregroundColor="hdsText" transparent="1" noWrap="1" zPosition="1" />
+		<widget name="oras" position="147,69" size="366,42" font="HdsRegular;31"
+			foregroundColor="hdsText2" transparent="1" noWrap="1" zPosition="1" />
+		<widget name="stare" position="15,135" size="498,39" font="HdsRegular;28"
+			foregroundColor="hdsText2" transparent="1" noWrap="1" zPosition="1" />
+	</screen>
 	<screen name="HdsFontInterfata" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
 		<widget name="lista" position="32,104" size="640,576" itemHeight="72" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="hdsSelText" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" />
@@ -8433,14 +8467,20 @@
 	<!-- ========== sfarsitul ecranelor ramase ========== -->
 	<!-- Egalizatorul (Screens/HdsEgalizator.py): starea in cuvinte (trei culori in acelasi loc, doua randuri), randul
 	     tehnic, desenul (casetele alegerilor si benzile, Canvas desenat de ecran), descrierea alegerii, ajutorul tastelor -->
+	<!-- Lista nativa de efecte: noua randuri vizibile, cu derulare pentru celelalte alegeri. -->
+	<screen name="HdsEgalizatorEfecte" position="center,center" size="900,640" backgroundColor="hdsPanelDialog">
+		<widget name="text" position="32,12" size="836,88" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget name="list" position="32,108" size="836,432" itemHeight="48" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+	</screen>
 	<screen name="HdsEgalizator" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
-		<widget source="stare" render="Label" position="32,98" size="1712,84" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
-		<widget source="stare_bine" render="Label" position="32,98" size="1712,84" font="HdsRegular;30" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
-		<widget source="stare_rau" render="Label" position="32,98" size="1712,84" font="HdsRegular;30" foregroundColor="hdsWarn" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget source="stare" render="Label" position="32,98" size="1712,86" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget source="stare_bine" render="Label" position="32,98" size="1712,86" font="HdsRegular;30" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget source="stare_rau" render="Label" position="32,98" size="1712,86" font="HdsRegular;30" foregroundColor="hdsWarn" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
 		<widget source="detaliu" render="Label" position="32,184" size="1712,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget source="desen" render="Canvas" position="32,226" size="1712,548" zPosition="1" />
 		<widget source="descriere" render="Label" position="32,782" size="1712,88" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget source="nota" render="Label" position="32,874" size="1712,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<!-- In coloane, nota explica salvarea Manual si revenirea la casutele de sus. -->
+		<widget source="nota" render="Label" position="32,874" size="1712,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 </skin>

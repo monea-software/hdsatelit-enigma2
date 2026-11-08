@@ -147,24 +147,188 @@
 		<key id="KEY_SYSRQ" mapto="captura" flags="m" />
 	</map>
 
-	<!-- HDSatelit: apasarea lunga a butoanelor colorate in bara (Screens/InfoBar.py, prioritatea -2, inaintea ecranului
-	     radio si a hartilor barei), cu actiunea aleasa in Butoane colorate si taste rapide (config.hds_buttons, web
-	     /taste-rapide). Ca la POWER, AUDIO si FAV: apasarea ("m") numai sterge semnul si lasa tasta mai departe, deci
-	     apasarea scurta face ce facea; cea lunga ("l", dupa 4 repetari) face actiunea aleasa; eliberarea ("b") e oprita
-	     numai dupa o apasare lunga facuta. Pentru orice telecomanda. -->
-	<map context="HdsTasteColorateActions">
-		<key id="KEY_RED" mapto="rosuApasat" flags="m" />
-		<key id="KEY_RED" mapto="rosuLung" flags="l" />
-		<key id="KEY_RED" mapto="rosuEliberat" flags="b" />
-		<key id="KEY_GREEN" mapto="verdeApasat" flags="m" />
-		<key id="KEY_GREEN" mapto="verdeLung" flags="l" />
-		<key id="KEY_GREEN" mapto="verdeEliberat" flags="b" />
-		<key id="KEY_YELLOW" mapto="galbenApasat" flags="m" />
-		<key id="KEY_YELLOW" mapto="galbenLung" flags="l" />
-		<key id="KEY_YELLOW" mapto="galbenEliberat" flags="b" />
-		<key id="KEY_BLUE" mapto="albastruApasat" flags="m" />
-		<key id="KEY_BLUE" mapto="albastruLung" flags="l" />
-		<key id="KEY_BLUE" mapto="albastruEliberat" flags="b" />
+	<!-- Alocarea tastelor: numai bara live, cu functia obisnuita pastrata. -->
+	<map context="HdsAlocareTasteActions">
+		<key id="KEY_RED" mapto="red_m" flags="m" />
+		<key id="KEY_RED" mapto="red_r" flags="r" />
+		<key id="KEY_RED" mapto="red_l" flags="l" />
+		<key id="KEY_RED" mapto="red_b" flags="b" />
+		<key id="KEY_GREEN" mapto="green_m" flags="m" />
+		<key id="KEY_GREEN" mapto="green_r" flags="r" />
+		<key id="KEY_GREEN" mapto="green_l" flags="l" />
+		<key id="KEY_GREEN" mapto="green_b" flags="b" />
+		<key id="KEY_YELLOW" mapto="yellow_m" flags="m" />
+		<key id="KEY_YELLOW" mapto="yellow_r" flags="r" />
+		<key id="KEY_YELLOW" mapto="yellow_l" flags="l" />
+		<key id="KEY_YELLOW" mapto="yellow_b" flags="b" />
+		<key id="KEY_BLUE" mapto="blue_m" flags="m" />
+		<key id="KEY_BLUE" mapto="blue_r" flags="r" />
+		<key id="KEY_BLUE" mapto="blue_l" flags="l" />
+		<key id="KEY_BLUE" mapto="blue_b" flags="b" />
+		<key id="KEY_INFO" mapto="info_m" flags="m" />
+		<key id="KEY_INFO" mapto="info_r" flags="r" />
+		<key id="KEY_INFO" mapto="info_l" flags="l" />
+		<key id="KEY_INFO" mapto="info_b" flags="b" />
+		<key id="KEY_AUDIO" mapto="audio_m" flags="m" />
+		<key id="KEY_AUDIO" mapto="audio_r" flags="r" />
+		<key id="KEY_AUDIO" mapto="audio_l" flags="l" />
+		<key id="KEY_AUDIO" mapto="audio_b" flags="b" />
+		<key id="KEY_FAVORITES" mapto="fav_m" flags="m" />
+		<key id="KEY_FAVORITES" mapto="fav_r" flags="r" />
+		<key id="KEY_FAVORITES" mapto="fav_l" flags="l" />
+		<key id="KEY_FAVORITES" mapto="fav_b" flags="b" />
+		<key id="KEY_EPG" mapto="epg_m" flags="m" />
+		<key id="KEY_EPG" mapto="epg_r" flags="r" />
+		<key id="KEY_EPG" mapto="epg_l" flags="l" />
+		<key id="KEY_EPG" mapto="epg_b" flags="b" />
+		<key id="KEY_UP" mapto="up_m" flags="m" />
+		<key id="KEY_UP" mapto="up_r" flags="r" />
+		<key id="KEY_UP" mapto="up_l" flags="l" />
+		<key id="KEY_UP" mapto="up_b" flags="b" />
+		<key id="KEY_DOWN" mapto="down_m" flags="m" />
+		<key id="KEY_DOWN" mapto="down_r" flags="r" />
+		<key id="KEY_DOWN" mapto="down_l" flags="l" />
+		<key id="KEY_DOWN" mapto="down_b" flags="b" />
+		<key id="KEY_LEFT" mapto="left_m" flags="m" />
+		<key id="KEY_LEFT" mapto="left_r" flags="r" />
+		<key id="KEY_LEFT" mapto="left_l" flags="l" />
+		<key id="KEY_LEFT" mapto="left_b" flags="b" />
+		<key id="KEY_RIGHT" mapto="right_m" flags="m" />
+		<key id="KEY_RIGHT" mapto="right_r" flags="r" />
+		<key id="KEY_RIGHT" mapto="right_l" flags="l" />
+		<key id="KEY_RIGHT" mapto="right_b" flags="b" />
+		<key id="KEY_OK" mapto="ok_m" flags="m" />
+		<key id="KEY_OK" mapto="ok_r" flags="r" />
+		<key id="KEY_OK" mapto="ok_l" flags="l" />
+		<key id="KEY_OK" mapto="ok_b" flags="b" />
+		<key id="KEY_ENTER" mapto="ok_m" flags="m" />
+		<key id="KEY_ENTER" mapto="ok_r" flags="r" />
+		<key id="KEY_ENTER" mapto="ok_l" flags="l" />
+		<key id="KEY_ENTER" mapto="ok_b" flags="b" />
+		<key id="KEY_TEXT" mapto="text_m" flags="m" />
+		<key id="KEY_TEXT" mapto="text_r" flags="r" />
+		<key id="KEY_TEXT" mapto="text_l" flags="l" />
+		<key id="KEY_TEXT" mapto="text_b" flags="b" />
+		<key id="KEY_VIDEO" mapto="video_m" flags="m" />
+		<key id="KEY_VIDEO" mapto="video_r" flags="r" />
+		<key id="KEY_VIDEO" mapto="video_l" flags="l" />
+		<key id="KEY_VIDEO" mapto="video_b" flags="b" />
+		<key id="KEY_PVR" mapto="video_m" flags="m" />
+		<key id="KEY_PVR" mapto="video_r" flags="r" />
+		<key id="KEY_PVR" mapto="video_l" flags="l" />
+		<key id="KEY_PVR" mapto="video_b" flags="b" />
+		<key id="KEY_LIST" mapto="list_m" flags="m" />
+		<key id="KEY_LIST" mapto="list_r" flags="r" />
+		<key id="KEY_LIST" mapto="list_l" flags="l" />
+		<key id="KEY_LIST" mapto="list_b" flags="b" />
+		<key id="KEY_RECORD" mapto="record_m" flags="m" />
+		<key id="KEY_RECORD" mapto="record_r" flags="r" />
+		<key id="KEY_RECORD" mapto="record_l" flags="l" />
+		<key id="KEY_RECORD" mapto="record_b" flags="b" />
+		<key id="KEY_PLAY" mapto="play_m" flags="m" />
+		<key id="KEY_PLAY" mapto="play_r" flags="r" />
+		<key id="KEY_PLAY" mapto="play_l" flags="l" />
+		<key id="KEY_PLAY" mapto="play_b" flags="b" />
+		<key id="KEY_PLAYPAUSE" mapto="play_m" flags="m" />
+		<key id="KEY_PLAYPAUSE" mapto="play_r" flags="r" />
+		<key id="KEY_PLAYPAUSE" mapto="play_l" flags="l" />
+		<key id="KEY_PLAYPAUSE" mapto="play_b" flags="b" />
+		<key id="KEY_PAUSE" mapto="pause_m" flags="m" />
+		<key id="KEY_PAUSE" mapto="pause_r" flags="r" />
+		<key id="KEY_PAUSE" mapto="pause_l" flags="l" />
+		<key id="KEY_PAUSE" mapto="pause_b" flags="b" />
+		<key id="KEY_STOP" mapto="stop_m" flags="m" />
+		<key id="KEY_STOP" mapto="stop_r" flags="r" />
+		<key id="KEY_STOP" mapto="stop_l" flags="l" />
+		<key id="KEY_STOP" mapto="stop_b" flags="b" />
+		<key id="KEY_REWIND" mapto="rewind_m" flags="m" />
+		<key id="KEY_REWIND" mapto="rewind_r" flags="r" />
+		<key id="KEY_REWIND" mapto="rewind_l" flags="l" />
+		<key id="KEY_REWIND" mapto="rewind_b" flags="b" />
+		<key id="KEY_FASTFORWARD" mapto="forward_m" flags="m" />
+		<key id="KEY_FASTFORWARD" mapto="forward_r" flags="r" />
+		<key id="KEY_FASTFORWARD" mapto="forward_l" flags="l" />
+		<key id="KEY_FASTFORWARD" mapto="forward_b" flags="b" />
+		<key id="KEY_CHANNELUP" mapto="channelup_m" flags="m" />
+		<key id="KEY_CHANNELUP" mapto="channelup_r" flags="r" />
+		<key id="KEY_CHANNELUP" mapto="channelup_l" flags="l" />
+		<key id="KEY_CHANNELUP" mapto="channelup_b" flags="b" />
+		<key id="KEY_CHANNELDOWN" mapto="channeldown_m" flags="m" />
+		<key id="KEY_CHANNELDOWN" mapto="channeldown_r" flags="r" />
+		<key id="KEY_CHANNELDOWN" mapto="channeldown_l" flags="l" />
+		<key id="KEY_CHANNELDOWN" mapto="channeldown_b" flags="b" />
+		<key id="KEY_SUBTITLE" mapto="subtitle_m" flags="m" />
+		<key id="KEY_SUBTITLE" mapto="subtitle_r" flags="r" />
+		<key id="KEY_SUBTITLE" mapto="subtitle_l" flags="l" />
+		<key id="KEY_SUBTITLE" mapto="subtitle_b" flags="b" />
+		<key id="KEY_MENU" mapto="menu_m" flags="m" />
+		<key id="KEY_MENU" mapto="menu_r" flags="r" />
+		<key id="KEY_MENU" mapto="menu_l" flags="l" />
+		<key id="KEY_MENU" mapto="menu_b" flags="b" />
+		<key id="KEY_TIME" mapto="timer_m" flags="m" />
+		<key id="KEY_TIME" mapto="timer_r" flags="r" />
+		<key id="KEY_TIME" mapto="timer_l" flags="l" />
+		<key id="KEY_TIME" mapto="timer_b" flags="b" />
+		<key id="KEY_WWW" mapto="portal_m" flags="m" />
+		<key id="KEY_WWW" mapto="portal_r" flags="r" />
+		<key id="KEY_WWW" mapto="portal_l" flags="l" />
+		<key id="KEY_WWW" mapto="portal_b" flags="b" />
+		<key id="KEY_TV" mapto="tv_m" flags="m" />
+		<key id="KEY_TV" mapto="tv_r" flags="r" />
+		<key id="KEY_TV" mapto="tv_l" flags="l" />
+		<key id="KEY_TV" mapto="tv_b" flags="b" />
+		<key id="KEY_RADIO" mapto="radio_m" flags="m" />
+		<key id="KEY_RADIO" mapto="radio_r" flags="r" />
+		<key id="KEY_RADIO" mapto="radio_l" flags="l" />
+		<key id="KEY_RADIO" mapto="radio_b" flags="b" />
+		<key id="KEY_PREVIOUS" mapto="previous_m" flags="m" />
+		<key id="KEY_PREVIOUS" mapto="previous_r" flags="r" />
+		<key id="KEY_PREVIOUS" mapto="previous_l" flags="l" />
+		<key id="KEY_PREVIOUS" mapto="previous_b" flags="b" />
+		<key id="KEY_NEXT" mapto="next_m" flags="m" />
+		<key id="KEY_NEXT" mapto="next_r" flags="r" />
+		<key id="KEY_NEXT" mapto="next_l" flags="l" />
+		<key id="KEY_NEXT" mapto="next_b" flags="b" />
+		<key id="KEY_0" mapto="number_0_m" flags="m" />
+		<key id="KEY_0" mapto="number_0_r" flags="r" />
+		<key id="KEY_0" mapto="number_0_l" flags="l" />
+		<key id="KEY_0" mapto="number_0_b" flags="b" />
+		<key id="KEY_1" mapto="number_1_m" flags="m" />
+		<key id="KEY_1" mapto="number_1_r" flags="r" />
+		<key id="KEY_1" mapto="number_1_l" flags="l" />
+		<key id="KEY_1" mapto="number_1_b" flags="b" />
+		<key id="KEY_2" mapto="number_2_m" flags="m" />
+		<key id="KEY_2" mapto="number_2_r" flags="r" />
+		<key id="KEY_2" mapto="number_2_l" flags="l" />
+		<key id="KEY_2" mapto="number_2_b" flags="b" />
+		<key id="KEY_3" mapto="number_3_m" flags="m" />
+		<key id="KEY_3" mapto="number_3_r" flags="r" />
+		<key id="KEY_3" mapto="number_3_l" flags="l" />
+		<key id="KEY_3" mapto="number_3_b" flags="b" />
+		<key id="KEY_4" mapto="number_4_m" flags="m" />
+		<key id="KEY_4" mapto="number_4_r" flags="r" />
+		<key id="KEY_4" mapto="number_4_l" flags="l" />
+		<key id="KEY_4" mapto="number_4_b" flags="b" />
+		<key id="KEY_5" mapto="number_5_m" flags="m" />
+		<key id="KEY_5" mapto="number_5_r" flags="r" />
+		<key id="KEY_5" mapto="number_5_l" flags="l" />
+		<key id="KEY_5" mapto="number_5_b" flags="b" />
+		<key id="KEY_6" mapto="number_6_m" flags="m" />
+		<key id="KEY_6" mapto="number_6_r" flags="r" />
+		<key id="KEY_6" mapto="number_6_l" flags="l" />
+		<key id="KEY_6" mapto="number_6_b" flags="b" />
+		<key id="KEY_7" mapto="number_7_m" flags="m" />
+		<key id="KEY_7" mapto="number_7_r" flags="r" />
+		<key id="KEY_7" mapto="number_7_l" flags="l" />
+		<key id="KEY_7" mapto="number_7_b" flags="b" />
+		<key id="KEY_8" mapto="number_8_m" flags="m" />
+		<key id="KEY_8" mapto="number_8_r" flags="r" />
+		<key id="KEY_8" mapto="number_8_l" flags="l" />
+		<key id="KEY_8" mapto="number_8_b" flags="b" />
+		<key id="KEY_9" mapto="number_9_m" flags="m" />
+		<key id="KEY_9" mapto="number_9_r" flags="r" />
+		<key id="KEY_9" mapto="number_9_l" flags="l" />
+		<key id="KEY_9" mapto="number_9_b" flags="b" />
 	</map>
 
 	<map context="InfobarInstantRecord">
@@ -300,6 +464,11 @@
 		<key id="KEY_SPACE" mapto="mainMenu" flags="mr" />
 	</map>
 	
+	<!-- tasta INFO intr-un ecran, numele folosit de pluginurile externe -->
+	<map context="InfoActions">
+		<key id="KEY_INFO" mapto="info" flags="m" />
+	</map>
+
 	<map context="MenuActions">
 		<key id="KEY_MENU" mapto="menu" flags="mr" />
 		<key id="KEY_SPACE" mapto="menu" flags="mr" />

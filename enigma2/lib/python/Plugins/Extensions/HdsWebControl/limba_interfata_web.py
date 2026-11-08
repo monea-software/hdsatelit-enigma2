@@ -64,11 +64,19 @@ def _salveazaFisierul(configfile=None):
 	configfile.save()
 
 
+def _listaCuStick(Lg):
+	try:
+		return Lg.getLanguageList(suplimentare=True)
+	except TypeError:
+		return Lg.getLanguageList()
+
+
 def _limbi(Lg, cfg, nume):
 	"""[[cod, nume]] in ordinea de pe televizor; numele ca in LanguageSelection.updateList (in limba aleasa acum),
 	altfel numele din lista limbilor."""
 	activa = cfg.osd.language.value
-	lista = Lg.getLanguageList()
+	instalate = {c for c, d in Lg.getLanguageList()}
+	lista = _listaCuStick(Lg)
 	if activa not in [c for c, d in lista]:
 		# limba salvata e ascunsa (Components/Language.py, LIMBI_COMPLETE): numele in limba in care sunt meniurile
 		activa = Lg.getActiveLanguage() or activa
@@ -77,7 +85,8 @@ def _limbi(Lg, cfg, nume):
 	for cod, date in lista:
 		# date = (nume, limba, tara); cheia numelui e limba_tara, ca pe televizor
 		cheie = "%s_%s" % (date[1], date[2]) if len(date) > 2 else cod
-		rez.append([cod, texte.get(cheie) or (date[0] if date else cod)])
+		rez.append([cod, (texte.get(cheie) or (date[0] if date else cod)) +
+			(" " + _t("(pe stick)") if cod not in instalate else "")])
 	return rez
 
 
@@ -99,6 +108,9 @@ def seteaza(argumente, Lg=None, cfg=None, nume=None, configfile=None):
 		return rez
 	if cod not in coduri:
 		rez = stare(Lg, cfg, nume)
+		if cod in [c for c, n in _listaCuStick(Lg)]:
+			rez.update({"result": False, "message": _t("Instaleaza limbile din Partea a doua pe stick, apoi alege limba din nou.")})
+			return rez
 		rez.update({"result": False, "message": _t("Limba „%s” nu există pe receptor.") % cod[:MAX_COD]})
 		return rez
 	cfg.osd.language.value = cod
@@ -237,6 +249,7 @@ PAGINA = """<!DOCTYPE html>
     <h2>Limba de pe televizor</h2>
     <p class="acum" id="acum"></p>
     <div class="rand"><label for="limba">Limba meniurilor</label><select id="limba"></select></div>
+	<p><a href="/partea-doua">Partea a doua pe stick</a></p>
     <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button></div>
     <p class="nota">Limba se schimbă pe loc, fără repornire. Ce se deschide pe televizor de acum apare în limba nouă; ecranele deschise deja se schimbă la următoarea deschidere. Paginile interfeței web se schimbă la următoarea încărcare.</p>
   </section>
@@ -316,6 +329,7 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Partea a doua pe stick"),
 		N_("Limba meniurilor"),
 		N_("Se citește limba de acum..."),
 		N_("Limba de pe televizor"),

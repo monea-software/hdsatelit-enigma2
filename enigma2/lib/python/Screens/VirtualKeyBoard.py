@@ -18,6 +18,20 @@ from Components.MultiContent import MultiContentEntryText, MultiContentEntryPixm
 from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
 from Tools.LoadPixmap import LoadPixmap
 
+# HDSatelit: tasta Enter a tastaturii in alte imagini; pluginurile lor le dau ca style=. Aici numai numele, ca sa se
+# incarce; tastatura noastra arata Enter la fel pentru toate.
+VKB_DONE_ICON = 0
+VKB_ENTER_ICON = 1
+VKB_OK_ICON = 2
+VKB_SAVE_ICON = 3
+VKB_SEARCH_ICON = 4
+VKB_DONE_TEXT = 5
+VKB_ENTER_TEXT = 6
+VKB_OK_TEXT = 7
+VKB_SAVE_TEXT = 8
+VKB_SEARCH_TEXT = 9
+
+
 def _dinTastatura():
 	"""Ultima tasta a venit de la o tastatura adevarata (Components/HdsTastaturaUsb.py); fara modul, False."""
 	try:
@@ -99,8 +113,13 @@ def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 
 class VirtualKeyBoard(Screen):
 
-	def __init__(self, session, title="", text=""):
+	def __init__(self, session, title="", text="", *extra, **optiuni):
+		# HDSatelit: pluginurile altor imagini dau si maxSize, visible_width, type, currPos, allMarked, style, windowTitle; aici nu schimba
+		# nimic (tastatura e aceeasi), dar nu mai opresc deschiderea. windowTitle, cand vine, e titlul ferestrei.
 		Screen.__init__(self, session)
+		titlu = optiuni.get("windowTitle")
+		if titlu:
+			self.onLayoutFinish.append(lambda: self.setTitle(titlu))
 		self.keys_list = []
 		self.shiftkeys_list = []
 		self.lang = language.getLanguage()
@@ -316,6 +335,39 @@ class VirtualKeyBoard(Screen):
 				["A", "S", "D", "F", "G", "H", "J", "K", "L", "ň", "ď", "'"],
 				[">", "Y", "X", "C", "V", "B", "N", "M", ";", ":", "_", "CLEAR"],
 				["SHIFT", "SPACE", "?", "\\", "Č", "Ř", "Š", "Ž", "Ú", "Á", "É", "OK"]]
+			self.nextLang = 'uk_UA'
+		elif self.lang.replace('-', '_').split('_', 1)[0].lower() == 'uk':
+			# HDSatelit (cererea unui tester, 30.10.2026): tastatura ucraineana, asezarea obisnuita a tastaturilor ucrainene
+			# (ЙЦУКЕН), cu ґ, є, і, ї si apostroful; tot 5 randuri de 12 taste, ca restul
+			self.lang = 'uk_UA'
+			self.keys_list = [
+				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
+				["й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ї"],
+				["ф", "і", "в", "а", "п", "р", "о", "л", "д", "ж", "є", "ґ"],
+				["я", "ч", "с", "м", "и", "т", "ь", "б", "ю", "'", ".", "CLEAR"],
+				["SHIFT", "SPACE", ",", "-", "@", "OK"]]
+			self.shiftkeys_list = [
+				["EXIT", "!", '"', "№", ";", "%", ":", "?", "*", "(", ")", "BACKSPACE"],
+				["Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ї"],
+				["Ф", "І", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", "Є", "Ґ"],
+				["Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", "'", ",", "CLEAR"],
+				["SHIFT", "SPACE", "_", "/", "+", "OK"]]
+			self.nextLang = 'ru_RU'
+		elif self.lang.replace('-', '_').split('_', 1)[0].lower() == 'ru':
+			# HDSatelit: tastatura ruseasca (ЙЦУКЕН), cu ъ, э si ё; tot 5 randuri de 12 taste
+			self.lang = 'ru_RU'
+			self.keys_list = [
+				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
+				["й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ъ"],
+				["ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", "э", "ё"],
+				["я", "ч", "с", "м", "и", "т", "ь", "б", "ю", ".", ",", "CLEAR"],
+				["SHIFT", "SPACE", "-", "@", "_", "OK"]]
+			self.shiftkeys_list = [
+				["EXIT", "!", '"', "№", ";", "%", ":", "?", "*", "(", ")", "BACKSPACE"],
+				["Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ъ"],
+				["Ф", "Ы", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", "Э", "Ё"],
+				["Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", "/", "+", "CLEAR"],
+				["SHIFT", "SPACE", "'", "=", "\\", "OK"]]
 			self.nextLang = 'ro_RO'
 		elif self.lang == 'ro_RO':
 			# HDSatelit: tastatura romaneasca (QWERTY, cu a, i, a cu caciula, s si t cu virgula dedesubt), tot 5 randuri de

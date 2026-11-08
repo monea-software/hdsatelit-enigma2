@@ -7,7 +7,7 @@ installdir = $(pkglibdir)/python
 install_PYTHON = \
 	Navigation.py NavigationInstance.py RecordTimer.py SleepTimer.py ServiceReference.py \
 	keyids.py keymapparser.py mytest.py skin.py timer.py tools.py GlobalActions.py \
-	e2reactor.py
+	e2reactor.py boxbranding.py
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = enigma2.pc
@@ -18,12 +18,19 @@ CLEANFILES = index-enigma2.xml
 
 EXTRA_DIST = lamedb
 
+# Pozele afisajului se instaleaza si la compilarea separata a interfetei.
+EXTRA_DIST += $(shell find $(srcdir)/HDSatelit/afisaj-color -type f)
+
 # /etc/image-version pentru ecranul About: version=0<major><minor><revizie><data commit>, 16 cifre cand fiecare parte a
 # versiunii are o cifra (0.3.9 -> 0039...); cand o parte are doua cifre, fiecare parte sta pe doua cifre, 19 cifre
 # (0.3.10 -> 0000310...). Cititorii (Components/HdsJurnalVersiuni.desparte_build, About, cadru_web, HdsCommon) le stiu
 # pe amandoua; peste 99 pe o parte sau o parte cu 0 in fata (0.3.09) opresc constructia.
 install-data-hook:
 	$(MKDIR_P) $(DESTDIR)$(sysconfdir)
+	$(MKDIR_P) $(DESTDIR)$(datadir)/enigma2/HDSatelit/afisaj-color
+	cp -R $(srcdir)/HDSatelit/afisaj-color/480x320 \
+		$(srcdir)/HDSatelit/afisaj-color/400x240 \
+		$(DESTDIR)$(datadir)/enigma2/HDSatelit/afisaj-color/
 	v=`echo $(PACKAGE_VERSION) | tr -d .`; \
 	echo "$(PACKAGE_VERSION)" | grep -Eq '^(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$$' || { \
 		echo "versiunea $(PACKAGE_VERSION) nu incape in /etc/image-version (x.y.z, cel mult 99 pe parte)" >&2; exit 1; }; \

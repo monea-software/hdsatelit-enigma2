@@ -82,6 +82,7 @@ def _jurnal(text):
 
 GRUPE = [
 	("ceas", N_("Ora și data")),
+	("vremea", N_("Vremea")),
 	("receptor", N_("Receptorul")),
 	("stocare", N_("Discul și memoria USB")),
 	("retea", N_("Rețeaua")),
@@ -407,6 +408,48 @@ def _oprire(ctx):
 	if not lista:
 		return None
 	return _minute(max(0, lista[0].begin - ctx.acum()) + 59)
+
+
+# ---------------------------------------------------------------- vremea
+
+def _vremeCamp(cheie):
+	"""Citeste numai datele tinute in memorie de serviciul vremii."""
+	def citeste(ctx):
+		from Components import HdsVremea
+		v = HdsVremea.date().get(cheie)
+		if cheie == "stare" and v:
+			return _(v)
+		return v if v is not None and v != "" else None
+	return citeste
+
+
+def _vremeAcum(ctx):
+	from Components import HdsVremea
+	v = HdsVremea.date()
+	return v if v.get("temperatura") is not None else None
+
+
+def _vremeAcumText(v):
+	from Components import HdsVremea
+	unitate = HdsVremea.setari()["unitate"]
+	parti = (HdsVremea.textTemperatura(v["temperatura"], unitate),
+		_(v.get("stare") or ""), v.get("oras"))
+	return ("derulat", " ".join(p for p in parti if p))
+
+
+def _vremeTemperatura(v, intreg=False):
+	from Components import HdsVremea
+	unitate = HdsVremea.setari()["unitate"]
+	if intreg:
+		return ("derulat", HdsVremea.textTemperatura(v, unitate))
+	return ("dreapta", HdsVremea.textPatru(v, unitate))
+
+
+def _formateVreme():
+	return [
+		("patru", N_("pe patru poziții"), _vremeTemperatura),
+		("intreg", N_("cu unitatea întreagă, derulat"), lambda v: _vremeTemperatura(v, True)),
+	]
 
 
 # ---------------------------------------------------------------- ora din alt oras (fusurile din /usr/share/zoneinfo)
@@ -2083,6 +2126,29 @@ CATALOG = [
 	D("ceas.sincronizat", N_("De unde vine ora"), GRATIS, 60, _sincronizat, 3, [
 		("sursa", N_("NTP, SAT, RTC sau PROV"), lambda c: ("fix", SURSE_ORA.get(c, "----"))),
 	], N_("NTP: prin Internet; SAT: de la două transpondere; RTC: ceasul receptorului; PROV: provizorie.")),
+	# ------------------------------------------------------------ vremea
+	D("vremea.acum", N_("Vremea acum"), GRATIS, 60, _vremeAcum,
+		{"temperatura": 12, "oras": u"București", "stare": u"Noros",
+			"pictograma": "/usr/share/enigma2/vremea/nori.png"}, [
+		("derulat", N_("temperatura, starea și orașul"), _vremeAcumText),
+	], N_("Pe afișajul color arată și pictograma vremii.")),
+	D("vremea.temperatura", N_("Temperatura de afară"), GRATIS, 60,
+		_vremeCamp("temperatura"), 12, _formateVreme(),
+		N_("Orașul și unitatea se aleg în setările vremii.")),
+	D("vremea.stare", N_("Starea vremii"), GRATIS, 60, _vremeCamp("stare"), u"Noros", [
+		("derulat", N_("derulat"), _txt("derulat")),
+	]),
+	D("vremea.oras", N_("Orașul vremii"), GRATIS, 60, _vremeCamp("oras"), u"București", [
+		("derulat", N_("derulat"), _txt("derulat")),
+	]),
+	D("vremea.azi_min", N_("Temperatura minimă de azi"), GRATIS, 60,
+		_vremeCamp("azi_min"), 5, _formateVreme()),
+	D("vremea.azi_max", N_("Temperatura maximă de azi"), GRATIS, 60,
+		_vremeCamp("azi_max"), 14, _formateVreme()),
+	D("vremea.maine_min", N_("Temperatura minimă de mâine"), GRATIS, 60,
+		_vremeCamp("maine_min"), 3, _formateVreme()),
+	D("vremea.maine_max", N_("Temperatura maximă de mâine"), GRATIS, 60,
+		_vremeCamp("maine_max"), 11, _formateVreme()),
 	# ------------------------------------------------------------ receptor
 	D("receptor.temperatura", N_("Temperatura procesorului"), GRATIS, 5, _temperatura, 45, [
 		("gc", N_("grade Celsius"), _tempGC),
@@ -2554,6 +2620,7 @@ DUPA_ID = dict((d.id, d) for d in CATALOG)
 # Etichetele scurte (cel mult 4 pozitii) care pot trece inainte de valoare in lista de rotire („+e”), ca sa se stie ce
 # inseamna un numar. Numai prescurtari tehnice, la fel in orice limba.
 SCURT = {
+	"vremea.acum": "MET",
 	"ceas.secunde": "SEC",
 	"ceas.ziua_anului": "DAY",
 	"ceas.saptamana": "WK",

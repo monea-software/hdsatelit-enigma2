@@ -343,6 +343,25 @@ RESULT eDVBScan::startFilter()
 void eDVBScan::SDTready(int err)
 {
 	SCAN_eDebug("got sdt %d", err);
+	if (err && m_SDT)
+	{
+		eDVBTableSpec previous;
+		if (!m_SDT->getSpec(previous)
+			&& (previous.flags & eDVBTableSpec::tfHaveTIDExt))
+		{
+			// PAT si SDT pot avea TSID diferit. Reluam doar SDT actual.
+			// Fara filtrul TSID, o a doua eroare nu mai reia citirea.
+			eDVBTableSpec fallback = eDVBSDTSpec();
+			fallback.timeout = 10000;
+			SCAN_eDebug("SDT pentru TSID %04x lipseste, reluam fara TSID",
+				previous.tidext);
+			m_SDT = new eTable<ServiceDescriptionSection>(m_scan_debug);
+			CONNECT(m_SDT->tableReady, eDVBScan::SDTready);
+			if (!m_SDT->start(m_demux, fallback))
+				return;
+			SCAN_eDebug("reluarea SDT actual nu a putut porni");
+		}
+	}
 	m_ready |= readySDT;
 	if (!err)
 		m_ready |= validSDT;
@@ -1064,7 +1083,21 @@ void eDVBScan::channelDone()
 		}
 	}
 
-	hdsjscan::prins(m_hds_jurnal, m_new_services.size());
+	{
+		/* SNR-ul si nivelul in randul transponderului, numai la scanarea cu jurnal, o data pe transponder si dupa tabele: atunci
+		   scanarea nu asteapta nimic de la tuner. Cat dureaza citirea se scrie in rand; o citire lenta le opreste pe urmatoarele */
+		int hds_snr = -1, hds_nivel = -1;
+		long hds_citire_ms = -1;
+		ePtr<iDVBFrontend> hds_fe;
+		if (hdsjscan::citesteSemnal(m_hds_jurnal) && m_channel && !m_channel->getFrontend(hds_fe))
+		{
+			long long hds_inceput = hdsjurnal::monotonMs();
+			hds_snr = hds_fe->readFrontendData(iDVBFrontend::signalQualitydB);
+			hds_nivel = hds_fe->readFrontendData(iDVBFrontend::signalPower);
+			hds_citire_ms = (long)(hdsjurnal::monotonMs() - hds_inceput);
+		}
+		hdsjscan::prins(m_hds_jurnal, m_new_services.size(), hds_snr, hds_nivel, hds_citire_ms);
+	}
 	m_ch_scanned.push_back(m_ch_current);
 
 	for (std::list<ePtr<iDVBFrontendParameters> >::iterator i(m_ch_toScan.begin()); i != m_ch_toScan.end();)

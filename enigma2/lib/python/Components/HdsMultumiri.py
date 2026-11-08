@@ -23,7 +23,16 @@ Numele se curata: fara caractere de control sau de format (directie, latime zero
 tabelul ar despica randul in eticheta / valoare), cel mult LUNGIME_MAX semne (unul mai lung se scurteaza cu "..."
 tipografic, ca testerul sa ramana pe lista), cel mult NUME_MAX nume.
 
-Modul curat (fara enigma la incarcare): probele pe PC in test_multumiri_testeri_0621.py.
+Albastrul, ca pe pagina /testeri/ a site-ului: beta testerii care si-au trimis propriul receptor la HD Satelit
+(campul "receptor_trimis": true din testeri.json, pus de echipa in moderarea forumului) au numele ca o eticheta, text
+albastru pe fundal alb (acelasi fundal si pe tema inchisa), iar sub rand sta legenda (LEGENDA), cu aceeasi eticheta ca
+exemplu (bucati_legenda), numai cand e macar unul. Copia primeste cheia "trimis" (numele lor, curate ca
+restul, numai cele din "nume"); fara niciunul cheia lipseste, deci copiile vechi raman bune. lista() da numele si pe cei
+albastri din aceeasi copie; bucati_albastre() da tabelului de pe televizor si paginii web randul pe bucati
+[(text, albastru)] si legenda, ca sa le deseneze colorate (textul enigma2 nu are coduri de culoare).
+
+Modul curat (fara enigma la incarcare): probele pe PC in test_multumiri_testeri_0621.py si
+test_testeri_albastri_0611.py.
 """
 
 import json
@@ -57,6 +66,8 @@ def N_(text):
 
 
 TEXT = N_("Mulțumim tuturor beta testerilor care au participat la realizarea imaginii HD Satelit: %s.")
+LEGENDA = N_("Cu albastru: beta testerii care și-au trimis propriul receptor la HD Satelit, pentru probe și pentru "
+	"îmbunătățirea imaginii E2 HD Satelit.")
 
 
 def _t(text):
@@ -111,9 +122,16 @@ def _actualizat(valoare, rezerva=0):
 	return int(valoare)
 
 
+def _albastri(lista, nume):
+	"""Numele albastre curate, numai cele care sunt si in `nume`, fara dubluri, in ordinea din `nume`."""
+	ale = set(curata(lista))
+	return [n for i, n in enumerate(nume) if n in ale and n not in nume[:i]]
+
+
 def copie_din_raspuns(corp, acum=None):
-	"""Raspunsul serverului (octeti) -> octetii copiei {"v": 1, "actualizat", "nume"}, sau None: raspuns rau (prea
-	mare, JSON stricat, fara lista "testeri", niciun nume). Folosita si de unealta care face copia din imagine."""
+	"""Raspunsul serverului (octeti) -> octetii copiei {"v": 1, "actualizat", "nume"[, "trimis"]}, sau None: raspuns
+	rau (prea mare, JSON stricat, fara lista "testeri", niciun nume). "trimis" = numele testerilor cu
+	"receptor_trimis": true (numai true), numai cand e macar unul. Folosita si de unealta care face copia din imagine."""
 	if not isinstance(corp, bytes) or len(corp) > MARIME_MAX:
 		return None
 	try:
@@ -122,16 +140,21 @@ def copie_din_raspuns(corp, acum=None):
 		return None
 	if not isinstance(d, dict) or not isinstance(d.get("testeri"), list):
 		return None
-	nume = curata([t.get("nume") for t in d["testeri"] if isinstance(t, dict)])
+	testeri = [t for t in d["testeri"] if isinstance(t, dict)]
+	nume = curata([t.get("nume") for t in testeri])
 	if not nume:
 		return None
 	copie = {"v": 1, "actualizat": _actualizat(d.get("actualizat"), time.time() if acum is None else acum),
 		"nume": nume}
+	trimis = _albastri([t.get("nume") for t in testeri if t.get("receptor_trimis") is True], nume)
+	if trimis:
+		copie["trimis"] = trimis
 	return (json.dumps(copie, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
 
 
 def _citeste_copie(cale):
-	"""(actualizat, nume) dintr-o copie, sau None (lipseste, stricata, fara niciun nume)."""
+	"""(actualizat, nume, trimis) dintr-o copie, sau None (lipseste, stricata, fara niciun nume); trimis = [] cand
+	cheia lipseste (copiile de dinainte de albastru)."""
 	try:
 		with open(cale, "rb") as f:
 			date = f.read(MARIME_MAX + 1)
@@ -145,17 +168,34 @@ def _citeste_copie(cale):
 	nume = curata(d.get("nume"))
 	if not nume:
 		return None
-	return _actualizat(d.get("actualizat")), nume
+	trimis = d.get("trimis")
+	return _actualizat(d.get("actualizat")), nume, _albastri(trimis if isinstance(trimis, list) else [], nume)
 
 
-def nume():
-	"""Numele de aratat: copia de pe receptor, altfel cea din imagine (si cea din imagine cand e mai noua, dupa o
-	versiune noua pe un receptor fara internet), altfel nimic."""
+def lista():
+	"""(nume, trimis) de aratat, din aceeasi copie: cea de pe receptor, altfel cea din imagine (si cea din imagine cand
+	e mai noua, dupa o versiune noua pe un receptor fara internet), altfel ([], [])."""
 	receptor = _citeste_copie(CALE_RECEPTOR)
 	imagine = _citeste_copie(cale_imagine())
 	if receptor and (not imagine or receptor[0] >= imagine[0]):
-		return receptor[1]
-	return imagine[1] if imagine else []
+		return receptor[1], receptor[2]
+	return (imagine[1], imagine[2]) if imagine else ([], [])
+
+
+def nume():
+	"""Numele de aratat (lista()), fara cei albastri."""
+	return lista()[0]
+
+
+def _sablon(traducere=None):
+	"""Fraza tradusa, daca are un singur %s si niciun alt %; altfel cea romaneasca."""
+	try:
+		tradus = (traducere or _t)(TEXT)
+	except Exception:
+		tradus = TEXT
+	if not isinstance(tradus, str) or tradus.count("%") != 1 or tradus.count("%s") != 1:
+		return TEXT
+	return tradus
 
 
 def text(lista=None, traducere=None):
@@ -168,6 +208,70 @@ def text(lista=None, traducere=None):
 		return (traducere or _t)(TEXT) % insiruire
 	except (TypeError, ValueError):
 		return TEXT % insiruire
+
+
+def legenda(trimis, traducere=None):
+	"""Legenda de sub rand, tradusa; "" cand nu e niciun nume albastru (legenda nu apare)."""
+	if not trimis:
+		return ""
+	try:
+		rez = (traducere or _t)(LEGENDA)
+	except Exception:
+		rez = LEGENDA
+	return rez if isinstance(rez, str) and rez else LEGENDA
+
+
+def segmente(lista, trimis, traducere=None):
+	"""Randul de multumiri pe bucati [(text, albastru)], lipite la loc = text(lista): numele din `trimis` albastre,
+	restul (fraza, virgulele) nu. Bucatile vecine de acelasi fel se unesc; fara niciun nume, []."""
+	if not lista:
+		return []
+	inainte, dupa = _sablon(traducere).split("%s")
+	albastri = set(trimis or [])
+	rez = []
+
+	def pune(bucata, albastru):
+		if not bucata:
+			return
+		if rez and rez[-1][1] == albastru:
+			rez[-1] = (rez[-1][0] + bucata, albastru)
+		else:
+			rez.append((bucata, albastru))
+
+	pune(inainte, False)
+	for i, n in enumerate(lista):
+		if i:
+			pune(", ", False)
+		pune(n, n in albastri)
+	pune(dupa, False)
+	return rez
+
+
+def bucati_albastre(traducere=None):
+	"""Pentru tabelul de pe televizor (Screens/Information.py) si pagina web /informatii/despre: {text: bucati} cu
+	randul de multumiri si legenda, fiecare cum il scrie populate() (fara " • "), si bucatile lui [(text, albastru)];
+	{} cand nu e niciun nume albastru (nimic de colorat). Randul se potriveste numai daca textul e acelasi, deci o copie
+	schimbata intre timp nu coloreaza nimic gresit."""
+	lista_nume, trimis = lista()
+	if not lista_nume or not trimis:
+		return {}
+	rand = text(lista_nume, traducere)
+	bucati = segmente(lista_nume, trimis, traducere)
+	if "".join(b for b, _a in bucati) != rand:
+		# o traducere cu alt % decat %s: randul ramane, dar fara albastru
+		return {}
+	leg = legenda(trimis, traducere)
+	return {rand: bucati, leg: bucati_legenda(leg)}
+
+
+def bucati_legenda(leg):
+	"""Legenda pe bucati: ce sta inainte de primele doua puncte („Cu albastru”) e eticheta-exemplu, ca numele din rand
+	(text albastru pe fundal alb), restul text obisnuit, fara spatiul de la inceput (eticheta isi are marginea ei).
+	Fara doua puncte, toata legenda e eticheta."""
+	inainte, sep, dupa = leg.partition(":")
+	if not sep or not inainte.strip() or not dupa.strip():
+		return [(leg, True)]
+	return [(inainte.strip(), True), (dupa.strip(), False)]
 
 
 # ---------------------------------------------------------------- actualizarea de pe server

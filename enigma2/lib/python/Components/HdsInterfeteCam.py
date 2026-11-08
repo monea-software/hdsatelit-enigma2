@@ -730,6 +730,13 @@ def _pare_tls(date):
 	return date[:1] in (b'\x15', b'\x16')
 
 
+def _e_flux(antete):
+	"""Un port care raspunde cu imagine sau sunet (Content-Type video/ sau audio/) trimite un flux, nu o pagina: butonul
+	de deschidere ar porni un stream in browser (Eduard, 05.11.2026, portul de releu al modulului)."""
+	tip = antete.get('content-type', '').strip().lower()
+	return tip.startswith('video/') or tip.startswith('audio/')
+
+
 def proba_http(gazda, port, conectare=LIMITA_CONECTARE, tacere=ASTEPTARE_TACERE, citire=LIMITA_CITIRE, cerere=None):
 	"""Proba unui port. {'stare', 'schema', 'cod_http', 'nume', 'sursa_nume'}; stare: 'web', 'nu_e_web' (vorbeste
 	primul sau raspunde altceva decat HTTP), 'nu_raspunde'. `cerere`: _o_cerere, sau alta cu aceeasi forma (la
@@ -764,6 +771,9 @@ def proba_http(gazda, port, conectare=LIMITA_CONECTARE, tacere=ASTEPTARE_TACERE,
 			if r2 is not None:
 				cod, antete, corp = r2
 				schema = schema2
+	if _e_flux(antete):
+		rez['stare'] = 'nu_e_web'
+		return rez
 	rez['stare'] = 'web'
 	rez['schema'] = schema
 	rez['cod_http'] = cod

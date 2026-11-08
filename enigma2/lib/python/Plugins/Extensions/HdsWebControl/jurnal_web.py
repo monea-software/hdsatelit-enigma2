@@ -26,6 +26,15 @@ def _t(text):
 		return text
 
 
+def _limba():
+	"""Limba interfetei, doua litere, ca pe televizor; pe PC romana."""
+	try:
+		from Components.Language import language
+		return str(language.getLanguage() or "ro")[:2].lower()
+	except Exception:
+		return "ro"
+
+
 def _J():
 	from Components import HdsJurnalVersiuni
 	return HdsJurnalVersiuni
@@ -39,9 +48,10 @@ def date(J=None):
 	vazut = J.ultima_vazuta()
 	ruleaza = J.versiunea_care_ruleaza(lista, curent)
 	sus, jos = J.sectiuni(lista, vazut, curent)
+	limba = _limba()
 
 	def intrare(x):
-		return {"fel": x["fel"], "eticheta": J.eticheta(x["fel"]), "text": J.text(x)}
+		return {"fel": x["fel"], "eticheta": J.eticheta_tradusa(x["fel"]), "text": J.text(x, limba)}
 
 	def versiune(v):
 		return {

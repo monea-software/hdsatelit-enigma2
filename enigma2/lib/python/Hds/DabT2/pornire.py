@@ -323,6 +323,7 @@ class Controlor(object):
         # manierele legaturilor timerelor, pe nume (compat.conecteaza_timer). Cu semnale-obiect legatura traieste
         # doar cat e tinut manierul; timerele raman eTimer simple in atributele _timer_*.
         self._legaturi = {}
+        self._abonamente_web = []     # tin releul pentru browsere; nu pornesc playerul televizorului
 
     def _leaga(self, nume, timer, functie):
         """Leaga functia la timer si tine manierul sub `nume` (un timer nou cu acelasi nume il inlocuieste)."""
@@ -448,6 +449,45 @@ class Controlor(object):
                 if buchete._curata_id(f.get('id')) == feed_id:
                     return f, tp
         return None, None
+
+    def pregateste_web(self, feed, tp, ref):
+        """Din firul principal: abonament la feed, fara zap. Datele vin asincron prin releu.
+        Un feed al televizorului poate fi impartit; alt feed activ nu este intrerupt de browser."""
+        if self.stare != 'oprit' and (self.mod == 'invata' or self.feed is None
+                                     or self.feed.get('id') != feed.get('id')):
+            return None, _('Releul DAB+ este folosit acum pentru alt flux. Oprește mai întâi acea redare.')
+        altul = self.coord.detinator
+        if altul is not None and altul is not self:
+            return None, _('Tunerul este folosit acum pentru alt flux din satelit.')
+        abonament = {'gata': threading.Event(), 'oprit': threading.Event(), 'mesaj': None}
+        self._abonamente_web.append(abonament)
+        if self.stare == 'oprit':
+            try:
+                self._pregateste(feed, tp, ref, 'web')
+            except Exception:
+                self.elibereaza_web(abonament)
+                jurnal.eroare(self.et, 'pregatirea transmisiei web')
+                return None, _('Postul DAB+ nu se poate porni.')
+        elif self.stare == 'tinut' and self._releu_gata:
+            self._opreste_tinerea()
+            self.stare, self.mod, self.ref_asteptat = 'canta', 'web', ref
+            abonament['gata'].set()
+            self._porneste_paza()
+        elif self.stare == 'canta' and self._releu_gata:
+            abonament['gata'].set()
+        return abonament, None
+
+    def elibereaza_web(self, abonament):
+        """Ultimul browser elibereaza doar pregatirea pe care o detine web-ul."""
+        if abonament in self._abonamente_web:
+            self._abonamente_web.remove(abonament)
+        abonament['oprit'].set()
+        if not self._abonamente_web and self.mod == 'web':
+            self.opreste('ultima transmisie web s-a oprit')
+
+    def _web_gata(self):
+        for abonament in self._abonamente_web:
+            abonament['gata'].set()
 
     def feeduri_active(self, plus=None):
         """T2: feed-urile care au nevoie de purtator in lamedb: cele invatate (servicii.json), cel care ruleaza
@@ -1163,6 +1203,10 @@ class Controlor(object):
                 and self.releu.ruleaza() and (self.tuner.prins_pe(tp) or self._prin_8001(feed)))
 
     def _pregateste(self, feed, tp, playref, mod):
+        if self.feed is not None and self.feed.get('id') != feed.get('id'):
+            for abonament in self._abonamente_web:
+                abonament['oprit'].set()
+            self._abonamente_web = []
         self._ultimii_octeti = None
         self._date_la = 0.0
         self._ultimele_utile = None
@@ -1207,7 +1251,10 @@ class Controlor(object):
             self._releu_gata = False
             self.coord.cere_tuner(self)
             self._arata(_('Acord pe %s') % tuner.text_transponder(tp))
-            self.tuner.acordeaza(tp, self._acord_gata, self._arata)
+            if mod == 'web':
+                self.tuner.acordeaza(tp, self._acord_gata, self._arata, fara_motor=True)
+            else:
+                self.tuner.acordeaza(tp, self._acord_gata, self._arata)
         if mod == 'zap':
             self._porneste_paza()
 
@@ -1371,6 +1418,12 @@ class Controlor(object):
         self._releu_gata = True
         self._memoreaza_servicii(servicii)
         self._ascunde()
+        self._web_gata()
+        if self.mod == 'web':
+            self.stare = 'canta'
+            self._scrie_receptie(fortat=True)
+            self._porneste_paza()
+            return
         if self.mod == 'invata':
             self._invatare_gata(True, len(servicii))
             return
@@ -1400,33 +1453,37 @@ class Controlor(object):
 
     def _scrie_receptie(self, fortat=False):
         """/tmp/hdsatelit/receptie.json pentru skin: la pornirea postului si apoi cel mult la 2 s (din paza)."""
-        if self.stare != 'canta' or self.feed is None or self.mod != 'zap':
+        if self.stare != 'canta' or self.feed is None or self.mod not in ('zap', 'web'):
             return
         acum = _monoton()
         if not fortat and acum - self._receptie_la < receptie.PAS_S:
             return
         self._receptie_la = acum
         try:
-            fid = buchete._curata_id(self.feed.get('id'))
-            parti = buchete.desparte_ref(self.profil, self.ref_asteptat or '')
-            sid = parti[1] if parti and self.profil.tip == 'dab' else None
-            post = None
-            for s in self._servicii_cache.get(fid) or []:
-                if isinstance(s, dict) and buchete._int(s.get('sid'), -1) == sid:
-                    post = s
-                    break
-            if self._tine_tuner():
-                semnal, slot = self.tuner.semnal(), self.tuner.slot
-            else:
-                fe = self._frontend_purtator
-                semnal, slot = self._semnal_purtator, (fe[1] if fe is not None else None)
-            # `actualizat` din fisier e ora de perete: skinul il compara cu ora lui (pasul de 2 s merge pe ceasul monoton)
-            receptie.scrie(receptie.compune(self.profil.tip, self.ref_asteptat, self.feed, self.tp, sid, post,
-                                            self.ultima_stare_releu, semnal,
-                                            self._ref_purtator if self._prin_8001() else None, time.time(), slot))
+            receptie.scrie(self.receptie_web(self.ref_asteptat))
             self._receptie_scrisa = True
         except Exception:
             jurnal.eroare(self.et, 'receptie.json')
+
+    def receptie_web(self, ref):
+        """Datele din memorie pentru postul cerut de browser. Fara HTTP, fisiere sau citiri ale placii."""
+        if self.feed is None or self.tp is None:
+            return None
+        fid = buchete._curata_id(self.feed.get('id'))
+        parti = buchete.desparte_ref(self.profil, ref or '')
+        if parti is None or parti[0] != fid:
+            return None
+        sid = parti[1] if self.profil.tip == 'dab' else None
+        post = next((s for s in self._servicii_cache.get(fid) or []
+                     if isinstance(s, dict) and buchete._int(s.get('sid'), -1) == sid), None)
+        if self._tine_tuner():
+            semnal, slot = self.tuner.semnal(), self.tuner.slot
+        else:
+            fe = self._frontend_purtator
+            semnal, slot = self._semnal_purtator, (fe[1] if fe is not None else None)
+        return receptie.compune(self.profil.tip, ref, self.feed, self.tp, sid, post,
+                               self.ultima_stare_releu, semnal,
+                               self._ref_purtator if self._prin_8001() else None, time.time(), slot)
 
     def _text_cautare_oprita(self):
         """Mesajul cand cautarea posturilor / programelor (mod „invata”) se opreste inainte de sfarsit."""
@@ -1440,7 +1497,7 @@ class Controlor(object):
         self.opreste(mesaj)
         if mod == 'invata':
             self._invatare_gata(False, mesaj)
-        else:
+        elif mod != 'web':
             self._popup(mesaj)
 
     # ------------------------------------------------------------ paza
@@ -1453,6 +1510,9 @@ class Controlor(object):
 
     def _pas_paza(self):
         try:
+            if self.mod == 'web':
+                self._pas_paza_web()
+                return
             if self.stare in ('oprit', 'tinut') or self.mod != 'zap':
                 self._opreste_timer(self._timer_paza)
                 return
@@ -1492,6 +1552,25 @@ class Controlor(object):
                 self._scrie_receptie()           # la 2 s cu semnalul proaspat; starea releului e cea de la ultimul /stare
         except Exception:
             jurnal.eroare(self.et, 'paza')
+
+    def _pas_paza_web(self):
+        """Numai starea si semnalul feed-ului. Nu citeste playerul TV si nu reia acordul."""
+        if self.stare != 'canta' or not self._abonamente_web:
+            return
+        acum = _monoton()
+        if self.fundal.in_curs() == 0 and acum - self._stare_la >= PAZA_STARE_S:
+            self._stare_la = acum
+            self.fundal.lanseaza(fundal.cere_json, self._stare_paza_web, self.profil.url_releu('/stare'))
+        if self._tine_tuner():
+            self.tuner.reimprospateaza()
+        else:
+            self._citeste_semnalul_purtatorului(acum)
+        self._scrie_receptie()
+
+    def _stare_paza_web(self, ok, raspuns):
+        if self.mod == 'web' and self.stare == 'canta' and ok and isinstance(raspuns, dict):
+            self.ultima_stare_releu = raspuns
+            self._scrie_receptie()
 
     def _prag_fara_date(self):
         return 8.0 if self.profil.tip == 'dab' else 5.0
@@ -1744,7 +1823,7 @@ class Controlor(object):
     def _releu_repornit(self, numar):
         jurnal.noteaza(self.et, 'releul repornit (%d)' % numar)
         fundal.inchide_conexiunile(self.profil.port_control)     # conexiunea spre releul mort nu se mai refoloseste
-        if self.stare == 'canta' and self.mod == 'zap':
+        if self.stare == 'canta' and self.mod in ('zap', 'web'):
             self.stare = 'pregatire'
             self._asteapta_releul()
         elif self.stare == 'pregatire':
@@ -1787,6 +1866,10 @@ class Controlor(object):
         self._timer_oprire = None
 
     def opreste(self, motiv=''):
+        for abonament in self._abonamente_web:
+            abonament['mesaj'] = motiv
+            abonament['oprit'].set()
+        self._abonamente_web = []
         if self.stare != 'oprit' or self.tuner.tinut() or self.releu.ruleaza():
             jurnal.noteaza(self.et, 'opresc: %s' % motiv)
         self._sterge_marcaj('oprire normala')
@@ -2013,6 +2096,8 @@ class Controlor(object):
 
     # ------------------------------------------------------------ mesaje
     def _arata(self, text):
+        if self.mod == 'web':
+            return
         try:
             if self.sesiune is None:
                 return

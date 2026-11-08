@@ -123,14 +123,16 @@ def stare(sesiune=None, S=None, RD=None, DES=None, E=None):
 	try:
 		d = RD.date(sesiune, S.numar_epg(), analiza)
 	except Exception as eroare:
-		print("[HdsWebControl] radio: %s" % eroare)
+		print("[HdsWebControl] radio: datele nu se pot citi")
 		rez["mesaj"] = _t("Datele postului nu se pot citi acum.")
 		return rez
 	rez["radio"] = bool(d.get("radio"))
 	if not rez["radio"]:
 		rez["mesaj"] = _t("Acum nu merge un post de radio.")
 		return rez
-	rez["date"] = d
+	rez["date"] = dict(d, ref=RD.ref_publica(d.get("ref", "")))
+	from Components.HdsRadioMeniu import date_panou
+	rez["panou_meniu"] = date_panou(d, RD)
 	rez["sigla"] = _numeSigla(d.get("ref"))
 	ep = d.get("epg") or {}
 	fel = S.valoare("vizualizator")
@@ -155,6 +157,84 @@ def stare(sesiune=None, S=None, RD=None, DES=None, E=None):
 		"bare_detaliu": RD.text_bare_detaliu(analiza or {"stare": "asteapta"}, fel),
 	}
 	return rez
+
+
+def stare_flux(ref, nume, serviciu=None, piste=None, RD=None, receptie_flux=None):
+	"""Datele postului ales in browser, fara sa schimbam navigatia televizorului.
+	Serviciul poate fi inregistrarea sesiunii (frontendInfo), iar fara decodor
+	EPG-ul si receptia se citesc din cache/lista prin aceleasi functii RD.
+	"""
+	if RD is None:
+		from Components import HdsRadioDate as RD
+	try:
+		from enigma import eServiceReference
+		obiect_ref = eServiceReference(ref)
+	except ImportError:
+		class Referinta(object):
+			def toString(self):
+				return ref
+		obiect_ref = Referinta()
+	if serviciu is None or not hasattr(serviciu, "info"):
+		rec = serviciu
+		try:
+			from enigma import eServiceCenter
+			statice = eServiceCenter.getInstance().info(obiect_ref)
+		except Exception:
+			statice = None
+
+		class Informatii(object):
+			def getInfo(self, cheie):
+				return statice.getInfo(obiect_ref, cheie) if statice is not None else -1
+
+			def getInfoString(self, cheie):
+				return statice.getInfoString(obiect_ref, cheie) if statice is not None else ""
+
+			def getInfoObject(self, cheie):
+				return statice.getInfoObject(obiect_ref, cheie) if statice is not None else None
+
+			def getEvent(self, numar):
+				# Urmatoarele evenimente sunt citite de RD din cache-ul EPG.
+				return statice.getEvent(obiect_ref) if statice is not None and numar == 0 else None
+
+		class Serviciu(object):
+			def info(self):
+				return Informatii()
+
+			def frontendInfo(self):
+				return rec.frontendInfo() if rec is not None and hasattr(rec, "frontendInfo") else None
+
+		serviciu = Serviciu()
+
+	class Navigatie(object):
+		def getCurrentlyPlayingServiceReference(self):
+			return obiect_ref
+
+		def getCurrentService(self):
+			return serviciu
+
+	analiza = None
+	# Analiza TV este utila numai cand PID-ul ascultat este chiar cel al paginii.
+	ales = next((p for p in (piste or []) if p.get("aleasa")), None)
+	if hasattr(serviciu, "rdsDecoder") and (ales is None or RD.pid_audio(serviciu) == ales.get("pid")):
+		try:
+			from Screens import HdsEcranRadio
+			leg = _legatura(HdsEcranRadio)
+			analiza = leg.analiza() if leg is not None else None
+		except Exception:
+			pass
+	d = RD.date(_CuNav(Navigatie()), 3, analiza)
+	d.update({"ref": ref, "nume": nume or d.get("nume", ""), "radio": True})
+	if piste:
+		p = next((p for p in piste if p.get("aleasa")), piste[0])
+		sunet = d.setdefault("sunet", {})
+		sunet.update({"codec": p.get("fel", ""), "limba": p.get("limba", ""), "piste": len(piste)})
+	if receptie_flux is not None:
+		d = RD.cu_receptie_flux(d, receptie_flux)
+	return {"result": True, "radio": True, "date": d, "sigla": _numeSigla(ref),
+		"texte": {"nume": RD.text_nume(d), "detalii": RD.text_detalii(d),
+			"sunet": RD.text_sunet(d), "transponder": RD.text_transponder(d),
+			"satelit": RD.text_satelit(d), "semnal": RD.text_semnal(d),
+			"epg_lipsa": "" if d.get("epg") else _t("Postul nu transmite programul emisiunilor.")}}
 
 
 def _alegeri(S):
@@ -554,9 +634,9 @@ PAGINA = """<!DOCTYPE html>
     <canvas id="bare" width="900" height="180" aria-label="Barele de frecvență ale sunetului"></canvas>
     <div class="nivel" id="nivelBare"><b>__NIVEL_S__</b><div><span id="nivelS"></span></div><b>__NIVEL_D__</b><div><span id="nivelD"></span></div></div>
     <div class="taste-viz">
+      <button type="button" id="egalizator"><span class="patrat" style="background:#22a84a"></span><span id="txEgal">Egalizator</span></button>
       <button type="button" id="vizUrmatoare"><span class="patrat" style="background:#e8c53a"></span><span id="txViz">Altă vizualizare</span></button>
       <button type="button" id="culoriUrmatoare"><span class="patrat" style="background:#3a7bd5"></span><span id="txCul">Alte culori</span></button>
-      <button type="button" id="egalizator"><span class="patrat" style="background:#22a84a"></span><span id="txEgal">Egalizator</span></button>
     </div>
     <p class="nota" id="alegeriAcum"></p>
     <p class="nota" id="notaTaste">Pe televizor, pe ecranul radio: tasta galbenă trece la altă vizualizare, tasta albastră la alte culori. Alegerea se ține minte. Tasta verde deschide egalizatorul.</p>

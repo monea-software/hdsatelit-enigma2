@@ -6,12 +6,14 @@
 # lib/service/hdsegalizator.cpp). Ecranul: Meniu > Audio > Egalizator (Screens/HdsEgalizator.py); web: /egalizator
 # (Plugins/Extensions/HdsWebControl/egalizator_web.py). Amandoua folosesc numai functiile de aici.
 #
-# Setarile (config.hds_egalizator): pornit (global), presetarea, cele 10 benzi (text „b0,b1,...,b9” in dB, -12..+12),
+# Setarile (config.hds_egalizator): pornit (global), presetarea, cele 10 benzi (text "b0,b1,...,b9" in dB, -24..+18),
 # modul Noapte, nivelul (potrivirea tariei fata de sunetul placii, -12..+12 dB), volumul (automat / in egalizator / pe
 # placa) si placa ALSA (implicit „default”). Presetarile pun benzile si modul Noapte; o banda schimbata de mana face
-# presetarea „manual”.
+# presetarea manual. Presetarea Manual se tine separat (benzi, nivel, comprimare si efect), ca sa poata fi rechemata
+# dupa incercarea altei presetari. Setarile vechi fara aceasta memorie pornesc de la valorile active, fara pierderi.
 #
-# Pe post: un post poate avea setarile lui (presetarea, benzile, Noapte, nivelul), tinute in FISIER_POSTURI (JSON, cel
+# Efectele speciale (implicit fara) folosesc acelasi motor; o presetare standard le opreste, Manual le rechema.
+# Pe post: un post poate avea setarile lui (presetarea, benzile, Noapte, nivelul, efectul), tinute in FISIER_POSTURI (JSON, cel
 # mult MAX_POSTURI de posturi, scris numai dupa o schimbare, cu PAUZA_SCRIERE_S intre schimbare si scriere, ca apasarile
 # repetate sa nu scrie de fiecare data pe eMMC). La pornirea fiecarui serviciu (evStart, inainte ca PMT-ul sa aleaga
 # pista) motorul primeste setarile postului, sau pe cele globale.
@@ -42,8 +44,8 @@ import time
 BENZI = 10
 FRECVENTE = (31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 ETICHETE = ("31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz")
-DB_MIN = -12
-DB_MAX = 12
+DB_MIN = -24
+DB_MAX = 18
 NIVEL_MIN = -12
 NIVEL_MAX = 12
 FISIER_POSTURI = "/etc/enigma2/hds-egalizator-posturi.json"
@@ -81,10 +83,33 @@ PRESETARI = (
 	("rock", N_("Rock"), (5, 4, 2, -1, -2, -1, 1, 3, 4, 4), False),
 	("clasica", N_("Clasică"), (0, 0, 0, 0, 0, 0, 0, 1, 2, 3), False),
 	("bas", N_("Bas mai mult"), (7, 6, 4, 1, 0, 0, 0, 0, 0, 0), False),
-	("noapte", N_("Noapte"), (-4, -3, -1, 0, 1, 2, 2, 1, 0, -1), True),
+	("noapte", N_("Mod de noapte"), (-4, -3, -1, 0, 1, 2, 2, 1, 0, -1), True),
 )
-NUME_MANUAL = N_("Reglat de tine")
+NUME_MANUAL = N_("Manual")
 CHEI_PRESETARI = tuple(p[0] for p in PRESETARI)
+
+# Ordinea este aceeasi cu identificatorii numerici din hdsegalizator_dsp.h.
+EFECTE = (
+	("fara", N_("Fără efecte")), ("ecou", N_("Ecou")), ("ping-pong", N_("Ecou dublu (ping-pong)")),
+	("camera", N_("Reverb cameră")), ("sala", N_("Reverb sală")), ("catedrala", N_("Reverb catedrală")),
+	("stadion", N_("Stadion")), ("chorus", N_("Cor (chorus)")), ("flanger", N_("Flanger")),
+	("phaser", N_("Phaser")), ("tremolo", N_("Tremolo")), ("vibrato", N_("Vibrato")),
+	("stereo", N_("Stereo lărgit")), ("radio", N_("Radio vechi")), ("telefon", N_("Telefon")),
+	("karaoke", N_("Fără voce (karaoke)")),
+)
+CHEI_EFECTE = tuple(e[0] for e in EFECTE)
+
+
+def curataEfect(cheie):
+	return cheie if isinstance(cheie, str) and cheie in CHEI_EFECTE else "fara"
+
+
+def numeEfecte():
+	return [(cheie, _t(nume)) for cheie, nume in EFECTE]
+
+
+def numeEfect(cheie):
+	return _t(EFECTE[CHEI_EFECTE.index(curataEfect(cheie))][1])
 
 # ce se intampla cu postul de acum (motivul dat de motor) -> textul pe ecran
 TEXTE_POST = {
@@ -151,7 +176,7 @@ def limiteaza(v, jos, sus):
 
 
 def benziDinText(text):
-	"""„0,2,-3,...” -> lista de 10 intregi in -12..+12; lipsurile si gunoiul devin 0."""
+	"""Textul "0,2,-3,..." -> lista de 10 intregi in -24..+18; lipsurile si gunoiul devin 0."""
 	parti = (text or "").replace(";", ",").split(",")
 	rez = []
 	for i in range(BENZI):
@@ -211,6 +236,9 @@ def initConfig():
 	c.presetare = ConfigSelection(default="normal", choices=alegeriPresetare())
 	c.benzi = ConfigText(default=textDinBenzi([0] * BENZI), fixed_size=False)
 	c.noapte = ConfigYesNo(default=False)
+	c.efect = ConfigSelection(default="fara", choices=numeEfecte())
+	# Memoria presetarii omului este separata de reglajele active; JSON gol = setari vechi.
+	c.manual = ConfigText(default="", fixed_size=False)
 	# nivelul ca text („-3”): ConfigSelection cu alegerile lui, citit si scris numai prin limiteaza()/str()
 	c.nivel = ConfigSelection(default="0", choices=[(str(v), textDb(v)) for v in range(NIVEL_MIN, NIVEL_MAX + 1)])
 	c.volum = ConfigSelection(default="auto", choices=[
@@ -240,7 +268,7 @@ def setariGlobale():
 	c = config.hds_egalizator
 	benzi = benziDinText(c.benzi.value)
 	return {"presetare": c.presetare.value, "benzi": benzi, "noapte": bool(c.noapte.value),
-		"nivel": limiteaza(c.nivel.value, NIVEL_MIN, NIVEL_MAX)}
+		"nivel": limiteaza(c.nivel.value, NIVEL_MIN, NIVEL_MAX), "efect": curataEfect(c.efect.value)}
 
 
 def _curataSetari(d):
@@ -256,8 +284,28 @@ def _curataSetari(d):
 	cheie = d.get("presetare")
 	if cheie not in CHEI_PRESETARI and cheie != MANUAL:
 		cheie = presetareDupaBenzi(benzi, noapte)
-	return {"presetare": cheie, "benzi": benzi, "noapte": noapte,
-		"nivel": limiteaza(d.get("nivel", 0), NIVEL_MIN, NIVEL_MAX)}
+	rez = {"presetare": cheie, "benzi": benzi, "noapte": noapte,
+		"nivel": limiteaza(d.get("nivel", 0), NIVEL_MIN, NIVEL_MAX), "efect": curataEfect(d.get("efect"))}
+	if rez["efect"] != "fara":
+		rez["presetare"] = MANUAL
+	if isinstance(d.get("manual"), dict):
+		m = d["manual"]
+		rez["manual"] = _curataSetari({k: m[k] for k in ("benzi", "noapte", "nivel", "efect") if k in m})
+	return rez
+
+
+def reglajManual(pePost=False, cheie=None):
+	"""Presetarea omului pentru domeniul ales; la setari vechi se pastreaza toate valorile active."""
+	from Components.config import config
+	if pePost:
+		s = memorie().ia(cheie if cheie is not None else postAcum()[0])
+		if s:
+			return _curataSetari(s.get("manual") or s)
+	try:
+		m = json.loads(config.hds_egalizator.manual.value)
+	except (TypeError, ValueError):
+		m = None
+	return _curataSetari(m) if isinstance(m, dict) else setariGlobale()
 
 
 # ---------------------------------------------------------------- posturile cu setarile lor
@@ -409,7 +457,7 @@ def comutaPePost(v, pePost):
 	rez = dict(v, benzi=list(v.get("benzi") or [0] * BENZI))
 	if not pePost:
 		g = setariGlobale()
-		rez.update(presetare=g["presetare"], benzi=list(g["benzi"]), noapte=g["noapte"], nivel=g["nivel"])
+		rez.update(presetare=g["presetare"], benzi=list(g["benzi"]), noapte=g["noapte"], nivel=g["nivel"], efect=g["efect"])
 	rez["pe_post"] = bool(pePost)
 	return rez
 
@@ -426,7 +474,7 @@ def setariEfective(cheie=None):
 
 
 def trimiteLaMotor(setari, m=None):
-	"""Benzile, Noapte, nivelul, volumul si placa -> motor (fara „pornit”)."""
+	"""Benzile, Noapte, nivelul, efectul, volumul si placa -> motor (fara pornit)."""
 	m = m if m is not None else motor()
 	if m is None:
 		return False
@@ -436,6 +484,8 @@ def trimiteLaMotor(setari, m=None):
 		m.setBanda(i, float(v))
 	m.setNoapte(1 if setari["noapte"] else 0)
 	m.setNivel(float(setari["nivel"]))
+	if hasattr(m, "setEfect"):
+		m.setEfect(CHEI_EFECTE.index(curataEfect(setari.get("efect"))))
 	m.setVolumAici(VOLUM_MOTOR.get(c.volum.value, 0))
 	m.setPlacaAlsa(c.placa.value or "default")
 	# un motor mai vechi (fara canalele TV) nu are aceste doua functii
@@ -465,7 +515,7 @@ def aplica(cheie=None, faraPost=False):
 # ---------------------------------------------------------------- schimbarile (ecranul si web-ul)
 
 def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, pePost=None, volum=None, placa=None,
-		salveaza=True, cheie=None, tv=None, potrivireTv=None):
+		salveaza=True, cheie=None, tv=None, potrivireTv=None, salveazaManual=False, efect=None):
 	"""Schimba setarile; ce nu e dat ramane. `pePost` True = setarile se tin pentru postul de acum (cheie), False =
 	postul uita setarile lui (merg cele globale). O presetare pune benzile si Noapte; benzile date de mana fac
 	presetarea „manual” (sau presetarea care se potriveste). -> setarile efective de dupa."""
@@ -481,11 +531,16 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 	# pe Nu se pleaca de la reglajele obisnuite: ale postului nu devin ale tuturor posturilor (numai ce e dat aici)
 	s = setariGlobale() if (pePost is False and cheie) else setariEfective(cheie)
 	s.pop("pe_post", None)
+	# Inainte de schimbarea presetarii se retine si un reglaj manual din formatul vechi.
+	manual = reglajManual(peste_post, cheie)
+	if presetare_ == MANUAL and benzi is None:
+		s.update(presetare=MANUAL, benzi=list(manual["benzi"]), noapte=manual["noapte"], nivel=manual["nivel"], efect=manual["efect"])
 	if presetare_ is not None and presetare(presetare_):
 		p = presetare(presetare_)
 		s["presetare"] = p[0]
 		s["benzi"] = list(p[2])
 		s["noapte"] = bool(p[3])
+		s["efect"] = "fara"
 	if benzi is not None:
 		s["benzi"] = [limiteaza(x, DB_MIN, DB_MAX) for x in list(benzi)[:BENZI]] + [0] * max(0, BENZI - len(benzi))
 		s["presetare"] = presetareDupaBenzi(s["benzi"], s["noapte"])
@@ -494,6 +549,18 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 		s["presetare"] = presetareDupaBenzi(s["benzi"], s["noapte"])
 	if nivel is not None:
 		s["nivel"] = limiteaza(nivel, NIVEL_MIN, NIVEL_MAX)
+	if efect is not None:
+		nou = curataEfect(efect)
+		if nou != s["efect"]:
+			s["presetare"] = MANUAL
+		s["efect"] = nou
+	# Un efect ales ramane un reglaj Manual si dupa mutarea unei benzi.
+	if s["efect"] != "fara":
+		s["presetare"] = MANUAL
+	if salveazaManual or (presetare_ == MANUAL and benzi is not None):
+		s["presetare"] = MANUAL
+	if salveazaManual or (s["presetare"] == MANUAL and (benzi is not None or noapte is not None or nivel is not None or efect is not None)):
+		manual = {k: s[k] for k in ("presetare", "benzi", "noapte", "nivel", "efect")}
 	if pornit is not None:
 		c.pornit.value = bool(pornit)
 	if volum is not None and volum in VOLUM_ALEGERI:
@@ -508,6 +575,7 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 		p = limiteaza(potrivireTv, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX)
 		c.potrivire_tv.value = str(p - p % POTRIVIRE_TV_PAS if p >= 0 else -((-p) - (-p) % POTRIVIRE_TV_PAS))
 	if peste_post and cheie:
+		s["manual"] = manual
 		mem.pune(cheie, s)
 	else:
 		if cheie and pePost is False:
@@ -516,8 +584,10 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 		c.benzi.value = textDinBenzi(s["benzi"])
 		c.noapte.value = s["noapte"]
 		c.nivel.value = str(s["nivel"])
+		c.efect.value = s["efect"]
+		c.manual.value = json.dumps(manual, ensure_ascii=False, sort_keys=True)
 	if salveaza:
-		for el in (c.pornit, c.presetare, c.benzi, c.noapte, c.nivel, c.volum, c.placa, c.tv, c.potrivire_tv):
+		for el in (c.pornit, c.presetare, c.benzi, c.noapte, c.nivel, c.efect, c.manual, c.volum, c.placa, c.tv, c.potrivire_tv):
 			el.save()
 		configfile.save()
 		_scrieMaiTarziu()
@@ -531,22 +601,27 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 	return rez
 
 
-def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None):
+def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, pePost=None, efect=None):
 	"""Numai pentru ascultare (ecranul si web-ul, cat reglezi): motorul primeste valorile, nimic nu se salveaza."""
 	m = motor()
 	if m is None:
 		return
 	_legaMotorul(m)
 	s = setariEfective(postAcum()[0])
+	if presetare_ == MANUAL:
+		s.update(reglajManual(s["pe_post"] if pePost is None else pePost))
 	if presetare_ is not None and presetare(presetare_):
 		p = presetare(presetare_)
 		s["benzi"], s["noapte"] = list(p[2]), bool(p[3])
+		s["efect"] = "fara"
 	if benzi is not None:
 		s["benzi"] = list(benzi)
 	if noapte is not None:
 		s["noapte"] = bool(noapte)
 	if nivel is not None:
 		s["nivel"] = nivel
+	if efect is not None:
+		s["efect"] = curataEfect(efect)
 	trimiteLaMotor(s, m)
 	if pornit is not None:
 		m.setPornit(1 if pornit else 0)
@@ -625,7 +700,7 @@ def stareMotor():
 		return None
 
 
-def textStare(st=None, format_pistei=None, trimis=None):
+def _textStare(st=None, format_pistei=None, trimis=None):
 	"""-> (textul mare, bine: True/False/None, detaliul tehnic mic). `st` = stareMotor() (sau None: fara motor)."""
 	if st is None:
 		return _t(TEXTE_POST["fara-motor"]), None, u""
@@ -660,6 +735,13 @@ def textStare(st=None, format_pistei=None, trimis=None):
 	if text is None:
 		return _t(TEXT_ESUAT) % _t(MOTIV_NECUNOSCUT), False, u""
 	return _t(text), (None if post in ("oprit", "nimic", "pauza") else False), u""
+
+
+def textStare(st=None, format_pistei=None, trimis=None):
+	text, bine, detaliu = _textStare(st, format_pistei, trimis)
+	if bine is not True:
+		text += u" " + _t("Efectele speciale nu se aud aici.")
+	return text, bine, detaliu
 
 
 def textMotiv(motiv):
@@ -756,6 +838,8 @@ def stareCompleta():
 	from Components.config import config
 	c = config.hds_egalizator
 	cheie, nume, ref = postAcum()
+	from Components.HdsRadioDate import ref_publica
+	ref = ref_publica(ref)
 	s = setariEfective(cheie)
 	st = stareMotor()
 	fmt, trimis = (None, None)
@@ -774,7 +858,9 @@ def stareCompleta():
 	return {
 		"pornit": bool(c.pornit.value), "presetare": s["presetare"], "nume_presetare": numePresetare(s["presetare"]),
 		"benzi": s["benzi"], "noapte": s["noapte"], "nivel": s["nivel"], "pe_post": s["pe_post"],
-		"globale": {"presetare": g["presetare"], "benzi": g["benzi"], "noapte": g["noapte"], "nivel": g["nivel"]},
+		"efect": s["efect"], "nume_efect": numeEfect(s["efect"]), "efecte": numeEfecte(),
+		"manual": reglajManual(s["pe_post"], cheie), "manual_global": reglajManual(False),
+		"globale": {"presetare": g["presetare"], "benzi": g["benzi"], "noapte": g["noapte"], "nivel": g["nivel"], "efect": g["efect"]},
 		"volum": c.volum.value, "placa": c.placa.value, "tv": bool(c.tv.value),
 		"potrivire_tv": limiteaza(c.potrivire_tv.value, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX),
 		"post": {"cheie": cheie, "nume": nume, "ref": ref},
@@ -786,18 +872,20 @@ def stareCompleta():
 def geometriePanzei(W, H):
 	"""Asezarea desenului din ecranul Egalizator (Screens/HdsEgalizator.py) pe o panza W x H: casetele de sus, coloanele,
 	randul valorilor (sus .. sus + h_text) si al etichetelor (y_eticheta .. H). Butonul rotund (raza) sta intre ele si
-	la +12 / -12 dB nu intra in texte."""
+	la capetele benzilor (-24 / +18 dB) si ale Nivelului (-12 / +12 dB) nu intra in texte."""
 	mare = H >= 500
 	g = {"mare": mare, "f_mic": 24 if mare else 17, "f_val": 30 if mare else 20, "f_eticheta": 26 if mare else 18,
 		"f_bold": 26 if mare else 18, "h_caseta": 84 if mare else 60, "spatiu": 16, "raza": 17 if mare else 12,
 		"w_scala": 84 if mare else 56, "h_text": 40 if mare else 28}
-	g["w_caseta"] = (W - 3 * g["spatiu"]) // 4
+	g["w_caseta"] = (W - 4 * g["spatiu"]) // 5
 	g["sus"] = g["h_caseta"] + (24 if mare else 14)
 	g["w_col"] = (W - g["w_scala"]) // (BENZI + 1)
 	g["y_sus"] = g["sus"] + g["h_text"] + g["raza"] + 4
 	g["y_eticheta"] = H - g["h_text"]
 	g["y_jos"] = g["y_eticheta"] - g["raza"] - 4
-	g["y_zero"] = (g["y_sus"] + g["y_jos"]) // 2
+	inalt = g["y_jos"] - g["y_sus"]
+	g["y_zero"] = g["y_sus"] + int(round(DB_MAX * inalt / float(DB_MAX - DB_MIN)))
+	g["y_nivel_zero"] = g["y_sus"] + int(round(NIVEL_MAX * inalt / float(NIVEL_MAX - NIVEL_MIN)))
 	return g
 
 

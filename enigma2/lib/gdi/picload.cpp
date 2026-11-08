@@ -1057,6 +1057,18 @@ int ePicLoad::getData(ePtr<gPixmap> &result)
 	return 0;
 }
 
+/* a value from the tuple of setPara: plugins pass the scale of the screen as a float */
+static double hdsNumarPoza(PyObject *o)
+{
+	double v = PyFloat_Check(o) ? PyFloat_AsDouble(o) : (double)PyLong_AsLong(o);
+	if (PyErr_Occurred())
+	{
+		PyErr_Clear();
+		return 0;
+	}
+	return v;
+}
+
 RESULT ePicLoad::setPara(PyObject *val)
 {
 	if (!PySequence_Check(val))
@@ -1065,11 +1077,13 @@ RESULT ePicLoad::setPara(PyObject *val)
 		return 0;
 	else {
 		ePyObject fast = PySequence_Fast(val, "");
-		m_conf.max_x		= PyLong_AsLong( PySequence_Fast_GET_ITEM(fast, 0));
-		m_conf.max_y		= PyLong_AsLong( PySequence_Fast_GET_ITEM(fast, 1));
-		m_conf.aspect_ratio	= (double)PyLong_AsLong( PySequence_Fast_GET_ITEM(fast, 2)) / PyLong_AsLong(PySequence_Fast_GET_ITEM(fast, 3));
-		m_conf.usecache		= PyLong_AsLong( PySequence_Fast_GET_ITEM(fast, 4));
-		m_conf.resizetype	= PyLong_AsLong( PySequence_Fast_GET_ITEM(fast, 5));
+		m_conf.max_x		= (int)hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 0));
+		m_conf.max_y		= (int)hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 1));
+		const double aspect_w	= hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 2));
+		const double aspect_h	= hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 3));
+		m_conf.aspect_ratio	= aspect_h != 0 ? aspect_w / aspect_h : 1.0;
+		m_conf.usecache		= (int)hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 4));
+		m_conf.resizetype	= (int)hdsNumarPoza(PySequence_Fast_GET_ITEM(fast, 5));
 		const char *bg_str	= PyUnicode_AsUTF8( PySequence_Fast_GET_ITEM(fast, 6));
 		if (!bg_str)  // not a str, or a str that cannot be encoded as UTF-8: bg_str[0] was read from NULL
 		{

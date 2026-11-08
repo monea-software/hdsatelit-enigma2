@@ -13,13 +13,16 @@
 #   GET  /api/egalizator             setarile (si cele obisnuite, „globale”), presetarile, postul de acum, starea in
 #                                    cuvinte, datele tehnice pe randuri („tehnic”), starea motorului (bruta, pentru
 #                                    „Text brut”)
-#   POST /api/egalizator-seteaza     pornit=0|1, presetare=<cheie>, benzi=b0,...,b9, noapte=0|1, nivel=-12..12,
+#   POST /api/egalizator-seteaza     pornit=0|1, presetare=<cheie>, benzi=b0,...,b9 (-24..18), noapte=0|1, nivel=-12..12,
 #                                    pe_post=0|1, volum=auto|aici|placa, placa=<nume ALSA>, tv=0|1 (si la canalele TV),
 #                                    potrivire_tv=-300..300 (ms, din 10 in 10: sunetul fata de imagine la TV); cu
 #                                    incearca=1 valorile
 #                                    se aud pe loc fara sa se salveze (glisoarele, cat le misti); renunta=1 pune inapoi
 #                                    ce e salvat. O singura valoare gresita nu schimba nimic. pe_post=0 fara alte
 #                                    valori: postul uita reglajele lui, cele obisnuite raman cum erau.
+#                                    salveaza_manual=1 memoreaza benzile, nivelul si comprimarea in Manual.
+#                                    noapte ramane citibil pentru compatibilitate; pagina il alege prin presetare.
+#                                    efect=<identificator din efecte> alege efectul si pastreaza restul in Manual.
 #   GET  /egalizator                 pagina
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2; apelurile sunt scurte (motorul noteaza setarile si raspunde
@@ -27,7 +30,7 @@
 
 MAX_TEXT = 80
 CHEI = ("pornit", "presetare", "benzi", "noapte", "nivel", "pe_post", "volum", "placa", "incearca", "renunta", "tv",
-	"potrivire_tv")
+	"potrivire_tv", "salveaza_manual", "efect")
 
 
 def _t(text):
@@ -53,7 +56,11 @@ def stare(E=None):
 	s = E.stareCompleta()
 	s["result"] = True
 	s["presetari"] = [{"cheie": p[0], "nume": _t(p[1]), "benzi": list(p[2]), "noapte": bool(p[3])} for p in E.PRESETARI]
+	m = s["manual"]
+	s["presetari"].append({"cheie": E.MANUAL, "nume": _t(E.NUME_MANUAL), "benzi": list(m["benzi"]),
+		"noapte": m["noapte"], "nivel": m["nivel"], "efect": m["efect"]})
 	s["nume_manual"] = _t(E.NUME_MANUAL)
+	s["efecte"] = [[cheie, nume] for cheie, nume in E.numeEfecte()]
 	s["etichete"] = list(E.ETICHETE)
 	s["limite"] = {"db_min": E.DB_MIN, "db_max": E.DB_MAX, "nivel_min": E.NIVEL_MIN, "nivel_max": E.NIVEL_MAX}
 	s["volum_alegeri"] = [["auto", _t("Automat")], ["aici", _t("În egalizator")], ["placa", _t("Pe placa de sunet")]]
@@ -72,15 +79,20 @@ def _intreg(text, jos, sus):
 def _citeste(argumente, E):
 	"""Argumentele -> (valorile bune, None) sau (None, mesajul de eroare)."""
 	v = {}
-	for cheie in ("pornit", "noapte", "pe_post", "incearca", "renunta", "tv"):
+	for cheie in ("pornit", "noapte", "pe_post", "incearca", "renunta", "tv", "salveaza_manual"):
 		if cheie in argumente:
 			if argumente[cheie] not in ("0", "1"):
 				return None, _t("„%s” se alege cu 1 (da) sau 0 (nu).") % cheie
 			v[cheie] = argumente[cheie] == "1"
 	if "presetare" in argumente:
-		if argumente["presetare"] not in E.CHEI_PRESETARI:
+		if argumente["presetare"] not in E.CHEI_PRESETARI + (E.MANUAL,):
 			return None, _t("Presetarea „%s” nu există.") % argumente["presetare"][:40]
 		v["presetare"] = argumente["presetare"]
+	if "efect" in argumente:
+		efect = argumente["efect"]
+		if not isinstance(efect, str) or efect not in tuple(e[0] for e in E.EFECTE):
+			return None, _t("Alege un efect din listă.")
+		v["efect"] = efect
 	if "benzi" in argumente:
 		parti = argumente["benzi"].split(",")
 		benzi = [_intreg(x.strip(), E.DB_MIN, E.DB_MAX) for x in parti]
@@ -125,34 +137,51 @@ def seteaza(argumente, E=None):
 		return rez
 	if v.get("incearca"):
 		E.incearca(benzi=v.get("benzi"), noapte=v.get("noapte"), nivel=v.get("nivel"), presetare_=v.get("presetare"),
-			pornit=v.get("pornit"))
+			pornit=v.get("pornit"), pePost=v.get("pe_post"), efect=v.get("efect"))
 		rez = stare(E)
 		rez.update({"result": True, "message": _t("Se aude acum. Apasă „Păstrează” ca să rămână.")})
 		return rez
-	valori = dict((k, v[k]) for k in ("pornit", "benzi", "noapte", "nivel", "volum", "placa", "tv") if k in v)
+	valori = dict((k, v[k]) for k in ("pornit", "benzi", "noapte", "nivel", "volum", "placa", "tv", "efect") if k in v)
 	if "potrivire_tv" in v:
 		valori["potrivireTv"] = v["potrivire_tv"]
 	if "presetare" in v:
 		valori["presetare_"] = v["presetare"]
 	if "pe_post" in v:
 		valori["pePost"] = v["pe_post"]
+	if "salveaza_manual" in v:
+		valori["salveazaManual"] = v["salveaza_manual"]
 	if not valori:
 		rez = stare(E)
 		rez.update({"result": False, "message": _t("Nu s-a trimis nicio setare.")})
 		return rez
 	E.seteaza(**valori)
 	rez = stare(E)
-	rez.update({"result": True, "message": _t("Păstrat. Se aude și pe televizor.")})
+	rez.update({"result": True, "message": _t("Reglaj salvat în presetarea „Manual”.") if v.get("salveaza_manual")
+		else _t("Păstrat. Se aude și pe televizor.")})
 	return rez
 
 
 def argumente(request):
 	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:20]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in CHEI:
+			continue
+		if cheie == "efect":
+			# Identificator exact: nu transformam liste/numere in text si nu reparam date gresite.
+			# Repetarea campului, octetii invalizi si spatiile sunt refuzate inaintea oricarei scrieri.
+			if cheie in rez or not isinstance(valori, (list, tuple)) or len(valori) != 1:
+				rez[cheie] = None
+				continue
+			v = valori[0]
+			if isinstance(v, bytes):
+				try:
+					v = v.decode("utf-8")
+				except UnicodeDecodeError:
+					v = None
+			rez[cheie] = v if isinstance(v, str) and len(v) <= MAX_TEXT else None
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
@@ -251,19 +280,32 @@ PAGINA = """<!DOCTYPE html>
   button.ales{background:var(--albastru);border-color:var(--albastru);color:#fff;}
   button.verde{background:var(--verde);border-color:var(--verde);color:#fff;}
   button:disabled{opacity:.5;cursor:default;}
-  .eticheta-aleasa{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--albastru);background:var(--albastru);color:#fff;}
   select,input[type=text]{min-height:44px;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
   .comutator{display:flex;align-items:center;gap:10px;min-height:44px;font-size:1rem;}
   .comutator input{width:22px;height:22px;}
-  .benzi{position:relative;display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:4px;align-items:end;margin-top:6px;}
+  .zona-benzi{overflow-x:auto;padding:5px;margin:-5px;}
+  .benzi{box-sizing:border-box;position:relative;display:grid;grid-template-columns:repeat(11,minmax(26px,1fr));gap:4px;align-items:end;margin-top:12px;padding:6px 30px;min-width:398px;}
+  .benzi:focus-within{outline:3px solid var(--albastru);outline-offset:2px;}
+  .banda:focus-within{background:var(--albastru);border-radius:6px;}
   .banda{display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;z-index:1;}
   .banda .val{font-weight:bold;font-size:.9rem;min-height:1.2em;white-space:nowrap;}
   .banda .et{color:var(--text-slab);font-size:.8rem;white-space:nowrap;}
   .scurt{display:none;}
-  .banda input[type=range]{writing-mode:vertical-lr;direction:rtl;height:220px;width:36px;margin:0;accent-color:#9fb4ff;}
+  .sina{position:relative;height:220px;width:36px;}
+  .urma,.umplere,.zero{position:absolute;pointer-events:none;}
+  .urma{left:calc(50% - 2px);width:4px;top:8px;bottom:8px;background:#485465;border-radius:3px;}
+  .umplere{left:calc(50% - 3px);width:6px;background:#9fb4ff;border-radius:3px;}
+  .zero{left:calc(50% - 8px);width:16px;height:1px;background:#a6afbf;}
+  .banda input[type=range]{position:relative;writing-mode:vertical-lr;direction:rtl;height:100%;width:100%;margin:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;}
+  .banda input[type=range]::-webkit-slider-runnable-track{width:16px;height:100%;background:transparent;border:0;}
+  .banda input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0;border:1px solid #ccd6ff;border-radius:50%;background:#9fb4ff;}
+  .banda input[type=range]::-moz-range-track{width:16px;height:100%;background:transparent;border:0;}
+  .banda input[type=range]::-moz-range-progress{background:transparent;}
+  .banda input[type=range]::-moz-range-thumb{box-sizing:border-box;width:16px;height:16px;border:1px solid #ccd6ff;border-radius:50%;background:#9fb4ff;}
   .banda.nivel{border-left:1px solid var(--bordura);}
   #spectru{position:absolute;left:0;top:0;width:100%;height:100%;z-index:0;pointer-events:none;}
   .stins .banda input[type=range]{filter:grayscale(1);opacity:.45;}
+  .stins .umplere{background:#667085;}
   table{width:100%;border-collapse:collapse;font-size:.9rem;}
   td{padding:6px 4px;border-bottom:1px solid var(--bordura);vertical-align:top;}
   td.e{color:var(--text-slab);width:45%;}
@@ -272,7 +314,7 @@ PAGINA = """<!DOCTYPE html>
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
   details summary{cursor:pointer;min-height:32px;}
-  @media (max-width:640px){ .benzi{gap:2px;} .banda input[type=range]{height:170px;width:26px;} .banda .et{font-size:.75rem;min-height:1.3em;} .banda .val{font-size:.75rem;} .lung{display:none;} .scurt{display:inline;} }
+  @media (max-width:800px){ .benzi{gap:2px;min-width:378px;} .sina{height:170px;width:26px;} .banda .et{font-size:.75rem;min-height:1.3em;} .banda .val{font-size:.75rem;} .lung{display:none;} .scurt{display:inline;} }
 </style>
 </head>
 <body>
@@ -288,13 +330,16 @@ PAGINA = """<!DOCTYPE html>
   <section class="card" id="reglaje">
     <h2>Reglaje</h2>
     <div class="rand">
-      <label class="comutator"><input type="checkbox" id="pornit"> Egalizator pornit</label>
-      <label class="comutator"><input type="checkbox" id="noapte"> Mod de noapte</label>
+      <label class="comutator"><input type="checkbox" id="pornit"> Egalizator</label>
+      <label class="comutator">Presetare <select id="presetari"></select></label>
+      <button type="button" id="manual">Reglaj manual</button>
       <label class="comutator" id="rand_post"><input type="checkbox" id="pe_post"> <span id="text_post">Pentru acest post</span></label>
+      <label class="comutator">Efecte speciale <select id="efecte"></select></label>
     </div>
-    <div class="rand" id="presetari"></div>
-    <div class="benzi" id="benzi"><canvas id="spectru"></canvas></div>
+    <p class="nota ascuns" id="comprimare">Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri.</p>
+    <div class="zona-benzi"><div class="benzi" id="benzi"><canvas id="spectru" aria-hidden="true"></canvas></div></div>
     <p class="nota">Barele din spate arată cât de tare se aude fiecare bandă acum. Sus: mai mult, jos: mai puțin, câte 1 dB (valorile sunt în dB, frecvențele în Hz).</p>
+    <p class="nota">Stânga/dreapta: coloana. Sus/jos: 1 dB. Enter: salvezi Manual. Escape: căsuțe.</p>
     <div class="rand" style="margin-top:12px">
       <button type="button" class="verde" id="pastreaza">Păstrează</button>
       <button type="button" id="renunta">Renunță</button>
@@ -324,7 +369,8 @@ PAGINA = """<!DOCTYPE html>
 </main>
 <script>
 var CFG = __CONFIG__;
-var D = null, SCHIMBAT = false, CEAS_INCERCARE = null;
+var D = null, SCHIMBAT = false, CEAS_INCERCARE = null, COADA = Promise.resolve();
+var NOAPTE = false, PRESETARE = "normal", MANUAL = false, REVIZIE = 0, EFECT = "fara";
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -358,36 +404,56 @@ function construieste(d){
     var r = document.createElement("input"); r.type = "range"; r.id = i === 10 ? "nivel" : "b" + i; r.step = 1;
     r.min = i === 10 ? d.limite.nivel_min : d.limite.db_min; r.max = i === 10 ? d.limite.nivel_max : d.limite.db_max;
     r.setAttribute("aria-label", et);
-    r.addEventListener("input", function(){ valoare($("v" + i), r.value); if(i < 10){ potrivestePresetarea(); } schimbare(); deseneaza(); });
+    var sina = document.createElement("div"); sina.className = "sina";
+    ["urma", "umplere", "zero"].forEach(function(nume){
+      var linie = document.createElement("span"); linie.className = nume; linie.id = nume + i;
+      linie.setAttribute("aria-hidden", "true"); sina.appendChild(linie);
+    });
+    sina.appendChild(r);
+    r.addEventListener("input", function(){ valoare($("v" + i), r.value); reglajManual(); schimbare(); deseneaza(); });
+    r.addEventListener("keydown", function(e){
+      if(e.key === "ArrowLeft" || e.key === "ArrowRight"){
+        e.preventDefault(); var j = (i + (e.key === "ArrowRight" ? 1 : 10)) % 11; $(j === 10 ? "nivel" : "b" + j).focus();
+      } else if(e.key === "ArrowUp" || e.key === "ArrowDown"){
+        e.preventDefault(); r.value = Math.max(+r.min, Math.min(+r.max, +r.value + (e.key === "ArrowUp" ? 1 : -1)));
+        r.dispatchEvent(new Event("input"));
+      } else if(e.key === "Enter"){
+        e.preventDefault(); MANUAL = true; pastreaza();
+      } else if(e.key === "Escape"){
+        e.preventDefault(); $("manual").focus();
+      }
+    });
     var e = document.createElement("div"); e.className = "et";
     var el = document.createElement("span"); el.className = "lung"; el.textContent = et;
     var es = document.createElement("span"); es.className = "scurt"; es.textContent = scurt(et);
     e.appendChild(el); e.appendChild(es);
-    col.appendChild(v); col.appendChild(r); col.appendChild(e); c.appendChild(col);
+    col.appendChild(v); col.appendChild(sina); col.appendChild(e); c.appendChild(col);
   });
   d.volum_alegeri.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; $("volum").appendChild(o); });
+  d.efecte.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; $("efecte").appendChild(o); });
   (d.potrivire_tv_alegeri || []).forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; $("potrivire_tv").appendChild(o); });
 }
 function presetari(d){
-  var c = $("presetari"); c.textContent = "";
-  d.presetari.forEach(function(p){
-    var b = document.createElement("button"); b.type = "button"; b.textContent = p.nume;
-    b.classList.toggle("ales", p.cheie === d.presetare);
-    b.addEventListener("click", function(){ aplicaPresetare(p); });
-    c.appendChild(b);
-  });
-  if(d.presetare === "manual"){
-    // benzile reglate de mana nu sunt o presetare de apasat: o eticheta aleasa, nu un buton stins
-    var s = document.createElement("span"); s.className = "eticheta-aleasa"; s.textContent = d.nume_manual; c.appendChild(s);
+  var c = $("presetari"), chei = d.presetari.map(function(p){ return p.cheie + ":" + p.nume; }).join("|");
+  if(c.getAttribute("data-chei") !== chei){
+    c.textContent = "";
+    d.presetari.forEach(function(p){
+      var b = document.createElement("option"); b.value = p.cheie; b.textContent = p.nume;
+      c.appendChild(b);
+    });
+    c.setAttribute("data-chei", chei);
   }
+  c.value = PRESETARE;
 }
 function aplicaPresetare(p){
   for(var i = 0; i < 10; i++){ $("b" + i).value = p.benzi[i]; valoare($("v" + i), p.benzi[i]); }
-  $("noapte").checked = p.noapte;
-  D.presetare = p.cheie; presetari(D); schimbare(); deseneaza();
+  if(p.nivel !== undefined){ $("nivel").value = p.nivel; valoare($("v10"), p.nivel); }
+  NOAPTE = p.noapte; EFECT = p.efect || "fara"; $("efecte").value = EFECT;
+  PRESETARE = p.cheie; MANUAL = false; presetari(D); schimbare(); deseneaza();
 }
 function arataReglaje(d){
-  $("pornit").checked = d.pornit; $("noapte").checked = d.noapte;
+  $("pornit").checked = d.pornit; NOAPTE = d.noapte; PRESETARE = d.presetare; MANUAL = false;
+  EFECT = d.efect; $("efecte").value = EFECT;
   for(var i = 0; i < 10; i++){ $("b" + i).value = d.benzi[i]; valoare($("v" + i), d.benzi[i]); }
   $("nivel").value = d.nivel; valoare($("v10"), d.nivel);
   $("pe_post").checked = d.pe_post; $("pe_post").disabled = !d.post.cheie;
@@ -395,6 +461,7 @@ function arataReglaje(d){
   $("volum").value = d.volum; $("placa").value = d.placa;
   $("tv").value = d.tv ? "1" : "0"; $("potrivire_tv").value = String(d.potrivire_tv);
   presetari(d); SCHIMBAT = false; $("nepastrat").textContent = "";
+  $("comprimare").classList.toggle("ascuns", !NOAPTE);
 }
 function arataStarea(d){
   var a = $("acum"); a.textContent = d.text || "";
@@ -410,11 +477,20 @@ function arataStarea(d){
   deseneaza();
 }
 // drumul butonului fiecarui glisor, masurat pe pagina (pe telefon randurile de text au alta inaltime decat pe ecran lat):
-// x la mijlocul glisorului, sus / jos unde ajunge centrul butonului la +12 / -12 (jumatatea butonului scazuta la capete)
+// x la mijlocul glisorului, sus / jos unde ajunge centrul butonului la maxim / minim.
+// Butonul de 16 px are aceeasi dimensiune in ambele motoare de browser.
 var BUTON_JUMATATE = 8;
 function drumGlisor(i, baza){
-  var r = $("b" + i).getBoundingClientRect();
-  return {x: r.left + r.width / 2 - baza.left, sus: r.top - baza.top + BUTON_JUMATATE, jos: r.bottom - baza.top - BUTON_JUMATATE};
+  var el = $(i === 10 ? "nivel" : "b" + i), r = el.getBoundingClientRect();
+  return {x: r.left + r.width / 2 - baza.left, sus: r.top - baza.top + BUTON_JUMATATE,
+    jos: r.bottom - baza.top - BUTON_JUMATATE, min: +el.min, max: +el.max};
+}
+function yDb(v, g){
+  return g.sus + (g.max - v) / (g.max - g.min) * (g.jos - g.sus);
+}
+function scala(x, g, px, aliniere){
+  x.textAlign = aliniere; x.textBaseline = "middle";
+  [g.max, 0, g.min].forEach(function(v){ x.fillText(numar(v), px, yDb(v, g)); });
 }
 function deseneaza(){
   var cv = $("spectru"), c = $("benzi"); if(!cv || !D || !$("b0")){ return; }
@@ -422,35 +498,51 @@ function deseneaza(){
   var x = cv.getContext("2d"); x.clearRect(0, 0, cv.width, cv.height);
   var sp = (D.motor && D.motor.spectru && (D.motor.stare === "merge" || D.motor.stare === "fara-date")) ? D.motor.spectru : null;
   var baza = c.getBoundingClientRect(), g = [];
-  for(var i = 0; i < 10; i++){ g.push(drumGlisor(i, baza)); }
+  for(var i = 0; i < 11; i++){
+    var d = drumGlisor(i, baza), zero = yDb(0, d), py = yDb(+$(i === 10 ? "nivel" : "b" + i).value, d);
+    g.push(d);
+    $("umplere" + i).style.top = (Math.min(zero, py) - d.sus + BUTON_JUMATATE) + "px";
+    $("umplere" + i).style.height = Math.abs(py - zero) + "px";
+    $("zero" + i).style.top = (zero - d.sus + BUTON_JUMATATE) + "px";
+  }
   var w = g.length > 1 ? g[1].x - g[0].x : cv.width / 11;
   x.fillStyle = $("pornit").checked ? "rgba(90,110,180,.35)" : "rgba(100,110,130,.2)";
   if(sp){ for(var k = 0; k < 10; k++){ var n = Math.max(-60, Math.min(0, sp[k])); var hh = (n + 60) / 60 * (g[k].jos - g[k].sus); x.fillRect(g[k].x - w * .3, g[k].jos - hh, w * .6, hh); } }
-  var zero = (g[0].sus + g[0].jos) / 2;
+  var zero = yDb(0, g[0]);
   x.strokeStyle = "rgba(102,112,133,.8)"; x.lineWidth = 1; x.beginPath(); x.moveTo(g[0].x - w / 2, zero); x.lineTo(g[9].x + w / 2, zero); x.stroke();
+  var zn = yDb(0, g[10]);
+  x.beginPath(); x.moveTo(g[10].x - w * .3, zn); x.lineTo(g[10].x + w * .3, zn); x.stroke();
+  x.fillStyle = "#a6afbf"; x.font = "11px sans-serif";
+  scala(x, g[0], g[0].x - w / 2 - 4, "right");
+  scala(x, g[10], g[10].x + w / 2 + 4, "left");
   x.strokeStyle = $("pornit").checked ? "#9fb4ff" : "#667085"; x.lineWidth = 3; x.beginPath();
-  benziAcum().forEach(function(v, i){ var z = (g[i].sus + g[i].jos) / 2, py = z - v / 12 * (g[i].jos - g[i].sus) / 2; if(i){ x.lineTo(g[i].x, py); } else { x.moveTo(g[i].x, py); } });
+  benziAcum().forEach(function(v, i){ var py = yDb(v, g[i]); if(i){ x.lineTo(g[i].x, py); } else { x.moveTo(g[i].x, py); } });
   x.stroke();
 }
 function trimite(valori){
   var q = new URLSearchParams(); Object.keys(valori).forEach(function(k){ q.set(k, valori[k]); });
-  return cerere("/api/egalizator-seteaza", "POST", q).then(function(d){
+  COADA = COADA.then(function(){ return cerere("/api/egalizator-seteaza", "POST", q); }).then(function(d){
     if(!d.result){ mesaj(d.message, true); return d; }
     D = d; arataStarea(d); return d;
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+  return COADA;
 }
 function valori(){
-  return {pornit: $("pornit").checked ? "1" : "0", benzi: benziAcum().join(","), noapte: $("noapte").checked ? "1" : "0", nivel: $("nivel").value};
+  return {pornit: $("pornit").checked ? "1" : "0", presetare: PRESETARE, benzi: benziAcum().join(","), noapte: NOAPTE ? "1" : "0", nivel: $("nivel").value, pe_post: $("pe_post").checked ? "1" : "0", efect: EFECT};
 }
 function schimbare(){
   mesaj("");
+  REVIZIE++;
+  $("comprimare").classList.toggle("ascuns", !NOAPTE);
   SCHIMBAT = true; $("nepastrat").textContent = "Ai schimbări nepăstrate: se aud acum, dar rămân numai după „Păstrează”.";
   $("reglaje").classList.toggle("stins", !$("pornit").checked);
   clearTimeout(CEAS_INCERCARE);
   CEAS_INCERCARE = setTimeout(function(){ var v = valori(); v.incearca = "1"; trimite(v); }, 150);
 }
 function citeste(cuReglaje){
+  var r = REVIZIE;
   return cerere("/api/egalizator").then(function(d){
+    if(r !== REVIZIE){ return; }
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi reglajele."; return; }
     var prima = !D; D = d;
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
@@ -459,11 +551,19 @@ function citeste(cuReglaje){
     arataStarea(d);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică să fie pornit și în aceeași rețea."; });
 }
-function potrivestePresetarea(){
-  var b = benziAcum().join(","), n = $("noapte").checked, gasit = "manual";
-  D.presetari.forEach(function(p){ if(p.benzi.join(",") === b && p.noapte === n){ gasit = p.cheie; } });
-  if(gasit !== D.presetare){ D.presetare = gasit; presetari(D); }
+function reglajManual(){
+  PRESETARE = "manual"; NOAPTE = false; MANUAL = true; $("presetari").value = PRESETARE;
 }
+function alegeEfect(){
+  var efect = $("efecte").value;
+  if(efect === EFECT){ return; }
+  EFECT = efect; PRESETARE = "manual"; MANUAL = true; $("presetari").value = PRESETARE;
+  schimbare(); clearTimeout(CEAS_INCERCARE);
+  var v = valori(); v.incearca = "1"; trimite(v);
+}
+// Selectul nativ emite input si la sageti; change acopera browserele care confirma la inchidere.
+$("efecte").addEventListener("input", alegeEfect);
+$("efecte").addEventListener("change", alegeEfect);
 $("pornit").addEventListener("change", schimbare);
 // „Numai pentru acest post” debifat: se vad (si se aud) reglajele obisnuite, ale tuturor posturilor; bifat: cele de acum
 // raman si devin ale postului la „Păstrează”
@@ -471,18 +571,38 @@ $("pe_post").addEventListener("change", function(){
   if(!$("pe_post").checked && D && D.globale){
     var g = D.globale;
     for(var i = 0; i < 10; i++){ $("b" + i).value = g.benzi[i]; valoare($("v" + i), g.benzi[i]); }
-    $("noapte").checked = g.noapte; $("nivel").value = g.nivel; valoare($("v10"), g.nivel);
-    D.presetare = g.presetare; presetari(D);
+    NOAPTE = g.noapte; $("nivel").value = g.nivel; valoare($("v10"), g.nivel);
+    EFECT = g.efect; $("efecte").value = EFECT;
+    PRESETARE = g.presetare; MANUAL = false; presetari(D);
   }
   schimbare(); deseneaza();
 });
-$("noapte").addEventListener("change", function(){ potrivestePresetarea(); schimbare(); });
-$("pastreaza").addEventListener("click", function(){
-  var v = valori(); if(!$("pe_post").disabled){ v.pe_post = $("pe_post").checked ? "1" : "0"; }
-  trimite(v).then(function(d){ if(d && d.result){ mesaj(d.message); arataReglaje(d); } });
+$("presetari").addEventListener("change", function(){
+  var p = D.presetari.filter(function(p){ return p.cheie === $("presetari").value; })[0];
+  if(p.cheie === "manual"){
+    p = Object.assign({}, $("pe_post").checked ? D.manual : D.manual_global, {cheie: "manual"});
+  }
+  aplicaPresetare(p);
 });
+$("manual").addEventListener("click", function(){ $("b0").focus(); });
+$("manual").addEventListener("keydown", function(e){ if(e.key === "ArrowDown"){ e.preventDefault(); $("b0").focus(); } });
+var CASUTE = ["pornit", "presetari", "manual", "pe_post", "efecte"];
+CASUTE.forEach(function(id, i){ $(id).addEventListener("keydown", function(e){
+  if(id === "efecte"){ return; } // Sageti, Home/End si cautare prin litere: comportamentul selectului nativ.
+  if(e.key === "ArrowLeft" || e.key === "ArrowRight"){
+    e.preventDefault(); var pas = e.key === "ArrowRight" ? 1 : CASUTE.length - 1, j = (i + pas) % CASUTE.length;
+    if($(CASUTE[j]).disabled){ j = (j + pas) % CASUTE.length; } $(CASUTE[j]).focus();
+  }
+}); });
+function pastreaza(){
+  clearTimeout(CEAS_INCERCARE); var r = REVIZIE;
+  var v = valori(); v.salveaza_manual = MANUAL ? "1" : "0";
+  trimite(v).then(function(d){ if(d && d.result && r === REVIZIE){ REVIZIE++; mesaj(d.message); arataReglaje(d); } });
+}
+$("pastreaza").addEventListener("click", pastreaza);
 $("renunta").addEventListener("click", function(){
-  trimite({renunta: "1"}).then(function(d){ if(d && d.result){ mesaj(d.message); arataReglaje(d); } });
+  clearTimeout(CEAS_INCERCARE); var r = ++REVIZIE;
+  trimite({renunta: "1"}).then(function(d){ if(d && d.result && r === REVIZIE){ REVIZIE++; mesaj(d.message); arataReglaje(d); } });
 });
 $("volum").addEventListener("change", function(){ trimite({volum: $("volum").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
 $("pune_placa").addEventListener("click", function(){ trimite({placa: $("placa").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
@@ -512,9 +632,12 @@ TEXTE_PAGINA = {
 		N_("Se citesc reglajele..."),
 		N_("Acum"),
 		N_("Reglaje"),
-		N_("Egalizator pornit"),
-		N_("Mod de noapte"),
+		N_("Presetare"),
+		N_("Reglaj manual"),
+		N_("Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri."),
+		N_("Stânga/dreapta: coloana. Sus/jos: 1 dB. Enter: salvezi Manual. Escape: căsuțe."),
 		N_("Pentru acest post"),
+		N_("Efecte speciale"),
 		N_("Barele din spate arată cât de tare se aude fiecare bandă acum. Sus: mai mult, jos: mai puțin, "
 			"câte 1 dB (valorile sunt în dB, frecvențele în Hz)."),
 		N_("Păstrează"),

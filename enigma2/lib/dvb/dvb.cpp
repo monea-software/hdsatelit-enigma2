@@ -1739,29 +1739,28 @@ RESULT eDVBChannel::setCIRouting(const eDVBCIRouting &routing)
 
 void eDVBChannel::SDTready(int result)
 {
-	ePyObject args = PyTuple_New(2), ret;
+	ePyObject args, ret;
 	bool ok=false;
+	int tsid = 0, onid = 0;
 	if (!result)
 	{
 		for (std::vector<ServiceDescriptionSection*>::const_iterator i = m_SDT->getSections().begin(); i != m_SDT->getSections().end(); ++i)
 		{
 			ok = true;
-			PyTuple_SET_ITEM(args, 0, PyLong_FromLong((*i)->getTransportStreamId()));
-			PyTuple_SET_ITEM(args, 1, PyLong_FromLong((*i)->getOriginalNetworkId()));
+			tsid = (*i)->getTransportStreamId();
+			onid = (*i)->getOriginalNetworkId();
 			break;
 		}
 	}
-	if (!ok)
-	{
-		PyTuple_SET_ITEM(args, 0, Py_None);
-		PyTuple_SET_ITEM(args, 1, Py_None);
-		Py_INCREF(Py_None);
-		Py_INCREF(Py_None);
-	}
-	ret = PyObject_CallObject(m_tsid_onid_callback, args);
+	args = ok ? Py_BuildValue("(ii)", tsid, onid) : PyTuple_Pack(2, Py_None, Py_None);
+	if (args)
+		ret = PyObject_CallObject(m_tsid_onid_callback, args);
+	/* Notificarea e consumata aici, inclusiv daca functia Python esueaza. */
+	if (!ret)
+		PyErr_Print();
 	if (ret)
 		Py_DECREF(ret);
-	Py_DECREF(args);
+	Py_XDECREF(args);
 	Py_DECREF(m_tsid_onid_callback);
 	m_tsid_onid_callback = ePyObject();
 	m_tsid_onid_demux = 0;

@@ -89,6 +89,61 @@ to generate HTML."""
 			self.index -= 1
 		self.setIndex(self.index)
 
+	# la fel ca pe MenuList: pluginurile cheama self["list"].down() indiferent de felul listei
+	def up(self):
+		if self.master is not None and self.count():
+			self.selectPrevious()
+
+	def down(self):
+		if self.master is not None and self.count():
+			self.selectNext()
+
+	def _instanta(self):
+		"""widgetul listei: sursa -> convertor -> render"""
+		x = self.master
+		while x is not None and getattr(x, "instance", None) is None:
+			x = getattr(x, "master", None)
+		return x.instance if x is not None else None
+
+	def _muta(self, directie):
+		instanta = self._instanta()
+		if instanta is not None:
+			instanta.moveSelection(getattr(instanta, directie))
+
+	def pageUp(self):
+		self._muta("pageUp")
+
+	def pageDown(self):
+		self._muta("pageDown")
+
+	def top(self):
+		if self.master is not None and self.count():
+			self.index = 0
+
+	def bottom(self):
+		if self.master is not None and self.count():
+			self.index = self.count() - 1
+
+	goTop = moveTop = top
+	goBottom = moveBottom = bottom
+	goLineUp = moveUp = selectPreviousEntry = up
+	goLineDown = moveDown = selectNextEntry = down
+	goPageUp = pageUp
+	goPageDown = pageDown
+
+	def getCurrentIndex(self):
+		return self.getIndex()
+
+	getSelectionIndex = getSelectedIndex = getCurrentIndex
+
+	def getList(self):
+		return self.__list
+
+	def selectionEnabled(self, enabled):
+		instanta = self._instanta()
+		if instanta is not None:
+			instanta.setSelectionEnable(enabled)
+
 	@cached
 	def getStyle(self):
 		return self.__style
@@ -101,8 +156,11 @@ to generate HTML."""
 	style = property(getStyle, setStyle)
 
 	def updateList(self, list):
-		"""Changes the list without changing the selection or emitting changed Events"""
-		assert len(list) == len(self.__list)
+		"""Pastreaza selectia la aceeasi lungime; altfel inlocuieste lista."""
+		if len(list) != len(self.__list):
+			# Pluginurile pot reface meniul cu mai multe sau mai putine randuri.
+			self.setList(list)
+			return
 		old_index = self.index
 		self.disable_callbacks = True
 		self.list = list

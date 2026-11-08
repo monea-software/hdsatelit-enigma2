@@ -61,17 +61,41 @@ HDS_PAZA_RADACINA=${HDS_PAZA_RADACINA:-}
 HDS_PAZA_REGULI=${HDS_PAZA_REGULI:-$HDS_PAZA_RADACINA/etc/hdsatelit-model}
 HDS_PAZA_STARE=${HDS_PAZA_STARE:-/tmp/hds-paza-model.stare}
 hds_paza=potrivit
+# NAND receivers (stocare=nand in the rules; Vu+ Solo SE, from 0.7.0): no eMMC, no deviceinfo partition and no
+# /proc/msp/sys. The chip comes from /proc/stb/info/chipset (the Vu+ driver writes it), the box type from
+# /proc/stb/info/vumodel (else /proc/stb/info/boxtype), the partitions from /proc/mtd, in mtd order, as the same
+# "size(name)" list the eMMC receivers get from blkdevparts (sizes in KiB; any character of a name other than letters,
+# digits and _ becomes _, so "rootfs(redundant)" is rootfs_redundant_). The awk below then names them mtd0, mtd1 ... and
+# takes their sizes from that list. hw=- in the rules: the board has no factory header to read.
+hds_nand=""
+[ -f "$HDS_PAZA_REGULI" ] && [ "$(sed -n 's/^[[:space:]]*stocare[[:space:]]*=[[:space:]]*//p' "$HDS_PAZA_REGULI" 2>/dev/null |
+	head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//')" = nand ] && hds_nand=1
 if [ -f "$HDS_PAZA_REGULI" ]; then
 	if ! grep -q '^stare=' "$HDS_PAZA_STARE" 2>/dev/null; then
 		hds_p=$HDS_PAZA_RADACINA
 		# every value is cut to a short run of plain characters, so nothing odd reaches awk -v or the state file
-		hds_cip=$(sed -n 's/^[[:space:]]*CHIP_VERSION[[:space:]]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' \
-			"$hds_p/proc/msp/sys" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
-		hds_bt=$(head -n 1 "$hds_p/proc/stb/info/boxtype" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
-		hds_parti=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^blkdevparts=//p' | head -n 1 |
-			tr ';' '\n' | sed -n 's/^mmcblk0://p' | head -n 1)
+		if [ -n "$hds_nand" ]; then
+			hds_cip=$(head -n 1 "$hds_p/proc/stb/info/chipset" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+			hds_bt=$(head -n 1 "$hds_p/proc/stb/info/vumodel" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+			[ -n "$hds_bt" ] || hds_bt=$(head -n 1 "$hds_p/proc/stb/info/boxtype" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+			hds_parti=$(awk '/^mtd[0-9]+:/ && NF >= 4 {
+					n = $0; sub(/^[^"]*"/, "", n); sub(/".*$/, "", n); gsub(/[^A-Za-z0-9_]/, "_", n)
+					s = 0; h = tolower($2); for (i = 1; i <= length(h); i++) s = s * 16 + index("0123456789abcdef", substr(h, i, 1)) - 1
+					printf "%s%dK(%s)", (c++ ? "," : ""), int(s / 1024), n
+				}' "$hds_p/proc/mtd" 2>/dev/null | cut -c1-600)
+		else
+			hds_cip=$(sed -n 's/^[[:space:]]*CHIP_VERSION[[:space:]]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' \
+				"$hds_p/proc/msp/sys" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+			hds_bt=$(head -n 1 "$hds_p/proc/stb/info/boxtype" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+			hds_parti=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^blkdevparts=//p' | head -n 1 |
+				tr ';' '\n' | sed -n 's/^mmcblk0://p' | head -n 1)
+		fi
 		case $hds_parti in *[!A-Za-z0-9_@\(\),.-]*) hds_parti='!' ;; esac
+		# the kernel of the slot that is running (kernel= in /proc/cmdline): only shown, the verdict keeps the table
+		hds_kpo=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^kernel=/dev/##p' | head -n 1 | tr -cd 'A-Za-z0-9_' | cut -c1-32)
+		hds_rsd=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^rootsubdir=//p' | head -n 1 | tr -cd 'A-Za-z0-9_' | cut -c1-32)
 		hds_di=$(echo "$hds_parti" | tr ',' '\n' | grep -n '(deviceinfo)' | head -n 1 | cut -d: -f1)
+		[ -z "$hds_nand" ] || hds_di=""
 		hds_hw=""
 		hds_et=""
 		if [ -n "$hds_di" ]; then
@@ -80,9 +104,68 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			hds_et=$(dd if="$hds_p/dev/mmcblk0p$hds_di" bs=256 skip=16224 count=1 2>/dev/null | tr '\000\r' '\n\n' |
 				sed -n '/BOX_TYPE:/{s/^.*\(BOX_TYPE:\)/\1/p;q}' | tr -cd "A-Za-z0-9_.:/ ,()'+-" | cut -c1-120)
 		fi
+		# Broadcom (familie=broadcom in the rules: Vu+ Solo 4K, Uno 4K SE, Duo 4K, Solo SE): no /proc/msp/sys, no
+		# blkdevparts, no deviceinfo. The chip comes from /proc/stb/info/chipset, the box type from /proc/stb/info/vumodel
+		# when there is no boxtype; the board is not compared. On eMMC the system comes from root= and the kernel from
+		# kernel= of /proc/cmdline or else kernel_part= of the rules, when /proc/partitions lists it, and the table is not
+		# compared; on NAND (stocare=nand too, Vu+ Solo SE) the place and the table come from /proc/mtd, as above (as
+		# Components/HdsPazaModel.py)
+		hds_cs=$(head -n 1 "$hds_p/proc/stb/info/chipset" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		hds_vm=$(head -n 1 "$hds_p/proc/stb/info/vumodel" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		hds_rp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^root=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
+		hds_kp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^kernel=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
+		# Multiboot (as Components/HdsPazaModel.py pornireMultiboot): kernel=, root= and rootsubdir= of the slot that
+		# runs, the first of each, kept only with plain characters and at most 160 of them (else they count as
+		# missing); the awk compares them with the base slot of the rules. A /proc/cmdline without a word is the usual
+		# start.
+		hds_root=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^root=//p' | head -n 1)
+		hds_kernel=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^kernel=//p' | head -n 1)
+		hds_sub=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's/^rootsubdir=//p' | head -n 1)
+		case $hds_root in *[!A-Za-z0-9_./:=+-]*) hds_root='' ;; esac
+		case $hds_kernel in *[!A-Za-z0-9_./:=+-]*) hds_kernel='' ;; esac
+		case $hds_sub in *[!A-Za-z0-9_./:=+-]*) hds_sub='' ;; esac
+		[ "${#hds_root}" -le 160 ] || hds_root=''
+		[ "${#hds_kernel}" -le 160 ] || hds_kernel=''
+		[ "${#hds_sub}" -le 160 ] || hds_sub=''
+		hds_cl=""
+		[ -n "$(tr -d ' \t\r\n' < "$hds_p/proc/cmdline" 2>/dev/null | head -c 1)" ] && hds_cl=1
+		# the device tree: a known model name other than the one of the rules is another receiver (E108)
+		hds_dt=$({ cat "$hds_p/proc/device-tree/bolt/board"; printf '\000';
+			cat "$hds_p/proc/device-tree/model"; printf '\000';
+			cat "$hds_p/proc/device-tree/compatible"; } 2>/dev/null |
+			tr '\000\n' ',,' | tr -cd 'A-Za-z0-9_.:/ ,()+-' |
+			sed 's/,,*/,/g;s/^,//;s/,$//' | cut -c1-80)
 		hds_pp=$hds_p/proc/partitions
 		[ -r "$hds_pp" ] || hds_pp=/dev/null
-		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" '
+		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" -v kpo="$hds_kpo" -v rsd="$hds_rsd" \
+			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v brp="$hds_rp" -v bkp="$hds_kp" \
+			-v slotroot="$hds_root" -v slotkernel="$hds_kernel" -v slotsub="$hds_sub" -v cl="$hds_cl" -v dt="$hds_dt" '
+			function modeldt(s) { s = tolower(s); sub(/^vu/, "", s); return s }
+			# as HdsPazaModel.modelDtDiferit: only a known model name in the device tree, other than the one of the rules
+			function dtgresit(   n, j, x, acceptate, cunoscute, citite) {
+				acceptate[modeldt(R["machinebuild"])] = 1
+				for (x in TT) acceptate[modeldt(x)] = 1
+				n = split("solo4k uno4k uno4kse ultimo4k zero4k duo4k duo4kse " \
+					"sf8008 sf8008m gbquad4k gbue4k gbx34k gbtrio4k gbmv200 " \
+					"viper4k viper4kv20 viper4kv30 viper4kv40 protek4k ustym4kpro", cunoscute, " ")
+				for (j = 1; j <= n; j++) MODELE[cunoscute[j]] = 1
+				n = split(tolower(dt), citite, /[^a-z0-9]+/)
+				for (j = 1; j <= n; j++) {
+					x = modeldt(citite[j])
+					if ((x in MODELE) && (x in acceptate)) return 0
+				}
+				for (j = 1; j <= n; j++) {
+					x = modeldt(citite[j])
+					if ((x in MODELE) && !(x in acceptate)) return 1
+				}
+				return 0
+			}
+			# a list of keys without the keys of the slot that runs (partitii, kernel)
+			function fara(s,   n, j, X, r) {
+				n = split(s, X, " "); r = ""
+				for (j = 1; j <= n; j++) if (X[j] != "partitii" && X[j] != "kernel") r = r " " X[j]
+				return r
+			}
 			function kib(s,   n, u) {
 				if (s !~ /^[0-9]+[KkMmGg]?$/) return -1
 				n = s + 0; u = toupper(substr(s, length(s)))
@@ -118,9 +201,21 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				if (kn !~ /^[A-Za-z0-9_]+$/) { kn = "kernel"; nb = 1 }
 				if (rn == "") rn = "rootfs"
 				if (rn !~ /^[A-Za-z0-9_]+$/) { rn = "rootfs"; nb = 1 }
+				# NAND: mtd0, mtd1 ... with the sizes from the /proc/mtd list itself (no /proc/partitions line)
 				for (j = 1; j <= ng; j++) {
-					if (GN[j] == kn && kp == "") kp = "mmcblk0p" j
-					if (GN[j] == rn && rp == "") rp = "mmcblk0p" j
+					pn = nand ? "mtd" (j - 1) : "mmcblk0p" j
+					if (nand && GK[j] != "") S[pn] = GK[j]
+					if (GN[j] == kn && kp == "") kp = pn
+					if (GN[j] == rn && rp == "") rp = pn
+				}
+				fam = (R["familie"] == "broadcom")
+				if (fam) {
+					cip = cs; if (bt == "") bt = vm; et = ""
+					# on eMMC the place comes from /proc/cmdline; on NAND (Vu+ Solo SE) from the /proc/mtd list above
+					if (!nand) {
+						rp = brp; kp = bkp; parti = ""
+						if (kp == "" && (R["kernel_part"] in S)) kp = R["kernel_part"]
+					}
 				}
 				kk = (kp in S) ? S[kp] : ""
 				rk = (rp in S) ? S[rp] : ""
@@ -129,14 +224,16 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				nc = split("model machinebuild chip boxtype hw partitions kernel_part rootfs_part", C, " ")
 				for (j = 1; j <= nc; j++) if (R[C[j]] == "") bune = 0
 				if (nb) bune = 0
-				ne = split(R["partitions"], E, ",")
+				if (R["familie"] != "" && !fam) bune = 0
+				if (R["stocare"] != "" && R["stocare"] != "nand") bune = 0
+				ne = (fam && R["partitions"] == "-") ? 0 : split(R["partitions"], E, ",")
 				for (j = 1; j <= ne; j++) {
 					c = index(E[j], ":")
 					EN[j] = c ? substr(E[j], 1, c - 1) : E[j]
 					EK[j] = c ? kib(substr(E[j], c + 1)) : ""
 					if (EN[j] !~ /^[A-Za-z0-9_]+$/ || EK[j] == -1) bune = 0
 				}
-				if (ne < 1) bune = 0
+				if (ne < 1 && !fam) bune = 0
 				# boxtype= may be a list (u57,u571); a single value compares as before
 				nt = split(R["boxtype"], T, ",")
 				for (j = 1; j <= nt; j++) { gsub(/^[ \t]+|[ \t]+$/, "", T[j]); if (T[j] != "") TT[T[j]] = 1 }
@@ -147,9 +244,14 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				m = ""; w = ""
 				if (!bune) m = " cip hw partitii kernel boxtype"
 				else {
-					if (cip == "" || tolower(cip) != tolower(R["chip"])) m = m " cip"
-					hwr = (hw == "" || hw != R["hw"])
-					ok = (ng >= ne)
+					# Broadcom and NAND: "7241" and "bcm7241" are the same chip (the bcm in front is dropped on both sides)
+					c1 = tolower(cip); c2 = tolower(R["chip"])
+					if (fam || nand) { sub(/^bcm/, "", c1); sub(/^bcm/, "", c2) }
+					if (cip == "" || c1 != c2) m = m " cip"
+					# Broadcom, or hw=- (a board without a factory header): the board is not read, nothing to compare
+					hwr = !fam && R["hw"] != "-" && (hw == "" || hw != R["hw"])
+					# Broadcom on eMMC: no table to compare; NAND (Broadcom too): the table from /proc/mtd is compared
+					ok = (fam && !nand) || (ng >= ne)
 					for (j = 1; ok && j <= ne; j++)
 						if (GN[j] != EN[j] || (EK[j] != "" && EK[j] != GK[j])) ok = 0
 					loc = (kp == R["kernel_part"] && rp == R["rootfs_part"] && kk "" != "" && rk "" != "")
@@ -172,6 +274,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					lt = substr(et, RSTART + 9, RLENGTH - 9); gsub(/[\047"]/, "", lt)
 				}
 				if (lt != "" && !(lt in TT)) m = m " eticheta"
+				if (bune && dtgresit()) m = m " dt"
 				# the internal memory: the same limits as HdsPazaModel.limiteEmmc (EMMC_IMPLICIT for viper4kv20)
 				ek = ("mmcblk0" in S) ? S["mmcblk0"] : ""
 				emi = (R["emmc_min_kib"] ~ /^[0-9]+$/) ? R["emmc_min_kib"] : ""
@@ -180,6 +283,15 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				if (bune && (emi != "" || ema != "")) {
 					if (ek != "" && ((ema != "" && ek + 0 > ema + 0) || (emi != "" && ek + 0 < emi + 0))) m = m " emmc"
 				}
+				# multiboot (as HdsPazaModel.pornireMultiboot and comparaPornire): kernel= other than the kernel of the
+				# rules, root= missing or other than the system of the rules, or rootsubdir= other than linuxrootfs1
+				# (the base slot on HiSilicon). The partitions then describe that slot, not the receiver: when only they
+				# differ, the receiver passes; another receiver keeps the whole list, as before. NAND, broken rules and
+				# an empty /proc/cmdline are the usual start, where the partitions decide.
+				mbk = (slotkernel != "" && slotkernel != "/dev/" R["kernel_part"])
+				mbs = (slotsub != "" && slotsub != "linuxrootfs1")
+				mb = (bune && !nand && cl != "" && (mbk || mbs || slotroot != "/dev/" R["rootfs_part"]))
+				if (mb && fara(m) == "") { m = ""; w = fara(w) }
 				print "stare=" (m == "" ? "potrivit" : "nepotrivit")
 				print "nepotriviri=" substr(m, 2)
 				print "treapta=" (t2 ? 2 : 1)
@@ -187,7 +299,25 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				print "cip=" cip
 				print "hw=" hw
 				print "partitii=" parti
-				print "kernel=" (kp == "" ? "" : kp " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
+				# on a multiboot start: the slot that runs, as /proc/cmdline gives it (as HdsPazaModel.slotDinCmdline),
+				# and whether its partitions are listed in /proc/partitions (slot=citit) or not (slot=necitit)
+				if (mb) {
+					dev = "^/dev/(mmcblk[0-9]+p[0-9]+|sd[a-z]+[0-9]+|nvme[0-9]+n[0-9]+p[0-9]+)$"
+					sk = (slotkernel ~ dev) ? substr(slotkernel, 6) : ""
+					sr = (slotroot ~ dev) ? substr(slotroot, 6) : ""
+					print "slot=" ((sk != "" && (sk in S) && sr != "" && (sr in S)) ? "citit" : "necitit")
+				}
+				# the device tree only when it names another receiver (the code E108 shows it)
+				if (index(m " ", " dt ")) print "dt=" dt
+				if (mb) {
+					k = (sk != "") ? sk : slotkernel; r = (sr != "") ? sr : slotroot
+					kt = (k == "") ? (slotroot == "" ? "" : "?, " r) : \
+						k " " ((sk != "" && (sk in S)) ? S[sk] : "?") " KiB, " (r == "" ? "-" : r)
+					print "kernel=" kt (rsd == "" ? "" : " (" rsd ")")
+				}
+				# multiboot: the kernel shown is the one of the running slot, not the first of the table
+				else if (kpo != "" && kp != "" && kpo != kp) print "kernel=" kpo " " ((kpo in S) ? S[kpo] : "?") " KiB, " (rp == "" ? "-" : rp) (rsd == "" ? "" : " (" rsd ")")
+				else print "kernel=" (kp == "" ? "" : kp " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
 				print "boxtype=" bt
 				print "eticheta=" et
 				print "emmc=" ek
@@ -684,6 +814,28 @@ fi
 
 ret=$?
 
+# HDS_IESIRE_BEGIN
+# Keep the last exit in RAM before any diagnosis or pause; the watchdog can distinguish a stopped interface from
+# a script still working on its exit. Only shell built-ins, then one atomic rename (no half-written record).
+HDS_IESIRE=${HDS_IESIRE:-/tmp/hds-enigma2.iesire}
+hds_iesire_up=""
+read hds_iesire_up hds_iesire_x 2>/dev/null < /proc/uptime
+hds_iesire_up=${hds_iesire_up%%.*}
+case $hds_iesire_up in ''|*[!0-9]*) hds_iesire_up=0 ;; esac
+hds_iesire_fel=""
+case $ret in
+	0|3) hds_iesire_fel=repornire ;;
+	1) hds_iesire_fel=oprire ;;
+	2|4) hds_iesire_fel=receptor ;;
+	5) hds_iesire_fel=python ;;
+	*) [ "$ret" -gt 128 ] && hds_iesire_fel=semnal ;;
+esac
+{
+	printf 'cod=%s\nuptime=%s\nparinte=%s\n' "$ret" "$hds_iesire_up" "$$"
+	[ -z "$hds_iesire_fel" ] || printf 'fel=%s\n' "$hds_iesire_fel"
+} 2>/dev/null > "$HDS_IESIRE.nou" && mv -f "$HDS_IESIRE.nou" "$HDS_IESIRE" 2>/dev/null
+# HDS_IESIRE_END
+
 # Unclean ends of enigma2: a signal (>128: 137 after the crash screen, 139 without it,
 # 143 = SIGTERM, which hds-watchdog sends to an interface that stopped answering) or 5 (Python crash). They are counted
 # in RAM (seconds from /proc/uptime: the clock of this receiver can jump) and written one line each, in a small log.
@@ -706,11 +858,15 @@ ret=$?
 # 0.3.0: every unclean end gets its cause, from the file bsodFatal writes (HDS_CADERE_MOTIV, main/bsod.cpp; enigma2
 # ends with 137 after the crash screen for a C++ crash and for a Python crash alike, so the code alone cannot tell them
 # apart), in the count (third word) and at the end of the line of the small log ("; cauza: ..."):
-#   python   an uncaught Python exception (file, line and error from the crash log): never the TDE's doing;
+#   python   an uncaught Python exception (file, line and error from the crash log): never the TDE's doing; the word in the
+#            count is "plugin" when the stack went through a plugin that did not come with the image (not in the opkg lists of
+#            the image packages, as in Components/HdsModSigur.py): safe mode counts it, the crash guard for settings does not;
 #   c++      a fatal signal, with the library of PC and whether a TDE call was running (lib/gdi/accel.cpp);
 #   eroare   another fatal error of enigma2 (eFatal);
-#   oprire   SIGTERM that hds-watchdog did not send (init, a person, a script): asked for, not a crash: it stays in the
-#            count and in the small log, but it brings no pause, no safe mode (so no report) and no crash guard;
+#   oprire   SIGTERM that hds-watchdog did not send (init, a person, a script), or a 137 with nothing behind it: no file of
+#            bsodFatal, no out of memory, no mark of the watchdog, so a SIGKILL from outside (killall -9 enigma2: the kernel
+#            does not say who sent it). Asked for, not a crash: it stays in the count and in the small log (the 137 with what
+#            it was, after the word), but it brings no pause, no safe mode (so no report), no crash guard and nothing for the TDE;
 #   memorie  the kernel killed enigma2 (out of memory, in dmesg);
 #   paznic   the end asked for by hds-watchdog (above);
 #   necunoscuta  a signal without crash report and without any of the above.
@@ -728,6 +884,7 @@ HDS_ACCEL_OPRIT=${HDS_ACCEL_OPRIT:-/etc/enigma2/hds-fara-accel}
 HDS_CADERI_PAUZA=${HDS_CADERI_PAUZA:-30}
 HDS_PAZNIC_OPRIRE=${HDS_PAZNIC_OPRIRE:-/tmp/hds-paznic.oprire}
 HDS_ACCEL_LUCRU=${HDS_ACCEL_LUCRU:-/etc/enigma2/hds-accel.lucru}
+HDS_OPKG_INFO=${HDS_OPKG_INFO:-/var/lib/opkg/info}
 if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 	[ -n "$acum" ] || acum=$(date +%s)
@@ -740,7 +897,9 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	esac
 	# the end asked for by hds-watchdog (see above)
 	paznic=""
+	paznic_semn=""
 	if [ -f "$HDS_PAZNIC_OPRIRE" ]; then
+		paznic_semn=1
 		if [ "$ret" -eq 143 ] || { [ "$ret" -eq 137 ] && grep -q '^sigkill=' "$HDS_PAZNIC_OPRIRE" 2>/dev/null; }; then
 			# digits only, no leading zero (a number like 08 is octal in $((...)) and an invalid one ends the shell)
 			paznic_up=$(sed -n 's/^uptime=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-12 |
@@ -765,6 +924,8 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		rm -f "$HDS_CADERE_MOTIV"
 	fi
 	dovada=""
+	cauza_rand=""
+	plugin_extern=""
 	if [ -n "$paznic" ]; then
 		cauza="paznic"
 	elif [ "$motiv_fel" = "semnal" ]; then
@@ -786,6 +947,16 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 				END { if (l != "") print l (e != "" ? " " e : "") }' "$motiv_jurnal" 2>/dev/null |
 				tr -cd ' -~' | cut -c1-200)
 			[ -n "$loc" ] && cauza="python: $loc"
+			# the plugins the last traceback went through; without the list of the image nothing can be said
+			if [ -f "$HDS_OPKG_INFO/enigma2-hdsatelit.list" ]; then
+				for hds_pl in $(awk '/Traceback \(most recent call last\)/ { s = "" }
+					/File "[^"]*\/Plugins\/(Extensions|SystemPlugins)\/[^\/"]+\// { p = $0; sub(/.*\/Plugins\//, "", p);
+						split(p, q, "/"); s = s " " q[1] "/" q[2] }
+					END { print s }' "$motiv_jurnal" 2>/dev/null | tr -cd 'A-Za-z0-9_/ -'); do
+					grep -qsF "/Plugins/$hds_pl/" "$HDS_OPKG_INFO/enigma2-hdsatelit.list" "$HDS_OPKG_INFO/hdsatelit-skin.list" ||
+						plugin_extern=1
+				done
+			fi
 		fi
 	elif [ "$motiv_fel" = "eroare" ]; then
 		cauza="eroare"
@@ -793,15 +964,31 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		cauza="oprire"
 	elif dmesg 2>/dev/null | tail -n 100 | grep -q 'Killed process [0-9]* (enigma2)'; then
 		cauza="memorie"
+	elif [ "$ret" -eq 137 ] && [ -z "$motiv_fel" ] && [ -z "$paznic_semn" ]; then
+		# a SIGKILL from outside (see above); "oprire" for every decision below, the small log says what it was
+		cauza="oprire"
+		cauza_rand="oprire: SIGKILL din afara, fara raport de cadere, fara lipsa de memorie, fara semnul paznicului"
 	else
 		cauza="necunoscuta"
 	fi
+	# HDS_IESIRE_BEGIN
+	# The cause is known now; publish it with the same exit, before the crash pause or the next start.
+	if [ -n "${HDS_IESIRE:-}" ]; then
+		{
+			printf 'cod=%s\nuptime=%s\nparinte=%s\nfel=%s\n' "$ret" "$hds_iesire_up" "$$" "$hds_iesire_fel"
+			printf 'cauza=%s\nmotiv_fel=%s\n' "${cauza_rand:-$cauza}" "$motiv_fel"
+		} 2>/dev/null > "$HDS_IESIRE.nou" && mv -f "$HDS_IESIRE.nou" "$HDS_IESIRE" 2>/dev/null
+	fi
+	# HDS_IESIRE_END
 	# the word in the count: "placa" only for a C++ crash or an unexplained one while the TDE worked (the rule of the
 	# repeated ends); "paznic" is set above; the other causes have their own word and are not counted for the TDE
 	case "$cauza" in
 		paznic) ;;
 		c++*|necunoscuta) ;;
-		python*) tde_lucrat=" python" ;;
+		python*)
+			tde_lucrat=" python"
+			[ -n "$plugin_extern" ] && tde_lucrat=" plugin"
+			;;
 		*) tde_lucrat=" $cauza" ;;
 	esac
 	echo "$acum $ret$tde_lucrat" >> "$HDS_CADERI"
@@ -831,7 +1018,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 			mv -f "$HDS_CADERI_JURNAL.nou" "$HDS_CADERI_JURNAL"
 	fi
 	cand=$(date '+%Y-%m-%d %H:%M:%S')
-	echo "$cand enigma2 s-a oprit neasteptat (cod $ret$tde), $recente in ultimele 10 minute; cauza: $cauza" \
+	echo "$cand enigma2 s-a oprit neasteptat (cod $ret$tde), $recente in ultimele 10 minute; cauza: ${cauza_rand:-$cauza}" \
 		>> "$HDS_CADERI_JURNAL"
 	if [ "$recente_placa" -ge 3 ] && [ ! -e "$HDS_ACCEL_OPRIT" ]; then
 		{
@@ -877,7 +1064,9 @@ fi
 # Crash guard for settings merged from a copy (block before the hook, or the 0.1.5 restore hook, which writes the same
 # snapshot and mark): 2 unclean ends counted above, at or after the merge and within the last 10 minutes, while the
 # window is open, put the previous settings back (settings.inainte-de-copie; without it there were no settings before
-# the merge and enigma2 starts on its defaults) and keep the merged ones as settings.din-copie-cazut. Any exit 30
+# the merge and enigma2 starts on its defaults) and keep the merged ones as settings.din-copie-cazut. A crash inside a
+# plugin that did not come with the image (the word "plugin" in the count) says nothing about the settings and is not
+# counted here. Any exit 30
 # minutes or more after the merge, or with a mark that holds no number, closes the window first (mark and snapshot
 # deleted), so a crash after the window never puts old settings back. The guard only sees the exits of enigma2: a hard
 # restart of the receiver while enigma2 runs is not counted, and the next boot closes the window (block before the
@@ -888,7 +1077,7 @@ if [ -f "$HDS_SETARI_SEMN" ]; then
 	semn=$(head -n 1 "$HDS_SETARI_SEMN" 2>/dev/null | tr -cd 0-9 | cut -c1-12 | sed 's/^0*//')
 	caderi_setari=0
 	if [ -n "$semn" ] && { [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; } && [ "${cauza:-}" != "oprire" ]; then
-		caderi_setari=$(awk -v s="$semn" -v a="$acum" '$1 >= s && $1 + 600 >= a && $3 != "oprire"' "$HDS_CADERI" 2>/dev/null | wc -l)
+		caderi_setari=$(awk -v s="$semn" -v a="$acum" '$1 >= s && $1 + 600 >= a && $3 != "oprire" && $3 != "plugin"' "$HDS_CADERI" 2>/dev/null | wc -l)
 		caderi_setari=$((caderi_setari + 0))
 	fi
 	if [ -z "$semn" ]; then

@@ -1,3 +1,5 @@
+from Components.HdsAsistentaControl import schimbaComponentaWeb
+
 class VariableText(object):
 	"""VariableText can be used for components which have a variable text, based on any widget with setText call"""
 	
@@ -8,6 +10,7 @@ class VariableText(object):
 	
 	def setText(self, text):
 		self.message = text
+		schimbaComponentaWeb(self)
 		if self.instance:
 			self.instance.setText(self.message or "")
 

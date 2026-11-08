@@ -256,7 +256,15 @@ void prins(Stare &s, int slot, int snr_db100)
 		s.parametri, s.lnb[0] ? s.lnb : "-", ms, snr, s.reacordare ? " dupa semnal pierdut" : "", sar);
 }
 
-void faraSemnal(Stare &s, int slot, int status)
+/* nivelul semnalului in procente (FE_READ_SIGNAL_STRENGTH da 0..65535); gol cand nu se stie */
+static void textNivel(char *buf, size_t n, int nivel)
+{
+	buf[0] = 0;
+	if (nivel >= 0 && nivel <= 65535)
+		snprintf(buf, n, " nivel %d%%", (nivel * 100 + 32767) / 65535);
+}
+
+void faraSemnal(Stare &s, int slot, int status, int nivel)
 {
 	if (!s.pornit_ms)
 		return;
@@ -269,11 +277,13 @@ void faraSemnal(Stare &s, int slot, int status)
 	if (status >= 0)  /* FE_HAS_SIGNAL 0x01, CARRIER 0x02, VITERBI 0x04, SYNC 0x08, LOCK 0x10 */
 		snprintf(st, sizeof(st), " stare semnal=%d purtatoare=%d viterbi=%d sincronizare=%d", !!(status & 1),
 			!!(status & 2), !!(status & 4), !!(status & 8));
+	char niv[24];
+	textNivel(niv, sizeof(niv), nivel);
 	char sar[48] = "";
 	if (sarite)
 		snprintf(sar, sizeof(sar), " (%lu reacordari nescrise)", sarite);
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::AVERT, "acordare", "%c %s | lnb %s | fara semnal dupa %ld ms%s%s%s",
-		litera(slot), s.parametri, s.lnb[0] ? s.lnb : "-", ms, st, s.reacordare ? " dupa semnal pierdut" : "", sar);
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::AVERT, "acordare", "%c %s | lnb %s | fara semnal dupa %ld ms%s%s%s%s",
+		litera(slot), s.parametri, s.lnb[0] ? s.lnb : "-", ms, st, niv, s.reacordare ? " dupa semnal pierdut" : "", sar);
 }
 
 void pierdut(Stare &s, int slot)
@@ -338,8 +348,11 @@ namespace hdsjscan
 
 static const char *const COMPONENTA = "scanare";
 
+/* peste atat, o citire de semnal nu mai e neglijabila fata de citirea tabelelor: scanarea nu mai citeste semnalul */
+static const long CITIRE_MAX_MS = 100;
+
 Stare::Stare()
-	: pornit_ms(0), tp_ms(0), servicii_inainte(0)
+	: pornit_ms(0), tp_ms(0), servicii_inainte(0), fara_citiri(0)
 {
 	tp[0] = 0;
 }
@@ -348,6 +361,7 @@ void pornita(Stare &s, size_t transpondere, int steaguri)
 {
 	s.pornit_ms = hdsjurnal::monotonMs();
 	s.tp_ms = 0;
+	s.fara_citiri = 0;
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "scanare", "pornita: %zu transpondere de cercetat, steaguri 0x%x",
 		transpondere, steaguri);
 }
@@ -364,12 +378,29 @@ void transponder(Stare &s, iDVBFrontendParameters *p, size_t servicii)
 	hdsjtuner::textParametri(s.tp, sizeof(s.tp), p);
 }
 
-void prins(Stare &s, size_t servicii)
+bool citesteSemnal(const Stare &s)
+{
+	return s.tp_ms && !s.fara_citiri;
+}
+
+void prins(Stare &s, size_t servicii, int snr_db100, int nivel, long citire_ms)
 {
 	if (!s.tp_ms)
 		return;
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "transponder", "%s prins, tabele citite in %ld ms, %zu servicii noi",
-		s.tp, (long)(hdsjurnal::monotonMs() - s.tp_ms), servicii >= s.servicii_inainte ? servicii - s.servicii_inainte : 0);
+	char semnal[96] = "";
+	if (citire_ms >= 0)
+	{
+		char snr[32] = "", niv[24];
+		if (snr_db100 >= 0 && snr_db100 <= 6000)  /* 0..60 dB, ca la acordare */
+			snprintf(snr, sizeof(snr), ", snr %d.%02d dB", snr_db100 / 100, snr_db100 % 100);
+		hdsjtuner::textNivel(niv, sizeof(niv), nivel);
+		snprintf(semnal, sizeof(semnal), "%s%s%s, citit in %ld ms", snr, niv[0] ? "," : "", niv, citire_ms);
+		if (citire_ms > CITIRE_MAX_MS)
+			s.fara_citiri = 1;
+	}
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "transponder", "%s prins, tabele citite in %ld ms, %zu servicii noi%s",
+		s.tp, (long)(hdsjurnal::monotonMs() - s.tp_ms), servicii >= s.servicii_inainte ? servicii - s.servicii_inainte : 0,
+		semnal);
 	s.tp_ms = 0;
 }
 

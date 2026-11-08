@@ -19,6 +19,10 @@
 #     curand (Components/VideoOutput.py), ca o scriere YCbCr sa cada in aceleasi secunde cu pornirea iesirii.
 #   - pornirea enigma2 (mytest.py): daca receptorul nu e in standby si iesirea e oprita (PhyOutputEnable NO) sau semnul
 #     din /tmp exista (enigma2 a iesit cu iesirea oprita), se scrie „on”.
+#   - oprirea completa (Screens/Standby.py, TryQuitMainloop cu 1, chiar inainte de quitMainloop; nu la repornire): cu
+#     „Stinge si televizorul (CEC)” aleasa, acelasi mesaj ca la intrarea in standby, apoi cel mult OPRIRE_ASTEAPTA_S
+#     pana termina scrierea si OPRIRE_LINIE_S cat pleaca mesajul pe fir (la iesirea enigma2 nodul se inchide, iar
+#     close() opreste CEC in driver). Din standby nimic: televizorul l-a primit la intrarea in standby.
 #
 # CEC, scris aici peste nodul driverului /dev/hdmi_cec (un singur deschizator: close() opreste CEC in driver oricine
 # l-ar mai tine deschis, deci nimic altceva din imagine nu deschide nodul):
@@ -32,18 +36,27 @@
 #     parametrii...]; primul octet e destinatia (adresa noastra sau 0x0F), cine a trimis nu se afla; read() intoarce 0
 #     cand nu e nimic (nu blocheaza). poll() nu e trezit cand vine un mesaj, deci mesajele se citesc cu un eTimer
 #     (CITIRE_MS) cat nodul e deschis. Pe placile familiei libreader (V10, Octagon SF8008 si MINI: driverul hi_hdmicec
-#     al SDK-ului producatorului) fiecare read() pe coada goala scrie in jurnalul nucleului "hdmicec_read: no enough
-#     data to receive" (kern.warn), deci citirea la 100 ms umplea dmesg cu 10 randuri pe secunda. Acolo read() se face
-#     numai cand poll(0) arata un mesaj in coada, plus o citire de control la CITIRE_SIGURA_MS: daca aceea gaseste un
-#     mesaj pe care poll nu l-a aratat, poll nu e de incredere pe receptorul acesta si citirea revine la fiecare pas.
-#     Tot acolo firul principal nu face NICIUN apel in driver: pe unele placi ale familiei driverul ignora O_NONBLOCK si
-#     read() asteapta un mesaj la nesfarsit (in jurnalul nucleului "hdmicec read: receive cmd error" cand e intrerupt),
-#     iar open, poll, ioctl, write si close pe acelasi nod asteapta dupa el; pe firul principal asta oprea interfata.
+#     al SDK-ului producatorului) driverul se poarta altfel (masurat pe un Octagon SF8008 Supreme, 0.7.1):
+#       - read() care cere mai mult decat un mesaj (read(fd, 256)) intoarce EFAULT, scrie in jurnalul nucleului
+#         "hdmicec_read: no enough data to receive" (kern.warn) si lasa mesajul in coada: asa nu se primea nimic, coada
+#         ramanea plina, poll(0) arata mereu un mesaj si citirea la 100 ms dadea 10 randuri pe secunda;
+#       - read() pe coada goala asteapta un mesaj (nu tine seama de O_NONBLOCK; "hdmicec read: receive cmd error" cand
+#         e intrerupt), iar open, poll, ioctl, write si close pe acelasi nod asteapta dupa el;
+#       - poll(0) arata corect daca e un mesaj in coada (nimic pe coada goala, POLLIN|POLLPRI cu un mesaj);
+#       - primul octet al mesajului e cel care l-a trimis (0 = televizorul), si la mesajele catre toti.
+#     Acolo un mesaj se citeste numai cand poll(0) il arata, cate unul: antetul (2 octeti), apoi exact lungimea lui;
+#     dupa fiecare mesaj iar poll(0). Fara citiri "de control" cand poll nu arata nimic: una ar astepta in driver.
+#     Tot acolo firul principal nu face NICIUN apel in driver: pe firul principal o citire care asteapta oprea interfata.
 #     Toate apelurile pe nod si citirea adresei din /proc/msp/hdmi0_sink le face, pe rand, firul de lucru CEC (FirCec);
 #     firul principal pune cererile in coada si ia rezultatele gata la pasii citirii, asteptand cel mult
 #     CITIRE_ASTEAPTA_S. Un apel care nu se intoarce in CITIRE_BLOCATA_S opreste CEC pana la repornirea interfetei
 #     (nimic nu mai pleaca spre nod, nici ce era in coada; firul ramas in driver e de fundal si nu-l asteapta nimeni)
 #     si apare in pagina web ca „nu raspunde”. Adresa fizica se tine minte dupa prima citire buna.
+# Numele: cel scris in setari (config.hds_standby.nume_tv) sau, gol, modelul citit pe receptor (model= din
+# /etc/hdsatelit-model, altfel /usr/lib/enigma.info), simplificat: fara diacritice, numai ASCII, fara primele cuvinte
+# (marca) cat e mai lung de NUME_MAX: "Amiko Viper 4K V20" -> "Viper 4K V20". /proc/stb/info/model nu se foloseste:
+# driverul de aici da acolo un nume fals de compatibilitate. Pachetul HDMI SPD (numele sursei in infoframe) nu se
+# trimite: driverul il trimite numai cu atributul pus de demonul platformei, care il tine oprit.
 # Nodul e deschis tot timpul pe un receptor care il are: numele receptorului pe televizor (lista intrarilor HDMI) vine
 # numai prin CEC. Partea pornita din fabrica e cea mai mica de care e nevoie pentru nume si nu schimba nimic pe
 # televizor: dupa deschidere (ANUNT_MS) <Report Physical Address> 0x84 si <Set OSD Name> 0x47 (repetate la
@@ -53,11 +66,6 @@
 # <Give Device Vendor ID> 0x8C -> <Feature Abort> (nu avem un cod de producator). Raspunsurile merg catre televizor
 # (0), fiindca sursa intrebarii nu se afla. Mesajele catre toti si celelalte coduri nu primesc raspuns; din calea
 # numelui nu pleaca niciodata <Standby>, <Image View On>, <Active Source> sau <Inactive Source>.
-# Numele: cel scris in setari (config.hds_standby.nume_tv) sau, gol, modelul citit pe receptor (model= din
-# /etc/hdsatelit-model, altfel /usr/lib/enigma.info), simplificat: fara diacritice, numai ASCII, fara primele cuvinte
-# (marca) cat e mai lung de NUME_MAX: "Amiko Viper 4K V20" -> "Viper 4K V20". /proc/stb/info/model nu se foloseste:
-# driverul de aici da acolo un nume fals de compatibilitate. Pachetul HDMI SPD (numele sursei in infoframe) nu se
-# trimite: driverul il trimite numai cu atributul pus de demonul platformei, care il tine oprit.
 # Telecomanda televizorului (setarea "Comanda din telecomanda televizorului", config.hds_standby.cec_telecomanda, Da din
 # fabrica): <User Control Pressed> / <User Control Released> de la televizor devin tastele telecomenzii receptorului
 # (TASTE_CEC: codul CEC -> codul Linux al tastei Viper) pe calea obisnuita a tastelor (eRCMapper.inject), deci merg in
@@ -110,6 +118,8 @@ SEMN_REL = "/tmp/hds-hdmi-oprit"
 MODEL_REL = "/etc/hdsatelit-model"
 ENIGMA_INFO_REL = "/usr/lib/enigma.info"
 
+OPRIRE_ASTEAPTA_S = 0.5     # oprirea completa: cat asteapta scrierea CEC (firul de lucru CEC) inainte de quitMainloop
+OPRIRE_LINIE_S = 0.2        # ... si apoi cat pleaca mesajul pe fir (un <Standby> are ~60 ms, plus o reincercare)
 PAZA_MS = 2500
 PAZA_LIMITA = 30            # rescrieri ale lui „off” pe ora
 CULORI_DUPA_MS = 2000       # privirea HdmiColors dupa „on”
@@ -120,7 +130,9 @@ ANUNT_REPETA_MS = 5000      # anuntul din nou cat CEC nu e gata (write = 0)
 ANUNT_INCERCARI = 12
 CITIRE_MS = 400             # citirea mesajelor primite, cat nodul e deschis
 CITIRI_PE_PAS = 8
-CITIRE_SIGURA_MS = 5000     # familia libreader: o citire si cand poll(0) nu arata nimic (paza pentru un poll care minte)
+CITIRE_SIGURA_MS = 5000     # numai citirea pe firul principal cu poll (inFir=False, probele): o citire si cand poll(0) nu
+                            # arata nimic; pe firul de lucru CEC (familia libreader) nu: acolo o citire pe coada goala
+                            # asteapta in driver
 CITIRE_ASTEAPTA_S = 0.01    # familia libreader: cat asteapta firul principal o cerere pusa firului de lucru CEC liber
 CITIRE_BLOCATA_S = 1.0      # familia libreader: un apel in driver care nu se intoarce in atat opreste CEC
 JURNAL_PE_CHEIE = 5
@@ -710,22 +722,28 @@ def _adreseNod(ioctl, fd):
 	return sink, buf
 
 
-def _pasCitireNod(citeste, poll, ioctl, fd, cuPoll, control, adrese, fir):
-	"""Un pas al citirii. Cu cuPoll, intai poll(0); daca nu arata nimic, citirea numai cand `control` (citirea de
-	control). Apoi cel mult CITIRI_PE_PAS read(). Cu `adrese` si mesaje citite, si adresele (_adreseNod), ca raspunsurile
-	la ele sa plece cu adresa logica buna. Intoarce (datele, citire de control facuta, eroarea lui read(), adresele)."""
-	if cuPoll and poll(fd) is False:
-		if not control:
-			return b"", False, None, None
-	else:
-		control = False
+def _citesteMesajNod(citeste, fd):
+	"""Un mesaj din driverul familiei libreader: antetul (primul octet, lungimea), apoi exact lungimea lui (driverul da
+	EFAULT si lasa mesajul in coada la o cerere mai mare decat mesajul). b"" daca nu e nimic."""
+	antet = bytearray(citeste(fd, 2) or b"")
+	if len(antet) < 2 or not 1 <= antet[1] <= CEC_LUNGIME_MAX:
+		return bytes(antet)      # gol, sau un inceput de neinteles: _inregistrare goleste coada
+	return bytes(antet) + bytes(bytearray(citeste(fd, antet[1]) or b""))
+
+
+def _pasCitireNod(citeste, poll, ioctl, fd, cuPoll, adrese, fir):
+	"""Un pas al citirii pe firul de lucru CEC (familia libreader). Cu cuPoll un mesaj se citeste numai cand poll(0) il
+	arata, apoi iar poll(0) inaintea urmatorului: o citire pe coada goala asteapta in driver. Cel mult CITIRI_PE_PAS
+	mesaje (_citesteMesajNod). Fara cuPoll sau cu un poll care nu merge (None), mesaj dupa mesaj pana la primul gol. Cu
+	`adrese` si mesaje citite, si adresele (_adreseNod), ca raspunsurile la ele sa plece cu adresa logica buna. Intoarce
+	(datele, eroarea lui read(), adresele)."""
 	date = bytearray()
 	eroare = None
 	for _i in range(CITIRI_PE_PAS):
-		if fir.oprit:
+		if fir.oprit or (cuPoll and poll(fd) is False):
 			break
 		try:
-			d = citeste(fd, 256)
+			d = _citesteMesajNod(citeste, fd)
 		except (IOError, OSError) as e:
 			eroare = e
 			break
@@ -733,8 +751,8 @@ def _pasCitireNod(citeste, poll, ioctl, fd, cuPoll, control, adrese, fir):
 			break
 		date.extend(bytearray(d))
 	if adrese and date and not fir.oprit:
-		return bytes(date), control, eroare, _adreseNod(ioctl, fd)
-	return bytes(date), control, eroare, None
+		return bytes(date), eroare, _adreseNod(ioctl, fd)
+	return bytes(date), eroare, None
 
 
 class Cec(object):
@@ -1154,24 +1172,19 @@ class Cec(object):
 		if self._oprit():
 			return 0
 		if self.fd is not None and not self._citireInCoada:
-			acum = self.ceas()
-			control = self.citireSigura is None or not 0 <= (acum - self.citireSigura) * 1000 < CITIRE_SIGURA_MS
 			adrese = self.logica is None or self.adresa is None
 			self._citireInCoada = True
 			self._cere("citirea din", _pasCitireNod, (self.citesteFd, self.pollFd, self._ioctlPe, self.fd,
-				bool(self.dupaPoll), control, adrese, self._firDeLucru()), lambda r, e: self._citit(r, e, acum))
+				bool(self.dupaPoll), adrese, self._firDeLucru()), self._citit)
 		return self._imparte()
 
-	def _citit(self, rezultat, eroare, acum):
-		"""Rezultatul unui pas al citirii facut de firul de lucru CEC: datele in tampon, ora citirii de control, poll-ul
-		care minte, adresele."""
+	def _citit(self, rezultat, eroare):
+		"""Rezultatul unui pas al citirii facut de firul de lucru CEC: datele in tampon, adresele."""
 		self._citireInCoada = False
 		if eroare is not None:
 			_jurnal("citirea CEC: %r" % (eroare,), "cec-citire")
 			return
-		date, control, eroareCitire, adrese = rezultat
-		if control:
-			self.citireSigura = acum
+		date, eroareCitire, adrese = rezultat
 		if eroareCitire is not None and getattr(eroareCitire, "errno", None) not in (errno.EAGAIN, errno.EWOULDBLOCK,
 				errno.EINTR):
 			_jurnal("citirea CEC: %s" % eroareCitire, "cec-citeste")
@@ -1179,9 +1192,6 @@ class Cec(object):
 			self._adreseVenite(adrese)
 		if date and self.fd is not None:
 			self.tampon.extend(bytearray(date))
-			if control:
-				self.dupaPoll = False
-				_jurnal("CEC: poll() nu a aratat un mesaj primit; citirea revine la fiecare pas", "cec-poll")
 
 	def _cuFir(self):
 		"""Familia libreader: toate apelurile pe nod trec prin firul de lucru CEC (inFir, aflat o singura data, inainte
@@ -1212,6 +1222,17 @@ class Cec(object):
 			c.gata.wait(CITIRE_ASTEAPTA_S)
 			self._iaRezultatele()
 		return c.raspuns
+
+	def asteaptaScrierile(self, secunde):
+		"""Oprirea completa: cel mult `secunde`, pana termina firul de lucru CEC cererile puse (familia libreader), apoi
+		rezultatele lor. Pe celelalte placi scrierile sunt deja facute. Intoarce True daca nu mai e nimic in lucru."""
+		termen = time.monotonic() + secunde
+		for c in list(self._cereri):
+			ramas = termen - time.monotonic()
+			if ramas <= 0 or not c.gata.wait(ramas):
+				break
+		self._iaRezultatele()
+		return not self._cereri
 
 	def _iaRezultatele(self):
 		"""Familia libreader: rezultatele cererilor terminate de firul de lucru CEC, in ordinea lor, pana la prima
@@ -1833,7 +1854,16 @@ class StandbyTv(object):
 
 	def _opresteIesirea(self):
 		"""vfd dupa afisaj, apoi „off”; True daca „off” a ajuns la driver."""
-		vfd = os.path.exists(VFD)
+		from Components.HdsAfisajCompat import permite
+		vfd = os.path.exists(VFD) and permite("alimentare")
+		if vfd:
+			try:
+				from Components.HdsFunctiiImagine import disponibil as functieImagine
+			except ImportError:  # probele vechi incarca numai acest modul
+				functieImagine = None
+			if functieImagine is not None and functieImagine("afisaj"):
+				# Afisajul producatorului isi pastreaza propriul mod de standby.
+				vfd = False
 		if vfd:
 			scrie(VFD, vfdDorit(), "vfd")
 		if not scrie(IESIRE, "off", "off"):
@@ -1888,6 +1918,26 @@ class StandbyTv(object):
 			self.oprit = True
 			_jurnal("iesirea HDMI oprita in standby (vfd %s)" % vfdDorit(), "oprita")
 			self._pornestePaza()
+
+	def laOprire(self, dormi=None):
+		"""Din Screens/Standby.py, la oprirea completa (TryQuitMainloop 1), chiar inainte de quitMainloop: cu „Stinge si
+		televizorul (CEC)” aleasa, ca la intrarea in standby (<Standby> daca receptorul era pe ecran, altfel <Inactive
+		Source>), apoi asteptarea scurta ca mesajul sa plece. Din standby nimic. Intoarce True daca a trimis ceva."""
+		if _inStandby():
+			return False
+		c = _cfg()
+		if not c.cec_stinge.value or not self.cec.deschis():
+			return False
+		trimis = False
+		try:
+			self.cec.opresteTastele()
+			trimis = self.cec.stingeTv(bool(self.cec.activ)) is not False
+			self.cec.asteaptaScrierile(OPRIRE_ASTEAPTA_S)
+			(dormi or time.sleep)(OPRIRE_LINIE_S)
+			_jurnal("CEC la oprirea completa: %s" % ("trimis" if trimis else "netrimis"), "cec-oprire")
+		except Exception as e:
+			_jurnal("CEC la oprirea completa: %r" % (e,), "cec-oprire")
+		return trimis
 
 	def _pornestePaza(self):
 		if not os.path.exists(HDMI0):
@@ -2076,6 +2126,15 @@ def laIesire():
 		instanta().laIesire()
 	except Exception as e:
 		_jurnal("iesirea din standby: %r" % (e,), "iesire")
+
+
+def laOprire():
+	"""Din Screens/Standby.py (TryQuitMainloop), numai la oprirea completa, chiar inainte de quitMainloop."""
+	try:
+		return instanta().laOprire()
+	except Exception as e:
+		_jurnal("oprirea completa: %r" % (e,), "oprire")
+		return False
 
 
 def trezitDeTemporizator():

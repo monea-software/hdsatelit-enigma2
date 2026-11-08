@@ -85,6 +85,16 @@ ALLOW_EMPTY:${PN} = "1"
 # porneste nicio conexiune singura. Modulul WireGuard din afara nucleului, openresolv si utilitarele FUSE cu setuid nu
 # intra (BAD_RECOMMENDATIONS in hdsatelit-image.bb): nucleul are WireGuard, iar montarea FUSE se face ca root.
 #
+# Modulele Python mici cerute de pluginurile altor echipe (06.11.2026, lotul module-lipsa-071): python3-sqlite3, python3-xmlrpc si
+# python3-zoneinfo din biblioteca standard (libsqlite3-0 si tzdata sunt deja in imagine), python3-tmdbsimple, python3-backports-lzma,
+# python3-mutagen. Pragul: cel mult 1 MB pe disc cu tot ce trag dupa ele si cerute de cel putin doua pluginuri diferite; impreuna
+# ~1,3 MB pe disc (masurat pe pachetele noastre, lucru-sesiune/oe-60/module-lipsa-071/INVENTAR.md). Fara ele cad la incarcare, in
+# emulator, EPGImport si EPGExport (backports.lzma), SerienRecorder, MediaPlayer2 si SubsSupport (xmlrpc), Jukebox, WebradioFS, YAMP si
+# MerlinMusicPlayer (sqlite3), M3U IPTV (zoneinfo), TMDB si BMediaCenter (tmdbsimple); mutagen il declara 5 pluginuri de muzica si
+# filme. Cele mari si cele cerute de un singur plugin stau in feedul de pluginuri externe (oe-build/module-feed.txt), de unde imaginea
+# le instaleaza singura la cerere (Components/HdsModuleLipsa.py). Randul lor e separat de cel al lotului tamiciav7
+# (python3-multiprocessing, in lista de jos), ca unirea sa fie curata.
+#
 # hdsatelit-feed: /etc/opkg/hdsatelit-feed.conf, canalul public al actualizarilor prin pachete (DISTRO_FEED_URI din
 # hdsatelit.conf).
 #
@@ -226,3 +236,5 @@ RDEPENDS:${PN} = "\
     wireguard-tools \
     kernel-module-tun \
 "
+# modulele Python mici cerute de pluginurile altor echipe (comentariul de sus, 06.11.2026)
+RDEPENDS:${PN} += "python3-sqlite3 python3-xmlrpc python3-zoneinfo python3-tmdbsimple python3-backports-lzma python3-mutagen"

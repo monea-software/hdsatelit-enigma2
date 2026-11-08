@@ -508,7 +508,11 @@ def inlocuitor(id_ecran, date=None):
 # Un singur zavor pentru tot ce pune un ecran de pornire: ecranul de pe televizor, interfata web, firul de conversie
 # al unei poze urcate si verificarea de la pornire pot cere punerea in acelasi timp; fara zavor iesea un backdrop.mvi
 # amestecat din doua fisiere.
-_ZAVOR_PUNERE = threading.Lock()
+try:
+	from Components import HdsGalerieSigle as _galerieSigle
+except ImportError:
+	_galerieSigle = None
+_ZAVOR_PUNERE = _galerieSigle.LOCK if _galerieSigle is not None else threading.RLock()
 
 # Un cadru I MPEG-2 incepe cu antetul de secventa 00 00 01 B3. Ecranele noastre au zeci de KB; sub 4 KB nu poate fi
 # un ecran intreg de 1920x1080.
@@ -623,6 +627,18 @@ def aplica(sursa, id_ecran):
 		# receptorul ar porni fara imagine
 		return False, _t("Fișierul acelui ecran nu este întreg. Alege altul sau pune-l din nou.")
 	with _ZAVOR_PUNERE:
+		if _galerieSigle is not None and _galerieSigle.managesBackdrop():
+			try:
+				with open(cale, "rb") as fisier:
+					octeti = fisier.read(_galerieSigle.MAX_MVI + 1)
+				if len(octeti) > _galerieSigle.MAX_MVI:
+					return False, _t("Fisierul ecranului este prea mare.")
+				_galerieSigle.putLocalBackdrop(octeti)
+			except (OSError, _galerieSigle.GalleryError) as eroare:
+				return False, _t("Nu am putut pune ecranul: %s") % eroare
+			_scrieAles(sursa, id_ecran)
+			return True, _t("Ecranul de pornire a fost schimbat. "
+				"Se vede la urmatoarea pornire a receptorului.")
 		_curataRamase(CALE_ACTIV)
 		try:
 			deja = os.path.isfile(CALE_ACTIV) and _rezumat(CALE_ACTIV) == _rezumat(cale)
@@ -638,7 +654,7 @@ def aplica(sursa, id_ecran):
 	return True, _t("Ecranul de pornire a fost schimbat. Se vede la următoarea pornire a receptorului.")
 
 
-def _verifica():
+def _verificaLocala():
 	"""Pune din nou ecranul ales, daca fisierul activ nu mai e el (actualizarea pachetului a pus la loc ecranul
 	implicit) sau daca ecranul ales a fost scos din galerie (atunci pe cel care ii ia locul). Intoarce
 	(ce s-a facut, sursa, id) pentru jurnal; nimic nu se scrie cand ecranul pus e deja cel bun."""
@@ -666,6 +682,20 @@ def _verifica():
 		return "la-zi", sursa, id_ecran
 	bun, _mesaj = aplica(sursa, id_ecran)
 	return ("pus-din-nou" if bun else "esuat"), sursa, id_ecran
+
+
+def _verifica():
+	# Zavorul comun inchide fereastra dintre verificare si copierea de la pornire.
+	with _ZAVOR_PUNERE:
+		if _galerieSigle is not None:
+			try:
+				_galerieSigle.startup()
+			except (OSError, _galerieSigle.GalleryError) as eroare:
+				print("[HdsGalerieSigle] la pornire: %s" % eroare)
+				return "galerie-online-esuat", None, None
+			if _galerieSigle.managesBackdrop():
+				return "la-zi", "galerie-online", None
+		return _verificaLocala()
 
 
 def verificaLaPornire():

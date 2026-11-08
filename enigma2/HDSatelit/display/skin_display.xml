@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Afisaj color HDSatelit. Desen propriu, adaptat la marimea LCD-ului. -->
+<skin>
+	<output id="1">
+		<resolution xres="480" yres="320" bpp="32" />
+	</output>
+	<windowstyle id="1">
+		<color name="Background" color="hdsPanelSolid" />
+		<color name="LabelForeground" color="hdsText" />
+		<color name="LabelBackground" color="hdsPanelSolid" />
+	</windowstyle>
+
+	<screen name="SummaryClockPanel" id="1" position="0,0" size="480,320">
+		<widget source="global.CurrentTime" render="Label"
+			position="20,12" size="440,66" font="HdsBold;52"
+			halign="right" valign="center" foregroundColor="hdsBrandLight"
+			backgroundColor="hdsPanelSolid">
+			<convert type="ClockToText">Format:%H:%M</convert>
+		</widget>
+		<eLabel position="20,88" size="440,3" backgroundColor="hdsBrand" />
+	</screen>
+
+	<screen name="InfoBarSummary" id="1" position="0,0" size="480,320"
+		flags="wfNoBorder" backgroundColor="hdsPanelSolid">
+		<panel name="SummaryClockPanel" />
+		<widget source="session.CurrentService" render="Label"
+			position="20,104" size="440,80" font="HdsBold;36"
+			valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid">
+			<convert type="ServiceName">Name</convert>
+		</widget>
+		<widget source="session.Event_Now" render="Label"
+			position="20,192" size="440,86" font="HdsRegular;28"
+			valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid">
+			<convert type="EventName">Name</convert>
+		</widget>
+		<widget source="session.Event_Now" render="Progress"
+			position="20,296" size="440,8" borderWidth="0"
+			foregroundColor="hdsBrandLight" backgroundColor="hdsTrack">
+			<convert type="EventTime">Progress</convert>
+		</widget>
+	</screen>
+
+	<screen name="ChannelSelection_summary" id="1" position="0,0" size="480,320"
+		flags="wfNoBorder" backgroundColor="hdsPanelSolid">
+		<panel name="SummaryClockPanel" />
+		<widget source="parent.ServiceEvent" render="Label"
+			position="20,104" size="440,80" font="HdsBold;36"
+			valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid">
+			<convert type="ServiceName">Name</convert>
+		</widget>
+		<widget source="parent.ServiceEvent" render="Label"
+			position="20,192" size="440,86" font="HdsRegular;28"
+			valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid">
+			<convert type="EventName">Name</convert>
+		</widget>
+		<widget source="parent.ServiceEvent" render="Progress"
+			position="20,296" size="440,8" borderWidth="0"
+			foregroundColor="hdsBrandLight" backgroundColor="hdsTrack">
+			<convert type="EventTime">Progress</convert>
+		</widget>
+	</screen>
+
+	<screen name="SimpleSummary" id="1" position="0,0" size="480,320"
+		flags="wfNoBorder" backgroundColor="hdsPanelSolid">
+		<panel name="SummaryClockPanel" />
+		<widget source="parent.Title" render="Label"
+			position="20,114" size="440,176" font="HdsRegular;34"
+			valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" />
+	</screen>
+
+	<screen name="StandbySummary" id="1" position="0,0" size="480,320"
+		flags="wfNoBorder" backgroundColor="hdsPanelSolid">
+		<widget source="global.CurrentTime" render="Label"
+			position="20,88" size="440,144" font="HdsBold;96"
+			halign="center" valign="center" foregroundColor="hdsBrandLight"
+			backgroundColor="hdsPanelSolid">
+			<convert type="ClockToText">Format:%H:%M</convert>
+		</widget>
+	</screen>
+
+	<screen name="InfoBarMoviePlayerSummary" id="1" position="0,0" size="480,320"
+		flags="wfNoBorder" backgroundColor="hdsPanelSolid">
+		<panel name="SummaryClockPanel" />
+		<widget source="session.CurrentService" render="Label"
+			position="20,114" size="440,160" font="HdsRegular;34"
+			valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid">
+			<convert type="ServiceName">Name</convert>
+		</widget>
+		<widget source="session.CurrentService" render="Progress"
+			position="20,296" size="440,8" borderWidth="0"
+			foregroundColor="hdsBrandLight" backgroundColor="hdsTrack">
+			<convert type="ServicePosition">Position</convert>
+		</widget>
+	</screen>
+</skin>

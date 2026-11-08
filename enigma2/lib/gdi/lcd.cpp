@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <stdlib.h>
 
 #if defined(HAVE_DBOX_FP_H) && defined(HAVE_DBOX_LCD_KS0713_H)
 #include <dbox/fp.h>
@@ -23,6 +24,8 @@ eLCD::eLCD()
 {
 	lcdfd = -1;
 	locked=0;
+	hds_update=1;
+	_buffer=0;
 }
 
 void eLCD::setSize(int xres, int yres, int bpp)
@@ -41,7 +44,7 @@ eLCD::~eLCD()
 
 int eLCD::lock()
 {
-	if (locked)
+	if (locked || lcdfd < 0)
 		return -1;
 
 	locked=1;
@@ -53,11 +56,56 @@ void eLCD::unlock()
 	locked=0;
 }
 
+// Geometria trebuie sa fie intreaga si plauzibila inainte de desen.
+static bool hdsLcdGeometry(int &xres, int &yres, int &bpp)
+{
+	const char *nodes[] = {"xres", "yres", "bpp"};
+	char text[3][32];
+	for (int i = 0; i < 3; ++i)
+	{
+		char filename[64];
+		snprintf(filename, sizeof(filename), "/proc/stb/lcd/%s", nodes[i]);
+		FILE *f = fopen(filename, "r");
+		if (!f)
+			return false;
+		int read = fscanf(f, "%31s", text[i]);
+		fclose(f);
+		if (read != 1)
+			return false;
+	}
+	const int bases[] = {16, 10};
+	for (int base = 0; base < 2; ++base)
+	{
+		long size[3];
+		bool valid = true;
+		for (int i = 0; i < 3; ++i)
+		{
+			char *end;
+			size[i] = strtol(text[i], &end, bases[base]);
+			valid = valid && end != text[i] && *end == 0;
+		}
+		if (valid && size[0] >= 320 && size[0] <= 1920 &&
+			size[1] >= 180 && size[1] <= 1080 &&
+			(size[2] == 16 || size[2] == 24 || size[2] == 32))
+		{
+			xres = size[0]; yres = size[1]; bpp = size[2];
+			return true;
+		}
+	}
+	return false;
+}
+
 eDBoxLCD::eDBoxLCD()
 {
 	int xres=132, yres=64, bpp=8;
 	is_oled = 0;
-#ifndef NO_LCD
+	inverted = 0;
+	bool color = hdsLcdGeometry(xres, yres, bpp);
+#ifdef NO_LCD
+	// Fara antetele mono, numai geometria color autorizeaza cadrele.
+	if (color)
+#endif
+	{
 	lcdfd = open("/dev/dbox/oled0", O_RDWR);
 	if (lcdfd < 0)
 	{
@@ -80,34 +128,14 @@ eDBoxLCD::eDBoxLCD()
 		eDebug("couldn't open LCD - load lcd.o!");
 	else
 	{
+#ifndef NO_LCD
 		int i=LCD_MODE_BIN;
 		ioctl(lcdfd, LCD_IOCTL_ASC_MODE, &i);
-		inverted=0;
-		FILE *f = fopen("/proc/stb/lcd/xres", "r");
-		if (f)
-		{
-			int tmp;
-			if (fscanf(f, "%x", &tmp) == 1)
-				xres = tmp;
-			fclose(f);
-			f = fopen("/proc/stb/lcd/yres", "r");
-			if (f)
-			{
-				if (fscanf(f, "%x", &tmp) == 1)
-					yres = tmp;
-				fclose(f);
-				f = fopen("/proc/stb/lcd/bpp", "r");
-				if (f)
-				{
-					if (fscanf(f, "%x", &tmp) == 1)
-						bpp = tmp;
-					fclose(f);
-				}
-			}
-			is_oled = 3;
-		}
-	}
 #endif
+		if (color)
+			is_oled = 3;
+	}
+	}
 	instance=this;
 
 	setSize(xres, yres, bpp);
@@ -140,7 +168,7 @@ int eDBoxLCD::setLCDContrast(int contrast)
 
 int eDBoxLCD::setLCDBrightness(int brightness)
 {
-#ifndef NO_LCD
+	brightness = brightness < 0 ? 0 : (brightness > 255 ? 255 : brightness);
 	eDebug("setLCDBrightness %d", brightness);
 	FILE *f=fopen("/proc/stb/lcd/oled_brightness", "w");
 	if (!f)
@@ -153,6 +181,7 @@ int eDBoxLCD::setLCDBrightness(int brightness)
 	}
 	else
 	{
+#ifndef NO_LCD
 		int fp;
 		if((fp=open("/dev/dbox/fp0", O_RDWR))<=0)
 		{
@@ -163,8 +192,8 @@ int eDBoxLCD::setLCDBrightness(int brightness)
 		if(ioctl(fp, FP_IOCTL_LCD_DIMM, &brightness)<=0)
 			eDebug("[LCD] can't set lcd brightness (%m)");
 		close(fp);
-	}
 #endif
+	}
 	return(0);
 }
 
@@ -184,7 +213,7 @@ eDBoxLCD *eDBoxLCD::getInstance()
 
 void eDBoxLCD::update()
 {
-	if (lcdfd >= 0)
+	if (lcdfd >= 0 && !locked && hds_update)
 	{
 		if (!is_oled || is_oled == 2)
 		{

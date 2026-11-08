@@ -56,6 +56,9 @@ SKIN_REZERVA = """
 	<widget name="key_green" position="317,624" size="269,32" font="Regular;19" foregroundColor="#00F2F4F8" backgroundColor="#0D10162A" transparent="1" valign="center" noWrap="1" zPosition="1" />
 	<eLabel position="592,629" size="4,21" backgroundColor="#00E8B93A" zPosition="1" />
 	<widget name="key_yellow" position="603,624" size="269,32" font="Regular;19" foregroundColor="#00F2F4F8" backgroundColor="#0D10162A" transparent="1" valign="center" noWrap="1" zPosition="1" />
+	<eLabel position="877,629" size="4,21" backgroundColor="#003D7BE0" zPosition="1" />
+	<widget name="key_blue" position="888,624" size="269,32" font="Regular;19"
+		foregroundColor="#00F2F4F8" transparent="1" valign="center" noWrap="1" zPosition="1" />
 </screen>"""
 
 CHENARE = ("sus", "jos", "st", "dr")
@@ -83,12 +86,14 @@ class HdsTemaInterfata(Screen):
 		self["key_red"] = Label(_("Renunță"))
 		self["key_green"] = Label(_("Aplică"))
 		self["key_yellow"] = Label(_("Implicită (Clasic)"))
+		self["key_blue"] = Label(_("Vremea"))
 		actiuni = {
 			"ok": self.aplica,
 			"green": self.aplica,
 			"cancel": self.close,
 			"red": self.close,
 			"yellow": self.implicita,
+			"blue": self.vremea,
 			"left": self.stanga,
 			"right": self.dreapta,
 		}
@@ -150,6 +155,10 @@ class HdsTemaInterfata(Screen):
 
 	def nimic(self):
 		pass
+
+	def vremea(self):
+		from Screens.HdsVremea import HdsVremea
+		self.session.open(HdsVremea)
 
 	def stanga(self):
 		self.cursor = T.TEME[0]

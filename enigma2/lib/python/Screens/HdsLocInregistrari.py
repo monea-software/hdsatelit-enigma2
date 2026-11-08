@@ -96,6 +96,36 @@ def skinRezerva(latime, inaltime):
 	</screen>""" % valori
 
 
+def pornesteReparare(session, disc, mesaj, dupa):
+	"""Randul 'Repară' al unui stick pus pe numai citire: un singur OK, explicatia e deja pe ecran. Lucrarea existenta
+	(Components/HdsDiscuri.verifica, cu ecranul de asteptare HarddiskWait); un stick folosit acum nu se atinge. `mesaj(text)`: de ce nu
+	porneste; `dupa(reusit)`: la sfarsit (textDupaReparare). Il foloseste si ecranul Imagine noua de pe stick."""
+	from Components import HdsDiscuri
+	from Screens.HarddiskSetup import HarddiskSetup, HarddiskWait
+	hdd = HdsDiscuri.discul(disc) if disc else None
+	if hdd is None:
+		mesaj(_("Discul ales nu mai este conectat. Alege din nou."))
+		return
+	if HdsDiscuri.inLucru():
+		mesaj(_("Se lucrează deja la un disc. Așteaptă să se termine."))
+		return
+	refuz = HdsDiscuri.motiveRefuz(hdd.device, HdsDiscuri.stareInregistrari())
+	if refuz:
+		mesaj(refuz[0][1])
+		return
+	session.openWithCallback(dupa, HarddiskWait, hdd, HarddiskSetup.HARDDISK_CHECK)
+
+
+def textDupaReparare(reusit):
+	"""Ce i se spune omului dupa verificare; „” cand a mers."""
+	if reusit is None:
+		return _("Se lucrează deja la un disc. Așteaptă să se termine.")
+	if not reusit:
+		from Components import HdsDiscuri
+		return HdsDiscuri.textLucru(HdsDiscuri.stareLucru())
+	return ""
+
+
 class HdsLocInregistrari(Screen):
 	"""cale: dosarul inregistrarilor care nu a mers (None din meniu: locul de acum); motiv: ce a spus
 	HdsStocare.verificaDisc despre el; scop: unul din Components.HdsLocInregistrari.SCOPURI; mesaj: (text, detaliu)
@@ -305,7 +335,8 @@ class HdsLocInregistrari(Screen):
 		self._puneText(text)
 		self._puneDetaliu(detaliu)
 		index = self["list"].getSelectionIndex() if self._randuri else 0
-		ales = self._randuri[index]["punct"] if 0 <= index < len(self._randuri) else None
+		rand_ales = self._randuri[index] if 0 <= index < len(self._randuri) else {}
+		ales = rand_ales.get("punct")
 		if self._punctAles is not None:
 			ales = self._punctAles
 		continua = any(r["actiune"] == L.ACT_CONTINUA for r in self._randuri)
@@ -327,7 +358,11 @@ class HdsLocInregistrari(Screen):
 		else:
 			# ramane ales acelasi disc dupa o citire noua (dupa o alegere: discul ales, pe randul lui „aici se salveaza”)
 			for i, r in enumerate(self._randuri):
-				if ales is not None and r["punct"] == ales:
+				if rand_ales.get("actiune") == L.ACT_NUME_MEDIA and self._punctAles is None:
+					potrivit = r["actiune"] == L.ACT_NUME_MEDIA and r.get("dispozitiv") == rand_ales.get("dispozitiv")
+				else:
+					potrivit = ales is not None and r["punct"] == ales and r["actiune"] != L.ACT_NUME_MEDIA
+				if potrivit:
 					self["list"].moveToIndex(i)
 					if r["actiune"] == L.ACT_ACTUAL:
 						self._punctAles = None
@@ -487,6 +522,8 @@ class HdsLocInregistrari(Screen):
 			self._formateaza(r.get("disc"))
 		elif r["actiune"] == L.ACT_REPARA:
 			self._repara(r.get("disc"))
+		elif r["actiune"] == L.ACT_NUME_MEDIA:
+			self._alegeNumeMedia(r)
 		elif r["actiune"] == L.ACT_ACTUAL:
 			if self._scop == L.SCOP_MENIU:
 				self._mesajNou(_("Înregistrările se salvează deja aici."))
@@ -505,6 +542,26 @@ class HdsLocInregistrari(Screen):
 				self._mesajNou(mesaj)
 				return
 			self._incepeLucrul(r["punct"])
+
+	def _alegeNumeMedia(self, rand):
+		from Screens.ChoiceBox import ChoiceBox
+		dispozitiv = rand["dispozitiv"]
+		info = L.numeMedia(dispozitiv)
+		alegeri = [(a[1], a[0]) for a in info.get("alegeri") or []]
+		if not alegeri:
+			self._mesajNou(_("Numele nu se poate schimba acum."))
+			return
+		index = next((i for i, a in enumerate(alegeri) if a[1] == info.get("valoare", "")), 0)
+		self.session.openWithCallback(lambda alegere: self._numeMediaAles(dispozitiv, alegere), ChoiceBox,
+			title=_("Numele în /media pentru „%s”") % rand["nume"], list=alegeri, selection=index)
+
+	def _numeMediaAles(self, dispozitiv, alegere=None):
+		if alegere is None:
+			return
+		rez = L.alegeNumeMedia(dispozitiv, alegere[1])
+		self._discuri()
+		self._citeste(True)
+		self._mesajNou(rez.get("message") or _("Numele nu se poate schimba acum."))
 
 	def _formateaza(self, disc):
 		"""Randul 'Formatează' al unui stick necitit: ecranul de formatare existent (Screens/HarddiskSetup.py) pentru
@@ -525,29 +582,12 @@ class HdsLocInregistrari(Screen):
 			self.session.openWithCallback(self._dupaFormatare, HarddiskSelection)
 
 	def _repara(self, disc):
-		"""Randul 'Repară' al unui stick pus pe numai citire: un singur OK, explicatia e deja pe ecran. Lucrarea existenta
-		(Components/HdsDiscuri.verifica, cu ecranul de asteptare HarddiskWait); un stick folosit acum nu se atinge."""
-		from Components import HdsDiscuri
-		from Screens.HarddiskSetup import HarddiskSetup, HarddiskWait
-		hdd = HdsDiscuri.discul(disc) if disc else None
-		if hdd is None:
-			self._mesajNou(_("Discul ales nu mai este conectat. Alege din nou."))
-			return
-		if HdsDiscuri.inLucru():
-			self._mesajNou(_("Se lucrează deja la un disc. Așteaptă să se termine."))
-			return
-		refuz = HdsDiscuri.motiveRefuz(hdd.device, HdsDiscuri.stareInregistrari())
-		if refuz:
-			self._mesajNou(refuz[0][1])
-			return
-		self.session.openWithCallback(self._dupaReparare, HarddiskWait, hdd, HarddiskSetup.HARDDISK_CHECK)
+		pornesteReparare(self.session, disc, self._mesajNou, self._dupaReparare)
 
 	def _dupaReparare(self, reusit=None):
-		if reusit is None:
-			self._mesajNou(_("Se lucrează deja la un disc. Așteaptă să se termine."))
-		elif not reusit:
-			from Components import HdsDiscuri
-			self._mesajNou(HdsDiscuri.textLucru(HdsDiscuri.stareLucru()))
+		text = textDupaReparare(reusit)
+		if text:
+			self._mesajNou(text)
 		self._dupaFormatare()
 
 	def _dupaFormatare(self, *rezultat):

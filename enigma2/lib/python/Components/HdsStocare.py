@@ -65,16 +65,43 @@ def _montari(cale_mounts="/proc/mounts"):
 	return lista
 
 
-def montarePentru(cale, montari=None, realpath=None):
-	"""(punct, fel, dispozitiv) al montarii care tine `cale` (cel mai lung punct de montare potrivit; la puncte egale,
-	montarea de mai tarziu, care o acopera pe cea dinainte, ca „rootfs /” urmat de „/dev/mmcblk0p10 /”), sau None."""
+def _potrivire(cale, lista, realpath=None):
+	"""Randul din `lista` (punctul de montare primul) care tine `cale`: cel mai lung punct potrivit; la puncte egale, montarea
+	de mai tarziu, care o acopera pe cea dinainte, ca „rootfs /” urmat de „/dev/mmcblk0p10 /”. None daca nu e niciunul."""
 	cale = (realpath or os.path.realpath)(cale)
 	potrivit = None
-	for punct, fel, disp in (montari if montari is not None else _montari()):
+	for rand in lista:
+		punct = rand[0]
 		if cale == punct or cale.startswith(punct.rstrip("/") + "/") or punct == "/":
 			if potrivit is None or len(punct) >= len(potrivit[0]):
-				potrivit = (punct, fel, disp)
+				potrivit = rand
 	return potrivit
+
+
+def montarePentru(cale, montari=None, realpath=None):
+	"""(punct, fel, dispozitiv) al montarii care tine `cale`, sau None."""
+	return _potrivire(cale, montari if montari is not None else _montari(), realpath)
+
+
+def _optiuniMontari(cale_mounts="/proc/mounts"):
+	"""[(punct, multimea optiunilor)] din /proc/mounts."""
+	lista = []
+	try:
+		with open(cale_mounts, "r", encoding="utf-8", errors="surrogateescape") as f:
+			for linie in f:
+				parti = linie.split()
+				if len(parti) >= 4:
+					lista.append((parti[1].replace("\\040", " "), set(parti[3].split(","))))
+	except (OSError, IOError):
+		pass
+	return lista
+
+
+def montataNumaiCitire(cale, optiuni=None, realpath=None):
+	"""True cand montarea care tine `cale` are optiunea ro in /proc/mounts. Un FAT cu o eroare (errors=remount-ro) primeste de la
+	nucleu numai steagul superblocului: /proc/mounts il arata, iar statvfs.f_flag poate sa nu-l arate."""
+	m = _potrivire(cale, optiuni if optiuni is not None else _optiuniMontari(), realpath)
+	return m is not None and "ro" in m[1]
 
 
 def _citesteSys(cale):
@@ -159,10 +186,11 @@ def _inDosarImagine(cale, punct, radacina, realpath=None):
 	return primul == radacina.get("subdosar") or _DOSAR_IMAGINE_RX.match(primul) is not None
 
 
-def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=None, radacina=None):
+def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=None, radacina=None, optiuni=None):
 	"""(bun, motiv): motiv e sir gol cand locul e un disc adevarat, altfel unul din lipsa, ram, intern, imagine, mic,
 	plin, numai_citire, scriere. `cale` e dosarul inregistrarilor (sau al timeshift-ului). Parametrii in plus sunt
-	pentru probele de pe PC (`radacina`: rezultatul lui discRadacina; False: radacina in memoria interna)."""
+	pentru probele de pe PC (`radacina`: rezultatul lui discRadacina; False: radacina in memoria interna; `optiuni`:
+	rezultatul lui _optiuniMontari)."""
 	statvfs = statvfs or getattr(os, "statvfs", None)
 	if not cale or not os.path.isdir(cale):
 		return False, "lipsa"
@@ -194,7 +222,9 @@ def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=N
 		return False, "lipsa"
 	if not os.access(cale, os.W_OK):
 		# nucleul pune singur pe numai citire un FAT cu o eroare (errors=remount-ro), iar statvfs merge mai departe
-		return False, "numai_citire" if int(getattr(s, "f_flag", 0) or 0) & ST_RDONLY else "scriere"
+		if int(getattr(s, "f_flag", 0) or 0) & ST_RDONLY or montataNumaiCitire(cale, optiuni, realpath):
+			return False, "numai_citire"
+		return False, "scriere"
 	return True, ""
 
 
