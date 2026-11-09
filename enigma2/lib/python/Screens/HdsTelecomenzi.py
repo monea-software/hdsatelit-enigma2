@@ -548,6 +548,7 @@ class HdsTelecomenzi(Screen):
 
 	def _arataProba(self, ev):
 		p = self.proba
+		self['istoric'].setText('\n'.join(p.istoric(_)))
 		if p.gata():
 			self['mare'].setText(_('Toate butoanele merg.'))
 		else:

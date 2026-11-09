@@ -57976,3 +57976,274 @@ msgstr "Nije moguće otvoriti cilj simboličke poveznice."
 #: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
 msgid "Țări"
 msgstr "Države"
+
+#. Fisa 50: reparatii a3.
+msgid "(captura nu este JPG sau PNG)"
+msgstr "(snimka nije u formatu JPG ili PNG)"
+
+#. Fisa 50: reparatii a3.
+msgid "Captura nu este disponibilă acum. Starea ecranului se verifică."
+msgstr "Snimka trenutačno nije dostupna. Provjerava se stanje zaslona."
+
+#. Fisa 50: reparatii a3.
+msgid "Captura se pregătește după închiderea ecranului protejat. Reîncearcă."
+msgstr "Snimka se priprema nakon zatvaranja zaštićenog zaslona. Pokušaj ponovno."
+
+#. Fisa 50: reparatii a3.
+msgid "Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "Proširenja na prijamniku i iz izvora paketa. Datoteke .ipk s USB memorije, diska, iz /tmp ili s mreže. Ažuriranja imagea nalaze se na stranici <a href=\"/actualizari\" id=\"legaturaActualizari\">Ažuriranje softvera</a>."
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, de pe disc și din /tmp"
+msgstr "Datoteke .ipk s USB memorije, diska i iz /tmp"
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, disc, din /tmp sau din rețea"
+msgstr "Datoteke .ipk s USB memorije, diska, iz /tmp ili s mreže"
+
+#. Fisa 50: reparatii a3.
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). Pentru dosarele de rețea, alege Caută și în rețea."
+msgstr "Instaliraš datoteku .ipk s USB memorije, diska ili iz memorije prijamnika (/tmp). Za mrežne mape odaberi Traži i u mreži."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp.\nCopiază extensia într-unul dintre aceste locuri, apoi apasă albastru."
+msgstr "Na USB memoriji, disku ni u /tmp nema datoteka .ipk.\nKopiraj proširenje na jedno od tih mjesta, zatim pritisni plavu tipku."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp. Copiază extensia într-unul dintre aceste locuri, apoi caută din nou."
+msgstr "Na USB memoriji, disku ni u /tmp nema datoteka .ipk. Kopiraj proširenje na jedno od tih mjesta, zatim ponovno pretraži."
+
+#. Fisa 50: reparatii a3.
+msgid "Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo."
+msgstr "Na televizoru je otvoren zaštićeni zaslon: %s. Vidi se samo tamo."
+
+#. Fisa 50: reparatii a3.
+msgid "Răspunsul nu este o captură JPG sau PNG."
+msgstr "Odgovor nije snimka u formatu JPG ili PNG."
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp"
+msgstr "Traže se datoteke .ipk na USB memoriji, disku i u /tmp"
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp."
+msgstr "Traže se datoteke .ipk na USB memoriji, disku i u /tmp."
+
+#. Fisa 50: reparatii a3.
+msgid "captura nu este JPG sau PNG"
+msgstr "snimka nije u formatu JPG ili PNG"
+
+#. Fisa 50: reparatii a3.
+msgid "oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
+msgstr "zaustavljeno vanjskim signalom SIGKILL (obično ga šalje dodatak ili naredba koja ponovno pokreće sučelje)"
+#: data/menu.xml lib/python/Components/HdsPornireMultipla.py
+#: lib/python/Screens/HdsPornireMultipla.py
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py
+msgid "Repornește în altă imagine"
+msgstr "Ponovno pokreni s drugom slikom"
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Din comunitate"
+msgstr "Iz zajednice"
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "%s - din comunitate - Autor: %s"
+msgstr "%s - iz zajednice - Autor: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Siglele comunității apar când există rețea."
+msgstr "Logotipi zajednice pojavljuju se kad postoji mrežna veza."
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "Din comunitate\nAutor: %s"
+msgstr "Iz zajednice\nAutor: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Reîncarcă lista"
+msgstr "Ponovno učitaj popis"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecieri: %(likes)d | Descărcări: %(downloads)d"
+msgstr "Sviđanja: %(likes)d | Preuzimanja: %(downloads)d"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecierile se dau pe site, cu contul: %s"
+msgstr "Sviđanja daješ na stranici nakon prijave u račun: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Din comunitate | Autor: %s"
+msgstr "Iz zajednice | Autor: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: implicită"
+msgstr "Redoslijed: zadani"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai apreciate"
+msgstr "Redoslijed: prema broju sviđanja"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai descărcate"
+msgstr "Redoslijed: prema broju preuzimanja"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecierile se dau pe site, cu contul:"
+msgstr "Sviđanja daješ na stranici nakon prijave u račun:"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine"
+msgstr "Redoslijed"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai apreciate"
+msgstr "Najviše sviđanja"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai descărcate"
+msgstr "Najviše preuzimanja"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecieri: "
+msgstr "Sviđanja: "
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Descărcări: "
+msgstr "Preuzimanja: "
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "%(nume)s (%(sigle)d)"
+msgstr "%(nume)s (%(sigle)d)"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri"
+msgstr "Sviđanja"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri primite"
+msgstr "Dobivena sviđanja"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor"
+msgstr "Poredak doprinositelja"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor apare când există rețea."
+msgstr "Poredak doprinositelja pojavljuje se kad postoji mrežna veza."
+
+#: Fisa 47c: contributori
+msgid "Contributor"
+msgstr "Doprinositelj"
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "Contributor: %s"
+msgstr "Doprinositelj: %s"
+
+#: Fisa 47c: contributori
+msgid "Loc"
+msgstr "Mjesto"
+
+#: Fisa 47c: contributori
+msgid "Nu este niciun ecran pentru acest contributor."
+msgstr "Ovaj doprinositelj nema nijednu sliku za početni zaslon."
+
+#: Fisa 47c: contributori
+msgid "OK: vezi siglele contributorului. EXIT: înapoi."
+msgstr "OK: pogledaj logotipe doprinositelja. EXIT: natrag."
+
+#: Fisa 47c: contributori
+msgid "Sigle aprobate"
+msgstr "Odobreni logotipi"
+
+#: Fisa 47c: contributori
+msgid "XP"
+msgstr "XP"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "%s - privată: %s"
+msgstr "%s - privatni: %s"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "Privată | %s"
+msgstr "Privatni | %s"
+
+#: Fisa 47d: siglele private
+msgid "are sigla altei firme"
+msgstr "sadrži logotip druge tvrtke"
+
+#: Fisa 47d: siglele private
+msgid "nu se publică"
+msgstr "ne objavljuje se"
+
+#: Fisa 47d: siglele private
+msgid "poza există pe alte site-uri"
+msgstr "slika postoji na drugim stranicama"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Se verifică legătura pentru asistență..."
+msgstr "Provjerava se veza za pomoć..."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Setările de internet"
+msgstr "Internetske postavke"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu are internet. Verifică setările rețelei."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: prijamnik nema pristup internetu. Provjeri mrežne postavke."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: cablul de rețea nu este conectat. Verifică și routerul."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: mrežni kabel nije spojen. Provjeri i usmjerivač."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. Verifică rețeaua Wi-Fi și parola."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: prijamnik nije spojen na Wi-Fi. Provjeri mrežu Wi-Fi i lozinku."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu poate afla adresa stb.hdsatelit.com (DNS). Verifică setările de internet."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: prijamnik ne može saznati adresu stb.hdsatelit.com (DNS). Provjeri internetske postavke."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit are o problemă temporară. Încearcă din nou mai târziu."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: poslužitelj HD Satelit ima privremeni problem. Pokušaj ponovno kasnije."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. Verifică internetul și încearcă din nou."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: prijamnik ne može pristupiti poslužitelju HD Satelit. Provjeri internet i pokušaj ponovno."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: sigurna veza HTTPS je odbijena. Provjeri datum i vrijeme prijamnika; ako su točni, pokušaj kasnije."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit a refuzat cererea. Încearcă din nou mai târziu."
+msgstr "Udaljenu pomoć nije moguće pokrenuti: poslužitelj HD Satelit odbio je zahtjev. Pokušaj ponovno kasnije."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Atenție: numele receptorului %s nu e cunoscut de actualizator."
+msgstr "  Upozorenje: program za ažuriranje ne poznaje naziv prijamnika %s."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB."
+msgstr "  Pri pokretanju drži Standby na prijamniku, zatim odaberi Recovery From USB."
+
+#. Fisa 57: recuperarea modelului.
+msgid "Recuperare prin Recovery From USB (stick USB):"
+msgstr "Oporavak putem Recovery From USB (USB memorija):"

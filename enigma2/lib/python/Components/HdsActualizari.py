@@ -1414,6 +1414,12 @@ class Actualizari(object):
 		if argumente is None:
 			return self._descarcare_cazuta(('descarcare', 'opkg nu primeste pachetele descarcate'), nume)
 		try:
+			from Components import HdsLimbaRestaurare
+			# Inainte sa dispara vreun pachet, retine ce avea omul.
+			HdsLimbaRestaurare.pastreaza(self.radacina, HdsLimbaRestaurare._aleasa())
+		except Exception as e:
+			return self._descarcare_cazuta(('descarcare', 'Limba nu se poate pastra: %s' % e), nume)
+		try:
 			from Components import HdsParteaDoua
 			if HdsParteaDoua.citesteConf(self.radacina) and HdsParteaDoua.radacinaNand(self.radacina):
 				self._partea_doua_lacat = HdsParteaDoua.ocupaOperatia(self.radacina)

@@ -2,7 +2,9 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsEcranPornire.py: ecranul din meniu prin care se alege poza de pornire (galeria gata facuta si pozele proprii).
+# HdsEcranPornire.py: siglele imaginii, pozele proprii si comunitatea.
+# Lista locala apare imediat. Reteaua si descarcarea merg pe fire separate.
+# OK pe o sigla din comunitate o descarca si o pune direct.
 #
 # Asezarea e aceeasi ca in pagina web (HdsWebControl/ecran_pornire_web.py): sus un rand de file cu grupele („Toate”,
 # „Logo”, „Natură”, ... „Pozele mele” cand exista, la urma „Adaugă o poză”), dedesubt ecranele grupei alese in
@@ -35,10 +37,11 @@ import re
 import threading
 import time
 
-from enigma import eListboxPythonMultiContent, ePicLoad, eTimer, ePoint, eSize, getDesktop, gRGB, RT_HALIGN_LEFT, \
+from enigma import eListboxPythonMultiContent, ePicLoad, eTimer, ePoint, eSize, getDesktop, gRGB, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, \
 	RT_VALIGN_CENTER
 
 from Screens.Screen import Screen
+from Screens.ChoiceBox import ChoiceBox
 from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.FileList import FileList
@@ -231,6 +234,73 @@ class HdsMeniuEcranPornire(Screen):
 		self.close(None)
 
 
+class HdsClasamentContributori(Screen):
+	"""Primele zece pozitii primite de la server, in aceeasi ordine."""
+
+	def __init__(self, session, contributori, nota=""):
+		Screen.__init__(self, session)
+		self.contributori = list(contributori)[:10]
+		l, i = _ecran()
+		f = l / 1920.0
+		latime, margine = int(1560 * f), int(24 * f)
+		hRand = MT.inaltimeCod(max(24, int(56 * f)))
+		hAntet = MT.inaltimeCod(max(24, int(46 * f)))
+		hNota = MT.inaltimeCod(max(48, int(80 * f)))
+		loc = i - int(180 * f) - 2 * margine - hAntet - hNota
+		vizibile = max(1, min(10, len(self.contributori), loc // hRand))
+		hLista = vizibile * hRand
+		inaltime = 2 * margine + hAntet + hLista + hNota
+		latLista = latime - 2 * margine
+		coloane = (0, int(latLista * .06), int(latLista * .56), int(latLista * .70), int(latLista * .86), latLista)
+		font = max(14, int(28 * f))
+		xml = ['<screen name="HdsClasamentContributori" position="center,center" size="%d,%d">' % (latime, inaltime)]
+		for k in range(5):
+			xml.append('<widget name="antet%d" position="%d,%d" size="%d,%d" font="Regular;%d" '
+				'foregroundColor="#00AEB9CC" halign="%s" valign="center" noWrap="1" transparent="1" />' %
+				(k, margine + coloane[k], margine, coloane[k + 1] - coloane[k], hAntet, font,
+					"left" if k < 2 else "right"))
+		xml.append('<widget name="lista" position="%d,%d" size="%d,%d" itemHeight="%d" '
+			'scrollbarMode="showOnDemand" transparent="1" />' %
+			(margine, margine + hAntet, latLista, hLista, hRand))
+		xml.append('<widget name="nota" position="%d,%d" size="%d,%d" font="Regular;%d" '
+			'valign="center" transparent="1" /></screen>' %
+			(margine, margine + hAntet + hLista, latLista, hNota, max(14, int(24 * f))))
+		self.skin = "\n".join(xml)
+		self.setTitle(_("Clasamentul contributorilor"))
+		for k, text in enumerate((_("Loc"), _("Contributor"), _("Sigle"), _("Aprecieri"), _("XP"))):
+			self["antet%d" % k] = Label(text)
+		randuri = []
+		for k, contributor in enumerate(self.contributori):
+			rand = [contributor.get("id")]
+			texte = (str(k + 1), contributor.get("nume", ""), str(contributor.get("sigle", 0)),
+				str(contributor.get("likes", 0)), str(contributor.get("xp", 0)))
+			for j, text in enumerate(texte):
+				rand.append(MultiContentEntryText(pos=(coloane[j], 0),
+					size=(coloane[j + 1] - coloane[j] - max(2, int(8 * f)), hRand), font=0,
+					flags=(RT_HALIGN_LEFT if j < 2 else RT_HALIGN_RIGHT) | RT_VALIGN_CENTER, text=text))
+			randuri.append(rand)
+		self["lista"] = MenuList(randuri, content=eListboxPythonMultiContent)
+		self["lista"].l.setFont(0, MT.fontCod("Regular", font))
+		self["lista"].l.setItemHeight(hRand)
+		text = _("OK: vezi siglele contributorului. EXIT: înapoi.")
+		self["nota"] = Label(text + ("\n" + nota if nota else ""))
+		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions"], {
+			"ok": self.alege,
+			"cancel": lambda: self.close(None),
+			"up": self["lista"].up,
+			"down": self["lista"].down,
+			"upRepeated": self["lista"].up,
+			"downRepeated": self["lista"].down,
+		}, -1)
+
+	def alege(self):
+		try:
+			k = self["lista"].getSelectionIndex()
+		except Exception:
+			k = 0
+		self.close(self.contributori[k].get("id") if 0 <= k < len(self.contributori) else None)
+
+
 def _skinEcranPornire():
 	"""Skinul ecranului, socotit din marimea desktopului (1920x1080 sau 1280x720): file sus, grila 4x3 de ecrane (sau
 	explicatia de la „Adaugă o poză”), randul de stare si tastele colorate jos."""
@@ -250,14 +320,14 @@ def _skinEcranPornire():
 	W, H = l - 2 * x, i - y - int(24 * f)
 	p = int(20 * f)
 	hFila, fFila = int(52 * f), max(14, int(26 * f))
-	lPoza, hPoza = int(360 * f), int(203 * f)
+	lPoza, hPoza = int(338 * f), int(190 * f)
 	gol_x, gol_y = int(28 * f), int(18 * f)
 	hNume, fNume = int(42 * f), max(14, int(26 * f))
 	hCasuta = hPoza + hNume
 	lGrila = COLOANE * lPoza + (COLOANE - 1) * gol_x
 	x0 = (W - lGrila) // 2
 	yGrila = p + hFila + int(20 * f)
-	hStare, fStare = int(40 * f), max(14, int(24 * f))
+	hStare, fStare = int(48 * f), max(14, int(20 * f))
 	hButon, fButon = int(50 * f), max(14, int(26 * f))
 	yButon = H - p - hButon
 	yStare = yButon - int(10 * f) - hStare
@@ -287,6 +357,16 @@ def _skinEcranPornire():
 		r.append('<widget name="nume%d" position="%d,%d" size="%d,%d" font="Regular;%d" halign="center" valign="top" '
 			'foregroundColor="#00F2F4F8" noWrap="1" transparent="1" zPosition="3" />'
 			% (k, cx + int(8 * f), yN, lPoza - int(16 * f), hN, fNume))
+		r.append('<widget name="credit%d" position="%d,%d" size="%d,%d" '
+			'font="Regular;%d" foregroundColor="#00F2F4F8" '
+			'backgroundColor="#200D1120" noWrap="1" zPosition="4" />'
+			% (k, cx + int(8 * f), cy + hPoza - int(68 * f),
+				lPoza - int(16 * f), int(30 * f), max(12, int(18 * f))))
+		r.append('<widget name="numere%d" position="%d,%d" size="%d,%d" '
+			'font="Regular;%d" foregroundColor="#00F2F4F8" '
+			'backgroundColor="#200D1120" noWrap="1" zPosition="4" />'
+			% (k, cx + int(8 * f), cy + hPoza - int(34 * f),
+				lPoza - int(16 * f), int(30 * f), max(12, int(18 * f))))
 		# insigna „pus acum”: pe un rand (noWrap), destul de lata pentru cea mai lunga traducere; la deschidere se
 		# strange dupa text (_potrivesteInsignele). valign="top": textul (litere mici, cu „p”) sta cu mijlocul literelor
 		# la mijlocul insignei; centrat dupa contur urca din cauza cozii lui „p”
@@ -295,11 +375,14 @@ def _skinEcranPornire():
 			% (k, cx + int(10 * f), cy + int(10 * f), int(200 * f), hPus, fPus))
 	# fila „Adaugă o poză”: explicatia, mare, in locul grilei
 	hGrila = RANDURI * hCasuta + (RANDURI - 1) * gol_y
+	r.append('<widget name="site" position="%d,%d" size="%d,%d" font="Regular;%d" '
+		'foregroundColor="#00AEB9CC" noWrap="1" transparent="1" />'
+		% (p, yGrila + hGrila + int(8 * f), W - 2 * p, int(32 * f), fStare))
 	r.append('<widget name="explicatie" position="%d,%d" size="%d,%d" font="Regular;%d" halign="center" valign="center" '
 		'foregroundColor="#00F2F4F8" backgroundColor="#000D1120" zPosition="5" />'
 		% (x0, yGrila, lGrila, hGrila, max(14, int(30 * f))))
 	r.append('<widget name="stare" position="%d,%d" size="%d,%d" font="Regular;%d" foregroundColor="#00F2F4F8" '
-		'valign="center" noWrap="1" transparent="1" zPosition="2" />' % (p, yStare, W - 2 * p - int(300 * f), hStare, fStare))
+		'valign="center" transparent="1" zPosition="2" />' % (p, yStare, W - 2 * p - int(300 * f), hStare, fStare))
 	r.append('<widget name="pagina" position="%d,%d" size="%d,%d" font="Regular;%d" foregroundColor="#00AEB9CC" '
 		'halign="right" valign="center" noWrap="1" transparent="1" zPosition="2" />'
 		% (W - p - int(300 * f), yStare, int(300 * f), hStare, fStare))
@@ -322,6 +405,7 @@ class HdsEcranPornire(Screen):
 
 	FILA_TOATE = "toate"
 	FILA_ADAUGA = "adauga"
+	ALEGERE_CLASAMENT = object()
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
@@ -329,6 +413,11 @@ class HdsEcranPornire(Screen):
 		self.setTitle(_("Ecran de pornire"))
 		self.file = []                  # [{"id", "nume"}], cu „Toate” la inceput si „Adaugă o poză” la urma
 		self.ecrane = []                # toate ecranele, din galerie si proprii
+		self._ordine = "implicit"
+		self._contributor = None
+		self._contributori = []
+		self._clasament_contributori = []
+		self._nota_contributori = ""
 		self.activ = None               # {"sursa", "id"} sau None
 		self.proprii = 0                # cate poze proprii are omul
 		self.sterse = 0                 # cate ecrane din galerie a sters omul
@@ -347,6 +436,13 @@ class HdsEcranPornire(Screen):
 		self._generatie = 0
 		self._poze = {}                 # cale -> pixmap decodat
 		self._ordine_poze = []
+		self._rezolutie = "1920x1080" if _ecran()[0] >= 1920 else "1280x720"
+		self._nota_comunitate = ""
+		self._comunitate_online = False
+		self._comunitate_lucru = False
+		self._comunitate_rezultat = None
+		self._comunitate_lista_asteapta = False
+		self._poze_ratate = set()
 
 		for k in range(MAX_FILE):
 			self["fila%d" % k] = Label("")
@@ -357,16 +453,20 @@ class HdsEcranPornire(Screen):
 			self["poza%d" % k] = Pixmap()
 			self["fara%d" % k] = Label("")
 			self["nume%d" % k] = Label("")
+			self["credit%d" % k] = Label("")
+			self["numere%d" % k] = Label("")
 			self["pus%d" % k] = Label(_("pus acum"))
 		self["explicatie"] = Label("")
 		self["stare"] = Label("")
 		self["pagina"] = Label("")
+		self["site"] = Label(_("Aprecierile se dau pe site, cu contul: %s") %
+			"https://stb.hdsatelit.com/sigle-de-pornire/")
 		for nume in ("rosu", "verde", "galben", "albastru"):
 			self["tasta_%s" % nume] = Label("")
 		self["buton_rosu"] = Label(_("Închide"))
 		self["buton_verde"] = Label(_("Pune ecranul"))
-		self["buton_galben"] = Label(_("Adaugă o poză"))
-		self["buton_albastru"] = Label(_("Ecranul din fabrică"))
+		self["buton_galben"] = Label(_("Ordine: implicită"))
+		self["buton_albastru"] = Label(_("Contributor: %s") % _("Toți"))
 
 		self["actiuni"] = ActionMap(
 			["OkCancelActions", "ColorActions", "DirectionActions", "MenuActions"], {
@@ -374,8 +474,8 @@ class HdsEcranPornire(Screen):
 				"cancel": self.inchide,
 				"red": self.inchide,
 				"green": self.pune,
-				"yellow": self.pozaMea,
-				"blue": self.dinFabrica,
+				"yellow": self.schimbaOrdinea,
+				"blue": self.alegeContributor,
 				"menu": self.meniulEcranului,
 				"up": self.sus_,
 				"down": self.jos,
@@ -401,6 +501,11 @@ class HdsEcranPornire(Screen):
 
 		self.onLayoutFinish.append(self._porneste)
 		self.onClose.append(self._laInchidere)
+		self._ceas_comunitate = eTimer()
+		try:
+			self._ceas_comunitate.callback.append(self._bateComunitate)
+		except AttributeError:
+			self._comunitate_conn = self._ceas_comunitate.timeout.connect(self._bateComunitate)
 
 	# ------------------------------------------------------------------ viata ecranului
 
@@ -408,6 +513,7 @@ class HdsEcranPornire(Screen):
 		# firul de conversie sau o poza decodata pot veni dupa inchidere; steagul le face inofensive
 		self._inchis = True
 		self._ceas.stop()
+		self._ceas_comunitate.stop()
 		self._coada = []
 		self._poze = {}
 
@@ -421,6 +527,74 @@ class HdsEcranPornire(Screen):
 			print("[HdsEcranPornire] nu pot pregati pozele mici: %s" % e)
 		self._potrivesteInsignele()
 		self._reciteste(primaData=True)
+		self._cereListaComunitate()
+		self._ceas_comunitate.start(150, False)
+
+	def _cereListaComunitate(self):
+		self._comunitate_lista_asteapta = True
+		if not self._comunitate_lucru:
+			self._incepeListaComunitate()
+
+	def _incepeListaComunitate(self):
+		self._comunitate_lista_asteapta = False
+		self._comunitate_lucru = True
+		contributor = self._contributor
+		# siglele private ale omului: dovada receptorului se citeste aici, pe firul interfetei; reteaua pe fir
+		privat = ecrane.contextPrivat()
+		def citeste():
+			try:
+				d = ecrane.lista(comunitate=True, rezolutie=self._rezolutie, contributor=contributor, privat=privat)
+			except Exception:
+				d = None
+			self._comunitate_rezultat = ("lista", (contributor, d))
+		fir = threading.Thread(target=citeste)
+		fir.daemon = True
+		fir.start()
+
+	def _bateComunitate(self):
+		"""Numai acest ceas aduce rezultatele retelei in widgeturi."""
+		if self._inchis or self._lucreaza:
+			return
+		if self._comunitate_rezultat is not None:
+			fel, date = self._comunitate_rezultat
+			self._comunitate_rezultat = None
+			self._comunitate_lucru = False
+			if fel == "lista":
+				contributor, date = date
+				if contributor == self._contributor:
+					if not isinstance(date, dict):
+						date = ecrane.lista(rezolutie=self._rezolutie,
+							contributor=self._contributor)
+						date["clasament_contributori"] = []
+						date["nota_contributori"] = _(
+							"Clasamentul contributorilor apare când există rețea.")
+					self._reciteste(date=date)
+			else:
+				if not date.get("ok"):
+					self._poze_ratate.add(fel)
+				self._deseneazaGrila()
+		if self._comunitate_lista_asteapta and not self._comunitate_lucru:
+			self._incepeListaComunitate()
+			return
+		if self._comunitate_lucru or not self._comunitate_online:
+			return
+		vizibile = self._inGrupa()[self.sus * COLOANE:self.sus * COLOANE + CASUTE]
+		for e in vizibile:
+			if (e["sursa"] != "comunitate" or e["id"] in self._poze_ratate or
+					ecrane.caleMic("comunitate", e["id"])):
+				continue
+			self._comunitate_lucru = True
+			ident = e["id"]
+			def citeste_poza(ident=ident):
+				try:
+					d = ecrane.previzualizareComunitate(ident)
+				except Exception:
+					d = {"ok": False}
+				self._comunitate_rezultat = (ident, d)
+			fir = threading.Thread(target=citeste_poza)
+			fir.daemon = True
+			fir.start()
+			break
 
 	def _potrivesteInsignele(self):
 		"""Insigna „pus acum” cat textul ei, plus cate o margine (textul e acelasi pe toate casutele)."""
@@ -439,17 +613,31 @@ class HdsEcranPornire(Screen):
 
 	# ------------------------------------------------------------------ datele
 
-	def _reciteste(self, primaData=False):
+	def _reciteste(self, primaData=False, date=None):
 		"""Reia totul de la modul: galeria, pozele proprii si care ecran e pus acum."""
+		self._contributor = getattr(self, "_contributor", None)
 		try:
-			d = ecrane.lista()
+			d = date if isinstance(date, dict) else ecrane.lista(
+				rezolutie=self._rezolutie, contributor=self._contributor)
 		except Exception as e:
 			print("[HdsEcranPornire] nu pot citi lista: %s" % e)
 			d = {"grupe": [], "ecrane": [], "proprii": [], "activ": None, "poate_converti": False}
 		self.activ = d.get("activ")
 		self.proprii = len(d.get("proprii") or [])
 		self.sterse = int(d.get("sterse") or 0)
-		self.ecrane = list(d.get("ecrane") or []) + list(d.get("proprii") or [])
+		self.ecrane = d.get("lista",
+			list(d.get("ecrane") or []) + list(d.get("proprii") or []))
+		self._nota_comunitate = d.get("nota_comunitate", "")
+		self._comunitate_online = d.get("comunitate_online", False)
+		self._contributori = list(d.get("contributori") or [])
+		self._clasament_contributori = list(d.get("clasament_contributori") or [])[:10]
+		self._nota_contributori = d.get("nota_contributori") or ""
+		if self._contributor is not None and not any(c.get("id") == self._contributor for c in self._contributori):
+			self._contributor = None
+			self._comunitate_lista_asteapta = True
+		elif date is None and self._contributor is not None and not self._comunitate_online:
+			self._comunitate_lista_asteapta = True
+		self._arataContributor()
 		fila_de_dinainte = self.file[self.fila]["id"] if self.file and 0 <= self.fila < len(self.file) else None
 		self.file = [{"id": self.FILA_TOATE, "nume": _("Toate")}]
 		self.file += [g for g in (d.get("grupe") or []) if g.get("id") != self.FILA_TOATE][:MAX_FILE - 2]
@@ -467,15 +655,11 @@ class HdsEcranPornire(Screen):
 
 	def _laEcranulPus(self):
 		"""La deschidere: fila grupei ecranului pus acum si chenarul pe el (altfel prima grupa, primul ecran)."""
-		self.fila, self.cursor, self.zona = min(1, len(self.file) - 1), 0, "grila"
+		self.fila, self.cursor, self.zona = 0, 0, "grila"
 		if self.activ:
 			for i, e in enumerate(self.ecrane):
 				if self._estePus(e):
-					grup = e.get("grup")
-					for k, f in enumerate(self.file):
-						if f["id"] == grup:
-							self.fila = k
-							self.cursor = self._inGrupa().index(e)
+					self.cursor = i
 					break
 		if not self._inGrupa():
 			self.zona = "file"
@@ -493,8 +677,65 @@ class HdsEcranPornire(Screen):
 		if f is None or f["id"] == self.FILA_ADAUGA:
 			return []
 		if f["id"] == self.FILA_TOATE:
-			return list(self.ecrane)
-		return [e for e in self.ecrane if e.get("grup") == f["id"]]
+			lista = self.ecrane
+		else:
+			lista = [e for e in self.ecrane if e.get("grup") == f["id"]]
+		return ecrane.ordoneaza(lista, getattr(self, "_ordine", "implicit"),
+			getattr(self, "_contributor", None))
+
+	def _arataContributor(self):
+		if "buton_albastru" not in self:
+			return
+		nume = next((c.get("nume") for c in self._contributori if c.get("id") == self._contributor), None)
+		self["buton_albastru"].setText(_("Contributor: %s") % (nume or _("Toți")))
+
+	def alegeContributor(self):
+		if self._lucreaza:
+			return
+		alegeri = [(_("Toți"), None)]
+		alegeri += [(_("%(nume)s (%(sigle)d)") % c, c["id"]) for c in self._contributori]
+		if self._clasament_contributori:
+			alegeri.append((_("Clasamentul contributorilor"), self.ALEGERE_CLASAMENT))
+		ales = next((i for i, c in enumerate(alegeri) if c[1] == self._contributor), 0)
+		text = _("Contributor")
+		if self._nota_contributori:
+			text += "\n" + self._nota_contributori
+		self.session.openWithCallback(self._contributorAles, ChoiceBox, title=text, list=alegeri, selection=ales)
+
+	def _contributorAles(self, rezultat):
+		if self._inchis or not rezultat:
+			return
+		if rezultat[1] is self.ALEGERE_CLASAMENT:
+			self.session.openWithCallback(self._dinClasament, HdsClasamentContributori,
+				self._clasament_contributori, self._nota_contributori)
+		else:
+			self._schimbaContributor(rezultat[1])
+
+	def _dinClasament(self, contributor):
+		if not self._inchis and contributor is not None:
+			self._schimbaContributor(contributor)
+
+	def _schimbaContributor(self, contributor):
+		self._contributor = contributor
+		self.fila, self.cursor, self.sus, self.zona = 0, 0, 0, "grila"
+		self._reciteste()
+		self._cereListaComunitate()
+
+	def schimbaOrdinea(self):
+		if self._lucreaza:
+			return
+		ales = self._ecranAles()
+		ordini = ("implicit", "likes", "downloads")
+		self._ordine = ordini[(ordini.index(self._ordine) + 1) % len(ordini)]
+		texte = {"implicit": _("Ordine: implicită"),
+			"likes": _("Ordine: cele mai apreciate"),
+			"downloads": _("Ordine: cele mai descărcate")}
+		self["buton_galben"].setText(texte[self._ordine])
+		lista = self._inGrupa()
+		self.cursor = next((i for i, e in enumerate(lista) if ales and
+			e["sursa"] == ales["sursa"] and e["id"] == ales["id"]), 0)
+		self.sus = max(0, self.cursor // COLOANE - RANDURI + 1)
+		self._deseneaza()
 
 	def _ecranAles(self):
 		lista = self._inGrupa()
@@ -580,13 +821,27 @@ class HdsEcranPornire(Screen):
 		for k in range(CASUTE):
 			i = self.sus * COLOANE + k
 			if i >= len(lista):
-				for nume in ("fundal", "poza", "fara", "nume", "pus"):
+				for nume in ("fundal", "poza", "fara", "nume", "pus", "credit", "numere"):
 					self["%s%d" % (nume, k)].hide()
 				continue
 			e = lista[i]
 			self["fundal%d" % k].show()
 			self["nume%d" % k].setText(e.get("nume") or e.get("id"))
 			self["nume%d" % k].show()
+			if e.get("privata"):
+				self["credit%d" % k].setText(_("Privată | %s") % ecrane.motivPrivat(e))
+				self["credit%d" % k].show()
+			elif e.get("sursa") == "comunitate":
+				self["credit%d" % k].setText(_("Din comunitate | Autor: %s") % e.get("autor", ""))
+				self["credit%d" % k].show()
+			else:
+				self["credit%d" % k].hide()
+			numere = ecrane.etichetaNumere(e)
+			self["numere%d" % k].setText(numere)
+			if numere:
+				self["numere%d" % k].show()
+			else:
+				self["numere%d" % k].hide()
 			if self._estePus(e):
 				self["pus%d" % k].show()
 			else:
@@ -638,6 +893,8 @@ class HdsEcranPornire(Screen):
 				text = _("Nu este niciun ecran în această grupă.")
 			elif self._estePus(e):
 				text = _("„%s” este pus acum.") % e.get("nume")
+			elif e.get("sursa") == "comunitate":
+				text = e["eticheta"]
 			elif e.get("sursa") == "propriu":
 				text = _("OK: pui sau ștergi poza ta „%s”.") % e.get("nume")
 			elif e.get("se_sterge"):
@@ -645,6 +902,8 @@ class HdsEcranPornire(Screen):
 			else:
 				text = _("OK pune ecranul „%s”. Se vede la următoarea pornire.") % e.get("nume")
 		if not self._lucreaza:
+			if self._nota_comunitate:
+				text += "\n" + self._nota_comunitate
 			self["stare"].setText(text)
 		if lista and len(lista) > CASUTE:
 			ultim = min(len(lista), (self.sus + RANDURI) * COLOANE)
@@ -785,7 +1044,11 @@ class HdsEcranPornire(Screen):
 		elif self.zona == "file":
 			self.jos()
 		else:
-			self.meniulEcranului()
+			e = self._ecranAles()
+			if e and e.get("sursa") == "comunitate":
+				self.pune()
+			else:
+				self.meniulEcranului()
 
 	def inchide(self):
 		if self._lucreaza:
@@ -810,18 +1073,17 @@ class HdsEcranPornire(Screen):
 		return alegeri
 
 	def meniulEcranului(self):
-		"""OK (si MENU) pe un ecran: fereastra mica cu ce se poate face cu el. Cand nu e nimic de facut (ecranul din
-		fabrica pus acum, fara ecrane sterse), randul de stare spune de ce."""
+		"""Actiunile ecranului ales si revenirea la ecranul din fabrica, disponibila si pe o grupa goala."""
 		if self._lucreaza:
 			return
 		e = self._ecranAles()
+		alegeri = self._alegeriPentru(e) if e is not None else []
+		if alegeri and alegeri[-1][1] == "inapoi":
+			alegeri.pop()
+		alegeri += [(_("Ecranul din fabrică"), "fabrica"), (_("Înapoi"), "inapoi")]
 		if e is None:
-			return
-		alegeri = self._alegeriPentru(e)
-		if not alegeri:
-			self["stare"].setText(_("„%s” este pus acum.") % e.get("nume"))
-			return
-		if e.get("sursa") == "propriu":
+			titlu = _("Ecran de pornire")
+		elif e.get("sursa") == "propriu":
 			titlu = _("Poza ta „%s”") % e.get("nume")
 		else:
 			titlu = _("Ecranul „%s”") % e.get("nume")
@@ -830,7 +1092,9 @@ class HdsEcranPornire(Screen):
 	def _alegereFacuta(self, e, rezultat):
 		if self._inchis or not rezultat:
 			return
-		if rezultat[1] == "pune":
+		if rezultat[1] == "fabrica":
+			self.dinFabrica()
+		elif rezultat[1] == "pune":
 			self._puneInFir(e["sursa"], e["id"])
 		elif rezultat[1] == "sterge":
 			self._intreabaStergere(e)
@@ -890,7 +1154,9 @@ class HdsEcranPornire(Screen):
 		"""Punerea (HdsEcranePornire.aplica: temporar, verificare, os.replace) pe un fir separat, ca web-ul: firul
 		enigma2 nu asteapta dupa memoria flash. Numai scrie fisierul: nu reporneste interfata, nu atinge showiframe;
 		ecranul se vede la urmatoarea pornire. Rezultatul il arata _bate, pe firul enigma2."""
-		lucrare = self._incepeLucrul(_("Se pune ecranul..."), 100)
+		mesaj = _("Se descarcă și se pune sigla. Așteaptă câteva clipe...") \
+			if sursa == "comunitate" else _("Se pune ecranul...")
+		lucrare = self._incepeLucrul(mesaj, 100)
 		fir = threading.Thread(target=self._firPunere, args=(lucrare, sursa, id_ecran))
 		fir.daemon = True
 		fir.start()
@@ -898,7 +1164,7 @@ class HdsEcranPornire(Screen):
 	def _firPunere(self, lucrare, sursa, id_ecran):
 		"""Firul punerii. Nimic de aici nu atinge un widget."""
 		try:
-			bun, mesaj = ecrane.aplica(sursa, id_ecran)
+			bun, mesaj = ecrane.aplica(sursa, id_ecran, self._rezolutie)
 			raspuns = {"result": bool(bun), "message": mesaj}
 		except Exception as e:          # nimic nu are voie sa scape dintr-un fir
 			raspuns = {"result": False, "message": _("Nu am putut pune ecranul: %s") % e}
@@ -977,6 +1243,7 @@ class HdsEcranPornire(Screen):
 		reusit = bool(raspuns.get("pus", raspuns.get("result")))
 		if raspuns.get("poza_noua"):
 			nou = raspuns.get("id")
+			self._contributor = None
 			# dupa o poza noua: fila „Pozele mele”, chenarul pe ea
 			self._reciteste()
 			for k, f in enumerate(self.file):

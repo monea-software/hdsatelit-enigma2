@@ -106,9 +106,12 @@ PAS_RAR_S = 30                         # cat de des, dupa ACTIV_S fara nicio cer
 ACTIV_S = 10 * 60
 TIMP_CERERE_S = 20
 RASPUNS_SERVER_MAX = 512 * 1024
+TIMP_DNS_PORNIRE_S = 2
+TIMP_HTTPS_PORNIRE_S = 3
 
 # starile sesiunii
-OPRIT, INREGISTRARE, ASTEAPTA, CONECTAT, SE_OPRESTE = "oprit", "inregistrare", "asteapta", "conectat", "se-opreste"
+OPRIT, VERIFICARE, INREGISTRARE, ASTEAPTA, CONECTAT, SE_OPRESTE = (
+	"oprit", "verificare", "inregistrare", "asteapta", "conectat", "se-opreste")
 
 
 def _jurnal(text):
@@ -125,6 +128,29 @@ def _t(text):
 def N_(text):
 	"""Marcaj pentru xgettext (--keyword=N_): textele se traduc la folosire."""
 	return text
+
+
+TEXT_VERIFICA = N_("Se verifică legătura pentru asistență...")
+TEXT_SETARI_INTERNET = N_("Setările de internet")
+ERORI_PORNIRE = {
+	"retea": N_("Asistența nu poate porni: receptorul nu are internet. "
+		"Verifică setările rețelei."),
+	"cablu": N_("Asistența nu poate porni: cablul de rețea nu este conectat. "
+		"Verifică și routerul."),
+	"wifi": N_("Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. "
+		"Verifică rețeaua Wi-Fi și parola."),
+	"dns": N_("Asistența nu poate porni: receptorul nu poate afla "
+		"adresa stb.hdsatelit.com (DNS). "
+		"Verifică setările de internet."),
+	"server": N_("Asistența nu poate porni: serverul HD Satelit are o problemă temporară. "
+		"Încearcă din nou mai târziu."),
+	"internet": N_("Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. "
+		"Verifică internetul și încearcă din nou."),
+	"https": N_("Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. "
+		"Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."),
+	"refuz": N_("Asistența nu poate porni: serverul HD Satelit a refuzat cererea. "
+		"Încearcă din nou mai târziu."),
+}
 
 
 # Informarea, aceeasi pe televizor si in web: accesul echipei, secretele mascate, pastrarea datelor si oprirea.
@@ -269,6 +295,8 @@ def oraSfarsit(moment):
 def textPana(ses, banda=False):
 	"""Pana cand e pornita sesiunea ses: "Pornită până la ZZ.LL, HH:MM." sau, la permanent, "Pornită, fără sfârșit;
 	o poți opri oricând." (banda=True: textele benzii de sus)."""
+	if not getattr(ses, "id", True):
+		return _t("Se oprește...") if ses.stare == SE_OPRESTE else _t(TEXT_VERIFICA)
 	if ses.permanenta():
 		return _t(TEXT_BANDA_PERMANENT if banda else TEXT_PORNITA_PERMANENT)
 	pana = ses.pana_la_ora if ses.pana_la_ora is not None else _oraPerete() + ses.durata_min * 60
@@ -385,12 +413,126 @@ def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
 
 # ---------------------------------------------------------------- stratul HTTP (inlocuit in probe)
 
+def _motivRetea(eroare):
+	import socket
+	import ssl
+	from urllib.error import URLError
+	if isinstance(eroare, URLError):
+		eroare = eroare.reason
+	if isinstance(eroare, socket.gaierror):
+		return "dns"
+	if isinstance(eroare, ssl.SSLError):
+		return "https"
+	return "internet"
+
+
+def _inTermen(functie, secunde):
+	# Rezolvarea DNS a sistemului poate astepta mult. Nu tine pornirea pe loc.
+	gata = threading.Event()
+	rezultat = []
+
+	def lucru():
+		try:
+			rezultat.append((True, functie()))
+		except Exception as e:
+			rezultat.append((False, e))
+		finally:
+			gata.set()
+	fir = threading.Thread(target=lucru, name="HdsAsistentaVerifica")
+	fir.daemon = True
+	fir.start()
+	if not gata.wait(secunde):
+		raise TimeoutError("verificarea a durat prea mult")
+	bun, valoare = rezultat[0]
+	if not bun:
+		raise valoare
+	return valoare
+
+
+def _httpsPornire(adrese):
+	import http.client
+	import socket
+	import ssl
+	from urllib.parse import urlsplit
+	url = urlsplit(SERVER)
+	limita = _acum() + TIMP_HTTPS_PORNIRE_S
+	context = ssl.create_default_context()
+	ultima = None
+	adrese = adrese[:3]
+
+	def ramas():
+		secunde = pana - _acum()
+		if secunde <= 0:
+			raise TimeoutError("verificarea a durat prea mult")
+		return secunde
+
+	# Foloseste adresa deja aflata, fara o a doua asteptare DNS.
+	for index, (familie, tip, protocol, _nume, adresa) in enumerate(adrese):
+		# O adresa care nu raspunde lasa timp si pentru celelalte.
+		acum = _acum()
+		pana = acum + (limita - acum) / (len(adrese) - index)
+		conexiune = http.client.HTTPSConnection(url.hostname, timeout=ramas())
+		brut = None
+		try:
+			brut = socket.socket(familie, tip, protocol)
+			brut.settimeout(ramas())
+			brut.connect(adresa)
+			brut.settimeout(ramas())
+			conexiune.sock = context.wrap_socket(brut, server_hostname=url.hostname)
+			conexiune.sock.settimeout(ramas())
+			# Numai antetele: nu deschide o sesiune si nu descarca o pagina.
+			conexiune.request("HEAD", url.path or "/", headers={"User-Agent": "hdsatelit-receptor/1"})
+			conexiune.sock.settimeout(ramas())
+			raspuns = conexiune.getresponse()
+			return raspuns.status
+		except ssl.SSLError:
+			raise
+		except OSError as e:
+			ultima = e
+		finally:
+			conexiune.close()
+			if brut is not None:
+				brut.close()
+	if ultima is not None:
+		raise ultima
+	raise OSError("fara adrese")
+
+
+def verificaPornire():
+	"""Motiv scurt sau sir gol: reteaua, DNS si HTTPS, inainte de inregistrare."""
+	import socket
+	from urllib.parse import urlsplit
+	from Components import HdsStareRetea as R
+	legatura = R.legatura()
+	if legatura.get("fizic") is False:
+		return "wifi" if legatura.get("fel") == R.WIFI else "cablu"
+	if R.fara_router_pasiv(legatura):
+		return "retea"
+	gazda = urlsplit(SERVER).hostname
+	try:
+		adrese = _inTermen(lambda: socket.getaddrinfo(gazda, 443, 0, socket.SOCK_STREAM), TIMP_DNS_PORNIRE_S)
+		if not adrese:
+			return "dns"
+	except Exception:
+		return "dns"
+	try:
+		cod = _inTermen(lambda: _httpsPornire(adrese), TIMP_HTTPS_PORNIRE_S)
+		# Un server care nu accepta HEAD raspunde 405; HTTPS tot a reusit.
+		return "server" if cod >= 500 or cod == 0 else ""
+	except Exception as e:
+		return _motivRetea(e)
+
+
+_ultimaEroareHttp = threading.local()
+
+
 def _posteazaHttp(url, metoda, corp_octeti, antete, timp=TIMP_CERERE_S):
 	from urllib.request import Request, urlopen
 	from urllib.error import HTTPError
 	h = {"User-Agent": "hdsatelit-receptor/1", "Accept": "application/json"}
 	h.update(antete or {})
 	cerere = Request(url, data=corp_octeti, method=metoda, headers=h)
+	_ultimaEroareHttp.motiv = ""
 	try:
 		r = urlopen(cerere, timeout=timp)
 		try:
@@ -404,6 +546,7 @@ def _posteazaHttp(url, metoda, corp_octeti, antete, timp=TIMP_CERERE_S):
 			corp = b""
 		return e.code, corp
 	except Exception as e:
+		_ultimaEroareHttp.motiv = _motivRetea(e)
 		_jurnal("retea: %s" % type(e).__name__)
 		return 0, b""
 
@@ -602,7 +745,7 @@ class Sesiune(object):
 		return not self.permanenta() and self.ramasS() <= 0
 
 	def activa(self):
-		return self.stare in (INREGISTRARE, ASTEAPTA, CONECTAT)
+		return self.stare in (VERIFICARE, INREGISTRARE, ASTEAPTA, CONECTAT)
 
 	def _pas(self):
 		"""Cat asteapta pana intreaba iar serverul: des cat e ceva de facut, rar dupa ACTIV_S fara nimic."""
@@ -623,10 +766,8 @@ class Sesiune(object):
 		except Exception:
 			self.dosar = None
 		self.jurnal = Jurnal(self.dosar)
-		self.jurnal.adauga(_t("pornită (%s, nivel %s, %d minute, text v%d)")
-			% (_t(ORIGINI[self.de_la]) if self.de_la in ORIGINI else self.de_la, self.nivel, self.durata_min,
-			self.versiune_text))
-		self._pune_stare(INREGISTRARE)
+		self.jurnal.adauga(_t(TEXT_VERIFICA))
+		self._pune_stare(VERIFICARE)
 		self._fir = threading.Thread(target=self._ruleaza, name="HdsAsistenta")
 		self._fir.daemon = True
 		self._fir.start()
@@ -674,6 +815,13 @@ class Sesiune(object):
 
 	def _ruleaza(self):
 		try:
+			motiv = verificaPornire()
+			if self._stop.is_set():
+				return
+			if motiv:
+				self._esecPornire(motiv)
+				return
+			self._pune_stare(INREGISTRARE)
 			if not self._inregistreaza():
 				return
 			if not self._asteapta_aprobare():
@@ -681,12 +829,21 @@ class Sesiune(object):
 			self._bucla_cereri()
 		except Exception as e:
 			_jurnal("firul: %s" % e)
-			self.opreste("eroare: %s" % type(e).__name__)
+			if not self.id:
+				self._esecPornire(_motivRetea(e))
+			else:
+				self.opreste("eroare: %s" % type(e).__name__)
 		finally:
 			self.jurnal.adauga(_t("oprită (%s)") % textMotiv(self.motiv_oprire) if self.motiv_oprire else _t("oprită"))
 			self._pune_stare(OPRIT)
 			self._curata()
 			_uita(self)
+
+	def _esecPornire(self, motiv):
+		global _eroare_pornire
+		_eroare_pornire = motiv
+		self.jurnal.adauga(_t(ERORI_PORNIRE.get(motiv, ERORI_PORNIRE["internet"])))
+		self.opreste("fara-server")
 
 	def _inregistreaza(self):
 		corp = {"v": PROTOCOL, "model": _model(), "imagine": _versiuneImagine(), "nivel": self.nivel,
@@ -700,12 +857,11 @@ class Sesiune(object):
 			corp["detalii"] = self.detalii
 		cod, o = _ceruta(self.server + "inregistreaza", "POST", corp, {})
 		if cod == 0 or cod >= 500 or cod == 404:
-			self.jurnal.adauga(_t("nu pot ajunge la serverul de asistență"))
-			self.opreste("fara-server")
+			motiv = getattr(_ultimaEroareHttp, "motiv", "") if cod == 0 else "server"
+			self._esecPornire(motiv or "internet")
 			return False
 		if not (200 <= cod < 300) or not o.get("id") or not o.get("secret") or not o.get("cod"):
-			self.jurnal.adauga(_t("serverul a refuzat înregistrarea (%s)") % cod)
-			self.opreste("inregistrare-refuzata")
+			self._esecPornire("refuz")
 			return False
 		self.id = str(o["id"])[:64]
 		self.secret = str(o["secret"])[:128]
@@ -714,6 +870,9 @@ class Sesiune(object):
 		self.stare = ASTEAPTA
 		self._scrie_stare()
 		self._pune_stare(ASTEAPTA)
+		self.jurnal.adauga(_t("pornită (%s, nivel %s, %d minute, text v%d)")
+			% (_t(ORIGINI[self.de_la]) if self.de_la in ORIGINI else self.de_la,
+			self.nivel, self.durata_min, self.versiune_text))
 		self.jurnal.adauga(_t("cerere trimisă, aștept echipa"))
 		return True
 
@@ -898,6 +1057,7 @@ def _op_din(exterior):
 # ---------------------------------------------------------------- starea globala (o sesiune deodata) si observatorii
 
 _sesiune = None
+_eroare_pornire = ""
 _observatori = []
 _lacat = threading.Lock()
 
@@ -942,17 +1102,18 @@ def porneste(nivel=NIVEL_PORNIRE, durata_min=DURATA_IMPLICITA_MIN, limba="ro", d
 		ctx=None, nevoie=NEVOIE_NIMIC, detalii=""):
 	"""(reusit, mesaj): porneste o sesiune daca nu merge deja una si daca functia e disponibila. Fara efect daca o
 	sesiune e deja activa. nevoie/detalii: "Cu ce te ajutam?" (optionale, vezi curataNevoie)."""
-	global _sesiune
+	global _sesiune, _eroare_pornire
 	if not disponibil():
 		return False, _t("Funcția nu e disponibilă pe această imagine.")
 	with _lacat:
 		if _sesiune is not None and _sesiune.activa():
 			return False, _t("Asistența merge deja.")
+		_eroare_pornire = ""
 		ses = Sesiune(nivel, durata_min, limba, SERVER, de_la=de_la, versiune_text=versiune_text, ctx=ctx,
 			nevoie=nevoie, detalii=detalii)
 		_sesiune = ses
 	ses.porneste()
-	return True, _t("Asistența a pornit.")
+	return True, _t("Asistența a pornit.") if ses.id else _t(TEXT_VERIFICA)
 
 
 def opreste(motiv="de om"):
@@ -1157,6 +1318,7 @@ def stare():
 	ses = _sesiune
 	if ses is None:
 		return {"stare": OPRIT, "disponibil": disponibil(), "durate": list(DURATE_MIN),
+			"eroare_pornire": _t(ERORI_PORNIRE.get(_eroare_pornire, "")),
 			"durata_implicita": DURATA_IMPLICITA_MIN, "are_concluzii": ultimeleConcluzii() is not None,
 			"copie": _stareCopie()}
 	return {

@@ -6,9 +6,9 @@
 #
 # Orice ecran sau setare de pe receptor are pereche in interfata web. Pe televizor grupul are sase intrari (data/menu.xml):
 #   Oprire programata (sleep, Screens/SleepTimerEdit.py), Standby (standby, Screens/Standby.Standby), Reporneste
-#   interfata (restart_enigma, TryQuitMainloop 3), Reporneste receptorul (restart, TryQuitMainloop 2), Porneste alte
-#   imagini (return_to_flash, Screens/HdsPornireMultipla.py, numai cu SystemInfo["HdsMultiboot"]: Octagon SF8008,
-#   SF8008 MINI si Amiko Viper 4K V10; altfel cardul lipseste ca si intrarea) si Oprire completa (deep_standby,
+#   interfata (restart_enigma, TryQuitMainloop 3), Reporneste receptorul (restart, TryQuitMainloop 2), Reporneste
+#   in alta imagine (return_to_flash, Screens/HdsPornireMultipla.py, cu SystemInfo["HdsMultiboot"]:
+#   bootoptions sau kexec instalat; altfel cardul lipseste ca si intrarea) si Oprire completa (deep_standby,
 #   TryQuitMainloop 1).
 #   Aici: un card pentru fiecare, cu aceleasi setari si actiuni, plus starea receptorului. Meniul web trimite
 #   ?f=somn|standby|interfata|receptor|flash|oprire, iar pagina aduce cardul acela primul.
@@ -78,6 +78,7 @@ def _pm(PM=None):
 
 
 _imagini = {}
+_alegeriConfirmate = {}
 _citireImagini = [False]
 
 
@@ -113,7 +114,9 @@ def imagini(PM=None, SystemInfo=None, proaspat=False):
 	if rez is not None:
 		return rez
 	semn = _semnDiscuri(PM)
-	_imagini["stare"] = PM.publice(PM.locuri())
+	stare = PM.locuri()
+	_imagini["stare"] = PM.publice(stare)
+	_imagini["asteptate"] = {l["loc"]: (l.get("date"), l["imagine"]) for l in stare["locuri"]}
 	_imagini["cand"] = time.time()
 	_imagini["semn"] = semn
 	rez = {"result": True}
@@ -137,12 +140,13 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 	if not SI.get("HdsMultiboot"):
 		return {"result": False, "message": _faraMultiboot()}
 	loc = argumente.get("loc", "")
-	if not (0 < len(loc) <= 2 and loc.isdigit()):
+	if not (0 < len(loc) <= 200 and loc.isascii() and loc.isdigit()):
 		return {"result": False, "message": _t("Acțiune necunoscută.")}
 	tinta = "flash:" + loc
 	pas = argumente.get("pas", "")
 	if pas == "renunta":
 		MC.uita(CONFIRMARE, tinta)
+		_alegeriConfirmate.pop(loc, None)
 		return {"result": True, "message": _t("Nu s-a făcut nimic.")}
 	if sesiune is None:
 		return {"result": False, "message": _faraSesiune()}
@@ -161,12 +165,20 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 		if not gasit[0]["alegere"]:
 			return {"result": False, "message": gasit[0].get("refuz") or _t(PM.REFUZ) % loc}
 		r = A.stareReceptor(sesiune, Standby=_standby(Standby), job_manager=job_manager)
-		return MC.raspunsIntrebare(CONFIRMARE, tinta, _t(PM.INTREBARE) % gasit[0]["imagine"], _t(PM.BUTON),
+		rez = MC.raspunsIntrebare(CONFIRMARE, tinta, _t(PM.INTREBARE) % gasit[0]["imagine"], _t(PM.BUTON),
 			[x for x in _detalii("flash", r)])
+		if len(_alegeriConfirmate) >= 64:
+			_alegeriConfirmate.clear()
+		_alegeriConfirmate[loc] = (rez["confirmare"]["cod"], _imagini.get("asteptate", {}).get(loc))
+		return rez
 	if not MC.verifica(CONFIRMARE, tinta, argumente.get("cod", "")):
 		return MC.codGresit()
+	confirmata = _alegeriConfirmate.pop(loc, None)
+	if not confirmata or confirmata[0] != argumente.get("cod", "") or confirmata[1] is None:
+		return MC.codGresit()
 	intreaba = A.vaIntreba(sesiune)
-	ok, text = PM.reporneste(sesiune, loc, dupa_ms=DUPA_MS, fabrica_ceas=fabrica_ceas, Standby=Standby)
+	ok, text = PM.reporneste(sesiune, loc, dupa_ms=DUPA_MS, fabrica_ceas=fabrica_ceas,
+		Standby=Standby, asteptat=confirmata[1])
 	_imagini.clear()
 	if not ok:
 		return {"result": False, "message": text}
@@ -528,7 +540,7 @@ __STIL_PAGINI__
       <div class="butoane"><button type="button" class="rosu" data-fa="receptor">Repornește receptorul</button></div>
     </section>
     <section class="card ascuns" id="card-flash">
-      <h2>Pornește alte imagini</h2>
+      <h2>Repornește în altă imagine</h2>
       <p class="nota" id="imaginiNota">Caut imaginile instalate...</p>
       <div id="imaginiLista"></div>
       <p class="nota">Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__.</p>
@@ -708,7 +720,7 @@ TEXTE_PAGINA = {
 		N_("Repornește receptorul"),
 		N_("Repornește tot receptorul; durează mai mult decât repornirea interfeței. Pe televizor: "
 			"__DRUM_RECEPTOR__."),
-		N_("Pornește alte imagini"),
+		N_("Repornește în altă imagine"),
 		N_("Caut imaginile instalate..."),
 		N_("Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__."),
 		N_("Oprire completă"),

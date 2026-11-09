@@ -2,8 +2,8 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsPornireMultipla.py: ecranul Porneste alte imagini. Meniu > Standby si repornire, numai pe Octagon SF8008,
-# SF8008 MINI si Amiko Viper 4K V10 (SystemInfo["HdsMultiboot"]).
+# HdsPornireMultipla.py: lista imaginilor din meniul de oprire, pentru
+# receptoare cu bootoptions sau kexec instalat (SystemInfo["HdsMultiboot"]).
 #
 # La deschidere ecranul cauta imaginile instalate in memorie, pe card si pe stick (Components/HdsPornireMultipla.py:
 # STARTUP_N de pe partitia bootoptions, nucleul si sistemul fiecarui loc), pe un fir separat, ca interfata sa nu stea, si le
@@ -26,7 +26,7 @@ from Components import HdsPornireMultipla as P
 
 class HdsPornireMultipla(Screen):
 	skin = """
-	<screen name="HdsPornireMultipla" resolution="1920,1080" position="center,center" size="1240,760" title="Pornește alte imagini">
+	<screen name="HdsPornireMultipla" resolution="1920,1080" position="center,center" size="1240,760" title="Repornește în altă imagine">
 		<widget name="lista" position="30,25" size="1180,480" itemHeight="56" font="Regular;30" scrollbarMode="showOnDemand" />
 		<widget source="nota" render="Label" position="30,520" size="1180,170" font="Regular;24" halign="left" valign="top" />
 		<widget source="key_red" render="Label" position="30,705" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
@@ -130,13 +130,14 @@ class HdsPornireMultipla(Screen):
 		if not l.get("alegere"):
 			self.session.open(MessageBox, P.textRefuz(l), MessageBox.TYPE_ERROR, timeout=10)
 			return
-		self.session.openWithCallback(lambda da, loc=l["loc"]: self.confirmat(da, loc), MessageBox,
+		asteptat = (l.get("date"), l["imagine"])
+		self.session.openWithCallback(lambda da, loc=l["loc"]: self.confirmat(da, loc, asteptat), MessageBox,
 			_(P.INTREBARE) % l["imagine"], MessageBox.TYPE_YESNO, default=True)
 
-	def confirmat(self, da, loc):
+	def confirmat(self, da, loc, asteptat=None):
 		if not da:
 			return
-		ok, text = P.reporneste(self.session, loc)
+		ok, text = P.reporneste(self.session, loc, asteptat=asteptat)
 		if not ok:
 			from Screens.MessageBox import MessageBox
 			self.session.open(MessageBox, text, MessageBox.TYPE_ERROR, timeout=10)

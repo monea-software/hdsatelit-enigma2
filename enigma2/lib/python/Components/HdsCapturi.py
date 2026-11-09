@@ -475,10 +475,11 @@ def _fa(cu_imagine=None, loc=None, paza=None):
 	cod, date = _ruleaza(_comandaGrab(cu_imagine))
 	if not _capturaValida(cs, epoca):
 		return False, _mesajRefuzCaptura(cs), cheie, amovibil
-	if cod != 0 or not date.startswith(_JPEG) or len(date) < CAPTURA_MINIMA:
+	fel = felPoza(date)
+	if cod != 0 or not fel or len(date) < CAPTURA_MINIMA:
 		_jurnal("grab: cod %s, %d octeti" % (cod, len(date or b"")))
 		return False, _t("Captura nu s-a putut face."), cheie, amovibil
-	ok, rez = _salveaza(date, "jpg", l, valida=lambda: _capturaValida(cs, epoca))
+	ok, rez = _salveaza(date, fel, l, valida=lambda: _capturaValida(cs, epoca))
 	return ok, rez, cheie, amovibil
 
 

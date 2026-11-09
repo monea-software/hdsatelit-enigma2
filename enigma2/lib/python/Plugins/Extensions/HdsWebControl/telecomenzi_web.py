@@ -647,7 +647,7 @@ def _captura_proba(D):
 	ev = S.ev
 	if ev is not None and ev["dispozitiv"] != D.NATIV:
 		randuri.append(_("de pe: %s, cod %d") % (ev["dispozitiv"], ev["cod"]))
-	return {"titlu": _("Proba tastelor"), "mare": mare, "detalii": randuri, "istoric": []}
+	return {"titlu": _("Proba tastelor"), "mare": mare, "detalii": randuri, "istoric": p.istoric(_)}
 
 
 def _captura_asociere(D):

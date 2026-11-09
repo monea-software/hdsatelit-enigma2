@@ -69,6 +69,8 @@ INTERPRET = ()
 CALE_PAROLA = "/etc/hdsatelit-ssh/parola"
 # hash-ul pus odata cu textul clar (hds-ssh-parola): textul se arata numai cat /etc/shadow il are
 CALE_HASH = "/etc/hdsatelit-ssh/hash"
+# O alegere facuta din televizor sau web. Nu contine parola sau hash-ul ei.
+CALE_ALEGERE = "/etc/hdsatelit-ssh/alegere"
 CALE_SEMN = "/etc/hdsatelit-ssh/facuta"
 # semnul lasat de hds-ssh-parola cand parola de la prima pornire nu s-a putut face (sters la prima reusita)
 CALE_EROARE = "/etc/hdsatelit-ssh/eroare"
@@ -656,7 +658,22 @@ def _programParola(comanda, intrare=None):
 	return p.returncode, (eroare[-1] if eroare else "")
 
 
+def _retineAlegerea():
+	"""Semnul ramane in afara copiei setarilor si nu se pierde la o restaurare."""
+	try:
+		dosar = os.path.dirname(_cale(CALE_ALEGERE))
+		os.makedirs(dosar, mode=0o700, exist_ok=True)
+		os.chmod(dosar, 0o700)
+		_scrieAtomic(CALE_ALEGERE, "aleasa\n", 0o600)
+	except (OSError, IOError):
+		return False
+	return True
+
+
 def faParolaNoua():
+	# Semnul se scrie intai: nici o cadere dupa schimbare nu pierde alegerea.
+	if not _retineAlegerea():
+		return False, _("Setarea nu s-a putut salva.")
 	cod, eroare = _programParola("noua")
 	if cod == 0:
 		return True, _("Am făcut o parolă nouă. Cea veche nu mai merge.")
@@ -668,6 +685,8 @@ def puneParola(text):
 	motiv = motivParola(text)
 	if motiv:
 		return False, motiv
+	if not _retineAlegerea():
+		return False, _("Setarea nu s-a putut salva.")
 	cod, eroare = _programParola("pune", text)
 	if cod == 0:
 		return True, _("Parola nouă e pusă. Merge pentru FTP, SSH și SFTP; cea veche nu mai merge.")
@@ -723,6 +742,8 @@ def textRegula(pornit):
 
 
 def seteazaFaraParola(pornit):
+	if not pornit and not _retineAlegerea():
+		return False, _("Setarea nu s-a putut salva.")
 	_scrieAtomic(CALE_REGULA, textRegula(bool(pornit)), 0o644)
 	if faraParolaInRetea() != bool(pornit):
 		return False, _("Setarea nu s-a putut salva.")

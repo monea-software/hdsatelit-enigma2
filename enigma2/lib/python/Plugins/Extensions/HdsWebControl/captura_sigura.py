@@ -48,13 +48,19 @@ def mesajRefuz():
 		return mesajEcranSecret()
 	except ImportError:
 		try:
-			return _("Pe televizor e deschis un ecran cu parolă. Se vede numai acolo.")
+			return _("Captura nu este disponibilă acum. Starea ecranului se verifică.")
 		except NameError:
-			return "Pe televizor e deschis un ecran cu parolă. Se vede numai acolo."
+			return "Captura nu este disponibilă acum. Starea ecranului se verifică."
 
 
 def cartusSecret(request):
-	"""Imagine independenta de framebuffer: se vede si in <img>, si la descarcare."""
+	"""Mesaj in panou; descarcarea refuzata primeste eroarea, fara un fisier SVG."""
+	if request.args.get(b"download", [b""])[0] == b"1":
+		import json
+		request.setResponseCode(409)
+		request.setHeader(b"content-type", b"application/json; charset=utf-8")
+		request.setHeader(b"cache-control", b"no-store, private")
+		return json.dumps({"result": False, "message": mesajRefuz()}).encode("utf-8")
 	from html import escape
 	request.setResponseCode(200)
 	request.setHeader(b"content-type", b"image/svg+xml; charset=utf-8")

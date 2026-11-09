@@ -1107,7 +1107,6 @@ _REGISTRU_PAGINI = """<footer>
   <a href="/motor">Rotirea antenei</a>
   <a href="/antena/semnal">Găsire semnal</a>
   <a href="/ecrane">Ecranul de pornire</a>
-  <a href="/sigle-pornire">Sigle de pornire</a>
   <a href="/acces-conditionat">Acces condiționat</a>
   <a href="/piste">Sunet și subtitrări</a>
   <a href="/subtitrari">Aspectul subtitrărilor</a>
@@ -1752,7 +1751,7 @@ function numeCapturaLocal(mod, tip){
   var t = new Date();
   var sufix = mod === "video" ? "-fara-meniu" : (mod === "osd" ? "-meniu" : "");
   return "captura-receptor" + sufix + "-" + t.getFullYear() + "-" + d(t.getMonth() + 1) + "-" + d(t.getDate()) +
-    "-" + d(t.getHours()) + d(t.getMinutes()) + (tip.indexOf("svg") !== -1 ? ".svg" : (tip.indexOf("png") !== -1 ? ".png" : ".jpg"));
+    "-" + d(t.getHours()) + d(t.getMinutes()) + (tip.indexOf("png") !== -1 ? ".png" : ".jpg");
 }
 function numeDinAntet(antet){
   var m = /filename="?([A-Za-z0-9._-]+)"?/.exec(antet || "");
@@ -1798,12 +1797,25 @@ function descarcaCaptura(mod){
         return;
       }
       if(r.status === 401 && !CFG.jeton){ location.replace("/"); throw new Error("browser deconectat"); }
-      if(!r.ok){ throw new Error("HTTP " + r.status); }
-      var nume = numeDinAntet(r.headers.get("content-disposition")) || numeCapturaLocal(mod, r.headers.get("content-type") || "");
+      if(!r.ok){
+        return r.json().catch(function(){ return {}; }).then(function(d){
+          throw new Error(d.message || "HTTP " + r.status);
+        });
+      }
+      var numeAntet = numeDinAntet(r.headers.get("content-disposition"));
       return r.blob().then(function(date){
-        if(ceas){ clearTimeout(ceas); }
-        salveazaFisier(date, nume);
-        gata("Captura s-a descărcat.");
+        return date.slice(0, 8).arrayBuffer().then(function(t){
+          var b = new Uint8Array(t);
+          var jpg = b[0] === 255 && b[1] === 216 && b[2] === 255;
+          var png = b[0] === 137 && b[1] === 80 && b[2] === 78 && b[3] === 71 &&
+            b[4] === 13 && b[5] === 10 && b[6] === 26 && b[7] === 10;
+          if(!jpg && !png){ throw new Error("Răspunsul nu este o captură JPG sau PNG."); }
+          var extensie = png ? "png" : "jpg";
+          var nume = numeAntet ? numeAntet.replace(/[.][^.]+$/, "." + extensie) : numeCapturaLocal(mod, extensie);
+          if(ceas){ clearTimeout(ceas); }
+          salveazaFisier(date, nume);
+          gata("Captura s-a descărcat.");
+        });
       });
     }).catch(function(e){
       if(ceas){ clearTimeout(ceas); }
@@ -3254,6 +3266,7 @@ def _construiesteResurse():
 				request.setHeader(b"content-type", b"application/json; charset=utf-8")
 				return json.dumps({"result": False, "message": eroare[1]}).encode("utf-8")
 			from . import captura_sigura as CS
+			from Components.HdsCapturi import felPoza
 			epoca_captura = CS.epocaCapturii()
 			if epoca_captura is None:
 				return CS.cartusSecret(request)
@@ -3322,7 +3335,6 @@ def _construiesteResurse():
 				except (ValueError, TypeError):
 					pass
 
-			nume_fisier = _numeCaptura(mod_captura, "png" if format_cerut == "png" else "jpg") if descarcare else None
 			cheie_pastrare = (epoca_captura, tuple(comanda))
 			if ce == "des":
 				pastrata = CS.dinPastrare(cheie_pastrare)
@@ -3332,11 +3344,17 @@ def _construiesteResurse():
 					request.setHeader(b"retry-after", b"1")
 					return json.dumps({"result": False, "message": "o captura a fost facuta chiar acum -- reincearca "
 						"peste o clipa"}).encode("utf-8")
+				fel = felPoza(pastrata[0])
+				if not fel:
+					request.setResponseCode(502)
+					request.setHeader(b"content-type", b"application/json; charset=utf-8")
+					return json.dumps({"result": False, "message": _t("captura nu este JPG sau PNG")}).encode("utf-8")
 				request.setResponseCode(200)
-				request.setHeader(b"content-type", pastrata[1])
+				request.setHeader(b"content-type", b"image/png" if fel == "png" else b"image/jpeg")
 				request.setHeader(b"cache-control", b"no-store")
 				request.setHeader(b"x-hds-captura", b"des")
-				if nume_fisier:
+				if descarcare:
+					nume_fisier = _numeCaptura(mod_captura, fel)
 					request.setHeader(b"content-disposition", ('attachment; filename="%s"' % nume_fisier).encode("ascii"))
 				return pastrata[0]
 			video_pazit = pazita and mod_efectiv != "osd"  # captura straina cu imaginea canalului: intervalul, pastrarea
@@ -3364,7 +3382,11 @@ def _construiesteResurse():
 					elif rezultat.returncode != 0 or not rezultat.stdout:
 						_jurnal("screenshot: grab a esuat, cod=%s, stderr=%r" % (rezultat.returncode, rezultat.stderr[:200]))
 						_eroareJson(502, "captura de ecran a esuat")
+					elif not felPoza(rezultat.stdout):
+						_eroareJson(502, _t("captura nu este JPG sau PNG"))
 					else:
+						fel = felPoza(rezultat.stdout)
+						tip_continut = b"image/png" if fel == "png" else b"image/jpeg"
 						request.setResponseCode(200)
 						request.setHeader(b"content-type", tip_continut)
 						request.setHeader(b"cache-control", b"no-store")
@@ -3372,7 +3394,8 @@ def _construiesteResurse():
 							request.setHeader(b"x-hds-captura", ("osd-" + motiv).encode("ascii"))
 						if video_pazit:
 							CS.tine(cheie_pastrare, rezultat.stdout, tip_continut)
-						if nume_fisier:
+						if descarcare:
+							nume_fisier = _numeCaptura(mod_captura, fel)
 							request.setHeader(b"content-disposition", ('attachment; filename="%s"' % nume_fisier).encode("ascii"))
 						request.write(rezultat.stdout)
 					request.finish()
@@ -4486,7 +4509,7 @@ def _construiesteResurse():
 			self.putChild(b"motor", MotorPaginaResource())
 			self.putChild(b"fonturi", FonturiPaginaResource())
 			self.putChild(b"ecrane", _ECRANE_PAGINA)
-			self.putChild(b"sigle-pornire", _SIGLE_PAGINA)
+			self.putChild(b"sigle-pornire", _ECRANE_PAGINA)
 			self.putChild(b"interfete-cam", InterfeteCamPaginaResource())
 			self.putChild(b"acces-conditionat", _ACCES_PAGINA)
 			# aceeasi pagina pentru amandoua sectiunile; restul adresei alege grupul si felul (/scanare/satelit/operator)
@@ -5482,6 +5505,8 @@ TEXTE_PAGINA = {
 		N_("Playlistul nu s-a putut descărca."),
 		N_("Se pregătește captura..."),
 		N_("Captura s-a descărcat."),
+		N_("captura nu este JPG sau PNG"),
+		N_("Răspunsul nu este o captură JPG sau PNG."),
 		N_("receptorul nu a răspuns"),
 		N_("Captura nu s-a putut descărca ("),
 		N_("prin internet"),

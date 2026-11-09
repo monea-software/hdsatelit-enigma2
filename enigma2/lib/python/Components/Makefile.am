@@ -8,7 +8,7 @@ install_PYTHON = \
 	HdsListeText.py \
 	Genres.py QRCode.py HdsFunctiiImagine.py \
 	International.py \
-	HdsParteaDoua.py HdsRadacinaUsb.py \
+	HdsParteaDoua.py HdsRadacinaUsb.py HdsLimbaRestaurare.py \
 	ActionMap.py GUISkin.py PerServiceDisplay.py components.py              \
 	HdsTransmisie.py HdsTunerB.py HdsLocuriLista.py HdsPluginuriImagine.py \
 	HdsRadioOnline.py \

@@ -71,6 +71,7 @@ MODULE_PRIVATE = frozenset((
 _TIPAR_PRIVAT = re.compile(r"(?i)(cam|card)")
 # campurile de parola si de PIN (clasele elementelor de setari)
 CAMPURI_PRIVATE = ("ConfigPassword", "ConfigPIN")
+_CLASA_SECRETA = re.compile(r"(?i)(password|passwd|passphrase|parola|pininput)")
 
 # Cheile interne si etichetele secretelor, cu sau fara diacritice.
 _SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass|pwd|psk)(?:\b|[._])|token|secret|jeton|"
@@ -147,6 +148,11 @@ _ATRIBUTE_TEXT = ("titlu", "nume", "text", "name", "title", "eticheta")
 
 def _jurnal(text):
 	print("[HdsAsistentaControl] %s" % text)
+
+
+def N_(text):
+	"""Marcaj pentru catalog; traducerea se face cand mesajul este afisat."""
+	return text
 
 
 # ---------------------------------------------------------------- tastele
@@ -320,11 +326,28 @@ def _componentaSecreta(ecran, nume, comp):
 	return "HdsCodAsociere" in _clase(ecran) and bool(re.match(r"^cod\d*$", nume))
 
 
-def mesajEcranSecret():
+def mesajEcranSecret(ecrane=None):
+	if ecrane is None:
+		nume = _NUME_SECRET_WEB
+	else:
+		ecran = _ecranCuSecrete(ecrane)
+		nume = _numeEcranSecret(ecran) if ecran is not None else ""
+	if nume:
+		text = N_("Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo.")
+	elif _REDESENARE_WEB is not None:
+		text = N_("Captura se pregătește după închiderea ecranului protejat. Reîncearcă.")
+	else:
+		text = N_("Captura nu este disponibilă acum. Starea ecranului se verifică.")
 	try:
-		return _("Pe televizor e deschis un ecran cu parolă. Se vede numai acolo.")
+		text = _(text)
 	except NameError:
-		return "Pe televizor e deschis un ecran cu parolă. Se vede numai acolo."
+		pass
+	return text % nume if nume else text
+
+
+def _numeEcranSecret(ecran):
+	titlu = _ascundeValori(mascheazaSecrete(_titlu(ecran)), _secreteEcrane([ecran]))
+	return titlu.strip()[:120] or type(ecran).__name__
 
 
 def _portiuneLista(lista, comp):
@@ -378,36 +401,44 @@ def _listaCuSecrete(lista, comp=None):
 	return False
 
 
-def ecranCuSecrete(ecrane, mod_ascii=False):
-	"""Aceeasi regula pentru text si capturile web, inclusiv randurile neselectate."""
-	if privat(ecrane)[0] or tastaturaSecreta(ecrane, mod_ascii):
-		return True
+def _ecranCuSecrete(ecrane, mod_ascii=False):
+	"""Ecranul care contine secretul, pentru aceeasi regula si acelasi mesaj peste tot."""
+	if tastaturaSecreta(ecrane, mod_ascii):
+		return ecrane[-1]
 	for ecran in ecrane:
-		if any(n in ("HdsAccesSsh", "HdsCodAsociere") or cheieSecreta(n) for n in _clase(ecran)):
-			return True
+		# Numele tehnic nu este un secret: InfoBarUnhandledKey apartine barei TV.
+		if ecranPrivat(ecran) or any(n in ("HdsAccesSsh", "HdsCodAsociere")
+				or _CLASA_SECRETA.search(n) for n in _clase(ecran)):
+			return ecran
 		if getattr(ecran, "hds_asistenta_secret", False) or cheieSecreta(_titlu(ecran)):
-			return True
+			return ecran
 		if any(_randSecret(rand) for rand in _intrariConfig(ecran)):
-			return True
+			return ecran
 		f = getattr(ecran, "secreteAsistenta", None)
 		if callable(f) and any(v is not None and str(v) for v in (f() or [])):
-			return True
+			return ecran
 		for nume, comp in ecran.items():
 			if _componentaSecreta(ecran, nume, comp):
-				return True
+				return ecran
 			t = _text(comp)
 			if t and mascheazaSecrete(t) != t:
-				return True
+				return ecran
 			lista = getattr(comp, "list", None)
 			if isinstance(lista, (list, tuple)) and _listaCuSecrete(lista, comp):
-				return True
-	return False
+				return ecran
+	return None
+
+
+def ecranCuSecrete(ecrane, mod_ascii=False):
+	"""Aceeasi regula pentru text si capturile web, inclusiv randurile neselectate."""
+	return _ecranCuSecrete(ecrane, mod_ascii) is not None
 
 
 # Scrise numai pe firul interfetei, citite atomic si de workerii capturii.
 # Registrul include si ferestrele nemodale, care nu apar in session.dialog_stack.
 _ECRANE_WEB = {}
 _STARE_CAPTURA_WEB = (0, True)
+_NUME_SECRET_WEB = ""
 _REDESENARE_WEB = None
 _CEAS_REDESENARE_WEB = None
 
@@ -454,7 +485,7 @@ def _actualizeazaCapturaWeb():
 	"""Epoca creste numai cand starea secretului se schimba (ecran cu secret aparut sau inchis). O fereastra obisnuita
 	deschisa sau inchisa in timpul unei capturi (bara de volum, InfoBar care se ascunde, un submeniu) nu o invalideaza;
 	trecerea secret -> fara secret creste epoca si cere redesenarea inainte de urmatoarea captura."""
-	global _STARE_CAPTURA_WEB, _REDESENARE_WEB
+	global _STARE_CAPTURA_WEB, _REDESENARE_WEB, _NUME_SECRET_WEB
 	try:
 		ecrane, vazute = [], set()
 		for ecran in list(_ECRANE_WEB.values()):
@@ -462,9 +493,12 @@ def _actualizeazaCapturaWeb():
 				if id(e) not in vazute:
 					vazute.add(id(e))
 					ecrane.append(e)
-		secret = ecranCuSecrete(ecrane)
+		ecran_secret = _ecranCuSecrete(ecrane)
+		secret = ecran_secret is not None
+		_NUME_SECRET_WEB = _numeEcranSecret(ecran_secret) if secret else ""
 	except Exception:
 		secret = True
+		_NUME_SECRET_WEB = ""
 	epoca, vechi = _STARE_CAPTURA_WEB
 	if vechi != secret:
 		epoca += 1
@@ -567,7 +601,7 @@ def motivRefuzCaptura(ecrane, mod_ascii=False):
 	if e_privat:
 		return "(ecran privat: %s; captura refuzata)" % clasa
 	if ecranCuSecrete(ecrane, mod_ascii):
-		return mesajEcranSecret()
+		return mesajEcranSecret(ecrane)
 	if tastaturaSecreta(ecrane, mod_ascii) or any(_selectatSecret(e) for e in ecrane):
 		return "(camp secret selectat sau tastatura secreta; captura refuzata)"
 	return ""
@@ -867,7 +901,7 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 		return "(ecran privat) %s\nEcrane: %s\nPe un ecran privat merge numai EXIT." % (clasa,
 			" > ".join(type(e).__name__ for e in ecrane))
 	if ecranCuSecrete(ecrane, mod_ascii):
-		return mesajEcranSecret()
+		return mesajEcranSecret(ecrane)
 	cap = []
 	secrete = _secreteEcrane(ecrane)
 	tastatura_secreta = tastaturaSecreta(ecrane, mod_ascii)

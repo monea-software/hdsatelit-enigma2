@@ -5,6 +5,9 @@
 # HdsPornireMultipla.py: Porneste alte imagini (Meniu > Standby si repornire), fara ecran. Il folosesc ecranul de pe
 # receptor (Screens/HdsPornireMultipla.py) si pagina web /alimentare (HdsWebControl/alimentare_web.py, cardul flash),
 # deci amandoua arata aceleasi imagini si scriu la fel.
+# Kexec deja instalat se citeste din STARTUP si initramfs, iar schema GPT din
+# numele reale boot/kernelN/rootfsN. Nu exista o lista inchisa de modele.
+# Alegerea foloseste acelasi ecran, aceeasi scriere si repornirea obisnuita.
 #
 # Octagon SF8008, SF8008 MINI si primul Amiko Viper 4K (V10, masina viper4k, aceeasi placa) au in memorie patru
 # locuri de imagini: nucleul in linuxkernel1-4 (mmcblk0p12-p15) si sistemul in subdosarul linuxrootfs1-4 al partitiei
@@ -37,7 +40,8 @@
 #   citit (ro,noload: fara reluarea jurnalului ext4) si se demonteaza imediat. Nu se scrie nimic pe ele;
 # - STARTUP vechi ramane in STARTUP.hds-inainte; scrierea: STARTUP.hds-nou, fsync, rename (os.replace) peste STARTUP, sync, apoi
 #   citit inapoi si comparat; la o nepotrivire se pune la loc cel vechi;
-# - directorul scris e numai partitia bootoptions dovedita in /proc/mounts (sau montata aici, apoi demontata).
+# - directorul scris este partitia de pornire dovedita in /proc/mounts sau
+#   radacina flash expusa de kexec, cu initramfs si sabloane de pornire existente.
 #
 # Citirea listei poate monta multe partitii, deci ecranul si pagina web o fac pe un fir separat. Alegerea verifica din nou
 # numai locul ales (locuri(numai=...)), deci ramane scurta pe firul enigma2.
@@ -51,10 +55,10 @@ import struct
 import subprocess
 import zlib
 
-MASINI = ("sf8008", "sf8008m", "viper4k", "ustym4kpro", "gbtrio4k", "gbmv200")
 FISIER_STARTUP = "STARTUP"
 COPIE = "STARTUP.hds-inainte"
 NOU = "STARTUP.hds-nou"
+ABSENT = b"HDS-FARA-STARTUP\n"
 MAXIM_STARTUP = 4096
 UIMAGE_MAGIC = 0x27051956
 TINTA_EMMC = re.compile(r"^boot emmcflash0\.linuxkernel([1-9])$")
@@ -80,7 +84,7 @@ def _(text):
 		return text
 
 
-TITLU = N_("Pornește alte imagini")
+TITLU = N_("Repornește în altă imagine")
 NOTA = N_("Alegi imaginea și apeși OK: receptorul repornește în ea. Lista arată imaginile instalate în memoria "
 	"receptorului.")
 CAUT = N_("Caut imaginile instalate...")
@@ -181,17 +185,14 @@ def linieComanda(radacina=None):
 
 
 def disponibil(radacina=None):
-	"""True pe Octagon SF8008, SF8008 MINI si Amiko Viper 4K V10 cu partitia bootoptions (nu cere /boot montat:
-	libreader il monteaza mai tarziu). Pe celelalte receptoare randul din meniu nu apare."""
-	try:
-		from Components import HdsPlatforma
-	except ImportError:
-		import HdsPlatforma  # probele de pe PC
-	masina = HdsPlatforma.masinaDinReguli(radacina) or HdsPlatforma.tipPlaca(radacina)
-	if masina not in MASINI:
-		return False
+	"""Capacitatea receptorului: bootoptions sau pornire kexec deja instalata.
+	Nu instaleaza si nu initializeaza pornirea multipla."""
 	dev, _m = dispozitivPartitie(parametri(linieComanda(radacina)).get("blkdevparts", ""), "bootoptions")
-	return bool(dev) or os.path.exists(_cale(radacina, "dev/block/by-name/bootoptions"))
+	if dev or _dosarKexec(radacina) or os.path.exists(_cale(radacina, "dev/block/by-name/bootoptions")):
+		return True
+	boot = dosarBoot(radacina)
+	return bool(boot and any(_verificaNativ(citesteStartup(date), {}, radacina)
+		for _n, _fisier, date in startupuri(boot)))
 
 
 # ------------------------------------------------------------------ fisierele STARTUP
@@ -205,14 +206,81 @@ def citesteStartup(date):
 	except UnicodeDecodeError:
 		return None
 	m = LINIE.match(text)
-	if not m:
+	if m:
+		tinta, argumente = m.group(1), m.group(2)
+	elif re.fullmatch(r"[A-Za-z0-9_./:=,+ -]+\n?", text):
+		# Incarcatorul kexec citeste direct parametrii din STARTUP.
+		tinta, argumente = "", text.strip()
+	else:
 		return None
-	chei = [c.split("=", 1)[0] for c in m.group(2).split() if "=" in c]
+	chei = [c.split("=", 1)[0] for c in argumente.split() if "=" in c]
 	sensibile = ("root", "kernel", "rootsubdir", "rootfstype", "blkdevparts",
-		"userdataroot", "userdatasubdir")
+		"userdataroot", "userdatasubdir", "initrd")
 	repetate = any(chei.count(k) > 1 for k in sensibile)
-	return {"tinta": m.group(1), "argumente": m.group(2),
-		"p": parametri(m.group(2)), "repetate": repetate}
+	return {"tinta": tinta, "argumente": argumente,
+		"p": parametri(argumente), "repetate": repetate}
+
+
+def _parametriKexec(st, radacina=None):
+	"""Forma instalata de kexec, cu nucleul pastrat in dosarul imaginii."""
+	if not st or st["tinta"] or st.get("repetate"):
+		return None
+	p = st["p"]
+	sub = p.get("rootsubdir", "")
+	if sub in ("", "linuxrootfs0") and p.get("kernel") == "/zImage":
+		sub = ""
+	elif not SUBDOSAR_DISC.fullmatch(sub) or p.get("kernel") != "/" + sub + "/zImage":
+		return None
+	if p.get("rootfstype", "ext4") != "ext4" or p.get("initrd", "/STARTUP.cpio.gz") != "/STARTUP.cpio.gz":
+		return None
+	ref = p.get("root", "")
+	dev = ref if re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", ref) else _radacinaDisc(ref, radacina)
+	if not dev:
+		return None
+	return dev, sub
+
+
+def _acumKexec(st, cmd):
+	# Unele initramfs nu pastreaza kernel= in linia de comanda expusa imaginii.
+	sub = lambda p: "" if p.get("rootsubdir", "") == "linuxrootfs0" else p.get("rootsubdir", "")
+	return st["p"].get("root") == cmd.get("root") and sub(st["p"]) == sub(cmd) and (
+		not cmd.get("kernel") or st["p"].get("kernel") == cmd["kernel"])
+
+
+def _dosarKexec(radacina=None):
+	"""Radacina flash expusa de incarcator la /boot, nu dosarul unui slot.
+	Un sablon trebuie sa descrie chiar pornirea curenta, iar initramfs sa existe."""
+	cmd = parametri(linieComanda(radacina))
+	sub_curent = cmd.get("rootsubdir", "") not in ("", "linuxrootfs0")
+	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
+		c = rand.split()
+		if (len(c) < 4 or c[1] not in ("/boot", "/") or c[2] != "ext4" or "rw" not in c[3].split(",") or
+			not re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", c[0])):
+			continue
+		if c[1] == "/" and sub_curent:
+			continue
+		dosar = _cale(radacina, c[1])
+		initrd = os.path.join(dosar, "STARTUP.cpio.gz")
+		if os.path.islink(initrd) or _citeste(initrd, 2) != b"\x1f\x8b":
+			continue
+		for _n, _fisier, date in startupuri(dosar):
+			st = citesteStartup(date)
+			if _parametriKexec(st, radacina) and (_acumKexec(st, cmd) or (
+				not sub_curent and cmd.get("root") == c[0] and radacinaValida(_cale(radacina, "/")))):
+				return dosar
+	return None
+
+
+def _nucleuKexec(cale, marime_partitie=None):
+	"""Antet ARM zImage si lungimea declarata, fara a executa nucleul."""
+	if os.path.islink(cale) or (marime_partitie is None and not os.path.isfile(cale)):
+		return False
+	antet = _citeste(cale, 48)
+	if not antet or len(antet) < 48:
+		return False
+	magie, inceput, sfarsit = struct.unpack("<III", antet[36:48])
+	marime = os.path.getsize(cale) if marime_partitie is None else marime_partitie
+	return magie == 0x016f2818 and 0 < sfarsit - inceput <= marime
 
 
 def verificaEmmc(st, cmd):
@@ -354,17 +422,26 @@ def _cheiValori(text):
 	return d
 
 
-def _versiuneOpkg(dosar, pachet):
-	# intai fisierul mic al pachetului, ca lista sa ramana rapida la multe imagini; altfel lista mare a pachetelor
-	text = _text(os.path.join(dosar, "var", "lib", "opkg", "info", pachet + ".control"), 16384)
-	m = re.search(r"(?m)^Version: ([^\r\n]+)", text)
-	if not m:
-		text = _text(os.path.join(dosar, "var", "lib", "opkg", "status"), 8 * 1024 * 1024)
-		m = re.search(r"(?m)^Package: %s\r?\n(?:[^\n]+\n)*?Version: ([^\r\n]+)" % re.escape(pachet), text)
-	if not m:
-		return ""
-	v = m.group(1).split(":")[-1]
-	return v.split("+")[0].split("-")[0]
+def _versiuneOpkg(dosar, versiune_imagine=""):
+	# Status-ul arata pachetele instalate; fisierele control pot fi ramase vechi.
+	text = _text(os.path.join(dosar, "var", "lib", "opkg", "status"), 8 * 1024 * 1024)
+	pachete = {}
+	for strofa in re.split(r"\r?\n\s*\r?\n", text):
+		campuri = {}
+		for rand in strofa.splitlines():
+			k, semn, v = rand.partition(":")
+			if semn and not rand.startswith((" ", "\t")):
+				campuri[k.lower()] = v.strip()
+		nume = campuri.get("package", "")
+		stare = campuri.get("status", "").split()
+		if nume not in ("enigma2-hdsatelit", "enigma2") or "installed" not in stare:
+			continue
+		v = campuri.get("version", "").split(":")[-1]
+		m = re.fullmatch(r"([0-9]{1,3}(?:\.[0-9]{1,3}){2,3})(?:[+-].*)?", v)
+		if m:
+			pachete[nume] = m.group(1)
+	# Pachetul generic poate avea versiunea interfetei, diferita de a imaginii.
+	return pachete.get("enigma2-hdsatelit") or versiune_imagine or pachete.get("enigma2", "")
 
 
 def numeImagine(dosar):
@@ -378,10 +455,20 @@ def numeImagine(dosar):
 	versiune = info.get("imgversion") or iv.get("imageversion", "")
 	if info.get("imgrevision"):
 		versiune = "%s.%s" % (versiune, info["imgrevision"])
-	if nume.lower() == "hdsatelit":
+	if "".join(nume.lower().split()) == "hdsatelit":
+		try:
+			from Components.HdsJurnalVersiuni import versiune_din_build
+		except ImportError:
+			from HdsJurnalVersiuni import versiune_din_build
+		# Pachetele si image-version se schimba la actualizare; metadatele bazei nu.
+		versiune_fisier = versiune_din_build(iv.get("version", ""))
+		for cheie in ("imageversion", "version"):
+			v = iv.get(cheie, "")
+			if not versiune_fisier and re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", v):
+				versiune_fisier = v
 		nume = "HD Satelit"
-		versiune = _versiuneOpkg(dosar, "enigma2-hdsatelit") or _cheiValori(
-			_text(os.path.join(dosar, "etc", "hdsatelit-model"))).get("version", "")
+		versiune = _versiuneOpkg(dosar, versiune_fisier) or _cheiValori(
+			_text(os.path.join(dosar, "etc", "hdsatelit-model"))).get("version", "") or versiune
 	if not versiune and re.match(r"^\d+(\.\d+)+$", iv.get("version", "")):
 		versiune = iv["version"]
 	if not nume:
@@ -393,9 +480,63 @@ def numeImagine(dosar):
 	return nume.strip() or _(FARA_NUME)
 
 
+def _partitieNume(nume, radacina=None):
+	"""Partitia interna cu numele GPT cerut. Un nume repetat nu se foloseste."""
+	gasite = []
+	dosar = _cale(radacina, "sys/class/block")
+	try:
+		partitii_ = os.listdir(dosar)
+	except OSError:
+		partitii_ = []
+	for part in partitii_:
+		if re.fullmatch(r"mmcblk0p[1-9][0-9]*", part) and _cheiValori(
+			_text(os.path.join(dosar, part, "uevent"))).get("PARTNAME") == nume:
+			gasite.append("/dev/" + part)
+	if not gasite and not radacina:
+		try:
+			date = subprocess.check_output(["blkid", "-c", "/dev/null", "-t",
+				"PARTLABEL=" + nume, "-o", "device"], stderr=subprocess.DEVNULL, timeout=5)
+			gasite = [dev for dev in date.decode("ascii").split()
+				if re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", dev)]
+		except (OSError, ValueError, subprocess.SubprocessError):
+			pass
+	return gasite[0] if len(gasite) == 1 else ""
+
+
+def _dispozitivBoot(radacina=None):
+	dev, _m = dispozitivPartitie(parametri(linieComanda(radacina)).get("blkdevparts", ""), "bootoptions")
+	if dev:
+		return dev
+	if os.path.exists(_cale(radacina, "dev/block/by-name/bootoptions")):
+		return "/dev/block/by-name/bootoptions"
+	return _partitieNume("boot", radacina)
+
+
+def _verificaNativ(st, cmd, radacina=None):
+	"""Schema bootoptions existenta sau kernelN/rootfsN numite in GPT."""
+	emmc = verificaEmmc(st, cmd)
+	if emmc:
+		return emmc
+	if not st or st.get("repetate") or st["p"].get("rootsubdir"):
+		return None
+	m = re.fullmatch(r"emmcflash0\.kernel([1-9][0-9]*):?", st["tinta"])
+	if not m or st["p"].get("rootfstype", "ext4") != "ext4":
+		return None
+	n = m.group(1)
+	nucleu, rad = _partitieNume("kernel" + n, radacina), _partitieNume("rootfs" + n, radacina)
+	if not nucleu or not rad or st["p"].get("root") != rad or st["p"].get("kernel", nucleu) != nucleu:
+		return None
+	marime = None
+	for rand in _text(_cale(radacina, "proc/partitions")).splitlines():
+		c = rand.split()
+		if len(c) == 4 and c[3] == nucleu[5:] and c[2].isdigit():
+			marime = int(c[2]) * 1024
+	return (n, nucleu, marime, rad, "") if marime else None
+
+
 def dosarBoot(radacina=None):
 	"""Punctul de montare al partitiei bootoptions din /proc/mounts (vfat, rw), cu radacina; None cand nu e montata."""
-	dev, _m = dispozitivPartitie(parametri(linieComanda(radacina)).get("blkdevparts", ""), "bootoptions")
+	dev = _dispozitivBoot(radacina)
 	if not dev:
 		return None
 	tinta = os.path.realpath(_cale(radacina, dev))
@@ -433,12 +574,12 @@ def _monteazaReal(dispozitiv, fel, optiuni=None):
 
 def _deschideBoot(radacina, monteaza):
 	"""(dosarul bootoptions, demonteaza sau None); (None, None) cand nu se poate dovedi."""
-	d = dosarBoot(radacina)
+	d = dosarBoot(radacina) or _dosarKexec(radacina)
 	if d:
 		return d, None
 	if radacina:
 		return None, None
-	dev, _m = dispozitivPartitie(parametri(linieComanda()).get("blkdevparts", ""), "bootoptions")
+	dev = _dispozitivBoot()
 	if not dev:
 		return None, None
 	return (monteaza or _monteazaReal)(dev, "vfat")
@@ -465,7 +606,7 @@ def startupuri(dosar):
 def _montate(radacina):
 	"""{dispozitiv: dosarul} din /proc/mounts, cu radacina."""
 	rez = {}
-	sub = parametri(linieComanda(radacina)).get("rootsubdir")
+	sub = parametri(linieComanda(radacina)).get("rootsubdir", "") not in ("", "linuxrootfs0")
 	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
 		c = rand.split()
 		if len(c) < 4 or c[2] != "ext4" or (c[1] == "/" and sub):
@@ -545,6 +686,40 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 			demonteaza()
 
 
+def _locKexec(n, fisier, date, cmd, montate, radacina, monteaza):
+	st = citesteStartup(date)
+	pereche = _parametriKexec(st, radacina)
+	if not pereche:
+		return None
+	dev, sub = pereche
+	if not any(len(c) == 4 and c[3] == dev[5:]
+		for c in (rand.split() for rand in _text(_cale(radacina, "proc/partitions")).splitlines())):
+		return None
+	dosar, demonteaza = _deschideDisc(dev, montate, radacina, monteaza)
+	if not dosar:
+		return _rand(n, fisier, date, _(FARA_NUME), motiv=MOTIV_CITIRE)
+	try:
+		sistem = os.path.join(dosar, sub)
+		# Un dosar de imagine nu poate iesi din partitia citita printr-o legatura.
+		if os.path.islink(sistem) or not os.path.isdir(os.path.join(sistem, "etc")):
+			return None
+		acum = _acumKexec(st, cmd)
+		bun = radacinaValida(sistem) and _nucleuKexec(os.path.join(sistem, "zImage"))
+		extern = not dev.startswith("/dev/mmcblk0p")
+		uuid = bool(UUID_DISC.fullmatch(st["p"]["root"]))
+		# Initramfs este comun sloturilor. Pornirea curenta dovedeste suportul UUID.
+		suport_uuid = not uuid or bool(UUID_DISC.fullmatch(cmd.get("root", "")))
+		sigur = suport_uuid and (not extern or uuid or (
+			dev.startswith("/dev/sda") and semnDiscuri(radacina) == ("sda",)))
+		return {"loc": n, "fel": "kexec", "imagine": numeImagine(sistem), "acum": acum,
+			"alegere": bool(bun and sigur and not acum), "strica": not bun,
+			"motiv": (MOTIV_UUID if not suport_uuid else MOTIV_DISCURI) if bun and not sigur else "", "extern": extern,
+			"fisier": fisier, "date": date, "radacina": dev}
+	finally:
+		if demonteaza:
+			demonteaza()
+
+
 def locuri(radacina=None, monteaza=None, numai=None):
 	"""{"locuri": [...], "pe_stick": bool, "eroare": bool}. Fiecare loc: loc, imagine, acum, alegere (se poate scrie),
 	fel (emmc / stick, adica orice nu e din memorie), strica, motiv (de ce nu se alege). Locurile goale (fara radacina) nu
@@ -563,10 +738,23 @@ def locuri(radacina=None, monteaza=None, numai=None):
 			demonteazaBoot()
 	if numai is not None:
 		fisiere = [x for x in fisiere if x[0] == str(numai)]
+	if boot == _dosarKexec(radacina):
+		montate = _montate(radacina)
+		for n, fisier, date in fisiere:
+			try:
+				loc = _locKexec(n, fisier, date, cmd, montate, radacina, monteaza)
+			except (IOError, OSError) as e:
+				_log("locul %s: %r" % (n, e))
+				rez["eroare"] = True
+				continue
+			if loc:
+				rez["locuri"].append(loc)
+		rez["pe_stick"] = any(l.get("extern") and l["acum"] for l in rez["locuri"])
+		return rez
 	emmc, altele = [], []
 	for n, nume_fisier, date in fisiere:
 		st = citesteStartup(date)
-		e = verificaEmmc(st, cmd)
+		e = _verificaNativ(st, cmd, radacina)
 		if e:
 			emmc.append((n, nume_fisier, date, e))
 		elif date.strip() and (not date.startswith(b"boot emmcflash0.") or
@@ -613,8 +801,10 @@ def _locuriEmmc(rez, emmc, cmd, montate, radacina, monteaza):
 			sistem = os.path.join(dosar_rad, sub)
 			if not os.path.isdir(os.path.join(sistem, "etc")):
 				continue  # loc gol
-			acum = (cmd.get("root") == rad and cmd.get("rootsubdir") == sub and cmd.get("kernel") == nucleu)
-			bun = radacinaValida(sistem) and nucleuValid(_cale(radacina, nucleu), marime)
+			acum = (cmd.get("root") == rad and cmd.get("rootsubdir", "") == sub and
+				(cmd.get("kernel") == nucleu or not sub and not cmd.get("kernel")))
+			bun = radacinaValida(sistem) and (nucleuValid(_cale(radacina, nucleu), marime) or (
+				not sub and _nucleuKexec(_cale(radacina, nucleu), marime)))
 			rez["locuri"].append({"loc": n, "fel": "emmc", "imagine": numeImagine(sistem), "acum": acum,
 				"alegere": bool(bun and not acum), "strica": not bun, "fisier": nume_fisier, "date": date})
 	finally:
@@ -658,7 +848,8 @@ def nota(stare):
 	"""Textul de sub lista."""
 	lista = stare.get("locuri", [])
 	if any(l["alegere"] for l in lista):
-		text = [_(NOTA_DISC if any(l["fel"] == "stick" and not l.get("fara_loc") for l in lista) else NOTA)]
+		text = [_(NOTA_DISC if any((l["fel"] == "stick" or l.get("extern")) and
+			not l.get("fara_loc") for l in lista) else NOTA)]
 	elif any(l.get("motiv") for l in lista):
 		text = []
 	else:
@@ -724,13 +915,27 @@ def _scrieAtomic(dosar, nume, date):
 	return _citeste(tinta, MAXIM_STARTUP + 1) == date
 
 
-def alege(loc, radacina=None, monteaza=None):
+def _restaureazaStartup(boot, vechi):
+	if vechi != ABSENT:
+		return _scrieAtomic(boot, FISIER_STARTUP, vechi)
+	try:
+		os.unlink(os.path.join(boot, FISIER_STARTUP))
+	except FileNotFoundError:
+		pass
+	if hasattr(os, "sync"):
+		os.sync()
+	return not os.path.exists(os.path.join(boot, FISIER_STARTUP))
+
+
+def alege(loc, radacina=None, monteaza=None, asteptat=None):
 	"""Scrie STARTUP din STARTUP_<loc> dupa o verificare din nou a locului. (True, imaginea) sau (False, motivul)."""
 	stare = locuri(radacina, monteaza, numai=loc)
 	gasit = [l for l in stare["locuri"] if l["loc"] == str(loc)]
 	if not gasit:
 		return False, _(NEGASIT)
 	l = gasit[0]
+	if asteptat is not None and (l.get("date"), l["imagine"]) != asteptat:
+		return False, _(NEGASIT)
 	if l["acum"]:
 		return False, _(DEJA)
 	if not l["alegere"]:
@@ -744,8 +949,14 @@ def alege(loc, radacina=None, monteaza=None):
 		if date != l["date"]:
 			return False, _(EROARE)
 		if l["fel"] == "emmc":
-			if not verificaEmmc(st, cmd):
+			if not _verificaNativ(st, cmd, radacina):
 				return False, _(EROARE)
+		elif l["fel"] == "kexec":
+			nou = _locKexec(str(loc), l["fisier"], date, cmd,
+				_montate(radacina), radacina, monteaza)
+			if (not nou or not nou["alegere"] or nou.get("radacina") != l.get("radacina") or
+				nou["imagine"] != l["imagine"]):
+				return False, textRefuz(nou) if nou else _(NEGASIT)
 		elif not verificaDisc(st, cmd, radacina):
 			return False, _(EROARE)
 		elif (not UUID_DISC.fullmatch(st["p"].get("root", "")) and
@@ -762,11 +973,11 @@ def alege(loc, radacina=None, monteaza=None):
 			if nou.get("radacina") != l.get("radacina") or nou["imagine"] != l["imagine"]:
 				return False, _(EROARE)
 		vechi = _citeste(os.path.join(boot, FISIER_STARTUP), MAXIM_STARTUP + 1)
-		if vechi is not None and not _scrieAtomic(boot, COPIE, vechi):
+		vechi = ABSENT if vechi is None else vechi
+		if not _scrieAtomic(boot, COPIE, vechi):
 			return False, _(EROARE)
 		if not _scrieAtomic(boot, FISIER_STARTUP, date):
-			if vechi is not None:
-				_scrieAtomic(boot, FISIER_STARTUP, vechi)
+			_restaureazaStartup(boot, vechi)
 			return False, _(EROARE)
 		_log("STARTUP = %s (%s)" % (l["fisier"], l["imagine"]))
 		return True, l["imagine"]
@@ -785,9 +996,9 @@ def inapoi(radacina=None, monteaza=None):
 		return False
 	try:
 		vechi = _citeste(os.path.join(boot, COPIE), MAXIM_STARTUP + 1)
-		if vechi is None or not citesteStartup(vechi):
+		if vechi is None or vechi != ABSENT and not citesteStartup(vechi):
 			return False
-		ok = _scrieAtomic(boot, FISIER_STARTUP, vechi)
+		ok = _restaureazaStartup(boot, vechi)
 		_log("STARTUP pus inapoi: %s" % ok)
 		return ok
 	except (IOError, OSError) as e:
@@ -798,13 +1009,13 @@ def inapoi(radacina=None, monteaza=None):
 			demonteaza()
 
 
-def reporneste(sesiune, loc, dupa_ms=0, fabrica_ceas=None, radacina=None, monteaza=None, Standby=None):
+def reporneste(sesiune, loc, dupa_ms=0, fabrica_ceas=None, radacina=None, monteaza=None, Standby=None, asteptat=None):
 	"""Scrie alegerea, apoi TryQuitMainloop(2) pe receptor (dupa `dupa_ms`). Daca omul spune Nu la intrebarea de pe
 	ecran (o inregistrare, o lucrare), fereastra se inchide cu apel inapoi si STARTUP se pune la loc; la Da enigma2 iese
 	si apelul nu mai vine. (True, imaginea) sau (False, motivul)."""
 	if sesiune is None:
 		return False, _(EROARE)
-	ok, text = alege(loc, radacina, monteaza)
+	ok, text = alege(loc, radacina, monteaza) if asteptat is None else alege(loc, radacina, monteaza, asteptat=asteptat)
 	if not ok:
 		return ok, text
 

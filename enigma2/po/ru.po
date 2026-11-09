@@ -61126,3 +61126,274 @@ msgstr "Невозможно открыть целевой объект симв
 #: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
 msgid "Țări"
 msgstr "Страны"
+
+#. Fisa 50: reparatii a3.
+msgid "(captura nu este JPG sau PNG)"
+msgstr "(снимок не в формате JPG или PNG)"
+
+#. Fisa 50: reparatii a3.
+msgid "Captura nu este disponibilă acum. Starea ecranului se verifică."
+msgstr "Снимок сейчас недоступен. Проверяется состояние экрана."
+
+#. Fisa 50: reparatii a3.
+msgid "Captura se pregătește după închiderea ecranului protejat. Reîncearcă."
+msgstr "Снимок готовится после закрытия защищённого экрана. Попробуй снова."
+
+#. Fisa 50: reparatii a3.
+msgid "Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "Расширения на ресивере и из источников пакетов. Файлы .ipk с флешки, диска, из /tmp или из сети. Обновления образа находятся на странице <a href=\"/actualizari\" id=\"legaturaActualizari\">Обновление ПО</a>."
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, de pe disc și din /tmp"
+msgstr "Файлы .ipk с флешки, диска и из /tmp"
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, disc, din /tmp sau din rețea"
+msgstr "Файлы .ipk с флешки, диска, из /tmp или из сети"
+
+#. Fisa 50: reparatii a3.
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). Pentru dosarele de rețea, alege Caută și în rețea."
+msgstr "Установи файл .ipk с флешки, диска или из памяти ресивера (/tmp). Для сетевых папок выбери Искать и в сети."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp.\nCopiază extensia într-unul dintre aceste locuri, apoi apasă albastru."
+msgstr "На флешке, диске и в /tmp нет файлов .ipk.\nСкопируй расширение в одно из этих мест, затем нажми синюю кнопку."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp. Copiază extensia într-unul dintre aceste locuri, apoi caută din nou."
+msgstr "На флешке, диске и в /tmp нет файлов .ipk. Скопируй расширение в одно из этих мест, затем повтори поиск."
+
+#. Fisa 50: reparatii a3.
+msgid "Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo."
+msgstr "На телевизоре открыт защищённый экран: %s. Он виден только там."
+
+#. Fisa 50: reparatii a3.
+msgid "Răspunsul nu este o captură JPG sau PNG."
+msgstr "Ответ не является снимком в формате JPG или PNG."
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp"
+msgstr "Поиск файлов .ipk на флешке, диске и в /tmp"
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp."
+msgstr "Поиск файлов .ipk на флешке, диске и в /tmp."
+
+#. Fisa 50: reparatii a3.
+msgid "captura nu este JPG sau PNG"
+msgstr "снимок не в формате JPG или PNG"
+
+#. Fisa 50: reparatii a3.
+msgid "oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
+msgstr "остановлен внешним сигналом SIGKILL (обычно от плагина или команды, перезапускающей интерфейс)"
+#: data/menu.xml lib/python/Components/HdsPornireMultipla.py
+#: lib/python/Screens/HdsPornireMultipla.py
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py
+msgid "Repornește în altă imagine"
+msgstr "Перезагрузка в другой образ"
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Din comunitate"
+msgstr "От сообщества"
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "%s - din comunitate - Autor: %s"
+msgstr "%s - от сообщества - Автор: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Siglele comunității apar când există rețea."
+msgstr "Логотипы сообщества появляются при подключении к сети."
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "Din comunitate\nAutor: %s"
+msgstr "От сообщества\nАвтор: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Reîncarcă lista"
+msgstr "Загрузи список заново"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecieri: %(likes)d | Descărcări: %(downloads)d"
+msgstr "Лайки: %(likes)d | Скачивания: %(downloads)d"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecierile se dau pe site, cu contul: %s"
+msgstr "Лайки можно ставить на сайте, войдя в аккаунт: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Din comunitate | Autor: %s"
+msgstr "От сообщества | Автор: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: implicită"
+msgstr "Порядок: по умолчанию"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai apreciate"
+msgstr "Порядок: по числу лайков"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai descărcate"
+msgstr "Порядок: по числу скачиваний"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecierile se dau pe site, cu contul:"
+msgstr "Лайки можно ставить на сайте, войдя в аккаунт:"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine"
+msgstr "Порядок"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai apreciate"
+msgstr "Больше всего лайков"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai descărcate"
+msgstr "Больше всего скачиваний"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecieri: "
+msgstr "Лайки: "
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Descărcări: "
+msgstr "Скачивания: "
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "%(nume)s (%(sigle)d)"
+msgstr "%(nume)s (%(sigle)d)"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri"
+msgstr "Лайки"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri primite"
+msgstr "Полученные лайки"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor"
+msgstr "Рейтинг участников"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor apare când există rețea."
+msgstr "Рейтинг участников появляется при подключении к сети."
+
+#: Fisa 47c: contributori
+msgid "Contributor"
+msgstr "Участник"
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "Contributor: %s"
+msgstr "Участник: %s"
+
+#: Fisa 47c: contributori
+msgid "Loc"
+msgstr "Место"
+
+#: Fisa 47c: contributori
+msgid "Nu este niciun ecran pentru acest contributor."
+msgstr "У этого участника нет изображений для экрана загрузки."
+
+#: Fisa 47c: contributori
+msgid "OK: vezi siglele contributorului. EXIT: înapoi."
+msgstr "OK: посмотри логотипы участника. EXIT: назад."
+
+#: Fisa 47c: contributori
+msgid "Sigle aprobate"
+msgstr "Одобренные логотипы"
+
+#: Fisa 47c: contributori
+msgid "XP"
+msgstr "XP"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "%s - privată: %s"
+msgstr "%s - частный: %s"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "Privată | %s"
+msgstr "Частный | %s"
+
+#: Fisa 47d: siglele private
+msgid "are sigla altei firme"
+msgstr "содержит логотип другой фирмы"
+
+#: Fisa 47d: siglele private
+msgid "nu se publică"
+msgstr "не публикуется"
+
+#: Fisa 47d: siglele private
+msgid "poza există pe alte site-uri"
+msgstr "картинка есть на других сайтах"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Se verifică legătura pentru asistență..."
+msgstr "Проверяется соединение для помощи..."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Setările de internet"
+msgstr "Настройки интернета"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu are internet. Verifică setările rețelei."
+msgstr "Не удаётся запустить помощь: у ресивера нет доступа к интернету. Проверь настройки сети."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: cablul de rețea nu este conectat. Verifică și routerul."
+msgstr "Не удаётся запустить помощь: сетевой кабель не подключён. Проверь также роутер."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. Verifică rețeaua Wi-Fi și parola."
+msgstr "Не удаётся запустить помощь: ресивер не подключён к Wi-Fi. Проверь сеть Wi-Fi и пароль."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu poate afla adresa stb.hdsatelit.com (DNS). Verifică setările de internet."
+msgstr "Не удаётся запустить помощь: ресивер не может определить адрес stb.hdsatelit.com (DNS). Проверь настройки интернета."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit are o problemă temporară. Încearcă din nou mai târziu."
+msgstr "Не удаётся запустить помощь: на сервере HD Satelit временная проблема. Попробуй снова позже."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. Verifică internetul și încearcă din nou."
+msgstr "Не удаётся запустить помощь: ресивер не может связаться с сервером HD Satelit. Проверь интернет и попробуй снова."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."
+msgstr "Не удаётся запустить помощь: защищённое соединение HTTPS отклонено. Проверь дату и время ресивера; если они верны, попробуй позже."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit a refuzat cererea. Încearcă din nou mai târziu."
+msgstr "Не удаётся запустить помощь: сервер HD Satelit отклонил запрос. Попробуй снова позже."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Atenție: numele receptorului %s nu e cunoscut de actualizator."
+msgstr "  Внимание: программе обновления неизвестно название ресивера %s."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB."
+msgstr "  При запуске удерживай Standby на ресивере, затем выбери Recovery From USB."
+
+#. Fisa 57: recuperarea modelului.
+msgid "Recuperare prin Recovery From USB (stick USB):"
+msgstr "Восстановление через Recovery From USB (USB-флешка):"

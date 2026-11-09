@@ -198,21 +198,73 @@ def actiuni_harta(trateaza):
 
 
 class AlocareTaste(object):
-	"""0 lasa tasta mai departe, 1 o consuma. Niciun ceas suplimentar."""
+	"""0 lasa tasta mai departe, 1 o consuma."""
 
-	def __init__(self, porneste, numar, disponibila, config=None):
+	# Prima repetare poate veni la 280 ms si este filtrata in harta.
+	# Lasam loc si urmatoarei repetari, fara a astepta la nesfarsit.
+	FARA_SEMN_MS = 650
+
+	def __init__(self, porneste, numar, disponibila, config=None, ceas=None):
 		self.porneste = porneste
 		self.numar = numar
 		self.disponibila = disponibila
 		self.config = config
 		self.lungi = set()
 		self.legaturi = dict((x[0], x[1:]) for x in LEGATURI_TASTE)
+		self.asteptata = None
+		self.incheiate = set()
+		self.ceas = ceas
+		if ceas is not None:
+			ceas.callback.append(self._expira)
+
+	def _opreste_asteptarea(self):
+		self.asteptata = None
+		if self.ceas is not None:
+			self.ceas.stop()
+
+	def anuleaza(self):
+		"""Bara a ramas in spatele altui ecran: nicio actiune amanata."""
+		if self.asteptata is not None:
+			self.incheiate.add(self.asteptata[0])
+		self._opreste_asteptarea()
+		self.lungi.clear()
+
+	def _asteapta(self):
+		if self.ceas is not None:
+			self.ceas.start(self.FARA_SEMN_MS, True)
+
+	def _scurta_asteptata(self, motiv):
+		if self.asteptata is None:
+			return
+		tasta, actiune, numeric = self.asteptata
+		self._opreste_asteptarea()
+		self.incheiate.add(tasta)
+		if not self.disponibila(tasta):
+			return
+		print("[HdsTasteRapide] tasta=%s decizie=scurta motiv=%s" %
+			(tasta, motiv))
+		if numeric:
+			self.numar(int(tasta[7:]))
+		else:
+			self.porneste(tasta, actiune)
+
+	def _expira(self):
+		self._scurta_asteptata("fara semn %d ms" % self.FARA_SEMN_MS)
 
 	def eveniment(self, tasta, faza):
+		avea_asteptare = self.asteptata is not None
 		if faza == "m":
+			# O alta apasare poate ascunde eliberarea celei dinainte.
+			self._scurta_asteptata("apasare noua")
+			self.incheiate.discard(tasta)
 			self.lungi.discard(tasta)
+		elif tasta in self.incheiate:
+			return 1
 		if not self.disponibila(tasta):
-			return 0
+			self.anuleaza()
+			# Actiunea recuperata poate deschide deja alt ecran.
+			# Nu mai chemam hartile vechi cu aceeasi apasare.
+			return int(faza == "m" and avea_asteptare)
 		scurta, lunga, la_eliberare = self.legaturi[tasta]
 		a = actiune_aleasa(scurta, self.config) if scurta else "default"
 		l = actiune_aleasa(lunga, self.config) if lunga else "default"
@@ -227,6 +279,8 @@ class AlocareTaste(object):
 		numeric = tasta.startswith("number_") and l != "default"
 		if faza == "m":
 			if numeric or (proprie and la_eliberare):
+				self.asteptata = (tasta, a, numeric)
+				self._asteapta()
 				return 1
 			if proprie and not la_eliberare:
 				self.porneste(tasta, a)
@@ -237,23 +291,26 @@ class AlocareTaste(object):
 				# Nimic la culori pastreaza sensul vechi: fara actiune lunga.
 				if l == "none" and tasta in ("red", "green", "yellow", "blue"):
 					return int(proprie)
+				self._opreste_asteptarea()
+				self.incheiate.add(tasta)
 				self.lungi.add(tasta)
+				print("[HdsTasteRapide] tasta=%s semn=l decizie=lunga" % tasta)
 				self.porneste(tasta, l)
 				return 1
 			if proprie and la_eliberare and tasta in ("info", "audio", "fav"):
+				self._opreste_asteptarea()
+				self.incheiate.add(tasta)
 				self.lungi.add(tasta)
 			return int(proprie and not la_eliberare)
 		if faza == "b":
+			if self.asteptata is not None and self.asteptata[0] == tasta:
+				self._scurta_asteptata("eliberare")
+				return 1
 			if tasta in self.lungi:
 				self.lungi.discard(tasta)
 				return 1
-			if numeric:
-				self.numar(int(tasta[7:]))
-				return 1
-			if proprie:
-				if la_eliberare:
-					self.porneste(tasta, a)
-				return 1
+		if faza == "r" and self.asteptata is not None and self.asteptata[0] == tasta:
+			self._asteapta()
 		return int(numeric or proprie)
 
 

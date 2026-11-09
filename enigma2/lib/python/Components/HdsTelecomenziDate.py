@@ -673,7 +673,7 @@ def ora_tastei(ev, ancora=None):
 	return time.strftime('%H:%M:%S', time.localtime(secunde)) + '.%03d' % rest
 
 
-def rand_istoric(ev, ora=None, keyids=None, ancora=None):
+def rand_istoric(ev, ora=None, keyids=None, ancora=None, traduce=None):
 	"""„22:15:07.123  Logitech USB Receiver  352 (0x160) KEY_OK  apăsat”."""
 	if ora is None:
 		ora = ora_tastei(ev, ancora)
@@ -685,7 +685,10 @@ def rand_istoric(ev, ora=None, keyids=None, ancora=None):
 	if disp == NATIV:
 		disp = 'telecomanda receptorului'
 	scan = '  scan 0x%X' % ev['scan'] if ev['scan'] >= 0 else ''
-	return '%s  %s  %s  %s%s' % (ora, disp[:32], cod, FELURI.get(ev['fel'], str(ev['fel'])), scan)
+	fel = FELURI.get(ev['fel'], str(ev['fel']))
+	if traduce is not None:
+		fel = traduce(fel)
+	return '%s  %s  %s  %s%s' % (ora, disp[:32], cod, fel, scan)
 
 
 class Proba(object):
@@ -694,9 +697,20 @@ class Proba(object):
 	def __init__(self):
 		self.verificate = set()
 		self.ultima = None
+		self.evenimente = []
+		self.ancora = None
 
 	def primeste(self, ev):
 		"""Întoarce id-ul butonului Viper aprins de eveniment sau None."""
+		if ev['fel'] != ASCII:
+			# Numai coduri, in proba deschisa de om. Fara text tastat.
+			print('[HdsTelecomenzi] tasta=%d semn=%d ms=%d' %
+				(ev['cod'], ev['fel'], ev['ms']))
+		if self.ancora is None:
+			self.ancora = ancora_ceas(ev)
+		# Pastram si eliberarile. Un buton aprins nu dovedeste tinerea.
+		self.evenimente.append(dict(ev))
+		self.evenimente = self.evenimente[-NUMAR_ISTORIC:]
 		if ev['fel'] not in (APASAT, TINUT, LUNG):
 			return None
 		cod = ev['tinta'] if ev['tinta'] >= 0 else (ev['cod'] if ev['dispozitiv'] == NATIV else -1)
@@ -706,6 +720,11 @@ class Proba(object):
 		self.verificate.add(b[0])
 		self.ultima = b[0]
 		return b[0]
+
+	def istoric(self, traduce=None):
+		"""Aceeasi ordine si aceleasi faze pe televizor si in pagina web."""
+		return [rand_istoric(ev, ancora=self.ancora, traduce=traduce)
+			for ev in reversed(self.evenimente)]
 
 	def ramase(self):
 		return [b[0] for b in BUTOANE_VIPER if b[0] not in self.verificate]

@@ -78,6 +78,7 @@ MIN_SPATIU_LIBER = 20 * 1024 * 1024
 
 _ID_BUN = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 SURSE = ("galerie", "propriu")
+CONTRIBUTOR_ECHIPA = "echipa-hdsatelit"
 
 
 def _t(text):
@@ -147,6 +148,14 @@ def _inDosar(dosar, nume):
 
 def caleEcran(sursa, id_ecran):
 	"""Fisierul .mvi al unui ecran, sau None daca sursa/id nu sunt bune ori fisierul nu exista."""
+	if sursa == "comunitate" and _galerieSigle is not None:
+		if not _galerieSigle._id(id_ecran):
+			return None
+		try:
+			return next((_galerieSigle.localPath(i) for i in _galerieSigle.downloaded()
+				if i["id"] == id_ecran and i["role"] == "backdrop"), None)
+		except (OSError, _galerieSigle.GalleryError):
+			return None
 	if sursa not in SURSE or not _idBun(id_ecran):
 		return None
 	dosar = CALE_GALERIE if sursa == "galerie" else CALE_PROPRII
@@ -159,6 +168,8 @@ def caleEcran(sursa, id_ecran):
 def caleMic(sursa, id_ecran):
 	"""Poza mica de previzualizare (JPG), sau None. La ecranele proprii, daca previzualizarea facuta pe receptor
 	lipseste, se intoarce poza sursa pastrata (tot o poza adevarata)."""
+	if sursa == "comunitate" and _galerieSigle is not None:
+		return _galerieSigle.localPreview(id_ecran)
 	if sursa not in SURSE or not _idBun(id_ecran):
 		return None
 	if sursa == "galerie":
@@ -368,6 +379,16 @@ def laLoc():
 def activ():
 	"""Ce ecran e pus acum, dupa FISIERUL de pe disc, nu doar dupa insemnare: o actualizare de pachet poate inlocui
 	backdrop.mvi pe sub noi. Intoarce {'sursa','id'} sau None."""
+	if _galerieSigle is not None and _galerieSigle.managesBackdrop():
+		i = _galerieSigle.status().get("roles", {}).get("backdrop")
+		if not i:
+			return None
+		cale = _galerieSigle.localPath(i)
+		if not cale or _amprenta(cale) != _amprenta(CALE_ACTIV):
+			return None
+		if i.get("source") == "factory":
+			return {"sursa": "galerie", "id": implicit()}
+		return {"sursa": "comunitate", "id": i["id"]}
 	a = _ales()
 	if a is None:
 		# omul n-a ales niciodata: e pus ecranul implicit din pachet, daca fisierul activ chiar e el
@@ -419,11 +440,25 @@ def proprii():
 	return rezultat
 
 
-def lista(limba=None):
+def contextPrivat():
+	"""Pe firul interfetei: dovada receptorului pentru siglele private ale omului (HdsGalerieSigle.contextPrivat), sau
+	None. Se da mai departe lui lista(comunitate=True, privat=...) pe firul de lucru."""
+	if _galerieSigle is None:
+		return None
+	try:
+		return _galerieSigle.contextPrivat()
+	except Exception:
+		return None
+
+
+def lista(limba=None, comunitate=False, rezolutie="1920x1080", contributor=None, privat=None):
 	"""Tot ce trebuie ca sa se deseneze ecranul si pagina: grupele care au macar un ecran (o grupa ramasa goala nu
 	se arata), ecranele din galerie (fara cele sterse de om), ecranele proprii, ecranul implicit si care e pus acum.
 	limba=None: numele in limba interfetei (ecranul de pe televizor); „ro”: numele romanesti (pagina web, care e in
 	romana); alt cod: numele din ecrane.json in acea limba, daca il are."""
+	sigle, nota = _listaComunitate(comunitate, rezolutie, contributor, privat)
+	numere = _galerieSigle.stats(online=comunitate) if _galerieSigle is not None else None
+	contributori = _galerieSigle.contributors(online=comunitate) if _galerieSigle is not None else None
 	date = _citesteDate()
 	date_sterse = sterse()
 	pus = activ()
@@ -441,6 +476,7 @@ def lista(limba=None):
 		iesire.append({
 			"id": e["id"],
 			"sursa": "galerie",
+			"contributor": {"id": CONTRIBUTOR_ECHIPA, "nume": "HD Satelit"},
 			"nume": _t(_ro(e)) if limba is None else _inLimba(e, limba),
 			"grup": e.get("grup", ""),
 			"are_poza": caleMic("galerie", e["id"]) is not None,
@@ -459,9 +495,37 @@ def lista(limba=None):
 	mele = proprii()
 	for e in mele:
 		e["se_sterge"] = not folosit("propriu", e["id"])
+		e["contributor"] = None
 	if mele:
 		iesire_grupe.append({"id": "proprii", "nume": "Pozele mele" if limba == "ro" else _t("Pozele mele")})
+	iesire.sort(key=lambda e: e["id"] != date["implicit"])
+	if sigle:
+		iesire_grupe.append({"id": "comunitate", "nume": _t("Din comunitate")})
+	for e in iesire + sigle:
+		if numere is not None and not e.get("privata"):
+			ident = "imagine-" + e["id"] if e["sursa"] == "galerie" else e["id"]
+			e.update(numere.get(ident, {"likes": 0, "downloads": 0}))
+	alegeri = {}
+	for e in iesire + sigle:
+		om = e.get("contributor")
+		if om and not e.get("privata"):
+			if om["id"] not in alegeri:
+				alegeri[om["id"]] = dict(om, sigle=0)
+			alegeri[om["id"]]["sigle"] += 1
+	if contributori is not None:
+		# Numarul serverului include si siglele mai vechi decat lista generala.
+		alegeri = {k: v for k, v in alegeri.items() if k == CONTRIBUTOR_ECHIPA}
+		for om in contributori:
+			alegeri[om["id"]] = {k: om[k] for k in ("id", "nume", "sigle")}
 	return {
+		"lista": iesire + mele + sigle,
+		"contributori": sorted(alegeri.values(), key=lambda i: (i["nume"].casefold(), i["id"])),
+		"clasament_contributori": contributori[:10] if contributori is not None else [],
+		"nota_contributori": "" if contributori is not None else
+			_t("Clasamentul contributorilor apare când există rețea."),
+		"nota_comunitate": nota,
+		"comunitate_online": _galerieSigle is not None and _galerieSigle.cachedCatalog(
+			contributor if contributor and contributor != CONTRIBUTOR_ECHIPA else None)["ok"],
 		"grupe": iesire_grupe,
 		"ecrane": iesire,
 		"proprii": mele,
@@ -472,6 +536,92 @@ def lista(limba=None):
 		"max_proprii": MAX_PROPRII,
 		"poate_converti": bool(pregatitDeConversie()),
 	}
+
+
+def ordoneaza(ecrane, ordine="implicit", contributor=None):
+	"""Egalitatile pastreaza ordinea listei implicite."""
+	if contributor:
+		ecrane = [e for e in ecrane if (e.get("contributor") or {}).get("id") == contributor]
+	if ordine not in ("likes", "downloads"):
+		return list(ecrane)
+	return sorted(ecrane, key=lambda e: -e.get(ordine, 0))
+
+
+def etichetaNumere(ecran):
+	if "likes" not in ecran or "downloads" not in ecran:
+		return ""
+	return _t("Aprecieri: %(likes)d | Descărcări: %(downloads)d") % ecran
+
+
+# motivul scurt al unei sigle private, pe televizor si in web (codul vine de la galerie: items.motiv_privat)
+MOTIV_PRIVAT = {
+	"marca": N_("are sigla altei firme"),
+	"internet": N_("poza există pe alte site-uri"),
+	"echipa": N_("nu se publică"),
+}
+
+
+def motivPrivat(ecran):
+	"""Motivul scurt, tradus, al unei sigle private; "" pentru celelalte."""
+	if not ecran.get("privata"):
+		return ""
+	return _t(MOTIV_PRIVAT.get(ecran.get("motiv"), MOTIV_PRIVAT["echipa"]))
+
+
+def _listaComunitate(actualizeaza, rezolutie, contributor=None, privat=None):
+	"""Reteaua se citeste numai la cererea firului de lucru. Siglele private ale omului (08.11.2026) vin numai cu
+	privat (contextPrivat, citit pe firul interfetei) si numai pe un receptor legat de contul lui."""
+	if _galerieSigle is None:
+		return [], _t("Siglele comunității apar când există rețea.")
+	M = _galerieSigle
+	ales = contributor if contributor and contributor != CONTRIBUTOR_ECHIPA else None
+	cat = (M.catalog(ales) if ales else M.catalog()) if actualizeaza else M.cachedCatalog(ales)
+	rez = {}
+	for i in cat.get("items", []):
+		if i.get("variants", {}).get(rezolutie, {}).get("backdrop"):
+			rez[i["id"]] = {"id": i["id"], "nume": i["title"],
+				"autor": i["author"], "descarcat": False, "contributor": i.get("contributor")}
+	try:
+		privatele = M.privateCatalog(privat, online=bool(actualizeaza and privat))
+	except Exception:
+		privatele = []
+	for i in privatele:
+		if i["id"] not in rez and i.get("variants", {}).get(rezolutie, {}).get("backdrop"):
+			rez[i["id"]] = {"id": i["id"], "nume": i["title"], "autor": i["author"], "descarcat": False,
+				"contributor": i.get("contributor"), "privata": True, "motiv": i.get("motiv")}
+	try:
+		for i in M.downloaded():
+			if i["role"] == "backdrop" and i["resolution"] == rezolutie and M.localPath(i):
+				# Catalogul actual are numele contului la zi, inclusiv pentru copii vechi.
+				om = (rez.get(i["id"]) or {}).get("contributor") or M._contributor(i.get("contributor"))
+				# privata: dupa lista de acum (aprobata intre timp = publica), altfel dupa ce s-a tinut minte la descarcare
+				acum = rez.get(i["id"])
+				privata = acum.get("privata", False) if acum is not None else i.get("privata") is True
+				motiv = acum.get("motiv") if acum is not None else i.get("motiv")
+				rez[i["id"]] = {"id": i["id"],
+					"nume": M._text(i.get("title"), 120) or i["id"],
+					"autor": M._text(i.get("author"), 80), "descarcat": True, "contributor": om}
+				if privata:
+					rez[i["id"]].update({"privata": True, "motiv": motiv})
+	except (OSError, M.GalleryError):
+		cat = {"ok": False}
+	for e in rez.values():
+		e.update({"sursa": "comunitate", "grup": "comunitate", "se_sterge": False,
+			"are_poza": True})
+		if e.get("privata"):
+			e["eticheta"] = _t("%s - privată: %s") % (e["nume"], motivPrivat(e))
+		else:
+			e["eticheta"] = _t("%s - din comunitate - Autor: %s") % (e["nume"], e["autor"])
+	nota = cat.get("message", "") if cat.get("ok") else \
+		_t("Siglele comunității apar când există rețea.")
+	return list(rez.values()), nota
+
+
+def previzualizareComunitate(id_ecran):
+	"""Se cheama numai pe un fir de lucru, ca descarcarea siglei."""
+	if _galerieSigle is None:
+		return {"ok": False}
+	return _galerieSigle.preview(id_ecran)
 
 
 def inlocuitor(id_ecran, date=None):
@@ -615,10 +765,16 @@ def _copiazaAtomic(sursa, tinta):
 	_fsyncDosar(os.path.dirname(tinta))
 
 
-def aplica(sursa, id_ecran):
+def aplica(sursa, id_ecran, rezolutie="1920x1080", anunta=True):
 	"""Pune ecranul ales pe locul ecranului activ. Intoarce (bun, mesaj). Numai scrie fisierul (vezi sus): nu reporneste
 	interfata si nu atinge showiframe; ecranul se vede la urmatoarea pornire. Se cheama de pe un fir separat (ecranul
 	de pe televizor si web-ul), nu de pe firul enigma2."""
+	if sursa == "comunitate" and _galerieSigle is not None:
+		r = _galerieSigle.install(id_ecran, "backdrop", rezolutie)
+		if r.get("ok"):
+			return True, _t("Ecranul de pornire a fost schimbat. "
+				"Se vede la următoarea pornire a receptorului.")
+		return False, r.get("message", "")
 	cale = caleEcran(sursa, id_ecran)
 	if cale is None:
 		return False, _t("Ecranul cerut nu există.")
@@ -637,6 +793,8 @@ def aplica(sursa, id_ecran):
 			except (OSError, _galerieSigle.GalleryError) as eroare:
 				return False, _t("Nu am putut pune ecranul: %s") % eroare
 			_scrieAles(sursa, id_ecran)
+			if anunta and sursa == "galerie":
+				_galerieSigle.announceDownload("imagine-" + id_ecran)
 			return True, _t("Ecranul de pornire a fost schimbat. "
 				"Se vede la urmatoarea pornire a receptorului.")
 		_curataRamase(CALE_ACTIV)
@@ -651,6 +809,8 @@ def aplica(sursa, id_ecran):
 			except OSError as eroare:
 				return False, _t("Nu am putut pune ecranul: %s") % eroare
 		_scrieAles(sursa, id_ecran)
+	if anunta and sursa == "galerie" and _galerieSigle is not None:
+		_galerieSigle.announceDownload("imagine-" + id_ecran)
 	return True, _t("Ecranul de pornire a fost schimbat. Se vede la următoarea pornire a receptorului.")
 
 
@@ -676,11 +836,11 @@ def _verificaLocala():
 			nou = _citesteDate()["implicit"]    # poza proprie stearsa de pe disc: ecranul implicit
 		if nou is None or caleEcran("galerie", nou) is None:
 			return "fara-galerie", sursa, id_ecran
-		bun, _mesaj = aplica("galerie", nou)
+		bun, _mesaj = aplica("galerie", nou, anunta=False)
 		return ("inlocuit" if bun else "esuat"), "galerie", nou
 	if _amprenta(caleEcran(sursa, id_ecran)) == _amprenta(CALE_ACTIV):
 		return "la-zi", sursa, id_ecran
-	bun, _mesaj = aplica(sursa, id_ecran)
+	bun, _mesaj = aplica(sursa, id_ecran, anunta=False)
 	return ("pus-din-nou" if bun else "esuat"), sursa, id_ecran
 
 

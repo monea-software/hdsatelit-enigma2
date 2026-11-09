@@ -897,9 +897,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	esac
 	# the end asked for by hds-watchdog (see above)
 	paznic=""
-	paznic_semn=""
 	if [ -f "$HDS_PAZNIC_OPRIRE" ]; then
-		paznic_semn=1
 		if [ "$ret" -eq 143 ] || { [ "$ret" -eq 137 ] && grep -q '^sigkill=' "$HDS_PAZNIC_OPRIRE" 2>/dev/null; }; then
 			# digits only, no leading zero (a number like 08 is octal in $((...)) and an invalid one ends the shell)
 			paznic_up=$(sed -n 's/^uptime=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-12 |
@@ -964,10 +962,11 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		cauza="oprire"
 	elif dmesg 2>/dev/null | tail -n 100 | grep -q 'Killed process [0-9]* (enigma2)'; then
 		cauza="memorie"
-	elif [ "$ret" -eq 137 ] && [ -z "$motiv_fel" ] && [ -z "$paznic_semn" ]; then
-		# a SIGKILL from outside (see above); "oprire" for every decision below, the small log says what it was
+	elif [ "$ret" -eq 137 ]; then
+		# Un semn vechi sau nepotrivit nu dovedeste interventia paznicului.
+		# Cauzele confirmate au fost verificate mai sus.
 		cauza="oprire"
-		cauza_rand="oprire: SIGKILL din afara, fara raport de cadere, fara lipsa de memorie, fara semnul paznicului"
+		cauza_rand="oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
 	else
 		cauza="necunoscuta"
 	fi

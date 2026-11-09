@@ -62203,3 +62203,274 @@ msgstr "Sümbollingi sihtmärki ei saa avada."
 #: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
 msgid "Țări"
 msgstr "Riigid"
+
+#. Fisa 50: reparatii a3.
+msgid "(captura nu este JPG sau PNG)"
+msgstr "(ekraanipilt ei ole JPG ega PNG)"
+
+#. Fisa 50: reparatii a3.
+msgid "Captura nu este disponibilă acum. Starea ecranului se verifică."
+msgstr "Ekraanipilt pole praegu saadaval. Ekraani olekut kontrollitakse."
+
+#. Fisa 50: reparatii a3.
+msgid "Captura se pregătește după închiderea ecranului protejat. Reîncearcă."
+msgstr "Ekraanipilt valmistatakse ette pärast kaitstud vaate sulgemist. Proovi uuesti."
+
+#. Fisa 50: reparatii a3.
+msgid "Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "Laiendused vastuvõtjas ja feed'ides. .ipk-failid mälupulgal, kettal, /tmp-kaustas või võrgus. Image uuendused on lehel <a href=\"/actualizari\" id=\"legaturaActualizari\">Tarkvarauuendus</a>."
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, de pe disc și din /tmp"
+msgstr ".ipk-failid mälupulgal, kettal ja /tmp-kaustas"
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, disc, din /tmp sau din rețea"
+msgstr ".ipk-failid mälupulgal, kettal, /tmp-kaustas või võrgus"
+
+#. Fisa 50: reparatii a3.
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). Pentru dosarele de rețea, alege Caută și în rețea."
+msgstr "Paigaldad .ipk-faili mälupulgalt, kettalt või vastuvõtja mälust (/tmp). Võrgukaustade jaoks vali Otsi ka võrgust."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp.\nCopiază extensia într-unul dintre aceste locuri, apoi apasă albastru."
+msgstr "Mälupulgal, kettal ega /tmp-kaustas pole .ipk-faile.\nKopeeri laiendus ühte neist kohtadest ja vajuta seejärel sinist nuppu."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp. Copiază extensia într-unul dintre aceste locuri, apoi caută din nou."
+msgstr "Mälupulgal, kettal ega /tmp-kaustas pole .ipk-faile. Kopeeri laiendus ühte neist kohtadest ja otsi uuesti."
+
+#. Fisa 50: reparatii a3.
+msgid "Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo."
+msgstr "Teleris on avatud kaitstud vaade: %s. Seda näeb ainult seal."
+
+#. Fisa 50: reparatii a3.
+msgid "Răspunsul nu este o captură JPG sau PNG."
+msgstr "Vastus ei ole JPG- ega PNG-ekraanipilt."
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp"
+msgstr "Otsitakse .ipk-faile mälupulgalt, kettalt ja /tmp-kaustast"
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp."
+msgstr "Otsitakse .ipk-faile mälupulgalt, kettalt ja /tmp-kaustast."
+
+#. Fisa 50: reparatii a3.
+msgid "captura nu este JPG sau PNG"
+msgstr "ekraanipilt ei ole JPG ega PNG"
+
+#. Fisa 50: reparatii a3.
+msgid "oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
+msgstr "peatatud välise SIGKILL-signaaliga (tavaliselt saadab selle plugin või käsk, mis taaskäivitab liidese)"
+#: data/menu.xml lib/python/Components/HdsPornireMultipla.py
+#: lib/python/Screens/HdsPornireMultipla.py
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py
+msgid "Repornește în altă imagine"
+msgstr "Taaskäivita teise tõmmisega"
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Din comunitate"
+msgstr "Kogukonnalt"
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "%s - din comunitate - Autor: %s"
+msgstr "%s - kogukonnalt - Autor: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Siglele comunității apar când există rețea."
+msgstr "Kogukonna logod ilmuvad võrguühenduse olemasolul."
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "Din comunitate\nAutor: %s"
+msgstr "Kogukonnalt\nAutor: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Reîncarcă lista"
+msgstr "Laadi loend uuesti"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecieri: %(likes)d | Descărcări: %(downloads)d"
+msgstr "Meeldimised: %(likes)d | Allalaadimised: %(downloads)d"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecierile se dau pe site, cu contul: %s"
+msgstr "Meeldimisi saad anda veebilehel kontoga: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Din comunitate | Autor: %s"
+msgstr "Kogukonnalt | Autor: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: implicită"
+msgstr "Järjestus: vaikimisi"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai apreciate"
+msgstr "Järjestus: enim meeldimisi"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai descărcate"
+msgstr "Järjestus: enim alla laaditud"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecierile se dau pe site, cu contul:"
+msgstr "Meeldimisi saad anda veebilehel kontoga:"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine"
+msgstr "Järjestus"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai apreciate"
+msgstr "Enim meeldimisi"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai descărcate"
+msgstr "Enim alla laaditud"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecieri: "
+msgstr "Meeldimised: "
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Descărcări: "
+msgstr "Allalaadimised: "
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "%(nume)s (%(sigle)d)"
+msgstr "%(nume)s (%(sigle)d)"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri"
+msgstr "Meeldimised"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri primite"
+msgstr "Saadud meeldimised"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor"
+msgstr "Kaastööliste edetabel"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor apare când există rețea."
+msgstr "Kaastööliste edetabel ilmub võrguühenduse olemasolul."
+
+#: Fisa 47c: contributori
+msgid "Contributor"
+msgstr "Kaastööline"
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "Contributor: %s"
+msgstr "Kaastööline: %s"
+
+#: Fisa 47c: contributori
+msgid "Loc"
+msgstr "Koht"
+
+#: Fisa 47c: contributori
+msgid "Nu este niciun ecran pentru acest contributor."
+msgstr "Sellel kaastöölisel pole ühtegi käivituspilti."
+
+#: Fisa 47c: contributori
+msgid "OK: vezi siglele contributorului. EXIT: înapoi."
+msgstr "OK: vaata kaastöölise logosid. EXIT: tagasi."
+
+#: Fisa 47c: contributori
+msgid "Sigle aprobate"
+msgstr "Heakskiidetud logod"
+
+#: Fisa 47c: contributori
+msgid "XP"
+msgstr "XP"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "%s - privată: %s"
+msgstr "%s - privaatne: %s"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "Privată | %s"
+msgstr "Privaatne | %s"
+
+#: Fisa 47d: siglele private
+msgid "are sigla altei firme"
+msgstr "sisaldab teise ettevõtte logo"
+
+#: Fisa 47d: siglele private
+msgid "nu se publică"
+msgstr "ei avaldata"
+
+#: Fisa 47d: siglele private
+msgid "poza există pe alte site-uri"
+msgstr "pilt on teistel veebilehtedel"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Se verifică legătura pentru asistență..."
+msgstr "Kontrollitakse kaugabi ühendust..."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Setările de internet"
+msgstr "Internetiseaded"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu are internet. Verifică setările rețelei."
+msgstr "Kaugabi ei saa käivituda: vastuvõtjal pole internetiühendust. Kontrolli võrguseadeid."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: cablul de rețea nu este conectat. Verifică și routerul."
+msgstr "Kaugabi ei saa käivituda: võrgukaabel pole ühendatud. Kontrolli ka ruuterit."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. Verifică rețeaua Wi-Fi și parola."
+msgstr "Kaugabi ei saa käivituda: vastuvõtja pole Wi-Fi-võrguga ühendatud. Kontrolli Wi-Fi-võrku ja parooli."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu poate afla adresa stb.hdsatelit.com (DNS). Verifică setările de internet."
+msgstr "Kaugabi ei saa käivituda: vastuvõtja ei suuda leida aadressi stb.hdsatelit.com (DNS). Kontrolli internetiseadeid."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit are o problemă temporară. Încearcă din nou mai târziu."
+msgstr "Kaugabi ei saa käivituda: HD Satelit serveril on ajutine probleem. Proovi hiljem uuesti."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. Verifică internetul și încearcă din nou."
+msgstr "Kaugabi ei saa käivituda: vastuvõtja ei saa HD Satelit serveriga ühendust. Kontrolli internetiühendust ja proovi uuesti."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."
+msgstr "Kaugabi ei saa käivituda: turvaline HTTPS-ühendus lükati tagasi. Kontrolli vastuvõtja kuupäeva ja kellaaega; kui need on õiged, proovi hiljem uuesti."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit a refuzat cererea. Încearcă din nou mai târziu."
+msgstr "Kaugabi ei saa käivituda: HD Satelit server lükkas päringu tagasi. Proovi hiljem uuesti."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Atenție: numele receptorului %s nu e cunoscut de actualizator."
+msgstr "  Hoiatus: uuendustööriist ei tunne vastuvõtja nime %s."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB."
+msgstr "  Hoia käivitamisel vastuvõtja Standby-nuppu all ja vali seejärel Recovery From USB."
+
+#. Fisa 57: recuperarea modelului.
+msgid "Recuperare prin Recovery From USB (stick USB):"
+msgstr "Taastamine Recovery From USB abil (USB-mälupulk):"

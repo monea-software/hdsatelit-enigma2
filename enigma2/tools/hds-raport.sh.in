@@ -567,6 +567,14 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	echo "-- hds-caderi.log"; rp_coada "$CADERI_JURNAL" 60
 	echo "-- hds-watchdog.log"; rp_coada "$R/home/root/hds-watchdog.log" 120
 	echo "-- hds-restaurare.log"; rp_coada "$L/hds-restaurare.log" 30
+	# HDS_INTERFATA_BEGIN
+	rp_sectiune "jurnalul interfetei"
+	for rp_f in "$L/hds-interfata.log.2" "$L/hds-interfata.log.1" "$L/hds-interfata.log"; do
+		[ -f "$rp_f" ] || continue
+		echo "-- ${rp_f##*/}"
+		rp_coada "$rp_f" 100
+	done
+	# HDS_INTERFATA_END
 	rp_sectiune "/proc/stb"
 	rp_cipul=$(rp_cip)
 	for rp_d in video vmpeg/0 vmpeg/1 hdmi info fp audio; do

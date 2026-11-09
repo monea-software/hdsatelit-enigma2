@@ -16,6 +16,7 @@
 # Rute (toate prin poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat;
 # ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/ecrane                                  grupele, ecranele, pozele proprii, ecranul pus acum
+#   GET  /api/ecrane?comunitate=1                     completeaza lista de pe server, pe fir separat
 #   GET  /api/ecran-poza?sursa=galerie|propriu&id=..  poza mica a unui ecran (JPG, 480x270)
 #   POST /api/ecran-alege?sursa=..&id=..              pune ecranul (fir separat)
 #   POST /api/ecran-sterge?sursa=galerie|propriu&id=..  sterge un ecran din galerie sau o poza proprie (fara sursa:
@@ -74,10 +75,25 @@ def _arg(request, cheie, implicit=b""):
 	return request.args.get(cheie, [implicit])[0].decode("ascii", "replace")
 
 
-def date(limba="ro", ep=None):
-	"""Corpul lui GET /api/ecrane: exact ce foloseste si ecranul de pe televizor."""
+def _rezolutie():
+	try:
+		from enigma import getDesktop
+		d = getDesktop(0).size()
+		return "1920x1080" if d.width() >= 1920 and d.height() >= 1080 else "1280x720"
+	except Exception:
+		return "1920x1080"
+
+
+def date(limba="ro", ep=None, rezolutie="1920x1080", comunitate=True, contributor=None, privat=None):
+	"""Corpul lui GET /api/ecrane: exact ce foloseste si ecranul de pe televizor. privat: dovada receptorului pentru
+	siglele private ale omului (ep.contextPrivat(), citita pe firul reactorului)."""
 	ep = ep or _ep()
-	d = ep.lista(limba)
+	optiuni = {"comunitate": comunitate, "rezolutie": rezolutie}
+	if contributor:
+		optiuni["contributor"] = contributor
+	if privat:
+		optiuni["privat"] = privat
+	d = ep.lista(limba, **optiuni)
 	d["result"] = True
 	return d
 
@@ -168,10 +184,14 @@ def rute(baza, resource, ep=None, fabrica_ceas=None):
 		"""GET /api/ecrane: numai citire."""
 
 		def render_GET(self, request):
-			try:
-				return self._raspunde(request, date(ep=m()))
-			except Exception as eroare:
-				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+			M, rez = m(), _rezolutie()
+			contributor = request.args.get(b"contributor", [b""])[0].decode("utf-8", "replace")
+			if _arg(request, b"comunitate") != "1":
+				return self._raspunde(request, date(ep=M, rezolutie=rez, comunitate=False,
+					contributor=contributor))
+			privat = M.contextPrivat() if hasattr(M, "contextPrivat") else None
+			return porneste_pe_fir(request, lambda: date(ep=M, rezolutie=rez, contributor=contributor,
+				privat=privat), [False], 180, fabrica_ceas)
 
 	class PozaResource(baza):
 		"""GET /api/ecran-poza: calea o face MODULUL, din identificator, verificata cu realpath; nimic din ce vine
@@ -212,15 +232,16 @@ def rute(baza, resource, ep=None, fabrica_ceas=None):
 			id_ecran = _arg(request, b"id")
 			client = _adresa(request)
 			M = m()
+			rez = _rezolutie()
 
 			def lucru():
-				bun, mesaj = M.aplica(sursa, id_ecran)
+				bun, mesaj = M.aplica(sursa, id_ecran, rez)
 				if not bun:
 					return {"result": False, "message": mesaj}, 400
 				_jurnal("ecran de pornire schimbat in %s/%s, de la %s" % (sursa, id_ecran, client))
 				return {"result": True, "message": mesaj, "sursa": sursa, "id": id_ecran}
 
-			return porneste_pe_fir(request, lucru, _Stare.punere, 60, fabrica_ceas)
+			return porneste_pe_fir(request, lucru, _Stare.punere, 180, fabrica_ceas)
 
 	class StergeResource(baza):
 		"""POST /api/ecran-sterge: sterge un ecran din galerie sau o poza proprie (nu ecranul din fabrica, nici cel
@@ -368,6 +389,17 @@ PAGINA = """<!DOCTYPE html>
   .ecran .poza img{width:100%;height:100%;object-fit:cover;display:block;}
   .ecran .gol{color:var(--text-slab);font-size:.8rem;padding:8px;text-align:center;}
   .ecran .nume{display:block;padding:10px;font-size:.9rem;min-height:44px;box-sizing:border-box;}
+  .ecran .numere{display:block;padding:0 10px 10px;color:var(--text-slab);
+    font-size:.85rem;overflow-wrap:anywhere;}
+  .ordine{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 12px 8px 0;}
+  .ordine select{font:inherit;max-width:100%;min-height:44px;padding:6px;
+    background:var(--panou);color:var(--text);border:1px solid var(--bordura);border-radius:8px;}
+  .clasament table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.85rem;}
+  .clasament th,.clasament td{padding:6px 3px;text-align:right;overflow-wrap:anywhere;}
+  .clasament th:first-child,.clasament td:first-child{width:40%;text-align:left;}
+  .clasament button{background:none;border:0;color:var(--accent);font:inherit;text-align:left;
+    cursor:pointer;min-height:44px;padding:4px 0;max-width:100%;overflow-wrap:anywhere;}
+  .clasament button:focus-visible{outline:3px solid #7fb8ff;outline-offset:2px;}
   .ecran .semn{position:absolute;left:8px;top:8px;font-size:.8rem;color:#10162a;background:#4fd18b;border-radius:999px;padding:3px 10px;white-space:nowrap;pointer-events:none;}
   .ecran .sterge{background:none;border:none;border-top:1px solid var(--bordura);color:var(--text-slab);font:inherit;font-size:.85rem;cursor:pointer;text-decoration:underline;min-height:44px;padding:0 10px;text-align:left;}
   .ecran .sterge:focus-visible{outline:3px solid #7fb8ff;outline-offset:-3px;}
@@ -390,6 +422,26 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>Ecranul de pornire</h1>
 <p class="sub">Alege poza pe care o arată receptorul când pornește. Se vede de la următoarea pornire.</p>
+<p class="sub" id="notaComunitate" role="status"></p>
+<p class="sub"><span>Aprecierile se dau pe site, cu contul:</span>
+<a href="https://stb.hdsatelit.com/sigle-de-pornire/" target="_blank" rel="noopener noreferrer">https://stb.hdsatelit.com/sigle-de-pornire/</a></p>
+<label class="ordine"><span>Ordine</span><select id="ordine">
+<option value="implicit">Implicită</option>
+<option value="likes">Cele mai apreciate</option>
+<option value="downloads">Cele mai descărcate</option>
+</select></label>
+<label class="ordine"><span>Contributor</span><select id="contributor">
+<option value="">Toți</option>
+</select></label>
+<button class="buton al-doilea" id="reincarcaLista" type="button">Reîncarcă lista</button>
+<p class="sub" id="notaContributori" role="status"></p>
+<section class="card clasament" id="clasamentContributori" hidden>
+  <h2>Clasamentul contributorilor</h2>
+  <table>
+    <thead><tr><th scope="col">Contributor</th><th scope="col">Sigle aprobate</th><th scope="col">Aprecieri primite</th><th scope="col">XP</th></tr></thead>
+    <tbody id="randuriContributori"></tbody>
+  </table>
+</section>
 <div class="grupe" id="grupe"></div>
 <div class="ecrane" id="ecrane"></div>
 <div class="stare" id="stareGrila"></div>
@@ -423,6 +475,11 @@ var CFG = __CONFIG__;
 var DATE = null;
 var ALES = null;
 var GRUP = "toate";
+var CONTRIBUTOR = "";
+var LISTA_GENERATIE = 0;
+var COMUNITATE_CERUTA = false;
+var COMUNITATE_LUCRU = false;
+var POZE_GENERATIE = 0;
 
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -450,7 +507,12 @@ function spune(unde, text, fel){
 }
 function toateEcranele(){
   if(!DATE){ return []; }
-  return (DATE.ecrane || []).concat(DATE.proprii || []);
+  var lista = DATE.lista || (DATE.ecrane || []).concat(DATE.proprii || []);
+  var ordine = document.getElementById("ordine").value;
+  if(ordine !== "likes" && ordine !== "downloads"){ return lista; }
+  return lista.map(function(x, i){ return {x:x, i:i}; }).sort(function(a,b){
+    return (b.x[ordine] || 0) - (a.x[ordine] || 0) || a.i - b.i;
+  }).map(function(a){ return a.x; });
 }
 function esteActiv(x){
   return DATE && DATE.activ && DATE.activ.sursa === x.sursa && DATE.activ.id === x.id;
@@ -458,6 +520,60 @@ function esteActiv(x){
 function numeImplicit(){
   var gasit = ((DATE && DATE.ecrane) || []).filter(function(x){ return x.id === DATE.implicit; })[0];
   return gasit ? gasit.nume : "";
+}
+
+function alegeContributor(id){
+  CONTRIBUTOR = id;
+  GRUP = "toate";
+  document.getElementById("contributor").value = id;
+  deseneazaGrupe();
+  deseneazaEcrane();
+  return cereComunitate(++LISTA_GENERATIE, CONTRIBUTOR);
+}
+
+function deseneazaContributori(){
+  var camp = document.getElementById("contributor");
+  camp.textContent = "";
+  var toti = document.createElement("option");
+  toti.value = "";
+  toti.textContent = "Toți";
+  camp.appendChild(toti);
+  (DATE.contributori || []).forEach(function(x){
+    if(!x.id){ return; }
+    var optiune = document.createElement("option");
+    optiune.value = x.id;
+    optiune.textContent = x.nume + " (" + x.sigle + ")";
+    camp.appendChild(optiune);
+  });
+  if(CONTRIBUTOR && !Array.from(camp.options).some(function(x){ return x.value === CONTRIBUTOR; })){
+    CONTRIBUTOR = "";
+  }
+  camp.value = CONTRIBUTOR;
+  var randuri = document.getElementById("randuriContributori");
+  randuri.textContent = "";
+  var clasament = (DATE.clasament_contributori || []).slice(0, 10);
+  document.getElementById("clasamentContributori").hidden = !clasament.length || !!DATE.nota_contributori;
+  document.getElementById("notaContributori").textContent = DATE.nota_contributori || "";
+  clasament.forEach(function(x, i){
+    var rand = document.createElement("tr");
+    var nume = document.createElement("td");
+    var buton = document.createElement("button");
+    buton.type = "button";
+    buton.textContent = (i + 1) + ". " + x.nume;
+    buton.onclick = function(){
+      GRUP = "toate";
+      deseneazaGrupe();
+      alegeContributor(x.id);
+    };
+    nume.appendChild(buton);
+    rand.appendChild(nume);
+    [x.sigle, x.likes, x.xp].forEach(function(n){
+      var celula = document.createElement("td");
+      celula.textContent = n;
+      rand.appendChild(celula);
+    });
+    randuri.appendChild(rand);
+  });
 }
 
 // aceleasi grupe ca pe televizor: „Toate”, apoi cele din lista (numai cele cu ecrane), „Pozele mele” la urma
@@ -479,8 +595,15 @@ function deseneazaGrupe(){
 function deseneazaEcrane(){
   var cutie = document.getElementById("ecrane");
   cutie.textContent = "";
-  toateEcranele().forEach(function(x){
-    if(GRUP !== "toate" && x.grup !== GRUP){ return; }
+  var generatie = ++POZE_GENERATIE, coadaPoze = [];
+  var vizibile = toateEcranele().filter(function(x){
+    return (GRUP === "toate" || x.grup === GRUP) &&
+      (!CONTRIBUTOR || (x.contributor && x.contributor.id === CONTRIBUTOR));
+  });
+  if(ALES && !vizibile.some(function(x){ return x.sursa === ALES.sursa && x.id === ALES.id; })){
+    ALES = null;
+  }
+  vizibile.forEach(function(x){
     var carte = document.createElement("div");
     carte.className = "ecran" + (ALES && ALES.sursa === x.sursa && ALES.id === x.id ? " ales" : "");
     var b = document.createElement("button");
@@ -494,7 +617,12 @@ function deseneazaEcrane(){
       var img = document.createElement("img");
       img.loading = "lazy";
       img.alt = x.nume;
-      img.src = pozaUrl(x.sursa, x.id);
+      if(x.sursa === "comunitate"){
+        img.style.visibility = "hidden";
+        coadaPoze.push({img: img, id: x.id});
+      } else {
+        img.src = pozaUrl(x.sursa, x.id);
+      }
       poza.appendChild(img);
     } else {
       var gol = document.createElement("span");
@@ -505,8 +633,14 @@ function deseneazaEcrane(){
     b.appendChild(poza);
     var nume = document.createElement("span");
     nume.className = "nume";
-    nume.textContent = x.nume;
+    nume.textContent = x.eticheta || x.nume;
     b.appendChild(nume);
+    if(Number.isInteger(x.likes) && Number.isInteger(x.downloads)){
+      var numere = document.createElement("span");
+      numere.className = "numere";
+      numere.textContent = "Aprecieri: " + x.likes + " | " + "Descărcări: " + x.downloads;
+      b.appendChild(numere);
+    }
     carte.appendChild(b);
     if(esteActiv(x)){
       var semn = document.createElement("span");
@@ -527,9 +661,28 @@ function deseneazaEcrane(){
   if(!cutie.children.length){
     var p = document.createElement("p");
     p.className = "sub";
-    p.textContent = "Nu este niciun ecran în această grupă.";
+    p.textContent = CONTRIBUTOR ? "Nu este niciun ecran pentru acest contributor." :
+      "Nu este niciun ecran în această grupă.";
     cutie.appendChild(p);
   }
+  async function urmatoareaPoza(){
+    while(coadaPoze.length && generatie === POZE_GENERATIE){
+      var poza = coadaPoze.shift();
+      try {
+        var d = await cerere("/api/sigle-poza?id=" + encodeURIComponent(poza.id));
+        if(generatie !== POZE_GENERATIE){ return; }
+        if(d.result){
+          poza.img.src = "data:" + d.mime + ";base64," + d.data;
+          poza.img.style.visibility = "";
+        }
+        else { poza.img.replaceWith(document.createTextNode("fără previzualizare")); }
+      } catch(e){
+        poza.img.replaceWith(document.createTextNode("fără previzualizare"));
+      }
+    }
+  }
+  urmatoareaPoza(); urmatoareaPoza();
+  potrivesteBara();
 }
 
 function potrivesteBara(){
@@ -538,10 +691,16 @@ function potrivesteBara(){
   document.getElementById("ce").textContent = ALES ? ("Ales: " + ALES.nume) : "Atinge un ecran ca să îl alegi.";
 }
 
-function incarca(){
-  return cerere("/api/ecrane").then(function(d){
-    if(!d.result){ throw new Error(d.message || "nu am putut citi lista"); }
+function adresaListei(comunitate, contributor){
+  var parametri = [];
+  if(comunitate){ parametri.push("comunitate=1"); }
+  if(contributor){ parametri.push("contributor=" + encodeURIComponent(contributor)); }
+  return "/api/ecrane" + (parametri.length ? "?" + parametri.join("&") : "");
+}
+function primesteDate(d){
     DATE = d;
+    deseneazaContributori();
+    document.getElementById("notaComunitate").textContent = d.nota_comunitate || "";
     var exista = [{id: "toate"}].concat(d.grupe || []).some(function(g){ return g.id === GRUP; });
     if(!exista){ GRUP = "toate"; }
     var mb = Math.round((d.max_octeti || 0) / 1048576);
@@ -558,17 +717,57 @@ function incarca(){
     deseneazaGrupe();
     deseneazaEcrane();
     potrivesteBara();
+}
+function cereComunitate(generatie, contributor){
+  COMUNITATE_CERUTA = true;
+  COMUNITATE_LUCRU = true;
+  return cerere(adresaListei(true, contributor)).then(function(r){
+    if(generatie !== LISTA_GENERATIE || contributor !== CONTRIBUTOR){ return; }
+    if(!r.result){ throw new Error(r.message || "nu am putut citi lista"); }
+    primesteDate(r);
+    if(contributor !== CONTRIBUTOR){ COMUNITATE_CERUTA = false; return incarca(); }
+  }).catch(function(){
+    if(generatie !== LISTA_GENERATIE || contributor !== CONTRIBUTOR){ return; }
+    document.getElementById("notaComunitate").textContent =
+      "Siglele comunității apar când există rețea.";
+    document.getElementById("clasamentContributori").hidden = true;
+    document.getElementById("notaContributori").textContent =
+      "Clasamentul contributorilor apare când există rețea.";
+  }).then(function(){
+    if(generatie === LISTA_GENERATIE){ COMUNITATE_LUCRU = false; }
+  });
+}
+function incarca(){
+  var generatie = ++LISTA_GENERATIE, contributor = CONTRIBUTOR;
+  COMUNITATE_LUCRU = false;
+  return cerere(adresaListei(false, contributor)).then(function(d){
+    if(generatie !== LISTA_GENERATIE || contributor !== CONTRIBUTOR){ return; }
+    if(!d.result){ throw new Error(d.message || "nu am putut citi lista"); }
+    primesteDate(d);
+    if(contributor !== CONTRIBUTOR){ return incarca(); }
+    if(!COMUNITATE_CERUTA || (CONTRIBUTOR && !d.comunitate_online && !d.nota_contributori)){
+      return cereComunitate(generatie, CONTRIBUTOR);
+    }
   }).catch(function(e){
+    if(generatie !== LISTA_GENERATIE){ return; }
     document.getElementById("ce").textContent = "Eroare: " + e.message;
   });
 }
+
+document.getElementById("reincarcaLista").onclick = function(){
+  if(COMUNITATE_LUCRU){ return; }
+  COMUNITATE_CERUTA = false;
+  incarca();
+};
+document.getElementById("ordine").onchange = deseneazaEcrane;
+document.getElementById("contributor").onchange = function(){ alegeContributor(this.value); };
 
 document.getElementById("pune").onclick = function(){
   if(!ALES){ return; }
   puneEcranul(ALES.sursa, ALES.id, this);
 };
 
-// tasta albastra de pe televizor: ecranul pus de imagine (grila)
+// Ecranul pus de imagine.
 document.getElementById("fabrica").onclick = function(){
   if(!DATE || !DATE.implicit){ return; }
   ALES = {sursa: "galerie", id: DATE.implicit, nume: numeImplicit() || DATE.implicit};
@@ -638,7 +837,9 @@ document.getElementById("trimite").onclick = function(){
     return r.json();
   }).then(function(d){
     spune("stareUrcare", d.message || (d.result ? "Gata." : "Nu s-a putut."), d.result ? "bun" : "rau");
-    if(d.result){ camp.value = ""; ALES = null; GRUP = "proprii"; }
+    if(d.result){
+      camp.value = ""; ALES = null; GRUP = "proprii"; CONTRIBUTOR = "";
+    }
     return incarca();
   }).catch(function(e){
     spune("stareUrcare", "Eroare: " + e.message, "rau");
@@ -673,8 +874,19 @@ TEXTE_PAGINA = {
 		N_("Se încarcă lista..."),
 		N_("Ecranul din fabrică"),
 		N_("Pune pe receptor"),
+		N_("Reîncarcă lista"),
+		N_("Aprecierile se dau pe site, cu contul:"),
+		N_("Ordine"), N_("Implicită"),
+		N_("Cele mai apreciate"), N_("Cele mai descărcate"),
+		N_("Contributor"), N_("Toți"), N_("Clasamentul contributorilor"),
+		N_("Sigle aprobate"), N_("Aprecieri primite"), N_("XP"),
 	),
 	"js": (
+		N_("Aprecieri: "), N_("Descărcări: "),
+		N_("Siglele comunității apar când există rețea."),
+		N_("Toți"),
+		N_("Clasamentul contributorilor apare când există rețea."),
+		N_("Nu este niciun ecran pentru acest contributor."),
 		N_("browser deconectat"),
 		N_("Toate"),
 		N_("fără previzualizare"),

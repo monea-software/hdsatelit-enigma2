@@ -856,8 +856,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			return _t('Nimic nu se potrivește cu „%s”. Galben: altă căutare. EXIT: înapoi.') % self.cautare
 		if fid == 'fisiere':
 			if self.cautareFisiere is not None:
-				return _t('Se caută fișiere .ipk pe stick și disc.') + ('\n' + _t('Un stick sau un disc răspunde greu.') if self.anuntatLent else '')
-			return _t('Niciun fișier .ipk pe stick sau disc.\nCopiază extensia pe un stick USB, apoi apasă albastru.')
+				return _t('Se caută fișiere .ipk pe stick, pe disc și în /tmp.') + ('\n' + _t('Un stick sau un disc răspunde greu.') if self.anuntatLent else '')
+			return _t('Niciun fișier .ipk pe stick, pe disc sau în /tmp.\n'
+				'Copiază extensia într-unul dintre aceste locuri, apoi apasă albastru.')
 		if not surse:
 			return _t('Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde.')
 		return _t('Nimic aici.')
@@ -1090,13 +1091,13 @@ class HdsExtensii(Screen, HelpableScreen):
 			culoare = 'chihlimbar'
 		if fid == 'fisiere':
 			if self.cautareFisiere is not None:
-				parti.append(_t('Se caută fișiere .ipk pe stick și disc'))
+				parti.append(_t('Se caută fișiere .ipk pe stick, pe disc și în /tmp'))
 				culoare = 'chihlimbar'
 			elif self.cautareRetea is not None:
 				parti.append(_t('Se caută fișiere .ipk în rețea'))
 				culoare = 'chihlimbar'
 			else:
-				parti.append(_t('Fișiere .ipk de pe stick și disc') + (' ' + _t('și din rețea') if self.fisiereRetea is not None else ''))
+				parti.append(_t('Fișiere .ipk de pe stick, de pe disc și din /tmp') + (' ' + _t('și din rețea') if self.fisiereRetea is not None else ''))
 			if self.anuntatLent and culoare == 'chihlimbar':
 				parti.append(_t('un loc răspunde greu'))
 			elif self.fisiereTaiate:

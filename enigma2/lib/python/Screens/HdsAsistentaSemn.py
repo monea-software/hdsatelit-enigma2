@@ -582,8 +582,10 @@ def pornesteWeb(session, nivel=None):
 	if reusit:
 		try:
 			from Screens import HdsAnuntRetea
+			ses = A.sesiune()
+			text = _("Asistența a pornit.") if ses is not None and ses.id else _(A.TEXT_VERIFICA)
 			HdsAnuntRetea.arata(session,
-				"%s (%s)" % (_("Asistența a pornit."), _("din pagina web")), "info")
+				"%s (%s)" % (text, _("din pagina web")), "info")
 		except Exception as e:
 			_jurnal("anuntul pornirii din web: %r" % (e,))
 	return reusit, mesaj

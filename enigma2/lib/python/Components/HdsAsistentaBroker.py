@@ -514,7 +514,10 @@ def op_captura(ctx, args):
 		return Rezultat(1, text=octeti)
 	if len(octeti) > CAPTURA_MAX:
 		return Rezultat(1, text="(captura prea mare)")
-	tip = "jpg" if octeti[:3] == b"\xff\xd8\xff" else "png"
+	from Components.HdsCapturi import felPoza, N_, _t
+	tip = felPoza(octeti)
+	if not tip:
+		return Rezultat(1, text=_t(N_("(captura nu este JPG sau PNG)")))
 	return Rezultat(0, octeti=octeti, tip=tip)
 
 

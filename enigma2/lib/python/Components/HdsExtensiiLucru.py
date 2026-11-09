@@ -563,8 +563,8 @@ def randuri(catalog, fila, pluginuri, plugins, cautare=''):
 	if fila == 'instalate':
 		return randuriInstalate(catalog, pluginuri, plugins)
 	if fila == 'disponibile':
-		# stickul nu e o sursa de feed: fisierele .ipk stau aici, ultimul rand (Eduard, 04.11.2026)
-		return randuriDeDescarcat(catalog) + [('dinfisier', None, None)]
+		# Fisierele locale se vad de la inceput, si cand lista are multe feeduri.
+		return [('dinfisier', None, None)] + randuriDeDescarcat(catalog)
 	if fila == 'actualizari':
 		return [('pachet', p, None) for p in catalog.actualizari()]
 	if fila == 'surse':
@@ -857,7 +857,8 @@ def descriereRand(catalog, fel, obj, extra):
 	if fel == 'actualizeaza':
 		return ('actualizari', _t('Actualizează tot'), _t('Toate extensiile cu o versiune nouă: %d') % extra, None, None, '')
 	if fel == 'dinfisier':
-		return ('fisier', _t('Din fișier'), _t('Fișiere .ipk de pe stick, de pe disc sau din rețea'), None, None, '')
+		return ('fisier', _t('Din fișier'),
+			_t('Fișiere .ipk de pe stick, disc, din /tmp sau din rețea'), None, None, '')
 	if fel == 'pluginsurse':
 		return ('surse', _t('Mai multe feeduri, automat'), _t('Un plugin din Monea Software le adaugă singur'), None, None, '')
 	# adauga
@@ -1010,8 +1011,9 @@ def detalii(catalog, fel, obj, extra):
 		d.update(icoana='actualizari', titlu=_t('Actualizează tot'), descriere=_t('Se instalează versiunea nouă pentru toate '
 			'extensiile de mai jos.'), indiciu=_t('OK actualizează'))
 	elif fel == 'dinfisier':
-		d.update(icoana='fisier', titlu=_t('Din fișier'), descriere=_t('Instalezi un fișier .ipk de pe stick, de pe disc sau din '
-			'rețea.'), indiciu=_t('OK deschide'))
+		d.update(icoana='fisier', titlu=_t('Din fișier'),
+			descriere=_t('Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). '
+				'Pentru dosarele de rețea, alege Caută și în rețea.'), indiciu=_t('OK deschide'))
 	elif fel == 'pluginsurse':
 		d.update(icoana='surse', titlu=_t('Mai multe feeduri, automat'), descriere=_t('În feedul Monea Software există un plugin '
 			'care adaugă singur mai multe feeduri. Îl găsești la Disponibile.'), indiciu=_t('OK îl arată'))

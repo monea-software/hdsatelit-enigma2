@@ -88,6 +88,11 @@ SURSA_NECUNOSCUTA = "necunoscut"
 # regulile modelului (aceeasi cale ca in Components/HdsPazaModel.FISIER_REGULI), fata de radacina
 FISIER_REGULI = "etc/hdsatelit-model"
 _CARACTERE_DOSAR = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-")
+# Numele binarului nu dovedeste familia placii: exista si pe alte receptoare.
+MASINI_DINOBOT = tuple(_nume.decode("ascii") for _nume, _cale in TABEL_NUME) + (
+	"viper4kv30", "viper4kv40", "u5", "u51", "u52", "u53", "u532", "u533",
+	"u54", "u55", "u42", "u43", "u57", "u571")
+MASINI_OCTAGON = ("sf8008", "sf8008m")
 
 
 def _citeste(cale, maxim):
@@ -237,11 +242,34 @@ def esteNand(radacina="/"):
 
 
 def seAplica(radacina="/"):
-	"""True numai pe receptoarele Dinobot, unde showiframe scrie eticheta (nu in emulatorul de pe PC, nu pe primul
-	Viper 4K, V10, al carui showiframe nu scrie nimic, si nu pe receptoarele cu NAND, unde showiframe e cel obisnuit si
-	nu exista Maintenance Mode)"""
-	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe")) and not esteV10(radacina) and \
-		not esteNand(radacina)
+	"""True numai pentru modelele Dinobot cunoscute, cu actualizatorul prezent."""
+	return os.path.exists(os.path.join(radacina, "usr/bin/showiframe")) and \
+		modelRecuperare(radacina) in MASINI_DINOBOT and not esteNand(radacina)
+
+
+def modelRecuperare(radacina="/"):
+	"""Modelul din regulile imaginii, apoi din driver. Numele de gazda nu alege recuperarea."""
+	date = _citeste(os.path.join(radacina, FISIER_REGULI), 16384)
+	for rand in _text(date or b"").splitlines():
+		cheie, sep, valoare = rand.strip().partition("=")
+		if sep and cheie.strip() == "machinebuild" and valoare.strip():
+			return valoare.strip()
+	placa = _citeste(os.path.join(radacina, "proc/stb/info/boxtype"), 256)
+	return _text(placa or b"").strip()
+
+
+def randuriEcran(radacina="/"):
+	"""Aceeasi recuperare pe TV si in web, dupa modelul receptorului."""
+	model = modelRecuperare(radacina)
+	if model in MASINI_OCTAGON:
+		return [_("Recuperare prin Recovery From USB (stick USB):"),
+			_("  Dosar pe stick:           %s") % ("octagon/%s/" % model),
+			_("  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB.")]
+	if seAplica(radacina):
+		return randuriInformatii(calculeaza(radacina), model=model)
+	if model == "viper4k":
+		return randuriV10()
+	return []
 
 
 def randuriV10():
@@ -251,7 +279,7 @@ def randuriV10():
 		_("  (fișierul …_recovery_emmc.zip, cu usb_update.bin), după instrucțiunile lui.")]
 
 
-def randuriInformatii(info):
+def randuriInformatii(info, model=None):
 	"""Randurile pentru ecranul Informatii Receptor, din rezultatul lui calculeaza()"""
 	l = [_("Recuperare prin Maintenance Mode (stick USB):")]
 	dosar = dosarPeStick(info.get("cale"))
@@ -276,11 +304,12 @@ def randuriInformatii(info):
 	elif info.get("nume") is None:
 		l.append(_("  Atenție: lipsește numele receptorului (/etc/hostname)."))
 	else:
-		l.append(_("  Atenție: numele receptorului („%s”) nu e cunoscut de actualizatorul Amiko.") % _vizibil(info.get("nume")))
+		l.append(_("  Atenție: numele receptorului %s nu e cunoscut de actualizator.") %
+			_vizibil(info.get("nume")))
 	l.append(_("  De la următoarea pornire a interfeței sau a receptorului, Maintenance Mode poate să nu mai găsească imaginea pe stick."))
 	if reguli:
 		l.append(_("  Atenție: regulile modelului cer dosarul %s.") % _vizibil(dosarPeStick(reguli)))
-	elif info.get("boxtype") == "u57":
+	elif info.get("boxtype") == "u57" and model in (None, "viper4kv20"):
 		l.append(_("  Pe Amiko Viper 4K V20 numele receptorului trebuie să fie %s.") % NUME_VIPER4KV20)
 	return l
 

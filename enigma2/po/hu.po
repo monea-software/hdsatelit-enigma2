@@ -62616,3 +62616,274 @@ msgstr "A szimbolikus hivatkozás célja nem nyitható meg."
 #: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
 msgid "Țări"
 msgstr "Országok"
+
+#. Fisa 50: reparatii a3.
+msgid "(captura nu este JPG sau PNG)"
+msgstr "(a képernyőkép nem JPG vagy PNG)"
+
+#. Fisa 50: reparatii a3.
+msgid "Captura nu este disponibilă acum. Starea ecranului se verifică."
+msgstr "A képernyőkép most nem érhető el. A képernyő állapotának ellenőrzése folyamatban."
+
+#. Fisa 50: reparatii a3.
+msgid "Captura se pregătește după închiderea ecranului protejat. Reîncearcă."
+msgstr "A képernyőkép a védett képernyő bezárása után készül el. Próbáld újra."
+
+#. Fisa 50: reparatii a3.
+msgid "Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "A vevőn és a tárolókban lévő bővítmények. .ipk fájlok USB-kulcsról, lemezről, a /tmp mappából vagy a hálózatról. Az image frissítései a <a href=\"/actualizari\" id=\"legaturaActualizari\">Szoftverfrissítés</a> oldalon találhatók."
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, de pe disc și din /tmp"
+msgstr ".ipk fájlok USB-kulcsról, lemezről és a /tmp mappából"
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, disc, din /tmp sau din rețea"
+msgstr ".ipk fájlok USB-kulcsról, lemezről, a /tmp mappából vagy a hálózatról"
+
+#. Fisa 50: reparatii a3.
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). Pentru dosarele de rețea, alege Caută și în rețea."
+msgstr "Telepíts egy .ipk fájlt USB-kulcsról, lemezről vagy a vevő memóriájából (/tmp). Hálózati mappákhoz válaszd a Keresés a hálózatban is lehetőséget."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp.\nCopiază extensia într-unul dintre aceste locuri, apoi apasă albastru."
+msgstr "Nincs .ipk fájl az USB-kulcson, a lemezen vagy a /tmp mappában.\nMásold a bővítményt ezek egyikére, majd nyomd meg a kék gombot."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp. Copiază extensia într-unul dintre aceste locuri, apoi caută din nou."
+msgstr "Nincs .ipk fájl az USB-kulcson, a lemezen vagy a /tmp mappában. Másold a bővítményt ezek egyikére, majd keress újra."
+
+#. Fisa 50: reparatii a3.
+msgid "Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo."
+msgstr "A tévén a védett képernyő van megnyitva: %s. Csak ott látható."
+
+#. Fisa 50: reparatii a3.
+msgid "Răspunsul nu este o captură JPG sau PNG."
+msgstr "A válasz nem JPG vagy PNG képernyőkép."
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp"
+msgstr ".ipk fájlok keresése az USB-kulcson, a lemezen és a /tmp mappában"
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp."
+msgstr ".ipk fájlok keresése az USB-kulcson, a lemezen és a /tmp mappában."
+
+#. Fisa 50: reparatii a3.
+msgid "captura nu este JPG sau PNG"
+msgstr "a képernyőkép nem JPG vagy PNG"
+
+#. Fisa 50: reparatii a3.
+msgid "oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
+msgstr "külső SIGKILL-jellel leállítva (általában egy bővítmény vagy a felületet újraindító parancs küldi)"
+#: data/menu.xml lib/python/Components/HdsPornireMultipla.py
+#: lib/python/Screens/HdsPornireMultipla.py
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py
+msgid "Repornește în altă imagine"
+msgstr "Újraindítás másik rendszerképpel"
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Din comunitate"
+msgstr "A közösségtől"
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "%s - din comunitate - Autor: %s"
+msgstr "%s - a közösségtől - Szerző: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Siglele comunității apar când există rețea."
+msgstr "A közösség logói hálózati kapcsolat esetén jelennek meg."
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "Din comunitate\nAutor: %s"
+msgstr "A közösségtől\nSzerző: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Reîncarcă lista"
+msgstr "Lista újratöltése"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecieri: %(likes)d | Descărcări: %(downloads)d"
+msgstr "Kedvelések: %(likes)d | Letöltések: %(downloads)d"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecierile se dau pe site, cu contul: %s"
+msgstr "A weboldalon a fiókoddal kedvelhetsz: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Din comunitate | Autor: %s"
+msgstr "A közösségtől | Szerző: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: implicită"
+msgstr "Sorrend: alapértelmezett"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai apreciate"
+msgstr "Sorrend: legkedveltebbek"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai descărcate"
+msgstr "Sorrend: legtöbbször letöltöttek"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecierile se dau pe site, cu contul:"
+msgstr "A weboldalon a fiókoddal kedvelhetsz:"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine"
+msgstr "Sorrend"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai apreciate"
+msgstr "Legkedveltebbek"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai descărcate"
+msgstr "Legtöbbször letöltöttek"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecieri: "
+msgstr "Kedvelések: "
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Descărcări: "
+msgstr "Letöltések: "
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "%(nume)s (%(sigle)d)"
+msgstr "%(nume)s (%(sigle)d)"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri"
+msgstr "Kedvelések"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri primite"
+msgstr "Kapott kedvelések"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor"
+msgstr "Közreműködők rangsora"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor apare când există rețea."
+msgstr "A közreműködők rangsora hálózati kapcsolat esetén jelenik meg."
+
+#: Fisa 47c: contributori
+msgid "Contributor"
+msgstr "Közreműködő"
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "Contributor: %s"
+msgstr "Közreműködő: %s"
+
+#: Fisa 47c: contributori
+msgid "Loc"
+msgstr "Helyezés"
+
+#: Fisa 47c: contributori
+msgid "Nu este niciun ecran pentru acest contributor."
+msgstr "Ehhez a közreműködőhöz nincs indítóképernyő."
+
+#: Fisa 47c: contributori
+msgid "OK: vezi siglele contributorului. EXIT: înapoi."
+msgstr "OK: a közreműködő logóinak megtekintése. EXIT: vissza."
+
+#: Fisa 47c: contributori
+msgid "Sigle aprobate"
+msgstr "Jóváhagyott logók"
+
+#: Fisa 47c: contributori
+msgid "XP"
+msgstr "XP"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "%s - privată: %s"
+msgstr "%s - privát: %s"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "Privată | %s"
+msgstr "Privát | %s"
+
+#: Fisa 47d: siglele private
+msgid "are sigla altei firme"
+msgstr "más cég logóját tartalmazza"
+
+#: Fisa 47d: siglele private
+msgid "nu se publică"
+msgstr "nem kerül közzétételre"
+
+#: Fisa 47d: siglele private
+msgid "poza există pe alte site-uri"
+msgstr "a kép más weboldalakon is megtalálható"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Se verifică legătura pentru asistență..."
+msgstr "A távsegítséghez szükséges kapcsolat ellenőrzése..."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Setările de internet"
+msgstr "Internetbeállítások"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu are internet. Verifică setările rețelei."
+msgstr "A távsegítség nem indítható: a vevőnek nincs internetkapcsolata. Ellenőrizd a hálózati beállításokat."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: cablul de rețea nu este conectat. Verifică și routerul."
+msgstr "A távsegítség nem indítható: a hálózati kábel nincs csatlakoztatva. Ellenőrizd a routert is."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. Verifică rețeaua Wi-Fi și parola."
+msgstr "A távsegítség nem indítható: a vevő nem csatlakozik Wi-Fi-hálózathoz. Ellenőrizd a Wi-Fi-hálózatot és a jelszót."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu poate afla adresa stb.hdsatelit.com (DNS). Verifică setările de internet."
+msgstr "A távsegítség nem indítható: a vevő nem tudja feloldani a stb.hdsatelit.com címet (DNS). Ellenőrizd az internetbeállításokat."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit are o problemă temporară. Încearcă din nou mai târziu."
+msgstr "A távsegítség nem indítható: a HD Satelit szerverén átmeneti hiba van. Próbáld újra később."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. Verifică internetul și încearcă din nou."
+msgstr "A távsegítség nem indítható: a vevő nem éri el a HD Satelit szerverét. Ellenőrizd az internetkapcsolatot, és próbáld újra."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."
+msgstr "A távsegítség nem indítható: a biztonságos HTTPS-kapcsolatot elutasították. Ellenőrizd a vevő dátumát és idejét; ha helyesek, próbáld újra később."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit a refuzat cererea. Încearcă din nou mai târziu."
+msgstr "A távsegítség nem indítható: a HD Satelit szervere elutasította a kérést. Próbáld újra később."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Atenție: numele receptorului %s nu e cunoscut de actualizator."
+msgstr "  Figyelem: a frissítő nem ismeri ezt a vevőnevet: %s."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB."
+msgstr "  Indításkor tartsd nyomva a vevő Standby gombját, majd válaszd a Recovery From USB lehetőséget."
+
+#. Fisa 57: recuperarea modelului.
+msgid "Recuperare prin Recovery From USB (stick USB):"
+msgstr "Helyreállítás a Recovery From USB használatával (USB-kulcs):"

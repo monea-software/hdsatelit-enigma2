@@ -7,7 +7,7 @@ install_PYTHON = \
 	KeyBindings.py BoundFunction.py ISO639.py Notifications.py __init__.py \
 	RedirectOutput.py DreamboxHardware.py StbHardware.py Import.py Event.py CList.py \
 	LoadPixmap.py Profile.py HardwareInfo.py Transponder.py ASCIItranslit.py \
-	Downloader.py ScaledSkin.py BlockDevices.py HdsPreFlight.py MediuImagine.py \
+	Downloader.py ScaledSkin.py BlockDevices.py HdsPreFlight.py HdsJurnalInterfata.py MediuImagine.py \
 	Alternatives.py Hex2strColor.py Trashcan.py FallbackTimer.py TextBoundary.py \
 	Weatherinfo.py \
 	Log.py LogConfig.py PiconResolver.py \

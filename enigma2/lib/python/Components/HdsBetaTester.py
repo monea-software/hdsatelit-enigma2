@@ -991,6 +991,9 @@ def jurnalPermis(nume):
 	# Auditul exploratorului ramane local; nici copiile editorului nu pleaca.
 	if nume.startswith("hds-fisiere.log") or ".hds-inainte" in nume:
 		return False
+	# Jurnalul interfetei are doua copii rotite, deja mascate la scriere.
+	if nume in ("hds-interfata.log", "hds-interfata.log.1", "hds-interfata.log.2"):
+		return True
 	if nume.startswith("messages") or nume.startswith("syslog") or nume.startswith("Enigma2-debug"):
 		return False
 	if nume.startswith("enigma2_crash_") and nume.endswith(".log"):

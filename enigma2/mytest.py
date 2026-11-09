@@ -5,6 +5,13 @@ import enigma
 enigma.eTimer = eBaseImpl.eTimer
 enigma.eSocketNotifier = eBaseImpl.eSocketNotifier
 enigma.eConsoleAppContainer = eConsoleImpl.eConsoleAppContainer
+# Jurnalul obisnuit al interfetei ramane pe receptor, cu scrieri grupate.
+try:
+	from Tools import HdsJurnalInterfata
+	HdsJurnalInterfata.porneste()
+except Exception as e:
+	print("[mytest] jurnalul interfetei:", type(e).__name__)
+
 # HDSatelit: functiile mici din enigma ale altor imagini (getBoxType, checkInternetAccess...), facute in Python, pentru pluginurile
 # lor (Components/HdsEnigmaCompat.py); ce exista deja nu se schimba
 try:

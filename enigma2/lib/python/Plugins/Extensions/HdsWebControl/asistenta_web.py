@@ -58,6 +58,8 @@ def stare(request=None, A=None, B=None):
 	A = _a(A)
 	s = A.stare()
 	return {"result": True, "stare": s.get("stare"), "disponibil": s.get("disponibil"),
+		"eroare_pornire": s.get("eroare_pornire") or "",
+		"setari_internet": "/retea" if s.get("eroare_pornire") else "",
 		"ramas_s": s.get("ramas_s", 0), "jurnal": s.get("jurnal", []), "nivel": s.get("nivel"),
 		"durata_implicita": s.get("durata_implicita"),
 		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
@@ -103,7 +105,8 @@ def cere(argumente, A=None, B=None, de_incredere=False):
 	except Exception as e:
 		reusit, mesaj = False, _t("Eroare pe receptor: %s") % e
 	rez = stare(None, A)
-	rez.update({"result": bool(reusit), "message": mesaj})
+	rez.update({"result": bool(reusit) and not bool(rez["eroare_pornire"]),
+		"message": rez["eroare_pornire"] or mesaj})
 	return rez
 
 
@@ -325,6 +328,7 @@ PAGINA = """<!DOCTYPE html>
   <label class="bifa"><input type="checkbox" id="accept" checked><span>Accept <a href="#" id="termeni">termenii și condițiile</a></span></label>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
+  <p class="ascuns" id="internet"><a id="setariInternet" href="/retea">Setările de internet</a></p>
 </section>
 <section class="card ascuns" id="pornita">
   <p class="pana" id="stare"></p>
@@ -372,11 +376,17 @@ function cerere(cale, metoda, date){
 function mesaj(id,t,e){ var m=$(id); m.textContent=t||""; m.classList.toggle("eroare",!!e); }
 function nuRaspunde(){ return "Receptorul nu răspunde."; }
 var copiaInapoi = null;
+var eroarePornireVazuta = "";
 function arata(d){
   var activa = !!d.stare && d.stare!=="oprit";
   $("indisponibil").classList.toggle("ascuns", !!d.disponibil || activa);
   $("pornire").classList.toggle("ascuns", activa || !d.disponibil);
   $("pornita").classList.toggle("ascuns", !activa);
+  if(d.eroare_pornire){ mesaj("mesaj", d.eroare_pornire, true); }
+  else if(eroarePornireVazuta){ mesaj("mesaj", ""); }
+  eroarePornireVazuta = d.eroare_pornire || "";
+  $("internet").classList.toggle("ascuns", !d.eroare_pornire);
+  $("setariInternet").href = adresa("/retea");
   $("stare").textContent = d.pana_text || "";
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   $("asteptareNuOpri").classList.toggle("ascuns", d.stare!=="asteapta");
@@ -434,6 +444,7 @@ TEXTE_PAGINA = {
 	"rămân închise. Poți opri oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
 		N_("Start"),
+		N_("Setările de internet"),
 		N_("Oprește"),
 		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),
 		N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."),

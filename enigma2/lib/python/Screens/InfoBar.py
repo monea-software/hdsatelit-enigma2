@@ -332,7 +332,8 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		from Components.HdsTasteRapide import AlocareTaste, actiuni_harta
 		self.hdsRosuLuat = False
 		self.hdsTasteAlocate = AlocareTaste(self.hdsPornesteTastaLunga,
-			self.keyNumberGlobal, self.hdsTastaDisponibila)
+			self.keyNumberGlobal, self.hdsTastaDisponibila, ceas=eTimer())
+		self.onExecEnd.append(self.hdsTasteAlocate.anuleaza)
 		self["HdsAlocareTasteActions"] = HelpableActionMap(self,
 			"HdsAlocareTasteActions", actiuni_harta(self.hdsTastaAlocata), prio=-2)
 
@@ -653,6 +654,8 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		return self.hdsTasteAlocate.eveniment(tasta, faza)
 
 	def hdsTastaDisponibila(self, tasta):
+		if not self.execing:
+			return False
 		# Aplicatia canalului si ecranul radio isi pastreaza tastele.
 		if hdsHbbtvDeschisa():
 			return False

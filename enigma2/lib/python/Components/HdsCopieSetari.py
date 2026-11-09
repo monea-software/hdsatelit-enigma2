@@ -54,7 +54,7 @@
 #     machine-id, cheile SSH, sistem.json si modulele de acces conditionat NUMAI pe receptorul copiei (aceeasi amprenta
 #     si acelasi model); din sistem.json, „Fără parolă în rețeaua locală” oprita se pune numai cand e alegerea omului
 #     (regula_ssh_aleasa: copia de la VERSIUNE_FARA_PAROLA_PORNITA incoace), iar repara_regula_ssh (din porneste)
-#     porneste o data regula oprita pusa inainte dintr-o copie mai veche;
+#     porneste o data regula oprita numai cu dovada restaurarii si fara o alegere proprie;
 #   - listele si conturile IPTV, radioul si datele necriptate ale pluginurilor urmeaza stickul si pe alt receptor;
 #     hds_iptv ramane 0700, fisierele 0600, inclusiv cand copia e pe FAT; datele pluginurilor se pun dupa instalare;
 #   - setarile se unesc ca in trusa: pleaca de la copie, pastreaza din setarile de acum PASTREZ si jetonul web, scot
@@ -163,8 +163,9 @@ FIS_REGULA_SSH = "etc/security/hds-ssh-retea-locala.conf"
 # „Fără parolă în rețeaua locală” oprita se crede numai din copiile facute de aceasta versiune incoace. Pana la 0.6.18
 # oprita era cea din fabrica (nealeasa de om); de la 0.6.19 (pachetul hdsatelit-ssh r3) regula vine pornita, dar
 # punerea la loc de pana la 0.7.0 o scria oprita dintr-o copie veche, iar copiile facute apoi (si cele automate, zilnice)
-# o duceau mai departe. Oprita intr-o copie mai veche nu se pune la loc: ramane cea a imaginii (pornita); cine o
-# oprise de mana pe 0.6.19-0.7.0 o opreste o data din nou. Din copiile de la aceasta versiune incoace se pune.
+# o duceau mai departe. Oprita intr-o copie mai veche nu se pune la loc: ramane cea a imaginii (pornita).
+# Pe receptorul actualizat, repararea unei reguli existente pastreaza alegerea omului sau orice urma nesigura.
+# Din copiile de la aceasta versiune incoace se pune.
 VERSIUNE_FARA_PAROLA_PORNITA = (0, 7, 1)
 # semnul (in DOSAR_RESTAURARE) verificarii facute o singura data dupa actualizare: regula oprita pusa la loc dintr-o
 # copie veche de o imagine care inca o punea (repara_regula_ssh)
@@ -1339,6 +1340,8 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 						% (_reinstalare()._scurt(p["nume"]), p["sarite"]))
 		# setarile omului din afara /etc/enigma2
 		sistem = stare_sistem(rad)
+		from Components import HdsLimbaRestaurare
+		sistem["limba"] = HdsLimbaRestaurare.stare(rad, text_setari)
 		if sistem:
 			_scrie_atomic(os.path.join(part, FIS_SISTEM), json.dumps(sistem, ensure_ascii=True, sort_keys=True,
 				indent=1).encode("ascii"))
@@ -1452,6 +1455,12 @@ def _sistem_din_copie(dosar):
 	if not isinstance(d, dict):
 		return None, "nu e un obiect JSON"
 	rez = {}
+	if "limba" in d:
+		try:
+			from Components import HdsLimbaRestaurare
+			rez["limba"] = HdsLimbaRestaurare.verifica(d["limba"])
+		except (ValueError, ImportError):
+			return None, "limba si pachetele ei nu au o forma buna"
 	if "ssh_fara_parola" in d:
 		if not isinstance(d["ssh_fara_parola"], bool):
 			return None, "ssh_fara_parola nu e da / nu"
@@ -2183,6 +2192,16 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		_jurnal("mutarea s-a oprit (%s)" % eroare.__class__.__name__)
 		note.append(_("Punerea la loc s-a întrerupt. Se reia la pornirea următoare."))
 		return rez
+	if acest and stare_canale["settings"] is not None:
+		try:
+			from Components import HdsLimbaRestaurare
+			date_limba = dict((sistem or {}).get("limba") or
+				HdsLimbaRestaurare.stare(rad, stare_canale["settings"]))
+			date_limba["limba"] = HdsLimbaRestaurare._limba(rad, stare_canale["settings"])
+			HdsLimbaRestaurare.pregateste(rad, date_limba)
+		except Exception as eroare:
+			_jurnal("pregatirea limbii: %s" % eroare.__class__.__name__)
+			return rez
 	# modulele de acces conditionat, la sfarsit (opkg poate dura); de pe alta baza a imaginii numai configurarile si
 	# legaturile, pachetele intra in coada reinstalarii
 	baza_alta = alta_baza(d, rad)
@@ -2658,14 +2677,43 @@ _TIPAR_OPRITA = "SSH: regula 'Fara parola in reteaua locala' pusa la loc: oprita
 _TIPAR_BAZA = re.compile(r"copia e de pe alta baza a imaginii \((\d{1,3}\.\d{1,3}\.\d{1,3}),")
 
 
+def _parola_ssh_automata(rad, ssh):
+	"""True numai fara parola pusa sau cu dovada parolei facute la prima pornire."""
+	shadow = _citeste_mic(_c(rad, ssh.CALE_SHADOW.lstrip("/")), 64 * 1024)
+	if shadow is None:
+		return False
+	for rand in shadow.decode("utf-8", "replace").splitlines():
+		parti = rand.split(":")
+		if parti[0] == "root" and len(parti) > 1:
+			hash_root = parti[1]
+			break
+	else:
+		return False
+	if hash_root in ("", "*"):
+		return True
+	# Un hash blocat poate fi tot parola aleasa de om.
+	if hash_root[:1] in ("!", "*"):
+		return False
+	tinut = _citeste_mic(_c(rad, ssh.CALE_HASH.lstrip("/")), 512)
+	if tinut is None or tinut.decode("utf-8", "replace").strip() != hash_root:
+		return False
+	try:
+		with open(_c(rad, ssh.CALE_JURNAL.lstrip("/")), "rb") as f:
+			f.seek(0, 2)
+			f.seek(max(0, f.tell() - 1024 * 1024))
+			jurnal = f.read().decode("utf-8", "replace")
+	except (OSError, IOError):
+		return False
+	prima = jurnal.rfind("parola lui root facuta la prima pornire (era:")
+	aleasa = max(jurnal.rfind("parola lui root schimbata ("),
+		jurnal.rfind("root are deja o parola; nu fac alta"))
+	return prima >= 0 and prima > aleasa
+
+
 def repara_regula_ssh(rad=None):
-	"""O singura data (semnul SEMN_REGULA_SSH): pe un receptor pe care o punere la loc a scris „Fără parolă în rețeaua
-	locală” oprita dintr-o copie mai veche decat VERSIUNE_FARA_PAROLA_PORNITA (nealeasa sigur de om, vezi acolo), regula
-	devine din nou pornita, cum vine imaginea. Dovada: in hds-restaurare.log, ultima punere care a scris regula oprita;
-	versiunea copiei din randul „alta baza” al aceleiasi puneri sau, fara el (aceeasi baza), din rezultat.json (copia
-	ultimei puneri). Regula schimbata intre timp (alt text decat cel scris de punerea la loc) ramane cum e. Chemata din
-	porneste(session) la fiecare pornire a interfetei: dupa semn, numai un stat. Intoarce True cand a pornit-o; nu
-	arunca."""
+	"""Repara o singura data numai regula dovedita ca fiind scrisa de ultima restaurare veche.
+	O alegere din televizor sau web, o parola proprie sau o urma nesigura pastreaza regula oprita.
+	Dupa semnul SEMN_REGULA_SSH face numai un stat. Intoarce True cand a pornit regula; nu arunca."""
 	rad = radacina(rad)
 	semn = os.path.join(dosar_restaurare(rad), SEMN_REGULA_SSH)
 	if os.path.exists(semn):
@@ -2685,14 +2733,27 @@ def repara_regula_ssh(rad=None):
 			inceput = jurnal.rfind("=== ", 0, poz)
 			sfarsit = jurnal.find("=== ", poz)
 			bloc = jurnal[max(inceput, 0):sfarsit if sfarsit >= 0 else len(jurnal)]
+			rezultat = citeste_rezultat(rad) or {}
 			m = _TIPAR_BAZA.search(bloc)
 			if m:
 				versiune = m.group(1)
 			else:
-				versiune = str(((citeste_rezultat(rad) or {}).get("copie") or {}).get("versiune") or "")
+				versiune = str((rezultat.get("copie") or {}).get("versiune") or "")
 			ssh = _modul_imagine("Components.HdsAccesSsh")
 			tinta = _c(rad, FIS_REGULA_SSH)
-			if (not regula_ssh_aleasa(versiune, False) and ssh is not None and not os.path.islink(tinta)
+			# Un bloc ulterior poate sa nu fi atins SSH. Textul singur nu dovedeste cine l-a scris.
+			dovada_scrierii = False
+			if sfarsit < 0 and inceput >= 0 and rezultat.get("incheiata") is True:
+				try:
+					cale_rezultat = os.path.join(dosar_restaurare(rad), REZULTAT)
+					dovada_scrierii = (not os.path.islink(cale_rezultat)
+						and os.stat(tinta).st_mtime_ns < os.stat(cale_rezultat).st_mtime_ns)
+				except OSError:
+					pass
+			if (versiune_tuplu(versiune) is not None and not regula_ssh_aleasa(versiune, False)
+					and ssh is not None and not os.path.islink(tinta)
+					and dovada_scrierii and not os.path.lexists(_c(rad, ssh.CALE_ALEGERE.lstrip("/")))
+					and _parola_ssh_automata(rad, ssh)
 					and _citeste_mic(tinta, 64 * 1024) == ssh.textRegula(False).encode("utf-8")):
 				_scrie_atomic(tinta, ssh.textRegula(True).encode("utf-8"), 0o644)
 				pornita = True
@@ -3110,6 +3171,11 @@ def porneste(session):
 		_arata_rezultatul(session)
 	except Exception as eroare:
 		_jurnal("mesajul punerii la loc: %s" % eroare.__class__.__name__)
+	try:
+		from Components import HdsLimbaRestaurare
+		HdsLimbaRestaurare.porneste(session, rez_copie)
+	except Exception as eroare:
+		_jurnal("refacerea limbii: %s" % eroare.__class__.__name__)
 	try:
 		# pluginurile si modulele de acces din copie, din feeduri (nu inainte de repornirea ceruta pentru retea)
 		_reinstalare().porneste(session, rez_copie)

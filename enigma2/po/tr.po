@@ -64503,3 +64503,274 @@ msgstr "Sembolik bağlantının hedefi açılamıyor."
 #: pluginuri-feed/RadioOnline/ecran.py:297 pluginuri-feed/RadioOnline/locuri.py:130 pluginuri-feed/RadioOnline/locuri.py:183 pluginuri-feed/RadioOnline/web.py:326
 msgid "Țări"
 msgstr "Ülkeler"
+
+#. Fisa 50: reparatii a3.
+msgid "(captura nu este JPG sau PNG)"
+msgstr "(ekran görüntüsü JPG veya PNG değil)"
+
+#. Fisa 50: reparatii a3.
+msgid "Captura nu este disponibilă acum. Starea ecranului se verifică."
+msgstr "Ekran görüntüsü şu anda kullanılamıyor. Ekranın durumu kontrol ediliyor."
+
+#. Fisa 50: reparatii a3.
+msgid "Captura se pregătește după închiderea ecranului protejat. Reîncearcă."
+msgstr "Ekran görüntüsü, korumalı ekran kapatıldıktan sonra hazırlanır. Yeniden dene."
+
+#. Fisa 50: reparatii a3.
+msgid "Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href=\"/actualizari\" id=\"legaturaActualizari\">Actualizare software</a>."
+msgstr "Alıcıdaki ve depolardaki eklentiler. USB bellekteki, diskteki, /tmp içindeki veya ağdaki .ipk dosyaları. İmaj güncellemeleri <a href=\"/actualizari\" id=\"legaturaActualizari\">Yazılım güncellemesi</a> sayfasındadır."
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, de pe disc și din /tmp"
+msgstr "USB bellekteki, diskteki ve /tmp içindeki .ipk dosyaları"
+
+#. Fisa 50: reparatii a3.
+msgid "Fișiere .ipk de pe stick, disc, din /tmp sau din rețea"
+msgstr "USB bellekteki, diskteki, /tmp içindeki veya ağdaki .ipk dosyaları"
+
+#. Fisa 50: reparatii a3.
+msgid "Instalezi un fișier .ipk de pe stick, de pe disc sau din memoria receptorului (/tmp). Pentru dosarele de rețea, alege Caută și în rețea."
+msgstr "USB bellekten, diskten veya alıcının belleğinden (/tmp) bir .ipk dosyası kur. Ağ klasörleri için Ağda da ara seçeneğini seç."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp.\nCopiază extensia într-unul dintre aceste locuri, apoi apasă albastru."
+msgstr "USB bellekte, diskte veya /tmp içinde .ipk dosyası yok.\nEklentiyi bu yerlerden birine kopyala, ardından mavi tuşa bas."
+
+#. Fisa 50: reparatii a3.
+msgid "Niciun fișier .ipk pe stick, pe disc sau în /tmp. Copiază extensia într-unul dintre aceste locuri, apoi caută din nou."
+msgstr "USB bellekte, diskte veya /tmp içinde .ipk dosyası yok. Eklentiyi bu yerlerden birine kopyala, ardından yeniden ara."
+
+#. Fisa 50: reparatii a3.
+msgid "Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo."
+msgstr "Televizyonda korumalı ekran açık: %s. Yalnızca orada görülebilir."
+
+#. Fisa 50: reparatii a3.
+msgid "Răspunsul nu este o captură JPG sau PNG."
+msgstr "Yanıt bir JPG veya PNG ekran görüntüsü değil."
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp"
+msgstr "USB bellekte, diskte ve /tmp içinde .ipk dosyaları aranıyor"
+
+#. Fisa 50: reparatii a3.
+msgid "Se caută fișiere .ipk pe stick, pe disc și în /tmp."
+msgstr "USB bellekte, diskte ve /tmp içinde .ipk dosyaları aranıyor."
+
+#. Fisa 50: reparatii a3.
+msgid "captura nu este JPG sau PNG"
+msgstr "ekran görüntüsü JPG veya PNG değil"
+
+#. Fisa 50: reparatii a3.
+msgid "oprita cu SIGKILL din afara (de obicei un plugin sau o comanda care reporneste interfata)"
+msgstr "dışarıdan gönderilen SIGKILL ile durduruldu (genellikle arayüzü yeniden başlatan bir eklenti veya komut tarafından)"
+#: data/menu.xml lib/python/Components/HdsPornireMultipla.py
+#: lib/python/Screens/HdsPornireMultipla.py
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py
+msgid "Repornește în altă imagine"
+msgstr "Başka bir imajla yeniden başlat"
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Din comunitate"
+msgstr "Topluluktan"
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "%s - din comunitate - Autor: %s"
+msgstr "%s - topluluktan - Yazar: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Siglele comunității apar când există rețea."
+msgstr "Topluluk logoları ağ bağlantısı olduğunda görünür."
+
+#: Fisa 47: ecranul de pornire si pagina web
+#, python-format
+msgid "Din comunitate\nAutor: %s"
+msgstr "Topluluktan\nYazar: %s"
+
+#: Fisa 47: ecranul de pornire si pagina web
+msgid "Reîncarcă lista"
+msgstr "Listeyi yeniden yükle"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecieri: %(likes)d | Descărcări: %(downloads)d"
+msgstr "Beğeniler: %(likes)d | İndirmeler: %(downloads)d"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Aprecierile se dau pe site, cu contul: %s"
+msgstr "Sitede hesabınla beğenebilirsin: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+#, python-format
+msgid "Din comunitate | Autor: %s"
+msgstr "Topluluktan | Yazar: %s"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: implicită"
+msgstr "Sıralama: varsayılan"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai apreciate"
+msgstr "Sıralama: en çok beğenilenler"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine: cele mai descărcate"
+msgstr "Sıralama: en çok indirilenler"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecierile se dau pe site, cu contul:"
+msgstr "Sitede hesabınla beğenebilirsin:"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Ordine"
+msgstr "Sıralama"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai apreciate"
+msgstr "En çok beğenilenler"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Cele mai descărcate"
+msgstr "En çok indirilenler"
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Aprecieri: "
+msgstr "Beğeniler: "
+
+#: Fisa 47b: aprecieri si descarcari
+msgid "Descărcări: "
+msgstr "İndirmeler: "
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "%(nume)s (%(sigle)d)"
+msgstr "%(nume)s (%(sigle)d)"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri"
+msgstr "Beğeniler"
+
+#: Fisa 47c: contributori
+msgid "Aprecieri primite"
+msgstr "Alınan beğeniler"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor"
+msgstr "Katkıda bulunanların sıralaması"
+
+#: Fisa 47c: contributori
+msgid "Clasamentul contributorilor apare când există rețea."
+msgstr "Katkıda bulunanların sıralaması ağ bağlantısı olduğunda görünür."
+
+#: Fisa 47c: contributori
+msgid "Contributor"
+msgstr "Katkıda bulunan"
+
+#: Fisa 47c: contributori
+#, python-format
+msgid "Contributor: %s"
+msgstr "Katkıda bulunan: %s"
+
+#: Fisa 47c: contributori
+msgid "Loc"
+msgstr "Sıra"
+
+#: Fisa 47c: contributori
+msgid "Nu este niciun ecran pentru acest contributor."
+msgstr "Bu katkıda bulunan için açılış ekranı yok."
+
+#: Fisa 47c: contributori
+msgid "OK: vezi siglele contributorului. EXIT: înapoi."
+msgstr "OK: katkıda bulunanın logolarını göster. EXIT: geri."
+
+#: Fisa 47c: contributori
+msgid "Sigle aprobate"
+msgstr "Onaylanan logolar"
+
+#: Fisa 47c: contributori
+msgid "XP"
+msgstr "XP"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "%s - privată: %s"
+msgstr "%s - özel: %s"
+
+#: Fisa 47d: siglele private
+#, python-format
+msgid "Privată | %s"
+msgstr "Özel | %s"
+
+#: Fisa 47d: siglele private
+msgid "are sigla altei firme"
+msgstr "başka bir şirketin logosunu taşıyor"
+
+#: Fisa 47d: siglele private
+msgid "nu se publică"
+msgstr "yayımlanmaz"
+
+#: Fisa 47d: siglele private
+msgid "poza există pe alte site-uri"
+msgstr "fotoğraf başka sitelerde mevcut"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Se verifică legătura pentru asistență..."
+msgstr "Uzaktan yardım bağlantısı kontrol ediliyor..."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Setările de internet"
+msgstr "İnternet ayarları"
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu are internet. Verifică setările rețelei."
+msgstr "Uzaktan yardım başlatılamıyor: alıcının internet bağlantısı yok. Ağ ayarlarını kontrol et."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: cablul de rețea nu este conectat. Verifică și routerul."
+msgstr "Uzaktan yardım başlatılamıyor: ağ kablosu bağlı değil. Yönlendiriciyi de kontrol et."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu este conectat la Wi-Fi. Verifică rețeaua Wi-Fi și parola."
+msgstr "Uzaktan yardım başlatılamıyor: alıcı Wi-Fi ağına bağlı değil. Wi-Fi ağını ve şifreyi kontrol et."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu poate afla adresa stb.hdsatelit.com (DNS). Verifică setările de internet."
+msgstr "Uzaktan yardım başlatılamıyor: alıcı stb.hdsatelit.com adresini çözemiyor (DNS). İnternet ayarlarını kontrol et."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit are o problemă temporară. Încearcă din nou mai târziu."
+msgstr "Uzaktan yardım başlatılamıyor: HD Satelit sunucusunda geçici bir sorun var. Daha sonra yeniden dene."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: receptorul nu ajunge la serverul HD Satelit. Verifică internetul și încearcă din nou."
+msgstr "Uzaktan yardım başlatılamıyor: alıcı HD Satelit sunucusuna ulaşamıyor. İnternet bağlantısını kontrol et ve yeniden dene."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: legătura sigură HTTPS a fost refuzată. Verifică data și ora receptorului; dacă sunt corecte, încearcă mai târziu."
+msgstr "Uzaktan yardım başlatılamıyor: güvenli HTTPS bağlantısı reddedildi. Alıcının tarihini ve saatini kontrol et; doğruysa daha sonra yeniden dene."
+
+#. Fisa 56: asistenta fara internet.
+#: lib/python/Components/HdsAsistenta.py
+msgid "Asistența nu poate porni: serverul HD Satelit a refuzat cererea. Încearcă din nou mai târziu."
+msgstr "Uzaktan yardım başlatılamıyor: HD Satelit sunucusu isteği reddetti. Daha sonra yeniden dene."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Atenție: numele receptorului %s nu e cunoscut de actualizator."
+msgstr "  Dikkat: güncelleyici %s alıcı adını tanımıyor."
+
+#. Fisa 57: recuperarea modelului.
+msgid "  Ține apăsat Standby pe receptor la pornire, apoi alege Recovery From USB."
+msgstr "  Açılışta alıcıdaki Standby tuşunu basılı tut, ardından Recovery From USB seçeneğini seç."
+
+#. Fisa 57: recuperarea modelului.
+msgid "Recuperare prin Recovery From USB (stick USB):"
+msgstr "Recovery From USB ile kurtarma (USB bellek):"

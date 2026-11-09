@@ -810,20 +810,20 @@ def _localDeschide(dosar, adresa_baza):
 	return deschide
 
 
-def actualizeazaContinut(radacina=None, progres=None, offline=None, lacat=None):
+def actualizeazaContinut(radacina=None, progres=None, offline=None, lacat=None, cerute=()):
 	radacina = radacina or radacinaImplicita()
 	propriu = lacat is None
 	lacat = lacat if lacat is not None else ocupaOperatia(radacina)
 	if lacat is None:
 		return False, _t("Alta operatie este in lucru sau interfata trebuie repornita.")
 	try:
-		return _actualizeazaContinut(radacina, progres, offline)
+		return _actualizeazaContinut(radacina, progres, offline, cerute)
 	finally:
 		if propriu:
 			elibereazaOperatia(lacat)
 
 
-def _actualizeazaContinut(radacina=None, progres=None, offline=None):
+def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=()):
 	"""Semnatura, indexuri, plan, SHA256, proba opkg, instalare fara surse, legaturi."""
 	radacina = radacina or radacinaImplicita()
 	progres = progres or (lambda text: None)
@@ -870,7 +870,8 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None):
 		usb = A.P.citeste_strofe(os.path.join(_cale(radacina, _relMontare(conf)), "var/lib/opkg/status"))
 		pe_stick = {s["package"]: s.get("version", "") for s in usb if "installed" in s.get("status", "").split()}
 		inst.update(pe_stick)
-		plan = planContinut(feed, inst, [conf["PACHET"]] + sorted(pe_stick), A)
+		plan = planContinut(feed, inst,
+			[conf["PACHET"]] + sorted(pe_stick) + list(cerute), A)
 		if not plan:
 			r = reconciliaza(radacina, conf)
 			return not r["conflicte"], _t("Continutul este la zi.") if not r["conflicte"] else _t("Conflict cu fisierele bazei.")

@@ -695,16 +695,12 @@ class HdsReceiverInfo(InformationBase):
 		except Exception:
 			pass
 
-		# dosarul de recuperare de pe stick, calculat ca showiframe (fara citirea memoriei interne); ca restul
-		# ecranului, o eroare aici nu goleste tot ecranul
+		# Recuperarea modelului, fara citirea memoriei interne. O eroare nu goleste ecranul.
 		try:
-			if HdsRecuperare.seAplica():
-				recuperare = HdsRecuperare.randuriInformatii(HdsRecuperare.calculeaza())
+			recuperare = HdsRecuperare.randuriEcran()
+			if recuperare:
 				l.append("")
 				l.extend(recuperare)
-			elif HdsRecuperare.esteV10():
-				l.append("")
-				l.extend(HdsRecuperare.randuriV10())
 		except Exception:
 			pass
 

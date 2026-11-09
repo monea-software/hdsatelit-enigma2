@@ -401,8 +401,13 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="OSD Preferences" entryID="usage_setup" pictograma="setari-generale" web="/setari?id=usage" weight="30">
 				<setup id="usage" />
 			</item>
-			<item level="1" text="Front Panel Display" requires="Display" entryID="lcd_setup" pictograma="afisaj-luminozitate" web="/setari?id=lcd" weight="40">
+			<item level="1" text="Front Panel Display" requires="HdsAfisajSimplu" entryID="lcd_setup" pictograma="afisaj-luminozitate" web="/setari?id=lcd" weight="40">
 				<setup id="lcd" />
+			</item>
+			<!-- LCD-ul color are aceleasi alegeri complete pe TV si pe web. -->
+			<item level="0" text="Front Panel Display" requires="HdsAfisajColor"
+				entryID="lcd_color_setup" pictograma="afisaj" web="/afisaj" weight="40">
+				<screen module="HdsAfisaj" screen="HdsAfisaj" />
 			</item>
 			<item level="0" text="Afișaj și LED" entryID="hds_vfd_producator"
 				pictograma="afisaj" weight="41" requires="HdsVfdProducator"
@@ -432,10 +437,6 @@ deschide(self.session, "afisaj")
 			</item>
 			<item level="0" text="Ecran de pornire" entryID="hds_ecran_pornire" pictograma="ecran-pornire" weight="47" web="/ecrane">
 				<screen module="HdsEcranPornire" screen="HdsEcranPornire" />
-			</item>
-			<item level="0" text="Sigle de pornire" entryID="hds_galerie_sigle"
-				pictograma="ecran-pornire" weight="48" web="/sigle-pornire">
-				<screen module="HdsGalerieSigle" screen="HdsGalerieSigle" />
 			</item>
 		</menu>
 
@@ -663,11 +664,10 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<item text="Restart Box" entryID="restart" pictograma="repornire" web="/alimentare?f=receptor" weight="30">
 			<screen module="Standby" screen="TryQuitMainloop">2</screen>
 		</item>
-		<!-- Porneste alte imagini (Screens/HdsPornireMultipla.py, Components/HdsPornireMultipla.py): imaginile instalate
-		     in celelalte locuri din memorie, una aleasa, STARTUP scris sigur, apoi repornirea in ea. Numai pe receptoarele
-		     cu mai multe locuri (Octagon SF8008 si SF8008 MINI): SystemInfo["HdsMultiboot"] (Components/SystemInfo.py).
-		     entryID-ul vechi ramane (cautarea, ajutorul si probele il stiu). In web: cardul flash din /alimentare. -->
-		<item text="Pornește alte imagini" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
+		<!-- Acelasi ecran pentru bootoptions, kexec instalat si sloturi GPT.
+		     Capacitatile receptorului decid daca intrarea apare.
+		     STARTUP ales si repornirea se folosesc la fel pe televizor si web. -->
+		<item text="Repornește în altă imagine" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
 			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
 		</item>
 		<item text="Deep Standby (Power Off)" entryID="deep_standby" pictograma="oprire" web="/alimentare?f=oprire" weight="60">

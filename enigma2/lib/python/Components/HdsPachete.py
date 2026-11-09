@@ -41,7 +41,9 @@ def _t(text):
 		return text
 # fisierul care face dintr-un dosar al pachetului un plugin: plugin.py/.pyc/.pyo sau compilat ca modul nativ (plugin.so,
 # plugin.cpython-314-<arh>.so, plugin.abi3.so), aceleasi ca PluginComponent.numeFisierePlugin
-_FISIER_PLUGIN = re.compile(r'/plugin(?:\.py|\.pyc|\.pyo|\.so|\.cpython-[^/]+\.so|\.abi3\.so)$')
+_DOSAR_PLUGIN = re.compile(r'^(.*?/Plugins/[^/]+/[^/]+)(?:/|$)')
+_FISIER_PLUGIN = re.compile(
+	r'^(.*?/Plugins/[^/]+/[^/]+)/plugin(?:\.py|\.pyc|\.pyo|\.so|\.cpython-[^/]+\.so|\.abi3\.so)$')
 # ceasul pentru durata cautarii: ora receptorului sare la pornire (TDT, NTP), iar „raspunde greu” nu trebuie sa apara
 # din saritura (Python 2: time.time)
 _ceas = getattr(time, 'monotonic', time.time)
@@ -752,17 +754,43 @@ def incarca(radacina='/'):
 		p.versiune_instalata = s.get('version', '') or '?'
 
 	# 3. ce plugin (dosar) tine fiecare pachet instalat
+	liste_instalate = {}
 	for n, _s in instalate:
 		if not n.startswith('enigma2'):
 			continue
+		fisiere = liste_instalate[n] = []
 		for r in _randuri(os.path.join(dosar_info, n + '.list')):
 			r = r.split('\t', 1)[0].strip()
+			if not r or r == '.':
+				continue
+			fisiere.append(r.rstrip('/'))
 			# si pluginul compilat ca modul nativ (plugin.so, plugin.cpython-314-<arh>.so), ca in PluginComponent.numeFisierePlugin
-			if '/Plugins/' in r and _FISIER_PLUGIN.search(r):
-				dosar = r.rsplit('/', 1)[0]
+			intrare = _FISIER_PLUGIN.match(r)
+			if intrare:
+				dosar = intrare.group(1)
 				cat.dupa_dosar[dosar] = n
 				if n in toate:
 					toate[n].dosar_plugin = dosar
+
+	# Unele pachete separa modulele interne ale unui plugin. Ele raman
+	# pentru dependente, dar nu sunt extensii de sine statatoare.
+	interne = set()
+	for n, fisiere in liste_instalate.items():
+		if n not in toate or toate[n].dosar_plugin:
+			continue
+		radacini = set()
+		for r in fisiere:
+			m = _DOSAR_PLUGIN.match(r)
+			if m:
+				radacini.add(m.group(1))
+		if len(radacini) != 1:
+			continue
+		parinte = radacini.pop()
+		if parinte not in cat.dupa_dosar:
+			continue
+		if all(r == parinte or r.startswith(parinte + '/') or
+				parinte.startswith(r + '/') for r in fisiere):
+			interne.add(n)
 
 	# Manifestul ramane cel de la constructie, inclusiv dupa actualizarea unui pachet.
 	# Pastram datele complete pentru dependente; listele extensiilor arata numai ce pune omul.
@@ -770,7 +798,8 @@ def incarca(radacina='/'):
 	for n, p in toate.items():
 		p.din_imagine = n in din_imagine
 	cat._toate = toate
-	cat.pachete = dict((n, p) for n, p in toate.items() if se_arata(n) and not p.din_imagine)
+	cat.pachete = dict((n, p) for n, p in toate.items()
+		if se_arata(n) and not p.din_imagine and n not in interne)
 	return cat
 
 

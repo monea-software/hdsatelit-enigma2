@@ -379,8 +379,22 @@ def temperaturaValida(t):
 
 
 def driverNormal(stare_driver):
-	"""Starea pazei driverului: lipsa (alt receptor) sau „Normal Temp” inseamna ca driverul nu incetineste."""
-	return not stare_driver or "normal" in stare_driver.lower()
+	"""Poarta de urcare: o stare necunoscuta nu permite accelerarea."""
+	stare = (stare_driver or "").strip().lower()
+	return not stare or "normal" in stare
+
+
+def driverIncalzit(pm, frecventa_ceruta, paza):
+	"""Caldura confirmata de pragul driverului sau de frecventa masurata."""
+	temp = pm.get("temperatura")
+	if paza and paza.get("pornita") and temperaturaValida(temp):
+		if temp >= paza["coborare"]:
+			return True
+	# O treapta mica aleasa de guvernor nu este o limitare de caldura.
+	masurata = pm.get("frecventa_khz")
+	stare = (pm.get("stare_driver") or "").strip().lower()
+	return (stare != "quit" and not driverNormal(stare) and
+		bool(masurata and frecventa_ceruta and 0 < masurata < frecventa_ceruta))
 
 
 # ---------------------------------------------------------------- treptele si hotararea (functii fara efecte)
@@ -462,11 +476,13 @@ def _primulSubFabricant(niveluri, fab):
 	return len(niveluri) - 1
 
 
-def hotarare(mod, temp, acum, stare, trepte, plafon_fabricant, stare_driver=None):
+def hotarare(mod, temp, acum, stare, trepte, plafon_fabricant,
+		stare_driver=None, caldura_driver=False):
 	"""Hotararea pazei, fara efecte: (plafon_khz, stare_noua, motiv).
 
 	stare e dictionarul intors data trecuta ({} la inceput); cheia „pornit_la” (ceasul monoton la pornirea
-	interfetei) o pune cine cheama. motiv e unul din MOTIVE."""
+	interfetei) o pune cine cheama. motiv e unul din MOTIVE.
+	caldura_driver cere confirmare prin pragul termic sau frecventa masurata."""
 	s = dict(stare or {})
 	pl = plafoane(trepte, plafon_fabricant)
 	if pl is None:
@@ -477,7 +493,7 @@ def hotarare(mod, temp, acum, stare, trepte, plafon_fabricant, stare_driver=None
 	fab = pl["fabricant"]
 	niveluri = scara(mod, pl)
 	valida = temperaturaValida(temp)
-	driver_ok = driverNormal(stare_driver)
+	driver_ok = driverNormal(stare_driver) and not caldura_driver
 
 	mod_nou = s.get("mod") != mod or s.get("scara") != niveluri
 	if mod_nou:
@@ -567,7 +583,7 @@ def hotarare(mod, temp, acum, stare, trepte, plafon_fabricant, stare_driver=None
 		candidati.append((fab, "pornire_sigura"))
 	plafon = min(k for k, m in candidati)
 	motiv = sorted((m for k, m in candidati if k == plafon), key=MOTIVE.index)[0]
-	if not motiv and not driver_ok:
+	if not motiv and caldura_driver:
 		motiv = "driver"
 	s["plafon"], s["motiv"] = plafon, motiv
 	return plafon, s, motiv
@@ -822,6 +838,7 @@ class Procesor(object):
 		self.motiv = ""
 		self.temperatura = None
 		self.frecventa = None           # frecventa de acum a ultimului pas, in kHz (pentru istoric)
+		self.driver_redus = 0          # citiri la rand cu frecventa sub cea ceruta
 		self.stat = None                # /proc/stat la ultimul pas (total, inactiv)
 		self.folosit = None             # procesorul folosit intre ultimii doi pasi, in %
 		self.folosit_la = None          # ceasul pasului care l-a masurat
@@ -949,9 +966,13 @@ class Procesor(object):
 		temp, pm = citesteTemperatura()
 		self.temperatura = temp
 		# frecventa de acum: din pm_cpu (aceeasi citire); scaling_cur_freq numai pe receptoarele fara pm_cpu
-		self.frecventa = pm.get("frecventa_khz") or _intreg(_citeste(CPUFREQ + "/scaling_cur_freq", 64), None)
+		ceruta = _intreg(_citeste(CPUFREQ + "/scaling_cur_freq", 64), None)
+		self.frecventa = pm.get("frecventa_khz") or ceruta
+		redus = driverIncalzit(pm, ceruta, None)
+		self.driver_redus = self.driver_redus + 1 if redus else 0
+		cald = driverIncalzit(pm, None, pazaDriver()) or self.driver_redus >= CITIRI_COBORARE
 		plafon, self.stare, motiv = hotarare(self.mod, temp, acum, self.stare, self.trepte_folosite, self.fabricant,
-			pm.get("stare_driver"))
+			pm.get("stare_driver"), cald)
 		self.plafon_hotarat = plafon
 		self.racire = _laRacire(self.mod, self.stare, motiv, temp)
 		if plafon is None:

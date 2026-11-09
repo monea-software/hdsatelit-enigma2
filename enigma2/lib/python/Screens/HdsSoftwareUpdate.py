@@ -115,16 +115,11 @@ CALE_CMDLINE = "/proc/cmdline"
 CALE_ENIGMA2_ETC = "/etc/enigma2"
 PREFIX_FOLDER_BACKUP = "hds-backup-setari-"
 
-# Receptorul are o singura pereche kernel + radacina pe eMMC (mmcblk0p9, mmcblk0p10), fara sloturi: o scriere
-# reala sterge tot /etc/enigma2, iar un rootfs care nu porneste se repara numai din Maintenance Mode.
-# Primul Amiko Viper 4K (V10, 0.6.3) tine sistemul intr-un subdosar al partitiei userdata (rootsubdir=linuxrootfs1 in
-# /proc/cmdline, nucleul in linuxkernel1). ofgwrite fara -m (ca aici) scrie atunci nucleul in partitia din kernel= si
-# sistemul in subdosarul care ruleaza (sterge numai acel subdosar; ofgwrite f09040bb, cmdline_parser.c
-# search_current_used_partitions si flash_ext4.c), iar in iesire spune "Using cmdLine kernel device: <kernel=>",
-# "Using cmdLine rootfs device: <root=>" si "Current root sub dir is: <rootsubdir>" in locul randurilor "Found cmdLine
-# ...". _simulareAratacorect le cere pe acestea numai cand /proc/cmdline are rootsubdir= (fara el, exact ca inainte),
-# cu dispozitivele si subdosarul din /proc/cmdline: un subdosar gol ar insemna stergerea intregii partitii. Repararea
-# pe V10 e arhiva de recuperare a producatorului (textUltimaConfirmare).
+# V20 are o singura pereche nucleu + sistem pe eMMC (p9, p10).
+# La pornirea multipla cu linuxrootfsN folosim -mN si verificam destinatiile
+# fata de kernel= si root=. Fara -m, cautarea GPT poate pierde nucleul.
+# Un subdosar gol ar insemna stergerea intregii partitii userdata.
+# Se scrie numai slotul pornit din memorie, dupa proba aceluiasi pachet.
 # Inainte de scriere se face o copie a datelor omului pe mediul imaginii, un dosar plat
 # hds-backup-setari-AAAALLZZ_HHMMSS/ cu:
 #   - fisierele de canale si temporizatoare de mai jos si toate userbouquet.*;
@@ -1004,30 +999,67 @@ def subdosarRadacina(cmdline=None):
 	return v if re.match(r"^[A-Za-z0-9_]{1,40}$", v) else ""
 
 
+def _argumenteOfgwrite(cmdline):
+	"""Slotul pornit din memorie sau perechea simpla; refuz la pornire nesigura."""
+	chei = ("kernel", "root", "rootsubdir", "kexec", "rootfstype")
+	campuri = [c.split("=", 1) for c in (cmdline or "").split() if "=" in c]
+	if any(sum(k == cheie for k, _v in campuri) > 1 for cheie in chei):
+		raise ValueError(_("Pornirea receptorului este neclară. Instalarea este oprită."))
+	p = dict(campuri)
+	root = p.get("root", "")
+	externe = ("/dev/sd", "/dev/nvme", "/dev/mmcblk1", "/dev/disk/", "/dev/mapper/", "UUID=", "PARTUUID=")
+	if any(d.startswith(externe) for d in (root, p.get("kernel", ""))) or p.get("kexec") == "1":
+		raise ValueError(_("Imaginea rulează de pe un disc extern. Pornește imaginea din memoria internă și verifică din nou."))
+	if "rootsubdir" not in p:
+		return "-r -k"
+	m = re.fullmatch(r"linuxrootfs([1-4])", p["rootsubdir"])
+	bloc = r"/dev/mmcblk0p[1-9][0-9]*"
+	if not m or not re.fullmatch(bloc, root) or not re.fullmatch(bloc, p.get("kernel", "")) or \
+			p.get("kernel") == root or p.get("rootfstype", "ext4") != "ext4":
+		raise ValueError(_("Slotul pornit din memoria internă nu poate fi stabilit sigur. Instalarea este oprită."))
+	return "-r -k -m%s" % m.group(1)
+
+
 def _simulareAratacorect(iesire, cmdline=None):
 	"""Verificare PROPRIE, din text, ca ofgwrite a recunoscut pachetul — NU se are incredere in
 	textul lui de "succes" (identic la simulare si la scriere reala). Cere gasirea
 	explicita a kernelului, rootfs-ului SI a dispozitivelor tinta, fara nicio mentiune de eroare.
-	Cu rootsubdir= in /proc/cmdline (V10; `cmdline` dat sau citit acum) dispozitivele sunt cele din kernel= si root=,
-	iar subdosarul anuntat trebuie sa fie chiar cel care ruleaza."""
+	Cu rootsubdir=, destinatiile trebuie sa fie chiar kernel= si root=.
+	Numarul dat prin -m trebuie sa corespunda subdosarului pornit."""
 	txt = (iesire or "").lower()
 	are_kernel = "found kernel file" in txt
 	are_rootfs = any(s in txt for s in (
 		"found rootfs file", "found ext4 rootfs", "found ext3 rootfs", "found ubi rootfs", "found ubifs rootfs"
 	))
 	cmdline = _citesteCmdline() if cmdline is None else cmdline
+	try:
+		_argumenteOfgwrite(cmdline)
+	except ValueError:
+		return False
 	subdosar = subdosarRadacina(cmdline)
 	if subdosar:
 		kernel, radacina = campCmdline(cmdline, "kernel"), campCmdline(cmdline, "root")
 		randuri = [r.strip() for r in txt.splitlines()]
-		bloc = r"^/dev/mmcblk\d+p\d+$"
-		are_dispozitive = bool(re.match(bloc, kernel) and re.match(bloc, radacina)) and \
-			("using cmdline kernel device: %s" % kernel.lower()) in randuri and \
-			("using cmdline rootfs device: %s" % radacina.lower()) in randuri and \
-			("current root sub dir is: %s" % subdosar.lower()) in randuri
+		tinte = {"kernel": set(), "rootfs": set()}
+		for rand in randuri:
+			m = re.fullmatch(r"(?:found|using) cmdline (kernel|rootfs) device: (\S+)", rand)
+			if m:
+				tinte[m.group(1)].add(m.group(2))
+			m = re.fullmatch(r"using (\S+) as (kernel|rootfs) device", rand)
+			if m:
+				tinte[m.group(2)].add(m.group(1))
+		sloturi = [r for r in randuri if r.startswith("flashing multiboot partition ")]
+		# Cu -m, subdosarul tinta este linuxrootfsN. Randul Current arata pornirea.
+		# Forma veche Using cmdLine ramane citibila pentru probele deja salvate.
+		slot_corect = set(sloturi) == {"flashing multiboot partition " + subdosar[-1]} or \
+			(not sloturi and "using cmdline kernel device: " + kernel.lower() in randuri)
+		subdosare = {r for r in randuri if r.startswith("current root sub dir is:")}
+		are_dispozitive = tinte == {"kernel": {kernel.lower()}, "rootfs": {radacina.lower()}} and \
+			slot_corect and subdosare == {"current root sub dir is: " + subdosar.lower()}
 	else:
 		are_dispozitive = "found cmdline kernel device" in txt and "found cmdline rootfs device" in txt
 	are_eroare = ("error" in txt) or ("not found" in txt) or ("missing" in txt) or ("no such file" in txt)
+	are_eroare = are_eroare or "flashing currently not running image" in txt
 	return bool(are_kernel and are_rootfs and are_dispozitive and not are_eroare)
 
 
@@ -1060,9 +1092,11 @@ def _analizaRand(rand):
 	if m:
 		return _("Fișierele stau pe stick (%s).") % os.path.basename(m.group(1).strip())
 	m = re.match(r"(?:Found|Using) cmdline (kernel|rootfs) device: (\S+)", rand, re.I)
-	if m:
-		loc = os.path.basename(m.group(2))
-		if m.group(1).lower() == "kernel":
+	gpt = re.fullmatch(r"Using (\S+) as (kernel|rootfs) device", rand, re.I)
+	if m or gpt:
+		fel, dispozitiv = m.groups() if m else (gpt.group(2), gpt.group(1))
+		loc = os.path.basename(dispozitiv)
+		if fel.lower() == "kernel":
 			return _("Nucleul se va instala în memoria internă, în locul %s.") % loc
 		return _("Sistemul se va instala în memoria internă, în locul %s.") % loc
 	jos = rand.lower()
@@ -1634,10 +1668,19 @@ class HdsSoftwareUpdate(Screen):
 	# -------------------------------------------------------------- faza 3: verificare (ofgwrite -n)
 
 	def _porneesteVerificare(self, cale_pachet):
+		self._pornireVerificata = None
 		refuz = self._refuzMediu(cale_pachet)
 		if refuz:
 			self._eroareInapoiLaLista(refuz)
 			return
+		cmdline = _citesteCmdline()
+		try:
+			argumente = _argumenteOfgwrite(cmdline)
+		except ValueError as eroare:
+			self._arataCorect = False
+			self._eroareInapoiLaLista(str(eroare))
+			return
+		self._cmdlineVerificare = cmdline
 		self._faza = "verificare"
 		self._ocupat = True
 		self["iesire"].hide()
@@ -1647,7 +1690,7 @@ class HdsSoftwareUpdate(Screen):
 		self["detaliu"].setText(_("Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
-		comanda = "%s -n -r -k %s" % (CALE_OFGWRITE, shlex.quote(cale_pachet))
+		comanda = "%s -n %s %s" % (CALE_OFGWRITE, argumente, shlex.quote(cale_pachet))
 		self._console.ePopen(comanda, self._verificareGata)
 
 	def _verificareGata(self, iesire, retval, extra_args=None):
@@ -1658,8 +1701,11 @@ class HdsSoftwareUpdate(Screen):
 		self.show()
 		self._ultimaIesire = iesire or _("(fără nicio ieșire de la ofgwrite)")
 		cale = (self._candidatAles or {}).get("cale_finala") or ""
-		self._arataCorect = retval == 0 and _simulareAratacorect(self._ultimaIesire) and \
+		cmdline = _citesteCmdline()
+		self._arataCorect = retval == 0 and _simulareAratacorect(self._ultimaIesire, cmdline) and \
+			getattr(self, "_cmdlineVerificare", cmdline) == cmdline and \
 			_ofgwriteAGasitPachetul(self._ultimaIesire, cale)
+		self._pornireVerificata = (cmdline, os.path.realpath(cale)) if self._arataCorect else None
 		self._arataAnaliza(False)
 		print("[HdsSoftwareUpdate] simularea, cod %s:\n%s" % (retval, self._ultimaIesire))
 		self["iesire"].setText(analizaPeIntelesulOmului(iesire, retval, self._arataCorect))
@@ -1761,6 +1807,14 @@ class HdsSoftwareUpdate(Screen):
 		refuz = self._refuzMediu(cale_pachet) or self._refuzPazaInainteDeScriere(cale_pachet)
 		if refuz:
 			return refuz
+		cmdline = _citesteCmdline()
+		try:
+			argumente = _argumenteOfgwrite(cmdline)
+		except ValueError as eroare:
+			return str(eroare)
+		if (" -m" in argumente or getattr(self, "_pornireVerificata", None) is not None) and (not self._arataCorect or
+				getattr(self, "_pornireVerificata", None) != (cmdline, os.path.realpath(cale_pachet))):
+			return _("Slotul sau pachetul nu mai corespunde verificării. Verifică din nou software-ul înainte de instalare.")
 		try:
 			jurnal = open(cale_jurnal, "wb")
 		except OSError as eroare:
@@ -1778,9 +1832,9 @@ class HdsSoftwareUpdate(Screen):
 			"init 4; "
 			"sleep 3; "
 			"echo '[hds] pornesc scrierea reala'; "
-			"%s -r -k %s; "
+			"%s %s %s; "
 			"echo \"[hds] ofgwrite s-a intors, cod: $?\""
-		) % (CALE_OFGWRITE, shlex.quote(cale_pachet))
+		) % (CALE_OFGWRITE, argumente, shlex.quote(cale_pachet))
 		with jurnal:
 			subprocess.Popen(["/bin/sh", "-c", comanda], stdin=subprocess.DEVNULL, stdout=jurnal, stderr=subprocess.STDOUT,
 				close_fds=True, start_new_session=True, env=env_ofgwrite)

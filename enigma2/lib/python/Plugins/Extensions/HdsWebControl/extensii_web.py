@@ -488,9 +488,10 @@ def _textGol(fila, cauta, surse, cf):
 		return _t("Nimic nu se potrivește cu %s.") % cauta
 	if fila == "fisiere":
 		if cf["in_curs"] or cf["niciuna"]:
-			return _t("Se caută fișiere .ipk pe stick și disc.") + (" " + _t("Un stick sau un disc răspunde greu.")
+			return _t("Se caută fișiere .ipk pe stick, pe disc și în /tmp.") + (" " + _t("Un stick sau un disc răspunde greu.")
 				if cf["lent"] else "")
-		return _t("Niciun fișier .ipk pe stick sau disc. Copiază extensia pe un stick USB, apoi caută din nou.")
+		return _t("Niciun fișier .ipk pe stick, pe disc sau în /tmp. "
+			"Copiază extensia într-unul dintre aceste locuri, apoi caută din nou.")
 	if not surse:
 		return _t("Niciun feed. Adaugă unul din Surse feeduri.")
 	return _t("Nimic aici.")
@@ -845,7 +846,7 @@ def cautaFisiere(arg, request, M):
 	if _FISIERE["retea"] is not None and (cautari["retea"] is None or cautari["retea"].gata) and \
 			_FISIERE["local"] is not None and _FISIERE["local"].locuri_retea:
 		P.cautare_ipk(list(_FISIERE["local"].locuri_retea))
-	return {"result": True, "message": _t("Se caută fișiere .ipk pe stick și disc.")}
+	return {"result": True, "message": _t("Se caută fișiere .ipk pe stick, pe disc și în /tmp.")}
 
 
 def deschide(arg, request, M):
@@ -1020,7 +1021,7 @@ __STIL_PAGINI__
 <body>
 <main>
 <h1>Extensii și aplicații</h1>
-<p class="nota">Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. Actualizările imaginii sunt în pagina <a href="/actualizari" id="legaturaActualizari">Actualizare software</a>.</p>
+<p class="nota">Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href="/actualizari" id="legaturaActualizari">Actualizare software</a>.</p>
 <p class="mesaj" id="incarcare">Se citește lista...</p>
 <div id="continut" class="ascuns">
   <section class="card">
@@ -1178,8 +1179,8 @@ function arataFisiere(d){
   c.classList.toggle("ascuns", d.fila !== "fisiere");
   if(d.fila !== "fisiere"){ return; }
   var t = [];
-  if(cf.in_curs){ t.push("Se caută fișiere .ipk pe stick și disc."); }
-  else if(cf.gasite !== null){ t.push("Fișiere .ipk de pe stick și disc" + (cf.retea_gasite !== null ? " și din rețea" : "") + (cf.taiate ? ", cele mai noi " + cf.gasite : "") + "."); }
+  if(cf.in_curs){ t.push("Se caută fișiere .ipk pe stick, pe disc și în /tmp."); }
+  else if(cf.gasite !== null){ t.push("Fișiere .ipk de pe stick, de pe disc și din /tmp" + (cf.retea_gasite !== null ? " și din rețea" : "") + (cf.taiate ? ", cele mai noi " + cf.gasite : "") + "."); }
   if(cf.retea_in_curs){ t.push("Se caută în rețea; lista se poate folosi între timp."); }
   else if(cf.retea_gasite !== null){ t.push(cf.retea_gasite ? cf.retea_gasite + " găsite în rețea." : "Niciun fișier .ipk în rețea."); }
   if(cf.lent){ t.push("Un loc răspunde greu."); }
@@ -1315,7 +1316,7 @@ def N_(text):
 TEXTE_PAGINA = {
 	"html": (
 		N_("Extensii și aplicații"),
-		N_("Extensiile de pe receptor, cele din feeduri, fișierele .ipk de pe stick sau disc și feedurile. "
+		N_("Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. "
 			"Actualizările imaginii sunt în pagina <a href=\"/actualizari\" "
 			"id=\"legaturaActualizari\">Actualizare software</a>."),
 		N_("Se citește lista..."),
@@ -1352,8 +1353,8 @@ TEXTE_PAGINA = {
 		N_("Extensii care nu au putut porni"),
 		N_("Pornește"),
 		N_("Nu mai răspunde de un minut."),
-		N_("Se caută fișiere .ipk pe stick și disc."),
-		N_("Fișiere .ipk de pe stick și disc"),
+		N_("Se caută fișiere .ipk pe stick, pe disc și în /tmp."),
+		N_("Fișiere .ipk de pe stick, de pe disc și din /tmp"),
 		N_("și din rețea"),
 		N_(", cele mai noi"),
 		N_("Se caută în rețea; lista se poate folosi între timp."),

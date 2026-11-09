@@ -350,7 +350,7 @@ def caleLumina():
 
 def disponibil(cale=None):
 	"""Receptorul are afisaj in fata (dispozitivul exista)."""
-	if cale is None:
+	if cale is None and not esteColor():
 		try:
 			from Components.HdsFunctiiImagine import disponibil as functieImagine
 		except ImportError:  # probele vechi incarca numai acest modul
@@ -461,6 +461,10 @@ def initConfig():
 	try:
 		from Components.SystemInfo import SystemInfo
 		SystemInfo["HdsAfisaj"] = disponibil()
+		# Pe LCD color, compatibilitatea cedeaza separat lumina si desenul.
+		SystemInfo["HdsAfisajColor"] = esteColor()
+		SystemInfo["HdsAfisajSimplu"] = (
+			SystemInfo.get("Display", False) and not esteColor())
 	except Exception as e:
 		_jurnal("SystemInfo: %r" % (e,))
 

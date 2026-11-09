@@ -155,7 +155,7 @@ def _nimic(*_a):
 
 
 def _activa(s):
-	return s.get("stare") in (A.INREGISTRARE, A.ASTEAPTA, A.CONECTAT, A.SE_OPRESTE)
+	return s.get("stare") in (A.VERIFICARE, A.INREGISTRARE, A.ASTEAPTA, A.CONECTAT, A.SE_OPRESTE)
 
 
 class HdsAsistenta(Screen):
@@ -181,6 +181,7 @@ class HdsAsistenta(Screen):
 		self["key_blue"] = StaticText("")
 		actiuni = {
 			"cancel": self.close,
+			"ok": self._internet,
 			"red": self._rosu,
 			"green": self._verde,
 			"yellow": self._galben,
@@ -250,6 +251,14 @@ class HdsAsistenta(Screen):
 			return
 		jurnal = "\n".join(s.get("jurnal") or [])
 		if not _activa(s):
+			eroare = s.get("eroare_pornire")
+			if eroare:
+				self["antet"].setText(_("Asistență de la distanță"))
+				self._puneText("\n\n".join(t for t in (eroare, sus) if t))
+				self["ajutor"].setText("")
+				self["key_green"].setText(_(A.TEXT_SETARI_INTERNET))
+				self["key_red"].setText(_("Înapoi"))
+				return
 			# oprita (s-a oprit singura cat ecranul era deschis, sau sub pagina de pornire): Verde deschide pagina
 			self["antet"].setText(_("Oprită. O pornești tu, dacă vrei să ne ajuți."))
 			self._puneText("\n\n".join(t for t in (sus, jurnal) if t))
@@ -270,7 +279,19 @@ class HdsAsistenta(Screen):
 
 	def _verde(self):
 		s = A.stare()
+		if s.get("eroare_pornire"):
+			self._internet()
+			return
 		if s.get("disponibil") and not _activa(s):
+			self._deschidePagina()
+
+	def _internet(self):
+		if A.stare().get("eroare_pornire"):
+			from Screens.NetworkSetup import NetworkAdapterSelection
+			self.session.openWithCallback(self._dupaInternet, NetworkAdapterSelection)
+
+	def _dupaInternet(self, *_args):
+		if not _activa(A.stare()):
 			self._deschidePagina()
 
 	def _rosu(self):
