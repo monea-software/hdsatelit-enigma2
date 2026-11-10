@@ -23,6 +23,10 @@
 #   tot sistemul, deci trebuie vazut si daca e alt proces); numele unui modul de acces e numai "modul-acces";
 # - contoarele citirilor starii tunerelor (enigma.getFrontendReadCounts(), lib/dvb/hdscitirifrontend.h): cereri, cate au
 #   venit din memorie, ioctl-uri, cat timp in ioctl;
+# - contoarele buclei principale C++ (enigma.getMainloopCounts(), lib/base/ebase.cpp): rundele, poll-urile fara
+#   asteptare si cele intoarse imediat, timpul de somn in poll(), temporizatoarele, activarile; pe descriptor activarile si
+#   erorile necerute, cu calea lui din /proc/PID/fd. De ce: pe Vu+ Duo 4K firul principal sta 85-99% in bucla C++ (stiva
+#   Python mereu in eApp.poll) si numai asa se vede ce descriptor sau ce temporizator o tine;
 # - /proc/interrupts si /proc/stat la inceput si la sfarsit (intreruperile care au crescut cel mai mult).
 #
 # Partea de calcul (citirea textelor din /proc, pragul, stivele, textul raportului) nu cere enigma2: se poate proba
@@ -39,8 +43,9 @@ FEREASTRA_S = 10         # fereastra culegerii
 ESANTIOANE = 40          # stivele firului principal in fereastra (un semnal la 250 ms)
 SEMNAL_PESTE_RTMIN = 8   # SIGRTMIN+7 e al paznicului (mytest.py), +8 al raportului de procesor
 CLK = 100                # tick-uri pe secunda (USER_HZ)
-MAX_STIVA = 3            # cadrele numarate impreuna
+MAX_STIVA = 6            # cadrele numarate impreuna (3 nu ajungeau sa se vada cine cheama, de pilda la gettext)
 MAX_RANDURI = 25         # randuri in fiecare clasament
+MAX_FD = 8               # descriptorii aratati din bucla principala
 
 PROGRAM = "/usr/bin/hds-raport.sh"
 FISIER_STIVE = "/tmp/hds-procesor-stive.txt"
@@ -217,8 +222,81 @@ def _dif32(a, b, cheie):
 		return None
 
 
+_CHEI_BUCLA = ("runde", "poll_zero", "poll_imediat", "us_poll", "timere", "activari", "python", "erori_necerute")
+
+
+def _evenimente(masca):
+	"""POLLIN|POLLPRI... din masca (valorile Linux, aceleasi pe ARM si MIPS)"""
+	nume = ((0x001, "IN"), (0x002, "PRI"), (0x004, "OUT"), (0x008, "ERR"), (0x010, "HUP"), (0x020, "NVAL"))
+	try:
+		masca = int(masca)
+	except (TypeError, ValueError):
+		return "?"
+	rez = [n for b, n in nume if masca & b]
+	rest = masca & ~0x3f
+	if rest:
+		rez.append("0x%x" % rest)
+	return "|".join(rez) or "0"
+
+
+def text_bucla(a, b, dt, cai=None):
+	"""randurile sectiunii buclei principale din doua citiri enigma.getMainloopCounts(); cai: {fd: calea}"""
+	r = ["-- bucla principala C++ (lib/base/ebase.cpp), pe secunda"]
+	if not a or not b or dt <= 0:
+		r.append("contoarele buclei nu se pot citi")
+		return r
+	d = dict((k, _dif32(a, b, k)) for k in _CHEI_BUCLA)
+	if None in d.values():
+		r.append("contoarele buclei nu se pot citi")
+		return r
+	r.append("runde=%.0f poll_fara_asteptare=%.0f poll_intors_imediat=%.0f temporizatoare=%.0f activari=%.0f "
+		"python=%.0f erori_necerute=%.0f" % (d["runde"] / dt, d["poll_zero"] / dt, d["poll_imediat"] / dt,
+		d["timere"] / dt, d["activari"] / dt, d["python"] / dt, d["erori_necerute"] / dt))
+	# timpul in poll() e somn (sau apelul de sistem); restul pana la 100% din timpul firului e lucru
+	r.append("timp_in_poll=%.0f ms/s (somn sau apel de sistem; firul lucreaza restul)" % (d["us_poll"] / 1000.0 / dt))
+	fa, fb = a.get("fd") or {}, b.get("fd") or {}
+	randuri = []
+	for fd, vb in fb.items():
+		va = fa.get(fd, (0, 0, 0, 0))
+		try:
+			act = (int(vb[0]) - int(va[0])) & 0xFFFFFFFF
+			err = (int(vb[1]) - int(va[1])) & 0xFFFFFFFF
+		except (TypeError, ValueError, IndexError):
+			continue
+		if act or err:
+			randuri.append((act + err, act, err, fd, vb))
+	randuri.sort(key=lambda x: (-x[0], x[3]))
+	if randuri:
+		r.append("descriptorii cei mai activi (fd: activari/s, erori necerute/s, ultimele revents / cerute, calea):")
+	for _, act, err, fd, vb in randuri[:MAX_FD]:
+		cale = (cai or {}).get(fd) or "?"
+		r.append("fd %s: %.1f/s, %.1f/s, %s / %s, %s" % (fd, act / dt, err / dt, _evenimente(vb[2]), _evenimente(vb[3]),
+			cale))
+	return r
+
+
+_CAI_TEHNICE = ("/dev/", "/proc/", "/sys/", "socket:", "pipe:", "anon_inode:", "/run/", "/var/run/", "/tmp/")
+
+
+def cale_sigura(cale):
+	"""numai caile tehnice (dispozitive, /proc, socketuri, tevi); un fisier al omului (o inregistrare, un film de pe
+	disc) nu intra in raport, apare numai "(fisier)" """
+	return cale if cale.startswith(_CAI_TEHNICE) else "(fisier)"
+
+
+def cai_descriptori(pid, fd_uri):
+	"""{fd: calea din /proc/PID/fd} (un socket sau o teava apar ca socket:[N] / pipe:[N])"""
+	rez = {}
+	for fd in fd_uri:
+		try:
+			rez[fd] = cale_sigura(os.readlink("/proc/%d/fd/%d" % (pid, int(fd))))
+		except (OSError, ValueError, TypeError):
+			rez[fd] = "(inchis)"
+	return rez
+
+
 def text_raport(fire_a, fire_b, dt, intr_a, intr_b, proc_a, proc_b, fe_a, fe_b, stive, pid, parte, clk=CLK,
-		procese_a=None, procese_b=None):
+		procese_a=None, procese_b=None, bucla_a=None, bucla_b=None, cai=None):
 	"""textul sectiunii raportului; fire_*: {tid: (nume, stare, utime, stime)}"""
 	r = ["procesor_fereastra_s=%.1f" % dt, "procesor_prag=%d%%/%ds" % (int(PRAG * 100), DURATA_S),
 		"fir_principal_ultima_masura=%d%%" % int(round(parte * 100))]
@@ -264,6 +342,9 @@ def text_raport(fire_a, fire_b, dt, intr_a, intr_b, proc_a, proc_b, fe_a, fe_b, 
 	else:
 		r.append("contoarele nu se pot citi")
 	r.append("")
+	if bucla_a is not None or bucla_b is not None:
+		r += text_bucla(bucla_a, bucla_b, dt, cai)
+		r.append("")
 	r.append("-- intreruperile care au crescut (pe secunda)")
 	for k, nume, d in cresteri_intreruperi(intr_a, intr_b):
 		r.append("%s %s %.1f" % (k, nume, d / dt if dt > 0 else 0))
@@ -326,9 +407,20 @@ def _contoare_frontend():
 		return None
 
 
+def _contoare_bucla():
+	try:
+		import enigma
+		d = enigma.getMainloopCounts()
+		return d if isinstance(d, dict) else None
+	except Exception:
+		# o imagine construita fara contoarele buclei (lib/base/ebase.cpp)
+		return None
+
+
 def _instantaneu(pid):
 	return {"t": time.monotonic(), "fire": fire(pid), "procese": procese(),
-		"intr": intreruperi(_citeste("/proc/interrupts")), "stat": _citeste("/proc/stat", 4096), "fe": _contoare_frontend()}
+		"intr": intreruperi(_citeste("/proc/interrupts")), "stat": _citeste("/proc/stat", 4096), "fe": _contoare_frontend(),
+		"bucla": _contoare_bucla()}
 
 
 class Urmaritor(object):
@@ -394,8 +486,10 @@ class Urmaritor(object):
 		b = _instantaneu(self.pid)
 		self.fisier.flush()
 		stive = stive_fir(_citeste(FISIER_STIVE, 2 * 1024 * 1024), self.ident)
+		fd_uri = list(((b.get("bucla") or {}).get("fd") or {}).keys())
 		text = text_raport(a["fire"], b["fire"], b["t"] - a["t"], a["intr"], b["intr"], a["stat"], b["stat"], a["fe"],
-			b["fe"], stive, self.pid, self.prag.parte, procese_a=a["procese"], procese_b=b["procese"])
+			b["fe"], stive, self.pid, self.prag.parte, procese_a=a["procese"], procese_b=b["procese"],
+			bucla_a=a.get("bucla"), bucla_b=b.get("bucla"), cai=cai_descriptori(self.pid, fd_uri))
 		with open(FISIER_RAPORT, "w") as f:
 			f.write(text)
 		try:

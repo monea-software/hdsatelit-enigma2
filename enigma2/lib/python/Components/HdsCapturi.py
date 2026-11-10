@@ -336,9 +336,6 @@ def _salveaza(octeti, extensie, l, acum=None, valida=None):
 			return False, _t("Nu mai e loc pe stick pentru capturi.")
 		n = _numeNou(dosar, extensie, acum)
 		c = os.path.join(dosar, n)
-		# Discul sau zavorul au putut astepta: nu salva o captura invalidata intre timp de un ecran cu secrete.
-		if valida is not None and not valida():
-			return False, _mesajRefuzCaptura(_paza())
 		try:
 			_scrie(c, octeti)
 		except (OSError, IOError) as e:
@@ -361,7 +358,7 @@ def inStandby():
 
 
 def _paza():
-	"""Paza comuna a secretelor si a decodorului, sau None (captura refuzata)."""
+	"""Paza decodorului (captura_sigura), sau None (atunci numai meniurile, fara imaginea canalului)."""
 	try:
 		from Plugins.Extensions.HdsWebControl import captura_sigura
 		return captura_sigura
@@ -369,32 +366,10 @@ def _paza():
 		return None
 
 
-def _stareCaptura():
-	cs = _paza()
-	try:
-		return cs, cs.epocaCapturii()
-	except Exception:
-		return cs, None
-
-
-def _capturaValida(cs, epoca):
-	try:
-		return bool(cs.capturaValida(epoca))
-	except Exception:
-		return False
-
-
-def _mesajRefuzCaptura(cs):
-	try:
-		return cs.mesajRefuz()
-	except Exception:
-		return _t("Captura nu s-a putut face.")
-
-
 def motivRefuzCaptura():
-	"""Poarta pe firul interfetei, comuna butonului local si paginii forumului; fara paza se refuza."""
-	cs, epoca = _stareCaptura()
-	return "" if _capturaValida(cs, epoca) else _mesajRefuzCaptura(cs)
+	"""Captura nu se mai refuza pentru ecranele cu secrete (arata ce e pe televizor).
+	Ramane functia, ca apelantii (tasta de captura, pagina forumului) sa mearga neschimbati."""
+	return ""
 
 
 def imagineaCanalului():
@@ -451,9 +426,7 @@ def _ruleaza(comanda):
 
 def _fa(cu_imagine=None, loc=None, paza=None):
 	"""fa(), plus daca stick-ul e amovibil (pentru mesajul de dupa captura) -> (reusit, cale_sau_mesaj, loc, amovibil)."""
-	cs, epoca = paza if paza is not None else _stareCaptura()
-	if not _capturaValida(cs, epoca):
-		return False, _mesajRefuzCaptura(cs), loc or MEMORIE, False
+	cs = paza if paza is not None else _paza()
 	lista_locuri = locuri()
 	l = _loc(loc, lista_locuri) if loc else locImplicit(lista_locuri)
 	cheie = l["cheie"] if l else (loc or MEMORIE)
@@ -470,16 +443,12 @@ def _fa(cu_imagine=None, loc=None, paza=None):
 				cs.incepeVideo()
 			except Exception:
 				pass
-	if not _capturaValida(cs, epoca):
-		return False, _mesajRefuzCaptura(cs), cheie, amovibil
 	cod, date = _ruleaza(_comandaGrab(cu_imagine))
-	if not _capturaValida(cs, epoca):
-		return False, _mesajRefuzCaptura(cs), cheie, amovibil
 	fel = felPoza(date)
 	if cod != 0 or not fel or len(date) < CAPTURA_MINIMA:
 		_jurnal("grab: cod %s, %d octeti" % (cod, len(date or b"")))
 		return False, _t("Captura nu s-a putut face."), cheie, amovibil
-	ok, rez = _salveaza(date, fel, l, valida=lambda: _capturaValida(cs, epoca))
+	ok, rez = _salveaza(date, fel, l)
 	return ok, rez, cheie, amovibil
 
 
@@ -526,8 +495,8 @@ class LucrareCaptura(threading.Thread):
 		threading.Thread.__init__(self, name="hds-captura")
 		self.daemon = True
 		self.cu_imagine = cu_imagine
-		# Fotografia ceruta inaintea unui secret nu poate incepe dupa ce acesta s-a deschis/inchis.
-		self.paza = _stareCaptura()
+		# paza decodorului, luata pe firul enigma2 (captura_sigura)
+		self.paza = _paza()
 		self.loc_cerut = loc
 		self.gata = False
 		self.reusit = False
@@ -550,14 +519,57 @@ class LucrareCaptura(threading.Thread):
 		self.gata = True
 
 
+class _CapturaCazuta(object):
+	"""O captura care nici n-a putut porni: terminata, nereusita."""
+
+	def __init__(self, loc):
+		self.gata, self.reusit, self.cale, self.loc, self.amovibil = True, False, "", loc or "", True
+		self.mesaj = _t("Captura nu s-a putut face.")
+
+	def is_alive(self):
+		return False
+
+
+class LucrarePregatita(object):
+	"""Captura pornita pe firul enigma2 (paza decodorului se citeste acolo), apoi grab pe un fir. Aceleasi campuri ca
+	LucrareCaptura (luate de la firul ei, odata pornit); join() asteapta firul."""
+
+	def __init__(self, cu_imagine=None, loc=None):
+		self.cu_imagine = cu_imagine
+		self.loc_cerut = loc
+		self.fir = None
+
+	def porneste(self):
+		"""Pe firul enigma2: paza imaginii se citeste acum, apoi grab pe un fir."""
+		try:
+			cu_imagine = imagineaCanalului() if self.cu_imagine is None else self.cu_imagine
+			fir = LucrareCaptura(cu_imagine, self.loc_cerut)
+			fir.start()
+		except Exception as e:
+			_jurnal("captura: %s" % e)
+			fir = _CapturaCazuta(self.loc_cerut)
+		self.fir = fir
+
+	def _camp(self, nume, implicit):
+		return getattr(self.fir, nume) if self.fir is not None else implicit
+
+	gata = property(lambda self: self._camp("gata", False))
+	reusit = property(lambda self: self._camp("reusit", False))
+	cale = property(lambda self: self._camp("cale", ""))
+	mesaj = property(lambda self: self._camp("mesaj", ""))
+	loc = property(lambda self: self._camp("loc", self.loc_cerut or ""))
+	amovibil = property(lambda self: self._camp("amovibil", True))
+
+	def join(self, timp=None):
+		if self.fir is not None and self.fir.is_alive():
+			self.fir.join(timp)
+
+
 def faPeFir(cu_imagine=None, loc=None):
-	"""Porneste captura pe un fir si o intoarce (LucrareCaptura). Paza imaginii se citeste aici, pe firul care cheama
-	(firul enigma2)."""
-	if cu_imagine is None:
-		cu_imagine = imagineaCanalului()
-	t = LucrareCaptura(cu_imagine, loc)
-	t.start()
-	return t
+	"""Porneste captura pe un fir si o intoarce (LucrarePregatita). Paza imaginii se citeste pe firul enigma2, pe loc."""
+	l = LucrarePregatita(cu_imagine, loc)
+	l.porneste()
+	return l
 
 
 def textSalvata(loc, amovibil=True):

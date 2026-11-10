@@ -89,12 +89,16 @@ MOTOR_PAS_S = 1.0            # cat merge antena: starea ei, o data pe secunda
 MOTOR_MESAJ_S = 2.0          # mesajul antenei tine atat dupa ultima stare „se misca”
 DORMI_MAXIM_S = 60.0
 TOLERANTA_S = 0.005          # un pas venit cu atat mai devreme (rotunjirea ceasului) conteaza ca la timp
-# luminozitatea: sirurile hex care aleg cele 7 trepte ale FD650 (driverul imparte valoarea la 37)
-TREPTE_LUMINA = ("0", "4a", "6f", "de", "103", "128", "21e")
+# Luminozitatea FD650: valoarea hex se imparte la 37. Prima treapta este 37 (25 hex), deci ramane aprinsa.
+# Treptele salvate 2-7 isi pastreaza valorile; stingerea are acum o alegere separata.
+TREPTE_LUMINA = ("25", "4a", "6f", "de", "103", "128", "21e")
 # V10: nodul din fp citeste un numar zecimal ("level=%d" in hi-dvb.ko), 0-255 ca la lib/gdi/lcd.cpp; treptele
 # luminii pe V10 se probeaza pe aparat
-TREPTE_LUMINA_FP = ("0", "42", "84", "127", "169", "212", "255")
+TREPTE_LUMINA_FP = ("1", "42", "84", "127", "169", "212", "255")
+# LCD color: treptele 2-7 pastreaza rotunjirea folosita de API-ul LCD.
+TREPTE_LUMINA_COLOR = ("1", "42", "85", "128", "170", "212", "255")
 LUMINA_NESCHIMBATA = "neschimbat"
+LUMINA_OPRITA = "oprit"
 NOAPTE_LA_FEL = "la_fel"
 ORE_NOAPTE_DE_LA = ("18", "19", "20", "21", "22", "23", "0")
 ORE_NOAPTE_PANA_LA = ("5", "6", "7", "8", "9")
@@ -121,6 +125,29 @@ _PERSONAJ_LA_MESAJ = {"evenimente.pornire": "pornire", "evenimente.eroare": "ero
 # evenimentele unei inregistrari care a esuat; dupa unul, sfarsitul inregistrarii nu mai aduce zambetul
 _REC_ESUAT = ("evRecordFailed", "evRecordWriteError", "evRecordAborted")
 REC_ESUAT_S = 120.0
+
+
+def N_(text):
+	return text
+
+
+# Numai controale cu valori cunoscute, sub cele doua directoare ale panoului. Nu se creeaza noduri.
+_LED_DESCRIERI = (
+	("ledpowercolor", N_("Culoarea LED-ului la funcționare"), "culoare"),
+	("ledstandbycolor", N_("Culoarea LED-ului în așteptare"), "culoare"),
+	("ledsuspendledcolor", N_("Culoarea LED-ului la oprire completă"), "culoare"),
+	("power4x7on", N_("LED la funcționare"), "pornit"),
+	("power4x7standby", N_("LED în așteptare"), "pornit"),
+	("power4x7suspend", N_("LED la oprire completă"), "pornit"),
+)
+LED_CONTROALE = tuple("led_%s_%s" % (dosar, nume)
+	for dosar in ("fp", "lcd") for nume, _titlu, _fel in _LED_DESCRIERI)
+LED_NODURI = {"led_%s_%s" % (dosar, nume): "/proc/stb/%s/%s" % (dosar, nume)
+	for dosar in ("fp", "lcd") for nume, _titlu, _fel in _LED_DESCRIERI}
+_LED_DATE = {"led_%s_%s" % (dosar, nume): (titlu, fel)
+	for dosar in ("fp", "lcd") for nume, titlu, fel in _LED_DESCRIERI}
+_LED_SCRISE = {}
+_LED_ERORI = set()
 
 
 def _(text):
@@ -272,11 +299,83 @@ def alegeriViteza():
 
 
 def alegeriLuminozitate():
-	return [(LUMINA_NESCHIMBATA, _("Neschimbată"))] + [(str(i), _("Treapta %d din 7") % i) for i in range(1, 8)]
+	return [(LUMINA_NESCHIMBATA, _("Neschimbată")), (LUMINA_OPRITA, _("Oprit"))] + [
+		(str(i), _("Treapta %d din 7") % i) for i in range(1, 8)]
 
 
 def alegeriLuminozitateNoapte():
-	return [(NOAPTE_LA_FEL, _("La fel ca ziua"))] + [(str(i), _("Treapta %d din 7") % i) for i in range(1, 8)]
+	return [(NOAPTE_LA_FEL, _("La fel ca ziua")), (LUMINA_OPRITA, _("Oprit"))] + [
+		(str(i), _("Treapta %d din 7") % i) for i in range(1, 8)]
+
+
+def alegeriLed(cheie):
+	"""Valorile driverului, comune ecranului si paginii web. Culorile depind de panou."""
+	date = _LED_DATE.get(cheie)
+	if date is None:
+		return []
+	alegeri = [(LUMINA_NESCHIMBATA, _("Neschimbată")), ("0", _("Oprit"))]
+	if date[1] == "culoare":
+		alegeri.extend((str(i), _("Culoarea %d") % i) for i in (1, 2, 3))
+	else:
+		alegeri.append(("1", _("Pornit")))
+	return alegeri
+
+
+def controaleLed(citeste=True):
+	"""Numai LED-urile oferite de driverul prezent; niciun nod nu este presupus dupa model."""
+	c = _cfg()
+	rez = []
+	chei = [k for k in LED_CONTROALE if os.path.exists(LED_NODURI[k])]
+	for cheie in chei:
+		nod = LED_NODURI[cheie]
+		actual = None
+		if citeste:
+			try:
+				with open(nod, "r", encoding="ascii") as f:
+					actual = f.read(32).strip()
+			except (IOError, OSError, UnicodeError):
+				pass
+		titlu = _(_LED_DATE[cheie][0])
+		aceleasi = [k for k in chei if _LED_DATE[k][0] == _LED_DATE[cheie][0]]
+		if len(aceleasi) > 1:
+			titlu = _("%s (%d)") % (titlu, aceleasi.index(cheie) + 1)
+		rez.append({"cheie": cheie, "titlu": titlu, "nod": nod,
+			"alegeri": alegeriLed(cheie), "valoare": getattr(c, cheie).value,
+			"eroare": nod in _LED_ERORI, "actual": actual})
+	return rez
+
+
+def aplicaLeduri(forteaza=False):
+	"""Aplica setarile LED existente, fara creare de fisiere si fara scrieri repetate."""
+	from Components.HdsAfisajCompat import permite
+	if not permite("leduri"):
+		_LED_SCRISE.clear()
+		_LED_ERORI.clear()
+		return True
+	reusit = True
+	for control in controaleLed(citeste=False):
+		nod, valoare = control["nod"], control["valoare"]
+		if valoare == LUMINA_NESCHIMBATA:
+			_LED_SCRISE.pop(nod, None)
+			_LED_ERORI.discard(nod)
+			continue
+		if not isinstance(valoare, str) or valoare not in dict(control["alegeri"]):
+			continue
+		if not forteaza and _LED_SCRISE.get(nod) == valoare:
+			continue
+		try:
+			# Fara O_CREAT: un nod retras de driver intre detectie si scriere ramane absent.
+			fd = os.open(nod, _DESCHIDERE | os.O_TRUNC)
+			with os.fdopen(fd, "w", encoding="ascii") as f:
+				f.write(valoare)
+			_LED_SCRISE[nod] = valoare
+			_LED_ERORI.discard(nod)
+		except (IOError, OSError) as eroare:
+			reusit = False
+			if nod not in _LED_ERORI:
+				_jurnal("nu pot scrie LED-ul %s: %s" % (nod, eroare))
+			_LED_ERORI.add(nod)
+	return reusit
 
 
 def alegeriNoapteDeLa():
@@ -348,6 +447,13 @@ def caleLumina():
 	return None, None
 
 
+def valoareLumina(treapta, trepte):
+	"""Valoarea hardware: 0 stinge, toate cele sapte trepte au valori pozitive."""
+	if treapta == 0:
+		return "0"
+	return trepte[max(1, min(len(trepte), int(treapta))) - 1]
+
+
 def disponibil(cale=None):
 	"""Receptorul are afisaj in fata (dispozitivul exista)."""
 	if cale is None and not esteColor():
@@ -391,6 +497,14 @@ def alegeriColorLive():
 def alegeriColorPicon():
 	return [("nu", _("Deloc")), ("singur", _("Piconul singur")),
 		("nume_ora", _("Piconul cu numele si ora"))]
+
+
+def alegeriColorBara():
+	return [("da", _("Da")), ("nu", _("Nu"))]
+
+
+def alegeriColorAnimatii():
+	return [("nu", _("Nu")), ("da", _("Da"))]
 
 
 def alegeriControlAfisaj():
@@ -454,13 +568,17 @@ def initConfig():
 		("nu", _("Nu")), ("imagine", _("Numai imaginea")),
 		("osd", _("Imaginea cu OSD"))])
 	c.color_picon = ConfigSelection(default="nu", choices=alegeriColorPicon())
+	c.color_bara = ConfigSelection(default="da", choices=alegeriColorBara())
+	c.color_animatii = ConfigSelection(default="nu", choices=alegeriColorAnimatii())
+	for cheie in LED_CONTROALE:
+		setattr(c, cheie, ConfigSelection(default=LUMINA_NESCHIMBATA, choices=alegeriLed(cheie)))
 	try:
 		_migreaza(c)
 	except Exception as e:
 		_jurnal("setarea veche: %r" % (e,))
 	try:
 		from Components.SystemInfo import SystemInfo
-		SystemInfo["HdsAfisaj"] = disponibil()
+		SystemInfo["HdsAfisaj"] = disponibil() or any(os.path.exists(LED_NODURI[k]) for k in LED_CONTROALE)
 		# Pe LCD color, compatibilitatea cedeaza separat lumina si desenul.
 		SystemInfo["HdsAfisajColor"] = esteColor()
 		SystemInfo["HdsAfisajSimplu"] = (
@@ -480,8 +598,8 @@ VALORI = {
 	"control_afisaj": ("auto", "extern"),
 	"asteptare": ASTEPTARE,
 	"viteza": VITEZE,
-	"luminozitate": (LUMINA_NESCHIMBATA,) + tuple(str(i) for i in range(1, 8)),
-	"luminozitate_noapte": (NOAPTE_LA_FEL,) + tuple(str(i) for i in range(1, 8)),
+	"luminozitate": (LUMINA_NESCHIMBATA, LUMINA_OPRITA) + tuple(str(i) for i in range(1, 8)),
+	"luminozitate_noapte": (NOAPTE_LA_FEL, LUMINA_OPRITA) + tuple(str(i) for i in range(1, 8)),
 	"noapte_de_la": ORE_NOAPTE_DE_LA,
 	"noapte_pana_la": ORE_NOAPTE_PANA_LA,
 	"personaj": P.PORNIT,
@@ -489,19 +607,33 @@ VALORI = {
 	"personaj_noaptea": P.NOAPTEA,
 	"color_live": ("nu", "imagine", "osd"),
 	"color_picon": ("nu", "singur", "nume_ora"),
+	"color_bara": ("da", "nu"),
+	"color_animatii": ("da", "nu"),
 }
 
 
 def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozitate=None, luminozitate_noapte=None,
 		noapte_de_la=None, noapte_pana_la=None, text=None, functionare=None, oras=None, personaj=None, personaj_ritm=None,
 		personaj_noaptea=None, color_live=None, color_picon=None,
-		control_afisaj=None, tema_afisaj=None):
+		color_bara=None, color_animatii=None,
+		control_afisaj=None, tema_afisaj=None, leduri=None):
 	"""Schimba, salveaza si aplica pe loc (ecranul si pagina web). Intoarce (reusit, mesaj); o valoare straina nu
 	schimba nimic."""
 	from Components.config import configfile
 	c = _cfg()
 	if tema_afisaj is not None and tema_afisaj not in dict(alegeriTemaAfisaj()):
 		return False, _("Tema de afisaj nu exista.")
+	noi = {}
+	if leduri is not None:
+		if not isinstance(leduri, dict):
+			return False, _("Setările LED-urilor nu sunt valide.")
+		for cheie, valoare in leduri.items():
+			if cheie not in LED_CONTROALE or (valoare != LUMINA_NESCHIMBATA
+					and not os.path.exists(LED_NODURI[cheie])):
+				return False, _("Controlul LED nu este disponibil.")
+			if not isinstance(valoare, str) or valoare not in dict(alegeriLed(cheie)):
+				return False, _("Valoarea LED-ului nu este acceptată.")
+			noi[cheie] = valoare
 	if color_live is not None and color_live != "nu":
 		if not esteColor() or color_live not in dict(alegeriColorLive()):
 			return False, _("Driverul nu ofera acest mod live pe afisaj.")
@@ -511,7 +643,6 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		if functionare not in FUNCTIONARE:
 			return False, _("Alegerea pentru receptorul pornit nu există.")
 		lista = LISTA_DIN_FUNCTIONARE[functionare]
-	noi = {}
 	if lista is not None:
 		intrari, eroare = valideazaLista(lista)
 		if eroare:
@@ -526,7 +657,8 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		"luminozitate_noapte": luminozitate_noapte, "noapte_de_la": noapte_de_la, "noapte_pana_la": noapte_pana_la,
 		"personaj": personaj, "personaj_ritm": personaj_ritm,
 		"personaj_noaptea": personaj_noaptea, "color_live": color_live,
-		"color_picon": color_picon, "control_afisaj": control_afisaj}
+		"color_picon": color_picon, "control_afisaj": control_afisaj,
+		"color_bara": color_bara, "color_animatii": color_animatii}
 	for cheie in sorted(VALORI):
 		v = valori[cheie]
 		if v is None:
@@ -552,7 +684,10 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		el.value = v
 		el.save()
 	configfile.save()
+	leduri_ok = aplicaLeduri(forteaza=leduri is not None)
 	if _afisaj is None:
+		if not leduri_ok:
+			return True, _("Salvat, dar LED-urile nu au putut fi schimbate.")
 		return True, (_("Salvat. Tema se aplica dupa repornirea interfetei.")
 			if tema_afisaj is not None else _("Salvat."))
 	_afisaj.citesteSetarile()
@@ -561,6 +696,8 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 	_afisaj.previzualizarePana = None
 	_afisaj.lumina = None
 	_afisaj.reporneste()
+	if not leduri_ok:
+		return True, _("Salvat, dar LED-urile nu au putut fi schimbate.")
 	if tema_afisaj is not None:
 		return True, _("Salvat. Tema se aplica dupa repornirea interfetei.")
 	from Components.HdsAfisajCompat import permite
@@ -1446,14 +1583,16 @@ class Afisaj(object):
 		return (h >= de_la or h < pana_la) if de_la > pana_la else (de_la <= h < pana_la)
 
 	def treaptaDorita(self, acum=None):
-		"""Treapta de luminozitate (1-7) pentru ora de acum, sau None: nu se scrie nimic."""
+		"""Treapta 1-7 pentru ora de acum; 0 stinge, None nu schimba lumina."""
 		c = _cfg()
 		zi, noapte = c.luminozitate.value, c.luminozitate_noapte.value
 		if zi == LUMINA_NESCHIMBATA and noapte == NOAPTE_LA_FEL:
 			return None
 		noaptea = self.esteNoapte(acum)
 		if noaptea and noapte != NOAPTE_LA_FEL:
-			return int(noapte)
+			return 0 if noapte == LUMINA_OPRITA else int(noapte)
+		if zi == LUMINA_OPRITA:
+			return 0
 		# ziua „neschimbata” dupa o noapte mai slaba: inapoi la treapta cea mai mare
 		return int(zi) if zi != LUMINA_NESCHIMBATA else len(TREPTE_LUMINA)
 
@@ -1465,13 +1604,13 @@ class Afisaj(object):
 		treapta = self.treaptaDorita(acum)
 		if treapta is None or treapta == self.lumina:
 			return
-		self.lumina = treapta
 		cale, trepte = caleLumina()
 		if cale is None:
 			return
 		try:
 			with open(cale, "w", encoding="ascii") as f:
-				f.write(trepte[max(1, min(len(trepte), treapta)) - 1])
+				f.write(valoareLumina(treapta, trepte))
+			self.lumina = treapta
 			self.eroareLumina = False
 		except (IOError, OSError) as e:
 			if not self.eroareLumina:
@@ -1611,6 +1750,7 @@ def porneste(session):
 	"""Din mytest.py, dupa ce exista sesiunea. Fara afisaj nu face nimic."""
 	global _afisaj
 	initConfig()
+	aplicaLeduri(forteaza=True)
 	if _afisaj is not None or not disponibil():
 		return
 	info = colorInfo()
@@ -1632,6 +1772,7 @@ def opreste():
 
 
 def actualizeaza():
+	aplicaLeduri()
 	if _afisaj is not None:
 		_afisaj.acum()
 
@@ -1758,6 +1899,7 @@ def stare():
 		"viteza": c.viteza.value,
 		"luminozitate": c.luminozitate.value,
 		"luminozitate_noapte": c.luminozitate_noapte.value,
+		"leduri": controaleLed(),
 		"noapte_de_la": c.noapte_de_la.value,
 		"noapte_pana_la": c.noapte_pana_la.value,
 		"text_tau": c.text.value,
@@ -1768,6 +1910,9 @@ def stare():
 		"color": colorInfo(),
 		"color_live": getattr(getattr(c, "color_live", None), "value", "nu"),
 		"color_picon": getattr(getattr(c, "color_picon", None), "value", "nu"),
+		"color_bara": getattr(getattr(c, "color_bara", None), "value", "da"),
+		"color_animatii": getattr(getattr(c, "color_animatii", None), "value", "nu"),
+		"color_cadru": getattr(_afisaj, "color_revizie", ""),
 		"color_imagine": ("picon" if getattr(_afisaj, "_picon", "")
 			and getattr(_afisaj, "color_imagine", "") == _afisaj._picon
 			else getattr(_afisaj, "color_imagine", "")),

@@ -700,7 +700,7 @@ def _captura_asociere(D):
 		randuri.append(_("Codul acesta e deja folosit pentru %s. Apasă-l încă o dată ca să-l muți la %s, sau alt buton.") %
 			(_(vechi[1]) if vechi else "?", _(b[1]) if b else "?"))
 	if b is not None and b[0] == "power":
-		randuri.append(_("Din standby adânc receptorul pornește numai cu telecomanda lui."))
+		randuri.append(_("Din Deep standby receptorul pornește numai cu telecomanda lui."))
 	if a.de_baza_facute():
 		randuri.append(_("Pe telecomanda nouă: ține apăsat 2 secunde = Sari; ține apăsat EXIT = Gata."))
 	elif a.lipsa_pentru_gata():
@@ -1000,7 +1000,7 @@ PAGINA = """<!DOCTYPE html>
       </div>
     </section>
     <p class="mesaj" id="mesaj"></p>
-    <p class="nota">Același utilitar e pe televizor, în __DRUM_MENIU__. Cât ascultă pagina, tastele merg și pe televizor, cel mult 2 minute, iar pe televizor apare un anunț. Din standby adânc receptorul pornește numai cu telecomanda lui.</p>
+    <p class="nota">Același utilitar e pe televizor, în __DRUM_MENIU__. Cât ascultă pagina, tastele merg și pe televizor, cel mult 2 minute, iar pe televizor apare un anunț. Din Deep standby receptorul pornește numai cu telecomanda lui.</p>
   </div>
 </div>
 </div>
@@ -1138,19 +1138,39 @@ function tasta(cod, lung){
   var q = new URLSearchParams(); q.set("command", String(cod)); if(lung){ q.set("lung", "1"); }
   cerere("/api/remotecontrol", "POST", q).then(function(d){ if(!d.result){ mesaj(d.message, true); } }).catch(function(){ mesaj("Tasta nu a ajuns la receptor.", true); });
 }
+function sensuriTelecomanda(){
+  cerere("/api/taste-context").then(function(d){
+    if(!d.result){ return; }
+    document.querySelectorAll("#desen g.buton").forEach(function(g){
+      var r = (d.taste || {})[g.getAttribute("data-cod")];
+      if(!r){ return; }
+      var t = g.querySelector("title");
+      if(!t){ t = document.createElementNS("http://www.w3.org/2000/svg", "title"); g.appendChild(t); }
+      t.textContent = "Scurt: " + r.text_short + ". " + "Lung: " + r.text_long; g.setAttribute("aria-label", t.textContent);
+      g.setAttribute("tabindex", "0"); g.setAttribute("role", "button");
+    });
+  }).catch(function(){});
+}
 (function(){
-  var tinut = null, lung = false;
   document.querySelectorAll("#desen g.buton").forEach(function(g){
     var cod = parseInt(g.getAttribute("data-cod"), 10);
-    g.addEventListener("pointerdown", function(e){ e.preventDefault(); lung = false; tinut = setTimeout(function(){ lung = true; tasta(cod, true); }, 700); });
-    g.addEventListener("pointerup", function(){ if(tinut){ clearTimeout(tinut); tinut = null; } if(!lung){ tasta(cod, false); } });
-    g.addEventListener("pointerleave", function(){ if(tinut){ clearTimeout(tinut); tinut = null; } });
+    var tinut = null, apasat = false, lung = false;
+    function lasa(){ if(tinut){ clearTimeout(tinut); tinut = null; } apasat = false; }
+    g.addEventListener("pointerdown", function(e){
+      if(e.button){ return; } e.preventDefault(); lasa(); apasat = true; lung = false;
+      tinut = setTimeout(function(){ tinut = null; lung = true; tasta(cod, true); }, 700);
+    });
+    g.addEventListener("pointerup", function(e){ if(e.button || !apasat){ return; } var scurt = !lung; lasa(); if(scurt){ tasta(cod, false); } });
+    g.addEventListener("pointerleave", lasa); g.addEventListener("pointercancel", lasa);
+    g.addEventListener("keydown", function(e){ if((e.key === "Enter" || e.key === " ") && !e.repeat){ e.preventDefault(); tasta(cod, false); } });
   });
 })();
 $("stergeTot").addEventListener("click", function(){ post("/api/telecomenzi-schimba", {actiune: "sterge-tot"}); });
 $("exportJson").href = adresa("/api/telecomenzi-export?format=json");
 $("exportCsv").href = adresa("/api/telecomenzi-export?format=csv");
 citeste();
+sensuriTelecomanda();
+setInterval(sensuriTelecomanda, 2000);
 </script>
 </body>
 </html>
@@ -1177,7 +1197,7 @@ TEXTE_PAGINA = {
 		N_("Export JSON"),
 		N_("Export CSV"),
 		N_("Același utilitar e pe televizor, în __DRUM_MENIU__. Cât ascultă pagina, tastele merg și pe "
-			"televizor, cel mult 2 minute, iar pe televizor apare un anunț. Din standby adânc receptorul "
+			"televizor, cel mult 2 minute, iar pe televizor apare un anunț. Din Deep standby receptorul "
 			"pornește numai cu telecomanda lui."),
 	),
 	"js": (
@@ -1216,6 +1236,9 @@ TEXTE_PAGINA = {
 		N_("Tasta nu a ajuns la receptor."),
 	),
 }
+
+
+TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
 
 
 def _traducePagina(sablon, fel="pagina"):

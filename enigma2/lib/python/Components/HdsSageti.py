@@ -7,22 +7,24 @@
 #
 # O singura regula pentru bara TV (Screens/InfoBarGenerics.py, InfoBarChannelSelection.switchChannelUp/Down) si pentru
 # ecranul radio (Screens/HdsEcranRadio.py, listaSus/listaJos), ca cele doua sa nu se contrazica. Fiecare sageata face
-# una din trei: "radio" (lista de canale radio), "tv" (lista de canale TV) sau "zap" (SUS canalul urmator, JOS cel
-# anterior, ca CH+ si CH-). Valorile vechi ale setarii (0.1.6: "radio" si "tv") isi pastreaza intelesul.
+# "current" (lista modului curent), "radio" (lista radio), "tv" (lista TV), "zap" (SUS urmatorul, JOS anteriorul)
+# sau "zap_invers" (SUS canalul anterior, JOS cel urmator). Valorile vechi ale setarii isi pastreaza intelesul.
 
 # valoarea setarii -> (ce face SUS, ce face JOS)
 SAGETI = {
+	"current": ("current", "current"),
 	"radio": ("radio", "tv"),        # SUS lista radio, JOS lista TV (implicitul pana la 0.6.19)
 	"tv_radio": ("tv", "radio"),
-	"tv": ("tv", "tv"),              # implicit din 0.6.20: amandoua lista TV (0.1.6: "Lista de canale TV")
+	"tv": ("tv", "tv"),
 	"radio_radio": ("radio", "radio"),
 	"zap": ("zap", "zap"),
+	"zap_invers": ("zap_invers", "zap_invers"),
 }
-IMPLICIT = "tv"
+IMPLICIT = "current"
 
 
 def ce_face(valoare, sus):
-	"""Ce face sageata (sus=True: SUS, altfel JOS) cu valoarea data a setarii: "radio", "tv" sau "zap". O valoare
+	"""Ce face sageata (sus=True: SUS, altfel JOS): "current", "radio", "tv", "zap" sau "zap_invers". O valoare
 	necunoscuta (setari dintr-o versiune viitoare, fisier stricat) se poarta ca implicitul."""
 	return SAGETI.get(valoare, SAGETI[IMPLICIT])[0 if sus else 1]
 

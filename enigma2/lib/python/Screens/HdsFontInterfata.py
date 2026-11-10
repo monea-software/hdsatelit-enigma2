@@ -14,7 +14,6 @@
 from enigma import eListboxPythonMultiContent, getDesktop, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_CENTER
 
 from Screens.Screen import Screen
-from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.Label import Label
 from Components.MenuList import MenuList
@@ -110,7 +109,7 @@ class HdsFontInterfata(Screen):
 		self["descriere"] = Label("")
 		self["detalii"] = Label("")
 		self["stare"] = Label(_("Sus și Jos aleg fontul; proba din dreapta îl arată înainte să-l folosești."))
-		self["key_red"] = Label(_("Renunță"))
+		self["key_red"] = Label(_("Închide"))
 		self["key_green"] = Label(_("Folosește fontul"))
 		self["key_yellow"] = Label(_("Fonturi Google"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
@@ -201,9 +200,7 @@ class HdsFontInterfata(Screen):
 			return
 		self.acum = f["id"]
 		self.reface()
-		self.session.openWithCallback(lambda *a: self.close(True), MessageBox,
-			_("Fontul interfeței e acum %s. Ecranele pe care le deschizi de acum îl folosesc; meniul din spate se schimbă "
-				"când îl deschizi din nou.") % rezultat, MessageBox.TYPE_INFO, timeout=8)
+		self["stare"].setText(_("Font păstrat: %s. Ecranele noi îl folosesc.") % rezultat)
 
 	def fonturiGoogle(self):
 		from Screens.HdsFonturi import HdsFonturi

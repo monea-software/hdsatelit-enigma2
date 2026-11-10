@@ -336,6 +336,7 @@ PAGINA = """<!DOCTYPE html>
       <label class="comutator" id="rand_post"><input type="checkbox" id="pe_post"> <span id="text_post">Pentru acest post</span></label>
       <label class="comutator">Efecte speciale <select id="efecte"></select></label>
     </div>
+    <p class="nota">Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.</p>
     <p class="nota ascuns" id="comprimare">Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri.</p>
     <div class="zona-benzi"><div class="benzi" id="benzi"><canvas id="spectru" aria-hidden="true"></canvas></div></div>
     <p class="nota">Barele din spate arată cât de tare se aude fiecare bandă acum. Sus: mai mult, jos: mai puțin, câte 1 dB (valorile sunt în dB, frecvențele în Hz).</p>
@@ -345,6 +346,7 @@ PAGINA = """<!DOCTYPE html>
       <button type="button" id="renunta">Renunță</button>
       <span class="nota" id="nepastrat"></span>
     </div>
+    <p class="nota">Păstrează salvează reglajele. Renunță reface reglajele păstrate înaintea probei.</p>
     <p class="mesaj" id="mesaj"></p>
   </section>
   <section class="card">
@@ -628,6 +630,7 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Păstrează salvează reglajele. Renunță reface reglajele păstrate înaintea probei."),
 		N_("Egalizator"),
 		N_("Se citesc reglajele..."),
 		N_("Acum"),
@@ -654,6 +657,7 @@ TEXTE_PAGINA = {
 			"Placa de sunet rămâne „default”, afară de probe."),
 		N_("La canalele TV cu sunet MPEG egalizatorul ține sunetul după imagine. Dacă buzele se mișcă după "
 			"sunet, alege un număr cu +; dacă sunetul vine după buze, unul cu −."),
+		N_("Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l."),
 		N_("Sunetul cu egalizator"),
 		N_("Text brut"),
 		N_("Aceleași reglaje sunt pe televizor, în __DRUM_MENIU__."),

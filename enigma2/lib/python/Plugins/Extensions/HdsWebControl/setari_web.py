@@ -33,14 +33,14 @@
 #                                               randului in lista de mai sus); o valoare straina nu schimba nimic
 #   GET  /setari                               pagina (?id=<cheie> alege ecranul)
 #
-# Sub lista ecranelor, caseta discreta „Interfața web” cu randul „Cere codul și în rețeaua
-# locală” (acelasi ca pe televizor, in ecranul interfetei web) si nota „Asocierea cu cod e oprită în rețeaua locală”
-# cand e oprita. Rutele ei sunt in plugin.py (/api/interfata-web, /api/interfata-web-seteaza).
+# Sub lista ecranelor, caseta discreta „Interfața web” cu nota parolei din reteaua de acasa (codul de pe
+# televizor s-a scos; parola, una singura si numai daca o vrea omul, se pune in /acces-ssh, Parola receptorului).
+# Rutele ei sunt in plugin.py (/api/interfata-web, /api/interfata-web-seteaza).
 # tot acolo randurile „Aplicații de telefon” (pornit din fabrica, din casa fara
 # parola) si „Acces din afara casei” (oprit din fabrica; pornit, din afara numai cu utilizatorul root si parola pentru
 # aplicatii), aceleasi ca pe televizor, cu parola, aplicatiile conectate si „Fă altă parolă pentru aplicații”
-# (aplicatii_web.py). Integrarea 0.2.4: cu „Cere codul și în rețeaua locală” pornit, notele spun ca aplicatiile cer
-# parola si din casa. Parola e ascunsa (puncte): pagina n-o are in HTML si nici in GET /api/interfata-web; butonul
+# (aplicatii_web.py). Cu parola omului bifata la interfata web, notele spun ca aplicatiile o cer si din casa. Parola
+# pentru aplicatii (facuta de receptor) nu se arata: pagina n-o are in HTML si nici in GET /api/interfata-web; butonul
 # "Arată parola" o cere cu POST /api/interfata-web-secrete?ce=parola (plugin.py), "Ascunde parola" o scoate din nou.
 #
 # primul rand al casetei e „Tema interfeței web” (Clasic sau Pro, cadru_web.py),
@@ -168,10 +168,10 @@ def _fel(el, nod=None):
 	clase = [c.__name__ for c in type(el).__mro__]
 	if "ConfigNothing" in clase:
 		return None
-	from Components.HdsAsistentaControl import _elementPrivat, cheieSecreta
-	if (_elementPrivat(el) or (nod is not None and
+	from Components.HdsAsistentaControl import cheieSecreta
+	if ("ConfigPassword" in clase or "ConfigPIN" in clase or (nod is not None and
 		any(cheieSecreta(text) for text in (nod.text or "", nod.get("text", ""))))):
-		return "secret"        # aceeasi regula pentru clasa, marcaj, cale si eticheta ca pe ecranul receptorului
+		return "secret"        # parola, PIN, cheie: dupa salvare nu se arata (ca pe televizor), randul spune pusa
 	if "ConfigBoolean" in clase:
 		return "bool"
 	if "ConfigSelection" in clase:
@@ -265,8 +265,12 @@ def _alegeriMultime(el):
 def _descriere(el, fel):
 	d = {"fel": fel}
 	if fel == "secret":
-		# Nu citim nici valoarea, nici getText(): raspunsul GET ramane sigur si cand televizorul arata parola.
-		d["valoare_text"] = "\u2022" * 8
+		# dupa salvare valoarea nu se mai arata nicaieri (nici cu stelute sau puncte);
+		# randul spune numai daca e pusa. Valoarea insasi nu pleaca spre browser.
+		# un PIN nescris are valoarea "aaaa" (ConfigPIN(default=-1)) sau -1
+		v = el.value
+		v = "".join(str(x) for x in v) if isinstance(v, (list, tuple)) else str(v if v is not None else "")
+		d["valoare_text"] = _t("nepusă") if v in ("", "0", "-1", "aaaa") else _t("pusă")
 	elif fel == "bool":
 		d["valoare"] = "1" if el.value else "0"
 		d["alegeri"] = _alegeri(el, fel)
@@ -719,15 +723,13 @@ PAGINA = """<!DOCTYPE html>
 </section>
 <section class="card ascuns" id="interfataWeb">
   <h2>Interfața web</h2>
-  <div class="rand"><label for="codRetea">Cere codul și în rețeaua locală</label>
-    <select id="codRetea"><option value="0">Nu</option><option value="1">Da</option></select>
-    <p class="ajutor" id="codReteaNota"></p></div>
+  <p class="ajutor" id="codReteaNota"></p>
   <div class="rand"><label for="aplicatii">Aplicații de telefon</label>
     <select id="aplicatii"><option value="0">Nu</option><option value="1">Da</option></select>
     <p class="ajutor" id="aplicatiiNota"></p></div>
   <div class="rand"><label for="aplicatiiAfara">Acces din afara casei</label>
     <select id="aplicatiiAfara"><option value="0">Nu</option><option value="1">Da</option></select>
-    <p class="ajutor" id="aplicatiiAfaraNota"></p></div>
+    <p class="ajutor" id="aplicatiiAfaraNota" data-hds-secret="1"></p></div>
   <div class="butoane"><button type="button" id="codReteaSalveaza">Salvează</button>
     <button type="button" class="ascuns" id="arataParola">Arată parola</button>
     <button type="button" class="ascuns" id="parolaAplicatii">Fă altă parolă pentru aplicații</button></div>
@@ -735,7 +737,7 @@ PAGINA = """<!DOCTYPE html>
 </section>
 <div id="continut" class="ascuns">
   <section class="card"><div id="stare" class="ascuns"></div><div id="randuri"></div>
-    <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button></div>
+    <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button><button type="button" class="rosu" id="renunta">Renunță</button></div>
   </section>
   <p class="nota">Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de alegeri se schimbă de pe televizor.</p>
 </div>
@@ -791,7 +793,9 @@ function control(r){
     c = document.createElement("input"); c.type = "text"; c.maxLength = r.max; c.value = r.valoare || "";
     c.placeholder = r.gol || ""; c.autocomplete = "off"; c.spellcheck = false;
   } else {
-    c = document.createElement("span"); c.className = "citire"; c.textContent = r.valoare_text || ""; return c;
+    c = document.createElement("span"); c.className = "citire"; c.textContent = r.valoare_text || "";
+    if(r.fel === "secret"){ c.dataset.hdsSecret = "1"; }
+    return c;
   }
   c.id = "r" + r.nr; c.setAttribute("data-inainte", r.valoare);
   return c;
@@ -804,6 +808,24 @@ function valoareControl(r, c){
   }
   return c.value;
 }
+function modificariNesalvate(){
+  return !!DATE && DATE.randuri.some(function(r){
+    var c = $("r" + r.nr);
+    return c && c.tagName !== "SPAN" && valoareControl(r, c) !== c.getAttribute("data-inainte");
+  });
+}
+window.addEventListener("beforeunload", function(e){ if(modificariNesalvate()){ e.preventDefault(); e.returnValue = ""; } });
+document.addEventListener("keydown", function(e){
+  var c = document.activeElement;
+  if(!c || !c.closest || !c.closest("#randuri")){ return; }
+  if(e.key === "Enter" && c.tagName === "SELECT" && c.options.length === 2){
+    e.preventDefault(); c.selectedIndex = 1 - c.selectedIndex; c.dispatchEvent(new Event("change", {bubbles:true}));
+  } else if(e.key === "ContextMenu" && c.tagName === "SELECT"){
+    e.preventDefault();
+    if(c.showPicker){ try { c.showPicker(); return; } catch(err) {} }
+    c.size = Math.min(8, c.options.length); c.addEventListener("blur", function(){ c.size = 0; }, {once:true});
+  }
+});
 function arata(d){
   DATE = d;
   $("titlu").textContent = d.titlu;
@@ -829,22 +851,32 @@ function arata(d){
   }
 }
 function notaCodRetea(d){
-  var n = d.cod_retea_locala
-    ? "Fiecare browser sau telefon nou din rețeaua locală are nevoie o dată de codul arătat pe televizor."
-    : "Asocierea cu cod e oprită în rețeaua locală: browserele și telefoanele din casă intră fără cod. Din afara rețelei locale receptorul nu răspunde.";
-  if(!d.cod_retea_locala && d.fara_cod){ n += " Dacă pornești codul, și acest browser va avea nevoie de codul de pe televizor."; }
-  if(d.cod_retea_locala && d.aplicatii){ n += " Aplicațiile de telefon cer atunci și acasă utilizatorul root și parola pentru aplicații."; }
-  n += " Același rând e pe televizor, în " + (d.drum || "Meniu") + ".";
+  var n = d.parola_web
+    ? "Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în Parola receptorului (/acces-ssh)."
+    : "Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai dacă vrei, în Parola receptorului (/acces-ssh). Din afara rețelei locale receptorul nu răspunde.";
   $("codReteaNota").textContent = n;
 }
-// parola pentru aplicatii: puncte pana la butonul Arată parola (POST /api/interfata-web-secrete); ULTIMA = ultima stare citita
-var PAROLA = "", PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022", ULTIMA = null;
+// parola pentru aplicatii (facuta de receptor): nu se arata pana la butonul Arată parola (POST /api/interfata-web-secrete);
+// ULTIMA = ultima stare citita
+var PAROLA = "", NEARATATA = "(se arată la buton)", ULTIMA = null;
+var TURA_PAROLA = 0, CEAS_PAROLA = null, PAROLA_PANA = 0, PLECATA = false;
+function ascundeParola(){
+  ++TURA_PAROLA; clearTimeout(CEAS_PAROLA); CEAS_PAROLA = null; PAROLA_PANA = 0;
+  PAROLA = "";
+  if(ULTIMA){ notaAplicatii(ULTIMA); }
+}
+function verificaTimp(){ if(PAROLA_PANA && Date.now() >= PAROLA_PANA){ ascundeParola(); } }
+function pleaca(){ PLECATA = true; ascundeParola(); }
+window.addEventListener("pagehide", pleaca);
+window.addEventListener("pageshow", function(){ PLECATA = false; verificaTimp(); });
+window.addEventListener("focus", verificaTimp);
+document.addEventListener("visibilitychange", verificaTimp);
 function notaAplicatii(d){
   ULTIMA = d;
-  var n, a, p = PAROLA || PUNCTE;
+  var n, a, p = PAROLA || NEARATATA;
   if(d.aplicatii){
-    n = d.cod_retea_locala
-      ? "Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, înregistrări, liste m3u) intră și din casă numai cu utilizatorul root și parola pentru aplicații" + (p ? " " + p : "") + ", fiindcă rândul de mai sus cere codul și în rețeaua locală."
+    n = d.parola_web
+      ? "Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, înregistrări, liste m3u) intră și din casă cu utilizatorul root și parola ta (pusă în Parola receptorului)."
       : "Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, înregistrări, liste m3u) intră din casă fără parolă. În aplicație scrii adresa receptorului și portul 80; utilizatorul și parola rămân goale.";
     var v = d.aplicatii_vazute || [];
     if(v.length){ n += " Conectate: " + v.map(function(x){ return x.nume + " (" + x.adresa + ")"; }).join(", ") + "."; }
@@ -866,8 +898,6 @@ function notaAplicatii(d){
 function citesteInterfataWeb(){
   cerere("/api/interfata-web").then(function(d){
     if(!d.result){ return; }
-    $("codRetea").value = d.cod_retea_locala ? "1" : "0";
-    $("codRetea").setAttribute("data-inainte", $("codRetea").value);
     notaCodRetea(d);
     $("aplicatii").value = d.aplicatii ? "1" : "0";
     $("aplicatii").setAttribute("data-inainte", $("aplicatii").value);
@@ -1025,7 +1055,7 @@ $("aspectRevino").addEventListener("click", function(){
 });
 $("codReteaSalveaza").addEventListener("click", function(){
   var m = $("codReteaMesaj"), cereri = [];
-  [["codRetea", "cod_retea_locala"], ["aplicatii", "aplicatii"], ["aplicatiiAfara", "aplicatii_afara"]].forEach(function(x){
+  [["aplicatii", "aplicatii"], ["aplicatiiAfara", "aplicatii_afara"]].forEach(function(x){
     var v = $(x[0]).value;
     if(v !== $(x[0]).getAttribute("data-inainte")){ var q = new URLSearchParams(); q.set(x[1], v); cereri.push(q); }
   });
@@ -1046,21 +1076,27 @@ $("codReteaSalveaza").addEventListener("click", function(){
 });
 $("arataParola").addEventListener("click", function(){
   var m = $("codReteaMesaj");
-  if(PAROLA){ PAROLA = ""; if(ULTIMA){ notaAplicatii(ULTIMA); } return; }
+  if(PAROLA){ ascundeParola(); return; }
+  var tura = ++TURA_PAROLA;
   var q = new URLSearchParams(); q.set("ce", "parola");
   cerere("/api/interfata-web-secrete", "POST", q).then(function(d){
+    if(PLECATA || tura !== TURA_PAROLA){ return; }
     if(!d.result){ m.textContent = d.message || ""; m.classList.add("eroare"); return; }
     PAROLA = d.parola_aplicatii || "";
     if(ULTIMA){ notaAplicatii(ULTIMA); }
+    clearTimeout(CEAS_PAROLA);
+    PAROLA_PANA = Date.now() + 5 * 60 * 1000;
+    CEAS_PAROLA = setTimeout(ascundeParola, 5 * 60 * 1000);
   }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
 });
 $("parolaAplicatii").addEventListener("click", function(){
   var m = $("codReteaMesaj");
   if(!confirm("Faci o parolă nouă pentru aplicații? Din afara casei, aplicațiile care o folosesc pe cea veche nu mai primesc răspuns până nu scrii în ele parola nouă.")){ return; }
+  ascundeParola();
   var q = new URLSearchParams(); q.set("parola_aplicatii_noua", "1");
   m.textContent = "Se face parola nouă..."; m.classList.remove("eroare");
   cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){
-    PAROLA = "";
+    ascundeParola();
     m.textContent = d.message || ""; m.classList.toggle("eroare", !d.result);
     citesteInterfataWeb();
   }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
@@ -1082,6 +1118,7 @@ function citeste(){
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
 }
 $("inapoi").href = adresa("/meniu");
+$("renunta").addEventListener("click", function(){ if(DATE){ arata(DATE); mesaj("Nu s-a schimbat nimic."); } });
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("id", ID); var n = 0;
   DATE.randuri.forEach(function(r){
@@ -1136,7 +1173,6 @@ TEXTE_PAGINA = {
 		N_("Fă-le implicite pe receptor"),
 		N_("Revino la implicitele receptorului"),
 		N_("Interfața web"),
-		N_("Cere codul și în rețeaua locală"),
 		N_("Nu"),
 		N_("Da"),
 		N_("Aplicații de telefon"),
@@ -1154,17 +1190,14 @@ TEXTE_PAGINA = {
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Niciun rând de arătat la nivelul ales."),
-		N_("Fiecare browser sau telefon nou din rețeaua locală are nevoie o dată de codul arătat pe "
-			"televizor."),
-		N_("Asocierea cu cod e oprită în rețeaua locală: browserele și telefoanele din casă intră fără cod. "
-			"Din afara rețelei locale receptorul nu răspunde."),
-		N_("Dacă pornești codul, și acest browser va avea nevoie de codul de pe televizor."),
-		N_("Aplicațiile de telefon cer atunci și acasă utilizatorul root și parola pentru aplicații."),
-		N_("Același rând e pe televizor, în"),
+		N_("Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în "
+			"Parola receptorului (/acces-ssh)."),
+		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai "
+			"dacă vrei, în Parola receptorului (/acces-ssh). Din afara rețelei locale receptorul nu răspunde."),
+		N_("(se arată la buton)"),
 		N_("Meniu"),
 		N_("Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, "
-			"înregistrări, liste m3u) intră și din casă numai cu utilizatorul root și parola pentru aplicații"),
-		N_(", fiindcă rândul de mai sus cere codul și în rețeaua locală."),
+			"înregistrări, liste m3u) intră și din casă cu utilizatorul root și parola ta (pusă în Parola receptorului)."),
 		N_("Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, "
 			"înregistrări, liste m3u) intră din casă fără parolă. În aplicație scrii adresa receptorului și "
 			"portul 80; utilizatorul și parola rămân goale."),
@@ -1202,6 +1235,10 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 	),
 }
+
+
+TEXTE_PAGINA["html"] += (N_("Renunță"),)
+TEXTE_PAGINA["js"] += (N_("Nu s-a schimbat nimic."),)
 
 
 def _traducePagina(sablon, fel="pagina"):

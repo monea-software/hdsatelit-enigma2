@@ -21,7 +21,7 @@
 # selecție" (ascunse cand chenarul e oprit; viteza numai cu pulsul pornit), in pagina web /navigator si in Caută
 # setări. Valorile sunt chiar cuvintele lansatorului (lansator.stilChenar); cele din fabrica dau chenarul de dinainte.
 # Chenarul si stilul lui sunt acum si in pagina web /navigator; schimbate cat navigatorul e deschis, se vad pe loc.
-# hbbtv (0.2.8): setarea principala "HbbTV", OPRITA din fabrica; oprita, nimic HbbTV nu
+# hbbtv (0.2.8; pornita din fabrica din nou din 0.7.3): setarea principala "HbbTV"; oprita, nimic HbbTV nu
 # mai porneste si nucleul nu mai citeste AIT-ul (Components/HdsHbbtv.hbbtv_pornit); pe televizor primul rand din
 # partea HbbTV (cu ea oprita semnul rosu si pornirea automata nu se mai vad), in /navigator si in Caută setări.
 # hbbtv_autostart (0.2.8 a planului HbbTV): "Pornirea automată a aplicațiilor HbbTV", oprita din fabrica; cu ea
@@ -182,7 +182,7 @@ def initConfig(config=None):
 	c.marire = ConfigSelection(choices=alegeriMarire(), default="auto")
 	c.font_minim = ConfigSelection(choices=alegeriFont(), default="14")
 	c.desen = ConfigSelection(choices=alegeriDesen(), default="auto")
-	c.hbbtv = ConfigYesNo(default=False)
+	c.hbbtv = ConfigYesNo(default=True)
 	c.hbbtv_semn = ConfigYesNo(default=True)
 	c.hbbtv_autostart = ConfigYesNo(default=False)
 	c.hbbtv_clar = ConfigYesNo(default=False)

@@ -107,6 +107,25 @@ def _numeLimba(cod):
 	return cod
 
 
+def limbaSubtitrare(tuplu, referinta=""):
+	"""Limba declarata are prioritate. Numai teletextul fara limba al serviciului cunoscut are rezerva.
+	Identitatea este documentata in HdsDvbIDate._cheieRef si HdsDvbILegare.cautaRef; baza livrata
+	data/hds-baza-pornire.jsonl.gz are pentru 283d:c00000:3fb:1 subtitrare DVB deu si teletext 775 fara limba.
+	Nu exista un camp tara generic: nu deducem limba din numele canalului sau din satelit."""
+	cod = str(tuplu[4] or "").strip() if len(tuplu) > 4 else ""
+	if cod.lower() not in ("", "und", "unk", "unknown", "<unknown>", "<necunoscut>", "xxx", "---"):
+		return cod
+	if not tuplu or tuplu[0] != 1:
+		return ""
+	p = (referinta or "").split(":")
+	try:
+		if len(p) >= 11 and p[0] == "1" and not p[10] and tuple(int(v, 16) for v in p[3:7]) == (0x283D, 0x3FB, 1, 0xC00000):
+			return "deu"
+	except (TypeError, ValueError):
+		pass
+	return ""
+
+
 # codurile ISO 639 locale (qaa-qtz): de obicei versiunea originala a emisiunii; qad e descrierea audio
 _COD_LOCAL = re.compile(r"^q[a-t][a-z]$")
 # limba pistei de sunet cand nu e o limba: aceleasi etichete ca playerul din web (HdsWebControl/player.js, tv_web.py)
@@ -401,6 +420,10 @@ class AudioSelection(Screen, ConfigListScreen):
 			idx = 1
 
 			subtitlelist = self.getSubtitleList()
+			try:
+				referinta = self.session.nav.getCurrentlyPlayingServiceReference().toString()
+			except Exception:
+				referinta = ""
 
 			if len(subtitlelist):
 				for x in subtitlelist:
@@ -413,8 +436,9 @@ class AudioSelection(Screen, ConfigListScreen):
 						selected = _pistaActiva()
 						selectedidx = idx
 					
-					if x[4] and x[4] != "und":
-						language = _numeLimba(x[4]) or language
+					cod_limba = limbaSubtitrare(x, referinta)
+					if cod_limba:
+						language = _numeLimba(cod_limba) or language
 					if len(x) > 5 and x[5]:
 						language = _("%s, pentru surzi") % language
 

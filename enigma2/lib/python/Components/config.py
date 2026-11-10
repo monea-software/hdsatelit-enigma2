@@ -365,7 +365,14 @@ class ConfigSelection(ConfigElement):
 	# GUI
 	def handleKey(self, key):
 		nchoices = len(self.choices)
-		i = self.choices.index(self.value)
+		try:
+			i = self.choices.index(self.value)
+		except ValueError:
+			# Valoarea salvata nu mai e in lista alegerilor (scrisa de un plugin sau de o versiune veche a lui; JAKITAKI,
+			# tema Cobalt, 09.11.2026): tasta nu mai opreste ecranul, alege prima valoare din lista (END pe ultima).
+			if nchoices and key in (KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END):
+				self.value = self.choices[nchoices - 1 if key == KEY_END else 0]
+			return
 		if key == KEY_LEFT:
 			self.value = self.choices[(i + nchoices - 1) % nchoices]
 		elif key == KEY_RIGHT:
@@ -377,7 +384,11 @@ class ConfigSelection(ConfigElement):
 
 	def selectNext(self):
 		nchoices = len(self.choices)
-		i = self.choices.index(self.value)
+		try:
+			i = self.choices.index(self.value)
+		except ValueError:
+			# valoare care nu e in lista (vezi handleKey): urmatoarea e prima alegere
+			i = -1
 		self.value = self.choices[(i + 1) % nchoices]
 
 	def getText(self):
@@ -1051,24 +1062,54 @@ class ConfigText(ConfigElement, NumericalTextInput):
 		self.value = str(value)
 
 class ConfigPassword(ConfigText):
-	def __init__(self, default = "", fixed_size = False, visible_width = False, censor = "*"):
+	"""Parola, PIN-ul sau cheia scrise de om. Cat omul o scrie, se vede in clar (fara
+	stelute); dupa salvare randul nu mai arata valoarea deloc, ci numai "pusă" / "nepusă". O tasta de scris (litere,
+	cifre, stergere) incepe o parola noua, de la zero; tastatura de pe ecran porneste goala (ConfigList.deschideTastatura)
+	si pune `scrisa` dupa OK. `censor` ramane in semnatura pentru apelurile de dinainte si nu mai face nimic."""
+	def __init__(self, default = "", fixed_size = False, visible_width = False, censor = ""):
 		ConfigText.__init__(self, default = default, fixed_size = fixed_size, visible_width = visible_width)
-		self.censor_char = censor
-		self.hidden = True
+		# True cat omul scrie acum parola (pana la salvare sau renuntare): atunci se vede in clar
+		self.scrisa = False
+
+	def _incepe(self):
+		if not self.scrisa:
+			self.scrisa = True
+			self.text = ""
+			self.marked_pos = 0
+			self.offset = 0
+			self.allmarked = False
+
+	def handleKey(self, key):
+		if key == KEY_ASCII or key in KEY_NUMBERS or key in (KEY_DELETE, KEY_BACKSPACE):
+			if key == KEY_ASCII or key in KEY_NUMBERS:
+				from Components.HdsAsistentaControl import cereOprirePentruSecret
+				if cereOprirePentruSecret(getattr(self, "hdsSession", None)):
+					return
+			self._incepe()
+		elif not self.scrisa and key in (KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_TOGGLEOW):
+			return  # nimic de mutat intr-o valoare care nu se arata
+		ConfigText.handleKey(self, key)
 
 	def getMulti(self, selected):
-		mtext, text, mark = ConfigText.getMulti(self, selected)
-		if self.hidden:
-			text = len(text) * self.censor_char
-		return (mtext, text, mark)
+		if self.scrisa:
+			return ConfigText.getMulti(self, selected)
+		return ("text", _("pusă") if self.text else _("nepusă"))
 
 	def onSelect(self, session):
+		self.hdsSession = session
 		ConfigText.onSelect(self, session)
-		self.hidden = False
 
 	def onDeselect(self, session):
+		self.hdsSession = None
 		ConfigText.onDeselect(self, session)
-		self.hidden = True
+
+	def save(self):
+		ConfigText.save(self)
+		self.scrisa = False
+
+	def cancel(self):
+		ConfigText.cancel(self)
+		self.scrisa = False
 
 # lets the user select between [min, min+stepwidth, min+(stepwidth*2)..., maxval] with maxval <= max depending
 # on the stepwidth

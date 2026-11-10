@@ -37,7 +37,6 @@ from Screens.ChoiceBox import ChoiceBox
 from Screens.VirtualKeyBoard import VirtualKeyBoard
 from Components.ActionMap import ActionMap
 from Components.Label import Label
-from Components.HdsCampText import CampText
 from Components.MenuList import MenuList
 from Components.Sources.StaticText import StaticText
 from Components.Sources.CanvasSource import CanvasSource
@@ -174,32 +173,14 @@ def setariCurente():
 	return s
 
 
-class _EtichetaAscunsa(CampText):
-	"""Textul tastaturii la parole: pe ecran puncte, pentru tastatura textul adevarat. Ca la tastatura obisnuita, cand
-	punctele nu mai incap se vede coada lor (Components/HdsCampText.py)."""
-
-	def __init__(self, text=""):
-		self._adevarat = text or ""
-		# Label.__init__ trece prin setText de mai jos: primeste textul adevarat (punctele le face setText)
-		CampText.__init__(self, self._adevarat)
-
-	def setText(self, text):
-		self._adevarat = text or ""
-		CampText.setText(self, u"\u2022" * len(self._adevarat))
-
-	def getText(self):
-		return self._adevarat
-
-	text = property(getText, setText)
-
-
 class TastaturaParola(VirtualKeyBoard):
-	"""Tastatura enigma2 cu literele scrise ascunse (parole)."""
+	"""Tastatura pentru campurile de parola ale paginilor. Literele se vad in clar cat le
+	scrii (fara puncte), ca la orice camp; numele clasei ramane, dupa el se recunoaste un camp de parola (campuri.py)."""
 
 	def __init__(self, session, title="", text=""):
 		VirtualKeyBoard.__init__(self, session, title=title, text=text)
+		self.hdsCampSecret = True
 		self.skinName = "VirtualKeyBoard"
-		self["text"] = _EtichetaAscunsa(text)
 
 
 # ---------------------------------------------------------------- fereastra navigatorului
@@ -272,6 +253,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 
 	def _continua(self):
 		if self.mod == L.MOD_CAM:
+			# interfata web a modulului se deschide si cat merge asistenta (captura e refuzata cat navigatorul e pe ecran)
 			self._cautaCam()
 		else:
 			c = S.initConfig()
@@ -400,6 +382,11 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self._faraNavigator(motiv)
 
 	# ------------------------------------------------ ferestrele peste navigator
+
+	def _cerere_asistenta(self, date):
+		from Components.HdsAsistentaControl import TEXT_OPRESTE_INTERFATA
+		self.session.openWithCallback(lambda *a: self.nav and self.nav.reia(), MessageBox,
+			_(TEXT_OPRESTE_INTERFATA), MessageBox.TYPE_INFO)
 
 	def _cerere_tastatura(self, date):
 		fel = date.get("fel")
@@ -640,9 +627,12 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 			"fara-web": _("Modulul nu are interfață web."),
 		}
 		text = texte.get(motiv) or L.textEroare(motiv, _)
+		if motiv == "asistenta":
+			from Components.HdsAsistentaControl import TEXT_OPRESTE_INTERFATA
+			text = _(TEXT_OPRESTE_INTERFATA)
 		print("[HdsNavigator] fara navigator: %s" % motiv)
 		self.eroare = text
-		if self.mod == L.MOD_CAM and motiv not in MOTIVE_FARA_REZERVA:
+		if self.mod == L.MOD_CAM and motiv not in MOTIVE_FARA_REZERVA + ("asistenta",):
 			local = bool(getattr(self, "interfata", None) and self.interfata.get("doar_local"))
 			self.session.openWithCallback(lambda *a: self.close(), HdsNavigatorRezerva, text, local)
 			return
@@ -731,7 +721,7 @@ class HdsNavigatorRezerva(Screen):
 # ---------------------------------------------------------------- favorite
 
 class HdsNavigatorFavorite(Screen):
-	"""Lista paginilor favorite. OK: Deschide sau Șterge din favorite. Intoarce adresa aleasa sau None."""
+	"""Lista paginilor favorite. OK deschide; MENU ofera scoaterea. Intoarce adresa aleasa sau None."""
 
 	def __init__(self, session):
 		latime, inaltime = _desktop()
@@ -740,30 +730,33 @@ class HdsNavigatorFavorite(Screen):
 		self.setTitle(_("Favorite"))
 		self["lista"] = MenuList([])
 		self["nota"] = StaticText("")
-		self["actiuni"] = ActionMap(["OkCancelActions"], {"ok": self.ok, "cancel": lambda: self.close(None)}, -1)
+		self["actiuni"] = ActionMap(["OkCancelActions", "MenuActions"], {
+			"ok": self.ok, "menu": self.meniu, "cancel": lambda: self.close(None)}, -1)
 		self.onLayoutFinish.append(self.umple)
 
 	def umple(self):
 		self.favorite = S.citesteFavorite()
 		self["lista"].setList([(x["titlu"] or x["adresa"], i) for i, x in enumerate(self.favorite)])
 		if self.favorite:
-			self["nota"].setText(_("OK pe o pagină: deschide-o sau scoate-o din favorite."))
+			self["nota"].setText(_("OK: deschide pagina. MENU: scoate din favorite."))
 		else:
 			self["nota"].setText(_("Nu ai pagini favorite. În navigator: MENU, apoi „Adaugă pagina la favorite”."))
 
 	def ok(self):
 		rand = self["lista"].getCurrent()
+		if rand:
+			self.close(self.favorite[rand[1]]["adresa"])
+
+	def meniu(self):
+		rand = self["lista"].getCurrent()
 		if not rand:
 			return
 		self._index = rand[1]
 		self.session.openWithCallback(self._ales, ChoiceBox, title=self.favorite[self._index]["adresa"],
-			list=[(_("Deschide"), "deschide"), (_("Scoate din favorite"), "sterge")])
+			list=[(_("Scoate din favorite"), "sterge")])
 
 	def _ales(self, ales=None):
 		if not ales:
-			return
-		if ales[1] == "deschide":
-			self.close(self.favorite[self._index]["adresa"])
 			return
 		S.stergeFavorit(self._index)
 		self.umple()

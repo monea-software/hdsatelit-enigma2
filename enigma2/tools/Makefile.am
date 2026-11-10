@@ -16,4 +16,6 @@ hds_blindscan_CFLAGS = -std=gnu11 -Wall -Wextra -Werror=implicit-function-declar
 hds_blindscan_LDFLAGS = -pthread
 hds_blindscan_LDADD = @LIBDL_LIBS@
 
-EXTRA_DIST = enigma2.sh.in hds-rezerva.sh.in hds-raport.sh.in
+# Aceste doua surse se instaleaza prin pachetul hdsatelit-nume-local.
+# Pachetul detine deja initul; instalarea lui si aici ar dubla proprietarul.
+EXTRA_DIST = enigma2.sh.in hds-rezerva.sh.in hds-raport.sh.in hds-nume-local hds-nume-local.py

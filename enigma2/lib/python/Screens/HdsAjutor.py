@@ -207,9 +207,10 @@ def _dupaAjutor(rez=None, *args):
 
 def deschideDinEcran(session, dialog, dedesubt=()):
 	"""Tasta HELP pe ecranul `dialog`: pagina lui de ajutor sau cuprinsul (cu o insemnare)."""
-	ecran = dialog if (getattr(dialog, "helpList", None) or []) else None
+	from Components.HdsTasteRapide import context_ecran
+	ecran = dialog if context_ecran(dialog) or (getattr(dialog, "helpList", None) or []) else None
 	i = A.pagina_ecranului(dialog, dedesubt) if A.instalat() else None
-	if i is None:
+	if i is None and context_ecran(dialog) is None:
 		nota = A.text("fara_pagina") if A.instalat() else None
 		session.openWithCallback(_dupaAjutor, HdsAjutorCuprins, nota=nota, ecran=ecran)
 	else:
@@ -276,6 +277,18 @@ class _Baza(Screen):
 	def deschideCuprins(self):
 		self.session.openWithCallback(self.dupaCopil, HdsAjutorCuprins, ecran=self.ecran)
 
+	def actualizari(self):
+		from Screens.HdsActualizari import HdsActualizari
+		self.session.open(HdsActualizari)
+
+	def verde(self):
+		if not A.instalat():
+			self.actualizari()
+		elif isinstance(self, HdsAjutorPagina):
+			self.deschideCuprins()
+		else:
+			self.cauta()
+
 	def cauta(self):
 		if not A.instalat():
 			return
@@ -308,13 +321,12 @@ class HdsAjutorLista(_Baza):
 		self["lista"] = MenuList([], content=eListboxPythonMultiContent)
 		self["stare"] = Label("")
 		self["key_red"] = StaticText(self.T("inchide"))
-		# fara pachetul ajutorului nu e nimic de cautat: tasta verde nu se vede si nu face nimic (cauta())
-		self["key_green"] = StaticText(self.T("cauta") if A.instalat() else "")
+		self["key_green"] = StaticText(self.T("cauta") if A.instalat() else _("Actualizări"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
 			"ok": self.ok,
 			"cancel": self.close,
 			"red": self.inchideTot,
-			"green": self.cauta,
+			"green": self.verde,
 			"left": self.paginaSus,
 			"right": self.paginaJos,
 		}, -1)
@@ -410,6 +422,9 @@ class HdsAjutorLista(_Baza):
 		return x[0] if x else None
 
 	def ok(self):
+		if not A.instalat():
+			self.actualizari()
+			return
 		i = self.ales()
 		if i is not None:
 			self.session.openWithCallback(self.dupaCopil, HdsAjutorPagina, i, ecran=self.ecran)
@@ -444,6 +459,9 @@ class HdsAjutorCuprins(HdsAjutorLista):
 		return self.T("versiune") % A.versiune() if A.versiune() else ""
 
 	def ok(self):
+		if not A.instalat():
+			self.actualizari()
+			return
 		i = self.ales()
 		cap = A.capitole(self.limba)
 		if i is not None and 0 <= i < len(cap):
@@ -470,7 +488,7 @@ class HdsAjutorPagina(_Baza):
 		self["stare"] = Label("")
 		self["online"] = Label("")
 		self["key_red"] = StaticText(self.T("inchide"))
-		self["key_green"] = StaticText(self.T("cuprins"))
+		self["key_green"] = StaticText(self.T("cuprins") if A.instalat() else _("Actualizări"))
 		self["key_yellow"] = StaticText(self.T("cauta"))
 		# fara lista tastelor ecranului de dedesubt, tasta albastra nu se vede deloc (nici semnul ei de culoare)
 		self["key_blue"] = StaticText(self.T("tastele_ecranului") if self.ecran is not None else "")
@@ -478,7 +496,7 @@ class HdsAjutorPagina(_Baza):
 			"ok": self.ok,
 			"cancel": self.close,
 			"red": self.inchideTot,
-			"green": self.deschideCuprins,
+			"green": self.verde,
 			"yellow": self.cauta,
 			"blue": self.tasteleEcranului,
 			"up": self.sus,
@@ -645,6 +663,7 @@ class HdsAjutorPagina(_Baza):
 
 	def construieste(self):
 		pg = A.pagina(self.i, self.limba)
+		pg = A.actualizeaza_taste(pg, dialog=self.ecran)
 		f = _factor()
 		self.x0 = max(4, int(8 * f))
 		self.spatiu = max(8, int(16 * f))
@@ -797,11 +816,22 @@ class HdsAjutorPagina(_Baza):
 		self["lista"].pageDown()
 
 	def ok(self):
+		if not A.instalat():
+			self.actualizari()
+			return
 		bloc = self._blocAles()
 		if bloc and bloc[2] >= 0 and bloc[2] != self.i:
 			self.session.openWithCallback(self.dupaCopil, HdsAjutorPagina, bloc[2], ecran=self.ecran)
 
 	def tasteleEcranului(self):
+		from Components.HdsTasteRapide import context_ecran, taste_ajutor
+		context = context_ecran(self.ecran)
+		if context is not None:
+			from Screens.ChoiceBox import ChoiceBox
+			lista = [("%s: %s" % (tasta, descriere), None)
+				for tasta, descriere, _legatura in taste_ajutor(context)]
+			self.session.open(ChoiceBox, title=_("Tastele acestui ecran"), list=lista, keys=[""] * len(lista))
+			return
 		lista = getattr(self.ecran, "helpList", None) if self.ecran is not None else None
 		if not lista:
 			return

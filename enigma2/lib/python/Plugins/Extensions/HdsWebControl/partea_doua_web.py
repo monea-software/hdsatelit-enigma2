@@ -28,12 +28,15 @@ def rute(baza, resource, P=None):
 		schimbaCeva = True
 		def render_POST(self, request):
 			punct = (request.args.get(b"punct") or [b""])[0].decode("utf-8", "replace")
+			ident = (request.args.get(b"ident") or [b""])[0].decode("utf-8", "replace") or None
 			d = P.starePublica()
-			if d.get("montat"):
-				punct = None
-			elif not d.get("descris") or punct not in [x["punct"] for x in d.get("candidati", [])]:
+			if not d.get("descris"):
 				return self._raspunde(request, {"result": False, "message": _t("Alege un stick disponibil.")})
-			ok = P.lucrare.porneste(punct)
+			if d.get("montat"):
+				punct, ident = None, None
+			elif not P.alegereDisponibila(d, punct, ident):
+				return self._raspunde(request, {"result": False, "message": _t("Stickul ales nu mai este disponibil sau nu are loc.")})
+			ok = P.lucrare.porneste(punct, ident=ident)
 			return self._raspunde(request, dict(P.starePublica(), result=ok,
 				message=_t("Operatia a pornit.") if ok else _t("Alta operatie este in lucru sau interfata trebuie repornita.")))
 
@@ -57,16 +60,17 @@ PAGINA = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Partea a doua pe stick</title><style>__STIL__</style></head><body><main>
 <h1>Partea a doua pe stick</h1>
-<section class="card"><p id="stare">Se citeste starea...</p><p id="limita"></p>
+<section class="card"><p id="stare">Se citeste starea...</p><p id="limita"></p><p id="necesar"></p>
 <label for="stick" id="eticheta">Stick USB</label><select id="stick"></select>
 <p id="spatiu"></p><button id="porneste">Instaleaza / actualizeaza</button></section>
 <p id="mesaj" role="status" aria-live="polite"></p></main>
 <script>__SCRIPT__
-var ultima = null;
+var ultima = null, trimitere = false;
 function arata(d){
   ultima=d;
   $("stare").textContent=d.mesaj || (d.montat ? "Stick montat" : "Niciun stick legat");
   $("limita").textContent=d.limita || "";
+  $("necesar").textContent=d.explicatie_stick || "";
   var select=$("stick"), ales=select.value;
   select.textContent="";
   (d.candidati || []).forEach(function(c){
@@ -74,18 +78,25 @@ function arata(d){
     o.textContent=c.punct+" ("+c.liber_mib+" MiB liberi)";select.appendChild(o);
   });
   if(Array.from(select.options).some(function(o){return o.value===ales;})){select.value=ales;}
-  select.hidden=!!d.legat || !d.descris;$("eticheta").hidden=select.hidden;
+  select.hidden=!!d.legat || !d.descris || !!d.stick_unic;$("eticheta").hidden=select.hidden;
   $("spatiu").hidden=!!d.legat || !d.descris;$("porneste").hidden=!d.descris;
   $("spatiu").textContent="Se folosesc "+(d.marime_mib || 1024)+" MiB pe stick, fara stergerea fisierelor existente.";
-  $("porneste").disabled=!!d.ocupat || !d.descris || (!d.montat && !(d.candidati || []).length);
-  $("porneste").textContent=d.ocupat ? "Asteapta..." : (d.montat ? "Actualizeaza partea a doua" : "Instaleaza pe stick");
+  $("porneste").disabled=trimitere || !!d.ocupat || !d.descris || (!d.montat && (!!d.legat || !(d.candidati || []).length));
+  $("porneste").textContent=d.ocupat ? "Asteapta..." : (d.montat ? "Actualizeaza partea a doua" : (d.actiune_unic || "Instaleaza pe stick"));
 }
 function citeste(){cerere("/api/partea-doua").then(arata).catch(nimicNuRaspunde);}
 $("porneste").addEventListener("click",function(){
-  if(!ultima || (!ultima.montat && !window.confirm("Folosesc spatiu pe acest stick pentru limbile suplimentare? Fisierele existente raman."))){return;}
-  var q=new URLSearchParams();if(!ultima.montat){q.set("punct",$("stick").value);}
+  if(!ultima || $("porneste").disabled){return;}
+  var q=new URLSearchParams();
+  if(!ultima.montat){
+    var c=ultima.stick_unic || (ultima.candidati || []).find(function(x){return x.punct===$("stick").value;});
+    if(!c){return;}
+    if(!ultima.stick_unic && !window.confirm("Folosesc spațiu pe stickul %s pentru limbile suplimentare? Fișierele existente rămân.".replace("%s",c.punct)+"\\n\\n"+(ultima.explicatie_stick || ""))){return;}
+    q.set("punct",c.punct);if(c.ident){q.set("ident",c.ident);}
+  }
+  trimitere=true;
   $("porneste").disabled=true;
-  cerere("/api/partea-doua-porneste","POST",q).then(function(d){mesaj(d.message,!d.result);citeste();}).catch(nimicNuRaspunde);
+  cerere("/api/partea-doua-porneste","POST",q).then(function(d){trimitere=false;mesaj(d.message,!d.result);citeste();}).catch(function(e){trimitere=false;nimicNuRaspunde(e);citeste();});
 });
 citeste();setInterval(citeste,3000);
 </script></body></html>"""
@@ -100,6 +111,6 @@ TEXTE_PAGINA = {
 		N_("Stick montat"), N_("Niciun stick legat"), N_("MiB liberi"),
 		N_("Se folosesc"), N_("MiB pe stick, fara stergerea fisierelor existente."),
 		N_("Asteapta..."), N_("Actualizeaza partea a doua"), N_("Instaleaza pe stick"),
-		N_("Folosesc spatiu pe acest stick pentru limbile suplimentare? Fisierele existente raman."),
+		N_("Folosesc spațiu pe stickul %s pentru limbile suplimentare? Fișierele existente rămân."),
 	),
 }

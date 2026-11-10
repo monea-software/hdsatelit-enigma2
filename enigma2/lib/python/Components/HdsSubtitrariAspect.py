@@ -128,6 +128,8 @@ CHEI_STIL = ("stil_font", "grosime", "marime", "culoare", "contur", "culoare_con
 	"directie_umbra", "distanta_umbra", "umbra_moale", "fundal", "culoare_fundal", "opacitate_fundal", "jos", "spatiere")
 CHEI = CHEI_STIL + ("marire_dvb",)
 CULORI = ("culoare", "culoare_contur", "culoare_umbra", "culoare_fundal")
+# Reglajele uzuale, comune ecranului si paginii web. Restul valorilor se pastreaza.
+CHEI_SCURTE = ("stil_font", "marime", "culoare", "jos", "marire_dvb")
 
 # Stilurile gata facute: toate setarile stilului afara de font si de inaltimea fata de marginea de jos (acelea tin de om
 # si de televizorul lui, nu de stil); marirea DVB nu tine de stil. Fara nume de firme.
@@ -431,6 +433,17 @@ def elemente(s=None, chei=CHEI):
 def element(cheie, s=None):
 	s = s if s is not None else initConfig()
 	return getattr(s, "hds_" + cheie)
+
+
+def numarReglajeAscunse(s=None):
+	"""Cate reglaje din afara vederii scurte difera de valorile implicite, inclusiv cele fara efect acum."""
+	s = s if s is not None else initConfig()
+	vizibile = CHEI_SCURTE if seAlegeMarireaDvb(s) else tuple(c for c in CHEI_SCURTE if c != "marire_dvb")
+	return sum(1 for cheie in CHEI if cheie not in vizibile and element(cheie, s).value != IMPLICITE[cheie])
+
+
+def textReglajeAscunse(s=None):
+	return _t("Reglaje ascunse diferite de valorile implicite: %d") % numarReglajeAscunse(s)
 
 
 def reimprospateazaFonturi():

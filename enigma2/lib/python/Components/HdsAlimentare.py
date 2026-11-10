@@ -31,6 +31,7 @@ ACTIUNI = (
 )
 CHEI = tuple(a[0] for a in ACTIUNI)
 MINUTE_IMPLICITE = 30
+DURATE_UZUALE = (30, 60, 90)
 # cel putin un minut din web: 0 minute ar opri receptorul pe loc, fara confirmare (oprirea pe loc are cardul ei)
 MINUTE_MINIM_WEB = 1
 INREGISTRARE_CURAND_S = 360
@@ -108,6 +109,16 @@ def limiteMinute(config=None):
 	return max(MINUTE_MINIM_WEB, int(minim)), int(maxim)
 
 
+def minuteValide(valoare, config=None):
+	"""Aceeasi durata intreaga si pozitiva pe televizor si in pagina web."""
+	text = str(valoare)
+	if not (0 < len(text) <= 12 and all(ch in "0123456789" for ch in text)):
+		return None
+	minute = int(text)
+	minim, maxim = limiteMinute(config)
+	return minute if minim <= minute <= maxim else None
+
+
 def stareSomn(nav, config=None):
 	"""Starea opririi programate: activ, minutele ramase (ca ecranul: getCurrentSleepTime), ora opririi, actiunea,
 	intrebarea si minutele propuse."""
@@ -131,6 +142,9 @@ def stareSomn(nav, config=None):
 def porneste(nav, minute, config=None):
 	"""Ca OK pe ecran cu Enable timer: minutele raman propunerea de data viitoare, actiunea si intrebarea se salveaza,
 	temporizatorul porneste de la zero."""
+	minute = minuteValide(minute, config)
+	if minute is None:
+		raise ValueError(_t("Durata opririi nu este validă."))
 	c = initConfig(config)
 	c.defaulttime.setValue(minute)
 	c.defaulttime.save()
@@ -157,10 +171,12 @@ def minuteCanal(nav, epg=None, acum=None):
 			if seek:
 				length = seek.getLength()
 				position = seek.getPlayPosition()
-				if length and position:
+				if length and position and length[0] == 0 and position[0] == 0:
 					remaining = length[1] - position[1]
-					if remaining > 0:
+					if remaining > 0 and position[1] >= 0:
 						remaining = remaining // 90000
+					else:
+						remaining = None
 		else:  # DVB
 			if epg is None:
 				from enigma import eEPGCache
@@ -171,8 +187,9 @@ def minuteCanal(nav, epg=None, acum=None):
 				start = event.getBeginTime()
 				duration = event.getDuration()
 				end = start + duration
-				remaining = end - now
-	if remaining:
+				if duration > 0 and start <= now < end:
+					remaining = end - now
+	if remaining is not None and remaining > 0:
 		return (remaining // 60) + 2
 	return None
 

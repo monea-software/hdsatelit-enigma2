@@ -5,7 +5,7 @@
 #   receptorului, scriere, pornire in /;
 # - /etc/pam.d/vsftpd (files/hds-vsftpd.pam): aceeasi parola ca la SSH si SFTP (parola lui root din /etc/shadow, prin
 #   common-auth), numai din reteaua de acasa (pam_access cu /etc/security/hds-ssh-retele-locale.conf din hdsatelit-ssh),
-#   comutatorul „Fără parolă în rețeaua locală” ca la /etc/pam.d/dropbear;
+#   comutatorul FTP al parolei din reteaua de acasa (/etc/security/hds-ftp-retea-locala.conf, din hdsatelit-ssh);
 # - fara tcp-wrappers: libwrap0 nu intra in imagine (vsftpd.conf are tcp_wrappers=NO; cu YES, vsftpd fara libwrap nu
 #   porneste);
 # - fara adaosurile bbappend-ului OE-Alliance la scripturile pachetului: utilizatorul „kids” din pkg_postinst (un cont in
@@ -14,6 +14,9 @@
 #   parola si fara shell), populate-volatile (dosarul /var/run/vsftpd/empty) si pornirea din init.d.
 # Paza imaginii (hds_paza_ssh_rootfs din images/hdsatelit-image.bb) verifica in rootfs aceleasi lucruri.
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+
+# PAM-ul FTP citeste comutatorul lui (hds-ftp-retea-locala.conf), separat de cel al SSH
+PR:append = ".hds1"
 
 SRC_URI += "file://hds-vsftpd.conf \
             file://hds-vsftpd.pam \
@@ -56,6 +59,7 @@ do_install:append() {
 		"auth requisite pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup" ] || \
 		bbfatal "vsftpd: /etc/pam.d/vsftpd nu incepe cu reteaua de acasa"
 	grep -q '^auth[[:space:]]*include[[:space:]]*common-auth' "$p" || bbfatal "vsftpd: /etc/pam.d/vsftpd fara common-auth"
+	grep -q 'accessfile=/etc/security/hds-ftp-retea-locala.conf' "$p" || bbfatal "vsftpd: /etc/pam.d/vsftpd fara comutatorul FTP"
 	if grep -q 'nullok' "$p"; then
 		bbfatal "vsftpd: /etc/pam.d/vsftpd primeste parola goala (nullok)"
 	fi

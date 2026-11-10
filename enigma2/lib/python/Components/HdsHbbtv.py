@@ -75,15 +75,15 @@ def _jurnal(text):
 
 def hbbtv_pornit(config=None):
 	"""Setarea principala „HbbTV” (config.plugins.hdsnavigator.hbbtv, 0.2.8: omul poate opri HbbTV de tot, daca
-	i se pare ca ingreuneaza receptorul), OPRITA din fabrica. Oprita: fara semnul rosu, ROSU
+	i se pare ca ingreuneaza receptorul), PORNITA din fabrica (Eduard, 09.11.2026; intre 08.10 si 09.11 a fost oprita). Oprita: fara semnul rosu, ROSU
 	si Portal nu pornesc nimic, pornirea automata nu se face, iar nucleul nu mai citeste AIT-ul (lib/service/servicedvb.cpp
-	nu mai cere filtrul). Cat setarea nu exista sau nu se poate citi: oprit."""
+	nu mai cere filtrul). Cat setarea nu exista sau nu se poate citi: pornit, ca din fabrica."""
 	try:
 		if config is None:
 			from Components.config import config
 		return bool(config.plugins.hdsnavigator.hbbtv.value)
 	except Exception:
-		return False
+		return True
 
 
 def semn_rosu_pornit(config=None):

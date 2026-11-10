@@ -15,6 +15,8 @@
 # bilet (aleator, 10 minute de la ultima folosire, legat de browserul care l-a primit), trimis apoi in antetul
 # X-HDS-Bilet; o pagina incarcata din nou cere iar PIN-ul, ca ecranul deschis din nou. PIN-urile nu pleaca niciodata
 # spre browser si se primesc numai din corpul cererii (scrise in adresa se ignora).
+# Campurile PIN sunt text obisnuit (cifrele se vad cat le scrii, fara stelute); dupa salvare pagina spune numai daca
+# PIN-ul e pus (pin_setari_setat / pin_canale_setat).
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/control-parental              starea: fara bilet, cand e cerut, numai ca e protejat si incercarile
@@ -473,7 +475,7 @@ __STIL_PAGINI__
   <h2>PIN-ul configurării</h2>
   <p class="intrebare">Configurarea e protejată. Introdu codul PIN corect, ca pe televizor.</p>
   <div class="rand"><label for="pin">PIN (4 cifre)</label>
-    <input type="password" id="pin" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" pattern="[0-9]*"></div>
+    <input type="text" id="pin" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[0-9]*"></div>
   <div class="butoane"><button type="button" class="principal" id="deschide">Deschide</button></div>
   <p class="nota" id="incercari"></p>
 </section>
@@ -494,8 +496,8 @@ __STIL_PAGINI__
       <p class="ajutor nota">Cât timp nu mai cere PIN-ul după ce ai renunțat să-l scrii pe un canal.</p></div>
     <div class="ascuns card" id="pinLipsa">
       <p class="intrebare">Nu există încă un PIN. Scrie PIN-ul nou de două ori; fără el, protecția rămâne oprită.</p>
-      <div class="rand"><label for="lipsaNou">PIN nou</label><input type="password" id="lipsaNou" class="pin" maxlength="4" inputmode="numeric" autocomplete="new-password"></div>
-      <div class="rand"><label for="lipsaNou2">Reintrodu PIN-ul nou</label><input type="password" id="lipsaNou2" class="pin" maxlength="4" inputmode="numeric" autocomplete="new-password"></div>
+      <div class="rand"><label for="lipsaNou">PIN nou</label><input type="text" id="lipsaNou" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="rand"><label for="lipsaNou2">Reintrodu PIN-ul nou</label><input type="text" id="lipsaNou2" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
       <div class="butoane"><button type="button" class="principal" id="lipsaPune">Pune PIN-ul și pornește</button><button type="button" id="lipsaRenunta">Renunță</button></div>
     </div>
   </section>
@@ -505,9 +507,9 @@ __STIL_PAGINI__
       <button type="button" data-rand="pin_canale" id="schimbaCanale">Schimbare PIN canale</button></div>
     <div class="ascuns" id="formPin">
       <p class="intrebare" id="formPinTitlu"></p>
-      <div class="rand" id="randVechi"><label for="pinVechi">Vechiul cod PIN</label><input type="password" id="pinVechi" class="pin" maxlength="4" inputmode="numeric" autocomplete="off"></div>
-      <div class="rand"><label for="pinNou">PIN nou</label><input type="password" id="pinNou" class="pin" maxlength="4" inputmode="numeric" autocomplete="new-password"></div>
-      <div class="rand"><label for="pinNou2">Reintrodu PIN-ul nou</label><input type="password" id="pinNou2" class="pin" maxlength="4" inputmode="numeric" autocomplete="new-password"></div>
+      <div class="rand" id="randVechi"><label for="pinVechi">Vechiul cod PIN</label><input type="text" id="pinVechi" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="rand"><label for="pinNou">PIN nou</label><input type="text" id="pinNou" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="rand"><label for="pinNou2">Reintrodu PIN-ul nou</label><input type="text" id="pinNou2" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
       <div class="butoane"><button type="button" class="principal" id="pinSalveaza">Schimbă PIN-ul</button><button type="button" id="pinRenunta">Renunță</button></div>
     </div>
     <p class="nota" id="pinNota"></p>
@@ -521,7 +523,7 @@ __STIL_PAGINI__
     <div id="intrari"></div>
     <p class="nota" id="listeNota"></p>
   </section>
-  <p class="nota">PIN-urile nu se arată niciodată. Aceleași setări sunt pe televizor, în __DRUM_MENIU__.</p>
+  <p class="nota">PIN-ul se vede cât îl scrii; după salvare pagina spune numai dacă e pus. Aceleași setări sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
 <p class="mesaj" id="mesaj"></p>
 <div id="confirmare" class="card ascuns"></div>
@@ -717,7 +719,8 @@ TEXTE_PAGINA = {
 		N_("Editare listă de canale"),
 		N_("Editare listă de buchete"),
 		N_("Reîncărcare liste negre/albe"),
-		N_("PIN-urile nu se arată niciodată. Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
+		N_("PIN-ul se vede cât îl scrii; după salvare pagina spune numai dacă e pus. Aceleași setări sunt pe "
+			"televizor, în __DRUM_MENIU__."),
 	),
 	"js": (
 		N_("browser deconectat"),

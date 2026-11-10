@@ -744,7 +744,7 @@ class HdsDvbIAdaugaURL(Screen):
         self['eticheta']    = Label(_('Adresă nouă (http:// sau https://)'))
         self['input']       = Label(self._url or _('(apasă OK sau Verde ca să scrii adresa)'))
         self['eroare']      = Label('')
-        self['buton_verde'] = Button(_('Salvează'))
+        self['buton_verde'] = Button(_('Scrie adresa'))
         self['buton_rosu']  = Button(_('Anulează'))
 
         self['tastatura'] = ActionMap(
@@ -756,6 +756,7 @@ class HdsDvbIAdaugaURL(Screen):
                 'cancel': self._anuleaza,
             }, -1)
         self.setTitle(_('Adaugă adresă'))
+        self.onFirstExecBegin.append(self._deschideTastatura)
 
     def _deschideTastatura(self):
         from Screens.VirtualKeyBoard import VirtualKeyBoard
@@ -764,7 +765,9 @@ class HdsDvbIAdaugaURL(Screen):
 
     def _dupaTastatura(self, text=None):
         if text is None:
-            return  # anulat din tastatura virtuala -- ramane la ce era, nu inchide dialogul
+            if not self._url:
+                self.close(None)
+            return
         self._url = text.strip()
         self['input'].setText(self._url or _('(apasă OK sau Verde ca să scrii adresa)'))
         self['eroare'].setText('')

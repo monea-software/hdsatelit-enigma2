@@ -2,7 +2,6 @@
 import skin
 from .HTMLComponent import HTMLComponent
 from .GUIComponent import GUIComponent
-from Components.HdsAsistentaControl import schimbaComponentaWeb
 from enigma import eLabel, eWidget, eSlider, fontRenderClass, ePoint, eSize
 
 class ScrollLabel(HTMLComponent, GUIComponent):
@@ -72,7 +71,6 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 			text = str(text)
 
 		self.message = text
-		schimbaComponentaWeb(self)
 		if self.long_text is None:
 			return
 		self.long_text.move(ePoint(0,0))

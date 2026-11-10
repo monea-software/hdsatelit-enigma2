@@ -202,6 +202,7 @@ PAGINA = """<!DOCTYPE html>
 <p class="mesaj" id="incarcare">Se citesc fonturile...</p>
 <div id="continut" class="ascuns">
   <div class="familii" id="familii"></div>
+  <p class="nota">Folosește fontul îl aplică și îl păstrează imediat. Proba singură nu schimbă fontul interfeței.</p>
   <p class="mesaj" id="mesaj"></p>
   <p class="nota">Proba fiecărui font e scrisă cu fișierele lui de pe receptor. Toate fonturile sunt libere (SIL Open Font License 1.1); licențele sunt și în pagina Licențe. Același ecran e pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -296,6 +297,7 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Folosește fontul îl aplică și îl păstrează imediat. Proba singură nu schimbă fontul interfeței."),
 		N_("Fontul interfeței"),
 		N_("Se citesc fonturile..."),
 		N_("Proba fiecărui font e scrisă cu fișierele lui de pe receptor. Toate fonturile sunt libere (SIL "

@@ -111,9 +111,9 @@ GRUPE = (
 			cuvant="Aspectul subtitrărilor"),
 	)),
 	(N_("Navigator web și HbbTV"), (
-		# 0.2.8: HbbTV e oprit din fabrica (config.plugins.hdsnavigator.hbbtv, randul "HbbTV
-		# (aplicatiile canalelor)" din Setari navigator web), deci randul spune de unde se porneste
-		Functie(N_("HbbTV, aplicațiile canalelor la tasta ROȘIE: îl pornești din Setări navigator web."),
+		# HbbTV pornit din fabrica din nou din 09.11.2026 (Eduard; intre 08.10 si 09.11 era oprit): randul spune ca se
+		# deschide cu ROSU si unde se opreste (randul "HbbTV (aplicatiile canalelor)" din Setari navigator web)
+		Functie(N_("HbbTV, aplicațiile canalelor la tasta ROȘIE. Îl poți opri din Setări navigator web."),
 			cod=("lib/python/Components/HdsHbbtv.py", "lib/python/Components/HdsHbbtvPornire.py",
 			"lib/python/Plugins/Extensions/HdsNavigator/setari.py"), versiune="0.2.6",
 			cuvant="tasta ROȘIE pornește aplicația", probat=True),
@@ -125,9 +125,10 @@ GRUPE = (
 		Functie(N_("Interfață web proprie: fiecare ecran al receptorului are pereche în browser."),
 			meniu=("hds_webcontrol_setup",), cod=("lib/python/Plugins/Extensions/HdsWebControl/plugin.py",
 			"lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py"), versiune="0.1.4", cuvant="pereche în interfața web"),
-		Functie(N_("Browserul intră numai cu un cod de șase cifre arătat pe televizor."),
-			meniu=("hds_webcontrol_setup",), cod=("lib/python/Plugins/Extensions/HdsWebControl/asociere.py",
-			"lib/python/Screens/HdsCodAsociere.py"), versiune="0.1.0", cuvant="cod de șase cifre"),
+		Functie(N_("În rețeaua de acasă intri fără cod și fără parolă; o singură parolă numai dacă o pui tu."),
+			meniu=("hds_webcontrol_setup",), cod=("lib/python/Components/HdsParolaLocala.py",
+			"lib/python/Plugins/Extensions/HdsWebControl/asociere.py"), versiune="0.6.0",
+			cuvant="Interfața web se deschide cu adresa receptorului"),
 		Functie(N_("Aplicațiile de telefon pentru receptoare: telecomandă, canale, ghid și înregistrări."),
 			cod=("lib/python/Plugins/Extensions/HdsWebControl/aplicatii_web.py",), versiune="0.2.4",
 			cuvant="Aplicațiile de telefon pentru receptoare", probat=True),

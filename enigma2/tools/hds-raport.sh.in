@@ -37,8 +37,9 @@
 #   filtru             stdin to stdout through the filter of the report (for the tests on the PC).
 # The report: one text file, raport-<model>-<date>-<time>.txt, kept in /home/root/logs/hds-raport (the last 3) and on
 # every stick; the code from the server goes next to it (<same name>.cod). Its first lines (up to the first empty line)
-# are written by this script from plain values only; the last section (the Python stacks of enigma2, rp_stive) keeps
-# only the lines of the faulthandler format; everything else goes through rp_filtru, the rules of
+# are written by this script from plain values only. Crash evidence uses rp_filtru_exceptie, which preserves the
+# stack frames and masks sensitive values. The last section (the Python stacks of enigma2, rp_stive) keeps
+# only the lines of the faulthandler format; the remaining body goes through rp_filtru, the rules of
 # Components/HdsDiagnostic.faraDatePersonale: lines with passwords, keys, tokens, users, Wi-Fi networks, serial numbers
 # or CAM data are dropped whole; addresses with a scheme, user:password@, e-mail and IPv6 addresses are hidden whole;
 # IPv4 addresses keep their first two numbers (192.168.x.x), MAC addresses their first three bytes; long hex strings
@@ -69,6 +70,7 @@ TRIMITE=${HDS_RAPORT_TRIMITE:-1}
 BATAIE=${HDS_BATAIE:-$R/var/run/hds-paznic.bataie}
 CADERI=${HDS_CADERI:-$R/tmp/hds-enigma2.caderi}
 CADERI_JURNAL=${HDS_CADERI_JURNAL:-$L/hds-caderi.log}
+CAUZE=${HDS_CAUZE_DOSAR:-$L/hds-cauze}
 MOD_SIGUR=${HDS_MOD_SIGUR_SEMN:-$R/tmp/hds-mod-sigur}
 REZERVA=${HDS_REZERVA_DOSAR:-$R/tmp/hds-rezerva}
 AFISAJ=${HDS_REZERVA_AFISAJ:-$R/dev/dbox/oled0}
@@ -319,7 +321,12 @@ rp_filtru() {
 		l = tolower($0)
 		if (l ~ /pass(word|wd)?|parol|token|jeton|secret|(^|[^a-z0-9_])key|cheie|api[_-]?key|access[_-]?key|private|psk|(^|[^a-z0-9_])pin([^a-z0-9_]|$)|auth|(^|[^a-z0-9_])user(name|s)?([^a-z0-9_.]|$)|login|utilizator|ssid|wpa|wifi|wlan.*(essid|network)|serial|(^|[^a-z0-9_])s\/n([^a-z0-9_]|$)|(^|[^a-z0-9_])sn[ \t]*[=:]|cpuid|chipid|chip_id|die.?id|(^|[^a-z0-9_])uuid([^a-z0-9_]|$)|(^|[^a-z0-9_])cid([^a-z0-9_]|$)|(^|[^a-z0-9_])cw([^a-z0-9_]|$)|control.?word|(^|[^a-z0-9_])biss|(^|[^a-z0-9_])ecm([^a-z0-9_]|$)|(^|[^a-z0-9_])emm([^a-z0-9_]|$)|cookie|session/) next
 		if (l ~ /cam[ds]?([^a-z]|$)|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/) next
-		print }' | sed -E \
+		print }' | rp_adrese
+}
+
+# Aceleasi reguli pentru adrese si identificatori, inclusiv in probele exceptiilor.
+rp_adrese() {
+	sed -E \
 		-e 's#[A-Za-z][A-Za-z0-9+.-]*(://|%3[Aa]//|%3[Aa]%2[Ff]%2[Ff])[^ 	"<>]*#<adresa ascunsa>#g' \
 		-e 's#[^ 	/:@"<>]+:[^ 	/@"<>]*@[^ 	/"<>]+#<adresa ascunsa>#g' \
 		-e 's#[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}#<ascuns>#g' \
@@ -336,6 +343,105 @@ rp_filtru() {
 		-e ':h' \
 		-e 's#(^|[^0-9A-Za-z])[0-9A-Fa-f]{16,}($|[^0-9A-Za-z])#\1<ascuns>\2#' \
 		-e 'th'
+}
+
+# Numai valorile sensibile sunt ascunse. Cadrele stivei nu trec prin filtrul care elimina randuri.
+# Pentru o valoare neetichetata dupa un cuvant sensibil, restul campului este ascuns conservator.
+rp_filtru_exceptie() {
+	tr -d '\000-\010\013-\037\177' | awk '
+		BEGIN {
+			chei = "pass(word|wd)?|pwd|parol(a|e)?|token|jeton|secret|key|cheie|api[_-]?key|access[_-]?key|private|psk|pin|auth|authorization|authentication|bearer|user(name|s)?|login|utilizator|ssid|wpa|wifi|wlan[0-9]*|essid|serial|s/n|sn|cpuid|chip_?id|die.?id|uuid|cid|cw|control.?word|biss|ecm|emm|cookie|session"
+			acces = "[a-z0-9_]*cam[ds]?|cardd|card[_.-]?serv|[gs]b[o]x|newc[s]|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox/config"
+		}
+		{
+			r = $0
+			if (r ~ /Traceback \(most recent call last\)/) stiva = 1
+			if (r ~ /^[ <0-9.>]*File "[A-Za-z0-9_.\/-]+", line [0-9]+(, in [A-Za-z0-9_<>.]+)?[ \t]*$/) {
+				if (tolower(r) ~ acces) { sub(/"[^"]*"/, "\"(modul-acces)\"", r); sub(/, in .*/, ", in (modul-acces)", r) }
+				# Calea din afara instalarii Python poate contine numele utilizatorului.
+				sub(/"[^\"]*\/enigma2\/python\//, "\"enigma2/python/", r)
+				print r; next
+			}
+			# Datele modulului de acces raman ascunse, cu un rand explicit in locul lor.
+			if (tolower(r) ~ "(^|[^a-z0-9_])(" acces ")([^a-z]|$)") { print "(modul-acces: valori ascunse)"; next }
+			out = ""
+			# Numele tipului este cod, nu o valoare secreta (de exemplu KeyError sau UserDefect).
+			if ((stiva && r ~ /^[A-Za-z_][A-Za-z0-9_.]*:/) ||
+				r ~ /^[A-Za-z_][A-Za-z0-9_.]*(Error|Exception|Exit|Interrupt|Warning):/) {
+				match(r, /^[A-Za-z_][A-Za-z0-9_.]*:/)
+				out = substr(r, 1, RLENGTH); r = substr(r, RLENGTH + 1); stiva = 0
+			} else if (r ~ /cauza[:=].*python:/ && match(r, /[^ ]+:[0-9]+ [A-Za-z_][A-Za-z0-9_.]*:/)) {
+				out = substr(r, 1, RSTART + RLENGTH - 1); r = substr(r, RSTART + RLENGTH)
+			}
+			while (match(tolower(r), "(^|[^a-z0-9_])[a-z0-9_.-]*(" chei ")([_-][a-z0-9_-]+)?[\"\047]?[ \\t]*[=:][ \\t]*")) {
+				out = out substr(r, 1, RSTART + RLENGTH - 1)
+				r = substr(r, RSTART + RLENGTH)
+				q = substr(r, 1, 1)
+				if (q == "\"" || q == "\047") {
+					i = 2
+					while (i <= length(r)) { if (substr(r, i, 1) == "\\") i += 2; else if (substr(r, i, 1) == q) break; else i++ }
+					r = substr(r, i + 1)
+				} else { r = "" }
+				out = out "<ascuns>"
+			}
+			# Forme fara egal/colon, de exemplu Authorization Bearer sau SSID nume.
+			if (match(tolower(r), "(^|[^a-z0-9_])(" chei ")[ \\t]+"))
+				r = substr(r, 1, RSTART + RLENGTH - 1) "<ascuns>"
+			# Formele ramase (nume lipite sau apeluri cu un literal) sunt tratate conservator.
+			else if (match(tolower(r), chei))
+				r = substr(r, 1, RSTART + RLENGTH - 1) "<ascuns>"
+			print out r
+		}' | rp_adrese
+}
+
+# Extrage antetul si CDATA, fara checksums, fara coada sau limita pe rand.
+# Accepta si un XML intrerupt dupa eroare, precum si jurnalele text ale ecranelor.
+rp_jurnal_cadere() {
+	awk '
+		/<hdsatelitimage|<enigma2>/ { xml = 1 }
+		/<crashdate>|<compiledate>|<sourcedate>|<rev>|<version>/ && !bloc { print }
+		!bloc && /<enigma2crashlog>/ { bloc = 1; sub(/^.*<enigma2crashlog>/, "") }
+		bloc {
+			if (!cdata) {
+				if ((i = index($0, "<![CDATA[")) != 0) { $0 = substr($0, i + 9); cdata = 1 }
+				else { if (/<\/enigma2crashlog>/) exit; if ($0 !~ /^[[:space:]]*$/) print; next }
+			}
+			linie = $0; text = ""
+			while ((i = index(linie, "]]>")) != 0) {
+				text = text substr(linie, 1, i - 1); rest = substr(linie, i + 3)
+				if (substr(rest, 1, 9) == "<![CDATA[") linie = substr(rest, 10)
+				else { print text; exit }
+			}
+			print text linie; next }
+		!xml { print }
+	' "$1" 2>/dev/null
+}
+
+rp_cauze() {
+	rp_sectiune "hds-caderi.log (cauzele pastrate)"
+	rp_coada "$CADERI_JURNAL" 200
+	rp_sectiune "cauzele caderilor (ultimele 10 minute si probele neincluse inca)"
+	# Lista este inghetata: numai arhivele incluse vor fi marcate dupa salvarea raportului.
+	while IFS= read -r rp_cf; do
+		[ -f "$rp_cf" ] && [ ! -L "$rp_cf" ] || continue
+		echo "-- ${rp_cf##*/}"
+		cat "$rp_cf"
+	done < "$RAM/cauze.lista"
+	for rp_cd in "$L" "$R/tmp"; do
+		find "$rp_cd" -maxdepth 1 -type f -name 'enigma2_crash_*.log' -mmin -10 2>/dev/null |
+		while IFS= read -r rp_cf; do
+			[ ! -L "$rp_cf" ] || continue
+			# Arhiva contine deja proba completa a acestui jurnal.
+			grep -qFx "jurnal=$rp_cf" "$RAM/cauze.jurnale" 2>/dev/null && continue
+			echo "-- ${rp_cf##*/}"
+			rp_jurnal_cadere "$rp_cf"
+		done
+	done
+}
+
+rp_oom() {
+	rp_sectiune "OOM din intregul dmesg disponibil"
+	dmesg 2>/dev/null | grep -Ei 'out of memory|oom-kill|oom_reaper|invoked oom-killer|killed process'
 }
 
 # ---------------------------------------------------------------- the report
@@ -609,11 +715,6 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	grep '^nameserver' "$R/etc/resolv.conf" 2>/dev/null
 	rp_sectiune "fisierele din /home/root/logs"
 	ls -l "$L" 2>/dev/null | head -n 60
-	rp_sectiune "jurnalele de cadere ale enigma2 (ultimele doua)"
-	for rp_f in $(ls -t "$L"/enigma2_crash_*.log 2>/dev/null | head -n 2); do
-		echo "-- ${rp_f##*/}"
-		rp_coada "$rp_f" 200
-	done
 	if [ -f "$L/enigma2-debug.log" ]; then
 		rp_sectiune "coada jurnalului enigma2 (depanare)"
 		rp_coada "$L/enigma2-debug.log" 400
@@ -626,6 +727,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 		rp_sectiune "jurnalul de dinainte de o oprire necurata"
 		rp_coada "$L/messages.cadere" 300
 	fi
+	# a library of another Python than the image's is loaded into enigma2 by a module linked to it (report 919342:
+	# libpython3.7m in an image with Python 3.14, brought by no package); its place usually names the plugin
+	rp_sectiune "bibliotecile Python de pe receptor (libpython)"
+	find "$R/" -xdev \( -path "$R/proc" -o -path "$R/sys" -o -path "$R/dev" \) -prune -o -name 'libpython*.so*' -print \
+		2>/dev/null | head -n 20
 	rp_sectiune "pachetele"
 	rp_pachete
 }
@@ -635,8 +741,32 @@ rp_antet() {
 	echo "HD Satelit - raportul pornirii"
 	echo "format=1"
 	echo "fel=$1"
+	rp_pm=$(sed -n 's/^stare=//p' "$PAZA_STARE" 2>/dev/null | head -n 1 | tr -d '\r')
+	case $rp_pm in
+		nepotrivit) rp_tip=paza ;;
+		potrivit|nu-se-aplica) rp_tip=obisnuita ;;
+		*) rp_pm=necunoscut; rp_tip=necunoscut ;;
+	esac
+	echo "paza_model=$rp_pm"
+	echo "interfata_tip=$rp_tip"
 	echo "model=$(rp_masina)"
 	echo "nume_model=$(rp_regula model)"
+	# Regulile descriu imaginea; nodurile de mai jos sunt semnale ale driverului.
+	echo "model_imagine=$(rp_masina)"
+	for rp_node in gbmodel vumodel model boxtype; do
+		rp_m=$(rp_model_token "$(head -n 1 "$R/proc/stb/info/$rp_node" 2>/dev/null)")
+		[ -n "$rp_m" ] && echo "model_driver_$rp_node=$rp_m"
+	done
+	for rp_dt in "$R/sys/firmware/devicetree/base" "$R/proc/device-tree"; do
+		[ -r "$rp_dt/model" ] || [ -r "$rp_dt/compatible" ] || continue
+		if [ -r "$rp_dt/model" ]; then
+			echo "model_dt=$(rp_curat "$(tr '\000' ' ' < "$rp_dt/model")" 80)"
+		fi
+		if [ -r "$rp_dt/compatible" ]; then
+			echo "compatibil_dt=$(rp_curat "$(tr '\000' ' ' < "$rp_dt/compatible")" 160)"
+		fi
+		break
+	done
 	echo "placa=$(rp_masina)"
 	echo "versiune=$(rp_versiune)"
 	echo "revizie=$(rp_curat "$(sed -n 's/^version=//p' "$R/etc/image-version" 2>/dev/null | head -n 1)" 40)"
@@ -687,14 +817,33 @@ rp_pe_stick() {
 # writes one report of kind $1 ($2 enigma2 seconds, $3 interface); prints the path of the kept file
 rp_scrie_raport() {
 	mkdir -p "$RAPOARTE" "$RAM" 2>/dev/null
+	find "$CAUZE" -maxdepth 1 -type f -name '*.txt' 2>/dev/null > "$RAM/cauze.lista"
+	: > "$RAM/cauze.jurnale"
+	while IFS= read -r rp_cf; do
+		grep '^jurnal=' "$rp_cf" >> "$RAM/cauze.jurnale"
+	done < "$RAM/cauze.lista"
 	rp_nume="raport-$(rp_masina)-$(date '+%Y%m%d-%H%M%S').txt"
 	rp_antet "$1" "$2" "$3" > "$RAM/raport.nou" 2>/dev/null
+	# Probele au locul lor inaintea corpului limitat la MAX_OCTETI. Niciun head/cut pe traceback.
+	rp_cauze | rp_filtru_exceptie >> "$RAM/raport.nou" 2>/dev/null || return 1
+	rp_oom | rp_filtru >> "$RAM/raport.nou" 2>/dev/null
 	{ rp_corp 2>&1; } | rp_filtru | head -c "$MAX_OCTETI" >> "$RAM/raport.nou" 2>/dev/null
 	rp_stive >> "$RAM/raport.nou" 2>/dev/null
 	rp_procesor >> "$RAM/raport.nou" 2>/dev/null
-	cp -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou" 2>/dev/null && mv -f "$RAPOARTE/$rp_nume.nou" "$RAPOARTE/$rp_nume"
+	if ! { cp -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou" 2>/dev/null &&
+		mv -f "$RAPOARTE/$rp_nume.nou" "$RAPOARTE/$rp_nume"; }; then
+		rm -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou"
+		return 1
+	fi
 	rm -f "$RAM/raport.nou" "$RAPOARTE/$rp_nume.nou"
 	[ -f "$RAPOARTE/$rp_nume" ] || return 1
+	while IFS= read -r rp_cf; do
+		[ -f "$rp_cf.raportat" ] || printf '%s\n' "$rp_nume" > "$rp_cf.raportat"
+		# Numai probe deja incluse, pastrate inca zece minute dupa primul raport salvat.
+		if [ -n "$(find "$rp_cf.raportat" -mmin +10 2>/dev/null)" ]; then
+			rm -f "$rp_cf" "$rp_cf.raportat"
+		fi
+	done < "$RAM/cauze.lista"
 	rp_pastreaza "$RAPOARTE"
 	sync
 	rp_pe_stick "$RAPOARTE/$rp_nume" > /dev/null
@@ -993,9 +1142,11 @@ rp_sloturi_cauta() {
 	rp_g=0
 	for rp_s in $(rp_sloturi_radacini | tr ' ' '\001'); do
 		rp_s=$(echo "$rp_s" | tr '\001' ' ')
-		rp_img=$(sed -nE 's/^(distro|creator|imagename)=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		rp_img=$(sed -n 's/^creator=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		[ -n "$rp_img" ] || rp_img=$(sed -nE 's/^(distro|imagename)=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
 		[ -n "$rp_img" ] || rp_img=$(head -n 1 "$rp_s/etc/issue" 2>/dev/null)
-		rp_ver=$(sed -nE 's/^(imageversion|version)=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		rp_ver=$(sed -n 's/^imageversion=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
+		[ -n "$rp_ver" ] || rp_ver=$(sed -n 's/^version=//p' "$rp_s/etc/image-version" 2>/dev/null | head -n 1)
 		rp_np=$(ls "$rp_s"/home/root/logs/hds-porniri/pornire-*.txt 2>/dev/null | wc -l)
 		rp_nr=$(ls "$rp_s"/home/root/logs/hds-raport/raport-*.txt 2>/dev/null | wc -l)
 		rp_nc=$(ls "$rp_s"/home/root/logs/enigma2_crash_*.log "$rp_s"/media/hdd/enigma2_crash_*.log 2>/dev/null | wc -l)

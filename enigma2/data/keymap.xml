@@ -474,6 +474,12 @@
 		<key id="KEY_SPACE" mapto="menu" flags="mr" />
 	</map>
 	
+	<!-- Sagetile de volum sunt optionale si active numai pe bara de canale. -->
+	<map context="HdsVolumPrivitActions">
+		<key id="KEY_LEFT" mapto="maiIncet" flags="mr" />
+		<key id="KEY_RIGHT" mapto="maiTare" flags="mr" />
+	</map>
+
 	<map context="InfobarShowHideActions">
 		<key id="KEY_OK" mapto="toggleShow" flags="m" />
 		<key id="KEY_ENTER" mapto="toggleShow" flags="m" />
@@ -504,20 +510,12 @@
 		</device>
 	</map>
 
-	<!-- HDSatelit: KEY_TEXT mapat spre "subtitles" exista deja mai jos (linia ~670),
-	     dar DOAR in contextul MediaPlayerActions, nu si in InfoBar (TV live), deci nu ajungea
-	     la nicio tasta acolo. Context nou, dupa modelul InfobarAudioSelectionActions de mai sus. -->
-	<!-- HDSatelit (tastele Viper): SUBT (KEY_SUBTITLE, 370) nu era legata nicaieri, deci tasta nu facea
-	     nimic; acum deschide alegerea subtitrarii pe orice telecomanda, in bara si in playerul inregistrarilor.
-	     TEXT ramane teletextul pe Viper; legatura TEXT - subtitrari de mai jos ramane numai pentru cele doua dispozitive. -->
+	<!-- SUBTITLE: scurt comuta ultima pista, lung deschide lista.
+	     Eliberarea dupa lung nu mai comuta pista. TEXT ramane teletext in vizionare. -->
 	<map context="InfobarSubtitleSelectionActions">
-		<key id="KEY_SUBTITLE" mapto="subtitles" flags="m" />
-		<device name="dreambox remote control (native)">
-			<key id="KEY_TEXT" mapto="subtitles" flags="m" />
-		</device>
-		<device name="dreambox ir keyboard">
-			<key id="KEY_TEXT" mapto="subtitles" flags="m" />
-		</device>
+		<key id="KEY_SUBTITLE" mapto="subtitlesPressed" flags="m" />
+		<key id="KEY_SUBTITLE" mapto="subtitlesLong" flags="l" />
+		<key id="KEY_SUBTITLE" mapto="subtitles" flags="b" />
 	</map>
 
 	<map context="InfobarSubserviceSelectionActions">
@@ -751,7 +749,7 @@
 			<key id="KEY_TV" mapto="leavePlayer" flags="m" />
 		</device>
 		<device name="dreambox advanced remote control (native)">
-			<!-- TTX pe Viper, ca in bara; pe celelalte doua telecomenzi TEXT ramane la subtitrari -->
+			<!-- TEXT pastreaza teletextul si in player. -->
 			<key id="KEY_TEXT" mapto="teletext" flags="m" />
 			<key id="KEY_TV" mapto="leavePlayer" flags="m" />
 			<key id="KEY_STOP" mapto="leavePlayer" flags="m" />

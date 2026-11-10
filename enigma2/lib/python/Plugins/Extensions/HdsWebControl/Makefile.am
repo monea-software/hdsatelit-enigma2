@@ -31,6 +31,7 @@ install_PYTHON = \
 	culori_web.py \
 	copie_setari_web.py \
 	dabt2_web.py \
+	dab_usb_web.py \
 	oarba_web.py \
 	descarcare_subtitrari_web.py \
 	ecran_negru_web.py \

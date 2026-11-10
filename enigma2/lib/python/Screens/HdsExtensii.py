@@ -5,7 +5,7 @@
 
 Un singur ecran, ca magazinul de aplicatii al unui televizor:
  - file sus (Stanga/Dreapta): Instalate (tot ce e instalat; OK deschide pluginurile, ca vechiul PluginBrowser),
-   Disponibile (ce se poate lua din surse, pe feeduri si sectiuni, plus randul Din fisier), Din fisier
+   Disponibile (ce se poate lua din surse, pe feeduri si sectiuni), Instaleaza de pe stick
    (.ipk de pe stick, disc sau retea) si Surse (feedurile HD Satelit si Pluginuri externe, cate un rand fiecare, si
    sursele adaugate de utilizator);
  - lista (Sus/Jos, P+/P- pe pagini): icoana, nume, descriere scurta, sursa, versiune, marime, insigne;
@@ -23,7 +23,7 @@ import re
 import time
 
 from enigma import eListboxPythonMultiContent, eTimer, ePoint, eSize, gRGB, getDesktop, \
-	RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_HALIGN_CENTER, RT_VALIGN_CENTER
+	RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_HALIGN_CENTER, RT_VALIGN_CENTER, BT_SCALE
 
 from Screens.Screen import Screen
 from Screens.HelpMenu import HelpableScreen
@@ -174,6 +174,64 @@ def icoana(cheie, marime):
 			_jurnal('icoana %s: %s' % (cheie, e))
 		_icoane[k] = ptr
 	return _icoane[k]
+
+
+def caiIcoanaPlugin(fel, obj):
+	"""Fisierele icoanei proprii, fara a importa sau porni pluginul."""
+	if fel == 'plugin':
+		dosar = getattr(obj, 'path', None)
+		nume = getattr(obj, 'iconstr', None)
+		if not nume and isinstance(getattr(obj, 'icon', None), str):
+			nume = obj.icon
+	elif fel == 'indisponibil':
+		dosar, nume = obj.get('path'), None
+	elif fel == 'pachet' and getattr(obj, 'instalat', False):
+		dosar, nume = getattr(obj, 'dosar_plugin', None), None
+	else:
+		return []
+	if not isinstance(dosar, str) or not dosar:
+		return []
+	cai = []
+	if isinstance(nume, str) and nume:
+		cale = os.path.join(dosar, nume)
+		if os.path.splitext(cale)[1] not in ('.png', '.jpg'):
+			cale = os.path.splitext(cale)[0] + '.png'
+		cai.append(cale)
+	cale = os.path.join(dosar, 'plugin.png')
+	if cale not in cai:
+		cai.append(cale)
+	return cai
+
+
+def caiIcoanaCategorie(cheie, marime):
+	"""Aceeasi rezerva ca icoana(), pentru pagina web."""
+	cai = []
+	try:
+		from skin import getListImage
+		cale = getListImage('HdsExtensiiImage', '%s_%d' % (cheie, marime))
+		if cale:
+			cai.append(cale)
+	except Exception:
+		pass
+	cai.append(resolveFilename(SCOPE_SKIN_IMAGE, 'skin_default/icons/plugin.png'))
+	return cai
+
+
+def icoanaRand(fel, obj, cheie, marime):
+	"""Icoana proprie a extensiei instalate, apoi icoana categoriei."""
+	if fel == 'plugin':
+		ptr = getattr(obj, 'icon', None)
+		if ptr is not None and not isinstance(ptr, str) and all(_marime_pixmap(ptr)):
+			return ptr
+	for cale in caiIcoanaPlugin(fel, obj):
+		try:
+			from Tools.LoadPixmap import LoadPixmap
+			ptr = LoadPixmap(cale, cached=True)
+			if ptr is not None and all(_marime_pixmap(ptr)):
+				return ptr
+		except Exception:
+			pass
+	return icoana(cheie, marime)
 
 
 def _marime_pixmap(ptr):
@@ -343,10 +401,10 @@ class HdsExtensii(Screen, HelpableScreen):
 
 		self.filaInitiala = fila
 		self.surseDeschise = fila == 'surse'
-		self.fisiereDeschise = fila == 'fisiere'
 		self.catalog = P.Catalog()
 		self.pluginuri = []
-		self.fisiere = None            # [FisierIpk] de pe stick, disc, memorie: cautate in fundal la intrarea in fila Din fisier
+		self.fisiere = None            # [FisierIpk] de pe stick, disc, memorie: cautate in fundal la deschiderea ecranului
+		self.semnLocuriFisiere = None  # montarile si /tmp de la inceputul cautarii
 		self.fisiereTaiate = False     # s-au gasit mai multe decat se arata (cele mai noi 300)
 		self.fisiereRetea = None       # [FisierIpk] din locurile de retea, numai dupa ce utilizatorul cere cautarea acolo
 		self.locuriRetea = []          # locurile de retea sarite de cautarea obisnuita (/media/net, montarile cifs/nfs...)
@@ -500,6 +558,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self.filaInitiala in ids:
 			self.fila = ids.index(self.filaInitiala)
 		self._arataFila()
+		self._verificaLocuriFisiere()
 		self._descarcaAutomat()
 		self.timerSchimbari.start(PAS_SCHIMBARI, False)
 
@@ -561,6 +620,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		lor schimba semnul inca o data) si nici cat alt ecran e deasupra (atunci la intoarcere, _laAratare)."""
 		if self.semnCatalog is None or getattr(self.session, 'current_dialog', self) is not self:
 			return
+		self._verificaLocuriFisiere()
 		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs():
 			return
 		semn = self._semnCatalog()
@@ -577,12 +637,11 @@ class HdsExtensii(Screen, HelpableScreen):
 		file = []
 		if self.cautare:
 			file.append(('cautare', '„%s”' % self.cautare, len(self._randuriCautare())))
-		file += L.file(self.catalog, L.nrInstalate(self.catalog, self.pluginuri, plugins))
-		# Surse feeduri si Din fisier nu stau sus cu celelalte: se deschid cu tasta verde, din Disponibile, si dispar la iesire
+		numar = len(self.fisiere or ()) + len(self.fisiereRetea or ()) if self.fisiere is not None else None
+		file += L.file(self.catalog, L.nrInstalate(self.catalog, self.pluginuri, plugins), numar)
+		# Surse feeduri se deschide cu tasta verde si dispare la iesire.
 		if self.surseDeschise or idCurent == 'surse':
 			file.append(L.filaSurse(self.catalog))
-		if self.fisiereDeschise or idCurent == 'fisiere':
-			file.append(('fisiere', _t('Din fișier'), len(self.fisiere) + len(self.fisiereRetea or ()) if self.fisiere is not None else None))
 		self.file = file
 		ids = [i for i, _e, _n in file]
 		if idCurent in ids:
@@ -618,6 +677,20 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	# ------------------------------------------------------------ fisierele .ipk, cautate in fundal
 
+	def _verificaLocuriFisiere(self):
+		# Semnul se retine numai cand incepe cautarea. Un stick introdus in timpul ei cere inca o cautare dupa ea.
+		if self.cautareFisiere is None and L.semnLocuriFisiere() != self.semnLocuriFisiere:
+			self._cautaFisiere()
+		# Si o cautare pornita din web trebuie vazuta aici, inclusiv dupa incarcarea unui fisier in /tmp.
+		noi = False
+		for retea, rezultat, cautare in ((False, 'fisiere', 'cautareFisiere'), (True, 'fisiereRetea', 'cautareRetea')):
+			c = P.ultima_cautare(retea)
+			if c is not None and c.gata and getattr(self, cautare) is None and getattr(self, rezultat) is not c.fisiere:
+				setattr(self, cautare, c)
+				noi = True
+		if noi:
+			self._verificaCautari()
+
 	def _cautaFisiere(self, retea=False):
 		"""porneste cautarea fisierelor .ipk intr-un fir separat (sau se leaga de cea care ruleaza deja); inainte rula
 		in firul interfetei, care statea pe loc cat citea stickul, discul si dosarele de retea. Rezultatul il ia
@@ -626,6 +699,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			if self.cautareRetea is None:
 				self.cautareRetea = P.cautare_ipk(list(self.locuriRetea))
 		elif self.cautareFisiere is None:
+			self.semnLocuriFisiere = L.semnLocuriFisiere()
 			self.cautareFisiere = P.cautare_ipk()
 		self.anuntatLent = False
 		if not self.timerCautare.isActive():
@@ -796,12 +870,13 @@ class HdsExtensii(Screen, HelpableScreen):
 		latT = max(40, W - xT - latDreapta - dreapta - int(12 * f))
 		ic, titlu, subtitlu, insigna, culori, mic = self._descriereRand(fel, obj, extra)
 		e = [None]
-		png = icoana(ic, 88)
+		png = icoanaRand(fel, obj, ic, 88)
 		if png is not None:
 			pw, ph = _marime_pixmap(png)
-			pw, ph = min(pw, cutie), min(ph, H)
+			scara = min(1.0, float(cutie) / pw, float(H) / ph) if pw and ph else 0
+			pw, ph = int(pw * scara), int(ph * scara)
 			e.append(MultiContentEntryPixmapAlphaBlend(pos=(xIc + max(0, (cutie - pw) // 2), max(0, (H - ph) // 2)),
-				size=(pw, ph), png=png))
+				size=(pw, ph), png=png, flags=BT_SCALE))
 		v = RT_VALIGN_CENTER
 		e.append(MultiContentEntryText(pos=(xT, int(H * 0.08)), size=(latT + (latDreapta if not insigna else 0), int(H * 0.46)), font=0,
 			flags=RT_HALIGN_LEFT | v, text=titlu, color=c['text'], color_sel=c['alb']))
@@ -834,8 +909,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			while i < len(self.randuri) - 1 and self.randuri[i][0] == 'sectiune':
 				i += 1
 			self['lista'].moveToIndex(i)
-		# in Disponibile fara pachete ramane randul Din fisier, iar textul spune de ce nu e nimic
-		if not self.randuri or (fid == 'disponibile' and len(self.randuri) == 1):
+		if not self.randuri or (fid == 'fisiere' and not any(r[0] == 'fisier' for r in self.randuri)):
 			self['gol'].setText(self._textGol(fid))
 			self['gol'].show()
 		else:
@@ -857,8 +931,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if fid == 'fisiere':
 			if self.cautareFisiere is not None:
 				return _t('Se caută fișiere .ipk pe stick, pe disc și în /tmp.') + ('\n' + _t('Un stick sau un disc răspunde greu.') if self.anuntatLent else '')
-			return _t('Niciun fișier .ipk pe stick, pe disc sau în /tmp.\n'
-				'Copiază extensia într-unul dintre aceste locuri, apoi apasă albastru.')
+			return _t(L.TEXT_FARA_FISIERE)
 		if not surse:
 			return _t('Niciun feed. Adaugă unul din Surse feeduri, cu tasta verde.')
 		return _t('Nimic aici.')
@@ -903,10 +976,20 @@ class HdsExtensii(Screen, HelpableScreen):
 				'folosi între timp.'))
 		else:
 			d = L.detalii(self.catalog, fel, obj, extra)
-		ptr = icoana(d['icoana'], 160) if d['icoana'] else None
+		ptr = icoanaRand(fel, obj, d['icoana'], 160) if d['icoana'] else None
 		try:
 			if ptr is not None:
-				self['dIcoana'].instance.setPixmap(ptr)
+				inst = self['dIcoana'].instance
+				if not hasattr(self, 'chenarIcoana'):
+					self.chenarIcoana = (inst.position(), inst.size())
+				poz, cutie = self.chenarIcoana
+				pw, ph = _marime_pixmap(ptr)
+				scara = min(float(cutie.width()) / pw, float(cutie.height()) / ph) if pw and ph else 1
+				pw, ph = max(1, int(pw * scara)), max(1, int(ph * scara))
+				inst.move(ePoint(poz.x() + (cutie.width() - pw) // 2, poz.y() + (cutie.height() - ph) // 2))
+				inst.resize(eSize(pw, ph))
+				inst.setScale(1)
+				inst.setPixmap(ptr)
 				self['dIcoana'].show()
 			else:
 				self['dIcoana'].hide()
@@ -1287,7 +1370,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self._idFila() == 'cautare' or self.cautare:
 			self._iesiDinCautare()
 			return
-		if self._idFila() in ('surse', 'fisiere') and self.filaInitiala != self._idFila():
+		if self._idFila() == 'surse' and self.filaInitiala != 'surse':
 			self._inchideSurse()
 			return
 		self.close()
@@ -1323,8 +1406,6 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._adaugaSursa()
 		elif fel == 'actualizeaza':
 			self._actualizeazaTot()
-		elif fel == 'dinfisier':
-			self._deschideFila('fisiere')
 		elif fel == 'pluginsurse':
 			self.surseDeschise = False
 			self.cautare = obj.titlu
@@ -1427,24 +1508,19 @@ class HdsExtensii(Screen, HelpableScreen):
 		self._actualizeazaTot()
 
 	def _deschideFila(self, fid):
-		if self._idFila() not in ('surse', 'fisiere'):
+		if self._idFila() != 'surse':
 			self.filaDinainteaSurse = self._idFila()
 		if fid == 'surse':
 			self.surseDeschise = True
-		else:
-			self.fisiereDeschise = True
 		self._construiesteFile()
 		self.fila = [i for i, _e, _n in self.file].index(fid)
 		self.mesajStare = ''
 		self._arataFila()
 
 	def _inchideSurse(self):
-		"""Din Din fisier inapoi la Surse feeduri, din Surse feeduri inapoi la fila de dinainte"""
-		fid = self._idFila()
-		self.fisiereDeschise = False
-		if fid != 'fisiere':
-			self.surseDeschise = False
-		tinta = 'surse' if fid == 'fisiere' and self.surseDeschise else (self.filaDinainteaSurse or 'instalate')
+		"""Din Surse feeduri inapoi la fila de dinainte."""
+		self.surseDeschise = False
+		tinta = self.filaDinainteaSurse or 'instalate'
 		self.fila = 0
 		self.file = []
 		self._construiesteFile()

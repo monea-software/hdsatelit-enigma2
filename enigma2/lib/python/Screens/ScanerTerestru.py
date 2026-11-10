@@ -28,7 +28,7 @@ Ecranul comun al scanerelor (EcranScaner) sta in Screens/ScanerCablu.py.
 from __future__ import absolute_import, unicode_literals
 
 import Components.HdsListeCabluTerestru as liste
-from Screens.ScanerCablu import EcranScaner, MINUTE_CU_INTREBARE
+from Screens.ScanerCablu import EcranScaner, MINUTE_CU_DURATA
 
 CALE_CONFIG = '/etc/enigma2/hdsscaner_terestru.conf'
 FELURI = ('canal', 'banda', 'regiune', 'manual', 'automat')
@@ -282,8 +282,9 @@ def pregateste(fel, valori, nimmanager=None, clasa=None, cale_xml=None, cale_rom
         if flags & retea:
             note.append(_('Rețelele DVB-T2 își anunță frecvențele într-un fel pe care imaginea nu îl citește încă.'))
     minute = liste.minute_maxime(len(tps))
-    if minute > MINUTE_CU_INTREBARE:
-        intrebari.append(_('Căutarea are %d încercări și poate dura până la %d minute.') % (len(tps), minute))
+    if minute > MINUTE_CU_DURATA and fel != 'banda':
+        note.append(_('Căutarea are %d încercări și poate dura până la %d minute.') % (len(tps), minute))
+    note.append(_('Canalul se întrerupe pe durata căutării.'))
     intrebare = ''
     if intrebari:
         intrebare = ' '.join(intrebari) + ' ' + _('Cauți totuși?')

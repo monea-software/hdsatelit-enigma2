@@ -10,6 +10,7 @@ from Components.PluginComponent import plugins
 from Components.config import config
 from Components.SystemInfo import SystemInfo
 from Components import HdsDale
+from Components.HdsTasteRapide import sens_tasta
 
 from Tools.Directories import resolveFilename, SCOPE_SKIN
 
@@ -460,6 +461,7 @@ class Menu(Screen):
 		list.sort(key=lambda x: int(x[3]))
 
 		self._flatlist = list
+		self.list = list
 		self._dalaAles = 0
 		self._dalaInceput = 0
 		self._dalaGata = False
@@ -468,6 +470,7 @@ class Menu(Screen):
 		self._alesInitial = self._indexDupaEntryID(alegere)
 
 		self._surseJos()
+		self.onExecBegin.append(self._actualizeazaTasteMeniu)
 		self._panouMeniu()
 		# panoul radio online din tema Pro nu are voie sa strice meniul
 		try:
@@ -490,7 +493,7 @@ class Menu(Screen):
 		actions = {
 				"ok": self.okbuttonClick,
 				"cancel": self.closeNonRecursive,
-				"menu": self.closeRecursive,
+				"menu": self.keyOptiuni,
 				"1": self.keyNumberGlobal,
 				"2": self.keyNumberGlobal,
 				"3": self.keyNumberGlobal,
@@ -500,10 +503,8 @@ class Menu(Screen):
 				"7": self.keyNumberGlobal,
 				"8": self.keyNumberGlobal,
 				"9": self.keyNumberGlobal,
-				# HDSatelit: TEXT in orice meniu deschide „Caută setări” (contextul HdsCautareActions din
-				# keymap.xml, ca in lista de canale)
+				# Scurtaturi optionale, oprite la instalare; actiunile sunt permanent in MENU.
 				"cautare": self.keyCautaSetari,
-				# HDSatelit: tasta galbena comuta pe loc lista / dale (acelasi meniu, aceeasi intrare aleasa)
 				"yellow": self.keyGalben,
 			}
 		contexte = ["OkCancelActions", "MenuActions", "NumberActions", "HdsCautareActions", "ColorActions"]
@@ -565,16 +566,25 @@ class Menu(Screen):
 
 	def _surseJos(self):
 		"""Linia de jos, in ambele moduri (panoul HdsMenuDaleJos sau HdsMenuListaJos din skin): numele tastelor nu se
-		traduc; tasta galbena spune forma in care trece meniul."""
+		traduc; indiciile urmeaza scurtaturile alese acum."""
 		self["dala_t_ok"] = StaticText("OK")
 		self["dala_t_exit"] = StaticText("EXIT")
 		self["dala_t_cifre"] = StaticText("1-9")
-		self["dala_t_text"] = StaticText("TEXT")
+		self["dala_t_text"] = StaticText("")
 		self["dala_ok"] = StaticText(_("Deschide"))
 		self["dala_exit"] = StaticText(_("Înapoi"))
 		self["dala_cifre"] = StaticText(_("Direct"))
-		self["dala_text"] = StaticText(_("Caută"))
-		self["dala_galben"] = StaticText(_("Listă") if self._modDale else _("Dale"))
+		self["dala_text"] = StaticText("")
+		self["dala_galben"] = StaticText("")
+		self._actualizeazaTasteMeniu()
+
+	def _actualizeazaTasteMeniu(self):
+		"""La revenirea din setari, tastele desenate au acelasi sens ca harta de actiuni."""
+		cauta = sens_tasta("menu", "text", config=config) == "search_settings"
+		aspect = sens_tasta("menu", "yellow", config=config) == "toggle_layout"
+		self["dala_t_text"].setText("TEXT" if cauta else "MENU")
+		self["dala_text"].setText(_("Caută") if cauta else _("Opțiuni"))
+		self["dala_galben"].setText((_("Listă") if self._modDale else _("Dale")) if aspect else "")
 
 	# ------------------------------------------------------------ modul dale
 	def _dalaSurse(self):
@@ -922,7 +932,11 @@ class Menu(Screen):
 			self.okbuttonClick()
 
 	def keyGalben(self):
-		"""Tasta galbena: lista <-> dale pe loc. Acelasi meniu se deschide din nou cu cealalta forma si cu aceeasi intrare
+		if sens_tasta("menu", "yellow", config=config) == "toggle_layout":
+			self.comutaAspect()
+
+	def comutaAspect(self):
+		"""Lista <-> dale pe loc. Acelasi meniu se deschide din nou cu cealalta forma si cu aceeasi intrare
 		aleasa; cand se inchide, se inchide si acesta cu acelasi rezultat (EXIT inapoi un nivel, MENU tot meniul)."""
 		if not self._modDale and not skinulAreDale():
 			return
@@ -940,6 +954,20 @@ class Menu(Screen):
 		self.close(*rezultat)
 
 	def keyCautaSetari(self):
+		if sens_tasta("menu", "text", config=config) == "search_settings":
+			self.cautaSetari()
+
+	def keyOptiuni(self):
+		"""Actiunile ecranului raman accesibile cu scurtaturile optionale oprite."""
+		from Screens.ChoiceBox import ChoiceBox
+		lista = [(_("Caută setări"), self.cautaSetari), (_("Listă sau dale"), self.comutaAspect),
+			(_("Închide meniul"), self.closeRecursive)]
+		def ales(raspuns):
+			if raspuns is not None:
+				raspuns[1]()
+		self.session.openWithCallback(ales, ChoiceBox, title=_("Opțiunile ecranului"), list=lista)
+
+	def cautaSetari(self):
 		"""„Caută setări” (Screens/HdsCautaSetari.py); ecranul se incarca abia la apasare. Inchis cu MENU, inchide si
 		meniul, ca un submeniu."""
 		try:

@@ -5,10 +5,10 @@
 # Programul de logare al lui Telnet (portul 23): inetd (/etc/hds-telnet-inetd.conf) porneste pentru fiecare legatura
 # `busybox telnetd -i -l /usr/sbin/hds-telnet-poarta`, iar telnetd il porneste pe acesta in terminalul legaturii.
 # Adresa omului se afla din socketul lui telnetd (procesul parinte: in modul -i socketul e pe fd 0) si din /proc/net/tcp:
-# - din reteaua de acasa (retelele din hds-ssh-retele-locale.conf, aceleasi ca la SSH si FTP), cu „Fara parola in
-#   reteaua locala” pornita (o regula „-” in hds-ssh-retea-locala.conf): intrebarea „login:” ca la orice receptor, apoi
-#   root intra fara parola (login -f root); un alt nume merge la login obisnuit;
-# - din reteaua de acasa, cu optiunea oprita: login obisnuit, cu parola receptorului;
+# - din reteaua de acasa (retelele din hds-ssh-retele-locale.conf, aceleasi ca la SSH si FTP), fara parola pusa de om
+#   pentru Telnet si SSH (o regula „-” in hds-ssh-retea-locala.conf, asa vine din fabrica): intrebarea „login:” ca la
+#   orice receptor, apoi root intra fara parola (login -f root); un alt nume merge la login obisnuit;
+# - din reteaua de acasa, cu parola omului bifata la Telnet si SSH: login obisnuit, cu parola lui;
 # - din afara casei, sau cand adresa nu se poate afla sigur: legatura se inchide. Nicio eroare nu duce la un shell.
 # Variabilele sunt numai pentru probele de pe PC (HDS_TELNET_PROC: /proc fals; HDS_TELNET_LOGIN: programul login).
 

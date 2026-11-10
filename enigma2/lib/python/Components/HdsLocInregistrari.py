@@ -7,11 +7,12 @@
 #
 # - candidati(): partitiile montate pe care se poate inregistra, din harddiskmanager.getMountedPartitions(), fara
 #   radacina, fara ce sta in RAM si fara partajari de retea (statvfs pe o partajare cazuta poate bloca un fir la
-#   nesfarsit). Citeste numai /proc/mounts si /sys, deci merge pe firul enigma2. necitite(): stick-urile si discurile
+#   nesfarsit). Pe firul interfetei se da numai inventarul din memorie. necitite(): stick-urile si discurile
 #   USB pe care nu le-a montat nimeni (sistem de fisiere necunoscut sau lipsa).
 # - cereStare(): spatiul liber si verificarea de disc adevarat (Components/HdsStocare.verificaDisc) pentru fiecare
 #   candidat si pentru locul de acum, pe un fir separat: pe un stick FAT prima citire a spatiului liber poate parcurge
-#   toata tabela FAT, secunde intregi. Rezultatul se tine VARSTA_STARE secunde; cel mult un fir de citire deodata.
+#   toata tabela FAT, secunde intregi. Cel mult un fir de citire deodata, cu termen. O citire noua se cere la
+#   deschiderea ecranului, la o alegere sau cand se schimba discurile, fara recitire periodica.
 # - foloseste(): pe un fir separat face dosarul „movie” pe discul ales (niciodata o formatare) si il verifica; setarile
 #   se schimba pe firul enigma2, cand rezultatul e cules de un eTimer (tragere, nu impingere: reactor.callFromThread nu
 #   trezeste prompt bucla reactorului imaginii, vezi ScreenshotResource din HdsWebControl/plugin.py). Cel mult o
@@ -53,8 +54,8 @@
 # Un stick pe care nucleul l-a pus pe numai citire dupa o eroare (motivul numai_citire): randul de reparat (ACT_REPARA)
 # porneste verificarea existenta (Components/HdsDiscuri.verifica), dupa care stickul se poate scrie din nou.
 #
-# Pe firul enigma2, realpath se face numai pe caile discurilor locale (_canonicSigur): pe o partajare de retea cazuta,
-# lstat poate bloca firul. Firele de citire si de pregatire folosesc realpath oriunde.
+# Pe firul interfetei caile se compara numai ca text si cu aliasurile ultimei citiri. realpath, spatiul liber si
+# probele de scriere merg in fundal. Rezultatele venite dupa termen nu schimba alegerea.
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau managerul de discuri, setarile, citirile de
 # disc si ceasul lor.
@@ -65,11 +66,13 @@ import sys
 import threading
 import time
 
-# cat timp (secunde) e buna o citire a discurilor; dupa atat, cererea urmatoare porneste o citire noua
+# cat timp se tine o citire a numelui din /media, ceruta explicit
 VARSTA_STARE = 20
 # dupa o citire cazuta (exceptie pe fir), cat timp nu se porneste alt fir: ecranul si pagina intreaba mai departe, dar
 # fara un fir nou la fiecare intrebare
 VARSTA_ESEC = 5
+# O citire sau o proba lenta nu tine ecranul deschis la nesfarsit.
+TERMEN_IO_S = 2.0
 # pasul eTimer-ului care culege rezultatul pregatirii si aplica setarile pe firul enigma2
 PAS_CULEGERE_MS = 200
 DOSAR_FILME = "movie"
@@ -247,11 +250,17 @@ def _canonicSigur(cale, realpath=None, tabel=None):
 	if not cale:
 		return ""
 	text = cale.rstrip("/") or "/"
-	if not (text + "/").startswith(PREFIXE_LOCALE):
-		return text
-	if _deRetea(text, _tabel() if tabel is None else tabel):
-		return text
-	return _canonic(cale, realpath)
+	if realpath is not None:
+		if tabel is not None and _deRetea(text, tabel):
+			return text
+		return _canonic(cale, realpath)
+	if text == "/hdd" or text.startswith("/hdd/"):
+		text = "/media/hdd" + text[4:]
+	for c in _inventar["cand"]:
+		punct = c["punct"].rstrip("/")
+		if _sub(text, punct):
+			return (c.get("real") or punct).rstrip("/") + text[len(punct):]
+	return text
 
 
 # ------------------------------------------------------------------ discurile
@@ -299,6 +308,9 @@ def etichetaDispozitiv(dispozitiv, real=""):
 	return eticheta or etichetaDinMontare(real, dispozitiv)
 
 
+_numeInfo = {}
+
+
 def numeMedia(dispozitiv, hm=None):
 	"""Aceleasi alegeri ale numelui din /media pentru televizor si pagina web."""
 	gol = {"valoare": "", "alegeri": [], "amanat": False, "mesaj": ""}
@@ -307,19 +319,66 @@ def numeMedia(dispozitiv, hm=None):
 	try:
 		if hm is None:
 			from Components.Harddisk import harddiskmanager as hm
-		return hm.mediaNameInfo(dispozitiv)
+		if threading.current_thread() is not threading.main_thread():
+			info = hm.mediaNameInfo(dispozitiv)
+			_numeInfo[dispozitiv] = info
+			return info
+		if dispozitiv in _numeInfo:
+			return dict(_numeInfo[dispozitiv])
+		from Components import HdsStocareDisc
+		rez = HdsStocareDisc.cere(("nume-media-info", dispozitiv), lambda: hm.mediaNameInfo(dispozitiv),
+			termen=TERMEN_IO_S, varsta=VARSTA_STARE)
+		return rez.get("valoare") or gol
 	except (ImportError, AttributeError):
 		return gol
 
 
+_numeLucru = None
+
+
 def alegeNumeMedia(dispozitiv, nume, hm=None):
 	"""Salveaza alegerea prin managerul de discuri; el verifica numele si folosirea discului."""
+	global _numeLucru
+	from Components import HdsStocareDisc
+	if _numeLucru is not None and HdsStocareDisc.activ(("nume-media-salveaza", _numeLucru["id"])):
+		return {"result": False, "message": _("Se salvează alegerea..."), "in_lucru": False,
+			"dispozitiv": dispozitiv}
 	try:
+		manager_dat = hm is not None
 		if hm is None:
 			from Components.Harddisk import harddiskmanager as hm
-		return hm.setMediaName(dispozitiv, nume)
+		_numeLucru = {"dispozitiv": dispozitiv, "nume": nume, "hm": hm, "id": time.monotonic()}
+		pana = _numeLucru["id"] + TERMEN_IO_S
+		salveaza = (lambda: hm.setMediaName(dispozitiv, nume)) if manager_dat else (
+			lambda: hm.setMediaName(dispozitiv, nume, valid=lambda: time.monotonic() < pana))
+		HdsStocareDisc.cere(("nume-media-salveaza", _numeLucru["id"]), salveaza,
+			termen=TERMEN_IO_S, varsta=3600)
+		return stareNumeMedia()
 	except (ImportError, AttributeError):
 		return {"result": False, "message": _("Numele nu se poate schimba acum."), "amanat": False}
+
+
+def stareNumeMedia():
+	if _numeLucru is None:
+		return None
+	from Components import HdsStocareDisc
+	l = _numeLucru
+	rez = HdsStocareDisc.stare(("nume-media-salveaza", l["id"]))
+	if rez is None:
+		return {"result": False, "message": _("Numele nu se poate schimba acum."), "in_lucru": False,
+			"dispozitiv": l["dispozitiv"]}
+	if rez["stare"] == "asteapta":
+		return {"result": True, "message": _("Se salvează alegerea..."), "in_lucru": True,
+			"dispozitiv": l["dispozitiv"]}
+	if rez["stare"] != "gata":
+		return {"result": False, "message": _("Discul nu răspunde."), "in_lucru": False,
+			"dispozitiv": l["dispozitiv"]}
+	valoare = rez["valoare"]
+	if valoare.get("result") and l["dispozitiv"] in _numeInfo:
+		info = dict(_numeInfo[l["dispozitiv"]])
+		info.update(valoare=l["nume"], amanat=bool(valoare.get("amanat")), mesaj=valoare.get("message") or "")
+		_numeInfo[l["dispozitiv"]] = info
+	return dict(valoare, in_lucru=False, dispozitiv=l["dispozitiv"])
 
 
 def mutaCaiMedia(vechi, nou, config=None, configfile=None, temporizatoare=None):
@@ -490,7 +549,7 @@ def _locRetea(punct):
 		return None
 
 
-def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
+def _candidatiPeFir(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 	"""[{punct, real, dispozitiv, nume, fel, id}] pentru partitiile montate pe care se poate inregistra. `punct` e
 	numele stabil (/media/hdd, /media/usb, ...) din Components/Harddisk.py; se ia o singura data pentru acelasi loc real;
 	numai sub PREFIXE_LOCURI. `id` e identitate() (discul tinut minte)."""
@@ -553,11 +612,12 @@ def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
 			"tip": felDisc(dispozitiv, amovibil),
 			"legatura": legatura(dispozitiv, citeste=citeste) if dispozitiv else "",
 			"imagine": bool(getattr(p, "system_disk", False)),
+			"eroare_montare": dict((getattr(hm, "mount_errors", None) or {}).get(dispozitiv) or {}),
 		})
 	return rez
 
 
-def necitite(hm=None, fel_fs=None):
+def _necititePeFir(hm=None, fel_fs=None):
 	"""[{dispozitiv, nume}] pentru partitiile USB pe care nu le-a montat nimeni si nu mai sunt in asteptare (udev nu
 	cunoaste sistemul lor de fisiere, iar montarea proprie din Components/Harddisk.py a renuntat)."""
 	if hm is None:
@@ -593,8 +653,25 @@ def necitite(hm=None, fel_fs=None):
 			"tip": felDisc(dispozitiv, amovibil),
 			"legatura": legatura(dispozitiv),
 			"total": _marimeNecitit(dispozitiv),
+			"eroare_montare": dict((getattr(hm, "mount_errors", None) or {}).get(dispozitiv) or {}),
 		})
 	return rez
+
+
+_inventar = {"cand": [], "necit": []}
+
+
+def candidati(hm=None, tabel=None, realpath=None, citeste=None, uuid=None):
+	"""Pe ecran se foloseste inventarul ultimei citiri; citirea reala merge numai in fundal."""
+	if any(v is not None for v in (hm, tabel, realpath, citeste, uuid)):
+		return _candidatiPeFir(hm, tabel, realpath, citeste, uuid)
+	return [dict(c) for c in _inventar["cand"]]
+
+
+def necitite(hm=None, fel_fs=None):
+	if hm is not None or fel_fs is not None:
+		return _necititePeFir(hm, fel_fs)
+	return [dict(c) for c in _inventar["necit"]]
 
 
 # ------------------------------------------------------------------ locul de acum
@@ -604,12 +681,23 @@ def locInregistrari(config=None, preferat=None, poateScrie=None):
 	InfoBarInstantRecord.instantRecord: locul inregistrarilor imediate, sau locul implicit daca acela lipseste."""
 	if config is None:
 		from Components.config import config
-	if preferat is None:
-		from Components.UsageConfig import preferredPath as preferat
-	cale = preferat(config.usage.instantrec_path.value)
-	if not cale or not (poateScrie or _poateScrie)(cale):
+	valoare = config.usage.instantrec_path.value
+	cale = preferat(valoare) if preferat is not None else _caleSetare(valoare, config)
+	if not cale or (poateScrie is not None and not poateScrie(cale)):
 		cale = config.usage.default_path.value
 	return cale
+
+
+def _caleSetare(valoare, config):
+	if valoare == "<default>":
+		return None
+	if valoare in ("<current>", "<timer>"):
+		nume = "last_videodir" if valoare == "<current>" else "last_timer_videodir"
+		try:
+			return getattr(config.movielist, nume).value
+		except (AttributeError, KeyError):
+			return None
+	return valoare
 
 
 def locTimeshift(config=None):
@@ -621,10 +709,11 @@ def locTimeshift(config=None):
 def locTemporizator(dirname=None, config=None, poateScrie=None):
 	"""Unde ar merge acum o inregistrare programata: dosarul ei, daca se poate scrie in el, altfel locul implicit (ca
 	RecordTimerEntry.calculateFilename)."""
-	if dirname and (poateScrie or _poateScrie)(dirname):
-		return dirname
 	if config is None:
 		from Components.config import config
+	cale = _caleSetare(dirname, config)
+	if cale and (poateScrie is None or poateScrie(cale)):
+		return cale
 	return config.usage.default_path.value
 
 
@@ -724,23 +813,57 @@ def citesteStare(cand, cale_loc, verifica=None, statvfs=None, isdir=None, realpa
 
 
 _zavor = threading.Lock()
-_citire = {"rez": None, "cheie": None, "timp": 0.0, "in_lucru": False, "esec": 0.0}
+_citire = {"rez": None, "cheie": None, "timp": 0.0, "in_lucru": False, "esec": 0.0,
+	"inceput": 0.0, "expirat": False, "generatie": 0}
+
+
+def _citesteCompleta(cand, cale_loc):
+	cand = _candidatiPeFir()
+	necit = _necititePeFir()
+	for c in cand:
+		c["nume_media"] = numeMedia(c.get("dispozitiv"))
+	with _zavor:
+		if not _citire["expirat"] and time.monotonic() - _citire["inceput"] < TERMEN_IO_S:
+			_inventar["cand"], _inventar["necit"] = list(cand), list(necit)
+	rez = citesteStare(cand, cale_loc)
+	rez["cand"], rez["necit"] = cand, necit
+	return rez
+
+
+def _stareTermen(cand, cale_loc):
+	cand = candidati() or cand
+	return {"loc": {"cale": cale_loc, "bun": False, "motiv": "termen", "liber": None, "total": None,
+		"punct": None, "pe_disc": None}, "discuri": [dict(c, bun=False, motiv="termen", liber=None,
+			total=None, are_movie=None, folosit=False) for c in cand], "cand": list(cand),
+		"necit": necitite(), "termen": True}
 
 
 def _citesteSiTine(cheie, cand, cale_loc, citeste):
+	with _zavor:
+		generatie = _citire["generatie"]
 	try:
 		rez = citeste(cand, cale_loc)
 	except Exception as eroare:
 		print("[HdsLocInregistrari] citirea discurilor: %s" % eroare)
 		rez = None
 	with _zavor:
+		if generatie != _citire["generatie"]:
+			return
+		if _citire["expirat"] or (_citire["inceput"] and time.monotonic() - _citire["inceput"] >= TERMEN_IO_S):
+			_citire["expirat"] = True
+			_citire["in_lucru"] = False
+			return
 		if rez is not None:
 			_citire["rez"] = rez
 			_citire["cheie"] = cheie
 			_citire["timp"] = time.time()
 			_citire["esec"] = 0.0
+			if "cand" in rez:
+				_inventar["cand"] = list(rez["cand"])
+				_inventar["necit"] = list(rez.get("necit") or [])
 		else:
 			_citire["esec"] = time.time()
+			_citire["expirat"] = True
 		_citire["in_lucru"] = False
 
 
@@ -755,27 +878,32 @@ def _cheie(cand, cale_loc):
 
 
 def cereStare(cand, cale_loc, din_nou=False, acum=None, citeste=None, porneste=None):
-	"""(rezultat, se_citeste): ultima citire (None daca nu e una pentru aceleasi discuri si acelasi loc) si daca o
-	citire e in curs. Porneste una noua pe un fir cand cea tinuta e mai veche de VARSTA_STARE, e pentru alte discuri
-	sau se cere din_nou. Dupa o citire cazuta, VARSTA_ESEC secunde nu porneste alt fir (decat la din_nou), dar spune
-	mai departe ca se citeste, ca ecranul si pagina sa intrebe din nou. Nu atinge discurile pe firul care o cheama."""
+	"""Da imediat rezultatul din memorie si daca citirea este in curs. Prima cerere sau din_nou porneste un fir.
+	Dupa termen nu mai asteapta si nu reia singura citirea. Un fir blocat nu se dubleaza."""
 	acum = time.time() if acum is None else acum
-	cheie = _cheie(cand, cale_loc)
+	cheie = _cheie(cand, cale_loc) if citeste is not None else (cale_loc, "inventar")
 	with _zavor:
+		if din_nou and not _citire["in_lucru"]:
+			_citire["expirat"] = False
+		if _citire["in_lucru"] and time.monotonic() - _citire["inceput"] >= TERMEN_IO_S:
+			_citire["expirat"] = True
+		if _citire["expirat"]:
+			return _stareTermen(cand, cale_loc), False
 		rez = _citire["rez"] if _citire["cheie"] == cheie else None
-		vechi = rez is None or din_nou or acum - _citire["timp"] >= VARSTA_STARE
-		asteapta = not din_nou and 0 <= acum - _citire["esec"] < VARSTA_ESEC
-		pornesc = vechi and not asteapta and not _citire["in_lucru"]
+		vechi = rez is None or din_nou
+		pornesc = vechi and not _citire["in_lucru"]
 		if pornesc:
 			_citire["in_lucru"] = True
-		in_lucru = _citire["in_lucru"] or (vechi and asteapta)
+			_citire["inceput"] = time.monotonic()
+		in_lucru = _citire["in_lucru"]
 	if pornesc:
 		try:
-			(porneste or _pornesteFir)(_citesteSiTine, cheie, list(cand), cale_loc, citeste or citesteStare)
+			(porneste or _pornesteFir)(_citesteSiTine, cheie, list(cand), cale_loc, citeste or _citesteCompleta)
 		except Exception as eroare:
 			print("[HdsLocInregistrari] firul de citire nu a pornit: %s" % eroare)
 			with _zavor:
 				_citire["in_lucru"] = False
+				_citire["expirat"] = True
 			in_lucru = False
 	return rez, in_lucru
 
@@ -783,6 +911,10 @@ def cereStare(cand, cale_loc, din_nou=False, acum=None, citeste=None, porneste=N
 def uitaCitirea():
 	"""Dupa o schimbare (disc ales, disc pus sau scos): cererea urmatoare citeste din nou."""
 	with _zavor:
+		if not _citire["in_lucru"]:
+			_citire["expirat"] = False
+			_citire["inceput"] = 0.0
+			_citire["generatie"] += 1
 		_citire["rez"] = None
 		_citire["cheie"] = None
 		_citire["timp"] = 0.0
@@ -806,6 +938,7 @@ def motivEroare(eroare):
 def pregatesteDisc(punct, cale_timeshift, ultimul_dosar, verifica=None, isdir=None, mkdir=None):
 	"""Face dosarul movie pe discul ales, daca lipseste (fara sa stearga sau sa formateze nimic), si il verifica.
 	Intoarce {bun, motiv, dosar, facut, timeshift_bun, ultimul_bun, eroare}."""
+	proba_scriere = verifica is None
 	verifica = verifica or _stocare().verificaDisc
 	isdir = isdir or os.path.isdir
 	mkdir = mkdir or os.mkdir
@@ -828,6 +961,20 @@ def pregatesteDisc(punct, cale_timeshift, ultimul_dosar, verifica=None, isdir=No
 		return rez
 	bun, motiv = verifica(dosar + "/")
 	rez["bun"], rez["motiv"] = bool(bun), motiv
+	if bun and proba_scriere:
+		try:
+			import tempfile
+			fd, cale_proba = tempfile.mkstemp(prefix=".hds-proba-", dir=dosar)
+			try:
+				if os.write(fd, b"\0" * 4096) != 4096:
+					raise OSError("proba de scriere incompleta")
+				os.fsync(fd)
+			finally:
+				os.close(fd)
+				os.unlink(cale_proba)
+		except (OSError, IOError) as eroare:
+			rez["bun"], rez["motiv"] = False, motivEroare(eroare)
+			return rez
 	if cale_timeshift:
 		rez["timeshift_bun"] = bool(verifica(cale_timeshift)[0])
 	try:
@@ -857,9 +1004,6 @@ def aplicaLoc(punct, pregatire, scop=SCOP_MENIU, config=None, configfile=None, r
 		from Components.config import config
 	if configfile is None:
 		from Components.config import configfile
-	if tabel is None:
-		tabel = _tabel()
-
 	def locul(cale):
 		# pe firul enigma2 numai realpath sigur: caile de retea din setari raman text
 		return _canonicSigur(cale, realpath, tabel)
@@ -917,7 +1061,8 @@ def aplicaLoc(punct, pregatire, scop=SCOP_MENIU, config=None, configfile=None, r
 
 
 _lucru = {"stare": None, "punct": None, "nume": None, "scop": SCOP_MENIU, "rez": None, "aplicat": False,
-	"schimbate": [], "timp": 0.0, "id": "", "de_ce": None}
+	"schimbate": [], "timp": 0.0, "id": "", "de_ce": None, "inceput": 0.0, "fir_activ": False,
+	"generatie": 0}
 _ceasuri = []       # eTimer-ul care culege pregatirea (tinut aici, altfel GC-ul l-ar culege)
 LUCRU_GATA = "gata"
 LUCRU_IN_LUCRU = "in_lucru"
@@ -925,12 +1070,21 @@ LUCRU_EROARE = "eroare"
 
 
 def _pregatesteSiTine(punct, cale_timeshift, ultimul_dosar, pregateste):
+	with _zavor:
+		generatie = _lucru["generatie"]
 	try:
 		rez = pregateste(punct, cale_timeshift, ultimul_dosar)
 	except Exception as eroare:
 		print("[HdsLocInregistrari] pregatirea lui %s: %s" % (punct, eroare))
 		rez = {"bun": False, "motiv": "scriere", "eroare": str(eroare)[:160], "dosar": punct.rstrip("/") + "/movie/"}
 	with _zavor:
+		if generatie != _lucru["generatie"]:
+			return
+		_lucru["fir_activ"] = False
+		if _lucru["stare"] != LUCRU_IN_LUCRU or time.monotonic() - _lucru["inceput"] >= TERMEN_IO_S:
+			_lucru["rez"] = {"bun": False, "motiv": "termen"}
+			_lucru["stare"] = LUCRU_EROARE
+			return
 		_lucru["rez"] = rez
 		_lucru["stare"] = LUCRU_GATA if rez.get("bun") else LUCRU_EROARE
 
@@ -956,10 +1110,11 @@ def foloseste(punct, cand, scop=SCOP_MENIU, config=None, pregateste=None, pornes
 	except (AttributeError, KeyError):
 		ultimul = ""
 	with _zavor:
-		if _lucru["stare"] == LUCRU_IN_LUCRU:
+		if _lucru["stare"] == LUCRU_IN_LUCRU or _lucru["fir_activ"]:
 			return False, _("Se pregătește deja un disc. Așteaptă puțin.")
 		_lucru.update({"stare": LUCRU_IN_LUCRU, "punct": punct, "nume": alesi[0]["nume"], "scop": scop, "rez": None,
-			"aplicat": False, "schimbate": [], "timp": time.time(), "id": alesi[0].get("id") or "", "de_ce": de_ce})
+			"aplicat": False, "schimbate": [], "timp": time.time(), "id": alesi[0].get("id") or "", "de_ce": de_ce,
+			"inceput": time.monotonic(), "fir_activ": True, "generatie": _lucru["generatie"] + 1})
 	try:
 		(porneste or _pornesteFir)(_pregatesteSiTine, punct, config.usage.timeshift_path.value, ultimul,
 			pregateste or pregatesteDisc)
@@ -967,6 +1122,7 @@ def foloseste(punct, cand, scop=SCOP_MENIU, config=None, pregateste=None, pornes
 		print("[HdsLocInregistrari] firul de pregatire nu a pornit: %s" % eroare)
 		with _zavor:
 			_lucru["stare"] = LUCRU_EROARE
+			_lucru["fir_activ"] = False
 			_lucru["rez"] = {"bun": False, "motiv": "scriere", "eroare": str(eroare)[:160], "dosar": ""}
 		return False, _("Nu am putut pregăti discul. Încearcă din nou.")
 	# culegerea: un eTimer pe firul enigma2, pana cand pregatirea e gata (merge si dupa inchiderea ecranului)
@@ -986,6 +1142,9 @@ def culege(config=None, configfile=None, realpath=None):
 	with _zavor:
 		if _lucru["stare"] is None:
 			return None
+		if _lucru["stare"] == LUCRU_IN_LUCRU and time.monotonic() - _lucru["inceput"] >= TERMEN_IO_S:
+			_lucru["stare"] = LUCRU_EROARE
+			_lucru["rez"] = {"bun": False, "motiv": "termen"}
 		stare = _lucru["stare"]
 		gata = stare == LUCRU_GATA and not _lucru["aplicat"]
 		if gata:
@@ -1031,8 +1190,83 @@ def uitaLucrul():
 	"""Pentru probe."""
 	with _zavor:
 		_lucru.update({"stare": None, "punct": None, "nume": None, "scop": SCOP_MENIU, "rez": None, "aplicat": False,
-			"schimbate": [], "timp": 0.0, "id": "", "de_ce": None})
+			"schimbate": [], "timp": 0.0, "id": "", "de_ce": None, "inceput": 0.0, "fir_activ": False,
+			"generatie": _lucru["generatie"] + 1})
 	del _ceasuri[:]
+
+
+_alegereRetea = None
+_ceasAlegereRetea = []
+
+
+def alegeRetea(ident, gata=None, sesiune=None):
+	"""Dupa proba locului din retea, pregateste dosarul si aplica aceeasi alegere ca pe disc."""
+	global _alegereRetea
+	if _alegereRetea is not None:
+		return {"ok": False, "mesaj": _("Se pregătește deja un disc. Așteaptă puțin.")}
+	from Components import HdsStocareDisc
+	cheie = ("alege-retea", ident, time.monotonic())
+
+	def candidat():
+		from Components import HdsStocareRetea as R
+		loc = R.locuri().dupaId(ident)
+		if loc is None:
+			return None
+		montat, punct = R.esteMontat(loc)
+		info = R.pentruInregistrari(punct) if montat else None
+		if info is None:
+			return None
+		return {"punct": punct, "real": punct, "nume": info[1], "fel": info[2], "dispozitiv": "",
+			"id": "retea:" + info[0], "tip": TIP_RETEA, "legatura": "", "imagine": False}
+
+	def termina(ok, mesaj):
+		global _alegereRetea
+		lucrare = _alegereRetea
+		_alegereRetea = None
+		if lucrare is not None:
+			lucrare["ceas"].stop()
+		if gata is not None:
+			gata({"ok": bool(ok), "mesaj": mesaj})
+
+	def pas():
+		if _alegereRetea is None:
+			return
+		lucrare = _alegereRetea
+		if lucrare.get("punct") is None:
+			rez = HdsStocareDisc.stare(cheie)
+			if rez is None or rez["stare"] == "asteapta":
+				lucrare["ceas"].start(PAS_CULEGERE_MS, True)
+				return
+			if rez["stare"] != "gata" or not rez.get("valoare"):
+				termina(False, _("Discul nu răspunde.") if rez["stare"] == "termen" else _("Locul din rețea nu este pregătit pentru înregistrări."))
+				return
+			c = rez["valoare"]
+			pornit, mesaj = foloseste(c["punct"], [c], SCOP_MENIU)
+			if not pornit:
+				termina(False, mesaj)
+				return
+			lucrare["punct"] = c["punct"]
+		else:
+			rez = culege()
+			if rez is None or rez.get("punct") != lucrare["punct"]:
+				termina(False, _("Nu am putut pregăti discul. Încearcă din nou."))
+				return
+			if rez["stare"] != LUCRU_IN_LUCRU:
+				text, detaliu = textLucru(rez)
+				termina(rez["stare"] == LUCRU_GATA and rez.get("aplicat"), " ".join(x for x in (text, detaliu) if x))
+				return
+		lucrare["ceas"].start(PAS_CULEGERE_MS, True)
+
+	try:
+		ceas = _ceasEnigma(pas)
+		_alegereRetea = {"ceas": ceas, "punct": None}
+		_ceasAlegereRetea[:] = [ceas]
+		HdsStocareDisc.cere(cheie, candidat, termen=TERMEN_IO_S, varsta=3600)
+		ceas.start(PAS_CULEGERE_MS, True)
+	except Exception:
+		_alegereRetea = None
+		return {"ok": False, "mesaj": _("Nu am putut pregăti discul. Încearcă din nou.")}
+	return {"ok": True, "in_lucru": True, "mesaj": _("Se pregătește locul înregistrărilor...")}
 
 
 # ------------------------------------------------------------------ textele
@@ -1046,6 +1280,7 @@ def textMotivDisc(motiv):
 		"mic": _("are mai puțin de 64 MB"),
 		"scriere": _("pe el nu se poate scrie"),
 		"lipsa": _("nu mai răspunde"),
+		"termen": _("Discul nu răspunde."),
 		"fisier": _("pe el există un fișier movie, care nu este dosar"),
 		"plin": _("este plin"),
 		"numai_citire": _("pe el se poate numai citi, nu și scrie"),
@@ -1109,6 +1344,8 @@ def textLucru(lucru):
 		return _("Gata. Înregistrările se salvează acum pe „%s”.") % nume, detaliu
 	if lucru["stare"] == LUCRU_GATA:
 		return _("Se pregătește „%s”...") % nume, ""
+	if rez.get("motiv") == "termen":
+		return _("Discul nu răspunde."), _("Încearcă din nou după ce verifici conexiunea discului.")
 	detaliu = _cuPunct(textMotivDisc(rez["motiv"])) if rez.get("motiv") else ""
 	return _("Nu am putut pregăti „%s” pentru înregistrări.") % nume, detaliu
 
@@ -1245,7 +1482,10 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 	detalii_loc = []
 	detalii_disc = []
 	titlu = _("Locul înregistrărilor")
-	if necunoscut:
+	if (stare or {}).get("termen"):
+		text = _("Discul nu răspunde.")
+		detalii_loc.append(_("Încearcă din nou după ce verifici conexiunea discului."))
+	elif necunoscut:
 		text = _("Caut un stick USB sau un hard disk...") if singur else _("Se citesc discurile...")
 	elif loc_bun:
 		folosit = [d for d in discuri if d.get("folosit")]
@@ -1297,7 +1537,8 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 		if rai:
 			a_doua = _("Pe discurile conectate nu se poate înregistra.")
 		elif necit:
-			a_doua = _("„%s” este conectat, dar receptorul nu îl poate citi.") % necit[0]["nume"]
+			a_doua = (necit[0].get("eroare_montare") or {}).get("motiv") or (
+				_("%s este conectat, dar receptorul nu îl poate citi.") % necit[0]["nume"])
 		else:
 			a_doua = _("Nu am găsit niciun stick USB sau hard disk.")
 		text = _(PRIMA_FRAZA[scop]) + " " + a_doua
@@ -1341,6 +1582,8 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 				randuri.append({"text": rand, "actiune": ACT_FOLOSESTE, "punct": d["punct"], "detaliu": _detaliuRand(d)})
 	for d in rai:
 		detalii_disc.append(_("„%s” nu se poate folosi: %s.") % (d["nume"], textMotivDisc(d.get("motiv"))))
+		if (d.get("eroare_montare") or {}).get("motiv"):
+			detalii_disc.append(d["eroare_montare"]["motiv"])
 	if not necunoscut and not (singur and automat):
 		# nucleul pune singur pe numai citire un stick cu o eroare; dupa verificare se poate scrie din nou (explicatia, in randul
 		# lui: caseta de detalii e deja plina in germana si rusa)
@@ -1349,11 +1592,15 @@ def texte(stare, cand, necit, scop=SCOP_MENIU, cale=None, motiv=None, se_citeste
 				"disc": discul(d["dispozitiv"]), "detaliu": _("Verifică stick-ul, îi repară erorile și se poate scrie "
 					"din nou pe el. Nu se formatează nimic.")})
 	for n in necit:
-		detalii_disc.append(_("„%s” nu poate fi citit de receptor. Îl poți formata aici sau pe un calculator, ca FAT32. "
-			"Formatarea șterge tot de pe el.") % n["nume"])
+		eroare_montare = n.get("eroare_montare") or {}
+		if eroare_montare.get("motiv"):
+			detalii_disc.append(eroare_montare["motiv"])
+		else:
+			detalii_disc.append(_("%s nu poate fi citit de receptor. Îl poți formata aici sau pe un calculator, ca FAT32. "
+				"Formatarea șterge tot de pe el.") % n["nume"])
 		# drumul spre formatare (randul 'Formatează'), numai dupa citire si nu cat ecranul pregateste singur alt disc
 		disc_intreg = discul(n.get("dispozitiv"))
-		if disc_intreg and not necunoscut and not (singur and automat):
+		if disc_intreg and not eroare_montare and not necunoscut and not (singur and automat):
 			randuri.append({"text": _("Formatează „%s”") % n["nume"], "actiune": ACT_FORMATEAZA, "punct": None,
 				"disc": disc_intreg, "detaliu": _("Deschide formatarea. Înainte să șteargă ceva, receptorul te întreabă.")})
 	if se_citeste and stare is None and cand and not necunoscut:
@@ -1406,7 +1653,7 @@ def _detaliuRand(d, cu_liber=True):
 	else:
 		parti.append(_("Se face pe el dosarul movie. Nu se șterge nimic."))
 	if d.get("fel") == "vfat" and (d.get("total") or 0) > LIMITA_FAT:
-		parti.append(_("Pe FAT32, o înregistrare se oprește la 4 GB (cam o oră pe un canal HD)."))
+		parti.append(_("FAT32 nu poate salva o înregistrare mai mare de 4 GB. Receptorul nu o împarte în fișiere. Pentru înregistrări lungi, alege un disc ext4."))
 	return " ".join(parti)
 
 
@@ -1437,7 +1684,7 @@ def alegeInFundal(cale, scop=SCOP_TEMPORIZATOR, arata=True, ceas=None, acum=None
 		return False
 	_fundal.update({"pas": FUNDAL_CITIRE, "scop": scop if scop in SCOPURI else SCOP_TEMPORIZATOR, "cale": cale or "",
 		"motiv": None, "cand": cand, "timp": acum, "arata": bool(arata), "punct": None})
-	# o citire noua: cea tinuta (pana la VARSTA_STARE secunde) poate fi de dinainte ca discul sa fie scos sau pus
+	# Fiecare alegere noua reciteste discurile; ceasul de mai jos culege numai rezultatul.
 	cereStare(cand, _fundal["cale"], din_nou=True)
 	try:
 		c = (ceas or _ceasEnigma)(pasFundal)
@@ -1489,6 +1736,8 @@ def _pasFundal(acum, anunta, deschide, retinut):
 		stare, se_citeste = cereStare(_fundal["cand"], cale)
 		if stare is None or se_citeste:
 			return pas
+		if "cand" in stare:
+			_fundal["cand"] = stare["cand"]
 		_fundal["motiv"] = (stare.get("loc") or {}).get("motiv")
 		dec = decizie(stare, discRetinut() if retinut is None else retinut, scop)
 		if dec["fel"] == DEC_BUN:
@@ -1666,7 +1915,7 @@ def _anuntaPaza():
 
 
 def pasPaza(liber=None, inregistrari=None, opreste=None, anunta=None):
-	"""Un pas al pazei, din eTimer-ul ei, pe firul enigma2 (statvfs pe radacina, ext4: nu parcurge discul). Fara
+	"""Un pas al pazei, din eTimer-ul ei; statvfs se cere in fundal, cu rezultat scurt. Fara
 	inregistrari pe discul de pornire ceasul se opreste; sub LIBER_OPRIRE liberi ele se opresc, cu un mesaj. Intoarce cate s-au
 	oprit. Timeshift-ul nu se opreste aici: are nevoie de omul care se uita, iar la 3 GB pe ora nu ajunge la disc plin."""
 	try:
@@ -1676,7 +1925,10 @@ def pasPaza(liber=None, inregistrari=None, opreste=None, anunta=None):
 				c.stop()
 			del _ceasPaza[:]
 			return 0
-		liber = _stocare().liberOcteti("/") if liber is None else liber
+		if liber is None:
+			from Components import HdsStocareDisc
+			s = HdsStocareDisc.statvfs("/")
+			liber = int(s.f_bavail) * int(s.f_bsize) if s is not None else None
 		if liber is None or liber >= LIBER_OPRIRE:
 			return 0
 		print("[HdsLocInregistrari] the disk the image runs from is almost full (%d MB): stopping %d recordings" % (

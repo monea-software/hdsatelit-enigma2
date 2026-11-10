@@ -108,7 +108,7 @@ class Verdict(object):
 	('Extensions/Nume'), pentru inlocuitor. taiat: citirea s-a oprit la o limita. slabe: semnele care opresc numai
 	cand pachetul nu are nimic pentru Python 3 (sursa care nu se compileaza, importurile): un pachet construit pentru
 	Python 3 poate avea scripturi vechi pe langa (masurat pe pachete reale, unelte/recunoastere.py)."""
-	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe')
+	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe', 'altpy', 'nativ')
 
 	def __init__(self):
 		self.python2 = None
@@ -119,6 +119,8 @@ class Verdict(object):
 		self.alt3 = ''               # un .pyc facut pentru alta versiune de Python 3 (numai pentru jurnal si masuratori)
 		self.fisiere = 0
 		self.slabe = []
+		self.altpy = None            # (fisierul, "3.7"): un .so legat de alta versiune de Python 3 decat a imaginii
+		self.nativ = ''              # primul program sau biblioteca (ELF) din pachet
 
 	def adauga(self, cod, detaliu):
 		self.python2 = True
@@ -319,6 +321,20 @@ def _citeste(t, m, maxim):
 	return fh.read(maxim)
 
 
+_ELF = b'\x7fELF'
+_LIBPY3 = re.compile(br'libpython3\.([0-9]{1,3})[a-z]*\.so')
+
+
+def _alt_libpython3(date):
+	""""3.7" cand un .so cere libpython-ul altei versiuni de Python 3 decat a imaginii, altfel ''"""
+	import sys
+	for m in _LIBPY3.finditer(date):
+		minor = int(m.group(1))
+		if sys.version_info[0] == 3 and minor != sys.version_info[1]:
+			return '3.%d' % minor
+	return ''
+
+
 def _din_data_tar(sursa, v, inceput, timp_maxim):
 	"""parcurge data.tar (flux) si completeaza verdictul; se opreste la primul semn sigur sau la o limita"""
 	py = 0
@@ -357,6 +373,17 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 						return
 					if b'libpython3.' in date:
 						v.python3 = True
+						alt = _alt_libpython3(date)
+						if alt and v.altpy is None:
+							v.altpy = (nume, alt)
+					if date[:4] == _ELF and not v.nativ:
+						v.nativ = nume
+				elif not v.nativ and _citeste(t, m, 4) == _ELF:
+					v.nativ = nume
+			elif not v.nativ and '.' not in nume and m.size >= 52:
+				# un program fara extensie (exteplayer3, un ajutor al pluginului)
+				if _citeste(t, m, 4) == _ELF:
+					v.nativ = nume
 			elif nume.endswith('.py') and not v.slabe:
 				# un semn slab nu opreste citirea: se cauta mai departe ce e facut pentru Python 3 (.pyc, .so)
 				if py < _PY_MAXIM and m.size <= _PY_OCTETI:

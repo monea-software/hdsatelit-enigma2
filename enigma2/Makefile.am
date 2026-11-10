@@ -21,15 +21,17 @@ EXTRA_DIST = lamedb
 # Pozele afisajului se instaleaza si la compilarea separata a interfetei.
 EXTRA_DIST += $(shell find $(srcdir)/HDSatelit/afisaj-color -type f)
 
-# /etc/image-version pentru ecranul About: version=0<major><minor><revizie><data commit>, 16 cifre cand fiecare parte a
-# versiunii are o cifra (0.3.9 -> 0039...); cand o parte are doua cifre, fiecare parte sta pe doua cifre, 19 cifre
-# (0.3.10 -> 0000310...). Cititorii (Components/HdsJurnalVersiuni.desparte_build, About, cadru_web, HdsCommon) le stiu
-# pe amandoua; peste 99 pe o parte sau o parte cu 0 in fata (0.3.09) opresc constructia.
+# Identificatorul sursei ramane version=0<versiune><data commit>, cu 16/19 cifre.
+# Data instalarii pachetului, UTC, sta separat in imagebuild si date.
+# enigma.info ofera numele complet si versiunea citibila listelor de pornire.
+# Peste 99 pe o parte sau zerouri in fata (0.3.09) opresc constructia.
 install-data-hook:
 	$(MKDIR_P) $(DESTDIR)$(sysconfdir)
 	$(MKDIR_P) $(DESTDIR)$(datadir)/enigma2/HDSatelit/afisaj-color
 	cp -R $(srcdir)/HDSatelit/afisaj-color/480x320 \
 		$(srcdir)/HDSatelit/afisaj-color/400x240 \
+		$(srcdir)/HDSatelit/afisaj-color/orbita \
+		$(srcdir)/HDSatelit/afisaj-color/fonturi \
 		$(DESTDIR)$(datadir)/enigma2/HDSatelit/afisaj-color/
 	v=`echo $(PACKAGE_VERSION) | tr -d .`; \
 	echo "$(PACKAGE_VERSION)" | grep -Eq '^(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$$' || { \
@@ -38,7 +40,18 @@ install-data-hook:
 		v=`echo $(PACKAGE_VERSION) | awk -F. '{ printf "%02d%02d%02d", $$1, $$2, $$3 }'`; \
 	d=`git -c safe.directory="*" -C $(top_srcdir) log -1 --format=%cd --date=format:%Y%m%d%H%M 2>/dev/null`; \
 	[ -n "$$d" ] || d=`date +%Y%m%d%H%M`; \
-	printf "version=0%s%s\ndistro=hdsatelit\nurl=https://hdsatelit.com\n" "$$v" "$$d" > $(DESTDIR)$(sysconfdir)/image-version
+	b=`date -u +%Y%m%d%H%M%S`; \
+	printf '%s\n' "version=0$$v$$d" "creator=HD Satelit" \
+		"imagename=HD Satelit" "imageversion=$(PACKAGE_VERSION)" \
+		"imagebuild=$${b%??????}" "date=$$b" "distro=hdsatelit" \
+		"url=https://hdsatelit.com" > "$(DESTDIR)$(sysconfdir)/image-version"; \
+	$(MKDIR_P) "$(DESTDIR)$(libdir)"; \
+	printf '%s\n' "distro='hdsatelit'" "displaydistro='HD Satelit'" \
+		"imgversion='$(PACKAGE_VERSION)'" "imageversion='$(PACKAGE_VERSION)'" \
+		"imagebuild='$${b%??????}'" "compiledate='$${b%??????}'" \
+		> "$(DESTDIR)$(libdir)/enigma.info"; \
+	c=`md5sum "$(DESTDIR)$(libdir)/enigma.info" | cut -d ' ' -f 1`; \
+	printf 'checksum=%s\n' "$$c" >> "$(DESTDIR)$(libdir)/enigma.info"
 
 index-enigma2.xml: $(top_srcdir)/tools/genmetaindex.py $(top_srcdir)/lib/python/Plugins/*/*/meta/plugin_*.xml
 	$(AM_V_GEN)$(PYTHON) $^ > $@

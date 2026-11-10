@@ -82,9 +82,18 @@ NUME_FAVORITE = ("Favourites (TV)", "Favourites (Radio)", "Favourites", "")
 
 
 def nume_favorite_aratat(buchet_id, nume_fisier):
-	"""Numele aratat al unui buchet Favorite cu numele implicit (tradus), altfel None."""
-	if buchet_id in FAVORITE and (nume_fisier or "").strip() in NUME_FAVORITE:
-		return _t("Favourites")
+	"""Numele implicit tradus al unui buchet al imaginii, altfel None."""
+	try:
+		try:
+			from Components.HdsFavorite import nume_buchet
+		except ImportError:
+			from HdsFavorite import nume_buchet
+		aratat = nume_buchet(buchet_id, nume_fisier)
+		if aratat != nume_fisier:
+			return aratat
+	except ImportError:
+		if buchet_id in FAVORITE and (nume_fisier or "").strip() in NUME_FAVORITE:
+			return _t("Favourites")
 	return None
 
 
@@ -865,13 +874,13 @@ class Sesiune(object):
 		x.blocat = False
 		nume = i.descriere or r.nume
 		if fel == "canal":
-			sv = self.d.lamedb.dupa_cheie(x.cheie)
-			if sv:
-				x.serviciu = self._canal(sv[0])
+			s = self.d.lamedb.servicii.get(r.k5())
+			if s is not None:
+				x.serviciu = self._canal(s)
 				x.ascuns = x.serviciu.ascuns
 				x.blocat = x.serviciu.blocat
 				if not nume:
-					nume = sv[0].nume
+					nume = s.nume
 			else:
 				x.mort = True
 		elif fel in ("subbuchet", "alternative"):
@@ -953,11 +962,8 @@ class Sesiune(object):
 		return self.d.sateliti.get(poz, "") if isinstance(poz, int) else ""
 
 	def serviciu(self, ref):
-		k = D.cheie_din_ref(ref)
-		if k is None:
-			return None
-		sv = self.d.lamedb.dupa_cheie(k)
-		return self._canal(sv[0]) if sv else None
+		s = self.d.lamedb.servicii.get(D.k5_din_ref(ref))
+		return self._canal(s) if s is not None else None
 
 	def _toate_canalele(self):
 		cheie = (id(self.d.lamedb), self.d.lamedb.versiune_date, self._v_par)
@@ -1106,13 +1112,13 @@ class Sesiune(object):
 	def adauga(self, buchet_id, refs, la=None):
 		"""Canalele (referinte) puse in buchet inaintea randului `la` (None = la sfarsit); cele deja in buchet se sar."""
 		b = self._b(buchet_id)
-		existente = set(i.cheie or i.ref for i in b.intrari)
+		existente = set(D.identitate_din_ref(i.ref) for i in b.intrari)
 		noi = []
 		for ref in refs:
 			r = D.Referinta(ref)
 			if not r.valida:
 				continue
-			k = r.cheie() or ref
+			k = D.identitate_din_ref(ref)
 			if k in existente:
 				continue
 			existente.add(k)
@@ -1181,8 +1187,8 @@ class Sesiune(object):
 		self._verifica_tinta(din_id, bloc, in_id)
 		if b.radio != tinta.radio and any(i.fel == "subbuchet" for i in bloc):
 			raise Eroare(_t("Un buchet TV nu se poate pune printre cele de radio."))
-		existente = set(i.cheie or i.ref for i in tinta.intrari)
-		puse = [x for x in bloc if (x.cheie or x.ref) not in existente]
+		existente = set(D.identitate_din_ref(i.ref) for i in tinta.intrari)
+		puse = [x for x in bloc if D.identitate_din_ref(x.ref) not in existente]
 		numeb = self._info_buchet(tinta).nume
 		if len(bloc) == 1:
 			nume = _t("Mutat în %(buchet)s: %(canal)s") % {"buchet": numeb, "canal": self._nume_rand(bloc[0])}
@@ -1203,10 +1209,10 @@ class Sesiune(object):
 		ind = self._bloc(b, indici)
 		bloc = [b.intrari[k] for k in ind]
 		self._verifica_tinta(din_id, bloc, in_id)
-		existente = set(i.cheie or i.ref for i in tinta.intrari) if din_id != in_id else set()
+		existente = set(D.identitate_din_ref(i.ref) for i in tinta.intrari) if din_id != in_id else set()
 		puse = []
 		for x in bloc:
-			k = x.cheie or x.ref
+			k = D.identitate_din_ref(x.ref)
 			if k in existente and x.fel not in ("marcaj", "spatiu"):
 				continue
 			existente.add(k)
@@ -1235,11 +1241,11 @@ class Sesiune(object):
 
 	def scoate_din_toate(self, refs):
 		"""Canalele scoase din toate buchetele (raman in receptor)."""
-		chei = set(D.cheie_din_ref(r) or r for r in refs)
+		chei = set(D.identitate_din_ref(r) for r in refs)
 		n = 0
 		with self._in_pas(_t("Scos din toate buchetele")) as pas:
 			for b in list(self.d.buchete.values()):
-				l = [x for x in b.intrari if (x.cheie or x.ref) not in chei]
+				l = [x for x in b.intrari if D.identitate_din_ref(x.ref) not in chei]
 				if len(l) != len(b.intrari):
 					n += len(b.intrari) - len(l)
 					self._pune_b(b.cu(intrari=l))
@@ -1277,8 +1283,7 @@ class Sesiune(object):
 
 	def redenumeste_serviciu(self, ref, nume):
 		"""Numele din lamedb, cu steagul HoldName (scanarea nu-l mai schimba)."""
-		k = D.cheie_din_ref(ref)
-		sv = self.d.lamedb.dupa_cheie(k) if k else []
+		sv = self._servicii_din([ref])
 		if not sv:
 			raise Eroare(_t("Canalul nu mai există în lista receptorului."))
 		nume = D.curat_nume(nume)
@@ -1369,7 +1374,7 @@ class Sesiune(object):
 			r = D.Referinta(ref)
 			if not r.valida:
 				continue
-			k = r.cheie() or ref
+			k = D.identitate_din_ref(ref)
 			if k in vazute:
 				continue
 			vazute.add(k)
@@ -1529,11 +1534,13 @@ class Sesiune(object):
 		rez = []
 		vazute = set()
 		for ref in refs:
-			k = D.cheie_din_ref(ref)
+			k = D.k5_din_ref(ref)
 			if not k or k in vazute:
 				continue
 			vazute.add(k)
-			rez.extend(self.d.lamedb.dupa_cheie(k))
+			s = self.d.lamedb.servicii.get(k)
+			if s is not None:
+				rez.append(s)
 		return rez
 
 	def ascunde(self, refs, da=True):
@@ -1597,24 +1604,25 @@ class Sesiune(object):
 		return nume
 
 	def sterge_servicii(self, refs):
-		"""Din lamedb (toate serviciile cu aceeasi cheie), din toate buchetele si din listele parentale."""
+		"""Numai serviciile alese, inclusiv tipul lor, din lamedb, buchete si listele parentale."""
+		refs = list(refs)
 		sv = self._servicii_din(refs)
-		chei = set(s.cheie for s in sv) | set(k for k in (D.cheie_din_ref(r) for r in refs) if k)
+		chei = set(k for k in (D.k5_din_ref(r) for r in refs) if k)
 		if not chei:
 			return 0
-		n = len(set(s.cheie for s in sv)) or len(chei)
+		n = len(chei)
 		nume = (_t("Șters din receptor: %s") % (sv[0].nume or _t("fără nume"))) if n == 1 and sv else \
 			ngettext("Un canal șters din receptor", "%d canale șterse din receptor", n) % n
 		with self._in_pas(nume):
 			for s in sv:
 				self._scoate_s(s.k5)
 			for b in list(self.d.buchete.values()):
-				l = [x for x in b.intrari if x.cheie not in chei]
+				l = [x for x in b.intrari if D.k5_din_ref(x.ref) not in chei]
 				if len(l) != len(b.intrari):
 					self._pune_b(b.cu(intrari=l))
 			for alb in (False, True):
 				lista = self.d.whitelist if alb else self.d.blacklist
-				l = tuple(r for r in lista if D.cheie_din_ref(r) not in chei)
+				l = tuple(r for r in lista if D.k5_din_ref(r) not in chei)
 				if l != lista:
 					self._tine_p()
 					if alb:
@@ -1713,10 +1721,10 @@ class Sesiune(object):
 		sar. -> cate s-au pus."""
 		b, x = self._alternativa(buchet_id, indice)
 		a = self._b(x.fisier)
-		existente = set(i.cheie or i.ref for i in a.intrari)
+		existente = set(D.identitate_din_ref(i.ref) for i in a.intrari)
 		noi = []
 		for ref in refs:
-			k = D.cheie_din_ref(ref) or ref
+			k = D.identitate_din_ref(ref)
 			if k in existente:
 				continue
 			existente.add(k)
@@ -1923,8 +1931,7 @@ class Sesiune(object):
 	def detalii(self, ref):
 		"""Tot ce stie lamedb despre canal: referinta, SID / TSID / ONID / namespace, tipul, furnizorul, steagurile,
 		PID-urile tinute minte (c:), CAID-urile, transponderul, buchetele."""
-		k = D.cheie_din_ref(ref)
-		sv = self.d.lamedb.dupa_cheie(k) if k else []
+		sv = self._servicii_din([ref])
 		if not sv:
 			raise Eroare(_t("Canalul nu mai există în lista receptorului."))
 		s = sv[0]
@@ -1935,13 +1942,12 @@ class Sesiune(object):
 			"caids": ["%04x" % x for x in s.caids], "poz_text": c.poz_text, "tp_text": c.tp_text,
 			"tp": t.cheie_text() if t is not None else "", "tp_campuri": t.campuri() if t is not None else {},
 			"buchete": [self._info_buchet(self.d.buchete[b]).nume for b in self.in_buchete(s.ref) if b in self.d.buchete],
-			"dubluri": len(sv)}
+			"dubluri": len(self.d.lamedb.dupa_cheie(s.cheie))}
 
 	def schimba_serviciu(self, ref, furnizor=None, steaguri=None, pids=None):
 		"""Mod avansat: furnizorul, steagurile (numai cele din STEAGURI_EDITABILE) si PID-urile tinute minte (c:)
 		ale unui canal. SID-ul si tipul nu se schimba aici (ar strica referintele din buchete). -> numele schimbarii."""
-		k = D.cheie_din_ref(ref)
-		sv = self.d.lamedb.dupa_cheie(k) if k else []
+		sv = self._servicii_din([ref])
 		if not sv:
 			raise Eroare(_t("Canalul nu mai există în lista receptorului."))
 		masca = 0
@@ -1977,8 +1983,8 @@ class Sesiune(object):
 	def scoate_canale(self, buchet_id, refs):
 		"""Canalele (dupa cheie) scoase dintr-un singur buchet (raman in receptor si in celelalte)."""
 		b = self._b(buchet_id)
-		chei = set(D.cheie_din_ref(r) or r for r in refs)
-		ind = [k for k, i in enumerate(b.intrari) if (i.cheie or i.ref) in chei]
+		chei = set(D.identitate_din_ref(r) for r in refs)
+		ind = [k for k, i in enumerate(b.intrari) if D.identitate_din_ref(i.ref) in chei]
 		if not ind:
 			return None
 		return self.scoate(buchet_id, ind)
@@ -2043,10 +2049,10 @@ class Sesiune(object):
 		b, m = self._b(buchet_id), self._b(model_id)
 		ordine = {}
 		for k, i in enumerate(m.intrari):
-			ordine.setdefault(i.cheie or i.ref, k)
+			ordine.setdefault(D.identitate_din_ref(i.ref), k)
 		locuri = [k for k, i in enumerate(b.intrari) if i.fel in ("canal", "flux")]
 		canale = [b.intrari[k] for k in locuri]
-		canale.sort(key=lambda i: ordine.get(i.cheie or i.ref, len(ordine)))
+		canale.sort(key=lambda i: ordine.get(D.identitate_din_ref(i.ref), len(ordine)))
 		l = list(b.intrari)
 		for k, i in zip(locuri, canale):
 			l[k] = i
@@ -2091,7 +2097,9 @@ class Sesiune(object):
 		cele care exista deja se sar. Un singur pas. -> cate."""
 		d = citeste_copia(copie_id, self.director)
 		alese = set(chei)
-		sv = [s for s in d.lamedb.servicii.values() if s.cheie in alese and s.k5 not in self.d.lamedb.servicii]
+		sv = [s for s in d.lamedb.servicii.values() if
+			(s.cheie in alese or ":".join("%x" % p for p in s.k5) in alese) and
+			s.k5 not in self.d.lamedb.servicii]
 		if not sv:
 			return 0
 		with self._in_pas(ngettext("Un canal adus înapoi din copie", "%d canale aduse înapoi din copie", len(sv)) %
@@ -2124,9 +2132,9 @@ class Sesiune(object):
 			refs = []
 			vazute = set()
 			for c in canale:
-				if c.ascuns or c.cheie in vazute:
+				if c.ascuns or c.k5 in vazute:
 					continue
-				vazute.add(c.cheie)
+				vazute.add(c.k5)
 				refs.append(c.ref)
 			if refs:
 				de_facut.append((D.curat_nume(nume, 100) or _t("Buchet nou"), refs))

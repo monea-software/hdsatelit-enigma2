@@ -727,6 +727,27 @@ def existaInca(rt, t):
 	return t is not None and (t in rt.timer_list or t in rt.processed_timers)
 
 
+def cautaEmisiune(rt, service, event):
+	"""Programarea emisiunii din ghid, inclusiv cea venita intre timp de pe telefon."""
+	if event is None or service is None:
+		return None
+	ref = service.ref.toString()
+	referinte = [ref]
+	for n in range(event.getNumOfLinkageServices()):
+		referinte.append(event.getLinkageService(service.ref, n).toString())
+	eid = event.getEventId()
+	for t in rt.timer_list:
+		if eid is not None and eid >= 0 and t.eit == eid and t.service_ref.ref.toString() in referinte:
+			return t
+	# O programare manuala poate sa nu aiba id-ul emisiunii. Aceeasi recunoastere ca in ghidul web.
+	from Components import HdsTemporizare
+	for ref in referinte:
+		t = HdsTemporizare.cauta(ref, {"id": eid, "begin": event.getBeginTime(), "dur": event.getDuration()}, rt)
+		if t is not None:
+			return t
+	return None
+
+
 # ------------------------------------------------------------------ campurile ferestrei (web)
 
 CAMPURI = ("name", "description", "justplay", "begin", "end", "repeated", "repeatedbegindate", "afterEvent", "dirname",

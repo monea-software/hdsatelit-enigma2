@@ -702,7 +702,7 @@ class HdsTelecomenzi(Screen):
 			randuri.append(_('Codul acesta e deja folosit pentru %s. Apasă-l încă o dată ca să-l muți la %s, sau alt buton.') %
 				(_(vechi[1]) if vechi else '?', _(b[1]) if b else '?'))
 		if b is not None and b[0] == 'power':
-			randuri.append(_('Din standby adânc receptorul pornește numai cu telecomanda lui.'))
+			randuri.append(_('Din Deep standby receptorul pornește numai cu telecomanda lui.'))
 		if a.de_baza_facute():
 			randuri.append(_('Pe telecomanda nouă: ține apăsat 2 secunde = Sari; ține apăsat EXIT = Gata.'))
 		elif a.lipsa_pentru_gata():

@@ -142,7 +142,7 @@ rz_cod_paza() {
 	elif ! grep -qE '^stare=(potrivit|nepotrivit)$' "$HDS_PAZA_STARE" 2>/dev/null; then rz_c=E291
 	elif grep -qx 'stare=nepotrivit' "$HDS_PAZA_STARE" 2>/dev/null; then
 		rz_np=" $(sed -n 's/^nepotriviri=//p' "$HDS_PAZA_STARE" | head -n 1) "
-		for rz_k in cip:01 boxtype:02 dt:08 eticheta:03 emmc:07 hw:04 partitii:05 kernel:06; do
+		for rz_k in cip:01 boxtype:02 model_id:08 eticheta:03 emmc:07 hw:04 partitii:05 kernel:06; do
 			case $rz_np in *" ${rz_k%:*} "*)
 				rz_v=$(sed -n "s/^${rz_k%:*}=//p" "$HDS_PAZA_STARE" | head -n 1)
 				case $rz_v in ''|'!') rz_c=E2${rz_k#*:} ;; *) rz_c=E1${rz_k#*:} ;; esac
@@ -195,12 +195,16 @@ rz_date() {
 		echo "confirmat=$(rz_regula confirmat)"
 		echo "asteptat_cip=$(rz_regula chip)"
 		echo "asteptat_boxtype=$(rz_regula boxtype)"
+		# modelul placii cerut: model_id= din reguli, altfel numele scurt din machinebuild= (HdsPazaModel.modelCerut)
+		rz_mc=$(rz_regula model_id)
+		[ -n "$rz_mc" ] || rz_mc=$(rz_regula machinebuild | sed 's/^vu//')
+		echo "asteptat_model_id=$rz_mc"
 		echo "asteptat_hw=$(rz_regula hw)"
 		echo "limba=$(sed -n 's/^config\.osd\.language=\([A-Za-z_]*\).*/\1/p' "$HDS_REZERVA_SETARI" 2>/dev/null | head -n 1)"
 		[ -f "$D/cauza" ] && echo "cauza=$(head -n 1 "$D/cauza" | rz_filtru | cut -c1-200)"
 		[ -f "$D/porniri" ] && echo "porniri=$(wc -l < "$D/porniri" | tr -cd 0-9)"
 		# the fields of the guard, as the guard wrote them (plain characters)
-		grep -E '^(stare|nepotriviri|treapta|avertismente|cip|hw|partitii|kernel|boxtype|eticheta|emmc|dt|slot|reguli)=' \
+		grep -E '^(stare|nepotriviri|treapta|avertismente|cip|hw|partitii|kernel|boxtype|eticheta|emmc|model_id|slot|reguli)=' \
 			"$HDS_PAZA_STARE" 2>/dev/null | cut -c1-300
 		[ -f "$D/drivere" ] && grep '^lipsa=' "$D/drivere"
 		rz_ml=$(rz_module_lipsa)

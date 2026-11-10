@@ -2,67 +2,19 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsTraducereSubtitrari (ecranul) - „Traducerea subtitrărilor": traducerea automata a subtitrarilor text (teletext,
-# fisiere si textul citit din subtitrarile DVB), prin serviciul ales de om (Components/HdsTraducereSubtitrari.py).
-#
-# Randurile: pornit/oprit; serviciul; campurile serviciului ales (cheia API, regiunea la Azure, adresa serverului la
-# LibreTranslate si la serverul compatibil OpenAI, ID-ul contului la Cloudflare Workers, modelul la Gemini, Groq,
-# Cloudflare Workers si la serverul compatibil OpenAI; la Groq si Cloudflare modelul se alege din lista propusa sau se
-# scrie, iar ID-ul contului se verifica la scriere: 32 de semne hex); limba
-# traducerii (implicit limba meniului); afisarea (in locul originalului sau sub el); traducerea care intarzie (se
-# asteapta, cu ecranul gol, sau dupa 2 s ramane originalul cu semnul „(netradus)”: originalul nu apare niciodata inaintea
-# traducerii); timpul de citire (cat sta cel putin o subtitrare tradusa, dupa lungime: Components/HdsTraducereSubtitrari
-# TIMP_CITIRE); subtitrarile DVB (prin recunoasterea textului); contorul „Ce s-a tradus” (OK il
-# pune la zero); „Tradu bara de jos” (titlurile barei, cu traducerea pornita), „Tradu EPG” si contorul ghidului
-# (Components/HdsTraducereEpg.py); "Tradu teletextul", "Teletextul tradus" (in pagina sau intr-un panou), "Tradu HbbTV"
-# si contorul lor (Components/HdsTraducereTexte.py). Sub lista: ce face randul, ce lipseste si ce pleaca din receptor
-# (confidentialitatea).
-# Cheia: OK pe rand deschide alegerea „Scrie cheia nouă” / „Șterge cheia”; cheia scrisa merge direct in fisierul
-# criptat (Components/HdsTraducereSubtitrari.chei()) si nu se mai arata niciodata (randul spune numai „pusă”).
-# Textele (regiunea, adresa, modelul): OK deschide tastatura de pe ecran.
-# Galben: „Probează traducerea”: o fraza de proba trimisa serviciului ales; raspunsul (sau eroarea, pe intelesul
-# oricui) apare sub lista, iar originalul si traducerea sunt desenate chiar de eSubtitleWidget, ca subtitrarile
-# (showTranslationSample: traducerea sub original, in culoarea ei, ca la afisarea „Sub original”).
-# Albastru: instructiunile pas cu pas pentru serviciul ales (avertismentul platii automate la Google Cloud, cont, cheie
-# gratuita, cota, ce se intampla la depasire, data verificarii); stanga/dreapta in ordinea din T.SERVICII. Verde salveaza, Rosu anuleaza (valorile se intorc).
-# Numai cu sagetile si OK: randurile-buton „Probează traducerea” si „Instrucțiuni” (sub campurile serviciului) fac
-# acelasi lucru ca Galben si Albastru; EXIT cu ceva schimbat intreaba (ChoiceBox: salveaza / lasa cum era / inapoi),
-# fara schimbari inchide. Rosu anuleaza fara intrebare.
-# Campurile text (regiunea, adresele, modelele) se arata prin randuri-proxy (o singura alegere, textul valorii): o
-# valoare goala apare „Global” la regiune si „lipsește (OK o scrie)” la celelalte, nu o casuta goala.
-# Serviciile de rezerva: randul arata langa fiecare ce ii lipseste („fără cheie”), din T.ceLipseste; ajutorul randului
-# spune intreg ce lipseste fiecaruia si care e serviciul principal. OK pe rand: adauga, muta, scoate, si „Fă-l
-# principal” pentru serviciile gata (T.serviciiGata, T.punePrincipal: principalul nou iese din rezerve, fostul intra
-# primul; salvat cu Verde, ca restul ecranului). Rezultatul unei chei puse ca rezerva (de pe telefon, cand principalul
-# merge) e mesajul configuratorului: traducerea ramane pe principal (textRezultat).
-# Primul rand, „Configurează de pe telefon”: OK deschide HdsTraducereTelefon, un cod QR mare (Components/HdsQr.py) cu
-# adresa http://<IP receptor>/t/<jeton> (HdsWebControl/asociere.py, cereJeton: o folosire, 5 minute, refacut singur la
-# expirare, anulat la inchidere); telefonul care il scaneaza ajunge asociat in pagina pas cu pas /traducere-configurare
-# (recunoasterea cheii, proba pe loc). Ecranul arata cand s-a conectat telefonul si rezultatul probei facute de pe el.
-# La serverul din casa (LibreTranslate, compatibil OpenAI) randul „Caută în rețeaua de acasă” sta inaintea adresei:
-# OK porneste cautarea (Components/HdsConfigurareTraducere.py, pe fire separate), apoi lista gasitelor; serverul ales
-# se pune si se probeaza singur (modelul ales automat), cu timpul masurat si avertismentul cand e lent.
-# „Adresă proprie” (propriu): adresa-sablon, metoda, corpul, felul corpului, numele antetului si valoarea lui (pastrata
-# ca o cheie), felul raspunsului, calea in JSON.
-# Adresele (LibreTranslate, compatibil OpenAI, adresa proprie): adresa receptorului insusi (127.0.0.1, localhost,
-# 0.0.0.0, 169.254.x, IP-ul lui) e refuzata la scriere, cu mesajul sub lista (T.clasaAdresa / C.normalizeazaAdresa).
-# Cheia unui serviciu cu adresa (T.CU_ADRESA) pleaca numai spre gazda pentru care a fost pusa: cheia scrisa in ecran se
-# leaga, la Verde, de adresa salvata atunci (T.chei().legaDeAdresa), ca ordinea randurilor (intai cheia sau intai
-# adresa) sa nu conteze. La anulare (Rosu, sau EXIT si „lasă cum era”), o cheie scrisa aici pentru o adresa care nu
-# ramane salvata se inlocuieste cu cheia si legatura de dinainte (tinute in RAM de la prima cheie scrisa, _cheiVechi):
-# cheia veche se intoarce numai la gazda ei. Randul cheii spune „pusă pentru alt server” cand cheia nu pleaca la adresa
-# de acum (T.notaCheie, si sub lista). Cat timp fisierul cheilor a fost pus deoparte la pornire (nu se mai putea citi pe
-# acest receptor), randul cheii spune „trebuie pusă din nou”, iar nota (T.textCheiDinNou) sta numai in ajutorul
-# randului cheii; la serviciile fara cheie obligatorie, o nota blanda.
-# In instructiuni, un cod QR spre pagina oficiala a cheii (T.instructiuni(serv)["pagina_cheie"]).
-# Skinul HDSatelit nu se atinge: ecranul isi poarta skinul aici, facut dupa marimea ecranului (1920x1080 sau 1280x720).
-# Lista are mai multe randuri decat incap: eListbox pune bara de derulare (si ingusteaza randurile) abia la prima mutare
-# a cursorului si redeseneaza numai randurile mutate, iar valorile celorlalte raman sub bara. La onLayoutFinish
-# (_pornit), inainte de primul desen, lista se aseaza pe randul de acum (moveSelectionTo) si se redeseneaza toata.
-# Aceleasi alegeri sunt in interfata web, pagina /traducere-subtitrari
-# (Plugins/Extensions/HdsWebControl/traducere_subtitrari_web.py).
+# Traducerea subtitrarilor: reglajele uzuale si Toate reglajele.
+# Setarile se editeaza local. Cheile noi raman numai in memorie si se arata mascate.
+# VERDE salveaza setarile schimbate si cheile; EXIT renunta la modificarile locale.
+# O schimbare facuta intre timp din web ramane daca acel camp nu a fost editat aici.
+# Cheia lipsa deschide direct tastatura. O cheie existenta se poate schimba sau sterge.
+# Tastatura cheii foloseste tastatura comuna, cu un camp local mascat.
+# Galben probeaza configuratia locala fara salvare. Albastru deschide instructiunile.
+# Pornirea spune ce lipseste pistei de subtitrare, inclusiv OCR pentru imagini.
+# Aceleasi reglaje si actiuni sunt in HdsWebControl, /traducere-subtitrari.
 
 from __future__ import absolute_import
+
+from copy import copy, deepcopy
 
 from enigma import getDesktop, eSubtitleWidget, eTimer
 
@@ -71,7 +23,7 @@ from Screens.ChoiceBox import ChoiceBox
 from Screens.VirtualKeyBoard import VirtualKeyBoard
 from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
-from Components.config import configfile, getConfigListEntry, ConfigSelection
+from Components.config import configfile, getConfigListEntry, ConfigSelection, ConfigSubsection, ConfigText
 from Components.GUIComponent import GUIComponent
 from Components.ScrollLabel import ScrollLabel
 from Components.Sources.StaticText import StaticText
@@ -149,6 +101,25 @@ def _camp(s, nume):
 		return getattr(s, nume)
 	except (KeyError, AttributeError):
 		return None
+
+
+def _copieSetari(original):
+	"""Copii locale fara notificatorii care schimba traducerea in timpul editarii."""
+	rezultat = ConfigSubsection()
+	for nume, element in original.dict().items():
+		if isinstance(element, ConfigText):
+			# Un camp nou are propriile functii de tastare si propria fereastra de ajutor.
+			local = ConfigText(default=element.default, fixed_size=element.fixed_size,
+				visible_width=element.visible_width)
+			local.value = element.value
+		else:
+			local = copy(element)
+			local.clearNotifiers()
+		if hasattr(element, "choices"):
+			local.choices = deepcopy(element.choices)
+			local._descr = None
+		setattr(rezultat, nume, local)
+	return rezultat
 
 
 def _t_lipsa(text):
@@ -494,9 +465,14 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		self.skin = _skin(marime.width(), marime.height())
 		Screen.__init__(self, session)
 		self.setTitle(_("Traducerea subtitrărilor"))
-		self.setari = T.initConfig()
+		self._ecranInchis = False
+		self._regiuneProbei = None
+		self._globale = T.initConfig()
+		self.setari = _copieSetari(self._globale)
+		self._initiale = {n: e.value for n, e in self.setari.dict().items()}
+		self._cheiNoi = []
+		self._toate = False
 		self._cheiPuse = set()			# serviciile cu adresa a caror cheie s-a scris chiar acum, in acest ecran
-		self._cheiVechi = {}			# serviciu -> (cheia, legatura) de dinainte de prima cheie scrisa aici (numai RAM)
 		self._proxiuri = {}				# id(element text) -> randul-proxy care ii arata valoarea
 		self._realul = {}				# id(randul-proxy) -> (elementul text, textul valorii goale)
 		ConfigListScreen.__init__(self, [], session=session)
@@ -527,6 +503,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		self.randRezerve = ConfigSelection(choices=[("rezerve", u"")], default="rezerve")
 		self.randProba = ConfigSelection(choices=[("proba", _("OK probează"))], default="proba")
 		self.randInstructiuni = ConfigSelection(choices=[("instructiuni", _("OK le deschide"))], default="instructiuni")
+		self.randToate = ConfigSelection(choices=[("toate", _("OK le deschide"))], default="toate")
 		self._textProba = None
 		self._textMesaj = None
 		self._textLucrare = None		# rezultatul cautarii sau al configurarii pornite de aici
@@ -597,9 +574,8 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		if serv in ("libre", "openai"):
 			lista.append(getConfigListEntry(_("Caută în rețeaua de acasă"), self.randCauta))
 		# Chei multiple per serviciu: minim 3 randuri de cheie + rand adauga cheie
-		toate = T.chei().citeste_toate()
-		lista_chei = list(toate.get(serv) or [])
-		n_randuri = max(3, len(lista_chei))
+		lista_chei = self._listaChei(serv)
+		n_randuri = max(3, len(lista_chei)) if self._toate else 1
 		while len(self.randChei) < n_randuri:
 			idx = len(self.randChei)
 			self.randChei.append(ConfigSelection(choices=[("cheie", "")], default="cheie"))
@@ -659,7 +635,51 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			lista.append(getConfigListEntry(_("Tradu HbbTV"), s.hbbtv))
 		if _camp(s, "teletext") is not None or _camp(s, "hbbtv") is not None:
 			lista.append(getConfigListEntry(_("Ce s-a tradus din teletext și HbbTV"), self.randContorTexte))
+		if not self._toate:
+			vizibile = self._numeVizibile()
+			elemente = [getattr(s, n) for n in vizibile if _camp(s, n) is not None]
+			butoane = (self.randCauta, self.randProba, self.randChei[0])
+			lista = [r for r in lista if self._real(r[1]) in elemente or r[1] in butoane]
+		ascunse = self._ascunseSchimbate()
+		text = (_("%d reglaje ascunse schimbate") % ascunse) if ascunse and not self._toate else _("OK le deschide")
+		self._puneValoare(self.randToate, "toate", text)
+		lista.append(getConfigListEntry(_("Reglajele uzuale") if self._toate else _("Toate reglajele"), self.randToate))
 		return lista
+
+	def _numeVizibile(self):
+		serv = self.setari.serviciu.value
+		campuri = {"azure": ("regiune",), "libre": ("adresa_libre",),
+			"openai": ("adresa_openai", "model_openai"), "gemini": ("model_gemini",),
+			"groq": ("model_groq",), "cloudflare": ("cont_cloudflare", "model_cloudflare"),
+			"propriu": tuple(n for n in self.setari.dict() if n.startswith("propriu_"))}
+		return ("pornit", "serviciu", "limba", "afisare", "dvb") + campuri.get(serv, ())
+
+	def _ascunseSchimbate(self):
+		vizibile = self._numeVizibile()
+		return sum(1 for n, e in self.setari.dict().items() if n not in vizibile and e.value != e.default)
+
+	def _listaChei(self, serv, marcate=False):
+		lista = [(v, False) for v in (T.chei().citeste_toate().get(serv) or [])]
+		for schimbare in self._cheiNoi:
+			if schimbare["serviciu"] != serv:
+				continue
+			idx, valoare = schimbare.get("indice", 0), schimbare["valoare"]
+			if valoare:
+				if idx < len(lista):
+					lista[idx] = (valoare, True)
+				elif valoare not in [v for v, noua in lista]:
+					lista.append((valoare, True))
+			elif idx < len(lista):
+				lista.pop(idx)
+		return lista if marcate else [v for v, noua in lista]
+
+	def _configuratiaLocala(self):
+		ok, mesaj, date, legaturi = T.chei().pregatesteMaiMulte(self._cheiNoi, s=self.setari)
+		self._eroareEditarii = mesaj if not ok else u""
+		cheile = {serv: valori[0] for serv, valori in (date or {}).items() if valori}
+		cfg = T.configuratia(self.setari, cheile=cheile, legaturi=legaturi)
+		cfg["_temporara"] = True
+		return cfg
 
 	def _facLista(self):
 		curent = self["config"].getCurrent()
@@ -714,7 +734,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 
 	def _textCheie(self):
 		serv = self.setari.serviciu.value
-		are = T.chei().stare().get(serv)
+		are = bool(self._listaChei(serv))
 		if are and serv in getattr(T, "CU_ADRESA", ()) and serv not in self._cheiPuse:
 			try:
 				if T.configuratia(self.setari).get("cheie_oprita"):
@@ -731,9 +751,11 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 
 	def _textCheieIndice(self, idx):
 		serv = self.setari.serviciu.value
-		chei_s = T.chei().citeste_toate().get(serv) or []
+		chei_s = self._listaChei(serv)
 		if idx >= len(chei_s):
 			return _("lipsește (OK o scrie)")
+		if any(c["serviciu"] == serv for c in self._cheiNoi):
+			return _("pregătită (VERDE salvează)")
 		stari = T.chei().stare_chei(serv)
 		if idx < len(stari):
 			txt_stare = stari[idx]["stare_text"]
@@ -840,9 +862,14 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		s = self.setari
 		if self._textMesaj:
 			return self._textMesaj
+		if e is self.randToate:
+			return _("OK schimbă vederea. Reglajele ascunse se păstrează. VERDE salvează tot; EXIT renunță.")
+		if e is s.pornit and hasattr(T, "diagnosticPornire"):
+			return T.diagnosticPornire(s=s)["mesaj"]
 		if self._textProba is not None and e in (s.serviciu, self.randProba):
 			return self._textProba
-		lipsa = T.textCeLipseste()
+		cfg = self._configuratiaLocala()
+		lipsa = self._eroareEditarii or T.textCeLipseste(cfg)
 		if e is self.randProba:
 			return _("OK trimite o frază de probă serviciului ales. Răspunsul apare aici, iar originalul și traducerea se văd "
 				"jos, ca subtitrările.") + ((u" " + lipsa) if lipsa else u"")
@@ -1002,6 +1029,10 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 	def ok(self):
 		e = self._curent()
 		s = self.setari
+		if e is self.randToate:
+			self._toate = not self._toate
+			self._facLista()
+			return
 		if e is self.randContor:
 			T.instanta().puneContorulLaZero()
 			self._improspateaza()
@@ -1020,12 +1051,15 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			self._improspateaza()
 			return
 		if e is self.randAdaugaCheie:
-			idx = len(T.chei().citeste_toate().get(s.serviciu.value) or [])
+			idx = len(self._listaChei(s.serviciu.value))
 			self._alegereCheieIndice(idx, ("scrie", "scrie"))
 			return
 		if e in self.randChei:
 			idx = self.randChei.index(e)
-			are_cheie = idx < len(T.chei().citeste_toate().get(s.serviciu.value) or [])
+			are_cheie = idx < len(self._listaChei(s.serviciu.value))
+			if not are_cheie:
+				self._alegereCheieIndice(idx, (u"", "scrie"))
+				return
 			titlu = (_("Valoarea antetului %d pentru %s") if s.serviciu.value == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(s.serviciu.value))
 			optiuni = [(_("Scrie cheia nouă"), "scrie")]
 			if are_cheie:
@@ -1101,67 +1135,53 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			pass
 
 	def _alegereCheie(self, alegere):
-		if not alegere:
-			return
-		serv = self.setari.serviciu.value
-		if alegere[1] == "sterge":
-			ok, mesaj = T.chei().schimba(serv, None)
-			if ok:
-				# stergerea e aleasa anume: la anulare nu se mai pune nimic la loc
-				self._cheiPuse.discard(serv)
-				self._cheiVechi.pop(serv, None)
-			self._mesaj(mesaj)
-			return
-
-		def gata(text):
-			if text is None or not text.strip():
-				return
-			if serv in getattr(T, "CU_ADRESA", ()) and serv not in self._cheiVechi:
-				try:
-					self._cheiVechi[serv] = (T.chei().citeste().get(serv), T.chei().legaturi().get(serv))
-				except Exception as e:
-					print("[HdsTraducereSubtitrari] cheia de dinainte: %s" % e.__class__.__name__)
-			ok, mesaj = T.chei().schimba(serv, text)
-			if ok and serv in getattr(T, "CU_ADRESA", ()):
-				self._cheiPuse.add(serv)		# legata la Verde de adresa salvata atunci
-			self._mesaj(mesaj)
-		self.session.openWithCallback(gata, VirtualKeyBoard, title=_("Cheia API pentru %s") % T.numeServiciu(serv),
-			text=u"")
+		self._alegereCheieIndice(0, alegere)
 
 	def _alegereCheieIndice(self, idx, alegere):
 		if not alegere:
 			return
 		serv = self.setari.serviciu.value
 		if alegere[1] == "sterge":
-			ok, mesaj = T.chei().schimba(serv, None, indice=idx)
-			if ok:
-				self._cheiPuse.discard(serv)
-				self._cheiVechi.pop(serv, None)
-			self._mesaj(mesaj)
+			self._cheiNoi.append({"serviciu": serv, "valoare": None, "indice": idx})
+			self._mesaj(_("Ștergere pregătită. VERDE salvează; EXIT renunță."))
 			return
 
 		def gata(text):
 			if text is None or not text.strip():
 				return
-			if serv in getattr(T, "CU_ADRESA", ()) and serv not in self._cheiVechi:
-				try:
-					self._cheiVechi[serv] = (T.chei().citeste().get(serv), T.chei().legaturi().get(serv))
-				except Exception as e:
-					print("[HdsTraducereSubtitrari] cheia de dinainte: %s" % e.__class__.__name__)
-			ok, mesaj = T.chei().schimba(serv, text, indice=idx)
-			if ok and serv in getattr(T, "CU_ADRESA", ()):
-				self._cheiPuse.add(serv)
-			self._mesaj(mesaj)
+			try:
+				valoare = T.curataCheie(text, serv == "propriu")
+				if not valoare:
+					self._mesaj(_("Cheia are caractere care nu pot fi într-o cheie (sau e prea lungă). Nu s-a schimbat nimic."))
+					return
+				self._cheiNoi.append({"serviciu": serv, "valoare": valoare, "indice": idx})
+				self._mesaj(_("Cheie pregătită. VERDE salvează; EXIT renunță."))
+			except Exception as eroare:
+				print("[HdsTraducereSubtitrari] inchiderea tastaturii: %s" % eroare.__class__.__name__)
+				self._textMesaj = _("Cheia nu s-a putut pregăti. Încearcă din nou.")
+				self["ajutor"].setText(self._textMesaj)
 		titlu = (_("Valoarea antetului %d pentru %s") if serv == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(serv))
-		self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=u"")
+		try:
+			self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=u"", hdsSecret=True)
+		except Exception as eroare:
+			print("[HdsTraducereSubtitrari] deschiderea tastaturii: %s" % eroare.__class__.__name__)
+			self._mesaj(_("Tastatura nu s-a putut deschide. Încearcă din nou."))
 
 	def _mesaj(self, text):
-		self._facLista()
+		try:
+			self._facLista()
+		except Exception as eroare:
+			print("[HdsTraducereSubtitrari] refacerea listei: %s" % eroare.__class__.__name__)
+		text = T.faraSecrete(text, [c["valoare"] for c in self._cheiNoi])
 		self._textMesaj = text		# ramane sub lista pana la alt rand (ceasul de 2 s nu-l sterge)
 		self["ajutor"].setText(text)
 
 	def probeaza(self):
-		cfg = T.configuratia()
+		cfg = self._configuratiaLocala()
+		if self._eroareEditarii:
+			self._mesaj(self._eroareEditarii)
+			return
+		self._regiuneProbei = (cfg["serviciu"], cfg.get("regiune"))
 		self._textProba = _("Se probează traducerea cu %s...") % T.numeServiciu(cfg["serviciu"])
 		self._textMesaj = None
 		if self._curent() is not self.randProba:
@@ -1174,6 +1194,13 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		T.instanta().proba(self._gataProba, cfg)
 
 	def _gataProba(self, rez):
+		if self._ecranInchis:
+			return
+		s = self.setari
+		if ("regiune_gasita" in rez and self._regiuneProbei == (s.serviciu.value, s.regiune.value)
+				and s.serviciu.value == "azure"):
+			s.regiune.value = rez["regiune_gasita"]
+			self._improspateazaProxiurile()
 		if rez.get("stare") == "ok":
 			timp = _secunde(rez["ms"]) if rez.get("ms") is not None else u"?"
 			self._textProba = _("Proba a mers (%s, %s): %s") % (rez.get("serviciu", u""), timp, rez["traducere"])
@@ -1463,69 +1490,47 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				self["proba"].arataTraducerea(p["original"], p["traducere"])
 
 	def salveaza(self):
-		for e in self._elemente:
-			e.save()
-		configfile.save()
-		self._legaCheile()
-		self._cheiVechi.clear()
-		self.close()
+		try:
+			finale = _copieSetari(self._globale)
+			schimbate = [(n, e.value) for n, e in self.setari.dict().items() if e.value != self._initiale[n]]
+			for n, valoare in schimbate:
+				getattr(finale, n).value = valoare
+			if self._cheiNoi:
+				ok, mesaj = T.chei().schimbaMaiMulte(self._cheiNoi, s=finale)
+				if not ok:
+					self._mesaj(mesaj)
+					return
+			for n, valoare in schimbate:
+				e = getattr(self._globale, n)
+				e.value = valoare
+				e.save()
+			configfile.save()
+			T.instanta().setariSchimbate()
+			diagnostic = T.diagnosticPornire(s=finale) if finale.pornit.value and hasattr(T, "diagnosticPornire") else None
+		except Exception as eroare:
+			print("[HdsTraducereSubtitrari] salvarea: %s" % eroare.__class__.__name__)
+			self._mesaj(_("Setările nu s-au putut salva. Încearcă din nou."))
+			return
+		self._cheiNoi[:] = []
+		if diagnostic and not diagnostic["poate_traduce"]:
+			from Screens.MessageBox import MessageBox
+			self.session.openWithCallback(lambda *raspuns: self.close(), MessageBox,
+				diagnostic["mesaj"], type=MessageBox.TYPE_INFO, timeout=8)
+		else:
+			self.close()
 
 	def _schimbat(self):
 		"""o setare schimbata si nesalvata, sau o cheie scrisa aici pentru un server cu adresa (se leaga la Verde)"""
-		return bool(self._cheiPuse) or any(e.isChanged() for e in self._elemente)
+		return bool(self._cheiNoi) or any(e.value != self._initiale[n] for n, e in self.setari.dict().items())
 
 	def iesire(self):
-		"""EXIT: fara schimbari inchide; altfel intreaba (OK alege), ca setarile sa se poata salva si fara Verde"""
-		if not self._schimbat():
-			self.anuleaza()
-			return
-
-		def gata(alegere):
-			if alegere is None or alegere[1] == "ramai":
-				return
-			if alegere[1] == "salveaza":
-				self.salveaza()
-			else:
-				self.anuleaza()
-		self.session.openWithCallback(gata, ChoiceBox, title=_("Ai schimbat setările traducerii. Le salvezi?"), list=[
-			(_("Da, salvează"), "salveaza"), (_("Nu, lasă cum era"), "renunta"), (_("Înapoi la alegeri"), "ramai")])
+		"""EXIT renunta la toate schimbarile locale."""
+		self.anuleaza()
 
 	def anuleaza(self):
-		for e in self._elemente:
-			e.cancel()
-		self._cheileLaLoc()
+		self._cheiNoi[:] = []
 		self._cheiPuse.clear()
-		self._cheiVechi.clear()
 		self.close()
-
-	def _cheileLaLoc(self):
-		"""la anulare: cheia scrisa aici ramane numai daca e legata chiar de adresa care ramane salvata; altfel se pun
-		la loc cheia si legatura de dinainte (sau nicio cheie), deci cheia veche pleaca tot numai spre gazda ei"""
-		for serv in sorted(self._cheiPuse):
-			if serv not in self._cheiVechi:
-				continue
-			veche, legatura = self._cheiVechi[serv]
-			try:
-				if T.chei().legaturi().get(serv) == T.origine(T.adresaServiciului(serv, self.setari)):
-					continue
-				if veche:
-					T.chei().schimba(serv, veche, adresa=legatura or u"")
-				else:
-					T.chei().schimba(serv, None)
-			except Exception as e:
-				print("[HdsTraducereSubtitrari] cheia %s la anulare: %s" % (serv, e.__class__.__name__))
-
-	def _legaCheile(self):
-		"""la Verde: cheile scrise in acest ecran se leaga de adresa salvata odata cu ele (scrise aici, de om, la
-		televizor, deci ordinea randurilor nu conteaza; din web cheia se leaga de adresa salvata cand e pusa)"""
-		lega = getattr(T.chei(), "legaDeAdresa", None)
-		for serv in sorted(self._cheiPuse):
-			try:
-				if lega is not None:
-					lega(serv)
-			except Exception as e:
-				print("[HdsTraducereSubtitrari] cheia %s: %s" % (serv, e))
-		self._cheiPuse.clear()
 
 	# ------------------------------------------------------------------ deschis, inchis
 	def _pornit(self):
@@ -1542,6 +1547,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				print("[HdsTraducereSubtitrari] lista: %s" % e)
 
 	def _inchis(self):
+		self._ecranInchis = True
 		self._ceas.stop()
 		try:
 			self["proba"].ascunde()

@@ -145,6 +145,9 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self.advancedManufacturer = None
 		self.advancedSCR = None
 		self.advancedConnected = None
+		self.advancedUnicableFormat = None
+		self.advancedUnicablePositions = None
+		self.advancedUnicablePin = None
 		
 		if self.nim.isMultiType():
 			multiType = self.nimConfig.multiType
@@ -250,6 +253,9 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 				self.list.append(getConfigListEntry(_("Enable 5V for active antenna"), self.nimConfig.terrestrial_5V))
 		else:
 			self.have_advanced = False
+		if self.nim.isCompatible("DVB-S"):
+			self.list.append(getConfigListEntry(_("Unicable: modul avansat, apoi LNB și LOF Unicable."), ConfigNothing()))
+			self.list.append(getConfigListEntry(_("Pe TV: VERDE păstrează setările și reia canalul."), ConfigNothing()))
 		self["config"].list = self.list
 		self["config"].l.setList(self.list)
 
@@ -258,6 +264,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.advancedLnbsEntry, self.advancedDiseqcMode, self.advancedUsalsEntry, \
 			self.advancedLof, self.advancedPowerMeasurement, self.turningSpeed, \
 			self.advancedType, self.advancedSCR, self.advancedManufacturer, self.advancedUnicable, self.advancedConnected, \
+			self.advancedUnicableFormat, self.advancedUnicablePositions, self.advancedUnicablePin, \
 			self.uncommittedDiseqcCommand, self.cableScanType, self.multiType, self.hdsFelEntry)
 		if self["config"].getCurrent() == self.multiType:
 			from Components.NimManager import InitNimManager
@@ -307,48 +314,17 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 #			self.list.append(getConfigListEntry(_("12V Output"), currLnb.output_12v))
 			
 			if currLnb.lof.value == "unicable":
-				self.advancedUnicable = getConfigListEntry("Unicable "+_("Configuration Mode"), currLnb.unicable)
-				self.list.append(self.advancedUnicable)
-				if currLnb.unicable.value == "unicable_user":
-					self.advancedSCR = getConfigListEntry(_("Channel"), currLnb.satcruser)
-					self.list.append(self.advancedSCR)
-					self.list.append(getConfigListEntry(_("Frequency"), currLnb.satcrvcouser[currLnb.satcruser.index]))
-					self.list.append(getConfigListEntry(_("LOF/L"), currLnb.lofl))
-					self.list.append(getConfigListEntry(_("LOF/H"), currLnb.lofh))
-					self.list.append(getConfigListEntry(_("Threshold"), currLnb.threshold))
-				elif currLnb.unicable.value == "unicable_matrix":
-					manufacturer_name = currLnb.unicableMatrixManufacturer.value
-					manufacturer = currLnb.unicableMatrix[manufacturer_name]
-					product_name = manufacturer.product.value
-					self.advancedManufacturer = getConfigListEntry(_("Manufacturer"), currLnb.unicableMatrixManufacturer)
-					self.advancedType = getConfigListEntry(_("Type"), manufacturer.product)
-					self.advancedSCR = getConfigListEntry(_("Channel"), manufacturer.scr[product_name])
-					self.list.append(self.advancedManufacturer)
-					self.list.append(self.advancedType)
-					self.list.append(self.advancedSCR)
-					self.list.append(getConfigListEntry(_("Frequency"), manufacturer.vco[product_name][manufacturer.scr[product_name].index])) 
-				elif currLnb.unicable.value == "unicable_lnb":
-					manufacturer_name = currLnb.unicableLnbManufacturer.value
-					manufacturer = currLnb.unicableLnb[manufacturer_name]
-					product_name = manufacturer.product.value
-					self.advancedManufacturer = getConfigListEntry(_("Manufacturer"), currLnb.unicableLnbManufacturer)
-					self.advancedType = getConfigListEntry(_("Type"), manufacturer.product)
-					self.advancedSCR = getConfigListEntry(_("Channel"), manufacturer.scr[product_name])
-					self.list.append(self.advancedManufacturer)
-					self.list.append(self.advancedType)
-					self.list.append(self.advancedSCR)
-					self.list.append(getConfigListEntry(_("Frequency"), manufacturer.vco[product_name][manufacturer.scr[product_name].index])) 
-
-				choices = []
-				connectable = nimmanager.canConnectTo(self.slotid)
-				for id in connectable:
-					choices.append((str(id), nimmanager.getNimDescription(id)))
-				if len(choices):
-					self.advancedConnected = getConfigListEntry(_("connected"), self.nimConfig.advanced.unicableconnected)
-					self.list.append(self.advancedConnected)
-					if self.nimConfig.advanced.unicableconnected.value == True:
-						self.nimConfig.advanced.unicableconnectedTo.setChoices(choices)
-						self.list.append(getConfigListEntry(_("Connected to"),self.nimConfig.advanced.unicableconnectedTo))
+				from Components.HdsUnicableConfig import unicableRows
+				refresh = {"mode": "advancedUnicable", "manufacturer": "advancedManufacturer",
+					"product": "advancedType", "band": "advancedSCR", "connected": "advancedConnected",
+					"format": "advancedUnicableFormat", "positions": "advancedUnicablePositions",
+					"pinEnabled": "advancedUnicablePin"}
+				for key, text, element, readonly in unicableRows(currLnb, self.nimConfig.advanced,
+						nimmanager, self.slotid):
+					entry = getConfigListEntry(text, element)
+					self.list.append(entry)
+					if key in refresh:
+						setattr(self, refresh[key], entry)
 
 			else:	#kein Unicable
 				self.list.append(getConfigListEntry(_("Voltage mode"), Sat.voltage))
@@ -466,6 +442,13 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		
 		ServiceStopScreen.__init__(self)
 		self.stopService()
+		# Reluarea apartine acestui ecran si nu inlocuieste o alegere facuta intre timp.
+		self.onClose.remove(self._ServiceStopScreen__onClose)
+		self.hdsNav = self.session.nav
+		self.hdsCanalSchimbat = False
+		if hasattr(self.hdsNav, "event"):
+			self.hdsNav.event.append(self.hdsUrmarireCanal)
+		self.onClose.append(self.hdsReiaCanalul)
 
 		ConfigListScreen.__init__(self, self.list)
 
@@ -493,6 +476,31 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 	def keyLeft(self):
 		ConfigListScreen.keyLeft(self)
 		self.newConfig()
+
+	def hdsUrmarireCanal(self, event):
+		from enigma import iPlayableService
+		if event == iPlayableService.evStart:
+			self.hdsCanalSchimbat = True
+
+	def restoreService(self, msg=None):
+		self.close()
+
+	def hdsReiaCanalul(self):
+		nav = self.hdsNav
+		if hasattr(nav, "event") and self.hdsUrmarireCanal in nav.event:
+			nav.event.remove(self.hdsUrmarireCanal)
+		ref, self.oldref = self.oldref, None
+		if (ref is None or self.session.nav is not nav or self.hdsCanalSchimbat
+				or nav.getCurrentlyPlayingServiceOrGroup() is not None
+				or getattr(self.session, "pipshown", False)):
+			return
+		from Screens.Standby import inStandby
+		if inStandby is not None:
+			if (getattr(inStandby, "prev_running_service", None) is None
+					and getattr(inStandby, "paused_service", None) is None):
+				inStandby.prev_running_service = ref
+		else:
+			nav.playService(ref)
 
 	def keyRight(self):
 		ConfigListScreen.keyRight(self)
@@ -522,6 +530,12 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 
 		for x in self["config"].list:
 			x[1].cancel()
+		if self.nim.isCompatible("DVB-S") and not isinstance(
+				self.nimConfig.advanced, ConfigNothing):
+			from Components.NimManager import cancelUnicable
+			for lnb in self.nimConfig.advanced.lnb.values():
+				if not isinstance(lnb, ConfigNothing) and "satcrformat" in lnb.dict():
+					cancelUnicable(lnb)
 		# we need to call saveAll to reset the connectedTo choices
 		self.saveAll()
 		self.hdsLocLaNucleu()

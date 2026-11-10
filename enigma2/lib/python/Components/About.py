@@ -140,6 +140,9 @@ class About:
 						return v.strip()
 		except (IOError, OSError):
 			pass
+		marca, sep, model = self.valoareDinReguli("model").partition(" ")
+		if sep:
+			return marca
 		if self._esteViper4kV20() or self._esteViper4kV10():
 			return "Amiko"
 		return ""
@@ -155,6 +158,9 @@ class About:
 						return v.strip()
 		except (IOError, OSError):
 			pass
+		marca, sep, model = self.valoareDinReguli("model").partition(" ")
+		if sep:
+			return model
 		if self._esteViper4kV20():
 			return "Viper 4K"
 		if self._esteViper4kV10():

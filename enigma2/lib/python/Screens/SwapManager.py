@@ -43,12 +43,24 @@ class SwapManager(Screen):
 		Screen.__init__(self, session)
 		self.setTitle(_("Fișier de swap (memorie virtuală)"))
 		self._inchis = False
+		self._discuri = []
+		self._semnal_medii = None
+		self._recauta = False
+		self._prima_citire = True
+		from enigma import eTimer
+		self._ceas = eTimer()
+		try:
+			self._legatura = self._ceas.timeout.connect(self._reincarcaLista)
+		except AttributeError:
+			self._ceas.callback.append(self._reincarcaLista)
 
 		self["lista"] = MenuList([])
 		self["stare"] = Label("")
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Activează swap (512 MB)"))
 		self["key_yellow"] = Button(_("Oprește swap pe disc"))
+		self["key_green"].hide()
+		self["key_yellow"].hide()
 
 		self["actiuni"] = ActionMap(
 			["OkCancelActions", "ColorActions"],
@@ -61,15 +73,46 @@ class SwapManager(Screen):
 
 		self.onLayoutFinish.append(self._reincarcaLista)
 		self.onClose.append(self._laInchidere)
+		try:
+			from Components.Harddisk import harddiskmanager
+			self._semnal_medii = harddiskmanager.on_partition_list_change
+			self._semnal_medii.append(self._mediiSchimbate)
+		except (ImportError, AttributeError):
+			pass
 
 	def _laInchidere(self):
 		self._inchis = True
+		self._ceas.stop()
+		if self._semnal_medii is not None and self._mediiSchimbate in self._semnal_medii:
+			self._semnal_medii.remove(self._mediiSchimbate)
+
+	def _mediiSchimbate(self, *args):
+		if not self._inchis:
+			self._recauta = True
+			self._ceas.start(300, True)
 
 	def _reincarcaLista(self):
-		self._discuri = HdsSwap.discuriMontate()
-		active = _swapuriActive()
-		randuri = [HdsSwap.textRand(d) for d in HdsSwap.discuri(active=active)]
+		if self._inchis:
+			return
+		st = HdsSwap.cereInventar(reface=self._prima_citire)
+		self._prima_citire = False
+		if st["cauta"] or HdsSwap.inLucru():
+			self._ceas.start(300, True)
+			return
+		self._recauta = False
+		if st.get("eroare"):
+			self["stare"].setText(_("Discurile nu pot fi citite. Încearcă din nou."))
+			return
+		ales = self._discSelectat()
+		punct = ales["punct"] if ales else None
+		self._discuri = list(st["discuri"])
+		active = st["active"]
+		randuri = [HdsSwap.textRand(d) for d in self._discuri]
 		self["lista"].setList(randuri or [_("Niciun disc HDD/USB montat momentan.")])
+		for i, d in enumerate(self._discuri):
+			if d["punct"] == punct:
+				self["lista"].moveToIndex(i)
+				break
 		# fara disc, verde si galben nu au pe ce lucra (_discSelectat intoarce None): nu se arata
 		for tasta in ("key_green", "key_yellow"):
 			if self._discuri:
@@ -88,14 +131,14 @@ class SwapManager(Screen):
 		disc = self._discSelectat()
 		if disc is None:
 			return
-		pornit, text = HdsSwap.activeaza(disc.mountpoint, gata=self._dupaComanda)
+		pornit, text = HdsSwap.activeaza(disc["punct"], gata=self._dupaComanda)
 		self["stare"].setText(text)
 
 	def _opreste(self):
 		disc = self._discSelectat()
 		if disc is None:
 			return
-		pornit, text = HdsSwap.opreste(disc.mountpoint, gata=self._dupaComanda)
+		pornit, text = HdsSwap.opreste(disc["punct"], gata=self._dupaComanda)
 		self["stare"].setText(text)
 
 	def _dupaComanda(self, lucru=None):

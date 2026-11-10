@@ -69,6 +69,42 @@ import sys
 import threading
 import time
 
+
+def scrieExceptie(tip, valoare, stiva, cale=None):
+	"""Proba completa inainte de PyErr_Print/bsodFatal, independent de inelul C++ de 16 KiB."""
+	import traceback
+	cale = cale or os.environ.get("HDS_CADERE_PYTHON", "/tmp/hds-cadere.python")
+	nou = cale + ".nou"
+	try:
+		with os.fdopen(os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+			f.write("pid=%d\nparinte=%d\nfel=python\n" % (os.getpid(), os.getppid()))
+			try:
+				with open("/proc/uptime") as up:
+					f.write("uptime=%s\n" % up.read().split()[0])
+			except OSError:
+				f.write("uptime=necunoscut\n")
+			traceback.print_exception(tip, valoare, stiva, file=f)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(nou, cale)
+		return True
+	except Exception:
+		return False
+
+
+def instaleazaExceptii():
+	"""PyErr_Print cheama sys.excepthook inainte ca bsodFatal sa trimita SIGKILL."""
+	import sys
+	vechi = sys.excepthook
+	if getattr(vechi, "_hds_exceptie", False):
+		return
+
+	def pastreaza(tip, valoare, stiva):
+		scrieExceptie(tip, valoare, stiva)
+		vechi(tip, valoare, stiva)
+	pastreaza._hds_exceptie = True
+	sys.excepthook = pastreaza
+
 CALE_BATAIE = "/var/run/hds-paznic.bataie"
 CALE_STARE = "/var/run/hds-paznic.stare"
 CALE_JURNAL = "/home/root/hds-watchdog.log"
@@ -164,7 +200,8 @@ def textDurata(secunde):
 class Bataie(object):
 	"""Registrul „ocupat” si bataia scrisa pe disc. Un singur obiect pe proces (bataie())."""
 
-	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None, imagine=None, setari=None):
+	def __init__(self, cale=None, ceas=None, pid=None, rotor=None, redare=None, standby=None, imagine=None, setari=None,
+			acordare=None):
 		self.cale = cale or CALE_BATAIE
 		self.setari = setari if setari is not None else _salveazaSetarile
 		self.eroareSetari = None
@@ -177,6 +214,12 @@ class Bataie(object):
 		self.inregistrare = -1  # 1: inregistrare acum sau curand, 0: niciuna, -1: nu se stie
 		self.criptat = -1       # serviciul de acum: 1 criptat, 0 in clar, -1 nu se stie (tools/hds-raport.sh)
 		self.video = -1         # latimea imaginii decodate a serviciului de acum; 0 sau -1: nicio imagine
+		# acord=: de ce nu porneste canalul de acum (nr. 77, 09.11.2026): rapoartele "fara imagine" aratau decodorul
+		# oprit, dar cauza era acordarea (un tuner nesetat pentru satelitul canalului); fara jurnalul interfetei nu se
+		# vedea. Numele din Components/HdsEcranNegru.py (configurare, fara_tuner, acordare, fara_pat, fara_sid, fara_pmt),
+		# gol cand nu e nicio eroare sau nu se stie.
+		self.acordare = acordare if acordare is not None else _acordareAcum
+		self.acord = ""
 		self.eroareRedare = None
 		self.ocupat = {}        # cheie -> [motiv, durata_s, inceput, pana_la]
 		self.eroareScriere = None
@@ -308,13 +351,21 @@ class Bataie(object):
 			self.video = int(video) if -1 <= int(video) <= 16384 else -1
 		except Exception:
 			self.criptat, self.video = -1, -1
+		# acord= (raportul pornirii); in fisier intra numai un nume scurt din litere mici si _
+		try:
+			acord = self.acordare()
+			self.acord = acord if isinstance(acord, str) and len(acord) <= 20 and \
+				all("a" <= c <= "z" or c == "_" for c in acord) else ""
+		except Exception:
+			self.acord = ""
 
 	def text(self, acum, bataie=None):
 		"""bataie: ceasul scris in campul bataie=; implicit acum (o bataie adevarata, de pe firul principal)."""
 		motive, pana = self.semn(acum)
 		return ("pid=%d\nbataie=%.3f\nocupat=%s\nocupat_pana=%.3f\nredare=%s\ninregistrare=%d\ncriptat=%d\nvideo=%d\n"
+			"acord=%s\n"
 			% (self.pid, acum if bataie is None else bataie, ",".join(motive), pana, self.redareFel, self.inregistrare,
-			self.criptat, self.video))
+			self.criptat, self.video, self.acord))
 
 	def scrie(self, acum=None, bataieVeche=False):
 		"""bataieVeche: scrierea firului de supraveghere (punctul 9): numai semnul „ocupat” e nou, bataia ramane cea de
@@ -427,6 +478,22 @@ def _imagineAcum():
 		return -1, -1
 	from enigma import iServiceInformation
 	return (1 if info.getInfo(iServiceInformation.sIsCrypted) == 1 else 0), info.getInfo(iServiceInformation.sVideoWidth)
+
+
+def _acordareAcum():
+	"""Eroarea acordarii serviciului de acum, pentru raportul pornirii: numele din Components/HdsEcranNegru.py pentru
+	sDVBState (ultimul eveniment al eDVBServicePMTHandler: eventMisconfiguration = configurare, niciun tuner setat
+	pentru acest canal; eventNoResources = fara_tuner, toate ocupate; eventTuneFailed = acordare, fara semnal; ...).
+	"" fara serviciu sau cand acordarea a mers."""
+	import NavigationInstance
+	nav = NavigationInstance.instance
+	serviciu = nav and nav.getCurrentService()
+	info = serviciu and serviciu.info()
+	if not info:
+		return ""
+	from enigma import iServiceInformation
+	from Components.HdsEcranNegru import eroare_acordare
+	return eroare_acordare(info.getInfo(iServiceInformation.sDVBState)) or ""
 
 
 # ---------------------------------------------------------------- punctul 9: pluginul extern pe firul principal

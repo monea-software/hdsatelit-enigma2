@@ -1,4 +1,11 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+# Proba completa este scrisa inainte de ecranul fatal si de SIGKILL, inclusiv la importuri.
+try:
+	from Components.HdsPaznic import instaleazaExceptii, scrieExceptie
+	instaleazaExceptii()
+except Exception as e:
+	print("[mytest] pastrarea exceptiei:", e)
+
 import eConsoleImpl
 import eBaseImpl
 import enigma
@@ -334,6 +341,12 @@ class Session:
 
 		if self.screen_error_count >= 3:
 			print("[HDS-SAFE] 3 erori consecutive in 30 de secunde. Se reporneste interfata GUI...")
+			# cu o tema externa, tema se retrage inainte de repornire: omul revine la tema HD Satelit, fara bucla (Components/HdsSkinuri.py)
+			try:
+				from Components import HdsSkinuri
+				HdsSkinuri.eroriEcrane(getattr(screen, "__name__", str(screen)))
+			except Exception as e:
+				print("[HDS-SAFE] retragerea temei:", e)
 			quitMainloop(3)
 			return
 
@@ -370,18 +383,54 @@ class Session:
 			return None
 
 		# read skin data
-		readSkin(dlg, None, dlg.skinName, desktop)
+		try:
+			readSkin(dlg, None, dlg.skinName, desktop)
+			self.puneZPosition(dlg, zPosition)
+
+			# create GUI view of this dialog
+			assert desktop is not None
+
+			dlg.setDesktop(desktop)
+			dlg.applySkin()
+		except Exception:
+			# zPosition cerut la deschidere se pune si pe ecranul refacut din rezerva
+			dlg.hdsZPosition = zPosition
+			self.ecranCuRezerva(dlg, desktop)
+
+		return dlg
+
+	@staticmethod
+	def puneZPosition(dlg, zPosition):
+		"""zPosition cerut de plugin la deschidere trece inaintea celui din skin"""
 		if zPosition is not None:
 			dlg.skinAttributes = [(key, value) for key, value in dlg.skinAttributes if key != "zPosition"]
 			dlg.skinAttributes.append(("zPosition", str(zPosition)))
 
-		# create GUI view of this dialog
-		assert desktop is not None
-
+	def ecranCuRezerva(self, dlg, desktop):
+		"""Ecranul nu s-a putut construi: daca venea din tema externa, acelasi ecran se face din nou cu rezerva (ecranul nostru sau cel
+		din cod), fara repornire si fara sa se ruleze iar constructorul lui (InfoBar e unul singur); omul afla din mesajul temei. Altfel
+		eroarea merge mai departe, ca pana acum."""
+		import skin
+		if getattr(dlg, "hdsSursaTema", None) not in skin.dosareSkinStraine:
+			raise
+		print("[Skin] ecranul %s din tema externa nu s-a putut construi, se foloseste rezerva:" % dlg.__class__.__name__)
+		print_exc(file=stdout)
+		skin.ecranFaraTema(dlg)
+		for r in list(getattr(dlg, "renderer", [])):
+			try:
+				r.disconnectAll()
+			except Exception:
+				print_exc(file=stdout)
+		try:
+			dlg.deleteGUIScreen()
+		except Exception:
+			print_exc(file=stdout)
+		dlg.instance = None
+		dlg.onLayoutFinish[:] = [f for f in dlg.onLayoutFinish if callable(f)]
+		readSkin(dlg, None, dlg.skinName, desktop)
+		self.puneZPosition(dlg, getattr(dlg, "hdsZPosition", None))
 		dlg.setDesktop(desktop)
 		dlg.applySkin()
-
-		return dlg
 
 	def pushCurrent(self):
 		if self.current_dialog is not None:
@@ -582,7 +631,8 @@ def runScreenTest():
 		Notifications.AddPopup(text, MessageBox.TYPE_WARNING, 20, "plugin_load_warnings")
 	# erorile din skin nu opresc receptorul; se anunta o data, detaliile sunt in jurnal
 	import skin
-	if skin.warnings:
+	# cu o tema externa, omul afla in cuvinte simple ce nu merge (Components/HdsTemaExterna.py); randurile raman in jurnal
+	if skin.warnings and not skin.altSkinActiv():
 		from Tools import Notifications
 		from Screens.MessageBox import MessageBox
 		text = _("The skin has errors, the receiver keeps working:\n")
@@ -826,7 +876,14 @@ def runScreenTest():
 		paza_model = HdsPazaModel.inPaza()
 	except Exception as e:
 		print("[mytest] paza de model:", e)
-		paza_model = False
+		# 09.11.2026: o eroare a pazei opreste interfata numai la profilurile noi (model_id= in reguli); la modelele de
+		# pana acum garda din enigma2.sh a oprit deja scrierile gresite (ca HdsPazaModel.inchisLaEroare)
+		import os
+		try:
+			with open(os.path.join(os.environ.get("HDS_PAZA_RADACINA") or "/", "etc/hdsatelit-model")) as f:
+				paza_model = any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+		except Exception:
+			paza_model = False
 	if paza_model:
 		from Screens.HdsPazaModel import HdsPazaModel as EcranPazaModel
 		screensToRun = [(0, EcranPazaModel)]
@@ -933,6 +990,14 @@ def runScreenTest():
 	profile("RunReactor")
 	profile_final()
 	runReactor()
+
+	# oprirea la cerere nu se numara impotriva unei teme externe aflate in proba
+	if skin.altSkinActiv():
+		try:
+			from Components import HdsSkinuri
+			HdsSkinuri.iesireCeruta()
+		except Exception as e:
+			print("[mytest] jurnalul temei la oprire:", e)
 
 	# HDSatelit: releele DAB+ si DVB-T2 oprite si tunerul dat inapoi la iesirea enigma2
 	try:
@@ -1131,6 +1196,10 @@ try:
 	parentalControl.save()
 except:
 	print('EXCEPTION IN PYTHON STARTUP CODE:')
+	try:
+		scrieExceptie(*exc_info())
+	except Exception:
+		pass
 	print('-'*60)
 	print_exc(file=stdout)
 	quitMainloop(5)

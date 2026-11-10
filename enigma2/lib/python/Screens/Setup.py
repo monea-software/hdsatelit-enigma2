@@ -163,6 +163,12 @@ class Setup(ConfigListScreen, Screen):
 				self.setup_title = x.get("title", "")
 			if gasit:
 				break
+		# Actiunea este numai a ecranului de volum; foloseste aceeasi memorie ca butonul din web.
+		if self.setup == "hds_setari_sunet":
+			if self.uitaVolumeSetare is None:
+				self.uitaVolumeSetare = ConfigNothing()
+			list.append((_("Uită volumele ținute minte"), self.uitaVolumeSetare))
+			self.descriptions[id(self.uitaVolumeSetare)] = _("OK: uită volumele tuturor canalelor. Întârzierile pistelor rămân.")
 
 	def createSetup(self, appendItems=None, prependItems=None):
 		"""Randurile ecranului din nou, in lista. Un plugin o suprascrie cand isi face randurile singur (ecranul i-o
@@ -198,12 +204,13 @@ class Setup(ConfigListScreen, Screen):
 		self.conditionale = False
 
 		self.setup = setup
+		self.uitaVolumeSetare = None
 		list = []
 		self.refill(list)
 
 		#check for list.entries > 0 else self.close
 		self["key_red"] = StaticText(_("Cancel"))
-		self["key_green"] = StaticText(_("OK"))
+		self["key_green"] = StaticText(_("Save"))
 
 		self["actions"] = NumberActionMap(["SetupActions"], 
 			{
@@ -386,6 +393,12 @@ class Setup(ConfigListScreen, Screen):
 
 	def keySelect(self):
 		"""Tasta OK; un plugin o suprascrie ca sa deschida un ecran al lui de pe un rand."""
+		if self.setup == "hds_setari_sunet" and self.getCurrentItem() is self.uitaVolumeSetare:
+			from Components import HdsSetariSunet
+			from Screens.MessageBox import MessageBox
+			HdsSetariSunet.uitaVolume()
+			self.session.open(MessageBox, _("Volumele ținute minte au fost uitate."), MessageBox.TYPE_INFO, timeout=5)
+			return
 		ConfigListScreen.keyOK(self)
 
 	def createSummary(self):

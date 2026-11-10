@@ -80,6 +80,7 @@ SETARI = (
 	("pornire", "on_movie_start", N_("La pornirea unui film")),
 	("oprire", "on_movie_stop", N_("La oprirea unui film")),
 	("sfarsit", "on_movie_eof", N_("La sfârșitul unui film")),
+	("iesire", "hds_exit_film", N_("EXIT în timpul filmului")),
 )
 # ce raspuns la intrebarea de reluare aduce pornirea din pagina (InfoBarCueSheetSupport.hdsPornireFilm)
 PORNIRI = {"loc": "resume", "inceput": "beginning"}
@@ -104,6 +105,9 @@ TXT_LISTA_INCETA = N_("Discul nu a răspuns la timp. Încearcă încă o dată."
 TXT_FILM_LIPSA = N_("Filmul nu este într-un dosar al filmelor de pe receptor.")
 TXT_ALT_ECRAN = N_("Pe televizor este deschis alt ecran. Închide-l și încearcă încă o dată.")
 TXT_PORNESTE = N_("Filmul pornește pe televizor.")
+TXT_CONFIRM_STERGE = N_("Ștergi filmul și fișierele asociate?")
+TXT_FILM_ACTIV = N_("Filmul este în redare sau se înregistrează acum.")
+TXT_STERGE_ESUAT = N_("Filmul nu s-a putut șterge.")
 
 
 def _config(cfg=None):
@@ -322,7 +326,15 @@ def comanda(argumente, sesiune=None, bara=None, cfg=None, F=None):
 	seek = serviciu.seek()
 	pauza = serviciu.pause()
 	try:
-		if fa == "pauza":
+		if fa in ("subtitrari", "subtitrari-lista"):
+			if bara is None or getattr(sesiune, "current_dialog", None) is not bara or not getattr(bara, "execing", False):
+				return _raspuns(False, TXT_ALT_ECRAN)
+			bara.hdsSubtitleActiune(fa == "subtitrari-lista")
+		elif fa == "stop":
+			if bara is None:
+				return _raspuns(False, TXT_NU_MERGE)
+			bara.leavePlayer()
+		elif fa == "pauza":
 			if bara is not None:
 				if bara.seekstate != bara.SEEK_STATE_PAUSE:
 					bara.pauseService()
@@ -572,6 +584,64 @@ def raspunsLista(intrari, dosar):
 	return {"result": True, "dosar": dosar, "filme": intrari}
 
 
+def dateLista(cfg=None):
+	from Components.HdsTasteRapide import profil_context, ETICHETE_TASTE
+	return {"locuri": locuriFilme(cfg), "alfabetic": _alfabetic(cfg),
+		"taste": profil_context("movie_list", config=cfg), "nume_taste": dict(ETICHETE_TASTE)}
+
+
+def listaComanda(argumente, sesiune=None, cfg=None, M=None, centru=None, configfile=None):
+	"""Operatiile listei folosesc aceleasi setari si mutare ca ecranul receptorului."""
+	c = _config(cfg)
+	fa = argumente.get("fa", "")
+	locuri = locuriFilme(cfg)
+	if fa in ("dosar", "sortare"):
+		if fa == "dosar":
+			valoare = argumente.get("destinatie", "")
+			if valoare not in locuri or not os.path.isdir(_caleDisc(valoare)):
+				return {"result": False, "message": _t(TXT_DOSAR)}
+			el = c.movielist.last_videodir
+		else:
+			if argumente.get("ordine") not in ("1", "2"):
+				return {"result": False, "message": _t(TXT_COMANDA)}
+			el = c.movielist.moviesort
+			valoare = int(argumente["ordine"])
+		el.value = valoare
+		el.save()
+		if configfile is None:
+			from Components.config import configfile
+		configfile.save()
+		return dict(result=True, message=_t(TXT_SALVAT), **dateLista(cfg))
+	cale = caleCeruta(argumente.get("cale", ""))
+	if cale is None or not filmSubLocuri(_caleDisc(cale), [_caleDisc(x) for x in locuri]):
+		return {"result": False, "message": _t(TXT_FILM_LIPSA)}
+	if fa not in ("muta", "sterge"):
+		return {"result": False, "message": _t(TXT_COMANDA)}
+	if M is None:
+		from Components import MovieList as M
+	try:
+		active = M.caiInregistrariActive(sesiune)
+		if fa == "muta":
+			destinatie = argumente.get("destinatie", "")
+			if destinatie not in locuri:
+				return {"result": False, "message": _t(TXT_DOSAR)}
+			M.mutaInregistrarea(_caleDisc(cale), _caleDisc(destinatie), active=active)
+		else:
+			if argumente.get("confirmat") != "1":
+				return {"result": False, "confirmare": True, "message": _t(TXT_CONFIRM_STERGE)}
+			if os.path.realpath(_caleDisc(cale)) in [os.path.realpath(x) for x in active]:
+				raise ValueError(_t(TXT_FILM_ACTIV))
+			if centru is None:
+				from enigma import eServiceCenter
+				centru = eServiceCenter.getInstance()
+			op = centru.offlineOperations(_referinta(cale))
+			if op is None or op.deleteFromDisk(0):
+				raise OSError(_t(TXT_STERGE_ESUAT))
+	except (ValueError, OSError) as eroare:
+		return {"result": False, "message": str(eroare)}
+	return {"result": True, "message": _t(TXT_FACUT)}
+
+
 def _alfabetic(cfg=None):
 	try:
 		return _config(cfg).movielist.moviesort.value == 1   # MovieList.SORT_ALPHANUMERIC
@@ -781,7 +851,7 @@ def deschideFilmul(sesiune, cale, mod, dupaLista=False):
 def argumente(request):
 	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute (calea unui film pana la
 	MAX_CALE, restul pana la MAX_TEXT)."""
-	permise = set(x[0] for x in SETARI) | set(("fa", "secunde", "cale", "de_la"))
+	permise = set(x[0] for x in SETARI) | set(("fa", "secunde", "cale", "de_la", "destinatie", "confirmat", "ordine"))
 	rez = {}
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
 		if isinstance(cheie, bytes):
@@ -791,7 +861,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_CALE if cheie == "cale" else MAX_TEXT].strip()
+		rez[cheie] = str(v)[:MAX_CALE if cheie in ("cale", "destinatie") else MAX_TEXT].strip()
 	return rez
 
 
@@ -822,11 +892,13 @@ def rute(baza, resource, sesiune=None, NOT_DONE_YET=None):
 			try:
 				dosar = dosarFilme()
 				alfabetic = _alfabetic()
+				date = dateLista()
 				if NOT_DONE_YET is None:
-					return self._raspunde(request, raspunsLista(citesteLista(dosar, alfabetic), dosar))
+					return self._raspunde(request, dict(raspunsLista(citesteLista(dosar, alfabetic), dosar), **date))
 				obiect = self
 
 				def _trimite(rez):
+					rez.update(date)
 					try:
 						request.write(obiect._raspunde(request, rez))
 						request.finish()
@@ -859,6 +931,9 @@ def rute(baza, resource, sesiune=None, NOT_DONE_YET=None):
 	class PornesteResource(_Schimba):
 		lucru = staticmethod(porneste)
 
+	class ListaComandaResource(_Schimba):
+		lucru = staticmethod(listaComanda)
+
 	class PaginaResource(resource.Resource):
 		"""GET /filme: pagina „Filmul de acum”."""
 		isLeaf = True
@@ -872,6 +947,7 @@ def rute(baza, resource, sesiune=None, NOT_DONE_YET=None):
 		b"filme-seteaza": SeteazaResource(),
 		b"filme-lista": ListaResource(),
 		b"filme-porneste": PornesteResource(),
+		b"filme-lista-comanda": ListaComandaResource(),
 	}
 	return api, PaginaResource()
 
@@ -972,6 +1048,9 @@ PAGINA = """<!DOCTYPE html>
         <button type="button" data-fa="salt" data-s="10">+10 s</button>
         <button type="button" data-fa="salt" data-s="60">+1 min</button>
         <button type="button" data-fa="inainte" id="bInainte" title="Derulare înainte, ca tasta &gt;&gt;">Înainte &gt;&gt;</button>
+        <button type="button" data-fa="stop" id="bStop">Stop</button>
+        <button type="button" data-fa="subtitrari">SUBT scurt</button>
+        <button type="button" data-fa="subtitrari-lista">SUBT lung</button>
       </div>
       <p class="nota ascuns" id="faraDerulare">Derularea rapidă nu merge la acest film (de exemplu la filmele de pe internet). Poți sări înainte sau înapoi cu butoanele de minute și secunde.</p>
       <div class="sari">
@@ -986,6 +1065,9 @@ PAGINA = """<!DOCTYPE html>
   <section class="card">
     <h2>Filmele din dosar</h2>
     <p class="nota" id="dosar">Aceleași filme ca în lista de filme de pe televizor.</p>
+    <p class="nota" id="tasteFilme"></p>
+    <div class="rand"><label for="locFilme">Dosar / marcaje</label><select id="locFilme"></select></div>
+    <div class="rand"><label for="sortFilme">Sortare</label><select id="sortFilme"><option value="2">Cele mai noi</option><option value="1">Alfabetic</option></select></div>
     <div id="listaFilme"></div>
     <div class="butoane"><button type="button" id="bLista">Citește lista din nou</button></div>
     <p class="mesaj" id="mesajLista"></p>
@@ -1002,6 +1084,7 @@ PAGINA = """<!DOCTYPE html>
 <script>
 var CFG = __CONFIG__;
 var DATE = null;
+var LISTA = null;
 var SCHIMBAT = false;
 function $(id){ return document.getElementById(id); }
 function el(tag, cls, text){ var e = document.createElement(tag); if(cls){ e.className = cls; } if(text !== undefined){ e.textContent = text; } return e; }
@@ -1128,6 +1211,22 @@ function randFilm(f){
     porn.addEventListener("click", function(){ pornesteFilm(f, ""); });
     b.appendChild(porn);
   }
+  var sterge = el("button", "rosu", "Șterge"); sterge.type = "button";
+  sterge.addEventListener("click", function(){
+    if(!window.confirm("Ștergi filmul și fișierele asociate?" + " " + f.nume)){ return; }
+    trimite("/api/filme-lista-comanda", {fa:"sterge", cale:f.cale, confirmat:"1"}, false, "mesajLista")
+      .then(function(d){ if(d && d.result){ citesteLista(); } });
+  });
+  b.appendChild(sterge);
+  var destinatie = el("select"); destinatie.setAttribute("aria-label", "Destinația filmului");
+  (LISTA.locuri || []).forEach(function(loc){ var o = el("option", "", loc); o.value = loc; destinatie.appendChild(o); });
+  b.appendChild(destinatie);
+  var muta = el("button", "verde", "Mută"); muta.type = "button";
+  muta.addEventListener("click", function(){
+    trimite("/api/filme-lista-comanda", {fa:"muta", cale:f.cale, destinatie:destinatie.value}, false, "mesajLista")
+      .then(function(d){ if(d && d.result){ citesteLista(); } });
+  });
+  b.appendChild(muta);
   r.appendChild(b);
   return r;
 }
@@ -1135,10 +1234,16 @@ function citesteLista(){
   mesaj("mesajLista", "Se citește lista...");
   $("bLista").disabled = true;
   return cerere("/api/filme-lista").then(function(d){
+    LISTA = d;
     $("bLista").disabled = false;
     var c = $("listaFilme"); c.textContent = "";
     if(d.dosar){ $("dosar").textContent = "Dosarul " + d.dosar + ", ca în lista de filme de pe televizor."; }
     if(!d.result){ mesaj("mesajLista", d.message || "Lista nu se poate citi.", true); return; }
+    var loc = $("locFilme"); loc.textContent = "";
+    (d.locuri || []).forEach(function(l){ var o = el("option", "", l); o.value = l; loc.appendChild(o); });
+    loc.value = d.dosar; $("sortFilme").value = d.alfabetic ? "1" : "2";
+    $("tasteFilme").textContent = (d.taste || []).filter(function(r){ return ["red","green","yellow","blue"].indexOf(r.key) >= 0; })
+      .map(function(r){ return (d.nume_taste[r.key] || r.key.toUpperCase()) + ": " + r.text_short; }).join(". ");
     (d.filme || []).forEach(function(f){ c.appendChild(randFilm(f)); });
     mesaj("mesajLista", (d.filme || []).length ? "" : "Dosarul nu are filme.");
   }).catch(function(){ $("bLista").disabled = false; mesaj("mesajLista", "Receptorul nu răspunde.", true); });
@@ -1164,6 +1269,8 @@ $("salveaza").addEventListener("click", function(){
   trimite("/api/filme-seteaza", v, true, "mesajSetari");
 });
 $("bLista").addEventListener("click", citesteLista);
+$("locFilme").addEventListener("change", function(){ trimite("/api/filme-lista-comanda", {fa:"dosar", destinatie:this.value}, false, "mesajLista").then(citesteLista); });
+$("sortFilme").addEventListener("change", function(){ trimite("/api/filme-lista-comanda", {fa:"sortare", ordine:this.value}, false, "mesajLista").then(citesteLista); });
 citeste(true).then(citesteLista);
 setInterval(function(){ citeste(false); }, 2000);
 </script>
@@ -1227,6 +1334,15 @@ TEXTE_PAGINA = {
 		N_("Scrie locul ca minute:secunde sau ore:minute:secunde, de exemplu 1:05:30."),
 	),
 }
+
+
+TEXTE_PAGINA["html"] += (
+	N_("Stop"), N_("Dosar / marcaje"), N_("Sortare"), N_("Cele mai noi"), N_("Alfabetic"),
+	N_("SUBT scurt"), N_("SUBT lung"),
+)
+TEXTE_PAGINA["js"] += (
+	N_("Șterge"), N_("Mută"), N_("Destinația filmului"), N_("Ștergi filmul și fișierele asociate?"),
+)
 
 
 def _traducePagina(sablon, fel="pagina"):

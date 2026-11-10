@@ -23,6 +23,28 @@ static long hdsNumar(PyObject *o)
 	return v;
 }
 
+/* Desenul culorilor din text nu lasa ultima culoare activa la elementul urmator. */
+static void restoreListboxTextStyle(gPainter &painter, eWindowStyle &style, eListboxStyle *local_style, bool selected)
+{
+	style.setStyle(painter, selected ? eWindowStyle::styleListboxSelected : eWindowStyle::styleListboxNormal);
+	if (!local_style)
+		return;
+	if (selected)
+	{
+		if (local_style->m_foreground_color_selected_set)
+			painter.setForegroundColor(local_style->m_foreground_color_selected);
+		if (local_style->m_background_color_selected_set)
+			painter.setBackgroundColor(local_style->m_background_color_selected);
+	}
+	else
+	{
+		if (local_style->m_foreground_color_set)
+			painter.setForegroundColor(local_style->m_foreground_color);
+		if (local_style->m_background_color_set)
+			painter.setBackgroundColor(local_style->m_background_color);
+	}
+}
+
 /*
     The basic idea is to have an interface which gives all relevant list
     processing functions, and can be used by the listbox to browse trough
@@ -359,7 +381,13 @@ void eListboxPythonStringContent::paint(gPainter &painter, eWindowStyle &style, 
 			eSize text_size(m_itemsize.width() - (text_offset.x() - offset.x()), m_itemsize.height() - (text_offset.y() - offset.y()));
 				/* HDSatelit: a text wider than the row is cut at its edge, and scrolls on the selected row */
 			eDerulare::drawLine(painter, (local_style && local_style->m_font) ? local_style->m_font : fnt, eRect(text_offset, text_size), string, flags,
-				(selected && m_listbox) ? m_listbox->selectedRowScroller() : 0);
+				(selected && m_listbox) ? m_listbox->selectedRowScroller() : 0, true);
+			if (strstr(string, "\\c"))
+			{
+				restoreListboxTextStyle(painter, style, local_style, selected);
+				if (gray)
+					painter.setForegroundColor(gRGB(0x808080));
+			}
 		}
 
 		if (selected && (!local_style || !local_style->m_selection))
@@ -1072,7 +1100,18 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 
 				painter.setFont(m_font[fnt]);
 					/* HDSatelit: a one-line text wider than its cell is cut at the edge, and scrolls on the selected row */
-				eDerulare::drawLine(painter, m_font[fnt], rect, string, flags, (selected && m_listbox) ? m_listbox->selectedRowScroller() : 0);
+				eDerulare::drawLine(painter, m_font[fnt], rect, string, flags, (selected && m_listbox) ? m_listbox->selectedRowScroller() : 0, true);
+				if (strstr(string, "\\c"))
+				{
+					bool textSelected = selected && (!sel_clip.valid() || !(gRegion(rect) & sel_clip).empty());
+					restoreListboxTextStyle(painter, style, local_style, textSelected);
+					ePyObject fore = textSelected ? pforeColorSelected : pforeColor;
+					ePyObject back = textSelected ? pbackColorSelected : pbackColor;
+					if (fore)
+						painter.setForegroundColor(gRGB(PyLong_AsUnsignedLongMask(fore)));
+					if (back)
+						painter.setBackgroundColor(gRGB(PyLong_AsUnsignedLongMask(back)));
+				}
 				painter.clippop();
 
 				// draw border

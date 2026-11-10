@@ -44,8 +44,8 @@ from Components.HdsCursorLista import pune_randurile
 
 CALE_CONFIG = '/etc/enigma2/hdsscaner_cablu.conf'
 FELURI = ('frecventa', 'banda', 'operator', 'manual', 'automat')
-# minutele peste care o scanare lunga se confirma inainte de pornire
-MINUTE_CU_INTREBARE = 10
+# O estimare lunga se arata inainte de Cauta acum, fara o confirmare separata.
+MINUTE_CU_DURATA = 10
 # Rândul din lista de alegere care deschide alt fel de scanare, nu o valoare: cheia „fel:<felul>”. Orange nu își
 # publică frecvențele, deci rândul lui deschide „Toată banda”.
 PREFIX_FEL = 'fel:'
@@ -282,7 +282,7 @@ def _fara_dubluri(transpondere):
 def pregateste(fel, valori, nimmanager=None, cale_xml=None):
     """Ce se cauta pentru felul ales si valorile date (aceleasi chei ca in configuratia ecranului).
     Intoarce {'fel', 'transpondere': [dict in unitatile nucleului], 'slot', 'flags', 'text', 'intrebare'} sau
-    {'eroare': text}. 'intrebare' nevida = se cere confirmarea utilizatorului inainte de pornire (scanare lunga)."""
+    {'eroare': text}. Durata si intreruperea canalului se arata in text inainte de pornire."""
     valori = valori or {}
     if fel not in FELURI:
         return {'eroare': _('Felul de scanare „%s" nu există. Alege unul din listă.') % fel}
@@ -363,13 +363,13 @@ def pregateste(fel, valori, nimmanager=None, cale_xml=None):
         motiv = liste.motiv_refuz_cablu(tp)
         if motiv:
             return {'eroare': _('Nu se poate căuta: %s.') % motiv}
-    intrebare = ''
     minute = liste.minute_maxime(len(tps))
-    if minute > MINUTE_CU_INTREBARE:
-        intrebare = _('Căutarea are %d încercări și poate dura până la %d minute. Pornești?') % (len(tps), minute)
+    if minute > MINUTE_CU_DURATA and fel != 'banda':
+        note.append(_('Căutarea are %d încercări și poate dura până la %d minute.') % (len(tps), minute))
+    note.append(_('Canalul se întrerupe pe durata căutării.'))
     if note:
         text += ' ' + ' '.join(note)
-    return {'fel': fel, 'transpondere': tps, 'slot': slot, 'flags': flags, 'text': text, 'intrebare': intrebare}
+    return {'fel': fel, 'transpondere': tps, 'slot': slot, 'flags': flags, 'text': text, 'intrebare': ''}
 
 
 def cerere_scanare(rez, clasa=None):
@@ -770,12 +770,11 @@ class EcranScaner(Screen):
         self['key_red'] = StaticText(_('Înapoi'))
         self['key_green'] = StaticText(_('Caută acum'))
         self['key_yellow'] = StaticText(_('Schimbă'))
-        self['key_blue'] = StaticText(_('Salvează'))
+        self['key_blue'] = StaticText('')
         actiuni = {
             'red': self.inchide,
             'green': self.cauta,
             'yellow': self._galben,
-            'blue': self.salveaza,
             'ok': self.schimba_valoare,
             'cancel': self.inchide,
             'up': self._sus,
@@ -801,7 +800,7 @@ class EcranScaner(Screen):
     def ajutor(self):
         """Randul de stare cand nu e nimic de spus: ce fac tastele. Un singur rand si cu fonturile marite la 130 %
         (Verde, „Caută acum”, se vede in bara tastelor)."""
-        return _('Schimbă cu OK, stânga sau dreapta; caută cu OK pe „Caută acum”.')
+        return _('Parametrii se păstrează automat. Schimbă cu OK sau săgețile.')
 
     # ---- textele de sub lista (previzualizarea si starea) ----
     def _potriveste_textele(self):
@@ -1041,10 +1040,6 @@ class EcranScaner(Screen):
         self.scrie_stare(text)
         from Screens.MessageBox import MessageBox
         self.session.open(MessageBox, text, MessageBox.TYPE_ERROR)
-
-    def salveaza(self):
-        scrie_config(self.CALE_CONFIG, self._config, self.ANTET_CONFIG)
-        self.scrie_stare(_('Salvat.'))
 
     def inchide(self):
         scrie_config(self.CALE_CONFIG, self._config, self.ANTET_CONFIG)

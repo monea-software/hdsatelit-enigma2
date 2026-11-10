@@ -320,7 +320,7 @@ class Sigle(object):
 		if MultiContentEntryPixmapAlphaBlend is None:
 			return None
 		try:
-			from Components.Renderer.Picon import sigle_pornite, dosare_sigle, cauta_sigla
+			from Tools.PiconResolver import sigle_pornite, dosare_sigle, cauta_sigla
 			from enigma import ePicLoad
 		except Exception as e:
 			_jurnal('siglele: %r' % (e,))
@@ -623,15 +623,12 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		self._sfaturi()
 
 	def _sfaturi(self):
-		"""Sfaturile scurte la prima deschidere a editorului pe acest receptor (o singura data; HELP le are pe toate,
-		iar din ajutor, galben le arata din nou la urmatoarea deschidere)."""
+		"""La prima intrare, indiciul ramane in ecran; editorul se poate folosi direct."""
 		from Screens import HdsEditorCanaleUnelte as UN
 		if UN.sfaturi_vazute():
 			return
-		self.session.openWithCallback(self._sfaturiVazute, MessageBox, _('Sfaturi: în stânga sunt canalele, în '
-			'dreapta buchetul; Stânga / Dreapta trec dintr-o parte în alta. OK adaugă canalul sau ia rândul ca să-l muți, '
-			'galben bifează mai multe. Jos scrie ce face fiecare tastă colorată, MENU are restul. Nimic nu se scrie până '
-			'nu salvezi, iar tasta < anulează. HELP: ajutorul.'), MessageBox.TYPE_INFO)
+		self._pune('indiciu', _('OK adaugă sau mută. GALBEN bifează. MENU arată operațiile. HELP deschide ajutorul.'))
+		self._sfaturiVazute()
 
 	def _sfaturiVazute(self, *_a):
 		from Screens import HdsEditorCanaleUnelte as UN
@@ -768,16 +765,16 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			elif sub is not None and sub[0] == 'furnizor':
 				tinta = ('dosar', 'furnizor', sub[1])
 		elif canalRef:
-			# cheia canalului (sid:ns:tsid:onid), fara tipul serviciului, care poate diferi intre lista si lamedb
+			# Referinta exacta pastreaza tipul ales cand acelasi SID are mai multe variante.
 			try:
 				srv = self.s.serviciu(canalRef)
 			except Exception:
 				srv = None
-			tinta = _g(srv, 'cheie') or _cheieDinRef(canalRef)
+			tinta = _g(srv, 'ref') or canalRef
 		if tinta is not None:
 			for i, r in enumerate(self.randuri[L.SURSA]):
 				if (r[0] == 'dosar' and self._cheieRand(r) == tinta) or \
-						(r[0] == 'canal' and (_g(r[1], 'cheie') or _cheieIndex(r[1])) == tinta):
+						(r[0] == 'canal' and _g(r[1], 'ref') == tinta):
 					self['sursa'].moveToIndex(i)
 					break
 		self.focus = L.SURSA
@@ -1071,7 +1068,7 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		"""(nume_sigle, multimea numelor de sigle de pe disc): o singura citire a dosarelor pentru tot filtrul."""
 		import os
 		try:
-			from Components.Renderer.Picon import dosare_sigle, nume_sigle
+			from Tools.PiconResolver import dosare_sigle, nume_sigle
 		except Exception:
 			return (lambda ref: [], set())
 		nume = set()
@@ -2806,12 +2803,26 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		lista.append((_('Copii de siguranță'), 'copii'))
 		lista.append((_('Lista radio') if not self.radio else _('Lista TV'), 'lista'))
 		lista.append((_('Ajutorul editorului'), 'ajutor'))
+		# Uneltele folosite rar au un singur loc. Mutarea si lucrul cu buchetele raman direct in meniu.
+		rare = frozenset(('test', 'dubluri', 'moarte', 'verifica', 'goale', 'transpondere', 'fluxuri', 'sigle',
+			'curatenie', 'importa', 'exporta', 'exporta_m3u', 'copii', 'alt_noi', 'alt_desface', 'alt_pune',
+			'editeaza_flux', 'flux', 'sterge_sateliti', 'pastreaza_sateliti', 'sterge_tp_bifate', 'sterge_dosar',
+			'sterge_receptor', 'scoate_nou', 'sterge_nelegat', 'leaga'))
+		def actiune(rand):
+			return rand[1][0] if isinstance(rand[1], tuple) else rand[1]
+		self._meniuAvansat = [rand for rand in lista if actiune(rand) in rare]
+		lista = [rand for rand in lista if actiune(rand) not in rare]
+		if self._meniuAvansat:
+			lista.append((_('Avansat'), 'avansat'))
 		self.session.openWithCallback(self._meniuAles, ChoiceBox, title=_('Editorul de canale'), list=lista)
 
 	def _meniuAles(self, ales):
 		if not ales or self.s is None:
 			return
 		a = ales[1]
+		if a == 'avansat':
+			self.session.openWithCallback(self._meniuAles, ChoiceBox, title=_('Avansat'), list=self._meniuAvansat)
+			return
 		if self._actiuneNoua(a):
 			return
 		if a == 'anuleaza':

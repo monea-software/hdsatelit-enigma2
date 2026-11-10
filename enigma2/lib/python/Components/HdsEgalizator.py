@@ -822,8 +822,14 @@ def randuriTehnice(st, posturi_tinute=0):
 		rand(u"Ieșirea", u"fișier WAV (probă)")
 	if m.get("sesiune_tv"):
 		rand(u"Sincronul cu imaginea", u"%s ms" % _nr(m.get("sincron_tv_ms", 0.0), 0))
-		rand(u"Ceasul imaginii", {1: u"citit de la decodor, în ms", 90: u"citit de la decodor, la 90 kHz"}.get(
-			m.get("ceas_imagine"), u"încă necitit"))
+		if m.get("ceas_imagine_sursa") == "placa":
+			# HiSilicon: ceasul imaginii aratate din sincronul placii; PTS-ul decodorului ramane numai pentru comparatie
+			rand(u"Ceasul imaginii", u"din sincronul plăcii, în ms" if m.get("ceas_imagine") else u"încă necitit")
+			if m.get("ceas_decodor_fata_de_placa_ms") is not None:
+				rand(u"PTS-ul decodorului față de imagine", u"%s ms" % _nr(m["ceas_decodor_fata_de_placa_ms"], 0))
+		else:
+			rand(u"Ceasul imaginii", {1: u"citit de la decodor, în ms", 90: u"citit de la decodor, la 90 kHz"}.get(
+				m.get("ceas_imagine"), u"încă necitit"))
 		rand(u"Tăceri și aruncări la potrivire", u"%d, %d" % (m.get("taceri_tv", 0), m.get("aruncari_tv", 0)))
 	if m.get("ceas_tv"):
 		rand(u"Ceasul imaginii la TV (STC)", {u"da": u"driverul îl dă", u"nu": u"driverul nu îl dă"}.get(

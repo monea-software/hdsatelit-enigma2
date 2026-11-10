@@ -88,9 +88,9 @@ IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
-# Regula curenta: ecrane deschise cu secrete mascate; numai modulele de acces raman inchise.
+# Regula curenta: toate meniurile sunt vizibile; valorile conturilor nu pleaca spre echipa.
 # v8 (0.6.21): informarea spune si ce trimite _cine (TEXT_CINE)
-VERSIUNE_TEXT = 8
+VERSIUNE_TEXT = 9
 # durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
 # fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
 DURATA_PERMANENTA = 0
@@ -153,7 +153,7 @@ ERORI_PORNIRE = {
 }
 
 
-# Informarea, aceeasi pe televizor si in web: accesul echipei, secretele mascate, pastrarea datelor si oprirea.
+# Informarea, aceeasi pe televizor si in web: accesul echipei, protejarea conturilor, pastrarea datelor si oprirea.
 INFORMARE = N_(
 	"Asistența de la distanță îi lasă pe oamenii de la HD Satelit să vadă, prin internet, starea tehnică a "
 	"receptorului tău, ca să găsească și să repare mai repede defectele imaginii pe modelul tău.\n"
@@ -163,8 +163,9 @@ INFORMARE = N_(
 	"\n"
 	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere "
 	"pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate "
-	"controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de "
-	"acces rămân închise. Poți opri oricând.\n"
+	"controla receptorul prin toate meniurile, inclusiv cele ale modulelor de acces. Numele de utilizator, parolele, "
+	"PIN-urile și cheile nu ajung la echipă. Înainte să scrii o parolă sau o cheie, oprește asistența. O poți porni "
+	"din nou după ce salvezi. Poți opri oricând.\n"
 	"\n"
 	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales "
 	"se oprește singură.\n"
@@ -191,9 +192,9 @@ TEXT_CINE = N_("Ca să știm ce receptor cere ajutor, trimite și o amprentă ca
 
 # Regula unica pentru pornire, informare si pagina web.
 TEXT_CUM_MERGE = N_(
-	"Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla "
-	"receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces "
-	"rămân închise. Poți opri oricând.")
+	"Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. "
+	"Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât scrii o parolă sau "
+	"o cheie, până o salvezi. Poți opri oricând.")
 
 
 def textInformare():
@@ -1005,6 +1006,8 @@ class Sesiune(object):
 		self._scrie_stare()
 
 	def _trimite_raspuns(self, seq, op, rez):
+		if self._stop.is_set():
+			return
 		if rez.octeti is not None:
 			date = rez.octeti
 			tip = rez.tip
@@ -1017,6 +1020,8 @@ class Sesiune(object):
 		self._ceruta_raspuns(corp)
 
 	def _ceruta_raspuns(self, corp):
+		if self._stop.is_set():
+			return
 		try:
 			_ceruta(self.server + "raspuns?id=" + self.id, "POST", corp, {"X-Secret": self.secret})
 		except Exception as e:
@@ -1105,6 +1110,8 @@ def porneste(nivel=NIVEL_PORNIRE, durata_min=DURATA_IMPLICITA_MIN, limba="ro", d
 	global _sesiune, _eroare_pornire
 	if not disponibil():
 		return False, _t("Funcția nu e disponibilă pe această imagine.")
+	# asistenta porneste si cu pagina unui modul deschisa in navigator (captura e refuzata cat navigatorul e pe ecran,
+	# deci echipa nu o vede)
 	with _lacat:
 		if _sesiune is not None and _sesiune.activa():
 			return False, _t("Asistența merge deja.")

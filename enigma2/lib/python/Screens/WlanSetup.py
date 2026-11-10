@@ -132,8 +132,9 @@ class WlanScanScreen(Screen):
 		if security in (WlanTools.SECURITY_OPEN, WlanTools.SECURITY_OWE):
 			self.startConnect(ssid, security, "", hidden)
 			return
+		# hdsSecret: cu asistenta pornita, prima tasta din parola cere oprirea ei (titlul tradus nu se mai cauta)
 		self.session.openWithCallback(boundFunction(self.passwordEntered, ssid, security, hidden), VirtualKeyBoard,
-			title=_("Password for %s") % WlanTools.ssidName(ssid), text="")
+			title=_("Password for %s") % WlanTools.ssidName(ssid), text="", hdsSecret=True)
 
 	def passwordEntered(self, ssid, security, hidden, password):
 		if password is None:

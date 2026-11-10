@@ -5,15 +5,17 @@
 # vpn_web.py: "VPN" in interfata web (HdsWebControl), perechea ecranului de pe televizor (Screens/HdsVpn.py, Setari >
 # Retea & Internet > VPN). Aceleasi date, aceleasi texte si aceleasi comenzi, din Components/HdsVpn.py: starea si
 # adresa vazuta pe internet, pornirea si oprirea, furnizorul (HMA, OpenVPN, WireGuard), serverul, numele si parola
-# (scrise aici, niciodata aratate inapoi), importul fisierelor din telefon sau de pe stick, ce trece prin VPN (tot sau
-# numai IPTV si adresele scrise aici), oprirea totala, pornirea odata cu receptorul, instalarea programelor si
-# stergerile. Legat din meniu_pagini_web.MODULE (plugin.py nu se schimba). Numai cu programele VPN in imagine
-# (SystemInfo["HdsVpn"], ca intrarea din meniu): altfel modulul nu da nicio ruta.
+# (scrise aici, niciodata aratate inapoi; campul parolei e text obisnuit, se vede cat
+# o scrii, fara stelute, iar dupa salvare pagina spune numai "salvate" si pune in camp indemnul de schimbare), importul
+# fisierelor din telefon sau de pe stick, ce trece prin VPN (tot sau numai IPTV si adresele scrise aici), oprirea totala,
+# pornirea odata cu receptorul, instalarea programelor si stergerile. Legat din meniu_pagini_web.MODULE (plugin.py nu
+# se schimba). Numai cu programele VPN in imagine (SystemInfo["HdsVpn"], ca intrarea din meniu): altfel modulul nu da
+# nicio ruta.
 #
 # Cine are voie: poarta comuna a HdsJsonResource lasa sa treaca reteaua locala cu ?token= sau cu cookie-ul
-# browserului. Starea (GET) o vede oricine trece de poarta: nu are secrete. Orice schimbare (POST) cere in plus un
-# browser conectat CU CODUL de pe televizor (nivel "asociat"): numele si parola contului, fisierele cu chei si
-# pornirea VPN-ului nu se dau unui browser intrat fara cod si nici cheii pentru scripturi.
+# browserului. Starea (GET) o vede oricine trece de poarta: nu are secrete. Orice schimbare (POST) cere un browser
+# (cel din casa, intrat liber sau cu parola omului), nu cheia pentru scripturi. Codul de
+# pe televizor (fostul nivel "asociat" numai cu cod) s-a scos; in casa nu se cere nimic.
 #   GET  /api/vpn                         starea (fara nume, parola sau chei)
 #   POST /api/vpn-porneste, /api/vpn-opreste, /api/vpn-ip, /api/vpn-stick
 #   POST /api/vpn-setari                  furnizor=, profil=, mod=tot|ales, oprire_totala=0|1, la_pornire=0|1,
@@ -92,16 +94,17 @@ def _sesiunePlugin(request):
 
 
 def nivel(request, sesiune_cerere=None):
-	""""jeton" (?token=), "asociat" (browser conectat cu codul de pe televizor) sau "liber"."""
+	""""jeton" (?token=) sau "asociat" (orice browser care a trecut poarta: din casa liber sau cu parola omului). Numele
+	ramane din istoric; "liber" numai fara browser."""
 	if _cuJeton(request):
 		return "jeton"
 	_secret, browser = (sesiune_cerere or _sesiunePlugin)(request)
-	if browser is not None and not browser.get("liber"):
+	if browser is not None:
 		return "asociat"
 	return "liber"
 
 
-NEASOCIAT = N_("VPN-ul se schimbă numai dintr-un browser conectat cu codul de pe televizor.")
+NEASOCIAT = N_("VPN-ul se schimbă numai din pagina VPN, dintr-un browser (nu cu cheia pentru scripturi).")
 
 
 def stare(V=None, nivel_cerere="asociat"):
@@ -323,12 +326,6 @@ def _json(obiect):
 ETICHETE = {
 	"TITLU": N_("VPN"),
 	"INCARCARE": N_("Se citește starea..."),
-	"CONECTARE": N_("Conectează browserul cu codul"),
-	"CONECTARE_TEXT": N_("VPN-ul se schimbă numai dintr-un browser conectat cu codul de pe televizor. Așa, cine e doar în "
-		"rețeaua ta de acasă nu îți poate afla contul și nu poate porni sau opri VPN-ul."),
-	"ARATA_COD": N_("Arată codul pe televizor"),
-	"COD": N_("Codul de pe televizor"),
-	"CONECTEAZA": N_("Conectează"),
 	"STARE": N_("Starea"),
 	"PORNESTE": N_("Pornește"),
 	"VERIFICA_IP": N_("Verifică adresa văzută pe internet"),
@@ -380,13 +377,7 @@ TEXTE_JS = {
 	"intrebareStergeCont": N_("Ștergi numele și parola de pe receptor?"),
 	"salvate": N_("salvate"),
 	"lipsesc": N_("lipsesc"),
-	"seCereCodul": N_("Se cere codul..."),
-	"codulPeTv": N_("Codul e pe televizor."),
-	"scrieCodul": N_("Scrie codul aici, apoi apasă Conectează."),
-	"codNecerut": N_("Codul nu s-a putut cere."),
-	"codSase": N_("Codul are 6 cifre."),
-	"conectat": N_("Conectat."),
-	"codGresit": N_("Codul nu a mers."),
+	"scrieAlta": N_("Scrie alta ca s-o schimbi"),
 	"numaiStarea": N_("Cu cheia pentru scripturi pagina arată numai starea."),
 	"porneste": N_("Pornește"),
 	"opreste": N_("Oprește"),
@@ -419,7 +410,7 @@ __STIL_PAGINI__
   .stare-mare.bun{color:#7ddc8a;} .stare-mare.chihlimbar{color:#f5b83d;} .stare-mare.rau{color:#ff8a7a;} .stare-mare.slab{color:var(--text-slab);}
   .detalii p{margin:0 0 4px;line-height:1.45;}
   .rand > *{min-width:0;}
-  .rand select, .rand input[type=text], .rand input[type=password], .rand input[type=file]{width:100%;box-sizing:border-box;}
+  .rand select, .rand input[type=text], .rand input[type=file]{width:100%;box-sizing:border-box;}
   .rand input[type=file]{max-width:100%;overflow:hidden;}
   textarea{width:100%;box-sizing:border-box;min-height:88px;}
   .bifa{display:flex;gap:10px;align-items:center;padding:8px 0;}
@@ -431,16 +422,6 @@ __STIL_PAGINI__
 <h1>__T_TITLU__</h1>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <div id="continut" class="ascuns">
-  <section class="card ascuns" id="conectare">
-    <h2>__T_CONECTARE__</h2>
-    <p class="nota" id="textConectare">__T_CONECTARE_TEXT__</p>
-    <div class="butoane" id="butoaneCod">
-      <button type="button" class="principal" id="arataCod">__T_ARATA_COD__</button>
-      <input id="cod" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="12 34 56" aria-label="__T_COD__">
-      <button type="button" class="principal" id="conecteaza">__T_CONECTEAZA__</button>
-    </div>
-    <p class="mesaj" id="mesajCod"></p>
-  </section>
   <section class="card">
     <h2>__T_STARE__</h2>
     <p class="stare-mare slab" id="stareMare">-</p>
@@ -478,7 +459,7 @@ __STIL_PAGINI__
   <section class="card" id="cardCont">
     <h2><span id="titluCont">__T_CONT__</span> <span class="nota" id="contStare"></span></h2>
     <div class="rand"><label for="nume">__T_NUME__</label><input type="text" id="nume" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128"></div>
-    <div class="rand"><label for="parola">__T_PAROLA__</label><input type="password" id="parola" autocomplete="new-password" maxlength="128"></div>
+    <div class="rand"><label for="parola">__T_PAROLA__</label><input type="text" id="parola" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128"></div>
     <div class="butoane">
       <button type="button" class="principal" id="salveazaCont">__T_SALVEAZA__</button>
       <button type="button" id="stergeCont">__T_STERGE_CONT__</button>
@@ -525,7 +506,6 @@ function optiuni(sel, lista, ales){
 function arata(d){
   D = d;
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
-  $("conectare").classList.toggle("ascuns", !!d.asociat || d.nivel === "jeton");
   var m = $("stareMare"); m.textContent = d.text_legatura; m.className = "stare-mare " + d.culoare;
   var det = $("detalii"); det.textContent = "";
   (d.detalii || []).forEach(function(x){ var p = document.createElement("p"); p.textContent = x; det.appendChild(p); });
@@ -543,6 +523,8 @@ function arata(d){
   pune("cumIei", d.cum_iei);
   $("cardCont").classList.toggle("ascuns", d.fel !== "openvpn");
   pune("contStare", "(" + (d.cont ? TXT.salvate : TXT.lipsesc) + ")"); pune("titluCont", d.text_cont); pune("contNota", d.text_cont_nota); $("stergeCont").disabled = !d.cont;
+  // parola salvata nu vine niciodata in pagina: campul ramane gol, cu indemnul de schimbare cand contul e salvat
+  $("parola").placeholder = d.cont ? TXT.scrieAlta : "";
   var mod = $("moduri");
   if(!mod.children.length){
     d.moduri.forEach(function(x){
@@ -562,7 +544,6 @@ function arata(d){
   pune("explicatieMod", d.explicatie_mod);
   var schimba = !!d.asociat;
   Array.prototype.forEach.call(document.querySelectorAll("#continut button, #continut select, #continut input, #continut textarea"), function(e){
-    if(e.closest("#conectare")){ return; }
     if(!schimba){ e.disabled = true; }
   });
   var l = d.lucrare || {};
@@ -642,29 +623,6 @@ $("trimite").addEventListener("click", function(){
     }
     return urmatorul();
   }).catch(function(){ mesaj(TXT.nuRaspunde, true); });
-});
-// conectarea cu codul de pe televizor (aceleasi cereri ca pagina de conectare a receptorului: /asociere/cod, /asociere)
-function mesajCod(text, eroare){ var m = $("mesajCod"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
-function asociere(cale, date){
-  return fetch(cale, {method: "POST", cache: "no-store", credentials: "same-origin",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: date.toString()}).then(function(r){
-    return r.json().catch(function(){ return {result: false, mesaj: TXT.neasteptat.replace("%s", r.status)}; });
-  });
-}
-$("arataCod").addEventListener("click", function(){
-  mesajCod(TXT.seCereCodul);
-  asociere("/asociere/cod", new URLSearchParams("reafiseaza=1")).then(function(r){
-    mesajCod(r.result ? (r.mesaj || TXT.codulPeTv) + " " + TXT.scrieCodul : (r.mesaj || TXT.codNecerut), !r.result);
-    if(r.result){ $("cod").focus(); }
-  }).catch(function(){ mesajCod(TXT.nuRaspunde, true); });
-});
-$("conecteaza").addEventListener("click", function(){
-  var cod = $("cod").value.replace(/[^0-9]/g, "");
-  if(cod.length !== 6){ mesajCod(TXT.codSase, true); return; }
-  asociere("/asociere", new URLSearchParams("cod=" + cod)).then(function(r){
-    if(r.result){ mesajCod(TXT.conectat); location.reload(); return; }
-    mesajCod(r.mesaj || TXT.codGresit, true);
-  }).catch(function(){ mesajCod(TXT.nuRaspunde, true); });
 });
 function planifica(){ setTimeout(function(){ citeste().then(planifica, planifica); }, (ASTEPT !== null || (D && D.lucrare && D.lucrare.lucreaza)) ? 800 : 2500); }
 citeste().then(planifica, planifica);

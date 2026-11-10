@@ -46,6 +46,7 @@ STRICAT = "stricat"          # fisierul de pe stick nu trece de e2fsck sau nu se
 REFUZURI = "refuzuri.json"
 MESAJ_LIPSA = N_("Stickul cu partea a doua lipseste. Limbile de pe el nu sunt disponibile acum. Pune stickul si reporneste receptorul.")
 MESAJ_LIMITA = N_("Acum sunt disponibile limbile. Navigatorul si recunoasterea textului nu sunt inca disponibile pentru acest model.")
+MESAJ_STICK_NECESAR = N_("Lasă stickul în receptor. Rămâne necesar pentru limbile instalate pe el.")
 
 
 def _t(text):
@@ -554,18 +555,18 @@ def _idNou():
 		return "%08x-%04x-%04x" % (random.getrandbits(32), random.getrandbits(16), random.getrandbits(16))
 
 
-def pregateste(punct, radacina=None, progres=None):
+def pregateste(punct, radacina=None, progres=None, ident=None):
 	radacina = radacina or radacinaImplicita()
 	lacat = ocupaOperatia(radacina)
 	if lacat is None:
 		return False, _t("Alta operatie este in lucru sau interfata trebuie repornita.")
 	try:
-		return _pregateste(punct, radacina, progres)
+		return _pregateste(punct, radacina, progres, ident)
 	finally:
 		elibereazaOperatia(lacat)
 
 
-def _pregateste(punct, radacina=None, progres=None):
+def _pregateste(punct, radacina=None, progres=None, ident=None):
 	"""Face fisierul ext4 pe stickul montat la `punct` (din sablon, fara sa stearga ceva), il verifica, il monteaza si
 	il leaga de receptor. (bine, mesaj)"""
 	radacina = radacina or radacinaImplicita()
@@ -577,7 +578,8 @@ def _pregateste(punct, radacina=None, progres=None):
 	progres = progres or (lambda t: None)
 	if idLegat(radacina):
 		return False, _t("Un stick este deja legat. Pune acel stick si reporneste receptorul.")
-	if punct not in [c["punct"] for c in candidati(radacina, conf, exclus=exclusInregistrari())]:
+	if not any(c["punct"] == punct and (ident is None or c.get("ident") == ident)
+			for c in candidati(radacina, conf, exclus=exclusInregistrari())):
 		return False, _t("Stickul ales nu mai este disponibil sau nu are loc.")
 	p = _cale(radacina, punct.lstrip("/"))
 	final = os.path.join(p, FISIER)
@@ -670,6 +672,20 @@ def stare(radacina=None):
 		d["marime_mib"] = _int(conf.get("MARIME_MIB"), 1024)
 		d["candidati"] = [] if d["legat"] else candidati(radacina, conf, exclus=exclusInregistrari())
 	return d
+
+
+def candidatUnic(d):
+	"""Comanda directă numește numai unicul mediu eligibil, înainte de legare."""
+	c = d.get("candidati") or []
+	if d.get("descris") and not d.get("legat") and not d.get("montat") and len(c) == 1:
+		return dict(c[0])
+	return None
+
+
+def alegereDisponibila(d, punct, ident=None):
+	return bool(d.get("descris") and not d.get("legat") and not d.get("montat") and
+		any(c["punct"] == punct and (ident is None or c.get("ident") == ident)
+			for c in d.get("candidati", [])))
 
 
 def trebuieIntrebat(d, refuzat_la=0, acum=None, zile=30):
@@ -946,7 +962,7 @@ class Lucrare:
 		self.bine = None
 		self.lacat = threading.Lock()
 
-	def porneste(self, punct=None):
+	def porneste(self, punct=None, ident=None):
 		with self.lacat:
 			A = _actualizari()
 			if self.ocupat or A.opkg_ocupat() or getattr(A.actualizari, "faza", "liber") != "liber":
@@ -954,13 +970,16 @@ class Lucrare:
 			if A.actualizari.repornire:
 				self.mesaj = _t("Reporneste interfata dupa actualizarea bazei.")
 				return False
+			if punct and not alegereDisponibila(stare(), punct, ident):
+				self.mesaj = _t("Stickul ales nu mai este disponibil sau nu are loc.")
+				return False
 			self.ocupat, self.bine = True, None
 		def progres(text):
 			self.mesaj = _t(text)
 		def lucru():
 			try:
 				if punct:
-					ok, mesaj = pregateste(punct, progres=progres)
+					ok, mesaj = pregateste(punct, progres=progres, ident=ident)
 					if not ok:
 						self.bine, self.mesaj = False, mesaj
 						return
@@ -985,6 +1004,9 @@ lucrare = Lucrare()
 def starePublica():
 	d = stare()
 	d.update(ocupat=lucrare.ocupat, mesaj=_t(lucrare.mesaj), bine=lucrare.bine, limita=_t(MESAJ_LIMITA))
+	d["stick_unic"] = candidatUnic(d)
+	d["actiune_unic"] = (_t("Folosește stickul %s") % d["stick_unic"]["punct"]) if d["stick_unic"] else ""
+	d["explicatie_stick"] = _t(MESAJ_STICK_NECESAR) if d.get("descris") else ""
 	if d.get("legat") and not d.get("montat"):
 		d["mesaj"] = _t(MESAJ_LIPSA)
 	if not d.get("descris"):

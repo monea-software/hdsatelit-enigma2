@@ -117,6 +117,9 @@ def __getattr__(nume):
 
 # eticheta filei Surse, aceeasi pe televizor si in pagina web (tradusa la folosire)
 ETICHETA_SURSE = N_('Surse feeduri')
+ETICHETA_FISIERE = N_('Instalează de pe stick')
+TEXT_FARA_FISIERE = N_('Pune fișierul .ipk pe stick sau în /tmp prin FTP. '
+	'Lista se reface singură când introduci stickul.')
 # pluginul din feedul Monea Software care adauga singur mai multe surse; randul despre el apare in Surse feeduri numai
 # cand pachetul chiar se poate lua (Eduard, 04.11.2026)
 PACHET_FEEDURI = 'enigma2-plugin-extensions-hdsfeeduri'
@@ -513,11 +516,21 @@ def textGolDisponibile(catalog):
 	return '\n'.join(randuri_)
 
 
-def file(catalog, nrInstalate):
-	"""[(id, eticheta, numar)] ale celor doua file de sus: Instalate si Disponibile (Eduard, 04.11.2026: „să fie clar
-	pentru om care sunt instalate și care e lista de download”). Actualizarile sunt o sectiune in Instalate, felurile sunt
-	sectiuni in Disponibile; Surse feeduri se deschide cu tasta verde, iar Din fisier e un rand in Disponibile."""
-	return [('instalate', _t('Instalate'), nrInstalate), ('disponibile', _t('Disponibile'), len(deDescarcat(catalog)))]
+def file(catalog, nrInstalate, nrFisiere=None):
+	"""Cele trei file permanente, in aceeasi ordine pe televizor si in web. Numarul fisierelor vine din cautarea
+	in fundal; None inseamna ca prima cautare nu s-a terminat. Surse feeduri se deschide cu tasta verde."""
+	return [('instalate', _t('Instalate'), nrInstalate), ('disponibile', _t('Disponibile'), len(deDescarcat(catalog))),
+		('fisiere', _t(ETICHETA_FISIERE), nrFisiere)]
+
+
+def semnLocuriFisiere():
+	"""Montarile si dosarul local /tmp, fara acces la stick, disc sau retea. O schimbare cere o noua cautare."""
+	try:
+		s = os.stat('/tmp')
+		tmp = getattr(s, 'st_mtime_ns', s.st_mtime)
+	except OSError:
+		tmp = None
+	return tuple(sorted(P.readMountTable().items())), tmp
 
 
 def filaSurse(catalog):
@@ -563,8 +576,7 @@ def randuri(catalog, fila, pluginuri, plugins, cautare=''):
 	if fila == 'instalate':
 		return randuriInstalate(catalog, pluginuri, plugins)
 	if fila == 'disponibile':
-		# Fisierele locale se vad de la inceput, si cand lista are multe feeduri.
-		return [('dinfisier', None, None)] + randuriDeDescarcat(catalog)
+		return randuriDeDescarcat(catalog)
 	if fila == 'actualizari':
 		return [('pachet', p, None) for p in catalog.actualizari()]
 	if fila == 'surse':

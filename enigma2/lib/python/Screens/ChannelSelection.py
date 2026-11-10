@@ -13,6 +13,7 @@ profile("ChannelSelection.py 1")
 from .EpgSelection import EPGSelection
 from enigma import eServiceReference, eEPGCache, eServiceCenter, eRCInput, eTimer, eDVBDB, iPlayableService, iServiceInformation, getPrevAsciiCode, eEnv
 from Components.config import config, ConfigSubsection, ConfigText
+from Components.HdsTasteRapide import sens_tasta
 from Tools.NumericalTextInput import NumericalTextInput
 profile("ChannelSelection.py 2")
 from Components.NimManager import nimmanager
@@ -61,7 +62,7 @@ FLAG_IS_DEDICATED_3D = 128 # HDSatelit: numele din alte imagini (canal 3D), ceru
 class BouquetSelector(Screen):
 	def __init__(self, session, bouquets, selectedFunc, enableWrapAround=False):
 		Screen.__init__(self, session)
-		self.setTitle(_("Choose bouquet") if _("Choose bouquet") != "Choose bouquet" else "Alegere buchet")
+		self.setTitle(_("Choose bouquet") if _("Choose bouquet") != "Choose bouquet" else _("Alegere buchet"))
 
 		self.selectedFunc=selectedFunc
 
@@ -146,7 +147,7 @@ class ChannelContextMenu(Screen):
 	def __init__(self, session, csel):
 
 		Screen.__init__(self, session)
-		self.setTitle(_("Channel list menu") if _("Channel list menu") != "Channel list menu" else "Meniu listă canale")
+		self.setTitle(_("Channel list menu") if _("Channel list menu") != "Channel list menu" else _("Meniu listă canale"))
 		#raise Exception("we need a better summary screen here")
 		self.csel = csel
 		self.bsel = None
@@ -187,7 +188,7 @@ class ChannelContextMenu(Screen):
 				menu.append(ChoiceEntryComponent(text = (fav, self.hdsFavorit)))
 			# editorul de canale (Screens/HdsEditorCanale.py), deschis pe buchetul si canalul de acum
 			if hds_editor_disponibil():
-				menu.append(ChoiceEntryComponent(text = (_("Editorul de canale"), self.hdsEditor)))
+				menu.append(ChoiceEntryComponent(text = (_("Editor"), self.hdsEditor)))
 
 		if not (current_sel_path or current_sel_flags & (eServiceReference.isDirectory|eServiceReference.isMarker)):
 			append_when_current_valid(current, menu, (_("show transponder info"), self.showServiceInformations), level = 2)
@@ -271,13 +272,41 @@ class ChannelContextMenu(Screen):
 						append_when_current_valid(current, menu, (_("end alternatives edit"), self.bouquetMarkEnd), level = 0)
 						append_when_current_valid(current, menu, (_("abort alternatives edit"), self.bouquetMarkAbort), level = 0)
 
+		self.hdsMeniuAvansat = []
+		if csel.bouquet_mark_edit == OFF and not csel.movemode:
+			# Operatiile vechi raman disponibile impreuna; Editor este drumul principal.
+			operatii = (self.toggleMoveMode, self.showMarkerInputBox, self.bouquetMarkStart,
+				self.editAlternativeServices, self.showAlternativeServices, self.removeAlternativeServices,
+				self.addAlternativeServices, self.removeCurrentService, self.removeBouquet,
+				self.copyCurrentToBouquetList, self.showBouquetInputBox, self.addServiceToBouquetSelected)
+			self.hdsMeniuAvansat = [rand for rand in menu if rand[0][1] in operatii]
+			menu = [rand for rand in menu if rand[0][1] not in operatii]
+			if self.hdsMeniuAvansat:
+				menu.append(ChoiceEntryComponent(text = (_("Avansat"), self.hdsAvansat)))
 		menu.append(ChoiceEntryComponent(text = (primaMare(_("back")), self.cancelClick)))
+		self.hdsMeniuPrincipal = menu
 		self["menu"] = ChoiceList(menu)
+
+	def hdsAvansat(self):
+		self.hdsIndexPrincipal = self["menu"].getSelectedIndex()
+		self["menu"].setList(self.hdsMeniuAvansat + [
+			ChoiceEntryComponent(text = (primaMare(_("back")), self.hdsInapoi))])
+		self.setTitle(_("Avansat"))
+		self.hdsInAvansat = True
+
+	def hdsInapoi(self):
+		self["menu"].setList(self.hdsMeniuPrincipal)
+		self["menu"].moveToIndex(self.hdsIndexPrincipal)
+		self.setTitle(_("Channel list menu") if _("Channel list menu") != "Channel list menu" else _("Meniu listă canale"))
+		self.hdsInAvansat = False
 
 	def okbuttonClick(self):
 		self["menu"].getCurrent()[0][1]()
 
 	def cancelClick(self):
+		if getattr(self, "hdsInAvansat", False):
+			self.hdsInapoi()
+			return
 		self.close(False)
 
 	def hdsCautare(self):
@@ -374,11 +403,18 @@ class ChannelContextMenu(Screen):
 			idx = tmp.find(')')
 			if idx != -1:
 				satpos = int(tmp[:idx])
-				eDVBDB.getInstance().removeServices(-1, -1, -1, satpos)
-				# numerele de pe antetele listei pe sateliti si lista insasi, fara satelitul scos
-				hds_uita_numerele()
-				if self.csel.hdsPeRadacinaSateliti():
-					self.csel.hdsRefaSateliti()
+				self.session.openWithCallback(boundFunction(self.hdsStergeSatelitul, satpos),
+					MessageBox, _("Ștergi canalele satelitului ales?"),
+					type=MessageBox.TYPE_YESNO, default=False)
+				return
+		self.close()
+
+	def hdsStergeSatelitul(self, satpos, raspuns):
+		if raspuns:
+			eDVBDB.getInstance().removeServices(-1, -1, -1, satpos)
+			hds_uita_numerele()
+			if self.csel.hdsPeRadacinaSateliti():
+				self.csel.hdsRefaSateliti()
 		self.close()
 
 	def copyCurrentToBouquetList(self):
@@ -1288,17 +1324,18 @@ class ChannelSelectionBase(Screen):
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
-		self.setTitle(_("Channel Selection") if _("Channel Selection") != "Channel Selection" else "Selectare canale")
+		self.setTitle(_("Channel Selection") if _("Channel Selection") != "Channel Selection" else _("Selectare canale"))
 
 		self["key_red"] = Button(_("All"))
 		self["key_green"] = Button(_("Satellites"))
 		self["key_yellow"] = Button(_("Provider"))
 		self["key_blue"] = Button(hdsEtichetaBuchete())
 		# HDSatelit: cautarea de canale (Screens/HdsCautareCanale.py), in bara de jos a skinului HDSatelit
-		self["key_text"] = StaticText("TEXT  " + _("Căutare"))
+		self["key_text"] = StaticText("TEXT  " + _("Căutare") if
+			sens_tasta("channel_list", "text", config=config) == "search_channels" else "")
 		self["HdsCautareActions"] = ActionMap(["HdsCautareActions"],
 			{
-				"cautare": self.hdsCautare,
+				"cautare": self.hdsCautareTasta,
 			})
 
 		self["list"] = ServiceList()
@@ -1502,11 +1539,11 @@ class ChannelSelectionBase(Screen):
 				return _("Satellites")
 			if ') ORDER BY name' in pathstr:
 				return _("All")
-		elif str == "Favourites":
-			return _("Favourites")
 		elif str == "Bouquets" and 'FROM BOUQUET "bouquets.' in (ref.getPath() or ""):
 			# radacina cu toate buchetele (#NAME Bouquets (TV) din bouquets.tv): acelasi text ca tasta albastra
 			return _("Buchete")
+		if 'FROM BOUQUET' in ref.getPath() and HdsFavorite is not None:
+			return HdsFavorite.nume_buchet(ref.toString(), str)
 		return str
 
 	def buildTitleString(self):
@@ -2460,9 +2497,11 @@ class ChannelSelectionBase(Screen):
 	def setCurrentSelection(self, service):
 		self.servicelist.setCurrent(service)
 
-	def hdsNumeBuchetAfisat(self, nume):
+	def hdsNumeBuchetAfisat(self, nume, ref=None):
 		"""Numele aratat al unui buchet in alegerea buchetului: Favorite cu numele implicit din fisier ("Favourites
 		(TV)") tradus, ca in titlu si in lista buchetelor; un nume ales de om ramane."""
+		if ref is not None and HdsFavorite is not None:
+			return HdsFavorite.nume_buchet(ref.toString(), nume)
 		return _("Favourites") if nume in ("Favourites (TV)", "Favourites (Radio)", "Favourites") else nume
 
 	def getBouquetList(self):
@@ -2478,12 +2517,12 @@ class ChannelSelectionBase(Screen):
 					if s.flags & eServiceReference.isDirectory:
 						info = serviceHandler.info(s)
 						if info:
-							bouquets.append((self.hdsNumeBuchetAfisat(info.getName(s)), s))
+							bouquets.append((self.hdsNumeBuchetAfisat(info.getName(s), s), s))
 				return bouquets
 		else:
 			info = serviceHandler.info(self.bouquet_root)
 			if info:
-				bouquets.append((self.hdsNumeBuchetAfisat(info.getName(self.bouquet_root)), self.bouquet_root))
+				bouquets.append((self.hdsNumeBuchetAfisat(info.getName(self.bouquet_root), self.bouquet_root), self.bouquet_root))
 			return bouquets
 		return None
 
@@ -2549,6 +2588,11 @@ class ChannelSelectionBase(Screen):
 	# Cautarea tine minte textul, filtrele si cursorul (memoria din Screens/HdsCautareCanale.py, una pentru lista TV si
 	# una pentru lista radio). Dupa un canal pornit din rezultate, deschiderea urmatoare a listei redeschide cautarea
 	# (hdsRedeschideCautarea), cu cursorul pe canal; EXIT din ea duce in lista obisnuita, cu filtrele pastrate pentru TEXT.
+	def hdsCautareTasta(self):
+		if sens_tasta("channel_list", "text", config=config) == "search_channels":
+			self.hdsCautare()
+		return 1
+
 	def hdsCautare(self, redeschisa=False):
 		if getattr(self, "movemode", False) or getattr(self, "bouquet_mark_edit", OFF) != OFF:
 			return
@@ -2716,7 +2760,7 @@ class ChannelSelectionBase(Screen):
 		for nume in self.CAP_SURSE:
 			self[nume] = StaticText("")
 		self["hdsCapCauta"].setText(_("Caută canal…"))
-		self["hdsCapIndiciu"].setText(_("TEXT sau OK ținut apăsat"))
+		self["hdsCapIndiciu"].setText(self.hdsIndiciuCautare())
 		self["hdsFelAles"] = StaticText("")
 		self["hdsAcumEticheta"] = StaticText("")
 		self["hdsAcumNume"] = StaticText("")
@@ -2760,6 +2804,17 @@ class ChannelSelectionBase(Screen):
 		etichete = [_("All"), _("Satellites"), _("Provider"), hdsEtichetaBuchete(), _("Menu")]
 		return etichete[:self.hdsCap.grupe]
 
+	def hdsIndiciuCautare(self):
+		text = sens_tasta("channel_list", "text", config=config) == "search_channels"
+		lung = sens_tasta("channel_list", "ok", lung=True, config=config) == "search_channels"
+		if text and lung:
+			return _("TEXT sau OK ținut apăsat")
+		if text:
+			return _("TEXT sau MENU")
+		if lung:
+			return _("OK ținut apăsat sau MENU")
+		return _("MENU sau OK pe Caută canal")
+
 	def hdsGrupaCurenta(self):
 		"""Grupa in care e lista acum (indicele din HdsCapLista.GRUPE_LISTEI, dupa radacina drumului), sau None."""
 		if not self.servicePath:
@@ -2779,6 +2834,8 @@ class ChannelSelectionBase(Screen):
 	def hdsDeseneazaCapul(self):
 		"""Randul cu focus (bara colorata), fila listei de acum, pastilele grupelor si selectia listei (stinsa cat
 		focusul e in cap). In mutare si in editarea buchetelor capul nu se foloseste: toate sursele goale."""
+		self["key_text"].setText("TEXT  " + _("Căutare") if
+			sens_tasta("channel_list", "text", config=config) == "search_channels" else "")
 		if not self.hdsCapVazut:
 			return
 		vazut = self.hdsPoateCauta()
@@ -2788,14 +2845,15 @@ class ChannelSelectionBase(Screen):
 		inDosar = len(self.servicePath) > 1
 		# in lista unei retele indiciul spune ce fac cifrele (numarul operatorului), nu cum se cauta
 		retea = bool(getattr(self, "hdsNumereRetea", None))
-		stare = (vazut, focus, radio, curenta, inDosar, self.hdsCap.grupa, retea)
+		indiciuCautare = self.hdsIndiciuCautare()
+		stare = (vazut, focus, radio, curenta, inDosar, self.hdsCap.grupa, retea, indiciuCautare)
 		if stare == self.hdsCapDesenat:
 			return
 		self.hdsCapDesenat = stare
 		texte = {}
 		if vazut:
 			tv, rd = _("TV"), _("Radio")
-			indiciu = _("Cifrele: numărul operatorului") if retea else _("TEXT sau OK ținut apăsat")
+			indiciu = _("Cifrele: numărul operatorului") if retea else indiciuCautare
 			texte.update({"hdsCapFond": "1", "hdsCapCauta": _("Caută canal…"), "hdsCapIndiciu": indiciu,
 				"hdsCapG4Fond": "1" if self.hdsCap.grupe > 4 else "",
 				"hdsCapFocusFila": "1" if focus == HdsCapLista.FILA else "",
@@ -2915,7 +2973,7 @@ class ChannelSelectionBase(Screen):
 			return False
 
 	def hdsCapLateral(self):
-		"""STANGA / DREAPTA fara directie (pe fila comuta oricum): ca DREAPTA."""
+		"""STANGA / DREAPTA fara directie: ca DREAPTA, fara comutarea modului."""
 		return self.hdsCapDreapta()
 
 	def hdsCapRepetat(self):
@@ -2926,7 +2984,9 @@ class ChannelSelectionBase(Screen):
 		return 1
 
 	def hdsCapOkLung(self):
-		return self.hdsCapFapta(self.hdsCap.okTinut(self.hdsPoateCauta()))
+		poate = self.hdsPoateCauta() and sens_tasta("channel_list", "ok", lung=True,
+			config=config) == "search_channels"
+		return self.hdsCapFapta(self.hdsCap.okTinut(poate))
 
 	def hdsCapOkEliberat(self):
 		return self.hdsCapFapta(self.hdsCap.okEliberare(self.hdsCapActiv()))
@@ -3226,7 +3286,8 @@ class ChannelSelectionBase(Screen):
 			from Components import HdsIndexCanale as X
 			for fel, fisier in X.buchete_fluxuri("radio" if self.mode == MODE_RADIO else "tv"):
 				ref = eServiceReference(X.ref_buchet_flux(fisier))
-				ref.setName(X.nume_buchet_flux(fel))
+				nume = X.nume_buchet_flux(fel)
+				ref.setName(HdsFavorite.nume_buchet(ref.toString(), nume) if HdsFavorite is not None else _(nume))
 				self.servicelist.addService(ref)
 				rez[fel] = ref
 		except Exception as e:
@@ -3283,6 +3344,7 @@ class ChannelSelectionBase(Screen):
 		self["hdsFavTasta"] = StaticText("")
 		self["hdsFavMesaj"] = StaticText("")
 		self.hdsFavLung = False
+		self.hdsFavApasata = False
 		self.hdsFavVazut = False
 		self.hdsFavDinLista = False
 		self.hdsFavCeas = eTimer()
@@ -3332,7 +3394,7 @@ class ChannelSelectionBase(Screen):
 				return
 			et = text[0]
 			lat = 0
-			for t in (_("Adaugă la Favorite"), _("Scoate din Favorite")):
+			for t in (_("Adaugă la Favorite"), _("Scoate din Favorite"), _("Buchete / Favorite")):
 				et.setText("FAV  " + t)
 				lat = max(lat, M.latimeText(et))
 			et.setText(sursa.getText())
@@ -3380,7 +3442,7 @@ class ChannelSelectionBase(Screen):
 	def hdsFavEticheta(self, ref=None):
 		if not self.hdsFavPornit:
 			return
-		text = self.hdsFavText(ref)
+		text = self.hdsFavText(ref) if sens_tasta("channel_list", "fav", config=config) == "favorite_toggle" else _("Buchete / Favorite")
 		if text:
 			text = "FAV  " + text
 		if self["hdsFavTasta"].getText() != text:
@@ -3396,23 +3458,35 @@ class ChannelSelectionBase(Screen):
 
 	def hdsFavApasat(self):
 		self.hdsFavLung = False
+		self.hdsFavApasata = True
 		return 1
 
 	def hdsFavTinut(self):
+		if not self.hdsFavApasata or self.hdsFavLung:
+			return 1
 		self.hdsFavLung = True
 		self.hdsFavAlegeBuchet()
 		return 1
 
 	def hdsFavEliberat(self):
+		if not self.hdsFavApasata:
+			return 1
+		self.hdsFavApasata = False
 		if self.hdsFavLung:
 			# apasarea lunga a lucrat deja
 			self.hdsFavLung = False
 			return 1
-		self.hdsFavComuta()
+		if sens_tasta("channel_list", "fav", config=config) == "favorite_toggle":
+			self.hdsFavComuta()
+		elif not self.pathChangeDisabled:
+			# FAV este navigare: radacina buchetelor, inclusiv cand cursorul era deja pe ea.
+			hdsCapLaLista(self)
+			self.clearPath()
+			self.enterPath(self.bouquet_root)
 		return 1
 
 	def hdsFavComuta(self, ref_b=None):
-		"""FAV scurt si MENU: canalul ales in buchet (Favorite, cand nu se da altul); e deja acolo: intrebarea scurta
+		"""MENU, sau FAV scurt cu optiunea activa: canalul in buchet; e deja acolo: intrebarea scurta
 		„Scoți ... din ...?”, cu Da ales (OK il scoate)."""
 		hdsCapLaLista(self)
 		text = self.hdsFavCanal()

@@ -8,8 +8,8 @@
 #
 # Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura video cu OSD, un mesaj pe ecran, concluziile
 # echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
-# (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B"; ecranele private
-# (Components/HdsAsistentaControl.py) raman inchise si la B. Nimic nu scrie pe disc in afara jurnalului
+# (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B" (fara ecrane
+# private, echipa vede ce e pe televizor; textul trimis spre noi trece in continuare prin filtrul de secrete). Nimic nu scrie pe disc in afara jurnalului
 # sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti. O singura
 # operatie primeste o cale (op "citeste", din 0.6.21): numai sub RADACINI_CITIRE, verificata dupa realpath (nicio
 # legatura spre afara, spre discuri sau stick-uri) si niciodata prin LOCURI_OPRITE (modulele de acces, parolele,
@@ -67,13 +67,19 @@ class Rezultat(object):
 
 # ---------------------------------------------------------------- filtre si plafoane
 
-def mascheaza(text):
-	"""Scoate numai randurile modulelor de acces; secretele devin stelute, SSID-ul ramane vizibil."""
+# operatiile care intorc textul ecranului: ecranele modulelor de acces se vad, deci randurile lor raman (numai valorile
+# conturilor ies). Celelalte iesiri (jurnale, fisiere, setari, procese) pierd ca pana acum randurile modulelor.
+OP_ECRAN = ("ecran", "taste", "text")
+
+
+def mascheaza(text, ecran=False):
+	"""Scoate valorile private (parole, chei, conturi) si MAC-ul din iesirea spre echipa; in afara textului ecranului
+	(ecran=False) si randurile modulelor de acces."""
 	randuri = []
 	for rand in (text or "").splitlines():
-		if _CAM.search(rand):
+		if not ecran and _CAM.search(rand):
 			continue
-		rand = mascheazaSecrete(rand)
+		rand = mascheazaConturi(mascheazaSecrete(rand))
 		rand = _MAC.sub(lambda m: m.group(1) + ":xx:xx:xx", rand)
 		randuri.append(rand)
 	return "\n".join(randuri)
@@ -502,7 +508,7 @@ def op_setari(ctx, args):
 
 
 def op_captura(ctx, args):
-	"""O captura video cu OSD; unealta refuza modulele de acces si editarea unui secret."""
+	"""O captura video cu OSD, ca pe televizor."""
 	faca = ctx.get("captura")
 	if faca is None:
 		return Rezultat(1, text="(captura nu e disponibila)")
@@ -510,7 +516,7 @@ def op_captura(ctx, args):
 	if not octeti:
 		return Rezultat(1, text="(captura nu s-a putut face acum)")
 	if isinstance(octeti, str):
-		# refuzul unelte (ecran privat): textul lui
+		# refuzul unelte (interfata nu e gata): textul lui
 		return Rezultat(1, text=octeti)
 	if len(octeti) > CAPTURA_MAX:
 		return Rezultat(1, text="(captura prea mare)")
@@ -523,7 +529,7 @@ def op_captura(ctx, args):
 
 def op_ecran(ctx, args):
 	"""Textul ecranului de sus (stiva, listele cu randul ales, setarile, textele), ca echipa sa mearga prin meniuri fara
-	poze; un ecran privat da numai "(ecran privat)" si clasa (Components/HdsAsistentaControl.textEcran)."""
+	poze (Components/HdsAsistentaControl.textEcran), la fel ca pe televizor; textul trece prin filtrul de mai jos."""
 	citeste = ctx.get("ecran")
 	if citeste is None:
 		return Rezultat(1, text="(ecranul nu se poate citi)")
@@ -544,7 +550,7 @@ TEXT_FARA_CONTROL = "(control oprit: sesiune numai de citire; omul porneste din 
 
 def op_taste(ctx, args):
 	"""Tastele telecomenzii (lista alba, cel mult MAX_TASTE), apasate pe rand pe firul enigma2; raspunsul spune ce s-a
-	apasat si da textul ecranului de dupa. Pe un ecran privat merge numai EXIT."""
+	apasat si da textul ecranului de dupa."""
 	if not _controlPermis(ctx):
 		return Rezultat(1, text=TEXT_FARA_CONTROL)
 	from Components import HdsAsistentaControl as C
@@ -737,5 +743,5 @@ def ruleaza(op, args, ctx=None):
 		_jurnal("%s: %s" % (op, e))
 		return Rezultat(1, text="(eroare la %s: %s)" % (op, type(e).__name__))
 	if rez.text is not None and rez.tip == "text":
-		rez.text = _taie(mascheaza(rez.text))
+		rez.text = _taie(mascheaza(rez.text, ecran=op in OP_ECRAN))
 	return rez

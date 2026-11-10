@@ -9,7 +9,7 @@ install_PYTHON = \
 	LoadPixmap.py Profile.py HardwareInfo.py Transponder.py ASCIItranslit.py \
 	Downloader.py ScaledSkin.py BlockDevices.py HdsPreFlight.py HdsJurnalInterfata.py MediuImagine.py \
 	Alternatives.py Hex2strColor.py Trashcan.py FallbackTimer.py TextBoundary.py \
-	Weatherinfo.py \
+	Weatherinfo.py Unicable.py \
 	Log.py LogConfig.py PiconResolver.py \
 	CopyFiles.py IO.py \
 	OEMInfo.py

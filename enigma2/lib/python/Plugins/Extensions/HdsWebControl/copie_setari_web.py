@@ -73,7 +73,8 @@ def stare(a, M=None):
 	"""GET /api/copie-setari: prima cerere (sau cauta=1) porneste cautarea; celelalte citesc starea comuna."""
 	M = _m(M)
 	st = M.stare()
-	if a.get("cauta") == "1" or (not st["cand"] and not st["cauta"]):
+	schimbate = getattr(M, "medii_schimbate", lambda: False)()
+	if not st["cauta"] and not st["lucreaza"] and (a.get("cauta") == "1" or not st["cand"] or schimbate):
 		try:
 			M.porneste_cautarea()
 		except Exception as eroare:
@@ -285,6 +286,7 @@ PAGINA = """<!DOCTYPE html>
 <script>
 var CFG = __CONFIG__;
 var ales = null, asteapta = null, ultimaStare = null;
+var ceas = null, semnMedii = null, semnCopii = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -304,7 +306,7 @@ function desenMedii(d){
   var c = $("medii"); c.textContent = "";
   var lista = d.medii || [];
   if(!lista.length){
-    c.appendChild(el("p", "mesaj", d.cauta ? "Se caută stickurile și discurile..." : "Bagă un stick USB sau un disc în receptor, apoi alege „Caută din nou”."));
+    c.appendChild(el("p", "mesaj", d.cauta ? "Se caută stickurile și discurile..." : "Bagă un stick USB sau un disc în receptor. Lista se reface singură."));
     ales = null;
   } else {
     if(!lista.some(function(m){ return m.id === ales; })){ ales = d.implicit || lista[0].id; }
@@ -314,7 +316,7 @@ function desenMedii(d){
       l.appendChild(i); l.appendChild(document.createTextNode(m.nume)); c.appendChild(l);
     });
   }
-  $("fa").disabled = !ales || d.lucreaza || asteapta === "copie";
+  $("fa").disabled = d.lucreaza || asteapta === "copie";
 }
 function intrebare(loc, text, da, cand){
   var vechi = loc.querySelector(".intrebare"); if(vechi){ vechi.remove(); }
@@ -370,11 +372,20 @@ function desenAutomat(d){
   $("text-automat").textContent = d.text_automat || "";
 }
 function citeste(cauta){
+	if(ceas){ clearTimeout(ceas); ceas = null; }
+	if(document.hidden){ ceas = setTimeout(function(){ citeste(); }, 3000); return; }
   return cerere("/api/copie-setari" + (cauta ? "?cauta=1" : "")).then(function(d){
-    if(!d.result){ mesaj("mesaj-copie", d.message || "Receptorul nu a putut citi starea.", true); return; }
+    if(!d.result){
+      mesaj("mesaj-copie", d.message || "Receptorul nu a putut citi starea.", true);
+      ceas = setTimeout(function(){ citeste(); }, 3000); return;
+    }
     ultimaStare = d;
     $("avertisment").textContent = d.avertisment || "";
-    desenMedii(d); desenCopii(d); desenAutomat(d);
+    var mediiNoi = JSON.stringify([d.medii, d.cauta, d.lucreaza, asteapta]);
+    if(semnMedii !== mediiNoi){ desenMedii(d); semnMedii = mediiNoi; }
+    var copiiNoi = JSON.stringify([d.copii, d.cauta]);
+    if(semnCopii !== copiiNoi){ desenCopii(d); semnCopii = copiiNoi; }
+    desenAutomat(d);
     $("cerere").classList.toggle("ascuns", !d.cerere);
     $("card-punere").classList.toggle("ascuns", !d.punere); $("punere").textContent = d.punere || "";
     if(asteapta === "copie" && !d.lucreaza){
@@ -383,13 +394,15 @@ function citeste(cauta){
       mesaj("mesaj-copie", (u.mesaje || []).join("\\n"), !u.ok);
       desenMedii(d);
     }
-    if(d.cauta || d.lucreaza || asteapta){ setTimeout(citeste, 1000); }
-  }).catch(function(){ mesaj("mesaj-copie", "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true); });
+    ceas = setTimeout(function(){ citeste(); }, d.cauta || d.lucreaza || asteapta ? 1000 : 3000);
+  }).catch(function(){
+    mesaj("mesaj-copie", "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true);
+    ceas = setTimeout(function(){ citeste(); }, 3000);
+  });
 }
 $("fa").addEventListener("click", function(){
-  if(!ales){ return; }
   $("fa").disabled = true; mesaj("mesaj-copie", "Se face copia. Nu scoate stickul până nu scrie „Copia e gata”.");
-  cerere("/api/copie-setari-fa?mediu=" + encodeURIComponent(ales), "POST").then(function(d){
+  cerere("/api/copie-setari-fa?mediu=" + encodeURIComponent(ales || ""), "POST").then(function(d){
     if(!d.result){ mesaj("mesaj-copie", d.message, true); $("fa").disabled = false; return; }
     asteapta = "copie"; setTimeout(citeste, 800);
   }).catch(function(){ mesaj("mesaj-copie", "Receptorul nu răspunde.", true); $("fa").disabled = false; });
@@ -447,7 +460,7 @@ TEXTE_PAGINA = {
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Se caută stickurile și discurile..."),
-		N_("Bagă un stick USB sau un disc în receptor, apoi alege „Caută din nou”."),
+		N_("Bagă un stick USB sau un disc în receptor. Lista se reface singură."),
 		N_("Nu"),
 		N_("Se caută copiile..."),
 		N_("Nicio copie găsită pe stickurile și discurile băgate."),

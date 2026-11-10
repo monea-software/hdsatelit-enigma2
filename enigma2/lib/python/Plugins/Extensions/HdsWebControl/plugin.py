@@ -27,49 +27,42 @@
 # retea putea injecta taste/schimba serviciul curent, exact tipul de risc cunoscut
 # (receptoare compromise prin imagini nesecurizate).
 #
-# ASOCIEREA BROWSERELOR (in locul jetonului, ceva simplu pentru om):
-# http://<receptor>/ (portul 80; 8080 trimite spre el) duce direct la panou. Prima data, pagina cere codul de 6 cifre afisat pe televizor
-# (valabil o ora, o singura folosire, 5 greseli = pauza de 5 minute); dupa cod, browserul primeste un
-# cookie HttpOnly, SameSite=Strict, valabil un an, iar receptorul pastreaza doar amprenta lui (asociere.py,
-# /etc/enigma2/hdswebcontrol-browsere.json). Jetonul ?token= ramane valabil pentru scripturi si uneltele
-# noastre (GET si POST, ca inainte), dar nu mai apare in paginile obisnuite; lista API s-a mutat in
-# /programatori. Cu cookie, comenzile care schimba ceva (remotecontrol, zap) cer POST + antetul X-HDS-CSRF
-# (derivat din secretul sesiunii) + Origin/Referer egal cu Host, ca o pagina straina deschisa in acelasi
-# browser sa nu poata comanda receptorul. Ecranul de setari arata browserele si le poate deconecta pe toate.
+# FARA COD SI FARA PAROLA IN CASA ("totul fara parole pe local"):
+# http://<receptor>/ (portul 80; 8080 trimite spre el) duce direct la panou, de pe orice adresa din reteaua de acasa
+# (Components/HdsParolaLocala.esteAdresaLocala: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fe80::/10,
+# fc00::/7). Codul de 6 cifre de pe televizor (asocierea) s-a scos de tot. Numai daca omul isi pune parola din
+# reteaua de acasa (Setari > Retea > Parola receptorului, o singura parola pentru tot) si bifeaza interfata web,
+# pagina cere parola lui (_PAGINA_ASOCIERE, POST /intra); dupa ea browserul primeste un cookie HttpOnly,
+# SameSite=Strict, valabil un an, iar receptorul pastreaza doar amprenta lui (asociere.py,
+# /etc/enigma2/hdswebcontrol-browsere.json). Jetonul ?token= ramane pentru scripturi si uneltele noastre (lista API in
+# /programatori). Comenzile care schimba ceva cerute dintr-un browser (cookie sau intrat liber) cer POST + antetul
+# X-HDS-CSRF + Origin/Referer egal cu Host, ca o pagina de pe internet deschisa in acelasi browser sa nu poata comanda
+# receptorul (protectie fata de afara casei, nu fata de om). Programele din casa folosesc rutele aplicatiilor
+# (aplicatii_web.py) sau ?token=.
 #
 # REPARATII DE SECURITATE (verificate pe emulator): serverul are acum propriile Site/Request/canal (_construiesteServer):
 # - antetul Host trebuie sa numeasca receptorul (IP scris cu cifre, localhost sau numele lui), altfel 403 pe
 #   orice cale: o pagina de pe internet care isi re-lega numele la IP-ul receptorului (DNS rebinding) trecea de
-#   verificarea Origin si putea cere coduri, iar daca omul scria codul in pagina ei, primea cookie-ul;
+#   verificarea Origin si comanda receptorul prin browserul omului;
 # - corpul unei cereri are cel mult 64 KB, verificat INAINTE de citire (Twisted citea si parsa corpul intreg
 #   pe firul enigma2, inaintea oricarei verificari: 32 MB inghetau televizorul 10 s);
 # - cel mult 64 de conexiuni deschise, 16 de la aceeasi adresa, iar o cerere trebuie sa soseasca intreaga in
 #   20 s (un aparat care trimitea cate un octet tinea mii de conexiuni si lasa enigma2 fara descriptori);
-# - blocarea asocierii se scoate din telecomanda (setari, Albastru, Conecteaza un browser nou), iar
-#   televizorul arata adresa care a cerut codul.
 #
-# RETEAUA LOCALA FARA COD: implicit, un browser (sau aplicatia) de pe o
-# adresa din reteaua locala (RFC1918 si loopback, _esteAdresaLocala) intra fara cod; cine vrea codul si in casa
-# porneste „Cere codul și în rețeaua locală” (config.plugins.hdswebcontrol.cod_retea_locala, implicit Nu; pe
-# televizor in ecranul interfetei web, in web pe /setari). Raman la fel: din afara retelei locale 403 pe orice (nu
-# se deschide nimic spre Internet); antetul Host verificat la orice cerere (DNS rebinding); comenzile care schimba
-# ceva cer si fara cod POST, aceeasi origine si antetul CSRF, facut dintr-un secret derivat din cheia pentru scripturi
-# (_secretLiber), pe care o pagina straina nu-l poate citi. Totul trece prin _sesiuneDinCerere, deci si paginile din
-# modulele *_web.py merg fara nicio schimbare in ele.
+# Din afara retelei de acasa: 403 pe orice (nu se deschide nimic spre Internet), afara de rutele aplicatiilor cu
+# "Acces din afara casei" pornit (parola pentru aplicatii). Antetul Host se verifica la orice cerere (DNS rebinding).
+# Totul trece prin _sesiuneDinCerere, deci si paginile din modulele *_web.py merg fara nicio schimbare in ele.
 #
 # CADRUL PAGINILOR (cadru_web.py): antetul comun (numele receptorului, versiunea, starea pe scurt, calea),
 # meniul pe grupe facut la rulare din data/menu.xml si temele Clasic si Pro (culorile din skin.xml, fontul skinului)
 # se pun pe orice pagina HTML intreaga intr-un singur loc, _CerereHds.render, numai dupa poarta; paginile *_web.py
-# raman cum sunt. Rutele API, poarta, jetonul, CSRF-ul si codul de asociere nu se schimba.
-#
-# FEREASTRA CODULUI: codul mare, in mijlocul ecranului, „12 34 56”, in ecranul propriu Screens/HdsCodAsociere.py,
-# ca sa se vada de la distanta (o fraza intr-un MessageBox se citea greu).
+# raman cum sunt. Rutele API, poarta, jetonul si CSRF-ul nu se schimba.
 #
 # APLICATIILE DE TELEFON (aplicatii_web.py): rutele cerute de aplicatiile obisnuite ale receptoarelor Enigma2 (/web/*,
 # rutele cu aceleasi nume din /api, /picon, /file, /grab), scrise de la zero. Pornite din fabrica
 # (config.plugins.hdswebcontrol.aplicatii) si fara parola din reteaua locala, cu Host-ul
-# receptorului (IP-ul, numele lui si numele lui cu terminatiile date de routere, _numeAcasa). Cu „Cere codul și în
-# rețeaua locală” pornit (cod_retea_locala), si din casa numai cu parola pentru aplicatii. Din afara retelei locale
+# receptorului (IP-ul, numele lui si numele lui cu terminatiile date de routere, _numeAcasa). Cu parola din reteaua de
+# acasa bifata la interfata web, si din casa cu utilizatorul oricare si parola omului. Din afara retelei locale
 # raspund numai cu „Acces din afara casei” pornit (config.plugins.hdswebcontrol.aplicatii_afara, oprit din fabrica) si
 # numai cu HTTP Basic si parola pentru aplicatii. Bariera si rutele: capul fisierului aplicatii_web.py. Restul
 # interfetei ramane numai pentru reteaua locala, cu poarta Host de pana acum (fara terminatiile routerelor).
@@ -182,26 +175,64 @@ ARE_PAGINA_TELECOMENZI = True
 
 
 def _trimiteTasta(cod, lung=False):
-	"""Tasta din telecomanda virtuala (panou, /telecomenzi) ca de pe telecomanda receptorului: prin
-	eRCMapper.inject, deci prin keyEvent (cu apasarea lunga la a patra repetare, ca la tasta tinuta) si cu numele
-	dispozitivului nativ, ca legaturile din keymap.xml scrise pentru el sa se potriveasca.
-	Inainte, tasta pleca cu numele „SDL” (tastatura emulatorului). Fara eRCMapper (binar vechi), drumul vechi."""
+	"""Codurile canonice folosesc dispozitivul receptorului si o singura eliberare.
+	Faza lunga explicita merge si cand emulatorul nu are un dispozitiv nativ fizic."""
 	try:
 		from enigma import eRCMapper
 		m = eRCMapper.getInstance()
 	except Exception:
 		m = None
-	if m is not None:
-		m.inject(cod, 0)                   # apasare
-		if lung:
-			for _i in range(5):
-				m.inject(cod, 2)           # repetari: a patra da apasarea lunga (main/enigma.cpp, keyEvent)
-		m.inject(cod, 1)                   # ridicare
+	if m is not None and not lung:
+		try:
+			m.inject(cod, 0)
+		finally:
+			m.inject(cod, 1)
 		return
 	from enigma import eActionMap
 	harta = eActionMap.getInstance()
-	harta.keyPressed("SDL", cod, 0)
-	harta.keyPressed("SDL", cod, 1)
+	dispozitiv = "dreambox advanced remote control (native)"
+	try:
+		harta.keyPressed(dispozitiv, cod, 0)
+		if lung:
+			harta.keyPressed(dispozitiv, cod, 3)
+	finally:
+		harta.keyPressed(dispozitiv, cod, 1)
+
+
+def profilTaste(sesiune=None, config=None):
+	"""Sensurile curente, din aceeasi harta ca executia tastelor si ajutorul."""
+	from Components.HdsTasteRapide import profil_context, context_ecran
+	if sesiune is None:
+		sesiune = _sesiune
+	ecran = getattr(sesiune, "current_dialog", None)
+	context = context_ecran(ecran) or "dialog"
+	if context == "button_setup":
+		context = "setup"
+	try:
+		from Screens.InfoBar import InfoBar, hdsHbbtvDisponibil
+		bara = InfoBar.instance
+	except (ImportError, AttributeError):
+		bara = None
+		hdsHbbtvDisponibil = lambda e: False
+	hbbtv = bool(context in ("live", "radio", "timeshift") and hdsHbbtvDisponibil(bara))
+	rows = profil_context(context, config=config, hbbtv=hbbtv,
+		pip=bool(getattr(sesiune, "pipshown", False)), epg_multi=getattr(ecran, "type", 1) != 0)
+	if context == "epg":
+		for row in rows:
+			if row["key"] in ("red", "green"):
+				try:
+					text = ecran["key_" + row["key"]].getText()
+					if text:
+						row["text_short"] = text
+				except (KeyError, TypeError, AttributeError):
+					pass
+	par = {r["key"]: r for r in rows}
+	taste = {}
+	for ident, (cod, _text, _ico, _nume, _clasa) in _TASTE_PANOU.items():
+		key = _TASTE_SENS.get(ident, ident)
+		if key in par:
+			taste[str(cod)] = par[key]
+	return {"context": context, "hbbtv": hbbtv, "taste": taste}
 
 # Bariera „o captura odata” pentru /api/screenshot: citita si scrisa numai pe firul enigma2 (reactorul), niciodata din
 # firul care ruleaza grab. Cat e pusa, o a doua cerere primeste 503 imediat, fara sa porneasca alt proces grab. Se
@@ -279,7 +310,7 @@ TERMEN_URCARE_S = 60
 
 # URCAREA UNUI FISIER DIN TELEFON PENTRU PLAYER (/api/media-urca, media_web.py): fisierul vine pe bucati de cel mult
 # 4 MiB (octeti bruti, ca poza), fiecare bucata o cerere, scrisa de media_web pe un disc montat. Limita mare numai pe
-# calea asta, cu cookie-ul de sesiune sau pentru browserul intrat fara cod (corpMareMedia); acelasi termen lungit al
+# calea asta, cu cookie-ul de sesiune sau pentru browserul intrat liber (corpMareMedia); acelasi termen lungit al
 # conexiunii. Pagina afla de la /api/media-player cat de mare poate fi bucata ei (media_web.marimeBucata).
 MAX_CORP_MEDIA = 4 * 1024 * 1024
 CALE_URCARE_MEDIA = b"/api/media-urca"
@@ -298,49 +329,32 @@ MAX_CORP_EDITOR_IMPORT = 16 * 1024 * 1024
 # primeste forumul pe o poza); aceeasi conditie ca la urcari (corpMareMedia)
 CALE_URCARE_CAPTURA = b"/api/captura-urca"
 MAX_CORP_CAPTURA = 4 * 1024 * 1024
+# Extensiile trimise din browser se pastreaza in /tmp; acelasi plafon si in extensii_web.MAX_IPK.
+CALE_URCARE_IPK = b"/api/extensii-urca"
+MAX_CORP_IPK = 16 * 1024 * 1024
 
 
 def corpMareMedia(are_cookie, adresa, aceeasi_origine):
 	"""True cand o bucata spre CALE_URCARE_MEDIA poate avea MAX_CORP_MEDIA octeti (la fel poza ecranului de pornire
 	spre CALE_URCARE_POZA, MAX_CORP_POZA: aceeasi problema, urcarea nu mergea fara cod): cererea are cookie-ul de sesiune,
-	sau e a unui browser intrat fara cod
-	(adresa din reteaua locala unde codul nu se cere, aceeasi conditie ca in _sesiuneDinCerere) care vine chiar dintr-o
-	pagina a receptorului (Origin/Referer = Host, `aceeasi_origine`). Browserul intrat fara cod nu primeste cookie, iar cu
+	sau e a unui browser intrat liber
+	(adresa din reteaua locala unde parola nu se cere, aceeasi conditie ca in _sesiuneDinCerere) care vine chiar dintr-o
+	pagina a receptorului (Origin/Referer = Host, `aceeasi_origine`). Browserul intrat liber nu primeste cookie, iar cu
 	limita mica urcarea din pagina /player nu mergea deloc in configuratia implicita; cererea de aceeasi origine taie
 	corpurile mari trimise de o pagina straina deschisa in browserul cuiva din casa. Cookie-ul este doar un indiciu pentru
 	limita, nu autentificare: toate corpurile au si plafonul comun MAX_RAM_CORPURI, iar accesul se verifica in ruta."""
 	if are_cookie:
 		return True
-	return bool(aceeasi_origine) and _esteAdresaLocala(adresa) and not codInReteaLocala()
+	return bool(aceeasi_origine) and _esteAdresaLocala(adresa) and not parolaWebCeruta()
 
 
 def _esteAdresaLocala(gazda):
-	"""Verifica STRICT prin text/numere daca 'gazda' (text IPv4, ex. '10.0.0.5') e in reteaua
-	locala (RFC1918) sau loopback. NU foloseste modulul `ipaddress` -- pachet SEPARAT in aceasta
-	distributie (`python3-ipaddress`, cerut ca RDEPENDS de retetele care il folosesc, in feed-ul
-	OE-Alliance), NEinclus in `hdsatelit-base.bb` -- aceeasi capcana ca `ctypes` lipsa (vezi nota
-	ScreenshotResource mai jos), verificata aici INAINTE sa presupun disponibil, nu dupa un import
-	esuat in productie."""
-	if not gazda:
-		return False
-	parti = gazda.split(".")
-	if len(parti) != 4:
-		return False  # IPv6 sau format neasteptat -- respins implicit, mai sigur decat presupus local
-	try:
-		octeti = [int(p) for p in parti]
-	except ValueError:
-		return False
-	if any(o < 0 or o > 255 for o in octeti):
-		return False
-	if octeti[0] == 127:
-		return True  # 127.0.0.0/8, loopback
-	if octeti[0] == 10:
-		return True  # 10.0.0.0/8
-	if octeti[0] == 172 and 16 <= octeti[1] <= 31:
-		return True  # 172.16.0.0/12 (inclusiv reteaua interna Docker, ex. 172.17.x, folosita la testare)
-	if octeti[0] == 192 and octeti[1] == 168:
-		return True  # 192.168.0.0/16
-	return False
+	"""True pentru o adresa din reteaua de acasa (Components/HdsParolaLocala.esteAdresaLocala: IPv4 private,
+	legatura locala si bucla, IPv6 ::1, fe80::/10, fc00::/7 si IPv4 scrise ca IPv6). Inainte numai RFC1918 si 127/8:
+	un telefon pe IPv6 sau pe 169.254 primea 403 in casa (nimic nu opreste programele
+	din casa)."""
+	from Components.HdsParolaLocala import esteAdresaLocala
+	return esteAdresaLocala(gazda)
 
 
 def _adresaClient(request):
@@ -411,7 +425,7 @@ def _secretDinCookie(request):
 
 
 def _secretLiber():
-	"""Secretul din care se face tokenul CSRF al browserelor intrate fara cod (reteaua locala, codul oprit): HMAC din
+	"""Secretul din care se face tokenul CSRF al browserelor intrate liber (reteaua locala, fara parola): HMAC din
 	cheia pentru scripturi (config.plugins.hdswebcontrol.token). Nu se scrie nicaieri si nu pleaca spre browser (pagina
 	primeste doar HMAC-ul lui, csrfPentru), iar cheia nu se poate afla din el. Ramane acelasi dupa o repornire a
 	interfetei (o pagina deschisa de dinainte merge mai departe; cu un secret nou la fiecare pornire, comenzile ei
@@ -419,14 +433,16 @@ def _secretLiber():
 	return hmac.new(_jetonConfigurat().encode("utf-8"), b"hds-liber-v1", hashlib.sha256).hexdigest()
 
 
-def codInReteaLocala():
-	"""True daca si in reteaua locala se cere codul de pe televizor (implicit Nu)."""
-	initConfigHdsWebControl()
+def parolaWebCeruta():
+	"""True numai cand omul si-a pus parola din reteaua de acasa si a bifat interfata web (Components/HdsParolaLocala.py;
+	din fabrica nu e pusa). Atunci si in casa paginile cer parola lui, iar aplicatiile utilizatorul oricare si parola lui.
+	La o eroare de citire: fara parola (in casa nu se cere nimic; din afara casei poarta e alta)."""
 	try:
-		return bool(config.plugins.hdswebcontrol.cod_retea_locala.value)
+		from Components import HdsParolaLocala
+		return HdsParolaLocala.ceruta(HdsParolaLocala.WEB)
 	except Exception as eroare:
-		_jurnal("setarea codului in reteaua locala nu se citeste (%s): se cere codul" % eroare)
-		return True  # la orice problema, varianta mai sigura
+		_jurnal("parola din reteaua de acasa nu se citeste (%s): fara parola" % eroare)
+		return False
 
 
 def aplicatiiPornite():
@@ -453,15 +469,15 @@ def aplicatiiAfara():
 
 def _sesiuneDinCerere(request):
 	"""(secret, browser) pentru un browser asociat si neexpirat. Doar intrari de tip browser: secretul unei aplicatii
-	(aceeasi lista) nu trece drept cookie. Fara asociere: daca adresa e din reteaua locala si codul nu se cere acolo
-	(implicit), un browser „liber” ({"nume": "", "liber": True}) cu _secretLiber(), din care se face tokenul CSRF;
-	altfel (None, None) si paginile dau pagina de asociere (sau 401 la /api)."""
+	(aceeasi lista) nu trece drept cookie. Fara cookie: daca adresa e din reteaua locala si parola nu se cere acolo
+	(din fabrica), un browser „liber” ({"nume": "", "liber": True}) cu _secretLiber(), din care se face tokenul CSRF;
+	altfel (None, None) si paginile dau pagina parolei (sau 401 la /api)."""
 	secret = _secretDinCookie(request)
 	if secret is not None:
 		browser = obtineAsociere().sesiune(secret, tip=TIP_BROWSER)
 		if browser is not None:
 			return secret, browser
-	if _esteAdresaLocala(_adresaClient(request)) and not codInReteaLocala():
+	if _esteAdresaLocala(_adresaClient(request)) and not parolaWebCeruta():
 		return _secretLiber(), {"id": "", "nume": "", "tip": TIP_BROWSER, "adresa": _adresaClient(request) or "",
 			"liber": True}
 	return None, None
@@ -598,30 +614,6 @@ def _puneCookie(request, valoare, max_age):
 		request.cookies.append(("%s=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=Strict" % (NUME_COOKIE, valoare, max_age)).encode("ascii"))
 
 
-def _sfatDeblocare():
-	"""Spus in pagina de asociere cand asocierea e blocata: blocarea se scoate din telecomanda, din ecranul interfetei
-	web (drumul din meniu, cu numele de pe televizor)."""
-	try:
-		from .meniu_web import drumText
-		drum = drumText("hds_webcontrol_setup")
-	except Exception as eroare:
-		print("[HdsWebControl] drumul din meniu: %s" % eroare)
-		drum = "Meniu"
-	return _t("Sau, din telecomandă: %s, tasta albastră, „Conectează un browser nou”.") % drum
-
-
-def _durataText(secunde):
-	secunde = max(1, int(secunde))
-	if secunde >= 60:
-		minute = (secunde + 59) // 60
-		if minute == 1:
-			return _t("un minut")
-		return _t("%d minute") % minute
-	if secunde == 1:
-		return _t("o secundă")
-	return _t("%d secunde") % secunde
-
-
 def _stareTelevizor():
 	"""'standby', 'meniu' (InfoBar nu e in fata: un meniu sau o fereastra deschisa, deci notificarea
 	asteapta in coada) sau 'ok'."""
@@ -638,138 +630,6 @@ def _stareTelevizor():
 	except Exception:
 		pass
 	return "ok"
-
-
-# fereastra cu codul de pe televizor: un id nou la fiecare afisare, ca inchiderea programata a uneia
-# vechi sa nu inchida una mai noua
-_fereastra_cod = {"id": None, "numar": 0}
-
-
-def _inchideFereastra(id_fereastra):
-	"""Inchide fereastra codului (sau o scoate din coada, daca n-a apucat sa apara), FARA sa anuleze codul: la
-	conectare, la o fereastra noua pentru acelasi cod, la expirare."""
-	try:
-		from Tools import Notifications
-		Notifications.RemovePopup(id_fereastra)  # scoate si din coada, daca n-a apucat sa apara
-	except Exception as eroare:
-		_jurnal("nu am putut inchide fereastra %s: %s" % (id_fereastra, eroare))
-	if _fereastra_cod["id"] == id_fereastra:
-		_fereastra_cod["id"] = None
-
-
-def textExpirare():
-	"""Mesajul de dupa o ora fara conectare (asociere.DURATA_COD_S), tradus."""
-	return _("A trecut o oră de la pornirea asocierii și am oprit-o. Dacă vrei, o poți relua din pagina web sau din aplicație.")
-
-
-def _anuntaExpirarea(id_fereastra, id_cerere=None):
-	"""Codul ferestrei a expirat fara conectare: codul se anuleaza (de obicei a expirat deja in asociere.py, pe acelasi
-	ceas; asa „am oprit-o” e adevarat oricum), fereastra se inchide (sau iese din coada) si pe televizor apare
-	mesajul scurt, 15 secunde sau pana la OK. Chemat de fereastra insasi (HdsCodAsociere, laExpirare) si, pentru o
-	fereastra care a stat in coada toata ora (omul era intr-un meniu), de callLater. Un singur mesaj oricum: al doilea
-	apel nu mai gaseste fereastra, iar notificarea are un id fix."""
-	if _fereastra_cod["id"] != id_fereastra:
-		return  # fereastra a fost inchisa inainte: conectare, EXIT (codul anulat) sau inlocuita de alta
-	if not _fereastraInCoadaSauPeEcran(id_fereastra):
-		# fereastra s-a inchis singura fiindca, inainte de ora, codul a fost anulat din alta parte (5 coduri gresite,
-		# „Deconectează browserele”, Albastru din setari): nimic de spus peste o ora
-		_fereastra_cod["id"] = None
-		return
-	if id_cerere:
-		obtineAsociere().anuleazaCod(id_cerere)
-	_inchideFereastra(id_fereastra)
-	try:
-		from Tools import Notifications
-		from Screens.MessageBox import MessageBox
-		Notifications.AddPopup(textExpirare(), MessageBox.TYPE_INFO, 15, "hds_web_cod_expirat")
-	except Exception as eroare:
-		_jurnal("nu am putut arata mesajul de expirare: %s" % eroare)
-
-
-def _fereastraInCoadaSauPeEcran(id_fereastra):
-	"""True daca notificarea ferestrei asteapta in coada sau e pe ecran (Tools.Notifications, listele lui)."""
-	try:
-		from Tools import Notifications
-		if any(n[4] == id_fereastra for n in getattr(Notifications, "notifications", [])):
-			return True
-		return any(x[0] == id_fereastra for x in getattr(Notifications, "current_notifications", []))
-	except Exception:
-		return True  # nu se stie: mai bine mesajul decat nimic
-
-
-def _anuleazaDeLaTelevizor(id_cerere, id_fereastra):
-	"""OK sau EXIT pe fereastra codului: codul acelei ferestre se anuleaza (numai el, dupa id-ul cererii)."""
-	if id_cerere and obtineAsociere().anuleazaCod(id_cerere):
-		_jurnal("codul de asociere anulat din telecomanda")
-	if _fereastra_cod["id"] == id_fereastra:
-		_fereastra_cod["id"] = None
-
-
-def _fereastraCoduluiDeschisa():
-	"""True daca fereastra codului e pe ecran acum (deschisa de notificare sau din ecranul de setari)."""
-	try:
-		from Screens.HdsCodAsociere import _deschise
-		return bool(_deschise)
-	except Exception:
-		return False
-
-
-def _inchideFerestreleCodului():
-	"""Inchide si ferestrele de cod deschise direct (din ecranul de setari), nu prin notificari."""
-	try:
-		from Screens.HdsCodAsociere import inchideToate
-		inchideToate()
-	except Exception as eroare:
-		_jurnal("nu am putut inchide ferestrele codului: %s" % eroare)
-
-
-def _arataCodPeTelevizor(cod, secunde, tip=TIP_BROWSER, adresa="", id_cerere=None):
-	"""Rulat pe firul reactorului (acelasi cu bucla enigma2), din cererea HTTP. Fereastra Screens/HdsCodAsociere,
-	deschisa prin notificarea standard enigma2 (Tools.Notifications): apare cand receptorul arata un canal; din
-	meniu, asteapta iesirea. Aceeasi fereastra pentru browser si pentru aplicatie (`tip`), ca sa nu existe doua
-	mecanisme. `adresa`: IP-ul aparatului care a cerut codul (un aparat strain din retea nu poate cere coduri pe ascuns): cine se uita la
-	televizor vede daca nu e aparatul lui. Fereastra isi stie singura sfarsitul (`expira`, pe ceasul monoton, acelasi
-	cu al asocierii), deci nu porneste de la zero daca a stat in coada; callLater de mai jos e numai pentru fereastra
-	care n-a apucat sa apara toata ora (callLater poate intarzia in acest reactor). Fereastra se inchide singura si
-	cand codul ei nu mai e cel activ (asociere.codActiv)."""
-	try:
-		from twisted.internet import reactor
-		from Tools import Notifications
-		from Screens.HdsCodAsociere import HdsCodAsociere
-		if _fereastra_cod["id"]:
-			_inchideFereastra(_fereastra_cod["id"])
-		_fereastra_cod["numar"] += 1
-		id_nou = "hds_web_cod_%d" % _fereastra_cod["numar"]
-		_fereastra_cod["id"] = id_nou
-		asociere = obtineAsociere()
-		Notifications.AddNotificationWithID(id_nou, HdsCodAsociere, cod=cod, tip=tip, adresa=adresa,
-			expira=time.monotonic() + int(secunde),
-			activ=(lambda: asociere.codActiv(id_cerere)) if id_cerere else None,
-			anuleaza=lambda: _anuleazaDeLaTelevizor(id_cerere, id_nou),
-			laExpirare=lambda: _anuntaExpirarea(id_nou, id_cerere))
-		reactor.callLater(int(secunde) + 1, _anuntaExpirarea, id_nou, id_cerere)
-	except Exception as eroare:
-		_jurnal("nu am putut arata codul pe televizor: %s" % eroare)
-
-
-def _anuntaBrowserNou(browser):
-	"""Inchide fereastra codului si spune pe televizor ce browser s-a conectat (cine se uita la televizor
-	afla imediat daca s-a conectat cineva pe care nu-l stie)."""
-	try:
-		if _fereastra_cod["id"]:
-			_inchideFereastra(_fereastra_cod["id"])
-		_inchideFerestreleCodului()
-		from Tools import Notifications
-		from Screens.MessageBox import MessageBox
-		if browser.get("tip") == TIP_APLICATIE:
-			text = _("Telefon conectat la receptor: %s") % browser.get("nume", "Telefon")
-		else:
-			text = _("Browser conectat la receptor: %s") % browser.get("nume", "Browser")
-		if browser.get("adresa"):
-			text += " (%s)" % browser["adresa"]
-		Notifications.AddPopup(text + ".", MessageBox.TYPE_INFO, 8, "hds_web_browser_nou")
-	except Exception as eroare:
-		_jurnal("nu am putut anunta browserul nou: %s" % eroare)
 
 
 def portFolosit():
@@ -821,10 +681,9 @@ def initConfigHdsWebControl():
 		# portul 80 implicit (adresa simpla http://hdsatelit.local, http://<ip>); 8080 trimite spre el
 		config.plugins.hdswebcontrol.port = ConfigInteger(default=PORT_IMPLICIT, limits=(80, 65535))
 		config.plugins.hdswebcontrol.token = ConfigText(default="", fixed_size=False)
-	if "cod_retea_locala" not in config.plugins.hdswebcontrol.content.items:
-		# codul de pe televizor si pentru aparatele din reteaua locala; implicit Nu: aparatele din casa intra fara cod.
-		# Din afara retelei locale accesul ramane refuzat oricum.
-		config.plugins.hdswebcontrol.cod_retea_locala = ConfigYesNo(default=False)
+	# setarea veche cod_retea_locala ("Cere codul și în rețeaua locală") s-a scos odata cu codul de pe
+	# televizor; in casa se cere numai parola pusa de om (Components/HdsParolaLocala.py). Valoarea veche din settings nu
+	# mai e citita de nimeni.
 	if "aplicatii" not in config.plugins.hdswebcontrol.content.items:
 		# rutele pentru aplicatiile de telefon (aplicatii_web.py); pornite din fabrica, fara parola din reteaua locala
 		config.plugins.hdswebcontrol.aplicatii = ConfigYesNo(default=True)
@@ -1236,6 +1095,13 @@ _TASTE_PANOU = {
 	"radio": (385, "Radio", None, "Radio", ""),
 }
 
+_TASTE_SENS = dict(sus="up", jos="down", stanga="left", dreapta="right",
+	rosu="red", verde="green", galben="yellow", albastru="blue", subt="subtitle",
+	ttx="text", chplus="channelup", chminus="channeldown", portal="portal",
+	emc="video", mplay="list", pauza="pause", redare="play", inregistrare="record",
+	derulare_inapoi="rewind", derulare_inainte="forward", anterior="previous", urmator="next")
+_TASTE_SENS.update((str(n), "number_%d" % n) for n in range(10))
+
 # iconitele tastelor fara text (SVG 24x24, umplute cu culoarea textului), desenate aici dupa semnele de pe telecomanda
 _TL_ICONITE = {
 	"power": '<path d="M11 3h2v9h-2z"/><path d="M7.05 6.05l1.41 1.41a5 5 0 1 0 7.08 0l1.41-1.41a7 7 0 1 1-9.9 0z"/>',
@@ -1329,6 +1195,7 @@ def _htmlTelecomanda():
 		'<button type="button" class="tl-mod" data-mod="toate" aria-pressed="false">%s</button></div></div>'
 		'<div class="tl-taste tl-compact">%s</div>'
 		'<div class="tl-taste tl-toate"><div class="tl-parte">%s</div><div class="tl-parte">%s</div></div>'
+		'<div class="stare tl-stare" id="tlSens" aria-live="polite"></div>'
 		'<div class="stare tl-stare" id="starTasta" role="status"></div></section>') % (
 		_tlText(_tlTradus(N_("Telecomandă"))), _tlText(_tlTradus(N_("Compact"))), _tlText(_tlTradus(N_("Toate tastele"))),
 		compacta, sus, jos)
@@ -1589,6 +1456,15 @@ function tasta(cod, buton, lung){
     stare.textContent = "Tasta nu a ajuns la receptor (" + e.message + ").";
   });
 }
+function tlSensuri(d){
+  if(!d || !d.taste){ return; }
+  document.querySelectorAll("#telecomanda button[data-cod]").forEach(function(b){
+    var r = d.taste[b.getAttribute("data-cod")];
+    if(!r){ return; }
+    var t = b.getAttribute("data-nume") + ": " + "Scurt: " + r.text_short + ". " + "Lung: " + r.text_long;
+    b.title = t; b.setAttribute("aria-label", t); b.setAttribute("data-sens", t);
+  });
+}
 (function(){
   var tl = document.getElementById("telecomanda");
   if(!tl || !tl.querySelectorAll){ return; }
@@ -1600,6 +1476,8 @@ function tasta(cod, buton, lung){
   function lasa(){ if(tinut){ clearTimeout(tinut); tinut = null; } }
   Array.prototype.forEach.call(tl.querySelectorAll("button[data-cod]"), function(b){
     var cod = parseInt(b.getAttribute("data-cod"), 10);
+    function descrie(){ var s = document.getElementById("tlSens"); if(s){ s.textContent = b.getAttribute("data-sens") || b.getAttribute("data-nume"); } }
+    b.addEventListener("focus", descrie); b.addEventListener("pointerenter", descrie);
     if(cuIndicator){
       b.addEventListener("pointerdown", function(e){
         if(e.button){ return; }   // numai butonul principal al mouse-ului, degetul sau creionul
@@ -1867,6 +1745,7 @@ function arataSemnal(s){
 }
 function actualizeazaStare(){
   cerere("/api/statusinfo").then(function(d){
+    tlSensuri(d.taste_context);
     if(window.HDS_ANTET){ window.HDS_ANTET.stare(d); }
     // posturile DAB+ / DVB-T2 din satelit: felul dupa nume, ca in lista de canale de pe televizor
     refTvPanou = d.currservice_serviceref || "";
@@ -1903,7 +1782,7 @@ function actualizeazaStare(){
   var buton = document.getElementById("deconectare");
   if(CFG.jeton || !CFG.browser){ buton.style.display = "none"; return; }
   buton.addEventListener("click", function(){
-    if(!confirm("Deconectezi acest browser? Pentru a-l folosi din nou vei avea nevoie de un cod nou de pe televizor.")){ return; }
+    if(!confirm("Deconectezi acest browser? Cu parola pusă, o va cere din nou.")){ return; }
     cerere("/deconectare", "POST").catch(function(){}).then(function(){ location.replace("/"); });
   });
 })();
@@ -1914,66 +1793,55 @@ actualizeazaStare();
 </html>
 """
 
+# Pagina parolei din reteaua de acasa (in locul paginii cu codul de pe televizor). O vede numai cine e in
+# casa cand omul si-a pus parola si a bifat interfata web; din fabrica nu apare niciodata. Numele _PAGINA_ASOCIERE ramane:
+# il folosesc toate paginile *_web.py cand browserul nu a intrat. Campul e text obisnuit: parola se vede cat o scrii.
 _PAGINA_ASOCIERE = """<!DOCTYPE html>
 <html lang="ro">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Conectare la receptor</title>
+<title>Parola receptorului</title>
 <style>""" + _STIL_COMUN + """
   body{min-height:100vh;display:flex;align-items:center;justify-content:center;}
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:12px;padding:24px;max-width:420px;width:100%;}
   h1{font-size:1.3rem;margin:0 0 8px;}
   p{margin:0 0 16px;line-height:1.45;}
-  input{width:100%;font-size:2rem;letter-spacing:.3em;text-align:center;padding:12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);}
+  input{width:100%;box-sizing:border-box;font-size:1.3rem;padding:12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);}
   button{width:100%;margin-top:12px;padding:14px;font-size:1rem;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;}
-  button.secundar{background:transparent;border:1px solid var(--bordura);color:var(--text);}
   .stare{min-height:1.4em;margin-top:14px;color:#ffd479;font-size:.95rem;line-height:1.4;}
   .nota{margin:18px 0 0;color:var(--text-slab);font-size:.82rem;}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>Conectare la receptor</h1>
-  <p>Introdu codul afișat pe televizor.</p>
+  <h1>Parola receptorului</h1>
+  <p>Ai pus o parolă pentru interfața web. Scrie-o aici.</p>
   <form id="formular" autocomplete="off">
-    <input id="cod" name="cod" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="00 00 00" aria-label="Codul de pe televizor" required autofocus>
-    <button type="submit">Conectează</button>
+    <input id="parola" name="parola" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Parola receptorului" required autofocus>
+    <button type="submit">Intră</button>
   </form>
-  <div class="stare" id="stare" role="status">Se cere codul...</div>
-  <button type="button" class="secundar" id="reafiseaza">Afișează din nou codul pe televizor</button>
-  <p class="nota">Codul apare pe televizor când receptorul arată un canal, nu în meniu și nu în standby. Este valabil o oră. După conectare, acest browser rămâne conectat un an.</p>
+  <div class="stare" id="stare" role="status"></div>
+  <p class="nota">Parola se scoate sau se schimbă pe televizor, în ecranul Parola receptorului (Setări, Rețea). După ce intri, acest browser rămâne intrat un an.</p>
 </div>
 <script>
 var stare = document.getElementById("stare");
-function trimite(cale, date){
-  return fetch(cale, {
-    method: "POST", cache: "no-store", credentials: "same-origin",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: new URLSearchParams(date).toString()
-  }).then(function(r){
-    return r.json().catch(function(){ return {result: false, mesaj: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
-  });
-}
-function cereCod(reafiseaza){
-  trimite("/asociere/cod", {reafiseaza: reafiseaza ? "1" : "0"}).then(function(d){
-    stare.textContent = d.mesaj || "";
-  }).catch(function(){
-    stare.textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.";
-  });
-}
 document.getElementById("formular").addEventListener("submit", function(e){
   e.preventDefault();
-  trimite("/asociere", {cod: document.getElementById("cod").value}).then(function(d){
-    if(d.result){ stare.textContent = "Conectat. Se deschide panoul..."; location.replace("/"); return; }
-    stare.textContent = d.mesaj || "Codul nu a fost primit.";
-    document.getElementById("cod").select();
+  fetch("/intra", {
+    method: "POST", cache: "no-store", credentials: "same-origin",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: new URLSearchParams({parola: document.getElementById("parola").value}).toString()
+  }).then(function(r){
+    return r.json().catch(function(){ return {result: false, mesaj: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
+  }).then(function(d){
+    if(d.result){ stare.textContent = "Se deschide pagina..."; location.reload(); return; }
+    stare.textContent = d.mesaj || "Parola nu a fost primită.";
+    document.getElementById("parola").select();
   }).catch(function(){
     stare.textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.";
   });
 });
-document.getElementById("reafiseaza").addEventListener("click", function(){ cereCod(true); });
-cereCod(false);
 </script>
 </body>
 </html>
@@ -2059,11 +1927,11 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/calitate-imagine-seteaza?profil=hd_sdr&amp;claritate=0..100&amp;...&amp;pornit=0|1[&amp;incearca=1|&amp;renunta=1]</code>: salvează reglajele unui profil (multipli de 5); cu <code>incearca=1</code> se văd pe loc fără să se salveze, <code>renunta=1</code> pune înapoi ce e salvat; <code>POST /api/calitate-imagine-implicite?profil=&lt;profil&gt;|toate</code>; <code>POST /api/calitate-imagine-hdr?iesire=auto|hdr10|hlg|none</code> (canalul pornește din nou, întrebarea apare pe televizor); <code>POST /api/calitate-imagine-comparatie?reglaj=&lt;cheie&gt;&amp;pornit=0|1</code> (jumătate de ecran, 60 s)</li>
   <li><code>GET /api/afisaj[?grupa=ceas|receptor|...][&amp;catalog=1][&amp;orase=1]</code>: afișajul din față: ce arată acum (măștile celor 4 cifre și textul), lista de rotire, mesajele scurte, așteptarea, setările, minutarul și cronometrul; cu <code>grupa</code> alegerile grupei cu desenul valorii de acum, cu <code>catalog=1</code> toate alegerile (căutarea), cu <code>orase=1</code> fusurile pentru ora din alt oraș</li>
   <li><code>POST /api/afisaj-seteaza?lista=ceas.ora:24@5,canal.nume:derulat&amp;evenimente=evenimente.volum:n&amp;asteptare=ora|ora_data|rec|stins&amp;viteza=200|300|450|600&amp;luminozitate=neschimbat|1..7&amp;luminozitate_noapte=la_fel|1..7&amp;noapte_de_la=18..23|0&amp;noapte_pana_la=5..9&amp;text=...&amp;oras=Asia/Tokyo</code>: salvează și aplică pe loc (oricare dintre ele); <code>previzualizare=1&amp;lista=...</code> arată lista pe afișaj fără salvare (cel mult 2 minute fără o cerere nouă), <code>previzualizare=0</code> revine; <code>minutar=0|1..120</code> și <code>cronometru=porneste|opreste|zero</code> pornesc ceasurile afișajului pe loc; <code>functionare=ora|canal|stins</code> merge ca înainte</li>
-  <li><code>GET /api/acces-ssh</code>: parola receptorului (FTP, SSH și SFTP): felul parolei lui root (fără parola însăși), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), opțiunea Fără parolă în rețeaua locală, stările periculoase (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi</li>
-  <li><code>POST /api/acces-ssh-parola</code>: textul parolei (se vede oricând); <code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow)</li>
-  <li><code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola aleasă (4-64 de semne: litere fără diacritice, cifre și semne, fără spații); <code>POST /api/acces-ssh-parola-noua?confirmat=1</code>: o parolă nouă la întâmplare</li>
+  <li><code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code>, fără parola însăși), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), stările neobișnuite (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi</li>
+  <li><code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow și fără parolă)</li>
+  <li><code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola ta, orice text (prima dată se cere peste tot); <code>POST /api/acces-ssh-sterge-parola</code>: parola ștearsă; <code>POST /api/acces-ssh-unde?unde=web,ftp,ssh,module,pluginuri</code>: unde se cere</li>
   <li><code>POST /api/acces-ssh-adauga</code> (corp: <code>cheie=</code>), <code>POST /api/acces-ssh-stick</code>, <code>POST /api/acces-ssh-sterge?amprenta=SHA256:..&amp;confirmat=1</code>: cheile publice lipite, cele din dosarul hdsatelit/ssh de pe stick, ștergerea unei chei</li>
-  <li><code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și <code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu <code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e deschis pe receptor, la fel <code>/api/remotecontrol</code></li>
+  <li>Fără parolă pusă, în rețeaua de acasă totul merge fără parolă; unde un program cere neapărat parolă, merge utilizatorul <code>root</code> cu orice parolă. Schimbările se fac dintr-un browser, nu cu <code>?token=</code></li>
   <li><code>GET /api/setari-din-copie</code>: setările importate: câte așteaptă repornirea interfeței (<code>asteapta</code>), proba lor (<code>garda</code>), scoase după opriri neașteptate (<code>cazut</code>), textele stării</li>
   <li><code>POST /api/setari-din-copie-reporneste</code>: repornește interfața, ca setările importate să se unească</li>
   <li><code>GET /api/copie-setari[?cauta=1]</code>: copia setărilor: stickurile și discurile (<code>implicit</code> = stickul de actualizare), copiile găsite (data, versiunea imaginii, acest receptor sau altul), copia automată, ultimul rezultat; niciodată conținutul copiei</li>
@@ -2085,6 +1953,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/dabt2-seteaza?cheie=tasta|dosar|latime|nedecodabile&amp;valoare=..</code>: setările ferestrei, aceleași ca pe televizor</li>
   <li><code>POST /api/dabt2-manual?fel=dab|t2&amp;nume=..&amp;grade=..&amp;emisfera=E|V&amp;frecventa=..&amp;...</code>: un flux adăugat de mână, cu aceleași câmpuri și limite ca „Adaugă manual”</li>
   <li><code>POST /api/dabt2-televizor?fel=dab|t2</code>: deschide fereastra pe televizor</li>
+  <li><code>GET /api/dab-terestru</code>, <code>POST /api/dab-terestru-fa?actiune=pregateste|cauta|opreste|asculta|opreste_radio|favorit|seteaza</code>: radioul DAB+ prin stick USB: starea stickului, căutarea, posturile, opțiunile</li>
   <li><code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire</li>
   <li><code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)</li>
   <li><code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs</li>
@@ -2170,12 +2039,12 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
 </ul>
 <h2>Acces</h2>
 <p>Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă.</p>
-<p>Din browser: după conectarea cu codul de pe televizor, browserul primește un cookie. Cu el, comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou.</p>
+<p>Din browser: din rețeaua de acasă intri direct (cu parola ta numai dacă ai pus-o pentru interfața web). Comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit din browser cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou (așa nu le poate trimite o pagină de pe internet).</p>
 <p>Comenzile care mișcă motorul, pornesc măsurarea semnalului sau schimbă LNB-ul (<code>lnb-aplica</code>, <code>lnb-raspuns</code>, <code>gasire-semnal-porneste</code>, <code>-reacordeaza</code>, <code>-opreste</code>, <code>motor-comanda</code>) se dau numai din paginile receptorului, cu browserul conectat: cu POST, cu antetul <code>X-HDS-CSRF</code>, fără cheia pentru scripturi.</p>
 <p>Adresele de mai sus răspund numai din rețeaua locală.</p>
 <h2>Aplicații de telefon</h2>
 <p>Aplicațiile obișnuite pentru receptoarele Enigma2 (telecomandă, canale, ghid, înregistrări programate, liste m3u) folosesc adresele lor obișnuite: <code>/web/...</code> în XML (de exemplu <code>/web/deviceinfo</code>, <code>/web/getservices</code>, <code>/web/zap?sRef=</code>, <code>/web/epgnow?bRef=</code>, <code>/web/timerlist</code>), cele cu aceleași nume din <code>/api/...</code> în JSON, <code>/picon/</code>, <code>/file?file=</code> (siglele, iar pentru redarea pe telefon înregistrările și filmele din locurile înregistrărilor, cu <code>Range</code>), <code>/web/ts.m3u?file=</code> și <code>/grab</code>. Sunt pornite din fabrică (rândul „Aplicații de telefon” din ecranul interfeței web și din pagina Setări).</p>
-<p>Din casă intră fără parolă, cu adresa IP a receptorului, cu numele lui (și cu terminațiile date de router: <code>.lan</code>, <code>.home</code>, <code>.localdomain</code>, <code>.home.arpa</code>, <code>.local</code>) sau cu <code>hdsatelit.local</code>; utilizatorul și parola din aplicație rămân goale. Cu alt nume în adresă, sau cu „Cere codul și în rețeaua locală” pornit, se cer utilizatorul <code>root</code> și parola pentru aplicații (HTTP Basic).</p>
+<p>Din casă intră fără parolă, cu adresa IP a receptorului, cu numele lui (și cu terminațiile date de router: <code>.lan</code>, <code>.home</code>, <code>.localdomain</code>, <code>.home.arpa</code>, <code>.local</code>) sau cu <code>hdsatelit.local</code>; utilizatorul și parola din aplicație rămân goale sau au orice. Cu parola ta pusă pentru interfața web, se cer utilizatorul <code>root</code> și parola ta (HTTP Basic); cu alt nume în adresă, utilizatorul <code>root</code> și parola pentru aplicații.</p>
 <p>Din afara casei receptorul nu răspunde aplicațiilor până nu pornești „Acces din afara casei”; atunci intră numai cu utilizatorul <code>root</code> și parola pentru aplicații, pe care o vezi pe televizor, în ecranul interfeței web, și în pagina Setări. După 5 parole greșite de la aceeași adresă, receptorul nu-i mai răspunde 5 minute. Cererile venite din alte pagini web sunt refuzate, iar oprirea completă și repornirea nu se fac din aplicații.</p>
 </main>
 </body>
@@ -2203,10 +2072,10 @@ def _paginaProgramatori():
 
 
 def stareInterfataWeb(browser=None):
-	"""GET /api/interfata-web: setarile interfetei web care se schimba si din web. Azi numai codul in reteaua locala
-	(acelasi rand ca pe televizor, in ecranul interfetei web)."""
+	"""GET /api/interfata-web: setarile interfetei web care se schimba si din web: daca in casa se cere parola omului
+	(parola_web; se pune in Setari > Retea > Parola receptorului, pagina /acces-ssh) si aplicatiile de telefon."""
 	liber = bool(browser and browser.get("liber"))
-	rez = {"result": True, "cod_retea_locala": codInReteaLocala(), "fara_cod": liber,
+	rez = {"result": True, "parola_web": parolaWebCeruta(), "liber": liber,
 		"drum": _drumSetariWeb()}
 	# aplicatiile de telefon: cele doua setari si aplicatiile vazute; parola NU (o da numai POST
 	# /api/interfata-web-secrete, la butonul "Arată")
@@ -2243,25 +2112,6 @@ def _drumSetariWeb():
 		return "Meniu"
 
 
-def seteazaCodReteaLocala(text):
-	"""POST /api/interfata-web-seteaza?cod_retea_locala=0|1. Salvat pe disc; se aplica de la cererea urmatoare."""
-	if text not in ("0", "1"):
-		return {"result": False, "message": _t("Se alege cu cod_retea_locala=0 sau 1.")}
-	initConfigHdsWebControl()
-	element = config.plugins.hdswebcontrol.cod_retea_locala
-	element.value = text == "1"
-	element.save()
-	configfile.save()
-	_jurnal("codul in reteaua locala: %s (din web)" % ("cerut" if element.value else "oprit"))
-	if element.value:
-		mesaj = (_t("Salvat. Din acum, fiecare browser sau telefon nou din rețeaua locală are nevoie o dată de codul "
-			"de pe "
-			"televizor. Aplicațiile de telefon cer și acasă utilizatorul root și parola pentru aplicații."))
-	else:
-		mesaj = _t("Salvat. Din acum, browserele și telefoanele din rețeaua locală intră fără cod.")
-	return {"result": True, "message": mesaj, "cod_retea_locala": bool(element.value)}
-
-
 def seteazaAplicatii(argumente):
 	"""POST /api/interfata-web-seteaza?aplicatii=0|1, ?aplicatii_afara=0|1 sau ?parola_aplicatii_noua=1
 	(aplicatii_web.py). Salvat pe disc; se aplica de la cererea urmatoare."""
@@ -2276,13 +2126,13 @@ def seteazaAplicatii(argumente):
 	if isinstance(valoare, bytes):
 		valoare = valoare.decode("ascii", "replace")
 	return aplicatii_web.seteaza(cheie, valoare.strip(), config.plugins.hdswebcontrol.aplicatii,
-		config.plugins.hdswebcontrol.aplicatii_afara, configfile.save, cod_acasa=codInReteaLocala())
+		config.plugins.hdswebcontrol.aplicatii_afara, configfile.save, cod_acasa=parolaWebCeruta())
 
 
 def _configPanou(csrf, jeton, browser):
-	"""Obiectul __CONFIG__ al panoului, ca JSON sigur in interiorul unui <script>. `cod_retea_locala`: daca in
-	reteaua locala se cere codul (pagina /setari arata starea, discret)."""
-	text = json.dumps({"csrf": csrf, "jeton": jeton, "browser": browser, "cod_retea_locala": codInReteaLocala()})
+	"""Obiectul __CONFIG__ al panoului, ca JSON sigur in interiorul unui <script>. `parola_web`: daca in reteaua
+	locala se cere parola omului (pagina /setari arata starea, discret)."""
+	text = json.dumps({"csrf": csrf, "jeton": jeton, "browser": browser, "parola_web": parolaWebCeruta()})
 	return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
@@ -2364,8 +2214,8 @@ def _paginaJeton(request, jeton):
 
 
 def _paginaPrincipala(request):
-	"""GET / si GET /panou: panoul pentru un browser asociat (sau pentru ?token= valid, ca uneltele vechi),
-	altfel pagina de asociere cu codul de pe televizor."""
+	"""GET / si GET /panou: panoul pentru orice browser din casa (sau pentru ?token= valid, ca uneltele vechi);
+	cand omul si-a pus parola pentru interfata web, intai pagina parolei."""
 	if not _esteAdresaLocala(_adresaClient(request)):
 		request.setResponseCode(403)
 		request.setHeader(b"content-type", b"text/plain; charset=utf-8")
@@ -2380,7 +2230,7 @@ def _paginaPrincipala(request):
 		return _legaturiDisponibile(_panouCuEcranNegru()).replace("__TELECOMANDA__", _htmlTelecomanda()).replace("__CONFIG__", _configPanou("", jeton, "")).encode("utf-8")
 	secret, browser = _sesiuneDinCerere(request)
 	if browser is not None:
-		# imaginea live din caseta ecranului: aceeasi politica a continutului ca pagina /tv (numai panoul, nu asocierea)
+		# imaginea live din caseta ecranului: aceeasi politica a continutului ca pagina /tv (numai panoul, nu parola)
 		try:
 			from . import tv_web
 			request.setHeader(b"content-security-policy", tv_web.CSP_TV)
@@ -3158,6 +3008,7 @@ def _construiesteResurse():
 				# DVB-I (internet_web.dvbiPanou): canalul are si varianta de internet / merge acum prin
 				# internet, cu starea retelei in locul semnalului
 				"dvbi": _dvbiPanou(ref_serviciu),
+				"taste_context": profilTaste(),
 			})
 
 	def _dvbiPanou(ref):
@@ -3175,11 +3026,8 @@ def _construiesteResurse():
 			return self.render_GET(request)
 
 		def render_GET(self, request):
-			# cat ecranul "Parola receptorului" e deschis pe receptor (parola mare, OK pe "Fără parolă în rețeaua locală"),
-			# tastele vin numai dintr-un browser conectat cu codul (acces_ssh_web.refuzEcranDeschis)
-			refuz = acces_ssh_web.refuzEcranDeschis(request)
-			if refuz is not None:
-				return self._raspunde(request, refuz, 403)
+			# fara refuzul cat ecranul "Parola receptorului" e deschis (parola nu se mai arata pe ecran, iar
+			# telecomanda din web e aceeasi cu cea din mana omului)
 			valori = request.args.get(b"command")
 			if not valori:
 				return self._eroare(request, "lipseste parametrul 'command'")
@@ -3195,6 +3043,10 @@ def _construiesteResurse():
 			except Exception as eroare:
 				return self._eroare(request, "injectare esuata: %s" % eroare, 500)
 			return self._raspunde(request, {"result": True, "command": cod})
+
+	class TasteContextResource(HdsJsonResource):
+		def render_GET(self, request):
+			return self._raspunde(request, dict(result=True, **profilTaste()))
 
 	class ZapResource(HdsJsonResource):
 		schimbaCeva = True
@@ -3265,11 +3117,7 @@ def _construiesteResurse():
 				request.setResponseCode(eroare[0])
 				request.setHeader(b"content-type", b"application/json; charset=utf-8")
 				return json.dumps({"result": False, "message": eroare[1]}).encode("utf-8")
-			from . import captura_sigura as CS
 			from Components.HdsCapturi import felPoza
-			epoca_captura = CS.epocaCapturii()
-			if epoca_captura is None:
-				return CS.cartusSecret(request)
 			global _captura_in_curs
 			if _captura_in_curs:
 				# bariera serverului, independenta de reprogramarea din /panou (vezi nota de la `_captura_in_curs`)
@@ -3302,6 +3150,8 @@ def _construiesteResurse():
 			pazita = _capturaStraina(request)
 			ce, motiv = "da", ""
 			if pazita:
+				# paza decodorului se incarca numai pentru capturile straine
+				from . import captura_sigura as CS
 				ce, motiv = CS.decide(mod_captura)
 				if ce == "refuz":
 					request.setResponseCode(503)
@@ -3335,7 +3185,7 @@ def _construiesteResurse():
 				except (ValueError, TypeError):
 					pass
 
-			cheie_pastrare = (epoca_captura, tuple(comanda))
+			cheie_pastrare = (0, tuple(comanda))
 			if ce == "des":
 				pastrata = CS.dinPastrare(cheie_pastrare)
 				if pastrata is None:
@@ -3373,9 +3223,7 @@ def _construiesteResurse():
 				_captura_in_curs = False  # bariera se ridica inainte de orice, chiar daca scrierea raspunsului cade mai jos
 				stare, rezultat = perechea
 				try:
-					if not CS.capturaValida(epoca_captura):
-						request.write(CS.cartusSecret(request))
-					elif stare == "lipsa":
+					if stare == "lipsa":
 						_eroareJson(500, "unealta 'grab' nu e disponibila pe acest sistem")
 					elif stare == "timeout":
 						_eroareJson(504, "captura a durat prea mult (peste %ds)" % timeout_s)
@@ -3468,8 +3316,8 @@ def _construiesteResurse():
 		return json.dumps(corp, ensure_ascii=False).encode("utf-8", "replace")
 
 	def _poartaAsociere(request):
-		"""Cererile de asociere nu au inca un cookie, deci nimic de furat, dar o pagina straina ar putea
-		umple televizorul de ferestre sau incerca coduri la nimereala. De aceea: doar din reteaua locala si
+		"""Cererile de intrare (/intra, /t) nu au inca un cookie, deci nimic de furat, dar o pagina straina ar
+		putea incerca parole prin browserul omului. De aceea: doar din reteaua locala si
 		doar dintr-o pagina servita chiar de receptor (Origin/Referer egal cu Host). Intoarce None sau
 		raspunsul de eroare gata facut."""
 		if not _esteAdresaLocala(_adresaClient(request)):
@@ -3479,91 +3327,42 @@ def _construiesteResurse():
 				403)
 		return None
 
-	class CodAsociereResource(resource.Resource):
-		"""POST /asociere/cod: arata codul pe televizor (sau spune de ce nu). Un cod inca valabil se
-		refoloseste; `reafiseaza=1` (butonul din pagina) il arata din nou."""
+	class IntraResource(resource.Resource):
+		"""POST /intra cu parola=<text>: parola din reteaua de acasa (numai cand omul si-a pus-o si a bifat interfata
+		web). La parola buna, cookie-ul sesiunii (un an), ca dupa vechiul cod. Aceeasi poarta ca /t: reteaua locala si
+		aceeasi origine (o pagina de pe internet nu poate incerca parole prin browserul omului)."""
 		isLeaf = True
 
 		def render_POST(self, request):
 			refuz = _poartaAsociere(request)
 			if refuz is not None:
 				return refuz
-			reafiseaza = request.args.get(b"reafiseaza", [b"0"])[0] == b"1"
-			# acelasi cod si aceeasi fereastra ca pentru viitoarea aplicatie (asociere.py: un singur cod activ)
-			r = obtineAsociere().cereCod(reafiseaza=reafiseaza, tip=TIP_BROWSER, adresa=_adresaClient(request) or "")
-			if r["stare"] == "blocat":
-				request.setHeader(b"retry-after", str(r["ramas"]).encode("ascii"))
-				return _json(request, {"result": False, "stare": "blocat", "ramas": r["ramas"],
-					"mesaj": _t("Au fost prea multe coduri greșite. Încearcă din nou peste %s. %s") % (
-						_durataText(r["ramas"]), _sfatDeblocare())}, 429)
-			if r["stare"] == "prea_des":
-				request.setHeader(b"retry-after", str(r["ramas"]).encode("ascii"))
-				return _json(request, {"result": False, "stare": "prea_des", "ramas": r["ramas"],
-					"mesaj": _t("Codul a fost cerut de prea multe ori. Încearcă din nou peste %s. %s") % (
-						_durataText(r["ramas"]), _sfatDeblocare())}, 429)
-			if r["afiseaza"]:
-				# codul NU se scrie in jurnal: jurnalele pot ajunge pe un disc partajat in retea, iar cine
-				# ar citi codul acolo s-ar putea conecta fara sa vada televizorul
-				_jurnal("cod de asociere trimis pe televizor, cerut de %s" % _adresaClient(request))
-				# apel direct, nu callLater(0): cererea ruleaza deja pe firul principal enigma2 (reactorul e
-				# bucla enigma2), iar callLater putea intarzia 15-20 s in acest reactor cand nu are alte
-				# evenimente (vezi _AsteptareCaptura). AddNotification doar pune fereastra in coada / o
-				# deschide, nu asteapta dupa om.
-				_arataCodPeTelevizor(r["cod"], r["ramas"], r["tip"], r["adresa"], r["id_cerere"])
-			televizor = _stareTelevizor()
-			if televizor == "meniu" and _fereastraCoduluiDeschisa():
-				# InfoBar nu mai e in fata tocmai fiindca fereastra codului s-a deschis peste el (sau omul a cerut
-				# codul din ecranul de setari): codul se vede deja (vazut in emulator: pagina spunea „după ce
-				# închideți meniul” desi codul era pe ecran)
-				televizor = "ok"
-			if televizor == "standby":
-				mesaj = _t("Receptorul este în standby. Pornește-l din telecomandă: codul apare pe televizor după "
-					"pornire.")
-			elif televizor == "meniu":
-				mesaj = _t("Codul apare pe televizor după ce închizi meniul sau fereastra deschisă pe receptor (tasta "
-					"Exit).")
-			else:
-				mesaj = _t("Codul este afișat pe televizor.")
-			return _json(request, {"result": True, "stare": r["stare"], "ramas": r["ramas"], "mesaj": mesaj})
+			if not parolaWebCeruta():
+				return _json(request, {"result": True, "mesaj": _t("Interfața web nu cere parolă.")})
+			parola = request.args.get(b"parola", [b""])[0].decode("utf-8", "replace")
+			from Components import HdsParolaLocala
+			if not HdsParolaLocala.verifica(parola):
+				return _json(request, {"result": False, "mesaj": _t("Parola nu e aceasta. Scrie din nou parola pusă "
+					"pe receptor.")}, 403)
+			secret, browser = obtineAsociere().adaugaSesiune(_antet(request, b"user-agent") or "",
+				_adresaClient(request) or "")
+			_puneCookie(request, secret, DURATA_SESIUNE_S)
+			_jurnal("browser intrat cu parola: %s (%s)" % (browser["nume"], browser["adresa"]))
+			return _json(request, {"result": True, "mesaj": _t("Intrat.")})
 
-	class AsociereResource(resource.Resource):
-		"""POST /asociere cu cod=<6 cifre>: la cod corect, cookie-ul sesiunii (un an) si fereastra
-		"Browser conectat" pe televizor."""
+	class ScriereSecretResource(resource.Resource):
+		"""Stare publica numai in casa: permite avertizarea si pe pagina parolei de intrare."""
+		isLeaf = True
 
-		def __init__(self):
-			resource.Resource.__init__(self)
-			self.putChild(b"cod", CodAsociereResource())
-
-		def render_POST(self, request):
-			refuz = _poartaAsociere(request)
-			if refuz is not None:
-				return refuz
-			cod = request.args.get(b"cod", [b""])[0].decode("utf-8", "replace")
-			r = obtineAsociere().verificaCod(cod, _antet(request, b"user-agent") or "", _adresaClient(request) or "", tip=TIP_BROWSER)
-			stare = r["stare"]
-			if stare == "ok":
-				_puneCookie(request, r["secret"], DURATA_SESIUNE_S)
-				_jurnal("browser asociat: %s (%s)" % (r["browser"]["nume"], r["browser"]["adresa"]))
-				_anuntaBrowserNou(r["browser"])  # direct, din acelasi motiv ca la _arataCodPeTelevizor
-				return _json(request, {"result": True, "mesaj": _t("Conectat.")})
-			if stare == "format":
-				return _json(request, {"result": False, "stare": stare, "mesaj": _t("Codul are 6 cifre.")}, 400)
-			if stare == "expirat":
-				return _json(request, {"result": False, "stare": stare,
-					"mesaj": _t("Codul a expirat sau a fost deja folosit. Apasă Afișează din nou codul pe televizor.")},
-						410)
-			if stare == "gresit":
-				ramase = _t("o încercare") if r["ramas"] == 1 else _t("%d încercări") % r["ramas"]
-				return _json(request, {"result": False, "stare": stare, "ramas": r["ramas"],
-					"mesaj": _t("Cod greșit. Mai ai %s.") % ramase}, 403)
-			request.setHeader(b"retry-after", str(r.get("ramas", 300)).encode("ascii"))
-			return _json(request, {"result": False, "stare": "blocat", "ramas": r.get("ramas", 300),
-				"mesaj": _t("Au fost prea multe coduri greșite. Încearcă din nou peste %s. %s") % (
-					_durataText(r.get("ramas", 300)), _sfatDeblocare())}, 429)
+		def render_GET(self, request):
+			if not _esteAdresaLocala(_adresaClient(request)):
+				return _json(request, {"result": False, "permisa": False}, 403)
+			from .asistenta_web import scriereSecret
+			return _json(request, scriereSecret())
 
 	class JetonQrResource(resource.Resource):
 		"""/t: telefonul care a scanat codul QR de pe televizor (asociere.py, cereJeton/verificaJeton).
-		GET /t/<jeton> = pagina care trimite jetonul; POST /t cu j=<jeton> = asocierea: aceeasi poarta ca POST /asociere
+		GET /t/<jeton> = pagina care trimite jetonul; POST /t cu j=<jeton> = asocierea: aceeasi poarta ca POST /intra
 		(reteaua locala si aceeasi origine; antetul Host e verificat pentru orice cerere in _CerereHds.process), apoi
 		cookie-ul pe un an, ca dupa cod, si fereastra „Browser conectat” pe televizor (numai pentru o intrare noua).
 		Raspunsul: JSON {result, destinatie}; din formularul fara JavaScript (fel=formular), 303 spre pagina."""
@@ -3593,7 +3392,6 @@ def _construiesteResurse():
 				_puneCookie(request, r["secret"], DURATA_SESIUNE_S)
 			if r["nou"]:
 				_jurnal("browser asociat prin codul QR: %s (%s)" % (r["browser"].get("nume", ""), r["browser"].get("adresa", "")))
-				_anuntaBrowserNou(r["browser"])
 			if formular:
 				request.setResponseCode(303)
 				request.setHeader(b"location", r["destinatie"].encode("ascii"))
@@ -3601,27 +3399,24 @@ def _construiesteResurse():
 			return _json(request, {"result": True, "destinatie": r["destinatie"]})
 
 	class InterfataWebResource(HdsJsonResource):
-		"""GET /api/interfata-web: codul in reteaua locala (ceruta sau nu) si daca browserul a intrat fara cod."""
+		"""GET /api/interfata-web: parola in reteaua locala (ceruta sau nu) si daca browserul a intrat liber."""
 
 		def render_GET(self, request):
 			_secret, browser = _sesiuneDinCerere(request)
 			return self._raspunde(request, stareInterfataWeb(browser=browser))
 
 	class InterfataWebSeteazaResource(HdsJsonResource):
-		"""POST /api/interfata-web-seteaza?cod_retea_locala=0|1. Poarta comuna (schimbaCeva): din browser cer POST,
-		aceeasi origine si antetul CSRF. Cine intra fara cod poate doar sa porneasca codul (cand codul e cerut, numai
-		un browser asociat sau jetonul ajung pana aici)."""
+		"""POST /api/interfata-web-seteaza?aplicatii=0|1, aplicatii_afara=0|1, parola_aplicatii_noua=1. Poarta comuna
+		(schimbaCeva): din browser cer POST, aceeasi origine si antetul CSRF. Parola din reteaua de acasa se pune in
+		/acces-ssh (Parola receptorului), nu aici."""
 		schimbaCeva = True
 
 		def render_POST(self, request):
 			if set(request.args) & {b"aplicatii", b"aplicatii_afara", b"parola_aplicatii_noua"}:
 				rezultat = seteazaAplicatii(request.args)
 				return self._raspunde(request, rezultat, 200 if rezultat["result"] else 400)
-			valoare = request.args.get(b"cod_retea_locala", [b""])[0]
-			if isinstance(valoare, bytes):
-				valoare = valoare.decode("ascii", "replace")
-			rezultat = seteazaCodReteaLocala(valoare.strip())
-			return self._raspunde(request, rezultat, 200 if rezultat["result"] else 400)
+			return self._raspunde(request, {"result": False, "message": _t("Se alege cu aplicatii=0|1, aplicatii_afara=0|1 "
+				"sau parola_aplicatii_noua=1.")}, 400)
 
 		def render_GET(self, request):
 			return self.render_POST(request)
@@ -3652,7 +3447,7 @@ def _construiesteResurse():
 
 		def render_POST(self, request):
 			if PARAM_JETON in request.args:
-				return _json(request, {"result": False, "message": "doar pentru browserele conectate cu cod"}, 400)
+				return _json(request, {"result": False, "message": "doar pentru browserele intrate cu parola"}, 400)
 			mod, eroare = _verificaAcces(request, schimba_ceva=True)
 			if eroare is not None:
 				return _json(request, {"result": False, "message": eroare[1]}, eroare[0])
@@ -4094,13 +3889,17 @@ def _construiesteResurse():
 	# Fereastra „Fluxuri și setări” (Hds/DabT2/ecrane.EcranPrincipal): fluxurile, actiunile, setarile, Despre.
 	from . import dabt2_web
 	_DABT2, _DABT2_PAGINA = dabt2_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	# ---------------------------------------------------------------- radioul DAB+ prin stick USB (dab_usb_web.py)
+	# Perechea ecranului de pe televizor; merge si fara pluginul DabTerestru: atunci il instaleaza.
+	from . import dab_usb_web
+	_DAB_USB, _DAB_USB_PAGINA = dab_usb_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- cautarea oarba pe satelit (oarba_web.py)
 	# Aceeasi cautare ca ecranul „Căutare oarbă pe satelit” (Screens/ScanerOarba.py), din Components/HdsCautareOarba.py.
 	from . import oarba_web
 	_OARBA, _OARBA_PAGINA = oarba_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- Parola receptorului (acces_ssh_web.py)
 	# Aceeasi stare si aceleasi comenzi ca ecranul "Parola receptorului" al receptorului (Screens/HdsAccesSsh.py,
-	# Components/HdsAccesSsh.py): parola lui root pentru FTP, SSH si SFTP, cheile SSH, "Fără parolă în rețeaua locală",
+	# Components/HdsAccesSsh.py): parola din reteaua de acasa (una singura, numai daca o vrea omul), cheile SSH,
 	# textul brut.
 	from . import acces_ssh_web
 	_ACCES_SSH, _ACCES_SSH_PAGINA = acces_ssh_web.rute(HdsJsonResource, resource)
@@ -4275,16 +4074,16 @@ def _construiesteResurse():
 	_ACCES, _ACCES_PAGINA = acces_conditionat_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- aplicatiile de telefon (aplicatii_web.py)
 	# Rutele aplicatiilor de telefon (/web/*, cele noi din /api, /picon, /file, /grab), numai cu setarea „Aplicații de
-	# telefon” si cu bariera lor (din casa fara parola, afara de „Cere codul și în rețeaua locală”
+	# telefon” si cu bariera lor (din casa fara parola, afara de parola omului bifata la interfata web
 	# pornit; din afara numai cu „Acces din afara casei” si parola pentru aplicatii); /api/statusinfo, /api/zap si /api/remotecontrol raspund in forma compatibila cererilor
 	# cu Basic si celor fara ?token=, X-HDS-CSRF si cookie (aplicatii_web.esteCerereAplicatie), altfel ca pana acum.
 	from . import aplicatii_web
 	_APLICATII = aplicatii_web.rute(resource, NOT_DONE_YET, aplicatii_web.Legaturi(
 		activ=aplicatiiPornite, afara=aplicatiiAfara, adresaClient=_adresaClient, antet=_antet,
-		gazdaProprie=lambda request: gazdaPermisa(_antet(request, b"host"), _numeAcasa()), codAcasa=codInReteaLocala,
+		gazdaProprie=lambda request: gazdaPermisa(_antet(request, b"host"), _numeAcasa()), codAcasa=parolaWebCeruta,
 		areCookie=lambda request: _secretDinCookie(request) is not None,
 		jetonValid=_jetonValid, jeton=_jetonConfigurat, trimiteTasta=_trimiteTasta, zap=zapReferinta,
-		refuzSsh=acces_ssh_web.refuzEcranDeschis, captura=ScreenshotResource))
+		captura=ScreenshotResource))
 
 	# ---------------------------------------------------------------- cadrul paginilor (cadru_web.py)
 	# Antetul, meniul pe grupe si temele se pun pe pagini in _CerereHds.render; aici numai /cadru, fonturile skinului.
@@ -4298,6 +4097,7 @@ def _construiesteResurse():
 			# ceruta de aplicatii)
 			self.putChild(b"statusinfo", _APLICATII["alege"](b"statusinfo", StatusInfoResource()))
 			self.putChild(b"remotecontrol", _APLICATII["alege"](b"remotecontrol", RemoteControlResource()))
+			self.putChild(b"taste-context", TasteContextResource())
 			self.putChild(b"mouse", _MOUSE[b"mouse"])
 			self.putChild(b"zap", _APLICATII["alege"](b"zap", ZapResource()))
 			self.putChild(b"mesaj-televizor", MesajTelevizorResource())
@@ -4319,7 +4119,7 @@ def _construiesteResurse():
 			# modulele de acces conditionat (acces_conditionat_web.py)
 			for nume_ruta, resursa in _ACCES.items():
 				self.putChild(nume_ruta, resursa)
-			# codul de asociere si in reteaua locala (pagina /setari, caseta „Interfața web”)
+			# starea interfetei web si aplicatiile de telefon (pagina /setari, caseta Interfata web)
 			self.putChild(b"interfata-web", InterfataWebResource())
 			self.putChild(b"interfata-web-seteaza", InterfataWebSeteazaResource())
 			# parola pentru aplicatii si cheia pentru scripturi, numai la butonul "Arată"
@@ -4426,12 +4226,17 @@ def _construiesteResurse():
 			# modul sigur (mod_sigur_web.py): /api/mod-sigur, /api/mod-sigur-alege, /api/mod-sigur-brut
 			for nume_ruta, resursa in _MOD_SIGUR.items():
 				self.putChild(nume_ruta, resursa)
+			# radioul DAB+ prin stick USB (dab_usb_web.py): /api/dab-terestru, /api/dab-terestru-fa, /api/dab-terestru-imagine
+			for nume_ruta, resursa in _DAB_USB.items():
+				self.putChild(nume_ruta, resursa)
 			# importul canalelor și listele implicite (scanare_import_web.py, scanare_liste_web.py)
 			for nume_ruta, resursa in _IMPORT.items():
 				self.putChild(nume_ruta, resursa)
 			self.putChild(b"liste-implicite", _LISTE_IMPLICITE[b"liste-implicite"])
 			# Configurare LNB, Găsire semnal si comenzile motorului (antena_web.py)
 			self.putChild(b"lnb", _ANTENA[b"lnb"])
+			self.putChild(b"unicable", _ANTENA[b"unicable"])
+			self.putChild(b"unicable-seteaza", _ANTENA[b"unicable-seteaza"])
 			self.putChild(b"lnb-plan", _ANTENA[b"lnb-plan"])
 			self.putChild(b"lnb-aplica", _ANTENA[b"lnb-aplica"])
 			self.putChild(b"lnb-raspuns", _ANTENA[b"lnb-raspuns"])
@@ -4490,8 +4295,8 @@ def _construiesteResurse():
 			return FaviconResource._date
 
 	class HdsWebRoot(resource.Resource):
-		"""Radacina site-ului. '/' (si '/panou') = panoul pentru un browser asociat, altfel pagina de
-		asociere; '/asociere' si '/asociere/cod' = asocierea cu codul de pe televizor; '/deconectare';
+		"""Radacina site-ului. '/' (si '/panou') = panoul (cu parola omului pusa pentru web, intai pagina parolei);
+		'/intra' = parola din reteaua de acasa; '/t/<jeton>' = codul QR de pe televizor; '/deconectare';
 		'/programatori' = lista API; '/jurnal' = jurnalul de versiuni; '/api/...' = resursele de mai sus. Streaming (Faza 2, viitor) se adauga
 		aici mai tarziu cu putChild(), fara sa schimbe API-urile deja existente."""
 
@@ -4500,7 +4305,8 @@ def _construiesteResurse():
 			self.putChild(b"api", ApiResource())
 			self.putChild(b"panou", DashboardResource())
 			self.putChild(b"fisiere", _FISIERE_PAGINA)
-			self.putChild(b"asociere", AsociereResource())
+			self.putChild(b"intra", IntraResource())
+			self.putChild(b"scriere-secret", ScriereSecretResource())
 			# telefonul din codul QR de pe televizor (jetonul de unica folosinta, asociere.py)
 			self.putChild(b"t", JetonQrResource())
 			self.putChild(b"deconectare", DeconectareResource())
@@ -4524,6 +4330,7 @@ def _construiesteResurse():
 			self.putChild(b"accel", _ACCEL_PAGINA)
 			self.putChild(b"cautare", _CAUTARE_PAGINA)
 			self.putChild(b"dabt2", _DABT2_PAGINA)
+			self.putChild(b"dab-terestru", _DAB_USB_PAGINA)
 			self.putChild(b"oarba", _OARBA_PAGINA)
 			self.putChild(b"ceas", _CEAS_PAGINA)
 			self.putChild(b"functii-imagine", _FUNCTII_IMAGINE_PAGINA)
@@ -4646,6 +4453,10 @@ def _construiesteServer(radacina):
 				if cale == CALE_URCARE_CAPTURA and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
 						_acelasiOriginCerere(self)):
 					return MAX_CORP_CAPTURA
+				if (cale == CALE_URCARE_IPK and self.getHeader("content-type") == "application/octet-stream" and
+						corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
+						_acelasiOriginCerere(self))):
+					return MAX_CORP_IPK
 				# Numai editorul (limitat la 1 MiB de fisier) are JSON mai mare.
 				# Urcarile folosesc bucati <=64 KiB si bugetul comun de RAM.
 				if cale == b"/api/fisiere-save" and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
@@ -4798,7 +4609,11 @@ def _construiesteServer(radacina):
 
 		def render(self, request):
 			from . import cadru_web
-			return cadru_web.imbracaRaspuns(request, self.resursa.render(request))
+			corp = cadru_web.imbracaRaspuns(request, self.resursa.render(request))
+			if isinstance(corp, bytes) and corp.startswith(b"<!DOCTYPE html>"):
+				from .asistenta_web import protejeazaScrierea
+				corp = protejeazaScrierea(corp.decode("utf-8", "surrogateescape")).encode("utf-8", "surrogateescape")
+			return corp
 
 	class _CanalHttp(http.HTTPChannel):
 		"""In Twisted, fiecare octet primit reia de la zero asteptarea de 60 s, deci un aparat care
@@ -4970,14 +4785,11 @@ TEXTE_PAGINA = {
 		N_("Caută setări"),
 		N_("Imaginea de pe ecranul receptorului"),
 		N_("Canalul de acum de pe televizor, pentru VLC, Kodi sau alt player din casă"),
-		N_("Conectare la receptor"),
-		N_("Introdu codul afișat pe televizor."),
-		N_("Conectează"),
-		N_("Se cere codul..."),
-		N_("Afișează din nou codul pe televizor"),
-		N_("Codul apare pe televizor când receptorul arată un canal, nu în meniu și nu în standby. Este "
-			"valabil o oră. După conectare, acest browser rămâne conectat un an."),
-		N_("Codul de pe televizor"),
+		N_("Parola receptorului"),
+		N_("Ai pus o parolă pentru interfața web. Scrie-o aici."),
+		N_("Intră"),
+		N_("Parola se scoate sau se schimbă pe televizor, în ecranul Parola receptorului (Setări, Rețea). După ce "
+			"intri, acest browser rămâne intrat un an."),
 		N_("Pentru programatori"),
 		N_("Receptorul are un API JSON simplu, folosit și de panoul de control."),
 		N_("Adrese"),
@@ -5146,25 +4958,22 @@ TEXTE_PAGINA = {
 			"<code>orase=1</code> fusurile pentru ora din alt oraș"),
 		N_("<code>POST "
 			"/api/afisaj-seteaza?lista=ceas.ora:24@5,canal.nume:derulat&amp;evenimente=evenimente.volum:n&amp;asteptare=ora|ora_data|rec|stins&amp;viteza=200|300|450|600&amp;luminozitate=neschimbat|1..7&amp;luminozitate_noapte=la_fel|1..7&amp;noapte_de_la=18..23|0&amp;noapte_pana_la=5..9&amp;text=...&amp;oras=Asia/Tokyo</code>: salvează și aplică pe loc (oricare dintre ele); <code>previzualizare=1&amp;lista=...</code> arată lista pe afișaj fără salvare (cel mult 2 minute fără o cerere nouă), <code>previzualizare=0</code> revine; <code>minutar=0|1..120</code> și <code>cronometru=porneste|opreste|zero</code> pornesc ceasurile afișajului pe loc; <code>functionare=ora|canal|stins</code> merge ca înainte"),
-		N_("<code>GET /api/acces-ssh</code>: parola receptorului (FTP, SSH și SFTP): felul parolei lui root "
-			"(fără parola însăși), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), "
-			"opțiunea Fără parolă în rețeaua locală, stările periculoase (<code>alarme</code>), lucrarea în curs "
-			"și rezultatul ultimei comenzi"),
-		N_("<code>POST /api/acces-ssh-parola</code>: textul parolei (se vede oricând); <code>GET "
-			"/api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără "
-			"/etc/shadow)"),
-		N_("<code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola aleasă (4-64 de semne: "
-			"litere fără diacritice, cifre și semne, fără spații); <code>POST "
-			"/api/acces-ssh-parola-noua?confirmat=1</code>: o parolă nouă la întâmplare"),
+		N_("<code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code>,"
+			" fără parola însăși), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SS"
+			"H (tipul, amprenta, comentariul), stările neobișnuite (<code>alarme</code>), lucrarea în curs și rez"
+			"ultatul ultimei comenzi"),
+		N_("<code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără"
+			" /etc/shadow și fără parolă)"),
+		N_("<code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola ta, orice text (prima dat"
+			"ă se cere peste tot); <code>POST /api/acces-ssh-sterge-parola</code>: parola ștearsă; <code>POST /ap"
+			"i/acces-ssh-unde?unde=web,ftp,ssh,module,pluginuri</code>: unde se cere"),
 		N_("<code>POST /api/acces-ssh-adauga</code> (corp: <code>cheie=</code>), <code>POST "
 			"/api/acces-ssh-stick</code>, <code>POST "
 			"/api/acces-ssh-sterge?amprenta=SHA256:..&amp;confirmat=1</code>: cheile publice lipite, cele "
 			"din dosarul hdsatelit/ssh de pe stick, ștergerea unei chei"),
-		N_("<code>POST /api/acces-ssh-fara-parola?pornit=0|1</code> (<code>pornit=1</code> cere și "
-			"<code>confirmat=1</code>): opțiunea Fără parolă în rețeaua locală. Parola, textul brut și toate "
-			"schimbările merg numai dintr-un browser conectat cu codul de pe televizor (altfel 403 cu "
-			"<code>trebuie_cod</code>), niciodată cu <code>?token=</code>; cât ecranul Parola receptorului e "
-			"deschis pe receptor, la fel <code>/api/remotecontrol</code>"),
+		N_("Fără parolă pusă, în rețeaua de acasă totul merge fără parolă; unde un program cere neapărat parolă,"
+			" merge utilizatorul <code>root</code> cu orice parolă. Schimbările se fac dintr-un browser, nu cu <c"
+			"ode>?token=</code>"),
 		N_("<code>GET /api/setari-din-copie</code>: setările importate: câte așteaptă repornirea interfeței "
 			"(<code>asteapta</code>), proba lor (<code>garda</code>), scoase după opriri neașteptate "
 			"(<code>cazut</code>), textele stării"),
@@ -5230,6 +5039,8 @@ TEXTE_PAGINA = {
 		N_("<code>POST "
 			"/api/dabt2-manual?fel=dab|t2&amp;nume=..&amp;grade=..&amp;emisfera=E|V&amp;frecventa=..&amp;...</code>: un flux adăugat de mână, cu aceleași câmpuri și limite ca „Adaugă manual”"),
 		N_("<code>POST /api/dabt2-televizor?fel=dab|t2</code>: deschide fereastra pe televizor"),
+		N_("<code>GET /api/dab-terestru</code>, <code>POST /api/dab-terestru-fa?actiune=pregateste|cauta|opreste|asculta|opreste_radio|favorit|seteaza</code>: "
+			"radioul DAB+ prin stick USB: starea stickului, căutarea, posturile, opțiunile"),
 		N_("<code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile "
 			"(<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării "
 			"(<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, "
@@ -5439,9 +5250,10 @@ TEXTE_PAGINA = {
 			"(GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în "
 			"ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața "
 			"web (butonul Arată). Tot acolo se poate face o cheie nouă."),
-		N_("Din browser: după conectarea cu codul de pe televizor, browserul primește un cookie. Cu el, "
-			"comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit cu POST, "
-			"dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou."),
+		N_("Din browser: din rețeaua de acasă intri direct (cu parola ta numai dacă ai pus-o pentru interfața we"
+			"b). Comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit din browser"
+			" cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou (așa nu "
+			"le poate trimite o pagină de pe internet)."),
 		N_("Comenzile care mișcă motorul, pornesc măsurarea semnalului sau schimbă LNB-ul "
 			"(<code>lnb-aplica</code>, <code>lnb-raspuns</code>, <code>gasire-semnal-porneste</code>, "
 			"<code>-reacordeaza</code>, <code>-opreste</code>, <code>motor-comanda</code>) se dau numai din "
@@ -5458,11 +5270,12 @@ TEXTE_PAGINA = {
 			"locurile înregistrărilor, cu <code>Range</code>), <code>/web/ts.m3u?file=</code> și "
 			"<code>/grab</code>. Sunt pornite din fabrică (rândul „Aplicații de telefon” din ecranul "
 			"interfeței web și din pagina Setări)."),
-		N_("Din casă intră fără parolă, cu adresa IP a receptorului, cu numele lui (și cu terminațiile date "
-			"de router: <code>.lan</code>, <code>.home</code>, <code>.localdomain</code>, "
-			"<code>.home.arpa</code>, <code>.local</code>) sau cu <code>hdsatelit.local</code>; utilizatorul "
-			"și parola din aplicație rămân goale. Cu alt nume în adresă, sau cu „Cere codul și în rețeaua "
-			"locală” pornit, se cer utilizatorul <code>root</code> și parola pentru aplicații (HTTP Basic)."),
+		N_("Din casă intră fără parolă, cu adresa IP a receptorului, cu numele lui (și cu terminațiile date de r"
+			"outer: <code>.lan</code>, <code>.home</code>, <code>.localdomain</code>, <code>.home.arpa</code>, <c"
+			"ode>.local</code>) sau cu <code>hdsatelit.local</code>; utilizatorul și parola din aplicație rămân g"
+			"oale sau au orice. Cu parola ta pusă pentru interfața web, se cer utilizatorul <code>root</code> și "
+			"parola ta (HTTP Basic); cu alt nume în adresă, utilizatorul <code>root</code> și parola pentru aplic"
+			"ații."),
 		N_("Din afara casei receptorul nu răspunde aplicațiilor până nu pornești „Acces din afara casei”; "
 			"atunci intră numai cu utilizatorul <code>root</code> și parola pentru aplicații, pe care o vezi "
 			"pe televizor, în ecranul interfeței web, și în pagina Setări. După 5 parole greșite de la "
@@ -5512,12 +5325,11 @@ TEXTE_PAGINA = {
 		N_("prin internet"),
 		N_("· are și DVB-I"),
 		N_("Acest browser:"),
-		N_("Deconectezi acest browser? Pentru a-l folosi din nou vei avea nevoie de un cod nou de pe "
-			"televizor."),
+		N_("Deconectezi acest browser? Cu parola pusă, o va cere din nou."),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
-		N_("Conectat. Se deschide panoul..."),
-		N_("Codul nu a fost primit."),
+		N_("Se deschide pagina..."),
+		N_("Parola nu a fost primită."),
 		N_("Codul QR nu e bun. Deschide din nou codul pe televizor și scanează-l."),
 		N_("Telefonul e conectat. Se deschide pagina..."),
 		N_("Nu s-a putut conecta telefonul."),
@@ -5579,6 +5391,9 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a răspuns ("),
 	),
 }
+
+
+TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
 
 
 def _traducePagina(sablon, fel="pagina"):

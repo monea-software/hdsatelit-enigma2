@@ -66,6 +66,7 @@ import json
 import os
 import re
 import signal
+import threading
 import time
 
 CALE_LANSATOR = "/usr/bin/hds-navigator"
@@ -208,7 +209,7 @@ ASCUNS = "ascuns"            # o fereastra a enigma2 e peste navigator
 OPRIRE = "oprire"
 
 # ferestrele pe care le cere pagina (nu tastele navigatorului)
-FERESTRE_PAGINA = ("tastatura", "adresa", "autentificare", "dialog", "alegere")
+FERESTRE_PAGINA = ("tastatura", "adresa", "autentificare", "dialog", "alegere", "asistenta")
 
 # flagurile enigma2 pentru taste (eActionMap): apasare, ridicare, repetare, lunga, ASCII
 _VALOARE_TASTA = {0: 1, 1: 0, 2: 2}
@@ -317,6 +318,25 @@ class Mediu(object):
 		except (IOError, OSError, ValueError, IndexError):
 			pass
 		return None
+
+	def asistenta_activa(self):
+		# fara modulul asistentei (alta imagine, probele de pe PC) nu are cine sa vada ecranul
+		try:
+			from Components.HdsAsistentaControl import asistentaActiva
+		except ImportError:
+			return False
+		return asistentaActiva()
+
+	def interfata_locala(self, adresa):
+		from Components.HdsAsistentaControl import interfataLocalaBlocata
+		return interfataLocalaBlocata(adresa, verifica_chiar_oprita=True)
+
+	def refuza_secret(self, session):
+		try:
+			from Components.HdsAsistentaControl import cereOprirePentruSecret
+		except ImportError:
+			return False
+		return cereOprirePentruSecret(session)
 
 	def exista(self, cale):
 		return os.path.exists(cale)
@@ -547,6 +567,9 @@ class Navigator(object):
 		self._ceas_ascuns = self.m.ceas_nou(self._termenAscuns)
 		self._ceas_oprire = self.m.ceas_nou(self._treaptaOprire)
 		self._treapta = 0
+		self._paze = set()
+		self._paza_pornire = False
+		self._peInterfataLocala = self.mod == MOD_CAM
 
 	# ------------------------------------------------------------ pornirea
 
@@ -616,9 +639,10 @@ class Navigator(object):
 		a.append(self.adresa)
 		return a
 
-	def porneste(self):
+	def porneste(self, _verificat=False):
 		"""Porneste procesul. False (si laOprit cu motivul) daca nu se poate. O aplicatie HbbTV pornita automat si inca
-		nevazuta lasa locul altui navigator (cedeaza)."""
+		nevazuta lasa locul altui navigator (cedeaza). Asistenta nu opreste pornirea (nici modul modulului de acces):
+		echipa nu vede ecranul cat navigatorul e deschis."""
 		if activ() is not None and activ() is not self and self.mod != MOD_HBBTV:
 			cedeaza()
 		if activ() is not None and activ() is not self:
@@ -675,7 +699,32 @@ class Navigator(object):
 	def url(self, adresa):
 		adresa = _text(adresa)
 		if adresa and not any(ch in adresa for ch in "\r\n"):
-			self._scrie("url " + adresa)
+			def verificat(blocat):
+				if blocat:
+					self._anuntaPaza()
+				else:
+					self._scrie("url " + adresa)
+			self._pazaAdresa(adresa, verificat)
+
+	def _pazaAdresa(self, adresa, gata, verifica_chiar_oprita=False):
+		"""Nicio adresa nu e oprita cat merge asistenta, nici interfata web a modulelor de acces: echipa nu vede ecranul cat
+		navigatorul e deschis (captura e refuzata), iar textul paginii nu pleaca."""
+		gata(False)
+
+	def _asistentaActiva(self):
+		functie = getattr(self.m, "asistenta_activa", None)
+		return bool(functie is not None and functie())
+
+	def refuzaSecret(self, session=None):
+		functie = getattr(self.m, "refuza_secret", None)
+		return bool(functie is not None and functie(session))
+
+	def _anuntaPaza(self):
+		if not self._aratat_anuntat:
+			self._motiv = "asistenta"
+			self.opreste()
+			return
+		self._cere("asistenta", {})
 
 	def inapoi(self):
 		self._scrie("inapoi")
@@ -697,6 +746,9 @@ class Navigator(object):
 		ecran."""
 		if self.stare not in (ARATAT, ASCUNS) or not text:
 			return False
+		if self.camp == "parola":
+			if self.refuzaSecret(getattr(self.a, "session", None)):
+				return False
 		self._scrie("text64 " + b64(text[:TEXT_MAXIM]))
 		return True
 
@@ -807,6 +859,17 @@ class Navigator(object):
 			self._ceas_viu.start(TERMEN_VIU_S * 1000, True)
 		cuv = rand.split(" ")
 		fel = cuv[0]
+		if fel == "ASISTENTA" and len(cuv) == 3 and cuv[1].isdigit():
+			identificator = cuv[1]
+			adresa = din_b64(cuv[2])
+
+			def verificat(blocat):
+				self._scrie("asistenta %s %d" % (identificator, 0 if blocat else 1))
+				if blocat:
+					self._anuntaPaza()
+
+			self._pazaAdresa(adresa, verificat, verifica_chiar_oprita=True)
+			return  # adresa nu intra nici in istoria starilor
 		if fel not in ("VIU", "TIMP", "INDICATOR-LA") and not rand.startswith("HBBTV tradu "):
 			self._stari.append(stare_scurta(rand))      # cererile de traducere nu umplu istoria starilor
 		if fel == "VIU":
@@ -1122,6 +1185,10 @@ class Navigator(object):
 
 	def opreste(self):
 		"""Oprirea ceruta de noi: „iesire”, apoi SIGTERM, apoi SIGKILL pe grup."""
+		self._paza_pornire = False
+		for ceas in self._paze:
+			ceas.stop()
+		self._paze.clear()
 		if self.stare in (OPRIT, OPRIRE):
 			return
 		if self._motiv is None:
@@ -1197,6 +1264,9 @@ class Navigator(object):
 	def _inchis(self, cod):
 		if self.stare == OPRIT:
 			return
+		for ceas in self._paze:
+			ceas.stop()
+		self._paze.clear()
 		for t in (self._ceas_pornire, self._ceas_incarcare, self._ceas_viu, self._ceas_ascuns, self._ceas_oprire):
 			t.stop()
 		self._legaTaste(False)

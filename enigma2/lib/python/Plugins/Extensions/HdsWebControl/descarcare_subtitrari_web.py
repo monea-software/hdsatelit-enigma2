@@ -8,8 +8,9 @@
 #
 # Pe televizor: "Caută subtitrări pe internet" si "Descărcare subtitrări" (setarile). Aici: aceeasi cautare si
 # descarcare pentru filmul care merge (lucru.py, aceeasi lucrare ca pe televizor), si conturile: parolele si cheile
-# numai se scriu, nu se citesc inapoi (pagina arata doar „scrisă” / „nescrisă”); numele de utilizator OpenSubtitles se
-# vede.
+# numai se scriu, nu se citesc inapoi (pagina arata doar "scrisă" / "nescrisă"); numele de utilizator OpenSubtitles se
+# vede. Cat le scrii, campurile parolelor si cheilor sunt text obisnuit (se vad, fara
+# stelute, fara buton Arata); dupa salvare campul ramane gol, cu indemnul "Scrie alta ca s-o schimbi".
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/descarcare-subtitrari                      filmul, sursele, conturile (fara valori secrete), lucrarea,
@@ -467,13 +468,13 @@ PAGINA = """<!DOCTYPE html>
   <section class="card">
     <h2>Conturi și chei</h2>
     <div class="camp"><label for="os_utilizator">OpenSubtitles: nume de utilizator</label><input type="text" id="os_utilizator" autocomplete="off"></div>
-    <div class="camp"><label for="os_parola">OpenSubtitles: parola <span class="detalii" id="st_os_parola"></span></label><input type="password" id="os_parola" autocomplete="new-password"><button type="button" class="ascuns" id="sterge_os_parola">Șterge</button></div>
-    <div class="camp"><label for="os_cheie_aplicatie">OpenSubtitles: cheia aplicației <span class="detalii" id="st_os_cheie_aplicatie"></span></label><input type="password" id="os_cheie_aplicatie" autocomplete="off"><button type="button" class="ascuns" id="sterge_os_cheie_aplicatie">Șterge</button></div>
-    <div class="camp"><label for="subsro_cheie">subs.ro: cheia API <span class="detalii" id="st_subsro_cheie"></span></label><input type="password" id="subsro_cheie" autocomplete="off"><button type="button" class="ascuns" id="sterge_subsro_cheie">Șterge</button></div>
-    <div class="camp"><label for="subdl_cheie">SubDL: cheia API <span class="detalii" id="st_subdl_cheie"></span></label><input type="password" id="subdl_cheie" autocomplete="off"><button type="button" class="ascuns" id="sterge_subdl_cheie">Șterge</button></div>
+    <div class="camp"><label for="os_parola">OpenSubtitles: parola <span class="detalii" id="st_os_parola"></span></label><input type="text" id="os_parola" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="ascuns" id="sterge_os_parola">Șterge</button></div>
+    <div class="camp"><label for="os_cheie_aplicatie">OpenSubtitles: cheia aplicației <span class="detalii" id="st_os_cheie_aplicatie"></span></label><input type="text" id="os_cheie_aplicatie" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="ascuns" id="sterge_os_cheie_aplicatie">Șterge</button></div>
+    <div class="camp"><label for="subsro_cheie">subs.ro: cheia API <span class="detalii" id="st_subsro_cheie"></span></label><input type="text" id="subsro_cheie" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="ascuns" id="sterge_subsro_cheie">Șterge</button></div>
+    <div class="camp"><label for="subdl_cheie">SubDL: cheia API <span class="detalii" id="st_subdl_cheie"></span></label><input type="text" id="subdl_cheie" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="ascuns" id="sterge_subdl_cheie">Șterge</button></div>
     <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button><button type="button" id="verifica">Verifică sursele</button><button type="button" id="stergeOs">Șterge contul OpenSubtitles</button></div>
     <p class="mesaj" id="verificare"></p>
-    <p class="nota">Parolele și cheile numai se scriu sau se șterg aici; nu se mai arată. Un câmp lăsat gol nu schimbă nimic. Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă parte. Numele de utilizator, nu adresa de e-mail.</p>
+    <p class="nota">Parolele și cheile se văd cât le scrii; după salvare pagina spune numai dacă sunt scrise. Un câmp lăsat gol nu schimbă nimic. Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă parte. Numele de utilizator, nu adresa de e-mail.</p>
   </section>
   <section class="card">
     <h2>Sursele</h2>
@@ -608,7 +609,11 @@ function arata(d){
     var s = $("st_" + c); if(s){ s.textContent = d.conturi[c] ? "(scrisă)" : "(nescrisă)"; s.classList.toggle("scrisa", !!d.conturi[c]); }
   });
   if(document.activeElement !== $("os_utilizator") && !$("os_utilizator").value){ $("os_utilizator").value = d.conturi.os_utilizator_text || ""; }
-  Object.keys(SECRETE).forEach(function(c){ $("sterge_" + c).classList.toggle("ascuns", !d.conturi[c]); });
+  // valoarea salvata nu vine niciodata in pagina: campul ramane gol, cu indemnul de schimbare cand e scrisa
+  Object.keys(SECRETE).forEach(function(c){
+    $("sterge_" + c).classList.toggle("ascuns", !d.conturi[c]);
+    $(c).placeholder = d.conturi[c] ? "Scrie alta ca s-o schimbi" : "";
+  });
   // fiecare sursa: pregatita (are datele de care are nevoie) sau nu; o sursa se foloseste numai cand e pregatita
   var s = $("surse"); s.textContent = "";
   d.surse.forEach(function(x){
@@ -711,9 +716,9 @@ TEXTE_PAGINA = {
 		N_("Salvează"),
 		N_("Verifică sursele"),
 		N_("Șterge contul OpenSubtitles"),
-		N_("Parolele și cheile numai se scriu sau se șterg aici; nu se mai arată. Un câmp lăsat gol nu "
-			"schimbă nimic. Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă "
-			"parte. Numele de utilizator, nu adresa de e-mail."),
+		N_("Parolele și cheile se văd cât le scrii; după salvare pagina spune numai dacă sunt scrise. Un "
+			"câmp lăsat gol nu schimbă nimic. Folosește pentru OpenSubtitles o parolă pe care nu o mai "
+			"folosești în altă parte. Numele de utilizator, nu adresa de e-mail."),
 		N_("Sursele"),
 		N_("Subtitrările se caută la cererea ta, pentru fișierul tău, și se salvează lângă film; nu trec "
 			"prin serverele HD Satelit. Răspunzi de ce descarci. Pe contul gratuit, OpenSubtitles poate pune "
@@ -750,6 +755,7 @@ TEXTE_PAGINA = {
 		N_("Se verifică sursele..."),
 		N_("(scrisă)"),
 		N_("(nescrisă)"),
+		N_("Scrie alta ca s-o schimbi"),
 		N_("pregătită, se folosește la căutare"),
 		N_("nepregătită, lipsesc datele de mai sus"),
 		N_("Receptorul nu a putut citi starea."),

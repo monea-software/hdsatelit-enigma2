@@ -2,7 +2,7 @@ SUMMARY = "Imaginea HDSatelit"
 DESCRIPTION = "enigma2 HDSatelit pe baza OE-Alliance. Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 # versiunea se tine dupa configure.ac din depozitul imaginii (AC_INIT) si dupa DISTRO_VERSION din hdsatelit.conf
-PV = "0.7.2"
+PV = "0.7.3"
 
 # hdsatelit-nume-local: numele hdsatelit.local in reteaua de acasa (avahi-publish), pe langa numele receptorului
 IMAGE_INSTALL = "hdsatelit-base hdsatelit-ssh hdsatelit-nume-local"
@@ -81,6 +81,16 @@ export IMAGE_BASENAME = "hdsatelit-image"
 
 inherit image
 inherit hds-usb-image
+
+# Locul radacinii pe eMMC-ul HiSilicon (10.11.2026, 0.7.3): clasele producatorilor (octagon-, amiko-, gigablue-, dinobot-
+# emmc_image si celelalte) fac rootfs.ext4 cu dd seek=${IMAGE_ROOTFS_SIZE}, adica MEREU la minimul masinii (624288 sau
+# 589824 KB), nu dupa marimea radacinii. 0.7.3 (traducerile in 30 de limbi, afisajul color) nu mai incape: mkfs.ext4
+# „Could not allocate block” la SF8008. Minimul devine 1 GiB numai unde masina are unul din aceste doua minime; partitia
+# userdata are 3580M (SF8008 MINI) sau 7000M (SF8008, Ustym, TRIO, V10), deci incape. Vu+ (Broadcom) si Solo SE (NAND)
+# au alte valori si raman neatinse. Atribuire, nu python () {}: functia anonima din image.bbclass ruleaza inaintea celei
+# din reteta si pune deja valoarea in comanda do_image_<tip> (prima proba, 04:08, tot 156072 de blocuri).
+HDS_ROOTFS_MINIM_MASINA := "${IMAGE_ROOTFS_SIZE}"
+IMAGE_ROOTFS_SIZE = "${@'1048576' if d.getVar('HDS_ROOTFS_MINIM_MASINA').strip() in ('589824', '624288') else d.getVar('HDS_ROOTFS_MINIM_MASINA')}"
 
 # Lista licentelor din imagine, facuta la construire (classes/hds-licente.bbclass): /usr/share/hdsatelit/licente,
 # citita de ecranul „Licențe” si de pagina web /licente
@@ -206,6 +216,18 @@ hds_paza_ssh_rootfs() {
 		fi
 		[ "$(grep -c 'pam_permit.so' "$pamftp")" = 1 ] || bbfatal "paza ftp: /etc/pam.d/vsftpd trebuie sa aiba exact un pam_permit"
 		[ -f ${IMAGE_ROOTFS}${base_libdir}/security/pam_listfile.so ] || bbfatal "paza ftp: lipseste pam_listfile.so"
+		# FTP are comutatorul lui (hds-ftp-retea-locala.conf, hdsatelit-ssh r4), cu aceleasi reguli ca la SSH
+		regula_ftp=${IMAGE_ROOTFS}${sysconfdir}/security/hds-ftp-retea-locala.conf
+		[ -f "$regula_ftp" ] || bbfatal "paza ftp: lipseste $regula_ftp"
+		[ "$(grep -v '^#' "$regula_ftp" | grep . | tail -n 1)" = "+ : ALL : ALL" ] || bbfatal "paza ftp: $regula_ftp nu trimite pe ceilalti la parola"
+		if grep '^-' "$regula_ftp" | grep -qw ALL; then
+			bbfatal "paza ftp: $regula_ftp lasa fara parola adrese din afara casei"
+		fi
+		[ "$(grep -c '^-' "$regula_ftp")" -le 1 ] || bbfatal "paza ftp: $regula_ftp are mai multe reguli -"
+		if grep '^-' "$regula_ftp" | grep -qvE '^- : root : 127\.0\.0\.0/8 10\.0\.0\.0/8 172\.16\.0\.0/12 192\.168\.0\.0/16 169\.254\.0\.0/16 '; then
+			bbfatal "paza ftp: regula FTP fara parola nu e a retelelor de acasa"
+		fi
+		grep -q 'accessfile=/etc/security/hds-ftp-retea-locala.conf' "$pamftp" || bbfatal "paza ftp: /etc/pam.d/vsftpd fara comutatorul FTP"
 		if grep -q '^kids:' ${IMAGE_ROOTFS}${sysconfdir}/passwd; then
 			bbfatal "paza ftp: contul kids e in imagine"
 		fi

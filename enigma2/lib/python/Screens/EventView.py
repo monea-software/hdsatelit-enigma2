@@ -1,16 +1,13 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from .Screen import Screen
-from Screens.TimerEdit import TimerSanityConflict
-from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.Button import Button
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
 from Components.TimerList import TimerList
-from Components.UsageConfig import preferredTimerPath
 from enigma import eEPGCache, eTimer, eServiceReference
-from RecordTimer import RecordTimerEntry, parseEvent, AFTEREVENT
-from .TimerEntry import TimerEntry
+from .TimerEntry import GhidTimer
+from Components import HdsInregistrariProgramate as HIP
 from time import localtime
 from Components.config import config
 
@@ -52,7 +49,10 @@ class EventViewBase:
 		if self.isRecording:
 			self["key_green"] = Button("")
 		else:
-			self["key_green"] = Button(_("Add timer"))
+			self["key_green"] = Button(_("Înregistrează"))
+		self["hds_timer_hint"] = Label("" if self.isRecording else _("MENU: editează înregistrarea."))
+		self.ghidTimer = GhidTimer(self.session, self.hdsTimerSchimbat)
+		self._ghidInchis = False
 		self["key_yellow"] = Button("")
 		self["key_blue"] = Button("")
 		self["actions"] = ActionMap(["OkCancelActions", "EventViewActions"],
@@ -68,6 +68,7 @@ class EventViewBase:
 			})
 		self.hdsTradus = False
 		self["hdsTraducereActions"] = ActionMap(["EventViewActions"], {"cancel": self.hdsInfo}, -1)
+		self["hdsTimerActions"] = ActionMap(["MenuActions"], {"menu": self.timerEdit})
 		self.onShown.append(self.onCreate)
 		self.onClose.append(self.hdsLaInchidere)
 
@@ -79,6 +80,7 @@ class EventViewBase:
 		self.close()
 
 	def hdsLaInchidere(self):
+		self._ghidInchis = True
 		if _E is not None:
 			_E.arataOriginal(False)
 
@@ -126,51 +128,17 @@ class EventViewBase:
 		if self.cbFunc is not None:
 			self.cbFunc(self.setEvent, self.setService, +1)
 
-	def removeTimer(self, timer):
-		timer.afterEvent = AFTEREVENT.NONE
-		self.session.nav.RecordTimer.removeEntry(timer)
-		self["key_green"].setText(_("Add timer"))
-		self.key_green_choice = self.ADD_TIMER
-	
 	def timerAdd(self):
-		if self.isRecording:
-			return
-		event = self.event
-		serviceref = self.currentService
-		if event is None:
-			return
-		eventid = event.getEventId()
-		refstr = serviceref.ref.toString()
-		for timer in self.session.nav.RecordTimer.timer_list:
-			if timer.eit == eventid and timer.service_ref.ref.toString() == refstr:
-				cb_func = lambda ret : not ret or self.removeTimer(timer)
-				self.session.openWithCallback(cb_func, MessageBox, _("Do you really want to delete %s?") % event.getEventName())
-				break
-		else:
-			newEntry = RecordTimerEntry(self.currentService, checkOldTimers = True, dirname = preferredTimerPath(), *parseEvent(self.event))
-			self.session.openWithCallback(self.finishedAdd, TimerEntry, newEntry)
+		if not self.isRecording:
+			self.ghidTimer.comuta(self.event, self.currentService)
 
-	def finishedAdd(self, answer):
-		print("finished add")
-		if answer[0]:
-			entry = answer[1]
-			simulTimerList = self.session.nav.RecordTimer.record(entry)
-			if simulTimerList is not None:
-				for x in simulTimerList:
-					if x.setAutoincreaseEnd(entry):
-						self.session.nav.RecordTimer.timeChanged(x)
-				simulTimerList = self.session.nav.RecordTimer.record(entry)
-				if simulTimerList is not None:
-					self.session.openWithCallback(self.finishSanityCorrection, TimerSanityConflict, simulTimerList)
-			self["key_green"].setText(_("Remove timer"))
-			self.key_green_choice = self.REMOVE_TIMER
-		else:
-			self["key_green"].setText(_("Add timer"))
-			self.key_green_choice = self.ADD_TIMER
-			print("Timeredit aborted")		
+	def timerEdit(self):
+		if not self.isRecording:
+			self.ghidTimer.editeaza(self.event, self.currentService)
 
-	def finishSanityCorrection(self, answer):
-		self.finishedAdd(answer)
+	def hdsTimerSchimbat(self):
+		if not self._ghidInchis:
+			self.setEvent(self.event)
 
 	def setService(self, service):
 		self.currentService=service
@@ -215,19 +183,14 @@ class EventViewBase:
 		if self.SimilarBroadcastTimer is not None:
 			self.SimilarBroadcastTimer.start(400,True)
 
-		serviceref = self.currentService
-		eventid = self.event.getEventId()
-		refstr = serviceref.ref.toString()
-		isRecordEvent = False
-		for timer in self.session.nav.RecordTimer.timer_list:
-			if timer.eit == eventid and timer.service_ref.ref.toString() == refstr:
-				isRecordEvent = True
-				break
+		if self.isRecording:
+			return
+		isRecordEvent = HIP.cautaEmisiune(self.session.nav.RecordTimer, self.currentService, event) is not None
 		if isRecordEvent and self.key_green_choice != self.REMOVE_TIMER:
-			self["key_green"].setText(_("Remove timer"))
+			self["key_green"].setText(_("Șterge programarea"))
 			self.key_green_choice = self.REMOVE_TIMER
 		elif not isRecordEvent and self.key_green_choice != self.ADD_TIMER:
-			self["key_green"].setText(_("Add timer"))
+			self["key_green"].setText(_("Înregistrează"))
 			self.key_green_choice = self.ADD_TIMER
 
 

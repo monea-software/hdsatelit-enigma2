@@ -3,6 +3,15 @@ from .Source import Source
 from enigma import eTimer
 
 class FrontendStatus(Source):
+	"""Starea tunerului (nivel, calitate, BER, prins) pentru elementele temei legate de ea.
+
+	Pe serviciul redat (service_source, ca sursa globala din SessionGlobals) citeste numai cat se vede ceva legat de ea:
+	ceasul porneste la prima aratare (doSuspend(0)) si se opreste la ascunderea ultimului element (doSuspend(1)).
+	Inainte pornea din constructor; sursa din SessionGlobals, de care tema HD Satelit nu leaga nimic, nu primea niciodata
+	doSuspend(1) (Element incepe suspendat, doSuspend vine numai la schimbare) si cerea starea tunerului la fiecare
+	secunda, pentru nimeni (6 cereri pe secunda, pe I2C la Vu+). Cu un tuner dat (frontend_source: ecranele de acordare
+	ale pluginurilor, deschise la cerere, care pot citi .snr / .lock direct, fara element legat) ceasul porneste din
+	constructor, ca inainte."""
 	def __init__(self, service_source = None, frontend_source = None, update_interval = 1000):
 		Source.__init__(self)
 		self.update_interval = update_interval
@@ -11,7 +20,9 @@ class FrontendStatus(Source):
 		self.invalidate()
 		self.poll_timer = eTimer()
 		self.poll_timer.callback.append(self.updateFrontendStatus)
-		self.poll_timer.start(update_interval, True)
+		self._mereu = frontend_source is not None
+		if self._mereu:
+			self.poll_timer.start(update_interval, True)
 
 	def invalidate(self):
 		self.snr = self.agc = self.ber = self.lock = self.snr_db = None
@@ -27,7 +38,8 @@ class FrontendStatus(Source):
 			self.ber = status.get("tuner_bit_error_rate")
 			self.lock = status.get("tuner_locked")
 		self.changed((self.CHANGED_ALL, ))
-		self.poll_timer.start(self.update_interval, True)
+		if self._mereu or not self.suspended:
+			self.poll_timer.start(self.update_interval, True)
 
 	def getFrontendStatus(self):
 		if self.frontend_source:
@@ -47,9 +59,11 @@ class FrontendStatus(Source):
 		if suspended:
 			self.poll_timer.stop()
 		else:
+			# Element pune starea noua abia dupa doSuspend: ceasul se porneste aici, nu in updateFrontendStatus
 			self.updateFrontendStatus()
+			self.poll_timer.start(self.update_interval, True)
 
 	def destroy(self):
+		self.poll_timer.stop()
 		self.poll_timer.callback.remove(self.updateFrontendStatus)
 		Source.destroy(self)
-

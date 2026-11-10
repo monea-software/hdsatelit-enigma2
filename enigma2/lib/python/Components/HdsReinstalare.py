@@ -11,7 +11,8 @@
 #   /home/root/hds-restaurare/config-acces/        configurarile modulelor de acces (etc/tuxbox/config), copiate
 #                                                  octet cu octet la punere, fara sa fie citite
 #   /home/root/hds-restaurare/pluginuri.tar.gz    datele extensiilor, validate integral, puse dupa instalarea lor;
-#                                                  .ipk-ul salvat are prioritate fata de feed
+#                                                  .ipk-ul salvat are prioritate fata de feed, afara de o copie de pe
+#                                                  alta baza (semnul pluginuri-alta-baza): atunci feedul e primul
 # fel: "acces" (pachetul unui modul de acces conditionat al copiei, cand copia e de pe alta baza a imaginii: binarele ei
 # nu merg aici, deci nu se copiaza) sau "plugin" (un plugin instalat de om, din lista copiei).
 # Dupa pornirea interfetei (porneste, din HdsCopieSetari.porneste) si dupa repornirea ceruta pentru retea, pe un fir
@@ -325,7 +326,10 @@ def _reinstaleaza_plugin(rad, nume, comanda, disponibile, actualizat, ultima, ac
 	try:
 		instalat = nume in acum
 		C = _copie()
-		local = None if instalat else getattr(C, "ipk_din_copie", lambda _r, _n: None)(rad, nume)
+		# dintr-o copie de pe alta baza a imaginii pachetul vine intai din feed (facut pentru baza de acum); .ipk-ul
+		# salvat numai cand feedul nu-l are, si numai daca nu are programe facute pentru baza veche (ipk_din_copie)
+		din_feed = nume in disponibile and getattr(C, "pluginuri_de_pe_alta_baza", lambda _r: False)(rad)
+		local = None if instalat or din_feed else getattr(C, "ipk_din_copie", lambda _r, _n: None)(rad, nume)
 		if not instalat and not local and nume not in disponibile:
 			return ("lipsa" if actualizat else "nereusite" if ultima else "amanat"), False
 		if not instalat and (comanda is None or _ruleaza(comanda + ["install", local or nume], TERMEN_INSTALARE_S) != 0):

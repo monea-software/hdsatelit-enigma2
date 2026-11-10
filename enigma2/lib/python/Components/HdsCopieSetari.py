@@ -25,9 +25,11 @@
 #                             brute, cu drepturile lor (pe FAT drepturile nu se pastreaza, in arhiva da);
 #   machine-id                /etc/machine-id (fisierul cheilor de traducere pus sub 0.1.9 e legat de el);
 #   authorized_keys           /home/root/.ssh/authorized_keys;
-#   sistem.json               setarile omului din afara /etc/enigma2 (stare_sistem): „Fără parolă în rețeaua locală” a
-#                             SSH-ului, sursele de pachete adaugate de om, interfata implicita cand sunt doua
+#   sistem.json               setarile omului din afara /etc/enigma2 (stare_sistem): regulile parolei pentru SSH si FTP,
+#                             sursele de pachete adaugate de om, interfata implicita cand sunt doua
 #                             configurate (/etc/default_gw); numai valori verificate, fara parole; scris cand e ceva;
+#   parola-locala.json        alegerea parolei din casa si bifele; numai cand e pusa, textul si hash-ul root (0600).
+#                             Numai pe acelasi receptor; restul lui /etc/shadow nu intra in copie;
 #   acces-conditionat.tar.gz  modulele de acces conditionat instalate, gasite dupa conventia pachetelor (fisiere in
 #                             /usr/<fel>s sau un script /etc/init.d/<fel>.<x>, felurile dupa forma: feluri_acces):
 #                             pachetul .ipk daca e pe receptor, altfel fisierele lui dupa lista opkg
@@ -112,12 +114,16 @@ ARH_RETEA = "retea.tar.gz"
 ARH_ACCES = "acces-conditionat.tar.gz"
 ARH_PLUGINURI = "pluginuri.tar.gz"
 META_PLUGINURI = "hds-pluginuri.json"
+# semnul (in dosarul restaurarii) ca datele si .ipk-urile pluginurilor sunt dintr-o copie de pe alta baza a imaginii:
+# programele si bibliotecile lor (ELF) nu se mai pun, iar pachetul se ia intai din feed (HdsReinstalare)
+SEMN_PLUGINURI_ALTA_BAZA = "pluginuri-alta-baza"
 MAX_FISIER_PLUGIN = 8 * 1024 * 1024
 FIS_MASINA = "machine-id"
 FIS_CHEI = "authorized_keys"
 FIS_SISTEM = "sistem.json"
+FIS_PAROLA = "parola-locala.json"
 # o imagine mai veche sare randul md5 al unui fisier pe care nu-l stie (citeste_descriere): copia ramane buna acolo
-FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM)
+FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM, FIS_PAROLA)
 SETTINGS_COPIE = "etc/enigma2/settings-fara-token"
 
 DOSAR_RESTAURARE = "home/root/hds-restaurare"
@@ -160,6 +166,12 @@ FISIERE_RETEA = ("etc/network/interfaces", "etc/resolv.conf", "etc/wpa_supplican
 # setarile omului din afara /etc/enigma2 (sistem.json): regula „Fără parolă în rețeaua locală” (Components/HdsAccesSsh.py),
 # sursele de pachete adaugate (Components/HdsPachete.py), interfata implicita (Screens/NetworkSetup.py, fara rand nou)
 FIS_REGULA_SSH = "etc/security/hds-ssh-retea-locala.conf"
+FIS_REGULA_FTP = "etc/security/hds-ftp-retea-locala.conf"
+DOSAR_PAROLA = "etc/hdsatelit-ssh"
+FIS_ALEGERE_PAROLA = DOSAR_PAROLA + "/parola-locala.json"
+FIS_PLUGINURI_PAROLA = DOSAR_PAROLA + "/parola-locala-pluginuri.json"
+MAX_PAROLA_COPIE = 64 * 1024
+TIPAR_HASH_PAROLA = re.compile(r"^\$6\$(?:rounds=[0-9]{1,9}\$)?[A-Za-z0-9./]{1,16}\$[A-Za-z0-9./]{86}$")
 # „Fără parolă în rețeaua locală” oprita se crede numai din copiile facute de aceasta versiune incoace. Pana la 0.6.18
 # oprita era cea din fabrica (nealeasa de om); de la 0.6.19 (pachetul hdsatelit-ssh r3) regula vine pornita, dar
 # punerea la loc de pana la 0.7.0 o scria oprita dintr-o copie veche, iar copiile facute apoi (si cele automate, zilnice)
@@ -1173,9 +1185,14 @@ def _citeste_pluginuri(cale, nume_pluginuri=None):
 		return None, None, _("Lista datelor pluginurilor nu e bună.")
 
 
-def pregateste_pluginuri(dosar, rad):
+def pregateste_pluginuri(dosar, rad, baza_alta=False):
 	tinta = os.path.join(dosar_restaurare(rad), ARH_PLUGINURI)
 	os.makedirs(os.path.dirname(tinta), exist_ok=True)
+	semn = os.path.join(dosar_restaurare(rad), SEMN_PLUGINURI_ALTA_BAZA)
+	if baza_alta:
+		_scrie_atomic(semn, b"1\n", 0o600)
+	elif os.path.exists(semn):
+		os.remove(semn)
 	sursa = os.path.join(dosar, ARH_PLUGINURI)
 	if os.path.isfile(sursa):
 		date = _citeste_mic(sursa, MAX_ARHIVA + 1)
@@ -1184,6 +1201,60 @@ def pregateste_pluginuri(dosar, rad):
 		_scrie_atomic(tinta, date, 0o600)
 	elif os.path.exists(tinta):
 		os.remove(tinta)
+
+
+def pluginuri_de_pe_alta_baza(rad=None):
+	"""True cand datele pluginurilor de pus sunt dintr-o copie de pe alta baza a imaginii (semnul lui pregateste_pluginuri)."""
+	return os.path.isfile(os.path.join(dosar_restaurare(rad), SEMN_PLUGINURI_ALTA_BAZA))
+
+
+def _modul_vecin(nume):
+	"""Un modul din Components, si cand fisierul ruleaza ca program (enigma2.sh: python3 HdsCopieSetari.py pornire)."""
+	try:
+		return __import__("Components." + nume, fromlist=[nume])
+	except ImportError:
+		pass
+	try:
+		return __import__(nume)
+	except ImportError:
+		return None
+
+
+def _modul_alt_python():
+	return _modul_vecin("HdsAltPython")
+
+
+def fisier_de_sarit(date, baza_alta):
+	"""De ce un fisier din datele unui plugin nu se pune inapoi, sau "" (se pune): un program sau o biblioteca (ELF)
+	dintr-o copie de pe alta baza a imaginii (facut pentru alte biblioteci, ca modulele de acces), ori unul legat de alt
+	Python decat al imaginii (un modul .so pentru Python 3.7 face enigma2 sa cada, raportul 919342)."""
+	if date[:4] != b"\x7fELF":
+		return ""
+	if baza_alta:
+		return "alta baza"
+	A = _modul_alt_python()
+	try:
+		v = A.altPythonOcteti(date) if A is not None else None
+	except Exception:
+		v = None
+	return ("Python %s" % v) if v else ""
+
+
+def ipk_de_sarit(cale, baza_alta):
+	"""De ce .ipk-ul salvat in copie nu se instaleaza, sau "": are un modul .so legat de alt Python, ori (copie de pe
+	alta baza) programe sau biblioteci facute pentru baza aceea. Un .ipk care nu se poate citi trece, ca inainte."""
+	HdsPython2 = _modul_vecin("HdsPython2")
+	if HdsPython2 is None:
+		return ""
+	try:
+		v = HdsPython2.din_ipk(cale, cu_control=False)
+	except Exception:
+		return ""
+	if getattr(v, "altpy", None):
+		return "Python %s in %s" % (v.altpy[1], v.altpy[0])
+	if baza_alta and getattr(v, "nativ", ""):
+		return "alta baza, %s" % v.nativ
+	return ""
 
 
 def ipk_din_copie(rad, nume):
@@ -1199,6 +1270,14 @@ def ipk_din_copie(rad, nume):
 			os.makedirs(d, mode=0o700, exist_ok=True)
 			tinta = os.path.join(d, os.path.basename(p["ipk"]))
 			_scrie_atomic(tinta, date[p["ipk"]][1], 0o600)
+			motiv = ipk_de_sarit(tinta, pluginuri_de_pe_alta_baza(rad))
+			if motiv:
+				_jurnal("pachetul salvat al extensiei %s nu se instaleaza (%s)" % (nume, motiv))
+				try:
+					os.remove(tinta)
+				except OSError:
+					pass
+				return None
 			return tinta
 	return None
 
@@ -1211,6 +1290,18 @@ def pune_date_plugin(rad, nume):
 	if eroare:
 		raise IOError("arhiva pluginurilor")
 	fisiere = next((p["fisiere"] for p in meta if p["nume"] == nume), [])
+	baza_alta = pluginuri_de_pe_alta_baza(rad)
+	sarite, de_pus = {}, []
+	for rel in fisiere:
+		motiv = fisier_de_sarit(date[rel][1], baza_alta)
+		if motiv:
+			sarite[motiv] = sarite.get(motiv, 0) + 1
+		else:
+			de_pus.append(rel)
+	if sarite:
+		fisiere = de_pus
+		_jurnal("datele extensiei %s: %d programe sau biblioteci nepuse (%s)" % (nume, sum(sarite.values()),
+			", ".join("%s: %d" % m for m in sorted(sarite.items()))))
 	# Toate tintele se verifica inainte de prima scriere.
 	for rel in fisiere:
 		if not _fara_legaturi(rad, rel) or not _fara_legaturi(rad, rel + ".hds-nou") or os.path.isdir(_c(rad, rel)):
@@ -1236,6 +1327,11 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 	rez = {"ok": False, "mesaje": mesaje, "cale": None, "nume": None, "marime": 0, "are": []}
 	if not os.path.isdir(punct):
 		mesaje.append(_("Mediul ales nu mai este montat."))
+		return rez
+	try:
+		parola = _parola_locala_de_pe_disc(rad)
+	except (ValueError, UnicodeError):
+		mesaje.append(_("Parola din rețeaua de acasă nu s-a putut copia. Pune parola din nou, apoi fă copia."))
 		return rez
 	dosar_copii = os.path.join(punct, *DOSAR_PE_MEDIU.split("/"))
 	fisiere = _fisiere_setari(rad)
@@ -1339,6 +1435,9 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 					mesaje.append(_("%s: %d fișiere depășesc limitele copiei și au fost sărite.")
 						% (_reinstalare()._scurt(p["nume"]), p["sarite"]))
 		# setarile omului din afara /etc/enigma2
+		if parola is not None:
+			_scrie_atomic(os.path.join(part, FIS_PAROLA), json.dumps(parola, ensure_ascii=True,
+				sort_keys=True).encode("ascii"), 0o600)
 		sistem = stare_sistem(rad)
 		from Components import HdsLimbaRestaurare
 		sistem["limba"] = HdsLimbaRestaurare.stare(rad, text_setari)
@@ -1418,16 +1517,16 @@ def _modul_imagine(nume):
 
 def stare_sistem(rad=None):
 	"""Setarile omului din afara /etc/enigma2, pentru sistem.json; {} cand nu e nimic de pus. Numai citire.
-	  ssh_fara_parola   „Fără parolă în rețeaua locală”, cand fisierul regulii exista: pornita = o regula „-”
-						(faraParolaInRetea din Components/HdsAccesSsh.py);
+	  ssh_fara_parola, ftp_fara_parola: cand fisierul regulii exista, True = o regula - (fara parola in casa);
 	  surse_pachete     [[nume, adresa]]: sursele adaugate de om, numai randurile care trec verificarea
 						(citeste_surse_utilizator din Components/HdsPachete.py: fara spatii, fara parole in adresa);
 	  poarta_implicita  interfata din /etc/default_gw, octet cu octet (Screens/NetworkSetup.py o scrie fara rand nou)."""
 	rad = radacina(rad)
 	rez = {}
-	regula = _citeste_mic(_c(rad, FIS_REGULA_SSH), 64 * 1024)
-	if regula is not None and not os.path.islink(_c(rad, FIS_REGULA_SSH)):
-		rez["ssh_fara_parola"] = any(r.startswith("-") for r in regula.decode("utf-8", "replace").splitlines())
+	for nume, cale in (("ssh_fara_parola", FIS_REGULA_SSH), ("ftp_fara_parola", FIS_REGULA_FTP)):
+		regula = _citeste_mic(_c(rad, cale), 64 * 1024)
+		if regula is not None and not os.path.islink(_c(rad, cale)):
+			rez[nume] = any(r.startswith("-") for r in regula.decode("utf-8", "replace").splitlines())
 	if os.path.isfile(_c(rad, FIS_SURSE)):
 		pachete = _modul_imagine("Components.HdsPachete")
 		if pachete is not None:
@@ -1461,10 +1560,11 @@ def _sistem_din_copie(dosar):
 			rez["limba"] = HdsLimbaRestaurare.verifica(d["limba"])
 		except (ValueError, ImportError):
 			return None, "limba si pachetele ei nu au o forma buna"
-	if "ssh_fara_parola" in d:
-		if not isinstance(d["ssh_fara_parola"], bool):
-			return None, "ssh_fara_parola nu e da / nu"
-		rez["ssh_fara_parola"] = d["ssh_fara_parola"]
+	for nume in ("ssh_fara_parola", "ftp_fara_parola"):
+		if nume in d:
+			if not isinstance(d[nume], bool):
+				return None, "%s nu e da / nu" % nume
+			rez[nume] = d[nume]
 	if "poarta_implicita" in d:
 		if not isinstance(d["poarta_implicita"], str) or not TIPAR_INTERFATA.match(d["poarta_implicita"]):
 			return None, "interfata implicita nu are forma unui nume de interfata"
@@ -1483,6 +1583,120 @@ def _sistem_din_copie(dosar):
 				vazute.append(s[0])
 			rez["surse_pachete"] = [list(s) for s in surse]
 	return rez, None
+
+
+def _verifica_parola_locala(d):
+	"""Alegerea si, numai cand e pusa, parola omului si hash-ul ei. Fara valori in erori sau jurnal."""
+	from Components.HdsParolaLocala import SERVICII, MAX_PAROLA
+	if not isinstance(d, dict) or not isinstance(d.get("pusa"), bool):
+		raise ValueError("alegerea parolei")
+	unde = d.get("unde")
+	if (not isinstance(unde, list) or len(unde) > len(SERVICII)
+			or any(not isinstance(s, str) or s not in SERVICII for s in unde) or len(set(unde)) != len(unde)):
+		raise ValueError("locurile parolei")
+	rez = {"pusa": d["pusa"], "unde": [s for s in SERVICII if s in unde]}
+	if "pluginuri" in d:
+		pluginuri = d["pluginuri"]
+		if (not isinstance(pluginuri, list) or len(pluginuri) > 256
+				or any(not isinstance(n, str) or not re.fullmatch(r"[A-Z][A-Za-z0-9_]{0,99}", n) for n in pluginuri)):
+			raise ValueError("pluginurile parolei")
+		rez["pluginuri"] = sorted(set(pluginuri))
+	if d["pusa"]:
+		parola, amprenta = d.get("parola"), d.get("hash")
+		if (not isinstance(parola, str) or not parola or len(parola.encode("utf-8")) > MAX_PAROLA
+				or any(c in parola for c in ("\n", "\r", "\x00"))
+				or not isinstance(amprenta, str) or not TIPAR_HASH_PAROLA.fullmatch(amprenta)):
+			raise ValueError("parola incompleta")
+		rez.update(parola=parola, hash=amprenta)
+	return rez
+
+
+def _shadow_parola(rad, amprenta=None):
+	"""Citeste numai hash-ul root sau pregateste acel camp, pastrand tot restul fisierului octet cu octet."""
+	cale = _c(rad, "etc/shadow")
+	date = _citeste_mic(cale, 64 * 1024 + 1)
+	if os.path.islink(cale) or not date or len(date) > 64 * 1024:
+		raise ValueError("fisierul parolelor")
+	randuri = date.splitlines(keepends=True)
+	gasite = [i for i, r in enumerate(randuri) if r.startswith(b"root:")]
+	if len(gasite) != 1:
+		raise ValueError("contul root")
+	i = gasite[0]
+	campuri = randuri[i].split(b":")
+	if len(campuri) != 9:
+		raise ValueError("contul root")
+	if amprenta is None:
+		return campuri[1].decode("ascii")
+	campuri[1] = amprenta.encode("ascii")
+	randuri[i] = b":".join(campuri)
+	return b"".join(randuri)
+
+
+def _parola_locala_de_pe_disc(rad):
+	"""Nicio parola facuta de imagine la intamplare: numai alegerea salvata de om si parola inca valabila."""
+	cale = _c(rad, FIS_ALEGERE_PAROLA)
+	if not os.path.lexists(cale):
+		return None
+	if os.path.islink(_c(rad, DOSAR_PAROLA)) or os.path.islink(cale):
+		raise ValueError("legatura la parola")
+	date = _citeste_mic(cale, MAX_PAROLA_COPIE + 1)
+	if not date or len(date) > MAX_PAROLA_COPIE:
+		raise ValueError("alegerea parolei")
+	d = json.loads(date.decode("utf-8"))
+	if isinstance(d, dict) and os.path.lexists(_c(rad, FIS_PLUGINURI_PAROLA)):
+		cale_pluginuri = _c(rad, FIS_PLUGINURI_PAROLA)
+		date_pluginuri = _citeste_mic(cale_pluginuri, MAX_PAROLA_COPIE + 1)
+		if os.path.islink(cale_pluginuri) or not date_pluginuri or len(date_pluginuri) > MAX_PAROLA_COPIE:
+			raise ValueError("pluginurile parolei")
+		d["pluginuri"] = json.loads(date_pluginuri.decode("utf-8"))
+	if isinstance(d, dict) and d.get("pusa") is True:
+		for nume in ("parola", "hash"):
+			if os.path.islink(_c(rad, DOSAR_PAROLA + "/" + nume)):
+				raise ValueError("legatura la parola")
+		text = _citeste_mic(_c(rad, DOSAR_PAROLA + "/parola"), MAX_PAROLA_COPIE + 1)
+		tinut = _citeste_mic(_c(rad, DOSAR_PAROLA + "/hash"), 512)
+		d["parola"] = text.decode("utf-8").rstrip("\r\n") if text is not None else None
+		d["hash"] = _shadow_parola(rad)
+		if tinut is not None and tinut.decode("ascii").strip() != d["hash"]:
+			raise ValueError("parola schimbata pe alta cale")
+		# Ajutorul schimba intai shadow, apoi textul si hash-ul: nu amestecam doua parole daca lucreaza in acelasi timp.
+		if text != _citeste_mic(_c(rad, DOSAR_PAROLA + "/parola"), MAX_PAROLA_COPIE + 1):
+			raise ValueError("parola schimbata in timpul copiei")
+	return _verifica_parola_locala(d)
+
+
+def _parola_locala_din_copie(dosar):
+	date = _citeste_mic(os.path.join(dosar, FIS_PAROLA), MAX_PAROLA_COPIE + 1)
+	if not date or len(date) > MAX_PAROLA_COPIE:
+		raise ValueError("alegerea parolei")
+	return _verifica_parola_locala(json.loads(date.decode("ascii")))
+
+
+def _pregateste_parola_locala(rad, parola, pregatire):
+	"""Aceeasi parola dupa imagine noua. Nu se copiaza restul conturilor sau al campurilor din shadow."""
+	from Components import HdsParolaLocala as P
+	dosar = _c(rad, DOSAR_PAROLA)
+	if os.path.islink(dosar):
+		raise ValueError("legatura la parola")
+	for rel in (FIS_ALEGERE_PAROLA, FIS_PLUGINURI_PAROLA, DOSAR_PAROLA + "/parola", DOSAR_PAROLA + "/hash",
+			DOSAR_PAROLA + "/facuta", FIS_REGULA_SSH, FIS_REGULA_FTP):
+		if os.path.islink(_c(rad, rel)):
+			raise ValueError("legatura la parola")
+	os.makedirs(dosar, mode=0o700, exist_ok=True)
+	os.chmod(dosar, 0o700)
+	if parola["pusa"]:
+		shadow = _c(rad, "etc/shadow")
+		pregatire.scrie(shadow, _shadow_parola(rad, parola["hash"]), stat.S_IMODE(os.stat(shadow).st_mode))
+		pregatire.scrie(_c(rad, DOSAR_PAROLA + "/parola"), (parola["parola"] + "\n").encode("utf-8"), 0o600)
+		pregatire.scrie(_c(rad, DOSAR_PAROLA + "/hash"), (parola["hash"] + "\n").encode("ascii"), 0o600)
+		pregatire.scrie(_c(rad, DOSAR_PAROLA + "/facuta"), b"", 0o600)
+	alegere = {"pusa": parola["pusa"], "unde": parola["unde"]}
+	pregatire.scrie(_c(rad, FIS_ALEGERE_PAROLA), (json.dumps(alegere, sort_keys=True) + "\n").encode("ascii"), 0o600)
+	# Lista spune ce bife de parola ale pluginurilor am pornit noi; scoaterea bifei trebuie sa mearga si dupa flash.
+	pregatire.scrie(_c(rad, FIS_PLUGINURI_PAROLA), (json.dumps(parola.get("pluginuri", [])) + "\n").encode("ascii"), 0o600)
+	for serviciu, cale, nume in ((P.SSH, FIS_REGULA_SSH, "SSH, SFTP si Telnet"), (P.FTP, FIS_REGULA_FTP, "FTP")):
+		liber = not (parola["pusa"] and serviciu in parola["unde"])
+		pregatire.scrie(_c(rad, cale), P.textRegula(liber, nume).encode("utf-8"), 0o644)
 
 
 # ---------------------------------------------------------------- copiile gasite
@@ -1622,7 +1836,7 @@ def descriere_copie(c):
 
 
 def text_avertisment():
-	return _("Copia are parolele Wi-Fi și setările modulelor de acces condiționat: ține stickul la tine.")
+	return _("Copia poate avea parole și chei: ține stickul la tine.")
 
 
 def text_intrebare_punere(c):
@@ -1665,11 +1879,36 @@ def verifica_copia(dosar, d=None):
 		cale = os.path.join(dosar, n)
 		if not os.path.isfile(cale) or os.path.islink(cale):
 			return _("lipsește %s din copie") % n
-		maxim = {ARH_RETEA: MAX_RETEA, FIS_MASINA: 64, FIS_CHEI: MAX_CHEI, FIS_SISTEM: MAX_SISTEM}.get(n, MAX_ARHIVA)
+		maxim = {ARH_RETEA: MAX_RETEA, FIS_MASINA: 64, FIS_CHEI: MAX_CHEI, FIS_SISTEM: MAX_SISTEM,
+			FIS_PAROLA: MAX_PAROLA_COPIE}.get(n, MAX_ARHIVA)
 		if os.path.getsize(cale) > maxim:
 			return _("%s e prea mare") % n
 		if _md5(cale) != h:
 			return _("%s nu mai e cum a fost scris (md5)") % n
+	return None
+
+
+def verifica_punerea(dosar, d=None):
+	"""None daca punerea la loc (pune_la_loc) ar primi copia: aceleasi citiri, fara nicio scriere. Pentru copia facuta
+	chiar inainte de o imagine noua (Components/HdsImagineOnline.py): md5-ul singur nu spune ca la prima pornire arhiva
+	canalelor trece de limitele si de locurile permise (_parcurge), iar o copie refuzata atunci inseamna setari pierdute.
+	Altfel motivul, ca la pune_la_loc."""
+	d = d or citeste_descriere(dosar)
+	motiv = verifica_copia(dosar, d)
+	if motiv:
+		return motiv
+	eroare = _parcurge(os.path.join(dosar, ARH_SETARI), _permis_setari)
+	if eroare:
+		return eroare
+	if ARH_PLUGINURI in d["md5"]:
+		_meta, _date, eroare = _citeste_pluginuri(os.path.join(dosar, ARH_PLUGINURI), d["pluginuri"] or None)
+		del _date
+		if eroare:
+			return eroare
+	if ARH_RETEA in d["md5"]:
+		retea, eroare = _citeste_arhiva(os.path.join(dosar, ARH_RETEA), _permis_retea, MAX_RETEA * 4)
+		if retea is None:
+			return eroare
 	return None
 
 
@@ -1938,8 +2177,12 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		return rez
 	meta_pluginuri = []
 	if ARH_PLUGINURI in d["md5"]:
+		# o arhiva a pluginurilor cu cai sau legaturi nepermise e semnul unei copii stricate sau facute de altcineva: nu se
+		# pune nimic (test_copie_pluginuri_070). Copia facuta inainte de o imagine noua trece prin aceeasi citire inainte
+		# de scriere (verifica_punerea), deci acolo omul afla inainte sa piarda ceva.
 		meta_pluginuri, _date_plugin, eroare = _citeste_pluginuri(os.path.join(dosar, ARH_PLUGINURI), d["pluginuri"] or None)
 		if eroare:
+			_jurnal("datele pluginurilor refuzate, nu scriu nimic")
 			note.append(_("Datele pluginurilor din copie nu sunt bune (%s); nu s-a pus nimic la loc.") % eroare)
 			return rez
 		del _date_plugin
@@ -1968,6 +2211,14 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if sistem is None:
 			sistem_refuzat = True
 			_jurnal("sistem.json refuzat (%s); restul se pune" % eroare)
+	parola_locala = None
+	if acest and FIS_PAROLA in d["md5"]:
+		try:
+			parola_locala = _parola_locala_din_copie(dosar)
+		except (ValueError, UnicodeError):
+			_jurnal("parola locala din copie nu are o forma buna; nu scriu nimic")
+			note.append(_("Parola din copia setărilor nu e întreagă; nu s-a pus nimic la loc."))
+			return rez
 	E = _c(rad, "etc/enigma2")
 	S = os.path.join(E, "settings")
 	canale = _Pregatire()     # etc/enigma2 si instantaneul setarilor
@@ -2107,7 +2358,10 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
 		# 5. setarile omului din afara /etc/enigma2 (numai pe acest receptor; sursele de pachete dupa mutare, prin
 		# scrierea lui HdsPachete)
-		if sistem and "ssh_fara_parola" in sistem and not regula_ssh_aleasa(d.get("versiune"), sistem["ssh_fara_parola"]):
+		if parola_locala is not None:
+			_pregateste_parola_locala(rad, parola_locala, rest)
+			sistem_puse.append("parola")
+		elif sistem and "ssh_fara_parola" in sistem and not regula_ssh_aleasa(d.get("versiune"), sistem["ssh_fara_parola"]):
 			_jurnal("SSH: regula 'Fara parola in reteaua locala' oprita in copia %s, mai veche decat %s (nealeasa sigur de "
 				"om): ramane cea a imaginii" % (d.get("versiune") or "?", ".".join(str(x) for x in VERSIUNE_FARA_PAROLA_PORNITA)))
 		elif sistem and "ssh_fara_parola" in sistem:
@@ -2120,6 +2374,14 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 				if vechi != date and not (vechi is None and not sistem["ssh_fara_parola"]):
 					rest.scrie(tinta, date, 0o644)
 					sistem_puse.append("ssh")
+		if parola_locala is None and sistem and "ftp_fara_parola" in sistem:
+			P = _modul_imagine("Components.HdsParolaLocala")
+			tinta = _c(rad, FIS_REGULA_FTP)
+			if P is not None and not os.path.islink(tinta):
+				date = P.textRegula(sistem["ftp_fara_parola"], "FTP").encode("utf-8")
+				if _citeste_mic(tinta, 64 * 1024) != date:
+					rest.scrie(tinta, date, 0o644)
+					sistem_puse.append("ftp")
 		if sistem and "poarta_implicita" in sistem:
 			tinta = _c(rad, FIS_POARTA)
 			date = sistem["poarta_implicita"].encode("ascii")
@@ -2158,6 +2420,14 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			pus.append("setari")
 			_jurnal("setarile puse")
 		rest.muta()
+		if parola_locala is not None:
+			for nume in (("eroare",) if parola_locala["pusa"] else ("parola", "hash")):
+				cale = _c(rad, DOSAR_PAROLA + "/" + nume)
+				if os.path.isfile(cale) and not os.path.islink(cale):
+					os.remove(cale)
+			from Components import HdsParolaLocala
+			HdsParolaLocala.uitaAlegerea()
+			_jurnal("parola din reteaua de acasa si bifele puse la loc")
 		if retea_puse:
 			pus.append("retea")
 			rez["repornire"] = "ceruta"
@@ -2172,6 +2442,8 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if "ssh" in sistem_puse:
 			_jurnal("SSH: regula 'Fara parola in reteaua locala' pusa la loc: %s" % ("PORNITA (din reteaua de acasa se intra "
 				"ca root fara parola)" if sistem["ssh_fara_parola"] else "oprita"))
+		if "ftp" in sistem_puse:
+			_jurnal("FTP: regula parolei din reteaua de acasa pusa la loc")
 		if "poarta" in sistem_puse:
 			_jurnal("reteaua: interfata implicita pusa la loc (/etc/default_gw)")
 		if sistem and sistem.get("surse_pachete"):
@@ -2200,8 +2472,9 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			date_limba["limba"] = HdsLimbaRestaurare._limba(rad, stare_canale["settings"])
 			HdsLimbaRestaurare.pregateste(rad, date_limba)
 		except Exception as eroare:
-			_jurnal("pregatirea limbii: %s" % eroare.__class__.__name__)
-			return rez
+			# limba se poate alege si din meniu: o pregatire cazuta nu mai opreste modulele si pluginurile (inainte
+			# punerea la loc ramanea neincheiata si se relua la fiecare pornire)
+			_jurnal("pregatirea limbii: %s; restul merge mai departe" % eroare.__class__.__name__)
 	# modulele de acces conditionat, la sfarsit (opkg poate dura); de pe alta baza a imaginii numai configurarile si
 	# legaturile, pachetele intra in coada reinstalarii
 	baza_alta = alta_baza(d, rad)
@@ -2222,7 +2495,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	# Datele necriptate si conturile pluginurilor urmeaza stickul.
 	if d.get("pluginuri") and (acest or any(p["fisiere"] for p in meta_pluginuri)):
 		try:
-			pregateste_pluginuri(dosar, rad)
+			pregateste_pluginuri(dosar, rad, baza_alta)
 			n = _reinstalare().adauga(rad, [(p, "plugin") for p in d["pluginuri"]])
 			pus.append("pluginuri")
 			_jurnal("pluginurile din copie: %d, in coada reinstalarii: %d" % (len(d["pluginuri"]), n))
@@ -2989,6 +3262,20 @@ _ZAVOR = threading.Lock()
 _VII = []
 
 
+def semn_medii():
+	"""Identitatea listei managerului, numai din memorie, fara citirea discurilor."""
+	try:
+		from Components.Harddisk import harddiskmanager
+		return tuple((id(p), p.mountpoint, getattr(p, "device", None))
+			for p in harddiskmanager.partitions)
+	except (ImportError, AttributeError):
+		return ()
+
+
+def medii_schimbate():
+	return _STARE.get("semn_medii") != semn_medii()
+
+
 def stare():
 	return _STARE
 
@@ -3022,6 +3309,7 @@ def porneste_cautarea(la_sfarsit=None):
 		if _STARE["cauta"]:
 			return False
 		_STARE["cauta"] = True
+	semn = semn_medii()
 
 	def lucru():
 		m = medii()
@@ -3033,7 +3321,7 @@ def porneste_cautarea(la_sfarsit=None):
 		if eroare or not rez:
 			_jurnal("cautarea copiilor: %s" % eroare)
 			rez = ([], [])
-		_STARE.update(medii=rez[0], copii=rez[1], cauta=False, cand=time.time())
+		_STARE.update(medii=rez[0], copii=rez[1], cauta=False, cand=time.time(), semn_medii=semn)
 		if la_sfarsit is not None:
 			la_sfarsit()
 
@@ -3069,10 +3357,17 @@ def porneste_copia(id_mediu, fel="manuala", la_sfarsit=None):
 		if _STARE["lucreaza"]:
 			return False, _("O copie se face deja. Așteaptă să se termine.")
 		_STARE["lucreaza"] = "copie"
-	m = mediu_dupa_id(id_mediu, _STARE["medii"] or medii())
+	m = mediu_dupa_id(id_mediu, _STARE["medii"] or [])
+	if m is None or not os.path.isdir(m.get("punct") or ""):
+		# R10 (analiza "cat mai simplu", 09.11.2026): un stick bagat dupa ultima cautare nu mai cere "Caută din nou";
+		# lista locurilor se reface aici, din /proc/mounts (fara citirea copiilor), iar fara loc ales (id gol) sau cu
+		# unul care nu mai e montat copia merge pe locul implicit
+		lista = medii()
+		_STARE["medii"] = lista
+		m = mediu_dupa_id(id_mediu, lista) or mediu_implicit(lista)
 	if m is None:
 		_STARE["lucreaza"] = None
-		return False, _("Mediul ales nu mai este montat.")
+		return False, _("Bagă un stick sau un disc și apasă din nou „Fă copia”.")
 	text = text_setari_acum()
 
 	def lucru():

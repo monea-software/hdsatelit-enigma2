@@ -1,0 +1,8518 @@
+{
+  "schema": 1,
+  "provenance": "Approved native Stitch HTML; 54-stitch/STADIU.md. Browser extraction with local licensed Noto Sans 600.",
+  "fonts": {
+    "sans": "../../fonturi/NotoSans-SemiBold.ttf",
+    "condensed": "../../fonturi/NotoSansCondensed-SemiBold.ttf"
+  },
+  "screens": {
+    "00-personaj": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e017",
+          "classes": "character-box",
+          "box": [
+            160,
+            64,
+            480,
+            352
+          ],
+          "declared": [
+            160,
+            64,
+            480,
+            352
+          ],
+          "text": ""
+        }
+      ],
+      "text": [],
+      "artwork": [
+        {
+          "id": "e018",
+          "classes": "floor-glow",
+          "box": [
+            218,
+            263,
+            364,
+            154
+          ],
+          "box_id": "e017",
+          "box_classes": "character-box",
+          "data_box": [
+            160,
+            64,
+            480,
+            352
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "00-personaj-e018-panel.png",
+          "native_box": [
+            250,
+            295,
+            300,
+            90
+          ],
+          "content_box": [
+            32,
+            32,
+            300,
+            90
+          ]
+        },
+        {
+          "id": "e019",
+          "classes": "character-img",
+          "box": [
+            128,
+            32,
+            544,
+            416
+          ],
+          "box_id": "e017",
+          "box_classes": "character-box",
+          "data_box": [
+            160,
+            64,
+            480,
+            352
+          ],
+          "opacity": 1,
+          "role": "character",
+          "file": "00-personaj-e019-character.png",
+          "native_box": [
+            160,
+            64,
+            480,
+            352
+          ],
+          "content_box": [
+            32,
+            32,
+            480,
+            352
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-00-personaj.html",
+      "source_sha256": "e7ebcc18ec4c040c1ad5feabeaf81d95c54075073b1f3116c0643f6f330293e0",
+      "reference": "54-stitch/png/800-00-personaj.png",
+      "background": "00-personaj-fond.png"
+    },
+    "01-ceas": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            600,
+            40
+          ],
+          "declared": [
+            32,
+            24,
+            600,
+            40
+          ],
+          "text": "HD Satelit"
+        },
+        {
+          "id": "e030",
+          "classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "declared": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "text": "20\n:\n08"
+        },
+        {
+          "id": "e035",
+          "classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Duminică\n8 noiembrie"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e029",
+          "classes": "ns brand-text",
+          "box_id": "e024",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            600,
+            40
+          ],
+          "run_box": [
+            72,
+            25,
+            136,
+            38
+          ],
+          "lines": [
+            [
+              72,
+              25,
+              136,
+              38
+            ]
+          ],
+          "text": "HD Satelit",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 55,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e032",
+          "classes": "",
+          "box_id": "e030",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            41.906,
+            -6,
+            312.969,
+            436
+          ],
+          "lines": [
+            [
+              41.906,
+              -6,
+              312.969,
+              436
+            ]
+          ],
+          "text": "20",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 336,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t02",
+          "element": "e033",
+          "classes": "colon",
+          "box_id": "e030",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            358.875,
+            -14,
+            82.25,
+            436
+          ],
+          "lines": [
+            [
+              358.875,
+              -14,
+              82.25,
+              436
+            ]
+          ],
+          "text": ":",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(66, 221, 229)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 328,
+          "shadow": "rgba(66, 221, 229, 0.65) 0px 0px 16px"
+        },
+        {
+          "id": "t03",
+          "element": "e034",
+          "classes": "",
+          "box_id": "e030",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            445.125,
+            -6,
+            312.969,
+            436
+          ],
+          "lines": [
+            [
+              445.125,
+              -6,
+              312.969,
+              436
+            ]
+          ],
+          "text": "08",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 336,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t04",
+          "element": "e036",
+          "classes": "ns date-day",
+          "box_id": "e035",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            191.484,
+            399,
+            167.297,
+            49
+          ],
+          "lines": [
+            [
+              191.484,
+              399,
+              167.297,
+              49
+            ]
+          ],
+          "text": "Duminică",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e038",
+          "classes": "ns date-full",
+          "box_id": "e035",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            397.781,
+            399,
+            210.719,
+            49
+          ],
+          "lines": [
+            [
+              397.781,
+              399,
+              210.719,
+              49
+            ]
+          ],
+          "text": "8 noiembrie",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e025",
+          "classes": "",
+          "box": [
+            0,
+            0,
+            92,
+            90
+          ],
+          "box_id": "e024",
+          "box_classes": "",
+          "data_box": [
+            32,
+            24,
+            600,
+            40
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "01-ceas-e025-icon.png",
+          "native_box": [
+            32,
+            30,
+            28,
+            28
+          ],
+          "content_box": [
+            32,
+            30,
+            28,
+            28
+          ]
+        },
+        {
+          "id": "e037",
+          "classes": "date-dot",
+          "box": [
+            342,
+            388,
+            72,
+            72
+          ],
+          "box_id": "e035",
+          "box_classes": "",
+          "data_box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "01-ceas-e037-separator.png",
+          "native_box": [
+            374.781,
+            420.5,
+            7,
+            7
+          ],
+          "content_box": [
+            32.78125,
+            32.5,
+            7,
+            7
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-01-ceas.html",
+      "source_sha256": "4e2e5a26309349f020b98ea8b910229565f9542988fcc57a97e367120914b118",
+      "reference": "54-stitch/png/800-01-ceas.png",
+      "background": "01-ceas-fond.png"
+    },
+    "02-ceas-vreme": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e020",
+          "classes": "nc",
+          "box": [
+            32,
+            64,
+            736,
+            192
+          ],
+          "declared": [
+            32,
+            64,
+            736,
+            192
+          ],
+          "text": "23\n:\n59"
+        },
+        {
+          "id": "e022",
+          "classes": "ns",
+          "box": [
+            32,
+            280,
+            464,
+            56
+          ],
+          "declared": [
+            32,
+            280,
+            464,
+            56
+          ],
+          "text": "Duminică, 8 nov."
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            532,
+            256,
+            236,
+            96
+          ],
+          "declared": [
+            532,
+            256,
+            236,
+            96
+          ],
+          "text": ""
+        },
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            544,
+            264,
+            80,
+            80
+          ],
+          "declared": [
+            544,
+            264,
+            80,
+            80
+          ],
+          "text": ""
+        },
+        {
+          "id": "e030",
+          "classes": "nc",
+          "box": [
+            648,
+            264,
+            120,
+            80
+          ],
+          "declared": [
+            648,
+            264,
+            120,
+            80
+          ],
+          "text": "−12°"
+        },
+        {
+          "id": "e031",
+          "classes": "ns",
+          "box": [
+            32,
+            368,
+            736,
+            56
+          ],
+          "declared": [
+            32,
+            368,
+            736,
+            56
+          ],
+          "text": "Suceava"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e020",
+          "classes": "nc",
+          "box_id": "e020",
+          "box_classes": "nc",
+          "box": [
+            32,
+            64,
+            736,
+            192
+          ],
+          "run_box": [
+            124.078,
+            -13,
+            240.547,
+            338
+          ],
+          "lines": [
+            [
+              124.078,
+              -13,
+              240.547,
+              338
+            ]
+          ],
+          "text": "23",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 252,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t01",
+          "element": "e021",
+          "classes": "colon",
+          "box_id": "e020",
+          "box_classes": "nc",
+          "box": [
+            32,
+            64,
+            736,
+            192
+          ],
+          "run_box": [
+            368.625,
+            -13,
+            62.75,
+            338
+          ],
+          "lines": [
+            [
+              368.625,
+              -13,
+              62.75,
+              338
+            ]
+          ],
+          "text": ":",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(66, 221, 229)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 252,
+          "shadow": "rgba(66, 221, 229, 0.85) 0px 0px 18px, rgba(66, 221, 229, 0.45) 0px 0px 32px"
+        },
+        {
+          "id": "t02",
+          "element": "e020",
+          "classes": "nc",
+          "box_id": "e020",
+          "box_classes": "nc",
+          "box": [
+            32,
+            64,
+            736,
+            192
+          ],
+          "run_box": [
+            435.375,
+            -13,
+            240.547,
+            338
+          ],
+          "lines": [
+            [
+              435.375,
+              -13,
+              240.547,
+              338
+            ]
+          ],
+          "text": "59",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 252,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t03",
+          "element": "e022",
+          "classes": "ns",
+          "box_id": "e022",
+          "box_classes": "ns",
+          "box": [
+            32,
+            280,
+            464,
+            56
+          ],
+          "run_box": [
+            32,
+            280,
+            321.563,
+            55
+          ],
+          "lines": [
+            [
+              32,
+              280,
+              321.563,
+              55
+            ]
+          ],
+          "text": "Duminică, 8 nov.",
+          "font": "sans",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 56,
+          "letter_spacing": 0,
+          "align": "left",
+          "baseline": 323,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e030",
+          "classes": "nc",
+          "box_id": "e030",
+          "box_classes": "nc",
+          "box": [
+            648,
+            264,
+            120,
+            80
+          ],
+          "run_box": [
+            647.766,
+            260,
+            120.484,
+            87
+          ],
+          "lines": [
+            [
+              647.766,
+              260,
+              120.484,
+              87
+            ]
+          ],
+          "text": "−12°",
+          "font": "condensed",
+          "size": 64,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 80,
+          "letter_spacing": -1,
+          "align": "center",
+          "baseline": 328,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e034",
+          "classes": "",
+          "box_id": "e031",
+          "box_classes": "ns",
+          "box": [
+            32,
+            368,
+            736,
+            56
+          ],
+          "run_box": [
+            68,
+            374,
+            127.875,
+            43
+          ],
+          "lines": [
+            [
+              68,
+              374,
+              127.875,
+              43
+            ]
+          ],
+          "text": "Suceava",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 56,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 408,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            500,
+            224,
+            300,
+            160
+          ],
+          "box_id": "e023",
+          "box_classes": "",
+          "data_box": [
+            532,
+            256,
+            236,
+            96
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "02-ceas-vreme-e023-panel.png",
+          "native_box": [
+            532,
+            256,
+            236,
+            96
+          ],
+          "content_box": [
+            32,
+            32,
+            236,
+            96
+          ]
+        },
+        {
+          "id": "e025",
+          "classes": "",
+          "box": [
+            516,
+            236,
+            136,
+            136
+          ],
+          "box_id": "e024",
+          "box_classes": "",
+          "data_box": [
+            544,
+            264,
+            80,
+            80
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "02-ceas-vreme-e025-icon.png",
+          "native_box": [
+            548,
+            268,
+            72,
+            72
+          ],
+          "content_box": [
+            32,
+            32,
+            72,
+            72
+          ]
+        },
+        {
+          "id": "e032",
+          "classes": "loc-icon",
+          "box": [
+            0,
+            352,
+            88,
+            88
+          ],
+          "box_id": "e031",
+          "box_classes": "ns",
+          "data_box": [
+            32,
+            368,
+            736,
+            56
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "02-ceas-vreme-e032-icon.png",
+          "native_box": [
+            32,
+            384,
+            24,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            24,
+            24
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-02-ceas-vreme.html",
+      "source_sha256": "fc1d5a6c41064b62d4722399f70760d439b3ed05d8e7469102581255d812a20a",
+      "reference": "54-stitch/png/800-02-ceas-vreme.png",
+      "background": "02-ceas-vreme-fond.png"
+    },
+    "03-canal-cinci-cifre": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e020",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            424,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            424,
+            48
+          ],
+          "text": "Pro TV Internațional"
+        },
+        {
+          "id": "e022",
+          "classes": "",
+          "box": [
+            488,
+            24,
+            168,
+            48
+          ],
+          "declared": [
+            488,
+            24,
+            168,
+            48
+          ],
+          "text": "PRO TV"
+        },
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            32,
+            88,
+            736,
+            160
+          ],
+          "declared": [
+            32,
+            88,
+            736,
+            160
+          ],
+          "text": "10245"
+        },
+        {
+          "id": "e026",
+          "classes": "",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "declared": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "text": "Știri și actualități: ediția de seară cu cele mai importante subiecte ale zilei"
+        },
+        {
+          "id": "e028",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "declared": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "text": ""
+        },
+        {
+          "id": "e031",
+          "classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "text": "19:00–20:30\nîncă 1 h 05 min"
+        },
+        {
+          "id": "e036",
+          "classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "text": "Urmează\n20:30\n • Sport la zi"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e021",
+          "classes": "ns channel-name",
+          "box_id": "e020",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            424,
+            48
+          ],
+          "run_box": [
+            32,
+            21,
+            345.141,
+            49
+          ],
+          "lines": [
+            [
+              32,
+              21,
+              345.141,
+              49
+            ]
+          ],
+          "text": "Pro TV Internațional",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 59,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e023",
+          "classes": "ns picon-wordmark",
+          "box_id": "e022",
+          "box_classes": "",
+          "box": [
+            488,
+            24,
+            168,
+            48
+          ],
+          "run_box": [
+            531.813,
+            32,
+            80.359,
+            30
+          ],
+          "lines": [
+            [
+              531.813,
+              32,
+              80.359,
+              30
+            ]
+          ],
+          "text": "PRO TV",
+          "font": "sans",
+          "size": 22,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 26,
+          "letter_spacing": 0.5,
+          "align": "start",
+          "baseline": 56,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e025",
+          "classes": "nc channel-digits",
+          "box_id": "e024",
+          "box_classes": "",
+          "box": [
+            32,
+            88,
+            736,
+            160
+          ],
+          "run_box": [
+            32,
+            29,
+            464.453,
+            261
+          ],
+          "lines": [
+            [
+              32,
+              29,
+              464.453,
+              261
+            ]
+          ],
+          "text": "10245",
+          "font": "condensed",
+          "size": 192,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 144,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 234,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t03",
+          "element": "e027",
+          "classes": "ns programme-title",
+          "box_id": "e026",
+          "box_classes": "",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "run_box": [
+            32,
+            269,
+            1676.844,
+            65
+          ],
+          "lines": [
+            [
+              32,
+              269,
+              1676.844,
+              65
+            ],
+            [
+              32,
+              269,
+              672.484,
+              65
+            ]
+          ],
+          "text": "Știri și actualități: ediția de seară cu cele mai importante subiecte ale zilei",
+          "font": "sans",
+          "size": 48,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 56,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 320,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e033",
+          "classes": "time-current",
+          "box_id": "e031",
+          "box_classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            375,
+            133.031,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              375,
+              133.031,
+              33
+            ]
+          ],
+          "text": "19:00–20:30",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e035",
+          "classes": "time-remaining",
+          "box_id": "e031",
+          "box_classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            195.031,
+            375,
+            172.422,
+            33
+          ],
+          "lines": [
+            [
+              195.031,
+              375,
+              172.422,
+              33
+            ]
+          ],
+          "text": "încă 1 h 05 min",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t06",
+          "element": "e038",
+          "classes": "next-label",
+          "box_id": "e036",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            413,
+            103.922,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              413,
+              103.922,
+              33
+            ]
+          ],
+          "text": "Urmează",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        },
+        {
+          "id": "t07",
+          "element": "e039",
+          "classes": "next-time",
+          "box_id": "e036",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            141.922,
+            413,
+            60.609,
+            33
+          ],
+          "lines": [
+            [
+              141.922,
+              413,
+              60.609,
+              33
+            ]
+          ],
+          "text": "20:30",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        },
+        {
+          "id": "t08",
+          "element": "e040",
+          "classes": "next-title",
+          "box_id": "e036",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            202.531,
+            413,
+            133.859,
+            33
+          ],
+          "lines": [
+            [
+              202.531,
+              413,
+              133.859,
+              33
+            ]
+          ],
+          "text": "• Sport la zi",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e022",
+          "classes": "",
+          "box": [
+            456,
+            0,
+            232,
+            104
+          ],
+          "box_id": "e022",
+          "box_classes": "",
+          "data_box": [
+            488,
+            24,
+            168,
+            48
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "03-canal-cinci-cifre-e022-panel.png",
+          "native_box": [
+            488,
+            24,
+            168,
+            48
+          ],
+          "content_box": [
+            32,
+            24,
+            168,
+            48
+          ]
+        },
+        {
+          "id": "e029",
+          "classes": "progress-fill",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-fill",
+          "file": "03-canal-cinci-cifre-e029-progress-fill.png",
+          "native_box": [
+            32,
+            352,
+            206.078,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        },
+        {
+          "id": "e030",
+          "classes": "progress-cap",
+          "box": [
+            198,
+            320,
+            81,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-cap",
+          "file": "03-canal-cinci-cifre-e030-progress-cap.png",
+          "native_box": [
+            230.078,
+            352,
+            16,
+            16
+          ],
+          "content_box": [
+            32.078125,
+            32,
+            16,
+            16
+          ]
+        },
+        {
+          "id": "e034",
+          "classes": "cyan-dot",
+          "box": [
+            145,
+            357,
+            71,
+            70
+          ],
+          "box_id": "e031",
+          "box_classes": "",
+          "data_box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "03-canal-cinci-cifre-e034-separator.png",
+          "native_box": [
+            177.031,
+            389,
+            6,
+            6
+          ],
+          "content_box": [
+            32.03125,
+            32,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e028",
+          "classes": "",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "03-canal-cinci-cifre-e028-progress-track.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-03-canal-cinci-cifre.html",
+      "source_sha256": "8333dbc06190b98f7e40690810b3d4dd8b047af40cbc5a1681670935f3c4143d",
+      "reference": "54-stitch/png/800-03-canal-cinci-cifre.png",
+      "background": "03-canal-cinci-cifre-fond.png",
+      "background_no_picon": "03-canal-cinci-cifre-fond-fara-picon.png",
+      "picon_container_ids": [
+        "e022"
+      ]
+    },
+    "03-canal-fara-epg": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e021",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "TVR Iași"
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "declared": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "text": "47"
+        },
+        {
+          "id": "e025",
+          "classes": "",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "declared": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "text": "TVR IAȘI"
+        },
+        {
+          "id": "e029",
+          "classes": "",
+          "box": [
+            32,
+            280,
+            736,
+            64
+          ],
+          "declared": [
+            32,
+            280,
+            736,
+            64
+          ],
+          "text": "Program indisponibil"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e022",
+          "classes": "ns channel-title",
+          "box_id": "e021",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            23,
+            134.313,
+            49
+          ],
+          "lines": [
+            [
+              32,
+              23,
+              134.313,
+              49
+            ]
+          ],
+          "text": "TVR Iași",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 61,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e024",
+          "classes": "nc channel-number",
+          "box_id": "e023",
+          "box_classes": "",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "run_box": [
+            32,
+            29,
+            185.781,
+            261
+          ],
+          "lines": [
+            [
+              32,
+              29,
+              185.781,
+              261
+            ]
+          ],
+          "text": "47",
+          "font": "condensed",
+          "size": 192,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 144,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 234,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e027",
+          "classes": "ns picon-text",
+          "box_id": "e025",
+          "box_classes": "",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "run_box": [
+            526.359,
+            130,
+            195.266,
+            65
+          ],
+          "lines": [
+            [
+              526.359,
+              130,
+              195.266,
+              65
+            ]
+          ],
+          "text": "TVR IAȘI",
+          "font": "sans",
+          "size": 48,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 52,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 181,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e032",
+          "classes": "ns detail-text",
+          "box_id": "e029",
+          "box_classes": "",
+          "box": [
+            32,
+            280,
+            736,
+            64
+          ],
+          "run_box": [
+            80,
+            277,
+            480.094,
+            65
+          ],
+          "lines": [
+            [
+              80,
+              277,
+              480.094,
+              65
+            ]
+          ],
+          "text": "Program indisponibil",
+          "font": "sans",
+          "size": 48,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 56,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 328,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e026",
+          "classes": "picon-plate",
+          "box": [
+            448,
+            61,
+            352,
+            214
+          ],
+          "box_id": "e025",
+          "box_classes": "",
+          "data_box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "03-canal-fara-epg-e026-panel.png",
+          "native_box": [
+            480,
+            93,
+            288,
+            150
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            150
+          ]
+        },
+        {
+          "id": "e028",
+          "classes": "picon-underline",
+          "box": [
+            572,
+            163,
+            104,
+            68
+          ],
+          "box_id": "e025",
+          "box_classes": "",
+          "data_box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "opacity": 1,
+          "role": "picon-decoration",
+          "file": "03-canal-fara-epg-e028-picon-decoration.png",
+          "native_box": [
+            604,
+            195,
+            40,
+            4
+          ],
+          "content_box": [
+            32,
+            32,
+            40,
+            4
+          ]
+        },
+        {
+          "id": "e030",
+          "classes": "info-icon",
+          "box": [
+            0,
+            262,
+            96,
+            96
+          ],
+          "box_id": "e029",
+          "box_classes": "",
+          "data_box": [
+            32,
+            280,
+            736,
+            64
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "03-canal-fara-epg-e030-icon.png",
+          "native_box": [
+            32,
+            294,
+            32,
+            32
+          ],
+          "content_box": [
+            32,
+            32,
+            32,
+            32
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-03-canal-fara-epg.html",
+      "source_sha256": "f6b0041d90ae2a464f63d78d5dc6bbe879df621f5f5861fa3d4998e485bb85fd",
+      "reference": "54-stitch/png/800-03-canal-fara-epg.png",
+      "background": "03-canal-fara-epg-fond.png",
+      "background_no_picon": "03-canal-fara-epg-fond-fara-picon.png",
+      "picon_container_ids": [
+        "e025"
+      ]
+    },
+    "03-canal-fara-picon-mut": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e016",
+          "classes": "box mute-box",
+          "box": [
+            32,
+            24,
+            32,
+            32
+          ],
+          "declared": [
+            32,
+            24,
+            32,
+            32
+          ],
+          "text": ""
+        },
+        {
+          "id": "e020",
+          "classes": "box header-box ns",
+          "box": [
+            80,
+            24,
+            576,
+            48
+          ],
+          "declared": [
+            80,
+            24,
+            576,
+            48
+          ],
+          "text": "Первый канал"
+        },
+        {
+          "id": "e021",
+          "classes": "box channel-num-box nc",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "declared": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "text": "412"
+        },
+        {
+          "id": "e022",
+          "classes": "box name-instead-box",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "declared": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "text": "Первый\nканал"
+        },
+        {
+          "id": "e027",
+          "classes": "box programme-title-box ns",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "declared": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "text": "Прямой эфир"
+        },
+        {
+          "id": "e028",
+          "classes": "box progress-box",
+          "box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "declared": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "text": ""
+        },
+        {
+          "id": "e031",
+          "classes": "box time-range-box ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "text": "18:00–19:00\nîncă 12 min"
+        },
+        {
+          "id": "e035",
+          "classes": "box next-programme-box ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "text": "Urmează \n19:00\n • Время"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e020",
+          "classes": "box header-box ns",
+          "box_id": "e020",
+          "box_classes": "box header-box ns",
+          "box": [
+            80,
+            24,
+            576,
+            48
+          ],
+          "run_box": [
+            80,
+            23,
+            265.109,
+            49
+          ],
+          "lines": [
+            [
+              80,
+              23,
+              265.109,
+              49
+            ]
+          ],
+          "text": "Первый канал",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 61,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e021",
+          "classes": "box channel-num-box nc",
+          "box_id": "e021",
+          "box_classes": "box channel-num-box nc",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "run_box": [
+            32,
+            29,
+            278.672,
+            261
+          ],
+          "lines": [
+            [
+              32,
+              29,
+              278.672,
+              261
+            ]
+          ],
+          "text": "412",
+          "font": "condensed",
+          "size": 192,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 144,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 234,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e025",
+          "classes": "",
+          "box_id": "e022",
+          "box_classes": "box name-instead-box",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "run_box": [
+            480,
+            119,
+            176.094,
+            60
+          ],
+          "lines": [
+            [
+              480,
+              119,
+              176.094,
+              60
+            ]
+          ],
+          "text": "Первый",
+          "font": "sans",
+          "size": 44,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 54,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 166,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e026",
+          "classes": "",
+          "box_id": "e022",
+          "box_classes": "box name-instead-box",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "run_box": [
+            480,
+            173,
+            131,
+            60
+          ],
+          "lines": [
+            [
+              480,
+              173,
+              131,
+              60
+            ]
+          ],
+          "text": "канал",
+          "font": "sans",
+          "size": 44,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 54,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 220,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e027",
+          "classes": "box programme-title-box ns",
+          "box_id": "e027",
+          "box_classes": "box programme-title-box ns",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "run_box": [
+            32,
+            267,
+            326.672,
+            65
+          ],
+          "lines": [
+            [
+              32,
+              267,
+              326.672,
+              65
+            ]
+          ],
+          "text": "Прямой эфир",
+          "font": "sans",
+          "size": 48,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 56,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 318,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e032",
+          "classes": "",
+          "box_id": "e031",
+          "box_classes": "box time-range-box ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            373,
+            135.219,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              373,
+              135.219,
+              33
+            ]
+          ],
+          "text": "18:00–19:00",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 399,
+          "shadow": "none"
+        },
+        {
+          "id": "t06",
+          "element": "e034",
+          "classes": "",
+          "box_id": "e031",
+          "box_classes": "box time-range-box ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            197.219,
+            373,
+            133.813,
+            33
+          ],
+          "lines": [
+            [
+              197.219,
+              373,
+              133.813,
+              33
+            ]
+          ],
+          "text": "încă 12 min",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 399,
+          "shadow": "none"
+        },
+        {
+          "id": "t07",
+          "element": "e036",
+          "classes": "",
+          "box_id": "e035",
+          "box_classes": "box next-programme-box ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            413,
+            111.563,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              413,
+              111.563,
+              33
+            ]
+          ],
+          "text": "Urmează",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        },
+        {
+          "id": "t08",
+          "element": "e037",
+          "classes": "",
+          "box_id": "e035",
+          "box_classes": "box next-programme-box ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            143.563,
+            413,
+            61.609,
+            33
+          ],
+          "lines": [
+            [
+              143.563,
+              413,
+              61.609,
+              33
+            ]
+          ],
+          "text": "19:00",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        },
+        {
+          "id": "t09",
+          "element": "e038",
+          "classes": "",
+          "box_id": "e035",
+          "box_classes": "box next-programme-box ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            205.172,
+            413,
+            99.703,
+            33
+          ],
+          "lines": [
+            [
+              205.172,
+              413,
+              99.703,
+              33
+            ]
+          ],
+          "text": "• Время",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e017",
+          "classes": "",
+          "box": [
+            0,
+            0,
+            96,
+            88
+          ],
+          "box_id": "e016",
+          "box_classes": "box mute-box",
+          "data_box": [
+            32,
+            24,
+            32,
+            32
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "03-canal-fara-picon-mut-e017-icon.png",
+          "native_box": [
+            32,
+            24,
+            32,
+            32
+          ],
+          "content_box": [
+            32,
+            24,
+            32,
+            32
+          ]
+        },
+        {
+          "id": "e023",
+          "classes": "cyan-accent-line",
+          "box": [
+            448,
+            74,
+            96,
+            68
+          ],
+          "box_id": "e022",
+          "box_classes": "box name-instead-box",
+          "data_box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "opacity": 1,
+          "role": "picon-decoration",
+          "file": "03-canal-fara-picon-mut-e023-picon-decoration.png",
+          "native_box": [
+            480,
+            106,
+            32,
+            4
+          ],
+          "content_box": [
+            32,
+            32,
+            32,
+            4
+          ]
+        },
+        {
+          "id": "e029",
+          "classes": "progress-fill",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "box progress-box",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-fill",
+          "file": "03-canal-fara-picon-mut-e029-progress-fill.png",
+          "native_box": [
+            32,
+            352,
+            588.797,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        },
+        {
+          "id": "e030",
+          "classes": "progress-cap",
+          "box": [
+            572,
+            320,
+            81,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "box progress-box",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-cap",
+          "file": "03-canal-fara-picon-mut-e030-progress-cap.png",
+          "native_box": [
+            604.797,
+            352,
+            16,
+            16
+          ],
+          "content_box": [
+            32.796875,
+            32,
+            16,
+            16
+          ]
+        },
+        {
+          "id": "e033",
+          "classes": "dot",
+          "box": [
+            147,
+            355,
+            71,
+            70
+          ],
+          "box_id": "e031",
+          "box_classes": "box time-range-box ns",
+          "data_box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "03-canal-fara-picon-mut-e033-separator.png",
+          "native_box": [
+            179.219,
+            387,
+            6,
+            6
+          ],
+          "content_box": [
+            32.21875,
+            32,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e028",
+          "classes": "box progress-box",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e028",
+          "box_classes": "box progress-box",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "03-canal-fara-picon-mut-e028-progress-track.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-03-canal-fara-picon-mut.html",
+      "source_sha256": "3da62c2c53044d5aa9508dfac1412895e2cdb6c43ec3a734e6f353dfd805db20",
+      "reference": "54-stitch/png/800-03-canal-fara-picon-mut.png",
+      "background": "03-canal-fara-picon-mut-fond.png"
+    },
+    "03-canal": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e017",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "TVR 1 HD"
+        },
+        {
+          "id": "e019",
+          "classes": "",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "declared": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "text": "128"
+        },
+        {
+          "id": "e021",
+          "classes": "",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "declared": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "text": "TVR 1"
+        },
+        {
+          "id": "e025",
+          "classes": "",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "declared": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "text": "Știri și actualități"
+        },
+        {
+          "id": "e027",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "declared": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "text": ""
+        },
+        {
+          "id": "e030",
+          "classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "text": "20:00–21:00\nîncă 32 min"
+        },
+        {
+          "id": "e034",
+          "classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "text": "Urmează\n21:00\n • Sport la zi"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e018",
+          "classes": "ns channel-name",
+          "box_id": "e017",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            23,
+            155.531,
+            49
+          ],
+          "lines": [
+            [
+              32,
+              23,
+              155.531,
+              49
+            ]
+          ],
+          "text": "TVR 1 HD",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 61,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e020",
+          "classes": "nc channel-number",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            88,
+            400,
+            160
+          ],
+          "run_box": [
+            32,
+            27,
+            278.672,
+            261
+          ],
+          "lines": [
+            [
+              32,
+              27,
+              278.672,
+              261
+            ]
+          ],
+          "text": "128",
+          "font": "condensed",
+          "size": 192,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 144,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 232,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e023",
+          "classes": "ns picon-wordmark",
+          "box_id": "e021",
+          "box_classes": "",
+          "box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "run_box": [
+            548.984,
+            126,
+            150.031,
+            76
+          ],
+          "lines": [
+            [
+              548.984,
+              126,
+              150.031,
+              76
+            ]
+          ],
+          "text": "TVR 1",
+          "font": "sans",
+          "size": 56,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 60,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 186,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e026",
+          "classes": "ns programme-title",
+          "box_id": "e025",
+          "box_classes": "",
+          "box": [
+            32,
+            272,
+            736,
+            64
+          ],
+          "run_box": [
+            32,
+            270,
+            386.109,
+            65
+          ],
+          "lines": [
+            [
+              32,
+              270,
+              386.109,
+              65
+            ]
+          ],
+          "text": "Știri și actualități",
+          "font": "sans",
+          "size": 48,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 60,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 321,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e031",
+          "classes": "ns time-main",
+          "box_id": "e030",
+          "box_classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            375,
+            133.031,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              375,
+              133.031,
+              33
+            ]
+          ],
+          "text": "20:00–21:00",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e033",
+          "classes": "ns time-remain",
+          "box_id": "e030",
+          "box_classes": "",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            195.031,
+            375,
+            131.609,
+            33
+          ],
+          "lines": [
+            [
+              195.031,
+              375,
+              131.609,
+              33
+            ]
+          ],
+          "text": "încă 32 min",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t06",
+          "element": "e035",
+          "classes": "ns next-label",
+          "box_id": "e034",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            32,
+            415,
+            103.922,
+            33
+          ],
+          "lines": [
+            [
+              32,
+              415,
+              103.922,
+              33
+            ]
+          ],
+          "text": "Urmează",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 441,
+          "shadow": "none"
+        },
+        {
+          "id": "t07",
+          "element": "e036",
+          "classes": "ns next-time",
+          "box_id": "e034",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            141.922,
+            415,
+            60.609,
+            33
+          ],
+          "lines": [
+            [
+              141.922,
+              415,
+              60.609,
+              33
+            ]
+          ],
+          "text": "21:00",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 441,
+          "shadow": "none"
+        },
+        {
+          "id": "t08",
+          "element": "e037",
+          "classes": "ns next-title",
+          "box_id": "e034",
+          "box_classes": "",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            202.531,
+            415,
+            133.859,
+            33
+          ],
+          "lines": [
+            [
+              202.531,
+              415,
+              133.859,
+              33
+            ]
+          ],
+          "text": "• Sport la zi",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.2,
+          "align": "start",
+          "baseline": 441,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e022",
+          "classes": "picon-plate",
+          "box": [
+            448,
+            61,
+            352,
+            214
+          ],
+          "box_id": "e021",
+          "box_classes": "",
+          "data_box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "03-canal-e022-panel.png",
+          "native_box": [
+            480,
+            93,
+            288,
+            150
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            150
+          ]
+        },
+        {
+          "id": "e024",
+          "classes": "picon-underline",
+          "box": [
+            572,
+            166,
+            104,
+            68
+          ],
+          "box_id": "e021",
+          "box_classes": "",
+          "data_box": [
+            480,
+            88,
+            288,
+            160
+          ],
+          "opacity": 1,
+          "role": "picon-decoration",
+          "file": "03-canal-e024-picon-decoration.png",
+          "native_box": [
+            604,
+            198,
+            40,
+            4
+          ],
+          "content_box": [
+            32,
+            32,
+            40,
+            4
+          ]
+        },
+        {
+          "id": "e028",
+          "classes": "progress-fill",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e027",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-fill",
+          "file": "03-canal-e028-progress-fill.png",
+          "native_box": [
+            32,
+            352,
+            345.906,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        },
+        {
+          "id": "e029",
+          "classes": "progress-cap",
+          "box": [
+            329,
+            320,
+            81,
+            80
+          ],
+          "box_id": "e027",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-cap",
+          "file": "03-canal-e029-progress-cap.png",
+          "native_box": [
+            361.906,
+            352,
+            16,
+            16
+          ],
+          "content_box": [
+            32.90625,
+            32,
+            16,
+            16
+          ]
+        },
+        {
+          "id": "e032",
+          "classes": "cyan-dot",
+          "box": [
+            145,
+            357,
+            71,
+            70
+          ],
+          "box_id": "e030",
+          "box_classes": "",
+          "data_box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "03-canal-e032-separator.png",
+          "native_box": [
+            177.031,
+            389,
+            6,
+            6
+          ],
+          "content_box": [
+            32.03125,
+            32,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e027",
+          "classes": "",
+          "box": [
+            0,
+            320,
+            800,
+            80
+          ],
+          "box_id": "e027",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "03-canal-e027-progress-track.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            16
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            16
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-03-canal.html",
+      "source_sha256": "1ffaa999d1a7abc5c27e1d58275973cfb35c1838bebecf2da172a631fe31278f",
+      "reference": "54-stitch/png/800-03-canal.png",
+      "background": "03-canal-fond.png",
+      "background_no_picon": "03-canal-fond-fara-picon.png",
+      "picon_container_ids": [
+        "e021"
+      ]
+    },
+    "04-vreme-date-vechi": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e029",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "text": "Vremea"
+        },
+        {
+          "id": "e031",
+          "classes": "",
+          "box": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "declared": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "text": "Azi, °C"
+        },
+        {
+          "id": "e033",
+          "classes": "",
+          "box": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "declared": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "text": "4"
+        },
+        {
+          "id": "e035",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "declared": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "text": ""
+        },
+        {
+          "id": "e038",
+          "classes": "",
+          "box": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "declared": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "text": "Date vechi\nde la 14:20"
+        },
+        {
+          "id": "e043",
+          "classes": "",
+          "box": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "declared": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "text": "Mâine"
+        },
+        {
+          "id": "e045",
+          "classes": "",
+          "box": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "declared": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "text": ""
+        },
+        {
+          "id": "e051",
+          "classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "declared": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "text": "2/7"
+        },
+        {
+          "id": "e057",
+          "classes": "",
+          "box": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "declared": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "text": "Marți"
+        },
+        {
+          "id": "e059",
+          "classes": "",
+          "box": [
+            664,
+            296,
+            72,
+            72
+          ],
+          "declared": [
+            664,
+            296,
+            72,
+            72
+          ],
+          "text": ""
+        },
+        {
+          "id": "e060",
+          "classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "declared": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "text": "Fără date"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e030",
+          "classes": "ns header-text",
+          "box_id": "e029",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "run_box": [
+            32,
+            22,
+            117.141,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              22,
+              117.141,
+              43
+            ]
+          ],
+          "text": "Vremea",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 56,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e032",
+          "classes": "ns today-label",
+          "box_id": "e031",
+          "box_classes": "",
+          "box": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "run_box": [
+            32,
+            82,
+            93.813,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              82,
+              93.813,
+              43
+            ]
+          ],
+          "text": "Azi, °C",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 116,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e034",
+          "classes": "nc today-temp",
+          "box_id": "e033",
+          "box_classes": "",
+          "box": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "run_box": [
+            32,
+            67,
+            120.281,
+            338
+          ],
+          "lines": [
+            [
+              32,
+              67,
+              120.281,
+              338
+            ]
+          ],
+          "text": "4",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 332,
+          "shadow": "rgba(242, 189, 104, 0.2) 0px 0px 28px"
+        },
+        {
+          "id": "t03",
+          "element": "e040",
+          "classes": "ns",
+          "box_id": "e038",
+          "box_classes": "",
+          "box": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "run_box": [
+            144,
+            360,
+            138.594,
+            38
+          ],
+          "lines": [
+            [
+              144,
+              360,
+              138.594,
+              38
+            ]
+          ],
+          "text": "Date vechi",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 30,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 390,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e041",
+          "classes": "ns",
+          "box_id": "e038",
+          "box_classes": "",
+          "box": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "run_box": [
+            144,
+            390,
+            118.563,
+            33
+          ],
+          "lines": [
+            [
+              144,
+              390,
+              118.563,
+              33
+            ]
+          ],
+          "text": "de la 14:20",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 26,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 416,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e044",
+          "classes": "ns panel-day-text",
+          "box_id": "e043",
+          "box_classes": "",
+          "box": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "run_box": [
+            496,
+            97,
+            82.266,
+            38
+          ],
+          "lines": [
+            [
+              496,
+              97,
+              82.266,
+              38
+            ]
+          ],
+          "text": "Mâine",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 127,
+          "shadow": "none"
+        },
+        {
+          "id": "t06",
+          "element": "e053",
+          "classes": "temp-min",
+          "box_id": "e051",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            496,
+            172,
+            19.063,
+            55
+          ],
+          "lines": [
+            [
+              496,
+              172,
+              19.063,
+              55
+            ]
+          ],
+          "text": "2",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t07",
+          "element": "e054",
+          "classes": "temp-slash",
+          "box_id": "e051",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            525.063,
+            172,
+            15.234,
+            55
+          ],
+          "lines": [
+            [
+              525.063,
+              172,
+              15.234,
+              55
+            ]
+          ],
+          "text": "/",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 0.6,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t08",
+          "element": "e055",
+          "classes": "temp-max",
+          "box_id": "e051",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            550.297,
+            172,
+            19.063,
+            55
+          ],
+          "lines": [
+            [
+              550.297,
+              172,
+              19.063,
+              55
+            ]
+          ],
+          "text": "7",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t09",
+          "element": "e058",
+          "classes": "ns panel-day-text",
+          "box_id": "e057",
+          "box_classes": "",
+          "box": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "run_box": [
+            496,
+            297,
+            71.688,
+            38
+          ],
+          "lines": [
+            [
+              496,
+              297,
+              71.688,
+              38
+            ]
+          ],
+          "text": "Marți",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 0.7,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 327,
+          "shadow": "none"
+        },
+        {
+          "id": "t10",
+          "element": "e061",
+          "classes": "ns",
+          "box_id": "e060",
+          "box_classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "run_box": [
+            496,
+            381,
+            124.141,
+            38
+          ],
+          "lines": [
+            [
+              496,
+              381,
+              124.141,
+              38
+            ]
+          ],
+          "text": "Fără date",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 0.7,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 411,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e036",
+          "classes": "",
+          "box": [
+            4,
+            324,
+            144,
+            144
+          ],
+          "box_id": "e035",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "04-vreme-date-vechi-e036-icon.png",
+          "native_box": [
+            36,
+            356,
+            80,
+            80
+          ],
+          "content_box": [
+            32,
+            32,
+            80,
+            80
+          ]
+        },
+        {
+          "id": "e042",
+          "classes": "forecast-panel panel-tomorrow",
+          "box": [
+            448,
+            48,
+            352,
+            232
+          ],
+          "box_classes": "",
+          "data_box": null,
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "04-vreme-date-vechi-e042-panel.png",
+          "native_box": [
+            480,
+            80,
+            288,
+            168
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            168
+          ]
+        },
+        {
+          "id": "e046",
+          "classes": "",
+          "box": [
+            636,
+            68,
+            128,
+            128
+          ],
+          "box_id": "e045",
+          "box_classes": "",
+          "data_box": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "04-vreme-date-vechi-e046-icon.png",
+          "native_box": [
+            668,
+            100,
+            64,
+            64
+          ],
+          "content_box": [
+            32,
+            32,
+            64,
+            64
+          ]
+        },
+        {
+          "id": "e056",
+          "classes": "forecast-panel panel-dayafter",
+          "box": [
+            448,
+            248,
+            352,
+            232
+          ],
+          "box_classes": "",
+          "data_box": null,
+          "opacity": 0.7,
+          "role": "panel",
+          "in_background": true,
+          "file": "04-vreme-date-vechi-e056-panel.png",
+          "native_box": [
+            480,
+            280,
+            288,
+            168
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            168
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-04-vreme-date-vechi.html",
+      "source_sha256": "13d45348a846dede9d59f24366643ca530ffce2fedb0b66cd2d1434d08fc198f",
+      "reference": "54-stitch/png/800-04-vreme-date-vechi.png",
+      "background": "04-vreme-date-vechi-fond.png"
+    },
+    "04-vreme": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e029",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "text": "Vremea"
+        },
+        {
+          "id": "e031",
+          "classes": "",
+          "box": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "declared": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "text": "Azi, °C"
+        },
+        {
+          "id": "e033",
+          "classes": "",
+          "box": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "declared": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "text": "−12"
+        },
+        {
+          "id": "e035",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "declared": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "text": ""
+        },
+        {
+          "id": "e041",
+          "classes": "",
+          "box": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "declared": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "text": "Ninsoare slabă"
+        },
+        {
+          "id": "e044",
+          "classes": "",
+          "box": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "declared": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "text": "Mâine"
+        },
+        {
+          "id": "e046",
+          "classes": "",
+          "box": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "declared": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "text": ""
+        },
+        {
+          "id": "e049",
+          "classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "declared": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "text": "−8 / −2"
+        },
+        {
+          "id": "e055",
+          "classes": "",
+          "box": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "declared": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "text": "Marți"
+        },
+        {
+          "id": "e057",
+          "classes": "",
+          "box": [
+            664,
+            296,
+            72,
+            72
+          ],
+          "declared": [
+            664,
+            296,
+            72,
+            72
+          ],
+          "text": ""
+        },
+        {
+          "id": "e062",
+          "classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "declared": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "text": "−5 / 3"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e030",
+          "classes": "ns header-text",
+          "box_id": "e029",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            40
+          ],
+          "run_box": [
+            32,
+            22,
+            117.141,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              22,
+              117.141,
+              43
+            ]
+          ],
+          "text": "Vremea",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 56,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e032",
+          "classes": "ns today-label",
+          "box_id": "e031",
+          "box_classes": "",
+          "box": [
+            32,
+            80,
+            416,
+            48
+          ],
+          "run_box": [
+            32,
+            82,
+            93.813,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              82,
+              93.813,
+              43
+            ]
+          ],
+          "text": "Azi, °C",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 116,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e034",
+          "classes": "nc today-temp",
+          "box_id": "e033",
+          "box_classes": "",
+          "box": [
+            32,
+            144,
+            416,
+            192
+          ],
+          "run_box": [
+            32,
+            67,
+            384.375,
+            338
+          ],
+          "lines": [
+            [
+              32,
+              67,
+              384.375,
+              338
+            ]
+          ],
+          "text": "−12",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 332,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t03",
+          "element": "e042",
+          "classes": "ns today-desc",
+          "box_id": "e041",
+          "box_classes": "",
+          "box": [
+            144,
+            360,
+            304,
+            64
+          ],
+          "run_box": [
+            144,
+            367,
+            254.109,
+            49
+          ],
+          "lines": [
+            [
+              144,
+              367,
+              254.109,
+              49
+            ]
+          ],
+          "text": "Ninsoare slabă",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 405,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e045",
+          "classes": "ns panel-day-text",
+          "box_id": "e044",
+          "box_classes": "",
+          "box": [
+            496,
+            96,
+            128,
+            40
+          ],
+          "run_box": [
+            496,
+            97,
+            82.266,
+            38
+          ],
+          "lines": [
+            [
+              496,
+              97,
+              82.266,
+              38
+            ]
+          ],
+          "text": "Mâine",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 127,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e051",
+          "classes": "temp-min",
+          "box_id": "e049",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            496,
+            172,
+            41.922,
+            55
+          ],
+          "lines": [
+            [
+              496,
+              172,
+              41.922,
+              55
+            ]
+          ],
+          "text": "−8",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t06",
+          "element": "e052",
+          "classes": "temp-slash",
+          "box_id": "e049",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            555.625,
+            172,
+            15.234,
+            55
+          ],
+          "lines": [
+            [
+              555.625,
+              172,
+              15.234,
+              55
+            ]
+          ],
+          "text": "/",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 0.6,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t07",
+          "element": "e053",
+          "classes": "temp-max",
+          "box_id": "e049",
+          "box_classes": "",
+          "box": [
+            496,
+            168,
+            240,
+            64
+          ],
+          "run_box": [
+            588.563,
+            172,
+            41.922,
+            55
+          ],
+          "lines": [
+            [
+              588.563,
+              172,
+              41.922,
+              55
+            ]
+          ],
+          "text": "−2",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 215,
+          "shadow": "none"
+        },
+        {
+          "id": "t08",
+          "element": "e056",
+          "classes": "ns panel-day-text",
+          "box_id": "e055",
+          "box_classes": "",
+          "box": [
+            496,
+            296,
+            128,
+            40
+          ],
+          "run_box": [
+            496,
+            297,
+            71.688,
+            38
+          ],
+          "lines": [
+            [
+              496,
+              297,
+              71.688,
+              38
+            ]
+          ],
+          "text": "Marți",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 327,
+          "shadow": "none"
+        },
+        {
+          "id": "t09",
+          "element": "e064",
+          "classes": "temp-min",
+          "box_id": "e062",
+          "box_classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "run_box": [
+            496,
+            372,
+            41.922,
+            55
+          ],
+          "lines": [
+            [
+              496,
+              372,
+              41.922,
+              55
+            ]
+          ],
+          "text": "−5",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 415,
+          "shadow": "none"
+        },
+        {
+          "id": "t10",
+          "element": "e065",
+          "classes": "temp-slash",
+          "box_id": "e062",
+          "box_classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "run_box": [
+            555.625,
+            372,
+            15.234,
+            55
+          ],
+          "lines": [
+            [
+              555.625,
+              372,
+              15.234,
+              55
+            ]
+          ],
+          "text": "/",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 0.6,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 415,
+          "shadow": "none"
+        },
+        {
+          "id": "t11",
+          "element": "e066",
+          "classes": "temp-max",
+          "box_id": "e062",
+          "box_classes": "",
+          "box": [
+            496,
+            368,
+            240,
+            64
+          ],
+          "run_box": [
+            588.563,
+            372,
+            19.063,
+            55
+          ],
+          "lines": [
+            [
+              588.563,
+              372,
+              19.063,
+              55
+            ]
+          ],
+          "text": "3",
+          "font": "condensed",
+          "size": 40,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 64,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 415,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e036",
+          "classes": "",
+          "box": [
+            2,
+            322,
+            148,
+            148
+          ],
+          "box_id": "e035",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            88,
+            88
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "04-vreme-e036-icon.png",
+          "native_box": [
+            34,
+            354,
+            84,
+            84
+          ],
+          "content_box": [
+            32,
+            32,
+            84,
+            84
+          ]
+        },
+        {
+          "id": "e043",
+          "classes": "forecast-panel panel-tomorrow",
+          "box": [
+            448,
+            48,
+            352,
+            232
+          ],
+          "box_classes": "",
+          "data_box": null,
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "04-vreme-e043-panel.png",
+          "native_box": [
+            480,
+            80,
+            288,
+            168
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            168
+          ]
+        },
+        {
+          "id": "e047",
+          "classes": "",
+          "box": [
+            636,
+            68,
+            128,
+            128
+          ],
+          "box_id": "e046",
+          "box_classes": "",
+          "data_box": [
+            664,
+            96,
+            72,
+            72
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "04-vreme-e047-icon.png",
+          "native_box": [
+            668,
+            100,
+            64,
+            64
+          ],
+          "content_box": [
+            32,
+            32,
+            64,
+            64
+          ]
+        },
+        {
+          "id": "e054",
+          "classes": "forecast-panel panel-dayafter",
+          "box": [
+            448,
+            248,
+            352,
+            232
+          ],
+          "box_classes": "",
+          "data_box": null,
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "04-vreme-e054-panel.png",
+          "native_box": [
+            480,
+            280,
+            288,
+            168
+          ],
+          "content_box": [
+            32,
+            32,
+            288,
+            168
+          ]
+        },
+        {
+          "id": "e058",
+          "classes": "",
+          "box": [
+            634,
+            266,
+            132,
+            132
+          ],
+          "box_id": "e057",
+          "box_classes": "",
+          "data_box": [
+            664,
+            296,
+            72,
+            72
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "04-vreme-e058-icon.png",
+          "native_box": [
+            666,
+            298,
+            68,
+            68
+          ],
+          "content_box": [
+            32,
+            32,
+            68,
+            68
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-04-vreme.html",
+      "source_sha256": "4f85e188b225379aa38ed36e5d82568f5446e31b52623a69c13bd6123d359aea",
+      "reference": "54-stitch/png/800-04-vreme.png",
+      "background": "04-vreme-fond.png"
+    },
+    "05-volum-mut": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e026",
+          "classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Volum"
+        },
+        {
+          "id": "e027",
+          "classes": "",
+          "box": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "declared": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "text": ""
+        },
+        {
+          "id": "e033",
+          "classes": "nc",
+          "box": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "declared": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "text": "MUT"
+        },
+        {
+          "id": "e034",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "declared": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "text": ""
+        },
+        {
+          "id": "e046",
+          "classes": "ns",
+          "box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "declared": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "text": "Sunetul este oprit  nivel păstrat 35"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e026",
+          "classes": "ns",
+          "box_id": "e026",
+          "box_classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            99.781,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              99.781,
+              43
+            ]
+          ],
+          "text": "Volum",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e033",
+          "classes": "nc",
+          "box_id": "e033",
+          "box_classes": "nc",
+          "box": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "run_box": [
+            240.109,
+            5,
+            523.891,
+            381
+          ],
+          "lines": [
+            [
+              240.109,
+              5,
+              523.891,
+              381
+            ]
+          ],
+          "text": "MUT",
+          "font": "condensed",
+          "size": 280,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 200,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 304,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t02",
+          "element": "e046",
+          "classes": "ns",
+          "box_id": "e046",
+          "box_classes": "ns",
+          "box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "run_box": [
+            32,
+            409,
+            250.891,
+            38
+          ],
+          "lines": [
+            [
+              32,
+              409,
+              250.891,
+              38
+            ]
+          ],
+          "text": "Sunetul este oprit",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e046",
+          "classes": "ns",
+          "box_id": "e046",
+          "box_classes": "ns",
+          "box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "run_box": [
+            312.891,
+            409,
+            218.125,
+            38
+          ],
+          "lines": [
+            [
+              312.891,
+              409,
+              218.125,
+              38
+            ]
+          ],
+          "text": "nivel păstrat 35",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e028",
+          "classes": "",
+          "box": [
+            4,
+            124,
+            200,
+            200
+          ],
+          "box_id": "e027",
+          "box_classes": "",
+          "data_box": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "05-volum-mut-e028-icon.png",
+          "native_box": [
+            36,
+            156,
+            136,
+            136
+          ],
+          "content_box": [
+            32,
+            32,
+            136,
+            136
+          ]
+        },
+        {
+          "id": "e035",
+          "classes": "volume-fill",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 0.45,
+          "role": "progress-fill",
+          "file": "05-volum-mut-e035-progress-fill.png",
+          "native_box": [
+            32,
+            352,
+            257.594,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        },
+        {
+          "id": "e036",
+          "classes": "volume-notches",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-overlay",
+          "file": "05-volum-mut-e036-progress-overlay.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        },
+        {
+          "id": "e047",
+          "classes": "",
+          "box": [
+            262,
+            396,
+            71,
+            71
+          ],
+          "box_id": "e046",
+          "box_classes": "ns",
+          "data_box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "05-volum-mut-e047-separator.png",
+          "native_box": [
+            294.891,
+            428.406,
+            6,
+            6
+          ],
+          "content_box": [
+            32.890625,
+            32.40625,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e034",
+          "classes": "",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "05-volum-mut-e034-progress-track.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-05-volum-mut.html",
+      "source_sha256": "e0b2dec934794c357af141cbcaf1cd0dfab3d1f433b893f5a6b326c327ca568f",
+      "reference": "54-stitch/png/800-05-volum-mut.png",
+      "background": "05-volum-mut-fond.png"
+    },
+    "05-volum": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e026",
+          "classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Volum"
+        },
+        {
+          "id": "e027",
+          "classes": "",
+          "box": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "declared": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "text": ""
+        },
+        {
+          "id": "e033",
+          "classes": "nc",
+          "box": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "declared": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "text": "100"
+        },
+        {
+          "id": "e034",
+          "classes": "",
+          "box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "declared": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "text": ""
+        },
+        {
+          "id": "e046",
+          "classes": "ns",
+          "box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "declared": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "text": "Volum maxim al receptorului"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e026",
+          "classes": "ns",
+          "box_id": "e026",
+          "box_classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            99.781,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              99.781,
+              43
+            ]
+          ],
+          "text": "Volum",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e033",
+          "classes": "nc",
+          "box_id": "e033",
+          "box_classes": "nc",
+          "box": [
+            208,
+            96,
+            560,
+            216
+          ],
+          "run_box": [
+            356.234,
+            5,
+            407.766,
+            381
+          ],
+          "lines": [
+            [
+              356.234,
+              5,
+              407.766,
+              381
+            ]
+          ],
+          "text": "100",
+          "font": "condensed",
+          "size": 280,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 200,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 304,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t02",
+          "element": "e046",
+          "classes": "ns",
+          "box_id": "e046",
+          "box_classes": "ns",
+          "box": [
+            32,
+            408,
+            736,
+            40
+          ],
+          "run_box": [
+            32,
+            409,
+            396.516,
+            38
+          ],
+          "lines": [
+            [
+              32,
+              409,
+              396.516,
+              38
+            ]
+          ],
+          "text": "Volum maxim al receptorului",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 439,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e028",
+          "classes": "",
+          "box": [
+            4,
+            124,
+            200,
+            200
+          ],
+          "box_id": "e027",
+          "box_classes": "",
+          "data_box": [
+            32,
+            152,
+            144,
+            144
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "05-volum-e028-icon.png",
+          "native_box": [
+            36,
+            156,
+            136,
+            136
+          ],
+          "content_box": [
+            32,
+            32,
+            136,
+            136
+          ]
+        },
+        {
+          "id": "e035",
+          "classes": "volume-fill",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-fill",
+          "file": "05-volum-e035-progress-fill.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        },
+        {
+          "id": "e036",
+          "classes": "volume-notches",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-overlay",
+          "file": "05-volum-e036-progress-overlay.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        },
+        {
+          "id": "e034",
+          "classes": "",
+          "box": [
+            0,
+            320,
+            800,
+            88
+          ],
+          "box_id": "e034",
+          "box_classes": "",
+          "data_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "05-volum-e034-progress-track.png",
+          "native_box": [
+            32,
+            352,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-05-volum.html",
+      "source_sha256": "987c92bd284705212a56946454cd6d392468ecb193d6f65a4a0c019319ce7382",
+      "reference": "54-stitch/png/800-05-volum.png",
+      "background": "05-volum-fond.png"
+    },
+    "06-schimbare-canal": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e022",
+          "classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Canal"
+        },
+        {
+          "id": "e023",
+          "classes": "nc",
+          "box": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "declared": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "text": "10245"
+        },
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "declared": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "text": "PRO TV"
+        },
+        {
+          "id": "e027",
+          "classes": "",
+          "box": [
+            240,
+            344,
+            528,
+            104
+          ],
+          "declared": [
+            240,
+            344,
+            528,
+            104
+          ],
+          "text": "Pro TV Internațional HD Europa"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e022",
+          "classes": "ns",
+          "box_id": "e022",
+          "box_classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            87.688,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              87.688,
+              43
+            ]
+          ],
+          "text": "Canal",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e023",
+          "classes": "nc",
+          "box_id": "e023",
+          "box_classes": "nc",
+          "box": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "run_box": [
+            99.313,
+            19,
+            601.375,
+            338
+          ],
+          "lines": [
+            [
+              99.313,
+              19,
+              601.375,
+              338
+            ]
+          ],
+          "text": "10245",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 284,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e025",
+          "classes": "ns picon-wordmark",
+          "box_id": "e024",
+          "box_classes": "",
+          "box": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "run_box": [
+            62.234,
+            369,
+            115.516,
+            43
+          ],
+          "lines": [
+            [
+              62.234,
+              369,
+              115.516,
+              43
+            ]
+          ],
+          "text": "PRO TV",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 38,
+          "letter_spacing": 0.5,
+          "align": "start",
+          "baseline": 403,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e028",
+          "classes": "ns channel-title-clamp",
+          "box_id": "e027",
+          "box_classes": "",
+          "box": [
+            240,
+            344,
+            528,
+            104
+          ],
+          "run_box": [
+            240,
+            340,
+            464.688,
+            107
+          ],
+          "lines": [
+            [
+              240,
+              340,
+              464.688,
+              55
+            ],
+            [
+              240,
+              392,
+              137.891,
+              55
+            ]
+          ],
+          "text": "Pro TV Internațional HD Europa",
+          "font": "sans",
+          "size": 40,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 52,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 383,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            0,
+            312,
+            240,
+            168
+          ],
+          "box_id": "e024",
+          "box_classes": "",
+          "data_box": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "opacity": 1,
+          "role": "panel",
+          "in_background": true,
+          "file": "06-schimbare-canal-e024-panel.png",
+          "native_box": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "content_box": [
+            32,
+            32,
+            176,
+            104
+          ]
+        },
+        {
+          "id": "e026",
+          "classes": "picon-line",
+          "box": [
+            74,
+            382,
+            92,
+            68
+          ],
+          "box_id": "e024",
+          "box_classes": "",
+          "data_box": [
+            32,
+            344,
+            176,
+            104
+          ],
+          "opacity": 1,
+          "role": "picon-decoration",
+          "file": "06-schimbare-canal-e026-picon-decoration.png",
+          "native_box": [
+            106,
+            414,
+            28,
+            4
+          ],
+          "content_box": [
+            32,
+            32,
+            28,
+            4
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-06-schimbare-canal.html",
+      "source_sha256": "9965ef3aeeba693eafee9d920b5a0119a0f6135fbad569fef8f86d61eb36d1d3",
+      "reference": "54-stitch/png/800-06-schimbare-canal.png",
+      "background": "06-schimbare-canal-fond.png",
+      "background_no_picon": "06-schimbare-canal-fond-fara-picon.png",
+      "picon_container_ids": [
+        "e024"
+      ]
+    },
+    "07-inregistrare-esuata": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e011",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Înregistrare"
+        },
+        {
+          "id": "e013",
+          "classes": "",
+          "box": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "declared": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "text": "REC"
+        },
+        {
+          "id": "e016",
+          "classes": "",
+          "box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "declared": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "text": ""
+        },
+        {
+          "id": "e019",
+          "classes": "",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "text": "Înregistrarea a eșuat"
+        },
+        {
+          "id": "e021",
+          "classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Disc plin\neliberează spațiu"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e012",
+          "classes": "ns",
+          "box_id": "e011",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            186.5,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              186.5,
+              43
+            ]
+          ],
+          "text": "Înregistrare",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e015",
+          "classes": "ns",
+          "box_id": "e013",
+          "box_classes": "",
+          "box": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "run_box": [
+            723.859,
+            27,
+            44.141,
+            33
+          ],
+          "lines": [
+            [
+              723.859,
+              27,
+              44.141,
+              33
+            ]
+          ],
+          "text": "REC",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(255, 125, 141)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 53,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e020",
+          "classes": "ns",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "run_box": [
+            215.828,
+            335,
+            368.328,
+            49
+          ],
+          "lines": [
+            [
+              215.828,
+              335,
+              368.328,
+              49
+            ]
+          ],
+          "text": "Înregistrarea a eșuat",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 44,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 373,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e022",
+          "classes": "ns",
+          "box_id": "e021",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            209.922,
+            405,
+            115.25,
+            38
+          ],
+          "lines": [
+            [
+              209.922,
+              405,
+              115.25,
+              38
+            ]
+          ],
+          "text": "Disc plin",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 36,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 435,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e024",
+          "classes": "ns",
+          "box_id": "e021",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            357.172,
+            405,
+            232.906,
+            38
+          ],
+          "lines": [
+            [
+              357.172,
+              405,
+              232.906,
+              38
+            ]
+          ],
+          "text": "eliberează spațiu",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 36,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 435,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e017",
+          "classes": "",
+          "box": [
+            288,
+            84,
+            224,
+            224
+          ],
+          "box_id": "e016",
+          "box_classes": "",
+          "data_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "07-inregistrare-esuata-e017-icon.png",
+          "native_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "content_box": [
+            32,
+            32,
+            160,
+            160
+          ]
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            305,
+            388,
+            73,
+            72
+          ],
+          "box_id": "e021",
+          "box_classes": "",
+          "data_box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "07-inregistrare-esuata-e023-separator.png",
+          "native_box": [
+            337.172,
+            420,
+            8,
+            8
+          ],
+          "content_box": [
+            32.171875,
+            32,
+            8,
+            8
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-07-inregistrare-esuata.html",
+      "source_sha256": "81b7781b05ec77306a690e0364896d2a09d14a995dc855ee00d6f5093f382e60",
+      "reference": "54-stitch/png/800-07-inregistrare-esuata.png",
+      "background": "07-inregistrare-esuata-fond.png"
+    },
+    "07-inregistrare": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e015",
+          "classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "2 înregistrări active"
+        },
+        {
+          "id": "e016",
+          "classes": "",
+          "box": [
+            32,
+            168,
+            56,
+            56
+          ],
+          "declared": [
+            32,
+            168,
+            56,
+            56
+          ],
+          "text": ""
+        },
+        {
+          "id": "e018",
+          "classes": "nc",
+          "box": [
+            112,
+            96,
+            656,
+            200
+          ],
+          "declared": [
+            112,
+            96,
+            656,
+            200
+          ],
+          "text": "REC"
+        },
+        {
+          "id": "e020",
+          "classes": "ns",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "text": "TVR 1 HD\nȘtiri și actualități"
+        },
+        {
+          "id": "e024",
+          "classes": "ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Durata\n01:12:45"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e015",
+          "classes": "ns",
+          "box_id": "e015",
+          "box_classes": "ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            292.609,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              292.609,
+              43
+            ]
+          ],
+          "text": "2 înregistrări active",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e019",
+          "classes": "rec-text",
+          "box_id": "e018",
+          "box_classes": "nc",
+          "box": [
+            112,
+            96,
+            656,
+            200
+          ],
+          "run_box": [
+            112,
+            19,
+            373.469,
+            338
+          ],
+          "lines": [
+            [
+              112,
+              19,
+              373.469,
+              338
+            ]
+          ],
+          "text": "REC",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 284,
+          "shadow": "rgba(255, 125, 141, 0.12) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e021",
+          "classes": "channel-title",
+          "box_id": "e020",
+          "box_classes": "ns",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "run_box": [
+            32,
+            335,
+            155.531,
+            49
+          ],
+          "lines": [
+            [
+              32,
+              335,
+              155.531,
+              49
+            ]
+          ],
+          "text": "TVR 1 HD",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 373,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e023",
+          "classes": "programme-title",
+          "box_id": "e020",
+          "box_classes": "ns",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "run_box": [
+            226.531,
+            335,
+            287.078,
+            49
+          ],
+          "lines": [
+            [
+              226.531,
+              335,
+              287.078,
+              49
+            ]
+          ],
+          "text": "Știri și actualități",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 373,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e025",
+          "classes": "duration-label",
+          "box_id": "e024",
+          "box_classes": "ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            32,
+            399,
+            118.656,
+            49
+          ],
+          "lines": [
+            [
+              32,
+              399,
+              118.656,
+              49
+            ]
+          ],
+          "text": "Durata",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e026",
+          "classes": "duration-time",
+          "box_id": "e024",
+          "box_classes": "ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            164.656,
+            399,
+            139.641,
+            49
+          ],
+          "lines": [
+            [
+              164.656,
+              399,
+              139.641,
+              49
+            ]
+          ],
+          "text": "01:12:45",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e017",
+          "classes": "rec-disc",
+          "box": [
+            0,
+            136,
+            120,
+            120
+          ],
+          "box_id": "e016",
+          "box_classes": "",
+          "data_box": [
+            32,
+            168,
+            56,
+            56
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "07-inregistrare-e017-icon.png",
+          "native_box": [
+            32,
+            168,
+            56,
+            56
+          ],
+          "content_box": [
+            32,
+            32,
+            56,
+            56
+          ]
+        },
+        {
+          "id": "e022",
+          "classes": "separator-dot",
+          "box": [
+            171,
+            324,
+            72,
+            72
+          ],
+          "box_id": "e020",
+          "box_classes": "ns",
+          "data_box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "07-inregistrare-e022-separator.png",
+          "native_box": [
+            203.531,
+            356.5,
+            7,
+            7
+          ],
+          "content_box": [
+            32.53125,
+            32.5,
+            7,
+            7
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-07-inregistrare.html",
+      "source_sha256": "32590a59ddbe1e26c0036e3634ae95a4c9af9277c8d7927167efb58469aceb8a",
+      "reference": "54-stitch/png/800-07-inregistrare.png",
+      "background": "07-inregistrare-fond.png"
+    },
+    "07-lipsa-semnal": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e019",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "TVR 1 HD\n128"
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "declared": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "text": ""
+        },
+        {
+          "id": "e046",
+          "classes": "",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "text": "Lipsă semnal"
+        },
+        {
+          "id": "e048",
+          "classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Verifică antena și cablul"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e020",
+          "classes": "ns",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            32,
+            26,
+            141.797,
+            43
+          ],
+          "lines": [
+            [
+              32,
+              26,
+              141.797,
+              43
+            ]
+          ],
+          "text": "TVR 1 HD",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e022",
+          "classes": "ns",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            203.797,
+            26,
+            54.922,
+            43
+          ],
+          "lines": [
+            [
+              203.797,
+              26,
+              54.922,
+              43
+            ]
+          ],
+          "text": "128",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e047",
+          "classes": "ns",
+          "box_id": "e046",
+          "box_classes": "",
+          "box": [
+            32,
+            336,
+            736,
+            48
+          ],
+          "run_box": [
+            284.438,
+            335,
+            231.109,
+            49
+          ],
+          "lines": [
+            [
+              284.438,
+              335,
+              231.109,
+              49
+            ]
+          ],
+          "text": "Lipsă semnal",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 44,
+          "letter_spacing": 0.2,
+          "align": "center",
+          "baseline": 373,
+          "shadow": "none"
+        },
+        {
+          "id": "t03",
+          "element": "e049",
+          "classes": "ns",
+          "box_id": "e048",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            236.344,
+            405,
+            327.313,
+            38
+          ],
+          "lines": [
+            [
+              236.344,
+              405,
+              327.313,
+              38
+            ]
+          ],
+          "text": "Verifică antena și cablul",
+          "font": "sans",
+          "size": 28,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 36,
+          "letter_spacing": 0.1,
+          "align": "center",
+          "baseline": 435,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e021",
+          "classes": "",
+          "box": [
+            153,
+            13,
+            71,
+            70
+          ],
+          "box_id": "e019",
+          "box_classes": "",
+          "data_box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "07-lipsa-semnal-e021-separator.png",
+          "native_box": [
+            185.797,
+            45,
+            6,
+            6
+          ],
+          "content_box": [
+            32.796875,
+            32,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e024",
+          "classes": "",
+          "box": [
+            288,
+            84,
+            224,
+            224
+          ],
+          "box_id": "e023",
+          "box_classes": "",
+          "data_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "07-lipsa-semnal-e024-icon.png",
+          "native_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "content_box": [
+            32,
+            32,
+            160,
+            160
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-07-lipsa-semnal.html",
+      "source_sha256": "1053ad08de8b57b45c6f0d7a06541ded5342428a8997055b4c905decd458d7e1",
+      "reference": "54-stitch/png/800-07-lipsa-semnal.png",
+      "background": "07-lipsa-semnal-fond.png"
+    },
+    "08-asteptare": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e011",
+          "classes": "",
+          "box": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "declared": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "text": "REC"
+        },
+        {
+          "id": "e014",
+          "classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "declared": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "text": "00\n:\n00"
+        },
+        {
+          "id": "e019",
+          "classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Următoarea înregistrare\n06:30"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e013",
+          "classes": "ns rec-text",
+          "box_id": "e011",
+          "box_classes": "",
+          "box": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "run_box": [
+            723.859,
+            27,
+            44.141,
+            33
+          ],
+          "lines": [
+            [
+              723.859,
+              27,
+              44.141,
+              33
+            ]
+          ],
+          "text": "REC",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(255, 125, 141)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 53,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e016",
+          "classes": "",
+          "box_id": "e014",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            44.406,
+            -6,
+            310.969,
+            436
+          ],
+          "lines": [
+            [
+              44.406,
+              -6,
+              310.969,
+              436
+            ]
+          ],
+          "text": "00",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 336,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t02",
+          "element": "e017",
+          "classes": "colon",
+          "box_id": "e014",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            359.375,
+            -18,
+            81.25,
+            436
+          ],
+          "lines": [
+            [
+              359.375,
+              -18,
+              81.25,
+              436
+            ]
+          ],
+          "text": ":",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(66, 221, 229)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 324,
+          "shadow": "rgba(66, 221, 229, 0.65) 0px 0px 16px, rgba(66, 221, 229, 0.35) 0px 0px 32px"
+        },
+        {
+          "id": "t03",
+          "element": "e018",
+          "classes": "",
+          "box_id": "e014",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            248
+          ],
+          "run_box": [
+            444.625,
+            -6,
+            310.969,
+            436
+          ],
+          "lines": [
+            [
+              444.625,
+              -6,
+              310.969,
+              436
+            ]
+          ],
+          "text": "00",
+          "font": "condensed",
+          "size": 320,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 232,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 336,
+          "shadow": "rgba(66, 221, 229, 0.15) 0px 0px 32px"
+        },
+        {
+          "id": "t04",
+          "element": "e020",
+          "classes": "ns next-rec-label",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            124.625,
+            399,
+            418.313,
+            49
+          ],
+          "lines": [
+            [
+              124.625,
+              399,
+              418.313,
+              49
+            ]
+          ],
+          "text": "Următoarea înregistrare",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e022",
+          "classes": "ns next-rec-time",
+          "box_id": "e019",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            582.938,
+            399,
+            92.422,
+            49
+          ],
+          "lines": [
+            [
+              582.938,
+              399,
+              92.422,
+              49
+            ]
+          ],
+          "text": "06:30",
+          "font": "sans",
+          "size": 36,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 437,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e012",
+          "classes": "rec-disc",
+          "box": [
+            667,
+            4,
+            81,
+            80
+          ],
+          "box_id": "e011",
+          "box_classes": "",
+          "data_box": [
+            688,
+            24,
+            80,
+            40
+          ],
+          "opacity": 1,
+          "role": "status",
+          "file": "08-asteptare-e012-status.png",
+          "native_box": [
+            699.859,
+            36,
+            16,
+            16
+          ],
+          "content_box": [
+            32.859375,
+            32,
+            16,
+            16
+          ]
+        },
+        {
+          "id": "e021",
+          "classes": "cyan-dot",
+          "box": [
+            526,
+            388,
+            73,
+            72
+          ],
+          "box_id": "e019",
+          "box_classes": "",
+          "data_box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "08-asteptare-e021-separator.png",
+          "native_box": [
+            558.938,
+            420,
+            8,
+            8
+          ],
+          "content_box": [
+            32.9375,
+            32,
+            8,
+            8
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-08-asteptare.html",
+      "source_sha256": "0870800e00db17a9c0dbe788ccb3c9c0b5cfdaa4cfb34a33873d14ef8228750a",
+      "reference": "54-stitch/png/800-08-asteptare.png",
+      "background": "08-asteptare-fond.png"
+    },
+    "09-actualizare-fara-procent": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e017",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Actualizare"
+        },
+        {
+          "id": "e021",
+          "classes": "",
+          "box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "declared": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "text": ""
+        },
+        {
+          "id": "e036",
+          "classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Se scrie\nnu opri receptorul"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e020",
+          "classes": "ns",
+          "box_id": "e017",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            78,
+            26,
+            174.438,
+            43
+          ],
+          "lines": [
+            [
+              78,
+              26,
+              174.438,
+              43
+            ]
+          ],
+          "text": "Actualizare",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e037",
+          "classes": "ns",
+          "box_id": "e036",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            183.109,
+            402,
+            118.063,
+            43
+          ],
+          "lines": [
+            [
+              183.109,
+              402,
+              118.063,
+              43
+            ]
+          ],
+          "text": "Se scrie",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 436,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e039",
+          "classes": "ns",
+          "box_id": "e036",
+          "box_classes": "",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            333.172,
+            402,
+            283.719,
+            43
+          ],
+          "lines": [
+            [
+              333.172,
+              402,
+              283.719,
+              43
+            ]
+          ],
+          "text": "nu opri receptorul",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 436,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e018",
+          "classes": "",
+          "box": [
+            0,
+            0,
+            96,
+            96
+          ],
+          "box_id": "e017",
+          "box_classes": "",
+          "data_box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "09-actualizare-fara-procent-e018-icon.png",
+          "native_box": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "content_box": [
+            32,
+            32,
+            32,
+            32
+          ]
+        },
+        {
+          "id": "e022",
+          "classes": "",
+          "box": [
+            288,
+            84,
+            224,
+            224
+          ],
+          "box_id": "e021",
+          "box_classes": "",
+          "data_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "09-actualizare-fara-procent-e022-icon.png",
+          "native_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "content_box": [
+            32,
+            32,
+            160,
+            160
+          ]
+        },
+        {
+          "id": "e038",
+          "classes": "",
+          "box": [
+            281,
+            388,
+            73,
+            72
+          ],
+          "box_id": "e036",
+          "box_classes": "",
+          "data_box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "09-actualizare-fara-procent-e038-separator.png",
+          "native_box": [
+            313.172,
+            420,
+            8,
+            8
+          ],
+          "content_box": [
+            32.171875,
+            32,
+            8,
+            8
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-09-actualizare-fara-procent.html",
+      "source_sha256": "84036734b38a67f9517d84f27ff6770c123d65967f8c8d4fe18ad82684f1349e",
+      "reference": "54-stitch/png/800-09-actualizare-fara-procent.png",
+      "background": "09-actualizare-fara-procent-fond.png"
+    },
+    "09-actualizare": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e016",
+          "classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Actualizare"
+        },
+        {
+          "id": "e020",
+          "classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "declared": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "text": "100\n%"
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "declared": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "text": ""
+        },
+        {
+          "id": "e025",
+          "classes": "ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "text": "Etapa 3 din 3\nse verifică imaginea"
+        },
+        {
+          "id": "e029",
+          "classes": "ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "declared": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "text": "Nu opri receptorul"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e019",
+          "classes": "ns title-text",
+          "box_id": "e016",
+          "box_classes": "",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            78,
+            26,
+            168.938,
+            43
+          ],
+          "lines": [
+            [
+              78,
+              26,
+              168.938,
+              43
+            ]
+          ],
+          "text": "Actualizare",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e021",
+          "classes": "nc digits-100",
+          "box_id": "e020",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "run_box": [
+            143.969,
+            19,
+            360.828,
+            338
+          ],
+          "lines": [
+            [
+              143.969,
+              19,
+              360.828,
+              338
+            ]
+          ],
+          "text": "100",
+          "font": "condensed",
+          "size": 248,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -1,
+          "align": "start",
+          "baseline": 284,
+          "shadow": "rgba(242, 189, 104, 0.15) 0px 0px 28px"
+        },
+        {
+          "id": "t02",
+          "element": "e022",
+          "classes": "nc percent-sign",
+          "box_id": "e020",
+          "box_classes": "",
+          "box": [
+            32,
+            96,
+            736,
+            200
+          ],
+          "run_box": [
+            504.797,
+            54,
+            151.219,
+            267
+          ],
+          "lines": [
+            [
+              504.797,
+              54,
+              151.219,
+              267
+            ]
+          ],
+          "text": "%",
+          "font": "condensed",
+          "size": 196,
+          "color": "rgb(242, 189, 104)",
+          "opacity": 1,
+          "line_height": 184,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 264,
+          "shadow": "rgba(242, 189, 104, 0.6) 0px 0px 16px"
+        },
+        {
+          "id": "t03",
+          "element": "e026",
+          "classes": "stage-num",
+          "box_id": "e025",
+          "box_classes": "ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            201.25,
+            375,
+            143.391,
+            33
+          ],
+          "lines": [
+            [
+              201.25,
+              375,
+              143.391,
+              33
+            ]
+          ],
+          "text": "Etapa 3 din 3",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t04",
+          "element": "e028",
+          "classes": "stage-detail",
+          "box_id": "e025",
+          "box_classes": "ns",
+          "box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "run_box": [
+            374.641,
+            375,
+            224.109,
+            33
+          ],
+          "lines": [
+            [
+              374.641,
+              375,
+              224.109,
+              33
+            ]
+          ],
+          "text": "se verifică imaginea",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.5,
+          "align": "start",
+          "baseline": 401,
+          "shadow": "none"
+        },
+        {
+          "id": "t05",
+          "element": "e029",
+          "classes": "ns",
+          "box_id": "e029",
+          "box_classes": "ns",
+          "box": [
+            32,
+            416,
+            736,
+            32
+          ],
+          "run_box": [
+            296.281,
+            415,
+            207.422,
+            33
+          ],
+          "lines": [
+            [
+              296.281,
+              415,
+              207.422,
+              33
+            ]
+          ],
+          "text": "Nu opri receptorul",
+          "font": "sans",
+          "size": 24,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 32,
+          "letter_spacing": -0.5,
+          "align": "center",
+          "baseline": 441,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e017",
+          "classes": "",
+          "box": [
+            0,
+            0,
+            96,
+            96
+          ],
+          "box_id": "e016",
+          "box_classes": "",
+          "data_box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "09-actualizare-e017-icon.png",
+          "native_box": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "content_box": [
+            32,
+            32,
+            32,
+            32
+          ]
+        },
+        {
+          "id": "e024",
+          "classes": "progress-fill",
+          "box": [
+            0,
+            304,
+            800,
+            88
+          ],
+          "box_id": "e023",
+          "box_classes": "",
+          "data_box": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-fill",
+          "file": "09-actualizare-e024-progress-fill.png",
+          "native_box": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        },
+        {
+          "id": "e027",
+          "classes": "amber-dot",
+          "box": [
+            324,
+            357,
+            71,
+            70
+          ],
+          "box_id": "e025",
+          "box_classes": "ns",
+          "data_box": [
+            32,
+            376,
+            736,
+            32
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "09-actualizare-e027-separator.png",
+          "native_box": [
+            356.641,
+            389,
+            6,
+            6
+          ],
+          "content_box": [
+            32.640625,
+            32,
+            6,
+            6
+          ]
+        },
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            0,
+            304,
+            800,
+            88
+          ],
+          "box_id": "e023",
+          "box_classes": "",
+          "data_box": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "opacity": 1,
+          "role": "progress-track",
+          "file": "09-actualizare-e023-progress-track.png",
+          "native_box": [
+            32,
+            336,
+            736,
+            24
+          ],
+          "content_box": [
+            32,
+            32,
+            736,
+            24
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-09-actualizare.html",
+      "source_sha256": "ecbff1e0596fc760b2ed3f54870f79bc168eddea53b383e12e1a4202b4702655",
+      "reference": "54-stitch/png/800-09-actualizare.png",
+      "background": "09-actualizare-fond.png"
+    },
+    "09-antena": {
+      "size": [
+        800,
+        480
+      ],
+      "boxes": [
+        {
+          "id": "e022",
+          "classes": "box ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "declared": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "text": "Antena se mișcă"
+        },
+        {
+          "id": "e032",
+          "classes": "box",
+          "box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "declared": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "text": ""
+        },
+        {
+          "id": "e044",
+          "classes": "box ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "declared": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "text": "Spre est\n19,2° E"
+        }
+      ],
+      "text": [
+        {
+          "id": "t00",
+          "element": "e031",
+          "classes": "",
+          "box_id": "e022",
+          "box_classes": "box ns",
+          "box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "run_box": [
+            78,
+            26,
+            257.438,
+            43
+          ],
+          "lines": [
+            [
+              78,
+              26,
+              257.438,
+              43
+            ]
+          ],
+          "text": "Antena se mișcă",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 48,
+          "letter_spacing": 0.2,
+          "align": "start",
+          "baseline": 60,
+          "shadow": "none"
+        },
+        {
+          "id": "t01",
+          "element": "e045",
+          "classes": "",
+          "box_id": "e044",
+          "box_classes": "box ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            267.531,
+            402,
+            125.219,
+            43
+          ],
+          "lines": [
+            [
+              267.531,
+              402,
+              125.219,
+              43
+            ]
+          ],
+          "text": "Spre est",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(220, 233, 244)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 436,
+          "shadow": "none"
+        },
+        {
+          "id": "t02",
+          "element": "e047",
+          "classes": "",
+          "box_id": "e044",
+          "box_classes": "box ns",
+          "box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "run_box": [
+            428.75,
+            402,
+            103.719,
+            43
+          ],
+          "lines": [
+            [
+              428.75,
+              402,
+              103.719,
+              43
+            ]
+          ],
+          "text": "19,2° E",
+          "font": "sans",
+          "size": 32,
+          "color": "rgb(165, 185, 206)",
+          "opacity": 1,
+          "line_height": 40,
+          "letter_spacing": 0,
+          "align": "start",
+          "baseline": 436,
+          "shadow": "none"
+        }
+      ],
+      "artwork": [
+        {
+          "id": "e023",
+          "classes": "",
+          "box": [
+            0,
+            0,
+            96,
+            96
+          ],
+          "box_id": "e022",
+          "box_classes": "box ns",
+          "data_box": [
+            32,
+            24,
+            624,
+            48
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "09-antena-e023-icon.png",
+          "native_box": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "content_box": [
+            32,
+            32,
+            32,
+            32
+          ]
+        },
+        {
+          "id": "e033",
+          "classes": "",
+          "box": [
+            288,
+            84,
+            224,
+            224
+          ],
+          "box_id": "e032",
+          "box_classes": "box",
+          "data_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "opacity": 1,
+          "role": "icon",
+          "file": "09-antena-e033-icon.png",
+          "native_box": [
+            320,
+            116,
+            160,
+            160
+          ],
+          "content_box": [
+            32,
+            32,
+            160,
+            160
+          ]
+        },
+        {
+          "id": "e046",
+          "classes": "",
+          "box": [
+            374,
+            388,
+            73,
+            72
+          ],
+          "box_id": "e044",
+          "box_classes": "box ns",
+          "data_box": [
+            32,
+            400,
+            736,
+            48
+          ],
+          "opacity": 1,
+          "role": "separator",
+          "file": "09-antena-e046-separator.png",
+          "native_box": [
+            406.75,
+            420,
+            8,
+            8
+          ],
+          "content_box": [
+            32.75,
+            32,
+            8,
+            8
+          ]
+        }
+      ],
+      "source": "54-stitch/html/800-09-antena.html",
+      "source_sha256": "a88aa10a0513432e1dd391dfeaa93d7b709a1d0f4beedc63466c8f8ef8958299",
+      "reference": "54-stitch/png/800-09-antena.png",
+      "background": "09-antena-fond.png"
+    }
+  },
+  "catalog": {
+    "snow": {
+      "id": "e036",
+      "classes": "",
+      "box": [
+        2,
+        322,
+        148,
+        148
+      ],
+      "box_id": "e035",
+      "box_classes": "",
+      "data_box": [
+        32,
+        352,
+        88,
+        88
+      ],
+      "opacity": 1,
+      "role": "icon",
+      "file": "04-vreme-e036-icon.png",
+      "native_box": [
+        34,
+        354,
+        84,
+        84
+      ],
+      "content_box": [
+        32,
+        32,
+        84,
+        84
+      ],
+      "screen": "04-vreme",
+      "semantic_file": "vreme-zapada.png",
+      "semantic_crop": [
+        32,
+        32,
+        116,
+        116
+      ]
+    },
+    "cloud": {
+      "id": "e047",
+      "classes": "",
+      "box": [
+        636,
+        68,
+        128,
+        128
+      ],
+      "box_id": "e046",
+      "box_classes": "",
+      "data_box": [
+        664,
+        96,
+        72,
+        72
+      ],
+      "opacity": 1,
+      "role": "icon",
+      "file": "04-vreme-e047-icon.png",
+      "native_box": [
+        668,
+        100,
+        64,
+        64
+      ],
+      "content_box": [
+        32,
+        32,
+        64,
+        64
+      ],
+      "screen": "04-vreme",
+      "semantic_file": "vreme-nori.png",
+      "semantic_crop": [
+        32,
+        32,
+        96,
+        96
+      ]
+    },
+    "partly_cloudy": {
+      "id": "e058",
+      "classes": "",
+      "box": [
+        634,
+        266,
+        132,
+        132
+      ],
+      "box_id": "e057",
+      "box_classes": "",
+      "data_box": [
+        664,
+        296,
+        72,
+        72
+      ],
+      "opacity": 1,
+      "role": "icon",
+      "file": "04-vreme-e058-icon.png",
+      "native_box": [
+        666,
+        298,
+        68,
+        68
+      ],
+      "content_box": [
+        32,
+        32,
+        68,
+        68
+      ],
+      "screen": "04-vreme",
+      "semantic_file": "vreme-partial.png",
+      "semantic_crop": [
+        32,
+        32,
+        100,
+        100
+      ]
+    },
+    "rain": {
+      "id": "e046",
+      "classes": "",
+      "box": [
+        636,
+        68,
+        128,
+        128
+      ],
+      "box_id": "e045",
+      "box_classes": "",
+      "data_box": [
+        664,
+        96,
+        72,
+        72
+      ],
+      "opacity": 1,
+      "role": "icon",
+      "file": "04-vreme-date-vechi-e046-icon.png",
+      "native_box": [
+        668,
+        100,
+        64,
+        64
+      ],
+      "content_box": [
+        32,
+        32,
+        64,
+        64
+      ],
+      "screen": "04-vreme-date-vechi",
+      "semantic_file": "vreme-ploaie.png",
+      "semantic_crop": [
+        32,
+        32,
+        96,
+        96
+      ]
+    },
+    "rec": {
+      "id": "e012",
+      "classes": "rec-disc",
+      "box": [
+        667,
+        4,
+        81,
+        80
+      ],
+      "box_id": "e011",
+      "box_classes": "",
+      "data_box": [
+        688,
+        24,
+        80,
+        40
+      ],
+      "opacity": 1,
+      "role": "status",
+      "file": "08-asteptare-e012-status.png",
+      "native_box": [
+        699.859,
+        36,
+        16,
+        16
+      ],
+      "content_box": [
+        32.859375,
+        32,
+        16,
+        16
+      ],
+      "screen": "08-asteptare"
+    },
+    "mute": {
+      "id": "e017",
+      "classes": "",
+      "box": [
+        0,
+        0,
+        96,
+        88
+      ],
+      "box_id": "e016",
+      "box_classes": "box mute-box",
+      "data_box": [
+        32,
+        24,
+        32,
+        32
+      ],
+      "opacity": 1,
+      "role": "icon",
+      "file": "03-canal-fara-picon-mut-e017-icon.png",
+      "native_box": [
+        32,
+        24,
+        32,
+        32
+      ],
+      "content_box": [
+        32,
+        24,
+        32,
+        32
+      ],
+      "screen": "03-canal-fara-picon-mut"
+    }
+  },
+  "fonts_sha256": {
+    "NotoSans-SemiBold.ttf": "87a8b90ece1e89746b544e4e086f85a3710e41485a8078f9be874837dfad45d5",
+    "NotoSansCondensed-SemiBold.ttf": "09ce05e5a0cbfa85f88f62557df2bd7cef96c0e18c367f2aa063e75d3660961b",
+    "OFL.txt": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb"
+  }
+}

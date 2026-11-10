@@ -65,6 +65,13 @@ void eWindow::setFlag(int flags)
 	m_flags |= flags;
 }
 
+void eWindow::setCornerRadius(int radius)
+{
+	/* Decoratia ferestrei ramane in grija stilului. */
+	eWidget::setCornerRadius(radius);
+	m_child->setCornerRadius(radius);
+}
+
 void eWindow::clearFlag(int flags)
 {
 	m_flags &= ~flags;

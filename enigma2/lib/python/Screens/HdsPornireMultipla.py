@@ -5,9 +5,10 @@
 # HdsPornireMultipla.py: lista imaginilor din meniul de oprire, pentru
 # receptoare cu bootoptions sau kexec instalat (SystemInfo["HdsMultiboot"]).
 #
-# La deschidere ecranul cauta imaginile instalate in memorie, pe card si pe stick (Components/HdsPornireMultipla.py:
-# STARTUP_N de pe partitia bootoptions, nucleul si sistemul fiecarui loc), pe un fir separat, ca interfata sa nu stea, si le
-# arata, cu imaginea pornita acum marcata; locurile goale nu apar. OK (sau VERDE) pe o imagine: o intrebare scurta, apoi
+# La deschidere ecranul cauta imaginile instalate in memorie, pe card, pe stick si pe HDD (Components/HdsPornireMultipla.py:
+# STARTUP_N de pe partitia bootoptions sau, la Vu+ 4K cu kexec, de pe radacina flash de la /boot, cu Recovery ca locul 0,
+# nucleul si sistemul fiecarui loc), pe un fir separat, ca interfata sa nu stea, si le arata, oricare ar fi locul pornit,
+# cu imaginea pornita acum marcata; locurile goale nu apar. OK (sau VERDE) pe o imagine: o intrebare scurta, apoi
 # STARTUP scris sigur si repornirea receptorului in ea. Daca la repornire receptorul intreaba (o inregistrare, o lucrare) si
 # raspunzi Nu, STARTUP se pune la loc. Un loc care nu se alege spune de ce pe rand, iar OK arata motivul intreg. Cat ecranul
 # e deschis, lista se reface singura cand se pune sau se scoate un disc. ROSU inchide. Aceeasi lista si aceeasi alegere in

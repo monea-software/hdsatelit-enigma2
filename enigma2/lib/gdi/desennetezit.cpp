@@ -177,6 +177,16 @@ bool pregateste(const gDesenNetezit &d, float ox, float oy, Forma &f)
 		f.mx0 = f.x0 - m; f.mx1 = f.x0 + m; f.my0 = f.y0 - m; f.my1 = f.y0 + m;
 		return true;
 	}
+	case gDesenNetezit::dreptunghi:
+	{
+		if (!finit(d.x0) || !finit(d.y0) || !finit(d.x1) || !finit(d.y1) || !finit(d.raza)
+			|| d.x1 <= d.x0 || d.y1 <= d.y0 || d.raza < 0.0f)
+			return false;
+		f.x0 = d.x0 + ox; f.y0 = d.y0 + oy; f.x1 = d.x1 + ox; f.y1 = d.y1 + oy;
+		f.raza = fminf(d.raza, fminf(f.x1 - f.x0, f.y1 - f.y0) * 0.5f);
+		f.mx0 = f.x0; f.my0 = f.y0; f.mx1 = f.x1; f.my1 = f.y1;
+		return true;
+	}
 	case gDesenNetezit::arc:
 	{
 		if (!finit(d.x0) || !finit(d.y0) || !finit(d.raza) || !(d.raza > 0.0f) || !finit(d.grosime) || !(d.grosime > 0.0f)
@@ -496,6 +506,47 @@ void poligon(const Forma &f, const eRect &r, Pensula &p)
 	}
 }
 
+/* Gradientul ramane legat de forma, nu de dreptunghiul de taiere. */
+void dreptunghi(const Forma &f, const eRect &r, Pensula &p, const gDesenNetezit &d)
+{
+	int x0, y0, x1, y1;
+	if (!fereastra(f.mx0, f.my0, f.mx1, f.my1, r, x0, y0, x1, y1))
+		return;
+	float hx = (f.x1 - f.x0) * 0.5f, hy = (f.y1 - f.y0) * 0.5f;
+	float cx = f.x0 + hx, cy = f.y0 + hy;
+	int n = d.gradient.size();
+	bool gradient = n == 2 || n == 3;
+	for (int y = y0; y < y1; ++y)
+		for (int x = x0; x < x1; ++x)
+		{
+			float qx = fabsf(x + 0.5f - cx) - hx + f.raza;
+			float qy = fabsf(y + 0.5f - cy) - hy + f.raza;
+			float ax = fmaxf(qx, 0.0f), ay = fmaxf(qy, 0.0f);
+			float dist = fminf(fmaxf(qx, qy), 0.0f) - f.raza;
+			if (ax > 0.0f || ay > 0.0f)
+				dist += sqrtf(ax * ax + ay * ay);
+			float a = acoperire(dist);
+			if (a <= 0.0f)
+				continue;
+			if (gradient)
+			{
+				float lung = d.gradient_vertical ? f.y1 - f.y0 : f.x1 - f.x0;
+				float poz = d.gradient_vertical ? y - f.y0 : x - f.x0;
+				float t = lung > 1.0f ? taie(poz / (lung - 1.0f), 0.0f, 1.0f) : 0.0f;
+				t *= n - 1;
+				int i = (int)t;
+				if (i >= n - 1) i = n - 2;
+				t -= i;
+				const gRGB &c0 = d.gradient[i], &c1 = d.gradient[i + 1];
+				p.r = (int)(c0.r + (c1.r - c0.r) * t + 0.5f);
+				p.g = (int)(c0.g + (c1.g - c0.g) * t + 0.5f);
+				p.b = (int)(c0.b + (c1.b - c0.b) * t + 0.5f);
+				p.opac = 255 - (int)(c0.a + (c1.a - c0.a) * t + 0.5f);
+			}
+			p.pune(x, y, a);
+		}
+}
+
 } /* namespace */
 
 void deseneazaNetezit(gSurface *s, const gRegion &taiere, const ePoint &offset, const gDesenNetezit &d)
@@ -503,7 +554,8 @@ void deseneazaNetezit(gSurface *s, const gRegion &taiere, const ePoint &offset, 
 	if (!s || !s->data || s->bpp != 32 || s->x <= 0 || s->y <= 0)
 		return;
 	int opac = 255 - (int)d.culoare.a;
-	if (opac <= 0)
+	if (opac <= 0 && !(d.forma == gDesenNetezit::dreptunghi
+		&& (d.gradient.size() == 2 || d.gradient.size() == 3)))
 		return;
 	Forma f;
 	if (!pregateste(d, (float)offset.x(), (float)offset.y(), f))
@@ -526,6 +578,7 @@ void deseneazaNetezit(gSurface *s, const gRegion &taiere, const ePoint &offset, 
 		case gDesenNetezit::disc: disc(f, r, p); break;
 		case gDesenNetezit::arc: arc(f, r, p); break;
 		case gDesenNetezit::poligon: poligon(f, r, p); break;
+		case gDesenNetezit::dreptunghi: dreptunghi(f, r, p, d); break;
 		}
 	}
 }

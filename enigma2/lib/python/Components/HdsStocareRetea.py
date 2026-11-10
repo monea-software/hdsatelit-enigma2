@@ -120,6 +120,7 @@ ERORI = {
 	"dialect": N_("Serverul nu folosește nicio versiune pe care o cunoaște receptorul. La SMB, pornește pe server "
 		"SMB 2 sau SMB 3."),
 	"ocupat": N_("Locul este deja montat."),
+	"folosit": N_("Locul este folosit pentru redare, timeshift sau înregistrări. Oprește folosirea lui, apoi salvează din nou."),
 	"plin": N_("Pe server nu mai este loc."),
 	"citire": N_("Pe acest loc nu se poate scrie: este numai pentru citire."),
 	"punct": N_("Receptorul nu poate face dosarul în care se montează locul."),
@@ -266,7 +267,7 @@ def curata(date, vechi=None):
 		if control and P.adresaHttpBuna(control, urlsplit(gazda).hostname):
 			loc["control"] = control
 	# un loc mutat pe alt server sau alt dosar trebuie verificat din nou pentru inregistrari
-	if vechi and any(vechi.get(k) != loc[k] for k in ("fel", "gazda", "dosar", "port")):
+	if vechi and any(vechi.get(k) != loc[k] for k in ("fel", "gazda", "dosar", "port", "utilizator", "citire")):
 		loc["inregistrari"] = False
 		loc["viteza"] = 0
 		loc["control"] = u""
@@ -291,7 +292,7 @@ def _faraDiacritice(text):
 	return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
-def _scrieAtomic(cale, octeti, mod=0o600):
+def _scrieAtomic(cale, octeti, mod=0o600, accepta=None):
 	dosar = os.path.dirname(cale)
 	if dosar and not os.path.isdir(dosar):
 		os.makedirs(dosar, 0o700)
@@ -303,6 +304,8 @@ def _scrieAtomic(cale, octeti, mod=0o600):
 	finally:
 		os.close(fd)
 	os.chmod(nou, mod)
+	if accepta is not None and not accepta():
+		raise TimeoutError("termen")
 	os.replace(nou, cale)
 
 
@@ -339,9 +342,9 @@ class Locuri(object):
 		self._memorie = (semn, locuri)
 		return [dict(l) for l in locuri]
 
-	def scrie(self, locuri):
+	def scrie(self, locuri, accepta=None):
 		text = json.dumps({"v": 1, "locuri": locuri}, ensure_ascii=False, sort_keys=True, indent=1)
-		_scrieAtomic(self.cale, text.encode("utf-8"), 0o600)
+		_scrieAtomic(self.cale, text.encode("utf-8"), 0o600, accepta=accepta)
 		self._memorie = None
 
 	def dupaId(self, ident):
@@ -350,7 +353,7 @@ class Locuri(object):
 				return l
 		return None
 
-	def pune(self, loc):
+	def pune(self, loc, accepta=None):
 		"""Adauga (fara id) sau inlocuieste locul. -> locul cu id."""
 		locuri = self.lista()
 		if not loc.get("id"):
@@ -365,14 +368,14 @@ class Locuri(object):
 			locuri.append(loc)
 		else:
 			locuri = [loc if l["id"] == loc["id"] else l for l in locuri]
-		self.scrie(locuri)
+		self.scrie(locuri, accepta=accepta)
 		return loc
 
-	def sterge(self, ident):
+	def sterge(self, ident, accepta=None):
 		locuri = self.lista()
 		rest = [l for l in locuri if l["id"] != ident]
 		if len(rest) != len(locuri):
-			self.scrie(rest)
+			self.scrie(rest, accepta=accepta)
 			return True
 		return False
 
@@ -423,7 +426,7 @@ class Parole(object):
 	def parola(self, ident):
 		return self.citeste().get(ident)
 
-	def pune(self, ident, parola):
+	def pune(self, ident, parola, accepta=None):
 		"""-> True daca s-a scris; False cand identitatea receptorului nu se poate citi."""
 		ident_cripto = self.identitate()
 		if not ident_cripto:
@@ -433,7 +436,7 @@ class Parole(object):
 			date.pop(ident, None)
 		else:
 			date[ident] = parola[:MAX_PAROLA]
-		_scrieAtomic(self.cale, self._modul().cripteaza(date, ident_cripto), 0o600)
+		_scrieAtomic(self.cale, self._modul().cripteaza(date, ident_cripto), 0o600, accepta=accepta)
 		return True
 
 	def pastreaza(self, idei):
@@ -524,10 +527,10 @@ def stare():
 def punctLoc(loc, montari=None):
 	"""Punctul de montare al locului: cel tinut minte, cel gasit in /proc/mounts dupa sursa, sau unul nou."""
 	s = _STARE.a(loc["id"])
-	if s.get("punct"):
-		return s["punct"]
 	montari = _montari() if montari is None else montari
 	sursa = sursaAsteptata(loc)
+	if s.get("punct") and (s["punct"] not in montari or montari[s["punct"]][0] == sursa):
+		return s["punct"]
 	for punct, (src, fel) in montari.items():
 		if src == sursa:
 			return punct
@@ -541,7 +544,7 @@ def esteMontat(loc, montari=None):
 		return False, u""
 	montari = _montari() if montari is None else montari
 	punct = punctLoc(loc, montari)
-	if punct in montari:
+	if punct in montari and montari[punct][0] == sursaAsteptata(loc):
 		return True, punct
 	sursa = sursaAsteptata(loc)
 	for p, (src, fel) in montari.items():
@@ -554,7 +557,9 @@ def descrie(loc, montari=None, cu_parola=None):
 	"""Un loc pentru ecran si pagina: fara parola, cu starea si textele."""
 	montat, punct = esteMontat(loc, montari)
 	s = _STARE.a(loc["id"])
-	if montat:
+	if s["stare"] == Stare.LUCREAZA or loc["id"] in _SALVARI:
+		st = Stare.LUCREAZA
+	elif montat:
 		st = Stare.MONTAT
 	elif s["stare"] in (Stare.LUCREAZA, Stare.EROARE):
 		st = s["stare"]
@@ -633,9 +638,20 @@ _rezultate = []
 _lacat_rez = threading.Lock()
 _ceas = [None]
 SINCRON = [False]       # probele de pe PC: totul pe loc, fara fire
+_termene = {}
+_active = set()
+_limitate = set()
+MAX_FIRE = 8
 
 
 def _culege():
+	for cheie, asteptare in list(_termene.items()):
+		if time.monotonic() >= asteptare[0]:
+			_termene.pop(cheie, None)
+			try:
+				asteptare[1]({"ok": False, "cod": "termen", "mesaj": textEroare("termen")})
+			except Exception as e:
+				_jurnal("termenul unei lucrari: %s" % e.__class__.__name__)
 	with _lacat_rez:
 		gata = list(_rezultate)
 		del _rezultate[:]
@@ -656,8 +672,10 @@ def _culege():
 _FIRE = [0]
 
 
-def lucreaza(tinta, argumente=(), gata=None, nume="HdsStocareRetea"):
+def lucreaza(tinta, argumente=(), gata=None, nume="HdsStocareRetea", termen=None, cheie=None):
 	"""Ruleaza tinta(*argumente) pe un fir; gata(rezultat) se cheama pe firul enigma2 (eTimer). In probe, pe loc."""
+	if termen is not None or cheie is not None:
+		return _lucreazaLimitat(tinta, argumente, gata, nume, termen, cheie)
 	if SINCRON[0]:
 		try:
 			rez = tinta(*argumente)
@@ -666,7 +684,15 @@ def lucreaza(tinta, argumente=(), gata=None, nume="HdsStocareRetea"):
 		if gata is not None:
 			gata(rez)
 		return
-
+	cheie_fir = object()
+	with _lacat_rez:
+		ocupat = cheie_fir in _active or len(_active) >= MAX_FIRE
+		if not ocupat:
+			_active.add(cheie_fir)
+	if ocupat:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
+		return
 	def fir():
 		try:
 			rez = tinta(*argumente)
@@ -676,11 +702,20 @@ def lucreaza(tinta, argumente=(), gata=None, nume="HdsStocareRetea"):
 		with _lacat_rez:
 			_rezultate.append((gata, rez))
 			_FIRE[0] -= 1
+			_active.discard(cheie_fir)
 	with _lacat_rez:
 		_FIRE[0] += 1
 	t = threading.Thread(target=fir, name=nume)
 	t.daemon = True
-	t.start()
+	try:
+		t.start()
+	except Exception:
+		with _lacat_rez:
+			_FIRE[0] -= 1
+			_active.discard(cheie_fir)
+		if gata:
+			gata({"ok": False, "cod": "alta", "mesaj": textEroare("alta")})
+		return
 	try:
 		from enigma import eTimer
 		if _ceas[0] is None:
@@ -691,31 +726,96 @@ def lucreaza(tinta, argumente=(), gata=None, nume="HdsStocareRetea"):
 		pass
 
 
+def _lucreazaLimitat(tinta, argumente=(), gata=None, nume="HdsStocareRetea", termen=None, cheie=None):
+	"""Pastreaza apelul public cu patru argumente si rezerva cererea pana se termina firul ei."""
+	if SINCRON[0]:
+		return lucreaza(tinta, argumente, gata, nume)
+	cheie_fir = cheie if cheie is not None else object()
+	with _lacat_rez:
+		ocupat = cheie_fir in _limitate
+		if not ocupat:
+			_limitate.add(cheie_fir)
+	if ocupat:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
+		return
+	jeton = object()
+	if termen is not None and gata is not None:
+		_termene[jeton] = (time.monotonic() + termen, gata)
+
+	def terminat(rez):
+		with _lacat_rez:
+			_limitate.discard(cheie_fir)
+		if termen is None or gata is None:
+			if gata:
+				gata(rez)
+			return
+		asteptare = _termene.pop(jeton, None)
+		if asteptare is not None:
+			gata(rez if time.monotonic() < asteptare[0] else
+				{"ok": False, "cod": "termen", "mesaj": textEroare("termen")})
+	return lucreaza(tinta, argumente, terminat, nume)
+
+
+_procese = set()
+_lacat_procese = threading.Lock()
+
+
 def _proces(mod, cerere, termen):
 	"""Ruleaza Components/HdsReteaUnealta.py intr-un proces copil, cererea (cu parola) pe intrarea standard."""
 	import subprocess
 	py = PYTHON if os.path.exists(PYTHON) else "python3"
 	cod = ("import sys; sys.path.insert(0, %r); from Components import HdsReteaUnealta as U; "
 		"sys.exit(U.main(sys.argv[1:]))" % DOSAR_PYTHON)
+	liber = mod == "demonteaza" and cerere.get("numai_liber")
+	if liber:
+		punct = cerere.get("punct") or ""
+		if not punct.startswith(DOSAR_MONTARI + "/") or "/.." in punct:
+			return {"ok": False, "cod": "cerere"}
+		comanda = ["/bin/umount", punct]
+		intrare = None
+	else:
+		comanda = [py, "-c", cod, mod]
+		intrare = (json.dumps(cerere) + "\n").encode("utf-8")
+	cheie = cerere.get("punct") or mod
+	with _lacat_procese:
+		if cheie in _procese or len(_procese) >= MAX_FIRE:
+			return {"ok": False, "cod": "ocupat"}
+		_procese.add(cheie)
+
+	def elibereaza():
+		with _lacat_procese:
+			_procese.discard(cheie)
+
 	try:
-		p = subprocess.Popen([py, "-c", cod, mod], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+		p = subprocess.Popen(comanda, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 			stderr=subprocess.DEVNULL, close_fds=True)
 	except OSError as e:
+		elibereaza()
 		_jurnal("procesul copil nu porneste: %s" % e.__class__.__name__)
 		return {"ok": False, "cod": "alta"}
 	try:
-		iesire, _x = p.communicate((json.dumps(cerere) + "\n").encode("utf-8"), timeout=termen)
-	except subprocess.TimeoutExpired:
+		iesire, _x = p.communicate(intrare, timeout=termen)
+	except (subprocess.TimeoutExpired, OSError) as e:
 		# un mount(2) blocat in nucleu de un server care tace nu se poate opri: copilul primeste semnalul, iar
 		# asteptarea lui ramane pe un fir separat; locul trece pe "termen", nu ramane "se monteaza" la nesfarsit
 		try:
 			p.kill()
 		except OSError:
 			pass
-		fir = threading.Thread(target=p.wait, name="HdsStocareRetea-copil")
+		def asteaptaCopil():
+			try:
+				p.wait()
+			finally:
+				elibereaza()
+		# Copilul si firul lui raman numarate pana ies, inclusiv dupa termenul cererii.
+		fir = threading.Thread(target=asteaptaCopil, name="HdsStocareRetea-copil")
 		fir.daemon = True
 		fir.start()
-		return {"ok": False, "cod": "termen"}
+		return {"ok": False, "cod": "termen" if isinstance(e, subprocess.TimeoutExpired) else "alta"}
+	elibereaza()
+	if liber:
+		return {"ok": p.returncode == 0, "cod": "" if p.returncode == 0 else "folosit"}
 	try:
 		return json.loads(iesire.decode("utf-8", "replace").strip().splitlines()[-1])
 	except (ValueError, IndexError):
@@ -758,7 +858,7 @@ def _scoateDinListe(punct):
 		pass
 
 
-def monteaza(ident, gata=None):
+def monteaza(ident, gata=None, _salvare=False):
 	"""Monteaza locul (smb, nfs) pe un fir, prin procesul copil. gata(rezultat) pe firul enigma2:
 	{ok, cod, mesaj, punct, vers}."""
 	loc = locuri().dupaId(ident)
@@ -767,6 +867,10 @@ def monteaza(ident, gata=None):
 		rez["mesaj"] = textEroare(rez["cod"])
 		if gata:
 			gata(rez)
+		return False
+	if (ident in _SALVARI and not _salvare) or _STARE.a(ident).get("stare") == Stare.LUCREAZA:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
 		return False
 	montat, punct = esteMontat(loc)
 	if montat:
@@ -812,15 +916,20 @@ def monteaza(ident, gata=None):
 		rez = dict(rez, punct=punct, mesaj=u"" if rez.get("ok") else textEroare(rez.get("cod") or "alta"))
 		if gata:
 			gata(rez)
-	lucreaza(lambda: PROCES[0]("monteaza", cerere, TERMEN_MONTARE_S), (), gataMontare, "HdsStocareRetea-monteaza")
+	lucreaza(lambda: PROCES[0]("monteaza", cerere, TERMEN_MONTARE_S), (), gataMontare, "HdsStocareRetea-monteaza",
+		termen=TERMEN_MONTARE_S + 1, cheie=("loc", ident))
 	return True
 
 
-def demonteaza(ident, gata=None):
+def demonteaza(ident, gata=None, numai_liber=False, sesiune=None, _salvare=False):
 	loc = locuri().dupaId(ident)
 	if loc is None:
 		if gata:
 			gata({"ok": False, "cod": "lipsa", "mesaj": textEroare("lipsa")})
+		return False
+	if (ident in _SALVARI and not _salvare) or _STARE.a(ident).get("stare") == Stare.LUCREAZA:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
 		return False
 	montat, punct = esteMontat(loc)
 	if not montat:
@@ -828,6 +937,10 @@ def demonteaza(ident, gata=None):
 		if gata:
 			gata({"ok": True, "deja": True})
 		return True
+	if numai_liber and _locFolosit(punct, sesiune):
+		if gata:
+			gata({"ok": False, "cod": "folosit", "mesaj": textEroare("folosit")})
+		return False
 	_STARE.pune(ident, stare=Stare.LUCREAZA, lucrare="demonteaza")
 
 	def gataDemontare(rez):
@@ -842,8 +955,8 @@ def demonteaza(ident, gata=None):
 			_STARE.pune(ident, stare=Stare.EROARE, lucrare=u"", cod=cod, mesaj=textEroare(cod))
 		if gata:
 			gata(dict(rez, mesaj=u"" if rez.get("ok") else textEroare(rez.get("cod") or "alta")))
-	lucreaza(lambda: PROCES[0]("demonteaza", {"punct": punct}, TERMEN_DEMONTARE_S), (), gataDemontare,
-		"HdsStocareRetea-demonteaza")
+	lucreaza(lambda: PROCES[0]("demonteaza", {"punct": punct, "numai_liber": numai_liber}, TERMEN_DEMONTARE_S), (), gataDemontare,
+		"HdsStocareRetea-demonteaza", termen=TERMEN_DEMONTARE_S + 1, cheie=("loc", ident))
 	return True
 
 
@@ -856,37 +969,80 @@ def verificaInregistrari(ident, gata=None):
 			gata({"ok": False, "cod": "nesuportat", "mesaj": _t("Înregistrările merg numai pe locurile SMB și NFS "
 				"montate.")})
 		return False
+	if loc.get("citire"):
+		if gata:
+			gata({"ok": False, "cod": "citire", "mesaj": textEroare("citire")})
+		return False
 	montat, punct = esteMontat(loc)
 	if not montat:
 		if gata:
 			gata({"ok": False, "cod": "nemontat", "mesaj": _t("Montează întâi locul.")})
 		return False
-	if loc.get("citire"):
+	if ident in _SALVARI or _STARE.a(ident).get("stare") == Stare.LUCREAZA:
 		if gata:
-			gata({"ok": False, "cod": "citire", "mesaj": textEroare("citire")})
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
 		return False
 	_STARE.pune(ident, stare=Stare.LUCREAZA, lucrare="viteza")
 
 	def gataViteza(rez):
 		_STARE.pune(ident, stare=Stare.MONTAT, lucrare=u"")
-		l = locuri().dupaId(ident)
-		if l is None:
-			return
 		if rez.get("ok"):
 			v = float(rez.get("scriere") or 0)
-			l["viteza"] = v
-			l["inregistrari"] = v >= VITEZA_MINIMA
-			locuri().pune(l)
 			rez = dict(rez, mesaj=textViteza(v))
 		else:
-			l["inregistrari"] = False
-			locuri().pune(l)
 			rez = dict(rez, mesaj=textEroare(rez.get("cod") or "alta"))
 		if gata:
 			gata(rez)
-	lucreaza(lambda: PROCES[0]("viteza", {"punct": punct}, TERMEN_VITEZA_S), (), gataViteza,
-		"HdsStocareRetea-viteza")
+	limita = time.monotonic() + TERMEN_VITEZA_S + TERMEN_RETEA_S
+
+	def lucruViteza():
+		rez = PROCES[0]("viteza", {"punct": punct}, TERMEN_VITEZA_S)
+		with _LACAT_SCRIERI:
+			l = locuri().dupaId(ident)
+			if l is None or not esteMontat(l)[0] or any(l.get(k) != loc.get(k) for k in
+				("fel", "gazda", "dosar", "port", "citire")):
+				return {"ok": False, "cod": "lipsa"}
+			l["viteza"] = float(rez.get("scriere") or 0) if rez.get("ok") else 0
+			l["inregistrari"] = bool(rez.get("ok")) and l["viteza"] >= VITEZA_MINIMA
+			locuri().pune(l, accepta=lambda: time.monotonic() < limita)
+		return rez
+	lucreaza(lucruViteza, (), gataViteza, "HdsStocareRetea-viteza",
+		termen=TERMEN_VITEZA_S + TERMEN_RETEA_S, cheie=("loc", ident))
 	return True
+
+
+def folosesteInregistrari(ident, gata=None, sesiune=None):
+	"""Monteaza, verifica scrierea si viteza, apoi alege efectiv locul, fara alt ecran."""
+	def final(rez):
+		if gata:
+			gata(rez)
+
+	def dupaViteza(rez):
+		if not rez.get("ok"):
+			final(rez)
+			return
+		loc = locuri().dupaId(ident)
+		montat, punct = esteMontat(loc) if loc else (False, u"")
+		bun = pentruInregistrari(punct) if montat else None
+		if not bun or bun[0] != ident:
+			final({"ok": False, "cod": "lent" if loc and loc.get("viteza", 0) < VITEZA_MINIMA else "lipsa",
+				"mesaj": textEroare("lent" if loc and loc.get("viteza", 0) < VITEZA_MINIMA else "lipsa")})
+			return
+		from Components import HdsLocInregistrari
+		r = HdsLocInregistrari.alegeRetea(ident, final, sesiune=sesiune)
+		if not r.get("ok"):
+			final(r)
+
+	def dupaMontare(rez):
+		if rez.get("ok"):
+			if sesiune is not None and _probaFolosita(sesiune):
+				final({"ok": False, "cod": "folosit", "mesaj": _t("Proba de viteză nu pornește în timpul redării "
+					"unui fișier, al timeshift-ului sau al înregistrărilor, nici înaintea unei înregistrări apropiate.")})
+				return
+			verificaInregistrari(ident, dupaViteza)
+		else:
+			final(rez)
+	return monteaza(ident, dupaMontare)
 
 
 def textViteza(v):
@@ -945,7 +1101,7 @@ def pentruInregistrari(punct):
 	if punct not in montari:
 		return None
 	for loc in locuri().lista():
-		if loc["fel"] not in FELURI_MONTATE or not loc.get("inregistrari"):
+		if loc["fel"] not in FELURI_MONTATE or not loc.get("inregistrari") or loc.get("citire"):
 			continue
 		montat, p = esteMontat(loc, montari)
 		if montat and p == punct:
@@ -1001,16 +1157,19 @@ def _pazeste():
 		if not isinstance(rez, list):
 			return
 		for loc, bun in rez:
+			if loc["id"] in _SALVARI or _STARE.a(loc["id"]).get("stare") == Stare.LUCREAZA:
+				continue
 			if bun:
 				_neraspuns.pop(loc["id"], None)
 				continue
 			_neraspuns[loc["id"]] = _neraspuns.get(loc["id"], 0) + 1
 			if _neraspuns[loc["id"]] >= 2:
 				_neraspuns.pop(loc["id"], None)
-				_jurnal("serverul locului %s nu raspunde: demontat" % loc["id"])
+				_jurnal("serverul locului %s nu raspunde" % loc["id"])
 				demonteaza(loc["id"], lambda r, n=loc["nume"]: _anunta(_t("Serverul locului %s nu mai răspunde, așa "
-					"că locul a fost demontat. Îl poți monta din nou din Locuri din rețea.") % n))
-	lucreaza(verifica, (), gataPaza, "HdsStocareRetea-paza")
+					"că locul a fost demontat. Îl poți monta din nou din Locuri din rețea.") % n) if r.get("ok") else None,
+					numai_liber=True)
+	lucreaza(verifica, (), gataPaza, "HdsStocareRetea-paza", cheie=("paza",))
 
 
 def _raspundeTcp(gazda, port, termen):
@@ -1102,7 +1261,7 @@ def cautaInCasa(gata=None):
 				timp=time.time())
 		if gata:
 			gata(rez)
-	lucreaza(CAUTARE[0], (), gataCautare, "HdsStocareRetea-cautare")
+	lucreaza(CAUTARE[0], (), gataCautare, "HdsStocareRetea-cautare", termen=TERMEN_RETEA_S * 2, cheie=("cautare",))
 	return True
 
 
@@ -1495,13 +1654,17 @@ def _listeazaDlna(loc, obiect):
 	return intrari
 
 
-def listeaza(ident, cale=u"", gata=None):
+def listeaza(ident, cale=u"", gata=None, _salvare=False):
 	"""Continutul unui dosar al locului, pe un fir. gata({ok, cod, mesaj, intrari: [{nume, dosar, marime, data, cale,
 	adresa, subtitrari}], cale}). La smb si nfs locul se monteaza intai, daca nu e montat."""
 	loc = locuri().dupaId(ident)
 	if loc is None:
 		if gata:
 			gata({"ok": False, "cod": "lipsa", "mesaj": textEroare("lipsa"), "intrari": []})
+		return False
+	if (ident in _SALVARI and not _salvare) or _STARE.a(ident).get("stare") == Stare.LUCREAZA:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează..."), "intrari": []})
 		return False
 	if loc["fel"] != "dlna" and not caleBuna(cale):
 		if gata:
@@ -1512,10 +1675,10 @@ def listeaza(ident, cale=u"", gata=None):
 		if not montat:
 			def dupaMontare(r):
 				if r.get("ok"):
-					listeaza(ident, cale, gata)
+					listeaza(ident, cale, gata, _salvare=_salvare)
 				elif gata:
 					gata(dict(r, intrari=[]))
-			return monteaza(ident, dupaMontare)
+			return monteaza(ident, dupaMontare, _salvare=_salvare)
 	parola = parole().parola(ident) if loc.get("utilizator") else None
 	if loc.get("utilizator") and parola is None and loc["fel"] not in FELURI_MONTATE:
 		if gata:
@@ -1525,7 +1688,10 @@ def listeaza(ident, cale=u"", gata=None):
 	def lucru():
 		try:
 			if loc["fel"] in FELURI_MONTATE:
-				intrari = _listeazaLocal(esteMontat(loc)[1], cale)
+				montat, punct = esteMontat(loc)
+				if not montat:
+					return {"ok": False, "cod": "lipsa", "mesaj": textEroare("lipsa"), "intrari": [], "cale": cale}
+				intrari = _listeazaLocal(punct, cale)
 			elif loc["fel"] in ("ftp", "ftps"):
 				intrari = _listeazaFtp(loc, parola, cale)
 			elif loc["fel"] in ("webdav", "webdavs"):
@@ -1539,7 +1705,8 @@ def listeaza(ident, cale=u"", gata=None):
 			_jurnal("rasfoirea locului %s: %s (%s)" % (ident, cod, e.__class__.__name__))
 			return {"ok": False, "cod": cod, "mesaj": textEroare(cod), "intrari": [], "cale": cale}
 		return {"ok": True, "intrari": _ordoneaza(intrari), "toate": intrari, "cale": cale}
-	lucreaza(lucru, (), gata, "HdsStocareRetea-listeaza")
+	lucreaza(lucru, (), gata, "HdsStocareRetea-listeaza", termen=TERMEN_RETEA_S * 2,
+		cheie=("listeaza", ident, cale))
 	return True
 
 
@@ -1591,7 +1758,8 @@ def dosareServer(fel, gazda, utilizator=u"", ident=None, parola=None, gata=None)
 			cod = getattr(e, "cod", None) or _codDinExceptie(e)
 			return {"ok": False, "cod": cod, "mesaj": textEroare(cod), "dosare": []}
 		return {"ok": False, "cod": "nesuportat", "mesaj": textEroare("nesuportat"), "dosare": []}
-	lucreaza(lucru, (), gata, "HdsStocareRetea-dosare")
+	_lucreazaLimitat(lucru, (), gata, "HdsStocareRetea-dosare", termen=TERMEN_RETEA_S * 2,
+		cheie=("dosare", fel, gazda, utilizator))
 	return True
 
 
@@ -1893,7 +2061,135 @@ def _curataSubtitrari():
 
 # ------------------------------------------------------------------ adaugarea, schimbarea, stergerea
 
-def salveaza(date, parola=None, ident=None):
+_SALVARI = set()
+_LACAT_SCRIERI = threading.RLock()
+
+
+def _probaFolosita(sesiune):
+	"""Proba mare nu concureaza cu redarea si scrierea; sunt acoperite si caile care trec prin legaturi."""
+	try:
+		nav = sesiune.nav
+		ref = nav.getCurrentlyPlayingServiceReference()
+		if ref is not None and ref.getPath():
+			return True
+		pip = getattr(sesiune, "pip", None)
+		if pip is not None:
+			ref = pip.getCurrentService()
+			if ref is not None and ref.getPath():
+				return True
+		from Components.HdsDiscuri import stareInregistrari
+		st = stareInregistrari(nav=nav)
+		urmatoarea = st.get("urmatoarea") or 0
+		return bool(st.get("in_curs") or st.get("fisiere") or st.get("timeshift") or
+			(urmatoarea and urmatoarea <= time.time() + TERMEN_VITEZA_S + TERMEN_RETEA_S + 10))
+	except Exception:
+		return True
+
+
+def _locFolosit(punct, sesiune=None):
+	"""Numai starea playerului si a inregistrarilor, fara citirea locului de retea."""
+	def inauntru(cale):
+		cale = (cale or u"").rstrip("/")
+		return cale == punct or cale.startswith(punct.rstrip("/") + "/")
+
+	try:
+		nav = getattr(sesiune, "nav", None)
+		if nav is None:
+			import NavigationInstance
+			nav = NavigationInstance.instance
+		if nav is None:
+			return True
+		ref = nav.getCurrentlyPlayingServiceReference()
+		if ref is not None and inauntru(ref.getPath()):
+			return True
+		pip = getattr(sesiune, "pip", None)
+		if pip is not None:
+			ref = pip.getCurrentService()
+			if ref is not None and inauntru(ref.getPath()):
+				return True
+		from Components.HdsDiscuri import stareInregistrari
+		st = stareInregistrari(nav=nav)
+		fisiere = st.get("fisiere") or []
+		urmatoarea = st.get("urmatoarea") or 0
+		return bool(any(inauntru(cale) for cale in fisiere) or inauntru(st.get("timeshift")) or
+			st.get("in_curs", 0) > len(fisiere) or (urmatoarea and
+				urmatoarea <= time.time() + TERMEN_DEMONTARE_S + TERMEN_RETEA_S + TERMEN_MONTARE_S + 10))
+	except Exception:
+		return True
+
+
+def salveazaSiConecteaza(date, parola=None, ident=None, gata=None, sesiune=None):
+	"""Salvarea ceruta de om conecteaza locul. O editare montata se aplica numai cand locul este liber."""
+	cheie = ident or "nou"
+	if cheie in _SALVARI or (ident and _STARE.a(ident).get("stare") == Stare.LUCREAZA):
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
+		return False
+	vechi = locuri().dupaId(ident) if ident else None
+	if ident and vechi is None:
+		if gata:
+			gata({"ok": False, "cod": "lipsa", "mesaj": textEroare("lipsa")})
+		return False
+	loc, cod, mesaj = curata(date, vechi)
+	if loc is None:
+		if gata:
+			gata({"ok": False, "cod": cod, "mesaj": mesaj})
+		return False
+	montat, punct = esteMontat(vechi) if vechi else (False, u"")
+	remonteaza = montat and (parola is not None or any(vechi.get(k) != loc.get(k) for k in
+		("fel", "gazda", "dosar", "port", "utilizator", "citire")))
+	if remonteaza and _locFolosit(punct, sesiune):
+		if gata:
+			gata({"ok": False, "cod": "folosit", "mesaj": textEroare("folosit")})
+		return False
+	_SALVARI.add(cheie)
+
+	def final(rez):
+		_SALVARI.discard(cheie)
+		if gata:
+			gata(rez)
+
+	def dupaScriere(rez):
+		if not rez.get("ok"):
+			if remonteaza and rez.get("cod") != "termen":
+				monteaza(ident, _salvare=True)
+			final(rez)
+			return
+		d = rez["loc"]
+		avertizare = rez.get("mesaj") or u""
+
+		def conectat(r):
+			mesaj = avertizare or (_t("Locul %s este conectat.") % d["nume"])
+			if not r.get("ok"):
+				mesaj = _t("Locul s-a salvat, dar nu s-a conectat: %s") % (r.get("mesaj") or textEroare(r.get("cod")))
+			final({"ok": bool(r.get("ok")), "cod": r.get("cod") or "", "mesaj": mesaj, "loc": d})
+		if d["fel"] in FELURI_MONTATE:
+			monteaza(d["id"], conectat, _salvare=True)
+		else:
+			listeaza(d["id"], gata=conectat, _salvare=True)
+
+	def scrie():
+		limita = time.monotonic() + TERMEN_RETEA_S
+		def lucru():
+			d, eroare = salveaza(date, parola, ident, accepta=lambda: time.monotonic() < limita)
+			return {"ok": d is not None, "loc": d, "mesaj": eroare}
+		lucreaza(lucru, (), dupaScriere, "HdsStocareRetea-salveaza", termen=TERMEN_RETEA_S,
+			cheie=("salveaza", cheie))
+
+	if remonteaza:
+		demonteaza(ident, lambda rez: scrie() if rez.get("ok") else final(rez), numai_liber=True,
+			sesiune=sesiune, _salvare=True)
+	else:
+		scrie()
+	return True
+
+
+def salveaza(date, parola=None, ident=None, accepta=None):
+	with _LACAT_SCRIERI:
+		return _salveaza(date, parola, ident, accepta)
+
+
+def _salveaza(date, parola=None, ident=None, accepta=None):
 	"""Adauga (ident None) sau schimba un loc. parola: None = neschimbata, "" = stearsa, text = noua.
 	-> (loc descris sau None, text eroare)."""
 	L = locuri()
@@ -1912,26 +2208,36 @@ def salveaza(date, parola=None, ident=None):
 		if parola is None and vechi.get("gazda") != loc.get("gazda"):
 			parola = u""
 	try:
-		loc = L.pune(loc)
+		loc = L.pune(loc, accepta=accepta) if accepta is not None else L.pune(loc)
 	except ValueError:
 		return None, _t("Sunt prea multe locuri. Șterge unul pe care nu îl mai folosești.")
 	except (OSError, IOError) as e:
 		_jurnal("locul nu se poate scrie: %s" % e.__class__.__name__)
 		return None, _t("Locul nu s-a putut salva pe receptor.")
 	if parola is not None and loc.get("utilizator"):
-		if not parole().pune(loc["id"], parola if parola else None):
+		p = parole()
+		scris = p.pune(loc["id"], parola if parola else None, accepta=accepta) if accepta is not None else \
+			p.pune(loc["id"], parola if parola else None)
+		if not scris:
 			return descrie(loc), _t("Locul s-a salvat, dar parola nu se poate păstra pe acest receptor.")
 	elif not loc.get("utilizator") and parole().are(loc["id"]):
-		parole().pune(loc["id"], None)
+		if accepta is not None:
+			parole().pune(loc["id"], None, accepta=accepta)
+		else:
+			parole().pune(loc["id"], None)
 	return descrie(loc), u""
 
 
-def sterge(ident, gata=None):
+def sterge(ident, gata=None, sesiune=None):
 	"""Demonteaza (daca e montat) si sterge locul si parola lui."""
 	loc = locuri().dupaId(ident)
 	if loc is None:
 		if gata:
 			gata({"ok": False, "cod": "lipsa", "mesaj": textEroare("lipsa")})
+		return False
+	if ident in _SALVARI or _STARE.a(ident).get("stare") == Stare.LUCREAZA:
+		if gata:
+			gata({"ok": False, "cod": "ocupat", "mesaj": _t("Se lucrează...")})
 		return False
 
 	def dupa(r):
@@ -1939,17 +2245,29 @@ def sterge(ident, gata=None):
 			if gata:
 				gata(r)
 			return
-		locuri().sterge(ident)
-		try:
-			parole().pune(ident, None)
-		except Exception:
-			pass
-		with _STARE.lacat:
-			_STARE.locuri.pop(ident, None)
-		if gata:
-			gata({"ok": True})
+		limita = time.monotonic() + TERMEN_RETEA_S
+
+		def lucru():
+			with _LACAT_SCRIERI:
+				if time.monotonic() >= limita:
+					return {"ok": False, "cod": "termen"}
+				locuri().sterge(ident, accepta=lambda: time.monotonic() < limita)
+				try:
+					parole().pune(ident, None, accepta=lambda: time.monotonic() < limita)
+				except Exception:
+					pass
+			return {"ok": True}
+
+		def sters(rez):
+			if rez.get("ok"):
+				with _STARE.lacat:
+					_STARE.locuri.pop(ident, None)
+			if gata:
+				gata(rez)
+		lucreaza(lucru, (), sters, "HdsStocareRetea-sterge", termen=TERMEN_RETEA_S,
+			cheie=("sterge", ident))
 	if loc["fel"] in FELURI_MONTATE and esteMontat(loc)[0]:
-		return demonteaza(ident, dupa)
+		return demonteaza(ident, dupa, numai_liber=True, sesiune=sesiune)
 	dupa({"ok": True, "deja": True})
 	return True
 

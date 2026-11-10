@@ -1319,14 +1319,55 @@ def semnal_purtator(sref):
 	return val
 
 
-def frontend_status(service, sref):
+# cheile starii tunerului si constantele iFrontendInformation din care se citesc
+_FE_CHEI = (("power", "signalPower"), ("quality", "signalQuality"), ("ber", "bitErrorRate"), ("lock", "lockState"),
+	("number", "frontendNumber"))
+FE_TOATE = tuple(k for k, c in _FE_CHEI)
+
+
+def _citeste_chei(fe, val, chei, incercat):
+	"""citeste in val cheile din chei care lipsesc si nu s-au incercat inca; True cand macar una s-a citit"""
+	got = False
+	for key, cname in _FE_CHEI:
+		if key not in chei or key in val or key in incercat:
+			continue
+		incercat.add(key)
+		c = _fe_const(cname)
+		if c is None:
+			continue
+		try:
+			val[key] = int(fe.getFrontendInfo(c))
+			got = True
+		except Exception:
+			pass
+	return got
+
+
+def frontend_status(service, sref, chei=None):
 	"""{'power','quality','ber','lock','number'} citite din placa, memo 0,5 s pe serviciu. La un serviciu redat dintr-un
 	flux: tunerul care tine purtatorul (semnal_purtator, cu 'purtator': True) sau None, niciodata zerourile canalului
-	PVR."""
+	PVR.
+
+	chei: numai acestea se citesc (implicit toate). Pe Vu+ fiecare citire e un ioctl pe I2C, cu firul principal blocat
+	cat dureaza (6 ms pe Duo 4K, mai mult pe Solo SE): bara temei arata numai nivelul si calitatea, deci cere numai
+	("power",) si ("quality",). In memo se tin numai numere, niciun obiect enigma2 (un serviciu tinut aici n-ar mai fi
+	eliberat la schimbarea canalului); o cheie lipsa ceruta in memo se citeste atunci, o singura data."""
+	chei = FE_TOATE if chei is None else chei
 	now = _now()
 	if _fe_memo["ref"] == sref and 0.0 <= now - _fe_memo["t"] < 0.5:
-		return _fe_memo["val"]
+		val = _fe_memo["val"]
+		if not isinstance(val, dict) or _fe_memo.get("complet") or all(k in val for k in chei):
+			return val
+		try:
+			fe = service and service.frontendInfo()
+			if fe:
+				_citeste_chei(fe, val, chei, _fe_memo.setdefault("incercat", set()))
+		except Exception as e:
+			log_once("frontend", e)
+		return val
 	val = None
+	complet = True
+	incercat = set()
 	try:
 		din_flux = ref_din_flux(sref)
 		fe = None if din_flux else (service and service.frontendInfo())
@@ -1334,18 +1375,9 @@ def frontend_status(service, sref):
 			val = semnal_purtator(sref)
 		elif fe:
 			val = {}
-			got = False
-			for key, cname in (("power", "signalPower"), ("quality", "signalQuality"), ("ber", "bitErrorRate"), ("lock", "lockState"), ("number", "frontendNumber")):
-				c = _fe_const(cname)
-				if c is None:
-					continue
-				try:
-					v = fe.getFrontendInfo(c)
-					val[key] = int(v)
-					got = True
-				except Exception:
-					pass
-			if not got:
+			complet = False
+			if not _citeste_chei(fe, val, chei, incercat):
+				complet = True
 				try:
 					d = fe.getAll(False)
 				except Exception:
@@ -1363,9 +1395,12 @@ def frontend_status(service, sref):
 	except Exception as e:
 		log_once("frontend", e)
 		val = None
+		complet = True
 	_fe_memo["t"] = now
 	_fe_memo["ref"] = sref
 	_fe_memo["val"] = val
+	_fe_memo["complet"] = complet
+	_fe_memo["incercat"] = incercat
 	return val
 
 
@@ -3996,7 +4031,11 @@ def tuner_state(service, sref):
 			val = u"LOCKED" if lock == 1 else (u"LOSTLOCK" if lock == 0 else u"")
 		else:
 			fe = service and service.frontendInfo()
-			d = fe.getAll(False) if fe else None
+			# getFrontendStatus are starea; getAll(False) facea in plus dictionarul transponderului si al tunerului
+			citeste = getattr(fe, "getFrontendStatus", None) if fe else None
+			d = citeste() if citeste is not None else None
+			if not isinstance(d, dict) and fe:
+				d = fe.getAll(False)
 			if isinstance(d, dict):
 				val = u(d.get("tuner_state")).upper()
 	except Exception as e:

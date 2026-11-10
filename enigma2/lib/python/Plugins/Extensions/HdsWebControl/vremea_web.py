@@ -54,12 +54,14 @@ def seteaza(argumente, V=None):
 def cauta(nume, V=None):
 	"""Se cheama numai pe fir separat, niciodata direct din render_GET."""
 	V = _v(V)
+	rezultat = V.cautaOraseRezultat(nume)
 	rez = []
-	for oras in V.cautaOrase(nume)[:20]:
+	for oras in rezultat["orase"][:20]:
 		cod = V.codOras(oras)
 		if cod:
 			rez.append({"nume": oras["nume"], "cod": cod})
-	return {"result": True, "orase": rez}
+	rezultat["orase"] = rez
+	return rezultat
 
 
 def argumente(request):
@@ -133,14 +135,14 @@ def rute(baza, resource, V=None, pe_fir=None, neterminat=None):
 
 				def esec(motiv):
 					return gata({"result": False, "orase": [], "message":
-						_t("Orașele nu se pot căuta acum. Încearcă din nou.")})
+						W.mesajCautare("serviciu"), "motiv": "serviciu"})
 
 				request.notifyFinish().addErrback(deconectata)
 				deferToThread(cauta, nume, W).addCallbacks(gata, esec)
 				return NOT_DONE_YET
 			except Exception as e:
 				print("[HdsWebControl] cautare oras: %s" % type(e).__name__)
-				return eroare(self, request, "Orașele nu se pot căuta acum. Încearcă din nou.")
+				return eroare(self, request, _v(V).mesajCautare("serviciu"))
 
 	class PaginaResource(resource.Resource):
 		isLeaf = True
@@ -169,6 +171,7 @@ PAGINA = """<!DOCTYPE html>
   .cautare input{flex:1;min-width:160px;}
   .legaturi{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;}
   #oras{width:100%;}
+  #orasAcum{font:inherit;text-align:left;}
 </style>
 </head>
 <body>
@@ -207,7 +210,8 @@ PAGINA = """<!DOCTYPE html>
   <div class="butoane"><button type="submit" id="salveaza" class="principal">Salvează</button></div>
   <p class="nota">Pe afișajul din față, alege vremea din lista de rotire.</p>
 </form>
-<p class="nota" id="acum"></p>
+<p class="nota"><button type="button" id="orasAcum" class="ascuns" aria-controls="nume"
+  title="Caută un oraș după nume"></button> <span id="acum"></span></p>
 <nav class="legaturi">
   <a id="temaLegatura" href="/tema-tv">Tema interfeței</a>
   <a id="afisajLegatura" href="/afisaj">Afișajul din față</a>
@@ -216,6 +220,7 @@ PAGINA = """<!DOCTYPE html>
 <script>
 __SCRIPT_COMUN__
 var salvate = null;
+var cautareInitiala = (new URLSearchParams(window.location.search).get("q") || "").slice(0, 80);
 function optiune(valoare, nume){
   var o = document.createElement("option"); o.value = valoare; o.textContent = nume;
   return o;
@@ -229,10 +234,15 @@ function arata(d){
   if(salvate.oras){ s.appendChild(optiune(salvate.oras, salvate.oras_nume)); }
   s.value = salvate.oras || "";
   var v = d.date || {}, t = d.texte || {};
+  $("orasAcum").textContent = v.oras || salvate.oras_nume || s.options[0].textContent;
+  $("orasAcum").classList.remove("ascuns");
   $("acum").textContent = t.temperatura ?
-    [v.oras, t.temperatura, v.stare].filter(Boolean).join(", ") : "";
+    [t.temperatura, v.stare].filter(Boolean).join(", ") : "";
   $("setari").classList.remove("ascuns");
 }
+$("orasAcum").addEventListener("click", function(){
+  $("nume").focus(); $("nume").select();
+});
 function cauta(){
   var nume = $("nume").value.trim();
   if(nume.length < 2){
@@ -242,7 +252,7 @@ function cauta(){
   $("rezultate").textContent = "Se caută orașele...";
   cerere("/api/vremea-orase?q=" + encodeURIComponent(nume)).then(function(d){
     if(!d.result){
-      $("rezultate").textContent = d.message || "Orașele nu se pot căuta acum."; return;
+      $("rezultate").textContent = d.message || "Receptorul nu răspunde."; return;
     }
     var s = $("oras"), ales = s.value;
     var numeAles = s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent : "";
@@ -255,9 +265,9 @@ function cauta(){
     });
     s.value = Array.from(s.options).some(function(o){ return o.value === ales; }) ? ales : "";
     $("rezultate").textContent = d.orase && d.orase.length ?
-      "Alege orașul din listă, apoi salvează." : "Nu s-au găsit orașe. Încearcă un alt nume.";
+      "Alege orașul din listă, apoi salvează." : d.message;
     if(d.orase && d.orase.length){ s.focus(); }
-  }).catch(function(){ $("rezultate").textContent = "Orașele nu se pot căuta acum. Încearcă din nou."; })
+  }).catch(function(){ $("rezultate").textContent = "Receptorul nu răspunde."; })
     .finally(function(){ $("cauta").disabled = false; $("salveaza").disabled = false; });
 }
 $("cauta").addEventListener("click", cauta);
@@ -279,7 +289,12 @@ $("setari").addEventListener("submit", function(e){
 $("temaLegatura").href = adresa("/tema-tv");
 $("afisajLegatura").href = adresa("/afisaj");
 cerere("/api/vremea").then(function(d){
-  if(d.result){ arata(d); mesaj(""); }
+  if(d.result){
+    arata(d); mesaj("");
+    if(cautareInitiala){
+      $("nume").value = cautareInitiala; cautareInitiala = ""; cauta();
+    }
+  }
   else { mesaj(d.message || "Setările vremii nu se pot citi acum.", true); }
 }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 </script>
@@ -314,10 +329,7 @@ TEXTE_PAGINA = {
 	"js": (
 		N_("Scrie cel puțin două litere din numele orașului."),
 		N_("Se caută orașele..."),
-		N_("Orașele nu se pot căuta acum."),
 		N_("Alege orașul din listă, apoi salvează."),
-		N_("Nu s-au găsit orașe. Încearcă un alt nume."),
-		N_("Orașele nu se pot căuta acum. Încearcă din nou."),
 		N_("Se salvează..."),
 		N_("Setările au fost salvate."),
 		N_("Setările nu au fost salvate."),

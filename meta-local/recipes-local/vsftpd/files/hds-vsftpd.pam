@@ -5,13 +5,14 @@
 #    „reusit” numai pentru adresele din retelele locale; orice alt rezultat, si o eroare de citire, opreste logarea pe
 #    loc (requisite), fara verificarea parolei;
 # 2. conturile de sistem din /etc/vsftpd.ftpusers nu intra prin FTP;
-# 3. „Fără parolă în rețeaua locală” (Setări > Rețea & Conexiuni > Parola receptorului): acelasi comutator ca in
-#    /etc/pam.d/dropbear, /etc/security/hds-ssh-retea-locala.conf (il scrie ecranul). Numai „refuzat” (regula „-”, optiunea
-#    pornita) duce la pam_permit; orice alt rezultat, si fisier lipsa, gol sau stricat, sare la verificarea parolei.
+# 3. parola din reteaua de acasa (Setari > Retea > Parola receptorului,): comutatorul FTP,
+#    /etc/security/hds-ftp-retea-locala.conf (il scrie ecranul, separat de cel al SSH). Din fabrica are regula -: din casa
+#    root intra cu orice parola (si goala, 1234, admin, root, pass). Numai „refuzat” (regula -) duce la pam_permit; orice
+#    alt rezultat, si fisier lipsa, gol sau stricat, sare la verificarea parolei (cand omul si-a pus parola pentru FTP).
 
 auth     requisite                       pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup
 auth     required                        pam_listfile.so item=user sense=deny file=/etc/vsftpd.ftpusers onerr=succeed
-auth     [perm_denied=ignore default=1]  pam_access.so accessfile=/etc/security/hds-ssh-retea-locala.conf nodefgroup
+auth     [perm_denied=ignore default=1]  pam_access.so accessfile=/etc/security/hds-ftp-retea-locala.conf nodefgroup
 auth     [success=done default=ignore]   pam_permit.so
 auth     include  common-auth
 account  include  common-account

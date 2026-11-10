@@ -84,7 +84,7 @@ def _detaliiResetare(R, sesiune):
 	d = [_t("Se pierd toate setările: listele de canale și favoritele, canalele găsite la scanare, setările antenei și "
 		"ale tunerelor, programările înregistrărilor, setările interfeței web și browserele conectate la ea."),
 		_t("Înregistrările de pe disc sau stick rămân."),
-		_t("Interfața iese și pornește din nou singură. Browserul se conectează apoi din nou, cu codul de pe televizor.")]
+		_t("Interfața iese și pornește din nou singură. Browserul intră apoi din nou direct (cu parola ta numai dacă ai pus-o).")]
 	if _inregistrari(sesiune):
 		d.append(_t("Înregistrările în curs se opresc."))
 	if not R.implicitele():
@@ -299,7 +299,7 @@ __STIL_PAGINI__
   <p class="intrebare">La revenirea la setările din fabrică se pierd TOATE setările receptorului.</p>
   <p class="nota">Se pierd: listele de canale și favoritele, canalele găsite la scanare, setările antenei și ale tunerelor (inclusiv datele sateliților), programările înregistrărilor, setările interfeței web și browserele conectate la ea.</p>
   <p class="nota">Rămân: înregistrările de pe disc sau stick.</p>
-  <p class="nota">După revenire interfața pornește din nou singură. Browserul se conectează apoi din nou, cu codul de pe televizor. Dacă ai schimbat portul interfeței web, ea răspunde din nou pe portul 80.</p>
+  <p class="nota">După revenire interfața pornește din nou singură. Browserul intră apoi din nou direct (cu parola ta numai dacă ai pus-o). Dacă ai schimbat portul interfeței web, ea răspunde din nou pe portul 80.</p>
   <p class="nota eroare ascuns" id="faraImplicite">Dosarul cu valorile din fabrică lipsește pe acest receptor: după revenire interfața pornește fără setări și fără liste de canale.</p>
   <p class="nota ascuns" id="cuInregistrari">O înregistrare e în curs: se oprește la revenire.</p>
   <label class="bifa" for="inteleg"><input type="checkbox" id="inteleg"> Înțeleg că se pierd toate setările</label>
@@ -431,8 +431,8 @@ TEXTE_PAGINA = {
 			"tunerelor (inclusiv datele sateliților), programările înregistrărilor, setările interfeței web "
 			"și browserele conectate la ea."),
 		N_("Rămân: înregistrările de pe disc sau stick."),
-		N_("După revenire interfața pornește din nou singură. Browserul se conectează apoi din nou, cu "
-			"codul de pe televizor. Dacă ai schimbat portul interfeței web, ea răspunde din nou pe portul 80."),
+		N_("După revenire interfața pornește din nou singură. Browserul intră apoi din nou direct (cu parola ta "
+			"numai dacă ai pus-o). Dacă ai schimbat portul interfeței web, ea răspunde din nou pe portul 80."),
 		N_("Dosarul cu valorile din fabrică lipsește pe acest receptor: după revenire interfața pornește "
 			"fără setări și fără liste de canale."),
 		N_("O înregistrare e în curs: se oprește la revenire."),

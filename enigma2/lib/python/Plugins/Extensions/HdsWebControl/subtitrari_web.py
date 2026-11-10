@@ -207,12 +207,17 @@ def contorLaZero(M=None, O=None):
 	return d
 
 
+def _vedere(M):
+	return {"scurte": list(M.CHEI_SCURTE), "ascunse_modificate": M.numarReglajeAscunse(),
+		"text_ascunse": M.textReglajeAscunse()}
+
+
 def stare(M=None):
 	"""Pentru GET /api/subtitrari-aspect: valorile de acum, alegerile [valoare, text], stilurile gata facute, stilul
 	care se potriveste acum si valorile de la inceput."""
 	M = _m(M)
 	M.reimprospateazaFonturi()
-	return {
+	rez = {
 		"result": True,
 		"valori": M.stare(),
 		"alegeri": M.alegeri(),
@@ -224,6 +229,8 @@ def stare(M=None):
 		"ascunse": [] if M.seAlegeMarireaDvb() else ["marire_dvb"],
 		"ocr": _contorSigur(M),
 	}
+	rez.update(_vedere(M))
+	return rez
 
 
 def _contorSigur(M):
@@ -235,7 +242,9 @@ def _contorSigur(M):
 
 
 def _raspuns(M, rezultat, mesaj):
-	return {"result": rezultat, "message": mesaj, "valori": M.stare(), "alegeri": M.alegeri(), "stil": M.stilCurent()}
+	rez = {"result": rezultat, "message": mesaj, "valori": M.stare(), "alegeri": M.alegeri(), "stil": M.stilCurent()}
+	rez.update(_vedere(M))
+	return rez
 
 
 def seteaza(argumente, M=None):
@@ -440,6 +449,8 @@ PAGINA = """<!DOCTYPE html>
 <h1>Aspectul subtitrărilor</h1>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
 <div id="continut" class="ascuns">
+  <div class="butoane"><button type="button" id="vedere" aria-expanded="false" aria-controls="grupe ocr">Toate reglajele</button></div>
+  <p class="nota" id="reglaje-ascunse"></p>
   <div id="grupe"></div>
   <section class="card ascuns" id="ocr">
     <h2>Recunoașterea textului</h2>
@@ -474,6 +485,8 @@ var GRUPE = [
 var CULORI = {culoare: 1, culoare_contur: 1, culoare_umbra: 1, culoare_fundal: 1};
 var ALTA = "__alta";
 var ultim = null;
+var toateReglaje = false;
+var ultimulOcr = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -499,6 +512,7 @@ function trimite(p){
 }
 var ocrPentruTraducere = false;
 function improspateazaOcrDupaSchimbare(){
+  if(!toateReglaje){ $("ocr").classList.add("ascuns"); return; }
   if(ultim && ultim.valori && ultim.valori.marire_dvb === "ocr"){ $("ocr").classList.remove("ascuns"); improspateazaOcr(); }
   else if(ocrPentruTraducere){ improspateazaOcr(); }
   else { $("ocr").classList.add("ascuns"); }
@@ -526,6 +540,7 @@ function valoareText(cheie){
   return String(v);
 }
 function seVede(r){
+  if(!toateReglaje && ultim.scurte && r[0] !== "stil" && ultim.scurte.indexOf(r[0]) === -1){ return false; }
   if(r.length < 3){ return true; }
   var v = ultim.valori[r[2]];
   return r[4] ? v === r[3] : v !== r[3];
@@ -534,7 +549,15 @@ function puneTot(d){
   if(d.alegeri){ ultim.alegeri = d.alegeri; }
   if(d.valori){ ultim.valori = d.valori; }
   if(d.stil){ ultim.stil = d.stil; }
-  GRUPE.forEach(function(g){
+  if(d.scurte){ ultim.scurte = d.scurte; }
+  if(d.ascunse_modificate !== undefined){ ultim.ascunse_modificate = d.ascunse_modificate; }
+  if(d.text_ascunse !== undefined){ ultim.text_ascunse = d.text_ascunse; }
+  $("vedere").textContent = toateReglaje ? "Vedere scurtă" : "Toate reglajele";
+  $("vedere").setAttribute("aria-expanded", toateReglaje ? "true" : "false");
+  $("reglaje-ascunse").textContent = ultim.text_ascunse || "";
+  $("reglaje-ascunse").classList.toggle("ascuns", toateReglaje);
+  GRUPE.forEach(function(g, i){
+    var vizibile = 0;
     g[1].forEach(function(r){
       var s = $("alege-" + r[0]); if(!s){ return; }
       var culoare = !!CULORI[r[0]];
@@ -543,15 +566,19 @@ function puneTot(d){
         var c = $("culoare-" + r[0]), v = ultim.valori[r[0]];
         if(v && v.charAt(0) === "#"){ c.value = v; c.disabled = false; } else { c.disabled = true; }
       }
-      $("rand-" + r[0]).classList.toggle("ascuns", !seVede(r));
+      var vizibil = seVede(r);
+      if(vizibil){ vizibile++; }
+      $("rand-" + r[0]).classList.toggle("ascuns", !vizibil);
+      var nota = $("nota-" + r[0]); if(nota){ nota.classList.toggle("ascuns", !vizibil); }
     });
+    var grupa = $("grupa-" + i); if(grupa){ grupa.classList.toggle("ascuns", !vizibile); }
   });
 }
 function construieste(){
   var c = $("grupe");
   while(c.firstChild){ c.removeChild(c.firstChild); }
-  GRUPE.forEach(function(g){
-    var card = document.createElement("section"); card.className = "card";
+  GRUPE.forEach(function(g, i){
+    var card = document.createElement("section"); card.className = "card"; card.id = "grupa-" + i;
     if(g[0]){ var h = document.createElement("h2"); h.textContent = g[0]; card.appendChild(h); }
     var randuri = 0;
     g[1].forEach(function(r){
@@ -585,11 +612,12 @@ function construieste(){
 function sterge(el){ while(el.firstChild){ el.removeChild(el.firstChild); } }
 function celula(r, text, clasa){ var td = document.createElement("td"); td.textContent = text; if(clasa){ td.className = clasa; } r.appendChild(td); }
 function puneOcr(d){
+  ultimulOcr = d;
   var c = $("ocr");
   var ales = !!(d && d.ales && ultim && ultim.valori && ultim.valori.marire_dvb === "ocr");
   ocrPentruTraducere = !!(d && d.pentru_traducere);
   var lucreaza = !!(d && d.disponibil && (ales || ocrPentruTraducere));
-  c.classList.toggle("ascuns", !lucreaza);
+  c.classList.toggle("ascuns", !lucreaza || !toateReglaje);
   if(!lucreaza){ return; }
   $("ocr-traducere").classList.toggle("ascuns", ales || !ocrPentruTraducere);
   $("ocr-scurt").textContent = d.scurt || "";
@@ -642,6 +670,12 @@ $("ocr-zero").addEventListener("click", function(){
     mesaj(d.message, !d.result); if(d.result){ puneOcr(d); }
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 });
+$("vedere").addEventListener("click", function(){
+  if(!ultim){ return; }
+  toateReglaje = !toateReglaje;
+  puneTot(ultim);
+  puneOcr(ultimulOcr);
+});
 setInterval(improspateazaOcr, __CONTOR_MS__);
 $("implicite").addEventListener("click", function(){
   mesaj("Se pun valorile de la început...");
@@ -662,6 +696,7 @@ TEXTE_PAGINA = {
 	"html": (
 		N_("Aspectul subtitrărilor"),
 		N_("Se citesc setările..."),
+		N_("Toate reglajele"),
 		N_("Recunoașterea textului"),
 		N_("Recunoașterea textului lucrează și acum: o cere traducerea subtitrărilor."),
 		N_("Ora"),
@@ -678,6 +713,8 @@ TEXTE_PAGINA = {
 			"televizor, în __DRUM_MENIU__; aici culorile se pot alege oricare."),
 	),
 	"js": (
+		N_("Toate reglajele"),
+		N_("Vedere scurtă"),
 		N_("Stil gata făcut"),
 		N_("Literele"),
 		N_("Fontul"),

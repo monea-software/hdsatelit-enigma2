@@ -94,7 +94,7 @@ class MMIDialog(Screen):
 			pinlength = entry[1]
 			if entry[3] == 1:
 				# masked pins:
-				x = ConfigPIN(0, len = pinlength, censor = "*")
+				x = ConfigPIN(0, len = pinlength)  # PIN-ul se vede cat il scrii
 			else:
 				# unmasked pins:
 				x = ConfigPIN(0, len = pinlength)
@@ -311,8 +311,9 @@ class CiSelection(Screen):
 		self["text"] = Label(_("Slot %d")%(1))
 
 	def selectionChanged(self):
-		cur_idx = self["entries"].getCurrentIndex()
-		self["text"].setText(_("Slot %d")%((cur_idx // 5)+1))
+		cur = self["entries"].getCurrent()
+		if cur and len(cur) > 3:
+			self["text"].setText(_("Slot %d") % (cur[3] + 1))
 
 	def keyConfigEntry(self, key):
 		try:
@@ -340,34 +341,25 @@ class CiSelection(Screen):
 			#get appname
 			appname = eDVBCI_UI.getInstance().getAppName(slot)
 			self.list.append( (appname, ConfigNothing(), 2, slot) )
+			self.list.append((_("Alocă canale modulului"), ConfigNothing(), "alocare", slot))
 
-		self.list.append(getConfigListEntry(_("Multiple service support"), config.ci[slot].canDescrambleMultipleServices))
+		self.list.append((_("Multiple service support"), config.ci[slot].canDescrambleMultipleServices, None, slot))
 		if SystemInfo["CommonInterfaceSupportsHighBitrates"]:
-			self.list.append(getConfigListEntry(_("High bitrate support"), config.ci[slot].canHandleHighBitrates))
+			self.list.append((_("High bitrate support"), config.ci[slot].canHandleHighBitrates, None, slot))
 
 	def updateState(self, slot):
-		state = eDVBCI_UI.getInstance().getState(slot)
-		self.state[slot] = state
-
-		slotidx=0
-		while len(self.list[slotidx]) < 3 or self.list[slotidx][3] != slot:
-			slotidx += 1
-
-		slotidx += 1 # do not change Reset
-		slotidx += 1 # do not change Init
-
-		if state == 0:			#no module
-			self.list[slotidx] = (_("no module found"), ConfigNothing(), 2, slot)
-		elif state == 1:		#module in init
-			self.list[slotidx] = (_("init module"), ConfigNothing(), 2, slot)
-		elif state == 2:		#module ready
-			#get appname
-			appname = eDVBCI_UI.getInstance().getAppName(slot)
-			self.list[slotidx] = (appname, ConfigNothing(), 2, slot)
-
 		lst = self["entries"]
+		index = lst.getCurrentIndex()
+		self.list = []
+		for numar in range(MAX_NUM_CI):
+			state = eDVBCI_UI.getInstance().getState(numar)
+			if state != -1:
+				self.appendEntries(numar, state)
 		lst.list = self.list
 		lst.l.setList(self.list)
+		if getattr(lst, "instance", None) is not None:
+			lst.instance.moveSelectionTo(min(index, max(0, len(self.list) - 1)))
+		self.selectionChanged()
 
 	def ciStateChanged(self, slot):
 		if self.dlg:
@@ -391,7 +383,9 @@ class CiSelection(Screen):
 				eDVBCI_UI.getInstance().setReset(slot)
 			elif action == 1:		#init
 				eDVBCI_UI.getInstance().setInit(slot)
-			elif self.state[slot] == 2:
+			elif action == "alocare" and eDVBCI_UI.getInstance().getState(slot) == 2:
+				self.session.open(CiAssignment, slot)
+			elif action == 2 and self.state[slot] == 2:
 				self.dlg = self.session.openWithCallback(self.dlgClosed, MMIDialog, slot, action)
 
 	def cancel(self):
@@ -399,4 +393,212 @@ class CiSelection(Screen):
 			state = eDVBCI_UI.getInstance().getState(slot)
 			if state != -1:
 				CiHandler.unregisterCIMessageHandler(slot)
+		self.close()
+
+
+class CiAssignment(Screen):
+	skin = """<screen name="CiAssignment" position="center,center" size="950,590" title="Common Interface">
+		<widget name="entries" position="20,20" size="910,440" scrollbarMode="showOnDemand" />
+		<widget name="text" position="20,465" size="910,50" font="Regular;21" />
+		<widget name="key_red" position="20,540" size="210,30" font="Regular;22" foregroundColor="#ff5555" />
+		<widget name="key_green" position="250,540" size="210,30" font="Regular;22" foregroundColor="#55ff55" />
+		<widget name="key_yellow" position="480,540" size="210,30" font="Regular;22" foregroundColor="#ffff55" />
+	</screen>"""
+
+	def __init__(self, session, slot):
+		Screen.__init__(self, session)
+		from Tools import CIHelper
+		self.helper = CIHelper
+		self.slot = slot
+		self.setTitle(_("Alocă canale modulului") + " - " + (_("Slot %d") % (slot + 1)))
+		self["entries"] = ConfigList([])
+		self["text"] = Label(_("Verde salvează alocările. Decodările multiple se schimbă în setările slotului."))
+		self["key_red"] = Label(_("Închide"))
+		self["key_green"] = Label(_("Save"))
+		self["key_yellow"] = Label(_("Delete"))
+		self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
+			"ok": self.alege, "cancel": self.close, "red": self.close,
+			"green": self.salveaza, "yellow": self.sterge,
+			"left": lambda: self.schimba(KEY_LEFT), "right": lambda: self.schimba(KEY_RIGHT)}, -1)
+		self.revizie = None
+		self.neaplicata = False
+		self.schimbata = False
+		try:
+			stare = CIHelper.citesteEditor(slot)
+			self.reguli, self.revizie = stare["reguli"], stare["revizie"]
+			self.neaplicata = stare["neaplicata"]
+			if self.neaplicata:
+				self.arataNeaplicata()
+		except Exception:
+			self.reguli = None
+			self["text"].setText(_("Alocările CI nu se pot citi. Fișierul existent a fost păstrat."))
+		self.refa()
+
+	def refa(self):
+		lista = []
+		if self.reguli is not None:
+			lista = [(_("Adaugă canal"), ConfigNothing(), "canal"),
+				(_("Adaugă furnizor"), ConfigNothing(), "furnizor"),
+				(_("Adaugă CAID"), ConfigNothing(), "caid")]
+			for fel, eticheta in (("servicii", _("Channel")), ("furnizori", _("Provider")), ("caid", "CAID")):
+				for index, valoare in enumerate(self.reguli[fel]):
+					text = "%04X" % valoare if fel == "caid" else valoare["name"]
+					if fel == "furnizori":
+						text += " [%08X]" % valoare["namespace"]
+					lista.append((eticheta + ": " + text, ConfigNothing(), fel, index))
+		self["entries"].list = lista
+		self["entries"].l.setList(lista)
+
+	def schimba(self, tasta):
+		self["entries"].handleKey(tasta)
+
+	def alege(self):
+		cur = self["entries"].getCurrent()
+		if not cur or len(cur) < 3:
+			return
+		if cur[2] == "canal":
+			from Screens.ChannelSelection import SimpleChannelSelection
+			self.session.openWithCallback(self.canalAles, SimpleChannelSelection, _("Adaugă canal"))
+		elif cur[2] == "furnizor":
+			from Screens.ChannelSelection import SimpleChannelSelection
+			class AlegeFurnizor(SimpleChannelSelection):
+				def __init__(self, session, title):
+					SimpleChannelSelection.__init__(self, session, title)
+					self.skinName = ["HdsListaCanaleSimpla", "SimpleChannelSelection"]
+					self.hdsPornesteCapul()
+
+				def layoutFinished(self):
+					self.setTvMode()
+					self.showProviders()
+
+				def setModeTv(self):
+					self.setTvMode()
+					self.showProviders()
+
+				def setModeRadio(self):
+					self.setRadioMode()
+					self.showProviders()
+
+				def channelSelected(self):
+					ref = self.getCurrentSelection()
+					if ref is None or not ref.valid():
+						return
+					if 'provider ==' in ref.getPath():
+						self.close(ref)
+					else:
+						SimpleChannelSelection.channelSelected(self)
+			self.session.openWithCallback(self.furnizorAles, AlegeFurnizor, _("Adaugă furnizor"))
+		elif cur[2] == "caid":
+			from Screens.ChoiceBox import ChoiceBox
+			try:
+				cunoscute = self.helper.caidCunoscute(self.slot)
+			except Exception:
+				cunoscute = []
+			if not cunoscute:
+				self.caidAles((None, None))
+				return
+			lista = [("%04X - %s" % (c["caid"], c["name"]) if c["name"] else "%04X" % c["caid"], c["caid"]) for c in cunoscute]
+			lista.append((_("Scrie CAID (hexazecimal)"), None))
+			self.session.openWithCallback(self.caidAles, ChoiceBox, title=_("Adaugă CAID"), list=lista)
+
+	def canalAles(self, ref):
+		if ref is None:
+			return
+		from ServiceReference import ServiceReference
+		try:
+			self.adauga("servicii", {"ref": ref.toString(), "name": ServiceReference(ref).getServiceName() or ref.toString()})
+		except ValueError:
+			self.eroare(_("Alege un canal DVB pentru modulul CI."))
+
+	def furnizorAles(self, ref):
+		if ref is None:
+			return
+		from enigma import eServiceCenter, iServiceInformation
+		centru = eServiceCenter.getInstance()
+		lista = centru.list(ref)
+		if lista is None:
+			return
+		try:
+			while True:
+				canal = lista.getNext()
+				if not canal.valid():
+					break
+				info = centru.info(canal)
+				nume = info.getInfoString(canal, iServiceInformation.sProvider) if info is not None else ""
+				if nume:
+					self.adauga("furnizori", {"name": nume, "namespace": canal.getUnsignedData(4)})
+		except ValueError:
+			self.eroare(_("Lista de alocări CI este plină sau conține date nevalide."))
+
+	def caidAles(self, alegere):
+		if alegere is None:
+			return
+		if alegere[1] is not None:
+			try:
+				self.adauga("caid", alegere[1])
+			except ValueError:
+				self.eroare(_("Lista de alocări CI este plină sau conține date nevalide."))
+		else:
+			from Screens.InputBox import InputBox
+			self.session.openWithCallback(self.caidScris, InputBox, title=_("Scrie CAID (hexazecimal)"), text="", maxSize=6)
+
+	def caidScris(self, text):
+		if text is None:
+			return
+		try:
+			self.adauga("caid", self.helper.caidDinText(text))
+		except ValueError:
+			self.eroare(_("CAID nevalid. Folosește 1-4 cifre hexazecimale, de exemplu 0B00."))
+
+	def adauga(self, fel, valoare):
+		reguli = {k: list(v) for k, v in self.reguli.items()}
+		reguli[fel].append(valoare)
+		self.reguli = self.helper.valideazaAlocarea(reguli)
+		self.marcheazaCiorna()
+		self.refa()
+
+	def sterge(self):
+		cur = self["entries"].getCurrent()
+		if cur and len(cur) > 3 and cur[2] in self.reguli:
+			del self.reguli[cur[2]][cur[3]]
+			self.marcheazaCiorna()
+			self.refa()
+
+	def marcheazaCiorna(self):
+		self.schimbata = True
+		self["key_green"].setText(_("Save"))
+		self["text"].setText(_("Verde salvează ciorna. Închide renunță numai la modificările nesalvate."))
+
+	def arataNeaplicata(self):
+		self["key_green"].setText(_("Reîncearcă"))
+		self["text"].setText(_("Salvat, neaplicat. Verde reîncearcă aplicarea. Închide păstrează salvarea."))
+
+	def eroare(self, text):
+		from Screens.MessageBox import MessageBox
+		self.session.open(MessageBox, text, MessageBox.TYPE_ERROR)
+
+	def salveaza(self):
+		if self.reguli is None:
+			return
+		if eDVBCI_UI.getInstance().getState(self.slot) != 2:
+			self.eroare(_("Modulul CI nu mai este pregătit."))
+			return
+		try:
+			if self.neaplicata and not self.schimbata:
+				self.helper.reaplicaAlocarea(self.slot, self.revizie)
+			else:
+				self.helper.salveazaEditor(self.slot, self.reguli, self.revizie)
+		except self.helper.AlocareSchimbata:
+			self["text"].setText(_("Alocările CI s-au schimbat din alt ecran. Ciorna rămâne aici. Redeschide editorul pentru datele actuale."))
+			return
+		except self.helper.AlocareNeaplicata as eroare:
+			self.revizie = eroare.revizie
+			self.neaplicata, self.schimbata = True, False
+			print("[Ci] aplicare alocari: %s" % eroare)
+			self.arataNeaplicata()
+			return
+		except Exception as eroare:
+			print("[Ci] salvare alocari: %s" % eroare)
+			self.eroare(_("Alocările CI nu s-au putut aplica. Verifică modulul și încearcă din nou."))
+			return
 		self.close()

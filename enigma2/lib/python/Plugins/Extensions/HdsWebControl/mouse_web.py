@@ -166,11 +166,6 @@ def _punct(request, M, px, py, pp_x, pp_y):
 
 def raspunde(request, sesiune, apasa, M=None, acces_ssh=None):
 	"""Lucrul rutei: (corp, cod_http). Separat de resursa, ca probele de pe PC sa-l ruleze fara twisted."""
-	if acces_ssh is None:
-		from . import acces_ssh_web as acces_ssh
-	refuz = acces_ssh.refuzEcranDeschis(request)
-	if refuz is not None:
-		return refuz, 403
 	if M is None:
 		from Components import HdsMouseEcran as M
 	fel = _arg(request, "fel") or ""

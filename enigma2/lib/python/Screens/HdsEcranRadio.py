@@ -766,6 +766,15 @@ class HdsEcranRadio(Screen):
 	def arataTasteViz(self, da):
 		"""Randul tastelor: GALBEN / ALBASTRU numai cand barele se pot arata (altfel ar schimba o vizualizare care nu se
 		vede); fara ele randul incepe cu VERDE (egalizatorul nu depinde de bare), apoi OK, la stanga."""
+		if not S.valoare("taste_colorate"):
+			for nume in ("tastaVerde", "tastaVerdeText", "tastaGalbena", "tastaGalbenaText",
+				"tastaAlbastra", "tastaAlbastraText"):
+				self[nume].hide()
+			g = self.geom.get("tastaGalbena")
+			if g is not None:
+				self._aseazaTaste(("tastaOk",), g[0])
+			self.taste_viz = None
+			return
 		da = bool(da)
 		self["tastaVerde"].show()
 		self["tastaVerdeText"].show()
@@ -901,9 +910,8 @@ class HdsEcranRadioOdihna(Screen):
 
 class HdsEcranRadioSetari(Screen, ConfigListScreen):
 	"""Setarile ecranului radio (Meniu > Audio > Ecranul radio si OK tinut pe ecranul radio). Numai cu sagetile si OK:
-	OK deschide lista alegerilor (sau schimba Da/Nu) si alegerea se vede pe loc pe ecranul radio si ramane (se tine
-	minte in setari; fisierul setarilor se scrie o singura data, la iesire). EXIT si Verde inchid, Rosu pune la loc
-	valorile de la deschidere.
+	OK deschide lista alegerilor sau schimba Da/Nu. Alegerea se vede pe loc pe ecranul radio.
+	Verde salveaza, Rosu pune la loc valorile de la deschidere, iar EXIT intreaba despre schimbarile nesalvate.
 
 	Randurile au doua elemente (eticheta, element): ConfigList.selectionChanged cheama onSelectionChanged numai pentru
 	randuri de doua, deci numele setarii se afla din element (self._nume), nu dintr-un al treilea camp."""
@@ -914,13 +922,13 @@ class HdsEcranRadioSetari(Screen, ConfigListScreen):
 		self.skin = _skin(SKIN_SETARI)
 		self.setTitle(_("Ecranul radio"))
 		self.setari = S.initConfig()
-		ConfigListScreen.__init__(self, [], session=session)
+		ConfigListScreen.__init__(self, [], session=session, on_change=self._aplica)
 		self["descriere"] = Label(u"")
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
 			"ok": self.ok,
-			"cancel": self.salveaza,
+			"cancel": self.iesire,
 			"red": self.anuleaza,
 			"green": self.salveaza,
 		}, -2)
@@ -971,7 +979,6 @@ class HdsEcranRadioSetari(Screen, ConfigListScreen):
 
 	def _pune(self, element):
 		"""Alegerea ramane in setari (in memorie) si se vede pe loc pe ecranul radio."""
-		element.save()
 		self["config"].invalidateCurrent()
 		self._aplica()
 
@@ -982,12 +989,10 @@ class HdsEcranRadioSetari(Screen, ConfigListScreen):
 
 	def salveaza(self):
 		"""Iesirea: fisierul setarilor se scrie o data, numai daca s-a schimbat ceva."""
-		schimbat = False
-		for rand in self["config"].list:
-			n = self._numeRand(rand)
-			if n is not None and rand[1].value != self._initiale.get(n):
-				schimbat = True
+		schimbat = self._schimbat()
 		if schimbat:
+			for rand in self["config"].list:
+				rand[1].save()
 			configfile.save()
 		self.close(schimbat)
 
@@ -1001,7 +1006,20 @@ class HdsEcranRadioSetari(Screen, ConfigListScreen):
 		self.close(False)
 
 	def iesire(self):
-		self.salveaza()
+		if not self._schimbat():
+			self.close(False)
+			return
+		from Screens.MessageBox import MessageBox
+		self.session.openWithCallback(self._confirmaIesire, MessageBox,
+			_("Really close without saving settings?"))
+
+	def _schimbat(self):
+		return any(rand[1].value != self._initiale.get(self._numeRand(rand))
+			for rand in self["config"].list)
+
+	def _confirmaIesire(self, renunta):
+		if renunta:
+			self.anuleaza()
 
 
 # ---------------------------------------------------------------- tastele (folosita de Screens/InfoBar.py)
@@ -1575,7 +1593,7 @@ class LegaturaRadio(object):
 	def _areSigla(self, ref_text):
 		"""True / False daca postul are sigla pe disc; None cand nu se poate afla (atunci caseta ramane)."""
 		try:
-			from Components.Renderer.Picon import cauta_sigla, sigle_pornite
+			from Tools.PiconResolver import cauta_sigla, sigle_pornite
 		except Exception:
 			return None
 		try:
@@ -1856,6 +1874,9 @@ class LegaturaRadio(object):
 		return 1
 
 	def iesire(self):
+		inchide_pip = getattr(self.infobar, "hdsInchidePipLaIesire", None)
+		if inchide_pip is not None and inchide_pip():
+			return 1
 		if getattr(self.infobar, "shown", False):
 			return 0              # bara e deschisa: EXIT o inchide, ca de obicei
 		if self.vizibil:
@@ -1879,7 +1900,7 @@ class LegaturaRadio(object):
 
 	def _tastaColorata(self):
 		"""Tastele colorate sunt ale ecranului radio numai cat el se vede si bara e fereastra din fata."""
-		return bool(self.radio and self.pornit() and self.vizibil and self._inFata())
+		return bool(S.valoare("taste_colorate") and self.radio and self.pornit() and self.vizibil and self._inFata())
 
 	def tastaGalbena(self):
 		if not self._tastaColorata():
@@ -1993,9 +2014,11 @@ class LegaturaRadio(object):
 			return 0
 		from Components.HdsSageti import sageata
 		fel = sageata(sus)
+		if fel == "zap_invers":
+			return self._zap(-1 if sus else 1)
 		if fel == "zap":
 			return self._zap(1 if sus else -1)
-		if fel == "radio":
+		if fel in ("current", "radio"):
 			return self.listaRadio()
 		arata_tv = getattr(self.infobar, "showTv", None)
 		if arata_tv is None:

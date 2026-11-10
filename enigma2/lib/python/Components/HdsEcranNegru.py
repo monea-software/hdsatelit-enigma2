@@ -938,11 +938,17 @@ class Urmaritor(object):
 		if d["criptat"]:
 			d["sisteme"] = [g[0] for g in C.group_caids(d["caids"])]
 			d["ecm"] = C.ecm_active(r)
-		fe = C.frontend_status(service, sref) or {}
-		d["lock"] = fe.get("lock", -1)
-		d["nivel"] = C.percent16(fe.get("power", -1))
-		d["calitate"] = C.percent16(fe.get("quality", -1))
-		d["stare_tuner"] = C.tuner_state(service, sref)
+		# imaginea intai: cand vine, analizeaza() nu se uita la semnal, deci starea tunerului nu se cere (pe Vu+ fiecare
+		# citire e un ioctl pe I2C, cu firul principal blocat cat dureaza; paznicul ruleaza la 2 s cat omul se uita la TV)
+		d["imagine"], d["negru_de"] = self.imagine(acum, r.geti("sVideoHeight"))
+		if d["imagine"] is True:
+			d["lock"], d["nivel"], d["calitate"], d["stare_tuner"] = -1, -1, -1, u""
+		else:
+			fe = C.frontend_status(service, sref, ("lock", "power", "quality")) or {}
+			d["lock"] = fe.get("lock", -1)
+			d["nivel"] = C.percent16(fe.get("power", -1))
+			d["calitate"] = C.percent16(fe.get("quality", -1))
+			d["stare_tuner"] = C.tuner_state(service, sref)
 		tp = r.tp()
 		d["tp_text"] = C.tp_line(tp, d["fel"], True)
 		d["tp_cautare"] = bool(tp) and C.ival(tp, "frequency") > 0
@@ -957,7 +963,6 @@ class Urmaritor(object):
 			d["tp_nu_emite"] = transponder_nu_emite()
 		if d["eroare"] == E_FARA_TUNER:
 			d["inregistrari"] = _inregistrari(nav)
-		d["imagine"], d["negru_de"] = self.imagine(acum, r.geti("sVideoHeight"))
 		if d["video_pid"] is None or d["video_pid"] <= 0:
 			d["analiza"] = analiza_pentru(sref)
 			d["video_necunoscut"] = video_necunoscut_din(r.gets("sPisteNecunoscute"))

@@ -4,8 +4,8 @@
 #
 # HdsTemaInterfata: "Tema interfeței" (Meniu > Interfata si aspect), tema meniurilor de pe televizor: Clasic (aerisita,
 # ca pana acum) sau Pro (densa, dupa ecranele Stitch ale temei Pro). Doua cartonase cu previzualizare; Stanga / Dreapta
-# aleg, Verde sau OK aplica, Galben aduce cursorul pe tema implicita (Clasic), Rosu sau EXIT inchide fara schimbare.
-# Aplicarea scrie setarea (config.skin.tema_tv) si intreaba daca interfata se reporneste acum, pe calea sigura
+# aleg, Verde sau OK aplica acum, Galben pastreaza pentru urmatoarea pornire, Rosu sau EXIT inchide.
+# Aplicarea scrie setarea (config.skin.tema_tv); Aplică acum reporneste pe calea sigura
 # (TryQuitMainloop 3, ca "Repornește interfața" din meniu): skinul se citeste numai la pornire. Logica e in
 # Components/HdsTemaTv.py, aceeasi cu pagina web /tema-tv. Tema de aici NU schimba tema interfetei web (alta setare).
 #
@@ -13,7 +13,6 @@
 # Tema e a skinului HDSatelit: cu alt skin ales, mesajul spune de ce nu se poate alege (HdsTemaTv.textAltSkin).
 
 from Screens.Screen import Screen
-from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.Label import Label
 from Components import HdsTemaTv as T
@@ -73,7 +72,7 @@ class HdsTemaInterfata(Screen):
 		self.skinName = ["HdsTemaInterfata"]
 		self.setTitle(_("Tema interfeței"))
 		self["subtitlu"] = Label(_("Alege cum arată meniurile pe televizor"))
-		self["indiciu"] = Label(_("Stânga și Dreapta aleg tema"))
+		self["indiciu"] = Label(_("Stânga/dreapta: tema. MENU: Clasic."))
 		for t in T.TEME:
 			self["nume_" + t] = Label(_(T.NUME[t]))
 			self["stare_" + t] = Label("")
@@ -83,16 +82,17 @@ class HdsTemaInterfata(Screen):
 				self["chenar_%s_%s" % (t, c)] = Label("")
 		self["nota"] = Label(_("Tema de pe televizor e separată de tema interfeței web: aceea se alege în browser, la Setări, și rămâne cum e."))
 		self["mesaj"] = Label("")
-		self["key_red"] = Label(_("Renunță"))
-		self["key_green"] = Label(_("Aplică"))
-		self["key_yellow"] = Label(_("Implicită (Clasic)"))
+		self["key_red"] = Label(_("Închide"))
+		self["key_green"] = Label(_("Aplică acum"))
+		self["key_yellow"] = Label(_("La următoarea pornire"))
 		self["key_blue"] = Label(_("Vremea"))
 		actiuni = {
 			"ok": self.aplica,
 			"green": self.aplica,
 			"cancel": self.close,
 			"red": self.close,
-			"yellow": self.implicita,
+			"yellow": self.laPornire,
+			"menu": self.implicita,
 			"blue": self.vremea,
 			"left": self.stanga,
 			"right": self.dreapta,
@@ -102,7 +102,7 @@ class HdsTemaInterfata(Screen):
 		for nume in ("up", "down", "upRepeated", "downRepeated", "leftRepeated", "rightRepeated", "upUp", "downUp",
 				"leftUp", "rightUp"):
 			actiuni[nume] = self.nimic
-		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], actiuni, -1)
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "MenuActions"], actiuni, -1)
 		self.cursor = T.aleasa()
 		self.onLayoutFinish.append(self.arata)
 		getattr(self, "onLayoutFinish", []).append(self._descrieriMarite)
@@ -151,7 +151,7 @@ class HdsTemaInterfata(Screen):
 		elif not s["pro_disponibil"]:
 			self["mesaj"].setText(_("Tema Pro lipsește din skinul instalat. Actualizează skinul HDSatelit."))
 		else:
-			self["mesaj"].setText(_("Tema nouă se vede după repornirea interfeței: câteva secunde, receptorul nu se oprește."))
+			self["mesaj"].setText(_("Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire."))
 
 	def nimic(self):
 		pass
@@ -172,10 +172,10 @@ class HdsTemaInterfata(Screen):
 		self.cursor = T.IMPLICITA
 		self.arata()
 
-	def aplica(self):
+	def aplica(self, acum=True):
 		tema = self.cursor
 		if tema == T.aleasa() and tema == T.activa():
-			self.close(False)
+			self["mesaj"].setText(_("Tema este deja aplicată."))
 			return
 		bun, mesaj, schimbata = T.seteaza(tema, traducere=_)
 		if not bun:
@@ -185,9 +185,13 @@ class HdsTemaInterfata(Screen):
 		if not schimbata:
 			self["mesaj"].setText(mesaj)
 			return
-		self.session.openWithCallback(self.reporneste, MessageBox,
-			_("Tema %s se vede după repornirea interfeței. O repornești acum? Receptorul nu se oprește; interfața pornește "
-				"din nou în câteva secunde, pe același canal.") % _(T.NUME[tema]), MessageBox.TYPE_YESNO)
+		if acum:
+			self.reporneste(True)
+		else:
+			self["mesaj"].setText(_("Tema %s este păstrată pentru următoarea pornire a interfeței.") % _(T.NUME[tema]))
+
+	def laPornire(self):
+		self.aplica(acum=False)
 
 	def reporneste(self, da=False):
 		if da:

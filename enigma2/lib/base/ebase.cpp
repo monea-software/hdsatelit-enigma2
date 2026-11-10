@@ -9,6 +9,59 @@
 #include <lib/base/elock.h>
 #include <lib/gdi/grc.h>
 
+#include <atomic>
+
+/*
+ * HDSatelit: contoarele buclei principale (numai eApp), pentru raportul de procesor (Components/HdsProcesorRaport.py,
+ * prin enigma.getMainloopCounts()). De ce: pe Vu+ Duo 4K firul principal sta 85-99% intr-un nucleu, jumatate in nucleul
+ * Linux, cu stiva Python mereu in eApp.poll (cod C++ al buclei) si fara niciun tuner deschis; din rapoarte nu se vede ce
+ * descriptor sau ce temporizator tine bucla. Contoarele numara rundele, poll-urile cerute fara asteptare, poll-urile
+ * intoarse imediat cu ceva gata, timpul petrecut in poll(), activarile temporizatoarelor si, pe fiecare descriptor,
+ * activarile, evenimentele de eroare necerute, ultimele revents si evenimentele cerute. Numere pe 32 de biti fara semn,
+ * atomice (raportul le citeste din firul lui), care se dau peste cap: raportul foloseste diferentele. Calea fiecarui
+ * descriptor o citeste raportul din /proc, nu bucla.
+ */
+namespace hdsbucla
+{
+static const int FD_MAX = 1024;
+
+struct Fd
+{
+	std::atomic<unsigned int> activari, erori;
+	std::atomic<int> revents, cerut;
+};
+
+struct Contoare
+{
+	std::atomic<unsigned int> runde, poll_zero, poll_imediat, us_poll, timere, activari, python, erori_necerute;
+	Fd fd[FD_MAX];
+};
+
+static Contoare &contoare()
+{
+	static Contoare c;
+	return c;
+}
+
+static inline void pe_fd(int fd, int revents, int cerut, bool eroare)
+{
+	if (fd < 0 || fd >= FD_MAX)
+		return;
+	Fd &f = contoare().fd[fd];
+	if (eroare)
+		f.erori.fetch_add(1, std::memory_order_relaxed);
+	else
+		f.activari.fetch_add(1, std::memory_order_relaxed);
+	f.revents.store(revents, std::memory_order_relaxed);
+	f.cerut.store(cerut, std::memory_order_relaxed);
+}
+
+static inline void numara(std::atomic<unsigned int> &x, unsigned int n = 1)
+{
+	x.fetch_add(n, std::memory_order_relaxed);
+}
+}
+
 DEFINE_REF(eSocketNotifier);
 
 eSocketNotifier::eSocketNotifier(eMainloop *context, int fd, int requested, bool startnow): context(*context), fd(fd), state(0), requested(requested)
@@ -201,6 +254,7 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 		eFatal("additional, but no res");
 
 	long poll_timeout = -1; /* infinite in case of empty timer list */
+	const bool hds_numara = (this == eApp); /* contoarele (hdsbucla) numai pentru bucla principala */
 
 	if (!m_timer_list.empty())
 	{
@@ -208,14 +262,22 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 		while (!m_timer_list.empty() && (poll_timeout = timeout_usec( m_timer_list.begin()->getNextActivation() ) ) <= 0 )
 		{
 			eTimer *tmr = m_timer_list.begin();
+			if (hds_numara)
+				hdsbucla::numara(hdsbucla::contoare().timere);
 			tmr->AddRef();
 			tmr->activate();
 			tmr->Release();
 		}
 		if (poll_timeout < 0)
 			poll_timeout = 0;
-		else /* convert us to ms */
-			poll_timeout /= 1000;
+		else
+			/*
+			 * HDSatelit: microsecunde -> milisecunde rotunjit in sus. Trunchiat (cum era), ultima fractiune de
+			 * milisecunda dinaintea fiecarui temporizator se facea cu poll(..., 0) repetat, fara somn: o bucla goala
+			 * la fiecare temporizator. Acum temporizatorul vine cu cel mult 1 ms mai tarziu, iar unul deja scadent
+			 * (0) ramane 0.
+			 */
+			poll_timeout = (poll_timeout + 999) / 1000;
 	}
 
 	if ((twisted_timeout > 0) && (poll_timeout > 0) && ((unsigned int)poll_timeout > twisted_timeout))
@@ -266,6 +328,15 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 	m_is_idle = 1;
 	++m_idle_count;
 
+	timespec hds_t0 = {0, 0}, hds_t1 = {0, 0};
+	if (hds_numara)
+	{
+		hdsbucla::numara(hdsbucla::contoare().runde);
+		if (poll_timeout == 0)
+			hdsbucla::numara(hdsbucla::contoare().poll_zero);
+		clock_gettime(CLOCK_MONOTONIC, &hds_t0);
+	}
+
 	if (this == eApp)
 	{
 		Py_BEGIN_ALLOW_THREADS
@@ -273,6 +344,17 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 		Py_END_ALLOW_THREADS
 	} else
 		ret = ::poll(pfd, fdcount, poll_timeout);
+
+	if (hds_numara)
+	{
+		clock_gettime(CLOCK_MONOTONIC, &hds_t1);
+		long long us = (long long)(hds_t1.tv_sec - hds_t0.tv_sec) * 1000000LL + (hds_t1.tv_nsec - hds_t0.tv_nsec) / 1000;
+		if (us < 0)
+			us = 0;
+		hdsbucla::numara(hdsbucla::contoare().us_poll, (unsigned int)(us > 0x7fffffffLL ? 0x7fffffffLL : us));
+		if (ret > 0 && us < 1000)
+			hdsbucla::numara(hdsbucla::contoare().poll_imediat);
+	}
 
 	m_is_idle = 0;
 
@@ -292,6 +374,11 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 					m_inActivate = it->second;
 					int req = m_inActivate->getRequested();
 					if (pfd[i].revents & req) {
+						if (hds_numara)
+						{
+							hdsbucla::numara(hdsbucla::contoare().activari);
+							hdsbucla::pe_fd(pfd[i].fd, pfd[i].revents, req, false);
+						}
 						m_inActivate->AddRef();
 						m_inActivate->activate(pfd[i].revents & req);
 						m_inActivate->Release();
@@ -300,7 +387,14 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 					m_inActivate = 0;
 					/* a notifier removed during this round (pipes closed by another one) has nothing left to handle */
 					if ((pfd[i].revents & (POLLERR|POLLHUP|POLLNVAL)) && notifiers.find(pfd[i].fd) != notifiers.end())
+					{
+						if (hds_numara)
+						{
+							hdsbucla::numara(hdsbucla::contoare().erori_necerute);
+							hdsbucla::pe_fd(pfd[i].fd, pfd[i].revents, req, true);
+						}
 						eDebug("poll: unhandled POLLERR/HUP/NVAL for fd %d(%d)", pfd[i].fd, pfd[i].revents);
+					}
 				}
 			}
 		}
@@ -308,6 +402,12 @@ int eMainloop::processOneEvent(unsigned int twisted_timeout, PyObject **res, ePy
 		{
 			if (pfd[i].revents)
 			{
+				if (hds_numara)
+				{
+					/* descriptorii Python (Twisted): bucla se intoarce in Python; numarati la fel, ca sa se vada si ei */
+					hdsbucla::numara(hdsbucla::contoare().python);
+					hdsbucla::pe_fd(pfd[i].fd, pfd[i].revents, pfd[i].events, false);
+				}
 				if (!*res)
 				{
 					*res = PyList_New(0);
@@ -440,6 +540,60 @@ void eMainloop::quit(int ret)
 }
 
 eApplication* eApp = 0;
+
+/* HDSatelit: contoarele buclei principale (hdsbucla, mai sus) pentru Python: enigma.getMainloopCounts() */
+static void hdsPune(PyObject *d, const char *cheie, unsigned int valoare)
+{
+	PyObject *v = PyLong_FromUnsignedLong(valoare);
+	if (v)
+	{
+		PyDict_SetItemString(d, cheie, v);
+		Py_DECREF(v);
+	}
+}
+
+PyObject *getMainloopCounts()
+{
+	hdsbucla::Contoare &c = hdsbucla::contoare();
+	PyObject *d = PyDict_New();
+	if (!d)
+	{
+		PyErr_Clear();
+		Py_RETURN_NONE;
+	}
+	hdsPune(d, "runde", c.runde.load(std::memory_order_relaxed));
+	hdsPune(d, "poll_zero", c.poll_zero.load(std::memory_order_relaxed));
+	hdsPune(d, "poll_imediat", c.poll_imediat.load(std::memory_order_relaxed));
+	hdsPune(d, "us_poll", c.us_poll.load(std::memory_order_relaxed));
+	hdsPune(d, "timere", c.timere.load(std::memory_order_relaxed));
+	hdsPune(d, "activari", c.activari.load(std::memory_order_relaxed));
+	hdsPune(d, "python", c.python.load(std::memory_order_relaxed));
+	hdsPune(d, "erori_necerute", c.erori_necerute.load(std::memory_order_relaxed));
+	/* {fd: (activari, erori necerute, ultimele revents, evenimentele cerute)}, numai descriptorii cu ceva numarat */
+	PyObject *fd = PyDict_New();
+	if (fd)
+	{
+		for (int i = 0; i < hdsbucla::FD_MAX; ++i)
+		{
+			hdsbucla::Fd &f = c.fd[i];
+			unsigned int a = f.activari.load(std::memory_order_relaxed);
+			unsigned int e = f.erori.load(std::memory_order_relaxed);
+			if (!a && !e)
+				continue;
+			PyObject *k = PyLong_FromLong(i);
+			PyObject *v = Py_BuildValue("(IIii)", a, e, f.revents.load(std::memory_order_relaxed),
+				f.cerut.load(std::memory_order_relaxed));
+			if (k && v)
+				PyDict_SetItem(fd, k, v);
+			Py_XDECREF(k);
+			Py_XDECREF(v);
+		}
+		PyDict_SetItemString(d, "fd", fd);
+		Py_DECREF(fd);
+	}
+	PyErr_Clear(); /* o valoare care nu s-a putut face lipseste din dictionar; nicio exceptie lasata setata */
+	return d;
+}
 
 #include "structmember.h"
 

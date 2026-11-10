@@ -80,8 +80,8 @@
 # PAUZA_COTA_S pana la PAUZA_S; cheie refuzata: PAUZE_REFUZ_S, iar la al REFUZURI_OPRIRE-lea refuz la rand serviciul e
 # oprit, cu mesaj, si se mai incearca singur o data pe ora; adresa refuzata la conectare: pana la schimbarea setarilor),
 # apoi revine primul. La pornire prima cerere asteapta reteaua si ceasul (asteaptaPornirea). Pe televizor nimic pentru
-# o trecere care merge; numai cand toate cad: pauza si mesajul o data (limita pe minut: fara mesaj; limita pe zi:
-# mesajul cu sfatul). Memoria tine traducerile fiecarui serviciu sub numele
+# o trecere care merge; cand toate cad: mesajul o data pe episod, inclusiv la limita pe minut. Limita pe zi are
+# mesajul cu sfatul. Memoria tine traducerile fiecarui serviciu sub numele
 # lui; o pagina gasita in memoria oricaruia din lant se deseneaza pe loc. Proba incearca numai serviciul ales.
 #
 # MAI PUTINE CERERI: o singura cerere deodata (MAX_IN_ZBOR); cat e una in zbor, lucrarile noi asteapta, apoi pleaca toate
@@ -132,6 +132,8 @@
 #   inainte(texte)                   textul OCR gata inainte de afisare: cererea pleaca acum
 #   instanta().stare()               dict pentru ecran si web (fara chei), cu contorul; tv_stins / tv_stins_text:
 #                                    televizorul stins, deci nimic nu se traduce (TEXT_TV_STINS, textTvStins())
+#   diagnosticPornire()              starea pistei si conditiile OCR, aceleasi pe televizor si in web
+#   faraSecrete(text, cheile=())      curata texte si rezultate imbricate inainte de afisare sau jurnal
 #   instanta().proba(laRezultat)     „Probează traducerea”: o fraza de proba, raspunsul pe firul enigma2
 #   chei().schimba(serviciu, valoare) / chei().stare()
 #   ceLipseste(), textCeLipseste(), numeServiciu(), SERVICII, LIMBI_TINTA
@@ -298,7 +300,7 @@ FELURI_TRECERE = (E_CHEIE, E_COTA, E_TERMEN, E_RETEA, E_LIPSA, E_LIMBA, E_ADRESA
 
 
 def _jurnal(text):
-	print("[HdsTraducereSubtitrari] %s" % text)
+	print("[HdsTraducereSubtitrari] %s" % faraSecrete(text))
 
 
 def N_(text):
@@ -1168,14 +1170,56 @@ def caleJson(obiect, cale):
 	return u"".join(iesire) if iesire else None
 
 
-def _ascundeCheia(text, cheie):
-	"""cheia (si bucatile ei de cel putin 8 semne, de ex. cea de dupa „Bearer”; cuvantul „Bearer” ramane) inlocuita cu
-	*** intr-un text de aratat"""
-	if not cheie or not text:
+def faraSecrete(text, cheile=()):
+	"""Scoate cheile din texte si rezultate, inclusiv formele codate de server; nu citeste fisiere."""
+	if isinstance(text, dict):
+		return dict((k, faraSecrete(v, cheile)) for k, v in text.items())
+	if isinstance(text, (list, tuple)):
+		return [faraSecrete(v, cheile) for v in text]
+	if not isinstance(text, (str, bytes)):
 		return text
-	for bucata in sorted(set([cheie] + [b for b in cheie.split() if len(b) >= 8]), key=len, reverse=True):
-		text = text.replace(bucata, u"***")
-	return text
+	t = text.decode("utf-8", "replace") if isinstance(text, bytes) else text
+	valori = []
+	def adauga(v):
+		if isinstance(v, dict):
+			for x in v.values():
+				adauga(x)
+		elif isinstance(v, (list, tuple)):
+			for x in v:
+				adauga(x)
+		elif isinstance(v, str) and v:
+			valori.append(v)
+	adauga(cheile)
+	# Numai memoria deja citita; jurnalul citirii cheilor nu trebuie sa porneasca alta citire.
+	magazin = globals().get("_CHEI", [None])[0]
+	memorie = getattr(magazin, "_memorie", None)
+	if memorie is not None:
+		adauga(memorie[1])
+	variante = set()
+	for v in valori:
+		for c in [v] + [b for b in v.split() if len(b) >= 8]:
+			variante.update((c, quote(c, safe=""), quote_plus(c), json.dumps(c, ensure_ascii=True)[1:-1],
+				c.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")))
+	for c in sorted(variante, key=len, reverse=True):
+		t = t.replace(c, u"***")
+		if "%" in c:
+			t = re.sub(re.escape(c), u"***", t, flags=re.I)
+	t = re.sub(r"(?i)(\b(?:authorization|x-api-key|api[_-]?key|access[_-]?token)\s*[:=]\s*)"
+		r"(?:bearer\s+)?[^\s,;\"']+", r"\1***", t)
+	return t
+
+
+def _ascundeCheia(text, cheie):
+	return faraSecrete(text, (cheie,))
+
+
+def _curataEroare(eroare, cheile=()):
+	"""Curata eroarea inainte de a intra in stare sau de a ajunge pe ecran."""
+	for camp in ("text", "cauza", "ce_faci", "detaliu"):
+		if hasattr(eroare, camp):
+			setattr(eroare, camp, faraSecrete(getattr(eroare, camp), cheile))
+	eroare.args = (eroare.text,)
+	return eroare
 
 
 def inceputRaspuns(date, cheie=u""):
@@ -1540,7 +1584,11 @@ class Chei(object):
 		date poate contine fie siruri simple (compatibilitate), fie liste de siruri.
 		Nimic nu se scrie cand identitatea nu se poate citi complet (cheile ar ramane legate de o identitate gresita).
 		Dupa o scriere buna, fisierul pus deoparte (<cale>.vechi) se sterge: cheile au fost puse din nou."""
-		ident = self.identitate()
+		try:
+			ident = self.identitate()
+		except Exception as e:
+			_jurnal("identitatea pentru chei: %s" % e.__class__.__name__)
+			return False
 		if not _identitateCompleta(ident):
 			_jurnal("cheile nu s-au scris: identitatea receptorului nu se poate citi")
 			return False
@@ -1558,7 +1606,11 @@ class Chei(object):
 		leg = dict((k, v) for k, v in legaturi.items() if k in CU_ADRESA and k in continut and isinstance(v, str))
 		if leg:
 			continut[CHEIE_LEGATURI] = leg
-		octeti = cripteaza(continut, ident)
+		try:
+			octeti = cripteaza(continut, ident)
+		except Exception as e:
+			_jurnal("criptarea cheilor: %s" % e.__class__.__name__)
+			return False
 		nou = self.cale + ".nou"
 		try:
 			d = os.path.dirname(self.cale)
@@ -1577,7 +1629,7 @@ class Chei(object):
 			os.replace(nou, self.cale)
 			self._memorie = None
 		except (OSError, IOError) as e:
-			_jurnal("cheile nu s-au scris: %s" % (getattr(e, "strerror", None) or e.__class__.__name__))
+			_jurnal("cheile nu s-au scris: %s" % e.__class__.__name__)
 			try:
 				os.unlink(nou)
 			except OSError:
@@ -1642,8 +1694,94 @@ class Chei(object):
 						"cheia.")
 		if not self.scrie(date, legaturi):
 			return False, _t("Cheia nu s-a putut salva pe receptor.")
-		instanta().setariSchimbate()
+		self._anuntaSchimbarea()
 		return True, mesaj
+
+	def _anuntaSchimbarea(self):
+		try:
+			instanta().setariSchimbate()
+		except Exception as e:
+			_jurnal("setarile cheilor: %s" % e.__class__.__name__)
+
+	def schimbaMaiMulte(self, modificari, s=None):
+		"""Valideaza tot lotul, apoi scrie cheile o data; nicio valoare nu intra in mesaje."""
+		ok, mesaj, date, legaturi = self.pregatesteMaiMulte(modificari, s)
+		if not ok:
+			return False, mesaj
+		if not modificari:
+			return True, u""
+		try:
+			if not self.scrie(date, legaturi):
+				return False, _t("Cheia nu s-a putut salva pe receptor.")
+		except Exception as e:
+			_jurnal("salvarea cheilor: %s" % e.__class__.__name__)
+			return False, _t("Cheia nu s-a putut salva pe receptor.")
+		self._anuntaSchimbarea()
+		return True, _t("Cheia e salvată pe receptor.")
+
+	def pregatesteMaiMulte(self, modificari, s=None):
+		"""Pregateste lotul numai in RAM: (ok, mesaj, chei, legaturi). Cheile nu ies in raspunsuri sau jurnal."""
+		if not isinstance(modificari, (list, tuple)) or len(modificari) > 90:
+			return False, _t("Lista schimbărilor de chei nu este bună."), None, None
+		try:
+			citite, legaturi = self._citesteTot()
+			date = dict((k, list(v)) for k, v in citite.items())
+			legaturi = dict(legaturi)
+			rescrise = dict((k, [False] * len(v)) for k, v in date.items())
+			cu_chei_noi = set()
+			for schimbare in modificari:
+				if not isinstance(schimbare, dict) or schimbare.get("serviciu") not in SERVICII:
+					return False, _t("Serviciu necunoscut."), None, None
+				serviciu = schimbare["serviciu"]
+				indice = schimbare.get("indice")
+				if indice is not None and (isinstance(indice, bool) or not isinstance(indice, int) or indice < 0):
+					return False, _t("Cheia nu există."), None, None
+				valoare = schimbare.get("valoare")
+				if valoare is not None and not isinstance(valoare, str):
+					return False, _t("Cheia are caractere care nu pot fi într-o cheie (sau e prea lungă). Nu s-a schimbat nimic."), None, None
+				v = curataCheie(valoare, serviciu == "propriu")
+				if valoare and valoare.strip() and not v:
+					return False, _t("Cheia are caractere care nu pot fi într-o cheie (sau e prea lungă). Nu s-a schimbat nimic."), None, None
+				lista = list(date.get(serviciu) or [])
+				noi = list(rescrise.get(serviciu) or [])
+				if indice is not None and (indice > len(lista) or (not v and indice == len(lista))):
+					return False, _t("Cheia nu există."), None, None
+				if not v:
+					if indice is None:
+						lista = []
+						noi = []
+					else:
+						lista.pop(indice)
+						noi.pop(indice)
+				elif indice is None:
+					lista = [v] + lista[1:]
+					noi = [True] + noi[1:]
+				elif indice == len(lista):
+					if v not in lista:
+						lista.append(v)
+						noi.append(True)
+				else:
+					lista[indice] = v
+					noi[indice] = True
+				rescrise[serviciu] = noi
+				if lista:
+					date[serviciu] = lista
+					if v and serviciu in CU_ADRESA:
+						cu_chei_noi.add(serviciu)
+				else:
+					date.pop(serviciu, None)
+					legaturi.pop(serviciu, None)
+			for serviciu in cu_chei_noi:
+				if serviciu not in date:
+					continue
+				noua = origine(adresaServiciului(serviciu, s))
+				if noua != legaturi.get(serviciu, u"") and not all(rescrise[serviciu]):
+					return False, _t("Adresa serverului s-a schimbat. Scrie din nou toate cheile lui sau șterge cheile rămase înainte de salvare."), None, None
+				legaturi[serviciu] = noua
+		except Exception as e:
+			_jurnal("pregatirea cheilor: %s" % e.__class__.__name__)
+			return False, _t("Cheia nu s-a putut salva pe receptor."), None, None
+		return True, u"", date, legaturi
 
 	def adauga_cheie(self, serviciu, valoare, adresa=None):
 		"""adauga o cheie noua la sfarsitul listei de chei a serviciului"""
@@ -1674,7 +1812,7 @@ class Chei(object):
 		legaturi[serviciu] = noua
 		if not self.scrie(date, legaturi):
 			return False
-		instanta().setariSchimbate()
+		self._anuntaSchimbarea()
 		return True
 
 	def legaCheileVechi(self, s=None):
@@ -2575,13 +2713,13 @@ def textOprit(serviciu, refuzuri, detaliu=u""):
 		numeServiciu(serviciu), refuzuri, detaliu or u"HTTP 401")
 
 
-def detaliuEroare(cod, date):
+def detaliuEroare(cod, date, cheile=()):
 	"""codul exact al erorii, pentru „Detalii” (fara cheie, fara adrese): „HTTP 401, cod 401000” sau „HTTP 429,
 	RESOURCE_EXHAUSTED”; "" fara cod HTTP"""
 	if not cod:
 		return u""
 	parti = [u"HTTP %d" % cod]
-	j = _jsonEroare(date) or {}
+	j = faraSecrete(_jsonEroare(date) or {}, cheile)
 	e = j.get("error")
 	if isinstance(e, dict):
 		if isinstance(e.get("code"), (int, str)) and str(e.get("code")) != str(cod):
@@ -2783,7 +2921,8 @@ def _cuAsteptarea(functie, r, cfg, cod, date, n):
 		if e.fel == E_COTA:
 			e.asteptare_s, e.pe_zi = asteptareDinRaspuns(cod, getattr(r, "antete", None), date)
 		if cod and cod != 200:
-			e.detaliu = detaliuEroare(cod, date)
+			e.detaliu = detaliuEroare(cod, date, (cfg.get("cheie"),))
+		_curataEroare(e, (cfg.get("cheie"),))
 		raise
 
 
@@ -3301,9 +3440,9 @@ class Traducator(object):
 					rez = traduceAcum(cfg_curent, list(lot.texte), lot.sursa, cfg_curent["tinta"], lot.context,
 						self.termenMs() / 1000.0, self._trimite)
 				except EroareTraducere as e:
-					eroare = e
+					eroare = _curataEroare(e, chei_serv)
 				except Exception as e:
-					eroare = EroareTraducere(E_RASPUNS, str(e)[:120])
+					eroare = EroareTraducere(E_RASPUNS, faraSecrete(str(e), chei_serv)[:120])
 				else:
 					with self.lacat:
 						self.caderi.pop(serv, None)
@@ -3372,7 +3511,7 @@ class Traducator(object):
 				if info["pe_zi"]:
 					info["mesaj"] = "zi"
 				elif all(m and m[1] == E_COTA and not m[2] for m in motive):
-					info["mesaj"] = None
+					info["mesaj"] = "cota"
 				elif not ramase:
 					info["mesaj"] = "setari"
 				else:
@@ -3525,8 +3664,8 @@ class Traducator(object):
 		_jurnal("%s: eroare %s%s" % (cfg["serviciu"], fel, (" (HTTP %s)" % eroare.cod) if eroare.cod else ""))
 
 	def _eroare(self, lot, eroare, info=None):
-		"""toate incercarile lotului au cazut (contorul e facut in _numaraEroarea); mesajul pe televizor numai cand
-		toate serviciile din lant asteapta, o singura data. Paginile lotului primesc pe loc renuntarea (originalul cu
+		"""toate incercarile lotului au cazut (contorul e facut in _numaraEroarea); mesajul pe televizor o singura
+		data pana la reusita sau schimbarea setarilor. Paginile lotului primesc pe loc renuntarea (originalul cu
 		semn), nu asteapta termenul nucleului."""
 		info = info or {}
 		self._raspundePaginilor(lot)
@@ -3535,6 +3674,8 @@ class Traducator(object):
 			self._intarziate += 1
 			self._spuneDacaELent()
 		fel_mesaj = info.get("mesaj")
+		if not fel_mesaj and fel in (E_RETEA, E_TERMEN, E_RASPUNS):
+			fel_mesaj = "eroare"
 		if info.get("oprite"):
 			# mesajul serviciului oprit dupa refuzurile cheii (_spuneOprit) spune deja ce s-a intamplat si ce faci
 			self.mesaj_spus = True
@@ -3542,7 +3683,11 @@ class Traducator(object):
 		if not fel_mesaj or self.mesaj_spus:
 			return
 		self.mesaj_spus = True
-		if fel_mesaj == "zi":
+		if fel_mesaj == "cota":
+			text = _t("Sunt prea multe cereri de traducere. Reîncerc automat după pauza cerută de serviciu.")
+		elif fel_mesaj == "eroare":
+			text = _t("Traducerea nu a reușit: %s Reîncerc automat.") % eroare.text
+		elif fel_mesaj == "zi":
 			text = _t("%s a ajuns la limita gratuită pe zi (sau pe lună).") % numeServiciu(info["pe_zi"]) + u" " + \
 				_t("Traducerea s-a oprit până se reînnoiește limita. Ca să meargă și atunci, pune servicii de rezervă în "
 				"Meniu › Setări › Sunet și subtitrări › Traducerea subtitrărilor.")
@@ -3558,7 +3703,7 @@ class Traducator(object):
 
 	def _spuneOprit(self, serv):
 		"""firul enigma2: serviciul tocmai oprit dupa refuzurile cheii: jurnalul si mesajul pe televizor, o singura data
-		(pana la setari schimbate sau pana merge din nou)"""
+		(pana la setari schimbate sau pana merge din nou); fara al doilea mesaj in acelasi episod de esec"""
 		o = self.oprite.get(serv)
 		if o is None:
 			return
@@ -3567,6 +3712,8 @@ class Traducator(object):
 		if serv in self.oprit_spus:
 			return
 		self.oprit_spus.add(serv)
+		if self.mesaj_spus:
+			return
 		self._mesaj(textOprit(serv, o["refuzuri"], o.get("detaliu")) + u" " + textCeFaciRefuz(serv))
 
 	def opriteLista(self, lant=None):
@@ -3652,14 +3799,19 @@ class Traducator(object):
 			inceput = self._acum()
 			try:
 				rez = traduceAcum(cfg, texte, sursa, cfg["tinta"], (), termen, self._trimite)
-				iesire = (_PROBA, rez, None, int((self._acum() - inceput) * 1000), None)
+				rez = faraSecrete(rez, (cfg.get("cheie"),))
+				iesire = (_PROBA, rez, None, int((self._acum() - inceput) * 1000),
+					{"temporara": bool(cfg.get("_temporara"))})
 			except EroareTraducere as e:
+				_curataEroare(e, (cfg.get("cheie"),))
 				gasita, toate = None, False
 				if cfg["serviciu"] == "azure" and e.cod == 401:
 					gasita, toate = self._cautaRegiunea(cfg, texte, sursa)
 				if gasita is not None:
 					regiune, rez, ms = gasita
-					iesire = (_PROBA, rez, None, ms, {"regiune": regiune})
+					rez = faraSecrete(rez, (cfg.get("cheie"),))
+					iesire = (_PROBA, rez, None, ms, {"regiune": regiune,
+						"temporara": bool(cfg.get("_temporara"))})
 				else:
 					if cfg["serviciu"] == "azure" and e.cod == 401:
 						# toate regiunile refuzate: cheia sau resursa (abonamentul), nu regiunea; altfel cautarea s-a
@@ -3668,7 +3820,7 @@ class Traducator(object):
 						e.args = (e.text,)
 					iesire = (_PROBA, None, e, int((self._acum() - inceput) * 1000), None)
 			except Exception as e:
-				iesire = (_PROBA, None, EroareTraducere(E_RASPUNS, str(e)[:120]), None, None)
+				iesire = (_PROBA, None, EroareTraducere(E_RASPUNS, faraSecrete(str(e), (cfg.get("cheie"),))[:120]), None, None)
 			with self.lacat:
 				self.rezultate.append(iesire)
 				self.probe -= 1
@@ -3722,16 +3874,19 @@ class Traducator(object):
 
 	def _gataProba(self, rez, eroare, ms, info=None):
 		p = self.ultima_proba or {}
+		temporara = bool(info and info.get("temporara"))
 		if eroare is None:
 			p.update({"stare": "ok", "traducere": u" ".join(rez), "ms": ms})
 			if info and info.get("regiune") is not None:
 				regiune = info["regiune"]
-				self._puneRegiunea(regiune)
+				if not temporara:
+					self._puneRegiunea(regiune)
 				nume = dict(REGIUNI_AZURE).get(regiune, regiune)
 				p["regiune_gasita"] = regiune
 				p["nota"] = _t("Am găsit regiunea: %s (%s).") % (regiune or u"global", nume)
-			self.setariSchimbate()
-			if ms is not None:
+			if not temporara:
+				self.setariSchimbate()
+			if ms is not None and not temporara:
 				self.media_ms = ms if self.media_ms is None else 0.8 * self.media_ms + 0.2 * ms
 		else:
 			p.update({"stare": "eroare", "traducere": eroare.text, "ms": ms, "fel": eroare.fel,
@@ -3802,6 +3957,7 @@ class Traducator(object):
 		tv_stins = _tvStins()
 		return {
 			"pornit": bool(s.pornit.value),
+			"diagnostic": diagnosticPornire(s),
 			# televizorul stins: nimic nu se traduce (laPagina), deci contorul sta; fraza pentru ecran si web
 			"tv_stins": tv_stins,
 			"tv_stins_text": _t(TEXT_TV_STINS) if tv_stins else u"",
@@ -4257,6 +4413,73 @@ def instanta():
 # ------------------------------------------------------------------ legaturile cu nucleul, OCR si ecranele
 
 _URMARIT = [False]
+_PISTA_TRADUCERE = [None]
+
+
+def diagnosticPornire(s=None, pista=None, ocr=None):
+	"""Explica starea pistei alese pentru televizor si web, fara cereri la serviciul de traducere."""
+	s = s or initConfig()
+	pista = _PISTA_TRADUCERE[0] if pista is None else pista
+	fel, limba, poza = None, u"", False
+	if isinstance(pista, (list, tuple)):
+		try:
+			fel = int(pista[0])
+		except (TypeError, ValueError, IndexError):
+			pass
+		limba = pista[4] if len(pista) > 4 else u""
+		try:
+			poza = fel == 2 and int(pista[2]) in (5, 6, 13)
+		except (TypeError, ValueError, IndexError):
+			pass
+	else:
+		limba = pista or u""
+	try:
+		from Components import HdsOcrSubtitrari as O
+		poza = O.estePozaFilm(pista)
+	except Exception:
+		O = None
+	necesita = fel == 0 or poza
+	def rezultat(cod, mesaj, poate=False):
+		return {"cod": cod, "mesaj": mesaj, "poate_traduce": poate, "fel": fel, "necesita_ocr": necesita}
+	if not s.pornit.value:
+		return rezultat("oprita", _t("Traducerea subtitrărilor este oprită."))
+	if _tvStins():
+		return rezultat("tv_stins", _t(TEXT_TV_STINS))
+	lant = lantul(s)
+	if not any(not ceLipseste(c) for c in lant):
+		return rezultat("configurare", textCeLipseste(lant[0]))
+	if pista is None:
+		return rezultat("fara_pista", _t("Nu este pornită nicio pistă de subtitrare. Alege o pistă; textul scris direct în imaginea filmului nu poate fi tradus."))
+	if cod2(limba) and cod2(limba) == limbaTinta(s):
+		return rezultat("deja_tinta", _t("Subtitrarea este deja în limba aleasă pentru traducere."))
+	if not necesita:
+		if fel == 1:
+			return rezultat("teletext", _t("Pista aleasă este subtitrare teletext: textul se traduce direct, fără OCR."), True)
+		return rezultat("text", _t("Pista aleasă oferă text: subtitrarea din fișier sau flux se traduce direct, fără OCR."), True)
+	if not s.dvb.value:
+		return rezultat("dvb_oprit", _t("Pista aleasă este o imagine. Pornește traducerea subtitrărilor DVB pentru a folosi OCR."))
+	if ocr is None:
+		try:
+			if O is None:
+				raise ImportError()
+			o = O.instanta()
+			modele = o.modele()
+			model = o.model if (o.fel == fel and o.limba == limba) else O.modelPentruLimba(limba, modele)
+			ocr = {"instalat": o.serviciu.instalat(), "modele": modele, "model": model,
+				"nucleu": callable(getattr(_clasaNucleu(), "setOcrHandler", None)),
+				"activ": bool(o.setare()) and not o.client.oprit}
+		except Exception as e:
+			_jurnal("diagnosticul OCR: %s" % e.__class__.__name__)
+			return rezultat("ocr_verificare", _t("Starea OCR nu se poate verifica acum. Verifică OCR sau alege o pistă text."))
+	if not ocr.get("instalat"):
+		return rezultat("ocr_lipsa", _t("Pista aleasă este o imagine, dar programul OCR nu este instalat. Instalează hds-ocr sau alege o pistă text."))
+	if not ocr.get("nucleu", True):
+		return rezultat("ocr_nucleu", _t("Pista aleasă este o imagine, dar nucleul nu oferă legătura OCR. Alege o pistă text."))
+	if not ocr.get("model"):
+		return rezultat("ocr_model", _t("Pista aleasă este o imagine, dar lipsește modelul OCR pentru limba ei. Descarcă modelul sau alege o pistă text."))
+	if not ocr.get("activ", True):
+		return rezultat("ocr_oprit", _t("Pista aleasă este o imagine, dar OCR este oprit după erori. Alege din nou pista sau verifică OCR."))
+	return rezultat("bitmap", _t("Pista aleasă este o imagine: OCR citește textul, apoi textul se traduce."), True)
 
 
 def cereOcr():
@@ -4317,6 +4540,7 @@ def inainte(texte):
 
 def pistaAleasa(pista):
 	"""limba subtitrarii pornite (tuplul din getSubtitleList, sau un cod): sursa cererilor; aceeasi limba = nimic"""
+	_PISTA_TRADUCERE[0] = pista
 	limba = u""
 	try:
 		if isinstance(pista, (list, tuple)):
@@ -4335,6 +4559,7 @@ def pistaAleasa(pista):
 
 
 def pistaOprita():
+	_PISTA_TRADUCERE[0] = None
 	if _INSTANTA[0] is not None:
 		_INSTANTA[0].sursa = ""
 

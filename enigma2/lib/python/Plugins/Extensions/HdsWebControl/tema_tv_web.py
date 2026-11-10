@@ -43,15 +43,23 @@ def stare(T=None, **cai):
 	return rez
 
 
-def seteaza(argumente, T=None, config=None, configfile=None, **cai):
+def seteaza(argumente, T=None, config=None, configfile=None, sesiune=None, **cai):
 	"""POST /api/tema-tv-seteaza."""
 	T = _tema(T)
+	mod = argumente.get("aplicare", "pornire")
+	if mod not in ("acum", "pornire"):
+		return {"result": False, "message": _t("Alege Aplică acum sau La următoarea pornire.")}
+	if mod == "acum" and sesiune is None:
+		return {"result": False, "message": _t("Interfața nu este gata pentru repornire.")}
 	bun, mesaj, schimbata = T.seteaza(argumente.get("tema", ""), config=config, configfile=configfile,
 		dosar=cai.get("dosar"), exista=cai.get("exista"), traducere=_t, dom_skins=cai.get("dom_skins"))
 	rez = stare(T, config=config, **cai)
 	if bun and schimbata:
 		mesaj = mesaj + " " + _t("Se vede pe televizor după repornirea interfeței.")
 	rez.update({"result": bun, "message": mesaj})
+	if bun and schimbata and mod == "acum":
+		rez.update(reporneste(sesiune))
+		rez["reporneste"] = bool(rez["result"])
 	return rez
 
 
@@ -103,7 +111,7 @@ def argumente(request):
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in ("tema", "id"):
+		if cheie not in ("tema", "id", "aplicare"):
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
@@ -162,7 +170,7 @@ def rute(baza, resource, T=None):
 		def render_GET(self, request):
 			return pagina(request)
 
-	return ({b"tema-tv": StareResource(), b"tema-tv-seteaza": _scrie(lambda a: seteaza(a, T)),
+	return ({b"tema-tv": StareResource(), b"tema-tv-seteaza": _scrie(lambda a: seteaza(a, T, sesiune=_sesiune())),
 		b"tema-tv-reporneste": _scrie(lambda a: reporneste(_sesiune())), b"tema-tv-poza": PozaResource()},
 		{b"tema-tv": PaginaResource()})
 
@@ -234,6 +242,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>Tema interfeței de pe televizor</h1>
 <p class="sub">Cum arată meniurile, lista de canale, ghidul și barele de informații pe televizor. Tema paginilor web e o altă setare și rămâne cum e.</p>
+<p class="nota">Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire.</p>
 <p><a id="vremeaLegatura" href="/vremea">Vremea pe televizor și pe afișaj</a></p>
 <p class="mesaj" id="incarcare">Se citește tema...</p>
 <div id="continut" class="ascuns">
@@ -287,10 +296,15 @@ function arata(d){
     var s = document.createElement("p"); s.className = "scurt"; s.textContent = t.scurt; card.appendChild(s);
     var de = document.createElement("p"); de.className = "descriere"; de.textContent = t.descriere; card.appendChild(de);
     var b = document.createElement("button"); b.type = "button";
-    b.textContent = t.aleasa ? "Aleasă" : "Alege tema " + t.nume;
-    b.disabled = t.aleasa || !t.disponibila || d.skin_imaginii === false;
-    b.addEventListener("click", function(){ alege(t.id); });
+    b.textContent = "Aplică acum";
+    b.disabled = (t.aleasa && t.activa) || !t.disponibila || d.skin_imaginii === false;
+    b.addEventListener("click", function(){ alege(t.id, "acum"); });
     card.appendChild(b);
+    var maiTarziu = document.createElement("button"); maiTarziu.type = "button";
+    maiTarziu.textContent = "La următoarea pornire";
+    maiTarziu.disabled = t.aleasa || !t.disponibila || d.skin_imaginii === false;
+    maiTarziu.addEventListener("click", function(){ alege(t.id, "pornire"); });
+    card.appendChild(maiTarziu);
     c.appendChild(card);
   });
   $("altSkin").textContent = d.nota_skin || "";
@@ -308,10 +322,13 @@ function citeste(){
     arata(d);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
 }
-function alege(id){
-  var q = new URLSearchParams(); q.set("tema", id);
+function alege(id, aplicare){
+  var q = new URLSearchParams(); q.set("tema", id); q.set("aplicare", aplicare);
   mesaj("Se salvează tema...");
-  cerere("/api/tema-tv-seteaza", "POST", q).then(function(d){ if(d.teme){ arata(d); } mesaj(d.message, !d.result); })
+  cerere("/api/tema-tv-seteaza", "POST", q).then(function(d){
+    if(d.teme){ arata(d); } mesaj(d.message, !d.result);
+    if(d.result && d.reporneste){ setTimeout(function(){ location.reload(); }, 15000); }
+  })
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
 $("reporneste").addEventListener("click", function(){
@@ -338,6 +355,7 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire."),
 		N_("Tema interfeței de pe televizor"),
 		N_("Vremea pe televizor și pe afișaj"),
 		N_("Cum arată meniurile, lista de canale, ghidul și barele de informații pe televizor. Tema "
@@ -349,6 +367,8 @@ TEXTE_PAGINA = {
 			"televizor, în __DRUM_MENIU__."),
 	),
 	"js": (
+		N_("Aplică acum"),
+		N_("La următoarea pornire"),
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("lipsește din skin"),

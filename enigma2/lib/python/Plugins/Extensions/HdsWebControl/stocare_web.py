@@ -84,6 +84,7 @@ def _disc(L, d, automat=None):
 		"tip": d.get("tip") or "",
 		"legatura": d.get("legatura") or "",
 		"imagine": bool(d.get("imagine")),
+		"eroare_montare": dict(d.get("eroare_montare") or {}),
 		# un stick pus pe numai citire: legatura spre verificare (pagina Discurile)
 		"repara": _t("Repară") if d.get("motiv") == "numai_citire" and d.get("dispozitiv") and not d.get("imagine") and
 			not d.get("protejat") else "",
@@ -93,7 +94,8 @@ def _disc(L, d, automat=None):
 def _necitit(L, n):
 	"""Un disc pe care receptorul nu il poate citi; `disc`: discul intreg (sda), pentru legatura 'Formatează'."""
 	rez = {"dispozitiv": n["dispozitiv"], "nume": n["nume"], "fel": n.get("fel") or "",
-		"disc": L.discul(n["dispozitiv"]) if hasattr(L, "discul") else ""}
+		"disc": L.discul(n["dispozitiv"]) if hasattr(L, "discul") else "",
+		"eroare_montare": dict(n.get("eroare_montare") or {})}
 	# eticheta discului (0.7.1) numai cand are una; pagina n-o foloseste aici, iar forma veche a randului ramane la fel
 	if n.get("eticheta"):
 		rez["eticheta"] = n["eticheta"]
@@ -102,7 +104,7 @@ def _necitit(L, n):
 	return rez
 
 
-def stare(L=None, acum=None):
+def stare(L=None, acum=None, din_nou=False):
 	"""Pentru GET /api/stocare. Culege intai o pregatire terminata (setarile se pun pe firul acesta); rezultatul ei se
 	da cel mult VARSTA_LUCRU secunde de la pornire (pagina il arata numai daca ea a cerut-o; lucrul in curs il arata
 	oricum). `detaliu` are numai explicatiile despre loc: starea fiecarui disc e in tabelul paginii."""
@@ -112,7 +114,9 @@ def stare(L=None, acum=None):
 	cand = L.candidati()
 	necit = L.necitite()
 	cale = L.locInregistrari()
-	citire, se_citeste = L.cereStare(cand, cale)
+	citire, se_citeste = L.cereStare(cand, cale, True) if din_nou else L.cereStare(cand, cale)
+	if citire is not None and "cand" in citire:
+		cand, necit = citire["cand"], citire.get("necit") or []
 	t = L.texte(citire, cand, necit, L.SCOP_MENIU, cale, None, se_citeste)
 	if citire is not None:
 		discuri = citire.get("discuri") or []
@@ -133,6 +137,7 @@ def stare(L=None, acum=None):
 		# `disc`: discul intreg (sda), pentru legatura 'Formatează' spre pagina Discurile
 		"necitite": [_necitit(L, n) for n in necit],
 		"lucru": None,
+		"nume_lucru": L.stareNumeMedia() if hasattr(L, "stareNumeMedia") else None,
 	}
 	if lucru is not None and (lucru["stare"] == L.LUCRU_IN_LUCRU or acum - (lucru.get("timp") or 0) < VARSTA_LUCRU):
 		text, detaliu = L.textLucru(lucru)
@@ -203,7 +208,7 @@ def rute(baza, resource, L=None):
 
 		def render_GET(self, request):
 			try:
-				return self._raspunde(request, stare(L))
+				return self._raspunde(request, stare(L, din_nou=bool(request.args.get(b"nou"))))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -330,6 +335,7 @@ PAGINA = """<!DOCTYPE html>
 <body>
 <main>
 <h1>Locul înregistrărilor</h1>
+<p><button type="button" id="actualizeaza">Actualizează</button></p>
 <p class="mesaj" id="incarcare">Se citesc discurile...</p>
 <div id="continut" class="ascuns">
   <section class="card">
@@ -339,6 +345,7 @@ PAGINA = """<!DOCTYPE html>
   </section>
   <section class="card">
     <h2>Discurile conectate</h2>
+    <p class="nota">Numele ales în /media se aplică la următoarea montare a discului.</p>
     <p class="nota ascuns" id="alege">Alege discul pe care se salvează înregistrările.</p>
     <p class="nota" id="fara">Nu este conectat niciun stick USB sau hard disk.</p>
     <table id="tabel"><thead><tr><th>Discul</th><th>Liber</th><th>Starea</th><th></th></tr></thead><tbody id="discuri"></tbody></table>
@@ -353,7 +360,7 @@ PAGINA = """<!DOCTYPE html>
   <section class="card ascuns" id="cardNecitite">
     <h2>Discuri pe care receptorul nu le poate citi</h2>
     <ul id="necitite"></ul>
-    <p class="nota">Receptorul nu le poate citi sistemul de fișiere. Se pot folosi după formatare: cu „Formatează”, care deschide pagina Discurile (receptorul întreabă înainte), sau pe un calculator, ca FAT32. Formatarea șterge tot de pe ele.</p>
+    <p class="nota">Verifică mai întâi mesajul discului. Pentru un disc fără sistem de fișiere, poți folosi Formatează din pagina Discurile. Formatarea șterge tot de pe el.</p>
   </section>
   <p class="nota">Locul fiecărui fel de înregistrare (programate, imediate, timeshift) se alege în <a data-cale="/locuri-inregistrari" href="/locuri-inregistrari" style="color:inherit">Locurile înregistrărilor</a>; formatarea și verificarea discurilor în <a data-cale="/discuri" href="/discuri" style="color:inherit">Discurile</a>.</p>
   <p class="nota">Același ecran este pe televizor, în __DRUM_MENIU__.</p>
@@ -421,8 +428,19 @@ function alegereNumeMedia(k, ocupat){
   if(info.mesaj){ var m = document.createElement("div"); m.className = "nota"; m.textContent = info.mesaj; et.appendChild(m); }
   return et;
 }
+function eroareMontare(parinte, eroare){
+  if(!eroare || !eroare.motiv){ return; }
+  var mesaj = document.createElement("div"); mesaj.className = "nota eroare"; mesaj.textContent = eroare.motiv; parinte.appendChild(mesaj);
+  if(!eroare.detalii){ return; }
+  var detalii = document.createElement("details"); var titlu = document.createElement("summary"); titlu.textContent = "Detalii"; detalii.appendChild(titlu);
+  var text = document.createElement("div"); text.className = "mic"; text.textContent = eroare.detalii; detalii.appendChild(text); parinte.appendChild(detalii);
+}
 function arata(d){
   ULTIMA = d;
+  if(NUME_OCUPAT !== null && d.nume_lucru && !d.nume_lucru.in_lucru && d.nume_lucru.dispozitiv === NUME_OCUPAT){
+    NUME_RASPUNS = {dispozitiv: NUME_OCUPAT, text: d.nume_lucru.message, detaliu: "", eroare: !d.nume_lucru.result, amanat: !!d.nume_lucru.amanat};
+    NUME_OCUPAT = null;
+  }
   if(NUME_RASPUNS && NUME_RASPUNS.amanat && (d.discuri || []).some(function(k){ return k.dispozitiv === NUME_RASPUNS.dispozitiv && k.nume_media && !k.nume_media.amanat; })){ NUME_RASPUNS = null; }
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   $("text").textContent = d.text || "";
@@ -440,6 +458,7 @@ function arata(d){
     var mic = document.createElement("div"); mic.className = "mic"; mic.textContent = k.punct + (k.fel ? " (" + k.fel + ")" : "");
     n.appendChild(mic);
     if(k.fisa){ var fi = document.createElement("div"); fi.className = "mic"; fi.textContent = k.fisa; n.appendChild(fi); }
+    eroareMontare(n, k.eroare_montare);
     var alegere = alegereNumeMedia(k, ocupat); if(alegere){ n.appendChild(alegere); }
     var l = document.createElement("td"); l.className = "liber"; l.textContent = k.liber_text ? (k.liber_text + " din " + k.total_text) : "";
     var s = document.createElement("td"); s.className = "stare"; s.textContent = k.stare;
@@ -474,7 +493,8 @@ function arata(d){
   var nc = $("necitite"); nc.textContent = "";
   (d.necitite || []).forEach(function(k){
     var li = document.createElement("li"); li.textContent = k.nume + (k.fisa ? ": " + k.fisa : "");
-    if(k.disc){
+    eroareMontare(li, k.eroare_montare);
+    if(k.disc && !(k.eroare_montare && k.eroare_montare.motiv)){
       // formatarea se face in pagina Discurile, cu intrebarea ei; aici numai drumul spre ea
       var a = document.createElement("a"); a.href = adresa("/discuri?f=formatare"); a.textContent = "Formatează";
       a.style.color = "inherit"; a.style.marginLeft = "12px";
@@ -499,17 +519,17 @@ function arata(d){
     if(sus.text !== ULTIMUL_MESAJ && m.scrollIntoView){ m.scrollIntoView({block: "nearest"}); }
   }
   ULTIMUL_MESAJ = sus ? sus.text : "";
-  programeaza(d.se_citeste || ocupat ? 1000 : 10000);
+  if(d.se_citeste || ocupat || NUME_OCUPAT !== null){ programeaza(250); }
+  else if(CEAS){ clearTimeout(CEAS); CEAS = null; }
 }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); } CEAS = setTimeout(citeste, ms); }
-function citeste(){
-  return cerere("/api/stocare").then(function(d){
-    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi discurile."; programeaza(10000); return; }
+function citeste(dinNou){
+  return cerere("/api/stocare" + (dinNou === true ? "?nou=1" : "")).then(function(d){
+    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi discurile."; return; }
     arata(d);
-  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."; programeaza(10000); });
+  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."; });
 }
 function foloseste(k){
-  if(!confirm("Înregistrările se vor salva pe „" + k.nume + "”. Dacă pe el nu există dosarul movie, receptorul îl face. Nu se șterge nimic. Continui?")){ return; }
   NUME_RASPUNS = null;
   var q = new URLSearchParams(); q.set("punct", k.punct);
   CERUT = k.punct;
@@ -530,7 +550,7 @@ function schimbaNumeMedia(k, nume){
   NUME_RASPUNS = {dispozitiv: k.dispozitiv, text: "Se trimite...", detaliu: "", eroare: false};
   if(ULTIMA){ arata(ULTIMA); }
   cerere("/api/stocare-nume-media", "POST", q).then(function(d){
-    NUME_OCUPAT = null;
+    if(!d.in_lucru){ NUME_OCUPAT = null; }
     NUME_RASPUNS = {dispozitiv: k.dispozitiv, text: d.message || "Numele nu se poate schimba acum.", detaliu: "", eroare: !d.result, amanat: !!d.amanat};
     if(d.discuri){ arata(d); } else { citeste(); }
   }).catch(function(){
@@ -541,7 +561,8 @@ function schimbaNumeMedia(k, nume){
 }
 // legaturile spre paginile vecine pastreaza cheia din adresa (modul ?token=)
 Array.prototype.forEach.call(document.querySelectorAll("a[data-cale]"), function(a){ a.href = adresa(a.getAttribute("data-cale")); });
-citeste();
+$("actualizeaza").addEventListener("click", function(){ citeste(true); });
+citeste(true);
 </script>
 </body>
 </html>
@@ -559,9 +580,11 @@ def N_(text):
 TEXTE_PAGINA = {
 	"html": (
 		N_("Locul înregistrărilor"),
+		N_("Actualizează"),
 		N_("Se citesc discurile..."),
 		N_("Unde se salvează"),
 		N_("Discurile conectate"),
+		N_("Numele ales în /media se aplică la următoarea montare a discului."),
 		N_("Alege discul pe care se salvează înregistrările."),
 		N_("Nu este conectat niciun stick USB sau hard disk."),
 		N_("Discul"),
@@ -579,9 +602,7 @@ TEXTE_PAGINA = {
 			"alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările "
 			"rămân și după o actualizare."),
 		N_("Discuri pe care receptorul nu le poate citi"),
-		N_("Receptorul nu le poate citi sistemul de fișiere. Se pot folosi după formatare: cu „Formatează”, "
-			"care deschide pagina Discurile (receptorul întreabă înainte), sau pe un calculator, ca FAT32. "
-			"Formatarea șterge tot de pe ele."),
+		N_("Verifică mai întâi mesajul discului. Pentru un disc fără sistem de fișiere, poți folosi Formatează din pagina Discurile. Formatarea șterge tot de pe el."),
 		N_("Locul fiecărui fel de înregistrare (programate, imediate, timeshift) se alege în <a "
 			"data-cale=\"/locuri-inregistrari\" href=\"/locuri-inregistrari\" style=\"color:inherit\">Locurile "
 			"înregistrărilor</a>; formatarea și verificarea discurilor în <a data-cale=\"/discuri\" "
@@ -595,12 +616,11 @@ TEXTE_PAGINA = {
 		N_("Se pregătește..."),
 		N_("Folosește pentru înregistrări"),
 		N_("Numele în /media"),
+		N_("Detalii"),
 		N_("Numele nu se poate schimba acum."),
 		N_("Formatează"),
 		N_("Receptorul nu a putut citi discurile."),
 		N_("Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."),
-		N_("Înregistrările se vor salva pe „"),
-		N_("”. Dacă pe el nu există dosarul movie, receptorul îl face. Nu se șterge nimic. Continui?"),
 		N_("Se trimite..."),
 		N_("Receptorul nu a putut porni pregătirea."),
 		N_("Receptorul nu răspunde."),

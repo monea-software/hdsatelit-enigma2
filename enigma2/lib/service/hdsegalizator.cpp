@@ -25,7 +25,11 @@
  * Canalele TV (vezi hdsegalizator.h): la sursele TV firul cititor pastreaza PTS-ul fiecarui PES si
  * il da bucatii trimise in GStreamer (appsrc in format „time”); mostrele decodate isi pastreaza timpul, deci fiecare
  * bucata scrisa in tampon are PTS-ul ei (marcajele sesiunii); firul placii compara PTS-ul cadrului care iese cu PTS-ul
- * imaginii (CeasImagine) si hotaraste cu SincronImagine.
+ * imaginii aratate (CeasImagine: pe HiSilicon din /proc/msp/sync00, citit tot de firul cititor; altfel VIDEO_GET_PTS) si
+ * hotaraste cu SincronImagine (sincronTv). La pornire si dupa un gol nimic nu iese pana la decizia pe primul esantion;
+ * cat merge, abaterile mici le potriveste raportul, iar cele mari (peste PRAG_MERS_S) se fac dupa ce perioada coboara.
+ * Iesirea trece prin RampaIesire: dupa orice tacere sunetul urca in RAMPA_IESIRE_S, tacerile pornesc stins.
+ * Radio din satelit: tamponul de dinaintea placii tine TINTA_RADIO_MS (cu 150 ms se golea la cateva secunde).
  *
  * Posturile de pe internet (vezi hdsegalizator.h): playbin-ul serviciului -> sinkFlux() -> appsink -> laMostraFlux -> Lant ->
  * Potrivire (fara potrivirea ceasurilor; firul GStreamer asteapta placa) -> ALSA, sau WAV la proba. m_lacat_flux tine sesiunea
@@ -95,9 +99,11 @@ namespace
 	const int FARA_DATE_MS = 2000;        /* dupa ce au mers: starea „fara date” */
 	const int PERIOADA_ALSA = 480;        /* 10 ms */
 	const unsigned LATENTA_ALSA_US = 100000;
-	const int LATENTA_PLACA_MS = 60;      /* de la ALSA la iesire: tamponul pistei din placa si iesirea (Latency 40 ms) */
-	const int TV_FARA_CEAS_MS = 4000;     /* TV: fara ceasul imaginii atata timp, sunetul se intoarce pe placa */
-	const int TV_NEPOTRIVIT_MS = 8000;    /* TV: fara sincron atata timp de la pornire, la fel */
+	/* TV: limitele sincronului (fara ceas, fara pornire potrivita, corectii la rand) sunt in SincronTv (hdsegalizator_dsp.h) */
+	const int CITIRE_SYNC_MS = 100;       /* TV pe HiSilicon: ceasul imaginii din /proc/msp/sync00, la atat */
+	const int TINTA_RADIO_MS = 350;       /* radio din satelit: tamponul de dinaintea placii (fara imagine, latenta nu conteaza) */
+	const double RAMPA_IESIRE_S = 0.010;  /* sunetul urca dupa orice tacere si coboara inaintea unei corectii, in atat */
+	const char *const SYNC_PLACA = "/proc/msp/sync00";   /* sincronul placii HiSilicon (decodorul principal) */
 	const int POTRIVIRE_TV_MAX_MS = 300;
 	const int CADERI_ALSA = 20;           /* scrieri ALSA cazute la rand dupa care sunetul se intoarce pe placa */
 	const size_t MAX_APPSRC = 256 * 1024; /* octeti in coada appsrc (demux): peste atat bucatile se arunca */
@@ -645,54 +651,13 @@ public:
 		std::string decodor_nume, codec;
 		bool info_decodor;
 		int esantionare, canale;
-		/* TV: PTS-ul bucatilor scrise in tampon (numarul cadrului, PTS) si starea sincronului */
-		std::mutex lacat_pts;
-		std::pair<uint64_t, uint64_t> marcaje[512];
-		int marcaje_inceput, marcaje_numar;
+		/* TV: PTS-ul bucatilor scrise in tampon si sincronul cu imaginea (hdsegalizator_dsp.h) */
+		MarcajePts marcaje;
+		SincronTv sincron;
+		bool coboara;                /* firul placii: perioada aceasta coboara inaintea unei corectii */
 		uint64_t pts_baza;           /* firul cititor: primul PTS al sesiunii (timpul 0 in GStreamer) */
 		std::atomic<bool> pts_baza_ok;
-		std::atomic<int> tv_stare;   /* TV_ASTEAPTA, TV_POTRIVIT, TV_FARA_CEAS, TV_NEPOTRIVIT */
-		std::atomic<double> eroare_tv_ms;
-		std::atomic<unsigned> taceri_tv, aruncari_tv;
 		int fd_audio0;               /* numai o sesiune de flux, cu setFluxAudio0 */
-		uint64_t ultim_ceas_bun;     /* firul placii */
-		int tacere_ramasa;           /* firul placii: cadrele de tacere hotarate de sincron, inca nescrise */
-
-		void marcheaza(uint64_t cadru, uint64_t pts)
-		{
-			std::lock_guard<std::mutex> l(lacat_pts);
-			if (marcaje_numar == 512)
-			{
-				marcaje_inceput = (marcaje_inceput + 1) % 512;
-				marcaje_numar--;
-			}
-			marcaje[(marcaje_inceput + marcaje_numar) % 512] = std::make_pair(cadru, pts & MASCA_PTS);
-			marcaje_numar++;
-		}
-
-		/* PTS-ul cadrului `cadru` (din marcajul de dinaintea lui, 48 kHz = 15/8 pasi de 90 kHz pe cadru) */
-		bool ptsLa(uint64_t cadru, uint64_t &pts)
-		{
-			std::lock_guard<std::mutex> l(lacat_pts);
-			while (marcaje_numar > 1 && marcaje[(marcaje_inceput + 1) % 512].first <= cadru &&
-				cadru - marcaje[(marcaje_inceput + 1) % 512].first > (uint64_t)RATA)
-			{
-				marcaje_inceput = (marcaje_inceput + 1) % 512;
-				marcaje_numar--;
-			}
-			if (!marcaje_numar)
-				return false;
-			const std::pair<uint64_t, uint64_t> *m = &marcaje[marcaje_inceput];
-			for (int i = marcaje_numar; i-- > 0;)
-				if (marcaje[(marcaje_inceput + i) % 512].first <= cadru)
-				{
-					m = &marcaje[(marcaje_inceput + i) % 512];
-					break;
-				}
-			int64_t dif = (int64_t)(cadru - m->first);
-			pts = (uint64_t)((int64_t)m->second + dif * 15 / 8) & MASCA_PTS;
-			return true;
-		}
 
 		Sesiune(): motor(0),
 #if HAVE_GSTREAMER
@@ -702,18 +667,17 @@ public:
 			ns_cit(0), ns_dec(0), ns_ies(0), ultim_ns_dec(0), octeti_es(0), cadre(0),
 			ultima_data_ms(0), caderi_alsa(0), eos(false), rampaJos(false), pregain_db(0.0), abatere_ppm(0.0),
 			benzi_active(0), limitari(0), versiune(0), pornit_ms(0), info_decodor(false),
-			esantionare(0), canale(0), marcaje_inceput(0), marcaje_numar(0), pts_baza(0), pts_baza_ok(false), tv_stare(0), eroare_tv_ms(0.0), taceri_tv(0),
-			aruncari_tv(0), fd_audio0(-1), ultim_ceas_bun(0), tacere_ramasa(0)
+			esantionare(0), canale(0), coboara(false), pts_baza(0), pts_baza_ok(false), fd_audio0(-1)
 		{
 		}
 	};
-	enum { TV_ASTEAPTA = 0, TV_POTRIVIT = 1, TV_FARA_CEAS = 2, TV_NEPOTRIVIT = 3 };
 
 	eHdsEgalizatorMotor():
 		pompa(0), m_cerereSpectru(0), m_stare(STARE_OPRIT), m_versiune(1), m_volum_mod(0), m_placa("default"), m_sesiune(0),
 		m_ultim_volum(-1), m_ultim_mut(false), m_volum_aici(true), m_procent(0.0), m_procent_cit(0.0),
 		m_procent_dec(0.0), m_procent_ies(0.0), m_debit(0), m_debit_aprox(true), m_ultim_octeti(0), m_ultim_cadre(0),
-		m_ultim_masura(0), m_suma_octeti(0.0), m_suma_cadre(0.0), m_volumctl(0), m_tv(true), m_potrivire_tv_ms(0), m_sesiune_flux(0), m_flux_audio0(false)
+		m_ultim_masura(0), m_suma_octeti(0.0), m_suma_cadre(0.0), m_volumctl(0), m_tv(true), m_potrivire_tv_ms(0),
+		m_ceas_placa(::access(SYNC_PLACA, R_OK) == 0), m_sesiune_flux(0), m_flux_audio0(false)
 	{
 		for (int i = 0; i < 3; i++)
 			m_ultime_fir[i] = 0;
@@ -804,18 +768,28 @@ public:
 		m_potrivire_tv_ms = ms < -POTRIVIRE_TV_MAX_MS ? -POTRIVIRE_TV_MAX_MS : (ms > POTRIVIRE_TV_MAX_MS ? POTRIVIRE_TV_MAX_MS : ms);
 	}
 
-	/* PTS-ul imaginii (firul enigma2, de la servicedvb); reseteaza = alt serviciu */
+	/* PTS-ul imaginii (firul enigma2, de la servicedvb, VIDEO_GET_PTS); reseteaza = alt serviciu. Pe HiSilicon ceasul
+	   imaginii vine din sincronul placii (citesteCeasPlaca): VIDEO_GET_PTS e acolo cu 0,7-1,2 s inaintea imaginii de pe
+	   ecran (masurat pe SF8008), deci se tine numai pentru comparatie in stare() */
 	void ceasImagine(long long pts)
 	{
 		std::lock_guard<std::mutex> l(m_lacat_ceas);
-		m_ceas_imagine.citire(pts, (int64_t)acumMs());
+		if (m_ceas_placa)
+			m_ceas_decodor.citire(pts, (int64_t)acumMs());
+		else
+			m_ceas_imagine.citire(pts, (int64_t)acumMs());
 	}
 
 	void reseteazaCeasImagine()
 	{
 		std::lock_guard<std::mutex> l(m_lacat_ceas);
 		m_ceas_imagine.reseteaza();
+		m_ceas_decodor.reseteaza();
 	}
+
+	/* firul cititor, TV pe HiSilicon: VidLocalTime din /proc/msp/sync00 = PTS-ul (in ms) al imaginii aratate acum, cum il
+	   tine sincronul placii; merge si cand decodorul placii n-are sunet (PID -1). Numai citire, 1-2 ms. */
+	void citesteCeasPlaca();
 
 	bool imagineLa(uint64_t t_ms, uint64_t &pts, int &unitate)
 	{
@@ -1088,6 +1062,8 @@ private:
 	std::atomic<int> m_potrivire_tv_ms;
 	std::mutex m_lacat_ceas;
 	CeasImagine m_ceas_imagine;
+	CeasImagine m_ceas_decodor;           /* pe HiSilicon: VIDEO_GET_PTS, numai pentru comparatie */
+	const bool m_ceas_placa;              /* exista /proc/msp/sync00: ceasul imaginii din sincronul placii */
 	/* sesiunea de flux care primeste mostre; laturi: firul GStreamer al serviciului si firul de control */
 	std::mutex m_lacat_flux;
 	Sesiune *m_sesiune_flux;
@@ -1234,10 +1210,15 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	s->sursa = sursa;
 	s->cerut = cerut;
 	s->pornit_ms = acumMs();
+	s->sincron.porneste(s->pornit_ms);
 	if (!sursa.fisier.empty() || !sursa.flux.empty())
 		s->potrivire.faraPotrivire();
 	else if (sursa.tv)
 		s->potrivire.raportExtern(1.0);     /* TV: raportul il da sincronul cu imaginea */
+	else
+		/* radio din satelit: PES-urile vin la ~100-130 ms, dmix ia cate 43 ms; cu 150 ms tamponul atingea zero la cateva
+		   secunde (o tacere scurta auzita, masurat pe SF8008) */
+		s->potrivire.setTinta(RATA * TINTA_RADIO_MS / 1000);
 	{
 		/* de aici, esec() inchide tot ce s-a deschis in sesiune */
 		std::lock_guard<std::mutex> l(m_lacat);
@@ -1607,9 +1588,9 @@ void eHdsEgalizatorMotor::inchideSesiunea()
 		(unsigned long long)s->cadre.load(), s->potrivire.goluri());
 	if (s->sursa.tv)
 		eDebug("[HdsEgalizator] TV: sincronul %s, ultima abatere %.0f ms, %u perioade de tacere, %u aruncari",
-			s->tv_stare.load() == TV_POTRIVIT ? "potrivit" : (s->tv_stare.load() == TV_FARA_CEAS ? "fara ceasul imaginii" :
-			(s->tv_stare.load() == TV_NEPOTRIVIT ? "nepotrivit" : "inca nepotrivit")), s->eroare_tv_ms.load(),
-			s->taceri_tv.load(), s->aruncari_tv.load());
+			s->sincron.stare.load() == SincronTv::POTRIVIT ? "potrivit" : (s->sincron.stare.load() == SincronTv::FARA_CEAS ?
+			"fara ceasul imaginii" : (s->sincron.stare.load() == SincronTv::NEPOTRIVIT ? "nepotrivit" : "inca nepotrivit")),
+			s->sincron.eroare_ms.load(), s->sincron.taceri.load(), s->sincron.aruncari.load());
 	delete s;
 }
 
@@ -1802,13 +1783,21 @@ void eHdsEgalizatorMotor::firCititor(Sesiune *s)
 		s->inceput.clear();
 	}
 	std::vector<std::pair<size_t, uint64_t> > pts;
+	/* TV pe HiSilicon: firul acesta citeste si ceasul imaginii, la CITIRE_SYNC_MS (asteptarea mai scurta il tine la timp) */
+	const bool ceas_placa = s->sursa.tv && m_ceas_placa;
+	uint64_t ultim_sync = 0;
 	while (!s->gata)
 	{
+		if (ceas_placa && acumMs() - ultim_sync >= (uint64_t)CITIRE_SYNC_MS)
+		{
+			ultim_sync = acumMs();
+			citesteCeasPlaca();
+		}
 		struct pollfd pfd;
 		pfd.fd = s->fd;
 		pfd.events = POLLIN;
 		pfd.revents = 0;
-		int r = poll(&pfd, 1, 100);
+		int r = poll(&pfd, 1, ceas_placa ? 20 : 100);
 		if (r > 0 && (pfd.revents & POLLIN))
 		{
 			ssize_t n = ::read(s->fd, buf.data(), buf.size());
@@ -1848,14 +1837,20 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 	int la_rand = 0, dupa = 0;
 	double g = 1.0;
 	const double pas_jos = 1.0 / (0.020 * RATA);
+	/* dupa orice tacere (pornirea, golul, tacerea sincronului) sunetul urca in RAMPA_IESIRE_S, inaintea unei corectii
+	   coboara; tacerile pornesc din ultimul esantion, stins: nicio treapta nu ajunge in placa */
+	RampaIesire rampa(RAMPA_IESIRE_S);
 	while (!s->gata)
 	{
-		/* TV: fara ceas sau fara PTS perioada e tacere; cu sunetul devreme, tacerea hotarata de sincron (exact), apoi sunetul */
+		/* TV: fara ceas, inainte de sincron sau fara PTS perioada e tacere; cu sunetul devreme, tacerea hotarata de sincron
+		   (exact), apoi sunetul */
 		int tacere = (s->sursa.tv && !s->rampaJos) ? sincronTv(s) : 0;
-		if (tacere > 0)
-			std::fill(f.begin(), f.begin() + (size_t)tacere * CANALE, 0.0f);
+		const bool coboara = s->coboara;
+		s->coboara = false;
+		int produse = 0;
 		if (tacere < PERIOADA_ALSA)
-			s->potrivire.citeste(f.data() + (size_t)tacere * CANALE, PERIOADA_ALSA - tacere);
+			produse = s->potrivire.citeste(f.data() + (size_t)tacere * CANALE, PERIOADA_ALSA - tacere);
+		rampa.aplica(f.data(), PERIOADA_ALSA, tacere, produse, coboara);
 		if (s->rampaJos)
 		{
 			for (int i = 0; i < PERIOADA_ALSA; i++)
@@ -1928,66 +1923,66 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 		alsa.drop(s->pcm);
 }
 
-/* TV, firul placii: -> cate cadre de tacere incep perioada (PERIOADA_ALSA = toata perioada: fara ceas, fara PTS, sau
-   sunetul e mai devreme decat o perioada); restul perioadei se citeste din tampon, dupa o eventuala aruncare, cu
-   raportul sincronului */
+/* TV, firul placii: -> cate cadre de tacere incep perioada; hotararea o ia SincronTv (hdsegalizator_dsp.h, probata pe
+   PC): nimic nu iese pana la decizia pe primul esantion, corectiile mari se fac dupa ce perioada coboara, iar fara pornire
+   potrivita in SincronTv::NEPOTRIVIT_MS sau cu prea multe corectii la rand starea devine NEPOTRIVIT (verifica() trece
+   sunetul pe placa, in liniste). Aici numai ceasul imaginii, intarzierea ALSA si jurnalul. */
 int eHdsEgalizatorMotor::sincronTv(Sesiune *s)
 {
 	uint64_t acum = acumMs();
-	uint64_t pts_v = 0, pts_a = 0;
+	uint64_t pts_v = 0;
 	int unitate = 0;
 	bool ok_v = imagineLa(acum, pts_v, unitate);
-	if (ok_v)
-		s->ultim_ceas_bun = acum;
-	else
-	{
-		uint64_t de_la = s->ultim_ceas_bun ? s->ultim_ceas_bun : s->pornit_ms;
-		if (acum - de_la > (uint64_t)TV_FARA_CEAS_MS && s->tv_stare.load() != TV_FARA_CEAS)
-			s->tv_stare = TV_FARA_CEAS;
-		return PERIOADA_ALSA;
-	}
-	if (s->potrivire.asteapta())
-		return 0;                         /* tamponul se umple: citirea da tacere fara sa ia nimic */
-	if (s->tacere_ramasa > 0)
-	{
-		/* tacerea hotarata se scrie toata, fara alta decizie: imaginea merge cat ea, deci sunetul ajunge exact la timp */
-		int t = s->tacere_ramasa < PERIOADA_ALSA ? s->tacere_ramasa : PERIOADA_ALSA;
-		s->tacere_ramasa -= t;
-		return t;
-	}
-	if (!s->ptsLa(s->potrivire.citite(), pts_a))
-		return PERIOADA_ALSA;
-	double intarziere = LATENTA_ALSA_US / 1e6;
+	double alsa_s = -1.0;
 	long fr = 0;
-	if (alsa.delay && s->pcm && alsa.delay(s->pcm, &fr) == 0 && fr >= 0)
-		intarziere = (double)fr / RATA;
-	intarziere += LATENTA_PLACA_MS / 1000.0;
-	SincronImagine d = SincronImagine::decide(pts_a, intarziere, pts_v, m_potrivire_tv_ms.load() / 1000.0);
-	s->eroare_tv_ms = d.eroare_s * 1000.0;
-	if (d.fapta == SincronImagine::MERGE)
+	if (ok_v && alsa.delay && s->pcm && alsa.delay(s->pcm, &fr) == 0 && fr >= 0)
+		alsa_s = (double)fr / RATA;
+	SincronTv::Eveniment ev = SincronTv::NIMIC;
+	int tacere = s->sincron.pas(acum, ok_v, pts_v, alsa_s, m_potrivire_tv_ms.load() / 1000.0, s->potrivire, s->marcaje,
+		s->coboara, ev);
+	if (ev == SincronTv::PORNIT)
+		eDebug("[HdsEgalizator] TV: sunetul porneste potrivit cu imaginea (abatere %.0f ms, ceasul imaginii %s, dupa %llu ms)",
+			s->sincron.eroare_ms.load(), m_ceas_placa ? "din sincronul placii" : (unitate == 1 ? "de la decodor, in ms" :
+			"de la decodor, la 90 kHz"), (unsigned long long)(acum - s->pornit_ms));
+	else if (ev == SincronTv::NEPOTRIVIT_LA_PORNIRE)
+		eDebug("[HdsEgalizator] TV: sunetul nu s-a putut porni potrivit in %d ms (abatere %.0f ms)", SincronTv::NEPOTRIVIT_MS,
+			s->sincron.eroare_ms.load());
+	else if (ev == SincronTv::PREA_MULTE_CORECTII)
+		eDebug("[HdsEgalizator] TV: %d corectii mari in %d ms (abatere %.0f ms): ceasul imaginii nu se potriveste",
+			SincronTv::CORECTII_MAX, SincronTv::CORECTII_FEREASTRA_MS, s->sincron.eroare_ms.load());
+	return tacere;
+}
+
+/* firul cititor, TV pe HiSilicon: VidLocalTime din sincronul placii (ms) -> ceasul imaginii */
+void eHdsEgalizatorMotor::citesteCeasPlaca()
+{
+	int fd = ::open(SYNC_PLACA, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return;
+	char text[8192];
+	size_t n = 0;
+	const uint64_t t0 = acumMs();
+	while (n < sizeof(text) - 1)
 	{
-		s->potrivire.raportExtern(d.raport);
-		if (s->tv_stare.load() != TV_POTRIVIT)
-		{
-			s->tv_stare = TV_POTRIVIT;
-			eDebug("[HdsEgalizator] TV: sunetul potrivit cu imaginea (abatere %.0f ms, ceasul imaginii in %s)",
-				d.eroare_s * 1000.0, unitate == 1 ? "ms" : "90 kHz");
-		}
-		return 0;
+		ssize_t r = ::read(fd, text + n, sizeof(text) - 1 - n);
+		if (r <= 0)
+			break;
+		n += (size_t)r;
 	}
-	if (s->tv_stare.load() == TV_ASTEAPTA && acum - s->pornit_ms > (uint64_t)TV_NEPOTRIVIT_MS)
-		s->tv_stare = TV_NEPOTRIVIT;
-	if (d.fapta == SincronImagine::ARUNCA)
-	{
-		s->potrivire.arunca(d.cadre);
-		s->aruncari_tv++;
-		return 0;
-	}
-	s->taceri_tv++;
-	s->tacere_ramasa = d.cadre;
-	int t = s->tacere_ramasa < PERIOADA_ALSA ? s->tacere_ramasa : PERIOADA_ALSA;
-	s->tacere_ramasa -= t;
-	return t;
+	const uint64_t t1 = acumMs();
+	::close(fd);
+	text[n] = 0;
+	const char *p = strstr(text, "VidLocalTime");
+	if (!p)
+		return;
+	p += strlen("VidLocalTime");
+	while (*p == ' ' || *p == '\t' || *p == ':')
+		p++;
+	long long v = strtoll(p, 0, 10);
+	if (v <= 0)
+		return;
+	std::lock_guard<std::mutex> l(m_lacat_ceas);
+	m_ceas_imagine.citire(v, (int64_t)((t0 + t1) / 2), 1);
 }
 
 void eHdsEgalizatorMotor::prelucreaza(Sesiune *s, const float *date, int cadre, long long pts90)
@@ -2021,7 +2016,7 @@ void eHdsEgalizatorMotor::prelucreaza(Sesiune *s, const float *date, int cadre, 
 					usleep(5000);
 			/* PTS-ul mostrei desemneaza primul cadru; impartirea nu adauga alte marcaje. */
 			if (facut == 0 && s->sursa.tv && pts90 >= 0)
-				s->marcheaza(s->potrivire.scrise(), (uint64_t)pts90);
+				s->marcaje.marcheaza(s->potrivire.scrise(), (uint64_t)pts90);
 			s->potrivire.scrie(s->tmp, n);
 		}
 		else if (s->wav.deschis())
@@ -2188,12 +2183,12 @@ void eHdsEgalizatorMotor::verifica()
 		esec(s->cerut, "latm-nesuportat");
 		return;
 	}
-	if (s->sursa.tv && s->tv_stare.load() == TV_FARA_CEAS)
+	if (s->sursa.tv && s->sincron.stare.load() == SincronTv::FARA_CEAS)
 	{
 		esec(s->cerut, "tv-fara-ceas");
 		return;
 	}
-	if (s->sursa.tv && s->tv_stare.load() == TV_NEPOTRIVIT)
+	if (s->sursa.tv && s->sincron.stare.load() == SincronTv::NEPOTRIVIT)
 	{
 		esec(s->cerut, "tv-nepotrivit");
 		return;
@@ -2363,16 +2358,30 @@ PyObject *eHdsEgalizatorMotor::stare(const std::string &post)
 	puneText(d, "ceas_tv", m_ceas_tv);
 	puneInt(d, "tv", m_tv.load() ? 1 : 0);
 	puneInt(d, "potrivire_tv_ms", m_potrivire_tv_ms.load());
+	puneText(d, "ceas_imagine_sursa", m_ceas_placa ? "placa" : "decodor");
 	if (s && s->sursa.tv)
 	{
 		uint64_t p = 0;
 		int unitate = 0;
-		imagineLa(acumMs(), p, unitate);
+		const uint64_t acum = acumMs();
+		const bool are = imagineLa(acum, p, unitate);
+		if (are && m_ceas_placa)
+		{
+			/* cu cat e ceasul din VIDEO_GET_PTS inaintea imaginii aratate (sincronul placii): dovada pe receptor */
+			uint64_t p_dec = 0;
+			bool are_dec;
+			{
+				std::lock_guard<std::mutex> c(m_lacat_ceas);
+				are_dec = m_ceas_decodor.la((int64_t)acum, p_dec);
+			}
+			if (are_dec)
+				puneReal(d, "ceas_decodor_fata_de_placa_ms", (double)diferentaPts(p_dec, p) / 90.0);
+		}
 		puneInt(d, "sesiune_tv", 1);
-		puneReal(d, "sincron_tv_ms", s->eroare_tv_ms.load());
+		puneReal(d, "sincron_tv_ms", s->sincron.eroare_ms.load());
 		puneInt(d, "ceas_imagine", unitate);
-		puneInt(d, "taceri_tv", (long)s->taceri_tv.load());
-		puneInt(d, "aruncari_tv", (long)s->aruncari_tv.load());
+		puneInt(d, "taceri_tv", (long)s->sincron.taceri.load());
+		puneInt(d, "aruncari_tv", (long)s->sincron.aruncari.load());
 	}
 	if (s)
 	{

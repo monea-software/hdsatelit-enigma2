@@ -561,6 +561,84 @@ def interfete_web(sistem=None, stari=None):
 	return rez
 
 
+# ---------------------------------------------------------------- parola din reteaua de acasa
+# Interfetele web ale modulelor de acces pornesc fara utilizator si fara parola in casa (asa vin
+# configurarile noastre: numai httpallowed cu retelele de acasa). Numai daca omul isi pune parola locala si bifeaza
+# "Interfețele web ale modulelor de acces" (Components/HdsParolaLocala.py), in sectiunea [webif] a fiecarei configurari
+# se scriu httpuser = root si httppwd = parola lui, dupa randul MARCA_PAROLA; fara bifa se scot numai randurile de dupa
+# marca (cele puse de om cu mana raman). Modulul le citeste la urmatoarea pornire.
+MARCA_PAROLA = '# parola din reteaua de acasa (Setari > Retea > Parola receptorului)'
+
+
+def parola_web_in_randuri(randuri, parola):
+	"""Randurile unei configurari cu parola pusa (parola text) sau scoasa (None) in [webif]. Intoarce lista noua, sau
+	None cand fisierul nu are [webif] (nu e configurarea unei interfete web) ori nu se schimba nimic."""
+	iesire, sectiune, are_webif, sari = [], '', False, False
+	for rand in randuri:
+		r = rand.strip()
+		if r.startswith('[') and r.endswith(']'):
+			if sectiune == 'webif' and parola is not None:
+				iesire.extend([MARCA_PAROLA, 'httpuser = root', 'httppwd = %s' % parola])
+			sectiune = r[1:-1].strip().lower()
+			are_webif = are_webif or sectiune == 'webif'
+			iesire.append(rand)
+			continue
+		if r == MARCA_PAROLA:
+			sari = True
+			continue
+		if sari and re.match(r'^(httpuser|httppwd)\s*=', r, re.IGNORECASE):
+			continue
+		sari = False
+		if sectiune == 'webif' and parola is not None and re.match(r'^(httpuser|httppwd)\s*=', r, re.IGNORECASE):
+			continue  # parola omului inlocuieste ce era scris aici
+		iesire.append(rand)
+	if sectiune == 'webif' and parola is not None:
+		while iesire and not iesire[-1].strip():
+			iesire.pop()
+		iesire.extend([MARCA_PAROLA, 'httpuser = root', 'httppwd = %s' % parola, ''])
+	if not are_webif or iesire == list(randuri):
+		return None
+	return iesire
+
+
+def puneParolaWeb(parola, sistem=None):
+	"""Pune (text) sau scoate (None) parola din [webif] a configurarilor tuturor modulelor gasite (si oprite).
+	Intoarce True daca n-a fost nicio eroare de scriere."""
+	sistem = sistem or SistemAcces()
+	bine = True
+	vazute = set()
+	for d in dosare_configurare(sistem):
+		dosar = d.get('dosar')
+		if not dosar or dosar in vazute or not d.get('exista'):
+			continue
+		vazute.add(dosar)
+		try:
+			nume_fisiere = sorted(os.listdir(sistem.cale(dosar)))
+		except OSError:
+			continue
+		for nume in nume_fisiere:
+			if not nume.endswith('.conf'):
+				continue
+			cale = sistem.cale(posixpath.join(dosar, nume))
+			try:
+				if os.path.islink(cale) or not os.path.isfile(cale) or os.path.getsize(cale) > CONFIG_WEB_MAXIM:
+					continue
+				with open(cale, 'r', encoding='utf-8', errors='surrogateescape') as f:
+					text = f.read()
+				noi = parola_web_in_randuri(text.split('\n'), parola)
+				if noi is None:
+					continue
+				mod = os.stat(cale).st_mode & 0o7777
+				nou = cale + '.nou'
+				with open(nou, 'w', encoding='utf-8', errors='surrogateescape') as f:
+					f.write('\n'.join(noi))
+				os.chmod(nou, mod)
+				os.replace(nou, cale)
+			except (OSError, IOError, ValueError):
+				bine = False
+	return bine
+
+
 def argv_script(sistem, fel, sufix, actiune):
 	"""(cale, cale, actiune) pentru execvp, sau None cand nu e un script bun de pornit chiar acum"""
 	if actiune not in ACTIUNI or not fel or not _SUFIX_BUN.match(sufix or '') or fel not in feluri(sistem):

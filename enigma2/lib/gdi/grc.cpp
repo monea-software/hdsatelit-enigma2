@@ -659,7 +659,7 @@ void gDC::exec(const gOpcode *o)
 		break;
 	case gOpcode::setForegroundColor:
 		m_foreground_color = o->parm.setColor->color;
-		m_background_color_rgb = getRGB(m_foreground_color);
+		m_foreground_color_rgb = getRGB(m_foreground_color);
 		delete o->parm.setColor;
 		break;
 	case gOpcode::setBackgroundColorRGB:
@@ -841,8 +841,28 @@ void gDC::exec(const gOpcode *o)
 		struct timespec t0, t1;
 		if (masoara)
 			clock_gettime(CLOCK_MONOTONIC, &t0);
+		gDesenNetezit &forma = *o->parm.desenNetezit;
+		if (forma.culoare_pictor)
+			forma.culoare = m_foreground_color_rgb;
 		if (m_pixmap && m_pixmap->surface)
-			deseneazaNetezit(m_pixmap->surface, m_current_clip, m_current_offset, *o->parm.desenNetezit);
+		{
+			if (m_pixmap->surface->bpp != 32 && forma.forma == gDesenNetezit::dreptunghi)
+			{
+				/* Afisajele vechi pastreaza umplerea plata. */
+				eRect limite(-m_current_offset.x(), -m_current_offset.y(),
+					m_pixmap->size().width(), m_pixmap->size().height());
+				eRect r = margineDesenNetezit(forma, limite);
+				r.moveBy(m_current_offset);
+				gRegion clip = m_current_clip & r & eRect(ePoint(0, 0), m_pixmap->size());
+				gRGB culoare = forma.gradient.empty() ? forma.culoare : forma.gradient.front();
+				if (m_pixmap->needClut())
+					m_pixmap->fill(clip, m_pixmap->surface->clut.findColor(culoare));
+				else
+					m_pixmap->fill(clip, culoare);
+			}
+			else
+				deseneazaNetezit(m_pixmap->surface, m_current_clip, m_current_offset, forma);
+		}
 		if (masoara)
 		{
 			clock_gettime(CLOCK_MONOTONIC, &t1);

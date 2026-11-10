@@ -56,9 +56,8 @@ class CleanupWizard(Screen):
 		self.setTitle(_("Curățenia discului"))
 
 		self["ghid"] = Label(_(
-			"Șterge doar fișiere temporare și cache de pachete; nu atinge NICIODATĂ "
-			"canale, înregistrări, cronometre sau setări. Pentru resetare completă, "
-			"folosește „Reset to Factory Defaults” din meniul Sistem."))
+			"Șterge doar fișiere temporare și pachete descărcate; nu atinge niciodată canale, înregistrări, "
+			"programări sau setări. Fișierele folosite acum de programe și steagul probei prin stick rămân."))
 		self["buton_rosu"] = Button(_("Înapoi"))
 		self["buton_verde"] = Button(_("Curăță selecția"))
 
@@ -98,7 +97,7 @@ class CleanupWizard(Screen):
 		self.session.openWithCallback(
 			lambda raspuns: self._dupaConfirmare(raspuns, eticheta, cale, nume_excluse),
 			MessageBox,
-			_("Ștergi conținutul „%s”?\nCale: %s\nAcțiunea nu poate fi anulată.\n"
+			_("Ștergi conținutul: %s?\nCale: %s\nAcțiunea nu poate fi anulată.\n"
 				"Fișierele folosite acum de programe și steagul de probă prin stick "
 				"sunt păstrate automat.") % (eticheta, cale),
 			MessageBox.TYPE_YESNO,
@@ -109,13 +108,10 @@ class CleanupWizard(Screen):
 		if not raspuns:
 			return
 		if not os.path.isdir(cale):
-			self.session.open(MessageBox, _("Folderul „%s” nu există pe acest sistem.") % cale, MessageBox.TYPE_INFO)
 			self._reincarcaListaSiMarimi()
+			self["ghid"].setText(_("Dosarul %s nu există pe acest receptor.") % cale)
 			return
 		sterse, eliberati = _curataFolder(cale, nume_excluse)
 		self._reincarcaListaSiMarimi()
-		self.session.open(
-			MessageBox,
-			_("„%s” curățat: %d fișiere șterse, %s eliberați.") % (eticheta, sterse, _formatMB(eliberati)),
-			MessageBox.TYPE_INFO,
-		)
+		self["ghid"].setText(_("%s: %d fișiere șterse, %s eliberați.") %
+			(eticheta, sterse, _formatMB(eliberati)))

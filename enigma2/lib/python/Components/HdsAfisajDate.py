@@ -36,6 +36,7 @@ import bisect
 import os
 import struct
 import time
+import unicodedata
 
 try:
 	from Components import HdsAfisajLitere as L
@@ -76,6 +77,24 @@ def _(text):
 
 def _jurnal(text):
 	print("[HdsAfisajDate] %s" % text)
+
+
+def pareOras(text):
+	"""O propunere de cautare, numai pentru un nume plauzibil, fara potriviri in catalog."""
+	text = (text or "").strip()
+	return 2 <= len(text) <= 60 and any(c.isalpha() for c in text) and all(
+		c.isalpha() or unicodedata.category(c).startswith("M") or c in " -'," for c in text)
+
+
+def presetari(color=False):
+	"""Liste scurte comune televizorului si paginii web. Alegerea nu salveaza nimic."""
+	canal = "canal.nume:derulat" if color else "canal.numar:dreapta"
+	vremea = "vremea.acum:derulat" if color else "vremea.temperatura:patru"
+	return [
+		{"id": "ora", "titlu": _("Doar ora"), "lista": "ceas.ora:24"},
+		{"id": "ora_canal", "titlu": _("Ora și canalul"), "lista": "ceas.ora:24@5," + canal + "@5"},
+		{"id": "ora_vremea", "titlu": _("Ora și vremea"), "lista": "ceas.ora:24@5," + vremea + "@5"},
+	]
 
 
 # ---------------------------------------------------------------- catalogul
@@ -280,12 +299,13 @@ class Context(object):
 			return d if isinstance(d, dict) else {}
 		return self._m("tp", f) or {}
 
-	def fe(self):
-		"""Starea tunerului {'power','quality','ber','lock','number'} (HdsCommon, tinuta minte 0,5 s)."""
+	def fe(self, chei=None):
+		"""Starea tunerului {'power','quality','ber','lock','number'} (HdsCommon, tinuta minte 0,5 s); chei: numai cele
+		aratate (pe Vu+ fiecare valoare e o citire pe I2C)."""
 		try:
 			from Components.Converter import HdsCommon as C
 			ref = self.ref()
-			return C.frontend_status(self.serviciu(), ref.toString() if ref is not None else "") or {}
+			return C.frontend_status(self.serviciu(), ref.toString() if ref is not None else "", chei) or {}
 		except Exception as e:
 			_jurnal("tunerul: %r" % (e,))
 			return {}
@@ -1232,7 +1252,7 @@ def _banda(ctx):
 
 
 def _tuner(ctx):
-	n = ctx.fe().get("number")
+	n = ctx.fe(("number",)).get("number")
 	if n is None or not 0 <= n <= 25:
 		return None
 	return chr(65 + n)
@@ -1241,7 +1261,7 @@ def _tuner(ctx):
 def _procentTuner(cheie):
 	def f(ctx):
 		try:
-			return _C().percent16(ctx.fe().get(cheie))
+			return _C().percent16(ctx.fe((cheie,)).get(cheie))
 		except Exception:
 			return None
 	return f
@@ -1258,14 +1278,14 @@ def _snr(ctx):
 
 
 def _ber(ctx):
-	v = ctx.fe().get("ber")
+	v = ctx.fe(("ber",)).get("ber")
 	return v if v is not None and v >= 0 else None
 
 
 def _faraSemnal(ctx):
 	if ctx.fisier():
 		return None
-	fe = ctx.fe()
+	fe = ctx.fe(("lock",))
 	return True if fe and fe.get("lock") == 0 else None
 
 

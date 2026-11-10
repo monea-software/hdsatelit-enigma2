@@ -68,6 +68,8 @@ void textTerestru(char *buf, size_t n, const eDVBFrontendParametersTerrestrial &
 /* secventa SEC, pe masura ce se executa (tuneLoopInt) */
 void tensiune(Stare &s, int voltaj);
 void ton(Stare &s, int ton);
+/* Unicable: standard, UB, frecventa comenzii, pozitie si prezenta PIN-ului.
+   La EN50494, frecventa comenzii este suma cuantizata IF + UB. */
 void diseqc(Stare &s, const unsigned char *d, int len);
 void toneburst(Stare &s, int b);
 

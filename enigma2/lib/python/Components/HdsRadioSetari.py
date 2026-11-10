@@ -54,6 +54,7 @@ EPG = (("1", "1"), ("2", "2"), ("3", "3"), ("4", "4"))
 
 IMPLICITE = {
 	"ecran": True,
+	"taste_colorate": False,
 	"vizualizator": "varfuri",
 	"culori": "skin",
 	"bare": "24",
@@ -63,8 +64,8 @@ IMPLICITE = {
 	"bara_la_zap": False,
 }
 
-ORDINE = ("ecran", "vizualizator", "culori", "bare", "cadre", "odihna", "epg", "bara_la_zap")
-DA_NU = ("ecran", "bara_la_zap")
+ORDINE = ("ecran", "taste_colorate", "vizualizator", "culori", "bare", "cadre", "odihna", "epg", "bara_la_zap")
+DA_NU = ("ecran", "taste_colorate", "bara_la_zap")
 ALEGERI = {
 	"vizualizator": VIZUALIZATOARE,
 	"culori": CULORI,
@@ -76,6 +77,7 @@ ALEGERI = {
 
 ETICHETE = {
 	"ecran": N_("Ecranul radio pe tot ecranul"),
+	"taste_colorate": N_("Culorile comandă ecranul radio"),
 	"vizualizator": N_("Vizualizatorul"),
 	"culori": N_("Culorile"),
 	"bare": N_("Numărul de bare"),
@@ -88,8 +90,9 @@ ETICHETE = {
 # fraza simpla intai; explicatia tehnica, daca e utila, dupa ea
 DESCRIERI = {
 	"ecran": N_("Când asculți un post de radio, ecranul arată numele postului, emisiunile, piesa, sunetul și semnalul. Cu Nu rămâne ecranul obișnuit."),
-	"vizualizator": N_("Cum se arată muzica pe ecran. Pe ecranul radio, tasta galbenă trece la următoarea. Barele urmăresc sunetul adevărat al postului, pe orice format de sunet."),
-	"culori": N_("Culorile barelor. Pe ecranul radio, tasta albastră trece la următoarele. „Culorile ecranelor” folosește aceleași culori ca meniurile receptorului."),
+	"taste_colorate": N_("Cu Da, verde deschide egalizatorul, galben schimbă vizualizatorul și albastru paleta. Cu Nu, culorile păstrează comenzile comune de vizionare. Ecranul radio poate rămâne vizibil."),
+	"vizualizator": N_("Cum se arată muzica pe ecran. Galben trece la următoarea numai dacă ai activat comenzile colorate ale radioului. Barele urmăresc sunetul adevărat al postului."),
+	"culori": N_("Culorile barelor. Albastru trece la următoarele numai dacă ai activat comenzile colorate ale radioului. Alegerea skin folosește culorile meniurilor."),
 	"bare": N_("Câte bare are vizualizatorul. Fiecare bară arată o parte din frecvențele sunetului. Barele se întind numai pe frecvențele pe care postul le transmite, deci pot fi mai puține."),
 	"cadre": N_("De câte ori pe secundă se mișcă barele. Mai puține cadre încarcă mai puțin receptorul."),
 	"odihna": N_("După atâtea minute fără nicio tastă rămân pe ecran doar numele postului, piesa și ceasul, care se mută încet, ca ecranul televizorului să nu se ardă. Orice tastă aduce ecranul întreg."),

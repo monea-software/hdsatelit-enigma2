@@ -13,7 +13,7 @@ unicable (version)
   |  | manufacturer (name)
   |  |  |\
   |  |  | \
-  |  |  | product (name, position, sc11-scr8. lofl, lofh, loft)
+  |  |  | product (name, positions, format, scr1-scr32, lofl, lofh, threshold)
   |  |  |
   |  |  |\
   |  |  | \
@@ -58,13 +58,88 @@ unicable (version)
 
 -->
 
+<!--
+format: EN50494 (implicit, 8 benzi) sau EN50607 (Unicable II/JESS, 32 benzi).
+Frecventele scr1-scr32 sunt in MHz, in ordinea UB1-UB32 a producatorului.
+Numarul de benzi se deduce din ultima frecventa declarata.
+Produsele noi folosesc frecventele implicite din documentatia producatorului.
+-->
+
 	<lnb>
 		<manufacturer name="DUR-line">
 			<product name="Unicable LNB" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<!-- https://www.durasat.de/out/media/24443_Anleitung_UK124_LNB_Anleitung.pdf -->
+			<product name="UK 124" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+			<!-- Monoblock 19,2E si 13E, dCSS (EN50607), 2 pozitii, 24 de benzi; aceleasi frecvente ca UK 124 si ca in listele
+			     Unicable publice ale altor receptoare Enigma2. Cerut pe forum (subiectul 801, Vu+ Uno4K SE, 10.11.2026). -->
+			<product name="MB6-UK Monoblock dCSS" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+			<!-- dCSS (EN50607), 24 de benzi, din aceleasi liste publice (10.11.2026) -->
+			<product name="UK 119" format="EN50607"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="975" scr10="1025" scr11="1225" scr12="1330" scr13="1430" scr14="1535" scr15="1630" scr16="1730"
+				scr17="1840" scr18="1880" scr19="1920" scr20="1960" scr21="2000" scr22="2040" scr23="2080" scr24="2125"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="UK101" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="UK102" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="UK104" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="UK 124-3L" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
 		</manufacturer>
 		<manufacturer name="G-STAR">
 			<product name="GS-404-L1" scr1="1280" scr2="1382" scr3="1484"/>
 			<product name="GS-406-L1" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+		</manufacturer>
+		<manufacturer name="GT-SAT">
+			<!-- https://www.dipolnet.com/unicable_i-ii_legacy_lnb_gt-sat_gt-s2dcss24_nc_cyfrowy_polsat_A98228.htm (cerut pe forum, 08.11.2026) -->
+			<product name="GT-S2dCSS24" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="GT-S1-2-3SCR4" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="dLNB dHello" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="GT-dLNB1-T" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="GT-dLNB1-T - Poland" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
+			<product name="GT-dLNB1-DY" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="GT-S1DCSS24" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="GT-S2DCSS24 - Italy" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="GT-S3DCSS24" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="GT-dLNB2T - Italy (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="GT-dLNB2T - Italy (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="GT-S2dCSS24 - Poland" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
 		</manufacturer>
 		<manufacturer name="Humax">
 			<product name="150 SCR" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
@@ -72,6 +147,39 @@ unicable (version)
 		<manufacturer name="Inverto">
 			<product name="IDLP-40UNIQD+S" scr1="1680" scr2="1420" scr3="2040" scr4="1210"/>
 			<product name="IDLB-QUDL-UNI2L-OPP" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<!-- https://www.inverto.tv/download/file/5a9fa20b88fb4-1520411147.pdf -->
+			<product name="IDLU-32UL40-UNBOO-OPP" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="IDLB-QUDL42-UNI2L-1PP" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="IDLB-QUDL43-UNE1L-OPP" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="IDLU-24UL40-UNMOO-OPP" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+			<product name="IDLU-32UL42-UNBOO-OPP" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="IDLU-32L410-BMR1L-1PN/32" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="IDLU-32L412-UNBRR-OPN" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="IDLU-32L410-BMR1L-1PN/8" scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"/>
+			<product name="IDLU-24UL40-PLSTM-BPP" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"/>
 		</manufacturer>
 		<manufacturer name="Kathrein">
 			<product name="UAS481"  lofl="10200" lofh="10200" scr1="1400" scr2="1516" scr3="1632" scr4="1748"/>
@@ -84,6 +192,119 @@ unicable (version)
 		</manufacturer>
 		<manufacturer name="Wisi">
 			<product name="OC 05" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+		<manufacturer name="EDISON">
+			<product name="SCR-1" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Fte">
+			<product name="pemium dCSS24 24ch" format="EN50607"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="975" scr10="1025" scr11="1225" scr12="1330" scr13="1430" scr14="1535" scr15="1630" scr16="1730"
+				scr17="1840" scr18="1880" scr19="1920" scr20="1960" scr21="2000" scr22="2040" scr23="2080" scr24="2125"/>
+			<product name="pemium dCSS 8ch" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+		</manufacturer>
+		<manufacturer name="Fte maximal">
+			<product name="PREMIUM dCSS 24ch" format="EN50607"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="975" scr10="1025" scr11="1225" scr12="1330" scr13="1430" scr14="1535" scr15="1630" scr16="1730"
+				scr17="1840" scr18="1880" scr19="1920" scr20="1960" scr21="2000" scr22="2040" scr23="2080" scr24="2125"/>
+		</manufacturer>
+		<manufacturer name="Fuba">
+			<product name="DEK 124" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1730"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="DEK 342" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="GigaBlue">
+			<product name="GigaBlue Ultra SCR-LNB" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+		</manufacturer>
+		<manufacturer name="Grundig GSS">
+			<product name="GSS GLD 244 SCR-LNB" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"/>
+		</manufacturer>
+		<manufacturer name="Maclean">
+			<product name="Unicable II MCTV-785" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="MCTV-762" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Megasat">
+			<product name="Unicable II LNB Diavolo" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+		</manufacturer>
+		<manufacturer name="Microelectronics Technology Inc">
+			<product name="AKU0-U05-M103" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1005" scr6="1050" scr7="1095" scr8="1140"
+				scr9="1260" scr10="1305" scr11="1350" scr12="1475" scr13="1520" scr14="1565" scr15="1610" scr16="1725"
+				scr17="1770" scr18="1815" scr19="1860" scr20="1905" scr21="1950" scr22="1995" scr23="2085" scr24="2130"/>
+		</manufacturer>
+		<manufacturer name="Next">
+			<product name="YE-449" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Offel">
+			<product name="13-205 LNB dCSS (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="13-205 LNB dCSS (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="13-207 LNB dCSS 1 LEGACY (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="13-207 LNB dCSS 1 LEGACY (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="13-208 LNB dCSS 2 LEGACY (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="13-208 LNB dCSS 2 LEGACY (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+		</manufacturer>
+		<manufacturer name="Opticum">
+			<product name="Unicable LNB" scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="970" scr6="1030" scr7="1090" scr8="1150"/>
+			<product name="SCR 16UB Pro" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="Unicable II LNB" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
+		</manufacturer>
+		<manufacturer name="Schwaiger">
+			<product name="SPS6941 531" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Sharp">
+			<product name="BS1R8EL600A" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="TechniSat">
+			<product name="SCR-LNB" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Telestar">
+			<product name="Skywire HC LNB" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Televes">
+			<product name="747312 (SPE24)" format="EN50607"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="975" scr10="1025" scr11="1125" scr12="1225" scr13="1325" scr14="1425" scr15="1525" scr16="1630"
+				scr17="1730" scr18="1830" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="LNB dCSS UNICABLE II 747322" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
+			<product name="747342 (PL)" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"
+				scr17="2084" scr18="2128" scr19="1816" scr20="1860" scr21="1904" scr22="1948" scr23="1992" scr24="1728"/>
+		</manufacturer>
+		<manufacturer name="Triax">
+			<product name="TSC 001" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Venton">
+			<product name="Venton BL-SCR" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
 		</manufacturer>
 	</lnb>
 	<matrix>
@@ -105,6 +326,11 @@ unicable (version)
 			<product name="SUM518" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 			<product name="SUM918" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 			<product name="SUM928" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="MSU 401/2-16K (SCR1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="MSU 401/2-16K (SCR5-16/JESS)" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
 		</manufacturer>
 		<manufacturer name="Dura-Sat">
 			<product name="UCP18" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
@@ -120,12 +346,208 @@ unicable (version)
 		</manufacturer>
 		<manufacturer name="Inverto">
 			<product name="IDLP-UST11O-CUO1O-8PP" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<!-- https://www.inverto.tv/download/file/63b53b663cb86-1672821606.pdf -->
+			<product name="IDLU-UWT110-CUO1O-32P" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="IDLP-UST1O1-CUO1O-4PP" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="IDLP-UST111-CUO1O-8PP" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="IDLP-UST112-CUO1O-8PP" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="IDLP-USS200-CUO10-8PP" positions="2" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="IDLU-UST110-CUO1O-32P" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="IDLU-UST110-CUO4O-32P" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="IDLU-UST110-CUO8O-32P" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="IDLU-UST111-CUO4O-32P" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="IDLU-UST112-CUO12-32S" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="IDLU-UST112-CUOO8-32S" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="IDLU-UWT110-CUO10-32P" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="ISKY-UST111-CUO4O-16P" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="ISKY-UST112-CUO12-16S" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="ISKY-UST112-CUOO8-16S" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
 		</manufacturer>
 		<manufacturer name="JULTEC">
 			<product name="JPS0501-6" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
 			<product name="JPS0502-3" scr1="1280" scr2="1382" scr3="1484"/>
 			<product name="JPS0502-6" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
 			<product name="JPS0504-3" scr1="1280" scr2="1382" scr3="1484"/>
+			<!-- https://www.jultec.de/Datenblatt_JPS0501-16M_T_X.pdf -->
+			<product name="JPS0501-16M" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0501-16T" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0501-16X" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="JPS0501-12" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS0501-8(A/M/T)" format="EN50607" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="JPS0501-12(MN/TN)" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS0502-3(A/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0502-4(M/T)" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS0502-6(M/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS0502-8-4(T)" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0504-3(A/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0504-6(M/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JRS0504-2(A/T)" format="EN50607" scr1="1280" scr2="1382"/>
+			<product name="JPS0506-3(A/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0508-3(A/M/T)" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JRS0502-2+4(T)" format="EN50607" scr1="1280" scr2="1382"/>
+			<product name="JRS0502-8+4T" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="old JRS0502-2+4" scr1="1280" scr2="1382"/>
+			<product name="JRS0504-2" format="EN50607" scr1="1280" scr2="1382"/>
+			<product name="JRS0504-8(M/T)" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0901-6(A/M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS0901-12(AN/TN)" format="EN50607" positions="2"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS0902-12(MN/TN)" format="EN50607" positions="2"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS0902-3" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0902-6(A/M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS0904-3(A/M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0904-6(M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS0906-3(A/M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0908-3(A/M/T)" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JRS0902-2+4(T)" format="EN50607" positions="2" scr1="1280" scr2="1382"/>
+			<product name="JRS0904-2(A/T)" format="EN50607" positions="2" scr1="1280" scr2="1382"/>
+			<product name="JPS1701-12(AN/TN)" format="EN50607" positions="4"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS1702-12(MN/TN)" format="EN50607" positions="4"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPS1702-6(A/M/T)" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS1704-3(A/M/T)" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS1704-6(M/T)" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPS1706-3(A/M/T)" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS1708-3(A/M/T)" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPS0501-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0501-16 a2CSS" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0502-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0502-16 a2CSS" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0504-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0504-16 a2CSS" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0508-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0508-16 a2CSS" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPSxx/JRSxx mit 4 UB" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPSxx/JRSxx mit 8 UB" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPSxx/JRSxx mit 16 UB" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="a2CSS 1Sat 4UBs" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="a2CSS 1Sat 8UBs" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="a2CSS 1Sat 16UBs" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="a2CSS 2Sat 4UBs" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="a2CSS 2Sat 8UBs" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="a2CSS 2Sat 16UBs" format="EN50607" positions="2"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="a2CSS 4Sat 4UBs" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="a2CSS 4Sat 8UBs" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="a2CSS 4Sat 16UBs" format="EN50607" positions="4"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JRS0501-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JRS0502-4 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JRS0502-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JRS0502-4+4T a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JRS0504-4 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JRS0506-4 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JRS0506-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JRS0508-4 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JRS0508-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0506-8 a2CSS" format="EN50607" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0506-16 a2CSS" format="EN50607"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0901-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0901-16 a2CSS" format="EN50607" positions="2"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0902-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0902-16 a2CSS" format="EN50607" positions="2"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0904-4 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS0904-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0904-16 a2CSS" format="EN50607" positions="2"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS0906-4 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS0906-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0908-4 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS0908-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS0912-8 a2CSS" format="EN50607" positions="2" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS1701-16 a2CSS" format="EN50607" positions="4"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS1702-16 a2CSS" format="EN50607" positions="4"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS1704-4 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS1704-8 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS1704-16 a2CSS" format="EN50607" positions="4"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
+			<product name="JPS1706-4 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS1706-8 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS1708-4 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPS1708-8 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPS1712-8 a2CSS" format="EN50607" positions="4" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPSxx/JRSxx 3 UB" format="EN50607" positions="8" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="JPSxx/JRSxx 4 UB" format="EN50607" positions="8" scr1="1375" scr2="1425" scr3="1475" scr4="1525"/>
+			<product name="JPSxx/JRSxx 6 UB" format="EN50607" positions="8" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="JPSxx/JRSxx 8 UB" format="EN50607" positions="8" scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"/>
+			<product name="JPSxx/JRSxx 12 UB" format="EN50607" positions="8"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="JPSxx/JRSxx 16 UB" format="EN50607" positions="8"
+				scr1="1375" scr2="1425" scr3="1475" scr4="1525" scr5="1575" scr6="1625" scr7="1675" scr8="1725"
+				scr9="1775" scr10="1825" scr11="1875" scr12="1925" scr13="1975" scr14="2025" scr15="2075" scr16="2125"/>
 		</manufacturer>
 		<manufacturer name="Kathrein">
 			<product name="EXR501" scr1="1400" scr2="1516" scr3="1632" scr4="1748"/>
@@ -142,6 +564,85 @@ unicable (version)
 			<product name="EXR2942" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
 			<product name="EXR2981" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 			<product name="EXU908" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="EXD 154" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="EXD 158/258 Twin" format="EN50607" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="EXD 1524/2524 A (8 UB)" format="EN50607" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="EXD 1524/2524 A x2 (8 UB)" format="EN50607" positions="4" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="EXD 1524/2524 B (12 UB)" format="EN50607" positions="2"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="EXD 1524/2524 B x2 (12 UB)" format="EN50607" positions="4"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="EXE 1581" format="EN50607" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="EXE 2581" format="EN50607" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="EXE 159" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790"/>
+			<product name="EXE 259" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790"/>
+			<product name="EXE 1512" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="EXE 2512" format="EN50607"
+				scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"
+				scr9="1790" scr10="1892" scr11="1994" scr12="2096"/>
+			<product name="EXD 1532 1Sat 8UBs" format="EN50607" scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"/>
+			<product name="EXD 1532 1Sat 16UBs" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="EXD 1532 1Sat 24UBs" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="EXD 1532 1Sat 30UBs" format="EN50607"
+				scr1="970" scr2="1010" scr3="1050" scr4="1090" scr5="1130" scr6="1170" scr7="1210" scr8="1250"
+				scr9="1290" scr10="1330" scr11="1370" scr12="1410" scr13="1450" scr14="1490" scr15="1530" scr16="1570"
+				scr17="1610" scr18="1650" scr19="1690" scr20="1730" scr21="1770" scr22="1810" scr23="1850" scr24="1890"
+				scr25="1930" scr26="1970" scr27="2010" scr28="2050" scr29="2090" scr30="2130"/>
+			<product name="EXD 1532 2Sat 8UBs" format="EN50607" positions="2" scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"/>
+			<product name="EXD 1532 2Sat 16UBs" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="EXD 1532 2Sat 24UBs" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="EXD 1532 2Sat 30UBs" format="EN50607" positions="2"
+				scr1="970" scr2="1010" scr3="1050" scr4="1090" scr5="1130" scr6="1170" scr7="1210" scr8="1250"
+				scr9="1290" scr10="1330" scr11="1370" scr12="1410" scr13="1450" scr14="1490" scr15="1530" scr16="1570"
+				scr17="1610" scr18="1650" scr19="1690" scr20="1730" scr21="1770" scr22="1810" scr23="1850" scr24="1890"
+				scr25="1930" scr26="1970" scr27="2010" scr28="2050" scr29="2090" scr30="2130"/>
+			<product name="EXD 2532 1Sat 8UBs" format="EN50607" scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"/>
+			<product name="EXD 2532 1Sat 16UBs" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="EXD 2532 1Sat 24UBs" format="EN50607"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="EXD 2532 1Sat 30UBs" format="EN50607"
+				scr1="970" scr2="1010" scr3="1050" scr4="1090" scr5="1130" scr6="1170" scr7="1210" scr8="1250"
+				scr9="1290" scr10="1330" scr11="1370" scr12="1410" scr13="1450" scr14="1490" scr15="1530" scr16="1570"
+				scr17="1610" scr18="1650" scr19="1690" scr20="1730" scr21="1770" scr22="1810" scr23="1850" scr24="1890"
+				scr25="1930" scr26="1970" scr27="2010" scr28="2050" scr29="2090" scr30="2130"/>
+			<product name="EXD 2532 2Sat 8UBs" format="EN50607" positions="2" scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"/>
+			<product name="EXD 2532 2Sat 16UBs" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="EXD 2532 2Sat 24UBs" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="EXD 2532 2Sat 30UBs" format="EN50607" positions="2"
+				scr1="970" scr2="1010" scr3="1050" scr4="1090" scr5="1130" scr6="1170" scr7="1210" scr8="1250"
+				scr9="1290" scr10="1330" scr11="1370" scr12="1410" scr13="1450" scr14="1490" scr15="1530" scr16="1570"
+				scr17="1610" scr18="1650" scr19="1690" scr20="1730" scr21="1770" scr22="1810" scr23="1850" scr24="1890"
+				scr25="1930" scr26="1970" scr27="2010" scr28="2050" scr29="2090" scr30="2130"/>
 		</manufacturer>
 		<manufacturer name="ROTEK">
 			<product name="EKL2/1" scr1="1400" scr2="1516"/>
@@ -149,12 +650,30 @@ unicable (version)
 		</manufacturer>
 		<manufacturer name="Smart">
 			<product name="DPA 51" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="DPA 524 L" format="EN50607" scr1="1280" scr2="1382" scr3="1484" scr4="1586"/>
+			<product name="DPA 98" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="DPA 989" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 		</manufacturer>
 		<manufacturer name="Technisat">
 			<product name="TechniRouter 5/1x8" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 			<product name="TechniRouter 9/1x8" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
 			<product name="TechniRouter 5/2x4" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
 			<product name="TechniRouter 9/2x4" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="TechniRouter 5/1x4" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="TechniRouter 5/1x16" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="TechniRouter 5/8x16" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="TechniRouter 9/4x16" format="EN50607" positions="4"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="TechniRouter 5/2x16" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
 		</manufacturer>
 		<manufacturer name="Telstar">
 			<product name="SCR 5/1x8" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
@@ -167,6 +686,253 @@ unicable (version)
 			<product name="DY 64 2410" scr1="1178" scr2="1280" scr3="1382" scr4="1484"/>
 			<product name="DY 68 1810" positions="2" scr1="1178" scr2="1280" scr3="1382" scr4="1484" scr5="1586" scr6="1688" scr7="1790" scr8="1892"/>
 			<product name="DY 68 2410" positions="2" scr1="1178" scr2="1280" scr3="1382" scr4="1484"/>
+			<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+			<product name="DY 64 1800" scr1="1178" scr2="1280" scr3="1382" scr4="1484" scr5="1586" scr6="1688" scr7="1790" scr8="1892"/>
+			<product name="DY 64 2400" scr1="1178" scr2="1280" scr3="1382" scr4="1484"/>
+		</manufacturer>
+		<!-- adaugate 10.11.2026 din listele Unicable publice ale altor receptoare Enigma2 (importa_unicable.py) -->
+		<manufacturer name="Astra Strobel">
+			<product name="SEV 103" scr1="1284" scr2="1400" scr3="1514"/>
+			<product name="SEV 108" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="SEV 208" positions="2" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+		</manufacturer>
+		<manufacturer name="Axing">
+			<product name="SES 5216/5416/5816-06" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="SES 544-06" positions="2" scr1="1331" scr2="1382" scr3="1433" scr4="1484"/>
+			<product name="SES 984-06" format="EN50607" positions="4" scr1="1331" scr2="1382" scr3="1433" scr4="1484"/>
+			<product name="SES 5532-19 (2 Sat)" format="EN50607" positions="2"
+				scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790" scr7="1892" scr8="1994"
+				scr9="974" scr10="1008" scr11="1042" scr12="1076" scr13="1110" scr14="1144" scr15="1178" scr16="1212"
+				scr17="1246" scr18="1314" scr19="1348" scr20="1416" scr21="1450" scr22="1518" scr23="1552" scr24="1620"
+				scr25="1654" scr26="1722" scr27="1756" scr28="1824" scr29="1858" scr30="1926" scr31="1960" scr32="2028"/>
+			<product name="SES 5532-19 x2 (4 Sat)" format="EN50607" positions="4"
+				scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790" scr7="1892" scr8="1994"
+				scr9="974" scr10="1008" scr11="1042" scr12="1076" scr13="1110" scr14="1144" scr15="1178" scr16="1212"
+				scr17="1246" scr18="1314" scr19="1348" scr20="1416" scr21="1450" scr22="1518" scr23="1552" scr24="1620"
+				scr25="1654" scr26="1722" scr27="1756" scr28="1824" scr29="1858" scr30="1926" scr31="1960" scr32="2028"/>
+			<product name="SES 556-19" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="SES 556-09" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="SES 996-19" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="SES 996-09" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="SES 46-00" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="SES 86-00" positions="2" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+		</manufacturer>
+		<manufacturer name="DStv">
+			<product name="DStv Switch (5-1)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="DStv Switch (5-2)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+		</manufacturer>
+		<manufacturer name="Dura-Sat(Dur-Line)">
+			<product name="Dur-DCR5-1-8(L4/K)" format="EN50607" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790" scr7="1892" scr8="1994"/>
+			<product name="DCR 5-2-4" scr1="1280" scr2="1382" scr3="1484" scr4="1586"/>
+			<product name="DCS 552-16" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"/>
+			<product name="DPC-32 K" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="UCP2" scr1="1400" scr2="1516"/>
+			<product name="UCP3" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="UCP18" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="UCP20" scr1="1210" scr2="1420"/>
+			<product name="UCP30" positions="2" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="UCP30V2" positions="2" scr1="1284" scr2="1400" scr3="1516"/>
+			<product name="VDU543NT" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="VDU563NT" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="VDU583NT" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="VDU586NT" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790"/>
+			<product name="VDU518NT" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="VDU983NT" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="UKS 246 Output 1" positions="2" scr1="1005" scr2="1210" scr3="1420" scr4="1610" scr5="1815" scr6="1995"/>
+			<product name="UKS 246 Output 2" positions="2" scr1="1050" scr2="1260" scr3="1475" scr4="1680" scr5="1725" scr6="2040"/>
+			<product name="UKS 246 Output 3" positions="2" scr1="1095" scr2="1305" scr3="1520" scr4="1725" scr5="1905" scr6="2085"/>
+			<product name="UKS 246 Output 4" positions="2" scr1="1140" scr2="1350" scr3="1565" scr4="1770" scr5="1950" scr6="2130"/>
+			<product name="UKS-246 U 1" positions="2" scr1="1005" scr2="1210" scr3="1420" scr4="1610" scr5="1815" scr6="1995"/>
+			<product name="UKS-246 U 2" positions="2" scr1="1050" scr2="1260" scr3="1475" scr4="1680" scr5="1860" scr6="2040"/>
+			<product name="UKS-246 U 3" positions="2" scr1="1095" scr2="1305" scr3="1520" scr4="1725" scr5="1905" scr6="2085"/>
+			<product name="UKS-246 U 4" positions="2" scr1="1140" scr2="1350" scr3="1565" scr4="1770" scr5="1950" scr6="2130"/>
+		</manufacturer>
+		<manufacturer name="EMP-Centauri">
+			<product name="MS4/1(6)EUN-3" scr1="1400" scr2="1632" scr3="1284" scr4="1516" scr5="1864" scr6="2096"/>
+			<product name="MS4/1(8)PIN-4" scr1="1080" scr2="1176" scr3="1237" scr4="1413" scr5="1555" scr6="1668" scr7="1842" scr8="1960"/>
+			<product name="MS8/1(8)PIN-4" positions="2" scr1="1080" scr2="1176" scr3="1237" scr4="1413" scr5="1555" scr6="1668" scr7="1842" scr8="1960"/>
+			<product name="MS5/5+2PIP-4" scr1="1080" scr2="1176" scr3="1237" scr4="1413" scr5="1555" scr6="1668" scr7="1842" scr8="1960"/>
+			<product name="MS5/5+2PEP-4" scr1="1080" scr2="1176" scr3="1237" scr4="1413" scr5="1555" scr6="1668" scr7="1842" scr8="1960"/>
+		</manufacturer>
+		<manufacturer name="Fracarro">
+			<product name="SCD2-5416 (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCD2-5416 (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="SCD2-5816 (SCR 1-4)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCD2-5816 (dCSS 5-16)" format="EN50607"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+		</manufacturer>
+		<manufacturer name="Fuba">
+			<product name="MCR 212" scr1="1400" scr2="1516"/>
+			<product name="MCR 221" format="EN50607" scr1="1280" scr2="1382"/>
+			<product name="MCR 441" format="EN50607" scr1="1280" scr2="1382" scr3="1484" scr4="1586"/>
+			<product name="MCR 518" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="MCR 918" positions="2" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="FMG 524 E" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="FME 524 E" format="EN50607" positions="2"
+				scr1="975" scr2="1025" scr3="1075" scr4="1125" scr5="1175" scr6="1225" scr7="1275" scr8="1325"
+				scr9="1375" scr10="1425" scr11="1475" scr12="1525" scr13="1575" scr14="1625" scr15="1675" scr16="1725"
+				scr17="1775" scr18="1825" scr19="1875" scr20="1925" scr21="1975" scr22="2025" scr23="2075" scr24="2125"/>
+			<product name="MCR 532" format="EN50607" positions="2"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="1020" scr10="1125" scr11="1230" scr12="1330" scr13="1435" scr14="1535" scr15="1640" scr16="1735"/>
+		</manufacturer>
+		<manufacturer name="GSS (Grundig SAT-Systems)">
+			<product name="SDUC 502" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="SDUC 902" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+		</manufacturer>
+		<manufacturer name="Johansson">
+			<product name="9712A" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9730I" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="9740" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9740D" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9740I" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9742" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9742D" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9742I" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9750" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9750D" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9750I" positions="2" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9752" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9752D" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9752I" positions="2" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9760" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9760D" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9760I" format="EN50607" positions="4" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9762" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9762D" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="9762I" format="EN50607" positions="4" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="9754 (SCR 1-4)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="9754 (dCSS 5-16)" format="EN50607" positions="2"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="9754A (SCR 1-4)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="9754A (dCSS 5-16)" format="EN50607" positions="2"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="9758 (SCR 1-4)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="9758 (dCSS 5-16)" format="EN50607" positions="2"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="9758A (SCR 1-4)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="9758A (dCSS 5-16)" format="EN50607" positions="2"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="9754APL" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271"/>
+			<product name="9758APL" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271"/>
+			<product name="9754AMC" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1006" scr6="1057" scr7="1108" scr8="1159"
+				scr9="1261" scr10="1312" scr11="1363" scr12="1471" scr13="1522" scr14="1573" scr15="1624" scr16="1731"/>
+			<product name="9758AMC" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="1006" scr6="1057" scr7="1108" scr8="1159"
+				scr9="1261" scr10="1312" scr11="1363" scr12="1471" scr13="1522" scr14="1573" scr15="1624" scr16="1731"/>
+		</manufacturer>
+		<manufacturer name="Kreiling">
+			<product name="KR 2-1-2 Uni-D" positions="2" scr1="1400" scr2="1516"/>
+			<product name="KR 5-1+4" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790" scr7="1892" scr8="1994"/>
+			<product name="KR 5-2+4" scr1="1280" scr2="1382" scr3="1484" scr4="1586"/>
+			<product name="KR 5-5-1-8" scr1="1280" scr2="1382" scr3="1484" scr4="1586" scr5="1688" scr6="1790" scr7="1892" scr8="1994"/>
+			<product name="KR 5-5-2-4" scr1="1280" scr2="1382" scr3="1484" scr4="1586"/>
+		</manufacturer>
+		<manufacturer name="LEM ELETTRONICA">
+			<product name="SC444" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCK54 (1/2/T)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCK56 (1/2/T)" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484"/>
+			<product name="SCK58 (1/2/T)" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"/>
+			<product name="SCK94 (1/2/T)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCK98 (1/T)" positions="2" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"/>
+			<product name="SCQ44 (4/8/T)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCX44 (4/6/8)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCX53 (4/6/8/T)" scr1="1210" scr2="1420" scr3="1680"/>
+			<product name="SCX54 (4/6/8/T)" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCX94 (4/6/8/T)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCW516/8" format="EN50607" positions="2"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"
+				scr9="1340" scr10="1485" scr11="1550" scr12="1615" scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+		</manufacturer>
+		<manufacturer name="Polytron">
+			<product name="SCA 32" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="984" scr6="1020" scr7="1056" scr8="1092"
+				scr9="1128" scr10="1164" scr11="1256" scr12="1292" scr13="1328" scr14="1364" scr15="1458" scr16="1494"
+				scr17="1530" scr18="1566" scr19="1602" scr20="1638" scr21="1716" scr22="1752" scr23="1788" scr24="1824"
+				scr25="1860" scr26="1896" scr27="1932" scr28="1968" scr29="2004" scr30="2076" scr31="2112" scr32="2148"/>
+			<product name="SCA 501-8" format="EN50607" scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="985" scr6="1050" scr7="1115" scr8="1275"/>
+			<product name="SCA 508-16 A (SCR 1-4)" positions="2" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SCA 508-16 A (dCSS 5-16)" format="EN50607" positions="2"
+				scr5="985" scr6="1050" scr7="1115" scr8="1275" scr9="1340" scr10="1485" scr11="1550" scr12="1615"
+				scr13="1745" scr14="1810" scr15="1875" scr16="1940"/>
+			<product name="SCA 508-4" positions="2" scr1="1280" scr2="1484" scr3="1688" scr4="1892"/>
+			<product name="SCA 908-4" format="EN50607" positions="4" scr1="1280" scr2="1484" scr3="1688" scr4="1892"/>
+		</manufacturer>
+		<manufacturer name="Rogetech">
+			<product name="CMS-518C" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+		</manufacturer>
+		<manufacturer name="SetOne">
+			<product name="SCR 5/8" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+		</manufacturer>
+		<manufacturer name="Spaun">
+			<product name="SUS 21 F" positions="2" scr1="1076" scr2="1178"/>
+			<product name="SUS 21 FI" positions="2" scr1="1210" scr2="1420"/>
+			<product name="SUS 21 FX" format="EN50607" positions="4" scr1="1076" scr2="1178"/>
+			<product name="SUS 4441 F" scr1="1210" scr2="1420" scr3="1680" scr4="2040"/>
+			<product name="SUS 5541 F-NFA" scr1="974" scr2="1076" scr3="1178" scr4="1280"/>
+			<product name="SUS 5581 F-NFA" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"/>
+			<product name="SUS 5581 NF 1x8" scr1="1068" scr2="1284" scr3="1400" scr4="1516" scr5="1632" scr6="1748" scr7="1864" scr8="1980"/>
+			<product name="SUS 5581 NF 3x3 1" scr1="1068" scr2="1284" scr3="1400"/>
+			<product name="SUS 5581 NF 3x3 2" scr1="1516" scr2="1632" scr3="1748"/>
+			<product name="SUS 5581 NF 3x3 3" scr1="1864" scr2="1980" scr3="2096"/>
+			<product name="SUS 5581 NF Leg 1x8" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"/>
+			<product name="SUS 5581 NF Leg 3x3 1" scr1="974" scr2="1076" scr3="1178"/>
+			<product name="SUS 5581 NF Leg 3x3 2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="SUS 5581 NF Leg 3x3 3" scr1="1586" scr2="1688" scr3="1790"/>
+			<product name="SUS 5581 NFA Leg 1x8" scr1="974" scr2="1076" scr3="1178" scr4="1280" scr5="1382" scr6="1484" scr7="1586" scr8="1688"/>
+			<product name="SUS 5581 NFA Leg 3x3 1" scr1="974" scr2="1076" scr3="1178"/>
+			<product name="SUS 5581 NFA Leg 3x3 2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="SUS 5581 NFA Leg 3x3 3" scr1="1586" scr2="1688" scr3="1790"/>
+			<product name="SUS 41 F" format="EN50607" positions="4" scr1="1076" scr2="1178" scr3="1280" scr4="1382"/>
+			<product name="SUS 41 F3" format="EN50607" positions="4" scr1="1076" scr2="1178" scr3="1280" scr4="1382"/>
+			<product name="SUS 9942/8 NF Leg 2x4" positions="2" scr1="1076" scr2="1178" scr3="1280" scr4="1382"/>
+		</manufacturer>
+		<manufacturer name="Telestar">
+			<product name="SCR 5/1x8" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="SCR 9/1x8" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632" scr5="1748" scr6="1864" scr7="1980" scr8="2096"/>
+			<product name="SCR 5/2x4" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
+			<product name="SCR 9/2x4" positions="2" scr1="1284" scr2="1400" scr3="1516" scr4="1632"/>
+		</manufacturer>
+		<manufacturer name="Televes">
+			<product name="NevoSwitch 714111/714112 (DE)" format="EN50607"
+				scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"
+				scr9="1125" scr10="1225" scr11="1325" scr12="1425" scr13="1525" scr14="1625" scr15="1725" scr16="1825"/>
+			<product name="NevoSwitch dCSS 5x5 714141" format="EN50607"
+				scr1="1210" scr2="1420" scr3="1680" scr4="2040" scr5="978" scr6="1028" scr7="1072" scr8="1116"
+				scr9="1160" scr10="1271" scr11="1315" scr12="1359" scr13="1484" scr14="1528" scr15="1572" scr16="1616"/>
+		</manufacturer>
+		<manufacturer name="Triax">
+			<product name="TUM 518" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="TUM 918" positions="2" scr1="1076" scr2="1178" scr3="1280" scr4="1382" scr5="1484" scr6="1586" scr7="1688" scr8="1790"/>
+			<product name="TUM 543C" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="TUM 583C" format="EN50607" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="TUM 943C" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="TUM 983C" format="EN50607" positions="2" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="TUM 1743C" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
+			<product name="TUM 1783C" format="EN50607" positions="4" scr1="1280" scr2="1382" scr3="1484"/>
 		</manufacturer>
 	</matrix>
 </unicable>

@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Explorator privilegiat. Fara acces prin token, aplicatii sau asistenta.
 
+In casa fisierele nu cer parola ("totul fara parole pe local"): o adresa din reteaua
+de acasa primeste singura sesiunea ei (Sessions.liber). Cand omul si-a pus parola din reteaua de acasa pentru
+interfata web, browserul a scris-o o data la intrare (plugin.py, /intra), deci nu se mai cere a doua oara aici. Din
+afara casei (cu accesul extern pornit) ramane logarea cu parola lui root, ca inainte.
+
 Toate operatiile de disc si verificarea parolei ruleaza in fire limitate.
 eTimer livreaza raspunsurile in bucla Enigma2; nu depindem de callFromThread.
 Nici parolele, nici continutul, nici exceptiile brute nu sunt jurnalizate.
@@ -84,6 +89,15 @@ class Sessions:
             self.sessions[self.key(secret)] = {"id": self.key(secret), "address": address, "expires": expires}
             return secret, expires
 
+    def liber(self, address):
+        """Sesiunea fara parola a unei adrese din casa: aceeasi la fiecare cerere (lucrarile, copierile si urcarile raman
+        ale ei), reinnoita la fiecare cerere."""
+        with self.lock:
+            ident = self.key("liber:" + str(address))
+            value = {"id": ident, "address": address, "expires": self.clock() + SESSION_SECONDS}
+            self.sessions[ident] = value
+            return dict(value)
+
     def get(self, secret, address):
         if not secret or len(str(secret)) > 128:
             return None
@@ -130,7 +144,7 @@ def gate(request, P, sessions=SESSIONS, require_login=True, download=False):
     if not P._esteAdresaLocala(address) and not getattr(P, "fisiereAfara", lambda: False)():
         raise FisiereError("network", _("Accesul la fișiere din afara casei este oprit."), 403)
     if P.PARAM_JETON in request.args or P._antet(request, b"authorization"):
-        raise FisiereError("browser", _("Fișierele se deschid numai din browser, cu parola receptorului."), 403)
+        raise FisiereError("browser", _("Fișierele se deschid numai din browser."), 403)
     if request.method not in (b"GET", b"POST"):
         raise FisiereError("method", _("Metoda cererii nu este permisă."), 405)
     if request.method == b"POST" and not P._antet(request, b"origin"):
@@ -143,6 +157,9 @@ def gate(request, P, sessions=SESSIONS, require_login=True, download=False):
     if not download and not P.obtineAsociere().csrfValid(secret, P._antet(request, b"x-hds-csrf")):
         raise FisiereError("csrf", _("Cererea nu are codul de protecție al panoului."), 403)
     session = sessions.get(_cookie(request), address)
+    if session is None and P._esteAdresaLocala(address):
+        # in casa, fara parola; cu parola pusa pentru interfata web, browserul a scris-o deja la intrare
+        session = sessions.liber(address)
     if require_login and session is None:
         raise FisiereError("login", _("Introdu parola receptorului. Sesiunea de fișiere durează 30 de minute."), 401)
     return session
@@ -493,7 +510,7 @@ def rute(resource, P, service=None, timer_factory=None):
                 data = body(request) if action != "upload-chunk" else None
                 if action == "access":
                     if not P._esteAdresaLocala(P._adresaClient(request)) or not isinstance(data.get("permis"), bool):
-                        raise FisiereError("local", _("Accesul extern se schimbă numai din casă, după introducerea parolei receptorului."), 403)
+                        raise FisiereError("local", _("Accesul extern se schimbă numai din casă."), 403)
                     setting = P.config.plugins.hdswebcontrol.fisiere_afara
                     setting.value = data["permis"]
                     setting.save()

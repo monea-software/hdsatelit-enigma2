@@ -57,3 +57,30 @@ HDS_FUNCTII_MIPS_PREGATITE ?= ""
 HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-navigator hds-ocr hds-ocr-modele"
 RDEPENDS:${PN}:remove:vusolose = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vusolose = " hdsatelit-radacina-usb"
+
+# Vu+ 4K (lotul a4-boot, 09.11.2026; lazcengiz, Uno4K SE, asistenta 742005): OpenMultiboot, luat de om din alt feed,
+# cere pachetul kernel-module-nandsim, iar feedul nostru nu il avea, deci opkg refuza instalarea. Pe Vu+ 4K (eMMC,
+# arhive tar.bz2) OpenMultiboot nu incarca nandsim (il foloseste numai la imaginile UBI de pe NAND), dar dependenta din
+# reteta lui e neconditionata. Toate nucleele Vu+ 4K au CONFIG_MTD_NAND_NANDSIM=m (defconfig-urile linux-vuplus 3.14.28,
+# 4.1.20, 4.1.45), deci modulul se face oricum (~20 KB) si nu se incarca singur. Masinile sunt numite una cate una, nu
+# dupa MACHINE_FEATURES omb: o masina al carei nucleu nu face modulul ar opri constructia imaginii.
+RDEPENDS:${PN}:append:vusolo4k = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuuno4k = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuuno4kse = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuultimo4k = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuduo4k = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuduo4kse = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:vuzero4k = " kernel-module-nandsim"
+
+# Vu+ Solo4K, Duo4K, Uno4K SE: stickurile Wi-Fi Ralink (RT2870, RT3070, RT5370, RT5372; Bogdanici13, Vu+ Solo4K, forum
+# 1024 si asistenta 694576, 10.11.2026: stickul 148f:5372 se vedea pe USB, dar nu aparea nicio placa Wi-Fi). Nucleele
+# Vu+ 4K au CONFIG_RT2800USB=m (inventarul drivere-usb-073), deci modulul rt2800usb si firmware-ul rt*.bin din
+# linux-firmware-ralink, ca pe gbtrio4k. PR-ul pachetului de grup creste pe aceste masini: actualizarea din meniu ia numai
+# pachetele instalate cu versiune noua (HdsActualizari.planul), deci fara el cine actualizeaza nu primea nici driverul,
+# nici kernel-module-nandsim de mai sus.
+RDEPENDS:${PN}:append:vusolo4k = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:vuduo4k = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:vuuno4kse = " kernel-module-rt2800usb linux-firmware-ralink"
+PR:append:vusolo4k = ".1"
+PR:append:vuduo4k = ".1"
+PR:append:vuuno4kse = ".1"

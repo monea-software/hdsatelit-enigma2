@@ -155,6 +155,14 @@ P_COPIE = N_("Se face copia completă pe stick...")
 P_INAINTE = N_("Se verifică totul înainte de instalare...")
 P_ASTEPT = N_("Instalarea așteaptă să se termine înregistrarea și pornește singură.")
 P_SCRIU = N_("Imaginea se instalează acum. Nu opri receptorul: repornește singur, iar canalele și setările revin singure.")
+T_FEED_PORNIT = N_("Instalez actualizarea. Canalele, setările și pluginurile rămân. Interfața repornește singură când receptorul e liber.")
+T_FEED_OCUPAT = N_("Așteaptă să se termine operația de acum.")
+T_COPIE_CERUTA = N_("Setările din copia făcută înainte de instalare se pun la loc acum. Interfața repornește o dată, când receptorul e liber.")
+T_COPIE_LIPSA = N_("Introdu stickul folosit la instalare. Setările se vor pune singure la loc.")
+# identitatea copiei asteptate, cand dupa o scriere buna copia nu era pe niciun stick (in dosarul restaurarii, ca sa ramana si
+# dupa repornire); se cauta la fiecare VERIFICARE_COPIE_MS, pana apare stickul
+FIS_COPIE_ASTEPTATA = "copie-asteptata.json"
+VERIFICARE_COPIE_MS = 30000
 T_STANDBY = N_("Actualizare singură în standby")
 T_ALTE = N_("Alte imagini")
 T_NEVERIFICATA = N_("Neverificată")
@@ -177,6 +185,9 @@ RADACINA = None
 # fereastra (in punte o pune pluginul, altfel Screens/HdsImagineOnline.py)
 ECRAN = None
 PAZA_PROPRIE = False
+# imaginea are feedul ei (porneste(session, cu_feed=True)): cautarea citeste si stare.json al feedului si alege intre
+# imaginea completa si actualizarea din feed (alege_oferta); in puntea de pe 0.6.x ramane False
+CU_FEED = False
 
 
 def _rad():
@@ -394,6 +405,39 @@ def citeste_lista(canal="public", credentiale=None, deschide=None):
 		_jurnal("lista semnata, cu forma rea: %s" % ", ".join(g))
 		return None, NESEMNATA
 	return d, None
+
+
+def oferta_din_feed(stare, img, canal, rad=None):
+	"""Oferta "versiune noua" din stare.json al feedului, sau None: numai o versiune care se instaleaza din meniu (fara
+	imagine_noua, pe baza receptorului, pe canalul lui) si mai noua decat cea care ruleaza."""
+	if not isinstance(stare, dict) or not isinstance(img, dict) or not img.get("versiune"):
+		return None
+	if stare.get("imagine_noua") or stare.get("baza") != img.get("baza"):
+		return None
+	if stare.get("canal") and stare.get("canal") != canal:
+		return None
+	v = _modul("HdsActualizari").versiunea_starii(stare)
+	if not v or compara(v, img["versiune"]) <= 0:
+		return None
+	return {"fel": "feed", "versiune": v, "data": stare.get("data") or "", "acum": img["versiune"],
+		"data_acum": data_din_jurnal(img["versiune"], rad)}
+
+
+def _baza(versiune):
+	"""Baza unei versiuni: primele doua parti ("0.7.2" -> "0.7"), ca HdsCopieSetari.baza_versiunii; "" cand nu are forma."""
+	parti = u"%s" % (versiune or "")
+	parti = parti.split(".")
+	return ".".join(parti[:2]) if len(parti) >= 3 and all(p.isdigit() for p in parti[:3]) else ""
+
+
+def alege_oferta(imagine, feed):
+	"""Intre imaginea completa si actualizarea din feed. Feedul cand aduce cel putin aceeasi versiune: pune numai
+	pachetele, fara stick si fara instalare de la zero, deci setarile si pluginurile raman pe loc. Imaginea completa
+	numai cand e mai noua decat ce da feedul (o baza noua) sau cand feedul nu are nimic. (09.11.2026, darog69: 0.7.2
+	era si in feed, dar fereastra a pus imaginea de la zero si setarile s-au pierdut.)"""
+	if feed and (not imagine or compara(feed["versiune"], imagine["versiune"]) >= 0):
+		return feed
+	return imagine
 
 
 def alege_imaginea(lista, masina, acum, canal="public"):
@@ -1028,7 +1072,9 @@ def fa_copia_verificata(punct, text_setari, rad=None):
 	completeaza_pluginurile(dosar, rad)
 	for nume in os.listdir(dosar):
 		goleste_cache(os.path.join(dosar, nume))
-	motiv = C.verifica_copia(dosar)
+	# cu regulile punerii la loc, nu numai md5: o copie pe care prima pornire ar refuza-o opreste scrierea acum
+	verifica = getattr(C, "verifica_punerea", None) or C.verifica_copia
+	motiv = verifica(dosar)
 	if motiv:
 		return None, motiv
 	return dosar, None
@@ -1131,7 +1177,133 @@ def verifica_dupa_scriere(punct, rad=None):
 	_jurnal("dupa scriere: scris %s, acum %s, acelasi loc: %s" % (d.get("versiune"), acum, aceeasi))
 	_sterge(cale)
 	shutil.rmtree(os.path.join(punct, FOLDER_CURAT), ignore_errors=True)
-	return {"bun": bun, "scris": d.get("versiune"), "din_standby": bool(d.get("din_standby")), "acum": acum}
+	copie = d.get("copie") if isinstance(d.get("copie"), dict) else None
+	return {"bun": bun, "scris": d.get("versiune"), "din_standby": bool(d.get("din_standby")), "acum": acum, "copie": copie}
+
+
+def restaurare_ramasa(copie, rad=None):
+	"""Dupa o scriere buna, la pornirea sesiunii: copia facuta chiar inainte de scriere (identitatea din scriere.json) trebuia
+	pusa la loc de HdsCopieSetari.pornire, din enigma2.sh, inainte de interfata. Daca acolo nu s-a pus nimic (stickul s-a
+	montat abia dupa cele 20 de secunde de asteptare, de pilda), nu exista rezultat.json, nici semnul "gata": copia se cere
+	acum (cererea o pune enigma2.sh la urmatoarea pornire a interfetei). ("ceruta", cale), ("lipsa", None) cand copia nu e pe
+	niciun mediu, sau ("", None) cand nu e nimic de facut (punerea la loc a rulat, cu sau fara succes, sau asteapta deja)."""
+	if not isinstance(copie, dict):
+		return "", None
+	C = _modul("HdsCopieSetari")
+	r = rad or _rad()
+	try:
+		if C.citeste_rezultat(r) is not None or C.cerere_in_asteptare(r) or \
+				os.path.exists(os.path.join(C.dosar_restaurare(r), C.SEMN_GATA)):
+			return "", None
+	except Exception as e:
+		_jurnal("restaurarea de dupa scriere: %s" % e)
+		return "", None
+	asteptata = os.path.join(C.dosar_restaurare(r), FIS_COPIE_ASTEPTATA)
+	for c in C.copii(rad=r):
+		try:
+			if C.identitate_copie(c["id"]) != copie:
+				continue
+		except (IOError, OSError, ValueError):
+			continue
+		ok, _mesaj = C.cere_punerea(c["id"], rad=r)
+		_jurnal("dupa scriere: copia %s nu fusese pusa la loc la pornire; %s" % (os.path.basename(c["id"]),
+			"ceruta acum" if ok else "cererea nu s-a putut scrie"))
+		if ok:
+			_sterge(asteptata)
+		return ("ceruta", c["id"]) if ok else ("", None)
+	if not os.path.exists(asteptata):
+		_jurnal("dupa scriere: copia facuta inainte de scriere nu e pe niciun mediu montat; o astept")
+		try:
+			os.makedirs(os.path.dirname(asteptata), exist_ok=True)
+			C._scrie_atomic(asteptata, json.dumps(copie, sort_keys=True).encode("utf-8"), 0o600)
+		except (IOError, OSError) as e:
+			_jurnal("copia asteptata: %s" % e)
+	return "lipsa", None
+
+
+def copie_asteptata(rad=None):
+	"""Identitatea copiei asteptate (restaurare_ramasa a gasit-o lipsa), sau None."""
+	try:
+		C = _modul("HdsCopieSetari")
+		with open(os.path.join(C.dosar_restaurare(rad or _rad()), FIS_COPIE_ASTEPTATA), "r", encoding="utf-8") as f:
+			d = json.load(f)
+		return d if isinstance(d, dict) else None
+	except (IOError, OSError, ValueError, ImportError):
+		return None
+
+
+class _AsteptareCopie(object):
+	"""Copia lipsa dupa o scriere buna: la fiecare VERIFICARE_COPIE_MS se cauta din nou pe stickurile montate. Cand apare
+	stickul, copia se cere si interfata se reporneste singura cand receptorul e liber (nu sub o inregistrare, o lucrare sau
+	o intrebare deschisa). Omul doar baga stickul."""
+
+	def __init__(self):
+		from enigma import eTimer
+		self.ceas = eTimer()
+		try:
+			self._legatura = self.ceas.timeout.connect(self.verifica)
+		except AttributeError:
+			self.ceas.callback.append(self.verifica)
+		self.repornesc = False
+
+	def porneste(self):
+		self.ceas.start(VERIFICARE_COPIE_MS, True)
+
+	def verifica(self):
+		if self.repornesc:
+			return self._reporneste()
+		copie = copie_asteptata()
+		if copie is None:
+			return
+		fel, _cale = restaurare_ramasa(copie)
+		if fel == "ceruta":
+			self.repornesc = True
+			_arata_restaurarea("ceruta")
+			return self.ceas.start(VERIFICARE_COPIE_MS, True)
+		if fel == "lipsa":
+			return self.ceas.start(VERIFICARE_COPIE_MS, True)
+		# punerea la loc a rulat altfel (din meniu): nu mai e nimic de asteptat
+		try:
+			_sterge(os.path.join(_modul("HdsCopieSetari").dosar_restaurare(_rad()), FIS_COPIE_ASTEPTATA))
+		except Exception:
+			pass
+
+	def _reporneste(self):
+		if _reporneste_cand_e_liber():
+			self.repornesc = False
+			return
+		self.ceas.start(VERIFICARE_COPIE_MS, True)
+
+
+_asteptare = []
+
+
+def _asteapta_copia(repornesc=False):
+	try:
+		if not _asteptare:
+			_asteptare.append(_AsteptareCopie())
+		_asteptare[0].repornesc = _asteptare[0].repornesc or repornesc
+		_asteptare[0].porneste()
+	except Exception as e:
+		_jurnal("asteptarea copiei: %s" % e)
+
+
+def _reporneste_cand_e_liber():
+	"""Repornirea interfetei pentru copia ceruta, ca la actualizarea rapida: numai cand TryQuitMainloop n-ar intreba nimic
+	(fara inregistrare acum sau in 6 minute, fara lucrare in fundal, fara alta intrebare de repornire). True cand a pornit
+	sau nu se mai poate face nimic de aici; False = se incearca din nou."""
+	session = imagine_online.session
+	if session is None:
+		return True
+	try:
+		from Plugins.Extensions.HdsWebControl.actualizari_web import reporneste_rapid
+		rez = reporneste_rapid(lambda: session)(lambda *a: None)
+	except Exception as e:
+		_jurnal("repornirea pentru copie: %s" % e)
+		from Screens.Standby import TryQuitMainloop
+		session.open(TryQuitMainloop, 3)
+		return True
+	return rez not in ("inregistrare", "lucrare", "intrebare")
 
 
 # ---------------------------------------------------------------- setarea
@@ -1222,6 +1394,8 @@ class ImagineOnline(object):
 		self._imagine = None
 		self._ceas = None
 		self._legatura = None
+		# ultima cautare a citit stare.json al feedului si acolo nu era nimic mai nou (fara imagine_noua)
+		self.feed_la_zi = False
 
 	# ---- firele
 	def _lucreaza(self, functie, gata):
@@ -1241,32 +1415,51 @@ class ImagineOnline(object):
 
 	# ---- cautarea
 	def cauta(self, la_sfarsit=None):
-		"""Citeste lista semnata si alege imaginea; la_sfarsit() dupa aceea, pe firul enigma2. False cand e alta lucrare."""
+		"""Citeste lista semnata si alege imaginea; pe imaginile cu feedul lor (CU_FEED) citeste si stare.json al feedului,
+		iar cand feedul aduce aceeasi versiune oferta e actualizarea din feed (alege_oferta). la_sfarsit() dupa aceea, pe
+		firul enigma2. False cand e alta lucrare."""
 		if self.ocupat():
 			return False
 		rad = _rad()
 		A = _modul("HdsActualizari")
-		canal = A.canalul(rad)[0]
-		canal = canal if canal in ("proba", "public") else "public"
+		canal_feed, _surse, baza_feed = A.canalul(rad)
+		canal = canal_feed if canal_feed in ("proba", "public") else "public"
 		credentiale = self._credentiale(canal, rad)
+		cu_feed = CU_FEED and canal_feed in ("proba", "public")
 		self.faza, self.pas, self.progres, self.mesaj = "caut", _t(P_CAUT), (0, 0), ""
 
 		def citeste():
-			return citeste_lista(canal, credentiale), A.fara_retea(rad)
+			feed, feed_la_zi = None, False
+			if cu_feed:
+				try:
+					img = A.imaginea(rad)
+					if img.get("versiune"):
+						stare, cod = A.descarca_stare(A.adresa_stare(canal_feed, baza_feed or img["baza"]),
+							A.citeste_netrc(rad) if canal_feed == "proba" else None)
+						if not cod:
+							feed = oferta_din_feed(stare, img, canal_feed, rad)
+							feed_la_zi = feed is None and not stare.get("imagine_noua")
+				except Exception as e:
+					_jurnal("starea feedului: %s" % e)
+			return citeste_lista(canal, credentiale), A.fara_retea(rad), feed, feed_la_zi
 
 		def gata(rez, eroare):
 			self._lucrare = None
 			self.faza, self.pas = "liber", ""
+			self.feed_la_zi = False
 			if eroare or rez is None:
 				self.rezultat = EROARE
 			else:
-				(lista, cod), fara = rez
-				if cod == FARA_RASPUNS and fara:
+				(lista, cod), fara, feed, self.feed_la_zi = rez
+				if cod and feed:
+					# lista imaginilor nu s-a citit, dar feedul are o versiune noua: ea e oferta
+					self.oferta, self.rezultat = feed, OFERTA
+				elif cod == FARA_RASPUNS and fara:
 					self.rezultat = FARA_RETEA
 				elif cod:
 					self.rezultat = cod
 				else:
-					self._din_lista(lista, canal, rad)
+					self._din_lista(lista, canal, rad, feed)
 			if self.rezultat != OFERTA:
 				self.oferta = None
 			if la_sfarsit is not None:
@@ -1274,17 +1467,24 @@ class ImagineOnline(object):
 		self._lucreaza(citeste, gata)
 		return True
 
-	def _din_lista(self, lista, canal, rad):
+	def _din_lista(self, lista, canal, rad, feed=None):
 		masina = masina_acum(rad)
 		acum = versiunea_acum(rad)
 		imagine = alege_imaginea(lista, masina, acum, canal) if masina else None
-		if imagine is None:
+		oferta_imagine = None
+		if imagine is not None:
+			date = lista.get("date_versiuni") or {}
+			oferta_imagine = {"fel": "imagine", "imagine": imagine, "canal": canal, "versiune": imagine["versiune"],
+				"data": imagine.get("data") or "", "acum": acum, "data_acum": date.get(acum) or data_din_jurnal(acum, rad)}
+		oferta = alege_oferta(oferta_imagine, feed)
+		if oferta is None:
 			self.rezultat = LA_ZI
 			self.oferta = None
 			return
-		date = lista.get("date_versiuni") or {}
-		self.oferta = {"fel": "imagine", "imagine": imagine, "canal": canal, "versiune": imagine["versiune"],
-			"data": imagine.get("data") or "", "acum": acum, "data_acum": date.get(acum) or data_din_jurnal(acum, rad)}
+		if oferta_imagine is not None and oferta is feed:
+			_jurnal("oferta: actualizarea din feed %s, nu imaginea completa %s (aceeasi versiune, fara instalare de la zero)"
+				% (feed["versiune"], imagine["versiune"]))
+		self.oferta = oferta
 		self.rezultat = OFERTA
 
 	def text_oferta(self, oferta=None):
@@ -1301,6 +1501,9 @@ class ImagineOnline(object):
 		if self.ocupat():
 			return _t(P_CAUT) if self.faza == "caut" else (self.pas or self.mesaj), None
 		o = oferta or self.oferta
+		if o and o.get("fel") == "feed":
+			# actualizarea din feed: fara stick si fara loc de scriere; o opreste numai alta lucrare a actualizarilor
+			return _modul("HdsActualizari").actualizari.poate_porni(), None
 		if not o or o.get("fel") != "imagine":
 			return _t(T_LA_ZI), None
 		tinta = citeste_tinta()
@@ -1323,6 +1526,16 @@ class ImagineOnline(object):
 		if motiv:
 			self.mesaj = motiv
 			return False
+		if self.oferta.get("fel") == "feed":
+			# "Da" la o versiune din feed (fereastra, meniul sau pagina web): actualizarea obisnuita, care cauta, instaleaza
+			# si reporneste interfata cand receptorul e liber
+			if not porneste_feed(self.session):
+				self.mesaj = _modul("HdsActualizari").actualizari.mesaj or _t(T_FEED_OCUPAT)
+				return False
+			_jurnal("porneste: actualizarea din feed %s, %s" % (self.oferta.get("versiune"), "din standby" if din_standby else
+				"cerut de om"))
+			self.mesaj = _t(T_FEED_PORNIT)
+			return True
 		imagine = self.oferta["imagine"]
 		if din_standby and any(cheia_scrierii(imagine, citeste_tinta()) in scrieri_esuate(p) for p, _liber in _stickuri_sigur()):
 			self.mesaj = _t(T_NESCRIS) % (versiunea_acum_sigur() or "?")
@@ -1692,11 +1905,37 @@ class Verificare(object):
 	def _dupa_lista(self):
 		if self.io.rezultat == OFERTA:
 			self.oferta_feed = None
+			if self.cu_feed and (self.io.oferta or {}).get("fel") == "imagine" and not self._versiune_stiuta():
+				# pe o imagine cu feed versiunea vine din status-ul opkg: fara ea (o instalare neterminata, un status
+				# stricat) "acum" ar fi baza, iar fereastra ar propune singura imaginea de la zero (09.11.2026, darog69)
+				_jurnal("fereastra: versiunea de acum nu se stie din status-ul opkg; imaginea completa nu se propune singura")
+				return self.programeaza(ZI)
+			if self.cu_feed and (self.io.oferta or {}).get("fel") == "imagine" and self.io.feed_la_zi and \
+					_baza(self.io.oferta.get("versiune")) and _baza(self.io.oferta.get("versiune")) == _baza(self._baza_acum()):
+				# imaginea completa pe aceeasi baza (0.7.x peste 0.7.y), dar feedul bazei spune ca nu e nimic nou: un feed
+				# ramas in urma (cache) sau o publicare numai ca imagine. Fereastra singura nu propune instalarea de la zero
+				# (09.11.2026, darog69, a doua ipoteza: feed vechi din cache dupa prima actualizare); din meniu ramane.
+				# Pretul: o versiune publicata numai ca imagine, pe aceeasi baza, nu mai apare singura.
+				_jurnal("fereastra: imaginea %s e pe aceeasi baza, iar feedul nu are nimic nou; nu o propun singura"
+					% self.io.oferta.get("versiune"))
+				return self.programeaza(ZI)
 			self._hotaraste()
 			return self.programeaza(ZI)
 		if not self.cu_feed:
 			return self.programeaza(ZI if self.io.rezultat == LA_ZI else REINCERCARE)
 		self._citeste_feedul()
+
+	def _baza_acum(self):
+		try:
+			return _modul("HdsActualizari").imaginea(_rad()).get("baza") or ""
+		except Exception:
+			return ""
+
+	def _versiune_stiuta(self):
+		try:
+			return bool(_modul("HdsActualizari").imaginea(_rad()).get("versiune"))
+		except Exception:
+			return False
 
 	def _citeste_feedul(self):
 		"""Feedul imaginii: o versiune noua (si cand vin numai pachete) are aceeasi fereastra; Da = actualizarea obisnuita."""
@@ -1712,12 +1951,9 @@ class Verificare(object):
 		def gata(rez, eroare):
 			stare, cod = rez if rez and not eroare else ({}, A.EROARE)
 			self._feed = None
-			if not cod and not stare.get("imagine_noua") and stare.get("baza") == img["baza"] and \
-					(not stare.get("canal") or stare.get("canal") == canal) and \
-					compara(A.versiunea_starii(stare), img["versiune"]) > 0:
-				v = A.versiunea_starii(stare)
-				self.oferta_feed = {"fel": "feed", "versiune": v, "data": stare.get("data") or "", "acum": img["versiune"],
-					"data_acum": data_din_jurnal(img["versiune"], rad)}
+			o = None if cod else oferta_din_feed(stare, img, canal, rad)
+			if o:
+				self.oferta_feed = o
 				self._hotaraste()
 			self.programeaza(ZI)
 		fabrica = self.io.fabrica_lucrare or _paza().LucrareFundal
@@ -1828,7 +2064,19 @@ def dupa_pornire():
 				Notifications.AddPopup(_t(T_NESCRIS) % (r["acum"] or "?"), MessageBox.TYPE_INFO, 30, "HdsImagineOnline")
 			except Exception as e:
 				_jurnal("mesajul: %s" % e)
+		elif r.get("copie"):
+			fel, _cale_copie = restaurare_ramasa(r["copie"])
+			if fel:
+				# setarile intai: fara standby pana nu revin; repornirea (ceruta) sau cautarea stickului (lipsa) o face
+				# _AsteptareCopie
+				pune_standby = False
+				_arata_restaurarea(fel)
+				_asteapta_copia(repornesc=fel == "ceruta")
 		break
+	else:
+		# o copie asteptata de la o pornire de dinainte (stickul inca nebagat)
+		if copie_asteptata() is not None:
+			_asteapta_copia()
 	if pune_standby:
 		try:
 			from Tools import Notifications
@@ -1837,6 +2085,18 @@ def dupa_pornire():
 				Notifications.AddNotification(Standby)
 		except Exception as e:
 			_jurnal("inapoi in standby: %s" % e)
+
+
+def _arata_restaurarea(fel):
+	""""ceruta": un mesaj scurt; repornirea o da apoi _AsteptareCopie, cand receptorul e liber (enigma2.sh pune copia la loc
+	inainte de interfata). "lipsa": un mesaj care cere stickul; copia se cauta singura cand apare."""
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(_t(T_COPIE_CERUTA if fel == "ceruta" else T_COPIE_LIPSA), MessageBox.TYPE_INFO,
+			10 if fel == "ceruta" else 30, "HdsImagineOnlineCopie")
+	except Exception as e:
+		_jurnal("mesajul restaurarii: %s" % e)
 
 
 def _stickuri_sigur():
@@ -1849,9 +2109,11 @@ def _stickuri_sigur():
 
 def porneste(session, cu_feed=True):
 	"""Din mytest.py (sau din pluginul-punte), dupa ce s-a facut sesiunea. Pornirea nu depinde de el."""
+	global CU_FEED
 	config_imagine()
 	imagine_online.session = session
 	if cu_feed:
+		CU_FEED = True
 		_modul("HdsActualizari").FEREASTRA_ACTIVA = True
 	if not _verificare:
 		v = Verificare(session, cu_feed=cu_feed)

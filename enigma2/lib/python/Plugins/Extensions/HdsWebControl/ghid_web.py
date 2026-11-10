@@ -491,6 +491,7 @@ PAGINA = """<!DOCTYPE html>
   .titlu-mare{font-size:1.2rem;font-weight:bold;margin:0 0 6px;word-break:break-word;}
   .linie{color:#ffc34d;margin:0 0 10px;}
   .text{white-space:pre-wrap;line-height:1.45;margin:0 0 10px;word-break:break-word;}
+  .descriere{max-height:20rem;overflow:auto;overscroll-behavior:contain;}
   .slab{color:var(--text-slab);}
   button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   button.rosu{background:#b3322a;border-color:#b3322a;color:#fff;}
@@ -514,8 +515,10 @@ PAGINA = """<!DOCTYPE html>
     <p class="cand" id="cand"></p>
     <p class="titlu-mare" id="titlu"></p>
     <p class="linie" id="linie"></p>
-    <p class="text" id="scurta"></p>
-    <p class="text slab" id="lunga"></p>
+    <div class="descriere" id="descriere" tabindex="0" aria-labelledby="titlu">
+      <p class="text" id="scurta"></p>
+      <p class="text slab" id="lunga"></p>
+    </div>
     <div class="butoane">
       <button type="button" class="rosu" id="inregistreaza">Înregistrează</button>
       <button type="button" id="comuta">Doar comutare la ora ei</button>
@@ -536,6 +539,35 @@ var CFG = __CONFIG__;
 var REF = new URLSearchParams(location.search).get("ref") || "";
 var DATE = null, ALES = null, EMISIUNI = [], URMATORUL = 0;
 var ORIGINAL = false, DETALII = null, INCERCARI_LISTA = 0, INCERCARI_EMISIUNE = 0, ASTEAPTA_MS = 1500, MAX_INCERCARI = 8;
+// Derularea descrierii: un singur ceas, numai cand textul nu incape.
+var CEAS_DESCRIERE = 0, DESCRIERE_PAUSA = false, DESCRIERE_TEXT = "";
+function opresteDescriere(){
+  if(CEAS_DESCRIERE){ clearTimeout(CEAS_DESCRIERE); CEAS_DESCRIERE = 0; }
+}
+function descriereSeMisca(){
+  var d = $("descriere");
+  return !document.hidden && !DESCRIERE_PAUSA &&
+    !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) &&
+    d.scrollHeight > d.clientHeight + 1;
+}
+function pasDescriere(){
+  CEAS_DESCRIERE = 0;
+  if(!descriereSeMisca()){ return; }
+  var d = $("descriere"), capat = d.scrollHeight - d.clientHeight;
+  if(d.scrollTop >= capat){
+    d.scrollTop = 0;
+    CEAS_DESCRIERE = setTimeout(pasDescriere, 5000);
+  } else {
+    d.scrollTop = Math.min(capat, d.scrollTop + 1);
+    CEAS_DESCRIERE = setTimeout(pasDescriere, d.scrollTop >= capat ? 5000 : 80);
+  }
+}
+function pornesteDescriere(reia){
+  opresteDescriere();
+  if(reia){ $("descriere").scrollTop = 0; }
+  if(descriereSeMisca()){ CEAS_DESCRIERE = setTimeout(pasDescriere, 5000); }
+}
+// Sfarsitul derularii.
 function text(e, camp){ return (ORIGINAL && e[camp + "_original"]) ? e[camp + "_original"] : (e[camp] || ""); }
 function areTraducere(){
   var da = EMISIUNI.some(function(e){ return !!e.titlu_original; });
@@ -581,6 +613,10 @@ function puneDetalii(){
   if(!DETALII){ return; }
   $("titlu").textContent = text(DETALII, "titlu"); $("linie").textContent = DETALII.linie;
   $("scurta").textContent = text(DETALII, "scurta"); $("lunga").textContent = text(DETALII, "lunga");
+  var continut = $("descriere").textContent;
+  if(continut !== DESCRIERE_TEXT){
+    DESCRIERE_TEXT = continut; pornesteDescriere(true);
+  }
   areTraducere();
 }
 function ceraDinNouLista(){
@@ -599,7 +635,12 @@ function ceraDinNouLista(){
   }, ASTEAPTA_MS);
 }
 function alege(e, dinNou){
-  if(!dinNou){ INCERCARI_EMISIUNE = 0; DETALII = null; }
+  if(!dinNou){
+    INCERCARI_EMISIUNE = 0; DETALII = null;
+    DESCRIERE_TEXT = ""; opresteDescriere();
+    var d = $("descriere");
+    DESCRIERE_PAUSA = d.matches(":hover") || d.contains(document.activeElement);
+  }
   ALES = e; deseneazaLista(); mesaj("");
   $("cand").textContent = e.acum ? "Acum" : (e.zi + " " + e.ora);
   if(!dinNou){ $("titlu").textContent = text(e, "titlu"); $("linie").textContent = ""; $("scurta").textContent = ""; $("lunga").textContent = ""; }
@@ -651,6 +692,31 @@ $("comuta").addEventListener("click", function(){ trimite("comutare"); });
 $("scoate").addEventListener("click", function(){ trimite("scoate"); });
 $("mai").addEventListener("click", function(){ citeste(true); });
 $("original").addEventListener("click", function(){ ORIGINAL = !ORIGINAL; deseneazaLista(); puneDetalii(); });
+var descriere = $("descriere");
+descriere.addEventListener("mouseenter", function(){
+  DESCRIERE_PAUSA = true; opresteDescriere();
+});
+descriere.addEventListener("mouseleave", function(){
+  DESCRIERE_PAUSA = descriere.contains(document.activeElement);
+  pornesteDescriere(false);
+});
+descriere.addEventListener("focusin", function(){
+  DESCRIERE_PAUSA = true; opresteDescriere();
+});
+descriere.addEventListener("focusout", function(e){
+  DESCRIERE_PAUSA = descriere.matches(":hover") || descriere.contains(e.relatedTarget);
+  pornesteDescriere(false);
+});
+descriere.addEventListener("touchstart", function(){
+  DESCRIERE_PAUSA = true; opresteDescriere();
+}, {passive:true});
+document.addEventListener("visibilitychange", function(){ pornesteDescriere(false); });
+window.addEventListener("resize", function(){ pornesteDescriere(false); });
+window.addEventListener("pagehide", opresteDescriere);
+window.addEventListener("pageshow", function(){ pornesteDescriere(false); });
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(function(){ pornesteDescriere(false); });
+}
 $("porneste").addEventListener("click", function(){
   if(!DATE){ return; }
   mesaj("Se trimite...");

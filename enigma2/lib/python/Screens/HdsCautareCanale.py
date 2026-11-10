@@ -429,11 +429,25 @@ def porneste_actualizare(session, grupuri, motor=None, la_gata=None, facute=None
 
 
 _ceasuriDupaScanare = []
+_ultimaScanarePiste = None
 INTREBARE_DUPA_SCANARE_S = 30     # fara raspuns: „Nu” (de ex. scanarea pornita din web, cu nimeni la televizor)
 
 
+def noteaza_dupa_scanare(scanat):
+	"""Oferta din rezultat si din web ramane limitata la scanarea terminata."""
+	global _ultimaScanarePiste
+	_ultimaScanarePiste = scanat
+	_noteazaScanarea(scanat)
+
+
+def canale_ultima_scanare(index):
+	if _ultimaScanarePiste is None:
+		return []
+	return canale_dupa_scanare(index, _ultimaScanarePiste)
+
+
 def intreaba_dupa_scanare(session, intarziere_ms=500, scanat=None):
-	"""Chemata de Screens/ServiceScan.py cand se inchide o scanare reusita. Nu face nimic pe loc:
+	"""Chemata la alegerea explicita a citirii pistelor din rezultatul scanarii. Nu face nimic pe loc:
 	ecranul de scanare se inchide fara sa astepte. Dupa `intarziere_ms`, cand stiva de ecrane s-a asezat, indexul se
 	citeste din nou (lamedb tocmai s-a scris) si, daca sunt canale fara piste stiute, omul e intrebat daca le citeste
 	acum, cu aceeasi trecere ca "Actualizeaza". Orice eroare ramane aici (jurnal), nu ajunge la scanare.
@@ -492,7 +506,7 @@ def din_scanare(c, scanat):
 	if pozitii is not None and getattr(c, 'poz', None) not in pozitii:
 		return False
 	transpondere = scanat.get('transpondere')
-	if transpondere:
+	if transpondere is not None:
 		tp = P.transponder_din_ref(getattr(c, 'ref', ''))
 		if tp is None or (tp[1] & 0xFFFFFFFF, tp[2], tp[3]) not in transpondere:
 			return False

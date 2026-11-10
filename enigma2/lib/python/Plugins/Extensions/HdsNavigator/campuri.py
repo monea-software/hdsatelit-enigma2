@@ -46,11 +46,16 @@ def tinta(sesiune):
 	except Exception:
 		VirtualKeyBoard = InputBox = None
 	if d is not None and VirtualKeyBoard is not None and isinstance(d, VirtualKeyBoard):
-		return "tastatura", d.__class__.__name__ == "TastaturaParola"
+		return "tastatura", bool(getattr(d, "hdsCampSecret", False))
 	if d is not None and InputBox is not None and isinstance(d, InputBox):
-		return "caseta", False
+		return "caseta", bool(getattr(d, "hdsCampSecret", False))
 	if d is not None and _setareText(d) is not None:
-		return "setare", False
+		rand = _setareText(d)
+		verifica = getattr(d["config"], "campSecretActual", None)
+		if verifica is not None:
+			return "setare", verifica()
+		return "setare", bool(getattr(rand[1], "hdsSecret", False)
+			or "ConfigPassword" in [c.__name__ for c in type(rand[1]).__mro__])
 	n = L.activ()
 	if n is not None and n.stare == L.ARATAT and n.camp != "niciunul":
 		return "navigator", n.camp == "parola"
@@ -63,6 +68,14 @@ def trimite(sesiune, text):
 	if not text:
 		return False, "gol"
 	fel, _parola = tinta(sesiune)
+	if _parola:
+		if fel == "navigator":
+			refuza = L.activ().refuzaSecret(sesiune)
+		else:
+			from Components.HdsAsistentaControl import cereOprirePentruSecret
+			refuza = cereOprirePentruSecret(sesiune)
+		if refuza:
+			return False, "asistenta"
 	d = _fereastra(sesiune)
 	try:
 		if fel == "tastatura":

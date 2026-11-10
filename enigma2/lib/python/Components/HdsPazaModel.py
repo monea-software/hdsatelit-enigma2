@@ -38,7 +38,13 @@
 #   cu marja fata de ambele). Hotaraste in ambele trepte; fara limite (alt model) nu se verifica. Un disc intreg
 #   nelistat nu hotaraste nimic (ca eticheta lipsa): pe un receptor adevarat /proc/partitions il listeaza mereu, iar un
 #   /proc/partitions necitit cade deja la "kernel"; uneltele de pe PC dau uneori numai randurile p9 si p10.
-# - DT: un nume explicit de model diferit opreste pornirea; un nume generic nu hotaraste.
+# - modelul placii (cheia model_id, codurile E108 si E208): numele de modele cunoscute (MODELE_CUNOSCUTE) din arborele
+#   dispozitivului (DT: bolt/board, model, compatible) si din nodurile driverului (/proc/stb/info/model, gbmodel,
+#   vumodel, boxtype). Valoarea numeste receptorul in mesaj si da pagina lui (MODELE_PLACI). Regulile fara model_id=
+#   (toate modelele de pana la 0.7.1): opreste numai un DT care numeste un model cunoscut diferit, fara cel cerut; un DT
+#   lipsa, generic sau necunoscut nu hotaraste (nodurile driverului le compara deja cheia boxtype). Regulile cu
+#   model_id= (placi al caror tip din driver e comun mai multor modele, de pilda gigablue): modelul cerut trebuie sa fie
+#   printre cele citite; niciunul citit = E208, numai altele = E108.
 # Informative: board_revision (o constanta din driver, aceeasi pe toate placile u57), tunerele
 # si, pentru ecranul de diagnostic si pagina web (informatiiPornire), ce da incarcatorul receptorului in /proc/cmdline
 # (MACHINEBUILD=, OEM= si MODEL= din partitia lui bootargs, pe Octagon de pilda MODEL=sf8008, si mem=), codul tunerelor
@@ -76,7 +82,7 @@
 # „boxtype=”, de exemplu u57,u571) si locul nucleului si al sistemului (partitiile kernel si rootfs pe locurile din
 # reguli, amandoua prezente); placa (HW=), tabela partitiilor si marimea nucleului sunt numai avertismente: interfata
 # porneste, iar o nota arata valorile citite („model neconfirmat”). „boxtype=” poate fi o lista si in treapta intai; o
-# singura valoare se compara ca pana acum. Memoria interna si DT hotarasc in ambele trepte.
+# singura valoare se compara ca pana acum. Memoria interna si modelul placii hotarasc in ambele trepte.
 #
 # La pornire hotaraste garda din enigma2.sh (inaintea lui showiframe) si scrie verdictul in /tmp/hds-paza-model.stare
 # (RAM), impreuna cu valorile citite. verdict() foloseste acel fisier ca singura sursa pentru stare si pentru randurile
@@ -117,7 +123,7 @@ OCTETI_ETICHETA = 256
 BLOC_SUMA = 1024 * 1024
 
 # cheile care hotarasc, in ordinea din mesaj; primele cinci se socotesc si cand regulile sunt stricate
-CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta", "dt", "emmc")
+CHEI_AMPRENTA = ("cip", "hw", "partitii", "kernel", "boxtype", "eticheta", "model_id", "emmc")
 CHEI_DE_BAZA = CHEI_AMPRENTA[:5]
 # treapta a doua: cheile care dau numai avertisment (la „kernel” numai marimea; locul hotaraste)
 CHEI_AVERTISMENT = ("hw", "partitii", "kernel")
@@ -196,25 +202,77 @@ CHEIE_FAMILIE = "familie"
 FAMILIE_BROADCOM = "broadcom"
 FAMILII = (FAMILIE_BROADCOM,)
 
-# Numai un model explicit din DT poate dovedi alt receptor.
-# Un nume generic al cipului sau un DT lipsa nu hotaraste.
-MODELE_DT = (
-	"solo4k", "uno4k", "uno4kse", "ultimo4k", "zero4k", "duo4k", "duo4kse",
-	"sf8008", "sf8008m", "gbquad4k", "gbue4k", "gbx34k", "gbtrio4k", "gbmv200",
-	"viper4k", "viper4kv20", "viper4kv30", "viper4kv40", "protek4k", "ustym4kpro")
+# Modelul placii (cheia model_id, cifra 08 a codurilor E108 si E208). Numele scurte ale modelelor cunoscute, cum le dau
+# arborele dispozitivului (DT) si nodurile driverului, fara "vu" in fata, in ordine alfabetica (garda din enigma2.sh le
+# scrie in aceeasi ordine). Un nume generic al cipului (brcm,bcm7252s) sau unul necunoscut nu numeste niciun model.
+MODELE_CUNOSCUTE = ("duo4k", "duo4kse", "gbmv200", "gbquad4k", "gbquad4kpro", "gbtrio4k", "gbue4k", "gbx34k",
+	"protek4k", "sf8008", "sf8008m", "solo4k", "ultimo4k", "uno4k", "uno4kse", "ustym4kpro", "viper4k", "viper4kv20",
+	"viper4kv30", "viper4kv40", "zero4k")
+# alt nume al aceleiasi placi (/proc/stb/info/gbmodel pe GigaBlue UHD Quad 4K Pro)
+ALIAS_MODELE = {"quad4kpro": "gbquad4kpro"}
+# placile cu nume pentru om si pagina pe site; model_id= din reguli poate fi numai una din ele. Tipul din driver al
+# placilor GigaBlue (gigablue) e comun mai multor modele: regulile lor cer modelul exact prin model_id=.
+MODELE_PLACI = {
+	"gbquad4kpro": ("GigaBlue UHD Quad 4K Pro", "gigablue-uhd-quad-4k-pro"),
+	"duo4kse": ("Vu+ Duo 4K SE", "vu-duo4k-se"),
+	"duo4k": ("Vu+ Duo 4K", "vu-duo4k"),
+	"uno4kse": ("Vu+ Uno 4K SE", "vu-uno4k-se"),
+	"solo4k": ("Vu+ Solo 4K", "vu-solo4k"),
+}
+PAGINA_MODEL = "https://stb.hdsatelit.com/receptoare/%s/"
+
+
+def numeScurt(text):
+	"""Numele scurt al unui model: litere mici, fara "vu" in fata, cu ALIAS_MODELE (la fel in garda din enigma2.sh)"""
+	text = (text or "").lower()
+	if text.startswith("vu"):
+		text = text[2:]
+	return ALIAS_MODELE.get(text, text)
+
+
+def modeleDinTexte(*texte):
+	"""Modelele cunoscute numite in texte (octeti sau text): numele scurte, sortate, unite cu virgula; "" cand niciunul.
+	Cuvintele se despart la orice caracter care nu e litera sau cifra ASCII (ca tr -c 'A-Za-z0-9' in garda)."""
+	gasite = set()
+	for text in texte:
+		if isinstance(text, bytes):
+			text = text.decode("ascii", "replace")
+		text = (text or "").encode("ascii", "replace").decode("ascii")
+		for cuvant in re.split(r"[^a-z0-9]+", text.lower()):
+			if numeScurt(cuvant) in MODELE_CUNOSCUTE:
+				gasite.add(numeScurt(cuvant))
+	return ",".join(sorted(gasite))
+
+
+def modelCerut(reguli):
+	"""Modelul cerut de reguli: model_id=, altfel numele scurt din machinebuild= (numai pentru texte)"""
+	reguli = reguli or {}
+	return reguli.get("model_id") or numeScurt(reguli.get("machinebuild", ""))
 
 
 def modelDtDiferit(reguli, dt):
-	"""True numai cand DT numeste un model cunoscut, diferit de cel cerut."""
-	def nume(text):
-		text = text.lower()
-		return text[2:] if text.startswith("vu") else text
-	cerute = [nume(x) for x in tipuriPlaca(reguli)]
-	cerute.append(nume(reguli.get("machinebuild", "")))
-	gasite = [nume(x) for x in re.split(r"[^a-z0-9]+", (dt or "").lower())]
-	if any(x in cerute for x in gasite if x in MODELE_DT):
-		return False
-	return any(x in MODELE_DT and x not in cerute for x in gasite)
+	"""Regulile fara model_id=: True numai cand DT numeste un model cunoscut diferit de cele cerute (tipurile din
+	boxtype= si machinebuild=) si niciunul cerut. DT lipsa, generic sau necunoscut nu hotaraste."""
+	cerute = [numeScurt(x) for x in tipuriPlaca(reguli)] + [numeScurt(reguli.get("machinebuild", ""))]
+	gasite = [x for x in modeleDinTexte(dt).split(",") if x]
+	return bool(gasite) and not any(x in cerute for x in gasite)
+
+
+def modelDiferit(reguli, a):
+	"""True cand modelul placii arata alt receptor (cheia model_id). Cu model_id= in reguli, modelul cerut trebuie sa fie
+	printre cele citite din toate sursele (a["model_id"]); niciunul citit da valoarea goala (E208), numai altele E108.
+	Fara model_id= hotaraste numai DT (modelDtDiferit). Un model numit in DT intra si in a["model_id"] (aceleasi fisiere,
+	citite cel putin pe lungimea lui a["dt"]), deci fara model_id= valoarea nu e niciodata goala: numai E108."""
+	cerut = (reguli or {}).get("model_id")
+	if cerut:
+		return cerut not in (a.get("model_id") or "").split(",")
+	return modelDtDiferit(reguli, a.get("dt"))
+
+
+def paginaModel(a):
+	"""Pagina receptorului citit (un singur model cunoscut, cu pagina), sau "" """
+	model = MODELE_PLACI.get((a or {}).get("model_id"))
+	return PAGINA_MODEL % model[1] if model else ""
 
 
 def broadcom(reguli):
@@ -303,6 +361,8 @@ def reguliValide(reguli, cu_sume=False):
 	if reguli.get("format") != FORMAT or reguli.get("distro") != DISTRO:
 		return False
 	if CHEIE_FAMILIE in reguli and reguli[CHEIE_FAMILIE] not in FAMILII:
+		return False
+	if "model_id" in reguli and reguli["model_id"] not in MODELE_PLACI:
 		return False
 	if not (broadcom(reguli) and reguli.get("partitions") == "-") and partitiiDinReguli(reguli.get("partitions")) is None:
 		return False
@@ -521,13 +581,15 @@ def caleDinEticheta(eticheta):
 
 def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, antet=None, eticheta=None,
 		board_revision=None, compatibil=None, nim_sockets=None, nume_partitii=("kernel", "rootfs"), tip=None,
-		chipset=None, familie=None, vumodel=None, kernel_part=None):
+		chipset=None, familie=None, vumodel=None, kernel_part=None, model_placa=None, gbmodel=None):
 	"""Amprenta din ce s-a citit (None = necitit). `antet`: primii 4 KiB ai partitiei deviceinfo, ca octeti (se
 	pastreaza numai HW= si MAGICNUM=); `eticheta`: cei 256 de octeti de la 0x3F6000 ai aceleiasi partitii;
-	`compatibil`: /proc/device-tree/compatible, ca octeti. Folosita de amprenta() si de scripturile de pe PC care
-	primesc textele prin ssh (urca-pe-stick). Chei: cip, boxtype, partitii (text), partitii_lista, kernel_part,
-	kernel_kib, rootfs_part, rootfs_kib, hw, magicnum, eticheta, board_revision, dt, tunere, marimi_partitii (toate
-	marimile din /proc/partitions, pentru locNucleu). `nume_partitii`: numele nucleului si al sistemului pentru
+	`compatibil`: arborele dispozitivului (bolt/board, model si compatible, fiecare cel mult 128 de octeti, despartite
+	prin octetul 0), ca octeti. `model_placa`, `gbmodel`, `vumodel`: /proc/stb/info/model, gbmodel, vumodel (cel mult
+	64 de octeti); impreuna cu DT si `boxtype` dau model_id (modeleDinTexte). Folosita de amprenta() si de scripturile
+	de pe PC care primesc textele prin ssh (urca-pe-stick). Chei: cip, boxtype, partitii (text), partitii_lista,
+	kernel_part, kernel_kib, rootfs_part, rootfs_kib, hw, magicnum, eticheta, board_revision, dt, model_id, tunere,
+	marimi_partitii (toate marimile din /proc/partitions, pentru locNucleu). `nume_partitii`: numele nucleului si al sistemului pentru
 	kernel_part si rootfs_part (numePartitii(reguli); implicit "kernel" si "rootfs"). `tip` si `chipset`:
 	/proc/stb/info/type si /proc/stb/info/chipset; ele si cheile din informatiiPornire sunt numai informative."""
 	a = {}
@@ -554,6 +616,7 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 	a["magicnum"] = campuri.get("MAGICNUM", "")
 	a["eticheta"] = _eticheta(eticheta) if _indexDeviceinfo(brut) is not None else ""
 	a["dt"] = curat(",".join(x.decode("ascii", "replace") for x in (compatibil or b"").split(b"\0") if x), 80)
+	a["model_id"] = modeleDinTexte(compatibil, model_placa, gbmodel, vumodel, boxtype)
 	tunere = []
 	for rand in (nim_sockets or "").splitlines():
 		rand = rand.strip()
@@ -713,10 +776,12 @@ def partitiiDinMtd(text):
 
 
 def amprentaNandDinTexte(chipset=None, vumodel=None, boxtype=None, mtd=None, nim_sockets=None,
-		nume_partitii=("kernel", "rootfs"), tip=None, compatibil=None, cmdline=None, partitions=None):
+		nume_partitii=("kernel", "rootfs"), tip=None, compatibil=None, cmdline=None, partitions=None, model_placa=None,
+		gbmodel=None):
 	"""Amprenta unui receptor cu NAND (stocare=nand): cipul din /proc/stb/info/chipset, tipul placii din
 	/proc/stb/info/vumodel (altfel /proc/stb/info/boxtype), partitiile din /proc/mtd. Aceleasi chei ca
-	amprentaDinTexte; hw, eticheta si emmc_kib raman goale (placa nu are antet de fabrica, nici eticheta, nici eMMC)."""
+	amprentaDinTexte, cu model_id din aceleasi surse; hw, eticheta si emmc_kib raman goale (placa nu are antet de
+	fabrica, nici eticheta, nici eMMC)."""
 	a = {}
 	a["cip"] = _simplu((chipset or "").split("\n")[0])
 	bt = _simplu((vumodel or "").split("\n")[0])
@@ -734,6 +799,7 @@ def amprentaNandDinTexte(chipset=None, vumodel=None, boxtype=None, mtd=None, nim
 	a["magicnum"] = ""
 	a["eticheta"] = ""
 	a["dt"] = curat(",".join(x.decode("ascii", "replace") for x in (compatibil or b"").split(b"\0") if x), 80)
+	a["model_id"] = modeleDinTexte(compatibil, model_placa, gbmodel, vumodel, boxtype)
 	tunere = []
 	for rand in (nim_sockets or "").splitlines():
 		rand = rand.strip()
@@ -776,16 +842,21 @@ def amprenta(radacina=None, reguli=None):
 	cmdline = _citesteText(_cale(radacina, "proc/cmdline"), 4096)
 	dt = b"\0".join(_citesteOcteti(_cale(radacina, "proc/device-tree/" + nume), 128) or b""
 		for nume in ("bolt/board", "model", "compatible"))
+	# modelul placii din nodurile driverului (model_id; aceleasi fisiere si lungimi ca in garda din enigma2.sh)
+	model_placa = _citesteText(_cale(radacina, "proc/stb/info/model"), 64)
+	gbmodel = _citesteText(_cale(radacina, "proc/stb/info/gbmodel"), 64)
+	vumodel = _citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64)
 	if nand(fam):
 		return amprentaNandDinTexte(
 			chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64),
-			vumodel=_citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64),
+			vumodel=vumodel,
 			boxtype=_citesteText(_cale(radacina, "proc/stb/info/boxtype"), 4096),
 			mtd=_citesteText(_cale(radacina, "proc/mtd"), 8192),
 			nim_sockets=_citesteText(_cale(radacina, "proc/bus/nim_sockets"), 8192),
 			nume_partitii=numePartitii(fam),
 			tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64), compatibil=dt, cmdline=cmdline,
-			partitions=_citesteText(_cale(radacina, "proc/partitions"), 65536))
+			partitions=_citesteText(_cale(radacina, "proc/partitions"), 65536), model_placa=model_placa,
+			gbmodel=gbmodel)
 	antet = eticheta = None
 	di = _indexDeviceinfo(blkdevpartsBrut(cmdline))
 	if di is not None:
@@ -806,7 +877,9 @@ def amprenta(radacina=None, reguli=None):
 		tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64),
 		chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64),
 		familie=FAMILIE_BROADCOM if broadcom(fam) else None,
-		vumodel=_citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64) if broadcom(fam) else None,
+		vumodel=vumodel,
+		model_placa=model_placa,
+		gbmodel=gbmodel,
 		kernel_part=(fam or {}).get("kernel_part") if broadcom(fam) else None)
 	# pornirea dintr-un slot de multiboot (pornireMultiboot): partitiile descriu slotul, nu receptorul
 	a["multiboot"] = pornireMultiboot(fam, cmdline)
@@ -815,21 +888,19 @@ def amprenta(radacina=None, reguli=None):
 
 def amprentaDinStare(st, baza=None):
 	"""Amprenta scrisa de garda in fisierul de stare, peste `baza` (amprenta de acum): fiecare cheie scrisa de garda
-	(cip, hw, boxtype, partitii, kernel, eticheta) ia valoarea de la pornire; o cheie lipsa din fisier ramane cea de
-	acum. Pentru randurile verdictului de la pornire."""
+	(cip, hw, boxtype, model_id, partitii, kernel, eticheta) ia valoarea de la pornire; o cheie lipsa din fisier ramane
+	cea de acum. Pentru randurile verdictului de la pornire."""
 	a = dict(baza or {})
 	st = st or {}
-	for cheie in ("cip", "hw", "boxtype"):
+	for cheie in ("cip", "hw", "boxtype", "model_id"):
 		if cheie in st:
-			a[cheie] = _simplu(st.get(cheie))
+			a[cheie] = modeleDinTexte(st.get(cheie)) if cheie == "model_id" else _simplu(st.get(cheie))
 	if "partitii" in st:
 		lista = partitiiDinText(st.get("partitii", ""))
 		a["partitii"] = textPartitii(lista)
 		a["partitii_lista"] = lista or []
 	if "kernel" in st:
 		a["kernel_text"] = curat(st.get("kernel", ""), 120)
-	if "dt" in st:
-		a["dt"] = curat(st["dt"], 80)
 	if "slot" in st:
 		a["slot_lizibil"] = st["slot"] == "citit"
 		a["slot_nota"] = ("Boot partitions read from the running slot; they do not identify the receiver."
@@ -935,8 +1006,8 @@ def _diferente(reguli, a):
 		d["eticheta"] = (reguli["boxtype"], tip)
 	if _emmcAfara(reguli, a.get("emmc_kib", "")):
 		d["emmc"] = (asteptat_text(reguli, "emmc"), textEmmc(a.get("emmc_kib", "")))
-	if modelDtDiferit(reguli, a.get("dt")):
-		d["dt"] = (asteptat_text(reguli, "dt"), a["dt"])
+	if modelDiferit(reguli, a):
+		d["model_id"] = (modelCerut(reguli), a.get("model_id", ""))
 	return d
 
 
@@ -1024,8 +1095,6 @@ def asteptat_text(reguli, cheie):
 		return textKernel(reguli.get("kernel_part", ""), reguli.get("kernel_kib", ""), reguli.get("rootfs_part", ""))
 	if cheie == "eticheta":
 		return reguli.get("boxtype", "")
-	if cheie == "dt":
-		return reguli.get("boxtype", "")
 	if cheie == "emmc":
 		lim = limiteEmmc(reguli)
 		if lim is None:
@@ -1036,6 +1105,8 @@ def asteptat_text(reguli, cheie):
 		if mare is not None:
 			return _("cel mult %s") % textEmmc(mare)
 		return _("cel puțin %s") % textEmmc(mic)
+	if cheie == "model_id":
+		return modelCerut(reguli)
 	return reguli.get(cheie, "")
 
 
@@ -1124,6 +1195,18 @@ def inPaza(radacina=None, cale_stare=None):
 		return verifica(radacina, reguli)["stare"] == STARE_NEPOTRIVIT
 	except Exception as eroare:
 		print("[HdsPazaModel] verdictul: %s" % eroare)
+		return inchisLaEroare(radacina)
+
+
+def inchisLaEroare(radacina=None):
+	"""Ce face interfata cand chiar codul pazei da o eroare (09.11.2026, coordonatorul): ramane pe ecranul pazei numai la
+	profilurile noi, cu model_id= in reguli (placi cu tip de driver comun mai multor modele). La modelele de pana acum
+	garda din enigma2.sh a oprit deja orice scriere gresita inainte de interfata, iar o greseala a acestui cod nu trebuie
+	sa lase receptorul omului fara interfata. Fara fisierul de reguli (emulatorul, alta imagine): False."""
+	try:
+		with open(_cale(radacina, FISIER_REGULI)) as f:
+			return any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+	except Exception:
 		return False
 
 
@@ -1134,6 +1217,9 @@ def numeReceptor(a, reguli=None, nepotriviri=None):
 	nepotrivire). UPD_PATH /amiko/viper4kvNN (cu sau fara ghilimele) da numele; altfel un BOX_TYPE diferit de regula
 	da „un receptor <tip>” (cu un exemplu, cand il stim). O eticheta cu numele din reguli nu se crede (o imagine de-a
 	noastra pornita inainte pe alt receptor o rescrie asa). Eticheta bruta nu intra niciodata aici (randurile tehnice)."""
+	model = MODELE_PLACI.get(a.get("model_id"))
+	if model:
+		return model[0]
 	eticheta = a.get("eticheta") or ""
 	m = re.match(r"^/?amiko/viper4kv(\d+)/?$", caleDinEticheta(eticheta))
 	nume = ("Amiko Viper 4K V%s" % m.group(1)) if m else ""
@@ -1209,7 +1295,7 @@ def eticheteAmprenta():
 		"boxtype": _("Tipul plăcii spus de driver"),
 		"eticheta": _("Tipul plăcii din eticheta receptorului"),
 		"emmc": _("Memoria internă (eMMC)"),
-		"dt": _("Device tree model"),
+		"model_id": _("Modelul plăcii"),
 	}
 
 
@@ -1297,7 +1383,10 @@ def mesajPornire(v):
 		fraze = [textPentru(reguli, v.get("versiune")), textAlTau(a, reguli, nep)]
 		tehnice = randuriTehnice(nep) + randEticheta(a, reguli)
 	fraze.append(_("Ca să nu strice receptorul, software-ul nu scrie nimic în memoria lui și nu pornește mai departe."))
-	if octagon(a, reguli):
+	pagina = paginaModel(a)
+	if pagina:
+		fraze.append(_("Imaginea pentru receptorul tău și pașii de instalare: %s") % pagina)
+	elif octagon(a, reguli):
 		fraze.append(_("Pune la loc software-ul potrivit cu un stick USB, cum arată producătorul receptorului "
 			"(la Octagon: ține apăsat Standby pe receptor la pornire, apoi Recovery From USB)."))
 	elif uclan(a, reguli):

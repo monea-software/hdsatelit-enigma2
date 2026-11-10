@@ -3,6 +3,7 @@
 #define __lib_gui_eslider_h
 
 #include <lib/gui/ewidget.h>
+#include <vector>
 
 class eSlider: public eWidget
 {
@@ -16,23 +17,30 @@ public:
 	void setBorderWidth(int pixel);
 	void setBorderColor(const gRGB &color);
 	void setForegroundColor(const gRGB &color);
+	static void setForegroundGradientEnabled(int enabled);
+	void setForegroundGradient(const gRGB &first, const gRGB &last, int vertical = 0);
+	void setForegroundGradient(const gRGB &first, const gRGB &middle, const gRGB &last, int vertical = 0);
 	void setPixmap(gPixmap *pixmap);
 	void setPixmap(ePtr<gPixmap> &pixmap);
 protected:
 	int event(int event, void *data=0, void *data2=0);
 private:
+	static bool m_gradient_enabled;
 	enum eSliderEvent
 	{
 		evtChangedSlider = evtUserWidget
 	};
 	bool m_have_border_color;
 	bool m_have_foreground_color;
+	bool m_have_start;
 	int m_min, m_max, m_value, m_start, m_orientation, m_orientation_swapped, m_border_width;
 	ePtr<gPixmap> m_pixmap;
 	
 	gRegion m_currently_filled;
 	gRGB m_border_color;
 	gRGB m_foreground_color;
+	std::vector<gRGB> m_gradient;
+	int m_gradient_vertical;
 };
 
 #endif

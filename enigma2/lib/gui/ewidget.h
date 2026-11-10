@@ -43,6 +43,8 @@ public:
 	
 	void setBackgroundColor(const gRGB &col);
 	void clearBackgroundColor();
+	void setCornerRadius(int radius);
+	int getCornerRadius() const { return m_corner_radius; }
 	
 	void setZPosition(int z);
 	void setTransparent(int transp);
@@ -91,6 +93,7 @@ private:
 	
 	gRGB m_background_color;
 	int m_have_background_color;
+	int m_corner_radius;
 	
 	eWidget *m_current_focus, *m_focus_owner;
 	

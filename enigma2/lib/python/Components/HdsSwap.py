@@ -37,6 +37,46 @@ _OCTAL = re.compile(r"\\([0-7]{3})")
 
 _stare = {"lucru": None}
 _consola = [None]
+_inventar = {"cauta": False, "discuri": [], "active": [], "semn": None, "eroare": False}
+_citire = None
+_revizie_inventar = 0
+
+
+def semnDiscuri(hm=None):
+	"""Lista managerului din memorie; nu verifica punctele de montare."""
+	manager = _hm(hm)
+	return (id(manager), tuple((id(p), p.mountpoint, getattr(p, "device", None))
+		for p in manager.partitions), _revizie_inventar)
+
+
+def cereInventar(hm=None, reface=False):
+	"""Citeste o data la deschidere, dupa hotplug sau dupa comanda, pe fir separat."""
+	global _citire
+	semn = semnDiscuri(hm)
+	if _inventar["cauta"] or inLucru():
+		return _inventar
+	if not reface and _inventar["semn"] == semn:
+		return _inventar
+	_inventar.update(cauta=True, eroare=False)
+
+	def citeste():
+		active = swapuriActive()
+		return discuri(hm, active), active
+
+	def gata(rez, eroare):
+		global _citire
+		_citire = None
+		_inventar.update(cauta=False, semn=semn, eroare=bool(eroare))
+		if not eroare and rez is not None:
+			_inventar.update(discuri=rez[0], active=rez[1])
+
+	try:
+		from Components.HdsImportSurse import Lucrare
+		_citire = Lucrare(citeste, gata)
+	except Exception:
+		_inventar["cauta"] = False
+		raise
+	return _inventar
 
 
 def _(text):
@@ -154,8 +194,11 @@ def _incepe(fel, punct, gata):
 
 
 def _termina(stare, pas="", cod=0):
+	global _revizie_inventar
 	lucru = dict(_stare["lucru"], stare=stare, pas=pas, cod=cod)
 	_stare["lucru"] = lucru
+	_inventar["semn"] = None
+	_revizie_inventar += 1
 	gata = _stare.pop("gata", None)
 	if gata is not None:
 		try:

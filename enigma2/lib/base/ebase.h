@@ -262,6 +262,12 @@ public:
 	}
 };
 
+/* HDSatelit: contoarele buclei principale (eApp), pentru raportul de procesor (Components/HdsProcesorRaport.py), din
+   Python: enigma.getMainloopCounts() -> {"runde", "poll_zero", "poll_imediat", "us_poll", "timere", "activari",
+   "python", "erori_necerute", "fd": {fd: (activari, erori necerute, ultimele revents, evenimentele cerute)}}; numere pe
+   32 de biti fara semn care se dau peste cap (se folosesc diferentele). Vezi hdsbucla in ebase.cpp. */
+PyObject *getMainloopCounts();
+
 #ifndef SWIG
 				// ... und Timer
 /**

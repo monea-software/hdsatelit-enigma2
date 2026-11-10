@@ -379,6 +379,7 @@ PAGINA = """<!DOCTYPE html>
 <body>
 <main>
 <h1>Meniul receptorului</h1>
+<p><a href="/skin">Listă sau dale pe televizor</a></p>
 <form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută setări" aria-label="Caută setări" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="nota">Același meniu ca la tasta MENU, cu aceleași intrări pentru nivelul ales pe receptor. La fiecare intrare: pagina ei din interfața web, dacă are, pagina de setări sau „Deschide pe televizor”.</p>
 <p class="mesaj" id="mesaj">Se citește meniul...</p>
@@ -495,6 +496,9 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 	),
 }
+
+
+TEXTE_PAGINA["html"] += (N_("Listă sau dale pe televizor"),)
 
 
 def _traducePagina(sablon, fel="pagina"):

@@ -86,6 +86,15 @@
 				<screen module="ScanerTerestru" screen="ScanerTerestru">"automat"</screen>
 			</item>
 		</menu>
+		<!-- Radio DAB+ terestru printr-un stick USB RTL-SDR (Screens/HdsDabUsb.py; lucrul e in pluginul DabTerestru din feed). Fara stick,
+		     ecranul spune ce lipseste. In web: /dab-terestru.
+		     10.11.2026 (0.7.3): requires="HdsDabUsb" (SystemInfo: pluginul DabTerestru instalat). Pachetul pluginului si al
+		     programului de receptie (rtl-sdr, hds-dab-sdr) nu sunt inca in niciun feed (retetele stau in lucru-sesiune/oe-60/
+		     dab-rtlsdr/retete, neprobate cu stick): fara asta randul ducea la un ecran care nu avea ce instala. Cand pachetele
+		     sunt in feed si probate, conditia se scoate (randul instaleaza din nou pluginul din acelasi ecran). -->
+		<item level="0" text="Radio DAB+ prin USB" entryID="hds_dab_usb" pictograma="radio" web="/dab-terestru" weight="35" requires="HdsDabUsb">
+			<screen module="HdsDabUsb" screen="HdsDabUsb" />
+		</item>
 		<!-- Scanarea detaliată (in cod: culegerea canal cu canal): trece prin lista facuta de scanare si noteaza ce se afla numai cand
 		     canalul ruleaza (rezolutia, codarea, accesul, PID-urile, pistele). Screens/HdsCulegereTotala.py. Adresa
 		     web veche, /culegere-canale, duce la aceeasi pagina (HdsWebControl/plugin.py). -->
@@ -525,9 +534,9 @@ deschide(self.session, "afisaj")
 			<item level="1" text="DNS Server Settings" entryID="dns_setup" pictograma="dns" web="/dns" weight="20">
 				<screen module="NetworkSetup" screen="NameserverSetup" />
 			</item>
-			<!-- intrarea prin FTP, SSH si SFTP cu aceeasi parola: parola lui root, aleasa pe receptor si vazuta oricand,
-			     cheile SSH, „Fără parolă în rețeaua locală” (Components/HdsAccesSsh.py, Screens/HdsAccesSsh.py); in web:
-			     /acces-ssh. -->
+			<!-- intrarea prin FTP, SSH, SFTP si Telnet; parola din reteaua de acasa, una singura si numai daca o pune omul, cu
+			     bifele unde se cere (Components/HdsParolaLocala.py, Components/HdsAccesSsh.py, Screens/HdsAccesSsh.py);
+			     cheile SSH; in web: /acces-ssh. -->
 			<item level="0" text="Parola receptorului" entryID="hds_acces_ssh" pictograma="terminal" weight="30" web="/acces-ssh" stare="netestat">
 				<screen module="HdsAccesSsh" screen="HdsAccesSsh" />
 			</item>

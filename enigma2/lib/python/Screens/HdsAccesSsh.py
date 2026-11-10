@@ -2,27 +2,27 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsAccesSsh.py: ecranul "Parola receptorului" (Setari > Retea & Conexiuni): cum se intra pe receptor de pe calculator,
-# prin FTP, SSH si SFTP, cu aceeasi parola.
+# HdsAccesSsh.py: ecranul "Parola receptorului" (Setari > Retea & Conexiuni): cum se intra pe receptor de pe calculator
+# si de pe telefon (FTP, SSH, SFTP, Telnet, interfata web) si parola din reteaua de acasa.
 #
-# Sus, pe grupe: pentru ce merge parola (FTP, SSH, SFTP; FTP numai cand serverul FTP asculta), parola lui root, mare, de
-# vazut oricand (altfel starea ei in cateva cuvinte, tot mare) si explicatia dedesubt; felul de conectare cu adresa
-# receptorului; numarul cheilor SSH sau, in locul lui, cu alta culoare, starea periculoasa (root fara parola care se
-# primeste, "Fără parolă în rețeaua locală" pornita, dropbear cu -B). Dedesubt, randurile cu ce se poate face, toate cu
-# sagetile si OK: "Schimbă parola" (tastatura de pe ecran, cu parola de acum scrisa dinainte), "Fă o parolă nouă" (la
-# intamplare), "Adaugă cheile de pe stick", cate un rand "Șterge cheia" pentru fiecare cheie, optiunea, "Text brut" si
-# "Închide". Sub lista, explicatia randului ales si rezultatul ultimei comenzi. Parola la intamplare, stergerea unei chei
-# si pornirea optiunii cer o confirmare cu "Nu" ales dinainte; parola scrisa de om nu (a scris-o chiar el, iar
-# tastatura are EXIT); o parola care nu se primeste (prea scurta, cu spatii sau diacritice) da motivul si nu schimba
-# nimic. Cat merge o comanda, OK spune intai sa astepti, fara intrebare.
+# In casa nicio parola; numai daca omul vrea, isi pune O SINGURA parola (orice text, si
+# "123", fara conditii si fara a doua scriere) si bifeaza unde se cere (Components/HdsParolaLocala.py). Forma, dupa a
+# doua parere: fara un rand Pornita/Oprita; "nepusă" inseamna ca nu se cere nicaieri; "Pune o parolă" o scrie o data
+# si ea se aplica peste tot; apoi bifele (Toate si fiecare loc, OK le schimba) si "Șterge parola" (fara intrebare).
+# Cat o scrie, omul o vede in clar (tastatura de pe ecran in mod obisnuit, goala); dupa salvare randul mare spune numai
+# "pusă" / "nepusă", parola nu se mai arata nicaieri.
+#
+# Sus: eticheta, "pusă" / "nepusă" (mare), unde se cere acum, felul de conectare cu adresa receptorului, numarul
+# cheilor SSH (sau, in locul lui, cu alta culoare, o stare neobisnuita a fisierelor de setari). Dedesubt, randurile cu ce
+# se poate face: parola, bifele, "Adaugă cheile de pe stick", cate un rand "Șterge cheia" pentru fiecare cheie, "Text
+# brut" si "Închide". Stergerea unei chei cere o confirmare cu "Nu" ales dinainte. Cat merge o comanda, OK spune intai
+# sa astepti, fara intrebare.
 # "Text brut" (randul lui sau tasta albastra) arata fisierele de setari ale serverelor SSH si FTP, cu litere de latime
 # fixa (Stanga/Dreapta intre ele, Sus/Jos derulare, OK sau EXIT inapoi), fara /etc/shadow si fara fisierul parolei.
 #
-# Toata logica e in Components/HdsAccesSsh.py (aceeasi in pagina web /acces-ssh): ecranul citeste stare() la fiecare
-# CITIRE_MS (cateva fisiere mici) si porneste lucrarile (parola, cheile, stickul, optiunea) pe firul lor; rezultatul il
-# ia din stare() la citirea urmatoare. O lucrare pornita din web se vede si aici. Cat ecranul e deschis,
-# Components.HdsAccesSsh.ecranDeschis() e adevarat (interfata web opreste atunci telecomanda si captura pentru
-# browserele neconectate cu codul).
+# Toata logica e in Components/HdsAccesSsh.py si Components/HdsParolaLocala.py (aceleasi in pagina web /acces-ssh):
+# ecranul citeste stare() la fiecare CITIRE_MS (cateva fisiere mici) si porneste lucrarile pe firul lor; rezultatul il
+# ia din stare() la citirea urmatoare. O lucrare pornita din web se vede si aici.
 #
 # Skinul: facut la deschidere dupa marimea ecranului si dupa marimea literelor aleasa de om (config.osd.fontscale:
 # skin.parseFont mareste fontul, deci aici se maresc casutele de text, iar lista pastreaza cate randuri incap, cel putin
@@ -173,38 +173,46 @@ def skinRezerva(latime, inaltime, procent=None):
 
 # actiunile randurilor
 SCHIMBA = "schimba"
-NOUA = "noua"
+STERGE_PAROLA = "sterge-parola"
+UNDE = "unde"
 STICK = "stick"
 STERGE = "sterge"
-FARA_PAROLA = "fara-parola"
 BRUT = "brut"
 INCHIDE = "inchide"
 # randurile care pornesc o lucrare (cat merge alta, OK spune intai sa astepti)
-CU_LUCRARE = (SCHIMBA, NOUA, STICK, STERGE, FARA_PAROLA)
+CU_LUCRARE = (SCHIMBA, STERGE_PAROLA, UNDE, STICK, STERGE)
+# bifa "Toate" (argumentul randului UNDE)
+TOATE = "toate"
 
 
-def randuri(s, parola):
+def _da(da):
+	return _("da") if da else _("nu")
+
+
+def randuri(s, parola=None):
 	"""Randurile listei dupa stare: (text, actiune, argument, explicatie)."""
 	lista = []
-	if s["program"]:
+	if s["program"] and not s["parola_pusa"]:
+		lista.append((_("Pune o parolă"), SCHIMBA, None,
+			_("Numai dacă vrei. Scrii orice parolă (și 123), o singură dată; se vede cât o scrii. Apoi se cere peste tot, "
+			"iar mai jos alegi unde. Până atunci, din casă intri peste tot fără parolă.")))
+	elif s["program"]:
 		lista.append((_("Schimbă parola"), SCHIMBA, None,
-			_("Scrii parola ta cu tastatura de pe ecran: 4-64 de semne, fără spații și fără diacritice. Cea veche nu mai merge.")))
-		if s["fel_parola"] == "pusa":
-			lista.append((_("Fă o parolă nouă"), NOUA, None,
-				_("Receptorul face o parolă la întâmplare și o arată aici. Cea veche nu mai merge.")))
-		else:
-			lista.append((_("Fă o parolă"), NOUA, None, _("Receptorul face o parolă la întâmplare și o arată aici.")))
+			_("Scrii altă parolă (orice text); se vede cât o scrii. Cea veche nu mai merge.")))
+		lista.append((_("Șterge parola"), STERGE_PAROLA, None,
+			_("OK șterge parola: în rețeaua de acasă nu se mai cere nicio parolă.")))
+		unde = s.get("unde") or []
+		toate = all(x in unde for x, _t in A._parolaLocala().TXT_SERVICII)
+		lista.append((_("Toate: %s") % _da(toate), UNDE, TOATE,
+			_("OK: parola se cere peste tot sau nicăieri.")))
+		for serviciu, _t in A._parolaLocala().TXT_SERVICII:
+			lista.append(("%s: %s" % (A.textUnde(serviciu), _da(serviciu in unde)), UNDE, serviciu,
+				_("OK schimbă: da = aici se cere parola ta; nu = aici intri fără parolă.")))
 	lista.append((_("Adaugă cheile de pe stick"), STICK, None,
 		_("Pune pe stick dosarul hdsatelit/ssh cu fișierul authorized_keys sau cu cheile tale .pub, apoi apasă OK.")))
 	for c in s["chei"]:
 		lista.append((_("Șterge cheia: %s") % A.textCheie(c), STERGE, c["amprenta"],
-			_("OK șterge cheia. Calculatorul cu această cheie intră apoi numai cu parola.") + "\n" + c["amprenta"]))
-	if s["fara_parola"]:
-		lista.append((_("Fără parolă în rețeaua locală: pornit"), FARA_PAROLA, False,
-			_("Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet; din afara casei numai cu o cheie. OK oprește.")))
-	else:
-		lista.append((_("Fără parolă în rețeaua locală: oprit"), FARA_PAROLA, True,
-			_("Acum și din casă se cere parola. Pornit, din casă intri direct, fără parolă. OK pornește.")))
+			_("OK șterge cheia. Din afara casei, calculatorul cu această cheie nu mai intră.") + "\n" + c["amprenta"]))
 	lista.append((_("Text brut (fișierele serverelor SSH și FTP)"), BRUT, None,
 		_("OK arată fișierele de setări ale serverelor SSH și FTP, așa cum sunt pe receptor.")))
 	lista.append((_("Închide"), INCHIDE, None, ""))
@@ -220,7 +228,7 @@ class HdsAccesSsh(Screen):
 		titlu = _("Parola receptorului")
 		self.setTitle(titlu)
 		self["titlu"] = StaticText(titlu)
-		self["eticheta"] = StaticText(_("Parola lui root, aceeași pentru SSH, SFTP și Telnet"))
+		self["eticheta"] = StaticText(_("Parola din rețeaua de acasă: una singură, pentru tot, numai dacă vrei"))
 		self["parola"] = StaticText("")
 		self["despre"] = StaticText("")
 		self["cum"] = StaticText("")
@@ -235,15 +243,12 @@ class HdsAccesSsh(Screen):
 		self._randuri = []
 		self._stare = None
 		self._adresa = ""
-		# parola aratata acum (o scrie dinainte tastatura de la "Schimbă parola")
-		self._parola = ""
 		# lucrarea pornita de aici (numarul ei) si ultima lucrare al carei rezultat s-a aratat
 		self._vazuta = None
 		self._mesajPana = 0
 		self._brut = False
 		self._paginaBruta = 0
 		self._textBrut = None
-		self._semnalat = False
 		# amprenta cheii de sters, cat e deschisa intrebarea
 		self._deSters = None
 		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions", "ColorActions"], {
@@ -262,8 +267,6 @@ class HdsAccesSsh(Screen):
 		self.onClose.append(self._laInchidere)
 
 	def _porneste(self):
-		A.semnalEcran(True)
-		self._semnalat = True
 		self["brut"].hide()
 		self._adresa = A.adresaLocala()
 		ultima = A.LUCRARI.stare()["ultima"]
@@ -273,9 +276,6 @@ class HdsAccesSsh(Screen):
 
 	def _laInchidere(self):
 		self._ceas.stop()
-		if self._semnalat:
-			self._semnalat = False
-			A.semnalEcran(False)
 
 	# ------------------------------------------------------------------ citirea
 
@@ -288,17 +288,16 @@ class HdsAccesSsh(Screen):
 			self._ceas.start(CITIRE_MS * 3, True)
 			return
 		self._stare = s
-		parola = A.parolaDeAratat() if (s["parola_de_vazut"] and s["fel_parola"] == "pusa") else ""
-		self._parola = parola
 		self["eticheta"].setText(A.textEticheta(s))
-		self["parola"].setText(parola or A.textParolaScurt(s))
+		# dupa salvare parola nu se mai arata: numai "pusă" / "nepusă"
+		self["parola"].setText(A.textParolaScurt(s))
 		self["despre"].setText(A.textParola(s))
 		self["cum"].setText(A.textCum(self._adresa, s.get("ftp")))
 		alarme = A.textAlarme(s)
 		# o stare periculoasa ia locul numarului de chei (cheile se vad oricum in lista)
 		self["alarma"].setText(alarme[0] if alarme else "")
 		self["chei"].setText("" if alarme else A.textChei(s))
-		self._puneRanduri(randuri(s, parola))
+		self._puneRanduri(randuri(s))
 		self._arataLucrarea(s["lucrare"])
 		if self._brut:
 			self._arataBrut(False)
@@ -313,7 +312,7 @@ class HdsAccesSsh(Screen):
 		index = 0
 		if ales is not None:
 			for i, r in enumerate(noi):
-				if r[1] == ales[1] and (r[1] != STERGE or r[2] == ales[2]):
+				if r[1] == ales[1] and (r[1] not in (STERGE, UNDE) or r[2] == ales[2]):
 					index = i
 					break
 		self["list"].moveToIndex(index)
@@ -398,27 +397,34 @@ class HdsAccesSsh(Screen):
 		elif actiune == BRUT:
 			self.albastru()
 		elif actiune == SCHIMBA:
+			# tastatura pleaca goala (parola pusa nu se arata) si scrie in clar
 			self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
-				title=_("Parola nouă: 4-64 de semne, fără spații și fără diacritice"), text=self._parola)
+				title=_("Parola ta: orice text, se vede cât o scrii"), text="", hdsSecret=True)
+		elif actiune == STERGE_PAROLA:
+			# fara intrebare (a doua parere): o parola stearsa se pune la loc la fel de simplu
+			self._porneste_lucrare(A.pornesteStergeParola)
+		elif actiune == UNDE:
+			self._porneste_lucrare(lambda: A.pornesteUnde(self._undeNou(argument)))
 		elif actiune == STICK:
 			self._porneste_lucrare(A.pornesteStick)
-		elif actiune == NOUA:
-			if self._stare and self._stare["fel_parola"] == "pusa":
-				self._intreaba(_("Faci o parolă nouă? Cea de acum nu mai merge."), self._confirmaNoua)
-			else:
-				self._porneste_lucrare(A.pornesteParolaNoua)
 		elif actiune == STERGE:
 			self._deSters = argument
 			cheie = [c for c in (self._stare["chei"] if self._stare else []) if c["amprenta"] == argument]
 			nume = A.numeCheie(cheie[0]) if cheie else argument
 			self._intreaba(_("Ștergi cheia %s?") % nume, self._confirmaSterge)
-		elif actiune == FARA_PAROLA:
-			# fara intrebare: pornita e starea obisnuita (din casa direct, ca la celelalte imagini), oprita la fel de simplu
-			pornit = bool(argument)
-			self._porneste_lucrare(lambda: A.pornesteFaraParola(pornit))
+
+	def _undeNou(self, argument):
+		"""Bifele dupa OK pe un rand: Toate (toate sau niciuna) sau un singur loc schimbat."""
+		servicii = [x for x, _t in A._parolaLocala().TXT_SERVICII]
+		unde = list((self._stare or {}).get("unde") or [])
+		if argument == TOATE:
+			return [] if all(x in unde for x in servicii) else servicii
+		if argument in unde:
+			return [x for x in unde if x != argument]
+		return [x for x in servicii if x in unde or x == argument]
 
 	def _parolaScrisa(self, text):
-		"""Parola scrisa la tastatura (None cu EXIT): o parola care nu se primeste da motivul si nu schimba nimic."""
+		"""Parola scrisa la tastatura (None cu EXIT). Orice text merge; numai gol nu schimba nimic."""
 		if text is None:
 			return
 		motiv = A.motivParola(text)
@@ -429,10 +435,6 @@ class HdsAccesSsh(Screen):
 			self._mesaj(_("Așteaptă să se termine ce ai pornit înainte."))
 			return
 		self._porneste_lucrare(lambda: A.pornestePuneParola(text))
-
-	def _confirmaNoua(self, da):
-		if da:
-			self._porneste_lucrare(A.pornesteParolaNoua)
 
 	def _confirmaSterge(self, da):
 		if da:

@@ -204,8 +204,19 @@ def stareTaste():
 	b = TR.actualizeaza_alegeri(_dep("config"))
 	butoane = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.BUTOANE]
 	scurte = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.SCURTE]
-	return {"result": True, "butoane": butoane, "scurte": scurte, "actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0])),
-		"implicite": dict(TR.VALORI_IMPLICITE)}
+	u = TR.initConfigProfil(_dep("config"))
+	profil = []
+	implicite = dict(TR.VALORI_IMPLICITE)
+	for k, implicit, text in TR.PROFIL_SETARI:
+		v = getattr(u, k).value
+		alegeri = [["1", _t("Da")], ["0", _t("Nu")]] if isinstance(implicit, bool) else _alegeri(getattr(u, k))
+		profil.append({"cheie": k, "text": text, "valoare": str(int(v)) if isinstance(v, bool) else str(v), "alegeri": alegeri})
+		implicite[k] = str(int(implicit)) if isinstance(implicit, bool) else str(implicit)
+	return {"result": True, "butoane": butoane, "scurte": scurte, "profil": profil,
+		"actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0])), "implicite": implicite,
+		"nume_taste": dict(TR.ETICHETE_TASTE),
+		"sensuri": dict((c, TR.profil_context(c, config=_dep("config"))) for c in
+			("live", "radio", "channel_list", "movie_list", "movie", "menu", "setup", "timeshift"))}
 
 
 def seteazaTaste(request):
@@ -213,7 +224,10 @@ def seteazaTaste(request):
 	TR = _dep("HdsTasteRapide")
 	config = _dep("config")
 	b = TR.actualizeaza_alegeri(config)
+	u = TR.initConfigProfil(config)
 	chei = [k for k, _text in TR.BUTOANE + TR.SCURTE]
+	profil = dict((k, implicit) for k, implicit, _text in TR.PROFIL_SETARI)
+	chei += list(profil)
 	a = _mc().argumente(request, chei, 128, limita=len(chei) + 8)
 	if not a:
 		rez = stareTaste()
@@ -222,14 +236,17 @@ def seteazaTaste(request):
 	noi = []
 	for k in chei:
 		if k in a:
-			el = getattr(b, k)
-			if a[k] not in [x[0] for x in _alegeri(el)]:
+			el = getattr(u if k in profil else b, k)
+			boolean = k in profil and isinstance(profil[k], bool)
+			alegeri = ("0", "1") if boolean else [x[0] for x in _alegeri(el)]
+			if a[k] not in alegeri:
 				rez = stareTaste()
 				rez.update(result=False, message=_t("Acțiunea %s nu există.") % a[k][:20])
 				return rez
-			noi.append((el, a[k]))
+			noi.append((el, a[k] == "1" if boolean else a[k]))
 	for el, v in noi:
 		el.value = v
+		el.save()
 	TR.salveaza(config)
 	_dep("configfile").save()
 	rez = stareTaste()
@@ -239,7 +256,7 @@ def seteazaTaste(request):
 
 # ------------------------------------------------------------------ skinul
 
-def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None):
+def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None, stare_tema=""):
 	"""Corpul raspunsului GET /api/skin, din lista citita pe fir si din setarile citite pe firul enigma2."""
 	S = _dep("HdsSkinuri")
 	activ = activ or S.DOSAR_IMAGINE
@@ -247,7 +264,7 @@ def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None):
 		"skinuri": [{"nume": x, "eticheta": _t("Skinul implicit") if x == S.IMPLICIT else x,
 			"ales": x == ales or (ales is None and x == S.IMPLICIT), "activ": x == activ,
 			"imaginii": x == S.DOSAR_IMAGINE} for x in skinuri],
-		"aspect": aspect, "aspecte": aspecte, "activ": activ, "refuz": refuz or ""}
+		"aspect": aspect, "aspecte": aspecte, "activ": activ, "refuz": refuz or "", "stare_tema": stare_tema or ""}
 
 
 def _aspecte(config):
@@ -266,9 +283,10 @@ def cereSkin(request):
 	aspecte = _aspecte(config)
 	radacina = _dep("radacina")
 	activ = S.numeDinValoare(_dep("skinPornit")()) or S.DOSAR_IMAGINE
-	refuz = S.textRefuz(S.citesteRefuz(_dep("refuz")), _t)
-	return _dep("peFir")(request, lambda: stareSkin(S.lista(radacina), ales, aspect, aspecte, activ, refuz), _STEAG_SKIN,
-		20)
+	refuz = S.textRefuz(S.refuzDeSpus(_dep("refuz")), _t)
+	stare_tema = S.textStareTema(_t)
+	return _dep("peFir")(request, lambda: stareSkin(S.lista(radacina), ales, aspect, aspecte, activ, refuz, stare_tema),
+		_STEAG_SKIN, 20)
 
 
 def _numeSkin(a):
@@ -284,7 +302,7 @@ def pozaSkin(a):
 	S = _dep("HdsSkinuri")
 	nume = _numeSkin(a)
 	if nume is None:
-		return None, _t("Skinul nu există.")
+		return None, _t("Tema nu există.")
 	cale = S.previzualizare(_dep("radacina"), nume, _dep("poza_lipsa"))
 	try:
 		with open(cale, "rb") as f:
@@ -303,16 +321,28 @@ def pozaSkin(a):
 def alegeSkin(request):
 	"""POST /api/skin-alege: ca OK pe ecran (aceeasi verificare a fisierului, acelasi avertisment de rezolutie)."""
 	S = _dep("HdsSkinuri")
-	a = _mc().argumente(request, ("nume",), 120)
+	a = _mc().argumente(request, ("nume", "aplicare"), 120)
+	mod = a.get("aplicare", "pornire")
+	if mod not in ("acum", "pornire"):
+		return {"result": False, "message": _t("Alege Aplică acum sau La următoarea pornire.")}
+	if mod == "acum":
+		refuz = _mc().numaiBrowser(request)
+		if refuz:
+			return {"result": False, "message": refuz}
+		if _dep("sesiune") is None:
+			return {"result": False, "message": _t("Interfața nu este gata pentru repornire.")}
 	nume = _numeSkin(a)
 	if nume is None:
-		return {"result": False, "message": _t("Skinul nu există.")}
+		return {"result": False, "message": _t("Tema nu există.")}
 	bun, mesaj, avertisment = S.alege(nume, _dep("config"), _dep("radacina"), _t, _dep("refuz"))
 	if not bun:
 		return {"result": False, "message": mesaj}
 	_dep("configfile").save()
-	return {"result": True, "message": (avertisment + " " + mesaj) if avertisment else mesaj, "avertisment": avertisment,
-		"reporneste": True}
+	pornita = mod == "acum" and _dep("HdsAlimentare").deschide(_dep("sesiune"), "interfata", dupa_ms=1500)
+	if mod == "acum" and not pornita:
+		mesaj += " " + _t("Interfața nu este gata pentru repornire.")
+	return {"result": mod != "acum" or bool(pornita), "message": (avertisment + " " + mesaj) if avertisment else mesaj, "avertisment": avertisment,
+		"reporneste": bool(pornita)}
 
 
 def aspectMeniu(request):
@@ -551,7 +581,7 @@ __STIL_PAGINI__
 <body>
 <main>
 <h1>Butoane colorate și taste rapide</h1>
-<p class="sub">Alege o funcție pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită păstrează comportamentul de acum. Cifrele lungi se alocă în afara timeshiftului.</p>
+<p class="sub">Alege o funcție sau un plugin instalat pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită urmează profilul curent. Cifrele lungi se alocă în afara timeshiftului.</p>
 <p class="mesaj" id="incarcare">Se citesc butoanele...</p>
 <div id="continut" class="ascuns">
   <section class="card">
@@ -562,6 +592,14 @@ __STIL_PAGINI__
   <section class="card">
     <h2>Apăsarea lungă</h2>
     <div id="butoane"></div>
+  </section>
+  <section class="card"><h2>Liste și meniuri</h2><div id="profil"></div></section>
+  <section class="card"><h2>Tastele acestui ecran</h2>
+    <label for="sensContext">Context</label><select id="sensContext">
+      <option value="live">TV</option><option value="radio">Radio</option><option value="channel_list">Lista de canale</option>
+      <option value="movie_list">Lista de filme</option><option value="movie">Film</option><option value="timeshift">Timeshift</option>
+      <option value="menu">Meniu</option><option value="setup">Setări</option>
+    </select><div id="sensuri"></div>
   </section>
   <div class="butoane">
     <button type="button" class="principal" id="salveaza">Salvează</button>
@@ -581,15 +619,25 @@ function randuri(c, lista, actiuni){
     var r = document.createElement("div"); r.className = "rand";
     var l = document.createElement("label"); l.htmlFor = "b-" + b.cheie; l.textContent = b.text; r.appendChild(l);
     var s = document.createElement("select"); s.id = "b-" + b.cheie;
-    actiuni.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); });
+    (b.alegeri || actiuni).forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); });
     s.value = b.valoare; r.appendChild(s); c.appendChild(r);
   });
 }
-function toate(){ return D.butoane.concat(D.scurte || []); }
+function toate(){ return D.butoane.concat(D.scurte || [], D.profil || []); }
+function arataSensuri(){
+  var c = $("sensuri"); c.textContent = "";
+  ((D.sensuri || {})[$("sensContext").value] || []).forEach(function(r){
+    var p = document.createElement("p"); p.className = "nota";
+    p.textContent = ((D.nume_taste || {})[r.key] || r.key.toUpperCase()) + ": " + "Scurt: " + r.text_short + ". " + "Lung: " + r.text_long;
+    c.appendChild(p);
+  });
+}
 function arata(d){
   D = d;
   randuri($("scurte"), d.scurte || [], d.actiuni);
   randuri($("butoane"), d.butoane, d.actiuni);
+  randuri($("profil"), d.profil || [], []);
+  arataSensuri();
 }
 function citeste(){
   return cerere("/api/taste-rapide").then(function(d){
@@ -609,7 +657,11 @@ $("implicite").addEventListener("click", function(){
   toate().forEach(function(b){ $("b-" + b.cheie).value = D.implicite[b.cheie]; });
   mesaj("Valorile implicite sunt pregătite. Apasă Salvează pentru a le păstra.");
 });
+$("sensContext").addEventListener("change", arataSensuri);
 citeste();
+window.addEventListener("beforeunload", function(e){
+  if(D && toate().some(function(b){ return $("b-" + b.cheie).value !== b.valoare; })){ e.preventDefault(); e.returnValue = ""; }
+});
 </script>
 </body>
 </html>
@@ -638,9 +690,11 @@ __STIL_PAGINI__
 <main>
 <h1>Aspectul ecranelor</h1>
 <p class="sub">Skinurile instalate pe receptor. Skinul ales se vede pe televizor după repornirea interfeței.</p>
+<p class="nota">Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire.</p>
 <p class="mesaj" id="incarcare">Se caută skinurile...</p>
 <div id="continut" class="ascuns">
   <p class="mesaj eroare ascuns" id="refuz"></p>
+  <p class="mesaj ascuns" id="stareTema"></p>
   <div class="skinuri" id="skinuri"></div>
   <section class="card">
     <h2>Aspectul meniului</h2>
@@ -679,13 +733,19 @@ function arata(d){
     img.addEventListener("error", function(){ img.classList.add("ascuns"); });
     card.appendChild(img);
     var b = document.createElement("button"); b.type = "button"; b.className = x.ales ? "" : "principal";
-    b.textContent = x.ales ? "Alege din nou" : "Alege acest skin";
-    b.addEventListener("click", function(){ alege(x.nume); });
-    var bs = document.createElement("div"); bs.className = "butoane"; bs.appendChild(b); card.appendChild(bs);
+    b.textContent = "Aplică acum";
+    b.addEventListener("click", function(){ alege(x.nume, "acum"); });
+    var bs = document.createElement("div"); bs.className = "butoane"; bs.appendChild(b);
+    var maiTarziu = document.createElement("button"); maiTarziu.type = "button";
+    maiTarziu.textContent = "La următoarea pornire";
+    maiTarziu.addEventListener("click", function(){ alege(x.nume, "pornire"); });
+    bs.appendChild(maiTarziu); card.appendChild(bs);
     c.appendChild(card);
   });
   $("refuz").textContent = d.refuz || "";
   $("refuz").classList.toggle("ascuns", !d.refuz);
+  $("stareTema").textContent = d.stare_tema || "";
+  $("stareTema").classList.toggle("ascuns", !d.stare_tema);
   var s = $("aspect");
   if(document.activeElement !== s){
     s.textContent = "";
@@ -700,18 +760,14 @@ function citeste(){
     arata(d);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
 }
-function alege(nume){
-  var q = new URLSearchParams(); q.set("nume", nume);
+function alege(nume, aplicare){
+  var q = new URLSearchParams(); q.set("nume", nume); q.set("aplicare", aplicare);
   mesaj("Se salvează...");
   cerere("/api/skin-alege", "POST", q).then(function(d){
     mesaj(d.message, !d.result);
     if(!d.result){ return; }
     citeste();
-    cuConfirmare("/api/skin-reporneste", new URLSearchParams(), function(r){
-      if(r.result && r.reporneste){ setTimeout(function(){ location.reload(); }, 15000); }
-    });
-    // cuConfirmare goleste mesajul: avertismentul (literele mici) si "se vede dupa repornire" raman scrise
-    mesaj(d.message, false);
+    if(d.reporneste){ setTimeout(function(){ location.reload(); }, 15000); }
   }).catch(nimicNuRaspunde);
 }
 $("aspect").addEventListener("change", function(){
@@ -738,6 +794,7 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire."),
 		N_("Dispozitive de intrare"),
 		N_("Telecomenzile, tastaturile și mouse-urile găsite de receptor la pornire. Pentru fiecare se "
 			"poate schimba cât de repede se repetă o tastă ținută apăsat."),
@@ -775,6 +832,8 @@ TEXTE_PAGINA = {
 			"Același ecran e pe televizor, în __DRUM_MENIU__."),
 	),
 	"js": (
+		N_("Aplică acum"),
+		N_("La următoarea pornire"),
 		N_("telecomandă"),
 		N_("tastatură"),
 		N_("alt dispozitiv"),
@@ -801,6 +860,15 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a putut citi skinurile."),
 	),
 }
+
+
+TEXTE_PAGINA["html"] += (
+	N_("Alege o funcție sau un plugin instalat pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită urmează profilul curent. Cifrele lungi se alocă în afara timeshiftului."),
+	N_("Liste și meniuri"),
+	N_("Tastele acestui ecran"), N_("Context"), N_("TV"), N_("Radio"), N_("Lista de canale"),
+	N_("Lista de filme"), N_("Film"), N_("Timeshift"), N_("Meniu"), N_("Setări"),
+)
+TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
 
 
 def _traducePagina(sablon, fel="pagina"):

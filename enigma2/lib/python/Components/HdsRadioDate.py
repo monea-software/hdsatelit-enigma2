@@ -296,7 +296,11 @@ def epg(info, ref_text, cate, acum=None):
 def rds(service, session=None):
 	"""{"text": RadioText, "piesa": RT+ (artistul si titlul), "rass": True cand postul are pagini RaSS}.
 	Textele trec prin Components/HdsRdsText.py: se iau numai dupa ce decodorul RDS a anuntat un mesaj bun pentru
-	serviciul care merge (la AAC nu vine niciunul) si numai daca sunt text valid, decodat in setul lor de caractere."""
+	serviciul care merge (la AAC nu vine niciunul) si numai daca sunt text valid, decodat in setul lor de caractere.
+	Un post al unui loc adaugat de o extensie isi da singur textul, cand il stie (DAB+ prin USB: textul postului sau de ce nu se aude)."""
+	din_loc = _rds_din_loc(service)
+	if din_loc is not None:
+		return din_loc
 	rez = {"text": u"", "piesa": u"", "rass": False}
 	try:
 		dec = service.rdsDecoder() if service is not None else None
@@ -319,6 +323,22 @@ def rds(service, session=None):
 	except Exception:
 		pass
 	return rez
+
+
+def _rds_din_loc(service):
+	"""{"text", "piesa", "rass"} de la extensia locului, sau None pentru orice alt serviciu. Un canal obisnuit n-are cale si iese pe loc."""
+	try:
+		info = service.info() if service is not None else None
+		campuri = _info_text(info, "sServiceref").split(u":") if info is not None else []
+		if len(campuri) <= 10 or not campuri[10]:
+			return None
+		from Components.HdsLocuriLista import dateRadio
+		d = dateRadio(campuri[10])
+		if not isinstance(d, dict):
+			return None
+		return {"text": _u(d.get("text") or u""), "piesa": _u(d.get("piesa") or u""), "rass": bool(d.get("rass"))}
+	except Exception:
+		return None
 
 
 def _piesa_din_flux(service):
@@ -421,7 +441,7 @@ def _semnal(service, ref_text, C):
 	except Exception:
 		rez["flux"] = False
 	try:
-		st = C.frontend_status(service, ref_text) or {}
+		st = C.frontend_status(service, ref_text, ("quality", "power", "lock", "number")) or {}
 	except Exception:
 		st = {}
 	q = C.percent16(st.get("quality")) if st.get("quality") is not None else None
@@ -587,7 +607,11 @@ def rapid(d, session, analiza=None, acum=None, cu_rds=False):
 	d["adresa"] = adresa_publica(d.get("ref", u"")) if _u(d.get("ref")).startswith("4097:") else u""
 	d["sunet"] = _sunet(r, analiza, C, date_online(service))
 	d["analiza"] = analiza or {}
-	if cu_rds:
+	# textul unui post al unui loc nu vine prin evUpdatedRadioText: se citeste la fiecare improspatare, numai din memoria extensiei
+	din_loc = _rds_din_loc(service)
+	if din_loc is not None:
+		d["rds"] = din_loc
+	elif cu_rds:
 		d["rds"] = rds(service, session)
 	ep = d.get("epg")
 	cur = ep.get("acum") if ep else None

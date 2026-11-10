@@ -234,6 +234,9 @@ class HdsLocInregistrari(Screen):
 	def _citeste(self, din_nou=False):
 		cale = self._loc()
 		stare, se_citeste = L.cereStare(self._cand, cale, din_nou)
+		if stare is not None and "cand" in stare:
+			self._cand = stare["cand"]
+			self._necit = stare.get("necit") or []
 		if self._singur and se_citeste:
 			# ecranul care alege singur asteapta citirea noua: cea tinuta poate fi de dinainte ca discul sa fie pus sau scos
 			stare = None
@@ -315,6 +318,14 @@ class HdsLocInregistrari(Screen):
 		self._citeste(True)
 
 	def _verifica(self):
+		if getattr(self, "_urmaresteNumele", False):
+			rez = L.stareNumeMedia()
+			if rez and rez.get("in_lucru"):
+				self._ceas.start(PAS_MS, True)
+				return
+			self._urmaresteNumele = False
+			if rez:
+				self._mesajNou(rez.get("message") or _("Numele nu se poate schimba acum."))
 		if self._lucreaza:
 			self._urmaresteLucrul()
 		else:
@@ -559,6 +570,9 @@ class HdsLocInregistrari(Screen):
 		if alegere is None:
 			return
 		rez = L.alegeNumeMedia(dispozitiv, alegere[1])
+		if rez.get("in_lucru"):
+			self._urmaresteNumele = True
+			self._ceas.start(PAS_MS, True)
 		self._discuri()
 		self._citeste(True)
 		self._mesajNou(rez.get("message") or _("Numele nu se poate schimba acum."))

@@ -13,7 +13,7 @@
 # Dupa fereastra zap-ul se scrie intr-un rand in FISIER (in /tmp, adica in memorie; ultimele PASTRATE zap-uri), cu
 # ascultatorii care au luat cel putin PRAG_MS. Asa se vede pe receptor, fara profilare si fara repornire, ce lucru Python
 # sta intre tasta si pornirea decodorului.
-# Ceasul: time.monotonic(); "t0" din rand se leaga de /proc/uptime (acelasi ceas cat nu e standby adanc), iar prin el de
+# Ceasul: time.monotonic(); "t0" din rand se leaga de /proc/uptime (acelasi ceas cat nu e Deep standby), iar prin el de
 # ceasul decodorului (/proc/msp/syncNN, Systime).
 # Costul: doua citiri de ceas pe ascultator, numai in fereastra; scrierea, una pe zap, dupa fereastra (eTimer).
 # Modulul nu importa nimic din enigma la incarcare (probele de pe PC).

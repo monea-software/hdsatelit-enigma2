@@ -17,6 +17,8 @@
 # - Restart network;
 # - pentru o placa Wi-Fi (driver gasit, ca in meniul placii): starea legaturii (WiFi status), cautarea retelelor,
 #   conectarea cu parola (si la o retea ascunsa), cu setarile vechi puse inapoi la esec, ca pe televizor.
+#   Campul parolei e text obisnuit (se vede cat o scrii, fara stelute); parola salvata nu se
+#   trimite niciodata spre browser (lista retelelor spune numai daca reteaua cere parola).
 # Iar pe /dns lista serverelor DNS: adaugare, scoatere, salvare (/etc/resolv.conf), ca OK pe televizor.
 #
 # O SINGURA LOGICA: Components/HdsRetea.py (placile, placa implicita, aplicarea, DNS, repornirea) si Components/HdsWlan.py
@@ -238,6 +240,11 @@ def _ipv6():
 		return None
 
 
+def _numeLocal():
+	from Components.HdsComutareRetea import nume_local_confirmat
+	return nume_local_confirmat()
+
+
 def stare(gazda=None):
 	"""Pentru GET /api/retea."""
 	R = _dep("retea")
@@ -274,6 +281,7 @@ def stare(gazda=None):
 		"conectare": _copie(_STARE["conectare"], ("pornit",)),
 		"securitati_ascunse": [[s, W.securityText(s)] for s in W.HIDDEN_SECURITY],
 		"ipv6": _ipv6(),
+		"nume_local": _numeLocal(),
 	}
 
 
@@ -948,7 +956,8 @@ __STIL_PAGINI__
       <label for="comutareOrdine">Ordinea rețelelor</label>
       <select id="comutareOrdine"></select>
     </div>
-    <p class="nota">După o trecere, receptorul poate avea altă adresă. Pe televizor apare adresa nouă; pagina se deschide mereu și cu <a href="http://hdsatelit.local/">http://hdsatelit.local/</a>. Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Trecerea singură pe altă rețea.</p>
+    <p class="nota">După o trecere, receptorul poate avea altă adresă. Pe televizor apare adresa nouă. Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Trecerea singură pe altă rețea.</p>
+    <p class="nota" id="numeLocal">Se citește...</p>
     <div class="butoane"><button type="button" id="spreCanale">Cât de aglomerat e Wi-Fi-ul</button><button type="button" id="spreAparate">Ce aparate sunt în rețea</button></div>
   </section>
 
@@ -1041,7 +1050,7 @@ __STIL_PAGINI__
       </div>
       <div class="rand" id="randParola">
         <label for="parola">Parola rețelei</label>
-        <input id="parola" type="password" autocomplete="off" spellcheck="false" maxlength="64">
+        <input id="parola" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64">
       </div>
       <div class="butoane">
         <button type="button" class="principal" id="conecteaza">Conectează</button>
@@ -1231,6 +1240,7 @@ function arata(){
   var p = placa(ALEASA);
   if(p && FORMULAR !== p.nume){ umpleFormular(p); } else { vizibile(); }
   arataAcum(); arataProba(); arataWifi(); arataIpv6();
+  scrie($("numeLocal"), D.nume_local ? "Numele în rețea: " + D.nume_local : "Numele local nu este disponibil. Folosește adresa IP a receptorului.");
   if(D.lucrare && !D.lucrare.gata){ mesaj("Se lucrează la rețea (" + D.lucrare.secunde + " s)..."); }
 }
 var ULTIM_MESAJ = null;
@@ -1353,7 +1363,8 @@ function citesteComutarea(){
     else if(d.mod === "comutat"){ linii.push("Acum pe " + d.activa + " (internetul nu mergea prin " + d.preferata + "). Se întoarce singur când acolo merge din nou."); }
     else { linii.push("Pornită. Acum receptorul e pe rețeaua lui obișnuită."); }
     if(d.cai && d.cai.length){ linii.push("Ordinea: " + d.cai.map(function(c, i){ return (i + 1) + ". " + c.nume; }).join(", ")); }
-    if(d.adresa){ linii.push("Adresa receptorului: " + d.adresa + " (sau hdsatelit.local)"); }
+    if(d.adresa){ linii.push("Adresa receptorului: " + d.adresa); }
+    if(d.nume_local){ linii.push("Numele în rețea: " + d.nume_local); }
     if(d.amanat){ linii.push("Amânat: " + d.amanat + "."); }
     if(d.ultimul){ linii.push("Ultima dată: " + d.ultimul); }
     scrie($("comutareStare"), linii.join("\\n"));
@@ -1515,8 +1526,7 @@ TEXTE_PAGINA = {
 			"altă rețea nu face nimic. Nu trece în timpul unei actualizări sau al unei înregistrări din "
 			"rețea."),
 		N_("Ordinea rețelelor"),
-		N_("După o trecere, receptorul poate avea altă adresă. Pe televizor apare adresa nouă; pagina se "
-			"deschide mereu și cu <a href=\"http://hdsatelit.local/\">http://hdsatelit.local/</a>. Aceeași "
+		N_("După o trecere, receptorul poate avea altă adresă. Pe televizor apare adresa nouă. Aceeași "
 			"setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Trecerea singură pe altă "
 			"rețea."),
 		N_("Cât de aglomerat e Wi-Fi-ul"),
@@ -1635,7 +1645,8 @@ TEXTE_PAGINA = {
 		N_("Pornită. Acum receptorul e pe rețeaua lui obișnuită."),
 		N_("Ordinea:"),
 		N_("Adresa receptorului:"),
-		N_("(sau hdsatelit.local)"),
+		N_("Numele în rețea:"),
+		N_("Numele local nu este disponibil. Folosește adresa IP a receptorului."),
 		N_("Amânat:"),
 		N_("Ultima dată:"),
 		N_("Server DNS"),

@@ -381,7 +381,8 @@ def transpondere_satelit(orbpos, transpondere_xml, multistream=True, slot=None):
             continue
         tp = {'frequency': x[1], 'symbol_rate': x[2], 'polarisation': x[3], 'fec': x[4],
               'inversion': x[7] if x[7] in (0, 1, 2) else 2, 'orbital_position': orbpos,
-              'system': x[5], 'modulation': x[6],
+              # XML poate numi DVB-S2X cu 2; ca la introducerea manuala, acordul este DVB-S2.
+              'system': SISTEM_DVB_S2 if x[5] == 2 else x[5], 'modulation': x[6],
               'rolloff': x[8] if x[8] in ROLLOFF_VALIDE else 0, 'pilot': x[9] if x[9] in (0, 1, 2) else 2}
         tp.update(_multistream_din_xml(x))
         motiv = motiv_refuz(tp, slot)
@@ -1828,11 +1829,11 @@ class ScanerSatelit(Screen):
         return _('Scanare satelit')
 
     def _text_albastru(self):
-        """La „Mai mulți sateliți” nu e nimic de salvat (bifele sunt in fereastra lui): tasta nu apare."""
+        """Albastru ramane numai pentru fluxurile DAB+ / DVB-T2; parametrii se pastreaza automat."""
         fel = self._fel()
         if fel in PROFIL_FEL:
             return _('Fluxuri și setări')
-        return '' if fel == 'mai_multi' else _('Salvează')
+        return ''
 
     def _text_galben(self):
         return '' if self._fel() == 'mai_multi' else _('Schimbă')
@@ -2023,7 +2024,7 @@ class ScanerSatelit(Screen):
             if not din_tara:
                 return _('%s: niciun operator de acest fel. Alte țări: OK pe rândul „Operator”.') % nume_tara(
                     tara_utilizatorului())
-        return _('Schimbă cu OK, stânga sau dreapta; caută cu OK pe „Caută acum”.')
+        return _('Parametrii se păstrează automat. Schimbă cu OK sau săgețile.')
 
     def _sus(self):
         self['lista'].selectPrevious()
@@ -2274,19 +2275,14 @@ class ScanerSatelit(Screen):
     def albastru(self):
         """La DVB-T2 si DAB+ prin satelit: fereastra HdsComun cu lista de fluxuri (ascultare, invatare, lista de
         pe hdsatelit.com, setari). Intrarile ei vechi din meniu au devenit aceste doua feluri de scanare, deci
-        drumul spre ea e de aici. La celelalte feluri: salveaza configurarea."""
+        drumul spre ea e de aici."""
         fel = self._fel()
         if fel == 'mai_multi':
             return
         if fel not in PROFIL_FEL:
-            self.salveaza()
             return
         from Screens.HdsComunPrincipal import HdsDabPrincipal, HdsT2miPrincipal
         self.session.open(HdsDabPrincipal if fel == 'dab' else HdsT2miPrincipal)
-
-    def salveaza(self):
-        _scrie_config(self._config)
-        self.scrie_stare(_('Configurația a fost salvată.'))
 
     def inchide(self):
         _scrie_config(self._config)

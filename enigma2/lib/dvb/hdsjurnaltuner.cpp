@@ -197,9 +197,21 @@ void toneburst(Stare &s, int b)
 
 void diseqc(Stare &s, const unsigned char *d, int len)
 {
-	char t[64];
-	if (len >= 4 && d[0] == 0x70)
-		snprintf(t, sizeof(t), "JESS UB%d", (d[1] >> 3) + 1);
+	char t[96];
+	bool unicable = false;
+	if (!d || len < 1)
+		return;
+	if ((len == 4 && d[0] == 0x70) || (len == 5 && d[0] == 0x71))
+	{
+		unicable = true;
+		int f = ((d[1] & 7) << 8) | d[2];
+		if (f)
+			snprintf(t, sizeof(t), "EN50607/JESS UB%d comanda %d MHz pozitia %d%s",
+				(d[1] >> 3) + 1, f + 100, (d[3] >> 2) + 1, d[0] == 0x71 ? " PIN da" : "");
+		else
+			snprintf(t, sizeof(t), "EN50607/JESS UB%d oprit%s", (d[1] >> 3) + 1,
+				d[0] == 0x71 ? " PIN da" : "");
+	}
 	else if (len >= 3 && (d[0] & 0xFC) == 0xE0)
 	{
 		unsigned char adr = d[1], cmd = d[2];
@@ -209,8 +221,18 @@ void diseqc(Stare &s, const unsigned char *d, int len)
 			snprintf(t, sizeof(t), "DiSEqC1.0 port %d", ((d[3] >> 2) & 3) + 1);
 		else if (cmd == 0x39 && len >= 4)
 			snprintf(t, sizeof(t), "DiSEqC1.1 port %d", (d[3] & 0x0F) + 1);
-		else if (cmd == 0x5A && len >= 4)
-			snprintf(t, sizeof(t), "Unicable UB%d", ((d[3] >> 5) & 7) + 1);
+		else if ((cmd == 0x5A && len == 5) || (cmd == 0x5C && len == 6))
+		{
+			unicable = true;
+			int f = ((d[3] & 3) << 8) | d[4];
+			if (f)
+				snprintf(t, sizeof(t), "EN50494 UB%d comanda %d MHz pozitia %d%s",
+					(d[3] >> 5) + 1, (f + 350) * 4, ((d[3] >> 4) & 1) + 1,
+					cmd == 0x5C ? " PIN da" : "");
+			else
+				snprintf(t, sizeof(t), "EN50494 UB%d oprit%s", (d[3] >> 5) + 1,
+					cmd == 0x5C ? " PIN da" : "");
+		}
 		else if (cmd == 0x5B)
 			snprintf(t, sizeof(t), "Unicable oprit");
 		else if (cmd == 0x00)
@@ -226,6 +248,15 @@ void diseqc(Stare &s, const unsigned char *d, int len)
 	}
 	else
 		snprintf(t, sizeof(t), "DiSEqC? %d octeti", len);
+	if (unicable && strlen(s.lnb) + strlen(t) + 1 >= sizeof(s.lnb))
+	{
+		/* Repetarile comutatorului nu trebuie sa ascunda acordarea Unicable. */
+		size_t pastrat = sizeof(s.lnb) - strlen(t) - 6;
+		while (pastrat && s.lnb[pastrat] != ' ')
+			--pastrat;
+		s.lnb[pastrat] = 0;
+		adauga(s.lnb, sizeof(s.lnb), "...");
+	}
 	lnb(s, t);
 }
 

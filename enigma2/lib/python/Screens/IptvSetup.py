@@ -202,9 +202,9 @@ class _EcranCartele(Screen):
 		scara = getDesktop(0).size().width() / 1920.0
 		f = scara * p / 100.0
 		self._inaltimeRand = int(123 * f)
-		lista.l.setFont(0, gFont("Regular", int(34 * f)))
-		lista.l.setFont(1, gFont("Regular", int(25 * f)))
-		lista.l.setFont(2, gFont("Bold", int(27 * f)))
+		lista.l.setFont(0, gFont(skin.fontHds("Regular"), int(34 * f)))
+		lista.l.setFont(1, gFont(skin.fontHds("Regular"), int(25 * f)))
+		lista.l.setFont(2, gFont(skin.fontHds("Bold"), int(27 * f)))
 		lista.l.setItemHeight(self._inaltimeRand)
 		self._scaraRand = f
 		self._margineRand = int(24 * scara)
@@ -234,10 +234,11 @@ class IptvSetup(_EcranCartele):
 		self["key_green"] = Button(_("Adaugă"))
 		self["key_yellow"] = Button(_("Actualizează"))
 		self["key_blue"] = Button(_("Șterge"))
-		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "MenuActions"], {
 			"cancel": self.close,
 			"red": self.close,
 			"ok": self._ok,
+			"menu": self._meniuSursa,
 			"green": self._adauga,
 			"yellow": self._actualizeaza,
 			"blue": self._sterge,
@@ -291,7 +292,13 @@ class IptvSetup(_EcranCartele):
 	def _ghid(self):
 		p = self._aleasa()
 		if p is not None:
-			self["ghid"].setText("%s: %s. %s" % (p["nume"], detaliuSursa(p), mesajSursa(p)))
+			if p["fel"] == "xtream":
+				taste = _("OK: grupele. MENU: date de acces și seriale.")
+			elif p["fel"] == "demo":
+				taste = _("OK: despre lista demo.")
+			else:
+				taste = _("OK: grupele. MENU: date de acces.")
+			self["ghid"].setText("%s %s: %s. %s" % (taste, p["nume"], detaliuSursa(p), mesajSursa(p)))
 		elif self._surse:
 			self["ghid"].setText(_("Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."))
 		else:
@@ -319,14 +326,18 @@ class IptvSetup(_EcranCartele):
 			self._adauga()
 		elif p["fel"] == "demo":
 			self.session.open(IptvDespre)
-		elif p["fel"] == "xtream":
-			from Screens.ChoiceBox import ChoiceBox
-			self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"],
-				list=[(_("Grupele"), "grupe"), (_("Date de acces"), "date"), (_("Seriale"), "seriale")])
 		else:
-			from Screens.ChoiceBox import ChoiceBox
-			self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"],
-				list=[(_("Grupele"), "grupe"), (_("Date de acces"), "date")])
+			self.session.openWithCallback(self._dupaFormular, IptvGrupe, p["id"])
+
+	def _meniuSursa(self):
+		p = self._aleasa()
+		if p is None or p["fel"] == "demo":
+			return
+		from Screens.ChoiceBox import ChoiceBox
+		actiuni = [(_("Date de acces"), "date")]
+		if p["fel"] == "xtream":
+			actiuni.append((_("Seriale"), "seriale"))
+		self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"], list=actiuni)
 
 	def _alegeCont(self, ales=None):
 		p = self._aleasa()
@@ -334,8 +345,6 @@ class IptvSetup(_EcranCartele):
 			return
 		if ales[1] == "seriale":
 			self.session.open(IptvSeriale, p["id"])
-		elif ales[1] == "grupe":
-			self.session.openWithCallback(self._dupaFormular, IptvGrupe, p["id"])
 		else:
 			self.session.openWithCallback(self._dupaFormular, IptvDateAcces, p["fel"], p["id"])
 
@@ -534,8 +543,8 @@ class IptvAlege(_EcranCartele):
 
 
 class _ParolaNoua(ConfigPassword):
-	"""Parola scrisa acum pe televizor: stelute cat are; goala, randul ramane gol (ConfigText arata atunci un spatiu,
-	pe care ConfigPassword l-ar face "*", ca si cum ar fi scrisa)."""
+	"""Parola scrisa acum pe televizor: se vede in clar (ConfigPassword cu `scrisa`); goala, randul ramane gol (un rand
+	gol lasa parola salvata cum e, deci "nepusă" ar spune altceva)."""
 
 	def getMulti(self, selected):
 		if not self.text:
@@ -604,9 +613,6 @@ class IptvDateAcces(Screen, ConfigListScreen):
 				el = _ParolaNoua(default="", fixed_size=False)
 			else:
 				el = ConfigText(default=self.vechi.get(cheie) or "", fixed_size=False)
-				if cheie in ("adresa", "user_agent", "referer"):
-					# adresa unui playlist poate avea parola in ea: tastatura ei e inchisa pentru Asistenta, ca a parolei
-					el.hds_asistenta_secret = True
 			self.campuri[cheie] = el
 			lista.append(getConfigListEntry(_(nume), el))
 		self.list = lista
@@ -631,9 +637,12 @@ class IptvDateAcces(Screen, ConfigListScreen):
 			if text is None:
 				return
 			el.value = text if e_parola else text.strip()
+			if e_parola:
+				el.scrisa = True
 			self["config"].invalidate(rand)
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
-		self.session.openWithCallback(gata, VirtualKeyBoard, title=x[0], text="" if e_parola else el.value)
+		self.session.openWithCallback(gata, VirtualKeyBoard, title=x[0], text="" if e_parola else el.value,
+			hdsSecret=e_parola)
 
 	def galben(self):
 		if self.fel != "m3u" or self.astept:

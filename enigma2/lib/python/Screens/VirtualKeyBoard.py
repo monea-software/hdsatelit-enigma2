@@ -117,6 +117,8 @@ class VirtualKeyBoard(Screen):
 		# HDSatelit: pluginurile altor imagini dau si maxSize, visible_width, type, currPos, allMarked, style, windowTitle; aici nu schimba
 		# nimic (tastatura e aceeasi), dar nu mai opresc deschiderea. windowTitle, cand vine, e titlul ferestrei.
 		Screen.__init__(self, session)
+		from Components.HdsAsistentaControl import campSecret
+		self.hdsCampSecret = bool(optiuni.get("hdsSecret") or campSecret(eticheta=title))
 		titlu = optiuni.get("windowTitle")
 		if titlu:
 			self.onLayoutFinish.append(lambda: self.setTitle(titlu))
@@ -134,6 +136,9 @@ class VirtualKeyBoard(Screen):
 		self.locSkin = None
 		
 		self["country"] = StaticText("")
+		self["key_green"] = StaticText(_("Confirm"))
+		self["key_yellow"] = StaticText("")
+		self["language"] = Label("")
 		self["header"] = Label(title)
 		# HDSatelit: campul pe un rand; cand textul nu mai incape, se vede coada lui, ce scrii acum
 		# (Components/HdsCampText.py)
@@ -232,9 +237,13 @@ class VirtualKeyBoard(Screen):
 	def switchLang(self):
 		self.lang = self.nextLang
 		self.setLang()
-		self.buildVirtualKeyBoard()
+		self.buildVirtualKeyBoard(self.selectedKey)
 
 	def setLang(self):
+		# Codurile scurte si cele cu cratima folosesc aceeasi asezare ca limba completa.
+		cod = (self.lang or "en_EN").replace('-', '_').split('_', 1)[0].lower()
+		self.lang = {"ar": "ar_AE", "de": "de_DE", "es": "es_ES", "fi": "fi_FI", "sv": "sv_SE",
+			"sk": "sk_SK", "cs": "cs_CZ", "uk": "uk_UA", "ru": "ru_RU", "ro": "ro_RO"}.get(cod, "en_EN")
 		if self.lang.replace('-', '_').split('_', 1)[0].lower() == 'ar':
 			self.lang = 'ar_AE'
 			self.keys_list = [
@@ -401,12 +410,26 @@ class VirtualKeyBoard(Screen):
 			self.lang = 'en_EN'
 			self.nextLang = 'de_DE'		
 		self["country"].setText(self.lang)
+		nume = {"en_EN": _("English"), "de_DE": _("German"), "es_ES": _("Spanish"), "fi_FI": _("Finnish"),
+			"sv_SE": _("Swedish"), "sk_SK": _("Slovakian"), "cs_CZ": _("Czech"), "uk_UA": _("Ukrainian"),
+			"ru_RU": _("Russian"), "ro_RO": _("Romanian"), "ar_AE": _("Arabic")}[self.lang]
+		self["language"].setText(nume)
+		self["key_yellow"].setText(nume)
 		if hasattr(self["text"], "setRtl"):
 			self["text"].setRtl(self.lang == 'ar_AE')
 		self.max_key=47+len(self.keys_list[4])
 
-	def buildVirtualKeyBoard(self, selectedKey=0):
+	def buildVirtualKeyBoard(self, selectedKey=None):
 		list = []
+		if selectedKey is None:
+			selectedKey = self.selectedKey
+		self.k_list = self.shiftkeys_list if self.shiftMode else self.keys_list
+		# Limba noua poate avea mai putine taste pe rand. Selectia desenata si cea folosita la OK raman identice.
+		rand, coloana = divmod(max(0, selectedKey), 12)
+		rand = min(rand, len(self.k_list) - 1)
+		self.selectedKey = rand * 12 + min(coloana, len(self.k_list[rand]) - 1)
+		selectedKey = self.selectedKey
+		self.max_key = (len(self.k_list) - 1) * 12 + len(self.k_list[-1]) - 1
 		
 		if self.shiftMode:
 			self.k_list = self.shiftkeys_list
@@ -452,6 +475,8 @@ class VirtualKeyBoard(Screen):
 				selectedKey -= 12
 
 		if text is None:
+			return
+		if text not in ("EXIT", "BACKSPACE", "CLEAR", "SHIFT", "OK") and self._secretOprit():
 			return
 
 		if text == "EXIT":
@@ -564,8 +589,14 @@ class VirtualKeyBoard(Screen):
 		# caracterele vin numai de la o tastatura adevarata (consola): tastele de pe ecran se ascund si se scrie orice
 		# caracter, nu numai cele care sunt pe tastele de pe ecran
 		char = chr(getPrevAsciiCode())
+		if char >= " " and self._secretOprit():
+			return
 		if not self.modTastatura:
 			self.punModTastatura(True)
 		if char >= " ":
 			self.text = self["text"].getText() + char
 			self["text"].setText(self.text)
+
+	def _secretOprit(self):
+		from Components.HdsAsistentaControl import cereOprirePentruSecret
+		return self.hdsCampSecret and cereOprirePentruSecret(self.session)

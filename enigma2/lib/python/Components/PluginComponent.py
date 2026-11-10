@@ -10,6 +10,15 @@ from Tools.Import import my_import
 from Plugins.Plugin import PluginDescriptor
 import keymapparser
 
+# HDSatelit: un modul .so (sau o biblioteca prin ctypes) legat de alt Python nu se mai incarca in enigma2; importul lui
+# da un ImportError (Components/HdsAltPython.py), nu o cadere mai tarziu in libpython-ul celuilalt Python
+try:
+	from Components import HdsAltPython
+	HdsAltPython.pazeste()
+except Exception as _exc:
+	HdsAltPython = None
+	print("[PluginComponent] the guard for modules of another Python is not set:", _exc)
+
 
 def _pluginPermis(categorie, nume):
 	"""HDSatelit: in the safe mode started by enigma2.sh (HDS_MOD_SIGUR=1, Components/HdsModSigur.py) only the plugins
@@ -97,6 +106,29 @@ def _faraDescriptoriGoi(plugins, nume):
 	return bune
 
 
+# versiunea celuilalt Python din mesajul pastrat in erori (Components/HdsAltPython.AltPython)
+_ALT_PYTHON = re_compile(r"built for Python (\d+\.\d+), this image has Python (\d+\.\d+)")
+
+
+def _altPython(exc):
+	"""Exceptia cu modulul legat de alt Python (ea sau una din lantul ei), cand importul pluginului a cazut pe el;
+	altfel None."""
+	try:
+		return HdsAltPython.exceptieDinLant(exc) if HdsAltPython is not None else None
+	except Exception:
+		return None
+
+
+def _raporteazaAltPython(categorie, nume, exc):
+	"""Raportul pluginurilor externe (Components/HdsPluginExtern), fara mesaj pe ecran: lista pluginurilor care nu s-au
+	incarcat il arata deja. Nu arunca."""
+	try:
+		from Components import HdsPluginExtern
+		HdsPluginExtern.raporteazaRefuz(categorie, nume, exc)
+	except Exception as e:
+		print("[PluginComponent] report for %s/%s: %r" % (categorie, nume, e))
+
+
 def _verificaDescriptor(p):
 	"""ce a intors Plugins(): descriptorul trebuie sa se poata pune in liste (getPlugins le sorteaza dupa weight)"""
 	if not isinstance(p, PluginDescriptor):
@@ -149,7 +181,7 @@ class PluginComponent:
 		self.installedPluginList = [ ]
 		# de ce nu se poate deschide un plugin. Spre deosebire de warnings (coada ferestrelor de avertisment), acestea raman
 		# dupa ce fereastra s-a inchis: erori, eroriTaste si amanate se refac la fiecare readPluginList
-		self.erori = {}             # 'categorie/nume' -> {nume, path, fel, mesaj}; fel: import plugins fara_plugins descriptor mod_sigur
+		self.erori = {}             # 'categorie/nume' -> {nume, path, fel, mesaj}; fel: import plugins fara_plugins descriptor mod_sigur alt_python
 		self.eroriTaste = {}        # calea pluginului -> keymap.xml stricat; pluginul ramane in liste
 		self.eroriDeschidere = {}   # calea pluginului -> ultima deschidere cazuta, pana la urmatoarea reusita (Plugins/Plugin.py)
 		self.amanate = {}           # calea pluginului -> descriptorul care asteapta repornirea interfetei
@@ -283,6 +315,13 @@ class PluginComponent:
 							print("Plugin ", c + "/" + pluginname, "failed to load:", exc)
 							print_exc(file=stdout)
 							print("skipping plugin.")
+							alt = _altPython(exc)
+							if alt is not None:
+								# un modul al pluginului e facut pentru alt Python: nu s-a incarcat, interfata merge mai departe
+								self._puneEroare(c, pluginname, path, "alt_python", _textEroare(alt))
+								self.warnings.append((c + "/" + pluginname, self._motiv(self.erori[c + "/" + pluginname])))
+								_raporteazaAltPython(c, pluginname, alt)
+								continue
 							self.warnings.append( (c + "/" + pluginname, str(exc)) )
 							self._puneEroare(c, pluginname, path, etapa, _textEroare(exc), _modulLipsa(exc))
 							_raporteazaIncarcare(c, pluginname, exc, etapa)
@@ -374,6 +413,10 @@ class PluginComponent:
 					return text
 			except Exception as exc:
 				print("[PluginComponent] starea modulului lipsa:", exc)
+		if fel == "alt_python":
+			m = _ALT_PYTHON.search(eroare["mesaj"] or "")
+			if m:
+				return _("Nu s-a încărcat: %s") % (_("făcut pentru Python %s, imaginea are Python %s") % m.groups())
 		return _("Nu s-a încărcat: %s") % motivOm(eroare["mesaj"])
 
 	def indisponibile(self):

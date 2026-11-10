@@ -137,28 +137,42 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			sed 's/,,*/,/g;s/^,//;s/,$//' | cut -c1-80)
 		hds_pp=$hds_p/proc/partitions
 		[ -r "$hds_pp" ] || hds_pp=/dev/null
+		# modelul placii (cheia model_id, ca HdsPazaModel.modeleDinTexte): numele de modele din arborele dispozitivului si
+		# din nodurile driverului, citite ca in HdsPazaModel.amprenta (128 de octeti din fiecare fisier al arborelui, 64
+		# din model, gbmodel si vumodel, 4096 din boxtype); orice semn care nu e litera sau cifra desparte cuvintele.
+		# Fisierele arborelui sunt aceleasi ca la hds_dt si se citesc mai mult decat cele 80 de semne ale lui, deci un
+		# model numit in hds_dt e si in model_id (fara model_id= in reguli valoarea nu ramane goala: E108, nu E208).
+		hds_mi=$({ for hds_f in bolt/board model compatible; do head -c 128 "$hds_p/proc/device-tree/$hds_f"; echo; done
+			for hds_f in model gbmodel vumodel; do head -c 64 "$hds_p/proc/stb/info/$hds_f"; echo; done
+			head -c 4096 "$hds_p/proc/stb/info/boxtype"; } 2>/dev/null | tr -c 'A-Za-z0-9' ' ')
 		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" -v kpo="$hds_kpo" -v rsd="$hds_rsd" \
 			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v brp="$hds_rp" -v bkp="$hds_kp" \
-			-v slotroot="$hds_root" -v slotkernel="$hds_kernel" -v slotsub="$hds_sub" -v cl="$hds_cl" -v dt="$hds_dt" '
-			function modeldt(s) { s = tolower(s); sub(/^vu/, "", s); return s }
-			# as HdsPazaModel.modelDtDiferit: only a known model name in the device tree, other than the one of the rules
-			function dtgresit(   n, j, x, acceptate, cunoscute, citite) {
-				acceptate[modeldt(R["machinebuild"])] = 1
-				for (x in TT) acceptate[modeldt(x)] = 1
-				n = split("solo4k uno4k uno4kse ultimo4k zero4k duo4k duo4kse " \
-					"sf8008 sf8008m gbquad4k gbue4k gbx34k gbtrio4k gbmv200 " \
-					"viper4k viper4kv20 viper4kv30 viper4kv40 protek4k ustym4kpro", cunoscute, " ")
-				for (j = 1; j <= n; j++) MODELE[cunoscute[j]] = 1
-				n = split(tolower(dt), citite, /[^a-z0-9]+/)
-				for (j = 1; j <= n; j++) {
-					x = modeldt(citite[j])
-					if ((x in MODELE) && (x in acceptate)) return 0
-				}
-				for (j = 1; j <= n; j++) {
-					x = modeldt(citite[j])
-					if ((x in MODELE) && !(x in acceptate)) return 1
-				}
-				return 0
+			-v slotroot="$hds_root" -v slotkernel="$hds_kernel" -v slotsub="$hds_sub" -v cl="$hds_cl" -v dt="$hds_dt" \
+			-v mi="$hds_mi" '
+			# modelele cunoscute, in ordine alfabetica (ca HdsPazaModel.MODELE_CUNOSCUTE)
+			BEGIN {
+				NM = split("duo4k duo4kse gbmv200 gbquad4k gbquad4kpro gbtrio4k gbue4k gbx34k protek4k sf8008 sf8008m " \
+					"solo4k ultimo4k uno4k uno4kse ustym4kpro viper4k viper4kv20 viper4kv30 viper4kv40 zero4k", LM, " ")
+				for (j = 1; j <= NM; j++) MODELE[LM[j]] = 1
+			}
+			# numele scurt al unui model: litere mici, fara "vu" in fata, quad4kpro = gbquad4kpro (HdsPazaModel.numeScurt)
+			function scurt(s) { s = tolower(s); sub(/^vu/, "", s); if (s == "quad4kpro") s = "gbquad4kpro"; return s }
+			# modelele cunoscute numite intr-un text, sortate, unite cu virgula (HdsPazaModel.modeleDinTexte)
+			function modele(s,   n, j, x, X, G, r) {
+				n = split(tolower(s), X, /[^a-z0-9]+/)
+				for (j = 1; j <= n; j++) { x = scurt(X[j]); if (x in MODELE) G[x] = 1 }
+				r = ""
+				for (j = 1; j <= NM; j++) if (LM[j] in G) r = r (r == "" ? "" : ",") LM[j]
+				return r
+			}
+			# regulile fara model_id= (HdsPazaModel.modelDtDiferit): opreste numai un model cunoscut numit de arborele
+			# dispozitivului, altul decat cele din reguli (boxtype=, machinebuild=), fara niciunul din ele
+			function dtgresit(   n, j, x, X, acceptate) {
+				acceptate[scurt(R["machinebuild"])] = 1
+				for (x in TT) acceptate[scurt(x)] = 1
+				n = split(modele(dt), X, ",")
+				for (j = 1; j <= n; j++) if (X[j] in acceptate) return 0
+				return n > 0
 			}
 			# a list of keys without the keys of the slot that runs (partitii, kernel)
 			function fara(s,   n, j, X, r) {
@@ -226,6 +240,10 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				if (nb) bune = 0
 				if (R["familie"] != "" && !fam) bune = 0
 				if (R["stocare"] != "" && R["stocare"] != "nand") bune = 0
+				# model_id= poate fi numai una din placile cu pagina (HdsPazaModel.MODELE_PLACI, reguliValide)
+				if ("model_id" in R && (R["model_id"] !~ /^[a-z0-9]+$/ ||
+					index(" gbquad4kpro duo4kse duo4k uno4kse solo4k ", " " R["model_id"] " ") == 0)) bune = 0
+				ids = modele(mi)
 				ne = (fam && R["partitions"] == "-") ? 0 : split(R["partitions"], E, ",")
 				for (j = 1; j <= ne; j++) {
 					c = index(E[j], ":")
@@ -274,7 +292,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					lt = substr(et, RSTART + 9, RLENGTH - 9); gsub(/[\047"]/, "", lt)
 				}
 				if (lt != "" && !(lt in TT)) m = m " eticheta"
-				if (bune && dtgresit()) m = m " dt"
+				# modelul placii (HdsPazaModel.modelDiferit): cu model_id= in reguli, modelul cerut trebuie sa fie printre cele
+				# citite din toate sursele (niciunul citit: model_id gol, E208); fara el hotaraste numai arborele (dtgresit)
+				if (bune && (("model_id" in R) ? !index("," ids ",", "," R["model_id"] ",") : dtgresit())) m = m " model_id"
 				# the internal memory: the same limits as HdsPazaModel.limiteEmmc (EMMC_IMPLICIT for viper4kv20)
 				ek = ("mmcblk0" in S) ? S["mmcblk0"] : ""
 				emi = (R["emmc_min_kib"] ~ /^[0-9]+$/) ? R["emmc_min_kib"] : ""
@@ -307,8 +327,6 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					sr = (slotroot ~ dev) ? substr(slotroot, 6) : ""
 					print "slot=" ((sk != "" && (sk in S) && sr != "" && (sr in S)) ? "citit" : "necitit")
 				}
-				# the device tree only when it names another receiver (the code E108 shows it)
-				if (index(m " ", " dt ")) print "dt=" dt
 				if (mb) {
 					k = (sk != "") ? sk : slotkernel; r = (sr != "") ? sr : slotroot
 					kt = (k == "") ? (slotroot == "" ? "" : "?, " r) : \
@@ -321,6 +339,8 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				print "boxtype=" bt
 				print "eticheta=" et
 				print "emmc=" ek
+				# modelul placii: cand s-a citit unul sau cand regulile il cer (gol = necitit, E208)
+				if (ids != "" || "model_id" in R) print "model_id=" ids
 				# only broken rules add a line (the startup code E290); with good rules the file stays as it was
 				if (!bune) print "reguli=stricate"
 			}' "$HDS_PAZA_REGULI" "$hds_pp" > "$HDS_PAZA_STARE.nou" 2>/dev/null
@@ -737,7 +757,98 @@ fi
 # the cause of a crash, written by bsodFatal (main/bsod.cpp) and read after the end below: one from an earlier run (the
 # script killed before it read it) must not explain this one
 HDS_CADERE_MOTIV=${HDS_CADERE_MOTIV:-/tmp/hds-cadere.motiv}
-rm -f "$HDS_CADERE_MOTIV" "$HDS_CADERE_MOTIV.nou"
+HDS_CADERE_PYTHON=${HDS_CADERE_PYTHON:-/tmp/hds-cadere.python}
+HDS_PAZNIC_OPRIRE=${HDS_PAZNIC_OPRIRE:-/tmp/hds-paznic.oprire}
+
+# O proba pe oprire, publicata prin rename numai dupa ce toate scrierile au reusit.
+# Colectorul raportului (tools/hds-raport.sh) elimina numai arhive deja raportate. Dosarul tine cel mult
+# HDS_CAUZE_MAXIM (30) arhive, cele mai noi: pe un receptor fara rapoarte nu creste fara sfarsit.
+hds_arhiveaza_cauza() {
+	hds_ca_dosar=${HDS_CAUZE_DOSAR:-${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}}
+	[ -n "$HDS_CAUZE_DOSAR" ] || hds_ca_dosar=${hds_ca_dosar%/*}/hds-cauze
+	mkdir -p "$hds_ca_dosar" 2>/dev/null || return 1
+	chmod 700 "$hds_ca_dosar" 2>/dev/null
+	hds_ca_f=$hds_ca_dosar/$(date +%s)-$$-$1.txt
+	(
+		umask 077
+		{
+			printf 'validare=%s\nparinte=%s\ncod=%s\nuptime=%s\ncauza=%s\npaznic=%s\n' \
+				"$1" "$$" "${ret:-necunoscut}" "${acum:-necunoscut}" "${cauza_rand:-$cauza}" "${paznic_validare:-absent}"
+			printf 'boot=%s\n' "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
+			for hds_ca_m in "$HDS_CADERE_MOTIV" "$HDS_PAZNIC_OPRIRE"; do
+				[ -f "$hds_ca_m" ] || continue
+				echo "-- ${hds_ca_m##*/}"
+				cat "$hds_ca_m" || exit 1
+			done
+			# Marcajul complet Python apartine acestei lansari; o eroare tratata anterior nu explica un SIGKILL.
+			if [ -f "$HDS_CADERE_PYTHON" ] && { [ "$1" = dinaintea-pornirii ] ||
+				{ { [ "$motiv_fel" = python ] || [ "${ret:-0}" -eq 5 ]; } && grep -qx "parinte=$$" "$HDS_CADERE_PYTHON"; }; }; then
+				echo '-- exceptia Python completa'
+				cat "$HDS_CADERE_PYTHON" || exit 1
+			else
+				hds_ca_j=$(sed -n 's/^jurnal=//p' "$HDS_CADERE_MOTIV" 2>/dev/null | head -n 1)
+				case ${hds_ca_j##*/} in
+					enigma2_crash_*.log)
+						if [ -f "$hds_ca_j" ] && [ ! -L "$hds_ca_j" ]; then
+							awk '/<hdsatelitimage|<enigma2>/ { xml = 1 }
+								/<crashdate>|<rev>|<version>/ && !b { print }
+								!b && /<enigma2crashlog>/ { b = 1; sub(/^.*<enigma2crashlog>/, "") }
+								b {
+									if (!cdata) {
+										if ((i = index($0, "<![CDATA[")) != 0) { $0 = substr($0, i + 9); cdata = 1 }
+										else { if (/<\/enigma2crashlog>/) exit; if ($0 !~ /^[[:space:]]*$/) print; next }
+									}
+									linie = $0; text = ""
+									while ((i = index(linie, "]]>")) != 0) {
+										text = text substr(linie, 1, i - 1); rest = substr(linie, i + 3)
+										if (substr(rest, 1, 9) == "<![CDATA[") linie = substr(rest, 10)
+										else { print text; exit }
+									}
+									print text linie; next }
+								!xml { print }' "$hds_ca_j" || exit 1
+						fi ;;
+				esac
+			fi
+		} > "$hds_ca_f.nou" && mv -f "$hds_ca_f.nou" "$hds_ca_f"
+	) || return 1
+	# numele incep cu ora in secunde, deci ordinea numelor e ordinea in timp; pleaca cele mai vechi peste limita
+	ls "$hds_ca_dosar"/*.txt 2>/dev/null | sort -r | sed -n "$((${HDS_CAUZE_MAXIM:-30} + 1)),\$p" |
+		while IFS= read -r hds_ca_v; do rm -f "$hds_ca_v" "$hds_ca_v.raportat"; done
+	return 0
+}
+
+# Citim tot inelul, dar un OOM dinaintea acestei lansari nu explica oprirea ei.
+hds_oom_acum() {
+	dmesg 2>/dev/null | awk -v inceput="${hds_e2_up:-0}" '
+		/Killed process [0-9]* \(enigma2\)/ {
+			if (match($0, /^\[[ ]*[0-9.]+\]/)) {
+				t = substr($0, RSTART, RLENGTH); gsub(/[^0-9.]/, "", t)
+				if (t + 0 < inceput + 0) next
+			}
+			gasit = 1
+		}
+		END { exit !gasit }'
+}
+
+# La pornire, marcajele ramase de la lansarea dinainte. Motivul caderii (bsodFatal) sau semnul paznicului arata o
+# lansare oprita inainte ca acest script sa le citeasca: se arhiveaza (cu exceptia Python, daca e), fara sa explice
+# lansarea de acum. Marcajul Python singur e o exceptie tiparita care nu a oprit interfata (PyErr_Print din C++ cheama
+# sys.excepthook si la erorile tratate, de pilda o lista care nu-si poate scrie un rand): nu e o cadere, deci se sterge
+# fara arhiva, altfel hds-cauze ar primi o arhiva la fiecare repornire a interfetei.
+hds_marcaje_ramase() {
+	if [ -f "$HDS_CADERE_MOTIV" ] || [ -f "$HDS_PAZNIC_OPRIRE" ]; then
+		paznic_validare=nevalid-dinaintea-pornirii
+		if hds_arhiveaza_cauza dinaintea-pornirii; then
+			rm -f "$HDS_CADERE_MOTIV" "$HDS_CADERE_PYTHON" "$HDS_PAZNIC_OPRIRE"
+		fi
+	else
+		rm -f "$HDS_CADERE_PYTHON"
+	fi
+	rm -f "$HDS_CADERE_MOTIV.nou" "$HDS_CADERE_PYTHON.nou"
+}
+# hds-arhiveaza-cauza-end
+
+hds_marcaje_ramase
 
 # libjpeg: ldconfig (run by package install scripts, e.g. an update through opkg) may point libjpeg.so.62 at the
 # vendor libjpeg9b.so (same SONAME, other version, not compatible with libjpeg-turbo, which WebKit and enigma2 are
@@ -797,6 +908,7 @@ if [ "$HDS_DEPANARE" = 1 ]; then
 	case $hds_dep_m in ''|*[!0-9]*) hds_dep_m=0 ;; esac
 	[ "$hds_dep_m" -lt 8388608 ] && hds_dep=1
 fi
+hds_e2_up=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 if [ -n "$hds_dep" ]; then
 	mkdir -p /home/root/logs
 	ENIGMA_DEBUG_LVL=4 ENIGMA_DEBUG_TIME=2 LD_PRELOAD=$LIBS @bindir@/enigma2 >> /home/root/logs/enigma2-debug.log 2>&1
@@ -897,7 +1009,10 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	esac
 	# the end asked for by hds-watchdog (see above)
 	paznic=""
+	# validarea semnului paznicului, pentru arhiva cauzei (hds_arhiveaza_cauza): absent, nevalid sau valid
+	paznic_validare=absent
 	if [ -f "$HDS_PAZNIC_OPRIRE" ]; then
+		paznic_validare=nevalid
 		if [ "$ret" -eq 143 ] || { [ "$ret" -eq 137 ] && grep -q '^sigkill=' "$HDS_PAZNIC_OPRIRE" 2>/dev/null; }; then
 			# digits only, no leading zero (a number like 08 is octal in $((...)) and an invalid one ends the shell)
 			paznic_up=$(sed -n 's/^uptime=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-12 |
@@ -905,10 +1020,10 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 			if grep -qx "parinte=$$" "$HDS_PAZNIC_OPRIRE" 2>/dev/null && [ -n "$paznic_up" ] &&
 				[ "$paznic_up" -le "$acum" ] && [ $((acum - paznic_up)) -le 300 ]; then
 				paznic=1
+				paznic_validare=valid
 				tde_lucrat=" paznic"
 			fi
 		fi
-		rm -f "$HDS_PAZNIC_OPRIRE"
 	fi
 	# the cause (see above): the file of bsodFatal, read once and removed
 	motiv_fel=""; motiv_semnal=""; motiv_pc=""; motiv_lr=""; motiv_tde=""; motiv_jurnal=""
@@ -919,7 +1034,6 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		motiv_lr=$(sed -n 's/^lr=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'A-Za-z0-9._+/-' | cut -c1-160)
 		motiv_tde=$(sed -n 's/^tde=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9')
 		motiv_jurnal=$(sed -n 's/^jurnal=//p' "$HDS_CADERE_MOTIV" | head -n 1)
-		rm -f "$HDS_CADERE_MOTIV"
 	fi
 	dovada=""
 	cauza_rand=""
@@ -927,7 +1041,14 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	if [ -n "$paznic" ]; then
 		cauza="paznic"
 	elif [ "$motiv_fel" = "semnal" ]; then
-		cauza="c++: semnalul ${motiv_semnal:-?}, in ${motiv_pc##*/}"
+		# the library keeps its folder when it is not one of the system folders (a plugin, a stick, /tmp): the report
+		# then says where a foreign library came from (report 919342: libpython3.7m in an image with Python 3.14)
+		case "$motiv_pc" in
+			/lib/*/*|/usr/lib/*/*|/usr/bin/*/*|/bin/*/*|/sbin/*/*|/usr/sbin/*/*) motiv_loc="$motiv_pc" ;;
+			/lib/*|/usr/lib/*|/usr/bin/*|/bin/*|/sbin/*|/usr/sbin/*|"") motiv_loc="${motiv_pc##*/}" ;;
+			*) motiv_loc="$motiv_pc" ;;
+		esac
+		cauza="c++: semnalul ${motiv_semnal:-?}, in $motiv_loc"
 		[ -n "$motiv_lr" ] && cauza="$cauza (apelat din ${motiv_lr##*/})"
 		case "$motiv_pc $motiv_lr" in
 			*hiaccel*) dovada=1 ;;
@@ -935,22 +1056,26 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		[ "$motiv_tde" = 1 ] && dovada=1 && cauza="$cauza, in timpul unui apel al placii 2D"
 	elif [ "$motiv_fel" = "python" ] || [ "$ret" -eq 5 ]; then
 		cauza="python"
-		# the place and the error of the last traceback of the crash log (ASCII, short)
-		if [ -n "$motiv_jurnal" ] && [ -f "$motiv_jurnal" ]; then
+		# The last traceback: one UTF-8 line with the file, line, type and message.
+		motiv_proba=$motiv_jurnal
+		if [ -f "$HDS_CADERE_PYTHON" ] && grep -qx "parinte=$$" "$HDS_CADERE_PYTHON"; then
+			motiv_proba=$HDS_CADERE_PYTHON
+		fi
+		if [ -n "$motiv_proba" ] && [ -f "$motiv_proba" ]; then
 			loc=$(awk '/Traceback \(most recent call last\)/ { l = ""; e = "" }
 				/File "[^"]*", line [0-9]+/ { l = $0; sub(/.*File "/, "", l); sub(/.*\/python\//, "", l);
 					sub(/", line /, ":", l); sub(/,.*/, "", l); e = ""; next }
-				l != "" && e == "" && /^[ <0-9.>]*[A-Za-z_][A-Za-z0-9_.]*(Error|Exception|Exit|Interrupt|Warning)/ {
+				l != "" && /^[ <0-9.>]*[A-Za-z_][A-Za-z0-9_.]*:/ {
 					e = $0; sub(/^[ <0-9.>]*/, "", e) }
-				END { if (l != "") print l (e != "" ? " " e : "") }' "$motiv_jurnal" 2>/dev/null |
-				tr -cd ' -~' | cut -c1-200)
+				END { if (l != "") print l (e != "" ? " " e : "") }' "$motiv_proba" 2>/dev/null |
+				tr -d '\000-\010\013-\037\177')
 			[ -n "$loc" ] && cauza="python: $loc"
 			# the plugins the last traceback went through; without the list of the image nothing can be said
 			if [ -f "$HDS_OPKG_INFO/enigma2-hdsatelit.list" ]; then
 				for hds_pl in $(awk '/Traceback \(most recent call last\)/ { s = "" }
 					/File "[^"]*\/Plugins\/(Extensions|SystemPlugins)\/[^\/"]+\// { p = $0; sub(/.*\/Plugins\//, "", p);
 						split(p, q, "/"); s = s " " q[1] "/" q[2] }
-					END { print s }' "$motiv_jurnal" 2>/dev/null | tr -cd 'A-Za-z0-9_/ -'); do
+					END { print s }' "$motiv_proba" 2>/dev/null | tr -cd 'A-Za-z0-9_/ -'); do
 					grep -qsF "/Plugins/$hds_pl/" "$HDS_OPKG_INFO/enigma2-hdsatelit.list" "$HDS_OPKG_INFO/hdsatelit-skin.list" ||
 						plugin_extern=1
 				done
@@ -960,7 +1085,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		cauza="eroare"
 	elif [ "$ret" -eq 143 ]; then
 		cauza="oprire"
-	elif dmesg 2>/dev/null | tail -n 100 | grep -q 'Killed process [0-9]* (enigma2)'; then
+	elif hds_oom_acum; then
 		cauza="memorie"
 	elif [ "$ret" -eq 137 ]; then
 		# Un semn vechi sau nepotrivit nu dovedeste interventia paznicului.
@@ -979,6 +1104,10 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		} 2>/dev/null > "$HDS_IESIRE.nou" && mv -f "$HDS_IESIRE.nou" "$HDS_IESIRE" 2>/dev/null
 	fi
 	# HDS_IESIRE_END
+	# Consumam marcajele numai dupa arhivarea reusita, inclusiv motivul si stiva integrala.
+	if hds_arhiveaza_cauza oprire; then
+		rm -f "$HDS_CADERE_MOTIV" "$HDS_CADERE_PYTHON" "$HDS_PAZNIC_OPRIRE"
+	fi
 	# the word in the count: "placa" only for a C++ crash or an unexplained one while the TDE worked (the rule of the
 	# repeated ends); "paznic" is set above; the other causes have their own word and are not counted for the TDE
 	case "$cauza" in

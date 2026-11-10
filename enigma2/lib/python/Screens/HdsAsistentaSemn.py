@@ -14,8 +14,8 @@
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
 #     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
 #   - ctxReceptor(session): settings de acum pentru copia facuta cand intra echipa („Pune înapoi cum era”, setari_acum,
-#     pe firul enigma2) si uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic,
-#     refuzata pe modulele de acces si cat se editeaza un secret; celelalte secrete se deseneaza cu stelute.
+#     pe firul enigma2) si uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic, aceeasi
+#     cu ce e pe televizor (fara ecrane ascunse si fara steluțe).
 #     Punerea unui mesaj si a concluziilor, si controlul (nivelul B): textul ecranului (op
 #     "ecran"), tastele telecomenzii (op "taste", una pe tic de eTimer) si textul intr-un camp (op "text"), toate pe firul
 #     enigma2 (Control.PeFir: reactor.callFromThread, iar ceasul controlerului goleste coada ca plasa); cat ruleaza un
@@ -256,7 +256,7 @@ def _trezeste(functie):
 	reactor.callFromThread(functie)
 
 
-# lucrul pe firul enigma2 cerut de firul sesiunii (textul ecranului, tastele, textul, verificarea ecranului privat)
+# lucrul pe firul enigma2 cerut de firul sesiunii (textul ecranului, tastele, textul)
 _peFir = Control.PeFir(trezeste=_trezeste)
 # cat asteapta firul sesiunii un raspuns de pe firul enigma2
 TERMEN_FIR_S = 15
@@ -274,15 +274,10 @@ def _stivaAcum():
 	return Control.stiva(s) if s is not None else []
 
 
-def _privatAcum():
-	"""(privat, clasa) pentru stiva de acum; pe firul enigma2."""
-	return Control.privat(_stivaAcum(), Control._sshDeschis())
-
-
 def _ecranText():
 	"""Textul ecranului (op "ecran"), citit pe firul enigma2."""
 	def lucru(gata):
-		gata(Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis()))
+		gata(Control.textEcran(_stivaAcum(), Control.modAscii()))
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
@@ -302,7 +297,7 @@ def _taste(lista):
 				ceas.stop()
 				stare["terminat"] = True
 				_vii.discard(ceas)
-				ecran = Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis())
+				ecran = Control.textEcran(_stivaAcum(), Control.modAscii())
 				cap = "taste trimise: %s" % (" ".join(sir.trimise) or "(niciuna)")
 				if sir.oprit:
 					cap += "\n" + sir.oprit
@@ -334,62 +329,36 @@ def _text(text):
 		ecrane = _stivaAcum()
 		mouse = HdsMouseEcran.MouseEcran(lambda: s.current_dialog if s is not None else None,
 			apasa=lambda cod: Control.apasaTasta(cod))
-		cod, mesaj = Control.scrieText(ecrane, text, Control.modAscii(), mouse.text, Control._sshDeschis())
+		cod, mesaj = Control.scrieText(ecrane, text, Control.modAscii(), mouse.text)
 		if cod == 0:
-			mesaj += "\n\n" + Control.textEcran(_stivaAcum(), Control.modAscii(), Control._sshDeschis())
+			mesaj += "\n\n" + Control.textEcran(_stivaAcum(), Control.modAscii())
 		gata((cod, mesaj))
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
 def _captura():
-	"""Video si OSD, dupa redesenarea secretelor; verificarea si grab raman pe acelasi fir cu ecranele."""
+	"""Video si OSD, cu datele conturilor scoase numai din copia pentru echipa, pe firul enigma2."""
 	def lucru(gata):
-		from Plugins.Extensions.HdsWebControl import captura_sigura as CS
-		epoca = CS.epocaCapturii()
-		ecrane = _stivaAcum()
-		motiv = Control.motivRefuzCaptura(ecrane, Control.modAscii())
-		if epoca is None or motiv or _session() is None:
-			gata(motiv or CS.mesajRefuz())
+		if _session() is None:
+			gata("(captura: interfata nu e gata)")
 			return
+		rez = None
 		try:
-			restaureaza, verifica = Control.mascheazaCaptura(ecrane)
-		except Exception:
-			gata("(captura: secretele nu se pot masca)")
-			return
-		ceas = eTimer()
-		def fotografiaza():
-			ceas.stop()
-			_vii.discard(ceas)
-			rez = None
+			p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
+				stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 			try:
-				actuale = _stivaAcum()
-				motiv = Control.motivRefuzCaptura(actuale, Control.modAscii())
-				if not CS.capturaValida(epoca):
-					rez = CS.mesajRefuz()
-				elif [id(e) for e in actuale] != [id(e) for e in ecrane] or not verifica():
-					rez = "(captura: ecran schimbat, incearca din nou)"
-				elif motiv:
-					rez = motiv
-				else:
-					p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
-						stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-					try:
-						rez, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
-						if not CS.capturaValida(epoca):
-							rez = CS.mesajRefuz()
-					except subprocess.TimeoutExpired:
-						p.kill()
-						p.communicate()
-						rez = None
-			except Exception:
-				pass
-			finally:
-				restaureaza()
-				gata(rez or None)
-		ceas.callback.append(fotografiaza)
-		_vii.add(ceas)
-		# Un tic permite rendererelor sa puna stelutele in framebuffer inainte de grab.
-		ceas.start(100, True)
+				rez, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
+			except subprocess.TimeoutExpired:
+				p.kill()
+				p.communicate()
+				rez = None
+		except Exception as e:
+			_jurnal("captura: %r" % (e,))
+		if rez:
+			from enigma import getDesktop
+			s = getDesktop(0).size()
+			rez = Control.curataCapturaEchipa(rez, _stivaAcum(), (s.width(), s.height()))
+		gata(rez or None)
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 

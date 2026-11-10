@@ -29,20 +29,23 @@
 #    browserul il trimite) primeste 403, din casa si din afara; aplicatiile nu trimit aceste antete;
 # 4. DIN CASA, cu antetul Host al receptorului (IP-ul scris cu cifre, numele lui, numele lui cu terminatiile date de
 #    routere: .lan, .home, .localdomain, .home.arpa, .local; hdsatelit.local; L.gazdaProprie =
-#    asociere.gazdaPermisa cu plugin._numeAcasa, numai numele EXACT) si cu „Cere codul și în rețeaua locală” oprit
-#    (L.codAcasa, cum vine din fabrica): fara parola. Ce are aplicatia scris in Utilizator / Parola nu se verifica si nu
-#    se numara: aplicatiile care au deja ceva scris acolo merg mai departe;
-# 5. DIN AFARA CASEI (cu „Acces din afara casei” pornit), din casa cu alt nume in Host si din casa cu codul cerut si in
-#    reteaua locala (randul „Cere codul și în rețeaua locală”, ca la browsere): HTTP Basic,
+#    asociere.gazdaPermisa cu plugin._numeAcasa, numai numele EXACT): fara parola, cum vine din fabrica. Ce are
+#    aplicatia scris in Utilizator / Parola nu se verifica si nu se numara: aplicatiile care au deja ceva scris acolo
+#    (root si 1234, admin, root, pass sau orice altceva) merg mai departe. Numai cand omul si-a pus parola din reteaua
+#    de acasa si a bifat interfata web (L.codAcasa = plugin.parolaWebCeruta, Components/HdsParolaLocala.py), si din
+#    casa se cere HTTP Basic cu utilizatorul oricare si parola lui (o singura parola
+#    pentru tot, numai daca o pune el);
+# 5. DIN AFARA CASEI (cu „Acces din afara casei” pornit) si din casa cu alt nume in Host: HTTP Basic,
 #    utilizatorul oricare (aplicatiile au „root” scris), parola = parola pentru aplicatii (12 litere si cifre in grupe
 #    de 4, facuta pe receptor, separata de parola root, aratata pe televizor in ecranul interfetei web si in /setari)
-#    sau cheia pentru scripturi (?token= merge si el). Fara antet: 401 cu provocarea WWW-Authenticate (Kodi, VLC,
-#    libcurl trimit parola numai dupa ea). O cerere care arata a browser (User-Agent cu „Mozilla/”) primeste 401 fara
-#    provocare: browserul nu arata fereastra de parola, deci nici nu o tine minte ca s-o trimita apoi singur din
-#    paginile altora. Antetele Sec-Fetch-* nu ajuta aici: browserele nu le trimit spre o adresa http. Parola gresita de
-#    GRESELI_MAX ori de la aceeasi adresa: 429 pentru BLOCARE_S secunde si un mesaj pe televizor. In casa, un Host
-#    strain cere parola fiindca o pagina re-legata prin DNS (DNS rebinding) trimite Host-ul ei, iar Origin / Referer
-#    sunt tot ale ei: fara parola, numai Host-ul o deosebeste de o aplicatie;
+#    sau cheia pentru scripturi (?token= merge si el); din casa merge si parola omului, cand e pusa. Fara antet: 401
+#    cu provocarea WWW-Authenticate (Kodi, VLC, libcurl trimit parola numai dupa ea). O cerere care arata a browser
+#    (User-Agent cu „Mozilla/”) primeste 401 fara provocare: browserul nu arata fereastra de parola, deci nici nu o
+#    tine minte ca s-o trimita apoi singur din paginile altora. Antetele Sec-Fetch-* nu ajuta aici: browserele nu le
+#    trimit spre o adresa http. Parola gresita de GRESELI_MAX ori de la aceeasi adresa din afara casei: 429 pentru
+#    BLOCARE_S secunde si un mesaj pe televizor (din casa, cu numele receptorului, greselile nu se numara). In casa, un
+#    Host strain cere parola fiindca o pagina re-legata prin DNS (DNS rebinding) trimite Host-ul ei, iar Origin /
+#    Referer sunt tot ale ei: fara parola, numai Host-ul o deosebeste de o aplicatie (paza fata de internet);
 # 6. comenzile (canal, taste, volum, standby, mesaj, temporizatoare) sunt sub aceeasi bariera; oprirea completa si
 #    repornirea (powerstate 1, 2, 3) nu se fac de aici deloc.
 # Prima cerere buna a unei aplicatii noi (adresa + felul aplicatiei, dintr-un vocabular fix), cu parola sau fara, pune
@@ -162,9 +165,9 @@
 # - bariera e aceeasi (_poarta). Oprirea: REDARE_INREGISTRARI = False (/file da atunci numai sigle, ca in 0.2.4) sau
 #   setarea „Aplicații de telefon” oprita (toate rutele de aici).
 #
-# FLUXUL: listele m3u au forma obisnuita, http://<ip>:8001/<referinta>. Pe 8001 asculta azi numai serverul releelor
-# DAB+ / DVB-T2 (Hds/DabT2/server8001.py), pe 127.0.0.1: din telefon fluxul porneste dupa ce portul acela se deschide in
-# retea, cu parola (nu de aici). Parola nu se scrie in listele m3u.
+# FLUXUL: listele m3u au forma obisnuita, http://<ip>:8001/<referinta>. Pe 8001 asculta serverul de flux al imaginii
+# (Hds/DabT2/server8001.py); raspunde din fabrica si aparatelor din reteaua de acasa,
+# fara parola (setarea config.misc.hds_fluxuri_retea_acasa, pornita), niciodata din internet. In listele m3u nu e nicio parola.
 # O referinta de fisier (inregistrare) nu merge pe 8001: serverul primeste numai referinte de canal fara cale (400
 # altfel), iar enigma2 nu face o inregistrare dintr-un fisier (eServiceFactoryDVB::record, lib/service/servicedvb.cpp),
 # deci nici demux, nici decodor. Inregistrarile pleaca spre telefon prin /file (REDAREA), citite de pe disc.
@@ -677,6 +680,15 @@ def _parolaDinAntet(antet):
 	return p
 
 
+def _parolaLocalaBuna(primita):
+	"""Parola omului din reteaua de acasa (Components/HdsParolaLocala.py), cand e pusa; altfel False."""
+	try:
+		from Components import HdsParolaLocala
+		return HdsParolaLocala.verifica(primita.decode("utf-8", "replace"))
+	except Exception:
+		return False
+
+
 def _parolaBuna(primita, jeton):
 	"""Parola pentru aplicatii (fara despartitori si majuscule) sau cheia pentru scripturi, in timp constant."""
 	import hmac
@@ -847,24 +859,32 @@ def _poarta(request, L, M):
 		return None
 	user_agent = L.antet(request, b"user-agent") or ""
 	if acasa and not L.codAcasa() and L.gazdaProprie(request):
-		# din casa, cu Host-ul receptorului si fara codul cerut si in casa: fara parola; ce e scris in Utilizator / Parola nu
-		# se verifica si nu se numara
+		# din casa, cu Host-ul receptorului si fara parola pusa de om pentru interfata web: fara parola; ce e scris in
+		# Utilizator / Parola nu se verifica si nu se numara
 		_noteazaAplicatia(adresa, user_agent, M)
 		return None
 	acum = CEAS()
-	ramas = _ramasBlocat(adresa, acum)
+	# din casa, cu numele receptorului in adresa, greselile nu se numara si nu blocheaza (nicio paza intre om
+	# si receptorul lui); cu alt nume in Host (o pagina de pe internet re-legata prin DNS, din browserul omului) se
+	# numara ca inainte
+	fara_numarare = acasa and L.gazdaProprie(request)
+	ramas = 0 if fara_numarare else _ramasBlocat(adresa, acum)
 	if ramas:
 		return (429, _t("Prea multe parole greșite. Încearcă din nou peste câteva minute."),
 			{b"retry-after": str(ramas).encode("ascii")})
 	provocare = None if "mozilla/" in user_agent.lower() else {b"www-authenticate": PROVOCARE}
 	antet = L.antet(request, b"authorization")
 	if not antet:
+		if acasa and L.codAcasa():
+			return (401, _t("Scrie în aplicație utilizatorul root și parola pusă pe receptor."), provocare)
 		return (401, _t("Scrie în aplicație utilizatorul root și parola pentru aplicații de pe receptor."), provocare)
 	primita = _parolaDinAntet(antet)
-	if primita is not None and _parolaBuna(primita, L.jeton()):
+	if primita is not None and (_parolaBuna(primita, L.jeton()) or (acasa and _parolaLocalaBuna(primita))):
 		_GRESELI.pop(adresa, None)
 		_noteazaAplicatia(adresa, user_agent, M)
 		return None
+	if fara_numarare:
+		return (401, _t("Parola e greșită."), provocare)
 	if _greseala(adresa, acum):
 		nume = numeAplicatie(user_agent)
 		_jurnal("parola gresita de %d ori de la %s (%s): oprit %d s" % (GRESELI_MAX, nume, adresa, BLOCARE_S))
@@ -1194,6 +1214,7 @@ class _Furnizor(object):
 	# receptorul
 	def despre(self):
 		from Components.About import about
+		from Tools.HardwareInfo import getModelName
 		rez = {}
 		for cheie, f in (("brand", about.getBrand), ("model", about.getModel), ("imagine", about.getImageVersionString),
 				("enigma", about.getEnigmaVersionString), ("nucleu", about.getKernelVersionString),
@@ -1202,7 +1223,8 @@ class _Furnizor(object):
 				rez[cheie] = f() or ""
 			except Exception:
 				rez[cheie] = ""
-		rez["boxtype"] = _citesteMic("/proc/stb/info/boxtype")
+		model = getModelName()
+		rez["boxtype"] = "" if model == "unknown" else model
 		return rez
 
 	def retea(self):
@@ -1721,12 +1743,6 @@ def h_remotecontrol(c):
 
 	if cod is None or not 0 < cod <= 0x2FF or fel == "ascii":
 		return raspuns(False, _t("Tasta nu e cunoscută."))
-	try:
-		refuz = c.L.refuzSsh(c.r)
-	except Exception:
-		refuz = None
-	if refuz is not None:
-		return raspuns(False, curat(refuz.get("message"), MAX_MESAJ) or _t("Tasta nu a plecat."))
 	try:
 		c.L.trimiteTasta(cod, fel == "long")
 	except Exception as eroare:
@@ -3934,10 +3950,10 @@ RUTE_API = {
 
 
 class Legaturi(object):
-	"""Ce ia modulul din plugin.py: cele doua setari (activ, afara), daca se cere codul si in casa (codAcasa), adresa
+	"""Ce ia modulul din plugin.py: cele doua setari (activ, afara), daca se cere parola omului si in casa (codAcasa), adresa
 	clientului, antetele, daca Host-ul numeste receptorul (gazdaProprie, cu terminatiile routerelor), daca cererea are
 	cookie-ul interfetei (areCookie), cheia pentru scripturi, tastele,
-	pornirea canalului, refuzul cat ecranul „Acces SSH” e deschis, clasa capturii. Probele dau ale lor."""
+	pornirea canalului, clasa capturii. Probele dau ale lor."""
 
 	def __init__(self, **campuri):
 		self.__dict__.update(campuri)
@@ -4065,8 +4081,8 @@ def stareSetari(activ, afara=False):
 
 def seteaza(cheie, text, aplicatii, afara, salveaza, cod_acasa=False):
 	"""POST /api/interfata-web-seteaza?aplicatii=0|1 sau ?aplicatii_afara=0|1 (`cheie`). `aplicatii` si `afara` sunt
-	config.plugins.hdswebcontrol.aplicatii si .aplicatii_afara, `salveaza` scrie setarile pe disc. `cod_acasa`: randul
-	„Cere codul și în rețeaua locală” e pornit (atunci aplicatiile cer parola si din casa, mesajul o spune)."""
+	config.plugins.hdswebcontrol.aplicatii si .aplicatii_afara, `salveaza` scrie setarile pe disc. `cod_acasa`: omul
+	si-a pus parola din reteaua de acasa pentru interfata web (atunci aplicatiile o cer si din casa, mesajul o spune)."""
 	element = afara if cheie == "aplicatii_afara" else aplicatii
 	if text not in ("0", "1"):
 		if element is afara:
@@ -4086,9 +4102,8 @@ def seteaza(cheie, text, aplicatii, afara, salveaza, cod_acasa=False):
 	else:
 		_jurnal("aplicatiile de telefon: %s (din web)" % ("pornite" if element.value else "oprite"))
 		if element.value and cod_acasa:
-			parola(creeaza=True)
-			mesaj = _t("Salvat. Codul se cere și în casă, deci aplicațiile de telefon intră și de acasă numai cu "
-				"utilizatorul root și parola pentru aplicații (butonul Arată).")
+			mesaj = _t("Salvat. Ai pus parolă pentru interfața web, deci aplicațiile de telefon intră și de acasă cu "
+				"utilizatorul root și parola ta.")
 		elif element.value:
 			mesaj = _t("Salvat. Aplicațiile de telefon din casă intră fără parolă: în aplicație scrii numai adresa "
 				"receptorului.")

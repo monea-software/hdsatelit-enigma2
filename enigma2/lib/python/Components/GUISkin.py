@@ -49,10 +49,15 @@ class GUISkin:
 	def createGUIScreen(self, parent, desktop, updateonly = False):
 		for val in self.renderer:
 			if isinstance(val, GUIComponent):
-				if not updateonly:
-					val.GUIcreate(parent)
-				if not val.applySkin(desktop, self):
-					print("warning, skin is missing renderer", val, "in", self)
+				try:
+					if not updateonly:
+						val.GUIcreate(parent)
+					if not val.applySkin(desktop, self):
+						print("warning, skin is missing renderer", val, "in", self)
+				except Exception as e:
+					# un element dintr-o tema externa care nu se poate face nu strica tot ecranul
+					if not self._elementTema(val, e):
+						raise
 
 		for key in self:
 			val = self[key]
@@ -114,6 +119,21 @@ class GUISkin:
 			except Exception:
 				print("[Skin] error in onLayoutFinish of %s:" % self.__class__.__name__)
 				print_exc()
+
+	def _elementTema(self, val, eroare):
+		"""True cand ecranul vine dintr-o tema externa: elementul cazut se ascunde si se noteaza pentru raport."""
+		import skin
+		if getattr(self, "hdsSursaTema", None) not in skin.dosareSkinStraine:
+			return False
+		print("[Skin] %s: element %s: %s" % (self.__class__.__name__, val.__class__.__name__, eroare))
+		print_exc()
+		skin.notaTema(self.__class__.__name__, "lipsa", "%s: %s" % (val.__class__.__name__, str(eroare)[:100]))
+		try:
+			if val.instance is not None:
+				val.instance.hide()
+		except Exception:
+			pass
+		return True
 
 	def deleteGUIScreen(self):
 		for (name, val) in list(self.items()):

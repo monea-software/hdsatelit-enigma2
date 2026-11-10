@@ -11,12 +11,19 @@
  * hdsegalizator_flux.h), trece prin prelucrarea din hdsegalizator_dsp.h (10 benzi, efect, Noapte, nivel, limitator) si iese
  * pe placa ALSA a receptorului (biblioteca libasound se incarca la pornire, cu dlopen).
  * Canalele TV: imaginea o arata placa dupa ceasul ei, deci sunetul din procesor se tine dupa PTS-ul
- * imaginii, citit de servicedvb la 100 ms (VIDEO_GET_PTS, ceasImagine): PTS-ul fiecarui PES audio merge prin GStreamer
- * pana la cadrele din tampon, iar firul placii aseaza sunetul cu tacere, aruncare sau raportul tamponului
- * (hdsegalizator_dsp.h: CeasImagine, SincronImagine). Numai sunetul MPEG (MP2); setarea „tv” il opreste, „potrivire” il
- * muta fata de imagine. Fara ceasul imaginii in TV_FARA_CEAS_MS sau fara sincron in TV_NEPOTRIVIT_MS sunetul se
- * intoarce pe placa (stare(): „tv-fara-ceas”, „tv-nepotrivit”). Cu setarea „tv” oprita, la canalele TV motorul citeste
- * o data ceasul demultiplexorului (numai citire) si spune in stare() („ceas_tv”) daca driverul il da.
+ * imaginii aratate. Pe HiSilicon (exista /proc/msp/sync00) il da sincronul placii (VidLocalTime, in ms), citit de firul
+ * cititor la 100 ms; pe celelalte placi PTS-ul citit de servicedvb la 100 ms (VIDEO_GET_PTS, ceasImagine). Pe SF8008
+ * VIDEO_GET_PTS e cu 0,7-1,2 s inaintea imaginii de pe ecran: sincronul nu se potrivea niciodata, arunca de 3-4 ori pe
+ * secunda timp de 8 s (franturi de sunet la fiecare schimbare de canal), apoi trecea pe placa. Acum VIDEO_GET_PTS se
+ * tine acolo numai pentru comparatie (stare(): ceas_decodor_fata_de_placa_ms).
+ * PTS-ul fiecarui PES audio merge prin GStreamer pana la cadrele din tampon, iar firul placii aseaza sunetul cu tacere,
+ * aruncare sau raportul tamponului (hdsegalizator_dsp.h: CeasImagine, SincronImagine). Nimic nu iese pana nu se
+ * hotaraste pe primul esantion; orice tacere, gol sau corectie trece prin rampa iesirii (RampaIesire). Numai sunetul
+ * MPEG (MP2); setarea „tv” il opreste, „potrivire” il muta fata de imagine. Fara ceasul imaginii in
+ * SincronTv::FARA_CEAS_MS, fara primul sunet potrivit in SincronTv::NEPOTRIVIT_MS sau cu prea multe corectii mari la rand,
+ * sunetul se intoarce pe placa (stare(): „tv-fara-ceas”, „tv-nepotrivit”), in liniste. Cu setarea „tv” oprita, la
+ * canalele TV motorul citeste o data ceasul demultiplexorului (numai citire) si spune in stare() („ceas_tv”) daca driverul
+ * il da.
  *
  * Legatura cu redarea (lib/service/servicedvb.cpp): la fiecare alegere a pistei de sunet a serviciului principal,
  * preiaSunetul() spune daca sunetul trece pe aici; atunci decodorul placii primeste PID-ul -1 (fara sunet), iar RDS,
@@ -94,10 +101,11 @@ public:
 	/* serviciul care merge alege din nou pista de sunet (dupa o schimbare a setarii „pornit”) */
 	void reaplica();
 
-	/* -> dictionar: pornit, stare, motiv, post, placa, ceas_tv, volum_aici, tv, potrivire_tv_ms si, cat merge o sesiune:
-	   codec, decodor, latm_prin_adts, esantionare, canale, debit, debit_aprox, procesor, procesor_fire, tampon_ms, goluri,
-	   aruncate, abatere_ppm, spectru, castig_inainte_db, benzi_active, limitari, iesire, fisier, secunde, cadre, la TV
-	   si sesiune_tv, sincron_tv_ms, ceas_imagine (1 ms, 90 kHz, 0 inca nu), taceri_tv, aruncari_tv */
+	/* -> dictionar: pornit, stare, motiv, post, placa, ceas_tv, ceas_imagine_sursa (placa / decodor), volum_aici, tv,
+	   potrivire_tv_ms si, cat merge o sesiune: codec, decodor, latm_prin_adts, esantionare, canale, debit, debit_aprox,
+	   procesor, procesor_fire, tampon_ms, goluri, aruncate, abatere_ppm, spectru, castig_inainte_db, benzi_active,
+	   limitari, iesire, fisier, secunde, cadre, la TV si sesiune_tv, sincron_tv_ms, ceas_imagine (1 ms, 90 kHz, 0 inca
+	   nu), ceas_decodor_fata_de_placa_ms (numai pe HiSilicon), taceri_tv, aruncari_tv */
 	PyObject *stare();
 	/* -> dictionar: gstreamer (0/1), mpeg, aac_adts, aac_latm (numele decodorului sau None), latm_prin_adts (0/1: LATM
 	   merge prin decodorul ADTS), alsa (0/1) */

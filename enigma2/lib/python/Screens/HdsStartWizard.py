@@ -23,6 +23,23 @@ except Exception:
 # secunde pentru confirmarea rezolutiei (ca in Setari > Video): fara raspuns revine setarea de dinainte
 VIDEO_CONFIRM_SECONDS = 20
 
+
+def N_(text):
+    return text
+
+
+# Prezentarea este optionala. Textele schimbate urmeaza cataloagele comune.
+TEXTE_PORNIRE_SIMPLA = {
+    "page1_desc": N_("Cu SUS / JOS alegi rândul, cu STÂNGA / DREAPTA sau OK schimbi valoarea.\n"
+        "VERDE salvează și deschide meniul principal. ALBASTRU arată funcțiile receptorului."),
+    "page1_feature_desc": N_("VERDE termină configurarea. Prezentarea este opțională, pe ALBASTRU.\n\n"
+        "Din meniul principal, Scanare caută canalele. Orientarea și setarea antenei te ajută cu antena.\n\n"
+        "Funcțiile receptorului se pot citi oricând din Informații, Despre imagine."),
+    "page2_help_desc": N_("VERDE sau OK salvează și deschide meniul principal.\n\n"
+        "O rezoluție nouă cere întâi proba imaginii. EXIT revine la limbă și rezoluție.\n\n"
+        "Prezentarea rămâne disponibilă în Informații, Despre imagine."),
+}
+
 # lista rezolutiilor cand iesirea video lipseste (probele de pe PC): aceleasi 8 ca pe un televizor Full HD / 4K, in
 # ordinea din Setari > Video, cu etichetele din VideoOutput.modeLabel, si modul luminat
 REZOLUTII_REZERVA = (
@@ -699,14 +716,14 @@ def _listaAlegerilor():
 
 class HdsStartWizard(Screen, ConfigListScreen):
     """
-    Asistentul HD Satelit de la prima pornire (Full HD 1080p nativ), in doua pagini:
+    Asistentul HD Satelit de la prima pornire (Full HD 1080p nativ):
     1. Configurare: sus limba (textele asistentului se schimba pe loc), jos rezolutia (numai modurile acceptate de
-       televizor, cand le anunta; un mod nou ramane numai dupa confirmare, altfel revine dupa 20 s). VERDE mai departe.
+       televizor, cand le anunta; un mod nou ramane numai dupa confirmare, altfel revine dupa 20 s). VERDE termina.
     2. Functiile principale ale receptorului (Components/HdsFunctii.py, aceeasi lista ca in "Despre imagine" si in web),
-       pe grupe, derulate cu CH+/CH-, sus/jos sau stanga/dreapta.
+       optional pe ALBASTRU, pe grupe, derulate cu CH+/CH-, sus/jos sau stanga/dreapta.
        VERDE sau OK termina: config.misc.firstrun=False pe disc, asistentul se inchide si interfata deschide meniul
        principal (deschideMeniulPrincipal). EXIT sau ROSU: inapoi la pagina 1.
-    Pe pagina 1, EXIT nu inchide asistentul: se iese numai prin pagina 2, cu limba salvata. Asistentul nu scrie nimic
+    Pe pagina 1, EXIT nu inchide asistentul: VERDE termina cu limba salvata. Asistentul nu scrie nimic
     in setarile tunerului; antena, canalele si reteaua se fac din meniul principal.
     """
     skinName = "HdsStartWizard"
@@ -816,9 +833,9 @@ class HdsStartWizard(Screen, ConfigListScreen):
         self["rc_glow_ok"] = Pixmap()
         self["rc_glow_colors"] = Pixmap()
 
-        # Butoane colorate: ROSU (inapoi) numai pe pagina 2, VERDE mai departe; galben si albastru nu se folosesc
+        # ROSU revine din prezentare, VERDE termina, ALBASTRU deschide prezentarea optionala.
         self["key_red"] = StaticText("")
-        self["key_green"] = StaticText("Continuă")
+        self["key_green"] = StaticText("")
         self["key_yellow"] = StaticText("")
         self["key_blue"] = StaticText("")
 
@@ -839,6 +856,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
                 "red": self.keyExit,
                 "green": self.keyGreen,
                 "save": self.keyGreen,          # VERDE in SetupActions
+                "blue": self.keyPrezentare,
                 "left": self.keyLeft,
                 "right": self.keyRight,
                 "up": self.keyUp,
@@ -875,6 +893,8 @@ class HdsStartWizard(Screen, ConfigListScreen):
         return self.tr("box_info", about.getReceiverName(), about.getChipset(), video)
 
     def tr(self, key, *args):
+        if key in TEXTE_PORNIRE_SIMPLA:
+            return _(TEXTE_PORNIRE_SIMPLA[key])
         lang = getattr(self, "selected_lang", "ro_RO")
         texts = WIZARD_TRANSLATIONS.get(lang, WIZARD_TRANSLATIONS.get("en_EN", WIZARD_TRANSLATIONS["ro_RO"]))
         txt = texts.get(key, WIZARD_TRANSLATIONS["ro_RO"].get(key, key))
@@ -892,9 +912,9 @@ class HdsStartWizard(Screen, ConfigListScreen):
             self["key_green"].setText(self.tr("btn_finish"))
         else:
             self["key_red"].setText("")
-            self["key_green"].setText(self.tr("btn_next"))
+            self["key_green"].setText(self.tr("btn_finish"))
         self["key_yellow"].setText("")
-        self["key_blue"].setText("")
+        self["key_blue"].setText(_("Funcțiile receptorului") if self.currentStep == self.STEP_CONFIG else "")
 
     def onLanguageChanged(self, configElement):
         """notificarea lui cfg_lang (la STANGA / DREAPTA si la alegerea din lista): limba se aplica pe loc, iar pagina
@@ -1011,7 +1031,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
         self.currentStep = step
         self.updateBottomButtons()
         pagina = "page%d_" % step
-        self["StepCounter"].setText(self.tr("step_counter", step, self.TOTAL_STEPS))
+        self["StepCounter"].setText(_("Prezentare opțională") if step == self.STEP_PREZENTARE else "")
         self["StepTitle"].setText(self.tr(pagina + "title"))
         self["StepDesc"].setText(self.tr(pagina + "desc"))
         self["HelpTitle"].setText(self.tr(pagina + "help_title"))
@@ -1143,7 +1163,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
 
     def keyOK(self):
         if self.currentStep == self.STEP_PREZENTARE:
-            self.finishWizard()
+            self.keyGreen()
             return
         cur = self["config"].getCurrent()
         if cur and len(cur) > 1 and isinstance(cur[1], ConfigSelection):
@@ -1218,22 +1238,23 @@ class HdsStartWizard(Screen, ConfigListScreen):
             self["config"].instance.moveSelection(self["config"].instance.moveDown)
 
     def keyGreen(self):
-        if self.currentStep == self.STEP_PREZENTARE:
-            self.finishWizard()
-            return
         # pagina 1: limba se salveaza oricum; o rezolutie noua numai dupa confirmare (continua in videoConfirmed)
         self.salveazaLimba()
         if self.askVideoMode():
             return
         self.salveazaVideo()
-        self.setStep(self.STEP_PREZENTARE)
+        self.finishWizard()
+
+    def keyPrezentare(self):
+        """Citire optionala; nu salveaza si nu ocoleste proba video."""
+        if self.currentStep == self.STEP_CONFIG:
+            self.setStep(self.STEP_PREZENTARE)
 
     def keyNimic(self):
         pass
 
     def keyExit(self):
-        """EXIT si ROSU: pe pagina 2 inapoi la configurare; pe pagina 1 asistentul ramane pe ecran (se termina numai
-        prin pagina 2, dupa ce limba s-a salvat)"""
+        """EXIT si ROSU: din prezentare inapoi la configurare; VERDE termina asistentul."""
         if self.currentStep == self.STEP_PREZENTARE:
             self.setStep(self.STEP_CONFIG)
 
@@ -1274,14 +1295,14 @@ class HdsStartWizard(Screen, ConfigListScreen):
         vo = VideoOutputModule.videoOutput
         el = VideoOutputModule.configElement("hds_videomode")
         if answer:
-            # deja aplicat: doar in config si pe disc (salveazaVideo), apoi pagina 2
+            # deja aplicat: doar in config si pe disc (salveazaVideo), apoi terminare
             mode = self.cfg_videomode.value
             if mode not in el.choices:
                 # lista din Setari > Video tine doar ce accepta televizorul; modul ales intra in ea
                 VideoOutputModule.updateModeChoices(False, (mode,), vo)
             el.value = mode
             self.salveazaVideo()
-            self.setStep(self.STEP_PREZENTARE)
+            self.finishWizard()
             return
         vo.restore(self.videoPrevious)
         # modul de dinainte se vede imediat (canalul porneste din nou)
@@ -1301,7 +1322,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
             self["FeatureText"].pageDown()
 
     def finishWizard(self):
-        """VERDE sau OK pe pagina 2: semnele de prima pornire pe disc (asistentul nu mai porneste: StartWizard.py il
+        """Terminare: semnele de prima pornire pe disc (asistentul nu mai porneste: StartWizard.py il
         inregistreaza pe config.misc.firstrun), apoi asistentul se inchide si interfata deschide meniul principal"""
         print("[HdsStartWizard] asistent terminat: firstrun=False, se deschide meniul principal")
         # ConfigSubsection.__getattr__ arunca KeyError pentru o cheie lipsa, deci se cauta in content.items

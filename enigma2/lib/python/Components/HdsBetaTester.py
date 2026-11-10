@@ -923,9 +923,62 @@ def coada(text, maxim=JURNAL_MAX):
 	return "[...]\n" + text[-maxim:]
 
 
+_CHEI_EXCEPTIE = (r"pass(?:word|wd)?|pwd|parol(?:a|e)?|token|jeton|secret|key|cheie|api[_-]?key|access[_-]?key|"
+	r"private|psk|pin|auth|authorization|authentication|bearer|user(?:name|s)?|login|utilizator|ssid|wpa|wifi|wlan[0-9]*|essid|serial|s/n|sn|cpuid|"
+	r"chip_?id|die.?id|uuid|cid|cw|control.?word|biss|ecm|emm|cookie|session")
+_VALOARE_EXCEPTIE = re.compile(r"(?<![a-z0-9_])[a-z0-9_.-]*(?:" + _CHEI_EXCEPTIE +
+	r")(?:[_-][a-z0-9_-]+)?[\"']?\s*[=:]\s*(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^\n]*)", re.I)
+_CAMP_EXCEPTIE = re.compile(r"(?<![a-z0-9_])(?:" + _CHEI_EXCEPTIE + r")\s+[^\n]*", re.I)
+
+
+def curataExceptie(text):
+	"""Pastreaza cadrele si tipul exceptiei; ascunde valorile, fara eliminarea randurilor stivei."""
+	rez = []
+	stiva = False
+	for rand in (text or "").splitlines():
+		if "Traceback (most recent call last)" in rand:
+			stiva = True
+		if re.fullmatch(r'[ <0-9.>]*File "[A-Za-z0-9_./-]+", line [0-9]+(?:, in [A-Za-z0-9_<>.]+)?\s*', rand):
+			if esteDeAcces(rand):
+				rand = re.sub(r'"[^"]*"', '"(modul-acces)"', rand, count=1)
+				rand = re.sub(r", in .*", ", in (modul-acces)", rand)
+			else:
+				rand = re.sub(r'"[^\"]*/enigma2/python/', '"enigma2/python/', rand)
+		else:
+			if esteDeAcces(rand):
+				rez.append("(modul-acces: valori ascunse)")
+				continue
+			prefix = ""
+			tip = re.match(r"[A-Za-z_][A-Za-z0-9_.]*:", rand)
+			if tip and (stiva or re.match(r"[A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Exit|Interrupt|Warning):", rand)):
+				prefix, rand = rand[:tip.end()], rand[tip.end():]
+				stiva = False
+			rand = _VALOARE_EXCEPTIE.sub(lambda m: re.split(r"[=:]", m.group(), maxsplit=1)[0] + "=<ascuns>", rand)
+			rand = _CAMP_EXCEPTIE.sub(lambda m: m.group().split()[0] + " <ascuns>", rand)
+			# Dupa inlocuirea valorilor etichetate, orice forma sensibila ramasa se ascunde conservator.
+			bucati = rand.split("<ascuns>")
+			for i, bucata in enumerate(bucati):
+				m = _SECRET.search(bucata) or re.search(_CHEI_EXCEPTIE, bucata, re.I)
+				if m:
+					bucati[i] = bucata[:m.end()] + "<ascuns>"
+			rand = prefix + "<ascuns>".join(bucati)
+		# Regulile existente pentru valori personale raman active si aici.
+		rand = _URL.sub("<adresa>", rand)
+		rand = _REF_IPTV.sub("<flux>", rand)
+		rand = _EMAIL_TEXT.sub("<e-mail>", rand)
+		rand = _MAC.sub("<mac>", rand)
+		rand = _IP6.sub("<ip>", rand)
+		rand = _IP6_SCURT.sub(lambda m: m.group() if m.group() == "::" else "<ip>", rand)
+		rand = _IP4.sub(lambda m: m.group() if m.group().startswith(("0.", "127.")) else "<ip>", rand)
+		rand = _FILM.sub("<fisier>", rand)
+		rand = re.sub(r"eyJ[\w-]{8,}\.[\w.-]+", "<ascuns>", rand)
+		rez.append(rand)
+	return "\n".join(rez)
+
+
 # ------------------------------------------------------------------ felul „jurnale”
 
-_CDATA_JURNAL = re.compile(r"<enigma2crashlog>\s*<!\[CDATA\[(.*?)\]\]>", re.S)
+_CDATA_JURNAL = re.compile(r"<enigma2crashlog>\s*<!\[CDATA\[(.*?)\]\]>\s*</enigma2crashlog>", re.S)
 _VERSIUNE_XML = re.compile(r"<version>(.*?)</version>", re.S)
 _DATA_XML = re.compile(r"<crashdate>(.*?)</crashdate>", re.S)
 
@@ -948,7 +1001,7 @@ def felJurnal(nume, text):
 		if data:
 			parti.append("data: %s" % data.group(1).strip()[:40])
 		if m:
-			parti.append(m.group(1))
+			parti.append(m.group(1).replace("]]]]><![CDATA[>", "]]>"))
 		else:
 			parti.append(text.split("<image>")[0])
 		return "nucleu", "\n".join(parti)
@@ -1089,7 +1142,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		cadere = esteCadere(nume)
 		if (cadere and caderi >= ramase_caderi) or (not cadere and obisnuite >= ramase):
 			continue
-		text = _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
+		crash = nume.startswith("enigma2_crash_")
+		text = _citesteCadere(cale_fisier) if crash else _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
 		if text is None:
 			continue
 		fel, text = felJurnal(nume, text)
@@ -1098,9 +1152,11 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 			continue
 		if nume.startswith("enigma2-stive-"):
 			text = stiveCurate(text)
+		elif crash:
+			text = curataExceptie(text)
 		else:
 			text = curata(text)
-		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": coada(text)})
+		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": text if crash else coada(text)})
 		vazute[nume] = semn
 		if cadere:
 			caderi += 1
@@ -1116,6 +1172,29 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	stare["jurnale_azi"] = int(stare.get("jurnale_azi", 0)) + obisnuite
 	stare["caderi_azi"] = int(stare.get("caderi_azi", 0)) + caderi
 	return {"jurnale": jurnale, "paznic": paznic}
+
+
+def _citesteCadere(cale_fisier):
+	"""De la inceput pana la sfarsitul enigma2crashlog, fara coada XML si fara limita pe stiva."""
+	try:
+		parti = []
+		bloc = False
+		cdata = False
+		with open(cale_fisier, encoding="utf-8", errors="replace") as f:
+			for rand in f:
+				if not bloc and rand.lstrip().startswith(("<image>", "<software>", "<checksums>")):
+					break
+				if "<enigma2crashlog>" in rand:
+					bloc = True
+				parti.append(rand)
+				# In CDATA, tagurile sunt textul exceptiei, nu structura XML.
+				for semn in re.findall(r"<!\[CDATA\[|\]\]>", rand):
+					cdata = semn == "<![CDATA["
+				if bloc and not cdata and "</enigma2crashlog>" in rand:
+					break
+		return "".join(parti)
+	except OSError:
+		return None
 
 
 def _citesteCoada(cale_fisier, maxim):
@@ -1168,11 +1247,11 @@ def ultimulJurnalCadere(dosar_logs=None):
 		return None
 	gasite.sort(reverse=True)
 	_m, nume, c = gasite[0]
-	text = _citesteCoada(c, 4 * JURNAL_MAX)
+	text = _citesteCadere(c)
 	if text is None:
 		return None
 	_fel, text = felJurnal(nume, text)
-	return {"nume": nume[:120], "text": coada(curata(text))}
+	return {"nume": nume[:120], "text": curataExceptie(text)}
 
 
 # ------------------------------------------------------------------ felul „canale”
@@ -2213,29 +2292,40 @@ def mesaj(fel, text, ecran="", cu_jurnal=False, captura=None, b=None, contor=Non
 	return True, _t("Mesajul a intrat în coadă și pleacă îndată ce receptorul are internet.")
 
 
-def capturaOsd(latime=CAPTURA_LATIME):
-	"""Captura numai a meniurilor (grab -o: fara imaginea canalului), JPEG, cel mult CAPTURA_MAX; sau None."""
+def capturaOsd(latime=CAPTURA_LATIME, ecrane=None, marime=None):
+	"""Captura pentru raportul echipei, fara valorile conturilor. Pe firul enigma2, TV sau web; fara context, None.
+	Nu modifica fotografia omului. `ecrane` si `marime` explicite sunt pentru probele pe PC."""
 	try:
-		from Plugins.Extensions.HdsWebControl import captura_sigura as CS
-		epoca = CS.epocaCapturii()
-		if epoca is None:
-			return None
 		import subprocess
-		p = subprocess.run(["grab", "-q", "-s", "-o", "-j", "80", "-r", str(latime)], stdout=subprocess.PIPE,
-			stderr=subprocess.DEVNULL, timeout=20)
-		date = p.stdout
-		if not CS.capturaValida(epoca):
-			return None
-		if p.returncode == 0 and date[:2] == b"\xff\xd8" and len(date) <= CAPTURA_MAX:
-			return date
-		if len(date) > CAPTURA_MAX:
-			p = subprocess.run(["grab", "-q", "-s", "-o", "-j", "60", "-r", "640"], stdout=subprocess.PIPE,
+		from Components import HdsAsistentaControl as Control
+		if ecrane is None:
+			from Screens import HdsAsistentaSemn as Semn
+			if Semn._session() is None:
+				return None
+			ecrane = Semn._stivaAcum()
+		if marime is None:
+			from enigma import getDesktop
+			s = getDesktop(0).size()
+			marime = s.width(), s.height()
+		for calitate, lat in ((80, latime), (60, 640)):
+			p = subprocess.run(["grab", "-q", "-s", "-o", "-j", str(calitate), "-r", str(lat)], stdout=subprocess.PIPE,
 				stderr=subprocess.DEVNULL, timeout=20)
-			if (CS.capturaValida(epoca) and p.returncode == 0
-					and p.stdout[:2] == b"\xff\xd8" and len(p.stdout) <= CAPTURA_MAX):
-				return p.stdout
+			if p.returncode != 0 or p.stdout[:2] != b"\xff\xd8":
+				return None
+			date = Control.curataCapturaEchipa(p.stdout, ecrane, marime)
+			if not date:
+				return None
+			if date[:2] != b"\xff\xd8":
+				# Raportul primeste in continuare JPEG; PNG-ul cu zonele acoperite ramane numai in RAM.
+				from PIL import Image
+				with Image.open(io.BytesIO(date)) as imagine:
+					iesire = io.BytesIO()
+					imagine.convert("RGB").save(iesire, format="JPEG", quality=calitate)
+					date = iesire.getvalue()
+			if len(date) <= CAPTURA_MAX:
+				return date
 	except Exception as e:
-		_jurnal("captura: %s" % e)
+		_jurnal("captura: %s" % e.__class__.__name__)
 	return None
 
 

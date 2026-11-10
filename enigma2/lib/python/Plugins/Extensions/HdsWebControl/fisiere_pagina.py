@@ -26,7 +26,7 @@ def _texte():
 		"title": _("Fișiere"),
 		"intro": _("Dosarele și fișierele receptorului, direct în browser."),
 		"authTitle": _("Parola receptorului"),
-		"authNote": _("Introdu parola utilizatorului root al receptorului. Se cere o dată în această sesiune a browserului."),
+		"authNote": _("Din afara casei se cere parola utilizatorului root al receptorului, o dată în această sesiune a browserului. În casă fișierele se deschid fără parolă."),
 		"password": _("Parolă"),
 		"login": _("Deschide fișierele"),
 		"logout": _("Închide accesul"),
@@ -34,7 +34,7 @@ def _texte():
 		"authExpired": _("Accesul la fișiere a expirat. Introdu din nou parola receptorului."),
 		"connected": _("Acces la fișiere deschis în acest browser."),
 		"external": _("Permite accesul la fișiere din afara casei"),
-		"externalNote": _("Se schimbă numai din rețeaua locală. Accesul din afara casei cere în continuare un browser asociat și parola receptorului."),
+		"externalNote": _("Se schimbă numai din rețeaua locală. Accesul din afara casei cere în continuare un browser intrat pe receptor și parola receptorului."),
 		"externalSaved": _("Setarea accesului din afara casei a fost salvată."),
 		"shortcuts": _("Scurtături"),
 		"manage": _("Organizează"),
@@ -173,7 +173,7 @@ main{max-width:1240px;margin:0 auto;min-width:0}h1{font-size:1.4rem;margin:0 0 8
 <p class="mesaj" id="f-message" role="status" aria-live="polite">__T_checking__</p>
 <section class="card f-auth" id="f-auth">
   <h2>__T_authTitle__</h2><p class="nota">__T_authNote__</p>
-  <form id="f-login"><label for="f-password">__T_password__</label><input id="f-password" type="password" name="password" autocomplete="current-password" required maxlength="256"><button class="principal" type="submit" id="f-login-button">__T_login__</button></form>
+  <form id="f-login"><label for="f-password">__T_password__</label><input id="f-password" type="text" name="password" autocomplete="off" autocapitalize="off" spellcheck="false" required maxlength="256"><button class="principal" type="submit" id="f-login-button">__T_login__</button></form>
 </section>
 <div id="f-content" hidden>
   <div class="f-top"><p class="nota">__T_connected__</p><button type="button" id="f-logout">__T_logout__</button></div>

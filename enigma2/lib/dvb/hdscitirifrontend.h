@@ -13,9 +13,9 @@
  *
  * CE FACE: pe fiecare tuner, ultima valoare bruta a fiecarei citiri (BER, SNR, nivel, stare) cu ora ei. O cerere in mai
  * putin de TTL de la citire primeste valoarea tinuta; altfel se face ioctl-ul. SNR-ul pentru calitate si pentru dB vine din
- * aceeasi citire, „prins” si „sincronizat” din aceeasi stare. TTL: TTL_MS (o citire pe secunda); TTL_LENT_MS cand un ioctl
- * dureaza in medie peste PRAG_LENT_US (I2C foarte lent). O eroare a ioctl-ului se tine si ea TTL (cu valoarea 0, nu cu
- * valoarea veche), ca un driver care refuza sa nu fie intrebat la fiecare cerere.
+ * aceeasi citire, "prins" si "sincronizat" din aceeasi stare. TTL: TTL_MS (o citire pe secunda; pe MIPS una la doua
+ * secunde); TTL_LENT_MS cand un ioctl dureaza in medie peste PRAG_LENT_US (I2C foarte lent). O eroare a ioctl-ului se
+ * tine si ea TTL (cu valoarea 0, nu cu valoarea veche), ca un driver care refuza sa nu fie intrebat la fiecare cerere.
  * Citesc DIRECT (fara memorie, dar numarat): bucla SEC a acordarii (motorul, IF_TUNER_LOCKED) si timeout(). Memoria se
  * goleste la acordare, la deschiderea si inchiderea tunerului si la schimbarea starii venita de la driver (prins/pierdut),
  * deci pierderea semnalului se vede imediat ce driverul o anunta.
@@ -40,7 +40,13 @@ namespace hdscitiri
 
 enum Fel { BER = 0, SNR = 1, NIVEL = 2, STARE = 3, NUMAR_FELURI = 4 };
 
+#if defined(__mips__)
+/* receptoarele slabe (Vu+ Solo SE si celelalte MIPS): o citire la doua secunde si cu I2C obisnuit. Valorile tinute
+   sunt numai cele aratate omului (bare, cifre, web); acordarea, bucla SEC si timeout() citesc direct, fara memorie. */
+static const int TTL_MS = 2000;
+#else
 static const int TTL_MS = 1000;              // o citire pe secunda
+#endif
 static const int TTL_LENT_MS = 2000;         // I2C foarte lent: o citire la doua secunde
 static const unsigned int PRAG_LENT_US = 25000;  // un ioctl in medie peste 25 ms = I2C foarte lent
 

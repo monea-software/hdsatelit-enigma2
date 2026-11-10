@@ -190,7 +190,10 @@ def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=N
 	"""(bun, motiv): motiv e sir gol cand locul e un disc adevarat, altfel unul din lipsa, ram, intern, imagine, mic,
 	plin, numai_citire, scriere. `cale` e dosarul inregistrarilor (sau al timeshift-ului). Parametrii in plus sunt
 	pentru probele de pe PC (`radacina`: rezultatul lui discRadacina; False: radacina in memoria interna; `optiuni`:
-	rezultatul lui _optiuniMontari)."""
+	rezultatul lui _optiuniMontari). Citirea atinge discul si se cheama pe firul de lucru; pentru culegere se
+	foloseste cereVerificare."""
+	if not cale:
+		return False, "lipsa"
 	statvfs = statvfs or getattr(os, "statvfs", None)
 	if not cale or not os.path.isdir(cale):
 		return False, "lipsa"
@@ -220,6 +223,8 @@ def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=N
 			return False, "plin"
 	except (OSError, IOError, AttributeError, TypeError):
 		return False, "lipsa"
+	if int(getattr(s, "f_flag", 0) or 0) & ST_RDONLY or montataNumaiCitire(cale, optiuni, realpath):
+		return False, "numai_citire"
 	if not os.access(cale, os.W_OK):
 		# nucleul pune singur pe numai citire un FAT cu o eroare (errors=remount-ro), iar statvfs merge mai departe
 		if int(getattr(s, "f_flag", 0) or 0) & ST_RDONLY or montataNumaiCitire(cale, optiuni, realpath):
@@ -228,7 +233,21 @@ def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=N
 	return True, ""
 
 
+def cereVerificare(cale):
+	"""Verificarea pentru apelanti care pot culege rezultatul ulterior.
+
+	Nu schimba contractul sincron verificaDisc: o citire in curs nu inseamna
+	ca locul ales anume de om trebuie inlocuit cu altul.
+	"""
+	from Components import HdsStocareDisc
+	return HdsStocareDisc.cere(("verifica_disc", cale), lambda: verificaDisc(cale))
+
+
 def textMotiv(motiv, cale):
+	if motiv == "se_citeste":
+		return _("Se citește discul...")
+	if motiv == "nu_raspunde":
+		return _("Discul nu răspunde.")
 	return {
 		"lipsa": _("locul „%s” nu există: nu este montat niciun disc acolo"),
 		"ram": _("locul „%s” este în memoria RAM a receptorului, nu pe un disc"),

@@ -5,7 +5,7 @@
 # extensii_web.py: "Extensii și aplicații" in interfata web (HdsWebControl), perechea ecranului de pe televizor
 # Meniu > Extensii si aplicatii (Screens/PluginBrowser.py = Screens/HdsExtensii.py, entryID plugin_selection).
 #
-# Aceleasi file (Pe receptor, Actualizari, categoriile din surse, Din fisier, Surse, cautarea), aceleasi randuri cu
+# Aceleasi file (Pe receptor, Disponibile, Instaleaza de pe stick, Surse, cautarea), aceleasi randuri cu
 # aceleasi insigne si detalii, aceleasi actiuni (instalare, actualizare, actualizeaza tot, stergere, fisier .ipk de pe
 # un disc al receptorului, sursele adaugate sau sterse, descarcarea listei, repornirea interfetei, pornirea unei
 # extensii pe televizor), din aceeasi logica: Components/HdsExtensiiLucru.py (randurile, planurile, sursele, lucrarea
@@ -31,6 +31,7 @@
 #   POST /api/extensii-opreste                          la fel; opreste opkg numai dupa un minut fara raspuns
 #   POST /api/extensii-descarca-lista                   opkg update
 #   POST /api/extensii-cauta-fisiere?retea=0|1          cauta fisiere .ipk pe stick, disc, memorie (sau in retea)
+#   POST /api/extensii-urca?nume=<nume>.ipk             fisier din browser in /tmp, cel mult 16 MiB, octeti bruti
 #   POST /api/extensii-deschide?plugin=<n>&nume=<nume>  extensia instalata se deschide pe televizor (ca OK)
 #   GET  /extensii                                      pagina
 #
@@ -41,16 +42,21 @@
 # un Mediu fals.
 
 import os
+from urllib.parse import urlencode
 
 # Serverele web ale extensiilor instalate (interfeteWeb): dosarele de pluginuri in care sta modulul radacinii unui Site
 DOSARE_PLUGINURI = ("Extensions", "SystemPlugins")
 # dosarul acestei interfete: serverele lui nu sunt ale unei extensii
 DOSAR_PROPRIU = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
 
-ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod", "feed", "fel")
-LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80}
+ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod", "feed", "fel",
+	"icoana", "rezerva")
+LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80, "icoana": 1024}
 _INCARCARE = [False]      # citirea catalogului pe fir: una singura odata
 _FISIERE = {"local": None, "retea": None}   # ultimele cautari terminate, ca ecranul: lista ramane pana vine alta
+_SEMN_FISIERE = [None]
+_URCARE = [False]
+MAX_IPK = 16 * 1024 * 1024
 
 
 def _t(text):
@@ -217,13 +223,25 @@ def _cautariFisiere(M):
 
 
 def _fisiereGasite():
-	"""[FisierIpk]: cele de pe stick, disc si memorie, apoi cele din retea (ca in fila Din fisier de pe televizor)"""
+	"""[FisierIpk]: cele de pe stick, disc si memorie, apoi cele din retea, ca pe televizor"""
 	rez = []
 	for fel in ("local", "retea"):
 		c = _FISIERE[fel]
 		if c is not None:
 			rez += list(c.fisiere or [])
 	return rez
+
+
+def _actualizeazaFisiere(M):
+	"""Prima lista si schimbarile de montari sau din /tmp pornesc aceeasi cautare ca pe televizor."""
+	cautari = _cautariFisiere(M)
+	semn = M.L.semnLocuriFisiere()
+	local = cautari["local"]
+	if semn != _SEMN_FISIERE[0] and (local is None or local.gata):
+		M.P.cautare_ipk()
+		_SEMN_FISIERE[0] = semn
+		cautari = _cautariFisiere(M)
+	return cautari
 
 
 def _stareCautari(M, cautari):
@@ -314,8 +332,6 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 		rez.append({"f": "descarca", "text": _t("Descarcă lista")})
 	elif fel == "adauga":
 		rez.append({"f": "adauga", "text": _t("Adaugă un feed"), "principal": True})
-	elif fel == "dinfisier":
-		rez.append({"f": "dinfisier", "text": _t("Deschide"), "principal": True})
 	elif fel == "pluginsurse":
 		rez.append({"f": "pluginsurse", "text": _t("Deschide"), "principal": True, "nume": obj.titlu})
 	# 0.6.6: sursa deschisa a pluginului, numai cand pachetul are arhiva ei langa el in feed
@@ -349,10 +365,75 @@ def _rand(M, catalog, fel, obj, extra, pluginuri):
 	d = L.detalii(catalog, fel, obj, extra)
 	return {"fel": fel, "cheie": _cheie(fel, obj, pluginuri), "titlu": P._curat(titlu, 200),
 		"subtitlu": P._curat(sub, 300), "insigna": insigna or "", "culoare": culoare or "", "mic": mic or "",
+		"icoana": "/api/extensii?" + urlencode({"icoana": _cheie(fel, obj, pluginuri),
+			"nume": P._curat(titlu, 120)}) if fel in ("plugin", "indisponibil") or
+			(fel == "pachet" and obj.instalat) else "",
 		"detalii": {"insigna": d["insigna"], "culoare": d["culoare"],
 			"randuri": [[a, P._curat(b, 400)] for a, b in zip(d["etichete"], d["valori"])],
 			"descriere": P._curat(d["descriere"], 1500)},
 		"actiuni": _actiuni(L, catalog, fel, obj, extra, pluginuri)}
+
+
+def _citesteIcoana(cale):
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(512 * 1024 + 1)
+		if len(date) <= 512 * 1024:
+			if date.startswith(b"\x89PNG\r\n\x1a\n"):
+				return b"image/png", date
+			if date.startswith(b"\xff\xd8\xff"):
+				return b"image/jpeg", date
+	except (OSError, ValueError, TypeError):
+		pass
+	return None
+
+
+def _pixmapWeb(plugin):
+	"""Un descriptor poate da numai pixmap, fara un fisier al icoanei."""
+	try:
+		ptr = getattr(plugin, "icon", None)
+		m = ptr.size()
+		if not (0 < m.width() <= 2048 and 0 < m.height() <= 2048):
+			return None
+		from enigma import savePNG
+		from tempfile import TemporaryDirectory
+		with TemporaryDirectory(prefix="hds-extensii-icoana-") as dosar:
+			cale = os.path.join(dosar, "icon.png")
+			if savePNG(cale, ptr) == 0:
+				return _citesteIcoana(cale)
+	except Exception:
+		pass
+	return None
+
+
+def icoanaWeb(arg, M):
+	"""Octetii unei icoane a unui rand instalat cunoscut, fara cale primita din browser."""
+	catalog = M.L.catalogLaZi()
+	if catalog is None:
+		return None
+	pluginuri = M.pluginuri()
+	for fel, obj, extra in M.L.randuriInstalate(catalog, pluginuri, M.plugins):
+		if fel not in ("plugin", "indisponibil", "pachet") or _cheie(fel, obj, pluginuri) != arg.get("icoana"):
+			continue
+		cheie, titlu = M.L.descriereRand(catalog, fel, obj, extra)[:2]
+		if M.P._curat(titlu, 120) != arg.get("nume"):
+			return None
+		from Screens.HdsExtensii import caiIcoanaPlugin, caiIcoanaCategorie
+		if arg.get("rezerva") != "1":
+			if fel == "plugin":
+				imagine = _pixmapWeb(obj)
+				if imagine is not None:
+					return imagine
+			for cale in caiIcoanaPlugin(fel, obj):
+				imagine = _citesteIcoana(cale)
+				if imagine is not None:
+					return imagine
+		for cale in caiIcoanaCategorie(cheie, 160):
+			imagine = _citesteIcoana(cale)
+			if imagine is not None:
+				return imagine
+		return None
+	return None
 
 
 def datePrincipale(M):
@@ -369,19 +450,17 @@ def stare(arg, M, catalog, date=None):
 	date = date or datePrincipale(M)
 	pluginuri = date["pluginuri"]
 	cauta = P._curat(arg.get("cauta", ""), 40).replace("\n", " ").strip()
-	cautari = _cautariFisiere(M)
+	cautari = _actualizeazaFisiere(M)
 	fisiere = _fisiereGasite()
 	gasite = _FISIERE["local"] is not None or _FISIERE["retea"] is not None
 	file = []
 	if cauta:
 		file.append(("cautare", _t("Căutare: %s") % cauta, len(L.randuriCautare(catalog, pluginuri, cauta, M.plugins))))
-	file += L.file(catalog, L.nrInstalate(catalog, pluginuri, M.plugins))
+	file += L.file(catalog, L.nrInstalate(catalog, pluginuri, M.plugins), len(fisiere) if gasite else None)
 	fila = arg.get("fila") or ("cautare" if cauta else "instalate")
-	# Surse feeduri se deschide cu butonul ei, Din fisier din randul din Disponibile, ca pe televizor
-	if fila in ("surse", "fisiere"):
+	# Surse feeduri se deschide cu butonul ei, ca pe televizor.
+	if fila == "surse":
 		file.append(L.filaSurse(catalog))
-	if fila == "fisiere":
-		file.append(("fisiere", _t("Din fișier"), len(fisiere) if gasite else None))
 	ids = [f[0] for f in file]
 	if fila not in ids:
 		fila = "cautare" if cauta else "instalate"
@@ -415,7 +494,7 @@ def stare(arg, M, catalog, date=None):
 		# toate actualizarile, si cand filtrul arata numai o parte (butonul spune "toate", ca MENU pe televizor)
 		"tot": [o.nume for o in catalog.actualizari()] if fila in ("instalate", "actualizari") else [],
 		"filtru": filtruWeb,
-		"gol": (L.textGolDisponibile(catalog) if fila == "disponibile" else "") or _textGol(fila, cauta, conf.surse, cf),
+		"gol": (L.textGolDisponibile(catalog) if fila == "disponibile" else "") or _textGol(fila, cauta, conf.surse, cf, L),
 		"lista": lista,
 		"surse": len(conf.surse),
 		"mod_sigur": date["mod_sigur"] if fila == "instalate" else "",
@@ -430,6 +509,7 @@ def stare(arg, M, catalog, date=None):
 		# Actualizeaza toate (0.6.6): din orice fila, cand sunt cel putin doua
 		"toate": len(toate), "text_toate": _t("Actualizează toate (%d)") % len(toate) if len(toate) >= 2 else "",
 		"cautare_fisiere": cf,
+		"max_ipk": MAX_IPK,
 		"lucrare": lucrare,
 		"sursa": sursa,
 		"lucreaza": descarcare or cf["in_curs"] or cf["retea_in_curs"] or bool(lucrare and lucrare["faza"] == "lucru") or
@@ -480,7 +560,7 @@ def _stareSursa(M):
 	return x
 
 
-def _textGol(fila, cauta, surse, cf):
+def _textGol(fila, cauta, surse, cf, L):
 	if fila == "instalate":
 		return (_t("Nu ai extensii instalate. Funcțiile imaginii sunt în meniu; extensii noi adaugi din celelalte "
 			"file."))
@@ -490,8 +570,7 @@ def _textGol(fila, cauta, surse, cf):
 		if cf["in_curs"] or cf["niciuna"]:
 			return _t("Se caută fișiere .ipk pe stick, pe disc și în /tmp.") + (" " + _t("Un stick sau un disc răspunde greu.")
 				if cf["lent"] else "")
-		return _t("Niciun fișier .ipk pe stick, pe disc sau în /tmp. "
-			"Copiază extensia într-unul dintre aceste locuri, apoi caută din nou.")
+		return _t(L.TEXT_FARA_FISIERE)
 	if not surse:
 		return _t("Niciun feed. Adaugă unul din Surse feeduri.")
 	return _t("Nimic aici.")
@@ -668,6 +747,53 @@ def fisier(arg, request, M):
 	if plan.get("fel") == "python2":
 		return _refuzPython2(M.L, plan)
 	return _pornestePlan(request, arg, M, catalog, "extensii-fisier", cale, plan)
+
+
+def _numeIpk(nume):
+	return bool(nume and not nume.startswith(".") and nume.lower().endswith(".ipk") and
+		all(ord(c) >= 32 and c != "\x7f" and c not in "/\\" for c in nume))
+
+
+def _scrieIpk(nume, continut, marime, dosar="/tmp"):
+	"""Un dosar nou pentru fiecare fisier; fisierul apare in cautare numai dupa scrierea completa."""
+	import tempfile
+	from shutil import disk_usage
+	if not _numeIpk(nume):
+		return _refuz(_t("Alege un fișier cu extensia .ipk, fără cale în nume.")), 400
+	if not 0 < marime <= MAX_IPK:
+		return _refuz(_t("Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB.")), 413
+	nou = partial = ""
+	try:
+		if disk_usage(dosar).free < marime + 1024 * 1024:
+			return _refuz(_t("Nu este suficient spațiu liber în /tmp pentru fișier.")), 507
+		nou = tempfile.mkdtemp(prefix="hds-extensii-", dir=dosar)
+		partial = os.path.join(nou, nume + ".part")
+		cale = os.path.join(nou, nume)
+		continut.seek(0)
+		with open(partial, "xb") as f:
+			ramas = marime
+			while ramas:
+				bucata = continut.read(min(ramas, 64 * 1024))
+				if not bucata:
+					raise IOError(_t("Fișierul nu a fost primit complet."))
+				f.write(bucata)
+				ramas -= len(bucata)
+		os.rename(partial, cale)
+		_SEMN_FISIERE[0] = None
+		return {"result": True, "message": _t("Fișierul a fost încărcat în /tmp. Alege Instalează fișierul din listă."),
+			"cale": cale}
+	except Exception as eroare:
+		if partial:
+			try:
+				os.unlink(partial)
+			except OSError:
+				pass
+		if nou:
+			try:
+				os.rmdir(nou)
+			except OSError:
+				pass
+		return _refuz(_t("Fișierul nu s-a putut încărca: %s") % eroare), 500
 
 
 def sursaAdauga(arg, request, M):
@@ -889,6 +1015,17 @@ def rute(baza, resource, mediu=None):
 			try:
 				m = M()
 				arg = argumente(request)
+				if "icoana" in arg:
+					imagine = icoanaWeb(arg, m)
+					if imagine is None:
+						request.setResponseCode(404)
+						return b""
+					mime, date = imagine
+					request.setHeader(b"content-type", mime)
+					request.setHeader(b"content-length", str(len(date)).encode("ascii"))
+					request.setHeader(b"cache-control", b"private, max-age=300")
+					request.setHeader(b"x-content-type-options", b"nosniff")
+					return date
 				c = m.L.catalogLaZi()
 				if c is not None:
 					return self._raspunde(request, stare(arg, m, c))
@@ -918,6 +1055,34 @@ def rute(baza, resource, mediu=None):
 
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class UrcaResource(baza):
+		"""POST binar, prin poarta comuna de autentificare si CSRF; scrierea se face pe fir separat."""
+		schimbaCeva = True
+
+		def render_GET(self, request):
+			return self._eroare(request, _t("Fișierul se încarcă numai cu POST."), 405)
+
+		def render_POST(self, request):
+			try:
+				refuz = _comun().numaiBrowser(request)
+				if refuz:
+					return self._eroare(request, refuz, 403)
+				if _URCARE[0]:
+					return self._eroare(request, _t("Se încarcă deja un fișier. Așteaptă să se termine."), 409)
+				nume = argumente(request).get("nume", "")
+				if not _numeIpk(nume):
+					return self._eroare(request, _t("Alege un fișier cu extensia .ipk, fără cale în nume."), 400)
+				if request.getHeader("content-type") != "application/octet-stream":
+					return self._eroare(request, _t("Fișierul trebuie trimis ca date binare."), 400)
+				continut = request.content
+				continut.seek(0, os.SEEK_END)
+				marime = continut.tell()
+				if not 0 < marime <= MAX_IPK:
+					return self._eroare(request, _t("Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB."), 413)
+				return M().peFir(request, lambda: _scrieIpk(nume, continut, marime), _URCARE, 60)
+			except Exception as eroare:
+				return self._eroare(request, _t("Fișierul nu s-a putut încărca: %s") % eroare, 500)
 
 	def actiune(f):
 		r = ActiuneResource()
@@ -968,6 +1133,7 @@ def rute(baza, resource, mediu=None):
 		b"extensii-actualizeaza": actiune(actualizeaza),
 		b"extensii-sterge": actiune(sterge),
 		b"extensii-fisier": actiune(fisier),
+		b"extensii-urca": UrcaResource(),
 		b"extensii-sursa-adauga": actiune(sursaAdauga),
 		b"extensii-sursa-sterge": actiune(sursaSterge),
 		b"extensii-reporneste": actiune(reporneste),
@@ -1004,6 +1170,8 @@ __STIL_PAGINI__
   .filtru label{display:flex;flex-direction:column;gap:4px;min-width:0;}
   .filtru select{max-width:100%;}
   .element .stanga{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .element .cu-icoana{display:flex;align-items:center;gap:12px;min-width:0;}
+  .icoana-extensie{width:52px;height:52px;object-fit:contain;flex:0 0 52px;}
   .element .titlu{overflow-wrap:anywhere;}
   .element .dreapta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;min-width:0;}
   .insigna{display:inline-block;padding:2px 8px;border:1px solid currentColor;border-radius:6px;font-size:.8rem;line-height:1.4;}
@@ -1064,6 +1232,8 @@ __STIL_PAGINI__
   </form>
   <section class="card ascuns" id="fisiere">
     <h2>Fișiere .ipk</h2>
+    <p><label for="ipkFisier">Încarcă un fișier .ipk din browser</label> <input type="file" id="ipkFisier" accept=".ipk"></p>
+    <p class="nota">Cel mult 16 MiB. Fișierul se salvează în /tmp și apare în lista de mai jos.</p>
     <p class="nota" id="fisiereText"></p>
     <div class="butoane">
       <button type="button" id="cautaFisiere">Caută din nou</button>
@@ -1087,20 +1257,23 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
-var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", CEAS = null, CAUTAT = false, SURSA = "", LISTA_CERUTA = false, FEED = "", FEL = "";
+var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", REDAT = "", CEAS = null, CERERE = 0, SURSA = "", LISTA_CERUTA = false, FEED = "", FEL = "", URCAT = "", URCA = false;
 function el(tip, clasa, text){ var e = document.createElement(tip); if(clasa){ e.className = clasa; } if(text !== undefined && text !== null){ e.textContent = text; } return e; }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); CEAS = null; } if(ms){ CEAS = setTimeout(citeste, ms); } }
 function citeste(){
+  var nr = ++CERERE; programeaza(0);
   var q = "/api/extensii?fila=" + encodeURIComponent(FILA) + (CAUTA ? "&cauta=" + encodeURIComponent(CAUTA) : "") +
     (FEED ? "&feed=" + encodeURIComponent(FEED) : "") + (FEL ? "&fel=" + encodeURIComponent(FEL) : "");
   return cerere(q).then(function(d){
+    if(nr !== CERERE){ return; }
     if(d.se_incarca){ $("incarcare").textContent = d.message || "Se citește lista..."; programeaza(800); return; }
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi lista."; $("incarcare").classList.remove("ascuns"); return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
-    D = d; FILA = d.fila; arata(d);
-    if(d.fila === "fisiere" && d.cautare_fisiere.niciuna && !CAUTAT){ CAUTAT = true; trimite("/api/extensii-cauta-fisiere", new URLSearchParams(), true); }
-    programeaza(d.lucreaza ? 1500 : 0);
-  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; $("incarcare").classList.remove("ascuns"); });
+    if(URCAT && d.randuri.some(function(r){ return r.cheie === "fisier:" + URCAT; })){ DESCHIS = "fisier:" + URCAT; URCAT = ""; }
+    var schimbat = !D || DESCHIS !== REDAT || JSON.stringify(D) !== JSON.stringify(d);
+    D = d; FILA = d.fila; if(schimbat){ arata(d); }
+    programeaza(d.lucreaza ? 1500 : 3000);
+  }).catch(function(){ if(nr !== CERERE){ return; } $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; $("incarcare").classList.remove("ascuns"); programeaza(3000); });
 }
 function trimite(cale, q, tacut){
   if(!tacut){ mesaj("Se trimite..."); }
@@ -1234,9 +1407,9 @@ function arataRanduri(d){
     bt.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
     var bb = el("div", "butoane"); bb.appendChild(bt); c.appendChild(bb);
   }
-  if(!d.randuri.length || (d.fila === "disponibile" && d.randuri.length === 1)){
+  if(!d.randuri.length){
     d.gol.split("\n").forEach(function(t){ c.appendChild(el("p", "nota", t)); });
-    if(!d.randuri.length){ return; }
+    return;
   }
   d.randuri.forEach(function(r){
     if(r.fel === "sectiune"){ c.appendChild(el("h3", "sectiune", r.titlu + " (" + r.numar + ")")); return; }
@@ -1248,7 +1421,17 @@ function arataRanduri(d){
     var dr = el("div", "dreapta");
     if(r.insigna){ dr.appendChild(el("span", "insigna " + r.culoare, r.insigna)); }
     if(r.mic){ dr.appendChild(el("span", "nota", r.mic)); }
-    rnd.appendChild(st); rnd.appendChild(dr);
+    var continut = st;
+    if(r.icoana){
+      continut = el("div", "cu-icoana");
+      var im = el("img", "icoana-extensie"); im.alt = ""; im.loading = "lazy"; im.src = adresa(r.icoana);
+      im.addEventListener("error", function(){
+        if(!im.dataset.rezerva){ im.dataset.rezerva = "1"; im.src = adresa(r.icoana + "&rezerva=1"); }
+        else { im.hidden = true; }
+      });
+      continut.appendChild(im); continut.appendChild(st);
+    }
+    rnd.appendChild(continut); rnd.appendChild(dr);
     function comuta(){ DESCHIS = deschis ? "" : r.cheie; arata(D); }
     rnd.addEventListener("click", comuta);
     rnd.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); comuta(); } });
@@ -1256,7 +1439,7 @@ function arataRanduri(d){
     if(deschis){ c.appendChild(detalii(r)); }
   });
 }
-function arata(d){ arataStare(d); arataLucrarea(d); arataSursa(d); arataFile(d); arataFisiere(d); arataRanduri(d); }
+function arata(d){ arataStare(d); arataLucrarea(d); arataSursa(d); arataFile(d); arataFisiere(d); arataRanduri(d); REDAT = DESCHIS; }
 function actiune(a){
   var q = new URLSearchParams();
   if(a.f === "instaleaza" || a.f === "actualizeaza" || a.f === "sterge"){ q.set("pachet", a.pachet); cuConfirmare("/api/extensii-" + a.f, q, dupa); }
@@ -1266,13 +1449,12 @@ function actiune(a){
   else if(a.f === "deschide"){ q.set("plugin", String(a.plugin)); q.set("nume", a.nume); trimite("/api/extensii-deschide", q); }
   else if(a.f === "descarca"){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", q); }
   else if(a.f === "sursa"){ q.set("pachet", a.pachet); SURSA = a.pachet; trimite("/api/extensii-sursa-afla", q); }
-  else if(a.f === "dinfisier"){ FILA = "fisiere"; DESCHIS = ""; citeste(); }
   else if(a.f === "pluginsurse"){ $("cauta").value = a.nume; CAUTA = a.nume; FILA = "cautare"; DESCHIS = ""; citeste(); }
   else if(a.f === "adauga"){ $("formSursa").classList.remove("ascuns"); $("formSursa").scrollIntoView({block: "center"}); $("sursaNume").focus(); }
 }
 function dupaRepornire(d){ if(d && d.result){ setTimeout(function(){ location.reload(); }, 20000); } else { citeste(); } }
 $("adaugaFeed").addEventListener("click", function(){ $("formSursa").classList.remove("ascuns"); $("formSursa").scrollIntoView({block: "center"}); });
-$("surseFeed").addEventListener("click", function(){ FILA = FILA === "surse" || FILA === "fisiere" ? "instalate" : "surse"; DESCHIS = ""; $("formSursa").classList.add("ascuns"); citeste(); });
+$("surseFeed").addEventListener("click", function(){ FILA = FILA === "surse" ? "instalate" : "surse"; DESCHIS = ""; $("formSursa").classList.add("ascuns"); citeste(); });
 $("descarca").addEventListener("click", function(){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", new URLSearchParams()); });
 $("toate").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
 $("reporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
@@ -1283,6 +1465,25 @@ $("opreste").addEventListener("click", function(){ cuConfirmare("/api/extensii-o
 $("sursaOpreste").addEventListener("click", function(){ trimite("/api/extensii-sursa-opreste", new URLSearchParams()); });
 $("cautaFisiere").addEventListener("click", function(){ trimite("/api/extensii-cauta-fisiere", new URLSearchParams()); });
 $("cautaRetea").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("retea", "1"); trimite("/api/extensii-cauta-fisiere", q); });
+$("ipkFisier").addEventListener("change", function(){
+  var camp = this, f = camp.files && camp.files[0];
+  if(!f || URCA){ return; }
+  if(!/\.ipk$/i.test(f.name)){ mesaj("Alege un fișier cu extensia .ipk.", true); camp.value = ""; return; }
+  if(!f.size || f.size > (D && D.max_ipk || 16777216)){ mesaj("Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB.", true); camp.value = ""; return; }
+  URCA = true; camp.disabled = true; mesaj("Se încarcă fișierul...");
+  var antete = {"Content-Type": "application/octet-stream"};
+  if(CFG.csrf){ antete["X-HDS-CSRF"] = CFG.csrf; }
+  fetch(adresa("/api/extensii-urca?nume=" + encodeURIComponent(f.name)), {method: "POST", body: f, cache: "no-store", credentials: "same-origin", headers: antete})
+    .then(function(r){
+      if(r.status === 401 && !CFG.jeton){ location.replace("/"); throw new Error("browser deconectat"); }
+      if(r.status === 413){ return {result: false, message: "Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB."}; }
+      return r.json();
+    }).then(function(d){
+      mesaj(d.message, !d.result);
+      if(d.result){ URCAT = d.cale; FILA = "fisiere"; DESCHIS = ""; }
+      return citeste();
+    }).catch(nimicNuRaspunde).then(function(){ URCA = false; camp.disabled = false; camp.value = ""; });
+});
 $("formCauta").addEventListener("submit", function(e){
   e.preventDefault();
   var t = $("cauta").value.trim();
@@ -1328,6 +1529,8 @@ TEXTE_PAGINA = {
 		N_("Caută"),
 		N_("Înapoi"),
 		N_("Fișiere .ipk"),
+		N_("Încarcă un fișier .ipk din browser"),
+		N_("Cel mult 16 MiB. Fișierul se salvează în /tmp și apare în lista de mai jos."),
 		N_("Caută din nou"),
 		N_("Caută și în rețea"),
 		N_("Surse feeduri"),
@@ -1365,6 +1568,9 @@ TEXTE_PAGINA = {
 		N_("Caută și în rețea"),
 		N_("Dosarele de rețea (un calculator sau un NAS) nu se caută singure, pot răspunde greu:"),
 		N_("Actualizează toate"),
+		N_("Alege un fișier cu extensia .ipk."),
+		N_("Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB."),
+		N_("Se încarcă fișierul..."),
 	),
 }
 

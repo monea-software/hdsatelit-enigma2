@@ -48,6 +48,7 @@
 # kill) pe un fir separat, numai liste de argumente (fara shell), cu termen. Fisierul nu importa nimic din enigma2 la
 # incarcare: probele de pe PC dau un sistem fals.
 
+import json
 import os
 import signal
 import struct
@@ -80,6 +81,7 @@ CALE_RUTE = "/proc/net/route"
 SYS_NET = "/sys/class/net/"
 CTRL_WPA = "/var/run/wpa_supplicant"
 NUME_LOCAL = "/etc/init.d/hds-nume-local"
+STARE_NUME_LOCAL = "/var/run/hds-nume-local.stare"
 VIRTUALE = ("lo", "tun", "tap", "wg", "ppp", "ipsec", "gre", "sit", "dummy", "docker", "veth", "br-")
 CONF_NUCLEU = "/proc/sys/net/ipv4/conf/"
 SETARI_NUCLEU = (("ignore_routes_with_linkdown", "1"), ("arp_ignore", "1"), ("arp_announce", "2"), ("rp_filter", "2"))
@@ -97,6 +99,38 @@ def _(text):
 		return builtins._(text)
 	except (AttributeError, ImportError, NameError):
 		return text
+
+
+def nume_local_confirmat(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NUME_LOCAL):
+	"""Numele confirmat de avahi, cu ambele procese vii si o stare recenta.
+	10.11.2026 (0.7.3): serviciul nou care scrie starea (tools/hds-nume-local.py, fisa 79) nu e inca livrat; pachetul
+	hdsatelit-nume-local din strat are serviciul vechi, care nu scrie fisierul. Fara fisierul de stare, dar cu serviciul
+	vechi pe receptor, se arata hdsatelit.local ca in 0.7.2 (altfel pagina /retea si mesajele spuneau ca numele lipseste,
+	desi mergea). Cu serviciul nou, verificarea stricta de mai jos."""
+	if not os.path.exists(cale):
+		return "hdsatelit.local" if os.path.exists(init) else ""
+	try:
+		with open(cale, encoding="utf-8") as f:
+			stare = json.loads(f.read(4096))
+		varsta = (time.monotonic() if acum is None else acum) - float(stare["actualizat"])
+		if not 0 <= varsta <= 15:
+			return ""
+		for cheie, start in (("pid", "inceput"), ("publicator", "inceput_publicator")):
+			pid = int(stare[cheie])
+			if pid <= 1 or not stare[start]:
+				return ""
+			with open(os.path.join(proc, str(pid), "stat"), encoding="utf-8") as f:
+				date = f.read(4096).rsplit(")", 1)[1].split()
+			if date[0] in ("Z", "X") or date[19] != stare[start]:
+				return ""
+		nume = stare["nume"]
+		baza = nume[:-6] if nume.endswith(".local") else ""
+		if baza == "hdsatelit" or (baza.startswith("hdsatelit-") and
+			baza[10:].isascii() and baza[10:].isdigit()):
+			return nume
+	except (OSError, ValueError, OverflowError, KeyError, TypeError, IndexError, AttributeError):
+		pass
+	return ""
 
 
 def _ipv6DupaRetea():
@@ -772,7 +806,7 @@ class Comutator(object):
 			"cai": [{"id": c["id"], "fel": c["fel"], "placa": c["placa"], "nume": text_cale(c)} for c in lista],
 			"activa": text_cale(self.activa), "preferata": text_cale(self.preferata), "adresa": self.adresa,
 			"lucreaza": self.lucreaza, "amanat": self.amanat, "ultimul": self.ultimul, "t_ultimul": self.t_ultimul,
-			"fara_alternative": len(lista) < 2}
+			"fara_alternative": len(lista) < 2, "nume_local": nume_local_confirmat()}
 
 	# ---- pe firul enigma2
 	def tic(self, acum=None):
@@ -1057,7 +1091,11 @@ class Comutator(object):
 	def _noteaza(self, text, cale, rau=False):
 		linii = [text]
 		if self.adresa and not rau:
-			linii.append(_("Adresa receptorului: %s (sau hdsatelit.local).") % self.adresa)
+			nume = nume_local_confirmat()
+			if nume:
+				linii.append(_("Adresa receptorului: %s (sau %s).") % (self.adresa, nume))
+			else:
+				linii.append(_("Adresa receptorului: %s.") % self.adresa)
 		self.ultimul = " ".join(linii)
 		self.t_ultimul = time.time()
 		_jurnal(self.ultimul)

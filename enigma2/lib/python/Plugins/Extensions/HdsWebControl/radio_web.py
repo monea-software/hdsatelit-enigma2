@@ -115,6 +115,14 @@ def stare(sesiune=None, S=None, RD=None, DES=None, E=None):
 	S, RD, DES, E = _module(S, RD, DES, E)
 	rez = {"result": True, "ordine": list(S.ORDINE), "setari": _setari(S), "radio": False,
 		"ecran_vizibil": S.ecran_radio_vizibil(), "ecran_pornit": S.ecran_pornit()}
+	from Components.HdsTasteRapide import profil_context, ETICHETE_TASTE
+	try:
+		from Screens.InfoBar import InfoBar, hdsHbbtvDisponibil
+		hbbtv = hdsHbbtvDisponibil(InfoBar.instance)
+	except (ImportError, AttributeError):
+		hbbtv = False
+	rez["taste"] = profil_context("radio", hbbtv=hbbtv)
+	rez["nume_taste"] = dict(ETICHETE_TASTE)
 	if sesiune is None:
 		rez["mesaj"] = _t("Receptorul pornește.")
 		return rez
@@ -528,9 +536,7 @@ def texte_pagina():
 		"viz": _t("Altă vizualizare"),
 		"cul": _t("Alte culori"),
 		"egal": _t("Egalizator"),
-		# nota tastelor: fraza veche (tradusa) si fraza tastei verzi (egalizatorul), fiecare cu textul ei
-		"nota_taste": _t("Pe televizor, pe ecranul radio: tasta galbenă trece la altă vizualizare, tasta albastră la "
-			"alte culori. Alegerea se ține minte.") + " " + _t("Tasta verde deschide egalizatorul."),
+		"nota_taste": _t("Culorile urmează comenzile comune de vizionare. Preluarea lor de ecranul radio este opțională."),
 		"nota_bare": _t("Barele urmăresc sunetul adevărat al postului, pe benzi de frecvență, oricare ar fi formatul "
 			"sunetului (MPEG, AAC, AC-3, E-AC-3, DTS, PCM), și când sunetul pleacă neschimbat spre bara de sunet."),
 		"nu_raspunde": _t("Receptorul nu răspunde."),
@@ -639,7 +645,7 @@ PAGINA = """<!DOCTYPE html>
       <button type="button" id="culoriUrmatoare"><span class="patrat" style="background:#3a7bd5"></span><span id="txCul">Alte culori</span></button>
     </div>
     <p class="nota" id="alegeriAcum"></p>
-    <p class="nota" id="notaTaste">Pe televizor, pe ecranul radio: tasta galbenă trece la altă vizualizare, tasta albastră la alte culori. Alegerea se ține minte. Tasta verde deschide egalizatorul.</p>
+    <p class="nota" id="notaTaste">Culorile urmează comenzile comune de vizionare. Preluarea lor de ecranul radio este opțională.</p>
     <p class="nota" id="notaBare">Barele urmăresc sunetul adevărat al postului, pe benzi de frecvență, oricare ar fi formatul sunetului (MPEG, AAC, AC-3, E-AC-3, DTS, PCM), și când sunetul pleacă neschimbat spre bara de sunet.</p>
   </section>
   <section class="card" id="cardTehnic">
@@ -703,6 +709,10 @@ function randEmisiune(eticheta, t, extra){
   return d;
 }
 function arataPost(d){
+  if(d.taste){
+    text("notaTaste", d.taste.filter(function(r){ return ["red", "green", "yellow", "blue"].indexOf(r.key) >= 0; })
+      .map(function(r){ return (d.nume_taste[r.key] || r.key.toUpperCase()) + ": " + "Scurt: " + r.text_short + ". " + "Lung: " + r.text_long; }).join(". "));
+  }
   var radio = !!d.radio;
   ["cardEmisiuni", "cardRds", "cardSunet", "cardTehnic"].forEach(function(id){ $(id).classList.toggle("ascuns", !radio); });
   $("faraRadio").textContent = radio ? "" : (d.mesaj || "");
@@ -939,6 +949,12 @@ TEXTE_PAGINA = {
 		N_("Se trimite..."),
 	),
 }
+
+
+TEXTE_PAGINA["html"] += (
+	N_("Culorile urmează comenzile comune de vizionare. Preluarea lor de ecranul radio este opțională."),
+)
+TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
 
 
 def _traducePagina(sablon, fel="pagina"):

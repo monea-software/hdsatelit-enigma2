@@ -405,7 +405,14 @@ def _valoriSatelit(S, fel, cerere):
 	v["fel"] = fel
 	# o pozitie trimisa de mai multe ori se cauta o data (si pregateste() le deduplica)
 	pozitii = []
-	for p in (cerere or {}).get("pozitii") or []:
+	if "pozitii" in (cerere or {}):
+		alese = cerere["pozitii"] or []
+	elif fel == "mai_multi":
+		from Screens.ScanerCablu import citeste_config
+		alese = citeste_config(S.CALE_CONFIG, {"pozitii": ""})["pozitii"].split(",")
+	else:
+		alese = []
+	for p in alese:
 		if str(p).lstrip("-").isdigit() and p not in pozitii:
 			pozitii.append(p)
 	v["pozitii"] = pozitii
@@ -988,14 +995,22 @@ def _salveazaConfigSatelit(S, fel, v):
 	"""Ca ecranul de pe televizor la Verde (_scrie_config): ultimele valori raman pentru data viitoare, si pe
 	televizor, si in pagina."""
 	c = S._citeste_config()
+	# Bifele web au acelasi fisier; cititorul ecranului de satelit nu foloseste acest camp.
+	from Screens.ScanerCablu import citeste_config
+	pozitii = citeste_config(S.CALE_CONFIG, {"pozitii": ""})["pozitii"]
+	if pozitii:
+		c["pozitii"] = pozitii
 	c.pop("tip", None)
 	for cheie in list(c.keys()):
-		if cheie in v and cheie not in ("operator", "operator_dvbt2", "operator_dab"):
+		if cheie in v and cheie not in ("operator", "operator_dvbt2", "operator_dab", "pozitii"):
 			c[cheie] = str(v[cheie])
 	if fel in S.CAMP_OPERATOR and v.get("operator"):
 		c[S.CAMP_OPERATOR[fel]] = str(v["operator"])
 	c["fel"] = fel
+	if fel == "mai_multi":
+		c["pozitii"] = ",".join(str(p) for p in v.get("pozitii") or [])
 	S._scrie_config(c)
+	return citeste_config(S.CALE_CONFIG, dict.fromkeys(c)) == {k: str(x) for k, x in c.items()}
 
 
 def _salveazaConfigCabluTerestru(scaner, M, fel, v):
@@ -1010,6 +1025,69 @@ def _salveazaConfigCabluTerestru(scaner, M, fel, v):
 	if fel == "operator" and "operator_ales" in c:
 		c["operator_ales"] = "1"
 	C.scrie_config(clasa.CALE_CONFIG, c, clasa.ANTET_CONFIG)
+	return C.citeste_config(clasa.CALE_CONFIG, dict.fromkeys(c)) == {k: str(x) for k, x in c.items()}
+
+
+# Ordinea alegerilor unei file ramane valabila si cand citirea listelor se termina invers.
+# Identificatorul este numai pentru ordonare, fara rol de autentificare.
+_PARAMETRI_VERSIUNI = {}
+MAX_FILE_PARAMETRI = 128
+
+
+def _versiuneParametri(client, versiune):
+	if not isinstance(client, str) or not 8 <= len(client) <= 64 or not client.isascii() or not client.isalnum():
+		return False
+	try:
+		numar = int(versiune)
+	except (ValueError, TypeError):
+		return False
+	if not 0 < numar <= 9007199254740991:
+		return False
+	if numar <= _PARAMETRI_VERSIUNI.get(client, 0):
+		return None
+	if client not in _PARAMETRI_VERSIUNI and len(_PARAMETRI_VERSIUNI) >= MAX_FILE_PARAMETRI:
+		_PARAMETRI_VERSIUNI.pop(next(iter(_PARAMETRI_VERSIUNI)))
+	_PARAMETRI_VERSIUNI[client] = numar
+	return numar
+
+
+def salveazaParametrii(scaner, fel, cerere, client=None, versiune=None):
+	"""Pastreaza numai valorile valide ale formularului. Nu deschide ecranul si nu ia tunerul."""
+	if client is not None and _PARAMETRI_VERSIUNI.get(client) != versiune:
+		return {"result": True, "depasit": True}
+	M = _modulScaner(scaner)
+	if M is None:
+		return {"result": False, "message": _t("Scaner necunoscut: %s.") % scaner}
+	feluri = [f for f, _n in M.FELURI] if scaner == "satelit" else list(M.FELURI)
+	if fel not in feluri:
+		return {"result": False, "message": _t("Fel de scanare necunoscut: %s.") % fel}
+	if scaner == "satelit":
+		v = _valoriSatelit(M, fel, cerere)
+		campuri, _info = _campuriSatelit(M, fel, v)
+		rez = M.pregateste(fel, _valoriPregateste(M, fel, v))
+	else:
+		v = _valoriCabluTerestru(scaner, M, fel, cerere)
+		campuri = _campuriCabluTerestru(M, fel, v)
+		rez = M.pregateste(fel, v)
+	if rez.get("eroare") or rez.get("de_ales"):
+		return {"result": False, "message": rez.get("eroare") or rez.get("text", "")}
+	if scaner == "satelit" and fel == "manual":
+		# Pastreaza valorile pe care validarea le-a normalizat, nu codurile vechi din cerere.
+		tp = rez["transpondere"][0]
+		for camp, parametru in (("sistem", "system"), ("pol", "polarisation"), ("fec", "fec"),
+			("mod", "modulation"), ("rolloff", "rolloff"), ("pilot", "pilot"), ("inversare", "inversion"),
+			("pls_mod", "pls_mode"), ("pls_cod", "pls_code")):
+			if parametru in tp:
+				v[camp] = str(tp[parametru])
+	# Parametrii ascunsi ai altui fel raman cum i-a lasat omul, chiar daca o cerere ii trimite.
+	valori = {c["cheie"]: v[c["cheie"]] for c in campuri if c["cheie"] in v}
+	if scaner == "satelit":
+		pastrat = _salveazaConfigSatelit(M, fel, valori)
+	else:
+		pastrat = _salveazaConfigCabluTerestru(scaner, M, fel, valori)
+	if not pastrat:
+		return {"result": False, "message": _t("Nu se poate scrie fișierul cu parametri.")}
+	return {"result": True}
 
 
 def _pornesteFluxuri(S, sesiune, rez):
@@ -1068,7 +1146,7 @@ def fluxuri(actiune, post=None):
 def porneste(scaner, fel, cerere=None, confirmat=False):
 	"""Porneste pe televizor felul de scanare ales, cu valorile date. Acelasi drum ca Verde in ecran: pregateste(),
 	apoi ServiceScan (sau CautareFluxuri la DVB-T2 si DAB+ prin satelit). Doua raspunsuri cer inca un pas din pagina:
-	„intrebare" (o scanare lunga sau DVB-T2 pe care nucleul nu il stie inca: se porneste numai cu confirmat) si
+	"intrebare" (DVB-T2 pe care nucleul nu il stie inca: se porneste numai cu confirmat) si
 	„de_ales" (DVB-S2 fara FEC: se alege modulatia si FEC-ul, apoi se trimite din nou)."""
 	M = _modulScaner(scaner)
 	if M is None:
@@ -1695,22 +1773,52 @@ def rute(baza, resource, NOT_DONE_YET):
 
 	class PornesteResource(_PeFir):
 		"""POST /api/scanare-porneste?scaner=&fel=&...: porneste cautarea pe televizor. Cu `confirmat=1` dupa o
-		intrebare. Schimba ceva pe receptor: cu cookie cere POST, aceeasi origine si antetul CSRF."""
+		intrebare. `actiune=parametri` pastreaza numai alegerile, fara pornire. Cu cookie cere POST, origine si CSRF."""
 		schimbaCeva = True
 
 		def render_POST(self, request):
 			cerere = argumente(request)
+			actiune = cerere.pop("actiune", "")
+			if actiune == "parametri":
+				return self._pastreaza(request, cerere)
+			if actiune:
+				return self._eroare(request, _t("Cererea nu este validă."))
 			scaner = cerere.pop("scaner", "")
 			fel = cerere.pop("fel", "")
 			confirmat = cerere.pop("confirmat", "") in ("1", "da", "true")
 			if scaner not in SCANERE:
 				return self._eroare(request, _t("Scaner necunoscut: %s.") % scaner)
+			client = cerere.pop("client", "")
+			numar = cerere.pop("versiune", "")
+			versiune = _versiuneParametri(client, numar) if client or numar else None
+			if versiune is False:
+				return self._eroare(request, _t("Cererea nu este validă."))
+			def _porneste():
+				if client and (versiune is None or _PARAMETRI_VERSIUNI.get(client) != versiune):
+					return {"result": False, "message": _t("Alegerile s-au schimbat. Încearcă din nou.")}
+				return porneste(scaner, fel, cerere, confirmat)
 			cai = caiDeCitit(scaner)
-			return self._peFir(request, lambda: incalzeste(scaner, cai),
-				lambda: porneste(scaner, fel, cerere, confirmat))
+			return self._peFir(request, lambda: incalzeste(scaner, cai), _porneste)
 
 		def render_GET(self, request):
+			if argumente(request).get("actiune") == "parametri":
+				return self._eroare(request, _t("Cererea nu este validă."), 405)
 			return self.render_POST(request)     # numai cu ?token= (scripturi); din browser poarta cere POST
+
+		def _pastreaza(self, request, cerere):
+			scaner = cerere.pop("scaner", "")
+			fel = cerere.pop("fel", "")
+			client = cerere.pop("client", "")
+			versiune = _versiuneParametri(client, cerere.pop("versiune", ""))
+			if versiune is False:
+				return self._eroare(request, _t("Cererea nu este validă."))
+			if versiune is None:
+				return self._raspunde(request, {"result": True, "depasit": True})
+			if scaner not in SCANERE:
+				return self._eroare(request, _t("Scaner necunoscut: %s.") % scaner)
+			cai = caiDeCitit(scaner)
+			return self._peFir(request, lambda: incalzeste(scaner, cai),
+				lambda: salveazaParametrii(scaner, fel, cerere, client, versiune))
 
 	class StareResource(baza):
 		"""GET /api/scanare-stare: starea cautarii (procent, canale, transpondere, timp ramas, rezultat)."""
@@ -1943,6 +2051,7 @@ PAGINA = """<!DOCTYPE html>
     <div class="butoane">
       <button type="button" class="buton" id="cauta">Caută acum</button>
     </div>
+    <p class="nota" id="stareParametri" role="status">Alegerile valide se păstrează automat, fără pornirea căutării.</p>
     <div class="mesaj" id="mesajCautare" role="status"></div>
   </div>
 </section>
@@ -1957,7 +2066,7 @@ PAGINA = """<!DOCTYPE html>
   <div class="retea ascuns" id="reteaGasita"><small id="reteaTitlu"></small><b id="reteaNume"></b><div id="reteaDate"></div><p class="nota" id="reteaIndiciu"></p><details id="reteaFrecvente"><summary id="reteaFrecventeTitlu"></summary><div class="tabel"><table><thead><tr id="reteaFrecventeCap"></tr></thead><tbody id="reteaFrecventeRanduri"></tbody></table></div></details></div>
   <div class="posturi ascuns" id="posturiGasite"></div>
   <details class="ascuns" id="textBrut"><summary>Text brut</summary><p class="nota">Răspunsul detectorului și notele scanării, așa cum le arată televizorul pe tasta albastră.</p><pre class="brut" id="textBrutPre"></pre></details>
-  <p class="nota ascuns" id="pisteDupa">Pistele canalelor găsite (teletext, subtitrări, limbile sunetului, HbbTV) se citesc din <a href="/cautare">Căutare canale</a>, cu „Actualizează pistele”. La închiderea căutării, televizorul întreabă și el, dacă au rămas canale cu pistele necitite.</p>
+  <p class="nota ascuns" id="pisteDupa">Poți citi teletextul, subtitrările, limbile sunetului și HbbTV pentru canalele acestei scanări din <a href="/cautare?dupa_scanare=1">Căutare canale</a>, cu "Actualizează pistele". Citirea pornește numai dacă o alegi.</p>
   <div class="butoane">
     <button type="button" class="buton ascuns" id="dinNou">Caută din nou</button>
     <button type="button" class="buton secundar ascuns" id="opreste">Oprește căutarea</button>
@@ -1973,15 +2082,27 @@ PAGINA = """<!DOCTYPE html>
 <script>
 var CFG = __CONFIG__;
 var S = {structura: null, sectiune: "scanare", grup: "", scaner: "", fel: "", valori: {}, campuri: null,
-  asteptare: null, ceasStare: null, ceasSemnal: null, antena: null, tintaAntena: "", nrCampuri: 0};
+  asteptare: null, ceasStare: null, ceasSemnal: null, antena: null, tintaAntena: "", nrCampuri: 0,
+  parametriModificati: false};
+// Numai identitatea filei si ordinea cererilor, fara parametri sau date de acces in storage.
+var PASTRARE = {client: "", versiune: 0, ceas: null};
+try{
+  PASTRARE.client = sessionStorage.getItem("hdsScanClient") || "";
+  PASTRARE.versiune = Number(sessionStorage.getItem("hdsScanVersiune")) || 0;
+}catch(e){}
+if(!/^[a-z0-9]{8,64}$/.test(PASTRARE.client)){
+  PASTRARE.client = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  PASTRARE.versiune = 0;
+}
 
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
   return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
 }
-function cerere(cale, metoda, date){
+function cerere(cale, metoda, date, laIesire){
   var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
+  if(laIesire){ optiuni.keepalive = true; }
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
   if(date){
     optiuni.headers["Content-Type"] = "application/x-www-form-urlencoded";
@@ -2101,7 +2222,7 @@ function alegeGrupul(cheie, fel){
   var ales = null;
   g.copii.forEach(function(x){
     if(x.scaner && x.fel){
-      var b = buton(x.text, false, function(){ alegeFelul(x); });
+      var b = buton(x.text, false, function(){ alegeFelul(x, true); });
       b.className = "";
       b.setAttribute("aria-pressed", "false");
       b.dataset.fel = x.scaner + "/" + x.fel;
@@ -2113,12 +2234,14 @@ function alegeGrupul(cheie, fel){
   });
   if(ales){ alegeFelul(ales); } else { S.fel = ""; arata($("formular"), false); scrieAdresa(); }
 }
-function alegeFelul(x){
+function alegeFelul(x, modificat){
   // felul cu pagina lui (web= din menu.xml, in afara lui /scanare: Căutare oarbă -> /oarba) se deschide acolo
   if(x.web && x.web.indexOf("/scanare") !== 0){ location.href = x.web; return; }
   S.scaner = x.scaner;
   S.fel = x.fel;
   S.valori = {};
+  goleste($("campuri"));
+  if(modificat){ S.parametriModificati = true; pastreazaParametrii(); }
   Array.prototype.forEach.call($("feluri").children, function(b){
     if(b.dataset && b.dataset.fel){ b.setAttribute("aria-pressed", b.dataset.fel === x.scaner + "/" + x.fel ? "true" : "false"); }
   });
@@ -2156,6 +2279,40 @@ function parametri(){
   });
   return p;
 }
+function pastreazaParametrii(){
+  if(PASTRARE.ceas){ clearTimeout(PASTRARE.ceas); PASTRARE.ceas = null; }
+  if(!S.parametriModificati || !S.scaner || !S.fel){ return; }
+  var p = parametri(), semn = p.toString(), nr = versiuneParametri(p);
+  p.set("actiune", "parametri");
+  mesaj($("stareParametri"), "Se păstrează alegerile...");
+  cerere("/api/scanare-porneste", "POST", p, true).then(function(d){
+    if(nr !== PASTRARE.versiune || semn !== parametri().toString() || d.depasit){ return; }
+    mesaj($("stareParametri"), d.result ? "Alegerile au fost păstrate." :
+      "Alegerile nu s-au păstrat: " + (d.message || ""), !d.result);
+  }).catch(function(){
+    if(nr === PASTRARE.versiune && semn === parametri().toString()){
+      mesaj($("stareParametri"), "Alegerile nu s-au păstrat. Receptorul nu răspunde.", true);
+    }
+  });
+}
+function versiuneParametri(p){
+  var nr = ++PASTRARE.versiune;
+  try{
+    sessionStorage.setItem("hdsScanClient", PASTRARE.client);
+    sessionStorage.setItem("hdsScanVersiune", String(nr));
+  }catch(e){}
+  p.set("client", PASTRARE.client); p.set("versiune", String(nr));
+  return nr;
+}
+function schimbaParametrii(){
+  S.parametriModificati = true;
+  citesteCampurile();
+  pastreazaParametrii();
+  incarcaCampuri();
+}
+window.addEventListener("pagehide", function(){
+  if(S.parametriModificati){ citesteCampurile(); pastreazaParametrii(); }
+});
 function incarcaCampuri(){
   var nr = ++S.nrCampuri;
   mesaj($("previz"), "Se pregătește...");
@@ -2201,7 +2358,7 @@ function deseneazaCampuri(d){
         gol.selected = true;
         s.insertBefore(gol, s.firstChild);
       }
-      s.addEventListener("change", function(){ S.valori[c.cheie] = s.value; incarcaCampuri(); });
+      s.addEventListener("change", function(){ S.valori[c.cheie] = s.value; schimbaParametrii(); });
       f.appendChild(s);
       S.valori[c.cheie] = c.valoare;
     } else if(c.tip === "bife"){
@@ -2214,7 +2371,7 @@ function deseneazaCampuri(d){
         b.type = "checkbox";
         b.value = o.cod;
         b.checked = alese.indexOf(o.cod) !== -1;
-        b.addEventListener("change", function(){ S.valori[c.cheie] = bifate(cutie); incarcaCampuri(); });
+        b.addEventListener("change", function(){ S.valori[c.cheie] = bifate(cutie); schimbaParametrii(); });
         r.appendChild(b);
         r.appendChild(el("span", "", o.text));
         cutie.appendChild(r);
@@ -2233,7 +2390,13 @@ function deseneazaCampuri(d){
       i.type = "text";
       i.inputMode = "decimal";
       i.value = c.valoare || "";
-      i.addEventListener("change", function(){ S.valori[c.cheie] = i.value.trim(); incarcaCampuri(); });
+      i.addEventListener("input", function(){
+        S.valori[c.cheie] = i.value.trim(); S.parametriModificati = true;
+        ++S.nrCampuri; // un raspuns de previzualizare mai vechi nu inlocuieste textul nou
+        if(PASTRARE.ceas){ clearTimeout(PASTRARE.ceas); }
+        PASTRARE.ceas = setTimeout(pastreazaParametrii, 300);
+      });
+      i.addEventListener("change", function(){ S.valori[c.cheie] = i.value.trim(); schimbaParametrii(); });
       f.appendChild(i);
       S.valori[c.cheie] = c.valoare || "";
     }
@@ -2248,7 +2411,7 @@ function bifate(cutie){
 function bifeaza(cutie, da, cheie){
   Array.prototype.forEach.call(cutie.querySelectorAll("input"), function(b){ b.checked = da; });
   S.valori[cheie] = bifate(cutie);
-  incarcaCampuri();
+  schimbaParametrii();
 }
 function deseneazaPrevizualizarea(p, plan){
   if(p.eroare){ mesaj($("previz"), p.eroare, true); return; }
@@ -2286,10 +2449,13 @@ function citesteCampurile(){
   });
 }
 
-// ---- pornirea: intrebarea (cautare lunga, DVB-T2) si alegerea FEC-ului la DVB-S2 se fac aici, apoi se trimite iar
+// ---- pornirea: acordul DVB-T2 sau al motorului si alegerea FEC-ului la DVB-S2, apoi se trimite iar
 function cauta(confirmat, alegere){
   citesteCampurile();
+  if(PASTRARE.ceas){ clearTimeout(PASTRARE.ceas); PASTRARE.ceas = null; }
   var p = parametri();
+  versiuneParametri(p); // pornirea invalideaza autosalvarile mai vechi ale filei
+  S.parametriModificati = false; // pagehide nu retrimite o autosalvare peste pornirea in asteptare
   if(confirmat){ p.set("confirmat", "1"); }
   if(alegere){ p.set("mod", alegere.mod); p.set("fec", alegere.fec); }
   $("cauta").disabled = true;
@@ -2306,7 +2472,10 @@ function cauta(confirmat, alegere){
       planificaStarea(1000);
       return;
     }
-    if(d.intrebare){ arataIntrebarea(d.intrebare, null, d.plan, d.buton_da); mesaj($("mesajCautare"), ""); return; }
+    if(d.intrebare){
+      S.parametriModificati = true; pastreazaParametrii();
+      arataIntrebarea(d.intrebare, null, d.plan, d.buton_da); mesaj($("mesajCautare"), ""); return;
+    }
     if(d.de_ales){ arataIntrebarea(d.message, d.de_ales); mesaj($("mesajCautare"), ""); return; }
     mesaj($("mesajCautare"), d.message || "Căutarea nu a pornit.", true);
     if(d.stare){ deseneazaStarea(d.stare); }
@@ -2442,8 +2611,8 @@ function deseneazaStarea(d){
   goleste(rez);
   (d.rezultat || []).forEach(function(r){ rez.appendChild(el("li", "", r)); });
   deseneazaReteaua(d.retea_gasita);
-  // pereche web a intrebarii de pe televizor dupa o scanare terminata cu canale (Screens/ServiceScan.hdsPisteDupaScanare)
-  arata($("pisteDupa"), !!(d.inchisa && d.gata && d.canale > 0 && d.fel_lucru !== "fluxuri"));
+  // Oferta sta in rezultat, ca pe televizor; nu porneste citirea pistelor.
+  arata($("pisteDupa"), !!(d.gata && d.canale > 0 && d.fel_lucru !== "fluxuri"));
   deseneazaPosturile(d, f);
   var brut = (f && d.text_brut) ? d.text_brut : "";
   arata($("textBrut"), !!brut);
@@ -2628,7 +2797,10 @@ function cartelaTunere(c){
       }
     }
   });
-  c.appendChild(el("p", "nota", "Setările se schimbă pe televizor, în ecranul Setări tuner."));
+  c.appendChild(el("p", "nota", "Configurarea completă a tunerului se face pe televizor, în Setări tuner. Dacă LNB-ul este deja configurat, poți schimba Unicable I / II (JESS) din legătura de mai jos."));
+  var unicable = el("a", "buton", "Unicable I / II (JESS)");
+  unicable.href = adresa("/antena/lnb") + "#cardUnicable";
+  c.appendChild(butoane([unicable]));
 }
 // tunerul B porneste singur daca are semnal: starea probei automate, ca randul din Setari tuner, si "Încearcă din nou"
 function randAuto(c, t){
@@ -2840,12 +3012,13 @@ TEXTE_PAGINA = {
 		N_("Caută totuși"),
 		N_("Renunță"),
 		N_("Caută acum"),
+		N_("Alegerile valide se păstrează automat, fără pornirea căutării."),
 		N_("Căutarea de pe televizor"),
 		N_("Text brut"),
 		N_("Răspunsul detectorului și notele scanării, așa cum le arată televizorul pe tasta albastră."),
-		N_("Pistele canalelor găsite (teletext, subtitrări, limbile sunetului, HbbTV) se citesc din <a "
-			"href=\"/cautare\">Căutare canale</a>, cu „Actualizează pistele”. La închiderea căutării, "
-			"televizorul întreabă și el, dacă au rămas canale cu pistele necitite."),
+		N_('Poți citi teletextul, subtitrările, limbile sunetului și HbbTV pentru canalele acestei scanări din '
+			'<a href="/cautare?dupa_scanare=1">Căutare canale</a>, cu "Actualizează pistele". '
+			'Citirea pornește numai dacă o alegi.'),
 		N_("Caută din nou"),
 		N_("Oprește căutarea"),
 		N_("Rotirea antenei"),
@@ -2857,6 +3030,10 @@ TEXTE_PAGINA = {
 		N_("Acest ecran se folosește pe televizor."),
 		N_("Deschide pe televizor"),
 		N_("Se pregătește..."),
+		N_("Se păstrează alegerile..."),
+		N_("Alegerile au fost păstrate."),
+		N_("Alegerile nu s-au păstrat: "),
+		N_("Alegerile nu s-au păstrat. Receptorul nu răspunde."),
 		N_("Receptorul nu răspunde."),
 		N_("Alege din listă"),
 		N_("Lista e goală"),
@@ -2942,7 +3119,9 @@ TEXTE_PAGINA = {
 		N_("Locul pentru USALS"),
 		N_("Sateliți"),
 		N_("(toți din lista motorului)"),
-		N_("Setările se schimbă pe televizor, în ecranul Setări tuner."),
+		N_("Configurarea completă a tunerului se face pe televizor, în Setări tuner. Dacă LNB-ul este deja "
+			"configurat, poți schimba Unicable I / II (JESS) din legătura de mai jos."),
+		N_("Unicable I / II (JESS)"),
 		N_("Receptorul nu are tuner de satelit."),
 		N_(", prag"),
 		N_("În modul simplu receptorul folosește LNB-ul universal de mai sus."),

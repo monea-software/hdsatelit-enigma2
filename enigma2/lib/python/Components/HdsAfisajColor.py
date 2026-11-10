@@ -12,8 +12,9 @@ from Components import HdsAfisajPersonaj as P
 from Components import HdsAfisajCompat as K
 
 DOSAR = "/usr/share/enigma2/HDSatelit/afisaj-color"
-MODELE = {"vusolo4k": (480, 320), "vuuno4kse": (400, 240),
-	"vuduo4k": (480, 320)}
+MODELE = {"vusolo4k": (480, 320, 32), "vuuno4kse": (400, 240, 32),
+	"vuduo4k": (480, 320, 32), "vuduo4kse": (480, 320, 32),
+	"gbquad4kpro": (400, 240, 16)}
 LIVE = ("nu", "imagine", "osd")
 PICON = ("nu", "singur", "nume_ora")
 
@@ -50,7 +51,7 @@ def detecteaza(radacina="/proc/stb/lcd", model=None):
 	model = (_model() if model is None else model).lower().replace(" ", "")
 	marime = MODELE.get(model)
 	if marime:
-		return {"latime": marime[0], "inaltime": marime[1], "bpp": 32}
+		return {"latime": marime[0], "inaltime": marime[1], "bpp": marime[2]}
 	return None
 
 
@@ -186,6 +187,11 @@ class Afisaj(A.Afisaj):
 		self.ecran = None
 		self.color_imagine = ""
 		self.color_text = ""
+		self.color_scena = None
+		self.color_revizie = ""
+		self.color_cadru = None
+		self._colorValoare = None
+		self._vremeEcrane = set()
 		self._refPicon = None
 		self._picon = ""
 		self._piconLa = 0
@@ -213,11 +219,11 @@ class Afisaj(A.Afisaj):
 		if treapta is not None:
 			from enigma import eDBoxLCD
 			# API-ul LCD asteapta numar zecimal 0..255.
-			eDBoxLCD.getInstance().setLCDBrightness(round((treapta - 1) * 255 / 6))
+			eDBoxLCD.getInstance().setLCDBrightness(int(A.valoareLumina(treapta, A.TREPTE_LUMINA_COLOR)))
 		self.lumina = treapta
 
 	def _sigla(self, acum):
-		from Components.Renderer.Picon import cauta_sigla, generatie_sigle
+		from Tools.PiconResolver import cauta_sigla, generatie_sigle
 		ref = self.ctx.ref()
 		ref = ref.toString() if ref is not None else ""
 		g = generatie_sigle()
@@ -251,6 +257,8 @@ class Afisaj(A.Afisaj):
 			mod = "nu"
 		if mod != "nu":
 			self.ultim = "live"
+			self.color_cadru = None
+			self.color_revizie = "live"
 			if self.ecran is not None:
 				self.ecran.hide()
 			self.color_imagine = ""
@@ -261,63 +269,123 @@ class Afisaj(A.Afisaj):
 		a = self.mesajul or self.arata
 		if a is None:
 			return ms
+		from Components import HdsAfisajScena as S
+		from Components import HdsAfisajRandare as R
 		secunde = max(0.0, acum - a.cititLa)
-		text = textColor(a.pereche, secunde, a.intrare.d.id,
-			getattr(getattr(a.intrare, "f", None), "id", ""))
-		imagine = ""
-		titlu = A._(getattr(a.intrare.d, "eticheta", ""))
+		id_ = a.intrare.d.id
+		if self._vremeEcrane and self.mesajul is None and not self.inAsteptare:
+			id_ = "vremea.acum"
+		format_ = getattr(getattr(a.intrare, "f", None), "id", "")
+		text = textColor(a.pereche, secunde, id_, format_)
 		fel = a.pereche[0] if a.pereche else "fix"
+		animatii = getattr(getattr(c, "color_animatii", None), "value", "nu") == "da"
+		imagine = ""
 		if fel == "personaj":
-			e = a.intrare.expresie
 			marime = "400x240" if self.infoColor["latime"] == 400 else "480x320"
-			imagine = pozaExpresie(e, a.cadru, marime)
-			# Cate o poza intermediara la inchiderea si deschiderea ochilor.
-			urmator = min(a.cadru + 1, len(e.cadre) - 1)
-			inchis = tuple(e.cadre[a.cadru]) == P.F_INCHISI
-			inchide = tuple(e.cadre[urmator]) == P.F_INCHISI
-			if inchis or inchide:
-				ramas = a.cadruLa + e.durate[a.cadru] / 1000.0 - acum
-				if 0 < ramas <= 0.085:
-					imagine = "afisaj-color/%s/stari/01.png" % marime
-				elif ramas > 0.085:
-					ms = min(ms, max(20, int((ramas - 0.08) * 1000)))
-			titlu = P.nume(e)
-		elif a.intrare.d.id == "vremea.acum":
-			from Components import HdsVremea as V
-			vreme = V.date()
-			titlu = vreme.get("oras", "")
-			text = V.textTemperatura(vreme.get("temperatura"),
-				V.setari()["unitate"])
-			stare = V._t(vreme.get("stare") or "")
-			text = " ".join(t for t in (text, stare) if t)
-			imagine = vreme.get("pictograma", "")
-			fel = "vremea"
-		elif c.color_picon.value != "nu" and not self.inAsteptare and self.mesajul is None:
-			imagine = self._sigla(acum)
-			if imagine:
-				fel = "picon"
-				text = self.ctx.numeServiciu() if c.color_picon.value == "nume_ora" else ""
-				titlu = ""
-		self.color_imagine, self.color_text = imagine, text
-		stins = fel != "picon" and a.intrare.d.id in ("texte.nimic", "asteptare.stins")
+			imagine = pozaExpresie(a.intrare.expresie, a.cadru if animatii else 0, marime)
+			if animatii:
+				# O singura poza intermediara la clipire.
+				e = a.intrare.expresie
+				urmator = min(a.cadru + 1, len(e.cadre) - 1)
+				inchis = tuple(e.cadre[a.cadru]) == P.F_INCHISI
+				inchide = tuple(e.cadre[urmator]) == P.F_INCHISI
+				if inchis or inchide:
+					ramas = a.cadruLa + e.durate[a.cadru] / 1000.0 - acum
+					if 0 < ramas <= 0.085:
+						imagine = "afisaj-color/%s/stari/01.png" % marime
+					elif ramas > 0.085:
+						ms = min(ms, max(20, int((ramas - 0.08) * 1000)))
+		elif id_ in ("canal.numar", "canal.nume", "canal.numar_nume", "evenimente.zap"):
+			imagine = self._sigla(acum) if c.color_picon.value != "nu" else ""
+		detalii = dict(imagine=imagine, format=format_,
+			titlu=A._(getattr(a.intrare.d, "eticheta", "")),
+			picon_mode=c.color_picon.value)
+		if self._colorValoare and self._colorValoare[0] is a:
+			detalii["valoare"] = self._colorValoare[1]
+		if self.inAsteptare:
+			detalii["asteptare"] = self.previzualizareAsteptare or c.asteptare.value
+		if self.recEsuatLa is not None and 0 <= acum - self.recEsuatLa < A.REC_ESUAT_S:
+			if id_ != "evenimente.actualizare":
+				detalii["rec_esuat"] = True
+				id_ = "evenimente.rec_esuata"
+		scena = S.scena(self.ctx, id_, text, a.pereche, acum, detalii)
+		if (c.color_picon.value != "nu" and not self.inAsteptare
+				and self.mesajul is None and not self._vremeEcrane):
+			picon = self._sigla(acum)
+			if picon and scena["pagina"] != "inregistrare_esuata":
+				scena.update(pagina="picon", imagine=picon, stins=False,
+					titlu=self.ctx.numeServiciu(), picon_mode=c.color_picon.value)
+		scena["bara"] = getattr(getattr(c, "color_bara", None), "value", "da") == "da"
+		self.color_scena = scena
+		self.color_imagine, self.color_text = scena.get("imagine", ""), scena.get("valoare", text)
+		self.color_cadru = R.cadru(scena, (self.infoColor["latime"], self.infoColor["inaltime"]))
+		self.color_revizie = self.color_cadru[2]
+		R.pastreaza(self.color_cadru[1])
 		if self.ecran is not None:
+			self.ecran.arataCadru(self.color_cadru[1])
 			self.ecran.show()
-			self.ecran.arata(titlu, text, imagine, fel, a.pereche,
-				a.intrare.d.id, secunde, self.viteza(), stins,
-				c.color_picon.value != "singur" or fel != "picon")
-			if self.ecran.animat:
-				ms = min(ms, 50)
-		if fel in ("alternat", "secventa") or c.color_picon.value != "nu":
-			ms = min(ms, 1000)
 		return ms
 
+	def _trebuieNumar(self):
+		return True
+
+	def _puneExpresia(self, e, acum):
+		m = self.mesajul
+		if m and m.intrare.d.id in ("evenimente.actualizare", "evenimente.fara_semnal"):
+			return
+		if self.recEsuatLa is not None and 0 <= acum - self.recEsuatLa < A.REC_ESUAT_S:
+			return
+		A.Afisaj._puneExpresia(self, e, acum)
+
+	def _pana(self, a, acum):
+		# Cadrele LED nu dicteaza redesenarea LCD-ului. O scena statica sta pe loc.
+		c = A._cfg()
+		animatii = getattr(getattr(c, "color_animatii", None), "value", "nu") == "da"
+		if a.pereche and a.pereche[0] == "personaj" and animatii:
+			return A.Afisaj._pana(self, a, acum)
+		cand = [acum + A.DORMI_MAXIM_S]
+		if self._vremeEcrane:
+			cand.append(acum + 10)
+		for termen in (a.pana, self.previzualizarePana):
+			if termen is not None:
+				cand.append(termen)
+		if self.recEsuatLa is not None:
+			sfarsit = self.recEsuatLa + A.REC_ESUAT_S
+			if sfarsit > acum:
+				cand.append(sfarsit)
+		if self.motorPana is not None:
+			cand.append(acum + A.MOTOR_PAS_S)
+		if self.mesajul is None:
+			r = self._candCiteste(a)
+			if r is not None:
+				cand.append(r)
+		r = self._personajCand(acum)
+		if r is not None:
+			cand.append(r)
+		id_ = a.intrare.d.id
+		if id_.startswith(("canal.", "emisiune.")) or id_ == "evenimente.zap":
+			cand.append(acum + 1)
+		elif a.pereche and a.pereche[0] in ("alternat", "secventa"):
+			cand.append(acum + 2)
+		return max(20, int((min(cand) - acum) * 1000 + 0.5))
+
+	def _laInregistrare(self, serviciu, eveniment):
+		A.Afisaj._laInregistrare(self, serviciu, eveniment)
+		# Semnul REC si eroarea nu depind de animatia personajului.
+		self.timer.start(0, True)
+
 	def _puneMesaj(self, id_data, valoare, secunde=None):
+		# Actualizarea in curs nu poate fi acoperita de volum sau de zap.
+		m = self.mesajul
+		if m is not None and m.intrare.d.id == "evenimente.actualizare":
+			if id_data != "evenimente.actualizare" and m.pana > self.ceas():
+				return False
+		if secunde is None:
+			secunde = {"evenimente.volum": 2, "evenimente.mut": 2,
+				"evenimente.zap": 8, "evenimente.rec": 4}.get(id_data)
 		if not A.Afisaj._puneMesaj(self, id_data, valoare, secunde):
 			return False
-		# Durata automata urmeaza textul LCD, nu cele patru pozitii LED.
-		m = self.mesajul
-		if secunde is None and m.pereche and m.pereche[0] == "derulat":
-			m.pana = self.ceas() + max(3.0, len(str(m.pereche[1])) * 0.16)
+		self._colorValoare = (self.mesajul, valoare)
 		return True
 
 	def textAcum(self):
@@ -328,9 +396,69 @@ class Afisaj(A.Afisaj):
 		A.Afisaj._iesiDinAsteptare(self)
 
 	def opreste(self):
+		if self.pastreazaLaOprire and self.color_scena:
+			from Components import HdsAfisajRandare as R
+			s = dict(self.color_scena, pagina="actualizare", progres=None,
+				procent=None, valoare="", detaliu=A._("Se scrie"))
+			self.color_scena = s
+			self.color_cadru = R.cadru(s, (self.infoColor["latime"], self.infoColor["inaltime"]))
+			self.color_revizie = self.color_cadru[2]
+			if self.ecran is not None:
+				self.ecran.arataCadru(self.color_cadru[1])
 		A.Afisaj.opreste(self)
 		if K.permite("live", color=True):
 			self.live.opreste()
-		if self.ecran is not None:
+		if self.ecran is not None and not self.pastreazaLaOprire:
 			self.session.deleteDialog(self.ecran)
 			self.ecran = None
+
+
+def cadruPrevizualizare(alegere="", expresie="", cadru=0, valori=None):
+	"""Unicul cadru nativ, pentru LCD, meniu si web; nu scrie pe dispozitiv."""
+	from Components import HdsAfisajRandare as R
+	from Components import HdsAfisajScena as S
+	motor = getattr(A, "_afisaj", None)
+	if not alegere and not expresie and getattr(motor, "ultim", None) == "live":
+		raise ValueError("Previzualizarea video este oferita de driver")
+	info = getattr(motor, "infoColor", None) or A.colorInfo() or dict(latime=480, inaltime=320)
+	marime = (info["latime"], info["inaltime"])
+	if not alegere and not expresie and getattr(motor, "color_cadru", None):
+		return motor.color_cadru
+	valori = valori or A.Valori(getattr(motor, "session", None))
+	ctx = valori.ctx
+	if expresie:
+		e = P.expresie(expresie)
+		if e is None:
+			raise ValueError("Expresie necunoscuta")
+		c = A._cfg()
+		animatii = getattr(getattr(c, "color_animatii", None), "value", "nu") == "da"
+		poza = pozaExpresie(e, cadru if animatii else 0,
+			"400x240" if marime[0] == 400 else "480x320")
+		s = S.scena(ctx, "personaj." + expresie, detalii=dict(imagine=poza))
+	else:
+		d, f = D.alegere(alegere or "ceas.ora:24")
+		if d is None:
+			raise ValueError("Alegere necunoscuta")
+		v = valori.valoare(d)
+		per = D.pereche(d, f, v)
+		if per is None and d.grupa == D.GRUPA_EVENIMENTE:
+			v = D.exemplu(d, f)
+			per = D.pereche(d, f, v)
+		detalii = dict(valoare=v, format=f.id, titlu=A._(d.eticheta))
+		if motor is not None and hasattr(motor, "_sigla"):
+			if getattr(getattr(A._cfg(), "color_picon", None), "value", "nu") != "nu":
+				detalii["imagine"] = motor._sigla(motor.ceas())
+		s = S.scena(ctx, d.id, textColor(per, 0, d.id, f.id), per, detalii=detalii)
+	s["bara"] = getattr(getattr(A._cfg(), "color_bara", None), "value", "da") == "da"
+	return R.cadru(s, marime)
+
+
+def vremeDeschisa(ecran, pornita):
+	motor = getattr(A, "_afisaj", None)
+	if not isinstance(motor, Afisaj):
+		return
+	if pornita:
+		motor._vremeEcrane.add(id(ecran))
+	else:
+		motor._vremeEcrane.discard(id(ecran))
+	motor.timer.start(0, True)

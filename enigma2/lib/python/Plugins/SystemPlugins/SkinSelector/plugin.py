@@ -9,7 +9,7 @@ from Components.ActionMap import NumberActionMap
 from Components.Pixmap import Pixmap
 from Components.Sources.StaticText import StaticText
 from Components.MenuList import MenuList
-from Components.config import config
+from Components.config import config, configfile
 # the list, the preview, the choice, the safe start and the menu layout are shared with the web interface (/skin):
 # Components/HdsSkinuri.py
 from Components import HdsSkinuri
@@ -31,17 +31,18 @@ class SkinSelector(Screen):
 		self.previewPath = ""
 		self.skinlist = HdsSkinuri.lista(self.root)
 
-		self["key_red"] = StaticText(_("Close"))
-		# HDSatelit: tasta verde nu face nimic aici (alegerea e pe OK): fara text, dunga ei nu se vede; aspectul meniului
-		# e numai pe galben
-		self["key_green"] = StaticText("")
+		self["key_red"] = StaticText(_("Închide"))
+		# Actiuni explicite: OK/VERDE aplica acum; ALBASTRU pastreaza pentru pornirea urmatoare.
+		self["key_green"] = StaticText(_("Aplică acum"))
+		self["key_blue"] = StaticText(_("La următoarea pornire"))
 		# HDSatelit: skinul ales se incarca la pornirea urmatoare (skin.py, Components/HdsSkinuri.py); daca n-a pornit,
 		# motivul intoarcerii pe HDSatelit sta aici pana la o alegere noua
-		refuz = HdsSkinuri.citesteRefuz()
+		refuz = HdsSkinuri.refuzDeSpus()
 		if refuz:
 			self["introduction"] = StaticText(HdsSkinuri.textRefuz(refuz, _))
 		else:
-			self["introduction"] = StaticText(_("Press OK to activate the selected skin."))
+			# tema externa de pe ecran: ce nu merge din ea, cat timp e ceva de spus
+			self["introduction"] = StaticText(HdsSkinuri.textStareTema(_) or _("Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire."))
 		self["SkinList"] = MenuList(self.skinlist)
 		self["Preview"] = Pixmap()
 		# HDSatelit: aspectul meniului (lista sau dale) pe tasta galbena; meniul ramane deocamdata lista (Screens/Menu.py)
@@ -51,6 +52,8 @@ class SkinSelector(Screen):
 		self["actions"] = NumberActionMap(["WizardActions", "InputActions", "EPGSelectActions", "ColorActions"],
 		{
 			"ok": self.ok,
+			"green": self.ok,
+			"blue": self.laPornire,
 			"back": self.close,
 			"red": self.close,
 			"yellow": self.comutaAspectMeniu,
@@ -104,7 +107,7 @@ class SkinSelector(Screen):
 		aboutbox.setTitle(_("About..."))
 
 
-	def ok(self):
+	def ok(self, acum=True):
 		nume = self["SkinList"].getCurrent()
 		if not nume:
 			return
@@ -113,12 +116,14 @@ class SkinSelector(Screen):
 		if not bun:
 			self.session.open(MessageBox, mesaj, MessageBox.TYPE_ERROR)
 			return
-		self["introduction"].setText(_("Press OK to activate the selected skin."))
-		text = _("GUI needs a restart to apply a new skin\nDo you want to Restart the GUI now?")
-		if avertisment:
-			text = avertisment + "\n\n" + text
-		restartbox = self.session.openWithCallback(self.restartGUI,MessageBox,text, MessageBox.TYPE_YESNO)
-		restartbox.setTitle(_("Restart GUI now?"))
+		configfile.save()
+		text = _("Skinul %s este păstrat pentru următoarea pornire a interfeței.") % nume
+		self["introduction"].setText((avertisment + "\n" + text) if avertisment else text)
+		if acum:
+			self.restartGUI(True)
+
+	def laPornire(self):
+		self.ok(acum=False)
 
 	def loadPreview(self):
 		pngpath = HdsSkinuri.previzualizare(self.root, self["SkinList"].getCurrent(),
@@ -159,6 +164,15 @@ class _Pornire(object):
 def _pornireReusita():
 	_Pornire.ceas = None
 	HdsSkinuri.pornireReusita()
+	# tema externa: raportul si mesajul pentru ce nu s-a putut din ea, o singura data pe versiune de tema
+	try:
+		valoare = HdsSkinuri.skinPornit()
+		if valoare != HdsSkinuri.SKIN_IMAGINE:
+			import skin
+			from Components import HdsTemaExterna
+			HdsTemaExterna.dupaProba(HdsSkinuri.numeDinValoare(valoare) or valoare, skin.raportTema, skin.warnings)
+	except Exception as eroare:
+		print("[SkinSelector] raportul temei: %s" % eroare)
 
 
 def laPornireaSesiunii(reason, session = None, **kwargs):
@@ -172,8 +186,9 @@ def laPornireaSesiunii(reason, session = None, **kwargs):
 		if refuz:
 			from Components.config import configfile
 			configfile.save()
-			from Tools import Notifications
-			Notifications.AddPopup(HdsSkinuri.textRefuz(refuz, _), MessageBox.TYPE_WARNING, 0, "hds_skin_refuz")
+			# echipa afla de tema retrasa; omul vede motivul si raspunsul serverului intr-un singur mesaj
+			from Components import HdsTemaExterna
+			HdsTemaExterna.dupaRefuz(refuz, HdsSkinuri.textRefuz(refuz, _))
 	except Exception as eroare:
 		print("[SkinSelector] mesajul skinului: %s" % eroare)
 	try:

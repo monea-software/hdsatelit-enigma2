@@ -52,7 +52,8 @@ def getInitialTransponderList(tlist, pos):
 			parm.fec = x[4]
 			parm.inversion = x[7]
 			parm.orbital_position = pos
-			parm.system = x[5]
+			# DVB-S2X din lista foloseste acordul DVB-S2, ca scanerul de satelit si nucleul.
+			parm.system = eDVBFrontendParametersSatellite.System_DVB_S2 if x[5] == 2 else x[5]
 			parm.modulation = x[6]
 			parm.rolloff = x[8]
 			parm.pilot = x[9]

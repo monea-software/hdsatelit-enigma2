@@ -6,14 +6,14 @@
 # tastele care ajung la el, ca listele de canale sa se poata folosi numai cu sagetile si OK.
 #
 # Randurile, de sus in jos: FILA, GRUPE, CAUTA, apoi lista. SUS de pe primul canal urca pe CAUTA, apoi pe GRUPE, apoi
-# pe FILA; JOS coboara inapoi pana in lista. Pe FILA, STANGA, DREAPTA si OK trec pe lista cealalta. Pe GRUPE, STANGA si
+# pe FILA; JOS coboara inapoi pana in lista. Pe FILA numai OK trece pe lista cealalta. Pe GRUPE, STANGA si
 # DREAPTA muta cursorul intre pastilele grupelor (GRUPE_LISTEI: toate canalele, sateliti, furnizori, favorite si meniul
 # listei), iar OK deschide grupa de sub cursor; OK pe grupa in care e deja lista, dintr-un dosar al ei (un satelit, un
 # furnizor, un buchet), urca inapoi in grupa. Pe CAUTA, OK deschide cautarea. Repetarile sagetilor (tasta tinuta) nu
 # intra in cap: tinuta apasat, sageata ramane a listei (derulare, trecerea de la primul la ultimul canal), iar in cap
 # nu comuta fila si nu muta cursorul de mai multe ori.
 #
-# OK tinut apasat, oriunde in lista = cautarea. Apasarea scurta lucreaza la eliberarea tastei: la apasare nu se stie
+# OK tinut apasat deschide cautarea numai cand optiunea este activa. Apasarea scurta lucreaza la eliberare: nu se stie
 # inca daca va fi scurta sau lunga (flagLong vine dupa cateva repetari, main/enigma.cpp).
 #
 # Tot aici: felul unui canal dupa referinta lui (felul(...)), pentru panoul din dreapta al listei.
@@ -180,7 +180,7 @@ class Cap(object):
 		if not activ or self.focus is LISTA:
 			return TRECE
 		if self.focus == FILA:
-			return COMUTA
+			return NIMIC
 		if self.focus == GRUPE:
 			grupa = self.grupa + (1 if pas > 0 else -1)
 			if 0 <= grupa < self.grupe:

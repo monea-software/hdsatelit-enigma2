@@ -8,7 +8,7 @@
 # meniul navigatorului si Setari > Surse Internet > „Setări navigator web”. Aici, aceleasi lucruri:
 #   - starea navigatorului de pe televizor (deschis sau nu, modul, felul desenului, campul activ, marirea), fara adrese;
 #   - textul scris aici ajunge in campul de text activ de pe televizor (in navigator sau intr-o fereastra de text a
-#     enigma2: Plugins/Extensions/HdsNavigator/campuri.py). Numai dintr-un browser asociat (cookie + antetul CSRF),
+#     enigma2: Plugins/Extensions/HdsNavigator/campuri.py). Numai dintr-un browser (cookie sau intrat liber din casa, + antetul CSRF),
 #     niciodata cu ?token=; textul sta numai in corpul cererii si nu se scrie in niciun jurnal;
 #   - „Deschide pe televizor” pentru o adresa scrisa aici, pentru pagina de pornire si pentru interfata camului;
 #   - setarile (aceleasi setari config.plugins.hdsnavigator ca pe televizor), favoritele, stergerea datelor;
@@ -432,12 +432,12 @@ def rute(baza, resource, sesiune=None, N=None):
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 	class TextResource(baza):
-		"""POST /api/navigator-text: numai cu cookie-ul unui browser asociat; textul nu apare in nicio eroare."""
+		"""POST /api/navigator-text: numai dintr-un browser, nu cu cheia pentru scripturi; textul nu apare in nicio eroare."""
 		schimbaCeva = True
 
 		def render_POST(self, request):
 			if cuJeton(request):
-				return self._eroare(request, _t("Textul se trimite numai dintr-un browser asociat."), 403)
+				return self._eroare(request, _t("Textul se trimite numai dintr-un browser (nu cu cheia pentru scripturi)."), 403)
 			try:
 				arg = argumente(request, permise=("text",), maxim=MAX_TEXT + 1)
 				return self._raspunde(request, trimiteText(arg, N, _ses()))
@@ -561,6 +561,7 @@ ETICHETE = {
 	"SETARI": N_("Setări"),
 	"SALVEAZA": N_("Salvează"),
 	"FAVORITE": N_("Favorite"),
+	"FAVORITE_NOTA": N_("Pe televizor, OK deschide pagina. MENU oferă Scoate din favorite."),
 	"TITLU_FAV": N_("Numele paginii (dacă vrei)"),
 	"ADAUGA": N_("Adaugă la favorite"),
 	"FARA_FAV": N_("Nu ai pagini favorite."),
@@ -684,6 +685,7 @@ PAGINA = """<!DOCTYPE html>
   </section>
   <section class="card">
     <h2>__T_FAVORITE__</h2>
+    <p class="nota">__T_FAVORITE_NOTA__</p>
     <div id="favorite"></div>
     <p class="nota ascuns" id="faraFav">__T_FARA_FAV__</p>
     <label for="favAdresa">__T_ADRESA__</label>
@@ -814,6 +816,7 @@ function arata(d){
   $("detaliiTv").textContent = det.join(" · ");
   $("inchide").disabled = n.stare === "oprit";
   $("tinta").textContent = ((d.tinta && d.tinta.text) || "") + (d.tinta && d.tinta.parola ? " " + TXT.parola_tv : "");
+  $("text").dataset.hdsSecret = d.tinta && d.tinta.parola ? "1" : "0";
   $("trimite").disabled = !(d.tinta && d.tinta.fel);
   arataSetari(d);
   arataFavorite(d);

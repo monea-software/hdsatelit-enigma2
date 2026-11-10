@@ -9,7 +9,6 @@ profile("LOAD:GUIComponent")
 from Components.GUIComponent import GUIComponent
 profile("LOAD:eRCInput")
 from enigma import eRCInput
-from Components.HdsAsistentaControl import schimbaEcranWeb, schimbaComponentaWeb
 
 class Screen(dict, GUISkin):
 
@@ -23,10 +22,6 @@ class Screen(dict, GUISkin):
 	# si iese, in loc de AttributeError (care opreste enigma2 din ceasul firului)
 	inchis = True
 	_inchis = True
-
-	def __setitem__(self, nume, componenta):
-		dict.__setitem__(self, nume, componenta)
-		schimbaComponentaWeb(componenta)
 
 	def __init__(self, session, parent = None):
 		dict.__init__(self)
@@ -163,7 +158,6 @@ class Screen(dict, GUISkin):
 			return
 		self.shown = True
 		self.already_shown = True
-		schimbaEcranWeb(self, True)
 		self.instance.show()
 		for x in self.onShow:
 			x()
@@ -175,7 +169,6 @@ class Screen(dict, GUISkin):
 		if not self.shown or not self.instance:
 			return
 		self.shown = False
-		schimbaEcranWeb(self, False)
 		self.instance.hide()
 		for x in self.onHide:
 			x()

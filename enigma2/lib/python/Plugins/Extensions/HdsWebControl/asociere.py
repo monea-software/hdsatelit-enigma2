@@ -2,55 +2,33 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# asociere.py: asocierea browserelor cu receptorul, ca la un televizor inteligent.
+# asociere.py: browserele intrate pe receptor (sesiunea cu cookie) si jetonul din codul QR de pe televizor.
 #
-# Fluxul: browserul nou cere un cod; receptorul arata pe televizor un cod de 6 cifre, valabil o ora;
-# omul il scrie in browser; receptorul da browserului un secret aleator (cookie HttpOnly, SameSite=Strict,
-# valabil un an) si pastreaza pe disc DOAR amprenta lui (sha256). Dupa asta, panoul merge fara nimic de scris.
+# Codul de 6 cifre aratat pe televizor si scris in browser s-a scos de tot. In casa interfata web merge fara nimic de
+# scris. Numai cand omul si-a pus parola din reteaua de acasa (Components/HdsParolaLocala.py) si a bifat interfata web,
+# browserul scrie o data parola (plugin.py, POST /intra) si primeste aici un secret aleator (cookie HttpOnly,
+# SameSite=Strict, valabil un an, adaugaSesiune); pe disc sta DOAR amprenta lui (sha256).
 #
-# Modulul nu importa nimic din enigma2 sau Twisted, ca sa poata fi testat pe PC
-# (test_asociere.py). Toate apelurile vin de pe firul
-# reactorului (acelasi cu bucla enigma2) sau din ecranul de setari (acelasi fir); lacatul de mai jos e
-# doar o plasa de siguranta, nu o cerinta.
+# Modulul nu importa nimic din enigma2 sau Twisted, ca sa poata fi testat pe PC. Toate apelurile vin de pe firul
+# reactorului (acelasi cu bucla enigma2) sau din ecranul de setari (acelasi fir); lacatul de mai jos e doar o plasa de
+# siguranta, nu o cerinta.
 #
-# Securitate (receptoarele cu imagini nesigure au fost sparte de multe ori):
-# - codul: secrets.randbelow, comparat in timp constant, o singura folosire, o ora pe ceasul monoton
-#   (nu se strica daca ceasul receptorului sare la sincronizarea orei);
-# - 5 coduri gresite, oricare ar fi codul curent, blocheaza asocierea 5 minute (contor global, nu pe cod,
-#   ca cererea unui cod nou sa nu-l poata reseta);
-# - si fiecare cod are contorul lui, care nu se goleste niciodata: contorul
-#   global uita greselile mai vechi de 5 minute, deci pe un cod de o ora un aparat ar fi putut face 4 greseli la
-#   fiecare 5 minute; asa, la a 5-a greseala pe acelasi cod, codul se anuleaza si asocierea se blocheaza, oricat ar
-#   mai fi avut codul de trait (cel mult 5 incercari din 1 000 000 pe un cod);
-# - cel mult 10 afisari de cod pe televizor in 15 minute, ca o pagina rau intentionata sa nu poata umple
-#   ecranul cu ferestre;
-# - secretul sesiunii nu se scrie niciodata pe disc, doar sha256(secret); fisierul are drepturi 0600 si se
-#   scrie atomic (fisier nou + os.replace);
+# Ce ramane din paza de dinainte (apara de o pagina de pe internet deschisa in browserul omului, nu de om):
+# - secretul sesiunii nu se scrie niciodata pe disc, doar sha256(secret); fisierul are drepturi 0600 si se scrie
+#   atomic (fisier nou + os.replace);
 # - tokenul CSRF al panoului se deriva din secret cu HMAC, deci nu trebuie pastrat nicaieri;
-# - antetul Host trebuie sa fie adresa receptorului (gazdaPermisa):
-#   altfel o pagina de pe internet care isi re-leaga numele la IP-ul receptorului (DNS rebinding) trimite
-#   Origin egal cu Host si trece de verificarea Origin;
-# - blocarea dupa coduri gresite si limita de afisari se scot din telecomanda (deblocheaza):
-#   un aparat din retea putea tine asocierea blocata la nesfarsit; codul tine minte adresa celui care l-a
-#   cerut, ca televizorul s-o arate.
+# - antetul Host trebuie sa fie adresa receptorului (gazdaPermisa): altfel o pagina de pe internet care isi re-leaga
+#   numele la IP-ul receptorului (DNS rebinding) trimite Origin egal cu Host si trece de verificarea Origin.
 #
-# O SINGURA lista si UN SINGUR cod pe televizor pentru toate aparatele:
-# fiecare intrare are campul `tip` ("browser" sau
-# "aplicatie"). Modulul nu stie nimic de cookie: serverul pune secretul intr-un cookie pentru browser, iar
-# viitoarea aplicatie il va primi in raspunsul JSON al asocierii, prin aceleasi cereCod/verificaCod. Codul
-# activ are si un id de cerere (`id_cerere`), ca API-ul aplicatiei (cere/confirma/anuleaza) sa-l poata lega
-# de cererea ei fara un al doilea mecanism.
+# O SINGURA lista pentru toate aparatele: fiecare intrare are campul `tip` ("browser" sau "aplicatie"; intrarile
+# de tip aplicatie sunt de dinainte si raman numai ca sa nu se piarda fisierul).
 #
 # JETONUL DIN CODUL QR (cereJeton / verificaJeton): un ecran de pe televizor (de ex. „Configurează de pe telefon” din
-# traducerea subtitrarilor) arata un cod QR cu adresa http://<IP receptor>/t/<jeton>; telefonul care il scaneaza devine
-# browser asociat (aceeasi intrare pe disc, acelasi cookie pe un an) fara cod de tastat, si ajunge direct la pagina
-# ceruta de ecran. Regulile, cel putin la fel de stricte ca la cod: jetonul are 256 de biti (secrets.token_urlsafe(32),
-# deci nu se poate ghici, spre deosebire de cele 6 cifre), o singura folosire, JETON_S secunde pe ceasul monoton, un
-# singur jeton activ (unul nou il anuleaza pe cel vechi), se anuleaza cand ecranul se inchide; in memorie se tine doar
-# amprenta lui (sha256), comparata in timp constant; il vede numai cine vede televizorul (ca si codul). Greselile nu
-# se numara la blocarea codului: un aparat din retea ar putea altfel bloca asocierea trimitand jetoane la nimereala,
-# iar ghicirea e oricum imposibila. Reteaua locala, antetul Host si aceeasi origine le verifica
-# serverul (plugin.py), ca la cod. Destinatia e o cale din lista DESTINATII_JETON, niciodata o adresa primita.
+# traducerea subtitrarilor) arata un cod QR cu adresa http://<IP receptor>/t/<jeton>; telefonul care il scaneaza ajunge
+# direct la pagina ceruta de ecran (si devine browser intrat, chiar cand omul are parola pusa). Omul nu scrie nimic:
+# jetonul are 256 de biti, o singura folosire, JETON_S secunde pe ceasul monoton, un singur jeton activ, se anuleaza cand
+# ecranul se inchide; in memorie se tine doar amprenta lui. Destinatia e o cale din DESTINATII_JETON, niciodata o adresa
+# primita.
 
 import hashlib
 import hmac
@@ -78,17 +56,8 @@ NUME_COOKIE = "hds_sesiune"
 ANTET_CSRF = "X-HDS-CSRF"
 CALE_IMPLICITA = "/etc/enigma2/hdswebcontrol-browsere.json"
 
-CIFRE_COD = 6
-# o ora: omul are timp sa ia telefonul si sa scrie codul;
-# ghicirea nu devine mai usoara (contorul pe cod de mai sus)
-DURATA_COD_S = 3600
 DURATA_SESIUNE_S = 365 * 24 * 3600
-MAX_GRESELI = 5
-PAUZA_BLOCARE_S = 300
 MAX_BROWSERE = 20
-MAX_AFISARI = 10
-FEREASTRA_AFISARI_S = 900
-INTERVAL_MIN_REAFISARE_S = 5
 INTERVAL_SALVARE_FOLOSIRE_S = 24 * 3600
 # jetonul din codul QR: cinci minute (omul scaneaza cu telefonul din fata televizorului; ecranul face altul la expirare)
 JETON_S = 300
@@ -134,26 +103,6 @@ def csrfPentru(secret):
 	citi cookie-ul (HttpOnly) si nici pagina panoului (fara CORS pe ea, iar SameSite=Strict nu trimite
 	cookie-ul din alt sit)."""
 	return hmac.new(secret.encode("ascii"), b"hds-csrf-v1", hashlib.sha256).hexdigest()
-
-
-def codAfisat(cod):
-	"""Cum se arata codul pe televizor: trei grupe de cate doua cifre, '12 34 56', usor de citit de la distanta.
-	Campul din pagina si din aplicatie primeste orice forma (normalizeazaCod curata spatiile)."""
-	cod = str(cod or "")
-	return " ".join(cod[i:i + 2] for i in range(0, len(cod), 2))
-
-
-def normalizeazaCod(text):
-	"""Accepta '123456', '12 34 56', '123 456', '123-456'; intoarce cele 6 cifre sau None."""
-	if text is None:
-		return None
-	curat = "".join(c for c in str(text) if c not in " -\t")
-	if len(curat) != CIFRE_COD or not curat.isdigit():
-		return None
-	# isdigit() accepta si cifre din alte scrieri (de ex. arabe); pastram doar 0-9
-	if any(c not in "0123456789" for c in curat):
-		return None
-	return curat
 
 
 def _gazdaSiPort(schema, netloc):
@@ -289,8 +238,7 @@ def _adresaCurata(adresa):
 
 
 class Asociere(object):
-	"""Coduri de asociere (in memorie) si aparatele asociate, browsere si aplicatii (pe disc, doar amprente).
-	Numele metodelor spun "browser" din istoric; lista e una singura, pentru toate aparatele (campul `tip`)."""
+	"""Browserele intrate (pe disc, doar amprente) si jetonul codului QR (in memorie)."""
 
 	def __init__(self, cale=CALE_IMPLICITA, ceas=time.time, ceas_monoton=time.monotonic, jurnal=None):
 		self._cale = cale
@@ -299,11 +247,6 @@ class Asociere(object):
 		self._jurnal = jurnal or (lambda text: None)
 		self._lacat = threading.RLock()
 		self._browsere = None  # lista de dictionare, incarcata la prima folosire
-		self._cod = None  # {"cod": "123456", "expira": monoton, "afisat": monoton}
-		self._greseli = 0
-		self._ultima_greseala = 0.0
-		self._blocat_pana = 0.0
-		self._afisari = []  # momentele (monoton) cand s-a aratat un cod pe televizor
 		self._jeton = None  # {"hash", "id", "destinatie", "expira"}: jetonul activ al codului QR (numai amprenta)
 		self._jeton_folosit = None  # {"id", "nume", "adresa"}: ultimul jeton folosit, pentru ecranul de pe televizor
 
@@ -371,145 +314,14 @@ class Asociere(object):
 				pass
 			return False
 
-	# ------------------------------------------------------------------ codul de pe televizor
-	def _curataAfisari(self, acum):
-		self._afisari = [t for t in self._afisari if acum - t < FEREASTRA_AFISARI_S]
-
-	def _secundeBlocare(self, acum):
-		if self._blocat_pana > acum:
-			return int(self._blocat_pana - acum + 0.999)
-		if self._blocat_pana:
-			self._blocat_pana = 0.0
-			self._greseli = 0
-		return 0
-
-	def _codCurent(self, acum):
-		if self._cod is not None and self._cod["expira"] <= acum:
-			self._cod = None
-		return self._cod
-
-	def cereCod(self, reafiseaza=False, tip=TIP_BROWSER, adresa=""):
-		"""Un aparat (browser sau aplicatie) cere un cod. Intoarce un dictionar:
-		  stare: 'blocat' | 'prea_des' | 'nou' | 'activ'
-		  cod: cele 6 cifre (doar ca sa le arate apelantul pe televizor), sau None
-		  id_cerere: id-ul codului activ (pentru API-ul aplicatiei: confirma/anuleaza), sau None
-		  tip: pentru ce fel de aparat a fost cerut codul (textul de pe televizor)
-		  adresa: adresa IP a aparatului care a facut codul activ (pentru televizor), sau "" (cod facut din
-		          ecranul de setari)
-		  afiseaza: True daca apelantul trebuie sa arate acum codul pe televizor
-		  ramas: secunde (cat mai e valabil codul, sau cat mai tine blocarea / limita de afisari)
-		Un cod inca valabil se refoloseste (nu se face altul la fiecare reincarcare a paginii): e un singur cod
-		activ odata, pentru orice fel de aparat."""
-		if tip not in TIPURI:
-			tip = TIP_BROWSER
+	# ------------------------------------------------------------------ intrarea cu parola din reteaua de acasa
+	def adaugaSesiune(self, user_agent="", adresa=""):
+		"""Un browser a scris parola buna (plugin.py, POST /intra): (secret, intrarea fara amprenta). Secretul exista in
+		clar numai acum, pentru cookie."""
 		with self._lacat:
-			acum = self._monoton()
-			blocat = self._secundeBlocare(acum)
-			if blocat:
-				return {"stare": "blocat", "cod": None, "id_cerere": None, "tip": tip, "adresa": "", "afiseaza": False, "ramas": blocat}
-			self._curataAfisari(acum)
-			curent = self._codCurent(acum)
-			if curent is not None:
-				ramas = int(curent["expira"] - acum + 0.999)
-				afiseaza = False
-				if reafiseaza and acum - curent["afisat"] >= INTERVAL_MIN_REAFISARE_S and len(self._afisari) < MAX_AFISARI:
-					afiseaza = True
-					curent["afisat"] = acum
-					self._afisari.append(acum)
-				return {"stare": "activ", "cod": curent["cod"], "id_cerere": curent["id"], "tip": curent["tip"],
-					"adresa": curent["adresa"], "afiseaza": afiseaza, "ramas": ramas}
-			if len(self._afisari) >= MAX_AFISARI:
-				ramas = int(FEREASTRA_AFISARI_S - (acum - self._afisari[0]) + 0.999)
-				return {"stare": "prea_des", "cod": None, "id_cerere": None, "tip": tip, "adresa": "", "afiseaza": False, "ramas": max(1, ramas)}
-			cod = "%0*d" % (CIFRE_COD, secrets.randbelow(10 ** CIFRE_COD))
-			self._cod = {"cod": cod, "id": secrets.token_hex(8), "tip": tip, "adresa": _adresaCurata(adresa),
-				"expira": acum + DURATA_COD_S, "afisat": acum, "greseli": 0}
-			self._afisari.append(acum)
-			return {"stare": "nou", "cod": cod, "id_cerere": self._cod["id"], "tip": tip, "adresa": self._cod["adresa"],
-				"afiseaza": True, "ramas": DURATA_COD_S}
-
-	def _deblocheaza(self):
-		# fara lacat: doar din metodele de mai jos, care il au deja
-		self._greseli = 0
-		self._ultima_greseala = 0.0
-		self._blocat_pana = 0.0
-		self._afisari = []
-		self._cod = None
-
-	def deblocheaza(self):
-		"""Din ecranul de setari, adica din telecomanda (partea in care avem incredere): scoate pauza de dupa
-		5 coduri gresite, uita afisarile numarate si anuleaza codul in curs. Motivul: orice
-		aparat din retea putea tine asocierea blocata la nesfarsit (5 coduri gresite la fiecare 5 minute) sau
-		consuma cele 10 afisari; fara asta, doar repornirea enigma2 scotea blocarea. Contorul ramane global
-		(unul pe adresa ar lasa 5 incercari pentru fiecare din cele ~250 de adrese ale retelei)."""
-		with self._lacat:
-			self._deblocheaza()
-
-	def codActiv(self, id_cerere):
-		"""True daca codul cu acest id e inca cel activ si neexpirat (fereastra de pe televizor se inchide singura cand
-		nu mai e: aparatul s-a conectat, codul a fost anulat sau inlocuit, a expirat)."""
-		if not id_cerere:
-			return False
-		with self._lacat:
-			curent = self._codCurent(self._monoton())
-			if curent is None:
-				return False
-			return secrets.compare_digest(str(id_cerere).encode("utf-8"), curent["id"].encode("ascii"))
-
-	def anuleazaCod(self, id_cerere=None):
-		"""Anuleaza codul activ (toate, fara id; cu id, doar daca e codul acelei cereri). True daca a anulat."""
-		with self._lacat:
-			if self._cod is None:
-				return False
-			if id_cerere is not None and not secrets.compare_digest(str(id_cerere).encode("utf-8"), self._cod["id"].encode("ascii")):
-				return False
-			self._cod = None
-			return True
-
-	def verificaCod(self, text_primit, user_agent="", adresa="", tip=TIP_BROWSER, nume=None, id_cerere=None):
-		"""Verifica un cod scris in browser sau in aplicatie. Intoarce un dictionar:
-		  stare: 'ok' | 'format' | 'expirat' | 'gresit' | 'blocat'
-		  secret: doar la 'ok', secretul aparatului (singura data cand exista in clar: cookie pentru browser,
-		          raspuns JSON pentru aplicatie)
-		  browser: doar la 'ok', intrarea salvata (fara amprenta), cu `tip`
-		  ramas: la 'gresit', cate incercari mai sunt; la 'blocat', cate secunde mai tine blocarea
-		`nume`: numele trimis de aplicatie (curatat); fara el, numele vine din User-Agent.
-		`id_cerere`: daca e dat (aplicatia), trebuie sa fie al codului activ, altfel raspunsul e 'expirat'."""
-		if tip not in TIPURI:
-			return {"stare": "format"}
-		with self._lacat:
-			acum = self._monoton()
-			blocat = self._secundeBlocare(acum)
-			if blocat:
-				return {"stare": "blocat", "ramas": blocat}
-			cod = normalizeazaCod(text_primit)
-			if cod is None:
-				return {"stare": "format"}
-			curent = self._codCurent(acum)
-			if curent is None:
-				return {"stare": "expirat"}
-			if id_cerere is not None and not secrets.compare_digest(str(id_cerere).encode("utf-8"), curent["id"].encode("ascii")):
-				return {"stare": "expirat"}  # alta cerere (sau una veche): fara nicio informatie despre cod
-			if not secrets.compare_digest(cod, curent["cod"]):
-				if self._greseli and acum - self._ultima_greseala > PAUZA_BLOCARE_S:
-					self._greseli = 0  # greselile vechi (de acum peste 5 minute) nu se aduna cu cele noi
-				self._greseli += 1
-				self._ultima_greseala = acum
-				curent["greseli"] = curent.get("greseli", 0) + 1
-				if self._greseli >= MAX_GRESELI or curent["greseli"] >= MAX_GRESELI:
-					self._blocat_pana = acum + PAUZA_BLOCARE_S
-					self._cod = None  # codul care putea fi ghicit nu mai e bun nici dupa pauza
-					return {"stare": "blocat", "ramas": PAUZA_BLOCARE_S}
-				return {"stare": "gresit", "ramas": MAX_GRESELI - max(self._greseli, curent["greseli"])}
-			# potrivire: codul se consuma, contorul de greseli se goleste
-			self._cod = None
-			self._greseli = 0
 			secret = secrets.token_urlsafe(32)
-			nume_aparat = numeAparat(nume) if nume else ""
-			if not nume_aparat:
-				nume_aparat = numeBrowser(user_agent) if tip == TIP_BROWSER else _t("Telefon")
-			intrare = self._adaugaBrowser(secret, nume_aparat, _adresaCurata(adresa), tip)
-			return {"stare": "ok", "secret": secret, "browser": self._faraAmprenta(intrare)}
+			intrare = self._adaugaBrowser(secret, numeBrowser(user_agent), _adresaCurata(adresa), TIP_BROWSER)
+			return secret, self._faraAmprenta(intrare)
 
 	# ------------------------------------------------------------------ jetonul din codul QR (vezi nota de sus)
 	def cereJeton(self, destinatie="/"):
@@ -685,8 +497,7 @@ class Asociere(object):
 			return True
 
 	def deconecteazaToate(self, pastreaza=None):
-		"""Scoate toate aparatele (browsere si aplicatii), anuleaza codul in curs si scoate blocarea dupa coduri
-		gresite (ca in deblocheaza: dupa asta, proprietarul vrea sa-si conecteze din nou aparatele). `pastreaza`:
+		"""Scoate toate aparatele (browsere si aplicatii) si jetonul codului QR. `pastreaza`:
 		secretul unui browser care ramane (cel care a cerut din web cheia noua pentru panou). Intoarce cate au fost
 		scoase."""
 		with self._lacat:
@@ -696,7 +507,6 @@ class Asociere(object):
 				ramas = None
 			numar = len(self._browsere) - (1 if ramas is not None else 0)
 			self._browsere = [ramas] if ramas is not None else []
-			self._deblocheaza()
 			self._jeton = None
 			self._salveaza()
 			return numar

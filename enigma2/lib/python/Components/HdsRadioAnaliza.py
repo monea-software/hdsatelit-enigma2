@@ -1302,7 +1302,8 @@ _SINCRON = b"\x47"
 
 def adresa_releu(cale):
 	"""Calea unei referinte (campul 11, cu %3a) -> (gazda, port, drum) daca e un flux al releului local DAB+ / DVB-T2
-	(http://127.0.0.1:<port>/dab/... sau /t2/...), altfel None. Numai adrese locale: barele nu cer nimic din retea."""
+	(http://127.0.0.1:<port>/dab/... sau /t2/...) ori al radioului DAB+ prin USB (/dab-rtl/..., a doua conexiune la aceeasi sesiune, fara alta
+	deschidere a stickului), altfel None. Numai adrese locale: barele nu cer nimic din retea."""
 	try:
 		text = cale.decode("utf-8", "replace") if isinstance(cale, bytes) else ("%s" % cale)
 	except Exception:
@@ -1318,7 +1319,7 @@ def adresa_releu(cale):
 	if gazda not in ("127.0.0.1", "localhost") or not port.isdigit() or not 0 < int(port) < 65536:
 		return None
 	bucati = [b for b in drum.split("/") if b]
-	if not bucati or bucati[0].lower() not in ("dab", "t2", "t2mi"):
+	if not bucati or bucati[0].lower() not in ("dab", "t2", "t2mi", "dab-rtl"):
 		return None
 	return gazda, int(port), "/" + "/".join(bucati)
 

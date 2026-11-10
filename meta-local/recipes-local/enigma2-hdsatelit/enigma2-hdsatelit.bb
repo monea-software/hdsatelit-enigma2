@@ -42,7 +42,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.2+git${SRCPV}"
+PV = "0.7.3+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe

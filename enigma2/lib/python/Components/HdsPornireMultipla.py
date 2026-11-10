@@ -43,6 +43,18 @@
 # - directorul scris este partitia de pornire dovedita in /proc/mounts sau
 #   radacina flash expusa de kexec, cu initramfs si sabloane de pornire existente.
 #
+# Vu+ 4K cu kexec (pus de alta imagine; initramfs-ul STARTUP.cpio.gz din radacina flash):
+# - in orice loc pornit, si de pe USB, initramfs-ul pune radacina flash intreaga la /boot (bind sau move), cu STARTUP,
+#   STARTUP_N, STARTUP_RECOVERY si STARTUP.cpio.gz; /proc/cmdline incepe cu kexec=1, are kernel= si rootsubdir= din
+#   STARTUP, iar root= e dispozitivul gasit (un root=UUID=... din STARTUP apare aici ca /dev/sdXN);
+# - locurile din memorie: kernel=/linuxrootfsN/zImage root=/dev/mmcblk0pX rootsubdir=linuxrootfsN; Recovery (locul 0
+#   in lista): kernel=/zImage ... rootsubdir=linuxrootfs0; locurile de pe USB sau HDD, N de la 4:
+#   kernel=<model>/linuxrootfsN/zImage root=UUID=<uuid> rootsubdir=<model>/linuxrootfsN [rootwait=40], cu kernel=
+#   socotit de la radacina partitiei din root=;
+# - UUID=/PARTUUID= le cauta initramfs-ul cu blkid, deci un asemenea loc se alege si cu mai multe discuri puse; un
+#   nucleu sau un disc negasit la pornire il duce inapoi in Recovery, nu il lasa fara imagine.
+# Locul pornit se recunoaste dupa partitie (UUID-ul rezolvat), subdosar si nucleu, nu dupa textul din root=.
+#
 # Citirea listei poate monta multe partitii, deci ecranul si pagina web o fac pe un fir separat. Alegerea verifica din nou
 # numai locul ales (locuri(numai=...)), deci ramane scurta pe firul enigma2.
 #
@@ -56,6 +68,9 @@ import subprocess
 import zlib
 
 FISIER_STARTUP = "STARTUP"
+RECOVERY = "STARTUP_RECOVERY"
+O_DATA = "STARTUP_ONCE"
+LOC_RECOVERY = "0"
 COPIE = "STARTUP.hds-inainte"
 NOU = "STARTUP.hds-nou"
 ABSENT = b"HDS-FARA-STARTUP\n"
@@ -66,7 +81,11 @@ TINTA_DISC = re.compile(r"^usb0\.sda([1-9][0-9]*)$")
 PARTITIE_SDA = re.compile(r"^/dev/sda[1-9][0-9]*$")
 PARTITIE_SCOASA = re.compile(r"^/dev/((?:sd[a-z]+|mmcblk[1-9][0-9]*p)[1-9][0-9]*)$")
 UUID_DISC = re.compile(r"^UUID=([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$")
+# PARTUUID: GPT (ca un UUID) sau MBR (semnatura discului si numarul partitiei).
+PARTUUID_DISC = re.compile(r"^PARTUUID=([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}|[0-9a-fA-F]{8}-[0-9a-fA-F]{2})$")
 SUBDOSAR_DISC = re.compile(r"^linuxrootfs[1-9][0-9]*$")
+# Kexec: si <model>/linuxrootfsN (locurile de pe USB sau HDD facute de alte imagini), un singur nivel, fara ..
+SUBDOSAR_KEXEC = re.compile(r"^(?:[A-Za-z0-9_-]+/)?linuxrootfs[1-9][0-9]*$")
 LINIE = re.compile(r"^boot (\S+) '([ -&(-~]*)'\n?$")
 OPTIUNI_CITIRE = "ro,noload"
 
@@ -107,6 +126,8 @@ NOTA_DISCURI = N_("Sunt mai multe discuri puse în receptor, iar la pornire nume
 	"care nu ai nevoie: lista se actualizează singură.")
 PE_STICK = N_("Imaginea de acum rulează de pe card sau stick, dar nu îi găsesc locul printre cele de pornire.")
 NICIUNA = N_("Nu am găsit alte imagini instalate, nici în memorie, nici pe card sau stick.")
+NOTA_O_DATA = N_("Altă imagine a cerut ca următoarea pornire să fie o singură dată în imaginea ei. Imaginea aleasă aici "
+	"pornește la repornirea de după aceea.")
 INTREBARE = N_("Receptorul repornește în imaginea %s. Continui?")
 BUTON = N_("Pornește")
 DEJA = N_("Aceasta e imaginea pornită acum.")
@@ -221,17 +242,25 @@ def citesteStartup(date):
 		"p": parametri(argumente), "repetate": repetate}
 
 
+def _subKexec(sub):
+	"""linuxrootfs0 inseamna radacina flash insasi (Recovery)."""
+	return "" if sub in ("", "linuxrootfs0") else sub
+
+
 def _parametriKexec(st, radacina=None):
-	"""Forma instalata de kexec, cu nucleul pastrat in dosarul imaginii."""
+	"""Forma instalata de kexec, cu nucleul pastrat in dosarul imaginii -> (partitia din root=, subdosarul); None altfel.
+	kernel= poate fi scris cu sau fara / la inceput; calea lui fata de radacina partitiei: _nucleuRelativ."""
 	if not st or st["tinta"] or st.get("repetate"):
 		return None
 	p = st["p"]
-	sub = p.get("rootsubdir", "")
-	if sub in ("", "linuxrootfs0") and p.get("kernel") == "/zImage":
-		sub = ""
-	elif not SUBDOSAR_DISC.fullmatch(sub) or p.get("kernel") != "/" + sub + "/zImage":
+	sub = _subKexec(p.get("rootsubdir", ""))
+	nucleu = p.get("kernel", "")
+	if not sub:
+		if nucleu != "/zImage":
+			return None
+	elif not SUBDOSAR_KEXEC.fullmatch(sub) or nucleu.lstrip("/") != sub + "/zImage":
 		return None
-	if p.get("rootfstype", "ext4") != "ext4" or p.get("initrd", "/STARTUP.cpio.gz") != "/STARTUP.cpio.gz":
+	if p.get("rootfstype", "ext4") != "ext4" or p.get("initrd", "/STARTUP.cpio.gz").lstrip("/") != "STARTUP.cpio.gz":
 		return None
 	ref = p.get("root", "")
 	dev = ref if re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", ref) else _radacinaDisc(ref, radacina)
@@ -240,18 +269,51 @@ def _parametriKexec(st, radacina=None):
 	return dev, sub
 
 
-def _acumKexec(st, cmd):
+def _nucleuRelativ(st):
+	"""kernel= din sablon, socotit de la radacina partitiei din root= (asa il citeste initramfs-ul)."""
+	return st["p"].get("kernel", "").lstrip("/")
+
+
+def _aceeasiPartitie(a, b, radacina=None):
+	"""Doua referinte root= (/dev/..., UUID=..., PARTUUID=...) numesc aceeasi partitie."""
+	if not a or not b:
+		return False
+	if a == b:
+		return True
+	da = a if a.startswith("/dev/mmcblk0p") else _radacinaDisc(a, radacina)
+	db = b if b.startswith("/dev/mmcblk0p") else _radacinaDisc(b, radacina)
+	return bool(da) and da == db
+
+
+def _acumKexec(st, cmd, radacina=None):
+	"""Sablonul descrie pornirea de acum: aceeasi partitie (initramfs-ul pune in linia de comanda dispozitivul gasit, nu
+	UUID-ul scris in STARTUP), acelasi subdosar si, cand linia de comanda il are, acelasi nucleu."""
+	p = st["p"]
+	if _subKexec(p.get("rootsubdir", "")) != _subKexec(cmd.get("rootsubdir", "")):
+		return False
 	# Unele initramfs nu pastreaza kernel= in linia de comanda expusa imaginii.
-	sub = lambda p: "" if p.get("rootsubdir", "") == "linuxrootfs0" else p.get("rootsubdir", "")
-	return st["p"].get("root") == cmd.get("root") and sub(st["p"]) == sub(cmd) and (
-		not cmd.get("kernel") or st["p"].get("kernel") == cmd["kernel"])
+	if cmd.get("kernel") and p.get("kernel", "").lstrip("/") != cmd["kernel"].lstrip("/"):
+		return False
+	return _aceeasiPartitie(p.get("root", ""), cmd.get("root", ""), radacina)
+
+
+def _sabloane(dosar):
+	"""STARTUP_<cifre>, apoi Recovery ca locul 0 (numai cand nu exista un STARTUP_0 adevarat): [(loc, fisier, octeti)]."""
+	rez = startupuri(dosar)
+	if not any(n == LOC_RECOVERY for n, _f, _d in rez):
+		date = _citeste(os.path.join(dosar, RECOVERY), MAXIM_STARTUP + 1)
+		if date is not None:
+			rez.insert(0, (LOC_RECOVERY, RECOVERY, date))
+	return rez
 
 
 def _dosarKexec(radacina=None):
-	"""Radacina flash expusa de incarcator la /boot, nu dosarul unui slot.
-	Un sablon trebuie sa descrie chiar pornirea curenta, iar initramfs sa existe."""
+	"""Radacina flash expusa de incarcator la /boot, nu dosarul unui slot. Trebuie sa aiba initramfs-ul kexec si cel
+	putin un sablon kexec bun. Dovada ca e chiar radacina pornirii de acum: kexec=1 in linia de comanda (initramfs-ul
+	o rescrie mereu asa si pune mereu radacina flash la /boot), sau un sablon care descrie pornirea de acum, sau pornirea
+	direct din flash."""
 	cmd = parametri(linieComanda(radacina))
-	sub_curent = cmd.get("rootsubdir", "") not in ("", "linuxrootfs0")
+	sub_curent = bool(_subKexec(cmd.get("rootsubdir", "")))
 	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
 		c = rand.split()
 		if (len(c) < 4 or c[1] not in ("/boot", "/") or c[2] != "ext4" or "rw" not in c[3].split(",") or
@@ -263,10 +325,11 @@ def _dosarKexec(radacina=None):
 		initrd = os.path.join(dosar, "STARTUP.cpio.gz")
 		if os.path.islink(initrd) or _citeste(initrd, 2) != b"\x1f\x8b":
 			continue
-		for _n, _fisier, date in startupuri(dosar):
+		for _n, _fisier, date in _sabloane(dosar):
 			st = citesteStartup(date)
-			if _parametriKexec(st, radacina) and (_acumKexec(st, cmd) or (
-				not sub_curent and cmd.get("root") == c[0] and radacinaValida(_cale(radacina, "/")))):
+			if _parametriKexec(st, radacina) and (_acumKexec(st, cmd, radacina) or
+				(cmd.get("kexec") == "1" and c[1] == "/boot") or
+				(not sub_curent and cmd.get("root") == c[0] and radacinaValida(_cale(radacina, "/")))):
 				return dosar
 	return None
 
@@ -306,22 +369,27 @@ def verificaEmmc(st, cmd):
 
 
 def _radacinaDisc(referinta, radacina=None):
-	"""Partitia externa numita direct sau printr-un UUID unic, fara cache."""
+	"""Partitia externa numita direct sau printr-un UUID sau PARTUUID unic, fara cache. Numele sdX de acum nu conteaza:
+	UUID-ul si PARTUUID-ul raman aceleasi oricum s-ar numi discul la pornire."""
 	if PARTITIE_SCOASA.fullmatch(referinta):
 		return referinta
 	m = UUID_DISC.fullmatch(referinta)
+	cheie, fals = "UUID", "dev/uuid/"
+	if not m:
+		m = PARTUUID_DISC.fullmatch(referinta)
+		cheie, fals = "PARTUUID", "dev/partuuid/"
 	if not m:
 		return ""
-	uuid = m.group(1).lower()
+	valoare = m.group(1).lower()
 	if radacina:
 		# Receptorul fals nu ruleaza unelte pe discurile calculatorului.
 		_de, part = discuriScoase(radacina)
 		gasite = ["/dev/" + n for n in part
-			if _text(_cale(radacina, "dev/uuid/" + n)).strip().lower() == uuid]
+			if _text(_cale(radacina, fals + n)).strip().lower() == valoare]
 	else:
 		try:
 			date = subprocess.check_output(["blkid", "-c", "/dev/null",
-				"-t", "UUID=" + uuid, "-o", "device"],
+				"-t", cheie + "=" + valoare, "-o", "device"],
 				stderr=subprocess.DEVNULL, timeout=5)
 			gasite = date.decode("ascii").split()
 		except (OSError, ValueError, subprocess.SubprocessError):
@@ -330,7 +398,10 @@ def _radacinaDisc(referinta, radacina=None):
 
 
 def _uuidDovedit(st, cmd, radacina):
-	"""Capacitatea apartine nucleului, care trebuie sa fie cel pornit acum."""
+	"""Capacitatea apartine nucleului, care trebuie sa fie cel pornit acum. PARTUUID nu e dovedit pentru initramfs-ul
+	locurilor din bootoptions (el cauta numai UUID-ul), deci un asemenea loc se arata, dar nu se alege."""
+	if PARTUUID_DISC.fullmatch(st["p"].get("root", "")):
+		return False
 	if not UUID_DISC.fullmatch(st["p"].get("root", "")):
 		return True
 	return st["p"].get("kernel") == cmd.get("kernel") and (
@@ -616,12 +687,20 @@ def _montate(radacina):
 	return rez
 
 
-def _deschideDisc(dispozitiv, montate, radacina, monteaza):
+def _dispozitiveMontate(radacina):
+	"""Toate dispozitivele din /proc/mounts, si cel al radacinii / cand ea e numai un subdosar al partitiei."""
+	return set(rand.split()[0] for rand in _text(_cale(radacina, "proc/mounts")).splitlines() if rand.split())
+
+
+def _deschideDisc(dispozitiv, montate, radacina, monteaza, oriunde=()):
 	"""Dosarul unei partitii de pe card sau stick: de unde a montat-o sistemul sau montata acum numai pentru citit ->
-	(dosar, demonteaza sau None); (None, None) cand nu se poate monta."""
+	(dosar, demonteaza sau None); (None, None) cand nu se poate monta. O partitie deja montata altundeva (de exemplu
+	radacina / a imaginii pornite de pe USB, care e doar subdosarul ei) se monteaza simplu, fara optiuni: o a doua
+	montare ro a unei partitii montate rw da EBUSY pe nucleele 4.x."""
 	if dispozitiv in montate:
 		return montate[dispozitiv], None
-	return (monteaza or _monteazaReal)(_cale(radacina, dispozitiv) if radacina else dispozitiv, "ext4", OPTIUNI_CITIRE)
+	optiuni = None if dispozitiv in oriunde else OPTIUNI_CITIRE
+	return (monteaza or _monteazaReal)(_cale(radacina, dispozitiv) if radacina else dispozitiv, "ext4", optiuni)
 
 
 def _rand(n, nume_fisier, date, imagine, acum=False, alegere=False, strica=False, motiv=""):
@@ -629,7 +708,7 @@ def _rand(n, nume_fisier, date, imagine, acum=False, alegere=False, strica=False
 		"fisier": nume_fisier, "date": date}
 
 
-def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza):
+def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde=None):
 	"""Randul unui loc care nu e din memorie (card, stick sau o forma necunoscuta); None cand locul e gol sau discul lui nu
 	e pus (STARTUP_5 si STARTUP_6 ale fabricii stau pe orice receptor, si fara disc)."""
 	p = st["p"] if st else {}
@@ -650,7 +729,9 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 	sub = p.get("rootsubdir", "")
 	if sub and not SUBDOSAR_DISC.fullmatch(sub):
 		return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
-	dosar, demonteaza = _deschideDisc(dev, montate, radacina, monteaza)
+	if oriunde is None:
+		oriunde = _dispozitiveMontate(radacina)
+	dosar, demonteaza = _deschideDisc(dev, montate, radacina, monteaza, oriunde)
 	if not dosar:
 		return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_CITIRE)
 	try:
@@ -686,7 +767,14 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 			demonteaza()
 
 
-def _locKexec(n, fisier, date, cmd, montate, radacina, monteaza):
+def _inPartitie(baza, cale):
+	"""`cale` ramane in partitia montata la `baza` si dupa legaturi (fara .. si fara legaturi spre afara)."""
+	baza, real = os.path.realpath(baza), os.path.realpath(cale)
+	return real == baza or real.startswith(baza.rstrip(os.sep) + os.sep)
+
+
+def _locKexec(n, fisier, date, cmd, montate, radacina, monteaza, oriunde=None):
+	"""Randul unui loc kexec: din memorie, Recovery (locul 0, radacina flash) sau de pe USB/HDD (<model>/linuxrootfsN)."""
 	st = citesteStartup(date)
 	pereche = _parametriKexec(st, radacina)
 	if not pereche:
@@ -695,25 +783,28 @@ def _locKexec(n, fisier, date, cmd, montate, radacina, monteaza):
 	if not any(len(c) == 4 and c[3] == dev[5:]
 		for c in (rand.split() for rand in _text(_cale(radacina, "proc/partitions")).splitlines())):
 		return None
-	dosar, demonteaza = _deschideDisc(dev, montate, radacina, monteaza)
+	if oriunde is None:
+		oriunde = _dispozitiveMontate(radacina)
+	dosar, demonteaza = _deschideDisc(dev, montate, radacina, monteaza, oriunde)
 	if not dosar:
 		return _rand(n, fisier, date, _(FARA_NUME), motiv=MOTIV_CITIRE)
 	try:
-		sistem = os.path.join(dosar, sub)
-		# Un dosar de imagine nu poate iesi din partitia citita printr-o legatura.
-		if os.path.islink(sistem) or not os.path.isdir(os.path.join(sistem, "etc")):
+		sistem = os.path.join(dosar, sub) if sub else dosar
+		nucleu = os.path.join(dosar, _nucleuRelativ(st))
+		# Un dosar de imagine sau un nucleu nu pot iesi din partitia citita printr-o legatura.
+		if (os.path.islink(sistem) or not _inPartitie(dosar, sistem) or not _inPartitie(dosar, nucleu) or
+			not os.path.isdir(os.path.join(sistem, "etc"))):
 			return None
-		acum = _acumKexec(st, cmd)
-		bun = radacinaValida(sistem) and _nucleuKexec(os.path.join(sistem, "zImage"))
+		acum = _acumKexec(st, cmd, radacina)
+		bun = radacinaValida(sistem) and _nucleuKexec(nucleu)
 		extern = not dev.startswith("/dev/mmcblk0p")
-		uuid = bool(UUID_DISC.fullmatch(st["p"]["root"]))
-		# Initramfs este comun sloturilor. Pornirea curenta dovedeste suportul UUID.
-		suport_uuid = not uuid or bool(UUID_DISC.fullmatch(cmd.get("root", "")))
-		sigur = suport_uuid and (not extern or uuid or (
-			dev.startswith("/dev/sda") and semnDiscuri(radacina) == ("sda",)))
+		# UUID= si PARTUUID= le cauta initramfs-ul kexec cu blkid, in ambele etape: ordinea discurilor nu conteaza. Un
+		# nume /dev/sdXN scris direct depinde de ea, deci se alege numai cu un singur disc, chiar sda.
+		stabil = bool(UUID_DISC.fullmatch(st["p"]["root"]) or PARTUUID_DISC.fullmatch(st["p"]["root"]))
+		sigur = not extern or stabil or (dev.startswith("/dev/sda") and semnDiscuri(radacina) == ("sda",))
 		return {"loc": n, "fel": "kexec", "imagine": numeImagine(sistem), "acum": acum,
 			"alegere": bool(bun and sigur and not acum), "strica": not bun,
-			"motiv": (MOTIV_UUID if not suport_uuid else MOTIV_DISCURI) if bun and not sigur else "", "extern": extern,
+			"motiv": MOTIV_DISCURI if bun and not sigur else "", "extern": extern,
 			"fisier": fisier, "date": date, "radacina": dev}
 	finally:
 		if demonteaza:
@@ -731,18 +822,22 @@ def locuri(radacina=None, monteaza=None, numai=None):
 	if not boot:
 		rez["eroare"] = True
 		return rez
+	kexec = boot == _dosarKexec(radacina)
 	try:
-		fisiere = startupuri(boot)
+		# Recovery (locul 0) numai la kexec: acolo e o imagine in radacina flash; la bootoptions e meniul fabricii.
+		fisiere = _sabloane(boot) if kexec else startupuri(boot)
+		o_data = kexec and os.path.lexists(os.path.join(boot, O_DATA))
 	finally:
 		if demonteazaBoot:
 			demonteazaBoot()
 	if numai is not None:
 		fisiere = [x for x in fisiere if x[0] == str(numai)]
-	if boot == _dosarKexec(radacina):
+	if kexec:
 		montate = _montate(radacina)
+		oriunde = _dispozitiveMontate(radacina)
 		for n, fisier, date in fisiere:
 			try:
-				loc = _locKexec(n, fisier, date, cmd, montate, radacina, monteaza)
+				loc = _locKexec(n, fisier, date, cmd, montate, radacina, monteaza, oriunde)
 			except (IOError, OSError) as e:
 				_log("locul %s: %r" % (n, e))
 				rez["eroare"] = True
@@ -750,6 +845,8 @@ def locuri(radacina=None, monteaza=None, numai=None):
 			if loc:
 				rez["locuri"].append(loc)
 		rez["pe_stick"] = any(l.get("extern") and l["acum"] for l in rez["locuri"])
+		# STARTUP_ONCE (pus de alta imagine) are intaietate la pornirea urmatoare; nu e al nostru, deci il spunem doar.
+		rez["o_data"] = o_data
 		return rez
 	emmc, altele = [], []
 	for n, nume_fisier, date in fisiere:
@@ -758,15 +855,16 @@ def locuri(radacina=None, monteaza=None, numai=None):
 		if e:
 			emmc.append((n, nume_fisier, date, e))
 		elif date.strip() and (not date.startswith(b"boot emmcflash0.") or
-			re.search(rb"\broot=(?:/dev/(?:sd|mmcblk[1-9])|UUID=)", date)):
+			re.search(rb"\broot=(?:/dev/(?:sd|mmcblk[1-9])|UUID=|PARTUUID=)", date)):
 			altele.append((n, nume_fisier, date, st))
 	rez["pe_stick"] = pe_stick
 	montate = _montate(radacina)
 	if altele:
 		discuri, partitii_ = discuriScoase(radacina)
+		oriunde = _dispozitiveMontate(radacina)
 		for n, nume_fisier, date, st in altele:
 			try:
-				l = _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza)
+				l = _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde)
 			except (IOError, OSError) as e:
 				_log("locul %s: %r" % (n, e))
 				l = _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_CITIRE)
@@ -820,7 +918,8 @@ def randuri(stare):
 		d = {"loc": l["loc"], "imagine": l["imagine"]}
 		if l.get("fara_loc"):
 			rez.append(_(RAND_STICK) % d)
-		elif l["fel"] == "stick":
+		elif l["fel"] == "stick" or l.get("extern"):
+			# Locurile kexec de pe USB sau HDD au aceleasi texte (deja traduse) ca locurile de pe card sau stick.
 			if l["acum"]:
 				rez.append(_(RAND_DISC_ACUM) % d)
 			elif l.get("strica"):
@@ -858,6 +957,8 @@ def nota(stare):
 		text.append(_(NOTA_DISCURI))
 	if any(l.get("fara_loc") for l in lista):
 		text.append(_(PE_STICK))
+	if stare.get("o_data"):
+		text.append(_(NOTA_O_DATA))
 	return " ".join(text)
 
 

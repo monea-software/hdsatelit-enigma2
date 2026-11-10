@@ -927,10 +927,6 @@ def scrieOsd(request, rez, fereastra=None):
 def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 	"""Verificarea stratului pe un fir (P._AsteptareCaptura: rezultatul vine inapoi pe firul enigma2 printr-un pipe si un
 	eTimer, nu prin reactor.callLater sau callFromThread, care in reactorul imaginii pot lasa bucla sa doarma)."""
-	from . import captura_sigura as CS
-	epoca_captura = CS.epocaCapturii()
-	if epoca_captura is None:
-		return scrieOsd(request, {"cod": 403, "mesaj": CS.mesajRefuz()})
 	if asteptare is None:
 		from . import plugin as P
 		asteptare = P._AsteptareCaptura
@@ -957,8 +953,6 @@ def osdPeFir(request, S, latime, etag, amanat, asteptare=None, reactor_=None):
 	def _rezultat(rez):
 		if gata[0]:
 			return
-		if not CS.capturaValida(epoca_captura):
-			rez = {"cod": 403, "mesaj": CS.mesajRefuz()}
 		# fereastra de acum, cand pleaca raspunsul (verificarea a durat)
 		_incheie(scrieOsd(request, rez, fereastraStrat(S)))
 
@@ -1495,10 +1489,6 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			refuz, _s, _b, _a = _poartaPagina(self, request)
 			if refuz is not None:
 				return refuz
-			from . import captura_sigura as CS
-			epoca_captura = CS.epocaCapturii()
-			if epoca_captura is None:
-				return self._raspunde(request, {"result": False, "message": CS.mesajRefuz()}, 403)
 			try:
 				latime = int(argumente(request).get("l") or 960)
 			except ValueError:
@@ -1512,8 +1502,6 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			fereastra = fereastraStrat(S)
 			rez = S.dinMemorie(latime, etag)
 			if rez is not None:
-				if not CS.capturaValida(epoca_captura):
-					return self._raspunde(request, {"result": False, "message": CS.mesajRefuz()}, 403)
 				return scrieOsd(request, rez, fereastra)
 			if _osd_fire[0] >= OSD_FIRE_MAX:
 				request.setHeader(b"retry-after", b"1")

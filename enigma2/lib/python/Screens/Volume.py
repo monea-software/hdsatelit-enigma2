@@ -9,6 +9,13 @@ class Volume(Screen):
 		self.volumeBar = VolumeBar()
 		
 		self["Volume"] = self.volumeBar
+		# tema externa: volumul si ca numar, cand tema il cere
+		import skin
+		if skin.dosareSkinStraine:
+			from Components.Label import Label
+			self["VolumeText"] = Label("")
 		
 	def setValue(self, vol):
 		self.volumeBar.setValue(vol)
+		if "VolumeText" in self:
+			self["VolumeText"].setText(str(vol))

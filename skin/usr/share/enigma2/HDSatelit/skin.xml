@@ -1578,22 +1578,6 @@
 		<panel name="HdsMessageBoxBase" />
 	</screen>
 
-	<!-- HdsCodAsociere (Screens/HdsCodAsociere.py): codul de asociere pe televizor, mare, in mijlocul
-	     ecranului, in trei casute de cate doua cifre („12 34 56”). Sursele: titlu, cod1..cod3 (si cod, tot codul,
-	     pentru alte skinuri), adresa (cine l-a cerut sau unde se deschide pagina), nota (EXIT). Fara bara de timp. -->
-	<screen name="HdsCodAsociere" position="340,220" size="1240,640" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1240,2" backgroundColor="hdsLine" zPosition="1" />
-		<widget source="titlu" render="Label" position="40,40" size="1160,80" font="HdsBold;52" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<eLabel position="85,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<eLabel position="455,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<eLabel position="825,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<widget source="cod1" render="Label" position="85,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="cod2" render="Label" position="455,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="cod3" render="Label" position="825,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="adresa" render="Label" position="40,430" size="1160,70" font="HdsRegular;38" halign="center" valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget source="nota" render="Label" position="40,530" size="1160,70" font="HdsRegular;38" halign="center" valign="center" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-	</screen>
-
 	<!-- HdsLocInregistrari (Screens/HdsLocInregistrari.py): locul inregistrarilor si discurile conectate, de la tasta
 	     rosie, din meniu si din notificari. Sursele: titlu, text (fraza simpla, 3 randuri), detaliu (explicatia, mai
 	     mic, 5 randuri: textele cele mai lungi, in germana si rusa), rand (explicatia randului ales, 2 randuri); lista

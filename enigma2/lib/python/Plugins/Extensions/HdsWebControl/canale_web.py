@@ -17,7 +17,7 @@
 # - emisiunea de acum (cu progresul) si cea urmatoare: eEPGCache.lookupEvent, cel mult MAX_EPG canale pe cerere; cu
 #   „Tradu EPG” titlul vine tradus NUMAI daca traducerea e deja in memorie (Components/HdsTraducereEpg.dinMemorie):
 #   lista de canale (pana la 100 de titluri pe cerere) nu porneste traduceri noi, ca sa nu consume cota;
-# - sigla: numai daca fisierul exista in caile lui Components/Renderer/Picon.py, cu acelasi nume;
+# - sigla: numai daca fisierul exista in caile lui Tools/PiconResolver.py, cu acelasi nume;
 # - cautarea dupa nume si filtrele: aceleasi grupe si aceleasi reguli ca pe televizor (Components/HdsIndexCanale.py:
 #   SAU in grup, SI intre grupe), aplicate listei alese; numerele de langa optiuni se numara pe lista aleasa.
 #
@@ -253,14 +253,14 @@ def _sursa(c):
 	"" pentru celelalte fluxuri si fara pozitie."""
 	poz = getattr(c, "poz", None)
 	if getattr(c, "tip", None) == "online":
-		return "Online"
+		return _eticheta_loc(c)
 	if getattr(c, "tip", None) not in ("tv", "radio") or poz is None or poz == "":
 		return ""
 	return _t(SURSE.get(poz, "Satelit")) if isinstance(poz, str) else _t("Satelit")
 
 
 def nume_sigla(ref):
-	"""Numele local ca in Renderer/Picon.py, pentru DVB si referinte radio audio HTTP(S)."""
+	"""Numele local ca in Tools/PiconResolver.py, pentru DVB si referinte radio audio HTTP(S)."""
 	c = _campuri(ref)
 	if c is None:
 		return None
@@ -636,7 +636,7 @@ class _Furnizor(object):
 
 	def cai_sigle(self):
 		"""Pe fir: aceleasi dosare ca pe televizor, inclusiv discurile montate."""
-		from Components.Renderer.Picon import dosare_sigle
+		from Tools.PiconResolver import dosare_sigle
 		cai = tuple(dosare_sigle())
 		try:
 			from Components.HdsLocuriLista import dosareSigle
@@ -646,7 +646,7 @@ class _Furnizor(object):
 		return cai
 
 	def generatie_sigle(self):
-		from Components.Renderer.Picon import generatie_sigle
+		from Tools.PiconResolver import generatie_sigle
 		return generatie_sigle()
 
 	def mai_tarziu(self, functie, ms=0):
@@ -911,13 +911,23 @@ def _gen_construieste_buchete(M, tip, sem):
 			# Posturile se vad in „Toate canalele”, pe grupa lor. Un buchet gol facut de om ramane.
 			continue
 		id_ = id_buchet(ref, i)
-		nume_b = curat(fara_mod(curat(nume)))
-		if nume_b == "Favourites":
-			nume_b = _t("Favourites")
+		nume_b = nume_buchet(ref, nume)
 		buchete.append({"id": id_, "nume": nume_b or id_, "ref": ref, "intrari": intrari, "numar": canale})
 		yield
 	_MEMORIE["buchete"][tip] = (sem, M.acum(), buchete)
 	return buchete
+
+
+def nume_buchet(ref, nume):
+	"""Acelasi nume de sistem ca pe televizor; numele personalizat ramane al utilizatorului."""
+	nume = curat(fara_mod(curat(nume)))
+	try:
+		from Components.HdsFavorite import nume_buchet as nume_comun
+	except ImportError:
+		# Pe PC modulul poate fi incarcat singur, fara pachetul Components.
+		nume_comun = None
+	text = nume_comun(ref, nume) if nume_comun is not None else nume
+	return curat(text)
 
 
 def gen_lista(M, tip, id_, viata=VIATA_LISTA_S):
@@ -1243,7 +1253,9 @@ def cheie_grupa(c):
 	tip = getattr(c, "tip", None)
 	if tip in ("dab", "t2"):
 		return tip
-	if tip in ("online", "internet", "iptv"):
+	if tip == "online":
+		return _grupa_loc(c)
+	if tip in ("internet", "iptv"):
 		return GRUPA_ONLINE
 	poz = getattr(c, "poz", None)
 	if poz is None or poz == "":
@@ -1260,6 +1272,8 @@ def ordine_grupa(cheie, X):
 		return (1, 0)
 	if cheie == GRUPA_ONLINE:
 		return (1, 1)
+	if str(cheie).startswith(GRUPA_ONLINE + ":"):
+		return (1, 2)
 	if cheie == "t2":
 		return (3, 0)
 	if cheie == "dab":
@@ -1276,20 +1290,37 @@ def nume_grupa(cheie, c, X):
 		return X.nume_buchet_flux(cheie)
 	if cheie == GRUPA_ALTE or c is None:
 		return _t("Alte canale")
-	if cheie == GRUPA_ONLINE:
+	if cheie == GRUPA_ONLINE or str(cheie).startswith(GRUPA_ONLINE + ":"):
 		return _nume_loc(c)
 	return X.text_pozitie(c.poz) or cheie
 
 
-def _nume_loc(c):
-	"""Numele locului unui post, ca randul lui din lista de pe televizor; registrul il tine in limba interfetei."""
+def _loc(c):
+	"""Locul adaugat de o extensie caruia ii apartine un post, sau None."""
 	try:
 		from Components import HdsLocuriLista as L
-		d = L.locCanal(getattr(c, "ref", ""))
+		return L.locCanal(getattr(c, "ref", ""))
 	except Exception as e:
 		_jurnal("locul canalului: %s" % type(e).__name__)
-		d = None
+		return None
+
+
+def _nume_loc(c):
+	"""Numele locului unui post, ca randul lui din lista de pe televizor; registrul il tine in limba interfetei."""
+	d = _loc(c)
 	return d["nume"] if d else "Online"
+
+
+def _eticheta_loc(c):
+	"""Sursa unui post al unui loc, ca eticheta din dreapta randului de pe televizor (Online, DAB+ USB)."""
+	d = _loc(c)
+	return d.get("eticheta") or "Online" if d else "Online"
+
+
+def _grupa_loc(c):
+	"""Grupa din pagina: fiecare loc are grupa lui, ca randul lui de pe televizor; Radio online ramane pe cheia veche."""
+	d = _loc(c)
+	return GRUPA_ONLINE if d is None or d.get("id") == "radioonline" else "%s:%s" % (GRUPA_ONLINE, d["id"])
 
 
 def gen_grupe(lista, X):
@@ -1681,7 +1712,7 @@ def _sigla_rand(r, sigle):
 	if not sigle:
 		return None
 	try:
-		from Components.Renderer.Picon import nume_sigle, nume_cautate_canal
+		from Tools.PiconResolver import nume_sigle, nume_cautate_canal
 	except ImportError:
 		candidate = (r.sigla,)  # Fara motorul de afisare ramane referinta exacta.
 	else:
@@ -2025,7 +2056,7 @@ def stare_acum(M=None):
 	except Exception:
 		standby = False
 	a.update({"result": True, "emisiune": emisiune, "standby": standby, "ora": int(M.acum()),
-		"transmise": _transmise(M)})
+		"transmise": _transmise(M), "progres_colorat": progres_colorat()})
 	return 200, a
 
 
@@ -2782,10 +2813,23 @@ def _vezi_live():
 		return modul
 
 
+def progres_colorat():
+	"""Aceeasi alegere ca pe televizor, citita si de fila deja deschisa."""
+	try:
+		from Components.config import config
+		return bool(config.skin.progres_colorat.value)
+	except (ImportError, AttributeError, KeyError):
+		return True
+
+
+def _stilProgres():
+	return "" if progres_colorat() else ".progres i{background:var(--atentie-plin,#f5b83d);}"
+
+
 def pagina_text(stil, config_pagina):
 	return _vezi_live().inPagina(_aparate().inPagina(_traducePagina(PAGINA))).replace("__STIL_COMUN__",
 		stil).replace("__CONFIG__",
-		config_pagina)
+		config_pagina).replace("__STIL_PROGRES__", _stilProgres())
 
 
 PAGINA = """<!DOCTYPE html>
@@ -2884,7 +2928,9 @@ PAGINA = """<!DOCTYPE html>
   .em .o{flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--text-slab);}
   .em .t{min-width:0;overflow:hidden;white-space:nowrap;}
   .progres{display:block;height:4px;background:#2a2f38;border-radius:2px;margin:5px 0 1px;overflow:hidden;}
-  .progres i{display:block;height:100%;width:0;background:#f5b83d;}
+  .progres i{display:block;height:100%;width:0;border-radius:inherit;
+    background:linear-gradient(90deg,var(--bine-plin,#4fd18b),
+      var(--atentie-plin,#f1c40f),var(--rosu,#e5484d));}
   .nota{color:var(--text-slab);font-size:.85rem;margin:8px 0 0;line-height:1.45;}
   #capat{height:1px;}
   .eroare{color:#ffb4a8;}
@@ -2920,6 +2966,7 @@ PAGINA = """<!DOCTYPE html>
 __APARATE_STIL__
 __LIVE_STIL__
 </style>
+<style id="stilProgres">__STIL_PROGRES__</style>
 </head>
 <body>
 <main>
@@ -3754,9 +3801,16 @@ function arataAcum(a, emisiune){
   if(emisiune){ p.appendChild(document.createTextNode(" · " + emisiune.o + " " + emisiune.t)); }
   if(a.standby){ p.appendChild(document.createTextNode(" · în standby")); }
 }
+function puneStilProgres(colorat){
+  if(typeof colorat !== "boolean"){ return; }
+  var stil = $("stilProgres");
+  var text = colorat ? "" : ".progres i{background:var(--atentie-plin,#f5b83d);}";
+  if(stil && stil.textContent !== text){ stil.textContent = text; }
+}
 function citesteAcum(){
   return cerere("/api/canale-acum").then(function(d){
     if(!d.result){ return; }
+    puneStilProgres(d.progres_colorat);
     potriveste(d.ora);
     arataAcum(d, d.emisiune);
     marcheaza(d.cheie);

@@ -14,6 +14,10 @@ class InputBox(Screen):
 
 		self["text"] = Label(title)
 		self["input"] = Input(**kwargs)
+		from Components.HdsAsistentaControl import campSecret
+		self.hdsCampSecret = bool(self["input"].type == Input.PIN or campSecret(eticheta=title + " " + windowTitle))
+		self["input"].hdsSecret = self.hdsCampSecret
+		self["input"].hdsSession = session
 		self.onShown.append(boundFunction(self.setTitle, windowTitle))
 		if useableChars is not None:
 			self["input"].setUseableChars(useableChars)
@@ -58,7 +62,7 @@ class InputBox(Screen):
 	def keyText(self):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
 		self.session.openWithCallback(self._dinTastatura, VirtualKeyBoard, title=self["text"].getText(),
-			text=self["input"].getText())
+			text=self["input"].getText(), hdsSecret=self.hdsCampSecret)
 
 	def _dinTastatura(self, text=None):
 		if text is not None:

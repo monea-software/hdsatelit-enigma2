@@ -79,6 +79,20 @@ def _skin(nume):
 	</screen>""" % (nume, _TASTE)
 
 
+
+class _ParolaLoc(ConfigPassword):
+	"""Parola locului de retea. Cat omul o scrie se vede in clar; nescrisa, randul spune numai daca e salvata o parola
+	("pusă") sau nu ("nepusă"): randul gol pastreaza parola salvata, criptata pe receptor."""
+
+	def __init__(self):
+		ConfigPassword.__init__(self, default=u"", fixed_size=False)
+		self.salvata = False
+
+	def getMulti(self, selected):
+		if not self.scrisa and not self.text:
+			return ("text", _("pusă") if self.salvata else _("nepusă"))
+		return ConfigPassword.getMulti(self, selected)
+
 class _Lista(Screen):
 	"""Baza celor trei ecrane cu lista: randuri de doua linii puse din cod (fonturile urmeaza Marimea textului)."""
 	INALTIME = 78
@@ -179,6 +193,7 @@ class HdsLocuriRetea(_Lista):
 		self["key_blue"].setText(_("Caută în casă"))
 		self.locuri = []
 		self.mesaj = u""
+		self.cautare_initiala = False
 		self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "MenuActions"], {
 			"ok": self.deschide,
 			"cancel": self.close,
@@ -191,6 +206,9 @@ class HdsLocuriRetea(_Lista):
 
 	def pornit(self):
 		self.citeste()
+		if not self.locuri and not self.cautare_initiala:
+			self.cautare_initiala = True
+			self.cauta()
 
 	def citeste(self):
 		ales = self.curent()
@@ -273,7 +291,7 @@ class HdsLocuriRetea(_Lista):
 		self.mesaj = u""
 		if l["montat"]:
 			S.demonteaza(l["id"], self.viu(lambda r: self._arata(r.get("mesaj") if not r.get("ok") else _("Locul %s a fost "
-				"demontat.") % l["nume"])))
+				"demontat.") % l["nume"])), numai_liber=True, sesiune=self.session)
 		else:
 			S.monteaza(l["id"], self.viu(lambda r: self._arata(r.get("mesaj") if not r.get("ok") else _("Locul %s este montat. "
 				"Îl găsești și în Player media.") % l["nume"])))
@@ -324,9 +342,6 @@ class HdsLocuriRetea(_Lista):
 		elif a == "monteaza":
 			self.monteazaSauDemonteaza()
 		elif a == "editeaza":
-			if l["montat"]:
-				self._arata(_("Demontează întâi locul, apoi schimbă-l."))
-				return
 			self.session.openWithCallback(self._dupaEditare, HdsLocReteaEditare, l["id"])
 		elif a == "sterge":
 			self.session.openWithCallback(self._sterge, MessageBox, _("Ștergi locul %s? Fișierele de pe server nu se "
@@ -338,40 +353,13 @@ class HdsLocuriRetea(_Lista):
 		l = self.loc()
 		if da and l is not None:
 			S.sterge(l["id"], self.viu(lambda r: self._arata(_("Locul %s a fost șters.") % l["nume"] if r.get("ok") else
-				r.get("mesaj"))))
+				r.get("mesaj"))), sesiune=self.session)
 
 	def _inregistrari(self, l):
-		def dupaViteza(r):
-			text = r.get("mesaj") or u""
-			if r.get("ok") and S.pentruInregistrari(l["punct"]):
-				text += u"\n\n" + _("Alege-l acum în Locul înregistrărilor (îl găsești în listă, ca pe un disc).")
-				self.session.openWithCallback(self._locul, MessageBox, text + u"\n\n" + _("Deschid Locul "
-					"înregistrărilor?"), MessageBox.TYPE_YESNO)
-			else:
-				self.session.open(MessageBox, text, MessageBox.TYPE_INFO if r.get("ok") else MessageBox.TYPE_ERROR)
-			self.citeste()
-
-		def dupaMontare(r):
-			if r.get("ok"):
-				S.verificaInregistrari(l["id"], self.viu(dupaViteza))
-				self.citeste()
-			else:
-				self._arata(r.get("mesaj"))
-		if not l["montat"]:
-			S.monteaza(l["id"], self.viu(dupaMontare))
-		else:
-			S.verificaInregistrari(l["id"], self.viu(dupaViteza))
 		self.mesaj = _("Se verifică scrierea și viteza (până la un minut)...")
+		S.folosesteInregistrari(l["id"], self.viu(lambda r: self._arata(r.get("mesaj"))), sesiune=self.session)
 		self.citeste()
 		self.ceas.start(CITIRE_MS, True)
-
-	def _locul(self, da):
-		if da:
-			try:
-				from Screens.HdsLocInregistrari import HdsLocInregistrari
-				self.session.open(HdsLocInregistrari)
-			except Exception as e:
-				print("[HdsLocuriRetea] Locul inregistrarilor: %s" % e)
 
 
 # ------------------------------------------------------------------ cautarea in casa
@@ -617,11 +605,12 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self.port = ConfigNumber(default=int(d.get("port") or 0))
 		self.dosar = ConfigText(default=d.get("dosar") or u"", fixed_size=False)
 		self.utilizator = ConfigText(default=d.get("utilizator") or u"", fixed_size=False)
-		self.parola = ConfigPassword(default=u"", fixed_size=False)
+		self.parola = _ParolaLoc()
 		self.pornire = ConfigYesNo(default=bool(d.get("pornire")))
 		self.citire = ConfigYesNo(default=bool(d.get("citire")))
 		self.tls = ConfigYesNo(default=bool(d.get("tls_oricare")))
 		self.are_parola = bool(vechi and vechi.get("utilizator") and S.parole().are(ident))
+		self.parola.salvata = self.are_parola
 		self["description"] = Label(u"")
 		self["footnote"] = Label(u"")
 		self["key_red"] = StaticText(_("Renunță"))
@@ -639,6 +628,7 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 			"ok": self.ok,
 		}, -2)
 		self.inchis = False
+		self.salvare = False
 		self.onClose.append(self._inchis)
 		self.fel.addNotifier(self._felSchimbat, initial_call=False)
 		self._randuri()
@@ -718,12 +708,16 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 			return
 		element = c[1]
 		text = u"" if element is self.parola else element.value
-		self.session.openWithCallback(lambda t: self._scris(element, t), VirtualKeyBoard, title=c[0], text=text)
+		self.session.openWithCallback(lambda t: self._scris(element, t), VirtualKeyBoard,
+			title=c[0], text=text, hdsSecret=element is self.parola)
 
 	def _scris(self, element, text):
 		if text is None:
 			return
 		element.value = text
+		if element is self.parola:
+			# parola scrisa acum: se vede in clar pana la salvare
+			element.scrisa = True
 		self["config"].invalidateCurrent()
 		self._descriere()
 
@@ -733,14 +727,27 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 			"citire": self.citire.value, "tls_oricare": self.tls.value, "control": self.control}
 
 	def salveaza(self):
+		if self.salvare:
+			return
 		parola = self.parola.value
 		if not parola:
 			parola = None if self.are_parola else (u"" if self.utilizator.value else None)
-		d, eroare = S.salveaza(self._date(), parola, self.ident)
-		if d is None:
-			self.session.open(MessageBox, eroare, MessageBox.TYPE_ERROR, timeout=10)
+		self.salvare = True
+		self["footnote"].setText(_("Se salvează și se conectează locul..."))
+		S.salveazaSiConecteaza(self._date(), parola, self.ident, self._salvat, sesiune=self.session)
+
+	def _salvat(self, r):
+		self.salvare = False
+		if self.inchis:
 			return
-		self.close(eroare or (_("Locul %s a fost salvat.") % d["nume"]))
+		if not r.get("ok"):
+			self.ident = (r.get("loc") or {}).get("id") or self.ident
+			self.parola.value = u""
+			self.are_parola = bool(self.ident and S.parole().are(self.ident))
+			self._descriere()
+			self["footnote"].setText(r.get("mesaj") or S.textEroare("alta"))
+			return
+		self.close(r.get("mesaj"))
 
 	def renunta(self):
 		self.close(None)

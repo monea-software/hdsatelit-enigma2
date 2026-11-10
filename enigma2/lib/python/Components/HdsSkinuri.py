@@ -35,6 +35,12 @@
 #   televizorul il spune o data dupa pornire (mesaj), ecranul Skin Selection si pagina /skin il arata cat e acolo. O
 #   alegere noua il sterge (si a aceluiasi skin: omul vrea sa incerce din nou).
 #
+# TEMELE EXTERNE (Components/HdsTemaExterna.py, incarcat numai pentru ele): la alegere verificarea intreaga (tot XML-ul si
+# includerile, rezolutia, fonturile, componentele) si jurnalul activarii pe disc, inainte de schimbarea setarii; la pornire
+# numararea pornirilor in proba (o tema care opreste receptorul nu se incarca la nesfarsit, si dupa o repornire intreaga) si
+# retragerea dupa trei opriri neasteptate in zece minute, chiar daca proba s-a terminat. Trei erori de ecran in 30 de secunde
+# (mytest.py) retrag tema cu MOTIV_ECRANE, inainte de singura repornire a interfetei. Cu tema HD Satelit nu ruleaza nimic din ele.
+#
 # Modulul nu importa nimic din enigma2 la incarcare (skin.py il cheama inainte de ecrane; probele de pe PC dau radacina,
 # config si fisierele din RAM).
 
@@ -63,6 +69,14 @@ MOTIV_LIPSA = "lipsa"
 MOTIV_NU_E_SKIN = "nu_e_skin"
 MOTIV_XML = "xml"
 MOTIV_CADERE = "cadere"
+MOTIV_ECRANE = "ecrane"
+MOTIV_INCLUDE = "include"
+MOTIV_REZOLUTIE = "rezolutie"
+MOTIV_SCRIERE = "scriere"
+# atatea opriri neasteptate in zece minute retrag tema si dupa sfarsitul probei (modul sigur vine la cinci)
+PRAG_CADERI = 3
+# jurnalul activarii (Components/HdsTemaExterna.py); refuzul de acolo ramane si dupa repornirea receptorului
+ACTIVARE = "/etc/enigma2/hds-tema-activare.json"
 
 
 def N_(text):
@@ -83,10 +97,14 @@ def _t(text, traducere=None):
 
 
 TEXT_MOTIV = {
-	MOTIV_LIPSA: N_("fișierul skinului lipsește"),
-	MOTIV_NU_E_SKIN: N_("fișierul nu e un skin"),
-	MOTIV_XML: N_("skin.xml nu se poate citi: %s"),
-	MOTIV_CADERE: N_("interfața s-a oprit neașteptat la pornirea cu el"),
+	MOTIV_LIPSA: N_("fișierul temei lipsește"),
+	MOTIV_NU_E_SKIN: N_("fișierul nu e o temă"),
+	MOTIV_XML: N_("fișierul temei nu se poate citi: %s"),
+	MOTIV_CADERE: N_("interfața s-a oprit neașteptat cu ea; cauza exactă nu a fost stabilită"),
+	MOTIV_ECRANE: N_("ecranele au dat erori de mai multe ori la rând; cauza exactă nu a fost stabilită"),
+	MOTIV_INCLUDE: N_("lipsește sau e stricată o parte a temei: %s"),
+	MOTIV_REZOLUTIE: N_("rezoluția temei nu e bună: %s"),
+	MOTIV_SCRIERE: N_("alegerea nu se poate ține minte pe receptor: discul e plin sau nu se poate scrie"),
 }
 
 
@@ -97,6 +115,15 @@ def _jurnal(text):
 def radacina():
 	from enigma import eEnv
 	return eEnv.resolve("${datadir}/enigma2/")
+
+
+def _temaExterna():
+	"""Components/HdsTemaExterna.py, incarcat numai cand e nevoie; None unde nu exista (probele cu modulul singur)."""
+	try:
+		from Components import HdsTemaExterna
+		return HdsTemaExterna
+	except ImportError:
+		return None
 
 
 def _config(config=None):
@@ -234,29 +261,41 @@ def avertismentRezolutie(nume, v, traducere=None):
 	LATIME_LITERE_MICI (720x576: 30 px -> 11 px) literele lor sunt mici."""
 	if not v.get("latime") or v["latime"] >= LATIME_LITERE_MICI:
 		return ""
-	return _t("Skinul %s e făcut pentru %dx%d. Ecranele HD Satelit se micșorează ca să încapă în el, deci literele lor "
+	return _t("Tema %s e făcută pentru %dx%d. Ecranele HD Satelit se micșorează ca să încapă în ea, deci literele lor "
 		"sunt mici.", traducere) % (nume, v["latime"], v["inaltime"])
 
 
 def alege(nume, config=None, root=None, traducere=None, refuz=None):
-	"""OK pe ecran si /api/skin-alege: (bun, mesaj, avertisment). Skinul trebuie sa fie din lista si sa inceapa cu
-	<skin>; alegerea se salveaza si se vede la pornirea urmatoare a interfetei. Refuzul tinut minte se sterge (si pentru
-	acelasi skin: omul vrea sa-l incerce din nou)."""
+	"""OK pe ecran si /api/skin-alege: (bun, mesaj, avertisment). Tema trebuie sa fie din lista si sa inceapa cu <skin>; o
+	tema externa e verificata intreaga, iar jurnalul activarii se scrie inainte de schimbarea setarii. Alegerea se salveaza si
+	se vede la pornirea urmatoare a interfetei. Refuzul tinut minte se sterge (si pentru aceeasi tema: omul vrea sa o incerce
+	din nou)."""
 	if root is None:
 		root = radacina()
 	cale = caleSkin(root, nume)
 	if cale is None:
-		return False, _t("Skinul nu există.", traducere), ""
+		return False, _t("Tema nu există.", traducere), ""
 	v = verificaSkin(cale)
 	if not v["bun"]:
-		return False, _t("Skinul %s nu se poate folosi: %s.", traducere) % (nume, textMotiv(v["motiv"], v["detaliu"],
+		return False, _t("Tema %s nu se poate folosi: %s.", traducere) % (nume, textMotiv(v["motiv"], v["detaliu"],
 			traducere)), ""
+	avertisment = avertismentRezolutie(nume, v, traducere)
+	T = _temaExterna() if nume != DOSAR_IMAGINE else None
+	if T is not None:
+		verificata = T.verifica(cale, root)
+		if not verificata["bun"]:
+			return False, _t("Tema %s nu se poate folosi: %s.", traducere) % (nume, textMotiv(verificata["motiv"],
+				verificata["detaliu"], traducere)), ""
+		if not T.pregatesteActivarea(fisier(nume), cale):
+			return False, _t("Tema %s nu se poate folosi: %s.", traducere) % (nume, textMotiv(MOTIV_SCRIERE, "", traducere)), ""
+		lipsa = T.textAvertisment(verificata, traducere)
+		avertisment = (avertisment + " " + lipsa).strip() if lipsa else avertisment
 	c = _config(config).skin.primary_skin
 	c.value = fisier(nume)
 	c.save()
-	# o alegere noua: motivul vechi nu mai e de spus (iar acelasi skin ales din nou primeste o noua incercare)
+	# o alegere noua: motivul vechi nu mai e de spus (iar aceeasi tema aleasa din nou primeste o noua incercare)
 	stergeRefuz(refuz)
-	return True, _t("Skinul ales se vede după repornirea interfeței.", traducere), avertismentRezolutie(nume, v, traducere)
+	return True, _t("Tema aleasă se vede după repornirea interfeței.", traducere), avertisment
 
 
 def aspect(config=None):
@@ -331,14 +370,32 @@ def citesteRefuz(cale=None):
 	return _citesteJson(cale or REFUZ)
 
 
-def stergeRefuz(cale=None):
+def refuzDeSpus(refuz=None, activare=None):
+	"""Selectorul si pagina web: refuzul din RAM sau, dupa o repornire a receptorului, cel din jurnalul activarii."""
+	r = citesteRefuz(refuz)
+	if r:
+		return r
+	a = _citesteJson(activare or ACTIVARE)
+	if a and a.get("stare") == "refuzat":
+		return {"skin": a.get("skin", ""), "motiv": a.get("motiv", ""), "detaliu": a.get("detaliu", ""), "aratat": True}
+	return None
+
+
+def stergeRefuz(cale=None, activare=None):
 	_sterge(cale or REFUZ)
+	# refuzul tinut minte pe disc nu mai e de spus dupa o alegere noua (la o tema externa, jurnalul e deja scris din nou)
+	a = _citesteJson(activare or ACTIVARE)
+	if a and a.get("stare") == "refuzat":
+		_sterge(activare or ACTIVARE)
 
 
 def refuza(valoare, motiv, detaliu="", cale=None):
 	"""Tine minte in RAM de ce skinul ales nu a pornit (pentru mesajul de pe televizor si pentru pagina)."""
 	r = {"skin": valoare, "motiv": motiv, "detaliu": detaliu, "aratat": False}
 	_scrieJson(cale or REFUZ, r)
+	T = _temaExterna()
+	if T is not None:
+		T.marcheazaRefuz(valoare, motiv, detaliu)
 	_jurnal("skinul %s nu porneste (%s %s), ramane %s" % (valoare, motiv, detaliu, SKIN_IMAGINE))
 	return r
 
@@ -360,32 +417,80 @@ def skinDePornit(valoare, mediu=None, root="/usr/share/enigma2", proba=None, ref
 	if semn and semn.get("skin") == valoare and _caderiDupa(int(semn.get("pornit") or 0), caderi):
 		_sterge(proba)
 		return None, refuza(valoare, MOTIV_CADERE, "", refuz)
-	v = verificaSkin(os.path.join(root, valoare))
+	cale = os.path.join(root, valoare)
+	v = verificaSkin(cale)
 	if not v["bun"]:
 		_sterge(proba)
 		return None, refuza(valoare, v["motiv"], v["detaliu"], refuz)
-	_scrieJson(proba, {"skin": valoare, "pornit": _uptime(uptime) if uptime is None or isinstance(uptime, str) else
-		int(uptime)})
+	acum = _uptime(uptime) if uptime is None or isinstance(uptime, str) else int(uptime)
+	T = _temaExterna()
+	if T is not None:
+		if T.caderiRecente(acum, caderi or CADERI) >= PRAG_CADERI:
+			_sterge(proba)
+			return None, refuza(valoare, MOTIV_CADERE, "", refuz)
+		motiv = T.laPornire(valoare, cale)
+		if motiv:
+			_sterge(proba)
+			return None, refuza(valoare, motiv[0], motiv[1], refuz)
+	if not _scrieJson(proba, {"skin": valoare, "pornit": acum}) and T is not None:
+		# fara semnul probei, o oprire la pornire n-ar mai retrage tema: nu se activeaza
+		return None, refuza(valoare, MOTIV_SCRIERE, "", refuz)
 	return valoare, None
 
 
 def incarcareCazuta(valoare, eroare, proba=None, refuz=None):
-	"""skin.py: loadSkin pe skinul ales a cazut (XML stricat)."""
+	"""skin.py: incarcarea temei alese a cazut: XML stricat sau o tema stricata (EroareTema, cu motivul ei)."""
 	_sterge(proba or PROBA)
-	return refuza(valoare, MOTIV_XML, str(eroare)[:200], refuz)
+	motiv = getattr(eroare, "motiv", None)
+	return refuza(valoare, motiv or MOTIV_XML, getattr(eroare, "detaliu", "") if motiv else str(eroare)[:200], refuz)
 
 
 def pornireReusita(proba=None):
 	"""Interfata a mers PROBA_S secunde cu skinul ales: semnul probei se sterge."""
 	_sterge(proba or PROBA)
+	T = _temaExterna() if skinPornit() != SKIN_IMAGINE else None
+	if T is not None:
+		T.probaReusita()
+
+
+def iesireCeruta():
+	"""mytest.py, cand interfata se opreste la cerere: pornirea asta nu se numara impotriva temei externe."""
+	if skinPornit() != SKIN_IMAGINE:
+		T = _temaExterna()
+		if T is not None:
+			T.iesireCeruta()
+
+
+def eroriEcrane(detaliu=""):
+	"""mytest.py, la a treia eroare de ecran in 30 de secunde, inainte de repornirea interfetei: cu o tema externa, tema se
+	retrage, deci repornirea e una singura si interfata nu intra in bucla. True daca s-a retras."""
+	valoare = skinPornit()
+	if valoare == SKIN_IMAGINE:
+		return False
+	refuza(valoare, MOTIV_ECRANE, str(detaliu)[:200])
+	return True
 
 
 def textRefuz(r, traducere=None):
 	if not r:
 		return ""
 	nume = numeDinValoare(r.get("skin")) or r.get("skin") or ""
-	return _t("Skinul ales (%s) nu a pornit: %s. Interfața a revenit la skinul HD Satelit.", traducere) % (nume,
+	return _t("Tema aleasă (%s) nu a pornit: %s. Interfața a revenit la tema HD Satelit.", traducere) % (nume,
 		textMotiv(r.get("motiv"), r.get("detaliu", ""), traducere))
+
+
+def textStareTema(traducere=None):
+	"""Selectorul si pagina web: ce nu merge din tema externa de pe ecran, sau "" (si cu tema HD Satelit)."""
+	valoare = skinPornit()
+	if valoare == SKIN_IMAGINE:
+		return ""
+	try:
+		import skin
+		T = _temaExterna()
+		return T.textStare(numeDinValoare(valoare) or valoare, skin.raportTema, traducere) if T is not None else ""
+	except Exception as eroare:
+		_jurnal("starea temei: %s" % eroare)
+		return ""
 
 
 def deAratat(refuz=None):

@@ -412,7 +412,7 @@ def identifica_distributie(cale_radacina):
 					k, v = rand.strip().split("=", 1)
 					info[k.lower()] = v.strip("\"'")
 		nume = info.get("creator") or info.get("distro") or info.get("distroname") or ""
-		versiune = info.get("version") or info.get("imageversion") or ""
+		versiune = info.get("imageversion") or info.get("version") or ""
 		if nume:
 			return ("%s %s" % (nume, versiune)).strip()[:60]
 	except (OSError, IOError, ValueError):

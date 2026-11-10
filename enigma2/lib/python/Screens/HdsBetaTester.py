@@ -900,10 +900,11 @@ class HdsBetaTester(Screen):
 		self["numar"].setText(numar)
 		for nume_w in ("numar_fundal", "numar_bara", "numar"):
 			_arata(self[nume_w], bool(numar))
-		# Mascat chiar pe ecran, ca panoul sa poata fi citit si capturat fara identificator.
-		self["identificator"].setText(_("Identificatorul tău: %s\nAcordul din %s, nota de confidențialitate "
+		# valoarea identificatorului nu se arata (nici cu stelute); randul spune numai ca
+		# e pus, la fel ca in pagina web (betatester_web.textIdentificator)
+		self["identificator"].setText(_("Identificatorul tău e pus.\nAcordul din %s, nota de confidențialitate "
 			"versiunea %d.\nPentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.")
-			% ("***", B.oraLocala(b.acord.value), int(b.nota.value)))
+			% (B.oraLocala(b.acord.value), int(b.nota.value)))
 
 	def _invitatie(self):
 		numar = B.randNumar()
@@ -1449,9 +1450,12 @@ def _capturaSiMesaj():
 	_asteptare["mesaj"] = None
 	if not m:
 		return
-	captura = B.capturaOsd()
-	ok, text = B.mesaj(m["fel"], m["text"], m["ecran"], m["jurnal"], captura, contor=B.contor())
-	print("[HdsBetaTester] mesajul cu captura: %s (%s)" % (ok, "captura" if captura else "fara captura"))
+
+	def trimite():
+		captura = B.capturaOsd()
+		ok, text = B.mesaj(m["fel"], m["text"], m["ecran"], m["jurnal"], captura, contor=B.contor())
+		print("[HdsBetaTester] mesajul cu captura: %s (%s)" % (ok, "captura" if captura else "fara captura"))
+	trimite()
 
 
 def _programeazaCaptura(mesaj_):
@@ -1560,7 +1564,6 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 		self.nume = ConfigText(default=b.public.value, fixed_size=False)
 		self.email = ConfigText(default="", fixed_size=False)
 		self.cod = ConfigText(default="", fixed_size=False)
-		self.cod.hds_asistenta_secret = True
 		self["text"] = Label(_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la "
 			"modelul tău. Fără parole pe receptor.") + ((" " + _("E-mailul (opțional) îți face un cont pe forum: "
 			"primești o legătură și îți pui parola acolo, de pe orice aparat.")) if self.forum else ""))
@@ -1687,7 +1690,6 @@ class HdsBetaLegareQr(Screen):
 		self["text"] = Label(_("Se cere un cod de legare..."))
 		self["qr"] = CanvasSource()
 		self["adresa"] = Label("")
-		self["qr"].hds_asistenta_secret = True
 		self["key_red"] = Button(_("Înapoi"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], _cuCulori({
 			"cancel": self.close,
@@ -1710,9 +1712,6 @@ class HdsBetaLegareQr(Screen):
 		self._cerere = B.cerereProfil("cod-legare")
 		if self._cerere is not None:
 			self.ceas.start(500, False)
-
-	def secreteAsistenta(self):
-		return (self._adresa, self._adresa.replace("https://", ""))
 
 	def _cereStarea(self):
 		self._incercari += 1

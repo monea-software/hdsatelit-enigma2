@@ -301,6 +301,7 @@ def acum(T):
 		"proba": proba,
 		"rezerve": _rezerve(T, s, serv),
 		"gata": gata,
+		"diagnostic": T.diagnosticPornire(s=s) if hasattr(T, "diagnosticPornire") else {},
 	}
 
 
@@ -791,7 +792,7 @@ PAGINA = r"""<!DOCTYPE html>
     </div>
     <p class="ascuns" id="cheie-auto-nota">Lipește cheia oricărui serviciu: Gemini, DeepL, Azure, Google Cloud, Groq, OpenRouter sau OpenAI. Receptorul recunoaște singur serviciul și o probează.</p>
     <label for="cheie">Lipește cheia</label>
-    <div class="cu-buton"><input type="password" id="cheie" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="lipește cheia aici"><button type="button" id="cheie-arata" aria-pressed="false">Arată</button></div>
+    <input type="text" id="cheie" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="lipește cheia aici">
     <div class="ascuns" id="regiune-bloc">
       <label for="alege-regiune">Regiunea resursei Azure</label>
       <select id="alege-regiune"></select>
@@ -882,7 +883,7 @@ PAGINA = r"""<!DOCTYPE html>
     <div class="ascuns" id="din-nou">
       <p class="nota">Din siguranță, receptorul nu păstrează cheia până nu merge: lipește-o din nou.</p>
       <label for="cheie-din-nou">Lipește din nou cheia</label>
-      <div class="cu-buton"><input type="password" id="cheie-din-nou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="lipește cheia aici"><button type="button" id="cheie-din-nou-arata" aria-pressed="false">Arată</button></div>
+      <input type="text" id="cheie-din-nou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="lipește cheia aici">
       <button type="button" class="mare principal ascuns" id="regiune-reincearca">Încearcă din nou cu regiunea aleasă</button>
       <button type="button" class="mare ascuns" id="fara-proba">Salvează cheia fără probă</button>
       <p class="nota ascuns" id="fara-proba-nota">Dacă știi că cheia e bună și receptorul nu ajunge acum la serviciu, o poți salva fără probă.</p>
@@ -1020,7 +1021,8 @@ function puneAcum(){
   var p = a.proba;
   valoare(dl, "Ultima probă", p ? ((p.stare === "ok" ? "reușită" : p.stare === "lucru" ? "în lucru" : "nereușită") + (p.ora ? ", la " + p.ora : "") + (p.timp ? ", " + p.timp : "")) : "niciuna încă");
   paragraf("acum-din-nou", a.chei_din_nou);
-  paragraf("acum-lipsa", a.lipsa_text);
+  var diagnostic = a.diagnostic || {};
+  paragraf("acum-lipsa", a.lipsa_text || (a.pornit && !diagnostic.poate_traduce ? diagnostic.mesaj : ""));
   var gata = a.gata || [];
   arata($("acum-principal-bloc"), gata.length > 0);
   $("acum-principal").textContent = gata.length ? "Serviciul principal: " + (a.serviciu_nume || a.serviciu || "-") + ". Traducerea pleacă întâi la el, apoi la rezerve, în ordine." : "";
@@ -1169,6 +1171,8 @@ function puneRezultat(){
     var sm = $("rez-modele");
     if(document.activeElement !== sm){ umple(sm, modele.map(function(m){ return [m, m]; }), c.model || ""); }
     arata($("rez-pornit"), !!c.salvat && !rezerva);
+    var diagnostic = (ultim.acum || {}).diagnostic || {};
+    $("rez-pornit").textContent = diagnostic.mesaj || "Traducerea e pornită; pe televizor a apărut confirmarea.";
     arata($("rez-gemini"), c.serviciu === "gemini" && !rezerva);
     var rz = (ultim.acum || {}).rezerve;
     arata($("rez-rezerve-bloc"), !!rz);
@@ -1329,23 +1333,14 @@ function trimiteCheie(v, serviciu, regiune, faraProba, unde, buton, cont){
   if(faraProba){ q.set("fara_proba", "1"); }
   pornesteLucrare("/api/traducere-configurare-cheie", q, unde, "cheie", buton);
 }
-function ascundeCheia(id, buton){ $(id).type = "password"; $(buton).textContent = "Arată"; $(buton).setAttribute("aria-pressed", "false"); }
-function comutaArata(id, buton){
-  var i = $(id), arat = i.type === "password";
-  i.type = arat ? "text" : "password";
-  $(buton).textContent = arat ? "Ascunde" : "Arată";
-  $(buton).setAttribute("aria-pressed", arat ? "true" : "false");
-}
 function cheiaDinCamp(id, buton, unde){
   var i = $(id), v = i.value.trim();
   if(!v){ mesaj(unde, "Lipește întâi cheia.", true); if(i.focus){ i.focus(); } return ""; }
+  // campul e text obisnuit (cheia se vede cat o lipesti); dupa trimitere se goleste
   i.value = "";
-  ascundeCheia(id, buton);
   return v;
 }
 ALEGERI.forEach(function(k){ $("alege-" + k).addEventListener("click", function(){ alege(k); }); });
-$("cheie-arata").addEventListener("click", function(){ comutaArata("cheie", "cheie-arata"); });
-$("cheie-din-nou-arata").addEventListener("click", function(){ comutaArata("cheie-din-nou", "cheie-din-nou-arata"); });
 $("cheie-trimite").addEventListener("click", function(){
   var v = cheiaDinCamp("cheie", "cheie-arata", "mesaj-cheie");
   if(!v){ return; }

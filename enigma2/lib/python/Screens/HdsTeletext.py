@@ -679,7 +679,7 @@ class HdsTeletext(Screen):
 			lista.append((_("Forme în relief: oprește") if _valoare(s, "relief") else _("Forme în relief: pornește"),
 				"relief"))
 		mod_tr = _modTraducere()
-		lista.append((_("Tradu teletextul: oprește") if mod_tr else _("Tradu teletextul: pornește"), "traducere"))
+		lista.append((_("Oprește traducerea teletextului") if mod_tr else _("Pornește traducerea teletextului"), "traducere"))
 		if mod_tr:
 			lista.append((_("Traducerea într-un panou") if mod_tr == "pagina" else _("Traducerea în pagină"),
 				"traducere_mod"))

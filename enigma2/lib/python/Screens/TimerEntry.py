@@ -49,6 +49,7 @@ from RecordTimer import AFTEREVENT
 from enigma import eEPGCache, eServiceReference
 from time import localtime, mktime, time, strftime
 from datetime import datetime
+import copy
 
 # ecranul din skinul HDSatelit dupa care se recunoaste skinul (blocul listei inregistrarilor programate)
 ECRAN_HDS = "HdsTimerEditList"
@@ -101,8 +102,154 @@ class ZiConfig(ConfigDateTime):
 		return ("text", HIP.ziText(self.value))
 
 
+class GhidTimer:
+	"""Programarea directa si editarea separata din lista ghidului si detaliile emisiunii."""
+	CAMPURI = HIP.CAMPURI + ("tags", "disabled")
+
+	def __init__(self, session, actualizeaza):
+		self.session = session
+		self.actualizeaza = actualizeaza
+
+	def _campuri(self, t):
+		return dict((c, list(getattr(t, c)) if c == "tags" else getattr(t, c, None)) for c in self.CAMPURI)
+
+	def _mesaj(self, text):
+		self.actualizeaza()
+		self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=6)
+
+	def _bun(self, service):
+		if service is not None and service.isRecordable():
+			return True
+		self._mesaj(HIP.mesajNeinregistrabil(service, _))
+		return False
+
+	def comuta(self, event, service):
+		if event is None or service is None:
+			return
+		rt = self.session.nav.RecordTimer
+		existent = HIP.cautaEmisiune(rt, service, event)
+		if existent is not None:
+			def sterge(da):
+				if da and HIP.existaInca(rt, existent):
+					existent.afterEvent = AFTEREVENT.NONE
+					rt.removeEntry(existent)
+					rt.stateChanged(existent)
+				self.actualizeaza()
+			self.session.openWithCallback(sterge, MessageBox,
+				_("Do you really want to delete %s?") % event.getEventName())
+			return
+		if not self._bun(service):
+			return
+		from RecordTimer import RecordTimerEntry, parseEvent
+		from Components.UsageConfig import preferredTimerPath
+		entry = RecordTimerEntry(service, checkOldTimers=True, dirname=preferredTimerPath(), *parseEvent(event))
+		# Unele emisiuni au subservicii reale. Alegerea lor nu este un formular de confirmare.
+		numar = event.getNumOfLinkageServices()
+		if numar > 1:
+			lista = []
+			for n in range(numar):
+				ref = event.getLinkageService(service.ref, n)
+				lista.append((ref.getName(), ref))
+			def subserviciu(ales):
+				if ales is not None:
+					entry.service_ref = ServiceReference(ales[1])
+					self._pune((True, entry), event, service)
+			self.session.openWithCallback(subserviciu, ChoiceBox,
+				title=_("Please select a subservice to record..."), list=lista)
+			return
+		if numar == 1:
+			entry.service_ref = ServiceReference(event.getLinkageService(service.ref, 0))
+		self._pune((True, entry), event, service)
+
+	def _pune(self, answer, event, parinte):
+		if not answer or not answer[0]:
+			self.actualizeaza()
+			return
+		entry = answer[1]
+		rt = self.session.nav.RecordTimer
+		if not self._bun(entry.service_ref):
+			return
+		# Un alt client poate programa aceeasi emisiune cat alegem subserviciul sau corectam un conflict.
+		existent = HIP.cautaEmisiune(rt, parinte, event) or HIP.cautaEmisiune(rt, entry.service_ref, event)
+		if existent is not None:
+			self.actualizeaza()
+			return
+		try:
+			suprapuse = rt.record(entry)
+			if suprapuse is not None:
+				for t in suprapuse:
+					if t.setAutoincreaseEnd(entry):
+						rt.timeChanged(t)
+				suprapuse = rt.record(entry)
+		except Exception as eroare:
+			print("[GhidTimer] programarea nu a mers: %s" % eroare)
+			self._mesaj(_("Înregistrarea nu s-a putut programa. Încearcă din nou."))
+			return
+		if suprapuse is not None:
+			from Screens.TimerEdit import TimerSanityConflict
+			self.session.openWithCallback(lambda a: self._pune(a, event, parinte), TimerSanityConflict, suprapuse)
+			self.actualizeaza()
+			return
+		rt.stateChanged(entry)
+		self.actualizeaza()
+
+	def editeaza(self, event, service):
+		if event is None or service is None:
+			return
+		rt = self.session.nav.RecordTimer
+		existent = HIP.cautaEmisiune(rt, service, event)
+		if existent is None:
+			from RecordTimer import RecordTimerEntry, parseEvent
+			from Components.UsageConfig import preferredTimerPath
+			entry = RecordTimerEntry(service, checkOldTimers=True, dirname=preferredTimerPath(), *parseEvent(event))
+			self.session.openWithCallback(lambda a: self._pune(a, event, service), TimerEntry, entry)
+			return
+		# Formularul modifica o copie. EXIT, refuzul conflictului sau un alt client nu pierd datele salvate.
+		inainte = self._campuri(existent)
+		ciorna = copy.copy(existent)
+		ciorna.tags = list(existent.tags)
+		self.session.openWithCallback(lambda a: self._modifica(existent, inainte, a),
+			TimerEntry, ciorna, existent=True)
+
+	def _modifica(self, existent, inainte, answer):
+		if not answer or not answer[0]:
+			self.actualizeaza()
+			return
+		rt = self.session.nav.RecordTimer
+		if not HIP.existaInca(rt, existent):
+			self._mesaj(_("Înregistrarea a fost ștearsă între timp, deci schimbarea nu s-a salvat."))
+			return
+		if self._campuri(existent) != inainte:
+			self._mesaj(_("Înregistrarea a fost schimbată între timp. Deschide din nou editarea."))
+			return
+		ciorna = answer[1]
+		HIP.reface(existent, self._campuri(ciorna))
+		from Components.TimerSanityCheck import TimerSanityCheck
+		verificare = TimerSanityCheck(rt.timer_list, existent)
+		if not verificare.check():
+			suprapuse = verificare.getSimulTimerList()
+			if suprapuse is not None:
+				for t in suprapuse:
+					if t is not existent and t.setAutoincreaseEnd(existent):
+						rt.timeChanged(t)
+			if not verificare.check():
+				suprapuse = verificare.getSimulTimerList()
+				HIP.reface(existent, inainte)
+				if suprapuse is not None:
+					from Screens.TimerEdit import TimerSanityConflict
+					lista = [ciorna] + [t for t in suprapuse if t is not existent]
+					self.session.openWithCallback(lambda a: self._modifica(existent, inainte, a),
+						TimerSanityConflict, lista)
+				self.actualizeaza()
+				return
+		rt.timeChanged(existent)
+		rt.saveTimer()
+		rt.stateChanged(existent)
+		self.actualizeaza()
+
+
 class TimerEntry(Screen, ConfigListScreen, HelpableScreen):
-	def __init__(self, session, timer):
+	def __init__(self, session, timer, existent=None):
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
 		self.timer = timer
@@ -112,7 +259,7 @@ class TimerEntry(Screen, ConfigListScreen, HelpableScreen):
 		self.entryEndTime = None
 
 		rt = self.session.nav.RecordTimer
-		self.existent = timer in rt.timer_list or timer in rt.processed_timers
+		self.existent = (timer in rt.timer_list or timer in rt.processed_timers) if existent is None else existent
 		self.titlu = _("Modifică înregistrarea programată") if self.existent else _("Înregistrare programată nouă")
 		self.setTitle(self.titlu)
 

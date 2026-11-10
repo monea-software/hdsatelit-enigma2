@@ -267,11 +267,14 @@ public:
 #define guard_offset_min -8000
 #define guard_offset_max 8000
 #define guard_offset_step 8000
-#define MAX_SATCR 8
+#define MAX_SATCR 32
 #define MAX_LNBNUM 32
 
 	int SatCR_positions;
 	int SatCR_idx;
+	int SatCR_format;
+	int SatCR_pin;
+	int SatCR_position;
 	unsigned int SatCRvco;
 	unsigned int UnicableTuningWord;
 	unsigned int UnicableConfigWord;
@@ -393,9 +396,17 @@ public:
 	RESULT setLNBSatCR(int SatCR_idx);
 	RESULT setLNBSatCRvco(int SatCRvco);
 	RESULT setLNBSatCRpositions(int SatCR_positions);
+	/* format: 0 = EN50494, 1 = EN50607; PIN: -1 = oprit, 0..255 = activ. */
+	RESULT setLNBSatCRformat(int format);
+	RESULT setLNBSatCRpin(int pin);
+	/* Pozitia 0 pastreaza maparea automata dupa numarul LNB-ului. */
+	RESULT setLNBSatCRposition(int position);
 	RESULT getLNBSatCR();
 	RESULT getLNBSatCRvco();
 	RESULT getLNBSatCRpositions();
+	RESULT getLNBSatCRformat();
+	RESULT getLNBSatCRpin();
+	RESULT getLNBSatCRposition();
 /* Satellite Specific Parameters */
 	RESULT addSatellite(int orbital_position);
 	RESULT setVoltageMode(int mode);

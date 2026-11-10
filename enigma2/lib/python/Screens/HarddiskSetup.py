@@ -10,6 +10,46 @@ from Screens.ChoiceBox import ChoiceBox
 from Components import HdsDiscuri
 from Tools.ScaledSkin import scaledSkin
 from enigma import eTimer
+import time
+
+SKIN_ADMIN = """
+<screen name="HdsDiscAdministrare" position="center,center" size="1000,380" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+	<widget name="model" position="24,24" size="952,44" font="HdsBold;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="capacity" position="24,78" size="952,36" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="bus" position="24,122" size="952,36" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="staretext" position="24,170" size="952,100" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="initializetext" position="24,290" size="450,60" font="HdsRegular;22" foregroundColor="red" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="montaretext" position="500,290" size="476,60" font="HdsRegular;22" foregroundColor="yellow" backgroundColor="hdsPanelDialog" transparent="1" />
+</screen>"""
+
+class HdsDiscCitire(Screen):
+	skin = """<screen name="HdsDiscCitire" position="center,center" size="900,150" flags="wfNoBorder">
+		<widget name="text" position="24,20" size="852,110" font="Regular;26" halign="center" valign="center" />
+	</screen>"""
+
+	def __init__(self, session, functie):
+		Screen.__init__(self, session)
+		from Components.HdsStocareDisc import cere
+		self["text"] = Label(_("Se citesc datele discului..."))
+		self["actions"] = ActionMap(["OkCancelActions"], {"cancel": self.renunta})
+		self.cheie = ("tv-disc", id(self), time.monotonic())
+		self.pana = time.monotonic() + 3
+		self.initial = cere(self.cheie, functie, termen=3, varsta=5)
+		self.timer = eTimer()
+		self.timer.callback.append(self.pas)
+		self.onClose.append(self.timer.stop)
+		self.timer.start(100, False)
+
+	def renunta(self):
+		self.close(None)
+
+	def pas(self):
+		from Components.HdsStocareDisc import stare
+		rez = stare(self.cheie) or self.initial
+		if (not rez or rez["stare"] == "asteapta") and time.monotonic() >= self.pana:
+			rez = {"stare": "termen", "valoare": None, "eroare": ""}
+		if rez and rez["stare"] != "asteapta":
+			self.close(rez)
 
 # HDSatelit: lista (hard diskurile si stick-urile USB), intrebarea (ce se pierde, cine foloseste discul acum) si
 # lucrarea (formatarea cu ext4 sau, pe un stick, FAT32 ori ext4, FAT32 primul; verificarea fiecarei partitii) trec prin
@@ -107,6 +147,7 @@ class HarddiskWait(Screen):
 		self.pornit = False
 		self.timer = eTimer()
 		self.timer.callback.append(self.pas)
+		self.onClose.append(self.timer.stop)
 		self.timer.start(100, True)
 
 	def pas(self):
@@ -129,7 +170,9 @@ class HarddiskSetup(Screen):
 	HARDDISK_CHECK = 2
 
 	def __init__(self, session, hdd, type = None):
+		self.skin = scaledSkin(SKIN_ADMIN)
 		Screen.__init__(self, session)
+		self.skinName = ["HdsDiscAdministrare"]
 		self.hdd = hdd
 		self.sistem = None
 
@@ -138,9 +181,10 @@ class HarddiskSetup(Screen):
 		else:
 			self.type = type
 
-		self["model"] = Label(_("Model: ") + hdd.model())
-		self["capacity"] = Label(_("Capacity: ") + hdd.capacity())
-		self["bus"] = Label(_("Bus: ") + hdd.bus())
+		self["model"] = Label(_("Se citesc datele discului..."))
+		self["capacity"] = Label("")
+		self["bus"] = Label("")
+		self["staretext"] = Label("")
 		self["initialize"] = Pixmap()
 
 		if self.type == self.HARDDISK_INITIALIZE:
@@ -148,6 +192,7 @@ class HarddiskSetup(Screen):
 		else:
 			text = _("Check")
 		self["initializetext"] = Label(text)
+		self["montaretext"] = Label(_("Galben: punct de montare"))
 
 		self["actions"] = ActionMap(["OkCancelActions"],
 		{
@@ -157,8 +202,78 @@ class HarddiskSetup(Screen):
 
 		self["shortcuts"] = ActionMap(["ShortcutActions"],
 		{
-			"red": self.hddQuestion
+			"red": self.hddQuestion,
+			"yellow": self.alegeMontare
 		})
+		self.onLayoutFinish.append(self.citesteModel)
+
+	def citesteModel(self):
+		self.citeste(lambda: (self.hdd.model(), self.hdd.capacity(), self.hdd.bus()), self.modelGata)
+
+	def modelGata(self, valori):
+		from Components.Harddisk import harddiskmanager
+		self["model"].setText(_("Model: ") + valori[0])
+		self["capacity"].setText(_("Capacity: ") + valori[1])
+		self["bus"].setText(_("Bus: ") + valori[2])
+		mesaje = []
+		for device, eroare in harddiskmanager.mount_errors.items():
+			rest = device[len(self.hdd.device):] if device.startswith(self.hdd.device) else ""
+			if device == self.hdd.device or rest and (rest.isdigit() or rest.startswith("p") and rest[1:].isdigit()):
+				mesaj = eroare.get("motiv", "")
+				if mesaj and mesaj not in mesaje:
+					mesaje.append(mesaj)
+		self["staretext"].setText("\n".join(mesaje))
+
+	def citeste(self, functie, callback):
+		def gata(rez):
+			if rez is None:
+				return
+			if rez["stare"] != "gata":
+				self.session.open(MessageBox, _("Discul nu răspunde la timp. Încearcă din nou."), MessageBox.TYPE_ERROR)
+				return
+			callback(rez["valoare"])
+		self.session.openWithCallback(gata, HdsDiscCitire, functie)
+
+	def alegeMontare(self):
+		from Components.Harddisk import harddiskmanager
+		def date():
+			def apartine(device):
+				if device == self.hdd.device:
+					return True
+				rest = device[len(self.hdd.device):] if device.startswith(self.hdd.device) else ""
+				return bool(rest and (rest.isdigit() or rest.startswith("p") and rest[1:].isdigit()))
+			parts = [p for p in list(harddiskmanager.partitions) + list(harddiskmanager.pending.values())
+				if p.device and apartine(p.device)]
+			rez = [(p.device, harddiskmanager.mediaNameInfo(p.device)) for p in parts]
+			return [(device, info) for device, info in rez if info["alegeri"]]
+		self.citeste(date, self.partitiiMontare)
+
+	def partitiiMontare(self, parts):
+		if not parts:
+			self.session.open(MessageBox, _("Discul nu are un UUID cunoscut sau nu mai este conectat."), MessageBox.TYPE_ERROR)
+			return
+		if len(parts) == 1:
+			self.montarePartitie((parts[0][0], parts[0]))
+			return
+		self.session.openWithCallback(self.montarePartitie, ChoiceBox, title=_("Alege partiția"),
+			list=[("/dev/" + device, (device, info)) for device, info in parts])
+
+	def montarePartitie(self, alegere):
+		if not alegere:
+			return
+		device, info = alegere[1]
+		self.montare_device = device
+		self.session.openWithCallback(self.montareAleasa, ChoiceBox,
+			title=_("Punct de montare la următoarea montare"), list=[(text, val) for val, text in info["alegeri"]])
+
+	def montareAleasa(self, alegere):
+		if not alegere:
+			return
+		from Components.Harddisk import harddiskmanager
+		pana = time.monotonic() + 3
+		self.citeste(lambda: harddiskmanager.setMediaName(self.montare_device, alegere[1], valid=lambda: time.monotonic() < pana),
+			lambda rez: self.session.open(MessageBox, rez["message"],
+				MessageBox.TYPE_INFO if rez["result"] else MessageBox.TYPE_ERROR))
 
 	def fel(self):
 		return HdsDiscuri.INITIALIZARE if self.type == self.HARDDISK_INITIALIZE else HdsDiscuri.VERIFICARE
@@ -178,7 +293,10 @@ class HarddiskSetup(Screen):
 			self.session.open(MessageBox, _("Se lucrează deja la un disc. Așteaptă să se termine."), MessageBox.TYPE_ERROR)
 			return
 		self.inregistrari = HdsDiscuri.stareInregistrari()
-		swap = [text for cheie, text in HdsDiscuri.folosire(self.hdd.device, self.inregistrari) if cheie == "swap"]
+		self.citeste(lambda: HdsDiscuri.folosire(self.hdd.device, self.inregistrari), self.folosireGata)
+
+	def folosireGata(self, folosire):
+		swap = [text for cheie, text in folosire if cheie == "swap"]
 		if swap:
 			self.session.open(MessageBox, swap[0], MessageBox.TYPE_ERROR)
 			return
@@ -195,7 +313,11 @@ class HarddiskSetup(Screen):
 
 	def intreaba(self, sistem):
 		self.sistem = sistem
-		q, detalii = HdsDiscuri.intrebare(self.hdd, self.fel(), sistem, self.inregistrari)
+		self.inregistrari = HdsDiscuri.stareInregistrari()
+		self.citeste(lambda: HdsDiscuri.intrebare(self.hdd, self.fel(), sistem, self.inregistrari), self.intrebareGata)
+
+	def intrebareGata(self, intrebare):
+		q, detalii = intrebare
 		self.session.openWithCallback(self.hddConfirmed, HdsDiscIntrebare, q, detalii, HdsDiscuri.butonDa(self.hdd,
 			self.fel()))
 
@@ -216,16 +338,25 @@ class HarddiskSelection(Screen):
 		self.setTitle(_("Format Hard Drive"))
 
 		# hard diskurile si stick-urile USB (Components/HdsDiscuri.discuriOferite, ca pagina web /discuri)
-		tlist = HdsDiscuri.discuriOferite()
-		if not tlist:
-			tlist = [(_("Niciun hard disk și niciun stick USB găsit."), 0)]
-		self["hddlist"] = MenuList(tlist)
+		self["hddlist"] = MenuList([(_("Se citesc datele discului..."), 0)])
+		self.onLayoutFinish.append(self.citesteLista)
 
 		self["actions"] = ActionMap(["OkCancelActions"],
 		{
 			"ok": self.okbuttonClick ,
 			"cancel": self.close
 		})
+
+	def citesteLista(self):
+		self.session.openWithCallback(self.listaGata, HdsDiscCitire, HdsDiscuri.discuriOferite)
+
+	def listaGata(self, rez):
+		if rez is None:
+			return
+		if rez["stare"] != "gata":
+			self["hddlist"].setList([(_("Discul nu răspunde la timp. Încearcă din nou."), 0)])
+			return
+		self["hddlist"].setList(rez["valoare"] or [(_("Niciun hard disk și niciun stick USB găsit."), 0)])
 
 	def okbuttonClick(self):
 		selection = self["hddlist"].getCurrent()

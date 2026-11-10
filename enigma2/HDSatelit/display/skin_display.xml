@@ -7,7 +7,8 @@
 	<windowstyle id="1">
 		<color name="Background" color="hdsPanelSolid" />
 		<color name="LabelForeground" color="hdsText" />
-		<color name="LabelBackground" color="hdsPanelSolid" />
+		<!-- fara LabelBackground: eWindowStyleSkinned nu are culoarea (tema intreaga dadea eroare pe Solo4K, 09.11.2026);
+		     fundalul etichetelor vine din backgroundColor-ul fiecarui widget -->
 	</windowstyle>
 
 	<screen name="SummaryClockPanel" id="1" position="0,0" size="480,320">

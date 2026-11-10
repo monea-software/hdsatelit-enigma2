@@ -102,7 +102,8 @@ def stare(B=None, b=None):
 	if inscris:
 		noi = B.raspunsuriNoi()
 		rez.update({
-			"id": "***",
+			# identificatorul salvat nu pleaca spre browser, nici cu stelute; numai ca e pus
+			"id_pus": bool(b.id.value),
 			"acord": B.oraLocala(b.acord.value),
 			"nota": int(b.nota.value),
 			"trimise": [list(r) for r in B.randuriTrimise()],
@@ -272,24 +273,27 @@ BANDA_NOTA = """<section id="hdsNotaNoua" role="alert" style="margin:0 0 16px;pa
 
 
 def textIdentificator(B, b):
-	"""Acelasi text ca jos in meniul testerului de pe televizor."""
-	return _t("Identificatorul tău: %s\nAcordul din %s, nota de confidențialitate versiunea %d.\n"
-		"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.") % ("***",
+	"""Textul de jos din meniul testerului. Valoarea identificatorului nu se arata (nici cu
+	stelute); randul spune numai ca e pus."""
+	return _t("Identificatorul tău e pus.\nAcordul din %s, nota de confidențialitate versiunea %d.\n"
+		"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.") % (
 		B.oraLocala(b.acord.value), int(b.nota.value))
 
 
 def _ultimulDeAfisat(B, b):
-	"""Mascheaza numai identificatorul testerului in copia pentru pagina, inclusiv un pachet al inscrierii vechi."""
+	"""Copia pentru pagina a ultimului pachet, inclusiv un pachet al inscrierii vechi: in locul identificatorului
+	testerului scrie numai "(identificatorul tău)", care spune ca e acolo, fara valoarea lui."""
 	text = B.ultimulPachet()
 	if not text:
 		return text
+	in_loc = _t("(identificatorul tău)")
 	try:
 		pachet = json.loads(text)
 	except (TypeError, ValueError):
 		# Un mesaj vechi ramane proza; identificatorul cunoscut nu pleaca nici din el.
-		return text.replace(b.id.value, "***") if b.id.value else text
+		return text.replace(b.id.value, in_loc) if b.id.value else text
 	if isinstance(pachet, dict) and "id" in pachet:
-		pachet["id"] = "***"
+		pachet["id"] = in_loc
 		return json.dumps(pachet, ensure_ascii=False, indent=1, sort_keys=False)
 	return text
 

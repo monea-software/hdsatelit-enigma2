@@ -1120,6 +1120,7 @@ class HdsForumScrie(Screen):
 		Screen.__init__(self, session)
 		self.setTitle(_("Scrie un mesaj"))
 		self.textul = text or ""
+		self._tastaturaInitiala = not self.textul.strip()
 		self.poze = []
 		self.zona = "text"
 		self.slot = 0
@@ -1158,6 +1159,7 @@ class HdsForumScrie(Screen):
 		self._ceas = _ceas(self._bate)
 		self.miniaturi = _Miniaturi(320, 180, self._pozaMica)
 		self.onLayoutFinish.append(self._porneste)
+		self.onShown.append(self._deschideTastaturaInitiala)
 		self.onClose.append(self._laInchidere)
 		self._arata()
 
@@ -1168,6 +1170,13 @@ class HdsForumScrie(Screen):
 			# jetonul si profilul se pregatesc cat omul scrie (si numele cu care apare)
 			self._jeton = F.cereJetonul()
 			self._ceas.start(PAS_MS, False)
+
+	def _deschideTastaturaInitiala(self):
+		# Ecranul trebuie sa fie activ inainte sa deschida tastatura deasupra lui.
+		if self._tastaturaInitiala:
+			self._tastaturaInitiala = False
+			if not self.textul.strip() and F.poateScrie():
+				self.ok()
 
 	def _laInchidere(self):
 		self._inchis = True

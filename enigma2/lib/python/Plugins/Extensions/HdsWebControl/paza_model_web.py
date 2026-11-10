@@ -33,6 +33,7 @@
 # fiecare, plus randurile nucleului) se citesc numai cand pornirea n-a reusit. Fisierul nu importa nimic din enigma2
 # la incarcare: probele de pe PC dau modulele lor (M, D) si receptorul lor fals (radacina).
 
+import os
 import re
 
 try:
@@ -82,7 +83,12 @@ def inPaza(M=None, radacina=None, cale_stare=None):
 		return _m(M).inPaza(radacina, cale_stare)
 	except Exception as eroare:
 		print("[HdsWebControl] paza de model: %s" % eroare)
-		return False
+		# ca pe televizor (HdsPazaModel.inchisLaEroare, 09.11.2026): inchis numai la profilurile cu model_id=
+		try:
+			with open(os.path.join(radacina or os.environ.get("HDS_PAZA_RADACINA") or "/", "etc/hdsatelit-model")) as f:
+				return any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+		except Exception:
+			return False
 
 
 def _verdict(M, radacina, cale_stare):
@@ -143,6 +149,7 @@ def stare(M=None, radacina=None, cale_stare=None, D=None, v=None):
 		"tehnice": tehnice,
 		"acum": M.randuriAcum(v),
 		"model": reguli.get("model", ""),
+		"pagina_model": M.paginaModel(v.get("amprenta_verdict") or a),
 		"versiune": v.get("versiune") or reguli.get("version", ""),
 		"versiune_baza": v.get("versiune_baza") or "",
 		"amprenta": amprenta,
@@ -313,6 +320,9 @@ def pagina_text(stil, date, limba="ro"):
 	„Copiază tot”). Pe alt receptor („nepotrivit”) „/” da tot aceasta pagina, deci legatura spre panou nu se pune."""
 	clasa = {"nepotrivit": "rau", "potrivit": "bun"}.get(date.get("stare"), "neutru")
 	fraze = "".join(u"<p>%s</p>" % _e(f) for f in date.get("fraze") or [])
+	if date.get("pagina_model") and date.get("stare") == "nepotrivit":
+		fraze += u'<p><a class="buton" href="%s">%s</a></p>' % (
+			_e(date["pagina_model"]), _e(_t("Pagina receptorului tău")))
 	tehnice = "".join(u"<li>%s</li>" % _ev(t) for t in date.get("tehnice") or [])
 	acum = "".join(u"<li>%s</li>" % _ev(t) for t in date.get("acum") or [])
 	t_cerut, t_citit = _e(_t("Cerut de software")), _e(_t("Citit pe receptor"))

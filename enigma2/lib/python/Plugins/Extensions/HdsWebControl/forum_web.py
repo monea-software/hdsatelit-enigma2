@@ -862,13 +862,17 @@ function porneste(cale, q, dupa, unde){
 function citesteStarea(){
   cerere("/api/forum-receptor").then(function(d){
     if(!d.result){ spune("subiect", d.message || "Receptorul nu a putut citi starea.", true); return; }
+    var primaScriere = !STARE;
     STARE = d;
     $("vizitator").classList.toggle("ascuns", d.inscris);
     $("scrie").classList.toggle("ascuns", !d.inscris);
     $("numeCutie").classList.toggle("ascuns", !d.inscris);
     $("pagina").classList.toggle("cu-scriere", !!d.inscris);
     $("text").maxLength = d.text_max || 8000;
-    if(d.inscris){ arataNumele(d.nume || ""); }
+    if(d.inscris){
+      arataNumele(d.nume || "");
+      if(primaScriere && !$("text").value.trim()){ $("text").focus(); }
+    }
     citesteFir(0, true);
   }).catch(function(){ spune("subiect", "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true); });
 }

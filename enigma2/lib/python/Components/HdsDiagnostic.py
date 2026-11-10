@@ -62,6 +62,7 @@ CODURI = (
 	("E204", GRUPA_NECITIT, N_("Placa nu s-a putut citi din antetul de fabrică.")),
 	("E205", GRUPA_NECITIT, N_("Partițiile nu s-au putut citi din linia de pornire.")),
 	("E206", GRUPA_NECITIT, N_("Partiția nucleului sau a sistemului nu s-a găsit.")),
+	("E208", GRUPA_NECITIT, N_("Modelul plăcii nu s-a putut citi.")),
 	("E290", GRUPA_NECITIT, N_("Semnul receptorului din software este stricat.")),
 	("E291", GRUPA_NECITIT, N_("Verificarea de la pornire nu a dat niciun rezultat.")),
 	("E301", GRUPA_INTERFATA, N_("Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur.")),
@@ -81,11 +82,12 @@ COD_MOD_SIGUR = "E301"
 COD_MOD_SIGUR_CADE = "E302"
 
 # cheile pazei de model in ordinea codului principal si ultimele doua cifre ale codului lor
-ORDINE_CHEI = ("cip", "boxtype", "dt", "eticheta", "emmc", "hw", "partitii", "kernel")
+ORDINE_CHEI = ("cip", "boxtype", "model_id", "eticheta", "emmc", "hw", "partitii", "kernel")
 CIFRE_CHEI = {"cip": "01", "boxtype": "02", "eticheta": "03", "hw": "04", "partitii": "05", "kernel": "06",
-	"emmc": "07", "dt": "08"}
-# cheile care nu au cod „necitit” (o valoare lipsa nu hotaraste nimic): raman E1xx
-FARA_NECITIT = ("eticheta", "emmc", "dt")
+	"emmc": "07", "model_id": "08"}
+# cheile care nu au cod de valoare necitita (o valoare lipsa nu hotaraste nimic): raman E1xx. Modelul placii lipsa (model_id gol)
+# poate opri numai regulile cu model_id= (E208); fara el se hotaraste numai dupa un model citit (E108).
+FARA_NECITIT = ("eticheta", "emmc")
 
 # titlurile grupelor (aceleasi texte ca mesajul pazei de model, Components/HdsPazaModel.mesajPornire)
 TITLURI = {
@@ -242,7 +244,7 @@ STARE_INFO = "info"
 ETICHETE_TV = {
 	"cip": N_("Procesor"),
 	"boxtype": N_("Tip placă (driver)"),
-	"dt": N_("Model (DT)"),
+	"model_id": N_("Modelul plăcii"),
 	"eticheta": N_("Etichetă"),
 	"hw": N_("Placă (HW)"),
 	"emmc": N_("Memorie internă"),
@@ -251,7 +253,7 @@ ETICHETE_TV = {
 	"tunere": N_("Tunere"),
 	"pornire": N_("Model (încărcător)"),
 }
-ORDINE_TV = ("cip", "boxtype", "dt", "eticheta", "hw", "emmc", "kernel", "partitii")
+ORDINE_TV = ("cip", "boxtype", "model_id", "eticheta", "hw", "emmc", "kernel", "partitii")
 # valorile numai informative din amprenta (Components/HdsPazaModel.informatiiPornire, cand exista): ce spune
 # incarcatorul receptorului in /proc/cmdline si driverul
 CHEI_INFORMATIVE = ("pornire_masina", "pornire_oem", "pornire_model", "ram", "tip_tunere", "chipset",
@@ -309,7 +311,8 @@ def randuri(v, M=None, tv=False):
 			cod = codCheie(cheie, nep[cheie])
 		elif cheie in avert:
 			stare, cod = STARE_AVERTISMENT, ""
-		elif nu_se_aplica or (cheie in ("eticheta", "dt") and not citit):
+		elif nu_se_aplica or (cheie in ("eticheta", "model_id") and not citit):
+			# modelul placii necitit hotaraste numai cu model_id= in reguli (atunci e in nepotriviri, E208)
 			stare, cod = STARE_INFO, ""
 		elif not citit:
 			# necitit, dar fara sa hotarasca (treapta a doua): nu se arata ca potrivit
@@ -319,7 +322,7 @@ def randuri(v, M=None, tv=False):
 		if v.get("partitii_informative") and cheie in ("kernel", "partitii"):
 			cerut, stare, cod = "", STARE_INFO, ""
 		if not citit:
-			citit = _t("lipsește (nu se verifică)") if cheie in ("eticheta", "dt") else _t("nu s-a putut citi")
+			citit = _t("lipsește (nu se verifică)") if cheie in ("eticheta", "model_id") else _t("nu s-a putut citi")
 		if cheie == "emmc" and liber:
 			citit = _t("%(marime)s, liber %(liber)d MiB") % {"marime": citit, "liber": liber[0]}
 		if tv:
@@ -555,6 +558,13 @@ def textComplet(v, M=None, adresa="", jurnale_=None):
 	r = ["HD Satelit: %s" % _t(TITLU_MENIU), titlu]
 	for cod in toate:
 		r.append("%s: %s" % (cod, textCod(cod)))
+	if v.get("stare") == M.STARE_NEPOTRIVIT:
+		a = v.get("amprenta_verdict") or v.get("amprenta") or {}
+		r.append(M.textPentru(v.get("reguli") or {}, v.get("versiune")))
+		r.append(M.textAlTau(a, v.get("reguli"), v.get("nepotriviri")))
+		pagina = M.paginaModel(a)
+		if pagina:
+			r.append(pagina)
 	if toate:
 		r.append(rugaminte())
 		r.append(_t("Forumul: %s") % FORUM)
@@ -772,7 +782,6 @@ TEXTE_ENGLEZA = {
 	"Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este.": "The receiver data in this software is damaged or from another version, so we cannot check which receiver it is for.",
 	"De obicei pornirea durează sub un minut.": "The start usually takes less than a minute.",
 	"Detalii": "Details",
-	"Device tree model": "Device tree model",
 	"Diagnosticul pornirii": "Startup diagnostics",
 	"Driverele receptorului lipsesc sau nu s-au încărcat.": "The receiver's drivers are missing or did not load.",
 	"Driverul plăcii nu s-a încărcat, deci tipul plăcii nu s-a putut citi și nu se poate dovedi că acest software este pentru el.": "The board driver was not loaded, so the board type could not be read and it cannot be proven that this software is for it.",
@@ -786,6 +795,7 @@ TEXTE_ENGLEZA = {
 	"Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la contact@hdsatelit.com.": "Take a photo of this screen and send it to the forum where you found the software or to contact@hdsatelit.com.",
 	"HD Satelit %(versiune)s pentru %(model)s": "HD Satelit %(versiune)s for %(model)s",
 	"HD Satelit pornește…": "HD Satelit is starting…",
+	"Imaginea pentru receptorul tău și pașii de instalare: %s": "The image for your receiver and installation steps: %s",
 	"Interfața a căzut de mai multe ori la pornire și a pornit în modul sigur.": "The interface crashed several times at startup and started in safe mode.",
 	"Interfața cade și în modul sigur.": "The interface crashes in safe mode too.",
 	"Interfața nu a apărut în 5 minute: s-a blocat la pornire.": "The interface did not appear within 5 minutes: it got stuck at startup.",
@@ -797,6 +807,8 @@ TEXTE_ENGLEZA = {
 	"Memoria internă are altă mărime decât la modelul pentru care e software-ul.": "The internal memory has a different size from the model the software is for.",
 	"Memorie internă": "Internal memory",
 	"Model (încărcător)": "Model (bootloader)",
+	"Modelul plăcii": "Board model",
+	"Modelul plăcii nu s-a putut citi.": "The board model could not be read.",
 	"Model neconfirmat: software pentru testeri": "Unconfirmed model: software for testers",
 	"Modelul acesta nu este încă confirmat pe un receptor adevărat. Software-ul pornește, dar e numai pentru testeri: trimite-ne valorile de mai jos sau fișa receptorului, ca să îl putem confirma.": "This model is not yet confirmed on a real receiver. The software starts, but it is only for testers: send us the values below or the receiver sheet, so we can confirm it.",
 	"Nu": "No",
@@ -811,6 +823,7 @@ TEXTE_ENGLEZA = {
 	"Partiția nucleului sau a sistemului nu s-a găsit.": "The kernel or system partition was not found.",
 	"Partiții": "Partitions",
 	"Partițiile din memoria receptorului sunt așezate altfel.": "The partitions in the receiver's memory are laid out differently.",
+	"Pagina receptorului tău": "Your receiver's page",
 	"Partițiile din memorie": "Partitions in memory",
 	"Partițiile nu s-au putut citi din linia de pornire.": "The partitions could not be read from the boot command line.",
 	"Partițiile nucleului și ale sistemului": "Kernel and system partitions",
@@ -883,7 +896,6 @@ TEXTE_ROMANA = {
 	TEXT_SLOT_NECITIT: "Slotul de pornire nu s-a putut citi; partițiile nu opresc pornirea.",
 	TEXT_SLOT_CITIT: "Partițiile sunt citite din slotul pornit; ele nu identifică receptorul.",
 	"The device tree identifies another receiver model.": "Arborele dispozitivelor arată alt model de receptor.",
-	"Device tree model": "Model (arborele dispozitivelor)",
 	"This receiver matches the hardware required by the software.": "Receptorul acesta are componentele cerute de software.",
 }
 

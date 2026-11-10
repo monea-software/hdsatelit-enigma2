@@ -2,7 +2,9 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# captura_sigura.py: bariera tuturor ecranelor cu secrete si paza decodorului pentru capturile straine.
+# captura_sigura.py: paza decodorului pentru capturile straine (si ultima poza pastrata).
+# Bariera ecranelor cu secrete s-a scos (captura arata ce e pe televizor, ca in
+# asistenta). Ramane numai paza driverului video, care nu ascunde nimic.
 # Citirea cadrului din decodor (grab fara optiune sau cu -v) loveste driverul video; cat decodorul nu e gata
 # (interfata abia pornita, canalul abia schimbat, standby,
 # niciun canal TV) captura se face numai cu afisajul OSD (grab -o), iar una cu imaginea canalului se face cel mult o
@@ -21,57 +23,6 @@ PAUZA_ZAP_S = 5          # dupa pornirea unui canal: decodorul porneste
 INTERVAL_VIDEO_S = 1.5   # cel mult o captura cu imaginea canalului atat de des
 PASTRARE_S = 2.0         # cat se mai da ultima poza unei cereri dese
 TIPURI_RADIO = ("2", "a", "A")   # tipul serviciului din referinta (al treilea camp, hex): radio
-MESAJ_ASOCIERE = "Captura nu este disponibilă acum. Închide fereastra codului de asociere de pe televizor și reîncearcă."
-
-
-def epocaCapturii():
-	try:
-		from Screens.HdsCodAsociere import stareCaptura
-		from Components.HdsAsistentaControl import stareCapturaWeb
-		epoca, deschis = stareCaptura()
-		epoca_web, secret = stareCapturaWeb()
-		if (type(epoca) is int and epoca >= 0 and deschis is False
-				and type(epoca_web) is int and epoca_web >= 0 and secret is False):
-			return epoca + epoca_web
-	except Exception:
-		pass
-	return None
-
-
-def capturaValida(epoca):
-	return type(epoca) is int and epoca >= 0 and epoca == epocaCapturii()
-
-
-def mesajRefuz():
-	try:
-		from Components.HdsAsistentaControl import mesajEcranSecret
-		return mesajEcranSecret()
-	except ImportError:
-		try:
-			return _("Captura nu este disponibilă acum. Starea ecranului se verifică.")
-		except NameError:
-			return "Captura nu este disponibilă acum. Starea ecranului se verifică."
-
-
-def cartusSecret(request):
-	"""Mesaj in panou; descarcarea refuzata primeste eroarea, fara un fisier SVG."""
-	if request.args.get(b"download", [b""])[0] == b"1":
-		import json
-		request.setResponseCode(409)
-		request.setHeader(b"content-type", b"application/json; charset=utf-8")
-		request.setHeader(b"cache-control", b"no-store, private")
-		return json.dumps({"result": False, "message": mesajRefuz()}).encode("utf-8")
-	from html import escape
-	request.setResponseCode(200)
-	request.setHeader(b"content-type", b"image/svg+xml; charset=utf-8")
-	request.setHeader(b"cache-control", b"no-store, private")
-	request.setHeader(b"x-content-type-options", b"nosniff")
-	request.setHeader(b"x-hds-captura", b"ecran-privat")
-	return ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
-		'<rect width="1280" height="720" fill="#101828"/>'
-		'<text x="640" y="360" text-anchor="middle" fill="white" font-family="sans-serif" font-size="24">%s</text>'
-		'</svg>' % escape(mesajRefuz())).encode("utf-8")
-
 
 
 def pornireaProcesului(stat="/proc/self/stat", uptime="/proc/uptime", acum=None, tic=None):
@@ -179,18 +130,12 @@ def incepeVideo(acum=None):
 
 
 def tine(cheie, date, tip, acum=None):
-	if not capturaValida(cheie[0]):
-		_STARE["pastrata"] = None
-		return
 	_STARE["pastrata"] = (cheie, date, tip, time.monotonic() if acum is None else acum)
 
 
 def dinPastrare(cheie, acum=None):
 	"""(date, tip) ale ultimei capturi cu imaginea canalului cu aceiasi parametri, mai noua de PASTRARE_S, sau None"""
 	p = _STARE["pastrata"]
-	if not capturaValida(cheie[0]):
-		_STARE["pastrata"] = None
-		return None
 	acum = time.monotonic() if acum is None else acum
 	if p is None or p[0] != cheie or not (0 <= acum - p[3] <= PASTRARE_S):
 		return None

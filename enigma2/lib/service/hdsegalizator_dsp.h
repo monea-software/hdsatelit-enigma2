@@ -37,12 +37,14 @@
  * scurta a ultimului esantion, apoi se asteapta din nou tinta. Un scriitor si un cititor, pe fire diferite.
  *
  * Canalele TV: sunetul din procesor trebuie sa se auda odata cu imaginea pe care placa o arata dupa
- * ceasul ei. CeasImagine tine PTS-ul imaginii citit periodic de la decodor (VIDEO_GET_PTS, prin servicedvb): afla singur
- * unitatea (driverul poate da ms sau 90 kHz), iar dintre citirile ultimelor secunde o ia pe cea mai apropiata de
- * schimbarea cadrului (cea mai mare diferenta fata de ceasul de perete), ca saltul de un cadru sa nu intre in sincron.
+ * ceasul ei. CeasImagine tine PTS-ul imaginii citit periodic (sincronul placii HiSilicon in ms, sau VIDEO_GET_PTS prin
+ * servicedvb): afla singur unitatea (driverul poate da ms sau 90 kHz) daca sursa nu o spune, iar dintre citirile
+ * ultimelor secunde o ia pe cea mai apropiata de schimbarea cadrului (cea mai mare diferenta fata de ceasul de perete),
+ * ca saltul de un cadru sa nu intre in sincron.
  * SincronImagine compara PTS-ul esantionului care urmeaza sa iasa cu PTS-ul imaginii din clipa in care se va auzi:
- * peste PRAG_S devreme -> tacere, peste PRAG_S tarziu -> aruncare, altfel raportul tamponului (Potrivire) se
- * potriveste incet, fara sarituri auzite.
+ * peste prag devreme -> tacere, peste prag tarziu -> aruncare, altfel raportul tamponului (Potrivire) se potriveste
+ * incet, fara sarituri auzite. Pragul e PRAG_S la pornirea sunetului si PRAG_MERS_S cat merge.
+ * RampaIesire: castigul de la iesire, ca nicio pornire, tacere sau corectie sa nu ajunga in placa drept salt.
  */
 
 #ifndef __lib_service_hdsegalizator_dsp_h
@@ -864,6 +866,9 @@ namespace hdsegal
 	{
 	public:
 		static const int FEREASTRA_MS = 3000;     /* citirile din care se alege cea de langa schimbarea cadrului */
+		/* sursa care isi spune unitatea (sincronul placii) da ceasul imaginii continuu, nu in trepte de un cadru: fereastra
+		   scurta, ca un salt inapoi al imaginii (placa tine imaginea pe loc) sa intre in sincron in sutimi, nu in 3 s */
+		static const int FEREASTRA_EXACTA_MS = 150;
 		static const int VECHI_MS = 1000;         /* fara citire noua atata timp: ceasul nu se mai stie */
 		static const int MASURA_MS = 800;         /* cat se masoara pentru unitate */
 		static const int64_t SALT = 45000;        /* 500 ms: alt flux, ceasul porneste din nou */
@@ -879,13 +884,18 @@ namespace hdsegal
 			m_ref = 0;
 			m_n = 0;
 			m_ultima_t = -1;
+			m_fereastra = FEREASTRA_MS;
 		}
 
-		/* o citire a decodorului: `brut` cum il da driverul, `t_ms` ceasul monoton */
-		void citire(long long brut, int64_t t_ms)
+		/* o citire a decodorului: `brut` cum il da driverul, `t_ms` ceasul monoton; `unitate_stiuta` (1 = ms, 90 = 90 kHz)
+		   cand sursa isi spune unitatea (sincronul placii HiSilicon da ms), fara cele MASURA_MS de invatare */
+		void citire(long long brut, int64_t t_ms, int unitate_stiuta = 0)
 		{
 			if (brut <= 0)
 				return;
+			if (m_unitate == 0 && (unitate_stiuta == 1 || unitate_stiuta == 90))
+				m_unitate = unitate_stiuta;
+			m_fereastra = unitate_stiuta ? FEREASTRA_EXACTA_MS : FEREASTRA_MS;
 			if (m_unitate == 0)
 			{
 				if (m_prima_t < 0 || t_ms < m_prima_t)
@@ -918,10 +928,10 @@ namespace hdsegal
 				m_ref_ok = true;
 				m_n = 0;
 			}
-			/* fereastra: cele mai vechi de FEREASTRA_MS ies */
+			/* fereastra: cele mai vechi de m_fereastra ies */
 			int k = 0;
 			for (int i = 0; i < m_n; i++)
-				if (t_ms - m_t[i] <= FEREASTRA_MS)
+				if (t_ms - m_t[i] <= m_fereastra)
 				{
 					m_t[k] = m_t[i];
 					m_d[k] = m_d[i];
@@ -976,13 +986,17 @@ namespace hdsegal
 		int64_t m_t[MAX_CITIRI], m_d[MAX_CITIRI];
 		int m_n;
 		int64_t m_ultima_t;
+		int m_fereastra;
 	};
 
 	/* ---------------------------------------------------------------- decizia de sincron (canalele TV) */
 	struct SincronImagine
 	{
 		enum Fapta { MERGE, TACERE, ARUNCA };
-		static constexpr double PRAG_S = 0.030;        /* peste atat: tacere sau aruncare; sub atat: raportul */
+		static constexpr double PRAG_S = 0.030;        /* la pornirea sunetului: peste atat tacere sau aruncare */
+		/* cat merge sunetul: abaterile mici (pasii perioadelor dmix, citirile ceasului) le potriveste raportul, incet si
+		   neauzit; numai peste atat se taie (cu rampa), ca sa nu se auda corectii pentru cateva milisecunde */
+		static constexpr double PRAG_MERS_S = 0.080;
 		static constexpr double K = 0.1;               /* 10 ms -> 1000 de milionimi */
 		static constexpr double MAX_ABATERE = 0.002;   /* ca la Potrivire: neauzit */
 
@@ -993,18 +1007,19 @@ namespace hdsegal
 
 		/* pts_sunet: PTS-ul esantionului care urmeaza sa intre in placa; intarziere_s: cat trece pana se aude (ALSA si
 		   placa); pts_imagine: PTS-ul imaginii acum; potrivire_s: cat mai tarziu sa se auda sunetul (reglajul omului) */
-		static SincronImagine decide(uint64_t pts_sunet, double intarziere_s, uint64_t pts_imagine, double potrivire_s)
+		static SincronImagine decide(uint64_t pts_sunet, double intarziere_s, uint64_t pts_imagine, double potrivire_s,
+			double prag_s = PRAG_S)
 		{
 			SincronImagine d;
 			d.eroare_s = (double)diferentaPts(pts_sunet, pts_imagine) / 90000.0 - intarziere_s + potrivire_s;
 			d.cadre = 0;
 			d.raport = 1.0;
-			if (d.eroare_s > PRAG_S)
+			if (d.eroare_s > prag_s)
 			{
 				d.fapta = TACERE;
 				d.cadre = (int)(d.eroare_s * RATA);
 			}
-			else if (d.eroare_s < -PRAG_S)
+			else if (d.eroare_s < -prag_s)
 			{
 				d.fapta = ARUNCA;
 				d.cadre = (int)(-d.eroare_s * RATA);
@@ -1144,6 +1159,21 @@ namespace hdsegal
 		/* fara potrivirea ceasurilor (sursa fara ceas propriu, de exemplu un fisier): raportul ramane 1 */
 		void faraPotrivire() { m_fix = true; }
 
+		/* cat sunet se strange inainte de pornire si dupa un gol (si in jurul caruia se tine tamponul); de pe firul care
+		   deschide sesiunea, inainte ca firele sa porneasca */
+		void setTinta(int cadre) { m_tinta = cadre > 0 && cadre < m_cap / 2 ? cadre : m_tinta; }
+
+		/* canalele TV: sunetul porneste cand o spune sincronul cu imaginea (dupa tacerea sau aruncarea hotarata pe primul
+		   esantion), nu la tinta; firul placii */
+		void porneste()
+		{
+			if (!m_asteapta)
+				return;
+			m_asteapta = false;
+			m_umplere = umplere();
+			m_poz = 0.0;
+		}
+
 		/* canalele TV: raportul il da sincronul cu imaginea (SincronImagine), nu umplerea tamponului; saltul peste
 		   SARITURA_S nu se mai face aici (il face sincronul, prin arunca) */
 		void raportExtern(double r)
@@ -1176,6 +1206,7 @@ namespace hdsegal
 		unsigned goluri() const { return m_goluri.load(); }
 		unsigned aruncate() const { return m_aruncate.load(); }
 		int tinta() const { return m_tinta; }
+		int capacitate() const { return m_cap - 1; }
 		bool asteapta() const { return m_asteapta; }
 
 	private:
@@ -1209,6 +1240,365 @@ namespace hdsegal
 		double m_ultim_l, m_ultim_r;
 		float m_ist[CANALE];
 		std::atomic<unsigned> m_goluri, m_aruncate;
+	};
+
+	/* ---------------------------------------------------------------- marcajele PTS ale tamponului (canalele TV)
+	   Perechi (numarul cadrului scris in tampon, PTS-ul lui): le scrie firul de decodare, le citeste firul placii. */
+	class MarcajePts
+	{
+	public:
+		MarcajePts(): m_inceput(0), m_numar(0) { m_lacat.clear(); }
+
+		void marcheaza(uint64_t cadru, uint64_t pts)
+		{
+			Lacat l(m_lacat);
+			if (m_numar == N)
+			{
+				m_inceput = (m_inceput + 1) % N;
+				m_numar--;
+			}
+			const int i = (m_inceput + m_numar) % N;
+			m_cadru[i] = cadru;
+			m_pts[i] = pts & MASCA_PTS;
+			m_numar++;
+		}
+
+		/* PTS-ul cadrului `cadru` (din marcajul de dinaintea lui, 48 kHz = 15/8 pasi de 90 kHz pe cadru) */
+		bool ptsLa(uint64_t cadru, uint64_t &pts)
+		{
+			Lacat l(m_lacat);
+			while (m_numar > 1 && m_cadru[(m_inceput + 1) % N] <= cadru &&
+				cadru - m_cadru[(m_inceput + 1) % N] > (uint64_t)RATA)
+			{
+				m_inceput = (m_inceput + 1) % N;
+				m_numar--;
+			}
+			if (!m_numar)
+				return false;
+			int ales = m_inceput;
+			for (int i = m_numar; i-- > 0;)
+				if (m_cadru[(m_inceput + i) % N] <= cadru)
+				{
+					ales = (m_inceput + i) % N;
+					break;
+				}
+			int64_t dif = (int64_t)(cadru - m_cadru[ales]);
+			pts = (uint64_t)((int64_t)m_pts[ales] + dif * 15 / 8) & MASCA_PTS;
+			return true;
+		}
+
+		/* primul cadru marcat dupa `cadru` (inceputul urmatorului PES din tampon); false daca nu e niciunul */
+		bool urmatorul(uint64_t cadru, uint64_t &urm)
+		{
+			Lacat l(m_lacat);
+			for (int i = 0; i < m_numar; i++)
+				if (m_cadru[(m_inceput + i) % N] > cadru)
+				{
+					urm = m_cadru[(m_inceput + i) % N];
+					return true;
+				}
+			return false;
+		}
+
+	private:
+		/* un scriitor (decodarea, la ~25-120 ms) si un cititor (placa, la 10 ms), operatii de cateva sute de ns: un lacat
+		   din <atomic> ajunge, fara alte antete (fisierul ramane fara legaturi) */
+		struct Lacat
+		{
+			std::atomic_flag &f;
+			explicit Lacat(std::atomic_flag &a): f(a) { while (f.test_and_set(std::memory_order_acquire)) {} }
+			~Lacat() { f.clear(std::memory_order_release); }
+		};
+		static const int N = 512;
+		std::atomic_flag m_lacat;
+		uint64_t m_cadru[N], m_pts[N];
+		int m_inceput, m_numar;
+	};
+
+	/* ---------------------------------------------------------------- sincronul cu imaginea (canalele TV), firul placii
+	   O data pe perioada de iesire (PERIOADA cadre): -> cate cadre de tacere incep perioada (PERIOADA = toata: fara ceas,
+	   inainte de primul sunet potrivit, sau sunetul e mai devreme decat o perioada); restul se citeste din tampon, cu
+	   raportul sincronului.
+	   - Inainte de primul sunet (si dupa un gol) NIMIC nu iese pana nu se hotaraste pe primul esantion: sunetul prea
+	     vechi se arunca in liniste (cel mult pana la urmatorul PES), cel devreme asteapta in tacere exact cat trebuie,
+	     apoi porneste. Primul sunet asteapta ceasul imaginii stabil (CEAS_STABIL_MS). Fara pornire potrivita in
+	     NEPOTRIVIT_MS: stare NEPOTRIVIT (motorul trece sunetul pe placa), tot in liniste, fara franturi.
+	   - Cat merge: abaterile pana la PRAG_MERS_S le potriveste raportul; peste, perioada aceasta coboara la zero
+	     (`coboara`) si corectia se face la urmatoarea. CORECTII_MAX corectii mari in CORECTII_FEREASTRA_MS = ceasul
+	     imaginii e gresit: NEPOTRIVIT.
+	   - Fara ceasul imaginii FARA_CEAS_MS: FARA_CEAS. Cat se asteapta, tamponul pastreaza numai ultima secunda (cel mai vechi
+	     sunet pleaca), ca sa nu se arunce sunetul nou si marcajele sa ramana pe cadrele lor. */
+	class SincronTv
+	{
+	public:
+		enum { ASTEAPTA = 0, POTRIVIT = 1, FARA_CEAS = 2, NEPOTRIVIT = 3 };
+		enum Eveniment { NIMIC, PORNIT, NEPOTRIVIT_LA_PORNIRE, PREA_MULTE_CORECTII };
+		static const int PERIOADA = 480;                /* 10 ms */
+		static const int FARA_CEAS_MS = 4000;
+		static const int NEPOTRIVIT_MS = 2500;          /* de la prima citire a ceasului */
+		/* la pornirea imaginii placa o tine o clipa pe loc (pe SF8008 ~100 ms in prima jumatate de secunda: VidLocalTime
+		   merge mai incet decat ceasul): primul sunet asteapta un interval de CEAS_STABIL_MS in care ceasul imaginii a
+		   mers cu ritmul ceasului (abaterea sub RITM_STABIL), ca sa nu urmeze o corectie imediat dupa pornire */
+		static const int CEAS_STABIL_MS = 200;
+		static constexpr double RITM_STABIL = 0.05;
+		static const int CORECTII_MAX = 3;
+		static const int CORECTII_FEREASTRA_MS = 10000;
+		static constexpr double LATENTA_PLACA_S = 0.060; /* de la ALSA la iesire: pista din placa si iesirea */
+		static constexpr double LATENTA_ALSA_S = 0.100;  /* cand ALSA nu spune intarzierea */
+
+		SincronTv(): stare(ASTEAPTA), eroare_ms(0.0), taceri(0), aruncari(0), m_pornit_ms(0), m_ultim_ceas_bun(0),
+			m_tacere_ramasa(0), m_ritm_t(0), m_ritm_pts(0), m_ceas_stabil(false), m_a_pornit(false), m_asteapta_de_la(0),
+			m_intarziere_s(-1.0), m_aruncat_pornire(false), m_corectie(-1),
+			m_corectie_cadre(0), m_corectii_poz(0)
+		{
+			for (int i = 0; i < CORECTII_MAX; i++)
+				m_corectii[i] = 0;
+		}
+
+		void porneste(uint64_t acum_ms) { m_pornit_ms = acum_ms; }
+
+		/* are_v / pts_v: ceasul imaginii in clipa `acum` (90 kHz); alsa_s: intarzierea spusa de ALSA (< 0: nu se stie);
+		   potrivire_s: reglajul omului (+ = sunetul mai tarziu). `coboara`: sunetul perioadei coboara la zero; `ev`: ce
+		   s-a intamplat (pentru jurnal) */
+		int pas(uint64_t acum, bool are_v, uint64_t pts_v, double alsa_s, double potrivire_s, Potrivire &p, MarcajePts &m,
+			bool &coboara, Eveniment &ev)
+		{
+			coboara = false;
+			ev = NIMIC;
+			if (are_v)
+			{
+				m_ultim_ceas_bun = acum;
+				/* ritmul ceasului imaginii pe intervale de CEAS_STABIL_MS */
+				if (!m_ritm_t)
+				{
+					m_ritm_t = acum;
+					m_ritm_pts = pts_v;
+				}
+				else if (acum - m_ritm_t >= (uint64_t)CEAS_STABIL_MS)
+				{
+					const double ritm = (double)diferentaPts(pts_v, m_ritm_pts) / 90.0 / (double)(acum - m_ritm_t);
+					m_ceas_stabil = fabs(ritm - 1.0) < RITM_STABIL;
+					m_ritm_t = acum;
+					m_ritm_pts = pts_v;
+				}
+			}
+			else
+			{
+				m_ritm_t = 0;
+				m_ceas_stabil = false;
+				uint64_t de_la = m_ultim_ceas_bun ? m_ultim_ceas_bun : m_pornit_ms;
+				if (acum - de_la > (uint64_t)FARA_CEAS_MS && stare.load() != FARA_CEAS)
+					stare = FARA_CEAS;
+				pastreazaCeleNoi(p);
+				return PERIOADA;
+			}
+			if (m_tacere_ramasa > 0)
+				return dinTacere();
+			/* intarzierea pana se aude: ALSA (prin dmix sare cu cate o perioada a placii) netezita, plus placa */
+			const double a = alsa_s >= 0.0 && alsa_s < 1.0 ? alsa_s : LATENTA_ALSA_S;
+			m_intarziere_s = m_intarziere_s < 0.0 ? a : m_intarziere_s + (a - m_intarziere_s) * 0.05;
+			const double intarziere = m_intarziere_s + LATENTA_PLACA_S;
+			uint64_t pts_a = 0;
+
+			if (p.asteapta())
+			{
+				if (!m_asteapta_de_la)
+					m_asteapta_de_la = acum;
+				if (acum - m_asteapta_de_la > (uint64_t)NEPOTRIVIT_MS && stare.load() != NEPOTRIVIT)
+				{
+					stare = NEPOTRIVIT;
+					ev = NEPOTRIVIT_LA_PORNIRE;
+				}
+				pastreazaCeleNoi(p);
+				/* primul sunet numai cu ceasul imaginii stabil; dupa un gol ceasul e deja stabil */
+				if ((!m_a_pornit && !m_ceas_stabil) || p.umplere() < 8)
+					return PERIOADA;
+				/* dupa un gol raman in fata cateva cadre (cel mult 2) din sunetul de dinainte: pleaca, ca hotararea sa se ia
+				   pe primul PES nou, nu pe ele */
+				uint64_t urm = 0;
+				if (m.urmatorul(p.citite(), urm) && urm - p.citite() <= 8)
+					p.arunca((int)(urm - p.citite()));
+				if (!m.ptsLa(p.citite(), pts_a))
+					return PERIOADA;
+				SincronImagine d = SincronImagine::decide(pts_a, intarziere, pts_v, potrivire_s);
+				eroare_ms = d.eroare_s * 1000.0;
+				/* sunetul atat de devreme incat tamponul nu l-ar tine pe toata tacerea: nu porneste */
+				if (d.fapta == SincronImagine::TACERE && p.umplere() + d.cadre > p.capacitate() - RATA / 4)
+					return PERIOADA;
+				if (d.fapta == SincronImagine::ARUNCA)
+				{
+					/* cel mult pana la urmatorul PES: dupa un gol, in fata sunetului nou pot ramane cateva cadre vechi, iar
+					   aruncarea socotita dupa PTS-ul lor ar lua si sunetul nou; perioada urmatoare hotaraste din nou */
+					int n = d.cadre;
+					uint64_t urm = 0;
+					if (m.urmatorul(p.citite(), urm) && urm - p.citite() < (uint64_t)n)
+						n = (int)(urm - p.citite());
+					p.arunca(n);
+					if (!m_aruncat_pornire)
+					{
+						m_aruncat_pornire = true;
+						aruncari++;
+					}
+					return PERIOADA;
+				}
+				p.porneste();
+				p.raportExtern(d.raport);
+				m_a_pornit = true;
+				m_asteapta_de_la = 0;
+				m_aruncat_pornire = false;
+				if (d.fapta == SincronImagine::TACERE)
+				{
+					taceri++;
+					m_tacere_ramasa = d.cadre;
+				}
+				if (stare.load() != POTRIVIT && stare.load() != NEPOTRIVIT)
+				{
+					stare = POTRIVIT;
+					ev = PORNIT;
+				}
+				return dinTacere();
+			}
+
+			if (m_corectie >= 0)
+			{
+				/* perioada de dinainte a coborat la zero: acum corectia, apoi sunetul urca din nou */
+				const int fapta = m_corectie, cadre = m_corectie_cadre;
+				m_corectie = -1;
+				if (fapta == SincronImagine::ARUNCA)
+				{
+					p.arunca(cadre);
+					aruncari++;
+					return 0;
+				}
+				taceri++;
+				m_tacere_ramasa = cadre;
+				return dinTacere();
+			}
+			if (!m.ptsLa(p.citite(), pts_a))
+				return 0;
+			SincronImagine d = SincronImagine::decide(pts_a, intarziere, pts_v, potrivire_s, SincronImagine::PRAG_MERS_S);
+			eroare_ms = d.eroare_s * 1000.0;
+			if (d.fapta == SincronImagine::MERGE)
+			{
+				p.raportExtern(d.raport);
+				return 0;
+			}
+			coboara = true;
+			if (preaMulteCorectii(acum))
+			{
+				if (stare.load() != NEPOTRIVIT)
+				{
+					stare = NEPOTRIVIT;
+					ev = PREA_MULTE_CORECTII;
+				}
+				return 0;
+			}
+			m_corectie = d.fapta;
+			m_corectie_cadre = d.cadre;
+			return 0;
+		}
+
+		std::atomic<int> stare;
+		std::atomic<double> eroare_ms;
+		std::atomic<unsigned> taceri, aruncari;
+
+	private:
+		int dinTacere()
+		{
+			int t = m_tacere_ramasa < PERIOADA ? m_tacere_ramasa : PERIOADA;
+			m_tacere_ramasa -= t;
+			return t;
+		}
+
+		static void pastreazaCeleNoi(Potrivire &p)
+		{
+			if (!p.asteapta())
+				return;
+			int u = p.umplere();
+			if (u > RATA * 3 / 2)
+				p.arunca(u - RATA);
+		}
+
+		bool preaMulteCorectii(uint64_t acum)
+		{
+			m_corectii[m_corectii_poz] = acum;
+			m_corectii_poz = (m_corectii_poz + 1) % CORECTII_MAX;
+			const uint64_t cea_mai_veche = m_corectii[m_corectii_poz];
+			return cea_mai_veche && acum - cea_mai_veche < (uint64_t)CORECTII_FEREASTRA_MS;
+		}
+
+		uint64_t m_pornit_ms, m_ultim_ceas_bun;
+		int m_tacere_ramasa;
+		uint64_t m_ritm_t, m_ritm_pts;
+		bool m_ceas_stabil, m_a_pornit;
+		uint64_t m_asteapta_de_la;
+		double m_intarziere_s;
+		bool m_aruncat_pornire;
+		int m_corectie, m_corectie_cadre;
+		uint64_t m_corectii[CORECTII_MAX];
+		int m_corectii_poz;
+	};
+
+	/* ---------------------------------------------------------------- castigul de la iesire (firul placii)
+	   O perioada de iesire are trei parti: [0, tacere) tacerea hotarata de sincron (sau toata, fara ceas), apoi
+	   [tacere, tacere + produse) sunetul din tampon, apoi golul (tamponul s-a golit). In tacere si in gol iese ultimul
+	   esantion, stins in cateva zeci de cadre (fara treapta care pocneste); dupa orice tacere sau gol sunetul urca din
+	   zero in `rampa_s`; cu `coboara` sunetul perioadei coboara la zero (o corectie a sincronului urmeaza la perioada
+	   urmatoare). Asa nicio pornire, aruncare sau tacere nu ajunge in placa drept salt. */
+	class RampaIesire
+	{
+	public:
+		explicit RampaIesire(double rampa_s = 0.010): m_c(0.0), m_pas(1.0 / (rampa_s * RATA))
+		{
+			m_ultim[0] = m_ultim[1] = 0.0;
+		}
+
+		void aplica(float *f, int cadre, int tacere, int produse, bool coboara)
+		{
+			if (tacere < 0)
+				tacere = 0;
+			if (produse < 0)
+				produse = 0;
+			const double pas_jos = coboara && produse > 0 ? 1.0 / produse : m_pas;
+			for (int i = 0; i < cadre; i++)
+			{
+				if (i < tacere || i >= tacere + produse)
+				{
+					for (int c = 0; c < CANALE; c++)
+					{
+						m_ultim[c] *= 0.93;
+						if (fabs(m_ultim[c]) < 1e-6)
+							m_ultim[c] = 0.0;
+						f[CANALE * i + c] = (float)m_ultim[c];
+					}
+					m_c = 0.0;
+					continue;
+				}
+				if (coboara)
+				{
+					m_c -= pas_jos;
+					if (m_c < 0.0)
+						m_c = 0.0;
+				}
+				else if (m_c < 1.0)
+				{
+					m_c += m_pas;
+					if (m_c > 1.0)
+						m_c = 1.0;
+				}
+				for (int c = 0; c < CANALE; c++)
+				{
+					f[CANALE * i + c] = (float)(f[CANALE * i + c] * m_c);
+					m_ultim[c] = f[CANALE * i + c];
+				}
+			}
+		}
+
+		double castig() const { return m_c; }
+
+	private:
+		double m_c, m_pas;
+		double m_ultim[CANALE];
 	};
 
 	/* float -> 16 biti, cu zgomot de rotunjire triunghiular de un bit, taiat la plin */

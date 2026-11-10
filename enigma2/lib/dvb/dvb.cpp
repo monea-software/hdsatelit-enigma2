@@ -1276,8 +1276,9 @@ void eDVBChannel::frontendStateChanged(iDVBFrontend*fe)
 		if (m_current_frontend_parameters)
 		{
 			eDebug("OURSTATE: lost lock, trying to retune");
-			ourstate = state_tuning;
-			m_frontend->get().tune(*m_current_frontend_parameters);
+			// Un refuz al acordarii nu porneste ceasul de asteptare.
+			ourstate = m_frontend->get().tune(*m_current_frontend_parameters)
+				? state_failed : state_tuning;
 		} else
 			/* on unmanaged channels, we don't do this. the client will do this. */
 		{

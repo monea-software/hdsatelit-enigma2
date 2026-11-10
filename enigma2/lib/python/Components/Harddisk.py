@@ -9,6 +9,7 @@ import re
 import json
 import subprocess
 import time
+import threading
 from Components.Console import Console
 
 def MajorMinor(path):
@@ -103,6 +104,7 @@ UUID_RX = re.compile(r"^[0-9A-Za-z-]{1,64}$")
 # its device in sysfs sits under an ATA port, /devices/.../ata1/host0/target0:0:0/0:0:0:0; a USB disk sits under
 # .../usb1/..., the eMMC under .../mmc0/... (never an ATA port)
 ATA_PORT_RX = re.compile(r"/ata[0-9]+/")
+_boot_slots = set()
 
 def isSataPhysdev(physdev):
 	"""physdev (the device path of the disk in sysfs, without /sys) is on an ATA port and not behind USB"""
@@ -124,7 +126,12 @@ def isAliasOf(alias, mountpoint):
 		return False
 	alias = alias.rstrip("/")
 	try:
-		return path.islink(alias) and path.realpath(alias) == path.realpath(mountpoint)
+		if alias in [m.rstrip("/") for s, m in readMounts()]:
+			return False
+		target = readlink(alias)
+		if not path.isabs(target):
+			target = path.join(path.dirname(alias), target)
+		return path.normpath(target) == path.normpath(mountpoint)
 	except (OSError, ValueError):
 		return False
 
@@ -132,13 +139,17 @@ def linkAlive(place, mounts = None):
 	"""a link in /media still leads somewhere; a link into /run/media or /media must also lead onto a mounted device,
 	not onto a folder left behind on the internal flash or in the RAM of /media (udev leaves the empty folder when it
 	cannot unmount)"""
-	if not path.exists(place):
-		return False
-	target = path.realpath(place)
-	if not (isUnder(target, SYSTEM_MOUNT_BASE) or isUnder(target, MEDIA_ROOT)):
-		return True
 	if mounts is None:
 		mounts = readMounts()
+	try:
+		target = readlink(place)
+		if not path.isabs(target):
+			target = path.join(path.dirname(place), target)
+		target = path.normpath(target)
+	except OSError:
+		return False
+	if not (isUnder(target, SYSTEM_MOUNT_BASE) or isUnder(target, MEDIA_ROOT)):
+		return True
 	holder = "/"
 	for source, mountpoint in mounts:
 		mountpoint = mountpoint.rstrip("/") or "/"
@@ -222,6 +233,40 @@ def mountArguments(device, fstype, target):
 	fsarg = fstype if fstype and fstype in kernelFilesystems() else "auto"
 	options = "noatime,utf8" if fstype in UTF8_FS else "noatime"
 	return ("mount", "mount", "-t", fsarg, "-o", options, "/dev/" + device, target)
+
+def isBootSlot(device):
+	# Numele partitiei vine din nucleu, fara citirea sistemului de fisiere.
+	if device in _boot_slots:
+		return True
+	try:
+		from Components.HdsPornireMultipla import _cheiValori, _text
+		name = _cheiValori(_text(SYS_CLASS_BLOCK + device + "/uevent")).get("PARTNAME", "")
+		if re.fullmatch(r"(?:rootfs|kernel)[0-9]+", name):
+			_boot_slots.add(device)
+			return True
+		if re.fullmatch(r"rootfs[0-9]+", deviceLabel(device), re.IGNORECASE):
+			_boot_slots.add(device)
+			return True
+		return False
+	except (ImportError, OSError, ValueError):
+		return False
+
+def probeBootSlot(device):
+	# Se cheama numai pe firul de citire, o data la conectare.
+	if isBootSlot(device):
+		return True
+	try:
+		data = subprocess.run(["blkid", "-p", "-s", "LABEL", "-o", "value", "/dev/" + device],
+			stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=2)
+		if data.returncode not in (0, 2):
+			raise OSError("eticheta indisponibila")
+		label = data.stdout.decode("utf-8", "replace").strip()
+		if re.fullmatch(r"rootfs[0-9]+", label, re.IGNORECASE):
+			_boot_slots.add(device)
+			return True
+		return False
+	except (OSError, subprocess.SubprocessError):
+		raise OSError("eticheta indisponibila")
 
 DEVTYPE_UDEV = 0
 DEVTYPE_DEVFS = 1
@@ -341,32 +386,30 @@ class Harddisk:
 			if not source.startswith("/dev/"):
 				continue
 			real = path.realpath(source)
+			if isBootSlot(path.basename(real)):
+				continue
 			rest = real[len(disc):] if real.startswith(disc) else None
 			if rest is not None and (rest == "" or rest.isdigit() or (rest[:1] == "p" and rest[1:].isdigit())):
 				return mountpoint
 		return None
 
 	def free(self):
-		try:
-			with open("/proc/mounts", encoding="utf-8", errors="surrogateescape") as mounts:
-				lines = mounts.readlines()
-		except IOError:
-			return -1
-
-		for line in lines:
-			parts = line.split()
-			if len(parts) < 2:
-				continue
-			real_path = path.realpath(parts[0])
-			if not real_path[-1].isdigit():
-				continue
+		# 09.11.2026: API vechi sincron. O citire in curs nu inseamna disc absent.
+		mountpoint = self.findMount()
+		if mountpoint:
 			try:
-				if MajorMinor(real_path) == MajorMinor(self.partitionPath(real_path[-1])):
-					stat = statvfs(parts[1])
-					return stat.f_bfree//1000 * stat.f_bsize//1000
+				value = statvfs(mountpoint)
+				return value.f_bfree // 1000 * value.f_bsize // 1000
 			except OSError:
 				pass
 		return -1
+
+	def freeAsync(self):
+		# 09.11.2026: citirea in fundal se cere explicit, cu None cat se asteapta.
+		from Components.HdsStocareDisc import statvfs as statCache
+		mountpoint = self.findMount()
+		value = statCache(mountpoint) if mountpoint else None
+		return value.f_bfree // 1000 * value.f_bsize // 1000 if value is not None else None
 
 	def numPartitions(self):
 		numPart = -1
@@ -599,19 +642,37 @@ class Partition:
 		self.device = device
 
 	def stat(self):
+		# 09.11.2026: apelantii vechi primesc rezultatul final al acestei citiri.
+		if not self.mountpoint or self.device and isBootSlot(self.device):
+			return None
 		return statvfs(self.mountpoint)
+
+	def statAsync(self):
+		# 09.11.2026: ecranele care culeg ulterior aleg explicit cache-ul asincron.
+		from Components.HdsStocareDisc import statvfs as statCache
+		if not self.mountpoint or self.device and isBootSlot(self.device):
+			return None
+		return statCache(self.mountpoint)
+
+	def freeAsync(self):
+		s = self.statAsync()
+		return s.f_bavail * s.f_bsize if s is not None else None
+
+	def totalAsync(self):
+		s = self.statAsync()
+		return s.f_blocks * s.f_bsize if s is not None else None
 
 	def free(self):
 		try:
 			s = self.stat()
-			return s.f_bavail * s.f_bsize
+			return s.f_bavail * s.f_bsize if s is not None else None
 		except (OSError, TypeError):
 			return None
 
 	def total(self):
 		try:
 			s = self.stat()
-			return s.f_blocks * s.f_bsize
+			return s.f_blocks * s.f_bsize if s is not None else None
 		except (OSError, TypeError):
 			return None
 
@@ -623,6 +684,8 @@ class Partition:
 		return "%s\t%s" % (self.description, self.mountpoint)
 
 	def mounted(self):
+		if self.device and isBootSlot(self.device):
+			return False
 		if self.force_mounted:
 			return True
 		if self.device and self.is_hotplug:
@@ -634,7 +697,8 @@ class Partition:
 			if self.mountpoint != mountpoint and not isAliasOf(self.mountpoint, mountpoint):
 				self.mountpoint = mountpoint
 			return True
-		return self.mountpoint in [mountpoint for source, mountpoint in readMounts()]
+		return any(self.mountpoint == mountpoint and not (source.startswith("/dev/") and
+			isBootSlot(path.basename(path.realpath(source)))) for source, mountpoint in readMounts())
 
 class SystemDiskPartition(Partition):
 	"""The partition of the external disk the image runs from, mounted a second time on a stable name (see
@@ -715,6 +779,11 @@ class HarddiskManager:
 		self.media_deferred = {}
 		self.media_messages = {}
 		self.media_name_timer = None
+		self.media_name_lock = threading.RLock()
+		self.media_allocation_lock = threading.RLock()
+		self.mount_errors = {}
+		self.mount_timeouts = set()
+		self._initializing = True
 
 		self.on_partition_list_change = CList()
 
@@ -752,6 +821,7 @@ class HarddiskManager:
 		for device in sorted(self.pending.keys(), key = self.pendingOrder):
 			if device in self.pending:
 				self.mountIfNeeded(device, True, True)
+		self._initializing = False
 
 	def externalRoot(self):
 		"""the image runs from a big external disk, in a folder of its partition (Components/HdsStocare.discRadacina)"""
@@ -763,12 +833,52 @@ class HarddiskManager:
 			return None
 
 	def addSystemDisk(self, root):
-		"""The image runs from a folder of the partition (rootsubdir=), and writing an image deletes that folder (ofgwrite,
-		flash_ext4.c), so recordings must stay outside it: the top of the partition, reachable only through a second
-		mount of the same device (the same filesystem, nothing is formatted or moved). The mount is on a stable name in
-		/media, a tmpfs, so it never outlives a start. The disk stays blacklisted: it is never offered for formatting
-		or checking, and hotplug events leave it alone. A command, not Console: no eTimer runs while modules load; the
-		filesystem is already mounted, so it takes milliseconds."""
+		def gata(rez):
+			if rez["stare"] != "gata" or not rez["valoare"]:
+				return
+			place, args = rez["valoare"]
+			if args:
+				self.busy[root["partitie"]] = place
+				self.run(args, self.systemMountFinished, [root, place], timeout=SYSTEM_MOUNT_TIMEOUT)
+			else:
+				self.addSystemPartition(root, place)
+		return self._queueMountPlan(("sistem", root["partitie"]), lambda: self.systemMountPlan(root), gata)
+
+	def _queueMountPlan(self, key, reader, callback, termen=3):
+		# 09.11.2026: zavorul workerilor nu garanteaza ordinea cererilor.
+		# Coada pastreaza discul de pornire, apoi ordinea din pendingOrder,
+		# fara nicio asteptare pe firul interfetei.
+		if not hasattr(self, "_mount_plan_queue"):
+			self._mount_plan_queue = []
+		if any(task[0] == key for task in self._mount_plan_queue):
+			return False
+		self._mount_plan_queue.append((key, reader, callback, termen))
+		if len(self._mount_plan_queue) == 1:
+			self._startMountPlan()
+		return True
+
+	def _startMountPlan(self):
+		if not self._mount_plan_queue:
+			return
+		from Components.HdsStocareMontare import executa
+		key, reader, callback, termen = self._mount_plan_queue[0]
+		def gata(rez):
+			try:
+				callback(rez)
+			finally:
+				self._mount_plan_queue.pop(0)
+				self._startMountPlan()
+		executa(self, key, reader, gata, termen=termen)
+
+	def systemMountPlan(self, root):
+		with self.media_allocation_lock:
+			return self._systemMountPlan(root)
+
+	def _systemMountPlan(self, root):
+		# Inregistrarile stau in radacina partitiei, in afara dosarului imaginii.
+		from Components.HdsStocareMontare import inTermen
+		if not inTermen():
+			return
 		device = root["partitie"]
 		stable = [m.rstrip("/") for m in findMountpoints(device) if isMediaName(m)]
 		if stable:
@@ -780,6 +890,8 @@ class HarddiskManager:
 				print("[Harddisk] no free name under %s for %s" % (MEDIA_ROOT, device))
 				return False
 			place = MEDIA_ROOT + name
+			if not inTermen():
+				return
 			try:
 				if path.islink(place):
 					unlink(place)
@@ -792,21 +904,30 @@ class HarddiskManager:
 			if environ.get("HDS_PROBA_MOUNT"):
 				print("[Harddisk] test mode, would run: %s" % " ".join(args[1:]))
 				return False
-			try:
-				done = subprocess.call(list(args[1:]), timeout = SYSTEM_MOUNT_TIMEOUT)
-			except (OSError, subprocess.SubprocessError) as err:
-				print("[Harddisk] mount: %s" % err)
-				done = 1
-			if done != 0 or place not in findMountpoints(device):
-				print("[Harddisk] could not mount %s on %s" % (device, place))
-				self.removeEmptyDir(place)
-				return False
+			if not inTermen():
+				return
+			self.busy[device] = place
+			return place, args
+		return place, None
+
+	def systemMountFinished(self, data, retval, extra_args):
+		root, place = extra_args
+		self.busy.pop(root["partitie"], None)
+		if retval or place not in findMountpoints(root["partitie"]):
+			self.removeEmptyDir(place)
+			return
+		self.addSystemPartition(root, place)
+
+	def addSystemPartition(self, root, place):
+		device = root["partitie"]
 		try:
 			# o imagine poate porni si de pe un stick mare: il arata ca stick, nu ca hard disk
 			removable = readFile("/sys/block/%s/removable" % root["disc"]) == "1"
 		except (IOError, OSError):
 			removable = False
 		p = SystemDiskPartition(place, device, _("Discul de pornire"), root["real"], removable)
+		# 09.11.2026: culegerea intarziata de la pornire nu porneste MediaScanner.
+		p.notify_mount = False
 		self.announceMounted(device, place, p)
 		return True
 
@@ -820,13 +941,11 @@ class HarddiskManager:
 			removable = bool(int(readFile(diskpath + "/removable")))
 		except (IOError, ValueError):
 			error = True
-		blacklisted = isSpecialMmcArea(disk) or disk == getattr(self, "system_disk", None)
-		medium_found = True
+		blacklisted = isSpecialMmcArea(disk) or disk == getattr(self, "system_disk", None) or isBootSlot(part)
 		try:
-			open("/dev/" + part).close()
-		except IOError as err:
-			if err.errno == 159: # no medium present
-				medium_found = False
+			medium_found = int(readFile(SYS_CLASS_BLOCK + part + "/size")) > 0
+		except (OSError, ValueError):
+			medium_found = False
 		return error, blacklisted, removable, False, [], medium_found
 
 	def getBlockDevInfo(self, blockdev):
@@ -864,13 +983,11 @@ class HarddiskManager:
 				self.cd = blockdev
 		except (OSError, ValueError):
 			error = True
-		# check for medium
-		medium_found = True
+		# Marimea din sysfs nu porneste discul, spre deosebire de deschiderea /dev.
 		try:
-			open("/dev/" + blockdev).close()
-		except IOError as err:
-			if err.errno == 159: # no medium present
-				medium_found = False
+			medium_found = int(readFile(devpath + "/size")) > 0
+		except (OSError, ValueError):
+			medium_found = not removable
 
 		return error, blacklisted, removable, is_cdrom, partitions, medium_found
 
@@ -951,8 +1068,9 @@ class HarddiskManager:
 					p.usb = usb
 					p.sata = sata
 					p.removable = removable
-					stable = self.stableMountpoint(device, mountpoints) if (usb or sata) and mountpoints else None
-					if mountpoints and (stable or not (usb or sata)):
+					p.notify_mount = not getattr(self, "_initializing", False)
+					stable = None
+					if mountpoints and not (usb or sata):
 						# not USB or SATA (fstab, the system), or already on its stable name (enigma2 started again)
 						self.announceMounted(device, stable or mountpoints[0], p)
 					else:
@@ -962,7 +1080,7 @@ class HarddiskManager:
 
 		return error, blacklisted, removable, is_cdrom, partitions, medium_found
 
-	def run(self, args, callback = None, extra_args = None):
+	def run(self, args, callback = None, extra_args = None, timeout=15):
 		"""mount/umount as an argument list, without a shell; HDS_PROBA_MOUNT only prints it (probes); False if not run"""
 		if isinstance(args, str):
 			raise TypeError("an argument list is needed, not a shell line")
@@ -971,7 +1089,40 @@ class HarddiskManager:
 			return False
 		if self.console is None:
 			self.console = Console()
-		self.console.ePopen(tuple(args), callback, extra_args or [])
+		from enigma import eTimer
+		timer = eTimer()
+		state = {"done": False, "name": None, "timeout": False}
+		device = next((a[5:] for a in args if isinstance(a, str) and a.startswith("/dev/")), None)
+		if not hasattr(self, "command_timers"):
+			self.command_timers = {}
+		key = id(timer)
+		self.command_timers[key] = timer
+		def finished(data, retval, values):
+			if state["done"]:
+				if state["timeout"] and device:
+					self.mount_timeouts.discard(device)
+				return
+			state["done"] = True
+			timer.stop()
+			self.command_timers.pop(key, None)
+			if callback:
+				callback(data, retval, values)
+		def expired():
+			if state["done"]:
+				return
+			state["timeout"] = True
+			if device:
+				self.mount_timeouts.add(device)
+			finished(_("Discul nu răspunde la timp. Încearcă din nou."), 124, extra_args or [])
+			if state["name"]:
+				self.console.kill(state["name"])
+		timer.callback.append(expired)
+		before = set(getattr(self.console, "appContainers", {}))
+		self.console.ePopen(tuple(args), finished, extra_args or [])
+		names = set(getattr(self.console, "appContainers", {})) - before
+		state["name"] = next(iter(names), None)
+		if not state["done"]:
+			timer.start(int(timeout * 1000), True)
 		return True
 
 	def lazyUnmount(self, mountpoint, callback = None, extra_args = None):
@@ -984,18 +1135,31 @@ class HarddiskManager:
 			return ""
 		return uuid if UUID_RX.match(uuid) else ""
 
-	def rememberHdd(self, uuid):
+	def rememberHdd(self, uuid, valid=None):
 		"""the partition now on /media/hdd; the file changes only when another partition takes /media/hdd"""
 		if not uuid or not UUID_RX.match(uuid) or uuid == self.hdd_uuid:
 			return
-		self.hdd_uuid = uuid
 		temp = HDD_UUID_FILE + ".nou"
 		try:
+			from Components.HdsStocareMontare import inTermen
+			if not inTermen() or valid is not None and not valid():
+				return
+			# 09.11.2026: apelul legacy tine minte proprietarul si cand
+			# fisierul nu poate fi scris; pregatirea anulabila asteapta salvarea.
+			if valid is None:
+				self.hdd_uuid = uuid
 			with open(temp, "w") as f:
 				f.write(uuid + "\n")
 				f.flush()
 				fsync(f.fileno())
+			if not inTermen() or valid is not None and not valid():
+				try:
+					unlink(temp)
+				except OSError:
+					pass
+				return
 			replace(temp, HDD_UUID_FILE)
+			self.hdd_uuid = uuid
 		except (IOError, OSError) as err:
 			print("[Harddisk] could not write %s: %s" % (HDD_UUID_FILE, err))
 
@@ -1015,13 +1179,19 @@ class HarddiskManager:
 			with open(MEDIA_NAMES_FILE, encoding="utf-8") as f:
 				values = json.load(f)
 			if isinstance(values, dict):
-				return {u: n for u, n in values.items() if isinstance(u, str) and UUID_RX.fullmatch(u) and
-					isinstance(n, str) and (n in MEDIA_NAMES[1:] or mediaLabelName(n) == n and n)}
+				result = {}
+				for u, n in sorted(values.items()):
+					if isinstance(u, str) and UUID_RX.fullmatch(u) and isinstance(n, str) and n and \
+						(n in MEDIA_NAMES or mediaLabelName(n) == n) and n not in result.values():
+						result[u] = n
+				return result
 		except (OSError, ValueError):
 			pass
 		return {}
 
-	def writeMediaNames(self, values):
+	def writeMediaNames(self, values, valid=None):
+		if valid is not None and not valid():
+			return False
 		if values == self.media_names:
 			return True
 		temp = MEDIA_NAMES_FILE + ".nou"
@@ -1031,7 +1201,12 @@ class HarddiskManager:
 				f.write("\n")
 				f.flush()
 				fsync(f.fileno())
+			if valid is not None and not valid():
+				unlink(temp)
+				return False
 			replace(temp, MEDIA_NAMES_FILE)
+			if valid is not None and not valid():
+				return False
 			self.media_names = values
 			return True
 		except OSError as err:
@@ -1039,10 +1214,13 @@ class HarddiskManager:
 			return False
 
 	def mediaPartition(self, device):
-		if not device or not findMountpoints(device):
+		if not device or isBootSlot(device):
 			return None
-		return next((p for p in self.partitions if p.device == device and p.is_hotplug and
+		return next((p for p in list(self.partitions) + list(self.pending.values()) if p.device == device and p.is_hotplug and
 			(getattr(p, "usb", False) or getattr(p, "sata", False))), None)
+
+	def mediaAssignmentFree(self, name, uuid):
+		return not any(n == name and u != uuid for u, n in self.media_names.items())
 
 	def mediaPlaceFree(self, place, device=None):
 		"""An existing name belongs to this device, or is really free; never take another live name."""
@@ -1050,7 +1228,7 @@ class HarddiskManager:
 		if device and any(place.rstrip("/") == m.rstrip("/") or isAliasOf(place, m) for m in findMountpoints(device)):
 			return True
 		uuid = deviceUuid(device) if device else None
-		if any(MEDIA_ROOT + n == place and u != uuid and uuidPresent(u) for u, n in self.media_names.items()):
+		if any(MEDIA_ROOT + n == place and u != uuid for u, n in self.media_names.items()):
 			return False
 		if place in self.busy.values() or place in self.aliases.values():
 			return False
@@ -1065,38 +1243,64 @@ class HarddiskManager:
 		except OSError:
 			return False
 
-	def mediaLink(self, alias, target, device):
+	def mediaLink(self, alias, target, device, valid=None):
+		from Components.HdsStocareMontare import inTermen
+		def alive():
+			return inTermen() and (valid is None or valid())
+		if not alive():
+			return False
 		if alias == target:
 			return True
 		if isAliasOf(alias, target):
-			self.media_alias_targets.setdefault(device, {})[alias] = readlink(alias)
+			value = readlink(alias)
+			if not alive():
+				return False
+			self.media_alias_targets.setdefault(device, {})[alias] = value
 			return True
 		if not self.mediaPlaceFree(alias, device):
 			return False
+		if not alive():
+			return False
 		try:
 			if path.islink(alias):
+				if not alive():
+					return False
 				unlink(alias)
 			elif path.isdir(alias):
+				if not alive():
+					return False
 				rmdir(alias)
+			if not alive():
+				return False
 			symlink(target, alias)
+			# 09.11.2026: si un apel de sistem deja pornit poate termina dupa
+			# scoatere. Inlaturam numai legatura tocmai creata de aceasta lucrare.
+			if not alive():
+				if path.islink(alias) and readlink(alias) == target:
+					unlink(alias)
+				return False
 			self.media_alias_targets.setdefault(device, {})[alias] = target
 			return True
 		except OSError as err:
 			print("[Harddisk] could not make %s: %s" % (alias, err))
 			return False
 
-	def labelAlias(self, device, target):
+	def labelAlias(self, device, target, valid=None):
+		def alive():
+			return valid is None or valid()
 		if environ.get(MEDIA_LABELS_ENV) == "0":
 			return ""
 		base = mediaLabelName(deviceLabel(device))
-		if not base:
+		if not base or not alive():
 			return ""
 		for number in range(1, 1000):
+			if not alive():
+				return ""
 			suffix = "-%d" % number if number > 1 else ""
 			name = base[:32 - len(suffix)] + suffix
 			alias = MEDIA_ROOT + name
 			if self.mediaPlaceFree(alias, device):
-				if self.mediaLink(alias, target, device):
+				if self.mediaLink(alias, target, device, valid=valid) and alive():
 					self.label_aliases[device] = alias
 					return alias
 				return ""
@@ -1146,79 +1350,36 @@ class HarddiskManager:
 		if uuid and UUID_RX.fullmatch(uuid):
 			choices = [["", _("Automat")]]
 			label = path.basename(self.label_aliases.get(device, "")) or mediaLabelName(deviceLabel(device))
-			for name in ([label] if label else []) + list(MEDIA_NAMES[1:]):
-				if name == value or self.mediaPlaceFree(MEDIA_ROOT + name, device):
+			for name in list(MEDIA_NAMES[:2]) + ([label] if label else []):
+				if name == value or self.mediaAssignmentFree(name, uuid):
 					choices.append([name, MEDIA_ROOT + name])
 			if value and value not in [c[0] for c in choices]:
 				choices.append([value, MEDIA_ROOT + value])
-		return {"valoare": value, "alegeri": choices, "amanat": device in self.media_deferred,
+		return {"valoare": value, "alegeri": choices, "amanat": bool(value and p and p.mountpoint != MEDIA_ROOT + value),
 			"mesaj": self.media_messages.get(device, "")}
 
 	def scheduleMediaNames(self):
-		if self.media_name_timer is None:
-			from enigma import eTimer
-			self.media_name_timer = eTimer()
-			self.media_name_timer.callback.append(self.retryMediaNames)
-		self.media_name_timer.start(2000, True)
+		return
 
 	def applyMediaName(self, device, value, checkBusy=True):
-		p = self.mediaPartition(device)
-		if p is None:
-			self.media_deferred.pop(device, None)
-			self.media_messages[device] = _("Discul nu are un UUID cunoscut sau nu mai este conectat.")
-			return False
-		stable = self.media_stable[device]
-		target = stable if not path.islink(stable) else path.realpath(stable)
-		place = MEDIA_ROOT + value if value else stable
-		if not self.mediaPlaceFree(place, device):
-			self.media_deferred.pop(device, None)
-			self.media_messages[device] = _("Numele %s este ocupat de alt disc sau dosar. Alege alt nume.") % place
-			return False
-		if p.mountpoint != place and checkBusy and self.mediaNameBusy(device):
-			self.media_deferred[device] = value
-			self.media_messages[device] = _("Numele se va schimba după ce se oprește înregistrarea sau timeshift-ul de pe acest disc.")
-			self.scheduleMediaNames()
-			return True
-		if not self.mediaLink(place, target, device):
-			self.media_deferred.pop(device, None)
-			self.media_messages[device] = _("Nu am putut face legătura %s. Încearcă din nou.") % place
-			return False
-		old = self.chosen_aliases.get(device)
-		previous = p.mountpoint
-		if old and old not in (place, stable, self.label_aliases.get(device)) and isAliasOf(old, target):
-			try:
-				from Components.HdsLocInregistrari import mutaCaiMedia
-				mutaCaiMedia(old, place)
-			except ImportError:
-				pass
-			try:
-				unlink(old)
-			except OSError:
-				pass
-		self.chosen_aliases.pop(device, None)
-		if value and place != stable:
-			self.chosen_aliases[device] = place
-		p.mountpoint = place
-		self.media_deferred.pop(device, None)
-		self.media_messages[device] = ""
-		if checkBusy and previous != place:
-			self.on_partition_list_change("change", p)
-		return True
+		return self.setMediaName(device, value)["result"]
 
 	def retryMediaNames(self):
-		for device, value in list(self.media_deferred.items()):
-			self.applyMediaName(device, value)
-		if self.media_deferred:
-			self.scheduleMediaNames()
+		return
 
-	def setMediaName(self, device, value):
+	def setMediaName(self, device, value, valid=None):
+		with self.media_name_lock:
+			return self.saveNextMediaName(device, value, valid)
+
+	def saveNextMediaName(self, device, value, valid=None):
 		info = self.mediaNameInfo(device)
 		if not isinstance(value, str) or not info["alegeri"]:
 			return {"result": False, "message": _("Discul nu are un UUID cunoscut sau nu mai este conectat."), "amanat": False}
-		label = path.basename(self.label_aliases.get(device, "")) or mediaLabelName(deviceLabel(device))
-		if value and value not in MEDIA_NAMES[1:] and value != label and value != info["valoare"]:
+		if value not in [c[0] for c in info["alegeri"]]:
 			return {"result": False, "message": _("Alege un nume din listă."), "amanat": False}
-		if value and not self.mediaPlaceFree(MEDIA_ROOT + value, device):
+		uuid = deviceUuid(device)
+		# 09.11.2026: si un nume ocupat acum de alt disc ramane protejat.
+		if value and (not self.mediaAssignmentFree(value, uuid) or not self.mediaPlaceFree(MEDIA_ROOT + value, device)):
 			return {"result": False, "message": _("Numele %s este ocupat de alt disc sau dosar. Alege alt nume.") % (MEDIA_ROOT + value), "amanat": False}
 		values = dict(self.media_names)
 		uuid = deviceUuid(device)
@@ -1228,11 +1389,10 @@ class HarddiskManager:
 			values[uuid] = value
 		else:
 			values.pop(uuid, None)
-		if not self.writeMediaNames(values):
+		if not self.writeMediaNames(values, valid):
 			return {"result": False, "message": _("Nu am putut ține minte numele discului. Încearcă din nou."), "amanat": False}
-		ok = self.applyMediaName(device, value)
-		return {"result": ok, "message": self.media_messages.get(device) or (_("Numele în /media a fost schimbat.") if ok else ""),
-			"amanat": device in self.media_deferred}
+		self.media_messages[device] = _("Punctul de montare a fost salvat. Se folosește la următoarea montare a discului.")
+		return {"result": True, "message": self.media_messages[device], "amanat": True}
 
 	def freeMediaName(self, uuid):
 		"""first free stable name: not mounted, not given or being mounted, not a link that still leads somewhere
@@ -1240,7 +1400,9 @@ class HarddiskManager:
 		mounts = readMounts()
 		mounted = set((mountpoint.rstrip("/") or "/") for source, mountpoint in mounts)
 		reserved = set(self.busy.values()) | set(self.aliases.values())
-		reserved.update(MEDIA_ROOT + n for u, n in self.media_names.items() if u != uuid and uuidPresent(u))
+		reserved.update(MEDIA_ROOT + n for u, n in self.media_names.items() if u != uuid)
+		# 09.11.2026: numele traditional ramane ca alias de compatibilitate;
+		# preferinta se adauga numai cand se anunta noua montare.
 		for name in MEDIA_NAMES:
 			place = MEDIA_ROOT + name
 			if place in mounted or place in reserved:
@@ -1265,15 +1427,18 @@ class HarddiskManager:
 
 	def stableMountpoint(self, device, mountpoints):
 		"""the stable name a partition already has: mounted on it, or a link to its mount (after enigma2 restarts)"""
-		for name in MEDIA_NAMES:
+		preferred = self.media_names.get(deviceUuid(device), "")
+		names = list(MEDIA_NAMES)
+		if preferred and preferred not in names:
+			names.append(preferred)
+		for name in names:
 			alias = MEDIA_ROOT + name
 			if any(isAliasOf(alias, m) for m in mountpoints):
 				self.media_alias_targets.setdefault(device, {})[alias] = readlink(alias)
 		for mountpoint in mountpoints:
-			if isMediaName(mountpoint):
+			if mountpoint.rstrip("/") in [MEDIA_ROOT + n for n in names]:
 				return mountpoint.rstrip("/")
-		preferred = self.media_names.get(deviceUuid(device), "")
-		for name in sorted(MEDIA_NAMES, key=lambda n: n == preferred):
+		for name in names:
 			alias = MEDIA_ROOT + name
 			if any(isAliasOf(alias, mountpoint) for mountpoint in mountpoints):
 				self.aliases[device] = alias
@@ -1287,6 +1452,9 @@ class HarddiskManager:
 			print("[Harddisk] no free name under %s for %s" % (MEDIA_ROOT, device))
 			return None
 		alias = MEDIA_ROOT + name
+		from Components.HdsStocareMontare import inTermen
+		if not inTermen():
+			return None
 		try:
 			if path.islink(alias):
 				unlink(alias)
@@ -1302,6 +1470,10 @@ class HarddiskManager:
 		return alias
 
 	def removeEmptyDir(self, place):
+		if threading.current_thread() is threading.main_thread():
+			from Components.HdsStocareMontare import executa
+			executa(self, ("dosar-gol", place), lambda: self.removeEmptyDir(place))
+			return
 		"""a stable name left as an empty folder in /media (not a link, not mounted)"""
 		if not isMediaName(place):
 			return
@@ -1344,15 +1516,24 @@ class HarddiskManager:
 				self.mountIfNeeded(device, True, mountedOnly)
 
 	def cleanStale(self):
+		from Components.HdsStocareMontare import executa
+		def gata(rez):
+			if rez["stare"] == "gata":
+				for mountpoint in rez["valoare"]:
+					self.lazyUnmount(mountpoint, self.unmountFinished, [mountpoint])
+		executa(self, "curata", self.stalePlan, gata)
+
+	def stalePlan(self):
 		"""left from devices pulled out while enigma2 was not running: mounts whose device is gone (only under /media
 		and /run/media) and stable names that no longer lead onto a mounted device"""
+		gone = []
 		for source, mountpoint in readMounts():
 			if not source.startswith("/dev/") or not (isUnder(mountpoint, MEDIA_ROOT) or isUnder(mountpoint, SYSTEM_MOUNT_BASE)):
 				continue
 			name = source[len("/dev/"):]
 			if DEVICE_NAME_RX.match(name) and not path.exists(SYS_CLASS_BLOCK + name):
 				print("[Harddisk] %s is gone, unmounting %s" % (source, mountpoint))
-				self.lazyUnmount(mountpoint, self.unmountFinished, [mountpoint])
+				gone.append(mountpoint)
 		try:
 			names = listdir(MEDIA_ROOT)
 		except OSError:
@@ -1369,24 +1550,60 @@ class HarddiskManager:
 					unlink(place)
 			except OSError:
 				pass
+		return gone
 
 	def mountIfNeeded(self, device, quiet = False, mountedOnly = False):
 		self.mount_timers.pop(device, None)
 		p = self.pending.get(device)
-		if p is None or device in self.busy:
+		if p is None or device in self.busy or device in self.mount_timeouts:
 			return
+		def gata(rez):
+			if self.pending.get(device) is not p:
+				return
+			if rez["stare"] != "gata":
+				self.mount_errors[device] = {"motiv": _("Discul nu răspunde la timp. Încearcă din nou."), "detalii": rez.get("eroare", ""), "numai_citire": False}
+				self.pending.pop(device, None)
+				return
+			plan = rez["valoare"] or {}
+			if plan.get("exclude"):
+				self.pending.pop(device, None)
+			elif plan.get("retry"):
+				self.scheduleMount(device)
+			elif plan.get("mounted"):
+				self.announceMounted(device, plan["mounted"])
+			elif plan.get("args"):
+				target = plan["target"]
+				self.busy[device] = target
+				if not self.run(plan["args"], self.mountFinished, [device, target]):
+					self.busy.pop(device, None)
+		self._queueMountPlan(("disc", device), lambda: self.mountPlan(device, p, quiet, mountedOnly), gata, termen=4)
+
+	def mountPlan(self, device, p, quiet, mountedOnly):
+		with self.media_allocation_lock:
+			return self._mountPlan(device, p, quiet, mountedOnly)
+
+	def _mountPlan(self, device, p, quiet, mountedOnly):
+		from Components.HdsStocareMontare import inTermen
+		if not inTermen() or self.pending.get(device) is not p:
+			return
+		if not getattr(p, "slot_checked", False):
+			if probeBootSlot(device):
+				return {"exclude": True}
+			if not inTermen() or self.pending.get(device) is not p:
+				return
+			p.slot_checked = True
 		mountpoints = findMountpoints(device)
+		if not inTermen() or self.pending.get(device) is not p:
+			return
 		if mountpoints:
 			stable = None
 			if getattr(p, "usb", False) or getattr(p, "sata", False):
 				stable = self.stableMountpoint(device, mountpoints) or self.makeAlias(device, mountpoints[0])
-			self.announceMounted(device, stable or mountpoints[0])
-			return
+			return {"mounted": stable or mountpoints[0]}
 		if mountedOnly or p.has_partitions or p.is_cdrom:
 			return
 		if path.isdir(FSTAB_MOUNT_PENDING):
-			self.scheduleMount(device)
-			return
+			return {"retry": True}
 		if not getattr(p, "usb", False) and not getattr(p, "sata", False):
 			# internal flash and eMMC partitions are never mounted from here
 			if not quiet:
@@ -1401,7 +1618,7 @@ class HarddiskManager:
 			tries = self.fstype_tries.get(device, 0)
 			if tries < FSTYPE_RETRIES:
 				self.fstype_tries[device] = tries + 1
-				self.scheduleMount(device)
+				return {"retry": True}
 			return
 		if fstype in NOT_MOUNTED_FS:
 			return
@@ -1410,6 +1627,8 @@ class HarddiskManager:
 			print("[Harddisk] no free name under %s for %s" % (MEDIA_ROOT, device))
 			return
 		target = MEDIA_ROOT + name
+		if not inTermen() or self.pending.get(device) is not p:
+			return
 		try:
 			if path.islink(target):
 				unlink(target)
@@ -1419,13 +1638,19 @@ class HarddiskManager:
 			print("[Harddisk] could not prepare %s: %s" % (target, err))
 			return
 		print("[Harddisk] mounting %s on %s" % (device, target))
+		if not inTermen() or self.pending.get(device) is not p:
+			return
 		self.busy[device] = target
-		if not self.run(mountArguments(device, fstype, target), self.mountFinished, [device, target]):
-			self.busy.pop(device, None)
+		return {"args": mountArguments(device, fstype, target), "target": target}
 
 	def mountFinished(self, data, retval, extra_args):
 		device, target = extra_args
 		self.busy.pop(device, None)
+		if retval:
+			self.mount_errors[device] = {"motiv": _("Discul nu a putut fi montat."),
+				"detalii": (data or "").strip()[:2000], "numai_citire": False}
+			if retval == 124:
+				self.pending.pop(device, None)
 		mountpoints = findMountpoints(device)
 		if device not in self.pending:
 			# pulled out while mounting: nothing stays on the stable name
@@ -1459,25 +1684,71 @@ class HarddiskManager:
 		self.removeEmptyDir(extra_args[0])
 
 	def announceMounted(self, device, mountpoint, p = None):
+		p = p or self.pending.get(device)
 		if p is None:
-			p = self.pending.pop(device)
-		else:
+			return
+		self.pending[device] = p
+		def prepare():
+			# 09.11.2026: doua anunturi nu pot alege simultan acelasi alias
+			# de eticheta. Asteptarea zavorului ramane numai pe worker.
+			with self.media_allocation_lock:
+				return prepareLocked()
+		def prepareLocked():
+			from Components.HdsStocareMontare import inTermen
+			def valid():
+				return inTermen() and self.pending.get(device) is p
+			if not valid():
+				return
+			displayed = mountpoint
+			uuid = deviceUuid(device)
+			# 09.11.2026: scoaterea invalideaza identitatea, chiar daca citirea
+			# UUID/eticheta/cale se termina inaintea termenului general.
+			if not valid():
+				return
+			if mountpoint.rstrip("/") == MEDIA_ROOT + "hdd":
+				self.rememberHdd(uuid, valid=valid)
+			if not valid():
+				return
+			if getattr(p, "usb", False) or getattr(p, "sata", False):
+				target = path.realpath(mountpoint) if path.islink(mountpoint) else mountpoint
+				if not valid():
+					return
+				self.media_stable[device] = mountpoint
+				self.labelAlias(device, target, valid=valid)
+				if not valid():
+					return
+				# 09.11.2026: alegerea salvata se aplica aici, inainte de add,
+				# pastrand si aliasul traditional folosit de inregistrari.
+				value = self.media_names.get(uuid, "")
+				if value and self.mediaLink(MEDIA_ROOT + value, target, device, valid=valid):
+					displayed = MEDIA_ROOT + value
+					if displayed != mountpoint:
+						self.chosen_aliases[device] = displayed
+			places = set(findMountpoints(device))
+			readonly = any(len(row) >= 4 and unescapeMountPath(row[1]) in places and "ro" in row[3].split(",")
+				for row in getProcMounts())
+			return {"numai_citire": readonly, "mountpoint": displayed}
+		def gata(rez):
+			if self.pending.get(device) is not p:
+				return
 			self.pending.pop(device, None)
-		p.mountpoint = mountpoint
-		self.partitions.append(p)
-		self.fstype_tries.pop(device, None)
-		print("[Harddisk] %s is mounted on %s" % (device, mountpoint))
-		if mountpoint.rstrip("/") == MEDIA_ROOT + "hdd":
-			self.rememberHdd(deviceUuid(device))
-		if getattr(p, "usb", False) or getattr(p, "sata", False):
-			self.media_stable[device] = mountpoint
-			target = path.realpath(mountpoint) if path.islink(mountpoint) else mountpoint
-			self.labelAlias(device, target)
-			value = self.media_names.get(deviceUuid(device), "")
-			if value:
-				# The mount is being announced now, before it is made available to recordings.
-				self.applyMediaName(device, value, False)
-		self.on_partition_list_change("add", p)
+			if rez["stare"] != "gata":
+				self.mount_errors[device] = {"motiv": _("Discul nu răspunde la timp. Încearcă din nou."),
+					"detalii": rez.get("eroare", ""), "numai_citire": False}
+				return
+			if rez["valoare"]["numai_citire"]:
+				self.mount_errors[device] = {"motiv": _("Discul este montat numai pentru citire."),
+					"detalii": self.mount_errors.get(device, {}).get("detalii", ""), "numai_citire": True}
+			else:
+				self.mount_errors.pop(device, None)
+			p.mountpoint = rez["valoare"]["mountpoint"]
+			self.partitions.append(p)
+			self.fstype_tries.pop(device, None)
+			if getattr(p, "notify_mount", True):
+				self.on_partition_list_change("add", p)
+		# 09.11.2026: si etichetele urmeaza ordinea cererilor, nu ordinea
+		# in care sistemul de operare programeaza firele de pregatire.
+		self._queueMountPlan(("anunta", device), prepare, gata)
 
 	def goneCheck(self, device):
 		"""after a removal: the system's own unmount fails while files are still open; the device is gone, so any mount
@@ -1491,6 +1762,9 @@ class HarddiskManager:
 				self.lazyUnmount(mountpoint, self.unmountFinished, [mountpoint])
 
 	def removeHotplugPartition(self, device):
+		_boot_slots.discard(device)
+		from Components.HdsStocareDisc import uita
+		uita(("slot-disc", device))
 		timer = self.mount_timers.pop(device, None)
 		if timer is not None:
 			timer.stop()
@@ -1502,12 +1776,17 @@ class HarddiskManager:
 		self.media_stable.pop(device, None)
 		self.label_aliases.pop(device, None)
 		self.chosen_aliases.pop(device, None)
-		for alias, target in self.media_alias_targets.pop(device, {}).items():
-			try:
-				if path.islink(alias) and readlink(alias) == target:
-					unlink(alias)
-			except OSError as err:
-				print("[Harddisk] could not remove %s: %s" % (alias, err))
+		self.mount_errors.pop(device, None)
+		aliases = self.media_alias_targets.pop(device, {})
+		def removeAliases():
+			for alias, target in aliases.items():
+				try:
+					if path.islink(alias) and readlink(alias) == target:
+						unlink(alias)
+				except OSError as err:
+					print("[Harddisk] could not remove %s: %s" % (alias, err))
+		from Components.HdsStocareMontare import executa
+		executa(self, ("scoate", device), removeAliases)
 		for x in self.partitions[:]:
 			if x.is_hotplug and x.device == device:
 				self.partitions.remove(x)

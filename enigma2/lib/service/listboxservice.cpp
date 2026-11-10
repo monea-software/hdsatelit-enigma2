@@ -884,6 +884,16 @@ void eListboxServiceContent::setSize(const eSize &size)
 void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected)
 {
 	painter.clip(eRect(offset, m_itemsize));
+	eRect service_name_area = m_element_position[celServiceName];
+	eRect event_progress_area = m_element_position[celServiceEventProgressbar];
+	if (event_progress_area.width() > 0 && event_progress_area.left() > service_name_area.left())
+	{
+		// Bara de derulare poate micsora locul desenat fata de latimea widgetului.
+		int right = std::min(m_itemsize.width(), event_progress_area.right());
+		int width = std::min(event_progress_area.width(), std::max(0, right - service_name_area.left() - 10));
+		event_progress_area = eRect(right - width, event_progress_area.top(), width, event_progress_area.height());
+		service_name_area.setWidth(std::max(0, event_progress_area.left() - 10 - service_name_area.left()));
+	}
 
 	int marked = 0;
 
@@ -1005,7 +1015,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		int mark_width = 0, mark_right = 0, mark_pixmap_width = 0;
 		if (isPlayable && m_visual_mode == visModeComplex && isStreamed(ref))
 		{
-			const eRect &row = m_element_position[celServiceName];
+			const eRect &row = service_name_area;
 			mark_right = row.left() + row.width();
 			if (m_itemsize.width() > 0 && m_itemsize.width() < mark_right)
 				mark_right = m_itemsize.width();
@@ -1039,7 +1049,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				measure->setFont(m_element_font[celServiceInfo]);
 				measure->renderString(label.c_str());
 				label_width = measure->getBoundBox().width() + 16;
-				const eRect &row = m_element_position[celServiceName];
+				const eRect &row = service_name_area;
 				label_right = row.left() + row.width();
 				if (m_itemsize.width() > 0 && m_itemsize.width() < label_right)
 					label_right = m_itemsize.width();
@@ -1061,7 +1071,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				int flags=gPainter::RT_VALIGN_CENTER,
 					yoffs = 0,
 					xoffs = xoffset;
-				eRect &area = m_element_position[e];
+				eRect &area = e == celServiceName ? service_name_area : m_element_position[e];
 				std::string text = "<n/a>";
 				int reserved = 0;  // width kept free at the right for the label
 				xoffset=0;
@@ -1253,12 +1263,14 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 			}
 			else if (e == celServiceEventProgressbar)
 			{
-				eRect area = m_element_position[celServiceEventProgressbar];
+				eRect area = event_progress_area;
 				if (area.width() > 0 && (isPlayable || isMarker))
 				{
 					// we schedule it to paint it as last element.. so we dont need to reset fore/background color
 					paintProgress = isPlayable;
-					xoffset = area.width() + 10;
+					// Bara din dreapta are deja loc separat de text.
+					if (area.left() <= service_name_area.left())
+						xoffset = area.width() + 10;
 				}
 			}
 		}
@@ -1284,7 +1296,7 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 			style.drawFrame(painter, eRect(offset, m_itemsize), eWindowStyle::frameListboxEntry);
 		if (paintProgress && evt)
 		{
-			eRect area = m_element_position[celServiceEventProgressbar];
+			eRect area = event_progress_area;
 			if (!selected && m_color_set[serviceEventProgressbarBorderColor])
 				painter.setForegroundColor(m_color[serviceEventProgressbarBorderColor]);
 			else if (selected && m_color_set[serviceEventProgressbarBorderColorSelected])

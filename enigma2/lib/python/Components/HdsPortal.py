@@ -182,7 +182,7 @@ def text_oprit():
 
 
 def hbbtv_pornit():
-	"""Setarea principala „HbbTV” (Components/HdsHbbtv.hbbtv_pornit); fara ea, oprit."""
+	"""Setarea principala „HbbTV” (Components/HdsHbbtv.hbbtv_pornit); fara ea, pornit (ca din fabrica, 09.11.2026)."""
 	try:
 		try:
 			from Components import HdsHbbtv as H
@@ -190,7 +190,7 @@ def hbbtv_pornit():
 			import HdsHbbtv as H
 		return H.hbbtv_pornit()
 	except Exception:
-		return False
+		return True
 
 
 def _porneste_aplicatia(ecran):

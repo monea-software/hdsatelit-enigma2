@@ -402,6 +402,8 @@ def _canaleActualizare(argumente_, M):
 	if index is None:
 		return None, "pregatire"
 	fel = argumente_.get("fel") or "fara"
+	if fel == "dupa_scanare":
+		return M.S.canale_ultima_scanare(index), fel
 	if fel not in FELURI_ACTUALIZARE:
 		return None, fel
 	toate = M.S.canale_de_citit(index.canale)
@@ -425,7 +427,7 @@ def actualizeaza(argumente_, M=None):
 	grupuri = P.transpondere_din_canale(canale)
 	if not grupuri:
 		return {"result": False, "message": _t("Niciun canal de satelit, cablu sau terestru de citit.")}
-	motor = P.are_motor()
+	motor = M.S.are_motor_pentru(grupuri) if fel == "dupa_scanare" else P.are_motor()
 	# reluarea (ca pe televizor, HdsCautareCanale._aleasActualizare): ultima trecere oprita in ultimele 24 de ore
 	rel = None if argumente_.get("de_la_capat") == "1" else P.reluare(grupuri, P.citeste_stare())
 	facute, inainte = None, 0
@@ -712,6 +714,7 @@ __LIVE_STIL__
     <span class="numar" id="numar">Se citește lista...</span>
     <span class="butoane">
       <select id="fel" aria-label="Ce canale">
+          <option value="dupa_scanare">canalele ultimei scanări fără piste știute</option>
         <option value="fara">canalele fără piste știute</option>
         <option value="gasite">canalele găsite acum</option>
         <option value="toate">toate canalele</option>
@@ -966,6 +969,7 @@ function stare(){
   }).catch(function(){});
 }
 var deLaCapat = false;
+$("fel").value = new URLSearchParams(location.search).get("dupa_scanare") === "1" ? "dupa_scanare" : "fara";
 function cerePornire(confirmat, neprinse){
   var q = filtre(); q.set("fel", $("fel").value);
   if(confirmat){ q.set("confirmat", "1"); q.set("neprinse", neprinse || "lasa"); }
@@ -1093,6 +1097,7 @@ TEXTE_PAGINA = {
 		N_("Șterge filtrele"),
 		N_("Se citește lista..."),
 		N_("canalele fără piste știute"),
+		N_("canalele ultimei scanări fără piste știute"),
 		N_("canalele găsite acum"),
 		N_("toate canalele"),
 		N_("Actualizează pistele"),

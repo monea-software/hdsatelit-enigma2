@@ -76,14 +76,16 @@ def ref_din_cerere(date):
 
 
 def adresa_privata(ip):
-    """0.7.0: True pentru o adresa IPv4 din reteaua de acasa (10.x.x.x, 172.16-31.x.x, 192.168.x.x)."""
+    """0.7.0: True pentru o adresa IPv4 din reteaua de acasa (10.x.x.x, 172.16-31.x.x, 192.168.x.x; din si
+    169.254.x.x, legatura directa fara DHCP)."""
     try:
         a = [int(x) for x in str(ip).split('.')]
     except ValueError:
         return False
     if len(a) != 4 or not all(0 <= x <= 255 for x in a):
         return False
-    return a[0] == 10 or (a[0] == 172 and 16 <= a[1] <= 31) or (a[0] == 192 and a[1] == 168)
+    return (a[0] == 10 or (a[0] == 172 and 16 <= a[1] <= 31) or (a[0] == 192 and a[1] == 168)
+            or (a[0] == 169 and a[1] == 254))
 
 
 def adresa_permisa(ip, retea):

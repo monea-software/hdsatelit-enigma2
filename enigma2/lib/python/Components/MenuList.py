@@ -1,7 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from .HTMLComponent import HTMLComponent
 from .GUIComponent import GUIComponent
-from Components.HdsAsistentaControl import schimbaComponentaWeb
 
 from enigma import eListboxPythonStringContent, eListbox
 
@@ -44,7 +43,6 @@ class MenuList(HTMLComponent, GUIComponent):
 
 	def setList(self, list):
 		self.list = list
-		schimbaComponentaWeb(self)
 		self.l.setList(self.list)
 
 	def moveToIndex(self, idx):

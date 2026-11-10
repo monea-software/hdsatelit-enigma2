@@ -9,7 +9,8 @@
  * Desen netezit (cu margini netede, fara trepte) pe suprafete de 32 de biti.
  *
  * Forme: linie groasa cu capete rotunde, arc cu grosime (capete drepte sau rotunde), inel, cerc plin,
- * poligon plin. Fiecare pixel primeste o acoperire intre 0 si 1 socotita din distanta semnata de la centrul
+ * poligon plin, dreptunghi cu colturi rotunjite si gradient optional.
+ * Fiecare pixel primeste o acoperire intre 0 si 1 socotita din distanta semnata de la centrul
  * pixelului pana la marginea formei (acoperire = 0,5 - distanta, taiata la 0..1), apoi se amesteca o singura
  * data cu ce era dedesubt ("over", alfa drept, pe toate cele patru canale, fara gamma, ca in ecranpornire.cpp).
  *
@@ -21,8 +22,9 @@
  *    jos), ca in SVG si in canvas-ul din browser: 90 = in jos, 180 = spre stanga, 270 = in sus.
  *
  * Nicio forma nu scrie in afara suprafetei si a zonei de taiere: marginile se taie intai in virgula mobila,
- * abia apoi se trec in intregi. Intrari fara sens (NaN, infinit, grosime sau raza <= 0, coordonate peste
- * +-1 000 000, poligon cu mai putin de 3 varfuri sau peste 4096) nu deseneaza nimic.
+ * abia apoi se trec in intregi. Intrari fara sens (NaN, infinit, grosime sau raza de cerc <= 0,
+ * raza de dreptunghi < 0, coordonate peste +-1 000 000, poligon cu mai putin de 3 varfuri sau peste 4096)
+ * nu deseneaza nimic.
  *
  * Desenul se face pe firul gRC (gDC::exec, opcode gOpcode::desenNetezit), in aceeasi coada cu fill, blit si
  * textul, deci ordinea fata de fillRect se pastreaza si nimic nu scrie in panza cat timp o copiaza gRC pe ecran.
@@ -39,7 +41,8 @@ struct gDesenNetezit
 		linie = 1,		/* x0,y0 -> x1,y1, grosime, capete rotunde */
 		arc = 2,		/* centru x0,y0, raza liniei de mijloc, grosime, start si unghi_arc in grade */
 		disc = 3,		/* centru x0,y0, raza */
-		poligon = 4		/* puncte = x,y,x,y,... */
+		poligon = 4,		/* puncte = x,y,x,y,... */
+		dreptunghi = 5	/* x0,y0 -> x1,y1, raza colturilor */
 	};
 	int forma;
 	float x0, y0, x1, y1;
@@ -48,9 +51,11 @@ struct gDesenNetezit
 	int capete_rotunde;	/* numai pentru arc: 1 = capete rotunde, 0 = capete drepte (taiate pe raza) */
 	std::vector<float> puncte;
 	gRGB culoare;
+	std::vector<gRGB> gradient;	/* numai dreptunghi: 2 sau 3 culori */
+	int gradient_vertical, culoare_pictor;
 
 	gDesenNetezit(): forma(0), x0(0), y0(0), x1(0), y1(0), raza(0), grosime(0), start(0), unghi_arc(0),
-		capete_rotunde(1)
+		capete_rotunde(1), gradient_vertical(0), culoare_pictor(0)
 	{
 	}
 };

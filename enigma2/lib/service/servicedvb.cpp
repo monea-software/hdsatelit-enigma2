@@ -1280,11 +1280,11 @@ RESULT eDVBServicePlay::start()
 	m_hds_zap.pornire(service, !m_is_pvr && m_is_primary && (!m_is_stream || hdsEsteReleuT2(service.path)));
 	ePtr<iTsSource> source = createTsSource(service);
 		/* AIT-ul HbbTV numai pe canalul viu din fereastra principala (nu la fisiere, fluxuri, PiP) si numai cu HbbTV
-		   pornit din setari (0.2.8, setarea principala "HbbTV", config.plugins.hdsnavigator.hbbtv, OPRITA din fabrica):
-		   oprita, niciun filtru de sectiuni pentru AIT; o cheie lipsa sau necitita lasa HbbTV oprit */
+		   pornit din setari (0.2.8, setarea principala "HbbTV", config.plugins.hdsnavigator.hbbtv, PORNITA din fabrica din 09.11.2026):
+		   oprita, niciun filtru de sectiuni pentru AIT; o cheie lipsa sau necitita lasa HbbTV pornit, ca din fabrica */
 	std::string hbbtv_setare;
-	bool cu_hbbtv = ePythonConfigQuery::getConfigValue("config.plugins.hdsnavigator.hbbtv", hbbtv_setare) == 0
-		&& hbbtv_setare == "True";
+	bool cu_hbbtv = ePythonConfigQuery::getConfigValue("config.plugins.hdsnavigator.hbbtv", hbbtv_setare) != 0
+		|| hbbtv_setare != "False";
 	m_service_handler.setAITReading(!m_is_pvr && m_is_primary && cu_hbbtv);
 		/* CA PMT-ul din memorie la zap (lib/dvb/pmt.h, m_ca_din_memorie): numai canalul viu din fereastra principala;
 		   inregistrarile, PiP-ul si fisierele raman pe drumul obisnuit (dupa PAT si PMT) */

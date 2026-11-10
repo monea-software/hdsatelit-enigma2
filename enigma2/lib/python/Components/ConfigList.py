@@ -5,7 +5,6 @@ from .config import KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_0, KEY_DELETE, K
 from Components.ActionMap import NumberActionMap, ActionMap
 from enigma import eListbox, eListboxPythonConfigContent, eRCInput, eTimer
 from Screens.MessageBox import MessageBox
-from Components.HdsAsistentaControl import schimbaComponentaWeb
 
 
 # HDSatelit: tastatura de pe ecran la orice camp de text. In orice ecran cu ConfigListScreen
@@ -37,6 +36,8 @@ def deschideTastatura(session, el, titlu="", gata=None):
 	primeste textul (None la iesire fara schimbare). Fereastra cu literele cifrelor se ascunde cat e deschisa."""
 	from Screens.VirtualKeyBoard import VirtualKeyBoard
 	parola = "ConfigPassword" in [c.__name__ for c in type(el).__mro__]
+	from Components.HdsAsistentaControl import campSecret
+	secret = campSecret(el, titlu)
 	fereastra = getattr(el, "help_window", None)
 	if fereastra is not None:
 		try:
@@ -45,6 +46,10 @@ def deschideTastatura(session, el, titlu="", gata=None):
 			fereastra = None
 
 	def laInchidere(text=None):
+		if text and secret:
+			from Components.HdsAsistentaControl import cereOprirePentruSecret
+			if cereOprirePentruSecret(session):
+				text = None
 		if fereastra is not None:
 			try:
 				fereastra.show()
@@ -54,6 +59,9 @@ def deschideTastatura(session, el, titlu="", gata=None):
 			text = None              # parola goala: ramane parola de dinainte
 		if text is not None:
 			el.value = text
+			if parola:
+				# parola scrisa acum: randul o arata in clar pana la salvare (Components/config.ConfigPassword)
+				el.scrisa = True
 			try:
 				el.marked_pos = len(el.text)
 			except Exception:
@@ -61,7 +69,8 @@ def deschideTastatura(session, el, titlu="", gata=None):
 			el.changed()
 		if gata is not None:
 			gata(text)
-	return session.openWithCallback(laInchidere, VirtualKeyBoard, title=titlu, text="" if parola else (el.value or ""))
+	return session.openWithCallback(laInchidere, VirtualKeyBoard, title=titlu,
+		text="" if parola else (el.value or ""), hdsSecret=secret)
 
 
 class ConfigList(HTMLComponent, GUIComponent, object):
@@ -93,6 +102,10 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 	def handleKey(self, key):
 		selection = self.getCurrent()
 		if selection and len(selection) > 1 and selection[1].enabled:
+			if key in KEY_NUMBERS or key == KEY_ASCII:
+				from Components.HdsAsistentaControl import campSecret, cereOprirePentruSecret
+				if campSecret(selection[1], selection[0]) and cereOprirePentruSecret(self.session):
+					return
 			selection[1].handleKey(key)
 			self.invalidateCurrent()
 			if key in KEY_NUMBERS:
@@ -100,6 +113,11 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 
 	def getCurrent(self):
 		return self.l.getCurrentSelection()
+
+	def campSecretActual(self):
+		from Components.HdsAsistentaControl import campSecret
+		rand = self.getCurrent()
+		return bool(rand and len(rand) >= 2 and campSecret(rand[1], rand[0]))
 	
 	def getCurrentIndex(self):
 		return self.l.getCurrentSelectionIndex()
@@ -109,14 +127,12 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 			self.instance.moveSelectionTo(index)
 	
 	def invalidateCurrent(self):
-		schimbaComponentaWeb(self)
 		self.l.invalidateEntry(self.l.getCurrentSelectionIndex())
 
 	def invalidate(self, entry):
 		# when the entry to invalidate does not exist, just ignore the request.
 		# this eases up conditional setup screens a lot.
 		if entry in self.__list:
-			schimbaComponentaWeb(self)
 			self.l.invalidateEntry(self.__list.index(entry))
 
 	GUI_WIDGET = eListbox
@@ -150,7 +166,6 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 	def setList(self, l):
 		self.timer.stop()
 		self.__list = l
-		schimbaComponentaWeb(self)
 		self.l.setList(self.__list)
 
 		if l is not None:
@@ -175,10 +190,11 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 
 class ConfigListScreen:
 	def __init__(self, list, session = None, on_change = None):
-		self["config_actions"] = NumberActionMap(["SetupActions", "InputAsciiActions", "KeyboardInputActions"],
+		self["config_actions"] = NumberActionMap(["SetupActions", "MenuActions", "InputAsciiActions", "KeyboardInputActions"],
 		{
 			"gotAsciiCode": self.keyGotAscii,
 			"ok": self.keyOK,
+			"menu": self.keyMenu,
 			"left": self.keyLeft,
 			"right": self.keyRight,
 			"home": self.keyHome,
@@ -310,7 +326,30 @@ class ConfigListScreen:
 				return
 			self.KeyText()           # OK pe un camp de text: tastatura de pe ecran
 			return
+		from Components.config import ConfigSelection, ConfigBoolean
+		# OK schimba numai valoarea curenta; pagina se salveaza cu VERDE.
+		if cur is not None and len(cur) > 1 and isinstance(cur[1], (ConfigSelection, ConfigBoolean)):
+			self["config"].handleKey(KEY_RIGHT)
+			self.__changed()
+			return
 		self["config"].handleKey(KEY_OK)
+
+	def keyMenu(self):
+		"""MENU: toate valorile unui ConfigSelection, fara salvarea paginii."""
+		from Components.config import ConfigSelection
+		cur = self["config"].getCurrent()
+		if cur is None or len(cur) < 2 or not isinstance(cur[1], ConfigSelection) or not cur[1].enabled:
+			return 0
+		el = cur[1]
+		alegeri = [(_(el.description[v]) or str(v), v) for v in el.choices]
+		from Screens.ChoiceBox import ChoiceBox
+		def ales(raspuns):
+			if raspuns is not None and el.enabled and any(len(r) > 1 and r[1] is el for r in self["config"].list):
+				el.value = raspuns[1]
+				self["config"].invalidate(cur)
+				self.__changed()
+		self.session.openWithCallback(ales, ChoiceBox, title=cur[0], list=alegeri, selection=el.index)
+		return 1
 
 	def keyLeft(self):
 		self["config"].handleKey(KEY_LEFT)

@@ -84,6 +84,7 @@ MAX_ADRESA_PROPRIE = 500  # adresa-sablon a adresei proprii
 MAX_CHEIE_BRUT = 2048     # cheia lipita, cu spatii si randuri noi; modulul o curata si o refuza peste 512 caractere
 MAX_VALOARE = 4096        # orice argument citit (peste, tot refuzat)
 MAX_ARGUMENTE = 32
+MAX_CHEI_NOI = 65536
 CONTOR_WEB_S = 5
 PROBA_WEB_S = 15          # cat urmareste pagina o proba
 PROBA_GARDA_S = 20        # o proba „in lucru” mai veche de atat nu mai opreste una noua
@@ -344,6 +345,13 @@ def valori(s, T=None):
 	}
 
 
+def fabricatie(s):
+	"""Valorile din fabrica, pentru semnul reglajelor ascunse; nu schimba configuratia."""
+	rez = dict((camp, getattr(s, camp).default) for camp in CHEI_VALORI)
+	rez["rezerve"] = [c for c in s.rezerve.default.split(",") if c]
+	return rez
+
+
 def _valoare(s, camp, implicit):
 	"""valoarea unei setari care poate lipsi (ConfigSubsection da KeyError, nu AttributeError)"""
 	try:
@@ -444,9 +452,10 @@ def stare(T=None):
 	fel_cheie, text_cheie = T.stareCheie(cfg) if hasattr(T, "stareCheie") else ("", "")
 	din_nou = T.textCheiDinNou() if hasattr(T, "textCheiDinNou") else ""
 	cere_cheie = "cheie" in T.CERE.get(cfg["serviciu"], ())
-	return {
+	rez = {
 		"result": True,
 		"valori": valori(s, T),
+		"fabricatie": fabricatie(s),
 		"regiuni": [[c, _t("Global") if not c else "%s (%s)" % (n, c)] for c, n in getattr(T, "REGIUNI_AZURE", ())],
 		"alegeri": alegeri(T, s),
 		"cere": dict((c, list(T.CERE.get(c, ()))) for c in T.SERVICII),
@@ -474,6 +483,7 @@ def stare(T=None):
 		"gata": list(T.serviciiGata(s)) if hasattr(T, "serviciiGata") else [],
 		"stari_chei": T.chei().stare_chei() if hasattr(T.chei(), "stare_chei") else {},
 	}
+	return T.faraSecrete(rez) if hasattr(T, "faraSecrete") else rez
 
 
 def _cuMesaj(T, rezultat, mesaj):
@@ -543,13 +553,33 @@ def _principal(argumente, T, s, configfile=None):
 	return _cuMesaj(T, True, mesaj)
 
 
-def seteaza(argumente, T=None, configfile=None):
+def seteaza(argumente, T=None, configfile=None, din_adresa=(), doar_proba=False):
 	"""POST /api/traducere-subtitrari-seteaza: numai cheile date; toate se verifica INAINTE de orice schimbare (un
 	ConfigSelection primit cu o valoare necunoscuta ar pune tacut valoarea implicita); o valoare rea refuza tot.
 	principal=<cod> e o cerere aparte („Fă-l principal”, _principal)."""
 	T = _tr(T)
 	s = T.initConfig()
+	modificari = []
+	if "chei_noi" in argumente:
+		if "chei_noi" in din_adresa:
+			return _cuMesaj(T, False, _t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
+		import json
+		try:
+			brut = argumente["chei_noi"]
+			if len(brut) > MAX_CHEI_NOI:
+				raise ValueError()
+			modificari = json.loads(brut)
+			if not isinstance(modificari, list) or len(modificari) > 90:
+				raise ValueError()
+			for m in modificari:
+				if not isinstance(m, dict) or set(m) - set(("serviciu", "valoare", "indice")) or \
+						not isinstance(m.get("valoare"), str) or len(m["valoare"]) > MAX_CHEIE_BRUT:
+					raise ValueError()
+		except (ValueError, TypeError):
+			return _cuMesaj(T, False, _t("Cheile trimise nu sunt valide. Nu s-a schimbat nimic."))
 	if "principal" in argumente:
+		if modificari or doar_proba:
+			return _cuMesaj(T, False, _t("Nu s-a schimbat nimic."))
 		return _principal(argumente, T, s, configfile)
 	noi = {}
 	rele = []
@@ -614,8 +644,22 @@ def seteaza(argumente, T=None, configfile=None):
 		for sfat in sfaturi:
 			mesaj += " " + sfat
 		return _cuMesaj(T, False, mesaj + " " + _t("Nu s-a schimbat nimic."))
-	if not noi:
+	if not noi and not modificari and not doar_proba:
 		return _cuMesaj(T, False, _t("Nu s-a trimis nicio alegere."))
+	if modificari or doar_proba:
+		from types import SimpleNamespace
+		local = SimpleNamespace(**dict((camp, SimpleNamespace(value=noi.get(camp, getattr(s, camp).value)))
+			for camp in CHEI_VALORI + ("rezerve",)))
+		if doar_proba:
+			reusit, mesaj, date, legaturi = T.chei().pregatesteMaiMulte(modificari, s=local)
+			if not reusit:
+				return _cuMesaj(T, False, mesaj)
+			cfg = T.configuratia(local, cheile=dict((c, l[0]) for c, l in date.items() if l), legaturi=legaturi)
+			cfg["_temporara"] = True
+			return proba(T, cfg=cfg)
+		reusit, mesaj = T.chei().schimbaMaiMulte(modificari, s=local)
+		if not reusit:
+			return _cuMesaj(T, False, mesaj)
 	for camp in CHEI_VALORI + ("rezerve",):
 		if camp in noi:
 			element = s.rezerve if camp == "rezerve" else getattr(s, camp)
@@ -626,7 +670,12 @@ def seteaza(argumente, T=None, configfile=None):
 	if configfile is None:
 		from Components.config import configfile
 	configfile.save()
-	return _cuMesaj(T, True, _t("Salvat."))
+	rez = _cuMesaj(T, True, _t("Salvat."))
+	if s.pornit.value and hasattr(T, "diagnosticPornire"):
+		diagnostic = T.diagnosticPornire(s=s)
+		if not diagnostic.get("poate_traduce"):
+			rez["diagnostic_pornire"] = diagnostic
+	return rez
 
 
 def _raspunsCheie(T, rezultat, mesaj):
@@ -664,7 +713,7 @@ def cheie(argumente, din_adresa, T=None):
 	return _raspunsCheie(T, bool(reusit), mesaj)
 
 
-def proba(T=None):
+def proba(T=None, cfg=None):
 	"""POST /api/traducere-subtitrari-proba: porneste proba si raspunde pe loc; pagina urmareste starea din GET."""
 	import time
 	T = _tr(T)
@@ -674,7 +723,7 @@ def proba(T=None):
 			time.monotonic() - _PROBA_PORNITA[0] < PROBA_GARDA_S:
 		return _cuMesaj(T, True, _t("Proba merge deja; rezultatul vine în câteva secunde."))
 	_PROBA_PORNITA[0] = time.monotonic()
-	if t.proba():
+	if (t.proba() if cfg is None else t.proba(cfg=cfg)):
 		return _cuMesaj(T, True, "Proba a pornit.")
 	return _cuMesaj(T, False, (t.ultima_proba or {}).get("traducere") or _t("Proba nu a putut porni."))
 
@@ -710,7 +759,8 @@ def argumente(request):
 		v = (val or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[nume] = str(v)[:MAX_VALOARE + 1]
+		limita = MAX_CHEI_NOI if nume == "chei_noi" else MAX_VALOARE
+		rez[nume] = str(v)[:limita + 1]
 	return rez
 
 
@@ -737,7 +787,7 @@ def rute(baza, resource, T=None):
 			try:
 				return self._raspunde(request, stare(T))
 			except Exception as eroare:
-				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+				return self._eroare(request, _t("Eroare pe receptor (%s).") % eroare.__class__.__name__, 500)
 
 	class _Schimba(baza):
 		schimbaCeva = True
@@ -749,18 +799,31 @@ def rute(baza, resource, T=None):
 			try:
 				return self._raspunde(request, self.fa(request))
 			except Exception as eroare:
-				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+				return self._eroare(request, _t("Eroare pe receptor (%s).") % eroare.__class__.__name__, 500)
 
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
 	class SeteazaResource(_Schimba):
 		def fa(self, request):
-			return seteaza(argumente(request), T)
+			return seteaza(argumente(request), T, din_adresa=cheiDinAdresa(request))
+
+		def render_GET(self, request):
+			if "chei_noi" in argumente(request):
+				return self._eroare(request,
+					_t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
+			return self.render_POST(request)
 
 	class ProbaResource(_Schimba):
 		def fa(self, request):
-			return proba(T)
+			date = argumente(request)
+			return seteaza(date, T, din_adresa=cheiDinAdresa(request), doar_proba=True)
+
+		def render_GET(self, request):
+			if "chei_noi" in argumente(request):
+				return self._eroare(request,
+					_t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
+			return self.render_POST(request)
 
 	class ZeroResource(_Schimba):
 		def fa(self, request):
@@ -901,6 +964,12 @@ PAGINA = """<!DOCTYPE html>
 <p><a class="configurare" id="legatura-configurare" href="/traducere-configurare">Configurare pas cu pas (recunoaște cheia, caută serverul din casă)</a></p>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
 <div id="continut" class="ascuns">
+  <section class="card" id="card-salvare">
+    <div class="butoane"><button type="button" id="salveaza">Salvează</button><button type="button" id="renunta">Renunță</button><button type="button" id="toate-reglajele" aria-expanded="false">Toate reglajele</button></div>
+    <p class="nota" id="reglaje-ascunse"></p>
+    <p class="nota">Setările și cheile se păstrează numai când apeși Salvează. Renunță anulează toate schimbările tale.</p>
+    <p class="mesaj" id="mesaj-salvare"></p>
+  </section>
   <section class="card" id="card-traducere">
     <h2>Traducerea</h2>
     <div class="rand" id="rand-pornit"><label for="alege-pornit">Traducerea automată</label><select id="alege-pornit"></select></div>
@@ -926,10 +995,10 @@ PAGINA = """<!DOCTYPE html>
     </div>
     <div class="rand" id="rand-cheie">
       <label for="cheie" id="eticheta-cheie">Cheia API</label>
-      <input type="password" id="cheie" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="lipește cheia aici">
+      <input type="text" id="cheie" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="lipește cheia aici">
       <p class="nota tot"><span id="cheie-stare"></span> <span id="cheie-optionala" class="ascuns">Cheia e opțională: numai dacă serverul cere cheie.</span><span id="cheie-antet" class="ascuns">Valoarea antetului, de exemplu Bearer, un spațiu și cheia ta; pleacă numai dacă ai scris numele antetului.</span></p>
       <p class="lipsa tot ascuns" id="chei-din-nou"></p>
-      <div class="butoane tot"><button type="button" id="cheie-salveaza">Salvează cheia</button><button type="button" id="cheie-sterge">Șterge cheia</button></div>
+      <div class="butoane tot"><button type="button" id="cheie-sterge">Șterge cheia</button></div>
       <p class="nota tot">Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată.</p>
       <div id="chei-extra" class="tot"></div>
       <div class="butoane tot" id="cheie-adauga-bloc"><button type="button" id="cheie-adauga">Adaugă încă o cheie</button></div>
@@ -983,7 +1052,7 @@ PAGINA = """<!DOCTYPE html>
       <datalist id="modele-cloudflare"></datalist>
       <p class="nota tot" id="nota-model_cloudflare"></p>
     </div>
-    <p class="nota">Regiunea, adresa, modelul și celelalte câmpuri se salvează când ieși din câmp (sau apeși Enter).</p>
+    <p class="nota">Regiunea, adresa, modelul și cheile se salvează împreună cu celelalte setări.</p>
     <p class="lipsa ascuns" id="lipsa"></p>
     <p class="mesaj" id="mesaj-traducere"></p>
   </section>
@@ -1115,6 +1184,8 @@ var CONTOR_MS = __CONTOR_MS__, PROBA_MS = __PROBA_MS__;
 var ultim = null;
 var instrAles = null;
 var probaPana = 0;
+var initiale = null, schimbari = {}, cheiNoi = {}, cheiAdaugate = {}, cheiSterse = {}, toateReglajele = false, extraActiv = null;
+var editariCamp = {}, probaLocala = null;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -1156,7 +1227,11 @@ function seVedePropriu(camp, v){
   return true;
 }
 function puneTot(d, fortat){
-  ["valori", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei"].forEach(function(k){
+  if(d.valori){
+    initiale = JSON.parse(JSON.stringify(d.valori));
+    d = Object.assign({}, d, {valori: Object.assign({}, d.valori, schimbari)});
+  }
+  ["valori", "fabricatie", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei"].forEach(function(k){
     if(d[k] !== undefined){ ultim[k] = d[k]; }
   });
   var v = ultim.valori;
@@ -1198,9 +1273,11 @@ function puneTot(d, fortat){
   $("eticheta-cheie").textContent = propriu ? "Valoarea antetului" : "Cheia API";
   $("cheie").placeholder = propriu ? "de exemplu Bearer și cheia" : "lipește cheia aici";
   var pusa = !!(ultim.chei && ultim.chei[serv]);
+  if(cheiNoi[serv] && cheiNoi[serv]["toate"] !== undefined){ pusa = !!cheiNoi[serv]["toate"]; }
   var oprita = pusa && ultim.cheie_fel === "oprita";
   var st = $("cheie-stare");
-  st.textContent = ultim.cheie_text || (pusa ? "Cheie pusă" : "Fără cheie");
+  st.textContent = (serv === initiale.serviciu ? ultim.cheie_text : "") || (pusa ? "Cheie pusă" : "Fără cheie");
+  if(cheiNoi[serv]){ st.textContent = "Cheie schimbată, încă nesalvată"; }
   st.classList.toggle("cheie-pusa", pusa && !oprita); st.classList.toggle("cheie-lipsa", !pusa || oprita);
   arata($("cheie-optionala"), !propriu && cere.indexOf("cheie") === -1);
   arata($("cheie-antet"), propriu);
@@ -1214,8 +1291,9 @@ function puneTot(d, fortat){
     var e = $("eticheta-" + k); e.textContent = tx(k, e.textContent);
     var n = $("nota-" + k); n.textContent = tx(k + "_nota", n.textContent);
   });
-  var l = $("lipsa"); l.textContent = ultim.lipsa_text || ""; arata(l, !!ultim.lipsa_text);
-  $("confidentialitate").textContent = ultim.confidentialitate || "";
+  var l = $("lipsa"), editat = Object.keys(schimbari).length || Object.keys(cheiNoi).length;
+  l.textContent = editat ? "Schimbări nesalvate." : (ultim.lipsa_text || ""); arata(l, !!l.textContent);
+  $("confidentialitate").textContent = (editat ? "Setările salvate: " : "") + (ultim.confidentialitate || "");
   puneInstructiuni(fortat);
   puneProba();
   puneContor();
@@ -1223,6 +1301,37 @@ function puneTot(d, fortat){
   puneContorTexte();
   puneRezerve();
   puneCheiExtra(v.serviciu);
+  puneVedere();
+}
+
+function campLocal(camp, valoare){
+  if(JSON.stringify(valoare) !== JSON.stringify(ultim.valori[camp])){ editariCamp[camp] = (editariCamp[camp] || 0) + 1; }
+  if(JSON.stringify(valoare) === JSON.stringify(initiale[camp])){ delete schimbari[camp]; }
+  else { schimbari[camp] = valoare; }
+  ultim.valori[camp] = valoare;
+}
+function retine(q, unde){
+  q.forEach(function(v, k){
+    if(k === "principal"){
+      var vechi = ultim.valori.serviciu, l = (ultim.valori.rezerve || []).filter(function(c){ return c !== v && c !== vechi; });
+      if(vechi !== v){ l.unshift(vechi); }
+      campLocal("rezerve", l); campLocal("serviciu", v);
+    } else { campLocal(k, DA_NU[k] ? v === "1" : (k === "rezerve" ? v.split(",").filter(Boolean) : v)); }
+  });
+  puneTot({}, true);
+  mesaj(unde, "Schimbări nesalvate.");
+}
+function puneVedere(){
+  var avansate = ["tarziu", "citire", "bara", "epg", "teletext", "teletext_mod", "hbbtv"];
+  avansate.forEach(function(k){ arata($("rand-" + k), toateReglajele); });
+  ["card-rezerve", "chei-extra", "cheie-adauga-bloc"].forEach(function(k){ arata($(k), toateReglajele); });
+  var ascunse = avansate.concat(["rezerve"]), serv = ultim.valori.serviciu, cere = ultim.cere[serv] || [];
+  TEXTE.forEach(function(k){ if(!seVedeCamp(k, serv, cere)){ ascunse.push(k); } });
+  PROPRIU.forEach(function(k){ if(!seVedePropriu(k, ultim.valori)){ ascunse.push(k); } });
+  var n = ascunse.filter(function(k){ return JSON.stringify(ultim.valori[k]) !== JSON.stringify((ultim.fabricatie || {})[k]); }).length;
+  paragraf("reglaje-ascunse", !toateReglajele && n ? "Reglaje ascunse diferite de fabrică: " + n + "." : "");
+  $("toate-reglajele").textContent = toateReglajele ? "Reglajele uzuale" : "Toate reglajele";
+  $("toate-reglajele").setAttribute("aria-expanded", String(toateReglajele));
 }
 function puneContorTexte(){
   var x = ultim.texte_tradus;
@@ -1334,14 +1443,17 @@ function salveazaRezerve(l){ var q = new URLSearchParams(); q.set("rezerve", l.j
 function puneCheiExtra(serv){
   var container = $("chei-extra");
   if(!container){ return; }
+  if(extraActiv && document.activeElement === extraActiv){ return; }
   sterge(container);
   var stari = (ultim.stari_chei || {})[serv] || [];
+  if(cheiSterse[serv]){ stari = []; }
   for(var idx = 1; idx < stari.length; idx++){
     var s = stari[idx] || {};
     var div = document.createElement("div"); div.className = "cheie-extra-rand tot";
     var et = document.createElement("span");
     et.className = "stare-cheie stare-" + (s.stare || "nefolosita");
     et.textContent = (idx + 1) + ". " + (s.stare_text || "");
+    if(cheiNoi[serv] && cheiNoi[serv][idx] !== undefined){ et.textContent = (idx + 1) + ". Cheie schimbată, încă nesalvată"; }
     div.appendChild(et);
     var b = document.createElement("div"); b.className = "butoane";
     var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "Șterge";
@@ -1354,6 +1466,24 @@ function puneCheiExtra(serv){
   }
   var blocAdauga = $("cheie-adauga-bloc");
   if(blocAdauga){ arata(blocAdauga, stari.length < 10); }
+  var nr = cheiAdaugate[serv] || 0;
+  for(var n = 0; n < nr; n++){
+    (function(i){
+      var div = document.createElement("div"); div.className = "cheie-extra-rand tot";
+      var et = document.createElement("span"); et.className = "stare-cheie";
+      et.textContent = (i + 1) + ". " + ((cheiNoi[serv] || {})[i] ? "Cheie schimbată, încă nesalvată" : "Cheie nouă");
+      div.appendChild(et);
+      var inp = document.createElement("input"); inp.type = "text";
+      inp.setAttribute("data-hds-secret", "1");
+      inp.placeholder = "lipește cheia aici"; inp.autocomplete = "off"; inp.autocapitalize = "off"; inp.spellcheck = false;
+      inp.addEventListener("input", function(){
+        if(!cheiNoi[serv]){ cheiNoi[serv] = {}; }
+        cheiNoi[serv][i] = inp.value.trim();
+      });
+      inp.addEventListener("focus", function(){ extraActiv = inp; });
+      div.appendChild(inp); container.appendChild(div);
+    })(stari.length + n);
+  }
 }
 function paragraf(id, text){ var p = $(id); p.textContent = text || ""; arata(p, !!text); }
 function puneInstructiuni(fortat){
@@ -1390,6 +1520,14 @@ function puneProba(){
   var p = ultim.stare && ultim.stare.proba;
   arata($("proba-rezultat"), !!p);
   if(!p){ return; }
+  if(probaLocala && probaLocala.activa && p.stare !== "lucru"){
+    var local = probaLocala; probaLocala = null;
+    if(p.regiune_gasita !== undefined && local.serviciu === "azure" && ultim.valori.serviciu === "azure" &&
+        local.editari === (editariCamp.regiune || 0) && local.serviciuEditari === (editariCamp.serviciu || 0)){
+      campLocal("regiune", p.regiune_gasita);
+      $("camp-regiune").value = p.regiune_gasita;
+    }
+  }
   var lucru = p.stare === "lucru", eroare = p.stare === "eroare";
   $("proba-original").textContent = p.original || "";
   $("proba-eticheta").textContent = eroare ? "Eroarea" : "Traducerea";
@@ -1450,35 +1588,95 @@ function puneContor(){
   paragraf("contor-de-la", c.de_la_ora ? "Numărate de la ora " + c.de_la_ora + "." : "");
 }
 function trimite(q, unde){
-  mesaj(unde, "Se salvează...");
-  cerere("/api/traducere-subtitrari-seteaza", "POST", q).then(function(d){
-    mesaj(unde, d.message, !d.result);
-    if(d.valori){ puneTot(d, true); }
-  }).catch(function(){ mesaj(unde, "Receptorul nu răspunde.", true); });
+  retine(q, unde);
 }
 function improspateaza(){
   return cerere("/api/traducere-subtitrari").then(function(d){ if(d.result){ puneTot(d, false); } return d; });
 }
 function trimiteCheie(q){
-  mesaj("mesaj-traducere", "Se salvează cheia...");
-  cerere("/api/traducere-subtitrari-cheie", "POST", q).then(function(d){
-    mesaj("mesaj-traducere", d.message, !d.result);
-    if(d.chei){ ultim.chei = d.chei; }
-    improspateaza().catch(function(){});
-  }).catch(function(){ mesaj("mesaj-traducere", "Receptorul nu răspunde.", true); });
+  var serv = q.get("serviciu"), idx = q.get("indice");
+  if(!cheiNoi[serv]){ cheiNoi[serv] = {}; }
+  if(idx === null && !q.get("cheie")){ cheiNoi[serv] = {}; cheiAdaugate[serv] = 0; cheiSterse[serv] = true; }
+  cheiNoi[serv][idx === null ? "toate" : idx] = q.get("cheie") || "";
+  puneTot({}, false);
+  mesaj("mesaj-traducere", "Cheie schimbată, încă nesalvată");
 }
+function retineCheia(){
+  var i = $("cheie"), v = i.value.trim();
+  if(v){
+    var serv = ultim.valori.serviciu;
+    if(!cheiNoi[serv]){ cheiNoi[serv] = {}; }
+    cheiNoi[serv].toate = v;
+    i.value = "";
+  }
+}
+function listaChei(){
+  var lista = [];
+  Object.keys(cheiNoi).forEach(function(serv){
+    var m = cheiNoi[serv];
+    if(cheiSterse[serv] && m.toate){ lista.push({serviciu: serv, valoare: ""}); }
+    if(m.toate !== undefined){ lista.push({serviciu: serv, valoare: m.toate}); }
+    var indici = Object.keys(m).filter(function(k){ return k !== "toate"; });
+    var existente = cheiSterse[serv] ? 0 : ((ultim.stari_chei || {})[serv] || []).length;
+    var sterse = indici.filter(function(k){ return !m[k] && Number(k) < existente; }).sort(function(a,b){ return Number(b)-Number(a); });
+    sterse.forEach(function(k){ lista.push({serviciu: serv, valoare: "", indice: Number(k)}); });
+    var urmator = Math.max(m.toate ? 1 : 0, existente - sterse.length);
+    indici.filter(function(k){ return !!m[k]; }).sort(function(a,b){ return Number(a)-Number(b); }).forEach(function(k){
+      var idx = Number(k) >= existente ? urmator++ : Number(k) - sterse.filter(function(x){ return Number(x) < Number(k); }).length;
+      lista.push({serviciu: serv, valoare: m[k], indice: idx});
+    });
+  });
+  return lista;
+}
+function dateSchimbari(){
+  TEXTE.concat(TEXTE_PROPRIU).forEach(function(k){
+    var v = $("camp-" + k).value.trim();
+    if(v !== String(ultim.valori[k] || "")){ campLocal(k, v); }
+  });
+  retineCheia();
+  var q = new URLSearchParams();
+  Object.keys(schimbari).forEach(function(k){
+    var v = schimbari[k]; q.set(k, k === "rezerve" ? v.join(",") : (DA_NU[k] ? (v ? "1" : "0") : v));
+  });
+  var lista = listaChei();
+  if(lista.length){ q.set("chei_noi", JSON.stringify(lista)); }
+  return q;
+}
+$("salveaza").addEventListener("click", function(){
+  var q = dateSchimbari(), lista = listaChei();
+  if(!Object.keys(schimbari).length && !lista.length){ mesaj("mesaj-salvare", "Nu s-a schimbat nimic."); return; }
+  $("salveaza").disabled = true;
+  mesaj("mesaj-salvare", "Se salvează...");
+  cerere("/api/traducere-subtitrari-seteaza", "POST", q).then(function(d){
+    $("salveaza").disabled = false;
+    if(d.result){ schimbari = {}; cheiNoi = {}; cheiAdaugate = {}; cheiSterse = {}; extraActiv = null; probaLocala = null; $("cheie").value = ""; }
+    if(d.valori){ puneTot(d, true); }
+    var diagnostic = d.diagnostic_pornire || {};
+    mesaj("mesaj-salvare", [d.message || "", diagnostic.mesaj || ""].join(" ").trim(), !d.result);
+    if(d.result){ ["mesaj-traducere", "mesaj-afisare", "mesaj-rezerve"].forEach(function(k){ mesaj(k, d.message); }); }
+  }).catch(function(){ $("salveaza").disabled = false; mesaj("mesaj-salvare", "Receptorul nu răspunde.", true); });
+});
+$("renunta").addEventListener("click", function(){
+  schimbari = {}; cheiNoi = {}; cheiAdaugate = {}; cheiSterse = {}; extraActiv = null; probaLocala = null; $("cheie").value = "";
+  ultim.valori = JSON.parse(JSON.stringify(initiale));
+  puneTot({}, true);
+  mesaj("mesaj-salvare", "Schimbările au fost anulate.");
+  ["mesaj-traducere", "mesaj-afisare", "mesaj-rezerve"].forEach(function(k){ mesaj(k, ""); });
+});
+$("toate-reglajele").addEventListener("click", function(){ toateReglajele = !toateReglajele; puneVedere(); });
 function urmaresteProba(){
   improspateaza().then(function(){
     var p = ultim.stare && ultim.stare.proba;
     if(p && p.stare === "lucru"){
       if(Date.now() < probaPana){ setTimeout(urmaresteProba, 1000); }
       else { mesaj("mesaj-proba", "Serviciul nu a răspuns în " + Math.round(PROBA_MS / 1000) + " secunde.", true); $("proba").disabled = false; }
-    } else { mesaj("mesaj-proba", ""); }
+    } else { mesaj("mesaj-proba", p && p.nota || ""); }
   }).catch(function(){ if(Date.now() < probaPana){ setTimeout(urmaresteProba, 1000); } });
 }
 ALEGERI.forEach(function(k){
   var s = $("alege-" + k);
   s.addEventListener("change", function(){
+    if(k === "serviciu"){ retineCheia(); }
     var q = new URLSearchParams(); q.set(k, s.value);
     if(k === "serviciu"){ instrAles = null; }
     trimite(q, AFISARE[k] ? "mesaj-afisare" : "mesaj-traducere");
@@ -1489,14 +1687,7 @@ TEXTE.concat(TEXTE_PROPRIU).forEach(function(k){
   i.addEventListener("change", function(){ var q = new URLSearchParams(); q.set(k, i.value.trim()); trimite(q, "mesaj-traducere"); });
 });
 if(CFG.jeton){ $("legatura-configurare").href = adresa("/traducere-configurare"); }
-$("cheie-salveaza").addEventListener("click", function(){
-  var i = $("cheie"), v = i.value.trim();
-  if(!v){ mesaj("mesaj-traducere", "Scrie sau lipește întâi cheia.", true); return; }
-  i.value = "";
-  var q = new URLSearchParams(); q.set("serviciu", ultim.valori.serviciu); q.set("cheie", v);
-  trimiteCheie(q);
-});
-$("cheie").addEventListener("keydown", function(e){ if(e && e.key === "Enter"){ $("cheie-salveaza").click(); } });
+$("cheie").addEventListener("keydown", function(e){ if(e && e.key === "Enter"){ $("salveaza").click(); } });
 $("cheie-sterge").addEventListener("click", function(){
   if(!confirm("Ștergi cheia acestui serviciu de pe receptor?")){ return; }
   var q = new URLSearchParams(); q.set("serviciu", ultim.valori.serviciu); q.set("cheie", "");
@@ -1505,24 +1696,10 @@ $("cheie-sterge").addEventListener("click", function(){
 $("cheie-adauga").addEventListener("click", function(){
   var serv = ultim.valori.serviciu;
   var stari = (ultim.stari_chei || {})[serv] || [];
-  var idx = stari.length;
-  var container = $("chei-extra");
-  var div = document.createElement("div"); div.className = "cheie-extra-rand tot";
-  var inp = document.createElement("input"); inp.type = "password";
-  inp.placeholder = "lipește cheia aici"; inp.autocomplete = "off";
-  inp.autocapitalize = "off"; inp.spellcheck = "false";
-  div.appendChild(inp);
-  var b = document.createElement("div"); b.className = "butoane";
-  var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "OK";
-  bt.addEventListener("click", function(){
-    var v = inp.value.trim();
-    if(!v){ mesaj("mesaj-traducere", "Scrie sau lipește întâi cheia.", true); return; }
-    inp.value = "";
-    var q = new URLSearchParams(); q.set("serviciu", serv); q.set("cheie", v); q.set("indice", String(idx));
-    trimiteCheie(q);
-  });
-  b.appendChild(bt); div.appendChild(b); container.appendChild(div);
-  if(inp.focus){ inp.focus(); }
+  if(cheiSterse[serv]){ stari = []; }
+  if(stari.length + (cheiAdaugate[serv] || 0) >= 10){ return; }
+  cheiAdaugate[serv] = (cheiAdaugate[serv] || 0) + 1;
+  puneCheiExtra(serv);
 });
 $("rezerva-adauga").addEventListener("click", function(){
   var c = $("alege-rezerva").value;
@@ -1535,9 +1712,14 @@ $("alege-instructiuni").addEventListener("change", function(){
   puneInstructiuni(true);
 });
 $("proba").addEventListener("click", function(){
+  var q = dateSchimbari();
+  var local = {serviciu: ultim.valori.serviciu, editari: editariCamp.regiune || 0,
+    serviciuEditari: editariCamp.serviciu || 0, activa: false};
+  probaLocala = local;
   mesaj("mesaj-proba", "Se trimite proba...");
   $("proba").disabled = true;
-  cerere("/api/traducere-subtitrari-proba", "POST", new URLSearchParams()).then(function(d){
+  cerere("/api/traducere-subtitrari-proba", "POST", q).then(function(d){
+    if(d.result && probaLocala === local){ local.activa = true; }
     mesaj("mesaj-proba", d.message, !d.result);
     probaPana = d.result ? Date.now() + PROBA_MS : 0;
     if(d.valori){ puneTot(d, false); }
@@ -1587,6 +1769,11 @@ citeste();
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
 TEXTE_PAGINA = {
 	"html": (
+		N_("Salvează"),
+		N_("Renunță"),
+		N_("Toate reglajele"),
+		N_("Setările și cheile se păstrează numai când apeși Salvează. Renunță anulează toate schimbările tale."),
+		N_("Regiunea, adresa, modelul și cheile se salvează împreună cu celelalte setări."),
 		N_("Traducerea subtitrărilor"),
 		N_("Configurare pas cu pas (recunoaște cheia, caută serverul din casă)"),
 		N_("Se citesc setările..."),
@@ -1714,6 +1901,13 @@ TEXTE_PAGINA = {
 		N_("gemma3:4b"),
 	),
 	"js": (
+		N_("Reglajele uzuale"),
+		N_("Reglaje ascunse diferite de fabrică:"),
+		N_("Schimbări nesalvate."),
+		N_("Cheie schimbată, încă nesalvată"),
+		N_("Cheie nouă"),
+		N_("Setările salvate:"),
+		N_("Schimbările au fost anulate."),
 		N_("Pornită"),
 		N_("Oprită"),
 		N_("Da"),

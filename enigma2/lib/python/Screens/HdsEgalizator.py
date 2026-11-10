@@ -6,10 +6,10 @@
 # ecranul radio). Setarile si motorul sunt in Components/HdsEgalizator.py; pagina web /egalizator e perechea lui.
 #
 # Doua zone: cinci casete sus, separat cele 10 benzi si Nivel. OK/Jos pe Reglaj manual intra la 31 Hz.
-# In coloane, stanga/dreapta aleg, sus/jos schimba cu 1 dB, OK salveaza Manual fara inchidere, EXIT revine sus.
+# In coloane, stanga/dreapta aleg, sus/jos schimba cu 1 dB, OK salveaza Manual fara inchidere, EXIT renunta.
 # Tastele colorate: ROSU renunta, VERDE pastreaza, GALBEN presetarea urmatoare, ALBASTRU pornit/oprit.
 # Cat reglezi, sunetul se schimba pe loc (HdsEgalizator.incearca). OK sau VERDE salveaza (HdsEgalizator.seteaza); ROSU
-# pune inapoi ce era; EXIT, cand s-a schimbat ceva, intreaba „Păstrezi schimbările?” (Da / Nu, cu sagetile si OK).
+# pune inapoi ce era; EXIT renunta la schimbarile nepastrate, la fel ca ROSU.
 # „Pentru acest post” pe Nu arata din acel moment reglajele obisnuite (HdsEgalizator.comutaPePost).
 #
 # Desenul (Canvas, marimea din skin; asezarea din HdsEgalizator.geometriePanzei): sus 5 casete pentru alegeri, jos cate
@@ -402,39 +402,11 @@ class HdsEgalizator(Screen):
 			self._dupaMutare()
 
 	def renunta(self):
-		"""EXIT: fara schimbari se inchide; cu schimbari intreaba (Da = pastreaza, Nu = pune inapoi)."""
-		if not self._schimbat():
-			self._iesiDinZona()
-			return
-		from Screens.MessageBox import MessageBox
-		self.session.openWithCallback(self._dupaIntrebare, MessageBox, _("Păstrezi schimbările?"), MessageBox.TYPE_YESNO,
-			default=True)
-
-	def _dupaIntrebare(self, da):
-		if self.poz >= POZ_BANDA0:
-			if da:
-				self.pastreaza(inchide=False)
-			else:
-				self.v = dict(self.orig, benzi=list(self.orig["benzi"]))
-				E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], pornit=self.v["pornit"],
-					efect=self.v["efect"])
-				self.salvat = False
-			self._iesiDinZona()
-			return
-		if da:
-			self.pastreaza()
-		else:
-			self.puneInapoi()
-
-	def _iesiDinZona(self):
-		if self.poz >= POZ_BANDA0:
-			self.poz = POZ_MANUAL
-			self._dupaMutare()
-		else:
-			self.close(False)
+		"""EXIT si ROSU renunta la proba nesalvata, fara intrebare."""
+		self.puneInapoi()
 
 	def puneInapoi(self):
-		"""ROSU (si Nu la intrebare): motorul primeste inapoi reglajele pastrate, fara nicio scriere."""
+		"""ROSU si EXIT: motorul primeste inapoi reglajele pastrate, fara nicio scriere."""
 		if self._schimbat():
 			m = E.motor()
 			if m is not None:
@@ -447,7 +419,8 @@ class HdsEgalizator(Screen):
 	def arataDescrierea(self):
 		p = self.poz
 		if p == POZ_PORNIT:
-			t = _("Pornit, sunetul posturilor de radio trece prin procesor și se aude cu reglajele de mai jos.")
+			# oprit din fabrica; textul spune la ce posturi lucreaza (numai sunet MPEG) si ca pe unele receptoare poate intrerupe sunetul
+			t = _("Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.")
 		elif p == POZ_PRESETARE:
 			t = _("Presetarea pune singură toate benzile; apoi le poți potrivi una câte una. Barele din spate: cât de tare se aude acum fiecare bandă.")
 		elif p == POZ_MANUAL:
@@ -481,7 +454,7 @@ class HdsEgalizator(Screen):
 		elif p == POZ_EFECTE:
 			t = _("OK: alegi un efect special. EXIT: ieși.")
 		else:
-			t = _("Stânga/dreapta: coloana. Sus/jos: 1 dB. OK: salvezi Manual. EXIT: căsuțe.")
+			t = _("Stânga/dreapta: coloana. Sus/jos: 1 dB. OK: salvezi Manual. EXIT: renunți.")
 		self["nota"].setText(t)
 
 	# ---- desenul ----

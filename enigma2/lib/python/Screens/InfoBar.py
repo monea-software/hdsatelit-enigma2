@@ -196,6 +196,27 @@ def hdsHbbtvDeschisa():
 	return HdsHbbtvPornire.deschisa()
 
 
+def hdsHbbtvDisponibil(ecran):
+	"""Aceeasi disponibilitate pentru tasta rosie si etichetele ei."""
+	if ecran is None or getattr(ecran, "timeshift_enabled", False):
+		return False
+	try:
+		from Components import HdsHbbtvPornire as H
+		mediu = H.Mediu(ecran.session)
+		if not mediu.hbbtv_pornit():
+			return False
+		rez, _ref = mediu.rezumat_canal()
+		fel, _url = H.hotarare_rosu(rez)
+		if fel not in (H.PORNESTE, H.CARUSEL):
+			return False
+		if H.OPRESTE_LA_INREGISTRARE and mediu.inregistrare_pornita():
+			return False
+		memorie = mediu.memorie_libera_kb()
+		return not isinstance(memorie, int) or memorie >= H.MEMORIE_ROSU_KB
+	except Exception:
+		return False
+
+
 def hdsFaActiuneaLunga(ecran, actiune):
 	"""Actiunile comune ale tastelor, cu ecranele si verificarile lor obisnuite."""
 	if actiune == "none":
@@ -212,6 +233,12 @@ def hdsFaActiuneaLunga(ecran, actiune):
 			ecran.runPlugin(plugin)
 	elif actiune == "epg":
 		ecran.showEventInfoPlugins()
+	elif actiune == "epg_multi":
+		ecran.hdsGhidBuchetCurent()
+	elif actiune == "epg_single":
+		ecran.openSingleServiceEPG()
+	elif actiune == "eventinfo":
+		ecran.openEventView()
 	elif actiune == "menu":
 		ecran.mainMenu()
 	elif actiune == "plugins":
@@ -232,6 +259,10 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		ecran.audioSelection()
 	elif actiune == "subtitle":
 		ecran.subtitleSelection()
+	elif actiune == "subtitle_toggle":
+		ecran.hdsComutaSubtitrarea()
+	elif actiune == "portal":
+		hdsPortalSauMesaj(ecran)
 	elif actiune == "channellist":
 		ecran.openServiceList()
 	elif actiune == "favourites":
@@ -278,12 +309,10 @@ def hdsAreSubcanale(session):
 
 
 def hdsActiuneVerdeScurt():
-	"""Actiunea aleasa pentru VERDE apasat scurt (Components/HdsTasteRapide.py, config.hds_buttons.green_short, implicit
-	"plugins"); "none" fara modul sau cand setarea nu se poate citi (atunci VERDE face ce facea: nimic fara subcanale)."""
+	"""VERDE foloseste aceeasi alegere ca editorul, webul si ajutorul."""
 	try:
-		from Components.HdsTasteRapide import actiune_aleasa
-		actiune = actiune_aleasa("green_short")
-		return "plugins" if actiune == "default" else actiune
+		from Components.HdsTasteRapide import actiune_efectiva
+		return actiune_efectiva("green_short")
 	except Exception as e:
 		print("[InfoBar] verde scurt: setarea nu se poate citi: %s" % e)
 		return "none"
@@ -313,10 +342,10 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		# HDSatelit: tastele Viper fara actiune inainte (vezi hdsAlegeFormatImagine mai sus)
 		self["HdsTasteActions"] = HelpableActionMap(self, "HdsInfobarActions",
 			{
-				"ghidProgram": (self.showEventInfoPlugins, _("show single service EPG...")),
+				"ghidProgram": (self.hdsGhidBuchetCurent, _("Ghidul buchetului curent")),
 				"mediaPlayer": (self.hdsMediaPlayer, _("Media player")),
 				"listaTimere": (self.hdsListaTimere, _("Înregistrări programate")),
-				"extensii": (self.hdsExtensii, _("Lista extensiilor și dacă acest canal are HbbTV")),
+				"extensii": (self.hdsPortal, _("Portal")),
 				# FAV: scurt (la eliberare) lista pe Favorite, ca pana acum; tinut apasat canalul de acum in Favorite
 				"favoriteApasat": self.hdsFavoriteApasat,
 				"favoriteLung": (self.hdsFavoriteLung, _("FAV ținut apăsat: canalul de acum în Favorite sau scos de acolo")),
@@ -349,8 +378,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				InfoBarPlugins, InfoBarServiceErrorPopupSupport, InfoBarFilmRefuz:
 			x.__init__(self)
 
-		# VERDE scurt e al pluginurilor, deci subcanalele sunt un rand in lista tastei albastre, numai cand canalul le are
-		# (implementarea de baza: InfoBar.subserviceSelection deschide actiunea tastei VERDE)
+		# Subcanalele raman accesibile si din lista extensiilor.
 		self.addExtension((lambda: _("Subcanale"), lambda: InfoBarSubserviceSelection.subserviceSelection(self),
 			lambda: hdsAreSubcanale(self.session)), "red")
 
@@ -381,6 +409,12 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		config.misc.standbyCounter.addNotifier(self.hdsLaStandby, initial_call=False)
 		# textul marit: orele emisiunii de acum din bara nu se mai lipesc de titlu (getattr: ecranele false ale probelor)
 		getattr(self, "onLayoutFinish", []).append(self.hdsOreleMarite)
+		getattr(self, "onLayoutFinish", []).append(self.hdsEtichetaRosu)
+		self.onShow.append(self.hdsEtichetaRosu)
+		self.hdsUrmaritorEticheta = ServiceEventTracker(screen=self, eventmap={
+			iPlayableService.evUpdatedInfo: self.hdsEtichetaRosu,
+			iPlayableService.evUpdatedEventInfo: self.hdsEtichetaRosu,
+		})
 		assert InfoBar.instance is None, "class InfoBar is a singleton class and just one instance of this class is allowed!"
 		InfoBar.instance = self
 		# HDSatelit: copiile de teletext ale canalelor vazute, in fundal (Components/HdsTeletextCopie.py)
@@ -631,9 +665,14 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		self.session.open(TimerEditList)
 
 	def hdsExtensii(self):
+		InfoBarExtensions.showExtensionSelection(self)
+
+	def hdsPortal(self):
 		hdsPortalSauMesaj(self)
 
 	def hdsHbbtvRosu(self):
+		if not hdsHbbtvDisponibil(self):
+			return 0
 		rez = hdsHbbtvRosu(self)
 		# Dupa pornirea aplicatiei canalului nu mai pornim alta actiune lunga.
 		self.hdsRosuLuat = bool(rez)
@@ -649,9 +688,38 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			print("[InfoBar] captura: %s: %s" % (type(e).__name__, e))
 
 	def hdsTastaAlocata(self, tasta, faza):
-		if tasta == "red" and faza == "m":
-			self.hdsRosuLuat = False
+		if tasta == "red":
+			if faza == "m":
+				self.hdsRosuLuat = False
+				if self.hdsTastaDisponibila(tasta) and self.hdsHbbtvRosu():
+					return 1
+			elif getattr(self, "hdsRosuLuat", False):
+				return 1
+		if tasta in ("channelup", "channeldown"):
+			from Components.HdsTasteRapide import actiune_aleasa, optiune
+			profil = optiune("hds_ch_privire")
+			if profil != "device" and actiune_aleasa(tasta + "_short") == "default":
+				if not self.hdsTastaDisponibila(tasta):
+					return 0
+				if faza == "m":
+					self.hdsCanalDinProfil(tasta == "channelup", profil)
+				return 1
 		return self.hdsTasteAlocate.eveniment(tasta, faza)
+
+	def hdsCanalDinProfil(self, urmator, profil):
+		radio = getattr(self, "hdsRadio", None)
+		if profil == "list":
+			if radio is not None and radio.radio:
+				radio.lista()
+			else:
+				self.openServiceList()
+			return
+		if radio is not None and radio._zap(1 if urmator else -1):
+			return
+		if urmator:
+			self.zapDown()
+		else:
+			self.zapUp()
 
 	def hdsTastaDisponibila(self, tasta):
 		if not self.execing:
@@ -662,7 +730,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		if tasta == "red" and getattr(self, "hdsRosuLuat", False):
 			return False
 		radio = getattr(self, "hdsRadio", None)
-		if radio is not None and radio._tastaColorata():
+		if tasta in ("green", "yellow", "blue") and radio is not None and radio._tastaColorata():
 			return False
 		# In timeshift cifrele raman ale derularii, inclusiv la tinere.
 		if tasta.startswith("number_") and self.timeshift_enabled:
@@ -680,16 +748,33 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		return True
 
 	def subserviceSelection(self):
-		"""VERDE apasat scurt cat te uiti la televizor (harta InfobarSubserviceSelectionActions, la eliberare; dupa o
-		apasare lunga eliberarea e oprita de HdsAlocareTasteActions): actiunea aleasa in Butoane colorate si taste rapide,
-		implicit pagina de pluginuri, pe orice canal. Subcanalele sunt in lista tastei albastre; VERDE le arata numai daca nu
-		e aleasa nicio actiune. Actiunea trece pe aceeasi cale ca apasarea lunga (hdsPornesteTastaLunga): ecranul radio isi
-		pastreaza tastele colorate, o eroare ramane numai in jurnal."""
+		"""VERDE scurt urmeaza alegerea comuna, implicit subcanalele canalului."""
 		actiune = hdsActiuneVerdeScurt()
 		if actiune != "none":
 			self.hdsPornesteTastaLunga("green", actiune)
-		elif hdsAreSubcanale(self.session):
-			return InfoBarSubserviceSelection.subserviceSelection(self)
+
+	def hdsEtichetaRosu(self):
+		"""Eticheta de inregistrare a skinului urmeaza sensul real al tastei."""
+		from Components.HdsTasteRapide import sens_tasta, text_actiune
+		actiune = sens_tasta("live", "red", hbbtv=hdsHbbtvDisponibil(self))
+		if actiune == "default":
+			actiune = "record" if config.misc.rcused.value == 1 else "none"
+		text = "" if actiune == "none" else text_actiune(actiune)
+		vizibil = self.get("ShowRecordOnRed")
+		if vizibil is not None:
+			vizibil.setBoolean(bool(text))
+		surse = (self.get("RecordingPossible"), self.get("ShowRecordOnRed"))
+		for renderer in getattr(self, "renderer", ()):
+			if renderer.__class__.__name__ != "FixedLabel":
+				continue
+			sursa = getattr(renderer, "source", None)
+			while sursa is not None:
+				if any(sursa is s for s in surse if s is not None):
+					instanta = getattr(renderer, "instance", None)
+					if instanta is not None:
+						instanta.setText(text)
+					break
+				sursa = getattr(sursa, "source", None)
 
 	def hdsFavorite(self):
 		# ca tasta albastra din lista de canale: lista buchetelor (favoritele), apoi lista se deschide
@@ -700,15 +785,19 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 	# (favoriteApasat) numai semnul se sterge, ca la tasta AUDIO (InfoBarAudioSelection)
 	def hdsFavoriteApasat(self):
 		self.hdsFavLung = False
+		self.hdsFavApasat = True
 
 	def hdsFavoriteLung(self):
+		if not getattr(self, "hdsFavApasat", False) or getattr(self, "hdsFavLung", False):
+			return
 		self.hdsFavLung = True
+		self.hdsFavApasat = False
 		hdsFavoriteCanalVazut(self)
 
 	def hdsFavoriteEliberat(self):
-		if getattr(self, "hdsFavLung", False):
-			self.hdsFavLung = False
+		if not getattr(self, "hdsFavApasat", False):
 			return
+		self.hdsFavApasat = False
 		self.hdsFavorite()
 
 	def hdsFormatImagine(self):
@@ -852,6 +941,18 @@ class MoviePlayer(InfoBarBase, InfoBarShowHide, \
 
 	def leavePlayer(self):
 		self.handleLeave(config.usage.on_movie_stop.value)
+
+	def hdsIesirePrivire(self):
+		"""EXIT pastreaza ascunderea barei sau foloseste alegerea pentru film."""
+		if not self.execing or self.session.current_dialog is not self:
+			return 0
+		from Components.HdsTasteRapide import optiune
+		alegere = optiune("hds_exit_film")
+		if self._hdsSecondaVizibila() or alegere not in ("ask", "movielist", "quit"):
+			self.hide()
+		else:
+			self.handleLeave(alegere)
+		return 1
 
 	def hdsFormatImagine(self):
 		hdsAlegeFormatImagine(self.session)

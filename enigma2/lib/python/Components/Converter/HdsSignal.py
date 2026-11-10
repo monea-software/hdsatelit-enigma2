@@ -351,16 +351,17 @@ class HdsSignal(Poll, Converter):
 			sref = u""
 		return service, sref
 
-	def _status(self):
+	def _status(self, chei=None):
+		# chei: numai ce arata convertorul (pe Vu+ fiecare valoare e o citire pe I2C, vezi HdsCommon.frontend_status)
 		service, sref = self._service_ref()
 		if service is None:
 			return None, sref
-		return C.frontend_status(service, sref), sref
+		return C.frontend_status(service, sref, chei), sref
 
 	def _pct(self, key):
 		# la un post DAB+ / program DVB-T2 prin releu frontend_status da tunerul care tine purtatorul (receptie.json),
 		# iar fara date None: bara ramane goala, nu „0%”
-		st, sref = self._status()
+		st, sref = self._status((key,))
 		if st:
 			return C.percent16(st.get(key))
 		return None
@@ -400,23 +401,23 @@ class HdsSignal(Poll, Converter):
 		return (u"%d%%" % p, p) if p is not None else (u"", 0)
 
 	def _ber(self):
-		st, sref = self._status()
+		st, sref = self._status(("ber",))
 		b = C.ival(st or {}, "ber")
 		if b < 0 or not st:
 			return (u"", 0)
 		return (u"%d" % b, min(b, 100))
 
 	def _tuner(self):
-		st, sref = self._status()
+		st, sref = self._status(("number",))
 		n = C.ival(st or {}, "number")
 		return C.tuner_name(n) if n >= 0 else u""
 
 	def _locked(self):
-		st, sref = self._status()
+		st, sref = self._status(("lock",))
 		return C.ival(st or {}, "lock") == 1
 
 	def _no_lock(self):
-		st, sref = self._status()
+		st, sref = self._status(("lock",))
 		return bool(st) and C.ival(st, "lock") == 0
 
 	def _no_lock_text(self):

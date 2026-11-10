@@ -152,7 +152,7 @@ E_CHEIE, E_COTA, E_RETEA, E_TERMEN, E_RASPUNS, E_LIMBA, E_LIPSA, E_ADRESA = (
 
 
 def _jurnal(text):
-	print("[HdsConfigurareTraducere] %s" % text)
+	print("[HdsConfigurareTraducere] %s" % _faraCheie(text, ()))
 
 
 def _t(text):
@@ -178,11 +178,24 @@ def _setare(s, camp, implicit=u""):
 
 
 def _faraCheie(text, chei):
-	"""textul fara nicio aparitie a cheilor date (raspunsurile serverelor pot repeta cheia)"""
+	"""Curata si rezultatele imbricate, fiindca serverul poate repeta cheia in orice camp."""
+	if isinstance(text, dict):
+		return dict((k, _faraCheie(v, chei)) for k, v in text.items())
+	if isinstance(text, (list, tuple)):
+		return [_faraCheie(v, chei) for v in text]
+	if not isinstance(text, (str, bytes)):
+		return text
+	try:
+		curata = getattr(_modulT(), "faraSecrete", None)
+		if curata is not None:
+			return curata(text, chei)
+	except Exception:
+		pass
 	t = u"%s" % (text if text is not None else u"")
 	for c in chei:
-		if c and len(c) >= 4:
-			t = t.replace(c, u"***")
+		if c:
+			for v in (c, quote(c, safe="")):
+				t = t.replace(v, u"***")
 	return t
 
 
@@ -202,13 +215,14 @@ def _oprireDin(e):
 	return _Oprire(e.fel, getattr(e, "cauza", None) or e.text, getattr(e, "ce_faci", u"") or u"", e.cod)
 
 
-def codIntern(corp, cod=None):
+def codIntern(corp, cod=None, chei=()):
 	"""codul de eroare al serviciului din corpul raspunsului (Azure: error.code, de ex. 401000; Google: error.status),
 	sau None"""
 	try:
 		j = json.loads(corp.decode("utf-8", "replace") if isinstance(corp, bytes) else corp)
 	except (ValueError, TypeError, AttributeError):
 		return None
+	j = _faraCheie(j, chei)
 	e = j.get("error") if isinstance(j, dict) else None
 	if not isinstance(e, dict):
 		# Cloudflare: {"success": false, "errors": [{"code": 5035, "message": ...}]}
@@ -756,10 +770,9 @@ class Configurator(object):
 			if l is not None and l.id != self._id:
 				return
 			for k, v in campuri.items():
-				if isinstance(v, str):
-					v = _faraCheie(v, chei)
-				elif k == "modele":
-					v = [_faraCheie(x, chei) for x in v][:MAX_MODELE]
+				v = _faraCheie(v, chei)
+				if k == "modele":
+					v = v[:MAX_MODELE]
 				self._stare[k] = v
 			self._stare["ora"] = time.strftime("%H:%M:%S")
 
@@ -1138,7 +1151,7 @@ class Configurator(object):
 		corp = l.ultim[0][1] if l.ultim else b""
 		ce = e.ce_faci or ceFaci(e.fel, serv, nume, l.local, l.adresa, corp, e.cod, l.tinta)
 		return {"stare": "eroare", "fel": e.fel, "mesaj": e.text, "ce_faci": ce, "cod": e.cod,
-			"cod_intern": getattr(e, "cod_intern", None) or (codIntern(corp, e.cod) if e.cod else None)}
+			"cod_intern": getattr(e, "cod_intern", None) or (codIntern(corp, e.cod, l.chei()) if e.cod else None)}
 
 	# ------------------------------------------------------------------ lucrarile
 	def _lucruCheie(self, l):
@@ -1164,7 +1177,7 @@ class Configurator(object):
 				if serv == "azure" and oprire.regiune_lipsa:
 					cere_regiune = oprire
 				if oprire.cod_intern is None and oprire.cod:
-					oprire.cod_intern = codIntern(corp, oprire.cod)
+					oprire.cod_intern = codIntern(corp, oprire.cod, l.chei())
 				ce = oprire.ce_faci or ceFaci(oprire.fel, serv, nume, local, cand["adresa"], corp, oprire.cod, l.tinta)
 				refuzuri.append((cand, oprire, ce, _serviciuOprit(corp)))
 		if cere_regiune is not None:
@@ -1306,7 +1319,7 @@ class Configurator(object):
 		except T.EroareTraducere as e:
 			if e.fel != E_CHEIE:
 				raise
-			prima_cod, prima_intern = e.cod, codIntern(l.ultim[0][1] if l.ultim else b"", e.cod)
+			prima_cod, prima_intern = e.cod, codIntern(l.ultim[0][1] if l.ultim else b"", e.cod, l.chei())
 		if l.regiune_data:
 			raise _Oprire(E_CHEIE, _t(MESAJ_REGIUNE_GRESITA),
 				_t("Copiază din nou KEY 1 de la „Keys and Endpoint”, întreagă, și alege regiunea scrisă acolo la "
@@ -1517,6 +1530,7 @@ class Configurator(object):
 		return vechi
 
 	def _aplica(self, l, rez):
+		rez = _faraCheie(rez, l.chei())
 		if rez.get("stare") != "ok":
 			campuri = {"stare": rez.get("stare", "eroare"), "pas": u"", "salvat": False,
 				"mesaj": rez.get("mesaj") or u"", "ce_faci": rez.get("ce_faci") or u"",

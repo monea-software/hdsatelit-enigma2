@@ -191,6 +191,13 @@ class Referinta(object):
 		d = self.date
 		return "%x:%x:%x:%x" % (d[1], d[4], d[2], d[3])
 
+	def k5(self):
+		"""Identitatea serviciului DVB, inclusiv tipul din referinta."""
+		if self.cheie() is None:
+			return None
+		d = self.date
+		return (d[1], d[4], d[2], d[3], d[0])
+
 
 def ref_serviciu(sid, ns, tsid, onid, tip):
 	"""Referinta de buchet a unui serviciu DVB, ca toString (hex mare)."""
@@ -214,6 +221,15 @@ def ref_spatiu(numar):
 
 def cheie_din_ref(text):
 	return Referinta(text).cheie()
+
+
+def k5_din_ref(text):
+	return Referinta(text).k5()
+
+
+def identitate_din_ref(text):
+	"""Canalele DVB se compara cu tipul lor; celelalte randuri, dupa referinta."""
+	return k5_din_ref(text) or text
 
 
 # ---------------------------------------------------------------- lamedb

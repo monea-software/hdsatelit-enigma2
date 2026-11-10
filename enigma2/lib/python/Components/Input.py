@@ -43,20 +43,11 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 			self.setMarkedPos(-2)
 		else:
 			self.setMarkedPos(self.currPos-self.offset)
+		# si PIN-ul se vede cat il scrii (fara stelute)
 		if self.visible_width:
-			if self.type == self.PIN:
-				self.text = ""
-				for x in self.Text[self.offset:self.offset+self.visible_width]:
-					self.text += (x==" " and " " or "*")
-			else:
-				self.text = self.Text[self.offset:self.offset+self.visible_width] + " "
+			self.text = self.Text[self.offset:self.offset+self.visible_width] + " "
 		else:
-			if self.type == self.PIN:
-				self.text = ""
-				for x in self.Text:
-					self.text += (x==" " and " " or "*")
-			else:
-				self.text = self.Text + " "
+			self.text = self.Text + " "
 
 	def setText(self, text):
 		if not len(text):
@@ -112,6 +103,8 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.update()
 
 	def up(self):
+		if self._secretOprit():
+			return
 		self.allmarked = False
 		if self.type == self.TEXT:
 			self.timeout()
@@ -123,6 +116,8 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.update()
 
 	def down(self):
+		if self._secretOprit():
+			return
 		self.allmarked = False
 		if self.type == self.TEXT:
 			self.timeout()
@@ -151,6 +146,10 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.update()
 
 	def insertChar(self, ch, pos, owr, ins):
+		if getattr(self, "hdsSecret", self.type == self.PIN):
+			from Components.HdsAsistentaControl import cereOprirePentruSecret
+			if cereOprirePentruSecret(getattr(self, "hdsSession", None)):
+				return
 		if ins and not self.maxSize:
 			self.Text = self.Text[0:pos] + ch + self.Text[pos:]
 		elif owr or self.overwrite:
@@ -176,6 +175,8 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.currPos = 0
 
 	def tab(self):
+		if self._secretOprit():
+			return
 		if self.type == self.TEXT:
 			self.timeout()
 		if self.allmarked:
@@ -219,6 +220,8 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.update()
 
 	def handleAscii(self, code):
+		if self._secretOprit():
+			return
 		if self.type == self.TEXT:
 			self.timeout()
 		if self.allmarked:
@@ -229,6 +232,8 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		self.update()
 
 	def number(self, number):
+		if self._secretOprit():
+			return
 		if self.type == self.TEXT:
 			owr = self.lastKey == number
 			newChar = self.getKey(number)
@@ -242,3 +247,9 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 		if self.type == self.PIN or self.type == self.NUMBER:
 			self.innerright()
 		self.update()
+
+	def _secretOprit(self):
+		if not getattr(self, "hdsSecret", self.type == self.PIN):
+			return False
+		from Components.HdsAsistentaControl import cereOprirePentruSecret
+		return cereOprirePentruSecret(getattr(self, "hdsSession", None))

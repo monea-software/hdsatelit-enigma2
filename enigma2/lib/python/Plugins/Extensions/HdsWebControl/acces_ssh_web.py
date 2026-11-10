@@ -4,38 +4,29 @@
 #
 # acces_ssh_web.py: "Parola receptorului" in interfata web (HdsWebControl), perechea ecranului receptorului
 # (Screens/HdsAccesSsh.py, Setari > Retea & Conexiuni > Parola receptorului). Aceleasi date, aceleasi texte si aceleasi
-# comenzi, din acelasi modul, Components/HdsAccesSsh.py: parola lui root, aceeasi pentru FTP, SSH si SFTP (o vezi
-# oricand, o schimbi cu una aleasa de tine sau cu una la intamplare), cum te conectezi (FTP numai cand serverul FTP
-# merge), cheile SSH (adauga din text lipit sau de pe stick, sterge), "Fără parolă în rețeaua locală", starile
-# periculoase (banda de sus) si, ca optiune, textul brut al fisierelor serverelor SSH si FTP.
+# comenzi, din aceleasi module, Components/HdsAccesSsh.py si Components/HdsParolaLocala.py: parola din reteaua de acasa
+# (una singura, numai daca o vrea omul; "pusă" / "nepusă", bifele unde se cere), cum te conectezi (FTP numai cand
+# serverul FTP merge), cheile SSH (adauga din text lipit sau de pe stick, sterge) si, ca optiune, textul brut al
+# fisierelor serverelor SSH si FTP.
 #
-# Cine are voie: poarta comuna a HdsJsonResource (reteaua locala, apoi ?token= sau cookie-ul browserului; ce schimba
-# ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului) lasa sa treaca si browserele „libere” (in
-# reteaua locala, cu codul oprit, orice aparat din casa intra fara cod) si cheia pentru scripturi. Aici, parola, textul
-# brut si orice schimbare cer in plus un browser conectat CU CODUL de pe televizor (nivel „asociat”): altfel oricine din
-# casa ar citi parola lui root sau si-ar pune cheia, adica ar intra ca root fara sa fi vazut televizorul. Browserele
-# libere si cheia pentru scripturi vad numai starea; pagina arata unui browser liber conectarea cu codul, pe loc.
-# Tot de aceea, cat ecranul "Parola receptorului" e deschis pe receptor, telecomanda si captura de ecran ale panoului
-# (plugin.py, RemoteControlResource si ScreenshotResource) cer si ele nivelul „asociat”: refuzEcranDeschis().
-#   GET  /api/acces-ssh                          starea, fara parola si fara hash (oricine trece de poarta)
-#   POST /api/acces-ssh-parola                   textul parolei (se vede oricand, cat e chiar parola din /etc/shadow)
-#   POST /api/acces-ssh-pune     (corp: parola=)  parola aleasa de om: 4-64 de semne ASCII vizibile, fara spatii
-#   POST /api/acces-ssh-parola-noua?confirmat=1  o parola noua la intamplare
+# In casa nicio parola si niciun cod. Codul de pe televizor (nivelul "asociat") s-a scos:
+# pagina si comenzile ei merg din orice browser care a trecut poarta comuna a HdsJsonResource (reteaua locala; cand omul
+# si-a pus parola si a bifat interfata web, browserul a scris-o o data la intrare). Parola nu se mai arata nicaieri dupa
+# salvare: nici GET-ul, nici vreo alta ruta nu o dau. Cat o scrie, omul o vede (camp text obisnuit).
+#   GET  /api/acces-ssh                          starea, fara parola si fara hash
+#   POST /api/acces-ssh-pune     (corp: parola=)  parola omului: orice text pe un rand; prima data se cere peste tot
+#   POST /api/acces-ssh-sterge-parola            parola stearsa: in casa nu se mai cere nicaieri (fara confirmare)
+#   POST /api/acces-ssh-unde     (unde=web,ftp,...) bifele: unde se cere parola pusa (gol: nicaieri)
 #   POST /api/acces-ssh-adauga   (corp: cheie=)  cheile publice lipite (una sau mai multe, si blocuri SSH2); acelasi
 #                                                drum si pentru "Adaugă cheia acestui calculator": pagina citeste
 #                                                fisierul .pub ales de pe calculator (input type=file, FileReader) si
 #                                                trimite textul lui ca pe o cheie lipita (aceleasi verificari)
 #   POST /api/acces-ssh-stick                    cheile din dosarul hdsatelit/ssh de pe stick
 #   POST /api/acces-ssh-sterge?amprenta=..&confirmat=1   sterge o cheie
-#   POST /api/acces-ssh-fara-parola?pornit=0|1  (fara confirmare: pornita e starea obisnuita)
 #   GET  /api/acces-ssh-brut?pagina=<n>          textul brut al unui fisier (fara /etc/shadow si fara parola)
 #   GET  /acces-ssh                              pagina
-# Parola, textul brut si toate cele cu POST: numai nivelul „asociat” (altfel 403 cu „trebuie_cod”).
 # Comenzile pornesc o lucrare pe firul modulului (una deodata, comuna cu televizorul) si raspund pe loc; pagina citeste
-# rezultatul din GET /api/acces-ssh ("lucrare") si il arata langa butoanele casetei din care a pornit. Pagina arata
-# puncte pana la apasarea butonului "Arata parola", care singur cere POST. Ascunderea, schimbarea "parola_semn"
-# (inode si ora fisierului parolei, nimic din parola) si lucrarile "parola-noua" / "pune-parola" sterg textul primit.
-# Urmatoarea afisare cere din nou butonul, niciodata cat merge o lucrare.
+# rezultatul din GET /api/acces-ssh ("lucrare") si il arata langa butoanele casetei din care a pornit.
 # Etichetele paginii si mesajele din script trec prin _t() (ETICHETE, TEXTE_JS), iar lang e limba receptorului.
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 si citesc numai cateva fisiere mici; ce scrie sau porneste un
@@ -79,70 +70,25 @@ def _arg(request, nume, maxim=200):
 	return str(v)[:maxim]
 
 
-def _cuJeton(request):
-	"""Cererea vine cu ?token= (scripturi): poarta a trecut-o pe jeton, nu pe cookie-ul browserului asociat."""
-	return b"token" in (getattr(request, "args", None) or {})
-
-
-def _sesiunePlugin(request):
-	from . import plugin as P
-	return P._sesiuneDinCerere(request)
-
-
-def nivel(request, sesiune_cerere=None):
-	"""„jeton” (?token=), „asociat” (cookie-ul unui browser conectat cu codul de pe televizor) sau „liber” (browser din
-	reteaua locala intrat fara cod)."""
-	if _cuJeton(request):
-		return "jeton"
-	_secret, browser = (sesiune_cerere or _sesiunePlugin)(request)
-	if browser is not None and not browser.get("liber"):
-		return "asociat"
-	return "liber"
-
-
-NEASOCIAT = {"result": False, "trebuie_cod": True,
-	"message": N_("Parola și cheile se văd și se schimbă numai dintr-un browser conectat cu codul de pe televizor.")}
-
-ECRAN_DESCHIS = N_("Cât ecranul „Parola receptorului” e deschis pe receptor, telecomanda și captura de ecran merg numai "
-	"dintr-un browser conectat cu codul de pe televizor.")
-
-
-def refuzEcranDeschis(request, A=None, sesiune_cerere=None):
-	"""Pentru telecomanda si captura de ecran din plugin.py: raspunsul de refuz (403) daca ecranul "Parola receptorului" e
-	deschis pe receptor si cererea nu vine dintr-un browser conectat cu codul; altfel None. Cu ecranul deschis, o tasta sau o
-	captura data unui browser liber ori cheii pentru scripturi ar ocoli poarta paginii (parola mare pe ecran, OK pe
-	„Fără parolă în rețeaua locală”)."""
-	try:
-		A = _a(A)
-		if not A.ecranDeschis():
-			return None
-	except Exception:
-		return None
-	if nivel(request, sesiune_cerere) == "asociat":
-		return None
-	return {"result": False, "trebuie_cod": True, "message": _t(ECRAN_DESCHIS)}
-
-
 def _lucrare(nume):
 	"""Caseta paginii in care se arata o lucrare si rezultatul ei."""
-	return {"parola-noua": "parola", "pune-parola": "parola", "adauga-chei": "chei", "stick": "chei",
-		"sterge-cheie": "chei", "fara-parola": "fara"}.get(nume or "", "")
+	return {"pune-parola": "parola", "sterge-parola": "parola", "unde": "parola", "adauga-chei": "chei", "stick": "chei",
+		"sterge-cheie": "chei"}.get(nume or "", "")
 
 
-def stare(A=None, nivel_cerere="asociat"):
+def stare(A=None):
 	"""Starea pentru pagina: ce arata ecranul de pe televizor, cu textele lui, fara parola."""
 	A = _a(A)
 	s = A.stare()
 	lucrare = s["lucrare"]
 	ultima = dict(lucrare["ultima"], caseta=_lucrare(lucrare["ultima"]["nume"])) if lucrare["ultima"] else None
+	P = A._parolaLocala()
 	return {
 		"result": True,
-		"nivel": nivel_cerere,
-		"asociat": nivel_cerere == "asociat",
 		"fel_parola": s["fel_parola"],
-		"parola_de_vazut": bool(s["parola_de_vazut"] and s["fel_parola"] == "pusa"),
-		"parola_alta": bool(s.get("parola_alta")),
-		"parola_semn": s["parola_semn"],
+		"parola_pusa": bool(s["parola_pusa"]),
+		"unde": s["unde"],
+		"locuri": [{"cheie": k, "text": _t(v)} for k, v in P.TXT_SERVICII],
 		"program": s["program"],
 		"ftp": bool(s.get("ftp")),
 		"text_eticheta": A.textEticheta(s),
@@ -153,8 +99,6 @@ def stare(A=None, nivel_cerere="asociat"):
 		"chei": [{"text": A.textCheie(c), "nume": A.numeCheie(c), "amprenta": c["amprenta"], "tip": c["nume_tip"],
 			"biti": c["biti"], "comentariu": c["comentariu"], "optiuni": c["optiuni"]} for c in s["chei"]],
 		"randuri_necunoscute": s["randuri_necunoscute"],
-		"fara_parola": s["fara_parola"],
-		"text_fara_parola": A.textFaraParola(s["fara_parola"]),
 		"fara_dovada": s["fara_dovada"],
 		"lucreaza": lucrare["lucreaza"],
 		"lucreaza_caseta": _lucrare(lucrare["lucreaza"]),
@@ -168,16 +112,6 @@ def _pornit(A, numar, mesaj):
 	if numar is None:
 		return {"result": False, "message": _t("Așteaptă să se termine ce ai pornit înainte (pe televizor sau aici).")}
 	return {"result": True, "lucrare": numar, "message": mesaj}
-
-
-def parola(request, A=None):
-	A = _a(A)
-	s = A.stare()
-	text = A.parolaDeAratat() if (s["parola_de_vazut"] and s["fel_parola"] == "pusa") else ""
-	if not text:
-		return {"result": False, "message": _t("Parola nu se vede aici. Alege „Schimbă parola” și pune una nouă: de atunci "
-			"se vede oricând.")}, 404
-	return {"result": True, "parola": text, "parola_semn": s["parola_semn"]}, 200
 
 
 def brut(request, A=None):
@@ -194,7 +128,7 @@ def brut(request, A=None):
 
 
 def pune(request, A=None):
-	"""Parola aleasa de om (corp: parola=), verificata intai aici, cu motivul pe intelesul omului."""
+	"""Parola omului (corp: parola=): orice text pe un rand, fara alta conditie."""
 	A = _a(A)
 	from .descarcare_subtitrari_web import _cheiDinAdresa
 	if "parola" in _cheiDinAdresa(request):
@@ -206,11 +140,19 @@ def pune(request, A=None):
 	return _pornit(A, A.pornestePuneParola(text), A.textLucrare(A.LUCRARE_PUNE))
 
 
-def parolaNoua(request, A=None):
+def stergeParola(request, A=None):
 	A = _a(A)
-	if _arg(request, "confirmat") != "1":
-		return {"result": False, "message": _t("Confirmă parola nouă: cea de acum nu mai merge după aceea.")}
-	return _pornit(A, A.pornesteParolaNoua(), A.textLucrare(A.LUCRARE_PAROLA_NOUA))
+	return _pornit(A, A.pornesteStergeParola(), A.textLucrare(A.LUCRARE_STERGE_PAROLA))
+
+
+def unde(request, A=None):
+	"""Bifele (unde=web,ftp,...; gol: nicaieri)."""
+	A = _a(A)
+	servicii = [k for k, _v in A._parolaLocala().TXT_SERVICII]
+	alese = [x for x in _arg(request, "unde", 200).split(",") if x]
+	if any(x not in servicii for x in alese):
+		return {"result": False, "message": _t("Loc necunoscut.")}
+	return _pornit(A, A.pornesteUnde(alese), A.textLucrare(A.LUCRARE_UNDE))
 
 
 def adauga(request, A=None):
@@ -238,54 +180,23 @@ def sterge(request, A=None):
 	return _pornit(A, A.pornesteSterge(amprenta), A.textLucrare(A.LUCRARE_STERGE))
 
 
-def faraParola(request, A=None):
-	A = _a(A)
-	pornit = _arg(request, "pornit")
-	if pornit not in ("0", "1"):
-		return {"result": False, "message": _t("Alege pornit sau oprit.")}
-	# fara confirmare: pornita e starea obisnuita (din casa direct; din afara casei numai cu cheia), ca pe receptor
-	return _pornit(A, A.pornesteFaraParola(pornit == "1"), A.textLucrare(A.LUCRARE_FARA_PAROLA))
-
-
 def rute(baza, resource, A=None, sesiune_cerere=None):
-	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py;
-	`sesiune_cerere(request)` da (secret, browser) ca _sesiuneDinCerere din plugin.py (probele de pe PC dau una a lor)."""
-
-	def neasociat(request):
-		if nivel(request, sesiune_cerere) == "asociat":
-			return None
-		return dict(NEASOCIAT, message=_t(NEASOCIAT["message"]))
+	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py. `sesiune_cerere`
+	ramane in semnatura pentru probele de dinainte; poarta e numai cea comuna (fara nivelul codului)."""
 
 	class StareResource(baza):
 		"""GET /api/acces-ssh: numai citire."""
 
 		def render_GET(self, request):
 			try:
-				return self._raspunde(request, stare(A, nivel(request, sesiune_cerere)))
-			except Exception as eroare:
-				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
-
-	class ParolaResource(baza):
-		"""POST /api/acces-ssh-parola: textul parolei, numai browserului asociat (poarta cere POST + CSRF)."""
-		schimbaCeva = True
-
-		def render_POST(self, request):
-			refuz = neasociat(request)
-			if refuz is not None:
-				return self._raspunde(request, refuz, 403)
-			try:
-				corp, cod = parola(request, A)
-				return self._raspunde(request, corp, cod)
+				return self._raspunde(request, stare(A))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 	class BrutResource(baza):
-		"""GET /api/acces-ssh-brut: numai citire, numai browserului asociat (cheile si jurnalul nu se dau oricui)."""
+		"""GET /api/acces-ssh-brut: numai citire."""
 
 		def render_GET(self, request):
-			refuz = neasociat(request)
-			if refuz is not None:
-				return self._raspunde(request, refuz, 403)
 			try:
 				return self._raspunde(request, brut(request, A))
 			except Exception as eroare:
@@ -296,22 +207,22 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 		lucru = None
 
 		def render_POST(self, request):
-			refuz = neasociat(request)
-			if refuz is not None:
-				return self._raspunde(request, refuz, 403)
 			try:
 				return self._raspunde(request, type(self).lucru(request, A))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 		def render_GET(self, request):
-			return self.render_POST(request)   # poarta cere POST din browser; cu ?token= raspunsul e refuzul
+			return self.render_POST(request)   # poarta cere POST din browser
 
 	class PuneResource(_Comanda):
 		lucru = staticmethod(pune)
 
-	class ParolaNouaResource(_Comanda):
-		lucru = staticmethod(parolaNoua)
+	class StergeParolaResource(_Comanda):
+		lucru = staticmethod(stergeParola)
+
+	class UndeResource(_Comanda):
+		lucru = staticmethod(unde)
 
 	class AdaugaResource(_Comanda):
 		lucru = staticmethod(adauga)
@@ -322,9 +233,6 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 	class StergeResource(_Comanda):
 		lucru = staticmethod(sterge)
 
-	class FaraParolaResource(_Comanda):
-		lucru = staticmethod(faraParola)
-
 	class PaginaResource(resource.Resource):
 		"""GET /acces-ssh: pagina "Parola receptorului"."""
 		isLeaf = True
@@ -334,20 +242,19 @@ def rute(baza, resource, A=None, sesiune_cerere=None):
 
 	api = {
 		b"acces-ssh": StareResource(),
-		b"acces-ssh-parola": ParolaResource(),
 		b"acces-ssh-brut": BrutResource(),
 		b"acces-ssh-pune": PuneResource(),
-		b"acces-ssh-parola-noua": ParolaNouaResource(),
+		b"acces-ssh-sterge-parola": StergeParolaResource(),
+		b"acces-ssh-unde": UndeResource(),
 		b"acces-ssh-adauga": AdaugaResource(),
 		b"acces-ssh-stick": StickResource(),
 		b"acces-ssh-sterge": StergeResource(),
-		b"acces-ssh-fara-parola": FaraParolaResource(),
 	}
 	return api, PaginaResource()
 
 
 def pagina(request):
-	"""Aceeasi poarta ca /limbi si /paznic; pagina se da numai browserului asociat (sau cu ?token=)."""
+	"""Aceeasi poarta ca /limbi si /paznic: reteaua locala si browserul intrat (liber sau cu parola), sau ?token=."""
 	from . import plugin as P
 	if not P._esteAdresaLocala(P._adresaClient(request)):
 		request.setResponseCode(403)
@@ -395,24 +302,19 @@ def _json(obiect):
 ETICHETE = {
 	"TITLU": N_("Parola receptorului"),
 	"INCARCARE": N_("Se citește starea..."),
-	"CONECTARE": N_("Conectează browserul cu codul"),
-	"CONECTARE_TEXT": N_("Parola și cheile se văd și se schimbă numai dintr-un browser conectat cu codul de pe "
-		"televizor. Așa, cine e doar în rețeaua ta de acasă nu le poate afla."),
-	"ARATA_COD": N_("Arată codul pe televizor"),
-	"COD": N_("Codul de pe televizor"),
-	"CONECTEAZA": N_("Conectează"),
-	"PAROLA": N_("Parola lui root, aceeași pentru SSH și SFTP"),
-	"SCHIMBA": N_("Schimbă parola"),
-	"PAROLA_NOUA": N_("Parola nouă"),
-	"ARATA_PAROLA": N_("Arată parola"),
-	"ARATA_PAROLA_NOUA": N_("Arată parola nouă"),
-	"PAROLA_NOUA_NOTA": N_("4-64 de semne: litere fără diacritice, cifre și semne, fără spații. Cea veche nu mai merge."),
-	"NOUA": N_("Fă o parolă nouă"),
+	"PAROLA": N_("Parola din rețeaua de acasă: una singură, pentru tot, numai dacă vrei"),
+	"PUNE": N_("Pune parola"),
+	"STERGE_PAROLA": N_("Șterge parola"),
+	"PAROLA_NOUA": N_("Parola ta"),
+	"PAROLA_NOUA_NOTA": N_("Orice text (și 123), o singură dată; se vede cât o scrii. După salvare nu se mai arată "
+		"nicăieri. Prima dată se cere peste tot; apoi alegi mai jos unde."),
+	"UNDE": N_("Unde se cere parola ta"),
+	"TOATE": N_("Toate"),
 	"CUM": N_("Cum te conectezi"),
-	"CUM_FTP": N_("FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root și parola de sus:"),
+	"CUM_FTP": N_("FTP sau SFTP (de exemplu FileZilla sau WinSCP), utilizatorul root:"),
 	"CUM_TEXT": N_("De pe calculator, în terminal:"),
-	"CUM_NOTA": N_("Din casă intri direct, fără parolă, prin SSH, SFTP, FTP și Telnet, cât e pornit „Fără parolă în rețeaua "
-		"locală”. Din afara casei se intră numai cu o cheie SSH pusă mai jos."),
+	"CUM_NOTA": N_("Din casă, fără parolă pusă, intri direct; unde un program cere neapărat parolă, scrii utilizatorul "
+		"root și orice parolă (și goală, 1234, admin, root, pass). Din afara casei se intră numai cu o cheie SSH pusă mai jos."),
 	"CHEI": N_("Cheile SSH"),
 	"LIPESTE": N_("Lipește cheia publică (conținutul fișierului .pub, de exemplu id_ed25519.pub):"),
 	"ADAUGA": N_("Adaugă cheia"),
@@ -422,9 +324,6 @@ ETICHETE = {
 	"STICK": N_("Adaugă cheile de pe stick"),
 	"STICK_NOTA": N_("De pe stick: pune dosarul hdsatelit/ssh cu fișierul authorized_keys sau cu cheile .pub, bagă "
 		"stickul în receptor, apoi apasă butonul. Nu pune niciodată cheia privată (fișierul fără .pub)."),
-	"FARA": N_("Fără parolă în rețeaua locală"),
-	"FARA_NOTA": N_("Pornit (cum vine receptorul): din casă intri direct, fără parolă; din afara casei numai cu o cheie. "
-		"Oprit: și din casă se cere parola."),
 	"BRUT": N_("Text brut (fișierele serverelor SSH și FTP)"),
 	"BRUT_BUTON": N_("Text brut"),
 	"FISIER": N_("Fișierul"),
@@ -440,20 +339,12 @@ TEXTE_JS = {
 	"nuRaspundeRetea": N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 	"nuRaspunde": N_("Receptorul nu răspunde."),
 	"seTrimite": N_("Se trimite..."),
-	"parolaNumaiCod": N_("Parola se vede numai dintr-un browser conectat cu codul de pe televizor."),
-	"arataParola": N_("Arată parola"),
-	"ascundeParola": N_("Ascunde parola"),
-	"arataParolaNoua": N_("Arată parola nouă"),
-	"ascundeParolaNoua": N_("Ascunde parola nouă"),
-	"faParolaNoua": N_("Fă o parolă nouă"),
-	"faParola": N_("Fă o parolă"),
+	"puneParola": N_("Pune parola"),
+	"schimbaParola": N_("Schimbă parola"),
 	"sterge": N_("Șterge"),
 	"cuOptiuni": N_("(cu opțiuni)"),
 	"intrebareSterge": N_("Ștergi cheia %s?"),
-	"scrieParola": N_("Scrie întâi parola nouă."),
-	"intrebareNoua": N_("Faci o parolă nouă? Cea de acum nu mai merge."),
-	"porneste": N_("Pornește"),
-	"opreste": N_("Oprește"),
+	"scrieParola": N_("Scrie întâi parola."),
 	"lipesteIntai": N_("Lipește întâi cheia publică."),
 	"cheiePrivata": N_("Ai lipit o cheie privată. Nu a plecat din pagină. Pune cheia publică (fișierul .pub); cheia "
 		"privată rămâne numai la tine."),
@@ -462,16 +353,6 @@ TEXTE_JS = {
 	"fisierGol": N_("Fișierul ales e gol."),
 	"fisierMare": N_("Fișierul ales e prea mare pentru o cheie publică."),
 	"fisierNecitit": N_("Fișierul ales nu s-a putut citi."),
-	"seCereCodul": N_("Se cere codul..."),
-	"codulPeTv": N_("Codul e pe televizor."),
-	"scrieCodul": N_("Scrie codul aici, apoi apasă Conectează."),
-	"codNecerut": N_("Codul nu s-a putut cere."),
-	"codSase": N_("Codul are 6 cifre."),
-	"conectat": N_("Conectat."),
-	"codGresit": N_("Codul nu a mers."),
-	"jetonTitlu": N_("Numai starea"),
-	"jetonText": N_("Cu cheia pentru scripturi pagina arată numai starea. Parola și cheile se văd și se schimbă numai "
-		"dintr-un browser conectat cu codul de pe televizor."),
 	"textBrut": N_("Text brut"),
 	"peScurt": N_("Pe scurt"),
 }
@@ -504,12 +385,14 @@ PAGINA = """<!DOCTYPE html>
   .card.alarma{border-color:#c0392b;background:#3a1714;}
   .alarma p{margin:0 0 6px;color:#ffb4a8;font-weight:600;line-height:1.45;}
   .alarma p:last-child{margin:0;}
-  .parola{font-family:ui-monospace,Consolas,monospace;font-size:2rem;letter-spacing:.06em;color:#f5b83d;margin:4px 0 8px;word-break:break-all;}
-  .parola.scurt{font-family:inherit;font-size:1.4rem;letter-spacing:0;word-break:normal;}
+  .parola{font-size:1.4rem;color:#f5b83d;margin:4px 0 8px;}
   .text{font-size:.98rem;line-height:1.45;margin:0 0 8px;}
   .nota{color:var(--text-slab);font-size:.85rem;margin:6px 0 0;line-height:1.45;}
   .cod{font-family:ui-monospace,Consolas,monospace;background:#0f1216;border:1px solid var(--bordura);border-radius:6px;padding:6px 8px;display:inline-block;}
   .butoane{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
+  .bife{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+  .bife label{display:flex;gap:10px;align-items:center;min-height:36px;}
+  .bife input{width:22px;height:22px;}
   button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   button.verde{background:var(--verde);border-color:var(--verde);color:#fff;}
   button.albastru{background:var(--albastru);border-color:var(--albastru);color:#fff;}
@@ -517,7 +400,6 @@ PAGINA = """<!DOCTYPE html>
   button:disabled{opacity:.5;cursor:default;}
   select{min-height:44px;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;max-width:100%;}
   input#parolaNoua{min-height:44px;width:16em;max-width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:1.1rem ui-monospace,Consolas,monospace;}
-  input#cod{min-height:44px;width:9em;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:1.1rem ui-monospace,Consolas,monospace;letter-spacing:.1em;}
   textarea{width:100%;box-sizing:border-box;min-height:96px;padding:8px 10px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:.85rem ui-monospace,Consolas,monospace;}
   table{width:100%;border-collapse:collapse;font-size:.95rem;}
   td{padding:8px 6px;border-bottom:1px solid var(--bordura);text-align:left;vertical-align:middle;}
@@ -529,7 +411,6 @@ PAGINA = """<!DOCTYPE html>
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
   @media (max-width:560px){
-    .parola{font-size:1.6rem;}
     table, tbody, tr, td{display:block;width:auto;}
     tr{border-bottom:1px solid var(--bordura);padding:6px 0;}
     td{border-bottom:0;padding:4px 0;}
@@ -543,28 +424,20 @@ PAGINA = """<!DOCTYPE html>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <div id="continut" class="ascuns">
   <section class="card alarma ascuns" id="alarme" role="alert"></section>
-  <section class="card ascuns" id="conectare">
-    <h2 id="titluConectare">__T_CONECTARE__</h2>
-    <p class="text" id="textConectare">__T_CONECTARE_TEXT__</p>
-    <div class="butoane" id="butoaneCod">
-      <button type="button" class="albastru" id="arataCod">__T_ARATA_COD__</button>
-      <input id="cod" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="12 34 56" aria-label="__T_COD__">
-      <button type="button" class="verde" id="conecteaza">__T_CONECTEAZA__</button>
-    </div>
-    <p class="mesaj" id="mesajCod"></p>
-  </section>
   <section class="card" id="casetaParola">
     <h2 id="eticheta">__T_PAROLA__</h2>
-    <p class="parola ascuns" id="parola"></p>
-    <button type="button" class="ascuns" id="arataParola" aria-pressed="false">__T_ARATA_PAROLA__</button>
+    <p class="parola" id="parola"></p>
     <p class="text" id="textParola"></p>
-    <div class="butoane">
-      <input id="parolaNoua" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="__T_PAROLA_NOUA__" aria-label="__T_PAROLA_NOUA__">
-      <button type="button" id="arataParolaNoua" aria-pressed="false">__T_ARATA_PAROLA_NOUA__</button>
-      <button type="button" class="verde" id="schimba">__T_SCHIMBA__</button>
-      <button type="button" id="noua">__T_NOUA__</button>
+    <div class="butoane" id="butoaneParola">
+      <input id="parolaNoua" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="256" placeholder="__T_PAROLA_NOUA__" aria-label="__T_PAROLA_NOUA__">
+      <button type="button" class="verde" id="pune">__T_PUNE__</button>
+      <button type="button" class="rosu ascuns" id="stergeParola">__T_STERGE_PAROLA__</button>
     </div>
     <p class="nota">__T_PAROLA_NOUA_NOTA__</p>
+    <div id="casetaUnde" class="ascuns">
+      <h2 style="margin-top:14px">__T_UNDE__</h2>
+      <div class="bife" id="bife"><label><input type="checkbox" id="toate"> __T_TOATE__</label></div>
+    </div>
     <div id="locparola"></div>
   </section>
   <section class="card">
@@ -590,13 +463,6 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota">__T_STICK_NOTA__</p>
   </section>
   <section class="card">
-    <h2>__T_FARA__</h2>
-    <p class="text" id="textFara"></p>
-    <div class="butoane"><button type="button" id="fara"></button></div>
-    <div id="locfara"></div>
-    <p class="nota">__T_FARA_NOTA__</p>
-  </section>
-  <section class="card">
     <h2>__T_BRUT__</h2>
     <div class="butoane"><button type="button" id="comutaBrut">__T_BRUT_BUTON__</button><select id="fisier" class="ascuns" aria-label="__T_FISIER__"></select></div>
     <pre id="brut" class="ascuns"></pre>
@@ -612,9 +478,6 @@ var MAX_FISIER = __MAX_TEXT__;
 var TXT = __TEXTE_JS__;
 var DATE = null;
 var ASTEPT = null;
-// GET-ul si incarcarea paginii nu cer parola; numai butonul Arata face POST.
-var PAROLA = "", PAROLA_OCUPATA = false, TURA_PAROLA = 0, PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
-var SEMN_PAROLA = null;
 var ULTIMA_VAZUTA = null;
 var BRUT_VIZIBIL = false;
 var VAZUT_LUCRAND = false;
@@ -635,7 +498,7 @@ function cerere(cale, metoda, date){
     return r.json().catch(function(){ return {result: false, message: TXT.neasteptat.replace("%s", r.status)}; });
   });
 }
-// rezultatul unei comenzi se arata langa butoanele casetei din care a pornit (parola, chei, fara)
+// rezultatul unei comenzi se arata langa butoanele casetei din care a pornit (parola, chei)
 function mesaj(text, eroare, caseta){
   var m = $("mesaj");
   if(caseta){ var loc = $("loc" + caseta); if(loc){ loc.appendChild(m); } }
@@ -643,42 +506,42 @@ function mesaj(text, eroare, caseta){
   m.classList.toggle("eroare", !!eroare);
   if(text && m.scrollIntoView){ m.scrollIntoView({block: "nearest"}); }
 }
-// Lucrarile care schimba parola si raspunsurile vechi nu mai pot lasa parola veche pe ecran.
-function schimbaParola(nume){ return nume === "parola-noua" || nume === "pune-parola"; }
-function uitaParola(){ PAROLA = ""; PAROLA_OCUPATA = false; TURA_PAROLA++; }
-function ascundeParolaNoua(){
-  $("parolaNoua").type = "password";
-  $("arataParolaNoua").textContent = TXT.arataParolaNoua;
-  $("arataParolaNoua").setAttribute("aria-pressed", "false");
+// bifele: una pentru fiecare loc, facute o singura data din lista primita
+function faBife(d){
+  var z = $("bife");
+  if(z.getAttribute("data-facut")){ return; }
+  z.setAttribute("data-facut", "1");
+  (d.locuri || []).forEach(function(l){
+    var e = document.createElement("label");
+    var c = document.createElement("input"); c.type = "checkbox"; c.setAttribute("data-loc", l.cheie);
+    c.addEventListener("change", function(){ trimiteUnde(); });
+    e.appendChild(c); e.appendChild(document.createTextNode(" " + l.text)); z.appendChild(e);
+  });
 }
-function arataParola(d){
+function bifeAlese(){
+  var a = [];
+  Array.prototype.forEach.call(document.querySelectorAll("#bife input[data-loc]"), function(c){ if(c.checked){ a.push(c.getAttribute("data-loc")); } });
+  return a;
+}
+function trimiteUnde(){ trimite("/api/acces-ssh-unde", {unde: bifeAlese().join(",")}, "parola"); }
+function arataParola(d, ocupat){
   $("eticheta").textContent = d.text_eticheta;
+  // dupa salvare parola nu se mai arata: numai "pusă" / "nepusă"
+  $("parola").textContent = d.text_parola_scurt;
   $("textParola").textContent = d.text_parola;
-  $("noua").textContent = d.fel_parola === "pusa" ? TXT.faParolaNoua : TXT.faParola;
-  ["noua", "schimba", "parolaNoua", "arataParolaNoua"].forEach(function(id){ $(id).classList.toggle("ascuns", !d.program); });
-  var p = $("parola");
-  var b = $("arataParola");
-  if(d.parola_semn !== SEMN_PAROLA){ SEMN_PAROLA = d.parola_semn; uitaParola(); }
-  if(d.lucreaza && PAROLA_OCUPATA){ uitaParola(); }
-  b.classList.toggle("ascuns", !d.asociat || !d.parola_de_vazut);
-  b.disabled = !!d.lucreaza || PAROLA_OCUPATA;
-  b.textContent = PAROLA ? TXT.ascundeParola : TXT.arataParola;
-  b.setAttribute("aria-pressed", PAROLA ? "true" : "false");
-  if(!d.parola_de_vazut || schimbaParola(d.lucreaza)){
-    // starea in cateva cuvinte, ca pe receptor; cat se pune o parola noua, cea veche nu mai ramane pe ecran
-    uitaParola();
-    b.textContent = TXT.arataParola; b.setAttribute("aria-pressed", "false");
-    p.textContent = schimbaParola(d.lucreaza) ? d.text_lucreaza : d.text_parola_scurt;
-    p.classList.add("scurt"); p.classList.remove("ascuns");
-    return;
-  }
-  if(!d.asociat){
-    p.textContent = ""; p.classList.add("ascuns"); uitaParola();
-    $("textParola").textContent = TXT.parolaNumaiCod;
-    return;
-  }
-  p.textContent = PAROLA || PUNCTE;
-  p.classList.remove("scurt"); p.classList.remove("ascuns");
+  $("pune").textContent = d.parola_pusa ? TXT.schimbaParola : TXT.puneParola;
+  $("butoaneParola").classList.toggle("ascuns", !d.program);
+  $("stergeParola").classList.toggle("ascuns", !d.parola_pusa);
+  $("casetaUnde").classList.toggle("ascuns", !d.parola_pusa);
+  faBife(d);
+  var unde = d.unde || [], toate = true;
+  Array.prototype.forEach.call(document.querySelectorAll("#bife input[data-loc]"), function(c){
+    c.checked = unde.indexOf(c.getAttribute("data-loc")) !== -1;
+    if(!c.checked){ toate = false; }
+    c.disabled = ocupat;
+  });
+  $("toate").checked = toate; $("toate").disabled = ocupat;
+  ["pune", "stergeParola", "parolaNoua"].forEach(function(id){ $(id).disabled = ocupat; });
 }
 function arataChei(d, ocupat){
   var n = (d.chei || []).length;
@@ -694,7 +557,7 @@ function arataChei(d, ocupat){
     c.appendChild(nume); c.appendChild(a);
     var ac = document.createElement("td"); ac.className = "actiune";
     var b = document.createElement("button"); b.type = "button"; b.className = "rosu"; b.textContent = TXT.sterge;
-    b.disabled = ocupat || !d.asociat;
+    b.disabled = ocupat;
     b.addEventListener("click", function(){
       if(!confirm(TXT.intrebareSterge.replace("%s", k.nume))){ return; }
       trimite("/api/acces-ssh-sterge", {amprenta: k.amprenta, confirmat: "1"}, "chei");
@@ -718,32 +581,19 @@ function arataPagini(d){
 function arata(d){
   DATE = d;
   var ocupat = !!d.lucreaza;
-  if(d.ultima && d.ultima.id !== ULTIMA_VAZUTA){
-    ULTIMA_VAZUTA = d.ultima.id;
-    if(schimbaParola(d.ultima.nume) && d.ultima.reusit){ uitaParola(); ascundeParolaNoua(); }
-  }
+  if(d.ultima && d.ultima.id !== ULTIMA_VAZUTA){ ULTIMA_VAZUTA = d.ultima.id; }
   arataAlarme(d);
-  arataParola(d);
+  arataParola(d, ocupat);
   arataChei(d, ocupat);
   arataPagini(d);
-  $("textFara").textContent = d.text_fara_parola;
-  $("fara").textContent = d.fara_parola ? TXT.opreste : TXT.porneste;
-  $("fara").className = d.fara_parola ? "verde" : "";
-  ["schimba", "parolaNoua", "arataParolaNoua", "noua", "adauga", "adaugaFisier", "stick", "fara"].forEach(function(id){ $(id).disabled = ocupat || !d.asociat; });
+  ["adauga", "adaugaFisier", "stick"].forEach(function(id){ $(id).disabled = ocupat; });
   $("randFtp").classList.toggle("ascuns", !d.ftp);
-  $("comutaBrut").disabled = !d.asociat;
-  $("conectare").classList.toggle("ascuns", d.asociat);
-  if(d.nivel === "jeton"){
-    $("titluConectare").textContent = TXT.jetonTitlu;
-    $("textConectare").textContent = TXT.jetonText;
-    $("butoaneCod").classList.add("ascuns"); $("mesajCod").classList.add("ascuns");
-  }
   // lucrarea in curs (pornita de aici sau de pe televizor), apoi rezultatul ei, langa butoanele casetei ei
   if(ocupat){ mesaj(d.text_lucreaza, false, d.lucreaza_caseta); VAZUT_LUCRAND = true; }
   else if(d.ultima && ((ASTEPT !== null && d.ultima.id >= ASTEPT) || VAZUT_LUCRAND)){
     mesaj(d.ultima.mesaj, !d.ultima.reusit, d.ultima.caseta);
     if(ASTEPT !== null && d.ultima.nume === "adauga-chei" && d.ultima.reusit){ $("cheie").value = ""; }
-    if(ASTEPT !== null && d.ultima.nume === "pune-parola" && d.ultima.reusit){ $("parolaNoua").value = ""; ascundeParolaNoua(); }
+    if(ASTEPT !== null && d.ultima.nume === "pune-parola" && d.ultima.reusit){ $("parolaNoua").value = ""; }
     ASTEPT = null; VAZUT_LUCRAND = false;
   }
 }
@@ -766,40 +616,18 @@ function trimite(cale, valori, caseta){
     if(r.result && r.lucrare){ ASTEPT = r.lucrare; citeste(); }
   }).catch(function(){ mesaj(TXT.nuRaspunde, true, caseta); });
 }
-// parola aleasa: receptorul o verifica (4-64 de semne ASCII vizibile) si spune motivul cand nu o primeste
-$("arataParola").addEventListener("click", function(){
-  if(PAROLA){ uitaParola(); if(DATE){ arataParola(DATE); } return; }
-  if(!DATE || !DATE.asociat || !DATE.parola_de_vazut || DATE.lucreaza || PAROLA_OCUPATA){ return; }
-  var tura = ++TURA_PAROLA, semn = SEMN_PAROLA;
-  PAROLA_OCUPATA = true; arataParola(DATE);
-  cerere("/api/acces-ssh-parola", "POST", new URLSearchParams()).then(function(r){
-    if(tura !== TURA_PAROLA || !DATE || !DATE.asociat || DATE.lucreaza || semn !== SEMN_PAROLA){ return; }
-    PAROLA_OCUPATA = false;
-    if(r.result && r.parola_semn === semn){ PAROLA = r.parola || ""; }
-    else { mesaj(r.message || TXT.necitit, true, "parola"); }
-    arataParola(DATE);
-  }).catch(function(){
-    if(tura !== TURA_PAROLA){ return; }
-    PAROLA_OCUPATA = false; mesaj(TXT.nuRaspunde, true, "parola"); if(DATE){ arataParola(DATE); }
-  });
-});
-$("arataParolaNoua").addEventListener("click", function(){
-  var ascunsa = $("parolaNoua").type === "password";
-  $("parolaNoua").type = ascunsa ? "text" : "password";
-  this.textContent = ascunsa ? TXT.ascundeParolaNoua : TXT.arataParolaNoua;
-  this.setAttribute("aria-pressed", ascunsa ? "true" : "false");
-});
-$("schimba").addEventListener("click", function(){
+// parola: orice text pe un rand, campul se vede cat scrii
+$("pune").addEventListener("click", function(){
   var t = $("parolaNoua").value;
   if(!t){ mesaj(TXT.scrieParola, true, "parola"); $("parolaNoua").focus(); return; }
-  uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); }
   trimite("/api/acces-ssh-pune", {parola: t}, "parola");
 });
-$("parolaNoua").addEventListener("keydown", function(e){ if(e.key === "Enter"){ $("schimba").click(); } });
-$("noua").addEventListener("click", function(){
-  if(DATE && DATE.fel_parola === "pusa" && !confirm(TXT.intrebareNoua)){ return; }
-  uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); }
-  trimite("/api/acces-ssh-parola-noua", {confirmat: "1"}, "parola");
+$("parolaNoua").addEventListener("keydown", function(e){ if(e.key === "Enter"){ $("pune").click(); } });
+$("stergeParola").addEventListener("click", function(){ trimite("/api/acces-ssh-sterge-parola", {}, "parola"); });
+$("toate").addEventListener("change", function(){
+  var da = $("toate").checked;
+  Array.prototype.forEach.call(document.querySelectorAll("#bife input[data-loc]"), function(c){ c.checked = da; });
+  trimiteUnde();
 });
 $("adauga").addEventListener("click", function(){
   var t = $("cheie").value;
@@ -831,7 +659,7 @@ $("fisierCheie").addEventListener("change", function(){
   r.readAsText(f);
 });
 $("stick").addEventListener("click", function(){ trimite("/api/acces-ssh-stick", {}, "chei"); });
-// textul brut: numai din browserul conectat cu codul, fisierul ales in lista
+// textul brut: fisierul ales in lista
 function citesteBrut(){
   cerere("/api/acces-ssh-brut?pagina=" + encodeURIComponent($("fisier").value || "0")).then(function(d){
     $("brut").textContent = d.result ? d.cale + "\\n\\n" + d.text : (d.message || TXT.necitit);
@@ -844,38 +672,7 @@ $("comutaBrut").addEventListener("click", function(){
   if(BRUT_VIZIBIL){ citesteBrut(); }
 });
 $("fisier").addEventListener("change", citesteBrut);
-// conectarea cu codul de pe televizor (aceleasi cereri ca pagina de conectare a receptorului: /asociere/cod, /asociere)
-function mesajCod(text, eroare){ var m = $("mesajCod"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
-function asociere(cale, date){
-  return fetch(cale, {method: "POST", cache: "no-store", credentials: "same-origin",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: date.toString()}).then(function(r){
-    return r.json().catch(function(){ return {result: false, mesaj: TXT.neasteptat.replace("%s", r.status)}; });
-  });
-}
-$("arataCod").addEventListener("click", function(){
-  mesajCod(TXT.seCereCodul);
-  asociere("/asociere/cod", new URLSearchParams("reafiseaza=1")).then(function(r){
-    // receptorul spune unde se vede codul (pe ecran acum, dupa iesirea din meniu sau dupa pornirea din standby)
-    mesajCod(r.result ? (r.mesaj || TXT.codulPeTv) + " " + TXT.scrieCodul : (r.mesaj || TXT.codNecerut), !r.result);
-    if(r.result){ $("cod").focus(); }
-  }).catch(function(){ mesajCod(TXT.nuRaspunde, true); });
-});
-$("conecteaza").addEventListener("click", function(){
-  var cod = $("cod").value.replace(/[^0-9]/g, "");
-  if(cod.length !== 6){ mesajCod(TXT.codSase, true); return; }
-  asociere("/asociere", new URLSearchParams("cod=" + cod)).then(function(r){
-    if(r.result){ mesajCod(TXT.conectat); location.reload(); return; }
-    mesajCod(r.mesaj || TXT.codGresit, true);
-  }).catch(function(){ mesajCod(TXT.nuRaspunde, true); });
-});
-$("fara").addEventListener("click", function(){
-  if(!DATE){ return; }
-  trimite("/api/acces-ssh-fara-parola", {pornit: DATE.fara_parola ? "0" : "1"}, "fara");
-});
 // citirea urmatoare: des cat se asteapta rezultatul unei comenzi, apoi la 3 secunde
-document.addEventListener("visibilitychange", function(){
-  if(document.hidden){ uitaParola(); ascundeParolaNoua(); if(DATE){ arataParola(DATE); } }
-});
 function planifica(){ setTimeout(function(){ citeste().then(planifica, planifica); }, ASTEPT === null ? 3000 : 700); }
 citeste().then(planifica, planifica);
 </script>

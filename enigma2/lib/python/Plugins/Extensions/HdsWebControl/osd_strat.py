@@ -53,7 +53,6 @@ import threading
 import time
 import zlib
 
-from . import captura_sigura as CS
 
 def _t(text):
 	"""Traducerea enigma2 (functia _ din builtins), sau textul insusi daca nu exista (probele de pe PC)."""
@@ -273,10 +272,7 @@ class Strat(object):
 	def dinMemorie(self, latime_ceruta, etag_client=None, latime_fb=None):
 		"""Pe firul enigma2, fara sa citeasca nimic: raspunsul gata facut daca nu e vremea unei verificari (sau daca
 		alta verificare e in lucru si exista un cadru), altfel None (atunci se cheama cadru() pe un fir)."""
-		epoca = CS.epocaCapturii()
-		if epoca is None:
-			self._stari.clear()
-			return {"cod": 403, "mesaj": CS.mesajRefuz()}
+		epoca = 0  # fara bariera ecranelor cu secrete, o singura epoca
 		if latime_fb is None:
 			g = self.fb.geometrie()
 			if g is None:
@@ -297,10 +293,7 @@ class Strat(object):
 		"""Pe un fir separat: verifica (si la schimbare codeaza) apoi da raspunsul. -> dict cu 'cod' (200, 304, 403, 503),
 		'etag', 'date', 'marime', 'gol'."""
 		with self._lacat:
-			epoca = CS.epocaCapturii()
-			if epoca is None:
-				self._stari.clear()
-				return {"cod": 403, "mesaj": CS.mesajRefuz()}
+			epoca = 0
 			g = self.fb.geometrie()
 			if g is None:
 				return {"cod": 503, "mesaj": _t("Stratul grafic nu se poate citi pe acest receptor.")}
@@ -317,10 +310,6 @@ class Strat(object):
 			if st.date is None or acum >= st.urmatoarea or st.grabit:
 				st.grabit = False
 				self._verifica(st, p, g, acum)
-			if not CS.capturaValida(epoca):
-				if self._stari.get(p) is st:
-					self._stari.pop(p, None)
-				return {"cod": 403, "mesaj": CS.mesajRefuz()}
 			return self._raspuns(p, st, etag_client)
 
 	def _raspuns(self, p, st, etag_client):

@@ -22,7 +22,7 @@ PICTOGRAMA_TRANSMIS = "liste/transmis.png"
 
 
 def _cauta_sigla_lista(sref, nume):
-	from Components.Renderer.Picon import cauta_sigla
+	from Tools.PiconResolver import cauta_sigla
 	return cauta_sigla(sref, nume=nume or None)
 
 
@@ -346,7 +346,11 @@ class ServiceList(HTMLComponent, GUIComponent):
 				except Exception as e:
 					skinWarning("ServiceList: attribute %s=\"%s\" not applied (%s)" % (attrib, value, e))
 		self.skinAttributes = attribs
-		return GUIComponent.applySkin(self, desktop, parent)
+		rezultat = GUIComponent.applySkin(self, desktop, parent)
+		if self.instance is not None:
+			self.hdsDimensiuneTema = (self.instance.size().width(), self.instance.size().height())
+			self.setMode(self.mode)
+		return rezultat
 
 	def connectSelChanged(self, fnc):
 		if not fnc in self.onSelectionChanged:
@@ -366,7 +370,7 @@ class ServiceList(HTMLComponent, GUIComponent):
 		if self.instance is None or not hasattr(self.l, "addPiconPath"):
 			return
 		try:
-			from Components.Renderer.Picon import dosare_sigle, generatie_sigle, sigle_pornite
+			from Tools.PiconResolver import dosare_sigle, generatie_sigle, sigle_pornite
 			from Components import HdsIptvSigle as S
 			if not self.hdsSigleCai:
 				if hasattr(self.l, "setPiconResolver"):
@@ -413,8 +417,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 				if not (s.flags & eServiceReference.isDirectory) or s.getName():
 					continue
 				info = handler.info(s)
-				if info is not None and info.getName(s) in self.NUME_FAVORITE:
-					numite[i] = _("Favourites")
+				if info is not None:
+					from Components.HdsFavorite import nume_buchet
+					nume = info.getName(s)
+					tradus = nume_buchet(s.toString(), nume)
+					if tradus != nume:
+						numite[i] = tradus
 			if not numite:
 				return
 			acum = self.getCurrent()
@@ -532,8 +540,10 @@ class ServiceList(HTMLComponent, GUIComponent):
 
 	def onShow(self):
 		GUIComponent.onShow(self)
+		if self.instance is not None:
+			self.setMode(self.mode)
 		if self.hdsSigleCeas is not None:
-			from Components.Renderer.Picon import resetPiconPath
+			from Tools.PiconResolver import resetPiconPath
 			resetPiconPath()
 			self.hdsSigleCeas.start(1500, False)
 			self.hdsSigle()
@@ -678,28 +688,45 @@ class ServiceList(HTMLComponent, GUIComponent):
 
 	def setMode(self, mode):
 		self.mode = mode
-		self.l.setItemHeight(self.ItemHeight)
+		latime = self.instance.size().width()
+		inaltime_lista = getattr(self, "hdsDimensiuneTema", (latime, None))[1]
+		randuri = getattr(getattr(config.usage, "hds_randuri_lista", None), "value", "tema")
+		font_nume, font_info, font_numar = self.ServiceNameFont, self.ServiceInfoFont, self.ServiceNumberFont
+		inaltime = self.ItemHeight
+		if randuri in ("8", "10", "12", "14", "16", "18", "20"):
+			if inaltime_lista is None:
+				inaltime_lista = self.instance.size().height()
+			inaltime = max(1, inaltime_lista // int(randuri))
+			inaltime_lista = inaltime * int(randuri)
+			# Loc pentru accente si literele care coboara sub rand, inclusiv chirilice.
+			limita_font = max(1, (inaltime - 4) * 7 // 10)
+			font_nume, font_info, font_numar = (gFont(f.family, min(f.pointSize, limita_font))
+				for f in (font_nume, font_info, font_numar))
+		if inaltime_lista is not None and self.instance.size().height() != inaltime_lista:
+			from enigma import eSize
+			self.instance.resize(eSize(latime, inaltime_lista))
+		self.l.setItemHeight(inaltime)
 		self.l.setVisualMode(eListboxServiceContent.visModeComplex)
-		if mode == self.MODE_NORMAL:
-			if config.usage.show_event_progress_in_servicelist.value:
-				self.l.setElementPosition(self.l.celServiceEventProgressbar, eRect(0, 0, 52, self.ItemHeight))
-			else:
-				self.l.setElementPosition(self.l.celServiceEventProgressbar, eRect(0, 0, 0, 0))
-			self.l.setElementFont(self.l.celServiceName, self.ServiceNameFont)
-			self.l.setElementPosition(self.l.celServiceName, eRect(0, 0, self.instance.size().width(), self.ItemHeight))
-			self.l.setElementFont(self.l.celServiceInfo, self.ServiceInfoFont)
-		else:
-			# HDSatelit: coloana numarului e mai lata cand numerele operatorului au mai multe cifre (radio de la 1001)
-			nr = getattr(self, "hdsLatimeNumar", 50)
-			if config.usage.show_event_progress_in_servicelist.value:
-				self.l.setElementPosition(self.l.celServiceEventProgressbar, eRect(nr + 10, 0, 52, self.ItemHeight))
-			else:
-				self.l.setElementPosition(self.l.celServiceEventProgressbar, eRect(nr + 10, 0, 0, 0))
-			self.l.setElementFont(self.l.celServiceNumber, self.ServiceNumberFont)
-			self.l.setElementPosition(self.l.celServiceNumber, eRect(0, 0, nr, self.ItemHeight))
-			self.l.setElementFont(self.l.celServiceName, self.ServiceNameFont)
-			self.l.setElementPosition(self.l.celServiceName, eRect(nr + 10, 0, self.instance.size().width() - nr - 10, self.ItemHeight))
-			self.l.setElementFont(self.l.celServiceInfo, self.ServiceInfoFont)
+		latime = self.instance.size().width()
+		# Coloana numarului ramane suficienta si pentru numerele operatorului.
+		nr = getattr(self, "hdsLatimeNumar", 50) if mode != self.MODE_NORMAL else 0
+		if mode != self.MODE_NORMAL:
+			# Si numerotarea obisnuita poate avea patru cifre, de pilda la canalele de internet.
+			nr = max(nr, 4 * font_numar.pointSize * 62 // 100 + 8)
+		inceput = nr + 10 if mode != self.MODE_NORMAL else 0
+		progres = config.usage.show_event_progress_in_servicelist.value
+		dreapta = progres and getattr(getattr(config.usage, "hds_progres_lista_pozitie", None),
+			"value", "stanga") == "dreapta"
+		bara = min(52, max(0, latime - inceput - 10)) if progres else 0
+		self.l.setElementPosition(self.l.celServiceEventProgressbar,
+			eRect(latime - bara if dreapta else inceput, 0, bara, inaltime) if bara else eRect(inceput, 0, 0, 0))
+		if mode != self.MODE_NORMAL:
+			self.l.setElementFont(self.l.celServiceNumber, font_numar)
+			self.l.setElementPosition(self.l.celServiceNumber, eRect(0, 0, nr, inaltime))
+		self.l.setElementFont(self.l.celServiceName, font_nume)
+		self.l.setElementPosition(self.l.celServiceName,
+			eRect(inceput, 0, max(0, latime - inceput - (bara + 10 if dreapta else 0)), inaltime))
+		self.l.setElementFont(self.l.celServiceInfo, font_info)
 
 	# HDSatelit: numerele operatorului in lista unei retele de cablu (Components/HdsRetele.py, Screens/ChannelSelection.py
 	# hdsUmpleRetea): in coloana numarului fiecare canal are numarul dat de operator (23 = TVR 1, cu golurile lui), nu
@@ -739,7 +766,7 @@ def refreshServiceList(configElement=None):
 class PiconLoader:
 	# Numele cerut la import; siglele se cauta prin mecanismul existent al imaginii.
 	def getPicon(self, service):
-		from Components.Renderer.Picon import getPiconName, sigle_pornite
+		from Tools.PiconResolver import getPiconName, sigle_pornite
 		if not sigle_pornite():
 			return None
 		cale = getPiconName(service)

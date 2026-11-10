@@ -124,7 +124,6 @@ REGISTRU = {
 	"hds_webcontrol_setup": (      # Screens/HdsWebControlSetup.py
 		(N_("Activează HdsWebControl"), "config.plugins.hdswebcontrol.activ", ""),
 		(N_("Port TCP"), "config.plugins.hdswebcontrol.port", ""),
-		(N_("Cere codul și în rețeaua locală"), "config.plugins.hdswebcontrol.cod_retea_locala", ""),
 		(N_("Aplicații de telefon"), "config.plugins.hdswebcontrol.aplicatii",
 			N_("parolă aplicații telefon telecomandă")),
 		(N_("Acces din afara casei"), "config.plugins.hdswebcontrol.aplicatii_afara",

@@ -6,11 +6,11 @@
 # sau sigla altui canal), sigla scoasa, siglele redenumite dupa referinta sau dupa nume si siglele care nu mai sunt ale
 # niciunui canal din lista.
 #
-# CUM CAUTA IMAGINEA (Components/Renderer/Picon.py, cauta_sigla): intai dupa referinta. Numele fisierului e facut din
+# CUM CAUTA IMAGINEA (Tools/PiconResolver.py, cauta_sigla): intai dupa referinta. Numele fisierului e facut din
 # primele zece campuri ale referintei unite cu "_" (<nume>.png); daca lipseste, cu tipul serviciului 1 (canalele HD 0x19
 # au adesea sigla sub 1_0_1_...), iar la fluxuri si cu partea DVB.
 # Se incearca si namespace-ul fara subretea. Dosarele sunt cele comune
-# din Picon.py, de pe toate discurile montate. Lista se reface la hotplug,
+# din Tools/PiconResolver.py, de pe toate discurile montate. Lista se reface la hotplug,
 # la deschiderea listei de canale sau dupa un minut. Pentru fiecare nume
 # se incearca toate dosarele. Referinta vine din toString (tipul si
 # steagurile in zecimal, celelalte campuri in hex mare, fara zerouri in fata), deci numele de aici se fac la fel, oricum
@@ -30,7 +30,7 @@
 #
 # DUPA O SCHIMBARE: uita_memoria() (chemata de fiecare functie care schimba ceva pe disc) goleste siglele tinute minte
 # de pagina /canale si de editorul web (canale_web._MEMORIE: lista gasita, ora ei, octetii cititi) si lista dosarelor din
-# Picon.py (tinuta un minut), ca sigla noua sa se vada la urmatoarea cerere.
+# Tools/PiconResolver.py (tinuta un minut), ca sigla noua sa se vada la urmatoarea cerere.
 #
 # Functiile lucreaza pe disc (un stick sau un disc adormit raspunde in cateva secunde): se cheama de pe un fir de lucru,
 # nu de pe firul enigma2. Nimic din enigma2 la incarcare. Probele de pe PC pun DOSARE (dosare temporare).
@@ -52,14 +52,14 @@ except ImportError:  # pe PC, in probe
 	except Exception:
 		_E = None
 
-# dosarele de sigle in ordinea cautarii; None = ale imaginii (Renderer/Picon.dosare_sigle)
+# dosarele de sigle in ordinea cautarii; None = ale imaginii (Tools/PiconResolver.dosare_sigle)
 DOSARE = None
 DOSAR = "picon"
-# ca Picon.CAI_SIGLE, cand Picon.py nu se poate incarca (${datadir} = /usr/share)
+# ca PiconResolver.CAI_SIGLE, cand modulul comun nu se poate incarca (${datadir} = /usr/share)
 CAI_IMAGINE = ("/usr/share/enigma2/%s/", "/media/hdd/%s/", "/media/usb/%s/", "/media/mmc/%s/", "/media/cf/%s/", "/%s/")
-# radacinile discurilor, cand Picon.py nu se poate incarca; se pot inlocui in probe
+# radacinile discurilor, cand Tools/PiconResolver.py nu se poate incarca; se pot inlocui in probe
 RADACINI_MEDIA = ("/media", "/run/media")
-# ca Picon.TIPURI_FLUX: tipurile de referinta ale fluxurilor care poarta si partea DVB
+# ca PiconResolver.TIPURI_FLUX: tipurile de referinta ale fluxurilor care poarta si partea DVB
 TIPURI_FLUX = ("4097", "5001", "5002", "5003", "8193", "8739")
 
 # marimea: aceeasi limita ca la citirea siglelor in interfata web (canale_web.MAX_SIGLA, aplicatii_web.MAX_SIGLA) si la
@@ -85,7 +85,7 @@ _HEX = re.compile(r"^[0-9A-Fa-f]{0,8}$")
 _INLOCUIRI = (("&", "and"), ("+", "plus"), ("*", "star"))
 # modulele interfetei web care tin minte siglele (_MEMORIE)
 MODULE_WEB = ("Plugins.Extensions.HdsWebControl.canale_web",)
-MODUL_PICON = "Components.Renderer.Picon"
+MODUL_PICON = "Tools.PiconResolver"
 
 _ZAVOR = threading.RLock()
 _MEMORIE_DOSARE = {}
@@ -786,7 +786,7 @@ def redenumeste(fel, perechi):
 
 def uita_memoria():
 	"""Uita siglele tinute minte in afara: lista gasita de pagina /canale (si de editorul web, care o foloseste),
-	octetii cititi si listele dosarelor din Picon.py si din rezerva locala. Numai modulele deja incarcate."""
+	octetii cititi si listele dosarelor din Tools/PiconResolver.py si din rezerva locala. Numai modulele deja incarcate."""
 	_MEMORIE_DOSARE.clear()
 	for nume in MODULE_WEB:
 		try:

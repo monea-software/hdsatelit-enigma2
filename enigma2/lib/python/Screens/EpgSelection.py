@@ -6,17 +6,14 @@ from Components.Pixmap import Pixmap
 from Components.Label import Label
 from Components.EpgList import EPGList, EPG_TYPE_SINGLE, EPG_TYPE_SIMILAR, EPG_TYPE_MULTI
 from Components.ActionMap import ActionMap
-from Components.TimerSanityCheck import TimerSanityCheck
-from Components.UsageConfig import preferredTimerPath
 from Components.Sources.ServiceEvent import ServiceEvent
 from Components.Sources.Event import Event
-from Screens.TimerEdit import TimerSanityConflict
 from Screens.EventView import EventViewSimple
-from Screens.MessageBox import MessageBox
+from Screens.ChoiceBox import ChoiceBox
 from .TimeDateInput import TimeDateInput
 from enigma import eServiceReference
-from RecordTimer import RecordTimerEntry, parseEvent, AFTEREVENT
-from .TimerEntry import TimerEntry
+from .TimerEntry import GhidTimer
+from Components import HdsInregistrariProgramate as HIP
 from ServiceReference import ServiceReference
 from time import localtime, time
 
@@ -73,7 +70,10 @@ class EPGSelection(Screen):
 			self.services = service
 			self.zapFunc = zapFunc
 
-		self["key_green"] = Button(_("Add timer"))
+		self["key_green"] = Button(_("Înregistrează"))
+		self["hds_timer_hint"] = Label(_("MENU: editare, zi și oră.") if self.type == EPG_TYPE_MULTI else
+			_("MENU: editează înregistrarea."))
+		self.ghidTimer = GhidTimer(session, self.hdsTimerSchimbat)
 		self.key_green_choice = self.ADD_TIMER
 		self.key_red_choice = self.EMPTY
 		self["list"] = EPGList(type = self.type, selChangedCB = self.onSelectionChanged, timer = session.nav.RecordTimer)
@@ -87,7 +87,7 @@ class EPGSelection(Screen):
 				"blue": self.blueButtonPressed,
 				"info": self.infoKeyPressed,
 				"red": self.zapTo,
-				"input_date_time": self.enterDateTime,
+				"input_date_time": self.timerMenu,
 				"nextBouquet": self.nextBouquet, # just used in multi epg yet
 				"prevBouquet": self.prevBouquet, # just used in multi epg yet
 				"nextService": self.nextService, # just used in single epg yet
@@ -95,6 +95,31 @@ class EPGSelection(Screen):
 			})
 		self["actions"].csel = self
 		self.onLayoutFinish.append(self.onCreate)
+		self.onClose.append(self.hdsTimerInchis)
+		self._ghidInchis = False
+
+	def hdsTimerInchis(self):
+		self._ghidInchis = True
+
+	def hdsTimerSchimbat(self):
+		if not self._ghidInchis:
+			self["list"].l.invalidate()
+			self.onSelectionChanged()
+
+	def timerMenu(self):
+		if self.type == EPG_TYPE_MULTI:
+			def ales(ret):
+				if ret is not None:
+					ret[1]()
+			self.session.openWithCallback(ales, ChoiceBox, title=_("Ghid TV"), list=[
+				(_("Editează înregistrarea"), self.timerEdit), (_("Alege ziua și ora"), self.enterDateTime)])
+		else:
+			self.timerEdit()
+
+	def timerEdit(self):
+		cur = self["list"].getCurrent()
+		if cur is not None:
+			self.ghidTimer.editeaza(cur[0], cur[1])
 
 	def nextBouquet(self):
 		if self.bouquetChangeCB:
@@ -217,50 +242,10 @@ class EPGSelection(Screen):
 		if self.type == EPG_TYPE_MULTI:
 			self["list"].updateMultiEPG(1)
 
-	def removeTimer(self, timer):
-		timer.afterEvent = AFTEREVENT.NONE
-		self.session.nav.RecordTimer.removeEntry(timer)
-		self["key_green"].setText(_("Add timer"))
-		self.key_green_choice = self.ADD_TIMER
-
 	def timerAdd(self):
 		cur = self["list"].getCurrent()
-		event = cur[0]
-		serviceref = cur[1]
-		if event is None:
-			return
-		eventid = event.getEventId()
-		refstr = serviceref.ref.toString()
-		for timer in self.session.nav.RecordTimer.timer_list:
-			if timer.eit == eventid and timer.service_ref.ref.toString() == refstr:
-				cb_func = lambda ret : not ret or self.removeTimer(timer)
-				self.session.openWithCallback(cb_func, MessageBox, _("Do you really want to delete %s?") % event.getEventName())
-				break
-		else:
-			newEntry = RecordTimerEntry(serviceref, checkOldTimers = True, dirname = preferredTimerPath(), *parseEvent(event))
-			self.session.openWithCallback(self.finishedAdd, TimerEntry, newEntry)
-
-	def finishedAdd(self, answer):
-		print("finished add")
-		if answer[0]:
-			entry = answer[1]
-			simulTimerList = self.session.nav.RecordTimer.record(entry)
-			if simulTimerList is not None:
-				for x in simulTimerList:
-					if x.setAutoincreaseEnd(entry):
-						self.session.nav.RecordTimer.timeChanged(x)
-				simulTimerList = self.session.nav.RecordTimer.record(entry)
-				if simulTimerList is not None:
-					self.session.openWithCallback(self.finishSanityCorrection, TimerSanityConflict, simulTimerList)
-			self["key_green"].setText(_("Remove timer"))
-			self.key_green_choice = self.REMOVE_TIMER
-		else:
-			self["key_green"].setText(_("Add timer"))
-			self.key_green_choice = self.ADD_TIMER
-			print("Timeredit aborted")
-	
-	def finishSanityCorrection(self, answer):
-		self.finishedAdd(answer)
+		if cur is not None:
+			self.ghidTimer.comuta(cur[0], cur[1])
 
 	def moveUp(self):
 		self["list"].moveUp()
@@ -279,7 +264,6 @@ class EPGSelection(Screen):
 			self["now_text"].hide()
 			self["next_text"].hide()
 			self["more_text"].hide()
-			self["key_red"].setText("")
 		else:
 			if state == 1:
 				self["now_button_sel"].show()
@@ -349,9 +333,9 @@ class EPGSelection(Screen):
 				self["key_red"].setText("")
 				self.key_red_choice = self.EMPTY
 			return
-		elif self.key_red_choice != self.ZAP and  self.type == EPG_TYPE_MULTI:
-				self["key_red"].setText("Zap")
-				self.key_red_choice = self.ZAP
+		elif self.type == EPG_TYPE_MULTI:
+			self["key_red"].setText(_("Pornește canalul"))
+			self.key_red_choice = self.ZAP
 
 		if event is None:
 			if self.key_green_choice != self.EMPTY:
@@ -359,17 +343,10 @@ class EPGSelection(Screen):
 				self.key_green_choice = self.EMPTY
 			return
 
-		serviceref = cur[1]
-		eventid = event.getEventId()
-		refstr = serviceref.ref.toString()
-		isRecordEvent = False
-		for timer in self.session.nav.RecordTimer.timer_list:
-			if timer.eit == eventid and timer.service_ref.ref.toString() == refstr:
-				isRecordEvent = True
-				break
+		isRecordEvent = HIP.cautaEmisiune(self.session.nav.RecordTimer, cur[1], event) is not None
 		if isRecordEvent and self.key_green_choice != self.REMOVE_TIMER:
-			self["key_green"].setText(_("Remove timer"))
+			self["key_green"].setText(_("Șterge programarea"))
 			self.key_green_choice = self.REMOVE_TIMER
 		elif not isRecordEvent and self.key_green_choice != self.ADD_TIMER:
-			self["key_green"].setText(_("Add timer"))
+			self["key_green"].setText(_("Înregistrează"))
 			self.key_green_choice = self.ADD_TIMER

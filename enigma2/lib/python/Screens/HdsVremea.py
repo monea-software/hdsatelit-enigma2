@@ -82,10 +82,7 @@ def _textScurt(widget, text, latime=None):
 
 
 def _cautaFir(nume, rezultat):
-	try:
-		rezultat.put((True, V.cautaOrase(nume)))
-	except Exception:
-		rezultat.put((False, []))
+	rezultat.put(V.cautaOraseRezultat(nume))
 
 
 SKIN_SETARI = """
@@ -100,7 +97,9 @@ SKIN_SETARI = """
 		transparent="1" scrollbarMode="showNever" />
 	<widget name="pictograma" position="756,94" size="112,112" alphatest="blend" scale="1" />
 	<widget name="oras" position="704,216" size="456,90" font="Regular;23"
-		foregroundColor="#00C9D2E3" transparent="1" />
+		foregroundColor="#00C9D2E3" backgroundColor="#0D10162A" itemHeight="90"
+		backgroundColorSelected="#00374EA1" foregroundColorSelected="#00FFFFFF"
+		transparent="1" scrollbarMode="showNever" />
 	<widget name="acum" position="704,316" size="456,92" font="Bold;26"
 		foregroundColor="#00F2F4F8" transparent="1" />
 	<widget name="prognoza" position="704,420" size="456,128" font="Regular;21"
@@ -123,15 +122,18 @@ SKIN_SETARI = """
 class HdsVremea(Screen):
 	"""Fiecare alegere se salveaza pe loc, fara alta confirmare."""
 
-	def __init__(self, session):
+	def __init__(self, session, cautare=""):
 		self.skin = scaledSkin(SKIN_SETARI)
 		Screen.__init__(self, session)
 		self.setTitle(_("Vremea"))
 		V.initConfig()
 		self.inchis = False
 		self.cautare = None
+		self.cautareInitiala = cautare if isinstance(cautare, str) else ""
+		self.orasDreapta = False
 		self["lista"] = MenuList([])
-		for nume in ("oras", "acum", "prognoza", "nota", "mesaj", "masura"):
+		self["oras"] = MenuList([])
+		for nume in ("acum", "prognoza", "nota", "mesaj", "masura"):
 			self[nume] = Label("")
 		self["masura"].hide()
 		self["pictograma"] = Pixmap()
@@ -142,8 +144,8 @@ class HdsVremea(Screen):
 			"Alegerile se păstrează imediat.\n\n"
 			"Unitatea și orașul sunt comune cu afișajul din față și cu interfața web."))
 		actiuni = {"ok": self.alege, "cancel": self.close, "red": self.close,
-			"yellow": self.automat, "blue": self.cauta, "up": self["lista"].up,
-			"down": self["lista"].down, "left": lambda: self.schimba(-1),
+			"yellow": self.automat, "blue": self.cauta, "up": lambda: self.vertical(-1),
+			"down": lambda: self.vertical(1), "left": lambda: self.schimba(-1),
 			"right": lambda: self.schimba(1)}
 		for tasta in ("up", "down"):
 			actiuni[tasta + "Repeated"] = actiuni[tasta]
@@ -155,19 +157,29 @@ class HdsVremea(Screen):
 		self.ceasCautare = eTimer()
 		self.ceasCautare.callback.append(self.rezultatCautare)
 		self.onLayoutFinish.append(self.arata)
+		self.onLayoutFinish.append(self._cautaInitial)
 		self.onShown.append(self.porneste)
 		self.onHide.append(self.ceas.stop)
 		self.onClose.append(self.inchide)
 
 	def porneste(self):
+		self._afisajVremea(True)
 		self.arata()
 		self.ceas.start(10000, False)
 
 	def inchide(self):
+		self._afisajVremea(False)
 		self.inchis = True
 		self.ceas.stop()
 		self.ceasCautare.stop()
 		self.cautare = None
+
+	def _afisajVremea(self, deschis):
+		try:
+			from Components import HdsAfisajColor as C
+			C.vremeDeschisa(self, deschis)
+		except Exception:
+			pass
 
 	def arata(self):
 		if self.inchis:
@@ -184,7 +196,7 @@ class HdsVremea(Screen):
 		d = V.date()
 		unitate = s.get("unitate", "C")
 		if d and d.get("temperatura") is not None:
-			self["oras"].setText(d.get("oras", ""))
+			self._arataOras(d.get("oras", ""))
 			self["acum"].setText("%s\n%s" % (
 				V.textTemperatura(d["temperatura"], unitate), _(d.get("stare", ""))))
 			linii = []
@@ -195,10 +207,27 @@ class HdsVremea(Screen):
 			self["prognoza"].setText("\n".join(linii))
 			_poza(self["pictograma"], d.get("pictograma", ""))
 		else:
-			self["oras"].setText(s.get("oras_nume") or _("Oraș automat"))
+			self._arataOras(s.get("oras_nume") or _("Oraș automat"))
 			self["acum"].setText(_("Vremea nu este disponibilă acum."))
 			self["prognoza"].setText(_("Datele apar automat când sunt disponibile."))
 			_poza(self["pictograma"], "")
+		self._focusOras()
+
+	def _arataOras(self, text):
+		instanta = self["oras"].instance
+		latime = instanta.size().width() - 24 if instanta else None
+		self["oras"].setList([_textScurt(self["masura"], text, latime)])
+
+	def _focusOras(self):
+		self["lista"].selectionEnabled(not self.orasDreapta)
+		self["oras"].selectionEnabled(self.orasDreapta)
+
+	def vertical(self, pas):
+		if self.orasDreapta:
+			self.orasDreapta = False
+			self._focusOras()
+		else:
+			(self["lista"].up if pas < 0 else self["lista"].down)()
 
 	def salveaza(self, schimbari):
 		bun, mesaj = V.seteaza(schimbari)
@@ -215,7 +244,17 @@ class HdsVremea(Screen):
 		return ("unitate", UNITATI) if index == 1 else ("tema", LOCURI)
 
 	def schimba(self, pas):
-		if self.cautare is not None or not self["lista"].getSelectionIndex():
+		if self.cautare is not None:
+			return
+		if self.orasDreapta:
+			if pas < 0:
+				self.orasDreapta = False
+				self._focusOras()
+			return
+		if not self["lista"].getSelectionIndex():
+			if pas > 0:
+				self.orasDreapta = True
+				self._focusOras()
 			return
 		cheie, alegeri = self._alegeriRand()
 		valori = [v for v, _t in alegeri]
@@ -226,7 +265,7 @@ class HdsVremea(Screen):
 	def alege(self):
 		if self.cautare is not None:
 			return
-		if not self["lista"].getSelectionIndex():
+		if self.orasDreapta or not self["lista"].getSelectionIndex():
 			self.cauta()
 			return
 		cheie, alegeri = self._alegeriRand()
@@ -246,8 +285,14 @@ class HdsVremea(Screen):
 		self.session.openWithCallback(self.pornesteCautarea, VirtualKeyBoard,
 			title=_("Numele orașului"), text="")
 
+	def _cautaInitial(self):
+		nume = self.cautareInitiala
+		self.cautareInitiala = ""
+		if nume:
+			self.pornesteCautarea(nume)
+
 	def pornesteCautarea(self, nume):
-		if self.inchis or not nume or not nume.strip():
+		if self.inchis or self.cautare is not None or not nume or not nume.strip():
 			return
 		rezultat = queue.Queue(maxsize=1)
 		self.cautare = rezultat
@@ -261,16 +306,14 @@ class HdsVremea(Screen):
 		if self.inchis or self.cautare is None:
 			return
 		try:
-			bun, orase = self.cautare.get_nowait()
+			rezultat = self.cautare.get_nowait()
 		except queue.Empty:
 			return
 		self.cautare = None
 		self.ceasCautare.stop()
-		if not bun:
-			self["mesaj"].setText(_("Orașul nu se poate căuta acum. Încearcă mai târziu."))
-			return
-		if not orase:
-			self["mesaj"].setText(_("Nu s-a găsit niciun oraș. Încearcă alt nume."))
+		orase = rezultat["orase"]
+		if not rezultat["result"] or not orase:
+			self["mesaj"].setText(rezultat["message"])
 			return
 		self["mesaj"].setText("")
 		self.session.openWithCallback(self.orasAles, ChoiceBox, title=_("Alege orașul"),

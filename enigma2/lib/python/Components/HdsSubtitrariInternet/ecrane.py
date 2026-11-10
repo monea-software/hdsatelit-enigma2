@@ -170,8 +170,9 @@ class HdsDescarcareSetari(Screen, ConfigListScreen):
 		else:
 			from Screens.VirtualKeyBoard import VirtualKeyBoard
 			text = "" if c[1].secret else self.conturi.stare().get("os_utilizator_text", "")
+			# hdsSecret: cu asistenta pornita, prima tasta din parola sau cheie cere oprirea ei (in orice limba)
 			self.session.openWithCallback(lambda valoare: self._scris(cheie, valoare), VirtualKeyBoard,
-				title=c[0], text=text)
+				title=c[0], text=text, hdsSecret=bool(c[1].secret))
 
 	def _scris(self, cheie, valoare):
 		if valoare is None:

@@ -66,6 +66,7 @@ TEXTE = {
 		"E106": "Partiția nucleului sau a sistemului e în alt loc sau are altă mărime.",
 		"E107": "Memoria internă are altă mărime decât la modelul pentru care e software-ul.",
 		"E108": "Arborele dispozitivelor arată alt model de receptor.",
+		"E208": "Modelul plăcii nu s-a putut citi.",
 		"E199": "O altă valoare a receptorului nu se potrivește.",
 		"E201": "Procesorul nu s-a putut citi: driverul procesorului nu s-a încărcat.",
 		"E202": "Tipul plăcii nu s-a putut citi: driverul plăcii nu s-a încărcat.",
@@ -104,6 +105,7 @@ TEXTE = {
 		"E106": "The kernel or system partition is in another place or has another size.",
 		"E107": "The internal memory has another size than on the model the software is made for.",
 		"E108": "The device tree identifies another receiver model.",
+		"E208": "The board model could not be read.",
 		"E199": "Another value of the receiver does not match.",
 		"E201": "The processor could not be read: the processor driver did not load.",
 		"E202": "The board type could not be read: the board driver did not load.",
@@ -124,6 +126,7 @@ TEXTE = {
 # randurile tehnice de pe ecran: (cheia din date.txt, eticheta, cheia valorii asteptate)
 # (cele mai importante intai: pe 720p incap mai putine)
 RANDURI_TEHNICE = (
+	("model_id", "model placa", "asteptat_model_id"),
 	("cip", "cip", "asteptat_cip"),
 	("boxtype", "boxtype", "asteptat_boxtype"),
 	("hw", "hw", "asteptat_hw"),

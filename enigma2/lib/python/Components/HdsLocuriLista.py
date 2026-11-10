@@ -115,15 +115,17 @@ def _puneInCapLista(lista):
 
 
 def inregistreaza(id_loc, nume, mod, buchet, prefix, marcaj, eticheta, plugin, fel="", sigle="", la_intrare=None, text_gol=None,
-		dosar=DOSAR, director=DIRECTOR):
+		dosar=DOSAR, director=DIRECTOR, date_radio=None):
 	"""Locul unei extensii. Se poate chema la fiecare pornire: scrie numai ce s-a schimbat. -> True daca s-a schimbat ceva pe disc
-	(atunci cine cheama reincarca buchetele, dupa ce isi scrie si grupele: reincarca())."""
+	(atunci cine cheama reincarca buchetele, dupa ce isi scrie si grupele: reincarca()).
+	date_radio(cale) -> {"text", "piesa", "rass"} sau None: textul unui post al locului pentru ecranul radio si pagina, cand extensia il stie
+	(Components/HdsRadioDate.rds). Numai citiri din memorie: se cheama pe firul interfetei."""
 	d = {"id": id_loc, "nume": nume, "mod": mod, "buchet": buchet, "prefix": prefix, "marcaj": marcaj, "eticheta": eticheta, "plugin": plugin,
 		"fel": fel, "sigle": sigle}
 	if not _valid(d):
 		_jurnal("loc respins: %r" % (id_loc,))
 		return False
-	_VII[id_loc] = {"la_intrare": la_intrare, "text_gol": text_gol}
+	_VII[id_loc] = {"la_intrare": la_intrare, "text_gol": text_gol, "date_radio": date_radio}
 	schimbat = False
 	os.makedirs(dosar, exist_ok=True)
 	cale = os.path.join(dosar, id_loc + ".json")
@@ -228,6 +230,21 @@ def textGol(cale):
 	except Exception as e:
 		_jurnal("text gol: %s: %s" % (type(e).__name__, e))
 		return ""
+
+
+def dateRadio(cale):
+	"""Textul pe care il da extensia pentru un post al locului ei, sau None. Fara cale de flux (un canal obisnuit) nu cauta nimic."""
+	if not cale:
+		return None
+	d = locCanal(cale)
+	f = (_VII.get(d["id"]) or {}).get("date_radio") if d else None
+	if f is None:
+		return None
+	try:
+		return f(cale)
+	except Exception as e:
+		_jurnal("date radio: %s: %s" % (type(e).__name__, e))
+		return None
 
 
 def reincarca():

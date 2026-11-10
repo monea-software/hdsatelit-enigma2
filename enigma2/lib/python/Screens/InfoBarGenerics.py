@@ -111,7 +111,7 @@ class InfoBarShowHide:
 		self["ShowHideActions"] = ActionMap( ["InfobarShowHideActions"] ,
 			{
 				"toggleShow": self.toggleShow,
-				"hide": self.hide,
+				"hide": self.hdsIesirePrivire,
 			}, 1) # lower prio to make it possible to override ok and cancel..
 
 		self.__event_tracker = ServiceEventTracker(screen=self, eventmap=
@@ -217,7 +217,26 @@ class InfoBarShowHide:
 			self.secondInfoBarScreen.hide()
 		Screen.hide(self)
 
+	def hdsInchidePipLaIesire(self):
+		"""EXIT inchide PiP numai din vizionare, cu bara live in fata."""
+		if (not isinstance(self, InfoBarChannelSelection) or not self.execing
+			or self.session.current_dialog is not self or self._hdsSecondaVizibila()
+			or not getattr(self.session, "pipshown", False)):
+			return False
+		if getattr(self.servicelist, "dopipzap", False):
+			self.servicelist.togglePipzap()
+		self.showPiP()
+		return True
+
+	def hdsIesirePrivire(self):
+		if not self.hdsInchidePipLaIesire():
+			self.hide()
+
 	def toggleShow(self):
+		# Optiunea OK apartine numai barei de canale, cat ea este ecranul activ.
+		lista = getattr(self, "_hdsListaDinOk", None)
+		if lista is not None and lista():
+			return
 		if self.__state == self.STATE_SHOWN:
 			if hasattr(self, "secondInfoBarScreen") and self.secondInfoBarScreen:
 				Screen.hide(self)
@@ -500,6 +519,11 @@ class InfoBarChannelSelection:
 				"historyNext": (self.historyNext, _("next channel in history")),
 				"openServiceList": (self.openServiceList, _("open servicelist")),
 			})
+		# Numai sagetile orizontale: CH+/- si celelalte taste isi pastreaza actiunile.
+		self["HdsVolumPrivitActions"] = ActionMap(["HdsVolumPrivitActions"], {
+			"maiIncet": lambda: self._hdsVolumPrivit(False),
+			"maiTare": lambda: self._hdsVolumPrivit(True),
+		}, prio=-2)
 		# HDSatelit: ajutorul (HELP) spune ce deschide sageata sus, dupa setare
 		try:
 			config.usage.hds_sageata_sus.addNotifier(self._hdsAjutorSageata, initial_call=True, immediate_feedback=False)
@@ -681,14 +705,46 @@ class InfoBarChannelSelection:
 		self.servicelist.historyNext()
 
 	def _hdsPeRadio(self):
-		# lista comuna in modul radio (MODE_RADIO, „Alternative radio mode”)
+		radio = getattr(self, "hdsRadio", None)
+		if radio is not None and radio.radio:
+			return True
 		return getattr(self.servicelist, "mode", 0) == 1
+
+	def _hdsTastePrivitActive(self):
+		"""Doar pe bara activa, fara a doua bara si fara tastele de derulare ale unui film sau timeshift."""
+		if not self.execing or self.session.current_dialog is not self:
+			return False
+		if self._hdsSecondaVizibila():
+			return False
+		derulare = self.get("SeekActions")
+		return not (derulare is not None and derulare.enabled)
+
+	def _hdsVolumPrivit(self, maiTare):
+		alegere = getattr(config.usage, "hds_stanga_dreapta_privire", None)
+		if getattr(alegere, "value", "actual") != "volum" or not self._hdsTastePrivitActive():
+			return 0
+		from Components.VolumeControl import VolumeControl
+		volum = VolumeControl.instance
+		if volum is not None:
+			if maiTare:
+				volum.volUp()
+			else:
+				volum.volDown()
+		return 1
+
+	def _hdsListaDinOk(self):
+		alegere = getattr(config.usage, "hds_ok_privire", None)
+		if getattr(alegere, "value", "bara") != "lista" or not self._hdsTastePrivitActive():
+			return False
+		self.openServiceList()
+		return True
 
 	def _hdsAjutorSageata(self, element=None):
 		from Components.HdsSageti import sageata
-		texte = {"radio": _("Lista de canale radio"), "tv": _("Lista de canale TV")}
-		sus = texte.get(sageata(True)) or _("next channel")
-		jos = texte.get(sageata(False)) or _("previous channel")
+		texte = {"radio": _("Lista de canale radio"), "tv": _("Lista de canale TV"),
+			"current": _("Lista modului curent (TV sau radio)")}
+		sus = texte.get(sageata(True)) or (_("previous channel") if sageata(True) == "zap_invers" else _("next channel"))
+		jos = texte.get(sageata(False)) or (_("next channel") if sageata(False) == "zap_invers" else _("previous channel"))
 		harta = self.get("ChannelSelectActions") if hasattr(self, "get") else None
 		for (h, context, actiuni) in getattr(self, "helpList", []):
 			if h is harta:
@@ -702,16 +758,18 @@ class InfoBarChannelSelection:
 		"""HDSatelit: sagetile SUS si JOS la privit, dupa setarea "Săgețile sus și jos la privit" (Components/HdsSageti.py).
 		Lista radio de pe TV: numai lista, cu cursorul pe ultimul post de radio; canalul TV merge pana se alege un post
 		(spre deosebire de tasta RADIO, care porneste radioul). Lista TV de pe radio: ca tasta TV. Lista in care esti
-		deja: lista de acum, cu un rand mai sus sau mai jos. "Schimbă canalul": SUS canalul urmator, JOS cel anterior."""
+		deja: lista de acum, cu un rand mai sus sau mai jos. Schimbarea canalului are doua sensuri, dupa alegere."""
 		from Components.HdsSageti import sageata
 		fel = sageata(sus)
-		if fel == "zap":
-			if sus:
+		if fel == "current":
+			fel = "radio" if self._hdsPeRadio() else "tv"
+		if fel in ("zap", "zap_invers"):
+			if sus == (fel == "zap"):
 				self.zapDown()
 			else:
 				self.zapUp()
 			return
-		peRadio = self._hdsPeRadio()
+		peRadio = getattr(self.servicelist, "mode", 0) == 1
 		if fel == "radio" and not peRadio and getattr(self, "showRadio", None) is not None:
 			self.showRadio(faraPornire=True)
 			return
@@ -1000,6 +1058,11 @@ class InfoBarEPG:
 		else:
 			self.openMultiServiceEPGSilent(bouquets, cnt, withCallback)
 
+	def hdsGhidBuchetCurent(self):
+		"""EPG scurt deschide ghidul listei curente fara intrebarea despre buchet."""
+		bouquets = self.servicelist.getBouquetList() or []
+		self.openMultiServiceEPGSilent(bouquets, len(bouquets), True)
+
 	def openMultiServiceEPGAskBouquet(self, bouquets, cnt, withCallback):
 		if cnt > 1: # show bouquet list
 			if withCallback:
@@ -1086,13 +1149,10 @@ class InfoBarEPG:
 
 	def showEventInfoPlugins(self):
 		list = [(p.name, boundFunction(self.runPlugin, p)) for p in plugins.getPlugins(where = PluginDescriptor.WHERE_EVENTINFO)]
-
-		if list:
-			list.append((_("show single service EPG..."), self.openSingleServiceEPG))
-			list.append((_("Multi EPG"), self.openMultiServiceEPG))
-			self.session.openWithCallback(self.EventInfoPluginChosen, ChoiceBox, title=_("Please choose an extension..."), list = list, skin_name = "EPGExtensionsList")
-		else:
-			self.openSingleServiceEPG()
+		list.append((_("Ghidul canalului curent"), self.openSingleServiceEPG))
+		list.append((_("Ghidul buchetului curent"), self.hdsGhidBuchetCurent))
+		self.session.openWithCallback(self.EventInfoPluginChosen, ChoiceBox,
+			title=_("Alege tipul de ghid"), list=list, skin_name="EPGExtensionsList")
 
 	def runPlugin(self, plugin):
 		# in bara aceasta metoda vine inaintea lui InfoBarPlugins.runPlugin: orice plugin din tasta albastra trece pe aici
@@ -2351,17 +2411,18 @@ class InfoBarAudioSelection:
 			text = _("AC3 downmix off: AC3 sound goes unchanged to the TV.")
 		Notifications.AddPopup(text=text, type=MessageBox.TYPE_INFO, timeout=5, id="AC3DownmixToggle")
 
-# HDSatelit: clasa SubtitleSelection (in Screens/AudioSelection.py) exista deja,
-# completa, stil Dreambox standard -- doar nu era legata la nicio tasta/meniu. keymap.xml
-# leaga deja KEY_TEXT la actiunea "subtitles" (linia 670), dar nicio clasa InfoBar nu o prindea.
-# Adaugat acest mixin minim, dupa modelul InfoBarAudioSelection de mai sus, ca sa lege
-# tasta deja existenta la ecranul deja existent, fara sa inventez cod nou de subtitrare.
+# Lista subtitrarilor si gestul tastei SUBT sunt comune barei si playerelor.
 class InfoBarSubtitleSelection:
-	def __init__(self):
+	def __init__(self, prio=0):
+		self.hdsSubtitleLung = False
+		self.hdsSubtitleApasata = False
 		self["SubtitleSelectionAction"] = HelpableActionMap(self, "InfobarSubtitleSelectionActions",
 			{
-				"subtitles": (self.subtitleSelection, _("Subtitle Options...")),
-			})
+				"subtitlesPressed": self.hdsSubtitleApasat,
+				"subtitlesLong": (self.hdsSubtitleTinut, _("Lista subtitrărilor")),
+				"subtitles": (self.hdsSubtitleEliberat, _("Pornește sau oprește ultima subtitrare")),
+				"subtitleSelection": (self.subtitleSelection, _("Subtitle Options...")),
+			}, prio=prio)
 
 	def subtitleSelection(self):
 		from Screens.AudioSelection import SubtitleSelection
@@ -2374,10 +2435,8 @@ class InfoBarSubserviceSelection:
 	def __init__(self):
 		self["SubserviceSelectionAction"] = HelpableActionMap(self, "InfobarSubserviceSelectionActions",
 			{
-				# HDSatelit: VERDE scurt; in bara (Screens/InfoBar.py, InfoBar.subserviceSelection) actiunea aleasa in Butoane
-				# colorate si taste rapide (implicit Extensii si aplicatii); subcanalele numai daca nu e aleasa niciuna, altfel
-				# sunt un rand in lista tastei albastre
-				"subserviceSelection": (self.subserviceSelection, _("Extensiile sau ce ai ales pentru VERDE (subcanalele, când există)")),
+				# VERDE deschide subcanalele sau actiunea aleasa in editorul tastelor.
+				"subserviceSelection": (self.subserviceSelection, _("Subcanalele sau acțiunea aleasă pentru VERDE")),
 			})
 
 		self["SubserviceQuickzapAction"] = HelpableActionMap(self, "InfobarSubserviceQuickzapActions",
@@ -3057,6 +3116,58 @@ class InfoBarSubtitleSupport(object):
 		self.__semn_sunet = None
 		self.__semn_subtitrare = None
 		_hdsOcr("urmaresteOprirea")
+		if not isinstance(self, InfoBarSubtitleSelection) and callable(getattr(self, "subtitleSelection", None)):
+			InfoBarSubtitleSelection.__init__(self, prio=-2)
+
+	def hdsSubtitleApasat(self):
+		self.hdsSubtitleLung = False
+		self.hdsSubtitleApasata = True
+
+	def hdsSubtitleTinut(self):
+		if not self.hdsSubtitleApasata or self.hdsSubtitleLung:
+			return
+		self.hdsSubtitleLung = True
+		self.hdsSubtitleApasata = False
+		self.hdsSubtitleActiune(True)
+
+	def hdsSubtitleEliberat(self):
+		if not self.hdsSubtitleApasata:
+			return
+		self.hdsSubtitleApasata = False
+		self.hdsSubtitleActiune(False)
+
+	def hdsSubtitleActiune(self, lung):
+		from Components.HdsTasteRapide import actiune_efectiva
+		actiune = actiune_efectiva("subtitle_long" if lung else "subtitle_short")
+		if actiune == "subtitle_toggle":
+			self.hdsComutaSubtitrarea()
+		elif actiune == "subtitle":
+			self.subtitleSelection()
+		elif actiune not in ("none", "default"):
+			from Screens.InfoBar import hdsFaActiuneaLunga
+			try:
+				hdsFaActiuneaLunga(self, actiune)
+			except Exception as eroare:
+				print("[InfoBar] actiunea subtitrarii %s: %s" % (actiune, eroare))
+
+	def hdsComutaSubtitrarea(self):
+		"""Ultima pista a acestui serviciu, inclusiv subtitrarile unui film."""
+		if self.subtitles_enabled:
+			self.setSubtitlesEnable(False)
+			return
+		ref = self.session.nav.getCurrentlyPlayingServiceReference()
+		cheie = ref.toString() if ref is not None else ""
+		ultima = getattr(self, "hdsUltimaSubtitrare", None)
+		sub = self.getCurrentServiceSubtitle()
+		lista = (sub.getSubtitleList() or []) if sub is not None else []
+		pista = None
+		if ultima and ultima[0] == cheie:
+			pista = next((x for x in lista if tuple(x[:4]) == tuple(ultima[1][:4])), None)
+		if pista is None:
+			self.subtitleSelection()
+			return
+		self.setSelectedSubtitle(pista)
+		self.setSubtitlesEnable(True)
 
 	def __serviceStopped(self):
 		self.cached_subtitle_checked = False
@@ -3118,6 +3229,8 @@ class InfoBarSubtitleSupport(object):
 					self.__subtitles_enabled = True
 					_hdsOcr("pistaAleasa", self.selected_subtitle)
 		else:
+			if self.__selected_subtitle:
+				self.hdsTineMinteSubtitrarea(self.__selected_subtitle)
 			if subtitle:
 				subtitle.disableSubtitles(self.subtitle_window.instance)
 			self.__selected_subtitle = False
@@ -3127,6 +3240,12 @@ class InfoBarSubtitleSupport(object):
 
 	def setSelectedSubtitle(self, subtitle):
 		self.__selected_subtitle = subtitle
+		if subtitle:
+			self.hdsTineMinteSubtitrarea(subtitle)
+
+	def hdsTineMinteSubtitrarea(self, subtitle):
+		ref = self.session.nav.getCurrentlyPlayingServiceReference()
+		self.hdsUltimaSubtitrare = (ref.toString() if ref is not None else "", tuple(subtitle))
 
 	subtitles_enabled = property(lambda self: self.__subtitles_enabled, setSubtitlesEnable)
 	selected_subtitle = property(lambda self: self.__selected_subtitle, setSelectedSubtitle)

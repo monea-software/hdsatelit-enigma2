@@ -10,7 +10,7 @@ from traceback import print_exc
 profile("LOAD:enigma_skin")
 from enigma import eSize, ePoint, gFont, eWindow, eLabel, ePixmap, eWindowStyleManager, \
 	addFont, gRGB, eWindowStyleSkinned, getDesktop
-from Components.config import ConfigSubsection, ConfigText, ConfigSelection, config
+from Components.config import ConfigSubsection, ConfigText, ConfigSelection, ConfigYesNo, config
 from Components.Converter.Converter import Converter
 from Components.Sources.Source import Source, ObsoleteSource
 from Tools.Directories import resolveFilename, SCOPE_SKIN, SCOPE_SKIN_IMAGE, SCOPE_FONTS, SCOPE_CURRENT_SKIN, SCOPE_CONFIG, fileExists
@@ -65,11 +65,49 @@ def loadSkin(name, scope = SCOPE_SKIN):
 	_surseSkin[id(radacina)] = name
 	return radacina
 
+# HDSatelit: tema externa aleasa de om. Tot ce s-a adaugat pentru temele scrise de altii (includerile, pozitiile relative,
+# convertoarele cu tipuri in plus, rezerva unui ecran care nu se poate folosi: Components/HdsTemaExterna.py) se aplica numai
+# ecranelor din dosarele de aici. Cu tema HD Satelit (Clasic, Pro) multimea e goala si nimic din ele nu ruleaza.
+dosareSkinStraine = set()
+# ce nu s-a putut din tema: numele ecranului -> {"rezerva": motivul sau None, "lipsa": [componentele lipsa]}
+raportTema = dict()
+_modulTema = [ ]
+
+def _Tema():
+	if not _modulTema:
+		from Components import HdsTemaExterna
+		_modulTema.append(HdsTemaExterna)
+	return _modulTema[0]
+
+def pregatesteTemaExterna(name):
+	"""Dupa loadSkin pe tema aleasa de om: includerile puse la loc, rezolutia verificata, dosarul tinut minte. O tema stricata iese din
+	lista si arunca exceptie, iar skin.py revine la HDSatelit."""
+	mpath, radacina = dom_skins[-1]
+	try:
+		if radacina.find("include") is not None:
+			_Tema().puneIncluderile(radacina, mpath, resolveFilename(SCOPE_SKIN, name), resolveFilename(SCOPE_SKIN, ""))
+		_Tema().verificaRezolutia(radacina)
+	except Exception:
+		dom_skins.pop()
+		raise
+	_Tema().pornesteImportul()
+	dosareSkinStraine.add(mpath)
+
 # skins are loaded in order of priority: the skin with the highest priority is loaded last
 # (usually the user-provided skin). loadSingleSkinData (colors, fonts, window style) is applied
 # in ascending priority; dom_skins keeps the screens in descending priority, so the first screen
 # found is used.
 config.skin = ConfigSubsection()
+
+
+def _progresColoratSchimbat(element):
+	# Bara pastreaza culorile temei; alegerea se vede la redesenare.
+	from enigma import eSlider
+	eSlider.setForegroundGradientEnabled(element.value)
+
+
+config.skin.progres_colorat = ConfigYesNo(default=True)
+config.skin.progres_colorat.addNotifier(_progresColoratSchimbat)
 
 AFISAJ_HDS = "HDSatelit/display/skin_display.xml"
 
@@ -267,6 +305,7 @@ except Exception as err:
 if skinAles is not None:
 	try:
 		loadSkin(skinAles)
+		pregatesteTemaExterna(skinAles)
 		skinPornit = skinAles
 		skinNotice("skinul ales: %s, cu HDSatelit/skin.xml ca rezerva" % skinAles)
 	except Exception as err:
@@ -275,6 +314,12 @@ if skinAles is not None:
 		_HdsSkinuri.incarcareCazuta(skinAles, err)
 		config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
 		config.skin.primary_skin.save()
+		# omul revine la tema HD Satelit cu varianta aleasa de el (Clasic sau Pro), chiar de la pornirea asta
+		try:
+			if temaProDeIncarcat():
+				loadSkin(TEMA_PRO_FISIER)
+		except Exception as err2:
+			skinWarning("tema Pro nu s-a incarcat, ramane Clasic: %s" % err2)
 
 # Rezerva LCD nu acopera ecranele explicite ale temei TV externe.
 incarcaAfisaj(rezerva=True)
@@ -509,10 +554,15 @@ class ScaraEcran(object):
 				return str(_marime(int(v), self.sy))
 			if a.endswith("width") or a.endswith("padding"):
 				return str(_marime(int(v), self.sf))
+			if atribut == "cornerRadius":
+				return str(_marime(int(v), self.sf))
 			if atribut == "colposition":
 				return str(_ori(int(v), self.sx))
 		if "font" in a:
 			return self.font(v)
+		if self.culori and atribut == "foregroundGradient":
+			parti = [p.strip() for p in v.split(',')]
+			return ','.join([self.culori.get(p, p) for p in parti[:-1]] + parti[-1:])
 		if self.culori and "color" in a and v in self.culori:
 			return self.culori[v]
 		return v
@@ -565,6 +615,7 @@ def altSkinActiv():
 # fisierului HDSatelit), tinut aici cand e ales alt skin, al carui stil il inlocuieste pe id 0 in eWindowStyleManager.
 # Obiectul insusi (nu getStyle al managerului: SWIG nu da inapoi un eWindowStyle * folosibil, iar un id nepus e ASSERT).
 STIL_HDS = [ None ]
+_rameFerestre = {}
 
 def puneStilHds(fereastra):
 	"""GUISkin.applySkin, pentru ecranele noastre sub alt skin ales (screen.stilHds, pus de readSkin): fereastra (si
@@ -627,6 +678,72 @@ def scaraEcran(element, skin_path, desktop, modul = None):
 	if baza == ecran and culori is None and fonturi is None:
 		return None
 	return ScaraEcran(baza, ecran, culori, fonturi)
+
+
+class _PozitieFereastra(str):
+	"""Pozitia unei ferestre de plugin se calculeaza dupa rama ei reala."""
+	pass
+
+
+def fereastraPlugin(element, skin_path, desktop, modul):
+	"""Baza ferestrei din codul unui plugin, fata de desktop si rama temei."""
+	if skin_path is not None or not (modul or "").startswith("Plugins.") or modulImagine(modul):
+		return None
+	if desktop.getStyleID() != 0:
+		return None
+	marime = rezolutieAtribut(element.get("size"))
+	if marime is None:
+		return None
+	baza = rezolutieAtribut(element.get("resolution"))
+	s = desktop.size()
+	ecran = (s.width(), s.height())
+	pozitie = element.get("position", "0,0").split(",")
+	if len(pozitie) != 2:
+		return None
+	try:
+		p = [None if v.strip() == "center" else int(v) for v in pozitie]
+	except ValueError:
+		return None
+	if baza is None:
+		# Nu deducem baza din tema: un plugin FHD poate rula sub o tema HD pe desktop FHD.
+		baza = ecran
+		if ecran == (1280, 720) and all(0 < m <= b for m, b in zip(marime, BAZA_HDS_IMPLICITA)):
+			limite = [m if v is None else v + m for v, m in zip(p, marime)]
+			if any(l > d for l, d in zip(limite, ecran)) and all(l <= b for l, b in zip(limite, BAZA_HDS_IMPLICITA)):
+				baza = BAZA_HDS_IMPLICITA
+	# Rama ramane a temei. Rezervam loc pentru ea inainte sa scalam si elementele pluginului.
+	rama = (0, 0, 0, 0) if "wfNoBorder" in [v.strip() for v in element.get("flags", "").split(",")] else _rameFerestre.get(0, (0, 0, 0, 0))
+	disponibil = (max(1, ecran[0] - rama[0] - rama[2]), max(1, ecran[1] - rama[1] - rama[3]))
+	marime_scalata = tuple(_marime(m, (d, b)) for m, d, b in zip(marime, ecran, baza))
+	factor = min([1.0] + [float(d) / m for d, m in zip(disponibil, marime_scalata)])
+	tinta = tuple(max(1, int(d * factor)) for d in ecran)
+	# Coordonatele numerice care centreaza continutul cer aceeasi centrare si cu rama.
+	pozitie = ["center" if v is None or v == (b - m) // 2 else str(v)
+		for v, b, m in zip(p, baza, marime)]
+	if "position" not in element.attrib and (baza != ecran or tinta != ecran):
+		pozitie = ["center", "center"]
+	if baza != tinta:
+		scara = ScaraEcran(baza, tinta)
+		pozitie = scara.pereche(",".join(pozitie))
+	else:
+		scara, pozitie = None, ",".join(pozitie)
+	return scara, _PozitieFereastra(pozitie)
+
+
+def pozitieFereastra(guiObject, desktop, valoare, scale):
+	"""Centrarea foloseste exteriorul; move primeste pozitia continutului."""
+	poz = parsePosition(valoare, scale, desktop, guiObject.csize())
+	marime, ecran = guiObject.size(), desktop.size()
+	offset = guiObject.child().position()
+	valori = []
+	for text, v, m, d, o in zip(valoare.split(","), (poz.x(), poz.y()),
+		(marime.width(), marime.height()), (ecran.width(), ecran.height()), (offset.x(), offset.y())):
+		if text.strip() == "center":
+			v = (d - m) // 2 + o
+		elif m <= d:
+			v = max(o, min(v, d - m + o))
+		valori.append(v)
+	return ePoint(*valori)
 
 def factorHds():
 	"""(sx, sy, sf) ca numere reale: marimea ecranului fata de skinul HDSatelit, (1.0, 1.0, 1.0) pe 1920x1080. Pentru
@@ -782,8 +899,17 @@ def parseColor(s):
 			# implicit al acelor imagini; numai cand skinul nostru nu are numele
 			if s.lower() in CULORI_DE_BAZA:
 				return gRGB(CULORI_DE_BAZA[s.lower()])
+			# tema externa cu gradient intre culori cu nume: se deseneaza prima culoare
+			if dosareSkinStraine and "," in s:
+				return parseColor(s.split(",")[0].strip())
 			raise SkinError("color '%s' must be #aarrggbb or valid named color" % (s))
-	return gRGB(int(s[1:], 0x10))
+	try:
+		return gRGB(int(s[1:], 0x10))
+	except ValueError:
+		# tema externa cu gradient: se deseneaza prima culoare, ca fundalul sa ramana
+		if dosareSkinStraine and "," in s:
+			return parseColor(s.split(",")[0].strip())
+		raise
 
 # HDSatelit: culorile de baza dupa nume, #aarrggbb (aa = 00 opac, ff transparent), cand skinul nu le defineste
 CULORI_DE_BAZA = {"black": 0x00000000, "white": 0x00ffffff, "red": 0x00ff0000, "green": 0x0000ff00, "blue": 0x000000ff,
@@ -791,6 +917,13 @@ CULORI_DE_BAZA = {"black": 0x00000000, "white": 0x00ffffff, "red": 0x00ff0000, "
 	"lightgrey": 0x00c0c0c0, "lightgray": 0x00c0c0c0, "orange": 0x00ffa500, "transparent": 0xff000000,
 	# numele de rol din skinurile altor imagini: textul alb pe fundal negru
 	"foreground": 0x00ffffff, "background": 0x00000000}
+
+def parseForegroundGradient(value):
+	parti = [p.strip() for p in value.split(',')]
+	if len(parti) not in (3, 4) or parti[-1] not in ("horizontal", "vertical"):
+		raise SkinError("foregroundGradient: 2-3 culori si horizontal sau vertical")
+	return [parseColor(p) for p in parti[:-1]], int(parti[-1] == "vertical")
+
 
 def parseParameter(s):
 	"""'1, 2, -3' -> (1, 2, -3); '7' -> 7. ValueError when a part is not a whole number."""
@@ -826,6 +959,10 @@ def readParameter(parameter, path_prefix, images = False, scara = None):
 			return
 		except ValueError:
 			pass
+	if path_prefix in dosareSkinStraine:
+		# parametrii temelor externe pe care imaginea nu ii foloseste (culori, texte) nu sunt erori
+		skinNotice("parameter %s=\"%s\" of the theme not used here" % (name, value))
+		return
 	skinWarning("parameter %s=\"%s\" skipped (expected whole numbers separated by commas%s)" % (name, value, images and ", or a .png file in the skin folder" or ""))
 
 # --- the lists drawn in Python (FileList, ChoiceList, PluginList...) read their look from the skin ---------
@@ -997,7 +1134,8 @@ ORIENTATION = {
 def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1))):
 	try:
 		if attrib == 'position':
-			guiObject.move(parsePosition(value, scale, desktop, guiObject.csize()))
+			guiObject.move(pozitieFereastra(guiObject, desktop, value, scale) if isinstance(value, _PozitieFereastra)
+				else parsePosition(value, scale, desktop, guiObject.csize()))
 		elif attrib == 'size':
 			guiObject.resize(parseSize(value, scale))
 		elif attrib == 'title':
@@ -1042,6 +1180,16 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 			guiObject.setBackgroundColorSelected(parseColor(value))
 		elif attrib == "foregroundColor":
 			guiObject.setForegroundColor(parseColor(value))
+		elif attrib == "foregroundGradient" and hasattr(guiObject, "setForegroundGradient"):
+			culori, vertical = parseForegroundGradient(value)
+			guiObject.setForegroundGradient(*(culori + [vertical]))
+		elif attrib == "foregroundGradient" and hasattr(guiObject, "setForegroundColor"):
+			# Widgeturile vechi pot folosi prima culoare.
+			guiObject.setForegroundColor(parseForegroundGradient(value)[0][0])
+		elif attrib == "cornerRadius" and hasattr(guiObject, "setCornerRadius"):
+			factor = min(scale[0][0] / float(scale[0][1]), scale[1][0] / float(scale[1][1]))
+			raza = int(round(int(value) * factor))
+			guiObject.setCornerRadius(max(0, raza))
 		elif attrib == "foregroundColorSelected":
 			guiObject.setForegroundColorSelected(parseColor(value))
 		elif attrib == "shadowColor":
@@ -1090,6 +1238,25 @@ def resolveFontFile(filename, path_prefix):
 			return candidate
 	return None
 
+def _fontTema(resolved_font, filename, name):
+	"""tema externa: un fisier care nu e font ar opri enigma2 din cod nativ, deci nu ajunge la addFont; un font lipsa sau
+	stricat al carui nume nu l-a dat deja HDSatelit ia un font al imaginii cu acelasi rol. Calea de folosit sau None."""
+	T = _Tema()
+	if resolved_font is not None and T.fontBun(resolved_font):
+		return resolved_font
+	skinNotice("font %s (%s) of the theme is missing or not a font" % (filename, name))
+	if T.fontDinImagine(name, [x for x in dom_skins if x[0] not in dosareSkinStraine]):
+		return None
+	return T.fontRezerva(name, resolveFilename(SCOPE_FONTS, ""))
+
+def _cuFactor(atribute):
+	"""get pentru atributele unui element din tema, cu expresiile cu f ("Regular;20*f") socotite"""
+	valori = _Tema().valoareCuFactor
+	def citeste(nume, implicit = None):
+		v = atribute.get(nume)
+		return valori(v) if v else (implicit if v is None else v)
+	return citeste
+
 def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 	"""loads skin data like colors, fonts, window style; each entry on its own, a bad one is skipped. `scara`
 	(ScaraEcran): un fisier HDSatelit cand ecranul final are alta rezolutie (loadSkinData)."""
@@ -1102,6 +1269,7 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 	scara_font = scara and (scara.sf, scara.sf) or ((1,1),(1,1))
 	scara_xy = scara and (scara.sx, scara.sy) or ((1,1),(1,1))
 	dinHds = esteDinHds(path_prefix)
+	dinTema = path_prefix in dosareSkinStraine
 
 	for c in skin.findall("output"):
 		try:
@@ -1140,6 +1308,10 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 			try:
 				scale = int(get_attr("scale") or 100)
 				resolved_font = resolveFontFile(filename, path_prefix)
+				if dinTema:
+					resolved_font = _fontTema(resolved_font, filename, name)
+					if resolved_font is None:
+						continue
 				if resolved_font is None:
 					skinWarning("font file %s (%s) not found" % (filename, name))
 					continue
@@ -1148,6 +1320,8 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 				skinWarning("font %s: %s" % (name, e))
 		for alias in c.findall("alias"):
 			get_attr = alias.attrib.get
+			if dinTema:
+				get_attr = _cuFactor(alias.attrib)
 			try:
 				size, height = int(get_attr("size")), int(get_attr("height") or 0)
 				if scara is not None:
@@ -1195,12 +1369,15 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 		try:
 			style = eWindowStyleSkinned()
 			id = int(windowstyle.attrib.get("id") or 0)
+			rama = {}
 
 			# defaults
 			font = gFont("Regular", 20)
 			offset = eSize(20, 5)
 			for title in windowstyle.findall("title"):
 				get_attr = title.attrib.get
+				if dinTema:
+					get_attr = _cuFactor(title.attrib)
 				if get_attr("offset"):
 					offset = parseSize(get_attr("offset"), scara_xy)
 				if get_attr("font"):
@@ -1220,6 +1397,15 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 						imagine = resolveSkinImage(filename, path_prefix)
 						png = loadPixmap(scara.imagine(imagine) if scara is not None else imagine, desktop)
 						style.setPixmap(getattr(eWindowStyleSkinned, bsName), getattr(eWindowStyleSkinned, bpName), png)
+						if bsName == "bsWindow":
+							try:
+								m = png.size()
+								w, h = int(m.width()), int(m.height())
+								for parte in ("bpTopLeft", "bpTop", "bpTopRight", "bpLeft", "bpRight", "bpBottomLeft", "bpBottom", "bpBottomRight"):
+									if bpName in (parte, "bpAll"):
+										rama[parte] = (w, h)
+							except (AttributeError, TypeError, ValueError):
+								pass
 					except Exception as e:
 						skinWarning("borderset %s/%s: %s" % (bsName, bpName, e))
 
@@ -1232,6 +1418,10 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 					skinWarning("window style color %s: %s" % (colorType, e))
 
 			eWindowStyleManager.getInstance().setStyle(id, style)
+			_rameFerestre[id] = (rama.get("bpLeft", (0, 0))[0],
+				max(rama.get(p, (0, 0))[1] for p in ("bpTopLeft", "bpTop", "bpTopRight")),
+				rama.get("bpRight", (0, 0))[0],
+				max(rama.get(p, (0, 0))[1] for p in ("bpBottomLeft", "bpBottom", "bpBottomRight")))
 			# cu alt skin ales, stilul ferestrelor HDSatelit (culorile listelor, fundalul, titlul, rama) se tine si in
 			# STIL_HDS, pentru ecranele noastre (GUISkin.applySkin, puneStilHds); skinul ales il inlocuieste pe id 0
 			if dinHds and id == 0 and altSkinActiv():
@@ -1258,6 +1448,9 @@ def loadSkinData(desktop):
 		except Exception as e:
 			skinWarning("%s: %s" % (path, e))
 			print_exc()
+	# tema externa: numele pe care le importa fisierele aduse de teme si de extensiile lor, inainte sa se incarce extensiile
+	if dosareSkinStraine:
+		_Tema().puneNumeLipsa(globals())
 
 def lookupScreen(name, style_id, numaiHds=False):
 	for (path, skin) in dom_skins:
@@ -1275,6 +1468,57 @@ def lookupScreen(name, style_id, numaiHds=False):
 				if (style_id != 2 and screen_style_id == -1) or screen_style_id == style_id:
 					return x, path
 	return None, None
+
+def lookupScreenTema(name, style_id):
+	"""Ca lookupScreen, numai in tema externa"""
+	for (p, radacina) in dom_skins:
+		if p not in dosareSkinStraine:
+			continue
+		for x in radacina.findall("screen"):
+			if x.attrib.get('name', '') == name:
+				try:
+					screen_style_id = int(x.attrib.get('id', '-1'))
+				except ValueError:
+					screen_style_id = -1
+				if screen_style_id == -1 and name.find('ummary') > 0:
+					screen_style_id = 1
+				if (style_id != 2 and screen_style_id == -1) or screen_style_id == style_id:
+					return x, p
+	return None, None
+
+def ecranulTemei(screen, names, style_id):
+	"""(nume, <screen>, cale) din tema externa pentru un ecran obisnuit al imaginii cu mai multe nume, dintre care pe primul
+	il are numai rezerva (ChannelSelection: HdsListaCanale, ChannelSelection; meniul: menu_mainmenu, Menu). Altfel
+	HDSatelit/skin.xml, incarcat dupa tema, ar da de fiecare data ecranul nostru. Ecranele Hds* raman ale noastre."""
+	if len(names) > 1 and not screen.__class__.__name__.startswith("Hds"):
+		for n in names:
+			if not n.startswith("Hds"):
+				x, p = lookupScreenTema(n, style_id)
+				if x is not None:
+					return n, x, p
+	return None, None, None
+
+def motivRezervaTema(screen, element, style_id):
+	"""De ce nu se poate folosi ecranul temei ((fel, detaliu)), inainte sa se construiasca ceva, sau None"""
+	try:
+		return _Tema().motivEcran(screen, element, lambda n: lookupScreen(n, style_id)[0])
+	except Exception as e:
+		skinNotice("verificarea ecranului temei: %s" % e)
+		return None
+
+# clasele ecranelor care au cazut la deschidere cu ecranul temei: raman pe rezerva pana la repornirea interfetei (mytest.py)
+_ecraneFaraTema = set()
+
+def ecranFaraTema(screen):
+	_ecraneFaraTema.add(screen.__class__.__name__)
+
+def notaTema(name, cheie, valoare):
+	"""raportTema: ce nu s-a putut din tema pentru ecranul `name`"""
+	e = raportTema.setdefault(name, {"rezerva": None, "lipsa": []})
+	if cheie == "rezerva":
+		e["rezerva"] = valoare
+	elif valoare not in e["lipsa"] and len(e["lipsa"]) < 20:
+		e["lipsa"].append(valoare)
 
 def panouLipsa(element, style_id, visited = None):
 	"""Numele primului <panel name="X"/> din element (sau din panourile lui) pe care niciun skin nu-l are; None daca
@@ -1295,9 +1539,10 @@ def panouLipsa(element, style_id, visited = None):
 			return lipsa
 	return None
 
-def expandPanels(element, skin_path, style_id, screen_name, visited = None):
+def expandPanels(element, skin_path, style_id, screen_name, visited = None, cadru = None):
 	"""children of a screen, with every <panel name="X"/> replaced by the children of screen X
-	(recursively). Returns (child, skin path of the file the child comes from)."""
+	(recursively). Returns (child, skin path of the file the child comes from). `cadru`: numai la ecranele din tema externa, locul
+	in care se aseaza panourile fara nume, cu pozitie si marime."""
 	if visited is None:
 		visited = set()
 	children = [ ]
@@ -1306,14 +1551,22 @@ def expandPanels(element, skin_path, style_id, screen_name, visited = None):
 			children.append((child, skin_path))
 			continue
 		panel_name = child.attrib.get("name")
+		if not panel_name and cadru is not None:
+			children += _Tema().panouFaraNume(child, skin_path, cadru, lambda n: lookupScreen(n, style_id))
+			continue
 		if not panel_name or panel_name in visited:
 			skinWarning("%s: panel %s skipped (missing name or used in a loop)" % (screen_name, panel_name))
 			continue
-		panel, panel_path = lookupScreen(panel_name, style_id)
+		panel = None
+		# sub o tema externa, ecranele noastre iau panourile noastre, chiar daca tema are unul cu acelasi nume
+		if dosareSkinStraine and esteDinHds(skin_path):
+			panel, panel_path = lookupScreen(panel_name, style_id, numaiHds=True)
+		if panel is None:
+			panel, panel_path = lookupScreen(panel_name, style_id)
 		if panel is None:
 			skinWarning("%s: panel %s not found" % (screen_name, panel_name))
 			continue
-		children += expandPanels(panel, panel_path, style_id, screen_name, visited | {panel_name})
+		children += expandPanels(panel, panel_path, style_id, screen_name, visited | {panel_name}, cadru)
 	return children
 
 def widgetIsWanted(screen, get_attr):
@@ -1332,7 +1585,20 @@ def widgetIsWanted(screen, get_attr):
 class additionalWidget:
 	pass
 
-def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None):
+# convertoarele imaginii pe care temele externe le folosesc cu tipuri in plus: ecranele din tema primesc clasa cu acelasi nume
+# din Components/Converter/HdsConvertoareStraine.py, derivata din cea a imaginii; ecranele imaginii, clasa imaginii neschimbata
+CONVERTOARE_STRAINE = frozenset(("ServiceInfo", "EventName", "EventTime", "ClockToText", "ServiceName", "ConditionalShowHide", "TemplatedMultiContent", "FrontendInfo",
+	"RdsInfo", "MovieInfo", "TunerInfo"))
+
+def convertorStrain(ctype, clasa):
+	try:
+		from Components.Converter import HdsConvertoareStraine
+		return getattr(HdsConvertoareStraine, ctype, None) or clasa
+	except Exception as e:
+		skinNotice("convertorul %s pentru temele externe: %s" % (ctype, e))
+		return clasa
+
+def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None, strain = False):
 	get_attr = widget.attrib.get
 	wsource = get_attr('source')
 
@@ -1371,6 +1637,8 @@ def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None):
 		converter_class = my_import('.'.join(("Components", "Converter", ctype))).__dict__.get(ctype)
 		if converter_class is None:
 			raise SkinError("converter %s not found" % ctype)
+		if strain and ctype in CONVERTOARE_STRAINE:
+			converter_class = convertorStrain(ctype, converter_class)
 
 		c = None
 		for i in source.downstream_elements:
@@ -1384,6 +1652,17 @@ def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None):
 	renderer_class = my_import('.'.join(("Components", "Renderer", wrender))).__dict__.get(wrender)
 	if renderer_class is None:
 		raise SkinError("renderer %s not found" % wrender)
+	# tema externa: o lista desenata fara convertor (o lista de texte) trece prin StringList, cum cere randatorul imaginii; o bara legata direct
+	# de o emisiune arata cat a trecut din ea
+	if strain and wrender == "Listbox" and not hasattr(source, "content"):
+		from Components.Converter.StringList import StringList
+		c = StringList("")
+		c.connect(source)
+		source = c
+	elif strain and wrender == "Progress" and not hasattr(source, "range") and hasattr(source, "event"):
+		c = convertorStrain("EventTime", None)("Progress")
+		c.connect(source)
+		source = c
 
 	renderer = renderer_class() # instantiate renderer
 	renderer.connect(source) # connect to source
@@ -1403,25 +1682,54 @@ def readSkin(screen, skin, names, desktop):
 
 	# try all skins, first existing one have priority
 	myscreen, path = None, None
-	for n in names:
-		myscreen, path = lookupScreen(n, style_id)
+	# tema externa: un nume pe care il are tema trece inaintea unuia pe care il are numai rezerva
+	if dosareSkinStraine and not screen.__class__.__name__ in _ecraneFaraTema:
+		n, myscreen, path = ecranulTemei(screen, names, style_id)
 		if myscreen is not None:
-			# use this name for debug output
 			name = n
-			break
+	if myscreen is None:
+		for n in names:
+			myscreen, path = lookupScreen(n, style_id)
+			if myscreen is not None:
+				# use this name for debug output
+				name = n
+				break
 
 	# HDSatelit, numai temele externe: un ecran al temei care cere un panou pe care tema nu-l are ramane fara elementele
 	# panoului (o tema reala: menu_mainmenu -> panel menulist: meniul fara lista, iar OK cadea in Sources/List). Atunci
 	# se ia ecranul HDSatelit pentru unul din nume (Menu), daca il avem; altfel ramane al temei, ca pana acum.
 	if myscreen is not None and path is not None and not esteDinHds(path):
-		lipsa = panouLipsa(myscreen, style_id)
-		if lipsa:
-			for n in names:
-				alNostru, caleNoastra = lookupScreen(n, style_id, numaiHds=True)
-				if alNostru is not None:
-					skinWarning("%s: panel %s not found, HDSatelit screen %s used" % (name, lipsa, n))
-					myscreen, path, name = alNostru, caleNoastra, n
-					break
+		if path in dosareSkinStraine:
+			# si cand lipseste lista ecranului sau cea mai mare parte din componente; se hotaraste inainte sa se construiasca
+			# ceva, deci nu e nimic de desfacut. Ecranul care a cazut o data cu tema ramane pe rezerva (mytest.py).
+			motiv = ("cadere", "") if screen.__class__.__name__ in _ecraneFaraTema else motivRezervaTema(screen, myscreen, style_id)
+			if motiv:
+				gasit = False
+				for n in names:
+					alNostru, caleNoastra = lookupScreen(n, style_id, numaiHds=True)
+					if alNostru is not None:
+						skinWarning("%s: panel %s not found, HDSatelit screen %s used" % (name, motiv[1], n) if motiv[0] == "panou" else
+							"%s: %s %s, HDSatelit screen %s used" % (name, motiv[0], motiv[1], n))
+						myscreen, path = alNostru, caleNoastra
+						gasit = True
+						break
+				if not gasit and (getattr(screen, "parsedSkin", None) is not None or getattr(screen, "skin", None)):
+					# fara ecran al nostru: cel scris in codul ecranului
+					skinWarning("%s: %s %s, screen written in the code used" % (name, motiv[0], motiv[1]))
+					myscreen, path = None, None
+					gasit = True
+				if gasit:
+					notaTema(name, "rezerva", motiv)
+					_Tema().rezervaFolosita(_HdsSkinuri.numeDinValoare(skinPornit) or skinPornit, name, motiv)
+		else:
+			lipsa = panouLipsa(myscreen, style_id)
+			if lipsa:
+				for n in names:
+					alNostru, caleNoastra = lookupScreen(n, style_id, numaiHds=True)
+					if alNostru is not None:
+						skinWarning("%s: panel %s not found, HDSatelit screen %s used" % (name, lipsa, n))
+						myscreen, path, name = alNostru, caleNoastra, n
+						break
 
 	# otherwise try embedded skin
 	if myscreen is None:
@@ -1456,9 +1764,15 @@ def readSkin(screen, skin, names, desktop):
 
 	# ecranele scrise pentru alta rezolutie (si culorile, fonturile noastre sub alt skin): ScaraEcran, vezi mai sus
 	scara = scaraEcran(myscreen, path, desktop, screen.__class__.__module__ if path is None else None)
+	fereastra = fereastraPlugin(myscreen, path, desktop, screen.__class__.__module__)
+	if fereastra is not None:
+		scara = fereastra[0]
 	scari = {path: scara}
 	# ecranul nostru sub alt skin ales: si stilul ferestrei HDSatelit (GUISkin.applySkin -> puneStilHds)
 	screen.stilHds = scara is not None and scara.fonturi is not None
+	strain = path in dosareSkinStraine
+	if dosareSkinStraine:
+		screen.hdsSursaTema = path
 
 	def scaraCopil(widget_path):
 		# un panou din alt fisier se scaleaza dupa fisierul lui
@@ -1472,11 +1786,19 @@ def readSkin(screen, skin, names, desktop):
 		if scara.scaleaza and name not in _ecraneScalate:
 			_ecraneScalate.add(name)
 			skinNotice("%s: %dx%d -> %dx%d" % ((name,) + scara.baza + scara.ecran))
+	if fereastra is not None:
+		screen.skinAttributes = [(a, fereastra[1] if a == "position" else v) for a, v in screen.skinAttributes]
+		if not any(a == "position" for a, _v in screen.skinAttributes):
+			screen.skinAttributes.append(("position", fereastra[1]))
 
 	screen.additionalWidgets = [ ]
 	screen.renderer = [ ]
 
-	children = expandPanels(myscreen, path, style_id, name)
+	if strain:
+		s = desktop.size()
+		children = expandPanels(myscreen, path, style_id, name, None, _Tema().cadruEcran(myscreen, s.width(), s.height()))
+	else:
+		children = expandPanels(myscreen, path, style_id, name)
 
 	# now walk all widgets: 1:1-mapped widgets (name=) or source->renderer widgets (source=)
 	for (widget, widget_path) in children:
@@ -1504,12 +1826,18 @@ def readSkin(screen, skin, names, desktop):
 							if a not in puse:
 								attributes.append((a, v))
 					screen[wname].skinAttributes = sc.atribute(attributes)
+			elif wsource and strain and wsource in screen and hasattr(screen[wsource], "GUIcreate") and not hasattr(screen[wsource], "connectDownstream"):
+				# tema externa: source= pentru ce la noi e un element al ecranului (o tasta Button in loc de StaticText): atributele merg la el
+				attributes = screen[wsource].skinAttributes = [ ]
+				collectAttributes(attributes, widget, prefix, ignore=('source', 'render', 'conditional', 'objectTypes'))
 			elif wsource:
-				readSourceWidget(screen, widget, name, prefix, sc)
+				readSourceWidget(screen, widget, name, prefix, sc, strain)
 			else:
 				raise SkinError("widget has no name and no source")
 		except Exception as e:
 			skinWarning("%s/%s: %s" % (name, wname or wsource, e))
+			if strain:
+				notaTema(name, "lipsa", str(e)[:120])
 
 	# now walk additional objects
 	for (widget, widget_path) in children:
@@ -1543,6 +1871,25 @@ def readSkin(screen, skin, names, desktop):
 			screen.additionalWidgets.append(w)
 		except Exception as e:
 			skinWarning("%s/<%s>: %s" % (name, w_tag, e))
+
+	if strain:
+		rezolvaEcranTema(screen, desktop, name)
+
+def rezolvaEcranTema(screen, desktop, name):
+	"""Numai ecranele din tema externa: pozitiile si marimile relative (fill, c+N, e-N, N%) si factorul f, intai ale ecranului
+	(fata de televizor), apoi ale elementelor lui (fata de ecran)"""
+	try:
+		T = _Tema()
+		s = desktop.size()
+		ecran = (s.width(), s.height())
+		screen.skinAttributes = T.rezolvaRelative(screen.skinAttributes, ecran[0], ecran[1])
+		w, h = T.marimeDinAtribute(screen.skinAttributes, ecran)
+		for x in list(screen.renderer) + list(screen.additionalWidgets) + list(screen.values()):
+			if getattr(x, "skinAttributes", None):
+				x.skinAttributes = T.rezolvaRelative(x.skinAttributes, w, h)
+	except Exception as e:
+		skinWarning("%s: pozitiile relative: %s" % (name, e))
+
 
 # ---------------------------------------------------------------- numele cerute de pluginuri
 colors = colorNames

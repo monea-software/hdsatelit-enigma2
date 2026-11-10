@@ -13,6 +13,9 @@ LCD_RESURSE = tuple(r for r in RESURSE if r != "leduri")
 _ocupanti = {}
 _summary = set()
 _proc_cache = (0, [])
+# Cautarea altor programe cu dispozitivul afisajului deschis (/proc/*/fd): o data la atatea secunde. Pe Vu+ Solo SE
+# tinea firul principal 3 din 40 de esantioane la pasul vechi de 2 s (raportul de procesor 239122).
+PROC_INTERVAL_S = 5
 _leduri = weakref.WeakSet()
 _ledPermis = None
 
@@ -168,7 +171,7 @@ def _procese():
 	"""Alte procese cu dispozitivul deschis; citire rara si limitata."""
 	global _proc_cache
 	acum = time.monotonic()
-	if acum - _proc_cache[0] < 2:
+	if 0 <= acum - _proc_cache[0] < PROC_INTERVAL_S:
 		return _proc_cache[1]
 	rez = []
 	try:
@@ -186,7 +189,12 @@ def _procese():
 			dosar = "/proc/%s/fd" % pid
 			folosite = set()
 			for fd in os.listdir(dosar)[:32]:
-				cale = os.path.realpath(os.path.join(dosar, fd))
+				# legatura din /proc/PID/fd e deja calea adevarata a fisierului deschis (nucleul a rezolvat legaturile
+				# la deschidere): un singur apel readlink, fata de realpath, care facea lstat pe fiecare bucata a caii
+				try:
+					cale = os.readlink(os.path.join(dosar, fd))
+				except OSError:
+					continue
 				resurse = dispozitive.get(cale) or _resurseProc(cale)
 				if not resurse:
 					continue

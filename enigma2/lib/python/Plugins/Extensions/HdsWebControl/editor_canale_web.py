@@ -66,7 +66,7 @@ CALE_OP = b"/api/editor-canale-op"
 CALE_IMPORT = b"/api/editor-canale-import"
 _EU = re.compile(r"^[A-Za-z0-9]{6,40}$")
 _ID_BUCHET = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
-_CHEIE = re.compile(r"^[0-9a-f]{1,8}(:[0-9a-f]{1,8}){3}$")
+_CHEIE = re.compile(r"^[0-9a-f]{1,8}(:[0-9a-f]{1,8}){3,4}$")
 _TP = re.compile(r"^[0-9a-f]{8}:[0-9a-f]{4}:[0-9a-f]{4}$")
 FEL_COD = {"canal": "c", "marcaj": "m", "spatiu": "g", "subbuchet": "b", "alternative": "a", "flux": "f", "altul": "x"}
 
@@ -273,7 +273,7 @@ def rand_intrare(x, sigle=None):
 		D = _D()
 		cale = D.decodeaza(D.Referinta(x.ref).cale)
 		detaliu = cale.split("://", 1)[-1].split("/", 1)[0] if "://" in cale else cale
-	return [x.id, FEL_COD.get(x.fel, "x"), x.nume, x.numar, biti, x.cheie or "", detaliu, x.buchet_id or "", sigla,
+	return [x.id, FEL_COD.get(x.fel, "x"), x.nume, x.numar, biti, cheie_serviciu(x.ref) if x.cheie else "", detaliu, x.buchet_id or "", sigla,
 		x.serviciu.hd if x.fel == "canal" and x.serviciu is not None else "", x.ref if x.fel == "flux" else ""]
 
 
@@ -288,7 +288,7 @@ def text_tp(k):
 def rand_serviciu(c, harta, sigle=None):
 	biti = (1 if c.ascuns else 0) | (2 if c.blocat else 0) | (4 if c.are_video else 0) | (8 if c.are_sunet else 0) | \
 		(16 if (c.steaguri or 0) & 64 else 0) | (32 if _U().hd_in_nume_sd(c.nume, c.stype) else 0)
-	return [c.cheie, c.ref, c.nume, c.furnizor, _poz_cod(c.poz), c.frecv or 0, c.pol, c.sid, c.hd, c.acces or "", biti,
+	return [cheie_serviciu(c.ref), c.ref, c.nume, c.furnizor, _poz_cod(c.poz), c.frecv or 0, c.pol, c.sid, c.hd, c.acces or "", biti,
 		len(harta.get(c.cheie, ())), c.tp_text, _sigla(c.ref, sigle), c.tip, text_tp(c.tp_cheie), c.stype]
 
 
@@ -372,17 +372,35 @@ def _ids(o, cheie="ids"):
 	return [x for x in v[:20000] if isinstance(x, int)]
 
 
+def cheie_serviciu(ref):
+	"""Identitatea unui rand web include si tipul serviciului."""
+	k = _D().k5_din_ref(ref)
+	return ":".join("%x" % p for p in k) if k is not None else ""
+
+
+def _din_cheie(s, k):
+	if not isinstance(k, str) or not _CHEIE.fullmatch(k):
+		return None
+	parti = tuple(int(p, 16) for p in k.split(":"))
+	if len(parti) == 5:
+		return s.d.lamedb.servicii.get(parti)
+	# Paginile mai vechi dau patru campuri. O selectie ambigua se reface, nu se ghiceste tipul.
+	sv = s.d.lamedb.dupa_cheie(k)
+	if len(sv) > 1:
+		raise _E().Eroare(_t("Lista de canale s-a schimbat. Alege din nou canalul."))
+	return sv[0] if sv else None
+
+
 def _chei(s, o, cheie="chei"):
-	"""Cheile canalelor (sid:ns:tsid:onid) -> referintele lor din lamedb."""
+	"""Cheile canalelor (sid:ns:tsid:onid:tip) -> referintele exacte din lamedb."""
 	v = o.get(cheie) or []
 	if not isinstance(v, list):
 		return []
 	rez = []
 	for k in v[:20000]:
-		if isinstance(k, str) and _CHEIE.match(k):
-			sv = s.d.lamedb.dupa_cheie(k)
-			if sv:
-				rez.append(sv[0].ref)
+		sv = _din_cheie(s, k)
+		if sv is not None:
+			rez.append(sv.ref)
 	return rez
 
 
@@ -664,13 +682,13 @@ def _servicii_atinse(s, o, rez):
 		bid = o.get("buchet")
 		for i in (s.d.buchete.get(bid).intrari if s.d.buchete.get(bid) else ()):
 			if i.id in (o.get("ids") or []) and i.cheie:
-				chei.append(i.cheie)
+				chei.append(cheie_serviciu(i.ref))
 	rand = []
 	sigle = sigle_stiute()
 	for k in chei:
-		sv = s.d.lamedb.dupa_cheie(k)
-		if sv:
-			rand.append(rand_serviciu(s._canal(sv[0]), harta, sigle))
+		sv = _din_cheie(s, k)
+		if sv is not None:
+			rand.append(rand_serviciu(s._canal(sv), harta, sigle))
 	if rand:
 		rez["servicii"] = rand
 
@@ -1336,7 +1354,7 @@ def grupa_json(g):
 	rand = []
 	for r in g.randuri:
 		inl = r.inlocuire
-		rand.append([r.cheie or "", r.ref or "", r.nume or "", r.poz_text or "", r.frecv or 0, r.pol or "", r.sid,
+		rand.append([cheie_serviciu(r.ref or "") or r.cheie or "", r.ref or "", r.nume or "", r.poz_text or "", r.frecv or 0, r.pol or "", r.sid,
 			None if r.are_video is None else (1 if r.are_video else 0),
 			None if r.are_sunet is None else (1 if r.are_sunet else 0), r.buchete or 0, r.tp_text or "",
 			r.buchet_id or "", r.id_intrare, (inl.nume + " · " + inl.poz_text + " · " + inl.tp_text) if inl else "",
@@ -1824,6 +1842,7 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="mai_mari">Mai mari</span>
   <span data-k="mai_mici">Mai mici</span>
   <span data-k="avansat_pornit">Mod avansat: pornit</span>
+  <span data-k="avansat">Avansat</span>
   <span data-k="avansat_oprit">Mod avansat: oprit</span>
   <span data-k="avansat_nota">Modul avansat arată și editarea transponderelor, a fișierului satellites.xml și a detaliilor canalelor. Greșelile de acolo pot opri canalele.</span>
   <span data-k="sateliti_xml">Sateliți și transpondere (satellites.xml)</span>
@@ -3009,7 +3028,7 @@ function filtreaza(pastreaza){
       if(f.liber && x[11]){ continue; }
       if(f.ascuns ? !(x[10] & 1) : false){ continue; }
       if(S.nfb){
-        var m = S.fb.masti[x[0]];
+        var m = S.fb.masti[x[0].split(":").slice(0, 4).join(":")];
         if(!m){ continue; }
         var bun = true;
         for(var gi in S.fsel){ if(S.fsel[gi] && !(m[gi] & S.fsel[gi])){ bun = false; break; } }
@@ -3750,6 +3769,14 @@ $("maiMultSus").onclick = function(){
   listaActiuni(L("mai_mult"), [
     S.deRefacut ? {text: L("reface") + ": " + S.deRefacut, fa: function(){ $("reface").click(); }} : null,
     S.nesalvate ? {text: L("schimbari"), fa: arataSchimbari} : null,
+    {text: L("avansat"), fa: meniuAvansat},
+    {text: L("marime_litere"), fa: marimeLitere},
+    {text: L("ajutor"), fa: function(){ foaie(L("ajutor"), [L("ajutor_text"), L("ajutor_taste")], [{text: L("ok"), clasa: "principal"}]); }},
+    {text: L("inchide_editor"), fa: inchideEditorul}
+  ]);
+};
+function meniuAvansat(){
+  listaActiuni(L("avansat"), [
     {text: L("unelte_test"), fa: function(){ unealta("test", L("unelte_test")); }},
     {text: L("unelte_dubluri"), fa: function(){ unealta("dubluri", L("unelte_dubluri")); }},
     {text: L("unelte_moarte"), fa: function(){ unealta("moarte", L("unelte_moarte")); }},
@@ -3760,18 +3787,15 @@ $("maiMultSus").onclick = function(){
     {text: L("curatenie"), fa: curatenie},
     {text: L("sigle"), fa: sigle},
     {text: L("inlocuieste_nume"), fa: inlocuiesteNume},
-    {text: L("marime_litere"), fa: marimeLitere},
     {text: L(S.avansat ? "avansat_pornit" : "avansat_oprit"), fa: comutaAvansat},
     S.avansat ? {text: L("sateliti_xml"), fa: satelitiXml} : null,
     {text: L("copii"), fa: copii},
     {text: L("import_arhiva"), fa: function(){ importa("arhiva"); }},
     {text: L("import_m3u"), fa: function(){ importa("m3u"); }},
     {text: L("export_zip"), fa: function(){ descarca("/api/editor-canale-export?fel=zip"); }},
-    {text: L("export_tar"), fa: function(){ descarca("/api/editor-canale-export?fel=tar.gz"); }},
-    {text: L("ajutor"), fa: function(){ foaie(L("ajutor"), [L("ajutor_text"), L("ajutor_taste")], [{text: L("ok"), clasa: "principal"}]); }},
-    {text: L("inchide_editor"), fa: inchideEditorul}
+    {text: L("export_tar"), fa: function(){ descarca("/api/editor-canale-export?fel=tar.gz"); }}
   ]);
-};
+}
 function inchideEditorul(){
   function inchide(){ cerere("/api/editor-canale-inchide", "POST").then(function(){ S.gata = false; S.plecat = true; location.href = "/canale"; }); }
   if(S.nesalvate){ intreaba(L("q_iesire"), L("inchide_editor"), inchide, true); } else { inchide(); }
@@ -3819,6 +3843,7 @@ deschide(false);
 # ---------------------------------------------------------------- traducerea paginilor
 TEXTE_PAGINA = {
 	"html": (
+		N_("Avansat"),
 		N_("Editorul de canale"),
 		N_("Radio"),
 		N_("Buchet"),

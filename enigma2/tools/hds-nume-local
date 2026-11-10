@@ -1,0 +1,14 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+### BEGIN INIT INFO
+# Provides: hds-nume-local
+# Required-Start: $local_fs
+# Required-Stop: $local_fs
+# Should-Start: $network dbus avahi-daemon
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Numele receptorului in reteaua de acasa
+### END INIT INFO
+
+exec /usr/bin/python3 /usr/bin/hds-nume-local.py "$@"

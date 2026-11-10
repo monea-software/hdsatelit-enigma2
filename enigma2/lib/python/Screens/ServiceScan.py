@@ -53,6 +53,11 @@ class ServiceScan(Screen):
 		Screen.__init__(self, session)
 		
 		self.scanList = scanList
+		try:
+			from Screens.HdsCautareCanale import noteaza_dupa_scanare
+			noteaza_dupa_scanare(None)
+		except Exception as e:
+			print("[ServiceScan] oferta de piste: %s" % e)
 		# HDSatelit: ecranul nu avea titlu (randul de sus ramanea gol); textul exista deja tradus
 		self.setTitle(_("Service Scan"))
 
@@ -80,10 +85,11 @@ class ServiceScan(Screen):
 		self["servicelist"] = FIFOList(len=10)
 		self["FrontendInfo"] = FrontendInfo()
 		
-		self["actions"] = ActionMap(["OkCancelActions"], 
+		self["actions"] = ActionMap(["OkCancelActions", "ColorActions"],
 			{
 				"ok": self.ok,
-				"cancel": self.cancel
+				"cancel": self.cancel,
+				"blue": self.hdsCitestePiste
 			})
 
 		# numele activityTimer, nu timer: subclasa DefaultServiceScan isi pune propriul self.timer
@@ -159,6 +165,7 @@ class ServiceScan(Screen):
 			done = False
 		if done:
 			self.stopActivity()
+			self.hdsOfertaPiste()
 			self.alignResult()
 			return
 		self.activityStep = (self.activityStep + 1) % len(self.ACTIVITY_FRAMES)
@@ -187,25 +194,39 @@ class ServiceScan(Screen):
 			pass
 
 	def hdsPisteDupaScanare(self):
-		# HDSatelit (cautarea dupa piste): la inchiderea unei scanari terminate care a gasit
-		# canale, cautarea de canale intreaba daca citeste acum pistele canalelor fara piste stiute (teletext,
-		# subtitrari, limbi, HbbTV). intreaba_dupa_scanare nu face nimic pe loc (intreaba dupa 0,5 s, cu raspuns „Nu”
-		# dupa 30 s), deci iesirea din scanare nu asteapta. Nu intreaba intr-un asistent (scanarea pornita de
-		# Wizard.runAsync, sau prima pornire). O eroare de aici nu ajunge la scanare.
-		# Intrebarea cuprinde numai ce a trecut prin scanarea aceasta (scanat: pozitiile si transponderele ei): dupa o
-		# scanare de cablu, numai canalele de cablu, fara comenzi de mutare a antenei spre sateliti.
+		# Iesirea pastreaza oferta pentru web. Citirea porneste numai la alegerea ALBASTRU.
 		try:
 			scan = self.get("scan")
-			if scan is None or not scan.isDone() or not getattr(scan, "foundServices", 0):
+			if scan is None or not scan.isDone():
 				return
 			if self.hdsDinAsistent():
 				return
 			ceAScanat = getattr(scan, "hdsCeAScanat", None)
-			scanat = ceAScanat() if ceAScanat is not None else None
-			from Screens.HdsCautareCanale import intreaba_dupa_scanare
-			intreaba_dupa_scanare(self.session, scanat=scanat)
+			scanat = ceAScanat() if ceAScanat is not None and getattr(scan, "foundServices", 0) else None
+			from Screens.HdsCautareCanale import noteaza_dupa_scanare, intreaba_dupa_scanare
+			noteaza_dupa_scanare(scanat)
+			if getattr(self, "hdsCitesteLaInchidere", False) and getattr(scan, "foundServices", 0):
+				intreaba_dupa_scanare(self.session, scanat=scanat)
 		except Exception as e:
 			print("[ServiceScan] pistele dupa scanare: %s" % e)
+
+	def hdsOfertaPiste(self):
+		scan = self.get("scan")
+		if (getattr(self, "hdsOfertaPusa", False) or scan is None
+				or not getattr(scan, "foundServices", 0) or self.hdsDinAsistent()):
+			return
+		self.hdsOfertaPusa = True
+		self.hdsPisteDupaScanare()
+		label = self["scan_result"]
+		label.setText(label.getText() + "\n" + _("ALBASTRU: citește pistele canalelor găsite. OK sau EXIT: revino la vizionare."))
+		self.hdsAseazaReteaua(bool(getattr(scan, "hdsRetele", None)))
+
+	def hdsCitestePiste(self):
+		scan = self.get("scan")
+		if (scan is not None and scan.isDone() and getattr(scan, "foundServices", 0)
+				and not self.hdsDinAsistent()):
+			self.hdsCitesteLaInchidere = True
+			self.close()
 
 	def hdsDinAsistent(self):
 		try:

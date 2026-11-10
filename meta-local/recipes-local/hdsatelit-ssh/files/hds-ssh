@@ -20,11 +20,15 @@
 #   pe stickul de flash (acolo urca-pe-stick-016.sh pune cheia calculatorului) intra in authorized_keys, o singura data
 #   (semnul /etc/hdsatelit-ssh/stick-citit); dupa aceea cheile noi intra numai din ecranul Acces SSH sau din web.
 # - Telnet (portul 23, ca la celelalte imagini): `busybox inetd /etc/hds-telnet-inetd.conf`, cu programul de logare
-#   hds-telnet-poarta: din casa root intra direct cand „Fara parola in reteaua locala” e pornita, altfel cu parola; din
+#   hds-telnet-poarta: din casa root intra direct cat parola omului nu e bifata la Telnet si SSH, altfel cu parola; din
 #   afara casei legatura se inchide. `hds-ssh telnet` il porneste numai pe el (la instalarea pachetului din feed);
 # - o singura data dupa actualizarea pachetului (semnul /etc/hdsatelit-ssh/regula-implicita): regula „Fara parola in
 #   reteaua locala” ramasa exact cea veche din pachet (oprita, nealeasa de om) devine cea noua, pornita; o regula aleasa
 #   de om ramane cum a lasat-o.
+# - o singura data dupa actualizarea la r4 (semnul /etc/hdsatelit-ssh/regula-ftp): FTP primeste regula lui
+#   (hds-ftp-retea-locala.conf); cine ceruse parola si in casa (regula SSH fara "-") si nu a ales inca nimic in ecranul
+#   nou (fara /etc/hdsatelit-ssh/parola-locala.json) o pastreaza si la FTP, ca inainte (acelasi text ca
+#   Components/HdsParolaLocala.textRegula, ca ecranul sa o recunoasca).
 # Parola nu trece niciodata prin acest script.
 
 PAROLA=/usr/sbin/hds-ssh-parola
@@ -33,6 +37,9 @@ SSH=/home/root/.ssh
 REGULA=/etc/security/hds-ssh-retea-locala.conf
 REGULA_NOUA=/usr/share/hdsatelit-ssh/hds-ssh-retea-locala.conf
 SEMN_REGULA=/etc/hdsatelit-ssh/regula-implicita
+REGULA_FTP=/etc/security/hds-ftp-retea-locala.conf
+SEMN_FTP=/etc/hdsatelit-ssh/regula-ftp
+ALEGERE=/etc/hdsatelit-ssh/parola-locala.json
 INETD_CONF=/etc/hds-telnet-inetd.conf
 INETD_PID=/var/run/hds-telnet-inetd.pid
 
@@ -53,6 +60,15 @@ regula_implicita() {
 	mkdir -p /etc/hdsatelit-ssh && : > "$SEMN_REGULA"
 }
 
+regula_ftp() {
+	[ -f "$SEMN_FTP" ] && return 0
+	if [ -f "$REGULA" ] && [ ! -f "$ALEGERE" ] && ! grep -q '^-' "$REGULA"; then
+		printf '%s\n' "# FTP: cu parola omului si in reteaua de acasa (Setari > Retea > Parola receptorului)." \
+			"+ : ALL : ALL" > "$REGULA_FTP.nou" && chmod 644 "$REGULA_FTP.nou" && mv -f "$REGULA_FTP.nou" "$REGULA_FTP"
+	fi
+	mkdir -p /etc/hdsatelit-ssh && : > "$SEMN_FTP"
+}
+
 telnet_porneste() {
 	[ -f "$INETD_CONF" ] && [ -x /usr/sbin/hds-telnet-poarta ] || return 0
 	if [ -f "$INETD_PID" ] && kill -0 "$(cat "$INETD_PID" 2>/dev/null)" 2>/dev/null; then
@@ -69,6 +85,7 @@ telnet)
 	;;
 start|"")
 	regula_implicita
+	regula_ftp
 	telnet_porneste
 	if [ -d "$SSH" ]; then
 		chown root:root "$SSH" 2>/dev/null

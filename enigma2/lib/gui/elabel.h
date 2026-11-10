@@ -22,6 +22,8 @@ public:
 		/* One line in rect; overflow scrolls from the logical beginning (right for RTL).
 		   Multiline text keeps its wrapping. Returns the overflow in px (0: fits). */
 	static int drawLine(gPainter &painter, gFont *font, const eRect &rect, const std::string &text, int flags, eDerulare *scroller);
+		/* Codurile de culoare sunt optionale; apelantul restabileste apoi stilul de baza. */
+	static int drawLine(gPainter &painter, gFont *font, const eRect &rect, const std::string &text, int flags, eDerulare *scroller, bool textColors);
 		/* true when `text` is surely narrower than `width` px with `font`, without measuring it */
 	static bool surelyFits(const std::string &text, const gFont *font, int width);
 		/* true when a box `height` px tall holds only one line of `font` */

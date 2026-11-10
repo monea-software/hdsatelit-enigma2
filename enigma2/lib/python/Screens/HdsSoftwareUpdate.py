@@ -102,6 +102,81 @@ from Screens.MessageBox import MessageBox
 from Tools.MediuImagine import verificaMediuScriere, pregatesteNumeStick, versiuneUsb, REFUZ_INTERN, REFUZ_LIPSA, REFUZ_SPATII
 from Components import HdsPazaModel
 
+
+_proprietarActualizare = None
+_rezervareOnline = None
+_eliberariActualizare = []  # Screen.doClose goleste __dict__; ceasul trebuie sa traiasca si dupa inchiderea TV
+
+
+def rezervaActualizarea(proprietar):
+	"""O singura verificare/instalare de pe stick, din TV sau web, pe firul enigma2.
+	Starea ocupata existenta opreste si pornirea unei imagini de pe internet."""
+	global _proprietarActualizare, _rezervareOnline
+	if _proprietarActualizare is proprietar:
+		return True
+	if _proprietarActualizare is not None:
+		return False
+	from Components.HdsImagineOnline import imagine_online
+	if imagine_online.ocupat():
+		return False
+	_rezervareOnline = (imagine_online, imagine_online.faza, imagine_online.pas, imagine_online.mesaj)
+	imagine_online.faza = "stick"
+	imagine_online.pas = _("Este în curs o verificare sau o instalare de pe stick. Termină ori renunță la ea înainte de altă actualizare.")
+	_proprietarActualizare = proprietar
+	return True
+
+
+def elibereazaActualizarea(proprietar):
+	global _proprietarActualizare, _rezervareOnline
+	if _proprietarActualizare is not proprietar:
+		return
+	if _rezervareOnline is not None:
+		i, faza, pas, mesaj = _rezervareOnline
+		if i.faza == "stick":
+			i.faza, i.pas, i.mesaj = faza, pas, mesaj
+	_proprietarActualizare = _rezervareOnline = None
+
+
+def textActualizareOcupata():
+	return _("Este în curs altă verificare sau instalare. Termină ori renunță la ea, apoi încearcă din nou.")
+
+
+def elibereazaDupaLucrare(proprietar, lucrare):
+	"""Un fir anulat poate inca inchide ultimul fisier; urmatoarea verificare asteapta sfarsitul lui."""
+	if _proprietarActualizare is not proprietar:
+		return
+
+	def elibereaza():
+		elibereazaActualizarea(proprietar)
+		callback = getattr(proprietar, "_actualizareEliberata", None)
+		if callback is not None:
+			callback()
+
+	if lucrare is None or getattr(lucrare, "_rez", {}).get("gata"):
+		elibereaza()
+		return
+	from enigma import eTimer
+	ceas = eTimer()
+
+	def gata():
+		if lucrare._rez.get("gata"):
+			ceas.stop()
+			if pastrata in _eliberariActualizare:
+				_eliberariActualizare.remove(pastrata)
+			proprietar._eliberareActualizare = None
+			elibereaza()
+
+	try:
+		legatura = ceas.timeout.connect(gata)
+	except AttributeError:
+		ceas.callback.append(gata)
+		legatura = None
+	pastrata = (ceas, legatura)
+	_eliberariActualizare.append(pastrata)
+	proprietar._eliberareActualizare = pastrata
+	ceas.start(100, False)
+
+
 NUME_KERNEL = "kernel.bin"
 NUME_ROOTFS = "rootfs.tar.bz2"
 NUME_VERSIUNE = "imageversion"
@@ -263,7 +338,12 @@ def _copieCompleta(mountpoint):
 	except Exception as eroare:
 		return str(eroare) or eroare.__class__.__name__
 	if rez.get("ok") and rez.get("cale"):
-		return None
+		# cu regulile punerii la loc (ca la imaginea online): o copie pe care prima pornire ar refuza-o e o copie cazuta, iar
+		# omul e intrebat inainte sa piarda ceva
+		try:
+			return HdsCopieSetari.verifica_punerea(rez["cale"])
+		except Exception as eroare:
+			return str(eroare) or eroare.__class__.__name__
 	return " ".join(rez.get("mesaje") or []) or "?"
 
 
@@ -1229,9 +1309,9 @@ class HdsSoftwareUpdate(Screen):
 		scara = getDesktop(0).size().width() / 1920.0
 		f = scara * p / 100.0
 		self._inaltimeRand = int(123 * f)     # 5 cartele incap in lista de 616 px a temei, fara bara de derulare
-		lista.l.setFont(0, gFont("Regular", int(34 * f)))
-		lista.l.setFont(1, gFont("Regular", int(25 * f)))
-		lista.l.setFont(2, gFont("Bold", int(27 * f)))
+		lista.l.setFont(0, gFont(skin.fontHds("Regular"), int(34 * f)))
+		lista.l.setFont(1, gFont(skin.fontHds("Regular"), int(25 * f)))
+		lista.l.setFont(2, gFont(skin.fontHds("Bold"), int(27 * f)))
 		lista.l.setItemHeight(self._inaltimeRand)
 		self._scaraRand = f
 		latime = lista.instance.size().width()
@@ -1322,9 +1402,12 @@ class HdsSoftwareUpdate(Screen):
 
 	def _laInchidere(self):
 		self._opreste = True
+		lucrare = self._lucrare
 		if self._lucrare is not None:
 			self._lucrare.opreste()
 			self._lucrare = None
+		if not self._scriereRealaPornita:
+			elibereazaDupaLucrare(self, lucrare)
 
 	def _oprit(self):
 		return self._opreste
@@ -1353,6 +1436,7 @@ class HdsSoftwareUpdate(Screen):
 		"""Lista imaginilor; ultimul rand, „Caută din nou software de receptor”, reface lista cu OK (ca tasta galbena)."""
 		if self._ocupat:
 			return
+		elibereazaActualizarea(self)
 		self._faza = "lista"
 		self["iesire"].hide()
 		self["lista"].show()
@@ -1422,7 +1506,7 @@ class HdsSoftwareUpdate(Screen):
 		if text:
 			self["detaliu"].setText(text)
 
-	# -------------------------------------------------------------- faza 2: alegere + confirmare 1
+	# -------------------------------------------------------------- faza 2: alegere si verificare directa
 
 	def _intreaba(self, callback, text, titlu, da, implicit_da, randuri):
 		"""O intrebare cu „Da” / „Nu” in fereastra ei (Screens/HdsPazaModel.HdsPazaModelIntrebare)."""
@@ -1450,6 +1534,9 @@ class HdsSoftwareUpdate(Screen):
 				else:
 					self["detaliu"].setText(textStickCazut(candidat))
 				return
+			if not rezervaActualizarea(self):
+				self["detaliu"].setText(textActualizareOcupata())
+				return
 			if candidat.get("fel") == FEL_STRAINA:
 				self._candidatAles = candidat
 				self._intreaba(self._dupaConfirmareVerificare, textAvertismentStrain(candidat),
@@ -1460,13 +1547,16 @@ class HdsSoftwareUpdate(Screen):
 				self._refuzPaza(text, cod)
 				return
 			self._candidatAles = candidat
-			self._intreaba(self._dupaConfirmareVerificare, textVerificare(candidat), _("Verificarea software-ului"),
-				_("Da, verifică software-ul"), True, RANDURI_VERIFICARE)
+			# R25 (analiza "cat mai simplu", 09.11.2026): verificarea nu scrie nimic pe receptor, deci OK o porneste direct;
+			# singura alegere ramane ultima confirmare dinaintea scrierii (cu "Nu" ales), iar paza ramane intreaga: modelul,
+			# locul, simularea, mediul si copia
+			self._pregatesteSiVerifica()
 		elif self._faza == "rezultat" and self._arataCorect and not self._scriereRealaPornita:
 			self._intreabaFlashReal()
 
 	def _dupaConfirmareVerificare(self, raspuns):
 		if not raspuns or self._candidatAles is None:
+			elibereazaActualizarea(self)
 			return
 		self._pregatesteSiVerifica()
 
@@ -1653,6 +1743,7 @@ class HdsSoftwareUpdate(Screen):
 
 	def _eroareInapoiLaLista(self, mesaj):
 		"""Inapoi in lista, cu `mesaj` sus; tasta verde si cea galbena revin (lista e aceeasi)."""
+		elibereazaActualizarea(self)
 		self._faza = "lista"
 		self["iesire"].hide()
 		self["lista"].show()
@@ -1716,7 +1807,7 @@ class HdsSoftwareUpdate(Screen):
 			self["detaliu"].setText(textNerecunoscut())
 			self._buton("key_green", "")
 
-	# -------------------------------------------------------------- faza 4: confirmare 2 + scriere reala
+	# -------------------------------------------------------------- faza 4: confirmare informata si scriere reala
 
 	def _intreabaFlashReal(self):
 		"""Ultima confirmare, in fereastra intrebarilor, cu „Nu” ales: textul simplu sus, dosarul pentru Maintenance

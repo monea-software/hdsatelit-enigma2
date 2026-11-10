@@ -37,7 +37,7 @@ CHEIE = re.compile(r"^[a-z0-9-]+/[a-z0-9-]+$")
 CHEI_TEXTE = ("ajutor", "cuprins", "capitol", "pagini_n", "cauta_titlu", "cauta_rezultate", "gasite_n", "nimic_gasit",
 	"in_engleza", "online", "versiune", "inapoi_cuprins", "se_citeste", "nu_raspunde", "pagina_lipsa", "ecran_tv",
 	"web_pereche", "fara_pagina", "valori", "din_fabrica", "cand", "la_ce_foloseste", "cum_ajungi", "ce_vezi",
-	"randuri", "taste", "pas_cu_pas", "probleme", "legat_de", "diferente_receptoare", "lipsa")
+	"randuri", "taste", "pas_cu_pas", "probleme", "legat_de", "diferente_receptoare", "lipsa", "actualizari")
 
 
 def _t(text):
@@ -67,7 +67,9 @@ def _limba(A=None):
 def texte(A=None, limba=None):
 	A = _a(A)
 	limba = limba or _limba(A)
-	return dict((k, A.text(k, limba)) for k in CHEI_TEXTE)
+	rezultat = dict((k, A.text(k, limba)) for k in CHEI_TEXTE)
+	rezultat["actualizari"] = _t("Actualizări")
+	return rezultat
 
 
 def stare(A=None):
@@ -445,8 +447,12 @@ function porneste(){
   cerere("/api/ajutor").then(function(d){
     T = d.texte || {};
     DATE = d;
-    // fara pachetul ajutorului: numai mesajul (nimic de cautat; textele din jur nu sunt instalate)
-    if(!d.instalat){ nota(T.lipsa); $("cauta").hidden = true; return; }
+    if(!d.instalat){
+      nota(T.lipsa); $("cauta").hidden = true;
+      var a = el("a", "buton", T.actualizari); a.href = adresa("/actualizari");
+      $("pagina").textContent = ""; $("pagina").appendChild(a); arata("pagina");
+      return;
+    }
     $("cauta").placeholder = T.cauta_titlu || "";
     $("cauta").setAttribute("aria-label", T.cauta_titlu || "");
     $("ecranTv").textContent = T.ecran_tv; $("ecranTv").hidden = false;

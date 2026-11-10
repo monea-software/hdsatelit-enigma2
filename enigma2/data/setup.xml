@@ -72,10 +72,23 @@
 			<item level="1" text="Ia baza de canale de pe stb.hdsatelit.com" stare="netestat" description="Da: o dată pe zi, în fundal, receptorul caută pe stb.hdsatelit.com o bază de canale mai nouă decât cea din imagine (rezoluția, sunetul, subtitrările, PID-urile fiecărui canal) și o folosește numai unde nu știe el nimic. Ce află receptorul singur rămâne neschimbat. Nu: numai baza venită cu imaginea.">config.usage.hds_baza_stb</item>
 			<item level="1" text="Alternative radio mode">config.usage.e1like_radio_mode</item>
 			<!-- sagetile sus si jos la privit (Components/HdsSageti.py: bara TV si ecranul radio); in web: /setari -->
-			<item level="0" text="Săgețile sus și jos la privit" description="Ce fac săgețile sus și jos când te uiți la un canal sau asculți radio, fără niciun meniu deschis: deschid lista de canale radio sau TV, ori schimbă canalul, sus pe următorul și jos pe cel anterior. Merge și cu telecomanda televizorului.">config.usage.hds_sageata_sus</item>
+			<item level="0" text="Săgețile sus și jos la privit" description="Fără meniu deschis: deschid lista modului curent, TV sau radio. Celelalte combinații și schimbarea canalului rămân la alegere.">config.usage.hds_sageata_sus</item>
+			<item level="0" text="OK la privit" description="Fără meniu deschis: arată bara de informații, ca până acum, sau deschide lista de canale.">config.usage.hds_ok_privire</item>
+			<item level="0" text="Stânga și dreapta la privit" description="Fără meniu deschis: păstrează acțiunile obișnuite sau reglează volumul, stânga mai încet și dreapta mai tare.">config.usage.hds_stanga_dreapta_privire</item>
+			<item level="0" text="CH+ și CH- la privit" description="După telecomandă păstrează sensul tastelor fizice. Poți alege schimbarea canalului sau deschiderea listei.">config.usage.hds_ch_privire</item>
+			<item level="0" text="FAV scurt adaugă sau scoate canalul din Favorite" description="Oprit: FAV deschide buchetele. Pornit: modifică Favoritele. Adăugarea rămâne în meniul listei.">config.usage.hds_fav_scurt_adauga</item>
+			<item level="0" text="OK lung caută în lista de canale" description="Oprit din fabrică. Căutarea rămâne în meniul listei.">config.usage.hds_ok_lung_cauta</item>
+			<item level="0" text="TEXT caută în lista de canale" description="Scurtătură opțională. Căutarea rămâne în meniul listei.">config.usage.hds_text_lista_cauta</item>
+			<item level="0" text="GALBEN schimbă lista sau dalele în meniu" description="Scurtătură opțională. Aspectul se poate schimba oricând din meniul ecranului.">config.usage.hds_meniu_galben_aspect</item>
+			<item level="0" text="TEXT caută setări în meniu" description="Scurtătură opțională. Căutarea rămâne în meniul ecranului.">config.usage.hds_meniu_text_cauta</item>
+			<item level="0" text="Culorile vechi în lista de filme" description="Oprit: VERDE mută filmul, ALBASTRU sortează. Pornit: VERDE sortează, ALBASTRU arată etichetele sau meniul.">config.usage.hds_filme_culori_vechi</item>
 			<!-- derularea meniurilor (Components/Renderer/Listbox.py, margineDerulare); in web: /setari?id=usage -->
 			<item level="0" text="Derularea listelor" description="Cum se mișcă meniurile, listele de alegere și ecranele de setări când cursorul ajunge la marginea ecranului. Rând cu rând: lista urcă un rând și vezi mereu încă două rânduri sub cursor, deci observi că mai sunt rânduri. Pagină cu pagină: lista sare pe pagina următoare, ca înainte. Lista de canale și ghidul rămân pe pagini.">config.usage.hds_derulare_liste</item>
+			<item level="0" text="Bara de progres colorată"
+				description="Nu: o singură culoare. Colțurile rămân rotunjite. În web, reîncarcă pagina."
+				>config.skin.progres_colorat</item>
 			<item level="0" text="Semnele din lista de canale" description="În dreapta fiecărui canal: „$” la canalele codate și sursa, Satelit, Cablu sau Terestru. Le poți opri pe amândouă sau numai pe unul. Un canal codat primește „$” după o căutare nouă de canale sau după ce l-ai privit o dată.">config.usage.hds_semne_lista</item>
+			<item level="0" text="Rânduri pe pagină" description="Numărul de canale văzute pe o pagină. După temă păstrează mărimea de acum; celelalte alegeri potrivesc rândurile și fontul la înălțimea listei.">config.usage.hds_randuri_lista</item>
 			<item level="1" text="Action on long powerbutton press">config.usage.on_long_powerpress</item>
 			<item level="1" text="Action on short powerbutton press">config.usage.on_short_powerpress</item>
 			<item level="1" text="Position of finished Timers in Timerlist">config.usage.timerlist_finished_timer_position</item>
@@ -90,7 +103,8 @@
 			     in web: /setari?id=usage, pagina TV si randul Acces din panou -->
 			<item level="0" text="Arată pașii decriptării" requires="HdsEcranNegru" stare="netestat" description="Da: la canalele criptate, sub mesajul de pe ecranul negru și în interfața web apar pașii decriptării pe măsură ce se întâmplă: cererea către modulul de acces, răspunsurile și timpul lor, imaginea decriptată, mesajele modulului CI. Nu: nimic din toate acestea.">config.usage.hds_pasi_decriptare</item>
 			<item level="1" text="12V output" requires="12V_Output">config.usage.output_12V</item>
-			<item level="0" text="Show event-progress in channel selection">config.usage.show_event_progress_in_servicelist</item>
+			<item level="0" text="Show event-progress in channel selection" description="Arată bara de progres a emisiunii în lista de canale.">config.usage.show_event_progress_in_servicelist</item>
+			<item level="0" text="Poziția barei de progres" description="Cu bara de progres pornită: în stânga, înainte de nume, sau la capătul din dreapta al rândului, după nume.">config.usage.hds_progres_lista_pozitie</item>
 			<!-- randurile „Furnizori” si „Nou” ale fiecarui satelit in lista „Sateliți” (Screens/ChannelSelection.py); in web: /setari?id=usage -->
 			<item level="1" text="Furnizori și Nou la fiecare satelit" description="Da: în lista de canale, la „Sateliți”, fiecare satelit are sub numele lui și rândurile „Furnizori” (canalele lui după furnizor) și „Nou” (canalele noi găsite la căutare). Nu: un singur rând pe satelit, iar furnizorii tuturor sateliților rămân pe tasta galbenă.">config.usage.hds_lista_furnizori_nou</item>
 			<item level="2" text="Show infobar on channel change">config.usage.show_infobar_on_zap</item>
@@ -99,6 +113,7 @@
 			<!-- playerul de filme (Screens/InfoBar.py, MoviePlayer; filme si inregistrari); in web: /filme (filme_web.py) -->
 			<item level="2" text="La pornirea unui film" description="Ce face receptorul când pornești un film sau o înregistrare văzută pe jumătate: întreabă, reia de unde ai rămas sau pornește de la început.">config.usage.on_movie_start</item>
 			<item level="2" text="La oprirea unui film" description="Ce face receptorul când oprești un film sau o înregistrare cu STOP: întreabă, se întoarce la lista de filme sau la canalul de dinainte.">config.usage.on_movie_stop</item>
+			<item level="0" text="EXIT în timpul filmului" description="Din fabrică ascunde bara, ca înainte. Poți alege întrebarea de oprire, lista de filme sau canalul de dinainte.">config.usage.hds_exit_film</item>
 			<item level="2" text="La sfârșitul unui film" description="Ce face receptorul când filmul sau înregistrarea ajunge la sfârșit: întreabă, se întoarce la lista de filme, la canalul de dinainte, sau rămâne pe pauză la sfârșit.">config.usage.on_movie_eof</item>
 			<item level="2" text="Custom skip time for '1'/'3'-keys">config.seek.selfdefined_13</item>
 			<item level="2" text="Custom skip time for '4'/'6'-keys">config.seek.selfdefined_46</item>
@@ -203,6 +218,6 @@
 			<item level="0" text="Adresa releului" stare="netestat" description="Unde rulează releul care decodează canalele alese pentru Stream Relay: pe acest receptor (127.0.0.1) sau pe alt aparat din rețeaua de acasă, dacă e pornit rândul Fluxuri pentru alte aparate din rețeaua de acasă. Se ia numai adresa; portul e în rândul următor. Altă adresă nu se folosește: canalele pornesc direct.">config.misc.acces_streamrelay_url</item>
 			<item level="0" text="Portul releului" stare="netestat" description="Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay.">config.misc.acces_streamrelay_port</item>
 			<item level="0" text="Întârzierea la schimbarea canalului (ms)" stare="netestat" description="Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale.">config.misc.acces_streamrelay_delay</item>
-			<item level="0" text="Fluxuri pentru alte aparate din rețeaua de acasă" stare="netestat" description="Oprită (din fabrică), fluxurile canalelor rămân numai pe acest receptor. Pornită, le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x), de exemplu un releu Stream Relay de pe alt receptor; din internet, niciodată.">config.misc.hds_fluxuri_retea_acasa</item>
+			<item level="0" text="Fluxuri pentru alte aparate din rețeaua de acasă" stare="netestat" description="Pornită (din fabrică), fluxurile canalelor le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x): VLC, Kodi, aplicațiile de telefon, un releu Stream Relay de pe alt receptor; din internet, niciodată. Oprită, fluxurile rămân numai pe acest receptor.">config.misc.hds_fluxuri_retea_acasa</item>
 		</setup>
 </setupxml>

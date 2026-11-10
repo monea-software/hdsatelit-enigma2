@@ -187,6 +187,16 @@ def modeLabel(mode):
 	return label.replace("  ", " ").strip()
 
 
+def hdrLabel(value):
+	"""Etichetele HDR pentru televizor si web; valoarea scrisa in driver ramane aceeasi."""
+	return {
+		"auto": N_("Automat, după canal"),
+		"hdr10": N_("Mereu HDR10"),
+		"hlg": N_("Mereu HLG"),
+		"none": N_("Oprită (SDR)"),
+	}.get(value, value)
+
+
 def modeParts(mode):
 	"""(resolution group, rate) of a driver mode name, the rate as modeLabel shows it: 1080p50 -> ("1080p", "50"),
 	1080p -> ("1080p", "60"), pal -> ("576i", "50"); (None, None) for 3D modes and unknown names"""
@@ -1277,7 +1287,7 @@ def InitVideoOutput(root=None, msp=MSP, pidFile=DAEMON_PID, timer=None):
 			default = videoOutput.defaultMode()
 		else:
 			now = None if videoOutput.simulation else readText(videoOutput.root + current)
-			labels = [(value, value) for value in options]
+			labels = [(value, hdrLabel(value) if name == "hdrtype" else value) for value in options]
 			default = now if now in options else options[0]
 		element = ConfigSelection(choices=labels, default=default)
 		# a choice equal to the default is written too: the default can differ from one start to the next

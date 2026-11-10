@@ -231,6 +231,14 @@ def texte(verdict, adresa="", din_meniu=False, limba=None, cale_setari=None, dos
 		cefaci = _("OK sau EXIT închide fereastra.")
 	else:
 		cefaci = D.ceFaci()
+		if verdict.get("stare") == M.STARE_NEPOTRIVIT:
+			# modelul citit are pagina lui (Components/HdsPazaModel.MODELE_PLACI): dupa codul diagnosticului, mesajul
+			# numeste receptorul, iar ce faci duce la imaginea lui
+			a = verdict.get("amprenta_verdict") or verdict.get("amprenta") or {}
+			pagina = M.paginaModel(a)
+			if pagina:
+				mesaj += " " + M.textAlTau(a, verdict.get("reguli"), verdict.get("nepotriviri"))
+				cefaci = _("Imaginea pentru receptorul tău și pașii de instalare: %s") % pagina
 	if D.notaSlot(verdict):
 		cefaci = D.notaSlot(verdict) + " " + cefaci
 	return {"titlu": titlu, "software": D.software(verdict), "cod": cod, "coduri": coduri, "mesaj": mesaj,

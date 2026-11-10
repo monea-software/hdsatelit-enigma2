@@ -180,14 +180,20 @@ def InitUsageConfig():
 
 	config.usage.quickzap_bouquet_change = ConfigYesNo(default = False)
 	config.usage.e1like_radio_mode = ConfigYesNo(default = False)
-	# HDSatelit: sagetile SUS si JOS la privit (Components/HdsSageti.py: bara TV si ecranul radio): lista de canale radio
-	# sau TV, ori canalul urmator si anterior. Numele vechi al setarii ramane (0.1.6 avea numai SUS: "radio", implicit,
-	# si "tv", cand si SUS deschidea lista TV, ca JOS), deci o valoare salvata isi pastreaza intelesul. Implicit din
-	# 0.6.20: amandoua lista TV (sus pe radio deruta; cine il vrea il alege din meniu)
-	config.usage.hds_sageata_sus = ConfigSelection(default = "tv", choices = [
+	# Sagetile deschid lista modului curent. Valorile salvate isi pastreaza sensul anterior.
+	config.usage.hds_sageata_sus = ConfigSelection(default = "current", choices = [
+		("current", N_("Lista modului curent (TV sau radio)")),
 		("radio", N_("Sus lista radio, jos lista TV")), ("tv_radio", N_("Sus lista TV, jos lista radio")),
 		("tv", N_("Ambele deschid lista TV")), ("radio_radio", N_("Ambele deschid lista radio")),
-		("zap", N_("Schimbă canalul (sus: următorul)"))])
+		("zap", N_("Schimbă canalul (sus: următorul)")),
+		("zap_invers", N_("Schimbă canalul (sus: anteriorul)"))])
+	config.usage.hds_ok_privire = ConfigSelection(default = "bara", choices = [
+		("bara", N_("Arată bara de informații")), ("lista", N_("Deschide lista de canale"))])
+	from Components.HdsTasteRapide import initConfigProfil
+	initConfigProfil(config)
+	config.usage.hds_stanga_dreapta_privire = ConfigSelection(default = "actual", choices = [
+		("actual", N_("Comportamentul obișnuit")),
+		("volum", N_("Volumul (stânga mai încet, dreapta mai tare)"))])
 	# HDSatelit: cum se misca meniurile, listele de alegere si ecranele de setari la marginea ecranului (Components/Renderer/
 	# Listbox.py, margineDerulare -> eListbox.setScrollMargin): rand cu rand, cu doua randuri vazute sub cursor (implicit),
 	# sau pagina cu pagina, ca inainte; lista de canale si ghidul raman pe pagini. Se aplica meniurilor deschise dupa schimbare
@@ -223,7 +229,7 @@ def InitUsageConfig():
 
 	config.usage.on_movie_start = ConfigSelection(default = "ask", choices = [
 		("ask", _("Ask user")), ("resume", _("Resume from last position")), ("beginning", _("Start from the beginning")) ])
-	config.usage.on_movie_stop = ConfigSelection(default = "ask", choices = [
+	config.usage.on_movie_stop = ConfigSelection(default = "movielist", choices = [
 		("ask", _("Ask user")), ("movielist", _("Return to movie list")), ("quit", _("Return to previous service")) ])
 	config.usage.on_movie_eof = ConfigSelection(default = "ask", choices = [
 		("ask", _("Ask user")), ("movielist", _("Return to movie list")), ("quit", _("Return to previous service")), ("pause", _("Pause movie at end")) ])
@@ -253,6 +259,10 @@ def InitUsageConfig():
 		("5", "DVB-T/-S/-C") ])
 
 	config.usage.show_event_progress_in_servicelist = ConfigYesNo(default = False)
+	config.usage.hds_progres_lista_pozitie = ConfigSelection(default = "stanga", choices = [
+		("stanga", N_("Stânga (înainte de nume)")), ("dreapta", N_("Dreapta (după nume)"))])
+	config.usage.hds_randuri_lista = ConfigSelection(default = "tema", choices = [
+		("tema", N_("După temă"))] + [(str(n), str(n)) for n in (8, 10, 12, 14, 16, 18, 20)])
 	# HDSatelit: in lista 'Sateliți' (Screens/ChannelSelection.py, hdsUmpleSateliti) si randurile 'Furnizori' si 'Nou' ale
 	# fiecarui satelit, sub antetul lui; oprita din fabrica: un singur rand pe satelit (furnizorii pe tasta galbena)
 	config.usage.hds_lista_furnizori_nou = ConfigYesNo(default = False)
@@ -296,8 +306,10 @@ def InitUsageConfig():
 	config.misc.acces_streamrelay_url.web_text_max = 64
 	# 0.7.0: fluxurile canalelor (serverul 8001, Hds/DabT2/server8001.py) si pentru
 	# alte aparate din reteaua de acasa (un releu Stream Relay de pe alt receptor); oprita: numai 127.0.0.1, ca pana acum.
-	# Pornita: numai adresele private (192.168.x.x, 10.x.x.x, 172.16-31.x.x), niciodata din internet.
-	config.misc.hds_fluxuri_retea_acasa = ConfigYesNo(default=False)
+	# Pornita: numai adresele private (192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x), niciodata din internet.
+	# PORNITA din fabrica, fiindca nimic nu opreste programele din casa (nici streamul pe 8001);
+	# listele m3u ale aplicatiilor de telefon (aplicatii_web.PORT_FLUX) trimit chiar la 8001.
+	config.misc.hds_fluxuri_retea_acasa = ConfigYesNo(default=True)
 	# 0.7.1: in ecranul Stream Relay (Screens/Setup.py) si in pagina lui web (setari_web.py), deasupra ajutorului fiecarui
 	# rand, starea de acum: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu
 	# (HdsStreamRelay.liniiStare; modulul se incarca abia la deschiderea ecranului)

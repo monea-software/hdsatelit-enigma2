@@ -185,6 +185,8 @@ MOTIVE = (
 	('alt-motiv', N_('Pentru această actualizare trebuie pusă imaginea nouă.')),
 )
 TEXT_MOTIV = dict(MOTIVE)
+TEXT_STATUS_STRICAT = N_('Nu pot verifica versiunea instalată. Nu s-a instalat nimic. Detaliile sunt în jurnalul '
+	'actualizărilor.')
 TEXT_IMAGINE_NOUA = N_('Trebuie pusă imaginea nouă de la zero, din „Imagine nouă de pe stick”. Instalată din meniu peste '
 	'imaginea de acum, actualizarea poate face receptorul instabil, de aceea aici nu se instalează.')
 
@@ -782,10 +784,35 @@ def verdict(stare, baza, plan, lipsa=()):
 		'poate_instala': bool(plan) and not motive}
 
 
+def stare_pachet_principal(radacina='/', conf=None):
+	"""Ce spune status-ul opkg despre enigma2-hdsatelit: 'instalat', starea lui cand nu e instalat de tot (de pilda
+	'install ok unpacked' dupa un opkg oprit la jumatate) sau 'lipsa'; plus marimea status-ului (octeti, -1 fara fisier).
+	Pentru jurnal si pentru paza de mai jos."""
+	conf = conf or P.citeste_configurarea(radacina)
+	cale = _cale(radacina, conf.status_file)
+	try:
+		marime = os.path.getsize(cale)
+	except OSError:
+		marime = -1
+	for s in P.citeste_strofe(cale):
+		if s.get('package') == PACHET_PRINCIPAL:
+			st = s.get('status', '').split()
+			if 'installed' in st and 'not-installed' not in st:
+				return 'instalat', marime
+			return ' '.join(st) or 'fara stare', marime
+	return 'lipsa', marime
+
+
 def rezultat_din_liste(radacina, surse, stare, conf=None):
 	"""Planul si verdictul cautarii din listele surselor feedului descarcate de `opkg update` (verificate inainte fata
-	de stare.json semnat), fata de pachetele instalate si de numele date prin Provides"""
+	de stare.json semnat), fata de pachetele instalate si de numele date prin Provides. Fara enigma2-hdsatelit instalat
+	in status (un status stricat de o repornire dura chiar dupa opkg, o instalare oprita la jumatate) planul ar iesi gol
+	si cautarea ar spune "la zi" pe versiunea veche (09.11.2026, darog69, Ustym): atunci cautarea e o eroare cu motivul
+	spus, nu "la zi"."""
 	conf = conf or P.citeste_configurarea(radacina)
+	principal, marime = stare_pachet_principal(radacina, conf)
+	if principal != 'instalat':
+		return {'stare': EROARE, 'eroare': _t(TEXT_STATUS_STRICAT), 'status': '%s, status %d octeti' % (principal, marime)}
 	inst = instalate(radacina, conf)
 	feed = pachete_din_feed(radacina, surse, conf)
 	plan = planul(feed, inst)
@@ -1321,6 +1348,10 @@ class Actualizari(object):
 		# tester se vedea numai „cautare: eroare”
 		eroare = rezultat.get('eroare')
 		self._jurnal('cautare: %s%s' % (rezultat.get('stare'), (' (%s)' % curata(eroare)[:200]) if eroare else ''))
+		if rezultat.get('status'):
+			# enigma2-hdsatelit nu e instalat in status-ul opkg: starea lui si marimea status-ului, pentru cine citeste
+			# jurnalul trimis
+			self._jurnal('pachetul principal: %s' % curata(rezultat['status'])[:200])
 		self._schimbat()
 		if self.rapid:
 			self._rapid_dupa_cautare(rezultat)
@@ -1493,6 +1524,13 @@ class Actualizari(object):
 		inainte = self._neconfigurate_inainte
 
 		def verifica():
+			# status-ul opkg si fisierele noi pe eMMC inainte de orice repornire: o repornire dura (watchdogul, curentul)
+			# chiar dupa opkg lasa altfel un status vechi sau gol, iar dupa ea cautarea spunea "la zi" pe versiunea
+			# veche (09.11.2026, darog69, Ustym)
+			try:
+				os.sync()
+			except (AttributeError, OSError):
+				pass
 			conf = P.citeste_configurarea(radacina)
 			inst = instalate(radacina, conf)
 			ramase = [p['nume'] for p in planificate if inst.get(p['nume']) != p['la']]
@@ -1546,6 +1584,15 @@ class Actualizari(object):
 					self._jurnal('opkg a iesit cu %s, dar toate pachetele actualizarii au versiunea noua: instalarea e '
 						'reusita; pachete neconfigurate in receptor (nu ale actualizarii): %s' % (cod,
 						', '.join(straine) or 'niciunul'))
+					# nr. 105 (5), TODO 1094: "instalare: cod 255" vine din scriptul de instalare al unei extensii puse de om
+					# (textele "No emu script to this image now", "Broken boxbranding ..." nu sunt in imagine si nici in
+					# straturile OE), ramasa neconfigurata; opkg il ruleaza din nou la sfarsitul oricarei instalari. Omul
+					# afla o data care extensie e, ca s-o scoata sau s-o puna din nou; actualizarea nu are nicio vina.
+					if straine:
+						nota = _t('Extensia %s nu se poate configura pe această imagine; nu ține de actualizare.') % \
+							', '.join(P.nume_scurt(n) if n.startswith(P.PREFIX) else n for n in straine[:3])
+						self.rezultat['nota_straine'] = nota
+						self.mesaj += ' ' + nota
 			else:
 				motiv = motiv_eroare(self._lista_ipkg, implicit=_t('Instalarea nu a reușit.'))
 				self.pas = ''
@@ -1567,6 +1614,8 @@ class Actualizari(object):
 				if self.rezultat.get('stare') == 'instalata':
 					self.rapid_pas = 'repornesc'
 					self.mesaj = _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+					if self.rezultat.get('nota_straine'):
+						self.mesaj += ' ' + self.rezultat['nota_straine']
 					self._programeaza_repornirea(REPORNIRE_RAPIDA_MS)
 				else:
 					self._sfarsit_rapid('instalare: %s' % self.rezultat.get('stare'))

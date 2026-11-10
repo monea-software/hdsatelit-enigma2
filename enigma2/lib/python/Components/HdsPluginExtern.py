@@ -76,6 +76,9 @@ DOSAR_REZERVA = "/tmp"
 DOSAR_COADA = "/home/root/logs/rapoarte-pluginuri"
 FISIER_ID = "/etc/enigma2/hds-raport-plugin.id"
 PREFIX_PLUGINURI = "/usr/lib/enigma2/python/Plugins/"
+# temele externe (Components/HdsTemaExterna.py) folosesc acelasi canal: cale = Teme/<dosarul temei>
+FEL_TEME = "Teme"
+PREFIX_TEME = "/usr/share/enigma2/"
 OPKG_STATUS = "/var/lib/opkg/status"
 OPKG_INFO = "/var/lib/opkg/info"
 OPKG_LISTE = "/var/lib/opkg/lists"
@@ -361,9 +364,64 @@ def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal,
 	arata = not incarcare and not st["aratat"]
 	if arata:
 		st["aratat"] = True
-	_asteptari.append({"nume": nume, "cauza": cod, "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S,
+	_asteptari.append({"nume": nume, "cauza": cauzaEcran(cod, valoare), "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S,
 		"arata": arata})
 	_programeaza()
+
+
+def cauzaEcran(cod, valoare):
+	"""Codul textului de pe ecran: ca in raport, afara de un modul legat de alt Python (Components/HdsAltPython), care
+	in raport ramane modul-lipsa (lista fixa a serverului, sectiunea 4) si pe ecran are textul lui."""
+	try:
+		from Components import HdsAltPython
+	except ImportError:
+		HdsAltPython = None
+	try:
+		if HdsAltPython is not None and HdsAltPython.versiuneDinExceptie(valoare):
+			return "alt-python"
+	except Exception:
+		pass
+	return cod
+
+
+def raporteazaRefuz(fel, nume, valoare, acum=None, mono=None):
+	"""Un plugin extern pe care incarcatorul (Components/PluginComponent.py) nu l-a pornit fiindca un modul al lui e
+	facut pentru alt Python (valoare: exceptia, cu calea modulului in .path): jurnalul de cadere si raportul, ca la o
+	eroare, o data pe semnatura in sesiune, fara mesajul pe ecran (il da lista pluginurilor care nu s-au incarcat).
+	True daca a pornit un raport. Nu arunca."""
+	try:
+		if "%s/%s" % (fel, nume) in PLUGINURI_IMAGINE:
+			return False
+		acum = time.time() if acum is None else acum
+		mono = time.monotonic() if mono is None else mono
+		cale = (getattr(valoare, "path", None) or getattr(valoare, "filename", None) or "").replace("\\", "/")
+		cadru = (cale[cale.rindex("/Plugins/") + len("/Plugins/"):] if "/Plugins/" in cale else cale.rsplit("/", 1)[-1]) \
+			or "%s/%s" % (fel, nume)
+		cadru += ":0"
+		st = _pluginuri.setdefault(nume, {"ore": [], "erori": 0, "semnaturi": set(), "aratat": False})
+		st["erori"] += 1
+		tip = type(valoare)
+		sem = semnatura(nume, tip, cadru, _text(valoare))
+		if sem in st["semnaturi"]:
+			return False
+		st["semnaturi"].add(sem)
+		cod = cauza(tip, valoare)
+		raport = compuneRaport(fel, nume, cod, sem, tip, valoare, getattr(valoare, "__traceback__", None), None, None,
+			st["erori"], acum, mono)
+		_jurnal("pluginul extern %s nu s-a incarcat (%s): raportul pe fir" % (nume, cod))
+		lucru = Lucru(raport)
+		lucru.start()
+		# fara mesaj, dar urmarit ca celelalte: un raport ramas in coada (de obicei reteaua nu e gata cand se citesc
+		# pluginurile) porneste ceasul cozii, nu asteapta pornirea urmatoare
+		_asteptari.append({"nume": nume, "cauza": cod, "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S, "arata": False})
+		try:
+			_programeaza()
+		except Exception as e:
+			_jurnal("ceasul raportului pluginului %s: %r" % (nume, e))
+		return True
+	except Exception as e:
+		_jurnal("raportul pluginului %s care nu s-a incarcat: %r" % (nume, e))
+		return False
 
 
 # ------------------------------------------------------------------ raportul: compunerea (firul enigma2, ieftina)
@@ -496,7 +554,7 @@ def dosarePachete():
 		liste = []
 	for n in liste:
 		text = _citeste(os.path.join(OPKG_INFO, n), 4 * 1024 * 1024)
-		if PREFIX_PLUGINURI not in text:
+		if PREFIX_PLUGINURI not in text and PREFIX_TEME not in text:
 			continue
 		for rand in text.splitlines():
 			cale = rand.split("\t", 1)[0].strip()
@@ -504,6 +562,10 @@ def dosarePachete():
 				parti = cale[len(PREFIX_PLUGINURI):].split("/")
 				if len(parti) >= 3 and parti[0] in FELURI and parti[1]:
 					rez.setdefault(parti[0] + "/" + parti[1], n[:-5])
+			elif cale.startswith(PREFIX_TEME):
+				parti = cale[len(PREFIX_TEME):].split("/")
+				if len(parti) >= 2 and parti[0]:
+					rez.setdefault(FEL_TEME + "/" + parti[0], n[:-5])
 	with _lacat:
 		_opkg["dosare"] = rez
 	return rez
@@ -603,6 +665,11 @@ def fisierePlugin(cale_plugin):
 	legaturi."""
 	baza = _r(PREFIX_PLUGINURI)
 	dosar = os.path.join(baza, cale_plugin)
+	prefix = ""
+	if cale_plugin.startswith(FEL_TEME + "/"):
+		baza = _r(PREFIX_TEME)
+		dosar = os.path.join(baza, cale_plugin[len(FEL_TEME) + 1:])
+		prefix = FEL_TEME + "/"
 	rez = []
 	for radacina, dosare, fisiere in os.walk(dosar, followlinks=False):
 		dosare[:] = [d for d in dosare if d != "__pycache__"]
@@ -614,7 +681,7 @@ def fisierePlugin(cale_plugin):
 				marime = os.path.getsize(disc)
 			except OSError:
 				continue
-			rel = os.path.relpath(disc, baza).replace("\\", "/")
+			rel = prefix + os.path.relpath(disc, baza).replace("\\", "/")
 			motiv = motivOmis(n, disc, marime)
 			try:
 				semn = "omis: " + motiv if motiv else sha256Fisier(disc)
@@ -824,7 +891,8 @@ def dupaRaspuns(text, ce, raspuns):
 	"""Pachetul de fisiere, cand serverul il vrea (fisierele se iau de pe disc in clipa trimiterii)."""
 	if ce == TRIMIS and raspuns.get("vreau_fisierele") is True:
 		cale = _valoareAntet(text, "cale")
-		if cale.split("/")[0] in FELURI and os.path.isdir(_r(PREFIX_PLUGINURI + cale)):
+		dosar = _r(PREFIX_TEME + cale[len(FEL_TEME) + 1:]) if cale.startswith(FEL_TEME + "/") else _r(PREFIX_PLUGINURI + cale)
+		if cale.split("/")[0] in FELURI + (FEL_TEME,) and os.path.isdir(dosar):
 			trimiteFisiere(raspuns.get("cod", ""), _valoareAntet(text, "cheie"), fisierePlugin(cale))
 
 
@@ -1023,6 +1091,7 @@ def textCauza(cod):
 		"tema": _("Pluginul cere un ecran pe care tema de acum nu îl are."),
 		"internet": _("Pluginul nu a putut lua date de pe internet."),
 		"fisier": _("Pluginul nu a găsit un fișier sau nu a putut scrie pe disc."),
+		"alt-python": _("Pluginul are o parte făcută pentru altă versiune de Python și nu poate rula pe această imagine."),
 	}.get(cod) or _("Pluginul a avut o eroare internă.")
 
 

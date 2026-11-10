@@ -3,11 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Vreme comuna pentru tema, afisaj si web. Memoria nu se scrie pe disc.
 
+import errno
 import json
 import math
 import os
+import socket
 import threading
 import time
+from datetime import date as DataCalendar
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -26,6 +29,15 @@ _FUS_TARA = {}
 
 def N_(text):
 	return text
+
+
+MESAJE_CAUTARE = {
+	"nume_scurt": N_("Scrie cel puțin două litere din numele orașului."),
+	"nume_invalid": N_("Numele orașului nu este valid."),
+	"fara_retea": N_("Rețeaua nu este disponibilă. Verifică legătura la internet și încearcă din nou."),
+	"serviciu": N_("Serviciul de căutare a orașelor nu răspunde. Încearcă din nou mai târziu."),
+	"fara_rezultate": N_("Nu s-a găsit niciun oraș. Încearcă numele fără diacritice sau în engleză."),
+}
 
 
 def _t(text):
@@ -174,15 +186,38 @@ def _citesteJson(url):
 	return v
 
 
+def _limbaOrase():
+	"""Numele oraselor urmeaza limba meniului, inclusiv limba de rezerva."""
+	try:
+		from Components.Language import limbaInterfata
+		valoare = limbaInterfata()
+	except (ImportError, AttributeError):
+		valoare = ""
+	if not valoare:
+		try:
+			from Components.config import config
+			valoare = config.osd.language.value
+		except (ImportError, AttributeError, KeyError):
+			valoare = ""
+	if isinstance(valoare, str):
+		cod = valoare.strip().lower().replace("-", "_").split("_")[0]
+		if len(cod) == 2 and cod.isascii() and cod.isalpha():
+			return cod
+	return "en"
+
+
 def cautaOrase(nume):
 	"""Apel cu retea: ecranele si web il ruleaza pe fir separat."""
 	nume = _text(nume, 80)
 	if len(nume) < 2:
 		return []
 	v = _citesteJson(GEOCODARE + "?" + urlencode(dict(
-		name=nume, count=20, language="ro", format="json")))
+		name=nume, count=20, language=_limbaOrase(), format="json")))
+	lista = v.get("results", [])
+	if not isinstance(lista, list):
+		raise ValueError("Lista de orase nevalida")
 	rez, vazute = [], set()
-	for oras in v.get("results", [])[:20]:
+	for oras in lista[:20]:
 		try:
 			parti = [oras["name"], oras.get("admin1"), oras.get("country")]
 			eticheta = ", ".join(dict.fromkeys(p for p in parti if p))
@@ -195,7 +230,52 @@ def cautaOrase(nume):
 				rez.append(o)
 		except (KeyError, TypeError, ValueError, OverflowError):
 			continue
+	if lista and not rez:
+		raise ValueError("Orase nevalide")
 	return rez
+
+
+def mesajCautare(motiv):
+	return _t(MESAJE_CAUTARE.get(motiv, MESAJE_CAUTARE["serviciu"]))
+
+
+def _faraRetea(eroare):
+	"""Ruta sau rezolvarea numelui lipseste, fara o alta cerere de retea."""
+	coduri = {getattr(errno, nume, None) for nume in
+		("ENETDOWN", "ENETUNREACH", "EHOSTDOWN", "EHOSTUNREACH")}
+	coduri.discard(None)
+	# URLError pastreaza eroarea de socket in reason.
+	for _pas in range(4):
+		if isinstance(eroare, socket.gaierror):
+			return True
+		if isinstance(eroare, OSError) and eroare.errno in coduri:
+			return True
+		motiv = getattr(eroare, "reason", None)
+		if not isinstance(motiv, BaseException) or motiv is eroare:
+			break
+		eroare = motiv
+	return False
+
+
+def cautaOraseRezultat(nume):
+	"""Un singur rezultat si aceleasi motive pentru ecran si interfata web."""
+	try:
+		nume = _text(nume, 80)
+	except (TypeError, ValueError):
+		motiv = "nume_invalid"
+	else:
+		if len(nume) < 2:
+			motiv = "nume_scurt"
+		else:
+			try:
+				orase = cautaOrase(nume)
+			except Exception as eroare:
+				motiv = "fara_retea" if _faraRetea(eroare) else "serviciu"
+			else:
+				motiv = "" if orase else "fara_rezultate"
+				return dict(result=True, orase=orase, motiv=motiv,
+					message=mesajCautare(motiv) if motiv else "")
+	return dict(result=False, orase=[], motiv=motiv, message=mesajCautare(motiv))
 
 
 def _fus():
@@ -285,19 +365,47 @@ def _prognoza(v, oras):
 	zile = v.get("daily")
 	if not isinstance(zile, dict):
 		zile = {}
-	for zi, i in (("azi", 0), ("maine", 1)):
+	rez["zile"] = []
+	for zi, i in (("azi", 0), ("maine", 1), ("poimaine", 2)):
+		# Data si codul provin din aceeasi pozitie a seriilor furnizorului.
+		# Nu construim o zi lipsa adunand 24 de ore si nu reutilizam codul de azi.
+		data = _ziPrognoza(_seriePrognoza(zile, "time", i))
+		cod = _codPrognoza(_seriePrognoza(zile, "weather_code", i))
+		rez[zi + "_data"], rez[zi + "_cod"] = data, cod
+		zi_date = dict(data=data, cod=cod)
 		for fel in ("min", "max"):
-			lista = zile.get("temperature_2m_" + fel, [])
 			try:
-				if not isinstance(lista, (list, tuple)):
-					raise ValueError("Serie nevalida")
-				v = _numar(lista[i])
+				v = _numar(_seriePrognoza(zile, "temperature_2m_" + fel, i))
 				if not -150 <= v <= 100:
 					raise ValueError("Temperatura nevalida")
 				rez[zi + "_" + fel] = v
-			except (IndexError, TypeError, ValueError):
+			except (TypeError, ValueError, OverflowError):
 				rez[zi + "_" + fel] = None
+			zi_date[fel] = rez[zi + "_" + fel]
+		rez["zile"].append(zi_date)
 	return rez
+
+
+def _seriePrognoza(zile, cheie, i):
+	lista = zile.get(cheie)
+	return lista[i] if isinstance(lista, (list, tuple)) and i < len(lista) else None
+
+
+def _ziPrognoza(valoare):
+	if not isinstance(valoare, str) or len(valoare) != 10:
+		return None
+	try:
+		return DataCalendar.fromisoformat(valoare).isoformat()
+	except ValueError:
+		return None
+
+
+def _codPrognoza(valoare):
+	try:
+		cod = _numar(valoare)
+		return int(cod) if 0 <= cod <= 99 and cod == int(cod) else None
+	except (TypeError, ValueError, OverflowError):
+		return None
 
 
 class Serviciu(object):
@@ -339,8 +447,8 @@ class Serviciu(object):
 			url = PROGNOZA + "?" + urlencode(dict(
 				latitude=oras["latitudine"], longitude=oras["longitudine"],
 				current="temperature_2m,weather_code,is_day",
-				daily="temperature_2m_min,temperature_2m_max",
-				forecast_days=2, temperature_unit="celsius", timezone="auto"))
+				daily="temperature_2m_min,temperature_2m_max,weather_code",
+				forecast_days=3, temperature_unit="celsius", timezone="auto"))
 			nou = _prognoza(self._citeste_json(url), oras)
 			with self._lacat:
 				if cheie == self._cheie:

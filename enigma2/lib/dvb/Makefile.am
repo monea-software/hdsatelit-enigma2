@@ -74,6 +74,7 @@ dvbinclude_HEADERS = \
 	hdsteletext.h \
 	hdsterestru.h \
 	hdsurmamotor.h \
+	hdsunicable.h \
 	idemux.h \
 	idvb.h \
 	isection.h \

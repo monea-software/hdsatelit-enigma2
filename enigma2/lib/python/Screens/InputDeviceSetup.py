@@ -155,6 +155,9 @@ class InputDeviceSetup(Screen, ConfigListScreen):
 		Screen.__init__(self, session)
 		self.inputDevice = device
 		iInputDevices.currentDevice = self.inputDevice
+		sectiune = HdsDispozitiveIntrare.sectiune(device, config)
+		self._valoriIntrare = [(getattr(sectiune, k), getattr(sectiune, k).value)
+			for k in ("enabled", "name", "repeat", "delay")]
 		self.onChangedEntry = [ ]
 		self.setup_title = _("Input device setup")
 		self.isStepSlider = None
@@ -173,8 +176,8 @@ class InputDeviceSetup(Screen, ConfigListScreen):
 				"save": self.apply,
 			}, -2)
 
-		self["key_red"] = StaticText(_("Cancel"))
-		self["key_green"] = StaticText(_("OK"))
+		self["key_red"] = StaticText(_("Renunță"))
+		self["key_green"] = StaticText(_("Păstrează"))
 		self["key_yellow"] = StaticText()
 		self["key_blue"] = StaticText()
 		self["introduction"] = StaticText()
@@ -241,28 +244,30 @@ class InputDeviceSetup(Screen, ConfigListScreen):
 		self.newConfig()
 
 	def confirm(self, confirmed):
-		if not confirmed:
-			print("not confirmed")
+		if confirmed is not True:
+			self._revino()
+			self["introduction"].setText(_("Setările de la intrare au fost refăcute."))
 			return
 		else:
 			HdsDispozitiveIntrare.salveazaNumele(self.inputDevice, iInputDevices, config)
 			self.keySave()
 
 	def apply(self):
-		self.session.openWithCallback(self.confirm, MessageBox, _("Use this input device settings?"), MessageBox.TYPE_YESNO, timeout = 20, default = True)
+		self.session.openWithCallback(self.confirm, MessageBox, _("Use this input device settings?"), MessageBox.TYPE_YESNO,
+			timeout=20, default=True, timeout_default=False)
 
-	def cancelConfirm(self, result):
-		if not result:
-			return
-		for x in self["config"].list:
-			x[1].cancel()
-		self.close()
+	def _revino(self):
+		# Mai intai enabled: notificatorul lui poate reface repetarea implicita. Refacem apoi si campurile ascunse.
+		self._valoriIntrare[0][0].setValue(self._valoriIntrare[0][1])
+		self.createSetup()
+		for element, valoare in self._valoriIntrare[1:]:
+			element.setValue(valoare)
+		self["config"].invalidate(self.repeatEntry)
+		self["config"].invalidate(self.delayEntry)
 
 	def keyCancel(self):
-		if self["config"].isChanged():
-			self.session.openWithCallback(self.cancelConfirm, MessageBox, _("Really close without saving settings?"), MessageBox.TYPE_YESNO, timeout = 20, default = True)
-		else:
-			self.close()
+		self._revino()
+		self.close()
 	# for summary:
 	def changedEntry(self):
 		for x in self.onChangedEntry:

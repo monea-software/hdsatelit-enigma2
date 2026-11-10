@@ -1,6 +1,7 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 import os
 import struct
+import threading
 from .GUIComponent import GUIComponent
 from Tools.FuzzyDate import FuzzyTime
 from ServiceReference import ServiceReference
@@ -27,6 +28,128 @@ from skin import getListFont, hasListFont, getParameterFromSkin, listRect
 # verifica nimic). Fisierele se verifica o data, la incarcarea listei.
 
 cutsParser = struct.Struct(">QI")
+
+_MUTARE_LACAT = threading.Lock()
+
+
+def caiInregistrariActive(session):
+	"""Fisiere in curs de inregistrare sau redare, verificate pe firul interfetei."""
+	nav = session.nav
+	active = []
+	temporizatoare = getattr(getattr(nav, "RecordTimer", None), "timer_list", ())
+	for t in temporizatoare:
+		pornit = getattr(t, "record_service", None) is not None
+		if not pornit and callable(getattr(t, "isRunning", None)):
+			pornit = t.isRunning() and not getattr(t, "justplay", False)
+		if pornit:
+			cale = getattr(t, "Filename", "") or getattr(t, "filename", "")
+			if cale:
+				active.extend((cale, cale + ".ts"))
+	# O inregistrare care nu are un temporizator cunoscut nu se muta pe ghicite.
+	if nav.getRecordings() and not active:
+		raise ValueError(_("Nu se pot verifica înregistrările în curs."))
+	ref = nav.getCurrentlyPlayingServiceReference()
+	if ref is not None:
+		cale = ref.getPath() or ""
+		if os.path.isabs(cale):
+			active.append(cale)
+	return tuple(active)
+
+
+def _mutaFaraInlocuire(sursa, tinta):
+	"""Mutare atomica pe acelasi disc, fara suprascriere nici daca apare un fisier intre verificari."""
+	if os.name == "nt":
+		os.rename(sursa, tinta)
+		return
+	try:
+		import ctypes
+		libc = ctypes.CDLL(None, use_errno=True)
+		redenumeste = getattr(libc, "renameat2", None)
+	except ImportError:
+		redenumeste = None
+	if redenumeste is None:
+		# Legaturile dure pastreaza aceeasi protectie pe un Python fara ctypes.
+		# Un disc fara acest suport refuza operatia inainte sa se atinga sursa.
+		os.link(sursa, tinta)
+		try:
+			os.unlink(sursa)
+		except OSError:
+			os.unlink(tinta)
+			raise
+		return
+	redenumeste.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+	redenumeste.restype = ctypes.c_int
+	if redenumeste(-100, os.fsencode(sursa), -100, os.fsencode(tinta), 1):
+		cod = ctypes.get_errno()
+		raise OSError(cod, os.strerror(cod), tinta)
+
+
+def mutaInregistrarea(cale, destinatie, active=()):
+	"""Muta filmul cu fisierele asociate pe acelasi disc. Orice refuz lasa sursele intacte.
+	Un esec dupa prima redenumire readuce fisierele deja mutate; nu se inlocuieste niciun fisier existent."""
+	import stat
+	from Components.HdsSubtitrariFilm import EXTENSII as extensiiSubtitrari
+	from Components.HdsPisteLimbi import limbaCanonica
+	def peDisc(text):
+		return os.fsdecode(text.encode("utf-8", "surrogateescape"))
+	cale = os.path.abspath(peDisc(cale))
+	destinatie = os.path.abspath(peDisc(destinatie))
+	with _MUTARE_LACAT:
+		if not os.path.isdir(destinatie):
+			raise ValueError(_("Dosarul de destinație nu există."))
+		if os.path.islink(cale) or not stat.S_ISREG(os.lstat(cale).st_mode):
+			raise ValueError(_("Se pot muta numai filme obișnuite, fără legături simbolice."))
+		if os.path.samefile(os.path.dirname(cale), destinatie):
+			raise ValueError(_("Filmul este deja în acest dosar."))
+		if os.stat(cale).st_dev != os.stat(destinatie).st_dev:
+			raise ValueError(_("Alege un dosar de pe același disc pentru mutare."))
+		cheie = lambda c: os.path.normcase(os.path.realpath(peDisc(c)))
+		if cheie(cale) in {cheie(c) for c in active if c}:
+			raise ValueError(_("Oprește înregistrarea sau redarea înainte de mutare."))
+		fisiere = [cale]
+		for sufix in (".meta", ".ap", ".sc", ".cuts", ".hdsdecodare"):
+			if os.path.lexists(cale + sufix):
+				fisiere.append(cale + sufix)
+		if cale.lower().endswith(".ts") and os.path.lexists(cale[:-3] + ".eit"):
+			fisiere.append(cale[:-3] + ".eit")
+		prefix = os.path.basename(cale) + "."
+		baza = os.path.splitext(os.path.basename(cale))[0]
+		for nume in sorted(os.listdir(os.path.dirname(cale))):
+			if nume.startswith(prefix) and len(nume[len(prefix):]) == 3 and nume[len(prefix):].isdigit():
+				fisiere.append(os.path.join(os.path.dirname(cale), nume))
+			# Numai numele exact al filmului, eventual urmat de o limba cunoscuta.
+			# Un alt film care doar incepe cu acelasi cuvant nu isi pierde subtitrarea.
+			radacina, extensie = os.path.splitext(nume)
+			if extensie.lower() not in extensiiSubtitrari or nume == os.path.basename(cale):
+				continue
+			potriveste = radacina.casefold() == baza.casefold()
+			if not potriveste and radacina.casefold().startswith(baza.casefold() + "."):
+				limba = radacina[len(baza) + 1:]
+				potriveste = limba.isalpha() and limbaCanonica(limba) is not None
+			if potriveste:
+				fisiere.append(os.path.join(os.path.dirname(cale), nume))
+		plan = [(f, os.path.join(destinatie, os.path.basename(f))) for f in fisiere]
+		for sursa, tinta in plan:
+			if os.path.islink(sursa) or not stat.S_ISREG(os.lstat(sursa).st_mode):
+				raise ValueError(_("Un fișier asociat nu poate fi mutat în siguranță."))
+			if os.path.lexists(tinta):
+				raise ValueError(_("În destinație există deja un fișier cu același nume."))
+		mutate = []
+		try:
+			for sursa, tinta in plan:
+				_mutaFaraInlocuire(sursa, tinta)
+				mutate.append((sursa, tinta))
+		except OSError:
+			erori = []
+			for sursa, tinta in reversed(mutate):
+				try:
+					_mutaFaraInlocuire(tinta, sursa)
+				except OSError:
+					erori.append(tinta)
+			if erori:
+				raise OSError(_("Mutarea s-a oprit. Verifică fișierele din ambele dosare: %s") % ", ".join(erori))
+			raise
+	return plan[0][1]
 
 def lastPlayPosFromCache(ref):
 	return None

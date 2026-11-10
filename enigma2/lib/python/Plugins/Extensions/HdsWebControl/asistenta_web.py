@@ -118,6 +118,161 @@ def opreste(A=None):
 	return rez
 
 
+def scriereSecret(C=None):
+	"""Numai permisiunea de scriere, fara valoarea campului si fara jurnalul asistentei."""
+	if C is None:
+		from Components import HdsAsistentaControl as C
+	try:
+		activa = C.asistentaActiva()
+	except Exception:
+		return {"result": False, "permisa": False,
+			"message": _t("Nu pot verifica asistența. Încearcă din nou înainte să scrii parola sau cheia.")}
+	return {"result": True, "permisa": not activa,
+		"message": _t(C.TEXT_OPRESTE_SECRET) if activa else ""}
+
+
+def protejeazaScrierea(text):
+	"""Acelasi paznic pentru toate campurile web, inclusiv pagina de intrare."""
+	if "</body>" not in text or 'id="hds-scriere-secret"' in text:
+		return text
+	import json
+	config = {"eroare": _t("Nu pot verifica asistența. Încearcă din nou înainte să scrii parola sau cheia."),
+		"inchide": _t("Închide"), "opreste": _t("Oprește asistența"),
+		"pe_tv": _t("Oprește asistența de pe televizor, apoi revino aici.")}
+	script = SCRIPT_SCRIERE_SECRET.replace("__TEXTE_SECRET__", json.dumps(config, ensure_ascii=True))
+	return text.replace("</body>", script + "</body>", 1)
+
+
+SCRIPT_SCRIERE_SECRET = r'''
+<script id="hds-scriere-secret">
+(function(){
+  "use strict";
+  var texte = __TEXTE_SECRET__, anterior = new WeakMap(), lipite = new WeakMap();
+  var inserare = new WeakSet(), coada = Promise.resolve(), inCurs = 0, avertisment = null;
+  function secret(c){
+    if(!c || !/^(INPUT|TEXTAREA)$/.test(c.tagName)){ return false; }
+    if(c.dataset.hdsSecret === "1" || c.type === "password"){ return true; }
+    var nume = [c.id || "", c.name || "", c.autocomplete || ""].join(" ");
+    if(/parol|passw|secret|token|(^|[ _-])pin|cheie|api[_-]?key/i.test(nume)){ return true; }
+    return c.classList.contains("pin");
+  }
+  function anunta(text){
+    if(avertisment){ avertisment.querySelector("p").textContent = text; return; }
+    var d = document.createElement("dialog"), p = document.createElement("p");
+    p.textContent = text; d.appendChild(p);
+    var cfg = window.CFG || {};
+    if(cfg.csrf || cfg.jeton){
+      var a = document.createElement("button"); a.type = "button"; a.textContent = texte.opreste;
+      a.onclick = function(){
+        a.disabled = true;
+        var h = {}; if(cfg.csrf){ h["X-HDS-CSRF"] = cfg.csrf; }
+        var url = "/api/asistenta-opreste" + (cfg.jeton ? "?token=" + encodeURIComponent(cfg.jeton) : "");
+        fetch(url, {method:"POST", credentials:"same-origin", cache:"no-store", headers:h})
+          .then(function(r){ return r.json(); }).then(function(r){
+            if(!r.result){ p.textContent = r.message || texte.eroare; a.disabled = false; return; }
+            d.close(); d.remove(); avertisment = null;
+          }).catch(function(){ p.textContent = texte.eroare; a.disabled = false; });
+      };
+      d.appendChild(a);
+    } else {
+      var nota = document.createElement("p"); nota.textContent = texte.pe_tv; d.appendChild(nota);
+    }
+    var b = document.createElement("button"); b.type = "button"; b.textContent = texte.inchide;
+    b.style.marginLeft = "1em";
+    b.onclick = function(){ d.close(); d.remove(); avertisment = null; };
+    d.addEventListener("cancel", function(){ d.remove(); avertisment = null; });
+    d.appendChild(b); document.body.appendChild(d); avertisment = d; d.showModal(); b.focus();
+  }
+  function verifica(){
+    // Cererea nu contine textul scris, nici macar numele campului.
+    return fetch("/scriere-secret", {credentials:"same-origin", cache:"no-store"})
+      .then(function(r){ if(!r.ok){ throw new Error("stare"); } return r.json(); });
+  }
+  function insereaza(c, text){
+    var inceput = c.selectionStart, sfarsit = c.selectionEnd;
+    if(inceput === null || sfarsit === null){ return; }
+    if(c.maxLength >= 0){ text = text.slice(0, Math.max(0, c.maxLength - c.value.length + sfarsit - inceput)); }
+    c.setRangeText(text, inceput, sfarsit, "end");
+    anterior.set(c, c.value); inserare.add(c);
+    c.dispatchEvent(new Event("input", {bubbles:true}));
+    inserare.delete(c);
+  }
+  function puneInCoada(c, lucru, verificaStarea){
+    inCurs++;
+    coada = coada.then(function(){
+      if(!verificaStarea){ if(c.isConnected){ lucru(); } return; }
+      return verifica().then(function(d){
+        if(!d.result || !d.permisa){ anunta(d.message || texte.eroare); return; }
+        if(c.isConnected){ lucru(); }
+      }).catch(function(){ anunta(texte.eroare); });
+    }).then(function(){ inCurs--; }, function(){ inCurs--; anunta(texte.eroare); });
+  }
+  document.addEventListener("focusin", function(e){
+    if(secret(e.target)){ anterior.set(e.target, e.target.value); }
+  }, true);
+  document.addEventListener("paste", function(e){
+    if(secret(e.target) && e.clipboardData){ lipite.set(e.target, e.clipboardData.getData("text/plain")); }
+  }, true);
+  document.addEventListener("beforeinput", function(e){
+    var c = e.target;
+    if(!secret(c) || c.readOnly || c.disabled || !/^(insert|delete)/.test(e.inputType || "")){ return; }
+    anterior.set(c, c.value);
+    if(!e.cancelable){ return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    if(/^delete/.test(e.inputType)){
+      var fel = e.inputType;
+      puneInCoada(c, function(){
+        var a = c.selectionStart, b = c.selectionEnd;
+        if(a === null || b === null){ return; }
+        if(a === b){
+          if(/Backward$/.test(fel)){
+            a = /Word/.test(fel) ? c.value.slice(0, a).replace(/\S+\s*$/, "").length : Math.max(0, a - 1);
+            if(a > 0 && /[\uDC00-\uDFFF]/.test(c.value.charAt(a))){ a--; }
+          } else if(/Forward$/.test(fel)){
+            b = /Word/.test(fel) ? a + (c.value.slice(a).match(/^\s*\S+/) || [""])[0].length : Math.min(c.value.length, b + 1);
+            if(b < c.value.length && /[\uD800-\uDBFF]/.test(c.value.charAt(b - 1))){ b++; }
+          }
+        }
+        c.setRangeText("", a, b, "end"); anterior.set(c, c.value); inserare.add(c);
+        c.dispatchEvent(new Event("input", {bubbles:true})); inserare.delete(c);
+      }, false);
+      return;
+    }
+    var text = e.data;
+    if(text === null && e.dataTransfer){ text = e.dataTransfer.getData("text/plain"); }
+    if(text === null){ text = lipite.get(c) || ""; } lipite.delete(c);
+    if(!text){ return; }
+    puneInCoada(c, function(){ insereaza(c, text); }, true);
+  }, true);
+  // Acopera si completarea automata ori compunerea pentru care beforeinput nu se poate opri.
+  document.addEventListener("input", function(e){
+    var c = e.target;
+    if(!secret(c) || inserare.has(c)){ return; }
+    e.stopImmediatePropagation();
+    var nou = c.value; c.value = anterior.get(c) || "";
+    puneInCoada(c, function(){
+      c.value = nou; anterior.set(c, nou); inserare.add(c);
+      c.dispatchEvent(new Event("input", {bubbles:true})); inserare.delete(c);
+    }, true);
+  }, true);
+  // Salvarea asteapta verificarea ultimului caracter; nu trimite o valoare incompleta.
+  document.addEventListener("click", function(e){
+    if(avertisment && avertisment.contains(e.target)){ return; }
+    if(!inCurs || !e.target.closest("button,input[type=submit]")){ return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    var tinta = e.target;
+    coada.then(function(){ if(tinta.isConnected && !avertisment){ tinta.click(); } });
+  }, true);
+  document.addEventListener("submit", function(e){
+    if(!inCurs){ return; } e.preventDefault(); e.stopImmediatePropagation();
+    var f = e.target, b = e.submitter;
+    coada.then(function(){ if(f.isConnected && !avertisment){ f.requestSubmit(b || undefined); } });
+  }, true);
+})();
+</script>
+'''
+
+
 def _sesiuneEnigma():
 	try:
 		from .meniu_comun_web import sesiune
@@ -324,7 +479,7 @@ PAGINA = """<!DOCTYPE html>
   <p>Funcția nu e disponibilă pe această imagine.</p>
 </section>
 <section class="card ascuns" id="pornire">
-  <p class="scurt">Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces rămân închise. Poți opri oricând.</p>
+  <p class="scurt">Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât scrii o parolă sau o cheie, până o salvezi. Poți opri oricând.</p>
   <label class="bifa"><input type="checkbox" id="accept" checked><span>Accept <a href="#" id="termeni">termenii și condițiile</a></span></label>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
@@ -438,10 +593,9 @@ TEXTE_PAGINA = {
 		N_("Asistență de la distanță"),
 		N_("Se citește starea..."),
 		N_("Funcția nu e disponibilă pe această imagine."),
-		N_(
-	"Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla "
-	"receptorul prin meniuri. Parolele, PIN-urile și cheile apar ca steluțe. Numai ecranele modulelor de acces "
-	"rămân închise. Poți opri oricând."),
+		N_("Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate "
+			"meniurile. Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât "
+			"scrii o parolă sau o cheie, până o salvezi. Poți opri oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
 		N_("Start"),
 		N_("Setările de internet"),

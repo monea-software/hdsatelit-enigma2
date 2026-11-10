@@ -261,17 +261,34 @@ def chei(ref_b, F=None):
 	return set(_harta(ref_b, _f(F)))
 
 
-def nume_buchet(ref_b, F=None):
-	"""Numele aratat omului: „Favorite” (tradus) pentru Favorite, altfel numele buchetului fara „ (TV)”."""
-	fisier = fisier_din_ref(ref_b) or ""
-	if e_favorite(fisier):
-		return _t("Favourites")
-	try:
-		nume = fara_mod(_f(F).nume(ref_b) or "")
-	except Exception as e:
-		_jurnal("numele buchetului %s: %s" % (fisier, e))
-		nume = ""
-	return nume or fisier
+def nume_buchet(ref_b, nume=None, F=None):
+	"""Numele implicit al unui buchet al imaginii, tradus la afisare. Numele omului ramane intact.
+	Al doilea argument poate fi si furnizorul vechi, pentru apelurile existente."""
+	if nume is not None and not isinstance(nume, str):
+		F, nume = nume, None
+	fisier = fisier_din_ref(ref_b) or (ref_b if ref_b.startswith("userbouquet.") else "")
+	if nume is None:
+		try:
+			nume = fara_mod(_f(F).nume(ref_b) or "")
+		except Exception as e:
+			_jurnal("numele buchetului %s: %s" % (fisier, e))
+			nume = ""
+	n = (nume or "").strip()
+	implicit = fara_mod(n)
+	if e_favorite(fisier) and n in ("", "Favourites", "Favourites (TV)", "Favourites (Radio)",
+			"Favorite", "Favorite (TV)", "Favorite (Radio)"):
+		tradus = _t("Favourites")
+		return _t("Favorite") if tradus == "Favourites" and implicit == "Favorite" else tradus
+	if fisier == "userbouquet.hds_dab.radio" and implicit in ("", "DAB+ din satelit", "DAB+ from satellite"):
+		return _t("DAB+ din satelit")
+	if fisier in ("userbouquet.hds_t2.tv", "userbouquet.hds_dvbt2_satelit.tv") and implicit in (
+			"", "DVB-T2 din satelit", "DVB-T2 from satellite"):
+		return _t("DVB-T2 din satelit")
+	if fisier in ("userbouquet.hdsdvbi.tv", "userbouquet.hdsdvbi.radio", "userbouquet.hds_dvbi.tv",
+			"userbouquet.hds_dvbi.radio") and implicit in ("", "Canale de pe internet (DVB-I)",
+			"Internet channels (DVB-I)", "DVB-I", "DVB-I (TV)", "DVB-I (Radio)"):
+		return _t("Canale de pe internet (DVB-I)")
+	return n or fisier
 
 
 def buchete_proprii(tip, F=None):

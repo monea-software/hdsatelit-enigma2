@@ -148,9 +148,9 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 		# the playlist, the keys at the bottom. Drawn only by a skin that places them.
 		self.hdsPanou = HdsPanouFisiere(self, self.filelist)
 		self["hds_lista_titlu"] = Label("")
-		self["hds_tasta_verde"] = StaticText(_("Play"))
+		self["hds_tasta_verde"] = StaticText(_("Redă"))
 		self["hds_tasta_galbena"] = StaticText(_("Pause playback"))
-		self["hds_ajutor"] = StaticText(_("OK add to playlist, MENU options, CH+ / CH- switch list"))
+		self["hds_ajutor"] = StaticText("")
 		self.playlist.onListChanged.append(self.updatePlaylistTitle)
 		self.onLayoutFinish.append(self.hdsLayoutFinished)
 
@@ -188,7 +188,7 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 
 		self["OkCancelActions"] = HelpableActionMap(self, "OkCancelActions", 
 			{
-				"ok": (self.ok, _("add file to playlist")),
+				"ok": (self.ok, _("Adaugă fișierul; deschide dosarul; redă din lista de redare.")),
 				"cancel": (self.exit, _("exit mediaplayer")),
 			}, -2)
 
@@ -337,6 +337,16 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 	def hdsLayoutFinished(self):
 		self.setTitle(_("Media player"))
 		self.updatePlaylistTitle()
+		self.hdsUpdateKeys()
+
+	def hdsUpdateKeys(self):
+		if self.currList == "playlist":
+			text = _("OK / VERDE: Redă. MENU: opțiuni, CH+/CH-: schimbă lista.")
+		elif self.filelist.canDescent():
+			text = _("OK: Deschide, VERDE: Redă. MENU: opțiuni, CH+/CH-: schimbă lista.")
+		else:
+			text = _("OK: Adaugă, VERDE: Redă. MENU: opțiuni, CH+/CH-: schimbă lista.")
+		self["hds_ajutor"].setText(text)
 
 	def updatePlaylistTitle(self):
 		n = len(self.playlist)
@@ -558,6 +568,7 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 
 	# FIXME: maybe this code can be optimized 
 	def updateCurrentInfo(self):
+		self.hdsUpdateKeys()
 		text = ""
 		if self.currList == "filelist":
 			idx = self.filelist.getSelectionIndex()

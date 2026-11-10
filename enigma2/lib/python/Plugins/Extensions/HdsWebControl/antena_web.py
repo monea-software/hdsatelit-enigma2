@@ -73,6 +73,7 @@ URMA_CITIRE_MAX = 512 * 1024
 # cat ramane valabila cererea anuntata nucleului inainte de o comanda din web (comenzile pleaca dupa tonul oprit, 13 V
 # si 500 ms, sau dupa ce se termina secventa nucleului: cel mult cateva secunde)
 CERERE_MOTOR_MS = 8000
+_UNICABLE_LUCRU = None
 
 
 def N_(text):
@@ -87,8 +88,8 @@ COMENZI_URMA = {"oprire": N_("oprire"), "limite_oprite": N_("limitele oprite"),
 	"mergi_la_unghi": N_("mergi la unghiul"), "recalculeaza_pozitiile": N_("pozițiile recalculate"),
 	"alta_comanda": N_("altă comandă")}
 
-MESAJ_DOAR_BROWSER = N_("Comenzile acestea se dau numai din pagina receptorului, dintr-un browser conectat cu codul "
-	"de pe televizor.")
+MESAJ_DOAR_BROWSER = N_("Comenzile acestea se dau numai din pagina receptorului, dintr-un browser (nu cu cheia "
+	"pentru scripturi).")
 
 
 def _t(text):
@@ -176,6 +177,183 @@ def _nm():
 	return nimmanager
 
 
+def _unicableLnbs():
+	# Numai LNB-urile avansate deja alese pe tuner.
+	from Components.config import ConfigNothing
+	manager = _nm()
+	result = []
+	for tuner in manager.nim_slots:
+		if not tuner.isCompatible("DVB-S"):
+			continue
+		cfg = manager.getNimConfig(tuner.slot)
+		if cfg.configMode.value != "advanced" or isinstance(cfg.advanced, ConfigNothing):
+			continue
+		used = {int(sat.lnb.value) for sat in cfg.advanced.sat.values() if int(sat.lnb.value) > 0}
+		for number in sorted(used):
+			lnb = cfg.advanced.lnb[number]
+			if not isinstance(lnb, ConfigNothing):
+				result.append((tuner.slot, number, cfg, lnb))
+	return result
+
+
+def _unicableRowsWeb(rows):
+	result = []
+	for key, label, element, readonly in rows:
+		row = {"key": key, "text": label, "value": element.value, "readonly": readonly}
+		if isinstance(element.value, bool):
+			row["choices"] = [[False, _t("No")], [True, _t("Yes")]]
+		elif hasattr(element, "choices"):
+			choices = element.choices.choices
+			if isinstance(choices, dict):
+				choices = list(choices.items())
+			row["choices"] = [list(c) if isinstance(c, tuple) else [c, c] for c in choices]
+		else:
+			row["min"], row["max"] = element.limits[0]
+		result.append(row)
+	return result
+
+
+def unicableDate(cerere=None):
+	from Components.HdsUnicableConfig import unicableRows
+	manager = _nm()
+	entries = []
+	for slot, number, cfg, lnb in _unicableLnbs():
+		active = lnb.lof.value == "unicable"
+		entries.append({"slot": slot, "lnb": number,
+			"text": manager.getNimDescription(slot) + " / " + _t("LNB") + " " + str(number),
+			"active": active,
+			"rows": _unicableRowsWeb(unicableRows(lnb, cfg.advanced, manager, slot)) if active else []})
+	return {"result": True, "entries": entries, "title": _t("Unicable I / II (JESS)"),
+		"save": _t("Save"), "activate": _t("Configurează Unicable"),
+		"unavailable": _t("Unicable nu este disponibil aici: niciun LNB nu este alocat în modul avansat. "
+			"Pe televizor, deschide Setări tuner, alege modul avansat și alocă un LNB satelitului."),
+		"setup": _t("Mergi la Setări tuner"),
+		"note": _t("Alege produsul și banda de utilizator. Formatul și frecvențele se pun automat. "
+			"În web, alegerile se aplică imediat; numerele se aplică la Salvează. Canalul se oprește "
+			"pentru aplicare și se reia singur. Salvarea nu confirmă recepția semnalului.")}
+
+
+def _unicablePlan(cerere):
+	from Components.HdsUnicableConfig import unicableRows
+	if set(cerere) != {"slot", "lnb", "camp", "valoare"}:
+		return {"result": False, "message": _t("Cerere Unicable nevalidă.")}
+	slot, number = _int(cerere.get("slot"), 0), _int(cerere.get("lnb"), 1, 64)
+	entry = next((x for x in _unicableLnbs() if x[:2] == (slot, number)), None)
+	if entry is None:
+		return {"result": False, "message": _t("LNB-ul Unicable nu mai este configurat.")}
+	manager, cfg, lnb = _nm(), entry[2], entry[3]
+	rows = unicableRows(lnb, cfg.advanced, manager, slot) if lnb.lof.value == "unicable" else []
+	if not rows and cerere["camp"] == "lof" and cerere["valoare"] == "unicable":
+		rows = [("lof", _t("LOF"), lnb.lof, False)]
+	row = next((r for r in rows if r[0] == cerere["camp"] and not r[3]), None)
+	if row is None:
+		return {"result": False, "message": _t("Alegere Unicable nevalidă.")}
+	element = row[2]
+	value = cerere["valoare"]
+	if isinstance(element.value, bool):
+		if value not in ("false", "true"):
+			return {"result": False, "message": _t("Alegere Unicable nevalidă.")}
+		value = value == "true"
+	elif hasattr(element, "choices"):
+		choices = element.choices.choices
+		values = list(choices) if isinstance(choices, dict) else [c[0] if isinstance(c, tuple) else c for c in choices]
+		valid = next((v for v in values if str(v) == value), None)
+		if valid is None:
+			return {"result": False, "message": _t("Alegere Unicable nevalidă.")}
+		value = valid
+	else:
+		low, high = element.limits[0]
+		value = _int(value, low, high)
+		if value is None:
+			return {"result": False, "message": _t("Alegere Unicable nevalidă.")}
+	_L, apply = _lnb()
+	session = _sesiune()
+	busy = apply.motivOcupat(session)
+	if busy:
+		return {"result": False, "message": busy}
+	return {"result": True, "cfg": cfg, "lnb": lnb, "element": element, "value": value,
+		"manager": manager, "slot": slot, "apply": apply}
+
+
+def unicableSeteaza(cerere, expected=None):
+	from Components.HdsUnicableConfig import unicableSnapshot, unicableRestore
+	from Components.NimManager import updateUnicablePositionChoices
+	plan = _unicablePlan(cerere)
+	if not plan["result"]:
+		return plan
+	cfg, lnb, apply = plan["cfg"], plan["lnb"], plan["apply"]
+	if expected is not None and apply.instantaneu(cfg)[0] != expected:
+		return {"result": False, "message": _t("Setările tunerului s-au schimbat. Alege din nou.")}
+	manager, slot = plan["manager"], plan["slot"]
+	# Validarea este gata inainte de prima schimbare.
+	from Components.config import config, configfile
+	before = unicableSnapshot(cfg)
+	try:
+		plan["element"].value = plan["value"]
+		updateUnicablePositionChoices(lnb)
+		manager.sec.update()
+		cfg.advanced.save()
+		try:
+			from Components import HdsTunerB
+			HdsTunerB.ales_acum_de_om(slot)
+		except Exception as error:
+			_jurnal("Unicable, tuner: %s" % error)
+		written = config.saveToFile(configfile.CONFIG_FILE)
+		if written is None:
+			raise IOError(_t("Setările Unicable nu au putut fi salvate."))
+		configfile._scris = written
+	except Exception:
+		unicableRestore(cfg, before)
+		manager.sec.update()
+		raise
+	result = unicableDate()
+	result["message"] = _t("Saved")
+	return result
+
+
+def _unicableMartor(session):
+	if session is None:
+		return None
+	nav = session.nav
+	martor = {"nav": nav, "schimbat": False, "asculta": None}
+	if nav is not None and hasattr(nav, "event"):
+		def asculta(event):
+			from enigma import iPlayableService
+			if event == iPlayableService.evStart:
+				martor["schimbat"] = True
+		martor["asculta"] = asculta
+		nav.event.append(asculta)
+	return martor
+
+
+def _unicableMartorValabil(session, martor):
+	return martor is None or (session is not None and _sesiune() is session
+		and session.nav is martor["nav"] and not martor["schimbat"])
+
+
+def _unicableMartorOpreste(martor):
+	if martor is None:
+		return
+	nav, asculta = martor["nav"], martor["asculta"]
+	if nav is not None and asculta is not None and asculta in getattr(nav, "event", ()):
+		nav.event.remove(asculta)
+	martor["asculta"] = None
+
+
+def _unicableResume(session, service, apply, martor=None):
+	if martor is not None and not _unicableMartorValabil(session, martor):
+		return
+	if (session is None or service is None or getattr(session, "pipshown", False)
+			or session.nav.getCurrentlyPlayingServiceOrGroup() is not None):
+		return
+	standby = apply._standby()
+	if standby is not None:
+		if getattr(standby, "prev_running_service", None) is None and getattr(standby, "paused_service", None) is None:
+			standby.prev_running_service = service
+	else:
+		session.nav.playService(service, checkParentalControl=False, forceRestart=True)
+
+
 def _voie(model, lnb):
 	"""Ce se poate schimba pe LNB-ul dat: exact randurile pe care le arata ecranul (ConfigLNB._construieste). In modul
 	simplu se schimba numai tipul (si comenzile la 13 V, pe tot tunerul)."""
@@ -220,7 +398,7 @@ def _ajutorLnb():
 		"diseqc13V": _t("Trimite comenzile DiSEqC la 13 V. Unele comutatoare și motoare o cer."),
 		"proba": _t("Ce face receptorul pentru un transponder de pe acest satelit: frecvența intermediară, tensiunea "
 			"și tonul."),
-		"unicable": _t("LNB-ul Unicable se configurează din Setări tuner."),
+		"unicable": _t("Setările Unicable sunt mai jos."),
 		"fix": _t("Comutatorul, sateliții și motorul se schimbă din Setări tuner."),
 	}
 
@@ -1172,6 +1350,84 @@ def rute(baza, resource, NOT_DONE_YET, pagina_antena=None):
 		def lucru(self, cerere):
 			return lnbDate(cerere.get("slot"))
 
+	class UnicableResource(_Citire):
+		def lucru(self, cerere):
+			return unicableDate(cerere)
+
+	class UnicableSeteazaResource(_Comanda):
+		def lucru(self, cerere):
+			return unicableSeteaza(cerere)
+
+		def render_POST(self, request):
+			global _UNICABLE_LUCRU
+			session, service, stopped, martor = None, None, False, None
+			if _plugin().PARAM_JETON in request.args:
+				return self._eroare(request, _t(MESAJ_DOAR_BROWSER), 403)
+			cerere, error = argumente(request)
+			if error:
+				return self._eroare(request, error)
+			if _UNICABLE_LUCRU is not None:
+				return self._eroare(request, _t("Se aplică setările Unicable. Încearcă din nou."))
+			try:
+				plan = _unicablePlan(cerere)
+				if not plan["result"]:
+					return self._raspunde(request, plan)
+				session = _sesiune()
+				service = session.nav.getCurrentlyPlayingServiceOrGroup() if session is not None else None
+				martor = _unicableMartor(session)
+				expected = plan["apply"].instantaneu(plan["cfg"])[0]
+				from enigma import eTimer
+				timer = eTimer()
+				def finish():
+					global _UNICABLE_LUCRU
+					code = 200
+					try:
+						if (not _unicableMartorValabil(session, martor)
+								or (session is not None and session.nav.getCurrentlyPlayingServiceOrGroup() is not None)):
+							body = {"result": False, "message": _t("Canalul s-a schimbat. Alege din nou.")}
+						else:
+							body = unicableSeteaza(cerere, expected)
+					except Exception as error:
+						_jurnal("Unicable: %s" % error)
+						body = {"result": False, "message": _t("Eroare pe receptor: %s") % error}
+						code = 500
+					finally:
+						try:
+							_unicableResume(session, service, plan["apply"], martor)
+						except Exception as error:
+							_jurnal("Unicable, pornirea canalului: %s" % error)
+						finally:
+							_unicableMartorOpreste(martor)
+							_UNICABLE_LUCRU = None
+					try:
+						if not getattr(request, "finished", False) and not getattr(request, "_disconnected", False):
+							payload = self._raspunde(request, body, code)
+							request.write(payload)
+							request.finish()
+					except Exception as error:
+						_jurnal("Unicable, raspunsul paginii: %s" % error)
+				try:
+					timer.callback.append(finish)
+					connection = None
+				except AttributeError:
+					connection = timer.timeout.connect(finish)
+				_UNICABLE_LUCRU = (timer, connection)
+				if service is not None:
+					stopped = True
+					session.nav.stopService()
+				timer.start(plan["apply"].MS_ELIBERARE_CANAL, True)
+				return NOT_DONE_YET
+			except Exception as error:
+				_UNICABLE_LUCRU = None
+				if stopped:
+					try:
+						_unicableResume(session, service, plan["apply"], martor)
+					except Exception as resume_error:
+						_jurnal("Unicable, pornirea canalului: %s" % resume_error)
+				_unicableMartorOpreste(martor)
+				_jurnal("Unicable: %s" % error)
+				return self._eroare(request, _t("Eroare pe receptor: %s") % error, 500)
+
 	class LnbPlanResource(_CitireCuFormular):
 		"""POST /api/lnb-plan: ce s-ar schimba (sau, cu doar=proba, „Probă de calcul” pentru ciorna). Nu scrie nimic."""
 		def lucru(self, cerere):
@@ -1281,6 +1537,8 @@ def rute(baza, resource, NOT_DONE_YET, pagina_antena=None):
 
 	api = {
 		b"lnb": LnbResource(),
+		b"unicable": UnicableResource(),
+		b"unicable-seteaza": UnicableSeteazaResource(),
 		b"lnb-plan": LnbPlanResource(),
 		b"lnb-aplica": LnbAplicaResource(),
 		b"lnb-raspuns": LnbRaspunsResource(),
@@ -1640,7 +1898,7 @@ cerere("/api/locul").then(function(d){
   incarcaOrase(tara, d.locul.oras || IMPLICIT[tara] || "");
   if (!CFG.csrf){
     $("salveazaOras").disabled = $("salveazaMana").disabled = $("cautaInternet").disabled = true;
-    mesaj($("mesaj"), "Locul se schimbă numai dintr-un browser conectat cu codul de pe televizor. Aici se vede numai locul de acum.");
+    mesaj($("mesaj"), "Locul se schimbă numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai locul de acum.");
   }
   urmaresteLocul();
 }).catch(function(){ mesaj($("acum"), "Receptorul nu răspunde.", true); });
@@ -1714,11 +1972,99 @@ PAGINA_LNB = """<!DOCTYPE html>
   <div class="mesaj" id="mesajProba" role="status"></div>
 </div>
 
+<div class="card ascuns" id="cardUnicable">
+  <h2 id="titluUnicable"></h2>
+  <p class="nota" id="notaUnicable"></p>
+  <div id="campuriUnicable"></div>
+  <p class="mesaj" id="mesajUnicable" role="status"></p>
+</div>
+
 """ + _SUBSOL + """
 </main>
 <script>""" + _JS_COMUN + """
 var S = {date: null, lnb: "", ciorna: {}, d13v: null, proba: {}, plan: null, ceasProba: null, ceasStare: null,
   fazaVazuta: "", intrebareFacuta: false};
+
+function arataUnicable(d){
+  if(!d.result){ mesaj($("mesajUnicable"), d.message, true); return; }
+  var card = $("cardUnicable"), fields = $("campuriUnicable");
+  arata(card, true);
+  $("titluUnicable").textContent = d.title;
+  $("notaUnicable").textContent = d.note;
+  goleste(fields);
+  if(!d.entries.length){
+    fields.appendChild(el("p", "nota", d.unavailable));
+    var setup = el("a", "buton secundar", d.setup);
+    setup.href = "/antena/tuner";
+    fields.appendChild(setup);
+  }
+  d.entries.forEach(function(entry){
+    fields.appendChild(el("h3", "", entry.text));
+    if(!entry.active){
+      var activate = buton(d.activate, "", function(){ salveazaUnicable(entry, "lof", "unicable"); });
+      activate.disabled = !CFG.csrf;
+      fields.appendChild(activate);
+      return;
+    }
+    entry.rows.forEach(function(row){
+      var choices = row.choices || [];
+      if(row.readonly){
+        var chosen = choices.filter(function(c){ return String(c[0]) === String(row.value); });
+        linie(fields, row.text, chosen.length ? chosen[0][1] : row.value);
+        return;
+      }
+      var label = el("label", "eticheta", row.text);
+      var input = el(choices.length ? "select" : "input", choices.length ? "" : "text");
+      label.htmlFor = input.id = "unicable-" + entry.slot + "-" + entry.lnb + "-" + row.key;
+      fields.appendChild(label);
+      if(choices.length){
+        optiuni(input, choices, row.value);
+        input.onchange = function(){ salveazaUnicable(entry, row.key, input.value); };
+      } else {
+        input.type = "number";
+        input.min = row.min;
+        input.max = row.max;
+        input.step = 1;
+        input.value = row.value;
+        var save = buton(d.save, "secundar", function(){
+          if(input.reportValidity()){ salveazaUnicable(entry, row.key, input.value); }
+        });
+        save.disabled = !CFG.csrf;
+        fields.appendChild(input);
+        fields.appendChild(save);
+      }
+      input.disabled = !CFG.csrf;
+      if(choices.length){ fields.appendChild(input); }
+    });
+  });
+}
+function salveazaUnicable(entry, key, value){
+  if(areCiorna()){
+    mesaj($("mesajUnicable"), "Aplică sau renunță întâi la schimbările LNB-ului.", true);
+    incarcaUnicable();
+    return;
+  }
+  var p = new URLSearchParams();
+  p.set("slot", entry.slot);
+  p.set("lnb", entry.lnb);
+  p.set("camp", key);
+  p.set("valoare", value);
+  Array.prototype.forEach.call($("campuriUnicable").querySelectorAll("input,select,button"), function(x){ x.disabled = true; });
+  cerere("/api/unicable-seteaza", "POST", p).then(function(d){
+    mesaj($("mesajUnicable"), d.message, !d.result);
+    if(d.result){ arataUnicable(d); incarca(); }
+    else { incarcaUnicable(); }
+  }).catch(function(){
+    mesaj($("mesajUnicable"), "Receptorul nu răspunde.", true);
+    incarcaUnicable();
+  });
+}
+function incarcaUnicable(){
+  return cerere("/api/unicable").then(arataUnicable).catch(function(){
+    mesaj($("mesajUnicable"), "Receptorul nu răspunde.", true);
+  });
+}
+incarcaUnicable();
 
 function lnbCurent(){
   var l = (S.date && S.date.lnburi) || [];
@@ -1877,7 +2223,7 @@ function deseneaza(){
   $("renunta").disabled = !areCiorna();
   arata($("renunta"), m.editabil && !!CFG.csrf);
   arata($("inainte"), !!d.copie && !areCiorna() && !!CFG.csrf);
-  if(!CFG.csrf){ mesaj($("mesaj"), "Setările se schimbă numai dintr-un browser conectat cu codul de pe televizor."); }
+  if(!CFG.csrf){ mesaj($("mesaj"), "Setările se schimbă numai dintr-un browser (nu cu cheia pentru scripturi)."); }
   else if(d.ocupat && d.aplicare.faza === "liber"){ mesaj($("mesaj"), d.ocupat); }
 }
 function incarca(slot, pastreazaMesaj){
@@ -2312,7 +2658,7 @@ function porneste(){
       puneSatelitii(null);
       incarcaTranspondere();
     }
-    if(!CFG.csrf){ mesaj($("mesaj"), "Măsurarea se pornește numai dintr-un browser conectat cu codul de pe televizor. Aici se vede starea."); }
+    if(!CFG.csrf){ mesaj($("mesaj"), "Măsurarea se pornește numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede starea."); }
     deseneazaStarea(d.stare);
     planifica(500);
   }).catch(function(){ $("subtitlu").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
@@ -2679,7 +3025,7 @@ function deseneazaComenzile(c){
     return;
   }
   if (!CFG.csrf){
-    mesaj($("motivMotor"), "Comenzile motorului se dau numai dintr-un browser conectat cu codul de pe televizor. Aici se vede numai rotirea.");
+    mesaj($("motivMotor"), "Comenzile motorului se dau numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai rotirea.");
     arata($("comenzi"), false);
     return;
   }
@@ -2899,13 +3245,14 @@ TEXTE_PAGINA = {
 		N_("Nestabilit. Până îl alegi, motorul USALS nu rotește antena spre niciun satelit; pașii, "
 			"pozițiile memorate și limitele merg."),
 		N_("Receptorul nu răspunde."),
+		N_("Aplică sau renunță întâi la schimbările LNB-ului."),
 		N_("Se salvează..."),
 		N_("Folosește acest loc"),
 		N_("Alege din listă"),
 		N_("Se caută..."),
 		N_("Coordonatele orașelor:"),
-		N_("Locul se schimbă numai dintr-un browser conectat cu codul de pe televizor. Aici se vede numai "
-			"locul de acum."),
+		N_("Locul se schimbă numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai locul de "
+			"acum."),
 		N_("Tipul LNB-ului"),
 		N_("Oscilator jos (MHz)"),
 		N_("Oscilator sus (MHz)"),
@@ -2918,7 +3265,7 @@ TEXTE_PAGINA = {
 		N_("Tunerul"),
 		N_("e în modul simplu."),
 		N_("e în modul avansat."),
-		N_("Setările se schimbă numai dintr-un browser conectat cu codul de pe televizor."),
+		N_("Setările se schimbă numai dintr-un browser (nu cu cheia pentru scripturi)."),
 		N_("Setările tunerului nu se pot citi."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Ai schimbări nesalvate pe tunerul"),
@@ -2952,8 +3299,7 @@ TEXTE_PAGINA = {
 		N_("Tunerele nu se pot citi."),
 		N_("Receptorul nu are niciun tuner de satelit, deci aici nu se poate măsura semnalul."),
 		N_("Pornește de la transponderul programului de pe televizor."),
-		N_("Măsurarea se pornește numai dintr-un browser conectat cu codul de pe televizor. Aici se vede "
-			"starea."),
+		N_("Măsurarea se pornește numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede starea."),
 		N_("satelitul canalului"),
 		N_("Fără semnal pe"),
 		N_(": se verifică alt transponder al satelitului ("),
@@ -2992,8 +3338,8 @@ TEXTE_PAGINA = {
 		N_("Vest"),
 		N_("Poziția din timpul mersului este estimată: motorul nu o raportează."),
 		N_("Locul antenei nu e stabilit, deci „Mergi la satelit” nu pornește. Alege-l mai întâi."),
-		N_("Comenzile motorului se dau numai dintr-un browser conectat cu codul de pe televizor. Aici se "
-			"vede numai rotirea."),
+		N_("Comenzile motorului se dau numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai"
+			" rotirea."),
 		N_("Ecranul „Rotirea antenei” e deschis și pe televizor: comenzile de acolo și de aici merg la "
 			"același motor."),
 		N_("are motor   |   Pas:"),

@@ -38,6 +38,7 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		ConfigListScreen.__init__(self, [], session=session)
 		self.setTitle(_("Butoane colorate și taste rapide"))
 		HdsTasteRapide.actualizeaza_alegeri(config)
+		HdsTasteRapide.initConfigProfil(config)
 		self["ghid"] = StaticText(_(
 			"Alege tasta cu SUS/JOS și funcția cu OK sau STÂNGA/DREAPTA. "
 			"Funcția obișnuită păstrează comportamentul de acum. "
@@ -53,13 +54,15 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 				"green": self.salveaza,
 				"yellow": self.implicite,
 			}, -2)
-		self._initiale = {k: getattr(config.hds_buttons, k).value
-			for k, _text in HdsTasteRapide.SCURTE + HdsTasteRapide.BUTOANE}
+		self._initiale = [(element, element.value) for _text, element in self._randuri()]
 		self.reface_lista()
 
+	def _randuri(self):
+		return [(text, getattr(config.usage, k)) for k, _v, text in HdsTasteRapide.PROFIL_SETARI] + [
+			(text, getattr(config.hds_buttons, k)) for k, text in HdsTasteRapide.SCURTE + HdsTasteRapide.BUTOANE]
+
 	def reface_lista(self):
-		self.list = [getConfigListEntry(text, getattr(config.hds_buttons, k))
-			for k, text in HdsTasteRapide.SCURTE + HdsTasteRapide.BUTOANE]
+		self.list = [getConfigListEntry(text, element) for text, element in self._randuri()]
 		self["config"].list = self.list
 
 	def keyOK(self):
@@ -68,6 +71,8 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		if curent is None:
 			return
 		text, element = curent[:2]
+		if not hasattr(element, "choices"):
+			return ConfigListScreen.keyOK(self)
 		lista = [(element.description[v], v) for v in element.choices]
 		pozitie = list(element.choices).index(element.value)
 
@@ -83,14 +88,18 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 	def implicite(self):
 		for k, v in HdsTasteRapide.VALORI_IMPLICITE.items():
 			getattr(config.hds_buttons, k).value = v
+		for k, v, _text in HdsTasteRapide.PROFIL_SETARI:
+			getattr(config.usage, k).value = v
 		self.reface_lista()
 
 	def salveaza(self):
 		HdsTasteRapide.salveaza(config)
+		for k, _v, _text in HdsTasteRapide.PROFIL_SETARI:
+			getattr(config.usage, k).save()
 		configfile.save()
 		self.close(True)
 
 	def anuleaza(self):
-		for cheie, valoare in self._initiale.items():
-			getattr(config.hds_buttons, cheie).value = valoare
+		for element, valoare in self._initiale:
+			element.value = valoare
 		self.close(False)

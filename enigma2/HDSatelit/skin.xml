@@ -1578,22 +1578,6 @@
 		<panel name="HdsMessageBoxBase" />
 	</screen>
 
-	<!-- HdsCodAsociere (Screens/HdsCodAsociere.py): codul de asociere pe televizor, mare, in mijlocul
-	     ecranului, in trei casute de cate doua cifre („12 34 56”). Sursele: titlu, cod1..cod3 (si cod, tot codul,
-	     pentru alte skinuri), adresa (cine l-a cerut sau unde se deschide pagina), nota (EXIT). Fara bara de timp. -->
-	<screen name="HdsCodAsociere" position="340,220" size="1240,640" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
-		<eLabel position="0,0" size="1240,2" backgroundColor="hdsLine" zPosition="1" />
-		<widget source="titlu" render="Label" position="40,40" size="1160,80" font="HdsBold;52" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<eLabel position="85,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<eLabel position="455,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<eLabel position="825,150" size="330,250" backgroundColor="hdsTrack" zPosition="1" />
-		<widget source="cod1" render="Label" position="85,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="cod2" render="Label" position="455,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="cod3" render="Label" position="825,150" size="330,250" font="HdsBold;160" halign="center" valign="center" foregroundColor="white" backgroundColor="hdsTrack" transparent="1" zPosition="2" />
-		<widget source="adresa" render="Label" position="40,430" size="1160,70" font="HdsRegular;38" halign="center" valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget source="nota" render="Label" position="40,530" size="1160,70" font="HdsRegular;38" halign="center" valign="center" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-	</screen>
-
 	<!-- HdsLocInregistrari (Screens/HdsLocInregistrari.py): locul inregistrarilor si discurile conectate, de la tasta
 	     rosie, din meniu si din notificari. Sursele: titlu, text (fraza simpla, 3 randuri), detaliu (explicatia, mai
 	     mic, 5 randuri: textele cele mai lungi, in germana si rusa), rand (explicatia randului ales, 2 randuri); lista
@@ -1739,10 +1723,17 @@
 		<widget name="language" conditional="language" position="262,432" size="300,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget name="mode" conditional="mode" position="572,432" size="196,36" font="HdsCond;26" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="32,478" size="736,1" backgroundColor="hdsDivider" zPosition="1" />
-		<panel name="HdsTaste800" />
+		<panel name="HdsTasteTastatura800" />
 	</screen>
 	<screen name="VirtualKeyboard" position="560,290" size="800,540" backgroundColor="hdsPanelDialog">
 		<panel name="VirtualKeyBoard" />
+	</screen>
+	<!-- Tastatura: verde confirma textul, galben arata limba asezarii si o schimba. -->
+	<screen name="HdsTasteTastatura800" position="0,0" size="800,540">
+		<eLabel position="32,496" size="6,32" backgroundColor="key_green" zPosition="1" />
+		<widget source="key_green" render="Label" position="46,488" size="322,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="400,496" size="6,32" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="414,488" size="354,48" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
 	<!-- butoanele colorate pentru ferestrele de 800 px (rand la y 486) -->
@@ -2132,8 +2123,10 @@
 			transparent="1" scrollbarMode="showNever" zPosition="2" />
 		<widget name="pictograma" position="1134,140" size="168,168"
 			alphatest="blend" scale="1" zPosition="2" />
-		<widget name="oras" position="1056,324" size="688,136" font="HdsRegular;34"
-			foregroundColor="hdsText2" transparent="1" zPosition="2" />
+		<widget name="oras" position="1056,324" size="688,136" itemHeight="136" font="HdsRegular;34"
+			foregroundColor="hdsText2" backgroundColor="hdsPanelDialog"
+			backgroundColorSelected="hdsBrand" foregroundColorSelected="hdsSelText"
+			scrollbarMode="showNever" transparent="1" zPosition="2" />
 		<widget name="acum" position="1056,474" size="688,138" font="HdsBold;39"
 			foregroundColor="hdsText" transparent="1" zPosition="2" />
 		<widget name="prognoza" position="1056,630" size="688,192" font="HdsRegular;32"
@@ -6219,8 +6212,8 @@
 	<!-- tastatura scanerelor (Screens/ScanerCablu.tastatura: VirtualKeyBoard cu skinName HdsTastaturaScaner): in stilul
 	     cadrului HdsCadru1240, fara bara de titlu a stilului de fereastra, in mijlocul ferestrei scanerului si oprita la
 	     x 1092, deci fereastra PiP (1344,54) nu o taie. `header` e numele campului, in placa; codul limbii tastaturii
-	     (`country`, de exemplu en_EN) nu se arata. -->
-	<screen name="HdsTastaturaScaner" position="292,295" size="800,490" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+	     (`country`, de exemplu en_EN) ramane intern, numele limbii se vede pe butonul galben. -->
+	<screen name="HdsTastaturaScaner" position="292,270" size="800,540" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<eLabel position="0,0" size="800,2" backgroundColor="hdsLine" zPosition="1" />
 		<widget name="header" position="32,18" size="736,56" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<eLabel position="32,88" size="736,1" backgroundColor="hdsDivider" zPosition="1" />
@@ -6228,6 +6221,8 @@
 		<eLabel position="32,174" size="736,2" backgroundColor="hdsBrandLight" zPosition="2" />
 		<widget name="text" position="48,110" size="704,64" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsTrack" transparent="1" valign="center" noWrap="1" zPosition="3" />
 		<widget name="list" position="85,196" size="630,270" backgroundColor="hdsPanelDialog" foregroundColor="hdsText" transparent="1" selectionDisabled="1" zPosition="2" />
+		<eLabel position="32,478" size="736,1" backgroundColor="hdsDivider" zPosition="1" />
+		<panel name="HdsTasteTastatura800" />
 	</screen>
 	<!-- „Import canale și setări” (Plugins/Extensions/HdsImportSetari/plugin.py) și „Liste implicite de canale”
 	     (Screens/HdsListeImplicite.py): aceeași fereastră ca scanerele (HdsScanerBaza1240: cadrul, starea), lista `lista`

@@ -104,8 +104,18 @@ def stare(C=None, service=None, prop=None, cu_serviciu=True):
 			fel = int(e[0])
 		except Exception:
 			fel = -1
-		rez["subtitrari"].append({"id": id_subtitrare(e), "tip": fel, "text": C.sub_text(e),
-			"limba": C.language_name(e[4]) if len(e) > 4 else "", "pornita": pornita})
+		cod_limba = e[4] if len(e) > 4 else ""
+		if fel == 1 and not C.language_name(cod_limba):
+			# Aceeasi rezerva ca lista TV, numai cand teletextul nu are o limba declarata.
+			try:
+				from Screens.AudioSelection import limbaSubtitrare
+			except ImportError:
+				pass
+			else:
+				cod_limba = limbaSubtitrare(e, r.gets("sServiceref"))
+		eticheta = tuple(e[:4]) + (cod_limba,) + tuple(e[5:])
+		rez["subtitrari"].append({"id": id_subtitrare(e), "tip": fel, "text": C.sub_text(eticheta),
+			"limba": C.language_name(cod_limba), "pornita": pornita})
 	rez["fara_subtitrari"] = scur is None
 	rez["canal_audio"] = C.piste_canal(service)
 	ex = C.sel_extras(r)

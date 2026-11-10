@@ -125,7 +125,7 @@ def dubluri(s):
 		for k, i in enumerate(b.intrari):
 			if i.fel not in ("canal", "flux"):
 				continue
-			cheie = i.cheie or i.ref
+			cheie = D.identitate_din_ref(i.ref)
 			if cheie in vazute:
 				x = s._info_intrare(i)
 				c = x.serviciu

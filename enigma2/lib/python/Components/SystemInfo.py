@@ -136,6 +136,10 @@ SystemInfo["HdsVpn"] = os.access("/usr/sbin/openvpn", os.X_OK) or os.access("/us
 # inregistrarile "Decodează mai târziu" (Components/HdsDecodare.py) numai cu programul de decodare pe receptor (aceeasi
 # cale ca HdsDecodare.CALE_PROGRAM): fara el randurile din setup.xml (requires="HdsDecodare") si din /setari lipsesc
 SystemInfo["HdsDecodare"] = os.access("/usr/bin/hds-decodare", os.X_OK)
+# Radio DAB+ prin USB (data/menu.xml, requires="HdsDabUsb"; 10.11.2026, 0.7.3): randul si pagina din meniul web numai cu
+# pluginul DabTerestru instalat (aceeasi cale ca Components/HdsDabUsb.PLUGIN). Pachetele lui nu sunt inca in feed, deci
+# randul nu mai duce la un ecran care nu are ce instala; conditia se scoate cand pachetele sunt in feed si probate.
+SystemInfo["HdsDabUsb"] = os.path.isfile("/usr/lib/enigma2/python/Plugins/Extensions/DabTerestru/plugin.py") or os.path.isfile("/usr/lib/enigma2/python/Plugins/Extensions/DabTerestru/plugin.pyc")
 # Lista imaginilor din meniul de oprire: bootoptions sau kexec deja instalat.
 # Aceeasi capacitate arata lista si in interfata web.
 try:

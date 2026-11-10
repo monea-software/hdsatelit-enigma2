@@ -140,6 +140,7 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 		sa.reimprospateazaFonturi()
 		ConfigListScreen.__init__(self, [], session=session)
 		self._toate = sa.elemente(self.setari)
+		self._toateReglaje = False
 
 		self["proba"] = ProbaSubtitrare()
 		self["fundal_deschis"] = Label("")
@@ -165,6 +166,8 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 		self.stil.value = sa.stilCurent()
 		self._inStil = False
 		self.stil.addNotifier(self._stilAles, initial_call=False)
+		# Comutarea schimba doar lista, fara sa salveze sau sa schimbe reglajele.
+		self.vedere = ConfigSelection(choices=[("vedere", "")], default="vedere")
 		# contorul OCR: un rand de citit (o singura alegere, textul contorului), improspatat de un ceas
 		self.contorOcr = ConfigSelection(choices=[("contor", self._textContor())], default="contor")
 		# limbile OCR: un rand de citit („8 în imagine, 2 descărcate”); OK deschide lista lor
@@ -221,7 +224,22 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 				lista.append(getConfigListEntry(_("Recunoașterea textului"), self.contorOcr))
 				if _modeleOcr() is not None:
 					lista.append(getConfigListEntry(_("Limbile recunoașterii"), self.limbiOcr))
+		self._actualizeazaVedere()
+		if not self._toateReglaje:
+			vizibile = sa.elemente(s, sa.CHEI_SCURTE)
+			lista = [rand for rand in lista if rand[1] is self.stil or rand[1] in vizibile]
+		comutator = getConfigListEntry(_("Vedere scurtă") if self._toateReglaje else _("Toate reglajele"), self.vedere)
+		lista.insert(1 if self._toateReglaje else len(lista), comutator)
 		return lista
+
+	def _actualizeazaVedere(self):
+		text = "" if self._toateReglaje else _("Modificate: %d") % sa.numarReglajeAscunse(self.setari)
+		self._puneValoare(self.vedere, "vedere", text)
+
+	def schimbaVedere(self):
+		self._toateReglaje = not self._toateReglaje
+		self._facLista()
+		self["ajutor"].setText(self._textAjutor())
 
 	def _facLista(self):
 		"""Lista din nou, cu cursorul pe aceeasi setare."""
@@ -257,6 +275,9 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 	def _textAjutor(self):
 		"""Sub lista: pe randul maririi DVB, ce face ea acum; pe contorul OCR, amanuntele lui; altfel ajutorul obisnuit."""
 		rand = self["config"].getCurrent() if "config" in self else None
+		if rand is not None and len(rand) > 1 and rand[1] is getattr(self, "vedere", None):
+			text = _("Schimbarea vederii păstrează toate valorile.")
+			return text if self._toateReglaje else sa.textReglajeAscunse(self.setari) + " " + text
 		if rand is not None and len(rand) > 1 and rand[1] is self.setari.hds_marire_dvb:
 			text = sa.textNotaMarireDvb()
 			ocr = _ocr()
@@ -332,6 +353,7 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 		"""Dupa o setare schimbata de mana, randul „Stil gata făcut" arata stilul care se potriveste (sau Personalizat)."""
 		if self._inStil:
 			return
+		self._actualizeazaVedere()
 		stil = sa.stilCurent()
 		if stil != self.stil.value:
 			self._inStil = True
@@ -361,10 +383,16 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 
 	# ------------------------------------------------------------------ taste
 	def keyLeft(self):
+		if self["config"].getCurrent() is not None and self["config"].getCurrent()[1] is self.vedere:
+			self.schimbaVedere()
+			return
 		if not self._esteTitlu(self["config"].getCurrent()):
 			ConfigListScreen.keyLeft(self)
 
 	def keyRight(self):
+		if self["config"].getCurrent() is not None and self["config"].getCurrent()[1] is self.vedere:
+			self.schimbaVedere()
+			return
 		if not self._esteTitlu(self["config"].getCurrent()):
 			ConfigListScreen.keyRight(self)
 
@@ -388,6 +416,9 @@ class HdsSubtitrariAspect(Screen, ConfigListScreen):
 		if rand is None or len(rand) < 2 or self._esteTitlu(rand):
 			return
 		element = rand[1]
+		if element is self.vedere:
+			self.schimbaVedere()
+			return
 		if element is self.contorOcr:
 			self._contorLaZero()
 			return

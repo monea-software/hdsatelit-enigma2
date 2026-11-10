@@ -110,7 +110,7 @@ inseamna ecran intreg). Imaginea revine OBLIGATORIU pe tot ecranul la: ascundere
 un obiect ascuns sau prea mic, orice inchidere (EXIT, zap, cadere, standby, memorie, laOprit) si la pornirea enigma2,
 daca a ramas mica dupa o cadere a interfetei (porneste -> video_intreg_la_pornire).
 
-SETAREA PRINCIPALA „HbbTV” (config.plugins.hdsnavigator.hbbtv, 0.2.8, OPRITA din fabrica; omul o porneste daca vrea
+SETAREA PRINCIPALA „HbbTV” (config.plugins.hdsnavigator.hbbtv, 0.2.8, PORNITA din fabrica din 09.11.2026; omul o poate opri
 de tot, daca i se pare ca ingreuneaza receptorul): oprita, ROSU si Portal nu pornesc nimic
 (rosu() intoarce 0), pornirea automata nu se face, o aplicatie deschisa se inchide pe loc (laSetareaHbbtv), semnul rosu
 nu se arata (HdsHbbtv.arata_semn) si nucleul nu mai cere filtrul AIT (lib/service/servicedvb.cpp, la urmatorul zap).

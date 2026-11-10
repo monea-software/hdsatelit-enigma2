@@ -31,9 +31,11 @@
 #   POST /api/alimentare-fa?ce=standby|interfata|receptor|flash|oprire&pas=intreaba   intrebarea si codul
 #   POST /api/alimentare-fa?ce=...&cod=<cod>                fapta: ecranul de pe televizor peste 1,5 s
 #   POST /api/alimentare-fa?ce=...&pas=renunta              codul nu mai e bun
-#   GET  /api/pornire-multipla                             imaginile din memorie, de pe card si de pe stick (cardul flash;
-#                                                          monteaza partitii, deci pe un fir, si nu in starea de la 10 s)
-#   POST /api/alimentare-fa?ce=flash&loc=<N>&pas=intreaba / &cod=<cod>   alegerea imaginii din locul N: STARTUP scris
+#   GET  /api/pornire-multipla                             imaginile din memorie, de pe card, stick sau HDD, aceleasi randuri
+#                                                          ca pe televizor (cardul flash; monteaza partitii, deci pe un fir,
+#                                                          si nu in starea de la 10 s)
+#   POST /api/alimentare-fa?ce=flash&loc=<N>&pas=intreaba / &cod=<cod>   alegerea imaginii din locul N (cifre; Recovery
+#                                                          kexec e locul 0, din STARTUP_RECOVERY): STARTUP scris
 #                                                          (HdsPornireMultipla.reporneste), apoi TryQuitMainloop 2
 #   GET  /alimentare[?f=...]                                pagina
 #
@@ -43,7 +45,7 @@
 
 DUPA_MS = 1500
 CONFIRMARE = "alimentare"
-CHEI_SOMN = ("fapta", "minute", "actiune", "intreaba")
+CHEI_SOMN = ("fapta", "minute", "actiune", "intreaba", "durata")
 CHEI_FA = ("ce", "pas", "cod", "loc")
 CACHE_IMAGINI_S = 15
 TIMP_FIR_IMAGINI_S = 60
@@ -237,6 +239,7 @@ def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_
 		"actiuni_somn": A.alegeriActiune(config, SI),
 		"minute_min": minim,
 		"minute_max": maxim,
+		"durate_uzuale": list(A.DURATE_UZUALE),
 		"carduri": [{"ce": c, "vizibil": c != "flash" or bool(SI.get("HdsMultiboot"))} for c in CARDURI],
 	}
 
@@ -263,8 +266,18 @@ def somn(argumente, A=None, sesiune=None, config=None, SystemInfo=None, Standby=
 		return cu_stare(True, _t("The sleep timer has been disabled."))
 	c = A.initConfig(config)
 	minim, maxim = A.limiteMinute(config)
-	text = argumente.get("minute", "")
-	minute = int(text) if 0 < len(text) <= 12 and all(ch in "0123456789" for ch in text) else None
+	durata = argumente.get("durata", "")
+	if durata not in ("", "emisiune"):
+		return cu_stare(False, _t("Durata aleasă nu este disponibilă."))
+	if durata == "emisiune":
+		try:
+			minute = A.minuteCanal(nav)
+		except Exception:
+			minute = None
+		if minute is None:
+			return cu_stare(False, _t("Nu se poate afla sfârșitul emisiunii sau al filmului. Alege o durată."))
+	else:
+		minute = A.minuteValide(argumente.get("minute", ""), config)
 	if minute is None or minute < minim or minute > maxim:
 		return cu_stare(False, _t("Minutele se scriu ca număr întreg, de la %d la %d.") % (minim, maxim))
 	actiune = argumente.get("actiune")
@@ -499,14 +512,21 @@ __STIL_PAGINI__
     <div class="status-linie"><span>Lucrări în fundal</span><span id="stLucrari">-</span></div>
     <div class="status-linie"><span>Oprire programată</span><span id="stSomn">-</span></div>
   </section>
-  <p class="mesaj" id="mesaj"></p>
+  <p class="mesaj" id="mesaj" role="status" aria-live="polite"></p>
   <div id="confirmare" class="card ascuns"></div>
   <div id="carduri">
     <section class="card" id="card-somn">
       <h2>Oprire programată</h2>
       <div class="status-linie"><span>Starea temporizatorului</span><span id="somnStare">-</span></div>
+      <div class="butoane">
+        <button type="button" data-minute="30">30 minute</button>
+        <button type="button" data-minute="60">60 minute</button>
+        <button type="button" data-minute="90">90 minute</button>
+        <button type="button" id="somnCanal">Până la sfârșitul emisiunii (+2 min)</button>
+      </div>
+      <p class="nota" id="somnCanalNota"></p>
       <div class="rand">
-        <label for="minute">Oprire receptor după (minute)</label>
+        <label for="minute">Durată proprie (minute)</label>
         <input type="number" id="minute" min="1" step="1" inputmode="numeric">
       </div>
       <div class="rand">
@@ -518,11 +538,10 @@ __STIL_PAGINI__
         <select id="intreaba"><option value="1">Da</option><option value="0">Nu</option></select>
       </div>
       <div class="butoane">
-        <button type="button" class="principal" id="somnPorneste">Activare temporizator</button>
+        <button type="button" class="principal" id="somnPorneste">Activează durata proprie</button>
         <button type="button" id="somnOpreste">Dezactivare temporizator</button>
-        <button type="button" id="somnCanal">Folosire ora canalului curent</button>
       </div>
-      <p class="nota" id="somnNota">Minutele rămân propunerea de data viitoare. Ora canalului curent înseamnă minutele până la sfârșitul emisiunii sau al filmului de acum, plus două. Pe televizor: __DRUM_SOMN__.</p>
+      <p class="nota" id="somnNota">Duratele se activează direct, cu tipul opririi și întrebarea alese în pagină. Până la sfârșitul emisiunii folosește timpul emisiunii sau al filmului de acum, plus două minute. Ultima durată activată rămâne propunerea de data viitoare. Pe televizor: __DRUM_SOMN__.</p>
     </section>
     <section class="card" id="card-standby">
       <h2>Standby</h2>
@@ -576,6 +595,7 @@ function arata(d){
   scrie("stSomn", d.somn ? textSomn(d.somn) : "-");
   var s = d.somn;
   ["somnPorneste", "somnOpreste", "minute", "actiune", "intreaba"].forEach(function(id){ $(id).disabled = !s; });
+  Array.prototype.forEach.call(document.querySelectorAll("button[data-minute]"), function(b){ b.disabled = !s; });
   $("minute").min = String(d.minute_min || 1);
   $("minute").max = String(d.minute_max || 9999);
   if(s){
@@ -588,6 +608,7 @@ function arata(d){
     if(document.activeElement !== $("intreaba")){ $("intreaba").value = s.intreaba ? "1" : "0"; }
     if(!minuteAtinse && document.activeElement !== $("minute")){ $("minute").value = String(s.activ ? s.minute : s.minute_propuse); }
     $("somnCanal").disabled = s.minute_canal === null || s.minute_canal === undefined;
+    scrie("somnCanalNota", $("somnCanal").disabled ? "Nu se poate afla sfârșitul emisiunii sau al filmului. Alege o durată." : "");
   } else {
     scrie("somnStare", "Se poate pune după pornirea completă a receptorului.");
     $("somnCanal").disabled = true;
@@ -630,9 +651,13 @@ function citeste(){
     arata(d);
   }).catch(function(){ if(!asteapta){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } });
 }
-function somn(fapta){
+function somn(fapta, minute, durata){
   var q = new URLSearchParams(); q.set("fapta", fapta);
-  if(fapta === "porneste"){ q.set("minute", $("minute").value.trim()); q.set("actiune", $("actiune").value); q.set("intreaba", $("intreaba").value); }
+  if(fapta === "porneste"){
+    if(durata){ q.set("durata", durata); }
+    else { q.set("minute", minute === undefined || minute === null ? $("minute").value.trim() : String(minute)); }
+    q.set("actiune", $("actiune").value); q.set("intreaba", $("intreaba").value);
+  }
   mesaj("Se trimite...");
   cerere("/api/alimentare-somn", "POST", q).then(function(d){
     mesaj(d.message, !d.result);
@@ -663,8 +688,9 @@ function fa(ce){
 $("minute").addEventListener("input", function(){ minuteAtinse = true; });
 $("somnPorneste").addEventListener("click", function(){ somn("porneste"); });
 $("somnOpreste").addEventListener("click", function(){ somn("opreste"); });
-$("somnCanal").addEventListener("click", function(){
-  if(D && D.somn && D.somn.minute_canal !== null){ $("minute").value = String(D.somn.minute_canal); minuteAtinse = true; mesaj(""); }
+$("somnCanal").addEventListener("click", function(){ somn("porneste", null, "emisiune"); });
+Array.prototype.forEach.call(document.querySelectorAll("button[data-minute]"), function(b){
+  b.addEventListener("click", function(){ somn("porneste", b.getAttribute("data-minute")); });
 });
 Array.prototype.forEach.call(document.querySelectorAll("button[data-fa]"), function(b){
   b.addEventListener("click", function(){ fa(b.getAttribute("data-fa")); });
@@ -701,16 +727,20 @@ TEXTE_PAGINA = {
 		N_("Lucrări în fundal"),
 		N_("Oprire programată"),
 		N_("Starea temporizatorului"),
-		N_("Oprire receptor după (minute)"),
+		N_("Durată proprie (minute)"),
 		N_("Acțiunea temporizatorului de oprire"),
 		N_("Întreabă înainte de oprire"),
 		N_("Da"),
 		N_("Nu"),
-		N_("Activare temporizator"),
+		N_("Activează durata proprie"),
 		N_("Dezactivare temporizator"),
-		N_("Folosire ora canalului curent"),
-		N_("Minutele rămân propunerea de data viitoare. Ora canalului curent înseamnă minutele până la "
-			"sfârșitul emisiunii sau al filmului de acum, plus două. Pe televizor: __DRUM_SOMN__."),
+		N_("30 minute"),
+		N_("60 minute"),
+		N_("90 minute"),
+		N_("Până la sfârșitul emisiunii (+2 min)"),
+		N_("Duratele se activează direct, cu tipul opririi și întrebarea alese în pagină. Până la sfârșitul emisiunii "
+			"folosește timpul emisiunii sau al filmului de acum, plus două minute. Ultima durată activată rămâne "
+			"propunerea de data viitoare. Pe televizor: __DRUM_SOMN__."),
 		N_("Standby"),
 		N_("Ecranul se stinge și canalul se oprește; înregistrările continuă. Receptorul se pornește din "
 			"telecomandă. Pe televizor: __DRUM_STANDBY__."),
@@ -740,6 +770,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a putut citi starea."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Se trimite..."),
+		N_("Nu se poate afla sfârșitul emisiunii sau al filmului. Alege o durată."),
 		N_("Pornește"),
 	),
 }

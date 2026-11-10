@@ -312,7 +312,7 @@ def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistr
 
 
 def lucruDisc(argumente, D=None, hm=None, sys_block="/sys/block", mounts=None, inregistrare=None, porneste=None,
-		unelte=None):
+		unelte=None, pregatit=None):
 	"""POST /api/discuri-lucru: pas=intreaba -> intrebarea televizorului, cu ce se pierde; cod=... -> aceeasi lucrare ca
 	pe televizor. Se refuza (si la intrebare, si la cod) cat o inregistrare e in curs sau incepe in mai putin de
 	PRAG_INREGISTRARE_S secunde si cat discul e folosit de swap, timeshift, o inregistrare sau un fisier deschis."""
@@ -329,12 +329,17 @@ def lucruDisc(argumente, D=None, hm=None, sys_block="/sys/block", mounts=None, i
 		return {"result": False, "message": _t("Lucrare necunoscută.")}
 
 	def cuStare(mesaj, extra=None):
-		rez = stareDiscuri(D, hm, sys_block, mounts, inregistrare, unelte)
+		rez = stareAcum()
 		rez.update(extra or {})
 		rez.update({"result": False, "message": mesaj})
 		return rez
 
-	hdd = D.discul(disc, hm, sys_block)
+	def stareAcum():
+		rez = dict(pregatit["stare"]) if pregatit is not None else stareDiscuri(D, hm, sys_block, mounts, inregistrare, unelte)
+		rez["lucru"] = _lucruDisc(D)
+		return rez
+
+	hdd = pregatit["hdd"] if pregatit is not None else D.discul(disc, hm, sys_block)
 	if hdd is None:
 		return cuStare(_t("Discul ales nu mai este în listă. Alege din nou."))
 	if fel == "formatare":
@@ -346,23 +351,34 @@ def lucruDisc(argumente, D=None, hm=None, sys_block="/sys/block", mounts=None, i
 	if D.inLucru():
 		return cuStare(_t("Se lucrează deja la un disc. Așteaptă să se termine."))
 	inreg = _inregistrari(D, inregistrare)
-	motive = D.motiveRefuz(disc, inreg, unelte)
+	motive = pregatit["motive"] if pregatit is not None else D.motiveRefuz(disc, inreg, unelte)
+	# Starea inregistrarilor se ia din nou pe firul interfetei.
+	motive = list(motive) + [m for m in D.motiveInregistrari(inreg) if m not in motive]
 	if motive:
 		C.uita("disc", tinta)
 		inceput = _t("Formatarea nu se face acum din pagină:") if fel == "formatare" else \
 			_t("Verificarea nu se face acum din pagină:")
 		return cuStare(inceput + " " + " ".join(t for _k, t in motive), {"motive": [t for _k, t in motive]})
 	if argumente.get("pas") == "intreaba":
-		q, detalii = D.intrebare(hdd, fel, sistem or None, inreg, unelte)
+		q, detalii = pregatit["intrebare"] if pregatit is not None else D.intrebare(hdd, fel, sistem or None, inreg, unelte)
 		return C.raspunsIntrebare("disc", tinta, q, D.butonDa(hdd, fel), detalii)
 	if not C.verifica("disc", tinta, argumente.get("cod", "")):
-		rez = stareDiscuri(D, hm, sys_block, mounts, inregistrare, unelte)
+		rez = stareAcum()
 		rez.update(C.codGresit())
 		return rez
 	pornit, text = D.pornesteFir(hdd, fel, porneste, sistem or None, unelte)
-	rez = stareDiscuri(D, hm, sys_block, mounts, inregistrare, unelte)
+	rez = stareAcum()
 	rez.update({"result": bool(pornit), "message": text})
 	return rez
+
+
+def pregatesteDisc(argumente, D, hm, sys_block, mounts, inreg, unelte):
+	disc, fel = argumente.get("disc", ""), argumente.get("fel", "")
+	hdd = D.discul(disc, hm, sys_block)
+	sistem = argumente.get("sistem") or (D.sistemImplicit(hdd) if hdd is not None else None)
+	return {"hdd": hdd, "motive": D.motiveRefuz(disc, inreg, unelte) if hdd is not None else [],
+		"intrebare": D.intrebare(hdd, fel, sistem, inreg, unelte) if hdd is not None and fel in FILE else None,
+		"stare": stareDiscuri(D, hm, sys_block, mounts, lambda: inreg, unelte)}
 
 
 # ------------------------------------------------------------------ fisierul de swap
@@ -377,13 +393,25 @@ def _lucruSwap(S, acum=None):
 	return {"fel": l["fel"], "punct": l["punct"], "stare": l["stare"], "text": S.textLucru(l), "timp": l.get("timp") or 0}
 
 
-def stareSwap(S=None, hm=None):
+def stareSwap(S=None, hm=None, reface=False):
 	"""Pentru GET /api/swap."""
 	S = _s(S)
-	active = S.swapuriActive()
+	# Cererile periodice culeg memoria. Discul se citeste numai dupa o schimbare.
+	if hm is None and hasattr(S, "cereInventar"):
+		inventar = S.cereInventar(reface=reface)
+		if inventar.get("eroare"):
+			return {"result": False, "message": _t("Discurile nu pot fi citite. Încearcă din nou.")}
+		active = inventar["active"]
+		lista = inventar["discuri"]
+		cauta = inventar["cauta"]
+	else:
+		active = S.swapuriActive()
+		lista = S.discuri(hm, active)
+		cauta = False
 	return {
 		"result": True,
-		"discuri": S.discuri(hm, active),
+		"discuri": lista,
+		"cauta": cauta,
 		"active": active,
 		"text_active": S.textActive(active),
 		"marime_mb": S.MARIME_MB_IMPLICITA,
@@ -475,6 +503,40 @@ def rute(baza, resource, H=None, D=None, S=None, config=None, configfile=None, h
 	"""({nume: resursa de sub /api}, {nume: resursa pagina}). `baza` e HdsJsonResource din plugin.py. Probele dau
 	modulele, setarile, managerul de discuri, radacinile navigarii, firul si consola lor."""
 	pe_fir = fir or _peFirImplicit
+	ceasuri = []
+
+	def citireDisc(obiect, request, cheie, functie, aplica=None):
+		if fir is not None:
+			return pe_fir(request, lambda: aplica(functie()) if aplica else functie(), [False])
+		from Components.HdsStocareDisc import cere, stare
+		from enigma import eTimer
+		from twisted.web.server import NOT_DONE_YET
+		cache = ("web-discuri", id(hm), cheie)
+		pana = time.monotonic() + 3
+		initial = cere(cache, functie, termen=3, varsta=5)
+		ceas = eTimer()
+		ceasuri.append(ceas)
+		def culege():
+			rez = stare(cache) or initial
+			if (not rez or rez["stare"] == "asteapta") and time.monotonic() >= pana:
+				rez = {"stare": "termen", "valoare": None, "eroare": ""}
+			if not rez or rez["stare"] == "asteapta":
+				return
+			ceas.stop()
+			ceasuri.remove(ceas)
+			try:
+				if rez["stare"] == "gata":
+					date = aplica(rez["valoare"]) if aplica else rez["valoare"]
+					corp = obiect._raspunde(request, date)
+				else:
+					corp = obiect._eroare(request, _t("Discul nu răspunde la timp. Încearcă din nou."), 504)
+				request.write(corp)
+				request.finish()
+			except Exception as eroare:
+				_c().jurnal("citirea discului: %s" % eroare)
+		ceas.callback.append(culege)
+		ceas.start(100, False)
+		return NOT_DONE_YET
 
 	def _rad():
 		return radacini() if radacini is not None else _h(H).radacini()
@@ -544,21 +606,33 @@ def rute(baza, resource, H=None, D=None, S=None, config=None, configfile=None, h
 
 	class Discuri(baza):
 		def render_GET(self, request):
-			return _apara(self, request, lambda: stareDiscuri(D, hm, sys_block, mounts, inregistrare, unelte))
+			inreg = _inregistrari(_d(D), inregistrare)
+			return citireDisc(self, request, "lista", lambda: stareDiscuri(D, hm, sys_block, mounts, lambda: inreg, unelte))
 
 	class LucruDisc(baza):
 		schimbaCeva = True
 
 		def render_POST(self, request):
-			return _refuz(self, request) or _apara(self, request, lambda: lucruDisc(argumente(request), D, hm, sys_block,
-				mounts, inregistrare, porneste, unelte))
+			refuz = _refuz(self, request)
+			if refuz:
+				return refuz
+			arg = argumente(request)
+			if arg.get("pas") == "renunta" or arg.get("fel") not in FILE:
+				return _apara(self, request, lambda: lucruDisc(arg, D, hm, sys_block, mounts, inregistrare, porneste, unelte))
+			modul = _d(D)
+			inreg = _inregistrari(modul, inregistrare)
+			cheie = ("pregatire", arg.get("disc", ""), arg.get("fel", ""), arg.get("sistem", ""),
+				inreg.get("in_curs"), inreg.get("urmatoarea"), tuple(inreg.get("fisiere") or []), inreg.get("timeshift", ""))
+			return citireDisc(self, request, cheie,
+				lambda: pregatesteDisc(arg, modul, hm, sys_block, mounts, inreg, unelte),
+				lambda date: lucruDisc(arg, D, hm, sys_block, mounts, inregistrare, porneste, unelte, date))
 
 		def render_GET(self, request):
 			return self.render_POST(request)
 
 	class Swap(baza):
 		def render_GET(self, request):
-			return _apara(self, request, lambda: stareSwap(S, hm))
+			return _apara(self, request, lambda: stareSwap(S, hm, argumente(request).get("pas") == "cauta"))
 
 	class SwapActiveaza(baza):
 		schimbaCeva = True
@@ -1000,11 +1074,15 @@ PAGINA_SWAP = """<!DOCTYPE html>
 __SCRIPT_COMUN__
 __SCRIPT_DISC__
 function inLucru(d){ return d.lucru && d.lucru.stare === "in_lucru"; }
+var semnAfisat = null;
 function arata(d){
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   var ocupat = inLucru(d);
   $("cardLucru").classList.toggle("ascuns", !d.lucru);
   if(d.lucru){ $("lucruText").textContent = d.lucru.text; $("lucruText").classList.toggle("eroare", d.lucru.stare === "eroare"); }
+  var semn = JSON.stringify([d.discuri, ocupat]);
+  if(semnAfisat !== semn){
+  semnAfisat = semn;
   var corp = $("discuri"); corp.textContent = "";
   d.discuri.forEach(function(k){
     var tr = document.createElement("tr");
@@ -1018,14 +1096,16 @@ function arata(d){
     a.appendChild(act); a.appendChild(op);
     corp.appendChild(tr);
   });
+  }
   var are = d.discuri.length > 0;
   $("tabel").classList.toggle("ascuns", !are); $("gol").classList.toggle("ascuns", are);
   $("active").textContent = d.text_active || "";
   $("fisier").textContent = d.fisier; $("marime").textContent = d.marime_mb;
-  programeaza(citeste, ocupat ? 1000 : 10000);
+  programeaza(citeste, ocupat || d.cauta ? 1000 : 3000);
 }
-function citeste(){
-  return cerere("/api/swap").then(function(d){
+function citeste(reface){
+  if(document.hidden){ programeaza(citeste, 3000); return; }
+  return cerere("/api/swap" + (reface === true ? "?pas=cauta" : "")).then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi discurile."; programeaza(citeste, 10000); return; }
     arata(d);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; programeaza(citeste, 10000); });
@@ -1039,7 +1119,7 @@ function opreste(k){
   cuConfirmare("/api/swap-opreste", q, function(d){ if(d.discuri){ arata(d); } else { citeste(); } });
 }
 legaturi();
-citeste();
+citeste(true);
 </script>
 </body>
 </html>

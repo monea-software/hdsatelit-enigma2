@@ -440,9 +440,9 @@ class HdsVpn(Screen):
 			self._mesaj(_("Numele nu poate fi gol."))
 			return
 		self._nume = nume
-		tastatura = self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
-			title=_("Parola contului VPN (după salvare nu se mai arată)"), text="")
-		tastatura.hds_asistenta_secret = True
+		# hdsSecret: cu asistenta pornita, prima tasta din parola cere oprirea ei (titlul tradus nu se mai cauta)
+		self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
+			title=_("Parola contului VPN (după salvare nu se mai arată)"), text="", hdsSecret=True)
 
 	def _parolaScrisa(self, parola):
 		nume = getattr(self, "_nume", "")

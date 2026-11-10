@@ -12,17 +12,19 @@
 #                   stergere cu confirmare), cautarea SAP. Logica: Components/HdsMabrSetari.
 #   /iptv           IPTV (Screens/IptvSetup.py): listele si conturile omului, adaugare (playlist, cont, portal, lista demo),
 #                   actualizare, stergere cu confirmare. Parola merge numai de la browser la receptor, niciodata inapoi.
-#                   Parola Xtream numai se scrie sau se sterge, nu se arata, si se primeste numai din corpul cererii.
-#                   Adresa M3U lipita poate avea contul in ea: mascata implicit, cu Arata/Ascunde numai local.
+#                   Parola Xtream numai se scrie sau se sterge, nu se trimite inapoi, si se primeste numai din corpul
+#                   cererii. Parola si adresa M3U (care poate avea contul in ea) sunt
+#                   campuri text obisnuite, se vad cat le scrii, fara stelute si fara buton Arata / Ascunde; dupa
+#                   adaugare campurile se golesc, iar lista surselor nu are nici parola, nici adresa cu parola.
 #                   Logica si verificarea textelor: Components/HdsIptvSurse (aceleasi pe televizor).
 #   /interfata-web  Interfata web (Screens/HdsWebControlSetup.py): pornirea si portul (oprirea si mutarea cu confirmare
-#                   si avertismentul ca pagina se pierde sau se muta), browserele conectate (deconectarea, cod nou pe
-#                   televizor, cu confirmare), cheia pentru scripturi (ascunsa, puncte; butonul Arata cheia o cere
+#                   si avertismentul ca pagina se pierde sau se muta), browserele intrate cu parola (deconectarea, cu
+#                   confirmare), cheia pentru scripturi (nu se arata pana la butonul Arata cheia, care o cere
 #                   intreaga prin POST /api/interfata-web-secrete?ce=cheie, din plugin.py; tasta Cheie noua pentru
 #                   panoul web cu confirmare: cheie noua si toate aparatele asociate deconectate, in afara de browserul
-#                   care cere, ca pe televizor, cheieNouaPanou). Parola pentru aplicatii la fel: puncte pana la butonul
+#                   care cere, ca pe televizor, cheieNouaPanou). Parola pentru aplicatii la fel: nu se arata pana la butonul
 #                   Arata parola (?ce=parola); nici HTML-ul, nici GET-urile paginii nu au parola sau cheia.
-#                   Randurile cod_retea_locala, aplicatii, aplicatii_afara si parola pentru aplicatii merg
+#                   Randurile aplicatii, aplicatii_afara si parola pentru aplicatii merg
 #                   prin rutele care exista deja (plugin.py: /api/interfata-web, /api/interfata-web-seteaza).
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
@@ -43,7 +45,7 @@
 #   POST /api/iptv-sterge           id=<sursa>, in doi pasi
 #   GET  /api/interfata-web-detalii pornirea, portul, browserele (fara cheie)
 #   POST /api/interfata-web-actiune fapta=activ&valoare=0|1 | fapta=port&valoare=N | fapta=deconecteaza |
-#                                   fapta=cheie | fapta=browser_nou; cele periculoase in doi pasi
+#                                   fapta=cheie; cele periculoase in doi pasi (browser_nou, codul de pe televizor, s-a scos)
 #   GET  /dvb-i, /mabr, /iptv, /interfata-web   paginile
 # Actiunile in doi pasi se refuza cand vin cu ?token= (meniu_comun_web.numaiBrowser).
 #
@@ -758,9 +760,9 @@ def actiuneInterfataWeb(arg, P=None, configfile=None, adresa_client="", secret_c
 	if fapta == "deconecteaza":
 		are_aplicatii = any(b["tip"] == "aplicatie" for b in _browsere(P))
 		if are_aplicatii:
-			intrebare = _t("Deconectezi toate browserele și telefoanele? Fiecare va avea nevoie din nou de un cod de pe televizor.")
+			intrebare = _t("Deconectezi toate browserele și telefoanele? Cu parola pusă, fiecare o cere din nou.")
 		else:
-			intrebare = _t("Deconectezi toate browserele? Fiecare va avea nevoie din nou de un cod de pe televizor.")
+			intrebare = _t("Deconectezi toate browserele? Cu parola pusă, fiecare o cere din nou.")
 
 		def deconecteaza():
 			numar = P.obtineAsociere().deconecteazaToate()
@@ -768,36 +770,22 @@ def actiuneInterfataWeb(arg, P=None, configfile=None, adresa_client="", secret_c
 			return _cuMesaj(stareInterfataWeb(P), True, _t("Deconectate: %d.") % numar)
 
 		return _doiPasi(arg, "web-deconecteaza", "", intrebare, _t("Da, deconectează"),
-			[_t("Dacă acest browser e conectat cu cod, și el va cere codul din nou.")], deconecteaza)
+			[_t("Dacă acest browser a intrat cu parolă, o va cere din nou.")], deconecteaza)
 	if fapta == "cheie":
 		def cheie():
 			numar = cheieNouaPanou(P.config, configfile, P.obtineAsociere(), secret_cerere)
 			_jurnal("cheie noua pentru panoul web, din web; aparate deconectate: %d" % numar)
-			# pagina se incarca din nou: browserul intrat fara cod primeste tokenul CSRF facut din cheia noua; cel asociat
+			# pagina se incarca din nou: browserul intrat liber primeste tokenul CSRF facut din cheia noua; cel intrat cu parola
 			# isi pastreaza cookie-ul
 			rez = _cuMesaj(stareInterfataWeb(P), True, _t("Cheia nouă pentru panoul web e făcută. Pagina se încarcă din nou."))
 			rez["reincarca"] = True
 			return rez
 
-		return _doiPasi(arg, "web-cheie", "", _t("Faci o cheie nouă pentru panoul web? Cheia veche nu mai merge, iar toate "
-			"telefoanele și browserele asociate vor trebui asociate din nou."), _t("Da, fă cheia nouă"),
+		return _doiPasi(arg, "web-cheie", "", _t("Faci o cheie nouă pentru panoul web? Cheia veche nu mai merge, iar browserele "
+			"intrate cu parolă o cer din nou."), _t("Da, fă cheia nouă"),
 			[_t("Acest browser rămâne conectat. Scripturile care folosesc cheia veche nu mai merg până primesc cheia nouă."),
-				_t("Browserele intrate fără cod din rețeaua locală, și această pagină dacă ai intrat fără cod, trebuie să "
+				_t("Browserele intrate liber din rețeaua locală, și această pagină dacă ai intrat liber, trebuie să "
 				"încarce din nou pagina după schimbare.")], cheie)
-	if fapta == "browser_nou":
-		def cod():
-			asociere = P.obtineAsociere()
-			asociere.deblocheaza()
-			r = asociere.cereCod(tip=P.TIP_BROWSER, adresa=adresa_client)
-			if not r.get("cod"):
-				return _cuMesaj(stareInterfataWeb(P), False, _t("Codul nu a putut fi făcut acum. Încearcă din nou peste un minut."))
-			P._arataCodPeTelevizor(r["cod"], r["ramas"], P.TIP_BROWSER, r.get("adresa", ""), r.get("id_cerere"))
-			_jurnal("cod nou pentru un browser cerut din web, de la %s" % (adresa_client or "?"))
-			return _cuMesaj(stareInterfataWeb(P), True, _t("Codul e pe televizor. Deschide adresa receptorului în browserul nou "
-				"și scrie codul."))
-
-		return _doiPasi(arg, "web-browser-nou", "", _t("Arăți pe televizor un cod nou pentru un browser?"), _t("Da, arată codul"),
-			[_t("Codul apare numai pe televizor. Ca pe televizor, asta scoate și pauza de după codurile greșite.")], cod)
 	return _cuMesaj(stareInterfataWeb(P), False, _t("Acțiunea cerută nu există."))
 
 
@@ -1020,9 +1008,7 @@ __STIL_PAGINI__
   .bifa{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;border-bottom:1px solid var(--bordura);cursor:pointer;}
   .bifa:last-child{border-bottom:0;}
   .bifa span{overflow-wrap:anywhere;}
-  .rand input[type=text],.rand input[type=url],.rand input[type=password],.rand input[type=number]{width:100%;}
-  .adresa-secreta{display:flex;flex-wrap:wrap;gap:8px;}
-  .rand .adresa-secreta input{width:auto;min-width:140px;flex:1;}
+  .rand input[type=text],.rand input[type=url],.rand input[type=number]{width:100%;}
   a.extern{overflow-wrap:anywhere;}
   .dvbi-grila{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin:0 0 12px;}
   .dvbi-grila .card{margin:0;}
@@ -1127,6 +1113,7 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
     <div class="rand"><label for="url">Adresă nouă (http:// sau https://)</label>
       <input type="url" id="url" maxlength="1024" placeholder="https://" autocomplete="off"></div>
     <div class="butoane"><button type="button" id="adauga">Adaugă adresa</button></div>
+    <p class="nota">Pe televizor, ALBASTRU deschide direct tastatura.</p>
   </details>
   <p class="nota">Aceleași setări sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -1416,13 +1403,13 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <div class="rand"><label for="fel">Ce ai primit</label>
       <select id="fel"><option value="m3u">Playlist: o adresă sau un fișier de pe stick</option><option value="xtream">Cont: server, utilizator și parolă</option><option value="stalker">Portal: adresa portalului și adresa MAC</option><option value="demo">Listă demo: canale gratuite care permit asta</option></select></div>
     <div class="rand camp" data-fel="m3u"><label for="adresa">Adresa listei</label>
-      <div class="adresa-secreta"><input type="password" inputmode="url" id="adresa" maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://"><button type="button" id="arataAdresa" aria-controls="adresa" aria-pressed="false">Arată adresa</button></div></div>
+      <input type="text" inputmode="url" id="adresa" data-hds-secret="1" maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://"></div>
     <div class="rand camp" data-fel="xtream"><label for="server">Server</label>
       <input type="text" id="server" maxlength="512" autocomplete="off" placeholder="http://"></div>
     <div class="rand camp" data-fel="xtream"><label for="utilizator">Utilizator</label>
       <input type="text" id="utilizator" maxlength="512" autocomplete="off"></div>
     <div class="rand camp" data-fel="xtream"><label for="parola">Parolă</label>
-      <input type="password" id="parola" maxlength="512" autocomplete="new-password"></div>
+      <input type="text" id="parola" maxlength="512" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="rand camp" data-fel="stalker"><label for="portal">Adresa portalului</label>
       <input type="text" id="portal" maxlength="512" autocomplete="off" placeholder="http://"></div>
     <div class="rand camp" data-fel="stalker"><label for="mac">Adresa MAC</label>
@@ -1435,7 +1422,7 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
       <input type="text" id="referer" maxlength="2048" autocomplete="off"></div>
     <p class="nota">Agent utilizator și Referer: goale folosesc valorile implicite.</p>
     <div class="butoane"><button type="button" class="principal" id="adauga">Adaugă</button></div>
-    <p class="nota">Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân.</p>
+    <p class="nota">Parola se vede cât o scrii; după adăugare nu se mai arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân.</p>
   </section>
   <section class="card ascuns" id="cardDemo">
     <h2>Lista demo: acordul fiecărui canal</h2>
@@ -1463,6 +1450,7 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <div id="serialeLista"></div>
     <div class="butoane"><button type="button" id="serialePrecedenta">Pagina precedentă</button><span id="serialePagina"></span><button type="button" id="serialeUrmatoarea">Pagina următoare</button></div>
   </section>
+  <p class="nota">Pe televizor, OK deschide grupele sursei. MENU arată datele de acces și serialele.</p>
   <p class="nota">Aceleași liste sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
 """ + _COADA + """var ASTEPT = null;
@@ -1562,13 +1550,7 @@ function urmareste(){
     }).catch(nimicNuRaspunde);
   }, 1500);
 }
-function ascundeAdresaLista(){
-  $("adresa").type = "password";
-  $("arataAdresa").textContent = "Arată adresa";
-  $("arataAdresa").setAttribute("aria-pressed", "false");
-}
 function arataCampuri(){
-  ascundeAdresaLista();
   var f = $("fel").value;
   $("rNume").classList.toggle("ascuns", f === "demo");
   $("rAgent").classList.toggle("ascuns", f === "demo");
@@ -1582,13 +1564,6 @@ function citeste(){
   }).catch(faraRaspuns);
 }
 $("fel").addEventListener("change", arataCampuri);
-$("arataAdresa").addEventListener("click", function(){
-  var ascunsa = $("adresa").type === "password";
-  $("adresa").type = ascunsa ? "text" : "password";
-  this.textContent = ascunsa ? "Ascunde adresa" : "Arată adresa";
-  this.setAttribute("aria-pressed", ascunsa ? "true" : "false");
-});
-document.addEventListener("visibilitychange", function(){ if(document.hidden){ ascundeAdresaLista(); } });
 $("actualizeaza").addEventListener("click", function(){ trimite("/api/iptv-actualizeaza", new URLSearchParams()); });
 $("adauga").addEventListener("click", function(){
   var f = $("fel").value, q = new URLSearchParams();
@@ -1597,7 +1572,7 @@ $("adauga").addEventListener("click", function(){
   document.querySelectorAll(".camp").forEach(function(r){
     if(r.getAttribute("data-fel") === f){ r.querySelectorAll("input").forEach(function(i){ q.set(i.id, i.id === "parola" ? i.value : i.value.trim()); }); }
   });
-  trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; $("adresa").value = ""; ascundeAdresaLista(); urmareste(); } });
+  trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; $("adresa").value = ""; urmareste(); } });
 });
 var ANTETE_ID = "", SR = null, SR_TURA = 0;
 var GRUPE_ID = "", GRUPE_DATE = null;
@@ -1710,32 +1685,45 @@ PAGINA_INTERFATA_WEB = "<!DOCTYPE html>" + _CAP + "Interfața web" + _STIL + """
   </section>
   <section class="card">
     <h2>Acces</h2>
-    <div class="rand"><label for="codRetea">Cere codul și în rețeaua locală</label>
-      <select id="codRetea"><option value="0">Nu</option><option value="1">Da</option></select></div>
+    <p class="nota" id="parolaLocala"></p>
     <div class="rand"><label for="aplicatii">Aplicații de telefon</label>
       <select id="aplicatii"><option value="0">Nu</option><option value="1">Da</option></select></div>
     <div class="rand"><label for="aplicatiiAfara">Acces din afara casei</label>
       <select id="aplicatiiAfara"><option value="0">Nu</option><option value="1">Da</option></select></div>
-    <p class="nota" id="aplicatiiNota"></p>
+    <p class="nota" id="aplicatiiNota" data-hds-secret="1"></p>
     <div class="butoane"><button type="button" class="ascuns" id="arataParola">Arată parola</button>
       <button type="button" class="ascuns" id="parolaAplicatii">Parolă nouă pentru aplicații</button></div>
   </section>
   <section class="card">
     <h2>Browsere conectate</h2>
     <div id="browsere"></div>
-    <div class="butoane"><button type="button" class="rosu" id="deconecteaza">Deconectează browserele</button>
-      <button type="button" id="browserNou">Conectează un browser nou</button></div>
+    <div class="butoane"><button type="button" class="rosu" id="deconecteaza">Deconectează browserele</button></div>
   </section>
   <section class="card">
     <h2>Cheia pentru scripturi</h2>
-    <div class="status-linie"><span>Cheia</span><span id="cheie"></span></div>
+    <div class="status-linie"><span>Cheia</span><span id="cheie" data-hds-secret="1"></span></div>
     <p class="nota">Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată cheia o arată întreagă.</p>
     <div class="butoane"><button type="button" id="arataCheie">Arată cheia</button>
       <button type="button" class="rosu" id="cheieNoua">Cheie nouă pentru panoul web</button></div>
   </section>
   <p class="nota">Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în pagina Setări.</p>
 </div>
-""" + _COADA + """var D = null, A = null, PAROLA = "", CHEIE = "", PUNCTE = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+""" + _COADA + """var D = null, A = null, PAROLA = "", CHEIE = "", NEARATATA = "(se arată la buton)";
+var PLECATA = false, SECRETE = {parola: {tura: 0, ceas: null, pana: 0}, cheie: {tura: 0, ceas: null, pana: 0}};
+function ascundeSecret(ce){
+  var s = SECRETE[ce];
+  ++s.tura; clearTimeout(s.ceas); s.ceas = null; s.pana = 0;
+  if(ce === "parola"){ PAROLA = ""; if(A){ arataAcces(A); } }
+  else { CHEIE = ""; if(D){ arata(D); } }
+}
+function pleaca(){ PLECATA = true; ascundeSecret("parola"); ascundeSecret("cheie"); }
+function verificaTimp(){
+  Object.keys(SECRETE).forEach(function(ce){ var s = SECRETE[ce]; if(s.pana && Date.now() >= s.pana){ ascundeSecret(ce); } });
+}
+window.addEventListener("pagehide", pleaca);
+window.addEventListener("pageshow", function(){ PLECATA = false; verificaTimp(); });
+window.addEventListener("focus", verificaTimp);
+document.addEventListener("visibilitychange", verificaTimp);
 function data(t){ return t ? new Date(t * 1000).toLocaleDateString("ro-RO") : ""; }
 function arata(d){
   D = d;
@@ -1749,17 +1737,17 @@ function arata(d){
     return rand(t);
   });
   pune("browsere", b.length ? b : [gol("Niciun browser conectat cu cod.")]);
-  $("cheie").textContent = CHEIE || PUNCTE;
+  $("cheie").textContent = CHEIE || NEARATATA;
   $("arataCheie").textContent = CHEIE ? "Ascunde cheia" : "Arată cheia";
 }
 function arataAcces(a){
-  $("codRetea").value = a.cod_retea_locala ? "1" : "0";
+  $("parolaLocala").textContent = a.parola_web ? "Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în Parola receptorului (/acces-ssh)." : "Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai dacă vrei, în Parola receptorului (/acces-ssh).";
   $("aplicatii").value = a.aplicatii ? "1" : "0";
   $("aplicatiiAfara").value = a.aplicatii_afara ? "1" : "0";
   A = a;
-  var p = PAROLA || PUNCTE, t = [];
+  var p = PAROLA || NEARATATA, t = [];
   if(a.aplicatii){
-    t.push(a.cod_retea_locala ? "Aplicații de telefon: și acasă scrii utilizatorul root și parola " + p + "." : "Aplicații de telefon: acasă scrii în aplicație numai adresa receptorului, fără utilizator și parolă.");
+    t.push(a.parola_web ? "Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola receptorului)." : "Aplicații de telefon: acasă scrii în aplicație numai adresa receptorului, fără utilizator și parolă.");
     t.push(a.aplicatii_afara ? "Din afara casei: utilizatorul root și parola " + p + "." : "Din afara casei: oprit. Pornit, cere utilizatorul root și parola " + p + ".");
     var v = a.aplicatii_vazute || [];
     if(v.length){ t.push("Conectate: " + v.map(function(x){ return x.nume + " (" + x.adresa + ")"; }).join(", ") + "."); }
@@ -1773,10 +1761,15 @@ function arataAcces(a){
 }
 // parola pentru aplicatii si cheia pentru scripturi: numai la butoanele Arată (POST /api/interfata-web-secrete)
 function secret(ce, gata){
+  var s = SECRETE[ce], tura = ++s.tura;
   var q = new URLSearchParams(); q.set("ce", ce);
   cerere("/api/interfata-web-secrete", "POST", q).then(function(d){
+    if(PLECATA || tura !== s.tura){ return; }
     if(!d.result){ mesaj(d.message, true); return; }
     gata(d);
+    clearTimeout(s.ceas);
+    s.pana = Date.now() + 5 * 60 * 1000;
+    s.ceas = setTimeout(function(){ ascundeSecret(ce); }, 5 * 60 * 1000);
   }).catch(nimicNuRaspunde);
 }
 function citesteAcces(){
@@ -1784,7 +1777,7 @@ function citesteAcces(){
 }
 function dupa(d){
   if(d && d.browsere){ arata(d); }
-  if(d && d.result && d.reincarca){ setTimeout(function(){ location.reload(); }, 1500); }
+  if(d && d.result && d.reincarca){ ascundeSecret("cheie"); setTimeout(function(){ location.reload(); }, 1500); }
 }
 function citeste(){
   return cerere("/api/interfata-web-detalii").then(function(d){
@@ -1806,8 +1799,8 @@ $("activ").addEventListener("change", function(){
   }
 });
 $("schimbaPort").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("port", $("port").value.trim()), dupa); });
-["codRetea", "aplicatii", "aplicatiiAfara"].forEach(function(id){
-  var cheie = {codRetea: "cod_retea_locala", aplicatii: "aplicatii", aplicatiiAfara: "aplicatii_afara"}[id];
+["aplicatii", "aplicatiiAfara"].forEach(function(id){
+  var cheie = {aplicatii: "aplicatii", aplicatiiAfara: "aplicatii_afara"}[id];
   $(id).addEventListener("change", function(){
     var q = new URLSearchParams(); q.set(cheie, $(id).value);
     mesaj("Se salvează...");
@@ -1816,19 +1809,19 @@ $("schimbaPort").addEventListener("click", function(){ cuConfirmare("/api/interf
 });
 $("parolaAplicatii").addEventListener("click", function(){
   if(!confirm("Faci o parolă nouă pentru aplicații? Din afara casei, aplicațiile care o folosesc pe cea veche nu mai primesc răspuns până nu scrii în ele parola nouă.")){ return; }
+  ascundeSecret("parola");
   var q = new URLSearchParams(); q.set("parola_aplicatii_noua", "1");
-  cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){ PAROLA = ""; mesaj(d.message, !d.result); citesteAcces(); }).catch(nimicNuRaspunde);
+  cerere("/api/interfata-web-seteaza", "POST", q).then(function(d){ ascundeSecret("parola"); mesaj(d.message, !d.result); citesteAcces(); }).catch(nimicNuRaspunde);
 });
 $("arataParola").addEventListener("click", function(){
-  if(PAROLA){ PAROLA = ""; if(A){ arataAcces(A); } return; }
+  if(PAROLA){ ascundeSecret("parola"); return; }
   secret("parola", function(d){ PAROLA = d.parola_aplicatii || ""; if(A){ arataAcces(A); } });
 });
 $("arataCheie").addEventListener("click", function(){
-  if(CHEIE){ CHEIE = ""; if(D){ arata(D); } return; }
+  if(CHEIE){ ascundeSecret("cheie"); return; }
   secret("cheie", function(d){ CHEIE = d.cheie || ""; if(D){ arata(D); } });
 });
 $("deconecteaza").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("deconecteaza"), dupa); });
-$("browserNou").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("browser_nou"), dupa); });
 $("cheieNoua").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("cheie"), dupa); });
 citeste();""" + _SFARSIT
 
@@ -1870,6 +1863,7 @@ TEXTE_PAGINA = {
 		N_("Adrese proprii"),
 		N_("Adresă nouă (http:// sau https://)"),
 		N_("Adaugă adresa"),
+		N_("Pe televizor, ALBASTRU deschide direct tastatura."),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("https://"),
 		N_("DVB-I: Privește"),
@@ -1896,6 +1890,7 @@ TEXTE_PAGINA = {
 			"receptorului nu le folosește încă. Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("http://"),
 		N_("Listele și conturile tale"),
+		N_("Pe televizor, OK deschide grupele sursei. MENU arată datele de acces și serialele."),
 		N_("Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte."),
 		N_("Actualizează toate"),
 		N_("Adaugă ce ți-a dat furnizorul"),
@@ -1905,7 +1900,6 @@ TEXTE_PAGINA = {
 		N_("Portal: adresa portalului și adresa MAC"),
 		N_("Listă demo: canale gratuite care permit asta"),
 		N_("Adresa listei"),
-		N_("Arată adresa"),
 		N_("Server"),
 		N_("Utilizator"),
 		N_("Parolă"),
@@ -1930,7 +1924,8 @@ TEXTE_PAGINA = {
 		N_("Pagina precedentă"),
 		N_("Pagina următoare"),
 		N_("Adaugă"),
-		N_("Parola nu se arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."),
+		N_("Parola se vede cât o scrii; după adăugare nu se mai arată și nu se trimite înapoi. Dacă adaugi din "
+			"nou același cont cu altă parolă, canalele din Favorite rămân."),
 		N_("Lista demo: acordul fiecărui canal"),
 		N_("Aceleași liste sunt pe televizor, în __DRUM_MENIU__."),
 		N_("Interfața web"),
@@ -1940,14 +1935,16 @@ TEXTE_PAGINA = {
 		N_("Port TCP"),
 		N_("Schimbă portul"),
 		N_("Acces"),
-		N_("Cere codul și în rețeaua locală"),
+		N_("Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în Parola receptorului (/acces-ssh)."),
+		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai dacă vrei, în Parola receptorului (/acces-ssh)."),
+		N_("Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola receptorului)."),
+		N_("(se arată la buton)"),
 		N_("Aplicații de telefon"),
 		N_("Acces din afara casei"),
 		N_("Arată parola"),
 		N_("Parolă nouă pentru aplicații"),
 		N_("Browsere conectate"),
 		N_("Deconectează browserele"),
-		N_("Conectează un browser nou"),
 		N_("Cheia pentru scripturi"),
 		N_("Cheia"),
 		N_("Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată "
@@ -1958,8 +1955,6 @@ TEXTE_PAGINA = {
 			"pagina Setări."),
 	),
 	"js": (
-		N_("Arată adresa"),
-		N_("Ascunde adresa"),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Merge"),
 		N_("Oprit pentru țara ta"),

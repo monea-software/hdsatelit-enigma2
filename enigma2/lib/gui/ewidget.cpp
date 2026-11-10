@@ -1,6 +1,7 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/gui/ewidget.h>
 #include <lib/gui/ewidgetdesktop.h>
+#include <lib/gdi/desennetezit.h>
 
 #include <algorithm>
 
@@ -12,6 +13,7 @@ eWidget::eWidget(eWidget *parent): m_animation(this), m_parent(parent ? parent->
 	m_layer = 0;
 	m_desktop = 0;
 	m_have_background_color = 0;
+	m_corner_radius = 0;
 	m_z_position = 0;
 	m_client_offset = eSize(0, 0);
 	if (m_parent)
@@ -196,6 +198,12 @@ void eWidget::clearBackgroundColor()
 	m_have_background_color = 0;
 }
 
+void eWidget::setCornerRadius(int radius)
+{
+	m_corner_radius = std::max(0, radius);
+	invalidate();
+}
+
 void eWidget::setZPosition(int z)
 {
 	m_z_position = z;
@@ -368,7 +376,24 @@ int eWidget::event(int event, void *data, void *data2)
 			} else
 			{
 				painter.setBackgroundColor(m_background_color);
-				painter.clear();
+				if (!m_corner_radius)
+					painter.clear();
+				else
+				{
+					/* Refacem fundalul de sub colturi inainte de amestec. */
+					eWidget *w = m_parent;
+					while (w && (!w->m_have_background_color || w->child() != w))
+						w = w->m_parent;
+					painter.setBackgroundColor(w ? w->m_background_color : gRGB(0, 0, 0, 255));
+					painter.clear();
+					gDesenNetezit forma;
+					forma.forma = gDesenNetezit::dreptunghi;
+					forma.x1 = size().width(); forma.y1 = size().height();
+					forma.raza = m_corner_radius;
+					forma.culoare = m_background_color;
+					painter.desenNetezit(forma);
+					painter.setBackgroundColor(m_background_color);
+				}
 			}
 		} else
 		{

@@ -15,8 +15,9 @@
 #   directory to playlist" din meniul playerului). Playerul se deschide pe televizor daca nu e deschis; cursorul
 #   listei de pe televizor ajunge pe rand (MediaPlayer.hdsSelect), apoi se cheama metoda tastei.
 # - un fisier din telefon sau calculator: se trimite pe un disc montat (niciodata /tmp sau memoria interna), in
-#   bucati de cel mult MAX_BUCATA, in <disc>/hds-din-telefon/<nume>.part, redenumit la sfarsit; apoi "Pornește pe
-#   televizor". O singura trimitere odata; anularea sterge .part.
+#   bucati de cel mult MAX_BUCATA, in <disc>/hds-din-telefon/<nume>.part, redenumit la sfarsit. Omul alege numai
+#   trimiterea sau "Trimite și pornește pe televizor". Redarea urmeaza numai transferului reusit.
+#   O singura trimitere odata; anularea sterge .part.
 # - ce merge in player: pauza, redare, oprire, salturi, urmatorul, anteriorul (tastele playerului), lista de redare
 #   (pornire, scoatere, golire, amestecare), listele salvate (salvare, incarcare, stergere), ascunderea, inchiderea.
 #   Filmele pornite din lista de filme se comanda din pagina /filme (filme_web.py), legata din pagina.
@@ -1649,11 +1650,16 @@ __STIL_PAGINI__
 <section class="card">
   <h2>Din telefon sau calculator</h2>
   <div class="urcare">
-    <p class="nota" id="urcareExplicatie">Alege un fișier: se trimite pe receptor, apoi îl pornești pe televizor.</p>
+    <p class="nota" id="urcareExplicatie">
+      Alege un fișier, apoi trimite-l cu sau fără pornire pe televizor.
+    </p>
     <div class="rand"><label for="disc">Discul pe care se pune</label><select id="disc"></select></div>
     <input type="file" id="fisier" aria-label="Fișierul de trimis">
     <div class="butoane">
-      <button type="button" class="principal" id="bTrimite" disabled>Trimite pe receptor</button>
+      <button type="button" class="principal" id="bTrimitePorneste" disabled>
+        Trimite și pornește pe televizor
+      </button>
+      <button type="button" id="bTrimite" disabled>Trimite pe receptor</button>
       <button type="button" class="rosu ascuns" id="bAnuleaza">Anulează</button>
     </div>
     <div class="ascuns" id="urcareProgres"><div class="bara"><div id="urcareBara"></div></div><p class="nota" id="urcareText"></p></div>
@@ -1755,9 +1761,12 @@ function arataDiscuri(d){
   if(ales){ s.value = ales; }
   var are = (d.discuri || []).length > 0;
   if(!are){ $("urcareExplicatie").textContent = "Nu e niciun stick sau disc pe care să se poată pune un fișier. Pune un stick în receptor."; }
-  else { $("urcareExplicatie").textContent = "Alege un fișier: se trimite pe receptor, în dosarul hds-din-telefon al discului, apoi îl pornești pe televizor."; }
+  else {
+    $("urcareExplicatie").textContent =
+      "Fișierul ajunge pe disc. Alege trimiterea cu sau fără pornire pe televizor.";
+  }
   $("fisier").setAttribute("accept", (d.extensii_urcare || []).map(function(e){ return "." + e; }).join(","));
-  $("bTrimite").disabled = !are || !!URC || !($("fisier").files && $("fisier").files[0]);
+  butoaneUrcare();
   var u = d.urcare;
   if(!URC && u){
     $("urcareProgres").classList.remove("ascuns");
@@ -1782,8 +1791,10 @@ function citeste(){
     if(!INCEPUT){ INCEPUT = true; NAV.deschide(d.dosar_start || ""); }
   }).catch(function(){ mesajIn("mesajTv", "Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea.", true); });
 }
-function porneste(cale, fa){
-  return trimite("/api/media-porneste", {cale: cale, fa: fa}, "mesajFisiere").then(function(){ setTimeout(citeste, 800); });
+function porneste(cale, fa, unde){
+  return trimite("/api/media-porneste", {cale: cale, fa: fa}, unde || "mesajFisiere").then(function(){
+    setTimeout(citeste, 800);
+  });
 }
 function randFisier(f, d){
   var rand = el("div", "fisier");
@@ -1835,6 +1846,11 @@ function arataDosar(d){
   if(!(d.dosare || []).length && !(d.fisiere || []).length){ c.appendChild(el("p", "nota", "Dosarul nu are fișiere pe care playerul le poate reda.")); }
 }
 // trimiterea unui fisier, in bucati (Blob.slice), una dupa alta
+function butoaneUrcare(){
+  var lipseste = !$("disc").value || !($("fisier").files && $("fisier").files[0]);
+  $("bTrimite").disabled = $("bTrimitePorneste").disabled = !!URC || lipseste;
+  $("fisier").disabled = $("disc").disabled = !!URC;
+}
 function progresUrcare(){
   var p = URC ? URC.pozitie : 0, t = URC ? URC.f.size : 1;
   $("urcareBara").style.width = Math.round(100 * p / Math.max(1, t)) + "%";
@@ -1843,12 +1859,12 @@ function progresUrcare(){
 function sfarsitUrcare(text, eroare){
   URC = null;
   $("bAnuleaza").classList.add("ascuns");
-  $("bTrimite").disabled = !($("fisier").files && $("fisier").files[0]);
+  butoaneUrcare();
   mesajIn("mesajUrcare", text, eroare);
 }
 function bucata(){
   if(!URC || URC.oprit){ return; }
-  var f = URC.f, p = URC.pozitie, sf = Math.min(f.size, p + URC.marime);
+  var u = URC, f = u.f, p = u.pozitie, sf = Math.min(f.size, p + u.marime);
   var q = new URLSearchParams(); q.set("nume", f.name); q.set("pozitie", String(p)); q.set("total", String(f.size)); q.set("disc", URC.disc);
   if(URC.id){ q.set("id", URC.id); }
   var antete = {"Content-Type": "application/octet-stream"};
@@ -1858,53 +1874,74 @@ function bucata(){
       if(r.status === 413){ return {result: false, message: "Receptorul nu primește bucăți atât de mari."}; }
       return r.json().catch(function(){ return {result: false, message: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
     }).then(function(d){
-      if(!URC || URC.oprit){ return; }
+      if(URC !== u || u.oprit){ return; }
       if(d.id){ URC.id = d.id; }
       if(!d.result){
         if(typeof d.primit === "number" && URC.id && URC.incercari < 5){ URC.incercari++; URC.pozitie = d.primit; bucata(); return; }
-        if(d.reincearca && URC.incercari < 5){ URC.incercari++; setTimeout(bucata, 1000); return; }
+        if(d.reincearca && URC.incercari < 5){
+          URC.incercari++; setTimeout(function(){ if(URC === u){ bucata(); } }, 1000); return;
+        }
         sfarsitUrcare(d.message || "Fișierul nu s-a putut trimite.", true); return;
       }
       URC.incercari = 0; URC.pozitie = d.primit; progresUrcare();
       if(d.gata){
+        if(typeof d.cale !== "string" || !d.cale){
+          sfarsitUrcare("Fișierul nu s-a putut trimite.", true); return;
+        }
+        var reda = u.porneste;
         URCAT = d.cale; sfarsitUrcare(d.message, false);
         $("urcareGata").classList.remove("ascuns");
-        $("fisier").value = ""; $("bTrimite").disabled = true;
+        $("fisier").value = ""; butoaneUrcare();
         NAV.deschide(d.dosar);
+        if(reda){ porneste(d.cale, "porneste", "mesajUrcare"); }
         return;
       }
       bucata();
     }).catch(function(){
-      if(URC && URC.incercari < 3){ URC.incercari++; setTimeout(bucata, 1500); return; }
+      if(URC !== u || u.oprit){ return; }
+      if(URC.incercari < 3){
+        URC.incercari++; setTimeout(function(){ if(URC === u){ bucata(); } }, 1500); return;
+      }
       sfarsitUrcare("Receptorul nu răspunde. Trimiterea s-a oprit.", true);
     });
 }
 $("fisier").addEventListener("change", function(){
   var f = this.files && this.files[0];
-  $("bTrimite").disabled = !f || !!URC || !$("disc").value;
+  butoaneUrcare();
   $("urcareGata").classList.add("ascuns");
   if(!f){ mesajIn("mesajUrcare", ""); return; }
   var disc = (DATE && DATE.discuri || []).filter(function(x){ return x.id === $("disc").value; })[0];
   if(disc && f.size > disc.liber){ mesajIn("mesajUrcare", "Fișierul are " + marime(f.size) + ", iar pe disc sunt liberi " + marime(disc.liber) + ".", true); return; }
   mesajIn("mesajUrcare", "Gata de trimis: " + f.name + ", " + marime(f.size) + ".");
 });
-$("bTrimite").addEventListener("click", function(){
+$("disc").addEventListener("change", butoaneUrcare);
+function incepeUrcare(reda){
   var f = $("fisier").files && $("fisier").files[0];
-  if(!f || URC){ return; }
-  URC = {f: f, disc: $("disc").value, pozitie: 0, id: "", incercari: 0, oprit: false, marime: (DATE && DATE.bucata) || 4194304};
-  $("bTrimite").disabled = true; $("bAnuleaza").classList.remove("ascuns");
+  if(!f || URC || !$("disc").value){ return; }
+  URCAT = null;
+  URC = {f: f, disc: $("disc").value, pozitie: 0, id: "", incercari: 0, oprit: false,
+    porneste: reda, marime: (DATE && DATE.bucata) || 4194304};
+  butoaneUrcare(); $("bAnuleaza").classList.remove("ascuns");
   $("urcareProgres").classList.remove("ascuns"); $("urcareGata").classList.add("ascuns");
   mesajIn("mesajUrcare", "Se trimite " + f.name + "...");
   progresUrcare(); bucata();
-});
+}
+$("bTrimite").addEventListener("click", function(){ incepeUrcare(false); });
+$("bTrimitePorneste").addEventListener("click", function(){ incepeUrcare(true); });
 $("bAnuleaza").addEventListener("click", function(){
-  var id = URC ? URC.id : "";
-  if(URC){ URC.oprit = true; }
+  var u = URC, id = u ? u.id : "";
+  if(u){ u.oprit = true; }
   var q = new URLSearchParams(); q.set("id", id);
-  cerere("/api/media-urca-anuleaza", "POST", q).then(function(d){ sfarsitUrcare(d.message, !d.result); $("urcareProgres").classList.add("ascuns"); citeste(); })
-    .catch(function(){ sfarsitUrcare("Receptorul nu răspunde.", true); });
+  cerere("/api/media-urca-anuleaza", "POST", q).then(function(d){
+    if(URC !== u){ return; }
+    sfarsitUrcare(d.message, !d.result); $("urcareProgres").classList.add("ascuns"); citeste();
+  }).catch(function(){
+    if(URC === u){ sfarsitUrcare("Receptorul nu răspunde.", true); }
+  });
 });
-$("bPornesteUrcat").addEventListener("click", function(){ if(URCAT){ porneste(URCAT, "porneste"); } });
+$("bPornesteUrcat").addEventListener("click", function(){
+  if(URCAT){ porneste(URCAT, "porneste", "mesajUrcare"); }
+});
 $("bDeschide").addEventListener("click", function(){ comanda("deschide"); });
 $("bPauza").addEventListener("click", function(){ var r = DATE && DATE.tv && DATE.tv.redare; comanda(r && r.pauza ? "redare" : "pauza"); });
 $("bAscunde").addEventListener("click", function(){ comanda(DATE && DATE.tv && DATE.tv.ascuns ? "arata" : "ascunde"); });
@@ -2146,9 +2183,10 @@ TEXTE_PAGINA = {
 			"unde sunt și derularea și saltul la un loc anume."),
 		N_("Fișierele de pe receptor"),
 		N_("Din telefon sau calculator"),
-		N_("Alege un fișier: se trimite pe receptor, apoi îl pornești pe televizor."),
+		N_("Alege un fișier, apoi trimite-l cu sau fără pornire pe televizor."),
 		N_("Discul pe care se pune"),
 		N_("Trimite pe receptor"),
+		N_("Trimite și pornește pe televizor"),
 		N_("Anulează"),
 		N_("Pornește pe televizor"),
 		N_("Lista de redare"),
@@ -2207,8 +2245,7 @@ TEXTE_PAGINA = {
 		N_("Dosarul deschis mai sus"),
 		N_("Deschide întâi un dosar în lista de fișiere."),
 		N_("Nu e niciun stick sau disc pe care să se poată pune un fișier. Pune un stick în receptor."),
-		N_("Alege un fișier: se trimite pe receptor, în dosarul hds-din-telefon al discului, apoi îl "
-			"pornești pe televizor."),
+		N_("Fișierul ajunge pe disc. Alege trimiterea cu sau fără pornire pe televizor."),
 		N_("Se trimite alt fișier:"),
 		N_("din"),
 		N_("Receptorul nu a putut citi playerul."),

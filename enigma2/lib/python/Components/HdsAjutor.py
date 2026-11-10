@@ -27,7 +27,14 @@
 import io
 import json
 import os
+import re
 import zlib
+
+try:
+	_
+except NameError:
+	def _(text):
+		return text
 
 DOSAR = "/usr/share/hdsatelit-ajutor"
 # imediat dupa -0x7FFFFFFF (navigatorul, HbbTV, culegerea canalelor si captura le leaga acolo si iau tastele cat
@@ -41,26 +48,33 @@ LIMBI_TEXT_IMPLICIT = ("ro", "en")
 # ecranele peste care HELP nu deschide nimic: receptorul e in standby (televizorul poate fi stins)
 FARA_AJUTOR = ("Standby", "StandbySummary")
 
+def N_(text):
+	"""Marcaj pentru catalog; limba mesajului se alege la folosire, din dictionar."""
+	return text
+
+
 # mesajul de pe ecran cand pachetul ajutorului lipseste (index.json are textele, dar aici nu e niciun index)
 TEXT_LIPSA = {
-	"ro": "Ajutorul nu e instalat pe acest receptor. Îl aduce actualizarea software.",
-	"en": "The help is not installed on this receiver. A software update brings it.",
-	"de": "Die Hilfe ist auf diesem Receiver nicht installiert. Ein Software-Update bringt sie.",
-	"fr": "L'aide n'est pas installée sur ce récepteur. Une mise à jour logicielle l'apporte.",
-	"es": "La ayuda no está instalada en este receptor. Una actualización de software la trae.",
-	"it": "L'aiuto non è installato su questo ricevitore. Lo porta un aggiornamento software.",
-	"hu": "A súgó nincs telepítve ezen a vevőn. Egy szoftverfrissítés hozza.",
-	"cs": "Nápověda není v tomto přijímači nainstalována. Přinese ji aktualizace softwaru.",
-	"pl": "Pomoc nie jest zainstalowana w tym odbiorniku. Przyniesie ją aktualizacja oprogramowania.",
-	"pt": "A ajuda não está instalada neste recetor. Uma atualização de software trá-la.",
-	"nl": "De help is niet geïnstalleerd op deze ontvanger. Een software-update brengt hem.",
-	"ru": "Справка не установлена на этом приёмнике. Её принесёт обновление программ.",
-	"tr": "Yardım bu alıcıda kurulu değil. Bir yazılım güncellemesi getirir.",
+	"ro": N_("Ajutorul nu e instalat pe acest receptor."),
+	"en": "The help is not installed on this receiver.",
+	"de": "Die Hilfe ist auf diesem Receiver nicht installiert.",
+	"fr": "L'aide n'est pas installée sur ce récepteur.",
+	"es": "La ayuda no está instalada en este receptor.",
+	"it": "L'aiuto non è installato su questo ricevitore.",
+	"hu": "A súgó nincs telepítve ezen a vevőn.",
+	"cs": "Nápověda není v tomto přijímači nainstalována.",
+	"pl": "Pomoc nie jest zainstalowana w tym odbiorniku.",
+	"pt": "A ajuda não está instalada neste recetor.",
+	"nl": "De help is niet geïnstalleerd op deze ontvanger.",
+	"ru": "Справка не установлена на этом приёмнике.",
+	"tr": "Yardım bu alıcıda kurulu değil.",
 }
 # textele din jur cand index.json nu le are (pachet mai vechi decat codul)
 TEXTE_REZERVA = {
-	"ro": {"ajutor": "Ajutor", "inchide": "Închide", "cuprins": "Cuprins", "cauta": "Caută"},
-	"en": {"ajutor": "Help", "inchide": "Close", "cuprins": "Contents", "cauta": "Search"},
+	"ro": {"ajutor": "Ajutor", "inchide": "Închide", "cuprins": "Cuprins", "cauta": "Caută",
+		"taste": _("Tastele acestui ecran")},
+	"en": {"ajutor": "Help", "inchide": "Close", "cuprins": "Contents", "cauta": "Search",
+		"taste": _("Keys on this screen")},
 }
 
 
@@ -286,10 +300,134 @@ def pagina(i, limba=None):
 		pg = json.loads((d.decompress(b) + d.flush()).decode("utf-8"))
 		if not isinstance(pg, dict) or not isinstance(pg.get("p"), list):
 			raise ValueError("pagina fara parti")
-		return pg
+		return actualizeaza_taste(pg, context_pagina(i), pagina_key=cheie_pagina(i))
 	except Exception as e:
 		_jurnal("pagina %s (%s): %s" % (i, L, e))
 		return None
+
+
+def context_pagina(i):
+	from Components.HdsTasteRapide import CONTEXTE_ECRANE
+	if (cheie_pagina(i) or "").endswith("/sagetile-sus-si-jos-la-privit"):
+		return "live"
+	e = (index() or {}).get("ecrane") or {}
+	for clasa, context in CONTEXTE_ECRANE.items():
+		if i in (e.get("clase") or {}).get(clasa, []):
+			return context
+	if i in (e.get("setup") or {}).values():
+		return "setup"
+	if i in (e.get("meniuri") or {}).values():
+		return "menu"
+	return None
+
+
+def actualizeaza_taste(pg, context=None, dialog=None, config=None, pagina_key=None):
+	"""Textul pachetului de ajutor urmeaza profilul instalat, inclusiv cu pachet vechi."""
+	from Components import HdsTasteRapide as T
+	if config is None:
+		try:
+			from Components.config import config
+		except ImportError:
+			config = T.config_fabrica()
+	context = T.context_ecran(dialog) if dialog is not None else context
+	pagina_key = pagina_key or (pg or {}).get("taste_pagina") or ""
+	if pagina_key and pg is not None and not pg.get("taste_acces_corectat"):
+		def acces(e):
+			if isinstance(e, list):
+				return [acces(x) for x in e]
+			if (isinstance(e, str) and not pagina_key.endswith("/telecomanda-televizorului")
+				and "Pornește-o cu SUBT" not in e):
+				return re.sub(r"\b(SUBT(?:ITLE)?)\b(?! \()", lambda m: m.group(1) + " " + _("(apăsare lungă)"), e)
+			return e
+		pg = dict(pg, p=acces(pg.get("p", [])), taste_acces_corectat=True)
+	if context is None:
+		if pagina_key.endswith("/cauta-setari") and pg is not None:
+			def cautare(e):
+				if isinstance(e, list):
+					return [cautare(x) for x in e]
+				if isinstance(e, str) and "MENU" in e and re.search(r"închide tot|closes all", e):
+					return _("MENU închide căutarea. În setări, MENU arată valorile setării; EXIT revine.")
+				return e
+			return dict(pg, p=cautare(pg.get("p", [])))
+		return pg
+	stare = {}
+	if context in ("live", "radio", "timeshift") and dialog is not None:
+		stare["pip"] = bool(getattr(getattr(dialog, "session", None), "pipshown", False))
+		try:
+			from Screens.InfoBar import hdsHbbtvDisponibil
+			stare["hbbtv"] = hdsHbbtvDisponibil(dialog)
+		except ImportError:
+			pass
+	profil = T.profil_context("setup" if context == "button_setup" else context, config, **stare)
+	texte = dict((r["key"], r["text_short"]) for r in profil)
+
+	def descrie(chei):
+		return "; ".join("%s: %s" % (k.upper(), texte[k]) for k in chei) + "."
+
+	def revizuieste(text):
+		if not isinstance(text, str):
+			return text
+		if pagina_key.endswith("/ecranul-radio"):
+			if re.search(r"GALBEN|ALBASTRU|YELLOW|BLUE", text):
+				from Components import HdsRadioSetari as Radio
+				return _(Radio.DESCRIERI["taste_colorate"])
+			if re.search(r"(?:celor 8 rânduri|eight rows|8 rows)", text):
+				return _("Setările includ și alegerea comenzilor colorate ale radioului.")
+		# Numerele meniului raman valabile: arborele nu se schimba in aceasta fisa.
+		if context == "menu" and re.search(r"MENU.*(?:închide|inchide|closes)", text):
+			return descrie(("menu",))
+		chei = []
+		for k, expresie in (("fav", r"\bFAV\b"), ("info", r"\bINFO\b"), ("epg", r"\bEPG\b"),
+			("subtitle", r"\bSUBT(?:ITLE)?\b"), ("green", r"\b(?:VERDE|GREEN)\b|tasta verde"),
+			("yellow", r"\b(?:GALBEN|YELLOW)\b|tasta galben"), ("blue", r"\b(?:ALBASTRU|BLUE)\b|tasta albastr")):
+			if re.search(expresie, text) and context in ("live", "radio", "timeshift", "movie_list", "channel_list", "menu"):
+				chei.append(k)
+		if context == "channel_list" and re.search(r"OK.*(?:lung|ținut|tinut|held|long)", text):
+			return "OK " + T.text_actiune(T.sens_tasta(context, "ok", True, config)) + "."
+		if context == "movie_list" and re.search(r"STOP|Oprești redarea|Opresti redarea", text):
+			return "STOP: " + T.text_actiune(T.sens_tasta("movie", "stop", config=config)) + "."
+		if context in ("live", "radio") and re.search(r"(?:SUS|JOS|săge).*lista (?:TV|radio)", text):
+			return descrie(("up", "down"))
+		return descrie(chei) if chei else text
+
+	def element(e):
+		return [element(x) if isinstance(x, list) else revizuieste(x) for x in e]
+
+	rez = dict(pg or {"t": T.text_actiune("help"), "p": []})
+	pagina_key = pagina_key or rez.get("taste_pagina") or ""
+	parti = [[nume, [element(e) for e in elemente]] for nume, elemente in rez.get("p", []) if nume != "taste"]
+	for parte, randuri in parti:
+		if parte != "randuri":
+			continue
+		for rand in randuri:
+			if len(rand) < 6:
+				continue
+			label = normalizeaza(str(rand[0]))
+			if "sagetile sus si jos" in label or ("arrow" in label and "watch" in label):
+				rand[1] = ", ".join(_(t) for t in ("Lista modului curent", "Sus lista radio, jos lista TV",
+					"Sus lista TV, jos lista radio", "Ambele deschid lista TV", "Ambele deschid lista radio",
+					"Schimbă canalul (sus: următorul)", "Schimbă canalul (sus: anteriorul)"))
+				rand[2] = _("Lista modului curent")
+				rand[3] = _("Din fabrică, ambele deschid lista modului curent, fără să schimbe recepția.")
+			if "oprirea unui film" in label or ("stop" in label and "movie" in label):
+				rand[2] = T.text_actiune("movielist")
+	if pagina_key.endswith("/ecranul-radio"):
+		from Components import HdsRadioSetari as Radio
+		valori = lambda k: ", ".join(_(t) for _v, t in Radio.ALEGERI.get(k, ())) if k not in Radio.DA_NU else _("Yes") + ", " + _("No")
+		fabrica = lambda k: (_("Yes") if Radio.IMPLICITE[k] else _("No")) if k in Radio.DA_NU else _(Radio.text_alegere(k, Radio.IMPLICITE[k]))
+		noi = [[_(Radio.ETICHETE[k]), valori(k), fabrica(k), _(Radio.DESCRIERI[k]), "", -1] for k in Radio.ORDINE]
+		parti = [[p, noi if p == "randuri" else r] for p, r in parti]
+	if context == "button_setup":
+		# Acest ecran are acum si apasari scurte si pluginuri instalate.
+		parti = [["la_ce_foloseste", [[_("Alegi funcția tastelor și pluginurile instalate. VERDE salvează, ROȘU sau EXIT anulează."), -1]]],
+			["randuri", [[text, _("Funcțiile tastelor și pluginurile instalate"),
+				T.text_actiune(T.FUNCTII_OBISNUITE.get(k, T.VALORI_IMPLICITE[k])), "", "", -1]
+				for k, text in T.SCURTE + T.BUTOANE]]]
+	rez["p"] = [["taste", T.taste_ajutor(context, config, **stare)]] + parti
+	rez["taste_context"] = context
+	rez["taste_contract"] = profil
+	rez["taste_pagina"] = pagina_key
+	return rez
 
 
 def legaturi(pg):

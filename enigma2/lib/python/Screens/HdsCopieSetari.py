@@ -8,10 +8,12 @@
 #
 # Randurile ca la scanere si la import (sursa List, eticheta si valoarea), in skinul HDSatelit ecranul
 # HdsCopieSetariScreen, pe alte skinuri skinul de rezerva al scanerelor (Screens/ScanerCablu.skin_rezerva). Totul merge
-# numai cu sagetile si OK; tastele colorate scurteaza: VERDE face copia, GALBEN pune la loc copia luminata, ALBASTRU o
-# sterge. Cautarea copiilor si facerea copiei merg pe un fir separat (un stick poate fi lent); punerea la loc NU se face
+# numai cu sagetile si OK; tastele colorate scurteaza: VERDE face copia (cu lista locurilor refacuta singura, cand
+# stickul a fost bagat dupa deschidere), OK sau GALBEN pune la loc copia luminata, ALBASTRU o sterge. Cautarea copiilor si facerea copiei merg pe un fir separat (un stick poate fi lent); punerea la loc NU se face
 # cat interfata ruleaza: se scrie cererea, interfata reporneste si enigma2.sh pune copia la loc inaintea ei. Punerea la
 # loc si stergerea intreaba inainte, cu „Nu” ales.
+
+import os
 
 from Components.ActionMap import ActionMap
 from Components.Label import Label
@@ -78,6 +80,8 @@ class HdsCopieSetariScreen(Screen):
 		self.id_mediu = implicit["id"] if implicit else None
 		self._cauta = True
 		self._inchis = False
+		self._recauta = False
+		self._semnal_medii = None
 		self._rezultat = []
 		self["lista"] = List([], enableWrapAround=True)
 		self["preview"] = Label("")
@@ -112,19 +116,40 @@ class HdsCopieSetariScreen(Screen):
 		except AttributeError:
 			self._ceas.callback.append(self._verifica)
 		self._arata()
+		try:
+			from Components.Harddisk import harddiskmanager
+			self._semnal_medii = harddiskmanager.on_partition_list_change
+			self._semnal_medii.append(self._mediiSchimbate)
+		except (ImportError, AttributeError):
+			pass
 		self.onClose.append(self._laInchidere)
 		self.onFirstExecBegin.append(self.cautaDinNou)
 		self.onLayoutFinish.append(self._potrivesteTextele)
 
 	# ---- starea comuna (ecran si web) ----
 	def cautaDinNou(self):
+		if self._inchis:
+			return
 		self._cauta = True
 		C.porneste_cautarea()
 		self._arata()
 		self._ceas.start(300, False)
 
+	def _mediiSchimbate(self, *args):
+		if not self._inchis:
+			self._recauta = True
+			self._ceas.start(300, False)
+
 	def _verifica(self):
+		if self._inchis:
+			return
 		st = C.stare()
+		if self._recauta and not st["cauta"] and not st["lucreaza"]:
+			self._recauta = False
+			if C.medii_schimbate():
+				self._cauta = True
+				C.porneste_cautarea()
+			st = C.stare()
 		if st["cauta"] or st["lucreaza"]:
 			self._arata()
 			return
@@ -200,7 +225,7 @@ class HdsCopieSetariScreen(Screen):
 		if m is None:
 			if self._cauta:
 				return _("Se caută stickurile, discurile și copiile de pe ele…")
-			return _("Bagă un stick USB sau un disc în receptor, apoi alege „Caută din nou”.")
+			return _("Bagă un stick USB sau un disc în receptor. Lista se reface singură.")
 		return (_("Copia merge pe %s: canalele, buchetele, listele DAB+ și DVB-T2, listele, conturile și portalurile IPTV, "
 			"favoritele și țara de la radio, pluginurile cu setările lor, setările, rețeaua și Wi-Fi, "
 			"cheile SSH și modulele de acces condiționat.") % m["nume"]) + "\n" + C.text_avertisment()
@@ -216,7 +241,7 @@ class HdsCopieSetariScreen(Screen):
 		if cheie == "pastrate":
 			return _("Câte copii automate rămân pe stick; cele făcute de mână nu se șterg singure.")
 		if cheie and cheie.startswith("copie:"):
-			return _("OK: ce faci cu copia. GALBEN: pune la loc. ALBASTRU: șterge.")
+			return _("OK sau GALBEN: pune la loc. ALBASTRU: șterge.")
 		if cheie == "anuleaza":
 			return _("OK: copia nu se mai pune la loc.")
 		return _("Caută din nou stickurile și copiile.")
@@ -300,10 +325,9 @@ class HdsCopieSetariScreen(Screen):
 		elif cheie in ("automat", "pastrate"):
 			self._schimba(1)
 		elif cheie and cheie.startswith("copie:"):
-			c = self.copie()
-			from Screens.ScanerCablu import AlegereDinLista
-			self.session.openWithCallback(self._dupaAlegereCopie, AlegereDinLista, title=eticheta_copie(c),
-				list=[(_("Pune la loc din copie"), "pune"), (_("Șterge copia"), "sterge")], selection=0)
+			# R10 (analiza "cat mai simplu", 09.11.2026): OK pe o copie cere direct punerea la loc, cu unicul Da (inainte
+			# o lista Pune la loc / Sterge, apoi intrebarea); stergerea ramane pe ALBASTRU, cu intrebarea ei
+			self.puneLaLoc()
 		elif cheie == "anuleaza":
 			C.anuleaza_cererea()
 			self._arata(_("Copia nu se mai pune la loc."))
@@ -315,16 +339,18 @@ class HdsCopieSetariScreen(Screen):
 			self.id_mediu = rand[1]
 		self._arata()
 
-	def _dupaAlegereCopie(self, rand=None):
-		if rand and rand[1] == "pune":
-			self.puneLaLoc()
-		elif rand and rand[1] == "sterge":
-			self.sterge()
-
 	def faCopia(self):
 		m = self.mediu()
+		if m is None or not os.path.isdir(m.get("punct") or ""):
+			# R10: un stick bagat dupa deschiderea ecranului (sau scos) nu mai cere "Caută din nou": lista locurilor se
+			# reface aici, din /proc/mounts (fara sa citeasca copiile de pe discuri), iar copia merge pe locul implicit
+			self.medii = C.medii()
+			if C.mediu_dupa_id(self.id_mediu, self.medii) is None:
+				implicit = C.mediu_implicit(self.medii)
+				self.id_mediu = implicit["id"] if implicit else None
+			m = self.mediu()
 		if m is None:
-			self._arata(_("Bagă un stick sau un disc și alege „Caută din nou”."))
+			self._arata(_("Bagă un stick sau un disc și apasă din nou „Fă copia”."))
 			return
 		self._rezultat = []
 		pornit, mesaj = C.porneste_copia(m["id"])
@@ -367,6 +393,8 @@ class HdsCopieSetariScreen(Screen):
 	def _laInchidere(self):
 		self._inchis = True
 		self._ceas.stop()
+		if self._semnal_medii is not None and self._mediiSchimbate in self._semnal_medii:
+			self._semnal_medii.remove(self._mediiSchimbate)
 
 
 def main(session, **kwargs):

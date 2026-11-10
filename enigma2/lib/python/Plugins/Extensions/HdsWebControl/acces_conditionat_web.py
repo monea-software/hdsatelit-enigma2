@@ -491,7 +491,7 @@ function detaliuDosar(f, m){
   if(d && d.dosar){
     var cale = el(d.exista ? "a" : "span", "cale-dosar hds-derulant", d.dosar);
     cale.title = d.dosar;
-    // Exploratorul cere browser asociat si autentificarea receptorului, fara jetonul panoului.
+    // Exploratorul merge din browser, fara jetonul panoului; din casa fara parola.
     if(d.exista){ cale.href = "/fisiere?cale=" + encodeURIComponent(d.dosar); }
     loc.appendChild(cale);
     if(!d.exista){ loc.appendChild(el("div", "hds-derulant", "Dosarul nu există încă.")); }

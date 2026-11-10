@@ -6,14 +6,12 @@
 # deschis pe receptor (op "ecran"), tastele telecomenzii (op "taste") si scrierea intr-un camp de text (op "text"). Cu
 # textul ecranului si cu tastele, echipa face prin meniuri orice ar face omul cu telecomanda.
 #
-# ECRANELE PRIVATE: numai modulele de acces (orice ecran al lor, dupa clasa si dupa modul). Daca unul dintre
-# ecranele din stiva (nu numai cel de sus) e privat, tot ecranul e privat: "ecran" da numai "(ecran privat)" si clasa,
-# "taste" primeste numai EXIT, "text" si captura sunt refuzate. Textul si capturile ecranelor cu secrete primesc
-# numai un mesaj; valorile se recunosc prin aceeasi regula, inclusiv pe randurile neselectate.
+# Echipa vede toate meniurile. Numai valorile conturilor, parolelor si cheilor sunt scoase din textul si imaginea
+# trimise echipei. Ecranul omului ramane in clar. Scrierea unui secret cere oprirea asistentei inainte de prima litera.
 #
 # TASTELE: numai din lista alba TASTE (fara POWER si fara oprire), cel mult MAX_TASTE pe cerere, cu PAUZA_MS intre ele,
 # trimise ca tastele adevarate ale telecomenzii (eRCMapper.inject cu dispozitivul nativ, ca in interfata web; fara el,
-# harta de actiuni). Inainte de fiecare tasta se verifica din nou ecranul: daca a devenit privat, merge numai EXIT.
+# harta de actiuni).
 #
 # FIRUL: interfata enigma2 nu e sigura intre fire; brokerul ruleaza pe firul sesiunii. Toate atingerile ecranului merg
 # prin PeFir: cererea intra intr-o coada, firul enigma2 e trezit (reactor.callFromThread) si o face; ceasul semnului
@@ -26,6 +24,7 @@ import re
 import threading
 import time
 import unicodedata
+from functools import lru_cache
 from urllib.parse import unquote, urlsplit
 
 # lista alba a tastelor (numele din cerere -> codul Linux al tastei, ca telecomanda fizica si interfata web)
@@ -55,24 +54,14 @@ MAX_TASTE = 20
 PAUZA_MS = 400
 # dupa ultima tasta, cat se asteapta pana se citeste ecranul
 LINISTE_MS = 900
-# pe un ecran privat merge numai iesirea
-TASTE_PE_PRIVAT = ("exit",)
 TEXT_MAXIM = 200
 
-# ecranele private, dupa clasa (numele exact) si dupa tipar (clasa sau modul)
-# Paginile native pot desena conturi/secrete in afara componentelor Python: private (numai EXIT), dar omului i se spune
-# mesajul ecranului cu parola, nu "ecran privat" (acela ramane pentru ecranele modulelor de acces).
-CLASE_NATIVE_SECRETE = frozenset(("HdsNavigatorEcran", "HdsHbbtvCurat", "TastaturaParola"))
-CLASE_PRIVATE = frozenset(("CamSetup", "CamInfo", "IptvDateAcces")) | CLASE_NATIVE_SECRETE
-MODULE_PRIVATE = frozenset((
-	"Screens.CamSetup", "Screens.CamInfo", "Screens.Ci",
-))
-# orice clasa sau modul al unui modul de acces, inclusiv pluginurile
-_TIPAR_PRIVAT = re.compile(r"(?i)(cam|card)")
-# campurile de parola si de PIN (clasele elementelor de setari)
-CAMPURI_PRIVATE = ("ConfigPassword", "ConfigPIN")
-_CLASA_SECRETA = re.compile(r"(?i)(password|passwd|passphrase|parola|pininput)")
+# campurile de parola si de PIN (clasele elementelor de setari): echipa nu le scrie (scrieSetare)
+CAMPURI_PAROLA = ("ConfigPassword", "ConfigPIN")
 
+# Curatarea secretelor din textele care PLEACA spre echipa (jurnalele, Tools/HdsJurnalInterfata.py; raportul de
+# setari si tot textul brokerului, Components/HdsAsistentaBroker.mascheaza; recunoasterea randurilor secrete din
+# /setari). Nu schimba ecranul omului. Numai iesirea spre echipa pierde valorile private.
 # Cheile interne si etichetele secretelor, cu sau fara diacritice.
 _SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass|pwd|psk)(?:\b|[._])|token|secret|jeton|"
 	r"chei[ae]|api[ _.-]?key|key(?:\b|[._0-9])|(?:^|[._\s])pin(?:\b|[._0-9])|servicepin|setuppin|"
@@ -92,18 +81,42 @@ _SECRET_JURNAL = re.compile(r"(?i)(\b(?:password|passwd|passphrase|parol[ăa]|ps
 	r"api[ _.-]?key|chei[ae](?:[ _.-]?api)?|biss[0-9]*|cw|control[ _.-]?word|cuv[âa]nt[ _.-](?:de[ _.-])?control)\s*[=:]\s*)"
 	r"(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+)")
 _BEARER = re.compile(r"(?i)(\bbearer\s+)[a-z0-9._~+/=-]+")
+_VALOARE_CONT = re.compile(r"[^,;&]*")
 _ANTET_SECRET = re.compile(r"(?i)(\b(?:authorization|(?:set-)?cookie)\s*[=:]\s*).*$")
 
 
+# Fiecare regula de mai sus cere macar unul dintre semnele = : | sau cuvantul bearer (o adresa cu cont are "://"). Un
+# text fara ele nu se poate schimba, deci nu mai trece prin cele sapte expresii (rapoartele 573125 si 891312:
+# capturile pentru web verificau la fiecare schimbare de pe ecran toate randurile listelor mari ale AJPanel, iar firul
+# principal statea ocupat cate doua minute).
+_POATE_SECRET = re.compile(r"(?i)[=:|]|bearer")
+_BETA_ID = re.compile(r"(?i)hds_beta\.(?:id|cod)\b")
+
+
 def cheieSecreta(cheie):
-	text = "".join(c for c in unicodedata.normalize("NFKD", str(cheie)) if not unicodedata.combining(c))
+	return _cheieSecreta(str(cheie))
+
+
+@lru_cache(maxsize=4096)
+def _cheieSecreta(cheie):
+	text = "".join(c for c in unicodedata.normalize("NFKD", cheie) if not unicodedata.combining(c))
 	if not _CONTEXT_CHEIE_ACCES.search(text):
 		text = _CHEIE_TASTA.sub("", text)
-	return bool(_SECRET.search(text) or re.search(r"(?i)hds_beta\.(?:id|cod)\b", text))
+	return bool(_SECRET.search(text) or _BETA_ID.search(text))
+
+
+@lru_cache(maxsize=8192)
+def _textCuSecret(text):
+	"""Raspunsul pentru acelasi text se tine minte: listele se reverifica la fiecare schimbare de pe ecran."""
+	return mascheazaSecrete(text) != text
 
 
 def mascheazaSecrete(text):
 	"""Pastreaza etichetele si adresele, inlocuind numai valorile secrete."""
+	if not text:
+		return ""
+	if not _POATE_SECRET.search(text):
+		return mascheazaConturi(text) if "%3a" in text.lower() else text
 	randuri = []
 	for rand in (text or "").splitlines():
 		rand = _URL_PAROLA.sub(r"\1***\2", rand)
@@ -112,18 +125,23 @@ def mascheazaSecrete(text):
 			if cheieSecreta(unquote(m.group(2))) or m.group(2).lower() in ("pw", "sid", "sessionid", "sig", "signature")
 			else m.group(0), rand)
 		m = _ATRIBUIRE.match(rand)
-		if m and cheieSecreta(m.group(1)):
+		if m and (cheieSecreta(m.group(1)) or _etichetaPrivata(m.group(1), False)):
 			rand = m.group(1) + m.group(2) + "***"
+		elif m and _etichetaPrivata(m.group(1), True):
+			# numele de utilizator: numai valoarea lui, pana la , ; sau & (optiunile de dupa, de pilda password=, trec
+			# prin curatarea de mai jos)
+			valoare = _VALOARE_CONT.match(m.group(3)).group(0)
+			rand = m.group(1) + m.group(2) + "***" + m.group(3)[len(valoare):]
 		rand = _ANTET_SECRET.sub(r"\1***", rand)
 		taste = () if _CONTEXT_CHEIE_ACCES.search(rand) else tuple(_CHEIE_TASTA.finditer(rand))
 		rand = _SECRET_JURNAL.sub(lambda m: m.group(0) if any(t.start() <= m.start() < t.end() for t in taste)
 			else m.group(1) + "***", rand)
 		rand = _BEARER.sub(r"\1***", rand)
 		randuri.append(rand)
-	return "\n".join(randuri)
+	return mascheazaConturi("\n".join(randuri))
 
-# Conturile din adresele salvate, pentru operatia setari din Components/HdsAsistentaBroker.py. Pe ecrane numele ramane vizibil: echipa il
-# vede ca omul. Si forma din referintele de serviciu (http%3a//nume%3aparola@gazda), unde mascheazaSecrete nu ajunge.
+# Conturile din adresele salvate nu pleaca spre echipa, inclusiv forma din referintele de serviciu
+# (http%3a//nume%3aparola@gazda), unde mascheazaSecrete nu ajunge.
 _URL_CONT = re.compile(r"(?i)([a-z][a-z0-9+.-]*(?:://|%3a//))[^/\s@?#]*(@|%40)")
 _URL_CALE_CONT_CODAT = re.compile(r"(?i)(%3a//[^/\s]+/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/")
 _URL_UTILIZATOR = re.compile(r"(?i)([?&;](?:user|username|usr|uname|login|utilizator)=)[^&#;\s]*")
@@ -153,6 +171,133 @@ def _jurnal(text):
 def N_(text):
 	"""Marcaj pentru catalog; traducerea se face cand mesajul este afisat."""
 	return text
+
+
+TEXT_OPRESTE_SECRET = N_("Oprește asistența de la distanță înainte să scrii parola sau cheia. "
+	"O poți porni din nou după ce salvezi. Echipa HD Satelit nu are nevoie de parola ta.")
+TEXT_OPRESTE_INTERFATA = N_("Oprește asistența de la distanță înainte să deschizi interfața web a modulului. "
+	"O poți porni din nou după ce închizi pagina.")
+
+
+def asistentaActiva():
+	"""Cat poate pleca ceva spre echipa. Dupa Oprește (SE_OPRESTE) nu mai pleaca nimic: un raspuns facut dupa oprire se
+	arunca (HdsAsistenta.Sesiune._trimite_raspuns si _ceruta_raspuns), deci omul poate scrie parola imediat, fara sa
+	astepte cererea serverului care se mai incheie."""
+	from Components import HdsAsistenta
+	sesiune = HdsAsistenta.sesiune()
+	return sesiune is not None and sesiune.activa()
+
+
+def _sesiuneInterfata():
+	"""Sesiunea enigma2 pentru campurile care nu-si stiu ecranul (Input fara hdsSession, ConfigPassword in afara
+	unei liste): mesajul trebuie sa apara, nu doar tasta sa fie oprita."""
+	try:
+		from Screens.HdsAsistentaSemn import _session
+		return _session()
+	except Exception:
+		return None
+
+
+def cereOprirePentruSecret(session=None):
+	"""True refuza scrierea. Nu retine si nu reia caracterul care a pornit avertismentul."""
+	if not asistentaActiva():
+		return False
+	if session is None:
+		session = _sesiuneInterfata()
+	if session is not None and not getattr(session, "hdsAvertismentSecret", False):
+		from Screens.MessageBox import MessageBox
+		session.hdsAvertismentSecret = True
+
+		def raspuns(opreste=False):
+			session.hdsAvertismentSecret = False
+			if opreste:
+				from Components import HdsAsistenta
+				HdsAsistenta.opreste()
+
+		session.openWithCallback(raspuns, MessageBox, _(TEXT_OPRESTE_SECRET), MessageBox.TYPE_YESNO,
+			default=False, list=[(_("Oprește asistența"), True), (_("Înapoi"), False)])
+	return True
+
+
+_CONT = re.compile(r"(?i)(?:^|[._\s-])(?:user(?:name)?|usr|uname|login|utilizator)(?:[0-9]*$|[._\s-])|nume\s+de\s+utilizator")
+# Etichetele ecranelor sunt traduse: parola si numele de utilizator in limbile imaginii (dupa scoaterea diacriticelor),
+# si cheile lipite fara despartitor (httpuser, httppwd din sectiunea [webif] a modulelor de acces).
+_PAROLA_LIMBI = re.compile(r"(?i)passw|pwd(?:\b|[._0-9])|kennwort|mot de passe|contrase|wachtw|has[lł]o|heslo|"
+	r"jelszo|lozink|geslo|salasan|adgangskode|losenord|passord|parool|slaptazod|sifre|senha|lykilor|"
+	r"парол|κωδικ|كلمة (?:المرور|السر)")
+_CONT_LIMBI = re.compile(r"(?i)user(?:name)?[0-9]*\s*$|benutzer|utilisateur|usuari|utente|gebruiker|uzytkownik|"
+	r"uzivatel|felhasznalo|korisni[kc]|uporabni|kayttaja|bruger|anvandar|bruker|kasutaja|naudotoj|lietotaj|"
+	r"kullan[ıi]c[ıi]|notand|utilizador|пользовател|"
+	r"користувач|корисни|"
+	r"χρηστη|مستخدم")
+
+
+@lru_cache(maxsize=4096)
+def _etichetaPrivata(eticheta, cont):
+	"""Parola (si, cu cont=True, numele de utilizator) dupa o eticheta in orice limba a imaginii."""
+	text = "".join(c for c in unicodedata.normalize("NFKD", eticheta) if not unicodedata.combining(c))
+	if _PAROLA_LIMBI.search(text):
+		return True
+	return bool(cont and (_CONT.search(text) or _CONT_LIMBI.search(text)))
+
+
+def campSecret(element=None, eticheta="", cont=False):
+	"""Un camp de parola/cheie; cont=True include si numele de utilizator numai pentru iesirea spre echipa."""
+	return bool(getattr(element, "hdsSecret", False) or (element is not None and _elementParola(element))
+		or cheieSecreta(eticheta) or _etichetaPrivata(str(eticheta), bool(cont)))
+
+
+def _componentaSecreta(comp, nume):
+	"""O componenta a ecranului (Label, StaticText) cu valoare privata, dupa marcaj, clasa sau numele ei. Tastele
+	colorate (key_red, key_green ...) spun numai ce face tasta: numele lor nu le face secrete."""
+	if str(nume).startswith("key_"):
+		return campSecret(comp)
+	return campSecret(comp, nume, cont=True)
+
+
+def ecranCuCampSecret(ecran):
+	if getattr(ecran, "hdsCampSecret", False):
+		return True
+	try:
+		cur = ecran["config"].getCurrent()
+		if cur and len(cur) > 1:
+			return campSecret(cur[1], cur[0])
+	except Exception:
+		pass
+	return campSecret(eticheta=_titlu(ecran))
+
+
+def interfataLocalaBlocata(adresa, interfete=None, rezolva=None, verifica_chiar_oprita=False):
+	"""Pe fir separat: numai adresele locale pe porturile modulelor active sunt oprite cat merge asistenta."""
+	if not verifica_chiar_oprita and not asistentaActiva():
+		return False
+	import socket
+	try:
+		from Components.HdsParolaLocala import esteAdresaLocala
+		u = urlsplit(adresa)
+		if u.scheme.lower() not in ("http", "https"):
+			return False
+		port = u.port or (443 if u.scheme.lower() == "https" else 80)
+		gazda = (u.hostname or "").rstrip(".").lower()
+		locala = gazda in ("localhost", "localhost.localdomain", socket.gethostname().lower())
+		if esteAdresaLocala(gazda) or gazda in ("0.0.0.0", "::"):
+			locala = True
+		if not locala:
+			adrese = [r[4][0].split("%", 1)[0]
+				for r in (rezolva or socket.getaddrinfo)(gazda, port, 0, socket.SOCK_STREAM)]
+			locala = any(esteAdresaLocala(ip) or ip in ("0.0.0.0", "::") for ip in adrese)
+		if not locala:
+			return False
+		if interfete is None:
+			from Components import HdsModuleAcces, HdsInterfeteCam
+			interfete = list(HdsModuleAcces.interfete_web())
+			rezultat = HdsInterfeteCam.rezultat() or {}
+			for modul in rezultat.get("cam_uri", ()):
+				interfete.extend(i for i in modul.get("interfete", ()) if i.get("web"))
+		return port in {int(i.get("port") or 0) for i in interfete}
+	except Exception:
+		# O navigare locala care nu se poate verifica nu pleaca spre interfata cu conturile omului.
+		return True
 
 
 # ---------------------------------------------------------------- tastele
@@ -205,7 +350,7 @@ def apasaTasta(cod, lung=False):
 	harta.keyPressed("dreambox advanced remote control (native)", cod, 1)
 
 
-# ---------------------------------------------------------------- stiva ecranelor si ecranele private
+# ---------------------------------------------------------------- stiva ecranelor
 
 def stiva(session):
 	"""Ecranele deschise, de jos in sus: cele din session.dialog_stack (tupluri (ecran, aratat)) si cel de sus."""
@@ -231,8 +376,8 @@ def _modul(ecran):
 	return getattr(type(ecran), "__module__", "") or ""
 
 
-def _elementPrivat(element):
-	return bool(getattr(element, "hds_asistenta_secret", False)) or any(n in CAMPURI_PRIVATE for n in _clase(element))
+def _elementParola(element):
+	return any(n in CAMPURI_PAROLA for n in _clase(element))
 
 
 def _intrariConfig(ecran):
@@ -254,451 +399,6 @@ def _intrariConfig(ecran):
 
 def _esteElement(x):
 	return hasattr(x, "getText") and hasattr(x, "value") and not isinstance(x, (str, bytes))
-
-
-def ecranPrivat(ecran):
-	"""True numai pentru ecranele modulelor de acces, inclusiv clasele de baza si pluginurile."""
-	if ecran is None:
-		return False
-	clase = _clase(ecran)
-	modul = _modul(ecran)
-	if any(c in CLASE_PRIVATE for c in clase) or modul in MODULE_PRIVATE:
-		return True
-	if any(_TIPAR_PRIVAT.search(c) for c in clase) or _TIPAR_PRIVAT.search(modul.rsplit(".", 1)[-1] if modul else ""):
-		return True
-	if modul.startswith("Plugins.") and _TIPAR_PRIVAT.search(modul):
-		return True
-	return False
-
-
-def privat(ecrane, ssh_deschis=False):
-	"""(privat, clasa): primul ecran al modulelor de acces din stiva; argumentul SSH ramane pentru compatibilitate."""
-	for e in ecrane:
-		if ecranPrivat(e):
-			return True, type(e).__name__
-	return False, ""
-
-
-def _privatModule(ecrane, ssh_deschis=False):
-	"""Ca privat(), dar fara paginile native cu secrete (CLASE_NATIVE_SECRETE): pentru mesajul spus asistentei, ca un
-	ecran al modulelor de acces sa nu fie dat drept ecran cu parola."""
-	for e in ecrane:
-		if ecranPrivat(e) and not any(c in CLASE_NATIVE_SECRETE for c in _clase(e)):
-			return True, type(e).__name__
-	return False, ""
-
-
-def _randSecret(rand):
-	return (isinstance(rand, (tuple, list)) and len(rand) >= 2 and _esteElement(rand[1])
-		and (_elementPrivat(rand[1]) or cheieSecreta(rand[0])))
-
-
-def _selectatSecret(ecran):
-	try:
-		componente = list(ecran.values())
-	except Exception:
-		return False
-	for comp in componente:
-		f = getattr(comp, "getCurrent", None)
-		try:
-			if callable(f) and _randSecret(f()):
-				return True
-		except Exception:
-			pass
-		lista = getattr(comp, "list", None)
-		i = _indexAles(comp)
-		if isinstance(lista, (list, tuple)) and i is not None and 0 <= i < len(lista) and _randSecret(lista[i]):
-			return True
-	return False
-
-
-def _inputSecret(comp):
-	return ((_esteElement(comp) and _elementPrivat(comp)) or ("Input" in _clase(comp)
-		and getattr(comp, "type", None) == getattr(comp, "PIN", 1)))
-
-
-def _componentaSecreta(ecran, nume, comp):
-	if nume.startswith("key_"):
-		return False
-	if getattr(comp, "hds_asistenta_secret", False) or _inputSecret(comp) or cheieSecreta(nume):
-		return True
-	# Codul de asociere este impartit in mai multe componente vizuale.
-	return "HdsCodAsociere" in _clase(ecran) and bool(re.match(r"^cod\d*$", nume))
-
-
-def mesajEcranSecret(ecrane=None):
-	if ecrane is None:
-		nume = _NUME_SECRET_WEB
-	else:
-		ecran = _ecranCuSecrete(ecrane)
-		nume = _numeEcranSecret(ecran) if ecran is not None else ""
-	if nume:
-		text = N_("Pe televizor e deschis ecranul protejat: %s. Se vede numai acolo.")
-	elif _REDESENARE_WEB is not None:
-		text = N_("Captura se pregătește după închiderea ecranului protejat. Reîncearcă.")
-	else:
-		text = N_("Captura nu este disponibilă acum. Starea ecranului se verifică.")
-	try:
-		text = _(text)
-	except NameError:
-		pass
-	return text % nume if nume else text
-
-
-def _numeEcranSecret(ecran):
-	titlu = _ascundeValori(mascheazaSecrete(_titlu(ecran)), _secreteEcrane([ecran]))
-	return titlu.strip()[:120] or type(ecran).__name__
-
-
-def _portiuneLista(lista, comp):
-	"""La liste mari cu widget cunoscut: pagina vizibila si vecinii, actualizate la derulare."""
-	if len(lista) <= 1000 or comp is None:
-		return lista
-	apeluri = getattr(comp, "onSelectionChanged", None)
-	if not isinstance(apeluri, list):
-		return lista
-	# Legatura ramane valabila si cand widgetul se creeaza dupa prima verificare a sursei.
-	if _actualizeazaCapturaWeb not in apeluri:
-		apeluri.insert(0, _actualizeazaCapturaWeb)
-	# MenuList are widgetul direct, iar Sources.List prin lantul master al convertoarelor.
-	obiect, vazute = comp, set()
-	while obiect is not None and id(obiect) not in vazute:
-		vazute.add(id(obiect))
-		widget = getattr(obiect, "instance", None)
-		try:
-			sus = widget.getTopIndex()
-			inaltime = widget.getItemHeight()
-			if not isinstance(sus, int) or not 0 <= sus < len(lista) or inaltime <= 0:
-				break
-			cate = widget.size().height() // inaltime + 1
-			if not isinstance(cate, int) or cate <= 0:
-				break
-		except (AttributeError, TypeError, ZeroDivisionError):
-			obiect = getattr(obiect, "master", None)
-			continue
-		inceput = max(0, sus - RANDURI_LISTA)
-		sfarsit = min(len(lista), sus + cate + RANDURI_LISTA)
-		return lista[inceput:sfarsit]
-	# Fara geometria paginii nu ghicim ce randuri deseneaza pluginul: verificam sursa intreaga.
-	return lista
-
-
-def _listaCuSecrete(lista, comp=None):
-	"""Un secret gasit refuza lista; numarul nodurilor nu este dovada unui secret."""
-	de_vazut, vazute = [_portiuneLista(lista, comp)], set()
-	while de_vazut:
-		x = de_vazut.pop()
-		if isinstance(x, str):
-			if mascheazaSecrete(x) != x:
-				return True
-		elif id(x) not in vazute:
-			vazute.add(id(x))
-			if isinstance(x, (list, tuple)):
-				de_vazut.extend(y for y in x if y is not None and not isinstance(y, (int, float, bool, bytes)))
-			elif x is not None and not isinstance(x, (int, float, bool, bytes)):
-				# Atributele vizuale sunt texte, nu arbori de obiecte regenerati de proprietati.
-				de_vazut.extend(v for nume in _ATRIBUTE_TEXT if isinstance(v := getattr(x, nume, None), str))
-	return False
-
-
-def _ecranCuSecrete(ecrane, mod_ascii=False):
-	"""Ecranul care contine secretul, pentru aceeasi regula si acelasi mesaj peste tot."""
-	if tastaturaSecreta(ecrane, mod_ascii):
-		return ecrane[-1]
-	for ecran in ecrane:
-		# Numele tehnic nu este un secret: InfoBarUnhandledKey apartine barei TV.
-		if ecranPrivat(ecran) or any(n in ("HdsAccesSsh", "HdsCodAsociere")
-				or _CLASA_SECRETA.search(n) for n in _clase(ecran)):
-			return ecran
-		if getattr(ecran, "hds_asistenta_secret", False) or cheieSecreta(_titlu(ecran)):
-			return ecran
-		if any(_randSecret(rand) for rand in _intrariConfig(ecran)):
-			return ecran
-		f = getattr(ecran, "secreteAsistenta", None)
-		if callable(f) and any(v is not None and str(v) for v in (f() or [])):
-			return ecran
-		for nume, comp in ecran.items():
-			if _componentaSecreta(ecran, nume, comp):
-				return ecran
-			t = _text(comp)
-			if t and mascheazaSecrete(t) != t:
-				return ecran
-			lista = getattr(comp, "list", None)
-			if isinstance(lista, (list, tuple)) and _listaCuSecrete(lista, comp):
-				return ecran
-	return None
-
-
-def ecranCuSecrete(ecrane, mod_ascii=False):
-	"""Aceeasi regula pentru text si capturile web, inclusiv randurile neselectate."""
-	return _ecranCuSecrete(ecrane, mod_ascii) is not None
-
-
-# Scrise numai pe firul interfetei, citite atomic si de workerii capturii.
-# Registrul include si ferestrele nemodale, care nu apar in session.dialog_stack.
-_ECRANE_WEB = {}
-_STARE_CAPTURA_WEB = (0, True)
-_NUME_SECRET_WEB = ""
-_REDESENARE_WEB = None
-_CEAS_REDESENARE_WEB = None
-
-
-def confirmaRedesenareWeb(epoca):
-	global _REDESENARE_WEB
-	if _STARE_CAPTURA_WEB == (epoca, False) and _REDESENARE_WEB == epoca:
-		_REDESENARE_WEB = None
-
-
-def _asteaptaRedesenareWeb(epoca):
-	"""Pe firul GUI: redesenare completa, apoi confirmarea cozii native, fara termen care sa permita captura."""
-	global _CEAS_REDESENARE_WEB
-	if _CEAS_REDESENARE_WEB is not None:
-		_CEAS_REDESENARE_WEB.stop()
-		_CEAS_REDESENARE_WEB = None
-	try:
-		from enigma import eTimer, getDesktop
-		desktop = getDesktop(0)
-		ceas = eTimer()
-		ceruta = [False]
-		def tic():
-			ceas.stop()
-			if _STARE_CAPTURA_WEB != (epoca, False) or _REDESENARE_WEB != epoca:
-				return
-			try:
-				if not ceruta[0]:
-					ceruta[0] = desktop.requestCaptureRedraw() is True
-				elif desktop.captureReady():
-					confirmaRedesenareWeb(epoca)
-					return
-				ceas.start(25, True)
-			except Exception:
-				# API lipsa sau eroare nativa: ecranul ramane protejat.
-				return
-		ceas.callback.append(tic)
-		_CEAS_REDESENARE_WEB = ceas
-		ceas.start(0, True)
-	except Exception:
-		pass
-
-
-def _actualizeazaCapturaWeb():
-	"""Epoca creste numai cand starea secretului se schimba (ecran cu secret aparut sau inchis). O fereastra obisnuita
-	deschisa sau inchisa in timpul unei capturi (bara de volum, InfoBar care se ascunde, un submeniu) nu o invalideaza;
-	trecerea secret -> fara secret creste epoca si cere redesenarea inainte de urmatoarea captura."""
-	global _STARE_CAPTURA_WEB, _REDESENARE_WEB, _NUME_SECRET_WEB
-	try:
-		ecrane, vazute = [], set()
-		for ecran in list(_ECRANE_WEB.values()):
-			for e in [ecran] + stiva(getattr(ecran, "session", None)):
-				if id(e) not in vazute:
-					vazute.add(id(e))
-					ecrane.append(e)
-		ecran_secret = _ecranCuSecrete(ecrane)
-		secret = ecran_secret is not None
-		_NUME_SECRET_WEB = _numeEcranSecret(ecran_secret) if secret else ""
-	except Exception:
-		secret = True
-		_NUME_SECRET_WEB = ""
-	epoca, vechi = _STARE_CAPTURA_WEB
-	if vechi != secret:
-		epoca += 1
-	repicteaza = not secret and (vechi or (_REDESENARE_WEB is not None and _REDESENARE_WEB != epoca))
-	if repicteaza:
-		_REDESENARE_WEB = epoca
-	_STARE_CAPTURA_WEB = (epoca, secret)
-	if secret:
-		_REDESENARE_WEB = None
-	elif repicteaza:
-		_asteaptaRedesenareWeb(epoca)
-
-
-def schimbaEcranWeb(ecran, vizibil):
-	if vizibil:
-		_ECRANE_WEB[id(ecran)] = ecran
-	else:
-		_ECRANE_WEB.pop(id(ecran), None)
-	_actualizeazaCapturaWeb()
-
-
-def schimbaComponentaWeb(comp):
-	# Notificarea preceda desenarea: un secret nou invalideaza capturile deja pornite.
-	if any(any(c is comp for c in e.values()) for e in list(_ECRANE_WEB.values())):
-		_actualizeazaCapturaWeb()
-
-
-def stareCapturaWeb():
-	epoca, secret = _STARE_CAPTURA_WEB
-	return epoca, secret or _REDESENARE_WEB is not None
-
-
-def tastaturaSecreta(ecrane, mod_ascii=False):
-	"""Contextul urmareste campul selectat din parinte, inclusiv tastaturile unor pluginuri."""
-	if not ecrane:
-		return False
-	sus = ecrane[-1]
-	if getattr(sus, "hds_asistenta_secret", False):
-		return True
-	try:
-		comp = list(sus.values())
-	except Exception:
-		comp = []
-	if any(_inputSecret(c) for c in comp) or "PinInput" in _clase(sus):
-		return True
-	scriere = (mod_ascii or any(re.search(r"(?i)(keyboard|numericaltextinput|inputbox)", c) for c in _clase(sus))
-		or any("Input" in _clase(c) for c in comp))
-	if not scriere:
-		return False
-	if cheieSecreta(_titlu(sus)):
-		return True
-	for e in ecrane[:-1]:
-		if _selectatSecret(e) or "HdsAccesSsh" in _clase(e) or "HdsCodAsociere" in _clase(e):
-			return True
-	return _selectatSecret(sus)
-
-
-def _secreteEcrane(ecrane):
-	"""Valorile cunoscute se ascund si in proza tradusa, independent de eticheta componentei."""
-	secrete = set()
-	for ecran in ecrane:
-		f = getattr(ecran, "secreteAsistenta", None)
-		valori = list(f() or []) if callable(f) else []
-		for rand in _intrariConfig(ecran):
-			if _randSecret(rand):
-				v = rand[1].value
-				valori.extend(v if isinstance(v, (list, tuple)) else [v])
-		for v in valori:
-			if v is not None and str(v) and str(v) != "***":
-				secrete.add(str(v))
-	return sorted(secrete, key=len, reverse=True)
-
-
-def _ascundeValori(text, secrete):
-	# In URL se pastreaza utilizatorul si gazda chiar daca coincid cu o parola cunoscuta.
-	parti = re.split(r"(?i)([a-z][a-z0-9+.-]*://[^\s]+)", text)
-	for i, parte in enumerate(parti):
-		for secret in secrete:
-			if i % 2 == 0 or "://" in secret:
-				parte = parte.replace(secret, "***")
-		parti[i] = parte
-	return "".join(parti)
-
-
-def _puneText(comp, text):
-	# ScrollLabel.setText revine la prima pagina; captura trebuie sa pastreze pozitia omului.
-	lung = getattr(comp, "long_text", None)
-	pozitie = lung.position() if lung is not None else None
-	comp.setText(text)
-	if pozitie is not None:
-		lung.move(pozitie)
-		if getattr(comp, "total", None):
-			comp.updateScrollbar()
-
-
-def motivRefuzCaptura(ecrane, mod_ascii=False):
-	"""Nici textul, nici captura unui ecran cu secrete nu se trimit la distanta. Ecranul privat (modulele de acces) se
-	spune intai, cu numele lui: altfel asistenta ar crede ca e o parola si n-ar afla ca acolo merge numai EXIT."""
-	e_privat, clasa = _privatModule(ecrane)
-	if e_privat:
-		return "(ecran privat: %s; captura refuzata)" % clasa
-	if ecranCuSecrete(ecrane, mod_ascii):
-		return mesajEcranSecret(ecrane)
-	if tastaturaSecreta(ecrane, mod_ascii) or any(_selectatSecret(e) for e in ecrane):
-		return "(camp secret selectat sau tastatura secreta; captura refuzata)"
-	return ""
-
-
-def mascheazaCaptura(ecrane):
-	"""Mascheaza componentele desenate fara sa schimbe valorile setarilor. Intoarce restaurarea si verificarea."""
-	restaurari, verificari = [], []
-	secrete = _secreteEcrane(ecrane)
-	vazute = set()
-	def amprenta():
-		return tuple((id(e), tuple((n, id(c), tuple(id(r) for r in getattr(c, "list", []))
-			if isinstance(getattr(c, "list", None), (list, tuple)) else ()) for n, c in e.items())) for e in ecrane)
-	initiala = amprenta()
-	try:
-		for ecran in ecrane:
-			for nume, comp in ecran.items():
-				if id(comp) in vazute:
-					continue
-				vazute.add(id(comp))
-				if _componentaSecreta(ecran, nume, comp) and "CanvasSource" in _clase(comp):
-					from Components.HdsMarireText import fontCod
-					try:
-						from skin import factorHds
-						sx, sy, sf = factorHds()
-					except (ImportError, AttributeError):
-						sx, sy, sf = 1.0, 1.0, 1.0
-					vechi = list(comp.drawlist[1])
-					comp.clear()
-					comp.fill(0, 0, 4096, 4096, 0x00ffffff)
-					comp.writeText(round(16 * sx), round(16 * sy), max(1, round(400 * sx)), max(1, round(100 * sy)),
-						0x00000000, 0x00ffffff, fontCod("Regular", max(1, round(48 * sf))), "***")
-					comp.flush()
-					secventa = comp.drawlist[0]
-					def refaceCanvas(comp=comp, vechi=vechi, secventa=secventa):
-						if comp.drawlist[0] == secventa:
-							comp.clear()
-							comp.drawlist[1].extend(vechi)
-							comp.flush()
-					restaurari.append(refaceCanvas)
-					verificari.append(lambda comp=comp, secventa=secventa: comp.drawlist[0] == secventa)
-					continue
-				t = _text(comp)
-				if t is not None:
-					mascat = "***" if _componentaSecreta(ecran, nume, comp) else _ascundeValori(mascheazaSecrete(t), secrete)
-					if mascat != t:
-						setter = getattr(comp, "setText", None)
-						if not callable(setter):
-							raise ValueError("componenta secreta fara setText")
-						_puneText(comp, mascat)
-						restaurari.append(lambda c=comp, vechi=t, nou=mascat: _puneText(c, vechi) if _text(c) == nou else None)
-					verificari.append(lambda c=comp, nou=mascat: _text(c) == nou)
-				lista = getattr(comp, "list", None)
-				if not isinstance(lista, (list, tuple)):
-					continue
-				for rand in lista:
-					if not isinstance(rand, (list, tuple)) or len(rand) < 2 or not _esteElement(rand[1]):
-						continue
-					el = rand[1]
-					secret = _randSecret(rand)
-					valoare = _valoare(el)
-					if not secret and _ascundeValori(mascheazaSecrete(valoare), secrete) == valoare:
-						continue
-					f = getattr(el, "getMulti", None)
-					if not callable(f):
-						raise ValueError("camp secret fara getMulti")
-					propriu = el.__dict__.get("getMulti")
-					# getMulti poate taia schema URL prin visible_width/offset; se mascheaza valoarea intreaga.
-					valoare_mascata = "***" if secret else _ascundeValori(mascheazaSecrete(valoare), secrete)
-					def mascat(selected, valoare=valoare_mascata):
-						return "text", valoare
-					el.getMulti = mascat
-					verificari.append(lambda el=el, mascat=mascat: el.getMulti is mascat)
-					def reface(el=el, propriu=propriu, comp=comp, rand=rand):
-						if propriu is None:
-							del el.getMulti
-						else:
-							el.getMulti = propriu
-						comp.invalidate(rand)
-					restaurari.append(reface)
-					comp.invalidate(rand)
-	except Exception:
-		for f in reversed(restaurari):
-			f()
-		raise
-	def restaureaza():
-		for f in reversed(restaurari):
-			f()
-	return restaureaza, lambda: amprenta() == initiala and all(f() for f in verificari)
-
-
-def _sshDeschis():
-	try:
-		from Components import HdsAccesSsh
-		return bool(HdsAccesSsh.ecranDeschis())
-	except Exception:
-		return False
 
 
 # ---------------------------------------------------------------- textul ecranului
@@ -764,8 +464,12 @@ def _textRand(e, adancime=0):
 
 
 def _valoare(element):
-	if _elementPrivat(element):
-		return "***"
+	if _elementParola(element):
+		# parola: ce arata randul pe televizor ("pusă" / "nepusă", sau textul cat omul il scrie)
+		try:
+			return str(element.getMulti(False)[1])
+		except Exception:
+			return ""
 	try:
 		v = element.getText()
 	except Exception:
@@ -805,7 +509,8 @@ def _randuriLista(nume, comp):
 		e = lista[i]
 		semn = ">" if i == ales else " "
 		if isinstance(e, (list, tuple)) and len(e) >= 2 and _esteElement(e[1]):
-			rand = "%s [%d] %s = %s" % (semn, i + 1, e[0], "***" if _randSecret(e) else _valoare(e[1]))
+			valoare = "[ascuns]" if campSecret(e[1], e[0], cont=True) else _valoare(e[1])
+			rand = "%s [%d] %s = %s" % (semn, i + 1, e[0], valoare)
 			if i == ales and len(e) > 2 and isinstance(e[2], str) and e[2].strip():
 				rand += "\n      ajutor: " + e[2].strip()
 		else:
@@ -847,15 +552,20 @@ def _numeServiciu(ref, centru):
 
 def _randuriServicii(nume, comp):
 	"""Lista de canale sau de buchete (Components/ServiceList: eListbox cu eListboxServiceContent, fara lista Python):
-	numele din radacina ei, cu randul ales, fara referinte. Lista de canale nu e privata; secretele sunt mascate
-	separat. None cand comp nu e o lista de servicii."""
+	numele din radacina ei, cu randul ales, fara referinte. None cand comp nu e o lista de servicii."""
 	f = getattr(comp, "getRootServices", None)
 	if not callable(f) or not callable(getattr(comp, "getCurrent", None)):
 		return None
 	try:
 		from enigma import eServiceCenter, eServiceReference
 		centru = eServiceCenter.getInstance()
-		refs = [eServiceReference(s) for s in f()]
+		root = getattr(comp, "getRoot", lambda: None)()
+		adaugate = getattr(comp, "hdsAdaugate", None)
+		if root is not None and "FROM SATELLITES" in (root.getPath() or "") and isinstance(adaugate, list):
+			# Satelitii sunt numiti si grupati pe TV; recitirea radacinii da dosare brute fara nume.
+			refs = list(adaugate)
+		else:
+			refs = [eServiceReference(s) for s in f()]
 		curent = comp.getCurrent()
 		ales_cheie = _cheieServiciu(curent) if curent is not None and curent.valid() else ""
 	except Exception as e:
@@ -892,23 +602,13 @@ def _randuriServicii(nume, comp):
 
 def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	"""Textul ecranului de sus, pentru echipa: stiva (clasele si titlurile), listele cu randul ales, setarile
-	"eticheta = valoare", textele si tastele colorate. Ecran privat: numai "(ecran privat)" si clasele."""
+	"eticheta = valoare", textele si tastele colorate, la fel cum se vad pe televizor. `ssh_deschis` ramane in
+	semnatura pentru apelurile de dinainte (nu mai schimba nimic)."""
 	if not ecrane:
 		return "(niciun ecran deschis)"
-	# Ecranul privat intai: numai clasele (fara texte si titluri), ca asistenta sa stie ca acolo merge numai EXIT.
-	e_privat, clasa = _privatModule(ecrane, ssh_deschis)
-	if e_privat:
-		return "(ecran privat) %s\nEcrane: %s\nPe un ecran privat merge numai EXIT." % (clasa,
-			" > ".join(type(e).__name__ for e in ecrane))
-	if ecranCuSecrete(ecrane, mod_ascii):
-		return mesajEcranSecret(ecrane)
 	cap = []
-	secrete = _secreteEcrane(ecrane)
-	tastatura_secreta = tastaturaSecreta(ecrane, mod_ascii)
 	for e in ecrane:
 		t = _titlu(e)
-		if e is ecrane[-1] and tastatura_secreta:
-			t = "***"
 		cap.append('%s "%s"' % (type(e).__name__, t) if t else type(e).__name__)
 	sus = ecrane[-1]
 	parti = ["Ecrane: " + " > ".join(cap),
@@ -922,20 +622,19 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	for nume, comp in componente:
 		if nume == "Title":
 			continue
-		if tastatura_secreta and not nume.startswith("key_"):
-			texte.append("  %s: ***" % nume)
-			continue
 		r = _randuriLista(nume, comp)
 		if r is None:
 			r = _randuriServicii(nume, comp)
 		if r is not None:
 			liste.extend(r)
 			continue
+		if _componentaSecreta(comp, nume) or (getattr(sus, "hdsCampSecret", False) and nume in ("text", "input")):
+			texte.append("  %s: [ascuns]" % nume)
+			continue
 		t = _text(comp)
-		if _componentaSecreta(sus, nume, comp):
-			t = "***"
 		if t is None or not t.strip():
 			continue
+		t = mascheazaSecrete(t)
 		t = " ".join(t.split()) if len(t) < 300 else t.strip()
 		if nume.startswith("key_"):
 			taste.append("%s=%s" % (nume[4:], t))
@@ -950,7 +649,121 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	text = "\n".join(parti)
 	if len(text) > TEXT_ECRAN_MAX:
 		text = text[:TEXT_ECRAN_MAX] + "\n... (taiat)"
-	return _ascundeValori(mascheazaSecrete(text), secrete)
+	return mascheazaSecrete(text)
+
+
+def _instanteComponenta(ecran, comp):
+	instanta = getattr(comp, "instance", None)
+	if instanta is not None:
+		return [instanta]
+	return [r.instance for r in getattr(ecran, "renderer", ())
+		if getattr(r, "source", None) is comp and getattr(r, "instance", None) is not None]
+
+
+def _randSecret(rand):
+	if isinstance(rand, (tuple, list)) and len(rand) >= 2 and _esteElement(rand[1]):
+		return campSecret(rand[1], rand[0], cont=True) or _textCuSecret(str(rand[1].getText()))
+	if _textCuSecret(_textRand(rand)):
+		return True
+	# Listele multi-content pot avea adrese lungi pe care rezumatul textului le omite.
+	if isinstance(rand, (tuple, list)):
+		return any(_randSecret(x) for x in rand if isinstance(x, (str, tuple, list)))
+	return isinstance(rand, str) and _textCuSecret(rand)
+
+
+def _dreptunghi(instanta):
+	p = instanta.getAbsolutePosition()
+	s = instanta.size()
+	return p.x(), p.y(), s.width(), s.height()
+
+
+def dreptunghiuriSecrete(ecrane):
+	"""Zonele credentialelor din OSD. None refuza captura cand pozitia nu poate fi aflata sigur."""
+	rez = []
+	for ecran in ecrane:
+		if getattr(ecran, "shown", True) is False:
+			continue
+		try:
+			componente = list(ecran.items())
+		except Exception:
+			continue
+		for nume, comp in componente:
+			lista = getattr(comp, "list", None)
+			secrete = [i for i, rand in enumerate(lista or ()) if _randSecret(rand)] \
+				if isinstance(lista, (tuple, list)) else []
+			secret = (_componentaSecreta(comp, nume)
+				or (getattr(ecran, "hdsCampSecret", False) and nume in ("text", "input")))
+			text = _text(comp)
+			if text and mascheazaSecrete(text) != text:
+				secret = True
+			if not secret and not secrete:
+				continue
+			instante = _instanteComponenta(ecran, comp)
+			if not instante:
+				return None
+			for instanta in instante:
+				try:
+					x, y, latime, inaltime = _dreptunghi(instanta)
+					if secrete and not secret:
+						sus = instanta.getTopIndex()
+						rand_inaltime = instanta.getItemHeight()
+						if rand_inaltime <= 0:
+							return None
+						for i in secrete:
+							pozitie = (i - sus) * rand_inaltime
+							if 0 <= pozitie < inaltime:
+								# Numai randul cu datele contului; restul meniului ramane vizibil.
+								rez.append((x, y + pozitie, latime, min(rand_inaltime, inaltime - pozitie)))
+					else:
+						rez.append((x, y, latime, inaltime))
+				except Exception:
+					return None
+	return rez
+
+
+def navigatorExternPeEcran():
+	try:
+		from Plugins.Extensions.HdsNavigator import lansator
+	except ImportError:
+		return False     # imaginea fara navigator: nu are ce pagina sa fie pe ecran
+	navigator = lansator.activ()
+	return navigator is not None and navigator.stare == lansator.ARATAT
+
+
+def curataCapturaEchipa(octeti, ecrane, marime):
+	"""Curata numai copia din RAM trimisa echipei. Nu modifica framebuffer-ul si nu pastreaza captura pe disc."""
+	# Pagina nativa e desenata de alt proces. OSD nu poate afla sigur unde ii sunt conturile.
+	if navigatorExternPeEcran():
+		return None
+	zone = dreptunghiuriSecrete(ecrane)
+	if zone is None:
+		return None
+	if not zone:
+		return octeti
+	try:
+		import io
+		import math
+		from PIL import Image, ImageDraw
+		with Image.open(io.BytesIO(octeti)) as sursa:
+			imagine = sursa.convert("RGB")
+		latime, inaltime = marime
+		if latime <= 0 or inaltime <= 0:
+			return None
+		sx, sy = imagine.width / float(latime), imagine.height / float(inaltime)
+		desen = ImageDraw.Draw(imagine)
+		for x, y, w, h in zone:
+			if w <= 0 or h <= 0:
+				return None
+			# Acoperim si doua blocuri JPEG MCU de 16 pixeli, ca nici contururile cromatice sa nu ramana.
+			x0, y0 = max(0, math.floor(x * sx) - 32), max(0, math.floor(y * sy) - 32)
+			x1, y1 = min(imagine.width, math.ceil((x + w) * sx) + 32), min(imagine.height, math.ceil((y + h) * sy) + 32)
+			if x1 > x0 and y1 > y0:
+				desen.rectangle((x0, y0, x1 - 1, y1 - 1), fill=(20, 28, 40))
+		iesire = io.BytesIO()
+		imagine.save(iesire, format="PNG")
+		return iesire.getvalue()
+	except Exception:
+		return None
 
 
 def modAscii():
@@ -1016,14 +829,13 @@ class PeFir(object):
 
 
 class SirTaste(object):
-	"""Tastele unei cereri, apasate pe rand (pas() la fiecare tic de PAUZA_MS, pe firul enigma2). Inainte de fiecare
-	tasta se uita la ecran: pe un ecran privat merge numai EXIT, iar sirul se opreste la prima tasta oprita."""
+	"""Tastele unei cereri, apasate pe rand (pas() la fiecare tic de PAUZA_MS, pe firul enigma2), ca de pe telecomanda
+	omului, pe orice ecran (fara ecrane private)."""
 
-	def __init__(self, taste, ecrane, apasa=apasaTasta, ssh_deschis=_sshDeschis):
+	def __init__(self, taste, ecrane, apasa=apasaTasta, ssh_deschis=None):
 		self.taste = list(taste)
 		self.ecrane = ecrane            # functie: stiva de acum
 		self.apasa = apasa
-		self.ssh = ssh_deschis
 		self.trimise = []
 		self.oprit = ""
 		self._asteapta = 0
@@ -1040,11 +852,6 @@ class SirTaste(object):
 			self._asteapta = max(0, ASTEAPTA_MS // PAUZA_MS - 1)
 			self.trimise.append(ASTEAPTA)
 			return True
-		e_privat, clasa = privat(self.ecrane(), self.ssh())
-		if e_privat and nume not in TASTE_PE_PRIVAT:
-			self.oprit = "ecran privat (%s): numai EXIT; oprit la %s" % (clasa, nume)
-			self.taste = []
-			return False
 		self.apasa(TASTE[nume], lung)
 		self.trimise.append(nume + (SUFIX_LUNG if lung else ""))
 		return bool(self.taste)
@@ -1054,15 +861,12 @@ class SirTaste(object):
 
 def scrieText(ecrane, text, mod_ascii, scrie, ssh_deschis=False):
 	"""(cod, mesaj): scrie text in campul deschis pe ecranul de sus. scrie(text) -> rezultatul lui
-	HdsMouseEcran.MouseEcran.text (semnele, prin actiunea gotAsciiCode a ecranului). Refuzat pe un ecran privat, pe un
-	camp de parola si cand nu e niciun camp de text deschis."""
+	HdsMouseEcran.MouseEcran.text (semnele, prin actiunea gotAsciiCode a ecranului). Refuzat numai cand nu e niciun camp
+	de text deschis."""
 	if not ecrane:
 		return 1, "(niciun ecran deschis)"
-	e_privat, clasa = privat(ecrane, ssh_deschis)
-	if e_privat:
-		return 1, "(ecran privat: %s; textul nu se scrie)" % clasa
-	if tastaturaSecreta(ecrane, mod_ascii) or any(_selectatSecret(e) for e in ecrane):
-		return 1, "(camp secret; textul nu se scrie)"
+	if ecranCuCampSecret(ecrane[-1]):
+		return 1, TEXT_OPRESTE_SECRET
 	if not mod_ascii:
 		return 1, "(niciun câmp de text deschis: deschide-l întâi, de pilda cu OK pe rand)"
 	text = (text or "")[:TEXT_MAXIM]
@@ -1135,7 +939,7 @@ def scrieSetare(radacina, cheie, valoare, salveaza=None, dupa=None):
 	el = elementSetare(radacina, cheie)
 	if el is None:
 		return 1, "(setare necunoscuta: %s)" % cheie
-	if _elementPrivat(el):
+	if _elementParola(el):
 		return 1, "(camp de parola: %s)" % cheie
 	vechi = _valoare(el)
 	try:

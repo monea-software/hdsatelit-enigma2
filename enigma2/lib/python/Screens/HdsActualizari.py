@@ -10,9 +10,10 @@
 # HdsActualizariScreen): versiunea instalata (0.3.2; imaginea de baza numai la avertizarea de imagine noua), canalul,
 # versiunea de pe server, ce se instaleaza (cate un rand pe pachet, versiunea de acum si cea noua), verificarea
 # zilnica. Sub lista: "Ce e nou" al actualizarii, sau de ce trebuie imagine noua, sau
-# ce nu a mers. Tastele: ROSU inapoi, VERDE instaleaza (numai cand se poate, cu o intrebare inainte), GALBEN cauta din
-# nou, ALBASTRU porneste sau opreste verificarea zilnica. Dupa instalare interfata se reporneste pe calea sigura
-# (TryQuitMainloop 3, ca "Restart Interface" din meniu); pana atunci nimic altceva nu mai porneste de aici.
+# ce nu a mers. Tastele: ROSU inapoi, VERDE instaleaza (numai cand se poate; o singura comanda, cu efectul spus pe randul
+# de stare: actualizarea rapida cauta, instaleaza si reporneste interfata singura cand receptorul e liber), GALBEN cauta
+# din nou, ALBASTRU porneste sau opreste verificarea zilnica. Repornirea e pe calea sigura (TryQuitMainloop 3, ca
+# "Restart Interface" din meniu); pana atunci nimic altceva nu mai porneste de aici.
 #
 # "Ce e nou": noutatile tuturor versiunilor de la cea instalata pana la cea de pe server,
 # grupate pe versiuni (Components/HdsActualizari.text_noutati), pot avea zeci de randuri. Textul de sub lista e un
@@ -274,7 +275,8 @@ class HdsActualizari(Screen):
 		elif st["repornire"]:
 			self._stare = _("Repornește interfața ca să folosești actualizarea (VERDE).")
 		elif r.get("stare") == A.DISPONIBILA and r.get("poate_instala"):
-			self._stare = _("VERDE: instalează versiunea %s.") % (r.get("server") or {}).get("versiune", "")
+			self._stare = _("VERDE: instalează versiunea %s. Interfața repornește apoi singură, când receptorul e liber.") % \
+				(r.get("server") or {}).get("versiune", "")
 		else:
 			self._stare = ""
 		self._scrieStarea()
@@ -387,11 +389,24 @@ class HdsActualizari(Screen):
 		r = self.a.rezultat
 		if self.a.ocupat() or not r.get("poate_instala"):
 			return
-		server = r.get("server") or {}
-		text = _("Instalezi versiunea %s (%s)?") % (server.get("versiune", ""), text_pachete(len(r.get("pachete") or []),
-			P.marime_text(r.get("marime")) or "?"))
-		text += "\n" + _("La sfârșit interfața trebuie repornită.")
-		self.session.openWithCallback(self._confirmat, MessageBox, text, MessageBox.TYPE_YESNO, default=True)
+		# R11 (analiza "cat mai simplu", 09.11.2026): VERDE e o singura comanda, cu efectul spus dinainte pe randul de
+		# stare: cauta din nou, instaleaza si reporneste interfata singura cand receptorul e liber (nu sub o inregistrare,
+		# o lucrare in fundal sau o intrebare deschisa), ca butonul rapid din pagina web (actualizeazaRapid)
+		try:
+			from Components.HdsImagineOnline import porneste_feed
+			pornit = porneste_feed(self.session)
+		except Exception as e:
+			print("[HdsActualizari] actualizarea rapida: %r" % (e,))
+			pornit = False
+		if not pornit:
+			# fara actualizarea rapida (pagina web lipsa): calea veche, cu intrebarea ei
+			server = r.get("server") or {}
+			text = _("Instalezi versiunea %s (%s)?") % (server.get("versiune", ""), text_pachete(len(r.get("pachete") or []),
+				P.marime_text(r.get("marime")) or "?"))
+			text += "\n" + _("La sfârșit interfața trebuie repornită.")
+			self.session.openWithCallback(self._confirmat, MessageBox, text, MessageBox.TYPE_YESNO, default=True)
+			return
+		self._arata()
 
 	def _confirmat(self, da):
 		if not da:

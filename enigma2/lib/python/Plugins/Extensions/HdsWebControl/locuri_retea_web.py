@@ -89,7 +89,7 @@ def stare(S=None):
 			"mesaj": S.textEroare(c["cod"]) if c.get("cod") else ""}}
 
 
-def salveaza(a, S=None):
+def salveaza(a, S=None, sesiune=None):
 	S = _s(S)
 	ident = a.get("id") or None
 	if a.get("sterge_parola") in ("1", "da", "true"):
@@ -101,16 +101,18 @@ def salveaza(a, S=None):
 	date = dict((k, a.get(k)) for k in ("fel", "nume", "gazda", "port", "dosar", "utilizator", "control") if k in a)
 	for k in ("pornire", "citire", "tls_oricare"):
 		date[k] = a.get(k) in ("1", "da", "true", "on")
-	d, eroare = S.salveaza(date, parola, ident)
+	cheie = _lucrareNoua("salveaza")
+	S.salveazaSiConecteaza(date, parola, ident, _gata(cheie), sesiune=sesiune)
 	rez = stare(S)
-	if d is None:
-		rez.update(result=False, message=eroare)
-	else:
-		rez.update(result=True, message=eroare or (_t("Locul %s a fost salvat.") % d["nume"]), loc=d)
+	rez.update(result=True, lucrare=cheie, message=_t("Se salvează și se conectează locul..."))
+	terminata = LUCRARI.get(cheie) or {}
+	if terminata.get("gata"):
+		r = terminata.get("rez") or {}
+		rez.update(result=bool(r.get("ok")), loc=r.get("loc"), message=r.get("mesaj") or "")
 	return rez
 
 
-def fa(a, S=None):
+def fa(a, S=None, sesiune=None):
 	"""monteaza, demonteaza, viteza, sterge: pornite aici, rezultatul in starea locului (pagina intreaba din nou)."""
 	S = _s(S)
 	ident = a.get("id") or ""
@@ -120,20 +122,15 @@ def fa(a, S=None):
 		rez.update(result=False, message=S.textEroare("lipsa"))
 		return rez
 	cheie = _lucrareNoua(ce)
-	functii = {"monteaza": S.monteaza, "demonteaza": S.demonteaza, "viteza": S.verificaInregistrari, "sterge": S.sterge}
+	functii = {"monteaza": S.monteaza,
+		"demonteaza": lambda ident, gata: S.demonteaza(ident, gata, numai_liber=True, sesiune=sesiune),
+		"viteza": lambda ident, gata: S.folosesteInregistrari(ident, gata, sesiune=sesiune),
+		"sterge": lambda ident, gata: S.sterge(ident, gata, sesiune=sesiune)}
 	if ce not in functii:
 		rez = stare(S)
 		rez.update(result=False, message=S.textEroare("cerere"))
 		return rez
-	if ce == "viteza":
-		loc = S.locuri().dupaId(ident)
-		if loc["fel"] in S.FELURI_MONTATE and not S.esteMontat(loc)[0]:
-			# montat intai, apoi proba
-			S.monteaza(ident, lambda r: S.verificaInregistrari(ident, _gata(cheie)) if r.get("ok") else _gata(cheie)(r))
-		else:
-			S.verificaInregistrari(ident, _gata(cheie))
-	else:
-		functii[ce](ident, _gata(cheie))
+	functii[ce](ident, _gata(cheie))
 	rez = stare(S)
 	rez.update(result=True, lucrare=cheie)
 	return rez
@@ -182,6 +179,8 @@ def lucrare(a, S=None):
 		rez["cale"] = l["date"].get("cale") or ""
 	elif l["fel"] == "dosare":
 		rez["dosare"] = r.get("dosare") or []
+	elif l["fel"] == "salveaza":
+		rez["loc"] = r.get("loc")
 	return rez
 
 
@@ -273,8 +272,8 @@ def rute(baza, resource, sesiune=None, S=None):
 	api = {
 		b"locuri-retea": StareResource(),
 		b"locuri-retea-lucrare": LucrareResource(),
-		b"locuri-retea-salveaza": faraDeGet(lambda a: salveaza(a, S), cuGet=False),
-		b"locuri-retea-fa": faraDeGet(lambda a: fa(a, S)),
+		b"locuri-retea-salveaza": faraDeGet(lambda a: salveaza(a, S, sesiune() if callable(sesiune) else sesiune), cuGet=False),
+		b"locuri-retea-fa": faraDeGet(lambda a: fa(a, S, sesiune() if callable(sesiune) else sesiune)),
 		b"locuri-retea-cauta": faraDeGet(lambda a: cauta(S)),
 		b"locuri-retea-rasfoieste": faraDeGet(lambda a: rasfoieste(a, S)),
 		b"locuri-retea-dosare": faraDeGet(lambda a: dosare(a, S), cuGet=False),
@@ -374,7 +373,7 @@ PAGINA = """<!DOCTYPE html>
   </section>
   <h2>Caută în casă</h2>
   <section class="card">
-    <p class="nota">Receptorul întreabă scurt aparatele din rețeaua ta: serverele media (DLNA), calculatoarele cu Windows și NAS-urile cu dosare partajate, serverele care se anunță (NFS, WebDAV, FTP). Nimic nu pleacă în afara rețelei tale și nimic nu se caută singur.</p>
+    <p class="nota">Receptorul caută serverele la prima intrare cu lista goală. Nimic nu pleacă în afara rețelei tale. Alegi serverul și salvezi locul ca să îl conectezi.</p>
     <div class="actiuni" style="margin-top:10px"><button type="button" class="albastru" id="cauta">Caută serverele din casă</button></div>
     <p class="mesaj" id="cautareStare"></p>
     <table><tbody id="gasite"></tbody></table>
@@ -394,7 +393,7 @@ PAGINA = """<!DOCTYPE html>
       </div>
       <div class="rand" id="d_cont">
         <div><label for="f_utilizator">Utilizatorul (gol: fără cont)</label><input id="f_utilizator" maxlength="120" autocomplete="off"></div>
-        <div><label for="f_parola">Parola</label><input id="f_parola" type="password" maxlength="256" autocomplete="new-password"><p class="nota ascuns" id="parolaNota">Este salvată o parolă. Lasă câmpul gol ca să rămână aceeași.</p></div>
+        <div><label for="f_parola">Parola</label><input id="f_parola" type="text" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="nota ascuns" id="parolaNota">Este salvată o parolă. Lasă câmpul gol ca să rămână aceeași.</p></div>
       </div>
       <div class="rand">
         <div id="d_port"><label for="f_port">Portul (0: cel obișnuit)</label><input id="f_port" type="number" min="0" max="65535" value="0"></div>
@@ -411,7 +410,7 @@ PAGINA = """<!DOCTYPE html>
       <div id="mesajFormular" class="mesaj"></div>
     </form>
   </section>
-  <p class="nota">Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc, și pot ține înregistrări după proba de scriere și viteză. Locul înregistrărilor se alege apoi în <a data-cale="/stocare" href="/stocare" style="color:inherit">Locul înregistrărilor</a>. Parolele stau criptate pe receptor și nu se arată nicăieri.</p>
+  <p class="nota">Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc. Folosește pt. înregistrări verifică scrierea și viteza, apoi alege locul pentru înregistrări. Parolele stau criptate pe receptor și nu se arată nicăieri.</p>
   <p class="nota">Același ecran este pe televizor, în __DRUM_MENIU__.</p>
 </div>
 </main>
@@ -420,6 +419,7 @@ var CFG = __CONFIG__;
 var CEAS = null;
 var ULTIMA = null;
 var RASFOIRE = null;
+var CAUTARE_INITIALA = false;
 var AJUTOR = {
   smb: "Calculatorul cu Windows sau NAS-ul: scrie numele dosarului partajat (de pildă Filme). Pe Windows, utilizatorul este contul tău.",
   nfs: "NAS sau Linux: dosarul exportat (de pildă volume1/filme). Fără parolă.",
@@ -504,6 +504,10 @@ function arata(d){
     tr.appendChild(td); tr.appendChild(ta); g.appendChild(tr);
   });
   programeaza(lucreaza ? 1000 : 15000);
+  if(!CAUTARE_INITIALA){
+    CAUTARE_INITIALA = true;
+    if(!(d.locuri || []).length && !cs.in_lucru){ cautaServere(); }
+  }
 }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); } CEAS = setTimeout(citeste, ms); }
 function citeste(){
@@ -515,7 +519,7 @@ function citeste(){
 function asteapta(lucrare, gata, pas){
   pas = pas || 0;
   cerere("/api/locuri-retea-lucrare?lucrare=" + encodeURIComponent(lucrare)).then(function(r){
-    if(r.result && !r.gata && pas < 240){ setTimeout(function(){ asteapta(lucrare, gata, pas + 1); }, 500); return; }
+    if(r.result && !r.gata && pas < 360){ setTimeout(function(){ asteapta(lucrare, gata, pas + 1); }, 500); return; }
     gata(r);
   }).catch(function(){ gata({result: false, message: "Receptorul nu răspunde."}); });
 }
@@ -529,7 +533,6 @@ function fa(l, ce){
       asteapta(d.lucrare, function(r){
         if(r.gata){
           var text = r.mesaj || "";
-          if(ce === "viteza" && r.ok){ text += " Acum îl poți alege în Locul înregistrărilor."; }
           if(ce === "sterge" && r.ok){ text = "Locul a fost șters."; }
           mesaj("mesajSus", text, !r.ok);
         }
@@ -556,6 +559,9 @@ function goleste(){
   $("titluFormular").textContent = "Adaugă un loc"; $("f_fel").disabled = false;
   potriveste();
 }
+function blocheazaFormular(blocat){
+  $("formular").querySelectorAll("input,select,button").forEach(function(c){ c.disabled = blocat; });
+}
 function editeaza(l){
   goleste();
   $("f_id").value = l.id; $("f_fel").value = l.fel; $("f_nume").value = l.nume; $("f_gazda").value = l.gazda;
@@ -570,6 +576,7 @@ function editeaza(l){
 function dinCautare(x){
   goleste();
   $("f_fel").value = x.fel; $("f_nume").value = x.nume; $("f_gazda").value = x.gazda; $("f_port").value = x.port || 0;
+  if(x.fel === "dlna"){ $("f_dosar").value = "0"; }
   $("f_control").value = x.control || "";
   potriveste();
   $("formular").scrollIntoView({block: "start"});
@@ -588,14 +595,20 @@ $("formular").addEventListener("submit", function(ev){
   if($("f_sterge").checked){ q.set("sterge_parola", "1"); }
   q.set("pornire", $("f_pornire").checked ? "1" : "0"); q.set("citire", $("f_citire").checked ? "1" : "0");
   q.set("tls_oricare", $("f_tls").checked ? "1" : "0");
-  $("salveaza").disabled = true;
+  blocheazaFormular(true);
+  mesaj("mesajFormular", "Se salvează și se conectează locul...", false);
   cerere("/api/locuri-retea-salveaza", "POST", q).then(function(d){
-    $("salveaza").disabled = false;
-    $("f_parola").value = "";
-    mesaj("mesajFormular", d.message, !d.result);
-    if(d.result){ goleste(); }
+    if(!d.result || !d.lucrare){ blocheazaFormular(false); mesaj("mesajFormular", d.message, true); return; }
     if(d.locuri){ arata(d); }
-  }).catch(function(){ $("salveaza").disabled = false; mesaj("mesajFormular", "Receptorul nu răspunde.", true); });
+    asteapta(d.lucrare, function(r){
+      blocheazaFormular(false);
+      $("f_parola").value = "";
+      if(r.ok){ goleste(); }
+      else if(r.loc){ $("f_id").value = r.loc.id; }
+      mesaj("mesajFormular", r.mesaj || r.message, !r.ok);
+      citeste();
+    });
+  }).catch(function(){ blocheazaFormular(false); mesaj("mesajFormular", "Receptorul nu răspunde.", true); });
 });
 $("alegeDosar").addEventListener("click", function(){
   var q = new URLSearchParams();
@@ -616,10 +629,11 @@ $("alegeDosar").addEventListener("click", function(){
     });
   });
 });
-$("cauta").addEventListener("click", function(){
+function cautaServere(){
   $("cauta").disabled = true;
   cerere("/api/locuri-retea-cauta", "POST", new URLSearchParams()).then(function(d){ if(d.locuri){ arata(d); } programeaza(1000); });
-});
+}
+$("cauta").addEventListener("click", cautaServere);
 function rasfoieste(l, cale, drum){
   RASFOIRE = {loc: l, cale: cale, drum: drum || [], lucrare: null};
   $("cardRasfoire").classList.remove("ascuns");
@@ -693,9 +707,8 @@ TEXTE_PAGINA = {
 		N_("Subtitrările de lângă film (același nume, sau dosarul Subs) și cele date de serverul media se iau "
 			"singure. Pe televizor, tasta SUB le arată pe toate, cu codarea și întârzierea."),
 		N_("Caută în casă"),
-		N_("Receptorul întreabă scurt aparatele din rețeaua ta: serverele media (DLNA), calculatoarele cu "
-			"Windows și NAS-urile cu dosare partajate, serverele care se anunță (NFS, WebDAV, FTP). Nimic nu "
-			"pleacă în afara rețelei tale și nimic nu se caută singur."),
+		N_("Receptorul caută serverele la prima intrare cu lista goală. Nimic nu pleacă în afara rețelei tale. "
+			"Alegi serverul și salvezi locul ca să îl conectezi."),
 		N_("Caută serverele din casă"),
 		N_("Adaugă un loc"),
 		N_("Felul locului"),
@@ -713,9 +726,8 @@ TEXTE_PAGINA = {
 		N_("Șterge parola salvată"),
 		N_("Salvează locul"),
 		N_("Renunță"),
-		N_("Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc, și pot ține "
-			"înregistrări după proba de scriere și viteză. Locul înregistrărilor se alege apoi în <a "
-			"data-cale=\"/stocare\" href=\"/stocare\" style=\"color:inherit\">Locul înregistrărilor</a>. Parolele stau "
+		N_("Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc. Folosește pt. "
+			"înregistrări verifică scrierea și viteza, apoi alege locul pentru înregistrări. Parolele stau "
 			"criptate pe receptor și nu se arată nicăieri."),
 		N_("Același ecran este pe televizor, în __DRUM_MENIU__."),
 	),
@@ -745,7 +757,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde. Verifică dacă este pornit și în aceeași rețea."),
 		N_("Receptorul nu răspunde."),
 		N_("Se verifică scrierea și viteza (până la un minut)..."),
-		N_("Acum îl poți alege în Locul înregistrărilor."),
+		N_("Se salvează și se conectează locul..."),
 		N_("Locul a fost șters."),
 		N_("Adaugă un loc"),
 		N_("Editează locul"),

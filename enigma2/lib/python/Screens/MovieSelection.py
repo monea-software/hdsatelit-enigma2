@@ -4,6 +4,7 @@ from Components.Button import Button
 from Components.ActionMap import HelpableActionMap, ActionMap
 from Components.MenuList import MenuList
 from Components.MovieList import MovieList
+from Components.HdsTasteRapide import sens_tasta, text_actiune
 from Components.DiskInfo import DiskInfo
 from Components.Pixmap import Pixmap
 from Components.Label import Label
@@ -192,6 +193,7 @@ class MovieContextMenu(Screen):
 			})
 
 		menu = [(_("delete..."), self.delete)]
+		menu.append((_("Mută"), boundFunction(self.dinLista, csel.mutaFilm)))
 		menu.extend([(p.description, boundFunction(self.execPlugin, p)) for p in plugins.getPlugins(PluginDescriptor.WHERE_MOVIELIST)])
 
 		if config.movielist.moviesort.value == MovieList.SORT_ALPHANUMERIC:
@@ -273,7 +275,7 @@ class MovieSelection(Screen, HelpableScreen, SelectionEventInfo):
 	film ales din lista); urmatorul: cursorul trece pe filmul de dupa el (dupa un film pe care receptorul nu l-a putut
 	reda, ca un OK sa nu il porneasca din nou). La dreapta: numele (la filmele fara descriere), marimea si formatul,
 	locul unde s-a ramas (din <film>.cuts) si dosarul, citite pe un fir separat. Tastele colorate: stergere, ordinea,
-	alt dosar, etichetele (sau meniul listei); toate sunt si in meniul listei."""
+	alt dosar si sortarea, cu profilul de culori anterior disponibil separat; toate sunt si in meniul listei."""
 
 	def __init__(self, session, selectedmovie = None, urmatorul = False):
 		Screen.__init__(self, session)
@@ -344,9 +346,9 @@ class MovieSelection(Screen, HelpableScreen, SelectionEventInfo):
 		self["ColorActions"] = HelpableActionMap(self, "ColorActions",
 			{
 				"red": (self.stergeFilm, _("Șterge")),
-				"green": (self.schimbaOrdinea, _("sort by date") + " / " + _("alphabetic sort")),
+				"green": (self.tastaVerde, text_actiune(sens_tasta("movie_list", "green", config=config))),
 				"yellow": (self.doPathSelect, _("Alt dosar")),
-				"blue": (self.tastaAlbastra, _("Etichete")),
+				"blue": (self.tastaAlbastra, text_actiune(sens_tasta("movie_list", "blue", config=config))),
 			})
 
 		self["OkCancelActions"] = HelpableActionMap(self, "OkCancelActions",
@@ -468,10 +470,43 @@ class MovieSelection(Screen, HelpableScreen, SelectionEventInfo):
 		self.reloadList()
 
 	def tastaAlbastra(self):
+		if sens_tasta("movie_list", "blue", config=config) == "sort_recordings":
+			self.schimbaOrdinea()
+		else:
+			self.eticheteSauMeniu()
+
+	def tastaVerde(self):
+		if sens_tasta("movie_list", "green", config=config) == "move_recording":
+			self.mutaFilm()
+		else:
+			self.schimbaOrdinea()
+
+	def eticheteSauMeniu(self):
 		if self.tags:
 			self.showTagsSelect()
 		else:
 			self.doContext()
+
+	def mutaFilm(self):
+		from Components.MovieList import mutaInregistrarea, caiInregistrariActive
+		current = self.getCurrent()
+		if current is None:
+			return
+		cale = current.getPath()
+		def ales(destinatie):
+			if not destinatie:
+				return
+			try:
+				mutaInregistrarea(cale, destinatie, caiInregistrariActive(self.session))
+			except (ValueError, OSError) as eroare:
+				self.session.open(MessageBox, str(eroare), MessageBox.TYPE_ERROR)
+				return
+			if config.movielist.hds_ultimul_film.value == current.toString():
+				config.movielist.hds_ultimul_film.value = ""
+				config.movielist.hds_ultimul_film.save()
+			self.reloadList()
+		self.session.openWithCallback(ales, MovieLocationBox, _("Alege dosarul de destinație"),
+			config.movielist.last_videodir.value)
 
 	def doContext(self):
 		current = self.getCurrent()
@@ -511,15 +546,14 @@ class MovieSelection(Screen, HelpableScreen, SelectionEventInfo):
 				self.tag_second = tmp
 			else:
 				self.tag_second = "<"+_("Tag 2")+">"
-		# verde: ordinea in care trece lista la apasare; albastru: etichetele, sau meniul listei cand nu sunt etichete
+		# Aceeasi harta de culori este folosita de ecran, editor, web si ajutor.
 		if config.movielist.moviesort.value == MovieList.SORT_ALPHANUMERIC:
-			self["key_green"].text = _("După dată")
+			ordine = _("După dată")
 		else:
-			self["key_green"].text = _("Alfabetic")
-		if self.tags:
-			self["key_blue"].text = _("Etichete")
-		else:
-			self["key_blue"].text = _("Meniu")
+			ordine = _("Alfabetic")
+		vechi = sens_tasta("movie_list", "green", config=config) == "sort_recordings"
+		self["key_green"].text = ordine if vechi else _("Mută")
+		self["key_blue"].text = (_("Etichete") if self.tags else _("Meniu")) if vechi else ordine
 
 	def setListType(self, type):
 		self["list"].setListType(type)

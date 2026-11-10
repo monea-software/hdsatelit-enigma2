@@ -294,6 +294,9 @@ RESULT eDVBFrontendParameters::getDVBT(eDVBFrontendParametersTerrestrial &p) con
 RESULT eDVBFrontendParameters::setDVBS(const eDVBFrontendParametersSatellite &p, bool no_rotor_command_on_tune)
 {
 	sat = p;
+	// Unele liste scriu 2 pentru S2X. DVB API foloseste tot SYS_DVBS2.
+	if (sat.system == 2)
+		sat.system = eDVBFrontendParametersSatellite::System_DVB_S2;
 	sat.no_rotor_command_on_tune = no_rotor_command_on_tune;
 	m_type = iDVBFrontend::feSatellite;
 	return 0;
@@ -798,8 +801,14 @@ void eDVBFrontend::feEvent(int w)
 		int state;
 		res = ::ioctl(m_fd, FE_GET_EVENT, &event);
 
-		if (res && (errno == EAGAIN))
+		if (res)
+		{
+			if (errno == EINTR || errno == EOVERFLOW)
+				continue;
+			if (errno != EAGAIN)
+				eDebug("frontend %d: FE_GET_EVENT failed (%m)", m_dvbid);
 			break;
+		}
 
 		if (w < 0)
 			continue;
@@ -812,6 +821,8 @@ void eDVBFrontend::feEvent(int w)
 #endif
 		{
 			state = stateLock;
+			m_tuning = 0;
+			m_timeout->stop();
 		} else
 		{
 			if (m_tuning) {
@@ -858,13 +869,25 @@ void eDVBFrontend::timeout()
 	m_tuning = 0;
 	if (m_state == stateTuning)
 	{
+		// Lock-ul poate fi deja in driver, iar evenimentul inca in coada.
+		int hds_err = 0;
+		bool hds_citeste = !m_simulate && m_fd >= 0;
+		int hds_stare = hds_citeste ? (int)hdsCitesteBrut(hdscitiri::STARE, true, hds_err) : -1;
+		if (hds_citeste && !hds_err && (hds_stare & FE_HAS_LOCK))
+		{
+			if (m_hds_timpi_zap.pornire_ms && !m_hds_timpi_zap.lock_ms)
+				m_hds_timpi_zap.lock_ms = hdsjurnal::monotonMs();
+			if (m_hds_jurnal.pornit_ms)
+				hdsjtuner::prins(m_hds_jurnal, m_slotid, -1);
+			m_hds_citiri.goleste();
+			m_state = stateLock;
+			m_stateChanged(this);
+			return;
+		}
 		/* drumul de esec, dupa timpul de asteptare (5-20 s): nivelul deosebeste "nu vine nimic" de "vine, dar nu decodeaza";
 		   citire directa, fara memoria tunerului (lib/dvb/hdscitirifrontend.h) */
-		bool hds_citeste = m_hds_jurnal.pornit_ms && !m_simulate && m_fd >= 0;
-		int hds_err = 0;
-		int hds_stare = hds_citeste ? (int)hdsCitesteBrut(hdscitiri::STARE, true, hds_err) : -1;
 		hdsjtuner::faraSemnal(m_hds_jurnal, m_slotid, (hds_citeste && !hds_err) ? hds_stare : -1,
-			hds_citeste ? hdsCiteste(signalPower, true) : -1);
+			(hds_citeste && m_hds_jurnal.pornit_ms) ? hdsCiteste(signalPower, true) : -1);
 		m_state = stateFailed;
 		m_stateChanged(this);
 	}

@@ -656,7 +656,13 @@ class Wizard(Screen):
 	def KeyText(self):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
 		self.currentConfigIndex = self["config"].getCurrentIndex()
-		self.session.openWithCallback(self.VirtualKeyBoardCallback, VirtualKeyBoard, title = self["config"].getCurrent()[0], text = self["config"].getCurrent()[1].getValue())
+		el = self["config"].getCurrent()[1]
+		# o parola salvata nu se arata nici in tastatura (porneste goala); cea scrisa acum se vede in clar
+		text = "" if isinstance(el, ConfigPassword) else el.getValue()
+		from Components.HdsAsistentaControl import campSecret
+		self.session.openWithCallback(self.VirtualKeyBoardCallback, VirtualKeyBoard,
+			title=self["config"].getCurrent()[0], text=text,
+			hdsSecret=campSecret(el, self["config"].getCurrent()[0]))
 
 	def VirtualKeyBoardCallback(self, callback = None):
 		if callback is not None and len(callback):
@@ -669,6 +675,8 @@ class Wizard(Screen):
 			self["config"].instance.moveSelectionTo(self.currentConfigIndex)
 			self["config"].setCurrentIndex(self.currentConfigIndex)
 			self["config"].getCurrent()[1].setValue(callback)
+			if isinstance(self["config"].getCurrent()[1], ConfigPassword):
+				self["config"].getCurrent()[1].scrisa = True
 			self["config"].invalidate(self["config"].getCurrent())
 
 
