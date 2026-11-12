@@ -34,6 +34,7 @@
 #   POST /api/retea-placa?placa=&sus=0|1&dhcp=0|1&ip=&masca=&are_poarta=0|1&poarta=&alta=0|1   (+ pas / cod)
 #   POST /api/retea-implicita?placa=         (+ pas / cod)
 #   POST /api/retea-reporneste               (+ pas / cod)
+#   POST /api/retea-tuner-reporneste         (+ pas / cod) reporneste interfata dupa un tuner USB bagat din mers
 #   POST /api/retea-proba?placa=             porneste proba retelei
 #   POST /api/retea-wifi-cauta?placa=        cauta retelele Wi-Fi
 #   POST /api/retea-wifi-conecteaza?placa=&ssid=<hex>|nume_ascuns=&securitate=&parola=&ascunsa=0|1   (+ pas / cod)
@@ -282,7 +283,19 @@ def stare(gazda=None):
 		"securitati_ascunse": [[s, W.securityText(s)] for s in W.HIDDEN_SECURITY],
 		"ipv6": _ipv6(),
 		"nume_local": _numeLocal(),
+		"drivere_usb": _drivereUsb(),
 	}
+
+
+def _drivereUsb():
+	"""cardul "Adaptoare USB": driverul unui stick instalat singur din feed (Components/HdsDriverLipsa, aceleasi texte ca
+	mesajul de pe televizor); None fara componenta"""
+	try:
+		from Components import HdsDriverLipsa
+		return HdsDriverLipsa.stareWeb()
+	except Exception as e:
+		_mc().jurnal("retea: drivere USB: %r" % (e,))
+		return None
 
 
 def _servereDns(R):
@@ -543,6 +556,21 @@ def reporneste(request):
 
 	return _doiPasi(request, a, "retea-reporneste", "", _t("Repornești plăcile de rețea?"), _t("Da, repornește rețeaua"),
 		[_t("Cât rețeaua repornește, legătura cu receptorul se întrerupe câteva secunde.")], fapta)
+
+
+def repornesteTuner(request):
+	"""POST /api/retea-tuner-reporneste: un tuner DVB pe USB (VU+ Turbo) bagat din mers apare in Setari tuner dupa
+	repornirea interfetei (Components/HdsDriverLipsa: aceeasi intrebare ca pe televizor), cu intrebarea si codul."""
+	a = _mc().argumente(request, ("pas", "cod"), 40)
+	try:
+		from Components import HdsDriverLipsa
+	except Exception:
+		HdsDriverLipsa = None
+	if HdsDriverLipsa is None or not HdsDriverLipsa.stareWeb().get("repornire"):
+		return {"result": False, "message": _t("Nu e nevoie de repornirea interfeței acum.")}
+	return _doiPasi(request, a, "retea-tuner-reporneste", "", _t("Repornești interfața acum?"),
+		_t("Repornește interfața"), [_t("Tunerul USB apare în Setări tuner după repornire. Imaginea revine în mai "
+		"puțin de un minut.")], HdsDriverLipsa.repornesteInterfata)
 
 
 # ------------------------------------------------------------------ proba retelei
@@ -872,6 +900,7 @@ def rute(baza, resource):
 		b"retea-placa": _scriere(aplicaPlaca),
 		b"retea-implicita": _scriere(placaImplicita),
 		b"retea-reporneste": _scriere(reporneste),
+		b"retea-tuner-reporneste": _scriere(repornesteTuner),
 		b"retea-proba": _scriere(proba),
 		b"retea-wifi-cauta": _scriere(cautaWifi),
 		b"retea-wifi-conecteaza": _scriere(conecteazaWifi),
@@ -1063,6 +1092,14 @@ __STIL_PAGINI__
     </div>
   </section>
 
+  <section class="card ascuns" id="cardUsb">
+    <h2>Adaptoare USB</h2>
+    <p class="nota">Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, receptorul îl ia singur din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe televizor.</p>
+    <p class="nota">Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, copiază-l pe un stick așa cum e și pune stickul în receptor.</p>
+    <p class="linii" id="usbStare"></p>
+    <div class="butoane ascuns" id="usbRepornire"><button type="button" class="rosu" id="usbReporneste">Repornește interfața</button></div>
+  </section>
+
   <section class="card">
     <h2>Repornirea rețelei</h2>
     <p class="nota">Oprește și pornește din nou toate plăcile de rețea, cu setările salvate.</p>
@@ -1239,7 +1276,7 @@ function arata(){
   $("cardSetari").classList.toggle("ascuns", !ALEASA);
   var p = placa(ALEASA);
   if(p && FORMULAR !== p.nume){ umpleFormular(p); } else { vizibile(); }
-  arataAcum(); arataProba(); arataWifi(); arataIpv6();
+  arataAcum(); arataProba(); arataWifi(); arataIpv6(); arataUsb();
   scrie($("numeLocal"), D.nume_local ? "Numele în rețea: " + D.nume_local : "Numele local nu este disponibil. Folosește adresa IP a receptorului.");
   if(D.lucrare && !D.lucrare.gata){ mesaj("Se lucrează la rețea (" + D.lucrare.secunde + " s)..."); }
 }
@@ -1379,6 +1416,25 @@ $("comutareOrdine").addEventListener("change", function(){ seteazaComutarea(1, $
 $("spreCanale").addEventListener("click", function(){ location.href = adresa("/wifi-canale"); });
 $("spreAparate").addEventListener("click", function(){ location.href = adresa("/aparate-retea"); });
 citesteComutarea();
+// cardul "Adaptoare USB" (Components/HdsDriverLipsa.py): driverul unui stick instalat singur din feed; se vede numai cand
+// s-a intamplat ceva de la pornire (aceleasi texte ca mesajul de pe televizor)
+function doua(n){ return (n < 10 ? "0" : "") + n; }
+function arataUsb(){
+  var u = D && D.drivere_usb, linii = [];
+  if(u){
+    if(u.lucru){ linii.push(u.lucru); }
+    (u.coada || []).forEach(function(n){ linii.push("Urmează: " + n); });
+    (u.ultimele || []).forEach(function(x){
+      var d = new Date(x.cand * 1000);
+      if(x.text !== u.lucru){ linii.push(doua(d.getHours()) + ":" + doua(d.getMinutes()) + "  " + x.text); }
+    });
+  }
+  $("cardUsb").classList.toggle("ascuns", !linii.length);
+  scrie($("usbStare"), linii.join("\\n"));
+  // un tuner USB bagat din mers apare in Setari tuner abia dupa repornirea interfetei
+  $("usbRepornire").classList.toggle("ascuns", !(u && u.repornire));
+}
+$("usbReporneste").addEventListener("click", function(){ cuConfirmare("/api/retea-tuner-reporneste", new URLSearchParams(), function(){ citeste(); }); });
 // cardul IPv6 (Components/HdsIpv6.py): starea de acum vine cu /api/retea (ipv6.linii, aceleasi randuri ca pe
 // televizor), setarea prin pagina generica a setarilor (setup.xml hds_ipv6, randul 0); receptorul o aplica pe loc
 function arataIpv6(){
@@ -1581,6 +1637,14 @@ TEXTE_PAGINA = {
 		N_("Serverul DNS transformă numele (de exemplu hdsatelit.com) în adrese. Cu DHCP, serverele le dă "
 			"de obicei routerul. Exemple: 1.1.1.1, 8.8.8.8, 9.9.9.9. Aceleași setări sunt pe televizor, în "
 			"__DRUM_MENIU__."),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Adaptoare USB"),
+		N_("Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, "
+			"receptorul îl ia singur din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe "
+			"televizor."),
+		N_("Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, "
+			"copiază-l pe un stick așa cum e și pune stickul în receptor."),
+		N_("Repornește interfața"),
 	),
 	"js": (
 		N_("nu se știe"),
@@ -1647,6 +1711,13 @@ TEXTE_PAGINA = {
 		N_("Adresa receptorului:"),
 		N_("Numele în rețea:"),
 		N_("Numele local nu este disponibil. Folosește adresa IP a receptorului."),
+		N_("Adaptoare USB"),
+		N_("Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, receptorul îl ia singur "
+			"din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe televizor."),
+		N_("Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, copiază-l pe un "
+			"stick așa cum e și pune stickul în receptor."),
+		N_("Urmează:"),
+		N_("Repornește interfața"),
 		N_("Amânat:"),
 		N_("Ultima dată:"),
 		N_("Server DNS"),

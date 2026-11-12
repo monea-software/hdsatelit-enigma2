@@ -180,7 +180,11 @@ void iListboxContent::setListbox(eListbox *lb)
 {
 	m_listbox = lb;
 	if (m_listbox)
+	{
 		m_listbox->setItemHeight(getItemHeight());
+		if (getItemWidth() > 0)
+			m_listbox->setItemWidth(getItemWidth());
+	}
 }
 
 int iListboxContent::currentCursorSelectable()
@@ -193,8 +197,15 @@ int iListboxContent::currentCursorSelectable()
 DEFINE_REF(eListboxPythonStringContent);
 
 eListboxPythonStringContent::eListboxPythonStringContent()
-	:m_cursor(0), m_itemheight(25)
+	:m_cursor(0), m_itemheight(25), m_itemwidth(0)
 {
+}
+
+void eListboxPythonStringContent::setItemWidth(int width)
+{
+	m_itemwidth = width > 0 ? width : 0;
+	if (m_listbox)
+		m_listbox->setItemWidth(m_itemwidth);
 }
 
 eListboxPythonStringContent::~eListboxPythonStringContent()
@@ -322,8 +333,11 @@ void eListboxPythonStringContent::paint(gPainter &painter, eWindowStyle &style, 
 		}
 	}
 
+	/* HDSatelit 0.7.4: the row with rounded corners or a gradient (skins written for other images); otherwise as before */
+	if (m_listbox && m_listbox->paintItemBackground(painter, style, eRect(offset, m_itemsize), selected))
+		;
 	/* if we have no transparent background */
-	if (!local_style || !local_style->m_transparent_background)
+	else if (!local_style || !local_style->m_transparent_background)
 	{
 			/* blit background picture, if available (otherwise, clear only) */
 		if (local_style && local_style->m_background && cursorValid)
@@ -480,7 +494,10 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 		}
 	}
 
-	if (!local_style || !local_style->m_transparent_background)
+	/* HDSatelit 0.7.4: the row with rounded corners or a gradient (skins written for other images); otherwise as before */
+	if (m_listbox && m_listbox->paintItemBackground(painter, style, eRect(offset, m_itemsize), selected))
+		;
+	else if (!local_style || !local_style->m_transparent_background)
 		/* if we have no transparent background */
 	{
 		/* blit background picture, if available (otherwise, clear only) */
@@ -534,9 +551,11 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 				   separation, up to two thirds of the row), or the whole row without a value. A label wider than
 				   that is cut before the value, and scrolls on the selected row. */
 			eDerulare *scroller = (selected && m_listbox) ? m_listbox->selectedRowScroller() : 0;
-			int value_start = valueStart(fnt, string, label_dx, m_seperation, m_itemsize.width());
+			/* HDSatelit 0.7.4: a title row (no value) in the header font of the skin, when it gives one */
+			ePtr<gFont> label_font = (PyTuple_Size(item) < 2 && local_style && local_style->m_headerfont) ? local_style->m_headerfont : fnt;
+			int value_start = valueStart(label_font, string, label_dx, m_seperation, m_itemsize.width());
 			int label_right = PyTuple_Size(item) >= 2 ? std::max(m_seperation, value_start - VALUE_GAP) : m_itemsize.width();
-			eDerulare::drawLine(painter, fnt, eRect(ePoint(offset.x() + label_dx, offset.y()), eSize(label_right - label_dx, item_left.height())), string, gPainter::RT_HALIGN_LEFT | vflags, scroller);
+			eDerulare::drawLine(painter, label_font, eRect(ePoint(offset.x() + label_dx, offset.y()), eSize(label_right - label_dx, item_left.height())), string, gPainter::RT_HALIGN_LEFT | vflags, scroller);
 
 				/* when we have no label, align value to the left. (FIXME:
 				   don't we want to specifiy this individually?) */
@@ -923,7 +942,10 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 		local_style = m_listbox->getLocalStyle();
 
 	painter.clip(itemregion);
-	clearRegion(painter, style, local_style, ePyObject(), ePyObject(), ePyObject(), ePyObject(), selected, itemregion, sel_clip, offset, cursorValid);
+	/* HDSatelit 0.7.4: the row with rounded corners or a gradient (skins written for other images); the cells clear
+	   their own place only when they have their own colour, as before. Otherwise the row is cleared as before. */
+	if (sel_clip.valid() || !m_listbox || !m_listbox->paintItemBackground(painter, style, eRect(offset, m_itemsize), selected))
+		clearRegion(painter, style, local_style, ePyObject(), ePyObject(), ePyObject(), ePyObject(), selected, itemregion, sel_clip, offset, cursorValid);
 
 	ePyObject items, buildfunc_ret;
 

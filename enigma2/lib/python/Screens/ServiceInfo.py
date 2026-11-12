@@ -155,7 +155,7 @@ class ServiceInfo(Screen):
 	def __init__(self, session, serviceref=None):
 		Screen.__init__(self, session)
 		self.skinName = ["ServiceInfo", "ServiceInfoSimple"]
-		self.setTitle(_("Service info") if _("Service info") != "Service info" else "Informații serviciu")
+		self.setTitle(_("Service info"))
 
 		self["actions"] = ActionMap(["OkCancelActions", "ColorActions"],
 		{
@@ -190,10 +190,10 @@ class ServiceInfo(Screen):
 			self.feinfo = None
 		else:
 			self.type = TYPE_SERVICE_INFO
-			red_text = _("Service") if _("Service") != "Service" else "Serviciu"
-			green_text = _("PIDs") if _("PIDs") != "PIDs" else "PID-uri"
+			red_text = _("Service")
+			green_text = _("PID-uri")
 			yellow_text = _("Multiplex")
-			blue_text = _("Tuner status") if _("Tuner status") != "Tuner status" else "Stare tuner"
+			blue_text = _("Tuner status")
 			self["red"] = Label(red_text)
 			self["green"] = Label(green_text)
 			self["yellow"] = Label(yellow_text)

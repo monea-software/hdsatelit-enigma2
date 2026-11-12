@@ -24,9 +24,21 @@ public:
 
 	void setBackgroundColor(const gRGB &col);
 	void setCornerRadius(int radius);
+		/* HDSatelit 0.7.4: the window border of the skins and plugins written for other images (borderWidth/borderColor
+		   on <screen>, instance.setBorderWidth): the widget border of the client area (the window frame itself is covered by it) */
+	void setBorderWidth(int width) { child()->setWidgetBorderWidth(width); }
+	void setBorderColor(const gRGB &color) { child()->setWidgetBorderColor(color); }
 	
 	void setFlag(int flags);
 	void clearFlag(int flags);
+
+		/* HDSatelit 0.7.4: animatia ferestrei, cu numele din OE-Alliance (pluginurile si temele cheama setAnimationMode,
+		   skin.py atributul animationMode): 0x00 oprita, 0x01 la aratare, 0x10 la ascundere, 0x11 amandoua; -1 = nealeasa
+		   (ca 0x00; Session.open o porneste numai pe ecranele deschise modal, mytest.py). Desenul: eWidgetDesktop. */
+	void setAnimationMode(int mode) { m_animation_mode = mode; }
+	int getAnimationMode() const { return m_animation_mode; }
+	void show();
+	void hide();
 #ifndef SWIG
 		/* HDSatelit: the scroll of a title wider than the title bar (eDerulare, lib/gui/elabel.h) */
 	eDerulare *titleScroller() { return &m_derulare; }
@@ -42,6 +54,7 @@ private:
 	eWidget *m_child;
 	int m_flags;
 	eWidgetDesktop *m_desktop;
+	int m_animation_mode;
 #ifndef SWIG
 	class Derulare: public eDerulare
 	{

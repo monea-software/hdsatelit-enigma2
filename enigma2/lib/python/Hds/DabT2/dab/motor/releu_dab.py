@@ -7,10 +7,15 @@ Ruleaza ca proces separat (nice 10), pornit de plugin; niciodata in enigma2.
   python3 releu_dab.py /tmp/hdsdab-feed.json [--port 8898] [--inactiv 10] [--iesi-fara-clienti]
 
   GET /stare                 JSON: sursa, debit, erori, procesor, memorie
+  GET /sunet/<setare>        decodarea sunetului DAB+ al fluxurilor .ts: automat | placa | software (setarea schimbata
+                             in ecranul DAB, pe televizor sau in pagina web); se aplica pe loc, cu PMT nou in TS
   GET /dab/<feed>/lista      JSON: posturile (raspunde cand FIC e complet sau dupa cel mult 6 s)
   GET /dab/<feed>/<SID>      audio: LOAS (DAB+) sau MP2 (DAB); SID zecimal (asa scrie buchetul) sau 0x... / hex
   GET /dab/<feed>/<SID>.ts   acelasi sunet intr-un TS cu un singur program (PAT/PMT, PES cu PTS, PCR), pentru redarea
-                             prin placa (referinta tip 1 cu cale http): LATM/LOAS pe stream_type 0x11, MP2 pe 0x03
+                             prin placa (referinta tip 1 cu cale http): LATM/LOAS pe stream_type 0x11, MP2 pe 0x03;
+                             dat in ritmul PCR-ului (RitmPcr, --ritm), nu in rafalele sursei. Pe placile care nu stiu
+                             AAC-ul DAB+ (cadre de 960; Broadcom/Vu+) DAB+ se decodeaza aici si pleaca tot ca MP2 (0x03):
+                             Hds/DabT2/sunet_software.py; setarea „sunet” din feed sau --sunet automat|placa|software
 
 Memorie: vezi REGULILE din comun/surse.py (demux cel mult 1 MB, nimic mare in /tmp). Releul nu scrie fisiere.
 Sursa porneste la primul client si se opreste dupa --inactiv secunde fara clienti; cu --iesi-fara-clienti
@@ -211,6 +216,105 @@ def _generator(sursa):
     return g if g is not None and (hasattr(g, '__next__') or hasattr(g, 'next')) else sursa     # next: Python 2.7
 
 
+# ritmul TS-ului (0.7.4, forumul 801 #1562: DAB+ din satelit pe Vu+ Uno4K SE, volum care urca si coboara). Sursa vine in
+# rafale (citirea grupata, superframe-ul de 120 ms: masurat pe .114 ~190 ms de plaja); fiecare PES pleaca deci cand
+# ceasul monoton ajunge la el. Atentie: enigma2 NU da decodorului PID-ul PCR pentru fluxurile releului (servicedvb.cpp,
+# setSyncPCR(-1) cand m_is_pvr), deci decodorul nu se potriveste dupa PCR; ritmul conteaza numai prin cat de lin vin
+# datele si cat raman in rezerva playerului (eHdsFluxHttp, 400 ms de ceas). Masurat pe .114 (aceeasi sursa):
+# plaja sosire-PTS 424 ms in 0.7.3, 192 ms numai cu trezirea reparata, 20 ms cu ritmul; pe .122 (HiSilicon) nicio
+# golire la niciunul (lucru-sesiune/paralel-1111b/STADIU-F-DAB-SATELIT.md: acolo si proba care hotaraste daca rezerva
+# de pornire ajunge la decodor sau se pierde inainte de filtrul sunetului).
+RITM_REZERVA_S = 0.4               # cat sta un PES in releu dupa sosire (absoarbe rafalele); cat rezerva playerului
+RITM_FEREASTRA_S = 10.0            # rezerva cea mai mica se urmareste pe ferestre de atat
+RITM_PRAG_S = 0.1                  # rezerva cea mai mica din fereastra peste atat: ancora coboara incet
+RITM_COBORARE = 5e-5               # cu cel mult 50 ppm (0,5 ms la 10 s): decodorul nu vede salt de ceas
+RITM_REANCORARE_S = 1.0            # peste atat (pauza a sursei, apoi totul deodata): ancora coboara la rezerva deodata
+RITM_SALT_90K = 10 * 90000         # PTS mutat cu mai mult de 10 s: alt flux, se ancoreaza din nou
+# decodarea software a DAB+ (sunet_software): peste atatea AU, daca faad2 strica mai mult de jumatate, postul trece pe
+# decodorul placii (AudioSpecificConfig gresit sau flux pe care faad2 nu-l stie)
+RENUNTA_DUPA_AU = 50
+
+
+class RitmPcr(object):
+    """Momentul (ceasul monoton) la care pleaca fiecare PES al unui TS, dupa PTS-ul lui (PCR = PTS - 0,5 s, deci
+    acelasi ritm): moment = ancora + PTS / 90 kHz. Logica pura, fara fire; ceasul se poate da (probe).
+
+    - Primul PES pleaca pe loc: porneste ceasul rezervei din player (hdsfluxhttp.cpp, implicit 400 ms). Ancora se pune
+      cu `rezerva` dupa sosirea lui, deci urmatoarele PES pleaca la rezerva + distanta lor in timp; cand rezerva
+      playerului e cel putin cat a releului, decodorul vede PCR-urile la distante egale chiar de la primul.
+    - Un PES venit dupa momentul lui (sursa a intarziat, un superframe pierdut, ceasul sursei mai lent): ancora urca
+      cat sa fie la timp si PES-ul pleaca pe loc. Nimic nu se arunca.
+    - Ca intarzierea sa nu creasca (ceasul sursei mai rapid, rezerva ramasa mare dupa o pauza a sursei): la fiecare
+      fereastra, daca cea mai mica rezerva vazuta e peste RITM_PRAG_S, ancora coboara cu cel mult RITM_COBORARE pe
+      secunda; daca e peste RITM_REANCORARE_S, coboara deodata pana la `rezerva`.
+    - Pe aceeasi cheie momentele nu scad (ordinea pachetelor TS)."""
+
+    __slots__ = ('rezerva', 'ceas', 'ancora', '_pts', '_desf', '_ultim', '_capat', '_min',
+                 'pes', 'urcari', 'coborari', 'reancorari', 'rezerva_min')
+
+    def __init__(self, rezerva=RITM_REZERVA_S, ceas=None):
+        self.rezerva = float(rezerva)
+        self.ceas = ceas or _monoton
+        self.ancora = None
+        self._pts = None                 # ultimul PTS (33 de biti)
+        self._desf = 0                   # PTS desfasurat (fara intoarcerea la 0 dupa 2^33), fata de primul
+        self._ultim = None               # ultimul moment dat
+        self._capat = 0.0                # sfarsitul ferestrei
+        self._min = None                 # cea mai mica rezerva din fereastra
+        self.pes = self.urcari = self.coborari = self.reancorari = 0
+        self.rezerva_min = None          # cea mai mica rezerva din ultima fereastra incheiata (pentru /stare)
+
+    def moment(self, pts):
+        acum = self.ceas()
+        self.pes += 1
+        if self._pts is not None:
+            d = (pts - self._pts) & dab_edi.TsAudio.MASCA_33
+            if d >= 1 << 32:
+                d -= 1 << 33
+            if -RITM_SALT_90K < d < RITM_SALT_90K:
+                self._desf += d
+            else:
+                self.ancora = None
+        self._pts = pts
+        if self.ancora is None:
+            self._desf = 0
+            self.ancora = acum + self.rezerva
+            self._capat = acum + RITM_FEREASTRA_S
+            self._min = None
+            t = acum if self._ultim is None else max(acum, self._ultim)
+            self._ultim = t
+            return t
+        m = self._desf / 90000.0
+        sosire = acum - m                # ancora la care PES-ul asta ar pleca exact cand a venit
+        if sosire > self.ancora:
+            self.ancora = sosire
+            self.urcari += 1
+        rez = self.ancora - sosire       # cat sta PES-ul in releu
+        if self._min is None or rez < self._min:
+            self._min = rez
+        if acum >= self._capat:
+            r = self._min
+            self.rezerva_min = r
+            if r > RITM_REANCORARE_S:
+                self.ancora -= r - self.rezerva
+                self.reancorari += 1
+            elif r > RITM_PRAG_S:
+                self.ancora -= min(r - RITM_PRAG_S, RITM_COBORARE * (acum - self._capat + RITM_FEREASTRA_S))
+                self.coborari += 1
+            self._capat = acum + RITM_FEREASTRA_S
+            self._min = None
+        t = self.ancora + m
+        if t < self._ultim:
+            t = self._ultim
+        self._ultim = t
+        return t
+
+    def stare(self):
+        return {'rezerva_ms': int(self.rezerva * 1000), 'pes': self.pes, 'urcari': self.urcari,
+                'coborari': self.coborari, 'reancorari': self.reancorari,
+                'rezerva_min_ms': None if self.rezerva_min is None else round(self.rezerva_min * 1000, 1)}
+
+
 def curata_id(feed_id):
     """La fel ca buchete._curata_id: asa se construieste URL-ul in plugin."""
     return ''.join(ch for ch in str(feed_id or '') if ch.isalnum() or ch in '_-.')[:64]
@@ -261,6 +365,14 @@ class ReleuDab(object):
         self.ultima_eroare = ''
         self._debit = (_monoton(), 0, 0.0)
         self.cap_client = int(arg.cap_client * 1024)
+        self.ritm_s = max(0.0, float(getattr(arg, 'ritm', RITM_REZERVA_S) or 0))     # 0 = TS-ul pleaca pe loc
+        self.ritmuri = {}                                # cheie dabts:<sid> -> RitmPcr (pentru /stare)
+        # decodarea sunetului DAB+ (0.7.4): setarea omului, apoi modul hotarat o data pe proces (_mod_sunet)
+        self.sunet_setare = str(getattr(arg, 'sunet', None) or feed.get('sunet') or 'automat')
+        self.sunet_mod = None                            # 'placa' / 'software', dupa primul post cerut ca .ts
+        self.sunet_motiv = ''
+        self.transcodoare = {}                           # cheie dabts:<sid> -> sunet_software.Transcodor
+        self._sunet_nou = False                          # setarea schimbata prin /sunet/<setare>
         self.Dispozitiv = DemuxFisier if arg.sursa_falsa else None
         if arg.sursa_falsa:
             DemuxFisier.cale = arg.sursa_falsa
@@ -271,6 +383,13 @@ class ReleuDab(object):
         parti = [p for p in cale.split('/') if p]
         if parti == ['stare']:
             return H.json_raspuns(self.stare())
+        if len(parti) == 2 and parti[0] == 'sunet':
+            if parti[1] not in ('automat', 'placa', 'software'):
+                return H.Raspuns(404, 'setare necunoscuta')
+            if parti[1] != self.sunet_setare:
+                self.sunet_setare = parti[1]
+                self._sunet_nou = True                   # firul de date hotaraste din nou la urmatorul cadru
+            return H.json_raspuns(self.stare()['sunet'])
         if len(parti) != 3 or parti[0] != 'dab':
             return H.Raspuns(404, 'cale necunoscuta')
         if parti[1] != self.feed_id:
@@ -330,6 +449,9 @@ class ReleuDab(object):
                 'sursa': st, 'edi': edi,
                 'eti': dict(self.stare_eti) if self.stare_eti else None,
                 'au': dict((('%04X' % sid), [d.au_bune, d.au_rele]) for sid, d in list(self.decodoare.items())),
+                'ritm': dict((k, r.stare()) for k, r in list(self.ritmuri.items())) or None,
+                'sunet': {'setare': self.sunet_setare, 'mod': self.sunet_mod, 'motiv': self.sunet_motiv,
+                          'transcodoare': dict((k, t.stare()) for k, t in list(self.transcodoare.items())) or None},
                 'ansamblu': self.ans.nume, 'complet': bool(self.ans.complet()), 'posturi': len(self.ans.posturi),
                 'clienti': len(s.clienti) if s else 0,
                 'abonati': dict((k, len(v)) for k, v in s.abonati.items()) if s else {},
@@ -347,6 +469,32 @@ class ReleuDab(object):
             except Exception as e:
                 self._lipsa = 'eti.py lipseste sau nu se incarca: %s' % e
         return self._lipsa if self.fel != 'edi' else None
+
+    def _mod_sunet(self):
+        """Cine decodeaza AAC-ul DAB+ al fluxurilor .ts: 'placa' sau 'software' (o data pe proces). Software numai daca
+        bibliotecile se incarca si proba de pornire iese; altfel placa, cu motivul in /stare si in jurnal."""
+        if self.sunet_mod is None:
+            try:
+                import sunet_software as ss
+                mod, motiv = ss.alege(self.sunet_setare)
+                if mod == ss.MOD_SOFTWARE:
+                    ok, de_ce = ss.disponibil()
+                    if not ok:
+                        mod, motiv = ss.MOD_PLACA, '%s; software nu se poate: %s' % (motiv, de_ce)
+                        self.jurnal('sunet: raman pe placa, %s' % de_ce)
+            except Exception as e:                       # modulul lipsa sau stricat: niciodata fara sunet
+                mod, motiv = 'placa', 'sunet_software: %s: %s' % (type(e).__name__, e)
+                self.jurnal(motiv)
+            self.sunet_mod, self.sunet_motiv = mod, motiv
+        return self.sunet_mod
+
+    def _transcodor(self, d):
+        import sunet_software as ss
+        i = d.info
+        asc = ss.asc_dab(i['rata_baza'], i['canale_baza'])
+        t = ss.Transcodor(lambda: ss.DecodorAac(asc))
+        t.info_sursa = i                                 # DABPlus face alt dict cand postul se reconfigureaza
+        return t
 
     def la_tic(self, acum):
         necesare = self.server.chei_necesare()
@@ -468,6 +616,13 @@ class ReleuDab(object):
         publica = server.publica
         self.decodoare = decodoare = {}
         muxere = {}                                      # cheie dabts:<sid> -> TsAudio
+        self.ritmuri = ritmuri = {}                      # cheie dabts:<sid> -> RitmPcr, cat traieste TsAudio-ul ei
+        for t in list(self.transcodoare.values()):
+            t.inchide()
+        self.transcodoare = transcodoare = {}            # cheie dabts:<sid> -> Transcodor (DAB+ decodat aici)
+        sw = None                                        # DAB+ decodat aici? se hotaraste la primul post cerut ca .ts
+        # ritmul cere un server care stie sa dea la un moment dat (releu_http.Server.amana); altfel TS-ul pleaca pe loc
+        ritm_s = self.ritm_s if getattr(server, 'amana', False) else 0
         pe_post = ()                                     # ((sid, [chei]), ...) din abonamente
         ab_vechi = None
         schimbari = -1
@@ -475,6 +630,17 @@ class ReleuDab(object):
         for fic, mst in cadre:
             if oprire.is_set():
                 return
+            if self._sunet_nou:
+                # setarea s-a schimbat din ecran: modul se hotaraste din nou; fluxurile .ts trec pe noul fel de sunet
+                # la cadrul urmator (TsAudio nou, PMT in versiunea urmatoare)
+                self._sunet_nou = False
+                self.sunet_mod = None
+                sw = (self._mod_sunet() == 'software') if any(c.startswith('dabts:') for _, c in ab_vechi or ()) else None
+                for x in decodoare.values():
+                    x.cu_brute = bool(sw)
+                if not sw:
+                    for k in list(transcodoare):
+                        transcodoare.pop(k).inchide()
             if fic:
                 ans.fic(fic)
                 if ans.schimbari != schimbari:
@@ -496,10 +662,18 @@ class ReleuDab(object):
                     del decodoare[sid]
                 for k in [k for k in muxere if k not in set(c for _, c in ab)]:
                     del muxere[k]
+                    ritmuri.pop(k, None)
+                    t = transcodoare.pop(k, None)
+                    if t is not None:
+                        t.inchide()
                 grupe = {}
                 for sid, cheie in ab:
                     grupe.setdefault(sid, []).append(cheie)
                 pe_post = tuple(sorted(grupe.items()))
+                if sw is None and any(c.startswith('dabts:') for _, c in ab):
+                    sw = self._mod_sunet() == 'software'
+                    for d in decodoare.values():          # un post deschis inainte ca LOAS: de acum si AU brute
+                        d.cu_brute = sw
             # un post cerut si ca LOAS si ca TS trece o singura data prin decodorul DAB+ (superframe-ul se cauta cadru
             # cu cadru, deci acelasi cadru dat de doua ori l-ar strica)
             for sid, chei in pe_post:
@@ -514,6 +688,7 @@ class ReleuDab(object):
                     d = decodoare.get(sid)
                     if d is None:
                         d = decodoare[sid] = dab_edi.DABPlus()
+                        d.cu_brute = bool(sw)                    # AU brute pentru faad2 (numai in modul software)
                     iesire = d.adauga(v)
                     if not iesire:
                         continue
@@ -524,10 +699,57 @@ class ReleuDab(object):
                     if not cheie.startswith('dabts:'):
                         publica(cheie, brut)
                         continue
+                    soft = aac and d.cu_brute                    # DAB+ decodat aici, placa primeste MP2
                     m = muxere.get(cheie)
-                    if m is None or m.tip != (0x11 if aac else 0x03):
-                        m = muxere[cheie] = dab_edi.TsAudio(sid, aac)
-                    publica(cheie, m.pachete(dab_edi.cadre_cu_pts(d, iesire)) if aac else m.cif(v))
+                    if m is None or m.tip != (0x11 if aac and not soft else 0x03):
+                        # TS nou: PTS-ul reincepe de la PTS_START, deci si ritmul lui. Pe aceeasi cheie (alt fel de
+                        # sunet): PMT cu versiunea urmatoare si contorii de continuitate dusi mai departe
+                        vechi = m
+                        m = muxere[cheie] = dab_edi.TsAudio(sid, aac and not soft,
+                                                            versiune=vechi.versiune + 1 if vechi is not None else 0)
+                        if vechi is not None:
+                            m.cc = dict(vechi.cc)
+                        if ritm_s > 0 and not (vechi is not None and aac and cheie in ritmuri):
+                            ritmuri[cheie] = RitmPcr(ritm_s)
+                        # DAB+ trecut intre placa si software: PTS-ul merge mai departe (din AU-uri), deci ritmul ramane;
+                        # unul nou ar da primul PES pe loc, inaintea celor vechi inca programate (pachete amestecate)
+                    r = ritmuri.get(cheie)
+                    if soft:
+                        # faad2 -> MP2: un PES pe cadru MP2, fiecare la momentul lui (PTS-ul vine din cel al AU-urilor)
+                        try:
+                            t = transcodoare.get(cheie)
+                            if t is None or t.info_sursa is not d.info:  # post nou sau reconfigurat: alt ASC
+                                if t is not None:
+                                    t.inchide()
+                                t = transcodoare[cheie] = self._transcodor(d)
+                            pas = 10800 // d.info['au_pe_superframe']
+                            for (_, pts), au in zip(dab_edi.cadre_cu_pts(d, iesire), d.brute):
+                                for cadru, p_mp2 in t.adauga(au, pts, pas):
+                                    if r is None:
+                                        publica(cheie, m.pachete(((cadru, p_mp2),)))
+                                    else:
+                                        publica(cheie, m.pachete(((cadru, p_mp2),)), r.moment(p_mp2))
+                            if t.au >= RENUNTA_DUPA_AU and t.au_rele * 2 > t.au:
+                                raise ValueError('faad2: %d AU rele din %d (%s)' % (t.au_rele, t.au, t.ultima_eroare))
+                        except Exception as e:
+                            # plasa: decodarea software nu merge pe postul asta -> placa (niciodata fara sunet); TS-ul
+                            # trece pe LOAS de la cadrul urmator, cu PMT nou
+                            motiv = '%s: %s' % (type(e).__name__, e)
+                            self.jurnal('sunet: trec pe placa, %s' % motiv)
+                            self.sunet_mod, self.sunet_motiv = 'placa', 'software oprit: %s' % motiv
+                            sw = False
+                            for k in list(transcodoare):
+                                transcodoare.pop(k).inchide()
+                            for x in decodoare.values():
+                                x.cu_brute = False
+                    elif r is None:
+                        publica(cheie, m.pachete(dab_edi.cadre_cu_pts(d, iesire)) if aac else m.cif(v))
+                    elif aac:
+                        for cadru, pts in dab_edi.cadre_cu_pts(d, iesire):       # un PES pe AU, fiecare la momentul lui
+                            publica(cheie, m.pachete(((cadru, pts),)), r.moment(pts))
+                    else:
+                        b = m.cif(v)
+                        publica(cheie, b, r.moment(m.pts))
 
 
 def citeste_feed(cale):
@@ -550,7 +772,7 @@ def main(argv=None):
     arg = H.citeste_argumente(sys.argv[1:] if argv is None else argv, {
         '--port': (int, None), '--gazda': (str, '127.0.0.1'), '--inactiv': (float, 10.0),
         '--sursa-falsa': (str, None), '--debit-fals': (float, 1178.0), '--cap-client': (float, CAP_CLIENT / 1024),
-        '--grupare': (float, GRUPARE_S)},
+        '--grupare': (float, GRUPARE_S), '--ritm': (float, RITM_REZERVA_S), '--sunet': (str, None)},
         ('--iesi-fara-clienti',), ('feed',), 'Releul DAB+ din satelit (hdsatelit.com)')
     jurnal = Jurnal()
     try:

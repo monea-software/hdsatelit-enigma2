@@ -152,6 +152,8 @@ class VideoSetup(ConfigListScreen, Screen):
 		self.syncing = False
 		self.resolution = self.rate = None
 		self.rateEntry = self.zapEntry = self.colorEntry = self.policyEntry = None
+		self.pozaEntry = None          # HDSatelit: poza canalului la schimbare (Components/HdsUltimaImagine.py)
+		self.primaEntry = None         # HDSatelit: prima imagine rapida (Components/HdsPrimaImagine.py)
 		self.colorTried = False        # YCbCr written on this OK (the question covers it)
 		self.colorText = None          # said when the screen closes (a TV without YCbCr, YCbCr for later)
 		self.colorRestart = False      # RGB saved on this OK while the output is YCbCr: the restart question
@@ -216,6 +218,16 @@ class VideoSetup(ConfigListScreen, Screen):
 		if zap is not None:
 			self.zapEntry = getConfigListEntry(_("La schimbarea canalului"), zap)
 			entries.append(self.zapEntry)
+		poza = self.pozaElement()
+		if poza is not None:
+			from Components import HdsUltimaImagine
+			self.pozaEntry = getConfigListEntry(_(HdsUltimaImagine.ETICHETA), poza)
+			entries.append(self.pozaEntry)
+		prima = self.primaElement()
+		if prima is not None:
+			from Components import HdsPrimaImagine
+			self.primaEntry = getConfigListEntry(_(HdsPrimaImagine.ETICHETA), prima)
+			entries.append(self.primaEntry)
 		return entries
 
 	@staticmethod
@@ -226,6 +238,24 @@ class VideoSetup(ConfigListScreen, Screen):
 	@staticmethod
 	def zapElement():
 		return VideoOutput.configElement(VideoOutput.ZAP_ATTR)
+
+	@staticmethod
+	def primaElement():
+		"""HDSatelit: config.av.hds_prima_imagine (Components/HdsPrimaImagine.py), numai pe receptoarele cu libreader"""
+		try:
+			from Components import HdsPrimaImagine
+			return HdsPrimaImagine.config() if HdsPrimaImagine.oferit() else None
+		except Exception:
+			return None
+
+	@staticmethod
+	def pozaElement():
+		"""HDSatelit: config.av.hds_zap_poza (Components/HdsUltimaImagine.py), numai cu grab pe receptor"""
+		try:
+			from Components import HdsUltimaImagine
+			return HdsUltimaImagine.config() if HdsUltimaImagine.oferit() else None
+		except Exception:
+			return None
 
 	def resolutionChanged(self, element):
 		"""another resolution: the "Frecventa" row gets its rates (the same rate or "Automat" when it has them)"""
@@ -288,6 +318,14 @@ class VideoSetup(ConfigListScreen, Screen):
 		if current is not None and self.zapEntry is not None and current[1] is self.zapEntry[1]:
 			self.showDescription(VideoOutput.zapDescription())
 			return
+		if current is not None and self.pozaEntry is not None and current[1] is self.pozaEntry[1]:
+			from Components import HdsUltimaImagine
+			self.showDescription(_(HdsUltimaImagine.DESCRIERE))
+			return
+		if current is not None and self.primaEntry is not None and current[1] is self.primaEntry[1]:
+			from Components import HdsPrimaImagine
+			self.showDescription(_(HdsPrimaImagine.DESCRIERE))
+			return
 		if current is not None and self.policyEntry is not None and current[1] is self.policyEntry[1]:
 			self.showDescription(VideoOutput.policyDescription())
 			return
@@ -339,8 +377,8 @@ class VideoSetup(ConfigListScreen, Screen):
 	def otherElements(self):
 		"""the settings saved with the video mode, without a question of their own: zapmode, the 4:3 picture and the HDMI
 		colours"""
-		return [element for element in (self.zapElement(), VideoOutput.policyElement(), VideoOutput.colorElement())
-			if element is not None]
+		return [element for element in (self.zapElement(), self.pozaElement(), self.primaElement(),
+			VideoOutput.policyElement(), VideoOutput.colorElement()) if element is not None]
 
 	def keySave(self):
 		output = VideoOutput.videoOutput

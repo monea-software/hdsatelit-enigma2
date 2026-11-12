@@ -39,6 +39,9 @@ class SelectionList(MenuList):
 
 	def toggleSelection(self):
 		idx = self.getSelectedIndex()
+		# a plugin may open an empty list and still bind OK to this (seen with an old plugin translated from Python 2)
+		if not self.list or idx is None or not 0 <= idx < len(self.list):
+			return
 		item = self.list[idx][0]
 		self.list[idx] = SelectionEntryComponent(item[0], item[1], item[2], not item[3])
 		self.setList(self.list)

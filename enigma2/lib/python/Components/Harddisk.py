@@ -57,8 +57,12 @@ def readMounts(mounts = None):
 def findMountpoints(device, mounts = None):
 	"""every place where /dev/<device> is mounted now, in /proc/mounts order; the name must match exactly (sda is not
 	sda1)"""
+	return _mountpointsIn(device, readMounts(mounts))
+
+def _mountpointsIn(device, pairs):
+	"""findMountpoints on (source, mountpoint) pairs already read (getMountedPartitions reads /proc/mounts once)"""
 	wanted = "/dev/" + device
-	return [mountpoint for source, mountpoint in readMounts(mounts)
+	return [mountpoint for source, mountpoint in pairs
 		if source == wanted or (source.startswith("/dev/") and path.realpath(source) == wanted)]
 
 def findMountpoint(device, mounts = None):
@@ -91,6 +95,9 @@ NOT_MOUNTED_FS = ("swap", "LVM2_member", "linux_raid_member", "crypto_LUKS", "zf
 # the second mount of the disk the image runs from (HarddiskManager.addSystemDisk): the filesystem is already mounted, so
 # it takes milliseconds; a start never waits for it longer than this (seconds)
 SYSTEM_MOUNT_TIMEOUT = 15
+# the links of the partitions already mounted at start are awaited at most this long before the plugins load (seconds;
+# HarddiskManager.waitStableNames); what is not ready by then is finished after the main loop starts, as before
+STABLE_NAMES_WAIT = 3
 # vfat file names in UTF-8 (the kernel default here is iso8859-1: names from the EPG would be unreadable on a PC)
 UTF8_FS = ("vfat",)
 # udev runs mount.sh before device-info.sh: a known type means mount.sh is done; while it is not known yet (udev
@@ -105,6 +112,10 @@ UUID_RX = re.compile(r"^[0-9A-Za-z-]{1,64}$")
 # .../usb1/..., the eMMC under .../mmc0/... (never an ATA port)
 ATA_PORT_RX = re.compile(r"/ata[0-9]+/")
 _boot_slots = set()
+# devices already read as not a boot slot (uevent without rootfsN/kernelN and no rootfsN label): mounted() asks for every
+# hotplug partition at each getMountedPartitions on the enigma2 thread, and the answer only changes with the device, so
+# it is forgotten when the device is added or removed (addHotplugPartition, removeHotplugPartition)
+_not_boot_slots = set()
 
 def isSataPhysdev(physdev):
 	"""physdev (the device path of the disk in sysfs, without /sys) is on an ATA port and not behind USB"""
@@ -238,6 +249,8 @@ def isBootSlot(device):
 	# Numele partitiei vine din nucleu, fara citirea sistemului de fisiere.
 	if device in _boot_slots:
 		return True
+	if device in _not_boot_slots:
+		return False
 	try:
 		from Components.HdsPornireMultipla import _cheiValori, _text
 		name = _cheiValori(_text(SYS_CLASS_BLOCK + device + "/uevent")).get("PARTNAME", "")
@@ -247,6 +260,7 @@ def isBootSlot(device):
 		if re.fullmatch(r"rootfs[0-9]+", deviceLabel(device), re.IGNORECASE):
 			_boot_slots.add(device)
 			return True
+		_not_boot_slots.add(device)
 		return False
 	except (ImportError, OSError, ValueError):
 		return False
@@ -683,22 +697,26 @@ class Partition:
 			return self.description
 		return "%s\t%s" % (self.description, self.mountpoint)
 
-	def mounted(self):
+	def mounted(self, mounts = None):
+		# mounts: the (source, mountpoint) pairs of readMounts(), when the caller has them already (getMountedPartitions)
 		if self.device and isBootSlot(self.device):
 			return False
 		if self.force_mounted:
 			return True
+		if mounts is None:
+			mounts = readMounts()
 		if self.device and self.is_hotplug:
 			# hotplug partitions: the mountpoint is whatever /proc/mounts says now, unless the partition is shown under
 			# its stable name (/media/hdd, a link to where the system mounted it)
-			mountpoint = findMountpoint(self.device)
+			found = _mountpointsIn(self.device, mounts)
+			mountpoint = found[0] if found else None
 			if mountpoint is None:
 				return False
 			if self.mountpoint != mountpoint and not isAliasOf(self.mountpoint, mountpoint):
 				self.mountpoint = mountpoint
 			return True
 		return any(self.mountpoint == mountpoint and not (source.startswith("/dev/") and
-			isBootSlot(path.basename(path.realpath(source)))) for source, mountpoint in readMounts())
+			isBootSlot(path.basename(path.realpath(source)))) for source, mountpoint in mounts)
 
 class SystemDiskPartition(Partition):
 	"""The partition of the external disk the image runs from, mounted a second time on a stable name (see
@@ -713,8 +731,9 @@ class SystemDiskPartition(Partition):
 		self.sata = not self.usb and isSataPhysdev(physdev)
 		self.removable = removable
 
-	def mounted(self):
-		return any(self.mountpoint == m or isAliasOf(self.mountpoint, m) for m in findMountpoints(self.device))
+	def mounted(self, mounts = None):
+		found = _mountpointsIn(self.device, readMounts() if mounts is None else mounts)
+		return any(self.mountpoint == m or isAliasOf(self.mountpoint, m) for m in found)
 
 DEVICEDB_SR = \
 	{"dm8000":
@@ -807,12 +826,14 @@ class HarddiskManager:
 			cmdline = ""
 		self.system_disk = rootDeviceName(cmdline, readMounts())
 		external_root = self.externalRoot()
+		# partitia discului mare de pe care porneste imaginea (sau None): ea ia /media/hdd inaintea unui stick tinut minte
+		self.system_partition = external_root["partitie"] if external_root else None
 		if external_root:
 			self.system_disk = external_root["disc"]
 		self.enumerateBlockDevices()
 		if external_root:
-			# before the sticks, so a fresh receiver has /hdd/movie/ on the disk; a stick that had /media/hdd keeps it
-			# (hddOwnerWaits)
+			# before the sticks, so /hdd/movie/ is on the disk; a stick that had /media/hdd gives it up, unless the name
+			# was chosen by hand for it (hddOwnerWaits, media_names)
 			self.addSystemDisk(external_root)
 		# partitions the base system mounted before enigma2 started get their stable names now: before any screen (a
 		# timer recording right after a wake-up needs /media/hdd) and before any listener, so a stick present at start
@@ -821,7 +842,26 @@ class HarddiskManager:
 		for device in sorted(self.pending.keys(), key = self.pendingOrder):
 			if device in self.pending:
 				self.mountIfNeeded(device, True, True)
+		self.waitStableNames()
 		self._initializing = False
+
+	def waitStableNames(self, termen = STABLE_NAMES_WAIT):
+		"""The plans above run one device after another (_queueMountPlan), and the next one starts from the answer of
+		the previous one, which an eTimer brings: before the main loop only the first device would get its link. The
+		plugins are imported before the main loop and some read /media/<name> right then (a softcam manager with its
+		binaries on /media/usb puts its folders back to the defaults when they are missing). So wait here, at most
+		`termen` seconds, for the links of the partitions already mounted; the disk work stays on the worker threads."""
+		if not getattr(self, "_mount_plan_queue", None):
+			return True
+		inceput = time.monotonic()
+		try:
+			from Components.HdsStocareMontare import culegeAcum
+			gata = culegeAcum(self, lambda: not self._mount_plan_queue, termen)
+		except Exception as err:
+			print("[Harddisk] stable names at start: %s" % err)
+			return False
+		print("[Harddisk] stable names at start: %s in %.2f s" % ("ready" if gata else "not all ready", time.monotonic() - inceput))
+		return gata
 
 	def externalRoot(self):
 		"""the image runs from a big external disk, in a folder of its partition (Components/HdsStocare.discRadacina)"""
@@ -1017,6 +1057,7 @@ class HarddiskManager:
 		return device in self.pending or any(x.device == device for x in self.partitions)
 
 	def addHotplugPartition(self, device, physdev = None):
+		_not_boot_slots.discard(device)
 		if not physdev:
 			dev, part = self.splitDeviceName(device)
 			try:
@@ -1167,6 +1208,12 @@ class HarddiskManager:
 		"""/media/hdd is kept for the partition that had it before, while that one is present and known here"""
 		owner = self.hdd_uuid
 		if not owner or uuid == owner or not uuidPresent(owner):
+			return False
+		# Discul mare de pe care porneste imaginea ia /media/hdd fara setare (Wlad, forum 948): /media/hdd tinut minte
+		# pentru un stick nu il mai opreste. Numele ales de mana pentru stick (media_names) il opreste mai departe, din
+		# freeMediaName (reserved). Pe receptoarele care pornesc din memoria interna nu se schimba nimic.
+		system = getattr(self, "system_partition", None)
+		if system and uuid and uuid == deviceUuid(system):
 			return False
 		try:
 			device = path.basename(readlink(UUID_DIR + owner))
@@ -1763,6 +1810,7 @@ class HarddiskManager:
 
 	def removeHotplugPartition(self, device):
 		_boot_slots.discard(device)
+		_not_boot_slots.discard(device)
 		from Components.HdsStocareDisc import uita
 		uita(("slot-disc", device))
 		timer = self.mount_timers.pop(device, None)
@@ -1838,7 +1886,12 @@ class HarddiskManager:
 		return findMountpoint(device) or MEDIA_ROOT + device
 
 	def getMountedPartitions(self, onlyhotplug = False):
-		parts = [x for x in self.partitions if (x.is_hotplug or not onlyhotplug) and x.mounted()]
+		# /proc/mounts read once for the whole list, not once per partition (ConfigLocations and FileList call this on the
+		# enigma2 thread); a Partition subclass from outside the image with the old mounted() signature is asked as before
+		mounts = readMounts()
+		ale_noastre = (Partition.mounted, SystemDiskPartition.mounted)
+		parts = [x for x in self.partitions if (x.is_hotplug or not onlyhotplug) and
+			(x.mounted(mounts) if getattr(type(x), "mounted", None) in ale_noastre else x.mounted())]
 		# a device on a fixed place (/media/hdd, /media/usb) is listed once, with its own name
 		taken = set(x.mountpoint.rstrip("/") for x in parts if x.is_hotplug and x.mountpoint)
 		taken.update(self.media_stable.get(x.device, "").rstrip("/") for x in parts if x.is_hotplug)

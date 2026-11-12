@@ -45,6 +45,16 @@ public:
 		   driver until the hold is lifted or the thread is stopped (see HISI_DVR_WAIT_US in filepush.cpp). Other
 		   boxes: only kept, nothing changes. */
 	void setHoldWhenFull(bool hold);
+
+		/* SoftCSA (lib/service/servicedvbsoftdecoder.h): the source is a live demux and the target the dvr of a playback
+		   demux. Set before start(). On HiSilicon writes go in parts of at most DVR_LOOP_PART bytes; a part the driver has
+		   no room for (EAGAIN) is dropped and the thread waits DVR_LOOP_FULL_US outside the driver before it reads on (a
+		   live stream cannot wait, and a wait inside the driver is state D, which the watchdog of the image takes for a
+		   hung thread). On every other receiver the generic path of filepush.cpp (LOOP_GATHER_BYTES) reads the demux
+		   without blocking, gathers by size and age, writes parts of whole packets and drops what finds no room for
+		   LOOP_DROP_MS. */
+	void setDvrLoop(bool loop) { m_dvr_loop = loop ? 1 : 0; }
+	bool dvrLoop() const { return m_dvr_loop != 0; }
 	
 	enum { evtEOF, evtReadError, evtWriteError, evtUser };
 	sigc::signal<void(int)> m_event;
@@ -71,6 +81,8 @@ private:
 	off_t m_current_position;
 	int m_fd_source; /* descriptor given to start(int, int), or -1: the thread may wait on it with poll */
 	volatile int m_hold_when_full = 0; /* setHoldWhenFull */
+	int m_dvr_loop = 0; /* setDvrLoop */
+	enum { DVR_LOOP_PART = 348 * 188 }; /* 65424 bytes, whole packets, about the write of a playback (READ_SIZE) */
 
 	ePtr<iTsSource> m_source;
 

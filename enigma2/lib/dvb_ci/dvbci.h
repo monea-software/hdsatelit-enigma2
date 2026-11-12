@@ -14,6 +14,7 @@ class eDVBCISession;
 class eDVBCIApplicationManagerSession;
 class eDVBCICAManagerSession;
 class eDVBCIMMISession;
+class eDVBCICcSession;
 class eDVBServicePMTHandler;
 class eDVBCISlot;
 class eDVBCIInterfaces;
@@ -67,8 +68,33 @@ class eDVBCISlot: public iObject, public sigc::trackable
 	bool user_mapped;
 	void data(int);
 	bool plugged;
+	/* slot pornit/oprit si intarzierea pornirii (din sursele GPL enigma2 OE-Alliance, depozitul enigma2 al stratului,
+	   commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4, lib/dvb_ci/dvbci.cpp: openDevice, closeDevice, setEnabled) */
+	eMainloop *m_context;
+	ePtr<eTimer> startup_timeout;
+	void openDevice();
+	void closeDevice();
+	/* CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4, lib/dvb_ci/dvbci.h):
+	   managerul de continut, parametrii descifrarii (demux, program, pid-uri, tuner), optiunile din setari si rutarea
+	   fluxului prin modul in timpul autentificarii */
+	eDVBCICcSession *cc_manager;
+	int16_t m_ca_demux_id;
+	uint16_t m_program_number;
+	int m_video_pid;
+	int m_audio_pid;
+	int m_audio_number;
+	int m_audio_pids[16];
+	int m_tunernum;
+	bool m_operator_profiles_disabled;
+	int m_alt_ca_handling;
+	bool m_ciPlusRoutingDone;
+	bool m_ciplus_keys;  // cheile CI+ primite de la modul (dupa autentificare)
+	int m_ciplus_routing_tunernum;
+	std::string m_ciplus_routing_input;
+	std::string m_ciplus_routing_ci_input;
+	void readCIPlusSettings();
 public:
-	enum {stateRemoved, stateInserted, stateInvalid, stateResetted};
+	enum {stateRemoved, stateInserted, stateInvalid, stateResetted, stateDisabled};
 	eDVBCISlot(eMainloop *context, int nr);
 	~eDVBCISlot();
 	
@@ -77,6 +103,26 @@ public:
 	void setAppManager( eDVBCIApplicationManagerSession *session );
 	void setMMIManager( eDVBCIMMISession *session );
 	void setCAManager( eDVBCICAManagerSession *session );
+	void setCCManager( eDVBCICcSession *session );
+	eDVBCICcSession *getCCManager() { return cc_manager; }
+	int getFd() { return fd; }
+	int16_t getCADemuxID() { return m_ca_demux_id; }
+	int getTunerNum() { return m_tunernum; }
+	int getUseCount() { return use_count; }
+	int getProgramNumber() { return (int)m_program_number; }
+	int getVideoPid() { return m_video_pid; }
+	int getAudioPid() { return m_audio_pid; }
+	int getAudioNumber() { return m_audio_number; }
+	int *getAudioPids() { return m_audio_pids; }
+	int getDescramblingOptions() { return m_alt_ca_handling; }
+	bool getIsOperatorProfileDisabled() { return m_operator_profiles_disabled; }
+	bool ciplusRoutingDone() { return m_ciPlusRoutingDone; }
+	void setCIPlusRoutingDone() { m_ciPlusRoutingDone = true; }
+	int getCIPlusRoutingTunerNum() { return m_ciplus_routing_tunernum; }
+	const std::string &getCIPlusRoutingInput() { return m_ciplus_routing_input; }
+	const std::string &getCIPlusRoutingCIInput() { return m_ciplus_routing_ci_input; }
+	void setCIPlusRoutingParameter(int tunernum, const std::string &input, const std::string &ci_input);
+	int setCaParameter(eDVBServicePMTHandler *pmthandler);
 
 	eDVBCIApplicationManagerSession *getAppManager() { return application_manager; }
 	eDVBCIMMISession *getMMIManager() { return mmi_session; }
@@ -96,6 +142,7 @@ public:
 	int getNumOfServices() { return running_services.size(); }
 	int setSource(data_source source);
 	int setClockRate(int);
+	int setEnabled(bool enabled);
 };
 
 struct CIPmtHandler
@@ -135,6 +182,8 @@ public:
 	void removePMTHandler(eDVBServicePMTHandler *pmthandler);
 	void recheckPMTHandlers();
 	void gotPMT(eDVBServicePMTHandler *pmthandler);
+		/* a CI slot descrambles the service of this handler: SoftCSA (lib/dvb/csasession.h) leaves it to the module */
+	bool isHandlerAssigned(eDVBServicePMTHandler *pmthandler);
 	void ciRemoved(eDVBCISlot *slot);
 	int getSlotState(int slot);
 
@@ -149,6 +198,12 @@ public:
 	int sendCAPMT(int slot);
 	int setInputSource(int tunerno, data_source source);
 	int setCIClockRate(int slot, int rate);
+	int setCIEnabled(int slot, bool enabled);
+	/* CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4) */
+	void setCIPlusRouting(int slotid);
+	void revertCIPlusRouting(int slotid);
+	std::string getLanguage();
+	int getCIPlusState(int slotid);
 #ifdef SWIG
 public:
 #endif

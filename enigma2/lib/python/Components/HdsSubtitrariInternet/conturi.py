@@ -111,6 +111,15 @@ def _curat(date):
 	return rez
 
 
+def _cheieDinImagine():
+	"""True daca imaginea a pus cheia aplicatiei OpenSubtitles (surse/opensubtitles.FISIER_CHEIE, negol)."""
+	try:
+		from .surse.opensubtitles import FISIER_CHEIE
+		return os.path.getsize(FISIER_CHEIE) > 0
+	except (OSError, IOError, ImportError):
+		return False
+
+
 class Conturi(object):
 	"""Citirea si scrierea fisierului; `identitate` si `cale` se pot schimba (probele)."""
 
@@ -188,4 +197,7 @@ class Conturi(object):
 		date = self.citeste() if date is None else date
 		rez = dict((k, k in date) for k in CAMPURI)
 		rez["os_utilizator_text"] = date.get("os_utilizator", "")
+		# cheia aplicatiei OpenSubtitles pusa de imagine (fisierul ei): randul arata „scrisă” si fara cheie in conturi;
+		# stergerea ramane numai pentru cheia scrisa de om (atunci se intoarce la cea din imagine)
+		rez["os_cheie_aplicatie_imagine"] = _cheieDinImagine()
 		return rez

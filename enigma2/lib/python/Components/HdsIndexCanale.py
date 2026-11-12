@@ -1146,15 +1146,48 @@ def text_buchet_gol(fel, cuOk=True):
 	cautarea (numai sagetile si OK); fara: in pagina web."""
 	ce, unde = _texte_gol(fel)
 	if cuOk:
-		ok = _('Apasă OK ca să alegi țara.') if fel == 'dvbi' else _('Apasă OK ca să cauți acum.')
+		if fel == 'dvbi':
+			# fara liste pentru tara: OK alege alta tara; altfel OK cauta acum cele mai noi liste (ChannelSelection)
+			ok = _('Apasă OK ca să alegi altă țară.') if dvbi_fara_liste()[0] else _(
+				'Caut acum cele mai noi liste DVB-I și le adaug? Apasă OK.')
+		else:
+			ok = _('Apasă OK ca să cauți acum.')
 		return ce + '\n\n' + ok + ' ' + unde
 	return ce + '\n\n' + unde
 
 
+def dvbi_fara_liste():
+	"""(True, tara) cand tara DVB-I de acum n-are liste in registre (Components/HdsDvbISetari.faraListe); altfel (False, "")."""
+	try:
+		try:
+			from Components.HdsDvbISetari import faraListe
+		except ImportError:
+			from HdsDvbISetari import faraListe
+		return faraListe()
+	except Exception as e:
+		print('[HdsIndexCanale] starea DVB-I: %s' % e)
+		return False, ''
+
+
+def _nume_tara(cod):
+	try:
+		try:
+			from Components.HdsListeCabluTerestru import nume_tara
+		except ImportError:
+			from HdsListeCabluTerestru import nume_tara
+		return nume_tara(cod)
+	except Exception:
+		return cod
+
+
 def _texte_gol(fel):
 	if fel == 'dvbi':
-		return (_('Aici apar canalele de pe internet (DVB-I) ale țării alese, fără nicio scanare și fără antenă. Lista e goală: încă nu ai ales țara sau listele ei nu s-au descărcat.'),
-			_('Țara se alege în Meniu > Setări > Surse de pe internet > DVB-I (televiziune prin internet).'))
+		fara, tara = dvbi_fara_liste()
+		if fara:
+			return (_('Pentru %s nu sunt încă liste DVB-I publice (canale de televiziune prin internet). Receptorul verifică singur în fiecare zi și le adaugă când apar.') % _nume_tara(tara),
+				_('Altă țară se alege în Meniu > Setări > Surse de pe internet > DVB-I.'))
+		return (_('Aici apar singure canalele de pe internet (DVB-I) din listele publice ale țării tale, fără scanare și fără antenă, și se țin la zi din oră în oră.'),
+			_('Țara și listele se schimbă în Meniu > Setări > Surse de pe internet > DVB-I.'))
 	if fel == 'abertis':
 		return (_('Aici apar canalele terestre spaniole recepționate din satelit. Lista e goală: încă nu ai căutat pe 30°V.'),
 			_('Căutarea e în Meniu > Scanare > Satelit > DVB-T2 prin satelit.'))
@@ -1220,6 +1253,8 @@ class Index(object):
 		self.limbi = {'lsunet': [], 'lsub': []}
 		self.optiuni = {}
 		self.cu_optiuni = dict((g, 0) for g in GRUPURI)
+		# cheile canalelor deja calculate pentru baza unica (HdsBazaCanale.tabel_chei), facute de construieste
+		self.chei_baza = None
 		if complet:
 			self._limbi()
 			for c in canale:
@@ -1357,6 +1392,7 @@ class Index(object):
 		facut; altfel se citeste o singura data, rand cu rand."""
 		if masurari is None:
 			masurari = {}
+		self._chei_in_folosinta()
 		v = getattr(masurari, 'versiune', None)
 		if v is not None and self.masurari_marcaj[0] is masurari and self.masurari_marcaj[1] == v:
 			return False
@@ -1389,6 +1425,14 @@ class Index(object):
 			self._numara()
 		return schimbat
 
+	def _chei_in_folosinta(self):
+		"""Cheile acestui index, deja calculate (construieste), trec in HdsBazaCanale.cheie inaintea trecerii peste baza:
+		o atribuire, pe firul enigma2. Fara tabel (index facut altfel), cheie() calculeaza ca inainte."""
+		if self.chei_baza is not None:
+			B = _modul_baza()
+			if B is not None:
+				B.tine_minte_chei(self.chei_baza)
+
 	def la_zi(self, masurari, versiune_piste, limba_receptor=None):
 		"""Indexul are deja masuratorile si pistele de acum (aceleasi priviri, aceleasi versiuni): nimic de refacut."""
 		v = getattr(masurari, 'versiune', None)
@@ -1405,6 +1449,7 @@ class Index(object):
 		pas = pas or PAS_TREPTAT
 		if masurari is None:
 			masurari = {}
+		self._chei_in_folosinta()
 		v = getattr(masurari, 'versiune', None)
 		aplicate = {}
 		for k, c in enumerate(self.canale):
@@ -1439,6 +1484,7 @@ class Index(object):
 		marcaj = (versiune, id(trasaturi) if versiune is None else None, limba_receptor)
 		if versiune is not None and marcaj == self.piste_aplicate:
 			return False
+		self._chei_in_folosinta()
 		if nume_limba is not None:
 			self.nume_limba = nume_limba
 		self.limba_receptor = limba_receptor
@@ -1631,8 +1677,9 @@ def semnatura(director=DIRECTOR, pozitii_feed=None):
 
 
 def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
-	"""Citirea lamedb-ului si a buchetelor si indexul, fara masuratori si piste. Numai fisiere si obiecte noi, nimic
-	din enigma2 si nimic comun: se poate chema de pe un fir. -> (semnatura, Index)."""
+	"""Citirea lamedb-ului si a buchetelor si indexul, fara masuratori si piste (cu tabelul cheilor pentru baza unica,
+	_tabel_chei). Numai fisiere si obiecte noi, nimic din enigma2 si nimic comun: se poate chema de pe un fir.
+	-> (semnatura, Index)."""
 	sem = semnatura(director, pozitii_feed)
 	buchete = fisiere_buchete(director)
 	grupe_online = _grupe_online(director, buchete)
@@ -1666,7 +1713,33 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 	index.grupe_online = grupe_online
 	index.grupe_online_canale = grupe_online_canale
 	index.numar_radacina_online = numar_radacina_online
+	index.chei_baza = _tabel_chei(unice)
 	return sem, index
+
+
+def _modul_baza():
+	"""Components/HdsBazaCanale, sau None daca nu se incarca (tabelul cheilor e numai o scurtatura)."""
+	try:
+		try:
+			from Components import HdsBazaCanale as B
+		except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
+			import HdsBazaCanale as B
+	except Exception:
+		return None
+	return B
+
+
+def _tabel_chei(canale):
+	"""Cheile canalelor deja calculate pentru baza unica (HdsBazaCanale.tabel_chei): pe firul care face indexul, o
+	singura data, ca trecerea indexului peste baza, pe firul enigma2, sa nu le mai calculeze la fiecare cautare. Date
+	noi, numai ale indexului; le pune in folosinta Index._chei_in_folosinta. None daca baza nu se incarca."""
+	B = _modul_baza()
+	if B is None:
+		return None
+	try:
+		return B.tabel_chei(c.cheie_mas for c in canale if c.cheie_mas)
+	except Exception:
+		return None
 
 
 def _grupe_online(director, buchete):

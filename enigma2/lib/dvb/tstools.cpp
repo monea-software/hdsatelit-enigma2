@@ -23,6 +23,12 @@ eDVBTSTools::eDVBTSTools()
 	m_last_filelength = 0;
 	
 	m_futile = 0;
+
+	/* HD Satelit: pazite de m_begin_valid/m_end_valid, dar puse la zero, nu lasate cu ce era in memorie */
+	m_offset_begin = 0;
+	m_offset_end = 0;
+	m_pts_begin = 0;
+	m_pts_end = 0;
 }
 
 void eDVBTSTools::closeSource()

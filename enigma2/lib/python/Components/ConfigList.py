@@ -99,9 +99,12 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 		selection[1].toggle()
 		self.invalidateCurrent()
 
-	def handleKey(self, key):
+	def handleKey(self, key, callback=None):
+		# callback (alte imagini): chemat dupa ce setarea a primit tasta (ecranele lor ii dau entryChanged)
 		selection = self.getCurrent()
 		if selection and len(selection) > 1 and selection[1].enabled:
+			if getattr(selection[1], "isReadOnly", lambda: False)():
+				return False
 			if key in KEY_NUMBERS or key == KEY_ASCII:
 				from Components.HdsAsistentaControl import campSecret, cereOprirePentruSecret
 				if campSecret(selection[1], selection[0]) and cereOprirePentruSecret(self.session):
@@ -110,9 +113,51 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 			self.invalidateCurrent()
 			if key in KEY_NUMBERS:
 				self.timer.start(1000, 1)
+			if callback is not None:
+				callback()
+			return True
+		return False
 
-	def getCurrent(self):
+	def getCurrent(self, full=True):
 		return self.l.getCurrentSelection()
+
+	# HDSatelit: navigarea cu numele din alte imagini (pluginurile scrise pentru ele le cheama pe self["config"])
+	def _muta(self, directie):
+		if self.instance is not None:
+			self.instance.moveSelection(getattr(self.instance, directie))
+
+	def goTop(self):
+		self._muta("moveTop")
+
+	def goPageUp(self):
+		self._muta("pageUp")
+
+	def goLineUp(self):
+		self._muta("moveUp")
+
+	def goLineDown(self):
+		self._muta("moveDown")
+
+	def goPageDown(self):
+		self._muta("pageDown")
+
+	def goBottom(self):
+		self._muta("moveEnd")
+
+	moveTop = goTop
+	pageUp = goPageUp
+	moveUp = goLineUp
+	moveDown = goLineDown
+	pageDown = goPageDown
+	moveBottom = goBottom
+
+	def selectionEnabled(self, enabled):
+		if self.instance is not None:
+			self.instance.setSelectionEnable(enabled)
+
+	def enableAutoNavigation(self, enabled):
+		"""La noi lista nativa nu se poate dezlega din Python (vezi MenuList.enableAutoNavigation); se tine alegerea."""
+		self.navigareAutomata = bool(enabled)
 
 	def campSecretActual(self):
 		from Components.HdsAsistentaControl import campSecret
@@ -189,7 +234,16 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 		return is_changed
 
 class ConfigListScreen:
-	def __init__(self, list, session = None, on_change = None):
+	def __init__(self, list, session = None, on_change = None, fullUI = False, allowDefault = False, **altele):
+		# HDSatelit: fullUI/allowDefault (alte imagini) se primesc; la noi tastele ecranului raman cele de azi, iar
+		# keyDefault (pune valorile implicite) se poate chema de ecran. Mesajele si notificatorii de salvare ca acolo.
+		self.fullUI = fullUI
+		self.allowDefault = allowDefault
+		if not isinstance(getattr(self, "onSave", None), type([])):
+			self.onSave = []
+		self.cancelMsg = _("Really close without saving settings?")
+		self.restartMsg = _("Repornești interfața acum?")
+		self.closeParameters = ()
 		self["config_actions"] = NumberActionMap(["SetupActions", "MenuActions", "InputAsciiActions", "KeyboardInputActions"],
 		{
 			"gotAsciiCode": self.keyGotAscii,
@@ -229,6 +283,13 @@ class ConfigListScreen:
 		
 		if not self.handleInputHelpers in self["config"].onSelectionChanged:
 			self["config"].onSelectionChanged.append(self.handleInputHelpers)
+		# temele din alte imagini asaza aici „HelpWindow” (poza tastaturii); numai sub o tema straina (HdsNumeStandard)
+		try:
+			from Components.HdsNumeStandard import adauga
+			from Components.Pixmap import Pixmap
+			adauga(self, "HelpWindow", Pixmap, ascuns=True)
+		except Exception as e:
+			print("[ConfigList] HelpWindow: %r" % (e,))
 
 	# numele cerute de pluginuri
 	def getCurrentEntry(self):
@@ -395,6 +456,9 @@ class ConfigListScreen:
 	# keySave and keyCancel are just provided in case you need them.
 	# you have to call them by yourself.
 	def keySave(self):
+		# notificatorii de salvare (addSaveNotifier, alte imagini) inaintea salvarii
+		for notifier in list(self.__dict__.get("onSave", ())):
+			notifier()
 		self.saveAll()
 		self.close()
 	
@@ -405,10 +469,120 @@ class ConfigListScreen:
 		for x in self["config"].list:
 			if len(x) > 1:
 				x[1].cancel()
-		self.close()
+		getattr(self, "cancelConfirmed", self.close)()
 
 	def keyCancel(self):
+		# intreaba cand sunt schimbari; inchiderea trece prin cancelConfirmed (subclasele din alte imagini o suprascriu)
+		self.closeParameters = ()
 		if self["config"].isChanged():
-			self.session.openWithCallback(self.cancelConfirm, MessageBox, _("Really close without saving settings?"))
+			self.session.openWithCallback(self.cancelConfirm, MessageBox, getattr(self, "cancelMsg", None) or _("Really close without saving settings?"))
 		else:
-			self.close()
+			getattr(self, "cancelConfirmed", self.close)()
+
+	# HDSatelit: restul API-ului din alte imagini al ecranelor cu setari (pluginurile scrise pentru el le cheama sau le
+	# suprascriu). Iesirea, salvarea si tastele de mai sus merg ca pana acum pe ecranele noastre.
+	def closeConfigList(self, closeParameters=()):
+		self.closeParameters = closeParameters
+		if self["config"].isChanged():
+			self.session.openWithCallback(self.cancelConfirm, MessageBox, getattr(self, "cancelMsg", None) or _("Really close without saving settings?"))
+		else:
+			self.cancelConfirmed()
+
+	def cancelConfirmed(self):
+		self.close(*getattr(self, "closeParameters", ()))
+
+	def setCancelMessage(self, msg):
+		self.cancelMsg = _("Really close without saving settings?") if msg is None else msg
+
+	def setRestartMessage(self, msg):
+		self.restartMsg = _("Repornești interfața acum?") if msg is None else msg
+
+	def addSaveNotifier(self, notifier):
+		if not callable(notifier):
+			raise TypeError("[ConfigList] notifier must be callable")
+		self.__dict__.setdefault("onSave", []).append(notifier)
+
+	def removeSaveNotifier(self, notifier):
+		lista = self.__dict__.get("onSave", [])
+		while notifier in lista:
+			lista.remove(notifier)
+
+	def clearSaveNotifiers(self):
+		self.onSave = []
+
+	def entryChanged(self):
+		self.__changed()
+
+	def _tastaSetare(self, tasta):
+		self["config"].handleKey(tasta)
+		self.__changed()
+
+	def keyTop(self):
+		self["config"].goTop()
+
+	def keyBottom(self):
+		self["config"].goBottom()
+
+	def keyFirst(self):
+		self._tastaSetare(KEY_HOME)
+
+	def keyLast(self):
+		self._tastaSetare(KEY_END)
+
+	def keyToggle(self):
+		self._tastaSetare(KEY_TOGGLEOW)
+
+	def keyErase(self):
+		# Alte imagini: sterge textul campului; la noi: un camp de text se goleste, restul nu se schimba
+		cur = self.getCurrentItem()
+		if cur is not None and esteTextDeScris(cur):
+			cur.setValue("")
+			self["config"].invalidateCurrent()
+			self.__changed()
+
+	def keyDefault(self):
+		for rand in self["config"].getList():
+			if len(rand) > 1 and hasattr(rand[1], "default"):
+				try:
+					rand[1].setValue(rand[1].default)
+				except Exception:
+					continue
+				self["config"].invalidate(rand)
+		self.__changed()
+
+	def suspendAllActionMaps(self):
+		self.actionMapStates = []
+		for nume in self.__hartile():
+			self.actionMapStates.append((nume, self[nume].enabled))
+			self[nume].setEnabled(False)
+
+	def resumeAllActionMaps(self):
+		for nume, stare in getattr(self, "actionMapStates", ()):
+			if nume in self:
+				self[nume].setEnabled(stare)
+
+	def __hartile(self):
+		return [k for k in self.keys() if isinstance(self[k], ActionMap)]
+
+	def showHelpWindow(self):
+		self.displayHelp(True)
+
+	def hideHelpWindow(self):
+		self.displayHelp(False)
+
+	def displayHelp(self, state):
+		cur = self.getCurrentItem()
+		fereastra = getattr(cur, "help_window", None) if cur is not None else None
+		if fereastra is not None:
+			fereastra.show() if state else fereastra.hide()
+
+	def noNativeKeys(self):
+		"""Alte imagini: lista nu mai muta singura cursorul (la noi lista nativa ramane legata; se tine alegerea)."""
+		self["config"].enableAutoNavigation(False)
+
+	def createSummary(self):
+		from Screens.Setup import SetupSummary
+		return SetupSummary
+
+	def run(self):
+		self.keySave()

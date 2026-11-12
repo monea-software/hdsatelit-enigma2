@@ -39,19 +39,21 @@ class eServiceEvent: public iObject
 {
 	DECLARE_REF(eServiceEvent);
 	bool loadLanguage(Event *event, std::string lang, int tsidonid);
+	bool loadLanguages(Event *event, const std::string &spec, int tsidonid);
 	std::list<eComponentData> m_component_data;
 	std::list<eServiceReference> m_linkage_services;
 	time_t m_begin;
 	int m_duration;
 	int m_event_id;
 	std::string m_event_name, m_short_description, m_extended_description;
-	static std::string m_language;
+	static std::string m_language, m_language_alternative;
 	// .. additional info
 public:
 #ifndef SWIG
 	RESULT parseFrom(Event *evt, int tsidonid=0);
 	RESULT parseFrom(const std::string filename, int tsidonid=0);
 	static void setEPGLanguage( const std::string language );
+	static void setEPGLanguageAlternative( const std::string language );
 #endif
 	time_t getBeginTime() const { return m_begin; }
 	int getDuration() const { return m_duration; }
@@ -71,6 +73,11 @@ SWIG_EXTEND(ePtr<eServiceEvent>,
 	{
 		extern void setServiceEventLanguage(const std::string language);
 		setServiceEventLanguage(language);
+	}
+	static void setEPGLanguageAlternative( const std::string language )
+	{
+		extern void setServiceEventLanguageAlternative(const std::string language);
+		setServiceEventLanguageAlternative(language);
 	}
 );
 

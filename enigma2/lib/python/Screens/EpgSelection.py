@@ -26,7 +26,22 @@ class EPGSelection(Screen):
 	
 	ZAP = 1
 
-	def __init__(self, session, service, zapFunc=None, eventid=None, bouquetChangeCB=None, serviceChangeCB=None):
+	# pluginurile OE-Alliance care mostenesc ecranul (EPGSearch) nu cheama __init__: ce le trebuie se face la cerere
+	_ghidInchis = False
+	eventviewDialog = None
+	zapFunc = None
+	type = EPG_TYPE_SINGLE
+
+	def __init__(self, session, service=None, zapFunc=None, eventid=None, bouquetChangeCB=None, serviceChangeCB=None, EPGtype=None, StartBouquet=None, StartRef=None, bouquets=None):
+		# EPGtype, StartBouquet, StartRef, bouquets: semnatura OE-Alliance (AutoTimer cere EPGtype="single");
+		# la noi felul ghidului vine din service si eventid, ca pana acum
+		if service is None and StartRef is not None:
+			service = StartRef
+		if service is None:
+			# OE-Alliance: fara canal = ghidul canalului de acum (AutoTimer din lista vederilor da canalul pornit, poate None)
+			service = session.nav.getCurrentlyPlayingServiceReference()
+		if service is None:
+			service = []  # niciun canal pornit: ghidul gol, nu o cadere in fillMultiEPG
 		Screen.__init__(self, session)
 		self.bouquetChangeCB = bouquetChangeCB
 		self.serviceChangeCB = serviceChangeCB
@@ -36,6 +51,9 @@ class EPGSelection(Screen):
 		self.saved_title = None
 		self["Service"] = ServiceEvent()
 		self["Event"] = Event()
+		# temele straine (numele standard): numarul tastat pentru salt; la noi ramane gol
+		from Components.HdsNumeStandard import adauga
+		adauga(self, "number", Label, ascuns=True)
 		if isinstance(service, str) and eventid != None:
 			self.type = EPG_TYPE_SIMILAR
 			self["key_yellow"] = Button()
@@ -116,10 +134,19 @@ class EPGSelection(Screen):
 		else:
 			self.timerEdit()
 
+	def hdsGhid(self):
+		"""GhidTimer al ecranului; facut aici si pentru subclasele care nu cheama __init__ (EPGSearch)"""
+		ghid = self.__dict__.get("ghidTimer")
+		if ghid is None:
+			ghid = self.ghidTimer = GhidTimer(self.session, self.hdsTimerSchimbat)
+			if self.hdsTimerInchis not in self.onClose:
+				self.onClose.append(self.hdsTimerInchis)
+		return ghid
+
 	def timerEdit(self):
 		cur = self["list"].getCurrent()
 		if cur is not None:
-			self.ghidTimer.editeaza(cur[0], cur[1])
+			self.hdsGhid().editeaza(cur[0], cur[1])
 
 	def nextBouquet(self):
 		if self.bouquetChangeCB:
@@ -245,7 +272,7 @@ class EPGSelection(Screen):
 	def timerAdd(self):
 		cur = self["list"].getCurrent()
 		if cur is not None:
-			self.ghidTimer.comuta(cur[0], cur[1])
+			self.hdsGhid().comuta(cur[0], cur[1])
 
 	def moveUp(self):
 		self["list"].moveUp()
@@ -350,3 +377,108 @@ class EPGSelection(Screen):
 		elif not isRecordEvent and self.key_green_choice != self.ADD_TIMER:
 			self["key_green"].setText(_("Înregistrează"))
 			self.key_green_choice = self.ADD_TIMER
+
+	# Numele OE-Alliance ale ecranului (vechea clasa EPGSelection), pentru pluginurile care il mostenesc sau il cheama:
+	# EPGSearch (care nu cheama __init__), AutoTimer, IMDb. Tastele ecranelor noastre nu sunt legate de ele.
+	# Fara zapExit, ca in OE-Alliance: EPGSearch trece atunci pe comutarea lui, care cauta canalul in buchete.
+	def Info(self):
+		self.infoKeyPressed()
+
+	def nextPage(self):
+		lista = self["list"].instance
+		lista.moveSelection(lista.pageDown)
+
+	def prevPage(self):
+		lista = self["list"].instance
+		lista.moveSelection(lista.pageUp)
+
+	def closeEventViewDialog(self):
+		if self.eventviewDialog:
+			self.eventviewDialog.hide()
+			self.eventviewDialog = None
+
+	def showConfig(self):
+		# OE-Alliance: setarile ghidului; la noi ele stau in meniul imaginii, deci aici nu se deschide nimic
+		self.closeEventViewDialog()
+
+	def hdsEmisiunea(self):
+		cur = self["list"].getCurrent()
+		return cur if cur is not None else (None, None)
+
+	def hdsPluginFilm(self):
+		"""numele pluginului de filme instalat, ca in OE-Alliance: TMDb intai, apoi IMDb; None daca nu e niciunul"""
+		from Tools.Directories import isPluginInstalled
+		if isPluginInstalled("tmdb"):
+			return "TMDb"
+		if isPluginInstalled("IMDb"):
+			return "IMDb"
+		return None
+
+	def redButtonText(self):
+		return self.hdsPluginFilm() or ""
+
+	def redButtonDescription(self):
+		nume = self.hdsPluginFilm()
+		return nume and _("Caută emisiunea aleasă în %s") % nume or ""
+
+	def redButtonPressed(self):
+		self.closeEventViewDialog()
+		event = self.hdsEmisiunea()[0]
+		if event is None:
+			return
+		nume = self.hdsPluginFilm()
+		if nume == "TMDb":
+			from Plugins.Extensions.tmdb.tmdb import tmdbScreen
+			self.session.open(tmdbScreen, event.getEventName())
+		elif nume == "IMDb":
+			from Plugins.Extensions.IMDb.plugin import IMDB
+			self.session.open(IMDB, event.getEventName(), False)
+		else:
+			from Screens.MessageBox import MessageBox
+			self.session.open(MessageBox, _("Pentru căutarea filmului instalează IMDb sau TMDb din Pluginuri."),
+				MessageBox.TYPE_INFO, timeout=10)
+
+	def blueButtonPressedLong(self):
+		# OE-Alliance: lista AutoTimer; se deschide prin intrarea pluginului, care isi salveaza singur lista la iesire
+		self.closeEventViewDialog()
+		try:
+			from Plugins.Extensions.AutoTimer.plugin import main
+		except ImportError:
+			from Screens.MessageBox import MessageBox
+			self.session.open(MessageBox, _("Pentru această tastă instalează AutoTimer din Pluginuri."),
+				MessageBox.TYPE_INFO, timeout=10)
+			return
+		main(self.session)
+
+	def doRecordTimer(self):
+		# OE-Alliance: REC = programeaza inregistrarea emisiunii alese (la noi: ca tasta verde, cu stergerea la a doua apasare)
+		self.closeEventViewDialog()
+		self.timerAdd()
+
+	def doZapTimer(self):
+		# OE-Alliance: REC tinut = comutare programata pe emisiunea aleasa, fara formular; daca e deja programata, editarea
+		event, service = self.hdsEmisiunea()
+		if event is None or service is None:
+			return
+		ghid = self.hdsGhid()
+		if HIP.cautaEmisiune(self.session.nav.RecordTimer, service, event) is not None:
+			ghid.editeaza(event, service)
+			return
+		from RecordTimer import RecordTimerEntry, parseEvent
+		ghid._pune((True, RecordTimerEntry(service, checkOldTimers=True, justplay=True, *parseEvent(event))), event, service)
+
+	def OpenSingleEPG(self):
+		event, service = self.hdsEmisiunea()
+		if service is not None:
+			self.session.open(EPGSelection, service.ref)
+
+	def sortEpg(self):
+		if self.type == EPG_TYPE_SINGLE:
+			self.yellowButtonPressed()
+
+	def showTimerList(self):
+		from Screens.TimerEdit import TimerEditList
+		self.session.open(TimerEditList)
+
+	def showAutoTimerList(self):
+		self.blueButtonPressedLong()

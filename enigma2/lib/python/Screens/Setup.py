@@ -112,6 +112,9 @@ class SetupSummary(Screen):
 		self["SetupTitle"] = StaticText(_(titlu) if titlu else "")
 		self["SetupEntry"] = StaticText("")
 		self["SetupValue"] = StaticText("")
+		# numele din alte imagini ale acelorasi texte (skin-urile scrise pentru el au <widget source="entry"/"value">)
+		self["entry"] = StaticText("")
+		self["value"] = StaticText("")
 		self.onShow.append(self.addWatcher)
 		self.onHide.append(self.removeWatcher)
 
@@ -129,8 +132,8 @@ class SetupSummary(Screen):
 				lista.remove(self.selectionChanged)
 
 	def selectionChanged(self):
-		self["SetupEntry"].text = self.parent.getCurrentEntry()
-		self["SetupValue"].text = self.parent.getCurrentValue()
+		self["SetupEntry"].text = self["entry"].text = self.parent.getCurrentEntry()
+		self["SetupValue"].text = self["value"].text = self.parent.getCurrentValue()
 
 class Setup(ConfigListScreen, Screen):
 
@@ -159,6 +162,11 @@ class Setup(ConfigListScreen, Screen):
 				if x.get("key") != self.setup:
 					continue
 				gasit = True
+				# skin= (alte imagini): numele ecranului din skin cerut de <setup>, inaintea celor implicite
+				skin = x.get("skin")
+				if skin and isinstance(self.skinName, type([])) and skin not in self.skinName:
+					self.skinName.insert(0, skin)
+				self.pendingHeading = None
 				self.addItems(list, x);
 				self.setup_title = x.get("title", "")
 			if gasit:
@@ -176,6 +184,7 @@ class Setup(ConfigListScreen, Screen):
 		lista = (prependItems or [])[:]
 		self.refill(lista)
 		lista.extend(appendItems or [])
+		self.list = lista
 		self["config"].setList(lista)
 
 	def faceRandurileSingur(self):
@@ -189,6 +198,13 @@ class Setup(ConfigListScreen, Screen):
 			print("[Setup] parametri necunoscuti, ignorati: %s" % ", ".join(sorted(altele)))
 		# for the skin: first try a setup_<setupID>, then Setup
 		self.skinName = ["setup_" + setup, "Setup" ] if setup else ["Setup"]
+		# ca in alte imagini: o subclasa a unui plugin isi cauta intai ecranul cu numele clasei ei; „SetupX” (forma OE-Alliance
+		# a temelor) e a doua forma a lui „setup_X”: se cauta setup_X, apoi SetupX, apoi Setup (si pe ecranele noastre)
+		if setup:
+			self.skinName.insert(1, "Setup" + setup)
+		if type(self) is not Setup and type(self).__name__ not in self.skinName:
+			self.skinName.insert(0, type(self).__name__)
+		getattr(self, "setImage", lambda *a: None)(setup, "setup")  # probele pe PC au un Screen fara setImage
 		self.plugin = plugin
 		self.xmlPlugin = _xmlPlugin(plugin) if plugin else None
 		self.traducere = _traducere(PluginLanguageDomain)
@@ -205,8 +221,13 @@ class Setup(ConfigListScreen, Screen):
 
 		self.setup = setup
 		self.uitaVolumeSetare = None
+		# restart= din setup.xml (alte imagini): id(setare) -> "gui" / "system"
+		self.repornire = {}
+		self.pendingHeading = None
+		self.pluginLanguageDomain = PluginLanguageDomain
 		list = []
 		self.refill(list)
+		self.list = list
 
 		#check for list.entries > 0 else self.close
 		self["key_red"] = StaticText(_("Cancel"))
@@ -270,8 +291,17 @@ class Setup(ConfigListScreen, Screen):
 			self.updateDescription()
 
 	def updateDescription(self):
+		if self.repornire:
+			# setarile cu restart= din setup.xml: nota de sub ajutor spune ce cere schimbarea (ca in alte imagini)
+			cur = self["config"].getCurrent()
+			fel = self.repornire.get(id(cur[1])) if cur is not None and len(cur) > 1 else None
+			self.setFootnote(_("* = după schimbare se repornește interfața") if fel == "gui" else
+				_("# = după schimbare se repornește receptorul") if fel == "system" else None)
 		current = self["config"].getCurrent()
 		text = self.descriptions.get(id(current[1]), "") if current is not None and len(current) > 1 else ""
+		# Alte imagini: descrierea poate fi al treilea element al randului (getConfigListEntry(text, setare, descriere))
+		if not text and current is not None and len(current) > 2 and isinstance(current[2], str):
+			text = current[2]
 		stare = "\n".join(self.hdsStare(current[1])) if current is not None and len(current) > 1 else ""
 		self.hdsStareText = stare
 		if stare:
@@ -342,12 +372,15 @@ class Setup(ConfigListScreen, Screen):
 		lista = []
 		self.refill(lista)
 		vechi = self["config"].list
-		if [id(r[1]) for r in lista] == [id(r[1]) for r in vechi]:
+		# randurile de titlu (un singur element) se compara dupa text
+		cheie = lambda r: id(r[1]) if len(r) > 1 else r[0]
+		if [cheie(r) for r in lista] == [cheie(r) for r in vechi]:
 			return
 		curent = self["config"].getCurrent()
+		self.list = lista
 		self["config"].setList(lista)
 		for i, r in enumerate(lista):
-			if curent is not None and len(curent) > 1 and r[1] is curent[1]:
+			if curent is not None and len(curent) > 1 and len(r) > 1 and r[1] is curent[1]:
 				self["config"].setCurrentIndex(i)
 				break
 		self.updateDescription()
@@ -381,7 +414,12 @@ class Setup(ConfigListScreen, Screen):
 		return curent[1] if curent is not None and len(curent) > 1 else None
 
 	def getCurrentDescription(self):
-		return self.descriptions.get(id(self.getCurrentItem()), "")
+		text = self.descriptions.get(id(self.getCurrentItem()), "")
+		if not text:
+			cur = self["config"].getCurrent()
+			if cur is not None and len(cur) > 2 and isinstance(cur[2], str):
+				text = cur[2]
+		return text
 
 	def setFootnote(self, footnote):
 		"""Nota de sub ajutor; goala sau None o ascunde."""
@@ -404,14 +442,109 @@ class Setup(ConfigListScreen, Screen):
 	def createSummary(self):
 		return SetupSummary
 
+	# HDSatelit: restul API-ului din alte imagini al ecranului Setup (pluginurile care il mostenesc il cheama)
+	def includeElement(self, element):
+		"""Se arata elementul (<item>, <if>, <elif>)? level= (nivelul setarilor; ecranul unui plugin nu are alt drum spre
+		setarile lui, deci acolo nivelul nu ascunde), requires= (chei SystemInfo sau setari config.*, mai multe cu ';',
+		'!' in fata = negat) si conditional= (expresie)."""
+		try:
+			nivel = int(element.get("level", 0))
+		except ValueError:
+			nivel = 0
+		if nivel > config.usage.setup_level.index and self.plugin is None:
+			return False
+		x = element
+		requires = x.get("requires")
+		if requires:
+			for requires in [c.strip() for c in requires.split(";") if c.strip()]:
+				negat = requires.startswith("!")
+				if negat:
+					requires = requires[1:].strip()
+				if requires.startswith("config."):
+					try:
+						valoare = eval(requires).value
+						rezultat = bool(valoare) and str(valoare).lower() not in ("0", "disable", "false", "no", "off")
+					except Exception as e:
+						print("[Setup] requires %r: %r" % (requires, e))
+						return False
+				else:
+					rezultat = bool(SystemInfo.get(requires, False))
+				if negat == rezultat:
+					return False
+		conditional = element.get("conditional")
+		if conditional:
+			self.conditionale = True
+			if not self.conditieAdevarata(conditional, self):
+				return False
+		return True
+
+	def formatItemText(self, text, data=None):
+		"""data="a,b" (alte imagini): valorile puse in locul lui %s din text, cand numarul se potriveste."""
+		if data:
+			valori = data.split(",") if isinstance(data, str) else list(data)
+			if text.count("%s") == len(valori):
+				try:
+					return text % tuple(valori)
+				except (TypeError, ValueError):
+					pass
+		return text
+
+	def selectionChanged(self):
+		self.updateDescription()
+
+	def getFootnote(self):
+		return self["footnote"].getText()
+
+	def getIndexFromItem(self, item):
+		if item is None:
+			return 0
+		lista = self["config"].list
+		if item in lista:
+			return lista.index(item)
+		for i, rand in enumerate(lista):
+			if len(rand) > 1 and len(item) > 1 and rand[0] == item[0] and rand[1] is item[1]:
+				return i
+		return 0
+
+	def moveToItem(self, item):
+		if item != self["config"].getCurrent():
+			self["config"].setCurrentIndex(self.getIndexFromItem(item))
+
+	def keySave(self):
+		"""Ca la ConfigListScreen; in plus, o setare cu restart= (setup.xml) schimbata intreaba de repornire."""
+		fel = None
+		for rand in self["config"].list:
+			if len(rand) > 1 and id(rand[1]) in self.repornire and rand[1].isChanged():
+				fel = "system" if self.repornire[id(rand[1])] == "system" or fel == "system" else "gui"
+		if fel is None:
+			return ConfigListScreen.keySave(self)
+		for notifier in list(self.__dict__.get("onSave", ())):
+			notifier()
+		self.saveAll()
+		from Screens.MessageBox import MessageBox
+		text = _("Repornești receptorul acum?") if fel == "system" else self.restartMsg
+		self.session.openWithCallback(lambda da: self.__repornire(da, 2 if fel == "system" else 3), MessageBox, text, MessageBox.TYPE_YESNO)
+
+	def __repornire(self, da, cod):
+		if da:
+			from Screens.Standby import TryQuitMainloop
+			self.session.open(TryQuitMainloop, cod)
+		self.close()
+
 	def addIf(self, list, nod):
 		"""<if conditional="..."> randuri <else /> randuri </if>, cum scriu pluginurile in setup.xml; se pot imbrica.
 		Lista se reface la fiecare schimbare de valoare, ca la randurile cu conditional=."""
 		self.conditionale = True
-		activ = self.conditieAdevarata(nod.get("conditional", "True"), self)
+		activ = self.includeElement(nod)
+		gasit = activ
 		for copil in nod:
-			if copil.tag == "else":
-				activ = not activ
+			if copil.tag == "elif":
+				# <elif conditional=... requires=... /> (alte imagini): ramura urmatoare, numai daca nicio ramura de dinainte n-a mers
+				activ = (not gasit) and self.includeElement(copil)
+				gasit = gasit or activ
+			elif copil.tag == "else":
+				activ = not gasit
+				gasit = True
 			elif activ:
 				self.addItems(list, [copil])
 
@@ -428,23 +561,17 @@ class Setup(ConfigListScreen, Screen):
 					config.usage.setup_level.notifiers.append(self.levelChanged)
 					self.onClose.append(self.removeNotifier)
 
-				# ecranul unui plugin nu are alt drum spre setarile lui: nivelul nu il lasa gol
-				if item_level > config.usage.setup_level.index and self.plugin is None:
+				if not self.includeElement(x):
 					continue
-
-				requires = x.get("requires")
-				if requires and not SystemInfo.get(requires, False):
-					continue;
-
-				conditional = x.get("conditional")
-				if conditional:
-					self.conditionale = True
-					if not self.conditieAdevarata(conditional, self):
-						continue
 
 				# HDSatelit: semnul „(în lucru)” / „(netestat)” din atributul stare= (HdsStareMeniu)
 				item_text = _hdsTextNod(x, _)
 				description = x.get("description")
+				if (x.text or "").strip() == "":
+					# Alte imagini: un <item> fara setare e titlul grupului de sub el; se arata numai daca urmeaza o
+					# setare vizibila (rand de un element: ConfigList il sare, lista il deseneaza ca titlu)
+					self.pendingHeading = (self.formatItemText(item_text, x.get("data")),)
+					continue
 				try:
 					b = eval(x.text or "");
 				except Exception as e:
@@ -452,6 +579,7 @@ class Setup(ConfigListScreen, Screen):
 						raise
 					print("[Setup] %s: randul %r: %r" % (self.plugin, x.text, e))
 					continue
+				item_text = self.formatItemText(item_text, x.get("data"))
 				if b == "":
 					continue
 				#add to configlist
@@ -459,9 +587,31 @@ class Setup(ConfigListScreen, Screen):
 				# the first b is the item itself, ignored by the configList.
 				# the second one is converted to string.
 				if not isinstance(item, ConfigNothing):
+					if getattr(self, "pendingHeading", None):
+						list.append(self.pendingHeading)
+						self.pendingHeading = None
+					restart = (x.get("restart") or "").lower()
+					if restart == "gui" and not item_text.endswith("*"):
+						item_text += " *"
+					elif restart == "system" and not item_text.endswith("#"):
+						item_text += " #"
+					if restart in ("gui", "system"):
+						self.repornire[id(item)] = restart
 					list.append( (item_text, item) )
 					if description:
 						self.descriptions[id(item)] = _(description)
+
+MODULE_NAME = __name__.split(".")[-1]
+
+
+def setupDom(setup=None, plugin=None):
+	"""Alte imagini: radacina setup.xml-ului (al pluginului, cand e dat si exista; altfel al imaginii)."""
+	if plugin:
+		radacina = _xmlPlugin(plugin)
+		if radacina is not None:
+			return radacina
+	return setupdom.getroot()
+
 
 def getSetupTitle(id):
 	xmldata = setupdom.getroot()

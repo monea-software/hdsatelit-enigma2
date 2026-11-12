@@ -176,6 +176,10 @@ def InitUsageConfig():
 	config.usage.showdish = ConfigYesNo(default = True)
 	# HDSatelit: tasta albastra deschide lista buchetelor (Favorite primul), nu numai Favorite
 	config.usage.multibouquet = ConfigYesNo(default = True)
+	# OE-Alliance: semnele numerotate (randurile „-” puse de Fast Scan in locul numerelor nefolosite ale operatorului) nu se vad
+	# in lista de canale, dar se numara (lib/service/listboxservice.cpp); se vad numai la mutare. Fara rand in meniu: nimic de ales,
+	# setarea e aici pentru pluginurile care o citesc.
+	config.usage.hide_number_markers = ConfigYesNo(default = True)
 	config.usage.multiepg_ask_bouquet = ConfigYesNo(default = False)
 
 	config.usage.quickzap_bouquet_change = ConfigYesNo(default = False)
@@ -266,6 +270,11 @@ def InitUsageConfig():
 	# HDSatelit: in lista 'Sateliți' (Screens/ChannelSelection.py, hdsUmpleSateliti) si randurile 'Furnizori' si 'Nou' ale
 	# fiecarui satelit, sub antetul lui; oprita din fabrica: un singur rand pe satelit (furnizorii pe tasta galbena)
 	config.usage.hds_lista_furnizori_nou = ConfigYesNo(default = False)
+	# HDSatelit (0.7.4): 'Actualizează lista de canale la privit' (data/setup.xml, sectiunea usage; in web /setari?id=usage).
+	# Pornita din fabrica, ca pana acum: la canalul privit, lib/dvb/pmt.cpp (SDTScanEvent) pune in lista ce gaseste
+	# scanarea transponderului (canalele noi, numele la zi, deci si canalele sterse de om). Oprita: lista ramane cum a
+	# lasat-o omul. C++ o citeste la fiecare sfarsit de scanare (getResolvedKey: "True" / "False"), deci se aplica pe loc
+	config.usage.hds_actualizare_lista = ConfigYesNo(default = True)
 	# HDSatelit: siglele canalelor (Components/Renderer/Picon.py): oprita, nicio sigla nu se arata (caseta ramane goala,
 	# transparenta), iar pe bare textele raman la locul lor (Components/HdsPiconBare.py); se schimba pe loc
 	config.usage.hds_piconuri = ConfigYesNo(default = True)
@@ -310,11 +319,32 @@ def InitUsageConfig():
 	# PORNITA din fabrica, fiindca nimic nu opreste programele din casa (nici streamul pe 8001);
 	# listele m3u ale aplicatiilor de telefon (aplicatii_web.PORT_FLUX) trimit chiar la 8001.
 	config.misc.hds_fluxuri_retea_acasa = ConfigYesNo(default=True)
+	# 0.7.4 (OE-Alliance): numele standard pe care il citesc pluginurile scrise pentru celelalte imagini (PlutoTV isi alege tastele
+	# dupa el). Da = in liste STANGA/DREAPTA dau pagina sus/jos, adica felul listelor noastre; fara ecran, nu schimba nimic la noi.
+	config.misc.actionLeftRightToPageUpPageDown = ConfigYesNo(default=True)
+	# 0.7.4 (cererea de pe forum, subiectul 1025): trecerea singura prin Stream Relay a canalelor cu ICAM (Sky
+	# Deutschland, 098C / 098D), fara lista facuta de mana (Components/HdsStreamRelay.py, TRECEREA SINGURA). OPRITA din
+	# fabrica de la 12.11.2026: receptorul descifreaza singur canalele ICAM (SoftCSA), pe televizor si in fluxul catre
+	# browser, iar releul le oprea fluxul in browser. Cine o vrea o porneste din setarile Stream Relay. Sistemele: un text
+	# (expert, si din web); gol sau gresit = cele din fabrica (le foloseste si HdsSoftCsa, la recunoasterea canalelor ICAM).
+	# La schimbare, legatura la zap se pune sau se scoate pe loc.
+	config.misc.hds_streamrelay_icam = ConfigYesNo(default=False)
+	config.misc.hds_streamrelay_icam_caid = ConfigText(default="098C,098D", fixed_size=False)
+	config.misc.hds_streamrelay_icam_caid.web_text_max = 64
+
+	def _trecereaSingura(_el):
+		try:
+			from Components import HdsStreamRelay
+			HdsStreamRelay.setareSchimbata()
+		except Exception as e:
+			print("[UsageConfig] trecerea singura Stream Relay: %s" % e)
+	config.misc.hds_streamrelay_icam.addNotifier(_trecereaSingura, initial_call=False)
+	config.misc.hds_streamrelay_icam_caid.addNotifier(_trecereaSingura, initial_call=False, immediate_feedback=False)
 	# 0.7.1: in ecranul Stream Relay (Screens/Setup.py) si in pagina lui web (setari_web.py), deasupra ajutorului fiecarui
 	# rand, starea de acum: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu
 	# (HdsStreamRelay.liniiStare; modulul se incarca abia la deschiderea ecranului)
 	for _el in (config.misc.acces_streamrelay_url, config.misc.acces_streamrelay_port, config.misc.acces_streamrelay_delay,
-			config.misc.hds_fluxuri_retea_acasa):
+			config.misc.hds_fluxuri_retea_acasa, config.misc.hds_streamrelay_icam, config.misc.hds_streamrelay_icam_caid):
 		_el.hdsStare = _stareStreamRelay
 	_mutaSetarileVechi()
 

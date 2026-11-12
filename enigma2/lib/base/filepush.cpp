@@ -4,6 +4,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#if HAVE_HISILICON
+#else
+/* the end of a file played into the dvr (Broadcom and the others; HiSilicon keeps its own playback path) */
+#include <lib/base/hdsfinalredare.h>
+#endif
 
 #define PVR_COMMIT 1
 
@@ -87,6 +92,11 @@ static void hisiWaitReadable(int fd, int timeout_ms)
    hold is lifted. stop() and setHoldWhenFull(false) end the wait at once (SIGUSR1, the handler is installed without
    SA_RESTART). */
 #define HISI_DVR_SLOW_US 5000
+
+/* SoftCSA loop into a dvr (setDvrLoop): the pause after a part dropped because the driver had no room. As long as
+   HISI_DVR_WAIT_US: each refused write already slept 100 ms in the driver (state D), so a short pause would keep the
+   thread mostly in D; the live demux buffer (1 MB) holds about a second meanwhile, what overflows is dropped too. */
+#define DVR_LOOP_FULL_US HISI_DVR_WAIT_US
 #define HISI_DVR_WAIT_US 400000L
 #define HISI_DVR_HOLD_US 200000L
 
@@ -122,7 +132,8 @@ struct hisiRecordStats
 	int64_t start_us, saved_us;
 	unsigned long long bytes;
 	unsigned long reads, full, short_big, small, at_once, eagain, eoverflow, errors, zero_reads, retries, skipped, pauses,
-		writes, max_read;
+		writes, max_read, loop_full, loop_slow;
+	unsigned long long loop_dropped;
 	int64_t read_us, read_max_us, pause_us, write_us, write_max_us;
 	long last_pause_us;
 	int last_errno;
@@ -136,7 +147,8 @@ struct hisiRecordStats
 		struct stat st;
 		target = "other";
 		if (fstat(fd_dest, &st) == 0)
-			target = S_ISFIFO(st.st_mode) ? "pipe" : S_ISREG(st.st_mode) ? "file" : S_ISSOCK(st.st_mode) ? "socket" : "other";
+			target = S_ISFIFO(st.st_mode) ? "pipe" : S_ISREG(st.st_mode) ? "file" : S_ISSOCK(st.st_mode) ? "socket" :
+				S_ISCHR(st.st_mode) ? "dvr" : "other";
 		snprintf(path, sizeof(path), "/tmp/hds-inregistrare-%ld.stat", (long)syscall(SYS_gettid));
 	}
 	void readDone(int64_t us, int n, size_t maxread)
@@ -184,17 +196,18 @@ struct hisiRecordStats
 			return;
 		saved_us = now;
 		int64_t run = now - start_us;
-		char text[1024];
+		char text[1280];
 		int n = snprintf(text, sizeof(text),
 			"target=%s\nrunning=%d\nseconds=%.1f\nbytes=%llu\nmbit_s=%.2f\nreads=%lu\nreads_full=%lu\nreads_short=%lu\n"
 			"reads_small=%lu\nread_at_once=%lu\nmax_read=%lu\neagain=%lu\neoverflow=%lu\nread_errors=%lu\n"
 			"last_errno=%d\nzero_reads=%lu\nretries=%lu\nskipped=%lu\n"
 			"read_ms=%lld\nread_max_ms=%.1f\npauses=%lu\npause_ms=%lld\nlast_pause_ms=%.1f\nwrites=%lu\nwrite_ms=%lld\n"
-			"write_max_ms=%.1f\n",
+			"write_max_ms=%.1f\nloop_full=%lu\nloop_dropped=%llu\nloop_slow=%lu\n",
 			target, final ? 0 : 1, run / 1e6, bytes, run > 0 ? bytes * 8.0 / run : 0.0, reads, full, short_big, small,
 			at_once, max_read, eagain, eoverflow, errors, last_errno, zero_reads, retries, skipped,
 			(long long)(read_us / 1000), read_max_us / 1000.0, pauses, (long long)(pause_us / 1000),
-			last_pause_us / 1000.0, writes, (long long)(write_us / 1000), write_max_us / 1000.0);
+			last_pause_us / 1000.0, writes, (long long)(write_us / 1000), write_max_us / 1000.0, loop_full, loop_dropped,
+			loop_slow);
 		if (n <= 0 || n >= (int)sizeof(text))
 			return;
 		char tmp[80];
@@ -208,6 +221,269 @@ struct hisiRecordStats
 			::unlink(tmp);
 		else if (final)
 			::unlink(path);
+	}
+};
+
+#else
+#include <poll.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
+/* SoftCSA loop into a dvr on the generic path (setDvrLoop, lib/service/servicedvbsoftdecoder.h): every receiver that is
+   not HiSilicon (Broadcom ARM and MIPS, and any machine added later). The source is the live demux of the service, read
+   without blocking (the thread sets O_NONBLOCK) after poll: a blocking read of a demux can return only once the whole
+   request is filled, which at a low rate holds the data back for a long time. The target is the dvr of a playback demux.
+   Reading: the thread gathers up to LOOP_GATHER_BYTES, but does not keep the first byte of a gather longer than
+   LOOP_GATHER_MS: parts large enough for the descrambler (it works on batches of packets) at a high rate, and data for
+   the decoder at least every LOOP_GATHER_MS at a low one (radio; MPEG audio decoders want frequent writes). A read that
+   ends inside a TS packet keeps the start of that packet for the next read, so the stream stays aligned.
+   Writing: parts of at most LOOP_PART bytes (a large write needs one large contiguous buffer in the driver, which can fail
+   with ENOMEM on fragmented memory). While the buffer of the driver is full it may refuse a write (EAGAIN, ENOMEM) or
+   wait in it; after a refusal the thread waits LOOP_RETRY_US outside the driver and tries again, and after LOOP_DROP_MS
+   without room it drops the rest of the gather (a live stream cannot wait for a decoder that takes nothing).
+   Every wait is bounded, so the thread sees m_stop within LOOP_POLL_MS even when the signal of stop() comes too early. */
+#define LOOP_GATHER_BYTES (174 * 188)
+#define LOOP_GATHER_MS 15
+#define LOOP_POLL_MS 100
+#define LOOP_PART (174 * 188)
+#define LOOP_RETRY_US 2000L
+#define LOOP_DROP_MS 1000
+#define LOOP_ERROR_US 20000L
+/* a write that took this long waited in the driver (loop_slow) */
+#define LOOP_SLOW_US 5000
+/* counters written to /tmp/hds-inregistrare-<thread id>.stat at most every LOOP_STAT_MS (the same file and keys as the
+   HiSilicon path); at the end the file becomes /tmp/hds-inregistrare-ultima.stat */
+#define LOOP_STAT_MS 2000
+
+static int64_t loopNowUs()
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (int64_t)t.tv_sec * 1000000 + t.tv_nsec / 1000;
+}
+
+/* sleeps outside the driver; SIGUSR1 from stop() ends it early (EINTR, the handler is installed without SA_RESTART) */
+static void loopPause(long us)
+{
+	struct timespec t;
+	t.tv_sec = us / 1000000L;
+	t.tv_nsec = (us % 1000000L) * 1000L;
+	nanosleep(&t, NULL);
+}
+
+struct genericLoop
+{
+	unsigned char tail[188]; /* the start of a packet whose rest the demux has not given yet */
+	int tail_len;
+	int64_t start_us, saved_us, read_end_us;
+	unsigned long long bytes, loop_dropped, resync;
+	unsigned long reads, gathers, eagain, eoverflow, errors, writes, loop_full, loop_slow, loop_retries;
+	int64_t write_us, write_max_us, filter_us, filter_max_us;
+	int last_errno;
+	char path[64];
+
+	void begin()
+	{
+		*this = genericLoop();
+		start_us = saved_us = loopNowUs();
+		snprintf(path, sizeof(path), "/tmp/hds-inregistrare-%ld.stat", (long)syscall(SYS_gettid));
+	}
+
+	/* key=value lines, written to a temporary file and renamed, so a reader never sees half a file */
+	void save(bool final)
+	{
+		int64_t now = loopNowUs();
+		if (!final && now - saved_us < LOOP_STAT_MS * 1000)
+			return;
+		saved_us = now;
+		int64_t run = now - start_us;
+		char text[1024];
+		int n = snprintf(text, sizeof(text),
+			"target=dvr\npath=generic\nrunning=%d\nseconds=%.1f\nbytes=%llu\nmbit_s=%.2f\nreads=%lu\ngathers=%lu\n"
+			"eagain=%lu\neoverflow=%lu\nread_errors=%lu\nlast_errno=%d\nresync=%llu\nwrites=%lu\nwrite_ms=%lld\n"
+			"write_max_ms=%.1f\nloop_full=%lu\nloop_dropped=%llu\nloop_slow=%lu\nloop_retries=%lu\nfilter_ms=%lld\n"
+			"filter_max_ms=%.1f\nfilter_pct=%.1f\n",
+			final ? 0 : 1, run / 1e6, bytes, run > 0 ? bytes * 8.0 / run : 0.0, reads, gathers, eagain, eoverflow, errors,
+			last_errno, resync, writes, (long long)(write_us / 1000), write_max_us / 1000.0, loop_full, loop_dropped,
+			loop_slow, loop_retries, (long long)(filter_us / 1000), filter_max_us / 1000.0,
+			run > 0 ? filter_us * 100.0 / run : 0.0);
+		if (n <= 0 || n >= (int)sizeof(text))
+			return;
+		char tmp[80];
+		snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+		int fd = ::open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+		if (fd < 0)
+			return;
+		bool ok = ::write(fd, text, n) == n;
+		::close(fd);
+		if (!ok || ::rename(tmp, final ? "/tmp/hds-inregistrare-ultima.stat" : path) < 0)
+			::unlink(tmp);
+		else if (final)
+			::unlink(path);
+	}
+
+	/* Fills buf with whole packets from the live demux (descriptor without blocking): first the start of a packet kept
+	   from the last call, then reads until LOOP_GATHER_BYTES or until the first new byte is LOOP_GATHER_MS old. Returns
+	   the bytes in buf, a multiple of blocksize starting with a sync byte, or 0 when the thread stops. */
+	int read(int fd, unsigned char *buf, int maxread, int blocksize, const volatile int &stop)
+	{
+		int have = 0;
+		if (tail_len > 0 && tail_len < blocksize && tail_len < maxread)
+		{
+			memcpy(buf, tail, tail_len);
+			have = tail_len;
+		}
+		tail_len = 0;
+		int64_t first_us = 0; /* when the first new bytes of this gather came */
+		while (!stop)
+		{
+			int whole = have - have % blocksize;
+			if (whole >= LOOP_GATHER_BYTES || maxread - have < blocksize)
+				break;
+			int wait_ms = LOOP_POLL_MS;
+			if (whole > 0)
+			{
+				int64_t left_us = first_us + LOOP_GATHER_MS * 1000LL - loopNowUs();
+				if (left_us <= 0)
+					break;
+				wait_ms = (int)((left_us + 999) / 1000);
+			}
+			struct pollfd pfd;
+			pfd.fd = fd;
+			pfd.events = POLLIN;
+			pfd.revents = 0;
+			int p = poll(&pfd, 1, wait_ms);
+			if (stop)
+				break;
+			if (p == 0)
+				continue; /* the checks above decide: send what was gathered, or wait again */
+			if (p < 0)
+			{
+				if (errno != EINTR)
+					loopPause(LOOP_ERROR_US);
+				continue;
+			}
+			ssize_t r = ::read(fd, buf + have, maxread - have);
+			if (r > 0)
+			{
+				if (!first_us)
+					first_us = loopNowUs();
+				have += r;
+				bytes += r;
+				reads++;
+				continue;
+			}
+			if (r < 0 && errno == EINTR)
+				continue;
+			if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EBUSY))
+			{
+				/* poll said there is data and the read found none: a driver whose poll does not wait; a pause, so the
+				   thread does not keep a core busy */
+				eagain++;
+				loopPause(LOOP_RETRY_US);
+				continue;
+			}
+			if (r < 0 && errno == EOVERFLOW)
+			{
+				/* the driver dropped data (its buffer was full); the next bytes start a new packet, so a started packet
+				   is dropped too */
+				eoverflow++;
+				resync += have % blocksize;
+				have -= have % blocksize;
+				continue;
+			}
+			/* any other error, or 0: the demux of a live service has no end; read again after a pause */
+			errors++;
+			last_errno = r < 0 ? errno : 0;
+			loopPause(LOOP_ERROR_US);
+		}
+		if (stop)
+			return 0;
+		/* the stream must start with a sync byte (descrambler, decoder): after anything unusual from the driver, drop the
+		   bytes before the first place where two packets in a row start with one */
+		int k = 0;
+		while (k < have && !(buf[k] == 0x47 && (k + blocksize >= have || buf[k + blocksize] == 0x47)))
+			k++;
+		if (k)
+		{
+			resync += k;
+			memmove(buf, buf + k, have - k);
+			have -= k;
+		}
+		int whole = have - have % blocksize;
+		tail_len = have - whole;
+		if (tail_len)
+			memcpy(tail, buf + whole, tail_len);
+		if (whole)
+		{
+			gathers++;
+			read_end_us = loopNowUs();
+		}
+		save(false);
+		return whole;
+	}
+
+	/* Writes len bytes (whole packets) into the dvr in parts of at most LOOP_PART. 0 when everything is written, or what
+	   is left was dropped after LOOP_DROP_MS without room; -1 (errno set) on an error after which nothing more can be
+	   written. The time since the end of the read is the filter (descrambling) time of this gather. */
+	int write(int fd, const unsigned char *data, int len, const volatile int &stop)
+	{
+		int64_t now = loopNowUs();
+		if (read_end_us)
+		{
+			int64_t f = now - read_end_us;
+			filter_us += f;
+			if (f > filter_max_us)
+				filter_max_us = f;
+			read_end_us = 0;
+		}
+		int done = 0;
+		int64_t refused_us = 0; /* start of the current run of refused writes */
+		while (done < len && !stop)
+		{
+			int part = len - done < LOOP_PART ? len - done : LOOP_PART;
+			int64_t w0 = loopNowUs();
+			ssize_t w = ::write(fd, data + done, part);
+			int err = errno;
+			int64_t t = loopNowUs();
+			if (w > 0)
+			{
+				writes++;
+				write_us += t - w0;
+				if (t - w0 > write_max_us)
+					write_max_us = t - w0;
+				if (t - w0 >= LOOP_SLOW_US)
+					loop_slow++;
+				done += w;
+				refused_us = 0;
+				continue;
+			}
+			if (w < 0 && err == EINTR)
+				continue; /* stop(): the loop condition looks at stop */
+			if (w == 0 || err == EAGAIN || err == EWOULDBLOCK || err == EBUSY || err == ENOMEM)
+			{
+				if (!refused_us)
+					refused_us = t;
+				if (t - refused_us >= LOOP_DROP_MS * 1000LL)
+				{
+					loop_full++;
+					loop_dropped += len - done;
+					break;
+				}
+				loop_retries++;
+				loopPause(LOOP_RETRY_US);
+				continue;
+			}
+			last_errno = err;
+			save(false);
+			errno = err;
+			return -1;
+		}
+		save(false);
+		return 0;
 	}
 };
 
@@ -241,6 +517,18 @@ void eFilePushThread::thread()
 		hisi_stats.begin(m_fd_dest);
 		hisi_cycle_us = hisiNowUs();
 	}
+#else
+	/* SoftCSA loop into a dvr on the generic path (see LOOP_GATHER_BYTES); other threads go on as before */
+	bool loop = m_dvr_loop && m_fd_source >= 0;
+	genericLoop loop_state;
+	if (loop)
+	{
+		loop_state.begin();
+		int fl = fcntl(m_fd_source, F_GETFL, 0);
+		if (fl < 0 || fcntl(m_fd_source, F_SETFL, fl | O_NONBLOCK) < 0)
+			eWarning("[eFilePushThread] SoftCSA loop: the demux stays blocking (%m)");
+	}
+	hdsFinalRedare final_redare; /* end of file: the decoder plays out its buffer before evtEOF */
 #endif
 
 	eDebug("FILEPUSH THREAD START");
@@ -324,14 +612,38 @@ void eFilePushThread::thread()
 				   absolutely forbidden is to return EINTR and consume a non-aligned number of bytes. 
 				*/
 #if HAVE_HISILICON
+			int to_write = m_buf_end - m_buf_start;
+			if (m_dvr_loop && to_write > DVR_LOOP_PART)
+				to_write = DVR_LOOP_PART; /* SoftCSA loop into a dvr: parts of whole packets */
 			int64_t hisi_w0 = (m_fd_source >= 0 || hisi_dvr) ? hisiNowUs() : 0;
-#endif
+			int w = write(m_fd_dest, m_buffer + m_buf_start, to_write);
+#else
+			if (loop)
+			{
+				if (loop_state.write(m_fd_dest, m_buffer + m_buf_start, m_buf_end - m_buf_start, m_stop) < 0)
+				{
+					eWarning("[eFilePushThread] SoftCSA loop: write error on the dvr (%m)");
+					sendEvent(evtWriteError);
+					break;
+				}
+				m_buf_start = m_buf_end; /* written, or dropped when the dvr had no room */
+				continue;
+			}
 			int w = write(m_fd_dest, m_buffer + m_buf_start, m_buf_end - m_buf_start);
+#endif
 #if HAVE_HISILICON
 			int hisi_errno = errno; /* the checks below look at errno: the statistics write files */
 			if (m_fd_source >= 0)
 			{
-				hisi_stats.wrote(hisiNowUs() - hisi_w0);
+				int64_t hisi_wus = hisiNowUs() - hisi_w0;
+				hisi_stats.wrote(hisi_wus);
+				if (m_dvr_loop && w > 0 && hisi_wus >= HISI_DVR_SLOW_US)
+					hisi_stats.loop_slow++; /* the driver slept after the write: its buffer is more than half used */
+				if (m_dvr_loop && w < 0 && hisi_errno == EAGAIN)
+				{
+					hisi_stats.loop_full++;
+					hisi_stats.loop_dropped += m_buf_end - m_buf_start;
+				}
 				hisi_stats.save(false);
 			}
 			else if (hisi_dvr)
@@ -342,6 +654,16 @@ void eFilePushThread::thread()
 //			eDebug("wrote %d bytes", w);
 			if (w <= 0)
 			{
+#if HAVE_HISILICON
+				if (m_dvr_loop && w < 0 && errno == EAGAIN)
+				{
+					/* the dvr has no room (the decoder stopped taking data): drop what waits and read on after a pause
+					   outside the driver; a live stream cannot wait for the decoder */
+					m_buf_start = m_buf_end;
+					hisiPause(DVR_LOOP_FULL_US);
+					continue;
+				}
+#endif
 				if (errno == EINTR || errno == EAGAIN || errno == EBUSY)
 					continue;
 				eDebug("eFilePushThread WRITE ERROR");
@@ -431,6 +753,14 @@ void eFilePushThread::thread()
 		}
 		hisi_at_once = hisi_now;
 		int64_t hisi_r0 = m_fd_source >= 0 ? hisiNowUs() : 0;
+#else
+		if (loop)
+		{
+			m_buf_end = maxread ? loop_state.read(m_fd_source, m_buffer, maxread, m_blocksize, m_stop) : 0;
+			if (m_buf_end <= 0)
+				continue; /* only when stopping: a live demux has no end, so no EOF event */
+		}
+		else
 #endif
 		if (maxread)
 			m_buf_end = m_source->read(m_current_position, m_buffer, maxread);
@@ -571,6 +901,17 @@ void eFilePushThread::thread()
 						continue;
 					case 1:
 						eDebug("wait for driver eof ok");
+#if HAVE_HISILICON
+#else
+						/* the driver has taken everything, but the decoder still holds a few seconds of picture
+						   and sound: read the file again every second (a timeshift file can still grow), and
+						   send evtEOF only when nothing new came for hdsFinalRedare::PASI_MAX seconds */
+						if (final_redare.maiAsteapta())
+						{
+							loopPause(hdsFinalRedare::PAS_MS * 1000L); /* SIGUSR1 from stop() ends it early */
+							continue; /* m_stop is checked by the while */
+						}
+#endif
 						break;
 					default:
 						eDebug("wait for driver eof aborted by signal");
@@ -593,6 +934,10 @@ void eFilePushThread::thread()
 			break;
 		} else
 		{
+#if HAVE_HISILICON
+#else
+			final_redare.dateNoi();
+#endif
 			m_current_position += m_buf_end;
 			bytes_read += m_buf_end;
 			if (m_sg)
@@ -604,6 +949,9 @@ void eFilePushThread::thread()
 #if HAVE_HISILICON
 	if (m_fd_source >= 0)
 		hisi_stats.save(true);
+#else
+	if (loop)
+		loop_state.save(true);
 #endif
 
 	eDebug("FILEPUSH THREAD STOP");

@@ -10,3 +10,5 @@
 SKIP_RECIPE[libbluray] = ""
 DEPENDS:remove = "libaacs libdvdcss"
 RDEPENDS:${PN}:remove = "libaacs libdvdcss"
+# 12.11.2026: comiterea fixata (reteta OE-Alliance are AUTOREV), aceeasi cu a pachetelor ServiceApp probate pe .122 pe 11.11
+SRCREV = "7121a00c531f458c66fc947700cfe8dc7bd85742"

@@ -9,12 +9,18 @@
 # Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura video cu OSD, un mesaj pe ecran, concluziile
 # echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
 # (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B" (fara ecrane
-# private, echipa vede ce e pe televizor; textul trimis spre noi trece in continuare prin filtrul de secrete). Nimic nu scrie pe disc in afara jurnalului
+# private, echipa vede ce e pe televizor; textul trimis spre noi trece in continuare prin filtrul de parole). Nimic nu scrie pe disc in afara jurnalului
 # sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti. O singura
 # operatie primeste o cale (op "citeste", din 0.6.21): numai sub RADACINI_CITIRE, verificata dupa realpath (nicio
-# legatura spre afara, spre discuri sau stick-uri) si niciodata prin LOCURI_OPRITE (modulele de acces, parolele,
-# cheile, jetoanele, datele personale). Iesirea trece intai prin filtrul de secrete (parole,
-# chei, jetoane) si prin mascarea adreselor MAC; caile si setarile cartelelor de acces (CAM) nu se citesc deloc.
+# legatura spre afara, spre discuri sau stick-uri) si niciodata prin LOCURI_OPRITE (fisierele de parole si cheile private)
+# sau LOCURI_NESIGURE (memoria bruta si fluxurile nucleului care nu se termina).
+#
+# Eduard, 12.11.2026 19:17 si 19:19 („cine a spus sa nu faca jurnalul despre rolele si problemele modulelor? eu am spus
+# sa fie tot, tot, tot”; „FARA PAROLE, ATAT”): asistenta vede tot, si modulele de acces (jurnalele, fisierele si dosarele
+# lor, procesele, setarile config.softcam...), si numele, gazdele, porturile, adresele MAC. Din tot ce pleaca spre echipa
+# se ascund NUMAI parolele (Components/HdsAsistentaControl.mascheazaParole). Hotararea inlocuieste nota din 01.11.2026
+# 23:40 (fara module si fara date personale in asistenta). Ce iese public pe forum (rapoartele testerilor, codurile QR)
+# ramane curatat ca inainte (HdsBetaTester.curata, HdsDiagnostic.faraDatePersonale).
 #
 # Fiecare op din catalog are aici o functie (TABEL); o proba cere ca cele doua liste sa coincida. Partea de sus nu
 # importa nimic din enigma2: functiile care au nevoie de receptor (captura, mesaj, memoria decodorului, setarile)
@@ -24,16 +30,12 @@ import os
 import re
 import subprocess
 
-from Components.HdsAsistentaControl import cheieSecreta, mascheazaConturi, mascheazaSecrete
+from Components.HdsAsistentaControl import mascheazaParole
 from Components.HdsProcFundal import nodOprit
 
-# caile cartelelor de acces si ale modulelor de acces nu se citesc niciodata (nici numele fisierelor nu apar in
-# raspuns): dupa forma, fara numele modulelor (orice cuvant care se termina in cam, camd sau cams, cititoarele de
-# cartele, porturile si fisierele lor de chei si de configurare)
-_CAM = re.compile(r"(?i)cam[ds]?(?![a-z])|card(?:d\b|[_.-]?serv)|(?<![a-z])[gs]box|(?<![a-z])new[c]s\b|cs3\d\dx|"
-	r"radeg[a]st|constcw|tuxbox/config|/var/keys|\.key\b|\.cfg\b")
-
 RASPUNS_MAX = 1024 * 1024           # 1 MB de raspuns (text sau captura)
+# coada unui fisier mai mare: putin sub plafon, ca randul de inceput si stelutele sa nu taie sfarsitul (_taie)
+COADA_MAX = RASPUNS_MAX - 16 * 1024
 CAPTURA_MAX = 2 * 1024 * 1024       # o captura (JPEG mic de la 0.6.15; PNG inainte) se plafoneaza aparte
 # op-urile de control: numai la nivelul B (omul a lasat bifat "Control complet")
 CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza")
@@ -42,9 +44,6 @@ MAX_RANDURI_JURNAL = 2000
 
 CALE_JURNALE = "/home/root/logs"
 IMAGE_VERSION = "/etc/image-version"
-# adresa MAC: ultimii trei octeti mascati
-_MAC = re.compile(r"\b([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){2})(:[0-9A-Fa-f]{2}){3}\b")
-
 
 def _jurnal(text):
 	print("[HdsAsistentaBroker] %s" % text)
@@ -67,22 +66,10 @@ class Rezultat(object):
 
 # ---------------------------------------------------------------- filtre si plafoane
 
-# operatiile care intorc textul ecranului: ecranele modulelor de acces se vad, deci randurile lor raman (numai valorile
-# conturilor ies). Celelalte iesiri (jurnale, fisiere, setari, procese) pierd ca pana acum randurile modulelor.
-OP_ECRAN = ("ecran", "taste", "text")
-
-
-def mascheaza(text, ecran=False):
-	"""Scoate valorile private (parole, chei, conturi) si MAC-ul din iesirea spre echipa; in afara textului ecranului
-	(ecran=False) si randurile modulelor de acces."""
-	randuri = []
-	for rand in (text or "").splitlines():
-		if not ecran and _CAM.search(rand):
-			continue
-		rand = mascheazaConturi(mascheazaSecrete(rand))
-		rand = _MAC.sub(lambda m: m.group(1) + ":xx:xx:xx", rand)
-		randuri.append(rand)
-	return "\n".join(randuri)
+def mascheaza(text):
+	"""Iesirea spre echipa: numai parolele devin *** (Eduard, 12.11.2026 19:19). Randurile modulelor de acces, numele de
+	utilizator, gazdele, porturile si adresele MAC raman."""
+	return mascheazaParole(text or "")
 
 
 def _taie(text, limita=RASPUNS_MAX):
@@ -100,6 +87,22 @@ def _citeste(cale, maxim=RASPUNS_MAX, lista=False):
 			from Components.HdsListeText import text_lista
 			return text_lista(date)
 		return date.decode("utf-8", "replace")
+	except Exception as e:
+		return "(nu se poate citi %s: %s)" % (os.path.basename(cale), type(e).__name__)
+
+
+def _citesteCoada(cale, maxim=RASPUNS_MAX):
+	"""Ultimii `maxim` octeti ai unui fisier obisnuit (fara primul rand, taiat, cand fisierul e mai mare)."""
+	try:
+		with open(cale, "rb") as f:
+			f.seek(0, os.SEEK_END)
+			marime = f.tell()
+			f.seek(max(0, marime - maxim))
+			date = f.read(maxim)
+		text = date.decode("utf-8", "replace")
+		if marime > maxim:
+			text = text.split("\n", 1)[-1]
+		return text
 	except Exception as e:
 		return "(nu se poate citi %s: %s)" % (os.path.basename(cale), type(e).__name__)
 
@@ -235,47 +238,40 @@ def op_tunere(ctx, args):
 
 
 # ---------------------------------------------------------------- citirea unui fisier sau a unui dosar (op "citeste")
-# Eduard, 01.11.2026 23:40: asistenta vede tot hardware-ul si tot ce e pe receptor, in afara de datele personale si de
-# modulele de acces (CAM si chei). Caile primite au trecut de tiparul din catalog (numai sub RADACINI_CITIRE, fara
+# Eduard, 01.11.2026 23:40: asistenta vede tot hardware-ul si tot ce e pe receptor; din 12.11.2026 19:19 si modulele de
+# acces si datele omului, fara parole (vezi capul fisierului). Caile primite au trecut de tiparul din catalog (numai sub RADACINI_CITIRE, fara
 # spatii); aici: realpath (legaturile simbolice si ".." se rezolva, iar locul real trebuie sa ramana sub
 # RADACINI_REALE: /proc/<pid>/fd, /proc/<pid>/root sau o legatura din /tmp spre un disc cad), apoi LOCURI_OPRITE si
-# _CAM pe calea ceruta si pe cea reala. Numai fisiere obisnuite (si cele din /proc, /sys) si dosare: un FIFO sau un
-# socket din /tmp ar tine sesiunea pe loc. Fisierul se citeste prin head (termen si plafon, ca un extern), iar raspunsul
-# trece prin mascheaza (randurile modulelor de acces scoase, secretele ca stelute, MAC-ul pe jumatate).
+# LOCURI_NESIGURE pe calea ceruta si pe cea reala. Numai fisiere obisnuite (si cele din /proc, /sys) si dosare: un FIFO
+# sau un socket din /tmp ar tine sesiunea pe loc. Fisierul se citeste prin head (termen si plafon, ca un extern), iar
+# raspunsul trece prin mascheaza (numai parolele ca stelute). Din 12.11.2026 19:19 (Eduard: „FARA PAROLE, ATAT”) se citesc
+# si fisierele modulelor de acces (jurnalele din /tmp si /var/log, /etc/init.d, /etc/tuxbox/config, oscam.server,
+# CCcam.cfg), setarile intregi, Wi-Fi-ul, IPTV-ul, linia de comanda a proceselor: toate cu parolele mascate.
 RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp")
 # unde duc pe receptor (OE: /var/log -> /var/volatile/log, /tmp -> /var/volatile/tmp)
 RADACINI_REALE = RADACINI_CITIRE + ("/var/volatile/log", "/var/volatile/tmp")
+# Inchise raman numai fisierele care sunt ele insele parole sau chei private (formatul lor nu are o eticheta dupa care
+# sa se mascheze parola): parolele sistemului (shadow, smbpasswd, htpasswd, .netrc, chap-secrets), cheile SSH si TLS,
+# VPN-ul si WireGuard (numele, parola si cheia privata), fisierele *.key (cheile TLS si listele de chei), jetoanele si
+# secretele conturilor (tin loc de parola) si cheile noastre (/etc/enigma2/hdsatelit/*.bin, hdsatelit-ssh).
 LOCURI_OPRITE = re.compile(
-	# Datele exploratorului si copiile editorului raman numai la proprietar.
-	r"hds-fisiere|\.hds-inainte(?:$|/)|"
-	# parolele, cheile, jetoanele si conturile (ale sistemului si ale noastre)
-	r"shadow|passwd|(?:^|[/._-])pass(?:word|phrase)?(?:[/._-]|$)|hdsatelit-ssh|wpa_supplicant|hostapd|dropbear|"
-	r"(?:^|/)\.?ssh(?:/|_|$)|ssl/private|\.pem$|vpn|wireguard|(?:^|/)wg\d|samba|(?:^|/)smb|(?:^|/)ppp(?:/|$)|netrc|"
-	r"(?:^|/)auto\.|jeton|token|secret|parol|chei|key|cred|auth(?!orized)|cookie|conturi|account|"
-	r"^/etc/enigma2/hdsatelit/[^/]*\.bin$|"
-	# parola Wi-Fi a unor drivere si conturile de DNS dinamic stau in fisiere cu nume obisnuite
-	r"^/etc/wireless(?:/|$)|rt2870sta|inadyn|(?:^|[/._-])ddns|no-?ip|"
-	# memoria si fluxurile nucleului care nu se citesc (sau nu se termina); linia de comanda a unui proces poate tine o parola
-	r"(?:^|/)environ$|kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$|^/proc/\d+/(?:task/\d+/)?cmdline$|"
-	# setarile intregi si copiile lor (op "setari" le da filtrate), listele si datele omului
-	# (identificatorii placii, seria memoriei, seriile si EEPROM-ul, se citesc: Eduard, 02.11.2026 01:19)
-	r"^/etc/enigma2/settings(?:$|[._~-])|backup|iptv|forum-poze|navigator|browsere")
-# modulele de acces, pe langa _CAM: nici numele lor nu apar in lista unui dosar
-_CAM_FAMILIE = re.compile(r"(?<![a-z])ecm|(?<![a-z])emm|caid|provid|softcam|oscam|ncam|cccam")
+	r"(?:^|/)g?shadow(?:[.~-]|$)|smbpasswd|htpasswd|passdb\.tdb|netrc|(?:chap|pap)-secrets|"
+	r"hdsatelit-ssh|(?:^|/)\.?ssh(?:/|_|$)|dropbear|ssl/private|\.pem$|\.key$|\.p12$|\.pfx$|"
+	r"vpn|wireguard|(?:^|/)wg\d|jeton|token|secret|"
+	r"^/etc/enigma2/hdsatelit/[^/]*\.bin$")
+# Nu tin secrete, dar nu se citesc: memoria bruta si fluxurile nucleului care nu se termina (ar tine sesiunea pana la
+# termen sau ar citi memoria altor procese).
+LOCURI_NESIGURE = re.compile(r"kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$")
 TERMEN_CITIRE_S = 10
 MAX_INTRARI_DOSAR = 2000
-TEXT_CITIRE_OPRITA = "(inchis: modulele de acces, parolele, cheile si datele personale nu se citesc)"
+TEXT_CITIRE_OPRITA = "(inchis: fisierele de parole si cheile private nu se citesc; din rest se ascund numai parolele)"
 # fisierele din /proc/stb pe care restul imaginii nu le citeste (Components/HdsProcFundal.nodOprit): numele da, continutul nu
 TEXT_NOD_OPRIT = "(necitit: pe aceasta placa citirea poate opri nucleul sau poate astepta la nesfarsit)"
 
 
-def _cam(cale):
-	c = (cale or "").lower()
-	return bool(_CAM.search(c) or _CAM_FAMILIE.search(c))
-
-
 def _oprit(cale):
-	return _cam(cale) or bool(LOCURI_OPRITE.search((cale or "").lower()))
+	c = (cale or "").lower()
+	return bool(LOCURI_OPRITE.search(c) or LOCURI_NESIGURE.search(c))
 
 
 def _hisilicon(ctx):
@@ -327,16 +323,25 @@ def op_citeste(ctx, args):
 	if not S.S_ISREG(st.st_mode):
 		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % cerut)
 	ruleaza = ctx.get("ruleaza", _ruleaza)
-	cod, text = ruleaza(["head", "-c", str(RASPUNS_MAX + 1), real_plin], termen=TERMEN_CITIRE_S)
+	# un fisier mai mare decat plafonul (un jurnal care creste): ultimul MB, unde e ce s-a intamplat acum, nu primul
+	# (asistenta 252913); fisierele din /proc si /sys au marimea 0 si raman pe head
+	coada = st.st_size > RASPUNS_MAX
+	unealta = "tail" if coada else "head"
+	cod, text = ruleaza([unealta, "-c", str(COADA_MAX if coada else RASPUNS_MAX + 1), real_plin],
+		termen=TERMEN_CITIRE_S)
 	if cod == 124:
 		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (cerut, TERMEN_CITIRE_S))
-	return Rezultat(cod, text=text.replace("\x00", " "))
+	text = text.replace("\x00", " ")
+	if coada and cod == 0:
+		# primul rand poate fi taiat la jumatate
+		text = "(fisierul are %d octeti: se arata ultimii %d)\n%s" % (st.st_size, COADA_MAX, text.split("\n", 1)[-1])
+	return Rezultat(cod, text=text)
 
 
 def _dosar(real_plin, real, hisilicon=False):
 	"""Lista unui dosar: d (dosar), f (fisier, cu marimea), l (legatura, fara tinta: in /proc tintele sunt fisierele
-	deschise, deci si filmele omului), altele cu felul lor; cele oprite apar "(inchis)", iar cele ale modulelor de acces
-	nu apar deloc."""
+	deschise, deci si filmele omului), altele cu felul lor; cele oprite apar "(inchis)"; cele ale modulelor de acces apar
+	ca oricare altele (Eduard, 12.11.2026 19:17)."""
 	import stat as S
 	try:
 		nume = sorted(os.listdir(real_plin))
@@ -345,8 +350,6 @@ def _dosar(real_plin, real, hisilicon=False):
 	randuri = []
 	for n in nume[:MAX_INTRARI_DOSAR]:
 		cale = real.rstrip("/") + "/" + n
-		if _cam(cale):
-			continue
 		try:
 			st = os.lstat(os.path.join(real_plin, n))
 		except Exception:
@@ -359,7 +362,7 @@ def _dosar(real_plin, real, hisilicon=False):
 			fel, marime, arata = "l", "-", n
 		else:
 			fel, marime, arata = "c" if S.S_ISCHR(st.st_mode) else ("p" if S.S_ISFIFO(st.st_mode) else "s"), "-", n
-		if LOCURI_OPRITE.search(cale.lower()):
+		if _oprit(cale):
 			arata += "  (inchis)"
 		elif not S.S_ISDIR(st.st_mode) and nodOprit(cale, hisilicon):
 			arata += "  (necitit)"
@@ -456,7 +459,8 @@ def op_jurnal(ctx, args):
 			return Rezultat(1, text="(jurnal necunoscut)")
 	except Exception:
 		return Rezultat(1, text="(jurnal necunoscut)")
-	text = _citeste(real, RASPUNS_MAX)
+	# coada fisierului, nu inceputul (asistenta 252913: hds-interfata.log are 1,5 MB pe SF8008 si se intorcea mijlocul)
+	text = _citesteCoada(real, COADA_MAX)
 	ultimele = text.splitlines()[-randuri:]
 	return Rezultat(0, text="\n".join(ultimele))
 
@@ -483,10 +487,13 @@ def op_procese(ctx, args):
 	return Rezultat(0, text="\n".join(randuri))
 
 
-# Citirea permite setarile tuturor ecranelor deschise; scrierea isi pastreaza lista separata din Control.
+# Citirea permite setarile tuturor ecranelor deschise (si ale modulelor de acces, config.softcam..., din 12.11.2026);
+# scrierea isi pastreaza lista separata din Control.
 SETARI_PERMISE = ("config.",)
-# o setare care tine chiar numele de utilizator al unui cont (adresele trec prin mascheaza, ca orice text)
-_CHEIE_CONT = re.compile(r"(?i)(?:^|[._])(?:user|username|usr|uname|login|utilizator)[0-9]*$")
+# o setare care tine o parola, un PIN (al controlului parental) sau cheia cu care receptorul trimite ca tester
+# (config.hds_beta.id, tine loc de parola la serverul nostru): valoarea intreaga devine ***
+_CHEIE_PAROLA = re.compile(r"(?i)(?:password|passwd|passphrase|pwd|parol|wep_key|(?:^|[._-])(?:pass|psk)[0-9]*$|pin(?:[._]?[0-9]+)?$|"
+	r"^config\.hds_beta\.(?:id|cod)$)")
 
 
 def op_setari(ctx, args):
@@ -499,11 +506,9 @@ def op_setari(ctx, args):
 		cheie = rand.split("=", 1)[0]
 		if not any(cheie.startswith(p) for p in SETARI_PERMISE):
 			continue
-		if _CAM.search(cheie):
-			continue
-		if _CHEIE_CONT.search(cheie):
+		if _CHEIE_PAROLA.search(cheie):
 			rand = cheie + "=***"
-		randuri.append(mascheazaConturi(mascheazaSecrete(rand)))
+		randuri.append(mascheazaParole(rand))
 	return Rezultat(0, text="\n".join(randuri) or "(nicio setare in lista permisa)")
 
 
@@ -608,7 +613,7 @@ def op_concluzii(ctx, args):
 
 def op_canal(ctx, args):
 	"""Canalul deschis: serviciul, PID-urile, transponderul (frecventa, polarizarea, rata), tunerul si semnalul, ca in
-	Informatii despre canal; randurile modulelor de acces le scoate filtrul (mascheaza)."""
+	Informatii despre canal; si randurile modulelor de acces (mascheaza ascunde numai parolele)."""
 	citeste = ctx.get("canal")
 	if citeste is None:
 		return Rezultat(1, text="(canalul nu se poate citi)")
@@ -660,6 +665,20 @@ def op_setare_scrie(ctx, args):
 TERMEN_OPKG_S = 300
 
 
+def _treciPeRezerva(ctx, text):
+	"""Dupa un opkg update cu cod de eroare: daca a cazut lista feedului extern de pe moneasoftware.com, sursa trece pe
+	serverul de rezerva (Components/HdsPluginuriExterne.dupa_update). True cand a trecut. Nu ridica exceptii."""
+	try:
+		try:
+			from Components import HdsPluginuriExterne as X
+		except ImportError:  # probe pe PC
+			import HdsPluginuriExterne as X
+		return bool(X.dupa_update((text or "").splitlines(), ctx.get("radacina", "/")))
+	except Exception as e:
+		print("[HdsAsistentaBroker] rezerva feedului extern: %r" % (e,))
+		return False
+
+
 def _opkg(ctx, actiune, pachet):
 	from Components import HdsAsistentaControl as C
 	if not _controlPermis(ctx):
@@ -677,6 +696,11 @@ def _opkg(ctx, actiune, pachet):
 		if not C.pachetInFeed(pachet, feeduri, liste):
 			cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
 			jurnal.append("opkg update: cod %s" % cod)
+			if cod != 0 and _treciPeRezerva(ctx, text):
+				# moneasoftware.com nu raspunde: sursa pluginurilor externe a trecut pe serverul de rezerva (aceeasi sursa,
+				# acelasi nume), deci lista se descarca inca o data, de acolo (ca in Extensii, HdsExtensiiLucru.treciPeRezerva)
+				cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
+				jurnal.append("opkg update (serverul de rezerva): cod %s" % cod)
 			if not C.pachetInFeed(pachet, feeduri, liste):
 				return Rezultat(1, text="(%s nu e in feedurile HD Satelit)" % pachet)
 		argv = ["opkg", "install", pachet]
@@ -743,5 +767,5 @@ def ruleaza(op, args, ctx=None):
 		_jurnal("%s: %s" % (op, e))
 		return Rezultat(1, text="(eroare la %s: %s)" % (op, type(e).__name__))
 	if rez.text is not None and rez.tip == "text":
-		rez.text = _taie(mascheaza(rez.text, ecran=op in OP_ECRAN))
+		rez.text = _taie(mascheaza(rez.text))
 	return rez

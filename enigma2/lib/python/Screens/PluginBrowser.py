@@ -35,3 +35,39 @@ class PluginDownloadBrowser(HdsExtensii):
 
 
 language.addCallback(languageChanged)
+
+
+from Screens.Screen import ScreenSummary  # noqa: E402
+
+
+class PluginBrowserSummary(ScreenSummary):
+	"""Ecranul mic (afisajul din fata) al listei de pluginuri, cum il cer pluginurile din alte imagini (createSummary):
+	numele si descrierea randului ales, in entry si value; parintele le trimite prin onChangedEntry(nume, descriere)."""
+	def __init__(self, session, parent):
+		from Components.Sources.StaticText import StaticText
+		ScreenSummary.__init__(self, session, parent=parent)
+		self.skinName = ["PluginBrowserSummary"] + list(self.skinName)
+		self["entry"] = StaticText("")
+		self["value"] = StaticText("")
+		self.onShow.append(self.addWatcher)
+		self.onHide.append(self.removeWatcher)
+
+	def addWatcher(self):
+		lista = getattr(self.parent, "onChangedEntry", None)
+		if isinstance(lista, list) and self.selectionChanged not in lista:
+			lista.append(self.selectionChanged)
+		alege = getattr(self.parent, "selectionChanged", None)
+		if callable(alege):
+			try:
+				alege()
+			except Exception as e:
+				print("[PluginBrowserSummary] %r" % (e,))
+
+	def removeWatcher(self):
+		lista = getattr(self.parent, "onChangedEntry", None)
+		if isinstance(lista, list) and self.selectionChanged in lista:
+			lista.remove(self.selectionChanged)
+
+	def selectionChanged(self, name="", description=""):
+		self["entry"].setText(name or "")
+		self["value"].setText(description or "")

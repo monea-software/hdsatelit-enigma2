@@ -16,7 +16,10 @@
 # fara raspuns revine modul de dinainte. Telefonul ramane locul de unde se intoarce un mod care lasa televizorul negru.
 # Un ceas de rezerva (cateva secunde dupa termen) intoarce modul si daca intrebarea de pe televizor nu s-a inchis
 # singura. „La schimbarea canalului” nu poate lasa televizorul negru: se scrie si se salveaza direct. La fel „Imaginea
-# 4:3” (VideoOutput.policyElement, fisierul policy al driverului), numai cand driverul il are.
+# 4:3” (VideoOutput.policyElement, fisierul policy al driverului), numai cand driverul il are. La fel „Poza canalului la
+# schimbare” (Components/HdsUltimaImagine.py, config.av.hds_zap_poza, poza_canal=1|0), numai cand receptorul are grab.
+# La fel „Prima imagine rapidă” (Components/HdsPrimaImagine.py, config.av.hds_prima_imagine, prima_imagine=1|0), numai pe
+# receptoarele HiSilicon cu libreader.
 # „Culorile pe HDMI” (VideoOutput.HdmiColors): YCbCr se scrie pe loc si trece prin aceeasi intrebare (singur sau
 # impreuna cu un mod nou); fara „Da” nu se salveaza, dar iesirea ramane YCbCr pana la urmatoarea pornire (driverul nu
 # are drum inapoi). RGB se salveaza direct si se aplica la urmatoarea pornire. In ambele cazuri, cand iesirea e YCbCr
@@ -29,7 +32,7 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/video                                        randurile, valorile, alegerile, incercarea in curs
-#   POST /api/video-seteaza?rezolutie=..&frecventa=..&colorspace=..&colordepth=..&hdrtype=..&zapmode=..&imagine43=..&culori_hdmi=..
+#   POST /api/video-seteaza?rezolutie=..&frecventa=..&colorspace=..&colordepth=..&hdrtype=..&zapmode=..&imagine43=..&culori_hdmi=..&poza_canal=1|0&prima_imagine=1|0
 #                                                          oricare dintre ele; un mod video nou sau YCbCr pornesc
 #                                                          incercarea
 #   POST /api/video-confirma                               pastreaza setarea incercata (ca „Da” pe televizor)
@@ -44,7 +47,8 @@
 import time
 
 # ce se poate trimite si cat de lung
-ARGUMENTE = ("rezolutie", "frecventa", "colorspace", "colordepth", "hdrtype", "zapmode", "imagine43", "culori_hdmi")
+ARGUMENTE = ("rezolutie", "frecventa", "colorspace", "colordepth", "hdrtype", "zapmode", "imagine43", "culori_hdmi",
+	"poza_canal", "prima_imagine")
 CULORI = (("colorspace", "HDMI color space"), ("colordepth", "Color depth"), ("hdrtype", "HDR type"))
 MAX_VALOARE = 40
 # ceasul de rezerva: atatea secunde dupa termenul intrebarii, modul revine si daca intrebarea nu s-a inchis singura
@@ -236,11 +240,51 @@ def stare(V=None, S=None, sesiune=None, acum=None, reciteste=True):
 		"imagine43": None if imagine43 is None else {"eticheta": V.policyRowText(), "valoare": imagine43.value,
 			"alegeri": _alegeri(imagine43), "descriere": V.policyDescription()},
 		"culori_hdmi": culori_hdmi,
+		"poza_canal": _pozaStare(),
+		"prima_imagine": _primaStare(),
 		"avertisment": S.rateWarning(),
 		"incercare": _stareIncercare(S, acum),
 		"numaratoare": _numaratoare(S, acum),
 		"ocupat": refuz,
 	}
+
+
+def _pozaElement():
+	"""HDSatelit: config.av.hds_zap_poza (Components/HdsUltimaImagine.py, poza canalului la schimbare) sau None; randul
+	e acelasi cu cel din Setari > Video (Screens/VideoSetup.py pozaElement)"""
+	try:
+		from Components import HdsUltimaImagine
+		return HdsUltimaImagine.config() if HdsUltimaImagine.oferit() else None
+	except Exception:
+		return None
+
+
+def _pozaStare():
+	el = _pozaElement()
+	if el is None:
+		return None
+	from Components import HdsUltimaImagine
+	return {"eticheta": _t(HdsUltimaImagine.ETICHETA), "valoare": "1" if el.value else "0",
+		"alegeri": [["1", _t("yes")], ["0", _t("no")]], "descriere": _t(HdsUltimaImagine.DESCRIERE)}
+
+
+def _primaElement():
+	"""HDSatelit: config.av.hds_prima_imagine (Components/HdsPrimaImagine.py, prima imagine rapida) sau None; randul e
+	acelasi cu cel din Setari > Video (Screens/VideoSetup.py primaElement)"""
+	try:
+		from Components import HdsPrimaImagine
+		return HdsPrimaImagine.config() if HdsPrimaImagine.oferit() else None
+	except Exception:
+		return None
+
+
+def _primaStare():
+	el = _primaElement()
+	if el is None:
+		return None
+	from Components import HdsPrimaImagine
+	return {"eticheta": _t(HdsPrimaImagine.ETICHETA), "valoare": "1" if el.value else "0",
+		"alegeri": [["1", _t("yes")], ["0", _t("no")]], "descriere": _t(HdsPrimaImagine.DESCRIERE)}
 
 
 def _cuMesaj(rez, reusit, mesaj):
@@ -305,6 +349,18 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 		imagine43_nou = _alegeValoare(imagine43, argumente["imagine43"]) if imagine43 is not None else None
 		if imagine43_nou is None:
 			return _cuMesaj(baza, False, _t("Alegerea „%s” nu există pentru „%s”.") % (argumente["imagine43"][:MAX_VALOARE], V.policyRowText()))
+	poza = _pozaElement()
+	poza_nou = None
+	if "poza_canal" in argumente:
+		poza_nou = {"1": True, "0": False}.get(argumente["poza_canal"]) if poza is not None else None
+		if poza_nou is None:
+			return _cuMesaj(baza, False, _t("Alegerea „%s” nu există pentru „%s”.") % (argumente["poza_canal"][:MAX_VALOARE], baza["poza_canal"]["eticheta"] if baza.get("poza_canal") else "poza_canal"))
+	prima = _primaElement()
+	prima_nou = None
+	if "prima_imagine" in argumente:
+		prima_nou = {"1": True, "0": False}.get(argumente["prima_imagine"]) if prima is not None else None
+		if prima_nou is None:
+			return _cuMesaj(baza, False, _t("Alegerea „%s” nu există pentru „%s”.") % (argumente["prima_imagine"][:MAX_VALOARE], baza["prima_imagine"]["eticheta"] if baza.get("prima_imagine") else "prima_imagine"))
 	culori = V.colorElement()
 	culori_nou = None
 	if "culori_hdmi" in argumente:
@@ -315,6 +371,14 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 	if zap_nou is not None and zap_nou != zap.value:
 		zap.value = zap_nou             # notificatorul il scrie in driver
 		zap.save()
+		fisier.save()
+	if prima_nou is not None and prima_nou != prima.value:
+		prima.value = prima_nou          # se citeste la fiecare zap
+		prima.save()
+		fisier.save()
+	if poza_nou is not None and poza_nou != poza.value:
+		poza.value = poza_nou            # notificatorul modulului: oprita = pozele sterse din memorie
+		poza.save()
 		fisier.save()
 	if imagine43_nou is not None and imagine43_nou != imagine43.value:
 		imagine43.value = imagine43_nou   # notificatorul il scrie in driver (policy); nu schimba formatul HDMI
@@ -355,7 +419,7 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 			_noteaza(mesaj, True, acum, culori_repornire)
 			return _cuMesaj(stare(V, S, sesiune, acum, reciteste=False), True, mesaj)
 		rez = stare(V, S, sesiune, acum, reciteste=False)
-		return _cuMesaj(rez, True, _t("Salvat.") if (zap_nou is not None or imagine43_nou is not None) else _t("Setarea era deja aceasta."))
+		return _cuMesaj(rez, True, _t("Salvat.") if (zap_nou is not None or imagine43_nou is not None or poza_nou is not None or prima_nou is not None) else _t("Setarea era deja aceasta."))
 	inainte, pe_ecran = V.tryVideo(sesiune.nav)
 	if pe_ecran is None:
 		if culori_schimbate:
@@ -725,6 +789,20 @@ PAGINA = """<!DOCTYPE html>
     </div>
     <p class="nota" id="zapDescriere"></p>
   </section>
+  <section class="card ascuns" id="cardPrima">
+    <div class="rand lat">
+      <label for="primaImagine" id="primaEticheta">Prima imagine rapidă</label>
+      <select id="primaImagine"></select>
+    </div>
+    <p class="nota" id="primaDescriere"></p>
+  </section>
+  <section class="card ascuns" id="cardPoza">
+    <div class="rand lat">
+      <label for="pozaCanal" id="pozaEticheta">Poza canalului la schimbare</label>
+      <select id="pozaCanal"></select>
+    </div>
+    <p class="nota" id="pozaDescriere"></p>
+  </section>
   <p class="nota">Aceleași setări sunt pe televizor, în __DRUM_MENIU__.</p>
   <p class="mesaj" id="mesaj"></p>
   <div class="butoane ascuns" id="cardRepornire"><button type="button" id="reporneste">Repornește receptorul</button></div>
@@ -801,7 +879,7 @@ function arata(d){
   }
   $("avertisment").textContent = d.avertisment || "";
   var blocat = !!(inc.activa || d.ocupat);
-  ["rezolutie", "frecventa", "incearca", "zapmode", "imagine43", "culoriHdmi"].forEach(function(id){ $(id).disabled = blocat; });
+  ["rezolutie", "frecventa", "incearca", "zapmode", "imagine43", "culoriHdmi", "pozaCanal", "primaImagine"].forEach(function(id){ $(id).disabled = blocat; });
   if(d.culori_hdmi){
     $("cardCulori").classList.remove("ascuns");
     $("culoriEticheta").textContent = d.culori_hdmi.eticheta;
@@ -825,6 +903,22 @@ function arata(d){
     $("zapDescriere").textContent = d.zapmode.descriere || "";
   } else {
     $("cardZap").classList.add("ascuns");
+  }
+  if(d.prima_imagine){
+    $("cardPrima").classList.remove("ascuns");
+    $("primaEticheta").textContent = d.prima_imagine.eticheta;
+    if(document.activeElement !== $("primaImagine")){ umple($("primaImagine"), d.prima_imagine.alegeri, d.prima_imagine.valoare); }
+    $("primaDescriere").textContent = d.prima_imagine.descriere || "";
+  } else {
+    $("cardPrima").classList.add("ascuns");
+  }
+  if(d.poza_canal){
+    $("cardPoza").classList.remove("ascuns");
+    $("pozaEticheta").textContent = d.poza_canal.eticheta;
+    if(document.activeElement !== $("pozaCanal")){ umple($("pozaCanal"), d.poza_canal.alegeri, d.poza_canal.valoare); }
+    $("pozaDescriere").textContent = d.poza_canal.descriere || "";
+  } else {
+    $("cardPoza").classList.add("ascuns");
   }
   if(d.ocupat && !inc.activa){ mesaj(d.ocupat, true); }
   else if(inc.ultimul && !$("mesaj").dataset.fix){ mesaj(inc.ultimul.mesaj, !inc.ultimul.reusit && !inc.ultimul.repornire); }
@@ -873,6 +967,14 @@ $("incearca").addEventListener("click", function(){
 });
 $("zapmode").addEventListener("change", function(){
   var q = new URLSearchParams(); q.set("zapmode", $("zapmode").value);
+  trimite("/api/video-seteaza", q);
+});
+$("primaImagine").addEventListener("change", function(){
+  var q = new URLSearchParams(); q.set("prima_imagine", $("primaImagine").value);
+  trimite("/api/video-seteaza", q);
+});
+$("pozaCanal").addEventListener("change", function(){
+  var q = new URLSearchParams(); q.set("poza_canal", $("pozaCanal").value);
   trimite("/api/video-seteaza", q);
 });
 $("imagine43").addEventListener("change", function(){
@@ -927,6 +1029,9 @@ TEXTE_PAGINA = {
 		N_("La schimbarea canalului"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("Repornește receptorul"),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Prima imagine rapidă"),
+		N_("Poza canalului la schimbare"),
 	),
 	"js": (
 		N_("browser deconectat"),

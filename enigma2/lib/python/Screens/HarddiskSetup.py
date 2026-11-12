@@ -23,7 +23,7 @@ SKIN_ADMIN = """
 </screen>"""
 
 class HdsDiscCitire(Screen):
-	skin = """<screen name="HdsDiscCitire" position="center,center" size="900,150" flags="wfNoBorder">
+	skin = """<screen name="HdsDiscCitire" resolution="1920,1080" position="center,center" size="900,150" flags="wfNoBorder">
 		<widget name="text" position="24,20" size="852,110" font="Regular;26" halign="center" valign="center" />
 	</screen>"""
 

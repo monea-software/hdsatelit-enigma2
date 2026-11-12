@@ -50,8 +50,11 @@ try:
 except ImportError:
 	from HdsListeText import text_lista
 
-# versiunea Notei de confidentialitate (situl-imaginii/date/nota-testeri.json); 2 = cu amprenta receptorului
-NOTA = 2
+# versiunea Notei de confidentialitate (situl-imaginii/date/nota-testeri.json); 2 = cu amprenta receptorului; 3 = cu
+# modulele de acces in datele receptorului (TODO 1389, NOTA_MODULE) si pauza care pastreaza inscrierea (TODO 1391 b).
+# Cine a acceptat nota 2 nu mai trimite pana apasa o data „Accept” (anuntul notei noi). Pastrata 2, nimic din nota 3 nu
+# pleaca (modulele cer b.nota >= NOTA_MODULE)
+NOTA = 3
 PROTOCOL = 1
 SERVER = "https://stb.hdsatelit.com/api/testeri/"
 ADRESA_NOTA = "https://stb.hdsatelit.com/testeri/confidentialitate/"
@@ -147,8 +150,8 @@ ETICHETE = {
 	"utilizare": (N_("Ecranele și funcțiile folosite"),
 		N_("Ce ecrane deschizi și de câte ori, ca să știm ce să îmbunătățim întâi.")),
 	"receptor": (N_("Datele receptorului"),
-		N_("Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI și driverele, ca să adaptăm imaginea "
-			"și lista de receptoare.")),
+		N_("Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI, driverele și modulele de acces "
+			"instalate, ca să adaptăm imaginea și lista de receptoare.")),
 	"probe": (N_("Rezultatele probelor"),
 		N_("Ce au găsit probele pornite de tine din meniul testerului: ce merge și ce nu pe modelul tău.")),
 }
@@ -175,12 +178,13 @@ NOTA_SCURTA = N_("Datele le primește Eduard Monea, persoană fizică (mărcile 
 NOTA_ANUNT_TITLU = N_("Nota de confidențialitate s-a schimbat")
 NOTA_ANUNT = N_("Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe "
 	"jurnalele, citește ce e nou și acceptă.")
+# ce e nou in nota 3 fata de 2, cuvant cu cuvant un paragraf al notei (test_nota_noua_anunt); amprenta si canalul care
+# nu merge (nota 2) sunt deja acceptate de toti cei cu nota 2. Pauza (TODO 1391 b) e un pas nou la „Cum renunți”, nu
+# date noi trimise
 NOTA_NOUTATI = (
-	N_("Receptorul trimite și o amprentă calculată din placa lui, ca să fie numărat o singură dată chiar dacă e "
-		"instalat în mai multe sloturi sau reinstalat. Din amprentă nu se pot afla adresa MAC sau seria, iar acestea "
-		"nu pleacă de pe receptor."),
-	N_("Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele "
-		"tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite."),
+	N_("Modulele de acces instalate: pentru fiecare, numele pachetului și versiunea lui, feedul din care se poate lua "
+		"aceeași versiune, dacă e modulul ales și dacă rulează. Fără fișierele lor de configurare, chei, servere, "
+		"cititoare sau canalele deschise cu ele."),
 )
 NOTA_ACCEPT_RAND = N_("Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum.")
 NOTA_OPRITA = N_("Trimiterea e oprită până accepți nota nouă.")
@@ -190,6 +194,13 @@ NOTA_BUTOANE = {
 	"mai_tarziu": (N_("Mai târziu"), N_("Îți amintim mâine.")),
 }
 NOTA_ACCEPTATA = N_("Mulțumim. Receptorul trimite din nou datele bifate.")
+# dupa prima activare (televizor si web, acelasi text din acceptaAcord) si in intrebarea de la iesire: multi porneau si
+# opreau des Beta tester, crezand ca e asistenta de la distanta
+DUPA_ACTIVARE = N_("Lasă Beta tester pornit: lucrează singur, în fundal. Dacă ieși din program, datele tale se șterg "
+	"și pierzi statutul de beta tester de pe site.")
+NU_E_ASISTENTA = N_("Asistența de la distanță e altceva: o pornești numai când ai nevoie, din Meniu > Setări > "
+	"Asistență de la distanță.")
+LA_IESIRE = N_("Pierzi statutul de beta tester de pe site.")
 # randul scurt de sub fiecare rand al meniului testerului si al celui neinscris (pe receptor si in web): exact ce
 # face randul
 RANDURI_MENIU = {
@@ -205,11 +216,13 @@ RANDURI_MENIU = {
 	"canal_testeri": N_("Versiunile noi ajung întâi la tine."),
 	"public": N_("Numele cu care apari pe forum și pe site."),
 	"nota": N_("Ce date pleacă, cine le primește, cât se păstrează."),
+	"pauza": N_("Nu mai trimite nimic; pornești din nou cu aceeași înscriere."),
 	"iesire": N_("Serverul șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."),
 	"nota_noua": NOTA_OPRITA,
 }
 RANDURI_VIZITATOR = {
 	"acord": N_("Alegi ce date trimiți; sunt anonime."),
+	"reia": N_("Aceeași înscriere: numele public și punctele XP rămân."),
 	"forum": N_("Citește ce scriu testerii acestui receptor."),
 }
 # avantajele aratate celui care nu e inscris (pe receptor si in web): (cheie, pictograma, titlu, rand); apar primele
@@ -254,6 +267,7 @@ STARI_MESAJ = {
 NUME_FEL_PACHET = {
 	"acord": N_("Acordul"),
 	"sterge": N_("Ștergerea datelor"),
+	"iesire": N_("Pauza"),
 	"mesaj": N_("Mesaj"),
 }
 
@@ -536,6 +550,7 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 	b.automat.value = bool(automat)
 	if not idValid(b.id.value):
 		b.id.value = identificatorNou()
+	prima_activare = not b.activ.value
 	b.activ.value = True
 	b.nota.value = NOTA
 	b.acord.value = oraUtc(acum)
@@ -557,7 +572,11 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 	_ceruteAcum["culegere"] = True
 	# numarul de testeri ai modelului se cere din nou (acum il numara si pe el)
 	_starea["numar_cand"] = None
-	return True, _t("Felicitări, ești beta tester. Datele bifate pleacă de acum.")
+	text = _t("Felicitări, ești beta tester. Datele bifate pleacă de acum.")
+	if prima_activare:
+		_canalDupaPauza()
+		text += "\n\n" + _t(DUPA_ACTIVARE) + "\n\n" + _t(NU_E_ASISTENTA)
+	return True, text
 
 
 def schimbaBife(feluri, nume=None, email=None, b=None, automat=None):
@@ -661,6 +680,51 @@ def iesire(b=None):
 	_starea["numar_cand"] = None
 	_starea["activ"] = False
 	return True, _t("Ai ieșit din program. Cererea de ștergere pleacă la server; pe receptor nu mai rămâne nimic.")
+
+
+def _canalDupaPauza():
+	"""Pornirea din nou dupa pauza (TODO 1391 b): canalul testerilor pus la loc cum era inainte de pauza."""
+	try:
+		if not citesteStare().get("canal_testeri_pauza"):
+			return
+		schimbaStare(lambda st: st.pop("canal_testeri_pauza", None))
+		A = modulCanalTesteri()
+		if A is not None and not canalTesteriPornit(A):
+			A.actualizari.testeri(True)
+			_jurnal("canalul testerilor pus la loc dupa pauza")
+	except Exception as e:
+		_jurnal("canalul testerilor dupa pauza: %s" % e)
+
+
+def inPauza(b=None):
+	"""Beta tester pus pe pauza (TODO 1391 b): oprit, dar cu identificatorul si nota pastrate."""
+	b = _b(b)
+	return not b.activ.value and idValid(b.id.value) and int(b.nota.value or 0) > 0
+
+
+def pauza(b=None):
+	"""„Pune pe pauză (păstrezi înscrierea)” (TODO 1391 b; Eduard 30.10.2026 11:10-11:13: oamenii pornesc si opresc des
+	Beta tester). Receptorul nu mai trimite nimic si iese din numaratoare prin ruta „iesire” a serverului (Api::iesire:
+	fara stergere, datele raman pana la termenele lor), dar pastreaza identificatorul, nota, bifele, numele, e-mailul,
+	numele public si cheia profilului. Pornirea din nou (acceptaAcord) foloseste acelasi identificator, iar serverul
+	intoarce aceeasi inscriere (iesit = NULL). Coada celorlalte pachete se goleste. -> (reusit, mesaj)"""
+	b = _b(b)
+	if not b.activ.value or not idValid(b.id.value):
+		return False, _t("Nu ești înscris în programul de beta testeri.")
+	golesteCoada()
+	puneInCoada("iesire", "iesire", {"v": PROTOCOL, "id": b.id.value})
+	b.activ.value = False
+	salveaza(b)
+	_jurnal("pauza (inscrierea pastrata)")
+	# canalul testerilor se opreste pe pauza si se pune la loc la pornirea din nou (acceptaAcord), daca era pornit
+	canal = canalTesteriPornit()
+	schimbaStare(lambda st: st.__setitem__("canal_testeri_pauza", canal))
+	opresteCanalTesteri()
+	_ceruteAcum["trimite"] = True
+	_starea["numar_cand"] = None
+	_starea["activ"] = False
+	return True, _t("Beta tester e pe pauză: receptorul nu mai trimite nimic. Îl pornești din nou din meniul Beta "
+		"tester, cu aceeași înscriere.")
 
 
 # ------------------------------------------------------------------ nota noua: anuntul si acordul dintr-o apasare
@@ -1694,8 +1758,108 @@ def pacheteNeconfigurate(radacina=""):
 	return rez
 
 
-def dateReceptor(model="", paza=None, radacina=""):
-	"""Datele receptorului (felul „receptor”): fara serii, fara MAC, fara numele retelei, fara IP."""
+# TODO 1389 (Eduard 30.10.2026 11:40): „să vedem ca betatester și modulele instalate și ce merge și nu merge”. Lista
+# modulelor de acces instalate pleaca in felul „receptor” numai cu nota NOTA_MODULE acceptata (nota 2 spunea „lista
+# pachetelor instalate nu pleaca”). Pentru fiecare modul: felul si sufixul scriptului, pachetul, versiunea, feedul din
+# care se poate lua aceeasi versiune, daca e ales si daca ruleaza. Fara fisiere de configurare, chei, servere sau
+# cititoare: numai ce scrie opkg si ce se vede in /proc (HdsModuleAcces.citeste). Forma: o lista de texte
+# „fel.sufix|pachet|versiune|feed|ales|pornit” (ales, pornit = 1 sau 0), fiindca serverul pastreaza fara schimbare
+# numai listele de valori simple (Pachete::campuriNoi; o lista de obiecte s-ar pierde pe tacute). Numele modulelor le
+# da receptorul la rulare; aici nu e scris niciunul.
+NOTA_MODULE = 3
+MODULE_MAX = 32
+LISTA_FEED_MAX = 16 * 1024 * 1024
+_NUME_FEED = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._+-]{0,47}\Z")
+
+
+def _campModul(text, maxim=60):
+	return _txt(text, maxim).replace("|", "/")
+
+
+def _versiunePachet(sistem, info_dir, pachet):
+	try:
+		text = sistem.citeste(info_dir.rstrip("/") + "/" + pachet + ".control", 8192)
+	except (OSError, IOError):
+		return ""
+	m = re.search(r"(?m)^Version:\s*(\S+)", text or "")
+	return m.group(1) if m else ""
+
+
+def _feedPachete(sistem, conf, cautate):
+	"""{pachet: numele feedului} pentru pachetele `cautate` = {pachet: versiune}: primul feed (in ordinea din
+	configurarea opkg) a carui lista descarcata are pachetul cu aceeasi versiune. Un nume de feed ciudat devine „alt”."""
+	rez = {}
+	for nume in conf.nume_surse():
+		if len(rez) >= len(cautate):
+			break
+		try:
+			text = sistem.citeste(conf.lists_dir.rstrip("/") + "/" + nume, LISTA_FEED_MAX)
+		except (OSError, IOError):
+			continue
+		for pachet, versiune in cautate.items():
+			if pachet in rez or not versiune:
+				continue
+			poz = text.find("Package: %s\n" % pachet)
+			while poz >= 0:
+				if poz == 0 or text[poz - 1] == "\n":
+					sfarsit = text.find("\n\n", poz)
+					strofa = text[poz:sfarsit if sfarsit >= 0 else len(text)]
+					if re.search(r"(?m)^Version:\s*%s\s*$" % re.escape(versiune), strofa):
+						rez[pachet] = nume if _NUME_FEED.match(nume) else "alt"
+						break
+				poz = text.find("Package: %s\n" % pachet, poz + 1)
+	return rez
+
+
+def moduleAcces(radacina="", sistem=None):
+	"""Lista modulelor de acces instalate (TODO 1389), ca texte „fel.sufix|pachet|versiune|feed|ales|pornit”; cel mult
+	MODULE_MAX. Intai scripturile modulelor (cu pachetul lor, daca au), apoi pachetele de module fara script. Nu
+	arunca: la orice eroare, lista goala."""
+	try:
+		try:
+			from Components import HdsInterfeteCam as C, HdsModuleAcces as M
+			from Components.HdsPachete import Configurare, citeste_configurarea
+		except ImportError:
+			import HdsInterfeteCam as C
+			import HdsModuleAcces as M
+			from HdsPachete import Configurare, citeste_configurarea
+		if sistem is None:
+			sistem = M.SistemAcces(radacina=radacina or "/")
+		try:
+			conf = citeste_configurarea(sistem.radacina)
+		except Exception:
+			conf = Configurare()
+		feluri_ = M.feluri(sistem)
+		opkg = C.citeste_opkg(sistem, set(), feluri_)
+		pachetScript = {}
+		for pachet, scripturi in opkg.scripturi.items():
+			for s in scripturi:
+				pachetScript.setdefault(s, pachet)
+		randuri = []
+		folosite = set()
+		for fel in feluri_:
+			st = M.citeste(sistem, fel)
+			for e in st.emulatoare:
+				pachet = pachetScript.get(e.script, "")
+				folosite.add(pachet)
+				randuri.append([e.script, pachet, e.ales, bool(e.pids)])
+		for pachet in sorted(opkg.pachete_cam):
+			if pachet not in folosite:
+				randuri.append(["", pachet, False, False])
+		randuri = randuri[:MODULE_MAX]
+		versiuni = dict((p, _versiunePachet(sistem, conf.info_dir, p)) for _s, p, _a, _r in randuri if p)
+		feeduri = _feedPachete(sistem, conf, versiuni) if versiuni else {}
+		return ["|".join((_campModul(script, 70), _campModul(pachet, 80), _campModul(versiuni.get(pachet, "")),
+			_campModul(feeduri.get(pachet, ""), 48), "1" if ales else "0", "1" if ruleaza else "0"))
+			for script, pachet, ales, ruleaza in randuri]
+	except Exception as e:
+		_jurnal("lista modulelor: %s" % e)
+		return []
+
+
+def dateReceptor(model="", paza=None, radacina="", cu_module=False):
+	"""Datele receptorului (felul „receptor”): fara serii, fara MAC, fara numele retelei, fara IP. `cu_module`: si lista
+	modulelor de acces (numai cu nota NOTA_MODULE acceptata)."""
 	paza = paza or {}
 	emmc, partitii = _partitii(radacina)
 	dt = ""
@@ -1706,7 +1870,7 @@ def dateReceptor(model="", paza=None, radacina=""):
 		dt = ""
 	# versiunea placii data de driver (pe SF8008 „1.2V-20240104103144” la placa din 2024): numai primul rand, fara serie
 	versiune_placa = _txt((_citesteMic(_cale(radacina, "/proc/stb/info/version")) or "").strip().split("\n")[0], 60)
-	return {
+	d = {
 		"placa": {"machinebuild": model, "cip": paza.get("cip", ""), "boxtype": paza.get("boxtype", ""), "dt": dt,
 			"procesor": _procesor(radacina), "nuclee": _nuclee(radacina), "versiune_placa": versiune_placa},
 		"memorie": {"ram_kb": _meminfo(radacina).get("MemTotal"), "emmc_kib": emmc, "nand_kib": _nand(radacina),
@@ -1720,6 +1884,9 @@ def dateReceptor(model="", paza=None, radacina=""):
 		"usb": _usb(radacina),
 		"pachete_neconfigurate": pacheteNeconfigurate(radacina),
 	}
+	if cu_module:
+		d["module"] = moduleAcces(radacina)
+	return d
 
 
 def sumaDate(date):
@@ -2149,7 +2316,8 @@ def culegeSiPune(inst, sarcini, stare, es=None, utilizare=None, pornire_s=None, 
 				if utilizare and (utilizare.get("ecrane") or utilizare.get("zapuri") or utilizare.get("inregistrari")):
 					date = utilizare
 			elif fel == "receptor":
-				d = dateReceptor(inst["model"], inst["paza"], radacina)
+				d = dateReceptor(inst["model"], inst["paza"], radacina,
+					cu_module=int(inst.get("nota") or 0) >= NOTA_MODULE)
 				suma = sumaDate(d)
 				if suma != stare.get("receptor_suma"):
 					date = d
@@ -2657,6 +2825,42 @@ def _culegeNumar():
 		_starea["numar"] = n
 	if 200 <= c.cod < 300 and isinstance(c.raspuns, dict):
 		_starea["legare_forum"] = c.raspuns.get("legare_forum") is True
+
+
+# TODO 1860 b (Eduard 29.10.2026 16:26: „«Nu ai internet? Trimite prin cod QR» ar trebui să apară doar dacă chiar nu
+# are net”): o proba scurta la serverul testerilor, in fundal, cu timp limita; rezultatul tinut minte PROBA_SERVER_S.
+# Randul din meniul Beta tester (si cardul din web) apare numai cand proba a esuat.
+PROBA_SERVER_S = 300
+PROBA_SERVER_TIMP_S = 8
+
+
+def probaServer(acum=None, citeste=None):
+	"""Porneste proba serverului daca rezultatul e mai vechi de PROBA_SERVER_S (ecranul nu asteapta)."""
+	acum = time.monotonic() if acum is None else acum
+	c = _starea.get("cerere_proba")
+	if c is not None:
+		if c.gata:
+			_starea["cerere_proba"] = None
+			_starea["server_ok"] = 200 <= c.cod < 500
+			_starea["server_ok_cand"] = acum
+		return
+	cand = _starea.get("server_ok_cand")
+	if cand is not None and acum - cand < PROBA_SERVER_S:
+		return
+	model = _modelTinut()[0] or "proba"
+	c = CerereGet(adresaServer(initConfig()) + "stare?model=" + model,
+		citeste or (lambda url: _citesteHttp(url, PROBA_SERVER_TIMP_S)))
+	_starea["cerere_proba"] = c
+	_starea["server_ok_cand"] = acum
+	c.start()
+
+
+def serverFaraRaspuns():
+	"""True numai cand ultima proba a serverului a esuat (fara retea, fara DNS, timp depasit, 5xx)."""
+	c = _starea.get("cerere_proba")
+	if c is not None and c.gata:
+		probaServer()
+	return _starea.get("server_ok") is False
 
 
 def legareForum():

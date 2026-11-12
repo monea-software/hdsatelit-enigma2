@@ -230,8 +230,11 @@ def completeazaTwisted():
 
 # constante pe clasele din enigma pe care le cer pluginurile (clasa, nume, valoare): evGstRecordEnded = sfarsitul unei inregistrari facute
 # prin GStreamer, evRecordAborted = o inregistrare oprita de alta imagine; imaginea nu le trimite niciodata, deci valorile sunt dupa ultimul
-# eveniment al clasei (evNewEventInfo = 9 in lib/service/iservice.h), ca sa nu se confunde cu unul adevarat
-CONSTANTE = (("iRecordableService", "evGstRecordEnded", 100), ("iRecordableService", "evRecordAborted", 101))
+# eveniment al clasei (evNewEventInfo = 9 in lib/service/iservice.h), ca sa nu se confunde cu unul adevarat.
+# eServiceReference.idServiceMP3 = 4097 (eServiceFactoryMP3::id = 0x1001 in lib/service/servicemp3.h) si noFlags = 0: managerul de
+# fisiere FileCommander porneste filmele cu eServiceReference(eServiceReference.idServiceMP3, eServiceReference.noFlags, cale)
+CONSTANTE = (("iRecordableService", "evGstRecordEnded", 100), ("iRecordableService", "evRecordAborted", 101),
+	("eServiceReference", "idServiceMP3", 0x1001), ("eServiceReference", "noFlags", 0))
 
 # Scalarea cu proportii exista deja in lista C++ (lib/gui/elistboxcontent.h si .cpp).
 # Aliasul se pune numai cand nucleul expune numele care face operatia, fara valoare de rezerva.

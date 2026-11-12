@@ -52,10 +52,13 @@ struct gDesenNetezit
 	std::vector<float> puncte;
 	gRGB culoare;
 	std::vector<gRGB> gradient;	/* numai dreptunghi: 2 sau 3 culori */
-	int gradient_vertical, culoare_pictor;
+	int gradient_vertical, culoare_pictor;	/* culoare_pictor: 1 = culoarea textului pictorului, 2 = culoarea lui de fundal */
+	/* numai dreptunghi: colturile rotunjite (1 stanga sus, 2 dreapta sus, 4 stanga jos, 8 dreapta jos, ca RADIUS_* din
+	   ewidget.h); celelalte raman drepte. 15 = toate, ca inainte. */
+	int colturi;
 
 	gDesenNetezit(): forma(0), x0(0), y0(0), x1(0), y1(0), raza(0), grosime(0), start(0), unghi_arc(0),
-		capete_rotunde(1), gradient_vertical(0), culoare_pictor(0)
+		capete_rotunde(1), gradient_vertical(0), culoare_pictor(0), colturi(15)
 	{
 	}
 };

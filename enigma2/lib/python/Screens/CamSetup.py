@@ -25,6 +25,9 @@
 #     indicata de proces, pe un fir separat, fara proba de retea; + inseamna HTTPS;
 #   - la sfarsitul detaliilor (0.7.1), Stream Relay: cate canale are lista, de unde se adauga si de ce nu raspunde
 #     releul (Components/HdsStreamRelay.liniiStare), ca in pagina web Acces condiționat.
+#   - la modulul care ruleaza (0.7.4, 11.11.2026), cand SoftCSA nu e gata cu el (nu stie protocolul 3 cu cuvintele
+#     extinse, ca OSCam-smod): un rand ca nu descifreaza canalele ICAM si ce modul le descifreaza
+#     (Components/HdsSoftCsa.randModul), acelasi ca in pagina web Acces condiționat.
 # Toata logica e in Components/HdsModuleAcces.py (aceeasi o foloseste interfata web,
 # HdsWebControl/acces_conditionat_web.py); ecranul doar o arata. text_rezultat si pid_de_aratat sunt folosite si de pagina web, ca textele sa fie aceleasi.
 from enigma import eTimer
@@ -64,6 +67,16 @@ def _liniiStreamRelay():
 	except Exception as e:
 		print("[CamSetup] Stream Relay: %s" % e)
 		return []
+
+
+def _randIcam(ruleaza):
+	"""Randul ICAM al modulului care ruleaza (0.7.4, Components/HdsSoftCsa.randModul), sau "" la o eroare."""
+	try:
+		from Components import HdsSoftCsa
+		return HdsSoftCsa.randModul(_, ruleaza)
+	except Exception as e:
+		print("[CamSetup] ICAM: %s" % e)
+		return ""
 
 
 def _vmrss(sistem, pid):
@@ -381,6 +394,9 @@ class CamSetup(Screen):
 				randuri += ["  " + r for r in randuri_proces(HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, e.pids)))]
 				randuri.append(_("Apasă OK pentru oprire, repornire sau informații."))
 				randuri.append("INFO: " + _("Despre decriptare"))
+				icam = _randIcam(True)
+				if icam:
+					randuri.append(icam)
 				for interfata in self.interfeteWeb:
 					if interfata['fel'] == fel and interfata['sufix'] == sufix:
 						adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])

@@ -65,6 +65,8 @@ dist_install_DATA = \
 	scan-s.png \
 	scan-t.png \
 	selectioncross.png \
+	timer_rec.png \
+	timer_zap.png \
 	unlock.png \
 	unlockBouquet.png
 

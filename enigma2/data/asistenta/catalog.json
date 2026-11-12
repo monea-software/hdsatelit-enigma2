@@ -20,7 +20,7 @@
       "op": "citeste",
       "grup": "Informații",
       "fel": "citire",
-      "text": "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), fără modulele de acces, parole, chei sau date personale",
+      "text": "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), cu parolele ascunse",
       "args": [
         {"nume": "cale", "tipar": "^/(proc|sys|etc|var/log|home/root/logs|tmp)(/[A-Za-z0-9._+@:,-]+)*/?\\Z", "cerut": true}
       ]
@@ -36,7 +36,7 @@
       "op": "retea",
       "grup": "Informații",
       "fel": "citire",
-      "text": "rețeaua, inclusiv numele Wi-Fi (MAC mascat pe jumătate)",
+      "text": "rețeaua, inclusiv numele Wi-Fi și adresa MAC",
       "args": []
     },
     {
@@ -97,7 +97,7 @@
       "op": "setari",
       "grup": "Setări",
       "fel": "citire",
-      "text": "setările receptorului, cu secretele ca steluțe, fără modulele de acces",
+      "text": "setările receptorului, cu parolele ca steluțe",
       "args": []
     },
     {
@@ -154,7 +154,7 @@
       "op": "canal",
       "grup": "Semnal",
       "fel": "citire",
-      "text": "canalul deschis: serviciul, transponderul, tunerul și semnalul (fără nimic de la modulele de acces)",
+      "text": "canalul deschis: serviciul, transponderul, tunerul, semnalul și modulul de acces",
       "args": []
     },
     {

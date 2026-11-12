@@ -133,6 +133,14 @@ private:
 	hdsurma::Acordare m_hds_acordare;
 	hdsjtuner::Stare m_hds_jurnal; // HDSatelit: jurnalul tunerului (lib/dvb/hdsjurnaltuner.h)
 	TimpiZap m_hds_timpi_zap;
+	/* HDSatelit (0.7.4, zap-ul pe cablu): ce a pus enigma2 pe descriptorul deschis acum al tunerului, ca sa nu se mai
+	   trimita la fiecare acordare: sistemul de livrare (SYS_DVBC_ANNEX_A, SYS_DVBT, SYS_DVBT2; -1 = nestiut) si
+	   alimentarea antenei oprita ("off" scris in active_antenna_power). Se uita la deschidere, la inchidere si la un
+	   refuz al driverului. Sistemul nu-l poate schimba alt proces cat timp descriptorul e deschis (dvb-core lasa un
+	   singur descriptor cu scriere pe tuner si refuza FE_SET_PROPERTY pe unul numai de citire); fisierul antenei il
+	   scrie, in imagine, numai setVoltage. */
+	int m_hds_sistem_pus;
+	bool m_hds_antena_oprita;
 	/* HDSatelit: memoria citirilor starii (lib/dvb/hdscitirifrontend.h): o citire a fiecarei valori pe secunda, impartita
 	   de toti cititorii; direct = fara memorie (bucla SEC, timeout()) */
 	hdscitiri::Memorie m_hds_citiri;
@@ -145,11 +153,22 @@ private:
 	int tuneLoopInt();
 	void setFrontend(bool recvEvents=true);
 	void hdsComandaTuner(bool recvEvents);
+	/* HDSatelit (0.7.4, viteza zap): pasii secventei SEC care nu asteapta, rulati pe loc din tune() (frontend.cpp) */
+	void hdsSecPeLoc();
+	/* HDSatelit (0.7.4, scanarea): la o acordare a cautarii (motivul "scanare") pe satelit cu asteptarea de 5 s, dupa
+	   HDS_SCAN_VERIFICARE_MS fara semnal prins se citeste starea; fara semnal si fara purtatoare, acordarea se da pierduta
+	   atunci (timeout()), nu dupa 5 s (frontend.cpp, hdsScanVerifica) */
+	enum { HDS_SCAN_VERIFICARE_MS = 3000 };
+	bool m_hds_e_scanare;
+	ePtr<eTimer> m_hds_scan_verificare;
+	void hdsScanVerifica();
 	bool setSecSequencePos(int steps);
 	RESULT switchDeliverySystem(int type, bool t2 = false);
 	static int PriorityOrder;
 public:
-	eDVBFrontend(int adap, int fe, int &ok, bool simulate=false, eDVBFrontend *simulate_fe=NULL);
+		/* devicename: dispozitivul deschis in locul /dev/dvb/adapter<adap>/frontend<fe> (puntea vtuner: frontend-ul virtual
+		   al placii se acordeaza prin tunerul USB adevarat, lib/dvb/hdsvtuner.cpp); NULL = cel obisnuit */
+	eDVBFrontend(int adap, int fe, int &ok, bool simulate=false, eDVBFrontend *simulate_fe=NULL, const char *devicename=NULL);
 	virtual ~eDVBFrontend();
 
 	int readInputpower();
@@ -172,6 +191,10 @@ public:
 	RESULT hdsSendDiseqc(const eDVBDiseqcCommand &diseqc, const hdsurma::Acordare *acordare);
 	hdsurma::Acordare &hdsAcordare() { return m_hds_acordare; }
 	const TimpiZap &hdsTimpiZap() const { return m_hds_timpi_zap; }
+	/* HDSatelit (0.7.4, viteza zap): false cand exista /tmp/hds-zap-vechi; atunci zap-ul merge ca in 0.7.3 (secventa SEC
+	   numai prin ceas, PMT-ul numai dupa PAT). Pentru masurarea inainte/dupa pe aceeasi imagine; fisierul nu-l pune nimeni
+	   din imagine. */
+	static bool hdsZapRapid();
 	/* HDSatelit: acordul de acum din nou, pe ultima acordare reusita de satelit (oparm.sat), ca
 	   reacordarea nucleului dupa pierderea semnalului; `motiv` intra in urma motorului. hdsPoateReacorda: tunerul e
 	   deschis si ultima lui acordare e pe `orbital`. hdsReacordeaza: 0 = acordat, -2 = nu se poate, altfel codul tune() */

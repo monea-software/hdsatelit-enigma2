@@ -472,13 +472,11 @@ class Server(object):
                 ses.eroare = 'serviciul nu se poate inregistra (referinta necunoscuta)'
                 return
             ses.rec = rec
-            # Stream Relay (0.7.0, Components/HdsStreamRelay.py): un canal din lista se da releului criptat, cu PID-urile
-            # ECM si fara inscriere la modulul de acces (drumul inregistrarilor "Decodeaza mai tarziu"), fiindca il
-            # decodeaza releul; fara fisierul listei nu se incarca nimic
-            if _in_stream_relay(ses.ref):
-                pune = getattr(rec, 'setDecodareMaiTarziu', None)
-                if pune is None or pune(True, False) != 0:
-                    jurnal.noteaza(ET, 'Stream Relay: fluxul criptat nu se poate cere pentru %s' % ses.ref)
+            # Orice cerere (VLC, Kodi, telefonul, browserul prin HdsTransmisie, un releu Stream Relay pus de om) primeste
+            # fluxul descifrat de receptor: inregistrarea se inscrie la modulul de acces ca orice flux, iar canalele
+            # CSA-ALT (ICAM) le descifreaza nucleul in software (SoftCSA, lib/service/servicedvbrecord.cpp
+            # softCsaRecord). Pana la 0.7.4 un canal din lista Stream Relay cerut din retea venea criptat (pentru un
+            # releu de pe alt aparat), deci VLC pe 8001 nu vedea canalele Sky din lista; drumul acela e scos.
             # releele cedeaza tunerul la zap (extensia de zap din pornire.py opreste sesiunile 8001 inainte de
             # alocare): marcata asa (lib/dvb/hdscedare.h), inregistrarea nu mai face gri in lista de canale
             # canalele pe care televizorul le poate porni; cu un enigma2 fara functie, nimic
@@ -644,18 +642,6 @@ def _termen_trimitere(conn, secunde):
     return False
 
 
-def _in_stream_relay(ref):
-    """True daca `ref` e in lista Stream Relay (Components/HdsStreamRelay.py); fara fisierul listei, False fara import."""
-    try:
-        if not os.path.isfile('/etc/enigma2/whitelist_streamrelay'):
-            return False
-        from Components import HdsStreamRelay
-        return HdsStreamRelay.releu().checkService(ref)
-    except Exception:
-        jurnal.eroare(ET, 'lista Stream Relay')
-        return False
-
-
 def _neblocant(fd):
     import fcntl
     fl = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -708,6 +694,65 @@ def opreste_sesiunile(ref):
     0 daca serverul nu ruleaza."""
     s = obtine()
     return s.opreste_sesiunile(ref) if s is not None else 0
+
+
+def frontend_sesiune(ref):
+    """Firul principal. frontendInfo() al inregistrarii unei sesiuni deschise de pe purtatorul `ref`: tunerul care tine
+    canalul pe care Stream Relay (OSCam/NCam) il ia de aici. None daca nu e nicio sesiune sau serverul nu ruleaza."""
+    s = obtine()
+    cheie = _cheie_ref(ref)
+    if s is None or not cheie:
+        return None
+    for ses in list(s.sesiuni):
+        rec = ses.rec
+        if rec is None or ses.oprita.is_set() or _cheie_ref(ses.ref) != cheie:
+            continue
+        try:
+            fe = rec.frontendInfo()
+        except Exception:
+            fe = None
+        if fe is not None:
+            return fe
+    return None
+
+
+def ref_releu(sref):
+    """Referinta DVB redata prin Stream Relay de pe receptor (calea http://127.0.0.1:<port>/<referinta>, ca la
+    HdsStreamRelay.textReleu), sau None pentru orice alta referinta."""
+    campuri = str(sref or '').split(':')
+    if len(campuri) < 11:
+        return None
+    cale = campuri[10].replace('%3a', ':').replace('%3A', ':')
+    for inceput in ('http://127.0.0.1:', 'http://localhost:'):
+        if cale.lower().startswith(inceput):
+            rest = cale[len(inceput):].split('/', 1)
+            if len(rest) == 2 and rest[0].isdigit() and re.match(r'^1:0:[0-9a-fA-F]+:', rest[1]):
+                return rest[1]
+    return None
+
+
+def frontend_releu(sref):
+    """Firul principal. Pentru un canal redat prin Stream Relay: frontendInfo() al tunerului care il tine (al sesiunii
+    8001 de la care releul ia fluxul). Canalul redat e un flux, fara tuner al lui: enigma2 da 0 la semnal si calitate.
+    None pentru orice alt serviciu."""
+    tinta = ref_releu(sref)
+    return frontend_sesiune(tinta) if tinta else None
+
+
+def frontend_serviciu(service):
+    """Firul principal. frontendInfo() de citit pentru un serviciu redat (Sources.FrontendStatus / FrontendInfo, temele
+    din afara): la Stream Relay al tunerului care tine canalul, altfel al serviciului."""
+    if service is None:
+        return None
+    try:
+        from enigma import iServiceInformation
+        info = service.info()
+        fe = frontend_releu(info.getInfoString(iServiceInformation.sServiceref)) if info is not None else None
+        if fe is not None:
+            return fe
+    except Exception:
+        pass
+    return service.frontendInfo()
 
 
 def refuzuri(ref):

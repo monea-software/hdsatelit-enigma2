@@ -215,8 +215,26 @@ def profilTaste(sesiune=None, config=None):
 		bara = None
 		hdsHbbtvDisponibil = lambda e: False
 	hbbtv = bool(context in ("live", "radio", "timeshift") and hdsHbbtvDisponibil(bara))
-	rows = profil_context(context, config=config, hbbtv=hbbtv,
-		pip=bool(getattr(sesiune, "pipshown", False)), epg_multi=getattr(ecran, "type", 1) != 0)
+	pip = bool(getattr(sesiune, "pipshown", False))
+	epg_multi = getattr(ecran, "type", 1) != 0
+	# Panoul cere /api/statusinfo la cateva secunde; profil_context (doua sensuri pentru fiecare tasta, ~30 de taste) tinea
+	# firul principal ~0,25 s la fiecare cerere pe Octagon SF8008 (masurat in proces). Acelasi context, aceleasi stari si
+	# aceleasi alegeri din „Taste rapide” dau acelasi rezultat: se refoloseste cel mult _TASTE_MEMO_S (alte setari, cum
+	# sunt sagetile sau pluginurile instalate, se vad dupa cel mult atat). Ghidul EPG pune textele tastelor lui: nu se tine.
+	cheie = None
+	if config is None and context != "epg":
+		try:
+			from Components.config import config as _cfg
+			b = _cfg.hds_buttons
+			alegeri = tuple(sorted([(k, getattr(v, "value", None)) for k, v in b.content.items.items()]))
+		except Exception:
+			alegeri = None
+		if alegeri is not None:
+			cheie = (context, hbbtv, pip, epg_multi, alegeri)
+			m = _TASTE_MEMO.get("v")
+			if m is not None and m[0] == cheie and 0 <= time.monotonic() - m[1] < _TASTE_MEMO_S:
+				return m[2]
+	rows = profil_context(context, config=config, hbbtv=hbbtv, pip=pip, epg_multi=epg_multi)
 	if context == "epg":
 		for row in rows:
 			if row["key"] in ("red", "green"):
@@ -232,7 +250,14 @@ def profilTaste(sesiune=None, config=None):
 		key = _TASTE_SENS.get(ident, ident)
 		if key in par:
 			taste[str(cod)] = par[key]
-	return {"context": context, "hbbtv": hbbtv, "taste": taste}
+	rez = {"context": context, "hbbtv": hbbtv, "taste": taste}
+	if cheie is not None:
+		_TASTE_MEMO["v"] = (cheie, time.monotonic(), rez)
+	return rez
+
+
+_TASTE_MEMO = {}
+_TASTE_MEMO_S = 30
 
 # Bariera „o captura odata” pentru /api/screenshot: citita si scrisa numai pe firul enigma2 (reactorul), niciodata din
 # firul care ruleaza grab. Cat e pusa, o a doua cerere primeste 503 imediat, fara sa porneasca alt proces grab. Se
@@ -1215,6 +1240,10 @@ _PAGINA_PANOU = """<!DOCTYPE html>
   .status-linie{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--bordura);font-size:.9rem;}
   #interfeteModule .status-linie{min-width:0;}
   #interfeteModule a{display:block;min-width:0;max-width:100%;}
+  #conflictePorturi .status-linie{align-items:center;flex-wrap:wrap;}
+  #conflictePorturi .text-conflict{flex:1 1 220px;min-width:0;color:#ffd38a;line-height:1.4;overflow-wrap:anywhere;}
+  #conflictePorturi button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  #conflictePorturi button:disabled{opacity:.5;cursor:default;}
   .status-linie:last-child{border-bottom:none;}
   .status-linie.cu-nota{flex-wrap:wrap;}
   .status-linie .nota-rand{flex-basis:100%;font-size:.8rem;color:var(--text-slab);line-height:1.35;}
@@ -1343,6 +1372,8 @@ _PAGINA_PANOU = """<!DOCTYPE html>
       <div class="status-linie"><a href="/tv">TV în browser: privește canalul live pe acest PC sau telefon</a></div>
       <div class="status-linie"><a href="/ghid">Ghidul canalului: emisiunile și înregistrarea lor</a></div>__INTERFETE_WEB__
       <div id="interfeteModule"></div>
+      <div id="conflictePorturi"></div>
+      <small class="nota-rand" id="stareConflictePorturi" role="status"></small>
       <div class="status-linie cu-nota"><span>Mesaj pe televizor</span>
         <form class="mesaj-tv" id="formMesajTv" onsubmit="return trimiteMesajTv()"><input type="text" id="textMesajTv" maxlength="500" placeholder="Scrie mesajul pentru televizor" aria-label="Scrie mesajul pentru televizor" autocomplete="off"><button type="submit">Trimite</button></form>
         <small class="nota-rand" id="stareMesajTv" role="status"></small>
@@ -1410,6 +1441,45 @@ function citesteInterfeteModule(){
     .then(function(){ setTimeout(citesteInterfeteModule, 5000); });
 }
 citesteInterfeteModule();
+// Paznicul porturilor (porturi_web.py): un rand de avertizare pentru fiecare conflict de porturi, cu butonul care muta
+// serviciul pe portul liber urmator. Textele (conflictul, propunerea, butonul, raspunsul) vin traduse de pe receptor.
+function arataConflictePorturi(d){
+  var loc = document.getElementById("conflictePorturi");
+  if(!loc){ return; }
+  loc.textContent = "";
+  (d.conflicte || []).forEach(function(c){
+    var rand = document.createElement("div"); rand.className = "status-linie";
+    var text = document.createElement("span"); text.className = "text-conflict";
+    text.textContent = c.text + (c.propunere ? " " + c.propunere : "");
+    rand.appendChild(text);
+    if(c.propunere){
+      var b = document.createElement("button"); b.type = "button"; b.textContent = d.buton || "";
+      b.addEventListener("click", function(){ schimbaPortul(c.port, b); });
+      rand.appendChild(b);
+    }
+    loc.appendChild(rand);
+  });
+}
+function incarcaConflictePorturi(){
+  return cerere("/api/porturi-conflicte").then(function(d){ if(d.result){ arataConflictePorturi(d); } })
+    .catch(function(){});
+}
+function citesteConflictePorturi(){
+  (document.hidden ? Promise.resolve() : incarcaConflictePorturi())
+    .then(function(){ setTimeout(citesteConflictePorturi, 30000); });
+}
+function schimbaPortul(port, buton){
+  var st = document.getElementById("stareConflictePorturi");
+  buton.disabled = true;
+  st.textContent = "Se trimite...";
+  st.classList.remove("eroare");
+  cerere("/api/porturi-conflicte-schimba?port=" + encodeURIComponent(port), "POST").then(function(r){
+    st.textContent = r.message || "";
+    st.classList.toggle("eroare", !r.result);
+    setTimeout(incarcaConflictePorturi, 3000);
+  }).catch(function(){ st.textContent = "Receptorul nu răspunde."; st.classList.add("eroare"); buton.disabled = false; });
+}
+citesteConflictePorturi();
 // Caseta Mesaj pe televizor: POST /api/mesaj-televizor, aceeasi fereastra ca mesajul aplicatiilor de telefon
 // (aplicatii_web.trimiteMesaj); campul se goleste numai dupa ce mesajul a aparut, la o eroare textul ramane
 function trimiteMesajTv(){
@@ -3858,6 +3928,11 @@ def _construiesteResurse():
 	from . import copie_setari_web
 	_COPIE_SETARI, _COPIE_SETARI_PAGINA = copie_setari_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 
+	# ---------------------------------------------------------------- Copia completa a imaginii (copie_imagine_web.py)
+	# Perechea ecranului „Copia completă a imaginii” (Screens/HdsCopieImagine.py, Components/HdsCopieImagine.py).
+	from . import copie_imagine_web
+	_COPIE_IMAGINE, _COPIE_IMAGINE_PAGINA = copie_imagine_web.rute(HdsJsonResource, resource)
+
 	# ---------------------------------------------------------------- Modul sigur (mod_sigur_web.py)
 	# Perechea mesajului modului sigur si a ecranului „Ce s-a întâmplat” (Screens/HdsModSigur.py): starea, alegerile
 	# (numai in modul sigur, apoi repornirea interfetei, ca pe televizor) si textul brut al fisierelor.
@@ -4072,6 +4147,11 @@ def _construiesteResurse():
 	# ecranelor CamSetup si CamInfo; interfetele web ale modulelor raman pe /interfete-cam.
 	from . import acces_conditionat_web
 	_ACCES, _ACCES_PAGINA = acces_conditionat_web.rute(HdsJsonResource, resource)
+	# ---------------------------------------------------------------- paznicul porturilor (porturi_web.py, 0.7.4)
+	# Conflictele de porturi (doua servicii pe acelasi port, un port tinut de alt program, un port al receptorului) si
+	# schimbarea portului, perechea intrebarii de pe televizor (Components/HdsPorturi.py); randul din panou mai jos.
+	from . import porturi_web
+	_PORTURI = porturi_web.rute(HdsJsonResource)
 	# ---------------------------------------------------------------- aplicatiile de telefon (aplicatii_web.py)
 	# Rutele aplicatiilor de telefon (/web/*, cele noi din /api, /picon, /file, /grab), numai cu setarea „Aplicații de
 	# telefon” si cu bariera lor (din casa fara parola, afara de parola omului bifata la interfata web
@@ -4118,6 +4198,9 @@ def _construiesteResurse():
 			self.putChild(b"interfete-cam", InterfeteCamResource())
 			# modulele de acces conditionat (acces_conditionat_web.py)
 			for nume_ruta, resursa in _ACCES.items():
+				self.putChild(nume_ruta, resursa)
+			# paznicul porturilor (porturi_web.py): conflictele si schimbarea portului
+			for nume_ruta, resursa in _PORTURI.items():
 				self.putChild(nume_ruta, resursa)
 			# starea interfetei web si aplicatiile de telefon (pagina /setari, caseta Interfata web)
 			self.putChild(b"interfata-web", InterfataWebResource())
@@ -4222,6 +4305,9 @@ def _construiesteResurse():
 			self.putChild(b"setari-din-copie-reporneste", _SETARI_COPIE[b"setari-din-copie-reporneste"])
 			# copia setarilor (copie_setari_web.py): /api/copie-setari, -fa, -pune, -sterge, -automat, -anuleaza
 			for nume_ruta, resursa in _COPIE_SETARI.items():
+				self.putChild(nume_ruta, resursa)
+			# copia completa a imaginii (copie_imagine_web.py): /api/copie-imagine, -fa, -opreste
+			for nume_ruta, resursa in _COPIE_IMAGINE.items():
 				self.putChild(nume_ruta, resursa)
 			# modul sigur (mod_sigur_web.py): /api/mod-sigur, /api/mod-sigur-alege, /api/mod-sigur-brut
 			for nume_ruta, resursa in _MOD_SIGUR.items():
@@ -4347,6 +4433,7 @@ def _construiesteResurse():
 			self.putChild(b"afisaj", _AFISAJ_PAGINA)
 			self.putChild(b"setari-din-copie", _SETARI_COPIE_PAGINA)
 			self.putChild(b"copie-setari", _COPIE_SETARI_PAGINA)
+			self.putChild(b"copie-imagine", _COPIE_IMAGINE_PAGINA)
 			self.putChild(b"mod-sigur", _MOD_SIGUR_PAGINA)
 			self.putChild(b"import", _IMPORT_PAGINA)
 			self.putChild(b"liste-implicite", _LISTE_IMPLICITE_PAGINA)
@@ -4659,6 +4746,13 @@ def porneste(reason, session=None, **kwargs):
 	if session is not None:
 		_sesiune = session  # pentru scanare_web.py: ecranele se deschid pe televizor prin ea
 	initConfigHdsWebControl()
+	# culorile si stilul receptorului pentru celelalte interfete web (OSCam Retuned): /etc/enigma2/hds-tema-web.css,
+	# tinut la zi singur (tema_export.py); merge si cand interfata web e oprita
+	try:
+		from . import tema_export
+		tema_export.porneste()
+	except Exception as eroare:
+		_jurnal("culorile pentru celelalte interfete web: %s" % eroare)
 	if not config.plugins.hdswebcontrol.activ.value:
 		_jurnal("dezactivat din configurare, nu pornesc")
 		# portul scris de o pornire de dinainte (enigma2 repornit fara repornirea receptorului) nu mai e adevarat

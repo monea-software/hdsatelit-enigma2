@@ -405,6 +405,10 @@ class HdsDvbISetup(Screen):
         elif actiune == S.R_REZERVA:
             S.comutaRezerva(self._config)
             self._salveaza()
+        elif actiune == getattr(S, 'R_TOATE', None):
+            # TODO 1883: listele din toate tarile pornite / oprite; buchetul se reface
+            S.comutaToateTarile(self._config)
+            self._salveaza(reincarca=True)
         elif actiune == S.R_INCERCARI:
             self.incearca()
         elif actiune == S.R_AVANSAT:

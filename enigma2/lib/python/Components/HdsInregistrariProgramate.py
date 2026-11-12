@@ -801,6 +801,10 @@ T_CANAL_NEINREGISTRABIL = N_("Acest canal nu poate fi înregistrat.")
 T_LIMITA_FLUX = {
 	"t2": N_("Înregistrarea programelor DVB-T2 din satelit nu e încă posibilă."),
 	"dab": N_("Înregistrarea posturilor DAB+ din satelit nu e încă posibilă."),
+	# 0.7.4: canalele de tip 1 cu adresa unui server (IPTV salvat cu tipul 1, fluxul altui receptor pe 8001) se vad prin
+	# lib/service/hdsfluxhttp.cpp, dar inregistrarea lor nu e facuta; mesajul nu arata referinta (calea are contul si
+	# parola furnizorului)
+	"retea": N_("Înregistrarea canalelor care vin prin rețea (IPTV de tip 1, fluxul altui receptor) nu e încă posibilă."),
 }
 T_DETALIU_TEHNIC = N_("Detaliu tehnic: %s")
 
@@ -839,7 +843,17 @@ def felNeinregistrabil(ref):
 	except ImportError:
 		return None
 	fel = HdsCapLista.fel_flux(text)
-	return fel if fel in T_LIMITA_FLUX else None
+	if fel in T_LIMITA_FLUX:
+		return fel
+	if fel is None and _canalPrinRetea(text):
+		return "retea"
+	return None
+
+
+def _canalPrinRetea(text):
+	"""O referinta de tip 1 cu adresa http:// a unui server (nu releele imaginii, prinse inainte de fel_flux)."""
+	mic = text.lower()
+	return mic.startswith("1:") and ("http%3a//" in mic or "http://" in mic)
 
 
 def textLimitaInregistrare(ref, tr=_):

@@ -48,6 +48,10 @@
 		<setup key="usage" title="OSD Preferences">
 			<item level="0" text="Setup Mode" description="Câte setări se văd în meniuri: Simplu arată numai ce se folosește des, Intermediar și Expert arată tot mai multe.">config.usage.setup_level</item>
 			<item level="0" text="What to show at startup">config.usage.hds_pornire</item>
+			<!-- animatia ferestrelor (Components/HdsAnimatiiFerestre.py): aceleasi chei ca pluginul AnimationSetup din OE-Alliance;
+			     desenata de placa unde stie (/proc/stb/fb/animation_*), altfel de interfata; in web: /setari?id=usage -->
+			<item level="0" text="Animația ferestrelor" description="Cum apar și pleacă meniurile și ecranele deschise din ele. Bara canalului, volumul, lista de canale și ghidul apar mereu pe loc, fără animație. O tastă apăsată în timpul animației o termină imediat.">config.misc.window_animation_default</item>
+			<item level="1" text="Viteza animației" description="Cât durează animația ferestrelor: Rapidă (circa 150 ms), Normală (200 ms) sau Lentă (250 ms).">config.misc.window_animation_speed</item>
 			<item level="1" text="2D acceleration on the video card (after GUI restart)" requires="HdsAccel2D" description="On at first: the big fills of the screen are done by the video card, the rest by the processor. If problems appear, the receiver goes back by itself to drawing without acceleration. Used from the next start of the interface.">config.usage.hds_accel_2d</item>
 			<!-- modul procesorului (Components/HdsProcesor.py); acelasi rand in ecranul Procesor si in web la /procesor -->
 			<item level="1" text="Modul procesorului" requires="HdsProcesor" description="Cât de repede poate lucra procesorul. Normal este ca la fabricant și e recomandat dacă nu știi ce să alegi. Se aplică la salvare.">config.hds_procesor.mod</item>
@@ -65,11 +69,20 @@
 			<item level="1" text="Show positioner movement">config.usage.showdish</item>
 			<item level="1" text="Enable multiple bouquets">config.usage.multibouquet</item>
 			<item level="1" text="Multi-EPG bouquet selection">config.usage.multiepg_ask_bouquet</item>
+			<!-- limba ghidului (Components/HdsLimbaEpg.py, lib/service/event.cpp; 0.7.4): ce limba se arata cand canalul trimite
+			     emisiunile in mai multe limbi; in web: /setari?id=usage -->
+			<item level="0" text="Limba ghidului de programe" description="Când un canal trimite programul în mai multe limbi, ghidul îl arată în limba aleasă. Automat: limba meniului. Schimbarea se vede pe loc, fără căutare nouă. Textul nu se traduce: dacă un canal trimite o emisiune într-o singură limbă, rămâne așa.">config.misc.hds_epg_limba</item>
+			<item level="1" text="A doua limbă a ghidului" description="Limba folosită când emisiunea nu are text în prima limbă a ghidului. Niciuna: engleza, apoi prima limbă trimisă de canal.">config.misc.hds_epg_limba2</item>
 			<item level="1" text="Change bouquets in quickzap">config.usage.quickzap_bouquet_change</item>
 			<item level="1" text="Reading the tracks while watching" description="What the receiver notes by itself for the channel search (sound and subtitle languages, teletext, HbbTV). Only the channel watched: what the receiver already knows. The whole transponder: also reads every channel on it from the tuner (not tested yet). Off: nothing; MENU in the channel search still reads them.">config.usage.hds_culegere_piste</item>
 			<!-- baza de pornire a canalelor (Components/HdsBazaPornire.py): o data pe zi, in fundal, numai cu setarea pornita
 			     (oprita din fabrica); ce afla receptorul singur ramane neschimbat; in web: /setari?id=usage -->
 			<item level="1" text="Ia baza de canale de pe stb.hdsatelit.com" stare="netestat" description="Da: o dată pe zi, în fundal, receptorul caută pe stb.hdsatelit.com o bază de canale mai nouă decât cea din imagine (rezoluția, sunetul, subtitrările, PID-urile fiecărui canal) și o folosește numai unde nu știe el nimic. Ce află receptorul singur rămâne neschimbat. Nu: numai baza venită cu imaginea.">config.usage.hds_baza_stb</item>
+			<!-- actualizarea listei la privit (lib/dvb/pmt.cpp, SDTScanEvent; config.usage.hds_actualizare_lista din
+			     Components/UsageConfig.py): pornita din fabrica, ca pana acum; oprita, ce gaseste scanarea transponderului
+			     canalului privit nu mai intra in lista, deci canalele sterse nu mai revin (cererea din 0.7.4); in web:
+			     /setari?id=usage -->
+			<item level="0" text="Actualizează lista de canale la privit" description="Da: când privești un canal, receptorul citește canalele de pe transponderul lui, adaugă singur în listă ce lipsește și aduce numele la zi. Așa revin și canalele șterse de tine. Nu: lista rămâne cum ai lăsat-o; canalele noi și numele schimbate apar numai după o scanare.">config.usage.hds_actualizare_lista</item>
 			<item level="1" text="Alternative radio mode">config.usage.e1like_radio_mode</item>
 			<!-- sagetile sus si jos la privit (Components/HdsSageti.py: bara TV si ecranul radio); in web: /setari -->
 			<item level="0" text="Săgețile sus și jos la privit" description="Fără meniu deschis: deschid lista modului curent, TV sau radio. Celelalte combinații și schimbarea canalului rămân la alegere.">config.usage.hds_sageata_sus</item>
@@ -211,10 +224,15 @@
 		<setup key="hds_ipv6" title="IPv6">
 			<item level="0" text="IPv6" description="Nu (din fabrică): plăcile de rețea nu au adrese IPv6, iar clientul IPv6 nu pornește; rețeaua merge pe IPv4, ca până acum. Da: receptorul primește și adrese IPv6, dacă rețeaua ta le dă. Se aplică pe loc.">config.usage.hds_ipv6</item>
 		</setup>
-		<!-- Stream Relay (0.7.0, Components/HdsStreamRelay.py): adresa, portul si intarzierea releului (config.misc.acces_streamrelay_*,
+		<!-- Stream Relay (0.7.0, Components/HdsStreamRelay.py), de la 12.11.2026 numai la cerere si numai pe televizor (browserul si
+		     8001 dau fluxul descifrat de receptor, SoftCSA): adresa, portul si intarzierea releului (config.misc.acces_streamrelay_*,
 		     Components/UsageConfig.py); canalele se aleg din meniul listei de canale. In web: /setari?id=hds_stream_relay si
 		     butonul de langa stea din lista de canale (canale_web.py) -->
 		<setup key="hds_stream_relay" title="Stream Relay">
+			<!-- 0.7.4: trecerea singura a canalelor cu ICAM (Components/HdsStreamRelay.py, TRECEREA SINGURA); sistemele numai
+			     la nivelul expert (din fabrica 098C,098D; gol sau gresit = cele din fabrica) -->
+			<item level="0" text="Trecerea singură a canalelor cu ICAM" stare="netestat" description="Nu (din fabrică): receptorul descifrează singur canalele cu ICAM (Sky Deutschland), pe televizor și în browser, deci Stream Relay nu e nevoie. Da: canalele cu ICAM (sistemele 098C și 098D) trec singure prin releul modulului de acces, numai pe televizor. Dacă releul nu răspunde, canalele pornesc direct, fără mesaj.">config.misc.hds_streamrelay_icam</item>
+			<item level="2" text="Sistemele pentru trecerea singură" stare="netestat" description="Codurile sistemelor de acces (CAID) ale canalelor care trec singure prin releu, despărțite prin virgulă. Din fabrică 098C,098D (Sky Deutschland, ICAM). Gol sau greșit: cele din fabrică.">config.misc.hds_streamrelay_icam_caid</item>
 			<item level="0" text="Adresa releului" stare="netestat" description="Unde rulează releul care decodează canalele alese pentru Stream Relay: pe acest receptor (127.0.0.1) sau pe alt aparat din rețeaua de acasă, dacă e pornit rândul Fluxuri pentru alte aparate din rețeaua de acasă. Se ia numai adresa; portul e în rândul următor. Altă adresă nu se folosește: canalele pornesc direct.">config.misc.acces_streamrelay_url</item>
 			<item level="0" text="Portul releului" stare="netestat" description="Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay.">config.misc.acces_streamrelay_port</item>
 			<item level="0" text="Întârzierea la schimbarea canalului (ms)" stare="netestat" description="Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale.">config.misc.acces_streamrelay_delay</item>

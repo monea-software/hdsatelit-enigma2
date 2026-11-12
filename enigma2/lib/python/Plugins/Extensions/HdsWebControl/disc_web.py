@@ -23,6 +23,8 @@
 #   - Swap File (entryID hds_swap_manager, Screens/SwapManager.py): discurile montate, swap-urile active, activarea
 #     fisierului de 512 MB si oprirea. Pagina: /swap, aceleasi comenzi (Components/HdsSwap.py); activarea si oprirea
 #     cu confirmare. Un swap deja pornit nu se rescrie si un swapfile.hds care nu e fisier obisnuit nu se atinge.
+#     0.7.4 (Ozgur, chkroot): si discul USB de pe care merge imaginea, si partitiile de swap pornite (punct = /dev/sd...,
+#     cu oprirea lor); swap-ul gasit porneste singur la pornire (HdsSwap.porneste), fraza e aceeasi ca pe televizor.
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/locuri-inregistrari                       randurile, alegerile, listele tinute minte
@@ -1063,7 +1065,8 @@ PAGINA_SWAP = """<!DOCTYPE html>
     <table class="tabel" id="tabel"><thead><tr><th>Discul</th><th>Swap</th><th></th></tr></thead><tbody id="discuri"></tbody></table>
     <p class="nota" id="active"></p>
   </section>
-  <p class="nota">Activarea face în rădăcina discului ales fișierul <span id="fisier"></span> de <span id="marime"></span> MB și îl pornește ca memorie virtuală. Swap-ul nu repornește singur după o repornire a receptorului.</p>
+  <p class="nota">Activarea face în rădăcina discului ales fișierul <span id="fisier"></span> de <span id="marime"></span> MB și îl pornește ca memorie virtuală.</p>
+  <p class="nota">O partiție de swap de pe un stick sau un disc și fișierul de swap făcut aici pornesc singure la fiecare pornire a receptorului, dacă nu e alt swap pornit. Oprit de aici, swap-ul rămâne oprit până la următoarea pornire.</p>
   <p class="nota legaturi">Discurile conectate și locul înregistrărilor sunt în <a data-cale="/stocare" href="/stocare">Locul înregistrărilor</a>.</p>
   <p class="mesaj" id="mesaj"></p>
   <div id="confirmare" class="card ascuns"></div>
@@ -1181,8 +1184,11 @@ TEXTE_PAGINA = {
 		N_("Niciun disc HDD/USB montat momentan."),
 		N_("Swap"),
 		N_("Activarea face în rădăcina discului ales fișierul <span id=\"fisier\"></span> de <span "
-			"id=\"marime\"></span> MB și îl pornește ca memorie virtuală. Swap-ul nu repornește singur după o "
-			"repornire a receptorului."),
+			"id=\"marime\"></span> MB și îl pornește ca memorie virtuală."),
+		# acelasi msgid ca HdsSwap.textPornire() pe televizor (0.7.4, Ozgur)
+		N_("O partiție de swap de pe un stick sau un disc și fișierul de swap făcut aici pornesc singure la fiecare "
+			"pornire a receptorului, dacă nu e alt swap pornit. Oprit de aici, swap-ul rămâne oprit până la următoarea "
+			"pornire."),
 		N_("Discurile conectate și locul înregistrărilor sunt în <a data-cale=\"/stocare\" "
 			"href=\"/stocare\">Locul înregistrărilor</a>."),
 	),

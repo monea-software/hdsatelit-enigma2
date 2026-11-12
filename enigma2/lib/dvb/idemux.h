@@ -3,6 +3,7 @@
 #define __dvb_idemux_h
 
 #include <lib/dvb/idvb.h>
+#include <lib/service/iservicescrambled.h>
 
 class iDVBSectionReader: public iObject
 {
@@ -55,6 +56,16 @@ public:
 				/* old one. */
 	};
 	virtual RESULT connectEvent(const sigc::slot<void(int)> &event, ePtr<eConnection> &conn)=0;
+
+		/* SoftCSA (lib/dvb/csasession.h): the packets are descrambled in place before they are parsed and written; 0 = none.
+		   May be changed while the recording runs: the thread never descrambles with a descrambler being replaced.
+		   eDVBTSRecorder does it on every receiver; -1 from a recorder that cannot. */
+	virtual RESULT setDescrambler(ePtr<iServiceScrambled> descrambler) { return -1; }
+		/* the target is the dvr of a playback demux fed from the live demux (lib/service/servicedvbsoftdecoder.h): writes in
+		   parts of whole packets, and data the driver has no room for is dropped (the thread waits outside the driver, or
+		   for a bounded time) instead of waiting in it for good; must be set before start(). eDVBTSRecorder does it on
+		   every receiver (HiSilicon and the generic path, lib/base/filepush.cpp); -1 from a recorder that cannot. */
+	virtual RESULT setDvrLoop(bool loop) { return -1; }
 };
 
 #endif

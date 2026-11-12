@@ -198,6 +198,14 @@ class MessageBox(Screen):
 		for valoare, poza in ((self.TYPE_ERROR, "ErrorPixmap"), (self.TYPE_YESNO, "QuestionPixmap"), (self.TYPE_INFO, "InfoPixmap"), (self.TYPE_WARNING, "WarningPixmap")):
 			if semn is False or semn != valoare:
 				self[poza].hide()
+		# temele straine (numele standard): o singura poza „icon” cu pozele in ordinea intrebare, informatie,
+		# avertisment, eroare, mesaj (pixmaps="..."), aleasa dupa fel; numai sub alta tema decat HD Satelit
+		from Components.HdsNumeStandard import adauga
+		from Components.Pixmap import MultiPixmap
+		if adauga(self, "icon", MultiPixmap) is not None:
+			# fara poza ceruta (picon/typeIcon False): False == 0 in Python, deci intai self.picon
+			self._semnOea = semn if self.picon and semn in (self.TYPE_YESNO, self.TYPE_INFO, self.TYPE_WARNING, self.TYPE_ERROR, self.TYPE_MESSAGE) else None
+			self.onLayoutFinish.append(self._puneSemnOea)
 
 		self.listaDinApel = bool(list)
 		self.randInceput = 0
@@ -256,6 +264,13 @@ class MessageBox(Screen):
 
 	def _nimic(self):
 		pass
+
+	def _puneSemnOea(self):
+		"""poza „icon” a temelor straine: indexul = felul ferestrei (0 intrebare ... 4 mesaj); fara fel, ascunsa"""
+		if self._semnOea is None:
+			self["icon"].hide()
+		else:
+			self["icon"].setPixmapNum(self._semnOea)
 
 	def _marimeDupaText(self):
 		if self.randInceput:

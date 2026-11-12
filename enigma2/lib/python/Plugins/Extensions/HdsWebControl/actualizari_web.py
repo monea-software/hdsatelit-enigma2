@@ -64,6 +64,9 @@ def stare(A=None):
 	rez["text_pachete"] = _pachete(n) if n else ""
 	# intrebarea de repornire (TryQuitMainloop) e pe televizor: pagina o spune cand repornirea rapida nu se face
 	rez["intrebare_pe_tv"] = _intrebare_pe_tv()
+	# 0.7.4: o repornire (sau oprire) ceruta cat ruleaza opkg asteapta pe televizor sfarsitul instalarii
+	# (Screens/Standby.py TryQuitMainloop); pagina o spune pe un rand
+	rez["asteapta_instalarea"] = _asteapta_instalarea()
 	rez["result"] = True
 	return rez
 
@@ -71,7 +74,16 @@ def stare(A=None):
 def _intrebare_pe_tv():
 	try:
 		from Screens import Standby
-		return bool(getattr(Standby, "inTryQuitMainloop", False))
+		return bool(getattr(Standby, "inTryQuitMainloop", False)) and not bool(getattr(Standby, "asteaptaInstalarea",
+			False))
+	except Exception:
+		return False
+
+
+def _asteapta_instalarea():
+	try:
+		from Screens import Standby
+		return bool(getattr(Standby, "asteaptaInstalarea", False))
 	except Exception:
 		return False
 
@@ -331,6 +343,8 @@ def texte():
 		"nuRevine": _t("Interfața nu a revenit în 4 minute. Verifică receptorul."),
 		"intrebareTv": _t("Actualizarea s-a instalat. Pe televizor se așteaptă un răspuns la întrebarea de repornire."),
 		"nerepornita": _t("Interfața nu s-a repornit. Apasă Repornește interfața."),
+		"asteaptaInstalarea": _t("Se instalează pachete software. Repornirea cerută așteaptă pe televizor sfârșitul "
+			"instalării."),
 	}
 
 
@@ -549,6 +563,7 @@ function arata(d){
   rand(r, T.zilnic, d.zilnic ? T.pornita : T.oprita);
   var jos = [];
   if(d.mesaj){ jos.push(d.mesaj); }
+  if(d.asteapta_instalarea){ jos.push(T.asteaptaInstalarea); }
   if(x.stare === "imagine-noua"){ jos = jos.concat(d.texte_motive || []); jos.push(d.text_imagine_noua); }
   else if(x.stare === "disponibila" || x.stare === "instalata"){
     if((x.nepotrivite || []).length){ jos.push(T.nepotrivite); }

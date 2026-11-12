@@ -27,4 +27,17 @@ with open("enigma.py.org", "r") as source, open("enigma.py", "w") as dest:
 		dest.write(text)
 		line += 1
 
+	# HDSatelit: la coada, stratul de compatibilitate pentru pluginurile scrise pentru interfata comuna enigma2
+	# (lib/python/HdsEnigmaCompat.py): pune numai numele care lipsesc; o greseala in el nu opreste enigma
+	dest.write("""
+
+# HDSatelit: stratul de compatibilitate al pluginurilor (HdsEnigmaCompat.py)
+try:
+	import HdsEnigmaCompat as _hdsCompat
+	_hdsCompat.aplica(globals())
+	del _hdsCompat
+except Exception as _hdsEroare:
+	print("[enigma] HdsEnigmaCompat: %s" % _hdsEroare)
+""")
+
 os.remove("enigma.py.org")

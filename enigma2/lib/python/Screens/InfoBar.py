@@ -296,6 +296,23 @@ def hdsFaActiuneaLunga(ecran, actiune):
 			"reboot": "receptor", "restart": "interfata"}[actiune])
 	elif actiune == "captura":
 		ecran.hdsCaptura()
+	elif actiune in ("zap_next", "zap_previous"):
+		# ca CH+/CH- cu "Schimba canalul": pe ecranul radio postul urmator sau anterior
+		canal = getattr(ecran, "hdsCanalDinProfil", None)
+		if canal is None:
+			print("[InfoBar] %s: ecranul %s nu schimba canalul" % (actiune, type(ecran).__name__))
+			return
+		canal(actiune == "zap_next", "zap")
+	elif actiune in ("volume_up", "volume_down"):
+		# ca tastele VOL, cu bara de volum
+		from Components.VolumeControl import VolumeControl
+		volum = VolumeControl.instance
+		if volum is None:
+			return
+		if actiune == "volume_up":
+			volum.volUp()
+		else:
+			volum.volDown()
 	else:
 		print("[InfoBar] apasare lunga: actiune necunoscuta %r" % (actiune,))
 
@@ -329,6 +346,12 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 	
 	ALLOW_SUSPEND = True
 	instance = None
+
+	@property
+	def LongButtonPressed(self):
+		# OE-Alliance: True cand tasta apasata acum e tinuta (steagul 3), pana la urmatoarea tasta; pluginurile (EPGSearch)
+		# despart asa apasarea scurta de cea lunga. Steagurile le tine InfoBarUnhandledKey.actionA, prima la fiecare tasta.
+		return bool(getattr(self, "flags", 0) & (1 << 3))
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
@@ -415,6 +438,11 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			iPlayableService.evUpdatedInfo: self.hdsEtichetaRosu,
 			iPlayableService.evUpdatedEventInfo: self.hdsEtichetaRosu,
 		})
+		# temele straine (numele standard OE-Alliance): etichetele butoanelor colorate ale barei, goale; numai sub alta tema
+		from Components.HdsNumeStandard import adauga
+		from Components.Label import Label
+		for nume in ("key_red", "key_green", "key_yellow", "key_blue"):
+			adauga(self, nume, Label)
 		assert InfoBar.instance is None, "class InfoBar is a singleton class and just one instance of this class is allowed!"
 		InfoBar.instance = self
 		# HDSatelit: copiile de teletext ale canalelor vazute, in fundal (Components/HdsTeletextCopie.py)
@@ -735,6 +763,13 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		# In timeshift cifrele raman ale derularii, inclusiv la tinere.
 		if tasta.startswith("number_") and self.timeshift_enabled:
 			return False
+		# Volumul sau canalul pe STANGA/DREAPTA lasa sagetile derularii (timeshift, pauza) si celei de-a doua bare, ca
+		# setarea "Stanga si dreapta la privit" (_hdsTastePrivitActive).
+		if tasta in ("left", "right"):
+			from Components.HdsTasteRapide import actiune_aleasa
+			if actiune_aleasa(tasta + "_short") in ("volume_up", "volume_down", "zap_next", "zap_previous") and \
+					not self._hdsTastePrivitActive():
+				return False
 		return True
 
 	def hdsPornesteTastaLunga(self, buton, actiune):
@@ -809,7 +844,10 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 	def hdsTeletext(self):
 		hdsTeletextSauMesaj(self)
 
-	def movieSelected(self, service):
+	# fromMovieSelection: pluginurile scrise pentru alte imagini (managerul de fisiere FileCommander) dau False cand filmul nu
+	# vine din lista filmelor; acolo playerul nu se mai intoarce in lista la sfarsit. La noi playerul nu deschide lista la
+	# iesire oricum, deci argumentul se primeste si atat.
+	def movieSelected(self, service, fromMovieSelection = True):
 		if service is not None:
 			self.session.open(MoviePlayer, service)
 

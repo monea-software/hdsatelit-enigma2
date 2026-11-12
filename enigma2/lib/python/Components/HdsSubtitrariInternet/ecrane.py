@@ -84,6 +84,9 @@ CAMPURI = (
 	("subsro_cheie", N_("subs.ro: cheia API"), True),
 	("subdl_cheie", N_("SubDL: cheia API"), True),
 )
+# cheile care, scrise, se pot si sterge de pe televizor (alegerea „Șterge cheia”); parola contului pleaca cu „Șterge contul
+# OpenSubtitles”
+CHEI_STERSE_DE_PE_TV = ("os_cheie_aplicatie", "subsro_cheie", "subdl_cheie")
 
 DESCRIERI = {
 	"os_utilizator": N_("Numele de utilizator al contului tău OpenSubtitles.com (nu adresa de e-mail). Un cont gratuit dă 20 de descărcări pe zi."),
@@ -140,7 +143,8 @@ class HdsDescarcareSetari(Screen, ConfigListScreen):
 		lista = []
 		for cheie, eticheta, secret in CAMPURI:
 			if secret:
-				text = _t("scrisă") if stare.get(cheie) else _t("nescrisă")
+				scrisa = stare.get(cheie) or (cheie == "os_cheie_aplicatie" and stare.get("os_cheie_aplicatie_imagine"))
+				text = _t("scrisă") if scrisa else _t("nescrisă")
 			else:
 				text = stare.get("os_utilizator_text") or _t("nescris")
 			lista.append(getConfigListEntry(_t(eticheta), _Camp(cheie, secret, text)))
@@ -167,12 +171,38 @@ class HdsDescarcareSetari(Screen, ConfigListScreen):
 		elif cheie == "sterge":
 			self.session.openWithCallback(self._stergeConfirmat, MessageBox,
 				_t("Ștergi contul OpenSubtitles de pe receptor?"), MessageBox.TYPE_YESNO, default=False)
+		elif cheie in CHEI_STERSE_DE_PE_TV and self.conturi.stare().get(cheie):
+			# o cheie scrisa: scrie alta sau sterge-o (ca la cheile traducerii); in web la fel, cu „Șterge”
+			from Screens.ChoiceBox import ChoiceBox
+			self.session.openWithCallback(lambda alegere: self._alegereCheie(cheie, c[0], alegere), ChoiceBox,
+				title=c[0], list=[(_t("Scrie cheia nouă"), "scrie"), (_t("Șterge cheia"), "sterge")])
 		else:
-			from Screens.VirtualKeyBoard import VirtualKeyBoard
-			text = "" if c[1].secret else self.conturi.stare().get("os_utilizator_text", "")
-			# hdsSecret: cu asistenta pornita, prima tasta din parola sau cheie cere oprirea ei (in orice limba)
-			self.session.openWithCallback(lambda valoare: self._scris(cheie, valoare), VirtualKeyBoard,
-				title=c[0], text=text, hdsSecret=bool(c[1].secret))
+			self._scrieCheia(cheie, c[0], c[1].secret)
+
+	def _alegereCheie(self, cheie, titlu, alegere):
+		if not alegere:
+			return
+		if alegere[1] == "sterge":
+			self.session.openWithCallback(lambda da: self._stergeCheia(cheie, da), MessageBox,
+				_t("Ștergi cheia acestui serviciu de pe receptor?"), MessageBox.TYPE_YESNO, default=False)
+		else:
+			self._scrieCheia(cheie, titlu, True)
+
+	def _stergeCheia(self, cheie, da):
+		if not da:
+			return
+		if cheie.startswith("os_"):
+			self._iesireOpenSubtitles()		# ca la scriere si ca in web (jetonul vechi nu mai foloseste)
+		if not self.conturi.schimba(**{cheie: None}):
+			self.session.open(MessageBox, _t("Datele nu s-au putut scrie pe receptor."), MessageBox.TYPE_ERROR, timeout=8)
+		self._faLista()
+
+	def _scrieCheia(self, cheie, titlu, secret):
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		text = "" if secret else self.conturi.stare().get("os_utilizator_text", "")
+		# hdsSecret: cu asistenta pornita, prima tasta din parola sau cheie cere oprirea ei (in orice limba)
+		self.session.openWithCallback(lambda valoare: self._scris(cheie, valoare), VirtualKeyBoard,
+			title=titlu, text=text, hdsSecret=bool(secret))
 
 	def _scris(self, cheie, valoare):
 		if valoare is None:

@@ -85,6 +85,52 @@ class MenuList(HTMLComponent, GUIComponent):
 	def setCurrentIndex(self, idx):
 		self.moveToIndex(idx)
 
+	# HDSatelit: restul numelor din alte imagini ale listei (pluginurile scrise pentru ele): proprietatile current/index,
+	# capetele si paginile (goFirst/goLast/goLeft/goRight; la lista verticala, stanga/dreapta = o pagina), randul de sus
+	# al ferestrei si un rand schimbat pe loc
+	# o subclasa mai veche care isi tine singura self.current / self.index (inainte de proprietati) le pastreaza: ce
+	# pune ea se citeste inapoi; altfel current e randul ales, iar index muta cursorul, ca in alte imagini
+	def _getCurrentOea(self):
+		return self.__dict__["_hdsCurentPus"] if "_hdsCurentPus" in self.__dict__ else self.getCurrent()
+
+	def _setCurrentOea(self, valoare):
+		self.__dict__["_hdsCurentPus"] = valoare
+
+	def _getIndexOea(self):
+		if self.instance is None and "_hdsIndexPus" in self.__dict__:
+			return self.__dict__["_hdsIndexPus"]
+		return self.getSelectedIndex()
+
+	def _setIndexOea(self, idx):
+		if self.instance is None:
+			self.__dict__["_hdsIndexPus"] = idx
+		else:
+			self.moveToIndex(idx)
+
+	current = property(_getCurrentOea, _setCurrentOea)
+	index = property(_getIndexOea, _setIndexOea)
+	goFirst = top
+	goLast = bottom
+	goLeft = pageUp
+	goRight = pageDown
+
+	def getTopIndex(self):
+		return self.instance.getTopIndex() if self.instance is not None and hasattr(self.instance, "getTopIndex") else -1
+
+	def setTopIndex(self, idx):
+		if self.instance is not None and hasattr(self.instance, "setTopIndex"):
+			self.instance.setTopIndex(idx)
+
+	def updateEntry(self, idx, data):
+		if self.list and 0 <= idx < len(self.list):
+			self.list[idx] = data
+			if hasattr(self.l, "updateEntry"):
+				self.l.updateEntry(idx, data)
+			else:
+				vechi = self.getSelectedIndex()
+				self.l.setList(self.list)
+				self.moveToIndex(vechi)
+
 	def getList(self):
 		return self.list
 
@@ -94,3 +140,9 @@ class MenuList(HTMLComponent, GUIComponent):
 	def selectionEnabled(self, enabled):
 		if self.instance is not None:
 			self.instance.setSelectionEnable(enabled)
+
+	def enableAutoNavigation(self, enabled):
+		"""Pluginurile scrise pentru alte imagini (FileCommander) opresc asa navigarea proprie a listei si muta cursorul din
+		harta lor NavigationActions. La noi lista nativa nu se poate dezlega din Python; harta NavigationActions se leaga
+		inaintea ei (Components/ActionMap.py), deci aici ramane numai alegerea."""
+		self.navigareAutomata = bool(enabled)

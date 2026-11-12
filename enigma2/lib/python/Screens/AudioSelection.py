@@ -747,3 +747,34 @@ class SubtitleSelection(AudioSelection):
 	def __init__(self, session, infobar=None):
 		AudioSelection.__init__(self, session, infobar, page=PAGE_SUBTITLES)
 		self.skinName = ["AudioSelection"]
+
+
+def __getattr__(nume):
+	"""HDSatelit: QuickSubtitlesConfigMenu, ecranul setarilor rapide ale subtitrarilor cerut de pluginurile scrise pentru
+	alte imagini. SubsSupport 2.0 il importa la pornire (plugin/subtitles.py) si il deschide din meniul subtitrarilor din
+	playerul lui cu session.open(QuickSubtitlesConfigMenu, self.infobar); o constructie cu importul nepazit nu pornea
+	deloc („cannot import name 'QuickSubtitlesConfigMenu'”, lordjedy, SF8008, 0.7.2). La noi aspectul subtitrarilor are un
+	singur ecran, „Aspectul subtitrărilor” (Screens/HdsSubtitrariAspect.py), acelasi din meniu si din web (/subtitrari):
+	clasa e acel ecran, cu semnatura asteptata (session, infobar). Cu ea, SubsSupport nu mai pune stilul lui peste
+	subtitrarile din film si lasa stilul imaginii. Clasa se face la prima cerere (__getattr__ al modulului), ca
+	AudioSelection sa nu incarce ecranul aspectului la pornire; daca nu se poate face, numele lipseste ca inainte
+	(ImportError la import, pe care pluginurile il prind)."""
+	if nume != "QuickSubtitlesConfigMenu":
+		raise AttributeError("module %r has no attribute %r" % (__name__, nume))
+	try:
+		from Screens.HdsSubtitrariAspect import HdsSubtitrariAspect
+	except Exception as e:
+		print("[AudioSelection] QuickSubtitlesConfigMenu: ecranul aspectului nu se poate incarca: %s" % e)
+		raise AttributeError(nume)
+
+	class QuickSubtitlesConfigMenu(HdsSubtitrariAspect):
+		def __init__(self, session, infobar=None, *argumente, **numite):
+			HdsSubtitrariAspect.__init__(self, session)
+			# skinul ecranului aspectului; QuickSubtitlesConfigMenu din tema e o fereastra mica, cu alte campuri
+			self.skinName = ["HdsSubtitrariAspect"]
+			self.infobar = infobar or getattr(session, "infobar", None)
+
+	QuickSubtitlesConfigMenu.__qualname__ = "QuickSubtitlesConfigMenu"
+	QuickSubtitlesConfigMenu.__module__ = __name__
+	globals()[nume] = QuickSubtitlesConfigMenu
+	return QuickSubtitlesConfigMenu

@@ -1,20 +1,25 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from time import localtime, time
 
-def FuzzyTime(t):
+def FuzzyTime(t, inPast=False):
+	# inPast=True (cerut de pluginurile scrise pentru celelalte imagini Enigma2, de pilda listele de inregistrari): „Yesterday” si ziua
+	# saptamanii in fata datei din anul acesta; fara el, totul ca inainte
 	d = localtime(t)
 	nt = time()
 	n = localtime()
+	zile = (_("Mon"), _("Tue"), _("Wed"), _("Thu"), _("Fri"), _("Sat"), _("Sun"))
 	
 	if d[:3] == n[:3]:
 		# same day
 		date = _("Today")
-	elif ((t - nt) < 7*86400) and (nt < t):
+	elif inPast and d[0] == n[0] and d[7] == n[7] - 1:
+		date = _("Yesterday")
+	elif ((t - nt) < 7*86400) and (nt < t) and not inPast:
 		# same week
-		date = (_("Mon"), _("Tue"), _("Wed"), _("Thu"), _("Fri"), _("Sat"), _("Sun"))[d[6]]
+		date = zile[d[6]]
 	elif d[0] == n[0]:
 		# same year
-		date = "%d.%d." % (d[2], d[1])
+		date = ("%s %d.%d." % (zile[d[6]], d[2], d[1])) if inPast else ("%d.%d." % (d[2], d[1]))
 	else:
 		date = "%d.%d.%d" % (d[2], d[1], d[0])
 	

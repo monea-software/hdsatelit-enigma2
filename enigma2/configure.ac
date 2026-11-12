@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.7.3],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.7.4],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -36,7 +36,9 @@ TUXBOX_APPS_DVB
 AM_CONDITIONAL(HAVE_GIT_DIR, test -d "$srcdir/.git")
 AM_CONDITIONAL(HAVE_FAKE_GIT_DIR, test -f "$srcdir/.git/last_commit_info")
 
-PKG_CHECK_MODULES(BASE, [freetype2 fribidi libdvbsi++ libpng libxml-2.0 sigc++-3.0])
+dnl libcrypto (OpenSSL 3): CI+ in lib/dvb_ci (din sursele GPL enigma2 (OE-Alliance), commitul
+dnl 29d951a6ec2e019680741efdad5ca7e7902b20e4); fara certificatele aparatului in /etc/ciplus modulele lucreaza ca CI simplu
+PKG_CHECK_MODULES(BASE, [freetype2 fribidi libdvbsi++ libpng libxml-2.0 sigc++-3.0 libcrypto])
 
 AC_ARG_WITH(gstreamer,
 	AS_HELP_STRING([--with-gstreamer],[media playback with GStreamer 1.0, yes or no]),
@@ -87,6 +89,7 @@ case "$BOXTYPE" in
 	u5|u5pvr|u51|u52|u54|u55|u56|u57|u571|u41|u42|u43|u45|u53|u532|u533|\
 	sf8008|sf8008m|sx988|ip8|ustym4kpro|ustym4kottpremium|ustym4ks2ottx|gbmv200|beyonwizv2|viper4k|dagsmv200|og2ott4k|og2s4k|sfx6008|sx88v2)
 		AC_DEFINE([HAVE_HISILICON],[1],[Define to 1 on HiSilicon boxes where video0 and audio0 share one player])
+		hds_hisilicon=yes
 		AC_MSG_RESULT([yes])
 		;;
 	*)
@@ -102,6 +105,33 @@ dnl 4K, Uclan Ustym 4K PRO, GigaBlue UHD TRIO 4K: machine gbmv200, the same show
 dnl selecting the demux again, so video0 stays on MEMORY after the backdrop. The images made for these boards select the
 dnl demux source when a decoder is opened (lib/dvb/decoder.cpp). The Viper 4K V20, V30 and V40 (u5/u4, where showiframe
 dnl is the daemon and one source serves all decoders) and every other machine define nothing.
+dnl SoftCSA (lib/dvb/csaengine.cpp) runs on every receiver: the recorder descrambles and loops into a dvr on HiSilicon
+dnl through its own path and on all other machines (Broadcom ARM and MIPS, and any machine added later) through the
+dnl generic one (lib/dvb/demux.cpp, lib/base/filepush.cpp). data/softcsa, the marker after which the access modules switch
+dnl to pmt_mode 6, is installed for every machine name; only the PC build (nobox, or no --with-boxtype) goes without it.
+case "$BOXTYPE" in
+	nobox|none|"")
+		hds_softcsa=no
+		;;
+	*)
+		hds_softcsa=yes
+		;;
+esac
+AM_CONDITIONAL(HDS_SOFTCSA, test "$hds_softcsa" = "yes")
+
+dnl CI+ on Vu+: the descrambler key goes to the CI slot through the Vu+ ioctl (second FBC tuner, slots 8-15), as in
+dnl the GPL enigma2 sources (OE-Alliance), commit 29d951a6ec2e019680741efdad5ca7e7902b20e4 (same machine list).
+AC_MSG_CHECKING([whether boxtype $BOXTYPE uses the Vu+ CI+ descrambler ioctl])
+case "$BOXTYPE" in
+	vuduo|vusolo|vuduo2|vusolo2|vuuno|vuultimo|vusolose|vuzero|vusolo4k|vuuno4k|vuuno4kse|vuultimo4k|vuzero4k|vuduo4k|vuduo4kse)
+		AC_DEFINE([DESCRAMBLER_VU],[1],[Define to 1 on Vu+ boxes: CI+ descrambler key through the Vu+ ioctl for FBC tuners 8-16])
+		AC_MSG_RESULT([yes])
+		;;
+	*)
+		AC_MSG_RESULT([no])
+		;;
+esac
+
 AC_MSG_CHECKING([whether boxtype $BOXTYPE is a board with libreader])
 case "$BOXTYPE" in
 	viper4k|sf8008|sf8008m|ustym4kpro|gbmv200)
@@ -180,6 +210,7 @@ lib/mmi/Makefile
 lib/nav/Makefile
 lib/python/Makefile
 lib/python/Components/Makefile
+lib/python/Components/Addons/Makefile
 lib/python/Components/Converter/Makefile
 lib/python/Components/Renderer/Makefile
 lib/python/Components/Sources/Makefile

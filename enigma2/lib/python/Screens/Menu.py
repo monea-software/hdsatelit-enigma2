@@ -54,6 +54,11 @@ HDS_COLOANE_DALE = HdsDale.COLOANE
 mdom = xml.etree.ElementTree.parse(resolveFilename(SCOPE_SKIN, 'menu.xml'))
 
 
+# coloanele randului de meniu dupa numele sabloanelor temelor (Components/Converter/XmlMultiContent.py); Number si Image nu
+# exista la noi (glif e numele pictogramei noastre, nu un caracter de font), deci raman goale
+INDEX_MENIU = {"Text": 0, "NumberText": 0}
+
+
 def intrareMeniu(titlu, functie, entryID, greutate, simplu=None, stare=None, glif=None):
 	"""Tuplul unei intrari de meniu, cu aceeasi forma pentru toate (vezi mai sus)."""
 	return (titlu, functie, entryID, greutate, titlu if simplu is None else simplu, stare,
@@ -485,7 +490,9 @@ class Menu(Screen):
 			self._dalaSurse()
 			self.onLayoutFinish.append(self._dalaPregateste)
 		else:
-			self["menu"] = List(list)
+			# numele coloanelor cerute de sabloanele temelor scrise pentru standardul OE-Alliance (<template> cu index="Text" /
+			# "NumberText"): titlul intrarii (randul: intrareMeniu). Cu tema noastra nu schimba nimic (n-are <template>).
+			self["menu"] = List(list, indexNames=INDEX_MENIU)
 			if self._alesInitial is not None:
 				# o metoda, nu lambda: GUISkin cheama direct numai metodele (restul trece prin exec)
 				self.onLayoutFinish.append(self._listaAlege)
@@ -523,6 +530,13 @@ class Menu(Screen):
 		if a is None:
 			a = _(parent.get("text", ""))
 		self["title"] = StaticText(a)
+		# temele straine (numele standard ale meniului): textele tastelor colorate (goale: meniul nostru nu le
+		# foloseste) si poza intrarii alese (ascunsa); numai sub alta tema decat HD Satelit
+		from Components.HdsNumeStandard import adauga
+		from Components.Pixmap import Pixmap
+		for tasta in ("key_red", "key_green", "key_yellow", "key_blue"):
+			adauga(self, tasta, StaticText)
+		adauga(self, "menuimage", Pixmap, ascuns=True)
 		self.menu_title = a
 		# si titlul ferestrei (sursa Title): skinurile il deseneaza in bara de sus, iar fara el bara ramane goala
 		self.setTitle(a)

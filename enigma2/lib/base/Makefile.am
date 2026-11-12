@@ -45,6 +45,7 @@ baseinclude_HEADERS = \
 	estring.h \
 	etpm.h \
 	filepush.h \
+	hdsfinalredare.h \
 	hdsjurnal.h \
 	i18n.h \
 	itssource.h \

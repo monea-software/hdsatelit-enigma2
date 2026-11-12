@@ -41,6 +41,11 @@ class Boolean(Source, object):
 		self.changed((self.CHANGED_ALL,))
 
 	def destroy(self):
+		# HDSatelit: aceeasi sursa poate sta in ecran sub doua nume (InfoBarAdditionalInfo: TimeshiftPossible este
+		# RecordingPossible; la fel pluginurile care o mostenesc), deci Screen.doClose o distruge de doua ori. Prima data
+		# Source.destroy ii goleste dictionarul; a doua oara nu mai e nimic de facut (inainte: AttributeError poll_timer).
+		if not self.__dict__:
+			return
 		if self.poll_timer:
 			self.poll_timer.callback.remove(self.poll)
 		if self.post_destroy is not None:

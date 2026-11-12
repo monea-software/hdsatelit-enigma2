@@ -9,6 +9,8 @@ DEFINE_REF(eWindowStyleSkinned);
 
 eWindowStyleSkinned::eWindowStyleSkinned()
 {
+	for (int i = 0; i < colMax; ++i)
+		m_color_set[i] = false;
 	// m_background_color = gRGB(0x808080);
 	
 	// TODO: initialize colors!!
@@ -270,7 +272,35 @@ void eWindowStyleSkinned::setPixmap(int bs, int bp, gPixmap &pixmap)
 void eWindowStyleSkinned::setColor(int what, const gRGB &col)
 {
 	if ((what < colMax) && (what >= 0))
+	{
 		m_color[what] = col;
+		m_color_set[what] = true;
+	}
+}
+
+bool eWindowStyleSkinned::sliderColors(bool scrollbar, gRGB &foreground, gRGB &background, gRGB &border, int &set)
+{
+	/* set: 1 the moving part, 2 the track, 4 the border, each only when the skin gave the colour */
+	int f = scrollbar ? colScrollbarForeground : colSliderForeground;
+	int b = scrollbar ? colScrollbarBackground : colSliderBackground;
+	int r = scrollbar ? colScrollbarBorder : colSliderBorder;
+	set = 0;
+	if (m_color_set[f])
+	{
+		foreground = m_color[f];
+		set |= 1;
+	}
+	if (m_color_set[b])
+	{
+		background = m_color[b];
+		set |= 2;
+	}
+	if (m_color_set[r])
+	{
+		border = m_color[r];
+		set |= 4;
+	}
+	return set != 0;
 }
 
 void eWindowStyleSkinned::setTitleOffset(const eSize &offset)

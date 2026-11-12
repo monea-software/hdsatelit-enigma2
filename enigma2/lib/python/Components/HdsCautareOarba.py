@@ -48,6 +48,12 @@ def N_(text):
 
 # ---------------------------------------------------------------- constante
 PROGRAM = '/usr/bin/hds-blindscan'
+# Vu+ Solo SE (AVL6211): programul inchis al producatorului, nemodificat, din feed (pachetul de mai jos), chemat prin
+# Components/HdsOarbaVuplus.py, care vorbeste acelasi protocol ca hds-blindscan; se instaleaza singur la prima cautare
+PYTHON = '/usr/bin/python3'
+PACHET_VUPLUS = 'vuplus-blindscan-dvbs-utils'
+MODELE_VUPLUS = ('solose', 'vusolose')
+VUMODEL = '/proc/stb/info/vumodel'
 TUNER_USED = '/proc/stb/parameters/tuner_used'
 
 # semnul 'ocupat' al paznicului (Components/HdsPaznic): cuvant scurt, fara spatii
@@ -206,14 +212,21 @@ def treceri(cerere, osc=None):
                           'ton': b['ton'], 'if_start': b['if_start'], 'if_stop': b['if_stop']})
     tuner = int(cerere.get('tuner') or 0)
     return {'treceri': lista, 'benzi': alese, 'polarizari': pol,
-            'argv': argv_program(lista, osc, tuner, cerere.get('timp_max'))}
+            'argv': argv_program(lista, osc, tuner, cerere.get('timp_max'), cerere.get('vuplus'),
+                                 cerere.get('rata_min'))}
 
 
-def argv_program(lista, osc=None, tuner=0, timp_max=None):
-    """Chemarea programului pentru trecerile date: oscilatoarele in MHz, fiecare trecere 'POL,TON,START,STOP'."""
+def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0):
+    """Chemarea programului pentru trecerile date: oscilatoarele in MHz, fiecare trecere 'POL,TON,START,STOP'.
+    vuplus: {'adaptor', 'program', 'i2c'} pe Vu+ Solo SE (vezi vuplus_pentru): acelasi protocol, prin HdsOarbaVuplus."""
     jos, sus, _prag = (int(x) for x in (osc or LNB_UNIVERSAL))
-    argv = [PROGRAM, '--tuner', str(int(tuner)), '--lo-jos', str(jos // 1000), '--lo-sus', str(sus // 1000),
-            '--timp-max', str(int(timp_max or TIMP_MAX_S))]
+    if vuplus:
+        argv = [PYTHON, vuplus['adaptor'], '--program', vuplus['program'], '--i2c', str(int(vuplus['i2c'])),
+                '--rata-min', str(max(1, int(rata_min or 0) // 1000))]
+    else:
+        argv = [PROGRAM]
+    argv += ['--tuner', str(int(tuner)), '--lo-jos', str(jos // 1000), '--lo-sus', str(sus // 1000),
+             '--timp-max', str(int(timp_max or TIMP_MAX_S))]
     for t in lista:
         argv += ['--trecere', '%s,%d,%d,%d' % (t['pol'], t['ton'], t['if_start'], t['if_stop'])]
     return argv
@@ -700,7 +713,8 @@ class Cautare(object):
         self._lot = self.treceri_etapa[self._facute:self._facute + TRECERI_PE_CHEMARE]
         self.trecere = None
         self.nr_trecere = 0
-        argv = argv_program(self._lot, self.osc, self.cerere.get('tuner') or 0, self.cerere.get('timp_max'))
+        argv = argv_program(self._lot, self.osc, self.cerere.get('tuner') or 0, self.cerere.get('timp_max'),
+                            self.cerere.get('vuplus'), self.cerere.get('rata_min'))
         try:
             self._proces = self._pornitor(argv, self._la_rand, self._la_iesire)
         except Exception as e:
@@ -1097,13 +1111,22 @@ def porneste_pe_receptor(sesiune, cerere):
     if c.in_curs():
         return _t('O căutare oarbă e deja în curs pe acest receptor.')
     import os
-    if not os.path.exists(PROGRAM):
+    pe_vuplus = model_vuplus() is not None
+    if not pe_vuplus and not os.path.exists(PROGRAM):
         return _t('Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software.')
     a = antena(sesiune)
     if a['motiv']:
         return a['motiv']
+    cerere_omului = cerere
     cerere = dict(cerere)
     cerere['tuner'] = a['slot']
+    if pe_vuplus:
+        vu = vuplus_pentru(a['slot'])
+        if vu is None:
+            return mesaj_eroare('placa-necunoscuta')
+        if not os.path.exists(vu['program']):
+            return _instaleaza_vuplus(sesiune, cerere_omului, vu)
+        cerere['vuplus'] = vu
     poz = a['pozitie']
     cunoscute = _cunoscute_satelit(poz) if poz is not None else []
     sateliti = [p for p, _n in a['sateliti']]
@@ -1129,6 +1152,15 @@ def porneste_pe_receptor(sesiune, cerere):
     except Exception as e:
         print('[HdsCautareOarba] paznicul: %s' % e)
     from Screens import ScanerSatelit as S
+    # stopService nu trece prin extensiile de zap: un program DVB-T2 sau un post DAB+ prin satelit si-ar tine releul si
+    # sesiunea 8001 (deci tunerul) pana la ~20 s, mai mult decat asteapta programul. Cedeaza acum, ca la ServiceScan,
+    # impreuna cu o scanare DVB-T2 / DAB+ care tine inca purtatorul.
+    try:
+        from Hds.DabT2 import imagine as hds_imagine
+        hds_imagine.inainte_de_scanare(_t('Tunerul a fost dat căutării oarbe.'))
+        S.elibereaza_cautarile()
+    except Exception as e:
+        print('[HdsCautareOarba] tunerul pentru cautare (DAB+ / DVB-T2): %s' % e)
     nume = dict((p, n or S.text_pozitie(p)) for p, n in a['sateliti'])
     refuz = c.porneste(cerere, a['osc'], poz, cunoscute, a['nume'], candidati if len(sateliti) > 1 else None, nume)
     if refuz:
@@ -1136,6 +1168,177 @@ def porneste_pe_receptor(sesiune, cerere):
         return refuz
     _porneste_ceasul()
     return None
+
+
+# ---------------------------------------------------------------- Vu+ Solo SE: programul producatorului, adus la cerere
+def model_vuplus(cale=VUMODEL):
+    """Modelul Vu+ cu drum de cautare oarba (MODELE_VUPLUS), din /proc/stb/info/vumodel, sau None."""
+    try:
+        with open(cale) as f:
+            model = f.read(64).strip().lower()
+    except (IOError, OSError):
+        return None
+    return model if model in MODELE_VUPLUS else None
+
+
+def vuplus_pentru(slot, **unde):
+    """{'adaptor', 'program', 'i2c', 'cip'} pentru tunerul din slot (HdsOarbaVuplus.program_pentru), sau None."""
+    from Components import HdsOarbaVuplus as V
+    vu = V.program_pentru(slot, **unde)
+    if vu is not None:
+        vu['adaptor'] = V.__file__
+    return vu
+
+
+def _arata(text):
+    """Un mesaj pe televizor dupa o lucrare in fundal (instalarea programului Vu+)."""
+    try:
+        from Tools import Notifications
+        from Screens.MessageBox import MessageBox
+        Notifications.AddPopup(text, MessageBox.TYPE_INFO, 15, 'HdsCautareOarba')
+    except Exception as e:
+        print('[HdsCautareOarba] %s (%s)' % (text, e))
+
+
+_TIMERE = []
+
+
+def _dupa_ms(ms, f):
+    from enigma import eTimer
+    t = eTimer()
+    try:
+        t.callback.append(f)
+    except AttributeError:
+        t.timeout.get().append(f)
+    _TIMERE[:] = [t]
+    t.start(int(ms), True)
+
+
+def _pe_fir(lucru, gata):
+    """lucru() pe un fir separat, gata(rezultat, eroare) pe firul interfetei."""
+    import threading
+    from twisted.internet import reactor
+
+    def alearga():
+        rez, err = None, None
+        try:
+            rez = lucru()
+        except Exception as e:
+            err = e
+        reactor.callFromThread(gata, rez, err)
+    threading.Thread(target=alearga, name='HdsCautareOarba', daemon=True).start()
+
+
+class InstalareVuplus(object):
+    """Aduce o singura data programul Vu+ (PACHET_VUPLUS) din feed, pe drumul Extensiilor (catalogul; lista de pe
+    internet reimprospatata daca pachetul nu e in ea; lucrarea opkg), apoi cheama dupa(). Numai pe firul interfetei.
+    Faze: nimic, citesc, lista, instalare, gata, eroare."""
+
+    def __init__(self, X=None, pe_fir=None, dupa_ms=None, arata=None):
+        self._x = X
+        self._pe_fir = pe_fir or _pe_fir
+        self._dupa_ms = dupa_ms or _dupa_ms
+        self._arata = arata or _arata
+        self.faza = 'nimic'
+        self.dupa = None
+        self.lucrare = None
+        self._lista_ceruta = False
+
+    def X(self):
+        if self._x is None:
+            from Components import HdsExtensiiLucru
+            self._x = HdsExtensiiLucru
+        return self._x
+
+    def in_curs(self):
+        return self.faza in ('citesc', 'lista', 'instalare')
+
+    def porneste(self, dupa):
+        self.dupa = dupa
+        if self.in_curs():
+            return
+        self._lista_ceruta = False
+        self._citeste()
+
+    def _citeste(self):
+        self.faza = 'citesc'
+        self._pe_fir(self.X().incarcaCatalog, self._catalog)
+
+    def _esec(self, text):
+        self.faza = 'eroare'
+        self.dupa = None
+        self._arata(text)
+
+    def _catalog(self, catalog, eroare):
+        if eroare is not None or catalog is None:
+            return self._esec(_t('Nu am putut citi lista de programe. Încearcă din nou.'))
+        X = self.X()
+        ocupat = X.motivOcupat()
+        if ocupat is not None:
+            return self._esec(ocupat[0])
+        p = catalog._toate.get(PACHET_VUPLUS)
+        if p is None:
+            if self._lista_ceruta:
+                return self._esec(_t('Programul Vu+ pentru căutarea oarbă nu e în lista de pe internet. Verifică '
+                                     'legătura la internet și încearcă din nou.'))
+            self._lista_ceruta = True
+            if not X.descarcareInCurs():
+                X.pornesteDescarcarea()
+            self.faza = 'lista'
+            self._dupa_ms(1000, self._asteapta_lista)
+            return
+        plan, eroare_plan = X.planInstalare(catalog, p)
+        if plan is None:
+            return self._esec(eroare_plan[0])
+        self.faza = 'instalare'
+        from Components.PluginComponent import plugins
+        self.lucrare = X.pornesteLucrarea(plan, plugins=plugins, din_web=False)
+        self.lucrare.asculta(self._lucrare)
+
+    def _asteapta_lista(self):
+        if self.X().descarcareInCurs():
+            self._dupa_ms(1000, self._asteapta_lista)
+            return
+        self._citeste()
+
+    def _lucrare(self, fel, *date):
+        if fel != 'gata':
+            return
+        self.lucrare = None
+        self.faza = 'gata'
+        dupa, self.dupa = self.dupa, None
+        if dupa is not None:
+            dupa()
+
+
+_INSTALARE = []
+
+
+def instalare_vuplus():
+    if not _INSTALARE:
+        _INSTALARE.append(InstalareVuplus())
+    return _INSTALARE[0]
+
+
+def _instaleaza_vuplus(sesiune, cerere, vu, i=None):
+    """Porneste aducerea programului Vu+ si, la sfarsit, cautarea ceruta (fara alt pas al omului). Intoarce textul de aratat."""
+    import os
+    i = i or instalare_vuplus()
+    if i.in_curs():
+        return _t('Programul Vu+ pentru căutarea oarbă se instalează. Căutarea pornește singură după instalare.')
+
+    def dupa():
+        if not os.path.exists(vu['program']):
+            _arata(_t('Instalarea programului Vu+ pentru căutarea oarbă nu a reușit. Verifică legătura la internet '
+                      'și încearcă din nou.'))
+            return
+        refuz = porneste_pe_receptor(sesiune, cerere)
+        if refuz:
+            _arata(refuz)
+    i.porneste(dupa)
+    if i.faza == 'eroare':
+        return _t('Programul Vu+ pentru căutarea oarbă nu s-a putut instala.')
+    return _t('Aduc programul Vu+ pentru căutarea oarbă (o singură dată). Căutarea pornește singură după instalare.')
 
 
 def scaneaza_canalele(sesiune):

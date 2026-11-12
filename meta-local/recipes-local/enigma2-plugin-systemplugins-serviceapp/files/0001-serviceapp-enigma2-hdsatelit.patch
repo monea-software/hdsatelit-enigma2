@@ -1,0 +1,349 @@
+ServiceApp (ramura sig3, 485bb98ffc24) pe enigma2-ul HD Satelit: interfata veche a subtitrarilor
+(enableSubtitles(eWidget*, tuplu), getSubtitleList() ca lista Python), fara iTapService, iStreamBufferInfo,
+eConfigManager, alternativeurl, nowTime, sBuffer, sVideoInfo; mesaje cu constructor fara argumente pentru
+eFixedMessagePump. Facut cu unelte-a/porteaza_serviceapp.py (Sarcina A, 11.11.2026).
+
+Upstream-Status: Inappropriate [enigma2 HD Satelit]
+
+diff --git a/src/serviceapp/extplayer.h b/src/serviceapp/extplayer.h
+index 9d79e9d..986f74c 100644
+--- a/src/serviceapp/extplayer.h
++++ b/src/serviceapp/extplayer.h
+@@ -213,6 +213,8 @@ class PlayerBackend: public sigc::trackable, public eThread, public eMainloop, p
+ 			subtitleAvailable,
+ 			error,
+ 		};
++		Message()
++			:type(-1), dataInt(0) {}
+ 		Message(int type)
+ 			:type(type), dataInt(0) {}
+ 		Message(int type, int dataInt)
+diff --git a/src/serviceapp/hds_compat.h b/src/serviceapp/hds_compat.h
+new file mode 100755
+index 0000000..15c3d62
+--- /dev/null
++++ b/src/serviceapp/hds_compat.h
+@@ -0,0 +1,48 @@
++/* Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ * SPDX-License-Identifier: GPL-2.0-only
++ *
++ * ServiceApp pe enigma2-ul HD Satelit. Enigma2-ul nostru are interfata veche a subtitrarilor (iSubtitleOutput cu
++ * enableSubtitles(eWidget *parent, ePyObject tuple), PyObject *getSubtitleList(), ca servicemp3.cpp al nostru) si nu
++ * are struct SubtitleTrack si iSubtitleUser, pe care ServiceApp le foloseste inauntru. Aici e pista, ca in enigma2-ul
++ * nou; fereastra subtitrarilor e eSubtitleWidget al nostru (setPage(ePangoSubtitlePage)), facuta in serviceapp.cpp
++ * din parintele dat de Python.
++ */
++#ifndef __hds_compat_h
++#define __hds_compat_h
++
++#include <string>
++#include <tuple>
++#include <cstdlib>
++#include <lib/gui/esubtitle.h>
++#include <lib/base/nconfig.h>
++
++struct SubtitleTrack
++{
++	int type;
++	int pid;
++	int page_number;
++	int magazine_number;
++	std::string language_code;
++	SubtitleTrack(): type(0), pid(0), page_number(0), magazine_number(0) {}
++	bool operator<(const SubtitleTrack &o) const
++	{
++		return std::tie(type, pid, page_number, magazine_number, language_code) <
++			std::tie(o.type, o.pid, o.page_number, o.magazine_number, o.language_code);
++	}
++};
++
++/* eConfigManager (enigma2-ul nou) nu exista la noi: aceeasi citire prin ePythonConfigQuery; o setare care lipseste
++   (la noi nu sunt config.subtitles.pango_subtitles_delay / _fps) intoarce valoarea data */
++class eConfigManager
++{
++public:
++	static int getConfigIntValue(const char *key, int implicit = 0)
++	{
++		std::string v;
++		if (ePythonConfigQuery::getConfigValue(key, v) < 0 || v.empty())
++			return implicit;
++		return atoi(v.c_str());
++	}
++};
++
++#endif
+diff --git a/src/serviceapp/scriptrun.h b/src/serviceapp/scriptrun.h
+index 7bdd2cb..d0fa6c7 100644
+--- a/src/serviceapp/scriptrun.h
++++ b/src/serviceapp/scriptrun.h
+@@ -46,6 +46,8 @@ class ResolveUrl: public sigc::trackable, public eThread, public eMainloop
+             stop,
+             tStop,
+         };
++        Message()
++            :type(-1) {}
+         Message(int type)
+             :type(type) {}
+     };
+diff --git a/src/serviceapp/serviceapp.cpp b/src/serviceapp/serviceapp.cpp
+index e5b4971..e12f094 100644
+--- a/src/serviceapp/serviceapp.cpp
++++ b/src/serviceapp/serviceapp.cpp
+@@ -226,8 +226,6 @@ eServiceApp::eServiceApp(eServiceReference ref):
+ 	m_decoder_time_valid_state(0)
+ {
+ 	options = createOptions(ref);
+-	if(!ref.alternativeurl.empty())
+-		m_ref.path = ref.alternativeurl;
+ 
+ 	extplayer = createPlayer(ref, getHeaders(m_ref.path));
+ 	player = new PlayerBackend(extplayer);
+@@ -252,7 +250,7 @@ eServiceApp::~eServiceApp()
+ 	delete extplayer;
+ 	delete m_resolver;
+ 
+-	if (m_subtitle_widget) m_subtitle_widget->destroy();
++	delete m_subtitle_widget;
+ 	m_subtitle_widget = 0;
+ #ifdef HAVE_EPG
+ 	m_nownext_timer->stop();
+@@ -379,7 +377,7 @@ void eServiceApp::updateEpgCacheNowNext()
+ 	}
+ 	if (next)
+ 	{
+-		time_t now = eDVBLocalTimeHandler::getInstance()->nowTime();
++		time_t now = ::time(0);
+ 		refreshtime = (int)(next->getBeginTime() - now) + 3;
+ 		if (refreshtime <= 0 || refreshtime > 60)
+ 		{
+@@ -477,7 +475,7 @@ void eServiceApp::pushSubtitles()
+ 	int delay = eConfigManager::getConfigIntValue("config.subtitles.pango_subtitles_delay");
+ 	if (isExternalTrack(*m_selected_subtitle_track))
+ 	{
+-		int subtitle_fps = eConfigManager::getConfigIntValue("config.subtitles.pango_subtitles_fps");
++		int subtitle_fps = eConfigManager::getConfigIntValue("config.subtitles.pango_subtitles_fps", 1);
+ 		if (subtitle_fps != m_prev_subtitle_fps)
+ 		{
+ 			m_prev_subtitle_fps = subtitle_fps;
+@@ -962,7 +960,7 @@ RESULT eServiceApp::selectChannel(int i)
+ 
+ 
+ // __iSubtitleOutput
+-RESULT eServiceApp::enableSubtitles(iSubtitleUser *user, struct SubtitleTrack &track)
++RESULT eServiceApp::enableSubtitlesTrack(eSubtitleWidget *user, struct SubtitleTrack &track)
+ {
+ 	m_subtitle_sync_timer->stop();
+ 	m_prev_subtitle_message = NULL;
+@@ -1010,7 +1008,7 @@ RESULT eServiceApp::enableSubtitles(iSubtitleUser *user, struct SubtitleTrack &t
+ 	return 0;
+ }
+ 
+-RESULT eServiceApp::disableSubtitles()
++RESULT eServiceApp::disableSubtitlesTrack()
+ {
+ 	eDebug("eServiceApp::disableSubtitles");
+ 	m_subtitle_sync_timer->stop();
+@@ -1018,7 +1016,7 @@ RESULT eServiceApp::disableSubtitles()
+ 	m_embedded_subtitle_pages.clear();
+ 	m_subtitle_pages = NULL;
+ 	m_selected_subtitle_track = NULL;
+-	if (m_subtitle_widget) m_subtitle_widget->destroy();
++	delete m_subtitle_widget;
+ 	m_subtitle_widget = 0;
+ 
+ 	m_decoder_time_valid_state = 0;
+@@ -1026,7 +1024,7 @@ RESULT eServiceApp::disableSubtitles()
+ 	return 0;
+ }
+ 
+-RESULT eServiceApp::getCachedSubtitle(struct SubtitleTrack &track)
++RESULT eServiceApp::getCachedSubtitleTrack(struct SubtitleTrack &track)
+ {
+ 	if (!options->autoTurnOnSubtitles)
+ 	{
+@@ -1034,7 +1032,7 @@ RESULT eServiceApp::getCachedSubtitle(struct SubtitleTrack &track)
+ 		return -1;
+ 	}
+ 	std::vector<struct SubtitleTrack> tracks;
+-	if (getSubtitleList(tracks) < 0 || tracks.empty())
++	if (getSubtitleTrackList(tracks) < 0 || tracks.empty())
+ 	{
+ 		eDebug("eServiceApp::getCachedSubtitle - no subtitles available");
+ 		return -1;
+@@ -1088,7 +1086,7 @@ RESULT eServiceApp::getCachedSubtitle(struct SubtitleTrack &track)
+ 	return ret;
+ }
+ 
+-RESULT eServiceApp::getSubtitleList(std::vector<struct SubtitleTrack> &subtitlelist)
++RESULT eServiceApp::getSubtitleTrackList(std::vector<struct SubtitleTrack> &subtitlelist)
+ {
+ 	m_subtitle_tracks.clear();
+ 	m_subtitle_streams.clear();
+@@ -1280,7 +1278,6 @@ int eServiceApp::getInfo(int w)
+ 	case sTagSerial:
+ 	case sTagEncoderVersion:
+ 	case sTagCRC:
+-	case sBuffer:
+ 		return resNA;
+ 	case sVideoType:
+ 	{
+@@ -1321,7 +1318,7 @@ std::string eServiceApp::getInfoString(int w)
+ {
+ 	switch (w)
+ 	{
+-	case sVideoInfo:
++	case -1000: /* sVideoInfo nu exista la noi */
+ 	{
+ 		char buff[100];
+ 		snprintf(buff, sizeof(buff), "%d|%d|%d|%d|%d|%d",
+@@ -1767,3 +1764,87 @@ PyMODINIT_FUNC PyInit_serviceapp(void)
+ 	SSL_library_init();
+ 	return PyModule_Create(&moduledef);
+ }
++
++/* HD Satelit: interfata subtitrarilor din enigma2-ul nostru (ca servicemp3.cpp): tuplul unei piste este
++   (type, pid, page_number, magazine_number, language_code), adica (2, numarul, felul, 0, limba). */
++static PyObject *hds_tuplu_pista(const SubtitleTrack &t)
++{
++	ePyObject tuple = PyTuple_New(5);
++	PyTuple_SET_ITEM(tuple, 0, PyLong_FromLong(t.type));
++	PyTuple_SET_ITEM(tuple, 1, PyLong_FromLong(t.pid));
++	PyTuple_SET_ITEM(tuple, 2, PyLong_FromLong(t.page_number));
++	PyTuple_SET_ITEM(tuple, 3, PyLong_FromLong(t.magazine_number));
++	PyTuple_SET_ITEM(tuple, 4, PyUnicode_FromString(t.language_code.c_str()));
++	return tuple;
++}
++
++PyObject *eServiceApp::getSubtitleList()
++{
++	ePyObject l = PyList_New(0);
++	std::vector<SubtitleTrack> piste;
++	if (getSubtitleTrackList(piste) < 0)
++		return l;
++	for (std::vector<SubtitleTrack>::const_iterator it = piste.begin(); it != piste.end(); ++it)
++	{
++		ePyObject tuple = hds_tuplu_pista(*it);
++		PyList_Append(l, tuple);
++		Py_DECREF(tuple);
++	}
++	return l;
++}
++
++PyObject *eServiceApp::getCachedSubtitle()
++{
++	SubtitleTrack t;
++	if (getCachedSubtitleTrack(t) == 0)
++		return hds_tuplu_pista(t);
++	Py_RETURN_NONE;
++}
++
++RESULT eServiceApp::enableSubtitles(eWidget *parent, ePyObject tuple)
++{
++	if (!parent || !PyTuple_Check(tuple) || PyTuple_Size(tuple) < 4)
++	{
++		eWarning("eServiceApp::enableSubtitles - needs (type, pid, page, magazine[, language])");
++		return -1;
++	}
++	SubtitleTrack t;
++	t.type = PyLong_AsLong(PyTuple_GET_ITEM(tuple, 0));
++	t.pid = PyLong_AsLong(PyTuple_GET_ITEM(tuple, 1));
++	t.page_number = PyLong_AsLong(PyTuple_GET_ITEM(tuple, 2));
++	t.magazine_number = PyLong_AsLong(PyTuple_GET_ITEM(tuple, 3));
++	if (PyTuple_Size(tuple) > 4 && PyUnicode_Check(PyTuple_GET_ITEM(tuple, 4)))
++	{
++		const char *limba = PyUnicode_AsUTF8(PyTuple_GET_ITEM(tuple, 4));
++		if (limba)
++			t.language_code = limba;
++	}
++	if (PyErr_Occurred())
++	{
++		PyErr_Print();
++		return -1;
++	}
++	disableSubtitlesTrack();
++	eSubtitleWidget *w = new eSubtitleWidget(parent);
++	w->resize(parent->size());
++	if (enableSubtitlesTrack(w, t) < 0)
++	{
++		delete w;
++		return -1;
++	}
++	return 0;
++}
++
++RESULT eServiceApp::disableSubtitles(eWidget *parent)
++{
++	(void)parent;
++	return disableSubtitlesTrack();
++}
++
++PyObject *eServiceApp::getBufferCharge()
++{
++	ePyObject tuple = PyTuple_New(5);
++	for (int i = 0; i < 5; i++)
++		PyTuple_SET_ITEM(tuple, i, PyLong_FromLong(0));
++	return tuple;
++}
+diff --git a/src/serviceapp/serviceapp.h b/src/serviceapp/serviceapp.h
+index 4b4c9d0..b76db05 100644
+--- a/src/serviceapp/serviceapp.h
++++ b/src/serviceapp/serviceapp.h
+@@ -3,6 +3,7 @@
+ 
+ #include <limits>
+ #include <lib/service/iservice.h>
++#include "hds_compat.h"
+ #include <lib/base/ebase.h>
+ #include <lib/base/message.h>
+ #include <lib/base/thread.h>
+@@ -75,7 +76,7 @@ class eServiceApp : public sigc::trackable,
+ 	SubtitleTrack const *m_selected_subtitle_track;
+ 	subtitleMessage const *m_prev_subtitle_message;
+ 	ePtr<eTimer> m_subtitle_sync_timer;
+-	iSubtitleUser *m_subtitle_widget;
++	eSubtitleWidget *m_subtitle_widget;
+ 	SubtitleManager m_subtitle_manager;
+ 	pts_t m_prev_subtitle_fps;
+ 	ePtr<eTimer> m_event_updated_info_timer;
+@@ -163,11 +164,6 @@ public:
+ 		ptr = 0;
+ 		return -1;
+ 	};
+-	RESULT tap(ePtr<iTapService> &ptr)
+-	{
+-		ptr = nullptr;
+-		return -1;
+-	};
+ 	RESULT cueSheet(ePtr<iCueSheet> &ptr)
+ 	{
+ 		ptr = 0;
+@@ -220,8 +216,8 @@ public:
+ 	RESULT isCurrentlySeekable();
+ 
+ 	// iStreamedService
+-	ePtr<iStreamBufferInfo> getBufferCharge() { return 0; };
+-	int setBufferSize(int size) { (void)size; }
++	PyObject *getBufferCharge();
++	int setBufferSize(int size) { (void)size; return 0; }
+ 
+ 	// iAudioTrackSelection
+ 	int getNumberOfTracks();
+@@ -234,10 +230,14 @@ public:
+ 	RESULT selectChannel(int i);
+ 
+ 	// iSubtitleOutput
+-	RESULT enableSubtitles(iSubtitleUser *user, SubtitleTrack &track);
+-	RESULT disableSubtitles();
+-	RESULT getCachedSubtitle(SubtitleTrack &track);
+-	RESULT getSubtitleList(std::vector<SubtitleTrack> &subtitlelist);
++	RESULT enableSubtitles(eWidget *parent, SWIG_PYOBJECT(ePyObject) entry);
++	RESULT disableSubtitles(eWidget *parent);
++	PyObject *getCachedSubtitle();
++	PyObject *getSubtitleList();
++	RESULT enableSubtitlesTrack(eSubtitleWidget *user, SubtitleTrack &track);
++	RESULT disableSubtitlesTrack();
++	RESULT getCachedSubtitleTrack(SubtitleTrack &track);
++	RESULT getSubtitleTrackList(std::vector<SubtitleTrack> &subtitlelist);
+ 
+ 	// iSubserviceList
+ 	int getNumberOfSubservices();

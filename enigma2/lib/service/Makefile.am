@@ -19,6 +19,7 @@ libenigma_service_a_SOURCES = \
 	hdsfluxhttp.cpp \
 	hdsjurnalzap.cpp \
 	servicedvbrecord.cpp \
+	servicedvbsoftdecoder.cpp \
 	servicefs.cpp \
 	servicem2ts.cpp
 
@@ -26,6 +27,7 @@ serviceincludedir = $(pkgincludedir)/lib/service
 serviceinclude_HEADERS = \
 	event.h \
 	iservice.h \
+	iservicescrambled.h \
 	listboxservice.h \
 	service.h \
 	servicedvb.h \
@@ -33,10 +35,13 @@ serviceinclude_HEADERS = \
 	hdsfluxhttp.h \
 	hdsjurnalzap.h \
 	hdsreleut2.h \
+	hdssoftcsapornire.h \
 	hdsegalizator_dsp.h \
 	hdsegalizator_flux.h \
 	hdssubtitrareceas.h \
+	hdssubtitraresincron.h \
 	servicedvbrecord.h \
+	servicedvbsoftdecoder.h \
 	servicefs.h \
 	servicem2ts.h
 

@@ -666,6 +666,45 @@ NIM_TYPE_ALIASES = {
 def normalizeNimType(type):
 	return NIM_TYPE_ALIASES.get(type, type)
 
+# HDSatelit (puntea vtuner, lib/dvb/hdsvtuner.cpp): tunerele DVB pe USB legate la pornirea interfetei, un rand pe tuner:
+# "<frontend virtual pe adapter0>\t<frontend USB>\t<nume>\t<sisteme>". Lipseste cand nu e niciun tuner USB in mufa.
+TUNERE_USB = "/tmp/hds_tunere_usb"
+
+def tunereUsb(cale=None):
+	"""{frontend virtual: (nume, [sisteme])} pentru tunerele USB legate de punte; {} fara ele sau la o lista stricata.
+	Numele din /proc/bus/nim_sockets al unui frontend virtual il scrie driverul vtuner al placii (difera de la placa la
+	placa, uneori numai "VTUNER"), deci numele adevarat al stickului si sistemele lui se iau de aici."""
+	rezultat = {}
+	try:
+		with open(cale or TUNERE_USB) as f:
+			for rand in f:
+				campuri = rand.rstrip("\n").split("\t")
+				if len(campuri) < 4:
+					continue
+				try:
+					fe = int(campuri[0])
+				except ValueError:
+					continue
+				sisteme = [x.strip() for x in campuri[3].split(",") if x.strip()]
+				rezultat[fe] = (campuri[2].strip(), sisteme)
+	except (IOError, OSError):
+		pass
+	return rezultat
+
+def numeTunerUsb(nume, tip, sisteme):
+	"""(numele aratat in Setari tunere, tipul) pentru un tuner USB: numele stickului cu „(USB)”; un stick cu cablu si
+	terestru (de pilda Vu+ Turbo, DVB-T/C) devine combinat, „DVB-C/T”, ca tunerele combinate ale placii."""
+	nume = (nume or "").strip()
+	if not nume or nume.lower() == "usb frontend":  # stickul nu-si spune numele (hdsvtuner.cpp pune "USB frontend")
+		nume = "USB"
+	elif not nume.upper().endswith("(USB)"):
+		nume = "%s (USB)" % nume
+	cablu = "DVB-C" in sisteme
+	terestru = "DVB-T" in sisteme or "DVB-T2" in sisteme
+	if cablu and terestru and tip in ("DVB-C", "DVB-T"):
+		tip = "DVB-C/T"
+	return nume, tip
+
 class NIM(object):
 	def isFBCLink(self):
 		return self.fbc_role == 2
@@ -979,12 +1018,27 @@ class NimManager:
 		nimfile.close()
 		
 		from os import path
+		usb = tunereUsb()
 		
 		for id, entry in list(entries.items()):
 			if not ("name" in entry and "type" in entry):
 				entry["name"] =  _("N/A")
 				entry["type"] = None
+			if entry.get("type") is not None and entry.get("frontend_device") in usb:
+				# tunerul DVB pe USB, prin puntea vtuner: numele stickului, nu cel pus de driverul vtuner
+				nume_usb, sisteme_usb = usb[entry["frontend_device"]]
+				entry["name"], entry["type"] = numeTunerUsb(nume_usb, entry["type"], sisteme_usb)
+				print("[NimManager] tuner USB pe slotul %d: %s (%s)" % (id, entry["name"], entry["type"]))
 			name = entry.get("name", "")
+			# Vu+ Duo 4K Lite (driverele platform-util): tunerul terestru BCM3466 si cel de cablu BCM3148/BCM3158 nu se
+			# anunta cu tipul lor; dupa nume primesc tipul si numele tunerelor Vu+ (aceleasi ca pe Duo 4K si Uno 4K SE)
+			chip = next((c for c in ("3466", "3148", "3158") if c in name), None)
+			if chip == "3466" and "DVB-T" in name:
+				entry["type"], entry["name"] = "DVB-T", "Vuplus DVB-T NIM(BCM3466)"
+				name = entry["name"]
+			elif chip in ("3148", "3158") and "DVB-C" in name and "DVB-T" not in name and "T2" not in name:
+				entry["type"], entry["name"] = "DVB-C", "Vuplus DVB-C NIM(BCM%s)" % chip
+				name = entry["name"]
 			if ("DVB-C" in name and ("DVB-T" in name or "T2" in name)) or ("DVB-C" in name and "T/T2" in name):
 				entry["type"] = "DVB-C/T"
 			elif entry["type"] in ("DVB-T", "DVB-C") and NIM.numeCuCabluSiTerestru(name):
@@ -1157,7 +1211,19 @@ class NimManager:
 			configMode = nim.configMode.value
 		
 			if self.nim_slots[slotid].isCompatible("DVB-S") or self.nim_slots[slotid].isCompatible("DVB-T") or self.nim_slots[slotid].isCompatible("DVB-C"):
-				return not (configMode == "nothing")		
+				return not (configMode == "nothing")
+
+	def getNimListForSat(self, orb_pos):
+		"""Tunerele DVB-S (numerele lor) care au setat satelitul de la pozitia orb_pos (zecimi de grad); ca in OE-Alliance,
+		cerut de pluginul FastScan (tunerul pe care se poate face cautarea rapida a unui operator)."""
+		lista = []
+		for nim in self.nim_slots:
+			try:
+				if nim.isCompatible("DVB-S") and orb_pos in [sat[0] for sat in self.getSatListForNim(nim.slot)]:
+					lista.append(nim.slot)
+			except Exception as e:
+				print("[NimManager] getNimListForSat %s: %s" % (nim.slot, e))
+		return lista
 
 	def getSatListForNim(self, slotid):
 		list = []
@@ -1864,3 +1930,5 @@ def InitNimManager(nimmgr):
 	nimmgr.sec = SecConfigure(nimmgr)
 
 nimmanager = NimManager()
+# acelasi obiect, cu numele cerut de pluginurile straine (FastScan: from Components.NimManager import nimManager)
+nimManager = nimmanager

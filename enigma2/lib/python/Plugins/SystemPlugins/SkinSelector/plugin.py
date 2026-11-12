@@ -181,6 +181,13 @@ def laPornireaSesiunii(reason, session = None, **kwargs):
 	el a reusit)."""
 	if reason != 0:
 		return
+	# o tema stearsa din alt panou sau din linia de comanda: fisierele imaginii pe care le suprascrisese se pun la loc
+	# (Components/HdsTemeSuprascrise.py; pe un fir, numai daca exista copii)
+	try:
+		from Components import HdsTemeSuprascrise
+		HdsTemeSuprascrise.laPornire()
+	except Exception as eroare:
+		print("[SkinSelector] fisierele imaginii suprascrise de teme: %s" % eroare)
 	try:
 		refuz = HdsSkinuri.deAratat()
 		if refuz:

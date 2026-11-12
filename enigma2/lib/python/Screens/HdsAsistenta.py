@@ -8,10 +8,12 @@
 #
 # Un clic, fara pasi in plus:
 # - HdsAsistentaAlege: pagina de pornire. Numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și
-#   condițiile" (Stanga/Dreapta schimba bifa; OK deschide HdsAsistentaTermeni, fereastra derulanta cu textul intreg,
-#   A.textTermeni) si Verde "Start". Start porneste pe loc asistenta completa (nivelul B: citirile si controlul prin
-#   meniuri, afara de ecranele private), fara nicio intrebare: durata A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume".
-#   Fara bifa de acord, Start nu porneste si pagina spune scurt de ce.
+#   condițiile" (Stanga/Dreapta schimba bifa; INFO deschide HdsAsistentaTermeni, fereastra derulanta cu textul intreg,
+#   A.textTermeni, unde Verde "Start" porneste si el) si Verde "Start". OK face ce face Start (randul 170, olo, forum
+#   1013: a bifat si a apasat OK, care deschidea termenii, si a asteptat), deci un singur pas. Start porneste pe loc
+#   asistenta completa (nivelul B: citirile si controlul prin meniuri, afara de ecranele private), fara nicio
+#   intrebare: durata A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume". Fara bifa de acord, Start (si OK) nu porneste si
+#   pagina spune scurt de ce.
 # - HdsAsistenta: intrarea din meniu. Cat asistenta e oprita deschide pe loc pagina de pornire (la prima executie,
 #   onFirstExecBegin: un ecran modal se deschide numai cand cel de dedesubt ruleaza); iesirea de pe pagina fara Start
 #   inchide si intrarea. Cat e pornita arata numai pana cand e pornita (A.textPana) si, dedesubt, jurnalul (fiecare
@@ -55,8 +57,8 @@ def N_(text):
 	return text
 
 
-# sub randul bifat: ce face OK pe el (pe receptor nu exista legatura de apasat ca in web)
-TEXT_OK_TERMENI = N_("OK pe rândul de sus: termenii și condițiile.")
+# sub randul bifat: OK porneste (ca Verde), INFO deschide termenii (pe receptor nu exista legatura de apasat ca in web)
+TEXT_OK_TERMENI = N_("OK sau VERDE: pornește asistența. INFO: termenii și condițiile.")
 # cat cererea asteapta echipa: omul poate iesi de pe ecran si se uita mai departe (banda de sus si anuntul de la
 # conectare ii spun ce se intampla)
 TEXT_ASTEPTARE = N_("Te anunțăm când intrăm. Poți folosi receptorul între timp.")
@@ -287,8 +289,9 @@ class HdsAsistenta(Screen):
 
 	def _internet(self):
 		if A.stare().get("eroare_pornire"):
-			from Screens.NetworkSetup import NetworkAdapterSelection
-			self.session.openWithCallback(self._dupaInternet, NetworkAdapterSelection)
+			# lista placilor ca din meniu: NetworkOverview cu o tema care il are numai pe el (Screens/HdsReteaStandard.py)
+			from Screens.HdsReteaStandard import HdsListaPlaci
+			self.session.openWithCallback(self._dupaInternet, HdsListaPlaci)
 
 	def _dupaInternet(self, *_args):
 		if not _activa(A.stare()):
@@ -350,7 +353,8 @@ class HdsAsistentaConcluzii(Screen):
 
 
 class HdsAsistentaTermeni(Screen):
-	"""Fereastra derulanta cu termenii si conditiile intregi (A.textTermeni), deschisa cu OK de pe randul bifat."""
+	"""Fereastra derulanta cu termenii si conditiile intregi (A.textTermeni), deschisa cu INFO de pe pagina de pornire.
+	Verde "Start" o inchide cu close(True): pagina de pornire porneste atunci asistenta (tot numai cu randul de acord bifat)."""
 	skin = _rezerva("HdsAsistentaTermeni", "Termenii și condițiile", CORP_ASISTENTA + LEGENDA_ASISTENTA)
 
 	def __init__(self, session):
@@ -362,12 +366,12 @@ class HdsAsistentaTermeni(Screen):
 		self["text"] = ScrollLabel(A.textTermeni())
 		self["ajutor"] = StaticText(_("Sus/Jos: tot textul"))
 		self["key_red"] = StaticText(_("Înapoi"))
-		self["key_green"] = StaticText("")
+		self["key_green"] = StaticText(_("Start"))
 		actiuni = {
 			"ok": self.close,
 			"cancel": self.close,
 			"red": self.close,
-			"green": _nimic,
+			"green": self._start,
 			"yellow": _nimic,
 			"blue": _nimic,
 		}
@@ -376,6 +380,9 @@ class HdsAsistentaTermeni(Screen):
 			actiuni[d + "Repeated"] = f
 			actiuni[d + "Up"] = _nimic
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], actiuni, -2)
+
+	def _start(self):
+		self.close(True)
 
 
 class HdsAsistentaAlege(Screen, ConfigListScreen):
@@ -398,9 +405,11 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		# Albastru: "Pune înapoi cum era", cat exista copia facuta cand a intrat echipa (dupa oprire, de aici)
 		self._copie = A.stareCopie()
 		self["key_blue"] = StaticText(_(A.TEXT_PUNE_INAPOI) if self._copie else "")
-		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
-			# OK legat aici (harta are OkCancelActions): OK pe rand deschide termenii si conditiile
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "InfoActions"], {
+			# OK legat aici (harta are OkCancelActions): OK porneste ca Verde (un singur pas); INFO: termenii.
+			# keyOK porneste si el: ConfigListScreen leaga tot OK de self.keyOK (SetupActions, prioritatea -1)
 			"ok": self.keyOK,
+			"info": self._termeni,
 			"cancel": self.close,
 			"red": self.close,
 			"green": self._start,
@@ -423,7 +432,16 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		self._puneText()
 
 	def keyOK(self):
-		self.session.open(HdsAsistentaTermeni)
+		# OK = Start (randul 170), oricare harta ia tasta (a noastra, -2, sau a lui ConfigListScreen, -1)
+		self._start()
+
+	def _termeni(self):
+		# termenii si conditiile (INFO); Verde "Start" din fereastra lor porneste asistenta de aici
+		self.session.openWithCallback(self._dupaTermeni, HdsAsistentaTermeni)
+
+	def _dupaTermeni(self, porneste=None):
+		if porneste is True:
+			self._start()
 
 	def _galben(self):
 		c = A.ultimeleConcluzii()

@@ -205,6 +205,9 @@
     alege_canal: "Alege întâi un canal.",
     extern: "Imaginea din pagină s-a oprit, ca să se poată deschide în playerul extern.",
     reia_aici: "Reia aici",
+    // B56 (Wlad): imaginea trimisa de browser in fereastra lui mica (clic dreapta > Picture in Picture)
+    pip_browser: "Imaginea se vede acum în fereastra mică a browserului.",
+    pip_inapoi: "Adu imaginea înapoi aici",
     m3u_gata: "Playlistul s-a descărcat (%s). Deschide-l într-un player din casă.",
     m3u_rau: "Playlistul nu s-a putut descărca.",
     m3u_http: "Playlistul nu s-a putut face (HTTP %s)."
@@ -644,6 +647,19 @@
     video.addEventListener("volumechange", function(){ self._butoane(); });
     ["play", "pause", "volumechange"].forEach(function(tip){ audio.addEventListener(tip, function(){ self._butoane(); }); });
     video.addEventListener("click", function(){ if(video.paused){ self.comutaRedarea(); } });
+    // B56 (Wlad, forum 948): imaginea mutata de browser in fereastra lui Picture in Picture lasa aici locul gol si
+    // intunecat (asa face browserul, nu receptorul); pagina spune unde e imaginea si o poate aduce inapoi
+    video.addEventListener("enterpictureinpicture", function(){
+      self._pipBrowser = true;
+      self.mesaj(tx("pip_browser"), tx("pip_inapoi"), function(){
+        if(document.pictureInPictureElement && document.exitPictureInPicture){
+          document.exitPictureInPicture().catch(function(){});
+        }
+      });
+    });
+    video.addEventListener("leavepictureinpicture", function(){
+      if(self._pipBrowser){ self._pipBrowser = false; self.mesaj(""); }
+    });
     imagine.addEventListener("click", function(){ if(self._media().paused){ self.comutaRedarea(); } });
     video.addEventListener("error", function(){
       if(self.jucator && self.felJucator === "mse" && video.error){ self._eroareFlux("MediaError", "video", {code: video.error.code, msg: video.error.message}); }
@@ -1644,8 +1660,12 @@
       if(gen !== self._generatie || !self._semnVizibil() || self.distrus){ return; }
       self._cerere("/api/motor").then(function(d){
         if(gen !== self._generatie || !self._semnVizibil()){ return; }
-        self._antenaMisca = !!(d && d.result && d.se_misca);
-        if(d && d.result && d.se_misca){ self.e.semnSub.textContent = tx("antena"); self.e.semnSub.classList.remove("hp-ascuns"); }
+        // readucerea antenei dupa pierderea semnalului (HdsMotorPozitie) nu se spune aici, ca nici pe televizor: omul a
+        // schimbat canalul pe acelasi satelit si vedea „Antena se roteste...” (Eduard, Amiko fara semnal, 11.11.2026)
+        var readucere = d && d.readucere && d.readucere.activa && d.readucere.in_curs;
+        var misca = !!(d && d.result && d.se_misca) && !readucere;
+        self._antenaMisca = misca;
+        if(misca){ self.e.semnSub.textContent = tx("antena"); self.e.semnSub.classList.remove("hp-ascuns"); }
         self._ceasAntena = setTimeout(pas, 1500);
       }).catch(function(){});
     }

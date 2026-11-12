@@ -9,10 +9,13 @@
 #include <lib/dvb/eit.h>
 #include <lib/dvb/subtitle.h>
 #include <lib/service/hdssubtitrareceas.h>
+#include <lib/service/hdssubtitraresincron.h>
 #include <lib/service/hdsjurnalzap.h>
 #include <lib/dvb/teletext.h>
 #include <lib/dvb/radiotext.h>
 #include <lib/base/filepush.h>
+#include <lib/dvb/csasession.h>
+#include <lib/service/servicedvbsoftdecoder.h>
 
 class eStaticServiceDVBInformation;
 class eStaticServiceDVBBouquetInformation;
@@ -229,8 +232,9 @@ protected:
 	
 		/* pvr */
 	int m_is_pvr, m_is_paused, m_timeshift_enabled, m_timeshift_active, m_timeshift_changed;
-		/* a live stream from a local relay (path http://127.0.0.1:...): a playback channel fed by eHdsFluxHttp,
-		   without the file parts of a recording (meta, cuts, eit, seeking, pause, bookmarks) */
+		/* a live stream over HTTP (a local relay, http://127.0.0.1:..., or a type 1 channel with an http:// address
+		   on the network, as eHttpStream in OE-Alliance): a playback channel fed by eHdsFluxHttp, without the file
+		   parts of a recording (meta, cuts, eit, seeking, pause, bookmarks) */
 	int m_is_stream;
 	int m_first_program_info;
 	bool m_hds_amana_gui, m_hds_seekable_amana;
@@ -276,6 +280,24 @@ protected:
 	void switchToTimeshift();
 
 	void updateDecoder(bool sendSeekableStateChanged=false);
+
+		/* SoftCSA (lib/dvb/csasession.h, lib/service/servicedvbsoftdecoder.h): a CSA-ALT service of the main window,
+		   descrambled in software. The session is made at the first PMT with a VideoGuard ECM, when software
+		   descrambling can work (eDVBCAHandler::softCsaReady); it turns itself on from the ECM (CSA-ALT) and then the
+		   decoder plays from the loop m_soft_decoder (m_soft_active). m_soft_proba: the loop test, any live service
+		   through the loop without descrambling (the file /tmp/hds-softcsa-bucla at the first PMT). The timeshift
+		   recorder gets its own session (m_timeshift_csa_session), never the one of the loop. A service known as CSA-ALT
+		   since the interface started gets the session and the loop before its first decoder (lib/service/
+		   hdssoftcsapornire.h), without waiting for the PMT and the ECM. */
+	ePtr<eDVBCSASession> m_csa_session, m_timeshift_csa_session;
+	ePtr<eDVBSoftDecoder> m_soft_decoder;
+	bool m_soft_active, m_soft_proba;
+	sigc::connection m_softcam_connected;
+	void softCsaProgram();
+	void softCsaActivated(bool active);
+	void softCsaSwitch(bool soft);
+	void softCsaReleaseDecoder();
+	void softCsaStop();
 	
 	int m_skipmode;
 	int m_fastforward;
@@ -324,6 +346,16 @@ protected:
 
 	ePtr<eTimer> m_subtitle_sync_timer;
 	void checkSubtitleTiming();
+		/* when the first page is shown: lib/service/hdssubtitraresincron.h (paused: nothing; playback from a file:
+		   a wider window, a quiet time after the decoder starts, a jump and PLAY, a short wait for a missing PTS) */
+	int64_t m_subtitle_liniste_pana_ms;
+	int64_t m_subtitle_fara_pts_de_la_ms;
+		/* the decoder is paused (PAUSE), not fast forward or slow motion */
+	bool hdsRedareOprita() const { return m_is_paused && !m_fastforward && !m_slowmotion; }
+		/* a recording or the timeshift buffer is played (not a channel, not a network stream) */
+	bool hdsRedareDinFisier() const { return m_timeshift_active || (m_is_pvr && !m_is_stream); }
+		/* the PTS of the decoder is not trusted for ms from now (playback from a file only) */
+	void hdsSubtitrareLiniste(int ms);
 
 		/* subtitle files (Components/HdsSubtitrariInternet/tv.py): their lines on their own clock
 		   (lib/service/hdssubtitrareceas.h), shown as text pages like the files of servicemp3 */

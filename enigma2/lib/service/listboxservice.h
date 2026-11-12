@@ -4,6 +4,7 @@
 
 #include <lib/gdi/gpixmap.h>
 #include <lib/gui/elistbox.h>
+#include <lib/gui/elistboxcontent.h>
 #include <lib/service/iservice.h>
 #include <lib/python/python.h>
 #include <map>
@@ -97,7 +98,12 @@ public:
 	int setCurrentMarked(bool);
 
 	void setNumberOffset(int offset) { m_numberoffset = offset; }
-	
+		/* as OE-Alliance: the numbered markers (isNumberedMarker: the rows a fast scan puts in place of the operator's
+		   unused numbers) are left out of the list while it is not edited, and still counted in the channel numbers.
+		   Here they are left out when the list is filled (setRoot), so every index of the list stays a real row; a change
+		   takes effect at the next fill (ChannelSelection fills the list again for the move mode, where they are shown). */
+	void setHideNumberMarker(bool doHide) { m_hide_number_marker = doHide; }
+
 	int getItemHeight() { return m_itemheight; }
 	void setItemHeight(int height);
 
@@ -152,6 +158,15 @@ public:
 	enum { markCrypted = 1, markSource = 2 };
 	void setServiceMarks(int marks, const std::string &crypted, const std::string &satellite, const std::string &cable,
 		const std::string &terrestrial);
+		/* HDSatelit 0.7.4: the row drawn from the serviceList template of the skin (themes written for the OE-Alliance
+		   standard, when the theme's settings choose a style: Components/HdsServiceListSablon.py). For every row that is
+		   painted, func(service, flags, number) gives the row as a MultiContent entry ([None, tuple, ...], the tuples of
+		   eListboxPythonMultiContent); navigation, marks, numbering, editing and everything else stay those of this list.
+		   flags: the row* values below. None = the classic row again. */
+	enum { rowSelected = 1, rowMarked = 2, rowMarker = 4, rowNumberedMarker = 8, rowPlayable = 16, rowFolder = 32,
+		rowRecorded = 64, rowStreamed = 128, rowNotAvailable = 256 };
+	void setTemplateBuildFunc(SWIG_PYOBJECT(ePyObject) func);
+	void setTemplateFont(int index, gFont *font);
 protected:
 	void cursorHome();
 	void cursorEnd();
@@ -208,6 +223,12 @@ private:
 
 	int m_numberoffset;
 
+		/* setHideNumberMarker; for the rows after left out numbered markers: how many were left out before the row (the key
+		   is the address of the row in m_list, which a std::list keeps until the row is erased) */
+	bool m_hide_number_marker;
+	std::map<const eServiceReference*, int> m_hidden_numbered;
+	int hiddenNumberedBefore(list::iterator row);
+
 	eServiceReference m_is_playable_ignore;
 
 	int m_itemheight;
@@ -225,6 +246,10 @@ private:
 	unsigned long m_picon_clock;
 	std::set<std::string> m_picon_requests;
 	ePyObject m_picon_resolver;
+	ePyObject m_template_build;
+	ePtr<eListboxPythonMultiContent> m_template_row;
+	std::string numberText();
+	bool paintTemplateRow(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected, int marked);
 	ePtr<gPixmap> servicePicon(const eServiceReference &ref, const std::string &name);
 };
 

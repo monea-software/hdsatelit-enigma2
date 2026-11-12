@@ -49,6 +49,7 @@ TEXTE = {
 		"titlu_E3": "Interfața nu pornește",
 		"rugaminte": "Fă o poză acestui ecran și trimite-o pe forumul unde ai găsit software-ul sau la "
 			"contact@hdsatelit.com.",
+		"qr": "Scanează codul din dreapta cu telefonul: raportul ne ajunge singur.",
 		"pagina": "Toate datele, de copiat, din calculator sau telefon:",
 		"reincercare": "Interfața se încearcă din nou peste %d minute.",
 		"coduri": "Coduri:",
@@ -86,6 +87,7 @@ TEXTE = {
 		"titlu_E1": "Software for another receiver",
 		"titlu_E2": "The receiver cannot be recognised",
 		"titlu_E3": "The interface does not start",
+		"qr": "Scan the code on the right with your phone: the report reaches us by itself.",
 		"rugaminte": "Take a photo of this screen and send it to the forum where you found the software or to "
 			"contact@hdsatelit.com.",
 		"pagina": "All the data, to copy, from a computer or a phone:",
@@ -589,8 +591,108 @@ def citesteGeometrie(fd, cale, rezerva):
 	return rezerva
 
 
-def compune(geom, randuri_ecran, litere):
-	"""imaginea intreaga (pagina vazuta), ca bytearray de stride*yres"""
+# ---------------------------------------------------------------- codul QR (TODO 1860 a; Eduard 29.10.2026 15:52-16:26)
+# In faza cod (interfata nu porneste) ecranul are in dreapta codul QR al raportului "p" (CONTRACT-QR.md al lotului
+# pornire-poza-eroare, sectiunile 1-2): scanat cu telefonul, stb.hdsatelit.com/q/ trimite singur raportul. Matricea o
+# face Components/HdsQr.py (din --python; pur Python, versiunile 1-20); fara el, ecranul ramane ca inainte. Textul T:
+# antetul (format, fel, model, masina, imagine, uptime, ora, limba, cheie, cod, cauze, coduri), apoi randurile tehnice si
+# ultimele randuri din hds-caderi.log, deja curatate (textAscii/faraAdrese). Fara amprenta (cere setarile testerului).
+QR_PREFIX = "https://stb.hdsatelit.com/q/#"
+QR_BUCATA = 600
+CAUZE_COD = {"E302": "mod-sigur", "E305": "interfata-blocata"}
+_SECRET_QR = re.compile(r"pass|parol|token|jeton|secret|key|cheie|psk|wpa|ssid|wifi|auth|cookie|user|login", re.I)
+
+
+def textRaportQr(date, jurnal, limba, cheie=None, acum=None, sus=None):
+	"""Textul T al raportului "p" (CONTRACT-QR 2) din date.txt si jurnalul caderilor."""
+	import time
+	cod = date.get("cod", "")
+	ch = (date.get("cheie") or "").lower()
+	if not re.fullmatch(r"[0-9a-f]{12}|[0-9a-f]{24}", ch):
+		ch = cheie or binascii.hexlify(os.urandom(6)).decode("ascii")
+	if sus is None:
+		try:
+			with open("/proc/uptime") as f:
+				sus = int(float(f.read().split()[0]))
+		except (IOError, OSError, ValueError, IndexError):
+			sus = 0
+	cauza = CAUZE_COD.get(cod, "interfata-cade" if cod.startswith("E3") else "necunoscut")
+	r = ["format=1", "fel=p", "model=%s" % textAscii(date.get("model") or "", 60),
+		"masina=%s" % textAscii(date.get("masina") or "", 40),
+		"imagine=%s" % textAscii(date.get("imagine") or date.get("versiune") or "", 40), "uptime=%d" % sus,
+		"ora=%s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() if acum is None else acum)),
+		"limba=%s" % limba, "cheie=%s" % ch, "cod=%s" % ch[:6].upper(), "cauze=%s" % cauza,
+		"coduri=%s" % ",".join((date.get("coduri") or cod).split()), ""]
+	r.append("== diagnostic")
+	r.extend(randuriTehnice(date))
+	# ce pleaca prin cod nu are randuri cu parole, chei, jetoane sau Wi-Fi (ca rp_filtru din hds-raport.sh)
+	jurnal = [x for x in (jurnal or []) if not _SECRET_QR.search(x)]
+	if jurnal:
+		r.append("== caderi")
+		r.extend(jurnal[-10:])
+	return "\n".join(r) + "\n"
+
+
+def adresaQr(text, maxim=QR_BUCATA):
+	"""UN cod (n = 1): textul se taie de la coada pana incape in `maxim` semne base64url."""
+	randuri = text.rstrip("\n").split("\n")
+	while True:
+		c = zlib.compressobj(9, zlib.DEFLATED, -15)
+		b = c.compress(("\n".join(randuri) + "\n").encode("utf-8")) + c.flush()
+		d = binascii.b2a_base64(b, newline=False).decode("ascii").replace("+", "-").replace("/", "_").rstrip("=")
+		if len(d) <= maxim or len(randuri) <= 13:
+			return "%sp%08x.1.1.%s" % (QR_PREFIX, zlib.crc32(b) & 0xFFFFFFFF, d[:maxim])
+		randuri = randuri[:-1]
+
+
+def matriceQr(dosar_python, date, jurnal, limba):
+	"""Matricea codului QR al raportului (Components/HdsQr), sau None (fara modul, orice eroare)."""
+	if not dosar_python or not os.path.isfile(os.path.join(dosar_python, "Components", "HdsQr.py")):
+		return None
+	try:
+		if dosar_python not in sys.path:
+			sys.path.insert(0, dosar_python)
+		from Components import HdsQr
+		return HdsQr.matrice(adresaQr(textRaportQr(date, jurnal, limba)))
+	except BaseException as e:
+		print("codul QR nu s-a facut: %r" % (e,))
+		return None
+
+
+def latimeQr(geom, m):
+	"""latura codului QR cu marginea alba de 4 module (patrate intregi), 0 fara cod"""
+	if not m:
+		return 0
+	n = len(m) + 8
+	return (min(geom.yres * 60 // 100, geom.xres * 32 // 100) // n) * n
+
+
+def puneQr(img, geom, m):
+	"""Codul QR in dreapta sus, pe fundal alb, patrate intregi."""
+	latura = latimeQr(geom, m)
+	if not latura:
+		return
+	o = geom.octeti
+	pas = latura // (len(m) + 8)
+	x0 = geom.xres - max(16, geom.xres // 24) - latura
+	y0 = max(16, geom.yres // 20)
+	alb = geom.pixel((255, 255, 255)).to_bytes(4, "little")[:o]
+	negru = geom.pixel((0, 0, 0)).to_bytes(4, "little")[:o]
+	for y in range(latura):
+		rand = bytearray(alb * latura)
+		my = y // pas - 4
+		if 0 <= my < len(m):
+			for mx, v in enumerate(m[my]):
+				if v:
+					x = (mx + 4) * pas
+					rand[x * o:(x + pas) * o] = negru * pas
+		inceput = (y0 + y) * geom.stride + x0 * o
+		img[inceput:inceput + latura * o] = rand
+
+
+def compune(geom, randuri_ecran, litere, latime_text=None):
+	"""imaginea intreaga (pagina vazuta), ca bytearray de stride*yres; latime_text: cat loc au randurile (cu codul QR
+	in dreapta, mai putin)"""
 	o = geom.octeti
 	fundal = geom.pixel(CULORI["fundal"]).to_bytes(4, "little")[:o]
 	rand_fundal = fundal * geom.xres + b"\0" * (geom.stride - geom.xres * o)
@@ -604,7 +706,7 @@ def compune(geom, randuri_ecran, litere):
 			continue
 		if y + h > geom.yres - 8:
 			break
-		maxim = (geom.xres - 2 * marg_x) // (litere.lat * marire)
+		maxim = (latime_text or geom.xres - 2 * marg_x) // (litere.lat * marire)
 		text = text[:maxim]
 		# tabelele treptelor 0..3 -> octetul k al pixelului (fundal, doua amestecuri, culoarea)
 		pixeli = []
@@ -629,12 +731,15 @@ def compune(geom, randuri_ecran, litere):
 	return img
 
 
-def randuriEcran(date, t, litere, coloane):
+def randuriEcran(date, t, litere, coloane, cu_qr=False):
 	"""(text, marire, culoare) de sus in jos; None = o jumatate de rand liber"""
 	cod = date.get("cod", "")
 	coduri = (date.get("coduri") or cod).split()
 	# o limba cu litere fara desen (nu e cazul celor 13) trece pe engleza, numai pe ecran
 	r = [(t.get(grupa(cod), ""), 1, CULORI["titlu"]), (cod, 3, CULORI["cod"])]
+	if cu_qr:
+		for rand in potrivesteText(t.get("qr", ""), coloane):
+			r.append((rand, 1, CULORI["adresa"]))
 	if len(coduri) > 1:
 		r.append(("%s %s" % (t.get("coduri", ""), " ".join(coduri)), 1, CULORI["gri"]))
 	for rand in potrivesteText(frazaCod(cod, t), coloane):
@@ -697,7 +802,7 @@ def ruleazaEnigma2(radacina="/proc"):
 	return False
 
 
-def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
+def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta, qr=None):
 	litere = Litere()
 	text_tot = "".join(v for v in t.values() if isinstance(v, str))
 	if any(not litere.are(c) for c in text_tot if c >= " "):
@@ -711,11 +816,14 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
 			fcntl.ioctl(fd, FBIOBLANK, 0)
 		except (ImportError, IOError, OSError):
 			pass
-		coloane = (geom.xres - 2 * max(16, geom.xres // 24)) // litere.lat
+		marg_x = max(16, geom.xres // 24)
+		cu_qr = bool(qr) and faza not in ("pornire", "lent")
+		latime_text = geom.xres - 2 * marg_x - (latimeQr(geom, qr) + marg_x if cu_qr else 0)
+		coloane = latime_text // litere.lat
 		if faza in ("pornire", "lent"):
 			randuri = randuriPornire(date, t, coloane)
 		else:
-			randuri = randuriEcran(date, t, litere, coloane)
+			randuri = randuriEcran(date, t, litere, coloane, cu_qr)
 		if faza in ("pornire", "lent"):
 			pass
 		elif geom.yres < 800:
@@ -723,7 +831,9 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta):
 			# randurile tehnice
 			fara = reincercare(t, date)
 			randuri = [(a, 2 if m == 3 else m, c) for a, m, c in randuri if a is not None and a != fara]
-		img = compune(geom, randuri, litere)
+		img = compune(geom, randuri, litere, latime_text)
+		if cu_qr:
+			puneQr(img, geom, qr)
 		if faza == "pornire" and ruleazaEnigma2():
 			# enigma2 a pornit cat se desena: ecranul e al lui
 			return geom, 0
@@ -785,8 +895,9 @@ def main(argv):
 			rezerva = Geometrie(l, i, b)
 		except ValueError:
 			pass
+	qr = matriceQr(a["--python"], date, jurnal, limba) if faza not in ("pornire", "lent") else None
 	try:
-		geom, scris = deseneaza(a["--fb"], date, t, t_en, rezerva)
+		geom, scris = deseneaza(a["--fb"], date, t, t_en, rezerva, qr)
 		print("imaginea pe %s: %s, %d octeti" % (a["--fb"], geom.text(), scris))
 	except (IOError, OSError) as e:
 		print("imaginea nu s-a desenat: %s" % e)

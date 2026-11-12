@@ -434,3 +434,71 @@ LanguageCodes["zho"] = LanguageCodes["chi"] = LanguageCodes["zh"] = ("Chinese", 
 LanguageCodes["znd"] = ("Zande", "")
 LanguageCodes["zul"] = LanguageCodes["zu"] = ("Zulu", "Negro-african")
 LanguageCodes["zun"] = ("Zuni", "")
+
+
+
+# ISO639Language: lista limbilor pentru alegerile pluginurilor scrise pentru standard (de pilda DVD Burn: limba
+# meniului), din tabelul de mai sus (OEA4, 11.11.2026).
+class ISO639Language:
+	[PRIMARY, SECONDARY, TERTIARY] = [1, 2, 3]
+	_PRINCIPALE = ("Undetermined", "English", "German", "Arabic", "Catalan", "Croatian", "Czech", "Danish", "Dutch", "Estonian",
+		"Finnish", "French", "Greek", "Hungarian", "Lithuanian", "Latvian", "Icelandic", "Italian", "Norwegian", "Polish",
+		"Portuguese", "Romanian", "Russian", "Serbian", "Slovakian", "Slovenian", "Spanish", "Swedish", "Turkish", "Ukrainian")
+
+	def __init__(self, depth=PRIMARY):
+		self.depth = depth
+		if depth == self.PRIMARY:
+			dorite = set(self._PRINCIPALE)
+		else:
+			lungime = 2 if depth == self.SECONDARY else 3
+			dorite = set(v[0] for k, v in LanguageCodes.items() if len(k) == lungime)
+		self.idlist_by_name = {}
+		for cod, v in LanguageCodes.items():
+			if v[0] in dorite:
+				self.idlist_by_name.setdefault(v[0], []).append(cod)
+		self.name_and_shortid_by_longid = {}
+		self.name_by_shortid = {}
+		for limba, coduri in self.idlist_by_name.items():
+			scurt = None
+			for cod in coduri:
+				if len(cod) == 2:
+					self.name_by_shortid[cod] = limba
+					scurt = cod
+			for cod in coduri:
+				if len(cod) == 3:
+					self.name_and_shortid_by_longid[cod] = (scurt, limba)
+
+	@staticmethod
+	def _limbaSistem():
+		try:
+			from Components.Language import language
+			return (language.getLanguage() or "en")[:2]
+		except Exception:
+			return "en"
+
+	def getChoices(self):
+		sistem = self._limbaSistem()
+		if sistem not in self.name_by_shortid:
+			sistem = "en"
+		alegeri = sorted((l, l) for l, coduri in self.idlist_by_name.items() if sistem not in coduri and "en" not in coduri)
+		if "en" in self.name_by_shortid:
+			if sistem != "en":
+				alegeri.insert(0, (self.name_by_shortid["en"], self.name_by_shortid["en"]))
+			alegeri.insert(0, (self.name_by_shortid[sistem], self.name_by_shortid[sistem]))
+		return alegeri
+
+	def determineLanguage(self, text):
+		text = (text or "").lower()
+		for cuvant in ("stereo", "audio", "description", "2ch", "dolby digital", "2.0"):
+			text = text.replace(cuvant, "")
+		text = text.strip()
+		if len(text) == 2 and text in self.name_by_shortid:
+			return self.name_by_shortid[text]
+		if len(text) == 3 and text in self.name_and_shortid_by_longid:
+			return self.name_and_shortid_by_longid[text][1]
+		if len(text) >= 3:
+			text = text.capitalize()
+			for limba in self.idlist_by_name:
+				if limba == text:
+					return limba
+		return "Undetermined"

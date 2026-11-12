@@ -9,6 +9,9 @@
 # e in Components/HdsSwap.py, folosita si de pagina web /swap (HdsWebControl/disc_web.py); televizorul si pagina impart
 # aceeasi stare, deci nu pornesc doua lucrari deodata.
 #
+# 0.7.4 (Ozgur, chkroot pe Solo SE): lista are si discul USB de pe care merge imaginea si partitiile de swap pornite (cu
+# oprirea lor); swap-ul gasit porneste singur la fiecare pornire (Components/HdsSwap.porneste, din mytest.py).
+#
 # Nota: NU s-a scris un DeviceManager.py separat: initializarea si verificarea discurilor exista deja in
 # Screens/HarddiskSetup.py ("Format Hard Drive" / "Check Disk Health").
 
@@ -32,7 +35,7 @@ class SwapManager(Screen):
 	skin = """
 	<screen name="SwapManager" resolution="1920,1080" position="center,center" size="1000,520" title="Fișier de swap (memorie virtuală)">
 		<widget name="lista" position="30,30" size="940,280" font="Regular;22" itemHeight="40" scrollbarMode="showOnDemand" />
-		<widget name="stare" position="30,320" size="940,100" font="Regular;20" />
+		<widget name="stare" position="30,320" size="940,130" font="Regular;20" />
 		<widget name="key_red" position="30,460" size="230,40" zPosition="1" font="Regular;20" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
 		<widget name="key_green" position="270,460" size="230,40" zPosition="1" font="Regular;20" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
 		<widget name="key_yellow" position="510,460" size="230,40" zPosition="1" font="Regular;20" halign="center" valign="center" backgroundColor="#a08000" transparent="0" />
@@ -119,7 +122,8 @@ class SwapManager(Screen):
 				self[tasta].show()
 			else:
 				self[tasta].hide()
-		self["stare"].setText(HdsSwap.textActive(active))
+		# 0.7.4: swap-ul gasit porneste singur la pornire (HdsSwap.porneste); aceeasi fraza ca in pagina /swap
+		self["stare"].setText(HdsSwap.textActive(active) + "\n" + HdsSwap.textPornire())
 
 	def _discSelectat(self):
 		index = self["lista"].getSelectionIndex()

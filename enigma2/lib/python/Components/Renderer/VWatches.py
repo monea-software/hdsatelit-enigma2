@@ -1,0 +1,105 @@
+# -*- coding: utf-8 -*-
+# Luat din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e (12.11.2026), fisierul lib/python/Components/Renderer/VWatches.py.
+# Licenta GPL-2.0 (ca enigma2); notele autorilor de mai jos raman neschimbate. Adus in imaginea HD Satelit (lotul TOT,
+# 12.11.2026) ca temele si pluginurile scrise pentru imaginile OE-Alliance sa-si gaseasca toate componentele.
+#######################################################################
+#
+#    Renderer for Dreambox-Enigma2
+#    Coded by shamann (c)2010
+#
+#    This program is free software; you can redistribute it and/or
+#    modify it under the terms of the GNU General Public License
+#    as published by the Free Software Foundation; either version 2
+#    of the License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#######################################################################
+
+import math
+
+from enigma import eCanvas, eRect, eSize, gRGB
+
+from skin import parseColor
+from Components.Renderer.Renderer import Renderer
+
+
+class VWatches(Renderer):
+	GUI_WIDGET = eCanvas
+
+	def __init__(self):
+		Renderer.__init__(self)
+		self.fColor = gRGB(255, 255, 255, 0)
+		self.bColor = gRGB(0, 0, 0, 255)
+		self.numval = -1
+
+	def applySkin(self, desktop, parent):
+		attribs = []
+		for (attrib, what) in self.skinAttributes:
+			match attrib:
+				case "backgroundColor":
+					self.bColor = parseColor(what)
+				case "foregroundColor":
+					self.fColor = parseColor(what)
+				case _:
+					attribs.append((attrib, what))
+		self.skinAttributes = attribs
+		return Renderer.applySkin(self, desktop, parent)
+
+	def postWidgetCreate(self, instance):
+		def parseSize(str):
+			(x, y,) = str.split(",")
+			return eSize(int(x), int(y))
+
+		for (attrib, value,) in self.skinAttributes:
+			if ((attrib == "size") and self.instance.setSize(parseSize(value))):
+				pass
+		self.instance.clear(self.bColor)
+
+	def changed(self, what):
+		if what[0] != self.CHANGED_CLEAR:
+			value = self.source.value
+			if self.instance and self.numval != value:
+				self.numval = value
+				self.instance.clear(self.bColor)
+				self.hand()
+
+	def calculate(self, w, r, m):
+		a = (w * 6)
+		z = (math.pi / 180)
+		x = int(round(r * math.sin(a * z)))
+		y = int(round(r * math.cos(a * z)))
+		return ((m + x), (m - y))
+
+	def hand(self):
+		width = self.instance.size().width()
+		height = self.instance.size().height()
+		r = (min(width, height) / 2)
+		(endX, endY,) = self.calculate(self.numval, r, r)
+		self.draw_line(r, r, endX, endY)
+
+	def draw_line(self, x0, y0, x1, y1):
+		steep = abs(y1 - y0) > abs(x1 - x0)
+		if steep:
+			x0, y0 = y0, x0
+			x1, y1 = y1, x1
+		if x0 > x1:
+			x0, x1 = x1, x0
+			y0, y1 = y1, y0
+		ystep = 1 if y0 < y1 else -1
+		deltax = x1 - x0
+		deltay = abs(y1 - y0)
+		error = -deltax / 2
+		y = int(y0)
+		for x in range(int(x0), int(x1 + 1)):
+			if steep:
+				self.instance.fillRect(eRect(y, x, 1, 3), self.fColor)
+			else:
+				self.instance.fillRect(eRect(x, y, 1, 3), self.fColor)
+			error = error + deltay
+			if error > 0:
+				y = y + ystep
+				error = error - deltax

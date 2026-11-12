@@ -34,22 +34,35 @@ namespace hdsgrad
 	static const char GRAD_STRICAT[] = "\xc3\xaf\xc2\xbf\xc2\xbd";
 	enum { GRAD_STRICAT_LUNG = 6 };
 
-	/* Furnizorul unui serviciu de satelit fara SDT, la fel ca inainte in afara de grad: system 0 "DVB-S", altfel
-	   "DVB-S2"; modulation 1 "QPSK", altfel "8PSK"; frecventa in kHz (scrisa in MHz, lipita de polarizare);
-	   polarisation 0 "H", altfel "V"; orbital_position in zecimi de grad (0..3599), "W" numai la 0, altfel "E". */
+	/* Furnizorul unui serviciu de satelit fara SDT: system 0 "DVB-S", altfel "DVB-S2"; modulation 1 "QPSK", altfel
+	   "8PSK"; frecventa in kHz (scrisa in MHz, lipita de polarizare); polarisation 0 "H", altfel "V"; orbital_position
+	   in zecimi de grad (0..3599, vestul ca 3600 - x): pana la 180,0 "E", peste "W" cu pozitia vestica (3300 ->
+	   "30.0" + grad + "W", nu "330.0...E"). 0 ramane "0.0...W", ca inainte. */
 	inline std::string furnizorScanare(int system, int modulation, unsigned int frequency, int polarisation,
 		int orbital_position)
 	{
 		char s[96];
+		int pozitie = orbital_position;
+		char directia = 'E';
+		if (pozitie <= 0)
+		{
+			pozitie = 0;
+			directia = 'W';
+		}
+		else if (pozitie > 1800)
+		{
+			pozitie = (3600 - pozitie % 3600) % 3600;
+			directia = 'W';
+		}
 		snprintf(s, sizeof(s), "%s %s %u%c %d.%d%s%c",
 			system ? "DVB-S2" : "DVB-S",
 			modulation == 1 ? "QPSK" : "8PSK",
 			frequency / 1000,
 			polarisation ? 'V' : 'H',
-			orbital_position / 10,
-			orbital_position % 10,
+			pozitie / 10,
+			pozitie % 10,
 			GRAD,
-			orbital_position > 0 ? 'E' : 'W');
+			directia);
 		return std::string(s);
 	}
 

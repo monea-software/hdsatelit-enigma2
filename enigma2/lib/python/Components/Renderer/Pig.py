@@ -18,6 +18,15 @@ class Pig(Renderer):
 		instance.setFBSize(desk.size())
 
 	def applySkin(self, desktop, parent):
+		# hidePip (imaginile OE-Alliance: ascunde fereastra PiP cat se vede ecranul): se citeste si nu ajunge la eVideoWidget
+		self.hidePip = True
+		atribute = []
+		for (attrib, value) in self.skinAttributes:
+			if attrib == "hidePip":
+				self.hidePip = str(value).strip().lower() in ("1", "true", "yes", "on")
+			else:
+				atribute.append((attrib, value))
+		self.skinAttributes = atribute
 		ret = Renderer.applySkin(self, desktop, parent)
 		if ret:
 			self.Position = self.instance.position() # fixme, scaling!

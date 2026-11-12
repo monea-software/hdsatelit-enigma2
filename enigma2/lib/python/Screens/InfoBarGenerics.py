@@ -65,6 +65,16 @@ class InfoBarDish:
 		# HDSatelit: in loc de chenarul mic cu o poza care clipeste (Screens/Dish.py, pastrat pentru
 		# skinurile care il cer pe nume), panoul cu directia, gradele, satelitii si antena care se roteste.
 		self.dishDialog = self.session.instantiateDialog(HdsDishMotor)
+		# 0.7.4: panoul are zPosition 150 in skin, deasupra meniurilor; cat alt ecran e peste bara (meniul, lista
+		# canalelor, setarile: execEnd) el sta ascuns, iar cand bara e iar in fata (execBegin) poate aparea din nou
+		self.onExecBegin.append(self.hdsPanouMotorInFata)
+		self.onExecEnd.append(self.hdsPanouMotorInSpate)
+
+	def hdsPanouMotorInFata(self):
+		self.dishDialog.hdsInFata(True)
+
+	def hdsPanouMotorInSpate(self):
+		self.dishDialog.hdsInFata(False)
 
 class InfoBarUnhandledKey:
 	def __init__(self):
@@ -76,6 +86,9 @@ class InfoBarUnhandledKey:
 		self.onLayoutFinish.append(self.unhandledKeyDialog.hide)
 		eActionMap.getInstance().bindAction('', -0x7FFFFFFF, self.actionA) #highest prio
 		eActionMap.getInstance().bindAction('', 0x7FFFFFFF, self.actionB) #lowest prio
+		# HDSatelit: tasta Inapoi fara rost pe ecranul de acum face EXIT (actionInapoi); chiar inaintea lui actionB
+		eActionMap.getInstance().bindAction('', 0x7FFFFFFF - 1, self.actionInapoi)
+		self.inapoiNefolosita = None
 		self.flags = (1<<1);
 		self.uflags = 0;
 
@@ -94,10 +107,42 @@ class InfoBarUnhandledKey:
 		if flag != 4:
 			self.uflags |= (1<<flag)
 
+	# HDSatelit 0.7.4 (Eduard, 12.11.2026: "nu pot iesi din meniu daca apas inapoi"): tasta Inapoi a telecomenzii
+	# (KEY_BACK 158, "RECALL" pe Octagon SF8008 si SF8008 MINI; KEY_LAST 405, "BACK" pe Uclan Ustym 4K PRO; celelalte
+	# modele n-o au) face EXIT acolo unde ecranul de acum nu-i da alt rost. Unde are rost (canalul anterior in bara,
+	# subcanalele, tastatura de pe ecran, tastele rapide, navigatorul si aplicatiile HbbTV, care iau tasta inainte), o
+	# legare de mai sus o ia si tasta nu ajunge aici. Ajunge aici numai ce n-a luat nimeni: apasarea se tine minte, iar
+	# la eliberare (ca legarile pe eliberare, flags="b", sa aiba si ele randul) se trimite EXIT intreg (apasare si
+	# eliberare). Apasarile tastei Inapoi se iau (1), ca patratul tastei nefolosite sa nu apara: tasta face EXIT.
+	TASTE_INAPOI = (158, 405)  # KEY_BACK, KEY_LAST
+	KEY_EXIT = 174
+	DISPOZITIV_INAPOI = "dreambox advanced remote control (native)"
+
+	def actionInapoi(self, key, flag):
+		if key not in self.TASTE_INAPOI:
+			return 0
+		if flag == 0:
+			self.inapoiNefolosita = key
+			return 1
+		if self.inapoiNefolosita != key:
+			return 0
+		if flag == 1:
+			self.inapoiNefolosita = None
+			harta = eActionMap.getInstance()
+			harta.keyPressed(self.DISPOZITIV_INAPOI, self.KEY_EXIT, 0)
+			harta.keyPressed(self.DISPOZITIV_INAPOI, self.KEY_EXIT, 1)
+		return 1
+
 	def checkUnused(self):
 		if self.flags == self.uflags:
 			self.unhandledKeyDialog.show()
 			self.hideUnhandledKeySymbolTimer.start(2000, True)
+
+	def showUnhandledKey(self):
+		"""semnul tastei nefolosite, cerut si de pluginurile scrise pentru alte imagini (InfoBar.instance.showUnhandledKey(),
+		FileCommander la OK fara nimic de ales)"""
+		self.unhandledKeyDialog.show()
+		self.hideUnhandledKeySymbolTimer.start(2000, True)
 
 class InfoBarShowHide:
 	""" InfoBar show/hide control, accepts toggleShow and hide actions, might start
@@ -311,17 +356,38 @@ class NumberZap(Screen):
 		self.field = self.field + str(number)
 		self["number"].setText(self.field)
 		_hdsAfisajCifre(self.field)
+		self.hdsNumeCanal()
 		if len(self.field) >= 4:
 			self.keyOK()
 
-	def __init__(self, session, number):
+	def hdsNumeCanal(self):
+		"""HDSatelit: langa cifre, numele canalului care porneste si buchetul lui (widgeturile servicename si servicenumber ale
+		temei); fara functia de cautare (un plugin care deschide NumberZap cu doua argumente) raman goale."""
+		if self.hdsCauta is None:
+			return
+		try:
+			ref, buchet = self.hdsCauta(int(self.field))
+			nume = ServiceReference(ref).getServiceName() if ref is not None else ""
+		except Exception as e:
+			print("[NumberZap] numele canalului: %r" % (e,))
+			return
+		if buchet is None:
+			return
+		self["servicename"].setText(nume or _("Niciun canal cu acest număr"))
+		self["servicenumber"].setText(buchet or "")
+
+	def __init__(self, session, number, hdsCauta=None):
 		Screen.__init__(self, session)
 		self.field = str(number)
+		self.hdsCauta = hdsCauta
 
 		self["channel"] = Label(_("Channel:"))
 
 		self["number"] = Label(self.field)
+		self["servicename"] = Label("")
+		self["servicenumber"] = Label("")
 		_hdsAfisajCifre(self.field)
+		self.hdsNumeCanal()
 
 		self["actions"] = NumberActionMap( [ "SetupActions" ],
 			{
@@ -369,7 +435,7 @@ class InfoBarNumberZap:
 				self.servicelist.recallPrevService()
 		else:
 			if "TimeshiftActions" in self and not self.timeshift_enabled:
-				self.session.openWithCallback(self.numberEntered, NumberZap, number)
+				self.session.openWithCallback(self.numberEntered, NumberZap, number, self.hdsCanalDupaNumar)
 
 	def numberEntered(self, retval):
 #		print self.servicelist
@@ -383,10 +449,14 @@ class InfoBarNumberZap:
 				serviceIterator = servicelist.getNext()
 				if not serviceIterator.valid(): #check end of list
 					break
-				playable = not (serviceIterator.flags & (eServiceReference.isMarker|eServiceReference.isDirectory))
+				# semnele numerotate (Fast Scan) tin locul unui numar, ca in OE-Alliance
+				playable = not (serviceIterator.flags & (eServiceReference.isMarker|eServiceReference.isDirectory)) or (serviceIterator.flags & eServiceReference.isNumberedMarker)
 				if playable:
 					num -= 1;
 			if not num: #found service with searched number ?
+				if serviceIterator.flags & eServiceReference.isMarker:
+					# numarul e al unui semn (operatorul nu-l foloseste): nu se porneste nimic, ca in OE-Alliance
+					return None, 0
 				return serviceIterator, 0
 		return None, num
 
@@ -421,6 +491,37 @@ class InfoBarNumberZap:
 			sl.setCurrentSelection(ref)
 			sl.zap()
 		return True
+
+	def hdsCanalDupaNumar(self, number):
+		"""HDSatelit: fara zap, canalul pe care l-ar porni zapToNumber(number) si numele buchetului lui (pentru fereastra
+		NumberZap). -> (eServiceReference sau None, numele buchetului sau "")."""
+		sl = self.servicelist
+		if getattr(sl, "hdsReteaRadacinii", None) is not None:
+			root = sl.getRoot()
+			if root is not None and sl.hdsReteaRadacinii(root) is not None:
+				return sl.hdsNumarInRetea(number), ""
+			if root is None:
+				# lista inca neumpluta dupa pornire: zapToNumber o reface intai (poate e lista unei retele), deci aici nu se
+				# ghiceste (None, None: fereastra ramane fara nume)
+				return None, None
+		bouquet = sl.bouquet_root
+		service = None
+		serviceHandler = eServiceCenter.getInstance()
+		if not config.usage.multibouquet.value:
+			service, number = self.searchNumberHelper(serviceHandler, number, bouquet)
+		else:
+			bouquetlist = serviceHandler.list(bouquet)
+			if bouquetlist is not None:
+				while number:
+					bouquet = bouquetlist.getNext()
+					if not bouquet.valid():
+						break
+					if bouquet.flags & eServiceReference.isDirectory:
+						service, number = self.searchNumberHelper(serviceHandler, number, bouquet)
+		if service is None:
+			return None, ""
+		buchet = ServiceReference(bouquet).getServiceName() if config.usage.multibouquet.value else ""
+		return service, buchet
 
 	def zapToNumber(self, number):
 		if self.hdsZapLaNumarRetea(number):
@@ -1219,6 +1320,14 @@ class InfoBarRdsDecoder:
 	def __init__(self):
 		self.rds_display = self.session.instantiateDialog(RdsInfoDisplay)
 		self.rass_interactive = None
+		# temele straine (numele standard): sursa RdsDecoder in bara, pentru textul radio (RDS); numai sub alta tema
+		from Components.HdsNumeStandard import adauga
+
+		def rds(nav=self.session.nav):
+			# importat numai sub tema straina (adauga cheama fabrica numai atunci)
+			from Components.Sources.RdsDecoder import RdsDecoder
+			return RdsDecoder(nav)
+		adauga(self, "RdsDecoder", rds)
 
 		self.__event_tracker = ServiceEventTracker(screen=self, eventmap=
 			{
@@ -1940,6 +2049,22 @@ class InfoBarExtensions:
 			{
 				"extensions": (self.showExtensionSelection, _("view extensions...")),
 			}, 1) # lower priority
+		# 12.11.2026 (cerut pe LinuxSat): primul rand al listei de pe butonul albastru deschide meniul Acces condiționat
+		# (modulele, informatiile despre decriptare, Stream Relay, sloturile CI), ca in imaginile OE-Alliance
+		self.addExtension((lambda: _("Acces condiționat"), self.hdsAccesConditionat, lambda: True))
+
+	def hdsAccesConditionat(self):
+		from Components.HdsTasteRapide import cauta_meniu
+		nod = cauta_meniu(mdom.getroot(), "cam_menu")
+		if nod is None:
+			print("[InfoBarExtensions] meniul cam_menu lipseste din menu.xml")
+			return
+		self.session.infobar = self
+		inchis = getattr(self, "mainMenuClosed", None)
+		if inchis is not None:
+			self.session.openWithCallback(inchis, MainMenu, nod)
+		else:
+			self.session.open(MainMenu, nod)
 
 	def addExtension(self, extension, key = None, type = EXTENSION_SINGLE):
 		self.list.append((type, extension, key))
@@ -2215,7 +2340,9 @@ class InfoBarInstantRecord:
 		else:
 			if len(simulTimerList) > 1: # with other recording
 				name = simulTimerList[1].name
-				name_date = ' '.join((name, strftime('%c', localtime(simulTimerList[1].begin))))
+				# ziua cu numele in limba meniului si cifre (strftime('%c') dadea numele zilei si al lunii in engleza)
+				from Components.config import _dataText
+				name_date = ' '.join((name, _dataText('%a %d.%m.%Y %H:%M', localtime(simulTimerList[1].begin))))
 				print("[TIMER] conflicts with", name_date)
 				recording.autoincrease = True	# start with max available length, then increment
 				if recording.setAutoincreaseEnd():
@@ -3090,6 +3217,16 @@ def _hdsOcr(nume, *argumente):
 	except Exception as e:
 		print("[InfoBarSubtitleSupport] OCR %s: %s" % (nume, e))
 
+def _hdsSubtitrareLipsa(nume, *argumente):
+	# HDSatelit: o subtitrare teletext aleasa pe care canalul nu o trimite (pagina declarata in PMT, dar fara
+	# antete in flux): un mesaj scurt dupa ~20 s (Components/HdsSubtitrareLipsa.py). O greseala de aici nu atinge
+	# subtitrarile.
+	try:
+		from Components import HdsSubtitrareLipsa
+		return getattr(HdsSubtitrareLipsa, nume)(*argumente)
+	except Exception as e:
+		print("[InfoBarSubtitleSupport] subtitrare lipsa %s: %s" % (nume, e))
+
 class InfoBarSubtitleSupport(object):
 	# HDSatelit: la fiecare canal si la
 	# fiecare inregistrare, cand pistele se cunosc (evUpdatedInfo), sunetul si subtitrarea se aleg prin
@@ -3178,6 +3315,7 @@ class InfoBarSubtitleSupport(object):
 			self.__subtitles_enabled = False
 			self.__selected_subtitle = None
 			_hdsOcr("pistaOprita")
+			_hdsSubtitrareLipsa("opreste")
 
 	def __updatedInfo(self):
 		try:
@@ -3228,6 +3366,8 @@ class InfoBarSubtitleSupport(object):
 					self.subtitle_window.show()
 					self.__subtitles_enabled = True
 					_hdsOcr("pistaAleasa", self.selected_subtitle)
+					ref = self.session.nav.getCurrentlyPlayingServiceReference()
+					_hdsSubtitrareLipsa("pazeste", self.selected_subtitle, ref.toString() if ref is not None else "")
 		else:
 			if self.__selected_subtitle:
 				self.hdsTineMinteSubtitrarea(self.__selected_subtitle)
@@ -3237,6 +3377,7 @@ class InfoBarSubtitleSupport(object):
 			self.__subtitles_enabled = False
 			self.subtitle_window.hide()
 			_hdsOcr("pistaOprita")
+			_hdsSubtitrareLipsa("opreste")
 
 	def setSelectedSubtitle(self, subtitle):
 		self.__selected_subtitle = subtitle
@@ -3442,6 +3583,71 @@ def getResumePoint(session):
 def delResumePoint(ref):
 	if _pozitii().pop(ref.toString(), None) is not None:
 		saveResumePoints()
+
+
+class _PozitiiRedare(object):
+	"""OE-Alliance (OEA10): resumePointsInstance, obiectul cerut de MovieManager, M3U IPTV si ZDFMediathek: aceleasi pozitii si
+	acelasi fisier ca functiile de mai sus (resumePointCache e chiar dictionarul lor, citit la prima folosire)."""
+	resumePointFile = _FISIER_POZITII
+
+	@property
+	def resumePointCache(self):
+		return _pozitii()
+
+	def loadResumePoints(self):
+		return loadResumePoints()
+
+	def saveResumePoints(self):
+		saveResumePoints()
+
+	def setResumePoint(self, session):
+		setResumePoint(session)
+
+	def getResumePoint(self, session):
+		return getResumePoint(session)
+
+	def delResumePoint(self, ref):
+		delResumePoint(ref)
+
+	def cleanCache(self):
+		pass
+
+
+resumePointsInstance = _PozitiiRedare()
+
+
+class InfoBarAspectSelection:
+	"""OE-Alliance (OEA10): mixinul cerut de playerele pluginurilor (IPTVPlayer, MediaPlayer al altor imagini): tasta din
+	InfobarAspectSelectionActions alege formatul imaginii, adica setarea noastra config.av.aspect (aceeasi ca in Setari > Video)."""
+	STATE_HIDDEN = 0
+	STATE_ASPECT = 1
+	STATE_RESOLUTION = 2
+
+	def __init__(self):
+		self["AspectSelectionAction"] = HelpableActionMap(self, "InfobarAspectSelectionActions",
+			{
+				"aspectSelection": (self.aspectSelection, _("Formatul imaginii")),
+			})
+
+	def aspectSelection(self):
+		from Components.config import config
+		setare = config.av.aspect
+		valori = list(setare.choices)
+		lista = [(setare.description[v], v) for v in valori]
+		ales = valori.index(setare.value) if setare.value in valori else 0
+		self.session.openWithCallback(self.aspectSelected, ChoiceBox, title=_("Formatul imaginii"), list=lista, selection=ales)
+
+	def aspectSelected(self, rezultat):
+		if rezultat:
+			from Components.config import config
+			config.av.aspect.value = rezultat[1]
+			config.av.aspect.save()
+
+	def ExGreen_toggleGreen(self, arg=""):
+		self.aspectSelection()
+
+	def resolutionSelection(self):
+		self.aspectSelection()
 
 
 class InfoBarScreenSaver:

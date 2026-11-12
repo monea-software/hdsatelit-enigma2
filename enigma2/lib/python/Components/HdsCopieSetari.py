@@ -221,6 +221,22 @@ SUFIXE_INFO_OPKG = ("control", "list", "conffiles", "postinst", "prerm", "postrm
 DOSARE_PACHET_PERMISE = ("usr/bin/", "usr/lib/", "usr/share/", "usr/sbin/")
 DOSARE_PACHET_OPRITE = ("usr/lib/enigma2/",)
 DOSARE_IPK = ("var/cache/opkg", "home/root", "tmp")
+# Pachetul refacut (0.7.4). Un plugin pus de om dintr-un fisier .ipk, care nu e in niciun feed si al carui .ipk nu mai e pe
+# stick sau in cache, nu se putea pune la loc dupa o imagine noua: HdsReinstalare il trecea la "nu exista" (09.11.2026,
+# darog69, Ustym 4K PRO: pluginurile lui nu erau in feedurile imaginii, iar dupa imaginea noua nu au revenit). Copia facuta
+# chiar inainte de scrierea unei imagini (fa_copia cu reface_pachete, din Components/HdsImagineOnline.py si
+# Screens/HdsSoftwareUpdate.py) face atunci pachetul din ce a pus opkg: controlul (info/<nume>.control sau strofa din
+# status), scripturile opkg si fisierele din info/<nume>.list, cum sunt acum pe receptor. El intra in pluginuri.tar.gz ca
+# un .ipk gasit (hds-ipk/), deci punerea la loc il instaleaza la fel (ipk_din_copie). Copiile zilnice si cele de mana nu-l
+# fac (timpul procesorului). Limitele: MAX_IPK_REFACUT pe plugin; BUGET_IPK pentru toate .ipk-urile copiei, fiindca
+# pluginuri.tar.gz intreaga trece de MAX_ARHIVA = copie cazuta, iar fara copie imaginea nu se scrie.
+FA_COPIA_REFACE_PACHETE = True
+DOSAR_IPK_REFACUTE = ".ipk-refacute"
+MAX_IPK_REFACUT = 48 * 1024 * 1024
+BUGET_IPK = 40 * 1024 * 1024
+CAMPURI_CONTROL = ("Package", "Version", "Architecture", "Maintainer", "Depends", "Pre-Depends", "Recommends", "Suggests",
+	"Provides", "Conflicts", "Replaces", "Section", "Priority", "Source", "License", "Homepage", "Description")
+SCRIPTURI_OPKG = ("preinst", "postinst", "prerm", "postrm")
 META_ACCES = "hds-copie/"
 PACHETE_ACCES = META_ACCES + "pachete.json"
 
@@ -940,6 +956,17 @@ def _reinstalare():
 	return R
 
 
+def text_ultima_punere(rad=None):
+	"""Ultima punere la loc: ce s-a pus din copie si, dupa el, ce a facut reinstalarea pluginurilor (sau ca inca lucreaza),
+	ca text; "" fara nicio punere la loc. Acelasi text pe televizor (randul din Screens/HdsCopieSetari.py) si in pagina web
+	(copie_setari_web.py): dupa o imagine noua omul vede si dupa ce s-au inchis ferestrele de 20 s ce a revenit."""
+	try:
+		rez = citeste_rezultat(rad)
+	except Exception:
+		rez = None
+	return "\n".join(t for t in (mesaj_rezultat(rez) if rez else "", mesaj_reinstalare(rad)) if t)
+
+
 def mesaj_reinstalare(rad=None):
 	"""Mesajul ultimei reinstalari a pachetelor din copie (Components/HdsReinstalare.py), pentru pagina web; „” fara."""
 	try:
@@ -1057,10 +1084,168 @@ def _ipk_plugin(rad, nume, punct):
 	return None
 
 
-def _date_pluginuri(rad, nume_pluginuri, punct):
-	"""Inventar fara continut: lista opkg, configurari, fisiere create ulterior, ipk ramas."""
+def dosar_ipk_refacute(punct):
+	"""Unde se fac pachetele refacute, pe mediul copiei, in dosarul copiilor (numele cu punct nu apare in lista copiilor);
+	fa_copia il sterge la sfarsit."""
+	return os.path.join(punct, *(DOSAR_PE_MEDIU.split("/") + [DOSAR_IPK_REFACUTE]))
+
+
+def _campuri_strofa(text):
+	"""[[camp, valoare]] dintr-o strofa opkg, cu randurile de continuare (cele care incep cu spatiu) lipite de camp."""
+	rez = []
+	for rand in text.splitlines():
+		if rand[:1] in (" ", "\t"):
+			if rez:
+				rez[-1][1] += "\n" + rand
+			continue
+		k, doua, v = rand.partition(":")
+		if doua and k.strip():
+			rez.append([k.strip(), v.strip()])
+	return rez
+
+
+def _control_refacut(rad, nume, strofa):
+	"""Textul fisierului control al pachetului refacut: info/<nume>.control cand e al lui, altfel campurile pachetului din
+	strofa status-ului (fara Status, Installed-Time, Auto-Installed, Conffiles). None fara Package, Version si
+	Architecture bune."""
+	campuri = None
+	date = _citeste_mic(_c(rad, "var/lib/opkg/info/%s.control" % nume), MAX_DESCRIERE + 1)
+	if date and len(date) <= MAX_DESCRIERE:
+		c = _campuri_strofa(date.decode("utf-8", "replace"))
+		if dict((k, v) for k, v in c).get("Package") == nume:
+			campuri = c
+	if campuri is None:
+		campuri = [x for x in _campuri_strofa(strofa) if x[0] in CAMPURI_CONTROL]
+	d = dict((k, v) for k, v in campuri)
+	if d.get("Package") != nume or not re.match(r"^[A-Za-z0-9.+_~:-]+$", d.get("Version", "")) or \
+			not re.match(r"^[A-Za-z0-9_-]+$", d.get("Architecture", "")):
+		return None
+	if "Description" not in d:
+		campuri.append(["Description", nume])
+	return "".join("%s: %s\n" % (k, v) for k, v in campuri)
+
+
+def _membru_ar(nume, marime):
+	"""Antetul unui membru al arhivei ar (ca in .ipk-urile OE: nume/, data 0, root, 644)."""
+	return ("%-16s%-12d%-6d%-6d%-8s%-10d`\n" % (nume + "/", 0, 0, 0, "644", marime)).encode("ascii")
+
+
+def _ipk_refacut(rad, nume, dosar_tmp):
+	"""Pachetul .ipk al unui plugin instalat, facut din ce a pus opkg pe receptor (vezi FA_COPIA_REFACE_PACHETE), in
+	dosar_tmp; calea lui sau None (lipsesc informatiile opkg, fisierele trec de MAX_IPK_REFACUT, unul nu se poate citi).
+	Nu arunca: un pachet care nu iese nu opreste copia."""
+	cale_ipk = None
+	try:
+		control = _control_refacut(rad, nume, _strofe_status(rad).get(nume, ""))
+		if control is None:
+			return None
+		d = dict((k, v) for k, v in _campuri_strofa(control))
+		versiune = d["Version"].split(":", 1)[-1]
+		if not re.match(r"^[A-Za-z0-9.+_~-]+$", versiune + d["Architecture"]):
+			return None
+		membri, total = [], 0
+		for rel in _lista_opkg(_c(rad, "var/lib/opkg/info/%s.list" % nume)):
+			cale = _c(rad, rel)
+			parinte = os.path.dirname(rel)
+			if parinte and not _fara_legaturi(rad, parinte):
+				continue
+			try:
+				st = os.lstat(cale)
+			except OSError:
+				continue
+			if stat.S_ISREG(st.st_mode):
+				total += st.st_size
+			elif not (stat.S_ISLNK(st.st_mode) or stat.S_ISDIR(st.st_mode)):
+				continue
+			membri.append((rel, cale, st))
+		if not any(stat.S_ISREG(st.st_mode) for _r, _c2, st in membri) or total > MAX_IPK_REFACUT:
+			return None
+		os.makedirs(dosar_tmp, exist_ok=True)
+		cale_ipk = os.path.join(dosar_tmp, "%s_%s_%s.ipk" % (nume, versiune, d["Architecture"]))
+		cale_date = cale_ipk + ".date"
+		with open(cale_date, "wb") as f:
+			with tarfile.open(fileobj=f, mode="w:gz", format=tarfile.GNU_FORMAT, compresslevel=6) as tf:
+				for rel, cale, st in membri:
+					if stat.S_ISREG(st.st_mode):
+						ti = _info_tar("./" + rel, st)
+						ti.size = st.st_size
+						with open(cale, "rb") as sursa:
+							tf.addfile(ti, sursa)
+					elif stat.S_ISLNK(st.st_mode):
+						ti = _info_tar("./" + rel, st, tarfile.SYMTYPE)
+						ti.linkname = os.readlink(cale)
+						tf.addfile(ti)
+					else:
+						tf.addfile(_info_tar("./" + rel, st, tarfile.DIRTYPE))
+		ctl = io.BytesIO()
+		with tarfile.open(fileobj=ctl, mode="w:gz", format=tarfile.GNU_FORMAT) as tf:
+			_adauga_date(tf, "./control", control.encode("utf-8"), 0o644)
+			conffiles = _citeste_mic(_c(rad, "var/lib/opkg/info/%s.conffiles" % nume), 1024 * 1024)
+			if conffiles:
+				_adauga_date(tf, "./conffiles", conffiles, 0o644)
+			for s in SCRIPTURI_OPKG:
+				script = _citeste_mic(_c(rad, "var/lib/opkg/info/%s.%s" % (nume, s)), 1024 * 1024)
+				if script:
+					_adauga_date(tf, "./" + s, script, 0o755)
+		ctl = ctl.getvalue()
+		marime_date = os.path.getsize(cale_date)
+		with open(cale_ipk, "wb") as f:
+			f.write(b"!<arch>\n" + _membru_ar("debian-binary", 4) + b"2.0\n")
+			f.write(_membru_ar("control.tar.gz", len(ctl)) + ctl + (b"\n" if len(ctl) % 2 else b""))
+			f.write(_membru_ar("data.tar.gz", marime_date))
+			with open(cale_date, "rb") as sursa:
+				shutil.copyfileobj(sursa, f, 1024 * 1024)
+			if marime_date % 2:
+				f.write(b"\n")
+			f.flush()
+			os.fsync(f.fileno())
+		os.remove(cale_date)
+		if os.path.getsize(cale_ipk) > MAX_ARHIVA:
+			raise IOError("pachet prea mare")
+		_jurnal("pachetul extensiei %s refacut din fisierele instalate (%d fisiere, %d KiB)" % (nume, len(membri),
+			os.path.getsize(cale_ipk) // 1024))
+		return cale_ipk
+	except Exception as eroare:
+		_jurnal("pachetul extensiei %s nu s-a putut reface: %s" % (nume, eroare.__class__.__name__))
+		for cale in (cale_ipk, (cale_ipk or "") + ".date"):
+			if cale:
+				try:
+					os.remove(cale)
+				except OSError:
+					pass
+		return None
+
+
+def _scoate_refacute(meta, surse, punct):
+	"""Scoate din inventarul pluginurilor pachetele refacute (cele din dosar_ipk_refacute); le trece la "sarite".
+	Intoarce cate a scos."""
+	dosar = os.path.normcase(os.path.abspath(dosar_ipk_refacute(punct)))
+	scoase = 0
+	for rel, sursa in list(surse.items()):
+		if rel.startswith("hds-ipk/") and isinstance(sursa, str) and \
+				os.path.normcase(os.path.dirname(os.path.abspath(sursa))) == dosar:
+			del surse[rel]
+			scoase += 1
+			for p in meta:
+				if p.get("ipk") == rel:
+					p["ipk"] = None
+					p["sarite"] = p.get("sarite", 0) + 1
+	return scoase
+
+
+def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
+	"""Inventar fara continut: lista opkg, configurari, fisiere create ulterior, ipk ramas. Cu reface_pachete (copia
+	dinaintea unei imagini noi), un plugin fara .ipk gasit si care nu e in listele feedurilor primeste pachetul refacut
+	(_ipk_refacut). Toate .ipk-urile impreuna raman sub BUGET_IPK; cele peste se trec la "sarite"."""
 	meta, surse = [], {}
 	total = 0
+	total_ipk = 0
+	in_feeduri = set()
+	if reface_pachete and nume_pluginuri:
+		try:
+			in_feeduri = set(_reinstalare()._in_liste(rad))
+		except Exception as eroare:
+			_jurnal("listele feedurilor: %s" % eroare.__class__.__name__)
 	for nume in nume_pluginuri:
 		lista = _c(rad, "var/lib/opkg/info/%s.list" % nume)
 		livrate = set(_lista_opkg(lista))
@@ -1102,14 +1287,28 @@ def _date_pluginuri(rad, nume_pluginuri, punct):
 				surse[rel] = cale
 				total += st.st_size
 		ipk = _ipk_plugin(rad, nume, punct)
+		refacut = False
+		if not ipk and reface_pachete and nume not in in_feeduri and not intrare["fara_lista"]:
+			ipk = _ipk_refacut(rad, nume, dosar_ipk_refacute(punct))
+			refacut = bool(ipk)
 		if ipk:
 			rel = "hds-ipk/" + os.path.basename(ipk)
-			if total + os.path.getsize(ipk) <= MAX_DECOMPRIMAT - MAX_DESCRIERE and len(surse) < MAX_MEMBRI - 2:
+			marime = os.path.getsize(ipk)
+			# BUGET_IPK numai cand se refac pachete: o copie de mana sau zilnica ramane cum era
+			if total + marime <= MAX_DECOMPRIMAT - MAX_DESCRIERE and len(surse) < MAX_MEMBRI - 2 and \
+					(not reface_pachete or total_ipk + marime <= BUGET_IPK):
 				intrare["ipk"] = rel
 				surse[rel] = ipk
-				total += os.path.getsize(ipk)
+				total += marime
+				total_ipk += marime
 			else:
 				intrare["sarite"] += 1
+				if refacut:
+					_jurnal("pachetul refacut al extensiei %s nu mai incape in copie" % nume)
+					try:
+						os.remove(ipk)
+					except OSError:
+						pass
 		meta.append(intrare)
 	return meta, surse
 
@@ -1317,7 +1516,18 @@ def pune_date_plugin(rad, nume):
 		raise
 
 
-def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
+def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, reface_pachete=False):
+	"""Copia setarilor (_fa_copia). reface_pachete: copia facuta chiar inainte de scrierea unei imagini noi; pluginurile
+	puse de om din fisiere, care nu sunt in feeduri, primesc pachetul refacut (FA_COPIA_REFACE_PACHETE). Dosarul de lucru
+	al pachetelor refacute se sterge la sfarsit, si dupa o eroare."""
+	try:
+		return _fa_copia(punct, text_setari, fel, rad, acum, reface_pachete)
+	finally:
+		if reface_pachete:
+			shutil.rmtree(dosar_ipk_refacute(punct), ignore_errors=True)
+
+
+def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, reface_pachete=False):
 	"""Copia setarilor pe mediul montat in `punct`. `text_setari`: settings de acum (config.pickle() pe firul enigma2);
 	fara el, fisierul de pe disc. Intoarce {"ok", "mesaje", "cale", "nume", "marime", "are"}. Ruleaza pe un fir
 	separat (stickul poate fi lent); pe receptor nu scrie nimic."""
@@ -1338,7 +1548,7 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 	module = module_acces(rad)
 	pluginuri = _pluginuri_de_pus(rad, module)
 	try:
-		meta_pluginuri, surse_pluginuri = _date_pluginuri(rad, pluginuri, punct)
+		meta_pluginuri, surse_pluginuri = _date_pluginuri(rad, pluginuri, punct, reface_pachete)
 	except Exception as eroare:
 		_jurnal("inventarul pluginurilor: %s" % eroare.__class__.__name__)
 		mesaje.append(_("Datele pluginurilor nu s-au putut copia. Încearcă din nou."))
@@ -1424,7 +1634,15 @@ def fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None):
 			are.append("acces")
 		elif os.path.exists(os.path.join(part, ARH_ACCES)):
 			os.remove(os.path.join(part, ARH_ACCES))
-		_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
+		try:
+			_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
+		except Exception:
+			# 0.7.4: cu pachetele refacute arhiva pluginurilor a trecut de limite; fara ele copia iese cum ar fi iesit
+			# inainte (o copie cazuta ar opri scrierea imaginii)
+			if not _scoate_refacute(meta_pluginuri, surse_pluginuri, punct):
+				raise
+			_jurnal("arhiva pluginurilor prea mare cu pachetele refacute; o scriu fara ele")
+			_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
 		if meta_pluginuri:
 			are.append("pluginuri")
 			for p in meta_pluginuri:
@@ -2850,7 +3068,9 @@ def _blocuri_nemontate():
 
 
 def _cea_mai_noua(rad):
-	"""Copia scrierii online, altfel regula veche: acest receptor, apoi acelasi model."""
+	"""Copia scrierii online, altfel regula veche: acest receptor, apoi acelasi model. Copia numita intr-un scriere.json
+	(facuta chiar inainte de scrierea imaginii) vine cu "din_scriere": True: numai ea opreste asteptarea stickurilor la
+	prima pornire (pornire)."""
 	toate = copii(rad=rad)
 	model = model_aici(rad)
 	versiune = versiune_imagine(rad)[1]
@@ -2869,7 +3089,7 @@ def _cea_mai_noua(rad):
 		for c in toate:
 			try:
 				if c["acest"] and identitate_copie(c["id"]) == s["copie"]:
-					return c, toate
+					return dict(c, din_scriere=True), toate
 			except (OSError, ValueError):
 				continue
 	for c in toate:
@@ -3078,21 +3298,31 @@ def pornire(rad=None, asteapta=True):
 	reincearca = False
 	try:
 		inceput = time.time()
+		anuntat = False
 		while True:
 			aleasa, toate = _cea_mai_noua(rad)
-			if aleasa is not None or not asteapta:
+			# numai copia facuta chiar inainte de scrierea imaginii (scriere.json) opreste asteptarea pe loc. O alta copie a
+			# receptorului, mai veche, de pe un disc montat mai repede, nu: stickul cu scriere.json poate veni dupa ea, iar o
+			# copie veche pusa acum ar ramane (09.11.2026, darog69: un disc USB cu multe partitii si un stick)
+			if aleasa is not None and (aleasa.get("din_scriere") or not asteapta):
+				break
+			if not asteapta:
 				break
 			if time.time() - inceput >= ASTEPTARE_MEDII_S:
 				break
 			if not _blocuri_nemontate() and _uptime() >= UPTIME_MEDII_S:
 				break
+			if aleasa is not None and not anuntat:
+				anuntat = True
+				_jurnal("am gasit copia %s; astept si stickurile inca nemontate, poate e acolo copia facuta inainte de "
+					"instalare" % os.path.basename(aleasa["id"]))
 			time.sleep(1)
 		if aleasa is None:
 			_jurnal("nicio copie a acestui model pe mediile montate (%d copii gasite)" % len(toate))
 			_marcheaza_alta_imagine(rad)
 			return 0
-		_jurnal("copia aleasa: %s (%s)" % (os.path.basename(aleasa["id"]), "acest receptor" if aleasa["acest"]
-			else "alt receptor"))
+		_jurnal("copia aleasa: %s (%s%s)" % (os.path.basename(aleasa["id"]), "acest receptor" if aleasa["acest"]
+			else "alt receptor", ", facuta inainte de instalarea imaginii" if aleasa.get("din_scriere") else ""))
 		rez = pune_la_loc(aleasa["id"], rad, "automat")
 		reincearca = rez.get("reincearca", False)
 		_incheie_restaurarea(rad, rez)

@@ -105,6 +105,8 @@ AGENT = "HDSatelit-receptor"
 GEMINI_MODELE = "https://generativelanguage.googleapis.com/v1beta/models"
 BAZA_GROQ = "https://api.groq.com/openai/v1"
 BAZA_OPENROUTER = "https://openrouter.ai/api/v1"
+# Grok (xAI): cheile incep cu xai-, se fac pe console.x.ai (API Keys); format compatibil OpenAI (chat/completions)
+BAZA_XAI = "https://api.x.ai/v1"
 BAZA_OPENAI = "https://api.openai.com/v1"
 
 # (cod, numele din portal); "" = Global (primul). Lista comuna e T.REGIUNI_AZURE cand exista (regiuniAzure()); asta e
@@ -387,6 +389,8 @@ def recunoasteCheie(text):
 		return [_cand("groq")]
 	if v.startswith("sk-or-"):
 		return [_cand("openai", BAZA_OPENROUTER, "OpenRouter")]
+	if v.startswith("xai-"):
+		return [_cand("openai", BAZA_XAI, "Grok (xAI)")]
 	if v.startswith("sk-ant-"):
 		return []			# alt furnizor, fara traducere aici: cheia nu pleaca nicaieri
 	if v.startswith("sk-"):
@@ -581,9 +585,11 @@ def ordineOllama(modele, numai_potrivite=False):
 
 
 _PREFERINTE_OPENAI = ("gemma-3", "gemma3", "gemma-4", "gemma4", "llama-3.3-70b", "gpt-oss-20b", "llama-3.1-8b",
-	"qwen3", "gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini", "gpt-5-nano", "mistral-small", "llama", "mistral")
+	"qwen3", "gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini", "gpt-5-nano", "mistral-small", "llama", "mistral",
+	# Grok (xAI): modelul fara gandire (raspuns repede, pretul cel mai mic al listei), apoi oricare Grok
+	"non-reasoning", "grok")
 _NU_OPENAI = ("embed", "whisper", "tts", "guard", "moderation", "audio", "realtime", "image", "dall-e", "transcribe",
-	"search", "rerank", "code", "vision", "orpheus", "playai", "compound", "translategemma")
+	"search", "rerank", "code", "vision", "orpheus", "playai", "compound", "translategemma", "multi-agent", "grok-build")
 
 
 def _alegeOpenAI(modele):
@@ -645,7 +651,7 @@ def ceFaci(fel, serviciu, nume=u"", local=False, adresa=u"", corp=b"", cod=None,
 				"Trebuie o cheie de la DeepL API, nu de la traducătorul obișnuit.")
 		if serviciu == "openai":
 			pagina = {"Groq": "console.groq.com/keys", "OpenRouter": "openrouter.ai/settings/keys",
-				"OpenAI": "platform.openai.com/settings/organization/api-keys"}.get(nume)
+				"OpenAI": "platform.openai.com/settings/organization/api-keys", "Grok (xAI)": "console.x.ai"}.get(nume)
 			if pagina:
 				return _t("Copiaz-o întreagă din pagina cheilor (%s), fără spații.") % pagina
 		if serviciu == "groq":

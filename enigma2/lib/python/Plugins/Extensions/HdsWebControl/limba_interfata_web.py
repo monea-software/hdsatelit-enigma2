@@ -71,7 +71,41 @@ def _listaCuStick(Lg):
 		return Lg.getLanguageList()
 
 
-def _limbi(Lg, cfg, nume):
+def _peStick(pe_stick=None):
+	"""Vu+ Solo SE cu partea a doua: limbile fara catalog vin de pe stick (Components/Language.limbiPeStick); altfel
+	din feed, singure (imaginea mica). Pe PC, fara modul: din feed."""
+	if pe_stick is not None:
+		return pe_stick
+	try:
+		from Components.Language import limbiPeStick
+		return limbiPeStick()
+	except ImportError:
+		return False
+
+
+def _eticheta(pe_stick=None):
+	return _t("(pe stick)") if _peStick(pe_stick) else _t("(se descarcă)")
+
+
+def _cereDescarcarea():
+	"""Components/HdsLimbaRestaurare.cereAcum: limba aleasa se descarca si se instaleaza singura, pe loc"""
+	try:
+		from Components import HdsLimbaRestaurare
+		HdsLimbaRestaurare.cereAcum(spus=True)
+	except Exception as e:
+		print("[HdsWebControl] descarcarea limbii: %r" % (e,))
+
+
+def _textSeDescarca(nume):
+	try:
+		from Components.HdsLimbaRestaurare import textSeDescarca
+		return textSeDescarca(nume)
+	except ImportError:
+		return _t("Limba %s se descarcă și se instalează singură când receptorul are internet. "
+			"Până atunci meniurile sunt în engleză.") % nume
+
+
+def _limbi(Lg, cfg, nume, pe_stick=None):
 	"""[[cod, nume]] in ordinea de pe televizor; numele ca in LanguageSelection.updateList (in limba aleasa acum),
 	altfel numele din lista limbilor."""
 	activa = cfg.osd.language.value
@@ -81,38 +115,46 @@ def _limbi(Lg, cfg, nume):
 		# limba salvata e ascunsa (Components/Language.py, LIMBI_COMPLETE): numele in limba in care sunt meniurile
 		activa = Lg.getActiveLanguage() or activa
 	texte = nume.get(activa, {})
+	eticheta = None
 	rez = []
 	for cod, date in lista:
 		# date = (nume, limba, tara); cheia numelui e limba_tara, ca pe televizor
 		cheie = "%s_%s" % (date[1], date[2]) if len(date) > 2 else cod
+		if cod not in instalate and eticheta is None:
+			eticheta = _eticheta(pe_stick)
 		rez.append([cod, (texte.get(cheie) or (date[0] if date else cod)) +
-			(" " + _t("(pe stick)") if cod not in instalate else "")])
+			(" " + eticheta if cod not in instalate else "")])
 	return rez
 
 
-def stare(Lg=None, cfg=None, nume=None):
+def stare(Lg=None, cfg=None, nume=None, pe_stick=None):
 	"""Pentru GET /api/limba-interfata."""
 	Lg, cfg, nume = _limba(Lg), _config(cfg), _nume(nume)
 	return {"result": True, "activa": Lg.getActiveLanguage() or cfg.osd.language.value,
-		"limbi": _limbi(Lg, cfg, nume)}
+		"limbi": _limbi(Lg, cfg, nume, pe_stick)}
 
 
-def seteaza(argumente, Lg=None, cfg=None, nume=None, configfile=None):
-	"""POST /api/limba-interfata-seteaza?limba=<cod>: numai un cod din lista; aceeasi schimbare ca OK pe televizor."""
+def seteaza(argumente, Lg=None, cfg=None, nume=None, configfile=None, cere=None, pe_stick=None):
+	"""POST /api/limba-interfata-seteaza?limba=<cod>: numai un cod din lista; aceeasi schimbare ca OK pe televizor. O
+	limba din feed (fara catalog) se salveaza la fel, iar receptorul o descarca singur, pe loc (cere)."""
 	Lg, cfg, nume = _limba(Lg), _config(cfg), _nume(nume)
 	cod = argumente.get("limba", "")
 	coduri = [c for c, n in Lg.getLanguageList()]
 	if not cod:
-		rez = stare(Lg, cfg, nume)
+		rez = stare(Lg, cfg, nume, pe_stick)
 		rez.update({"result": False, "message": _t("Nu s-a trimis nicio limbă.")})
 		return rez
+	din_feed = False
 	if cod not in coduri:
-		rez = stare(Lg, cfg, nume)
+		rez = stare(Lg, cfg, nume, pe_stick)
 		if cod in [c for c, n in _listaCuStick(Lg)]:
-			rez.update({"result": False, "message": _t("Instaleaza limbile din Partea a doua pe stick, apoi alege limba din nou.")})
+			if _peStick(pe_stick):
+				rez.update({"result": False, "message": _t("Instaleaza limbile din Partea a doua pe stick, apoi alege limba din nou.")})
+				return rez
+			din_feed = True
+		else:
+			rez.update({"result": False, "message": _t("Limba „%s” nu există pe receptor.") % cod[:MAX_COD]})
 			return rez
-		rez.update({"result": False, "message": _t("Limba „%s” nu există pe receptor.") % cod[:MAX_COD]})
-		return rez
 	cfg.osd.language.value = cod
 	cfg.osd.language.save()
 	Lg.activateLanguage(cod)
@@ -120,8 +162,13 @@ def seteaza(argumente, Lg=None, cfg=None, nume=None, configfile=None):
 	cfg.misc.languageselected.save()
 	_salveazaFisierul(configfile)
 	print("[HdsWebControl] limba meniurilor: %s (din web)" % cod)
-	rez = stare(Lg, cfg, nume)
+	rez = stare(Lg, cfg, nume, pe_stick)
 	ales = dict((c, n) for c, n in rez["limbi"]).get(cod, cod)
+	if din_feed:
+		(cere or _cereDescarcarea)()
+		sufix = " " + _eticheta(pe_stick)
+		rez.update({"result": True, "message": _textSeDescarca(ales[:-len(sufix)] if ales.endswith(sufix) else ales)})
+		return rez
 	rez.update({"result": True, "message": _t("Limba meniurilor este acum: %s. Ecranele deschise deja pe televizor "
 		"se schimbă la următoarea deschidere.") % ales})
 	return rez

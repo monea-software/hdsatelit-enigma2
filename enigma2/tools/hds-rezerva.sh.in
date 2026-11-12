@@ -75,6 +75,8 @@ HDS_REZERVA_COD=${HDS_REZERVA_COD:-75}
 HDS_REZERVA_INIT_LENT=${HDS_REZERVA_INIT_LENT:-40}
 HDS_REZERVA_INIT_COD=${HDS_REZERVA_INIT_COD:-90}
 HDS_REZERVA_LOAD=${HDS_REZERVA_LOAD:-}
+# the pid of tools/hds-actualizare-intrerupta.py while it finishes an update cut in the middle, before enigma2 (0.7.4)
+HDS_REZERVA_ACTUALIZARE=${HDS_REZERVA_ACTUALIZARE:-/tmp/hds-actualizare-intrerupta.ruleaza}
 
 D=$HDS_REZERVA_DOSAR
 FORUM=https://stb.hdsatelit.com/forum/
@@ -506,6 +508,20 @@ rz_urmareste() {
 		fi
 		# before enigma2: the step of the boot
 		rz_e2=""
+		# an update cut in the middle is being finished before enigma2 (enigma2.sh, tools/hds-actualizare-intrerupta.py):
+		# opkg may work for minutes and is never stopped, so this is not a stuck start ("UPD", no "slow", no E306)
+		rz_ai=""
+		read rz_ai 2>/dev/null < "$HDS_REZERVA_ACTUALIZARE"
+		case $rz_ai in ''|*[!0-9]*) rz_ai="" ;; esac
+		if [ -n "$rz_ai" ] && [ -d "$HDS_PAZA_RADACINA/proc/$rz_ai" ]; then
+			rz_pas_t=$rz_a
+			if [ "$rz_pas" != "UPD actualizare" ]; then
+				[ "$rz_faza" = cod ] && rz_urm_web_opreste
+				rz_pas="UPD actualizare"; rz_faza=pornire
+				rz_afisaj UPD
+			fi
+			continue
+		fi
 		rz_p=$(rz_pas_acum)
 		if [ -n "$rz_p" ] && [ "$rz_p" != "$rz_pas" ]; then
 			rz_pas=$rz_p; rz_pas_t=$rz_a

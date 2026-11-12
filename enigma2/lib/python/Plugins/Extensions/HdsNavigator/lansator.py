@@ -192,7 +192,19 @@ HBBTV_MARIRE_LA_COPIERE = True
 # hds-navigator, ca si --hbbtv-parte): o reparatie a stratului ajunge astfel si printr-o actualizare a
 # pachetului enigma2, fara navigator nou. Fara fisier, navigatorul il ia pe al lui (/usr/share/hds-navigator).
 CALE_HBBTV_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hds-hbbtv.js")
-LATIME_CSS = 1280           # pagina vede 1280 de puncte CSS pe latime (scara 1,5 pe un ecran de 1920)
+LATIME_CSS = 1280           # modul HbbTV: pagina vede 1280 de puncte CSS pe latime (scara 1,5 pe un ecran de 1920)
+# Paginile obisnuite si interfata web a modulului (0.7.4, NB; Eduard 12.11.2026: "nu are padding deloc la margini... nu
+# e ca pe PC"): pagina sta in interiorul marginilor temei HD Satelit (ecranele ei incep la 72,40 si au 1776x1000 la
+# 1920x1080; lansatorul nu scrie nimic in margini, unde ramane fereastra noastra intunecata) si vede latimea unui PC:
+# 1,25 puncte de ecran pe punct CSS la 1920, deci ~1421 de puncte CSS in margini (pe tot ecranul ar fi 1536, cat un
+# laptop cu 1920x1080 si marirea de 125 % din Windows). Inainte: 1280 pe tot ecranul (scara 1,5), deci literele mai
+# mari, dar paginile late (tabelele modulelor) se micsorau sau se rupeau altfel decat pe PC.
+MARGINE_X_1080, MARGINE_Y_1080 = 72, 40
+SCARA_PAGINA_1080 = 1.25
+# Desenul GL (0.7.4, NB): pe Mali-450 (SF8008, V20, Ustym) procesul web cade cu GL in WebKit 2.54, iar lansatorul se
+# reporneste singur pe procesor ("REZERVA procesor proces-web-cazut"): o pornire in plus, cu procesorul plin, cat se
+# descifreaza canalul. Dupa prima cadere, pana la repornirea interfetei, navigatoarele (si HbbTV) pornesc direct cu --cpu.
+_gl_cazut = [False]
 TEXT_MAXIM = 4096
 PRIORITATE_TASTE = -0x7FFFFFFF
 
@@ -576,18 +588,30 @@ class Navigator(object):
 	def argumente(self):
 		"""Argumentele lansatorului (fara program)."""
 		latime, inaltime = self.m.marime_ecran()
-		scara = latime / float(LATIME_CSS)
-		inaltime_css = int(round(inaltime / scara))
-		a = ["--latime", str(LATIME_CSS), "--inaltime", str(inaltime_css), "--scara", "%.4f" % scara,
-			"--ascuns", "--oom", "1000", "--limba", self.m.limba()]
 		hbbtv = self.mod == MOD_HBBTV
+		margini = []
+		if hbbtv:
+			latime_css = LATIME_CSS
+			scara = latime / float(LATIME_CSS)
+		else:
+			# in interiorul marginilor temei, cu latimea unui PC (vezi MARGINE_X_1080, SCARA_PAGINA_1080)
+			k = latime / 1920.0
+			mx = int(round(MARGINE_X_1080 * k))
+			my = int(round(MARGINE_Y_1080 * inaltime / 1080.0))
+			latime, inaltime = latime - 2 * mx, inaltime - 2 * my
+			latime_css = int(round(latime / (SCARA_PAGINA_1080 * k)))
+			scara = latime / float(latime_css)
+			margini = ["--margine-x", str(mx), "--margine-y", str(my)]
+		inaltime_css = int(round(inaltime / scara))
+		a = ["--latime", str(latime_css), "--inaltime", str(inaltime_css), "--scara", "%.4f" % scara,
+			"--ascuns", "--oom", "1000", "--limba", self.m.limba()] + margini
 		if self.m.fb() is not None and self.m.exista("/dev/fb0"):
 			a += ["--fb", "/dev/fb0"]
 			# in modul HbbTV telecomanda ramane a enigma2: fara dispozitive de intrare, deci fara EVIOCGRAB
 			for i in [] if hbbtv else self.m.intrari():
 				a += ["--intrare", i]
 		s = self.setari or {}
-		if s.get("desen") == "procesor":
+		if s.get("desen") == "procesor" or _gl_cazut[0]:
 			a.append("--cpu")
 		if not hbbtv and s.get("chenar", True) is not False:
 			a.append("--chenar")  # chenarul pe selectie, desenat de lansator (in modul HbbTV il deseneaza aplicatia)
@@ -889,9 +913,15 @@ class Navigator(object):
 		if fel == "REZERVA":
 			self.rezerva = " ".join(cuv[1:])[:60]
 			_jurnal("rezerva: %s" % self.rezerva)
+			if "proces-web-cazut" in cuv or "fara-cadre" in cuv:
+				_gl_cazut[0] = True
 			return
 		if fel == "REPORNIRE":
 			_jurnal("repornire pe procesor")
+			return
+		if fel in ("COMPUNERE", "MARGINI", "PRIORITATE"):
+			# 0.7.4: compunerea pe placa grafica (texturemapper), marginile paginii, prioritatea mai mica pe procesor
+			_jurnal("%s: %s" % (fel.lower(), " ".join(cuv[1:3])[:30]))
 			return
 		if fel == "PROGRES" and len(cuv) > 1 and cuv[1].isdigit():
 			self.progres = int(cuv[1])

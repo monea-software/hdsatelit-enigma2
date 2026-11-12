@@ -275,9 +275,14 @@ def _pune_config_inapoi(rad):
 
 
 def _pune_legaturile(rad, legaturi):
+	"""Legaturile alese puse din nou. Legatura aleasa a unui fel (etc/init.d/<fel>) numai spre un script care exista
+	acum: un pachet care nu s-a instalat (nu exista in feed, sau scriptul lui are alt nume aici) nu lasa o legatura
+	spre nimic, iar alegerea de dinainte ramane."""
 	n = 0
 	for rel, tinta in sorted((legaturi or {}).items()):
 		if not TIPAR_LEGATURA.match(rel) or not TIPAR_TINTA.match(tinta or ""):
+			continue
+		if rel.startswith("etc/init.d/") and not os.path.isfile(_c(rad, "etc/init.d/" + os.path.basename(tinta))):
 			continue
 		cale = _c(rad, rel)
 		if os.path.lexists(cale) and not os.path.islink(cale):

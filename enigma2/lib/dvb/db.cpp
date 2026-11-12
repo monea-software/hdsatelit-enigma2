@@ -1,5 +1,7 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <errno.h>
+#include <dirent.h>
+#include <regex.h>
 #include <lib/dvb/db.h>
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontend.h>
@@ -877,6 +879,197 @@ void eDVBDB::reloadBouquets()
 		parent.m_services.push_back(ref);
 		parent.flushChanges();
 	}
+}
+
+/* HDSatelit: the bouquet calls of the plugins (db.h). */
+static bool hdsBuchetPlugin(const std::string &f)
+{
+	return f.find('/') == std::string::npos
+		&& (f.compare(0, 12, "userbouquet.") == 0 || f.compare(0, 11, "subbouquet.") == 0)
+		&& f.size() > 12;
+}
+
+static std::string hdsRadacinaBuchet(const std::string &f)
+{
+	return f.find(".radio") != std::string::npos ? "bouquets.radio" : "bouquets.tv";
+}
+
+static bool hdsTrimiteLaBuchet(const eServiceReference &r, const std::string &f)
+{
+	return (r.flags & eServiceReference::canDescent) && r.path.find("FROM BOUQUET \"" + f + "\"") != std::string::npos;
+}
+
+/* the whole list read before anything changes: false (and nothing changed) when it is not a list of strings */
+static bool hdsListaReferinte(ePyObject services, std::list<eServiceReference> &out, const char *metoda)
+{
+	if (!services || !PyList_Check(services))
+	{
+		eDebug("[eDVBDB] %s: the services are not a list, nothing changed", metoda);
+		return false;
+	}
+	Py_ssize_t n = PyList_Size(services);
+	for (Py_ssize_t i = 0; i < n; ++i)
+	{
+		ePyObject o = PyList_GET_ITEM(services, i);
+		const char *text = PyUnicode_Check(o) ? PyUnicode_AsUTF8(o) : NULL;
+		if (!text)
+		{
+			PyErr_Clear();
+			eDebug("[eDVBDB] %s: entry %d is not a string, nothing changed", metoda, (int)i);
+			return false;
+		}
+		eServiceReference ref(text);
+		if (ref.type == eServiceReference::idInvalid)
+		{
+			eDebug("[eDVBDB] %s: '%s' is not a service reference, left out", metoda, text);
+			continue;
+		}
+		out.push_back(ref);
+	}
+	return true;
+}
+
+RESULT eDVBDB::addOrUpdateBouquet(const std::string &name, const std::string &filename, ePyObject services, bool isAddedFirst)
+{
+	if (!hdsBuchetPlugin(filename))
+	{
+		eDebug("[eDVBDB] addOrUpdateBouquet: '%s' is not a userbouquet/subbouquet file name, nothing changed", filename.c_str());
+		return -1;
+	}
+	std::list<eServiceReference> refs;
+	if (!hdsListaReferinte(services, refs, "addOrUpdateBouquet"))
+		return -1;
+	eBouquet *b = NULL;
+	std::map<std::string, eBouquet>::iterator it = m_bouquets.find(filename);
+	if (it != m_bouquets.end())
+		b = &it->second;
+	else
+	{
+		if (filename.compare(0, 11, "subbouquet.") != 0)
+		{
+			std::map<std::string, eBouquet>::iterator rad = m_bouquets.find(hdsRadacinaBuchet(filename));
+			if (rad != m_bouquets.end())
+			{
+				bool are = false;
+				for (eBouquet::list::iterator i = rad->second.m_services.begin(); i != rad->second.m_services.end(); ++i)
+					if (hdsTrimiteLaBuchet(*i, filename))
+						are = true;
+				if (!are)
+				{
+					eServiceReference ref;
+					memset(ref.data, 0, sizeof(ref.data));
+					ref.type = eServiceReference::idDVB;
+					ref.flags = eServiceReference::flagDirectory;
+					ref.data[0] = filename.find(".radio") != std::string::npos ? 2 : 1;
+					ref.path = "FROM BOUQUET \"" + filename + "\" ORDER BY bouquet";
+					if (isAddedFirst)
+						rad->second.m_services.push_front(ref);
+					else
+						rad->second.m_services.push_back(ref);
+					rad->second.flushChanges();
+				}
+			}
+			else
+				eDebug("[eDVBDB] addOrUpdateBouquet: %s not loaded, '%s' is not added to it", hdsRadacinaBuchet(filename).c_str(), filename.c_str());
+		}
+		b = &m_bouquets[filename];
+		b->m_filename = filename;
+		b->m_bouquet_name = name;
+	}
+	b->m_services.swap(refs);
+	return b->flushChanges();
+}
+
+RESULT eDVBDB::addOrUpdateBouquet(const std::string &name, ePyObject services, const int type, bool isAddedFirst)
+{
+	return addOrUpdateBouquet(name, "userbouquet." + name + (type == 2 ? ".radio" : ".tv"), services, isAddedFirst);
+}
+
+RESULT eDVBDB::appendServicesToBouquet(const std::string &filename, ePyObject services)
+{
+	eServiceReference ref;
+	ref.path = "FROM BOUQUET \"" + filename + "\" ORDER BY bouquet";
+	eBouquet *b = NULL;
+	if (getBouquet(ref, b) || !b)
+	{
+		eDebug("[eDVBDB] appendServicesToBouquet: no bouquet '%s'", filename.c_str());
+		return -1;
+	}
+	std::list<eServiceReference> refs;
+	if (!hdsListaReferinte(services, refs, "appendServicesToBouquet"))
+		return -1;
+	b->m_services.splice(b->m_services.begin(), refs);
+	return b->flushChanges();
+}
+
+RESULT eDVBDB::removeBouquet(const std::string &filename_regex)
+{
+	/* POSIX extended expressions (enigma2 is built without C++ exceptions); the plugins pass simple names and patterns */
+	regex_t re;
+	if (regcomp(&re, filename_regex.c_str(), REG_EXTENDED | REG_NOSUB) != 0)
+	{
+		eDebug("[eDVBDB] removeBouquet: '%s' is not a regular expression, nothing deleted", filename_regex.c_str());
+		return -1;
+	}
+	std::string dir = eEnv::resolve("${sysconfdir}/enigma2/");
+	DIR *d = opendir(dir.c_str());
+	if (!d)
+	{
+		regfree(&re);
+		return -1;
+	}
+	std::vector<std::string> nume;
+	struct dirent *e;
+	while ((e = readdir(d)) != NULL)
+	{
+		std::string f = e->d_name;
+		if (e->d_type != DT_REG && e->d_type != DT_UNKNOWN)
+			continue;
+		if (hdsBuchetPlugin(f) && regexec(&re, f.c_str(), 0, NULL, 0) == 0)
+			nume.push_back(f);
+	}
+	closedir(d);
+	regfree(&re);
+	static const char *radacini[] = { "bouquets.tv", "bouquets.radio" };
+	for (std::vector<std::string>::iterator f = nume.begin(); f != nume.end(); ++f)
+	{
+		for (int r = 0; r < 2; ++r)
+		{
+			std::map<std::string, eBouquet>::iterator rad = m_bouquets.find(radacini[r]);
+			if (rad == m_bouquets.end())
+				continue;
+			size_t inainte = rad->second.m_services.size();
+			for (eBouquet::list::iterator i = rad->second.m_services.begin(); i != rad->second.m_services.end(); )
+				if (hdsTrimiteLaBuchet(*i, *f))
+					i = rad->second.m_services.erase(i);
+				else
+					++i;
+			if (rad->second.m_services.size() != inainte)
+				rad->second.flushChanges();
+		}
+		m_bouquets.erase(*f);
+		if (::unlink((dir + *f).c_str()) < 0)
+			eDebug("[eDVBDB] removeBouquet: cannot delete %s: %m", f->c_str());
+		else
+			eDebug("[eDVBDB] removeBouquet: %s deleted", f->c_str());
+	}
+	return 0;
+}
+
+int eDVBDB::getFlag(const eServiceReference &ref)
+{
+	if (ref.type != eServiceReference::idDVB)
+		return 0;
+	std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator it = m_services.find((const eServiceReferenceDVB&)ref);
+	return it != m_services.end() ? it->second->m_flags : 0;
+}
+
+bool eDVBDB::isCrypted(const eServiceReference &ref)
+{
+	if (ref.type != eServiceReference::idDVB)
+		return false;
+	std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator it = m_services.find((const eServiceReferenceDVB&)ref);
+	return it != m_services.end() && ((it->second->m_flags & eDVBService::dxIsScrambledPMT) || !it->second->m_ca.empty());
 }
 
 eDVBDB *eDVBDB::instance;

@@ -24,7 +24,8 @@ PACKAGE_FILE_ROOTS = ('/media/', '/hdd/', '/mnt/', '/autofs/', '/tmp/', '/run/me
 _COMMANDS = ('update', 'upgrade', 'install', 'remove', 'list', 'list_installed', 'list-installed', 'list-upgradable')
 # HDSatelit 0.6.8: --download-only, packages from foreign sources are downloaded and read before they are installed
 # (Components/HdsExtensiiLucru.py, packages made only for Python 2)
-_OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only')
+# --force-overwrite and --force-reinstall: only for skins (enigma2-plugin-skins-*), as in OE-Alliance (HdsExtensiiLucru.optiuniTema)
+_OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only', '--force-overwrite', '--force-reinstall')
 _PROGRAMS = ('/usr/bin/opkg', '/bin/opkg', '/usr/sbin/opkg', '/usr/local/bin/opkg')
 
 

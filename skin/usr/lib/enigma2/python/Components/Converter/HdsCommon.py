@@ -1454,6 +1454,50 @@ def hbbtv_rosu(r):
 	return r._memo("hbbtv_rosu", fn) is True
 
 
+def rosu_deschide_hbbtv(r):
+	"""ROSU pe bara deschide aplicatia HbbTV a canalului redat: HbbTV pornit din setari si AIT-ul citit are o aplicatie
+	de pornit (aceeasi conditie ca HdsHbbtvPornire.hotarare_rosu; fara setarea semnului, care tine numai de semn).
+	Pe imaginile fara sAITPID / sHBBTVAit sau fara modul: False."""
+	if isi("sAITPID") is None or isi("sHBBTVAit") is None:
+		return False
+	if r.geti("sAITPID") <= 0:
+		return False
+
+	def fn():
+		from Components import HdsHbbtv
+		if not HdsHbbtv.hbbtv_pornit():
+			return False
+		rez = HdsHbbtv.rezumat(HdsHbbtv.din_info(r.info(), _ISI))
+		return rez.get("are_hbbtv") is True and rez.get("aleasa") is not None
+	try:
+		return r._memo("rosu_hbbtv", fn) is True
+	except Exception:
+		return False
+
+
+def rosu_text(r):
+	"""Legenda tastei ROSII din bara (tema Pro, HdsInfo RedKeyText): „HbbTV” pe canalele
+	unde ROSU deschide aplicatia HbbTV (Screens/InfoBar.hdsHbbtvRosu o ia inaintea inregistrarii); altfel ce i-a
+	alocat omul tastei (Components/HdsTasteRapide, scurt), iar fara alocare „Înregistrează” (functia obisnuita a
+	tastei pe bara). O alocare „Nimic” lasa legenda goala."""
+	if rosu_deschide_hbbtv(r):
+		return u"HbbTV"
+	try:
+		from Components import HdsTasteRapide
+		a = HdsTasteRapide.sens_tasta("live", "red")
+		if a == "none":
+			return u""
+		if a != "default":
+			# listele tastelor se fac la import, uneori inainte de traducere: textul se traduce din nou la afisare
+			# (HdsTasteRapide.text_tasta, 553b0a53c); un text deja tradus trece neschimbat
+			text = HdsTasteRapide.text_actiune(a)
+			traduce = getattr(HdsTasteRapide, "text_tasta", None)
+			return u(traduce("red", text) if traduce else text)
+	except Exception:
+		pass
+	return tr("epg_key_rec")
+
+
 def text_hbbtv(r):
 	"""„da” / „nu are” (canalul nu anunta HbbTV) / „nu se știe” (nu s-a citit inca) pentru afisaj."""
 	v = hbbtv_semnalat(r)

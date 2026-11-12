@@ -151,7 +151,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			-v mi="$hds_mi" '
 			# modelele cunoscute, in ordine alfabetica (ca HdsPazaModel.MODELE_CUNOSCUTE)
 			BEGIN {
-				NM = split("duo4k duo4kse gbmv200 gbquad4k gbquad4kpro gbtrio4k gbue4k gbx34k protek4k sf8008 sf8008m " \
+				NM = split("duo4k duo4klite duo4kse gbmv200 gbquad4k gbquad4kpro gbtrio4k gbue4k gbx34k protek4k sf8008 sf8008m " \
 					"solo4k ultimo4k uno4k uno4kse ustym4kpro viper4k viper4kv20 viper4kv30 viper4kv40 zero4k", LM, " ")
 				for (j = 1; j <= NM; j++) MODELE[LM[j]] = 1
 			}
@@ -242,7 +242,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				if (R["stocare"] != "" && R["stocare"] != "nand") bune = 0
 				# model_id= poate fi numai una din placile cu pagina (HdsPazaModel.MODELE_PLACI, reguliValide)
 				if ("model_id" in R && (R["model_id"] !~ /^[a-z0-9]+$/ ||
-					index(" gbquad4kpro duo4kse duo4k uno4kse solo4k ", " " R["model_id"] " ") == 0)) bune = 0
+					index(" gbquad4kpro duo4kse duo4k duo4klite uno4kse solo4k ", " " R["model_id"] " ") == 0)) bune = 0
 				ids = modele(mi)
 				ne = (fam && R["partitions"] == "-") ? 0 : split(R["partitions"], E, ",")
 				for (j = 1; j <= ne; j++) {
@@ -265,7 +265,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					# Broadcom and NAND: "7241" and "bcm7241" are the same chip (the bcm in front is dropped on both sides)
 					c1 = tolower(cip); c2 = tolower(R["chip"])
 					if (fam || nand) { sub(/^bcm/, "", c1); sub(/^bcm/, "", c2) }
-					if (cip == "" || c1 != c2) m = m " cip"
+					# Broadcom with chip=- (MHD, AX HD51: the chipset node of the driver is not reliable): the chip is not
+					# read and not compared, as hw=- for the board; the box type and the place decide
+					if (!(fam && R["chip"] == "-") && (cip == "" || c1 != c2)) m = m " cip"
 					# Broadcom, or hw=- (a board without a factory header): the board is not read, nothing to compare
 					hwr = !fam && R["hw"] != "-" && (hw == "" || hw != R["hw"])
 					# Broadcom on eMMC: no table to compare; NAND (Broadcom too): the table from /proc/mtd is compared
@@ -458,6 +460,51 @@ if [ "$hds_paza" != nepotrivit ] && [ -x @bindir@/showiframe -a -f @datadir@/bac
 		unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
 		exec @bindir@/showiframe @datadir@/backdrop.mvi
 	)
+fi
+
+# An update cut in the middle (tools/hds-actualizare-intrerupta.py, 0.7.4). opkg runs as a child of enigma2, and any end
+# of enigma2 while it unpacks (a restart of the interface, a crash) kills it with SIGKILL (lib/base/console.cpp): the
+# opkg status keeps the old version while part of the files are new, and enigma2 then ends at every start, safe mode
+# too (LinuxSat 164125 #969426, SF8008 with its root on a stick, 10.11.2026). This script and the program are among the
+# first files of the package (./usr/bin), so they are the new ones even after an unpack stopped early. The program runs
+# only on a sign: the mark of an update in progress (written by Components/HdsActualizari.py before opkg and removed
+# when opkg ends by itself), packages left in /tmp/hds-actualizare (only checked ones stay there), or /etc/image-version
+# (the first file of the main package) naming another version than enigma2-hdsatelit in the opkg status, or that
+# package not installed whole. It finishes the update once per boot, only from packages signed by HD Satelit, never
+# stops opkg at a deadline and always exits 0; enigma2 shows the result. A usual start reads two small files with shell
+# built-ins and runs one awk on the opkg status (about 40 ms on a receiver). On another receiver (model guard) nothing
+# runs. The variables are only for the tests on the PC; init sets none of them.
+HDS_ACT_PROGRAM=${HDS_ACT_PROGRAM:-@bindir@/hds-actualizare-intrerupta.py}
+HDS_ACT_SEMN=${HDS_ACT_SEMN:-/etc/enigma2/hds-actualizare.in-curs}
+HDS_ACT_DOSAR=${HDS_ACT_DOSAR:-/tmp/hds-actualizare}
+HDS_ACT_IMAGINE=${HDS_ACT_IMAGINE:-/etc/image-version}
+HDS_ACT_STATUS=${HDS_ACT_STATUS:-/var/lib/opkg/status}
+hds_act=""
+[ -f "$HDS_ACT_SEMN" ] && hds_act=semn
+for hds_f in "$HDS_ACT_DOSAR"/*.ipk; do
+	[ -f "$hds_f" ] && hds_act=pachete
+	break
+done
+if [ -z "$hds_act" ] && [ -f "$HDS_ACT_IMAGINE" ] && [ -f "$HDS_ACT_STATUS" ]; then
+	hds_act_img=""
+	while IFS='=' read -r hds_k hds_v; do
+		[ "$hds_k" = imageversion ] && hds_act_img=$hds_v
+	done < "$HDS_ACT_IMAGINE"
+	hds_act_st=$(awk '/^Package: enigma2-hdsatelit$/ { p = 1; next } p && /^$/ { exit } p && /^Version:/ { v = $2 }
+		p && /^Status:/ { s = $0 } END { if (v != "") print v "|" s }' "$HDS_ACT_STATUS" 2>/dev/null)
+	if [ -n "$hds_act_img" ] && [ -n "$hds_act_st" ]; then
+		hds_act_v=${hds_act_st%%|*}
+		hds_act_v=${hds_act_v#*:}
+		hds_act_v=${hds_act_v%%[+~-]*}
+		case "${hds_act_st#*|}" in
+			*" installed"*) [ "$hds_act_v" = "$hds_act_img" ] || hds_act=versiune ;;
+			*) hds_act=status ;;
+		esac
+	fi
+fi
+if [ -n "$hds_act" ] && [ "$hds_paza" = potrivit ] && [ -f "$HDS_ACT_PROGRAM" ] && command -v python3 > /dev/null 2>&1; then
+	echo "[hds-actualizare] an update may have been cut ($hds_act): $HDS_ACT_PROGRAM pornire"
+	python3 -I -S -B "$HDS_ACT_PROGRAM" pornire > /dev/null 2>&1
 fi
 
 # Settings put back while enigma2 was running (Components/HdsSetariDinCopie.py) wait in settings.din-copie, one

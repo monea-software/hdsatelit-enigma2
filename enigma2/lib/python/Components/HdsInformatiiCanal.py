@@ -63,6 +63,16 @@ def valoare(info, what):
 	return v
 
 
+def furnizor(info, I):
+	"""Furnizorul canalului, cu cel facut de scanare din transponder scris pentru om (Components/HdsFurnizori.py)."""
+	v = valoare(info, I.sProvider)
+	try:
+		from Components.HdsFurnizori import aratat_in_informatii
+		return aratat_in_informatii(v) if isinstance(v, str) and v else v
+	except Exception:
+		return v
+
+
 def textHdr(info, I):
 	"""Gama imaginii din flux (evenimentul 17 al decodorului, sGamma): 0 SDR, 1 HDR, 2 HDR10, 3 HLG; "" cand nu se stie."""
 	s_gamma = getattr(I, "sGamma", None)
@@ -118,7 +128,7 @@ def randuriServiciu(info, I, nume, refstr):
 	retea = tuple(randuriRetea(refstr))
 	if width != -1 and height != -1:
 		Labels = ((_("Name"), nume, TYPE_TEXT),
-			(_("Provider"), valoare(info, I.sProvider), TYPE_TEXT)) + retea + (
+			(_("Provider"), furnizor(info, I), TYPE_TEXT)) + retea + (
 			(_("Aspect ratio"), aspect, TYPE_TEXT),
 			(_("Resolution"), "%dx%d" % (width, height), TYPE_TEXT))
 		hdr = textHdr(info, I)
@@ -128,7 +138,7 @@ def randuriServiciu(info, I, nume, refstr):
 			(_("Service reference"), refstr, TYPE_TEXT))
 	else:
 		Labels = ((_("Name"), nume, TYPE_TEXT),
-			(_("Provider"), valoare(info, I.sProvider), TYPE_TEXT)) + retea + (
+			(_("Provider"), furnizor(info, I), TYPE_TEXT)) + retea + (
 			(_("Aspect ratio"), aspect, TYPE_TEXT),
 			(_("Namespace"), valoare(info, I.sNamespace), TYPE_VALUE_HEX, 8),
 			(_("Service reference"), refstr, TYPE_TEXT))

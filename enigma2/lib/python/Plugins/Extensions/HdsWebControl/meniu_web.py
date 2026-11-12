@@ -434,6 +434,7 @@ function intrare(c){
 }
 function grup(g, deschis){
   var d = document.createElement("details"); if(deschis){ d.open = true; }
+  if(g.id){ d.id = "g-" + g.id; }
   var s = document.createElement("summary"); s.appendChild(document.createTextNode(g.text));
   pictograma(g.pictograma, s);
   if(g.web){ s.appendChild(legatura(g.web, "Pagina web")); }
@@ -444,13 +445,15 @@ function grup(g, deschis){
   return d;
 }
 // /meniu#i-<entryID> (din meniul de sus, la intrarile care se deschid numai pe televizor): grupa intrarii se
-// deschide, iar randul ei e ales si adus in fata
+// deschide, iar randul ei e ales si adus in fata. /meniu#g-<id> (o treapta din calea paginii, grupa fara pagina ei,
+// cadru_web._hrefGrupa): grupa se deschide, cu cele de deasupra ei, si vine sus
 function arataDinAdresa(){
   var vechi = document.querySelector(".intrare.ales"); if(vechi){ vechi.classList.remove("ales"); }
   var h = location.hash.slice(1);
-  if(!/^i-[A-Za-z0-9_.-]{1,64}$/.test(h)){ return; }
+  if(!/^[ig]-[A-Za-z0-9_.-]{1,64}$/.test(h)){ return; }
   var x = $(h); if(!x){ return; }
-  for(var p = x.parentNode; p; p = p.parentNode){ if(p.tagName === "DETAILS"){ p.open = true; } }
+  for(var p = x; p; p = p.parentNode){ if(p.tagName === "DETAILS"){ p.open = true; } }
+  if(h.charAt(0) === "g"){ x.scrollIntoView({block: "start"}); return; }
   x.classList.add("ales");
   x.scrollIntoView({block: "center"});
 }

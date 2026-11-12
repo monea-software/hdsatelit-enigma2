@@ -110,7 +110,7 @@ inseamna ecran intreg). Imaginea revine OBLIGATORIU pe tot ecranul la: ascundere
 un obiect ascuns sau prea mic, orice inchidere (EXIT, zap, cadere, standby, memorie, laOprit) si la pornirea enigma2,
 daca a ramas mica dupa o cadere a interfetei (porneste -> video_intreg_la_pornire).
 
-SETAREA PRINCIPALA „HbbTV” (config.plugins.hdsnavigator.hbbtv, 0.2.8, PORNITA din fabrica din 09.11.2026; omul o poate opri
+SETAREA PRINCIPALA HbbTV (config.plugins.hdsnavigator.hbbtv, 0.2.8, PORNITA din fabrica din 0.7.3; omul o poate opri
 de tot, daca i se pare ca ingreuneaza receptorul): oprita, ROSU si Portal nu pornesc nimic
 (rosu() intoarce 0), pornirea automata nu se face, o aplicatie deschisa se inchide pe loc (laSetareaHbbtv), semnul rosu
 nu se arata (HdsHbbtv.arata_semn) si nucleul nu mai cere filtrul AIT (lib/service/servicedvb.cpp, la urmatorul zap).
@@ -427,12 +427,20 @@ ID_DVB_EVENT = 1
 
 LIMBA_3 = {"ro": "ron", "en": "eng", "de": "deu", "fr": "fra", "it": "ita", "es": "spa", "pt": "por", "hu": "hun",
 	"cs": "ces", "pl": "pol", "nl": "nld", "ru": "rus", "tr": "tur", "bg": "bul", "el": "ell", "uk": "ukr", "sk": "slk",
-	"sr": "srp", "hr": "hrv", "sl": "slv", "sv": "swe", "da": "dan", "fi": "fin", "no": "nor", "ar": "ara"}
+	"sr": "srp", "hr": "hrv", "sl": "slv", "sv": "swe", "da": "dan", "fi": "fin", "no": "nor", "ar": "ara",
+	"ca": "cat", "et": "est", "fy": "fry", "is": "isl", "lt": "lit", "lv": "lav"}
 TARA_3 = {"RO": "ROU", "MD": "MDA", "DE": "DEU", "AT": "AUT", "CH": "CHE", "GB": "GBR", "IE": "IRL", "FR": "FRA",
 	"BE": "BEL", "IT": "ITA", "ES": "ESP", "PT": "PRT", "HU": "HUN", "CZ": "CZE", "SK": "SVK", "PL": "POL", "NL": "NLD",
-	"RU": "RUS", "TR": "TUR", "BG": "BGR", "GR": "GRC", "UA": "UKR", "US": "USA"}
+	"RU": "RUS", "TR": "TUR", "BG": "BGR", "GR": "GRC", "UA": "UKR", "US": "USA",
+	"RS": "SRB", "HR": "HRV", "SI": "SVN", "SE": "SWE", "DK": "DNK", "FI": "FIN", "NO": "NOR", "EE": "EST", "LT": "LTU",
+	"LV": "LVA", "IS": "ISL", "AD": "AND", "AE": "ARE"}
+# Tara dupa limba meniului, cand limba nu vine cu o tara stiuta (in TARA_3), pentru toate limbile imaginii (po/). Tara e
+# cea din Components/Language.py (ar_AE, ca_AD), afara de sarba (acolo YU, tara care nu mai exista: Serbia) si frizona
+# (x-FY: Olanda). O limba lipsa de aici ar da paginilor HbbTV tara Romania.
 TARA_LIMBII = {"ro": "RO", "en": "GB", "de": "DE", "fr": "FR", "it": "IT", "es": "ES", "pt": "PT", "hu": "HU",
-	"cs": "CZ", "pl": "PL", "nl": "NL", "ru": "RU", "tr": "TR"}
+	"cs": "CZ", "pl": "PL", "nl": "NL", "ru": "RU", "tr": "TR",
+	"bg": "BG", "el": "GR", "uk": "UA", "sk": "SK", "sr": "RS", "hr": "HR", "sl": "SI", "sv": "SE", "da": "DK",
+	"fi": "FI", "no": "NO", "et": "EE", "lt": "LT", "lv": "LV", "is": "IS", "ca": "AD", "fy": "NL", "ar": "AE"}
 
 
 def parte_ref(ref):

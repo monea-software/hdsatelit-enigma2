@@ -80,7 +80,9 @@ def pachete(U, H, discuri, candidati=None):
 		# stickul pus pe numai citire, fara alt disc pentru dezarhivare (U.marcheazaMediu); verificarea e in pagina Discurile
 		fara_loc = bool(c.get("numai_citire")) and not c.get("loc_lucru") and c.get("fel") != "rea"
 		rez.append({
-			"nume": U.numeImagineStraina(c) if c.get("fel") == "straina" else U._numePachet(c),
+			# copia completa facuta de receptor (HdsCopieImagine): „Copia completă din <data, ora>”, ca pe televizor
+			"nume": U.numeImagineStraina(c) if c.get("fel") == "straina" else (U.titluPachet(c) if getattr(
+				U, "esteCopieCompleta", lambda x: False)(c) else U._numePachet(c)),
 			"fel": c.get("fel") or "",
 			"stare": U.textFel(c["fel"]) if c.get("fel") else "",
 			"versiune": c.get("versiune") or "",
@@ -186,7 +188,7 @@ def controler(U, sesiune):
 			return {"result": True, "id": self._ident, "faza": self._faza,
 				"ocupat": self._ocupat, "scriere": self._scriereRealaPornita,
 				"poate_instala": self._faza == "rezultat" and self._arataCorect and not self._scriereRealaPornita,
-				"poate_renunta": not self._scriereRealaPornita and self._faza not in ("verificare", "anulare") and
+				"poate_renunta": not self._scriereRealaPornita and self._faza != "anulare" and
 					(self._ocupat or self._faza == "rezultat" or self.intrebare is not None),
 				"mesaj": self["detaliu"].text, "analiza": self["iesire"].text,
 				"refuz": self.refuz, "intrebare": self.intrebare}
@@ -217,9 +219,13 @@ def controler(U, sesiune):
 			return True
 
 		def opreste(self):
-			# Copierea si sumele se pot anula, ca pe TV; ofgwrite -n este lasat sa termine.
-			if self._scriereRealaPornita or self._faza == "anulare" or (self._ocupat and self._faza == "verificare"):
+			# Copierea si sumele se pot anula, ca pe TV; simularea (ofgwrite -n, nu scrie nimic) se opreste ca la EXIT pe TV.
+			if self._scriereRealaPornita or self._faza == "anulare":
 				return False
+			if self._ocupat and self._faza == "verificare":
+				self.intrebare, self._raspuns = None, None
+				self._oprireSimulare()
+				return True
 			self.intrebare, self._raspuns = None, None
 			self._renuntat = True
 			if self._ocupat:

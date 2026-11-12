@@ -22,6 +22,11 @@ public:
 	void setForegroundGradient(const gRGB &first, const gRGB &middle, const gRGB &last, int vertical = 0);
 	void setPixmap(gPixmap *pixmap);
 	void setPixmap(ePtr<gPixmap> &pixmap);
+		/* HDSatelit 0.7.4: a picture under the bar (the track; scrollbarBackgroundPicture of the skins written for other
+		   images), drawn over the background, before the moving part */
+	void setBackgroundPixmap(ePtr<gPixmap> &pixmap);
+		/* HDSatelit 0.7.4: this slider is the scroll bar of a list (the window style colours Scrollbar*, not Slider*) */
+	void setIsScrollbar(bool scrollbar) { m_is_scrollbar = scrollbar; }
 protected:
 	int event(int event, void *data=0, void *data2=0);
 private:
@@ -32,9 +37,11 @@ private:
 	};
 	bool m_have_border_color;
 	bool m_have_foreground_color;
+	bool m_is_scrollbar;
 	bool m_have_start;
 	int m_min, m_max, m_value, m_start, m_orientation, m_orientation_swapped, m_border_width;
 	ePtr<gPixmap> m_pixmap;
+	ePtr<gPixmap> m_background_pixmap;
 	
 	gRegion m_currently_filled;
 	gRGB m_border_color;

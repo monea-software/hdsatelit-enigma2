@@ -3,7 +3,9 @@
 #include <lib/gui/ewidget.h>
 #include <lib/base/ebase.h>
 #include <lib/gdi/grc.h>
+#include <lib/gdi/hdsanimatie.h>
 #include <string.h>
+#include <time.h>
 
 extern void dumpRegion(const gRegion &region);
 
@@ -307,6 +309,42 @@ void eWidgetDesktop::paintLayer(eWidget *widget, int layer)
 	painter.resetOffset();
 }
 
+	/* the buffer has the size and the palette of the screen (the colours given by number are looked up in it); a
+	   new size or palette length makes a new buffer (the drawing thread keeps the old one while it still uses it) */
+bool eWidgetDesktop::hiddenBuffer(ePtr<gPixmap> &pm, ePtr<gDC> &dc)
+{
+	if (!m_screen.m_dc)
+		return false;
+	ePtr<gPixmap> screen;
+	m_screen.m_dc->getPixmap(screen);
+	if (!screen || !screen->surface || (screen->surface->bpp != 32) || !screen->surface->data)
+		return false;
+	eSize size = screen->size();
+	gSurface *s = screen->surface;
+	int colors = s->clut.data ? s->clut.colors : 0;
+	if (!pm || (pm->size() != size) || (pm->surface->clut.colors != colors))
+	{
+		dc = 0;
+		pm = new gPixmap(size, 32, 0);
+		if (!pm->surface || !pm->surface->data)
+		{
+			pm = 0;
+			return false;
+		}
+		if (colors > 0)
+		{
+			pm->surface->clut.data = new gRGB[colors];
+			pm->surface->clut.colors = colors;
+			memcpy(pm->surface->clut.data, s->clut.data, colors * sizeof(gRGB));
+		}
+		dc = new gDC(pm);
+		eDebug("[eWidgetDesktop] hidden buffer %dx%d", size.width(), size.height());
+	}
+	else if ((colors > 0) && memcmp(pm->surface->clut.data, s->clut.data, colors * sizeof(gRGB)))
+		memcpy(pm->surface->clut.data, s->clut.data, colors * sizeof(gRGB));
+	return true;
+}
+
 	/* HDSatelit: in immediate mode the widgets draw straight into the page the screen shows (the receiver refuses the
 	   manual blit, so fb->blit() does nothing): a dirty region is first filled with the window background (fully
 	   transparent in a window over the picture), then the widgets over it are drawn one by one, and those half drawn
@@ -334,30 +372,8 @@ bool eWidgetDesktop::paintOffscreen()
 		area += (long long)dirty.rects[i].width() * dirty.rects[i].height();
 	if ((area <= 0) || (area * 8 > (long long)size.width() * size.height()))
 		return false;
-		/* the buffer has the size and the palette of the screen (the colours given by number are looked up in it); a
-		   new size or palette length makes a new buffer (the drawing thread keeps the old one while it still uses it) */
-	gSurface *s = screen->surface;
-	int colors = s->clut.data ? s->clut.colors : 0;
-	if (!m_offscreen || (m_offscreen->size() != size) || (m_offscreen->surface->clut.colors != colors))
-	{
-		m_offscreen_dc = 0;
-		m_offscreen = new gPixmap(size, 32, 0);
-		if (!m_offscreen->surface || !m_offscreen->surface->data)
-		{
-			m_offscreen = 0;
-			return false;
-		}
-		if (colors > 0)
-		{
-			m_offscreen->surface->clut.data = new gRGB[colors];
-			m_offscreen->surface->clut.colors = colors;
-			memcpy(m_offscreen->surface->clut.data, s->clut.data, colors * sizeof(gRGB));
-		}
-		m_offscreen_dc = new gDC(m_offscreen);
-		eDebug("[eWidgetDesktop] hidden buffer %dx%d for the small regions", size.width(), size.height());
-	}
-	else if ((colors > 0) && memcmp(m_offscreen->surface->clut.data, s->clut.data, colors * sizeof(gRGB)))
-		memcpy(m_offscreen->surface->clut.data, s->clut.data, colors * sizeof(gRGB));
+	if (!hiddenBuffer(m_offscreen, m_offscreen_dc))
+		return false;
 		/* nothing is read back from the screen: as in paint(), every pixel of the dirty region is drawn again, by the
 		   topmost window over it or by the background */
 	ePtr<gDC> visible = m_screen.m_dc;
@@ -374,9 +390,200 @@ bool eWidgetDesktop::paintOffscreen()
 	return true;
 }
 
+/*
+ * HDSatelit 0.7.4: animatiile ferestrelor desenate de enigma2 (lib/gdi/hdsanimatie.h).
+ *
+ * Un pas = o schimbare de ecran facuta de Python dintr-o data (Session.open: ecranul de dedesubt se ascunde si cel nou se
+ * arata; Session.close: cel de sus se ascunde, cel de dedesubt se arata), intre doua paint(). Pasul porneste la prima
+ * fereastra cu animatia ceruta (eWindow::setAnimationMode, pusa de Session.open numai pe ecranele deschise modal). Fiecare
+ * fereastra care se arata sau se ascunde in pas isi compune intai zona in „inainte” (RAM), cu ce se vede inca, deci
+ * imaginea „inainte” e exact ecranul de dinaintea pasului. La paint() zona (dreptunghiul care cuprinde ferestrele schimbate)
+ * se compune in „dupa” (tamponul ascuns m_offscreen), iar operatia gOpcode::hdsAnimatie trece de la una la alta pe firul
+ * gRC. Ce s-a mai schimbat in afara zonei se copiaza o data, ca in paintOffscreen. Din memoria video nu se citeste nimic.
+ * Ferestrele aratate fara Session.open (bara canalului la zap, volumul, mesajele scurte, PiP, subtitrarile) nu pornesc
+ * niciun pas: raman fara animatie si fara nicio intarziere.
+ */
+int eWidgetDesktop::s_anim_fel = 0;
+int eWidgetDesktop::s_anim_durata_ms = 200;
+
+static long hdsAcumMs()
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (long)t.tv_sec * 1000L + t.tv_nsec / 1000000L;
+}
+
+void eWidgetDesktop::hdsSetAnimatie(int fel, int durata_ms)
+{
+	s_anim_fel = (fel >= 0 && fel <= 3) ? fel : 0;
+	s_anim_durata_ms = durata_ms < 80 ? 80 : (durata_ms > 600 ? 600 : durata_ms);
+	eDebug("[HdsAnimatie] felul %d, %d ms", s_anim_fel, s_anim_durata_ms);
+}
+
+int eWidgetDesktop::hdsAnimatieFel()
+{
+	return s_anim_fel;
+}
+
+int eWidgetDesktop::hdsAnimatieDurata()
+{
+	return s_anim_durata_ms;
+}
+
+void eWidgetDesktop::hdsAnimatieInchidere()
+{
+	m_anim_urm_inchidere = 1;
+}
+
+void eWidgetDesktop::hdsAnimatieFaraPas()
+{
+	m_anim_fara = 1;
+	m_anim_fara_ms = hdsAcumMs();
+}
+
+void eWidgetDesktop::hdsAnimatieTine()
+{
+	if (!s_anim_fel || (m_style_id != 0))
+		return;
+	m_anim_tine = 1;
+	m_anim_tine_ms = hdsAcumMs();
+}
+
+void eWidgetDesktop::hdsAnimatieElibereaza()
+{
+	if (!m_anim_tine)
+		return;
+	m_anim_tine = 0;
+	m_require_redraw = 1;
+	if (m_timer)
+		m_timer->start(0, 1);
+}
+
+void eWidgetDesktop::hdsInainteDeSchimbare(eWidget *root, int cere)
+{
+	if ((m_comp_mode != cmImmediate) || (m_style_id != 0) || !s_anim_fel || !m_screen.m_dc || !root)
+		return;
+	long acum = hdsAcumMs();
+	if (m_anim_fara)
+	{
+		if (acum - m_anim_fara_ms <= 300)
+			return;		/* pasul acesta e fara animatie */
+		m_anim_fara = 0;
+	}
+	if (m_anim_armata && (acum - m_anim_cand_ms > 1000))
+		m_anim_armata = 0;	/* un pas ramas fara paint (fereastra n-a mai aparut): uitat */
+	if (!m_anim_armata)
+	{
+		if (!cere)
+			return;
+		m_anim_armata = 1;
+		m_anim_regiune = gRegion();
+		m_anim_cand_ms = acum;
+		m_anim_inchidere = m_anim_urm_inchidere;
+		m_anim_schimbari = 0;
+		hdsAnimatieOpreste();	/* o animatie inca in curs sare la final; cea noua porneste dupa ea, pe firul gRC */
+	}
+	m_anim_urm_inchidere = 0;
+	gRegion nou = gRegion(eRect(root->position(), root->size()) & eRect(ePoint(0, 0), m_screen.m_screen_size));
+	nou -= m_anim_regiune;
+	if (nou.empty())
+		return;
+	if (!hiddenBuffer(m_anim_inainte, m_anim_inainte_dc))
+	{
+		m_anim_armata = 0;
+		return;
+	}
+		/* ca in paintOffscreen: ferestrele vazute acum si fundalul, numai in zona noua, in imaginea „inainte” */
+	gRegion ramas = m_screen.m_dirty_region;
+	ePtr<gDC> vizibil = m_screen.m_dc;
+	m_screen.m_dirty_region = nou;
+	m_screen.m_dc = m_anim_inainte_dc;
+	for (ePtrList<eWidget>::iterator i(m_root.begin()); i != m_root.end(); ++i)
+		if (i->m_vis & eWidget::wVisShow)
+			paintLayer(i, 0);
+	paintBackground(&m_screen);
+	m_screen.m_dc = vizibil;
+	m_screen.m_dirty_region = ramas;
+	m_anim_regiune |= nou;
+	++m_anim_schimbari;
+}
+
+bool eWidgetDesktop::paintAnimatie()
+{
+	m_anim_armata = 0;
+	gRegion compus = m_anim_regiune;
+	m_anim_regiune = gRegion();
+	if (compus.empty() || !m_anim_inainte || !m_anim_inainte_dc || !s_anim_fel || (hdsAcumMs() - m_anim_cand_ms > 1000))
+		return false;
+	if (!hiddenBuffer(m_offscreen, m_offscreen_dc))
+		return false;
+	eRect ecran(ePoint(0, 0), m_screen.m_screen_size);
+	eRect zona = compus.extends & ecran;
+		/* sub 1% din ecran nu se vede nicio animatie: desen obisnuit */
+	if ((long long)zona.width() * zona.height() * 100 < (long long)ecran.width() * ecran.height())
+		return false;
+	gRegion murdar = m_screen.m_dirty_region & gRegion(ecran);
+		/* „dupa”: zona intreaga si ce mai e de desenat, compuse in tamponul ascuns */
+	ePtr<gDC> vizibil = m_screen.m_dc;
+	m_screen.m_dirty_region = murdar | gRegion(zona);
+	m_screen.m_dc = m_offscreen_dc;
+	for (ePtrList<eWidget>::iterator i(m_root.begin()); i != m_root.end(); ++i)
+		if (i->m_vis & eWidget::wVisShow)
+			paintLayer(i, 0);
+	paintBackground(&m_screen);
+	m_screen.m_dc = vizibil;
+		/* in zona, ce nu s-a schimbat in pas (in afara ferestrelor schimbate) e la fel inainte si dupa */
+	gRegion neschimbat = gRegion(zona) - compus;
+	if (!neschimbat.empty())
+	{
+		gPainter p(m_anim_inainte_dc);
+		p.resetClip(neschimbat);
+		p.blit(m_offscreen, ePoint(0, 0), eRect(), 0);
+	}
+	gPainter painter(vizibil);
+	gRegion afara = murdar - gRegion(zona);
+	if (!afara.empty())
+	{
+		painter.resetClip(afara);
+		painter.blit(m_offscreen, ePoint(0, 0), eRect(), 0);
+	}
+	painter.hdsAnimatie(m_anim_inainte, m_offscreen, zona, s_anim_fel, m_anim_inchidere, s_anim_durata_ms);
+	painter.flush();
+	eDebug("[HdsAnimatie] pas: %d schimbari, zona %d,%d %dx%d, %s", m_anim_schimbari, zona.left(), zona.top(),
+		zona.width(), zona.height(), m_anim_inchidere ? "inchidere" : "deschidere");
+	return true;
+}
+
 void eWidgetDesktop::paint()
 {
 	m_require_redraw = 0;
+
+		/* animatia ferestrelor: intre Session.close si processDelay nu se deseneaza nimic (cel mult 100 ms); zona murdara
+		   ramane si se deseneaza la eliberare sau la termen */
+	if (m_anim_tine)
+	{
+		long ramas = 100 - (hdsAcumMs() - m_anim_tine_ms);
+		if (ramas > 0)
+		{
+			m_require_redraw = 1;
+			if (m_timer)
+				m_timer->start(ramas, 1);
+			return;
+		}
+		m_anim_tine = 0;
+	}
+		/* un pas oprit (hdsAnimatieFaraPas) se deseneaza pe loc; oprirea tine 300 ms (o redesenare ramasa din urma poate
+		   veni inainte ca processDelay sa arate ecranul de dedesubt); directia ceruta tine numai pana aici */
+	if (m_anim_fara)
+	{
+		m_anim_armata = 0;
+		m_anim_regiune = gRegion();
+		if (hdsAcumMs() - m_anim_fara_ms > 300)
+			m_anim_fara = 0;
+	}
+	m_anim_urm_inchidere = 0;
+	if ((m_comp_mode == cmImmediate) && m_anim_armata && paintAnimatie())
+		return;
 
 	if ((m_comp_mode == cmImmediate) && paintOffscreen())
 		return;
@@ -511,6 +718,8 @@ eWidgetDesktop::eWidgetDesktop(eSize size): m_mainloop(0)
 	m_screen.m_screen_size = size;
 	m_require_redraw = 0;
 	m_style_id = 0;
+	m_anim_armata = m_anim_inchidere = m_anim_urm_inchidere = m_anim_schimbari = m_anim_fara = m_anim_tine = 0;
+	m_anim_cand_ms = m_anim_fara_ms = m_anim_tine_ms = 0;
 
 	CONNECT(gRC::getInstance()->notify, eWidgetDesktop::notify);
 	setCompositionMode(cmImmediate);

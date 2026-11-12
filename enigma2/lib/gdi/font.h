@@ -83,6 +83,10 @@ public:
 #define GS_SOFTHYPHEN 16
 #define GS_HYPHEN   32
 #define GS_CANBREAK (GS_ISSPACE|GS_SOFTHYPHEN|GS_HYPHEN)
+/* HDSatelit: colour codes in the text, as in the GPL enigma2 sources (OE-Alliance): \c + 8 hex digits AARRGGBB (or the old
+   notation : ; < = > ? for A..F) colours the next letters, \C goes back to the colour of the widget */
+#define GS_COLORCHANGE 64
+#define GS_COLORRESET 128
 
 struct pGlyph
 {
@@ -91,6 +95,8 @@ struct pGlyph
 	FT_ULong glyph_index;
 	int flags;
 	eRect bbox;
+	unsigned long newcolor;
+	pGlyph(): x(0), y(0), w(0), glyph_index(0), flags(0), newcolor(0) {}
 };
 
 typedef std::vector<pGlyph> glyphString;
@@ -101,11 +107,13 @@ class eLCD;
 class eTextPara: public iObject
 {
 	DECLARE_REF(eTextPara);
-	ePtr<Font> current_font, replacement_font;
-	FT_Face current_face, replacement_face;
+	ePtr<Font> current_font, replacement_font, fallback_font;
+	FT_Face current_face, replacement_face, fallback_face;
 	int use_kerning;
 	int previous;
 	static std::string replacement_facename;
+	/* HDSatelit: the third font, after the font of the text and the Replacement font, only for symbols (font.cpp) */
+	static std::string fallback_facename;
 	static std::set<int> forced_replaces;
 
 	eRect area;
@@ -121,13 +129,14 @@ class eTextPara: public iObject
 	int appendGlyph(Font *current_font, FT_Face current_face, FT_UInt glyphIndex, int flags, int rflags);
 	void newLine(int flags);
 	void setFont(Font *font, Font *replacement_font);
+	bool hdsFallbackFace();
 	eRect boundBox;
 	void calc_bbox();
 	int bboxValid;
 	void clear();
 public:
 	eTextPara(eRect area, ePoint start=ePoint(-1, -1))
-		:current_font(0), replacement_font(0), current_face(0), replacement_face(0)
+		:current_font(0), replacement_font(0), fallback_font(0), current_face(0), replacement_face(0), fallback_face(0)
 		,area(area), cursor(start), maximum(0, 0), left(start.x()), charCount(0)
 		,doTopBottomReordering(false), bboxValid(0)
 	{
@@ -135,8 +144,10 @@ public:
 	virtual ~eTextPara();
 	
 	static void setReplacementFont(std::string font) { replacement_facename=font; }
+	static void setFallbackFont(std::string font) { fallback_facename=font; }
 	static void forceReplacementGlyph(int unicode) { forced_replaces.insert(unicode); }
-	/* HDSatelit: how many of the code points have no glyph in the font `face` nor in the replacement font (-1: no such font) */
+	/* HDSatelit: how many of the code points have no glyph in the font `face` nor in the replacement font, nor (for the
+	   symbols only) in the fallback font: the ones renderString leaves out (-1: no such font) */
 	static int missingGlyphs(const std::string &face, const std::vector<unsigned long> &codes);
 
 	void setFont(const gFont *font);

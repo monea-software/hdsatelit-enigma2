@@ -236,6 +236,17 @@ def textMaririDvb():
 	return [(cheie, texte[cheie]) for cheie in MARIRI_DVB if cheie in oferite]
 
 
+def dupaOcrInstalat(s=None):
+	"""hds-ocr tocmai s-a instalat din feed (Components/HdsOcrSubtitrari.dupaInstalare): alegerea OCR apare in "Mărirea
+	subtitrărilor DVB", fara repornire, iar o valoare "ocr" salvata (copia setarilor pusa pe o imagine fara OCR) revine."""
+	s = s if s is not None else initConfig()
+	el = s.hds_marire_dvb
+	el.setChoices(textMaririDvb(), default=IMPLICITE["marire_dvb"])
+	if el.saved_value == "ocr" and "ocr" in maririDvbOferite():
+		el.load()
+	return el.value
+
+
 def seAlegeMarireaDvb(s=None):
 	"""Randul „Mărirea subtitrărilor DVB” se arata (pe televizor si in web) numai cand are ce alege: fara OCR ramane o
 	singura alegere, „clara”, deci randul si nota lui nu se arata."""

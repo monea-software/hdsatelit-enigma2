@@ -65,6 +65,14 @@ class TemplatedMultiContent(StringList):
 
 			self.content.setTemplate(template)
 			self.content.setItemHeight(itemheight)
+			# HDSatelit 0.7.4: latimea unui element din listele orizontale si in grila (sabloanele skin-urilor straine:
+			# "itemWidth"); fara ea, lista ramane cum era
+			itemwidth = self.template.get("itemWidth")
+			if templates and style and style in templates and isinstance(templates[style][0], (tuple, list)):
+				itemwidth, itemheight = templates[style][0][0], templates[style][0][1]
+				self.content.setItemHeight(itemheight)
+			if itemwidth and hasattr(self.content, "setItemWidth"):
+				self.content.setItemWidth(int(itemwidth))
 			self.selectionEnabled = selectionEnabled
 			self.scrollbarMode = scrollbarMode
 			self.active_style = style

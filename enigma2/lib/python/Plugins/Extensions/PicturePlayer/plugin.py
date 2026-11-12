@@ -840,8 +840,10 @@ def main(session, **kwargs):
 
 def filescan_open(list, session, **kwargs):
 	# Recreate List as expected by PicView
-	filelist = [((file.path, False), None) for file in list]
-	session.open(Pic_Full_View, filelist, 0, file.path)
+	filelist = [((f.path, False), None) for f in list]
+	# 0.7.4: in Python 3 variabila din lista nu iese din ea; `file.path` de aici dadea NameError si inchidea interfata la
+	# deschiderea unei poze de pe stick (asistenta 252913, 11.11). Caile sunt intregi, deci dosarul primei poze ajunge.
+	session.open(Pic_Full_View, filelist, 0, os.path.dirname(list[0].path) if list else "/")
 
 def filescan(**kwargs):
 	from Components.Scanner import Scanner, ScanPath

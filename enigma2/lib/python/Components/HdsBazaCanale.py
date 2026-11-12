@@ -16,7 +16,8 @@ FORMATUL (JSON pe randuri, numai ASCII, ensure_ascii):
 CHEI: canal = HdsIndexCanale.cheie_din_ref ("sid:ns:tsid:onid" hex fara zerouri in fata, sau cheia de flux);
 transponder = "ns:tsid:onid" (hex, fara zerouri); cheia de rezerva "onid:tsid:sid@poz", poz = ns >> 16
 (C = cablu 0xFFFF, T = terestru 0xEEEE), folosita numai la cerere (cauta(..., rezerva=True)) si numai cu un singur
-alt rand candidat, care se uneste pe loc sub cheia noua.
+alt rand candidat, care se uneste pe loc sub cheia noua. Cheile listei de canale de acum nu se mai calculeaza la fiecare
+cautare: indexul cautarii le da o data (tabel_chei, tine_minte_chei).
 
 GRUPE PE CANAL (pozitii; -1 sau "" = nu se stie):
   sv  [furnizor, tip serviciu, nume]
@@ -249,8 +250,45 @@ _RE_COD = re.compile(r"^[A-Za-z0-9/.+-]{1,12}$")
 _RE_OBIECT_VF = re.compile(r'"vf":\{([^{}]*)\}')
 
 
+# cheile listei de canale de acum, deja calculate: {cheie sau referinta: cheie(...)}. Il face tabel_chei pe firul care
+# face indexul cautarii (HdsIndexCanale.construieste) si il pune tine_minte_chei pe firul enigma2, la inceputul trecerii
+# indexului peste baza (Index.aplica_treptat cheama cheie() de doua ori pe fiecare canal: masuratorile si pistele). Un
+# index nou isi pune tabelul lui; ce nu e in tabel se calculeaza ca inainte, fara sa fie tinut minte.
+_CHEI = {}
+
+
 def cheie(ref_sau_cheie):
 	"""Referinta de serviciu sau cheie -> cheia canalului (forma lui cheie_din_ref) sau None."""
+	if ref_sau_cheie.__class__ is str:
+		k = _CHEI.get(ref_sau_cheie)
+		if k is not None:
+			return k
+	return _cheie_calculata(ref_sau_cheie)
+
+
+def tabel_chei(chei):
+	"""Tabelul lui cheie() pentru cheile date (cheile canalelor unui index): {k: cheie(k)}, numai pentru raspunsurile
+	care nu sunt None. Raspunsul egal cu k se tine ca k insusi, deci tabelul nu face siruri noi. Nu atinge nimic comun:
+	se poate chema de pe un fir."""
+	tabel = {}
+	for k in chei:
+		if k.__class__ is not str or k in tabel:
+			continue
+		r = _cheie_calculata(k)
+		if r is not None:
+			tabel[k] = k if r == k else r
+	return tabel
+
+
+def tine_minte_chei(tabel):
+	"""Pune tabelul (tabel_chei) in folosinta pentru cheie(), in locul celui de dinainte; None sau altceva = niciunul.
+	O singura atribuire, pe firul enigma2."""
+	global _CHEI
+	_CHEI = tabel if isinstance(tabel, dict) else {}
+
+
+def _cheie_calculata(ref_sau_cheie):
+	"""cheie(), calculata de fiecare data."""
 	if not isinstance(ref_sau_cheie, str) or not ref_sau_cheie:
 		return None
 	s = ref_sau_cheie.strip()

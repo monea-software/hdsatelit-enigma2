@@ -180,6 +180,50 @@ def getPreferredTagEditor():
 
 setPreferredTagEditor(None)
 
+
+# OE-Alliance (OEA10): mutarea si copierea unei inregistrari cu toate fisierele ei (partile .001..., .eit, .ap, .cuts, .meta, .sc),
+# numele cerute de MovieManager si de interfata web straina. Lucrarea ruleaza in fundal (Tools.CopyFiles: Task, mv/cp), nu pe firul interfetei.
+def createMoveList(serviceref, dest):
+	"""[(sursa, destinatie)] pentru inregistrarea data si fisierele ei; un dosar (mustDescent) se muta intreg."""
+	src = os.path.normpath(serviceref.getPath())
+	dosar, nume = os.path.split(src)
+	dest = os.path.normpath(dest)
+	if os.path.normpath(dosar) == dest:
+		raise Exception(_("Înregistrarea este deja în acest dosar."))
+	lista = [(src, os.path.join(dest, nume))]
+	if not serviceref.flags & eServiceReference.mustDescent:
+		if src.endswith(".ts"):
+			for i in range(1, 1000):
+				parte = "%s.%03d" % (src, i)
+				if not os.path.exists(parte):
+					break
+				lista.append((parte, os.path.join(dest, os.path.basename(parte))))
+		baza = os.path.splitext(src)[0]
+		if os.path.exists(baza + ".eit"):
+			lista.append((baza + ".eit", os.path.join(dest, os.path.basename(baza) + ".eit")))
+		for ext in (".ap", ".cuts", ".meta", ".sc"):
+			if os.path.exists(src + ext):
+				lista.append((src + ext, os.path.join(dest, nume + ext)))
+	return lista
+
+
+def _transferaInregistrarea(serviceref, dest, name, muta):
+	from Tools.CopyFiles import copyFiles, moveFiles
+	lista = createMoveList(serviceref, dest)
+	lista.reverse()  # fisierele mici intai, filmul la urma
+	if name is None:
+		name = os.path.split(lista[-1][0])[1]
+	return (moveFiles if muta else copyFiles)(lista, name)
+
+
+def moveServiceFiles(serviceref, dest, name=None, allowCopy=True):
+	return _transferaInregistrarea(serviceref, dest, name, True)
+
+
+def copyServiceFiles(serviceref, dest, name=None):
+	return _transferaInregistrarea(serviceref, dest, name, False)
+
+
 class MovieContextMenu(Screen):
 	def __init__(self, session, csel, service):
 		Screen.__init__(self, session)
@@ -306,6 +350,12 @@ class MovieSelection(Screen, HelpableScreen, SelectionEventInfo):
 		# create optional description border and hide immediately
 		self["DescriptionBorder"] = Pixmap()
 		self["DescriptionBorder"].hide()
+		# temele straine (numele standard): litera aleasa la saltul rapid si starea sortarii; la noi raman ascunse
+		from Components.HdsNumeStandard import adauga
+		from Components.Pixmap import MultiPixmap
+		adauga(self, "chosenletter", Label, ascuns=True)
+		adauga(self, "movie_sort", MultiPixmap, ascuns=True)
+		adauga(self, "movie_off", MultiPixmap, ascuns=True)
 
 		if not fileExists(config.movielist.last_videodir.value):
 			config.movielist.last_videodir.value = defaultMoviePath()

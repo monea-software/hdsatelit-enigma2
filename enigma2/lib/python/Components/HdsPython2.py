@@ -10,16 +10,20 @@ pagina web, prin Components/HdsExtensiiLucru.py) intreaba modulul acesta INAINTE
 Python 2, nu instaleaza nimic: spune de ce si propune inlocuitorul pentru Python 3 din feedurile noastre, daca exista.
 
 Semnele (un semn sigur opreste instalarea; "nu stiu" nu o opreste niciodata):
-  - TARI, din control (lista feedului sau fisierul .ipk): Depends / Pre-Depends cer numai pachete Python 2 (python,
-    python-core, python-twisted-web, python2.7, libpython2.7 ...; numele python3-* sunt bune), sau pachetul insusi e o
-    biblioteca Python 2 (python-<nume>);
+  - DEPENDINTELE Python 2 din control (Depends / Pre-Depends cer numai pachete Python 2: python, python-core,
+    python-twisted-web, python2.7, libpython2.7 ...; numele python3-* sunt bune): din 0.7.4 nu mai opresc (vezi
+    DEPENDINTE_PERECHI): numele se tin in Verdict.dependinte, continutul se citeste mai departe (un .pyo, un .so sau un
+    dosar de Python 2 opresc ca inainte), iar instalarea pune in locul lor perechile python3 (perechi()), cu
+    opkg --force-depends; pluginul se traduce apoi la incarcare;
+  - TARE, din control: pachetul insusi e o biblioteca Python 2 (python-<nume>);
   - TARE, din lista: pachetul vine dintr-un feed al imaginilor cu Python 2 (o sursa al carei grup, aceeasi adresa fara
     ultimul dosar, are Python 2 insusi: python-core 2.x), numai la felurile cu cod Python (FELURI_COD) si cand nu cere
     nimic din Python 3;
   - TARI, din continutul unui fisier .ipk (numai citit, in memorie, fara nimic scris pe disc si fara nimic rulat):
     fisiere sub /usr/lib/python2.x, fisiere .pyo/.pyc cu numarul magic al lui Python 2 (primii doi octeti, little
     endian, de la 20000 in sus; Python 3 are 3000-3999), biblioteci .so legate de libpython2;
-  - SLABE, din continut (opresc numai cand pachetul nu are nimic pentru Python 3, masurat pe pachete reale): sursa .py
+  - SLABE, din continut (din 0.7.4 nu mai opresc: pachetul se instaleaza si pluginul se traduce la incarcare, vezi
+    TRADUCERE_LA_INCARCARE si Components/HdsPython2Traducere.py; inainte opreau cand pachetul nu avea nimic pentru Python 3): sursa .py
     care nu se compileaza in Python 3 (print fara paranteze, except X, e ...), importuri de module care nu mai exista
     in Python 3 (urllib2, urlparse, cookielib ...) facute fara rezerva (un import dintr-un try sau dintr-un if nu se
     socoteste: acolo e de obicei varianta pentru cealalta versiune).
@@ -108,7 +112,8 @@ class Verdict(object):
 	('Extensions/Nume'), pentru inlocuitor. taiat: citirea s-a oprit la o limita. slabe: semnele care opresc numai
 	cand pachetul nu are nimic pentru Python 3 (sursa care nu se compileaza, importurile): un pachet construit pentru
 	Python 3 poate avea scripturi vechi pe langa (masurat pe pachete reale, unelte/recunoastere.py)."""
-	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe', 'altpy', 'nativ')
+	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe', 'altpy', 'nativ', 'traducere',
+		'dependinte')
 
 	def __init__(self):
 		self.python2 = None
@@ -121,6 +126,8 @@ class Verdict(object):
 		self.slabe = []
 		self.altpy = None            # (fisierul, "3.7"): un .so legat de alta versiune de Python 3 decat a imaginii
 		self.nativ = ''              # primul program sau biblioteca (ELF) din pachet
+		self.traducere = False       # numai semne slabe (sursa de Python 2): se instaleaza si se traduce la incarcare
+		self.dependinte = []         # pachetele Python 2 cerute in Depends (0.7.4: inlocuite la instalare cu perechile python3)
 
 	def adauga(self, cod, detaliu):
 		self.python2 = True
@@ -162,11 +169,16 @@ def e_pachet_python3(nume):
 
 
 def din_dependinte(text, verdict=None):
-	"""verdictul dupa Depends (sau Pre-Depends): Python 2 cand o grupa are numai alternative Python 2"""
+	"""verdictul dupa Depends (sau Pre-Depends): o grupa cu numai alternative Python 2 intra in v.dependinte (din 0.7.4;
+	inainte, cu DEPENDINTE_PERECHI oprit, era semn tare: Python 2)"""
 	v = verdict if verdict is not None else Verdict()
 	for grupa in _alternative(text):
 		if all(e_pachet_python2(n) for n in grupa):
-			v.adauga(DEPENDINTA, grupa[0])
+			if DEPENDINTE_PERECHI:
+				if grupa[0] not in v.dependinte and len(v.dependinte) < 40:
+					v.dependinte.append(grupa[0])
+			else:
+				v.adauga(DEPENDINTA, grupa[0])
 		elif any(e_pachet_python3(n) for n in grupa):
 			v.python3 = True
 	return v
@@ -445,10 +457,69 @@ def din_ipk(cale, verdict=None, timp_maxim=TIMP_MAXIM, cu_control=True):
 	return _incheie(v)
 
 
+# 0.7.4 (Eduard, 12.11.2026 04:51): un pachet care are numai sursa de Python 2 (numai semne slabe: sursa care nu se compileaza in
+# Python 3, importuri de module scoase) nu se mai opreste la instalare: pluginul se traduce in Python 3 la prima incarcare
+# (Components/HdsPython2Traducere.py). Semnele tari (fisiere compilate de Python 2, biblioteci legate de libpython2, dependinte
+# Python 2, feedul unei imagini cu Python 2) opresc ca inainte: acolo nu e sursa de tradus sau pachetul cere Python 2 insusi.
+TRADUCERE_LA_INCARCARE = True
+
+# 0.7.4 (decizia 5 a lotului traducatorului, 12.11.2026): un pachet vechi al carui singur semn de Python 2 e ca cere pachete
+# Python 2 (python-core, python-twisted-web ...) se instaleaza: in locul lor se pun perechile din Python 3 (perechi(): python-X ->
+# python3-X, numele scoase sau unite -> pachetul care le are acum), cu opkg install --force-depends, apoi pluginul se traduce la
+# prima incarcare. Ce nu are pereche nu opreste instalarea: se spune omului in fereastra, iar un modul care chiar lipseste il aduce
+# la incarcare Components/HdsModuleLipsa.py. Continutul se citeste ca la orice pachet: .pyo/.pyc, .so sau dosar de Python 2 opresc.
+# Probat pe receptor (opkg cu libsolv): dupa o instalare cu --force-depends, instalarile, actualizarile si stergerile obisnuite
+# merg mai departe fara plangeri.
+DEPENDINTE_PERECHI = True
+
+# numele pachetelor Python 2 fara pereche cu acelasi nume in Python 3 -> pachetul Python 3 care are acum modulele lor
+# (manifestul python3 din OE: argparse, ipaddress, lzma, pkgutil, re, subprocess, textwrap, zlib, urllib sunt in python3-core)
+PERECHI_SPECIALE = {
+	'python': 'python3-core', 'python2': 'python3-core', 'python2.7': 'python3-core', 'python-lang': 'python3-core',
+	'python-re': 'python3-core', 'python-subprocess': 'python3-core', 'python-textutils': 'python3-core',
+	'python-argparse': 'python3-core', 'python-zlib': 'python3-core', 'python-ipaddress': 'python3-core',
+	'python-lzma': 'python3-core', 'python-pkgutil': 'python3-core', 'python-robotparser': 'python3-core',
+	'python-imaging': 'python3-pillow', 'python-pil': 'python3-pillow', 'python2.7-core': 'python3-core',
+	'python-gdata': 'python3-gdata-python3',
+}
+
+
+def candidati_pereche(nume):
+	"""numele pachetelor Python 3 care pot tine locul pachetului Python 2 `nume`, in ordinea incercarii"""
+	n = (nume or '').strip().lower()
+	rez = []
+	if n.startswith('libpython2'):
+		return ['python3-core']
+	if n.startswith('python-'):
+		rez.append('python3-' + n[len('python-'):])
+	s = PERECHI_SPECIALE.get(n)
+	if s and s not in rez:
+		rez.append(s)
+	return rez
+
+
+def perechi(dependinte, bune):
+	"""(perechi, fara): pentru fiecare pachet Python 2 din `dependinte`, primul candidat_pereche pentru care bune(nume) e
+	adevarat (pachetul e instalat sau vine din feedurile noastre: hotaraste cel care cheama), fara repetari; `fara`: numele
+	Python 2 fara pereche"""
+	rez, fara = [], []
+	for d in dependinte or ():
+		gasit = next((c for c in candidati_pereche(d) if bune(c)), None)
+		if gasit is None:
+			if d not in fara:
+				fara.append(d)
+		elif gasit not in rez:
+			rez.append(gasit)
+	return rez, fara
+
+
 def _incheie(v):
 	if v.python2 is None and v.slabe and not v.python3:
-		for m in v.slabe:
-			v.adauga(*m)
+		if TRADUCERE_LA_INCARCARE:
+			v.traducere = True
+		else:
+			for m in v.slabe:
+				v.adauga(*m)
 	if v.python2 is None and v.python3:
 		v.python2 = False
 	return v

@@ -109,6 +109,8 @@ public:
 	RESULT getCurrentPCR(pts_t &pcr);
 
 	RESULT connectEvent(const sigc::slot<void(int)> &event, ePtr<eConnection> &conn);
+	RESULT setDescrambler(ePtr<iServiceScrambled> descrambler);
+	RESULT setDvrLoop(bool loop);
 private:
 	RESULT startPID(int pid);
 	void stopPID(int pid);
@@ -122,6 +124,7 @@ private:
 	ePtr<eDVBDemux> m_demux;
 	
 	int m_running, m_target_fd, m_source_fd;
+	int m_buffer_size; /* HDSatelit 0.7.4: the demux buffer of start() (setBufferSize before start) */
 	std::string m_target_filename;
 };
 

@@ -1319,6 +1319,57 @@ def semnal_purtator(sref):
 	return val
 
 
+def ref_releu_dvb(sref):
+	"""Referinta DVB a canalului redat prin Stream Relay de pe receptor (http://127.0.0.1:<port>/<referinta>, ca la
+	HdsStreamRelay.textReleu), sau "" pentru orice alt serviciu. Bara arata pentru el datele canalului de satelit, nu
+	„Flux IP · flux local” (Eduard, 11.11.2026: omul a ales un canal de satelit)."""
+	import re
+	r = parse_ref(sref)
+	if not r["url"] or not is_local_host(r["host"]) or len(r["urlpath"]) != 1:
+		return u""
+	tinta = r["urlpath"][0]
+	return tinta if re.match(r"^1:0:[0-9A-Fa-f]+:", tinta) else u""
+
+
+def tp_releu(sref):
+	"""Datele transponderului canalului de satelit redat prin Stream Relay, din lista de canale (ca la orice canal), fara
+	sa ceara tunerul; {} daca nu e un canal prin releu sau nu se stie."""
+	tinta = ref_releu_dvb(sref)
+	if not tinta:
+		return {}
+	try:
+		from enigma import eServiceCenter, eServiceReference, iServiceInformation
+		ref = eServiceReference(tinta if tinta.endswith(u":") else tinta + u":")
+		info = eServiceCenter.getInstance().info(ref)
+		d = info.getInfoObject(ref, iServiceInformation.sTransponderData) if info is not None else None
+		return d if isinstance(d, dict) else {}
+	except Exception as e:
+		log_once("tp_releu", e)
+		return {}
+
+
+def fe_releu(sref):
+	"""Canal redat prin Stream Relay (OSCam/NCam, http://127.0.0.1:<port>/<referinta DVB>): frontendInfo al tunerului
+	care il tine, prin sesiunea serverului local 8001 de la care releul ia fluxul; None pentru orice alt serviciu. Canalul
+	redat e un flux fara tuner al lui: fara asta, bara arata semnal 0 si calitate 0 (Eduard, .114, 11.11.2026)."""
+	if not ref_din_flux(sref):
+		return None
+	try:
+		from Hds.DabT2 import server8001
+		return server8001.frontend_releu(sref)
+	except Exception as e:
+		log_once("fe_releu", e)
+		return None
+
+
+def fe_pentru(service, sref):
+	"""frontendInfo de citit pentru serviciul redat: al lui; la Stream Relay, al tunerului care tine canalul; la alte
+	fluxuri, niciunul (zerourile canalului PVR nu sunt o masura)."""
+	if ref_din_flux(sref):
+		return fe_releu(sref)
+	return service and service.frontendInfo()
+
+
 # cheile starii tunerului si constantele iFrontendInformation din care se citesc
 _FE_CHEI = (("power", "signalPower"), ("quality", "signalQuality"), ("ber", "bitErrorRate"), ("lock", "lockState"),
 	("number", "frontendNumber"))
@@ -1359,7 +1410,7 @@ def frontend_status(service, sref, chei=None):
 		if not isinstance(val, dict) or _fe_memo.get("complet") or all(k in val for k in chei):
 			return val
 		try:
-			fe = service and service.frontendInfo()
+			fe = fe_pentru(service, sref)
 			if fe:
 				_citeste_chei(fe, val, chei, _fe_memo.setdefault("incercat", set()))
 		except Exception as e:
@@ -1370,8 +1421,8 @@ def frontend_status(service, sref, chei=None):
 	incercat = set()
 	try:
 		din_flux = ref_din_flux(sref)
-		fe = None if din_flux else (service and service.frontendInfo())
-		if din_flux:
+		fe = fe_pentru(service, sref)
+		if din_flux and fe is None:
 			val = semnal_purtator(sref)
 		elif fe:
 			val = {}
@@ -1498,6 +1549,50 @@ def hbbtv_rosu(r):
 	return r._memo("hbbtv_rosu", fn) is True
 
 
+def rosu_deschide_hbbtv(r):
+	"""ROSU pe bara deschide aplicatia HbbTV a canalului redat: HbbTV pornit din setari si AIT-ul citit are o aplicatie
+	de pornit (aceeasi conditie ca HdsHbbtvPornire.hotarare_rosu; fara setarea semnului, care tine numai de semn).
+	Pe imaginile fara sAITPID / sHBBTVAit sau fara modul: False."""
+	if isi("sAITPID") is None or isi("sHBBTVAit") is None:
+		return False
+	if r.geti("sAITPID") <= 0:
+		return False
+
+	def fn():
+		from Components import HdsHbbtv
+		if not HdsHbbtv.hbbtv_pornit():
+			return False
+		rez = HdsHbbtv.rezumat(HdsHbbtv.din_info(r.info(), _ISI))
+		return rez.get("are_hbbtv") is True and rez.get("aleasa") is not None
+	try:
+		return r._memo("rosu_hbbtv", fn) is True
+	except Exception:
+		return False
+
+
+def rosu_text(r):
+	"""Legenda tastei ROSII din bara (tema Pro, HdsInfo RedKeyText): „HbbTV” pe canalele
+	unde ROSU deschide aplicatia HbbTV (Screens/InfoBar.hdsHbbtvRosu o ia inaintea inregistrarii); altfel ce i-a
+	alocat omul tastei (Components/HdsTasteRapide, scurt), iar fara alocare „Înregistrează” (functia obisnuita a
+	tastei pe bara). O alocare „Nimic” lasa legenda goala."""
+	if rosu_deschide_hbbtv(r):
+		return u"HbbTV"
+	try:
+		from Components import HdsTasteRapide
+		a = HdsTasteRapide.sens_tasta("live", "red")
+		if a == "none":
+			return u""
+		if a != "default":
+			# listele tastelor se fac la import, uneori inainte de traducere: textul se traduce din nou la afisare
+			# (HdsTasteRapide.text_tasta, 553b0a53c); un text deja tradus trece neschimbat
+			text = HdsTasteRapide.text_actiune(a)
+			traduce = getattr(HdsTasteRapide, "text_tasta", None)
+			return u(traduce("red", text) if traduce else text)
+	except Exception:
+		pass
+	return tr("epg_key_rec")
+
+
 def text_hbbtv(r):
 	"""„da” / „nu are” (canalul nu anunta HbbTV) / „nu se știe” (nu s-a citit inca) pentru afisaj."""
 	v = hbbtv_semnalat(r)
@@ -1621,10 +1716,12 @@ class Reader(object):
 					d = i.getInfoObject(c)
 				except Exception:
 					d = None
+			if (not isinstance(d, dict) or not d) and ref_releu_dvb(self.sref()):
+				d = tp_releu(self.sref())
 			if not isinstance(d, dict) or not d:
 				d = None
 				try:
-					fe = self.service().frontendInfo()
+					fe = fe_pentru(self.service(), self.sref())
 					if fe:
 						for call in (lambda: fe.getTransponderData(True), lambda: fe.getAll(True)):
 							try:
@@ -1830,6 +1927,11 @@ class Reader(object):
 					return "dab_relay"
 				if u"dab" in up and is_local_host(host):
 					return "dab_relay"
+				if ref_releu_dvb(self.sref()):
+					# canal de satelit (cablu, terestru) prin Stream Relay: felul transponderului lui
+					k = tp_kind(self.tp())
+					if k:
+						return k
 				return "ip"
 			k = tp_kind(self.tp())
 			if path.startswith(u"/"):
@@ -3628,11 +3730,13 @@ def fe_number(r):
 	"""Numarul tunerului care reda (0 = A), sau -1. Fara citire din placa (frontendNumber nu face ioctl). La un serviciu
 	redat dintr-un flux: tunerul care tine purtatorul, din receptie.json, sau -1 (enigma2 ar da 0, adica „A”)."""
 	def fn():
-		if ref_din_flux(r.sref()):
+		fe = fe_releu(r.sref())
+		if fe is None and ref_din_flux(r.sref()):
 			n = ival(rj_dict(r.rj() or {}, "purtator"), "tuner")
 			return n if 0 <= n <= 25 else -1
-		s = r.service()
-		fe = s and s.frontendInfo()
+		if fe is None:
+			s = r.service()
+			fe = s and s.frontendInfo()
 		if not fe:
 			return -1
 		c = _fe_const("frontendNumber")
@@ -3965,7 +4069,7 @@ def frontend_snr(service, sref):
 	val = None
 	try:
 		# un serviciu redat dintr-un flux nu are tuner al lui (zerourile canalului PVR nu sunt o masura)
-		fe = None if ref_din_flux(sref) else (service and service.frontendInfo())
+		fe = fe_pentru(service, sref)
 		if fe:
 			val = {"db": -1, "raw": -1, "number": -1}
 			for key, cname in (("db", "signalQualitydB"), ("raw", "snrValue"), ("number", "frontendNumber")):
@@ -4025,12 +4129,13 @@ def tuner_state(service, sref):
 		return _state_memo["val"]
 	val = u""
 	try:
-		if ref_din_flux(sref):
+		fe = fe_releu(sref)
+		if fe is None and ref_din_flux(sref):
 			# flux: starea tunerului care tine purtatorul, dupa lock-ul citit de controlor; nestiut = gol
 			lock = ival(semnal_purtator(sref) or {}, "lock")
 			val = u"LOCKED" if lock == 1 else (u"LOSTLOCK" if lock == 0 else u"")
 		else:
-			fe = service and service.frontendInfo()
+			fe = fe or (service and service.frontendInfo())
 			# getFrontendStatus are starea; getAll(False) facea in plus dictionarul transponderului si al tunerului
 			citeste = getattr(fe, "getFrontendStatus", None) if fe else None
 			d = citeste() if citeste is not None else None

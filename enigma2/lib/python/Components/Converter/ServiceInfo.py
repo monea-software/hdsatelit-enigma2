@@ -25,6 +25,7 @@ class ServiceInfo(Converter, object):
 	IS_HDR10 = 18
 	IS_HLG = 19
 	IS_SDR = 20
+	IS_SOFTCSA = 21
 
 
 	def __init__(self, type):
@@ -54,6 +55,8 @@ class ServiceInfo(Converter, object):
 				"IsHDR10": (self.IS_HDR10, (iPlayableService.evVideoSizeChanged, gamma_ev)),
 				"IsHLG": (self.IS_HLG, (iPlayableService.evVideoSizeChanged, gamma_ev)),
 				"IsSDR": (self.IS_SDR, (iPlayableService.evVideoSizeChanged, gamma_ev)),
+				# canalul redat e descifrat in software (CSA-ALT, SoftCSA): starea vine cu evUpdatedInfo, la trecerea pe bucla
+				"IsSoftCSA": (self.IS_SOFTCSA, (iPlayableService.evUpdatedInfo, iPlayableService.evStart)),
 			}[type]
 
 	def getServiceInfoString(self, info, what, convert = lambda x: "%d" % x):
@@ -89,6 +92,10 @@ class ServiceInfo(Converter, object):
 			return False
 		elif self.type == self.IS_CRYPTED:
 			return info.getInfo(iServiceInformation.sIsCrypted) == 1
+		elif self.type == self.IS_SOFTCSA:
+			# cu getattr: un binar enigma2 fara SoftCSA nu opreste skinul
+			cheie = getattr(iServiceInformation, "sIsSoftCSA", None)
+			return cheie is not None and info.getInfo(cheie) == 1
 		elif self.type == self.IS_WIDESCREEN:
 			return info.getInfo(iServiceInformation.sAspect) in (3, 4, 7, 8, 0xB, 0xC, 0xF, 0x10)
 		elif self.type == self.SUBSERVICES_AVAILABLE:

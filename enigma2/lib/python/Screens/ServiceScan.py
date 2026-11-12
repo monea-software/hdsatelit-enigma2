@@ -166,6 +166,7 @@ class ServiceScan(Screen):
 		if done:
 			self.stopActivity()
 			self.hdsOfertaPiste()
+			self.hdsIndiciuT2()
 			self.alignResult()
 			return
 		self.activityStep = (self.activityStep + 1) % len(self.ACTIVITY_FRAMES)
@@ -220,6 +221,36 @@ class ServiceScan(Screen):
 		label = self["scan_result"]
 		label.setText(label.getText() + "\n" + _("ALBASTRU: citește pistele canalelor găsite. OK sau EXIT: revino la vizionare."))
 		self.hdsAseazaReteaua(bool(getattr(scan, "hdsRetele", None)))
+
+	def hdsIndiciuT2(self):
+		"""A35 (anestis1956, Cipru 39E): canalele DVB-T2 prin satelit stau in pachete T2-MI, pe care cautarea obisnuita nu
+		le desface (gaseste cel mult serviciul purtator, fara nume). Dupa o cautare pe o pozitie care are operatori DVB-T2
+		in data/operatori-satelit.json, un rand spune unde se gasesc; il vede si pagina web (scan_result)."""
+		if getattr(self, "hdsIndiciuPus", False) or self.hdsDinAsistent():
+			return
+		self.hdsIndiciuPus = True
+		try:
+			scan = self.get("scan")
+			ceAScanat = getattr(scan, "hdsCeAScanat", None) if scan is not None else None
+			pozitii = set(p for p in ((ceAScanat() or {}).get("pozitii") or ()) if isinstance(p, int)) if ceAScanat else set()
+			if not pozitii:
+				return
+			from Components.HdsOperatoriSatelit import operatori, nume_tara
+			from Components.HdsGrade import pozitieOrbitala
+			pe = {}
+			for o in operatori("t2mi"):
+				if o.get("pozitie") in pozitii:
+					tara = nume_tara((o.get("tari") or ["?"])[0])
+					if tara not in pe.setdefault(o["pozitie"], []):
+						pe[o["pozitie"]].append(tara)
+			randuri = [_("Pe %s sunt și canale DVB-T2 prin satelit (%s), pe care căutarea obișnuită nu le vede: "
+				"Scanare > Satelit > DVB-T2 prin satelit.") % (pozitieOrbitala(p) or p, ", ".join(pe[p]))
+				for p in sorted(pe)]
+			if randuri:
+				label = self["scan_result"]
+				label.setText("\n".join([t for t in [label.getText()] + randuri if t]))
+		except Exception as e:
+			print("[ServiceScan] randul DVB-T2 prin satelit: %s" % e)
 
 	def hdsCitestePiste(self):
 		scan = self.get("scan")

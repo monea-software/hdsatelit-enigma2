@@ -42,7 +42,6 @@
 # un Mediu fals.
 
 import os
-from urllib.parse import urlencode
 
 # Serverele web ale extensiilor instalate (interfeteWeb): dosarele de pluginuri in care sta modulul radacinii unui Site
 DOSARE_PLUGINURI = ("Extensions", "SystemPlugins")
@@ -359,6 +358,8 @@ def _cheie(fel, obj, pluginuri):
 
 def _rand(M, catalog, fel, obj, extra, pluginuri):
 	L, P = M.L, M.P
+	# biblioteca standard, dar importata la folosire: modulele paginilor web nu importa nimic la incarcare
+	from urllib.parse import urlencode
 	if fel == "sectiune":
 		return {"fel": fel, "titlu": P._curat(obj, 200), "numar": extra}
 	_ic, titlu, sub, insigna, culoare, mic = L.descriereRand(catalog, fel, obj, extra)
@@ -483,7 +484,11 @@ def stare(arg, M, catalog, date=None):
 	lucrare = _stareLucrare(L)
 	toate = catalog.actualizari()
 	cf = _stareCautari(M, cautari)
-	descarcare = L.descarcareInCurs()
+	# si cat asteapta descarcarea de pe serverul de rezerva al feedului extern (HdsExtensiiLucru.treciPeRezerva, 2 s):
+	# altfel pagina ar arata eroarea primei descarcari ca rezultat
+	rezerva = L.rezervaAsteapta()
+	descarcare = L.descarcareInCurs() or rezerva
+	rezerva = rezerva or bool(descarcare and L.STARE.get("rezerva_acum"))
 	sursa = _stareSursa(M)
 	return {
 		"result": True,
@@ -501,7 +506,7 @@ def stare(arg, M, catalog, date=None):
 		"opkg": date["opkg"],
 		"repornire_ceruta": date["restart"] or bool(lucrare and (lucrare["rezultat"] or {}).get("repornire")),
 		"avertismente": date["avertismente"],
-		"descarcare": {"in_curs": descarcare, "cod": ultima.get("cod"), "motiv": ultima.get("motiv", ""),
+		"descarcare": {"in_curs": descarcare, "rezerva": rezerva, "cod": ultima.get("cod"), "motiv": ultima.get("motiv", ""),
 			"cand": P.text_varsta(ultima.get("cand")) if ultima.get("cand") else "",
 			# ce contine lista descarcata ultima oara (0.6.6), acelasi text ca pe televizor
 			"rezumat": L.textDescarcare(catalog, ultima, ultima.get("inainte")) if ultima.get("cand") and not descarcare
@@ -1284,7 +1289,7 @@ function arataInlocuitor(x){ INLOCUITOR = x && x.inlocuitor ? x.inlocuitor : "";
 function instaleazaInlocuitor(nume){ arataInlocuitor(null); var q = new URLSearchParams(); q.set("pachet", nume); cuConfirmare("/api/extensii-instaleaza", q, dupa); }
 function dupa(d){ arataInlocuitor(d && d.python2); citeste(); }
 function arataStare(d){
-  $("lista").textContent = d.lista + (d.descarcare.in_curs ? " · se descarcă acum" : "");
+  $("lista").textContent = d.lista + (d.descarcare.in_curs ? (d.descarcare.rezerva ? " · serverul principal nu răspunde, se descarcă de pe serverul de rezervă" : " · se descarcă acum") : "");
   var p = [];
   if(d.mod_sigur){ p.push(d.mod_sigur); }
   if(d.repornire_ceruta){ p.push("Extensiile noi apar după repornirea interfeței."); }
@@ -1571,6 +1576,9 @@ TEXTE_PAGINA = {
 		N_("Alege un fișier cu extensia .ipk."),
 		N_("Fișierul .ipk trebuie să aibă între 1 octet și 16 MiB."),
 		N_("Se încarcă fișierul..."),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"),
+		N_("browser deconectat"),
 	),
 }
 

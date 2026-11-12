@@ -10,7 +10,7 @@ setup the "fonts".
 
 This has been done so another converter could convert the list to a different format, for example
 to generate HTML."""
-	def __init__(self, list = [ ], enableWrapAround = False, item_height = 25, fonts = [ ]):
+	def __init__(self, list = [ ], enableWrapAround = False, item_height = 25, fonts = [ ], templateName = None, indexNames = None):
 		Source.__init__(self)
 		self.__list = list
 		self.onSelectionChanged = [ ]
@@ -19,6 +19,18 @@ to generate HTML."""
 		self.disable_callbacks = False
 		self.enableWrapAround = enableWrapAround
 		self.__style = "default" # style might be an optional string which can be used to define different visualisations in the skin
+		# listele desenate dintr-un sablon XML (temele si pluginurile scrise pentru standardul OE-Alliance, FileCommander):
+		# indexNames = numele coloanelor randului ({"PathName": 17, ...}) folosite de <template> din skin; templateName =
+		# sablonul cerut (<template name=...>, implicit "Default"); vezi Components/Converter/XmlMultiContent.py
+		self.indexNames = indexNames or {}
+		self.templateName = templateName
+		self.navigareAutomata = True
+
+	def enableAutoNavigation(self, enabled):
+		"""In alte imagini lista desenata isi lasa atunci sagetile ecranului. La noi lista nativa nu se poate dezlega din
+		Python; sagetile ajung oricum intai la harta NavigationActions a ecranului (Components/ActionMap.py), deci aici
+		ramane numai alegerea."""
+		self.navigareAutomata = bool(enabled)
 
 	def setList(self, list):
 		self.__list = list
@@ -154,6 +166,62 @@ to generate HTML."""
 			self.changed((self.CHANGED_SPECIFIC, "style"))
 
 	style = property(getStyle, setStyle)
+
+	# HDSatelit: numele din alte imagini ale sursei: mode = style, template (sablonul cerut, pastrat), visible/show/hide pe
+	# lista desenata (elementul GUI legat de sursa), fara efect cand lista nu e inca pe ecran
+	mode = property(getStyle, setStyle)
+
+	def getMode(self):
+		return self.style
+
+	def setMode(self, mode):
+		self.setStyle(mode)
+
+	def getTemplate(self):
+		"""numele <template> ales din skin (XmlMultiContent): cel pus, apoi templateName, apoi "Default" ca in standard"""
+		return self.__dict__.get("_hdsSablon") or self.templateName or "Default"
+
+	def setTemplate(self, template):
+		if self.__dict__.get("_hdsSablon") != template:
+			self.__dict__["_hdsSablon"] = template
+			self.changed((self.CHANGED_SPECIFIC, "template"))
+
+	template = property(getTemplate, setTemplate)
+
+	def _instantaGui(self):
+		"""Primul element GUI (randatorul) legat sub sursa, prin convertoare; None cand lista nu e pe ecran."""
+		de_vazut = list(getattr(self, "downstream_elements", ()))
+		vazute = 0
+		while de_vazut and vazute < 32:
+			el = de_vazut.pop(0)
+			vazute += 1
+			inst = getattr(el, "instance", None)
+			if inst is not None:
+				return inst
+			de_vazut.extend(getattr(el, "downstream_elements", ()))
+		return None
+
+	def show(self):
+		inst = self._instantaGui()
+		if inst is not None:
+			inst.show()
+
+	def hide(self):
+		inst = self._instantaGui()
+		if inst is not None:
+			inst.hide()
+
+	def getVisible(self):
+		inst = self._instantaGui()
+		try:
+			return bool(inst.isVisible()) if inst is not None else False
+		except AttributeError:
+			return False
+
+	def setVisible(self, visible):
+		self.show() if visible else self.hide()
+
+	visible = property(getVisible, setVisible)
 
 	def updateList(self, list):
 		"""Pastreaza selectia la aceeasi lungime; altfel inlocuieste lista."""

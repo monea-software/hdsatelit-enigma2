@@ -1,5 +1,9 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 
 #include <lib/base/init.h>
@@ -17,6 +21,8 @@
 #include <lib/dvb_ci/dvbci_ui.h>
 #include <lib/dvb_ci/dvbci_appmgr.h>
 #include <lib/dvb_ci/dvbci_mmi.h>
+#include <lib/dvb_ci/dvbci_ccmgr.h>
+#include <lib/dvb/frontend.h>
 
 #include <dvbsi++/ca_program_map_section.h>
 
@@ -29,6 +35,31 @@
 #endif
 
 eDVBCIInterfaces *eDVBCIInterfaces::instance = 0;
+
+/* Setarile CI de la pornire (slot pornit/oprit, intarzierea pornirii) se citesc din /etc/enigma2/settings: sloturile se
+   fac inaintea Python-ului (eAutoInitNumbers::dvb), deci ePythonConfigQuery nu are inca setarile. Acelasi lucru il face
+   eSimpleConfig in enigma2 OE-Alliance (depozitul enigma2 al stratului OE-Alliance, commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4,
+   eDVBCISlot::eDVBCISlot); aici numai cele doua chei de care e nevoie. */
+static std::string hdsSetareCi(const char *cheie, const char *implicit)
+{
+	std::string rezultat = implicit;
+	FILE *f = fopen("/etc/enigma2/settings", "r");
+	if (!f)
+		return rezultat;
+	char linie[512];
+	size_t lungime = strlen(cheie);
+	while (fgets(linie, sizeof(linie), f))
+	{
+		if (strncmp(linie, cheie, lungime) == 0 && linie[lungime] == '=')
+		{
+			rezultat = linie + lungime + 1;
+			while (!rezultat.empty() && (rezultat[rezultat.size() - 1] == '\n' || rezultat[rezultat.size() - 1] == '\r' || rezultat[rezultat.size() - 1] == ' '))
+				rezultat.erase(rezultat.size() - 1);
+		}
+	}
+	fclose(f);
+	return rezultat;
+}
 
 eDVBCIInterfaces::eDVBCIInterfaces()
 {
@@ -141,6 +172,7 @@ int eDVBCIInterfaces::sendCAPMT(int slotid)
 			tmp = tmp->linked_next;
 		if (tmp)
 		{
+			tmp->setCaParameter(it->pmthandler);  // CI+: demux, program, pid-uri, tuner (OE-Alliance)
 			tmp->sendCAPMT(it->pmthandler);  // send capmt
 			break;
 		}
@@ -621,6 +653,14 @@ void eDVBCIInterfaces::removePMTHandler(eDVBServicePMTHandler *pmthandler)
 	}
 }
 
+bool eDVBCIInterfaces::isHandlerAssigned(eDVBServicePMTHandler *pmthandler)
+{
+	for (PMTHandlerList::iterator it = m_pmt_handlers.begin(); it != m_pmt_handlers.end(); ++it)
+		if (it->pmthandler == pmthandler)
+			return it->cislot != NULL;
+	return false;
+}
+
 void eDVBCIInterfaces::gotPMT(eDVBServicePMTHandler *pmthandler)
 {
 	eDebug("[eDVBCIInterfaces] gotPMT");
@@ -632,7 +672,10 @@ void eDVBCIInterfaces::gotPMT(eDVBServicePMTHandler *pmthandler)
 		{
 			eDebugCI("check slot %d %d %d", tmp->getSlotID(), tmp->running_services.empty(), canDescrambleMultipleServices(tmp->getSlotID()));
 			if (tmp->running_services.empty() || canDescrambleMultipleServices(tmp->getSlotID()))
+			{
+				tmp->setCaParameter(pmthandler);  // CI+: demux, program, pid-uri, tuner (OE-Alliance)
 				tmp->sendCAPMT(pmthandler);
+			}
 			tmp = tmp->linked_next;
 		}
 	}
@@ -953,6 +996,140 @@ int eDVBCIInterfaces::setCIClockRate(int slotid, int rate)
 	return -1;
 }
 
+int eDVBCIInterfaces::setCIEnabled(int slotid, bool enabled)
+{
+	eDVBCISlot *slot = getSlot(slotid);
+	if (slot)
+		return slot->setEnabled(enabled);
+	return -1;
+}
+
+/* CI+: rutarea fluxului prin modul in timpul autentificarii (din sursele GPL enigma2 (OE-Alliance), commitul
+   29d951a6ec2e019680741efdad5ca7e7902b20e4, eDVBCIInterfaces::setCIPlusRouting/revertCIPlusRouting). Multe module
+   CI+ 1.3 cer un transponder trecut prin ele ca sa termine autentificarea (orice canal). Sursele vechi se citesc
+   asa cum sunt din /proc si se scriu inapoi la fel cand modulul a primit cheile (sau cand e scos). */
+static bool hdsCitesteSursa(const char *cale, std::string &sursa)
+{
+	char buf[32] = {0};
+	FILE *f = fopen(cale, "r");
+	if (!f)
+		return false;
+	bool bun = fscanf(f, "%31s", buf) == 1;
+	fclose(f);
+	if (bun)
+		sursa = buf;
+	return bun && !sursa.empty();
+}
+
+static void hdsScrieSursa(const char *cale, const std::string &sursa)
+{
+	FILE *f = fopen(cale, "w");
+	if (!f)
+	{
+		eDebug("[CI] nu pot scrie %s", cale);
+		return;
+	}
+	fputs(sursa.c_str(), f);
+	fclose(f);
+}
+
+void eDVBCIInterfaces::setCIPlusRouting(int slotid)
+{
+	eDebug("[CI] setCIRouting slotid=%d", slotid);
+	eDVBCISlot *slot = getSlot(slotid);
+	if (!slot || slotid < 0 || slotid > 3)
+		return;
+	if (m_pmt_handlers.empty())
+	{
+		eDebug("[CI] setCIRouting: niciun canal pornit, rutarea ramane cum e");
+		return;
+	}
+	/* cererile repetate de Content Control nu au voie sa suprascrie sursele salvate */
+	if (slot->ciplusRoutingDone() || slot->getCIPlusRoutingTunerNum() >= 0)
+		return;
+	/* modulul are deja canale (rutarea lor, ca „CamMgrRouting active” in OE-Alliance): primeste deja un transponder,
+	   iar mutarea altui tuner prin el ar lasa canalul decriptat fara imagine */
+	if (slot->use_count > 0)
+	{
+		eDebug("[CI] setCIRouting: slotul %d are deja canale, rutarea ramane", slotid);
+		return;
+	}
+	static const data_source surse_ci[4] = {CI_A, CI_B, CI_C, CI_D};
+	static const data_source tunere[4] = {TUNER_A, TUNER_B, TUNER_C, TUNER_D};
+	for (PMTHandlerList::iterator it = m_pmt_handlers.begin(); it != m_pmt_handlers.end(); ++it)
+	{
+		if (it->cislot)  // canalul are deja un modul alocat: rutarea lui ramane neatinsa
+			continue;
+		int tunernum = -1;
+		eUsePtr<iDVBChannel> channel;
+		if (!it->pmthandler->getChannel(channel) && channel)
+		{
+			ePtr<iDVBFrontend> frontend;
+			if (!channel->getFrontend(frontend) && frontend)
+				tunernum = ((eDVBFrontend *)&(*frontend))->getSlotID();
+		}
+		if (tunernum < 0 || tunernum > 3)  // data_source are tunerele A-D
+			continue;
+		char cale[64];
+		std::string sursa, sursa_ci;
+		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/input%d", tunernum);
+		if (!hdsCitesteSursa(cale, sursa))
+			continue;
+		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/ci%d_input", slotid);
+		if (!hdsCitesteSursa(cale, sursa_ci))
+			continue;
+		setInputSource(tunernum, surse_ci[slotid]);
+		slot->setSource(tunere[tunernum]);
+		slot->setCIPlusRoutingParameter(tunernum, sursa, sursa_ci);
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+: tunerul %d trecut prin modul", slotid, tunernum);
+		break;
+	}
+}
+
+void eDVBCIInterfaces::revertCIPlusRouting(int slotid)
+{
+	eDVBCISlot *slot = getSlot(slotid);
+	if (!slot)
+		return;
+	/* chemat de managerul CI+ cand modulul a dat cheile (check_new_key): autentificarea a reusit */
+	if (slot->getCCManager())
+		slot->m_ciplus_keys = true;
+	if (slot->ciplusRoutingDone())
+		return;
+	/* intre timp modulul a primit canale (zap pe un canal decriptat): rutarea lor e cea buna, sursele vechi nu se mai
+	   scriu peste ea */
+	if (slot->use_count > 0)
+	{
+		slot->setCIPlusRoutingDone();
+		return;
+	}
+	int tunernum = slot->getCIPlusRoutingTunerNum();
+	if (tunernum >= 0 && !slot->getCIPlusRoutingInput().empty() && !slot->getCIPlusRoutingCIInput().empty())
+	{
+		char cale[64];
+		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/ci%d_input", slotid);
+		hdsScrieSursa(cale, slot->getCIPlusRoutingCIInput());
+		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/input%d", tunernum);
+		hdsScrieSursa(cale, slot->getCIPlusRoutingInput());
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+ gata: tunerul %d inapoi pe sursa lui", slotid, tunernum);
+	}
+	slot->setCIPlusRoutingDone();
+}
+
+int eDVBCIInterfaces::getCIPlusState(int slotid)
+{
+	eDVBCISlot *slot = getSlot(slotid);
+	if (!slot || !slot->getCCManager())
+		return 0;
+	return slot->m_ciplus_keys ? 2 : 1;
+}
+
+std::string eDVBCIInterfaces::getLanguage()
+{
+	/* limba meniului, pentru resursa Host Language & Country a modulelor CI+ */
+	return hdsSetareCi("config.osd.language", "en_GB");
+}
+
 int eDVBCISlot::send(const unsigned char *data, size_t len)
 {
 	int res=0;
@@ -961,6 +1138,9 @@ int eDVBCISlot::send(const unsigned char *data, size_t len)
 	//for(i=0;i<len;i++)
 	//	eDebugNoNewLine("%02x ",data[i]);
 	//eDebug("");
+
+	if (fd < 0)  // slotul oprit: nimic nu pleaca spre modul
+		return -1;
 
 	if (sendqueue.empty())
 		res = ::write(fd, data, len);
@@ -979,10 +1159,15 @@ int eDVBCISlot::send(const unsigned char *data, size_t len)
 void eDVBCISlot::data(int what)
 {
 	eDebugCI("CISlot %d what %d\n", getSlotID(), what);
+	if (state == stateDisabled)
+		return;
 	if(what == eSocketNotifier::Priority) {
 		if(state != stateRemoved) {
 			state = stateRemoved;
 			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d modul scos", getSlotID());
+			/* CI+: modulul scos in timpul autentificarii nu lasa tunerul legat de un slot gol (fara imagine) */
+			eDVBCIInterfaces::getInstance()->revertCIPlusRouting(getSlotID());
+			m_ciplus_keys = false;
 			while(sendqueue.size())
 			{
 				delete [] sendqueue.top().data;
@@ -990,7 +1175,8 @@ void eDVBCISlot::data(int what)
 			}
 			eDVBCISession::deleteSessions(this);
 			eDVBCIInterfaces::getInstance()->ciRemoved(this);
-			notifier->setRequested(eSocketNotifier::Read);
+			if (notifier)  // slotul oprit cand /dev/ciN nu s-a putut deschide: fara notificator
+				notifier->setRequested(eSocketNotifier::Read);
 			eDVBCI_UI::getInstance()->setState(getSlotID(),0);
 		}
 		return;
@@ -1003,6 +1189,13 @@ void eDVBCISlot::data(int what)
 		eDebug("ci inserted in slot %d", getSlotID());
 		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d modul introdus", getSlotID());
 		state = stateInserted;
+		/* CI+: optiunile citite iar (schimbarea lor nu cere repornire), rutarea de autentificare de la zero */
+		readCIPlusSettings();
+		m_ciPlusRoutingDone = false;
+		m_ciplus_keys = false;
+		m_ciplus_routing_tunernum = -1;
+		m_ciplus_routing_input.clear();
+		m_ciplus_routing_ci_input.clear();
 		eDVBCI_UI::getInstance()->setState(getSlotID(),1);
 		notifier->setRequested(eSocketNotifier::Read|eSocketNotifier::Priority);
 		/* enable PRI to detect removal or errors */
@@ -1041,33 +1234,81 @@ void eDVBCISlot::data(int what)
 DEFINE_REF(eDVBCISlot);
 
 eDVBCISlot::eDVBCISlot(eMainloop *context, int nr)
+	:startup_timeout(eTimer::create(context))
 {
-	char filename[128];
-
 	application_manager = 0;
 	mmi_session = 0;
 	ca_manager = 0;
+	cc_manager = 0;
+	m_ca_demux_id = -1;
+	m_program_number = 0;
+	m_video_pid = 0;
+	m_audio_pid = 0;
+	m_audio_number = 0;
+	memset(m_audio_pids, 0, sizeof(m_audio_pids));
+	m_tunernum = -1;
+	m_ciPlusRoutingDone = false;
+	m_ciplus_keys = false;
+	m_ciplus_routing_tunernum = -1;
 	use_count = 0;
 	linked_next = 0;
 	user_mapped = false;
-	plugged = true;
-	
-	slotid = nr;
+	plugged = false;
+	fd = -1;
+	m_context = context;
+	state = stateDisabled;
 
-	sprintf(filename, "/dev/ci%d", nr);
+	slotid = nr;
+	readCIPlusSettings();
+
+	/* din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4: slotul oprit nu se
+	   deschide deloc (starea 3 in Python, „modul oprit”); cel pornit se deschide dupa intarzierea pornirii
+	   (config.cimisc.bootDelay, implicit 5 s), ca modulele care pornesc greu sa nu fie resetate inainte sa fie gata */
+	char cheie[64];
+	snprintf(cheie, sizeof(cheie), "config.ci.%d.enabled", nr);
+	bool pornit = hdsSetareCi(cheie, "true") != "false";
+	if (pornit)
+	{
+		int intarziere = atoi(hdsSetareCi("config.cimisc.bootDelay", "5").c_str());
+		if (intarziere < 0 || intarziere > 15)
+			intarziere = 5;
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d pornit, deschis dupa %d s", nr, intarziere);
+		eDVBCI_UI::getInstance()->setState(nr, 0);  // slotul se vede in meniu si cat asteapta
+		if (intarziere)
+		{
+			CONNECT(startup_timeout->timeout, eDVBCISlot::openDevice);
+			startup_timeout->start(1000 * intarziere, true);
+		}
+		else
+			openDevice();
+	}
+	else
+	{
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d oprit din setari", nr);
+		eDVBCI_UI::getInstance()->setState(nr, 3);
+	}
+}
+
+void eDVBCISlot::openDevice()
+{
+	char filename[128];
+
+	plugged = true;
+
+	sprintf(filename, "/dev/ci%d", slotid);
 
 //	possible_caids.insert(0x1702);
 //	possible_providers.insert(providerPair("PREMIERE", 0xC00000));
 //	possible_services.insert(eServiceReference("1:0:1:2A:4:85:C00000:0:0:0:"));
 
-	fd = ::open(filename, O_RDWR | O_NONBLOCK);
+	fd = ::open(filename, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 
 	eDebugCI("CI Slot %d has fd %d", getSlotID(), fd);
 	state = stateInvalid;
 
 	if (fd >= 0)
 	{
-		notifier = eSocketNotifier::create(context, fd, eSocketNotifier::Read | eSocketNotifier::Priority | eSocketNotifier::Write);
+		notifier = eSocketNotifier::create(m_context, fd, eSocketNotifier::Read | eSocketNotifier::Priority | eSocketNotifier::Write);
 		CONNECT(notifier->activated, eDVBCISlot::data);
 	} else
 	{
@@ -1075,9 +1316,49 @@ eDVBCISlot::eDVBCISlot(eMainloop *context, int nr)
 	}
 }
 
+void eDVBCISlot::closeDevice()
+{
+	/* ca in OE-Alliance: dispozitivul se inchide, apoi drumul „modul scos” (sesiunile sterse, canalele luate inapoi) */
+	if (notifier)
+		notifier->stop();
+	if (fd >= 0)
+		::close(fd);
+	fd = -1;
+	data(eSocketNotifier::Priority);
+	state = stateDisabled;
+}
+
+int eDVBCISlot::setEnabled(bool enabled)
+{
+	eDebug("[CI%d] Enabled: %d, state %d", slotid, enabled, state);
+	startup_timeout->stop();
+	if (enabled && state != stateDisabled)
+		return 0;
+	if (!enabled && state == stateDisabled)
+	{
+		eDVBCI_UI::getInstance()->setState(slotid, 3);
+		return 0;
+	}
+	if (enabled)
+	{
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d pornit din meniu", slotid);
+		eDVBCI_UI::getInstance()->setState(slotid, 0);
+		openDevice();
+	}
+	else
+	{
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d oprit din meniu", slotid);
+		closeDevice();
+		eDVBCI_UI::getInstance()->setState(slotid, 3);
+	}
+	return 0;
+}
+
 eDVBCISlot::~eDVBCISlot()
 {
 	eDVBCISession::deleteSessions(this);
+	if (fd >= 0)
+		::close(fd);
 }
 
 void eDVBCISlot::setAppManager( eDVBCIApplicationManagerSession *session )
@@ -1095,6 +1376,78 @@ void eDVBCISlot::setCAManager( eDVBCICAManagerSession *session )
 	ca_manager = session;
 }
 
+void eDVBCISlot::setCCManager( eDVBCICcSession *session )
+{
+	cc_manager = session;
+}
+
+/* CI+: profilurile operatorului si optiunile de decriptare (config.ci.N.disable_operator_profile,
+   config.ci.N.alternative_ca_handling 0-3), citite din /etc/enigma2/settings la pornire si la fiecare modul introdus,
+   ca in OE-Alliance (eSimpleConfig in constructorul slotului) */
+void eDVBCISlot::readCIPlusSettings()
+{
+	char cheie[80];
+	snprintf(cheie, sizeof(cheie), "config.ci.%d.disable_operator_profile", slotid);
+	m_operator_profiles_disabled = hdsSetareCi(cheie, "false") == "true";
+	snprintf(cheie, sizeof(cheie), "config.ci.%d.alternative_ca_handling", slotid);
+	m_alt_ca_handling = atoi(hdsSetareCi(cheie, "0").c_str());
+	if (m_alt_ca_handling < 0 || m_alt_ca_handling > 3)
+		m_alt_ca_handling = 0;
+}
+
+void eDVBCISlot::setCIPlusRoutingParameter(int tunernum, const std::string &input, const std::string &ci_input)
+{
+	m_ciplus_routing_tunernum = tunernum;
+	m_ciplus_routing_input = input;
+	m_ciplus_routing_ci_input = ci_input;
+}
+
+/* parametrii descifrarii CI+ pentru canalul trimis modulului (din sursele GPL enigma2 (OE-Alliance), commitul
+   29d951a6ec2e019680741efdad5ca7e7902b20e4, eDVBCISlot::setCaParameter) */
+int eDVBCISlot::setCaParameter(eDVBServicePMTHandler *pmthandler)
+{
+	ePtr<iDVBDemux> demux;
+	eDVBServicePMTHandler::program program;
+	eServiceReferenceDVB ref;
+	uint8_t dmx_id;
+	eUsePtr<iDVBChannel> channel;
+	ePtr<iDVBFrontend> frontend;
+
+	m_ca_demux_id = -1;
+	if (!pmthandler->getDataDemux(demux) && demux && !demux->getCADemuxID(dmx_id))
+		m_ca_demux_id = dmx_id;
+
+	pmthandler->getServiceReference(ref);
+	m_program_number = ref.getServiceID().get();
+
+	m_audio_number = 0;
+	m_video_pid = 0;
+	m_audio_pid = 0;
+	if (!pmthandler->getProgramInfo(program))
+	{
+		m_audio_number = program.audioStreams.size();
+		if (m_audio_number > 16)
+			m_audio_number = 16;
+		for (int i = 0; i < m_audio_number; i++)
+			m_audio_pids[i] = program.audioStreams[i].pid;
+		m_video_pid = program.videoStreams.empty() ? 0 : program.videoStreams[0].pid;
+		m_audio_pid = (program.audioStreams.empty() || program.defaultAudioStream < 0 || static_cast<size_t>(program.defaultAudioStream) >= program.audioStreams.size()) ? 0 : program.audioStreams[program.defaultAudioStream].pid;
+	}
+
+	m_tunernum = -1;
+	if (!pmthandler->getChannel(channel) && channel && !channel->getFrontend(frontend) && frontend)
+	{
+		m_tunernum = ((eDVBFrontend *)&(*frontend))->getSlotID();
+#ifndef DESCRAMBLER_VU
+		/* calea Vu+ (al doilea tuner FBC, sloturile 8-15) exista numai pe Vu+; in rest tunerul nu conteaza */
+		if (m_tunernum > 7)
+			m_tunernum = -1;
+#endif
+	}
+	eDebug("[CI%d] setCaParameter demux %d tuner %d program %04x", slotid, m_ca_demux_id, m_tunernum, m_program_number);
+	return 0;
+}
+
 int eDVBCISlot::getSlotID()
 {
 	return slotid;
@@ -1104,6 +1457,9 @@ int eDVBCISlot::reset()
 {
 	eDebug("CI Slot %d: reset requested", getSlotID());
 	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d resetare ceruta", getSlotID());
+
+	if (fd < 0)  // slotul oprit sau inca neinceput (intarzierea pornirii)
+		return -1;
 
 	if (state == stateInvalid)
 	{
@@ -1273,6 +1629,25 @@ int eDVBCISlot::sendCAPMT(eDVBServicePMTHandler *pmthandler, const std::vector<u
 			//dont need tag and lenfield
 			ca_manager->sendCAPMT(raw_data + hlen, wp - hlen);
 			running_services[program_number] = pmt_version;
+
+			/* CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4): pid-urile
+			   programului merg la descifrarea CI+ (numai cand modulul a deschis Content Control) */
+			if (cc_manager)
+			{
+				std::vector<uint16_t> pids;
+				int prg_info_len = ((raw_data[hlen + 4] << 8) | raw_data[hlen + 5]) & 0xfff;
+				int es_info_len = 0;
+				for (int jj = hlen + prg_info_len + 6; jj + 4 < wp; jj += es_info_len + 5)
+				{
+					uint16_t es_pid = ((raw_data[jj + 1] << 8) | raw_data[jj + 2]) & 0x1fff;
+					pids.push_back(es_pid);
+					es_info_len = ((raw_data[jj + 3] << 8) | raw_data[jj + 4]) & 0xfff;
+				}
+				if (!sendEmpty)
+					cc_manager->addProgram(program_number, pids);
+				else
+					cc_manager->removeProgram(program_number, pids);
+			}
 		}
 	}
 	return 0;
@@ -1352,7 +1727,10 @@ int eDVBCISlot::setClockRate(int rate)
 	FILE *ci = fopen(buf, "wb");
 	if (ci)
 	{
-		if (rate)
+		/* 2 = extra_high, numai unde driverul il ofera in ci%d_tsclk_choices (ca in OE-Alliance) */
+		if (rate == 2)
+			fprintf(ci, "extra_high");
+		else if (rate)
 			fprintf(ci, "high");
 		else
 			fprintf(ci, "normal");

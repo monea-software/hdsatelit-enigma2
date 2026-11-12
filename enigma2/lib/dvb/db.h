@@ -70,6 +70,21 @@ public:
 	void saveServicelist();
 	void saveServicelist(const char *file);
 	void reloadBouquets();
+	/* HDSatelit: the bouquet calls of the common enigma2 plugin interface, with the names and arguments the bouquet
+	   plugins use (IPTV and terrestrial bouquet makers, backups). Written here (db.cpp). The list of references is
+	   checked whole before anything changes; only userbouquet.* and subbouquet.* files are created or deleted.
+	   - addOrUpdateBouquet: the bouquet gets exactly these services; a new one is added to bouquets.tv/.radio
+	     (at the start with isAddedFirst); the second form makes the file name userbouquet.<name>.tv/.radio (type 2 = radio);
+	   - appendServicesToBouquet: the services put at the start of an existing bouquet (-1 when there is none);
+	   - removeBouquet: every userbouquet.* / subbouquet.* file whose name the regular expression finds is deleted and
+	     taken out of bouquets.tv/.radio;
+	   - getFlag: the flags of a service in lamedb (0 when it is not there); isCrypted: the service is known scrambled. */
+	RESULT addOrUpdateBouquet(const std::string &name, const std::string &filename, SWIG_PYOBJECT(ePyObject) services, bool isAddedFirst = false);
+	RESULT addOrUpdateBouquet(const std::string &name, SWIG_PYOBJECT(ePyObject) services, const int type, bool isAddedFirst = false);
+	RESULT appendServicesToBouquet(const std::string &filename, SWIG_PYOBJECT(ePyObject) services);
+	RESULT removeBouquet(const std::string &filename_regex);
+	int getFlag(const eServiceReference &service);
+	bool isCrypted(const eServiceReference &service);
 	void parseServiceData(ePtr<eDVBService> s, std::string str);
 };
 

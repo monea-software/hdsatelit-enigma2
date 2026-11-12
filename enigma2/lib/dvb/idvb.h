@@ -720,6 +720,12 @@ public:
 
 	virtual RESULT setRadioPic(const std::string &filename) = 0;
 
+		/* SoftCSA loop (lib/service/servicedvbsoftdecoder.h): the decoder of the playback demux fed by the loop goes now,
+		   while the loop may still write into it. Its demux filters are released by closing them, without DMX_STOP: on
+		   Broadcom a DMX_STOP on the filters of a playback demux hangs (no data flowing) or crashes the driver (data
+		   flowing). The destructor then has nothing to stop. Nothing to do here, nor on HiSilicon (lib/dvb/decoder.cpp). */
+	virtual void freeDecoder() { }
+
 	struct videoEvent
 	{
 		enum { eventUnknown = 0,

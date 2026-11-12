@@ -314,6 +314,39 @@ void eEPGCache::saveLater()
 	requestSave();
 }
 
+/* HDSatelit: the header load() asks for, read without changing the file (load renames and, when broken, deletes it) */
+static bool hdsFisierGhidCitibil(const char *cale)
+{
+	FILE *f = fopen(cale, "r");
+	if (!f)
+		return false;
+	unsigned int magic = 0;
+	char text[13];
+	bool bun = fread(&magic, sizeof(int), 1, f) == 1 && magic == 0x98765432
+		&& fread(text, 13, 1, f) == 1 && !strncmp(text, "ENIGMA_EPG_V7", 13);
+	fclose(f);
+	return bun;
+}
+
+void eEPGCache::loadLater()
+{
+	if (!m_running || !strlen(m_filename))
+	{
+		eDebug("[EPGC] load from Python: the guide thread does not run, it reads the file when it starts");
+		return;
+	}
+	messages.send(Message(Message::load));
+}
+
+void eEPGCache::timeUpdatedSafe()
+{
+	eDVBLocalTimeHandler *t = eDVBLocalTimeHandler::getInstance();
+	if (t && t->ready())
+		timeUpdated();
+	else
+		eDebug("[EPGC] timeUpdated from Python ignored: the receiver time is not valid yet");
+}
+
 void eEPGCache::flushEPG()
 {
 	if (!m_running)
@@ -1584,6 +1617,18 @@ void eEPGCache::gotMessage( const Message &msg )
 			break;
 		case Message::save:
 			save();
+			break;
+		case Message::load:
+			/* the guide is replaced only by a file this guide can read (our byte order and ENIGMA_EPG_V7): a missing
+			   file, or one copied from an image with another format, keeps the guide of now and is not deleted */
+			if (hdsFisierGhidCitibil(m_filename))
+			{
+				flushData();
+				load();
+				cleanLoop();
+			}
+			else
+				eDebug("[EPGC] load: %s missing or not a guide file this receiver reads, the guide stays", m_filename);
 			break;
 		default:
 			eDebug("unhandled EPGCache Message!!");

@@ -22,6 +22,15 @@ void ePixmap::setScale(int scale)
 	}
 }
 
+void ePixmap::setPixmapScale(int flags)
+{
+	int align = flags & (scaleHCenter | scaleRight | scaleVCenter | scaleBottom);
+	if (flags & 4)
+		setScale((flags & 8) ? (scaleKeepAspect | align) : scaleStretch);
+	else
+		setScale(align ? (scaleMove | align) : scaleNone);
+}
+
 void ePixmap::setPixmap(gPixmap *pixmap)
 {
 	m_pixmap = pixmap;
@@ -99,7 +108,37 @@ int ePixmap::event(int event, void *data, void *data2)
 				flags = gPainter::BT_ALPHATEST;
 			else if (m_alphatest == 2)
 				flags = gPainter::BT_ALPHABLEND;
-			if (m_scale)
+			if (m_scale & (scaleKeepAspect | scaleFill | scaleMove))
+			{
+				/* HDSatelit 0.7.4: the proportions kept (fitted inside, or filling the widget) or the picture
+				   unscaled, aligned as the skin asks; whatever leaves the widget is clipped by its region */
+				int ww = s.width(), wh = s.height();
+				int w = m_pixmap->size().width(), h = m_pixmap->size().height();
+				bool scaled = !(m_scale & scaleMove) && w > 0 && h > 0;
+				if (scaled)
+				{
+					bool widthLimited = (long long)ww * h <= (long long)wh * w;
+					if (m_scale & scaleFill)
+						widthLimited = !widthLimited;
+					if (widthLimited)
+					{
+						h = (int)((long long)h * ww / w);
+						w = ww;
+					}
+					else
+					{
+						w = (int)((long long)w * wh / h);
+						h = wh;
+					}
+				}
+				int x = (m_scale & scaleHCenter) ? (ww - w) / 2 : (m_scale & scaleRight) ? ww - w : 0;
+				int y = (m_scale & scaleVCenter) ? (wh - h) / 2 : (m_scale & scaleBottom) ? wh - h : 0;
+				if (scaled)
+					painter.blitScale(m_pixmap, eRect(x, y, w, h), eRect(), flags);
+				else
+					painter.blit(m_pixmap, ePoint(x, y), eRect(), flags);
+			}
+			else if (m_scale)
 				painter.blitScale(m_pixmap, eRect(ePoint(0, 0), size()), eRect(), flags);
 			else
 				painter.blit(m_pixmap, ePoint(0, 0), eRect(), flags);

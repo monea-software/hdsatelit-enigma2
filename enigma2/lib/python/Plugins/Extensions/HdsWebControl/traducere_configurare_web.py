@@ -1616,6 +1616,8 @@ TEXTE_PAGINA = {
 		N_("Scrie adresa calculatorului, de exemplu 192.168.1.50."),
 		N_("Receptorul nu a putut citi starea."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Traducerea e pornită; pe televizor a apărut confirmarea."),
 	),
 }
 

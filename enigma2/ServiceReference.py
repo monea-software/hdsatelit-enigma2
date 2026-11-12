@@ -59,3 +59,32 @@ def getPlayingref(ref):
 	if instance:
 		playing = instance.getCurrentlyPlayingServiceOrGroup() or eServiceReference()
 	return playing
+
+
+# Numele OE-Alliance cerute de teme si pluginuri (lotul TOT, 12.11.2026; dupa sursele GPL enigma2 OE-Alliance, commitul
+# 29d951a6ec2e, ServiceReference.py): resolveAlternate (13 teme: Aglare, Insprion80, popking159...), makeServiceQueryStr,
+# isRadioServiceReference (convertorul ExtremeInfo).
+def resolveAlternate(ref):
+	"""Pentru o alternativa (grup), canalul care se poate reda acum; altfel None."""
+	from enigma import getBestPlayableServiceReference
+	nref = None
+	if ref.flags & eServiceReference.isGroup:
+		nref = getBestPlayableServiceReference(ref, getPlayingref(ref))
+		if not nref:
+			nref = getBestPlayableServiceReference(ref, eServiceReference(), True)
+	return nref
+
+
+def makeServiceQueryStr(serviceTypes):
+	return " || ".join(["(type == %d)" % x for x in serviceTypes])
+
+
+def isRadioServiceReference(ref):
+	"""True cand ref e un canal de radio (DVB radio, radio AVC sau DAB)."""
+	if not isinstance(ref, eServiceReference):
+		ref = eServiceReference(ref or "")
+	if not ref.valid():
+		return False
+	if ref.type == getattr(eServiceReference, "idServiceDAB", -1):
+		return True
+	return ref.getUnsignedData(0) in (2, 10)  # dRadio, dRadioAvc

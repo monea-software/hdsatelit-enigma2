@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsImportSetari: ecranul „Import canale și setări” (meniul Scanare, din data/menu.xml). Aduce canalele, buchetele,
-# înregistrările programate, setările antenei, rețeaua și Wi-Fi-ul, piconurile și setările generale sigure dintr-o
-# copie și oferă pluginurile ei aflate în sursele receptorului (instaleaza_pluginuri, câte unul, cu confirmarea de la
-# Extensii și aplicații); skinul nu. Copia vine: de pe un stick sau un disc (dosarul etc/enigma2 al
+# înregistrările programate, setările antenei, rețeaua și Wi-Fi-ul, piconurile, setările generale sigure și modulele de
+# acces (fișierele lor copiate ca atare, pachetele instalate din nou, modulul ales) dintr-o copie și oferă pluginurile
+# ei aflate în sursele receptorului (instaleaza_pluginuri, câte unul, cu confirmarea de la Extensii și aplicații);
+# skinul nu. Copia vine: de pe un stick sau un disc (dosarul etc/enigma2 al
 # altei imagini, o copie plată, o arhivă .tar.gz), din altă partiție a memoriei interne sau dintr-o copie de siguranță
 # a receptorului. Sursele, dezarhivarea și importul stau în Components/HdsImportSurse.py, folosit și de pagina web
 # /import (HdsWebControl/scanare_import_web.py).
@@ -116,7 +117,7 @@ def _nimic():
 
 
 class HdsImportSetariScreen(Screen):
-	"""Rândurile: Sursa, cele șapte alegeri (ALEGERI: Da / Nu, sau „lipsește din copie”), „Importă acum”,
+	"""Rândurile: Sursa, cele opt alegeri (ALEGERI: Da / Nu, sau „lipsește din copie”), „Importă acum”,
 	„Instalează pluginurile din copie” (după un import cu pluginuri de oferit), „Caută din nou”."""
 
 	def __init__(self, session):
@@ -388,6 +389,8 @@ class HdsImportSetariScreen(Screen):
 			"siguranță pe receptor. Continui?") % scurt(surse_import.text_sursa(s))
 		if alegeri_efective(self.alegeri, s).get("retea"):
 			text += "\n" + _("Rețeaua se schimbă: legătura poate cădea câteva secunde.")
+		if alegeri_efective(self.alegeri, s).get("acces"):
+			text += "\n" + _("Modulele de acces vin din copie; fișierele lor de acum se păstrează.")
 		self.session.openWithCallback(self._dupaConfirmare, MessageBox, text, MessageBox.TYPE_YESNO, default=False)
 
 	def _dupaConfirmare(self, da=False):

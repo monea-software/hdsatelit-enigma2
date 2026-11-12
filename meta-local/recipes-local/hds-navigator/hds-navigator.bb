@@ -13,7 +13,10 @@ PV = "0.7.0"
 # r3 (versiunea 0.6.7): SCRIPT_MENIURI, in afara modului HbbTV: meniurile paginilor care se deschid numai sub mouse
 # (reguli CSS :hover, ca "other files" din interfata web a unui modul) se deschid si la focalizarea data de sageti
 # (aceleasi reguli copiate cu :focus-within intr-o foaie a lansatorului)
-PR = "r3"
+# r4 (0.7.4, NB): EXIT inchide de pe orice pagina, Inapoi/RECALL (KEY_BACK, KEY_LAST) si „<” merg o pagina inapoi si
+# ies de pe prima; marginile paginii (--margine-x/-y); pe procesor nice 10 (si, in afara HbbTV, un fir de pictura si
+# 25 de cadre pe secunda)
+PR = "r4"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

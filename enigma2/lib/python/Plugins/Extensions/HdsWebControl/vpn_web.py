@@ -22,6 +22,11 @@
 #                                         iptv=0|1, adrese= (numai cheile date se schimba)
 #   POST /api/vpn-cont  (corp: nume=, parola=)   /api/vpn-cont-sterge?confirmat=1
 #   POST /api/vpn-importa (corp: nume=, text=, de mai multe ori: fisierele alese in telefon, cel mult 60 KB odata)
+#   POST /api/vpn-adauga  (corp: nume_fisier= si b64= de mai multe ori, fisierele in base64, si .zip; lipit= textul
+#                         lipit; sau fel=, server=, nume=, parola=, psk=, protocol=, metoda=, grup_oc=, id_server=,
+#                         scrise de mana) -> Adauga VPN, felul recunoscut dupa continut; raspunsul spune ce lipseste
+#   POST /api/vpn-secrete (corp: id=, nume=, parola=, psk=)   datele de acces ale serverului ales (protocoalele noi)
+#   POST /api/vpn-certificat?confirmat=1   pastreaza certificatul necunoscut al serverului OpenConnect
 #   POST /api/vpn-sterge?id=..&confirmat=1, /api/vpn-sterge-toate?confirmat=1, /api/vpn-instaleaza?confirmat=1
 #   GET  /vpn                             pagina
 # Etichetele paginii si mesajele din script trec prin _t() (ETICHETE, TEXTE_JS); lang e limba receptorului.
@@ -32,6 +37,10 @@
 
 MAX_TEXT_FISIER = 61440
 MAX_FISIERE = 40
+# corpul cererii are cel mult 64 KB (plugin.MAX_CORP_CERERE); base64 urlencodat creste, deci pagina trimite cel mult
+# 56000 de semne base64 odata, iar ce e mai mare merge pe stick
+MAX_B64 = 60000
+CAMPURI_ADAUGA = ("fel", "server", "nume", "parola", "psk", "protocol", "metoda", "grup_oc", "id_server", "port")
 CHEI_SETARI = ("furnizor", "profil", "mod", "oprire_totala", "la_pornire", "iptv", "adrese")
 
 
@@ -117,14 +126,17 @@ def stare(V=None, nivel_cerere="asociat"):
 		culoare={"conectat": "bun", "se_conecteaza": "chihlimbar", "blocat": "rau", "eroare": "rau"}.get(s["legatura"],
 			"slab"),
 		detalii=V.textDetalii(s),
-		furnizori=[[f, V.textFurnizor(f)] for f in V.FURNIZORI],
-		moduri=[[m, V.textMod(m)] for m in V.MODURI],
+		furnizori=[[f, V.textFurnizor(f)] for f in s.get("furnizori", V.FURNIZORI)],
+		moduri=[[m, V.textMod(m)] for m in s.get("moduri", V.MODURI)],
+		feluri_adauga=[list(x) for x in s.get("feluri_adauga") or []],
+		campuri_text=[[c, V.textCamp(c)] for c in s.get("campuri") or []],
+		text_fel=V.textFel(s["fel"]),
 		cum_iei=V.textCumIeiFisierele(s["furnizor"]),
 		explicatie_mod=V.textExplicatieMod(s),
 		text_cont=V.textCont(s["furnizor"]),
 		text_cont_nota=V.textExplicatieCont(s["furnizor"]),
-		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else (_t(V.TEXT_WG_INDISPONIBIL) if s.get(
-			"wg_indisponibil") else ""),
+		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else (s.get("text_indisponibil") or (_t(
+			V.TEXT_WG_INDISPONIBIL) if s.get("wg_indisponibil") else "")),
 		text_lucreaza=V.textLucrare(l["lucreaza"]) if l["lucreaza"] else "")
 
 
@@ -158,7 +170,7 @@ def instaleaza(request, V=None):
 	V = _v(V)
 	if _arg(request, "confirmat") != "1":
 		return {"result": False, "message": _t("Confirmă instalarea programelor VPN.")}
-	return _pornit(V.pornesteInstalarea(V.felFurnizor(V.setari()["furnizor"])), V.textLucrare(V.LUCRARE_INSTALEAZA))
+	return _pornit(V.pornesteInstalarea(V.stare()["fel"]), V.textLucrare(V.LUCRARE_INSTALEAZA))
 
 
 def setari(request, V=None):
@@ -227,6 +239,61 @@ def importa(request, V=None):
 		fisiere.append((n, t.encode("utf-8")))
 	reusit, mesaj, detalii = V.importa(fisiere, V.setari()["furnizor"])
 	return {"result": reusit, "message": mesaj, "detalii": detalii}
+
+
+def adauga(request, V=None):
+	"""Adauga VPN din pagina: fisierele (base64, si arhivele .zip), textul lipit sau datele scrise de mana."""
+	V = _v(V)
+	import base64
+	import binascii
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	if {"b64", "lipit", "nume", "parola", "psk"}.intersection(_cheiDinAdresa(request)):
+		return {"result": False, "message": _t("Fișierele se trimit numai în corpul cererii.")}
+	nume = _lista(request, "nume_fisier")
+	date = _lista(request, "b64")
+	if len(nume) != len(date):
+		return {"result": False, "message": _t("Alege întâi fișierele.")}
+	if len(nume) > MAX_FISIERE or sum(len(x) for x in date) > MAX_B64:
+		return {"result": False, "message": _t("Prea multe fișiere odată.")}
+	fisiere = []
+	for n, b in zip(nume, date):
+		n = n.replace("\\", "/").rsplit("/", 1)[-1][:120]
+		try:
+			fisiere.append((n, base64.b64decode(b.encode("ascii"), validate=True)))
+		except (binascii.Error, ValueError, UnicodeError):
+			return {"result": False, "message": _t("Fișierul %s nu se poate citi.") % n[:60]}
+	lipit = _arg(request, "lipit", MAX_TEXT_FISIER + 1)
+	campuri = {}
+	for k in CAMPURI_ADAUGA:
+		if k.encode("ascii") in (getattr(request, "args", None) or {}):
+			campuri["grup" if k == "grup_oc" else k] = _arg(request, k, 300)
+	if not fisiere and not lipit.strip() and not campuri.get("fel"):
+		return {"result": False, "message": _t("Alege fișierele, lipește textul sau scrie datele.")}
+	reusit, mesaj, detalii = V.adaugaVpn(fisiere, lipit, campuri)
+	return {"result": reusit, "message": mesaj, "lipsesc": detalii.get("lipsesc") or [],
+		"lipsesc_text": [[c, V.textCamp(c)] for c in detalii.get("lipsesc") or []], "ids": detalii.get("ids") or []}
+
+
+def secrete(request, V=None):
+	"""Datele de acces (numele, parola, cheia comuna) ale unui server al protocoalelor noi; numai din corp."""
+	V = _v(V)
+	from .descarcare_subtitrari_web import _cheiDinAdresa
+	if {"nume", "parola", "psk"}.intersection(_cheiDinAdresa(request)):
+		return {"result": False, "message": _t("Datele contului se trimit numai în corpul cererii.")}
+	args = getattr(request, "args", None) or {}
+	campuri = dict((k, _arg(request, k, V.MAX_SECRET + 1)) for k in V.CAMPURI if k.encode("ascii") in args)
+	if not campuri:
+		return {"result": False, "message": _t("Nimic de schimbat.")}
+	reusit, mesaj = V.salveazaSecrete(_arg(request, "id", 16), **campuri)
+	return {"result": reusit, "message": mesaj}
+
+
+def certificat(request, V=None):
+	V = _v(V)
+	if _arg(request, "confirmat") != "1":
+		return {"result": False, "message": _t("Confirmă.")}
+	reusit, mesaj = V.pastreazaCertificatul()
+	return {"result": reusit, "message": mesaj}
 
 
 def sterge(request, V=None):
@@ -302,6 +369,9 @@ def rute(baza, resource, V=None, sesiune_cerere=None):
 		b"vpn-cont": comanda(cont),
 		b"vpn-cont-sterge": comanda(contSterge),
 		b"vpn-importa": comanda(importa),
+		b"vpn-adauga": comanda(adauga),
+		b"vpn-secrete": comanda(secrete),
+		b"vpn-certificat": comanda(certificat),
 		b"vpn-sterge": comanda(sterge),
 		b"vpn-sterge-toate": comanda(stergeToate),
 		b"vpn-instaleaza": comanda(instaleaza),
@@ -334,11 +404,30 @@ ETICHETE = {
 	"FURNIZOR": N_("Furnizorul și serverul"),
 	"ETICHETA_FURNIZOR": N_("Furnizorul"),
 	"ETICHETA_SERVER": N_("Serverul"),
+	"FARA_FISIERE": N_("Alege furnizorul fără fișiere: scrii contul și alegi țara"),
 	"STERGE_SERVER": N_("Șterge serverul ales"),
 	"STERGE_TOATE": N_("Șterge toate serverele acestui furnizor"),
-	"IMPORT": N_("Fișierele furnizorului"),
-	"ALEGE_FISIERE": N_("Alege fișierele (.ovpn, .conf și certificatele lor)"),
-	"TRIMITE": N_("Trimite fișierele"),
+	"ADAUGA": N_("Adaugă VPN"),
+	"ADAUGA_NOTA": N_("Un fișier de la furnizor (.ovpn, .conf, .sswan, .mobileconfig, .zip, cu certificatele alături), "
+		"un text lipit (ss://, adresa https:// a serverului, fișierul WireGuard) sau datele scrise de mână. Felul se "
+		"recunoaște singur; apoi se cere numai ce lipsește."),
+	"ALEGE_FISIERE": N_("Fișierele"),
+	"LIPESTE": N_("Sau lipește aici textul"),
+	"MANA": N_("Sau scrie datele de mână"),
+	"FEL": N_("Felul VPN-ului"),
+	"NICIUNUL": N_("(fără)"),
+	"SERVER_NOU": N_("Serverul"),
+	"PROTOCOL": N_("Felul serverului"),
+	"METODA": N_("Metoda (cifrul)"),
+	"PSK": N_("Cheia comună (PSK)"),
+	"GRUP_OC": N_("Grupul (dacă serverul îl cere)"),
+	"ADAUGA_BUTON": N_("Adaugă"),
+	"DATE_ACCES": N_("Datele de acces"),
+	"DATE_NOTA": N_("După salvare nu se mai arată nicăieri, nici aici, nici pe televizor."),
+	"CERTIFICAT": N_("Certificatul serverului"),
+	"CERTIFICAT_NOTA": N_("Serverul are un certificat pe care receptorul nu îl cunoaște. Ai încredere în el numai dacă "
+		"serverul e al tău sau al firmei tale."),
+	"CERTIFICAT_DA": N_("Am încredere"),
 	"STICK": N_("Importă fișierele de pe stick"),
 	"STICK_NOTA": N_("De pe stick: dosarul hdsatelit/vpn, cu fișierele .ovpn sau .conf ori cu arhiva .zip a furnizorului."),
 	"CONT": N_("Numele și parola contului"),
@@ -370,6 +459,12 @@ TEXTE_JS = {
 	"alegeFisiere": N_("Alege întâi fișierele."),
 	"zip": N_("Arhiva .zip se despachetează întâi sau se pune pe stick."),
 	"prea": N_("Fișierul %s este prea mare."),
+	"nimicDeAdaugat": N_("Alege fișierele, lipește textul sau scrie datele."),
+	"stick": N_("Pune-l pe stick în dosarul hdsatelit/vpn."),
+	"preaMulte": N_("Prea multe fișiere odată."),
+	"mai": N_("Mai scrie: %s."),
+	"intrebareCertificat": N_("Ai încredere în certificatul serverului? Alege Da numai dacă serverul e al tău sau al "
+		"firmei tale."),
 	"scrieNumele": N_("Scrie întâi numele și parola contului."),
 	"intrebareInstaleaza": N_("Instalezi programele VPN din feedul de extensii HD Satelit? Durează câteva minute."),
 	"intrebareSterge": N_("Ștergi serverul %s?"),
@@ -393,7 +488,7 @@ def pagina_text(stil, config_pagina):
 	nota = html.escape(_t(NOTA_TV), quote=False)
 	nota = nota.replace("%s", MC.drumHtml("hds_vpn"), 1) if "%s" in nota else nota
 	text = text.replace("__LIMBA__", _limba()).replace("__NOTA_TV__", nota).replace("__TEXTE_JS__",
-		_json(dict((k, _t(v)) for k, v in TEXTE_JS.items())))
+		_json(dict((k, _t(v)) for k, v in TEXTE_JS.items()))).replace("__NICIUNUL__", _json(_t(ETICHETE["NICIUNUL"])))
 	return MC.sablon(text, stil, config_pagina)
 
 
@@ -442,19 +537,46 @@ __STIL_PAGINI__
     <div class="rand"><label for="furnizor">__T_ETICHETA_FURNIZOR__</label><select id="furnizor"></select></div>
     <div class="rand"><label for="server">__T_ETICHETA_SERVER__</label><select id="server"></select></div>
     <p class="nota" id="cumIei"></p>
+    <p><a href="/vpn-furnizor">__T_FARA_FISIERE__</a></p>
     <div class="butoane">
       <button type="button" id="stergeServer">__T_STERGE_SERVER__</button>
       <button type="button" class="rosu" id="stergeToate">__T_STERGE_TOATE__</button>
     </div>
   </section>
   <section class="card">
-    <h2>__T_IMPORT__</h2>
-    <div class="rand"><label for="fisiere">__T_ALEGE_FISIERE__</label><input type="file" id="fisiere" multiple accept=".ovpn,.conf,.crt,.key,.pem,.txt"></div>
+    <h2>__T_ADAUGA__</h2>
+    <p class="nota">__T_ADAUGA_NOTA__</p>
+    <div class="rand"><label for="fisiere">__T_ALEGE_FISIERE__</label><input type="file" id="fisiere" multiple accept=".ovpn,.conf,.sswan,.mobileconfig,.json,.txt,.zip,.crt,.cer,.der,.key,.pem"></div>
+    <p class="nota"><label for="lipit">__T_LIPESTE__</label></p>
+    <textarea id="lipit" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <details id="mana">
+      <summary>__T_MANA__</summary>
+      <div class="rand"><label for="felNou">__T_FEL__</label><select id="felNou"></select></div>
+      <div class="rand"><label for="serverNou">__T_SERVER_NOU__</label><input type="text" id="serverNou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="250"></div>
+      <div class="rand camp-oc"><label for="protocolNou">__T_PROTOCOL__</label><select id="protocolNou"><option value="anyconnect">Cisco AnyConnect, ocserv</option><option value="gp">GlobalProtect (Palo Alto)</option><option value="pulse">Pulse Secure (Ivanti)</option><option value="nc">Juniper Network Connect</option><option value="fortinet">Fortinet</option><option value="f5">F5 BIG-IP</option><option value="array">Array Networks</option></select></div>
+      <div class="rand camp-oc"><label for="grupNou">__T_GRUP_OC__</label><input type="text" id="grupNou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"></div>
+      <div class="rand camp-ss"><label for="metodaNoua">__T_METODA__</label><select id="metodaNoua"><option value="chacha20-ietf-poly1305"></option><option value="aes-256-gcm"></option><option value="aes-128-gcm"></option><option value="aes-192-gcm"></option><option value="xchacha20-ietf-poly1305"></option></select></div>
+      <div class="rand camp-psk"><label for="pskNou">__T_PSK__</label><input type="text" id="pskNou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="256"></div>
+      <div class="rand camp-nume"><label for="numeNou">__T_NUME__</label><input type="text" id="numeNou" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128"></div>
+      <div class="rand camp-parola"><label for="parolaNoua">__T_PAROLA__</label><input type="text" id="parolaNoua" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="256"></div>
+    </details>
     <div class="butoane">
-      <button type="button" class="principal" id="trimite">__T_TRIMITE__</button>
+      <button type="button" class="principal" id="adauga">__T_ADAUGA_BUTON__</button>
       <button type="button" id="stick">__T_STICK__</button>
     </div>
     <p class="nota">__T_STICK_NOTA__</p>
+  </section>
+  <section class="card ascuns" id="cardDate">
+    <h2>__T_DATE_ACCES__ <span class="nota" id="dateStare"></span></h2>
+    <div id="campuriDate"></div>
+    <div class="butoane"><button type="button" class="principal" id="salveazaDate">__T_SALVEAZA__</button></div>
+    <p class="nota">__T_DATE_NOTA__</p>
+  </section>
+  <section class="card ascuns" id="cardCertificat">
+    <h2>__T_CERTIFICAT__</h2>
+    <p class="nota">__T_CERTIFICAT_NOTA__</p>
+    <p class="nota" id="pin"></p>
+    <div class="butoane"><button type="button" class="principal" id="certificatDa">__T_CERTIFICAT_DA__</button></div>
   </section>
   <section class="card" id="cardCont">
     <h2><span id="titluCont">__T_CONT__</span> <span class="nota" id="contStare"></span></h2>
@@ -513,7 +635,7 @@ function arata(d){
   var pornit = d.pornit || ["conectat", "se_conecteaza", "blocat"].indexOf(d.legatura) !== -1;
   $("comuta").textContent = pornit ? TXT.opreste : TXT.porneste;
   $("comuta").classList.toggle("rosu", pornit); $("comuta").classList.toggle("principal", !pornit);
-  $("cardPrograme").classList.toggle("ascuns", !d.lipsesc && !d.wg_indisponibil); pune("textPrograme", d.text_programe);
+  $("cardPrograme").classList.toggle("ascuns", !d.lipsesc && !d.indisponibil && !d.wg_indisponibil); pune("textPrograme", d.text_programe);
   $("instaleaza").classList.toggle("ascuns", !d.lipsesc);
   optiuni($("furnizor"), d.furnizori, d.furnizor);
   var servere = (d.profiluri || []).map(function(p){ return [p.id, p.titlu]; });
@@ -526,6 +648,8 @@ function arata(d){
   // parola salvata nu vine niciodata in pagina: campul ramane gol, cu indemnul de schimbare cand contul e salvat
   $("parola").placeholder = d.cont ? TXT.scrieAlta : "";
   var mod = $("moduri");
+  var cheieModuri = d.moduri.map(function(x){ return x[0]; }).join(",");
+  if(mod.getAttribute("data-moduri") !== cheieModuri){ mod.textContent = ""; mod.setAttribute("data-moduri", cheieModuri); }
   if(!mod.children.length){
     d.moduri.forEach(function(x){
       var l = document.createElement("label"); l.className = "bifa";
@@ -542,6 +666,28 @@ function arata(d){
   // in modul navigator oprirea totala e mereu (navigatorul n-are alta iesire decat tunelul)
   $("randOprire").classList.toggle("ascuns", d.mod === "navigator");
   pune("explicatieMod", d.explicatie_mod);
+  // datele de acces ale protocoalelor noi (OpenVPN are cardul lui de cont)
+  var cuDate = d.fel !== "openvpn" && d.fel !== "wireguard" && !!d.profil && (d.campuri_text || []).length > 0;
+  $("cardDate").classList.toggle("ascuns", !cuDate);
+  if(cuDate){
+    pune("dateStare", "(" + ((d.campuri_lipsa || []).length ? TXT.lipsesc : TXT.salvate) + ")");
+    var cd = $("campuriDate"), cheie = d.profil.id + ":" + d.campuri_text.map(function(x){ return x[0]; }).join(",");
+    if(cd.getAttribute("data-cheie") !== cheie){
+      cd.textContent = ""; cd.setAttribute("data-cheie", cheie);
+      d.campuri_text.forEach(function(x){
+        var r = document.createElement("div"); r.className = "rand";
+        var l = document.createElement("label"); l.textContent = x[1]; l.htmlFor = "date_" + x[0];
+        var i = document.createElement("input"); i.type = "text"; i.id = "date_" + x[0]; i.setAttribute("data-camp", x[0]);
+        i.autocomplete = "off"; i.spellcheck = false; i.setAttribute("autocapitalize", "off"); i.maxLength = 256;
+        r.appendChild(l); r.appendChild(i); cd.appendChild(r);
+      });
+    }
+    Array.prototype.forEach.call(cd.querySelectorAll("input"), function(i){ i.placeholder = (d.campuri_lipsa || []).indexOf(i.getAttribute("data-camp")) === -1 ? TXT.scrieAlta : ""; });
+  }
+  $("cardCertificat").classList.toggle("ascuns", !d.pin_propus); pune("pin", d.pin_propus || "");
+  var feluri = [["", ETICHETA_NICIUNUL]].concat(d.feluri_adauga || []);
+  optiuni($("felNou"), feluri, $("felNou").value || "");
+  arataCampuriNoi();
   var schimba = !!d.asociat;
   Array.prototype.forEach.call(document.querySelectorAll("#continut button, #continut select, #continut input, #continut textarea"), function(e){
     if(!schimba){ e.disabled = true; }
@@ -584,6 +730,59 @@ $("stergeToate").addEventListener("click", function(){
   if(D && confirm(TXT.intrebareStergeToate.replace("%s", String(D.nr_profiluri)))){ trimite("/api/vpn-sterge-toate", {confirmat: "1"}); }
 });
 $("stick").addEventListener("click", function(){ trimite("/api/vpn-stick", {}); });
+var ETICHETA_NICIUNUL = __NICIUNUL__;
+function arataCampuriNoi(){
+  var f = $("felNou").value;
+  function vede(cls, da){ Array.prototype.forEach.call(document.querySelectorAll("." + cls), function(e){ e.classList.toggle("ascuns", !da); }); }
+  vede("camp-oc", f === "openconnect"); vede("camp-ss", f === "shadowsocks"); vede("camp-psk", f === "l2tp" || f === "ikev2");
+  vede("camp-nume", f !== "shadowsocks" && f !== ""); vede("camp-parola", f !== "");
+}
+$("felNou").addEventListener("change", arataCampuriNoi);
+// metodele Shadowsocks: numele lor tehnice, aceleasi in toate limbile
+Array.prototype.forEach.call($("metodaNoua").options, function(o){ o.textContent = o.value; });
+function citesteB64(f){
+  return new Promise(function(da, nu){ var r = new FileReader(); r.onload = function(){ var s = String(r.result); da([f.name, s.slice(s.indexOf(",") + 1)]); }; r.onerror = nu; r.readAsDataURL(f); });
+}
+$("adauga").addEventListener("click", function(){
+  var alese = Array.prototype.slice.call($("fisiere").files || []);
+  // corpul unei cereri are cel mult 64 KB: fisierele mai mari (arhivele mari ale furnizorilor) merg pe stick
+  var mare = alese.filter(function(f){ return f.size > 40000; })[0];
+  if(mare){ mesaj(TXT.prea.replace("%s", mare.name) + " " + TXT.stick, true); return; }
+  if(alese.reduce(function(s, f){ return s + f.size; }, 0) > 41000){ mesaj(TXT.preaMulte, true); return; }
+  var lipit = $("lipit").value, f = $("felNou").value;
+  if(!alese.length && !lipit.trim() && !f){ mesaj(TXT.nimicDeAdaugat, true); return; }
+  mesaj(TXT.seTrimite);
+  Promise.all(alese.map(citesteB64)).then(function(lista){
+    var q = new URLSearchParams();
+    lista.forEach(function(x){ q.append("nume_fisier", x[0]); q.append("b64", x[1]); });
+    if(lipit.trim()){ q.append("lipit", lipit); }
+    // datele scrise de mana merg si cu fisiere alaturi (certificatul CA al furnizorului la IKEv2)
+    if(f && !lipit.trim()){
+      q.append("fel", f); q.append("server", $("serverNou").value.trim());
+      if(f === "openconnect"){ q.append("protocol", $("protocolNou").value); if($("grupNou").value.trim()){ q.append("grup_oc", $("grupNou").value.trim()); } }
+      if(f === "shadowsocks"){ q.append("metoda", $("metodaNoua").value); }
+      if($("pskNou").value && (f === "l2tp" || f === "ikev2")){ q.append("psk", $("pskNou").value); }
+      if($("numeNou").value.trim() && f !== "shadowsocks"){ q.append("nume", $("numeNou").value.trim()); }
+      if($("parolaNoua").value){ q.append("parola", $("parolaNoua").value); }
+    }
+    return cerere("/api/vpn-adauga", "POST", q).then(function(r){
+      mesaj(r.message, !r.result);
+      if(r.result){
+        $("fisiere").value = ""; $("lipit").value = ""; ["serverNou", "grupNou", "pskNou", "numeNou", "parolaNoua"].forEach(function(id){ $(id).value = ""; });
+        $("felNou").value = ""; arataCampuriNoi();
+      }
+      return citeste().then(function(){ if(r.result && (r.lipsesc || []).length){ var i = document.querySelector("#campuriDate input"); if(i){ i.focus(); } } });
+    });
+  }).catch(function(){ mesaj(TXT.nuRaspunde, true); });
+});
+$("salveazaDate").addEventListener("click", function(){
+  if(!D || !D.profil){ return; }
+  var c = {id: D.profil.id}, ceva = false;
+  Array.prototype.forEach.call(document.querySelectorAll("#campuriDate input"), function(i){ if(i.value){ c[i.getAttribute("data-camp")] = i.getAttribute("data-camp") === "nume" ? i.value.trim() : i.value; ceva = true; } });
+  if(!ceva){ mesaj(TXT.scrieNumele, true); return; }
+  trimite("/api/vpn-secrete", c).then(function(r){ if(r && r.result){ Array.prototype.forEach.call(document.querySelectorAll("#campuriDate input"), function(i){ i.value = ""; }); } });
+});
+$("certificatDa").addEventListener("click", function(){ if(confirm(TXT.intrebareCertificat)){ trimite("/api/vpn-certificat", {confirmat: "1"}); } });
 $("salveazaCont").addEventListener("click", function(){
   var n = $("nume").value.trim(), p = $("parola").value;
   if(!n || !p){ mesaj(TXT.scrieNumele, true); return; }
@@ -606,24 +805,6 @@ function trimiteFisiere(lista){
   var q = new URLSearchParams(); lista.forEach(function(x){ q.append("nume", x[0]); q.append("text", x[1]); });
   return cerere("/api/vpn-importa", "POST", q);
 }
-$("trimite").addEventListener("click", function(){
-  var alese = Array.prototype.slice.call($("fisiere").files || []);
-  if(!alese.length){ mesaj(TXT.alegeFisiere, true); return; }
-  if(alese.some(function(f){ return /\\.zip$/i.test(f.name); })){ mesaj(TXT.zip, true); return; }
-  var mare = alese.filter(function(f){ return f.size > 60000; })[0];
-  if(mare){ mesaj(TXT.prea.replace("%s", mare.name), true); return; }
-  mesaj(TXT.seTrimite);
-  Promise.all(alese.map(citesteFisier)).then(function(lista){
-    var total = lista.reduce(function(s, x){ return s + x[1].length; }, 0);
-    var loturi = (total <= 56000 && lista.length <= 40) ? [lista] : lista.map(function(x){ return [x]; });
-    var mesaje = [], i = 0;
-    function urmatorul(){
-      if(i >= loturi.length){ mesaj(mesaje.join(" "), false); $("fisiere").value = ""; return citeste(); }
-      return trimiteFisiere(loturi[i++]).then(function(r){ mesaje.push(r.message); return urmatorul(); });
-    }
-    return urmatorul();
-  }).catch(function(){ mesaj(TXT.nuRaspunde, true); });
-});
 function planifica(){ setTimeout(function(){ citeste().then(planifica, planifica); }, (ASTEPT !== null || (D && D.lucrare && D.lucrare.lucreaza)) ? 800 : 2500); }
 citeste().then(planifica, planifica);
 </script>
@@ -638,6 +819,13 @@ citeste().then(planifica, planifica);
 TEXTE_PAGINA = {
 	"html": (
 		N_("exemplu.ro"),
+		# felurile de servere OpenConnect (nume de produse; raman la fel in traduceri)
+		N_("Cisco AnyConnect, ocserv"),
+		N_("GlobalProtect (Palo Alto)"),
+		N_("Pulse Secure (Ivanti)"),
+		N_("Juniper Network Connect"),
+		N_("Array Networks"),
+		N_("Fortinet"),
 	),
 	"js": (
 	),

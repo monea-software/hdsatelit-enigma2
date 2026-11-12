@@ -22,7 +22,14 @@ from Tools.LoadPixmap import LoadPixmap
 # widget, color or font is skipped and everything else is still drawn.
 
 colorNames = dict()
+# HDSatelit 0.7.4: culorile din <colors> al caror value e un degrade ("a,b[,c],directie[,alphablend]", skin-urile straine:
+# <color name="ListSelection" value="selection,selectionShade,vertical"/>): nume -> textul degradeului. colorNames are
+# atunci prima culoare (ce desena si inainte), iar degradeul se ia oriunde se cere unul.
+gradients = dict()
 fonts = dict()       # <alias name="Body" font="Regular" size="30" height="40"/> -> (font, size, height)
+# HDSatelit 0.7.4: latimea unui caracter din <alias width="..."/> (skin-urile straine; "w" si "h" in coordonate). fonts ramane cu
+# trei campuri (ecranele noastre il despacheteaza asa).
+latimiFont = dict()
 parameters = dict()  # <parameter name="X" value="1,2,3"/> -> (1, 2, 3); from <hdsparameters> also image paths
 warnings = [ ]
 MAX_WARNINGS = 50
@@ -56,8 +63,11 @@ dom_skins = [ ]
 _surseSkin = {}
 _xmlAfisaj = set()
 
-def loadSkin(name, scope = SCOPE_SKIN):
-	# read the skin
+def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, filename = None):
+	# read the skin. HDSatelit: si cu numele argumentelor OE-Alliance (filename=, desktop=, screenID=), ca la pluginurile
+	# scrise pentru acele imagini; desktop/screenID nu schimba nimic aici (datele se incarca in loadSkinData)
+	if name is None:
+		name = filename
 	filename = resolveFilename(scope, name)
 	mpath = path.dirname(filename) + "/"
 	radacina = xml.etree.ElementTree.parse(filename).getroot()
@@ -92,6 +102,159 @@ def pregatesteTemaExterna(name):
 		raise
 	_Tema().pornesteImportul()
 	dosareSkinStraine.add(mpath)
+
+# HDSatelit 0.7.4 (TL): sabloanele listei de canale, ca in standardul OE-Alliance (advanced/channel-styles,
+# template-reference): <template component="serviceList" name="..." fonts="..."><mode name="services|bouquets|other">...
+# in skinTemplates.xml langa tema aleasa (si skinUserTemplates.xml), altfel in widgeturile ecranelor temei. Numele cerute de
+# pluginurile temelor (UmbraSettings: componentTemplates, domScreens, reloadSkinTemplates; config.channelSelection.screenStyle
+# si widgetStyle). Se citesc numai pentru o tema straina; cu tema HD Satelit registrul ramane gol si setarile au numai
+# „lista clasica”. Ca acolo, din fabrica lista ramane cea clasica (screenStyle gol). Lista de canale nu se deseneaza inca
+# dupa sablon: registrul si setarile sunt pentru pluginurile temelor (vezi STADIU-TL-SABLOANE-RETEA.md).
+class ComponentTemplates(object):
+	"""sabloanele cu component= din tema: (componenta, nume) -> elementul <template>; ultimul cu acelasi nume castiga"""
+	def __init__(self):
+		self.changedTimes = {}
+		self.templates = {}
+
+	def add(self, template, fileName=None):
+		if fileName and fileName not in self.changedTimes:
+			try:
+				self.changedTimes[fileName] = path.getmtime(fileName)
+			except OSError:
+				self.changedTimes[fileName] = None
+		component = template.get("component")
+		name = template.get("name")
+		if component and name:
+			self.templates.setdefault(component, {})[name] = template
+
+	def clear(self):
+		self.templates = {}
+		self.changedTimes = {}
+
+	def get(self, component, name):
+		return self.templates.get(component, {}).get(name)
+
+	def names(self, component):
+		if component in self.templates:
+			return list(self.templates[component].keys())
+		return None
+
+	def isChanged(self):
+		for fileName, timp in self.changedTimes.items():
+			try:
+				if path.getmtime(fileName) != timp:
+					return True
+			except OSError:
+				if timp is not None:
+					return True
+		return False
+
+componentTemplates = ComponentTemplates()
+# fisierul skin.xml al temei alese (cale relativa la SCOPE_SKIN), cum il stiu pluginurile temelor
+currentPrimarySkin = "HDSatelit/skin.xml"
+COMPONENTE_SABLOANE = ("serviceList",)
+
+class _EcraneDom(object):
+	"""domScreens: numele ecranului -> (elementul <screen>, dosarul fisierului), primul gasit in ordinea cautarii
+	(ca lookupScreen); citit din dom_skins la fiecare folosire, deci mereu la zi"""
+	def _toate(self):
+		rez = {}
+		for (mpath, radacina) in dom_skins:
+			for x in radacina.findall("screen"):
+				nume = x.attrib.get("name")
+				if nume and nume not in rez:
+					rez[nume] = (x, mpath)
+		return rez
+
+	def items(self):
+		return self._toate().items()
+
+	def keys(self):
+		return self._toate().keys()
+
+	def values(self):
+		return self._toate().values()
+
+	def get(self, nume, implicit=None):
+		return self._toate().get(nume, implicit)
+
+	def __getitem__(self, nume):
+		return self._toate()[nume]
+
+	def __contains__(self, nume):
+		return nume in self._toate()
+
+	def __iter__(self):
+		return iter(self._toate())
+
+	def __len__(self):
+		return len(self._toate())
+
+domScreens = _EcraneDom()
+
+def loadSkinTemplates(skinTemplatesFileNames):
+	"""sabloanele cu component= cunoscut: din fisierele date (<skin><template .../></skin>), altfel din ecranele temei"""
+	def adauga(template, fileName):
+		if template.get("component", "") in COMPONENTE_SABLOANE:
+			componentTemplates.add(template, fileName)
+	if skinTemplatesFileNames:
+		for fileName in skinTemplatesFileNames:
+			try:
+				radacina = xml.etree.ElementTree.parse(fileName).getroot()
+			except Exception as err:
+				skinWarning("sabloanele din %s nu s-au citit: %s" % (fileName, err))
+				continue
+			for template in radacina.findall("template"):
+				adauga(template, fileName)
+	else:
+		for (mpath, radacina) in dom_skins:
+			if mpath not in dosareSkinStraine:
+				continue
+			for template in radacina.findall(".//widget/templates/template"):
+				adauga(template, None)
+
+def reloadSkinTemplates(clear=False):
+	"""sabloanele temei alese: skinTemplates.xml langa skin.xml si skinUserTemplates.xml (din dosarul temei); fara ele, din
+	ecrane. Cu tema HD Satelit nu se citeste nimic. Dupa citire se refac alegerile setarilor listei de canale."""
+	if clear:
+		componentTemplates.clear()
+	fisiere = []
+	if dosareSkinStraine:
+		for nume in (path.join(path.dirname(currentPrimarySkin), "skinTemplates.xml"), path.join(path.dirname(currentPrimarySkin), "skinUserTemplates.xml")):
+			cale = resolveFilename(SCOPE_SKIN, nume)
+			if path.isfile(cale):
+				fisiere.append(cale)
+		loadSkinTemplates(fisiere)
+	refreshChannelSelectionStyleChoices()
+
+def getcomponentTemplateNames(component):
+	return componentTemplates.names(component)
+
+def refreshChannelSelectionStyleChoices():
+	"""config.channelSelection.screenStyle (ecranele temei cu base="ChannelSelection"; "" = lista clasica, din fabrica) si
+	widgetStyle (sabloanele serviceList; primul din fabrica), ca in standard; nu sunt in meniurile noastre"""
+	if getattr(config, "channelSelection", None) is None:
+		config.channelSelection = ConfigSubsection()
+	ecrane = [("", "Lista clasică")]
+	stiluri = componentTemplates.names("serviceList") or []
+	if stiluri:
+		for nume, (element, _p) in domScreens.items():
+			if element.get("base") == "ChannelSelection":
+				ecrane.append((nume, element.get("label", nume)))
+	sabloane = [(stil, stil) for stil in stiluri]
+	for nume, alegeri, implicit in (("screenStyle", ecrane, ""), ("widgetStyle", sabloane or [("", "")], stiluri[0] if stiluri else "")):
+		setare = getattr(config.channelSelection, nume, None)
+		if setare is None:
+			setattr(config.channelSelection, nume, ConfigSelection(default=implicit, choices=alegeri))
+		else:
+			setare.setChoices(alegeri, default=implicit)
+	# cerute de sabloane (conditional="config.channelSelection.piconRatio.value == 167", 42 de randuri in corpusul de teme)
+	# si de pluginul de setari al temei Umbra (showNumber, showPicon...); ca in standard, numai daca lipsesc, fara meniu
+	if getattr(config.channelSelection, "piconRatio", None) is None:
+		config.channelSelection.piconRatio = ConfigSelection(default=167, choices=[(167, "16:10"), (235, "1:2.35"), (250, "1:2.5")])
+	for nume in ("showNumber", "showPicon", "showProgress", "showCryptoIcon", "showServiceTypeIcon", "showTimers"):
+		if getattr(config.channelSelection, nume, None) is None:
+			setattr(config.channelSelection, nume, ConfigYesNo(default=True))
 
 # skins are loaded in order of priority: the skin with the highest priority is loaded last
 # (usually the user-provided skin). loadSingleSkinData (colors, fonts, window style) is applied
@@ -302,15 +465,45 @@ try:
 except Exception as err:
 	skinWarning("tema Pro nu s-a incarcat, ramane Clasic: %s" % err)
 
+def partiTema(nume, dosar_skin=None):
+	"""Partile unei teme straine, ca in imaginile pentru care e scrisa (nota OEA8): <dosarul temei>/mySkin/skin_*.xml, in
+	ordine alfabetica (pluginurile de setari ale temelor scriu acolo alegerile omului: culori, vreme, postere). Cai
+	intregi; [] fara dosar."""
+	dosar_skin = dosar_skin if dosar_skin is not None else resolveFilename(SCOPE_SKIN, "")
+	dosar = path.join(path.dirname(path.join(dosar_skin, nume)), "mySkin")
+	if not path.isdir(dosar):
+		return [ ]
+	return sorted(glob(path.join(dosar, "skin_*.xml")))
+
+def incarcaPartiTema(nume):
+	"""partile temei inaintea temei (dom_skins: primul gasit castiga, deci partile trec peste ecranele si culorile ei);
+	o parte stricata se sare cu un rand in jurnal. Intoarce cate s-au incarcat."""
+	n = 0
+	for cale in partiTema(nume):
+		try:
+			loadSkin(cale)
+			dosareSkinStraine.add(dom_skins[-1][0])
+			n += 1
+		except Exception as err:
+			skinWarning("partea temei %s nu s-a incarcat: %s" % (cale, err))
+	return n
+
 if skinAles is not None:
+	_inaintePartilor = len(dom_skins)
 	try:
+		incarcaPartiTema(skinAles)
 		loadSkin(skinAles)
 		pregatesteTemaExterna(skinAles)
 		skinPornit = skinAles
+		currentPrimarySkin = skinAles
 		skinNotice("skinul ales: %s, cu HDSatelit/skin.xml ca rezerva" % skinAles)
 	except Exception as err:
 		# numai in jurnal: mesajul pentru om, tradus, il da extensia SkinSelector la pornirea sesiunii (HdsSkinuri)
 		skinNotice("skinul ales %s nu s-a incarcat, ramane HDSatelit: %s" % (skinAles, err))
+		# partile temei pleaca odata cu ea
+		for _mpath, _r in dom_skins[_inaintePartilor:]:
+			dosareSkinStraine.discard(_mpath)
+		del dom_skins[_inaintePartilor:]
 		_HdsSkinuri.incarcareCazuta(skinAles, err)
 		config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
 		config.skin.primary_skin.save()
@@ -320,6 +513,12 @@ if skinAles is not None:
 				loadSkin(TEMA_PRO_FISIER)
 		except Exception as err2:
 			skinWarning("tema Pro nu s-a incarcat, ramane Clasic: %s" % err2)
+
+# sabloanele listei de canale ale temei alese (registrul componentTemplates; cu tema HD Satelit nu se citeste nimic)
+try:
+	reloadSkinTemplates()
+except Exception as err:
+	skinWarning("sabloanele listei de canale nu s-au citit: %s" % err)
 
 # Rezerva LCD nu acopera ecranele explicite ale temei TV externe.
 incarcaAfisaj(rezerva=True)
@@ -339,14 +538,43 @@ except Exception as err:
 	skinWarning("fallback skin not loaded: %s" % err)
 profile("LoadSkinDefaultDone")
 
+def centruCuDeplasare(pos, wsize, ssize, scale = (1, 1)):
+	""""center", "center+20", "center-8" (ghidul coordonatelor din skin-urile straine): elementul centrat plus deplasarea
+	(scalata), cel putin 0; None pentru orice alta forma"""
+	pos = pos.strip()
+	if not pos.startswith("center"):
+		return None
+	rest = pos[6:].replace(" ", "")
+	deplasare = 0
+	if rest:
+		if rest[0] not in "+-" or not rest[1:].isdigit():
+			return None
+		deplasare = int(rest) * scale[0] // scale[1]
+	return max((ssize - wsize) // 2 + deplasare, 0)
+
 def evalPos(pos, wsize, ssize, scale):
 	if pos == "center":
 		pos = (ssize - wsize) // 2
+	elif pos.startswith("center"):
+		v = centruCuDeplasare(pos, wsize, ssize, scale)
+		if v is None:
+			raise ValueError("pozitia \"%s\" nu e inteleasa" % pos)
+		pos = v
 	else:
 		pos = int(pos) * scale[0] // scale[1]
 	return int(pos)
 
-def parsePosition(s, scale, desktop = None, size = None):
+def _esteDesktop(o):
+	return o is None or hasattr(o, "getStyleID")
+
+def parsePosition(s, scale, desktop = None, size = None, *oea):
+	"""ale noastre: (s, scale, desktop, size). Pluginurile scrise pentru imaginile OE-Alliance cheama si
+	(value, scale, object, desktop, size): al treilea e atunci elementul, nu desktopul; se recunoaste dupa tip."""
+	if oea or not _esteDesktop(desktop):
+		obiect, desktop, size = desktop, size, (oea[0] if oea else None)
+		if not _esteDesktop(desktop):
+			desktop = None
+		s = _relativFataDeParinte(s, obiect, desktop, size)
 	if not s:
 		return ePoint(0, 0)
 	x, y = s.split(',')
@@ -363,11 +591,37 @@ def parsePosition(s, scale, desktop = None, size = None):
 
 	return ePoint(x, y)
 
-def parseSize(s, scale):
+def parseSize(s, scale, obiect = None, desktop = None):
+	"""(value, scale) la noi; pluginurile OE-Alliance dau si (object, desktop), ca "e", "c" si "%" sa fie fata de parinte"""
+	if obiect is not None or desktop is not None:
+		s = _relativFataDeParinte(s, obiect, desktop, None)
 	if not s:
 		return eSize(0, 0)
 	x, y = s.split(',')
 	return eSize(int(x) * scale[0][0] // scale[0][1], int(y) * scale[1][0] // scale[1][1])
+
+def _relativFataDeParinte(s, obiect, desktop, size):
+	"""o pereche cu e, c, % (forma pluginurilor scrise pentru imaginile OE-Alliance) -> numere, fata de parintele
+	elementului (sau fata de desktop); fara asa ceva, valoarea asa cum e"""
+	if not s or not isinstance(s, str) or not _valoareRelativa(s):
+		return s
+	parinte = None
+	try:
+		p = obiect.getParent() if obiect is not None and hasattr(obiect, "getParent") else None
+		if p is not None and p.size().width() <= 0 and hasattr(p, "getParent") and p.getParent() is not None:
+			p = p.getParent()
+		if p is not None:
+			parinte = (p.size().width(), p.size().height())
+	except Exception:
+		parinte = None
+	if parinte is None and desktop is not None:
+		parinte = (desktop.size().width(), desktop.size().height())
+	if parinte is None:
+		return s
+	atribute = [("position", s)]
+	if size is not None:
+		atribute.append(("size", "%d,%d" % (size.width(), size.height())))
+	return dict(_Tema().rezolvaRelative(atribute, parinte[0], parinte[1])).get("position", s)
 
 # ------------------------------------------------------------------ ecranele scrise pentru alta rezolutie
 # HDSatelit: un skin ales care nu e 1920x1080 (1280x720, 1024x576, 720x576, 3840x2160) arata ecranele lui; ecranele pe
@@ -508,7 +762,7 @@ class ScaraEcran(object):
 			try:
 				v = int(p.strip())
 			except ValueError:
-				rez.append(p)
+				rez.append(scaleazaExpresie(p, f))
 				continue
 			rez.append(str(_marime(v, f) if marime else _ori(v, f)))
 		return ','.join(rez)
@@ -545,24 +799,35 @@ class ScaraEcran(object):
 				return self.pereche(v)
 			if atribut == "size":
 				return self.pereche(v, True)
-			if atribut in ("pointer", "seek_pointer"):
+			if atribut in ("pointer", "seek_pointer", "seekPointer"):
 				nume, sep, poz = v.rpartition(':')
 				return nume + sep + self.pereche(poz) if sep else v
-			if atribut in ("pixmap", "backgroundPixmap", "selectionPixmap"):
+			if atribut in ("pixmap", "backgroundPixmap", "selectionPixmap") or atribut in POZE_BARA or atribut in POZE_PISTA:
 				return self.imagine(v)
+			if atribut == "itemWidth":
+				return str(_marime(int(v), self.sx))
 			if a.endswith("height"):
 				return str(_marime(int(v), self.sy))
+			if a.endswith("padding") and "," in v:
+				# padding="stanga,sus[,dreapta,jos]" (skin-urile straine)
+				return ",".join(str(_marime(int(x), self.sf)) for x in v.split(","))
 			if a.endswith("width") or a.endswith("padding"):
 				return str(_marime(int(v), self.sf))
-			if atribut == "cornerRadius":
+			if atribut in ("cornerRadius", "itemCornerRadius", "itemCornerRadiusSelected"):
+				raza, sep, colturi = v.partition(';')
+				return str(_marime(int(raza), self.sf)) + sep + colturi
+			if atribut == "itemSpacing":
+				return self.pereche(v if "," in v else "%s,%s" % (v, v))
+			if atribut in ("scrollbarRadius", "scrollbarOffset"):
 				return str(_marime(int(v), self.sf))
 			if atribut == "colposition":
 				return str(_ori(int(v), self.sx))
 		if "font" in a:
 			return self.font(v)
-		if self.culori and atribut == "foregroundGradient":
-			parti = [p.strip() for p in v.split(',')]
-			return ','.join([self.culori.get(p, p) for p in parti[:-1]] + parti[-1:])
+		if self.culori and (atribut in ("foregroundGradient", "backgroundGradient") or
+				(atribut in ("backgroundColor", "foregroundColor") and ',' in v)):
+			# culorile cu nume ale unui degrade; directia si alphablend nu sunt nume de culori si raman
+			return ','.join([self.culori.get(p.strip(), p.strip()) for p in v.split(',')])
 		if self.culori and "color" in a and v in self.culori:
 			return self.culori[v]
 		return v
@@ -603,6 +868,21 @@ class ScaraEcran(object):
 		if self.scaleaza or self.fonturi:
 			text = _RX_GFONT.sub(font, text)
 		return text
+
+_TERMENI = re.compile(r'([+-])')
+
+def scaleazaExpresie(p, f):
+	"""o coordonata cu expresie a unui ecran scalat ("e-48", "center+20", "c-10"): numai termenii facuti doar din cifre
+	se scaleaza (sunt pixeli ai grilei de proiectare); e, c, %, w, h, f si termenii care le contin (e/4, 3*e, 25%) raman,
+	fiindca se socotesc din marimea deja scalata a parintelui. "center", "fill", cuvintele raman cum sunt."""
+	bucati = _TERMENI.split(p)
+	if len(bucati) == 1:
+		return p
+	rez = [ ]
+	for b in bucati:
+		t = b.strip()
+		rez.append(str(_ori(int(t), f)) if t.isdigit() else b)
+	return ''.join(rez)
 
 def altSkinActiv():
 	"""True cand interfata a pornit cu alt skin decat HDSatelit"""
@@ -888,7 +1168,14 @@ def parseFont(s, scale):
 		return gFont(name, _hds_scaleaza(size * scale[0][0] // scale[0][1]))
 	return gFont(s, _hds_scaleaza(20 * scale[0][0] // scale[0][1]))
 
-def parseColor(s):
+def parseColor(s, default = None):
+	"""o culoare #aarrggbb, #rrggbb sau un nume. default (forma OE-Alliance, parseColor(value, default=)): ce se intoarce
+	in locul unei culori gresite, in loc de SkinError"""
+	if default is not None:
+		try:
+			return parseColor(s)
+		except Exception:
+			return gRGB(default) if isinstance(default, int) else default
 	if not s:
 		raise SkinError("missing color value")
 	if s[0] != '#':
@@ -918,11 +1205,61 @@ CULORI_DE_BAZA = {"black": 0x00000000, "white": 0x00ffffff, "red": 0x00ff0000, "
 	# numele de rol din skinurile altor imagini: textul alb pe fundal negru
 	"foreground": 0x00ffffff, "background": 0x00000000}
 
-def parseForegroundGradient(value):
+# HDSatelit: degradeurile din teme (backgroundGradient, foregroundGradient, backgroundColor/foregroundColor cu virgula ale
+# skin-urilor straine): "start[,mijloc],sfarsit,directie[,alphablend]", culori #aarrggbb sau nume din <colors>; directia
+# vertical (de sus in jos) sau horizontal; alphablend 1/true/on/yes. Directiile ca eWidget.GRADIENT_* (lib/gui/ewidget.h).
+GRADIENT_VERTICAL = 1
+GRADIENT_HORIZONTAL = 2
+
+def _esteCuloare(s):
+	if s[:1] == '#':
+		return len(s) in (7, 9)
+	return s in colorNames or s.lower() in CULORI_DE_BAZA
+
+def citesteDegrade(value):
+	"""'a,b[,c],directie[,alphablend]' -> ([2 sau 3 culori gRGB], vertical (bool), alphablend (0 sau 1)). SkinError fara
+	cel putin doua culori si o directie. O directie necunoscuta (alt cuvant) e verticala, ca in skin-urile straine."""
+	value = gradients.get(value.strip(), value)
 	parti = [p.strip() for p in value.split(',')]
-	if len(parti) not in (3, 4) or parti[-1] not in ("horizontal", "vertical"):
-		raise SkinError("foregroundGradient: 2-3 culori si horizontal sau vertical")
-	return [parseColor(p) for p in parti[:-1]], int(parti[-1] == "vertical")
+	culori = [ ]
+	for p in parti:
+		if len(culori) == 3 or not _esteCuloare(p):
+			break
+		culori.append(parseColor(p))
+	rest = parti[len(culori):]
+	if len(culori) < 2 or not rest or len(rest) > 2 or not rest[0]:
+		raise SkinError("degradeul \"%s\" trebuie sa fie start[,mijloc],sfarsit,horizontal|vertical[,alphablend]" % value)
+	directie = rest[0].lower()
+	if directie not in ("horizontal", "vertical"):
+		skinNotice("degradeul \"%s\": directia \"%s\" necunoscuta, se ia vertical" % (value, rest[0]))
+	alpha = len(rest) == 2 and rest[1].lower() in ("1", "alphablend", "enabled", "on", "true", "yes")
+	return culori, directie != "horizontal", int(alpha)
+
+def parseGradient(value):
+	"""ca in skin-urile straine: (start, mijloc, sfarsit, directie, alphablend) pentru setBackgroundGradient; la doua
+	culori mijlocul e chiar sfarsitul (asa le deosebeste eWidget)"""
+	culori, vertical, alpha = citesteDegrade(value)
+	if len(culori) == 2:
+		culori.append(culori[1])
+	return culori[0], culori[1], culori[2], GRADIENT_VERTICAL if vertical else GRADIENT_HORIZONTAL, alpha
+
+def parseForegroundGradient(value):
+	"""pentru eSlider.setForegroundGradient: ([2 sau 3 culori], 1 = vertical)"""
+	culori, vertical, alpha = citesteDegrade(value)
+	return culori, int(vertical)
+
+def parseRadius(value):
+	"""cornerRadius: '20' -> (20, 15); '20;top' sau '20;topLeft,bottomRight' -> raza si colturile rotunjite (bitii
+	RADIUS_* din lib/gui/ewidget.h: 1 stanga sus, 2 dreapta sus, 4 stanga jos, 8 dreapta jos); un nume necunoscut nu adauga nimic"""
+	raza, sep, colturi = value.partition(';')
+	raza = int(raza.strip())
+	if not sep:
+		return raza, 15
+	biti = {"topleft": 1, "topright": 2, "top": 3, "bottomleft": 4, "bottomright": 8, "bottom": 12, "left": 5, "right": 10, "all": 15}
+	rez = 0
+	for c in colturi.split(','):
+		rez |= biti.get(c.strip().lower(), 0)
+	return raza, rez
 
 
 def parseParameter(s):
@@ -940,6 +1277,31 @@ def parseImageParameter(s, path_prefix):
 		raise ValueError("not a .png file inside the skin folder")
 	return path.join(path_prefix or "", s)
 
+# HDSatelit 0.7.4 (OEA15): parametrii pictogramelor listelor, ca in OE-Alliance (ChoiceListNative, ChoiceListIcon_red,
+# FileListNativeIcons, FileListIcon_movie, MovieListIcon_play, VirtualKeyboardNative, VirtualKeyboardNativeColors...).
+# Valorile au si coduri 0x.., culori #.. si nume de culori din tema; numai aceste nume primesc forma lor, ca o valoare
+# straina gresita pentru alt parametru sa nu treaca drept numere. Numele culorilor se citesc la desen (SkinIcon.culoare).
+_PARAMETRU_PICTOGRAMA = re.compile(r"^(ChoiceList|FileList|MovieList|VirtualKeyboard)(Native\w*|Icon_\w+)$")
+
+def parametruPictograma(s):
+	"""'59922,red,red' -> (59922, 'red', 'red'); '0xea86,live' -> (0xEA86, 'live'); '#00ff0000' -> 0xff0000.
+	ValueError pentru o parte goala."""
+	parti = []
+	for p in s.split(','):
+		p = p.strip()
+		if not p:
+			raise ValueError("empty part")
+		if p[:2].lower() == "0x":
+			p = int(p, 16)
+		elif p[0] == "#":
+			p = int(p[1:], 16)
+		elif p.lstrip("-").isdigit():
+			p = int(p)
+		elif p[0] == "*":
+			p = p[1:]
+		parti.append(p)
+	return parti[0] if len(parti) == 1 else tuple(parti)
+
 def readParameter(parameter, path_prefix, images = False, scara = None):
 	"""<parameter name="..." value="..."/> into `parameters`; a bad value is skipped with one log line. `scara`
 	(ScaraEcran, fisierele HDSatelit pe alt ecran): numerele se scaleaza (scaleazaParametru)."""
@@ -948,6 +1310,14 @@ def readParameter(parameter, path_prefix, images = False, scara = None):
 	if not name or value is None:
 		skinWarning("%s: parameter without name or value skipped" % path_prefix)
 		return
+	if _PARAMETRU_PICTOGRAMA.match(name):
+		# pictogramele din listele desenate in Python, forma OE-Alliance (Components/SkinIcon.py): cod, culoare, culoare
+		# aleasa; inaintea numerelor obisnuite, ca un cod sa nu fie scalat niciodata
+		try:
+			parameters[name] = parametruPictograma(value)
+			return
+		except ValueError:
+			pass
 	try:
 		parameters[name] = scaleazaParametru(name, parseParameter(value), scara)
 		return
@@ -1088,9 +1458,9 @@ def collectAttributes(skinAttributes, node, skin_path_prefix=None, ignore=()):
 	for attrib, value in list(node.items()):
 		if attrib in ignore:
 			continue
-		if attrib in ("pixmap", "backgroundPixmap", "selectionPixmap"):
+		if attrib in ("pixmap", "backgroundPixmap", "selectionPixmap") or attrib in POZE_BARA or attrib in POZE_PISTA:
 			value = resolveSkinImage(value, skin_path_prefix)
-		elif attrib in ("pointer", "seek_pointer"):
+		elif attrib in ("pointer", "seek_pointer", "seekPointer"):
 			# "file.png:x,y": only the file part is a path
 			name, sep, pos = value.partition(':')
 			value = resolveSkinImage(name, skin_path_prefix) + sep + pos
@@ -1122,6 +1492,55 @@ def loadPixmap(path, desktop):
 	return ptr
 
 ALPHATEST = { "on": 1, "off": 0, "blend": 2 }
+# <windowstyle><color name="...">: numele din skin-urile straine -> numele culorilor eWindowStyleSkinned de la noi
+CULORI_STIL_NUME = {"Foreground": "LabelForeground", "ListboxBackgroundSelected": "ListboxSelectedBackground",
+	"ListboxForegroundSelected": "ListboxSelectedForeground", "ListboxBackgroundMarked": "ListboxMarkedBackground",
+	"ListboxForegroundMarked": "ListboxMarkedForeground", "ListboxBackgroundMarkedSelected": "ListboxMarkedAndSelectedBackground",
+	"ListboxForegroundMarkedSelected": "ListboxMarkedAndSelectedForeground"}
+# poza partii care se misca a barei de derulare din liste, cu numele din skin-urile straine
+POZE_BARA = ("scrollbarSliderPicture", "scrollbarForegroundPixmap", "scrollbarSliderPixmap", "sliderPixmap")
+# poza de sub bara (pista), cu numele din skin-urile straine
+POZE_PISTA = ("scrollbarBackgroundPicture", "scrollbarBackgroundPixmap", "scrollbarbackgroundPixmap")
+# scale/scaleFlags din skin-urile straine -> bitii lui ePixmap.setScale (lib/gui/epixmap.h): 1 intinsa, 2 proportiile
+# pastrate (incape), 4 umple, 8 nescalata; aliniere 16 centru / 32 dreapta pe orizontala, 64 centru / 128 jos pe verticala
+_SC_ASPECT, _SC_UMPLE, _SC_MUTA = 2, 4, 8
+_SC_ORIZ = {"left": 0, "center": 16, "middle": 16, "right": 32}
+_SC_VERT = {"top": 0, "center": 64, "middle": 64, "bottom": 128}
+
+def parseScaleImagine(value):
+	"""valoarea lui scale/scaleFlags -> bitii pentru ePixmap.setScale; ValueError pentru un nume necunoscut"""
+	v = value.strip()
+	if v.isdigit():
+		# un numar (skin-urile vechi si ale noastre: scale="1", "2"...): 0 = cum e, orice alt numar = intinsa, ca inainte
+		return 1 if int(v) else 0
+	fix = {"0": 0, "none": 0, "off": 0, "1": 1, "scale": 1, "stretch": 1, "keepAspect": _SC_ASPECT, "scaleKeepAspect": _SC_ASPECT,
+		"on": _SC_ASPECT, "aspect": _SC_ASPECT, "center": _SC_MUTA | 16 | 64, "width": _SC_ASPECT | 16 | 64,
+		"height": _SC_ASPECT | 16 | 64, "fill": _SC_UMPLE | 16 | 64}
+	if v in fix:
+		return fix[v]
+	for prefix, baza in (("scale", _SC_ASPECT), ("move", _SC_MUTA), ("", _SC_ASPECT)):
+		if not v.startswith(prefix):
+			continue
+		rest = v[len(prefix):]
+		if rest in ("Center", "Middle", "Scaled"):
+			return baza | 16 | 64
+		# leftTop, centerScaled, scaleRightBottom, moveMiddleTop...: orizontala apoi verticala
+		m = re.match(r'^(left|center|middle|right)(Top|Center|Middle|Bottom|Scaled)$', rest[:1].lower() + rest[1:])
+		if m:
+			oriz, vert = m.group(1), m.group(2).lower()
+			return baza | _SC_ORIZ[oriz] | (64 if vert == "scaled" else _SC_VERT[vert])
+	raise ValueError("scale \"%s\" necunoscut" % value)
+ADEVARAT = frozenset(("1", "true", "yes", "on", "enabled"))
+
+def parsePadding(value):
+	"""padding/textPadding din skin-urile straine: "a" (toate), "a,b" (stanga/dreapta, sus/jos) sau "a,b,c,d" (stanga,
+	sus, dreapta, jos) -> 4 numere ca text; ValueError pentru alta forma"""
+	parti = [str(int(p.strip())) for p in value.split(",")]
+	if len(parti) in (1, 2):
+		parti = (parti * 4)[:4]
+	if len(parti) != 4:
+		raise ValueError("padding \"%s\" trebuie sa aiba 1, 2 sau 4 numere" % value)
+	return parti
 ORIENTATION = {
 	"orVertical": ("orVertical", False),
 	"orTopToBottom": ("orVertical", False),
@@ -1144,6 +1563,12 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 			guiObject.setText(_(value))
 		elif attrib == 'font':
 			guiObject.setFont(parseFont(value, scale))
+		elif attrib == 'headerFont' and hasattr(guiObject, "setHeaderFont"):
+			# lista de setari in skin-urile straine: fontul randurilor de titlu (fara valoare)
+			guiObject.setHeaderFont(parseFont(value, scale))
+		elif attrib == 'entryFont' and hasattr(guiObject, "setSecondFont"):
+			# lista de setari in skin-urile straine: fontul randurilor (stanga); valueFont e al valorilor
+			guiObject.setFont(parseFont(value, scale))
 		elif attrib == 'zPosition':
 			guiObject.setZPosition(int(value))
 		elif attrib == 'itemHeight':
@@ -1156,69 +1581,217 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 				guiObject.setBackgroundPicture(ptr)
 			else:
 				guiObject.setSelectionPicture(ptr)
-		elif attrib == "alphatest": # used by ePixmap
+		elif attrib in ("alphatest", "alphaTest"): # used by ePixmap; alphaTest = numele din skin-urile straine
 			guiObject.setAlphatest(ALPHATEST[value])
-		elif attrib == "scale":
-			guiObject.setScale(1)
+		elif attrib in ("scale", "scaleFlags"):
+			# skin-urile straine: "0"/"none"/"off" = imaginea cum e; "1"/"scale"/"stretch" = intinsa pe tot elementul;
+			# keepAspect, centerScaled, leftTop... = cu proportiile pastrate si aliniata; "center"/"move..." = nescalata,
+			# aliniata; "fill" = umple elementul (ce iese se taie). Inainte orice valoare, chiar si "0", o intindea.
+			guiObject.setScale(parseScaleImagine(value))
 		elif attrib == "orientation": # used by eSlider
 			name, swapped = ORIENTATION[value]
 			guiObject.setOrientation(getattr(guiObject, name), swapped)
-		elif attrib == "valign":
-			guiObject.setVAlign({ "top": guiObject.alignTop, "center": guiObject.alignCenter, "bottom": guiObject.alignBottom }[value])
-		elif attrib == "halign":
-			guiObject.setHAlign({ "left": guiObject.alignLeft, "center": guiObject.alignCenter, "right": guiObject.alignRight, "block": guiObject.alignBlock }[value])
+		elif attrib in ("valign", "verticalAlignment", "vAlign"):
+			# verticalAlignment/vAlign: numele noi din skin-urile straine; "middle" = center
+			guiObject.setVAlign({ "top": guiObject.alignTop, "center": guiObject.alignCenter, "middle": guiObject.alignCenter, "bottom": guiObject.alignBottom }[value.strip()])
+		elif attrib in ("halign", "horizontalAlignment", "hAlign"):
+			guiObject.setHAlign({ "left": guiObject.alignLeft, "center": guiObject.alignCenter, "right": guiObject.alignRight, "block": guiObject.alignBlock }[value.strip()])
 		elif attrib == "flags":
 			for f in value.split(','):
 				f = f.strip()
 				if hasattr(eWindow, f):
 					guiObject.setFlag(getattr(eWindow, f))
+				elif f == "wfBorder":
+					# skin-urile straine: fereastra cu rama, adica ce face si fara steag
+					pass
 				else:
 					skinWarning("unknown window flag %s" % f)
 		elif attrib == "backgroundColor":
-			guiObject.setBackgroundColor(parseColor(value))
+			value = gradients.get(value.strip(), value)
+			if ',' in value and hasattr(guiObject, "setBackgroundGradient"):
+				# skin-urile straine: o culoare cu virgula e un degrade. Prima culoare ramane fundalul simplu (listele si
+				# ferestrele nu deseneaza degradeul), degradeul se deseneaza peste ea pe etichete si pe celelalte elemente.
+				guiObject.setBackgroundColor(parseColor(value.split(',')[0].strip()))
+				guiObject.setBackgroundGradient(*parseGradient(value))
+			else:
+				guiObject.setBackgroundColor(parseColor(value))
+		elif attrib == "backgroundGradient" and hasattr(guiObject, "setBackgroundGradient"):
+			guiObject.setBackgroundGradient(*parseGradient(value))
 		elif attrib == "backgroundColorSelected":
 			guiObject.setBackgroundColorSelected(parseColor(value))
 		elif attrib == "foregroundColor":
-			guiObject.setForegroundColor(parseColor(value))
+			value = gradients.get(value.strip(), value)
+			if ',' in value and hasattr(guiObject, "setForegroundGradient"):
+				# bara de progres din skin-urile straine: degradeul in foregroundColor; prima culoare cand degradeurile sunt oprite
+				culori, vertical = parseForegroundGradient(value)
+				guiObject.setForegroundColor(culori[0])
+				guiObject.setForegroundGradient(*(culori + [vertical]))
+			else:
+				guiObject.setForegroundColor(parseColor(value))
 		elif attrib == "foregroundGradient" and hasattr(guiObject, "setForegroundGradient"):
 			culori, vertical = parseForegroundGradient(value)
 			guiObject.setForegroundGradient(*(culori + [vertical]))
 		elif attrib == "foregroundGradient" and hasattr(guiObject, "setForegroundColor"):
 			# Widgeturile vechi pot folosi prima culoare.
 			guiObject.setForegroundColor(parseForegroundGradient(value)[0][0])
+		elif attrib in ("itemCornerRadius", "itemCornerRadiusSelected") and hasattr(guiObject, "setItemCornerRadius"):
+			# randurile listelor in skin-urile straine: colturile rotunjite ale randului (Selected = al celui ales)
+			factor = min(scale[0][0] / float(scale[0][1]), scale[1][0] / float(scale[1][1]))
+			raza, colturi = parseRadius(value)
+			getattr(guiObject, "set" + attrib[0].upper() + attrib[1:])(max(0, int(round(raza * factor))), colturi)
+		elif attrib in ("itemGradient", "itemGradientSelected") and hasattr(guiObject, "setItemGradient"):
+			# degradeul din spatele randului (Selected = al celui ales); forma ca la backgroundColor cu virgula
+			getattr(guiObject, "set" + attrib[0].upper() + attrib[1:])(*parseGradient(value))
+		elif attrib == "itemSpacing" and hasattr(guiObject, "setItemSpacing"):
+			# spatiul dintre elementele listei (x, y; un singur numar = amandoua); "0,0" = lista ca pana acum
+			parti = [int(v) for v in value.split(",")]
+			x, y = (parti * 2)[:2]
+			guiObject.setItemSpacing(ePoint(x * scale[0][0] // scale[0][1], y * scale[1][0] // scale[1][1]))
+		elif attrib == "itemSpacing" and all(int(p) == 0 for p in value.split(",")):
+			# o imagine fara setItemSpacing: "0,0" e chiar ce face lista
+			pass
+		elif attrib == "listOrientation" and hasattr(guiObject, "setOrientation") and hasattr(guiObject, "orGrid"):
+			# listele orizontale si in grila ale skin-urilor straine (vertical = ca pana acum)
+			guiObject.setOrientation({"vertical": guiObject.orVertical, "horizontal": guiObject.orHorizontal,
+				"grid": guiObject.orGrid}[value.strip()])
+		elif attrib == "animationMode":
+			# animatia ferestrei la deschidere/inchidere, cu valorile din OE-Alliance (Components/HdsAnimatiiFerestre.py);
+			# pe elementele care nu sunt ferestre nu inseamna nimic
+			if hasattr(guiObject, "setAnimationMode"):
+				guiObject.setAnimationMode(parseAnimationMode(value))
+		elif attrib == "scrollbarScroll" and hasattr(guiObject, "setScrollMargin"):
+			# "byLine": lista se muta rand cu rand (la noi: cu un rand vazut dincolo de cel ales); "byPage": pe pagini, ca acum
+			guiObject.setScrollMargin(1 if value.strip() == "byLine" else 0)
+		elif attrib == "separatorLineColor" and hasattr(guiObject, "setSeparatorColor"):
+			# linia dintre randurile listei (skin-urile straine)
+			guiObject.setSeparatorColor(parseColor(value))
+		elif attrib == "separatorLineSize" and hasattr(guiObject, "setSeparatorSize"):
+			guiObject.setSeparatorSize(int(value) * scale[1][0] // scale[1][1])
+		elif attrib == "spacingColor" and hasattr(guiObject, "setSpacingColor"):
+			# culoarea spatiilor dintre elementele listei (cu itemSpacing)
+			guiObject.setSpacingColor(parseColor(value))
+		elif attrib == "itemWidth" and hasattr(guiObject, "setItemWidth"):
+			guiObject.setItemWidth(int(value) * scale[0][0] // scale[0][1])
+		elif attrib == "itemAlignment" and hasattr(guiObject, "setItemAlignment"):
+			# unde sta blocul elementelor cand e mai mic decat lista; justify = spatiile cresc pana o umplu
+			v = value.strip()
+			v = {"default": "leftTop", "center": "centerMiddle", "justify": "justifyFull"}.get(v, v)
+			guiObject.setItemAlignment(getattr(guiObject, "itemAlign" + v[0].upper() + v[1:]))
 		elif attrib == "cornerRadius" and hasattr(guiObject, "setCornerRadius"):
 			factor = min(scale[0][0] / float(scale[0][1]), scale[1][0] / float(scale[1][1]))
-			raza = int(round(int(value) * factor))
-			guiObject.setCornerRadius(max(0, raza))
+			raza, colturi = parseRadius(value)
+			guiObject.setCornerRadius(max(0, int(round(raza * factor))))
+			# "20;top": numai colturile alese; toate (15) e chiar ce face setCornerRadius singur
+			if colturi != 15 and hasattr(guiObject, "setCornerEdges"):
+				guiObject.setCornerEdges(colturi)
 		elif attrib == "foregroundColorSelected":
 			guiObject.setForegroundColorSelected(parseColor(value))
 		elif attrib == "shadowColor":
 			guiObject.setShadowColor(parseColor(value))
 		elif attrib == "selectionDisabled":
 			guiObject.setSelectionEnable(0)
+		elif attrib == "selection":
+			# skin-urile straine: selection="0"/"false" = fara bara de alegere
+			guiObject.setSelectionEnable(int(value.strip().lower() in ADEVARAT))
 		elif attrib == "transparent":
-			guiObject.setTransparent(int(value))
-		elif attrib == "borderColor":
+			# skin-urile straine scriu si "yes"/"true"/"on"
+			v = value.strip().lower()
+			guiObject.setTransparent(int(v) if v.isdigit() else int(v in ADEVARAT))
+		elif attrib == "borderColor" and (hasattr(guiObject, "setBorderColor") or not hasattr(guiObject, "setWidgetBorderColor")):
 			guiObject.setBorderColor(parseColor(value))
-		elif attrib == "borderWidth":
+		elif attrib == "borderWidth" and (hasattr(guiObject, "setBorderWidth") or not hasattr(guiObject, "setWidgetBorderWidth")):
 			guiObject.setBorderWidth(int(value))
+		elif attrib in ("borderColor", "widgetBorderColor") and hasattr(guiObject, "setWidgetBorderColor"):
+			# chenarul elementului (skin-urile straine: widgetBorder*; pe liste si alte elemente fara chenar propriu si
+			# borderColor/borderWidth, ca acolo); pe etichete borderColor ramane conturul textului
+			guiObject.setWidgetBorderColor(parseColor(value))
+		elif attrib in ("borderWidth", "widgetBorderWidth") and hasattr(guiObject, "setWidgetBorderWidth"):
+			guiObject.setWidgetBorderWidth(int(value))
+		elif attrib == "underline" and hasattr(guiObject, "setUnderline"):
+			# ghidul recipes/underline: 1/yes/true/on/enabled/underline = subliniat
+			guiObject.setUnderline(int(value.strip().lower() in ADEVARAT or value.strip().lower() == "underline"))
+		elif attrib == "fontScale" and hasattr(guiObject, "setFontScale"):
+			# skin-urile straine: "size[;limita]" sau "width[;limita]" (limita implicita -4: cel mult 4 puncte mai mic):
+			# textul prea lat pentru eticheta se scrie cu litere mai mici, numai unde tema cere asta
+			fel, sep, limita = value.partition(";")
+			limita = int(limita) if sep and limita.strip() else -4
+			guiObject.setFontScale({"size": 1, "width": 2}[fel.strip()], limita * scale[1][0] // scale[1][1])
+		elif attrib == "alphaBlend" and hasattr(guiObject, "setWidgetAlphaBlend"):
+			# alphaBlend="1": culoarea de fundal cu transparenta se amesteca cu fundalul de dedesubt
+			guiObject.setWidgetAlphaBlend(int(value.strip().lower() in ADEVARAT))
+		elif attrib == "textBorderColor" and hasattr(guiObject, "setTextBorderColor"):
+			# conturul textului cu numele nou al skin-urilor straine (pe etichete, borderColor e acelasi lucru)
+			guiObject.setTextBorderColor(parseColor(value))
+		elif attrib == "textBorderWidth" and hasattr(guiObject, "setTextBorderWidth"):
+			guiObject.setTextBorderWidth(int(value))
 		elif attrib == "scrollbarMode":
-			guiObject.setScrollbarMode({ "showOnDemand": guiObject.showOnDemand, "showAlways": guiObject.showAlways, "showNever": guiObject.showNever }[value])
+			# skin-urile straine: showOnDemandShrink (la noi lista isi strange singura coloana din dreapta) si barele din
+			# stanga/sus (showLeftOnDemand, showLeftAlways, showLeft, showTopOnDemand, showTopAlways): la noi bara e in dreapta
+			v = value.strip()
+			mod = { "showOnDemand": "showOnDemand", "showOnDemandShrink": "showOnDemand", "showLeftOnDemand": "showOnDemand",
+				"showLeft": "showOnDemand", "showTopOnDemand": "showOnDemand", "showAlways": "showAlways",
+				"showLeftAlways": "showAlways", "showTopAlways": "showAlways", "showNever": "showNever" }[v]
+			guiObject.setScrollbarMode(getattr(guiObject, mod))
+		elif attrib in ("scrollbarForegroundColor", "scrollbarSliderForegroundColor") and hasattr(guiObject, "setScrollbarForegroundColor"):
+			# bara de derulare a listelor, numele din skin-urile straine (cele vechi scrollbarSlider* si cele noi)
+			guiObject.setScrollbarForegroundColor(parseColor(value))
+		elif attrib in POZE_BARA and hasattr(guiObject, "setScrollbarForegroundPixmap"):
+			guiObject.setScrollbarForegroundPixmap(loadPixmap(value, desktop))
+		elif attrib in POZE_PISTA and hasattr(guiObject, "setScrollbarBackgroundPixmap"):
+			guiObject.setScrollbarBackgroundPixmap(loadPixmap(value, desktop))
+		elif attrib == "scrollbarBackgroundColor" and hasattr(guiObject, "setScrollbarBackgroundColor"):
+			guiObject.setScrollbarBackgroundColor(parseColor(value))
+		elif attrib in ("scrollbarBorderColor", "scrollbarSliderBorderColor") and hasattr(guiObject, "setScrollbarBorderColor"):
+			guiObject.setScrollbarBorderColor(parseColor(value))
+		elif attrib == "scrollbarBorderWidth" and hasattr(guiObject, "setScrollbarSliderBorderWidth"):
+			guiObject.setScrollbarSliderBorderWidth(int(value))
+		elif attrib == "scrollbarRadius" and hasattr(guiObject, "setScrollbarRadius"):
+			guiObject.setScrollbarRadius(parseRadius(value)[0])
+		elif attrib == "scrollbarOffset" and hasattr(guiObject, "setScrollbarOffset"):
+			guiObject.setScrollbarOffset(int(value))
+		elif attrib == "scrollbarWidth":
+			# HDSatelit 0.7.4: latimea barei de derulare din tema (inainte primita si ignorata)
+			guiObject.setScrollbarWidth(parseScale(value) * scale[0][0] // scale[0][1])
+		elif attrib == "scrollbarSliderBorderWidth":
+			guiObject.setScrollbarSliderBorderWidth(int(value))
 		elif attrib == "enableWrapAround":
-			guiObject.setWrapAround(value not in ("0", "false"))
-		elif attrib == "pointer" or attrib == "seek_pointer":
+			guiObject.setWrapAround(value.strip().lower() not in ("0", "false", "off", "no"))
+		elif attrib in ("pointer", "seek_pointer", "seekPointer"):
 			(name, pos) = value.split(':')
 			pos = parsePosition(pos, scale)
 			ptr = loadPixmap(name, desktop)
-			guiObject.setPointer({"pointer": 0, "seek_pointer": 1}[attrib], ptr, pos)
+			guiObject.setPointer(0 if attrib == "pointer" else 1, ptr, pos)
 		elif attrib == 'shadowOffset':
 			guiObject.setShadowOffset(parsePosition(value, scale))
 		elif attrib == 'noWrap':
 			guiObject.setNoWrap(int(value) if value.isdigit() else 1)
+		elif attrib == 'wrap':
+			# skin-urile straine: wrap="1"/"wrap" = randuri multe; "0"/"noWrap"/"ellipsis" = un singur rand (la noi textul
+			# prea lung pe un rand se deruleaza, in loc sa fie taiat cu "...")
+			v = value.strip()
+			guiObject.setNoWrap(0 if v == "wrap" or v.lower() in ADEVARAT else 1)
+		elif attrib == 'textOffset' and not hasattr(guiObject, "setTextOffset") and hasattr(guiObject, "setPadding"):
+			# skin-urile straine: textOffset pe etichete e acelasi lucru cu padding (x stanga si dreapta, y sus si jos)
+			x, y = [int(v) for v in parsePadding(value)[:2]]
+			sx, sy = scale
+			guiObject.setPadding(x * sx[0] // sx[1], y * sy[0] // sy[1], x * sx[0] // sx[1], y * sy[0] // sy[1])
 		elif attrib == 'textOffset':
 			guiObject.setTextOffset(parsePosition(value, scale))
-		elif attrib == 'secondfont':
+		elif attrib in ('padding', 'textPadding') and hasattr(guiObject, "setTextOffset"):
+			# skin-urile straine, la liste: "stanga,sus[,dreapta,jos]" (sau un numar pentru toate); la noi lista stie
+			# numai departarea textului de stanga si de sus
+			guiObject.setTextOffset(parsePosition(",".join(parsePadding(value)[:2]), scale))
+		elif attrib in ('padding', 'textPadding') and hasattr(guiObject, "setPadding"):
+			# etichetele: textul la departarea data de margini (stanga, sus, dreapta, jos), fundalul pe tot elementul
+			l, t, r, b = [int(v) for v in parsePadding(value)]
+			sx, sy = scale
+			guiObject.setPadding(l * sx[0] // sx[1], t * sy[0] // sy[1], r * sx[0] // sx[1], b * sy[0] // sy[1])
+		elif attrib in ('secondfont', 'secondFont', 'valueFont'):
+			# valueFont/secondFont: numele noi ale fontului valorilor din lista de setari
 			guiObject.setSecondFont(parseFont(value, scale))
+		elif attrib == 'scrollText':
+			# skin-urile straine: derularea textului prea lung; la noi eticheta il deruleaza singura (eDerulare)
+			pass
 		elif attrib == 'id':
 			pass
 		elif attrib not in _reportedAttributes:
@@ -1229,7 +1802,10 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 		skinWarning("%s: attribute %s=\"%s\" not applied (%s)" % (guiObject.__class__.__name__, attrib, value, e))
 
 def applyAllAttributes(guiObject, desktop, attributes, scale):
-	for (attrib, value) in attributes:
+	# position dupa size, ca la ecran (GUISkin.applySkin): "center" se socoteste cu marimea elementului, iar pluginurile
+	# scriu des position inaintea lui size; inainte de resize marimea e (-1,-1) si elementul pleca de la mijlocul ecranului.
+	# Ordinea celorlalte atribute ramane (sortare stabila); o pozitie cu numere iese la fel in orice ordine.
+	for (attrib, value) in sorted(attributes, key=lambda a: a[0] == "position"):
 		applySingleAttribute(guiObject, desktop, attrib, value, scale)
 
 def resolveFontFile(filename, path_prefix):
@@ -1290,7 +1866,12 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 			name = color.attrib.get("name")
 			value = color.attrib.get("value")
 			try:
-				colorNames[name] = parseColor(value)
+				if value and "," in value:
+					gradients[name] = value
+					colorNames[name] = parseColor(value.split(",")[0].strip())
+				else:
+					gradients.pop(name, None)
+					colorNames[name] = parseColor(value)
 				# paleta HDSatelit, pentru ecranele noastre cand e ales alt skin (ScaraEcran.culori)
 				if dinHds and name and value:
 					if value[0] == '#':
@@ -1327,6 +1908,10 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 				if scara is not None:
 					size, height = _marime(size, scara.sf), _marime(height, scara.sy)
 				fonts[get_attr("name")] = (get_attr("font"), size, height)
+				latime = int(get_attr("width") or 0)
+				if scara is not None and latime:
+					latime = _marime(latime, scara.sx)
+				latimiFont[get_attr("name")] = latime
 			except Exception as e:
 				skinWarning("font alias %s: %s" % (get_attr("name"), e))
 
@@ -1412,6 +1997,8 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 			for color in windowstyle.findall("color"):
 				get_attr = color.attrib.get
 				colorType = get_attr("name")
+				# skin-urile straine: numele noi ale culorilor ferestrei (ListboxBackgroundSelected...), puse pe ale noastre
+				colorType = CULORI_STIL_NUME.get(colorType, colorType)
 				try:
 					style.setColor(getattr(eWindowStyleSkinned, "col" + colorType), parseColor(get_attr("color")))
 				except Exception as e:
@@ -1554,6 +2141,17 @@ def expandPanels(element, skin_path, style_id, screen_name, visited = None, cadr
 		if not panel_name and cadru is not None:
 			children += _Tema().panouFaraNume(child, skin_path, cadru, lambda n: lookupScreen(n, style_id))
 			continue
+		if panel_name and cadru is not None and child.attrib.get("position") and child.attrib.get("size") and panel_name not in visited:
+			# panoul cu nume si cu locul lui (skin-urile straine): copiii ecranului numit se aseaza in originea panoului,
+			# urmati de copiii scrisi chiar in <panel>
+			panel, panel_path = lookupScreen(panel_name, style_id)
+			if panel is None:
+				skinWarning("%s: panel %s not found" % (screen_name, panel_name))
+				continue
+			loc = xml.etree.ElementTree.Element("panel", dict((k, v) for k, v in child.attrib.items() if k != "name"))
+			loc.extend(list(panel) + list(child))
+			children += _Tema().panouFaraNume(loc, panel_path, cadru, lambda n: lookupScreen(n, style_id))
+			continue
 		if not panel_name or panel_name in visited:
 			skinWarning("%s: panel %s skipped (missing name or used in a loop)" % (screen_name, panel_name))
 			continue
@@ -1573,6 +2171,11 @@ def widgetIsWanted(screen, get_attr):
 	# conditional="a,b": the widget is used only when the screen has all these components
 	conditional = get_attr('conditional')
 	if conditional and [c for c in conditional.split(',') if c.strip() not in screen]:
+		return False
+	# excludes="a,b" (OE-Alliance): the widget is NOT used when the screen has any of these components; a skin draws one
+	# variant with conditional="x" and the other with excludes="x" (Obsidian-FHD, the menu list with and without menuimage)
+	excludes = get_attr('excludes')
+	if excludes and [c for c in excludes.split(',') if c.strip() and c.strip() in screen]:
 		return False
 	# objectTypes="name,Class1,Class2": only when that component is one of these classes
 	objectTypes = get_attr('objectTypes')
@@ -1597,6 +2200,54 @@ def convertorStrain(ctype, clasa):
 	except Exception as e:
 		skinNotice("convertorul %s pentru temele externe: %s" % (ctype, e))
 		return clasa
+
+# HDSatelit 0.7.4: listele desenate dintr-un sablon XML (forma standardului OE-Alliance, folosita de temele scrise pentru el:
+# NetworkOverview, NetworkMountsOverview, QuickMenu, PlayerSelectorGrid... si de pluginuri ca FileCommander):
+#   <widget source="list" render="Listbox" ...><template name="Default" fonts="Regular;24" itemHeight="50">
+#     <mode name="default"><text index="Name" position="0,0" size="400,50" font="0" /></mode></template></widget>
+# (sau aceleasi <template> intr-un <templates>). Sursa e o lista (Sources/List) cu numele coloanelor in indexNames.
+# Convertorul (Components/Converter/XmlMultiContent.py) se leaga aici, fara <convert>; scara temei (resolution=) e a
+# ecranului. Sabloanele listei de canale (component="serviceList") nu sunt pentru o sursa: le citeste registrul de mai jos.
+def sabloaneXml(widget):
+	"""elementul care tine <template>-urile unui widget (<templates> sau widgetul insusi), sau None"""
+	sabloane = widget.find("templates")
+	if sabloane is None and widget.find("template") is not None:
+		sabloane = widget
+	if sabloane is None:
+		return None
+	if all(t.get("component") for t in sabloane.findall("template")):
+		return None
+	return sabloane
+
+def _numarAtribut(widget, nume, axa):
+	"""itemWidth/itemHeight ale widgetului, apoi latimea/inaltimea din size= cand e un numar; 0 altfel"""
+	try:
+		return int(widget.get(nume) or 0) or int((widget.get("size") or "").split(",")[axa])
+	except (ValueError, IndexError):
+		return 0
+
+def convertorSablonXml(widget, source, scara = None):
+	"""convertorul XmlMultiContent pentru <template> din widget, legat de sursa (acelasi, daca sursa il are deja), sau None"""
+	sabloane = sabloaneXml(widget)
+	if sabloane is None:
+		return None
+	# un sablon care nu poate citi nicio coloana din lista (numai coloane cu nume, pe care lista nu le stie: ecranul nostru nu
+	# are contractul ecranului pentru care e scris sablonul, de pilda meniul sub o tema care cere NumberText/Text): ramane
+	# forma de dinainte, nu randuri goale. Un singur index numar sau un nume cunoscut ajunge ca sablonul sa se foloseasca.
+	indexuri = [x.get("index") for x in sabloane.iter() if x.get("index")]
+	nume = set(i for i in indexuri if not i.lstrip("+-").isdigit())
+	if indexuri and len(nume) == len(set(indexuri)) and not nume & set(getattr(source, "indexNames", None) or {}):
+		skinNotice("lista %s: sablonul cere coloanele %s, lista nu le are; ramane desenul de dinainte" % (widget.get("source"), ", ".join(sorted(nume))))
+		return None
+	from Components.Converter.XmlMultiContent import XmlMultiContent
+	for c in source.downstream_elements:
+		if isinstance(c, XmlMultiContent) and c.dom is sabloane:
+			return c
+	c = XmlMultiContent({"dom": sabloane, "scara": scara, "itemWidth": _numarAtribut(widget, "itemWidth", 0),
+		"itemHeight": _numarAtribut(widget, "itemHeight", 1),
+		"selectionEnabled": (widget.get("selection") or "1").lower() not in ("0", "false", "no", "off")})
+	c.connect(source)
+	return c
 
 def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None, strain = False):
 	get_attr = widget.attrib.get
@@ -1652,6 +2303,11 @@ def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None, strai
 	renderer_class = my_import('.'.join(("Components", "Renderer", wrender))).__dict__.get(wrender)
 	if renderer_class is None:
 		raise SkinError("renderer %s not found" % wrender)
+	# lista desenata dintr-un sablon XML (<template> sau <templates> in widget; vezi convertorSablonXml)
+	if wrender == "Listbox" and not hasattr(source, "content"):
+		c = convertorSablonXml(widget, source, scara)
+		if c is not None:
+			source = c
 	# tema externa: o lista desenata fara convertor (o lista de texte) trece prin StringList, cum cere randatorul imaginii; o bara legata direct
 	# de o emisiune arata cat a trecut din ea
 	if strain and wrender == "Listbox" and not hasattr(source, "content"):
@@ -1667,7 +2323,7 @@ def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None, strai
 	renderer = renderer_class() # instantiate renderer
 	renderer.connect(source) # connect to source
 	attributes = renderer.skinAttributes = [ ]
-	collectAttributes(attributes, widget, skin_path_prefix, ignore=('render', 'source', 'conditional', 'objectTypes'))
+	collectAttributes(attributes, widget, skin_path_prefix, ignore=('render', 'source', 'conditional', 'excludes', 'objectTypes'))
 	if scara is not None:
 		renderer.skinAttributes = scara.atribute(attributes)
 	screen.renderer.append(renderer)
@@ -1768,9 +2424,12 @@ def readSkin(screen, skin, names, desktop):
 	if fereastra is not None:
 		scara = fereastra[0]
 	scari = {path: scara}
+	# scara ecranului, pentru sabloanele listei de canale (Components/HdsServiceListSablon: aceeasi grila de proiectare)
+	screen.hdsScara = scara
 	# ecranul nostru sub alt skin ales: si stilul ferestrei HDSatelit (GUISkin.applySkin -> puneStilHds)
 	screen.stilHds = scara is not None and scara.fonturi is not None
 	strain = path in dosareSkinStraine
+	pluginStrain = path is None and (screen.__class__.__module__ or "").startswith("Plugins.") and not modulImagine(screen.__class__.__module__)
 	if dosareSkinStraine:
 		screen.hdsSursaTema = path
 
@@ -1798,7 +2457,9 @@ def readSkin(screen, skin, names, desktop):
 		s = desktop.size()
 		children = expandPanels(myscreen, path, style_id, name, None, _Tema().cadruEcran(myscreen, s.width(), s.height()))
 	else:
-		children = expandPanels(myscreen, path, style_id, name)
+		# ecranele pluginurilor cu <panel> fara nume sau cu locul lui (position/size): copiii se aseaza in originea
+		# panoului, ca in ghidul skin-urilor straine (inainte se pierdeau: "panel None skipped"). Ecranele imaginii nu au.
+		children = expandPanels(myscreen, path, style_id, name, None, cadruPanouri(myscreen, desktop))
 
 	# now walk all widgets: 1:1-mapped widgets (name=) or source->renderer widgets (source=)
 	for (widget, widget_path) in children:
@@ -1816,7 +2477,7 @@ def readSkin(screen, skin, names, desktop):
 				if wname not in screen:
 					raise SkinError("component '%s' not found" % wname)
 				attributes = screen[wname].skinAttributes = [ ]
-				collectAttributes(attributes, widget, prefix, ignore=('name', 'conditional', 'objectTypes'))
+				collectAttributes(attributes, widget, prefix, ignore=('name', 'conditional', 'excludes', 'objectTypes'))
 				if sc is not None:
 					if wname == "config":
 						# lista de setari (eListboxPythonConfigContent) scrie cu "Regular;20" si "Regular;16" cand skinul
@@ -1829,9 +2490,14 @@ def readSkin(screen, skin, names, desktop):
 			elif wsource and strain and wsource in screen and hasattr(screen[wsource], "GUIcreate") and not hasattr(screen[wsource], "connectDownstream"):
 				# tema externa: source= pentru ce la noi e un element al ecranului (o tasta Button in loc de StaticText): atributele merg la el
 				attributes = screen[wsource].skinAttributes = [ ]
-				collectAttributes(attributes, widget, prefix, ignore=('source', 'render', 'conditional', 'objectTypes'))
+				collectAttributes(attributes, widget, prefix, ignore=('source', 'render', 'conditional', 'excludes', 'objectTypes'))
 			elif wsource:
-				readSourceWidget(screen, widget, name, prefix, sc, strain)
+				# tipurile OE-Alliance in plus ale convertoarelor (ServiceInfo IsHD, EventName Genre...) si pentru pluginurile
+				# straine cu skin in cod sub tema HD Satelit, nu numai sub tema externa (propunerea lui OEA3)
+				readSourceWidget(screen, widget, name, prefix, sc, strain or pluginStrain)
+			elif get_attr('addon'):
+				# addon-urile de tema OE-Alliance (Components/Addons: Pager, ScreenHeader...; lotul TOT): vezi widgetAddon()
+				widgetAddon(screen, widget, name, prefix, sc)
 			else:
 				raise SkinError("widget has no name and no source")
 		except Exception as e:
@@ -1860,6 +2526,9 @@ def readSkin(screen, skin, names, desktop):
 				w.widget = eLabel
 			elif w_tag == "ePixmap":
 				w.widget = ePixmap
+			elif w_tag in ("eRectangle", "rectangle"):
+				# skin-urile straine: un dreptunghi plin (culoare, degrade, colturi rotunjite); la noi o eticheta fara text
+				w.widget = eLabel
 			else:
 				raise SkinError("unsupported element <%s>" % w_tag)
 
@@ -1872,8 +2541,93 @@ def readSkin(screen, skin, names, desktop):
 		except Exception as e:
 			skinWarning("%s/<%s>: %s" % (name, w_tag, e))
 
-	if strain:
+	if strain or areRelative(screen):
+		# tema externa aleasa, sau ecranul unui plugin scris pentru imaginile din care vin pluginurile straine
+		# (position="fill", "e-10,c-50", "50%,10", "left"/"top" cu size="*,40"...): numerele, fata de ecran
+		metriciFont(screen, name)
 		rezolvaEcranTema(screen, desktop, name)
+	centreazaElemente(screen, desktop, name)
+
+def cadruPanouri(element, desktop):
+	"""locul copiilor (0, 0, latime, inaltime) cand ecranul are un <panel> fara nume sau cu position/size; altfel None.
+	Latimea si inaltimea sunt in grila ecranului (resolution=, daca o are; altfel ecranul televizorului)."""
+	if not any(c.tag == "panel" and (not c.attrib.get("name") or c.attrib.get("position") or c.attrib.get("size")) for c in element):
+		return None
+	s = desktop.size()
+	grila = rezolutieAtribut(element.attrib.get("resolution")) or (s.width(), s.height())
+	return _Tema().cadruEcran(element, grila[0], grila[1])
+
+_RX_WH = re.compile(r'(?<![A-Za-z_])(\d*)\s*\*?\s*([wh])(?![A-Za-z_])')
+
+def _cuMetrici(v, alias):
+	"""'10w,2h' (skin-urile straine): w = latimea unui caracter, h = inaltimea randului aliasului de font (implicit Body),
+	ca numere; fara w/h, valoarea cum e"""
+	if not isinstance(v, str) or not _RX_WH.search(v):
+		return v
+	nume = alias if alias in fonts else "Body"
+	if nume not in fonts:
+		return v
+	marimi = {"w": latimiFont.get(nume, 0), "h": fonts[nume][2]}
+	return _RX_WH.sub(lambda m: "(%s*%d)" % (m.group(1) or "1", marimi[m.group(2)]), v)
+
+def metriciFont(screen, name):
+	"""w si h din position/size (cu fontul elementului, cand e un alias), inainte de rezolvarea pozitiilor relative"""
+	try:
+		for x in [screen] + list(screen.renderer) + list(screen.additionalWidgets) + list(screen.values()):
+			atribute = getattr(x, "skinAttributes", None)
+			if not atribute or not any(a in ("position", "size") and isinstance(v, str) and _RX_WH.search(v) for a, v in atribute):
+				continue
+			alias = dict(atribute).get("font")
+			rez = []
+			for a, v in atribute:
+				if a in ("position", "size") and isinstance(v, str):
+					parti = [_cuMetrici(p, alias) for p in v.split(",")]
+					parti = [str(_Tema().calculeaza(p) if _Tema().calculeaza(p) is not None else p) for p in parti]
+					v = ",".join(parti)
+				rez.append((a, v))
+			x.skinAttributes = rez
+	except Exception as e:
+		skinWarning("%s: w/h in pozitii: %s" % (name, e))
+
+def _valoareRelativa(v):
+	"""True pentru o pozitie/marime care nu e facuta numai din numere si "center" (fill, e, c, %, *, f, left...)"""
+	return isinstance(v, str) and v.replace("center", "").strip(" ,0123456789-") != ""
+
+def areRelative(screen):
+	"""True cand ecranul sau un element al lui are pozitii/marimi relative; ecranele imaginii nu au (numai numere si
+	"center"), deci la ele nu se schimba nimic si nu se incarca nimic in plus."""
+	for x in [screen] + list(screen.renderer) + list(screen.additionalWidgets) + list(screen.values()):
+		for a, v in getattr(x, "skinAttributes", None) or ():
+			if a in ("position", "size") and _valoareRelativa(v):
+				return True
+	return False
+
+def centreazaElemente(screen, desktop, name):
+	"""Pozitia "center" a unui element (widget, ePixmap, eLabel) e fata de ecranul lui: (marimea ecranului - marimea
+	elementului) // 2, cel putin 0, cum il asteapta temele si pluginurile facute pentru alte imagini (acolo position si
+	size se citesc impreuna, fata de ecran); parsePosition ar centra fata de televizor. Se scrie ca numar, dupa scara si dupa
+	pozitiile relative ale temei. Un element fara marime numerica ramane cum e. Elementele imaginii nu folosesc "center",
+	deci la ele nu se schimba nimic."""
+	try:
+		s = desktop.size()
+		parinte = rezolutieAtribut(dict(screen.skinAttributes).get("size")) or (s.width(), s.height())
+		for x in list(screen.renderer) + list(screen.additionalWidgets) + list(screen.values()):
+			atribute = getattr(x, "skinAttributes", None)
+			if not atribute or not any(a == "position" and "center" in str(v) for a, v in atribute):
+				continue
+			marime = rezolutieAtribut(dict(atribute).get("size"))
+			if marime is None:
+				continue
+			def centrat(v):
+				parti = v.split(",")
+				if len(parti) != 2:
+					return v
+				# "center" si "center+N"/"center-N" (deplasarea e deja scalata, ca restul valorilor)
+				return ",".join(str(centruCuDeplasare(c, m, p)) if centruCuDeplasare(c, m, p) is not None else c
+					for c, p, m in zip(parti, parinte, marime))
+			x.skinAttributes = [(a, centrat(v) if a == "position" and isinstance(v, str) else v) for a, v in atribute]
+	except Exception as e:
+		skinWarning("%s: centrarea elementelor: %s" % (name, e))
 
 def rezolvaEcranTema(screen, desktop, name):
 	"""Numai ecranele din tema externa: pozitiile si marimile relative (fill, c+N, e-N, N%) si factorul f, intai ale ecranului
@@ -1934,6 +2688,20 @@ def findSkinScreen(names):
 		if lookupScreen(nume, GUI_SKIN_ID)[0] is not None:
 			return nume
 	return None
+
+
+def parseAnimationMode(value):
+	# HDSatelit 0.7.4: valorile atributului animationMode din OE-Alliance (0x01 la aratare, 0x10 la ascundere); un numar
+	# (zecimal sau 0x..) trece asa cum e; o valoare necunoscuta = oprita
+	valoare = value.strip()
+	optiuni = {"disable": 0x00, "off": 0x00, "offshow": 0x10, "offhide": 0x01, "onshow": 0x01, "onhide": 0x10,
+		"disable_onshow": 0x10, "disable_onhide": 0x01, "on": 0x11, "enable": 0x11}
+	if valoare in optiuni:
+		return optiuni[valoare]
+	try:
+		return int(valoare, 0) & 0x11
+	except ValueError:
+		return 0x00
 
 
 def parseBoolean(attribute, value):
@@ -2014,3 +2782,52 @@ componentSizes = _DimensiuniComponente()
 
 # Numele clasei cerut de pluginuri foloseste aceleasi chei si acelasi registru.
 ComponentSizes = _DimensiuniComponente
+
+
+# Numele OE-Alliance cerute de teme si de pluginurile lor (lotul TOT, 12.11.2026; temele si pluginurile lor de setari le importa).
+# Imaginea nu reincarca temele din mers: o tema schimbata se vede dupa repornirea interfetei, iar functiile spun asta in jurnal.
+windowStyles = {}  # stilurile de fereastra pe ecran (screenID: argumentele lui loadSingleSkinData), ca in OE-Alliance
+
+
+def reloadWindowStyles():
+	"""Reincarca stilurile de fereastra inregistrate in windowStyles (in imagine, de obicei niciunul)."""
+	if not windowStyles:
+		print("[Skin] reloadWindowStyles: culorile temei se schimba dupa repornirea interfetei")
+	for screenID in list(windowStyles):
+		try:
+			loadSingleSkinData(*windowStyles[screenID])
+		except Exception as e:
+			print("[Skin] reloadWindowStyles %s: %s" % (screenID, e))
+
+
+def reloadSkins():
+	"""Imaginea nu reincarca temele din mers (False): schimbarile se vad dupa repornirea interfetei."""
+	print("[Skin] reloadSkins: tema se reincarca dupa repornirea interfetei")
+	return False
+
+
+def widgetAddon(screen, widget, name, prefix, sc=None):
+	"""<widget addon="Pager" connection="list" .../>: addon-ul de tema OE-Alliance din Components/Addons, legat de elementul
+	ecranului numit in connection (lotul TOT, 12.11.2026). Un addon pe care imaginea nu-l are ridica SkinError (elementul
+	lipseste si se scrie in jurnal, ca orice componenta lipsa a unei teme)."""
+	get_attr = widget.attrib.get
+	fel = get_attr('addon')
+	legatura = get_attr('connection')
+	if not legatura:
+		raise SkinError("addon %s fara connection" % fel)
+	try:
+		clasa = getattr(__import__("Components.Addons." + fel, fromlist=[fel]), fel)
+	except (ImportError, AttributeError):
+		raise SkinError("addon '%s' not found" % fel)
+	baza = "%s_%s_%s_" % (name, fel, legatura)
+	i = 0
+	while ("%s%d" % (baza, i)) in screen:
+		i += 1
+	cheie = "%s%d" % (baza, i)
+	addon = clasa()
+	addon.connectRelatedElement(legatura, screen)
+	screen[cheie] = addon
+	attributes = addon.skinAttributes = []
+	collectAttributes(attributes, widget, prefix, ignore=('addon', 'connection', 'conditional', 'excludes', 'objectTypes'))
+	if sc is not None:
+		addon.skinAttributes = sc.atribute(attributes)

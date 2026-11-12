@@ -363,6 +363,15 @@ class Urmaritor(object):
 			self.pagini = self.subpagini = 0
 			return self._reimprospatare_pas(acum, None)
 		self.subpagini = subpagini
+		r = self.reimprospatare
+		if (self.salvat and self.complet and subpagini > 0 and st[1] == self.pagini
+				and not (r and r["ref"] == ref and not r.get("gata"))):
+			# copia vizitei e facuta (sau nu trebuie facuta), caruselul e complet si nu a aparut nicio pagina: numararea
+			# trecerilor pagina cu pagina (cate un apel in nucleu pentru fiecare din cele pana la ~800 de pagini, la 5 s, cat
+			# se uita omul la canal) nu mai schimba nimic, fiindca trecerile numai cresc. Se numara din nou cand numarul
+			# paginilor din nucleu se schimba (o pagina noua face caruselul necomplet pana vine a doua oara) si la o
+			# reimprospatare pe acelasi canal (salvat = False).
+			return self._reimprospatare_pas(acum, None)
 		pagini = self._numara_treceri(n, acum)
 		self.pagini = len(pagini)
 		self.complet = subpagini > 0 and acum - self.inceput >= PE_CANAL_MIN_S and (
@@ -386,6 +395,10 @@ class Urmaritor(object):
 		except Exception:
 			return []
 		for p in pagini:
+			if self.treceri.get(p, 0) >= TRECERI_COMPLETE:
+				# primita deja de doua ori: pentru caruselul complet nu mai conteaza (trecerile numai cresc); fara apelul in
+				# nucleu pentru fiecare din cele pana la ~800 de pagini la fiecare pas (masurat in proces pe Octagon SF8008)
+				continue
 			try:
 				v = n.versiune(p)
 			except Exception:
@@ -400,7 +413,8 @@ class Urmaritor(object):
 		return pagini
 
 	def _toate_primite_de_doua_ori(self, pagini):
-		return bool(pagini) and all(self.treceri.get(p, 0) >= TRECERI_COMPLETE for p in pagini)
+		t = self.treceri
+		return bool(pagini) and not [p for p in pagini if t.get(p, 0) < TRECERI_COMPLETE]
 
 	def _automat_trebuie(self, ref, acum):
 		try:

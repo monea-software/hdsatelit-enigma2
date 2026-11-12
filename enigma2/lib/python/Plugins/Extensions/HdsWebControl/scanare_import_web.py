@@ -5,7 +5,7 @@
 # scanare_import_web.py: „Import canale și setări” în interfața web (HdsWebControl).
 #
 # Orice ecran de pe receptor are pereche în interfața web. Pe televizor: Meniu > Scanare > Import canale și setări
-# (Plugins/Extensions/HdsImportSetari/plugin.py). Aici: aceleași surse (stick-urile întâi), aceleași patru alegeri,
+# (Plugins/Extensions/HdsImportSetari/plugin.py). Aici: aceleași surse (stick-urile întâi), aceleași alegeri,
 # același import, din același modul (Components/HdsImportSurse.py): căutarea, dezarhivarea, copia de siguranță și
 # scrierea fișierelor pe firul importului, reîncărcarea listei de canale pe firul enigma2, un singur import odată
 # pentru televizor și web. Setările merg în settings.din-copie și intră la următoarea pornire a interfeței (pagina
@@ -15,9 +15,10 @@
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/import-surse[?cauta=1]      sursele găsite (fără căutare nouă, afară de prima cerere și de cauta=1),
 #                                          starea căutării și a importului, rezultatul ultimului import
-#   POST /api/import?sursa=<id>&canale=1&tunere=1&temporizatoare=0&retea=0&picon=1&generale=1&pachete=1
-#                                          pornește importul (pluginurile: numai oferta, instalate apoi prin
-#                                          /api/extensii-instaleaza, ca la Extensii și aplicații)
+#   POST /api/import?sursa=<id>&canale=1&tunere=1&temporizatoare=0&retea=0&picon=1&generale=1&acces=1&pachete=1
+#                                          pornește importul (modulele de acces: fișierele copiate ca atare și
+#                                          pachetele instalate din nou, ca pe televizor; pluginurile: numai oferta,
+#                                          instalate apoi prin /api/extensii-instaleaza, ca la Extensii și aplicații)
 #   POST /api/import-alta-imagine?raspuns=da|nu|ascunde   răspunsul la întrebarea primei porniri (copia altei imagini,
 #                                          Components/HdsImportAltaImagine.py) sau ascunderea rezumatului ei
 #   GET  /import                           pagina
@@ -126,6 +127,7 @@ def sursa_publica(M, s):
 		"retea": bool(s.get("retea")),
 		"picon": bool(s.get("picon")),
 		"pachete": bool(s.get("pachete")),
+		"acces": bool(s.get("acces")),
 	}
 
 
@@ -519,8 +521,9 @@ $("importa").addEventListener("click", function(){
   var q = [];
   ORDINE.forEach(function(k){ q.push(k + "=" + (($("a-" + k) || {}).checked ? "1" : "0")); });
   var retea = ($("a-retea") || {}).checked ? "\\n\\n" + "Rețeaua se schimbă: legătura poate cădea câteva secunde." : "";
+  var acces = ($("a-acces") || {}).checked ? "\\n\\n" + "Modulele de acces vin din copie; fișierele lor de acum se păstrează." : "";
   if(!confirm("Canalele și setările alese se înlocuiesc cu cele din:" + "\\n" + s.text + "\\n\\n" +
-    "Cele de acum se păstrează într-o copie de siguranță pe receptor. Continui?" + retea)){ return; }
+    "Cele de acum se păstrează într-o copie de siguranță pe receptor. Continui?" + retea + acces)){ return; }
   $("importa").disabled = true; mesaj("Se pregătește copia...");
   cerere("/api/import?sursa=" + encodeURIComponent(s.id) + "&" + q.join("&"), "POST").then(function(d){
     if(!d.result){ mesaj(d.message, true); desenAlegeri(); return; }
@@ -571,6 +574,7 @@ TEXTE_PAGINA = {
 		N_("browser deconectat"),
 		N_("Instalează"),
 		N_("Rețeaua se schimbă: legătura poate cădea câteva secunde."),
+		N_("Modulele de acces vin din copie; fișierele lor de acum se păstrează."),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("(lipsește din copie)"),
 		N_("Se caută copiile pe stick-uri, discuri și în memoria receptorului..."),

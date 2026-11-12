@@ -27,6 +27,7 @@
 
 class eTextPara;
 struct gDesenNetezit;
+struct gHdsAnimatie;
 
 class gDC;
 struct gOpcode
@@ -68,6 +69,7 @@ struct gOpcode
 		setCompositing,
 
 		desenNetezit,	/* HDSatelit: forma cu margini netede (lib/gdi/desennetezit.h); tinut ultimul in lista */
+		hdsAnimatie,	/* HDSatelit 0.7.4: animatia unei ferestre (lib/gdi/hdsanimatie.h), dupa desenNetezit */
 	} opcode;
 
 	gDC *dc;
@@ -148,6 +150,7 @@ struct gOpcode
 		gCompositingData *setCompositing;
 
 		gDesenNetezit *desenNetezit;
+		gHdsAnimatie *hdsAnimatie;
 	} parm;
 };
 
@@ -262,6 +265,10 @@ public:
 
 		/* forma cu margini netede, desenata pe firul gRC in ordine cu restul comenzilor */
 	void desenNetezit(const gDesenNetezit &forma);
+
+		/* animatia unei ferestre (lib/gdi/hdsanimatie.h): de la „inainte” la „dupa” in zona data, pe firul gRC; cele doua
+		   imagini sunt de marimea ecranului, in RAM, pe 32 de biti; zona e in coordonatele ecranului (fara offset si taiere) */
+	void hdsAnimatie(gPixmap *inainte, gPixmap *dupa, const eRect &zona, int fel, int inchidere, int durata_ms);
 
 	void setOffset(ePoint abs);
 	void moveOffset(ePoint rel);

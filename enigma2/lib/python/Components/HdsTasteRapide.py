@@ -12,9 +12,41 @@ except NameError:
 	def _(text):
 		return text
 
+
+def text_tasta(cheie, text, traducere=None):
+	"""Textul unui rand din BUTOANE, SCURTE sau PROFIL_SETARI in limba de acum.
+
+	Listele se fac la import, uneori inainte sa fie pusa traducerea enigma2; atunci _ e cel de rezerva de mai sus si
+	randurile raman in romana (ecranul tastelor in turca pe Solo SE, Ozgur, 11.11.2026). De aceea se traduc din nou la
+	afisare; un text deja tradus trece neschimbat. traducere: functia paginii web (altfel cea a enigma2)."""
+	t = traducere
+	if t is None:
+		try:
+			import builtins
+			t = builtins._
+		except (AttributeError, ImportError):
+			return text
+	if cheie.startswith("number_") and cheie.endswith("_long"):
+		try:
+			return t("%d (apăsare lungă)") % int(cheie.split("_")[1])
+		except (TypeError, ValueError):
+			return text
+	return t(text)
+
+
+def _tr(text):
+	"""Traducerea enigma2 de acum (alegerile si textele actiunilor, facute la import; vezi text_tasta)."""
+	return text_tasta("", text)
+
+
 ACTIUNI_DISPONIBILE = [
 	("default", _("Funcția obișnuită")),
 	("none", _("Nimic")),
+	# Ozgur (Solo SE, 11.11.2026): SUS/JOS schimba canalul, STANGA/DREAPTA volumul. Aceleasi texte ca in TEXTE_ACTIUNI.
+	("zap_next", _("Canalul următor")),
+	("zap_previous", _("Canalul anterior")),
+	("volume_up", _("Mai tare")),
+	("volume_down", _("Mai încet")),
 	("epg", _("Alegerea tipului de ghid (EPG)")),
 	("epg_multi", _("Ghidul buchetului curent")),
 	("epg_single", _("Ghidul canalului curent")),
@@ -219,8 +251,12 @@ TEXTE_ACTIUNI = {
 def text_actiune(actiune):
 	if actiune.startswith("plugin:"):
 		p = pluginuri_alocabile().get(actiune)
-		return _("Plugin: %s") % p.name if p else _("Plugin indisponibil (%s)") % actiune[-8:]
-	return TEXTE_ACTIUNI.get(actiune, dict(ACTIUNI_DISPONIBILE).get(actiune, actiune))
+		return _tr("Plugin: %s") % p.name if p else _tr("Plugin indisponibil (%s)") % actiune[-8:]
+	return _tr(TEXTE_ACTIUNI.get(actiune, dict(ACTIUNI_DISPONIBILE).get(actiune, actiune)))
+
+
+# Actiunile care se repeta cat tii tasta (faza "r"), ca tastele VOL. Canalul se schimba o data pe apasare.
+ACTIUNI_REPETATE = ("volume_up", "volume_down")
 
 
 def _valoare(config, sectiune, nume, implicit):
@@ -405,14 +441,25 @@ def config_fabrica():
 	return c
 
 
+# id(config) -> subsectiunea hds_buttons gasita completa. Pagina web (/api/statusinfo, profilTaste) cheama functia de
+# ~30 de ori la fiecare cerere, la cateva secunde cat panoul e deschis; verificarea celor ~50 de chei costa ~1 ms pe
+# Octagon SF8008 de fiecare data (masurat in proces). Se crede numai cat config are tot aceeasi subsectiune.
+_COMPLETE = {}
+
+
 def initConfigButtonSetup(config=None):
 	# Verificam dictionarul: unele versiuni de ConfigSubsection arunca KeyError.
 	config = _config(config)
+	b = _COMPLETE.get(id(config))
+	if b is not None and config.content.items.get("hds_buttons") is b:
+		return b
 	chei = [k for k, _text in SCURTE + BUTOANE]
 	if "hds_buttons" in config.content.items:
 		b = config.hds_buttons
 		cunoscute = getattr(getattr(b, "content", None), "items", vars(b))
 		if all(k in cunoscute for k in chei):
+			if config.content.items.get("hds_buttons") is b:
+				_COMPLETE[id(config)] = b
 			return b
 	from Components.config import ConfigSubsection, ConfigSelection
 	if "hds_buttons" not in config.content.items:
@@ -469,8 +516,9 @@ def actualizeaza_alegeri(config=None, pluginuri=None):
 	"""La deschiderea ecranului sau paginii, cu inventarul instalat acum."""
 	b = initConfigButtonSetup(config)
 	lista = pluginuri_alocabile(pluginuri)
-	alegeri = ACTIUNI_DISPONIBILE + [
-		(k, _("Plugin: %s") % p.name) for k, p in sorted(
+	# traduse acum: lista s-a facut la import, uneori inainte de limba aleasa (ar fi ramas in romana)
+	alegeri = [(k, _tr(text)) for k, text in ACTIUNI_DISPONIBILE] + [
+		(k, _tr("Plugin: %s") % p.name) for k, p in sorted(
 			lista.items(), key=lambda x: (str(x[1].name).lower(), x[0]))]
 	alegeri = _cu_indisponibile(alegeri,
 		[getattr(b, k).value for k, _text in SCURTE + BUTOANE])
@@ -614,6 +662,10 @@ class AlocareTaste(object):
 				return 1
 		if faza == "r" and self.asteptata is not None and self.asteptata[0] == tasta:
 			self._asteapta()
+		if faza == "r" and proprie and not la_eliberare and a in ACTIUNI_REPETATE:
+			# volumul tinut apasat merge mai departe, ca VOL+ si VOL-
+			self.porneste(tasta, a)
+			return 1
 		return int(numeric or proprie)
 
 

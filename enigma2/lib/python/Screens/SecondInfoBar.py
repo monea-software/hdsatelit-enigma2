@@ -118,6 +118,14 @@ class SecondInfoBar(Screen):
 		self["key_green"] = StaticText()
 		self["key_yellow"] = StaticText()
 		self["key_blue"] = StaticText()
+		# temele straine (numele standard): sursa RdsDecoder (textul radio); numai sub alta tema decat HD Satelit
+		from Components.HdsNumeStandard import adauga
+
+		def rds(nav=self.session.nav):
+			# importat numai sub tema straina (adauga cheama fabrica numai atunci)
+			from Components.Sources.RdsDecoder import RdsDecoder
+			return RdsDecoder(nav)
+		adauga(self, "RdsDecoder", rds)
 		# descrierea intreaga a emisiunii alese, peste coloana din stanga a ghidului; numai daca skinul o deseneaza
 		# (un skin fara ea nu primeste avertismentul „skin is missing element”)
 		self._areDescriere = _skinAre(self.skinName, "hdsEpgText")

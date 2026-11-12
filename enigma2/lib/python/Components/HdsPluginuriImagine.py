@@ -68,11 +68,42 @@ def pluginImagine(cale, radacina=''):
 	return pluginuri is not None and cheie in pluginuri
 
 
+# Pluginurile straine se agata in meniu dupa id-urile meniurilor din menu.xml-ul de referinta (menuid == "system",
+# "cam", "extended"...); la noi meniurile au alte id-uri (system_menu, cam_menu...), deci intrarile lor nu apareau.
+# Fiecare meniu al nostru intreaba pluginul si cu id-urile de referinta care ii corespund. „system” merge in
+# „Sistem și dispozitive”, unde il cauta oamenii (autorii pluginurilor il scriu pentru meniul „System”).
+ID_MENIU_REFERINTA = {
+	"system_menu": ("system", "extended"),
+	"cam_menu": ("cam",),
+	"software_menu": ("software_manager", "advanced_software"),
+	"video_audio": ("video_menu",),
+	"harddisk": ("rec", "timermenu"),
+	"setup": ("epg",),
+}
+
+
 def meniuriUtilizator(plugins, menuid):
-	"""Intrarile de meniu adaugate de pluginurile omului, in ordinea lor."""
+	"""Intrarile de meniu adaugate de pluginurile omului, in ordinea lor (si cele cerute pe id-urile de referinta ale
+	meniului; o intrare data de acelasi plugin pe doua id-uri apare o singura data)."""
 	from Plugins.Plugin import PluginDescriptor
+	iduri = (menuid,) + ID_MENIU_REFERINTA.get(menuid, ())
 	rez = []
 	for plugin in plugins.getPlugins(PluginDescriptor.WHERE_MENU):
-		if not pluginImagine(getattr(plugin, 'path', '')):
-			rez += plugin(menuid) or []
+		if pluginImagine(getattr(plugin, 'path', '')):
+			continue
+		vazute = set()
+		for ident in iduri:
+			try:
+				intrari = plugin(ident) or []
+			except Exception as e:  # un plugin care nu stie id-ul de referinta nu strica meniul nostru
+				if ident == menuid:
+					raise
+				print("[HdsPluginuriImagine] %s(%s): %s" % (getattr(plugin, 'name', '?'), ident, e))
+				continue
+			for x in intrari:
+				cheie = x[2] if len(x) > 2 else x[0]
+				if cheie in vazute:
+					continue
+				vazute.add(cheie)
+				rez.append(x)
 	return rez

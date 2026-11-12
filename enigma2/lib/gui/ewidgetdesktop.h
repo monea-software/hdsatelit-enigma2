@@ -77,6 +77,29 @@ public:
 	
 	void resize(eSize size);
 	eSize size() const { return m_screen.m_screen_size; }
+
+		/* HDSatelit 0.7.4: animatiile ferestrelor desenate de enigma2 (lib/gdi/hdsanimatie.h), numai pe desktopul
+		   televizorului, in modul imediat, pe 32 de biti. Felul (0 oprit, 1 aparitie treptata, 2 alunecare scurta, 3 marire
+		   usoara) si durata le pun setAnimation_current/speed (main/enigma.cpp) cand placa nu are /proc/stb/fb/animation_*. */
+	static void hdsSetAnimatie(int fel, int durata_ms);
+	static int hdsAnimatieFel();
+	static int hdsAnimatieDurata();
+		/* Session.close: schimbarea care urmeaza e o inchidere (alunecarea coboara, marirea scade) */
+	void hdsAnimatieInchidere();
+		/* Session.open/close/execDialog: ecranul care se deschide sau se inchide acum nu are animatie (bara, lista de canale,
+		   ghidul...): schimbarile din urmatoarele 300 ms se deseneaza pe loc, chiar daca ecranul de dedesubt are animatie */
+	void hdsAnimatieFaraPas();
+		/* Session.close tine desenul pana cand processDelay a aratat ecranul de dedesubt (hdsAnimatieElibereaza), cel mult
+		   100 ms: altfel o redesenare ramasa din urma ar rupe inchiderea in doi pasi (fereastra pleaca spre imagine, apoi cea
+		   de dedesubt apare singura) */
+	void hdsAnimatieTine();
+	void hdsAnimatieElibereaza();
+#ifndef SWIG
+		/* eWindow::show/hide, chiar inainte de schimbare: cere = fereastra are animatia pornita (setAnimationMode). Prima
+		   cerere porneste un pas; in pasul pornit, fiecare fereastra care se arata sau se ascunde isi compune zona in imaginea
+		   „inainte” (in RAM), cu ce se vede inca. La urmatorul paint() zona schimbata trece de la „inainte” la „dupa”. */
+	void hdsInainteDeSchimbare(eWidget *root, int cere);
+#endif
 private:
 	ePtrList<eWidget> m_root;
 	void calcWidgetClipRegion(eWidget *widget, gRegion &parent_visible);
@@ -105,6 +128,17 @@ private:
 	bool paintOffscreen();
 	ePtr<gPixmap> m_offscreen;
 	ePtr<gDC> m_offscreen_dc;
+		/* a hidden 32 bpp buffer with the size and palette of the screen (m_offscreen, m_anim_inainte) */
+	bool hiddenBuffer(ePtr<gPixmap> &pm, ePtr<gDC> &dc);
+
+		/* HDSatelit 0.7.4: animatia ferestrelor (vezi hdsInainteDeSchimbare) */
+	bool paintAnimatie();
+	ePtr<gPixmap> m_anim_inainte;
+	ePtr<gDC> m_anim_inainte_dc;
+	gRegion m_anim_regiune;		/* zona deja compusa in „inainte” in pasul curent */
+	int m_anim_armata, m_anim_inchidere, m_anim_urm_inchidere, m_anim_schimbari, m_anim_fara, m_anim_tine;
+	long m_anim_cand_ms, m_anim_fara_ms, m_anim_tine_ms;
+	static int s_anim_fel, s_anim_durata_ms;
 };
 
 #endif

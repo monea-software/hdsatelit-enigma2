@@ -5,7 +5,8 @@ from .GUIComponent import GUIComponent
 from enigma import eLabel, eWidget, eSlider, fontRenderClass, ePoint, eSize
 
 class ScrollLabel(HTMLComponent, GUIComponent):
-	def __init__(self, text=""):
+	def __init__(self, text="", showscrollbar=True):
+		# showscrollbar=False (pluginurile straine, AutoBackup): fara bara de derulare, ca scrollbarMode="showNever"
 		GUIComponent.__init__(self)
 		self.message = text
 		self.instance = None
@@ -14,7 +15,7 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 		self.pages = None
 		self.total = None
 		# showOnDemand (bara numai cand textul are mai multe pagini), showAlways, showNever; din skin
-		self.scrollbarMode = "showOnDemand"
+		self.scrollbarMode = "showOnDemand" if showscrollbar else "showNever"
 
 	def applySkin(self, desktop, parent):
 		ret = False
@@ -30,7 +31,8 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 				else:
 					atribute.append((attrib, value))
 			self.skinAttributes = atribute
-			skin.applyAllAttributes(self.long_text, desktop, self.skinAttributes, parent.scale)
+			# borderColor/borderWidth sunt ale barei de derulare (mai jos); pe eticheta ar fi conturul textului
+			skin.applyAllAttributes(self.long_text, desktop, [a for a in self.skinAttributes if a[0] not in ("borderColor", "borderWidth")], parent.scale)
 			widget_attribs = [ ]
 			scrollbar_attribs = [ ]
 			for (attrib, value) in self.skinAttributes:
@@ -46,6 +48,8 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 		lineheight=fontRenderClass.getInstance().getLineHeight( self.long_text.getFont() )
 		if not lineheight:
 			lineheight = 30 # assume a random lineheight if nothing is visible
+		# pasul pentru goLineUp/goLineDown
+		self.lineHeight = lineheight
 		lines = (int)(s.height() // lineheight)
 		self.pageHeight = (int)(lines * lineheight)
 		self.instance.resize(eSize(s.width(), self.pageHeight+(int)(lineheight//6)))
@@ -195,8 +199,40 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 		i=1
 		while i < self.pages:
 			self.pageDown()
-			i += 1 
+			i += 1
 			self.updateScrollbar()
+
+	# numele din pluginurile scrise pentru alte imagini (managerul de fisiere FileCommander le leaga de sageti): un rand, o
+	# pagina, inceputul, sfarsitul; isNavigationNeeded = textul are mai mult de o pagina (inainte de asezare: nu)
+	def _mutaLa(self, y):
+		"""textul derulat cu y puncte, intre inceput si ultima pagina"""
+		if self.total is None or self.long_text is None:
+			return
+		y = max(0, min(y, self.total - self.pageHeight))
+		self.long_text.move(ePoint(self.long_text.position().x(), -y))
+		self.updateScrollbar()
+
+	def goLineUp(self):
+		self._mutaLa(self.getPos() - (getattr(self, "lineHeight", 0) or 30))
+
+	def goLineDown(self):
+		self._mutaLa(self.getPos() + (getattr(self, "lineHeight", 0) or 30))
+
+	def goPageUp(self):
+		self.pageUp()
+
+	def goPageDown(self):
+		self.pageDown()
+
+	def goTop(self):
+		self.firstPage()
+
+	def goBottom(self):
+		if self.total is not None:
+			self._mutaLa(self.total - self.pageHeight)
+
+	def isNavigationNeeded(self):
+		return self.total is not None
 
 	def produceHTML(self):
 		return self.getText()

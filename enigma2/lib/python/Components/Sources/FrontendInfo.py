@@ -41,11 +41,11 @@ class FrontendInfo(Source, PerServiceBase):
 			return dict
 		elif self.service_source:
 			service = self.navcore and self.service_source()
-			feinfo = service and service.frontendInfo()
+			feinfo = service and _feServiciu(service)
 			return feinfo and feinfo.getFrontendData()
 		elif self.navcore:
 			service = self.navcore.getCurrentService()
-			feinfo = service and service.frontendInfo()
+			feinfo = service and _feServiciu(service)
 			return feinfo and feinfo.getFrontendData()
 		else:
 			return None
@@ -54,3 +54,12 @@ class FrontendInfo(Source, PerServiceBase):
 		if not self.frontend_source and not self.service_source:
 			PerServiceBase.destroy(self)
 		Source.destroy(self)
+
+
+def _feServiciu(service):
+	"""frontendInfo al serviciului redat; la Stream Relay, al tunerului care tine canalul (Hds.DabT2.server8001)."""
+	try:
+		from Hds.DabT2.server8001 import frontend_serviciu
+	except Exception:
+		return service.frontendInfo()
+	return frontend_serviciu(service)

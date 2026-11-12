@@ -921,8 +921,30 @@ class Operatie(object):
 		f = self.la_final
 		if f is not None:
 			f(self.rezultat)
+		_dupa_operatie(self.rezultat)
 
 	def desprinde(self, la_final=None):
 		"""ecranul se inchide: pasii merg mai departe, rezultatul merge la `la_final` (sau nicaieri)"""
 		self.la_pas = None
 		self.la_final = la_final
+
+
+def _dupa_operatie(rezultat):
+	"""0.7.4: dupa ce un modul a fost ales, pornit sau repornit (de pe televizor sau din web), paznicul porturilor
+	(Components/HdsPorturi.py) se uita din nou, peste putin, daca doua servicii cer acelasi port. Nu arunca.
+	0.7.4 (P4): un modul care nu a pornit fiindca programului lui ii lipseste o biblioteca pe care o are feedul extern (OpenSSL
+	1.0/1.1/3, libcrypt.so.1, /lib/ld-linux.so.3) o primeste singur si porneste din nou (Components/HdsBibliotecaLipsa.py)."""
+	if not rezultat.get('ok') and rezultat.get('motiv') == 'nu_a_pornit':
+		try:
+			from Components import HdsBibliotecaLipsa
+			HdsBibliotecaLipsa.dupaCadereModul(rezultat.get('fel'), rezultat.get('nume'))
+		except Exception:
+			pass
+		return
+	if not rezultat.get('ok') or rezultat.get('motiv') not in ('ales', 'pornit', 'repornit'):
+		return
+	try:
+		from Components import HdsPorturi
+		HdsPorturi.dupa_schimbare()
+	except Exception:
+		pass

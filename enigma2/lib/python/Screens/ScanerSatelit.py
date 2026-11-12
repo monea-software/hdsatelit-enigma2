@@ -38,6 +38,7 @@ import json
 import os
 import re
 import time
+import weakref
 
 from Screens.Screen import Screen
 from Components.ActionMap import ActionMap
@@ -1046,6 +1047,48 @@ def _tuner_ocupat(mesaj):
         return mesaj == 'tunerul de satelit e ocupat'
 
 
+# Functiile de mai jos lucreaza pe scanarile DVB-T2 / DAB+ prin satelit care traiesc (CautareFluxuri.toate): cine le
+# cere tunerul sau le opreste fara sa aiba fereastra lor (Components/ServiceScan.py inainte de start, inchiderea
+# scanerului). Fereastra scanarii (Screens/HdsScanareFluxuri.py) da tunerul la orice iesire; ele sunt plasa pentru
+# orice alt drum.
+def elibereaza_cautarile():
+    """O cautare de canale (Components/ServiceScan.py, chiar inainte de eComponentScan.start) cere tunerul de satelit:
+    scanarile DVB-T2 / DAB+ prin satelit care inca il tin (purtatorul acordat pana la alegere) il dau acum, sincron, ca
+    la un zap venit din alta parte (CautareFluxuri._la_zap); fereastra si rezultatul lor raman. -> cate l-au dat."""
+    n = 0
+    for c in list(CautareFluxuri.toate):
+        if c.tuner is None:
+            continue
+        try:
+            c._elibereaza_tunerul()
+            n += 1
+        except Exception as e:
+            print('[ScanerSatelit] tunerul scanarii %s: %s' % (c.profil_tip, e))
+    return n
+
+
+def opreste_cautarile_nealese():
+    """La inchiderea scanerului si la schimbarea felului: scanarile DVB-T2 / DAB+ pornite si inca fara alegere (nici
+    „Ascultă”, nici „Înapoi”) se opresc (detectorul, invatarea, tunerul; canalul de dinainte porneste din nou, ca la
+    CautareFluxuri.opreste). Un post ales cu „Ascultă” ramane pornit: scanerul se inchide tocmai ca el sa ramana."""
+    for c in list(CautareFluxuri.toate):
+        if c.ales is None and c.faza != 'nepornit':
+            try:
+                c.opreste()
+            except Exception as e:
+                print('[ScanerSatelit] oprirea scanarii %s: %s' % (c.profil_tip, e))
+
+
+def cautarea_cu_tuner():
+    """Felul ('t2' / 'dab') unei scanari DVB-T2 / DAB+ prin satelit care tine inca tunerul, sau None."""
+    for c in list(CautareFluxuri.toate):
+        t = c.tuner
+        tinut = getattr(t, 'tinut', None)
+        if t is not None and (tinut is None or tinut()):
+            return c.profil_tip
+    return None
+
+
 def _fara_semnal(mesaj):
     """Acordul a cazut pentru ca nu a venit semnal (motivul dat de Hds/DabT2/tuner.py: 'nu vine semnal pe ...')."""
     inceput = 'nu vine semnal'
@@ -1077,12 +1120,16 @@ class CautareFluxuri(object):
     tunerul l-ar lua orice cerere (o sesiune a serverului local 8001, de pilda), care ar roti antena inapoi cat omul
     inca alege. Tunerul se da: sincron la asculta(i), chiar inainte de pornirea postului (acelasi transponder, fara
     rotire), la inapoi() / opreste(), la orice zap venit din alta parte (din web, din lista) si la o inregistrare
-    adevarata, prin extensiile din Navigation puse numai cat il tine. Invatarea prin releu (T2-MI, ETI) are nevoie de
-    tuner: inainte de ea se da, dupa ea se ia din nou.
+    adevarata, prin extensiile din Navigation puse numai cat il tine, iar la o cautare de canale inainte de start
+    (Components/ServiceScan.py -> elibereaza_cautarile). Invatarea prin releu (T2-MI, ETI) are nevoie de tuner:
+    inainte de ea se da, dupa ea se ia din nou.
     la_stare(text) si la_gata(ok, text, numar_posturi) raman pentru apelantii vechi; ecranele se inscriu in
     `ascultatori` (functii fara argumente, chemate la fiecare schimbare) si citesc rezumat()."""
 
     IN_CURS = ('acord', 'detector', 'salvare', 'invatare')
+    # toate scanarile care traiesc (elibereaza_cautarile, opreste_cautarile_nealese, cautarea_cu_tuner); lista e slaba,
+    # nu le tine in viata
+    toate = weakref.WeakSet()
 
     def __init__(self, sesiune, profil_tip, tp, la_stare=None, la_gata=None, ref_inainte=None,
                  pozitie_inainte=None):
@@ -1112,6 +1159,7 @@ class CautareFluxuri(object):
         self._invat = None
         self._disc = None
         self._extensii = False
+        CautareFluxuri.toate.add(self)
 
     def _felul(self):
         return _('DAB+') if self.profil_tip == 'dab' else _('DVB-T2')
@@ -1815,7 +1863,21 @@ class ScanerSatelit(Screen):
         actiuni.update((nume, lambda: None) for nume in ('upUp', 'downUp', 'leftUp', 'rightUp'))
         self['tastatura'] = ActionMap(['ColorActions', 'OkCancelActions', 'DirectionActions'], actiuni, -1)
         self.onLayoutFinish.append(self._potriveste_textele)
+        self._fel_ultim = self._fel()
+        self.onClose.append(self._la_inchidere)
         self.setTitle(self._titlu())
+
+    def _la_inchidere(self):
+        """Ecranul se inchide: o scanare DVB-T2 / DAB+ inca nealeasa nu mai tine tunerul. Postul ales cu „Ascultă”
+        ramane (dupa el scanerul se inchide tocmai ca postul sa ramana pe ecran)."""
+        opreste_cautarile_nealese()
+
+    def _schimbat_felul(self):
+        """Felul s-a schimbat (randul „Felul scanării”) de pe DVB-T2 / DAB+ prin satelit: ca la inchidere."""
+        fel = self._fel()
+        if fel != getattr(self, '_fel_ultim', fel) and self._fel_ultim in PROFIL_FEL:
+            opreste_cautarile_nealese()
+        self._fel_ultim = fel
 
     # ---- felul si campurile lui
     def _fel(self):
@@ -2006,6 +2068,7 @@ class ScanerSatelit(Screen):
     def _reactualizeaza(self):
         """Randurile din nou dupa o schimbare; cursorul ramane pe randul schimbat (dupa cheie, Components/HdsCursorLista):
         setList singur l-ar duce pe primul rand."""
+        self._schimbat_felul()
         self._normalizeaza()
         self._construieste_lista()
         pune_randurile(self['lista'], self._intrari)

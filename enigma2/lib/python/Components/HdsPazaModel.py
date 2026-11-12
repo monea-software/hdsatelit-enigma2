@@ -199,13 +199,15 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 # numele partitiilor din /proc/mtd, iar tabela se compara (avertisment in treapta a doua); placa tot nu se compara.
 # Cipul se compara fara „bcm” in fata pe amandoua (_cipFaraBcm); regulile Broadcom il scriu cum il da driverul (7241).
 CHEIE_FAMILIE = "familie"
+# chip=- in regulile Broadcom: cipul nu se citeste si nu se compara (AX HD51, nodul chipset nesigur; MHD 12.11.2026)
+FARA_CIP = "-"
 FAMILIE_BROADCOM = "broadcom"
 FAMILII = (FAMILIE_BROADCOM,)
 
 # Modelul placii (cheia model_id, cifra 08 a codurilor E108 si E208). Numele scurte ale modelelor cunoscute, cum le dau
 # arborele dispozitivului (DT) si nodurile driverului, fara "vu" in fata, in ordine alfabetica (garda din enigma2.sh le
 # scrie in aceeasi ordine). Un nume generic al cipului (brcm,bcm7252s) sau unul necunoscut nu numeste niciun model.
-MODELE_CUNOSCUTE = ("duo4k", "duo4kse", "gbmv200", "gbquad4k", "gbquad4kpro", "gbtrio4k", "gbue4k", "gbx34k",
+MODELE_CUNOSCUTE = ("duo4k", "duo4klite", "duo4kse", "gbmv200", "gbquad4k", "gbquad4kpro", "gbtrio4k", "gbue4k", "gbx34k",
 	"protek4k", "sf8008", "sf8008m", "solo4k", "ultimo4k", "uno4k", "uno4kse", "ustym4kpro", "viper4k", "viper4kv20",
 	"viper4kv30", "viper4kv40", "zero4k")
 # alt nume al aceleiasi placi (/proc/stb/info/gbmodel pe GigaBlue UHD Quad 4K Pro)
@@ -216,8 +218,10 @@ MODELE_PLACI = {
 	"gbquad4kpro": ("GigaBlue UHD Quad 4K Pro", "gigablue-uhd-quad-4k-pro"),
 	"duo4kse": ("Vu+ Duo 4K SE", "vu-duo4k-se"),
 	"duo4k": ("Vu+ Duo 4K", "vu-duo4k"),
+	"duo4klite": ("Vu+ Duo 4K Lite", "vu-duo4klite"),
 	"uno4kse": ("Vu+ Uno 4K SE", "vu-uno4k-se"),
 	"solo4k": ("Vu+ Solo 4K", "vu-solo4k"),
+	"ultimo4k": ("Vu+ Ultimo4K", "vu-ultimo4k"),
 }
 PAGINA_MODEL = "https://stb.hdsatelit.com/receptoare/%s/"
 
@@ -969,7 +973,10 @@ def _diferente(reguli, a):
 	si „kernel_loc” (numai locul nucleului si al sistemului, fara marime). Regulile trebuie sa fie valide."""
 	d = {}
 	cip = a.get("cip", "")
-	if nand(reguli) or broadcom(reguli):
+	if broadcom(reguli) and reguli["chip"] == FARA_CIP:
+		# chip=- (MHD, AX HD51): pe placile Broadcom al caror driver nu da un cip sigur, cipul nu se compara (ca hw=-)
+		cip_rau = False
+	elif nand(reguli) or broadcom(reguli):
 		cip_rau = not cip or _cipFaraBcm(cip) != _cipFaraBcm(reguli["chip"])
 	else:
 		cip_rau = not cip or cip.lower() != reguli["chip"].lower()
@@ -1528,10 +1535,19 @@ def randSusRefuz(cod):
 	return "%s%s. %s" % (scurt[:1].upper(), scurt[1:], _("Nu s-a instalat nimic pe receptor."))
 
 
-def sumeSha256(dosar, oprit=None):
+def sumeSha256(dosar, oprit=None, progres=None):
 	"""{cheie_suma: hex} pentru kernel.bin si rootfs.tar.bz2 din `dosar` (citire in bucati de 1 MiB; pe un fir separat,
-	hashlib elibereaza GIL-ul). `oprit` e o functie: True = se renunta (intoarce None)."""
+	hashlib elibereaza GIL-ul). `oprit` e o functie: True = se renunta (intoarce None). `progres`: un dict in care se
+	scriu „total” (octetii de citit) si „gata” (cei cititi), ca ecranul sa arate procentul."""
 	rez = {}
+	if progres is not None:
+		total = 0
+		for _cheie, nume in FISIERE_SUME:
+			try:
+				total += os.path.getsize(os.path.join(dosar, nume))
+			except OSError:
+				pass
+		progres["total"], progres["gata"] = total, 0
 	for cheie, nume in FISIERE_SUME:
 		h = hashlib.sha256()
 		with open(os.path.join(dosar, nume), "rb") as f:
@@ -1542,6 +1558,8 @@ def sumeSha256(dosar, oprit=None):
 				if not bucata:
 					break
 				h.update(bucata)
+				if progres is not None:
+					progres["gata"] = progres.get("gata", 0) + len(bucata)
 		rez[cheie] = h.hexdigest()
 	return rez
 

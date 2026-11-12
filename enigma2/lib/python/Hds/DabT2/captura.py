@@ -60,6 +60,15 @@ def variante_rezerva():
     return [(v, _('fara') if v == '0' else '%s s' % ('%g' % (int(v) / 1000.0)).replace('.', ',')) for v in REZERVE_MS]
 
 
+# decodarea sunetului DAB+ redat prin placa (0.7.4): automat = placa pe HiSilicon, in receptor (software) pe celelalte
+# (Broadcom/Vu+ nu stie cadrele de 960 ale DAB+); hotararea o ia releul (sunet_software.alege)
+SUNET = ('automat', 'placa', 'software')
+
+
+def variante_sunet():
+    return [('automat', _('automat')), ('placa', _('placa')), ('software', _('software'))]
+
+
 def configureaza():
     """config.plugins.hdscomun, comun ambelor pluginuri (se defineste o singura data)."""
     from Components.config import config, ConfigSubsection, ConfigYesNo, ConfigSelection
@@ -82,6 +91,9 @@ def configureaza():
         # 0.2.2: rezerva de la pornirea unui post DAB+ sau DVB-T2 redat prin placa, in milisecunde (citita de
         # lib/service/servicedvb.cpp, createTsSource -> eHdsFluxHttp::setStartReserve)
         config.plugins.hdscomun.rezerva = ConfigSelection(default='400', choices=variante_rezerva())
+    if not _are(config.plugins.hdscomun, 'sunet'):
+        # 0.7.4: cine decodeaza sunetul posturilor DAB+ (releul il primeste in feed, iar la schimbare prin /sunet/<setare>)
+        config.plugins.hdscomun.sunet = ConfigSelection(default='automat', choices=variante_sunet())
     return config.plugins.hdscomun
 
 

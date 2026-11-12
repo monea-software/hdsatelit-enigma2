@@ -154,6 +154,74 @@ def mascheazaConturi(text):
 	return _URL_UTILIZATOR.sub(r"\1***", rand)
 
 
+# Eduard, 12.11.2026 19:19: „FARA PAROLE, ATAT”. Asistenta (Components/HdsAsistentaBroker.mascheaza) si jurnalul
+# interfetei de pe receptor (Tools/HdsJurnalInterfata.py) ascund NUMAI parolele: numele de utilizator, gazdele, porturile,
+# adresele MAC, randurile modulelor de acces si restul raman. Ce iese public (rapoartele de pe forum, pachetele testerilor,
+# codurile QR) trece in continuare la plecare prin HdsBetaTester.curata si HdsDiagnostic.faraDatePersonale.
+# Cheia unei parole: password, passwd, passphrase, pwd, parola (si lipite: httppwd, wpa_passphrase), pass si psk numai
+# singure sau dupa . _ - (bypass, compass raman).
+_CHEIE_PAROLA = r"(?:[a-z0-9_.-]*(?:password|passwd|passphrase|pwd|wep_key[0-9]?|parol[a-z\u0103\u00e2\u00ee\u0219\u021b]*)|(?:[a-z0-9_.-]*[._-])?(?:pass|psk))"
+# un rand care e chiar o atribuire (setari, oscam.server, wpa_supplicant.conf, hostapd.conf): tot restul randului
+_PAROLA_RAND = re.compile(r"(?im)^([ \t]*" + _CHEIE_PAROLA + r"[ \t]*[=:][ \t]*)\S.*$")
+# in mijlocul unui rand (jurnale, JSON, adrese cu ?password=): o valoare, intre ghilimele sau pana la spatiu , ; &
+_PAROLA_VALOARE = re.compile(r"(?i)(?<![\w.-])(" + _CHEIE_PAROLA + r"[\"']?[ \t]*[=:][ \t]*)(?:(\")[^\"]*\"|(')[^']*'|[^\s,;&\"'<>]+)")
+
+
+def _stelutePastreazaGhilimele(m):
+	g = m.group(2) or m.group(3) or ""
+	return m.group(1) + g + "***" + g
+# linia de comanda a unui proces (/proc/<pid>/cmdline): --password x, -pass x
+_PAROLA_OPTIUNE = re.compile(r"(?i)(?<![\w-])(--?(?:password|passwd|pass|pwd|psk)[ \t]+)\S+")
+# adresele cu cont: schema://nume:parola@gazda, forma codata din referintele de serviciu si nume:parola@gazda fara schema
+_PAROLA_URL = re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^\s/@]*(@)")
+_PAROLA_URL_CODAT = re.compile(r"(?i)(%3a//[^/\s:@%]+%3a)[^\s/@]*?(%40|@)")
+_PAROLA_URL_GOL = re.compile(r"(?<![\w.:/%+-])([\w.+-]+:)[^\s/@:]+(@[\w-]+(?:\.[\w-]+)*)")
+# adresa unui canal de la un furnizor: /live/<utilizator>/<parola>/<id>.ts (Components/HdsIptvClient.py)
+_PAROLA_URL_CALE = re.compile(r"(?i)((?:://|%3a//)[^/\s]+/(?:live|movie|series|timeshift)/[^/\s]+/)[^/\s]+/")
+# randurile cititoarelor (CCcam.cfg, newcamd.list): C:/N:/L: gazda port utilizator PAROLA, F: utilizator PAROLA,
+# CWS = gazda port utilizator PAROLA; gazda, portul si utilizatorul raman
+_PAROLA_LINIE = re.compile(r"(?m)^([ \t]*(?:[CNL]:|CWS[ \t]*=)[ \t]*\S+[ \t]+\S+[ \t]+\S+[ \t]+)\S+")
+_PAROLA_PRIETEN = re.compile(r"(?m)^([ \t]*F:[ \t]*\S+[ \t]+)\S+")
+# antetul HTTP cu parola (Basic) sau cu jetonul care tine loc de parola
+_PAROLA_ANTET = re.compile(r"(?im)(\bauthorization[ \t]*[=:][ \t]*)\S.*$")
+# fara niciunul dintre aceste semne textul nu are parola (jurnalul interfetei: cate un rand, mii pe minut)
+_POATE_PAROLA = re.compile(r"(?im)pass|pwd|psk|parol|wep_key|@|%40|authoriz|/(?:live|movie|series|timeshift)/|^\s*(?:[cnlf]:|cws)|"
+	r"kennwort|mot de passe|contrase|wachtw|has[lł]o|heslo|jelsz|lozink|geslo|salasan|adgangskode|senord|parool|slapta|[şs]ifre|"
+	r"senha|lykil|парол|κωδικ|كلمة")
+# aceleasi cuvinte, fara cele englezesti si romanesti (pe care le prind expresiile de sus)
+_POATE_PAROLA_LIMBI = re.compile(r"(?i)kennwort|mot de passe|contrase|wachtw|has[lł]o|heslo|jelsz|lozink|geslo|salasan|"
+	r"adgangskode|senord|passord|parool|slapta|[şs]ifre|senha|lykil|парол|κωδικ|كلمة|passw")
+
+
+def mascheazaParole(text):
+	"""Numai parolele devin ***; tot restul textului ramane cum e (Eduard, 12.11.2026 19:19)."""
+	if not text:
+		return ""
+	if not _POATE_PAROLA.search(text):
+		return text
+	text = _PAROLA_RAND.sub(r"\1***", text)
+	text = _PAROLA_VALOARE.sub(_stelutePastreazaGhilimele, text)
+	text = _PAROLA_OPTIUNE.sub(r"\1***", text)
+	text = _PAROLA_URL.sub(r"\1***\2", text)
+	text = _PAROLA_URL_CODAT.sub(r"\1***\2", text)
+	text = _PAROLA_URL_GOL.sub(r"\1***\2", text)
+	text = _PAROLA_URL_CALE.sub(r"\1***/", text)
+	text = _PAROLA_LINIE.sub(r"\1***", text)
+	text = _PAROLA_PRIETEN.sub(r"\1***", text)
+	text = _PAROLA_ANTET.sub(r"\1***", text)
+	if _POATE_PAROLA_LIMBI.search(text):
+		# eticheta tradusa a unei parole (ecranele in alte limbi: Passwort, Mot de passe, Hasło, Пароль ...)
+		randuri = []
+		for rand in text.split("\n"):
+			m = _ATRIBUIRE.match(rand)
+			if m and _PAROLA_LIMBI.search("".join(c for c in unicodedata.normalize("NFKD", m.group(1))
+					if not unicodedata.combining(c))):
+				rand = m.group(1) + m.group(2) + "***"
+			randuri.append(rand)
+		text = "\n".join(randuri)
+	return text
+
+
 RANDURI_LISTA = 40          # cate randuri dintr-o lista (in jurul celui ales)
 TEXT_ECRAN_MAX = 16 * 1024
 

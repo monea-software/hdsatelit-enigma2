@@ -1981,6 +1981,10 @@ TEXTE_PAGINA = {
 		N_("Se pune contorul la zero..."),
 		N_("Receptorul nu a putut citi setările."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Toate reglajele"),
+		N_(". Cheie schimbată, încă nesalvată"),
+		N_("Nu s-a schimbat nimic."),
 	),
 }
 

@@ -3,6 +3,8 @@
 # harddiskmanager in step when USB sticks, disks and card readers are added or removed.
 # Other plugins keep using hotplugNotifier from this module:
 # every entry is called as fnc(device, media_state) with "1" = added and "0" = removed.
+# USB devices (0.7.4): the same events go to Components/HdsDriverLipsa, which installs from our feed the driver of a
+# Wi-Fi stick or USB network adapter that has none on the receiver (the map of USB IDs is made from the built packages).
 import socket
 from traceback import print_exc
 
@@ -49,6 +51,9 @@ def parseUevent(data):
 
 
 def handleEvent(event):
+	if event.get("SUBSYSTEM") == "usb":
+		usbEvent(event)
+		return
 	if event.get("SUBSYSTEM") != "block":
 		return
 	device = event.get("DEVNAME", "")
@@ -73,6 +78,16 @@ def handleEvent(event):
 		harddiskmanager.addHotplugPartition(device, event.get("DEVPATH"))
 		harddiskmanager.scheduleMount(device, MOUNT_WAIT_MS)
 		notifyListeners(device, "1")
+
+
+def usbEvent(event):
+	"""a USB device or interface added or removed: the driver from our feed when the receiver has none for it"""
+	try:
+		from Components import HdsDriverLipsa
+		HdsDriverLipsa.eveniment(event)
+	except Exception:
+		print("[Hotplug] USB event failed: %s" % event.get("DEVPATH"))
+		print_exc()
 
 
 def injectEvent(event):
@@ -147,5 +162,16 @@ def autostart(reason, **kwargs):
 		listener.stop()
 
 
+def sessionstart(reason, session=None, **kwargs):
+	# the drivers of USB sticks left in the socket at start, and the messages on screen, need the session
+	if reason == 0 and session is not None:
+		try:
+			from Components import HdsDriverLipsa
+			HdsDriverLipsa.porneste(session)
+		except Exception:
+			print_exc()
+
+
 def Plugins(**kwargs):
-	return [PluginDescriptor(name="Hotplug", description=_("Follows added and removed storage devices"), where=PluginDescriptor.WHERE_AUTOSTART, needsRestart=True, fnc=autostart)]
+	return [PluginDescriptor(name="Hotplug", description=_("Follows added and removed storage devices"), where=PluginDescriptor.WHERE_AUTOSTART, needsRestart=True, fnc=autostart),
+		PluginDescriptor(where=PluginDescriptor.WHERE_SESSIONSTART, needsRestart=True, fnc=sessionstart)]

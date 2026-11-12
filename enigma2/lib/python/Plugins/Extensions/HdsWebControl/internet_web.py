@@ -32,6 +32,7 @@
 #   POST /api/dvb-i-seteaza         activ=0|1 | predefinita=<cheie>&bifata=0|1 | adauga_url=<adresa>
 #   POST /api/dvb-i-sterge          index=N, in doi pasi (pas=intreaba, cod=..., pas=renunta)
 #   POST /api/dvb-i-reincarca       reincarcarea acum
+#   POST /api/dvb-i-cauta           cele mai noi liste acum: registrele, apoi reincarcarea (buchetul DVB-I gol din Canale)
 #   GET  /api/mabr                  starea
 #   POST /api/mabr-seteaza          activ=0|1 | autodiscover=0|1 | adauga=<adresa:port>
 #   POST /api/mabr-sterge           index=N, in doi pasi
@@ -42,6 +43,8 @@
 #   POST /api/iptv-adauga           fel=m3u|xtream|stalker|demo, nume, adresa | server, utilizator, parola (numai din corp) |
 #                                   portal, mac; lista se aduce pe firul de lucru, rezultatul vine in GET
 #   POST /api/iptv-actualizeaza     [id=<sursa>] o sursa sau toate
+#   POST /api/iptv-fisier           text=<continutul unui fisier cu adrese, cate una pe rand> (fisierul ales in browser; aceeasi
+#                                   citire ca /etc/enigma2/iptv.txt pus prin FTP, Components/HdsIptvFisier.py)
 #   POST /api/iptv-sterge           id=<sursa>, in doi pasi
 #   GET  /api/interfata-web-detalii pornirea, portul, browserele (fara cheie)
 #   POST /api/interfata-web-actiune fapta=activ&valoare=0|1 | fapta=port&valoare=N | fapta=deconecteaza |
@@ -206,6 +209,9 @@ def stareDvbi(D=None, cale=None, DD=None, registru=None):
 		"regiuni": [{"id": i, "nume": nume, "nivel": niv} for i, nume, niv in D.regiuniTarii(cfg, stare, reg)],
 		"liste_tarii": [dict(l, canale=D.canaleLista(stare, l["adresa"])) for l in D.listeleTarii(cfg, reg)],
 		"rezerva": D.rezervaPornita(cfg),
+		"toate_tarile": D.toateTarilePornit(cfg) if hasattr(D, "toateTarilePornit") else None,
+		"liste_alte_tari": [dict(l, canale=D.canaleLista(stare, l["adresa"]), tara_nume=D.numeTara(l["tara"]) if l["tara"]
+			else "") for l in D.listeleAltorTari(cfg, reg)] if hasattr(D, "listeleAltorTari") and cfg.get("tara") else [],
 		"stare": {"culoare": culoare, "text": text, "detalii": detalii},
 		"canale": canale, "rezumat": n,
 		"incercare": {"in_curs": bool(incercare.get("in_curs")), "facute": int(incercare.get("facute", 0) or 0),
@@ -289,6 +295,15 @@ def seteazaDvbi(arg, D=None, cale=None):
 			D.comutaListaTarii(cfg, arg["lista"])
 		mesaj = _t("Salvat. Listele se descarcă din nou.")
 		reincarca = True
+	elif "toate_tarile" in arg and hasattr(D, "comutaToateTarile"):
+		# TODO 1883: listele din toate tarile (ca pe televizor, randul "Liste din toate țările")
+		v = _bool(arg["toate_tarile"])
+		if v is None:
+			return _cuMesaj(stareDvbi(D, cale), False, _t("Se alege cu toate_tarile=0 sau 1."))
+		if v != D.toateTarilePornit(cfg):
+			D.comutaToateTarile(cfg)
+		mesaj = _t("Salvat. Listele se descarcă din nou.")
+		reincarca = True
 	elif "rezerva" in arg and hasattr(D, "comutaRezerva"):
 		v = _bool(arg["rezerva"])
 		if v is None:
@@ -339,6 +354,15 @@ def stergeDvbi(arg, D=None, cale=None):
 		return _cuMesaj(stareDvbi(D, cale), True, _t("Adresa a fost ștearsă."))
 
 	return _doiPasi(arg, "dvbi-sterge", url, _t("Ștergi adresa din listele DVB-I?"), _t("Da, șterge"), [url], fapta)
+
+
+def cautaDvbi(D=None, cale=None):
+	"""POST /api/dvb-i-cauta: cele mai noi liste DVB-I acum (registrele intrebate din nou, apoi reincarcarea), ca OK in
+	buchetul DVB-I gol din lista de canale; rezultatul se vede in GET /api/dvb-i si in lista."""
+	D = _dvbi(D)
+	if not D.cautaAcum():
+		return _cuMesaj(stareDvbi(D, cale), False, _t("O reîncărcare e deja în curs."))
+	return _cuMesaj(stareDvbi(D, cale), True, _t("Caut cele mai noi liste DVB-I…"))
 
 
 def reincarcaDvbi(D=None, cale=None):
@@ -512,6 +536,26 @@ def adaugaIptv(arg, din_adresa=(), I=None):
 	rez = _cuMesaj(stareIptv(I), True, _t("Se verifică legătura cu serverul..."))
 	rez["id"] = sursa["id"]
 	return rez
+
+
+# corpul unei cereri are cel mult 64 KB (plugin.MAX_CORP_CERERE); textul codat in adresa creste cu ~1/3
+MAX_FISIER = 40 * 1024
+
+
+def fisierIptv(arg, I=None):
+	"""POST /api/iptv-fisier: adresele din fisierul ales in browser, ca la /etc/enigma2/iptv.txt pus prin FTP. Sursele noi intra in
+	lista si firul de lucru le aduce canalele, ca la Adauga."""
+	S, C, L = _iptv(I)
+	from Components import HdsIptvFisier as F
+	text = arg.get("text") or ""
+	nume = S.numeCurat(arg.get("nume") or "", "iptv.txt")
+	if len(text) > MAX_FISIER:
+		return _cuMesaj(stareIptv(I), False, _t(F.T_PREA_MARE))
+	rez = F.preiaText(text, nume, verifica=C.verificaDate, adauga=L.adaugaSiCere, dosar=S.DOSAR, e_plin=C.E_PREA_MULTE,
+		tine_minte=False)
+	if not rez["mesaje"]:
+		return _cuMesaj(stareIptv(I), False, _t(F.T_NIMIC))
+	return _cuMesaj(stareIptv(I), bool(rez["adaugate"]), " ".join(rez["mesaje"]))
 
 
 def actualizeazaIptv(arg, I=None):
@@ -862,6 +906,9 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 	def dvbi_reincarca(request):
 		return reincarcaDvbi(D, cale_dvbi)
 
+	def dvbi_cauta(request):
+		return cautaDvbi(D, cale_dvbi)
+
 	def mabr(request):
 		return stareMabr(S, cale_mabr)
 
@@ -893,6 +940,9 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 	def iptv_actualizeaza(request):
 		return actualizeazaIptv(_argumente(request, ("id",)), I)
 
+	def iptv_fisier(request):
+		return fisierIptv(_argumente(request, ("text", "nume"), MAX_FISIER + 1), I)
+
 	def iptv_sterge(request):
 		return stergeIptv(_argumente(request, ("id", "pas", "cod")), I)
 
@@ -922,6 +972,7 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"dvb-i-seteaza": _schimbare(dvbi_seteaza),
 		b"dvb-i-sterge": _schimbare(dvbi_sterge, True),
 		b"dvb-i-reincarca": _schimbare(dvbi_reincarca),
+		b"dvb-i-cauta": _schimbare(dvbi_cauta),
 		b"dvb-i-incearca": _schimbare(dvbi_incearca),
 		b"dvb-i-registre": _schimbare(dvbi_registre),
 		b"mabr": _citire(mabr),
@@ -933,6 +984,7 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"iptv-grupe-schimba": _schimbare(iptv_grupe_schimba),
 		b"iptv-adauga": _schimbare(iptv_adauga),
 		b"iptv-actualizeaza": _schimbare(iptv_actualizeaza),
+		b"iptv-fisier": _schimbare(iptv_fisier),
 		b"iptv-sterge": _schimbare(iptv_sterge, True),
 		b"sursa-antete": _schimbare(sursa_antete),
 		b"seriale": _citire(seriale),
@@ -1076,6 +1128,13 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
       <div class="butoane"><button type="button" id="registre">Întreabă din nou registrele</button></div>
     </section>
     <section class="card">
+      <h2>Liste din toate țările</h2>
+      <div class="rand"><label for="toate_tarile">Liste din toate țările, după cele ale țării tale</label>
+        <select id="toate_tarile"><option value="1">Da</option><option value="0">Nu</option></select></div>
+      <p class="nota">După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg dacă furnizorul le lasă și din țara ta.</p>
+      <ul id="listeAlteTari"></ul>
+    </section>
+    <section class="card">
       <h2>Trecere pe internet</h2>
       <div class="rand"><label for="rezerva">Trecere singură pe internet când satelitul nu se recepționează</label>
         <select id="rezerva"><option value="1">Da</option><option value="0">Nu</option></select></div>
@@ -1207,6 +1266,9 @@ function arata(d){
   $("stare").textContent = d.text_stare || "";
   if(document.activeElement !== $("activ")){ $("activ").value = d.activ ? "1" : "0"; }
   if(document.activeElement !== $("rezerva")){ $("rezerva").value = d.rezerva === false ? "0" : "1"; }
+  if(document.activeElement !== $("toate_tarile")){ $("toate_tarile").value = d.toate_tarile === false ? "0" : "1"; }
+  var ua = $("listeAlteTari"); ua.textContent = "";
+  (d.liste_alte_tari || []).forEach(function(l){ var li = document.createElement("li"); li.textContent = (l.tara_nume ? l.tara_nume + ": " : "") + (l.lista || l.adresa) + (l.canale !== null && l.canale !== undefined ? " · " + l.canale : ""); ua.appendChild(li); });
   var r = d.reincarcare || {};
   $("reincarcareText").textContent = r.mesaj || "Listele se reîncarcă singure din oră în oră cât timp receptorul e pornit.";
   $("reincarcareText").classList.toggle("eroare", !!(r.gata && !r.succes));
@@ -1246,7 +1308,7 @@ function citeste(){
   }).catch(faraRaspuns);
 }
 function reincarca(){ trimite("/api/dvb-i-reincarca", new URLSearchParams()); }
-["activ", "rezerva", "tara", "regiune"].forEach(function(id){
+["activ", "rezerva", "toate_tarile", "tara", "regiune"].forEach(function(id){
   $(id).addEventListener("change", function(){ var q = new URLSearchParams(); q.set(id, $(id).value); trimite("/api/dvb-i-seteaza", q); });
 });
 $("reincarca").addEventListener("click", reincarca);
@@ -1424,6 +1486,13 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <div class="butoane"><button type="button" class="principal" id="adauga">Adaugă</button></div>
     <p class="nota">Parola se vede cât o scrii; după adăugare nu se mai arată și nu se trimite înapoi. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân.</p>
   </section>
+  <section class="card">
+    <h2>Mai multe adrese dintr-un fișier</h2>
+    <div class="rand"><label for="fisierAdrese">Fișierul cu adrese</label>
+      <input type="file" id="fisierAdrese" accept=".txt,text/plain"></div>
+    <p class="nota">Un fișier text cu câte o adresă de listă pe rând (http:// sau https://); numele listei poate sta pe același rând. Listele se adaugă imediat ce alegi fișierul.</p>
+    <p class="nota">La fel merge și fără browser: copiezi prin FTP fișierul iptv.txt în dosarul /etc/enigma2/ al receptorului, iar listele noi se iau singure în cel mult un minut.</p>
+  </section>
   <section class="card ascuns" id="cardDemo">
     <h2>Lista demo: acordul fiecărui canal</h2>
     <div id="demo"></div>
@@ -1573,6 +1642,15 @@ $("adauga").addEventListener("click", function(){
     if(r.getAttribute("data-fel") === f){ r.querySelectorAll("input").forEach(function(i){ q.set(i.id, i.id === "parola" ? i.value : i.value.trim()); }); }
   });
   trimite("/api/iptv-adauga", q).then(function(d){ if(d && d.result && d.id){ ASTEPT = d.id; $("parola").value = ""; $("adresa").value = ""; urmareste(); } });
+});
+$("fisierAdrese").addEventListener("change", function(){
+  var f = this.files && this.files[0], el = this;
+  if(!f){ return; }
+  if(f.size > 40960){ mesaj("Fișierul e prea mare pentru o listă de adrese.", true); el.value = ""; return; }
+  var r = new FileReader();
+  r.onload = function(){ var q = new URLSearchParams(); q.set("text", String(r.result || "")); q.set("nume", f.name || ""); trimite("/api/iptv-fisier", q).then(function(d){ el.value = ""; if(d && d.result){ urmareste(); } }); };
+  r.onerror = function(){ mesaj("Fișierul nu s-a putut citi.", true); el.value = ""; };
+  r.readAsText(f);
 });
 var ANTETE_ID = "", SR = null, SR_TURA = 0;
 var GRUPE_ID = "", GRUPE_DATE = null;
@@ -1839,6 +1917,9 @@ TEXTE_PAGINA = {
 		N_("Regiunea"),
 		N_("Țările vin din registrele DVB-I; listele țării se iau singure și se actualizează din oră în oră."),
 		N_("Întreabă din nou registrele"),
+		N_("Liste din toate țările"),
+		N_("Liste din toate țările, după cele ale țării tale"),
+		N_("După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg dacă furnizorul le lasă și din țara ta."),
 		N_("Trecere pe internet"),
 		N_("Trecere singură pe internet când satelitul nu se recepționează"),
 		N_("Da"),
@@ -1949,6 +2030,12 @@ TEXTE_PAGINA = {
 		N_("Cheia"),
 		N_("Doar pentru programatori. Browserul obișnuit nu are nevoie de ea. Cheia e ascunsă: butonul Arată "
 			"cheia o arată întreagă."),
+		N_("Mai multe adrese dintr-un fișier"),
+		N_("Fișierul cu adrese"),
+		N_("Un fișier text cu câte o adresă de listă pe rând (http:// sau https://); numele listei poate sta pe același rând. "
+			"Listele se adaugă imediat ce alegi fișierul."),
+		N_("La fel merge și fără browser: copiezi prin FTP fișierul iptv.txt în dosarul /etc/enigma2/ al receptorului, iar listele "
+			"noi se iau singure în cel mult un minut."),
 		N_("Arată cheia"),
 		N_("Cheie nouă pentru panoul web"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în "
@@ -2009,6 +2096,8 @@ TEXTE_PAGINA = {
 		N_("Apasă Caută SAP pentru a descoperi sesiuni MABR în rețea."),
 		N_("Niciun grup adăugat de mână."),
 		N_("Încă nu ai adăugat nimic."),
+		N_("Fișierul e prea mare pentru o listă de adrese."),
+		N_("Fișierul nu s-a putut citi."),
 		N_("Seriale"),
 		N_("Antete"),
 		N_("Antetele sursei"),
@@ -2046,6 +2135,14 @@ TEXTE_PAGINA = {
 		N_("Ascunde parola"),
 		N_("Arată cheia"),
 		N_("Ascunde cheia"),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("(se arată la buton)"),
+		N_("Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o "
+			"schimbi în Parola receptorului (/acces-ssh)."),
+		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui "
+			"numai dacă vrei, în Parola receptorului (/acces-ssh)."),
+		N_("Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola "
+			"receptorului)."),
 	),
 }
 

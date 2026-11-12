@@ -51,11 +51,14 @@ static char litera(int slot)
 }
 
 Zap::Zap()
-	: m_are_imagine(0), m_ctx(0), m_activ(false), m_esec(false), m_avert(false), m_t0(0), m_t_acordat(0), m_t_program(0), m_t_imagine(0),
+	: m_citeste_pts(0), m_ctx(0), m_activ(false), m_esec(false), m_avert(false), m_t0(0), m_t_acordat(0), m_t_program(0), m_t_imagine(0),
+	m_t_eveniment(0), m_pts(0), m_t_cadre(0), m_termen_pts(0), m_latime(-1), m_inaltime(-1), m_citiri(0), m_bune(0), m_pts_bun(false),
+	m_ceas_pts(eTimer::create(eApp)),
 	m_slot(-1), m_vpid(-1), m_vtip(-1), m_apid(-1), m_atip(-1), m_criptat(-1), m_sid(0),
 	m_ceas(eTimer::create(eApp))
 {
 	CONNECT(m_ceas->timeout, Zap::faraImagine);
+	CONNECT(m_ceas_pts->timeout, Zap::citestePts);
 	memset(m_marcaje, 0, sizeof(m_marcaje));
 	m_t_comanda = m_t_blocare = 0;
 	m_sec_ms = -1;
@@ -64,10 +67,15 @@ Zap::Zap()
 void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 {
 	m_ceas->stop();
+	m_ceas_pts->stop();
 	m_activ = masurat;
 	m_esec = m_avert = false;
 	m_t0 = hdsjurnal::monotonMs();
 	m_t_acordat = m_t_program = m_t_imagine = 0;
+	m_t_eveniment = m_pts = m_t_cadre = m_termen_pts = 0;
+	m_latime = m_inaltime = -1;
+	m_citiri = m_bune = 0;
+	m_pts_bun = false;
 	memset(m_marcaje, 0, sizeof(m_marcaje));
 	m_t_comanda = m_t_blocare = 0;
 	m_sec_ms = -1;
@@ -102,10 +110,10 @@ void Zap::acordare(const eDVBFrontend::TimpiZap &t)
 void Zap::textMarcaje(char *buf, size_t n) const
 {
 	snprintf(buf, n, " | zap_t0 %lld ms | marcaje: pmt %ld ms, decodor %ld ms, ca_pmt %ld ms, "
-		"comanda_tuner %ld ms, sec %ld ms, blocare %ld ms, pachet_video -1 ms, eveniment_video %ld ms",
+		"comanda_tuner %ld ms, sec %ld ms, blocare %ld ms, pachet_video -1 ms, eveniment_video %ld ms, cadre %ld ms",
 		m_t0, dupa(m_t0, m_marcaje[PMT_PRIMIT]), dupa(m_t0, m_marcaje[DECODOR_PREGATIT]),
 		dupa(m_t0, m_marcaje[CA_PMT_TRIMIS]), dupa(m_t0, m_t_comanda), m_sec_ms,
-		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]));
+		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]), dupa(m_t0, m_t_cadre));
 }
 
 void Zap::textCanal(char *buf, size_t n)
@@ -165,7 +173,7 @@ void Zap::textCanal(char *buf, size_t n)
 void Zap::scrieEsec(const char *nivel, const char *motiv)
 {
 	char canal[600];
-	char marcaje[320];
+	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
 	textCanal(canal, sizeof(canal));
 	long long acum = hdsjurnal::monotonMs();
@@ -200,6 +208,7 @@ void Zap::eveniment(int ev, int slot)
 		return;
 	m_esec = true;
 	m_ceas->stop();
+	m_ceas_pts->stop();
 	scrieEsec(hdsjurnal::EROARE, motiv);
 }
 
@@ -223,7 +232,7 @@ void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 		m_apid = m_atip = -1;
 	m_vpid = vpid;
 	m_vtip = vtip;
-	if (vpid > 0 && vpid < 0x2000 && !m_avert && !m_ceas->isActive())
+	if (vpid > 0 && vpid < 0x2000 && !m_avert && !m_t_eveniment && !m_ceas->isActive() && !m_ceas_pts->isActive())
 	{
 		long trecut = (long)(hdsjurnal::monotonMs() - m_t0);
 		long rest = FARA_IMAGINE_MS - trecut;
@@ -248,7 +257,7 @@ void Zap::programGata()
 	m_activ = false;
 	char sunet[48];
 	textSunet(sunet, sizeof(sunet));
-	char marcaje[320];
+	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit fara imagine (radio): acordare %ld ms, program %ld ms"
 		" | sunet %s | criptat %s%s", litera(m_slot), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), sunet,
@@ -257,19 +266,96 @@ void Zap::programGata()
 
 void Zap::imagine(int latime, int inaltime)
 {
-	if (!m_activ || m_t_imagine || !m_t_program)
+	if (!m_activ || m_t_eveniment || m_t_imagine || !m_t_program)
 		return;
-	m_t_imagine = hdsjurnal::monotonMs();
-	m_marcaje[EVENIMENT_VIDEO] = m_t_imagine;
+	m_t_eveniment = hdsjurnal::monotonMs();
+	m_marcaje[EVENIMENT_VIDEO] = m_t_eveniment;
+	m_latime = latime;
+	m_inaltime = inaltime;
+	if (!m_citeste_pts)
+	{
+		scrieImagine(m_t_eveniment, false);
+		return;
+	}
+	/* evenimentul nu spune ca se vad cadre (canal nedescifrat: vine si fara imagine); in el nu se intreaba decodorul,
+	   PTS-ul se citeste din ceas. Dupa avertisment (imagine tarzie) citirile merg FARA_IMAGINE_MS de la eveniment. */
 	m_ceas->stop();
+	pornesteCitiri(m_avert ? m_t_eveniment + FARA_IMAGINE_MS : m_t0 + FARA_IMAGINE_MS);
+	m_ceas_pts->start(PAS_PTS_MS, true);
+}
+
+void Zap::pornesteCitiri(long long termen)
+{
+	m_citiri = m_bune = 0;
+	m_pts_bun = false;
+	m_termen_pts = termen;
+}
+
+void Zap::citestePts()
+{
+	if (!m_activ || m_esec || m_t_imagine || !m_citeste_pts)
+		return;
+	long long pts = 0;
+	bool bun = m_citeste_pts(m_ctx, pts) && pts > 0;
+	long long acum = hdsjurnal::monotonMs();
+	if (bun && m_pts_bun && pts != m_pts)
+	{
+		/* cadre noi: timpul imaginii e al evenimentului cand merg de la prima pereche de citiri */
+		m_t_cadre = acum;
+		scrieImagine(m_t_eveniment && m_citiri == 1 ? m_t_eveniment : acum, !m_t_eveniment);
+		return;
+	}
+	if (bun)
+	{
+		m_pts = pts;
+		m_pts_bun = true;
+		++m_bune;
+	}
+	++m_citiri;
+	/* pana la termen, si macar doua citiri bune (o citire cazuta nu face din una singura un verdict) */
+	if (acum < m_termen_pts || (m_bune < 2 && m_citiri < MAX_CITIRI_RATATE))
+	{
+		m_ceas_pts->start(PAS_PTS_MS, true);
+		return;
+	}
+	if (m_avert)
+		return;  /* nici dupa avertisment n-au venit cadre: avertismentul ramane randul final */
+	m_avert = true;
+	const char *cr = m_criptat == 1 ? "fara acces sau raspuns lent al modulului" : "";
+	char motiv[200];
+	if (m_t_eveniment)
+		snprintf(motiv, sizeof(motiv), "fara imagine: eveniment video la %ld ms, dar decodorul nu arata cadre noi "
+			"(PTS-ul video sta pe loc)%s%s", dupa(m_t0, m_t_eveniment), *cr ? "; criptat: " : "", cr);
+	else
+		snprintf(motiv, sizeof(motiv), "fara imagine%s%s%s", *cr ? " (criptat: " : "", cr, *cr ? ")" : "");
+	scrieEsec(hdsjurnal::AVERT, motiv);
+	/* cheia poate veni mai tarziu: citirile mai merg FARA_IMAGINE_MS, iar cadrele de atunci dau „imagine tarzie” */
+	m_termen_pts = acum + FARA_IMAGINE_MS;
+	m_ceas_pts->start(PAS_PTS_MS, true);
+}
+
+void Zap::scrieImagine(long long t, bool fara_eveniment)
+{
+	m_t_imagine = t ? t : hdsjurnal::monotonMs();
+	m_ceas->stop();
+	m_ceas_pts->stop();
 	m_activ = false;
 	char sunet[48];
 	textSunet(sunet, sizeof(sunet));
-	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
-	if (latime > 0 && inaltime > 0)
-		snprintf(marime, sizeof(marime), " %dx%d", latime, inaltime);
-	char marcaje[320];
+	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
+	if (fara_eveniment)
+	{
+		/* imaginea merge, numai evenimentul a lipsit: reusit, fara canal, fara timpul primei imagini */
+		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "
+			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s%s", litera(m_slot),
+			dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), (int)FARA_IMAGINE_MS, codecVideo(m_vtip), sunet,
+			m_criptat ? "da" : "nu", marcaje);
+		return;
+	}
+	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
+	if (m_latime > 0 && m_inaltime > 0)
+		snprintf(marime, sizeof(marime), " %dx%d", m_latime, m_inaltime);
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c %s: acordare %ld ms, program %ld ms, imagine %ld ms | video %s"
 		"%s | sunet %s | criptat %s%s", litera(m_slot), m_avert ? "imagine tarzie" : "reusit", dupa(m_t0, m_t_acordat),
 		dupa(m_t0, m_t_program), dupa(m_t0, m_t_imagine), codecVideo(m_vtip), marime, sunet,
@@ -278,20 +364,13 @@ void Zap::imagine(int latime, int inaltime)
 
 void Zap::faraImagine()
 {
-	if (!m_activ || m_t_imagine || m_avert || m_esec)
+	if (!m_activ || m_t_imagine || m_t_eveniment || m_avert || m_esec)
 		return;
-	if (m_are_imagine && m_are_imagine(m_ctx))
+	if (m_citeste_pts)
 	{
-		/* imaginea merge, numai evenimentul a lipsit: reusit, fara canal, fara timpul primei imagini */
-		m_activ = false;
-		char sunet[48];
-		textSunet(sunet, sizeof(sunet));
-		char marcaje[320];
-		textMarcaje(marcaje, sizeof(marcaje));
-		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "
-			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s%s", litera(m_slot),
-			dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), (int)FARA_IMAGINE_MS, codecVideo(m_vtip), sunet,
-			m_criptat ? "da" : "nu", marcaje);
+		/* fara eveniment de la decodor: doua citiri ale PTS-ului spun daca imaginea merge */
+		pornesteCitiri(0);
+		citestePts();
 		return;
 	}
 	m_avert = true;
@@ -304,9 +383,23 @@ void Zap::faraImagine()
 void Zap::oprire()
 {
 	m_ceas->stop();
+	m_ceas_pts->stop();
+	/* oprit intre eveniment si a doua citire (zap repede): o ultima citire, decodorul e inca pornit */
+	if (m_activ && m_t_eveniment && !m_t_imagine && !m_esec && m_pts_bun && m_citeste_pts)
+	{
+		long long pts = 0;
+		if (m_citeste_pts(m_ctx, pts) && pts > 0 && pts != m_pts)
+		{
+			long long acum = hdsjurnal::monotonMs();
+			m_t_cadre = acum;
+			scrieImagine(m_citiri == 1 ? m_t_eveniment : acum, false);
+			return;
+		}
+	}
 	if (m_activ && !m_t_imagine && !m_avert && !m_esec && m_vpid > 0 && m_vpid < 0x2000 &&
 		hdsjurnal::monotonMs() - m_t0 >= PRAG_OPRIRE_MS)
-		scrieEsec(hdsjurnal::AVERT, "oprit fara imagine");
+		scrieEsec(hdsjurnal::AVERT, m_t_eveniment ? "oprit fara imagine (eveniment video fara cadre noi)" :
+			"oprit fara imagine");
 	m_activ = false;
 }
 

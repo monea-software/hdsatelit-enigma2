@@ -9,8 +9,8 @@ LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
 # PV = data la care s-au schimbat datele (AAAA.LL.ZZ, cu .N la a doua schimbare din aceeasi zi); il scrie
 # fa_ajutor_receptor.py, numai cand amprenta datelor de mai jos nu mai e aceeasi (nu se schimba de mana)
-# amprenta datelor: 7d36c82447a0443115b174a85bc2e553fa4015ea2d38992601ed1fd947bdd69e
-PV = "2026.10.26"
+# amprenta datelor: e9eef7e6c68d38205be3472dab9807949c2146ab6427d2acb4830e818e381555
+PV = "2026.11.12.2"
 PR = "r0"
 
 SRC_URI = "file://index.json file://ro.dat file://en.dat file://cauta-ro.dat file://cauta-en.dat file://verifica_ajutor.py"

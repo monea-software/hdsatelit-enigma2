@@ -19,6 +19,18 @@
  *
  * Randarea: implicit procesul web compune cu GLES pe ecranul EGL disponibil si citeste cadrul inapoi in memoria
  * partajata; --pictura-cpu lasa numai compunerea pe GLES; --cpu desenul si compunerea pe procesor (Skia).
+ * Pe Mali-450 (GLES 2.0: SF8008, V20, Ustym) desenul GL nu merge in WebKit 2.54: compunerea prin Skia (functia interna
+ * UseSkiaForComposition, implicita) cade pe loc (ThreadedCompositor, pointer nul in threadSafeProxy(); core + simboluri,
+ * lotul h4-h6), iar cu ea oprita (TextureMapper) procesul web nu mai cade, dar fiecare cadru citit inapoi e negru
+ * (proba NB pe .122, 12.11.2026). Ramane rezerva pe procesor; enigma2 (lansator.py) tine minte caderea si porneste
+ * urmatoarele navigatoare direct cu --cpu. Pe procesor (--cpu, rezerva) lansatorul si
+ * procesele WebKit (care il mostenesc) au prioritate mai mica (nice 10), ca descifrarea si decodarea canalului sa nu
+ * sufere; in afara modului HbbTV si pictura pe un singur fir si cel mult 25 de cadre pe secunda.
+ *
+ * Marginile (--margine-x/-y, 0.7.4, NB): pe /dev/fb0, in afara modului HbbTV, pagina se aseaza in dreptunghiul din
+ * interiorul marginilor (ca ecranele temei HD Satelit: 72 si 40 de puncte la 1920x1080); lansatorul nu scrie nimic in
+ * margini, unde ramane fereastra enigma2 desenata inainte de „arata”. Tot ce scrie lansatorul (pagina, chenarul,
+ * textele de jos, indicatorul, golirea, captura) foloseste acelasi dreptunghi.
  * Rezerva automata: la pornire un proces copil incearca ecranul EGL (dlopen, fara legare de libEGL); daca nu exista
  * sau nu porneste, desenul trece pe procesor. Daca procesul web cade cu GL sau nu da niciun cadru in 15 s dupa
  * incarcare, lansatorul se reporneste o singura data cu --cpu. Fiecare trecere pe procesor lasa un rand
@@ -147,6 +159,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -157,6 +170,10 @@
 #endif
 
 /* ---------------------------------------------------------------- optiuni */
+
+/* randurile de stare (mai jos), folosite si de marginile ecranului si de alegerea compunerii */
+static void stare(const char *text);
+static void stare_f(const char *format, ...) G_GNUC_PRINTF(1, 2);
 
 static struct {
     char *url;
@@ -197,6 +214,8 @@ static struct {
     char **hbbtv_parti;
     gboolean marire_copiere;
     char *dvb_dosar;
+    int margine_x;
+    int margine_y;
 } opt = {
     .latime = 1280,
     .inaltime = 720,
@@ -243,11 +262,14 @@ static GOptionEntry intrari_optiuni[] = {
     { "hbbtv-js", 0, 0, G_OPTION_ARG_FILENAME, &opt.hbbtv_js, "Scriptul obiectelor HbbTV (implicit /usr/share/hds-navigator/hds-hbbtv.js)", "CALE" },
     { "hbbtv-parte", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt.hbbtv_parti, "O parte a starii HbbTV, JSON in base64 (se poate repeta)", "CHEIE=BASE64" },
     { "marire-la-copiere", 0, 0, G_OPTION_ARG_NONE, &opt.marire_copiere, "Modul HbbTV cu --scara 1.5: pagina desenata la scara 1 (1280x720) si marita de 1,5 ori la copierea pe ecran", NULL },
+    { "margine-x", 0, 0, G_OPTION_ARG_INT, &opt.margine_x, "Marginea din stanga si din dreapta a paginii pe /dev/fb0, in puncte de ecran (nu in modul HbbTV)", "N" },
+    { "margine-y", 0, 0, G_OPTION_ARG_INT, &opt.margine_y, "Marginea de sus si de jos a paginii pe /dev/fb0, in puncte de ecran (nu in modul HbbTV)", "N" },
     { "dvb-dosar", 0, 0, G_OPTION_ARG_FILENAME, &opt.dvb_dosar, "Modul HbbTV: dosarul arborilor de carusel pentru adresele dvb:// (implicit /tmp/hds-carusel)", "CALE" },
     { NULL }
 };
 
 /* ---------------------------------------------------------------- rezerva GPU -> procesor */
+
 
 /* Constantele EGL folosite de proba (EGL 1.4 si EGL_MESA_platform_surfaceless): lansatorul nu cere anteturi
  * EGL la constructie si nu e legat de libEGL, deci porneste si pe receptoare fara nicio biblioteca EGL. */
@@ -334,8 +356,10 @@ static const char *egl_proba(void)
 
 static struct {
     int fd;
-    guint8 *mem;
-    gsize marime;
+    guint8 *mem;      /* cu margini: primul punct din interiorul lor */
+    guint8 *mmap_mem; /* inceputul zonei mapate (pentru munmap) */
+    gsize mmap_marime;
+    gsize marime;     /* de la mem pana la sfarsitul zonei mapate */
     int latime;
     int inaltime;
     int pas;          /* octeti pe rand */
@@ -385,10 +409,22 @@ static gboolean ecran_deschide_fb(const char *cale)
         g_printerr("HDS-NAV EROARE fb-mmap %d\n", errno);
         return FALSE;
     }
+    ecran.mmap_mem = ecran.mem;
+    ecran.mmap_marime = ecran.marime;
     ecran.latime = v.xres;
     ecran.inaltime = v.yres;
     ecran.pas = f.line_length;
     ecran.este_fb = TRUE;
+    /* marginile: ecranul lansatorului devine dreptunghiul din interior (acelasi pas pe rand) */
+    int mx = opt.hbbtv ? 0 : opt.margine_x, my = opt.hbbtv ? 0 : opt.margine_y;
+    if (mx > 0 && my >= 0 && 2 * mx < ecran.latime && 2 * my < ecran.inaltime) {
+        gsize deplasare = (gsize)my * ecran.pas + (gsize)mx * 4;
+        ecran.mem += deplasare;
+        ecran.marime -= deplasare;
+        ecran.latime -= 2 * mx;
+        ecran.inaltime -= 2 * my;
+        stare_f("MARGINI %d %d", mx, my);
+    }
     return TRUE;
 }
 
@@ -781,6 +817,11 @@ static void ecran_redeseneaza_tot(void)
     strat_dupa_cadru(TRUE);
 }
 
+/* Pe procesor (--cpu) cel mult atatea cadre pe secunda: fiecare cadru e pictat si compus de procesor, pe care il cer si
+ * descifrarea in software si decodarea canalului (SF8008). Pe placa grafica raman 60. */
+#define CADRE_PE_PROCESOR 25
+#define PRIORITATE_PE_PROCESOR 10
+
 static gboolean hds_view_cadru_dispatch(GSource *s, GSourceFunc cb, gpointer data)
 {
     if (g_source_get_ready_time(s) == -1)
@@ -824,7 +865,7 @@ static gboolean hds_view_render_buffer(WPEView *v, WPEBuffer *tampon, const WPER
     gint64 acum = g_get_monotonic_time();
     if (!self->ultimul_cadru)
         self->ultimul_cadru = acum;
-    gint64 urmator = self->ultimul_cadru + G_USEC_PER_SEC / 60;
+    gint64 urmator = self->ultimul_cadru + G_USEC_PER_SEC / (opt.cpu && !opt.hbbtv ? CADRE_PE_PROCESOR : 60);
     self->ultimul_cadru = acum;
     g_source_set_ready_time(self->cadru, urmator <= acum ? 0 : urmator);
     return TRUE;
@@ -3041,12 +3082,9 @@ static void tasta_telecomanda(guint cod, int valoare)
         break;
     case KEY_0: keyval = WPE_KEY_0; break;
     case KEY_EXIT:
-        if (valoare == 1) {
-            if (webkit_web_view_can_go_back(vedere))
-                webkit_web_view_go_back(vedere);
-            else
-                stare("TASTA iesire");
-        }
+        /* 0.7.4 (Eduard, 12.11.2026): EXIT inchide navigatorul de pe orice pagina */
+        if (valoare == 1)
+            stare("TASTA iesire");
         return;
     case KEY_POWER:
         if (valoare == 1)
@@ -3061,10 +3099,16 @@ static void tasta_telecomanda(guint cod, int valoare)
         if (valoare == 1)
             indicator_comuta(!ind.activ);
         return;
-    case KEY_BACK:
-    case KEY_PREVIOUS:
-        if (valoare == 1)
-            webkit_web_view_go_back(vedere);
+    case KEY_BACK:      /* Inapoi/RECALL (Octagon SF8008) */
+    case KEY_LAST:      /* BACK pe Uclan Ustym 4K PRO */
+    case KEY_PREVIOUS:  /* „<” pe Viper */
+        /* pagina de dinainte; de pe prima pagina inchide navigatorul, ca EXIT */
+        if (valoare == 1) {
+            if (webkit_web_view_can_go_back(vedere))
+                webkit_web_view_go_back(vedere);
+            else
+                stare("TASTA iesire");
+        }
         return;
     case KEY_NEXT:
         if (valoare == 1)
@@ -4247,8 +4291,14 @@ int main(int argc, char **argv)
      * fara patch se comporta ca --pictura-cpu). */
     if (opt.pictura_cpu || opt.cpu)
         g_setenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1", TRUE);
-    if (opt.cpu)
+    if (opt.cpu) {
         g_setenv("WPE_DISABLE_HARDWARE_ACCELERATION", "1", TRUE);
+        /* un singur fir de pictura si prioritate mai mica, mostenite de procesele WebKit (pornite dupa) */
+        if (!opt.hbbtv)  /* HbbTV: firele si cadrele ca in lotul h4-h6 (raspunsul la taste masurat), numai nice */
+            g_setenv("WEBKIT_SKIA_CPU_PAINTING_THREADS", "1", FALSE);
+        if (setpriority(PRIO_PROCESS, 0, PRIORITATE_PE_PROCESOR) == 0)
+            stare("PRIORITATE 10");
+    }
 
     WPEDisplay *afisaj = WPE_DISPLAY(g_object_new(HDS_TYPE_DISPLAY, NULL));
     if (!wpe_display_connect(afisaj, &eroare)) {
@@ -4424,7 +4474,7 @@ int main(int argc, char **argv)
     if (opt.hbbtv && !reporneste_pe_cpu)
         ecran_goleste();
     if (ecran.este_fb)
-        munmap(ecran.mem, ecran.marime);
+        munmap(ecran.mmap_mem, ecran.mmap_marime);
     else
         g_free(ecran.mem);
     g_free(copie_pagina.mem);

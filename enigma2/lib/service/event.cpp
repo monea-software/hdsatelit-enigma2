@@ -16,10 +16,18 @@
 
 // static members / methods
 std::string eServiceEvent::m_language = "de_DE";
+/* the second guide language (0.7.4, forum 588 #1914, as in OE-Alliance): tried when the event has no text in the first one,
+   before English and before the first language found; empty = none */
+std::string eServiceEvent::m_language_alternative = "";
 
 void eServiceEvent::setEPGLanguage( const std::string language )
 {
 	m_language = language;
+}
+
+void eServiceEvent::setEPGLanguageAlternative( const std::string language )
+{
+	m_language_alternative = language;
 }
 ///////////////////////////
 
@@ -168,6 +176,32 @@ bool eServiceEvent::loadLanguage(Event *evt, std::string lang, int tsidonid)
 	return retval;
 }
 
+/* one language setting: a menu locale ("ro_RO": its ISO 639 codes from ISOtbl, in order) or ISO 639 codes given directly,
+   separated by spaces, commas or slashes ("ron rum", "hun"); the first code with text wins; empty or "---" = none */
+bool eServiceEvent::loadLanguages(Event *evt, const std::string &spec, int tsidonid)
+{
+	if (spec.empty() || spec == "---")
+		return false;
+	if (spec.find('_') != std::string::npos || spec == "C")
+	{
+		for (int i=0; i < MAX_LANG; i++)
+			if (spec==ISOtbl[i][0] && loadLanguage(evt, ISOtbl[i][1], tsidonid))
+				return true;
+		return false;
+	}
+	size_t inceput = 0;
+	while (inceput < spec.size())
+	{
+		size_t sfarsit = spec.find_first_of(" ,/", inceput);
+		if (sfarsit == std::string::npos)
+			sfarsit = spec.size();
+		if (sfarsit - inceput == 3 && loadLanguage(evt, spec.substr(inceput, 3), tsidonid))
+			return true;
+		inceput = sfarsit + 1;
+	}
+	return false;
+}
+
 RESULT eServiceEvent::parseFrom(Event *evt, int tsidonid)
 {
 	uint16_t stime_mjd = evt->getStartTimeMjd();
@@ -182,10 +216,12 @@ RESULT eServiceEvent::parseFrom(Event *evt, int tsidonid)
 	);
 	m_event_id = evt->getEventId();
 	m_duration = fromBCD(duration>>16)*3600+fromBCD(duration>>8)*60+fromBCD(duration);
-	for (int i=0; i < MAX_LANG; i++)
-		if (m_language==ISOtbl[i][0])
-			if (loadLanguage(evt, ISOtbl[i][1], tsidonid))
-				return 0;
+	/* the language is chosen at every lookup from the descriptors kept in the cache: a new choice shows on the guide
+	   already received, without a new scan */
+	if (loadLanguages(evt, m_language, tsidonid))
+		return 0;
+	if (loadLanguages(evt, m_language_alternative, tsidonid))
+		return 0;
 	if (loadLanguage(evt, "eng", tsidonid))
 		return 0;
 	if (loadLanguage(evt, std::string(), tsidonid))
@@ -295,6 +331,11 @@ RESULT eServiceEvent::getLinkageService(eServiceReference &service, eServiceRefe
 void setServiceEventLanguage(const std::string language)
 {
 	eServiceEvent::setEPGLanguage(language);
+}
+
+void setServiceEventLanguageAlternative(const std::string language)
+{
+	eServiceEvent::setEPGLanguageAlternative(language);
 }
 
 DEFINE_REF(eDebugClass);

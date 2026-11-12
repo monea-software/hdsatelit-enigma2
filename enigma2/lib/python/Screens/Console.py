@@ -18,7 +18,19 @@ class Console(Screen):
 			<widget name="text" position="0,0" size="550,400" font="Console;14" />
 		</screen>"""
 		
-	def __init__(self, session, title = "Console", cmdlist = None, finishedCallback = None, closeOnSuccess = False):
+	def __init__(self, session, title = "Console", cmdlist = None, finishedCallback = None, closeOnSuccess = False,
+			cmdList = None, showScripts = True, windowTitle = None, **altele):
+		# HDSatelit: numele din alte imagini (pluginurile scrise pentru ele): cmdList = cmdlist, windowTitle = titlul;
+		# showScripts se tine (la noi comenzile se arata oricum)
+		if altele:
+			print("[Console] argumente necunoscute, ignorate: %s" % ", ".join(sorted(altele)))
+		if cmdList is not None and cmdlist is None:
+			cmdlist = cmdList
+		if windowTitle:
+			title = windowTitle
+		if isinstance(cmdlist, str):
+			cmdlist = [cmdlist]
+		self.showScripts = showScripts
 		Screen.__init__(self, session)
 
 		self.finishedCallback = finishedCallback
@@ -34,6 +46,7 @@ class Console(Screen):
 		}, -1)
 		
 		self.cmdlist = cmdlist
+		self.cmdList = cmdlist  # numele din alte imagini
 		self.newtitle = title
 		
 		self.onShown.append(self.updateTitle)
@@ -92,6 +105,16 @@ class Console(Screen):
 			self.close()
 			self.container.appClosed.remove(self.runFinished)
 			self.container.dataAvail.remove(self.dataAvail)
+
+	# numele din alte imagini ale tastelor (subclasele pluginurilor le cheama)
+	def keyCancel(self):
+		self.cancel()
+
+	def keyPageUp(self):
+		self["text"].pageUp()
+
+	def keyPageDown(self):
+		self["text"].pageDown()
 
 	def dataAvail(self, data):
 		if isinstance(data, bytes):

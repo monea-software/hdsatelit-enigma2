@@ -101,6 +101,74 @@ def runFileCommand(args):
 		print("resolveFilename: %s failed: %s" % (args[0], e))
 		return 127
 
+def _dosarSkin(nume_setare):
+	try:
+		from Components.config import config
+		return os_path.dirname(getattr(getattr(config.skin, nume_setare, None), "value", "") or "")
+	except Exception:
+		return ""
+
+
+def _inaltimeEcran(nr):
+	try:
+		from enigma import getDesktop
+		return getDesktop(nr).size().height()
+	except Exception:
+		return 0
+
+
+def _cautaSuprascriere(scope, base):
+	"""Ordinea standard pentru locurile pe care cautarea noastra nu le avea; "" cand fisierul nu e in niciunul."""
+	config_dir = defaultPaths[SCOPE_CONFIG][0]
+	skin_dir = defaultPaths[SCOPE_SKIN][0]
+	skin = _dosarSkin("primary_skin")
+	if scope == SCOPE_CURRENT_SKIN:
+		locuri = [os_path.join(config_dir, skin)] if skin else []
+		locuri.append(os_path.join(config_dir, "skin_common"))
+		if base.endswith(".xml"):
+			locuri.append(config_dir)
+		inaltime = _inaltimeEcran(0)
+		dupa = [os_path.join(skin_dir, "skin_fallback_%d" % inaltime)] if inaltime else []
+	elif scope == SCOPE_LCDSKIN:
+		afisaj = _dosarSkin("display_skin")
+		locuri = [os_path.join(config_dir, "display", afisaj)] if afisaj else []
+		locuri.append(os_path.join(config_dir, "display", "skin_common"))
+		dupa = []
+	else:
+		afisaj = _dosarSkin("display_skin")
+		locuri = [os_path.join(config_dir, "fonts")]
+		if skin:
+			locuri += [os_path.join(config_dir, skin, "fonts"), os_path.join(config_dir, skin)]
+		locuri += [os_path.join(config_dir, "skin_common", "fonts"), os_path.join(config_dir, "skin_common")]
+		dupa = []
+		if not fileExists(os_path.join(defaultPaths[SCOPE_FONTS][0], base)):
+			# fonturile din dosarul skin-ului numai cand fontul nu e in /usr/share/fonts (cel de azi ramane primul)
+			if skin:
+				dupa += [os_path.join(skin_dir, skin, "fonts"), os_path.join(skin_dir, skin)]
+			dupa += [os_path.join(skin_dir, "skin_default", "fonts"), os_path.join(skin_dir, "skin_default")]
+			if afisaj:
+				dupa += [os_path.join(defaultPaths[SCOPE_LCDSKIN][0], afisaj, "fonts"), os_path.join(defaultPaths[SCOPE_LCDSKIN][0], afisaj)]
+	for dosar in locuri:
+		cale = os_path.join(dosar, base)
+		if os_path.isfile(cale):
+			return cale
+	for dosar in dupa:
+		cale = os_path.join(dosar, base)
+		if os_path.isfile(cale) and not (scope == SCOPE_CURRENT_SKIN and _gasitDeCautareaNoastra(base)):
+			return cale
+	return ""
+
+
+def _gasitDeCautareaNoastra(base):
+	"""La SCOPE_CURRENT_SKIN: fisierul e deja in skin-ul ales, in HDSatelit/ sau skin_default/ (cautarea de azi)."""
+	skin_dir = defaultPaths[SCOPE_SKIN][0]
+	skin = _dosarSkin("primary_skin")
+	for dosar in ([skin] if skin else []) + ["HDSatelit", "skin_default"]:
+		if fileExists(os_path.join(skin_dir, dosar, base)):
+			return True
+	return False
+
+
 def resolveFilename(scope, base = "", path_prefix = None):
 	if scope == SCOPE_LIBDIR:
 		return os_path.join(eEnv.resolve("${libdir}/"), base)
@@ -117,13 +185,24 @@ def resolveFilename(scope, base = "", path_prefix = None):
 				return os_path.join(radacina, parti[0], parti[1], base)
 		return base
 	if base[0:2] == "~/":
-		# you can only use the ~/ if we have a prefix directory
-		assert path_prefix is not None
-		base = os_path.join(path_prefix, base[2:])
+		# „~/” = dosarul dat in path_prefix (skin_path al ecranului). Fara el, ca in celelalte imagini Enigma2: un avertisment in jurnal
+		# si numele ramane cum e (inainte: AssertionError, iar ecranul pluginului cadea).
+		if path_prefix is not None:
+			base = os_path.join(path_prefix, base[2:])
+		else:
+			print("[Directories] resolveFilename: %s fara path_prefix" % base)
 
 	# don't resolve absolute paths
 	if base[0:1] == '/':
 		return base
+
+	# standard (documentatia pentru dezvoltatori, skinning/files): inaintea skin-ului ales se cauta suprascrierile
+	# omului, /etc/enigma2/<dosarul skin-ului>/ si /etc/enigma2/skin_common/ (la .xml si /etc/enigma2/); fonturile se cauta
+	# si in dosarele skin-ului. Numai cand fisierul exista acolo: altfel totul ramane cum era.
+	if base and scope in (SCOPE_CURRENT_SKIN, SCOPE_FONTS, SCOPE_LCDSKIN):
+		gasit = _cautaSuprascriere(scope, base)
+		if gasit:
+			return gasit
 
 	if scope == SCOPE_CURRENT_LCDSKIN:
 		from Components.config import config
@@ -172,6 +251,24 @@ def resolveFilename(scope, base = "", path_prefix = None):
 				path = tmp[0]
 		else:
 			path = tmp[0]
+	elif scope == SCOPE_SKIN_IMAGE:
+		# HDSatelit 0.7.4: temele scrise pentru alte imagini cer imaginile cu calea scurta (buttons/key_red.png) si le
+		# asteapta in dosarul temei sau in skin_default; aici calea scurta sub ${datadir}/enigma2/ nu le gasea si ecranul
+		# cadea (forumul: o tema din afara pe SF8008, „pixmap file /usr/share/enigma2/buttons/... not found”). Locul de
+		# pana acum ramane primul; numai cand fisierul nu e acolo: dosarul temei alese, HDSatelit/, skin_default/.
+		tmp = defaultPaths[scope]
+		path = tmp[0]
+		if not fileExists(path + base):
+			try:
+				from Components.config import config
+				ales = config.skin.primary_skin.value or ""
+			except Exception:
+				ales = ""
+			pos = ales.rfind('/')
+			for dosar in ([ales[:pos + 1]] if pos > 0 else []) + ["HDSatelit/", "skin_default/"]:
+				if fileExists(tmp[0] + dosar + base):
+					path = tmp[0] + dosar
+					break
 	else:
 		tmp = defaultPaths[scope]
 		path = tmp[0]
@@ -488,3 +585,223 @@ def defaultRecordingLocation(candidate=None):
 	if candidate and pathExists(candidate):
 		return candidate
 	return resolveFilename(SCOPE_HDD)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Numele cerute de pluginurile scrise pentru celelalte imagini Enigma2 (OEA4, 11.11.2026). Numai nume noi; ce exista mai sus
+# ramane neschimbat (sanitizeFilename primeste si maxlen=, cum il cheama ele).
+import os as _os
+from os.path import basename, dirname, exists, getsize, isdir, isfile, islink, join, normpath, splitext  # noqa: F401  (numele importate de pluginuri din acest modul)
+from os import sep, stat, remove, rename, link  # noqa: F401
+try:
+	from os import statvfs
+except ImportError:  # Windows (probele de pe PC): nu exista
+	statvfs = None
+
+DEFAULT_MODULE_NAME = __name__.split(".")[-1]
+try:
+	from enigma import eGetEnigmaDebugLvl as _nivelJurnal
+	forceDebug = _nivelJurnal() > 4
+except Exception:
+	forceDebug = False
+
+SCOPE_HOME = SCOPE_USERETC
+SCOPE_KEYMAPS = 23
+SCOPE_HARDWARE = 24
+defaultPaths.setdefault(SCOPE_KEYMAPS, (eEnv.resolve("${datadir}/keymaps/"), PATH_DONTCREATE))
+defaultPaths.setdefault(SCOPE_HARDWARE, (eEnv.resolve("${datadir}/enigma2/hardware/"), PATH_DONTCREATE))
+defaultPaths.setdefault(SCOPE_LIBDIR, (eEnv.resolve("${libdir}/"), PATH_DONTCREATE))
+defaultPaths.setdefault(SCOPE_CURRENT_SKIN, defaultPaths[SCOPE_SKIN])
+defaultPaths.setdefault(SCOPE_CURRENT_PLUGIN, defaultPaths[SCOPE_PLUGINS])
+defaultPaths.setdefault(SCOPE_CURRENT_LCDSKIN, defaultPaths[SCOPE_LCDSKIN])
+defaultPaths.setdefault(SCOPE_PLUGIN_ABSOLUTE, (defaultPaths[SCOPE_PLUGINS][0], PATH_DONTCREATE))
+defaultPaths.setdefault(SCOPE_PLUGIN_RELATIVE, (defaultPaths[SCOPE_PLUGINS][0], PATH_DONTCREATE))
+
+scopeConfig = defaultPaths[SCOPE_CONFIG][0]
+scopeGUISkin = defaultPaths[SCOPE_SKIN][0]
+scopeLCDSkin = defaultPaths[SCOPE_LCDSKIN][0]
+scopeFonts = defaultPaths[SCOPE_FONTS][0]
+scopePlugins = defaultPaths[SCOPE_PLUGINS][0]
+
+pluginBlacklist = set()
+
+
+def InitDefaultPaths():
+	resolveFilename(SCOPE_CONFIG)
+
+
+class ResolveLists:
+	"""Listele de cautare tinute minte la standard; la noi cautarea nu le tine minte, deci raman goale."""
+	skin = []
+	lcdSkin = []
+	fonts = []
+
+
+def clearResolveLists():
+	del ResolveLists.skin[:]
+	del ResolveLists.lcdSkin[:]
+	del ResolveLists.fonts[:]
+
+
+def fileAccess(file, mode="r"):
+	fel = F_OK
+	if "r" in mode:
+		fel |= R_OK
+	if "w" in mode:
+		fel |= W_OK
+	try:
+		return access(file, fel)
+	except (OSError, TypeError):
+		return False
+
+
+def fileContains(file, content, mode="r"):
+	return fileHas(file, content, mode)
+
+
+def fileUpdateLine(filename, conditionValue, replacementValue, create=False, source=DEFAULT_MODULE_NAME, debug=False):
+	"""Rescrie primul rand cu replacementValue cand incepe cu conditionValue (sau, cu create=True, cand fisierul e gol)."""
+	rand = fileReadLine(filename, default="", source=source, debug=debug) or ""
+	if conditionValue and rand.startswith(conditionValue):
+		return fileWriteLine(filename, replacementValue, source=source, debug=debug)
+	if create and not conditionValue:
+		return fileWriteLine(filename, replacementValue, source=source, debug=debug)
+	return 0
+
+
+def copyTree(src, dst, symlinks=False):
+	return copytree(src, dst, symlinks)
+
+
+def renameDir(oldPath, newPath):
+	try:
+		_os.rename(oldPath, newPath)
+		return 1
+	except OSError as e:
+		print("[Directories] renameDir %s -> %s: %s" % (oldPath, newPath, e))
+		return 0
+
+
+def comparePaths(leftPath, rightPath):
+	"""Adevarat cand leftPath e rightPath sau un dosar parinte al lui."""
+	if leftPath.endswith(sep):
+		leftPath = leftPath[:-1]
+	stanga = leftPath.split(sep)
+	dreapta = rightPath.split(sep)
+	if len(stanga) > len(dreapta):
+		return False
+	return all(a == b for a, b in zip(stanga, dreapta))
+
+
+def bestRecordingLocation(candidates):
+	"""Din [(nume, cale), ...]: calea cu cel mai mult loc (locul liber socotit de doua ori); "" cand nu e niciuna."""
+	cale, cel_mai_mare = "", 0
+	if statvfs is None:
+		return cale
+	for candidat in candidates:
+		try:
+			st = statvfs(candidat[1])
+		except OSError as e:
+			print("[Directories] bestRecordingLocation %s: %s" % (candidat[1], e))
+			continue
+		if st.f_bavail:
+			marime = (st.f_blocks + st.f_bavail) * st.f_bsize
+			if marime > cel_mai_mare:
+				cel_mai_mare, cale = marime, candidat[1]
+	return cale
+
+
+def hasHardLinks(path):
+	"""Daca discul de sub path stie legaturi tari (pentru inregistrarile mutate fara copiere)."""
+	import tempfile
+	try:
+		fd, sursa = tempfile.mkstemp(prefix="HardLink_", suffix=".test", dir=path)
+		_os.close(fd)
+	except OSError:
+		return False
+	tinta = splitext(sursa)[0] + ".link"
+	try:
+		link(sursa, tinta)
+		rezultat = True
+	except OSError:
+		rezultat = False
+	for f in (sursa, tinta):
+		try:
+			remove(f)
+		except OSError:
+			pass
+	return rezultat
+
+
+def shellQuote(string):
+	return shellquote(string)
+
+
+def lsof():
+	"""[(pid, program, fisier deschis), ...] pentru toate procesele care se pot citi."""
+	rezultat = []
+	try:
+		procese = listdir("/proc")
+	except OSError:
+		return rezultat
+	for pid in procese:
+		if not pid.isdigit():
+			continue
+		try:
+			program = readlink(join("/proc", pid, "exe"))
+			dosar = join("/proc", pid, "fd")
+			for fd in listdir(dosar):
+				rezultat.append((pid, program, readlink(join(dosar, fd))))
+		except OSError:
+			pass
+	return rezultat
+
+
+def getExtension(file):
+	return splitext(file)[1]
+
+
+def mediaFilesInUse(session):
+	"""Numele fisierelor video deschise acum (fara cel pe care il reda chiar receptorul, cand e deschis o singura data)."""
+	try:
+		from Components.MovieList import KNOWN_EXTENSIONS
+	except Exception:
+		KNOWN_EXTENSIONS = {".ts", ".mkv", ".mp4", ".avi", ".mpg", ".m2ts", ".mov", ".wmv", ".divx", ".flv", ".iso", ".mp3", ".flac", ".ogg", ".wav"}
+	fisiere = [basename(x[2]) for x in lsof() if getExtension(x[2]) in KNOWN_EXTENSIONS]
+	redat = None
+	try:
+		serviciu = session.nav.getCurrentlyPlayingServiceOrGroup()
+		redat = serviciu and serviciu.getPath()
+	except Exception:
+		pass
+	if redat:
+		redat = None if "://" in redat else basename(redat)
+	return set(f for f in fisiere if not (redat and f == redat and fisiere.count(redat) < 2))
+
+
+def readPluginBlacklist():
+	pluginBlacklist.clear()
+	for fisier in (join(scopeConfig, "plugin_blacklist"), "/tmp/plugin_blacklist"):
+		pluginBlacklist.update(x.strip() for x in (fileReadLines(fisier, default=[]) or []) if x.strip())
+	return pluginBlacklist
+
+
+def prettySize(size):
+	"""Marimea cu unitatea (B, KB, MB, GB, TB), cum o arata pluginurile de fisiere."""
+	try:
+		size = float(size)
+	except (TypeError, ValueError):
+		return str(size)
+	for unitate in ("B", "KB", "MB", "GB"):
+		if abs(size) < 1024.0:
+			return "%3.1f %s" % (size, unitate) if unitate != "B" else "%d %s" % (size, unitate)
+		size /= 1024.0
+	return "%3.1f TB" % size
+
+
+_sanitizeFilenameVechi = sanitizeFilename
+
+
+def sanitizeFilename(filename, maximum=255, maxlen=None):
+	"""Un nume de fisier fara semne interzise, cat incape pe disc (maxlen= e numele argumentului la standard)."""
+	return _sanitizeFilenameVechi(filename, maxlen if maxlen is not None else maximum)

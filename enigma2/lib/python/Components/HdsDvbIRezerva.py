@@ -33,6 +33,20 @@
 #     Components/HdsDvbIIncercare, 403/451/401) => mesajul cu tasta spre setarea VPN (Screens/HdsDvbI.HdsDvbIOprit),
 #     cel mult o data la MESAJ_PAUZA_S pe canal; o incercare mai veche de REINCERCARE_S se face din nou la pornire.
 #
+# Variantele aceluiasi canal pe acelasi satelit (Components/HdsVarianteCanal.py: alt transponder, alt SID, SD / HD,
+# criptat / necriptat; in liste se arata numai una): pe acelasi ceas, INAINTEA trecerii pe internet,
+#   - programul de satelit nu merge (verdictul ecranului negru, Components/HdsEcranNegru: fara semnal, frecventa goala,
+#     postul mutat, fara PMT, criptat nedecriptat, fara imagine; radioul si o bara fara urmaritor: fara semnal PRAG_S
+#     secunde) cel putin PRAG_VARIANTA_S secunde => programul trece TACUT pe urmatoarea varianta neincercata, in
+#     ordinea listei (cele de pe acelasi transponder sar cand vina e a transponderului: fara semnal, frecventa goala).
+#     Nicio varianta nu merge: inapoi pe prima, pana la urmatorul zap (de acolo poate porni trecerea pe internet);
+#   - cat urmeaza o varianta, mesajul ecranului negru nu se arata (variantaUrmeaza); varianta care da imagine
+#     PRAG_MERGE_S secunde si cea cazuta se noteaza (HdsVarianteCanal.noteaza), ca lista sa o arate data viitoare pe
+#     cea care merge;
+#   - ca la internet: canalul tinut minte, istoricul si numerele din buchete raman ale omului (playService direct);
+#     OK in lista pe canalul inlocuit nu il porneste din nou (inlocuitDe); rotirea antenei, readucerea si standby-ul
+#     opresc schimbarea; o varianta aleasa de om la MENU ("Alte variante") nu se inlocuieste pana la urmatorul zap.
+#
 # Legatura cu enigma2 sta in Mediu (inlocuit in probele de pe PC); logica e in Paznic.
 from __future__ import absolute_import, unicode_literals
 
@@ -51,6 +65,12 @@ ASTEPTARE_PROBA_S = 8         # cat se asteapta semnalul la o incercare
 MESAJ_PAUZA_S = 30 * 60       # acelasi canal oprit pe tara: mesajul cel mult o data in atat
 REINCERCARE_S = 10 * 60       # la pornirea unui canal DVB-I, o incercare mai veche de atat se face din nou
 STARI_FARA_TRECERE = ("oprit_tara", "adresa_moarta")
+# variantele: verdictele ecranului negru (Components/HdsEcranNegru) dupa care programul trece pe alta varianta
+PRAG_VARIANTA_S = 2           # verdictul tine atatea secunde (cu mesajul ascuns cat urmeaza o varianta)
+PRAG_MERGE_S = 12             # varianta pornita de rezerva fara niciun verdict atatea secunde: notata ca buna
+CODURI_VARIANTA = ("fara_semnal", "frecventa_goala", "post_mutat", "fara_pmt", "criptat", "fara_imagine")
+CODURI_TRANSPONDER = ("fara_semnal", "frecventa_goala")   # vina transponderului: variantele de pe el sar
+TIPURI_RADIO = (2, 10)
 
 
 def N_(text):
@@ -95,6 +115,17 @@ def cheie(ref):
 
 def acelasi(a, b):
 	return bool(a) and bool(b) and cheie(a) == cheie(b)
+
+
+def transponderRef(ref):
+	""""ns:tsid:onid" (hex, fara zerouri) al unei referinte DVB, ca HdsVarianteCanal.Varianta.tpk; "" altfel"""
+	k = cheie(ref)
+	if len(k) < 10:
+		return ""
+	try:
+		return "%x:%x:%x" % (k[6], k[4], k[5])
+	except TypeError:
+		return ""
 
 
 # ------------------------------------------------------------------ legatura cu enigma2
@@ -257,6 +288,44 @@ class Mediu(object):
 		except Exception:
 			return False
 
+	def verdict(self):
+		"""(urmarit, verdict) al ecranului negru pentru programul de acum (Components/HdsEcranNegru, _STARE pus de
+		urmaritorul barii); urmarit False cand urmaritorul lipseste (alt skin, modul lipsa)"""
+		m = sys.modules.get("Components.HdsEcranNegru")
+		try:
+			st = getattr(m, "_STARE", None) if m is not None else None
+			if not st or st.get("legatura") is None:
+				return False, None
+			return True, st.get("verdict")
+		except Exception:
+			return False, None
+
+	def variante(self, ref):
+		"""celelalte variante ale canalului pe acelasi satelit, in ordinea listei: [(referinta, transponder)]"""
+		try:
+			from Components import HdsVarianteCanal as V
+			return [(v.ref, v.tpk) for v in V.alternative(ref)]
+		except Exception as e:
+			print("[HdsDvbIRezerva] variantele: %r" % (e,))
+			return []
+
+	def mesajDinNou(self):
+		"""mesajul ecranului negru se hotaraste din nou (nu mai urmeaza nicio varianta)"""
+		m = sys.modules.get("Components.HdsEcranNegru")
+		try:
+			leg = m._STARE.get("legatura") if m is not None else None
+			if leg is not None:
+				leg.dinNou()
+		except Exception as e:
+			print("[HdsDvbIRezerva] mesajul ecranului negru: %r" % (e,))
+
+	def noteazaVarianta(self, ref, merge):
+		try:
+			from Components import HdsVarianteCanal as V
+			V.noteaza(ref, merge)
+		except Exception as e:
+			print("[HdsDvbIRezerva] nota variantei: %r" % (e,))
+
 	def taraCanalului(self, canal):
 		try:
 			from Components import HdsDvbISetari as S
@@ -363,6 +432,13 @@ class Paznic(object):
 		self.anuntata = None      # ((slot, de_la, la, comanda), prima vedere) a comenzii de motor notate si nepornite
 		self.astept_rotirea = False   # s-a scris in jurnal ca trecerea asteapta oprirea antenei
 		self._setari = (0, None)
+		# variantele (HdsVarianteCanal): sirul de incercari de la zap-ul omului: {"inceput", "incercate" (chei),
+		# "pornit" (programul pornit aici), "pornit_la", "notat"}; programul fara variante pana la urmatorul zap; verdictul
+		# vazut (ref, cod, de cand); varianta aleasa de om la MENU, de pastrat dupa zap-ul ei
+		self.lant = None
+		self.fara_variante = ""
+		self.nu_merge = None
+		self.ales_de_om = ""
 
 	def _noteaza(self, text):
 		print("[HdsDvbIRezerva] %s" % text)
@@ -438,7 +514,14 @@ class Paznic(object):
 			self.fara_de = None
 			self.fara_trecere = ""
 			self.astept_rotirea = False
-		if not ref or ref == self.fara_trecere:
+			self._varianteLaZap(ref, acum)
+		if not ref:
+			return
+		if ref.startswith("1:") and not acelasi(ref, self.fara_variante) and self._bateVariante(acum, ref):
+			# o varianta urmeaza sau tocmai a pornit: trecerea pe internet asteapta
+			self.fara_de = None
+			return
+		if ref == self.fara_trecere:
 			return
 		if ref.startswith("4097:"):
 			self._canalDvbI(acum, ref)
@@ -496,6 +579,129 @@ class Paznic(object):
 		self._noteaza("fara semnal pe %s de %d s: trece pe internet (%s)" % (leg["nume"], PRAG_S, leg["url"]))
 		self.m.porneste(internet)
 		self.m.anunta(_t(T_PE_INTERNET) % leg["nume"])
+
+	# ---- variantele aceluiasi canal pe acelasi satelit
+	def _varianteLaZap(self, ref, acum):
+		l = self.lant
+		if l is not None and l["pornit"] and acelasi(ref, l["pornit"]):
+			l["pornit_la"] = acum   # programul pornit aici de rezerva
+			return
+		# zap-ul omului (sau alt program): sirul de incercari se termina
+		self.lant = None
+		self.nu_merge = None
+		self.fara_variante = ""
+		if self.ales_de_om and acelasi(ref, self.ales_de_om):
+			self.fara_variante = ref   # aleasa de om la MENU: ramane pana la urmatorul zap
+		self.ales_de_om = ""
+
+	def alesDeOm(self, ref):
+		"""varianta aleasa de om la MENU ("Alte variante"): nu se inlocuieste pana la urmatorul zap"""
+		self.ales_de_om = ref
+		if acelasi(self.m.refCurent(), ref):
+			self.urmarit = self.m.refCurent()
+			self.fara_de = None
+			self.fara_trecere = ""
+			self.astept_rotirea = False
+			self.lant = None
+			self.nu_merge = None
+			self.fara_variante = ref
+			self.ales_de_om = ""
+
+	def _candidati(self, ref, cod=None):
+		"""variantele inca neincercate ale programului `ref`, in ordine; cand vina e a transponderului (cod), fara cele
+		de pe acelasi transponder"""
+		if not hasattr(self.m, "variante"):
+			return []   # un mediu fara variante (alte probe, alte module): ca inainte
+		l = self.lant
+		incercate = l["incercate"] if l is not None else ()
+		tp = transponderRef(ref) if cod in CODURI_TRANSPONDER else ""
+		return [(r, tpv) for r, tpv in self.m.variante(ref) if cheie(r) not in incercate and not (tp and tpv == tp)]
+
+	def variantaUrmeaza(self, ref, cod=None):
+		"""True cand programul `ref` mai are o varianta de incercat (mesajul ecranului negru asteapta)"""
+		if not ref or not ref.startswith("1:") or acelasi(ref, self.fara_variante) or self.activa is not None:
+			return False
+		return bool(self._candidati(ref, cod))
+
+	def inlocuitDe(self, ref):
+		"""programul pornit aici in locul canalului `ref` (varianta care merge), sau None"""
+		l = self.lant
+		if l is None or not l["pornit"] or not acelasi(ref, l["inceput"]) or acelasi(ref, l["pornit"]):
+			return None
+		acum = self.m.refCurent()
+		return acum if acelasi(acum, l["pornit"]) else None
+
+	def _codNuMerge(self, acum, ref):
+		"""(cod, urmarit): de ce nu merge programul `ref` acum (verdictul ecranului negru), sau (None, urmarit)"""
+		urmarit, v = self.m.verdict()
+		radio = False
+		try:
+			radio = int(ref.split(":")[2], 16) in TIPURI_RADIO
+		except (IndexError, ValueError):
+			pass
+		if urmarit and not radio:
+			if v is not None and acelasi(v.get("ref"), ref) and v.get("cod") in CODURI_VARIANTA:
+				return v.get("cod"), True
+			return None, True
+		# radioul (fara verdict) si o bara fara urmaritor: numai lipsa semnalului
+		slot, blocat = self.m.semnal()
+		if slot >= 0 and blocat is False:
+			return "fara_semnal", False
+		return None, False
+
+	def _bateVariante(self, acum, ref):
+		"""-> True cand bataia e a variantelor (una urmeaza sau tocmai a pornit)"""
+		if not hasattr(self.m, "variante") or self.m.standby():
+			self.nu_merge = None
+			return False
+		cod, urmarit = self._codNuMerge(acum, ref)
+		l = self.lant
+		if cod is None:
+			self.nu_merge = None
+			if urmarit and l is not None and l["pornit"] and acelasi(ref, l["pornit"]) and not l["notat"] and \
+					acum - l["pornit_la"] >= PRAG_MERGE_S:
+				# varianta pornita aici da imagine: lista o arata de acum pe ea
+				l["notat"] = True
+				self._noteaza("varianta merge: %s" % ref)
+				self.m.noteazaVarianta(ref, True)
+			return False
+		slot = self.m.semnal()[0]
+		if slot >= 0:
+			r = self.m.readucere()
+			if r.get("activa") and r.get("slot") == slot and r.get("in_curs"):
+				self.nu_merge = None
+				return False
+			if self._rotireInCurs(slot, acum):
+				self.nu_merge = None
+				return False
+		alt = self._candidati(ref, cod)
+		if not alt and l is None:
+			return False
+		if self.nu_merge is None or not acelasi(self.nu_merge[0], ref) or self.nu_merge[1] != cod:
+			self.nu_merge = (ref, cod, acum)
+		if acum - self.nu_merge[2] < (PRAG_VARIANTA_S if urmarit else PRAG_S):
+			return bool(alt)
+		if l is None:
+			l = self.lant = {"inceput": ref, "incercate": set(), "pornit": "", "pornit_la": acum, "notat": False}
+		l["incercate"].add(cheie(ref))
+		self.nu_merge = None
+		self.m.noteazaVarianta(ref, False)
+		urm = alt[0][0] if alt else None
+		if urm is None:
+			self.fara_variante = l["inceput"]
+			if acelasi(ref, l["inceput"]):
+				self._noteaza("nicio varianta nu merge pentru %s (%s)" % (ref, cod))
+				# mesajul ecranului negru, ascuns cat urma o varianta, se hotaraste din nou
+				self.m.mesajDinNou()
+				return False
+			self._noteaza("nicio varianta nu merge (%s): inapoi pe %s" % (cod, l["inceput"]))
+			l["pornit"], l["pornit_la"], l["notat"] = l["inceput"], acum, True
+			self.m.porneste(l["inceput"])
+			return True
+		self._noteaza("%s nu merge (%s): trece pe varianta %s" % (ref, cod, urm))
+		l["pornit"], l["pornit_la"], l["notat"] = urm, acum, False
+		self.m.porneste(urm)
+		return True
 
 	def _rotireInCurs(self, slot, acum):
 		"""True cat antena tunerului `slot` e in drum: motorul in mers, sau comanda notata si motorul inca nepornit cel
@@ -694,3 +900,30 @@ def stare():
 		return {"activa": False}
 	a = p.activa
 	return {"activa": True, "nume": a["nume"], "url": a["url"], "slot": a["slot"], "orbital": a["orbital"]}
+
+
+def variantaUrmeaza(ref, cod=None):
+	"""mesajul ecranului negru asteapta: programul mai are o varianta de incercat (Screens/HdsEcranNegru.py)"""
+	p = _PAZNIC[0]
+	try:
+		return p.variantaUrmeaza(ref, cod) if p is not None and cod in CODURI_VARIANTA else False
+	except Exception as e:
+		print("[HdsDvbIRezerva] varianta urmatoare: %r" % (e,))
+		return False
+
+
+def inlocuitDe(ref):
+	"""programul pornit de rezerva in locul canalului `ref` (o varianta a lui), sau None (Screens/ChannelSelection.zap)"""
+	p = _PAZNIC[0]
+	try:
+		return p.inlocuitDe(ref) if p is not None else None
+	except Exception as e:
+		print("[HdsDvbIRezerva] inlocuirea: %r" % (e,))
+		return None
+
+
+def alesDeOm(ref):
+	"""varianta aleasa de om la MENU, pastrata pana la urmatorul zap"""
+	p = _PAZNIC[0]
+	if p is not None:
+		p.alesDeOm(ref)

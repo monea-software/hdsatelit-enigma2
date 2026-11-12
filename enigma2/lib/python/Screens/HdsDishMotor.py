@@ -25,6 +25,16 @@
 # satelitii sunt puncte pe bolta, plecarea
 # (violet) si tinta (aurie) mai mari si cu gradele scrise langa ele, antena lata in centru care se roteste, raza
 # semnalului un con ascutit la satelit si lat la antena. Aceeasi forma are desenul SVG din pagina web /motor.
+#
+# 0.7.4 (forumul, subiectul 795: Vu+ Solo4K, comanda spre motor pleca pe alta mufa a tunerului, motorul nu se misca):
+# panoul automat statea practic tot timpul pe ecran si se desena peste meniuri. Timpii lui de inchidere se socoteau
+# numai de la o oprire, iar cat nucleul spune ca motorul merge nu avea limita; reluarea comenzii (plasa de sosire,
+# Components/HdsMotorPozitie.py, la oprire + 11,5 s) si fiecare zap porneau alta mutare. Acum, numai la panoul automat:
+#   - prima oprire fara semnal se arata cat o tine starea (6 s, 15 s cu indemnul de cablu), apoi panoul nu mai apare
+#     la nicio mutare pana la o sosire cu semnal (_urmeazaFaraSemnal); Rotirea antenei si pagina web arata tot;
+#   - EXIT il ascunde oricand, pana cand motorul sta din nou; zap-ul si motorul nu sunt atinse;
+#   - cat alt ecran e deasupra barei (meniu, lista canalelor, setari) panoul e ascuns (hdsInFata, din InfoBarDish);
+#   - o greseala intr-o bataie nu-l mai lasa inghetat pe ecran: ceasul porneste mereu din nou.
 
 import math
 
@@ -57,6 +67,11 @@ MS_IN_ASTEPTARE = 1000
 MS_IN_ALUNECARE = 200
 # cat timp ramane in banda un mesaj al comenzilor (erorile raman pana la urmatoarea comanda)
 MESAJ_S = 8
+# panoul automat dupa o mutare terminata fara semnal (_urmeazaFaraSemnal): NORMAL = ca pana acum; MESAJ = arata oprirea
+# fara semnal cat o tine starea; LINISTIT = nu se mai arata la nicio mutare, pana la o sosire cu semnal
+NORMAL, MESAJ, LINISTIT = "normal", "mesaj", "linistit"
+# EXIT pe panoul automat: inaintea barei (ShowHideActions 1) si a mesajului de ecran negru (-1), numai cat se vede panoul
+PRIO_IESIRE = -2
 
 # panza (coordonate in interiorul ei, la latimea de asezare 1280). Forma:
 # satelitii sunt puncte pe bolta, de alta culoare decat ea si putin mai groase; plecarea si tinta au fiecare culoarea
@@ -299,8 +314,15 @@ def _fontHds(nume):
 		return nume
 
 
+def _treceMaiDeparte():
+	"""OK pe panoul automat: tasta merge mai departe, la bara (ActionMap.action: 0 = neprinsa)"""
+	return 0
+
+
 class HdsDishMotor(Screen):
 	skinName = ["HdsDishMotor"]
+	# True = panoul pus automat peste program de bara (InfoBarDish); ecranul din meniu (HdsDishMotorEcran) il face False
+	AUTOMAT = True
 
 	SKIN = """
 	<screen name="HdsDishMotor" flags="wfNoBorder" position="center,center" size="900,478" zPosition="100" backgroundColor="#101820" title="Antena se roteste">
@@ -329,7 +351,14 @@ class HdsDishMotor(Screen):
 		self["ramas"] = StaticText("")
 		self["detaliu"] = StaticText("")
 		self["viteza"] = StaticText("")
-		# panoul nu are nicio ActionMap: nu prinde nicio tasta, deci zapul si telecomanda merg exact ca pana acum
+		# panoul automat prinde numai EXIT si numai cat se vede (_hartaIesire, din _arata / _ascunde): zap-ul si
+		# telecomanda merg ca pana acum; OK trece mai departe la bara. Ecranul din meniu are harta lui (actiuni).
+		self._in_fata = True          # bara e ecranul din fata (hdsInFata); fara legatura cu bara ramane adevarat
+		self._inchis_de_om = False    # EXIT: ascuns pana cand motorul sta din nou
+		self._fara_semnal = NORMAL
+		if self.AUTOMAT:
+			self["iesire_panou"] = ActionMap(["InfobarShowHideActions"], {"hide": self._iesireOm,
+				"toggleShow": _treceMaiDeparte}, PRIO_IESIRE)
 
 		# panza primeste din skin marimea deja scalata, deci si desenul se scaleaza cu acelasi factor
 		try:
@@ -383,9 +412,8 @@ class HdsDishMotor(Screen):
 		iar o conditie citita o singura data la pornire ar lasa fara panou pe cine tocmai si-a configurat
 		motorul si a schimbat canalul, pana la urmatoarea repornire. Costul in repaus e o intrebare pe secunda."""
 		self._panouPornit = bool(element.value)
-		if not self._panouPornit and self._vazut:
-			self._vazut = False
-			self.hide()
+		if not self._panouPornit:
+			self._ascunde()
 		self._porneste()
 
 	def _porneste(self):
@@ -395,43 +423,112 @@ class HdsDishMotor(Screen):
 
 	def _laInchidere(self):
 		self._ceas.stop()
+		self._hartaIesire(False)
 		try:
 			config.usage.showdish.notifiers.remove(self._setareSchimbata)
 		except Exception:
 			pass
+
+	# ------------------------------------------------------------------ aratat / ascuns (panoul automat)
+
+	def _arata(self):
+		if not self._vazut:
+			self._vazut = True
+			self._cheie = None
+			self._texte = {}
+			self.show()
+		self._hartaIesire(True)
+
+	def _ascunde(self):
+		"""singurul drum spre ascuns al panoului automat: scoate si harta EXIT, altfel EXIT ar ramane prins de un panou
+		nevazut si n-ar mai ajunge la bara"""
+		if self._vazut:
+			self._vazut = False
+			self.hide()
+		self._hartaIesire(False)
+
+	def _hartaIesire(self, activa):
+		"""EXIT e al panoului numai cat se vede (ActionMap.execBegin / execEnd leaga si dezleaga, fara dubluri)"""
+		harta = self.get("iesire_panou") if self.AUTOMAT else None
+		if harta is None:
+			return
+		if activa:
+			harta.execBegin()
+		else:
+			harta.execEnd()
+
+	def _iesireOm(self):
+		"""EXIT pe panoul automat: panoul se ascunde si nu mai apare pana cand motorul sta din nou (sfarsitul mutarii si al
+		reluarii ei, un zap din mers); zap-ul, motorul si bara nu sunt atinse"""
+		self._inchis_de_om = True
+		self._ascunde()
+
+	def hdsInFata(self, da):
+		"""InfoBarDish: bara canalelor e ecranul din fata (execBegin) sau alt ecran a venit peste ea (execEnd: meniul, lista
+		canalelor, setarile). Panoul are zPosition 150 in skin, deasupra meniurilor: cat alt ecran e in fata sta ascuns,
+		ca sa nu se deseneze peste el. Ascunderea e pe loc, aratarea la bataia urmatoare."""
+		self._in_fata = bool(da)
+		if not self._in_fata:
+			self._ascunde()
+
+	def _urmeazaFaraSemnal(self, stare):
+		"""Motorul care nu raspunde (cablul, comanda pe alta mufa) nu mai tine panoul pe ecran la fiecare mutare:
+		- MESAJ: prima oprire fara semnal se arata cat o tine starea (HdsMotorStare: 6 s, 15 s cu indemnul de cablu);
+		- LINISTIT: din clipa in care starea nu mai e acea oprire (reluarea comenzii de la oprire + 11,5 s, un zap, motorul
+		  in repaus), panoul automat nu se mai arata la nicio mutare;
+		- NORMAL din nou la o oprire cu semnal: sosirea notata de nucleu (hdsRotorArrived = 2) sau programul blocat dupa
+		  oprire. A doua conteaza: pe tunerele care masoara curentul motorului (sec.cpp, oprirea dupa curent) orice
+		  mutare buna se opreste cu semnul 1 si semnalul vine o clipa mai tarziu; la fel cand semnalul vine dupa timpul
+		  maxim. Altfel un motor bun ar fi ramas linistit pana la repornire.
+		Starea se urmeaza si cand panoul nu se vede (alt ecran in fata, EXIT). Rotirea antenei si pagina web arata tot."""
+		oprire_fara_semnal = bool(stare.get("a_ajuns") and stare.get("fara_semnal_la_sosire"))
+		cu_semnal = stare.get("sosire") == "semnal" or bool(stare.get("semnal_stiut") and stare.get("semnal_prins"))
+		if stare.get("a_ajuns") and cu_semnal:
+			self._fara_semnal = NORMAL
+		elif self._fara_semnal == NORMAL and oprire_fara_semnal:
+			self._fara_semnal = MESAJ
+		elif self._fara_semnal == MESAJ and not oprire_fara_semnal:
+			self._fara_semnal = LINISTIT
 
 	# ------------------------------------------------------------------ bataia ceasului
 
 	def _bate(self):
 		if not self._pornit:
 			return
+		urmatoarea = MS_IN_ASTEPTARE
+		try:
+			urmatoarea = self._bataie()
+		except Exception as e:
+			# o greseala aici lasa inainte panoul inghetat pe ecran pentru totdeauna (ceasul nu mai pornea)
+			print("[HdsDishMotor] panoul automat: %r" % (e,))
+			try:
+				self._ascunde()
+			except Exception as e2:
+				print("[HdsDishMotor] panoul automat nu s-a ascuns: %r" % (e2,))
+		self._ceas.start(urmatoarea, True)
+
+	def _bataie(self):
+		"""o bataie a panoului automat; intoarce peste cate milisecunde vine urmatoarea"""
 		if panouAutomatAscuns():
-			# „Rotirea antenei" sau „Gasire semnal" e deschis si arata el miscarea (si citeste starea, deci si invata):
+			# Rotirea antenei sau Gasire semnal e deschis si arata el miscarea (si citeste starea, deci si invata):
 			# panoul automat sta ascuns
-			if self._vazut:
-				self._vazut = False
-				self.hide()
-			self._ceas.start(MS_IN_ASTEPTARE, True)
-			return
+			self._ascunde()
+			return MS_IN_ASTEPTARE
 		stare = stareMotor()
-		if not self._panouPornit:
-			# `showdish` oprit: starea s-a citit numai ca sa se invete viteza; nimic pe ecran
-			self._ceas.start(MS_IN_ASTEPTARE, True)
-			return
-		if stare["activ"]:
-			if not self._vazut:
-				self._vazut = True
-				self._cheie = None
-				self._texte = {}
-				self.show()
-			self._scrie(stare)
-			self._deseneaza(stare)
-			self._ceas.start(MS_IN_ALUNECARE if stare.get("alunecare") else MS_IN_MISCARE, True)
-		else:
-			if self._vazut:
-				self._vazut = False
-				self.hide()
-			self._ceas.start(MS_IN_ASTEPTARE, True)
+		# intai starile (si cu panoul nevazut), abia apoi portile vizibilitatii
+		self._urmeazaFaraSemnal(stare)
+		if not stare["activ"]:
+			# motorul sta: EXIT-ul omului s-a terminat odata cu mutarea
+			self._inchis_de_om = False
+		# `showdish` oprit: starea s-a citit numai ca sa se invete viteza; nimic pe ecran
+		if not (self._panouPornit and stare["activ"] and self._in_fata) or self._inchis_de_om or \
+				self._fara_semnal == LINISTIT:
+			self._ascunde()
+			return MS_IN_ASTEPTARE
+		self._arata()
+		self._scrie(stare)
+		self._deseneaza(stare)
+		return MS_IN_ALUNECARE if stare.get("alunecare") else MS_IN_MISCARE
 
 	# ------------------------------------------------------------------ textele
 
@@ -659,6 +756,8 @@ class HdsDishMotorEcran(HdsDishMotor):
 	web); ecranul doar le cheama si arata ce spun. Tunerul se ia abia la prima comanda (cine deschide ecranul doar ca
 	sa vada rotirea nu isi pierde programul) si se da inapoi la iesire, cu programul pus la loc."""
 	skinName = ["HdsDishMotorEcran", "HdsDishMotor"]
+	# ecranul cerut din meniu: fara harta EXIT a panoului automat (EXIT e cancel din harta actiuni, care il inchide)
+	AUTOMAT = False
 	# POWER pe telecomanda: standby-ul e primit (mytest.py cere ALLOW_SUSPEND), iar standby-ul opreste
 	# motorul, porneste limitele si da tunerul inapoi (revizia m3); fara asta POWER nu facea nimic cat e deschis ecranul
 	ALLOW_SUSPEND = Screen.SUSPEND_STOPS

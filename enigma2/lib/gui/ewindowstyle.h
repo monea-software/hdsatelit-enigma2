@@ -4,6 +4,7 @@
 class eWindow;
 class eSize;
 class gFont;
+struct gRGB;
 
 #include <lib/base/object.h>
 
@@ -48,6 +49,8 @@ public:
 	virtual void setStyle(gPainter &painter, int what) = 0;
 	virtual void drawFrame(gPainter &painter, const eRect &frame, int type) = 0;
 	virtual RESULT getFont(int what, ePtr<gFont> &font) = 0;
+		/* HDSatelit 0.7.4: the colours of the list scroll bars / sliders given by the skin (eWindowStyleSkinned); none here */
+	virtual bool sliderColors(bool scrollbar, gRGB &foreground, gRGB &background, gRGB &border, int &set) { set = 0; return false; }
 #endif
 	virtual ~eWindowStyle() = 0;
 };

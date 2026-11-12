@@ -211,7 +211,8 @@ LogManagerViewLog = HdsLogManagerViewLog
 
 
 class HdsLogManager(Screen):
-    """Lista jurnalelor din CALE_JURNALE; OK deschide jurnalul selectat, Galben sterge, Albastru arata info."""
+    """Lista jurnalelor din CALE_JURNALE; OK deschide jurnalul selectat, Verde porneste sau opreste "Jurnal detaliat"
+    (config.crash.enabledebug, cu intrebarea repornirii interfetei), Galben sterge, Albastru arata info."""
     # HDSatelit: redenumit din `LogManager` -- acelasi motiv ca `HdsLogManagerViewLog` de mai
     # sus, `<screen name="LogManager">` exista deja in skin.xml (widget "list"/"LogsSize", nu "lista"/
     # butoanele proprii) -- fara redenumire, ecranul ar fi luat skinul gresit la fel de tacut.
@@ -229,7 +230,7 @@ class HdsLogManager(Screen):
         Screen.__init__(self, session)
         self.setTitle(_("Manager jurnale"))
         self["key_red"] = Button(_("Înapoi"))
-        self["key_green"] = Button(_("Deschide"))
+        self["key_green"] = Button(self._textVerde())
         self["key_yellow"] = Button(_("Șterge"))
         self["key_blue"] = Button(_("Informații"))
         self["actiuni"] = ActionMap(
@@ -238,7 +239,7 @@ class HdsLogManager(Screen):
                 "cancel": self.close,
                 "red": self.close,
                 "ok": self._deschide,
-                "green": self._deschide,
+                "green": self._detaliat,
                 "yellow": self._sterge,
                 "blue": self._informatii,
             }, -2)
@@ -290,3 +291,27 @@ class HdsLogManager(Screen):
 
     def _informatii(self):
         self.session.open(LogInfo)
+
+    # ---- "Jurnal detaliat" (randul 825 din TODO, P4; perechea web: /jurnale-sistem)
+    @staticmethod
+    def _textVerde():
+        return _("Detaliat: Da") if HdsJurnale.jurnalDetaliat() else _("Detaliat: Nu")
+
+    def _detaliat(self):
+        pornit = HdsJurnale.puneJurnalDetaliat(not HdsJurnale.jurnalDetaliat())
+        self["key_green"].setText(self._textVerde())
+        if pornit == HdsJurnale.detaliatActiv():
+            # interfata de acum scrie deja asa (o schimbare intoarsa): nimic de repornit
+            return
+        if pornit:
+            text = _("Jurnalul detaliat scrie tot ce face interfața, pentru găsirea unei probleme, în %s "
+                "(cel mult 8 MB, cele mai vechi rânduri se taie). Pornește după repornirea interfeței. "
+                "Repornești interfața acum?") % HdsJurnale.CALE_DETALIAT
+        else:
+            text = _("Jurnalul detaliat se oprește după repornirea interfeței. Repornești interfața acum?")
+        self.session.openWithCallback(self._dupaIntrebare, MessageBox, text, MessageBox.TYPE_YESNO, default=True)
+
+    def _dupaIntrebare(self, raspuns):
+        if raspuns:
+            from Screens.Standby import TryQuitMainloop
+            self.session.open(TryQuitMainloop, 3)

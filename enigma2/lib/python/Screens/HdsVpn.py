@@ -3,7 +3,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsVpn.py: ecranul "VPN" (Setari > Retea & Internet > VPN): VPN-ul receptorului prin HMA (HideMyAss) sau alt
-# furnizor OpenVPN, ori prin WireGuard.
+# furnizor OpenVPN, prin WireGuard, IKEv2/IPsec, OpenConnect (Cisco AnyConnect si altele), Shadowsocks sau L2TP/IPsec.
+#
+# "Adauga VPN" (un singur rand): de pe stick (dosarul hdsatelit/vpn, felul recunoscut singur dupa continut) sau datele
+# scrise de mana (felul, serverul, apoi numele, parola, cheia comuna). Dupa adaugare serverul e ales si, daca lipseste
+# ceva, tastatura se deschide singura pentru el. Din telefon (fisier sau text lipit) merge in interfata web.
 #
 # Sus: titlul si starea mare (Conectat, Oprit, Se conecteaza..., Fara legatura cu internetul oprit), cu culoarea ei;
 # dedesubt serverul, ce trece prin VPN si adresa vazuta pe internet (sau motivul unei erori). Apoi randurile, toate cu
@@ -142,6 +146,10 @@ def skinRezerva(latime, inaltime, procent=None):
 
 # actiunile randurilor
 COMUTA = "comuta"
+ADAUGA = "adauga"
+FARA_FISIERE = "fara_fisiere"
+DATE_ACCES = "date_acces"
+CERTIFICAT = "certificat"
 INSTALEAZA = "instaleaza"
 FURNIZOR = "furnizor"
 SERVER = "server"
@@ -156,7 +164,7 @@ STERGE_TOATE = "sterge_toate"
 STERGE_CONT = "sterge_cont"
 INCHIDE = "inchide"
 # randurile care pornesc o lucrare (cat merge alta, OK spune intai sa astepti)
-CU_LUCRARE = (COMUTA, INSTALEAZA, STICK, IP)
+CU_LUCRARE = (COMUTA, INSTALEAZA, STICK, IP, ADAUGA)
 CU_SAGETI = (FURNIZOR, SERVER, MOD, OPRIRE, LA_PORNIRE)
 
 
@@ -174,13 +182,16 @@ def randuri(s):
 	fel = s["fel"]
 	if s["lipsesc"]:
 		r.append((_("Instalează programele VPN"), INSTALEAZA, V.textProgrameLipsa(fel)))
-	elif s.get("wg_indisponibil"):
-		r.append((_("WireGuard: nu este disponibil"), FURNIZOR, _(V.TEXT_WG_INDISPONIBIL)))
+	elif s.get("indisponibil"):
+		r.append(("%s: %s" % (V.textFel(fel), _("nu merge pe acest receptor")), FURNIZOR, s.get("text_indisponibil", "")))
 	if s["pornit"] or s["legatura"] in ("conectat", "se_conecteaza", "blocat"):
 		r.append((_("VPN: pornit"), COMUTA, _("OK oprește VPN-ul. Internetul merge apoi direct, prin rețeaua ta.")))
 	else:
 		r.append((_("VPN: oprit"), COMUTA, _("OK pornește VPN-ul cu serverul ales.")))
 	r.append(("%s: %s" % (_("Furnizorul"), V.textFurnizor(s["furnizor"])), FURNIZOR, V.textCumIeiFisierele(s["furnizor"])))
+	# ecranul furnizorilor fara fisiere (Screens/HdsVpnFurnizor.py): contul si tara, receptorul face restul
+	r.append((_("Alege furnizorul (fără fișiere)"), FARA_FISIERE,
+		_("NordVPN, Surfshark, PIA, Mullvad: scrii contul și alegi țara; receptorul face restul.")))
 	if s["profil"]:
 		r.append(("%s: %s" % (_("Serverul"), s["profil"]["titlu"]), SERVER,
 			_("STÂNGA/DREAPTA: serverul de alături. OK: lista serverelor (%d).") % s["nr_profiluri"]))
@@ -190,8 +201,16 @@ def randuri(s):
 	if fel == "openvpn":
 		r.append(("%s (%s)" % (V.textCont(s["furnizor"]), _("salvate") if s["cont"] else _("lipsesc")), CONT,
 			V.textExplicatieCont(s["furnizor"])))
-	r.append((_("Importă fișierele de pe stick"), STICK,
-		_("De pe stick: dosarul hdsatelit/vpn, cu fișierele .ovpn sau .conf ori cu arhiva .zip a furnizorului.")))
+	elif s["profil"] and s.get("campuri"):
+		lipsa = s.get("campuri_lipsa") or []
+		r.append(("%s (%s)" % (_("Datele de acces"), _("lipsesc") if lipsa else _("salvate")), DATE_ACCES,
+			_("OK: scrii %s. După salvare nu se mai arată nicăieri. Se scriu mai ușor din telefon, în interfața web.")
+			% ", ".join(V.textCamp(c) for c in s["campuri"])))
+	if s.get("pin_propus"):
+		r.append((_("Ai încredere în certificatul serverului?"), CERTIFICAT,
+			_("Serverul are un certificat pe care receptorul nu îl cunoaște. OK, dacă e serverul tău sau al firmei tale.")))
+	r.append((_("Adaugă VPN"), ADAUGA, _("De pe stick (dosarul hdsatelit/vpn: .ovpn, .conf, .sswan, .mobileconfig, "
+		"ss://, .zip) sau datele scrise de mână. Felul se recunoaște singur. Din telefon, în interfața web.")))
 	r.append(("%s: %s" % (_("Ce trece prin VPN"), V.textMod(s["mod"])), MOD, textExplicatieMod(s)))
 	# in modul navigator oprirea totala e mereu (navigatorul n-are alta iesire decat tunelul), deci randul lipseste
 	if s["mod"] != "navigator":
@@ -316,6 +335,11 @@ class HdsVpn(Screen):
 		if ultima and ultima["id"] != self._vazuta:
 			self._vazuta = ultima["id"]
 			self._mesaj(ultima["mesaj"])
+			# dupa Adauga VPN de pe stick: daca serverul ales cere nume, parola sau cheie, tastatura vine singura
+			if ultima["nume"] == V.LUCRARE_STICK and getattr(self, "_asteptCampuri", False):
+				self._asteptCampuri = False
+				if ultima["reusit"] and self._stare and self._stare.get("campuri_lipsa"):
+					self._cereCampuri(list(self._stare["campuri_lipsa"]))
 		elif self._mesajPana and time() > self._mesajPana:
 			self._mesajPana = 0
 			self["mesaj"].setText("")
@@ -347,8 +371,9 @@ class HdsVpn(Screen):
 			return
 		a = r[1]
 		if a == FURNIZOR:
-			i = V.FURNIZORI.index(s["furnizor"])
-			self._schimba(furnizor=V.FURNIZORI[(i + pas) % len(V.FURNIZORI)])
+			lista = s.get("furnizori") or list(V.FURNIZORI)
+			i = lista.index(s["furnizor"]) if s["furnizor"] in lista else 0
+			self._schimba(furnizor=lista[(i + pas) % len(lista)])
 		elif a == SERVER:
 			lista = s["profiluri"]
 			if not lista:
@@ -358,8 +383,9 @@ class HdsVpn(Screen):
 			i = ids.index(s["profil"]["id"]) if (s["profil"] and s["profil"]["id"] in ids) else -1
 			self._schimba(profil=ids[(i + pas) % len(ids)])
 		elif a == MOD:
-			i = V.MODURI.index(s["mod"]) if s["mod"] in V.MODURI else 0
-			self._schimba(mod=V.MODURI[(i + pas) % len(V.MODURI)])
+			moduri = s.get("moduri") or list(V.MODURI)
+			i = moduri.index(s["mod"]) if s["mod"] in moduri else 0
+			self._schimba(mod=moduri[(i + pas) % len(moduri)])
 		elif a == OPRIRE:
 			self._schimba(oprire_totala=not s["oprire_totala"])
 		elif a == LA_PORNIRE:
@@ -393,9 +419,10 @@ class HdsVpn(Screen):
 			self._intreaba(_("Instalezi programele VPN din feedul de extensii HD Satelit? Durează câteva minute."),
 				lambda da: da and self._lucrare(lambda: V.pornesteInstalarea(s["fel"])))
 		elif a == FURNIZOR:
-			lista = [(V.textFurnizor(f), f) for f in V.FURNIZORI]
+			chei = s.get("furnizori") or list(V.FURNIZORI)
+			lista = [(V.textFurnizor(f), f) for f in chei]
 			self.session.openWithCallback(self._furnizorAles, ChoiceBox, title=_("Furnizorul VPN"), list=lista,
-				selection=V.FURNIZORI.index(s["furnizor"]))
+				selection=chei.index(s["furnizor"]) if s["furnizor"] in chei else 0)
 		elif a == SERVER:
 			if not s["profiluri"]:
 				self._mesaj(_("Nu sunt servere pentru acest furnizor. Importă întâi fișierele."))
@@ -408,6 +435,17 @@ class HdsVpn(Screen):
 			self.session.openWithCallback(self._numeScris, VirtualKeyBoard, title=_("Numele contului VPN"), text="")
 		elif a == STICK:
 			self._lucrare(V.pornesteStick)
+		elif a == FARA_FISIERE:
+			from .HdsVpnFurnizor import HdsVpnFurnizor
+			self.session.openWithCallback(lambda *x: self._citeste(), HdsVpnFurnizor, s["furnizor"])
+		elif a == ADAUGA:
+			lista = [(_("De pe stick (dosarul hdsatelit/vpn)"), "stick"), (_("Scriu datele de mână"), "mana")]
+			self.session.openWithCallback(self._adaugaAles, ChoiceBox, title=_("Adaugă VPN"), list=lista)
+		elif a == DATE_ACCES:
+			self._cereCampuri(list(s.get("campuri") or []))
+		elif a == CERTIFICAT:
+			self._intreaba(_("Ai încredere în certificatul serverului? Alege Da numai dacă serverul e al tău sau al "
+				"firmei tale."), self._confirmaCertificat)
 		elif a in (MOD, OPRIRE, LA_PORNIRE):
 			self._sageata(1)
 		elif a == IP:
@@ -418,6 +456,109 @@ class HdsVpn(Screen):
 			self._intreaba(_("Ștergi toate serverele acestui furnizor (%s)?") % s["nr_profiluri"], self._confirmaStergeToate)
 		elif a == STERGE_CONT:
 			self._intreaba(_("Ștergi numele și parola de pe receptor?"), self._confirmaStergeCont)
+
+	# ------------------------------------------------------------------ Adauga VPN
+
+	def _adaugaAles(self, ales):
+		if not ales:
+			return
+		if ales[1] == "stick":
+			self._asteptCampuri = True
+			self._lucrare(V.pornesteStick)
+			return
+		feluri = (self._stare or {}).get("feluri_adauga") or []
+		if not feluri:
+			self._mesaj(_("Pe acest receptor nu merge niciun VPN care se scrie de mână."))
+			return
+		self.session.openWithCallback(self._felAles, ChoiceBox, title=_("Felul VPN-ului"), list=[(t, f) for f, t in feluri])
+
+	def _felAles(self, ales):
+		if not ales:
+			return
+		self._manual = {"fel": ales[1]}
+		titlu = {"openconnect": _("Adresa serverului (de pildă https://vpn.firma.ro)"),
+			"shadowsocks": _("Serverul și portul (de pildă ss.exemplu.ro:8388)")}.get(ales[1],
+			_("Adresa serverului (de pildă vpn.exemplu.ro)"))
+		self.session.openWithCallback(self._serverScris, VirtualKeyBoard, title=titlu, text="")
+
+	def _serverScris(self, text):
+		if text is None or not text.strip():
+			return
+		self._manual["server"] = text.strip()
+		fel = self._manual["fel"]
+		if fel == "openconnect":
+			lista = [("Cisco AnyConnect, ocserv", "anyconnect"), ("GlobalProtect (Palo Alto)", "gp"),
+				("Pulse Secure (Ivanti)", "pulse"), ("Juniper Network Connect", "nc"), ("Fortinet", "fortinet"),
+				("F5 BIG-IP", "f5"), ("Array Networks", "array")]
+			self.session.openWithCallback(self._protocolAles, ChoiceBox, title=_("Felul serverului"), list=lista)
+		elif fel == "shadowsocks":
+			lista = [(m, m) for m in V.METODE_SS]
+			self.session.openWithCallback(self._metodaAleasa, ChoiceBox, title=_("Metoda (cifrul)"), list=lista,
+				selection=V.METODE_SS.index("chacha20-ietf-poly1305"))
+		else:
+			self._adaugaManual()
+
+	def _protocolAles(self, ales):
+		if ales:
+			self._manual["protocol"] = ales[1]
+			self._adaugaManual()
+
+	def _metodaAleasa(self, ales):
+		if ales:
+			self._manual["metoda"] = ales[1]
+			self._adaugaManual()
+
+	def _adaugaManual(self):
+		date = dict(self._manual)
+		self._manual = {}
+		# IKEv2: certificatul CA al furnizorului (daca il da) se ia de pe stick, din dosarul hdsatelit/vpn
+		fisiere = []
+		if date.get("fel") == "ikev2":
+			try:
+				fisiere = [x for x in V.fisiereStick() if x[0].lower().endswith(V.EXT_ALATURI)]
+			except Exception as eroare:
+				print("[HdsVpn] stickul: %r" % (eroare,))
+		try:
+			reusit, mesaj, d = V.adaugaVpn(fisiere, campuri=date)
+		except Exception as eroare:
+			reusit, mesaj, d = False, _("Eroare pe receptor: %s") % eroare, {}
+		self._mesaj(mesaj)
+		self._citeste()
+		if reusit and d.get("lipsesc"):
+			self._cereCampuri(list(d["lipsesc"]))
+
+	def _cereCampuri(self, campuri):
+		"""Tastatura pentru fiecare camp de acces, pe rand; salvarea la urma (nimic pe jumatate)."""
+		self._campuri = [c for c in campuri if c in V.CAMPURI]
+		self._valori = {}
+		self._urmatorulCamp()
+
+	def _urmatorulCamp(self):
+		if not self._campuri:
+			s = self._stare
+			if self._valori and s and s["profil"]:
+				_reusit, mesaj = V.salveazaSecrete(s["profil"]["id"], **self._valori)
+				self._mesaj(mesaj)
+			self._valori = {}
+			self._citeste()
+			return
+		c = self._campuri[0]
+		titlu = {"nume": _("Numele contului VPN"), "parola": _("Parola contului VPN (după salvare nu se mai arată)"),
+			"psk": _("Cheia comună (PSK, după salvare nu se mai arată)")}[c]
+		self.session.openWithCallback(self._campScris, VirtualKeyBoard, title=titlu, text="", hdsSecret=c != "nume")
+
+	def _campScris(self, text):
+		if text is None:
+			self._campuri, self._valori = [], {}
+			return
+		c = self._campuri.pop(0)
+		self._valori[c] = text.strip() if c == "nume" else text
+		self._urmatorulCamp()
+
+	def _confirmaCertificat(self, da):
+		if da:
+			self._mesaj(V.pastreazaCertificatul()[1])
+			self._citeste()
 
 	def _lucrare(self, porneste):
 		if porneste() is None:

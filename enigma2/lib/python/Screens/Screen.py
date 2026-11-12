@@ -23,7 +23,7 @@ class Screen(dict, GUISkin):
 	inchis = True
 	_inchis = True
 
-	def __init__(self, session, parent = None):
+	def __init__(self, session, parent = None, mandatoryWidgets = None, enableHelp = False):
 		dict.__init__(self)
 		self.skinName = self.__class__.__name__
 		self.session = session
@@ -58,6 +58,28 @@ class Screen(dict, GUISkin):
 		# don't care about having or not having focus.
 		self.stand_alone = False
 		self.keyboardMode = None
+
+		# pluginurile scrise pentru alte imagini (managerul de fisiere FileCommander):
+		# mandatoryWidgets = elementele fara de care, acolo, un ecran din skin se respinge si se ia cel scris in cod;
+		# skinurile noastre nu au ecranele acelor pluginuri, deci aici lista doar se pastreaza.
+		# enableHelp=True: tasta HELP deschide ajutorul ecranului (helpList), ca la HelpableScreen; key_help e eticheta
+		# tastei, pe care o arata skinurile lor. Contextul e al nostru, HelpActions (data/keymap.xml).
+		self.mandatoryWidgets = mandatoryWidgets
+		if enableHelp:
+			from Components.ActionMap import ActionMap
+			from Components.Sources.StaticText import StaticText
+			self["helpActions"] = ActionMap(["HelpActions"], {"displayHelp": self.showHelp})
+			self["key_help"] = StaticText(_("HELP"))
+
+	def showHelp(self):
+		"""ajutorul ecranului (randurile puse de HelpableActionMap in helpList), ca HelpableScreen"""
+		from Screens.HelpMenu import HelpMenu
+		self.session.openWithCallback(self.callHelpAction, HelpMenu, self.helpList)
+
+	def callHelpAction(self, *args):
+		if args:
+			(actionmap, context, action) = args
+			actionmap.action(context, action)
 
 	def saveKeyboardMode(self):
 		rcinput = eRCInput.getInstance()
@@ -153,6 +175,12 @@ class Screen(dict, GUISkin):
 	def setFocus(self, o):
 		self.instance.setFocus(o.instance)
 
+	# HDSatelit 0.7.4 (OE-Alliance): animatia ferestrei, ceruta de pluginuri (de obicei setAnimationMode(0) pe ferestrele
+	# lor care apar des): 0x00 oprita, 0x01 la aratare, 0x10 la ascundere, 0x11 amandoua (Components/HdsAnimatiiFerestre.py)
+	def setAnimationMode(self, mode):
+		if self.instance:
+			self.instance.setAnimationMode(mode)
+
 	def show(self):
 		if (self.shown and self.already_shown) or not self.instance:
 			return
@@ -178,6 +206,26 @@ class Screen(dict, GUISkin):
 
 	def __repr__(self):
 		return str(type(self))
+
+	# HDSatelit: semnaturile din alte imagini (pluginurile scrise pentru ele): setTitle(title, showPath) (calea meniului nu se
+	# arata la noi), poza ecranului (setImage/getImage: numele se tine, skin-urile noastre nu au poza ecranului)
+	def setTitle(self, title, showPath=True):
+		GUISkin.setTitle(self, title)
+
+	title = property(lambda self: self.getTitle(), lambda self, titlu: self.setTitle(titlu))
+
+	def setImage(self, image, source=None):
+		self.screenImage = image
+		# temele din alte imagini asaza aici „Image” (poza ecranului); numai sub o tema straina, ascunsa (HdsNumeStandard)
+		try:
+			from Components.HdsNumeStandard import adauga
+			from Components.Pixmap import Pixmap
+			adauga(self, "Image", Pixmap, ascuns=True)
+		except Exception as e:
+			print("[Screen] Image: %r" % (e,))
+
+	def getImage(self):
+		return getattr(self, "screenImage", None)
 
 	def callLater(self, function):
 		"""function() on the next pass of the main loop"""

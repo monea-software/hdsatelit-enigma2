@@ -129,6 +129,34 @@ def _raporteazaAltPython(categorie, nume, exc):
 		print("[PluginComponent] report for %s/%s: %r" % (categorie, nume, e))
 
 
+def _importaPlugin(categorie, nume, path):
+	"""HDSatelit: importul pluginului; unul care cade numai fiindca e scris in Python 2 se traduce in Python 3 o data, apoi se
+	importa din nou (Components/HdsPython2Traducere.py). La fel unul care s-a incarcat, dar are cod de Python 2 in functii (se
+	vede din sursa, o data pe versiunea fisierelor). Exceptia aruncata e a celui de-al doilea import cand pluginul tradus tot
+	cade, ModuleNotFoundError('fissix') cand lipseste traducatorul (Components/HdsModuleLipsa.py il aduce din feed) sau
+	Python2Netradus (mesajul pentru om); altfel exceptia primului import."""
+	modul = ".".join(["Plugins", categorie, nume, "plugin"])
+	try:
+		plugin = my_import(modul)
+	except Exception as exc:
+		try:
+			from Components import HdsPython2Traducere
+		except Exception as e:
+			print("[PluginComponent] traducatorul Python 2:", e)
+			raise exc
+		plugin = HdsPython2Traducere.incearca(categorie, nume, path, exc, lambda: my_import(modul))
+		if plugin is None:
+			raise
+		return plugin
+	# s-a incarcat; codul de Python 2 din functii (cade abia la deschidere) se cauta in sursa o data pe versiunea fisierelor
+	try:
+		from Components import HdsPython2Traducere
+	except Exception as e:
+		print("[PluginComponent] traducatorul Python 2:", e)
+		return plugin
+	return HdsPython2Traducere.dupaImport(categorie, nume, path, plugin, lambda: my_import(modul))
+
+
 def _verificaDescriptor(p):
 	"""ce a intors Plugins(): descriptorul trebuie sa se poata pune in liste (getPlugins le sorteaza dupa weight)"""
 	if not isinstance(p, PluginDescriptor):
@@ -249,6 +277,19 @@ class PluginComponent:
 
 	def readPluginList(self, directory):
 		"""enumerates plugins"""
+		# HDSatelit: the known heavy steps of some plugins (JediMakerXtream, Bouquet Maker Xtream) run on a worker
+		# thread; the hook is in place before any plugin module is imported (Components/HdsFirPluginuri.py)
+		try:
+			from Components import HdsFirPluginuri
+			HdsFirPluginuri.instaleaza()
+		except Exception as exc:
+			print("[PluginComponent] HdsFirPluginuri:", exc)
+		# HDSatelit: bugetul verificarii din sursa a pluginurilor Python 2 pentru aceasta citire (Components/HdsPython2Traducere.py)
+		try:
+			from Components import HdsPython2Traducere
+			HdsPython2Traducere.incepeCitirea()
+		except Exception as exc:
+			print("[PluginComponent] HdsPython2Traducere:", exc)
 		# the first read is the start of the interface, before the first heartbeat
 		semn = None if self.firstRun else _SemnRecitire()
 		try:
@@ -287,7 +328,7 @@ class PluginComponent:
 						if semn is not None:
 							semn.plugin(c, pluginname)
 						try:
-							plugin = my_import('.'.join(["Plugins", c, pluginname, "plugin"]))
+							plugin = _importaPlugin(c, pluginname, path)
 
 							if "Plugins" not in plugin.__dict__:
 								print("Plugin %s doesn't have 'Plugin'-call." % (pluginname))
@@ -324,7 +365,15 @@ class PluginComponent:
 								continue
 							self.warnings.append( (c + "/" + pluginname, str(exc)) )
 							self._puneEroare(c, pluginname, path, etapa, _textEroare(exc), _modulLipsa(exc))
-							_raporteazaIncarcare(c, pluginname, exc, etapa)
+							python2 = getattr(exc, "python2", None)
+							if python2 is not None:
+								# scris in Python 2 si netradus: textul pentru om in lista pluginurilor care nu se deschid
+								self.erori[c + "/" + pluginname]["python2"] = str(exc).split(" (", 1)[0]
+							# raportul spune eroarea pluginului (cea de dinaintea traducerii), nu motivul nostru (netradus, motor lipsa)
+							raport = exc
+							if (python2 is not None or _modulLipsa(exc) == "fissix") and exc.__cause__ is not None:
+								raport = exc.__cause__
+							_raporteazaIncarcare(c, pluginname, raport, etapa)
 							continue
 
 						new_plugins.extend(plugins)
@@ -405,6 +454,9 @@ class PluginComponent:
 			return _("Nu s-a încărcat: %s") % _("Nu are funcția Plugins")
 		if fel == "descriptor":
 			return _("Nu s-a încărcat: %s") % _("Descriere greșită a pluginului")
+		if eroare.get("modul") == "fissix":
+			# motorul traducerii (python3-fissix, adus de HdsModuleLipsa cu harta): textul despre Python 2, nu "Lipsește modulul fissix"
+			return _("Nu s-a încărcat: %s") % _("scris pentru Python 2; traducătorul nu e instalat încă")
 		if eroare.get("modul"):
 			try:
 				from Components import HdsModuleLipsa
@@ -417,6 +469,14 @@ class PluginComponent:
 			m = _ALT_PYTHON.search(eroare["mesaj"] or "")
 			if m:
 				return _("Nu s-a încărcat: %s") % (_("făcut pentru Python %s, imaginea are Python %s") % m.groups())
+		if eroare.get("python2"):
+			return _("Nu s-a încărcat: %s") % eroare["python2"]
+		try:
+			from Components import HdsPython2Traducere
+			if HdsPython2Traducere.eTradus(eroare["path"]):
+				return _("Tradus din Python 2; nu s-a încărcat: %s") % motivOm(eroare["mesaj"])
+		except Exception as exc:
+			print("[PluginComponent] starea traducerii:", exc)
 		return _("Nu s-a încărcat: %s") % motivOm(eroare["mesaj"])
 
 	def indisponibile(self):

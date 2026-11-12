@@ -159,6 +159,22 @@ def scurtat(text, latime, font="HdsCond", marime=28):
 # vedeau numai pana la „…”, intregi doar in textul brut). Ecranele de pe televizor (Screens/Information.py,
 # Screens/HdsHdmiInfo.py) rup un rand prea lung in mai multe randuri ale listei, cu aceleasi masuri ca scurtat(), deci
 # fiecare bucata incape in celula ei si nu mai e scurtata; scurtat() ramane numai pentru titluri si etichete.
+# Numele imaginii, „HD Satelit”, nu se rupe pe doua randuri (in araba randul testerilor din „Despre imagine” se rupea
+# intre „HD” si „Satelit:”): „HD” merge cu cuvantul urmator care incepe cu „Satelit”, ca un singur cuvant; fiecare rand
+# ramane o bucata din text, deci rupt_bucati il gaseste la fel.
+NERUPT = ("HD", "Satelit")
+
+
+def _cuvinte(text):
+	"""Cuvintele lui rupt() (despartite de spatii), cu „HD” lipit de cuvantul urmator care incepe cu „Satelit”."""
+	rez = []
+	for cuvant in text.split(" "):
+		if rez and rez[-1] == NERUPT[0] and cuvant.startswith(NERUPT[1]):
+			rez[-1] += " " + cuvant
+		else:
+			rez.append(cuvant)
+	return rez
+
 
 def rupt(text, latime, font="HdsCond", marime=28, latime_urmare=None):
 	"""Textul pe randuri care incap: primul in `latime` puncte, urmatoarele in `latime_urmare` (implicit tot
@@ -176,7 +192,7 @@ def rupt(text, latime, font="HdsCond", marime=28, latime_urmare=None):
 	rez = []
 	lat = latime
 	rand = ""
-	for cuvant in text.split(" "):
+	for cuvant in _cuvinte(text):
 		incercare = cuvant if not rand else rand + " " + cuvant
 		if L.latime(incercare, familie, m) <= loc(lat):
 			rand = incercare

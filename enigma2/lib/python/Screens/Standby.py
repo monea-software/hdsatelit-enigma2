@@ -22,6 +22,25 @@ def _standbyTv(functie):
 	except Exception as e:
 		print("[Standby] HdsStandbyTv.%s: %r" % (functie, e))
 
+def stergeStandbyDinCoada():
+	"""HDSatelit 0.7.4: scoate din coada notificarilor cererile de standby inca nedeschise (cerute din web, de un
+	temporizator sau de un plugin cat o fereastra era deschisa pe televizor). Chemata la iesirea din standby, pe orice
+	cale, si de web la trezire: altfel o cerere veche porneste standby-ul mult mai tarziu, cand se inchide fereastra
+	(.114, 11.11.2026: un OK dupa 12 minute). Intoarce cate cereri a scos."""
+	try:
+		from Tools import Notifications
+		vechi = [n for n in Notifications.notifications if n[1] is Standby]
+		for n in vechi:
+			if n in Notifications.notifications:
+				Notifications.notifications.remove(n)
+	except Exception as e:
+		print("[Standby] coada notificarilor: %r" % e)
+		return 0
+	if vechi:
+		print("[Standby] %d cereri de standby scoase din coada" % len(vechi))
+	return len(vechi)
+
+
 class Standby(Screen):
 	def Power(self):
 		print("leave standby")
@@ -79,6 +98,8 @@ class Standby(Screen):
 	def __onClose(self):
 		global inStandby
 		inStandby = None
+		# o cerere de standby pusa in coada inainte de standby (o fereastra era deschisa) nu mai porneste dupa trezire
+		stergeStandbyDinCoada()
 		# iesirea HDMI pornita inaintea canalului (pornirile se suprapun), dupa inStandby = None (privirea culorilor
 		# HDMI nu mai vede standby-ul); la orice iesire: tasta, web, temporizator
 		_standbyTv("laIesire")
@@ -129,10 +150,60 @@ inTryQuitMainloop = False
 QUIT_SHUTDOWN = 1
 QUIT_REBOOT = 2
 QUIT_RESTART = 3
+# restul numelor din alte imagini, cu numerele lor: pluginurile se incarca fara eroare. Scriptul nostru de pornire
+# (tools/enigma2.sh.in) face 1 oprire, 2 repornire, 4 actualizarea afisajului din fata; 5 il ia drept cadere;
+# celelalte coduri pornesc interfata din nou (ca 3)
+QUIT_UPGRADE_FP = 4
+QUIT_ERROR_RESTART = 5
+QUIT_DEBUG_RESTART = 6
+QUIT_KODI = 15
+QUIT_MAINT = 16
+QUIT_RETROGAMING = 17
+QUIT_UPGRADE_PROGRAM = 42
+QUIT_IMAGE_RESTORE = 43
+QUIT_UPGRADE_FRONTPANEL = 44
+QUIT_WOLSHUTDOWN = 45
+quitMainloopCode = 1
+TVinStandby = None
+
+# HDSatelit (0.7.4, LinuxSat 164125 #969426): cat ruleaza opkg (o actualizare din meniu sau o extensie se instaleaza),
+# iesirea enigma2 l-ar opri la jumatate: eConsoleAppContainer ii trimite SIGKILL la distrugere (lib/base/console.cpp),
+# status-ul opkg ramane pe versiunea veche, fisierele raman amestecate si interfata nu mai porneste. Atunci TryQuitMainloop
+# nu iese: spune pe televizor ca asteapta, verifica la PAS_INSTALARE_MS si face ce s-a cerut (oprire, repornire) singur,
+# dupa ce opkg a terminat si nu se inregistreaza nimic. OK sau EXIT renunta. Codul 4 (afisajul din fata) nu asteapta.
+# asteaptaInstalarea: o asemenea fereastra e pe ecran (pagina web a actualizarilor o arata).
+PAS_INSTALARE_MS = 2000
+asteaptaInstalarea = False
+
+
+def _instalareInCurs():
+	"""True cat ruleaza opkg sau cat se instaleaza o actualizare (Components/HdsActualizari.instalare_in_curs)"""
+	try:
+		from Components.HdsActualizari import instalare_in_curs
+		return instalare_in_curs()
+	except Exception as e:
+		print("[TryQuitMainloop] instalarea in curs: %r" % (e,))
+		return False
+
+
+def _textInstalare(retvalue):
+	if retvalue == QUIT_SHUTDOWN:
+		return _("Se instalează pachete software. Receptorul se oprește singur după ce se termină instalarea.") + "\n" + \
+			_("OK sau EXIT: renunți.")
+	if retvalue == QUIT_REBOOT:
+		return _("Se instalează pachete software. Receptorul repornește singur după ce se termină instalarea.") + "\n" + \
+			_("OK sau EXIT: renunți.")
+	return _("Se instalează pachete software. Interfața repornește singură după ce se termină instalarea.") + "\n" + \
+		_("OK sau EXIT: renunți.")
+
 
 class TryQuitMainloop(MessageBox):
 	def __init__(self, session, retvalue=1, timeout=-1, default_yes = True):
 		self.retval=retvalue
+		self._ceasInstalare = None
+		if retvalue != 4 and _instalareInCurs():
+			self.__asteaptaInstalarea(session, retvalue)
+			return
 		recordings = session.nav.getRecordings()
 		jobs = len(job_manager.getPendingJobs())
 		self.connected = False
@@ -180,7 +251,48 @@ class TryQuitMainloop(MessageBox):
 		elif event == iRecordableService.evStart:
 			self.stopTimer()
 
+	# HDSatelit: fereastra de asteptare cat ruleaza opkg (vezi PAS_INSTALARE_MS)
+	def __asteaptaInstalarea(self, session, retvalue):
+		global asteaptaInstalarea
+		self.connected = False
+		self._instalareGata = False
+		MessageBox.__init__(self, session, _textInstalare(retvalue), type=MessageBox.TYPE_INFO, timeout=-1)
+		self.skinName = "MessageBox"
+		from enigma import eTimer
+		self._ceasInstalare = eTimer()
+		try:
+			self._legaturaInstalare = self._ceasInstalare.timeout.connect(self.__verificaInstalarea)
+		except AttributeError:
+			self._ceasInstalare.callback.append(self.__verificaInstalarea)
+		self._ceasInstalare.start(PAS_INSTALARE_MS, False)
+		asteaptaInstalarea = True
+		self.onShow.append(self.__onShow)
+		self.onHide.append(self.__onHide)
+		print("[TryQuitMainloop] se instaleaza pachete: codul %s asteapta sfarsitul instalarii" % retvalue)
+
+	def __verificaInstalarea(self):
+		if self._ceasInstalare is None or _instalareInCurs():
+			return
+		try:
+			if self.session.nav.getRecordings():
+				return
+		except Exception:
+			pass
+		print("[TryQuitMainloop] instalarea s-a terminat: codul %s" % self.retval)
+		self._instalareGata = True
+		self.close(True)
+
 	def close(self, value):
+		global asteaptaInstalarea
+		# getattr: o clasa straina facuta din TryQuitMainloop, cu __init__ propriu, nu are campul
+		if getattr(self, "_ceasInstalare", None) is not None:
+			self._ceasInstalare.stop()
+			self._ceasInstalare = None
+			asteaptaInstalarea = False
+			if not self._instalareGata:
+				# OK sau EXIT pe fereastra de asteptare: omul renunta, ca la Nu pe intrebare
+				print("[TryQuitMainloop] asteptarea instalarii oprita de om: codul %s nu se mai face" % self.retval)
+				value = False
 		if self.connected:
 			self.conntected=False
 			self.session.nav.record_event.remove(self.getRecordEvent)
@@ -201,8 +313,10 @@ class TryQuitMainloop(MessageBox):
 			MessageBox.close(self, True)
 
 	def __onShow(self):
-		global inTryQuitMainloop
+		global inTryQuitMainloop, quitMainloopCode
 		inTryQuitMainloop = True
+		# Alte imagini: codul iesirii cerute, citit de pluginuri (Screens.Standby.quitMainloopCode)
+		quitMainloopCode = getattr(self, "retval", quitMainloopCode)
 
 	def __onHide(self):
 		global inTryQuitMainloop

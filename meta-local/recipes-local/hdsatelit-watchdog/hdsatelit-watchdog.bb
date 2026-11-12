@@ -62,7 +62,14 @@ PV = "0.1.0"
 # r13 (06.11.2026, 071): cate un rand la iesirea enigma2 (codul corelat cu parintele si pornirea din /proc), durata si
 # prima bataie; o prima bataie peste 90 s se anunta separat. Fara nicio bataie: numai stive la 180 si 600 s, cel mult
 # doua copii pe proces; nicio hotarare noua de repornire. Fara importuri noi, deci RDEPENDS neschimbat.
-PR = "r13"
+# r14 (11.11.2026, 0.7.4, LinuxSat 164125 #969426): cat ruleaza un proces opkg (actualizarea din meniu sau web,
+# Extensii, SSH, reparatia de la pornire) bataia se socoteste „ocupat” cu motivul actualizare: nivelul 3 nu opreste
+# enigma2, nivelul 5 nu reporneste receptorul, nivelul 2 are pragul lung; cel mult o ora pe proces. O iesire a enigma2
+# in timpul unei instalari din interfata oprea opkg la jumatate (fisiere amestecate, interfata care nu mai porneste).
+# Tot in r14: „memoria pozelor lipseste” citita din vmallocinfo se crede numai dupa doua citiri la rand fara mapare (o
+# citire falsa noaptea, V20, dadea anuntul si putea cere o repornire in standby de prisos). Tot cu r14 ajunge pe receptoare
+# si paznicul care merge fara /dev/watchdog (56a30f81a, ramas pe r13). Fara importuri noi, deci RDEPENDS neschimbat.
+PR = "r14"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

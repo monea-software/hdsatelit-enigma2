@@ -506,7 +506,31 @@ void poligon(const Forma &f, const eRect &r, Pensula &p)
 	}
 }
 
-/* Gradientul ramane legat de forma, nu de dreptunghiul de taiere. */
+/* culoarea degradeului la `poz` puncte de la inceputul formei, pe o lungime `lung` */
+struct CuloareDegrade
+{
+	int r, g, b, opac;
+};
+
+inline CuloareDegrade culoareDegrade(const gDesenNetezit &d, int n, float lung, float poz)
+{
+	float t = lung > 1.0f ? taie(poz / (lung - 1.0f), 0.0f, 1.0f) : 0.0f;
+	t *= n - 1;
+	int i = (int)t;
+	if (i >= n - 1) i = n - 2;
+	t -= i;
+	const gRGB &c0 = d.gradient[i], &c1 = d.gradient[i + 1];
+	CuloareDegrade c;
+	c.r = (int)(c0.r + (c1.r - c0.r) * t + 0.5f);
+	c.g = (int)(c0.g + (c1.g - c0.g) * t + 0.5f);
+	c.b = (int)(c0.b + (c1.b - c0.b) * t + 0.5f);
+	c.opac = 255 - (int)(c0.a + (c1.a - c0.a) * t + 0.5f);
+	return c;
+}
+
+/* Gradientul ramane legat de forma, nu de dreptunghiul de taiere. Culoarea lui depinde numai de rand (vertical) sau
+   numai de coloana (orizontal), deci se socoteste o data pe rand, respectiv o data pe coloana, nu la fiecare pixel
+   (un fundal de 1920x1080 in degrade). Colturile alese (d.colturi): un colt neales are raza 0 in sfertul lui. */
 void dreptunghi(const Forma &f, const eRect &r, Pensula &p, const gDesenNetezit &d)
 {
 	int x0, y0, x1, y1;
@@ -516,35 +540,80 @@ void dreptunghi(const Forma &f, const eRect &r, Pensula &p, const gDesenNetezit 
 	float cx = f.x0 + hx, cy = f.y0 + hy;
 	int n = d.gradient.size();
 	bool gradient = n == 2 || n == 3;
+	bool toate = (d.colturi & 15) == 15;
+	std::vector<CuloareDegrade> coloane;
+	if (gradient && !d.gradient_vertical)
+	{
+		coloane.resize(x1 - x0);
+		for (int x = x0; x < x1; ++x)
+			coloane[x - x0] = culoareDegrade(d, n, f.x1 - f.x0, x - f.x0);
+	}
 	for (int y = y0; y < y1; ++y)
+	{
+		if (gradient && d.gradient_vertical)
+		{
+			CuloareDegrade c = culoareDegrade(d, n, f.y1 - f.y0, y - f.y0);
+			p.r = c.r; p.g = c.g; p.b = c.b; p.opac = c.opac;
+		}
+		/* Pixelii plini ai randului, [i0, i1): centrul la cel putin o jumatate de punct inauntru si in afara benzii
+		   colturilor rotunjite, deci acoperirea e 1 si se pun direct (ca p.pune(x, y, 1)), fara distanta socotita.
+		   Raza plina e o margine sigura si cand unele colturi sunt drepte. */
+		int i0 = x1, i1 = x1;
+		float py = fabsf(y + 0.5f - cy);
+		if (py <= hy - 0.5f)
+		{
+			float w = py <= hy - f.raza ? hx - 0.5f : fminf(hx - f.raza, hx - 0.5f);
+			if (w >= 0.0f)
+			{
+				float a0 = ceilf(cx - w - 0.5f), a1 = floorf(cx + w - 0.5f) + 1.0f;
+				i0 = a0 < (float)x0 ? x0 : (a0 > (float)x1 ? x1 : (int)a0);
+				i1 = a1 < (float)i0 ? i0 : (a1 > (float)x1 ? x1 : (int)a1);
+			}
+		}
+		if (i0 < i1)
+		{
+			uint32_t *rand = (uint32_t *)((uint8_t *)p.pixeli + (size_t)y * p.pas);
+			if (gradient && !d.gradient_vertical)
+				for (int x = i0; x < i1; ++x)
+				{
+					const CuloareDegrade &c = coloane[x - x0];
+					amesteca(rand + x, c.r, c.g, c.b, c.opac);
+				}
+			else
+				for (int x = i0; x < i1; ++x)
+					amesteca(rand + x, p.r, p.g, p.b, p.opac);
+		}
 		for (int x = x0; x < x1; ++x)
 		{
-			float qx = fabsf(x + 0.5f - cx) - hx + f.raza;
-			float qy = fabsf(y + 0.5f - cy) - hy + f.raza;
+			if (x == i0 && i0 < i1)
+			{
+				x = i1 - 1;
+				continue;
+			}
+			float raza = f.raza;
+			if (!toate)
+			{
+				int colt = y + 0.5f < cy ? (x + 0.5f < cx ? 1 : 2) : (x + 0.5f < cx ? 4 : 8);
+				if (!(d.colturi & colt))
+					raza = 0.0f;
+			}
+			float qx = fabsf(x + 0.5f - cx) - hx + raza;
+			float qy = fabsf(y + 0.5f - cy) - hy + raza;
 			float ax = fmaxf(qx, 0.0f), ay = fmaxf(qy, 0.0f);
-			float dist = fminf(fmaxf(qx, qy), 0.0f) - f.raza;
+			float dist = fminf(fmaxf(qx, qy), 0.0f) - raza;
 			if (ax > 0.0f || ay > 0.0f)
 				dist += sqrtf(ax * ax + ay * ay);
 			float a = acoperire(dist);
 			if (a <= 0.0f)
 				continue;
-			if (gradient)
+			if (gradient && !d.gradient_vertical)
 			{
-				float lung = d.gradient_vertical ? f.y1 - f.y0 : f.x1 - f.x0;
-				float poz = d.gradient_vertical ? y - f.y0 : x - f.x0;
-				float t = lung > 1.0f ? taie(poz / (lung - 1.0f), 0.0f, 1.0f) : 0.0f;
-				t *= n - 1;
-				int i = (int)t;
-				if (i >= n - 1) i = n - 2;
-				t -= i;
-				const gRGB &c0 = d.gradient[i], &c1 = d.gradient[i + 1];
-				p.r = (int)(c0.r + (c1.r - c0.r) * t + 0.5f);
-				p.g = (int)(c0.g + (c1.g - c0.g) * t + 0.5f);
-				p.b = (int)(c0.b + (c1.b - c0.b) * t + 0.5f);
-				p.opac = 255 - (int)(c0.a + (c1.a - c0.a) * t + 0.5f);
+				const CuloareDegrade &c = coloane[x - x0];
+				p.r = c.r; p.g = c.g; p.b = c.b; p.opac = c.opac;
 			}
 			p.pune(x, y, a);
 		}
+	}
 }
 
 } /* namespace */

@@ -63,7 +63,22 @@ class LanguageSelection(Screen):
 	def save(self):
 		cod = self["languages"].getCurrent()[0]
 		if cod not in language.lang:
+			from Components.Language import limbiPeStick
 			from Screens.MessageBox import MessageBox
+			if not limbiPeStick():
+				# limba din feed (imaginea mica): se salveaza ca oricare, meniurile raman in engleza pana vine, iar
+				# receptorul o descarca si o instaleaza singur, fara intrebare (Components/HdsLimbaRestaurare.py)
+				self.run()
+				from Components import HdsLimbaRestaurare
+				try:
+					HdsLimbaRestaurare.cereAcum(self.session, spus=True)
+				except Exception as e:
+					print("[LanguageSelection] descarcarea limbii: %r" % (e,))
+				date = language.toate.get(cod)
+				nume = (date and _cached("%s_%s" % date[1:3])) or (date[0] if date else cod)
+				self.session.openWithCallback(lambda *args: self.close(), MessageBox,
+					HdsLimbaRestaurare.textSeDescarca(nume), type=MessageBox.TYPE_INFO, timeout=10)
+				return
 			def raspuns(da):
 				if da:
 					from Screens.HdsParteaDoua import HdsParteaDoua
@@ -118,9 +133,11 @@ class LanguageSelection(Screen):
 		if not languageList: # no language available => display only english
 			list = [ LanguageEntryComponent("en", _cached("en_EN"), "en_EN") ]
 		else:
+			from Components.Language import etichetaFaraCatalog
+			eticheta = etichetaFaraCatalog()
 			list = [LanguageEntryComponent(file=x[1][2].lower(),
 				name=(_cached("%s_%s" % x[1][1:3]) or x[1][0]) +
-				(" " + _("(pe stick)") if x[0] not in language.lang else ""), index=x[0]) for x in languageList]
+				(" " + eticheta if x[0] not in language.lang else ""), index=x[0]) for x in languageList]
 		self.list = list
 
 		#list.sort(key=lambda x: x[1][7])

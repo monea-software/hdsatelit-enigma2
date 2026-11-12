@@ -153,6 +153,15 @@ Mecanism (cinci nivele, independente unul de altul):
        - hotararea e o functie fara efecte (hotarare_servicii), testata in teste/test_gasite_0607.py (clasa
          Servicii), impreuna cu limita de timp a unei treceri.
 
+  Cat ruleaza opkg (r14, versiunea 0.7.4): orice proces cu numele opkg (actualizarea din meniu sau din web,
+     Extensii, SSH, reparatia actualizarii de la pornire) face bataia „ocupat” cu motivul „actualizare” (opkg_in_lucru,
+     bataie_cu_opkg): nivelul 3 nu opreste enigma2, nivelul 5 nu reporneste receptorul, nivelul 2 are pragul lung.
+     O iesire a enigma2 in timpul unei instalari din interfata opreste opkg la jumatate (fisiere amestecate, status
+     vechi, interfata care nu mai porneste: SF8008 cu radacina pe stick, 10.11.2026). Cel mult OPKG_MAX_S pe proces.
+     Tot in r14, anuntul memoriei pozelor: lipsa citita din vmallocinfo se crede numai dupa ES_CITIRI_LIPSA citiri la
+     rand fara mapare (numara_citiri_zero); o singura citire falsa, noaptea, nu mai da anuntul. Testat in
+     teste/test_paznic_opkg_074.py.
+
 Testat izolat pe receptorul de test, 21.09.2026 -- vezi STADIU-PROIECT-IMAGINE.md pentru
 dovada (toate cele trei ramuri: pastreaza receptorul pornit cand enigma2 e sanatos; chiar reporneste dur
 cand un proces tinta e absent/blocat cu fire D, fortat prin variabile de mediu de test; chiar trimite
@@ -222,6 +231,22 @@ _placa_secunde = 0           # timpul watchdog-ului hardware raportat de driver 
 _fara_bataie_anuntat = None  # pid-ul pentru care s-a scris deja „fara bataie” in jurnal
 _web_raspunde_anuntat = None # pid-ul pentru care s-a scris deja „bataia oprita, web-ul raspunde”
 _ocupat_anuntat = None       # (pid, motiv) pentru care s-a scris deja „astept, e ocupat”
+
+# ---- r14 (0.7.4): cat ruleaza opkg nu se reporneste nimic (LinuxSat 164125 #969426, SF8008 cu radacina pe stick) ----
+# opkg pornit din interfata (actualizarea, Extensii, modulele lipsa) e copilul enigma2: la iesirea enigma2 primeste
+# SIGKILL (~eConsoleAppContainer, lib/base/console.cpp), iar dupa un SIGKILL al enigma2 moare la urmatorul rand scris
+# (SIGPIPE). Dezarhivarea ramane la jumatate, status-ul opkg (scris numai la iesire) ramane pe versiunea veche si
+# interfata nu mai porneste. Cat exista un proces opkg (de oriunde: meniul, web, SSH, reparatia de la pornire), bataia
+# se socoteste „ocupat” cu motivul OPKG_MOTIV: nivelul 3 nu trimite SIGTERM, nivelul 5 nu reporneste receptorul, iar
+# nivelul 2 are pragul lung (~5 min); un blocaj adevarat de nucleu tot se prinde si watchdogul HW ramane. Procesul se
+# cauta dupa nume (/proc/PID/comm, gaseste_opkg), nu dupa lacatul lui opkg: o proba de lacat l-ar putea lua chiar cand
+# porneste un opkg, care ar cadea atunci cu „Could not lock”. Cel mult OPKG_MAX_S pe proces: un opkg agatat (un
+# postinst care nu mai iese) nu tine paznicul departe pe veci.
+OPKG_NUME = os.environ.get("HDS_WATCHDOG_OPKG", "opkg")
+OPKG_MOTIV = "actualizare"   # acelasi motiv ca MOTIV_ACTUALIZARE din Components/HdsPaznic.py (textul lui pe ecran si web)
+OPKG_MAX_S = 3600
+OPKG_OCUPAT_S = 2 * PET_INTERVAL_S   # termenul pus in bataie; se reinnoieste la fiecare verificare cat opkg ruleaza
+_opkg_vazut = {}             # pid -> [ceasul monoton la care s-a vazut prima oara, termenul depasit deja anuntat]
 
 # ---- jurnalele de cadere ale enigma2: aceeasi cale ca in main/bsod.cpp (CRASH_LOG_DIR) ----
 CRASH_LOG_DIR = os.environ.get("HDS_WATCHDOG_CRASH_DIR", "/home/root/logs")
@@ -304,6 +329,13 @@ _es_mapari = None           # maparile de ES_MARIME la ultima citire, sau None (
 _es_anuntat = None           # (fel, cheie) scris ultima data in jurnal
 _es_tv_de = None             # de cand (ceas monoton) bataia enigma2 spune redare=tv sau radio fara intrerupere, sau None
 _es_imagine = False          # canalul merge de cel putin ES_PORNIRE_S (la ultima citire a lui vmallocinfo)
+# r14 (TODO 03.11, jurnal:254, V20): noaptea paznicul scria „memoria pozelor LIPSESTE” si dupa un minut „din nou mapata”,
+# cu acelasi demon: o singura citire a lui vmallocinfo fara mapare, urmata de una buna. Lipsa citita din vmallocinfo se
+# crede acum numai dupa ES_CITIRI_LIPSA citiri la rand fara mapare, la cel putin ES_VERIFICARE_S una de alta, cu acelasi
+# demon si cu un canal pornit; pana atunci starea e „nesigur” (fara rand pe ecran, fara socoteala la repornirea in
+# standby). Esecul maparii din jurnalul nucleului ramane crezut pe loc.
+ES_CITIRI_LIPSA = 2
+_es_zero = None              # (pid-ul demonului, citiri la rand fara mapare, ceasul ultimei citiri numarate) sau None
 
 # ---- nivelul 4, paza rutei hds-netguard (24.09.2026) ----
 NETGUARD_IP = "117.78.33.205"
@@ -574,6 +606,55 @@ def ocupat_valabil(bataie, acum):
     if pana <= acum or pana - bataie["bataie"] > OCUPAT_MAX_S:
         return [], 0
     return bataie["ocupat"], pana - acum
+
+
+def gaseste_opkg(proc=None):
+    """Pid-urile proceselor vii cu numele OPKG_NUME (PROC_DIR/PID/comm, fara zombie: _procese_cu_numele), fara pidof si
+    fara lacatul lui opkg. Separat de find_target_pids (care cauta enigma2), ca o cautare sa nu se ia drept cealalta."""
+    return _procese_cu_numele(OPKG_NUME, proc)
+
+
+def opkg_in_lucru(acum, pids=None):
+    """Pid-urile proceselor opkg care tin paznicul departe acum (fiecare cel mult OPKG_MAX_S de cand a fost vazut prima
+    oara), cu un rand in jurnal la inceput, la sfarsit si o data la termenul depasit. acum = ceas monoton."""
+    global _opkg_vazut
+    if pids is None:
+        pids = gaseste_opkg()
+    vazut = {}
+    pazite = []
+    for pid in pids:
+        intrare = _opkg_vazut.get(pid)
+        if intrare is None:
+            intrare = [acum, False]
+            log("opkg pid=%d ruleaza: pana termina, interfata si receptorul nu se repornesc (nivelul 2 cu pragul lung)"
+                % pid)
+        vazut[pid] = intrare
+        if acum - intrare[0] < OPKG_MAX_S:
+            pazite.append(pid)
+        elif not intrare[1]:
+            intrare[1] = True
+            log("opkg pid=%d ruleaza de peste %d s: paznicul nu mai asteapta dupa el" % (pid, OPKG_MAX_S))
+    for pid, intrare in _opkg_vazut.items():
+        if pid not in vazut:
+            log("opkg pid=%d a terminat dupa %d s" % (pid, int(acum - intrare[0])))
+    _opkg_vazut = vazut
+    return pazite
+
+
+def bataie_cu_opkg(bataie, acum):
+    """Copia bataii cu OPKG_MOTIV in semnul „ocupat” si termenul cel putin acum + OPKG_OCUPAT_S: nivelurile 3 si 5 il
+    vad ca pe orice lucru lung al enigma2. Fara bataie intoarce None: fara bataia procesului de acum nivelurile 3 si 5
+    nu fac nimic oricum. Un semn al enigma2 care nu se mai crede (ocupat_valabil) nu se pastreaza."""
+    if bataie is None:
+        return None
+    b = dict(bataie)
+    motive, _ramas = ocupat_valabil(bataie, acum)
+    pana = acum + OPKG_OCUPAT_S
+    if motive:
+        pana = max(pana, bataie["ocupat_pana"])
+    b["ocupat"] = ([OPKG_MOTIV] + [m for m in motive if m != OPKG_MOTIV])[:5]
+    b["ocupat_pana"] = pana
+    return b
 
 
 def hotarare_blocaj_moale(acum, pid_enigma2, bataie, interfata_pornita, asteptare_s, web_activ, sonda_web):
@@ -1892,18 +1973,33 @@ def pornire_demon_es():
         return None
 
 
-def hotarare_memorie_es(acum, demon, mapari, esec_la, imagine=True):
+def numara_citiri_zero(inainte, acum, demon, mapari, imagine):
+    """Numaratoarea citirilor la rand fara mapare, dupa o citire noua a lui vmallocinfo (r14): (pid, n, ceasul citirii
+    numarate) sau None. Creste cu o citire fara mapare a aceluiasi demon, cu un canal pornit si demonul pornit de cel
+    putin ES_PORNIRE_S, la cel putin ES_VERIFICARE_S de citirea numarata inainte (o citire pe loc, mai devreme, nu
+    schimba nimic); o mapare gasita, alt demon, vmallocinfo necitit sau niciun canal o sterg."""
+    if demon is None or mapari != 0 or not imagine or acum - demon[1] < ES_PORNIRE_S:
+        return None
+    if inainte is None or inainte[0] != demon[0]:
+        return (demon[0], 1, acum)
+    if acum - inainte[2] >= ES_VERIFICARE_S:
+        return (demon[0], inainte[1] + 1, acum)
+    return inainte
+
+
+def hotarare_memorie_es(acum, demon, mapari, esec_la, imagine=True, citiri_zero=ES_CITIRI_LIPSA):
     """Hotararea anuntului, fara efecte (testata in teste/test_cadere_radio_2.py si test_memorie_0509.py). acum: ceas
     monoton (secunde de la pornirea receptorului); demon: pornire_demon_es(); mapari: citeste_mapari_es(); esec_la:
     esec_memorie_es(); imagine: un canal TV sau radio ruleaza de cel putin ES_PORNIRE_S (bataia enigma2, redare=tv
-    sau radio).
+    sau radio); citiri_zero: citirile la rand fara mapare (numara_citiri_zero; r14, teste/test_paznic_opkg_074.py).
     Intoarce (fel, detaliu), fel fiind:
       lipsa    demonul de acum nu are memoria: esecul maparii din jurnal dupa pornirea lui, sau nicio mapare de
-               ES_MARIME in vmallocinfo la cel putin ES_PORNIRE_S de la pornirea lui cu un canal pornit; poza radio
-               si filmele nu merg pana la repornirea receptorului
+               ES_MARIME in vmallocinfo, de ES_CITIRI_LIPSA ori la rand, la cel putin ES_PORNIRE_S de la pornirea lui
+               cu un canal pornit; poza radio si filmele nu merg pana la repornirea receptorului
       ok       demonul de acum are memoria
-      nesigur  demonul nu ruleaza, abia a pornit, vmallocinfo nu se poate citi, sau niciun canal inca (standby,
-               nimic: demonul isi face maparea abia cand enigma2 foloseste decodorul): nu se spune nimic"""
+      nesigur  demonul nu ruleaza, abia a pornit, vmallocinfo nu se poate citi, niciun canal inca (standby, nimic:
+               demonul isi face maparea abia cand enigma2 foloseste decodorul) sau o singura citire fara mapare (se
+               mai citeste o data): nu se spune nimic"""
     if demon is None:
         return "nesigur", "demonul platformei (%s) nu ruleaza sau nu se poate citi" % ES_DEMON
     pid, pornit_la = demon
@@ -1918,7 +2014,11 @@ def hotarare_memorie_es(acum, demon, mapari, esec_la, imagine=True):
         return "nesigur", "%s pid=%d a pornit acum %ds, maparea inca lipseste" % (ES_DEMON, pid, max(0, int(acum - pornit_la)))
     if not imagine:
         return "nesigur", "%s pid=%d fara mapare, dar niciun canal inca (o face la primul canal)" % (ES_DEMON, pid)
-    return "lipsa", "%s pid=%d nu are maparea de %d o in %s" % (ES_DEMON, pid, ES_MARIME, VMALLOCINFO_PATH)
+    if citiri_zero < ES_CITIRI_LIPSA:
+        return "nesigur", ("%s pid=%d fara mapare la %d citire din %d la rand; mai citesc o data"
+                           % (ES_DEMON, pid, max(1, citiri_zero), ES_CITIRI_LIPSA))
+    return "lipsa", ("%s pid=%d nu are maparea de %d o in %s (%d citiri la rand)"
+                     % (ES_DEMON, pid, ES_MARIME, VMALLOCINFO_PATH, citiri_zero))
 
 
 def pas_memorie_es(acum, canal=True):
@@ -1927,7 +2027,7 @@ def pas_memorie_es(acum, canal=True):
     ES_PORNIRE_S (sau s-a oprit), hotararea, o linie in jurnalul paznicului cand memoria incepe sa lipseasca (o data pe
     demon) si cand revine. Nu reporneste nimic. canal: bataia enigma2 de acum spune redare=tv sau radio.
     Intoarce (fel, detaliu, cheie); cheie = pid-ul demonului fara memorie, altfel „”."""
-    global _es_esec_vazut, _es_urmatoarea, _es_demon, _es_mapari, _es_anuntat, _es_tv_de, _es_imagine
+    global _es_esec_vazut, _es_urmatoarea, _es_demon, _es_mapari, _es_anuntat, _es_tv_de, _es_imagine, _es_zero
     esec_la = esec_memorie_es(_es_grupuri)
     if canal:
         if _es_tv_de is None or acum < _es_tv_de:
@@ -1941,7 +2041,8 @@ def pas_memorie_es(acum, canal=True):
         _es_demon = pornire_demon_es()
         _es_mapari = citeste_mapari_es() if _es_demon is not None else None
         _es_urmatoarea = acum + ES_VERIFICARE_S
-    fel, detaliu = hotarare_memorie_es(acum, _es_demon, _es_mapari, esec_la, imagine)
+        _es_zero = numara_citiri_zero(_es_zero, acum, _es_demon, _es_mapari, imagine)
+    fel, detaliu = hotarare_memorie_es(acum, _es_demon, _es_mapari, esec_la, imagine, _es_zero[1] if _es_zero else 0)
     cheie = str(_es_demon[0]) if (fel == "lipsa" and _es_demon is not None) else ""
     if fel == "lipsa" and _es_anuntat != ("lipsa", cheie):
         log("memoria pozelor si a filmelor LIPSESTE (demonul platformei nu si-a putut mapa memoria la pornire): %s; "
@@ -2217,11 +2318,19 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
     pids = find_target_pids(TARGET_PROCESS)
     pid_enigma2 = min(pids) if pids else None
     bataie = citeste_bataie()
+    # r14: cat ruleaza opkg, bataia poarta motivul OPKG_MOTIV (nivelurile 3 si 5 asteapta, nivelul 2 pragul lung)
+    try:
+        opkg = opkg_in_lucru(acum)
+    except Exception as e:
+        opkg = []
+        log("eroare la cautarea lui opkg: %r" % (e,))
+    if opkg:
+        bataie = bataie_cu_opkg(bataie, acum)
     proprie = bataie if (bataie is not None and bataie["pid"] == pid_enigma2) else None
     motive, _ramas = ocupat_valabil(proprie, acum)
     # programul de noapte al culegerii (separat de enigma2, fara semn in bataie) muta motorul si acordeaza mereu: pragul
     # lung, ca la scanare (05.10.2026 12:52: un minut in driver la trecerea pe 36,0E a dat repornirea dura)
-    lung = bool(motive) or culegere_de_noapte()
+    lung = bool(motive) or culegere_de_noapte() or bool(opkg)
     healthy, detail = check_health(CONFIRM_HANG_CHECKS_OCUPAT if lung else CONFIRM_HANG_CHECKS, pids)
     if healthy and not confirmed:
         # gardat si pe `not confirmed`, nu doar pe `healthy` (bug gasit 21.09.2026, verificare

@@ -7,7 +7,8 @@
 # Orice ecran sau setare de pe receptor are pereche in interfata web.
 # Pe televizor:
 #   - Meniu > Setari > Sistem & Dispozitive > System Log Viewer (entryID hds_log_manager, Screens/LogManager.py,
-#     HdsLogManager): lista jurnalelor din /home/root/logs, Verde/OK deschide unul (cel mult 512 KB de la sfarsit),
+#     HdsLogManager): lista jurnalelor din /home/root/logs, OK deschide unul (cel mult 512 KB de la sfarsit), Verde
+#     porneste sau opreste "Jurnal detaliat",
 #     Galben il sterge dupa o intrebare, Albastru arata "Informatii" (dosarul, cate fisiere, spatiul, cate jurnale de
 #     depanare se pastreaza si dupa cate zile se sterg; config.logmanager nu se schimba din niciun ecran);
 #   - ... > Crash Log Viewer (entryID hds_crashlog_autosubmit, Screens/HdsCrashlogAutoSubmit.py): jurnalele
@@ -31,6 +32,9 @@
 #   GET  /api/jurnale-cadere-citeste?cale=<cale>   textul unui jurnal de cadere (pe un fir)
 #   POST /api/jurnale-cadere-sterge?cale=<cale>&pas=intreaba | &cod=<cod> | &pas=renunta   stergerea, in doi pasi
 #   POST /api/jurnale-cadere-seteaza?anonim=0|1&retea=0|1   setarile citite de bsod.cpp (oricare dintre ele)
+#   POST /api/jurnale-sistem-detaliat?pornit=0|1    "Jurnal detaliat" (config.crash.enabledebug, VERDE in Manager
+#                                                   jurnale): scris pe loc in /etc/enigma2/settings, porneste dupa
+#                                                   repornirea interfetei (pagina o cere prin /api/alimentare-fa)
 #   GET  /jurnale-sistem, /jurnale-cadere          paginile
 # Stergerile nu se fac cu ?token= (numai din browserul conectat).
 #
@@ -88,7 +92,36 @@ def stareSistem(J=None, config=None):
 		"jurnale": [{"nume": n, "marime": int(s), "marime_text": _kb(s), "data": J.textData(m)} for m, n, s in jurnale],
 		"informatii": {"dosar": dosar, "numar": numar, "total_mb": round(total_mb, 1), "pastrate": pastrate,
 			"zile": zile, "randuri": [[a, b] for a, b in _randuriInPlus(J)]},
+		"detaliat": stareDetaliat(J, config),
 	}
+
+
+def stareDetaliat(J=None, config=None):
+	""""Jurnal detaliat": setarea (pentru pornirea urmatoare), daca interfata de acum il scrie, alegerile Da/Nu."""
+	J = _j(J)
+	element = J.initConfigDetaliat(_config(J, config))
+	return {"pornit": bool(element.value), "activ": bool(J.detaliatActiv()), "alegeri": _alegeriDaNu(element),
+		"cale": J.CALE_DETALIAT, "plafon_mb": J.PLAFON_DETALIAT // (1024 * 1024)}
+
+
+def seteazaDetaliat(argumente, J=None, config=None, configfile=None):
+	"""POST /api/jurnale-sistem-detaliat: pornit=0|1, ca VERDE pe televizor (Screens/LogManager.HdsLogManager)."""
+	J = _j(J)
+	config = _config(J, config)
+	valoare = argumente.get("pornit")
+	if valoare not in ("0", "1"):
+		rez = {"result": False, "message": _t("Valoarea trimisă nu e bună. Se alege Da sau Nu.")}
+	else:
+		pornit = J.puneJurnalDetaliat(valoare == "1", config, configfile)
+		if pornit == J.detaliatActiv():
+			text = _t("Salvat.")
+		elif pornit:
+			text = _t("Salvat. Jurnalul detaliat pornește după repornirea interfeței.")
+		else:
+			text = _t("Salvat. Jurnalul detaliat se oprește după repornirea interfeței.")
+		rez = {"result": True, "message": text}
+	rez["detaliat"] = stareDetaliat(J, config)
+	return rez
 
 
 def _randuriInPlus(J):
@@ -259,7 +292,7 @@ def argumente(request):
 	"""Argumentele cererii ca text scurt, numai cheile stiute, fara token."""
 	rez = _c().argumente(request, ("nume", "pas", "cod"), MAX_NUME)
 	rez.update(_c().argumente(request, ("cale",), MAX_CALE))
-	rez.update(_c().argumente(request, ("anonim", "retea"), 4))
+	rez.update(_c().argumente(request, ("anonim", "retea", "pornit"), 4))
 	return rez
 
 
@@ -358,6 +391,18 @@ def rute(baza, resource, J=None, config=None, configfile=None, fir=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class SeteazaDetaliat(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, seteazaDetaliat(argumente(request), J, config, configfile))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class PaginaSistem(resource.Resource):
 		"""GET /jurnale-sistem."""
 		isLeaf = True
@@ -376,6 +421,7 @@ def rute(baza, resource, J=None, config=None, configfile=None, fir=None):
 		b"jurnale-sistem": StareSistem(),
 		b"jurnale-sistem-citeste": CitesteSistem(),
 		b"jurnale-sistem-sterge": StergeSistem(),
+		b"jurnale-sistem-detaliat": SeteazaDetaliat(),
 		b"jurnale-cadere": StareCadere(),
 		b"jurnale-cadere-citeste": CitesteCadere(),
 		b"jurnale-cadere-sterge": StergeCadere(),
@@ -473,6 +519,16 @@ PAGINA_SISTEM = """<!DOCTYPE html>
     <div class="butoane"><button type="button" id="inchide">Închide</button></div>
   </section>
   <section class="card">
+    <h2>Jurnal detaliat</h2>
+    <div class="rand">
+      <label for="detaliat">Jurnal detaliat (tot ce face interfața, pentru găsirea unei probleme)</label>
+      <select id="detaliat"></select>
+    </div>
+    <div class="status-linie"><span>Acum, interfața scrie jurnalul detaliat</span><span id="detaliatActiv"></span></div>
+    <p class="nota">Pornește sau se oprește după repornirea interfeței. Se scrie în <span id="detaliatCale"></span>, cel mult <span id="detaliatPlafon"></span> MB: cele mai vechi rânduri se taie singure.</p>
+    <div class="butoane ascuns" id="detaliatRepornire"><button type="button" class="rosu" id="reporneste">Repornește interfața</button></div>
+  </section>
+  <section class="card">
     <h2>Informații</h2>
     <div class="status-linie"><span>Dosarul jurnalelor</span><span id="infoDosar"></span></div>
     <div class="status-linie"><span>Număr de fișiere</span><span id="infoNumar"></span></div>
@@ -491,9 +547,23 @@ PAGINA_SISTEM = """<!DOCTYPE html>
 <script>
 __SCRIPT_COMUN__
 __SCRIPT_VIZUALIZARE__
+function arataDetaliat(x){
+  if(!x){ return; }
+  var sel = $("detaliat");
+  if(document.activeElement !== sel){
+    sel.textContent = "";
+    (x.alegeri || []).forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; sel.appendChild(o); });
+    sel.value = x.pornit ? "1" : "0";
+  }
+  $("detaliatActiv").textContent = x.activ ? "Da" : "Nu";
+  $("detaliatCale").textContent = x.cale || "";
+  $("detaliatPlafon").textContent = String(x.plafon_mb || "");
+  $("detaliatRepornire").classList.toggle("ascuns", !!x.pornit === !!x.activ);
+}
 function arata(d){
   if(!d.jurnale){ return; }
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
+  arataDetaliat(d.detaliat);
   var corp = $("jurnale"); corp.textContent = "";
   d.jurnale.forEach(function(j){
     var tr = document.createElement("tr");
@@ -533,6 +603,15 @@ function sterge(nume){
   var q = new URLSearchParams(); q.set("nume", nume);
   cuConfirmare("/api/jurnale-sistem-sterge", q, function(d){ if(d.jurnale){ arata(d); inchideJurnal(); } else { citeste(); } });
 }
+$("detaliat").addEventListener("change", function(){
+  var q = new URLSearchParams(); q.set("pornit", $("detaliat").value);
+  mesaj("Se salvează...");
+  cerere("/api/jurnale-sistem-detaliat", "POST", q).then(function(d){ mesaj(d.message, !d.result); arataDetaliat(d.detaliat); }).catch(nimicNuRaspunde);
+});
+$("reporneste").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("ce", "interfata");
+  cuConfirmare("/api/alimentare-fa", q);
+});
 $("inchide").addEventListener("click", inchideJurnal);
 legaturi();
 citeste();
@@ -674,6 +753,12 @@ TEXTE_PAGINA = {
 		N_("Data"),
 		N_("Deschide arată cel mult ultimii 512 KB din jurnal, ca pe televizor."),
 		N_("Închide"),
+		N_("Jurnal detaliat"),
+		N_("Jurnal detaliat (tot ce face interfața, pentru găsirea unei probleme)"),
+		N_("Acum, interfața scrie jurnalul detaliat"),
+		N_("Pornește sau se oprește după repornirea interfeței. Se scrie în <span id=\"detaliatCale\"></span>, cel "
+			"mult <span id=\"detaliatPlafon\"></span> MB: cele mai vechi rânduri se taie singure."),
+		N_("Repornește interfața"),
 		N_("Informații"),
 		N_("Dosarul jurnalelor"),
 		N_("Număr de fișiere"),
@@ -719,6 +804,8 @@ TEXTE_PAGINA = {
 		N_("Găsite:"),
 		N_("Receptorul nu a putut căuta jurnalele."),
 		N_("Se salvează..."),
+		N_("Da"),
+		N_("Nu"),
 	),
 }
 

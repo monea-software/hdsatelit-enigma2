@@ -528,7 +528,7 @@ def _dependente(text):
 class Pachet(object):
 	__slots__ = ('nume', 'categorie', 'titlu', 'subtitlu', 'descriere', 'versiune', 'versiune_instalata',
 		'marime', 'marime_instalat', 'sursa', 'depinde', 'din_imagine', 'arhitectura', 'dosar_plugin', 'sectiune', 'fisier', 'arhiva',
-		'python2')
+		'python2', 'dependinte_py2')
 
 	def __init__(self, nume):
 		self.nume = nume
@@ -551,6 +551,9 @@ class Pachet(object):
 		# versiunea din surse e numai pentru Python 2 (dupa Depends din lista, Components/HdsPython2.py): (cod, detaliu)
 		# al motivului, altfel None. Un asemenea pachet nu se instaleaza si nu e o actualizare (0.6.8)
 		self.python2 = None
+		# 0.7.4: pachetele Python 2 cerute in Depends de versiunea din surse (python-core ...); la instalare in locul lor se pun
+		# perechile python3 (Components/HdsPython2.perechi, Components/HdsExtensiiLucru.perechiPython3)
+		self.dependinte_py2 = []
 
 	@property
 	def instalat(self):
@@ -562,7 +565,9 @@ class Pachet(object):
 
 	@property
 	def actualizare(self):
-		return self.instalat and self.disponibil and not self.python2 and \
+		# 0.7.4 (PY3): nici cand versiunea din surse cere pachete Python 2 (dependinte_py2): opkg nu o actualizeaza dupa nume, nici
+		# cu --force-depends (probat pe receptor); pachetul vechi instalat ramane cum e
+		return self.instalat and self.disponibil and not self.python2 and not self.dependinte_py2 and \
 			compara_versiuni(self.versiune, self.versiune_instalata) > 0
 
 	@property
@@ -619,6 +624,10 @@ class Catalog(object):
 		self.surse_cu_lista = []
 		self.erori = []
 		self._toate = {}                # si pachetele ascunse (dependentele), pentru textul confirmarii
+		# 0.7.4: pachetele python3*/libpython3* din liste (nume -> (versiunea cea mai noua, sursa ei)) si cele instalate: perechile
+		# pentru dependintele Python 2 ale pachetelor vechi (Components/HdsExtensiiLucru.perechiPython3)
+		self.python3 = {}
+		self.python3_instalate = set()
 
 	def categorii(self):
 		"""Categoriile care au macar un pachet, in ordinea filelor, cu numarul lor."""
@@ -693,6 +702,11 @@ def incarca(radacina='/'):
 			if not nume_valid(n) or not n.startswith(PREFIX):
 				if H.e_python2_insusi(s):
 					cu_python2.add(sursa)
+				elif nume_valid(n) and H.e_pachet_python3(n) and _arhitectura_buna(s.get('architecture', ''), conf.arhitecturi):
+					v3 = s.get('version', '')
+					vechi3 = cat.python3.get(n)
+					if vechi3 is None or compara_versiuni(v3, vechi3[0]) > 0:
+						cat.python3[n] = (v3, sursa)
 				continue
 			arh = s.get('architecture', '')
 			if not _arhitectura_buna(arh, conf.arhitecturi):
@@ -719,6 +733,7 @@ def incarca(radacina='/'):
 			# 0.6.8: dupa Depends (None = nu se stie, False = cere ceva din Python 3, altfel motivul Python 2)
 			v2 = H.din_control(s)
 			p.python2 = v2.motiv if v2.python2 else v2.python2
+			p.dependinte_py2 = list(v2.dependinte)
 
 	# 1b. pachetele cu cod Python din feedurile imaginilor cu Python 2 (grupul sursei are python-core 2.x), care nu cer
 	# nimic din Python 3: facute pentru Python 2 (0.6.8)
@@ -738,6 +753,8 @@ def incarca(radacina='/'):
 		if not n or 'installed' not in st.split() or 'not-installed' in st:
 			continue
 		instalate.append((n, s))
+		if H.e_pachet_python3(n):
+			cat.python3_instalate.add(n)
 	dosar_info = _cale(radacina, conf.info_dir)
 	for n, s in instalate:
 		if not n.startswith(PREFIX) or not nume_valid(n):
@@ -912,12 +929,21 @@ def scrie_surse_utilizator(surse, radacina='/'):
 
 # ---------------------------------------------------------------- cache-ul opkg
 
-def curata_cache(radacina='/', lacat='/var/run/opkg.lock'):
+# lacatul lui opkg 0.10 din imagine: /run/opkg.lock (valoare compilata, opkg.conf nu are lock_file; vazut pe receptor in
+# timpul unei instalari). /var/run duce in /var/volatile/run, alt dosar: cu /var/run/opkg.lock, curata_cache
+# lua un lacat pe care opkg nu-l foloseste si stergea pachetele si cat rula alt opkg. Aceeasi cale ca
+# Components/HdsActualizari.LACAT_OPKG (de acolo nu se importa: HdsActualizari importa modulul acesta).
+LACAT_OPKG = '/run/opkg.lock'
+
+
+def curata_cache(radacina='/', lacat=LACAT_OPKG):
 	"""Sterge pachetele (.ipk) descarcate de opkg in cache_dir, dupa o instalare: pe receptor cache-ul e in RAM
 	(/var/cache -> /var/volatile/cache) si opkg le tinea pana la repornire (0.6.6; un pachet al imaginii are ~20 MB).
 	Numai cu lacatul lui opkg luat (lockf, fara asteptare): cat ruleaza alt opkg nu se atinge nimic (ar putea instala
-	chiar un fisier de acolo). Listele din cache (*_Packages.gz) raman. Intoarce numarul fisierelor sterse, sau None
-	cand ruleaza alt opkg."""
+	chiar un fisier de acolo). Aici lacatul se ia intentionat (cateva milisecunde, cat se sterg fisierele), ca sa nu
+	porneasca alt opkg chiar atunci. Fisierul lacatului nu se face: opkg il sterge la iesire, deci lipsa lui = niciun opkg,
+	iar altii il cauta dupa simpla existenta (HdsBetaTester.opkgLucreaza); unul ramas dupa un opkg oprit se ia ca oricare.
+	Listele din cache (*_Packages.gz) raman. Intoarce numarul fisierelor sterse, sau None cand ruleaza alt opkg."""
 	conf = citeste_configurarea(radacina)
 	dosar = _cale(radacina, conf.cache_dir)
 	try:
@@ -933,9 +959,13 @@ def curata_cache(radacina='/', lacat='/var/run/opkg.lock'):
 		fcntl = None
 	if fcntl is not None:
 		try:
-			fd = os.open(_cale(radacina, lacat), os.O_RDWR | os.O_CREAT, 0o644)
-		except OSError:
-			return None
+			fd = os.open(_cale(radacina, lacat), os.O_RDWR)
+		except OSError as e:
+			import errno
+			if e.errno != errno.ENOENT:
+				return None
+			fd = None              # fara fisier nu ruleaza niciun opkg (il face si il sterge el)
+	if fd is not None:
 		try:
 			fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 		except (IOError, OSError):
@@ -1198,8 +1228,17 @@ class CautareIpk(object):
 	def _lucreaza(self):
 		try:
 			info = {}
-			fisiere = [FisierIpk(c, m, d, retea=self.retea is not None, radacina=self.radacina)
-				for c, m, d in cauta_fisiere_ipk(self.radacina, info=info, retea=self.retea)]
+			fel = self.retea is not None
+			vechi, noi, fisiere = _citite.get(fel) or {}, {}, []
+			for c, m, d in cauta_fisiere_ipk(self.radacina, info=info, retea=self.retea):
+				cheie = (c, m, d, self.radacina)
+				f = vechi.get(cheie)
+				if f is None:
+					f = FisierIpk(c, m, d, retea=fel, radacina=self.radacina)
+				noi[cheie] = f
+				fisiere.append(f)
+			# o singura atribuire: cele gasite acum raman pentru cautarea urmatoare de acelasi fel
+			_citite[fel] = noi
 			fisiere.sort(key=lambda f: (not f.citit, -f.data, f.cale))
 			# pachetele numai pentru Python 2 (0.6.8), tot pe fir: cele mai noi intai, cel mult TIMP_PYTHON2 secunde in
 			# total; cele ramase se verifica la confirmarea instalarii (planFisier)
@@ -1218,6 +1257,13 @@ class CautareIpk(object):
 
 # cat timp (secunde, de la pornirea cautarii) se verifica pe fir fisierele gasite pentru Python 2
 TIMP_PYTHON2 = 10.0
+
+# fisierele .ipk deja citite (control si verdictul Python 2), pe felul cautarii (False: stick, disc, /tmp; True: retea),
+# dupa (cale, marime, data, radacina): o cautare noua nu le mai citeste si nu le mai dezarhiveaza (12.11.2026: pe SF8008
+# fiecare cautare a 10 pachete tinea 10 s de procesor, iar decodarea Sky se oprea). Se tin numai cele gasite la ultima
+# cautare de fiecare fel; cel mult o cautare de fiecare fel ruleaza odata (cautare_ipk), deci fiecare fir isi scrie
+# numai intrarea lui, dintr-o singura atribuire.
+_citite = {}
 
 # cautarile in curs, cel mult una de fiecare fel (fara retea, in retea): un ecran redeschis se leaga de cea care ruleaza.
 # Un fir agatat pe o retea care nu raspunde nu se poate opri; asa nu se mai porneste inca unul langa el.
@@ -1357,6 +1403,12 @@ class FisierIpk(object):
 		return v.motiv if v is not None and v.python2 else None
 
 	@property
+	def dependinte_py2(self):
+		"""0.7.4: pachetele Python 2 cerute in Depends (dupa verificare; la instalare se pun in loc perechile python3)"""
+		v = self.verdict
+		return list(v.dependinte) if v is not None and not v.python2 else []
+
+	@property
 	def titlu(self):
 		if self.rezumat and len(self.rezumat) <= 40:
 			return self.rezumat
@@ -1476,7 +1528,8 @@ def motiv_eroare(linii, implicit=N_('Operațiunea nu a reușit.'), ceas=True):
 		return _t('Extensia nu este făcută pentru acest receptor.')
 	if 'signature' in t and ('fail' in t or 'invalid' in t or 'bad' in t):
 		return _t('Semnătura feedului nu se potrivește. Extensia nu a fost instalată.')
-	if 'mismatch' in t:
+	if 'mismatch' in t or 'truncated input file' in t:
+		# 'Truncated input file': arhiva descarcata pe jumatate (randul 816, jurnalele testerilor din 31.10)
 		return _t('Fișierul descărcat este deteriorat. Încearcă din nou.')
 	if 'failed to download' in t or 'wget' in t or 'curl' in t or 'download failed' in t or 'network is unreachable' in t \
 			or 'bad address' in t or 'could not resolve' in t or 'timed out' in t or 'connection refused' in t:

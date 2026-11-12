@@ -202,15 +202,28 @@ class HdsCopieSetariScreen(Screen):
 				self._culoare if c["acest"] else self._culoare_stinsa))
 		if not self.copii and not self._cauta:
 			randuri.append((_("Nicio copie găsită"), "nimic", "", self._culoare_stinsa))
+		# 0.7.4: ce s-a pus la loc ultima data (dupa o imagine noua, si pluginurile), ca randul "Ultima punere la loc" din
+		# pagina web; textul intreg sta sub lista
+		if self._textPunere():
+			c = (C.citeste_rezultat() or {}).get("copie") or {}
+			randuri.append((_("Ultima punere la loc"), "punere", c.get("data_text") or "", self._culoare))
 		if self._cerere():
 			randuri.append((_("Renunță la punerea la loc"), "anuleaza", "", self._culoare_nota))
 		randuri.append((_("Caută din nou"), "cauta", "", self._culoare))
 		return randuri
 
+	def _textPunere(self):
+		try:
+			return C.text_ultima_punere()
+		except Exception:
+			return ""
+
 	def _textPreview(self):
 		if self._rezultat:
 			return "\n".join(self._rezultat)
 		cheie = self._cheie()
+		if cheie == "punere":
+			return self._textPunere()
 		c = self.copie()
 		if c is not None:
 			return C.descriere_copie(c) + "\n" + C.text_avertisment()
@@ -244,6 +257,9 @@ class HdsCopieSetariScreen(Screen):
 			return _("OK sau GALBEN: pune la loc. ALBASTRU: șterge.")
 		if cheie == "anuleaza":
 			return _("OK: copia nu se mai pune la loc.")
+		if cheie == "punere":
+			# randul numai arata (textul e sub lista); nu face nimic la OK
+			return ""
 		return _("Caută din nou stickurile și copiile.")
 
 	def _arata(self, stare=None):

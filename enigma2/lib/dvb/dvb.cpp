@@ -79,13 +79,24 @@ eDVBResourceManager::eDVBResourceManager()
 		/* search available adapters... */
 
 		// add linux devices
-
-	int num_adapter = 0;
-	while (eDVBAdapterLinux::exist(num_adapter))
+		/* puntea vtuner (lib/dvb/hdsvtuner.cpp, ca in enigma2 OE-Alliance): intai tunerele pe USB (adapter1..N), legate de vtuner,
+		   care fac frontend-uri virtuale pe adapter0; abia apoi adapter0, cu frontend-urile placii si cele virtuale.
+		   Fara stick in mufa ordinea si adaptoarele raman cele de dinainte (adapter0, apoi 1..N care nu sunt USB). */
+	if (eDVBAdapterLinux::exist(0))
 	{
-		addAdapter(new eDVBAdapterLinux(num_adapter));
-		num_adapter++;
+		std::vector<int> other_adapters;
+		for (int num_adapter = 1; eDVBAdapterLinux::exist(num_adapter); num_adapter++)
+		{
+			if (eDVBAdapterLinux::isusb(num_adapter))
+				addAdapter(new eDVBUsbAdapter(num_adapter));
+			else
+				other_adapters.push_back(num_adapter);
+		}
+		addAdapter(new eDVBAdapterLinux(0));
+		for (size_t k = 0; k < other_adapters.size(); ++k)
+			addAdapter(new eDVBAdapterLinux(other_adapters[k]));
 	}
+	eDVBUsbAdapter::scrieLista();
 
 	int fd = open("/proc/stb/info/model", O_RDONLY);
 	char tmp[255];
@@ -136,7 +147,13 @@ void eDVBResourceManager::feStateChanged()
 }
 
 DEFINE_REF(eDVBAdapterLinux);
-eDVBAdapterLinux::eDVBAdapterLinux(int nr): m_nr(nr)
+eDVBAdapterLinux::eDVBAdapterLinux(int nr, bool scan): m_nr(nr)
+{
+	if (scan)
+		scanDevices();
+}
+
+void eDVBAdapterLinux::scanDevices()
 {
 		// scan frontends
 	int num_fe = 0;
@@ -144,31 +161,51 @@ eDVBAdapterLinux::eDVBAdapterLinux(int nr): m_nr(nr)
 	eDebug("scanning for frontends..");
 	while (1)
 	{
-		struct stat s;
 		char filename[128];
 #if HAVE_DVB_API_VERSION < 3
+		struct stat s;
 		sprintf(filename, "/dev/dvb/card%d/frontend%d", m_nr, num_fe);
-#else
-		sprintf(filename, "/dev/dvb/adapter%d/frontend%d", m_nr, num_fe);
-#endif
 		if (stat(filename, &s))
 			break;
+#else
+		/* nodul din /dev sau intrarea din /sys: frontend-ul virtual facut chiar acum de vtuner (puntea USB) poate sa
+		   nu aiba inca nodul */
+		if (!hdsvtuner::frontendExista("", m_nr, num_fe))
+			break;
+		sprintf(filename, "/dev/dvb/adapter%d/frontend%d", m_nr, num_fe);
+#endif
 		eDVBFrontend *fe;
+			/* puntea vtuner: frontend-ul virtual se acordeaza prin frontend-ul USB adevarat */
+		const char *device = NULL;
+		std::map<std::string, std::string>::iterator mapped = mappedFrontendName.find(filename);
+		if (mapped != mappedFrontendName.end())
+		{
+			device = mapped->second.c_str();
+			eDebug("frontend %d de pe adapter%d: tunerul USB %s", num_fe, m_nr, device);
+		}
 
 		{
 			int ok = 0;
-			fe = new eDVBFrontend(m_nr, num_fe, ok, true);
+			fe = new eDVBFrontend(m_nr, num_fe, ok, true, NULL, device);
 			if (ok)
 				m_simulate_frontend.push_back(ePtr<eDVBFrontend>(fe));
 		}
 
 		{
 			int ok = 0;
-			fe = new eDVBFrontend(m_nr, num_fe, ok, false, fe);
+			fe = new eDVBFrontend(m_nr, num_fe, ok, false, fe, device);
 			if (ok)
 				m_frontend.push_back(ePtr<eDVBFrontend>(fe));
 		}
 		++num_fe;
+	}
+		/* puntea vtuner: driverul vtuner al placii a pus frontend-ul virtual pe alt indice decat cel asteptat */
+	for (std::map<std::string, std::string>::iterator m = mappedFrontendName.begin(); m != mappedFrontendName.end(); ++m)
+	{
+		int a = -1, f = -1;
+		if (sscanf(m->first.c_str(), "/dev/dvb/adapter%d/frontend%d", &a, &f) == 2 && a == m_nr && f >= num_fe)
+			eWarning("[eDVBUsbAdapter] frontend-ul virtual %s nu a aparut (adapter%d are %d frontend-uri); tunerul USB %s nu se foloseste",
+				m->first.c_str(), m_nr, num_fe, m->second.c_str());
 	}
 
 		// scan demux

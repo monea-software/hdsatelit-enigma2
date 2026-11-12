@@ -290,6 +290,12 @@ def porneste():
 		I.scoateSetarileVechi()
 	except Exception as e:
 		_jurnal("setarile vechi: %s" % type(e).__name__)
+	# adresele puse de om in /etc/enigma2/iptv.txt (prin FTP) se iau singure, si cand nu e inca nicio sursa
+	try:
+		from Components import HdsIptvFisier
+		HdsIptvFisier.porneste()
+	except Exception as e:
+		_jurnal("fisierul cu adrese: %s" % type(e).__name__)
 	if not I.areSurse():
 		return
 	try:

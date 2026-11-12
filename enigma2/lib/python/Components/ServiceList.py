@@ -52,9 +52,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 	MODE_NORMAL = 0
 	MODE_FAVOURITES = 1
 
-	def __init__(self):
+	def __init__(self, serviceList=None):
+		# serviceList: ecranul listei de canale care o tine; pluginurile straine il dau (ServiceList(self)), lista noastra nu-l foloseste
 		GUIComponent.__init__(self)
 		self.l = eListboxServiceContent()
+		# OE-Alliance: semnele numerotate nu se vad in lista (se numara); config.usage.hide_number_markers, Da din fabrica
+		self.l.setHideNumberMarker(getattr(config.usage, "hide_number_markers", None) is None or config.usage.hide_number_markers.value)
 
 		pic = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/icons/folder.png"))
 		if pic:
@@ -111,6 +114,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsSigleCeas = None
 		self.hdsSigleStare = None
 		self.hdsSigleCai = False
+		# ecranul listei de canale al imaginii (weakref), pus de Screens/ChannelSelection.py: da randurile in plus ale
+		# listei buchetelor (hdsRanduriBuchete); fara el (alte ecrane cu ServiceList) lista buchetelor e cea din fisier
+		self.hdsEcran = None
+		# variantele aceluiasi canal pe acelasi satelit scoase din lista de acum (hdsVarianteUnice, hdsFaraVariante):
+		# referinta ascunsa (toCompareString) -> referinta aratata in locul ei, pentru setCurrent
+		self.hdsAscunse = {}
 		if hasattr(self.l, "addStreamed"):
 			self.hdsPictogramaTransmis(resolveFilename(SCOPE_CURRENT_SKIN, PICTOGRAMA_TRANSMIS))
 			self.l.setStreamedLabel(_("În rețea"))
@@ -346,6 +355,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 				except Exception as e:
 					skinWarning("ServiceList: attribute %s=\"%s\" not applied (%s)" % (attrib, value, e))
 		self.skinAttributes = attribs
+		# scara ecranului (resolution= al temei), pentru lista desenata dupa sablon (hdsSablonActualizeaza)
+		self.hdsScara = getattr(parent, "hdsScara", None)
 		rezultat = GUIComponent.applySkin(self, desktop, parent)
 		if self.instance is not None:
 			self.hdsDimensiuneTema = (self.instance.size().width(), self.instance.size().height())
@@ -423,7 +434,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 					tradus = nume_buchet(s.toString(), nume)
 					if tradus != nume:
 						numite[i] = tradus
-			if not numite:
+			# randurile in plus ale listei buchetelor de pe receptor (Screens/ChannelSelection.py, hdsRanduriBuchete):
+			# listele retelelor, apoi grupele listei (Toate canalele, După satelit, După furnizor)
+			slab = getattr(self, "hdsEcran", None)
+			ecran = slab() if slab is not None else None
+			in_plus = ecran.hdsRanduriBuchete(root) if ecran is not None else []
+			if not numite and not in_plus:
 				return
 			acum = self.getCurrent()
 			# ca la listele facute din Python (ChannelSelection: setRoot(..., True), addService, FillFinished)
@@ -436,10 +452,120 @@ class ServiceList(HTMLComponent, GUIComponent):
 				self.l.addService(s)
 			self.l.FillFinished()
 			self.l.sort()
+			if in_plus:
+				# dupa sortare: randurile in plus raman la coada, in ordinea lor
+				for s in in_plus:
+					self.l.addService(s)
+				self.l.FillFinished()
 			if acum.valid():
 				self.l.setCurrent(acum)
 		except Exception as e:
 			print("[ServiceList] numele buchetelor: %s" % e)
+
+	# ---- lista "Furnizor": grupele facute de scanare din transponder ("DVB-S2 8PSK 11250H 51.5°E") se arata dupa
+	# operatorul transponderului sau ca "Satelit 51,5°E, 11250 H", grupa nucleului fara furnizor ("Unknown") ca "Fără
+	# furnizor" (Components/HdsFurnizori.py), apoi lista se sorteaza pentru om: furnizorii dupa nume, transponderele de la
+	# vest la est, la urma cele fara furnizor. Numai numele randului: drumul lui ((provider == "...")) ramane al nucleului.
+
+	def hdsNumeleFurnizorilor(self):
+		root = self.root
+		if root is None or self.instance is None or "FROM PROVIDERS" not in (root.getPath() or ""):
+			return
+		try:
+			from Components import HdsFurnizori
+		except ImportError:
+			return
+		try:
+			lista = eServiceCenter.getInstance().list(root)
+			randuri = []
+			while lista is not None:
+				s = lista.getNext()
+				if not s.valid():
+					break
+				nume = s.getName()
+				aratat = HdsFurnizori.nume_aratat(nume)
+				if aratat != nume:
+					s = eServiceReference(s.toString())
+					s.setName(aratat)
+				randuri.append((HdsFurnizori.cheie_ordine(nume, aratat), s))
+			if not randuri:
+				return
+			randuri.sort(key=lambda x: x[0])
+			# cursorul pe primul rand (FillFinished), ca la o lista noua; intoarcerea dintr-un furnizor il pune apoi pe el
+			self.l.setRoot(root, True)
+			for _cheie, s in randuri:
+				self.l.addService(s)
+			self.l.FillFinished()
+		except Exception as e:
+			print("[ServiceList] numele furnizorilor: %s" % e)
+
+	# ---- variantele aceluiasi canal pe acelasi satelit (Components/HdsVarianteCanal.py): in listele facute din lamedb
+	# (Toate, un satelit, un furnizor, canalele noi, transponderul de acum) se arata o singura varianta; celelalte se scot
+	# numai din lista din memorie, iar hdsAscunse tine locul lor (setCurrent pe o varianta ascunsa pune cursorul pe cea
+	# aratata). Buchetele (si numerele lor) raman cum le-a facut omul.
+
+	def hdsListaDinLamedb(self, root):
+		"""root e o lista de canale facuta de nucleu din lamedb (nu un buchet, nu lista satelitilor sau a furnizorilor)."""
+		if root is None or getattr(root, "type", None) != 1:
+			return False
+		cale = root.getPath() or ""
+		return bool(cale) and "FROM " not in cale and "ORDER BY" in cale
+
+	def hdsVarianteUnice(self):
+		root = self.root
+		if self.instance is None or not self.hdsListaDinLamedb(root):
+			return
+		try:
+			from Components import HdsVarianteCanal
+		except ImportError:
+			return
+		try:
+			lista = eServiceCenter.getInstance().list(root)
+			texte = (lista.getContent("S", False) or []) if lista is not None else []
+			ascunse = HdsVarianteCanal.ascunse(texte)
+			if not ascunse:
+				return
+			l = self.l
+			for s in ascunse:
+				r = eServiceReference(s)
+				l.setCurrent(r)
+				c = eServiceReference()
+				l.getCurrent(c)
+				if c.valid() and c == r:
+					l.removeCurrent()
+			# cursorul pe primul rand, ca dupa o umplere noua (cine deschide lista il pune apoi unde trebuie)
+			l.FillFinished()
+			self.hdsAscunse = dict((s, eServiceReference(a)) for s, a in ascunse.items() if a)
+		except Exception as e:
+			print("[ServiceList] variantele: %s" % e)
+
+	def hdsFaraVariante(self, refs):
+		"""Canalele unui bloc pus din Python (lista "Sateliți", ChannelSelection.hdsCanaleLoc) fara variantele ascunse;
+		locul lor se tine in hdsAscunse."""
+		if not refs:
+			return refs
+		try:
+			from Components import HdsVarianteCanal
+			texte = [r.toCompareString() for r in refs]
+			ascunse = HdsVarianteCanal.ascunse(texte)
+		except Exception as e:
+			print("[ServiceList] variantele: %s" % e)
+			return refs
+		if not ascunse:
+			return refs
+		for s, a in ascunse.items():
+			if a:
+				self.hdsAscunse[s] = eServiceReference(a)
+		return [r for r, s in zip(refs, texte) if s not in ascunse]
+
+	def hdsAratat(self, ref):
+		"""Randul care tine locul referintei in lista de acum: varianta aratata, pentru una ascunsa; altfel ref."""
+		if ref is None or not self.hdsAscunse:
+			return ref
+		try:
+			return self.hdsAscunse.get(ref.toCompareString(), ref)
+		except Exception:
+			return ref
 
 	def hdsFaraNume(self, ref):
 		"""Referinta din fisier pentru un rand cu numele tradus (hdsNumeleBuchetelor); celelalte raman cum sunt."""
@@ -449,6 +575,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 		return ref
 
 	def setCurrent(self, ref):
+		# o varianta ascunsa (de pilda pornita singura de rezerva): cursorul pe varianta aratata in locul ei
+		ref = self.hdsAratat(ref)
 		self.l.setCurrent(ref)
 		# serviciul cautat nu e in lista (de pilda postul de acum, din alt buchet): cursorul ramanea dupa ultimul rand,
 		# iar bara de selectie se desena peste tot locul gol de sub posturi; il punem pe primul rand
@@ -518,6 +646,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsTransmiseAcum()
 		self.hdsLeagaDvbI(True)
 		self.hdsNumeleBuchetelor()
+		self.hdsNumeleFurnizorilor()
+		self.hdsVarianteUnice()
 		if hasattr(self.l, "addPiconPath"):
 			from enigma import eTimer
 			self.hdsSigleCeas = eTimer()
@@ -572,6 +702,10 @@ class ServiceList(HTMLComponent, GUIComponent):
 	def setNumberOffset(self, offset):
 		self.l.setNumberOffset(offset)
 
+	def setHideNumberMarker(self, value):
+		# OE-Alliance: semnele numerotate ascunse (True) sau aratate (mutarea); se vede la urmatoarea umplere a listei (setRoot)
+		self.l.setHideNumberMarker(value)
+
 	def setPlayableIgnoreService(self, ref):
 		self.l.setIgnoreService(ref)
 
@@ -588,12 +722,16 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.hdsAdaugate = []
 		if hasattr(self.l, "invalidatePicons"):
 			self.l.invalidatePicons()
+		self.hdsAscunse = {}
 		self.iconitaMarcaj(root)
 		self.hdsInregistrari()
 		self.l.setRoot(root, justSet)
+		self.hdsSablonActualizeaza()
 		if not justSet:
 			self.l.sort()
 			self.hdsNumeleBuchetelor()
+			self.hdsNumeleFurnizorilor()
+			self.hdsVarianteUnice()
 		else:
 			self.hdsNumite = set()
 		self.hdsEticheteDvbI()
@@ -727,6 +865,47 @@ class ServiceList(HTMLComponent, GUIComponent):
 		self.l.setElementPosition(self.l.celServiceName,
 			eRect(inceput, 0, max(0, latime - inceput - (bara + 10 if dreapta else 0)), inaltime))
 		self.l.setElementFont(self.l.celServiceInfo, font_info)
+		self.hdsSablonActualizeaza()
+
+	# HDSatelit 0.7.4: randul desenat dupa sablonul listei de canale al temei (Components/HdsServiceListSablon), numai cand
+	# tema straina si setarile ei aleg un stil; altfel (si cu tema noastra) lista clasica, neschimbata
+	hdsSablon = None
+	hdsModSablon = "services"
+	hdsSablonPermis = False
+
+	def hdsSablonActualizeaza(self):
+		if not hasattr(self.l, "setTemplateBuildFunc"):
+			return False
+		try:
+			from Components.HdsServiceListSablon import sablonAles, SablonListaCanale, felulListei
+			# numai lista principala de canale (ChannelSelection pune hdsSablonPermis); listele simple (alegerea canalului din
+			# pluginuri, ghid, PiP) raman clasice, ca in standard
+			element, _ecran = sablonAles() if self.instance is not None and self.hdsSablonPermis else (None, None)
+			if element is None:
+				if self.hdsSablon is not None:
+					self.hdsSablon = None
+					self.l.setTemplateBuildFunc(None)
+					self.setMode(self.mode)
+				return False
+			latime = self.instance.size().width()
+			if self.hdsSablon is None or self.hdsSablon.element is not element or self.hdsSablon.latime != latime:
+				self.hdsSablon = SablonListaCanale(element, latime, getattr(self, "hdsScara", None))
+				for i, f in enumerate(self.hdsSablon.fonturi):
+					self.l.setTemplateFont(i, f)
+			self.hdsModSablon = felulListei(getattr(self, "root", None))
+			inaltime, _t = self.hdsSablon.mod(self.hdsModSablon)
+			if inaltime:
+				self.l.setItemHeight(inaltime)
+			self.l.setTemplateBuildFunc(self.hdsRandSablon)
+			return True
+		except Exception as e:
+			print("[ServiceList] lista dupa sablon: %s" % e)
+			self.hdsSablon = None
+			self.l.setTemplateBuildFunc(None)
+			return False
+
+	def hdsRandSablon(self, ref, steaguri, numar):
+		return self.hdsSablon.rand(self.hdsModSablon, ref, steaguri, numar)
 
 	# HDSatelit: numerele operatorului in lista unei retele de cablu (Components/HdsRetele.py, Screens/ChannelSelection.py
 	# hdsUmpleRetea): in coloana numarului fiecare canal are numarul dat de operator (23 = TVR 1, cu golurile lui), nu

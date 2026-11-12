@@ -41,6 +41,10 @@ try:
 	from Components.Ipkg import IpkgComponent, opkgArguments, opkgProgram
 except ImportError:  # probe pe PC
 	from Ipkg import IpkgComponent, opkgArguments, opkgProgram
+try:
+	from Components import HdsTemeSuprascrise as TS
+except ImportError:  # probe pe PC
+	import HdsTemeSuprascrise as TS
 
 JURNAL_OPKG = P.DOSAR_JURNALE + '/hds-extensii.log'
 FARA_RASPUNS_S = 60              # dupa atata timp fara niciun rand de la opkg se poate opri lucrarea
@@ -197,10 +201,11 @@ def felFeed(catalog, nume, adresa):
 	adaugata de om ramane a lui, chiar cu adresa unui feed cunoscut (asa o poate sterge)."""
 	if catalog.configurare.e_a_utilizatorului(nume):
 		return None
-	if P.sursa_hdsatelit(adresa):
-		return FEED_HDS
+	# intai feedul extern: rezerva lui sta pe stb.hdsatelit.com (0.7.4), dar ramane feedul extern, nu cel HD Satelit
 	if _X().e_feed_extern(adresa):
 		return FEED_EXTERN
+	if P.sursa_hdsatelit(adresa):
+		return FEED_HDS
 	return None
 
 
@@ -348,19 +353,96 @@ def pachetPlugin(catalog, plugin):
 	return catalog.pachet_pentru_dosar(posixpath.normpath(cale))
 
 
-def pluginPentru(pluginuri, p):
+def pluginPentru(pluginuri, p, plugins=None):
+	"""Pluginul de deschis pentru un pachet instalat: randul lui din Extensii (unulPePlugin), nu o unealta interna a lui din
+	meniul extensiilor (AJPanel: „Deschide” pornea File Manager, prima lui intrare din lista comuna)."""
 	if not p.dosar_plugin:
 		return None
-	for plugin in pluginuri:
-		if posixpath.normpath(getattr(plugin, 'path', '') or '') == posixpath.normpath(p.dosar_plugin):
-			return plugin
-	return None
+	dosar = posixpath.normpath(p.dosar_plugin)
+	ale_lui = [x for x in pluginuri if posixpath.normpath(getattr(x, 'path', '') or '') == dosar]
+	return unulPePlugin(ale_lui, plugins)[0] if ale_lui else None
 
 
 def pluginuriDeDeschis(plugins):
-	"""Pluginurile omului cu ecran, aceleasi in Extensii, la albastru si in web."""
+	"""Pluginurile omului cu ecran, aceleasi in Extensii, la albastru si in web. Extensii arata din ele cate un rand pe
+	plugin (unulPePlugin)."""
 	f = getattr(plugins, 'pluginuriDeDeschis', None)
 	return [p for p in f() if not I.pluginImagine(getattr(p, 'path', ''))] if f is not None else []
+
+
+# PluginDescriptor.WHERE_PLUGINMENU (Plugins/Plugin.py), fara import: probele de pe PC incarca modulul singur
+_LISTA_PLUGINURI = 2
+
+
+def _dosar(plugin):
+	cale = getattr(plugin, 'path', None) or ''
+	return posixpath.normpath(cale) if isinstance(cale, str) and cale else ''
+
+
+def _are(plugin, loc):
+	try:
+		return loc in (getattr(plugin, 'where', None) or ())
+	except TypeError:
+		return False
+
+
+def _componenta(plugins):
+	"""componenta pluginurilor data, altfel cea a imaginii (None cand nu se poate lua)"""
+	if plugins is not None:
+		return plugins
+	try:
+		from Components.PluginComponent import plugins as componenta
+		return componenta
+	except Exception:
+		return None
+
+
+def unulPePlugin(pluginuri, plugins=None):
+	"""Randurile pluginurilor in Extensii (televizor si web), luate din lista comuna (pluginuriDeDeschis): fiecare plugin o
+	data, cu intrarile lui din lista pluginurilor (WHERE_PLUGINMENU); pluginul fara asemenea intrare, cu prima lui intrare.
+	Pluginurile scrise pentru alte imagini pun in meniul extensiilor si unelte interne (AJPanel: File Manager, Terminal,
+	Player Bar si inca cinci, pornite implicit; Pluto TV: „Pluto TV Update”), care din 0.7.1 apareau in Extensii cate un
+	rand, ca niste pluginuri separate (JAKITAKI, 08.11 si 10.11.2026). Ele raman la tasta albastra si in pluginul lor.
+	Intrarea din meniul extensiilor cu aceeasi functie ca una din lista pluginurilor (geamanul pastrat de lista comuna, de
+	pilda la XStreamity) tine locul aceleia. Un plugin cu mai multe intrari in lista pluginurilor (SubsSupport: setarile,
+	descarcarea, playerul DVB) le pastreaza pe toate, ca in lista pluginurilor din orice imagine. Ordinea ramane a listei
+	comune; un descriptor fara dosar ramane cum e."""
+	f = getattr(_componenta(plugins), 'getPlugins', None)
+	try:
+		din_lista = list(f(_LISTA_PLUGINURI)) if f is not None else []
+	except Exception as e:
+		_jurnal('lista pluginurilor: %s' % e)
+		din_lista = []
+
+	def inLista(p):
+		if _are(p, _LISTA_PLUGINURI):
+			return True
+		d = _dosar(p)
+		return any(x == p and _dosar(x) == d for x in din_lista)
+	grupe = {}
+	for p in pluginuri:
+		grupe.setdefault(_dosar(p), []).append(p)
+	rez, vazute = [], set()
+	for p in pluginuri:
+		d = _dosar(p)
+		if not d:
+			rez.append(p)
+		elif d not in vazute:
+			vazute.add(d)
+			grupa = grupe[d]
+			rez.extend([x for x in grupa if inLista(x)] or grupa[:1])
+	return rez
+
+
+def descriptoriiPluginului(plugin, plugins=None):
+	"""Ceilalti descriptori ai aceluiasi plugin (acelasi dosar), intai geamanii (aceeasi functie), pentru icoana randului:
+	XStreamity, XKlass, EStalker, BouquetMakerXtream si TV Garden pun icoana numai pe intrarea din lista pluginurilor, iar
+	randul din Extensii poate fi geamanul ei din meniul extensiilor, fara icoana."""
+	d = _dosar(plugin)
+	if not d:
+		return []
+	toti = [x for x in (getattr(_componenta(plugins), 'pluginList', None) or ()) if x is not plugin and _dosar(x) == d]
+	return [x for x in toti if x == plugin] + [x for x in toti if not x == plugin]
 
 
 def indisponibile(plugins):
@@ -411,8 +493,9 @@ def dupaRepornire(catalog, plugins):
 def randuriInstalate(catalog, pluginuri, plugins):
 	"""Fila Instalate: tot ce e pe receptor, o singura data: pluginurile care se deschid, cele care nu se pot deschide (cu
 	motivul), pachetele care asteapta repornirea si restul pachetelor instalate, fara plugin in lista (module de acces,
-	teme). Numarul de pe fila e numarul acestor randuri."""
-	rez = [('plugin', pl, pachetPlugin(catalog, pl)) for pl in pluginuri
+	teme). Numarul de pe fila e numarul acestor randuri. Un plugin are un singur rand (unulPePlugin), nu cate unul pentru
+	fiecare unealta pusa de el in meniul extensiilor."""
+	rez = [('plugin', pl, pachetPlugin(catalog, pl)) for pl in unulPePlugin(pluginuri, plugins)
 		if not I.pluginImagine(getattr(pl, 'path', ''))]
 	vazute = set(x[2].nume for x in rez if x[2] is not None)
 	for e in indisponibile(plugins):
@@ -523,14 +606,26 @@ def file(catalog, nrInstalate, nrFisiere=None):
 		('fisiere', _t(ETICHETA_FISIERE), nrFisiere)]
 
 
-def semnLocuriFisiere():
-	"""Montarile si dosarul local /tmp, fara acces la stick, disc sau retea. O schimbare cere o noua cautare."""
+def semnLocuriFisiere(tmp='/tmp'):
+	"""Montarile si fisierele .ipk puse direct in /tmp (nume, marime, data), fara acces la stick, disc sau retea. O
+	schimbare cere o noua cautare.
+	Nu data dosarului /tmp (12.11.2026, Eduard pe Octagon SF8008 0.7.4): modulul de acces conditionat rescrie fisiere in
+	/tmp la cateva secunde, data dosarului se schimba mereu, iar Extensii (si pagina web) porneau o cautare noua la fiecare
+	verificare (2 s), fara sfarsit: semnul se misca sus tot timpul, fiecare cautare citea 10 s pachetele (verificarea
+	Python 2), iar decodarea Sky se oprea (46 de opriri in 14 minute). Un .ipk incarcat din web sau copiat in /tmp, sau
+	sters dupa instalare, schimba tot semnul."""
+	ipk = []
 	try:
-		s = os.stat('/tmp')
-		tmp = getattr(s, 'st_mtime_ns', s.st_mtime)
+		for e in os.scandir(tmp):
+			try:
+				if e.name.lower().endswith('.ipk') and e.is_file(follow_symlinks=False):
+					st = e.stat(follow_symlinks=False)
+					ipk.append((e.name, st.st_size, getattr(st, 'st_mtime_ns', st.st_mtime)))
+			except OSError:
+				continue
 	except OSError:
-		tmp = None
-	return tuple(sorted(P.readMountTable().items())), tmp
+		ipk = None
+	return tuple(sorted(P.readMountTable().items())), tuple(sorted(ipk)) if ipk is not None else None
 
 
 def filaSurse(catalog):
@@ -547,7 +642,7 @@ def randuriCautare(catalog, pluginuri, text, plugins=None):
 	t = (text or '').strip().lower()
 	rez = []
 	vazute = set()
-	for plugin in pluginuri:
+	for plugin in unulPePlugin(pluginuri, plugins):
 		if I.pluginImagine(getattr(plugin, 'path', '')):
 			continue
 		nume = (plugin.name or '').lower()
@@ -1323,6 +1418,61 @@ def planPython2Fisier(catalog, f):
 		'fisier')
 
 
+# 0.7.4 (decizia 5 a lotului traducatorului): pachetul vechi care cere pachete Python 2 (python-core, python-twisted-web ...) se
+# instaleaza cu perechile lor din Python 3, intr-o singura comanda: opkg install --force-depends <perechile> <pachetul>; pluginul
+# se traduce apoi singur la prima incarcare (Components/HdsPython2Traducere.py). Perechile se iau numai daca sunt instalate sau
+# daca versiunea lor cea mai noua vine din feedurile noastre (ca la Components/HdsModuleLipsa.py: o sursa straina nu poate da un
+# "python3-x"). Ce nu are pereche nu opreste instalarea: se spune pe randul "Python 2" al ferestrei (televizor si pagina web, din
+# acelasi plan); un modul care chiar lipseste il aduce la incarcare HdsModuleLipsa. Fara dependinte Python 2: nimic schimbat.
+TEXT_PERECHI = N_('se mai instalează %s, apoi se traduce singură')
+TEXT_FARA_PERECHI = N_('se traduce singură la prima pornire')
+TEXT_FARA_PERECHE = N_('fără pereche pentru Python 3: %s')
+OPKG_INFO = '/var/lib/opkg/info'
+
+
+def perechiPython3(catalog, dependinte, radacina='/'):
+	"""(de instalat, fara pereche) pentru pachetele Python 2 `dependinte`: perechile python3 care nu sunt inca instalate (din
+	feedurile noastre) si numele Python 2 fara pereche. Fara catalog se socotesc numai pachetele instalate."""
+	if not dependinte:
+		return [], []
+	instalate = getattr(catalog, 'python3_instalate', None) if catalog is not None else None
+	lista = (getattr(catalog, 'python3', None) or {}) if catalog is not None else {}
+
+	def eInstalat(n):
+		if instalate is not None:
+			return n in instalate
+		return os.path.exists(P._cale(radacina, '%s/%s.control' % (OPKG_INFO, n)))
+
+	def bune(n):
+		if not P.nume_valid(n):
+			return False
+		if eInstalat(n):
+			return True
+		x = lista.get(n)
+		return x is not None and felFeed(catalog, x[1], catalog.configurare.adresa(x[1])) in (FEED_HDS, FEED_EXTERN)
+	alese, fara = P.H.perechi(dependinte, bune)
+	return [n for n in alese if not eInstalat(n)], fara
+
+
+def randPython2(perechi, fara):
+	"""randul "Python 2" al ferestrei: ce se mai instaleaza (si ca pluginul se traduce), ce nu are pereche"""
+	parti = [_t(TEXT_PERECHI) % ', '.join(perechi) if perechi else _t(TEXT_FARA_PERECHI)]
+	if fara:
+		# intai: o tema straina, fara randurile care deruleaza, scurteaza valoarea la sfarsit
+		parti.insert(0, _t(TEXT_FARA_PERECHE) % ', '.join(fara))
+	return ('Python 2', '; '.join(parti))
+
+
+def dependintePython2(pachete):
+	"""pachetele Python 2 cerute de pachetele date (Pachet.dependinte_py2 / FisierIpk.dependinte_py2), fara repetari"""
+	rez = []
+	for x in pachete:
+		for d in getattr(x, 'dependinte_py2', None) or ():
+			if d not in rez:
+				rez.append(d)
+	return rez
+
+
 # ---------------------------------------------------------------- planurile confirmarilor
 
 def motivOcupat(descarcare=None, program=None):
@@ -1356,7 +1506,10 @@ def planInstalare(catalog, p, argumente=None, nota=None):
 	for d in dep:
 		if d.python2:
 			return planPython2Pachet(catalog, p, (P.H.DEPENDINTA, d.nume)), None
-	a = (argumente or opkgArguments)('install', [p.nume])
+	py2 = dependintePython2([p] + dep)
+	perechi, fara = perechiPython3(catalog, py2)
+	optiuni = optiuniTema(p.nume, ('--force-depends',) if py2 else ())
+	a = (argumente or opkgArguments)('install', (perechi if py2 else []) + [p.nume], optiuni)
 	if a is None:
 		return None, (_t('Numele extensiei nu este valid. Nu se instalează.'), 'rau')
 	total = p.marime + sum(d.marime for d in dep)
@@ -1364,14 +1517,26 @@ def planInstalare(catalog, p, argumente=None, nota=None):
 	rand = [(_t('Versiune'), p.versiune), (_t('Mărime'), P.marime_text(total) or _t('necunoscută')), (_t('Feed'), s)]
 	if dep:
 		rand.append((_t('Se mai instalează'), ', '.join(d.titlu for d in dep[:3]) + (' ' + _t('și încă %d') % (len(dep) - 3) if len(dep) > 3 else '')))
+	if py2:
+		rand.append(randPython2(perechi, fara))
 	plan = {'fel': 'instaleaza', 'titlu': _t('Instalezi %s?') % p.titlu, 'nume': p.titlu, 'subtitlu': p.subtitlu,
 		'icoana': P.ICOANE.get(p.categorie, 'altele'), 'randuri': rand, 'nota': _nota(catalog, [p] + dep, nota),
 		'externe': surseExterne(catalog, [p] + dep), 'notaCuloare': culoareNota(catalog, [p] + dep),
 		'buton': N_('Instalează'), 'argumente': a,
 		'repornire': any(x.categorie not in FARA_REPORNIRE_INSTALARE for x in [p] + dep),
 		'pachete': [p.nume], 'tinte': [_tinta(p)]}
-	_cuVerificare(catalog, plan, [p] + dep, 'install', [p.nume], argumente)
+	_cuVerificare(catalog, plan, [p] + dep, 'install', [p.nume], argumente, optiuni)
 	return plan, None
+
+
+def optiuniTema(nume, optiuni=(), actualizare=False):
+	"""Optiunile opkg ale unei teme (enigma2-plugin-skins-*), ca in imaginile OE-Alliance: --force-overwrite (tema poate
+	aduce un fisier pe care imaginea il are; HdsTemeSuprascrise il copiaza inainte si il pune la loc dupa stergerea temei)
+	si, la instalare, --force-reinstall (o incercare veche cazuta lasa tema „half-installed” si opkg n-o mai ia). Numai la
+	teme; optiunea se aplica intregii comenzi, deci si dependintelor aduse odata cu tema (de pilda OAWeather)."""
+	if not TS.eTema(nume):
+		return tuple(optiuni)
+	return tuple(optiuni) + (TS.OPTIUNI_ACTUALIZARE if actualizare else TS.OPTIUNI_INSTALARE)
 
 
 def deVerificat(catalog, p):
@@ -1380,14 +1545,20 @@ def deVerificat(catalog, p):
 	return dinSursaStraina(catalog, p) and p.categorie in P.H.FELURI_VERIFICATE and p.python2 is None
 
 
-def _cuVerificare(catalog, plan, pachete, comanda, nume, argumente=None):
+def _cuVerificare(catalog, plan, pachete, comanda, nume, argumente=None, optiuni=()):
 	"""Un pachet dintr-o sursa straina se descarca intai (opkg --download-only) si se citeste din cache-ul opkg, inainte
-	de instalare (Lucrare): dupa Depends se vede numai o parte din pachetele pentru Python 2 (masurat: 34 din 69)."""
-	if not any(deVerificat(catalog, x) for x in pachete):
+	de instalare (Lucrare): dupa Depends se vede numai o parte din pachetele pentru Python 2 (masurat: 34 din 69).
+	`optiuni`: --force-depends pentru un pachet cu dependinte Python 2 (fara ea opkg nu descarca nimic: nimeni nu da
+	python-core). Cu --force-overwrite (o tema) pachetul se descarca intai si din feedurile noastre: din el se afla ce
+	fisiere ale imaginii suprascrie, ca sa fie copiate inainte (HdsTemeSuprascrise)."""
+	teme = '--force-overwrite' in optiuni
+	if not teme and not any(deVerificat(catalog, x) for x in pachete):
 		return
-	v = (argumente or opkgArguments)(comanda, nume, ('--download-only',))
+	v = (argumente or opkgArguments)(comanda, nume, ('--download-only',) + tuple(optiuni))
 	if v is not None:
 		plan['verifica'] = v
+		if teme:
+			plan['teme'] = True
 		plan['catalog'] = catalog
 		# numele fisierelor din liste: opkg 0.8.0 pastreaza in cache data serverului, nu pe cea a descarcarii, si nu
 		# scrie mereu randul "Downloading" (masurat pe receptorul de proba): asa se recunoaste si un pachet
@@ -1400,7 +1571,10 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 	pachete = [p for p in pachete if p.actualizare and P.nume_valid(p.nume)]
 	if not pachete:
 		return None, None
-	a = (argumente or opkgArguments)('upgrade', [p.nume for p in pachete])
+	# numai teme: --force-overwrite, ca la instalare (o versiune noua poate aduce alt fisier al imaginii); amestecate cu
+	# alte extensii („Actualizează toate”): fara, ca optiunea sa nu ajunga la ele (o tema instalata tine deja fisierele ei)
+	optiuni = optiuniTema(pachete[0].nume, actualizare=True) if all(TS.eTema(p.nume) for p in pachete) else ()
+	a = (argumente or opkgArguments)('upgrade', [p.nume for p in pachete], optiuni)
 	if a is None:
 		return None, (_t('Un nume de extensie nu este valid. Nu se actualizează.'), 'rau')
 	total = sum(p.marime for p in pachete)
@@ -1430,7 +1604,7 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 		'textGata': _t('Gata. Extensiile sunt la zi.') if len(pachete) > 1 else None,
 		'pachete': [p.nume for p in pachete], 'tinte': [_tinta(p) for p in pachete]}
 	# o versiune noua dintr-o sursa straina se citeste inainte (o actualizare numai pentru Python 2 ar strica pluginul)
-	_cuVerificare(catalog, plan, pachete, 'upgrade', [p.nume for p in pachete], argumente)
+	_cuVerificare(catalog, plan, pachete, 'upgrade', [p.nume for p in pachete], argumente, optiuni)
 	return plan, None
 
 
@@ -1568,18 +1742,112 @@ def planFisier(f, argumente=None, catalog=None):
 	if getattr(f, 'python2', None):
 		return planPython2Fisier(catalog, f), None
 	cale = P.fisier_ipk_permis(f.cale)
-	a = (argumente or opkgArguments)('install', [cale]) if cale else None
+	# 0.7.4: un fisier vechi care cere pachete Python 2: cu perechile python3 si --force-depends (vezi perechiPython3)
+	py2 = dependintePython2([f])
+	perechi, fara = perechiPython3(catalog, py2)
+	optiuni = optiuniTema(getattr(f, 'nume', '') or '', ('--force-depends',) if py2 else ())
+	if not cale:
+		a = None
+	else:
+		a = (argumente or opkgArguments)('install', (perechi if py2 else []) + [cale], optiuni)
 	if a is None:
 		return None, (_t('Fișierul nu se poate instala de aici (nu mai există sau nu e pe stick, disc sau rețea).'), 'rau')
 	rand = [(_t('Extensie'), f.nume or _t('necunoscut')), (_t('Versiune'), f.versiune or _t('necunoscută')),
 		(_t('Mărime'), P.marime_text(f.marime)), (_t('Fișierul'), f.cale_text)]
+	if py2:
+		rand.append(randPython2(perechi, fara))
 	return {'fel': 'fisier', 'titlu': _t('Instalezi %s?') % f.titlu, 'nume': f.titlu, 'subtitlu': f.rezumat,
 		'icoana': 'fisier', 'randuri': [r for r in rand if r[1]],
 		# intai fraza despre verificare: o cale lunga (pana la 255 de semne) o impingea sub marginea notei; calea
 		# scurtata la mijloc, ca sa ramana numele fisierului
 		'nota': _t('Nu este verificată de HD Satelit. Extensie dintr-un fișier %s: %s') % (deUnde(f.cale, f.retea),
 			P.scurt_mijloc(f.cale_text, 70)),
-		'externe': [], 'buton': N_('Instalează'), 'argumente': a, 'repornire': True, 'pachete': [f.nume or f.cale]}, None
+		'externe': [], 'buton': N_('Instalează'), 'argumente': a, 'repornire': True, 'pachete': [f.nume or f.cale],
+		'cale_fisier': cale, 'teme': '--force-overwrite' in optiuni}, None
+
+
+# 0.7.4: un .ipk pus direct in /tmp (incarcat din pagina web sau copiat de om) sta in RAM pana la repornirea intreaga
+# (/tmp e tmpfs: repornirea interfetei nu-l sterge). Dupa instalarea lui reusita din fila Din fisier se sterge. De pe
+# stick, disc, retea sau din alte dosare nu se sterge nimic: sunt fisierele omului.
+DOSARE_TMP = ('/tmp', '/var/volatile/tmp')
+
+
+def stergeIpkDinTmp(cale, radacina='/'):
+	"""Sterge fisierul .ipk `cale` (calea reala din P.fisier_ipk_permis) numai cand sta direct in /tmp, e un fisier
+	obisnuit si nu e o legatura. True daca l-a sters."""
+	if not isinstance(cale, str) or not cale.lower().endswith('.ipk') or posixpath.dirname(cale) not in DOSARE_TMP:
+		return False
+	p = P._cale(radacina, cale)
+	try:
+		import stat
+		s = os.lstat(p)
+		if not stat.S_ISREG(s.st_mode):
+			return False
+		os.remove(p)
+		return True
+	except OSError:
+		return False
+
+
+# 0.7.4 (randul 816, jurnalele testerilor din 31.10): extensiile din afara au uneori scripturile (preinst, postinst,
+# prerm, postrm) scrise pe Windows: cu BOM in fata lui #!/bin/sh sau cu randuri CRLF. Shell-ul nu le poate porni
+# („﻿#!/bin/sh: No such file or directory”), deci configurarea sau stergerea extensiei cade. Inainte de fiecare
+# lucrare opkg, scripturile din dosarul info al lui opkg care au BOM sau CRLF se scriu din nou fara ele (acelasi mod de
+# fisier, prin .nou si rename); celelalte nu se ating. Cel mult SCRIPT_MAXIM octeti pe script.
+SCRIPTURI_PACHET = ('.preinst', '.postinst', '.prerm', '.postrm')
+SCRIPT_MAXIM = 256 * 1024
+BOM = b'\xef\xbb\xbf'
+# randuri din iesirea unei lucrari incheiate cu codul 0 care arata ca scriptul extensiei n-a facut tot (o pagina HTML
+# descarcata in locul arhivei, o arhiva taiata, o comanda care nu exista pe aceasta imagine): extensia e pusa, dar poate
+# nu merge, deci rezultatul nu mai spune „Terminat fără erori.”
+SEMNE_SCRIPT_RAU = ('invalid tar magic', 'truncated input file', 'not in gzip format', 'unexpected end of file',
+	': command not found', 'syntax error')
+
+
+def reparaScripturiPachete(radacina='/', dosar=None):
+	"""Scoate BOM-ul si CR-urile din scripturile pachetelor din dosarul info al lui opkg. Intoarce numele reparate."""
+	if dosar is None:
+		try:
+			dosar = P._cale(radacina, P.citeste_configurarea(radacina).info_dir)
+		except Exception:
+			dosar = P._cale(radacina, P.DOSAR_INFO)
+	try:
+		nume = sorted(os.listdir(dosar))
+	except OSError:
+		return []
+	reparate = []
+	for n in nume:
+		if not n.endswith(SCRIPTURI_PACHET):
+			continue
+		cale = os.path.join(dosar, n)
+		try:
+			if os.path.islink(cale) or os.path.getsize(cale) > SCRIPT_MAXIM:
+				continue
+			with open(cale, 'rb') as f:
+				date = f.read()
+			if not (date.startswith(BOM) or b'\r' in date):
+				continue
+			nou = date[len(BOM):] if date.startswith(BOM) else date
+			nou = nou.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+			mod = os.stat(cale).st_mode & 0o7777
+			with open(cale + '.nou', 'wb') as f:
+				f.write(nou)
+			os.chmod(cale + '.nou', mod)
+			os.replace(cale + '.nou', cale)
+			reparate.append(n)
+		except OSError as e:
+			_jurnal('scriptul %s: %s' % (n, e))
+	return reparate
+
+
+def eroareScriptPachet(linii):
+	"""Primul rand din iesire care arata o eroare a scriptului extensiei (SEMNE_SCRIPT_RAU), scurtat; '' daca nu e."""
+	for linie in linii or ():
+		text = linie if isinstance(linie, str) else str(linie)
+		mic = text.lower()
+		if any(s in mic for s in SEMNE_SCRIPT_RAU) or mic.lstrip().startswith('﻿#!'):
+			return P._curat(text.strip(), 160)
+	return ''
 
 
 # ---------------------------------------------------------------- jurnalul opkg si pluginurile
@@ -1651,13 +1919,16 @@ def pazesteListeleHds():
 	return sterse
 
 
-def pornesteDescarcarea(ipkg=None, inainte=None):
+def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False):
 	"""opkg update. `ipkg`: IpkgComponent-ul ecranului, cu ascultatorul lui pus deja; altfel unul nou (pagina).
 	Descarcarea se tine aici pana la sfarsit, deci se vede si de pe televizor, si din pagina. La sfarsit:
-	STARE['descarcare'] = {'cod', 'motiv', 'cand'} si catalogul paginii se citeste din nou."""
+	STARE['descarcare'] = {'cod', 'motiv', 'cand', 'rezerva'} si catalogul paginii se citeste din nou. `rezerva`: a doua
+	descarcare, de pe serverul de rezerva al feedului extern (treciPeRezerva)."""
 	d = ipkg if ipkg is not None else IpkgComponent()
 	linii = []
 	STARE['ultima_descarcare'] = time.time()
+	# pagina web: descarcarea de acum e cea de pe serverul de rezerva al feedului extern
+	STARE['rezerva_acum'] = rezerva
 	if inainte is None:
 		inainte = instantaneu(_CATALOG['catalog'])
 
@@ -1668,14 +1939,16 @@ def pornesteDescarcarea(ipkg=None, inainte=None):
 		elif e == IpkgComponent.EVENT_DONE:
 			d.removeCallback(eveniment)
 			STARE['descarcare'] = {'cod': parametru, 'motiv': '' if parametru == 0 else P.motiv_eroare(linii),
-				'cand': time.time(), 'inainte': inainte}
+				'cand': time.time(), 'inainte': inainte, 'rezerva': rezerva}
 			catalogVechi()
 	d.addCallback(eveniment)
 
-	def paza(e, _parametru):
+	def paza(e, parametru):
 		if e == IpkgComponent.EVENT_DONE:
 			d.removeCallback(paza)
 			pazesteListeleHds()
+			if parametru != 0:
+				treciPeRezerva(linii)
 	# paza listelor HD Satelit inaintea ascultatorului ecranului (pus deja), care citeste
 	# catalogul chiar la EVENT_DONE: o lista nesemnata nu se vede nici o data
 	ascultatori = getattr(d, 'callbackList', None)
@@ -1686,6 +1959,68 @@ def pornesteDescarcarea(ipkg=None, inainte=None):
 	pastreazaPanaLaSfarsit(d)
 	d.startCmd(IpkgComponent.CMD_UPDATE)
 	return d
+
+
+# rezerva feedului extern (0.7.4): dupa trecere, inca un opkg update, pornit putin mai tarziu (ascultatorii descarcarii
+# cazute pot porni ei ceva chiar acum) si numai daca nu lucreaza deja opkg
+INTARZIERE_REZERVA_MS = 2000
+_rezerva = {'ceas': None, 'ascultatori': []}
+
+
+def rezervaAsteapta():
+	"""True cat timp descarcarea de pe serverul de rezerva e programata (treciPeRezerva), dar nu a pornit inca"""
+	return _rezerva['ceas'] is not None
+
+
+def laRezerva(cb):
+	"""Ecranul Extensii, deschis cand a cazut moneasoftware.com: cb(d) primeste descarcarea de pe serverul de rezerva
+	(IpkgComponent-ul ei, ca sa o urmareasca pana la sfarsit, cu mesajul si catalogul ca la o descarcare a lui), sau
+	cb(None) daca nu a mai pornit (alta lucrare opkg ruleaza). O singura data."""
+	if cb not in _rezerva['ascultatori']:
+		_rezerva['ascultatori'].append(cb)
+
+
+def scoateAscultatorRezerva(cb):
+	if cb in _rezerva['ascultatori']:
+		_rezerva['ascultatori'].remove(cb)
+
+
+def _anuntaRezerva(d):
+	ascultatori, _rezerva['ascultatori'] = _rezerva['ascultatori'], []
+	for cb in ascultatori:
+		try:
+			cb(d)
+		except Exception as e:
+			_jurnal('ascultatorul rezervei: %s' % e)
+
+
+def treciPeRezerva(linii):
+	"""opkg update cu cod de eroare: daca a cazut lista feedului extern de pe moneasoftware.com, sursa trece pe rezerva
+	(Components/HdsPluginuriExterne.dupa_update) si lista se descarca inca o data, de acolo. Omul nu face nimic: Extensii
+	reciteste catalogul la sfarsitul descarcarii, iar ModuleLipsa si DriverLipsa reincearca singure."""
+	try:
+		if not _X().dupa_update(list(linii)):
+			return False
+	except Exception as e:
+		_jurnal('rezerva feedului extern: %s' % e)
+		return False
+	scrieJurnal('moneasoftware.com nu raspunde: feedul pluginurilor externe trece pe serverul de rezerva')
+	try:
+		from enigma import eTimer
+	except ImportError:  # probe pe PC
+		return True
+
+	def acum():
+		_rezerva['ceas'] = None
+		if descarcareInCurs() or lucrareInCurs():
+			_anuntaRezerva(None)
+			return
+		_anuntaRezerva(pornesteDescarcarea(rezerva=True))
+	ceas = eTimer()
+	ceas.callback.append(acum)
+	ceas.start(INTARZIERE_REZERVA_MS, True)
+	_rezerva['ceas'] = ceas
+	return True
 
 
 # ---------------------------------------------------------------- lucrarea opkg (instalare, actualizare, stergere)
@@ -1760,7 +2095,41 @@ class Lucrare(object):
 			scrieJurnal('---- verificare %s' % ' '.join(self.plan.get('verifica')))
 			self.ipkg.runCmd(self.plan.get('verifica'))
 			return
+		if self.plan.get('teme') and self.plan.get('cale_fisier'):
+			# o tema dintr-un fisier: fisierele imaginii pe care le suprascrie se copiaza intai (pe un fir: un .ipk de
+			# tema are zeci de MB dezarhivati), apoi instalarea
+			self._scrie('pas', _t(TEXT_VERIFICARE))
+			cale, radacina = self.plan.get('cale_fisier'), self.radacina
+			self._peFir(lambda: TS.pastreazaDinIpk(cale, radacina), lambda _r: self._instaleaza())
+			return
 		self._instaleaza()
+
+	def _peFir(self, lucru, apoi):
+		"""lucru() pe un fir separat, apoi apoi(rezultat) pe firul enigma2 (un eTimer culege rezultatul, ca la
+		verificare); pe PC, pe loc"""
+		stare = {'gata': False, 'rez': None}
+
+		def fir():
+			try:
+				stare['rez'] = lucru()
+			except Exception as e:
+				_jurnal('lucrul pe fir: %s' % e)
+			stare['gata'] = True
+		try:
+			from enigma import eTimer
+		except ImportError:          # probele de pe PC: pe loc
+			fir()
+			apoi(stare['rez'])
+			return
+		self._ceas = eTimer()
+
+		def uitaTe():
+			if stare['gata']:
+				self._ceas.stop()
+				apoi(stare['rez'])
+		self._ceas.callback.append(uitaTe)
+		P._fire.start_new_thread(fir, ())
+		self._ceas.start(150, False)
 
 	def _instaleaza(self):
 		self.etapa = 'instalare'
@@ -1773,6 +2142,12 @@ class Lucrare(object):
 		if self.neconfigurateInainte:
 			scrieJurnal('pachete neconfigurate in receptor (opkg le configureaza din nou la sfarsit): %s' %
 				', '.join(self.neconfigurateInainte), True)
+		try:
+			reparate = reparaScripturiPachete(self.radacina)
+			if reparate:
+				scrieJurnal('scripturi de pachet fara BOM/CRLF acum: %s' % ', '.join(reparate), True)
+		except Exception as e:
+			_jurnal('scripturile pachetelor: %s' % e)
 		self.ipkg.runCmd(self.plan.get('argumente'))
 
 	# ------------------------------------------------------------ verificarea pentru Python 2 (0.6.8)
@@ -1820,11 +2195,24 @@ class Lucrare(object):
 		scrieJurnal('verificare: %d pachete descarcate' % len(noi))
 		stare = {'gata': False, 'rez': []}
 
+		teme = self.plan.get('teme')
+		radacina = self.radacina
+
 		def lucru():
 			try:
 				stare['rez'] = [(c, P.H.din_ipk(c)) for c in noi]
 			except Exception as e:
 				_jurnal('verificarea pachetelor: %s' % e)
+			if teme:
+				# o tema: fisierele imaginii pe care le suprascrie, copiate inainte de instalare (HdsTemeSuprascrise)
+				for c in noi:
+					try:
+						copiate = TS.pastreazaDinIpk(c, radacina)
+						if copiate:
+							scrieJurnal('tema %s: fisiere ale imaginii copiate inainte: %s' % (os.path.basename(c),
+								', '.join(copiate)))
+					except Exception as e:
+						_jurnal('copia fisierelor temei: %s' % e)
 			stare['gata'] = True
 		try:
 			from enigma import eTimer
@@ -1992,7 +2380,12 @@ class Lucrare(object):
 					'actualizeaza': _t('Gata. %s este la zi.'), 'sterge': _t('Gata. %s a fost șters.')}
 				titlu = self.plan.get('textGata') or (texte.get(fel) or _t('Gata. %s')) % nume
 			stare, culoare = _t('Gata'), 'bun'
-			if cod == 0:
+			eroareScript = eroareScriptPachet(self.linii) if cod == 0 and fel != 'sterge' else ''
+			if eroareScript:
+				# randul 816: codul 0, dar scriptul extensiei a scris o eroare (de pilda o pagina HTML in locul arhivei)
+				self._scrie('eroare', _t('Scriptul extensiei a scris o eroare: %s') % eroareScript)
+				scrieJurnal('codul %s, dar scriptul extensiei a scris o eroare: %s' % (cod, eroareScript), True)
+			elif cod == 0:
 				self._scrie('bun', _t('Terminat fără erori.'))
 			butoane = [N_('Închide')]
 			if trebuieRepornire and fel != 'sterge':
@@ -2009,6 +2402,9 @@ class Lucrare(object):
 			elif fel == 'instaleaza' and any(t['acces'] for t in bune):
 				# un modul de acces nou: nu porneste singur, se alege din ecranul modulelor
 				stare = _t('Îl pornești din ecranul modulelor.')
+			if eroareScript:
+				stare = _t('Extensia e pusă, dar scriptul ei a scris o eroare: poate nu merge.')
+				culoare = 'chihlimbar'
 		else:
 			motiv = P.motiv_eroare(self.linii)
 			if self.oprit:
@@ -2022,7 +2418,18 @@ class Lucrare(object):
 			butoane = [N_('Închide')]
 		self.rezultat = {'reusit': reusit, 'titlu': titlu, 'stare': stare, 'culoare': culoare, 'butoane': butoane,
 			'ales': ales, 'repornire': 'Repornește interfața' in butoane}
+		if self.schimbat:
+			# fisierele imaginii suprascrise de o tema stearsa acum (sau altfel) se pun la loc (HdsTemeSuprascrise)
+			try:
+				puse = TS.refa(self.radacina)
+				if puse:
+					scrieJurnal('fisierele imaginii puse la loc dupa stergerea temei: %s' % ', '.join(puse), True)
+			except Exception as e:
+				_jurnal('fisierele imaginii: %s' % e)
 		scrieJurnal('---- cod %s' % cod, True)
+		# 0.7.4: fisierul instalat din /tmp nu mai tine RAM (de pe stick sau disc ramane)
+		if reusit and fel == 'fisier' and stergeIpkDinTmp(self.plan.get('cale_fisier'), self.radacina):
+			scrieJurnal('fisierul instalat sters din /tmp: %s' % posixpath.basename(self.plan.get('cale_fisier')))
 		# pachetele descarcate de opkg nu mai trebuie (cache-ul e in RAM): sterse acum, nu la repornire (0.6.6)
 		try:
 			n = P.curata_cache()
@@ -2032,6 +2439,13 @@ class Lucrare(object):
 			_jurnal('cache opkg: %s' % e)
 		catalogVechi()
 		self._anunta('gata', cod)
+		if self.schimbat and fel != 'sterge':
+			# 0.7.4: ce s-a instalat poate cere un port pe care il are alt serviciu (Components/HdsPorturi.py)
+			try:
+				from Components import HdsPorturi
+				HdsPorturi.dupa_schimbare()
+			except Exception:
+				pass
 
 
 def pornesteLucrarea(plan, plugins=None, din_web=True):

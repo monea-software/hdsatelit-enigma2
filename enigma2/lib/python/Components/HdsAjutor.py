@@ -72,9 +72,11 @@ TEXT_LIPSA = {
 # textele din jur cand index.json nu le are (pachet mai vechi decat codul)
 TEXTE_REZERVA = {
 	"ro": {"ajutor": "Ajutor", "inchide": "Închide", "cuprins": "Cuprins", "cauta": "Caută",
-		"taste": _("Tastele acestui ecran")},
+		"taste": _("Tastele acestui ecran"), "pagina_din": "Pagina %d din %d", "pagini_n": "%d pagini",
+		"gasite_n": "%d găsite"},
 	"en": {"ajutor": "Help", "inchide": "Close", "cuprins": "Contents", "cauta": "Search",
-		"taste": _("Keys on this screen")},
+		"taste": _("Keys on this screen"), "pagina_din": "Page %d of %d", "pagini_n": "%d pages",
+		"gasite_n": "%d found"},
 }
 
 
@@ -176,6 +178,24 @@ def in_engleza(limba=None):
 	"""True cand paginile se arata in alta limba decat a interfetei"""
 	limba = limba or limba_interfetei()
 	return limba_text(limba) != limba
+
+
+def text_cu(cheie, limba, valori):
+	"""text(cheie) % valori, fara sa poata cadea: un index de ajutor lipsa sau vechi (fara cheie, sau cu alte locuri de
+	format) facea TypeError in ecranul ajutorului si oprea interfata (rafejo, Vu+ Uno4K SE, 0.7.3, 11.11.2026: tasta Help,
+	„not all arguments converted” la pagina_din). Se incearca limba, engleza, romana si rezerva; la urma valorile goale."""
+	if not isinstance(valori, tuple):
+		valori = (valori,)
+	limba = limba_ui(limba)
+	texte = (index() or {}).get("texte") or {}
+	for L in (limba, "en", "ro"):
+		for t in ((texte.get(L) or {}).get(cheie), (TEXTE_REZERVA.get(L) or {}).get(cheie)):
+			if t:
+				try:
+					return t % valori
+				except (TypeError, ValueError, KeyError):
+					pass
+	return u" ".join(u"%s" % v for v in valori)
 
 
 def text(cheie, limba=None):
@@ -419,9 +439,14 @@ def actualizeaza_taste(pg, context=None, dialog=None, config=None, pagina_key=No
 		parti = [[p, noi if p == "randuri" else r] for p, r in parti]
 	if context == "button_setup":
 		# Acest ecran are acum si apasari scurte si pluginuri instalate.
+		# pe randurile sagetilor: schimbarea canalului si volumul (cererea lui Ozgur, 11.11.2026)
+		sageti = {"up_short": _("Poți alege și Canalul următor sau Canalul anterior."),
+			"down_short": _("Poți alege și Canalul următor sau Canalul anterior."),
+			"left_short": _("Poți alege și Mai tare sau Mai încet, ca tastele de volum."),
+			"right_short": _("Poți alege și Mai tare sau Mai încet, ca tastele de volum.")}
 		parti = [["la_ce_foloseste", [[_("Alegi funcția tastelor și pluginurile instalate. VERDE salvează, ROȘU sau EXIT anulează."), -1]]],
-			["randuri", [[text, _("Funcțiile tastelor și pluginurile instalate"),
-				T.text_actiune(T.FUNCTII_OBISNUITE.get(k, T.VALORI_IMPLICITE[k])), "", "", -1]
+			["randuri", [[T.text_tasta(k, text), _("Funcțiile tastelor și pluginurile instalate"),
+				T.text_actiune(T.FUNCTII_OBISNUITE.get(k, T.VALORI_IMPLICITE[k])), sageti.get(k, ""), "", -1]
 				for k, text in T.SCURTE + T.BUTOANE]]]
 	rez["p"] = [["taste", T.taste_ajutor(context, config, **stare)]] + parti
 	rez["taste_context"] = context
@@ -557,6 +582,43 @@ def pagina_ecranului(dialog, dedesubt=()):
 
 
 # ------------------------------------------------------------------ tasta HELP
+def _ecranStrainCuHelp(d):
+	"""True cand ecranul de sus e al unui plugin strain (are o harta facuta de codul pluginului, Components/ActionMap.py
+	_hartaStraina, sau clasa lui e dintr-un plugin din afara imaginii) si are o harta legata acum care da HELP unei actiuni
+	a lui (HelpableScreen, displayHelp / displayHelpLong din HelpActions.straine). Atunci HELP e al pluginului, ca in
+	OE-Alliance. Ecranele noastre si pluginurile imaginii: False, ajutorul imaginii ramane. Orice nelamurire: False."""
+	try:
+		from Components.ActionMap import ActionMap, SUFIX_STRAINE
+		harti = [v for v in d.values() if isinstance(v, ActionMap) and getattr(v, "bound", False)]
+		if not harti:
+			return False
+		if not any(getattr(h, "straine", False) for h in harti):
+			import sys
+			modul = sys.modules.get(type(d).__module__)
+			cale = (getattr(modul, "__file__", None) or "").replace("\\", "/")
+			if "/Plugins/" not in cale:
+				return False
+			from Components.HdsPluginuriImagine import pluginImagine
+			if pluginImagine(cale):
+				return False
+		from Tools.KeyBindings import queryKeyBinding
+		for h in harti:
+			contexte = list(h.contexts)
+			if getattr(h, "straine", False):
+				contexte += [c + SUFIX_STRAINE for c in h.contexts]
+			oprite = getattr(h, "disbledActions", ())
+			for ctx in contexte:
+				for actiune in h.actions:
+					if actiune in oprite:
+						continue
+					for tasta, _steaguri in queryKeyBinding(ctx, actiune):
+						if tasta == KEY_HELP:
+							return True
+	except Exception as e:
+		_jurnal("tasta HELP, ecranul strain: %s" % e)
+	return False
+
+
 class _Tasta(object):
 	"""Legarea globala a tastei HELP: pe orice ecran deschide pagina lui de ajutor (Screens/HdsAjutor.py)."""
 
@@ -578,6 +640,10 @@ class _Tasta(object):
 			if d is None or any(n in FARA_AJUTOR for n in nume):
 				return 0
 			if any(n.startswith("HdsAjutor") for n in nume):
+				return 0
+			if _ecranStrainCuHelp(d):
+				# ecranul unui plugin strain care leaga el insusi HELP: tasta ajunge la plugin (displayHelp,
+				# displayHelpLong), ca in OE-Alliance; apasarea, tinerea si eliberarea trec toate (prinsa ramane False)
 				return 0
 			dedesubt = [x[0] for x in reversed(getattr(s, "dialog_stack", None) or [])]
 			from Screens.HdsAjutor import deschideDinEcran

@@ -14,7 +14,8 @@ except ImportError:
 	CampText = Label
 from Components.Pixmap import Pixmap
 from Components.MenuList import MenuList
-from Components.MultiContent import MultiContentEntryText, MultiContentEntryPixmapAlphaTest
+from Components.MultiContent import MultiContentEntryText, MultiContentEntryPixmapAlphaTest, MultiContentEntryRectangle
+from Components.SkinIcon import nativ, culoare, codBun, fontPictograme
 from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
 from Tools.LoadPixmap import LoadPixmap
 
@@ -32,6 +33,19 @@ VKB_SAVE_TEXT = 8
 VKB_SEARCH_TEXT = 9
 
 
+def antetPesteCamp(antet, camp):
+	"""True daca eticheta tastaturii (instanta ei din skin) se suprapune peste campul de text: dreptunghiurile se ating.
+	Fara una din ele (skinul nu le are), False."""
+	if antet is None or camp is None:
+		return False
+	a, b = antet.position(), camp.position()
+	la, lb = antet.size(), camp.size()
+	if la.width() <= 0 or la.height() <= 0 or lb.width() <= 0 or lb.height() <= 0:
+		return False
+	return a.x() < b.x() + lb.width() and b.x() < a.x() + la.width() and \
+		a.y() < b.y() + lb.height() and b.y() < a.y() + la.height()
+
+
 def _dinTastatura():
 	"""Ultima tasta a venit de la o tastatura adevarata (Components/HdsTastaturaUsb.py); fara modul, False."""
 	try:
@@ -46,6 +60,76 @@ class VirtualKeyBoardList(MenuList):
 		MenuList.__init__(self, list, enableWrapAround, eListboxPythonMultiContent)
 		self.l.setFont(0, gFont("Regular", 28))
 		self.l.setItemHeight(45)
+		if nativ("VirtualKeyboardNative"):
+			# OE-Alliance: tastele desenate de tema (_tasteNative): textul mic al tastelor fara glifa si glifele
+			self.l.setFont(1, gFont("Regular", 28 * 5 // 9))
+			# glifele incap in tasta: cel mult inaltimea ei fara spatiul din jur (VirtualKeyboardNativeGeometry)
+			spatiu = _parametruTastatura("VirtualKeyboardNativeGeometry", (4, 6, 2))[0]
+			self.l.setFont(2, fontPictograme("VirtualKeyboardIcons", 28, max(12, 45 - 2 * int(spatiu))))
+
+# OE-Alliance: VirtualKeyboardNative=1 in tema deseneaza tastele ca dreptunghiuri in culorile temei
+# (VirtualKeyboardNativeColors: fond, fond ales, chenar, text, rosu, verde, galben, albastru; VirtualKeyboardNativeGeometry:
+# spatiu, raza, chenar) cu glifele din VirtualKeyboardNativeIcons (13 coduri, in ordinea de mai jos), fontul
+# <alias name="VirtualKeyboardIcons"/>. Latimile si ordinea tastelor raman ale tastaturii noastre.
+_NUME_GLIFE = ("BACKSPACEICON", "DELETEICON", "ENTERICON", "EXITICON", "FIRSTICON", "LASTICON", "LEFTICON", "LOCALEICON",
+	"RIGHTICON", "SHIFTICON", "SPACEICON", "TABICON", "CLEARICON")
+_TASTA_GLIFA = {"EXIT": "EXITICON", "BACKSPACE": "BACKSPACEICON", "CLEAR": "CLEARICON", "SHIFT": "SHIFTICON",
+	"SPACE": "SPACEICON", "OK": "ENTERICON"}
+
+
+def _parametruTastatura(nume, implicit):
+	try:
+		from skin import parameters
+		valoare = parameters.get(nume)
+	except ImportError:
+		valoare = None
+	if isinstance(valoare, (tuple, list)) and len(valoare) >= len(implicit):
+		return tuple(valoare[:len(implicit)])
+	return implicit
+
+
+def _tasteNative(keys, selectedKey, shiftMode, latimi):
+	culori = _parametruTastatura("VirtualKeyboardNativeColors", (0x00202020, 0x00404040, 0x00ffffff, 0x00ffffff, 0x00cc4444, 0x0044cc66, 0x00ddcc44, 0x004488cc))
+	fond, ales, chenar, text, rosu, verde, galben, albastru = [culoare(c) for c in culori]
+	geometrie = _parametruTastatura("VirtualKeyboardNativeGeometry", (4, 6, 2))
+	try:
+		spatiu, raza, grosime = [max(0, int(v)) for v in geometrie]
+	except (TypeError, ValueError):
+		spatiu, raza, grosime = 4, 6, 2
+	try:
+		from skin import parameters
+		coduri = parameters.get("VirtualKeyboardNativeIcons", ())
+	except ImportError:
+		coduri = ()
+	if not isinstance(coduri, (tuple, list)):
+		coduri = (coduri,)
+	glife = dict((n, c) for n, c in zip(_NUME_GLIFE, coduri) if codBun(c))
+	glife.setdefault("CLEARICON", glife.get("DELETEICON"))
+	sublinieri = {"EXIT": rosu, "OK": verde, "SHIFT": albastru if shiftMode else galben}
+	inaltime = 45
+	res = [(keys)]
+	x = 0
+	for count, key in enumerate(keys):
+		latime = latimi(key)
+		activ = selectedKey == count
+		w, h = max(1, latime - spatiu * 2), max(1, inaltime - spatiu * 2)
+		fondTasta = ales if activ or (key == "SHIFT" and shiftMode) else fond
+		res.append(MultiContentEntryRectangle(pos=(x + spatiu, spatiu), size=(w, h), backgroundColor=fondTasta,
+			backgroundColorSelected=fondTasta, borderWidth=grosime if activ else 0, borderColor=chenar, borderColorSelected=chenar, cornerRadius=raza))
+		if key in sublinieri and sublinieri[key] is not None:
+			res.append(MultiContentEntryRectangle(pos=(x + spatiu + raza, inaltime - spatiu - grosime * 2), size=(max(1, w - raza * 2), max(1, grosime)),
+				backgroundColor=sublinieri[key], backgroundColorSelected=sublinieri[key]))
+		cod = glife.get(_TASTA_GLIFA.get(key, ""))
+		if cod:
+			eticheta, font = chr(cod), 2
+		else:
+			eticheta = "\u25cc" + key if len(key) == 1 and "\u064b" <= key <= "\u0652" else key
+			font = 0 if len(eticheta) <= 2 else 1
+		# textul pe toata tasta (ca in tastatura obisnuita), dreptunghiul cu spatiul din jur
+		res.append(MultiContentEntryText(pos=(x, 0), size=(latime, inaltime), font=font, text=eticheta,
+			flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, color=text, color_sel=text))
+		x += latime
+	return res
 
 def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 	key_backspace = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_backspace.png"))
@@ -57,6 +141,12 @@ def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 	key_shift = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_shift.png"))
 	key_shift_sel = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_shift_sel.png"))
 	key_space = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_space.png"))
+	if nativ("VirtualKeyboardNative"):
+		poze = {"EXIT": key_esc, "BACKSPACE": key_backspace, "CLEAR": key_clr, "SHIFT": key_shift, "SPACE": key_space, "OK": key_ok}
+		def latimi(key):
+			poza = poze.get(key, key_bg)
+			return poza.size().width() if poza is not None else 45
+		return _tasteNative(keys, selectedKey, shiftMode, latimi)
 	res = [ (keys) ]
 	
 	x = 0
@@ -163,7 +253,23 @@ class VirtualKeyBoard(Screen):
 		self.setLang()
 		self.onExecBegin.append(self.setKeyboardModeAscii)
 		self.onLayoutFinish.append(self.buildVirtualKeyBoard)
+		self.onLayoutFinish.append(self._antetPesteCamp)
 		self.onLayoutFinish.append(self._laDeschidere)
+		self._titluCerut = bool(titlu)
+
+	def _antetPesteCamp(self):
+		"""0.7.4 (forumul 768, JAKITAKI, o tema din afara): unele teme pun eticheta („header”) chiar peste campul de text,
+		ca indemn, iar textul scris se suprapunea peste ea. Cand cele doua dreptunghiuri se ating, eticheta se ascunde si
+		devine titlul ferestrei (daca cine a deschis tastatura n-a dat alt titlu). In tema noastra nu se ating: nimic."""
+		try:
+			if not antetPesteCamp(getattr(self["header"], "instance", None), getattr(self["text"], "instance", None)):
+				return
+			eticheta = self["header"].getText()
+			self["header"].hide()
+			if eticheta and not self._titluCerut:
+				self.setTitle(eticheta)
+		except Exception as e:
+			print("[VirtualKeyBoard] eticheta peste camp: %r" % (e,))
 
 	def _laDeschidere(self):
 		if _dinTastatura():
@@ -600,3 +706,7 @@ class VirtualKeyBoard(Screen):
 	def _secretOprit(self):
 		from Components.HdsAsistentaControl import cereOprirePentruSecret
 		return self.hdsCampSecret and cereOprirePentruSecret(self.session)
+
+
+# numele OE-Alliance al ecranului (tema OverlayHD il importa; lotul TOT, 12.11.2026)
+VirtualKeyboard = VirtualKeyBoard

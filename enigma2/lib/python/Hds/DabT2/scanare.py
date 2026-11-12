@@ -452,6 +452,29 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
                 gasite.append((f, t, stiute(f)))
             else:
                 de_invatat.append((f, t, False))
+    # multiplexurile surori (cererea unui tester, Cipru 39E): acelasi operator are si alte transpondere pe aceeasi
+    # pozitie (Hellas Sat DTT mux 1 pe 11760 H, mux 2 pe 11778,5 H). Cautarea pornita de pe unul il invata si pe celalalt:
+    # aceeasi pozitie, aceeasi tara, verificat pe receptor („merge”), ascultat prin 8001. Pana acum al doilea mux se
+    # gasea numai din „Fluxuri și setări”, feed cu feed. Releul invatarii acordeaza singur transponderul lui.
+    # (cheia feed-ului, liste._cheie_feed, nu tine de transponder: aici se compara id-urile)
+    tari, pozitii, ids = set(), set(), set(f.get('id') for f, _t, _x in gasite + de_invatat)
+    for f, t, _x in gasite + de_invatat:
+        if f.get('tara'):
+            tari.add(f.get('tara'))
+            pozitii.add(t.get('pozitie'))
+    for t in lista.get('transpondere', []) if tari and profil.tip == 't2' else []:   # numai DVB-T2 (probat pe receptor)
+        if t.get('pozitie') not in pozitii or liste._acelasi_transponder(t, tp):
+            continue
+        for f in t.get('feeduri', []):
+            if f.get('tip') != profil.tip or str(f.get('fel')) not in FELURI_PRIN_8001:
+                continue
+            if f.get('tara') not in tari or f.get('stare_verificare') != 'merge' or f.get('id') in ids:
+                continue
+            ids.add(f.get('id'))
+            if stiute(f):
+                gasite.append((f, t, stiute(f)))
+            else:
+                de_invatat.append((f, t, False))
     # un buchet gol nu se face la o scanare fara rezultat (ar aparea in lista de canale ca un dosar gol); unul care
     # exista se reface oricum (intrarile feed-urilor disparute ies)
     rez_b = {'schimbat': False, 'intrari': 0, 'feeduri': 0}

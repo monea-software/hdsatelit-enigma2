@@ -9,6 +9,9 @@
 # - initConfig(): config.logmanager (debugloglimit, daysloglimit), facute la prima folosire; pe televizor nu se schimba
 #   din niciun ecran, ecranul "Informatii" le arata. initConfigCadere(): config.plugins.crashlogautosubmit
 #   (sendAnonCrashlog, addNetwork), cu numele cerute de main/bsod.cpp, care le citeste direct din /etc/enigma2/settings.
+# - initConfigDetaliat(), puneJurnalDetaliat(): "Jurnal detaliat" (config.crash.enabledebug, citit de tools/enigma2.sh.in
+#   la pornirea interfetei), schimbat din Manager jurnale (VERDE) si din /jurnale-sistem; pazaDetaliat() si porneste()
+#   (din mytest.py) tin enigma2-debug.log sub PLAFON_DETALIAT.
 #   Verificarea se face in config.content.items: ConfigSubsection.__getattr__ arunca KeyError, nu AttributeError.
 # - listaJurnale(): fisierele din CALE_JURNALE, cele mai noi primele. citesteJurnal(): textul unui jurnal, cel mult
 #   MARIME_MAX_AFISATA octeti de la sfarsit (ca pe televizor). stergeFisier(): stergerea, dupa intrebarea ecranului.
@@ -36,6 +39,15 @@ SUFIX_CADERE = ".log"
 
 LIMITA_DEPANARE_IMPLICITA = 5
 ZILE_IMPLICITE = 14
+
+# "Jurnal detaliat" (config.crash.enabledebug, citit de tools/enigma2.sh.in la pornirea interfetei): fisierul in care
+# scrie enigma2 cu ENIGMA_DEBUG_LVL=4 si paza lui (pazaDetaliat): peste PLAFON_DETALIAT raman ultimii
+# PASTREAZA_DETALIAT octeti; o citire de marime la PAZA_DETALIAT_MS. Scriptul de pornire pune un prag numai in imaginea
+# de diagnoza (HDS_DEPANARE) si numai la pornire; cu setarea, fara paza, jurnalul ar creste fara margine in memoria interna.
+CALE_DETALIAT = "/home/root/logs/enigma2-debug.log"
+PLAFON_DETALIAT = 8 * 1024 * 1024   # acelasi prag ca imaginea de diagnoza in enigma2.sh.in
+PASTREAZA_DETALIAT = 4 * 1024 * 1024
+PAZA_DETALIAT_MS = 5 * 60 * 1000
 
 
 def _(text):
@@ -70,6 +82,111 @@ def initConfigCadere(config=None):
 	config.plugins.crashlogautosubmit = ConfigSubsection()
 	config.plugins.crashlogautosubmit.sendAnonCrashlog = ConfigYesNo(default=True)
 	config.plugins.crashlogautosubmit.addNetwork = ConfigYesNo(default=False)
+
+
+def initConfigDetaliat(config=None):
+	"""config.crash.enabledebug: "Jurnal detaliat" (randul 825 din TODO, P4). Numele e cel citit de tools/enigma2.sh.in
+	(grep "^config.crash.enabledebug=true" in /etc/enigma2/settings): pornit, interfata urmatoare scrie in
+	CALE_DETALIAT cu ENIGMA_DEBUG_LVL=4. Oprit din fabrica; nu intra in copia setarilor (HdsCopieSetari.SCOT)."""
+	if config is None:
+		from Components.config import config
+	try:
+		return config.crash.enabledebug          # facuta deja (ConfigSubsection da KeyError cand lipseste)
+	except (AttributeError, KeyError):
+		pass
+	from Components.config import ConfigSubsection, ConfigYesNo
+	if "crash" not in config.content.items:
+		config.crash = ConfigSubsection()
+	if "enabledebug" not in config.crash.content.items:
+		config.crash.enabledebug = ConfigYesNo(default=False)
+	return config.crash.enabledebug
+
+
+def jurnalDetaliat(config=None):
+	"""True cand jurnalul detaliat e pornit (pentru pornirea urmatoare a interfetei)."""
+	try:
+		return bool(initConfigDetaliat(config).value)
+	except Exception:
+		return False
+
+
+def puneJurnalDetaliat(pornit, config=None, configfile=None):
+	"""Porneste sau opreste jurnalul detaliat si scrie pe loc /etc/enigma2/settings (scriptul de pornire citeste
+	fisierul, nu memoria). Intoarce noua valoare."""
+	element = initConfigDetaliat(config)
+	element.value = bool(pornit)
+	element.save()
+	if configfile is None:
+		from Components.config import configfile
+	configfile.save()
+	return element.value
+
+
+def detaliatActiv():
+	"""True cand interfata de acum scrie jurnalul detaliat (ENIGMA_DEBUG_LVL din mediul ei, pus de enigma2.sh)."""
+	return bool(os.environ.get("ENIGMA_DEBUG_LVL"))
+
+
+def pazaDetaliat(cale=None, plafon=None, pastreaza=None):
+	"""Tine CALE_DETALIAT sub PLAFON_DETALIAT: peste el, raman numai ultimii PASTREAZA_DETALIAT octeti (de la un
+	inceput de rand), cu un rand in fata care spune ca inceputul s-a taiat. enigma2 scrie in fisier cu ">>" (O_APPEND):
+	dupa taiere, randurile lui noi merg la noul sfarsit; cele scrise chiar in clipa taierii se pot pierde. Intoarce
+	marimea taiata (0 cand nu s-a taiat nimic)."""
+	cale = cale or CALE_DETALIAT
+	plafon = PLAFON_DETALIAT if plafon is None else plafon
+	pastreaza = PASTREAZA_DETALIAT if pastreaza is None else pastreaza
+	try:
+		if os.path.islink(cale):
+			return 0
+		marime = os.path.getsize(cale)
+	except OSError:
+		return 0
+	if marime <= plafon:
+		return 0
+	try:
+		with open(cale, "r+b") as f:
+			f.seek(max(0, marime - pastreaza))
+			coada = f.read(pastreaza)
+			rand = coada.find(b"\n")
+			if 0 <= rand < len(coada) - 1:
+				coada = coada[rand + 1:]
+			antet = ("[HdsJurnale] %s: inceputul jurnalului (%d KB) s-a taiat, raman ultimii %d KB\n" % (
+				time.strftime("%Y-%m-%d %H:%M:%S"), marime // 1024, len(coada) // 1024)).encode("ascii")
+			f.seek(0)
+			f.write(antet + coada)
+			f.truncate()
+		return marime
+	except OSError as e:
+		print("[HdsJurnale] paza jurnalului detaliat:", e)
+		return 0
+
+
+class _PazaDetaliat(object):
+	"""O citire de marime la PAZA_DETALIAT_MS (si una la 20 s dupa pornire). Ruleaza mereu, si cu setarea oprita: un
+	jurnal ramas mare de la o pornire de dinainte se taie si el; costa un stat()."""
+
+	def __init__(self):
+		from enigma import eTimer
+		self.ceas = eTimer()
+		self.ceas.callback.append(self.pas)
+		self.ceas.start(20000, True)
+
+	def pas(self):
+		try:
+			taiat = pazaDetaliat()
+			if taiat:
+				print("[HdsJurnale] jurnalul detaliat avea %d KB: taiat" % (taiat // 1024))
+		finally:
+			self.ceas.start(PAZA_DETALIAT_MS, True)
+
+
+_paza = []
+
+
+def porneste():
+	"""Din mytest.py, o singura data: paza marimii jurnalului detaliat."""
+	if not _paza:
+		_paza.append(_PazaDetaliat())
 
 
 def limite(config=None):

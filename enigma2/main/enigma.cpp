@@ -25,6 +25,7 @@
 #include <lib/gui/elistboxcontent.h>
 #include <lib/gui/ewidget.h>
 #include <lib/gui/ewidgetdesktop.h>
+#include <lib/gdi/hdsanimatie.h>
 #include <lib/gui/ewindow.h>
 #include <lib/python/connections.h>
 #include <lib/python/python.h>
@@ -56,6 +57,69 @@ int getPrevAsciiCode()
 	return ret;
 }
 
+/* HDSatelit: the character a web remote sends before its faked KEY_ASCII (510), read by getPrevAsciiCode as a typed one */
+void setPrevAsciiCode(int code)
+{
+	prev_ascii_code = code;
+}
+
+/*
+ * HDSatelit: animatiile ferestrelor, cu numele cerute de pluginul AnimationSetup din OE-Alliance. Pe receptoarele care au
+ * /proc/stb/fb/animation_current si animation_speed le face driverul placii video, ca in OE-Alliance; unde fisierele lipsesc
+ * le deseneaza enigma2 (mai jos). 1..14 = numele driverului (simplefade ... stripes), orice alta valoare = oprit (disable).
+ */
+static void hdsScrieAnimatie(const char *fisier, const char *valoare)
+{
+	if (access(fisier, W_OK) != 0)
+		return;
+	FILE *f = fopen(fisier, "w");
+	if (!f)
+		return;
+	fputs(valoare, f);
+	fclose(f);
+}
+
+/*
+ * HDSatelit 0.7.4: unde placa nu are fisierele, aceleasi doua functii aleg animatiile desenate de enigma2 (lib/gdi/hdsanimatie.h,
+ * lib/gui/ewidgetdesktop.cpp), deci pluginul AnimationSetup si setarea noastra (Components/HdsAnimatiiFerestre.py) lucreaza pe
+ * ambele drumuri. Numele placii se strang in cele trei feluri desenate: *fade si stripes = aparitie treptata, slide*,
+ * growfromleft si extrudefromleft = alunecare scurta, *zoom*, growdrop si popup = marire usoara. Viteza (15..30 in
+ * AnimationSetup, 20 implicit) -> durata 4000 / viteza ms (20 = 200 ms, 30 = ~133 ms, 15 = ~267 ms).
+ */
+static bool hdsAnimatiePlaca()
+{
+	return access("/proc/stb/fb/animation_current", W_OK) == 0;
+}
+
+void setAnimation_current(int a)
+{
+	static const char *const nume[] = { "disable", "simplefade", "simplezoom", "growdrop", "growfromleft", "extrudefromleft",
+		"popup", "slidedrop", "slidefromleft", "slidelefttoright", "sliderighttoleft", "slidetoptobottom", "zoomfromleft",
+		"zoomfromright", "stripes" };
+	static const int desenat[] = { 0, 1, 3, 3, 2, 2, 3, 2, 2, 2, 2, 2, 3, 3, 1 };
+	int i = (a > 0 && a < (int)(sizeof(nume) / sizeof(nume[0]))) ? a : 0;
+	if (hdsAnimatiePlaca())
+	{
+		hdsScrieAnimatie("/proc/stb/fb/animation_current", nume[i]);
+		eWidgetDesktop::hdsSetAnimatie(0, eWidgetDesktop::hdsAnimatieDurata());
+	}
+	else
+		eWidgetDesktop::hdsSetAnimatie(desenat[i], eWidgetDesktop::hdsAnimatieDurata());
+}
+
+void setAnimation_speed(int speed)
+{
+	char text[16];
+	snprintf(text, sizeof(text), "%d", speed);
+	hdsScrieAnimatie("/proc/stb/fb/animation_speed", text);
+	eWidgetDesktop::hdsSetAnimatie(eWidgetDesktop::hdsAnimatieFel(), speed > 0 ? 4000 / speed : 200);
+}
+
+/* animatia randului ales din liste: numai biblioteca grafica a unor Vu+ o are; aici nimic, ca in OE-Alliance fara ea */
+void setAnimation_current_listbox(int)
+{
+}
+
 /*
  * HDSatelit: fiecare tasta trece prin eRCMapper (lib/driver/rcmapper.h): traducerea telecomenzilor
  * asociate si captura cititorului de coduri. Apasarea lunga se numara inainte, deci ajunge si ea in cititor;
@@ -63,6 +127,9 @@ int getPrevAsciiCode()
  */
 static void deliverKey(eActionMap *actions, const eRCKey &key, int flags)
 {
+	/* HDSatelit 0.7.4: o tasta apasata (nu eliberarea) opreste animatia unei ferestre: zona sare la imaginea finala */
+	if (!(flags & eRCKey::flagBreak))
+		hdsAnimatieOpreste();
 	std::string device = key.producer->getIdentifier();
 	int code = key.code;
 	eRCMapper *mapper = eRCMapper::getInstance();

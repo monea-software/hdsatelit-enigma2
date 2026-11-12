@@ -97,8 +97,10 @@ def stare(a, M=None):
 		"avertisment": M.text_avertisment(),
 		"ultimul": st["ultimul"],
 		"cerere": bool(M.cerere_in_asteptare()),
-		# rezultatul punerii la loc si, dupa el, al reinstalarii pachetelor din feeduri (ca pe televizor)
-		"punere": "\n".join(t for t in (M.mesaj_rezultat(rez) if rez else "", M.mesaj_reinstalare()) if t),
+		# rezultatul punerii la loc si, dupa el, al reinstalarii pachetelor din feeduri (acelasi text ca randul "Ultima punere
+		# la loc" de pe televizor; modulul copiei de pe imaginile vechi nu are text_ultima_punere)
+		"punere": M.text_ultima_punere() if hasattr(M, "text_ultima_punere") else
+			"\n".join(t for t in (M.mesaj_rezultat(rez) if rez else "", M.mesaj_reinstalare()) if t),
 	}
 
 

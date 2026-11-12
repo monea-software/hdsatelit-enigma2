@@ -556,6 +556,7 @@ class EcranSetari(Screen, ConfigListScreen):
             (_('Arata si feed-urile care nu se decodeaza'), cfg.nedecodabile),
             (_('Ia listele DAB+ si DVB-T2 de pe stb.hdsatelit.com in fiecare zi'), cfg.liste_zilnic),
             (_('Rezerva la pornirea postului'), cfg.rezerva),
+            (_('Decodarea sunetului DAB+'), cfg.sunet),
         ]
         # textul de jos urmeaza randul ales (capturile au textul lor comun)
         self._ajutor = {
@@ -564,12 +565,15 @@ class EcranSetari(Screen, ConfigListScreen):
                                     'numele posturilor. Butonul Actualizeaza lista merge oricand.'),
             id(cfg.rezerva): _('La pornirea unui post, receptorul tine o rezerva din flux, ca intreruperile scurte '
                                'sa nu se vada si sa nu se auda. Postul porneste cu atat mai tarziu.'),
+            id(cfg.sunet): _('Automat: pe receptoarele Vu+ sunetul DAB+ se decodeaza in receptor, pe celelalte de '
+                             'placa. Alege altceva numai daca sunetul unui post DAB+ se aude sacadat.'),
         }
         if IN_IMAGINE:
             lista = lista[1:]     # paznicul pluginului nu e in imagine
         else:
-            # rezerva de pornire o citeste numai nucleul imaginii (eHdsFluxHttp): pe alte imagini nu face nimic
-            lista = [x for x in lista if x[1] is not cfg.rezerva]
+            # rezerva de pornire o citeste numai nucleul imaginii (eHdsFluxHttp), iar posturile DAB+ ajung la placa
+            # numai in imagine (profil.sunet_ts): pe alte imagini cele doua nu fac nimic
+            lista = [x for x in lista if x[1] is not cfg.rezerva and x[1] is not cfg.sunet]
         ConfigListScreen.__init__(self, lista, session=session)
         try:
             self['config'].onSelectionChanged.append(self._ajutor_rand)
@@ -588,13 +592,27 @@ class EcranSetari(Screen, ConfigListScreen):
             pass
 
     def salveaza(self):
+        sunet = None
         try:
+            cfg = captura.configureaza()
+            if cfg.sunet.isChanged():
+                sunet = cfg.sunet.value
             for x in self['config'].list:
                 x[1].save()
             from Components.config import configfile
             configfile.save()
         except Exception:
             jurnal.eroare('ecran', 'salvare setari')
+        if sunet is not None:
+            # releul DAB care canta acum trece pe loc pe noua decodare; controlorul DAB, si cand Setarile sunt deschise
+            # din fereastra DVB-T2 (setarile sunt comune); fara controlor DAB nu ruleaza niciun releu DAB
+            try:
+                from . import intrare
+                c = intrare._controlori.get(profil_mod.DAB.nume)
+                if c is not None:
+                    c.sunet_schimbat(sunet)
+            except Exception:
+                jurnal.eroare('ecran', 'decodarea sunetului')
         self.close(True)
 
     def renunta(self):

@@ -27,6 +27,10 @@ DEPENDS = " \
 # reda pe decodorul placii). Serviciul vine mai tarziu prin actualizari, dar bibliotecile trebuie sa fie deja in
 # imagine (hdsatelit-base): o actualizare prin pachete nu aduce biblioteci noi de sistem.
 DEPENDS += "libdvdread libdvdnav libdreamdvd"
+# CI+ in enigma2 (lib/dvb_ci, din sursele GPL enigma2 OE-Alliance, commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4,
+# 12.11.2026): autentificarea si descifrarea CI+ folosesc libcrypto (OpenSSL 3, recipes-local/openssl). La rulare
+# libcrypto3 vine singura (shlibs). Certificatele aparatului NU sunt in imagine: le pune omul in /etc/ciplus.
+DEPENDS += "openssl"
 # Accelerarea 2D pe placa (TDE HiSilicon, 25.09.2026, lotul accel-tde; 26.09.2026, lotul 1d al pilotului): pe
 # MACHINE_FEATURES "hiaccel" (meta-dinobot u57.conf) --with-libhiaccel -> HAVE_HISILICON_ACCEL in lib/gdi/accel.cpp,
 # care incarca libhiaccel.so (dinobot-libs-u57) cu dlopen la pornire, numai cand placa exista si setarea e pornita.
@@ -42,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.3+git${SRCPV}"
+PV = "0.7.4+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -148,9 +152,9 @@ FILES:${PN} += " \
 # limbi = ~19 MB) intra in pachetul ei, enigma2-hdsatelit-po-<limba>, in feedul imaginii; in imagine raman romana si
 # engleza (hotararea lui Eduard, 06.11.2026: „pastrezi numai ce trebuie neaparat, de pilda romana si engleza”). O limba
 # lipsa nu strica nimic: Components/Language.py ramane pe limba de dinainte („Selected language does not exist!”).
-# Pachetul tine de masina (PACKAGE_ARCH mai jos), deci impartirea nu ajunge pe masinile cu eMMC, unde totul ramane intr-un
-# singur pachet, ca pana acum.
-PACKAGES_DYNAMIC:append:hdsflashmic = " ^${PN}-po-.*"
+# Pachetul tine de masina (PACKAGE_ARCH mai jos), deci impartirea de aici nu ajunge pe masinile cu eMMC; acolo e cea de
+# mai jos (imaginea mica).
+PACKAGES_DYNAMIC += "^${PN}-po-.*"
 # ${PN}-po-toate (componenta hdsatelit-partea-doua, 06.11.2026 seara): un pachet gol care depinde de TOATE limbile facute
 # aici, ca partea a doua de pe stick (hdsatelit-partea-doua-continut) sa le ceara fara sa stie lista; lista o da chiar
 # impartirea de mai jos, deci o limba noua intra singura.
@@ -168,9 +172,53 @@ python populate_packages:prepend:hdsflashmic () {
 }
 RDEPENDS:${PN}:append:hdsflashmic = " ${PN}-po-ro ${PN}-po-en"
 
+# Imaginea mica (0.7.4, 10.11.2026; lucru-sesiune/oe-60/imagine-mica/PROIECT-IMAGINE-MICA.md, 2a si P2): pe toate
+# celelalte masini (eMMC si Solo SE pe stick) cele 15 limbi native (HDS_LIMBI_NATIVE, conf/distro/hdsatelit.conf) raman
+# INAUNTRUL lui enigma2-hdsatelit, iar numai celelalte 15 trec in pachetele enigma2-hdsatelit-po-<limba>, in feed (~25 MB
+# mai putin in radacina). Fisierele limbilor native nu se muta dintr-un pachet in altul, deci actualizarea din meniu a
+# receptoarelor de pe bazele vechi nu poate da peste „un pachet ar scrie peste fisierele altui pachet”. O limba nenativa
+# aleasa de om vine singura din feed (Components/HdsLimbaRestaurare.py). Paza: toate nativele au catalogul, iar
+# numarul pachetelor e HDS_LIMBI_FEED_NUMAR (o limba noua in po/Makefile.am cere o hotarare: nativa sau din feed).
+# Fara return in acest bloc: codul se lipeste in fata functiei populate_packages.
+python populate_packages:prepend () {
+    if 'hdsflashmic' not in (d.getVar('OVERRIDES') or '').split(':'):
+        import re
+        hds_native = (d.getVar('HDS_LIMBI_NATIVE') or '').split()
+        hds_dosar = d.expand('${datadir}/enigma2/po')
+        hds_lipsa = [l for l in hds_native if not os.path.isfile(os.path.join(d.getVar('PKGD') + hds_dosar, l,
+            'LC_MESSAGES', 'enigma2.mo'))]
+        if not hds_native or hds_lipsa:
+            bb.fatal('enigma2-hdsatelit: limbile native fara catalog: %s' % (' '.join(hds_lipsa) or 'HDS_LIMBI_NATIVE gol'))
+        hds_limbi = do_split_packages(d, hds_dosar, r'^(?!(?:%s)$)([a-zA-Z_]+)$' % '|'.join(re.escape(l) for l in hds_native),
+            d.expand('${PN}-po-%s'), 'Traducerea interfetei HD Satelit: %s', allow_dirs=True, prepend=True)
+        if len(hds_limbi) != int(d.getVar('HDS_LIMBI_FEED_NUMAR') or '0'):
+            bb.fatal('enigma2-hdsatelit: %d limbi in feed (%s), asteptate %s (HDS_LIMBI_FEED_NUMAR)' % (len(hds_limbi),
+                ' '.join(sorted(hds_limbi)), d.getVar('HDS_LIMBI_FEED_NUMAR')))
+}
+
+# Afisajul color (hotararea A, 10.11.2026; PROIECT-IMAGINE-MICA.md 1c si 4e): /usr/share/enigma2/HDSatelit/afisaj-color
+# (13,8 MB: pozele 480x320 si 400x240, orbita, fonturile) il folosesc numai receptoarele cu LCD color (HDS_AFISAJ_COLOR,
+# conf/distro/hdsatelit.conf). Pe celelalte nimic nu citeste dosarul (meniul Afisaj, pagina web si vremea intreaba intai
+# esteColor()), deci se sterge la constructie; pe Vu+ 4K ramane, si merge din prima secunda, fara internet.
+do_install:append() {
+    if [ "${HDS_AFISAJ_COLOR}" != "1" ]; then
+        rm -rf ${D}${datadir}/enigma2/HDSatelit/afisaj-color
+    fi
+}
+
 # t2mi_decap (decapsulatorul T2-MI) sta sub python/Hds/DabT2/t2/bin: .debug-ul lui, altfel QA debug-files
 FILES:${PN}-dbg += "${libdir}/enigma2/python/.debug ${libdir}/enigma2/python/*/.debug \
     ${libdir}/enigma2/python/Hds/DabT2/t2/bin/.debug"
+
+# SoftCSA (0.7.4, lib/dvb/csaengine.cpp): canalele CSA-ALT (ICAM, Sky Deutschland) se descifreaza in software cu
+# libdvbcsa (strat: libdvbcsa_git.bbappend, fixata la b84e790a, cu dvbcsa_bs_key_set_ecm). Programul o incarca la rulare
+# (dlopen, libdvbcsa.so.1): DEPENDS numai pentru ordinea constructiei si proba QA build-deps, RDEPENDS ca sa vina in
+# imagine si la actualizare. Codul pune si semnul ${datadir}/hdsatelit/softcsa (data/Makefile.am): dupa el scriptul de
+# pornire al modulelor de acces trece singur pe pmt_mode = 6 si extended_cw_api = 1.
+DEPENDS += "libdvbcsa"
+# :append, fiindca RDEPENDS:${PN} se pune mai jos cu "=" (lista modulelor Python)
+RDEPENDS:${PN}:append = " libdvbcsa"
+FILES:${PN} += "${datadir}/hdsatelit/softcsa"
 
 # python3-cryptography: semnatura Ed25519 a actualizarilor (Components/HdsSemnatura.py); fara ea nicio actualizare
 # semnata nu se instaleaza, deci se cere aici, nu se lasa pe seama altor pachete care o aduc intamplator. E reteta
@@ -183,7 +231,11 @@ RDEPENDS:${PN} = " \
     python3-cryptography \
     python3-future python3-image python3-mmap python3-netifaces python3-pexpect python3-pillow python3-process \
     python3-puremagic python3-pyopenssl python3-pyusb python3-requests python3-six python3-treq python3-trio \
+    python3-difflib \
     "
+
+# python3-difflib (randul de sus): AutoTimer din feedul OE-Alliance il importa la pornire; pana la 0.7.3 venea prin pachetele
+# OCR, iar in 0.7.4 (OCR la cerere) a plecat cu ele, deci se cere aici, ca celelalte biblioteci ale pluginurilor externe.
 
 # Pluginurile externe: bibliotecile de mai sus (ultimele doua randuri) le pune OE-Alliance in toate imaginile, iar scripturile
 # de instalare ale multor pluginuri cheama comanda „python”, care pe aceasta baza nu exista
@@ -205,4 +257,42 @@ pkg_postinst:${PN}() {
 if [ -z "$D" ] && [ -f /etc/hdsatelit-model ] && [ ! -f /etc/hds-interfata-pornita ]; then
 	printf 'imagine=actualizare\n' > /etc/hds-interfata-pornita
 fi
+# SoftCSA: modulul de acces isi potriveste pmt_mode / extended_cw_api dupa semnul ${datadir}/hdsatelit/softcsa numai cand
+# porneste. Cand semnul vine prima oara cu o actualizare (fara repornirea receptorului), modulul ales porneste din nou, pe
+# fundal, abia dupa ce interfata noua serveste /tmp/.listen.camd.socket (alt proces enigma2 decat cel de la instalare):
+# repornit cat ruleaza inca interfata veche, modulul ar trece pe pmt_mode 6 fara nimeni la soclu si nu s-ar mai descifra
+# nimic pana la repornirea interfetei. Se asteapta cel mult 30 de minute; altfel potrivirea o face modulul la urmatoarea
+# lui pornire. /etc/hds-softcsa-semn tine minte ca s-a facut (in imaginea construita se pune de la inceput).
+if [ -n "$D" ]; then
+	[ -f $D${datadir}/hdsatelit/softcsa ] && touch $D${sysconfdir}/hds-softcsa-semn
+elif [ -f ${datadir}/hdsatelit/softcsa ] && [ ! -f ${sysconfdir}/hds-softcsa-semn ]; then
+	touch ${sysconfdir}/hds-softcsa-semn
+	if [ -x ${sysconfdir}/init.d/softcam ]; then
+		# || true: scriptul ruleaza cu set -e, iar pidof fara proces da 1 (actualizarea terminata la pornire, golul
+		# dintre interfata veche si cea noua); fara el postinst-ul iesea cu eroare si bucla se oprea chiar la repornire
+		vechi=$(pidof enigma2 || true)
+		( i=0
+		while [ $i -lt 900 ]; do
+			acum=$(pidof enigma2 || true)
+			if [ -S /tmp/.listen.camd.socket ] && [ -n "$acum" ] && [ "$acum" != "$vechi" ]; then
+				${sysconfdir}/init.d/softcam restart
+				break
+			fi
+			sleep 2
+			i=$((i + 1))
+		done ) > /dev/null 2>&1 < /dev/null &
+	fi
+fi
+true
+}
+
+# La scoaterea pachetului (fara semnul SoftCSA dupa el) modulul porneste din nou si revine pe pmt_mode = 0; altfel ar
+# ramane pe 6, iar fara /tmp/.listen.camd.socket nu s-ar mai descifra nimic. opkg nu cheama postrm-ul pachetului vechi la
+# o actualizare sau la o intoarcere pe o versiune mai veche: acolo potrivirea o face modulul la urmatoarea lui pornire.
+pkg_postrm:${PN}() {
+if [ -z "$D" ] && [ ! -f ${datadir}/hdsatelit/softcsa ] && [ -f ${sysconfdir}/hds-softcsa-semn ]; then
+	rm -f ${sysconfdir}/hds-softcsa-semn
+	[ -x ${sysconfdir}/init.d/softcam ] && ( sleep 3; ${sysconfdir}/init.d/softcam restart ) > /dev/null 2>&1 < /dev/null &
+fi
+true
 }

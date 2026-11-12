@@ -7,6 +7,11 @@
 # <service name ref/>) si cheama cihelper.load_ci_assignment() la pornire si load_ci_assignment(force=True) dupa salvare. Aici fisierele
 # se citesc si regulile se dau modulului CI prin eDVBCIInterfaces.setDescrambleRules(slot, (servicii, (furnizor, namespace), caid)),
 # functia pe care imaginea o are deja (lib/dvb_ci/dvbci.cpp). Un fisier lipsa sau stricat lasa slotul neatins. Nu arunca.
+# Imaginea cheama load_ci_assignment() la pornire (Screens/Ci.py, InitCiConfig), fara plugin.
+# Slotul oprit (ci<slot>.oprit langa ci<slot>.xml): nucleul n-are oprirea slotului, deci slotul primeste o regula care
+# nu se potriveste cu niciun canal (REGULI_OPRIT); modulul ramane alimentat si meniul lui merge, dar nu mai decodeaza
+# nimic. Fisierul alocarilor omului ramane neatins. Regulile noi se folosesc de la urmatoarea schimbare de canal:
+# nucleul nu muta un canal care ruleaza deja pe alt slot (recheckPMTHandlers).
 import os
 import re
 import tempfile
@@ -15,11 +20,16 @@ import threading
 from xml.etree.ElementTree import parse, fromstring, Element, SubElement, ElementTree
 
 DOSAR = "/etc/enigma2"
+LAMEDB = "/etc/enigma2/lamedb"
+MAX_LAMEDB_OCTETI = 32 * 1024 * 1024
 MAX_REGULI = 512
 _REF_DVB = re.compile(r"1:0:(?:[0-9a-fA-F]{1,8}:){8}\Z")
+# serviciul 0 nu ruleaza niciodata: un slot cu numai regula asta nu primeste niciun canal
+REGULI_OPRIT = (["1:0:0:0:0:0:0:0:0:0:"], [], [])
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\ud800-\udfff]")
 _EDITOR_LOCK = threading.RLock()
 _neaplicate = {}
+_deGolit = set()  # sloturi pornite din nou fara alocari valide: primesc o data listele goale
 
 
 class AlocareSchimbata(ValueError):
@@ -42,6 +52,21 @@ def caidDinText(text):
 	return numar
 
 
+def refCanal(text):
+	"""Referinta DVB a unui canal, fara numele pus de buchet: "1:0:" si cele opt campuri ale serviciului. Un canal
+	dintr-un buchet cu #DESCRIPTION are numele in referinta (eServiceReference::toString, "...:0:0:0::Nume"), iar
+	nucleul compara canalele fara nume; dosarele, marcajele, fluxurile si inregistrarile dau ValueError."""
+	if not isinstance(text, str) or len(text) > 512:
+		raise ValueError("serviciu")
+	parti = text.strip().split(":")
+	if len(parti) < 11 or parti[0] != "1" or parti[1] != "0" or parti[10] != "":
+		raise ValueError("serviciu")
+	campuri = parti[2:10]
+	if not all(re.fullmatch(r"[0-9a-fA-F]{1,8}", c) for c in campuri):
+		raise ValueError("serviciu")
+	return "1:0:" + "".join("%X:" % int(c, 16) for c in campuri)
+
+
 def _text(text, maxim=256):
 	if not isinstance(text, str) or not text.strip() or len(text) > maxim or _CONTROL.search(text):
 		raise ValueError("text")
@@ -59,9 +84,7 @@ def valideazaAlocarea(reguli):
 	for serviciu in reguli["servicii"]:
 		if not isinstance(serviciu, dict) or set(serviciu) != {"ref", "name"}:
 			raise ValueError("serviciu")
-		ref = _text(serviciu["ref"], 150)
-		if not _REF_DVB.fullmatch(ref):
-			raise ValueError("serviciu")
+		ref = refCanal(_text(serviciu["ref"], 512))
 		nou = {"ref": ref, "name": _text(serviciu["name"])}
 		if not any(s["ref"] == ref for s in rezultat["servicii"]):
 			rezultat["servicii"].append(nou)
@@ -141,6 +164,61 @@ def reaplicaAlocarea(slot, revizie):
 			raise ValueError("reguli")
 		_aplicaAlocarea(slot)
 		return citesteEditor(slot)
+
+
+def _verificaSlot(slot):
+	if type(slot) is not int or not 0 <= slot < 4:
+		raise ValueError("slot")
+
+
+def _caleOprit(slot):
+	return os.path.join(DOSAR, "ci%d.oprit" % slot)
+
+
+def slotOprit(slot):
+	"""Slotul nu primeste niciun canal (oprit din meniul CI sau din web)."""
+	_verificaSlot(slot)
+	return os.path.isfile(_caleOprit(slot))
+
+
+def opresteSlot(slot, oprit):
+	"""Opreste (oprit=True) sau porneste slotul, fara sa atinga alocarile omului; apoi regulile noi se dau modulului.
+	AlocareNeaplicata cand nucleul nu le primeste (starea ramane schimbata pe disc si se aplica la pornire)."""
+	_verificaSlot(slot)
+	cale = _caleOprit(slot)
+	with _EDITOR_LOCK:
+		if oprit:
+			if not os.path.isfile(cale):
+				fd, temporar = tempfile.mkstemp(prefix=".ci%d-" % slot, suffix=".oprit", dir=DOSAR)
+				try:
+					with os.fdopen(fd, "wb") as fisier:
+						fisier.write(b"oprit\n")
+						fisier.flush()
+						os.fsync(fisier.fileno())
+					os.replace(temporar, cale)
+				finally:
+					if os.path.exists(temporar):
+						os.unlink(temporar)
+		else:
+			if os.path.isfile(cale):
+				os.unlink(cale)
+			_deGolit.add(slot)
+		_aplicaAlocarea(slot)
+		return slotOprit(slot)
+
+
+def reguliEfective(slot):
+	"""Regulile date nucleului pentru slot, aceleasi la pornire, la salvare, la reincercare si la oprire / pornire:
+	slotul oprit nu primeste nimic; altfel alocarile din ci<slot>.xml. Fara fisier (sau cu unul stricat): None, slotul
+	ramane cum e; numai dupa „Pornește slotul” listele goale (alegerea automata a modulului), ca regula de oprire sa
+	nu ramana in nucleu."""
+	_verificaSlot(slot)
+	if slotOprit(slot):
+		return tuple(list(x) for x in REGULI_OPRIT)
+	reguli = citesteAlocarea(os.path.join(DOSAR, "ci%d.xml" % slot))
+	if reguli is None and slot in _deGolit:
+		return ([], [], [])
+	return reguli
 
 
 def _aplicaAlocarea(slot):
@@ -229,24 +307,116 @@ def alegeriAlocare(fel, text="", de_la=0, cate=100):
 	return {"alegeri": rezultat[de_la:de_la + cate], "mai_sunt": len(rezultat) > de_la + cate}
 
 
-def caidCunoscute(slot):
-	"""Operatorii si CAID-urile lor din canalele scanate, plus cele ale modulului."""
-	from enigma import eDVBCIInterfaces, iServiceInformation
-	gasite = {}
-	for centru, ref in _canale():
-		info = centru.info(ref)
-		if info is None:
+def caidLamedb(cale=None, maxim=MAX_LAMEDB_OCTETI):
+	"""{CAID: multimea furnizorilor} din lamedb (formatul scris de eDVBDB::saveServicelist): randul de date al fiecarui
+	canal are „p:furnizor” si „C:xxxx” (CAID-urile puse la scanare din descriptorul CA_identifier al SDT). Informatia
+	statica a unui canal nu da CAID-urile in Python (eDVBService::getInfoObject da numai sTransponderData), de aceea
+	se citeste fisierul. Listele din pachete n-au de obicei „C:”. Fisier lipsa, prea mare sau stricat: {}."""
+	cale = cale or LAMEDB
+	try:
+		if os.path.getsize(cale) > maxim:
+			return {}
+		with open(cale, "r", encoding="utf-8", errors="replace") as fisier:
+			text = fisier.read()
+	except (IOError, OSError):
+		return {}
+	text = text.replace("\r", "")
+	inceput = text.find("\nservices\n")
+	if inceput < 0:
+		return {}
+	randuri = text[inceput + 10:].split("\n")
+	gasite, j = {}, 0
+	while j + 2 < len(randuri):
+		if randuri[j].startswith("end"):
+			break
+		date = randuri[j + 2]
+		j += 3
+		if "C:" not in date:
 			continue
-		nume = info.getInfoString(ref, iServiceInformation.sProvider) or ""
-		for caid in info.getInfoObject(ref, iServiceInformation.sCAIDs) or []:
-			if type(caid) is int and 0 < caid <= 0xffff:
-				gasite.setdefault(caid, set()).add(nume)
-	ci = eDVBCIInterfaces.getInstance()
-	for caid in ci.readCICaIds(slot) or []:
-		if type(caid) is int and 0 < caid <= 0xffff:
-			gasite.setdefault(caid, set())
-	return [{"caid": caid, "name": ", ".join(sorted(n for n in nume if n))}
-		for caid, nume in sorted(gasite.items())]
+		furnizor, caids = "", []
+		for camp in date.split(","):
+			if camp.startswith("p:"):
+				furnizor = camp[2:].strip()
+			elif camp.startswith("C:"):
+				try:
+					caids.append(int(camp[2:6], 16))
+				except ValueError:
+					pass
+		for caid in caids:
+			if 0 < caid <= 0xffff:
+				gasite.setdefault(caid, set())
+				if furnizor:
+					gasite[caid].add(furnizor)
+	return gasite
+
+
+def _caidCanalPornit():
+	"""(CAID-urile din PMT ale canalului pornit, furnizorul lui); ([], "") fara canal DVB pornit."""
+	try:
+		import NavigationInstance
+		from enigma import iServiceInformation
+		serviciu = NavigationInstance.instance.getCurrentService()
+		info = serviciu.info() if serviciu is not None else None
+		if info is None:
+			return [], ""
+		caids = info.getInfoObject(iServiceInformation.sCAIDs) or []
+		furnizor = info.getInfoString(iServiceInformation.sProvider) or ""
+		return [c for c in caids if type(c) is int and 0 < c <= 0xffff], furnizor
+	except Exception as e:
+		print("[CIHelper] CAID-urile canalului pornit: %r" % (e,))
+		return [], ""
+
+
+def _caidModul(slot):
+	"""CAID-urile spuse de modul (ca_info), goale cand modulul nu e gata."""
+	try:
+		from enigma import eDVBCIInterfaces
+		return [c for c in eDVBCIInterfaces.getInstance().readCICaIds(slot) or [] if type(c) is int and 0 < c <= 0xffff]
+	except Exception as e:
+		print("[CIHelper] CAID-urile modulului din slotul %d: %r" % (slot, e))
+		return []
+
+
+def _numeSistem(caid):
+	try:
+		from Components.Converter.HdsCommon import caid_name
+		return caid_name(caid) or ""
+	except Exception:
+		return ""
+
+
+def caidCunoscute(slot, lamedb=None, pornit=None, modul=None):
+	"""CAID-urile de ales in editorul de alocari (televizor si web), ca omul sa nu le scrie: cele spuse de modul,
+	cele ale canalului pornit si cele din canalele scanate. Fiecare: {"caid", "name" (sistemul si cel mult trei
+	furnizori), "modul" (il spune modulul), "acum" (il are canalul pornit)}; intai ale modulului, apoi ale canalului
+	pornit, apoi dupa numar. pornit / modul: pentru probe ((caids, furnizor) si lista modulului)."""
+	_verificaSlot(slot)
+	gasite = {}
+
+	def pune(caid, furnizori=(), **semne):
+		x = gasite.setdefault(caid, {"furnizori": set(), "modul": False, "acum": False})
+		x["furnizori"].update(f for f in furnizori if f)
+		x.update(semne)
+
+	for caid, furnizori in caidLamedb(lamedb).items():
+		pune(caid, furnizori)
+	caids, furnizor = pornit if pornit is not None else _caidCanalPornit()
+	for caid in caids:
+		pune(caid, (furnizor,), acum=True)
+	for caid in (modul if modul is not None else _caidModul(slot)):
+		pune(caid, modul=True)
+	rezultat = []
+	for caid, x in gasite.items():
+		unici = {}
+		for f in sorted(x["furnizori"]):
+			unici.setdefault(f.casefold(), f)  # „AB Sat” si „AB SAT” din lamedb: un singur nume
+		furnizori = sorted(unici.values(), key=lambda f: f.casefold())
+		text = ", ".join(furnizori[:3]) + (" +%d" % (len(furnizori) - 3) if len(furnizori) > 3 else "")
+		sistem = _numeSistem(caid)
+		nume = "%s: %s" % (sistem, text) if sistem and text else (sistem or text)
+		rezultat.append({"caid": caid, "name": nume, "modul": x["modul"], "acum": x["acum"]})
+	rezultat.sort(key=lambda c: (not c["modul"], not c["acum"], c["caid"]))
+	return rezultat
 
 
 def _numar(text):
@@ -309,15 +479,21 @@ class _CIHelper:
 		except Exception as e:
 			print("[CIHelper] fara modul CI: %s" % e)
 			return rezultat
-		for slot in range(sloturi or 0):
-			reguli = citesteAlocarea(os.path.join(DOSAR, "ci%d.xml" % slot))
-			if reguli is None:
+		for slot in range(min(sloturi or 0, 4)):
+			try:
+				reguli = reguliEfective(slot)
+			except Exception as e:
+				print("[CIHelper] slotul %d: %s" % (slot, e))
+				rezultat[slot] = False
 				continue
+			if reguli is None:
+				continue  # fara fisier sau cu unul stricat: slotul ramane cum e
 			try:
 				cod = ci.setDescrambleRules(slot, reguli)
 				if cod not in (None, 0):
 					raise RuntimeError("CI")
 				rezultat[slot] = True
+				_deGolit.discard(slot)
 				print("[CIHelper] slotul %d: %d canale, %d furnizori, %d CAID" % (slot, len(reguli[0]), len(reguli[1]), len(reguli[2])))
 			except Exception as e:
 				rezultat[slot] = False

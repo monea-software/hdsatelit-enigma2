@@ -69,10 +69,22 @@ public:
 		
 		colWindowTitleForeground,
 		colWindowTitleBackground,
+			/* HDSatelit 0.7.4: the bars of the skins written for other images (<windowstyle><color name="ScrollbarForeground"...>):
+			   the moving part, the track and the border of the list scroll bars and of the sliders; used only when the
+			   skin gives them (sliderColors), otherwise the bars look as before */
+		colScrollbarForeground,
+		colScrollbarBackground,
+		colScrollbarBorder,
+		colSliderForeground,
+		colSliderBackground,
+		colSliderBorder,
 		colMax
 	};
 	
 	void setColor(int what, const gRGB &back);
+#ifndef SWIG
+	bool sliderColors(bool scrollbar, gRGB &foreground, gRGB &background, gRGB &border, int &set);
+#endif
 	
 	void setTitleOffset(const eSize &offset);
 	void setTitleFont(gFont *fnt);
@@ -88,6 +100,7 @@ private:
 	borderSet m_border[bsMax];
 	
 	gRGB m_color[colMax];
+	bool m_color_set[colMax];
 	
 	eSize m_title_offset;
 	ePtr<gFont> m_fnt;

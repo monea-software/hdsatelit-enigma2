@@ -498,7 +498,7 @@ static int hdsGrupFbc(int adap, int fe)
 	return rezultat;
 }
 
-eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFrontend *simulate_fe)
+eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFrontend *simulate_fe, const char *devicename)
 	:m_simulate(simulate), m_enabled(false), m_type(-1), m_simulate_fe(simulate_fe), m_dvbid(fe), m_slotid(fe)
 	,m_fd(-1), m_rotor_mode(false), m_need_rotor_workaround(false), m_can_handle_dvbs2(false), m_delsys_types(0)
 	,m_multistream(false), m_dvbt2(false), m_dvb_api(0), m_hds_fbc_set(hdsGrupFbc(adap, fe))
@@ -513,11 +513,17 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
 #else
 	sprintf(m_filename, "/dev/dvb/adapter%d/frontend%d", adap, fe);
 #endif
+	if (devicename)
+		snprintf(m_filename, sizeof(m_filename), "%s", devicename);
 	m_timeout = eTimer::create(eApp);
 	CONNECT(m_timeout->timeout, eDVBFrontend::timeout);
 
 	m_tuneTimer = eTimer::create(eApp);
 	CONNECT(m_tuneTimer->timeout, eDVBFrontend::tuneLoop);
+
+	m_hds_e_scanare = false;
+	m_hds_scan_verificare = eTimer::create(eApp);
+	CONNECT(m_hds_scan_verificare->timeout, eDVBFrontend::hdsScanVerifica);
 
 	for (int i=0; i<eDVBFrontend::NUM_DATA_ENTRIES; ++i)
 		m_data[i] = -1;
@@ -525,6 +531,8 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
 	m_idleInputpower[0]=m_idleInputpower[1]=0;
 	m_hds_rotor_locked = false;
 	m_hds_acordare.goleste();
+	m_hds_sistem_pus = -1;
+	m_hds_antena_oprita = false;
 
 	ok = !openFrontend();
 	closeFrontend();
@@ -545,6 +553,10 @@ int eDVBFrontend::openFrontend()
 	m_state=stateIdle;
 	m_tuning=0;
 	m_hds_citiri.goleste(); /* tuner deschis din nou: nimic tinut de dinainte (hdscitirifrontend.h) */
+	/* nucleul poate fi pe alt sistem dupa redeschidere: prima acordare il pune din nou, iar setVoltage de mai jos scrie
+	   din nou alimentarea antenei */
+	m_hds_sistem_pus = -1;
+	m_hds_antena_oprita = false;
 
 #if HAVE_DVB_API_VERSION < 3
 	FrontendInfo fe_info;
@@ -745,6 +757,7 @@ int eDVBFrontend::closeFrontend(bool force, bool no_delayed)
 		setTone(iDVBFrontend::toneOff);
 		setVoltage(iDVBFrontend::voltageOff);
 		m_tuneTimer->stop();
+		m_hds_scan_verificare->stop();
 
 		if (m_sec && !m_simulate)
 			m_sec->setRotorMoving(m_slotid, false);
@@ -770,6 +783,8 @@ int eDVBFrontend::closeFrontend(bool force, bool no_delayed)
 #endif
 	m_sn=0;
 	m_state = stateClosed;
+	m_hds_sistem_pus = -1;
+	m_hds_antena_oprita = false;
 
 	return 0;
 }
@@ -823,6 +838,7 @@ void eDVBFrontend::feEvent(int w)
 			state = stateLock;
 			m_tuning = 0;
 			m_timeout->stop();
+			m_hds_scan_verificare->stop();
 		} else
 		{
 			if (m_tuning) {
@@ -867,6 +883,7 @@ void eDVBFrontend::feEvent(int w)
 void eDVBFrontend::timeout()
 {
 	m_tuning = 0;
+	m_hds_scan_verificare->stop();
 	if (m_state == stateTuning)
 	{
 		// Lock-ul poate fi deja in driver, iar evenimentul inca in coada.
@@ -891,6 +908,31 @@ void eDVBFrontend::timeout()
 		m_state = stateFailed;
 		m_stateChanged(this);
 	}
+}
+
+/* HDSatelit (0.7.4, scanarea, 11.11.2026). Un transponder mort cu rata peste 20000 tinea cautarea 5 s (timpul de
+   asteptare din calcLockTimeout); pe Hotbird, la un tester, 52 de transpondere fara semnal din 122 = ~260 s din 13 minute.
+   La o acordare a cautarii (m_hds_e_scanare, din tune()) starea se citeste o data dupa HDS_SCAN_VERIFICARE_MS: fara semnal
+   prins, fara FE_HAS_SIGNAL si fara FE_HAS_CARRIER (driverul nu vede nimic pe frecventa), acordarea se da pierduta acum,
+   prin timeout() (acelasi drum ca la 5 s: inca o citire a starii, randul "fara semnal dupa" in jurnal, cautarea trece la
+   urmatorul). Cu semnal sau purtatoare (transponder slab, inca in cautare) se asteapta mai departe pana la 5 s, ca inainte.
+   O citire esuata nu hotaraste nimic. Zap-ul, inregistrarile si ratele mici (10-20 s) nu sunt atinse.
+   ATENTIE: driverul Octagon SF8008 (Si2166) nu pune niciodata FE_HAS_SIGNAL si FE_HAS_CARRIER (11.11.2026: numai SYNC cat
+   cauta, numai LOCK cand a prins, si SYNC pe transponderele moarte), deci acolo regula e un timp de asteptare mai scurt:
+   "neprins la 3 s = mort". Pe .114, 467 de acordari fara DiSEqC si motor au prins in cel mult 1,53 s de la tune() (mediana
+   0,41 s), iar dupa comanda driverul prinde in ~0,23 s; pragul de 3 s lasa o marja de ~2x fata de cea mai lenta. */
+void eDVBFrontend::hdsScanVerifica()
+{
+	if (m_simulate || m_state != stateTuning || !m_hds_e_scanare || m_fd < 0)
+		return;
+	int err = 0;
+	int stare = (int)hdsCitesteBrut(hdscitiri::STARE, true, err);
+	if (err || (stare & (FE_HAS_LOCK | FE_HAS_SIGNAL | FE_HAS_CARRIER)))
+		return;
+	eDebug("[SEC] scanare: fara semnal si fara purtatoare dupa %d ms (stare 0x%x), transponderul se da pierdut",
+		(int)HDS_SCAN_VERIFICARE_MS, stare);
+	m_timeout->stop();
+	timeout();
 }
 
 #define INRANGE(X,Y,Z) (((X<=Y) && (Y<=Z))||((Z<=Y) && (Y<=X)) ? 1 : 0)
@@ -1960,7 +2002,11 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 				int tuneTimeout = m_sec_sequence.current()->timeout;
 				eDebugNoSimulate("[SEC] startTuneTimeout %d", tuneTimeout);
 				if (!m_simulate)
+				{
 					m_timeout->start(tuneTimeout, 1);
+					if (m_hds_e_scanare && tuneTimeout > HDS_SCAN_VERIFICARE_MS)
+						m_hds_scan_verificare->start(HDS_SCAN_VERIFICARE_MS, true);
+				}
 				++m_sec_sequence.current();
 				break;
 			}
@@ -2272,6 +2318,104 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 	return delay;
 }
 
+bool eDVBFrontend::hdsZapRapid()
+{
+	return ::access("/tmp/hds-zap-vechi", F_OK) != 0;
+}
+
+/* HDSatelit (0.7.4, viteza zap, 11.11.2026). tune() pornea secventa SEC numai prin m_tuneTimer (0 ms), adica dupa ce bucla
+   principala termina tot ce urmeaza dupa start() (Python-ul zap-ului, ceasurile ajunse la termen): pe .114 (Octagon SF8008)
+   38-321 ms intre inceputul zap-ului si primul pas al secventei, timp in care tunerul nu primea nimic. Acum, cand secventa
+   pana la comanda (SET_FRONTEND) are numai pasi simpli (tensiunea si tonul LNB-ului, timpii, salturile dupa stare) si
+   pauze de cel mult PAUZE_MS in total (10 + 10 ms din fabrica), toata bucata ruleaza pe loc, prin tuneLoopInt (ca din ceas),
+   iar pauzele se dorm pe loc: tunerul primeste comanda inainte de Python-ul de dupa start() si se blocheaza pe semnal cat
+   lucreaza interfata. Restul secventei (pauza de 500 ms, limitarea curentului) ramane pe ceas.
+   Totul sau nimic: cu DiSEqC, toneburst, Unicable (18 V, comanda, inapoi la 13 V), motor (curentul, asteptarea semnalului:
+   IF_TUNER_LOCKED_GOTO poate anunta "semnal prins" inainte ca cel care a cerut acordarea sa asculte, pornirea si oprirea
+   motorului anunta interfata), inchiderea amanata sau o pauza mai lunga, secventa merge toata pe ceas, ca inainte; o
+   secventa nu se rupe in doua (o bucata pe loc, restul dupa Python), ca sa nu se lungeasca tinerea unei tensiuni intre pasi.
+   Verificarea dinainte ia secventa in linie dreapta pana la comanda (pauzele sarite de IF_*_GOTO se numara si ele, deci
+   socoteala e cu marja). Ceasul ramane pornit cu 0 ms (de tune() si de fiecare tuneLoopInt cu pas fara asteptare), deci
+   pasul de dupa comanda il face ceasul, ca inainte. */
+static bool hdsPasSimplu(int cmd)
+{
+	switch (cmd)
+	{
+	case eSecCommand::GOTO:
+	case eSecCommand::SET_VOLTAGE:
+	case eSecCommand::IF_VOLTAGE_GOTO:
+	case eSecCommand::IF_NOT_VOLTAGE_GOTO:
+	case eSecCommand::IF_TONE_GOTO:
+	case eSecCommand::IF_NOT_TONE_GOTO:
+	case eSecCommand::SET_TONE:
+	case eSecCommand::SET_FRONTEND:
+	case eSecCommand::START_TUNE_TIMEOUT:
+	case eSecCommand::SET_TIMEOUT:
+	case eSecCommand::IF_TIMEOUT_GOTO:
+	case eSecCommand::INVALIDATE_CURRENT_SWITCHPARMS:
+	case eSecCommand::UPDATE_CURRENT_SWITCHPARMS:
+	case eSecCommand::INVALIDATE_CURRENT_ROTORPARMS:
+	case eSecCommand::UPDATE_CURRENT_ROTORPARAMS:
+	case eSecCommand::IF_ROTORPOS_VALID_GOTO:
+	case eSecCommand::SET_ROTOR_DISEQC_RETRYS:
+	case eSecCommand::IF_NO_MORE_ROTOR_DISEQC_RETRYS_GOTO:
+	case eSecCommand::SET_POWER_LIMITING_MODE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void eDVBFrontend::hdsSecPeLoc()
+{
+	enum { PAUZE_MS = 30, PASI_MAX = 40 };
+	if (!m_sec_sequence || m_sec_sequence.current() == m_sec_sequence.end())
+		return;
+	/* verificarea dinainte: numai pasi simpli si pauze scurte pana la comanda, altfel nimic pe loc */
+	int pauze = 0;
+	bool comanda = false;
+	for (eSecCommandList::iterator i = m_sec_sequence.current(); i != m_sec_sequence.end() && !comanda; ++i)
+	{
+		if (i->cmd == eSecCommand::SLEEP)
+		{
+			if (i->msec < 0)
+				return;
+			pauze += i->msec;
+		}
+		else if (!hdsPasSimplu(i->cmd))
+			return;
+		comanda = i->cmd == eSecCommand::SET_FRONTEND;
+	}
+	if (!comanda || pauze > PAUZE_MS)
+		return;
+	int dormit = 0;
+	for (int pas = 0; pas < PASI_MAX; ++pas)
+	{
+		if (m_sec_sequence.current() == m_sec_sequence.end())
+			return;
+		const eSecCommand &c = *m_sec_sequence.current();
+		if (c.cmd == eSecCommand::SLEEP)
+		{
+			/* plasa de siguranta: un salt care ar duce in afara bucatii verificate */
+			if (c.msec < 0 || dormit + c.msec > PAUZE_MS)
+				return;
+			if (!m_hds_timpi_zap.sec_start_ms)
+				m_hds_timpi_zap.sec_start_ms = hdsjurnal::monotonMs();
+			eDebug("[SEC] sleep %dms (pe loc)", c.msec);
+			if (c.msec > 0)
+				usleep(c.msec * 1000);
+			dormit += c.msec;
+			++m_sec_sequence.current();
+			continue;
+		}
+		if (!hdsPasSimplu(c.cmd))
+			return;
+		bool a_fost_comanda = c.cmd == eSecCommand::SET_FRONTEND;
+		if (tuneLoopInt() != 0 || a_fost_comanda || m_state != stateTuning)
+			return;
+	}
+}
+
 void eDVBFrontend::hdsComandaTuner(bool recvEvents)
 {
 	/* La motor pot exista mai multe comenzi; ramane ultima, pana la semnalul confirmat. */
@@ -2423,9 +2567,12 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			hdsComandaTuner(recvEvents);
 			if (ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) == -1)
 			{
+				m_hds_sistem_pus = -1;
 				perror("FE_SET_PROPERTY failed");
 				return;
 			}
+			/* DTV_DELIVERY_SYSTEM de mai sus a schimbat sistemul nucleului: acordarea urmatoare pe cablu il pune din nou */
+			m_hds_sistem_pus = t2 ? SYS_DVBT2 : SYS_DVBT;
 		}
 		else
 #endif
@@ -2913,6 +3060,8 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 	eDebugNoSimulate("(%d)tune", m_dvbid);
 
 	m_timeout->stop();
+	m_hds_scan_verificare->stop();
+	m_hds_e_scanare = false;
 
 	int res=0;
 
@@ -2930,8 +3079,9 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 	}
 
 	{
-		// a tuner that does both cable and terrestrial gets its delivery system set on every tune,
-		// because the kernel may still be on the other one (for example after reopening)
+		// a tuner that does both cable and terrestrial gets its delivery system checked on every tune, because the
+		// kernel may still be on the other one (for example after reopening); switchDeliverySystem sends it only when
+		// it differs from the one set on this open descriptor (0.7.4)
 		const int both = (1 << iDVBFrontend::feCable) | (1 << iDVBFrontend::feTerrestrial);
 		int type;
 		if (!where.getSystem(type) && type != iDVBFrontend::feSatellite && (m_delsys_types & both) == both)
@@ -2999,6 +3149,10 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 		res=prepare_sat(feparm, timeout);
 		if (res)
 			goto tune_error;
+		/* cautarea (scan.cpp pune motivul "scanare"), numai la asteptarea de 5 s (rata peste 20000): zigzagul ratelor
+		   mici ramane cu timpul lui; o acordare cu motorul pornit (sec.cpp a pus o comanda noua) asteapta ca inainte */
+		m_hds_e_scanare = !m_simulate && timeout == 5000 && !strcmp(m_hds_acordare.motiv, "scanare") &&
+			!(m_hds_acordare.rotor_cmd != -1 && m_hds_acordare.rotor_cmd != m_hds_acordare.rotor_cmd_vechi) && hdsZapRapid();
 
 		break;
 	}
@@ -3056,6 +3210,10 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 
 	if (!m_simulate)
 	{
+		/* pe loc numai la o acordare ceruta din afara buclei evenimentelor tunerului: dupa pierderea semnalului (tune() din
+		   feEvent, prin eDVBChannel) sau dupa un esec (cautarea trece la transponderul urmator din timeout()) secventa
+		   ramane pe ceas, ca pana acum */
+		bool hds_pe_loc = m_state != stateLostLock && m_state != stateFailed && hdsZapRapid();
 		m_hds_citiri.goleste(); /* acordare noua: nimic tinut din acordarea de dinainte (hdscitirifrontend.h) */
 		m_tuneTimer->start(0,true);
 		m_tuning = 1;
@@ -3064,6 +3222,8 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 			m_state = stateTuning;
 			m_stateChanged(this);
 		}
+		if (hds_pe_loc && m_state == stateTuning)
+			hdsSecPeLoc();
 	}
 	else
 		tuneLoop();
@@ -3099,10 +3259,19 @@ RESULT eDVBFrontend::setVoltage(int voltage)
 {
 	if (!m_simulate)
 	{
+		/* 0.7.4: "off" numai cand nu e deja scris de noi pe descriptorul deschis acum (secventa de cablu il cerea la
+		   fiecare acordare, deci la fiecare zap); "on" (T2 cu 5 V) se scrie ca pana acum, la fiecare acordare */
 		if (voltage == voltageOff)
-			hdsAlimentareAntena(m_slotid, "off");
+		{
+			if (!m_hds_antena_oprita)
+				hdsAlimentareAntena(m_slotid, "off");
+			m_hds_antena_oprita = true;
+		}
 		else if (voltage == voltage13 && m_type == feTerrestrial)
+		{
 			hdsAlimentareAntena(m_slotid, "on");
+			m_hds_antena_oprita = false;
+		}
 	}
 	if (m_type == feCable)
 		return -1;
@@ -3336,22 +3505,29 @@ RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 	if (!(m_delsys_types & (1 << type)))
 		return -EINVAL;
 #if HAVE_DVB_API_VERSION >= 5
-	if (!m_simulate)
+	/* HDSatelit (0.7.4): numai cand nucleul nu e deja pe sistemul cerut. Pana acum ioctl-ul pleca la fiecare acordare,
+	   deci la fiecare zap pe cablu; orice ioctl al tunerului asteapta semaforul pe care firul tunerului din nucleu il tine
+	   cat lucreaza driverul, iar un driver cu set_property il poate duce si la tuner. Ce a pus enigma2 se tine in
+	   m_hds_sistem_pus si se uita la deschidere, la inchidere si la un refuz (atunci se trimite din nou). */
+	int sistem = type == iDVBFrontend::feCable ? SYS_DVBC_ANNEX_A : (t2 ? SYS_DVBT2 : SYS_DVBT);
+	if (!m_simulate && sistem != m_hds_sistem_pus)
 	{
 		struct dtv_property p[2];
 		struct dtv_properties cmdseq;
 		memset(p, 0, sizeof(p));
 		p[0].cmd = DTV_CLEAR;
 		p[1].cmd = DTV_DELIVERY_SYSTEM;
-		p[1].u.data = type == iDVBFrontend::feCable ? SYS_DVBC_ANNEX_A : (t2 ? SYS_DVBT2 : SYS_DVBT);
+		p[1].u.data = sistem;
 		cmdseq.num = 2;
 		cmdseq.props = p;
 		if (::ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) < 0)
 		{
+			m_hds_sistem_pus = -1;
 			hdsjtuner::sistem(m_slotid, type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T", errno);
 			eWarning("frontend %d: setting the delivery system failed (%m)", m_dvbid);
 			return -EINVAL;
 		}
+		m_hds_sistem_pus = sistem;
 	}
 	if (m_type != type)
 	{

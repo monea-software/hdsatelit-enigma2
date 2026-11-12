@@ -1062,10 +1062,14 @@ def completeaza_pluginurile(dosar_copie, rad=None):
 def fa_copia_verificata(punct, text_setari, rad=None):
 	"""(dosarul copiei, None) sau (None, motiv): copia completa pe stick, apoi recitita de acolo fisier cu fisier."""
 	C = _modul("HdsCopieSetari")
+	kw = {"fel": "automata"}
 	if rad:
-		rez = C.fa_copia(punct, text_setari, fel="automata", rad=rad)
-	else:
-		rez = C.fa_copia(punct, text_setari, fel="automata")
+		kw["rad"] = rad
+	# 0.7.4: pluginurile puse din fisiere, care nu sunt in feeduri, intra in copie cu pachetul lor refacut (dupa imaginea
+	# noua se instaleaza din copie). Modulul copiei de pe imaginile vechi (puntea) nu stie parametrul.
+	if getattr(C, "FA_COPIA_REFACE_PACHETE", False):
+		kw["reface_pachete"] = True
+	rez = C.fa_copia(punct, text_setari, **kw)
 	if not rez.get("ok") or not rez.get("cale"):
 		return None, " ".join(rez.get("mesaje") or []) or "copia"
 	dosar = rez["cale"]
@@ -1181,19 +1185,36 @@ def verifica_dupa_scriere(punct, rad=None):
 	return {"bun": bun, "scris": d.get("versiune"), "din_standby": bool(d.get("din_standby")), "acum": acum, "copie": copie}
 
 
+def copie_gresita_la_pornire(rez, copie):
+	"""True cand punerea la loc automata de la prima pornire (rezultat.json, motivul "automat") a luat alta copie decat cea
+	facuta chiar inainte de scriere (identitatea din scriere.json): de pilda o copie mai veche de pe un disc montat inaintea
+	stickului. Atunci copia buna se cere si ea (restaurare_ramasa). Rezultatul unei cereri din meniu nu se atinge, nici
+	unul fara numele copiei (nu se stie ce s-a pus)."""
+	if not isinstance(rez, dict) or not isinstance(copie, dict) or rez.get("motiv") != "automat":
+		return False
+	pusa = rez.get("copie") if isinstance(rez.get("copie"), dict) else {}
+	nume = u"%s" % (pusa.get("nume") or "")
+	return bool(nume) and nume != u"%s" % (copie.get("nume") or "")
+
+
 def restaurare_ramasa(copie, rad=None):
 	"""Dupa o scriere buna, la pornirea sesiunii: copia facuta chiar inainte de scriere (identitatea din scriere.json) trebuia
 	pusa la loc de HdsCopieSetari.pornire, din enigma2.sh, inainte de interfata. Daca acolo nu s-a pus nimic (stickul s-a
 	montat abia dupa cele 20 de secunde de asteptare, de pilda), nu exista rezultat.json, nici semnul "gata": copia se cere
-	acum (cererea o pune enigma2.sh la urmatoarea pornire a interfetei). ("ceruta", cale), ("lipsa", None) cand copia nu e pe
-	niciun mediu, sau ("", None) cand nu e nimic de facut (punerea la loc a rulat, cu sau fara succes, sau asteapta deja)."""
+	acum (cererea o pune enigma2.sh la urmatoarea pornire a interfetei). La fel cand prima pornire a pus alta copie
+	(copie_gresita_la_pornire: una mai veche, de pe un mediu montat inaintea stickului). ("ceruta", cale), ("lipsa", None)
+	cand copia nu e pe niciun mediu, sau ("", None) cand nu e nimic de facut (copia buna a rulat, cu sau fara succes, sau
+	asteapta deja)."""
 	if not isinstance(copie, dict):
 		return "", None
 	C = _modul("HdsCopieSetari")
 	r = rad or _rad()
 	try:
-		if C.citeste_rezultat(r) is not None or C.cerere_in_asteptare(r) or \
-				os.path.exists(os.path.join(C.dosar_restaurare(r), C.SEMN_GATA)):
+		if C.cerere_in_asteptare(r):
+			return "", None
+		rez = C.citeste_rezultat(r)
+		gresita = copie_gresita_la_pornire(rez, copie)
+		if (rez is not None or os.path.exists(os.path.join(C.dosar_restaurare(r), C.SEMN_GATA))) and not gresita:
 			return "", None
 	except Exception as e:
 		_jurnal("restaurarea de dupa scriere: %s" % e)
@@ -1206,7 +1227,9 @@ def restaurare_ramasa(copie, rad=None):
 		except (IOError, OSError, ValueError):
 			continue
 		ok, _mesaj = C.cere_punerea(c["id"], rad=r)
-		_jurnal("dupa scriere: copia %s nu fusese pusa la loc la pornire; %s" % (os.path.basename(c["id"]),
+		_jurnal("dupa scriere: copia %s nu fusese pusa la loc la pornire%s; %s" % (os.path.basename(c["id"]),
+			(" (pusa a fost %s)" % ((rez["copie"] if isinstance(rez.get("copie"), dict) else {}).get("nume") or "alta"))
+				if gresita else "",
 			"ceruta acum" if ok else "cererea nu s-a putut scrie"))
 		if ok:
 			_sterge(asteptata)
@@ -1823,9 +1846,28 @@ def _straine_publice():
 		return []
 
 
+# versiunea de acum, tinuta minte dupa data si marimea status-ului opkg (12.11.2026): pagina web o cere la 2 s, iar fiecare
+# cerere citea si desfacea intreg /var/lib/opkg/status pe firul principal (sute de KB); se schimba numai cand opkg instaleaza
+_versiune_tinuta = {"semn": None, "valoare": ""}
+
+
+def _semn_status(rad):
+	try:
+		s = os.stat(os.path.join(rad, "var", "lib", "opkg", "status"))
+		return (rad, s.st_mtime_ns, s.st_size)
+	except OSError:
+		return None
+
+
 def versiunea_acum_sigur():
 	try:
-		return versiunea_acum()
+		rad = _rad()
+		semn = _semn_status(rad)
+		if semn is not None and semn == _versiune_tinuta["semn"]:
+			return _versiune_tinuta["valoare"]
+		v = versiunea_acum(rad)
+		_versiune_tinuta["semn"], _versiune_tinuta["valoare"] = semn, v
+		return v
 	except Exception:
 		return ""
 

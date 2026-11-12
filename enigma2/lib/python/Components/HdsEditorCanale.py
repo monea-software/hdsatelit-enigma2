@@ -121,6 +121,18 @@ def _jurnal(text):
 	print("[HdsEditorCanale] %s" % text)
 
 
+def _furnizori():
+	"""Components/HdsFurnizori.py (numele furnizorilor aratate omului), sau None fara el."""
+	try:
+		try:
+			from Components import HdsFurnizori as F
+		except ImportError:
+			import HdsFurnizori as F
+		return F
+	except Exception:
+		return None
+
+
 # ---------------------------------------------------------------- erorile
 
 class Eroare(Exception):
@@ -988,10 +1000,20 @@ class Sesiune(object):
 		return [v for v in self.toate(radio) if v.poz == poz]
 
 	def furnizori(self, radio=False):
+		"""[(furnizorul din lamedb, cate canale)], in ordinea listei "Furnizor" de pe receptor: furnizorii dupa nume,
+		transponderele fara operator de la vest la est, la urma fara furnizor (Components/HdsFurnizori.py)."""
 		n = {}
 		for v in self.toate(radio):
 			n[v.furnizor] = n.get(v.furnizor, 0) + 1
-		return sorted(n.items(), key=lambda x: D.cheie_sortare(x[0]))
+		F = _furnizori()
+		if F is None:
+			return sorted(n.items(), key=lambda x: D.cheie_sortare(x[0]))
+		return sorted(n.items(), key=lambda x: (F.cheie_ordine(x[0])[:4], D.cheie_sortare(F.nume_aratat(x[0]))))
+
+	def furnizor_aratat(self, nume):
+		"""Numele aratat al unui furnizor, ca in lista "Furnizor" de pe receptor."""
+		F = _furnizori()
+		return F.nume_aratat(nume) if F is not None else (nume or _t("Fără furnizor"))
 
 	def din_furnizor(self, nume, radio=False):
 		return [v for v in self.toate(radio) if v.furnizor == nume]

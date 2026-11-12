@@ -69,6 +69,12 @@ private:
 		   ultima data in <fisier>.hdsdecodare (se rescrie numai cand se schimba) */
 	bool m_decodare_mai_tarziu;
 	bool m_decodare_pe_televizor;
+		/* SoftCSA (lib/dvb/csasession.h): a recording or a stream of the stream server (8001) of a CSA-ALT service gets
+		   the stream descrambled, by a session of its own; only with a softcam which already gave control words over the
+		   socket (an active session without keys would turn the scrambled packets into null packets), never for
+		   "decode later" */
+	ePtr<eDVBCSASession> m_csa_session;
+	void softCsaRecord(const eDVBServicePMTHandler::program &program);
 	std::string m_decodare_scris;
 	void scrieDecodare(const eDVBServicePMTHandler::program &program, const std::set<int> &pids);
 

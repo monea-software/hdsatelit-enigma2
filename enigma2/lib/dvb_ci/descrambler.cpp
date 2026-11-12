@@ -1,0 +1,182 @@
+/* Din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4, lib/dvb_ci/descrambler.cpp;
+   licenta GPLv2 a enigma2. Modificat de moneasoftware.com si hdsatelit.com, 2026: numai legarea de slotul si
+   jurnalul nostru (dvbci_hds_compat.h). */
+#include <lib/dvb_ci/dvbci_hds_compat.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
+#include <lib/dvb_ci/descrambler.h>
+#include <lib/base/eerror.h>
+
+enum ca_descr_data_type
+{
+	CA_DATA_IV,
+	CA_DATA_KEY,
+};
+
+enum ca_descr_parity
+{
+	CA_PARITY_EVEN,
+	CA_PARITY_ODD,
+};
+
+struct ca_descr_data
+{
+	unsigned int index;
+	enum ca_descr_parity parity;
+	enum ca_descr_data_type data_type;
+	unsigned int length;
+	unsigned char *data;
+};
+
+struct vu_ca_descr_data
+{
+	int slot_id;
+	int fix1; // = 0x6f7c
+	int demux_id;
+	int tunernum;
+	int use_count;
+	int program_number;
+	int reserved1;
+	int fix2; // = 0x1 -> add pids
+	int video_pid;
+	int audio_pid;
+	int reserved2;
+	int fix3; // = 0x12345678
+	int reserved3;
+	int key_register;
+	int use_aes; // 0x2 for AES
+	unsigned char key[16];
+	unsigned char iv[16];
+	int audio_number;
+	int audio_pids[16];
+};
+
+#define CA_SET_DESCR_DATA _IOW('o', 137, struct ca_descr_data)
+
+int descrambler_set_key(int &desc_fd, eDVBCISlot *slot, int parity, unsigned char *data)
+{
+	bool vuIoctlSuccess = false;
+#ifdef DESCRAMBLER_VU
+	if (slot->getTunerNum() > 7 || slot->getTunerNum() == -1) // might be VU box with 2 FBC tuners or VU offline decryption -> try to use VU ioctl
+	{
+		struct vu_ca_descr_data d;
+
+		d.slot_id = slot->getSlotID();
+		d.fix1 = 0x6f7c;
+		d.demux_id = slot->getCADemuxID();
+		d.tunernum = slot->getTunerNum();
+		d.use_count = slot->getUseCount();
+		d.program_number = slot->getProgramNumber();
+		d.fix2 = 0x1;
+		d.video_pid = slot->getVideoPid();
+		d.audio_pid = slot->getAudioPid();
+		d.fix3 = 0x12345678;
+		d.key_register = parity;
+		d.use_aes = 0x2; // AES
+		memcpy(d.key, data, 16);
+		memcpy(d.iv, data + 16, 16);
+		d.audio_number = slot->getAudioNumber();
+		memcpy(d.audio_pids, slot->getAudioPids(), 16 * 4);
+
+		unsigned int ret = ioctl(slot->getFd(), 0x10, &d);
+		if (ret == 0)
+		{
+			vuIoctlSuccess = true;
+			descrambler_deinit(desc_fd); // don't set pids for VU ioctl
+			desc_fd = -1;
+		}
+		eDebug("[CI%d] descrambler_set_key vu ret %u", slot->getSlotID(), ret);
+	}
+#endif
+	if (!vuIoctlSuccess)
+	{
+		struct ca_descr_data d;
+
+		if (desc_fd < 0)
+			return -1;
+
+		d.index = slot->getSlotID();
+		d.parity = (enum ca_descr_parity)parity;
+		d.data_type = CA_DATA_KEY;
+		d.length = 16;
+		d.data = data;
+
+		if (ioctl(desc_fd, CA_SET_DESCR_DATA, &d) == -1)
+		{
+			eWarning("[CI%d descrambler] set key failed", slot->getSlotID());
+			return -1;
+		}
+
+		d.index = slot->getSlotID();
+		d.parity = (enum ca_descr_parity)parity;
+		d.data_type = CA_DATA_IV;
+		d.length = 16;
+		d.data = data + 16;
+
+		if (ioctl(desc_fd, CA_SET_DESCR_DATA, &d) == -1)
+		{
+			eWarning("[CI%d descrambler] set iv failed", slot->getSlotID());
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int descrambler_set_pid(int desc_fd, eDVBCISlot *slot, int enable, int pid)
+{
+	struct ca_pid p = {};
+	unsigned int flags = 0x80;
+	eDebug("[CI descrambler]1 index: %x enable: %x pid: %x", slot->getSlotID(), enable, pid);
+	if (desc_fd < 0)
+		return -1;
+
+	if (slot->getSlotID())
+		flags |= 0x40;
+
+	if (enable)
+		flags |= 0x20;
+
+	p.pid = pid;
+	p.index = flags;
+	eDebug("[CI descrambler]2 index: %x enable: %x flags: %x pid: %x", slot->getSlotID(), enable, flags, pid);
+	if (ioctl(desc_fd, CA_SET_PID, &p) == -1)
+	{
+		if (slot->getDescramblingOptions() > 0)
+			return 0;
+		eWarning("[CI%d descrambler] set pid failed", slot->getSlotID());
+		return -1;
+	}
+
+	return 0;
+}
+
+int descrambler_init(eDVBCISlot *slot, uint8_t ca_demux_id)
+{
+	int desc_fd;
+
+	std::string filename = "/dev/dvb/adapter0/ca" + std::to_string(ca_demux_id);
+
+	if (slot->getDescramblingOptions() > 1)
+		filename = "/dev/dvb/adapter0/ca" + std::to_string(ca_demux_id + 1);
+
+	desc_fd = open(filename.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+	if (desc_fd == -1)
+	{
+		eWarning("[CI%d descrambler] can not open %s", slot->getSlotID(), filename.c_str());
+	}
+	eDebug("[CI%d descrambler] using ca device %s", slot->getSlotID(), filename.c_str());
+
+	return desc_fd;
+}
+
+void descrambler_deinit(int desc_fd)
+{
+	if (desc_fd >= 0)
+		close(desc_fd);
+	desc_fd = -1;
+}

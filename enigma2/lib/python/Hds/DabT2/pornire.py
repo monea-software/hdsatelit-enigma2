@@ -1304,7 +1304,27 @@ class Controlor(object):
         date['url_8001'] = 'http://127.0.0.1:8001/%s' % purtator['ref']
         self._lanseaza_releul(date)
 
+    def _setare_sunet(self):
+        """Decodarea sunetului DAB+ aleasa in ecranul DAB (automat / placa / software), pentru releu."""
+        try:
+            from . import captura
+            return str(captura.configureaza().sunet.value)
+        except Exception:
+            return 'automat'
+
+    def sunet_schimbat(self, valoare):
+        """Setarea „Decodarea sunetului DAB+” schimbata (televizor sau web): releul DAB care ruleaza o ia pe loc
+        (GET /sunet/<valoare>, in fundal); unul pornit mai tarziu o citeste din feed."""
+        if self.profil.tip != 'dab' or not self.releu.ruleaza():
+            return
+
+        def gata(ok, raspuns):
+            jurnal.noteaza(self.et, 'decodarea sunetului: %s -> %s' % (valoare, raspuns if ok else 'releul nu raspunde'))
+        self.fundal.lanseaza(fundal.cere_json, gata, self.profil.url_releu('/sunet/%s' % valoare))
+
     def _lanseaza_releul(self, date):
+        if self.profil.tip == 'dab':
+            date['sunet'] = self._setare_sunet()
         try:
             buchete.scrie_atomic(self.profil.fisier_feed(), json.dumps(date, ensure_ascii=False).encode('utf-8'))
         except Exception:
@@ -1443,6 +1463,7 @@ class Controlor(object):
         self._player_la = _monoton()
         self._reluat_dupa_date = False
         self._fara_imagine_notat = False
+        self._criptat_spus = False
         # inaintea playerului: bara citeste receptie.json cel mult o data la 2 s, iar PMT-ul poate veni in acest timp
         self._scrie_receptie(fortat=True)
         self._in_repornire = True
@@ -1538,6 +1559,16 @@ class Controlor(object):
                 return
             self._paza_abateri = 0
             acum = _monoton()
+            if (self.stare == 'canta' and self.profil.tip == 't2' and not getattr(self, '_criptat_spus', True)
+                    and acum - getattr(self, '_player_la', acum) >= CRIPTAT_DUPA_S and self.latime_video() <= 0
+                    and flux_criptat(prag=CRIPTATE_SIGUR)):
+                # B46 (Silviu, forum 683, Abertis 30W pe SF8008): un flux BISS fara cheia lui in modulul de acces lasa
+                # ecranul negru, fara niciun cuvant (masurat pe .114: 178935 de pachete criptate, 0 iesite). O data pe
+                # pornire, aceeasi fraza ca la cautare; canalul ramane pornit (cheia poate veni din modulul de acces).
+                self._criptat_spus = True
+                nume = self.feed.get('nume') or self.feed.get('id') if self.feed else ''
+                jurnal.noteaza(self.et, 'fluxul pornit e criptat si nu iese nimic: %s' % nume)
+                self._popup(_('Fluxul %s e criptat si nu se poate desface.') % nume)
             if self.stare == 'canta' and self.fundal.in_curs() == 0 and acum - self._stare_la >= PAZA_STARE_S:
                 self._stare_la = acum
                 self.fundal.lanseaza(fundal.cere_json, self._stare_paza, self.profil.url_releu('/stare'))

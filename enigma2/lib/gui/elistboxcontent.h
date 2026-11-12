@@ -18,6 +18,8 @@ public:
 	void invalidateEntry(int index);
 	void invalidate();
 	void setItemHeight(int height);
+		/* HDSatelit 0.7.4: the item width of a horizontal or grid list (itemWidth of a template) */
+	void setItemWidth(int width);
 	eSize getItemSize() { return m_itemsize; }
 #ifndef SWIG
 protected:
@@ -42,12 +44,14 @@ protected:
 	virtual void paint(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected);
 	
 	int getItemHeight() { return m_itemheight; }
+	int getItemWidth() { return m_itemwidth; }
 
 protected:
 	ePyObject m_list;
 	int m_cursor, m_saved_cursor;
 	eSize m_itemsize;
 	int m_itemheight;
+	int m_itemwidth;
 #endif
 };
 

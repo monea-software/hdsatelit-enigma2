@@ -16,16 +16,22 @@
 #     (/etc/enigma2/hds-backup-setari-*), la sfârșit: cu ele se poate întoarce un import.
 # Se sar: dosarul amiko/ (fișierele Maintenance Mode), dosarele ascunse și ale sistemului Windows, legăturile
 # simbolice și dosarele modulelor de acces condiționat, recunoscute fără să li se știe numele (după felul în care își
-# numesc fișierele și după locurile lor standard, vezi _nume_de_modul și _loc_acces): nu se citesc, nu se arată.
-# Arhivele se judecă după cuprins: din ele se iau numai fișierele din lista albă, deci o arhivă a unui modul de acces
-# nu e o sursă și nimic din ea nu se arată. Pe mediu nu se scrie nimic.
+# numesc fișierele și după locurile lor standard, vezi _nume_de_modul și _loc_acces): nu devin surse, nu se citesc, nu
+# se arată. Arhivele se judecă după cuprins: o arhivă a unui modul de acces nu are lamedb sau settings, deci nu e o
+# sursă și nimic din ea nu se arată. Pe mediu nu se scrie nimic.
+# Fișierele modulelor de acces ale unei copii care e sursă (de sub rădăcina altei imagini sau din arhiva ei, locurile
+# HdsImportExtra.LOCURI_ACCES) se copiază ca atare la import, cu alegerea „acces” (regula din 31.10.2026), iar
+# pachetele modulelor se instalează din nou (HdsImportExtra.importa_acces). Sursa ține despre ele numai un bool; din
+# arhivă se scot abia la pregătire, când alegerea e făcută, în <dosarul pregătirii>/extra.
 #
 # Importul copiază numai LISTA_ALBA (canalele, buchetele, înregistrările programate); din settings ia numai cheile
 # tunerelor (CHEI_TUNERE) și setările sigure ale meniului (Components/HdsImportExtra.CHEI_SIGURE, verificate față de
 # valorile permise acum), care merg în settings.din-copie (Components/HdsSetariDinCopie.py), nu în settings. Tot din
 # copie, prin Components/HdsImportExtra.py: piconurile (numai dintr-un dosar, cu limite), lista pluginurilor instalate
 # (potrivită cu sursele de pachete ale receptorului, pentru oferta de instalare) și rețeaua (citită aici, aplicată pe
-# firul enigma2 de Components/HdsImportRetea.py, cu întoarcerea la cea de dinainte când nu merge). Skinul nu se aduce. O arhivă se tratează ca venită din afară: se citesc cel mult
+# firul enigma2 de Components/HdsImportRetea.py, cu întoarcerea la cea de dinainte când nu merge) și modulele de acces
+# (HdsImportExtra.importa_acces: fișierele ca atare, pachetele instalate din nou; modulul ales în copie se alege aici pe
+# firul enigma2, în incheie_importul). Skinul nu se aduce. O arhivă se tratează ca venită din afară: se citesc cel mult
 # MAX_MEMBRI membri și MAX_DECOMPRIMAT octeți decomprimați, se scriu numai fișierele obișnuite din lista albă aflate
 # în dosarul găsit la căutare, fiecare direct în <dosarul pregătirii>/<nume> (fără extractall, deci fără căi luate din
 # arhivă), cel mult MAX_OCTETI în total. Fiecare pregătire scrie în dosarul ei (/tmp/hds-import.<n>) și îl mută la
@@ -127,10 +133,11 @@ SEMNE_SINGLE = ("config.backupmanager.", "config.imagemanager.", "config.misc.re
 ORDINE_MEDIU = {"stick": 0, "disc": 1, "intern": 2, "receptor": 3}
 # alegerile importului: (cheia, câmpul sursei care trebuie să fie adevărat ca alegerea să aibă sens)
 ALEGERI = (("canale", "canale"), ("tunere", "setari"), ("temporizatoare", "temporizatoare"), ("retea", "retea"),
-	("picon", "picon"), ("generale", "setari"), ("pachete", "pachete"))
-# rețeaua se alege de mână (schimbarea ei poate întrerupe legătura cu pagina web); pluginurile înseamnă numai oferta
+	("picon", "picon"), ("generale", "setari"), ("acces", "acces"), ("pachete", "pachete"))
+# rețeaua se alege de mână (schimbarea ei poate întrerupe legătura cu pagina web); pluginurile înseamnă numai oferta;
+# modulele de acces: fișierele copiate ca atare și pachetele instalate din nou (HdsImportExtra.importa_acces)
 ALEGERI_IMPLICITE = {"canale": True, "tunere": True, "temporizatoare": False, "retea": False, "picon": True,
-	"generale": True, "pachete": True}
+	"generale": True, "acces": True, "pachete": True}
 
 
 def _(text):
@@ -443,10 +450,18 @@ def _prea_mult_decomprimat(m, max_decomprimat):
 	return getattr(m, "offset_data", 0) + max(0, getattr(m, "size", 0)) > max_decomprimat
 
 
-def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioare=None, extra=None):
+def _loc_acces_membru(norm):
+	"""Calea unui membru de arhivă trece printr-unul din locurile fișierelor modulelor de acces (sub orice rădăcină)."""
+	c = "/" + norm + "/"
+	return any("/" + loc + "/" in c for loc in _extra().LOCURI_ACCES)
+
+
+def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioare=None, extra=None, acces=None):
 	"""{dosar: {nume}} cu fișierele din lista albă ale unei arhive deschise (`t`, citită în ordine), sau None la o
 	limită depășită. În `interioare` (dacă e dată) pune membrii care sunt ei înșiși arhive de copie (fișiere obișnuite,
-	nu legături, cel mult MAX_ARHIVA), iar în `extra` căile fișierelor rețelei și ale listelor de pachete (_rel_extra)."""
+	nu legături, cel mult MAX_ARHIVA), în `extra` căile fișierelor rețelei și ale listelor de pachete (_rel_extra), iar
+	în `acces` căile fișierelor obișnuite din locurile modulelor de acces (numai ca să fie numărate sub rădăcina copiei;
+	nu se scot și nu ajung în sursă)."""
 	pe_dosare = {}
 	for i, m in enumerate(t):
 		if i >= max_membri:
@@ -465,6 +480,9 @@ def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioa
 		dosar, nume = posixpath.split(norm)
 		if fisier_permis(nume) and not _are_cam(norm):
 			pe_dosare.setdefault(dosar, set()).add(nume)
+		elif (acces is not None and len(acces) < _extra().MAX_FISIERE_ACCES and _loc_acces_membru(norm)
+				and m.size <= _extra().MAX_FISIER_ACCES):
+			acces.append(norm)
 		elif (extra is not None and len(extra) < 64 and not _are_cam(norm) and 0 < m.size <= MAX_EXTRA
 				and _rel_extra(norm)):
 			extra.append(norm)
@@ -474,7 +492,7 @@ def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioa
 	return pe_dosare
 
 
-def _cel_mai_bun_dosar(pe_dosare, extra=None):
+def _cel_mai_bun_dosar(pe_dosare, extra=None, acces=None):
 	bune = [(d, cuprins_dosar(n), len(n)) for d, n in (pe_dosare or {}).items()]
 	bune = [b for b in bune if b[1]]
 	if not bune:
@@ -482,7 +500,25 @@ def _cel_mai_bun_dosar(pe_dosare, extra=None):
 	bune.sort(key=lambda b: (not b[0].endswith("etc/enigma2"), not b[0].endswith("enigma2"), -b[2], b[0]))
 	dosar, cuprins = bune[0][0], bune[0][1]
 	cuprins["extra"] = extra_sub_radacina(dosar, extra or ())
+	cuprins["acces"] = len(acces_sub_radacina(dosar, acces or ()))
 	return dosar, cuprins
+
+
+def acces_sub_radacina(dosar, membri):
+	"""Căile de sub rădăcina copiei (etc/enigma2 al ei, ca la extra_sub_radacina) ale membrilor `membri` care sunt
+	fișiere ale modulelor de acces (HdsImportExtra.este_loc_acces); o copie plată nu are rădăcină, deci niciunul."""
+	X = _extra()
+	rad = X.radacina_copiei(dosar)
+	if rad is None:
+		return []
+	rez = []
+	for norm in membri:
+		if rad and not norm.startswith(rad + "/"):
+			continue
+		rel = norm[len(rad) + 1:] if rad else norm
+		if X.este_loc_acces(rel):
+			rez.append(rel)
+	return rez
 
 
 def extra_sub_radacina(dosar, membri):
@@ -510,10 +546,11 @@ def _cuprins_interior(tarfile, cale, membru, max_membri, termen, max_decomprimat
 				if f is None:
 					return None
 				extra = []
+				acces = []
 				with tarfile.open(fileobj=f, mode="r|*") as interior:
 					pe_dosare = _membri_arhiva(interior, "%s/%s" % (os.path.basename(cale), membru), max_membri,
-						termen, max_decomprimat, extra=extra)
-				return _cel_mai_bun_dosar(pe_dosare, extra)
+						termen, max_decomprimat, extra=extra, acces=acces)
+				return _cel_mai_bun_dosar(pe_dosare, extra, acces)
 	return None
 
 
@@ -526,16 +563,17 @@ def cuprins_arhiva(cale, max_membri=MAX_MEMBRI, termen=None, max_decomprimat=MAX
 	import tarfile
 	interioare = []
 	extra = []
+	acces = []
 	try:
 		with tarfile.open(cale, "r:*") as t:
 			pe_dosare = _membri_arhiva(t, os.path.basename(cale), max_membri, termen, max_decomprimat, interioare,
-				extra)
+				extra, acces)
 	except Exception as eroare:  # tarfile.TarError, EOFError, OSError, zlib.error, lzma.LZMAError
 		_jurnal("arhivă necitită %s: %s" % (os.path.basename(cale), eroare.__class__.__name__))
 		return None
 	if pe_dosare is None:
 		return None
-	gasit = _cel_mai_bun_dosar(pe_dosare, extra)
+	gasit = _cel_mai_bun_dosar(pe_dosare, extra, acces)
 	if gasit:
 		return gasit
 	for membru in interioare[:MAX_INTERIOARE]:
@@ -566,7 +604,7 @@ def _sursa(mediu, cale, fel, cuprins, timp, rel, imagine="", dosar_arhiva=""):
 		ex = _extra().cuprins_extra(cale, fel, cale if fel == "arhiva" else "", cuprins.get("extra") or ())
 	except Exception as eroare:
 		_jurnal("părțile de lângă canale %s: %s" % (os.path.basename(cale), eroare.__class__.__name__))
-		ex = {"retea": False, "picon": False, "pachete": False}
+		ex = {"retea": False, "picon": False, "pachete": False, "acces": False}
 	if fel == "dosar":
 		id_sursa = cale
 	elif interioara:
@@ -593,6 +631,8 @@ def _sursa(mediu, cale, fel, cuprins, timp, rel, imagine="", dosar_arhiva=""):
 		"retea": bool(ex.get("retea")),
 		"picon": bool(ex.get("picon")),
 		"pachete": bool(ex.get("pachete")),
+		# fișierele modulelor de acces: numai dacă sunt (nicio cale, niciun nume)
+		"acces": bool(cuprins.get("acces")) if fel == "arhiva" else bool(ex.get("acces")),
 		"extra": list(cuprins.get("extra") or []) if fel == "arhiva" else [],
 	}
 
@@ -758,6 +798,8 @@ def cuprins_text(s):
 		parti.append(_("rețea"))
 	if s.get("picon"):
 		parti.append(_("piconuri"))
+	if s.get("acces"):
+		parti.append(_("module de acces"))
 	if s.get("pachete"):
 		parti.append(_("lista pluginurilor"))
 	return ", ".join(parti)
@@ -786,6 +828,7 @@ def eticheta_alegere(cheie):
 		"retea": _("Rețea și Wi-Fi"),
 		"picon": _("Piconuri"),
 		"generale": _("Setări generale"),
+		"acces": _("Module de acces"),
 		"pachete": _("Pluginuri"),
 	}[cheie]
 
@@ -798,6 +841,8 @@ def ajutor_alegere(cheie):
 		"retea": _("Cablul și Wi-Fi-ul din copie. Fără legătură cu ele, rămâne rețeaua de acum."),
 		"picon": _("Piconurile din dosarul picon al copiei, în memoria receptorului."),
 		"generale": _("Fusul orar, ecranul și alte setări din copie. Limba nu se schimbă."),
+		"acces": _("Fișierele modulelor de acces, copiate așa cum sunt, și modulele, instalate din nou din sursele de "
+			"pachete."),
 		"pachete": _("Pluginurile din copie, oferite după import ca să le instalezi."),
 	}.get(cheie, "")
 
@@ -837,15 +882,17 @@ class _InLucru(object):
 
 
 def pregateste(sursa, dest=DOSAR_TMP, max_membri=MAX_MEMBRI, max_octeti=MAX_OCTETI,
-		max_decomprimat=MAX_DECOMPRIMAT):
+		max_decomprimat=MAX_DECOMPRIMAT, cu_acces=False):
 	"""(dosarul din care se importă, None) sau (None, motiv). Un dosar se folosește pe loc; dintr-o arhivă se scriu
 	numai fișierele obișnuite din lista albă aflate în dosarul găsit la căutare, întâi în dosarul acestei pregătiri
-	(`dest`.<n>), care devine `dest` numai dacă între timp nu a pornit o pregătire mai nouă. Rulează pe un fir separat."""
+	(`dest`.<n>), care devine `dest` numai dacă între timp nu a pornit o pregătire mai nouă. `cu_acces` (alegerea
+	„acces”): și fișierele modulelor de acces de sub rădăcina copiei, ca atare, în <dosar>/extra/<cale>. Rulează pe un
+	fir separat."""
 	with _InLucru():
-		return _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat)
+		return _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat, cu_acces)
 
 
-def _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat):
+def _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat, cu_acces=False):
 	if sursa.get("fel") == "dosar":
 		if not os.path.isdir(sursa.get("cale", "")):
 			return None, _("dosarul nu mai există: %s") % sursa.get("cale", "")
@@ -875,14 +922,14 @@ def _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat):
 		rez = _scoate_membrul(tarfile, cale, interioara, cale_interioara, max_membri, max_decomprimat)
 		if rez is None:
 			rez = _scoate_din_arhiva(tarfile, cale_interioara, sursa.get("dosar_arhiva", ""), lucru, max_membri,
-				max_octeti, max_decomprimat, extra)
+				max_octeti, max_decomprimat, extra, cu_acces and sursa.get("acces"))
 		try:
 			os.remove(cale_interioara)
 		except OSError:
 			pass
 	else:
 		rez = _scoate_din_arhiva(tarfile, cale, sursa.get("dosar_arhiva", ""), lucru, max_membri, max_octeti,
-			max_decomprimat, extra)
+			max_decomprimat, extra, cu_acces and sursa.get("acces"))
 	if rez is not None:
 		shutil.rmtree(lucru, ignore_errors=True)
 		return None, rez
@@ -932,12 +979,20 @@ def _scoate_membrul(tarfile, cale, membru, tinta, max_membri, max_decomprimat):
 	return _("arhiva nu are fișiere de canale sau de setări")
 
 
-def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octeti, max_decomprimat, extra=()):
+def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octeti, max_decomprimat, extra=(),
+		cu_acces=False):
 	"""Scrie în `lucru` fișierele din lista albă aflate în `dosar_arhiva`, iar în `lucru`/extra fișierele `extra` (căi
-	de sub rădăcina copiei: rețeaua, listele pachetelor); None dacă a mers, altfel motivul."""
+	de sub rădăcina copiei: rețeaua, listele pachetelor) și, cu `cu_acces`, fișierele modulelor de acces de sub rădăcina
+	copiei (HdsImportExtra.este_loc_acces), ca atare, cu limitele lor (MAX_FISIERE_ACCES, MAX_FISIER_ACCES,
+	MAX_TOTAL_ACCES; ce trece de ele se lasă, fără eroare); None dacă a mers, altfel motivul."""
 	scrise = 0
 	total = 0
-	rad = _extra().radacina_copiei(dosar_arhiva) or ""
+	X = _extra()
+	rad_copie = X.radacina_copiei(dosar_arhiva)
+	cu_acces = bool(cu_acces) and rad_copie is not None
+	acces_scrise = 0
+	acces_total = 0
+	rad = rad_copie or ""
 	# fișierele rețelei și listele pachetelor găsite la căutare: în <lucru>/extra/<calea de sub rădăcina copiei>
 	dorite = dict(((rad + "/" + rel) if rad else rel, rel) for rel in (extra or ()) if _extra().fel_extra(rel))
 	try:
@@ -951,6 +1006,27 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 				if norm is None or not m.isreg():
 					continue
 				dosar, nume = posixpath.split(norm)
+				rel_acces = None
+				if cu_acces and (not rad or norm.startswith(rad + "/")):
+					rel_acces = norm[len(rad) + 1:] if rad else norm
+					if not X.este_loc_acces(rel_acces):
+						rel_acces = None
+				if rel_acces is not None:
+					# fișierul unui modul de acces: scris ca atare (octeții din arhivă, fără să fie citit ca text)
+					if (acces_scrise >= X.MAX_FISIERE_ACCES or m.size > X.MAX_FISIER_ACCES
+							or acces_total + m.size > X.MAX_TOTAL_ACCES):
+						continue
+					f = t.extractfile(m)
+					if f is None:
+						continue
+					tinta = os.path.join(lucru, "extra", *rel_acces.split("/"))
+					os.makedirs(os.path.dirname(tinta), mode=0o700, exist_ok=True)
+					with open(tinta, "wb") as g:
+						shutil.copyfileobj(f, g, 65536)
+					os.chmod(tinta, 0o755 if m.mode & 0o111 else 0o600)
+					acces_scrise += 1
+					acces_total += m.size
+					continue
 				if norm in dorite and not _are_cam(norm) and 0 < m.size <= MAX_EXTRA:
 					total += m.size
 					if total > max_octeti:
@@ -1357,9 +1433,10 @@ def incarca_temporizatoarele(cale, rt=None, creeaza=None):
 
 
 def importa(dosar, alegeri, dest=CALE_ETC, copie=None, setari=None, reincarca=None, text_setari=None, sursa=None,
-		context=None, dest_picon=None, catalog=None, radacina_pregatita=None):
+		context=None, dest_picon=None, catalog=None, radacina_pregatita=None, rad_sistem="/", opkg=None):
 	"""Importul din `dosar` în `dest`, după alegeri ({"canale", "tunere", "temporizatoare", "retea", "picon",
-	"generale", "pachete"}: bool). `sursa`: sursa aleasă (locurile piconurilor, ale rețelei și ale listei pluginurilor);
+	"generale", "acces", "pachete"}: bool). `rad_sistem`, `opkg`: rădăcina receptorului și comanda opkg pentru modulele
+	de acces (numai probele le schimbă). `sursa`: sursa aleasă (locurile piconurilor, ale rețelei și ale listei pluginurilor);
 	`context`: ce s-a citit pe firul enigma2 înainte (context_import: valorile permise ale setărilor sigure).
 	Întâi copia de siguranță a fișierelor de acum: copie(dest) -> (dosar, fișiere, eroare), implicit
 	copie_de_siguranta cu `text_setari`; cu eroare importul nu pornește. Apoi canalele și buchetele, înregistrările
@@ -1368,11 +1445,11 @@ def importa(dosar, alegeri, dest=CALE_ETC, copie=None, setari=None, reincarca=No
 	(incheie_importul); `reincarca`, dacă e dat, se cheamă aici (probele). Rulează pe firul importului: numai fișiere."""
 	with _InLucru():
 		return _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa, context, dest_picon,
-			catalog, radacina_pregatita)
+			catalog, radacina_pregatita, rad_sistem, opkg)
 
 
 def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=None, context=None, dest_picon=None,
-		catalog=None, radacina_pregatita=None):
+		catalog=None, radacina_pregatita=None, rad_sistem="/", opkg=None):
 	note_copie = []
 	if copie is None:
 		def copie(d):
@@ -1472,8 +1549,11 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 				if in_asteptare > len(chei):
 					mesaje.append(_("Setări importate care așteaptă repornirea interfeței: %d.") % in_asteptare)
 	_importa_extra(dosar, alegeri, rez, sursa, context, dest_picon, catalog, radacina_pregatita)
+	_importa_acces(dosar, alegeri, rez, sursa, radacina_pregatita, rad_sistem, opkg)
+	acces = rez.get("acces") or {}
 	rez["ok"] = bool(rez["canale"] or rez["setari"] or rez.get("temporizatoare") or rez.get("picon")
-		or rez.get("_retea") or (rez.get("pachete") or {}).get("total"))
+		or rez.get("_retea") or (rez.get("pachete") or {}).get("total") or acces.get("copiate")
+		or acces.get("puse"))
 	if not rez["ok"]:
 		mesaje.append(_("Nu s-a importat nimic."))
 	return rez
@@ -1538,6 +1618,36 @@ def _importa_extra(dosar, alegeri, rez, sursa, context, dest_picon, catalog, rad
 			mesaje.append(_("Copia nu are setări de rețea pe care să le pot folosi."))
 
 
+def _importa_acces(dosar, alegeri, rez, sursa, radacina_pregatita, rad_sistem="/", opkg=None):
+	"""Modulele de acces din copie (HdsImportExtra.importa_acces), pe firul importului, cu alegerea „acces”: fișierele
+	de sub rădăcina copiei (dosarul altei imagini pe mediu sau, la o arhivă, <pregătire>/extra), listele ei de pachete.
+	În rez["acces"] ajung numai numere și nume de pachete; modulul de ales stă în rez["_acces_alege"], scos de
+	incheie_importul (alegerea se face pe firul enigma2)."""
+	if not sursa or not alegeri.get("acces"):
+		return
+	X = _extra()
+	fel = sursa.get("fel")
+	try:
+		if fel == "arhiva":
+			rad_copie = radacina_pregatita or os.path.join(dosar, "extra")
+			loc = X.locuri_extra(sursa.get("cale", ""), "arhiva", sursa.get("cale", ""), rad_copie)
+		else:
+			rad_copie = X.radacina_copiei(sursa.get("cale", dosar))
+			loc = X.locuri_extra(sursa.get("cale", dosar), "dosar")
+		if not rad_copie:
+			return
+		r = X.importa_acces(rad_copie, loc.get("pachete") or [], rad_sistem, opkg)
+	except Exception as eroare:
+		_jurnal("modulele de acces: %s" % eroare.__class__.__name__)
+		rez["mesaje"].append(_("Modulele de acces nu s-au putut aduce din copie."))
+		return
+	alege = r.pop("alege", None)
+	if alege:
+		rez["_acces_alege"] = alege
+	rez["acces"] = r
+	rez["mesaje"].extend(X.texte_acces(r))
+
+
 def _istoric_semnal():
 	try:
 		from Components import HdsIstoricSemnal as I
@@ -1588,20 +1698,21 @@ def reincarca_canale():
 
 
 def pregateste_si_importa(sursa, alegeri, text_setari=None, anulat=None, dest_tmp=DOSAR_TMP, dest=CALE_ETC,
-		context=None, dest_picon=None, catalog=None):
+		context=None, dest_picon=None, catalog=None, rad_sistem="/", opkg=None):
 	"""Tot lucrul importului de pe firul lui: pregătirea sursei, importul (fără reîncărcarea listei), apoi ștergerea
 	fișierelor scoase din arhivă. `anulat` (threading.Event): pus înainte de import (ecranul închis cât se pregătea
 	copia), nu se mai scrie nimic pe receptor."""
 	with _InLucru():
 		try:
-			dosar, motiv = pregateste(sursa, dest_tmp)
+			dosar, motiv = pregateste(sursa, dest_tmp, cu_acces=bool(alegeri.get("acces")))
 			if dosar is None:
 				return {"ok": False, "mesaje": [_("Importul nu a pornit: %s.") % motiv]}
 			if anulat is not None and anulat.is_set():
 				return {"ok": False, "anulat": True, "mesaje": [_("Importul s-a oprit înainte să schimbe ceva.")]}
 			return importa(dosar, alegeri, dest=dest, text_setari=text_setari, sursa=sursa, context=context,
 				dest_picon=dest_picon, catalog=catalog,
-				radacina_pregatita=os.path.join(dosar, "extra") if sursa.get("fel") == "arhiva" else None)
+				radacina_pregatita=os.path.join(dosar, "extra") if sursa.get("fel") == "arhiva" else None,
+				rad_sistem=rad_sistem, opkg=opkg)
 		finally:
 			curata_tmp(dest_tmp)
 
@@ -1619,12 +1730,14 @@ def context_import(alegeri):
 	return context
 
 
-def incheie_importul(rez, eroare=None, reincarca=None, incarca=None, dest=CALE_ETC, dupa=None, aplica_retea=None):
+def incheie_importul(rez, eroare=None, reincarca=None, incarca=None, dest=CALE_ETC, dupa=None, aplica_retea=None,
+		alege_modul=None):
 	"""Pe firul enigma2, la capătul firului importului: reîncărcarea listei de canale (dacă s-au scris canale) și a
 	înregistrărilor programate (incarca_temporizatoarele, dacă s-a scris timers.xml), apoi rețeaua din copie, dacă e
-	(Components/HdsImportRetea.aplica, cu întoarcerea la cea de dinainte când nu merge; durează până la un minut), și
-	abia apoi zăvorul dat înapoi, rezultatul ținut minte pentru ecran și web și dupa(rezultat). Întoarce rezultatul
-	(fără rețea: cel final)."""
+	(Components/HdsImportRetea.aplica, cu întoarcerea la cea de dinainte când nu merge; durează până la un minut), apoi
+	modulul de acces ales în copie, dacă e (alege_modul_de_acces, Components/HdsModuleAcces.Operatie), și abia apoi
+	zăvorul dat înapoi, rezultatul ținut minte pentru ecran și web și dupa(rezultat). Întoarce rezultatul (fără rețea
+	și fără modul de ales: cel final)."""
 	if not isinstance(rez, dict):
 		rez = {"ok": False, "mesaje": [_("Importul s-a oprit: %s.") % (eroare or _("eroare necunoscută"))]}
 	if rez.get("canale") and not rez.get("reincarcat"):
@@ -1641,11 +1754,18 @@ def incheie_importul(rez, eroare=None, reincarca=None, incarca=None, dest=CALE_E
 		except Exception as e:
 			_jurnal("înregistrările programate: %s" % e)
 	plan = rez.pop("_retea", None)
+	modul = rez.pop("_acces_alege", None)
 
-	def final(r):
+	def gata_tot(r):
 		elibereaza(r)
 		if dupa is not None:
 			dupa(r)
+
+	def final(r):
+		if modul:
+			alege_modul_de_acces(modul, r, gata_tot, alege_modul)
+		else:
+			gata_tot(r)
 
 	if not plan:
 		final(rez)
@@ -1666,6 +1786,40 @@ def incheie_importul(rez, eroare=None, reincarca=None, incarca=None, dest=CALE_E
 		_jurnal("rețeaua: %s" % e.__class__.__name__)
 		gata_retea({"adus": False, "mesaje": [_("Rețeaua din copie nu s-a aplicat; a rămas cea de dinainte.")]})
 	return rez
+
+
+def alege_modul_de_acces(modul, rez, gata, alege_modul=None):
+	"""Pe firul enigma2: modulul ales în copie ({"fel", "sufix", "nume", "reporneste"}, HdsImportExtra.modul_de_ales)
+	ales și pornit aici ca din ecranul modulelor (Components/HdsModuleAcces.Operatie: oprește modulul de acum, schimbă
+	legătura, pornește modulul nou; „reporneste” când era deja cel ales, fiindcă fișierele lui s-au schimbat), apoi
+	gata(rez), o singură dată. `alege_modul(modul, la_final)` numai pentru probe."""
+	terminat = []
+	mesaje = rez.setdefault("mesaje", [])
+
+	def la_final(rezultat):
+		if terminat:
+			return
+		terminat.append(True)
+		if (rezultat or {}).get("ok"):
+			mesaje.append(_("Modulul ales în imaginea veche, %s, e ales și aici și pornit.") % modul.get("nume", ""))
+			rez.setdefault("acces", {})["ales"] = modul.get("nume", "")
+		else:
+			mesaje.append(_("Modulul %s nu a pornit acum; îl pornești din Meniu, Acces condiționat, Module de acces "
+				"condiționat.") % modul.get("nume", ""))
+		gata(rez)
+
+	try:
+		if alege_modul is None:
+			from Components import HdsModuleAcces
+
+			def alege_modul(m, la_final):
+				o = HdsModuleAcces.Operatie("reporneste" if m.get("reporneste") else "alege", m["fel"], m["sufix"],
+					la_final=la_final)
+				o.porneste()   # o ține în viață HdsModuleAcces cât lucrează (_curenta, scriptul în curs)
+		alege_modul(modul, la_final)
+	except Exception as e:
+		_jurnal("alegerea modulului: %s" % e.__class__.__name__)
+		la_final({"ok": False})
 
 
 # ---------------------------------------------------------------- starea comună (televizor și web)

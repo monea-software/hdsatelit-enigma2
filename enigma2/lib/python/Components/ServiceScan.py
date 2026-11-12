@@ -1,4 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import sys
 import time
 from enigma import eComponentScan, iDVBFrontend
 from Components.NimManager import nimmanager as nimmgr
@@ -203,6 +204,9 @@ class ServiceScan:
 		# {"titlu", "nume", "date", "indiciu"} (etichetele ecranului HDSatelit); fara caseta, randuri in rezumat
 		self.hdsRetele = []
 		self.networkCard = networkCard or {}
+		# cine tinea tunerul cand trecerea n-a putut porni (hdsCineTineTunerul), pentru randul de la sfarsit; None = nu se
+		# stie, ramane fraza generala
+		self.hdsMotivTuner = None
 
 	def doRun(self):
 		self.scan = eComponentScan()
@@ -278,13 +282,118 @@ class ServiceScan:
 		self.scan.newService.get().append(self.newService)
 		self.servicelist.clear()
 		self.state = self.Running
+		self.hdsElibereazaTunerul()
 		err = self.scan.start(self.feid, self.flags)
 		self.frontendInfo.updateFrontendData()
+		self.hdsMotivTuner = None
 		if err:
 			self.state = self.Error
 			self.errorcode = 0
+			self.hdsMotivTuner = self.hdsCineTineTunerul()
 		self.refreshEta()
 		self.scanStatusChanged()
+
+	# ---- HDSatelit: tunerul de satelit dat cautarii ----
+
+	@staticmethod
+	def hdsTunerSatelit(feid):
+		"""Tunerul cautarii e de satelit (sau nu se stie): numai atunci il pot tine fluxurile DAB+ / DVB-T2 prin
+		satelit. O cautare pe cablu sau terestru nu opreste nimic de pe satelit."""
+		try:
+			return bool(nimmgr.nim_slots[feid].isCompatible("DVB-S"))
+		except Exception:
+			return True
+
+	def hdsElibereazaTunerul(self):
+		"""Chiar inainte de eComponentScan.start, care ia tunerul cu allocateRawChannel(feid) (lib/components/scan.cpp)
+		si cade daca il tine altcineva („nu a putut porni”). Ecranul a oprit serviciul cu nav.stopService(), care nu
+		trece prin extensiile de zap: un program DVB-T2 sau un post DAB+ prin satelit (releul si sesiunea lui 8001)
+		ar mai tine tunerul pana la ~20 s (paza controlorului, apoi tinerea sesiunii), iar cautarea ar cadea pe loc
+		(de pilda „Ascultă” in „DVB-T2 prin satelit”, apoi „După satelit” din acelasi meniu). Cedeaza acum, sincron, ca
+		la un zap: controlorii DAB+ / DVB-T2 (Hds/DabT2/imagine.inainte_de_scanare) si scanarile DVB-T2 / DAB+ care
+		inca tin purtatorul (Screens/ScanerSatelit.elibereaza_cautarile; neincarcat = nicio scanare). Numai pe un
+		tuner de satelit; o eroare de aici nu ajunge la cautare."""
+		if not self.hdsTunerSatelit(self.feid):
+			return
+		try:
+			from Hds.DabT2 import imagine as hds_imagine
+			hds_imagine.inainte_de_scanare(_("Tunerul a fost dat căutării de canale."))
+		except Exception as e:
+			print("[ServiceScan] tunerul pentru cautare (DAB+ / DVB-T2): %r" % (e,))
+		scaner = sys.modules.get("Screens.ScanerSatelit")
+		elibereaza = getattr(scaner, "elibereaza_cautarile", None)
+		if elibereaza is not None:
+			try:
+				elibereaza()
+			except Exception as e:
+				print("[ServiceScan] tunerul scanarii DVB-T2 / DAB+: %r" % (e,))
+
+	def hdsCineTineTunerul(self):
+		"""Trecerea n-a putut porni: cine tine inca tunerul, spus omului in randul de la sfarsit, sau None (atunci ramane
+		fraza generala). Numai ce stie imaginea sigur, din memorie: o scanare DVB-T2 / DAB+ prin satelit, un flux
+		DVB-T2 / DAB+ (controlorii din Hds/DabT2), cine a luat tunerul prin coordonatorul comun (Gasire semnal, rotirea
+		antenei), sesiunile serverului local 8001. In jurnalul enigma2 ramane si starea tunerelor (hdsJurnalTuner)."""
+		self.hdsJurnalTuner()
+		if not self.hdsTunerSatelit(self.feid):
+			return None
+		felul = {"t2": "DVB-T2", "dab": "DAB+"}
+		fel = None
+		cautare = getattr(sys.modules.get("Screens.ScanerSatelit"), "cautarea_cu_tuner", None)
+		if cautare is not None:
+			try:
+				fel = cautare()
+			except Exception as e:
+				print("[ServiceScan] scanarea care tine tunerul: %r" % (e,))
+		if fel in felul:
+			return _("Tunerul e încă ținut de scanarea %s prin satelit. Ieși cu EXIT și caută din nou.") % felul[fel]
+		cine = None
+		try:
+			from Hds.DabT2 import imagine as hds_imagine
+			cine = hds_imagine.cine_tine_tunerul()
+		except Exception as e:
+			print("[ServiceScan] cine tine tunerul: %r" % (e,))
+		if cine in felul:
+			return _("Tunerul e încă ținut de un flux %s prin satelit. Ieși cu EXIT și caută din nou.") % felul[cine]
+		nume = self.hdsDetinator()
+		if nume:
+			return _("Tunerul e folosit acum de %s. Oprește-l, apoi încearcă din nou.") % nume
+		if cine == "8001":
+			return _("Tunerul e folosit acum de un flux cerut pe portul 8001 al receptorului (Stream Relay sau alt "
+				"aparat din rețea). Oprește-l, apoi caută din nou.")
+		return None
+
+	@staticmethod
+	def hdsDetinator():
+		"""Numele celui care tine tunerul de satelit prin coordonatorul comun DAB+ / DVB-T2 (Hds/DabT2/coordonator.py, in
+		sys.modules sub numele lui fix: Gasire semnal, ecranul si verificarea motorului), sau "". Numai citire: o cedare
+		de aici ar putea porni programul oprit de verificarea motorului peste cautare."""
+		m = sys.modules.get("hdsatelit_hds_coordonator")
+		detinator = getattr(getattr(m, "coordonator", None), "detinator", None)
+		return str(getattr(detinator, "nume", "") or "") if detinator is not None else ""
+
+	def hdsJurnalTuner(self):
+		"""Un rand in jurnalul enigma2 cand trecerea n-a putut lua tunerul: cine il tine prin coordonator, sesiunile
+		serverului local 8001 si folosirile canalelor din nucleu (eDVBResourceManager.getChannelUseCounts, cand exista).
+		Canalele brute (allocateRawChannel) nu apar in folosiri. Nu arunca."""
+		try:
+			sesiuni = None
+			try:
+				from Hds.DabT2 import server8001
+				s = server8001.obtine()
+				sesiuni = s.stare().get("detalii") if s is not None else None
+			except Exception:
+				pass
+			folosiri = None
+			try:
+				from enigma import eDVBResourceManager
+				citire = getattr(eDVBResourceManager.getInstance(), "getChannelUseCounts", None)
+				folosiri = list(citire()) if citire is not None else None
+			except Exception:
+				pass
+			print("[ServiceScan] tunerul %s nu s-a putut lua: detinator=%r, sesiuni 8001=%r, folosirile canalelor=%r" % (
+				self.feid, self.hdsDetinator() or None, sesiuni, folosiri))
+		except Exception as e:
+			print("[ServiceScan] starea tunerelor: %r" % (e,))
 
 	def execEnd(self):
 		self.hdsOcupat(False)
@@ -781,6 +890,9 @@ class ServiceScan:
 			# cautarea nici n-a pornit: lista goala sau tunerul nu s-a putut rezerva
 			if not self.scanList[self.run]["transponders"]:
 				lines.append(_("There were no transponders to scan."))
+			elif self.hdsMotivTuner:
+				# cine tine tunerul, cand imaginea stie (hdsCineTineTunerul), in locul frazei generale
+				lines.append(self.hdsMotivTuner)
 			else:
 				lines.append(_("The tuner could not be used. It may be busy with a recording or not configured."))
 		if self.state == self.Done and services == 0:

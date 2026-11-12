@@ -244,6 +244,8 @@ TEXTE_PLAYER = {
 	"alege_canal": N_("Alege întâi un canal."),
 	"extern": N_("Imaginea din pagină s-a oprit, ca să se poată deschide în playerul extern."),
 	"reia_aici": N_("Reia aici"),
+	"pip_browser": N_("Imaginea se vede acum în fereastra mică a browserului."),
+	"pip_inapoi": N_("Adu imaginea înapoi aici"),
 	"m3u_gata": N_("Playlistul s-a descărcat (%s). Deschide-l într-un player din casă."),
 	"m3u_rau": N_("Playlistul nu s-a putut descărca."),
 	"m3u_http": N_("Playlistul nu s-a putut face (HTTP %s)."),
@@ -619,16 +621,7 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 	else:
 		rez.update({"merge": True, "motiv": "", "avertizare": text})
 	rez.update(dateRadio(ref, rez["nume"], T=T, ref_tv=ref_tv))
-	# 0.7.0 Stream Relay: un canal din lista vine de la releu (Components/HdsTransmisie.py, adresaReleu), deci nu se
-	# refuza ca "criptat"; daca releul nu raspunde acum, motivul lui, pe loc (legatura se incearca cel mult 0,5 s)
-	releu = T.adresaReleu(ref) if hasattr(T, "adresaReleu") else None
-	if releu is not None:
-		rez["releu"] = True
-		if not T.releuAsculta(releu):
-			motiv_releu = T.motivReleuOprit(releu[0], releu[1]) if hasattr(T, "motivReleuOprit") else \
-				_t(T.TEXT_RELEU_OPRIT) % (releu[0], releu[1])
-			rez.update({"merge": False, "motiv": motiv_releu, "avertizare": "", "extern": False,
-				"extern_motiv": motiv_releu})
+	# (12.11.2026) fara Stream Relay in browser: orice canal vine de la tuner, descifrat de receptor (SoftCSA pentru ICAM)
 	# un canal MPEG-2 trece ca "merge" cand pagina trimite wasm=1 (are playerul wasm); fluxul e acelasi, numai redarea
 	# din pagina difera (player.js alege playerul dupa "video")
 	return rez

@@ -574,6 +574,10 @@ class DABPlus(object):
         self._cheie_info = None
         self.superframes = 0             # superframe-uri gasite (firecode bun), si cu toate AU stricate
         self.indici = []                 # pozitiile in superframe ale AU din ultima iesire (pentru timpul lor)
+        # 0.7.4: AU-urile brute (fara CRC si fara LOAS) ale ultimei iesiri, in aceeasi ordine, numai cand le cere cineva
+        # (decodarea in software, Hds/DabT2/sunet_software.py, pe placile care nu stiu cadrele de 960)
+        self.cu_brute = False
+        self.brute = []
 
     def adauga(self, mst):
         c = self.cadre
@@ -602,11 +606,13 @@ class DABPlus(object):
         cheie = (dac, sbr, chm, ps, num)
         if cheie != self._cheie_info:
             self._cheie_info = cheie
-            self.info = {'rata_iesire': 48000 if dac else 32000, 'sbr': sbr, 'ps': ps, 'stereo': chm or ps, 'au_pe_superframe': num}
+            self.info = {'rata_iesire': 48000 if dac else 32000, 'sbr': sbr, 'ps': ps, 'stereo': chm or ps, 'au_pe_superframe': num,
+                         'rata_baza': rata, 'canale_baza': 2 if chm else 1}
         mv = memoryview(sf)
         canale = 2 if chm else 1
         iesire = []
         indici = self.indici = []
+        brute = self.brute = [] if self.cu_brute else None
         for i in range(num):
             a, b = st[i], st[i + 1]
             au = mv[a:b]
@@ -617,6 +623,8 @@ class DABPlus(object):
             self.au_bune += 1
             indici.append(i)
             iesire.append(loas(au[:la - 2], rata, canale))
+            if brute is not None:
+                brute.append(au[:la - 2].tobytes())
         return iesire
 
 
@@ -652,22 +660,26 @@ class TsAudio(object):
     CIF_90K = 2160                    # 24 ms, un cadru CIF (DAB, MP2)
     MASCA_33 = (1 << 33) - 1
 
-    def __init__(self, sid, aac=True, tsid=1):
+    def __init__(self, sid, aac=True, tsid=1, versiune=0):
         self.sid = (int(sid) & 0xFFFF) or 1
         self.tip = 0x11 if aac else 0x03
+        # versiunea PMT-ului: alt fel de sunet pe aceeasi cheie (placa <-> decodat in software) vine cu versiunea
+        # urmatoare, ca enigma2 sa citeasca PMT-ul din nou si sa schimbe decodorul
+        self.versiune = int(versiune) & 31
         self.cc = {0: 0, self.PID_PMT: 0, self.PID_SUNET: 0}
         self._tabele_la = None
         self._cif = 0
         self._pat = self._sectiune(0x00, tsid & 0xFFFF, bytearray(struct.pack('>HH', self.sid, 0xE000 | self.PID_PMT)))
         pmt = bytearray(struct.pack('>HH', 0xE000 | self.PID_SUNET, 0xF000))
         pmt += bytearray(struct.pack('>BHH', self.tip, 0xE000 | self.PID_SUNET, 0xF000))
-        self._pmt = self._sectiune(0x02, self.sid, pmt)
+        self._pmt = self._sectiune(0x02, self.sid, pmt, self.versiune)
         self.pes = 0
+        self.pts = None                   # PTS-ul ultimului cadru pus (releul trimite TS-ul in ritmul lui)
 
     @staticmethod
-    def _sectiune(tid, ext, corp):
+    def _sectiune(tid, ext, corp, versiune=0):
         lung = 5 + len(corp) + 4
-        s = bytearray(struct.pack('>BHHBBB', tid, 0xB000 | lung, ext, 0xC1, 0, 0)) + corp
+        s = bytearray(struct.pack('>BHHBBB', tid, 0xB000 | lung, ext, 0xC1 | ((versiune & 31) << 1), 0, 0)) + corp
         return s + bytearray(struct.pack('>I', crc32_mpeg(s)))
 
     def _cc(self, pid):
@@ -725,6 +737,7 @@ class TsAudio(object):
                 iesire += self._psi(0, self._pat) + self._psi(self.PID_PMT, self._pmt)
             iesire += self._pes(cadru, pts)
             self.pes += 1
+            self.pts = pts
         return bytes(iesire)
 
     def cif(self, cadru):

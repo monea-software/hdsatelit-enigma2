@@ -9,4 +9,5 @@ REQUIRED_DISTRO_FEATURES:remove = "opengl"
 # tipurile native sunt void *, ca la imaginile altor echipe pe Vu+. Prima constructie Solo 4K a cazut aici (06.11, 10:00).
 CFLAGS:append:vusolo4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuuno4kse = " -DBROADCOM_PLATFORM"
+CFLAGS:append:vuduo4klite = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuduo4k = " -DBROADCOM_PLATFORM"

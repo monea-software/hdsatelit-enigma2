@@ -48,6 +48,7 @@
 # /etc/shadow, dropbear and ssh keys. The names of access module processes are replaced by "modul-acces".
 # The server keeps no address of the sender.
 # Raportul fara-imagine foloseste bataia proaspata a procesului curent.
+# Raportul fara-imagine scrie in antet acord= si cauza_imagine= (fara-semnal cand acordarea a cazut, nu decodorul).
 # Semnul ocupat intrerupe numaratoarea. Latimea -1 ramane necunoscuta
 # daca nici nodul xres nu o poate confirma. Asteptarea minima se aplica
 # fiecarei lansari Enigma2; enigma2_s din antet ramane durata de la prima.
@@ -264,7 +265,7 @@ rp_pas_init() {
 # the heartbeat of the interface (Components/HdsPaznic.py) into rb_* variables; 1 when it is not there
 rp_bataie() {
 	rb_bataie=""; rb_redare=""; rb_inreg=""; rb_criptat=""; rb_video=""
-	rb_pid=""; rb_ocupat=""; rb_video_sursa=api
+	rb_pid=""; rb_ocupat=""; rb_video_sursa=api; rb_acord=""
 	[ -f "$BATAIE" ] || return 1
 	while IFS='=' read -r rp_k rp_v; do
 		case $rp_k in
@@ -275,14 +276,18 @@ rp_bataie() {
 			inregistrare) rb_inreg=$rp_v ;;
 			criptat) rb_criptat=$rp_v ;;
 			video) rb_video=$rp_v ;;
+			acord) rb_acord=$rp_v ;;
 		esac
 	done < "$BATAIE"
 	case $rb_bataie in ''|*[!0-9]*) rb_bataie="" ;; esac
+	# acord=: de ce nu porneste canalul (Components/HdsPaznic.py, numele din HdsEcranNegru.py); numai litere mici si _
+	case $rb_acord in *[!a-z_]*) rb_acord="" ;; esac
+	[ "${#rb_acord}" -le 20 ] || rb_acord=""
 	# Bataia veche sau a altei lansari nu confirma starea de acum.
 	if [ -z "$u_e2" ] || [ "$rb_pid" != "$u_e2" ] || [ -z "$rb_bataie" ] ||
 		[ "$rb_bataie" -lt "$u_e2_t0" ] || [ "$rb_bataie" -gt "$rp_a" ] ||
 		[ $((rp_a - rb_bataie)) -gt 30 ]; then
-		rb_bataie=""; rb_redare=""; rb_video=""
+		rb_bataie=""; rb_redare=""; rb_video=""; rb_acord=""
 		return 1
 	fi
 	# Unele drivere dau -1 prin API, desi nodul video are dimensiunea.
@@ -437,6 +442,14 @@ rp_cauze() {
 			rp_jurnal_cadere "$rp_cf"
 		done
 	done
+	# 0.7.4: stiva Python (si C) scrisa de enigma2 la semnalul fatal (mytest.py, faulthandler.enable), numai cand nu e goala si
+	# e din ultimele 10 minute: arata functia care a chemat codul C++ cazut (rapoartele 898941 si 503916 aveau numai registrele)
+	rp_cs="$L/enigma2-stiva-semnal.txt"
+	if [ -f "$rp_cs" ] && [ ! -L "$rp_cs" ] && [ -s "$rp_cs" ] && [ -n "$(find "$rp_cs" -mmin -10 2>/dev/null)" ]; then
+		echo "-- ${rp_cs##*/}"
+		head -c 16384 "$rp_cs"
+		echo
+	fi
 }
 
 rp_oom() {
@@ -736,6 +749,18 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	rp_pachete
 }
 
+# acord= din bataie (numele din Components/HdsEcranNegru.py NUME_EVENIMENTE) -> cauza unui raport fara-imagine
+rp_cauza_imagine() {
+	case $1 in
+		'') echo fara-imagine ;;
+		acordare) echo fara-semnal ;;
+		configurare) echo tuner-nesetat ;;
+		fara_tuner) echo fara-tuner ;;
+		fara_pat|fara_sid|fara_pmt) echo fara-serviciu ;;
+		*) echo alta-eroare ;;
+	esac
+}
+
 # the header (plain values only) of a report of kind $1; $2 = seconds since enigma2 started (or ""), $3 = interface
 rp_antet() {
 	echo "HD Satelit - raportul pornirii"
@@ -778,6 +803,12 @@ rp_antet() {
 	# a report started by the image itself (Components/HdsProcesorRaport.py: motiv=procesor, declansare=automata)
 	[ -n "${HDS_RAPORT_MOTIV:-}" ] && echo "motiv=$(echo "$HDS_RAPORT_MOTIV" | tr -cd 'a-z0-9-' | cut -c1-20)"
 	[ -n "${HDS_RAPORT_DECLANSARE:-}" ] && echo "declansare=$(echo "$HDS_RAPORT_DECLANSARE" | tr -cd 'a-z0-9-' | cut -c1-20)"
+	# canalul fara imagine: de ce (randurile 305/315 din TODO, 11.11.2026). Felul ramane fara-imagine (serverul il cere
+	# asa); cauza_imagine=fara-semnal cand acordarea a cazut (antena, LNB, setarile tunerului), nu decodorul
+	if [ "$1" = fara-imagine ]; then
+		echo "acord=${rp_imagine_acord:-}"
+		echo "cauza_imagine=$(rp_cauza_imagine "${rp_imagine_acord:-}")"
+	fi
 	echo "id=$(rp_id)"
 	echo "cheie=$(rp_aleator 24)"
 	echo
@@ -978,6 +1009,7 @@ rp_urmareste() {
 	u_facute=""; u_rapoarte=0; u_retea=""; u_drivere=""; u_e2=""; u_e2_t0=0; u_e2_prim=""; u_e2_porniri=0
 	u_esecuri=0
 	u_interfata=""; u_interfata_run=""; u_imagine=""; u_tv_de=""; u_raport_interfata=""; u_trimite=1; u_trimite_t=0
+	u_acord=""; rp_imagine_acord=""
 	u_cod_afisat=""; rp_ultim_cod=""; u_afisaj_t=0; u_sigur=""
 	[ -x "$LIBREADER" ] && u_libreader=1 || u_libreader=""
 	while :; do
@@ -1037,13 +1069,17 @@ rp_urmareste() {
 				[ -n "$u_libreader" ] && rp_ruleaza showiframe && rp_lipsa=1
 				# Numaram doar absenta confirmata, fara motor sau alt lucru lung.
 				if [ -n "$rp_lipsa" ]; then
-					[ -n "$u_tv_de" ] || u_tv_de=$rp_a
+					[ -n "$u_tv_de" ] || { u_tv_de=$rp_a; u_acord=""; }
+					[ -z "$rb_acord" ] || u_acord=$rb_acord
 				else
 					u_tv_de=""
 				fi
 				if [ -n "$u_tv_de" ] && [ "$u_imagine" != lipsa ] &&
 					[ $((rp_a - u_tv_de)) -ge "$IMAGINE_S" ] &&
 					[ $((rp_a - u_e2_t0)) -ge "$ASTEPTARE" ]; then
+					# cauza in antet (rp_antet): acord= de acum sau ultimul vazut in fereastra (la reincercarile de 5 s
+					# acordarea poate sari intre "cazuta" si "in lucru"); gol = nicio eroare de acordare stiuta
+					rp_imagine_acord=${rb_acord:-$u_acord}
 					rp_declanseaza fara-imagine "$((rp_a - u_e2_prim))" "$u_interfata"
 					u_imagine=lipsa
 				fi

@@ -54,9 +54,27 @@
 # inainte. Cat VPN-ul e cerut, NETNS exista si fara tunel: navigatorul nu iese direct pe internet (oprire totala
 # implicita). Interfata camului (127.0.0.1) ramane in afara: TCP local nu trece dintr-un namespace in altul.
 #
+# Celelalte protocoale (FELURI), in aceeasi forma (profil importat, datele de acces 0600 neafisate, lista alba la ce vine
+# de la om, aceleasi moduri de rutare, aceeasi paza), fiecare cu interfata lui tun, deci cu aceeasi rutare ca OpenVPN:
+#   openconnect  Cisco AnyConnect (si GlobalProtect, Pulse/Juniper, Fortinet, F5, Array prin --protocol): adresa https
+#                a serverului; parola numai prin stdin (--passwd-on-stdin); in locul lui vpnc-script porneste acest
+#                fisier (openconnect-script), care pune adresa, rutele si DNS-ul ca scriptul --up al lui openvpn.
+#   ikev2        strongSwan: charon cu kernel-libipsec (ESP in spatiul utilizatorului, interfata tun ipsec0; merge si
+#                pe nucleele fara XFRM_USER/ESP) si swanctl prin soclul vici din DOSAR_RULARE. Configurarea (cu parola
+#                ca 0x<hex>, deci nimic din ea nu se poate citi ca sintaxa) se scrie 0600, se incarca si se sterge.
+#                Serverul se verifica mereu cu un certificat: cel din import sau autoritatile din sistem. Jurnalul
+#                lui charon (/tmp, 0600, golit la fiecare pornire) poate avea numele contului, niciodata parola.
+#   shadowsocks  ss-local (numai pe 127.0.0.1) + hev-socks5-tunnel (interfata tun); numai metodele AEAD, fara plugin=.
+#   l2tp         L2TP/IPsec: charon in modul transport (cere XFRM_USER si ESP in nucleu) + xl2tpd + pppd.
+# Adauga VPN (adaugaVpn): un fisier, mai multe sau un text lipit, recunoscute dupa continut (recunoaste()), ori
+# datele scrise de mana; dupa adaugare serverul e ales singur, iar ce lipseste (numele, parola, cheia comuna) se cere
+# apoi (campuriLipsa, salveazaSecrete). Datele de acces ale protocoalelor noi stau langa profil (<id>.secret, 0600);
+# OpenVPN pastreaza contul comun (cont). Grupurile (furnizorii) au unul sau mai multe feluri; adaugaGrup() lasa
+# HdsVpnFurnizori sa-si puna grupurile lui.
+#
 # FIRUL: stare() citeste numai fisiere mici si starea tinuta de paza (merge pe firul enigma2); tot ce porneste un
 # program merge prin LUCRARI (un fir deodata, comun televizorului si paginii web). Fisierul nu importa nimic din enigma2
-# la incarcare: probele de pe PC schimba RADACINA, RULATOR si REZOLVATOR.
+# la incarcare: probele de pe PC schimba RADACINA, RULATOR, PORNITOR si REZOLVATOR.
 
 import base64
 import binascii
@@ -78,6 +96,9 @@ import zipfile
 RADACINA = ""
 RULATOR = None
 REZOLVATOR = None
+# probele de pe PC: cine porneste programele care raman pornite (openconnect, charon, ss-local...): fn(argv, mediu,
+# intrare) -> un obiect cu pid, poll() si wait()
+PORNITOR = None
 
 DOSAR = "/etc/hdsatelit-vpn"
 DOSAR_PROFILURI = DOSAR + "/profiluri"
@@ -109,8 +130,28 @@ PROGRAM_OPKG = "/usr/bin/opkg"
 PROGRAM_MODPROBE = "/sbin/modprobe"
 PYTHON = "/usr/bin/python3"
 
+# programele protocoalelor noi: prima cale care exista
+CAI_PROGRAME = {
+	"openconnect": ("/usr/sbin/openconnect", "/usr/bin/openconnect"),
+	"charon": ("/usr/libexec/ipsec/charon", "/usr/lib/ipsec/charon"),
+	"swanctl": ("/usr/sbin/swanctl", "/usr/bin/swanctl"),
+	"ss-local": ("/usr/bin/ss-local", "/usr/sbin/ss-local"),
+	"tun2socks": ("/usr/bin/hev-socks5-tunnel", "/usr/sbin/hev-socks5-tunnel"),
+	"xl2tpd": ("/usr/sbin/xl2tpd", "/usr/bin/xl2tpd"),
+	"pppd": ("/usr/sbin/pppd", "/usr/bin/pppd"),
+}
+CALE_CA_SISTEM = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt")
+
 INTERFATA_OPENVPN = "hdsvpn1"
 INTERFATA_WG = "hdsvpn0"
+INTERFATA_OC = "hdsvpn2"
+INTERFATA_IPSEC = "ipsec0"      # facuta de kernel-libipsec (numele nu se alege)
+INTERFATA_PPP = "hdsvpn4"
+INTERFATA_SS = "hdsvpn5"
+INTERFETE_TUN = (INTERFATA_OPENVPN, INTERFATA_OC, INTERFATA_IPSEC, INTERFATA_PPP, INTERFATA_SS)
+PORT_SOCKS = "10805"
+ADRESA_TUN_SS = "198.18.0.1"
+CALE_JURNAL_PROTOCOL = "/tmp/hds-vpn-%s.log"
 TABELA = "51830"
 NETNS = "hdsvpn"
 CALE_NETNS = "/var/run/netns/" + NETNS
@@ -131,9 +172,23 @@ UA = "hdsatelit-receptor/1"
 
 # furnizorii cu fisiere OpenVPN si nume si parola (HMA, cei cu configurare oficiala pentru routere, oricare altul) si
 # WireGuard; textele de ajutor spun de unde ia omul datele (cercetarea: vpn/cercetare-logare-furnizori.md)
-FURNIZORI = ("hma", "nordvpn", "surfshark", "protonvpn", "openvpn", "wireguard")
+# pia si mullvad: grupurile serverelor puse de HdsVpnFurnizori (furnizorii fara fisiere, cu contul si tara)
+FURNIZORI = ("hma", "nordvpn", "surfshark", "protonvpn", "pia", "openvpn", "wireguard", "mullvad", "ikev2", "openconnect",
+	"shadowsocks", "l2tp")
 FURNIZORI_SERVICIU = ("nordvpn", "surfshark", "protonvpn")
 MODURI = ("navigator", "tot", "ales")
+# felurile de VPN; fiecare grup (furnizor) are unul sau mai multe (primul e cel implicit)
+FELURI = ("openvpn", "wireguard", "ikev2", "openconnect", "shadowsocks", "l2tp")
+FELURI_FISIER = ("openvpn", "wireguard")
+_FELURI_GRUP = {"hma": ("openvpn",), "nordvpn": ("openvpn",), "surfshark": ("openvpn",), "protonvpn": ("openvpn",),
+	"pia": ("openvpn",), "openvpn": ("openvpn",), "wireguard": ("wireguard",), "mullvad": ("wireguard",), "ikev2": ("ikev2",), "openconnect": ("openconnect",),
+	"shadowsocks": ("shadowsocks",), "l2tp": ("l2tp",)}
+# grupul fiecarui fel cand fisierul adaugat nu se potriveste cu furnizorul ales
+GRUP_FEL = {"openvpn": "openvpn", "wireguard": "wireguard", "ikev2": "ikev2", "openconnect": "openconnect",
+	"shadowsocks": "shadowsocks", "l2tp": "l2tp"}
+# grupurile puse de alte module (HdsVpnFurnizori): cheie -> {"feluri", "text", "cum"}
+_GRUPURI_ADAUGATE = {}
+_CHEIE_GRUP = re.compile(r"^[a-z0-9][a-z0-9_\-]{1,23}\Z")
 
 MAX_FISIER = 65536
 MAX_ARHIVA = 8 * 1024 * 1024
@@ -241,6 +296,7 @@ _BLOC_PEM = re.compile(r"-----BEGIN [^-\n]{1,60}-----.*?(?:-----END [^-\n]{1,60}
 _BLOC_IN_LINIE = re.compile(r"<(key|tls-auth|tls-crypt|tls-crypt-v2|secret|auth-user-pass|pkcs12)>.*?(?:</\1>|\Z)",
 	re.S | re.I)
 _CHEIE_WG_RAND = re.compile(r"(?im)^([ \t]*(?:PrivateKey|PresharedKey)[ \t]*)=.*$")
+_SS_URI = re.compile(r"(?i)(?<![A-Za-z0-9])ss://\S+")
 _CHEIE_B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=(?![A-Za-z0-9+/=])")
 
 
@@ -254,6 +310,7 @@ def ascunde(text, secrete=None):
 	text = _BLOC_IN_LINIE.sub(lambda m: "<%s>[ascuns]</%s>" % (m.group(1), m.group(1)), text)
 	text = _BLOC_PEM.sub("[bloc ascuns]", text)
 	text = _CHEIE_WG_RAND.sub(lambda m: m.group(1) + "= ***", text)
+	text = _SS_URI.sub("ss://***", text)
 	text = _CHEIE_B64.sub("***", text)
 	return text
 
@@ -312,9 +369,26 @@ def versiuneNucleu():
 
 
 def areTun():
-	"""tun.ko incarcat, pus pe disc sau nodul /dev/net/tun facut"""
+	"""tun.ko incarcat, pus pe disc sau nodul /dev/net/tun facut (sau tun in nucleu: /sys/class/misc/tun)"""
 	return (os.path.exists(_cale(CALE_TUN)) or os.path.isdir(_cale("/sys/module/tun"))
+		or os.path.exists(_cale("/sys/class/misc/tun"))
 		or os.path.exists(_cale("/lib/modules/%s/kernel/drivers/net/tun.ko" % versiuneNucleu())))
+
+
+_MODULE_DISC = {}
+
+
+def _modulPeDisc(nume):
+	"""True cand modulul `nume`.ko e pus pe disc sub /lib/modules/<nucleu> (oriunde, si in extra/). Dosarul se citeste o
+	data (stare() ajunge aici de multe ori pe secunda, pe firul enigma2); instaleaza() il face sa fie citit din nou."""
+	baza = _cale("/lib/modules/%s" % versiuneNucleu())
+	if baza not in _MODULE_DISC:
+		gasite = set()
+		for _d, _sub, fisiere in os.walk(baza):
+			gasite.update(f[:-3] for f in fisiere if f.endswith(".ko"))
+		_MODULE_DISC.clear()
+		_MODULE_DISC[baza] = gasite
+	return nume in _MODULE_DISC[baza]
 
 
 def areWireguardInNucleu():
@@ -322,26 +396,103 @@ def areWireguardInNucleu():
 
 
 def wireguardIndisponibil():
-	"""True cand nucleul nu are WireGuard deloc: nici in el (/sys/module/wireguard, Viper 4K V20, V30, V40), nici ca
-	modul pus pe disc (wireguard.ko sub /lib/modules/<nucleu>). Asa e primul Viper 4K (V10, nucleul linux-amiko fara
-	CONFIG_WIREGUARD) pana cand stratul aduce modulul. Atunci instalarea lui wireguard-tools nu ajuta: ecranul si
-	pagina spun TEXT_WG_INDISPONIBIL in locul instalarii, iar pornirea cu un profil WireGuard se refuza cu el."""
+	"""True cand nucleul nu are WireGuard acum: nici in el (/sys/module/wireguard, Viper 4K V20, V30, V40), nici ca
+	modul pus pe disc (wireguard.ko sub /lib/modules/<nucleu>). Pe celelalte modele modulul vine din feed
+	(kernel-module-wireguard-<nucleu>, cerut explicit de pachete("wireguard")); daca feedul nu il are, instalarea
+	spune TEXT_WG_INDISPONIBIL."""
 	if areWireguardInNucleu():
 		return False
-	baza = _cale("/lib/modules/%s" % versiuneNucleu())
-	for _d, _sub, fisiere in os.walk(baza):
-		if "wireguard.ko" in fisiere:
-			return False
-	return True
+	return not _modulPeDisc("wireguard")
 
 
 TEXT_WG_INDISPONIBIL = N_("WireGuard nu este disponibil pe acest receptor: nucleul lui nu îl are. Folosește un "
 	"furnizor OpenVPN.")
 
 
+def areNetns():
+	"""Nucleul are namespace-uri de retea (CONFIG_NET_NS: /proc/self/ns/net). Lipsesc pe Vu+ (Duo 4K, Uno 4K SE, Solo
+	4K, Solo SE): acolo modul "navigator" nu se poate, deci nici nu se arata."""
+	return os.path.exists(_cale("/proc/self/ns/net"))
+
+
+_XFRM = {}
+
+
+def areXfrm():
+	"""IPsec in nucleu cu XFRM_USER si ESP (cerut numai de L2TP/IPsec, modul transport): /proc/sys/net/core/xfrm_* plus
+	xfrm_user si esp4 incarcate sau puse pe disc; xfrm_user pus in nucleu se afla o data cu `ip xfrm state count`."""
+	if not os.path.exists(_cale("/proc/sys/net/core/xfrm_acq_expires")):
+		return False
+	user = os.path.isdir(_cale("/sys/module/xfrm_user")) or _modulPeDisc("xfrm_user")
+	if not user:
+		if "user" not in _XFRM:
+			_XFRM["user"] = _ruleaza([PROGRAM_IP, "xfrm", "state", "count"], 5)[0] == 0
+		user = _XFRM["user"]
+	esp = os.path.isdir(_cale("/sys/module/esp4")) or _modulPeDisc("esp4")
+	return user and esp
+
+
+def arePpp():
+	return (os.path.exists(_cale("/dev/ppp")) or os.path.isdir(_cale("/sys/module/ppp_generic"))
+		or _modulPeDisc("ppp_generic"))
+
+
+def _program(nume):
+	"""Calea programului `nume` (CAI_PROGRAME) daca e pe receptor, altfel ""."""
+	for c in CAI_PROGRAME.get(nume, ()):
+		if _executabil(c):
+			return c
+	return ""
+
+
+def nucleuPoate(fel):
+	"""(poate, motivul) pentru felul de VPN pe nucleul acestui receptor, oricare ar fi programele."""
+	if fel == "wireguard":
+		return True, ""
+	if fel == "l2tp":
+		# XFRM e in nucleul tuturor modelelor; xfrm_user, esp4 si modulele PPP vin din feed (pachete("l2tp"))
+		if not os.path.exists(_cale("/proc/sys/net/core/xfrm_acq_expires")):
+			return False, _("L2TP/IPsec nu merge pe acest receptor: nucleul lui nu are IPsec (XFRM și ESP). Folosește "
+				"IKEv2, OpenVPN sau WireGuard.")
+		return True, ""
+	# tun lipsa nu opreste nimic: modulul vine din feed odata cu programele (pachete())
+	return True, ""
+
+
 def programe():
-	return {"openvpn": _executabil(PROGRAM_OPENVPN) and areTun(),
-		"wireguard": _executabil(PROGRAM_WG) and areWireguardInNucleu()}
+	"""Felurile de VPN care pot porni acum (programele puse si nucleul in stare)."""
+	tun = areTun()
+	return {"openvpn": _executabil(PROGRAM_OPENVPN) and tun,
+		"wireguard": _executabil(PROGRAM_WG) and (areWireguardInNucleu() or _modulPeDisc("wireguard")),
+		"openconnect": bool(_program("openconnect")) and tun,
+		"ikev2": bool(_program("charon") and _program("swanctl")) and tun,
+		"shadowsocks": bool(_program("ss-local") and _program("tun2socks")) and tun,
+		"l2tp": bool(_program("xl2tpd") and _program("pppd") and _program("charon") and _program("swanctl")) and
+			nucleuPoate("l2tp")[0] and areXfrm() and arePpp()}
+
+
+# felurile ale caror programe nu sunt inca in feedul de extensii (OpenEmbedded 6.0 nu are retete pentru
+# shadowsocks-libev si hev-socks5-tunnel): se arata numai cand programele sunt deja pe receptor, ca omul sa nu primeasca
+# o instalare care cade sigur. Cand stratul VPN le are, felul iese de aici.
+FELURI_FARA_PACHET = ("shadowsocks",)
+
+
+def capabil(fel):
+	"""("da", "") cand felul poate porni acum, ("instaleaza", textul) cand lipsesc numai programele (vin din feedul de
+	extensii), ("nu", motivul) cand nucleul acestui receptor nu il poate rula sau feedul nu are inca programele."""
+	poate, motiv = nucleuPoate(fel)
+	if not poate:
+		return "nu", motiv
+	if programe().get(fel):
+		return "da", ""
+	if fel in FELURI_FARA_PACHET:
+		return "nu", _("Programele pentru %s nu sunt încă în feedul de extensii HD Satelit.") % textFel(fel)
+	return "instaleaza", textProgrameLipsa(fel)
+
+
+def felPosibil(fel):
+	"""Felul se arata pe acest receptor (in grupuri si la Adauga VPN)."""
+	return capabil(fel)[0] != "nu"
 
 
 def disponibil():
@@ -351,15 +502,75 @@ def disponibil():
 	return _executabil(PROGRAM_OPENVPN) or _executabil(PROGRAM_WG)
 
 
+def _incarcaFurnizori():
+	"""HdsVpnFurnizori (grupurile furnizorilor cu logare) isi pune grupurile cu adaugaGrup() cand se incarca; aici se
+	incarca o data, fara sa cada daca lipseste (probele de pe PC, imaginile fara el)."""
+	if _GRUPURI_ADAUGATE.get("__incercat"):
+		return
+	_GRUPURI_ADAUGATE["__incercat"] = True
+	try:
+		from Components import HdsVpnFurnizori  # noqa: F401
+	except Exception as eroare:
+		if not isinstance(eroare, ImportError):
+			jurnal("HdsVpnFurnizori: %r" % (eroare,))
+
+
+def adaugaGrup(cheie, text, feluri, cum_iei=""):
+	"""Pentru HdsVpnFurnizori: un grup (furnizor) nou sau felurile unuia existent. `text`: numele aratat (tradus de
+	cel care il da), `feluri`: felurile primite (primul e cel implicit), `cum_iei`: de unde ia omul datele. True daca
+	l-a pus."""
+	feluri = tuple(f for f in (feluri or ()) if f in FELURI)
+	if not _CHEIE_GRUP.match(cheie or "") or not feluri:
+		return False
+	_GRUPURI_ADAUGATE[cheie] = {"feluri": feluri, "text": text or cheie, "cum": cum_iei or ""}
+	return True
+
+
+def furnizori():
+	"""Cheile tuturor grupurilor, in ordinea din ecran: cele de baza, apoi cele adaugate."""
+	_incarcaFurnizori()
+	return list(FURNIZORI) + sorted(k for k in _GRUPURI_ADAUGATE if k not in FURNIZORI and not k.startswith("__"))
+
+
+def grupCunoscut(grup):
+	return grup in FURNIZORI or grup in furnizori()
+
+
+def feluriGrup(grup):
+	x = _GRUPURI_ADAUGATE.get(grup)
+	if isinstance(x, dict):
+		return x["feluri"]
+	return _FELURI_GRUP.get(grup, ("openvpn",))
+
+
 def felFurnizor(furnizor):
-	return "wireguard" if furnizor == "wireguard" else "openvpn"
+	"""Felul implicit al grupului (primul din feluriGrup)."""
+	return feluriGrup(furnizor)[0]
+
+
+def _modulPachet(nume):
+	return "kernel-module-%s-%s" % (nume.replace("_", "-"), versiuneNucleu())
 
 
 def pachete(fel):
-	"""Pachetele de instalat pentru un fel de VPN (dependintele, lzo, lz4, libcap-ng, le aduce opkg)."""
+	"""Pachetele de instalat pentru un fel de VPN (dependintele, lzo, lz4, libcap-ng, gnutls..., le aduce opkg). Modulele
+	nucleului se cer numai cand lipsesc (nici in nucleu, nici pe disc): un pachet de modul care nu e in feed ar opri
+	toata instalarea. WireGuard: modulul se cere explicit (instalarea pune --no-install-recommends, iar pe nucleele fara
+	WireGuard modulul era numai o recomandare a lui wireguard-tools)."""
+	# hds-vpn-nucleu-tun/-ipsec/-ppp: pachetele-umbrela ale stratului VPN, facute pe fiecare masina din .config-ul
+	# nucleului ei (aduc numai modulele care lipsesc; goale unde totul e in nucleu, ca tun pe SF8008)
 	if fel == "wireguard":
-		return ["wireguard-tools"]
-	return ["openvpn", "kernel-module-tun-%s" % versiuneNucleu()]
+		return ["wireguard-tools"] + ([_modulPachet("wireguard")] if wireguardIndisponibil() else [])
+	if fel == "openconnect":
+		return ["openconnect", "hds-vpn-nucleu-tun"]
+	if fel == "ikev2":
+		# kernel-libipsec: ESP in spatiul utilizatorului, prin tun; modulele IPsec ale nucleului nu trebuie
+		return ["strongswan", "hds-vpn-nucleu-tun"]
+	if fel == "shadowsocks":
+		return ["shadowsocks-libev", "hev-socks5-tunnel", "hds-vpn-nucleu-tun"]
+	if fel == "l2tp":
+		return ["xl2tpd", "ppp", "strongswan", "hds-vpn-nucleu-ipsec", "hds-vpn-nucleu-ppp"]
+	return ["openvpn", "hds-vpn-nucleu-tun"]
 
 
 # ---------------------------------------------------------------- fisierele OpenVPN (lista alba)
@@ -418,6 +629,8 @@ PERMISE = {
 	"tls-ciphersuites": (1, 1, _sigur), "tls-groups": (1, 1, _sigur), "tls-cert-profile": (1, 1, _sigur),
 	"tls-version-min": (1, 2, _sigur), "tls-version-max": (1, 1, _sigur), "remote-cert-ku": (1, 8, _sigur),
 	"remote-cert-eku": (1, 1, _sigur), "verify-x509-name": (1, 2, _sigur),
+	# in toate fisierele PIA: opreste numai verificarea potrivirii optiunilor cu serverul
+	"disable-occ": (0, 0, None),
 }
 # directivele tratate deosebit: remote, dev, auth-user-pass si fisierele (in linie sau de alaturi)
 SPECIALE = ("remote", "dev", "auth-user-pass")
@@ -950,8 +1163,8 @@ def profiluri():
 	if semn != _INDEX["semn"]:
 		date = _citesteJson(CALE_INDEX) or {}
 		lista = [p for p in (date.get("profiluri") or []) if isinstance(p, dict) and re.match(r"^[0-9a-f]{12}\Z",
-			str(p.get("id", ""))) and p.get("fel") in ("openvpn", "wireguard") and re.match(
-			r"^[0-9a-f]{12}\.(ovpn|conf)\Z", str(p.get("fisier", ""))) and isinstance(p.get("titlu"), str)]
+			str(p.get("id", ""))) and p.get("fel") in FELURI and re.match(
+			r"^[0-9a-f]{12}\.(ovpn|conf|json)\Z", str(p.get("fisier", ""))) and isinstance(p.get("titlu"), str)]
 		_INDEX["lista"] = lista
 		_INDEX["semn"] = semn
 	return list(_INDEX["lista"])
@@ -1008,7 +1221,7 @@ def _membriArhiva(nume, date, greseli):
 def importa(fisiere, grup):
 	"""Importa fisierele (lista de (nume, octeti)): .ovpn, .conf, .zip si fisierele de alaturi (.crt, .key, .pem...).
 	(reusit, mesaj, {"adaugate", "la_fel", "refuzate", "motive"})."""
-	if grup not in FURNIZORI:
+	if not grupCunoscut(grup):
 		return False, _("Alege întâi furnizorul."), {}
 	greseli = []
 	desfacute = []
@@ -1037,10 +1250,11 @@ def importa(fisiere, grup):
 	titluri = set(p["titlu"] for p in lista if p.get("grup") == grup)
 	adaugate = la_fel = refuzate = 0
 	motive = list(greseli)
-	pentru_wg = grup == "wireguard"
+	ids_rez = []
+	feluri = feluriGrup(grup)
 	for nume, text in principale[:MAX_MEMBRI]:
 		este_wg = "[interface]" in text.lower()
-		if este_wg != pentru_wg:
+		if ("wireguard" if este_wg else "openvpn") not in feluri:
 			refuzate += 1
 			motive.append(_("%s: e un fișier WireGuard; alege furnizorul WireGuard.") % _numeCurat(nume) if este_wg else
 				_("%s: e un fișier OpenVPN; alege un furnizor cu fișiere OpenVPN.") % _numeCurat(nume))
@@ -1053,6 +1267,8 @@ def importa(fisiere, grup):
 		id_p = hashlib.sha1(("%s\n%s" % (grup, a["curat"])).encode("utf-8")).hexdigest()[:12]
 		if id_p in ids:
 			la_fel += 1
+			if id_p not in ids_rez:
+				ids_rez.append(id_p)
 			continue
 		if len(lista) >= MAX_PROFILURI:
 			refuzate += 1
@@ -1075,6 +1291,7 @@ def importa(fisiere, grup):
 		lista.append(p)
 		ids.add(id_p)
 		titluri.add(titlu)
+		ids_rez.append(id_p)
 		adaugate += 1
 	if adaugate:
 		_scrieIndex(lista)
@@ -1089,7 +1306,7 @@ def importa(fisiere, grup):
 		parti.append(motive[0])
 	jurnal("import %s: %d adaugate, %d la fel, %d refuzate %s" % (grup, adaugate, la_fel, refuzate, motive[:3]))
 	return bool(adaugate or la_fel), " ".join(parti) or _("Nimic de adăugat."), {"adaugate": adaugate,
-		"la_fel": la_fel, "refuzate": refuzate, "motive": motive[:5]}
+		"la_fel": la_fel, "refuzate": refuzate, "motive": motive[:5], "ids": ids_rez}
 
 
 def stergeProfil(id_profil):
@@ -1100,6 +1317,7 @@ def stergeProfil(id_profil):
 	if setari()["pornit"] and setari()["profil"] == id_profil:
 		return False, _("Oprește întâi VPN-ul.")
 	_sterge(_caleProfil(p))
+	_sterge(_caleSecret(p))
 	_scrieIndex([x for x in lista if x["id"] != id_profil])
 	if setari()["profil"] == id_profil:
 		salveazaSetari(profil="")
@@ -1116,6 +1334,7 @@ def stergeGrup(grup):
 	for p in lista:
 		if p.get("grup") == grup:
 			_sterge(_caleProfil(p))
+			_sterge(_caleSecret(p))
 			n += 1
 		else:
 			pastrate.append(p)
@@ -1123,6 +1342,700 @@ def stergeGrup(grup):
 	if profil(s["profil"]) is None:
 		salveazaSetari(profil="")
 	return True, _("Servere șterse: %d.") % n
+
+
+# ---------------------------------------------------------------- protocoalele noi: recunoasterea si profilurile
+
+# Shadowsocks: numai metodele AEAD (ss-local); cele vechi (fluxuri fara autentificare) se refuza cu motivul lor
+METODE_SS = ("aes-128-gcm", "aes-192-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "xchacha20-ietf-poly1305")
+METODE_SS_VECHI = ("rc4", "rc4-md5", "table", "aes-128-cfb", "aes-192-cfb", "aes-256-cfb", "aes-128-ctr", "aes-192-ctr",
+	"aes-256-ctr", "camellia-128-cfb", "camellia-192-cfb", "camellia-256-cfb", "bf-cfb", "cast5-cfb", "des-cfb",
+	"idea-cfb", "rc2-cfb", "seed-cfb", "salsa20", "chacha20", "chacha20-ietf")
+# OpenConnect: --protocol
+PROTOCOALE_OC = ("anyconnect", "gp", "nc", "pulse", "fortinet", "f5", "array")
+# campurile de acces ale protocoalelor noi (stau in <id>.secret, 0600)
+CAMPURI = ("nume", "parola", "psk")
+MAX_SECRET = 256
+EXT_ALATURI = (".crt", ".pem", ".cer", ".der", ".key", ".ca")
+_URL_OC = re.compile(r"^https://([A-Za-z0-9](?:[A-Za-z0-9.\-]{0,251}[A-Za-z0-9])?)(?::(\d{1,5}))?"
+	r"(/[A-Za-z0-9._~\-/%=&+,;@!$]{0,200})?\Z")
+# numele contului la IKEv2 si L2TP (ajunge in fisiere de configurare): fara ghilimele, spatii sau semne de sintaxa
+_NUME_CONT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@+\-=]{0,127}\Z")
+_ID_IKE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@\-]{0,200}\Z")
+_PIN_OC = re.compile(r"^pin-sha256:[A-Za-z0-9+/]{43}=\Z")
+_PROPUNERE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*(?:,[a-z0-9]+(?:[-_][a-z0-9]+)*){0,15}\Z")
+_PEM_CERT = re.compile(r"-----BEGIN CERTIFICATE-----\s+[A-Za-z0-9+/=\s]{40,32768}?-----END CERTIFICATE-----")
+_DOCTYPE_PLIST = re.compile(r'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1\.0//EN" '
+	r'"http://www\.apple\.com/DTDs/PropertyList-1\.0\.dtd">')
+
+
+def _secretBun(x, maxim=MAX_SECRET):
+	"""Parola sau cheia comuna: text pe un singur rand, fara semne de control."""
+	return isinstance(x, str) and 0 < len(x) <= maxim and all(ord(c) >= 0x20 and ord(c) != 0x7f for c in x)
+
+
+def _titluCurat(text, rezerva):
+	t = re.sub(r"[\x00-\x1f\x7f<>]", "", "%s" % (text or "")).strip()[:80]
+	return t or rezerva
+
+
+def _textPlist(text):
+	"""XML-ul plist dintr-un .mobileconfig (si din cel semnat, unde e in mijlocul unui bloc binar), sau ""."""
+	a = text.find("<?xml")
+	if a < 0:
+		a = text.find("<plist")
+	b = text.find("</plist>")
+	if a < 0 or b < a:
+		return ""
+	return text[a:b + 8]
+
+
+def recunoaste(text, nume=""):
+	"""Felul VPN-ului dupa continut (si, unde nu se poate altfel, dupa nume): "openvpn", "wireguard", "ikev2" (.sswan,
+	.mobileconfig IKEv2), "l2tp" (.mobileconfig L2TP), "openconnect" (adresa https a serverului), "shadowsocks" (ss://
+	sau configurarea JSON) sau "" daca nu se recunoaste."""
+	t = (text or "").lstrip("﻿").strip()
+	n = (nume or "").lower()
+	if not t:
+		return ""
+	if re.match(r"(?i)^ss://", t):
+		return "shadowsocks"
+	if n.endswith(".mobileconfig") or "<plist" in t[:65536]:
+		x = _textPlist(t)
+		if re.search(r"<key>VPNType</key>\s*<string>IKEv2</string>", x):
+			return "ikev2"
+		if re.search(r"<key>VPNType</key>\s*<string>L2TP</string>", x):
+			return "l2tp"
+		return ""
+	if t.startswith("{"):
+		try:
+			d = json.loads(t)
+		except ValueError:
+			return ""
+		if isinstance(d, dict):
+			if isinstance(d.get("remote"), dict) and str(d.get("type", "")).startswith("ikev2"):
+				return "ikev2"
+			if isinstance(d.get("servers"), list) or ("server" in d and ("password" in d or "method" in d)):
+				return "shadowsocks"
+		return ""
+	if re.search(r"(?im)^\s*\[interface\]", t) and re.search(r"(?im)^\s*\[peer\]", t):
+		return "wireguard"
+	if n.endswith(".ovpn") or re.search(r"(?im)^\s*(?:client\s*$|remote\s+\S|dev\s+tun|<ca>\s*$)", t):
+		return "openvpn"
+	if "\n" not in t and _URL_OC.match(t):
+		return "openconnect"
+	return ""
+
+
+def _b64Text(text):
+	s = re.sub(r"\s", "", text).replace("-", "+").replace("_", "/")
+	s += "=" * (-len(s) % 4)
+	return base64.b64decode(s, validate=True).decode("utf-8")
+
+
+def _pemDinDer(date):
+	b = base64.b64encode(date).decode("ascii")
+	return "-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----" % "\n".join(b[i:i + 64] for i in range(0, len(b), 64))
+
+
+def certificateDin(text):
+	"""Certificatele PEM dintr-un text (blocurile BEGIN/END CERTIFICATE, verificate ca base64), cel mult 8."""
+	rez = []
+	for m in _PEM_CERT.finditer(text or ""):
+		corp = re.sub(r"\s", "", m.group(0)[len("-----BEGIN CERTIFICATE-----"):-len("-----END CERTIFICATE-----")])
+		try:
+			der = base64.b64decode(corp, validate=True)
+		except (binascii.Error, ValueError):
+			continue
+		if der[:1] == b"\x30" and len(der) > 64:
+			rez.append(_pemDinDer(der))
+		if len(rez) >= 8:
+			break
+	return rez
+
+
+def _greseala(fel, text):
+	return {"ok": False, "fel": fel, "greseli": [text], "note": [], "profiluri": []}
+
+
+def _analizaBuna(fel, profiluri, note=None):
+	return {"ok": bool(profiluri), "fel": fel, "greseli": [] if profiluri else [_("Nimic de adăugat.")],
+		"note": note or [], "profiluri": profiluri}
+
+
+def _profilSs(server, port, metoda, parola, titlu):
+	"""Un profil Shadowsocks verificat sau (None, motivul)."""
+	if not _gazdaBuna(server) or not _PORT(str(port)):
+		return None, _("Adresa serverului nu este bună: %s") % ("%s" % server)[:60]
+	metoda = ("%s" % metoda).lower()
+	if metoda in METODE_SS_VECHI:
+		return None, _("Metoda %s este veche și nesigură; cere furnizorului una nouă (aes-256-gcm sau "
+			"chacha20-ietf-poly1305).") % metoda
+	if metoda not in METODE_SS:
+		return None, _("Metoda %s nu este cunoscută.") % metoda[:40]
+	secrete = {}
+	campuri = ["parola"]
+	if parola:
+		if not _secretBun(parola):
+			return None, _("Parola nu este bună (cel mult %d semne, pe un singur rând).") % MAX_SECRET
+		secrete["parola"] = parola
+	return {"titlu": _titluCurat(titlu, "Shadowsocks, %s" % server), "date": {"server": server, "port": str(port),
+		"metoda": metoda}, "secrete": secrete, "campuri": campuri, "remote": [(server, str(port), "tcp")]}, ""
+
+
+def _ssDinUri(uri):
+	"""(server, port, metoda, parola, titlu) din ss:// (SIP002 sau forma veche, toata in base64), sau (None, motivul)."""
+	try:
+		from urllib.parse import unquote
+	except ImportError:
+		from urllib import unquote
+	rest = uri.strip()[5:]
+	titlu = ""
+	if "#" in rest:
+		rest, eticheta = rest.split("#", 1)
+		titlu = unquote(eticheta)
+	interogare = ""
+	if "?" in rest:
+		rest, interogare = rest.split("?", 1)
+	rest = rest.rstrip("/")
+	if re.search(r"(?i)(^|[&;])plugin=", interogare):
+		return None, _("Directiva %s nu este primită: %s.") % ("plugin", _(_PROGRAME))
+	try:
+		if "@" in rest:
+			info, gazda = rest.rsplit("@", 1)
+			info = unquote(info)
+			if ":" not in info:
+				info = _b64Text(info)
+		else:
+			info, gazda = _b64Text(rest).rsplit("@", 1)
+	except (ValueError, binascii.Error, UnicodeDecodeError):
+		return None, _("Adresa ss:// nu este bună.")
+	if ":" not in info:
+		return None, _("Adresa ss:// nu este bună.")
+	metoda, parola = info.split(":", 1)
+	e = _desparteEndpoint(gazda)
+	if e is None:
+		return None, _("Adresa serverului nu este bună: %s") % gazda[:60]
+	return (e[0], e[1], metoda, parola, titlu), ""
+
+
+def analizeazaSs(text, nume=""):
+	"""Shadowsocks: ss:// (unul sau mai multe, cate unul pe rand), configurarea JSON a lui ss-local sau lista SIP008
+	{"servers": [...]}. Fiecare server devine un profil."""
+	t = (text or "").lstrip("﻿").strip()
+	profiluri, greseli = [], []
+	if t.lower().startswith("ss://"):
+		for rand in t.split():
+			if not rand.lower().startswith("ss://"):
+				continue
+			x, motiv = _ssDinUri(rand)
+			if x is None:
+				greseli.append(motiv)
+				continue
+			p, motiv = _profilSs(*x)
+			(profiluri.append(p) if p else greseli.append(motiv))
+	else:
+		try:
+			d = json.loads(t)
+		except ValueError:
+			return _greseala("shadowsocks", _("Fișierul nu este text."))
+		lista = d.get("servers") if isinstance(d, dict) and isinstance(d.get("servers"), list) else [d]
+		for x in lista[:MAX_MEMBRI]:
+			if not isinstance(x, dict):
+				continue
+			if x.get("plugin"):
+				greseli.append(_("Directiva %s nu este primită: %s.") % ("plugin", _(_PROGRAME)))
+				continue
+			p, motiv = _profilSs(str(x.get("server", "")), str(x.get("server_port", "")), str(x.get("method", "")),
+				x.get("password") if isinstance(x.get("password"), str) else "", str(x.get("remarks") or x.get("tag") or ""))
+			(profiluri.append(p) if p else greseli.append(motiv))
+	rez = _analizaBuna("shadowsocks", profiluri)
+	if greseli:
+		rez["greseli"] = greseli + (rez["greseli"] if not profiluri else [])
+		rez["ok"] = bool(profiluri)
+	return rez
+
+
+def _profilIkev2(server, port="500", id_server="", auth="eap", ca=None, nume="", parola="", psk="", ike="", esp="",
+		id_local="", titlu=""):
+	"""Un profil IKEv2 verificat sau (None, motivul). `auth`: "eap" (nume si parola, serverul cu certificat), "psk"
+	(cheia comuna) sau "psk-eap"."""
+	if not _gazdaBuna(server or ""):
+		return None, _("Adresa serverului nu este bună: %s") % ("%s" % server)[:60]
+	if not _PORT(str(port or "500")):
+		return None, _("Rândul %s nu este bun.") % "port"
+	id_server = id_server or server
+	if not _ID_IKE.match(id_server):
+		return None, _("Rândul %s nu este bun.") % "RemoteIdentifier"
+	if id_local and not _ID_IKE.match(id_local):
+		return None, _("Rândul %s nu este bun.") % "LocalIdentifier"
+	for x in (ike, esp):
+		if x and not _PROPUNERE.match(x):
+			return None, _("Rândul %s nu este bun.") % x[:40]
+	if auth not in ("eap", "psk", "psk-eap"):
+		return None, _("Autentificarea cu certificatul clientului (.p12) nu este primită încă. Folosește numele și "
+			"parola.")
+	campuri = (["psk"] if auth.startswith("psk") else []) + (["nume", "parola"] if auth.endswith("eap") else [])
+	secrete = {}
+	if nume:
+		if not _NUME_CONT.match(nume):
+			return None, _("Numele nu este bun (litere, cifre și . _ @ + - =, cel mult 128).")
+		secrete["nume"] = nume
+	for cheie, v in (("parola", parola), ("psk", psk)):
+		if v:
+			if not _secretBun(v):
+				return None, _("Parola nu este bună (cel mult %d semne, pe un singur rând).") % MAX_SECRET
+			secrete[cheie] = v
+	date = {"server": server, "port": str(port or "500"), "id_server": id_server, "auth": auth, "ca": list(ca or [])[:8],
+		"ike": ike or "", "esp": esp or "", "id_local": id_local or ""}
+	return {"titlu": _titluCurat(titlu, "IKEv2, %s" % server), "date": date, "secrete": secrete, "campuri": campuri,
+		"remote": [(server, str(port or "500"), "udp")]}, ""
+
+
+def analizeazaSswan(text, ca=None):
+	"""Profilul strongSwan pentru Android (.sswan, JSON)."""
+	try:
+		d = json.loads((text or "").lstrip("﻿"))
+	except ValueError:
+		return _greseala("ikev2", _("Fișierul nu este text."))
+	if not isinstance(d, dict) or not isinstance(d.get("remote"), dict):
+		return _greseala("ikev2", _("Fișierul nu are serverul (remote)."))
+	r = d["remote"]
+	tip = str(d.get("type", ""))
+	auth = {"ikev2-eap": "eap", "ikev2-eap-only": "eap"}.get(tip, "cert")
+	ca = list(ca or [])
+	if isinstance(r.get("cert"), str):
+		try:
+			ca.append(_pemDinDer(base64.b64decode(r["cert"], validate=True)))
+		except (binascii.Error, ValueError):
+			return _greseala("ikev2", _("Lipsește certificatul serverului (ca)."))
+	local = d.get("local") if isinstance(d.get("local"), dict) else {}
+	p, motiv = _profilIkev2(str(r.get("addr", "")), str(r.get("port") or "500"), str(r.get("id") or ""), auth, ca,
+		nume=str(local.get("eap_id") or ""), ike=str(d.get("ike-proposal") or ""), esp=str(d.get("esp-proposal") or ""),
+		titlu=str(d.get("name") or ""))
+	return _analizaBuna("ikev2", [p]) if p else _greseala("ikev2", motiv)
+
+
+def _plist(text):
+	"""Dictionarul unui .mobileconfig (XML), cu DOCTYPE-ul Apple primit si orice alt DOCTYPE sau ENTITY refuzat."""
+	x = _textPlist(text)
+	if not x:
+		return None
+	x = _DOCTYPE_PLIST.sub("", x, count=1)
+	if "<!DOCTYPE" in x or "<!ENTITY" in x:
+		return None
+	try:
+		import plistlib
+	except ImportError:
+		return "fara plistlib"
+	try:
+		return plistlib.loads(x.encode("utf-8"))
+	except Exception:
+		return None
+
+
+def _sirPlist(x):
+	if isinstance(x, bytes):
+		return x.decode("utf-8", "replace")
+	return x if isinstance(x, str) else ""
+
+
+def analizeazaMobileconfig(text, ca=None):
+	"""Profilul Apple (.mobileconfig) cu VPN IKEv2 sau L2TP; certificatele radacina din el (com.apple.security.root,
+	.pem, .pkcs1) se iau ca autoritati pentru server."""
+	d = _plist(text)
+	if d == "fara plistlib":
+		return _greseala("ikev2", _("Profilurile .mobileconfig nu se pot citi pe acest receptor. Scrie datele de mână."))
+	if not isinstance(d, dict):
+		return _greseala("ikev2", _("Fișierul nu este un profil .mobileconfig bun."))
+	continut = [x for x in (d.get("PayloadContent") or []) if isinstance(x, dict)]
+	ca = list(ca or [])
+	for x in continut:
+		if x.get("PayloadType") in ("com.apple.security.root", "com.apple.security.pem", "com.apple.security.pkcs1"):
+			v = x.get("PayloadContent")
+			if isinstance(v, bytes) and v[:1] == b"\x30":
+				ca.append(_pemDinDer(v))
+			elif isinstance(v, (bytes, str)):
+				ca += certificateDin(_sirPlist(v))
+	profiluri, greseli, fel = [], [], "ikev2"
+	for x in continut:
+		if x.get("PayloadType") != "com.apple.vpn.managed":
+			continue
+		titlu = str(x.get("UserDefinedName") or x.get("PayloadDisplayName") or "")
+		if x.get("VPNType") == "IKEv2" and isinstance(x.get("IKEv2"), dict):
+			k = x["IKEv2"]
+			metoda = str(k.get("AuthenticationMethod") or "None")
+			eap = bool(k.get("ExtendedAuthEnabled"))
+			auth = {"None": "eap", "SharedSecret": "psk-eap" if eap else "psk"}.get(metoda, "cert")
+			p, motiv = _profilIkev2(str(k.get("RemoteAddress") or ""), "500", str(k.get("RemoteIdentifier") or ""), auth,
+				ca, nume=str(k.get("AuthName") or "") if auth.endswith("eap") else "",
+				parola=str(k.get("AuthPassword") or "") if auth.endswith("eap") else "",
+				psk=_sirPlist(k.get("SharedSecret")) if auth.startswith("psk") else "",
+				id_local=str(k.get("LocalIdentifier") or "") if auth.startswith("psk") else "", titlu=titlu)
+			(profiluri.append(p) if p else greseli.append(motiv))
+		elif x.get("VPNType") == "L2TP" and isinstance(x.get("PPP"), dict):
+			fel = "l2tp"
+			ppp, sec = x["PPP"], x.get("IPSec") if isinstance(x.get("IPSec"), dict) else {}
+			p, motiv = _profilL2tp(str(ppp.get("CommRemoteAddress") or ""), str(ppp.get("AuthName") or ""),
+				str(ppp.get("AuthPassword") or ""), _sirPlist(sec.get("SharedSecret")), titlu)
+			(profiluri.append(p) if p else greseli.append(motiv))
+		elif x.get("VPNType"):
+			greseli.append(_("Felul %s din profil nu este primit.") % str(x.get("VPNType"))[:20])
+	rez = _analizaBuna(fel, profiluri)
+	if greseli and not profiluri:
+		rez["greseli"] = greseli
+	return rez
+
+
+def _profilL2tp(server, nume="", parola="", psk="", titlu=""):
+	if not _gazdaBuna(server or ""):
+		return None, _("Adresa serverului nu este bună: %s") % ("%s" % server)[:60]
+	secrete = {}
+	if nume:
+		if not _NUME_CONT.match(nume):
+			return None, _("Numele nu este bun (litere, cifre și . _ @ + - =, cel mult 128).")
+		secrete["nume"] = nume
+	for cheie, v in (("parola", parola), ("psk", psk)):
+		if v:
+			if not _secretBun(v):
+				return None, _("Parola nu este bună (cel mult %d semne, pe un singur rând).") % MAX_SECRET
+			secrete[cheie] = v
+	return {"titlu": _titluCurat(titlu, "L2TP, %s" % server), "date": {"server": server}, "secrete": secrete,
+		"campuri": ["psk", "nume", "parola"], "remote": [(server, "500", "udp")]}, ""
+
+
+def _profilOc(adresa, protocol="anyconnect", grup="", pin="", nume="", parola="", titlu=""):
+	"""Un profil OpenConnect verificat sau (None, motivul). `adresa`: https://server[:port][/cale] sau numele serverului."""
+	adresa = (adresa or "").strip()
+	if adresa and not adresa.lower().startswith("https://"):
+		adresa = "https://" + adresa.split("://", 1)[-1]
+	m = _URL_OC.match(adresa)
+	if not m or not _gazdaBuna(m.group(1)) or (m.group(2) and not _PORT(m.group(2))):
+		return None, _("Adresa serverului nu este bună: %s") % adresa[:60]
+	protocol = (protocol or "anyconnect").lower()
+	if protocol not in PROTOCOALE_OC:
+		return None, _("Rândul %s nu este bun.") % "protocol"
+	if grup and not _sigur(grup):
+		return None, _("Rândul %s nu este bun.") % "authgroup"
+	if pin and not _PIN_OC.match(pin):
+		return None, _("Rândul %s nu este bun.") % "servercert"
+	secrete = {}
+	if nume:
+		if not _campBun(nume):
+			return None, _("Numele nu este bun (cel mult %d semne, pe un singur rând).") % MAX_CAMP_CONT
+		secrete["nume"] = nume
+	if parola:
+		if not _secretBun(parola):
+			return None, _("Parola nu este bună (cel mult %d semne, pe un singur rând).") % MAX_SECRET
+		secrete["parola"] = parola
+	port = m.group(2) or "443"
+	return {"titlu": _titluCurat(titlu, "OpenConnect, %s" % m.group(1)), "date": {"url": adresa, "server": m.group(1),
+		"port": port, "protocol": protocol, "grup": grup or "", "pin": pin or ""}, "secrete": secrete,
+		"campuri": ["nume", "parola"], "remote": [(m.group(1), port, "tcp")]}, ""
+
+
+def analizeaza(fel, text, nume="", ca=None):
+	"""Analiza unui text de felul `fel` (protocoalele noi): {"ok", "fel", "greseli", "note", "profiluri"}."""
+	if fel == "shadowsocks":
+		return analizeazaSs(text, nume)
+	if fel in ("ikev2", "l2tp"):
+		if _textPlist(text):
+			return analizeazaMobileconfig(text, ca)
+		return analizeazaSswan(text, ca)
+	if fel == "openconnect":
+		p, motiv = _profilOc((text or "").strip())
+		return _analizaBuna(fel, [p]) if p else _greseala(fel, motiv)
+	return _greseala(fel, _("Felul %s nu este cunoscut.") % fel)
+
+
+def analizeazaCampuri(campuri, ca=None):
+	"""Datele scrise de mana (ecranul, pagina web, HdsVpnFurnizori): {"fel", "server", "nume", "parola", "psk",
+	"protocol", "grup", "id_server", "port", "metoda", "titlu"}."""
+	c = dict((k, ("%s" % v).strip() if k not in ("parola", "psk") else "%s" % v) for k, v in (campuri or {}).items()
+		if v is not None)
+	fel = c.get("fel", "")
+	server = c.get("server", "")
+	if fel == "openconnect":
+		p, motiv = _profilOc(server, c.get("protocol") or "anyconnect", c.get("grup", ""), c.get("pin", ""),
+			c.get("nume", ""), c.get("parola", ""), c.get("titlu", ""))
+	elif fel == "ikev2":
+		auth = "psk-eap" if c.get("psk") and c.get("nume") else ("psk" if c.get("psk") else "eap")
+		p, motiv = _profilIkev2(server, c.get("port") or "500", c.get("id_server", ""), auth, ca, c.get("nume", ""),
+			c.get("parola", ""), c.get("psk", ""), titlu=c.get("titlu", ""))
+	elif fel == "l2tp":
+		p, motiv = _profilL2tp(server, c.get("nume", ""), c.get("parola", ""), c.get("psk", ""), c.get("titlu", ""))
+	elif fel == "shadowsocks":
+		gazda, port = server, c.get("port", "")
+		e = _desparteEndpoint(server)
+		if e:
+			gazda, port = e
+		p, motiv = _profilSs(gazda, port or "8388", c.get("metoda") or "chacha20-ietf-poly1305", c.get("parola", ""),
+			c.get("titlu", ""))
+	else:
+		return _greseala(fel, _("Alege felul VPN-ului."))
+	return _analizaBuna(fel, [p]) if p else _greseala(fel, motiv)
+
+
+def _caleSecret(p):
+	return "%s/%s.secret" % (DOSAR_PROFILURI, p["id"])
+
+
+def dateProfil(p):
+	"""Datele (fara secrete) unui profil al protocoalelor noi, din <id>.json."""
+	return _citesteJson(_caleProfil(p), MAX_FISIER * 4) or {}
+
+
+def secreteProfil(p):
+	"""Datele de acces ale profilului (numai pentru pornire; puse si in lista textelor ascunse din jurnal)."""
+	d = _citesteJson(_caleSecret(p), 8192) or {}
+	rez = dict((k, d[k]) for k in CAMPURI if isinstance(d.get(k), str) and d[k])
+	_SECRETE.update(rez.values())
+	return rez
+
+
+def campuriLipsa(p):
+	"""Ce trebuie sa mai scrie omul ca profilul `p` (dict sau id) sa porneasca: lista din "nume", "parola", "psk"."""
+	if isinstance(p, str):
+		p = profil(p)
+	if p is None:
+		return []
+	if p["fel"] == "openvpn":
+		return ["nume", "parola"] if (p.get("cere_cont") and not areCont()) else []
+	if p["fel"] == "wireguard":
+		return []
+	d = _citesteJson(_caleSecret(p), 8192) or {}
+	return [c for c in (p.get("campuri") or []) if c in CAMPURI and not (isinstance(d.get(c), str) and d[c])]
+
+
+def _campBunPentru(fel, cheie, v):
+	if cheie == "nume":
+		if fel in ("ikev2", "l2tp"):
+			return bool(_NUME_CONT.match(v or "")), _("Numele nu este bun (litere, cifre și . _ @ + - =, cel mult 128).")
+		return _campBun(v), _("Numele nu este bun (cel mult %d semne, pe un singur rând).") % MAX_CAMP_CONT
+	return _secretBun(v), _("Parola nu este bună (cel mult %d semne, pe un singur rând).") % MAX_SECRET
+
+
+def salveazaSecrete(id_profil, **campuri):
+	"""Numele, parola sau cheia comuna ale unui profil (0600, langa el; la OpenVPN contul comun). Numai cheile date se
+	schimba. (reusit, mesaj)."""
+	p = profil(id_profil)
+	if p is None:
+		return False, _("Serverul nu mai există.")
+	campuri = dict((k, v) for k, v in campuri.items() if v is not None)
+	if p["fel"] == "openvpn":
+		return salveazaCont(campuri.get("nume", ""), campuri.get("parola", ""))
+	if p["fel"] == "wireguard":
+		return False, _("WireGuard nu are nume și parolă: cheia e în fișier.")
+	for k, v in campuri.items():
+		if k not in CAMPURI:
+			return False, _("Rândul %s nu este bun.") % k[:20]
+		if k == "nume":
+			v = campuri[k] = v.strip()
+		bun, motiv = _campBunPentru(p["fel"], k, v)
+		if not bun:
+			return False, motiv
+	d = _citesteJson(_caleSecret(p), 8192) or {}
+	d = dict((k, d[k]) for k in CAMPURI if isinstance(d.get(k), str))
+	d.update(campuri)
+	_SECRETE.update(v for v in campuri.values() if v)
+	_dosar(DOSAR)
+	_dosar(DOSAR_PROFILURI)
+	_scrieAtomic(_caleSecret(p), json.dumps(d), 0o600)
+	jurnal("datele de acces ale serverului %s au fost salvate" % p["id"])
+	return True, _("Datele de acces sunt salvate. Nu se mai arată nicăieri.")
+
+
+def salveazaSecreteGrup(grup, fel, **campuri):
+	"""Aceleasi date de acces pe toate profilurile felului `fel` din grup (HdsVpnFurnizori: contul furnizorului)."""
+	n = 0
+	for p in profiluriGrup(grup):
+		if p["fel"] == fel and fel not in FELURI_FISIER:
+			reusit, mesaj = salveazaSecrete(p["id"], **campuri)
+			if not reusit:
+				return False, mesaj
+			n += 1
+	return True, _("Datele de acces sunt salvate. Nu se mai arată nicăieri.") if n else _("Nimic de adăugat.")
+
+
+def _salveazaProfilNou(grup, fel, x, lista, ids, titluri, nume_fisier=""):
+	"""Pune pe receptor un profil al protocoalelor noi (analiza `x`); (id, nou)."""
+	date = dict(x["date"], fel=fel)
+	id_p = hashlib.sha1(("%s\n%s" % (grup, json.dumps(date, sort_keys=True))).encode("utf-8")).hexdigest()[:12]
+	if id_p in ids:
+		return id_p, False
+	titlu, baza, k = x["titlu"], x["titlu"], 2
+	while titlu in titluri:
+		titlu = "%s %d" % (baza, k)
+		k += 1
+	p = {"id": id_p, "titlu": titlu, "fel": fel, "grup": grup, "fisier": "%s.json" % id_p,
+		"nume_fisier": _numeCurat(nume_fisier or titlu), "gazde": ["%s:%s" % (r[0], r[1]) for r in x["remote"]][:16],
+		"proto": x["remote"][0][2] if x["remote"] else "udp", "remote": [list(r) for r in x["remote"]][:16],
+		"cere_cont": "parola" in x["campuri"], "campuri": [c for c in x["campuri"] if c in CAMPURI], "plin": True,
+		"adaugat": int(time.time())}
+	_dosar(DOSAR)
+	_dosar(DOSAR_PROFILURI)
+	_scrieAtomic(_caleProfil(p), json.dumps(date, ensure_ascii=False), 0o600)
+	lista.append(p)
+	ids.add(id_p)
+	titluri.add(titlu)
+	return id_p, True
+
+
+def _grupPentru(fel, grup, s):
+	if grup and grupCunoscut(grup) and fel in feluriGrup(grup):
+		return grup
+	if fel in feluriGrup(s["furnizor"]):
+		return s["furnizor"]
+	return GRUP_FEL[fel]
+
+
+def adaugaVpn(fisiere=(), text="", campuri=None, grup=None):
+	"""Adauga VPN: fisiere (lista de (nume, octeti), si arhive .zip), un text lipit sau datele scrise de mana
+	(`campuri`, vezi analizeazaCampuri), recunoscute dupa continut. Grupul: `grup` daca primeste felul, altfel
+	furnizorul ales daca il primeste, altfel grupul felului (GRUP_FEL). Numele, parola si cheia comuna din `campuri`
+	se pun pe profilurile adaugate. Cu VPN-ul oprit, primul server adaugat devine cel ales. (reusit, mesaj, {"ids",
+	"lipsesc", "fel", "grup", "adaugate", "la_fel", "refuzate", "motive"})."""
+	campuri = dict(campuri or {})
+	s = setari()
+	greseli = []
+	desfacute = []
+	for nume, date in fisiere or ():
+		if nume.lower().endswith(".zip"):
+			desfacute += _membriArhiva(nume, date, greseli)
+		elif len(date) <= MAX_FISIER:
+			desfacute.append((nume, date))
+		else:
+			greseli.append(_("Fișierul %s este prea mare.") % _numeCurat(nume))
+	if text and text.strip():
+		if len(text) > MAX_FISIER:
+			greseli.append(_("Fișierul %s este prea mare.") % "text")
+		else:
+			desfacute.append(("", text.encode("utf-8")))
+	alaturi, ca = {}, []
+	principale = []
+	for nume, date in desfacute:
+		n = nume.replace("\\", "/").rsplit("/", 1)[-1]
+		t = date.decode("utf-8", "replace")
+		fel = recunoaste(t, n)
+		if fel:
+			principale.append((nume, t, fel))
+			continue
+		if n.lower().endswith(EXT_ALATURI):
+			nn = _numeAlaturi(n)
+			if date[:1] == b"\x30" and len(date) > 64:
+				t = _pemDinDer(date)
+			if nn:
+				alaturi[nn] = t
+			ca += certificateDin(t)
+		elif n.lower().endswith((".ovpn", ".conf", ".sswan", ".mobileconfig", ".json", ".txt")) or not nume:
+			greseli.append(_("%s: nu recunosc felul VPN-ului din el.") % (_numeCurat(nume) if nume else _("Textul")))
+	manual = not principale and campuri.get("fel") in FELURI and bool(campuri.get("server"))
+	if not principale and not manual:
+		return False, (greseli[0] if greseli else _("Nu am găsit niciun VPN în ce ai dat.")), {"motive": greseli[:5],
+			"ids": [], "lipsesc": []}
+	lista = profiluri()
+	ids = set(p["id"] for p in lista)
+	adaugate = la_fel = refuzate = 0
+	ids_noi, motive = [], list(greseli)
+	grupuri_folosite = []
+	pe_grupuri = {}
+	for nume, t, fel in principale[:MAX_MEMBRI]:
+		if fel in FELURI_FISIER:
+			pe_grupuri.setdefault(_grupPentru(fel, grup, s), []).append((nume or "VPN.ovpn", t.encode("utf-8")))
+	for g, lot in sorted(pe_grupuri.items()):
+		alaturi_lot = [(n, v.encode("utf-8")) for n, v in sorted(alaturi.items())]
+		reusit, mesaj, d = importa(lot + alaturi_lot, g)
+		adaugate += d.get("adaugate", 0)
+		la_fel += d.get("la_fel", 0)
+		refuzate += d.get("refuzate", 0)
+		motive += d.get("motive", [])
+		ids_noi += [i for i in d.get("ids", []) if i not in ids_noi]
+		if d.get("ids"):
+			grupuri_folosite.append(g)
+	lista = profiluri()
+	ids = set(p["id"] for p in lista)
+	analize = []
+	for nume, t, fel in principale[:MAX_MEMBRI]:
+		if fel not in FELURI_FISIER:
+			analize.append((nume, fel, analizeaza(fel, t, nume, ca)))
+	if manual:
+		analize.append(("", campuri["fel"], analizeazaCampuri(campuri, ca)))
+	schimbat = False
+	for nume, fel, a in analize:
+		fel = a.get("fel") or fel
+		cap, motiv_cap = capabil(fel)
+		if cap == "nu":
+			refuzate += 1
+			motive.append(motiv_cap)
+			continue
+		if not a["ok"]:
+			refuzate += 1
+			motive.append(("%s: %s" % (_numeCurat(nume), a["greseli"][0])) if nume else a["greseli"][0])
+			continue
+		g = _grupPentru(fel, grup, s)
+		titluri = set(p["titlu"] for p in lista if p.get("grup") == g)
+		for x in a["profiluri"]:
+			if len(lista) >= MAX_PROFILURI:
+				refuzate += 1
+				motive.append(_("Sunt deja %d servere; șterge din ele.") % MAX_PROFILURI)
+				break
+			id_p, nou = _salveazaProfilNou(g, fel, x, lista, ids, titluri, nume)
+			schimbat = schimbat or nou
+			adaugate += 1 if nou else 0
+			la_fel += 0 if nou else 1
+			if id_p not in ids_noi:
+				ids_noi.append(id_p)
+			if x["secrete"]:
+				# datele din fisier (ss://, .mobileconfig) se pun langa profil; cele scrise de mana mai jos
+				_scrieSecreteNoi(id_p, x["secrete"])
+			if g not in grupuri_folosite:
+				grupuri_folosite.append(g)
+	if schimbat:
+		_scrieIndex(lista)
+	secrete_scrise = dict((k, campuri[k]) for k in CAMPURI if campuri.get(k))
+	for id_p in ids_noi:
+		p = profil(id_p)
+		if p and secrete_scrise and p["fel"] not in ("wireguard",):
+			if p["fel"] != "openvpn" or ("nume" in secrete_scrise and "parola" in secrete_scrise):
+				reusit, mesaj = salveazaSecrete(id_p, **secrete_scrise)
+				if not reusit:
+					motive.append(mesaj)
+	ales = profil(ids_noi[0]) if ids_noi else None
+	if ales is not None and not s["pornit"]:
+		salveazaSetari(furnizor=ales["grup"], profil=ales["id"])
+	lipsesc = campuriLipsa(ales) if ales else []
+	parti = []
+	if ales is not None:
+		parti.append(_("VPN adăugat: %s.") % ales["titlu"] if adaugate <= 1 else _("Servere adăugate: %d.") % adaugate)
+		if adaugate == 0 and la_fel:
+			parti = [_("Erau deja: %d.") % la_fel]
+		if s["pornit"]:
+			parti.append(_("Oprește VPN-ul ca să treci pe el."))
+		elif lipsesc:
+			parti.append(_("Mai scrie: %s.") % ", ".join(textCamp(c) for c in lipsesc))
+		else:
+			parti.append(_("Apasă VERDE ca să pornești VPN-ul."))
+	if refuzate:
+		parti.append(_("Nepotrivite: %d.") % refuzate)
+	if motive and (refuzate or ales is None):
+		parti.append(motive[0])
+	jurnal("adauga: %d adaugate, %d la fel, %d refuzate %s" % (adaugate, la_fel, refuzate, motive[:3]))
+	return ales is not None, " ".join(parti) or _("Nimic de adăugat."), {"ids": ids_noi, "lipsesc": lipsesc,
+		"fel": ales["fel"] if ales else "", "grup": ales["grup"] if ales else "", "adaugate": adaugate, "la_fel": la_fel,
+		"refuzate": refuzate, "motive": motive[:5]}
+
+
+def _scrieSecreteNoi(id_p, secrete):
+	p = profil(id_p) or {"id": id_p}
+	d = _citesteJson(_caleSecret(p), 8192) or {}
+	d.update(dict((k, v) for k, v in secrete.items() if k in CAMPURI and v))
+	_SECRETE.update(v for v in secrete.values() if v)
+	_dosar(DOSAR_PROFILURI)
+	_scrieAtomic(_caleSecret(p), json.dumps(d), 0o600)
+
+
+def textCamp(c):
+	return {"nume": _("numele"), "parola": _("parola"), "psk": _("cheia comună (PSK)")}.get(c, c)
 
 
 # ---------------------------------------------------------------- stickul
@@ -1198,10 +2111,35 @@ def importaDePeStick(grup):
 	return reusit, mesaj
 
 
+def adaugaDePeStick(grup=None):
+	"""Adauga VPN de pe stick: tot ce e in hdsatelit/vpn, recunoscut dupa continut (adaugaVpn)."""
+	if not dosareStick():
+		return False, _("Pe stick nu am găsit dosarul hdsatelit/vpn. Pune în el fișierele .ovpn, .conf sau arhiva .zip.")
+	fisiere = fisiereStick()
+	if not fisiere:
+		return False, _("Dosarul hdsatelit/vpn de pe stick este gol.")
+	reusit, mesaj, _d = adaugaVpn(fisiere, grup=grup)
+	return reusit, mesaj
+
+
 # ---------------------------------------------------------------- setarile si contul
 
 SETARI_IMPLICITE = {"furnizor": "hma", "profil": "", "mod": "navigator", "oprire_totala": False, "la_pornire": False,
 	"pornit": False, "iptv": True, "adrese": []}
+
+
+def modEfectiv(s=None):
+	"""Modul folosit: "navigator" numai unde nucleul are namespace-uri de retea; altfel "tot" (pe Vu+ alegerea
+	navigatorului nici nu se arata)."""
+	s = s or setari()
+	if s["mod"] == "navigator" and not areNetns():
+		return "tot"
+	return s["mod"]
+
+
+def moduriPosibile(fel=""):
+	"""Modurile aratate: fara "navigator" pe nucleele fara namespace-uri si la L2TP (interfata ppp nu se muta)."""
+	return [m for m in MODURI if m != "navigator" or (areNetns() and fel != "l2tp")]
 
 
 def adresaBuna(a):
@@ -1211,7 +2149,7 @@ def adresaBuna(a):
 def setari():
 	date = _citesteJson(CALE_SETARI) or {}
 	s = dict(SETARI_IMPLICITE)
-	if date.get("furnizor") in FURNIZORI:
+	if isinstance(date.get("furnizor"), str) and grupCunoscut(date["furnizor"]):
 		s["furnizor"] = date["furnizor"]
 	if isinstance(date.get("profil"), str) and re.match(r"^([0-9a-f]{12})?\Z", date["profil"]):
 		s["profil"] = date["profil"]
@@ -1530,7 +2468,8 @@ def wgInNetns():
 
 def vpnViu():
 	_culegeCopilul()
-	return bool(pidOpenvpn()) or interfataExista(INTERFATA_WG) or wgInNetns()
+	return (bool(pidOpenvpn()) or interfataExista(INTERFATA_WG) or wgInNetns() or _oricareViu() or
+		interfataExista(INTERFATA_PPP))
 
 
 # ---------------------------------------------------------------- namespace-ul de retea al navigatorului (modul "navigator")
@@ -1571,7 +2510,7 @@ def prefixNavigator():
 	HbbTV" (NETNS se face aici daca lipseste: fara tunel inca, navigatorul nu iese direct pe internet), altfel [] (VPN-ul
 	oprit sau alt mod: navigatorul porneste ca inainte, fara nicio schimbare)."""
 	s = setari()
-	if not s["pornit"] or s["mod"] != "navigator":
+	if not s["pornit"] or modEfectiv(s) != "navigator":
 		return []
 	if not netnsExista():
 		creeazaNetns()
@@ -1788,11 +2727,20 @@ def _pornesteAcum():
 	fel = p["fel"]
 	if fel == "wireguard" and wireguardIndisponibil():
 		return False, _(TEXT_WG_INDISPONIBIL)
-	if not programe()[fel]:
+	poate, motiv = nucleuPoate(fel)
+	if not poate:
+		return False, motiv
+	if not programe().get(fel):
 		return False, _("Lipsesc programele VPN. Instalează-le întâi.")
 	if fel == "openvpn" and p.get("cere_cont") and not areCont():
 		return False, _("Scrie întâi numele și parola contului.")
-	navigator = s["mod"] == "navigator"
+	lipsa = campuriLipsa(p)
+	if lipsa:
+		return False, _("Mai scrie: %s.") % ", ".join(textCamp(c) for c in lipsa)
+	mod = modEfectiv(s)
+	if mod == "navigator" and fel == "l2tp":
+		return False, _("L2TP nu poate trece numai navigatorul prin VPN. Alege alt rând la Ce trece prin VPN.")
+	navigator = mod == "navigator"
 	# oprirea totala cu reguli (tot traficul, adresele alese); in modul navigator o face chiar NETNS, fara reguli
 	blocare = s["oprire_totala"] and s["pornit"] and not navigator
 	with _LACAT_RETEA:
@@ -1811,8 +2759,8 @@ def _pornesteAcum():
 		servere, nerezolvate = _rezolvaServere(p)
 		if not servere:
 			return False, _("Nu găsesc adresa serverului %s. Verifică legătura la internet.") % ", ".join(nerezolvate)[:80]
-		ales = ipuriAles(s) if s["mod"] == "ales" else []
-		plan = {"fel": fel, "mod": s["mod"], "oprire_totala": s["oprire_totala"], "profil": p["id"],
+		ales = ipuriAles(s) if mod == "ales" else []
+		plan = {"fel": fel, "mod": mod, "oprire_totala": s["oprire_totala"], "profil": p["id"],
 			"servere": sorted(set(ip for ip, _p, _x in servere)), "ales": ales, "cand": int(time.time())}
 		_scrieAtomic(CALE_PLAN, json.dumps(plan), 0o600)
 		if blocare:
@@ -1821,8 +2769,11 @@ def _pornesteAcum():
 		_STARE.update(eroare="", eroare_cont=False, ip=None, neconectat_de=time.time(), ales_cand=time.time())
 		if fel == "openvpn":
 			reusit, mesaj = _pornesteOpenvpn(p, servere, navigator)
-		else:
+		elif fel == "wireguard":
 			reusit, mesaj = _pornesteWg(p, servere, plan)
+		else:
+			reusit, mesaj = {"openconnect": _pornesteOpenconnect, "shadowsocks": _pornesteSs, "ikev2": _pornesteIkev2,
+				"l2tp": _pornesteL2tp}[fel](p, servere, plan)
 	if reusit:
 		_pornestePaza()
 	return reusit, mesaj
@@ -1879,6 +2830,9 @@ def _pornesteWg(p, servere, plan):
 			return False, _("Nu găsesc adresa serverului %s. Verifică legătura la internet.") % g
 		endpointuri[(g, pt)] = ips[0]
 	navigator = plan["mod"] == "navigator"
+	if not areWireguardInNucleu():
+		# modulul din feed (kernel-module-wireguard-<nucleu>) nu se incarca singur pe toate imaginile
+		_ruleaza([PROGRAM_MODPROBE, "wireguard"], 20)
 	_ip("link", "del", INTERFATA_WG)
 	if navigator:
 		_ip("-n", NETNS, "link", "del", INTERFATA_WG)
@@ -1932,6 +2886,7 @@ def _opresteTot(curata_dns=True, sterge_netns=True):
 	_dosar(DOSAR_RULARE)
 	_scrieAtomic(CALE_OPRIRE, "1\n", 0o600)
 	_opresteOpenvpn()
+	_opresteProtocoale()
 	if interfataExista(INTERFATA_WG):
 		_ip("link", "del", INTERFATA_WG)
 	if netnsExista():
@@ -2015,6 +2970,731 @@ def _susNetns(dev, mediu):
 		"cand": int(time.time()), "comenzi_rele": rele}), 0o600)
 	jurnal("openvpn sus in %s: %s, %d comenzi rele" % (NETNS, dev, rele))
 	return 0
+
+
+# ---------------------------------------------------------------- protocoalele noi: programele care raman pornite
+
+# ce scrie in linia de comanda a fiecarui program (pid-ul din fisier e al lui numai daca are semnul)
+SEMNE_PROCES = {"openconnect": "--interface=" + INTERFATA_OC, "charon": "charon",
+	"ss-local": DOSAR_RULARE + "/ss.json", "tun2socks": DOSAR_RULARE + "/tun2socks.yml",
+	"xl2tpd": DOSAR_RULARE + "/xl2tpd.conf"}
+# programele fiecarui fel, in ordinea opririi (charon la urma)
+PROCESE_FEL = {"openconnect": ("openconnect",), "shadowsocks": ("tun2socks", "ss-local"), "ikev2": ("charon",),
+	"l2tp": ("xl2tpd", "charon")}
+# fisierele cu secrete din DOSAR_RULARE, sterse la oprire (si dupa folosire, unde se poate)
+FISIERE_SECRETE_RULARE = ("ss.json", "swanctl/swanctl.conf", "ppp.opt")
+TIMP_IPSEC_S = 40
+TIMP_INTERFATA_S = 8
+_COPII = {}
+
+
+def _calePid(nume):
+	return "%s/%s.pid" % (DOSAR_RULARE, nume)
+
+
+def pidProces(nume):
+	text = _citeste(_calePid(nume), 32)
+	try:
+		pid = int((text or "").strip())
+	except ValueError:
+		return None
+	if pid > 1 and _pidViu(pid, SEMNE_PROCES.get(nume, nume)):
+		return pid
+	return None
+
+
+def procesViu(nume):
+	c = _COPII.get(nume)
+	if c is not None:
+		if c.poll() is None:
+			return True
+		_COPII.pop(nume, None)
+	return pidProces(nume) is not None
+
+
+def felViu():
+	"""Felul protocolului nou ale carui programe merg acum (toate cele ale felului), sau ""."""
+	for fel, nume in PROCESE_FEL.items():
+		if fel == "l2tp" and not procesViu("xl2tpd"):
+			continue
+		if fel == "ikev2" and procesViu("xl2tpd"):
+			continue
+		if all(procesViu(n) for n in nume):
+			return fel
+	return ""
+
+
+def _oricareViu():
+	return any(procesViu(n) for n in SEMNE_PROCES)
+
+
+def _pornesteProces(nume, argv, mediu=None, intrare=None):
+	"""Porneste `argv` in sesiunea lui (nu moare cu interfata), iesirea in /tmp/hds-vpn-<nume>.log, pid-ul in
+	DOSAR_RULARE. `intrare`: textul dat pe stdin (parola lui openconnect), apoi stdin se inchide."""
+	_dosar(DOSAR_RULARE)
+	jurnal("pornesc %s: %s" % (nume, " ".join(argv)))
+	if PORNITOR is not None:
+		proc = PORNITOR(list(argv), mediu, intrare)
+	else:
+		try:
+			fd = os.open(_cale(CALE_JURNAL_PROTOCOL % nume), os.O_WRONLY | os.O_CREAT | os.O_TRUNC |
+				getattr(os, "O_NOFOLLOW", 0), 0o600)
+		except OSError:
+			fd = subprocess.DEVNULL
+		try:
+			proc = subprocess.Popen(argv, stdin=subprocess.PIPE if intrare is not None else subprocess.DEVNULL,
+				stdout=fd, stderr=subprocess.STDOUT, close_fds=True, start_new_session=True, cwd="/", env=mediu)
+		finally:
+			if fd is not subprocess.DEVNULL:
+				os.close(fd)
+		if intrare is not None:
+			try:
+				proc.stdin.write(intrare.encode("utf-8"))
+				proc.stdin.close()
+			except (OSError, IOError):
+				pass
+	_COPII[nume] = proc
+	_scrieAtomic(_calePid(nume), "%d\n" % proc.pid, 0o600)
+	return proc
+
+
+def _opresteProces(nume):
+	pid = pidProces(nume)
+	c = _COPII.get(nume)
+	if pid:
+		try:
+			os.kill(pid, signal.SIGTERM)
+		except OSError:
+			pass
+		for _i in range(50):
+			if not pidProces(nume):
+				break
+			time.sleep(0.1)
+		if pidProces(nume):
+			try:
+				os.kill(pid, signal.SIGKILL)
+			except OSError:
+				pass
+	elif c is not None and c.poll() is None:
+		try:
+			c.terminate()
+		except OSError:
+			pass
+	if c is not None:
+		try:
+			c.wait(5)
+		except Exception:
+			pass
+	_COPII.pop(nume, None)
+	_sterge(_calePid(nume))
+
+
+def _opresteProtocoale():
+	for fel in ("openconnect", "shadowsocks", "l2tp", "ikev2"):
+		for nume in PROCESE_FEL[fel]:
+			if procesViu(nume) or os.path.exists(_cale(_calePid(nume))):
+				_opresteProces(nume)
+	for f in FISIERE_SECRETE_RULARE:
+		_sterge("%s/%s" % (DOSAR_RULARE, f))
+
+
+def _jurnalProtocol(nume, maxim=16384):
+	return (_citeste(CALE_JURNAL_PROTOCOL % nume, 262144) or "")[-maxim:]
+
+
+def _asteaptaInterfata(dev, secunde=TIMP_INTERFATA_S):
+	if RULATOR is not None:
+		return True
+	for _i in range(int(secunde * 10)):
+		if interfataExista(dev):
+			return True
+		time.sleep(0.1)
+	return False
+
+
+def _numeDev(x, implicit):
+	return x if re.match(r"^[A-Za-z0-9_.\-]{1,15}\Z", x or "") else implicit
+
+
+def _ipv4(x):
+	try:
+		return str(ipaddress.IPv4Address((x or "").strip()))
+	except ValueError:
+		return ""
+
+
+def susTun(fel, dev, adrese, mtu, dns, servere, peer="", configureaza=True):
+	"""Interfata VPN `dev` (tun sau ppp) gata: in modul navigator mutata in NETNS si configurata acolo, altfel adresa
+	(cu `configureaza`), rutarea dupa plan si DNS-ul in modul tot. Scrie sus.json. Pentru scripturile programelor
+	(openconnect-script, ppp-sus) si dupa pornirea lui charon si hev-socks5-tunnel."""
+	plan = _citestePlan()
+	mtu = str(mtu) if str(mtu).isdigit() else "1400"
+	dns = [d for d in dns if _ipv4(d)][:3]
+	if plan.get("mod") == "navigator":
+		creeazaNetns()
+		rele = aplicaComenzi(comenziNetns(dev, adrese, mtu, True, peer=peer))
+		scrieDnsNetns(dns or list(DNS_REZERVA))
+		_dosar(DOSAR_RULARE)
+		_scrieAtomic(CALE_SUS, json.dumps({"fel": fel, "dev": dev, "dns": dns, "ip_local": (adrese or [""])[0],
+			"netns": True, "cand": int(time.time()), "comenzi_rele": rele}), 0o600)
+		jurnal("%s sus in %s: %s, %d comenzi rele" % (fel, NETNS, dev, rele))
+		return rele
+	_stergeReguli((PRIO_SERVER, PRIO_CASA, PRIO_TOT, PRIO_ALES))
+	_ip("-4", "route", "flush", "table", TABELA)
+	rele = 0
+	if configureaza:
+		for a in adrese:
+			rele += aplicaComenzi([["-4", "address", "replace", a] + (["peer", peer] if peer else []) + ["dev", dev]])
+		rele += aplicaComenzi([["link", "set", "dev", dev, "mtu", mtu, "up"]])
+	mod = plan.get("mod", "tot")
+	servere = sorted(set([s for s in servere if _ipv4(s)] + list(plan.get("servere") or [])))
+	rele += aplicaComenzi(comenziPornire(dev, servere, mod, bool(plan.get("oprire_totala")), plan.get("ales") or []))
+	if mod == "tot":
+		aplicaDns(dns or list(DNS_REZERVA))
+	_dosar(DOSAR_RULARE)
+	_scrieAtomic(CALE_SUS, json.dumps({"fel": fel, "dev": dev, "dns": dns, "ip_local": (adrese or [""])[0],
+		"cand": int(time.time()), "comenzi_rele": rele}), 0o600)
+	jurnal("%s sus: %s, %d comenzi rele" % (fel, dev, rele))
+	return rele
+
+
+def josTun(fel):
+	"""Interfata VPN a cazut (scriptul programului): ca --down la openvpn."""
+	plan = _citestePlan()
+	_sterge(CALE_SUS)
+	if plan.get("mod") == "navigator":
+		jurnal("%s jos: navigatorul ramane fara internet pana revine VPN-ul" % fel)
+		return 0
+	if os.path.exists(_cale(CALE_OPRIRE)) or not plan.get("oprire_totala"):
+		curataRetea()
+		jurnal("%s jos: rutarea scoasa" % fel)
+	else:
+		jurnal("%s jos: oprirea totala ramane (internetul oprit pana revine VPN-ul)" % fel)
+	return 0
+
+
+# ---------------------------------------------------------------- OpenConnect
+
+def argumenteOpenconnect(d, nume):
+	"""Linia de comanda a lui openconnect (fara parola: ea merge pe stdin). Toate optiunile in forma --x=valoare, iar
+	adresa e verificata (https://...), deci nimic de la om nu poate deveni o optiune."""
+	a = [_program("openconnect") or CAI_PROGRAME["openconnect"][0], "--non-inter", "--passwd-on-stdin",
+		"--interface=" + INTERFATA_OC, "--script=%s %s openconnect-script" % (PYTHON, _caleScript()),
+		"--protocol=" + d.get("protocol", "anyconnect"), "--user=" + nume, "--timestamp"]
+	if d.get("grup"):
+		a.append("--authgroup=" + d["grup"])
+	if d.get("pin"):
+		a.append("--servercert=" + d["pin"])
+	a.append(d["url"])
+	return a
+
+
+_PIN_IN_JURNAL = re.compile(r"--servercert[= ](pin-sha256:[A-Za-z0-9+/]{43}=)")
+_ERORI_OC = (
+	("Login failed", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("Authentication failed", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("Failed to complete authentication", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("User input required in non-interactive mode", N_("Serverul cere încă un cod (de pe telefon sau prin SMS); "
+		"receptorul nu îl poate da."), True),
+	("certificate from VPN server", N_("Certificatul serverului nu este de încredere."), False),
+	("Failed to open HTTPS connection", N_("Serverul nu răspunde. Verifică adresa lui."), False),
+	("Failed to connect to host", N_("Serverul nu răspunde. Verifică adresa lui."), False),
+)
+
+
+def eroareOpenconnect():
+	"""(motivul, este eroare de cont, pin-ul propus pentru un certificat necunoscut)"""
+	coada = _jurnalProtocol("openconnect")
+	m = _PIN_IN_JURNAL.search(coada)
+	if m:
+		# certificatul nu a fost primit (openconnect propune --servercert); spune si "User input required", fiindca ar
+		# fi cerut un da. Cu pin-ul bun in profil, "verify failed" apare tot, dar fara propunere, si legatura merge mai departe
+		return _(N_("Certificatul serverului nu este de încredere.")), False, m.group(1)
+	for semn, motiv, de_cont in _ERORI_OC:
+		if semn in coada:
+			return _(motiv), de_cont, (m.group(1) if m else "")
+	return "", False, (m.group(1) if m else "")
+
+
+def _pornesteOpenconnect(p, servere, plan):
+	d = dateProfil(p)
+	sec = secreteProfil(p)
+	if not d.get("url") or not sec.get("nume") or not sec.get("parola"):
+		return False, _("Scrie întâi numele și parola contului.")
+	if not incarcaTun():
+		return False, _("Interfața tun nu se poate deschide (lipsește tun.ko). Instalează programele VPN.")
+	_STARE["pin_propus"] = ""
+	proc = _pornesteProces("openconnect", argumenteOpenconnect(d, sec["nume"]), intrare=sec["parola"] + "\n")
+	limita = time.time() + TIMP_CONECTARE_S
+	while time.time() < limita:
+		if proc.poll() is not None:
+			motiv, de_cont, pin = eroareOpenconnect()
+			if pin and not d.get("pin"):
+				_STARE["pin_propus"] = pin
+			_STARE.update(eroare=motiv or _("OpenConnect s-a oprit. Verifică adresa serverului."), eroare_cont=de_cont)
+			if not (setari()["oprire_totala"] and setari()["pornit"]) and plan.get("mod") != "navigator":
+				curataRetea()
+			return False, _STARE["eroare"]
+		sus = _citesteJson(CALE_SUS) or {}
+		if sus.get("fel") == "openconnect":
+			_STARE.update(legatura="CONNECTED", adresa_tunel=sus.get("ip_local", ""))
+			return True, _("Conectat la %s.") % p["titlu"]
+		if PORNITOR is not None:
+			break
+		time.sleep(0.5)
+	return True, _("Se conectează încă la %s.") % p["titlu"]
+
+
+def scriptOpenconnect(mediu):
+	"""Scriptul lui openconnect (in locul lui vpnc-script): reason=connect pune interfata, rutarea si DNS-ul;
+	disconnect le scoate; restul (pre-init, reconnect, attempt-reconnect) nu schimba nimic (interfata ramane)."""
+	motiv = mediu.get("reason", "")
+	dev = _numeDev(mediu.get("TUNDEV", ""), INTERFATA_OC)
+	if motiv == "connect":
+		local = _ipv4(mediu.get("INTERNAL_IP4_ADDRESS", ""))
+		if not local:
+			jurnal("openconnect connect fara adresa IPv4")
+			return 0
+		mtu = mediu.get("INTERNAL_IP4_MTU", "1300")
+		dns = [x for x in (mediu.get("INTERNAL_IP4_DNS", "") or "").split() if _ipv4(x)]
+		susTun("openconnect", dev, ["%s/32" % local], mtu, dns, [_ipv4(mediu.get("VPNGATEWAY", ""))])
+		return 0
+	if motiv == "disconnect":
+		return josTun("openconnect")
+	return 0
+
+
+def pastreazaCertificatul():
+	"""Omul are incredere in certificatul serverului OpenConnect aratat la ultima incercare: pin-ul intra in profil.
+	(reusit, mesaj)."""
+	pin = _STARE.get("pin_propus") or ""
+	s = setari()
+	p = profil(s["profil"])
+	if not pin or p is None or p["fel"] != "openconnect" or not _PIN_OC.match(pin):
+		return False, _("Nimic de schimbat.")
+	d = dateProfil(p)
+	d["pin"] = pin
+	_scrieAtomic(_caleProfil(p), json.dumps(d, ensure_ascii=False), 0o600)
+	_STARE["pin_propus"] = ""
+	jurnal("certificatul serverului %s pastrat: %s" % (p["id"], pin))
+	return True, _("Certificatul serverului este păstrat. Pornește din nou VPN-ul.")
+
+
+# ---------------------------------------------------------------- Shadowsocks
+
+def textTun2socks():
+	return ("tunnel:\n  name: %s\n  mtu: 8500\n  ipv4: %s\n"
+		"socks5:\n  port: %s\n  address: 127.0.0.1\n  udp: 'udp'\n"
+		"misc:\n  log-level: warn\n") % (INTERFATA_SS, ADRESA_TUN_SS, PORT_SOCKS)
+
+
+def configurareSs(d, parola, ip_server):
+	return {"server": ip_server, "server_port": int(d["port"]), "local_address": "127.0.0.1",
+		"local_port": int(PORT_SOCKS), "password": parola, "method": d["metoda"], "timeout": 300, "mode": "tcp_and_udp"}
+
+
+def _pornesteSs(p, servere, plan):
+	d = dateProfil(p)
+	sec = secreteProfil(p)
+	if not sec.get("parola"):
+		return False, _("Scrie întâi parola.")
+	if d.get("metoda") not in METODE_SS:
+		return False, _("Metoda %s nu este cunoscută.") % str(d.get("metoda"))[:40]
+	if not incarcaTun():
+		return False, _("Interfața tun nu se poate deschide (lipsește tun.ko). Instalează programele VPN.")
+	_dosar(DOSAR_RULARE)
+	_scrieAtomic(DOSAR_RULARE + "/ss.json", json.dumps(configurareSs(d, sec["parola"], servere[0][0])), 0o600)
+	_scrieAtomic(DOSAR_RULARE + "/tun2socks.yml", textTun2socks(), 0o600)
+	ss = _pornesteProces("ss-local", [_program("ss-local") or CAI_PROGRAME["ss-local"][0], "-c",
+		_cale(DOSAR_RULARE + "/ss.json")])
+	t2s = _pornesteProces("tun2socks", [_program("tun2socks") or CAI_PROGRAME["tun2socks"][0],
+		_cale(DOSAR_RULARE + "/tun2socks.yml")])
+	if not _asteaptaInterfata(INTERFATA_SS) or ss.poll() is not None or t2s.poll() is not None:
+		motiv = (_jurnalProtocol("ss-local", 300) + " " + _jurnalProtocol("tun2socks", 300)).strip()
+		jurnal("shadowsocks nu a pornit: %s" % motiv)
+		_STARE.update(eroare=_("Shadowsocks nu a pornit. Vezi metoda și parola."), eroare_cont=False)
+		return False, _STARE["eroare"]
+	# ss-local a citit configurarea la pornire: parola nu mai sta pe disc
+	_sterge(DOSAR_RULARE + "/ss.json")
+	susTun("shadowsocks", INTERFATA_SS, ["%s/32" % ADRESA_TUN_SS], "8500", [], [ip for ip, _p, _x in servere])
+	_STARE.update(legatura="CONNECTED", adresa_tunel=ADRESA_TUN_SS)
+	return True, _("Pornit spre %s.") % p["titlu"]
+
+
+# ---------------------------------------------------------------- IKEv2 si L2TP/IPsec (strongSwan)
+
+DOSAR_SWANCTL = DOSAR_RULARE + "/swanctl"
+CALE_STRONGSWAN = DOSAR_RULARE + "/strongswan.conf"
+CALE_VICI = DOSAR_RULARE + "/charon.vici"
+CALE_DNS_IPSEC = DOSAR_RULARE + "/ipsec-dns"
+CALE_RESOLVCONF_IPSEC = DOSAR_RULARE + "/ipsec-resolvconf"
+CALE_JURNAL_CHARON = "/tmp/hds-vpn-charon-ike.log"
+# pluginurile, in ordine: kernel-libipsec inaintea lui kernel-netlink (IPsec-ul il face libipsec, prin tun); cele care
+# lipsesc din pachet se sar cu un avertisment
+PLUGINURI_IKEV2 = ("random drbg nonce x509 revocation constraints pubkey pkcs1 pkcs7 pkcs8 pkcs12 pem openssl gmp aes "
+	"des sha1 sha2 md4 md5 hmac kdf curve25519 kernel-libipsec kernel-netlink resolve socket-default vici "
+	"eap-identity eap-mschapv2 eap-md5 xauth-generic")
+# L2TP: modul transport, deci IPsec-ul nucleului (fara kernel-libipsec)
+PLUGINURI_L2TP = PLUGINURI_IKEV2.replace("kernel-libipsec ", "")
+
+
+def _hex(text):
+	return "0x" + binascii.hexlify(text.encode("utf-8")).decode("ascii")
+
+
+def textStrongswan(pluginuri):
+	return ("charon {\n"
+		"  load = %s\n"
+		"  port = 0\n  port_nat_t = 0\n"
+		"  install_routes = no\n  install_virtual_ip = yes\n"
+		"  retransmit_tries = 3\n  close_ike_on_child_failure = yes\n"
+		"  plugins {\n"
+		"    vici {\n      socket = unix://%s\n    }\n"
+		"    resolve {\n      file = %s\n      resolvconf {\n        path = %s\n      }\n    }\n"
+		"  }\n"
+		"  filelog {\n    hds {\n      path = %s\n      default = 1\n      time_format = %%H:%%M:%%S\n"
+		"      append = no\n      flush_line = yes\n    }\n  }\n"
+		"  syslog {\n    daemon {\n      default = -1\n    }\n  }\n"
+		"}\n") % (pluginuri, _cale(CALE_VICI), _cale(CALE_DNS_IPSEC), _cale(CALE_RESOLVCONF_IPSEC),
+		_cale(CALE_JURNAL_CHARON))
+
+
+def textResolvconfIpsec():
+	""""resolvconf" pentru pluginul resolve al lui charon: strongSwan 5.9+ il cheama cand e scris in configurare (si cand
+	/sbin/resolvconf exista), altfel scrie in fisier; amandoua duc numai in CALE_DNS_IPSEC, niciodata in
+	/etc/resolv.conf. DNS-ul il pune apoi receptorul (susTun), dupa modul ales."""
+	return ("#!/bin/sh\n# HdsVpn: DNS-ul dat de serverul IKEv2 ajunge numai aici\n"
+		"case \"$1\" in -a) cat >> %s ;; esac\nexit 0\n") % _cale(CALE_DNS_IPSEC)
+
+
+def certificateCa(d):
+	"""Autoritatile cu care se verifica serverul: cele din import, altfel cele ale sistemului (ca-certificates)."""
+	if d.get("ca"):
+		return [c for c in d["ca"] if isinstance(c, str)][:8]
+	for c in CALE_CA_SISTEM:
+		text = _citeste(c, 4 * 1024 * 1024)
+		if text:
+			return _certificateToate(text)
+	return []
+
+
+def _certificateToate(text):
+	rez = []
+	for m in _PEM_CERT.finditer(text or ""):
+		rez.append(m.group(0))
+		if len(rez) >= 400:
+			break
+	return rez
+
+
+def textSwanctlIkev2(d, sec, ip_servere, nume_ca):
+	"""swanctl.conf pentru IKEv2: numai valori verificate (adrese IP, identitati pe lista alba, propuneri pe lista alba,
+	numele fisierelor facute de noi) si secretele ca 0x<hex>: nimic de la om nu se poate citi ca sintaxa."""
+	auth = d.get("auth", "eap")
+	r = ["connections {", "  hds {", "    version = 2", "    remote_addrs = %s" % ",".join(ip_servere),
+		"    remote_port = %s" % (d.get("port") or "500"), "    vips = 0.0.0.0", "    encap = yes",
+		"    dpd_delay = 30s", "    keyingtries = 1"]
+	if d.get("ike"):
+		r.append("    proposals = %s,default" % d["ike"])
+	r.append("    local {")
+	if auth.startswith("psk"):
+		r += ["      auth = psk"] + (["      id = %s" % d["id_local"]] if d.get("id_local") else [])
+		if auth.endswith("eap"):
+			r += ["    }", "    local-eap {", "      auth = eap", "      eap_id = %s" % sec["nume"]]
+	else:
+		r += ["      auth = eap", "      id = %s" % sec["nume"], "      eap_id = %s" % sec["nume"]]
+	r.append("    }")
+	r += ["    remote {", "      id = %s" % d["id_server"]]
+	if auth.startswith("psk"):
+		r.append("      auth = psk")
+	else:
+		r += ["      auth = pubkey", "      cacerts = %s" % ",".join(nume_ca)]
+	r += ["    }", "    children {", "      hds {", "        remote_ts = 0.0.0.0/0", "        dpd_action = restart",
+		"        close_action = none"]
+	if d.get("esp"):
+		r.append("        esp_proposals = %s,default" % d["esp"])
+	r += ["      }", "    }", "  }", "}", "secrets {"]
+	if auth.endswith("eap"):
+		r += ["  eap-hds {", "    id = %s" % sec["nume"], "    secret = %s" % _hex(sec["parola"]), "  }"]
+	if auth.startswith("psk"):
+		r += ["  ike-hds {", "    id-1 = %s" % d["id_server"], "    secret = %s" % _hex(sec["psk"]), "  }"]
+	r.append("}")
+	return "\n".join(r) + "\n"
+
+
+def textSwanctlL2tp(sec, ip_server):
+	return "\n".join(["connections {", "  hds {", "    version = 1", "    remote_addrs = %s" % ip_server,
+		"    proposals = aes256-sha1-modp2048,aes128-sha1-modp2048,aes256-sha1-modp1024,aes128-sha1-modp1024,"
+		"3des-sha1-modp1024,default", "    keyingtries = 1", "    local {", "      auth = psk", "    }",
+		"    remote {", "      auth = psk", "    }", "    children {", "      l2tp {", "        mode = transport",
+		"        local_ts = dynamic[udp/1701]", "        remote_ts = dynamic[udp/1701]",
+		# ESP in nucleu: numai ce au nucleele imaginii (fara SHA-384/512 si ChaCha20; tabelul lui V1)
+		"        esp_proposals = aes256-sha256,aes128-sha256,aes256-sha1,aes128-sha1,3des-sha1", "      }", "    }", "  }",
+		"}",
+		"secrets {", "  ike-hds {", "    secret = %s" % _hex(sec["psk"]), "  }", "}"]) + "\n"
+
+
+def _swanctl(*argv, **k):
+	mediu = dict(os.environ, STRONGSWAN_CONF=_cale(CALE_STRONGSWAN), SWANCTL_DIR=_cale(DOSAR_SWANCTL))
+	cmd = [_program("swanctl") or CAI_PROGRAME["swanctl"][0]] + list(argv) + ["--uri", "unix://" + _cale(CALE_VICI)]
+	if RULATOR is not None:
+		return RULATOR(cmd, k.get("timeout", TIMP_PROGRAM_S))
+	try:
+		p = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+			timeout=k.get("timeout", TIMP_PROGRAM_S), env=mediu)
+		return p.returncode, p.stdout.decode("utf-8", "replace")
+	except subprocess.TimeoutExpired:
+		return -2, "timeout"
+	except OSError as eroare:
+		return -1, str(eroare)
+
+
+_ERORI_IPSEC = (
+	("EAP_FAILURE", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("ERROR_AUTHENTICATION_FAILURE", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("EAP_MSCHAPV2 method failed", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("AUTHENTICATION_FAILED", N_("Numele, parola sau cheia comună nu sunt bune. VPN-ul nu mai încearcă singur."), True),
+	("no trusted", N_("Certificatul serverului nu se potrivește cu autoritatea lui (CA). Adaugă certificatul CA al "
+		"furnizorului."), False),
+	("constraint check failed", N_("Certificatul serverului nu se potrivește cu numele lui."), False),
+	("no issuer certificate found", N_("Certificatul serverului nu se potrivește cu autoritatea lui (CA). Adaugă "
+		"certificatul CA al furnizorului."), False),
+	("NO_PROPOSAL_CHOSEN", N_("Serverul nu primește cifrurile receptorului."), False),
+	("giving up after", N_("Serverul nu răspunde. Încearcă alt server."), False),
+	("unable to resolve", N_("Nu găsesc adresa serverului. Verifică legătura la internet."), False),
+)
+
+
+def eroareIpsec():
+	coada = _citeste(CALE_JURNAL_CHARON, 262144) or ""
+	coada = coada[-16384:]
+	for semn, motiv, de_cont in _ERORI_IPSEC:
+		if semn in coada:
+			return _(motiv), de_cont
+	return "", False
+
+
+def _pornesteCharon(pluginuri):
+	"""charon pornit cu configurarea noastra; True cand soclul vici raspunde."""
+	_dosar(DOSAR_RULARE)
+	_dosar(DOSAR_SWANCTL)
+	for sub in ("x509ca", "x509", "private", "conf.d"):
+		_dosar(DOSAR_SWANCTL + "/" + sub)
+	_scrieAtomic(CALE_STRONGSWAN, textStrongswan(pluginuri), 0o600)
+	_scrieAtomic(CALE_RESOLVCONF_IPSEC, textResolvconfIpsec(), 0o700)
+	_sterge(CALE_DNS_IPSEC)
+	# charon scrie in jurnalul lui si numele contului (identitatea IKE): fisierul e facut 0600 inainte, charon il
+	# deschide fara sa-i schimbe drepturile, si se goleste la fiecare pornire (append = no)
+	_scrieAtomic(CALE_JURNAL_CHARON, "", 0o600)
+	_sterge(CALE_VICI)
+	mediu = dict(os.environ, STRONGSWAN_CONF=_cale(CALE_STRONGSWAN))
+	proc = _pornesteProces("charon", [_program("charon") or CAI_PROGRAME["charon"][0]], mediu=mediu)
+	for _i in range(100):
+		if proc.poll() is not None:
+			return False
+		if os.path.exists(_cale(CALE_VICI)) or PORNITOR is not None:
+			return True
+		time.sleep(0.1)
+	return False
+
+
+def _incarcaSiInitiaza(text_conf, copil):
+	"""Scrie swanctl.conf (0600), il incarca, il sterge (secretele raman numai in charon) si porneste legatura.
+	(reusit, textul lui swanctl)."""
+	cale = DOSAR_SWANCTL + "/swanctl.conf"
+	_scrieAtomic(cale, text_conf, 0o600)
+	try:
+		cod, text = _swanctl("--load-all", "--file", _cale(cale))
+	finally:
+		_sterge(cale)
+	if cod != 0:
+		jurnal("swanctl --load-all: %s" % ascunde(text.strip())[-300:])
+		return False, text
+	cod, text = _swanctl("--initiate", "--child", copil, "--timeout", str(TIMP_IPSEC_S), timeout=TIMP_IPSEC_S + 10)
+	return cod == 0, text
+
+
+_VIP = re.compile(r"(?m)^\s*local\s+.*\[(\d{1,3}(?:\.\d{1,3}){3})\]\s*$")
+
+
+def adresaVirtuala(text):
+	"""Adresa data de server (virtual IP) din `swanctl --list-sas`: ultimul [x.x.x.x] de pe randul local."""
+	m = _VIP.search(text or "")
+	return _ipv4(m.group(1)) if m else ""
+
+
+def _dnsIpsec():
+	return [x for x in re.findall(r"(?m)^nameserver\s+(\S+)", _citeste(CALE_DNS_IPSEC, 4096) or "") if _ipv4(x)]
+
+
+def _pornesteIkev2(p, servere, plan):
+	d = dateProfil(p)
+	sec = secreteProfil(p)
+	lipsa = campuriLipsa(p)
+	if lipsa:
+		return False, _("Mai scrie: %s.") % ", ".join(textCamp(c) for c in lipsa)
+	if not incarcaTun():
+		return False, _("Interfața tun nu se poate deschide (lipsește tun.ko). Instalează programele VPN.")
+	ca = [] if d.get("auth", "eap").startswith("psk") else certificateCa(d)
+	if not d.get("auth", "eap").startswith("psk") and not ca:
+		return False, _("Lipsește certificatul serverului (ca).")
+	if not _pornesteCharon(PLUGINURI_IKEV2):
+		motiv, _c = eroareIpsec()
+		return False, motiv or _("strongSwan nu a pornit.")
+	nume_ca = []
+	for i, c in enumerate(ca):
+		n = "ca%03d.pem" % i
+		_scrieAtomic("%s/x509ca/%s" % (DOSAR_SWANCTL, n), c + "\n", 0o600)
+		nume_ca.append(n)
+	ips = sorted(set(ip for ip, _p, _x in servere))
+	reusit, text = _incarcaSiInitiaza(textSwanctlIkev2(d, sec, ips, nume_ca), "hds")
+	if not reusit:
+		motiv, de_cont = eroareIpsec()
+		_STARE.update(eroare=motiv or _("Serverul IKEv2 nu a primit legătura."), eroare_cont=de_cont)
+		_opresteProces("charon")
+		if not (setari()["oprire_totala"] and setari()["pornit"]) and plan.get("mod") != "navigator":
+			curataRetea()
+		return False, _STARE["eroare"]
+	cod, lista = _swanctl("--list-sas")
+	vip = adresaVirtuala(lista)
+	if not vip:
+		_STARE.update(eroare=_("Serverul nu a dat o adresă receptorului (virtual IP)."), eroare_cont=False)
+		_opresteProces("charon")
+		return False, _STARE["eroare"]
+	if not _asteaptaInterfata(INTERFATA_IPSEC):
+		_opresteProces("charon")
+		return False, _("Interfața tun nu se poate deschide (lipsește tun.ko). Instalează programele VPN.")
+	susTun("ikev2", INTERFATA_IPSEC, ["%s/32" % vip], "1400", _dnsIpsec(), ips)
+	_STARE.update(legatura="CONNECTED", adresa_tunel=vip, sa_ok=True)
+	return True, _("Conectat la %s.") % p["titlu"]
+
+
+def legaturaIpsec():
+	"""True cand charon are legatura stabilita (`swanctl --list-sas`: ESTABLISHED si INSTALLED)."""
+	cod, text = _swanctl("--list-sas", timeout=10)
+	return cod == 0 and "ESTABLISHED" in text and "INSTALLED" in text
+
+
+# L2TP/IPsec: xl2tpd + pppd (prin pty) peste IPsec in modul transport
+
+def _ghilimelePpp(x):
+	return '"%s"' % x.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def textPppOpt(sec):
+	"""Optiunile lui pppd (0600, in DOSAR_RULARE, sterse dupa legatura): numele cu lista alba, parola intre ghilimele cu
+	\\ si " scapate (pppd le citeste asa); interfata, scripturile si DNS-ul le alege receptorul."""
+	return "\n".join(["ipcp-accept-local", "ipcp-accept-remote", "refuse-eap", "noccp", "noauth", "mtu 1400",
+		"mru 1400", "nodefaultroute", "noipdefault", "usepeerdns", "persist", "maxfail 3", "lcp-echo-interval 30",
+		"lcp-echo-failure 4", "logfd 2", "ifname %s" % INTERFATA_PPP, "ip-up-script %s" % _cale(DOSAR_RULARE + "/ppp-sus"),
+		"ip-down-script %s" % _cale(DOSAR_RULARE + "/ppp-jos"), "name %s" % _ghilimelePpp(sec["nume"]),
+		"password %s" % _ghilimelePpp(sec["parola"])]) + "\n"
+
+
+def textXl2tpd(ip_server):
+	return "\n".join(["[global]", "port = 1701", "", "[lac hds]", "lns = %s" % ip_server, "ppp debug = no",
+		"pppoptfile = %s" % _cale(DOSAR_RULARE + "/ppp.opt"), "length bit = yes", "redial = no",
+		"autodial = no"]) + "\n"
+
+
+def _scriptPpp(fel):
+	return "#!/bin/sh\nexec %s %s ppp-%s \"$@\"\n" % (PYTHON, _caleScript(), fel)
+
+
+def _pornesteL2tp(p, servere, plan):
+	if plan.get("mod") == "navigator":
+		return False, _("L2TP nu poate trece numai navigatorul prin VPN. Alege alt rând la Ce trece prin VPN.")
+	sec = secreteProfil(p)
+	lipsa = campuriLipsa(p)
+	if lipsa:
+		return False, _("Mai scrie: %s.") % ", ".join(textCamp(c) for c in lipsa)
+	ok, motiv = nucleuPoate("l2tp")
+	if not ok:
+		return False, motiv
+	for m in ("ppp_generic", "ppp_async", "esp4", "xfrm4_mode_transport", "xfrm_user"):
+		_ruleaza([PROGRAM_MODPROBE, m], 20)
+	ip = servere[0][0]
+	if not _pornesteCharon(PLUGINURI_L2TP):
+		motiv, _c = eroareIpsec()
+		return False, motiv or _("strongSwan nu a pornit.")
+	reusit, text = _incarcaSiInitiaza(textSwanctlL2tp(sec, ip), "l2tp")
+	if not reusit:
+		motiv, de_cont = eroareIpsec()
+		_STARE.update(eroare=motiv or _("Serverul L2TP nu a primit legătura IPsec."), eroare_cont=de_cont)
+		_opresteProces("charon")
+		return False, _STARE["eroare"]
+	for fel in ("sus", "jos"):
+		_scrieAtomic(DOSAR_RULARE + "/ppp-" + fel, _scriptPpp(fel), 0o700)
+	_scrieAtomic(DOSAR_RULARE + "/ppp.opt", textPppOpt(sec), 0o600)
+	_scrieAtomic(DOSAR_RULARE + "/xl2tpd.conf", textXl2tpd(ip), 0o600)
+	control = DOSAR_RULARE + "/xl2tpd.control"
+	_sterge(control)
+	_pornesteProces("xl2tpd", [_program("xl2tpd") or CAI_PROGRAME["xl2tpd"][0], "-D", "-c",
+		_cale(DOSAR_RULARE + "/xl2tpd.conf"), "-p", _cale(DOSAR_RULARE + "/xl2tpd.pid.intern"), "-C", _cale(control)])
+	for _i in range(50):
+		if os.path.exists(_cale(control)) or PORNITOR is not None:
+			break
+		time.sleep(0.1)
+	try:
+		fd = os.open(_cale(control), os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
+		try:
+			os.write(fd, b"c hds\n")
+		finally:
+			os.close(fd)
+	except OSError as eroare:
+		jurnal("xl2tpd control: %s" % eroare)
+	limita = time.time() + TIMP_CONECTARE_S
+	while time.time() < limita:
+		sus = _citesteJson(CALE_SUS) or {}
+		if sus.get("fel") == "l2tp":
+			_sterge(DOSAR_RULARE + "/ppp.opt")
+			_STARE.update(legatura="CONNECTED", adresa_tunel=sus.get("ip_local", ""))
+			return True, _("Conectat la %s.") % p["titlu"]
+		motiv, de_cont = eroareL2tp()
+		if de_cont:
+			_STARE.update(eroare=motiv, eroare_cont=True)
+			_sterge(DOSAR_RULARE + "/ppp.opt")
+			return False, motiv
+		if not procesViu("xl2tpd") or PORNITOR is not None:
+			break
+		time.sleep(0.5)
+	if PORNITOR is not None:
+		return True, _("Se conectează încă la %s.") % p["titlu"]
+	_sterge(DOSAR_RULARE + "/ppp.opt")
+	return True, _("Se conectează încă la %s.") % p["titlu"]
+
+
+def eroareL2tp():
+	"""(motivul, este eroare de cont) din iesirea lui xl2tpd si pppd (logfd 2), apoi din jurnalul lui charon."""
+	coada = _jurnalProtocol("xl2tpd")
+	if "authentication failed" in coada.lower():
+		return _("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur."), True
+	return eroareIpsec()
+
+
+def scriptPpp(fel, argv, mediu):
+	"""ip-up-script / ip-down-script ale lui pppd: argv = interfata, tty, viteza, adresa locala, adresa de dincolo."""
+	dev = _numeDev(argv[0] if argv else "", INTERFATA_PPP)
+	if fel == "sus":
+		local = _ipv4(argv[3] if len(argv) > 3 else "")
+		dns = [x for x in (mediu.get("DNS1", ""), mediu.get("DNS2", "")) if _ipv4(x)]
+		susTun("l2tp", dev, ["%s/32" % local] if local else [], "1400", dns, [], configureaza=False)
+		return 0
+	return josTun("l2tp")
+
+
+def eroareProtocol(fel):
+	"""(motivul ultimei erori a felului, este eroare de cont)"""
+	if fel == "openvpn":
+		return eroareOpenvpn()
+	if fel == "openconnect":
+		motiv, de_cont, _pin = eroareOpenconnect()
+		return motiv, de_cont
+	if fel == "l2tp":
+		return eroareL2tp()
+	if fel == "ikev2":
+		return eroareIpsec()
+	return "", False
 
 
 # ---------------------------------------------------------------- IP-ul vazut pe internet
@@ -2136,6 +3816,13 @@ def _citesteLegatura():
 		conectat = v is not None
 		_STARE.update(legatura="CONNECTED" if conectat else "WAIT", adresa_tunel="")
 		return "wireguard", conectat, True
+	fel = felViu()
+	if fel:
+		# programele merg; legatura e gata cand scriptul lor a scris sus.json (la IPsec si cat charon o are stabilita)
+		conectat = sus.get("fel") == fel and (fel not in ("ikev2", "l2tp") or _STARE.get("sa_ok", True))
+		_STARE.update(legatura="CONNECTED" if conectat else "WAIT", adresa_tunel=sus.get("ip_local", "") if conectat
+			else "")
+		return fel, conectat, True
 	_STARE.update(legatura="", adresa_tunel="")
 	return sus.get("fel", ""), False, False
 
@@ -2154,6 +3841,9 @@ def pasPaza(acum=None, greu=True):
 	if not greu or not s["pornit"] or LUCRARI.stare()["lucreaza"]:
 		return
 	plan = _citestePlan()
+	if viu and fel in ("ikev2", "l2tp"):
+		# charon reface singur legatura (dpd_action=restart); paza vede numai daca o are acum
+		_STARE["sa_ok"] = legaturaIpsec()
 	with _LACAT_RETEA:
 		if viu and conectat:
 			sus = _citesteJson(CALE_SUS) or {}
@@ -2171,7 +3861,7 @@ def pasPaza(acum=None, greu=True):
 					_scrieAtomic(CALE_PLAN, json.dumps(plan), 0o600)
 			return
 		# in modul navigator nu se opreste: navigatorul tot nu iese direct, iar openvpn revine singur
-		if viu and fel == "openvpn" and not plan.get("oprire_totala") and plan.get("mod") != "navigator" and \
+		if viu and fel not in ("wireguard", "") and not plan.get("oprire_totala") and plan.get("mod") != "navigator" and \
 				_STARE["neconectat_de"] and \
 				acum - _STARE["neconectat_de"] > CADERE_LUNGA_S:
 			jurnal("fara legatura de %d s: opresc openvpn, internetul merge direct pana la repornire" % (
@@ -2180,7 +3870,7 @@ def pasPaza(acum=None, greu=True):
 			viu = False
 		if viu:
 			return
-		motiv, de_cont = eroareOpenvpn() if fel == "openvpn" else ("", False)
+		motiv, de_cont = eroareProtocol(fel or plan.get("fel", ""))
 		if de_cont:
 			_STARE.update(eroare=motiv, eroare_cont=True)
 			_opresteTot()
@@ -2325,7 +4015,7 @@ def opresteVpn():
 
 
 def pornesteStick():
-	return LUCRARI.porneste(LUCRARE_STICK, importaDePeStick, setari()["furnizor"])
+	return LUCRARI.porneste(LUCRARE_STICK, adaugaDePeStick)
 
 
 def pornesteIp():
@@ -2340,7 +4030,7 @@ def schimba(**schimbari):
 	"""Schimba setarile din ecran sau din pagina: (reusit, mesaj, numarul lucrarii de repornire sau None). Cu VPN-ul
 	pornit, o schimbare a serverului, a modului, a opririi totale sau a adreselor il reporneste."""
 	s = setari()
-	if "furnizor" in schimbari and schimbari["furnizor"] not in FURNIZORI:
+	if "furnizor" in schimbari and not grupCunoscut(schimbari["furnizor"]):
 		return False, _("Furnizorul nu este cunoscut."), None
 	if "mod" in schimbari and schimbari["mod"] not in MODURI:
 		return False, _("Alege ce trece prin VPN."), None
@@ -2410,13 +4100,20 @@ def textConfExtensii(canal, baza, arhitecturi):
 
 
 def _ocupatOpkg():
+	"""Alt opkg ruleaza acum. Lacatul lui e /run/opkg.lock (pe unele imagini /var/run/opkg.lock): citit din /proc/locks
+	cu HdsActualizari.opkg_ocupat, fara sa fie luat; numai unde acela nu se incarca (probele de pe PC), cu lockf."""
 	try:
 		from Components import HdsExtensiiLucru as X
 		if X.lucrareInCurs() or X.descarcareInCurs():
 			return True
 	except Exception:
 		pass
-	return os.path.exists(_cale("/var/run/opkg.lock")) and _lacatViu(_cale("/var/run/opkg.lock"))
+	try:
+		from Components import HdsActualizari as HA
+		return bool(HA.opkg_ocupat(RADACINA or "/"))
+	except Exception:
+		pass
+	return any(os.path.exists(_cale(c)) and _lacatViu(_cale(c)) for c in ("/run/opkg.lock", "/var/run/opkg.lock"))
 
 
 def _lacatViu(cale):
@@ -2436,10 +4133,11 @@ def _lacatViu(cale):
 
 def instaleaza(fel):
 	"""Instaleaza programele VPN din feedul de extensii al bazei. (reusit, mesaj)."""
-	if fel not in ("openvpn", "wireguard"):
+	if fel not in FELURI:
 		return False, _("Felul VPN-ului nu este cunoscut.")
-	if fel == "wireguard" and wireguardIndisponibil():
-		return False, _(TEXT_WG_INDISPONIBIL)
+	poate, motiv = nucleuPoate(fel)
+	if not poate:
+		return False, motiv
 	if not _executabil(PROGRAM_OPKG):
 		return False, _("Instalarea pachetelor nu este disponibilă în această imagine.")
 	canal, baza, arh = canalSiArhitecturi()
@@ -2448,6 +4146,7 @@ def instaleaza(fel):
 	if _ocupatOpkg():
 		return False, _("Altă instalare rulează acum. Așteaptă să se termine.")
 	text = textConfExtensii(canal, baza, arh)
+	_MODULE_DISC.clear()
 	if _citeste(CALE_CONF_EXTENSII) != text:
 		_scrieAtomic(CALE_CONF_EXTENSII, text, 0o644)
 	nume = pachete(fel)
@@ -2470,10 +4169,16 @@ def instaleaza(fel):
 		X.catalogVechi()
 	except Exception:
 		pass
-	if fel == "openvpn":
+	_MODULE_DISC.clear()
+	if fel != "wireguard":
 		incarcaTun()
-	if cod == 0 and programe()[fel]:
+	elif not areWireguardInNucleu():
+		_ruleaza([PROGRAM_MODPROBE, "wireguard"], 20)
+	if cod == 0 and programe().get(fel):
 		return True, _("Programele VPN sunt instalate.")
+	if fel == "wireguard" and wireguardIndisponibil():
+		# feedul nu are modulul nucleului acestui receptor
+		return False, _(TEXT_WG_INDISPONIBIL)
 	if cod == -2:
 		return False, _("Instalarea nu a terminat la timp. Verifică legătura la internet.")
 	# opkg (wget -q) spune numai "wget returned 5" cand certificatul cade; ajutorul comun vede daca e de vina ceasul
@@ -2503,7 +4208,7 @@ def _jobLaPornire():
 	_asteaptaRuta()
 	s = setari()
 	p = profil(s["profil"])
-	if p is None or p.get("grup") != s["furnizor"] or not programe()[p["fel"]] or (
+	if p is None or p.get("grup") != s["furnizor"] or not programe().get(p["fel"]) or (
 			p["fel"] == "openvpn" and p.get("cere_cont") and not areCont()):
 		return _jobPorneste()
 	reusit, mesaj = _pornesteAcum()
@@ -2542,6 +4247,18 @@ def porneste():
 
 # ---------------------------------------------------------------- starea si textele
 
+def furnizoriVizibili(s=None):
+	"""Grupurile aratate in ecran si in pagina: cele cu macar un fel care poate merge pe nucleul acestui receptor (si
+	cel ales acum, oricare ar fi)."""
+	s = s or setari()
+	return [f for f in furnizori() if f == s["furnizor"] or any(felPosibil(x) for x in feluriGrup(f))]
+
+
+def feluriAdauga():
+	"""Felurile care se pot scrie de mana (Adauga VPN, Scriu datele de mana) pe acest receptor: [(fel, text)]."""
+	return [(f, textFel(f)) for f in ("ikev2", "openconnect", "l2tp", "shadowsocks") if felPosibil(f)]
+
+
 def stare():
 	"""Tot ce arata ecranul si pagina web, fara secrete."""
 	s = setari()
@@ -2549,10 +4266,10 @@ def stare():
 	p = profil(s["profil"])
 	if p is not None and p.get("grup") != s["furnizor"]:
 		p = None
-	fel = felFurnizor(s["furnizor"])
+	fel = p["fel"] if p else felFurnizor(s["furnizor"])
 	lucrare = LUCRARI.stare()
 	sus = _citesteJson(CALE_SUS) or {}
-	viu = bool(pidOpenvpn()) or interfataExista(INTERFATA_WG) or wgInNetns()
+	viu = vpnViu()
 	plan = _citestePlan()
 	if lucrare["lucreaza"] in (LUCRARE_PORNESTE, LUCRARE_REPORNESTE):
 		legatura = "se_conecteaza"
@@ -2566,18 +4283,32 @@ def stare():
 		legatura = "se_conecteaza"
 	else:
 		legatura = "eroare" if _STARE["eroare"] else "oprit"
-	wg_indisponibil = fel == "wireguard" and wireguardIndisponibil()
+	cap, motiv_cap = capabil(fel)
+	lipsa = campuriLipsa(p) if p else []
+	campuri = (["nume", "parola"] if fel == "openvpn" else list(p.get("campuri") or [])) if p else (
+		["nume", "parola"] if fel == "openvpn" else [])
+	moduri = moduriPosibile(fel)
+	mod = modEfectiv(s)
 	return {
-		"furnizor": s["furnizor"], "fel": fel, "mod": s["mod"], "oprire_totala": s["oprire_totala"],
-		"la_pornire": s["la_pornire"], "pornit": s["pornit"], "iptv": s["iptv"], "adrese": list(s["adrese"]),
+		"furnizor": s["furnizor"], "fel": fel, "mod": mod if mod in moduri else moduri[0],
+		"oprire_totala": s["oprire_totala"], "la_pornire": s["la_pornire"], "pornit": s["pornit"], "iptv": s["iptv"],
+		"adrese": list(s["adrese"]),
 		"profil": ({"id": p["id"], "titlu": p["titlu"], "fel": p["fel"], "gazde": list(p.get("gazde") or []),
 			"plin": p.get("plin", True), "cere_cont": bool(p.get("cere_cont"))} if p else None),
 		"profiluri": [{"id": x["id"], "titlu": x["titlu"]} for x in lista],
 		"nr_profiluri": len(lista),
-		"cont": areCont(),
+		"cont": areCont() if fel == "openvpn" else bool(p) and not any(c in lipsa for c in ("nume", "parola")),
+		"campuri": campuri,
+		"campuri_lipsa": lipsa,
 		"programe": programe(),
-		"lipsesc": not programe()[fel] and not wg_indisponibil,
-		"wg_indisponibil": wg_indisponibil,
+		"lipsesc": cap == "instaleaza",
+		"indisponibil": cap == "nu",
+		"text_indisponibil": motiv_cap if cap == "nu" else "",
+		"wg_indisponibil": fel == "wireguard" and cap == "nu",
+		"furnizori": furnizoriVizibili(s),
+		"moduri": moduri,
+		"feluri_adauga": feluriAdauga(),
+		"pin_propus": (_STARE.get("pin_propus") or "") if fel == "openconnect" else "",
 		"legatura": legatura,
 		"eroare": _STARE["eroare"] if legatura in ("eroare", "oprit", "blocat") else "",
 		"ip": dict(_STARE["ip"]) if (_STARE["ip"] and legatura == "conectat") else None,
@@ -2588,10 +4319,23 @@ def stare():
 	}
 
 
+def textFel(fel):
+	"""Numele felului de VPN (nume proprii, aceleasi in toate limbile)."""
+	return {"openvpn": "OpenVPN", "wireguard": "WireGuard", "ikev2": "IKEv2/IPsec",
+		"openconnect": "OpenConnect (Cisco AnyConnect, GlobalProtect, Fortinet)", "shadowsocks": "Shadowsocks",
+		"l2tp": "L2TP/IPsec"}.get(fel, fel)
+
+
 def textFurnizor(f):
+	x = _GRUPURI_ADAUGATE.get(f)
+	if isinstance(x, dict):
+		return x["text"]
 	return {"hma": _("HMA (HideMyAss), fișiere OpenVPN"), "nordvpn": _("NordVPN, fișiere OpenVPN"),
 		"surfshark": _("Surfshark, fișiere OpenVPN"), "protonvpn": _("Proton VPN, fișiere OpenVPN"),
-		"openvpn": _("OpenVPN, fișier propriu"), "wireguard": _("WireGuard, fișier propriu")}.get(f, f)
+		"openvpn": _("OpenVPN, fișier propriu"), "wireguard": _("WireGuard, fișier propriu"),
+		"pia": _("PIA, fișiere OpenVPN"), "mullvad": _("Mullvad, WireGuard"),
+		"ikev2": _("IKEv2/IPsec, server propriu"), "openconnect": _("OpenConnect (Cisco AnyConnect și altele)"),
+		"shadowsocks": _("Shadowsocks, adresa ss://"), "l2tp": _("L2TP/IPsec, server propriu")}.get(f, f)
 
 
 def textCont(f):
@@ -2684,12 +4428,44 @@ def textLucrare(nume):
 
 
 def textProgrameLipsa(fel):
+	if fel == "openconnect":
+		return _("Lipsește programul OpenConnect. Se instalează din feedul de extensii HD Satelit.")
+	if fel == "ikev2":
+		return _("Lipsește programul strongSwan (IKEv2). Se instalează din feedul de extensii HD Satelit.")
+	if fel == "shadowsocks":
+		return _("Lipsesc programele Shadowsocks (ss-local și hev-socks5-tunnel). Se instalează din feedul de "
+			"extensii HD Satelit.")
+	if fel == "l2tp":
+		return _("Lipsesc programele L2TP (xl2tpd, pppd și strongSwan). Se instalează din feedul de extensii HD "
+			"Satelit.")
 	if fel == "wireguard":
 		return _("Lipsește programul WireGuard (wireguard-tools). Se instalează din feedul de extensii HD Satelit.")
 	return _("Lipsește programul OpenVPN (openvpn și tun.ko). Se instalează din feedul de extensii HD Satelit.")
 
 
 def textCumIeiFisierele(furnizor):
+	x = _GRUPURI_ADAUGATE.get(furnizor)
+	if isinstance(x, dict) and x.get("cum"):
+		return x["cum"]
+	if furnizor == "pia":
+		return _("PIA: scrii numele și parola la Alege furnizorul (fără fișiere) și alegi țara. Merg și fișierele "
+			"OpenVPN de la PIA, pe stick în dosarul hdsatelit/vpn.")
+	if furnizor == "mullvad":
+		return _("Mullvad: scrii numărul contului la Alege furnizorul (fără fișiere) și alegi țara. Merge și fișierul "
+			"WireGuard (.conf) din contul Mullvad, pe stick în dosarul hdsatelit/vpn.")
+	if furnizor == "ikev2":
+		return _("Furnizorul îți dă adresa serverului, numele și parola pentru IKEv2 (la NordVPN, Surfshark și Proton "
+			"VPN sunt cele de serviciu). Alege Adaugă VPN, apoi Scriu datele de mână. Certificatul CA al furnizorului, "
+			"dacă îl dă, și profilurile .sswan sau .mobileconfig pune-le pe stick în dosarul hdsatelit/vpn.")
+	if furnizor == "openconnect":
+		return _("Pentru Cisco AnyConnect, GlobalProtect, Pulse, Fortinet și celelalte: adresa serverului (https://...), "
+			"numele și parola. Alege Adaugă VPN, apoi Scriu datele de mână, sau lipește adresa în interfața web.")
+	if furnizor == "shadowsocks":
+		return _("Adresa ss:// sau fișierul JSON de la furnizor: pune-l pe stick în dosarul hdsatelit/vpn sau lipește-l "
+			"în interfața web, la Adaugă VPN.")
+	if furnizor == "l2tp":
+		return _("Adresa serverului, cheia comună (PSK), numele și parola. Alege Adaugă VPN, apoi Scriu datele de "
+			"mână; merge și profilul .mobileconfig.")
 	if furnizor == "hma":
 		return _("HMA a oprit în 2023 configurarea manuală (routere, Linux): nu mai dă fișiere OpenVPN și nici parole "
 			"pentru alte aparate, iar codul de activare merge numai în aplicațiile HMA (Windows, Mac, Android, iOS). Dacă "
@@ -2719,6 +4495,14 @@ def main(argv):
 	if len(argv) >= 2 and argv[1] in ("openvpn-sus", "openvpn-jos"):
 		try:
 			return scriptOpenvpn(argv[1][8:], os.environ)
+		except Exception as eroare:
+			jurnal("scriptul %s: %r" % (argv[1], eroare))
+			return 0
+	if len(argv) >= 2 and argv[1] in ("openconnect-script", "ppp-sus", "ppp-jos"):
+		try:
+			if argv[1] == "openconnect-script":
+				return scriptOpenconnect(os.environ)
+			return scriptPpp(argv[1][4:], argv[2:], os.environ)
 		except Exception as eroare:
 			jurnal("scriptul %s: %r" % (argv[1], eroare))
 			return 0

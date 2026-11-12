@@ -136,10 +136,16 @@ _LED_DESCRIERI = (
 	("ledpowercolor", N_("Culoarea LED-ului la funcționare"), "culoare"),
 	("ledstandbycolor", N_("Culoarea LED-ului în așteptare"), "culoare"),
 	("ledsuspendledcolor", N_("Culoarea LED-ului la oprire completă"), "culoare"),
-	("power4x7on", N_("LED la funcționare"), "pornit"),
-	("power4x7standby", N_("LED în așteptare"), "pornit"),
-	("power4x7suspend", N_("LED la oprire completă"), "pornit"),
+	("power4x7on", N_("Afișajul la funcționare"), "pornit"),
+	("power4x7suspend", N_("Afișajul la oprire completă"), "pornit"),
 )
+# power4x7*: alimentarea afisajului de 4 cifre (Octagon SF8008, Uclan Ustym 4K PRO, aceeasi placa), nu un LED. Driverul
+# primeste „on” / „off” si se citeste „1” / „0”: un „1” scris il lasa pe 0 (probat pe un SF8008), deci scrierea trece
+# prin _scrie4x7. power4x7standby nu e setare: urmeaza alegerea „In asteptare” (aprins cand asteptarea arata ceva, stins
+# la „nimic”), ca /proc/stb/power/vfd pe Viper 4K. Driverul il tine pe 0 de la pornire, iar fara el afisajul ramanea
+# negru in standby cu „Ora” aleasa (Ustym 4K PRO pe 0.7.3).
+NODURI_4X7_ASTEPTARE = ["/proc/stb/fp/power4x7standby", "/proc/stb/lcd/power4x7standby"]
+_ASTEPTARE_SCRISE = {}
 LED_CONTROALE = tuple("led_%s_%s" % (dosar, nume)
 	for dosar in ("fp", "lcd") for nume, _titlu, _fel in _LED_DESCRIERI)
 LED_NODURI = {"led_%s_%s" % (dosar, nume): "/proc/stb/%s/%s" % (dosar, nume)
@@ -345,14 +351,78 @@ def controaleLed(citeste=True):
 	return rez
 
 
+def _citesteNod(nod):
+	try:
+		with open(nod, "r", encoding="ascii") as f:
+			return f.read(32).strip()
+	except (IOError, OSError, UnicodeError):
+		return None
+
+
+def _scrieNod(nod, text):
+	# Fara O_CREAT: un nod retras de driver intre detectie si scriere ramane absent.
+	fd = os.open(nod, _DESCHIDERE | os.O_TRUNC)
+	with os.fdopen(fd, "w", encoding="ascii") as f:
+		f.write(text)
+
+
+def _e4x7(nod):
+	return "power4x7" in os.path.basename(nod)
+
+
+def _scrie4x7(nod, pornit):
+	"""Un nod power4x7*: intai „on” / „off” (driverul SF8008 / Ustym 4K PRO), apoi, daca citirea inapoi nu arata
+	valoarea, cifra („1” / „0”, alt driver). -> textul care s-a prins (sau ultimul incercat)."""
+	cifra = "1" if pornit else "0"
+	text = cifra
+	for text in (("on" if pornit else "off"), cifra):
+		_scrieNod(nod, text)
+		if _citesteNod(nod) in (cifra, text):
+			return text
+	return text
+
+
+def aplicaAfisajInAsteptare(forteaza=False):
+	"""power4x7standby dupa alegerea „In asteptare” (arataInAsteptare). Aceleasi porti ca /proc/stb/power/vfd in
+	Components/HdsStandbyTv.py: resursa „alimentare” lasata imaginii si fara ecranul producatorului pentru afisaj.
+	Se cheama la pornire, la salvare si la intrarea in standby; scrie numai cand valoarea dorita se schimba."""
+	noduri = [n for n in NODURI_4X7_ASTEPTARE if os.path.exists(n)]
+	if not noduri:
+		return True
+	from Components.HdsAfisajCompat import permite
+	if not permite("alimentare"):
+		_ASTEPTARE_SCRISE.clear()
+		return True
+	try:
+		from Components.HdsFunctiiImagine import disponibil as functieImagine
+		if functieImagine("afisaj"):
+			return True
+	except ImportError:  # probele vechi incarca numai acest modul
+		pass
+	pornit = arataInAsteptare()
+	reusit = True
+	for nod in noduri:
+		if not forteaza and _ASTEPTARE_SCRISE.get(nod) == pornit:
+			continue
+		try:
+			_scrie4x7(nod, pornit)
+			_ASTEPTARE_SCRISE[nod] = pornit
+		except (IOError, OSError) as eroare:
+			reusit = False
+			_ASTEPTARE_SCRISE.pop(nod, None)
+			_jurnal("nu pot scrie afisajul in asteptare %s: %s" % (nod, eroare))
+	return reusit
+
+
 def aplicaLeduri(forteaza=False):
-	"""Aplica setarile LED existente, fara creare de fisiere si fara scrieri repetate."""
+	"""Aplica setarile LED existente, fara creare de fisiere si fara scrieri repetate; apoi afisajul in asteptare."""
+	asteptare = aplicaAfisajInAsteptare(forteaza)
 	from Components.HdsAfisajCompat import permite
 	if not permite("leduri"):
 		_LED_SCRISE.clear()
 		_LED_ERORI.clear()
-		return True
-	reusit = True
+		return asteptare
+	reusit = asteptare
 	for control in controaleLed(citeste=False):
 		nod, valoare = control["nod"], control["valoare"]
 		if valoare == LUMINA_NESCHIMBATA:
@@ -364,10 +434,10 @@ def aplicaLeduri(forteaza=False):
 		if not forteaza and _LED_SCRISE.get(nod) == valoare:
 			continue
 		try:
-			# Fara O_CREAT: un nod retras de driver intre detectie si scriere ramane absent.
-			fd = os.open(nod, _DESCHIDERE | os.O_TRUNC)
-			with os.fdopen(fd, "w", encoding="ascii") as f:
-				f.write(valoare)
+			if _e4x7(nod) and valoare in ("0", "1"):
+				_scrie4x7(nod, valoare == "1")
+			else:
+				_scrieNod(nod, valoare)
 			_LED_SCRISE[nod] = valoare
 			_LED_ERORI.discard(nod)
 		except (IOError, OSError) as eroare:
@@ -495,8 +565,37 @@ def alegeriColorLive():
 
 
 def alegeriColorPicon():
-	return [("nu", _("Deloc")), ("singur", _("Piconul singur")),
-		("nume_ora", _("Piconul cu numele si ora"))]
+	# „langa_nume” (implicit): piconul in placa din dreapta a paginii canalului; celelalte doua iau tot afisajul
+	return [("nu", _("Deloc")), ("langa_nume", _("Lângă numele canalului")),
+		("singur", _("Piconul singur")), ("nume_ora", _("Piconul cu numele si ora"))]
+
+
+# Temele afisajului color desenate de noi: „orbita” e tema HD Satelit de pana acum (lista de rotire, toate paginile);
+# celelalte arata canalul privit cu litere mari (Components/HdsAfisajRandare._temaMare), cat te uiti la televizor.
+AFISAJ_HDS = "HDSatelit/display/skin_display.xml"
+TEME_COLOR = ("orbita", "picon_mare", "text_mare", "ora_urmatoarea")
+TEMA_COLOR_IMPLICITA = "orbita"
+
+
+def alegeriColorTema():
+	return [("orbita", _("HD Satelit")), ("picon_mare", _("Picon mare și numele canalului")),
+		("text_mare", _("Ora și numele canalului, foarte mari")),
+		("ora_urmatoarea", _("Ora mare și emisiunea următoare"))]
+
+
+def valoareTema(fisier, tema):
+	"""Valoarea din lista „Tema afișajului”: fisierul temei de afisaj, plus „#tema” pentru temele noastre mari."""
+	if fisier == AFISAJ_HDS and tema in TEME_COLOR and tema != TEMA_COLOR_IMPLICITA:
+		return fisier + "#" + tema
+	return fisier
+
+
+def citesteTema(valoare):
+	"""(fisierul, tema color) dintr-o valoare a listei „Tema afișajului”; tema e None la temele din afara."""
+	fisier, _diez, tema = (valoare or "").partition("#")
+	if fisier == AFISAJ_HDS:
+		return fisier, tema or TEMA_COLOR_IMPLICITA
+	return valoare, None
 
 
 def alegeriColorBara():
@@ -513,11 +612,17 @@ def alegeriControlAfisaj():
 
 
 def alegeriTemaAfisaj():
+	"""Lista „Tema afișajului”: pe afisajul color, temele noastre (HD Satelit si cele mari, pe loc), apoi temele de
+	afisaj din afara (skin_display*.xml, dupa repornirea interfetei)."""
 	try:
 		import skin
+		lista = list(skin.listaAfisaje())
 	except ImportError:
-		return [("HDSatelit/display/skin_display.xml", _("HD Satelit"))]
-	return skin.listaAfisaje()
+		lista = [(AFISAJ_HDS, _("HD Satelit"))]
+	if not esteColor():
+		return lista
+	ale_noastre = [(valoareTema(AFISAJ_HDS, t), e) for t, e in alegeriColorTema()]
+	return ale_noastre + [(v, e) for v, e in lista if v != AFISAJ_HDS]
 
 
 def _temaAfisaj():
@@ -525,7 +630,32 @@ def _temaAfisaj():
 		from Components.config import config
 		return config.skin.display_skin.value
 	except AttributeError:
-		return "HDSatelit/display/skin_display.xml"
+		return AFISAJ_HDS
+
+
+def _afisajExternIncarcat():
+	"""Tema de afisaj din afara incarcata acum (skin.afisajExternActiv), sau ""."""
+	try:
+		import skin
+		f = getattr(skin, "afisajExternActiv", None)
+		return f() if callable(f) else ""
+	except Exception:
+		return ""
+
+
+def temaColor():
+	"""Tema color aleasa (TEME_COLOR); „orbita” cand setarea lipseste."""
+	try:
+		v = _cfg().color_tema.value
+	except Exception:
+		return TEMA_COLOR_IMPLICITA
+	return v if v in TEME_COLOR else TEMA_COLOR_IMPLICITA
+
+
+def temaAfisajAleasa():
+	"""Valoarea randului „Tema afișajului” (ecranul si pagina web): fisierul temei, cu „#tema” la temele mari."""
+	fisier = _temaAfisaj()
+	return valoareTema(fisier, temaColor()) if esteColor() else fisier
 
 
 def _migreaza(c):
@@ -567,7 +697,9 @@ def initConfig():
 	c.color_live = ConfigSelection(default="nu", choices=[
 		("nu", _("Nu")), ("imagine", _("Numai imaginea")),
 		("osd", _("Imaginea cu OSD"))])
-	c.color_picon = ConfigSelection(default="nu", choices=alegeriColorPicon())
+	# piconul langa numele canalului, pornit din fabrica (forumul nostru 1013 #1597); cine a salvat alta alegere o pastreaza
+	c.color_picon = ConfigSelection(default="langa_nume", choices=alegeriColorPicon())
+	c.color_tema = ConfigSelection(default=TEMA_COLOR_IMPLICITA, choices=alegeriColorTema())
 	c.color_bara = ConfigSelection(default="da", choices=alegeriColorBara())
 	c.color_animatii = ConfigSelection(default="nu", choices=alegeriColorAnimatii())
 	for cheie in LED_CONTROALE:
@@ -606,7 +738,8 @@ VALORI = {
 	"personaj_ritm": P.RITMURI,
 	"personaj_noaptea": P.NOAPTEA,
 	"color_live": ("nu", "imagine", "osd"),
-	"color_picon": ("nu", "singur", "nume_ora"),
+	"color_picon": ("nu", "langa_nume", "singur", "nume_ora"),
+	"color_tema": TEME_COLOR,
 	"color_bara": ("da", "nu"),
 	"color_animatii": ("da", "nu"),
 }
@@ -616,13 +749,23 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		noapte_de_la=None, noapte_pana_la=None, text=None, functionare=None, oras=None, personaj=None, personaj_ritm=None,
 		personaj_noaptea=None, color_live=None, color_picon=None,
 		color_bara=None, color_animatii=None,
-		control_afisaj=None, tema_afisaj=None, leduri=None):
+		control_afisaj=None, tema_afisaj=None, leduri=None, color_tema=None):
 	"""Schimba, salveaza si aplica pe loc (ecranul si pagina web). Intoarce (reusit, mesaj); o valoare straina nu
-	schimba nimic."""
+	schimba nimic. `tema_afisaj` e valoarea listei „Tema afișajului”: fisierul temei de afisaj, cu „#tema” la temele
+	noastre mari (aplicate pe loc); numai o tema din afara (alt fisier) cere repornirea interfetei."""
 	from Components.config import configfile
 	c = _cfg()
 	if tema_afisaj is not None and tema_afisaj not in dict(alegeriTemaAfisaj()):
 		return False, _("Tema de afisaj nu exista.")
+	tema_fisier, repornire = None, False
+	if tema_afisaj is not None:
+		tema_fisier, tema = citesteTema(tema_afisaj)
+		if tema is not None and esteColor():
+			color_tema = tema
+		# alegerea fisierului se scrie mereu (explicita: o tema TV straina nu mai pune skin_display-ul ei peste al
+		# nostru); repornirea trebuie numai cand se schimba fisierul sau cand alegi tema noastra peste una din afara
+		# incarcata acum
+		repornire = tema_fisier != _temaAfisaj() or (tema is not None and bool(_afisajExternIncarcat()))
 	noi = {}
 	if leduri is not None:
 		if not isinstance(leduri, dict):
@@ -658,7 +801,7 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		"personaj": personaj, "personaj_ritm": personaj_ritm,
 		"personaj_noaptea": personaj_noaptea, "color_live": color_live,
 		"color_picon": color_picon, "control_afisaj": control_afisaj,
-		"color_bara": color_bara, "color_animatii": color_animatii}
+		"color_bara": color_bara, "color_animatii": color_animatii, "color_tema": color_tema}
 	for cheie in sorted(VALORI):
 		v = valori[cheie]
 		if v is None:
@@ -674,9 +817,9 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		if oras and oras not in dict(D.fusurile()):
 			return False, _("Valoarea „%s” nu se poate alege aici.") % oras[:20]
 		noi["oras"] = oras
-	if tema_afisaj is not None:
+	if tema_fisier is not None:
 		import skin
-		reusit, mesaj_tema = skin.alegeAfisaj(tema_afisaj, salveaza=False)
+		reusit, mesaj_tema = skin.alegeAfisaj(tema_fisier, salveaza=False)
 		if not reusit:
 			return False, _(mesaj_tema)
 	for cheie, v in noi.items():
@@ -689,7 +832,7 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 		if not leduri_ok:
 			return True, _("Salvat, dar LED-urile nu au putut fi schimbate.")
 		return True, (_("Salvat. Tema se aplica dupa repornirea interfetei.")
-			if tema_afisaj is not None else _("Salvat."))
+			if repornire else _("Salvat."))
 	_afisaj.citesteSetarile()
 	_afisaj.previzualizare = None
 	_afisaj.previzualizareAsteptare = None
@@ -698,7 +841,7 @@ def seteaza(lista=None, asteptare=None, evenimente=None, viteza=None, luminozita
 	_afisaj.reporneste()
 	if not leduri_ok:
 		return True, _("Salvat, dar LED-urile nu au putut fi schimbate.")
-	if tema_afisaj is not None:
+	if repornire:
 		return True, _("Salvat. Tema se aplica dupa repornirea interfetei.")
 	from Components.HdsAfisajCompat import permite
 	if not permite("lcd" if esteColor() else "text"):
@@ -815,7 +958,9 @@ def numarSiCate(session, cate=False):
 		return None, None
 	fara = eServiceReference.isDirectory | eServiceReference.isMarker
 	try:
-		esteCanal = lambda r: not (r.flags & fara)
+		# semnele numerotate (Fast Scan) tin locul unui numar, ca in lista si in OE-Alliance (isNumberedMarker = 256)
+		semn = getattr(eServiceReference, "isNumberedMarker", 256)
+		esteCanal = lambda r: not (r.flags & fara) or bool(r.flags & semn)
 		numar = _numarDinLista(referinte, ref.toCompareString(), deplasare, lambda r: r.toCompareString(), esteCanal)
 		return numar, (_cateDinLista(referinte, esteCanal) if cate else None)
 	except Exception as e:
@@ -1778,7 +1923,8 @@ def actualizeaza():
 
 
 def arataInAsteptare():
-	"""False numai cand asteptarea e „nimic” (stins); pentru /proc/stb/power/vfd (Components/HdsStandbyTv.py)."""
+	"""False numai cand asteptarea e „nimic” (stins); pentru /proc/stb/power/vfd (Components/HdsStandbyTv.py) si
+	power4x7standby (aplicaAfisajInAsteptare)."""
 	try:
 		return _cfg().asteptare.value != "stins"
 	except Exception as e:
@@ -1887,7 +2033,7 @@ def stare():
 		"scris": scris and not compat["cedat"],
 		"control_afisaj": c.control_afisaj.value,
 		"compatibilitate": compat,
-		"tema_afisaj": _temaAfisaj(),
+		"tema_afisaj": temaAfisajAleasa(),
 		"masti": list(masti),
 		"desen": L.desenText(masti),
 		"text": text,
@@ -1910,6 +2056,7 @@ def stare():
 		"color": colorInfo(),
 		"color_live": getattr(getattr(c, "color_live", None), "value", "nu"),
 		"color_picon": getattr(getattr(c, "color_picon", None), "value", "nu"),
+		"color_tema": temaColor(),
 		"color_bara": getattr(getattr(c, "color_bara", None), "value", "da"),
 		"color_animatii": getattr(getattr(c, "color_animatii", None), "value", "nu"),
 		"color_cadru": getattr(_afisaj, "color_revizie", ""),

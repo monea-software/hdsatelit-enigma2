@@ -50,7 +50,7 @@ class FrontendStatus(Source):
 			return dict
 		elif self.service_source:
 			service = self.service_source()
-			feinfo = service and service.frontendInfo()
+			feinfo = service and _feServiciu(service)
 			return feinfo and feinfo.getFrontendStatus()
 		else:
 			return None
@@ -67,3 +67,12 @@ class FrontendStatus(Source):
 		self.poll_timer.stop()
 		self.poll_timer.callback.remove(self.updateFrontendStatus)
 		Source.destroy(self)
+
+
+def _feServiciu(service):
+	"""frontendInfo al serviciului redat; la Stream Relay, al tunerului care tine canalul (Hds.DabT2.server8001)."""
+	try:
+		from Hds.DabT2.server8001 import frontend_serviciu
+	except Exception:
+		return service.frontendInfo()
+	return frontend_serviciu(service)

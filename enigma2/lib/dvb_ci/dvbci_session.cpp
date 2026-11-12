@@ -8,6 +8,15 @@
 #include <lib/dvb_ci/dvbci_camgr.h>
 #include <lib/dvb_ci/dvbci_datetimemgr.h>
 #include <lib/dvb_ci/dvbci_mmi.h>
+/* resursele CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4,
+   lib/dvb_ci/dvbci_session.cpp); modulul le deschide numai cand le anunta dvbci_resmgr.cpp, adica numai cu
+   certificatele aparatului in /etc/ciplus */
+#include <lib/dvb_ci/dvbci_ccmgr.h>
+#include <lib/dvb_ci/dvbci_hlcmgr.h>
+#include <lib/dvb_ci/dvbci_host_ctrl.h>
+#include <lib/dvb_ci/dvbci_cam_upgrade.h>
+#include <lib/dvb_ci/dvbci_app_mmi.h>
+#include <lib/dvb_ci/dvbci_operatorprofile.h>
 
 DEFINE_REF(eDVBCISession);
 
@@ -152,6 +161,18 @@ void eDVBCISession::createSession(eDVBCISlot *slot, const unsigned char *resourc
 		session=new eDVBCIApplicationManagerSession(slot);
 		eDebug("APPLICATION MANAGER");
 		break;
+	case 0x00020042:
+	case 0x00020043:
+	case 0x00020045:
+		session=new eDVBCIApplicationManagerSession(slot);
+		eDebug("[CI%d SESS] APPLICATION MANAGER %x", slot->getSlotID(), resource_identifier[3] & 0x0f);
+		break;
+	case 0x00200041:
+	case 0x00200042:
+	case 0x00200043:
+		session = new eDVBCIHostControlSession;
+		eDebug("[CI%d SESS] Host Control %x", slot->getSlotID(), resource_identifier[3] & 0x0f);
+		break;
 	case 0x00030041:
 		session = new eDVBCICAManagerSession(slot);
 		eDebug("CA MANAGER");
@@ -164,11 +185,36 @@ void eDVBCISession::createSession(eDVBCISlot *slot, const unsigned char *resourc
 		session = new eDVBCIMMISession(slot);
 		eDebug("MMI - create session");
 		break;
+	case 0x00410041:
+	case 0x00410042:
+		session = new eDVBCIApplicationMMISession;
+		eDebug("[CI%d SESS] Application MMI %x", slot->getSlotID(), resource_identifier[3] & 0x0f);
+		break;
+	case 0x008C1001:
+	case 0x008C1002:
+	case 0x008C1004:
+		/* autentificarea CI+ cere fluxul unui transponder trecut prin modul (ca in OE-Alliance) */
+		eDVBCIInterfaces::getInstance()->setCIPlusRouting(slot->getSlotID());
+		session = new eDVBCICcSession(slot, resource_identifier[3] & 0x0f);
+		eDebug("[CI%d SESS] Content Control %x", slot->getSlotID(), resource_identifier[3] & 0x0f);
+		break;
+	case 0x008D1001:
+		session = new eDVBCIHostLanguageAndCountrySession;
+		eDebug("[CI%d SESS] Host Language & Country", slot->getSlotID());
+		break;
+	case 0x008E1001:
+		session = new eDVBCICAMUpgradeSession;
+		eDebug("[CI%d SESS] CAM Upgrade", slot->getSlotID());
+		break;
+	case 0x008F1001:
+	case 0x008F1002:
+		session = new eDVBCIOperatorProfileSession;
+		eDebug("[CI%d SESS] Operator Profile %x", slot->getSlotID(), resource_identifier[3] & 0x0f);
+		break;
 	case 0x00100041:
 //		session=new eDVBCIAuthSession;
 		eDebug("AuthSession");
-//		break;
-	case 0x00200041:
+		[[fallthrough]];
 	default:
 		eDebug("unknown resource type %02x %02x %02x %02x", resource_identifier[0], resource_identifier[1], resource_identifier[2],resource_identifier[3]);
 		session=0;

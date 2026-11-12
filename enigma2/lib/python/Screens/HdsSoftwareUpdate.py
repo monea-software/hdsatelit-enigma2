@@ -185,6 +185,9 @@ SUBCALE_UPDATE = ("e2", "update")  # structura standard
 FOLDER_DEZARHIVARE = ".hds-actualizare-extrasa"  # dosarul curat, pe acelasi mediu
 NUME_PACHET = (NUME_KERNEL, NUME_ROOTFS, NUME_VERSIUNE, NUME_MARCAJ)
 BLOC_COPIE = 1024 * 1024
+BLOC_SINCRONIZARE = 8 * 1024 * 1024  # fsync la atatia octeti scrisi in dosarul curat (vezi _copiaza)
+# simularea (ofgwrite -n) ia de obicei 10-20 s; peste atat se opreste singura, cu mesaj (nu scrie nimic, deci se poate opri)
+LIMITA_SIMULARE_S = 120
 CALE_OFGWRITE = "/usr/bin/ofgwrite"
 CALE_CMDLINE = "/proc/cmdline"
 CALE_ENIGMA2_ETC = "/etc/enigma2"
@@ -334,7 +337,10 @@ def _copieCompleta(mountpoint):
 	prin internet, Favoritele, setarile pluginurilor). Intoarce None sau textul erorii."""
 	try:
 		from Components import HdsCopieSetari
-		rez = HdsCopieSetari.fa_copia(mountpoint, HdsCopieSetari.text_setari_acum(), fel="automata")
+		# 0.7.4: pluginurile puse din fisiere, care nu sunt in feeduri, intra in copie cu pachetul lor refacut, ca la imaginea
+		# online; numai cand modulul copiei stie parametrul (HdsCopieSetari.FA_COPIA_REFACE_PACHETE)
+		kw = {"reface_pachete": True} if getattr(HdsCopieSetari, "FA_COPIA_REFACE_PACHETE", False) else {}
+		rez = HdsCopieSetari.fa_copia(mountpoint, HdsCopieSetari.text_setari_acum(), fel="automata", **kw)
 	except Exception as eroare:
 		return str(eroare) or eroare.__class__.__name__
 	if rez.get("ok") and rez.get("cale"):
@@ -710,7 +716,10 @@ def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar=""):
 	sus = _("Atenție: o înregistrare este în curs chiar acum.") + "\n" if inregistrare else ""
 	tehnic = (recuperare.strip() + "\n" if recuperare and recuperare.strip() else "") + \
 		_("Software: %s") % "  ·  ".join(_numeSiVersiune(c))
-	if subdosar:
+	if esteCopieCompleta(c):
+		pereche = _("Este o copie completă: se pune înapoi exact cum a fost făcută, cu setările, canalele și pluginurile ei. "
+			"Setările de acum nu se mai copiază și nu se pun peste ea.")
+	elif subdosar:
 		pereche = _("Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick.") % subdosar
 	else:
 		pereche = _("Receptorul are o singură pereche de nucleu și sistem în memoria internă (fără multiboot): dacă noul software nu pornește, singura reparare este Maintenance Mode, de mână. Înainte de instalare, setările și lista de canale se copiază pe stick.")
@@ -759,6 +768,17 @@ def versiuneSiData(c):
 	return (), ""
 
 
+def esteCopieCompleta(c):
+	"""Pachetul e o copie completa facuta de receptor (Components/HdsCopieImagine.py): marcajul are copie_completa=da.
+	O copie completa se pune inapoi exact cum a fost facuta: fara copia setarilor de acum inainte de scriere, deci fara
+	punerea ei la loc la prima pornire (hotararea din 11.11.2026, randul 205). Semnul e in marcaj, nu in numele fisierului:
+	numele il poate schimba omul, marcajul e fisierul pe care instalarea il citeste si il verifica oricum."""
+	return HdsPazaModel.cheiValori(c.get("marcaj") or "").get("copie_completa") == "da"
+
+
+_COPIE_RX = re.compile(r"-copie-(20\d{6})-(\d{2})(\d{2})")
+
+
 def _compatibil(c):
 	return (c.get("paza") or (None,))[0] == HdsPazaModel.PACHET_BUN and not c.get("nume_stick")
 
@@ -804,7 +824,8 @@ def asazaPachete(candidati):
 	apoi cele de la alte echipe si la sfarsit cele incompatibile."""
 	# la aceeasi versiune si data decide numele arhivei, in care data sta tot la sfarsit
 	candidati.sort(key=lambda c: versiuneSiData(c) + (os.path.basename(c.get("cale_zip") or ""),), reverse=True)
-	candidati.sort(key=lambda c: 0 if _compatibil(c) else (1 if _deLaAltii(c) else 2))
+	# copiile complete dupa imaginile de pe site: „cea mai noua” ramane o imagine adevarata, cand e una pe stick
+	candidati.sort(key=lambda c: (1 if esteCopieCompleta(c) else 0) if _compatibil(c) else (2 if _deLaAltii(c) else 3))
 	for i, c in enumerate(candidati):
 		if _compatibil(c):
 			c["fel"] = FEL_NOUA if i == 0 else FEL_BUNA
@@ -839,6 +860,12 @@ def titluPachet(c):
 	versiune, data = versiuneSiData(c)
 	if c.get("fel") == FEL_STRAINA:
 		return _literaMare(numeImagineStraina(c))
+	if esteCopieCompleta(c):
+		m = _COPIE_RX.search(os.path.basename(c.get("cale_zip") or "") + " " + (c.get("versiune") or ""))
+		if m:
+			d = m.group(1)
+			return _("Copia completă din %s") % ("%s.%s.%s, %s:%s" % (d[6:8], d[4:6], d[:4], m.group(2), m.group(3)))
+		return _("Copia completă a imaginii")
 	if not versiune:
 		return _literaMare(_numePachet(c)) if c["tip"] == "folder" else _numePachet(c)
 	titlu = "HD Satelit %s" % ".".join(str(x) for x in versiune)
@@ -967,18 +994,35 @@ def _spatiuSuficient(mountpoint, octeti_necesari):
 		return True  # nu blocam daca nu putem verifica (mai bine incearca si esueaza clar)
 
 
-def _copiaza(sursa, dest, oprit=None):
-	"""Copiere in bucati de 1 MiB; `oprit()` adevarat (ecranul s-a inchis) opreste copierea."""
+def _sincronizeaza(dest):
+	"""Ce s-a scris ajunge pe stick acum, nu cand vrea nucleul."""
+	dest.flush()
+	os.fsync(dest.fileno())
+
+
+def _copiaza(sursa, dest, oprit=None, progres=None):
+	"""Copiere in bucati de 1 MiB; `oprit()` adevarat (ecranul s-a inchis) opreste copierea. La fiecare BLOC_SINCRONIZARE
+	si la sfarsit, fsync: procentul arata scrierea adevarata pe stick, nu memoria, iar sync-ul de la inceputul simularii
+	(ofgwrite -n) nu mai are sute de MB de scris (pe un stick lent statea minute intregi, fara niciun semn pe ecran).
+	`progres["gata"]` creste cu fiecare bucata."""
+	nesincronizat = 0
 	while True:
 		if oprit is not None and oprit():
 			raise OSError("copierea a fost oprita")
 		bucata = sursa.read(BLOC_COPIE)
 		if not bucata:
-			return
+			break
 		dest.write(bucata)
+		nesincronizat += len(bucata)
+		if nesincronizat >= BLOC_SINCRONIZARE:
+			_sincronizeaza(dest)
+			nesincronizat = 0
+		if progres is not None:
+			progres["gata"] = progres.get("gata", 0) + len(bucata)
+	_sincronizeaza(dest)
 
 
-def _extrageZip(candidat, tinta, oprit=None):
+def _extrageZip(candidat, tinta, oprit=None, progres=None):
 	"""Scoate din zip-ul candidat numai cele patru fisiere ale pachetului (NUME_PACHET) in dosarul `tinta`. Ridica
 	OSError/KeyError/zipfile.BadZipFile la orice problema; apelantul le arata."""
 	radacina = candidat["radacina_in_zip"]
@@ -986,35 +1030,151 @@ def _extrageZip(candidat, tinta, oprit=None):
 		originale = {}
 		for n in z.namelist():
 			originale.setdefault(n.replace("\\", "/"), n)
-		for nume_scurt in NUME_PACHET:
-			nume_in_zip = originale.get(radacina + nume_scurt)
-			if nume_in_zip is not None:
-				with z.open(nume_in_zip) as sursa, open(os.path.join(tinta, nume_scurt), "wb") as dest:
-					_copiaza(sursa, dest, oprit)
+		alese = [(nume_scurt, originale.get(radacina + nume_scurt)) for nume_scurt in NUME_PACHET]
+		alese = [(scurt, n) for scurt, n in alese if n is not None]
+		if progres is not None:
+			progres["total"] = sum(z.getinfo(n).file_size for _scurt, n in alese)
+		for nume_scurt, nume_in_zip in alese:
+			with z.open(nume_in_zip) as sursa, open(os.path.join(tinta, nume_scurt), "wb") as dest:
+				_copiaza(sursa, dest, oprit, progres)
 
 
-def _copiazaDosar(candidat, tinta, oprit=None):
+def _copiazaDosar(candidat, tinta, oprit=None, progres=None):
 	"""Copiaza din dosarul e2/update de pe stick numai cele patru fisiere ale pachetului (NUME_PACHET) in `tinta`."""
-	for nume_scurt in NUME_PACHET:
-		sursa_cale = os.path.join(candidat["cale_update"], nume_scurt)
-		if os.path.isfile(sursa_cale):
-			with open(sursa_cale, "rb") as sursa, open(os.path.join(tinta, nume_scurt), "wb") as dest:
-				_copiaza(sursa, dest, oprit)
+	alese = [n for n in NUME_PACHET if os.path.isfile(os.path.join(candidat["cale_update"], n))]
+	if progres is not None:
+		progres["total"] = sum(os.path.getsize(os.path.join(candidat["cale_update"], n)) for n in alese)
+	for nume_scurt in alese:
+		with open(os.path.join(candidat["cale_update"], nume_scurt), "rb") as sursa, \
+				open(os.path.join(tinta, nume_scurt), "wb") as dest:
+			_copiaza(sursa, dest, oprit, progres)
 
 
-def _pregatesteDosarCurat(candidat, oprit=None):
+def _pregatesteDosarCurat(candidat, oprit=None, progres=None):
 	"""Dosarul curat al pachetului, pe acelasi mediu (pe alt disc, cand stickul e pe numai citire: locLucru):
 	<mediu>/.hds-actualizare-extrasa/e2/update, golit si umplut numai cu fisierele pachetului (din zip sau din dosarul e2/update).
-	Ruleaza pe un fir separat. Intoarce calea dosarului."""
+	Ruleaza pe un fir separat. Intoarce calea dosarului. `progres`: dict {"total", "gata"} in octeti, citit de ecran."""
 	tinta = os.path.join(locLucru(candidat), FOLDER_DEZARHIVARE, *SUBCALE_UPDATE)
 	if os.path.isdir(tinta):
 		shutil.rmtree(tinta, ignore_errors=True)
 	os.makedirs(tinta, exist_ok=True)
 	if candidat["tip"] == "zip":
-		_extrageZip(candidat, tinta, oprit)
+		_extrageZip(candidat, tinta, oprit, progres)
 	else:
-		_copiazaDosar(candidat, tinta, oprit)
+		_copiazaDosar(candidat, tinta, oprit, progres)
 	return tinta
+
+
+# -------------------------------------------------------------- pasii verificarii, aratati o data pe secunda
+
+PAS_COPIERE, PAS_SUME, PAS_SIMULARE = 1, 2, 3
+PASI_VERIFICARE = 3
+
+
+def _durataText(secunde):
+	"""„45 s”, „3 min”: cat a trecut sau cat mai e, rotunjit in sus la minut peste un minut."""
+	secunde = max(1, int(secunde + 0.999))
+	if secunde < 60:
+		return _("%d s") % secunde
+	return _("%d min") % ((secunde + 59) // 60)
+
+
+def _textProcent(progres, trecut):
+	"""„45 % (110 din 245 MB). Mai durează cam 2 min.”; procentul numai cand se stie totalul, timpul ramas dupa 3 s."""
+	total = int((progres or {}).get("total") or 0)
+	gata = min(int((progres or {}).get("gata") or 0), total)
+	if total <= 0:
+		return ""
+	mb = 1024 * 1024
+	text = _("%d %% (%d din %d MB).") % (gata * 100 // total, gata // mb, (total + mb - 1) // mb)
+	if gata >= total:
+		return text
+	if trecut >= 3 and gata > 0:
+		return text + " " + _("Mai durează cam %s.") % _durataText((total - gata) * trecut / float(gata))
+	return text + " " + _("Se măsoară viteza stickului…")
+
+
+def textPas(pas, progres=None, trecut=0, punct_numai_citire=""):
+	"""Textul de sus al ecranului (si mesajul paginii web) cat lucreaza pasul `pas` (PAS_*); `trecut` in secunde."""
+	if pas == PAS_COPIERE:
+		if punct_numai_citire:
+			text = _("Pasul 1 din 3: pe stick se poate numai citi, deci copiez software-ul într-un dosar curat pe „%s”.") % punct_numai_citire
+		else:
+			text = _("Pasul 1 din 3: se copiază software-ul într-un dosar curat.")
+		procent = _textProcent(progres, trecut)
+		return text + (" " + procent if procent else "")
+	if pas == PAS_SUME:
+		text = _("Pasul 2 din 3: se verifică dacă software-ul este întreg (sumele de control).")
+		procent = _textProcent(progres, trecut)
+		return text + (" " + procent if procent else "")
+	# la simulare textul nu se schimba: fereastra lui ofgwrite sta peste interfata si arata ea pasii, iar o redesenare a
+	# interfetei in timpul ei poate muta pagina aratata a ecranului
+	return _("Pasul 3 din 3: programul de instalare verifică software-ul. Nu se instalează nimic pe receptor.") + " " + \
+		_("De obicei durează sub un minut; după %d minute se oprește singură. EXIT o oprește oricând.") % (LIMITA_SIMULARE_S // 60)
+
+
+# -------------------------------------------------------------- ecranul televizorului dupa o simulare oprita
+
+FBIOGET_VSCREENINFO = 0x4600
+FBIOPUT_VSCREENINFO = 0x4601
+FBIO_SET_MANUAL_BLIT = 0x40014621  # _IOW('F', 0x21, __u8), ca in lib/gdi/fb.cpp
+FB_ACTIVATE_ALL = 64
+LOC_ACTIVATE = 84  # in struct fb_var_screeninfo (160 de octeti): dupa 8 campuri, 4 x fb_bitfield si nonstd
+CALE_FB = "/dev/fb0"
+
+
+def citesteEcranul(cale=CALE_FB):
+	"""Modul ecranului (struct fb_var_screeninfo) inainte de simulare; None daca nu se poate citi. ofgwrite -n isi pune
+	fereastra peste interfata schimband modul (mai multe pagini, alta pagina aratata) si il da inapoi numai cand se
+	termina singur."""
+	try:
+		import fcntl
+		fd = os.open(cale, os.O_RDWR)
+		try:
+			return bytes(fcntl.ioctl(fd, FBIOGET_VSCREENINFO, bytes(160)))
+		finally:
+			os.close(fd)
+	except Exception as e:
+		print("[HdsSoftwareUpdate] modul ecranului nu s-a citit: %s" % e)
+		return None
+
+
+def punEcranulLaLoc(salvat, cale=CALE_FB):
+	"""Dupa o simulare oprita: modul ecranului de dinainte, ca la sfarsitul obisnuit al lui ofgwrite (close_framebuffer:
+	FB_ACTIVATE_ALL, apoi fara blit manual). Nu arunca; True daca a mers."""
+	if not salvat or len(salvat) < 160:
+		return False
+	try:
+		import fcntl
+		import struct
+		date = bytearray(salvat)
+		struct.pack_into("=I", date, LOC_ACTIVATE, FB_ACTIVATE_ALL)
+		fd = os.open(cale, os.O_RDWR)
+		try:
+			fcntl.ioctl(fd, FBIOPUT_VSCREENINFO, bytes(date))
+			try:
+				fcntl.ioctl(fd, FBIO_SET_MANUAL_BLIT, b"\x00")
+			except OSError:
+				pass
+		finally:
+			os.close(fd)
+		return True
+	except Exception as e:
+		print("[HdsSoftwareUpdate] modul ecranului nu s-a pus la loc: %s" % e)
+		return False
+
+
+def redeseneazaTotEcranul():
+	"""Tot ecranul se redeseneaza la urmatoarea pictare (ca la schimbarea rezolutiei): fereastra lui ofgwrite oprit
+	ramane altfel desenata peste interfata, unde ecranul nostru nu acopera (proba pe .122, 11.11.2026)."""
+	try:
+		from enigma import getDesktop
+		desktop = getDesktop(0)
+		desktop.resize(desktop.size())
+		# oprirea din pagina web nu trece prin hide()/show() pe televizor: pictarea se cere aici
+		desktop.paint()
+	except Exception as e:
+		print("[HdsSoftwareUpdate] redesenarea ecranului: %s" % e)
 
 
 def _marimePachet(candidat):
@@ -1390,9 +1550,10 @@ class HdsSoftwareUpdate(Screen):
 
 	def _inapoi(self):
 		"""Inapoi / EXIT. Dupa simulare intoarce la lista. In timpul copierii in dosarul curat si al sumelor (fir separat)
-		inchide ecranul: _laInchidere opreste firul la urmatoarea bucata. Numai in timpul simularii (ofgwrite -n) ecranul
-		asteapta."""
+		inchide ecranul: _laInchidere opreste firul la urmatoarea bucata. In timpul simularii (ofgwrite -n, nu scrie
+		nimic) o opreste si intoarce la lista."""
 		if self._ocupat and self._faza == "verificare":
+			self._oprireSimulare()
 			return
 		if self._faza == "rezultat" and not self._scriereRealaPornita:
 			self._reincarca()
@@ -1402,6 +1563,7 @@ class HdsSoftwareUpdate(Screen):
 
 	def _laInchidere(self):
 		self._opreste = True
+		self._opresteePas()
 		lucrare = self._lucrare
 		if self._lucrare is not None:
 			self._lucrare.opreste()
@@ -1629,17 +1791,60 @@ class HdsSoftwareUpdate(Screen):
 			return
 		self._ocupat = True
 		self._opreste = False
-		if candidat.get("numai_citire"):
-			self["detaliu"].setText(_("Pe stick se poate numai citi, deci copiez software-ul într-un dosar curat pe „%s”. Durează până la un minut.") % punct)
-		else:
-			self["detaliu"].setText(_("Se copiază software-ul într-un dosar curat pe stick. Durează până la un minut."))
+		progres = {}
+		self._pornestePas(PAS_COPIERE, progres, punct if candidat.get("numai_citire") else "")
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		self._lucrare = HdsPazaModel.LucrareFundal(
-			lambda: _pregatesteDosarCurat(candidat, oprit=self._oprit),
+			lambda: _pregatesteDosarCurat(candidat, oprit=self._oprit, progres=progres),
 			lambda cale, eroare: self._dosarGata(candidat, cale, eroare))
 
+	# -------------------------------------------------------------- pasul si procentul, o data pe secunda
+
+	def _pornestePas(self, pas, progres=None, punct=""):
+		"""Textul de sus spune pasul (1-3 din 3), procentul si cat mai dureaza, reinnoit o data pe secunda; pagina web
+		citeste acelasi text. La simulare, ceasul o opreste dupa LIMITA_SIMULARE_S."""
+		self._pas = (pas, progres if progres is not None else {}, time.time(), punct)
+		self._textPas = None
+		ceas = getattr(self, "_ceasPas", None)
+		if ceas is None:
+			try:
+				from enigma import eTimer
+				ceas = eTimer()
+				try:
+					self._legaturaPas = ceas.timeout.connect(self._bataiePas)
+				except AttributeError:
+					ceas.callback.append(self._bataiePas)
+				self._ceasPas = ceas
+			except Exception as e:
+				print("[HdsSoftwareUpdate] ceasul pasilor: %s" % e)
+				ceas = None
+		self._bataiePas()
+		if ceas is not None:
+			ceas.start(1000, False)
+
+	def _opresteePas(self):
+		self._pas = None
+		ceas = getattr(self, "_ceasPas", None)
+		if ceas is not None:
+			ceas.stop()
+
+	def _bataiePas(self):
+		pas = getattr(self, "_pas", None)
+		if pas is None:
+			self._opresteePas()
+			return
+		numar, progres, inceput, punct = pas
+		trecut = max(0.0, time.time() - inceput)
+		text = textPas(numar, progres, trecut, punct)
+		if text != getattr(self, "_textPas", None):
+			self._textPas = text
+			self["detaliu"].setText(text)
+		if numar == PAS_SIMULARE and trecut >= LIMITA_SIMULARE_S:
+			self._oprireSimulare(depasita=True)
+
 	def _dosarGata(self, candidat, cale, eroare):
+		self._opresteePas()
 		self._lucrare = None
 		self._ocupat = False
 		if eroare or not cale:
@@ -1686,15 +1891,17 @@ class HdsSoftwareUpdate(Screen):
 			return
 		self._ocupat = True
 		self._opreste = False
-		self["detaliu"].setText(_("Se verifică dacă software-ul este întreg (sumele de control). Durează câteva secunde."))
+		progres = {}
+		self._pornestePas(PAS_SUME, progres)
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		semn = HdsPazaModel.semnFisiere(cale)
 		self._lucrare = HdsPazaModel.LucrareFundal(
-			lambda: HdsPazaModel.sumeSha256(cale, oprit=self._oprit),
+			lambda: HdsPazaModel.sumeSha256(cale, oprit=self._oprit, progres=progres),
 			lambda sume, eroare: self._sumeGata(cale, marcaj, semn, sume, eroare))
 
 	def _sumeGata(self, cale, marcaj, semn, sume, eroare):
+		self._opresteePas()
 		self._lucrare = None
 		self._ocupat = False
 		if eroare or sume is None:
@@ -1778,13 +1985,47 @@ class HdsSoftwareUpdate(Screen):
 		self["lista"].show()
 		self["iesire"].setText("")
 		self["lista"].setList([self._randPachet(self._candidatAles)] if self._candidatAles else [])
-		self["detaliu"].setText(_("Se verifică software-ul: nu se instalează nimic pe receptor. Așteaptă câteva secunde și nu îl opri."))
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		comanda = "%s -n %s %s" % (CALE_OFGWRITE, argumente, shlex.quote(cale_pachet))
-		self._console.ePopen(comanda, self._verificareGata)
+		# fiecare simulare are numarul ei: raspunsul uneia oprite (EXIT sau prea lunga), venit tarziu, nu mai schimba nimic
+		self._simulareNr = getattr(self, "_simulareNr", 0) + 1
+		self._ecranInainte = citesteEcranul()
+		self._pornestePas(PAS_SIMULARE)
+		self._console.ePopen(comanda, self._verificareGata, ("simulare", self._simulareNr))
+
+	def _oprireSimulare(self, depasita=False):
+		"""EXIT in timpul simularii, sau simularea mai lunga de LIMITA_SIMULARE_S: ofgwrite -n nu scrie nimic, deci se
+		opreste oricand. Modul ecranului se pune la loc (fereastra lui ofgwrite ramanea peste interfata, care parea
+		inghetata), iar omul se intoarce la lista cu un mesaj in cuvinte simple."""
+		if self._faza != "verificare" or not self._ocupat:
+			return
+		self._opresteePas()
+		self._simulareNr = getattr(self, "_simulareNr", 0) + 1
+		self._console.killAll()
+		punEcranulLaLoc(getattr(self, "_ecranInainte", None))
+		self._ecranInainte = None
+		redeseneazaTotEcranul()
+		self._ocupat = False
+		self._arataCorect = False
+		self._pornireVerificata = None
+		self.hide()
+		self.show()
+		if depasita:
+			print("[HdsSoftwareUpdate] simularea a trecut de %d s: oprita" % LIMITA_SIMULARE_S)
+			mesaj = _("Verificarea nu s-a terminat în %d minute și am oprit-o. Nu s-a instalat nimic pe receptor. "
+				"Stickul poate fi prea lent sau poate avea erori: încearcă din nou, ori cu alt stick.") % (LIMITA_SIMULARE_S // 60)
+		else:
+			mesaj = _("Ai oprit verificarea. Nu s-a instalat nimic pe receptor.")
+		self._eroareInapoiLaLista(mesaj)
 
 	def _verificareGata(self, iesire, retval, extra_args=None):
+		if isinstance(extra_args, tuple) and len(extra_args) == 2 and extra_args[0] == "simulare" and \
+				extra_args[1] != getattr(self, "_simulareNr", 0):
+			print("[HdsSoftwareUpdate] raspunsul unei simulari oprite (cod %s), lasat deoparte" % retval)
+			return
+		self._opresteePas()
+		self._ecranInainte = None
 		self._ocupat = False
 		self._faza = "rezultat"
 		# programul de instalare, chiar si la verificare, goleste ecranul cand termina: fara asta ramaneau numai textele schimbate, pe negru
@@ -1844,6 +2085,11 @@ class HdsSoftwareUpdate(Screen):
 		self._scriereRealaPornita = True  # o singura scriere reala per deschidere a ecranului
 
 		mountpoint = locLucru(self._candidatAles)
+		if esteCopieCompleta(self._candidatAles):
+			# copia completa are deja setarile ei: fara copia celor de acum, deci si fara punerea ei la loc la prima pornire
+			self._pornesteScrierea(cale_pachet, mountpoint, _("Copia completă se pune înapoi exact cum a fost făcută; "
+				"setările de acum nu se copiază."))
+			return
 		_bazaCanalelor("copie")
 		folder_backup, fisiere_copiate, eroare_backup = _creeazaBackupSetari(mountpoint)
 		eroare_backup = eroare_backup or _copieCompleta(mountpoint)

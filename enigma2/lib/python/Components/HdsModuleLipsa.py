@@ -35,8 +35,20 @@ import time
 
 RADACINA = ""
 HARTA = "/usr/share/enigma2/hds-module-pachete.json"
+# 0.7.4 (P4, Eduard 11.11.2026 21:55): bibliotecile vechi ale programelor altora (de obicei module de acces) pe care le are feedul
+# extern, cu pachetul care le aduce: un program care cade pe una din ele (Components/HdsBibliotecaLipsa.py citeste antetul ELF) o
+# primeste prin aceeasi coada (cereBiblioteca). Numai numele de aici ajung la opkg.
+BIBLIOTECI = {
+	"libcrypto.so.1.0.0": "openssl10-compat",
+	"libssl.so.1.0.0": "openssl10-compat",
+	"libcrypto.so.1.1": "openssl11-compat",
+	"libssl.so.1.1": "openssl11-compat",
+	"libcrypto.so.3": "openssl3-compat",
+	"libssl.so.3": "openssl3-compat",
+	"libcrypt.so.1": "libxcrypt-compat",
+	"ld-linux.so.3": "ld-linux-compat",
+}
 OPKG_INFO = "/var/lib/opkg/info"
-OPKG_LACAT = "/var/run/opkg.lock"
 INTARZIERE_PORNIRE_MS = 20000
 PAS_ASTEPTARE_MS = 60000
 PAS_URMATOR_MS = 1500
@@ -152,6 +164,36 @@ def cere(eroare, cale, nume, cand="incarcare"):
 		return None
 
 
+def cereBiblioteca(biblioteca, cale, nume, cand="program", dupa=None):
+	"""Pachetul din BIBLIOTECI pus in coada pentru programul de la `cale` (modulul `nume`), sau None. `dupa()` se cheama dupa o
+	instalare reusita (de pilda: modulul de acces porneste din nou). Aceleasi reguli ca la cere(): o incercare pe pachet si sesiune,
+	nimic pentru un pachet deja instalat."""
+	try:
+		pachet = BIBLIOTECI.get(biblioteca)
+		if pachet is None or not _pachetBun(pachet):
+			return None
+		cale = cale or nume or ""
+		if instalat(pachet):
+			if pachet not in _rezultat:
+				_rezultat[pachet] = {"stare": "instalat_dar_cade", "motiv": ""}
+				_jurnal("%s e instalat, dar %s tot nu gaseste %s" % (pachet, nume, biblioteca))
+			return None
+		if pachet in _rezultat:
+			return None
+		el = next((x for x in _coada if x["pachet"] == pachet), None)
+		if el is None:
+			el = {"pachet": pachet, "modul": biblioteca, "fel": "biblioteca", "pluginuri": {}}
+			_coada.append(el)
+			_jurnal("in coada: %s (biblioteca %s, pentru %s)" % (pachet, biblioteca, nume))
+		el["pluginuri"].setdefault(cale, {"nume": nume or cale.rsplit("/", 1)[-1], "cand": cand, "dupa": dupa})
+		if _stare["pornit"]:
+			_programeaza(PAS_URMATOR_MS)
+		return pachet
+	except Exception as e:
+		_jurnal("cereBiblioteca: %r" % (e,))
+		return None
+
+
 def dupaCitire(plugins):
 	"""Dupa readPluginList: pluginurile cazute la import pe un modul din harta (erori cu "modul")."""
 	try:
@@ -188,6 +230,12 @@ def porneste(session):
 	"""Din mytest.py, dupa crearea sesiunii: coada (cererile de la pornire) incepe dupa INTARZIERE_PORNIRE_MS."""
 	_stare["sesiune"] = session
 	_stare["pornit"] = True
+	try:
+		# modulul de acces ales care n-a pornit la pornirea receptorului fiindca ii lipseste o biblioteca din feed (0.7.4, P4)
+		from Components import HdsBibliotecaLipsa
+		HdsBibliotecaLipsa.verificaAlese()
+	except Exception as e:
+		_jurnal("verificaAlese: %r" % (e,))
 	if _coada:
 		_programeaza(INTARZIERE_PORNIRE_MS)
 
@@ -209,19 +257,19 @@ def _X():
 	return HdsExtensiiLucru
 
 
-def _lacatViu(cale):
-	"""alt program tine zavorul lui opkg (lockf, ca libopkg)"""
+def _opkgRuleaza():
+	"""alt opkg tine zavorul lui (SSH, web, o actualizare): aceeasi verificare ca la actualizari
+	(Components/HdsActualizari.opkg_ocupat: /run/opkg.lock, citit din /proc/locks fara sa ia zavorul). Inainte se citea
+	/var/run/opkg.lock, unde opkg din imagine nu-l pune niciodata, deci nu se vedea niciun opkg."""
 	try:
-		import fcntl
-	except ImportError:
+		try:
+			from Components.HdsActualizari import opkg_ocupat
+		except ImportError:
+			from HdsActualizari import opkg_ocupat
+		return bool(opkg_ocupat(RADACINA or "/"))
+	except Exception as e:
+		_jurnal("zavorul opkg: %r" % (e,))
 		return False
-	try:
-		with open(cale, "ab") as f:
-			fcntl.lockf(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-			fcntl.lockf(f.fileno(), fcntl.LOCK_UN)
-		return False
-	except (OSError, IOError):
-		return True
 
 
 def _ocupat():
@@ -231,7 +279,7 @@ def _ocupat():
 			return True
 	except Exception:
 		pass
-	return os.path.exists(_c(OPKG_LACAT)) and _lacatViu(_c(OPKG_LACAT))
+	return _opkgRuleaza()
 
 
 def _configurare():
@@ -337,7 +385,12 @@ def _urmatorul():
 				_actualizeazaListele()
 				return
 			_coada.pop(0)
-			text = _t("Feedul HD Satelit nu are modulul.") if motiv == "lipsa" else _t("Altă sursă are o versiune mai nouă; nu o instalez singur.")
+			if motiv != "lipsa":
+				text = _t("Altă sursă are o versiune mai nouă; nu o instalez singur.")
+			elif el.get("fel") == "biblioteca":
+				text = _t("Feedul HD Satelit nu are biblioteca.")
+			else:
+				text = _t("Feedul HD Satelit nu are modulul.")
 			_rezultat[el["pachet"]] = {"stare": "lipsa" if motiv == "lipsa" else "refuzat", "motiv": text}
 			_jurnal("%s nu se instaleaza: %s" % (el["pachet"], motiv))
 			_programeaza(PAS_URMATOR_MS)
@@ -393,7 +446,7 @@ def planModul(el, versiune):
 	argumente = X.opkgArguments("install", [el["pachet"]])
 	if argumente is None:
 		return None
-	titlu = _t("modulul %s") % el["modul"]
+	titlu = (_t("biblioteca %s") if el.get("fel") == "biblioteca" else _t("modulul %s")) % el["modul"]
 	return {"fel": "instaleaza", "titlu": titlu, "nume": titlu, "subtitlu": _numePluginuri(el), "icoana": "altele", "randuri": [],
 		"nota": "", "externe": [], "notaCuloare": "", "buton": N_("Instalează"), "argumente": argumente, "repornire": False,
 		"pachete": [el["pachet"]], "tinte": [{"nume": el["pachet"], "titlu": el["pachet"], "la": versiune, "de": "", "acces": False}],
@@ -416,7 +469,10 @@ def _pornesteLucrarea(el, versiune):
 			dupaLucrare(el, l)
 	l.asculta(ascultator)
 	_jurnal("instalez %s %s pentru %s" % (el["pachet"], versiune, _numePluginuri(el)))
-	_mesaj(_t("Se instalează modulul %s pentru %s.") % (el["modul"], _numePluginuri(el)))
+	if el.get("fel") == "biblioteca":
+		_mesaj(_t("Se instalează biblioteca %s pentru %s.") % (el["modul"], _numePluginuri(el)))
+	else:
+		_mesaj(_t("Se instalează modulul %s pentru %s.") % (el["modul"], _numePluginuri(el)))
 	l.porneste()
 
 
@@ -432,9 +488,29 @@ def dupaLucrare(el, lucrare, plugins=None):
 		if not rez.get("reusit"):
 			motiv = rez.get("stare") or _t("Operațiunea nu a reușit.")
 			_rezultat[el["pachet"]] = {"stare": "esuat", "motiv": motiv}
-			_mesaj(_t("Modulul %s nu s-a instalat: %s") % (el["modul"], motiv))
+			if el.get("fel") == "biblioteca":
+				_mesaj(_t("Biblioteca %s nu s-a instalat: %s") % (el["modul"], motiv))
+			else:
+				_mesaj(_t("Modulul %s nu s-a instalat: %s") % (el["modul"], motiv))
 			return
 		_rezultat[el["pachet"]] = {"stare": "instalat", "motiv": ""}
+		if el.get("fel") == "biblioteca":
+			# programele (module de acces) nu sunt pluginuri de activat: fiecare porneste din nou prin dupa(), dar numai dupa ultima
+			# biblioteca pe care o mai asteapta (mgcamd cere trei pachete, deci trei elemente in coada: o pornire dupa primul ar cadea)
+			nume = []
+			for cale, v in el["pluginuri"].items():
+				if any(cale in x["pluginuri"] for x in _coada):
+					continue
+				nume.append(v["nume"])
+				if callable(v.get("dupa")):
+					try:
+						v["dupa"]()
+					except Exception as e:
+						_jurnal("dupa %s: %r" % (cale, e))
+			_jurnal("%s instalat; pornite din nou: %s" % (el["pachet"], ", ".join(sorted(set(nume))) or "-"))
+			if nume:
+				_mesaj(_t("Biblioteca %s s-a instalat; %s pornește din nou.") % (el["modul"], ", ".join(sorted(set(nume)))))
+			return
 		if plugins is None:
 			from Components.PluginComponent import plugins
 		erori = dict((e.get("path"), e) for e in getattr(plugins, "erori", {}).values())

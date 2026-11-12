@@ -58,6 +58,11 @@
 #      prelungeste cat pluginul inca lucreaza, cel mult TOTAL_PLUGIN_EXTERN_S de la ultima bataie. Dupa aceea, sau cand
 #      firul principal nu mai e intr-un plugin extern, semnul se scoate si paznicul face ce face la orice blocaj
 #      (stivele, repornirea). Prima bataie noua scoate semnul si scrie in jurnal cat a tinut pluginul firul.
+#      Afisajul din fata (0.7.4): cat asteapta paznicul, pe afisajul de 4 cifre scrie TEXT_AFISAJ_PLUGIN („bUSY”), din
+#      firul de supraveghere (desenul obisnuit al afisajului merge pe firul principal, care e tinut), o data pe tacere;
+#      nu in asteptare si nu pe afisajele color (pe ele deseneaza tot firul principal). Prima bataie noua reface
+#      afisajul pe loc (HdsAfisaj.actualizeaza). Pluginurile stiute muta oricum lucrul greu pe un fir
+#      (Components/HdsFirPluginuri.py), deci la ele firul principal nu ajunge sa fie tinut.
 #
 # Paznicul placii (watchdog-ul hardware, 60 s) si oprirea la un blocaj de nucleu (fir in stare D) raman mereu pornite;
 # setarea de aici priveste numai repornirea interfetei cand nu mai raspunde.
@@ -141,6 +146,7 @@ MOTIV_OARBA = "oarba"           # cautarea oarba pe satelit (Components/HdsCauta
 MOTIV_PLUGINURI = "pluginuri"   # lista de pluginuri citita din nou (Components/PluginComponent.py); pluginuri:<dosar> cat se importa acela
 CHEIE_PLUGINURI = "lista-pluginuri"
 MOTIV_PLUGIN_EXTERN = "plugin-extern"   # plugin-extern:<dosar>: un plugin extern tine firul principal (punctul 9)
+MOTIV_ACTUALIZARE = "actualizare"   # opkg instaleaza o actualizare (Components/HdsActualizari.py, 0.7.4): o iesire a enigma2 l-ar opri
 CHEIE_PLUGIN_EXTERN = "plugin-extern"
 
 # punctul 9: pluginurile externe care tin firul principal
@@ -148,6 +154,7 @@ PRAG_PLUGIN_EXTERN_S = 2 * BATAIE_S + 5    # doua batai ratate si putin: un lucr
 PAS_PLUGIN_EXTERN_S = 5                    # cat de des se uita firul de supraveghere
 DURATA_PLUGIN_EXTERN_S = 60                # cat asteapta paznicul dupa fiecare privire in care pluginul inca lucreaza
 TOTAL_PLUGIN_EXTERN_S = 10 * 60            # cel mult atat de la ultima bataie; dupa, paznicul face ce face la orice blocaj
+TEXT_AFISAJ_PLUGIN = "bUSY"                # pe afisajul de 4 cifre cat asteapta paznicul (se citeste „busy”)
 
 
 def _(text):
@@ -299,6 +306,8 @@ class Bataie(object):
 					_jurnal("%s a tinut firul principal %d s; paznicul a asteptat" % (plugin[0], int(acum - self.ultimaBataie)))
 				self._curata(acum)
 				self.scrie(acum)
+			if plugin is not None:
+				_afisajInapoi()
 		except Exception as e:
 			_jurnal("bataia: %r" % (e,))
 		self.verificaMemoriaDriver()
@@ -528,13 +537,45 @@ def pluginExternInStiva(cadru, pluginDinCale=None, adancime=200):
 	return None
 
 
+def _semnAfisaj():
+	"""Functia care scrie TEXT_AFISAJ_PLUGIN pe afisajul de 4 cifre, facuta pe firul principal (importurile aici); ea
+	insasi nu importa nimic nou. Fara afisaj de 4 cifre, in asteptare sau pe un afisaj color nu scrie nimic. Nu arunca."""
+	try:
+		from Components import HdsAfisaj, HdsAfisajLitere
+		from Components import HdsAfisajCompat     # noqa: F401 (Afisaj.scrie il ia din sys.modules)
+	except Exception:
+		return lambda: False
+	octeti = HdsAfisajLitere.octetiText(TEXT_AFISAJ_PLUGIN).decode("latin-1")
+
+	def scrie():
+		try:
+			a = HdsAfisaj._afisaj
+			if a is None or type(a) is not HdsAfisaj.Afisaj or getattr(a, "inAsteptare", False):
+				return False
+			return bool(a.scrie(octeti))    # ultim = textul nostru: primul pas al afisajului scrie din nou ce arata
+		except Exception as e:
+			_jurnal("semnul pe afisaj: %r" % (e,))
+			return False
+	return scrie
+
+
+def _afisajInapoi():
+	"""Pe firul principal, dupa ce pluginul extern a lasat firul: afisajul arata din nou ce arata (pasul lui acum)."""
+	try:
+		from Components import HdsAfisaj
+		HdsAfisaj.actualizeaza()
+	except Exception as e:
+		_jurnal("afisajul dupa pluginul extern: %r" % (e,))
+
+
 class SupraveghetorPluginExtern(object):
 	"""Punctul 9 din capul fisierului. pas() e o singura privire (testele o cheama direct); porneste() o face pe un fir
 	al lui, la fiecare PAS_PLUGIN_EXTERN_S secunde."""
 
-	def __init__(self, bataie, cadru=None, pluginDinCale=None):
+	def __init__(self, bataie, cadru=None, pluginDinCale=None, semn=None):
 		self.b = bataie
 		self.cadru = cadru or _cadrulFiruluiPrincipal
+		self.semn = semn if semn is not None else _semnAfisaj()
 		# hotararea se ia o data, aici, pe firul principal: firul de supraveghere nu importa nimic (firul principal poate
 		# sta chiar in importul unui plugin, cu lacatul importurilor luat)
 		if pluginDinCale is None:
@@ -582,6 +623,10 @@ class SupraveghetorPluginExtern(object):
 			self.anuntat = (ultima, nume)
 			_jurnal("%s tine firul principal de %d s; paznicul asteapta cel mult %d s de la ultima bataie"
 				% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+			try:
+				self.semn()
+			except Exception:
+				pass
 		return "asteapta:" + nume
 
 	def _bucla(self):
@@ -695,6 +740,7 @@ def textMotiv(motiv):
 		MOTIV_MOTOR: _("rotirea antenei"),
 		MOTIV_OARBA: _("căutarea oarbă pe satelit"),
 		MOTIV_PLUGINURI: _("citirea listei de pluginuri"),
+		MOTIV_ACTUALIZARE: _("instalarea actualizării software"),
 	}.get(motiv, motiv)
 
 

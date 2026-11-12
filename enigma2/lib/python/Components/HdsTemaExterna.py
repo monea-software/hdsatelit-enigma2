@@ -25,6 +25,11 @@
 # JURNALUL ACTIVARII (ACTIVARE): supravietuieste repornirii receptorului. Se scrie inainte de alegere si la fiecare pornire
 # cu tema in proba; fara el scris, tema nu se activeaza. Peste MAX_INCERCARI porniri fara sfarsitul probei, tema se retrage.
 #
+# CADERILE ECRANELOR (stivaDinTema): trei erori de ecran in 30 de secunde retrag tema numai daca macar una trece prin fisierele
+# temei (dosarul ei sau fisierele pachetului opkg care a pus-o: convertoare, randatoare, pluginul ei). Un plugin care cade singur
+# (constructorul lui, oricare ar fi tema) reporneste interfata ca pana acum, dar tema omului ramane (Obsidian-FHD retrasa de
+# OAWeatherOverview, 12.11.2026).
+#
 # NUMELE CERUTE (ImportComponente, puneNumeLipsa): convertoarele si randatoarele din HdsConvertoareStraine si HdsRandatoareStraine se vad la
 # import cu numele din XML numai cand nu exista fisierul (un pachet de tema care il aduce ramane al lui si se instaleaza fara conflict).
 #
@@ -38,6 +43,8 @@ import copy
 import hashlib
 import json
 import os
+import posixpath
+import re
 import time
 import xml.etree.ElementTree as ET
 
@@ -57,10 +64,11 @@ MAX_ANUNTATE = 40
 
 # ce dau modulele noastre, cu numele din XML
 CONVERTOARE_NOASTRE = frozenset(("ClientsStreaming", "CpuUsage", "CryptoInfo", "EventInfo", "ExtendedServiceInfo", "HddState", "LayoutInfo", "MovieReference",
-	"PliExtraInfo", "RotorPosition", "ServiceName2", "ServiceOrbitalPosition", "StreamInfo", "TransponderInfo", "VAudioInfo", "VNetSpeedInfo", "VServiceInfo"))
+	"PliExtraInfo", "RotorPosition", "ServiceName2", "ServiceOrbitalPosition", "StreamInfo", "TransponderInfo", "VAudioInfo", "VNetSpeedInfo", "VServiceInfo",
+	"SCServicePosition", "AnalogClock", "ConfigEntryTestVisible", "ConverterRotator", "TextCase", "ReceiverInfo", "YWeather"))
 # RunningText nu e aici: imaginea il are ca fisier (Components/Renderer/RunningText.py), cu optiunile lui
 RANDATOARE_NOASTRE = frozenset(("ChannelNumber", "CiModuleControl", "NextEpgInfo", "NextEvents", "PiconBg", "Rectangle", "RegularLabel",
-	"VRunningText", "VVolumeText", "VideoSize", "VolumeText"))
+	"VRunningText", "VVolumeText", "VideoSize", "VolumeText", "Cover", "AudioIcon", "SingleEpgList", "AnalogClockLCD", "RatingIconLabel", "Bhclock"))
 MODULE_NOASTRE = {"Converter": ("HdsConvertoareStraine", CONVERTOARE_NOASTRE), "Renderer": ("HdsRandatoareStraine", RANDATOARE_NOASTRE)}
 # importuri scrise pentru Python 2 in fisierele aduse de teme ("from Poll import Poll")
 IMPORTURI_VECHI = {"Poll": "Components.Converter.Poll", "Converter": "Components.Converter.Converter", "Renderer": "Components.Renderer.Renderer"}
@@ -447,6 +455,17 @@ def panouFaraNume(panou, cale, cadru, cauta):
 	return _aseaza(list(panou), cale, loc, cauta, panou.attrib.get("layout") == "stack", 0)
 
 
+def _centru(s, parinte, marime):
+	""""center", "center+20", "center-8" -> elementul centrat in parinte plus deplasarea, cel putin 0; None altfel"""
+	if not s.startswith("center"):
+		return None
+	rest = s[6:].replace(" ", "")
+	deplasare = calculeaza(rest) if rest else 0
+	if deplasare is None or (rest and rest[0] not in "+-"):
+		return None
+	return max((parinte - marime) // 2 + deplasare, 0)
+
+
 def _pozitieCopil(el, cadru, ramas):
 	"""(x, y, latime, inaltime) ale copilului si locul ramas dupa el."""
 	x0, y0, w0, h0 = cadru
@@ -473,8 +492,12 @@ def _pozitieCopil(el, cadru, ramas):
 	mh = h0 if mh is None else mh
 	parti = [q.strip() for q in p.split(",")]
 	if len(parti) == 2:
-		px = (w0 - mw) // 2 if parti[0] == "center" else w0 - mw if parti[0] == "right" else _masura(parti[0], w0) or 0
-		py = (h0 - mh) // 2 if parti[1] == "center" else h0 - mh if parti[1] == "bottom" else _masura(parti[1], h0) or 0
+		px = _centru(parti[0], w0, mw)
+		py = _centru(parti[1], h0, mh)
+		if px is None:
+			px = w0 - mw if parti[0] == "right" else _masura(parti[0], w0) or 0
+		if py is None:
+			py = h0 - mh if parti[1] == "bottom" else _masura(parti[1], h0) or 0
 	else:
 		px = py = 0
 	return (x0 + px, y0 + py, mw, mh), ramas
@@ -1329,3 +1352,57 @@ def componenteDinRaport(lipsa):
 		if "No module named" in r:
 			rez.add(r.split("No module named")[1].strip(" '\"").split(".")[-1])
 	return rez
+
+
+# ------------------------------------------------------------------ caderile ecranelor: din tema sau din altceva
+
+DOSAR_OPKG_INFO = "/var/lib/opkg/info"
+_FISIER_IN_STIVA = re.compile(r'File "([^"]+)"')
+
+
+def _faraPyc(cale):
+	"""Calea sursei pentru un .pyc (asa apare in stiva): /x/__pycache__/m.cpython-314.pyc si /x/m.pyc devin /x/m.py."""
+	if not cale.endswith(".pyc"):
+		return cale
+	dosar, nume = posixpath.split(cale)
+	if posixpath.basename(dosar) == "__pycache__":
+		dosar = posixpath.dirname(dosar)
+		nume = nume.split(".")[0] + ".pyc"
+	return posixpath.join(dosar, nume[:-1])
+
+
+def fisierePachetTema(dosar_tema, info=None):
+	"""Fisierele pachetului opkg care a pus tema (cel care are <dosar_tema>/skin.xml), cu .pyc scris ca .py. Multime goala pentru
+	o tema pusa de mana."""
+	info = info or DOSAR_OPKG_INFO
+	skin_xml = dosar_tema.rstrip("/") + "/skin.xml"
+	try:
+		liste = sorted(n for n in os.listdir(info) if n.endswith(".list"))
+	except OSError:
+		return frozenset()
+	for n in liste:
+		try:
+			with open(os.path.join(info, n), encoding="utf-8", errors="replace") as f:
+				randuri = [r.split("\t")[0].strip() for r in f]
+		except (IOError, OSError):
+			continue
+		if skin_xml in randuri:
+			return frozenset(_faraPyc(r) for r in randuri if r)
+	return frozenset()
+
+
+def stivaDinTema(stiva, dosar_tema, info=None):
+	"""True cand stiva unei erori de ecran trece printr-un fisier al temei: sub dosarul ei sau din pachetul ei."""
+	dosar = dosar_tema.rstrip("/") + "/"
+	fisiere = _FISIER_IN_STIVA.findall(stiva or "")
+	if any(f.startswith(dosar) for f in fisiere):
+		return True
+	pachet = None
+	for f in fisiere:
+		if pachet is None:
+			pachet = fisierePachetTema(dosar, info)
+			if not pachet:
+				return False
+		if _faraPyc(f) in pachet:
+			return True
+	return False

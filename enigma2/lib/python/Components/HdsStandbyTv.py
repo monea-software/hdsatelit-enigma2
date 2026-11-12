@@ -49,7 +49,8 @@
 #     Tot acolo firul principal nu face NICIUN apel in driver: pe firul principal o citire care asteapta oprea interfata.
 #     Toate apelurile pe nod si citirea adresei din /proc/msp/hdmi0_sink le face, pe rand, firul de lucru CEC (FirCec);
 #     firul principal pune cererile in coada si ia rezultatele gata la pasii citirii, asteptand cel mult
-#     CITIRE_ASTEAPTA_S. Un apel care nu se intoarce in CITIRE_BLOCATA_S opreste CEC pana la repornirea interfetei
+#     CITIRE_ASTEAPTA_S (pasul citirii nu asteapta: il ia un ceas dupa PRELUARE_MS). Un apel care nu se intoarce in
+#     CITIRE_BLOCATA_S opreste CEC pana la repornirea interfetei
 #     (nimic nu mai pleaca spre nod, nici ce era in coada; firul ramas in driver e de fundal si nu-l asteapta nimeni)
 #     si apare in pagina web ca „nu raspunde”. Adresa fizica se tine minte dupa prima citire buna.
 # Numele: cel scris in setari (config.hds_standby.nume_tv) sau, gol, modelul citit pe receptor (model= din
@@ -134,6 +135,8 @@ CITIRE_SIGURA_MS = 5000     # numai citirea pe firul principal cu poll (inFir=Fa
                             # arata nimic; pe firul de lucru CEC (familia libreader) nu: acolo o citire pe coada goala
                             # asteapta in driver
 CITIRE_ASTEAPTA_S = 0.01    # familia libreader: cat asteapta firul principal o cerere pusa firului de lucru CEC liber
+                            # (scrierile, deschiderea, adresele: rezultatul lor merge la apelant)
+PRELUARE_MS = 10            # familia libreader: pasul citirii nu asteapta; rezultatul lui il ia un ceas dupa atat
 CITIRE_BLOCATA_S = 1.0      # familia libreader: un apel in driver care nu se intoarce in atat opreste CEC
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
@@ -590,6 +593,9 @@ def initConfig():
 		from Components.SystemInfo import SystemInfo
 		SystemInfo["HdsHdmiStandby"] = os.path.exists(IESIRE)
 		SystemInfo["HdsCec"] = os.path.exists(CEC)
+		# meniul „Standby și televizorul” (menu.xml): oricare din cele doua. Vu+ 4K n-au /proc/stb/hdmi/output, dar au
+		# CEC (/dev/hdmi_cec); fara asta tot meniul era ascuns, cu randurile CEC cu tot (0.7.4)
+		SystemInfo["HdsStandbyTv"] = SystemInfo["HdsHdmiStandby"] or SystemInfo["HdsCec"]
 	except Exception as e:
 		_jurnal("SystemInfo: %r" % (e,))
 
@@ -1175,7 +1181,7 @@ class Cec(object):
 			adrese = self.logica is None or self.adresa is None
 			self._citireInCoada = True
 			self._cere("citirea din", _pasCitireNod, (self.citesteFd, self.pollFd, self._ioctlPe, self.fd,
-				bool(self.dupaPoll), adrese, self._firDeLucru()), self._citit)
+				bool(self.dupaPoll), adrese, self._firDeLucru()), self._citit, asteapta=False)
 		return self._imparte()
 
 	def _citit(self, rezultat, eroare):
@@ -1207,11 +1213,16 @@ class Cec(object):
 			self._lucru = FirCec(self.ceasLucru)
 		return self._lucru
 
-	def _cere(self, ce, functie, argumente, dupa):
+	def _cere(self, ce, functie, argumente, dupa, asteapta=True):
 		"""Familia libreader: functie(*argumente) pe firul de lucru CEC, dupa cererile puse inainte; dupa(rezultat,
 		eroare) pe firul principal, cand s-a terminat. Cu firul liber, firul principal asteapta cel mult CITIRE_ASTEAPTA_S
 		(un apel obisnuit ia sub o milisecunda); altfel rezultatul se ia la un pas urmator al citirii. Intoarce ce intoarce
-		dupa, sau None cand cererea nu s-a terminat inca (ori CEC e oprit si nu s-a mai pus)."""
+		dupa, sau None cand cererea nu s-a terminat inca (ori CEC e oprit si nu s-a mai pus).
+		Cu asteapta=False (pasul citirii, la CITIRE_MS, rezultatul nu merge la apelant) firul principal nu asteapta deloc:
+		rezultatul il ia un ceas dupa PRELUARE_MS (_preia), deci mesajele primite (si tastele de pe telecomanda
+		televizorului) vin tot in cateva milisecunde, nu la pasul urmator. Raportul 388460 (SF8008, procesorul plin de un
+		plugin): asteptarea de 10 ms tinea firul principal 10-19 ms pe pas in medie, cu varfuri de 90-170 ms, fiindca dupa
+		ea firul principal isi recapata GIL-ul tarziu (masurat pe Linux cu Python 3.14 si 1-3 fire ocupate)."""
 		if self._oprit():
 			return None
 		c = CerereCec(ce, functie, argumente, dupa)
@@ -1219,9 +1230,36 @@ class Cec(object):
 		self._cereri.append(c)
 		self._firDeLucru().pune(c)
 		if liber and not self._iau:
-			c.gata.wait(CITIRE_ASTEAPTA_S)
-			self._iaRezultatele()
+			if asteapta or not self._preiaDupa(PRELUARE_MS):
+				c.gata.wait(CITIRE_ASTEAPTA_S)
+				self._iaRezultatele()
 		return c.raspuns
+
+	def _preiaDupa(self, ms):
+		"""Ceasul (unul singur) care ia rezultatele firului de lucru CEC dupa `ms`. False daca nu se poate face un ceas
+		(fara eTimer, probele vechi): atunci _cere asteapta ca inainte."""
+		try:
+			t = getattr(self, "timerPreluare", None)
+			if t is None:
+				t = self.timerPreluare = self.faceTimer(self._preia)
+			if t is None:
+				return False
+			t.start(ms, True)
+			return True
+		except Exception as e:
+			_jurnal("preluarea CEC: %r" % (e,), "cec-preluare")
+			return False
+
+	def _preia(self):
+		"""Rezultatele gata ale firului de lucru CEC (pasul citirii) si inregistrarile venite cu ele, pe firul principal.
+		Daca firul de lucru n-a terminat inca, rezultatul il ia pasul urmator al citirii (care verifica si apelurile
+		ramase in driver)."""
+		try:
+			self._iaRezultatele()
+			if not self._oprit():
+				self._imparte()
+		except Exception as e:
+			_jurnal("citirea CEC: %r" % (e,), "cec-citire")
 
 	def asteaptaScrierile(self, secunde):
 		"""Oprirea completa: cel mult `secunde`, pana termina firul de lucru CEC cererile puse (familia libreader), apoi
@@ -1912,6 +1950,13 @@ class StandbyTv(object):
 					self.cec.activLaStandby = False     # televizorul stins: la trezire nu mai e pe noi
 			except Exception as e:
 				_jurnal("CEC la standby: %r" % (e,), "cec-intrare")
+		# afisajul de 4 cifre in standby (power4x7standby, SF8008 / Ustym 4K PRO) dupa alegerea „In asteptare”, si cand
+		# iesirea HDMI ramane pornita: altfel driverul il tine stins (Components/HdsAfisaj.aplicaAfisajInAsteptare)
+		try:
+			from Components import HdsAfisaj
+			HdsAfisaj.aplicaAfisajInAsteptare(forteaza=True)
+		except Exception as e:
+			_jurnal("afisajul in asteptare: %r" % (e,), "afisaj-asteptare")
 		if not c.hdmi_oprit.value or not os.path.exists(IESIRE):
 			return
 		if self._opresteIesirea():

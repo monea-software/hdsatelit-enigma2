@@ -71,27 +71,37 @@ def stare(B=None, b=None):
 	B = _b(B)
 	b = b if b is not None else B.initConfig()
 	inscris = B.inscris(b)
+	# pus pe pauza (TODO 1391 b): formularul acordului cu alegerile de dinainte, iar acordul pastreaza identificatorul
+	pauza = not inscris and B.inPauza(b)
 	rez = {
 		"result": True,
 		"inscris": inscris,
 		"nota_veche": B.notaVeche(b),
+		"pauza": pauza,
 		"feluri": [{"fel": f, "eticheta": B.eticheta(f), "rand": B.randScurt(f),
-			"bifat": bool(getattr(b, f).value) if (inscris or B.notaVeche(b)) else True} for f in B.FELURI],
+			"bifat": bool(getattr(b, f).value) if (inscris or pauza or B.notaVeche(b)) else True} for f in B.FELURI],
 		"antet": _t(B.ANTET_ACORD),
 		"bifa_nota": _t(B.BIFA_NOTA),
 		"nota_scurta": _t(B.NOTA_SCURTA),
 		"adresa_nota": B.ADRESA_NOTA,
-		"nume": b.nume.value if inscris else "",
-		"email": b.email.value if inscris else "",
-		"automat": bool(b.automat.value) if (inscris or B.notaVeche(b)) else True,
+		"nume": b.nume.value if (inscris or pauza) else "",
+		"email": b.email.value if (inscris or pauza) else "",
+		"automat": bool(b.automat.value) if (inscris or pauza or B.notaVeche(b)) else True,
 		"automat_eticheta": _t(B.AUTOMAT[0]),
 		"automat_rand": _t(B.AUTOMAT[1]),
 		"numar": B.randNumar(),
 		"randuri": dict((k, _t(v)) for k, v in (B.RANDURI_MENIU if inscris else B.RANDURI_VIZITATOR).items()),
 	}
 	B.ceNumar()
+	# TODO 1860 b: cand receptorul nu ajunge la serverul nostru, rapoartele pleaca de pe telefonul care deschide pagina
+	B.probaServer()
+	if B.serverFaraRaspuns():
+		rez["fara_net"] = rapoarteQr(B, b)
 	if B.notaVeche(b):
 		rez["nota_noua"] = textNotaNoua(B)
+	if pauza:
+		rez["pauza_text"] = _t("Beta tester e pe pauză. Cu „Sunt de acord” pornește din nou, cu aceeași înscriere: "
+			"numele public și punctele XP rămân.")
 	if not inscris:
 		rez.update({
 			"intrebare": _t(B.INTREBARE),
@@ -197,6 +207,28 @@ def canalTesteri(B):
 		return None
 	return {"eticheta": _t(A.TEXT_BIFA_TESTERI), "nota": _t(getattr(A, "TEXT_NOTA_TESTERI", "")) if getattr(A,
 		"TEXT_NOTA_TESTERI", "") else "", "pornit": B.canalTesteriPornit(A)}
+
+
+def rapoarteQr(B, b):
+	"""Cardul „Nu ai internet?” (perechea web a ecranului Screens/HdsQrRapoarte.py): {titlu, text, rapoarte: [[titlu,
+	link]]}. Fiecare link are raportul intreg intr-o singura adresa (CONTRACT-QR, n = 1): pagina stb.hdsatelit.com/q/
+	il trimite singura cand telefonul il deschide. {} daca modulul lipseste."""
+	try:
+		from Components import HdsQrRapoarte as R
+	except Exception:
+		return {}
+	rapoarte = []
+	for fel in R.FELURI:
+		try:
+			rapoarte.append([R.titlu(fel), R.legatura(fel, b)])
+		except Exception as e:
+			print("[betatester_web] raportul %s: %s" % (fel, e))
+	return {
+		"titlu": _t("Receptorul nu ajunge la serverul nostru"),
+		"text": _t("Trimite raportul de pe telefon: atinge raportul potrivit și pleacă singur. Dacă nu știi pe care, "
+			"alege primul."),
+		"rapoarte": rapoarte,
+	}
 
 
 def textNotaNoua(B):
@@ -344,6 +376,9 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 	if ce == "trimite-acum":
 		ok, mesaj = B.trimiteAcum()
 		return {"result": ok, "message": mesaj}
+	if ce == "pauza":
+		ok, mesaj = B.pauza(b)
+		return {"result": ok, "message": mesaj}
 	if ce == "raport-canal":
 		from Components import HdsRaportCanal  # canalul de acum + ultimele randuri din jurnalele tunerului si zap-ului
 		ok, mesaj = HdsRaportCanal.trimite(None, arg.get("text", ""), B)
@@ -385,14 +420,15 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 		return _lucrare(c, "raspunsuri")
 	if ce == "iesire":
 		mc = mc or _mc()
-		if not B.inscris(b) and not B.notaVeche(b):
+		if not B.inscris(b) and not B.notaVeche(b) and not B.inPauza(b):
 			return {"result": False, "message": _t("Nu ești înscris în programul de beta testeri.")}
 		if arg.get("pas") == "renunta":
 			mc.uita("beta-iesire")
 			return {"result": True, "message": _t("Nu s-a făcut nimic.")}
 		if arg.get("pas") == "intreaba":
 			return mc.raspunsIntrebare("beta-iesire", "", _t("Ieși din programul de beta testeri? Serverul șterge datele "
-				"acestei înscrieri. Înscrierile din alte sloturi rămân."), _t("Da, ieși și șterge"))
+				"acestei înscrieri. Înscrierile din alte sloturi rămân.") + " " + _t(B.LA_IESIRE) + " " +
+				_t(B.NU_E_ASISTENTA), _t("Da, ieși și șterge"))
 		if not mc.verifica("beta-iesire", "", arg.get("cod", "")):
 			return mc.codGresit()
 		ok, mesaj = B.iesire(b)
@@ -562,6 +598,11 @@ __STIL_PAGINI__
 <main class="beta">
 <header class="cap"><h1>Beta tester</h1></header>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
+<section class="card ascuns" id="faraNet">
+  <h2 id="faraNetTitlu"></h2>
+  <p class="intrebare" id="faraNetText"></p>
+  <div class="butoane" id="faraNetLinkuri" style="flex-direction:column;align-items:stretch"></div>
+</section>
 <div id="notaNoua" class="ascuns">
   <section class="card">
     <p class="banda" id="notaOprita"></p>
@@ -582,6 +623,10 @@ __STIL_PAGINI__
         <p id="textInvitatie"></p>
         <div class="avantaje" id="listaAvantaje"></div>
         <p class="banda ascuns" id="numarAcord"></p>
+      </section>
+      <section class="card ascuns" id="pauzaCard">
+        <p class="banda" id="pauzaText"></p>
+        <div class="butoane"><button type="button" class="rosu" id="iesirePauza">Ieși din program și șterge datele</button></div>
       </section>
       <section class="card">
         <h2>Devino beta tester</h2>
@@ -668,6 +713,11 @@ __STIL_PAGINI__
           <p class="nota"><a id="legaturaNota2" href="#" target="_blank" rel="noopener">Nota întreagă</a></p>
         </div>
       </details>
+      <details class="rm" id="r-pauza"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><div class="t"><b>Pune pe pauză (păstrezi înscrierea)</b><span data-rand="pauza"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
+        <div class="corp">
+          <div class="butoane"><button type="button" id="pauza">Pune pe pauză</button></div>
+        </div>
+      </details>
       <details class="rm rosu" id="r-iesire"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><div class="t"><b>Ieși din program și șterge datele</b><span data-rand="iesire"></span></div><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
         <div class="corp">
           <div class="butoane"><button type="button" class="rosu" id="iesire">Ieși și șterge datele</button></div>
@@ -686,7 +736,7 @@ __STIL_PAGINI__
     </aside>
   </div>
 </div>
-<p class="mesaj" id="mesaj"></p>
+<p class="mesaj" id="mesaj" style="white-space:pre-line"></p>
 <p class="nota">Același program e pe televizor, în __DRUM_MENIU__.</p>
 </main>
 <div hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-actualizare"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-traducere"><path d="M4 5h16v11H9l-5 4z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-conexiune"><path d="M4 14h16v6H4z"/><path d="M8 17h.01M12 17h.01M8 10a6 6 0 0 1 8 0M5 7a10 10 0 0 1 14 0"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-noutati"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="svg-informatii"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></div>
@@ -722,6 +772,13 @@ function avantaje(lista){
 function arata(d){
   STARE = d;
   $("incarcare").classList.add("ascuns");
+  var fn = d.fara_net || {};
+  $("faraNet").classList.toggle("ascuns", !(fn.rapoarte && fn.rapoarte.length));
+  if(fn.rapoarte){
+    $("faraNetTitlu").textContent = fn.titlu || ""; $("faraNetText").textContent = fn.text || "";
+    var L = $("faraNetLinkuri"); L.textContent = "";
+    fn.rapoarte.forEach(function(r, i){ var a = document.createElement("a"); a.className = "buton" + (i ? "" : " principal"); a.href = r[1]; a.target = "_blank"; a.rel = "noopener"; a.textContent = r[0]; L.appendChild(a); });
+  }
   $("acord").classList.toggle("ascuns", d.inscris);
   $("meniu").classList.toggle("ascuns", !d.inscris);
   var nv = d.nota_noua;
@@ -744,6 +801,9 @@ function arata(d){
   $("automatEticheta2").textContent = d.automat_eticheta; $("automatRand2").textContent = d.automat_rand;
   document.querySelectorAll("[data-rand]").forEach(function(e){ e.textContent = (d.randuri || {})[e.getAttribute("data-rand")] || ""; });
   if(!d.inscris){
+    $("pauzaCard").classList.toggle("ascuns", !d.pauza);
+    $("pauzaText").textContent = d.pauza_text || "";
+    if(d.pauza && !$("feluri").childElementCount){ $("nume").value = d.nume || ""; $("email").value = d.email || ""; $("automat").checked = !!d.automat; }
     $("titluInvitatie").textContent = d.intrebare || "";
     $("textInvitatie").textContent = d.invitatie || "";
     avantaje(d.avantaje);
@@ -857,6 +917,8 @@ $("codLegare").addEventListener("click", function(){
   });
 });
 $("iesire").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
+$("pauza").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "pauza"); fa(q); });
+$("iesirePauza").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
 $("iesireVeche").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
 $("notaAccept").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "accepta-nota"); fa(q); });
 citeste();
@@ -918,6 +980,8 @@ TEXTE_PAGINA = {
 		N_("Nota întreagă"),
 		N_("Ieși din program și șterge datele"),
 		N_("Ieși și șterge datele"),
+		N_("Pune pe pauză (păstrezi înscrierea)"),
+		N_("Pune pe pauză"),
 		N_("Ești beta tester"),
 		N_("Numele tău pe forum"),
 		N_("Trimite acum"),

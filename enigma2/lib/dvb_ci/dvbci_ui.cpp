@@ -1,3 +1,4 @@
+/* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/dvb_ci/dvbci_ui.h>
 #include <lib/dvb_ci/dvbci.h>
 
@@ -19,6 +20,8 @@ eDVBCI_UI::eDVBCI_UI()
 {
 	ASSERT(!instance);
 	instance = this;
+	for (int i = 0; i < MAX_SLOTS; i++)
+		m_decoding[i] = 0;
 }
 
 eDVBCI_UI *eDVBCI_UI::getInstance()
@@ -74,6 +77,27 @@ int eDVBCI_UI::getMMIState(int slot)
 int eDVBCI_UI::setClockRate(int slot, int rate)
 {
 	return eDVBCIInterfaces::getInstance()->setCIClockRate(slot, rate);
+}
+
+int eDVBCI_UI::setEnabled(int slot, bool enabled)
+{
+	return eDVBCIInterfaces::getInstance()->setCIEnabled(slot, enabled);
+}
+
+void eDVBCI_UI::setDecodingState(int slot, int state)
+{
+	if (slot >= 0 && slot < MAX_SLOTS)
+		m_decoding[slot] = state;
+}
+
+int eDVBCI_UI::getDecodingState(int slot)
+{
+	return (slot >= 0 && slot < MAX_SLOTS) ? m_decoding[slot] : 0;
+}
+
+int eDVBCI_UI::getCIPlusState(int slot)
+{
+	return eDVBCIInterfaces::getInstance()->getCIPlusState(slot);
 }
 
 //FIXME: correct "run/startlevel"

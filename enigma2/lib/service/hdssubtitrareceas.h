@@ -18,6 +18,8 @@
  * - a reading that does not come (no decoder yet, after a zap) moves the clock by the time that passed;
  * - paused ("Reclama", the advertisement key): the readings go on, the clock does not move; it goes on from the same
  *   place when the pause ends.
+ * - PAUSE of the playback (a recording, the timeshift buffer; tine): no reading at all, the clock does not move and
+ *   the time of the pause is not counted at the next reading.
  *
  * THE LINES: sorted by their start (ms in the time of the file). The time of the file now is
  * (clock - delay) / speed: speed 23.976 / 25 = 0.95904 for a subtitle made on a 23.976 fps copy of a film that the
@@ -120,6 +122,14 @@ public:
 			m_last_source = source;
 		}
 		m_have_last = have_value;
+	}
+
+	/* the playback is paused (PAUSE on a recording or in timeshift): no reading, the clock does not move, and the time
+	   of the pause is not counted at the next reading (the PTS before it stays the last one) */
+	void tine(int64_t wall_ms)
+	{
+		if (m_valid)
+			m_last_wall = wall_ms;
 	}
 
 	bool valid() const { return m_valid; }

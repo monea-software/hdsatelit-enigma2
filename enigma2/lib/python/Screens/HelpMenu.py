@@ -60,3 +60,34 @@ class HelpableScreen:
 		if args:
 			(actionmap, context, action) = args
 			actionmap.action(context, action)
+
+
+def showDocumentation(session, filename, translateFunc, callback=None):
+	"""Documentatia XML a unui plugin din alte imagini (<help caption="..."><page title="..."><text value="..."/></page>):
+	aici un ecran de text cu titlul si paginile una dupa alta. Un fisier care nu se poate citi lasa totul cum era."""
+	import xml.etree.ElementTree as ET
+	tradu = translateFunc if callable(translateFunc) else (lambda t: t)
+	try:
+		radacina = ET.parse(filename).getroot()
+	except Exception as e:
+		print("[HelpMenu] documentatia %s: %r" % (filename, e))
+		return
+	bucati = []
+	for pagina in radacina.iter("page"):
+		# ca in OE-Alliance: titlul paginii din heading sau title; randurile noi scrise „/n” in valori (MPHelp, AutoTimer)
+		titlu_pagina = pagina.get("heading") or pagina.get("title")
+		if titlu_pagina:
+			bucati.append(tradu(titlu_pagina).replace("/n", "\n"))
+		for el in pagina.iter():
+			if el is pagina:
+				continue
+			for text in (el.get("value"), el.get("text"), el.text):
+				if text and text.strip():
+					bucati.append(tradu(text.strip()).replace("/n", "\n"))
+		bucati.append("")
+	from Screens.TextBox import TextBox
+	titlu = tradu(radacina.get("caption", "")) if radacina.get("caption") else ""
+	if callable(callback):
+		session.openWithCallback(callback, TextBox, "\n".join(bucati).strip(), title=titlu)
+	else:
+		session.open(TextBox, "\n".join(bucati).strip(), title=titlu)

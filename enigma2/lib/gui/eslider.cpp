@@ -14,8 +14,14 @@ void eSlider::setForegroundGradientEnabled(int enabled)
 eSlider::eSlider(eWidget *parent)
 	:eWidget(parent), m_have_border_color(false), m_have_foreground_color(false), m_have_start(false),
 	m_min(0), m_max(100), m_value(0), m_start(0), m_orientation(orHorizontal),
-	m_orientation_swapped(0), m_border_width(0), m_gradient_vertical(0)
+	m_orientation_swapped(0), m_border_width(0), m_gradient_vertical(0), m_is_scrollbar(false)
 {
+}
+
+void eSlider::setBackgroundPixmap(ePtr<gPixmap> &pixmap)
+{
+	m_background_pixmap = pixmap;
+	invalidate();
 }
 
 void eSlider::setPixmap(ePtr<gPixmap> &pixmap)
@@ -76,12 +82,26 @@ int eSlider::event(int event, void *data, void *data2)
 		getStyle(style);
 			/* paint background */
 		eWidget::event(evtPaint, data, data2);
+		if (m_background_pixmap)
+			((gPainter*)data2)->blit(m_background_pixmap, ePoint(0, 0), eRect(), gPainter::BT_ALPHATEST);
 
 		gPainter &painter = *(gPainter*)data2;
 
 		style->setStyle(painter, eWindowStyle::styleLabel); // TODO - own style
+			/* HDSatelit 0.7.4: the Scrollbar and Slider colours of the window style, when the skin gives them and the bar has
+			   no colour of its own */
+		gRGB style_fg, style_bg, style_border;
+		int style_set = 0;
+		style->sliderColors(m_is_scrollbar, style_fg, style_bg, style_border, style_set);
+		if ((style_set & 2) && !hasBackgroundColor() && !m_background_pixmap)
+		{
+			painter.setBackgroundColor(style_bg);
+			painter.clear();
+		}
 		if (m_have_foreground_color)
 			painter.setForegroundColor(m_foreground_color);
+		else if (style_set & 1)
+			painter.setForegroundColor(style_fg);
 		
 		if (!m_pixmap && ((m_gradient_enabled && !m_gradient.empty()) || getCornerRadius()))
 		{
@@ -104,6 +124,8 @@ int eSlider::event(int event, void *data, void *data2)
 // border
 		if (m_have_border_color)
 			painter.setForegroundColor(m_border_color);
+		else if (style_set & 4)
+			painter.setForegroundColor(style_border);
 		painter.fill(eRect(0, 0, s.width(), m_border_width));
 		painter.fill(eRect(0, m_border_width, m_border_width, s.height()-m_border_width));
 		painter.fill(eRect(m_border_width, s.height()-m_border_width, s.width()-m_border_width, m_border_width));

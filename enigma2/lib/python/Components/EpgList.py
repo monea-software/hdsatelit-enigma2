@@ -20,6 +20,16 @@ try:
 except Exception:
 	_E = None
 
+# the old OE-Alliance names of two guide settings, read by plugins (EPGSearch: the event font size and the rows per
+# page of its list); the guide of the image does not use them
+from Components.config import config, ConfigSubsection, ConfigSelectionNumber
+if not hasattr(config, "epgselection"):
+	config.epgselection = ConfigSubsection()
+if not hasattr(config.epgselection, "enhanced_eventfs"):
+	config.epgselection.enhanced_eventfs = ConfigSelectionNumber(default=0, stepwidth=1, min=-8, max=10, wraparound=True)
+if not hasattr(config.epgselection, "enhanced_itemsperpage"):
+	config.epgselection.enhanced_itemsperpage = ConfigSelectionNumber(default=16, stepwidth=1, min=0, max=40, wraparound=True)
+
 # The rows are drawn here; the skin can set their look (defaults = the 2011 look):
 #   <alias name="EPGList0"/>: font of the events and row height (HDSatelit name); on the widget, as other skins write it,
 #   EventFontSingle= (one channel and similar events) and EventFontMulti= (all channels) replace that font
@@ -52,6 +62,12 @@ class Rect:
 
 	def width(self):
 		return self.__width
+
+	# the OE-Alliance names (plugins that draw their own rows, EPGSearch: r.x, r.w)
+	x = property(left)
+	y = property(top)
+	w = property(width)
+	h = property(height)
 
 class EPGList(HTMLComponent, GUIComponent):
 	def __init__(self, type=EPG_TYPE_SINGLE, selChangedCB=None, timer = None):
@@ -88,6 +104,15 @@ class EPGList(HTMLComponent, GUIComponent):
 		self.clock_pre_pixmap = clock('epgclock_pre')[0]
 		self.clock_post_pixmap = clock('epgclock_post')[0]
 		self.clock_prepost_pixmap = clock('epgclock_prepost')[0]
+		# the OE-Alliance list of the clocks, indexed by getPixmapForEntry (0 add, 1 pre, 2 the whole event, 3 pre and
+		# post, 4 post; then the same for zap and zap+record timers, disabled, fallback): plugin rows (EPGSearchList)
+		cinci = [self.clock_add_pixmap, self.clock_pre_pixmap, self.clock_pixmap, self.clock_prepost_pixmap, self.clock_post_pixmap]
+		self.clocks = cinci * 3 + [self.clock_pixmap, self.clock_pixmap]
+		self.selclocks = self.clocks
+		self.wasEntryAutoTimer = False
+		self.wasEntryIceTV = False
+		# the OE-Alliance name of the event font size (plugins compute their columns from it)
+		self.eventFontSizeSingle = getattr(font, "pointSize", 22) or 22
 		# the clock box (x from the start of its column) and the space it takes from the text
 		(self.clock_x, self.clock_y, self.clock_w, self.clock_h), skinned = getParameterFromSkin("EPGListIcon", (0, 0, 21, 21))
 		self.clock_skinned = skinned
@@ -229,6 +254,10 @@ class EPGList(HTMLComponent, GUIComponent):
 			self.service_rect = Rect(width//20*7, 0, width//20*13, height)
 
 	def getClockPixmap(self, refstr, beginTime, duration, eventId):
+		return self.clocks[self.hdsClockType(refstr, beginTime, duration, eventId)]
+
+	def hdsClockType(self, refstr, beginTime, duration, eventId):
+		"""the clock of a row with a timer, as an index in self.clocks (the OE-Alliance numbers)"""
 		pre_clock = 1
 		post_clock = 2
 		clock_type = 0
@@ -236,7 +265,7 @@ class EPGList(HTMLComponent, GUIComponent):
 		for x in self.timer.timer_list:
 			if x.service_ref.ref.toString() == refstr:
 				if x.eit == eventId:
-					return self.clock_pixmap
+					return 2
 				beg = x.begin
 				end = x.end
 				if beginTime > beg and beginTime < end and endTime > end:
@@ -244,25 +273,33 @@ class EPGList(HTMLComponent, GUIComponent):
 				elif beginTime < beg and endTime > beg and endTime < end:
 					clock_type |= post_clock
 		if clock_type == 0:
-			return self.clock_add_pixmap
+			return 0
 		elif clock_type == pre_clock:
-			return self.clock_pre_pixmap
+			return 1
 		elif clock_type == post_clock:
-			return self.clock_post_pixmap
+			return 4
 		else:
-			return self.clock_prepost_pixmap
+			return 3
 		
+	def hdsPixmapForEntry(self, service, eventId, beginTime, duration):
+		"""(clock pixmap or None, rec) for the rows of this list"""
+		index = self.getPixmapForEntry(service, eventId, beginTime, duration)
+		if index is None:
+			return (None, False)
+		return (self.clocks[index], True)
+
 	def getPixmapForEntry(self, service, eventId, beginTime, duration):
-		rec=beginTime and (self.timer.isInTimer(eventId, beginTime, duration, service))
-		if rec:
-			clock_pic = self.getClockPixmap(service, beginTime, duration, eventId)
-		else:
-			clock_pic = None
-		return (clock_pic, rec)
+		"""as in OE-Alliance: the index of the clock in self.clocks, None without a timer"""
+		self.wasEntryAutoTimer = False
+		self.wasEntryIceTV = False
+		rec = beginTime and (self.timer.isInTimer(eventId, beginTime, duration, service))
+		if not rec:
+			return None
+		return self.hdsClockType(service, beginTime, duration, eventId)
 
 	def buildSingleEntry(self, service, eventId, beginTime, duration, EventName):
 		EventName = self.hdsTitle(EventName)
-		(clock_pic, rec) = self.getPixmapForEntry(service, eventId, beginTime, duration)
+		(clock_pic, rec) = self.hdsPixmapForEntry(service, eventId, beginTime, duration)
 		r1=self.weekday_rect
 		r2=self.datetime_rect
 		r3=self.descr_rect
@@ -291,7 +328,7 @@ class EPGList(HTMLComponent, GUIComponent):
 		return (self.clock_type, rect.left(), rect.top(), 21, 21, clock_pic), rect.left() + 25, rect.width()
 
 	def buildSimilarEntry(self, service, eventId, beginTime, service_name, duration):
-		(clock_pic, rec) = self.getPixmapForEntry(service, eventId, beginTime, duration)
+		(clock_pic, rec) = self.hdsPixmapForEntry(service, eventId, beginTime, duration)
 		r1=self.weekday_rect
 		r2=self.datetime_rect
 		r3=self.service_rect
@@ -313,7 +350,7 @@ class EPGList(HTMLComponent, GUIComponent):
 
 	def buildMultiEntry(self, changecount, service, eventId, beginTime, duration, EventName, nowTime, service_name):
 		EventName = self.hdsTitle(EventName)
-		(clock_pic, rec) = self.getPixmapForEntry(service, eventId, beginTime, duration)
+		(clock_pic, rec) = self.hdsPixmapForEntry(service, eventId, beginTime, duration)
 		r1=self.service_rect
 		r2=self.progress_rect
 		r3=self.descr_rect

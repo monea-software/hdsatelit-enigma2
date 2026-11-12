@@ -1,8 +1,10 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 from .MenuList import MenuList
 from Tools.Directories import SCOPE_CURRENT_SKIN, resolveFilename
-from enigma import RT_HALIGN_LEFT, RT_VALIGN_CENTER, eListboxPythonMultiContent
+from enigma import RT_HALIGN_LEFT, RT_HALIGN_CENTER, RT_VALIGN_CENTER, eListboxPythonMultiContent
+from .MultiContent import MultiContentEntryText
 from skin import getListFont, getParameterFromSkin, getListPixmap, centerPixmap
+from .SkinIcon import nativ, pictograma, fontPictograme
 
 # The rows are drawn here; the skin can set their look (names as used by other enigma2 skins, defaults = the 2011 look):
 #   <alias name="ChoiceList"/>: font and row height
@@ -10,6 +12,10 @@ from skin import getListFont, getParameterFromSkin, getListPixmap, centerPixmap
 #   of the text next to a key, of the key and of the text of a row without key
 #   <hdsparameters>: ChoicelistKeyImage ("liste/tasta_%s.png", %s = 1..9, 0, red, green, yellow, blue, menu,
 #   info, text) and ChoicelistDashImage (a thin line drawn in place of the row of dashes)
+#   OE-Alliance: ChoiceListNative=1 and ChoiceListIcon_<key> = code[,color[,selected color]] draw the key as a glyph of
+#   the font <alias name="ChoiceListIcons"/> (enigma2icons by default) in the ChoicelistIcon box (ChoicelistIconExpanded,
+#   ChoicelistIconVerticalline for those two keys); the digits are then written with the list font. Without these
+#   parameters (our skins) the rows are drawn exactly as before.
 # HDSatelit: with a larger text size (config.osd.fontscale 105-130, Screens/FontSetup.py) the row grows like its font:
 # the y and the height of every rectangle of a row and the row height from the skin (itemHeight) are multiplied by the
 # percent (getListFont already grows the font and the alias row height, but itemHeight in the skin set it back, and at
@@ -35,6 +41,18 @@ def _fitted(text, width, percent):
 	return text
 
 
+def _glifaNativa(key):
+	"""(text, font, color, selected color) of a key drawn from the font (OE-Alliance, ChoiceListNative); None otherwise"""
+	if not key or key in ("dummy", "none") or not nativ("ChoiceListNative"):
+		return None
+	if len(key) == 1 and key in "0123456789":
+		return key, 0, None, None
+	icon = pictograma("ChoiceList", key, "ChoiceListNative")
+	if icon is None:
+		return None
+	return icon.text, 1, icon.color, icon.selectedColor
+
+
 def ChoiceEntryComponent(key = "", text = ["--"]):
 	res = [ text ]
 	percent = _percent()
@@ -48,14 +66,24 @@ def ChoiceEntryComponent(key = "", text = ["--"]):
 		else:
 			res.append((eListboxPythonMultiContent.TYPE_TEXT, rect[0], rect[1], rect[2], rect[3], 0, RT_HALIGN_LEFT | (skinned and RT_VALIGN_CENTER or 0), "-"*200))
 	else:
-		png, from_skin = getListPixmap("ChoicelistKeyImage", key, resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/buttons/key_" + key + ".png"))
-		if png is not None:
+		glyph = _glifaNativa(key)
+		if glyph is not None:
+			png, from_skin = None, False
+		else:
+			png, from_skin = getListPixmap("ChoicelistKeyImage", key, resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/buttons/key_" + key + ".png"))
+		if png is not None or glyph is not None:
 			rect, skinned = getParameterFromSkin("ChoicelistName", (45, 0, 800, 25))
 		else:
 			rect, skinned = getParameterFromSkin("ChoicelistNameSingle", (45, 0, 800, 25))
 		rect = _grown(rect, percent)
 		res.append((eListboxPythonMultiContent.TYPE_TEXT, rect[0], rect[1], rect[2], rect[3], 0, RT_HALIGN_LEFT | (skinned and RT_VALIGN_CENTER or 0), _fitted(text[0], rect[2], percent)))
-		if png is not None:
+		if glyph is not None:
+			icon = getParameterFromSkin("ChoicelistIcon", (5, 0, 35, 25))[0]
+			if key in ("expanded", "verticalline"):
+				icon = getParameterFromSkin("ChoicelistIcon" + key.capitalize(), icon)[0]
+			icon = _grown(icon, percent)
+			res.append(MultiContentEntryText(pos = (icon[0], icon[1]), size = (icon[2], icon[3]), font = glyph[1], flags = RT_HALIGN_CENTER | RT_VALIGN_CENTER, text = glyph[0], color = glyph[2], color_sel = glyph[3]))
+		elif png is not None:
 			icon, skinned = getParameterFromSkin("ChoicelistIcon", (5, 0, 35, 25))
 			icon = _grown(icon, percent)
 			if skinned:
@@ -64,11 +92,23 @@ def ChoiceEntryComponent(key = "", text = ["--"]):
 
 	return res
 
+def _marimeAlias(alias, implicit):
+	"""the size of <alias name=`alias`> of the skin, unscaled (fontPictograme scales it), else `implicit`"""
+	try:
+		from skin import fonts
+		return int(fonts[alias][1]) or implicit
+	except Exception:
+		return implicit
+
+
 class ChoiceList(MenuList):
 	def __init__(self, list, selection = 0, enableWrapAround=False):
 		MenuList.__init__(self, list, enableWrapAround, eListboxPythonMultiContent)
 		font, height = getListFont("ChoiceList", ("Regular", 20, 25))
 		self.l.setFont(0, font)
+		if nativ("ChoiceListNative"):
+			# OE-Alliance: the glyphs of the keys (ChoiceEntryComponent), at the size of the list font by default
+			self.l.setFont(1, fontPictograme("ChoiceListIcons", _marimeAlias("ChoiceList", 20)))
 		self.l.setItemHeight(height)
 		self.selection = selection
 

@@ -24,6 +24,7 @@ driverincludedir = $(pkgincludedir)/lib/driver
 driverinclude_HEADERS = \
 	avswitch.h \
 	etimezone.h \
+	hdsconsolacitire.h \
 	input_fake.h \
 	misc_options.h \
 	rc.h \

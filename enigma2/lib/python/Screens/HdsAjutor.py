@@ -232,6 +232,10 @@ class _Baza(Screen):
 	def T(self, cheie):
 		return A.text(cheie, self.limba)
 
+	def TF(self, cheie, valori):
+		"""textul formatat cu valorile, fara cadere la un index de ajutor lipsa sau vechi (A.text_cu)"""
+		return A.text_cu(cheie, self.limba, valori)
+
 	def _latimeText(self, text, font):
 		try:
 			w = self["masura"]
@@ -300,7 +304,7 @@ class _Baza(Screen):
 		if not text:
 			return
 		pagini = A.cauta(text, self.limba)
-		self.session.openWithCallback(self.dupaCopil, HdsAjutorLista, pagini, self.T("cauta_rezultate") % text,
+		self.session.openWithCallback(self.dupaCopil, HdsAjutorLista, pagini, self.TF("cauta_rezultate", text),
 			cautare=True, ecran=self.ecran)
 
 
@@ -380,8 +384,8 @@ class HdsAjutorLista(_Baza):
 		if not A.instalat():
 			return A.text("lipsa", self.limba)
 		if self.cautare:
-			return self.T("gasite_n") % len(self.pagini) if self.pagini else self.T("nimic_gasit")
-		n = self.T("pagini_n") % len(self.pagini)
+			return self.TF("gasite_n", len(self.pagini)) if self.pagini else self.T("nimic_gasit")
+		n = self.TF("pagini_n", len(self.pagini))
 		return u"%s · %s" % (self.subtitlu, n) if self.subtitlu else n
 
 	def construieste(self):
@@ -447,7 +451,7 @@ class HdsAjutorCuprins(HdsAjutorLista):
 		self.setTitle(self.T("ajutor"))
 
 	def randuri(self):
-		return [(c["i"], c["cod"], c["titlu"], self.T("pagini_n") % len(c["pagini"])) for c in A.capitole(self.limba)]
+		return [(c["i"], c["cod"], c["titlu"], self.TF("pagini_n", len(c["pagini"]))) for c in A.capitole(self.limba)]
 
 	def stare(self):
 		if not A.instalat():
@@ -456,7 +460,7 @@ class HdsAjutorCuprins(HdsAjutorLista):
 			return self.nota
 		if A.in_engleza(self.limba):
 			return self.T("in_engleza")
-		return self.T("versiune") % A.versiune() if A.versiune() else ""
+		return self.TF("versiune", A.versiune()) if A.versiune() else ""
 
 	def ok(self):
 		if not A.instalat():
@@ -468,7 +472,7 @@ class HdsAjutorCuprins(HdsAjutorLista):
 			# titlul ecranului scurt („Capitolul 03”): numele capitolului (pana la ~48 de semne) nu incape in bara de sus
 			# a skinului, deci sta in starea de sub lista
 			self.session.openWithCallback(self.dupaCopil, HdsAjutorLista, cap[i]["pagini"],
-				self.T("capitol") % cap[i]["cod"], ecran=self.ecran, subtitlu=cap[i]["titlu"])
+				self.TF("capitol", cap[i]["cod"]), ecran=self.ecran, subtitlu=cap[i]["titlu"])
 
 
 class HdsAjutorPagina(_Baza):
@@ -790,7 +794,7 @@ class HdsAjutorPagina(_Baza):
 				i = 0
 			total = (len(self._randuri) + n - 1) // n
 			if total > 1:
-				bucati.append(self.T("pagina_din") % (i // n + 1, total))
+				bucati.append(self.TF("pagina_din", (i // n + 1, total)))
 		if bloc and bloc[2] >= 0:
 			bucati.append(self.T("indemn_legatura"))
 		else:
@@ -799,7 +803,7 @@ class HdsAjutorPagina(_Baza):
 		if A.in_engleza(self.limba):
 			self["online"].setText(self.T("in_engleza"))
 		else:
-			self["online"].setText(self.T("online") % A.adresa_online(self.i, self.limba) if A.instalat() else "")
+			self["online"].setText(self.TF("online", A.adresa_online(self.i, self.limba)) if A.instalat() else "")
 
 	# ------------------------------------------------------------ taste
 

@@ -258,6 +258,13 @@ class InformationBase(Screen):
 			lista.l.setFont(2, self.fontValoare)
 			lista.l.setItemHeight(self.inaltime)
 			lista.selectionEnabled(False)
+			# pagina cu pagina, nu rand cu rand: MenuList pune derularea aleasa in setari (implicit rand cu rand, ultima
+			# pagina lipita jos), iar atunci paginile ecranului nu mai cad pe granitele socotite de pe_pagini si titlul
+			# repetat al sectiunii iese in mijlocul ecranului (12.11.2026, en/de/ar)
+			try:
+				lista.instance.setScrollMargin(0)
+			except Exception:
+				pass
 			try:
 				self.latimi[i] = lista.instance.size().width()
 			except Exception:
@@ -543,6 +550,14 @@ class HdsAbout(InformationBase):
 		except Exception as e:
 			print("[Information] imaginea de baza: %r" % (e,))
 		l.append(rand(_("Nucleu Enigma2"), about.getEnigmaVersionString()))
+		# descifrarea in software a canalelor CSA-ALT (ICAM): libdvbcsa si modulul de acces legat cu protocolul 3
+		# (Components/HdsSoftCsa.py); o eroare aici nu goleste ecranul
+		try:
+			from Components import HdsSoftCsa
+			eticheta = _("Descifrare software (CSA-ALT)")
+			l.append(" • %s%s" % ((eticheta + ":").ljust(max(25, len(eticheta) + 3)), HdsSoftCsa.textStare(_)))
+		except Exception as e:
+			print("[Information] SoftCSA: %r" % (e,))
 		l.append(rand(_("Nucleu Linux"), about.getKernelVersionString()))
 		l.append(rand(_("Timp funcționare"), about.getUptimeString()))
 		# baza de pornire a canalelor (Components/HdsBazaPornire.py): versiunea venita cu imaginea si, cand e mai noua,
@@ -607,12 +622,49 @@ class HdsAbout(InformationBase):
 		# niciun nume nu apare. O eroare aici nu goleste ecranul. Sub el, legenda albastrului, numai cand e macar un
 		# tester care si-a trimis propriul receptor la HD Satelit, ca pe site; tabelul (_albastre) le
 		# deseneaza colorate, iar populate() ramane numai text (pagina web il cheama pe un obiect fals).
+		# Inainte, sectiunea „Mulțumiri” cu producatorii care ne ajuta (data/multumiri-producatori.json,
+		# HdsMultumiri.producatori): un rand pe firma, eticheta = firma, valoarea = motivele; randul testerilor ramane
+		# ultimul, sub subtitlul lui. Fara lista producatorilor, ecranul ramane ca inainte.
+		# Sub producatori, codul deschis luat de la altii (HdsMultumiri.surse: proiectul si ce am luat, citat si in fisiere);
+		# o eroare la producatori nu scoate sursele, si invers.
+		producatori = []
+		surse = []
+		try:
+			from Components import HdsMultumiri
+			producatori = HdsMultumiri.producatori(traducere=_)
+		except Exception as e:
+			producatori = []
+			print("[Information] producatorii: %r" % (e,))
+		try:
+			from Components import HdsMultumiri
+			surse = HdsMultumiri.surse(traducere=_)
+		except Exception as e:
+			surse = []
+			print("[Information] sursele: %r" % (e,))
+		try:
+			if producatori or surse:
+				titlu_m, sub_producatori, sub_testeri = HdsMultumiri.titluri(traducere=_)
+				l.append("")
+				l.append(titlu_m + ":")
+				if producatori:
+					l.append(" " + sub_producatori)
+					for firma, motive in producatori:
+						l.append(rand(firma, motive))
+				if surse:
+					l.append(" " + HdsMultumiri.subtitluSurse(traducere=_))
+					for nume, ce in surse:
+						l.append(rand(nume, ce))
+		except Exception as e:
+			producatori = surse = []
+			print("[Information] multumirile: %r" % (e,))
 		try:
 			from Components import HdsMultumiri
 			HdsMultumiri.porneste()
 			nume_multumiri, trimisi = HdsMultumiri.lista()
 			text_multumiri = HdsMultumiri.text(nume_multumiri, traducere=_)
 			if text_multumiri:
+				if producatori or surse:
+					l.append(" " + sub_testeri)
 				l.append("")
 				l.append(" • " + text_multumiri)
 				legenda = HdsMultumiri.legenda(trimisi, traducere=_)

@@ -12,6 +12,7 @@ from Components import HdsDecodare
 from enigma import eListboxPythonMultiContent, eListbox, iServiceInformation, \
 	RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_CENTER, eServiceReference, eServiceCenter
 from skin import getListFont, hasListFont, getParameterFromSkin, listRect
+from Components.SkinIcon import nativ, pictograma, fontPictograme
 
 # The rows are drawn here; the skin can set their look (HDSatelit names, defaults = the 2011 look), for each
 # kind of list (Original, Compact, Minimal; the compact list with description uses the Compact fonts):
@@ -26,6 +27,12 @@ from skin import getListFont, hasListFont, getParameterFromSkin, listRect
 # HDSatelit: inregistrarile care asteapta decodarea ("Decodează mai târziu", Components/HdsDecodare.py) au dupa nume
 # semnul "[Se decodează mai târziu]", in orice fel de lista; numai cu programul de decodare pe receptor (altfel nu se
 # verifica nimic). Fisierele se verifica o data, la incarcarea listei.
+
+# OE-Alliance: a skin with MovieListNativeIcons=1 gets in front of the name the state of the recording as a glyph of
+# the font <alias name="MovieListIcons"/> (enigma2icons by default): MovieListIcon_unwatched, MovieListIcon_part_1_4 ..
+# part_4_4 = code[,color[,selected color]] (font 3 of the list; the name moves right by the glyph). Skins without
+# these parameters (ours) draw the rows exactly as before.
+_FONT_GLIFE = 3
 
 cutsParser = struct.Struct(">QI")
 
@@ -263,6 +270,21 @@ class MovieList(GUIComponent):
 			self.l.setFont(i, font)
 			if i == 0:
 				self.l.setItemHeight(height)
+				self.hdsMarimeGlifa = default[1]
+		if nativ("MovieListNativeIcons"):
+			self.l.setFont(_FONT_GLIFE, fontPictograme("MovieListIcons", self.hdsMarimeGlifa))
+
+	def hdsGlifaStare(self, serviceref, length):
+		"""SkinIcon of the state of a recording (OE-Alliance, MovieListNativeIcons): watched part or unwatched; else None.
+		The state is read once per file (until the list is loaded again)."""
+		if not nativ("MovieListNativeIcons"):
+			return None
+		cale = serviceref.getPath()
+		stari = self.__dict__.setdefault("hdsStari", {})
+		if cale not in stari:
+			parte = moviePlayState(cale + ".cuts", serviceref, length if isinstance(length, int) else 0)
+			stari[cale] = "part_%d_4" % min(4, parte // 25) if parte else "unwatched"
+		return pictograma("MovieList", stari[cale]) or (stari[cale] != "unwatched" and pictograma("MovieList", "unwatched") or None)
 
 	def applySkin(self, desktop, parent):
 		ret = GUIComponent.applySkin(self, desktop, parent)
@@ -289,6 +311,7 @@ class MovieList(GUIComponent):
 				len = 0 #dont recalc movielist to speedup loading the list
 			self.list[cur_idx] = (x[0], x[1], x[2], len) #update entry in list... so next time we don't need to recalc
 		
+		glyph = self.hdsGlifaStare(serviceref, len)
 		if len > 0:
 			len = "%d:%02d" % (len // 60, len % 60)
 		else:
@@ -311,6 +334,11 @@ class MovieList(GUIComponent):
 		def text(name, default, font, align, value):
 			rect, skinned = getParameterFromSkin(name, default)
 			x, y, w, h = listRect(rect, width)
+			if glyph is not None and name.endswith(("Name", "NameDate")):
+				# OE-Alliance: the glyph of the state in front of the name, as tall as the name
+				s = max(1, h)
+				res.append(glyph.entry((x, y), (s, h), _FONT_GLIFE))
+				x, w = x + s + 8, max(0, w - s - 8)
 			res.append(MultiContentEntryText(pos=(x, y), size=(w, h), font = font, flags = align | (skinned and RT_VALIGN_CENTER or 0), text = value))
 
 		if self.list_type == MovieList.LISTTYPE_ORIGINAL:
@@ -379,6 +407,7 @@ class MovieList(GUIComponent):
 		instance.selectionChanged.get().remove(self.selectionChanged)
 
 	def reload(self, root = None, filter_tags = None):
+		self.hdsStari = {}
 		if root is not None:
 			self.load(root, filter_tags)
 		else:

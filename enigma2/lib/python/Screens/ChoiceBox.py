@@ -7,9 +7,75 @@ from Components.Sources.StaticText import StaticText
 
 DIGIT_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
 
+# Pluginurile scrise pentru alte imagini tin ordinea unor liste in config.misc.pluginlist.<nume> (textul unei liste Python cu
+# textele randurilor): ChoiceBox(..., reorderConfig="fcBookmarksOrder") la semnele de carte ale managerului de fisiere
+# FileCommander, care si scrie singur valoarea (si o citeste cu eval). Setarile se fac aici, la incarcarea modulului, ca
+# in acele imagini; valoarea implicita e lista goala.
+ORDINI_LISTE = ("eventinfoOrder", "extensionOrder", "fcBookmarksOrder")
+
+def _setariOrdine():
+	try:
+		from Components.config import config, ConfigSubsection, ConfigText
+		# ConfigSubsection da KeyError (nu AttributeError) pentru un nume lipsa, deci se intreaba direct continutul
+		if "pluginlist" not in config.misc.content.items:
+			config.misc.pluginlist = ConfigSubsection()
+		for nume in ORDINI_LISTE:
+			if nume not in config.misc.pluginlist.content.items:
+				setattr(config.misc.pluginlist, nume, ConfigText(default = "[]"))
+	except Exception as e:
+		print("[ChoiceBox] ordinea listelor: %r" % (e,))
+
+_setariOrdine()
+
+def ordoneazaDupaSetare(lista, nume):
+	"""randurile (text, ...) in ordinea din config.misc.pluginlist.<nume>; cele care nu sunt acolo raman dupa ele, in
+	ordinea lor. Cu o setare lipsa sau stricata lista ramane cum e."""
+	try:
+		from ast import literal_eval
+		from Components.config import config
+		ordine = literal_eval(getattr(config.misc.pluginlist, nume).value)
+		if not isinstance(ordine, (list, tuple)):
+			return lista
+	except Exception:
+		return lista
+	loc = {}
+	for i, text in enumerate(ordine):
+		if isinstance(text, str):
+			loc.setdefault(text, i)
+	return sorted(lista, key = lambda x: loc.get(x[0] if isinstance(x, (list, tuple)) and x else x, len(loc)))
+
 class ChoiceBox(Screen):
-	def __init__(self, session, title = "", list = [], keys = None, selection = 0, skin_name = []):
+	def __init__(self, session, title = "", list = [], keys = None, selection = 0, skin_name = [], reorderConfig = "",
+			text = None, choiceList = None, buttonList = None, skinName = None, windowTitle = None, titlebartext = None,
+			allowCancel = None, allow_cancel = None, **altele):
+		# HDSatelit: numele din alte imagini ale acelorasi argumente (pluginurile scrise pentru ele): text = textul de sus,
+		# choiceList = list, buttonList = keys, skinName = skin_name, windowTitle/titlebartext = titlul ferestrei,
+		# allowCancel/allow_cancel=False = IESIRE nu inchide. Ordinea pozitionala ramane a noastra (title, list, keys...),
+		# aceeasi cu a clasei ChoiceBox de acolo.
+		if altele:
+			print("[ChoiceBox] argumente necunoscute, ignorate: %s" % ", ".join(sorted(altele)))
+		if choiceList is not None and not list:
+			list = choiceList
+		if buttonList is not None and keys is None:
+			keys = buttonList
+		if skinName and not skin_name:
+			skin_name = skinName
+		windowTitle = windowTitle or titlebartext
+		if text is not None:
+			if title and not windowTitle:
+				windowTitle = title
+			title = text
+		if skin_name is None:
+			skin_name = []
+		self.hdsTitluFereastra = windowTitle
+		self.hdsPoateIesi = not (allowCancel is False or allow_cancel is False)
+		if list is None:
+			list = []
+		if keys is not None and not isinstance(keys, type([])):
+			keys = [k for k in keys]
 		Screen.__init__(self, session)
+		if reorderConfig:
+			list = ordoneazaDupaSetare(list, reorderConfig)
 
 		if isinstance(skin_name, str):
 			skin_name = [skin_name]
@@ -18,6 +84,16 @@ class ChoiceBox(Screen):
 		self["text"] = Label(title)
 		# titlul ferestrei: cel pus de apelant cu setTitle dupa deschidere, altfel unul general (bara de sus nu ramane goala)
 		self.setTitle(_("Alege"))
+		if self.hdsTitluFereastra:
+			self.setTitle(self.hdsTitluFereastra)
+		# temele din alte imagini cer „windowtitle” (titlul, cand nu folosesc Title) si „description”; numai sub o tema straina
+		try:
+			from Components.HdsNumeStandard import adauga
+			from Components.Sources.StaticText import StaticText as _St
+			adauga(self, "windowtitle", lambda: _St(self.hdsTitluFereastra or ""))
+			adauga(self, "description", lambda: Label(""))
+		except Exception as e:
+			print("[ChoiceBox] nume standard: %r" % (e,))
 		self.list = []
 		self.summarylist = []
 		# only a list that gets no key at all from ChoiceBox (no keys from the caller, more rows than digits) lets
@@ -196,4 +272,6 @@ class ChoiceBox(Screen):
 		self["summary_list"].setText(summarytext)
 
 	def cancel(self):
+		if not getattr(self, "hdsPoateIesi", True):
+			return
 		self.close(None)

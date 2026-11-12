@@ -14,6 +14,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 MARIMI = ((400, 240), (480, 320), (800, 480))
 T, S, C, G, R = "#DCE9F4", "#A5B9CE", "#42DDE5", "#F2BD68", "#FF7D8D"
+# Temele mari (alese la „Tema afișajului”): literele cele mai mari care incap, citite de la cativa metri.
+TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea")
+PAS_MARE = 1.06          # distanta dintre randurile unui text mare, fata de corpul literei
+REF_MARE = 100           # corpul la care se masoara textele mari (restul marimilor se socotesc proportional)
+UNUL_DIN_DOUA = 0.85     # un rand ramane un rand cat timp e macar atat de mare cat varianta pe mai multe randuri
 _CADRE = OrderedDict()
 _TEMP = None
 _LIVE = None
@@ -119,6 +124,106 @@ def _scurt(text, f, latime):
 	return text.rstrip() + "…" if text else ""
 
 
+def _randuri(text, f, latime, linii):
+	"""Cuvintele pe randuri (fara sa taie un cuvant); None cand nu incap pe `linii` randuri."""
+	rez, rest = [], text.split()
+	while rest:
+		linie = rest.pop(0)
+		if not _incape(linie, f, latime):
+			return None
+		while rest and _incape(linie + " " + rest[0], f, latime):
+			linie += " " + rest.pop(0)
+		rez.append(linie)
+		if len(rez) > linii:
+			return None
+	return rez
+
+
+def _cerneala(randuri, f, marime):
+	"""(urcarea, coborarea, inaltimea) blocului: de la cea mai inalta litera a primului rand pana la cea mai joasa a
+	ultimului, cu PAS_MARE intre randuri."""
+	urca = max(-f.getbbox(l, anchor="ls")[1] for l in randuri)
+	coboara = max(f.getbbox(l, anchor="ls")[3] for l in randuri)
+	return urca, coboara, (len(randuri) - 1) * marime * PAS_MARE + urca + coboara
+
+
+@lru_cache(maxsize=96)
+def _asezareMare(text, familie, latime, inaltime, maxim, minim, linii):
+	"""(marimea, randurile): cel mai mare corp de litera cu care textul incape intreg in caseta, pe cel mult `linii`
+	randuri. Un singur rand e preferat cand e aproape la fel de mare. Daca nici la `minim` nu incape, ramane `minim`,
+	cu ultimul rand scurtat cu „…”.
+	Cautarea masoara cu un singur font, la REF_MARE, si socoteste proportional (latimea si inaltimea literelor cresc
+	odata cu corpul); fontul adevarat se incarca numai pentru marimea gasita, ca sa fie sigur ca incape. Altfel la un
+	zap se incarcau 15-22 de marimi de font pe firul interfetei (masurat pe PC: pana la 220 ms)."""
+	fam = _familie(text, familie)
+	ref = font(fam, REF_MARE)
+	cuvinte = text.split()
+	masurate = {}
+
+	def latRef(t):
+		if t not in masurate:
+			b = ref.getbbox(t)
+			masurate[t] = max(ref.getlength(t), b[2]) - min(0, b[0])
+		return masurate[t]
+
+	def estimat(marime, n):
+		k = float(marime) / REF_MARE
+		rez, rest = [], list(cuvinte)
+		while rest:
+			linie = rest.pop(0)
+			if latRef(linie) * k > latime:
+				return None
+			while rest and latRef(linie + " " + rest[0]) * k <= latime:
+				linie += " " + rest.pop(0)
+			rez.append(linie)
+			if len(rez) > n:
+				return None
+		urca, coboara, _t = _cerneala(rez, ref, REF_MARE)
+		return rez if (len(rez) - 1) * marime * PAS_MARE + (urca + coboara) * k <= inaltime else None
+
+	def potrivit(marime, n):
+		f = font(fam, marime)
+		r = _randuri(text, f, latime, n)
+		return r if r is not None and _cerneala(r, f, marime)[2] <= inaltime else None
+
+	cele_mai_mari = []
+	for n in range(1, max(1, linii) + 1):
+		jos, sus = int(minim), int(maxim)
+		if estimat(jos, n) is None:
+			continue
+		while jos < sus:
+			mijloc = (jos + sus + 1) // 2
+			if estimat(mijloc, n) is not None:
+				jos = mijloc
+			else:
+				sus = mijloc - 1
+		cele_mai_mari.append((jos, n))
+	if cele_mai_mari:
+		mare = max(m for m, _n in cele_mai_mari)
+		for marime, n in cele_mai_mari:
+			if marime < mare * UNUL_DIN_DOUA:
+				continue
+			# proba cu fontul adevarat (rotunjirile lui pot da cativa pixeli in plus)
+			for m in range(marime, max(int(minim), marime - 6) - 1, -1):
+				r = potrivit(m, n)
+				if r is not None:
+					return m, tuple(r)
+	# nici la minim: randurile care incap, ultimul scurtat
+	f = font(fam, int(minim))
+	cuvinte, rez = text.split(), []
+	while cuvinte and len(rez) < max(1, linii) - 1:
+		linie = cuvinte.pop(0)
+		while cuvinte and _incape(linie + " " + cuvinte[0], f, latime):
+			linie += " " + cuvinte.pop(0)
+		rez.append(_scurt(linie, f, latime))
+	if cuvinte:
+		rez.append(_scurt(" ".join(cuvinte), f, latime))
+	while len(rez) > 1 and _cerneala(rez, f, int(minim))[2] > inaltime:
+		ultim = rez.pop()
+		rez[-1] = _scurt(rez[-1] + " " + ultim, f, latime)
+	return int(minim), tuple(rez)
+
+
 class Compozitie:
 	def __init__(self, scena, marime, sablon):
 		self.s, self.marime = scena, marime
@@ -128,6 +233,9 @@ class Compozitie:
 		if scena.get("pagina") in ("canal", "schimbare_canal"):
 			if not scena.get("canal", {}).get("sigla"):
 				fond = self.e.get("background_no_picon", fond)
+		elif scena.get("pagina") == "tema_mare":
+			# fondul Orbita fara placa piconului: tot afisajul ramane pentru litere
+			fond = self.e.get("background_no_picon", fond)
 		self.im = poza(os.path.join(self.root, fond)).copy()
 		self.d = ImageDraw.Draw(self.im)
 		self.grupe = _grupe(self.e)
@@ -186,6 +294,44 @@ class Compozitie:
 			else:
 				self.d.text((px, py), linie, font=f, fill=color, anchor="ls")
 		return True
+
+	def mare(self, text, box, familie="condensed", maxim=None, minim=None, linii=1, color=T,
+			align="center", valign="center", principal=False):
+		"""Textul cu cel mai mare corp care incape in caseta (_asezareMare); intoarce caseta cernelii sau None."""
+		text = " ".join(str(text or "").split()).replace("\u2212", "-")
+		if not text:
+			return None
+		x, y, w, h = [int(round(v)) for v in box]
+		if w <= 0 or h <= 0:
+			return None
+		maxim = int(maxim or h)
+		minim = int(min(maxim, minim or max(8, h // 4)))
+		marime, randuri = _asezareMare(text, familie, w, h, maxim, minim, linii)
+		fam = _familie(text, familie)
+		f = font(fam, marime)
+		urca, _coboara, total = _cerneala(randuri, f, marime)
+		sus = y + (h - total) / 2.0
+		if valign == "top":
+			sus = y
+		elif valign == "bottom":
+			sus = y + h - total
+		ink = None
+		for i, linie in enumerate(randuri):
+			b = f.getbbox(linie, anchor="ls")
+			lat = b[2] - b[0]
+			stanga = x + (w - lat) / 2.0 if align == "center" else (x + w - lat if align in ("right", "end") else x)
+			px, py = int(round(stanga - b[0])), int(round(sus + urca + i * marime * PAS_MARE))
+			bb = self.d.textbbox((px, py), linie, font=f, anchor="ls")
+			self.audit.append(dict(text=linie, box=[x, y, w, h], ink=list(bb), principal=principal,
+				marime=marime, mare=True))
+			ink = bb if ink is None else (min(ink[0], bb[0]), min(ink[1], bb[1]), max(ink[2], bb[2]), max(ink[3], bb[3]))
+			if principal and ":" in linie:
+				for j, litera in enumerate(linie):
+					self.d.text((px + f.getlength(linie[:j]), py), litera, font=f,
+						fill=C if litera == ":" else color, anchor="ls")
+			else:
+				self.d.text((px, py), linie, font=f, fill=color, anchor="ls")
+		return ink
 
 	def grup(self, i, text, **kw):
 		if i >= len(self.grupe):
@@ -303,6 +449,8 @@ def _sablon(s, w):
 		return "05-volum-mut" if s.get("mut") else "05-volum"
 	if p == "actualizare":
 		return "09-actualizare-fara-procent" if s.get("progres") is None else "09-actualizare"
+	if p == "tema_mare":
+		return "03-canal"
 	return {"ceas": "01-ceas", "ceas_vreme": "02-ceas-vreme",
 		"vreme": "04-vreme", "asteptare": "08-asteptare", "personaj": "00-personaj",
 		"inregistrare": "07-inregistrare", "inregistrare_esuata": "07-inregistrare-esuata",
@@ -381,6 +529,68 @@ def _vreme(c):
 				for cuvant in text.split())
 			c.text(text, b, size, linii=2)
 		_weather_icon(c, z.get("cod"), locuri[2][i], z.get("pictograma"))
+
+
+def _temaMare(c):
+	"""Temele mari: numele canalului, piconul si ora cu literele cele mai mari care incap (citite de la 3 m pe
+	afisajele de 480x320). Fara bara si fara secunde: cadrul se schimba numai cu ora, canalul sau emisiunea."""
+	s, (w, h) = c.s, c.marime
+	m = {400: 12, 480: 16, 800: 32}[w]
+	# randul de sus ramane al semnelor MUT si REC (si al punctului din fondul Orbita): literele mari incep sub el,
+	# la fel cu semnele sau fara ele, ca pagina sa nu sara cand apare un semn
+	_stanga, _mut, fs, _m, sus_st = c._locStari()
+	sus = int(sus_st + fs * 1.5)
+	lat = w - 2 * m
+	jos = h - m
+	ch = s.get("canal") or {}
+	nume = ch.get("nume", "")
+	ceas = s.get("ceas") or "--:--"
+	tema = s.get("tema")
+
+	def ceasul(box):
+		return c.mare(ceas, box, "condensed", maxim=box[3] * 1.4, minim=box[3] // 3, principal=True)
+
+	if not nume and tema != "ora_urmatoarea":
+		# fara canal (filme, redare): numai ora, cat tot afisajul
+		ceasul((m, sus, lat, jos - sus))
+		return
+	if tema == "picon_mare":
+		hn, linii = int(h * .30), 1
+		fam = _familie(nume, "condensed")
+		if _asezareMare(nume, fam, lat, hn, int(hn * 1.2), int(h * .11), 1)[0] < h * .17:
+			# numele lung: doua randuri, piconul ceva mai mic
+			hn, linii = int(h * .40), 2
+		if ch.get("sigla") and c.imagine(ch["sigla"], (m, sus, lat, jos - hn - int(h * .03) - sus)):
+			c.mare(nume, (m, jos - hn, lat, hn), maxim=hn * 1.2, minim=int(h * .11), linii=linii)
+			return
+		# fara picon: numai numele, cat tot afisajul
+		c.mare(nume, (m, sus, lat, jos - sus), maxim=h * .42, minim=int(h * .11), linii=3)
+		return
+	if tema == "text_mare":
+		hc = int((jos - sus) * .50)
+		ceasul((m, sus, lat, hc))
+		c.mare(nume, (m, sus + hc + int(h * .04), lat, jos - sus - hc - int(h * .04)),
+			maxim=h * .40, minim=int(h * .11), linii=2)
+		return
+	# ora_urmatoarea: ora mare, apoi emisiunea urmatoare (ora ei si titlul), toate citite de departe
+	urm, e = ch.get("urmatoarea") or {}, ch.get("emisiune") or {}
+	if urm.get("titlu"):
+		eticheta = _("Urmează") + " " + (urm.get("interval") or "").split(" - ")[0]
+		titlu = urm["titlu"]
+	elif e.get("titlu"):
+		eticheta, titlu = (e.get("interval") or ""), e["titlu"]
+	else:
+		eticheta, titlu = "", nume or _("Program indisponibil")
+	eticheta = eticheta.strip()
+	g, ht = int(h * .02), int(h * .26)
+	he = int(h * .19) if eticheta else 0
+	hc = jos - sus - ht - he - (2 * g if eticheta else g)
+	ceasul((m, sus, lat, hc))
+	y = sus + hc + g
+	if eticheta:
+		c.mare(eticheta, (m, y, lat, he), maxim=he * 1.4, minim=int(h * .08), color=C)
+		y += he + g
+	c.mare(titlu, (m, y, lat, jos - y), maxim=h * .32, minim=int(h * .09), linii=2)
 
 
 def randeaza(scena, marime=(480, 320), audit=None):
@@ -513,6 +723,8 @@ def randeaza(scena, marime=(480, 320), audit=None):
 				text = " · ".join(t for t in ((_('Spre vest') if d == "vest" else _("Spre est") if d == "est" else ""),
 					s.get("valoare", ""), s.get("detaliu", "")) if t)
 			c.grup(1, text)
+	elif p == "tema_mare":
+		_temaMare(c)
 	elif p == "picon":
 		m = {400: 12, 480: 16, 800: 32}[w]
 		c.imagine(s.get("imagine"), (m, h * .18, w - 2 * m, h * .62))

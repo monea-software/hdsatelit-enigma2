@@ -43,6 +43,8 @@ class Navigation:
 		
 		NavigationInstance.instance = self
 		self.ServiceHandler = eServiceCenter.getInstance()
+		# pluginurile straine (M3UIPTV) citesc canalul cerut la ultimul zap, inainte ca un plugin sa-l inlocuiasca cu altul
+		self.originalPlayingServiceReference = None
 		
 		import Navigation as Nav
 		Nav.navcore = self
@@ -90,6 +92,7 @@ class Navigation:
 	def playService(self, ref, checkParentalControl = True, forceRestart = False, adjust = True):
 		# MerlinMusicPlayer cere adjust=False. Zap-ul nostru nu muta selectia listei de canale,
 		# argumentul este acceptat fara o actiune suplimentara asupra listei.
+		self.originalPlayingServiceReference = ref
 		m = _masura
 		oldref = self.currentlyPlayingServiceReference
 		if m is None or not ref or (oldref and ref == oldref and not forceRestart):
@@ -244,6 +247,7 @@ class Navigation:
 			self.pnav.stopService()
 		# evEnd le goleste numai daca rula un player; dupa un zap luat asincron de o extensie nu rula niciunul
 		self.currentlyPlayingServiceReference = None
+		self.originalPlayingServiceReference = None
 		self.currentlyPlayingService = None
 
 	def pause(self, p):

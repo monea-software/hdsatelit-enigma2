@@ -41,6 +41,8 @@
 # 0.7.1: cardul „Stream Relay” (GET da si stream_relay, din Components/HdsStreamRelay.stare): cate canale are lista,
 # de unde se adauga (lista de canale de pe televizor, pagina Canale), daca releul raspunde si de ce nu (modulul ales
 # oprit, niciun modul, modulul fara releu), cu legaturile spre pagina Canale si spre setarile Stream Relay.
+# 0.7.4 (11.11.2026): GET da si icam, randul din ecranul modulelor (Components/HdsSoftCsa.randModul) cand un modul
+# ruleaza si SoftCSA nu e gata cu el (OSCam-smod nu descifreaza ICAM): sta in cardul „Acum”; "" altfel.
 import re
 import time
 
@@ -125,13 +127,15 @@ def _comanda(H):
 	return {"in_curs": False, "ultima": _STARE["ultima"]}
 
 
-def stare(H=None, E=None, SR=None):
-	"""Pentru GET /api/acces-conditionat. `SR` e Components.HdsStreamRelay (probele dau unul fals)."""
+def stare(H=None, E=None, SR=None, SC=None):
+	"""Pentru GET /api/acces-conditionat. `SR` e Components.HdsStreamRelay, `SC` Components.HdsSoftCsa (probele dau
+	unele false)."""
 	H = _h(H)
 	E = _ecran(E)
 	sistem = H.SistemAcces()
 	feluri = []
 	decripteaza = False
+	ruleaza = False
 	for i, st in enumerate(H.feluri_de_aratat(sistem)):
 		feluri.append({
 			"fel": st.fel,
@@ -142,8 +146,23 @@ def stare(H=None, E=None, SR=None):
 			"fara_script": list(st.fara_script),
 		})
 		decripteaza = decripteaza or bool(st.ecm)
+		ruleaza = ruleaza or any(e.pids for e in st.emulatoare)
 	return {"result": True, "feluri": feluri, "sufix_gol": H.SUFIX_GOL, "decripteaza_acum": decripteaza,
-		"comanda": _comanda(H), "stream_relay": _streamRelay(H, SR)}
+		"comanda": _comanda(H), "stream_relay": _streamRelay(H, SR), "icam": _icam(ruleaza, SC)}
+
+
+def _icam(ruleaza, SC=None):
+	"""Randul ICAM (Components/HdsSoftCsa.randModul): modulul care ruleaza nu descifreaza canalele ICAM, sau "".
+	`SC` e Components.HdsSoftCsa (probele dau unul fals)."""
+	if not ruleaza:
+		return ""
+	try:
+		if SC is None:
+			from Components import HdsSoftCsa as SC
+		return SC.randModul(_t, True)
+	except Exception as eroare:
+		_jurnal("ICAM: %r" % (eroare,))
+		return ""
 
 
 def _streamRelay(H, SR=None):
@@ -390,6 +409,7 @@ PAGINA = """<!DOCTYPE html>
     <h2>Acum</h2>
     <p class="acum" id="decriptare"></p>
     <p class="nota" id="comanda"></p>
+    <p class="nota ascuns" id="icam"></p>
   </section>
   <div id="feluri"></div>
   <section class="card ascuns" id="releu">
@@ -491,7 +511,7 @@ function detaliuDosar(f, m){
   if(d && d.dosar){
     var cale = el(d.exista ? "a" : "span", "cale-dosar hds-derulant", d.dosar);
     cale.title = d.dosar;
-    // Exploratorul merge din browser, fara jetonul panoului; din casa fara parola.
+    // Exploratorul merge din browser, fara jetonul panoului; din casa fara autentificare.
     if(d.exista){ cale.href = "/fisiere?cale=" + encodeURIComponent(d.dosar); }
     loc.appendChild(cale);
     if(!d.exista){ loc.appendChild(el("div", "hds-derulant", "Dosarul nu există încă.")); }
@@ -560,6 +580,9 @@ function arata(d){
   $("decriptare").textContent = d.decripteaza_acum
     ? "Receptorul decriptează acum un canal."
     : "Receptorul nu decriptează acum niciun canal (canalul de acum nu este criptat sau niciun modul nu îl decriptează).";
+  // modulul pornit nu descifreaza canalele ICAM (textul vine tradus, "" cand nu e cazul)
+  $("icam").textContent = d.icam || "";
+  $("icam").classList.toggle("ascuns", !d.icam);
   var c = d.comanda || {};
   ocupat = !!c.in_curs;
   if(c.in_curs){ $("comanda").textContent = c.text || ""; }

@@ -69,3 +69,12 @@ if [ -z "$D" ]; then
 fi
 exit 0
 }
+
+# Amiko Viper 4K V20, V30, Protek 4K X2 (u57) si V40 (u571): rtl8188fu.ko (in imagine, pus din fabrica pe placa) cu
+# -mlong-calls, ca modulele nucleului (motivul in dinobot-kernel/linux-dinobot_%.bbappend: zona modulelor e la 32,25 MB
+# de capatul codului nucleului; modulul cade cu "relocation out of range" daca nimereste la inceputul ei). Modulul e
+# din afara nucleului, deci KCFLAGS (din kcflags.inc, dat lui make prin mediu) atinge numai modulul.
+KCFLAGS:append:u57 = " -mlong-calls"
+KCFLAGS:append:u571 = " -mlong-calls"
+PR:append:u57 = ".hds1"
+PR:append:u571 = ".hds1"

@@ -606,7 +606,9 @@ function arata(d){
   var v = $("verificare"); v.textContent = d.verificare_in_curs ? "Se verifică sursele..." : (d.verificare || "");
   v.style.whiteSpace = "pre-line";
   CAMPURI.forEach(function(c){
-    var s = $("st_" + c); if(s){ s.textContent = d.conturi[c] ? "(scrisă)" : "(nescrisă)"; s.classList.toggle("scrisa", !!d.conturi[c]); }
+    // cheia aplicatiei OpenSubtitles pusa de imagine apare scrisa si fara cheia omului (butonul de stergere numai la aceea)
+    var scrisa = !!d.conturi[c] || (c === "os_cheie_aplicatie" && !!d.conturi.os_cheie_aplicatie_imagine);
+    var s = $("st_" + c); if(s){ s.textContent = scrisa ? "(scrisă)" : "(nescrisă)"; s.classList.toggle("scrisa", scrisa); }
   });
   if(document.activeElement !== $("os_utilizator") && !$("os_utilizator").value){ $("os_utilizator").value = d.conturi.os_utilizator_text || ""; }
   // valoarea salvata nu vine niciodata in pagina: campul ramane gol, cu indemnul de schimbare cand e scrisa

@@ -74,7 +74,8 @@ def xmlAttributeValue(node, name):
 
 # parses an event, and gives out a (begin, end, name, duration, eit)-tuple.
 # begin and end will be corrected
-def parseEvent(ev, description = True):
+def parseEvent(ev, description = True, isZapTimer = False):
+	# isZapTimer: cerut de pluginurile straine (SeriesPlugin); la noi temporizatorul de comutare are aceleasi margini
 	if description:
 		name = ev.getEventName()
 		description = ev.getShortDescription()
@@ -114,6 +115,15 @@ def hdsTineMinte(ref):
 	except Exception as e:
 		print("[RecordTimer] HdsCanalTinut: %r" % (e,))
 
+def hdsInstalareInCurs():
+	# HDSatelit: True cat ruleaza opkg sau cat se instaleaza o actualizare (Components/HdsActualizari.instalare_in_curs)
+	try:
+		from Components.HdsActualizari import instalare_in_curs
+		return instalare_in_curs()
+	except Exception as e:
+		print("[RecordTimer] instalarea in curs: %r" % (e,))
+		return False
+
 def hdsDecodare():
 	# HDSatelit: inregistrarile "Decodează mai târziu" (Components/HdsDecodare.py); None daca modulul lipseste
 	try:
@@ -125,10 +135,33 @@ def hdsDecodare():
 class RecordTimerEntry(timer.TimerEntry, object):
 ######### the following static methods and members are only in use when the box is in (soft) standby
 	receiveRecordEvents = False
+	# HDSatelit: oprirea dupa inregistrare cat ruleaza opkg (vezi shutdown)
+	hdsCeasOprire = None
+	HDS_PAS_OPKG_MS = 2000
 
 	@staticmethod
 	def shutdown():
+		# HDSatelit (0.7.4, ca TryQuitMainloop din Screens/Standby.py): cat ruleaza opkg (o actualizare, o extensie, un
+		# modul lipsa instalat singur), oprirea l-ar omori la jumatate (eConsoleAppContainer ii trimite SIGKILL la
+		# iesire): status-ul opkg ramane vechi, fisierele raman amestecate si interfata nu mai porneste. Atunci nu se
+		# opreste acum: peste HDS_PAS_OPKG_MS se verifica din nou tot (inregistrarile, temporizatorul urmator, opkg),
+		# numai cat receptorul inca asteapta oprirea dupa inregistrare (receiveRecordEvents). Fara opkg, ca inainte.
+		if hdsInstalareInCurs():
+			print("RecordTimer.shutdown: opkg instaleaza acum, oprirea asteapta sfarsitul instalarii")
+			if RecordTimerEntry.hdsCeasOprire is None:
+				from enigma import eTimer
+				RecordTimerEntry.hdsCeasOprire = eTimer()
+				RecordTimerEntry.hdsCeasOprire.callback.append(RecordTimerEntry.hdsReverificaOprirea)
+			if not RecordTimerEntry.hdsCeasOprire.isActive():
+				RecordTimerEntry.hdsCeasOprire.start(RecordTimerEntry.HDS_PAS_OPKG_MS, True)
+			return
 		quitMainloop(1)
+
+	@staticmethod
+	def hdsReverificaOprirea():
+		# omul a iesit din standby intre timp (stopTryQuitMainloop): oprirea nu se mai face
+		if RecordTimerEntry.receiveRecordEvents:
+			RecordTimerEntry.staticGotRecordEvent(None, iRecordableService.evEnd)
 
 	@staticmethod
 	def staticGotRecordEvent(recservice, event):
@@ -164,8 +197,21 @@ class RecordTimerEntry(timer.TimerEntry, object):
 			Notifications.AddNotification(Screens.Standby.TryQuitMainloop, 1, onSessionOpenCallback=RecordTimerEntry.stopTryQuitMainloop, default_yes = default_yes)
 #################################################################
 
-	def __init__(self, serviceref, begin, end, name, description, eit, disabled = False, justplay = False, afterEvent = AFTEREVENT.AUTO, checkOldTimers = False, dirname = None, tags = None):
+	# HDSatelit 0.7.4: pluginurile straine (AutoTimer, Partnerbox, EPG-urile lor) cheama constructorul cu argumentele lor cu
+	# nume; inainte cadea cu TypeError. Se primesc si se tin ca atribute cu aceleasi nume (createRecordTimerEntry si pluginurile
+	# le citesc inapoi); inregistrarea noastra nu le foloseste si timers.xml nu le scrie.
+	IMPLICITE_STRAINE = (("descramble", "notset"), ("record_ecm", "notset"), ("rename_repeat", True), ("isAutoTimer", False),
+		("ice_timer_id", None), ("always_zap", False), ("MountPath", None), ("fixDescription", False), ("cridSeries", None),
+		("cridEpisode", None), ("cridRecommendation", None), ("filename", None), ("precondition", 0), ("zap_wakeup", "always"),
+		("conflict_detection", True), ("pipzap", False))
+
+	def __init__(self, serviceref, begin, end, name, description, eit, disabled = False, justplay = False, afterEvent = AFTEREVENT.AUTO, checkOldTimers = False, dirname = None, tags = None, **altele):
 		timer.TimerEntry.__init__(self, int(begin), int(end))
+		necunoscute = [k for k in altele if k not in dict(self.IMPLICITE_STRAINE)]
+		if necunoscute:
+			raise TypeError("RecordTimerEntry.__init__() got an unexpected keyword argument %r" % necunoscute[0])
+		for nume, implicit in self.IMPLICITE_STRAINE:
+			setattr(self, nume, altele.get(nume, implicit))
 
 		if checkOldTimers == True:
 			if self.begin < time() - 1209600:

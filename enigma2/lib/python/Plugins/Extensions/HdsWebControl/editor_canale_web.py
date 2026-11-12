@@ -14,7 +14,10 @@
 #   la vedere dupa o schimbare; inainte de orice stergere, intrebarea cu numarul randurilor;
 # - tastele de pe calculator sunt numai scurtaturi (sagetile, Shift / Ctrl + sageti, Space, Enter, Delete, Ctrl+C / X
 #   / V, Ctrl+Z / Y, Ctrl+A, Ctrl+S, F2, Esc); nimic nu cere tastatura;
-# - listele lungi (9000 de canale) se deseneaza numai cat se vede (lista virtuala, randuri de aceeasi inaltime).
+# - listele lungi (9000 de canale) se deseneaza numai cat se vede (lista virtuala, randuri de aceeasi inaltime);
+# - variantele aceluiasi canal pe acelasi satelit (Components/HdsVarianteCanal.py, ca lista de pe televizor): in sursa
+#   (toate, un satelit, un furnizor), fara text si fara filtre, se arata o singura varianta, cu semnul "+N"; celelalte
+#   se adauga din "⋯", "Alte variante (N)". Cautarea si filtrele arata toate variantele; buchetul ramane neatins.
 #
 # RUTELE (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; cele care
 # schimba ceva cer, cu cookie, POST, aceeasi origine si antetul CSRF al panoului). `eu` = numarul paginii deschise
@@ -285,11 +288,38 @@ def text_tp(k):
 		return ""
 
 
-def rand_serviciu(c, harta, sigle=None):
+def rand_serviciu(c, harta, sigle=None, varianta=None):
+	"""Randul unui canal; la coada grupa variantelor lui (numar, 0 = fara variante) si locul in grupa (0 = aratata)."""
 	biti = (1 if c.ascuns else 0) | (2 if c.blocat else 0) | (4 if c.are_video else 0) | (8 if c.are_sunet else 0) | \
 		(16 if (c.steaguri or 0) & 64 else 0) | (32 if _U().hd_in_nume_sd(c.nume, c.stype) else 0)
+	g, loc = varianta or (0, 0)
 	return [cheie_serviciu(c.ref), c.ref, c.nume, c.furnizor, _poz_cod(c.poz), c.frecv or 0, c.pol, c.sid, c.hd, c.acces or "", biti,
-		len(harta.get(c.cheie, ())), c.tp_text, _sigla(c.ref, sigle), c.tip, text_tp(c.tp_cheie), c.stype]
+		len(harta.get(c.cheie, ())), c.tp_text, _sigla(c.ref, sigle), c.tip, text_tp(c.tp_cheie), c.stype, g, loc]
+
+
+def variante_editor(canale, versiune=None):
+	"""{cheia canalului: (numarul grupei, locul in grupa)} pentru canalele editorului cu variante pe acelasi satelit,
+	cu aceeasi grupa si aceeasi ordine ca lista de pe televizor (Components/HdsVarianteCanal.py); {} fara modul."""
+	try:
+		try:
+			from Components import HdsVarianteCanal as V
+		except ImportError:
+			import HdsVarianteCanal as V
+	except Exception:
+		return {}
+	try:
+		cheie = (versiune, len(canale), id(canale[0]) if canale else 0, V.stare().versiune)
+		if _VARIANTE_EDITOR[0] == cheie:
+			return _VARIANTE_EDITOR[1]
+		rez = V.locuri_din_canale(canale)
+		_VARIANTE_EDITOR[:] = [cheie, rez]
+		return rez
+	except Exception as e:
+		_jurnal("variantele: %s" % e)
+		return {}
+
+
+_VARIANTE_EDITOR = [None, {}]   # ultima lista a paginilor (cheia ei) si locurile variantelor
 
 
 def rezumat(s):
@@ -356,10 +386,14 @@ def servicii(s, a):
 	cate = _intreg(a.get("cate"), MAX_PAGINA, 1, MAX_PAGINA)
 	harta = s._harta_buchete()
 	sigle = sigle_stiute()
-	randuri = [rand_serviciu(c, harta, sigle) for c in toate[de_la:de_la + cate]]
+	variante = variante_editor(toate, (radio, s.versiune()))
+	randuri = [rand_serviciu(c, harta, sigle, variante.get(c.cheie)) for c in toate[de_la:de_la + cate]]
 	rez = {"result": True, "total": len(toate), "de_la": de_la, "randuri": randuri, "versiune": s.versiune()}
 	if de_la == 0:
 		rez["sateliti"] = [[_poz_cod(p), t, s.nume_satelit(p), n] for p, t, n in s.sateliti(radio)]
+		# furnizorii in ordinea listei "Furnizor" de pe receptor, cu numele aratat (Components/HdsFurnizori.py)
+		aratat = getattr(s, "furnizor_aratat", None)
+		rez["furnizori"] = [[f, aratat(f) if aratat is not None else f] for f, _n in s.furnizori(radio)]
 	return 200, rez
 
 
@@ -1651,6 +1685,8 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="buchet_nou">Buchet nou</span>
   <span data-k="sub_buchet_nou">Sub-buchet nou</span>
   <span data-k="buchet_din_alese">Buchet nou din cele alese</span>
+  <span data-k="buchet_nou_gol">Niciun canal nu trece de filtrele alese. Alege altele.</span>
+  <span data-k="buchet_nou_filtre">Alege filtrele buchetului nou (rezoluție, limba sunetului, subtitrări, sunet...), apoi OK.</span>
   <span data-k="buchet_din_satelit">Fă un buchet din acest satelit</span>
   <span data-k="buchet_din_furnizor">Fă un buchet din acest furnizor</span>
   <span data-k="deschide">Deschide</span>
@@ -1795,6 +1831,8 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="f_noi">Noi</span>
   <span data-k="f_blocate">Blocate</span>
   <span data-k="nou_semn">nou</span>
+  <span data-k="alte_variante">Alte variante</span>
+  <span data-k="criptat_semn">Criptat</span>
   <span data-k="internet_semn">internet</span>
   <span data-k="detalii">Detalii</span>
   <span data-k="scoate_din_unul">Scoate dintr-un buchet...</span>
@@ -2580,7 +2618,7 @@ function arataDetalii(cheie){
   cerere("/api/editor-canale-detalii?cheie=" + encodeURIComponent(cheie)).then(function(r){
     if(!r.result){ mesaj(r.message || L("eroare_retea"), true); return; }
     var p = [];
-    p.push(r.nume + " · " + (r.furnizor || L("fara_furnizor")));
+    p.push(r.nume + " · " + textFurn(r.furnizor));
     p.push(L("referinta") + ": " + r.ref);
     p.push("SID " + r.sid + " (0x" + r.sid.toString(16) + ") · TSID " + r.tsid + " · ONID " + r.onid + " · " + L("namespace") + " " + r.ns + " · " + L("tip") + " " + r.tip);
     p.push([r.poz_text, r.tp_text].filter(Boolean).join(" · "));
@@ -2965,6 +3003,7 @@ function incarcaServicii(){
     return cerere("/api/editor-canale-servicii?radio=" + (radio ? 1 : 0) + "&de_la=" + de_la + "&cate=" + MAX_PAGINA).then(function(r){
       if(!r.result){ return; }
       if(r.sateliti){ S.sateliti = r.sateliti; }
+      if(r.furnizori){ S.furnOrdine = {}; S.furnAratat = {}; r.furnizori.forEach(function(p, i){ S.furnOrdine[p[0]] = i; S.furnAratat[p[0]] = p[1]; }); }
       toate = toate.concat(r.randuri);
       if(de_la + r.randuri.length < r.total && r.randuri.length){ return pagina(de_la + r.randuri.length); }
       if(radio !== S.radio){ return; }
@@ -3055,6 +3094,20 @@ function filtreaza(pastreaza){
         if(cuv.every(function(c){ return cuvinte.some(function(w){ return seamana(w, c); }); })){ rez.push(ij); }
       }
     }
+    S.variante = {};
+    if(!q && !tipar && !refCauta && !S.nfb && S.sursa !== "buchete" && S.sursa !== "cautare" &&
+        !Object.keys(f).some(function(k){ return f[k]; })){
+      // variantele aceluiasi canal pe acelasi satelit: numai cea aratata (locul 0 in grupa), cu "+N"
+      var cap = {};
+      rez.forEach(function(j){ var g = S.sv[j][17]; if(g){ var c = cap[g]; if(c === undefined || S.sv[c][18] > S.sv[j][18]){ cap[g] = j; } } });
+      rez = rez.filter(function(j){
+        var g = S.sv[j][17];
+        if(!g || cap[g] === j){ return true; }
+        (S.variante[cap[g]] = S.variante[cap[g]] || []).push(j);
+        return false;
+      });
+      for(var gv in S.variante){ S.variante[gv].sort(function(a, b){ return S.sv[a][18] - S.sv[b][18]; }); }
+    }
     if(S.sursa === "sateliti"){ rez.sort(function(a, b){ var A = S.sv[a], B = S.sv[b]; return (A[5] - B[5]) || (A[6] < B[6] ? -1 : A[6] > B[6] ? 1 : 0) || (A[7] - B[7]); }); }
     else if(q && S.sursa !== "buchete"){
       var rang = function(j){ var n = fara(S.sv[j][2]).replace(/[^0-9a-z+]+/g, " ").trim(); return n.indexOf(q) === 0 ? 0 : (" " + n).indexOf(" " + q) !== -1 ? 1 : 2; };
@@ -3069,7 +3122,7 @@ function filtreaza(pastreaza){
     S.lista = S.sursa === "buchete" ? S.arbore.filter(function(b){ return b[0] !== buchetAcum(); }).map(function(b){ return {fel: "buc", id: b[0], text: b[1], n: b[2], indent: b[3]}; })
       : S.sursa === "sateliti" && S.sursaPoz !== null ? transpondere()
       : S.sursa === "sateliti" ? S.sateliti.map(function(s){ return {fel: "sat", poz: s[0], text: s[1] + (s[2] ? "  " + s[2] : ""), n: s[3]}; })
-      : furnizori().map(function(p){ return {fel: "furn", nume: p[0], text: p[0] || L("fara_furnizor"), n: p[1]}; });
+      : furnizori().map(function(p){ return {fel: "furn", nume: p[0], text: textFurn(p[0]), n: p[1]}; });
     VS.pune(S.lista.length, L("nimic_gasit"));
   } else {
     S.lista = null;
@@ -3110,11 +3163,20 @@ function textTp(cheie){
   return cheie;
 }
 function furnizori(){
-  var n = {}, l = [];
+  var n = {}, l = [], o = S.furnOrdine || {};
   S.sv.forEach(function(x){ n[x[3]] = (n[x[3]] || 0) + 1; });
   for(var k in n){ l.push([k, n[k]]); }
-  l.sort(function(a, b){ return fara(a[0]) < fara(b[0]) ? -1 : 1; });
+  // ordinea listei "Furnizor" de pe receptor (trimisa de receptor); un furnizor nou de dupa citire, la coada
+  l.sort(function(a, b){
+    var ia = a[0] in o ? o[a[0]] : 1e9, ib = b[0] in o ? o[b[0]] : 1e9;
+    if(ia !== ib){ return ia - ib; }
+    return fara(a[0]) < fara(b[0]) ? -1 : 1;
+  });
   return l;
+}
+// numele aratat al unui furnizor, ca pe receptor ("Satelit 51,5°E, 11250 H", "Fără furnizor")
+function textFurn(f){
+  return (S.furnAratat && S.furnAratat[f]) || f || L("fara_furnizor");
 }
 // actiunile satelitului / transponderului / furnizorului ales: pe calculator butoane langa drum, pe telefon in „Mai
 // mult” din bara de jos a sursei (drumul ramane un rand, lista ramane la vedere)
@@ -3154,7 +3216,7 @@ function deseneazaDrumSursa(){
   } else if(S.sursa === "furnizori" && S.sursaFurn !== null){
     var b2 = el("button", "", L("furnizori")); b2.type = "button"; b2.onclick = function(){ S.sursaFurn = null; S.lsel = {}; filtreaza(); };
     d.appendChild(b2); d.appendChild(el("span", "sep", "›"));
-    d.appendChild(el("span", "", S.sursaFurn || L("fara_furnizor")));
+    d.appendChild(el("span", "", textFurn(S.sursaFurn)));
     actiuneDrum(d, L("buchet_din_furnizor"), function(){ op({op: "buchet_din", fel: "furnizor", valoare: S.sursaFurn, radio: S.radio}).then(function(){ incarcaArbore(); }); }, "mic");
   }
   if(S.vazute){ d.appendChild(el("span", "sep", nCanale(S.vazute.length))); }
@@ -3216,6 +3278,8 @@ function desenRandSursa(i){
   t2.appendChild(el("div", "d hds-derulant", [pz, x[12], "SID " + x[7], x[3]].filter(Boolean).join(" · ")));
   d.appendChild(t2);
   if(x[8] === "HD" || x[8] === "UHD"){ d.appendChild(el("span", "semn hd", x[8])); }
+  var alte = (S.variante || {})[S.vazute[i]];
+  if(alte){ var sv = el("span", "semn", "+" + alte.length); sv.title = L("alte_variante") + " (" + alte.length + ")"; d.appendChild(sv); }
   if(x[10] & 16){ d.appendChild(el("span", "semn nou", L("nou_semn"))); }
   if(x[10] & 1){ d.appendChild(el("span", "semn", L("ascuns"))); }
   if(x[11]){ var sb = el("span", "semn", "✓ " + x[11]); sb.title = L("in_buchete") + x[11]; d.appendChild(sb); }
@@ -3296,6 +3360,8 @@ function meniuSursa(){
     cereText(L("redenumeste_tot"), L("nume"), x[2], function(v){ op({op: "redenumeste_serviciu", chei: chei, nume: v}); });
   }}); }
   if(x){ act.push({text: L("porneste_tv"), fa: function(){ pornesteTv(x[0]); }}); }
+  var alte = x ? (S.variante || {})[S.svIndex[x[0]]] : null;
+  if(alte){ act.push({text: L("alte_variante") + " (" + alte.length + ")", fa: function(){ alteVariante(alte); }}); }
   if(x){
     act.push({text: L("detalii"), fa: function(){ arataDetalii(x[0]); }});
     act.push({text: L("pune_sigla"), fa: function(){ puneSigla(x[0]); }});
@@ -3313,6 +3379,15 @@ function meniuSursa(){
   act.push({text: L("sel_tot"), fa: function(){ selTotSursa(true); }});
   act.push({text: L("desel_tot"), fa: function(){ selTotSursa(false); }});
   listaActiuni(nCanale(chei.length), act);
+}
+function alteVariante(alte){
+  // celelalte variante ale canalului pe acelasi satelit: fiecare se adauga in buchet ca "+" pe rand
+  listaActiuni(L("alte_variante") + " (" + alte.length + ")", alte.map(function(j){
+    var y = S.sv[j];
+    var pz = ""; for(var k = 0; k < S.sateliti.length; k++){ if(S.sateliti[k][0] === y[4]){ pz = S.sateliti[k][1]; break; } }
+    return {text: [y[2] || "?", y[12], y[3] || ("SID " + y[7]), y[9] === "criptat" ? L("criptat_semn") : "FTA"].filter(Boolean).join(" · "),
+      fa: function(){ adaugaCanale([y[0]]); }};
+  }));
 }
 function adaugaCanale(chei, inainte){
   if(laRadacina()){ mesaj(L("alege_buchet"), true); if(ingust()){ comutaPanou("buchet"); } return; }
@@ -3364,7 +3439,33 @@ function aplicaFiltreBaza(){
   S.nfb = n;
   $("maiMulteFiltre").setAttribute("aria-pressed", n ? "true" : "false");
   filtreaza();
+  if(S.buchetNou){ buchetNouDinFiltre(0); }
 }
+// TODO 1904 (Eduard 29.10.2026): /editor-canale#buchet-nou, deschis din „Creează buchet nou” de pe /canale: filtrele,
+// apoi numele (propus din filtre), buchetul din canalele gasite, salvarea si inapoi la /canale. Ca pe televizor.
+S.buchetNou = location.hash === "#buchet-nou";
+function numeDinFiltre(){
+  var parti = [];
+  Array.prototype.forEach.call(document.querySelectorAll('#filtre button[aria-pressed="true"]'), function(b){ parti.push(b.textContent.trim()); });
+  if(S.fb){ S.fb.grupe.forEach(function(g, gi){ g[2].forEach(function(o){ if((S.fsel[gi] || 0) & o[0]){ parti.push(o[1]); } }); }); }
+  return parti.join(", ").slice(0, 60);
+}
+function buchetNouDinFiltre(pas){
+  if(!S.sv || !S.vazute){ if(pas < 200){ setTimeout(function(){ buchetNouDinFiltre(pas + 1); }, 300); } return; }
+  if(!S.vazute.length){ mesaj(L("buchet_nou_gol"), true); filtreBaza(); return; }
+  var chei = S.vazute.map(function(i){ return S.sv[i][0]; });
+  cereText(L("buchet_nou"), L("nume"), numeDinFiltre(), function(v){
+    op({op: "buchet_nou", nume: v, radio: S.radio, chei: chei}).then(function(r){
+      if(!r || !r.buchet){ return; }
+      cerere("/api/editor-canale-salveaza", "POST").then(function(z){
+        if(!z.result){ mesaj(z.message || L("eroare_retea"), true); return; }
+        mesaj(L("se_salveaza"));
+        asteapta(function(){ location.href = "/canale"; });
+      });
+    });
+  });
+}
+if(S.buchetNou){ setTimeout(function(){ mesaj(L("buchet_nou_filtre")); filtreBaza(); }, 0); }
 $("maiMulteFiltre").onclick = filtreBaza;
 Array.prototype.forEach.call(document.querySelectorAll("#filtre button[data-f]"), function(b){ if(S.filtre[b.getAttribute("data-f")]){ b.setAttribute("aria-pressed", "true"); } });
 function alegeSursa(fel){
@@ -3893,6 +3994,8 @@ TEXTE_PAGINA = {
 		N_("Buchet nou"),
 		N_("Sub-buchet nou"),
 		N_("Buchet nou din cele alese"),
+		N_("Niciun canal nu trece de filtrele alese. Alege altele."),
+		N_("Alege filtrele buchetului nou (rezoluție, limba sunetului, subtitrări, sunet...), apoi OK."),
 		N_("Fă un buchet din acest satelit"),
 		N_("Fă un buchet din acest furnizor"),
 		N_("Deschide"),
@@ -4040,6 +4143,8 @@ TEXTE_PAGINA = {
 		N_("Noi"),
 		N_("Blocate"),
 		N_("nou"),
+		N_("Alte variante"),
+		N_("Criptat"),
 		N_("internet"),
 		N_("Detalii"),
 		N_("Scoate dintr-un buchet..."),

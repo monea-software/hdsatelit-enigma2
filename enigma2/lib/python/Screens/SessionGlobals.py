@@ -7,6 +7,7 @@ from Components.Sources.Source import Source
 from Components.Sources.TunerInfo import TunerInfo
 from Components.Sources.Boolean import Boolean
 from Components.Sources.RecordState import RecordState
+from Components.Sources.Clock import Clock
 from Components.Converter.Combine import Combine
 from Components.Renderer.FrontpanelLed import FrontpanelLed
 
@@ -22,6 +23,10 @@ class SessionGlobals(Screen):
 		self["TunerInfo"] = TunerInfo()
 		self["RecordState"] = RecordState(session)
 		self["Standby"] = Boolean(fixed = False)
+		# session.CurrentTime, ca in ghidul temelor standard (temele vechi folosesc global.CurrentTime, care ramane); ceasul
+		# sta oprit pana cand un element il foloseste (Element.setSuspend il porneste)
+		self["CurrentTime"] = Clock()
+		self["CurrentTime"].clock_timer.stop()
 		
 		from Components.SystemInfo import SystemInfo
 		

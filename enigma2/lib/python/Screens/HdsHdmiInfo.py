@@ -188,6 +188,12 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 			lista.l.setFont(2, self.fontValoare)
 			lista.l.setItemHeight(self.inaltime)
 			lista.selectionEnabled(False)
+			# pagina cu pagina (ca in Screens/Information.py): MenuList pune derularea din setari (implicit rand cu rand),
+			# iar atunci paginile ecranului nu mai cad pe granitele socotite cu perPagina
+			try:
+				lista.instance.setScrollMargin(0)
+			except Exception:
+				pass
 			try:
 				self.latimi[i] = lista.instance.size().width()
 			except Exception:

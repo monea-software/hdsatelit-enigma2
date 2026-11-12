@@ -37,6 +37,8 @@ void eListboxServiceContent::removeCurrent()
 {
 	if (m_size && m_listbox)
 	{
+		if (m_cursor != m_list.end())
+			m_hidden_numbered.erase(&*m_cursor);
 		if (m_cursor_number == --m_size)
 		{
 			m_list.erase(m_cursor--);
@@ -68,6 +70,7 @@ void eListboxServiceContent::FillFinished()
 void eListboxServiceContent::setRoot(const eServiceReference &root, bool justSet)
 {
 	m_list.clear();
+	m_hidden_numbered.clear();
 	m_picon_requests.clear();
 	m_root = root;
 
@@ -83,7 +86,46 @@ void eListboxServiceContent::setRoot(const eServiceReference &root, bool justSet
 	else if (m_lst->getContent(m_list))
 		eDebug("getContent failed");
 
+	/* OE-Alliance: the numbered markers are not shown while the list is not edited (setHideNumberMarker); they count in
+	   the numbers of the rows after them (paint, hiddenNumberedBefore). A list without them is not changed at all. */
+	if (m_hide_number_marker && m_marked.empty())
+	{
+		int hidden = 0;
+		for (list::iterator i(m_list.begin()); i != m_list.end(); )
+		{
+			if ((i->flags & eServiceReference::isMarker) && (i->flags & eServiceReference::isNumberedMarker))
+			{
+				++hidden;
+				i = m_list.erase(i);
+				continue;
+			}
+			if (hidden)
+				m_hidden_numbered[&*i] = hidden;
+			++i;
+		}
+	}
+
 	FillFinished();
+}
+
+/* how many numbered markers were left out before `row`: the count of the row, or of the nearest row before it that has one
+   (a row added later by addService has none); 0 when nothing was left out */
+int eListboxServiceContent::hiddenNumberedBefore(list::iterator row)
+{
+	if (m_hidden_numbered.empty())
+		return 0;
+	while (true)
+	{
+		if (row != m_list.end())
+		{
+			std::map<const eServiceReference*, int>::const_iterator h = m_hidden_numbered.find(&*row);
+			if (h != m_hidden_numbered.end())
+				return h->second;
+		}
+		if (row == m_list.begin())
+			return 0;
+		--row;
+	}
 }
 
 void eListboxServiceContent::setCurrent(const eServiceReference &ref)
@@ -314,7 +356,23 @@ void eListboxServiceContent::sort()
 		m_service_center->list(m_root, m_lst);
 	if (m_lst)
 	{
+		/* ServiceList sorts after every fill; a bouquet ("ORDER BY bouquet") keeps its order, and with it the counts of the
+		   left out numbered markers (the rows keep their addresses in a std::list). Only an order that changes drops them. */
+		std::vector<const eServiceReference*> before;
+		if (!m_hidden_numbered.empty())
+			for (list::const_iterator i(m_list.begin()); i != m_list.end(); ++i)
+				before.push_back(&*i);
 		m_list.sort(iListableServiceCompare(m_lst));
+		if (!before.empty())
+		{
+			size_t k = 0;
+			for (list::const_iterator i(m_list.begin()); i != m_list.end(); ++i, ++k)
+				if (before[k] != &*i)
+				{
+					m_hidden_numbered.clear();
+					break;
+				}
+		}
 			/* FIXME: is this really required or can we somehow keep the current entry? */
 		cursorHome();
 		if (m_listbox)
@@ -325,7 +383,7 @@ void eListboxServiceContent::sort()
 DEFINE_REF(eListboxServiceContent);
 
 eListboxServiceContent::eListboxServiceContent()
-	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_itemheight(25), m_service_marks(0), m_picons_enabled(false), m_picon_clock(0)
+	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_hide_number_marker(false), m_itemheight(25), m_service_marks(0), m_picons_enabled(false), m_picon_clock(0)
 {
 	memset(m_color_set, 0, sizeof(m_color_set));
 	cursorHome();
@@ -347,7 +405,122 @@ void eListboxServiceContent::addPiconPath(const std::string &path)
 eListboxServiceContent::~eListboxServiceContent()
 {
 	if (Py_IsInitialized())
+	{
 		Py_XDECREF(m_picon_resolver);
+		Py_XDECREF(m_template_build);
+	}
+}
+
+/* the row of a serviceList template: an eListboxPythonMultiContent that draws one entry (the one Python built), with the
+   local style (colours, selection) of this list; the list itself and its cursor are not touched */
+class hdsRandSablon: public eListboxPythonMultiContent
+{
+public:
+	void pune(eListbox *listbox, ePyObject rand, const eSize &size)
+	{
+		m_listbox = listbox;
+		Py_XDECREF(m_list);
+		m_list = PyList_New(1);
+		Py_INCREF(rand);
+		PyList_SET_ITEM(static_cast<PyObject*>(m_list), 0, rand);
+		m_cursor = 0;
+		m_itemsize = size;
+	}
+	void goleste()
+	{
+		Py_XDECREF(m_list);
+		m_list = ePyObject();
+		m_listbox = 0;
+	}
+};
+
+void eListboxServiceContent::setTemplateBuildFunc(ePyObject func)
+{
+	Py_XDECREF(m_template_build);
+	m_template_build = (func && PyCallable_Check(func)) ? func : ePyObject();
+	Py_XINCREF(m_template_build);
+	if (m_template_build && !m_template_row)
+		m_template_row = new hdsRandSablon();
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+void eListboxServiceContent::setTemplateFont(int index, gFont *font)
+{
+	if (!m_template_row)
+		m_template_row = new hdsRandSablon();
+	m_template_row->setFont(index, font);
+}
+
+bool eListboxServiceContent::paintTemplateRow(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected, int marked)
+{
+	const eServiceReference &ref = *m_cursor;
+	bool isMarker = ref.flags & eServiceReference::isMarker;
+	bool isFolder = ref.flags & eServiceReference::isDirectory;
+	bool isPlayable = !(isFolder || isMarker);
+	int flags = (selected ? rowSelected : 0) | (marked ? rowMarked : 0) | (isMarker ? rowMarker : 0) |
+		((ref.flags & eServiceReference::isNumberedMarker) ? rowNumberedMarker : 0) | (isPlayable ? rowPlayable : 0) |
+		(isFolder ? rowFolder : 0);
+	if (isPlayable)
+	{
+		if (isRecorded(ref))
+			flags |= rowRecorded;
+		if (isStreamed(ref))
+			flags |= rowStreamed;
+		if (!marked && m_is_playable_ignore.valid())
+		{
+			ePtr<iStaticServiceInformation> service_info;
+			m_service_center->info(ref, service_info);
+			if (service_info && !service_info->isPlayable(ref, m_is_playable_ignore))
+				flags |= rowNotAvailable;
+		}
+	}
+	ePyObject args = PyTuple_New(3);
+	PyTuple_SET_ITEM(static_cast<PyObject*>(args), 0, NEW_eServiceReference(ref));
+	PyTuple_SET_ITEM(static_cast<PyObject*>(args), 1, PyLong_FromLong(flags));
+	PyTuple_SET_ITEM(static_cast<PyObject*>(args), 2, PyUnicode_FromString(numberText().c_str()));
+	ePyObject rand = PyObject_CallObject(m_template_build, args);
+	Py_DECREF(args);
+	if (!rand || !PyList_Check(rand))
+	{
+		if (PyErr_Occurred())
+			PyErr_Print();
+		Py_XDECREF(rand);
+		return false;  /* the classic row */
+	}
+	hdsRandSablon *r = static_cast<hdsRandSablon*>(m_template_row.operator->());
+	r->pune(m_listbox, rand, m_itemsize);
+	Py_DECREF(rand);
+	r->paint(painter, style, offset, selected);
+	r->goleste();
+	return true;
+}
+
+/* the number of the row under the cursor, as in the number column: the operator's number (setRefNumber) or the place in
+   the list, the markers not counted and the numbered markers counted (OE-Alliance); "" for a marker without number */
+std::string eListboxServiceContent::numberText()
+{
+	if ((m_cursor->flags & eServiceReference::isMarker) && !(m_cursor->flags & eServiceReference::isNumberedMarker))
+		return "";
+	char bla[12];
+	if (!m_ref_numbers.empty())
+	{
+		std::map<eServiceReference, int>::const_iterator rn = m_ref_numbers.find(*m_cursor);
+		if (rn == m_ref_numbers.end())
+			return "";
+		snprintf(bla, sizeof(bla), "%d", rn->second);
+		return bla;
+	}
+	int markers_before = 0;
+	list::iterator tmp = m_cursor;
+	while (tmp != m_list.begin())
+	{
+		--tmp;
+		if ((tmp->flags & eServiceReference::isMarker) && !(tmp->flags & eServiceReference::isNumberedMarker))
+			++markers_before;
+	}
+	snprintf(bla, sizeof(bla), "%d", m_numberoffset + m_cursor_number + 1 - markers_before + hiddenNumberedBefore(m_cursor));
+	return bla;
 }
 
 void eListboxServiceContent::setPiconResolver(ePyObject resolver)
@@ -909,6 +1082,13 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 	else
 		style.setStyle(painter, selected ? eWindowStyle::styleListboxSelected : eWindowStyle::styleListboxNormal);
 
+	/* HDSatelit 0.7.4: the row of the skin's serviceList template, when one is chosen (setTemplateBuildFunc) */
+	if (m_template_build && m_template_row && cursorValid() && paintTemplateRow(painter, style, offset, selected, marked))
+	{
+		painter.clippop();
+		return;
+	}
+
 	eListboxStyle *local_style = 0;
 
 		/* get local listbox style, if present */
@@ -953,7 +1133,11 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		}
 	}
 
-	if (!local_style || !local_style->m_transparent_background)
+	/* HDSatelit 0.7.4: the row with rounded corners or a gradient (skins written for other images; not for the marked
+	   rows, which keep their own colours); otherwise as before */
+	if (!marked && m_listbox && m_listbox->paintItemBackground(painter, style, eRect(offset, m_itemsize), selected))
+		;
+	else if (!local_style || !local_style->m_transparent_background)
 		/* if we have no transparent background */
 	{
 		/* blit background picture, if available (otherwise, clear only) */
@@ -1080,33 +1264,11 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				{
 				case celServiceNumber:
 				{
-					if (m_cursor->flags & eServiceReference::isMarker)
+					/* a numbered marker (shown only while the list is edited) has its number, as in OE-Alliance; the operator's
+					   numbers (setRefNumber) or the place in the list (numberText, the same for the template rows) */
+					text = numberText();
+					if (text.empty())
 						continue;
-					char bla[12];
-					if (!m_ref_numbers.empty())
-					{
-						/* the operator's numbers (setRefNumber): the number of the service, an empty cell without one */
-						std::map<eServiceReference, int>::const_iterator rn = m_ref_numbers.find(*m_cursor);
-						if (rn == m_ref_numbers.end())
-							continue;
-						snprintf(bla, sizeof(bla), "%d", rn->second);
-						text = bla;
-						flags|=gPainter::RT_HALIGN_RIGHT;
-						break;
-					}
-				/* how we can do this better? :) */
-					int markers_before=0;
-					{
-						list::iterator tmp=m_cursor;
-						while(tmp != m_list.begin())
-						{
-							--tmp;
-							if (tmp->flags & eServiceReference::isMarker)
-								++markers_before;
-						}
-					}
-					sprintf(bla, "%d", m_numberoffset + m_cursor_number + 1 - markers_before);
-					text = bla;
 					flags|=gPainter::RT_HALIGN_RIGHT;
 					break;
 				}

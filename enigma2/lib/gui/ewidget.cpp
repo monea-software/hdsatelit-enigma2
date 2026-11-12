@@ -14,6 +14,12 @@ eWidget::eWidget(eWidget *parent): m_animation(this), m_parent(parent ? parent->
 	m_desktop = 0;
 	m_have_background_color = 0;
 	m_corner_radius = 0;
+	m_corner_edges = RADIUS_ALL;
+	m_widget_border_width = 0;
+	m_widget_alphablend = 0;
+	m_widget_border_color = gRGB(0, 0, 0);
+	m_gradient_vertical = 1;
+	m_gradient_alphablend = 0;
 	m_z_position = 0;
 	m_client_offset = eSize(0, 0);
 	if (m_parent)
@@ -204,6 +210,75 @@ void eWidget::setCornerRadius(int radius)
 	invalidate();
 }
 
+void eWidget::setCornerEdges(int edges)
+{
+	m_corner_edges = edges & RADIUS_ALL;
+	invalidate();
+}
+
+void eWidget::setBackgroundGradient(const gRGB &startcolor, const gRGB &midcolor, const gRGB &endcolor, int direction, int alphablend)
+{
+	m_background_gradient.clear();
+	m_background_gradient.push_back(startcolor);
+	/* the same middle and end colour is the two colour form ("start,end,direction") */
+	if (!(midcolor == endcolor))
+		m_background_gradient.push_back(midcolor);
+	m_background_gradient.push_back(endcolor);
+	m_gradient_vertical = direction != GRADIENT_HORIZONTAL;
+	m_gradient_alphablend = alphablend != 0;
+	if (direction == GRADIENT_OFF)
+		m_background_gradient.clear();
+	invalidate();
+}
+
+void eWidget::clearBackgroundGradient()
+{
+	if (m_background_gradient.empty())
+		return;
+	m_background_gradient.clear();
+	invalidate();
+}
+
+/* The gradient fills the widget (with the corner radius) through the antialiased drawing (lib/gdi/desennetezit.h).
+   Under it: nothing to clear when every colour is opaque and the corners are square (each pixel is replaced); the
+   background colour of the nearest parent that has one, under rounded corners and under transparent colours with
+   alphablend; fully transparent otherwise, so that a transparent colour replaces what was there, as a transparent
+   backgroundColor does. Text drawn afterwards blends its edges with the middle colour. */
+void eWidget::paintBackgroundGradient(gPainter &painter)
+{
+	const std::vector<gRGB> &g = m_background_gradient;
+	bool opaque = true;
+	for (std::vector<gRGB>::const_iterator i = g.begin(); i != g.end(); ++i)
+		if (i->a)
+			opaque = false;
+	if (m_corner_radius || !opaque)
+	{
+		gRGB under(0, 0, 0, 255);
+		if (m_corner_radius || m_gradient_alphablend)
+		{
+			eWidget *w = m_parent;
+			while (w && (!w->m_have_background_color || w->child() != w))
+				w = w->m_parent;
+			if (w)
+				under = w->m_background_color;
+		}
+		painter.setBackgroundColor(under);
+		painter.clear();
+	}
+	gDesenNetezit forma;
+	forma.forma = gDesenNetezit::dreptunghi;
+	forma.x1 = size().width(); forma.y1 = size().height();
+	forma.raza = m_corner_radius;
+	forma.colturi = m_corner_edges;
+	forma.gradient = g;
+	forma.gradient_vertical = m_gradient_vertical;
+	painter.desenNetezit(forma);
+	gRGB middle = g[1];
+	if (g.size() == 2)
+		middle = gRGB((g[0].r + g[1].r + 1) / 2, (g[0].g + g[1].g + 1) / 2, (g[0].b + g[1].b + 1) / 2, (g[0].a + g[1].a + 1) / 2);
+	painter.setBackgroundColor(middle);
+}
+
 void eWidget::setZPosition(int z)
 {
 	m_z_position = z;
@@ -325,6 +400,8 @@ void eWidget::doPaint(gPainter &painter, const gRegion &r, int layer)
 		{
 			painter.resetClip(region);
 			event(evtPaint, &region, &painter);
+			if (m_widget_border_width > 0)
+				paintWidgetBorder(painter);
 		}
 	}
 
@@ -333,6 +410,63 @@ void eWidget::doPaint(gPainter &painter, const gRegion &r, int layer)
 	for (ePtrList<eWidget>::iterator i(m_childs.begin()); i != m_childs.end(); ++i)
 		i->doPaint(painter, childs, layer);
 	painter.moveOffset(-position());
+}
+
+void eWidget::setWidgetBorderWidth(int width)
+{
+	width = width > 0 ? width : 0;
+	if (m_widget_border_width != width)
+	{
+		m_widget_border_width = width;
+		invalidate();
+	}
+}
+
+void eWidget::setWidgetBorderColor(const gRGB &color)
+{
+	m_widget_border_color = color;
+	if (m_widget_border_width > 0)
+		invalidate();
+}
+
+void eWidget::setWidgetAlphaBlend(int blend)
+{
+	blend = blend ? 1 : 0;
+	if (m_widget_alphablend != blend)
+	{
+		m_widget_alphablend = blend;
+		invalidate();
+	}
+}
+
+void eWidget::paintWidgetBorder(gPainter &painter)
+{
+	/* only the band at the edges is drawn (the inside stays as the widget painted it); with rounded corners the
+	   outside edge follows them, as the background does */
+	int w = m_size.width(), h = m_size.height(), b = m_widget_border_width;
+	if (w <= 0 || h <= 0)
+		return;
+	if (b * 2 >= w || b * 2 >= h)
+		b = std::min(w, h) / 2;
+	painter.setForegroundColor(m_widget_border_color);
+	if (m_corner_radius <= 0)
+	{
+		painter.fill(eRect(0, 0, w, b));
+		painter.fill(eRect(0, h - b, w, b));
+		painter.fill(eRect(0, b, b, h - 2 * b));
+		painter.fill(eRect(w - b, b, b, h - 2 * b));
+		return;
+	}
+	gRegion band = gRegion(eRect(0, 0, w, h)) - gRegion(eRect(b, b, w - 2 * b, h - 2 * b));
+	painter.clip(band);
+	gDesenNetezit forma;
+	forma.forma = gDesenNetezit::dreptunghi;
+	forma.x0 = 0; forma.y0 = 0; forma.x1 = w; forma.y1 = h;
+	forma.raza = m_corner_radius;
+	forma.colturi = m_corner_edges;
+	forma.culoare_pictor = 1;
+	painter.desenNetezit(forma);
+	painter.clippop();
 }
 
 void eWidget::recalcClipRegionsWhenVisible()
@@ -368,7 +502,9 @@ int eWidget::event(int event, void *data, void *data2)
 //		dumpRegion(*(gRegion*)data);
 		if (!isTransparent())
 		{
-			if (!m_have_background_color)
+			if (!m_background_gradient.empty())
+				paintBackgroundGradient(painter);
+			else if (!m_have_background_color)
 			{
 				ePtr<eWindowStyle> style;
 				if (!getStyle(style))
@@ -376,7 +512,7 @@ int eWidget::event(int event, void *data, void *data2)
 			} else
 			{
 				painter.setBackgroundColor(m_background_color);
-				if (!m_corner_radius)
+				if (!m_corner_radius && !(m_widget_alphablend && m_background_color.a))
 					painter.clear();
 				else
 				{
@@ -390,6 +526,7 @@ int eWidget::event(int event, void *data, void *data2)
 					forma.forma = gDesenNetezit::dreptunghi;
 					forma.x1 = size().width(); forma.y1 = size().height();
 					forma.raza = m_corner_radius;
+					forma.colturi = m_corner_edges;
 					forma.culoare = m_background_color;
 					painter.desenNetezit(forma);
 					painter.setBackgroundColor(m_background_color);

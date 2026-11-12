@@ -38,6 +38,33 @@ try:
 except Exception as e:
 	print("[mytest] stivele la semnal:", e)
 
+# HDSatelit 0.7.4: la o oprire cu SIGABRT (abort: exceptie C++ neprinsa, eroare glibc) sau SIGFPE, stiva Python a tuturor
+# firelor (si, cu Python 3.14, stiva C cu numele functiilor C++) in /home/root/logs/enigma2-stiva-semnal.txt; apoi semnalul merge
+# la manerul de dinainte (bsod.cpp, pus inainte de mytest.py: jurnalul caderii se scrie ca pana acum). Pana acum o oprire cu
+# semnalul 6 lasa numai registrele, fara functia care a chemat C++-ul (rapoartele 898941 Ustym 4K PRO si 503916 SF8008, 0.7.3).
+# SIGSEGV, SIGBUS si SIGILL raman numai la bsod.cpp, neschimbate: dupa faulthandler semnalul se trimite din nou din libc, iar
+# bsod.cpp ar vedea PC-ul in libc, nu in biblioteca cazuta (enigma2.sh ia din el dovada caderilor placii 2D, „hiaccel”).
+# Raportul pornirii ia fisierul daca e din ultimele 10 minute (tools/hds-raport.sh). Fisierul se goleste la fiecare pornire.
+try:
+	import ctypes as _hdsC
+	import faulthandler
+	import os as _hdsOs
+	import signal as _hdsSemnal
+	_hdsLibc = _hdsC.CDLL(None)
+	_hdsManere = []
+	for _hdsS in (_hdsSemnal.SIGSEGV, _hdsSemnal.SIGBUS, _hdsSemnal.SIGILL):
+		_hdsB = _hdsC.create_string_buffer(512)		# struct sigaction (manerul bsod.cpp), tinut ca octeti
+		if _hdsLibc.sigaction(int(_hdsS), None, _hdsB) != 0:
+			raise OSError("sigaction %d" % int(_hdsS))
+		_hdsManere.append((int(_hdsS), _hdsB))
+	_hdsOs.makedirs("/home/root/logs", exist_ok=True)
+	_hdsStivaSemnal = open("/home/root/logs/enigma2-stiva-semnal.txt", "w")
+	faulthandler.enable(file=_hdsStivaSemnal, all_threads=True)
+	for _hdsS, _hdsB in _hdsManere:
+		_hdsLibc.sigaction(_hdsS, _hdsB, None)
+except Exception as e:
+	print("[mytest] stiva la cadere:", e)
+
 from Tools.Profile import profile, profile_final
 
 profile("PYTHON_START")
@@ -59,11 +86,18 @@ profile("LANGUAGE")
 
 from Components.Language import language
 
-def setEPGLanguage():
-	print("language set to", language.getLanguage())
-	eServiceEvent.setEPGLanguage(language.getLanguage())
+# limba ghidului: limba meniului sau cea aleasa, plus limba a doua (Components/HdsLimbaEpg.py, 0.7.4); fara modul, ca inainte
+try:
+	from Components import HdsLimbaEpg
+	HdsLimbaEpg.porneste()
+except Exception as e:
+	print("[mytest] limba ghidului:", type(e).__name__, e)
 
-language.addCallback(setEPGLanguage)
+	def setEPGLanguage():
+		print("language set to", language.getLanguage())
+		eServiceEvent.setEPGLanguage(language.getLanguage())
+
+	language.addCallback(setEPGLanguage)
 
 from traceback import print_exc
 profile("LOAD:InfoBar")
@@ -253,6 +287,14 @@ class Session:
 			p(reason=0, session=self)
 
 	def processDelay(self):
+		try:
+			self.processDelayHds()
+		finally:
+			# HDSatelit 0.7.4: desenul tinut de Session.close (animatia ferestrelor) merge mai departe
+			if HdsAnimatiiFerestre is not None:
+				HdsAnimatiiFerestre.dupaInchidere()
+
+	def processDelayHds(self):
 		callback = self.current_dialog.callback
 
 		retval = self.current_dialog.returnValue
@@ -306,7 +348,15 @@ class Session:
 		now = time.time()
 		if now - getattr(self, "last_screen_error_time", 0) > 30:
 			self.screen_error_count = 0
+			self.screen_error_tema = False
 		self.screen_error_count = getattr(self, "screen_error_count", 0) + 1
+		# cu o tema externa: a trecut eroarea prin fisierele ei? (numai atunci o retrag cele trei erori, Components/HdsSkinuri.py)
+		try:
+			from Components import HdsSkinuri
+			if HdsSkinuri.eroareDinTema(tb_str):
+				self.screen_error_tema = True
+		except Exception as e:
+			print("[HDS-SAFE] tema in stiva:", e)
 		self.last_screen_error_time = now
 
 		# Salveaza raportul de crash pe disc
@@ -340,11 +390,22 @@ class Session:
 			print("[HDS-SAFE] modulul lipsa:", e)
 
 		if self.screen_error_count >= 3:
+			# 0.7.4 (actualizarea ramasa la jumatate, cologno49): cat opkg instaleaza, ecranele pot cadea fiindca fisierele
+			# se schimba sub ele; repornirea interfetei ar omori opkg (lib/base/console.cpp) si ar lasa pachete amestecate
+			try:
+				from Components.HdsActualizari import instalare_in_curs
+				instalare = instalare_in_curs()
+			except Exception:
+				instalare = False
+			if instalare:
+				print("[HDS-SAFE] 3 erori, dar opkg instaleaza acum: interfata nu se reporneste")
+				self.screen_error_count = 0
+				return
 			print("[HDS-SAFE] 3 erori consecutive in 30 de secunde. Se reporneste interfata GUI...")
 			# cu o tema externa, tema se retrage inainte de repornire: omul revine la tema HD Satelit, fara bucla (Components/HdsSkinuri.py)
 			try:
 				from Components import HdsSkinuri
-				HdsSkinuri.eroriEcrane(getattr(screen, "__name__", str(screen)))
+				HdsSkinuri.eroriEcrane(getattr(screen, "__name__", str(screen)), getattr(self, "screen_error_tema", False))
 			except Exception as e:
 				print("[HDS-SAFE] retragerea temei:", e)
 			quitMainloop(3)
@@ -354,7 +415,8 @@ class Session:
 		try:
 			from Screens.MessageBox import MessageBox
 			s_name = getattr(screen, "__name__", str(screen))
-			msg = "A apărut o problemă la deschiderea ecranului (%s).\nS-a revenit automat la meniul anterior în deplină siguranță.\nJurnalul de eroare a fost salvat pe disc." % s_name
+			# 0.7.4 (FAA7MED, forum 588): textul trece prin traducere, altfel omul il vedea in romana pe un receptor in engleza
+			msg = _("A apărut o problemă la deschiderea ecranului (%s).\nS-a revenit automat la meniul anterior în deplină siguranță.\nJurnalul de eroare a fost salvat pe disc.") % s_name
 			self.open(MessageBox, msg, type=MessageBox.TYPE_WARNING, timeout=6)
 		except Exception as e:
 			print("[HDS-SAFE] Nu s-a putut afisa MessageBox de avertizare:", e)
@@ -449,6 +511,9 @@ class Session:
 		self.current_dialog = dialog
 		self.current_dialog.isTmp = False
 		self.current_dialog.callback = None # would cause re-entrancy problems.
+		# HDSatelit 0.7.4: lista de canale a barei se deschide pe aici; fara animatie (Components/HdsAnimatiiFerestre.py)
+		if HdsAnimatiiFerestre is not None:
+			HdsAnimatiiFerestre.laDeschidere(self, dialog)
 		self.execBegin()
 
 	def openWithCallback(self, callback, screen, *arguments, **kwargs):
@@ -464,7 +529,19 @@ class Session:
 
 		self.pushCurrent()
 		try:
-			dlg = self.instantiateDialog(screen, *arguments, **kwargs)
+			try:
+				dlg = self.instantiateDialog(screen, *arguments, **kwargs)
+			except Exception as e:
+				# HDSatelit 0.7.4: bara canalului cazuta dintr-un plugin care i-a schimbat clasele se construieste inca o
+				# data, fara schimbarile pluginurilor (Components/HdsPazaBara.py); altfel eroarea merge mai departe ca inainte
+				try:
+					from Components import HdsPazaBara
+					reparat = HdsPazaBara.repara(screen, e)
+				except Exception:
+					reparat = False
+				if not reparat:
+					raise
+				dlg = self.instantiateDialog(screen, *arguments, **kwargs)
 			if dlg is None:
 				raise RuntimeError("Ecranul %s nu a putut fi instantiat" % str(screen))
 		except Exception as e:
@@ -482,6 +559,9 @@ class Session:
 		# HDSatelit: numaratoarea ecranelor pentru beta testeri (numai cu programul pornit, fara nimic pe disc aici)
 		if HdsBetaTester is not None:
 			HdsBetaTester.numaraEcran(screen)
+		# HDSatelit 0.7.4: animatia ferestrei numai pe ecranele potrivite (Components/HdsAnimatiiFerestre.py)
+		if HdsAnimatiiFerestre is not None:
+			HdsAnimatiiFerestre.laDeschidere(self, dlg)
 		try:
 			self.execBegin()
 		except Exception:
@@ -508,7 +588,23 @@ class Session:
 
 		self.current_dialog.returnValue = retval
 		self.delay_timer.start(0, 1)
+		if HdsAnimatiiFerestre is not None:
+			HdsAnimatiiFerestre.laInchidere(self, screen)
 		self.execEnd()
+
+	# HDSatelit 0.7.4 (OE-Alliance): mesajele scurte cerute de pluginuri pe sesiune (FastScan: showError cand o inregistrare e
+	# in curs; PiconBrowser: showInfo), cu semnaturile din OE-Alliance; mesajul apare pe loc si pleaca singur (Screens/Toast.py)
+	def showInfo(self, text, timeout=4, replaceId=None):
+		from Screens.Toast import Toast
+		Toast.instance.showToast(text=text, toastType=Toast.TYPE_INFO, timeout=timeout, replaceId=replaceId)
+
+	def showWarning(self, text, timeout=5):
+		from Screens.Toast import Toast
+		Toast.instance.showToast(text=text, toastType=Toast.TYPE_WARNING, timeout=timeout)
+
+	def showError(self, text, timeout=5):
+		from Screens.Toast import Toast
+		Toast.instance.showToast(text=text, toastType=Toast.TYPE_ERROR, timeout=timeout)
 
 	def pushSummary(self):
 		if self.summary is not None:
@@ -620,6 +716,13 @@ def runScreenTest():
 	config.misc.startCounter.value += 1
 
 	profile("readPluginList")
+	# HDSatelit 0.7.4: metodele barei canalului tinute minte inainte de pluginuri (Components/HdsPazaBara.py: un plugin care strica
+	# bara nu lasa omul fara ea)
+	try:
+		from Components import HdsPazaBara
+		HdsPazaBara.instantaneu()
+	except Exception as e:
+		print("[mytest] paza barei:", e)
 	plugins.readPluginList(resolveFilename(SCOPE_PLUGINS))
 	# pluginurile care nu s-au incarcat se anunta imediat, nu doar in Plugin browser
 	if plugins.warnings:
@@ -660,11 +763,12 @@ def runScreenTest():
 		print("[mytest] DAB+ si DVB-T2:", e)
 
 	# HDSatelit 0.7.0: Stream Relay (Components/HdsStreamRelay.py): legatura la zap numai cand lista canalelor exista si
-	# are canale; fara fisierul listei nici modulul nu se incarca (nimic schimbat la zap). Dupa DAB+/DVB-T2, ca extensia
-	# lor de zap sa ramana inaintea celei a releului.
+	# are canale, sau (0.7.4) cand trecerea singura a canalelor cu ICAM e pornita (config.misc.hds_streamrelay_icam);
+	# fara amandoua nici modulul nu se incarca (nimic schimbat la zap). Dupa DAB+/DVB-T2, ca extensia lor de zap sa
+	# ramana inaintea celei a releului.
 	try:
 		from os.path import isfile as _esteFisier
-		if _esteFisier("/etc/enigma2/whitelist_streamrelay"):
+		if _esteFisier("/etc/enigma2/whitelist_streamrelay") or config.misc.hds_streamrelay_icam.value:
 			from Components import HdsStreamRelay
 			HdsStreamRelay.porneste()
 	except Exception as e:
@@ -743,6 +847,27 @@ def runScreenTest():
 		HdsTunerB.porneste(session)
 	except Exception as e:
 		print("[mytest] tunerul B:", e)
+	# HDSatelit: Vu+ 4K cu FBC (Components/HdsFbcMutare.py): dupa 0.7.4, cand A e neconfigurat, B configurat si antena e
+	# dovedit in mufa A, setarile lui B trec singure pe A, o singura data. Fara FBC nu face nimic. Pornirea nu depinde de ea.
+	try:
+		from Components import HdsFbcMutare
+		HdsFbcMutare.porneste(session)
+	except Exception as e:
+		print("[mytest] mutarea FBC:", e)
+	# HDSatelit: „Jurnal detaliat” (Components/HdsJurnale.py): enigma2-debug.log tinut sub 8 MB (un stat() la 5 minute).
+	try:
+		from Components import HdsJurnale
+		HdsJurnale.porneste()
+	except Exception as e:
+		print("[mytest] paza jurnalului detaliat:", e)
+	# HDSatelit: swap-ul gasit porneste singur (Components/HdsSwap.py, 0.7.4): la 20 s si la 90 s, pe un fir, daca nu e
+	# niciun swap pornit, partitia de swap de pe un stick sau un disc (intai cel al imaginii, ca la chkroot) sau
+	# swapfile.hds facut din ecran; numai swapon. Pornirea nu depinde de el.
+	try:
+		from Components import HdsSwap
+		HdsSwap.porneste()
+	except Exception as e:
+		print("[mytest] pornirea swap-ului:", e)
 	# HDSatelit: legatura cu routerul si cu internetul (Components/HdsStareRetea.py): pictograma din bare si din web,
 	# mesajul din mijlocul ecranului la pierderea internetului. Citirea pasiva la 3 s pe firul enigma2, verificarea DNS
 	# pe firul ei. Pornirea nu depinde de ea.
@@ -857,6 +982,20 @@ def runScreenTest():
 		HdsCalitateImagine.porneste(session)
 	except Exception as e:
 		print("[mytest] calitatea imaginii:", e)
+	# HDSatelit: poza canalului la schimbare (Components/HdsUltimaImagine.py, proba de concept, oprita din fabrica): cu
+	# setarea pornita, la zap se arata ultima imagine a canalului nou pana vine imaginea vie; pozele numai in /tmp
+	try:
+		from Components import HdsUltimaImagine
+		HdsUltimaImagine.porneste(session)
+	except Exception as e:
+		print("[mytest] poza canalului:", e)
+	# HDSatelit: prima imagine rapida (Components/HdsPrimaImagine.py): pe receptoarele HiSilicon cu libreader, dupa zap
+	# bQuickOutput = 1 scris in /proc/msp/syncNN (numai scrieri, pe un fir), ca primul cadru sa apara cum e decodat
+	try:
+		from Components import HdsPrimaImagine
+		HdsPrimaImagine.porneste(session)
+	except Exception as e:
+		print("[mytest] prima imagine rapida:", e)
 	# HDSatelit: HbbTV (Components/HdsHbbtvPornire.py, etapele H4 si H6): fereastra video lasata mica de o aplicatie
 	# HbbTV inainte de o cadere a interfetei se pune pe tot ecranul, iar pornirea automata a aplicatiilor (setarea din
 	# Setari navigator web, oprita din fabrica) asculta canalul redat. Pornirea receptorului nu depinde de ele.
@@ -976,6 +1115,14 @@ def runScreenTest():
 		HdsModuleLipsa.porneste(session)
 	except Exception as e:
 		print("[mytest] modulele lipsa ale pluginurilor:", e)
+	# HDSatelit 0.7.4: paznicul porturilor (Components/HdsPorturi.py): la un minut dupa pornire (modulul de acces a pornit
+	# si si-a deschis porturile), daca doua servicii cer acelasi port sau un port al receptorului, o intrebare cu
+	# "Schimbă portul" si "Nu acum". Pornirea receptorului nu depinde de el.
+	try:
+		from Components import HdsPorturi
+		HdsPorturi.porneste(session)
+	except Exception as e:
+		print("[mytest] paznicul porturilor:", e)
 
 	runNextScreen(session, screensToRun)
 
@@ -1156,6 +1303,14 @@ Components.RecordingConfig.InitRecordingConfig()
 profile("UsageConfig")
 import Components.UsageConfig
 Components.UsageConfig.InitUsageConfig()
+
+# HDSatelit 0.7.4: animatia ferestrelor (Components/HdsAnimatiiFerestre.py): setarea, aplicata acum, si ecranele care o primesc
+try:
+	from Components import HdsAnimatiiFerestre
+	HdsAnimatiiFerestre.initConfig()
+except Exception as e:
+	print("[mytest] animatia ferestrelor:", e)
+	HdsAnimatiiFerestre = None
 
 profile("keymapparser")
 import keymapparser

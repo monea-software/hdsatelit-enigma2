@@ -14,7 +14,12 @@ from Components import HdsAfisajCompat as K
 DOSAR = "/usr/share/enigma2/HDSatelit/afisaj-color"
 MODELE = {"vusolo4k": (480, 320, 32), "vuuno4kse": (400, 240, 32),
 	"vuduo4k": (480, 320, 32), "vuduo4kse": (480, 320, 32),
-	"gbquad4kpro": (400, 240, 16)}
+	"gbquad4kpro": (400, 240, 16),
+	# Vu+ Duo 4K Lite: placa GigaBlue UHD Quad 4K Pro (colorlcd400); valorile driverului au intaietate
+	"vuduo4klite": (400, 240, 16),
+	# Vu+ Ultimo4K (colorlcd800 in vuultimo4k.conf, OE-Alliance): 800x480; valorile driverului au intaietate, iar
+	# pozele personajului sunt cele 480x320 pana la un set 800x480
+	"vuultimo4k": (800, 480, 32)}
 LIVE = ("nu", "imagine", "osd")
 PICON = ("nu", "singur", "nume_ora")
 
@@ -222,6 +227,19 @@ class Afisaj(A.Afisaj):
 			eDBoxLCD.getInstance().setLCDBrightness(int(A.valoareLumina(treapta, A.TREPTE_LUMINA_COLOR)))
 		self.lumina = treapta
 
+	def _temaMare(self):
+		"""Tema mare aleasa, cand pagina ei e pe afisaj: cat privesti (nu in asteptare), fara alt mesaj scurt decat
+		canalul nou si fara vremea deschisa pe televizor. Altfel None (pagina obisnuita)."""
+		tema = A.temaColor() if hasattr(A, "temaColor") else "orbita"
+		if tema == "orbita" or self.inAsteptare or self._vremeEcrane:
+			return None
+		m = self.mesajul
+		if m is not None and m.intrare.d.id != "evenimente.zap":
+			return None
+		if self.recEsuatLa is not None and 0 <= self.ceas() - self.recEsuatLa < A.REC_ESUAT_S:
+			return None
+		return tema
+
 	def _sigla(self, acum):
 		from Tools.PiconResolver import cauta_sigla, generatie_sigle
 		ref = self.ctx.ref()
@@ -270,7 +288,13 @@ class Afisaj(A.Afisaj):
 		if a is None:
 			return ms
 		from Components import HdsAfisajScena as S
-		from Components import HdsAfisajRandare as R
+		tema = self._temaMare()
+		if tema is not None:
+			# tema mare: canalul privit, cu litere mari, in locul listei de rotire
+			sigla = self._sigla(acum) if tema == "picon_mare" else ""
+			scena = S.scenaTema(self.ctx, tema, acum, dict(imagine=sigla))
+			scena["bara"] = False
+			return self._arataScena(scena, scena.get("valoare", ""), ms)
 		secunde = max(0.0, acum - a.cititLa)
 		id_ = a.intrare.d.id
 		if self._vremeEcrane and self.mesajul is None and not self.inAsteptare:
@@ -309,13 +333,18 @@ class Afisaj(A.Afisaj):
 				detalii["rec_esuat"] = True
 				id_ = "evenimente.rec_esuata"
 		scena = S.scena(self.ctx, id_, text, a.pereche, acum, detalii)
-		if (c.color_picon.value != "nu" and not self.inAsteptare
+		# „Piconul singur” si „cu numele si ora” iau tot afisajul; „Lângă numele canalului” ramane pe pagina canalului
+		if (c.color_picon.value in ("singur", "nume_ora") and not self.inAsteptare
 				and self.mesajul is None and not self._vremeEcrane):
 			picon = self._sigla(acum)
 			if picon and scena["pagina"] != "inregistrare_esuata":
 				scena.update(pagina="picon", imagine=picon, stins=False,
 					titlu=self.ctx.numeServiciu(), picon_mode=c.color_picon.value)
 		scena["bara"] = getattr(getattr(c, "color_bara", None), "value", "da") == "da"
+		return self._arataScena(scena, text, ms)
+
+	def _arataScena(self, scena, text, ms):
+		from Components import HdsAfisajRandare as R
 		self.color_scena = scena
 		self.color_imagine, self.color_text = scena.get("imagine", ""), scena.get("valoare", text)
 		self.color_cadru = R.cadru(scena, (self.infoColor["latime"], self.infoColor["inaltime"]))
@@ -362,6 +391,10 @@ class Afisaj(A.Afisaj):
 		r = self._personajCand(acum)
 		if r is not None:
 			cand.append(r)
+		if self._temaMare() is not None:
+			# tema mare: ora la schimbarea minutului, canalul si emisiunea cel tarziu la 10 s
+			cand.append(acum - acum % 60 + 60.05)
+			cand.append(acum + 10)
 		id_ = a.intrare.d.id
 		if id_.startswith(("canal.", "emisiune.")) or id_ == "evenimente.zap":
 			cand.append(acum + 1)
@@ -413,10 +446,62 @@ class Afisaj(A.Afisaj):
 			self.ecran = None
 
 
-def cadruPrevizualizare(alegere="", expresie="", cadru=0, valori=None):
-	"""Unicul cadru nativ, pentru LCD, meniu si web; nu scrie pe dispozitiv."""
+def _siglaPrevizualizare(motor, ctx):
+	"""Piconul canalului privit pentru previzualizare: al motorului (acelasi cache), altfel cautat la fel."""
+	if motor is not None and hasattr(motor, "_sigla"):
+		return motor._sigla(motor.ceas())
+	try:
+		from Tools.PiconResolver import cauta_sigla
+		ref = ctx.ref()
+		ref = ref.toString() if ref is not None else ""
+		return cauta_sigla(ref, nume=ctx.numeServiciu()) if ref else ""
+	except Exception:
+		return ""
+
+
+def cadruTema(tema, picon=None, valori=None, marime=None, sigla=None):
+	"""Cum arata canalul privit intr-o tema („Tema afișajului”) si cu piconul ales: previzualizarea din meniu si din
+	pagina web, inainte de salvare. Nu scrie pe dispozitiv."""
 	from Components import HdsAfisajRandare as R
 	from Components import HdsAfisajScena as S
+	if tema not in A.TEME_COLOR:
+		raise ValueError("Tema necunoscuta")
+	if picon is not None and picon not in A.VALORI["color_picon"]:
+		raise ValueError("Pictograma necunoscuta")
+	motor = getattr(A, "_afisaj", None)
+	if marime is None:
+		info = getattr(motor, "infoColor", None) or A.colorInfo() or dict(latime=480, inaltime=320)
+		marime = (info["latime"], info["inaltime"])
+	valori = valori or A.Valori(getattr(motor, "session", None))
+	ctx = valori.ctx
+	c = A._cfg()
+	if picon is None:
+		picon = getattr(getattr(c, "color_picon", None), "value", "nu")
+	if sigla is None:
+		sigla = _siglaPrevizualizare(motor, ctx) if (tema == "picon_mare" or picon != "nu") else ""
+	if tema != "orbita":
+		s = S.scenaTema(ctx, tema, detalii=dict(imagine=sigla))
+		s["bara"] = False
+		return R.cadru(s, marime)
+	d = D.DUPA_ID.get("canal.numar_nume")
+	if d is not None:
+		# citirea numara canalul (ctx.numar), ca in previzualizarea alegerilor
+		valori.valoare(d)
+	s = S.scena(ctx, "canal.numar_nume", "", None, detalii=dict(imagine=sigla if picon != "nu" else ""))
+	if picon in ("singur", "nume_ora") and sigla:
+		s.update(pagina="picon", imagine=sigla, stins=False, titlu=s.get("canal", {}).get("nume", ""),
+			picon_mode=picon)
+	s["bara"] = getattr(getattr(c, "color_bara", None), "value", "da") == "da"
+	return R.cadru(s, marime)
+
+
+def cadruPrevizualizare(alegere="", expresie="", cadru=0, valori=None, tema=None, picon=None):
+	"""Unicul cadru nativ, pentru LCD, meniu si web; nu scrie pe dispozitiv. `tema`/`picon`: cum ar arata canalul
+	cu tema si piconul alese (cadruTema)."""
+	from Components import HdsAfisajRandare as R
+	from Components import HdsAfisajScena as S
+	if tema or picon:
+		return cadruTema(tema or A.temaColor(), picon, valori)
 	motor = getattr(A, "_afisaj", None)
 	if not alegere and not expresie and getattr(motor, "ultim", None) == "live":
 		raise ValueError("Previzualizarea video este oferita de driver")

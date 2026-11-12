@@ -1,5 +1,50 @@
 <!-- Modificat de moneasoftware.com si hdsatelit.com, 2026 -->
 <skin>
+	<!-- Culorile cu nume pe care temele straine (scrise pentru celelalte imagini Enigma2) le asteapta de la imagine, fara
+	     sa le defineasca ele (OEA8, 0.7.4). Fisierul se citeste primul: orice tema care isi defineste culoarea o inlocuieste,
+	     iar tema HD Satelit isi defineste singura toate culorile pe care le foloseste. -->
+	<colors>
+		<color name="background" value="#20101010" />
+		<color name="transBG" value="#58101010" />
+		<color name="foreground" value="#00eeeeee" />
+		<color name="yellow" value="#f0c810" />
+		<color name="orange" value="#f8b800" />
+		<color name="blue" value="#8098c0" />
+		<color name="green" value="#50c850" />
+		<color name="red" value="#f04838" />
+		<color name="grey" value="#989898" />
+		<color name="dark" value="#284868" />
+		<color name="darkgrey" value="#686868" />
+		<color name="grey81" value="#cecece" />
+		<color name="grey90" value="#e4e4e4" />
+		<color name="redtransparent" value="#20500000" />
+		<color name="greentransparent" value="#20005000" />
+		<color name="bluetransparent" value="#20002050" />
+		<color name="yellowtransparent" value="#20505000" />
+		<color name="secondFG" value="#008898e0" />
+		<color name="transpBlack" value="#18000000" />
+		<color name="transpWhite" value="#18ffffff" />
+		<color name="buttonRed" value="#a01414" />
+		<color name="buttonGreen" value="#1e781e" />
+		<color name="buttonYellow" value="#a08400" />
+		<color name="buttonBlue" value="#18188c" />
+		<color name="infobarBG" value="#40080808" />
+		<color name="white2" value="#ffffff" />
+		<color name="black2" value="#000000" />
+		<color name="dark2" value="#24062848" />
+		<color name="menu" value="#00284868" />
+		<color name="red2" value="#f04838" />
+		<color name="green2" value="#50c850" />
+		<color name="blue2" value="#8098c0" />
+		<color name="yellow2" value="#f0c810" />
+		<color name="transparent2" value="#ff000000" />
+		<color name="transpBlack2" value="#18000000" />
+		<color name="transpWhite2" value="#18ffffff" />
+		<color name="background2" value="#20101010" />
+		<color name="foreground2" value="#00eeeeee" />
+		<color name="infobar-frgrnd" value="#00eeeeee" />
+		<color name="infobar_sunken" value="#40202020" />
+	</colors>
 	<!-- Main screen colors (id=1 LCD) -->
 	<windowstyle type="skinned" id="1">
 		<color name="Background" color="#000000" />
@@ -36,6 +81,10 @@
 		     in fisierul care se incarca mereu (skin.py incarca numai HDSatelit/skin.xml si acest fisier, deci cel din
 		     data/skin.xml nu ajungea niciodata). DejaVu Sans Mono Bold are ă ș ț; tuxtxt.ttf (Vera) nu le are. -->
 		<font filename="DejaVuSansMono-Bold.ttf" name="Console" scale="100"/>
+		<!-- fontul de pictograme cu codurile asteptate de temele si pluginurile OE-Alliance (font="enigma2icons;N",
+		     iconFont="enigma2icons;N"); al nostru, desenele din Material Symbols (Apache 2.0, fonts/enigma2icons.license).
+		     Nu e font de rezerva (fara replacement): textul nu trece niciodata prin el. -->
+		<font filename="enigma2icons.ttf" name="enigma2icons" scale="100"/>
 	</fonts>
 	<!-- Screwed Stone II skin (skin_default.xml) /Nemesis -->
 	<!-- About screen -->
@@ -332,8 +381,12 @@ self.instance.move(ePoint((720-wsizex)//2, (576-wsizey)//(count &gt; 7 and 2 or 
 		<widget name="Dishpixmap" pixmap="skin_default/icons/dish.png" position="0,0" size="130,160" alphatest="off" />
 	</screen>
 	<!-- unhandled key pressed -->
-	<screen name="UnhandledKey" flags="wfNoBorder" position="620,50" size="34,45" title="UnhandledKey" zPosition="100" backgroundColor="transparent">
-		<widget name="UnhandledKeyPixmap" pixmap="skin_default/unhandled-key.png" position="0,0" size="34,45" alphatest="off" />
+	<!-- HDSatelit: ca in tema HD Satelit, textul „Tastă nefolosită în acest ecran” intr-un panou mic sus dreapta, strans
+	     de Screens/UnhandledKey.py la lungimea textului (marginea dreapta ramane); scris pe 720x576, ca tot fisierul -->
+	<screen name="UnhandledKey" flags="wfNoBorder" position="124,28" size="560,32" title="UnhandledKey" zPosition="100" backgroundColor="transparent">
+		<widget name="UnhandledKeyPixmap" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="UnhandledKeyText" position="0,0" size="560,32" font="Regular;20" foregroundColor="foreground" backgroundColor="#00101010" cornerRadius="4" widgetBorderWidth="1" widgetBorderColor="orange" padding="34,0,12,0" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="12,10" size="12,12" backgroundColor="orange" zPosition="2" />
 	</screen>
 	<!-- EPG Selection - Single -->
 	<screen name="EPGSelection" position="center,center" size="560,430" title="EPG Selection">
@@ -729,9 +782,13 @@ self.instance.move(ePoint(orgpos.x() + (orgwidth - newwidth)//2, orgpos.y()))
 		<widget name="config" position="10,10" size="540,402" scrollbarMode="showOnDemand" />
 	</screen>
 	<!-- Numberzap -->
-	<screen name="NumberZap" position="center,center" size="250,60" title="Channel">
-		<widget name="channel" position="35,15" size="110,25" font="Regular;23" />
-		<widget name="number" position="145,15" size="80,25" halign="right" font="Regular;23" />
+	<!-- HDSatelit 0.7.4: si numele canalului care porneste (servicename) si buchetul lui (servicenumber), ca in tema
+	     HD Satelit; NumberZap le umple la fiecare cifra (Screens/InfoBarGenerics.py) -->
+	<screen name="NumberZap" position="center,center" size="440,90" title="Channel">
+		<widget name="channel" position="15,8" size="110,28" font="Regular;23" />
+		<widget name="number" position="125,8" size="80,28" halign="right" font="Regular;23" />
+		<widget name="servicenumber" position="215,8" size="210,28" halign="right" font="Regular;19" noWrap="1" />
+		<widget name="servicename" position="15,44" size="410,38" font="Regular;28" noWrap="1" />
 	</screen>
 	<!-- Numerical help dialog -->
 	<screen name="NumericalTextInputHelpDialog" position="190,400" zPosition="2" size="394,124" backgroundColor="#202020" flags="wfNoBorder">

@@ -74,6 +74,7 @@
 
 import json
 import os
+import threading
 import time
 
 PRAG_KB = 40 * 1024             # sub atat bucata nu mai ajunge sigur (showiframe cere 34611200 octeti dintr-o bucata)
@@ -261,7 +262,7 @@ class Esantioane(object):
 	sub prag la rand (un minut), cu valoarea cea mai mare dintre ele. La trecerea in standby sau din standby totul se ia
 	de la capat (decodorul isi elibereaza sau isi reface maparile)."""
 
-	def __init__(self, ceas=None, masura=None, prag_=None):
+	def __init__(self, ceas=None, masura=None, prag_=None, pe_fir=False):
 		self.ceas = ceas or time.monotonic
 		self.masura = masura or masoara
 		self.prag = prag_ or prag
@@ -269,6 +270,12 @@ class Esantioane(object):
 		self.ultima = None      # ceasul monoton al ultimei citiri
 		self.sub = []           # citirile sub prag, la rand, inca necrezute (cel mult CONFIRMARI)
 		self.buna = None        # masuratoarea crezuta in starea de acum (dict de la bucataLibera)
+		# pe_fir (paznicul de pe receptor, esantioane()): citirea se face pe un fir si se ia la bataia urmatoare. Pe Octagon
+		# SF8008 masoara() tine ~31 ms (vmallocinfo singur 24 ms, masurat), adica un cadru
+		# sarit pe firul principal la fiecare citire. Probele construiesc Esantioane fara pe_fir: citirea pe loc, ca inainte.
+		self.pe_fir = pe_fir
+		self._fir = None
+		self._gata = None       # (standby la pornirea citirii, masuratoarea), pus de fir
 
 	def pas(self, standby):
 		"""O bataie (10 s). -> masuratoarea crezuta acum, sau None. Nu arunca."""
@@ -279,8 +286,10 @@ class Esantioane(object):
 				self.standby, self.ultima, self.sub, self.buna = standby, None, [], None
 			if self.ultima is not None and 0 <= acum - self.ultima < (CONFIRMARE_S if self.sub else ESANTION_S):
 				return self.buna
+			gata, m = self._masoara(standby)
+			if not gata:
+				return self.buna
 			self.ultima = acum
-			m = self.masura()
 			if not m or m.get("liber_kb") is None:
 				return self.buna
 			if not subPrag(m, self.prag()):
@@ -292,6 +301,32 @@ class Esantioane(object):
 		except Exception as e:
 			_log("citirea memoriei: %r" % (e,))
 		return self.buna
+
+	def _masoara(self, standby):
+		"""(gata, masuratoarea). Fara pe_fir: citirea pe loc. Cu pe_fir: rezultatul citirii pornite la o bataie dinainte,
+		daca e gata si din aceeasi stare (standby sau nu); altfel porneste citirea (daca nu ruleaza deja una) si da
+		(False, None): masuratoarea vine la bataia urmatoare (10 s), cu aceleasi reguli de crezare."""
+		if not self.pe_fir:
+			return True, self.masura()
+		gata = self._gata
+		if gata is not None:
+			self._gata = None
+			if gata[0] == standby:
+				return True, gata[1]
+		fir = self._fir
+		if fir is None or not fir.is_alive():
+			def lucru(starea=standby):
+				try:
+					m = self.masura()
+				except Exception as e:
+					_log("citirea memoriei pe fir: %r" % (e,))
+					m = None
+				self._gata = (starea, m)
+			fir = threading.Thread(target=lucru, name="HdsMemorieDriver")
+			fir.daemon = True
+			self._fir = fir
+			fir.start()
+		return False, None
 
 	def valoare(self, standby=None):
 		"""Masuratoarea crezuta, numai daca e din starea ceruta (None = oricare)."""
@@ -305,7 +340,7 @@ _esantioane = [None]
 
 def esantioane():
 	if _esantioane[0] is None:
-		_esantioane[0] = Esantioane()
+		_esantioane[0] = Esantioane(pe_fir=True)
 	return _esantioane[0]
 
 

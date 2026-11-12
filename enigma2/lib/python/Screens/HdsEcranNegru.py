@@ -24,6 +24,8 @@
 # <screen name="HdsEcranNegru">; pentru alte skinuri, skinul de rezerva de mai jos (1920, scalat la desktop, font
 # „Regular”, culori scrise direct).
 
+import sys
+
 from enigma import ePoint, eSize
 
 from .Screen import Screen
@@ -614,12 +616,27 @@ class LegaturaEcranNegru(object):
 	def _poateArata(self, v):
 		if v is None or not E.pornit() or not self.in_fata or self._inStandby():
 			return False
+		if self._variantaUrmeaza(v):
+			return False
 		if self.ascuns_de_om is not None and self.ascuns_de_om == v.get("cod"):
 			return False
 		sb = getattr(self.infobar, "secondInfoBarScreen", None)
 		if sb is not None and sb.shown:
 			return False
 		return not self._acoperitDeMotor(v)
+
+	def _variantaUrmeaza(self, v):
+		"""cat rezerva trece singura pe alta varianta a canalului (Components/HdsDvbIRezerva), mesajul nu se arata"""
+		m = sys.modules.get("Components.HdsDvbIRezerva")
+		try:
+			return m is not None and bool(m.variantaUrmeaza(v.get("ref"), v.get("cod")))
+		except Exception as e:
+			print("[HdsEcranNegru] variantele: %s" % e)
+			return False
+
+	def dinNou(self):
+		"""mesajul se hotaraste din nou cu verdictul de acum (rezerva nu mai are variante de incercat)"""
+		self._actualizeaza()
 
 	def _actualizeaza(self):
 		v = self.verdict
@@ -711,6 +728,9 @@ class LegaturaEcranNegru(object):
 				self._deschideAnaliza()
 			elif fapta == E.F_LOC:
 				self._alegeLocul()
+			elif fapta == E.F_MODULE:
+				from Screens.CamSetup import CamSetup
+				self.session.open(CamSetup)
 		except Exception as e:
 			print("[HdsEcranNegru] fapta %s: %s: %s" % (fapta, type(e).__name__, e))
 			return False

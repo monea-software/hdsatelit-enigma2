@@ -63,6 +63,7 @@ typedef enum {
 #include <lib/base/filepush.h>
 #include <lib/dvb/idvb.h>
 #include <lib/dvb/demux.h>
+#include <mutex>
 #include <lib/dvb/esection.h>
 #include <lib/dvb/decoder.h>
 #include <lib/dvb/pvrparse.h>
@@ -468,6 +469,12 @@ class eDVBRecordFileThread: public eFilePushThread
 public:
 	eDVBRecordFileThread();
 	void setTimingPID(int pid, int type);
+		/* SoftCSA: descramble in place before parsing and writing (iDVBTSRecorder::setDescrambler) */
+	void setDescrambler(ePtr<iServiceScrambled> descrambler)
+	{
+		std::lock_guard<std::mutex> lock(m_descrambler_lock);
+		m_descrambler = descrambler;
+	}
 	
 	void startSaveMetaInformation(const std::string &filename);
 	void stopSaveMetaInformation();
@@ -486,6 +493,10 @@ private:
 	off_t m_current_offset;
 	pts_t m_last_pcr; /* very approximate.. */
 	int m_pid;
+		/* held while descrambling: replacing the descrambler waits for the thread, so the old one is released (and maybe
+		   destroyed) by the main loop, never by this thread */
+	std::mutex m_descrambler_lock;
+	ePtr<iServiceScrambled> m_descrambler;
 };
 
 eDVBRecordFileThread::eDVBRecordFileThread()
@@ -519,8 +530,20 @@ int eDVBRecordFileThread::getLastPTS(pts_t &pts)
 
 int eDVBRecordFileThread::filterRecordData(const unsigned char *data, int len, size_t &current_span_remaining)
 {
+	/* SoftCSA: the packets are in our own buffer (eFilePushThread::m_buffer), whole and aligned; descrambled in place, so
+	   the parser below sees the clear stream (access points of a recording) */
+	if (len > 0)
+	{
+		std::lock_guard<std::mutex> lock(m_descrambler_lock);
+		if (m_descrambler)
+			m_descrambler->descramble(const_cast<unsigned char*>(data), len);
+	}
 #if HAVE_HISILICON
 	if (m_parse)
+#else
+	/* nor the SoftCSA loop into a dvr (setDvrLoop): the decoder reads it, nobody asks it for access points, and the
+	   parser would only cost processor time */
+	if (!dvrLoop())
 #endif
 	m_ts_parser.parseData(m_current_offset, data, len);
 	
@@ -535,6 +558,8 @@ eDVBTSRecorder::eDVBTSRecorder(eDVBDemux *demux): m_demux(demux)
 {
 	m_running = 0;
 	m_target_fd = -1;
+	m_source_fd = -1;
+	m_buffer_size = 1024*1024; /* HDSatelit 0.7.4: setBufferSize before start keeps another size */
 	m_thread = new eDVBRecordFileThread();
 	CONNECT(m_thread->m_event, eDVBTSRecorder::filepushEvent);
 #ifndef HAVE_ADD_PID
@@ -596,7 +621,7 @@ RESULT eDVBTSRecorder::start()
 		return -3;
 	}
 
-	setBufferSize(1024*1024);
+	setBufferSize(m_buffer_size);
 
 	dmx_pes_filter_params flt;
 #if HAVE_DVB_API_VERSION > 3
@@ -634,6 +659,9 @@ RESULT eDVBTSRecorder::start()
 		struct stat st;
 		bool stream = fstat(m_target_fd, &st) == 0 && (S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode));
 		m_thread->setParseStream(!stream);
+		/* nor the SoftCSA loop into a dvr (setDvrLoop): the decoder reads it, nobody asks it for access points */
+		if (m_thread->dvrLoop())
+			m_thread->setParseStream(false);
 	}
 #endif
 	if (m_target_filename != "")
@@ -652,6 +680,11 @@ RESULT eDVBTSRecorder::start()
 
 RESULT eDVBTSRecorder::setBufferSize(int size)
 {
+	/* HDSatelit 0.7.4: before start (no demux open yet) the size is kept for start(); after it the driver may refuse a
+	   change while the filter runs (HiSilicon, 11.11.2026) */
+	m_buffer_size = size;
+	if (m_source_fd < 0)
+		return 0;
 	int res = ::ioctl(m_source_fd, DMX_SET_BUFFER_SIZE, size);
 	if (res < 0)
 		eDebug("eDVBTSRecorder DMX_SET_BUFFER_SIZE failed(%m)");
@@ -733,6 +766,16 @@ RESULT eDVBTSRecorder::stop()
 	if (::close(m_source_fd) < 0)
 		perror("close");
 #else
+	if (m_thread->dvrLoop())
+	{
+		/* SoftCSA loop into a dvr: its thread waits in poll (100 ms at most) and outside the driver
+		   (lib/base/filepush.cpp), so it ends by itself; stop it before the demux is closed, which would let it poll or
+		   read a descriptor number another thread may reuse meanwhile. The workaround below then only stops and closes
+		   the demux (a second DMX_STOP does nothing), and m_thread->stop() returns at once. */
+		if (::ioctl(m_source_fd, DMX_STOP) < 0)
+			perror("DMX_STOP");
+		m_thread->stop();
+	}
 #if HAVE_DVB_API_VERSION >= 5
 	/* workaround for record thread stop */
 	if (::ioctl(m_source_fd, DMX_STOP) < 0)
@@ -858,6 +901,21 @@ void eDVBTSRecorder::stopPID(int pid)
 	}
 #endif
 	m_pids[pid] = -1;
+}
+
+/* SoftCSA: the recorder can descramble and loop into a dvr on this receiver (lib/dvb/cahandler.cpp reads it) */
+bool hdsSoftCsaInRecorder = true;
+
+RESULT eDVBTSRecorder::setDescrambler(ePtr<iServiceScrambled> descrambler)
+{
+	m_thread->setDescrambler(descrambler);
+	return 0;
+}
+
+RESULT eDVBTSRecorder::setDvrLoop(bool loop)
+{
+	m_thread->setDvrLoop(loop);
+	return 0;
 }
 
 void eDVBTSRecorder::filepushEvent(int event)

@@ -114,13 +114,21 @@ FISIER_MODEL = '/etc/hdsatelit-model'
 CONF_PUBLIC = '/etc/opkg/hdsatelit-feed.conf'
 CONF_PROBA = '/etc/opkg/hdsatelit-proba-feed.conf'
 NETRC = ('/home/root/.netrc', '/.netrc')
-LACAT_OPKG = '/var/run/opkg.lock'
+# lacatul lui opkg: opkg 0.10 din imagine il ia in /run/opkg.lock (opkg.conf nu are lock_file; vazut pe .122 in timpul
+# unei instalari, 11.11.2026). /var/run duce in /var/volatile/run, alt dosar, unde opkg nu-l pune niciodata: cu numai
+# /var/run/opkg.lock, opkg_ocupat nu vedea nicio instalare (Extensii, SSH). Calea veche ramane a doua (alte versiuni).
+LACAT_OPKG = '/run/opkg.lock'
+LACATE_OPKG = (LACAT_OPKG, '/var/run/opkg.lock')
 JURNAL = P.DOSAR_JURNALE + '/hds-actualizari.log'
 MARIME_JURNAL = P.MARIME_JURNAL
 PACHET_PRINCIPAL = 'enigma2-hdsatelit'
 PRAG_PACHETE = 150
-MARIME_STARE_MAX = 256 * 1024
+# Starea feedului bazei (stare.json) creste cu fiecare model nou (drivere si completari pe masina, ~15-20 KB pe model):
+# 250 KB la 13 modele in 0.7.4 (12.11.2026). 2 MB ajung pentru ~90 de modele; un JSON de 2 MB se citeste usor si pe Solo SE.
+MARIME_STARE_MAX = 2 * 1024 * 1024
 TIMP_STARE = 20
+# pazeste_listele cere stare.json pe firul interfetei, imediat dupa opkg update: timp scurt
+TIMP_STARE_PAZA = 6
 PRIMA_VERIFICARE = 300
 ZI = 24 * 3600
 REINCERCARE = 3 * 3600
@@ -146,6 +154,25 @@ INDEXURI_SEMNATE = '/etc/enigma2/hds-indexuri-semnate.json'
 # interfata); cat ar intreba pe televizor, se incearca din nou la atatea ms
 REPORNIRE_RAPIDA_MS = 3000
 REINCERCARE_RAPIDA_MS = 30000
+# actualizarea oprita la jumatate (0.7.4, LinuxSat 164125 #969426): opkg e copilul enigma2 (Components/Ipkg.py,
+# eConsoleAppContainer), iar la orice iesire a enigma2 destructorul ii trimite SIGKILL (lib/base/console.cpp). De aceea:
+# SEMN_IN_CURS (pe memoria interna, ramane peste o repornire dura) se scrie inainte de opkg, cu versiunea si pachetele
+# planului, si se scoate cand opkg iese singur; tools/hds-actualizare-intrerupta.py (pornit de enigma2.sh inainte de
+# enigma2) termina la pornire ce a ramas si scrie REZULTAT_PORNIRE, aratat aici (porneste) pe televizor si in web.
+# Cat ruleaza opkg, semnul "ocupat" al paznicului (CHEIE_PAZNIC, prelungit de fiecare bataie) tine paznicul departe de
+# enigma2, iar Screens/Standby.py TryQuitMainloop asteapta sfarsitul instalarii (instalare_in_curs).
+SEMN_IN_CURS = '/etc/enigma2/hds-actualizare.in-curs'
+REZULTAT_PORNIRE = '/tmp/hds-actualizare-intrerupta.rezultat'
+CHEIE_PAZNIC = 'actualizare'
+DURATA_PAZNIC_S = 15 * 60
+# cat se instaleaza: mesajul de sub lista (ecranul si pagina web). Pe un stick USB lent dezarhivarea tine minute intregi
+# fara niciun rand nou de la opkg; omul care crede ca s-a blocat si opreste receptorul lasa fisierele amestecate
+TEXT_INSTALARE = N_('Nu opri receptorul până se termină instalarea. Pe un stick USB poate dura câteva minute.')
+TEXTE_PORNIRE = {
+	'terminata': N_('Actualizarea %s fusese oprită la jumătate; s-a terminat la pornirea receptorului.'),
+	'esuata': N_('Actualizarea %s fusese oprită la jumătate și nu s-a putut termina la pornire. Caută din nou în '
+		'Actualizare software; detaliile sunt în jurnalul actualizărilor.'),
+}
 # de ce asteapta repornirea rapida (raspunsul functiei de repornire) si ce se scrie atunci
 TEXTE_ASTEPTARE = {
 	'inregistrare': N_('Actualizarea s-a instalat. Interfața se repornește singură după înregistrare.'),
@@ -385,10 +412,43 @@ def fara_retea(radacina='/'):
 
 
 def opkg_ocupat(radacina='/'):
-	"""True cand ruleaza alt opkg (are lacatul lui, lockf pe /var/run/opkg.lock); fara fisier, nimic nu ruleaza"""
-	cale = _cale(radacina, LACAT_OPKG)
+	"""True cand ruleaza alt opkg (are lacatul lui, lockf pe unul din LACATE_OPKG); fara fisier, nimic nu ruleaza"""
+	tinute = lacate_tinute(_cale(radacina, '/proc/locks'))
+	return any(_lacat_tinut(_cale(radacina, cale), tinute) for cale in LACATE_OPKG)
+
+
+def lacate_tinute(cale='/proc/locks'):
+	"""{(major, minor, inode)} ale fisierelor cu un lacat POSIX/OFD/flock tinut acum (/proc/locks), sau None cand nu se
+	poate citi"""
+	try:
+		with open(cale, 'r', encoding='ascii', errors='replace') as f:
+			text = f.read(1 << 16)
+	except (IOError, OSError):
+		return None
+	rez = set()
+	for rand in text.splitlines():
+		p = rand.replace('->', ' ').split()
+		if len(p) >= 6 and p[1] in ('POSIX', 'OFDLCK', 'FLOCK'):
+			d = p[5].split(':')
+			try:
+				rez.add((int(d[0], 16), int(d[1], 16), int(d[2])))
+			except (ValueError, IndexError):
+				pass
+	return rez
+
+
+def _lacat_tinut(cale, tinute=None):
+	"""Cu /proc/locks citit (tinute), fara sa ia lacatul: o proba cu lockf il ia o clipa, iar un opkg pornit chiar
+	atunci ar cadea cu "Could not lock" (si fisierul ramas dupa un opkg oprit cu SIGKILL ar fi luat la fiecare
+	intrebare). Numai fara /proc/locks (probele de pe PC), cu lockf."""
 	if not os.path.exists(cale):
 		return False
+	if tinute is not None and hasattr(os, 'major'):
+		try:
+			st = os.stat(cale)
+		except OSError:
+			return False
+		return (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino) in tinute
 	try:
 		import fcntl
 		fd = os.open(cale, os.O_RDWR)
@@ -403,6 +463,67 @@ def opkg_ocupat(radacina='/'):
 		return False
 	finally:
 		os.close(fd)
+
+
+def instalare_in_curs(radacina='/'):
+	"""True cat se instaleaza o actualizare de aici sau cat ruleaza un opkg (orice instalare, si a Extensiilor): atunci
+	iesirea enigma2 ar opri opkg la jumatate (Screens/Standby.py TryQuitMainloop, mytest.py la ecranele protejate)"""
+	try:
+		if actualizari.faza == 'instalez':
+			return True
+	except NameError:
+		pass
+	return opkg_ocupat(radacina)
+
+
+def scrie_semnul_in_curs(versiune, planificate, radacina='/'):
+	"""SEMN_IN_CURS inainte de opkg: versiunea si {pachet: versiunea noua} ale planului, atomic si cu fsync (trebuie sa
+	ramana si dupa o repornire dura). False cand nu se poate scrie (instalarea merge oricum, ca inainte)."""
+	cale = _cale(radacina, SEMN_IN_CURS)
+	d = {'versiune': u'%s' % (versiune or ''), 'ora': int(time.time()),
+		'pachete': dict((p['nume'], p['la']) for p in planificate if P.nume_valid(p.get('nume', '')) and p.get('la'))}
+	try:
+		with open(cale + '.nou', 'w', encoding='utf-8') as f:
+			json.dump(d, f, sort_keys=True)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(cale + '.nou', cale)
+		return True
+	except (IOError, OSError, TypeError, ValueError) as e:
+		print('[HdsActualizari] semnul instalarii: %s' % e)
+		return False
+
+
+def sterge_semnul_in_curs(radacina='/'):
+	try:
+		os.remove(_cale(radacina, SEMN_IN_CURS))
+	except OSError:
+		pass
+
+
+def rezultat_pornire(radacina='/'):
+	"""Rezultatul lui tools/hds-actualizare-intrerupta.py de la pornirea aceasta ({stare, versiune, ramase, detaliu}),
+	citit o singura data (fisierul se sterge), sau None"""
+	cale = _cale(radacina, REZULTAT_PORNIRE)
+	try:
+		with open(cale, 'r', encoding='utf-8', errors='replace') as f:
+			text = f.read(4096)
+	except (IOError, OSError):
+		return None
+	try:
+		os.remove(cale)
+	except OSError:
+		pass
+	d = {}
+	for rand in text.splitlines():
+		k, semn, v = rand.partition('=')
+		if semn:
+			d[k.strip()] = curata(v.strip())
+	return d if d.get('stare') in TEXTE_PORNIRE else None
+
+
+def text_rezultat_pornire(rez):
+	return _t(TEXTE_PORNIRE[rez['stare']]) % (rez.get('versiune') or '?')
 
 
 # ---------------------------------------------------------------- sursele si parola
@@ -955,11 +1076,34 @@ def tine_minte_indexurile(radacina, canal, baza, stare):
 	return True
 
 
-def pazeste_listele(radacina='/'):
+def _stare_pentru_paza(radacina, canal, baza, deschide=None):
+	"""stare.json semnat al canalului si bazei, cerut acum pentru pazeste_listele (None cand nu se poate: fara cheia
+	canalului de proba, fara raspuns, nesemnat, alt canal). Timp scurt: paza ruleaza pe firul interfetei, la sfarsitul
+	lui opkg update, cand serverul tocmai a raspuns."""
+	if canal not in ('proba', 'public'):
+		return None
+	credentiale = citeste_netrc(radacina) if canal == 'proba' else None
+	if canal == 'proba' and credentiale is None:
+		return None
+	noua, cod = descarca_stare(adresa_stare(canal, baza), credentiale, TIMP_STARE_PAZA, deschide)
+	if cod is not None or noua.get('canal') not in (None, canal):
+		print('[HdsActualizari] paza listelor: stare.json %s/%s nu s-a putut lua (%s)' % (canal, baza,
+			noua.get('eroare') or cod))
+		return None
+	return noua
+
+
+def pazeste_listele(radacina='/', deschide=None):
 	"""Dupa un `opkg update` pornit din alta parte (Extensii): listele surselor feedului HD Satelit care nu sunt chiar
 	cele din ultima stare.json semnata (tinute minte de tine_minte_indexurile la cautare si la verificarea zilnica) se
 	sterg, ca un pachet pus pe server de altcineva sa nu se vada si sa nu se instaleze de acolo. Intoarce numele
-	surselor sterse."""
+	surselor sterse.
+
+	0.7.4: inainte de stergere, stare.json semnat al canalului si bazei se cere o data (Wlad, Amiko V10, 11.11.2026:
+	dupa punerea la loc a copiei setarilor si schimbarea bazei feedului 0.7.1 -> 0.7.0, amprentele tinute minte erau
+	ale altei baze si fiecare opkg update al Extensiilor stergea toate listele HD Satelit, deci feedul aparea gol). Se
+	sterg numai listele care nu se potrivesc nici cu stare.json semnat proaspat; cand se potrivesc, amprentele lui se
+	tin minte. `deschide` (probele) inlocuieste urlopen."""
 	conf = P.citeste_configurarea(radacina)
 	dosar = _cale(radacina, conf.lists_dir)
 	try:
@@ -969,20 +1113,35 @@ def pazeste_listele(radacina='/'):
 		tinute = {}
 	if not isinstance(tinute, dict):
 		tinute = {}
+
+	def semnata(nume, arh, canal, baza, amprente):
+		cale = _lista(dosar, nume)
+		x = None
+		if amprente.get('canal') == canal and amprente.get('baza') == baza and isinstance(amprente.get('indexuri'), dict):
+			x = amprente['indexuri'].get(arh)
+		try:
+			return isinstance(x, dict) and _sha256_fisier(cale) == (x.get('sha256'), x.get('marime'))
+		except (IOError, OSError, EOFError, ValueError):
+			return False
+
 	sterse = []
 	for canal, surse in surse_feed(radacina, conf).items():
+		# pe baze (feed/<canal>/<baza>/<arh>): fiecare baza are stare.json-ul ei
+		pe_baze = {}
 		for nume, _a, arh, baza in surse:
-			cale = _lista(dosar, nume)
-			if cale is None:
-				continue
-			x = None
-			if tinute.get('canal') == canal and tinute.get('baza') == baza and isinstance(tinute.get('indexuri'), dict):
-				x = tinute['indexuri'].get(arh)
-			try:
-				bun = isinstance(x, dict) and _sha256_fisier(cale) == (x.get('sha256'), x.get('marime'))
-			except (IOError, OSError, EOFError, ValueError):
-				bun = False
-			if not bun:
+			if _lista(dosar, nume) is not None and not semnata(nume, arh, canal, baza, tinute):
+				pe_baze.setdefault(baza, []).append((nume, arh))
+		for baza, rele in pe_baze.items():
+			noua = _stare_pentru_paza(radacina, canal, baza, deschide)
+			if noua is not None:
+				proaspete = {'canal': canal, 'baza': baza, 'indexuri': noua.get('indexuri')}
+				bune = [(n, a) for n, a in rele if semnata(n, a, canal, baza, proaspete)]
+				if bune and tine_minte_indexurile(radacina, canal, baza, noua):
+					tinute = dict(proaspete, actualizare=noua.get('actualizare'))
+					print('[HdsActualizari] paza listelor: amprentele %s/%s luate din nou, liste pastrate: %s' % (
+						canal, baza, ', '.join(n for n, _a in bune)))
+					rele = [x for x in rele if x not in bune]
+			for nume, arh in rele:
 				sterge_listele(radacina, [(nume, '', arh, baza)], conf)
 				sterse.append(nume)
 	if sterse:
@@ -1106,7 +1265,10 @@ def argumente_instalare(cai, dosar=None):
 	cand o cale e refuzata."""
 	from Components.Ipkg import opkgArguments
 	radacina = os.path.join(os.path.realpath(dosar or DOSAR_PACHETE), '')
-	return opkgArguments('install', list(cai), (), (radacina,))
+	# --force-overwrite (12.11.2026, dupa TM): o tema straina instalata ca in OE-Alliance (--force-overwrite) poate lua un fisier al
+	# imaginii in lista ei; fara optiune, actualizarea imaginii ar cadea pe aceeasi ciocnire. Pachetele imaginii sunt semnate si
+	# verificate mai sus, deci ele iau fisierul inapoi.
+	return opkgArguments('install', list(cai), ('--force-overwrite',), (radacina,))
 
 
 # ---------------------------------------------------------------- config
@@ -1180,6 +1342,8 @@ class Actualizari(object):
 		self._ceas_rapid = None
 		self._legatura_rapid = None
 		self.fabrica_ceas = None        # eTimer; probele de pe PC dau altul
+		# rezultatul lui tools/hds-actualizare-intrerupta.py de la pornirea aceasta (rezultat_pornire), sau None
+		self.reparare = None
 
 	# ---- ascultatorii (ecranul si pagina web se reimprospateaza singure)
 	def _schimbat(self):
@@ -1385,7 +1549,7 @@ class Actualizari(object):
 			self.rezultat = dict(r, stare=NESEMNATA, poate_instala=False, eroare=curata(problema))
 			self._schimbat()
 			return False
-		self.mesaj = ''
+		self.mesaj = _t(TEXT_INSTALARE)
 		self._de_instalat = list(r.get('pachete') or [])
 		self.faza, self.pas, self.progres = 'instalez', _t('Se descarcă și se verifică pachetele...'), (0, len(nume))
 		self._lista_ipkg = []
@@ -1488,8 +1652,11 @@ class Actualizari(object):
 			elif e == IpkgComponent.EVENT_DONE:
 				ipkg.removeCallback(eveniment)
 				self._ipkg = None
+				# opkg a iesit singur: rezultatul il spune verificarea de mai jos, deci semnul nu mai trebuie
+				self._sfarsit_opkg()
 				self._dupa_instalare(param)
 		ipkg.addCallback(eveniment)
+		self._inceput_opkg()
 		self._jurnal('opkg %s' % ' '.join(argumente))
 		ipkg.setCurrentCommand(IpkgComponent.CMD_INSTALL)
 		try:
@@ -1497,10 +1664,30 @@ class Actualizari(object):
 		except Exception as e:
 			ipkg.removeCallback(eveniment)
 			self._ipkg = None
+			self._sfarsit_opkg()
 			self._refa_legaturile_partii_doua()
 			self._elibereaza_lacatul_partii_doua()
 			self._partea_doua_detasa = False
 			return self._descarcare_cazuta(('descarcare', curata(e)), nume)
+
+	def _inceput_opkg(self):
+		"""Inainte de opkg: semnul pe memoria interna (tools/hds-actualizare-intrerupta.py termina la pornire o instalare
+		oprita) si semnul "ocupat" al paznicului (nu reporneste interfata, pragul lung la blocajele de nucleu)"""
+		if not scrie_semnul_in_curs((self.rezultat.get('server') or {}).get('versiune'), self._de_instalat, self.radacina):
+			self._jurnal('semnul instalarii in curs nu se poate scrie')
+		try:
+			from Components import HdsPaznic
+			HdsPaznic.ocupat(CHEIE_PAZNIC, HdsPaznic.MOTIV_ACTUALIZARE, DURATA_PAZNIC_S)
+		except Exception as e:
+			print('[HdsActualizari] paznicul: %r' % (e,))
+
+	def _sfarsit_opkg(self):
+		sterge_semnul_in_curs(self.radacina)
+		try:
+			from Components import HdsPaznic
+			HdsPaznic.liber(CHEIE_PAZNIC)
+		except Exception as e:
+			print('[HdsActualizari] paznicul: %r' % (e,))
 
 	def _refa_legaturile_partii_doua(self):
 		if self._partea_doua_detasa:
@@ -1733,6 +1920,8 @@ class Actualizari(object):
 				TEXTE_STARE else '',
 			'mesaj': self.mesaj,
 			'repornire': self.repornire,
+			# rezultatul unei actualizari oprite la jumatate, terminate (sau nu) la pornire
+			'reparare': self.reparare,
 			'rapid': self.rapid,
 			'rapid_pas': self.rapid_pas,
 			'zilnic': zilnic_pornit(),
@@ -1822,9 +2011,35 @@ _verificare = []
 FEREASTRA_ACTIVA = False
 
 
+def arata_rezultatul_pornirii(radacina='/'):
+	"""O actualizare oprita la jumatate, terminata (sau nu) la pornire de tools/hds-actualizare-intrerupta.py: textul
+	ramane in mesajul actualizarilor (ecranul Actualizare software si pagina web) si apare o data pe televizor"""
+	rez = rezultat_pornire(radacina)
+	if rez is None:
+		return None
+	text = text_rezultat_pornire(rez)
+	actualizari.reparare = dict(rez, text=text)
+	actualizari.mesaj = text
+	actualizari._jurnal('la pornire: actualizarea %s %s (%s)' % (rez.get('versiune') or '?', rez['stare'],
+		rez.get('detaliu') or ''))
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_INFO if rez['stare'] == 'terminata' else MessageBox.TYPE_ERROR, 30,
+			'HdsActualizariPornire')
+	except Exception as e:
+		print('[HdsActualizari] rezultatul pornirii: %s' % e)
+	return rez
+
+
 def porneste():
-	"""Din mytest.py, dupa ce s-a facut sesiunea: config-ul si verificarea zilnica. Pornirea nu depinde de el."""
+	"""Din mytest.py, dupa ce s-a facut sesiunea: config-ul, rezultatul unei actualizari terminate la pornire si verificarea
+	zilnica. Pornirea nu depinde de el."""
 	config_actualizari()
+	try:
+		arata_rezultatul_pornirii()
+	except Exception as e:
+		print('[HdsActualizari] rezultatul pornirii: %r' % (e,))
 	if not _verificare:
 		v = VerificareZilnica()
 		_verificare.append(v)

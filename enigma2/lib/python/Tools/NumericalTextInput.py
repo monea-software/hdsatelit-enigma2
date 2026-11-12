@@ -4,7 +4,13 @@ from enigma import eTimer
 from Components.Language import language
 
 class NumericalTextInput:
-	def __init__(self, nextFunc=None, handleTimeout = True, search = False):
+	def __init__(self, nextFunc=None, handleTimeout = True, search = False, mode = None):
+		# mode (pluginurile scrise pentru alte imagini; FileCommander cere "SearchUpper" pentru alegerea dupa litere):
+		# "Search"/"SearchLower" = tabelul de cautare de mai jos, "SearchUpper" = acelasi cu litere mari, "Number" = numai
+		# cifra tastei; alt nume sau nimic = tabelul obisnuit, ca pana acum
+		felul = str(mode or "").upper()
+		if felul in ("SEARCH", "SEARCHLOWER", "SEARCHUPPER"):
+			search = True
 		self.mapping = []
 		self.lang = language.getLanguage()
 		self.useableChars=None
@@ -29,6 +35,12 @@ class NumericalTextInput:
 			self.mapping.append ("pqrs7") # 7
 			self.mapping.append ("tuv8") # 8
 			self.mapping.append ("wxyz9") # 9
+			if felul == "SEARCHUPPER":
+				self.mapping = [x.upper() for x in self.mapping]
+			return
+
+		if felul == "NUMBER":
+			self.mapping = [str(i) for i in range(10)]
 			return
 
 		if self.lang == 'de_DE':

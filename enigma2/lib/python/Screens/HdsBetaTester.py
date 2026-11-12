@@ -104,8 +104,10 @@ GLIFE = {
 	"canal_testeri": "reincarca",
 	"public": "licente",
 	"nota": "mod-sigur",
+	"pauza": "oprire-programata",
 	"iesire": "intrare",
 	"acord": "noutati",
+	"reia": "pornire",
 	"nota_noua": "noutati",
 }
 GLIF_TESTER = "noutati"
@@ -334,6 +336,16 @@ def uitaJetonulForumului():
 		F.uitaJetonul()
 	except Exception as e:
 		print("[HdsBetaTester] jetonul forumului: %s" % e)
+
+
+def _ecranQr():
+	"""Ecranul „Trimite prin cod QR” (Screens/HdsQrRapoarte.py, TODO 1860 b), sau None daca lipseste."""
+	try:
+		from Screens.HdsQrRapoarte import HdsQrRapoarte
+		return HdsQrRapoarte
+	except Exception as e:
+		print("[HdsBetaTester] ecranul codurilor QR: %s" % e)
+		return None
 
 
 def ecranProbe():
@@ -610,6 +622,14 @@ class HdsBetaTester(Screen):
 		("canal_testeri", ""),          # eticheta si starea vin din Components.HdsActualizari (canalul testerilor)
 		("public", B.N_("Apariția publică")),
 		("nota", B.N_("Nota de confidențialitate")),
+		("pauza", B.N_("Pune pe pauză (păstrezi înscrierea)")),
+		("iesire", B.N_("Ieși din program și șterge datele")),
+	)
+	# pus pe pauza (TODO 1391 b): pornirea din nou (acordul, cu aceeasi inscriere), forumul, nota si iesirea cu stergerea
+	RANDURI_PAUZA = (
+		("reia", B.N_("Pornește din nou Beta tester")),
+		("forum", B.N_("Forumul receptorului")),
+		("nota", B.N_("Nota de confidențialitate")),
 		("iesire", B.N_("Ieși din program și șterge datele")),
 	)
 	# cine nu e inscris: acordul si forumul (citit de oricine)
@@ -676,6 +696,9 @@ class HdsBetaTester(Screen):
 		self.onFirstExecBegin.append(self._laInceput)
 		self.onLayoutFinish.append(self._asezare)
 		B.ceNumar()
+		# TODO 1860 b: proba scurta a serverului, in fundal; randul „Nu ai internet?” apare numai daca a esuat
+		B.probaServer()
+		self._faraNet = B.serverFaraRaspuns()
 		self.ceasNumar.start(1000, False)
 		self.ceasUltima.start(3000, False)
 		self.reface()
@@ -717,13 +740,16 @@ class HdsBetaTester(Screen):
 	# ------------------------------------------------------------ ceasurile
 
 	def _numarul(self):
-		"""Randul cu numarul de testeri ai modelului, cand vine raspunsul (ecranul nu il asteapta)."""
+		"""Randul cu numarul de testeri ai modelului si randul „Nu ai internet?”, cand vin raspunsurile (ecranul nu le
+		asteapta)."""
 		B._culegeNumar()
 		rand = B.randNumar()
-		if rand != self._numar:
+		fara = B.serverFaraRaspuns()
+		if rand != self._numar or fara != self._faraNet:
 			self._numar = rand
+			self._faraNet = fara
 			self.reface()
-		if B._starea.get("cerere_numar") is None:
+		if B._starea.get("cerere_numar") is None and B._starea.get("cerere_proba") is None:
 			self.ceasNumar.stop()
 
 	def _ultimaTrimitere(self):
@@ -846,13 +872,15 @@ class HdsBetaTester(Screen):
 		# cu nota veche: meniul testerului, cu starea si acceptarea notei noi primele (nimic nu pleaca pana atunci)
 		inscris = B.inscris(b) or veche
 		randuri = []
-		felul = self.RANDURI_NOTA_VECHE if veche else (self.RANDURI if inscris else self.RANDURI_VIZITATOR)
+		pe_pauza = not inscris and B.inPauza(b)
+		felul = self.RANDURI_NOTA_VECHE if veche else (self.RANDURI if inscris else
+			(self.RANDURI_PAUZA if pe_pauza else self.RANDURI_VIZITATOR))
 		for cheie, text in felul:
 			if cheie == "forum" and ecranForum() is None:
 				continue
 			if cheie == "probe" and ecranProbe() is None:
 				continue
-			scurt = B.RANDURI_MENIU.get(cheie, "") if inscris else B.RANDURI_VIZITATOR.get(cheie, "")
+			scurt = B.RANDURI_MENIU.get(cheie, "") if (inscris or (pe_pauza and cheie in ("nota", "iesire"))) else 				B.RANDURI_VIZITATOR.get(cheie, "")
 			glif = GLIFE.get(cheie, "")
 			if cheie == "canal_testeri":
 				A = B.modulCanalTesteri()
@@ -870,6 +898,9 @@ class HdsBetaTester(Screen):
 			elif cheie == "nota_noua":
 				insigna = _("Trimiterea e oprită")
 			randuri.append((_(text), cheie, _(scurt), insigna, valoare, glif, "rosu" if cheie == "iesire" else ""))
+		if B.serverFaraRaspuns() and _ecranQr() is not None:
+			from Components import HdsQrRapoarte as R
+			randuri.append((_(R.RAND_MENIU), "qr_fara_net", _(R.RAND_MENIU_SCURT), "", "", "conexiune", ""))
 		self.randuri = randuri
 		self["lista"].setList(randuri)
 		self._schimbaFelul(inscris)
@@ -935,13 +966,18 @@ class HdsBetaTester(Screen):
 			if e is not None:
 				self.session.openWithCallback(self._dupaForum, e)
 			return
-		if cheie == "acord":
+		if cheie == "qr_fara_net":
+			e = _ecranQr()
+			if e is not None:
+				self.session.open(e)
+			return
+		if cheie in ("acord", "reia"):
 			self.session.openWithCallback(self._dupaAcord, HdsBetaAcord)
 			return
 		if cheie == "nota_noua":
 			self.session.openWithCallback(self._dupaAcord, HdsBetaNotaNoua)
 			return
-		if not B.inscris() and not (B.notaVeche() and cheie in ("nota", "iesire")):
+		if not B.inscris() and not ((B.notaVeche() or B.inPauza()) and cheie in ("nota", "iesire")):
 			return
 		if cheie == "mesaj":
 			self.session.open(HdsBetaMesaj, self.ecran_dedesubt)
@@ -971,10 +1007,14 @@ class HdsBetaTester(Screen):
 			self.session.openWithCallback(lambda *r: self.reface(), HdsBetaPublic)
 		elif cheie == "nota":
 			self.session.open(HdsBetaText, _("Nota de confidențialitate"), _(B.NOTA_SCURTA), B.ADRESA_NOTA)
+		elif cheie == "pauza":
+			_ok, text = B.pauza()
+			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
+			self.reface()
 		elif cheie == "iesire":
 			self.session.openWithCallback(self._dupaIesire, MessageBox, _("Ieși din programul de beta testeri? Serverul "
-				"șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân."),
-				MessageBox.TYPE_YESNO, default=False)
+				"șterge datele acestei înscrieri. Înscrierile din alte sloturi rămân.") + "\n\n" + _(B.LA_IESIRE) + " " +
+				_(B.NU_E_ASISTENTA), MessageBox.TYPE_YESNO, default=False)
 
 	def schimbaCanalTesteri(self):
 		"""OK pe "Primeste intai versiunile pentru testeri": bifa se schimba prin Components.HdsActualizari (scrie sau
@@ -1116,9 +1156,10 @@ class HdsBetaAcord(Screen, _Comutatoare):
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
-		self.setTitle(_("Devino beta tester"))
 		b = B.initConfig()
-		inapoi = B.notaVeche(b)
+		# nota veche sau pauza (TODO 1391 b): bifele de dinainte raman; acordul pastreaza identificatorul
+		inapoi = B.notaVeche(b) or B.inPauza(b)
+		self.setTitle(_("Pornește din nou Beta tester") if B.inPauza(b) else _("Devino beta tester"))
 		self.bife = dict((fel, ConfigYesNo(default=bool(getattr(b, fel).value) if inapoi else True)) for fel in B.FELURI)
 		self.automat = ConfigYesNo(default=bool(b.automat.value) if inapoi else True)
 		self.nume = ConfigText(default=b.nume.value, fixed_size=False)
@@ -1194,7 +1235,8 @@ class HdsBetaAcord(Screen, _Comutatoare):
 		if not ok:
 			self["stare"].setText(text)
 			return
-		self.session.openWithCallback(lambda *r: self.close(True), MessageBox, text, MessageBox.TYPE_INFO, timeout=6)
+		# fara termen: dupa prima activare textul are si explicatia (lasa-l pornit, asistenta e altceva), citita pana la OK
+		self.session.openWithCallback(lambda *r: self.close(True), MessageBox, text, MessageBox.TYPE_INFO)
 
 	def renunta(self):
 		self.close(False)

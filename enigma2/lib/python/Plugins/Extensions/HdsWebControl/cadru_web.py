@@ -1329,6 +1329,16 @@ def _gaseste(lista, cale, parinti):
 	return None
 
 
+_ID_GRUPA = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def _hrefGrupa(x):
+	"""O grupa din cale fara pagina ei: /meniu#g-<id> deschide grupa in meniul complet (meniu_web.py), ca toate
+	treptele caii sa fie clicabile; "" cand grupa n-are id."""
+	gid = x.get("id") or ""
+	return "/meniu#g-" + gid if _ID_GRUPA.match(gid) else ""
+
+
 def drumPagina(grupe, cale, titlu=""):
 	"""Calea din antet: [(text, href sau "")]. Pagina din meniu: „Meniu” sau „Panou”, grupele, pagina; altfel
 	pagina-parinte (PARINTI) si titlul paginii."""
@@ -1341,7 +1351,7 @@ def drumPagina(grupe, cale, titlu=""):
 		rad = (_t("Panou"), "/") if lant[0].get("fel") in ("principal", "alte") else (_t("Meniu"), "/meniu")
 		drum = [rad]
 		for x in lant[1:-1] if lant[0].get("fel") in ("principal", "alte") else lant[:-1]:
-			drum.append((x["text"], x.get("href") or ""))
+			drum.append((x["text"], x.get("href") or _hrefGrupa(x)))
 		drum.append((lant[-1]["text"], ""))
 		return drum
 	parinte = PARINTI.get(cale.split("?", 1)[0])

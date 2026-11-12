@@ -58,8 +58,10 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		self.reface_lista()
 
 	def _randuri(self):
-		return [(text, getattr(config.usage, k)) for k, _v, text in HdsTasteRapide.PROFIL_SETARI] + [
-			(text, getattr(config.hds_buttons, k)) for k, text in HdsTasteRapide.SCURTE + HdsTasteRapide.BUTOANE]
+		# textele traduse la afisare (text_tasta): listele se fac la import, uneori inainte de limba aleasa
+		t = HdsTasteRapide.text_tasta
+		return [(t(k, text), getattr(config.usage, k)) for k, _v, text in HdsTasteRapide.PROFIL_SETARI] + [
+			(t(k, text), getattr(config.hds_buttons, k)) for k, text in HdsTasteRapide.SCURTE + HdsTasteRapide.BUTOANE]
 
 	def reface_lista(self):
 		self.list = [getConfigListEntry(text, element) for text, element in self._randuri()]

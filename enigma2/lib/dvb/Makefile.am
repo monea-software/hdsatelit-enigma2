@@ -10,7 +10,11 @@ AM_CPPFLAGS = \
 noinst_LIBRARIES = libenigma_dvb.a
 
 libenigma_dvb_a_SOURCES = \
+	cahandler.cpp \
 	crc32.cpp \
+	csaengine.cpp \
+	csasession.cpp \
+	cwhandler.cpp \
 	db.cpp \
 	decoder.cpp \
 	demux.cpp \
@@ -21,6 +25,8 @@ libenigma_dvb_a_SOURCES = \
 	esection.cpp \
 	frontend.cpp \
 	hdsait.cpp \
+	hdsfastscan.cpp \
+	hdsfastscantabele.cpp \
 	hdsjurnaldecodor.cpp \
 	hdsjurnaltuner.cpp \
 	hdspazademux.cpp \
@@ -29,6 +35,7 @@ libenigma_dvb_a_SOURCES = \
 	hdsteletext.cpp \
 	hdsspectru.cpp \
 	hdsurmamotor.cpp \
+	hdsvtuner.cpp \
 	metaparser.cpp \
 	pesparse.cpp \
 	pmt.cpp \
@@ -45,7 +52,11 @@ libenigma_dvb_a_SOURCES = \
 dvbincludedir = $(pkgincludedir)/lib/dvb
 dvbinclude_HEADERS = \
 	dvbapi_compat.h \
+	cahandler.h \
 	crc32.h \
+	csaengine.h \
+	csasession.h \
+	cwhandler.h \
 	db.h \
 	decoder.h \
 	demux.h \
@@ -57,6 +68,8 @@ dvbinclude_HEADERS = \
 	frontend.h \
 	frontendparms.h \
 	hdsait.h \
+	hdsfastscan.h \
+	hdsfastscantabele.h \
 	hdscalitate.h \
 	hdscedare.h \
 	hdscitirifrontend.h \
@@ -75,6 +88,7 @@ dvbinclude_HEADERS = \
 	hdsterestru.h \
 	hdsurmamotor.h \
 	hdsunicable.h \
+	hdsvtuner.h \
 	idemux.h \
 	idvb.h \
 	isection.h \

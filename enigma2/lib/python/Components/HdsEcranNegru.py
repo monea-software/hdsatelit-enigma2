@@ -94,8 +94,9 @@ F_COD = "cod"                    # codul pentru parinti, din nou
 F_TUNER = "tuner"                # setarile tunerului
 F_ANALIZA = "analiza"            # analiza fluxului (serviciu de date, format necunoscut)
 F_LOC = "loc"                    # alegerea locului antenei (Screens/HdsLocul.py)
+F_MODULE = "module"              # ecranul modulelor de acces (Screens/CamSetup.py), la ICAM fara SoftCSA
 F_ASCUNDE = "ascunde"            # numai din web: ca EXIT pe televizor
-FAPTE = (F_CAUTA_TP, F_CAUTA, F_INREGISTRARI, F_COD, F_TUNER, F_ANALIZA, F_LOC)
+FAPTE = (F_CAUTA_TP, F_CAUTA, F_INREGISTRARI, F_COD, F_TUNER, F_ANALIZA, F_LOC, F_MODULE)
 
 # erorile acordarii, dupa numele evenimentelor eDVBServicePMTHandler (sDVBState)
 E_FARA_TUNER = "fara_tuner"
@@ -178,6 +179,7 @@ FAPTE_TEXT = {
 	F_TUNER: N_("Deschide setările tunerului"),
 	F_ANALIZA: N_("Analizează fluxul"),
 	F_LOC: N_("Alege locul antenei"),
+	F_MODULE: N_("Deschide modulele de acces"),
 }
 T_ARATA_ANALIZA = N_("Arată analiza fluxului")
 T_DATE_STIUT = N_("Acest serviciu nu are imagine și nici sunet. Trimite: %s.")
@@ -419,7 +421,12 @@ def analizeaza(d):
 	furnizor = _curat(d.get("furnizor") or u"", 60)
 	if d.get("criptat"):
 		text = _t(T_CRIPTAT_ECM) if (d.get("ecm") or -1) > 0 else _t(TEXTE[CRIPTAT])
-		v = _verdict(CRIPTAT, d, text=text, etichete=_etichete_criptare(d),
+		fapta = None
+		if d.get("icam_fara_modul"):
+			# ICAM cu un modul care nu il descifreaza: textul din Components/HdsSoftCsa (TEXT_ICAM_CANAL, cu numele
+			# modulelor care il descifreaza), fapta deschide ecranul modulelor
+			text, fapta = _t(d["icam_fara_modul"]), F_MODULE
+		v = _verdict(CRIPTAT, d, text=text, fapta=fapta, etichete=_etichete_criptare(d),
 			detaliu=_detaliu(_caid_text(d.get("caids")), (_t(D_FURNIZOR) % furnizor) if furnizor else u""))
 		# pasii decriptarii (Components/HdsPasiDecriptare.py), numai cu setarea lor pornita: randurile vii sub mesaj
 		if d.get("pasi"):
@@ -598,8 +605,10 @@ def cadre_din_text(text):
 def cadre_hisilicon(citeste=None):
 	"""Cadrele iesite din decodoarele video care ruleaza (suma vdec00 si vdec01), sau None cand nu se pot citi (fisierele lipsesc sau firul de
 	citire e ocupat: dupa un flux de internet driverul poate tine citirea cat se inchide playerul). Un decodor oprit nu adauga nimic.
-	Inainte, necititul dadea 0, adica "nicio imagine", si aparea "Fara imagine" peste un canal cu imagine buna."""
-	citeste = citeste or _citeste_proc
+	Inainte, necititul dadea 0, adica "nicio imagine", si aparea "Fara imagine" peste un canal cu imagine buna.
+	Fara citeste (pe receptor): amandoua fisierele intr-o singura cerere catre firul de fundal (_citeste_vdec_direct)."""
+	if citeste is None:
+		citeste = (_procFundal(_citeste_vdec_direct, HISI_DIR) or {}).get
 	total = 0
 	gasit = False
 	for n in (0, 1):
@@ -635,6 +644,23 @@ def _citeste_proc_direct(cale):
 def _citeste_proc(cale):
 	"""Ca _citeste_proc_direct; fisierele driverului (/proc/msp, /proc/hisi) le citeste pe firul de fundal."""
 	return _procFundal(_citeste_proc_direct, cale)
+
+
+def _citeste_vdec_direct(dosar):
+	"""{HISI_VDEC % n: text} pentru vdec00 si vdec01 din dosar, numai cele care exista. Ruleaza pe firul de fundal: o
+	singura cerere la pasul urmaritorului in loc de doua (pe Octagon SF8008, sub incarcarea obisnuita, un fir nou pornit
+	si asteptat costa ~1,6 ms, citirea lui vdec00 ~0,8 ms; vdec01 apare numai cu imaginea in imagine, iar fara el se
+	pornea degeaba al doilea fir la fiecare pas). Cheile sunt caile din HISI_VDEC,
+	ca cadre_hisilicon sa le caute la fel ca pana acum."""
+	rez = {}
+	for n in (0, 1):
+		cale = os.path.join(dosar, "vdec%02d" % n)
+		if not os.path.exists(cale):
+			continue
+		text = _citeste_proc_direct(cale)
+		if text is not None:
+			rez[HISI_VDEC % n] = text
+	return rez
 
 
 # ---------------------------------------------------------------- setarea si starea pentru web
@@ -938,6 +964,7 @@ class Urmaritor(object):
 		if d["criptat"]:
 			d["sisteme"] = [g[0] for g in C.group_caids(d["caids"])]
 			d["ecm"] = C.ecm_active(r)
+			d["icam_fara_modul"] = _icam_fara_modul(ref, d["caids"])
 		# imaginea intai: cand vine, analizeaza() nu se uita la semnal, deci starea tunerului nu se cere (pe Vu+ fiecare
 		# citire e un ioctl pe I2C, cu firul principal blocat cat dureaza; paznicul ruleaza la 2 s cat omul se uita la TV)
 		d["imagine"], d["negru_de"] = self.imagine(acum, r.geti("sVideoHeight"))
@@ -1042,6 +1069,16 @@ def _pasi_uita():
 			P.uita()
 	except Exception:
 		pass
+
+
+def _icam_fara_modul(ref, caids):
+	"""Textul (netradus) al canalului ICAM cu SoftCSA negata (Components/HdsSoftCsa.canalIcamFaraSoftCsa), altfel "";
+	referinta e cea din navigatie (a canalului, nu a releului). "" la o eroare."""
+	try:
+		from Components import HdsSoftCsa
+		return HdsSoftCsa.TEXT_ICAM_CANAL if HdsSoftCsa.canalIcamFaraSoftCsa(ref.toString(), caids) else ""
+	except Exception:
+		return ""
 
 
 def _cam_start():

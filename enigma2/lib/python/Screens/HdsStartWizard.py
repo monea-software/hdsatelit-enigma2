@@ -970,10 +970,20 @@ class HdsStartWizard(Screen, ConfigListScreen):
 
         lang_choices = []
         try:
-            raw_langs = language.getLanguageList()
+            # si limbile din feed (imaginea mica: 15 in imagine), cu eticheta lor; alegerea uneia o descarca singura
+            # (salveazaLimba). Pe Vu+ Solo SE cu partea a doua, numai cele cu catalog (stickul nu e pus inca).
+            try:
+                from Components.Language import etichetaFaraCatalog, limbiPeStick
+                raw_langs = language.getLanguageList(suplimentare=not limbiPeStick())
+                eticheta = etichetaFaraCatalog()
+            except ImportError:
+                raw_langs, eticheta = language.getLanguageList(), ""
+            cu_catalog = getattr(language, "lang", None)
             for item in raw_langs:
                 code = item[0]
                 name = native_map.get(code, item[1][0] if len(item[1]) > 0 else code)
+                if eticheta and cu_catalog is not None and code not in cu_catalog:
+                    name += " " + eticheta
                 if code != "ro_RO":
                     lang_choices.append((code, name))
         except Exception as e:
@@ -1140,6 +1150,15 @@ class HdsStartWizard(Screen, ConfigListScreen):
         config.osd.language.value = chosen
         config.osd.language.save()
         configfile.save()
+        cu_catalog = getattr(language, "lang", None)
+        if cu_catalog is not None and chosen not in cu_catalog:
+            # limba din feed: asistentul ramane in engleza, iar receptorul o descarca si o instaleaza singur, pe loc
+            # (Components/HdsLimbaRestaurare.py); fara internet, cand vine reteaua
+            try:
+                from Components import HdsLimbaRestaurare
+                HdsLimbaRestaurare.cereAcum(self.session)
+            except Exception as e:
+                print("[HdsStartWizard] descarcarea limbii:", e)
 
     def salveazaVideo(self):
         """rezolutia aleasa pe pagina 1 (confirmata sau neschimbata): in config.av.hds_videomode si pe disc"""

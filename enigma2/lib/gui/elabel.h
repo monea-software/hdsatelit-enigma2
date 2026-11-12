@@ -67,10 +67,31 @@ public:
 	void setForegroundColor(const gRGB &col);
 	void setShadowColor(const gRGB &col);
 	void setShadowOffset(const ePoint &offset);
+		/* HDSatelit: the outline of the text (borderColor/borderWidth on labels in skins, also called
+		   textBorderColor/textBorderWidth); black when only the width is given, at most 3 points */
+	void setBorderColor(const gRGB &col);
+	void setBorderWidth(int width);
+	void setTextBorderColor(const gRGB &col) { setBorderColor(col); }
+	void setTextBorderWidth(int width) { setBorderWidth(width); }
 	void setNoWrap(int nowrap);
+		/* HDSatelit 0.7.4: the space between the edges and the text (padding="left,top,right,bottom" of the skins written
+		   for other images); 0 = as before */
+	void setPadding(int left, int top, int right, int bottom);
+		/* HDSatelit 0.7.4: fontScale of the skins written for other images, only where the skin asks for it: a text too
+		   wide for the label is drawn with smaller letters until it fits (type 1 "size", 2 "width": both make the
+		   letters smaller here), not below the floor (floor < 0: the font size plus floor). 0 = as before (a one-line
+		   text that does not fit scrolls) */
+	void setFontScale(int type, int floor);
+		/* HDSatelit 0.7.4: underline="1" (skins written for other images): a line of one point under the text, in the
+		   text colour; 0 = as before */
+	void setUnderline(int underline);
 	void clearForegroundColor();
 	
 	eSize calculateSize();
+		/* HDSatelit 0.7.4, the call of the plugins written for other images (eLabel.calculateTextSize(font, text,
+		   eSize(w, h)[, nowrap])): the size of a text in a font inside targetSize, wrapped unless nowrap, without a
+		   label (nothing is drawn or invalidated) */
+	static eSize calculateTextSize(gFont *font, const std::string &string, eSize targetSize, bool nowrap = false);
 	~eLabel();
 protected:
 	ePtr<gFont> m_font;
@@ -83,7 +104,20 @@ private:
 	gRGB m_foreground_color, m_shadow_color;
 	ePoint m_shadow_offset;
 	int m_nowrap;
+	int m_padding_left, m_padding_top, m_padding_right, m_padding_bottom;
+	int m_fontscale_type, m_fontscale_floor;
+	int m_underline;
+	void paintUnderline(gPainter &painter, const eSize &area, const std::string &text, int flags);
+	ePtr<gFont> m_font_scaled;
+	bool m_font_scaled_valid;
+	ePtr<gFont> scaledFont(const eSize &area, const std::string &text);
+	bool hasPadding() const { return m_padding_left || m_padding_top || m_padding_right || m_padding_bottom; }
+	eSize textSize() const;
+	gRGB m_text_border_color;
+	int m_text_border_width;
 #ifndef SWIG
+		/* the text in the outline colour at every offset of the outline width (static text or the scrolling line) */
+	void paintTextBorder(gPainter &painter, const eRect &rect, const std::string &text, int flags, eTextPara *line, const ePoint &offset);
 		/* HDSatelit: the scroll of a one-line text that does not fit (eDerulare above) */
 	class Derulare: public eDerulare
 	{

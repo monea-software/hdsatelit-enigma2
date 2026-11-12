@@ -24,6 +24,7 @@
 #      canalele si buchetele, setarile antenei, inregistrarile programate, piconurile si setarile generale sigure
 #      (Components/HdsImportExtra.CHEI_SIGURE; limba ramane cea din asistent), cele pe care copia le are; reteaua si
 #      Wi-Fi-ul numai cand receptorul nu are deja o retea care merge (retea_merge: reteaua din asistent nu se strica);
+#      modulele de acces (fisierele lor copiate ca atare, pachetele instalate din nou, modulul ales);
 #      pluginurile numai cu oferta. Skinul nu se aduce. Copia de siguranta, arhivele, limitele si lista alba sunt ale
 #      importului.
 #   5. La capat: starea GATA cu rezumatul (ce s-a adus, cu numere, si ce nu), aratat o data pe televizor si in web;
@@ -57,9 +58,10 @@ DESCHISE = (CAUTA, INTREBARE)
 MEDII_BUNE = ("stick", "disc")
 # copiile HD Satelit stau pe mediu sub HdsCopieSetari.DOSAR_PE_MEDIU ("hdsatelit/copii-setari")
 PREFIX_COPII_HDS = "hdsatelit/"
-# rețeaua numai cand receptorul nu are deja una care merge (retea_merge); pluginurile numai cu oferta
+# rețeaua numai cand receptorul nu are deja una care merge (retea_merge); pluginurile numai cu oferta; modulele de
+# acces: fisierele copiate ca atare si pachetele instalate din nou (HdsImportExtra.importa_acces, regula din 31.10.2026)
 ALEGERI_PRIMA = {"canale": True, "tunere": True, "temporizatoare": True, "retea": True, "picon": True,
-	"generale": True, "pachete": True}
+	"generale": True, "acces": True, "pachete": True}
 MAX_TEXT_SURSA = 70
 # tipurile de serviciu radio din lamedb (al cincilea camp al randului serviciului): 2 = radio, 10 = radio AAC
 TIPURI_RADIO = (2, 10)
@@ -246,6 +248,10 @@ def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
 	setari = int(rez.get("setari") or 0)
 	retea = rez.get("retea") if isinstance(rez.get("retea"), dict) else {}
 	pachete = rez.get("pachete") if isinstance(rez.get("pachete"), dict) else {}
+	acces = rez.get("acces") if isinstance(rez.get("acces"), dict) else {}
+
+	def _nume(lista):
+		return [str(n)[:80] for n in (lista or [])][:20]
 	r = {
 		"ok": bool(rez.get("ok")),
 		"tv": 0, "radio": 0, "buchete": 0, "temporizatoare": 0,
@@ -264,6 +270,14 @@ def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
 		"copia_retea": bool(sursa and sursa.get("retea")),
 		"copia_picon": bool(sursa and sursa.get("picon")),
 		"copia_pachete": bool(sursa and sursa.get("pachete")),
+		# modulele de acces: numai numere si numele pachetelor (HdsImportExtra.importa_acces)
+		"acces_copiate": int(acces.get("copiate") or 0),
+		"acces_puse": _nume(acces.get("puse")),
+		"acces_deja": _nume(acces.get("deja")),
+		"acces_lipsa": _nume(acces.get("lipsa")),
+		"acces_amanate": _nume(acces.get("amanate")),
+		"acces_ales": str(acces.get("ales") or "")[:80],
+		"copia_acces": bool(sursa and sursa.get("acces")),
 		"mesaje": [str(m)[:300] for m in (rez.get("mesaje") or [])][:16],
 	}
 	if rez.get("canale"):
@@ -311,6 +325,12 @@ def parti_rezumat(r):
 		adus.append(_("rețeaua și Wi-Fi"))
 	if r.get("picon"):
 		adus.append(_("piconuri: %d") % r["picon"])
+	if r.get("acces_copiate"):
+		adus.append(_("fișierele modulelor de acces: %d, copiate așa cum erau") % r["acces_copiate"])
+	if r.get("acces_puse"):
+		adus.append(_("modulele de acces, instalate din nou: %s") % ", ".join(_scurt(n) for n in r["acces_puse"]))
+	if r.get("acces_ales"):
+		adus.append(_("modulul ales: %s, pornit") % r["acces_ales"])
 	neadus = []
 	if not antena:
 		neadus.append(_("setările antenei (nu sunt în copie pentru un tuner de satelit)"))
@@ -335,8 +355,26 @@ def parti_rezumat(r):
 	else:
 		neadus.append(_("pluginurile (le pui din nou din Meniu, Extensii și aplicații, din listă sau din fișier .ipk)"))
 	neadus.append(_("skinul (skinurile altor imagini nu se potrivesc pe ecranele acestei imagini)"))
-	neadus.append(_("modulele de acces condiționat"))
+	if r.get("acces_lipsa"):
+		neadus.append(_("modulele de acces %s (nu există în sursele de pachete ale imaginii; fișierele lor sunt "
+			"copiate)") % ", ".join(_scurt(n) for n in r["acces_lipsa"]))
+	if r.get("acces_amanate"):
+		neadus.append(_("modulele de acces %s (se instalează singure la următoarea pornire a receptorului)")
+			% ", ".join(_scurt(n) for n in r["acces_amanate"]))
+	if not r.get("copia_acces") and not r.get("acces_copiate"):
+		neadus.append(_("modulele de acces condiționat (nu sunt în copie)"))
+	elif not r.get("acces_copiate"):
+		neadus.append(_("fișierele modulelor de acces (nu s-au putut copia)"))
 	return adus, neadus
+
+
+def _scurt(nume):
+	"""Numele aratat al unui pachet: fara enigma2-plugin-<categorie>- (HdsImportExtra.nume_scurt)."""
+	try:
+		from Components.HdsImportExtra import nume_scurt
+	except ImportError:
+		return nume
+	return nume_scurt(nume)
 
 
 def text_rezumat(r):
@@ -407,9 +445,10 @@ def stare_publica(rad=None):
 
 
 def text_ce_se_aduce():
-	return _("Se aduc canalele și buchetele, setările antenei, înregistrările programate, piconurile și setările "
-		"generale sigure; rețeaua și Wi-Fi numai dacă receptorul nu are deja o rețea care merge. Pluginurile copiei "
-		"care sunt în sursele receptorului ți le ofer apoi. Limba rămâne cea de acum, iar skinul nu se aduce.")
+	return _("Se aduc canalele și buchetele, setările antenei, înregistrările programate, piconurile, setările "
+		"generale sigure și modulele de acces (fișierele lor, copiate așa cum sunt, și modulele, instalate din nou); "
+		"rețeaua și Wi-Fi numai dacă receptorul nu are deja o rețea care merge. Pluginurile copiei care sunt în "
+		"sursele receptorului ți le ofer apoi. Limba rămâne cea de acum, iar skinul nu se aduce.")
 
 
 def text_oferta(r):

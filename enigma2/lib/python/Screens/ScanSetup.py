@@ -353,7 +353,7 @@ class ScanSetup(ConfigListScreen, Screen, CableTransponderSearchSupport):
 
 		self.setTitle(_("Manual Scan"))
 		self["key_red"] = StaticText(_("Cancel"))
-		self["key_green"] = StaticText(_("Scan") if _("Scan") != "Scan" else "Scanare")
+		self["key_green"] = StaticText(_("Scanare"))
 
 		# Harta nu e abonata la SetupActions: la prioritatea -2 ar primi inaintea listei (ConfigListScreen, -1) si
 		# stanga/dreapta/verde (save)/cifrele, pe care nu le are („unknown action SetupActions/right! typo in

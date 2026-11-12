@@ -34,14 +34,14 @@ install_PYTHON = \
 	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
 	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
-	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py \
+	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py HdsVpnFurnizor.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
 	HdsAfisajColor.py \
-	HdsCopieSetari.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
+	HdsCopieSetari.py HdsCopieImagine.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
 	HdsNavigatorWeb.py HdsTemaInterfata.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
-	HdsLocuriRetea.py HdsBetaTester.py HdsForumReceptor.py \
+	HdsLocuriRetea.py HdsReteaStandard.py HdsBetaTester.py HdsQrRapoarte.py HdsForumReceptor.py \
 	Opkg.py NetworkServices.py DVD.py \
 	TaskList.py Toast.py

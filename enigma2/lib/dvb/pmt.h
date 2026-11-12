@@ -4,6 +4,8 @@
 
 #ifndef SWIG
 #include <map>
+#include <string>
+#include <vector>
 #include <lib/base/buffer.h>
 #include <lib/dvb/idvb.h>
 #include <lib/dvb/dvb.h>
@@ -22,6 +24,7 @@
 
 class eDVBCAService;
 class eDVBScan;
+class ePMTClient;
 
 struct channel_data: public sigc::trackable
 {
@@ -52,6 +55,11 @@ class eDVBCAService: public sigc::trackable
 	void sendCAPMT();
 	void Connect();
 	void socketCB(int what);
+		/* the second path, the softcam connected to enigma2 (lib/dvb/cahandler.h): the message id of this service, the
+		   PMT version of the CA PMT in m_capmt (-1 before the first one) and its length */
+	uint32_t m_id;
+	int m_version;
+	int capmtLength(int &lenbytes) const;
 
 	static void DVBChannelAdded(eDVBChannel*);
 	static void DVBChannelStateChanged(iDVBChannel*);
@@ -68,6 +76,20 @@ public:
 	static RESULT unregister_service( const eServiceReferenceDVB &ref, int demux_nums[2], eTable<ProgramMapSection> *ptr );
 	void buildCAPMT(eTable<ProgramMapSection> *ptr);
 	sigc::signal<void(long long)> caPmtTrimis;
+
+		/* for eDVBCAHandler (lib/dvb/cahandler.cpp): the CA PMT with the protocol 3 header (0xA5, message id), the list
+		   management and the command changed only in the copy written */
+	int writeCAPMTObject(ePMTClient *client, int list_management = -1, int cmd_id = -1);
+	void notifyCapmtSent();
+	int getCAPMTVersion() const { return m_version; }
+	uint32_t getId() const { return m_id; }
+	std::string toString() const { return m_service.toString(); }
+	static int numberOfServices() { return exist.size(); }
+	static int numberOfBuiltServices();
+	static void builtServices(std::vector<eDVBCAService*> &services);
+	static int findById(uint32_t id, eServiceReferenceDVB &ref);
+		/* the last softcam left the new socket: the CA PMT of every service again on the old path */
+	static void resendLegacy();
 };
 
 #endif
@@ -100,8 +122,13 @@ class eDVBServicePMTHandler: public sigc::trackable
 
 	void PMTready(int error);
 	void PATready(int error);
-	
+
 	int m_pmt_pid;
+		/* HDSatelit (0.7.4, viteza zap): la semnal prins, pe canalul viu din fereastra principala, filtrul PMT porneste
+		   direct pe PID-ul PMT tinut minte (cPMTPID, scris de PATready), in paralel cu PAT-ul care il verifica la sosire;
+		   m_hds_pmt_devreme = acel PID pana la primul PAT, altfel -1 (PMT-ul porneste dupa PAT, ca inainte) */
+	int m_hds_pmt_devreme;
+	void pornesteTabele(bool rapid);
 	
 	int m_use_decode_demux;
 	uint8_t m_decode_demux_num;

@@ -79,13 +79,19 @@ class Network:
 
 	def onRemoteRootFS(self):
 		if self.remoteRootFS == None:
-			fp = open('/proc/mounts', 'r', encoding="utf-8", errors="surrogateescape")
-			mounts = fp.readlines()
-			fp.close()
+			# HDSatelit: fara /proc/mounts (/proc demontat la oprire, pornire din alt multiboot) raspunsul e "nu", fara
+			# sa opreasca interfata (raportul 858016, Vu+ Uno4K SE 0.7.3: FileNotFoundError aici); se reincearca la
+			# urmatorul apel, nu se tine minte
+			try:
+				with open('/proc/mounts', 'r', encoding="utf-8", errors="surrogateescape") as fp:
+					mounts = fp.readlines()
+			except OSError as e:
+				print("[Network] /proc/mounts necitibil: %s" % e)
+				return False
 			self.remoteRootFS = False
 			for line in mounts:
 				parts = line.strip().split()
-				if parts[1] == '/' and parts[2] == 'nfs':
+				if len(parts) > 2 and parts[1] == '/' and parts[2] == 'nfs':
 					self.remoteRootFS = True
 					break
 		return self.remoteRootFS

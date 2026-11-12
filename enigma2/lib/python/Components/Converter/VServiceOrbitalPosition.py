@@ -1,0 +1,44 @@
+# -*- coding: utf-8 -*-
+# Luat din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e (12.11.2026), fisierul lib/python/Components/Converter/VServiceOrbitalPosition.py.
+# Licenta GPL-2.0 (ca enigma2); notele autorilor de mai jos raman neschimbate. Adus in imaginea HD Satelit (lotul TOT,
+# 12.11.2026) ca temele si pluginurile scrise pentru imaginile OE-Alliance sa-si gaseasca toate componentele.
+from enigma import iPlayableService, iPlayableServicePtr, iServiceInformation
+
+from Components.Element import cached
+from Components.Converter.Converter import Converter
+
+
+class VServiceOrbitalPosition(Converter):
+	FULL = 0
+	SHORT = 1
+
+	def __init__(self, token):
+		Converter.__init__(self, token)
+		self.type = self.SHORT if token == "Short" else self.FULL
+
+	def changed(self, what):
+		if what[0] != self.CHANGED_SPECIFIC or what[1] == iPlayableService.evStart:
+			Converter.changed(self, what)
+
+	@cached
+	def getText(self):
+		text = ""
+		service = self.source.service
+		if isinstance(service, iPlayableServicePtr):
+			info = service and service.info()
+			ref = None
+		else:  # Reference.
+			info = service and self.source.info
+			ref = service
+		if info is not None:
+			transponderInfo = info.getInfoObject(ref, iServiceInformation.sTransponderData) if ref else info.getInfoObject(iServiceInformation.sTransponderData)
+			if transponderInfo and "orbital_position" in transponderInfo:
+				position = int(transponderInfo["orbital_position"])
+				direction = "E"
+				if position > 1800:
+					position = 3600 - position
+					direction = "W"
+				text = f"{position // 10}.{position % 10}{direction}" if self.type == self.SHORT else f"{position // 10}.{position % 10} ° {direction}"
+		return text
+
+	text = property(getText)

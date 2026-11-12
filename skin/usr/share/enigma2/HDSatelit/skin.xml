@@ -2840,6 +2840,15 @@
 		<widget source="qr" render="Canvas" position="1264,120" size="440,440" zPosition="3" />
 		<widget name="adresa" position="1224,576" size="520,150" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="top" zPosition="2" />
 	</screen>
+	<!-- „Nu ai internet? Trimite prin cod QR” (Screens/HdsQrRapoarte.py, TODO 1860 b): rapoartele in stanga, codul ales
+	     in dreapta; qr_mare (ascuns) e codul pe tot ecranul, aratat de OK -->
+	<screen name="HdsQrRapoarte" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1776" />
+		<widget name="lista" position="32,104" size="760,560" font="HdsRegular;30" itemHeight="70" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" transparent="1" scrollbarMode="showNever" zPosition="2" />
+		<widget name="text" position="32,688" size="760,224" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
+		<widget source="qr" render="Canvas" position="904,104" size="808,808" zPosition="3" />
+		<widget source="qr_mare" render="Canvas" position="388,0" size="1000,1000" zPosition="5" />
+	</screen>
 	<!-- ajutorul de la distanta (numai din meniul testerului; numele din skinName al clasei): starea, codul mare,
 	     informarea sau jurnalul; tastele sunt StaticText cu legenda lor aici (liniuta si textul se ascund cand tasta
 	     n-are text: Verde cat sesiunea merge) -->
@@ -4988,9 +4997,15 @@
 		<widget name="turnTime" conditional="turnTime" position="330,208" size="166,52" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 
-	<!-- tasta fara efect: patrat chihlimbar sus dreapta cat timp codul arata fereastra -->
-	<screen name="UnhandledKey" position="1776,54" size="48,48" backgroundColor="hdsAmber" flags="wfNoBorder" zPosition="100">
+	<!-- tasta fara efect (Screens/UnhandledKey.py): panou mic sus dreapta cu „Tastă nefolosită în acest ecran” in limba
+	     meniului, cat timp codul arata fereastra (2 s); patratul chihlimbar de dinainte ramane semnul din
+	     stanga textului. Eticheta e chiar panoul: codul o strange la lungimea textului, marginea dreapta (1824) ramane.
+	     Marginea chihlimbar il desparte de ferestrele temei (acelasi fond); raza mica: colturile unei ferestre transparente
+	     lasa sa se vada video-ul de sub ele -->
+	<screen name="UnhandledKey" position="984,54" size="840,60" backgroundColor="transparent" flags="wfNoBorder" zPosition="100">
 		<widget name="UnhandledKeyPixmap" conditional="UnhandledKeyPixmap" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="UnhandledKeyText" conditional="UnhandledKeyText" position="0,0" size="840,60" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" cornerRadius="8" widgetBorderWidth="2" widgetBorderColor="hdsAmber" padding="58,0,24,0" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="24,20" size="20,20" backgroundColor="hdsAmber" zPosition="2" />
 	</screen>
 
 	<!-- incarcarea fluxului (IPTV) -->

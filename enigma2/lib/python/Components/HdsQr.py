@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsQr: cod QR (ISO/IEC 18004) pentru o adresa scurta, fara biblioteci straine: modul octeti, nivelul de corectie M,
-# versiunile 1-10 (cel mult 213 octeti). Iese o matrice de 0/1 (1 = patrat inchis), fara marginea alba; desenul
+# versiunile 1-20 (cel mult 666 octeti; 1-10 pana la 213 octeti, 11-20 adaugate pe 11.11.2026 pentru codurile
+# rapoartelor fara internet din Beta tester, Components/HdsQrRapoarte.py). Iese o matrice de 0/1 (1 = patrat inchis), fara marginea alba; desenul
 # il face ecranul, cu CanvasSource.fill() (deseneaza()). Modul comun al imaginii: ecranele traducerii subtitrarilor
 # (Screens/HdsTraducereSubtitrari.py: telefonul asociat prin cod, paginile oficiale ale cheilor) si navigatorul
 # (Plugins/Extensions/HdsNavigator: rezerva spre pagina „Interfețe CAM”).
@@ -13,7 +14,8 @@
 # aliniere, de sincronizare, modulul inchis, informatia de format si de versiune), apoi masca cu penalizarea cea mai
 # mica dintre cele opt.
 
-# (cuvinte de corectie pe bloc, [(blocuri, cuvinte de date pe bloc), ...]) pentru nivelul M, versiunile 1-10
+# (cuvinte de corectie pe bloc, [(blocuri, cuvinte de date pe bloc), ...]) pentru nivelul M, versiunile 1-20 (ISO/IEC
+# 18004 tabelul 9; 11-20 verificate cu RS_BLOCK_TABLE al bibliotecii qrcode, proba test_qr_rapoarte_074.py)
 _BLOCURI_M = {
 	1: (10, [(1, 16)]),
 	2: (16, [(1, 28)]),
@@ -25,19 +27,32 @@ _BLOCURI_M = {
 	8: (22, [(2, 38), (2, 39)]),
 	9: (22, [(3, 36), (2, 37)]),
 	10: (26, [(4, 43), (1, 44)]),
+	11: (30, [(1, 50), (4, 51)]),
+	12: (22, [(6, 36), (2, 37)]),
+	13: (22, [(8, 37), (1, 38)]),
+	14: (24, [(4, 40), (5, 41)]),
+	15: (24, [(5, 41), (5, 42)]),
+	16: (28, [(7, 45), (3, 46)]),
+	17: (28, [(10, 46), (1, 47)]),
+	18: (26, [(9, 43), (4, 44)]),
+	19: (26, [(3, 44), (11, 45)]),
+	20: (26, [(3, 41), (13, 42)]),
 }
 
 _ALINIERE = {
 	1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34],
 	7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50],
+	11: [6, 30, 54], 12: [6, 32, 58], 13: [6, 34, 62], 14: [6, 26, 46, 66], 15: [6, 26, 48, 70],
+	16: [6, 26, 50, 74], 17: [6, 30, 54, 78], 18: [6, 30, 56, 82], 19: [6, 30, 58, 86], 20: [6, 34, 62, 90],
 }
 
 # biti ramasi dupa cuvinte, pe versiune
-_REST = {1: 0, 2: 7, 3: 7, 4: 7, 5: 7, 6: 7, 7: 0, 8: 0, 9: 0, 10: 0}
+_REST = {1: 0, 2: 7, 3: 7, 4: 7, 5: 7, 6: 7, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 3, 15: 3, 16: 3, 17: 3,
+	18: 3, 19: 3, 20: 3}
 
 _NIVEL_M = 0  # bitii nivelului de corectie in informatia de format (L=1, M=0, Q=3, H=2)
 
-VERSIUNE_MAXIMA = 10
+VERSIUNE_MAXIMA = 20
 
 # ---------------------------------------------------------------- GF(256)
 
@@ -299,7 +314,7 @@ class _Matrice(object):
 
 
 def matrice(text):
-	"""Matricea codului QR pentru `text` (str sau bytes); ValueError daca nu incape in versiunea 10."""
+	"""Matricea codului QR pentru `text` (str sau bytes); ValueError daca nu incape in versiunea VERSIUNE_MAXIMA."""
 	date = text.encode("utf-8") if not isinstance(text, bytes) else text
 	versiune = versiunea_pentru(len(date))
 	if versiune is None:

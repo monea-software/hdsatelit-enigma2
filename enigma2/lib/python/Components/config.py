@@ -511,6 +511,14 @@ class ConfigEnableDisable(ConfigBoolean):
 	def __init__(self, default = False):
 		ConfigBoolean.__init__(self, default = default, descriptions = enable_disable_descriptions)
 
+def _dataText(format, t):
+	"""strftime cu numele zilelor si lunilor in limba meniului (Tools/HdsNumeData.py); la orice eroare, strftime."""
+	try:
+		from Tools.HdsNumeData import dataText
+		return dataText(format, t)
+	except Exception:
+		return strftime(format, t)
+
 class ConfigDateTime(ConfigElement):
 	def __init__(self, default, formatstring, increment = 86400):
 		ConfigElement.__init__(self)
@@ -527,10 +535,10 @@ class ConfigDateTime(ConfigElement):
 			self.value = self.default
 
 	def getText(self):
-		return strftime(self.formatstring, localtime(self.value))
+		return _dataText(self.formatstring, localtime(self.value))
 
 	def getMulti(self, selected):
-		return ("text", strftime(self.formatstring, localtime(self.value)))
+		return ("text", _dataText(self.formatstring, localtime(self.value)))
 
 	def fromstring(self, val):
 		return int(val)
@@ -2013,3 +2021,108 @@ setupOnSave = {}
 
 def setOnSaveCallback(setup, callback):
 	setupOnSave[setup] = callback
+
+
+# HDSatelit: stratul de compatibilitate cu API-ul din alte imagini al setarilor (pluginurile scrise pentru el).
+# Se adauga numai ce lipseste (o clasa care are deja metoda o pastreaza pe a ei); nimic din ce merge azi nu se schimba.
+# Codurile tastelor sunt aceleasi cu KEY_* de mai sus; PAGEUP...ERASE sunt coduri noi, pe care setarile noastre le ignora.
+ActionKeys.SELECT = KEY_OK
+ActionKeys.DELETE = KEY_DELETE
+ActionKeys.BACKSPACE = KEY_BACKSPACE
+ActionKeys.FIRST = KEY_HOME
+ActionKeys.LAST = KEY_END
+ActionKeys.TOGGLE = KEY_TOGGLEOW
+ActionKeys.ASCII = KEY_ASCII
+ActionKeys.TIMEOUT = KEY_TIMEOUT
+for _i in range(10):
+	setattr(ActionKeys, "NUMBER_%d" % _i, KEY_0 + _i)
+ActionKeys.NUMBERS = tuple(KEY_NUMBERS)
+ActionKeys.PAGEUP = 22
+ActionKeys.PAGEDOWN = 23
+ActionKeys.PREV = 24
+ActionKeys.NEXT = 25
+ActionKeys.ERASE = 26
+ACTIONKEY_LEFT, ACTIONKEY_RIGHT, ACTIONKEY_SELECT = KEY_LEFT, KEY_RIGHT, KEY_OK
+ACTIONKEY_DELETE, ACTIONKEY_BACKSPACE, ACTIONKEY_FIRST, ACTIONKEY_LAST = KEY_DELETE, KEY_BACKSPACE, KEY_HOME, KEY_END
+ACTIONKEY_TOGGLE, ACTIONKEY_ASCII, ACTIONKEY_TIMEOUT = KEY_TOGGLEOW, KEY_ASCII, KEY_TIMEOUT
+ACTIONKEY_NUMBERS = list(KEY_NUMBERS)
+(ACTIONKEY_0, ACTIONKEY_1, ACTIONKEY_2, ACTIONKEY_3, ACTIONKEY_4, ACTIONKEY_5, ACTIONKEY_6, ACTIONKEY_7, ACTIONKEY_8,
+	ACTIONKEY_9) = KEY_NUMBERS
+ACTIONKEY_PAGEUP, ACTIONKEY_PAGEDOWN, ACTIONKEY_PREV, ACTIONKEY_NEXT, ACTIONKEY_ERASE = 22, 23, 24, 25, 26
+del _i
+
+
+def _hdsAdauga(clasa, nume, functie):
+	if not hasattr(clasa, nume):
+		setattr(clasa, nume, functie)
+
+
+def _hdsTextAfisat(self, value):
+	"""toDisplayString: textul aratat pentru o valoare (descrierea alegerii, cand setarea are descrieri)."""
+	for camp in ("description", "descriptions"):
+		try:
+			d = getattr(self, camp)
+			if d is not None:
+				return str(d[value])
+		except Exception:
+			pass
+	return str(value)
+
+
+_hdsAdauga(ConfigElement, "toString", lambda self, value: self.tostring(value))
+_hdsAdauga(ConfigElement, "fromString", lambda self, value: self.fromstring(value))
+_hdsAdauga(ConfigElement, "toDisplayString", _hdsTextAfisat)
+_hdsAdauga(ConfigElement, "getText", lambda self: self.toDisplayString(self.value))
+_hdsAdauga(ConfigElement, "getMulti", lambda self, selected: ("text", self.getText()))
+_hdsAdauga(ConfigElement, "handleKey", lambda self, key, callback=None: None)
+_hdsAdauga(ConfigElement, "showHelp", lambda self, session: self.onSelect(session))
+_hdsAdauga(ConfigElement, "hideHelp", lambda self, session: self.onDeselect(session))
+_hdsAdauga(ConfigElement, "isReadOnly", lambda self: self.__dict__.get("_hdsDoarCitire", False))
+_hdsAdauga(ConfigElement, "setReadOnly", lambda self, value: self.__dict__.__setitem__("_hdsDoarCitire", bool(value)))
+_hdsAdauga(ConfigElement, "getSavedValue", lambda self: self.saved_value)
+_hdsAdauga(ConfigElement, "setSavedValue", lambda self, value: setattr(self, "saved_value", value))
+_hdsAdauga(ConfigElement, "getSaveDisabled", lambda self: self.save_disabled)
+_hdsAdauga(ConfigElement, "setSaveDisabled", lambda self, value: setattr(self, "save_disabled", bool(value)))
+_hdsAdauga(ConfigElement, "getSaveForced", lambda self: self.save_forced)
+_hdsAdauga(ConfigElement, "setSaveForced", lambda self, value: setattr(self, "save_forced", bool(value)))
+_hdsAdauga(ConfigSelection, "getChoices", lambda self: [x[0] if isinstance(x, (tuple, list)) else x for x in self.choices.choices] if isinstance(self.choices.choices, list) else list(self.choices.choices.keys()))
+_hdsAdauga(ConfigSelection, "getDescriptions", lambda self: [self.toDisplayString(x) for x in self.getChoices()])
+_hdsAdauga(ConfigSelection, "getSelectionList", lambda self: [(x, self.toDisplayString(x)) for x in self.getChoices()])
+_hdsAdauga(ConfigSelection, "setSelectionList", lambda self, choices, default=None: self.setChoices(choices, default))
+_hdsAdauga(ConfigSequence, "getLimits", lambda self: self.limits[0] if len(self.limits) == 1 else self.limits)
+descriptionsList = descriptionList
+
+
+def ReadOnly(element):
+	"""Alte imagini: setarea se arata, dar nu se poate schimba din liste (ConfigList o ocoleste)."""
+	element.setReadOnly(True)
+	return element
+
+
+def _hdsCuCallback(clasa):
+	"""handleKey(key, callback=None) pe o clasa a noastra cu handleKey(self, key): pluginurile din alte imagini dau si
+	functia de chemat dupa tasta (YouTube, SubsSupport); fara ea, totul ca pana acum."""
+	f = clasa.__dict__.get("handleKey")
+	if f is None or getattr(f, "_hdsCuCallback", False):
+		return
+	try:
+		from inspect import signature
+		if len(signature(f).parameters) != 2:
+			return
+	except (TypeError, ValueError):
+		return
+
+	def handleKey(self, key, callback=None):
+		rezultat = f(self, key)
+		if callback is not None:
+			callback()
+		return rezultat
+	handleKey._hdsCuCallback = True
+	handleKey.__doc__ = f.__doc__
+	clasa.handleKey = handleKey
+
+
+for _clasa in list(globals().values()):
+	if isinstance(_clasa, type) and issubclass(_clasa, ConfigElement):
+		_hdsCuCallback(_clasa)
+del _clasa

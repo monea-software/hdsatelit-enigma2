@@ -121,7 +121,14 @@ class Element(object):
 	suspended = property(lambda self: self.__suspended, setSuspend)
 	
 	def checkSuspend(self):
-		self.suspended = reduce(lambda x, y: x and y.__suspended, self.downstream_elements, True)
+		# acelasi rezultat ca reduce(lambda x, y: x and y.__suspended, ..., True): primul element nesuspendat (valoarea
+		# lui), altfel al ultimului, sau True fara elemente; bucla se opreste la primul, fara un apel pe fiecare element
+		suspendat = True
+		for element in self.downstream_elements:
+			suspendat = element.__suspended
+			if not suspendat:
+				break
+		self.suspended = suspendat
 
 	def doSuspend(self, suspend):
 		pass

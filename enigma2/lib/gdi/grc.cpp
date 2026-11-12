@@ -4,6 +4,7 @@
 #include <time.h>
 #include <lib/gdi/grc.h>
 #include <lib/gdi/desennetezit.h>
+#include <lib/gdi/hdsanimatie.h>
 #include <lib/gdi/font.h>
 #include <lib/base/init.h>
 #include <lib/base/init_num.h>
@@ -504,6 +505,29 @@ void gPainter::desenNetezit(const gDesenNetezit &forma)
 	m_rc->submit(o);
 }
 
+void gPainter::hdsAnimatie(gPixmap *inainte, gPixmap *dupa, const eRect &zona, int fel, int inchidere, int durata_ms)
+{
+	if ( m_dc->islocked() || !inainte || !dupa )
+		return;
+	gOpcode o;
+	o.opcode = gOpcode::hdsAnimatie;
+	o.dc = m_dc.grabRef();
+	gHdsAnimatie *a = new gHdsAnimatie;	/* sters in gDC::exec, cu referintele imaginilor */
+	a->fel = fel;
+	a->durata_ms = durata_ms;
+	a->inchidere = inchidere;
+	a->x = zona.left();
+	a->y = zona.top();
+	a->w = zona.width();
+	a->h = zona.height();
+	inainte->AddRef();
+	dupa->AddRef();
+	a->inainte = inainte;
+	a->dupa = dupa;
+	o.parm.hdsAnimatie = a;
+	m_rc->submit(o);
+}
+
 void gPainter::setOffset(ePoint val)
 {
 	if ( m_dc->islocked() )
@@ -842,7 +866,9 @@ void gDC::exec(const gOpcode *o)
 		if (masoara)
 			clock_gettime(CLOCK_MONOTONIC, &t0);
 		gDesenNetezit &forma = *o->parm.desenNetezit;
-		if (forma.culoare_pictor)
+		if (forma.culoare_pictor == 2)
+			forma.culoare = m_background_color_rgb;	/* HDSatelit 0.7.4: randurile listelor (eListbox::paintItemBackground) */
+		else if (forma.culoare_pictor)
 			forma.culoare = m_foreground_color_rgb;
 		if (m_pixmap && m_pixmap->surface)
 		{
@@ -870,6 +896,31 @@ void gDC::exec(const gOpcode *o)
 				(long)((t1.tv_sec - t0.tv_sec) * 1000000L + (t1.tv_nsec - t0.tv_nsec) / 1000L));
 		}
 		delete o->parm.desenNetezit;
+		break;
+	}
+	case gOpcode::hdsAnimatie:
+	{
+		/* HDSatelit 0.7.4: cadrele animatiei se scriu direct in pagina vazuta; dupa fiecare, flush prin exec (virtual), ca
+		   suprafata sa ajunga pe ecran unde DC-ul o arata numai la flush (emulatorul SDL; pe framebuffer fb->blit, fara cost) */
+		gHdsAnimatie *a = o->parm.hdsAnimatie;
+		if (m_pixmap && m_pixmap->surface && a->inainte->surface && a->dupa->surface)
+		{
+			struct Arata
+			{
+				static void flush(void *ctx)
+				{
+					gDC *dc = (gDC *)ctx;
+					gOpcode f;
+					f.opcode = gOpcode::flush;
+					f.dc = dc;
+					dc->exec(&f);
+				}
+			};
+			hdsAnimatieRuleaza(m_pixmap->surface, a->inainte->surface, a->dupa->surface, *a, &Arata::flush, this);
+		}
+		a->inainte->Release();
+		a->dupa->Release();
+		delete a;
 		break;
 	}
 	default:

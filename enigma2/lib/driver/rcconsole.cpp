@@ -3,36 +3,104 @@
 #include <lib/base/init_num.h>
 #include <lib/base/eerror.h>
 #include <lib/driver/rcconsole.h>
+#include <lib/driver/hdsconsolacitire.h>
+#include <lib/base/hdsjurnal.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 
-eRCConsoleDriver::eRCConsoleDriver(const char *filename): eRCDriver(eRCInput::getInstance()), m_escape(false),
-	m_utf8(0), m_utf8left(0)
+eRCConsoleDriver::eRCConsoleDriver(const char *filename): eRCDriver(eRCInput::getInstance()), m_ot_ok(false),
+	m_escape(false), m_utf8(0), m_utf8left(0), m_goale(0)
 {
-	handle=open(filename, O_RDONLY|O_NONBLOCK);
+	/*
+	 * HDSatelit: O_NOCTTY: the console is read only for the letters of a USB keyboard and must never become the
+	 * controlling terminal of enigma2 (the job control of a controlling terminal can refuse the reads).
+	 */
+	handle=open(filename, O_RDONLY|O_NONBLOCK|O_NOCTTY);
+	sn=0;
 	if (handle<0)
 	{
 		eDebug("failed to open %s", filename);
-		sn=0;
-	} else
-	{
-		sn=eSocketNotifier::create(eApp, handle, eSocketNotifier::Read);
-		CONNECT(sn->activated, eRCConsoleDriver::keyPressed);
+		return;
 	}
-	
+
 		/* set console mode */
 	struct termios t;
-	tcgetattr(handle, &t);
+	if (tcgetattr(handle, &t) != 0)
+	{
+		/*
+		 * HDSatelit: not a terminal, so nothing to watch. The kernel of the Vu+ Duo 4K has no virtual terminals
+		 * (CONFIG_VT is not set), so /dev/tty0 there is no console (for instance a regular file left by a write):
+		 * poll() says readable for ever and read() gives 0, and the main loop held a core at 85-99% (0.7.1-0.7.3).
+		 * Without virtual terminals no keyboard letters come through a console anyway.
+		 */
+		int err = errno;
+		struct stat st;
+		const char *fel = "?";
+		if (fstat(handle, &st) == 0)
+			fel = S_ISREG(st.st_mode) ? "regular file" : S_ISCHR(st.st_mode) ? "character device" : "other";
+		eWarning("[eRCConsoleDriver] %s is not a terminal (%s, errno %d %s): not watched", filename, fel, err,
+			strerror(err));
+		hdsjurnal::scrief("consola", hdsjurnal::INFO, "tty0", "%s nu e terminal (%s, errno %d %s): consola nu se "
+			"urmareste", filename, fel, err, strerror(err));
+		close(handle);
+		handle = -1;
+		return;
+	}
 	ot = t;
+	m_ot_ok = true;
 	t.c_lflag &= ~(ECHO | ICANON | ECHOK | ECHOE | ECHONL);
 	tcsetattr(handle, TCSANOW,&t);
+
+	sn=eSocketNotifier::create(eApp, handle, eSocketNotifier::Read);
+	CONNECT(sn->activated, eRCConsoleDriver::keyPressed);
 }
 
 eRCConsoleDriver::~eRCConsoleDriver()
 {
-	tcsetattr(handle,TCSANOW, &ot);
  	if (handle>=0)
+	{
+		if (m_ot_ok)
+			tcsetattr(handle,TCSANOW, &ot);
 		close(handle);
+	}
+}
+
+/*
+ * HDSatelit: the console is left after hdsconsola::LIMITA_GOALE reads without data in a row (Vu+ Duo 4K: poll() said
+ * readable about 100000 times a second and read() took nothing, so the main loop held a core at 85-99%). The notifier is
+ * released, not only stopped: unlock() would start a stopped one again. One line says why, with what the next look
+ * needs: the device number, the result of read(), errno and the process groups.
+ */
+void eRCConsoleDriver::lasaConsola(int rezultat, int err)
+{
+	struct stat st;
+	unsigned int maj = 0, min = 0;
+	if (fstat(handle, &st) == 0)
+	{
+		maj = major(st.st_rdev);
+		min = minor(st.st_rdev);
+	}
+	int pgrp = (int)getpgrp(), tty_pgrp = (int)tcgetpgrp(handle), sid = (int)getsid(0), tty_sid = (int)tcgetsid(handle);
+	eWarning("[eRCConsoleDriver] /dev/tty0 (%u:%u) left after %d reads without data in a row (read %d, errno %d %s, "
+		"pgrp %d, tty pgrp %d, sid %d, tty sid %d): the letters of a USB keyboard no longer come through the console",
+		maj, min, (int)hdsconsola::LIMITA_GOALE, rezultat, err, err ? strerror(err) : "-", pgrp, tty_pgrp, sid, tty_sid);
+	hdsjurnal::scrief("consola", hdsjurnal::AVERT, "tty0", "/dev/tty0 (%u:%u) lasata dupa %d citiri fara date la rand "
+		"(read %d, errno %d %s, pgrp %d, pgrp tty %d, sid %d, sid tty %d)", maj, min, (int)hdsconsola::LIMITA_GOALE,
+		rezultat, err, err ? strerror(err) : "-", pgrp, tty_pgrp, sid, tty_sid);
+	if (sn)
+	{
+		sn->stop();
+		sn = 0;
+	}
+	if (m_ot_ok)
+		tcsetattr(handle, TCSANOW, &ot);
+	close(handle);
+	handle = -1;
 }
 
 void eRCConsoleDriver::keyPressed(int)
@@ -42,7 +110,21 @@ void eRCConsoleDriver::keyPressed(int)
 	int num = read(handle, data, 16);
 	unsigned char code;
 	long cp;
-	
+
+	/*
+	 * HDSatelit: a read without data (0, or -1 whatever errno) is counted before anything else, also before the kmNone
+	 * return below: live TV is kmNone and that is exactly when the main loop spun on /dev/tty0 (Vu+ Duo 4K). Without
+	 * this check num = -1 also went into "while (num--)" and read far past data[] in the text modes.
+	 */
+	if (num <= 0)
+	{
+		int err = num < 0 ? errno : 0;
+		if (hdsconsola::lasaDupaCitire(num, m_goale))
+			lasaConsola(num, err);
+		return;
+	}
+	hdsconsola::lasaDupaCitire(num, m_goale);
+
 	int km = input->getKeyboardMode();
 
 	if (km == eRCInput::kmNone)

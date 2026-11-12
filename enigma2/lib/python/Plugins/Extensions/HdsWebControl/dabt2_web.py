@@ -13,7 +13,7 @@
 #   GET  /api/dabt2?fel=dab|t2                         fluxurile, starea, setarile, Despre, lucrul in curs si
 #                                                      repunerea canalului de dinainte dupa invatare (ca pe televizor)
 #   POST /api/dabt2-actiune?fel=&actiune=actualizeaza|buchete|invata|sterge[&flux=]
-#   POST /api/dabt2-seteaza?cheie=tasta|dosar|latime|nedecodabile|liste_zilnic|rezerva&valoare=
+#   POST /api/dabt2-seteaza?cheie=tasta|dosar|latime|nedecodabile|liste_zilnic|rezerva|sunet&valoare=
 #   POST /api/dabt2-manual?fel=&nume=&grade=&emisfera=E|V&frecventa=&pol=&sr=&sistem=&modulatie=&fec=&pid=
 #                          [&fel_dab=&ip=&port=]  (DAB)   [&plp=]  (DVB-T2)
 #   POST /api/dabt2-televizor?fel=                     deschide fereastra pe televizor
@@ -36,7 +36,7 @@ def _t(text):
 
 FELURI = ("dab", "t2")
 ACTIUNI = ("actualizeaza", "buchete", "invata", "sterge")
-CHEI_SETARI = ("tasta", "dosar", "latime", "nedecodabile", "liste_zilnic", "rezerva")
+CHEI_SETARI = ("tasta", "dosar", "latime", "nedecodabile", "liste_zilnic", "rezerva", "sunet")
 DA_NU = ("tasta", "nedecodabile", "liste_zilnic")
 LATIMI = ("1920", "1280")
 POLARIZARI = ("H", "V", "L", "R")
@@ -151,6 +151,9 @@ def _setari(D):
 		"ultima_zilnica": ultima_zilnica(D),
 		"rezerva": _text(cfg.rezerva.value),
 		"rezerve": [[v, _text(t)] for v, t in D.captura.variante_rezerva()],
+		# decodarea sunetului DAB+ (0.7.4); fara ea (un modul Hds mai vechi) randul nu apare
+		"sunet": _text(cfg.sunet.value) if getattr(cfg, "sunet", None) is not None else "",
+		"sunete": [[v, _text(t)] for v, t in D.captura.variante_sunet()] if hasattr(D.captura, "variante_sunet") else [],
 	}
 
 
@@ -327,8 +330,8 @@ def seteaza(argumente, D=None, configfile=None):
 	fel = fel_din(argumente.get("fel"))
 	cheie, valoare = argumente.get("cheie"), argumente.get("valoare", "")
 	if cheie not in CHEI_SETARI:
-		return _cu_stare(fel, D, False, _t("Se alege cu cheie=tasta, dosar, latime, nedecodabile, liste_zilnic sau "
-			"rezerva."))
+		return _cu_stare(fel, D, False, _t("Se alege cu cheie=tasta, dosar, latime, nedecodabile, liste_zilnic, "
+			"rezerva sau sunet."))
 	cfg = D.captura.configureaza()
 	if cheie in DA_NU:
 		if valoare not in ("0", "1"):
@@ -341,6 +344,10 @@ def seteaza(argumente, D=None, configfile=None):
 	elif cheie == "rezerva":
 		if valoare not in D.captura.REZERVE_MS:
 			return _cu_stare(fel, D, False, _t("Rezerva nu e una din listă."))
+		nou = valoare
+	elif cheie == "sunet":
+		if valoare not in D.captura.SUNET:
+			return _cu_stare(fel, D, False, _t("Decodarea sunetului nu e una din listă."))
 		nou = valoare
 	else:
 		if valoare not in LATIMI:
@@ -357,6 +364,12 @@ def seteaza(argumente, D=None, configfile=None):
 			D.captura.obtine(D.controlor(fel).coord).leaga_tasta()
 		except Exception as eroare:
 			_jurnal("tasta capturii: %s" % eroare)
+	if cheie == "sunet":
+		# ca pe televizor: releul DAB care canta acum trece pe loc pe noua decodare
+		try:
+			D.controlor("dab").sunet_schimbat(nou)
+		except Exception as eroare:
+			_jurnal("decodarea sunetului: %s" % eroare)
 	if cheie == "nedecodabile":
 		# ca la inchiderea Setarilor pe televizor: lista si buchetul fiecarui fel, daca s-a schimbat ceva
 		for f in FELURI:
@@ -718,6 +731,8 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota">O dată pe zi, în fundal, receptorul ia de pe stb.hdsatelit.com frecvențele și numele posturilor. Butonul „Actualizează lista” merge oricând. <span id="ultimaZilnica"></span></p>
     <div class="rand"><label for="s_rezerva">Rezervă la pornirea postului</label><select id="s_rezerva"></select></div>
     <p class="nota">La pornirea unui post, receptorul ține o rezervă din flux, ca întreruperile scurte să nu se vadă și să nu se audă. Postul pornește cu atât mai târziu. Aceeași rezervă la DAB+ și la DVB-T2.</p>
+    <div class="rand"><label for="s_sunet">Decodarea sunetului DAB+</label><select id="s_sunet"></select></div>
+    <p class="nota">Automat: pe receptoarele Vu+ sunetul DAB+ se decodează în receptor, pe celelalte de placă. Alege altceva numai dacă sunetul unui post DAB+ se aude sacadat. Se schimbă pe loc, și la postul care cântă.</p>
     <p class="nota">Aceleași setări sunt pe televizor, în „Fluxuri și setări”, pe tasta MENU.</p>
   </section>
   <section class="card">
@@ -808,6 +823,7 @@ function deseneaza(d){
   if(document.activeElement !== $("s_liste_zilnic")){ $("s_liste_zilnic").value = s.liste_zilnic ? "1" : "0"; }
   $("ultimaZilnica").textContent = s.ultima_zilnica || "";
   optiuni($("s_rezerva"), s.rezerve, s.rezerva);
+  if(s.sunete && s.sunete.length){ optiuni($("s_sunet"), s.sunete, s.sunet); }
   optiuni($("s_dosar"), s.dosare, s.dosar);
   optiuni($("s_latime"), s.latimi.map(function(x){ return [x, x + " px"]; }), s.latime);
   Array.prototype.forEach.call(document.querySelectorAll(".campDab"), function(e){ arata(e, FEL === "dab"); });
@@ -841,7 +857,7 @@ function seteaza(cheie, valoare){
 $("actualizeaza").addEventListener("click", function(){ faActiunea("actualizeaza"); });
 $("buchete").addEventListener("click", function(){ faActiunea("buchete"); });
 $("televizor").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fel", FEL); trimite("/api/dabt2-televizor", q, "Se deschide pe televizor..."); });
-["tasta", "dosar", "latime", "nedecodabile", "liste_zilnic", "rezerva"].forEach(function(c){ $("s_" + c).addEventListener("change", function(){ seteaza(c, this.value); }); });
+["tasta", "dosar", "latime", "nedecodabile", "liste_zilnic", "rezerva", "sunet"].forEach(function(c){ $("s_" + c).addEventListener("change", function(){ seteaza(c, this.value); }); });
 $("adauga").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("fel", FEL);
   ["nume", "grade", "emisfera", "frecventa", "pol", "sr", "sistem", "modulatie", "fec", "pid", "fel_dab", "ip", "port", "plp"].forEach(function(c){ q.set(c, $("m_" + c).value); });
@@ -914,6 +930,11 @@ TEXTE_PAGINA = {
 			"vadă și să nu se audă. Postul pornește cu atât mai târziu. Aceeași rezervă la DAB+ și la DVB-T2."),
 		N_("Aceleași setări sunt pe televizor, în „Fluxuri și setări”, pe tasta MENU."),
 		N_("Despre"),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Decodarea sunetului DAB+"),
+		N_("Automat: pe receptoarele Vu+ sunetul DAB+ se decodează în receptor, pe celelalte de placă. "
+			"Alege altceva numai dacă sunetul unui post DAB+ se aude sacadat. Se schimbă pe loc, și la "
+			"postul care cântă."),
 	),
 	"js": (
 		N_("browser deconectat"),

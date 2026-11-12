@@ -188,6 +188,23 @@ public:
 	RESULT flush();
 	RESULT showSinglePic(const char *filename);
 	RESULT setRadioPic(const std::string &filename);
+#if HAVE_HISILICON
+#else
+	/* SoftCSA loop (iTSMPEGDecoder::freeDecoder; HiSilicon keeps the empty one, its stop is probed with the loop): the
+	   filters of the playback demux go by closing their descriptors (the destructors of eDVBVideo, eDVBAudio, eDVBPCR
+	   and eDVBTText only close), without DMX_STOP; the destructor of this decoder then finds nothing to stop (the
+	   pointers are 0 and it sets every PID to none, so setState sends no command) */
+	void freeDecoder()
+	{
+		m_video_event_conn = 0;
+		m_demux_event_conn = 0;
+		m_video = 0;
+		m_audio = 0;
+		m_pcr = 0;
+		m_text = 0;
+		m_changed = 0;
+	}
+#endif
 		/* what 0=auto, 1=video, 2=audio. */
 	RESULT getPTS(int what, pts_t &pts);
 	RESULT connectVideoEvent(const sigc::slot<void(struct videoEvent)> &event, ePtr<eConnection> &connection);

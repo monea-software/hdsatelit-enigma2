@@ -234,8 +234,12 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 	def number(self, number):
 		if self._secretOprit():
 			return
+		unic = False
 		if self.type == self.TEXT:
-			owr = self.lastKey == number
+			# o tasta cu un singur caracter permis (0 la un CAID hexazecimal, cu useableChars) scrie si trece la pozitia
+			# urmatoare, ca la cifre: altfel a doua apasare scria peste aceeasi pozitie si „0B00” iesea „0B0” (CI, 11.11.2026)
+			unic = self._tastaCuUnCaracter(number)
+			owr = self.lastKey == number and not unic
 			newChar = self.getKey(number)
 		elif self.type == self.PIN or self.type == self.NUMBER:
 			owr = False
@@ -244,9 +248,22 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 			self.deleteAllChars()
 			self.allmarked = False
 		self.insertChar(newChar, self.currPos, owr, False);
-		if self.type == self.PIN or self.type == self.NUMBER:
+		if unic:
+			self.nextKey()
+			self.innerright()
+		elif self.type == self.PIN or self.type == self.NUMBER:
 			self.innerright()
 		self.update()
+
+	def _tastaCuUnCaracter(self, number):
+		"""True cand tasta `number` are, cu useableChars, un singur caracter permis (fara ciclu de litere)"""
+		u = getattr(self, "useableChars", None)
+		if not u:
+			return False
+		try:
+			return len(set(c for c in self.mapping[number] if c in u)) == 1
+		except (IndexError, TypeError):
+			return False
 
 	def _secretOprit(self):
 		if not getattr(self, "hdsSecret", self.type == self.PIN):

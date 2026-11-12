@@ -58,6 +58,17 @@ class HelpMenuList(GUIComponent):
 				if not len(buttons):
 					continue
 
+				# pluginurile scrise pentru alte imagini dau uneori textul ca functie, chemata cand se arata ajutorul
+				# (FileCommander: "Run 'mediainfo' command" sau "Install 'mediainfo' command", dupa ce e instalat)
+				if callable(help):
+					try:
+						help = help()
+					except Exception as e:
+						print("[HelpMenuList] textul de ajutor pentru %s/%s: %r" % (context, action, e))
+						help = None
+					if not help:
+						continue
+
 				primul = help[0] if isinstance(help, list) else help
 				text = cuLiteraMare(primul)
 				if (context, action) in vazute or ("text", text) in vazute:

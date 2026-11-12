@@ -275,7 +275,13 @@ class JobManager:
 		self.in_background = False
 		self.active_job = None
 
-	def AddJob(self, job):
+	# onSuccess(job) si onFail(job, task, problems): pluginurile scrise pentru alte imagini (managerul de fisiere
+	# FileCommander, la copiere, mutare, stergere si scripturile din fundal) isi arata singure rezultatul. onFail intoarce
+	# True cand a cerut el reluarea (atunci errorCB vine din raspunsul omului); altfel lucrarea trece la cele cazute.
+	# Fara ele, ca pana acum.
+	def AddJob(self, job, onSuccess = None, onFail = None):
+		job.onSuccess = onSuccess
+		job.onFail = onFail
 		self.active_jobs.append(job)
 		self.kick()
 
@@ -287,6 +293,17 @@ class JobManager:
 
 	def jobDone(self, job, task, problems):
 		print("job", job, "completed with", problems, "in", task)
+		onFail = getattr(job, "onFail", None)
+		onSuccess = getattr(job, "onSuccess", None)
+		if problems and onFail is not None:
+			if not onFail(job, task, problems):
+				self.errorCB(False)
+			return
+		if not problems and onSuccess is not None:
+			self.active_job = None
+			onSuccess(job)
+			self.kick()
+			return
 		from Tools import Notifications
 		if self.in_background:
 			from Screens.TaskView import JobView

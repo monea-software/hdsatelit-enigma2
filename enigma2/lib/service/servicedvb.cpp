@@ -17,6 +17,10 @@
 
 #include <lib/components/file_eraser.h>
 #include <lib/service/servicedvbrecord.h>
+#include <lib/dvb/cahandler.h>
+#include <lib/dvb_ci/dvbci.h>
+#include <lib/service/hdssoftcsapornire.h>
+#include <unistd.h>
 #include <lib/service/hdsegalizator.h>
 #if HAVE_GSTREAMER
 #include <lib/service/servicemp3.h>
@@ -304,8 +308,8 @@ public:
 	RESULT getName(const eServiceReference &ref, std::string &name);
 	int getLength(const eServiceReference &ref);
 	RESULT getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &SWIG_OUTPUT, time_t start_time);
-	/* recordings and live streams from a local relay (path http://127.0.0.1:...) need no tuner of their own: always
-	   playable. The signature matches the virtual of iStaticServiceInformation, so the channel list calls this one */
+	/* recordings and live streams over HTTP (a local relay, or a type 1 channel with an http:// address) need no
+	   tuner of their own: always playable. The signature matches the virtual of iStaticServiceInformation, so the channel list calls this one */
 	int isPlayable(const eServiceReference &ref, const eServiceReference &ignore, bool simulate=false) { return 1; }
 	int getInfo(const eServiceReference &ref, int w);
 	std::string getInfoString(const eServiceReference &ref,int w);
@@ -317,7 +321,9 @@ DEFINE_REF(eStaticServiceDVBPVRInformation);
 eStaticServiceDVBPVRInformation::eStaticServiceDVBPVRInformation(const eServiceReference &ref)
 {
 	m_ref = ref;
-	m_parser.parseFile(ref.path);
+	/* a stream over HTTP has no .meta next to it (the address is not a file) */
+	if (!eHdsFluxHttp::accepts(ref.path))
+		m_parser.parseFile(ref.path);
 }
 
 RESULT eStaticServiceDVBPVRInformation::getName(const eServiceReference &ref, std::string &name)
@@ -340,6 +346,9 @@ RESULT eStaticServiceDVBPVRInformation::getName(const eServiceReference &ref, st
 int eStaticServiceDVBPVRInformation::getLength(const eServiceReference &ref)
 {
 	ASSERT(ref == m_ref);
+	/* a live stream has no length */
+	if (eHdsFluxHttp::accepts(ref.path))
+		return 0;
 	
 	eDVBTSTools tstools;
 	
@@ -416,6 +425,17 @@ PyObject *eStaticServiceDVBPVRInformation::getInfoObject(const eServiceReference
 
 RESULT eStaticServiceDVBPVRInformation::getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &evt, time_t start_time)
 {
+	/* a type 1 channel over HTTP (IPTV saved with type 1, the stream of another receiver) carries the ids of the
+	   satellite channel: its programme comes from the EPG cache of that channel, as in OE-Alliance (the channel list
+	   and the info bar show the current event); no .eit is looked for at the address */
+	if (eHdsFluxHttp::accepts(ref.path))
+	{
+		eServiceReference fara_cale(ref);
+		fara_cale.type = eServiceFactoryDVB::id;
+		fara_cale.path.clear();
+		fara_cale.name.clear();
+		return eEPGCache::getInstance() ? eEPGCache::getInstance()->lookupEventTime(fara_cale, start_time, evt) : -1;
+	}
 	if (!ref.path.empty())
 	{
 		ePtr<eServiceEvent> event = new eServiceEvent;
@@ -751,7 +771,7 @@ PyObject *eDVBServiceList::getContent(const char* format, bool sorted)
 
 /* Numaratoarea din Python (getContent "C" si "S", apoi parcurgerea) fara sirurile Python: aceleasi intrari, in
    aceeasi ordine (aceeasi interogare, nesortata); dupa primele limit intrari nu se mai numara; dosarele si marcajele
-   (flags isDirectory/isMarker) nu se numara; prima potrivire numarata da raspunsul. Egalitatea sirurilor "C" e
+   (flags isDirectory/isMarker) nu se numara, afara de semnele numerotate (isNumberedMarker, ca in OE-Alliance); prima potrivire numarata da raspunsul. Egalitatea sirurilor "C" e
    operator==: toCompareString scrie tipul, cele 8 campuri si calea (fara flags si fara nume) intr-un fel din care se
    pot citi inapoi, iar PyUnicode_FromString (lib/python/python.h, "surrogateescape") pastreaza orice octet, deci doua
    siruri sunt egale numai cand referintele sunt egale. */
@@ -765,7 +785,8 @@ int eDVBServiceList::hdsChannelNumber(const eServiceReference &ref, int limit)
 	{
 		if (i++ >= limit)
 			break;
-		if (r.flags & (eServiceReference::isDirectory | eServiceReference::isMarker))
+		/* a numbered marker (the place of a number the operator does not use) counts, as in OE-Alliance */
+		if ((r.flags & (eServiceReference::isDirectory | eServiceReference::isMarker)) && !(r.flags & eServiceReference::isNumberedMarker))
 			continue;
 		++n;
 		if ((const eServiceReference &)r == ref)
@@ -960,9 +981,20 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_is_primary = 1;
 	m_is_pvr = !m_reference.path.empty();
 	m_is_stream = m_is_pvr && eHdsFluxHttp::accepts(m_reference.path);
-	
+	/* an address this image cannot read on the DVB path (https://, rtsp://...): one line in the log (only the scheme,
+	   the rest can hold a user and a password), otherwise the channel stays black without a trace */
+	if (m_is_pvr && !m_is_stream && m_reference.path.find("://") != std::string::npos)
+		eDebug("[eDVBServicePlay] type 1 with a %s address: not readable here (only http://), use type 4097",
+			m_reference.path.substr(0, m_reference.path.find("://")).c_str());
+
 	m_timeshift_enabled = m_timeshift_active = 0, m_timeshift_changed = 0;
 	m_skipmode = m_fastforward = m_slowmotion = 0;
+	m_soft_active = m_soft_proba = false;
+	/* SoftCSA: a softcam connecting after this service started (at every start of the interface the channel starts first)
+	   gets the service a session then, without a zap */
+	if (eDVBCAHandler::getInstance())
+		m_softcam_connected = eDVBCAHandler::getInstance()->softcamConnected.connect(
+			sigc::mem_fun(*this, &eDVBServicePlay::softCsaProgram));
 	
 	CONNECT(m_service_handler.serviceEvent, eDVBServicePlay::serviceEvent);
 	CONNECT(m_service_handler.infoLiveReady, eDVBServicePlay::hdsInfoLiveReady);
@@ -985,16 +1017,23 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_hds_radio_de_la = 0;
 	m_hds_radio_eliberare = eTimer::create(eApp);
 	CONNECT(m_hds_radio_eliberare->timeout, eDVBServicePlay::hdsRadioEliberat);
-	/* jurnalul zap-ului: fara eveniment al decodorului dupa FARA_IMAGINE_MS, PTS-ul imaginii spune daca imaginea merge */
-	m_hds_zap.verificare([](void *p) -> bool {
+	/* jurnalul zap-ului: PTS-ul video al decodorului, citit de doua ori dupa evenimentul video (sau la FARA_IMAGINE_MS
+	   fara eveniment): numai un PTS care se misca inseamna imagine (11.11.2026: pe un canal nedescifrat evenimentul vine
+	   fara nicio imagine). Fara /proc/stb/video/zapmode (pe HiSilicon poate da Oops in nucleu). */
+	m_hds_zap.verificare([](void *p, long long &pts) -> bool {
 		eDVBServicePlay *s = static_cast<eDVBServicePlay *>(p);
-		pts_t pts = 0;
-		return s->m_decoder && !s->m_decoder->getPTS(0, pts) && pts > 0;
+		pts_t v = 0;
+		if (!s->m_decoder || s->m_decoder->getPTS(1, v))
+			return false;
+		pts = v;
+		return true;
 	}, this);
 
 	m_subtitle_sync_timer = eTimer::create(eApp);
 
 	CONNECT(m_subtitle_sync_timer->timeout, eDVBServicePlay::checkSubtitleTiming);
+	m_subtitle_liniste_pana_ms = 0;
+	m_subtitle_fara_pts_de_la_ms = 0;
 
 	m_external_active = -1;
 	m_subtitle_delay_ms = 0;
@@ -1110,7 +1149,10 @@ void eDVBServicePlay::serviceEvent(int event)
 		if (m_timeshift_enabled)
 			updateTimeshiftPids();
 		if (!m_timeshift_active)
+		{
+			softCsaProgram();
 			updateDecoder();
+		}
 		m_hds_amana_gui = false;
 		if (m_first_program_info & 1 && m_is_pvr && !m_is_stream)
 		{
@@ -1368,6 +1410,7 @@ RESULT eDVBServicePlay::stop()
 	delete m_subtitle_widget;
 	m_subtitle_widget = 0;
 	resetTimeshift(0);
+	softCsaStop();
 
 	m_service_handler_timeshift.free();
 	m_service_handler.free();
@@ -1531,9 +1574,13 @@ RESULT eDVBServicePlay::pause()
 	{
 		m_slowmotion = 0;
 		m_is_paused = 1;
+		/* the subtitles wait in their queue while paused (checkSubtitleTiming, hdssubtitraresincron.h) */
+		m_subtitle_sync_timer->stop();
 		/* sunetul trecut prin egalizatorul din procesor se opreste odata cu decodorul placii */
 		if (m_is_primary && m_hds_sunet_procesor && eHdsEgalizator::existent())
 			eHdsEgalizator::existent()->pauza(this, true);
+		if (m_soft_decoder)
+			m_soft_decoder->setPaused(true);
 		playbackPaused(true);
 		return m_decoder->pause();
 	} else
@@ -1548,11 +1595,16 @@ RESULT eDVBServicePlay::unpause()
 	{
 		m_slowmotion = 0;
 		m_is_paused = 0;
+		if (m_soft_decoder)
+			m_soft_decoder->setPaused(false);
 		playbackPaused(false);
 		RESULT r = m_decoder->play();
 		/* dupa pauza, egalizatorul alege din nou pista (sunetul prin procesor, daca e cazul) */
 		if (m_is_primary && eHdsEgalizator::existent())
 			eHdsEgalizator::existent()->pauza(this, false);
+		/* the subtitles that waited go on, after a short quiet time (a timeshift decoder paused before its first
+		   picture can still give the PTS of the stream before) */
+		hdsSubtitrareLiniste(hdssub::LINISTE_PLAY_MS);
 		return r;
 	} else
 		return -1;
@@ -1576,6 +1628,7 @@ RESULT eDVBServicePlay::seekTo(pts_t to)
 	m_cue->seekTo(0, to);
 	m_dvb_subtitle_pages.clear();
 	m_subtitle_pages.clear();
+	hdsSubtitrareLiniste(hdssub::LINISTE_PORNIRE_MS);
 
 	return 0;
 }
@@ -1606,6 +1659,7 @@ RESULT eDVBServicePlay::seekRelative(int direction, pts_t to)
 	m_cue->seekTo(mode, to);
 	m_dvb_subtitle_pages.clear();
 	m_subtitle_pages.clear();
+	hdsSubtitrareLiniste(hdssub::LINISTE_PORNIRE_MS);
 	return 0;
 }
 
@@ -1772,11 +1826,24 @@ RESULT eDVBServicePlay::getName(std::string &name)
 
 RESULT eDVBServicePlay::getEvent(ePtr<eServiceEvent> &evt, int nownext)
 {
-	return m_event_handler.getEvent(evt, nownext);
+	RESULT r = m_event_handler.getEvent(evt, nownext);
+	/* a type 1 channel over HTTP seldom carries its own EIT: the bar shows the programme of the satellite channel whose
+	   ids the reference holds, from the EPG cache (nownext 0 = now, 1 = the next one) */
+	if (r && m_is_stream && eEPGCache::getInstance())
+	{
+		eServiceReference fara_cale(m_reference);
+		fara_cale.type = eServiceFactoryDVB::id;
+		fara_cale.path.clear();
+		fara_cale.name.clear();
+		r = eEPGCache::getInstance()->lookupEventTime(fara_cale, -1, evt, nownext ? 1 : 0);
+	}
+	return r;
 }
 
 int eDVBServicePlay::getInfo(int w)
 {
+	if (w == sIsSoftCSA)
+		return m_soft_active && m_csa_session ? 1 : 0;
 	eDVBServicePMTHandler::program program;
 
 	if (w == sCAIDs || w == sCAIDPIDs || w == sHBBTVAit)
@@ -2485,8 +2552,22 @@ RESULT eDVBServicePlay::startTimeshift()
 		
 	m_record->setTargetFD(m_timeshift_fd);
 
+	/* SoftCSA: the buffer gets the stream descrambled, by a session of its own (two threads never share an engine) */
+	if (m_soft_active && m_csa_session)
+	{
+		m_timeshift_csa_session = new eDVBCSASession((eServiceReferenceDVB&)m_reference);
+		if (m_timeshift_csa_session->init() &&
+			m_record->setDescrambler(ePtr<iServiceScrambled>((iServiceScrambled*)m_timeshift_csa_session)) == 0)
+		{
+			m_timeshift_csa_session->forceActivate();
+			eDebug("[eDVBServicePlay] SoftCSA: timeshift recorder descrambles");
+		}
+		else
+			m_timeshift_csa_session = 0;
+	}
+
 	m_timeshift_enabled = 1;
-	
+
 	updateTimeshiftPids();
 	m_record->start();
 
@@ -2502,10 +2583,12 @@ RESULT eDVBServicePlay::stopTimeshift(bool swToLive)
 		switchToLive();
 	
 	m_timeshift_enabled = 0;
-	
+
 	m_record->stop();
+	m_record->setDescrambler(0);
 	m_record = 0;
-	
+	m_timeshift_csa_session = 0;
+
 	close(m_timeshift_fd);
 	eDebug("remove timeshift file");
 	eBackgroundFileEraser::getInstance()->erase(m_timeshift_file.c_str());
@@ -2678,6 +2761,16 @@ void eDVBServicePlay::switchToLive()
 	/* free the timeshift service handler, we need the resources */
 	m_service_handler_timeshift.free();
 
+	/* SoftCSA: the loop was stopped while the buffer played */
+	if (m_soft_active && m_soft_decoder && !m_soft_decoder->isRunning() && m_soft_decoder->start() != 0)
+	{
+		eWarning("[eDVBServicePlay] SoftCSA: the loop does not start again after timeshift");
+		m_soft_decoder = 0;
+		m_soft_active = false;
+	}
+	else if (m_soft_active && m_csa_session)
+		m_csa_session->armHolds();
+
 	updateDecoder(true);
 }
 
@@ -2695,6 +2788,12 @@ void eDVBServicePlay::resetTimeshift(int start)
 	m_video_event_connection = 0;
 	m_timeshift_changed = 1;
 	m_timeshift_file_next.clear();
+	/* the subtitle pages waiting came from the decoder that goes now (the channel, or the timeshift buffer): with the
+	   next one they came out "late" and were all shown at once when timeshift started and when it ended */
+	m_subtitle_sync_timer->stop();
+	m_subtitle_pages.clear();
+	m_dvb_subtitle_pages.clear();
+	m_subtitle_fara_pts_de_la_ms = 0;
 
 	if (start)
 	{
@@ -2711,8 +2810,8 @@ ePtr<iTsSource> eDVBServicePlay::createTsSource(eServiceReferenceDVB &ref)
 	{
 		eHdsFluxHttp *s = new eHdsFluxHttp();
 		s->open(ref.path);
-		/* the start reserve of the local relays (DVB-T2 and DAB+ from satellite), from the setting of their window;
-		   400 ms when the setting is not there */
+		/* the start reserve (the local relays of DVB-T2 and DAB+ from satellite, and the type 1 channels with an
+		   http:// address, which need it more), from the setting of the relays' window; 400 ms when it is not there */
 		std::string reserve;
 		int ms = 400;
 		if (!ePythonConfigQuery::getConfigValue("config.plugins.hdscomun.rezerva", reserve) && !reserve.empty())
@@ -2731,6 +2830,14 @@ void eDVBServicePlay::switchToTimeshift()
 		return;
 
 	resetTimeshift(1);
+	/* SoftCSA: nothing plays from the loop while the buffer plays (its playback demux and its thread are freed) */
+	if (m_soft_decoder)
+	{
+		if (m_csa_session)
+			m_csa_session->releaseHolds(); /* a wait for a late key ends now, the thread stops at once */
+		m_soft_decoder->setDecoder(0);
+		m_soft_decoder->stop();
+	}
 
 	eServiceReferenceDVB r = (eServiceReferenceDVB&)m_reference;
 	r.path = m_timeshift_file;
@@ -2809,12 +2916,18 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 
 	if (!m_decoder)
 	{
-		h.getDecodeDemux(m_decode_demux);
+		/* SoftCSA: the decoder plays from the playback demux fed by the loop */
+		if (m_soft_active && m_soft_decoder && !m_timeshift_active)
+			m_decode_demux = m_soft_decoder->getDecodeDemux();
+		else
+			h.getDecodeDemux(m_decode_demux);
 		if (m_decode_demux)
 		{
 			m_decode_demux->getMPEGDecoder(m_decoder, m_is_primary);
 			if (m_decoder)
 				m_decoder->connectVideoEvent(sigc::mem_fun(*this, &eDVBServicePlay::video_event), m_video_event_connection);
+			if (m_decoder && m_soft_active && m_soft_decoder && !m_timeshift_active)
+				m_soft_decoder->setDecoder(m_decoder);
 			if (m_is_primary)
 			{
 				m_teletext_parser = new eDVBTeletextParser(m_decode_demux);
@@ -2887,7 +3000,8 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 		m_decoder->setVideoPID(vpid, vpidtype);
 		selectAudioStream();
 
-		if (!(m_is_pvr || m_timeshift_active || !m_is_primary))
+		/* the loop of SoftCSA is a playback for the decoder: an explicit PCR PID breaks the picture on HiSilicon */
+		if (!(m_is_pvr || m_timeshift_active || !m_is_primary || m_soft_active))
 			m_decoder->setSyncPCR(pcrpid);
 		else
 			m_decoder->setSyncPCR(-1);
@@ -2908,6 +3022,10 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 		}
 
 		int decoder_result = mustPlay ? m_decoder->play() : m_decoder->set();
+		/* a new decoder on a recording or on the timeshift buffer: its PTS can be the one of the stream before for a
+		   moment, while the demux already brings pages tens of seconds ahead (hdssubtitraresincron.h) */
+		if (mustPlay)
+			hdsSubtitrareLiniste(hdssub::LINISTE_PORNIRE_MS);
 		if (!decoder_result)
 			m_hds_zap.marcaj(hdsjzap::Zap::DECODOR_PREGATIT);
 		hdsPozaRadio(vpid);
@@ -2938,6 +3056,234 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 		else
 			m_event((iPlayableService*)this, evSeekableStatusChanged);
 	}
+}
+
+void eDVBServicePlay::softCsaProgram()
+{
+	/* only the live service of the main window (not files, streams or the second window), and not before its tuning
+	   (the softcam may connect while nothing plays yet) or while the timeshift buffer plays */
+	if (m_is_pvr || m_is_stream || !m_is_primary || m_timeshift_active)
+		return;
+	{
+		eUsePtr<iDVBChannel> channel;
+		if (m_service_handler.getChannel(channel) || !channel)
+			return;
+	}
+	if (m_soft_decoder && m_soft_decoder->isRunning())
+		m_soft_decoder->updatePids();
+	/* the loop test: any live service through the loop, without descrambling (the picture of a free service shows
+	   that recorder -> dvr -> playback demux -> decoder works on this receiver) */
+	if (!m_csa_session && !m_soft_active && !m_soft_proba && ::access("/tmp/hds-softcsa-bucla", F_OK) == 0)
+	{
+		m_soft_proba = true;
+		eDebug("[eDVBServicePlay] SoftCSA: loop test on %s (/tmp/hds-softcsa-bucla)", m_reference.toString().c_str());
+		softCsaSwitch(true);
+		return;
+	}
+	if (m_soft_proba)
+		return;
+	eDVBServicePMTHandler::program program;
+	if (m_service_handler.getProgramInfo(program))
+		return;
+	/* CSA-ALT exists only with VideoGuard: the first ECM of that system is analyzed (the program from the PIDs kept has
+	   the CAIDs of the channel list, without ECM PIDs) */
+	uint16_t ecm_pid = 0, caid = 0;
+	bool videoguard = false;
+	for (std::list<eDVBServicePMTHandler::program::capid_pair>::const_iterator i(program.caids.begin());
+		i != program.caids.end(); ++i)
+	{
+		if (!hdssoftcsa::videoGuard(i->caid))
+			continue;
+		videoguard = true;
+		if (hdssoftcsa::pidEcmBun(i->capid))
+		{
+			ecm_pid = i->capid;
+			caid = i->caid;
+			break;
+		}
+	}
+	/* 0.7.4: the loop started before the PMT from the memory of the service, and the PMT has no VideoGuard ECM: the
+	   channel cannot be CSA-ALT now, the decoder goes back to the live demux (a session activated from the ECM of this zap
+	   stays as before) */
+	if (hdssoftcsa::inapoiPePlaca(program.pmtPid != -1,
+		m_soft_active && m_csa_session && m_csa_session->activatedFromCache(), ecm_pid != 0))
+	{
+		eDebug("[eDVBServicePlay] SoftCSA: the PMT has no VideoGuard ECM, the decoder goes back to the live demux");
+		softCsaSwitch(false);
+		m_csa_session = 0;
+		return;
+	}
+	if ((m_csa_session && m_csa_session->isEcmAnalyzed()) || !program.isCrypted())
+		return;
+	/* a session for this service, inactive until the ECM (or the memory of the service) says CSA-ALT */
+	auto newSession = [this]() -> bool {
+		m_csa_session = new eDVBCSASession((eServiceReferenceDVB&)m_reference);
+		if (!m_csa_session->init())
+		{
+			eWarning("[eDVBServicePlay] SoftCSA: session init failed");
+			m_csa_session = 0;
+			return false;
+		}
+		/* a CI module descrambling this service keeps it on the hardware */
+		eDVBServicePMTHandler *handler = &m_service_handler;
+		m_csa_session->shouldSuppressActivation = [handler]() {
+			eDVBCIInterfaces *ci = eDVBCIInterfaces::getInstance();
+			return ci && ci->isHandlerAssigned(handler);
+		};
+		m_csa_session->activated.connect(sigc::mem_fun(*this, &eDVBServicePlay::softCsaActivated));
+		return true;
+	};
+	/* 0.7.4 (lib/service/hdssoftcsapornire.h): a service known as CSA-ALT (its ECM analyzed since the interface started)
+	   and no decoder yet, i.e. the start with the PIDs kept, at the tuning, before the PMT: the loop starts now and the
+	   decoder is made on it from the beginning. Skipped: the decoder on the live demux, the wait for the PMT and the
+	   ECM, the release and the new decoder at the activation. Nothing goes to Python here (the info of the zap follows
+	   as before); without the conditions, or when something fails, the service starts as before. */
+	hdssoftcsa::Pornire p;
+	p.principal = m_is_primary;
+	p.fisier = m_is_pvr;
+	p.flux = m_is_stream;
+	p.timeshift = m_timeshift_active;
+	p.decodor = m_decoder ? true : false;
+	p.sesiune = m_csa_session ? true : false;
+	p.videoguard = videoguard;
+	if (!p.decodor && !p.sesiune && videoguard)
+	{
+		p.csa_alt = eDVBCSASession::cachedCsaAlt((eServiceReferenceDVB&)m_reference);
+		eDVBCAHandler *h = eDVBCAHandler::getInstance();
+		p.gata = h && h->softCsaReady();
+		eDVBCIInterfaces *ci = eDVBCIInterfaces::getInstance();
+		p.ci = ci && ci->isHandlerAssigned(&m_service_handler);
+	}
+	if (hdssoftcsa::pornesteDevreme(p) && newSession())
+	{
+		/* the decode demux the decoder on the live demux would take: the CA PMT from memory goes out right after this
+		   only with it (eDVBServicePMTHandler::trimiteCaDinMemorie), with the demuxes of today */
+		ePtr<iDVBDemux> placa;
+		m_service_handler.getDecodeDemux(placa);
+		m_soft_decoder = new eDVBSoftDecoder(m_service_handler);
+		m_soft_decoder->setDescrambler(ePtr<iServiceScrambled>((iServiceScrambled*)m_csa_session));
+		m_csa_session->armHolds();
+		if (m_soft_decoder->start() == 0)
+		{
+			/* the loop before the activation: softCsaActivated finds it running (softCsaSwitch does nothing and sends
+			   nothing), and updateDecoder, after this, makes the decoder on its playback demux */
+			m_soft_active = true;
+			if (m_csa_session->activateFromCache())
+			{
+				eDebug("[eDVBServicePlay] SoftCSA: %s known as CSA-ALT, the loop starts before the PMT",
+					m_reference.toString().c_str());
+				return;
+			}
+			m_soft_active = false;
+			m_soft_decoder->stop();
+		}
+		eWarning("[eDVBServicePlay] SoftCSA: no early start, the service starts as before");
+		m_soft_decoder = 0;
+		m_csa_session = 0;
+	}
+	if (!ecm_pid)
+		return;
+	if (!m_csa_session)
+	{
+		eDVBCAHandler *h = eDVBCAHandler::getInstance();
+		if (!h || !h->softCsaReady())
+		{
+			eDebug("[eDVBServicePlay] SoftCSA: not ready (libdvbcsa, softcam with protocol 3 and extended CW), CAID %04X left to the hardware", caid);
+			return;
+		}
+		if (!newSession())
+			return;
+	}
+	ePtr<iDVBDemux> demux;
+	if (!m_service_handler.getDataDemux(demux) && demux)
+	{
+		eDebug("[eDVBServicePlay] SoftCSA: ECM monitor PID %04X CAID %04X", ecm_pid, caid);
+		m_csa_session->startECMMonitor(demux, ecm_pid, caid);
+	}
+}
+
+void eDVBServicePlay::softCsaActivated(bool active)
+{
+	eDebug("[eDVBServicePlay] SoftCSA session %s", active ? "active: the decoder plays from the loop" : "inactive");
+	if (active)
+		softCsaSwitch(true);
+	else if (m_soft_active)
+		softCsaSwitch(false);
+}
+
+void eDVBServicePlay::softCsaReleaseDecoder()
+{
+	/* like resetTimeshift: the decoder, its demux and the parsers on it go; the subtitles chosen come back on the next
+	   decoder (m_timeshift_changed, getCachedSubtitle in updateDecoder) */
+	if (m_soft_decoder)
+		m_soft_decoder->setDecoder(0);
+	m_decode_demux = 0;
+	m_decoder = 0;
+	m_teletext_parser = 0;
+	m_rds_decoder = 0;
+	m_subtitle_parser = 0;
+	m_new_subtitle_page_connection = 0;
+	m_new_dvb_subtitle_page_connection = 0;
+	m_rds_decoder_event_connection = 0;
+	m_video_event_connection = 0;
+	m_timeshift_changed = 1;
+	m_subtitle_sync_timer->stop();
+	m_subtitle_pages.clear();
+	m_dvb_subtitle_pages.clear();
+	m_subtitle_fara_pts_de_la_ms = 0;
+}
+
+void eDVBServicePlay::softCsaSwitch(bool soft)
+{
+	if (soft == m_soft_active || m_timeshift_active)
+		return;
+	if (soft)
+	{
+		if (!m_soft_decoder)
+			m_soft_decoder = new eDVBSoftDecoder(m_service_handler);
+		m_soft_decoder->setDescrambler(m_csa_session ? ePtr<iServiceScrambled>((iServiceScrambled*)m_csa_session) : ePtr<iServiceScrambled>());
+		softCsaReleaseDecoder();
+		if (m_csa_session)
+			m_csa_session->armHolds();
+		if (m_soft_decoder->start() != 0)
+		{
+			eWarning("[eDVBServicePlay] SoftCSA: the loop does not start, the decoder stays on the live demux");
+			m_soft_decoder = 0;
+			updateDecoder(true);
+			return;
+		}
+		m_soft_active = true;
+	}
+	else
+	{
+		softCsaReleaseDecoder();
+		m_soft_active = false;
+		if (m_soft_decoder)
+		{
+			if (m_csa_session)
+				m_csa_session->releaseHolds();
+			m_soft_decoder->stop();
+			m_soft_decoder = 0;
+		}
+	}
+	updateDecoder(true);
+	m_event((iPlayableService*)this, evUpdatedInfo);
+}
+
+void eDVBServicePlay::softCsaStop()
+{
+	m_softcam_connected.disconnect();
+	if (m_soft_decoder)
+	{
+		if (m_csa_session)
+			m_csa_session->releaseHolds(); /* the zap does not wait for a late key */
+		m_soft_decoder->setDecoder(0);
+		m_soft_decoder->stop();
+		m_soft_decoder = 0;
+	}
+	m_soft_active = m_soft_proba = false;
+	m_timeshift_csa_session = 0;
+	m_csa_session = 0;
 }
 
 void eDVBServicePlay::loadCuesheet()
@@ -3395,6 +3741,21 @@ void eDVBServicePlay::newSubtitlePage(const eDVBTeletextSubtitlePage &page)
 	}
 }
 
+static int64_t hdsPereteMs();
+
+void eDVBServicePlay::hdsSubtitrareLiniste(int ms)
+{
+	m_subtitle_fara_pts_de_la_ms = 0;
+	if (hdsRedareDinFisier())
+	{
+		int64_t pana = hdsPereteMs() + ms;
+		if (pana > m_subtitle_liniste_pana_ms)
+			m_subtitle_liniste_pana_ms = pana;
+	}
+	if (m_subtitle_widget)
+		checkSubtitleTiming();
+}
+
 void eDVBServicePlay::checkSubtitleTiming()
 {
 	eDebug("checkSubtitleTiming");
@@ -3420,30 +3781,29 @@ void eDVBServicePlay::checkSubtitleTiming()
 		}
 		else
 			return;
-	
-		pts_t pos = 0;
-	
-		if (m_decoder)
-			m_decoder->getPTS(0, pos);
 
-		eDebug("%lld %lld", (long long)pos, (long long)show_time);
-		int diff = show_time - pos;
-		if (type == TELETEXT && !page.m_have_pts)
+		/* the decision: lib/service/hdssubtitraresincron.h (paused: nothing until PLAY; playback from a file: a
+		   window of 180 s instead of 20 s, a quiet time after a new decoder, a jump and PLAY, a short wait for a
+		   missing PTS; on a channel as before) */
+		hdssub::Stare stare;
+		stare.pauza = hdsRedareOprita();
+		stare.din_fisier = hdsRedareDinFisier();
+		stare.acum_ms = hdsPereteMs();
+		stare.liniste_pana_ms = m_subtitle_liniste_pana_ms;
+		stare.fara_pts_de_la_ms = m_subtitle_fara_pts_de_la_ms;
+		pts_t pos = 0;
+		stare.are_pts = !stare.pauza && m_decoder && m_decoder->getPTS(0, pos) == 0 && pos != 0;
+		stare.pos = pos;
+		hdssub::Hotarare h = hdssub::hotarare(stare, type != TELETEXT || page.m_have_pts, show_time);
+		m_subtitle_fara_pts_de_la_ms = stare.fara_pts_de_la_ms;
+
+		eDebug("%lld %lld: %s", (long long)pos, (long long)show_time, h.motiv);
+		if (h.fel == hdssub::STAI)
 		{
-			eDebug("ttx subtitle page without pts... immediate show");
-			diff = 0;
+			m_subtitle_sync_timer->stop();
+			return;
 		}
-		if (diff < 0)
-		{
-			eDebug("[late (%d ms)]", -diff / 90);
-			diff = 0;
-		}
-		if (abs(diff) > 1800000)
-		{
-			eDebug("[invalid]... immediate show!");
-			diff = 0;
-		}
-		if ((diff/90)<20)
+		if (h.fel == hdssub::ARATA)
 		{
 			if (type == TELETEXT)
 			{
@@ -3459,8 +3819,8 @@ void eDVBServicePlay::checkSubtitleTiming()
 			}
 		} else
 		{
-			eDebug("start subtitle delay %d", diff / 90);
-			m_subtitle_sync_timer->start(diff / 90, 1);
+			eDebug("start subtitle delay %d", h.ms);
+			m_subtitle_sync_timer->start(h.ms, 1);
 			break;
 		}
 	}
@@ -3652,6 +4012,13 @@ RESULT eDVBServicePlay::setExternalSubtitleCues(int index, ePyObject cues)
 /* one reading of the clock: the play position on a recording, the PTS of the decoder on a channel and in timeshift */
 int64_t eDVBServicePlay::externalClock()
 {
+	/* PAUSE (a recording, the timeshift buffer): the clock stays; without this, a decoder that gives no PTS while
+	   paused (a timeshift paused before its first picture) moved it by the time that passed, so the lines went on */
+	if (hdsRedareOprita() && m_external_clock.valid())
+	{
+		m_external_clock.tine(hdsPereteMs());
+		return m_external_clock.ms();
+	}
 	bool inregistrare = m_is_pvr && !m_is_stream && !m_timeshift_active;
 	pts_t v = 0;
 	bool are = false;

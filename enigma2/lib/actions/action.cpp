@@ -227,9 +227,26 @@ void eActionMap::keyPressed(const std::string &device, int key, int flags)
 		c != m_bindings.end(); ++c)
 	{
 		if (flags == eRCKey::flagMake)
+		{
 			c->second.m_prev_seen_make_key = key;
+			c->second.m_long_key_pressed = false;
+		}
 		else if (c->second.m_prev_seen_make_key != key)  // ignore repeat or break when the make code for this key was not visible
 			continue;
+
+		/*
+		 * HDSatelit 0.7.4: steagul "stop" (5, flags="s" in keymap) ca in OE-Alliance: eliberarea tastei dupa o apasare lunga
+		 * vazuta de aceasta legare porneste si randurile cu "s" (ex. volumeUpStop / volumeDownStop din keymap-urile OE-Alliance).
+		 * Spre deosebire de OE-Alliance, unde eliberarea de dupa lunga NU mai e "b", la noi randurile cu "b" pornesc mai departe,
+		 * ca inainte (hartile noastre se bizuie pe ele; pentru pluginurile straine o opreste Components/ActionMap.py). Legarile
+		 * fara context (de pilda pazitorul din ActionMap.py, tasta HELP a ajutorului) primesc tot steagul 1, ca inainte.
+		 * Keymap-ul nostru nu are randuri cu "s", deci pentru hartile noastre nimic nu se schimba.
+		 */
+		int mask = 1 << flags;
+		if (flags == eRCKey::flagLong)
+			c->second.m_long_key_pressed = true;
+		else if (flags == eRCKey::flagBreak && c->second.m_long_key_pressed)
+			mask |= 1 << 5; // flagStop in OE-Alliance (lib/driver/rc.h la noi n-are numele)
 
 			/* is this a native context? */
 		if (c->second.m_widget)
@@ -245,7 +262,7 @@ void eActionMap::keyPressed(const std::string &device, int key, int flags)
 				{
 					if (
 							(k->second.m_key == key) &&
-							(k->second.m_flags & (1<<flags)) &&
+							(k->second.m_flags & mask) &&
 						  ((k->second.m_device == device) || (k->second.m_device == "generic"))
 						  )
 						call_list.push_back(call_entry(c->second.m_widget, (void*)(intptr_t)c->second.m_id, (void*)(intptr_t)k->second.m_action));
@@ -268,7 +285,7 @@ void eActionMap::keyPressed(const std::string &device, int key, int flags)
 				{
 					if (
 						(k->second.m_key == key) &&
-						(k->second.m_flags & (1<<flags)) &&
+						(k->second.m_flags & mask) &&
 						((k->second.m_device == device) || (k->second.m_device == "generic"))
 						)
 					{

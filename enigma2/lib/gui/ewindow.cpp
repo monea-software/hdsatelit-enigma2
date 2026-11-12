@@ -11,6 +11,7 @@ eWindow::eWindow(eWidgetDesktop *desktop, int z): eWidget(0), m_derulare(this)
 {
 	m_flags = 0;
 	m_desktop = desktop;
+	m_animation_mode = -1;
 		/* ask style manager for current style */
 	ePtr<eWindowStyleManager> mgr;
 	eWindowStyleManager::getInstance(mgr);
@@ -38,6 +39,22 @@ eWindow::~eWindow()
 {
 	m_desktop->removeRootWidget(this);
 	m_child->destruct();
+}
+
+	/* HDSatelit 0.7.4: chiar inainte de schimbare, desktopul compune ce se vede inca in zona ferestrei (animatia ferestrelor,
+	   lib/gui/ewidgetdesktop.cpp); fara animatie aleasa sau fara pas pornit nu face nimic */
+void eWindow::show()
+{
+	if (m_desktop && !isVisible())
+		m_desktop->hdsInainteDeSchimbare(this, (m_animation_mode > 0) && (m_animation_mode & 0x01));
+	eWidget::show();
+}
+
+void eWindow::hide()
+{
+	if (m_desktop && isVisible())
+		m_desktop->hdsInainteDeSchimbare(this, (m_animation_mode > 0) && (m_animation_mode & 0x10));
+	eWidget::hide();
 }
 
 void eWindow::setTitle(const std::string &string)

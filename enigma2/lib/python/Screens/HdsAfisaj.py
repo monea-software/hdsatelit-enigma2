@@ -490,6 +490,20 @@ def textSetare(cheie, valoare):
 	return valoare
 
 
+def previzualizareSetare(fel, ob, setari):
+	"""(tema, picon) pentru desenul mare pe randurile „Tema afișajului” si „Pictograma canalului”: cum arata canalul
+	privit cu alegerea de pe ecran; (None, None) pe celelalte randuri si la o tema din afara (n-are previzualizare)."""
+	if fel != "setare" or ob not in ("tema_afisaj", "color_picon"):
+		return None, None
+	setari = setari or {}
+	_fisier, tema = A.citesteTema(setari.get("tema_afisaj") or A.AFISAJ_HDS)
+	if tema is None:
+		# tema din afara: n-are previzualizare; pictograma se vede in tema HD Satelit
+		return ("orbita", setari.get("color_picon")) if ob == "color_picon" else (None, None)
+	# tema aleasa pe ecran, si pe randul pictogramei (intr-o tema mare pictograma nu schimba nimic, deci nici desenul)
+	return tema, setari.get("color_picon")
+
+
 def textIntrare(i):
 	"""Randul listei de rotire intr-un singur text (titlul meniului unei alegeri din lista): numele si formatul."""
 	return D.textAlegere(i.d, i.f)
@@ -614,7 +628,8 @@ def texteSus(fel, ob, exemplu=False, setari=None, stare=None, personaj=None):
 			nota = ((stare or {}).get("compatibilitate") or {}).get("text") or u""
 			nota = u" ".join(p for p in (nota, _("Schimbarea se aplică după salvare.")) if p)
 		elif ob == "tema_afisaj":
-			nota = _("Tema se aplică după repornirea interfeței.")
+			nota = _("Sus vezi cum arată canalul în tema aleasă. O temă din afară se aplică după repornirea "
+				"interfeței.")
 		elif ob == "text":
 			nota = _("OK deschide tastatura. Textul apare când „Textul tău” e în lista de rotire.")
 		elif ob in ("luminozitate", "luminozitate_noapte", "noapte_de_la", "noapte_pana_la"):
@@ -1329,9 +1344,16 @@ class HdsAfisaj(Screen, HelpableScreen):
 			d, f = ob if fel == "alegere" else (ob.d, ob.f)
 			alegere = D.idAlegere(d, f)
 		w, h = self.dimensiuni.get("previzualizare", (520, 190))
+		tema = picon = None
+		if fel == "setare":
+			tema, picon = previzualizareSetare(fel, ob, self.lucru.setari)
 		try:
-			_date, imagine, revizie = C.cadruPrevizualizare(alegere=alegere,
-				expresie=expresie, cadru=self.cadru if expresie else 0, valori=self.valori)
+			if tema is not None:
+				# randul „Tema afișajului” sau „Pictograma canalului”: canalul privit cu alegerea de pe ecran, nesalvata
+				_date, imagine, revizie = C.cadruTema(tema, picon, self.valori)
+			else:
+				_date, imagine, revizie = C.cadruPrevizualizare(alegere=alegere,
+					expresie=expresie, cadru=self.cadru if expresie else 0, valori=self.valori)
 		except Exception as eroare:
 			_jurnal("cadrul color: %r" % (eroare,))
 			imagine, revizie = "", ""

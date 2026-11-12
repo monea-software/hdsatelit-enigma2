@@ -115,7 +115,7 @@ def stare(C=None, service=None, prop=None, cu_serviciu=True):
 				cod_limba = limbaSubtitrare(e, r.gets("sServiceref"))
 		eticheta = tuple(e[:4]) + (cod_limba,) + tuple(e[5:])
 		rez["subtitrari"].append({"id": id_subtitrare(e), "tip": fel, "text": C.sub_text(eticheta),
-			"limba": C.language_name(cod_limba), "pornita": pornita})
+			"limba": C.language_name(cod_limba), "pornita": pornita, "nu_vine": _nuVine(e, r) if fel == 1 else ""})
 	rez["fara_subtitrari"] = scur is None
 	rez["canal_audio"] = C.piste_canal(service)
 	ex = C.sel_extras(r)
@@ -129,6 +129,16 @@ def stare(C=None, service=None, prop=None, cu_serviciu=True):
 	rez["hbbtv_semnalat"] = semnalat(r) if semnalat is not None else bool(r.gets("sHBBTVUrl"))
 	rez["teletext"] = r.geti("sTXTPID") > 0
 	return rez
+
+
+def _nuVine(e, r):
+	"""Langa o subtitrare teletext: „Canalul nu trimite acum subtitrări pe pagina 777.” cand teletextul canalului vine,
+	dar pagina nu (Components/HdsSubtitrareLipsa.py, acelasi semn ca mesajul de pe televizor); altfel ""."""
+	try:
+		from Components import HdsSubtitrareLipsa
+		return HdsSubtitrareLipsa.text_pentru_web(e, r.gets("sServiceref") or "")
+	except Exception:
+		return ""
 
 
 def _dupa(C, ok, mesaj_ok, mesaj_rau):
@@ -398,6 +408,7 @@ function deseneaza(d){
     buton(s, p.text || p.id, p.pornita, function(){
       var q = new URLSearchParams(); q.set("id", p.pornita ? "oprit" : p.id); trimite("/api/subtitrare", q);
     });
+    if(p.nu_vine){ var n = document.createElement("p"); n.className = "nota"; n.textContent = p.nu_vine; s.appendChild(n); }
   });
   var alte = 0;
   if(d.canal_audio !== null){

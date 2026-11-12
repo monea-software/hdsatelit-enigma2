@@ -1917,6 +1917,8 @@ def puneLegatura(widget=None):
 				return True
 			_jurnal("ales, dar %s: subtitrarile DVB raman poze" % ("fara modele in %s" % o.tessdata
 				if o.serviciu.instalat() else "serviciul %s lipseste" % o.serviciu.binar))
+			if not o.serviciu.instalat():
+				_cereInstalarea()
 		pune(None)
 		if _INSTANTA[0] is not None:
 			_INSTANTA[0].opreste()
@@ -1938,6 +1940,31 @@ def _cereStareaModelelor(o):
 			dep.cereStare()
 	except Exception as e:
 		_jurnal("starea modelelor: %s" % e)
+
+
+def _cereInstalarea():
+	"""Recunoasterea textului lipseste (imaginea mica, de la 0.7.4: hds-ocr sta in feed): receptorul o descarca si o
+	instaleaza singur, semnat, cu dependintele ei (Components/HdsLimbaRestaurare.cereOcr: o singura cerere pe pornire,
+	cu mesajul mic "Se instalează completările receptorului"). Dupa instalare, dupaInstalare() o leaga."""
+	try:
+		from Components import HdsLimbaRestaurare
+		HdsLimbaRestaurare.cereOcr()
+	except Exception as e:
+		_jurnal("instalarea din feed: %s" % e)
+
+
+def dupaInstalare():
+	"""Pe firul interfetei, dupa ce hds-ocr s-a instalat din feed: modelele se citesc din nou, alegerea OCR din
+	"Mărirea subtitrărilor DVB" apare (si valoarea "ocr" salvata intr-o copie revine), apoi legatura cu nucleul, fara
+	repornirea interfetei. Intoarce True daca OCR e legat."""
+	if _INSTANTA[0] is not None:
+		_INSTANTA[0]._modele = None
+	try:
+		from Components import HdsSubtitrariAspect
+		HdsSubtitrariAspect.dupaOcrInstalat()
+	except Exception as e:
+		_jurnal("alegerea OCR dupa instalare: %s" % e)
+	return puneLegatura()
 
 
 def _laSchimbareSetare(element=None):

@@ -1656,6 +1656,14 @@ void eDVBSatelliteEquipmentControl::setSlotNotLinked(int slot_no)
 	m_not_linked_slot_mask |= (1 << slot_no);
 }
 
+bool eDVBSatelliteEquipmentControl::isOrbitalPositionConfigured(int orbital_position)
+{
+	for (int i = 0; i <= m_lnbidx && i < (int)(sizeof(m_lnbs) / sizeof(m_lnbs[0])); ++i)
+		if (m_lnbs[i].m_satellites.find(orbital_position) != m_lnbs[i].m_satellites.end())
+			return true;
+	return false;
+}
+
 bool eDVBSatelliteEquipmentControl::isRotorMoving()
 {
 	return m_rotorMoving;

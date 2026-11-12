@@ -6,6 +6,7 @@
 #include <lib/base/eptrlist.h> /* for eSmartPtrList */
 #include <lib/gui/ewindowstyle.h> /* for eWindowStyle */
 #include <lib/gui/ewidgetanimation.h>
+#include <vector>
 
 #define MAX_LAYER 16
 
@@ -43,8 +44,49 @@ public:
 	
 	void setBackgroundColor(const gRGB &col);
 	void clearBackgroundColor();
+	bool hasBackgroundColor() const { return m_have_background_color != 0; }
+		/* HDSatelit: background gradient (backgroundGradient, or backgroundColor="start[,middle],end,direction" in
+		   foreign skins): two colours when middle == end, else three, along GRADIENT_VERTICAL (top to bottom) or
+		   GRADIENT_HORIZONTAL (left to right). Drawn only on widgets that are not transparent, before the background
+		   colour, with the corner radius. alphablend: colours with transparency are mixed with the background colour of
+		   the nearest parent that has one (sibling widgets below are not mixed in); without it they replace what is
+		   there (the video shows through, as with a transparent background colour). */
+	void setBackgroundGradient(const gRGB &startcolor, const gRGB &midcolor, const gRGB &endcolor, int direction, int alphablend);
+	void clearBackgroundGradient();
 	void setCornerRadius(int radius);
 	int getCornerRadius() const { return m_corner_radius; }
+		/* HDSatelit: which corners the radius rounds (RADIUS_*, cornerRadius="20;top"); the others stay square */
+	void setCornerEdges(int edges);
+	int getCornerEdges() const { return m_corner_edges; }
+		/* HDSatelit 0.7.4: a border around the widget (widgetBorderWidth/widgetBorderColor of the skins written for
+		   other images; on lists and windows also borderWidth/borderColor), drawn over the widget after it painted
+		   itself, before its children, following cornerRadius; 0 = none (as before), black when no colour is given */
+	void setWidgetBorderWidth(int width);
+	void setWidgetBorderColor(const gRGB &color);
+	int getWidgetBorderWidth() const { return m_widget_border_width; }
+		/* HDSatelit 0.7.4: alphaBlend="1" (skins written for other images): a background colour with transparency is
+		   mixed with the background of the nearest parent that has one, instead of replacing it (where the video
+		   would show through); 0 = as before */
+	void setWidgetAlphaBlend(int blend);
+
+	enum
+	{
+		GRADIENT_OFF = 0,
+		GRADIENT_VERTICAL = 1,
+		GRADIENT_HORIZONTAL = 2
+	};
+	enum
+	{
+		RADIUS_TOP_LEFT = 1,
+		RADIUS_TOP_RIGHT = 2,
+		RADIUS_TOP = 3,
+		RADIUS_BOTTOM_LEFT = 4,
+		RADIUS_BOTTOM_RIGHT = 8,
+		RADIUS_BOTTOM = 12,
+		RADIUS_LEFT = 5,
+		RADIUS_RIGHT = 10,
+		RADIUS_ALL = 15
+	};
 	
 	void setZPosition(int z);
 	void setTransparent(int transp);
@@ -94,6 +136,14 @@ private:
 	gRGB m_background_color;
 	int m_have_background_color;
 	int m_corner_radius;
+	int m_corner_edges;
+	std::vector<gRGB> m_background_gradient;	/* empty, 2 or 3 colours */
+	int m_gradient_vertical, m_gradient_alphablend;
+	void paintBackgroundGradient(gPainter &painter);
+	int m_widget_border_width;
+	int m_widget_alphablend;
+	gRGB m_widget_border_color;
+	void paintWidgetBorder(gPainter &painter);
 	
 	eWidget *m_current_focus, *m_focus_owner;
 	

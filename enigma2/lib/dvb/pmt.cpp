@@ -3,6 +3,7 @@
 #include <lib/base/eerror.h>
 #include <lib/base/hdsjurnal.h>
 #include <lib/dvb/pmt.h>
+#include <lib/dvb/cahandler.h>
 #include <lib/dvb/specs.h>
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/metaparser.h>
@@ -31,6 +32,7 @@ eDVBServicePMTHandler::eDVBServicePMTHandler()
 {
 	m_use_decode_demux = 0;
 	m_pmt_pid = -1;
+	m_hds_pmt_devreme = -1;
 	eDVBResourceManager::getInstance(m_resourceManager);
 	CONNECT(m_PMT.tableReady, eDVBServicePMTHandler::PMTready);
 	CONNECT(m_PAT.tableReady, eDVBServicePMTHandler::PATready);
@@ -43,6 +45,49 @@ eDVBServicePMTHandler::eDVBServicePMTHandler()
 eDVBServicePMTHandler::~eDVBServicePMTHandler()
 {
 	free();
+}
+
+namespace
+{
+	/* PID-uri de pornit decodorul tinute minte: orice intrare din cache, in afara de PID-ul PMT (cPMTPID). Un serviciu
+	   care tine minte numai PID-ul PMT (privit pana la PAT, fara decodor) nu porneste din memorie un program gol. */
+	bool arePidTinute(eDVBService *s)
+	{
+		if (!s || s->cacheEmpty())
+			return false;
+		for (int i = 0; i < eDVBService::cacheMax; ++i)
+			if (i != eDVBService::cPMTPID && s->getCacheEntry((eDVBService::cacheID)i) != -1)
+				return true;
+		return false;
+	}
+}
+
+void eDVBServicePMTHandler::pornesteTabele(bool rapid)
+{
+	m_hds_pmt_devreme = -1;
+	if (m_service && !m_service->usePMT())
+		return;
+	if (m_pmt_pid != -1)
+	{
+		m_PMT.begin(eApp, eDVBPMTSpec(m_pmt_pid, m_reference.getServiceID().get()), m_demux);
+		return;
+	}
+	m_PAT.begin(eApp, eDVBPATSpec(), m_demux);
+	/* HDSatelit (0.7.4, viteza zap): PMT-ul nu mai asteapta PAT-ul (o repetare a lui, plus trecerea buclei principale pana
+	   la PATready, pe .114 parte din cele 400-760 ms intre semnal si PMT). Filtrul porneste pe PID-ul tinut minte; PATready
+	   il lasa daca PAT-ul da acelasi PID si acelasi serviciu, altfel il porneste pe cel bun (sau il opreste, fara intrare in
+	   PAT), deci un PID schimbat de televiziune costa numai timpul de pana acum. Ajuta mai ales canalele criptate vazute
+	   prima oara de la pornire (CA PMT-ul, ECM-ul), modulele CI (primesc PMT-ul abia la PMTready) si canalele fara PID-uri
+	   tinute minte. */
+	if (rapid && m_service)
+	{
+		int pid = m_service->getCacheEntry(eDVBService::cPMTPID);
+		if (pid > 0 && pid < 0x1FFF)
+		{
+			m_hds_pmt_devreme = pid;
+			m_PMT.begin(eApp, eDVBPMTSpec(pid, m_reference.getServiceID().get()), m_demux);
+		}
+	}
 }
 
 void eDVBServicePMTHandler::channelStateChanged(iDVBChannel *channel)
@@ -63,28 +108,33 @@ void eDVBServicePMTHandler::channelStateChanged(iDVBChannel *channel)
 			else if (m_channel->getDemux(m_demux, (!m_use_decode_demux) ? 0 : iDVBChannel::capDecode))
 				eDebug("Allocating %s-decoding a demux for now tuned-in channel failed.", m_use_decode_demux ? "" : "non-");
 		}
-		
+
+		/* canalul viu din fereastra principala: PAT-ul (si PMT-ul din PID-ul tinut minte) pornesc inaintea lui evTunedIn,
+		   ale carui ascultatori Python ruleaza aici, pe loc; ceilalti (inregistrari, PiP, fisiere) ca inainte */
+		bool hds_rapid = m_demux && m_ca_din_memorie && !m_pvr_channel && eDVBFrontend::hdsZapRapid();
+		if (hds_rapid)
+			pornesteTabele(true);
+
 		serviceEvent(eventTuned);
-		
+
 		if (m_demux)
 		{
 			eDebug("ok ... now we start!!");
 
-			if (!m_service || m_service->usePMT())
-			{
-				if (m_pmt_pid == -1)
-					m_PAT.begin(eApp, eDVBPATSpec(), m_demux);
-				else
-					m_PMT.begin(eApp, eDVBPMTSpec(m_pmt_pid, m_reference.getServiceID().get()), m_demux);
-			}
+			if (!hds_rapid)
+				pornesteTabele(false);
 
 			if ( m_service && !m_service->cacheEmpty() )
 			{
-				serviceEvent(eventNewProgramInfo);
-				/* decodorul a pornit din PID-urile tinute minte (si demuxul lui e stiut): la un canal criptat cu PMT-ul
-				   tinut minte, CA PMT-ul pleaca acum, nu dupa PAT si PMT */
-				trimiteCaDinMemorie();
-				notificaInfoLive();
+				/* numai PID-ul PMT tinut minte (cPMTPID) nu e un program de pornit: decodorul asteapta PMT-ul */
+				if (arePidTinute(m_service))
+				{
+					serviceEvent(eventNewProgramInfo);
+					/* decodorul a pornit din PID-urile tinute minte (si demuxul lui e stiut): la un canal criptat cu PMT-ul
+					   tinut minte, CA PMT-ul pleaca acum, nu dupa PAT si PMT */
+					trimiteCaDinMemorie();
+					notificaInfoLive();
+				}
 			}
 		}
 	} else if ((m_last_channel_state != iDVBChannel::state_failed) && 
@@ -300,20 +350,35 @@ void eDVBServicePMTHandler::PATready(int)
 					pmtpid_single = service_id_single = -1;
 			}
 		}
+		bool hds_alt_serviciu = false;
 		if (pmtpid_single != -1) // only one PAT entry .. and not valid pmtpid found
 		{
 			eDebug("use single pat entry!");
 			m_reference.setServiceID(eServiceID(service_id_single));
 			pmtpid = pmtpid_single;
+			hds_alt_serviciu = true;
 		}
+		/* PMT-ul pornit la semnal pe PID-ul tinut minte (pornesteTabele): numai primul PAT dupa acordare il verifica;
+		   actualizarile PAT-ului de mai tarziu merg ca inainte */
+		int hds_devreme = m_hds_pmt_devreme;
+		m_hds_pmt_devreme = -1;
 		if (pmtpid == -1) {
 			eDebug("no PAT entry found.. start delay");
+			if (hds_devreme != -1)
+				m_PMT.stop(); /* ca inainte: fara PMT pornit, "serviciul lipseste din PAT" dupa o secunda */
 			m_no_pat_entry_delay->start(1000, true);
 		}
 		else {
 			eDebug("use pmtpid %04x for service_id %04x", pmtpid, m_reference.getServiceID().get());
 			m_no_pat_entry_delay->stop();
-			m_PMT.begin(eApp, eDVBPMTSpec(pmtpid, m_reference.getServiceID().get()), m_demux);
+			/* PID-ul PMT tinut minte pentru zap-ul urmator (si in lamedb, "c:19", cu celelalte PID-uri) */
+			if (m_service && !m_pvr_channel && !hds_alt_serviciu &&
+				m_service->getCacheEntry(eDVBService::cPMTPID) != pmtpid)
+				m_service->setCacheEntry(eDVBService::cPMTPID, pmtpid);
+			if (hds_devreme == pmtpid && !hds_alt_serviciu)
+				eDebug("PMT pid %04x already started from the remembered PID", pmtpid);
+			else
+				m_PMT.begin(eApp, eDVBPMTSpec(pmtpid, m_reference.getServiceID().get()), m_demux);
 		}
 	} else
 		serviceEvent(eventNoPAT);
@@ -974,8 +1039,22 @@ void eDVBServicePMTHandler::SDTScanEvent(int event)
 				m_reference.getChannelID(chid);
 				if (chid == m_dvb_scan->getCurrentChannelID())
 				{
-					m_dvb_scan->insertInto(db, true);
-					eDebug("sdt update done!");
+					/* HDSatelit (0.7.4): setarea 'Actualizeaza lista de canale la privit' (config.usage.hds_actualizare_lista,
+					   data/setup.xml, sectiunea usage), pornita din fabrica. Oprita, ce a gasit scanarea transponderului nu
+					   intra in lista: canalele sterse de om nu mai revin, iar cele noi apar numai dupa o scanare. Scanarea se
+					   face mai departe in tuneExt: socoteala tunerului (lib/dvb/hdscedare.h, LIVE_USES = 2, dvb.cpp
+					   canAllocateChannel) numara si folosirea ei. Citita aici, la fiecare sfarsit de scanare, setarea se
+					   aplica pe loc; o cheie lipsa sau necitita lasa actualizarea pornita, ca din fabrica. */
+					std::string actualizare;
+					bool actualizare_lista = ePythonConfigQuery::getConfigValue("config.usage.hds_actualizare_lista", actualizare) != 0
+						|| actualizare != "False";
+					if (actualizare_lista)
+					{
+						m_dvb_scan->insertInto(db, true);
+						eDebug("sdt update done!");
+					}
+					else
+						eDebug("sdt update skipped (config.usage.hds_actualizare_lista off)");
 				}
 				else
 					eDebug("ignore sdt update data.... incorrect transponder tuned!!!");
@@ -1000,6 +1079,7 @@ int eDVBServicePMTHandler::tuneExt(eServiceReferenceDVB &ref, int use_decode_dem
 	/* the yielding uses counted on the channel of a former tune go back before m_channel changes */
 	clearYieldingUses();
 	m_ca_din_memorie_trimis = false;
+	m_hds_pmt_devreme = -1;
 	m_reference = ref;
 	m_use_decode_demux = use_decode_demux;
 	m_no_pat_entry_delay->stop();
@@ -1139,6 +1219,7 @@ void eDVBServicePMTHandler::free()
 {
 	m_info_live_amana = false;
 	m_no_pat_entry_delay->stop();
+	m_hds_pmt_devreme = -1;
 	m_ca_timpi_connection.disconnect();
 	/* the yielding uses go back while this handler still holds the channel */
 	clearYieldingUses();
@@ -1287,7 +1368,7 @@ ChannelMap eDVBCAService::exist_channels;
 ePtr<eConnection> eDVBCAService::m_chanAddedConn;
 
 eDVBCAService::eDVBCAService()
-	:m_buffer(512), m_prev_build_hash(0), m_sendstate(0), m_retryTimer(eTimer::create(eApp))
+	:m_buffer(512), m_prev_build_hash(0), m_sendstate(0), m_retryTimer(eTimer::create(eApp)), m_id(0), m_version(-1)
 {
 	memset(m_used_demux, 0xFF, sizeof(m_used_demux));
 	CONNECT(m_retryTimer->timeout, eDVBCAService::sendCAPMT);
@@ -1310,8 +1391,12 @@ RESULT eDVBCAService::register_service( const eServiceReferenceDVB &ref, int dem
 	{
 		caservice = (exist[ref]=new eDVBCAService());
 		caservice->m_service = ref;
-		eDebug("[eDVBCAService] new service %s", ref.toString().c_str() );
+		if (eDVBCAHandler::getInstance())
+			caservice->m_id = eDVBCAHandler::getInstance()->serviceId(ref);
+		eDebug("[eDVBCAService] new service %s (id %u)", ref.toString().c_str(), caservice->m_id);
 	}
+	if (eDVBCAHandler::getInstance())
+		eDVBCAHandler::getInstance()->serviceRegistered();
 
 	int loops = demux_nums[0] != demux_nums[1] ? 2 : 1;
 	for (int i=0; i < loops; ++i)
@@ -1375,8 +1460,14 @@ RESULT eDVBCAService::unregister_service( const eServiceReferenceDVB &ref, int d
 			{
 				if (!used_demux_slots)  // no more used.. so we remove it
 				{
+					eDVBCAHandler *h = eDVBCAHandler::getInstance();
+					if (h)
+						h->serviceRemoved(it->second);
 					delete it->second;
 					exist.erase(it);
+					/* the softcam connected to enigma2 gets the list without this service */
+					if (h)
+						h->serviceListChanged();
 				}
 				else
 				{
@@ -1640,6 +1731,7 @@ void eDVBCAService::buildCAPMT(eTable<ProgramMapSection> *ptr)
 		eDebug("[eDVBCAService] don't build/send the same CA PMT twice");
 		return;
 	}
+	bool isUpdate = m_prev_build_hash != 0;
 
 	std::vector<ProgramMapSection*>::const_iterator i=ptr->getSections().begin();
 	if ( i != ptr->getSections().end() )
@@ -1680,6 +1772,7 @@ void eDVBCAService::buildCAPMT(eTable<ProgramMapSection> *ptr)
 		capmt.injectDescriptor(tmp, false);
 
 		capmt.writeToBuffer(m_capmt);
+		m_version = pmt_version;
 	}
 
 	m_prev_build_hash = build_hash;
@@ -1687,10 +1780,22 @@ void eDVBCAService::buildCAPMT(eTable<ProgramMapSection> *ptr)
 	if ( m_sendstate != 0xFFFFFFFF )
 		m_sendstate=0;
 	sendCAPMT();
+	if (m_version >= 0 && eDVBCAHandler::getInstance())
+		eDVBCAHandler::getInstance()->capmtBuilt(this, isUpdate);
 }
 
 void eDVBCAService::sendCAPMT()
 {
+	/* a softcam connected to enigma2 (lib/dvb/cahandler.h) gets the CA PMT there: the old path stays quiet, the same CA
+	   PMT on both would start two descramblings */
+	if (eDVBCAHandler::getInstance() && eDVBCAHandler::getInstance()->clientConnected())
+	{
+		m_retryTimer->stop();
+		return;
+	}
+	if (m_version < 0)
+		return; /* nothing built yet (the retry timer of an old connection) */
+
 	if ( m_sendstate && m_sendstate != 0xFFFFFFFF ) // broken pipe retry
 	{
 		::close(m_sock);
@@ -1748,6 +1853,91 @@ void eDVBCAService::sendCAPMT()
 				break;
 		}
 		++m_sendstate;
+	}
+}
+
+int eDVBCAService::capmtLength(int &lenbytes) const
+{
+	lenbytes = 0;
+	int wp = 0;
+	if (m_capmt[3] & 0x80)
+	{
+		lenbytes = m_capmt[3] & ~0x80;
+		for (int i = 0; i < lenbytes; ++i)
+			wp = (wp << 8) | m_capmt[4 + i];
+	}
+	else
+		wp = m_capmt[3];
+	return wp + 4 + lenbytes;
+}
+
+int eDVBCAService::writeCAPMTObject(ePMTClient *client, int list_management, int cmd_id)
+{
+	if (!client || m_version < 0)
+		return -1;
+	int lenbytes;
+	int wp = capmtLength(lenbytes);
+	if (wp <= 0 || wp > (int)sizeof(m_capmt))
+		return -1;
+	unsigned char buf[sizeof(m_capmt) + 5];
+	buf[0] = 0xA5; /* protocol 3: message start and message id; skipped for an older protocol */
+	buf[1] = m_id >> 24;
+	buf[2] = m_id >> 16;
+	buf[3] = m_id >> 8;
+	buf[4] = m_id & 0xFF;
+	memcpy(buf + 5, m_capmt, wp);
+	if (list_management >= 0)
+		buf[5 + 4 + lenbytes] = (unsigned char)list_management;
+	/* ca_pmt_cmd_id: list_management (1), program_number (2), version (1), program_info_length (2), then the command */
+	if (cmd_id >= 0)
+		buf[5 + 4 + lenbytes + 6] = (unsigned char)cmd_id;
+	return client->writeCAPMTObject((const char*)buf, wp);
+}
+
+void eDVBCAService::notifyCapmtSent()
+{
+	if (!caPmtTrimis.empty())
+		caPmtTrimis(hdsjurnal::monotonMs());
+}
+
+int eDVBCAService::numberOfBuiltServices()
+{
+	int n = 0;
+	for (CAServiceMap::const_iterator it = exist.begin(); it != exist.end(); ++it)
+		if (it->second->m_version >= 0)
+			++n;
+	return n;
+}
+
+void eDVBCAService::builtServices(std::vector<eDVBCAService*> &services)
+{
+	services.clear();
+	for (CAServiceMap::const_iterator it = exist.begin(); it != exist.end(); ++it)
+		if (it->second->m_version >= 0)
+			services.push_back(it->second);
+}
+
+int eDVBCAService::findById(uint32_t id, eServiceReferenceDVB &ref)
+{
+	for (CAServiceMap::const_iterator it = exist.begin(); it != exist.end(); ++it)
+	{
+		if (it->second->m_id == id)
+		{
+			ref = it->first;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+void eDVBCAService::resendLegacy()
+{
+	for (CAServiceMap::const_iterator it = exist.begin(); it != exist.end(); ++it)
+	{
+		if (it->second->m_version < 0)
+			continue;
+		it->second->m_sendstate = 1; /* connect again */
+		it->second->sendCAPMT();
 	}
 }
 

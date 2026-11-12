@@ -12,7 +12,13 @@
 #include <lib/dvb/frontend.h>
 #include <lib/dvb/tstools.h>
 #include <lib/dvb/esection.h>
+#include <lib/dvb/hdsvtuner.h>
 #include <connection.h>
+
+#include <map>
+#include <string>
+#include <vector>
+#include <pthread.h>
 
 #include <dvbsi++/service_description_section.h>
 
@@ -114,7 +120,8 @@ class eDVBAdapterLinux: public iDVBAdapter
 {
 	DECLARE_REF(eDVBAdapterLinux);
 public:
-	eDVBAdapterLinux(int nr);
+		/* scan = false: fara frontend-uri si demuxuri (puntea vtuner, eDVBUsbAdapter) */
+	eDVBAdapterLinux(int nr, bool scan = true);
 
 	int getNumDemux();
 	RESULT getDemux(ePtr<eDVBDemux> &demux, int nr);
@@ -123,10 +130,41 @@ public:
 	RESULT getFrontend(ePtr<eDVBFrontend> &fe, int nr, bool simulate=false);
 	
 	static int exist(int nr);
+		/* puntea vtuner (lib/dvb/hdsvtuner.cpp): adaptorul e un tuner pe USB; frontend-ul virtual al placii ->
+		   frontend-ul USB adevarat, pe care enigma2 il acordeaza */
+	static bool isusb(int nr);
+	static std::map<std::string, std::string> mappedFrontendName;
 private:
 	int m_nr;
 	eSmartPtrList<eDVBFrontend> m_frontend, m_simulate_frontend;
 	eSmartPtrList<eDVBDemux>    m_demux;
+	void scanDevices();
+};
+
+	/* puntea vtuner (ca in enigma2 OE-Alliance; lib/dvb/hdsvtuner.cpp): un tuner DVB pe USB legat de un /dev/misc/vtunerN al
+	   placii. Nu are frontend-uri si demuxuri in enigma2: frontend-ul lui apare pe adapter0, ca frontend virtual */
+class eDVBUsbAdapter: public eDVBAdapterLinux
+{
+	DECLARE_REF(eDVBUsbAdapter);
+public:
+	eDVBUsbAdapter(int nr);
+	virtual ~eDVBUsbAdapter();
+		/* scrie /tmp/hds_tunere_usb cu legaturile facute (sau o sterge, daca nu e niciuna) */
+	static void scrieLista();
+private:
+	volatile bool m_running;
+	pthread_t m_pumpThread;
+	bool m_pumpStarted;
+	int m_pipeFd[2];
+	int m_demuxFd;
+	int m_vtunerFd;
+	unsigned short m_pidList[30];
+	unsigned char m_buffer[(188 / 4) * 4096];
+	std::string m_virtualFrontendName;
+	std::string m_usbFrontendName;
+	static std::vector<hdsvtuner::Legatura> s_legaturi;
+	static void *threadproc(void *arg);
+	void *vtunerPump();
 };
 #endif // SWIG
 

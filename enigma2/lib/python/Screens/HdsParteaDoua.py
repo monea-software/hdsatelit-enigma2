@@ -12,7 +12,7 @@ from enigma import eTimer
 
 
 class HdsParteaDoua(Screen):
-	skin = """<screen name="HdsParteaDoua" position="center,center" size="980,560" title="Partea a doua pe stick">
+	skin = """<screen name="HdsParteaDoua" resolution="1920,1080" position="center,center" size="980,560" title="Partea a doua pe stick">
 		<widget name="text" position="30,25" size="920,430" font="Regular;26" />
 		<widget name="key_red" position="30,490" size="200,45" font="Regular;24" />
 		<widget name="key_green" position="250,490" size="460,45" font="Regular;24" />

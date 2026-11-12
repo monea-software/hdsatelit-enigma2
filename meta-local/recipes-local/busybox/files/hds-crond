@@ -1,0 +1,97 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# /etc/init.d/crond (pachetul busybox-cron, imaginea 0.7.4): sarcinile programate ale pluginurilor (Cron Manager din
+# AIO Panel, CronTimers si altele), din /etc/cron/crontabs. Aceleasi fisiere se vad si prin /etc/crontabs si
+# /var/spool/cron/crontabs (legaturile din postinst), deci orice plugin scrie in acelasi loc.
+# crond (busybox) porneste NUMAI cand exista cel putin o sarcina, ca receptorul sa nu tina degeaba un proces:
+# - la pornirea receptorului (S90): porneste daca exista sarcini;
+# - start / restart / reload (le cheama pluginurile dupa ce scriu o sarcina): porneste sau reporneste daca exista
+#   sarcini, altfel il opreste (ultima sarcina stearsa = crond oprit);
+# - stop: il opreste.
+# Un rand e sarcina daca nu e gol si nu incepe cu "#" (randurile oprite de AIO incep cu "#AIO_DISABLED#"). Fisierele
+# cu "." in nume (cron.update, root.new) nu sunt sarcini: nici crond nu le citeste.
+### BEGIN INIT INFO
+# Provides:          crond
+# Required-Start:    $local_fs $syslog
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: sarcinile programate (busybox crond), numai cand exista
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=${HDS_CROND_DAEMON:-/usr/sbin/crond}
+DOSAR=${HDS_CROND_DOSAR:-/etc/cron/crontabs}
+NUME=crond
+
+are_sarcini() {
+	for f in "$DOSAR"/*; do
+		[ -f "$f" ] || continue
+		case "${f##*/}" in *.*) continue ;; esac
+		grep -q '^[[:space:]]*[^#[:space:]]' "$f" 2>/dev/null && return 0
+	done
+	return 1
+}
+
+ruleaza() {
+	start-stop-daemon -K -t -q -n "$NUME" > /dev/null 2>&1
+}
+
+opreste() {
+	ruleaza || return 0
+	start-stop-daemon -K -q -n "$NUME" > /dev/null 2>&1
+	# asteapta iesirea (cel mult 3 s), ca un start imediat sa nu-l mai gaseasca pornit
+	i=0
+	while ruleaza && [ "$i" -lt 30 ]; do
+		usleep 100000 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+}
+
+porneste() {
+	[ -d "$DOSAR" ] || mkdir -p "$DOSAR"
+	if ! are_sarcini; then
+		echo "crond: nicio sarcina in $DOSAR, nu porneste"
+		return 0
+	fi
+	ruleaza && return 0
+	if [ ! -x "$DAEMON" ]; then
+		echo "crond: lipseste $DAEMON"
+		return 0
+	fi
+	# sarcinile ruleaza cu /bin/sh oricine porneste scriptul (crond ia shell-ul din SHELL; din alt mediu putea veni
+	# un shell care nu exista pe receptor, iar sarcina nu mai pornea: vazut la proba din chroot)
+	SHELL=/bin/sh "$DAEMON" -c "$DOSAR"
+	echo "crond: pornit ($DOSAR)"
+}
+
+case "$1" in
+	start)
+		porneste
+		;;
+	stop)
+		opreste
+		;;
+	restart|reload|force-reload)
+		opreste
+		porneste
+		;;
+	status)
+		if ruleaza; then
+			echo "crond: pornit"
+		elif are_sarcini; then
+			echo "crond: oprit (exista sarcini)"
+			exit 3
+		else
+			echo "crond: oprit (nicio sarcina)"
+			exit 3
+		fi
+		;;
+	*)
+		echo "Folosire: $0 {start|stop|restart|reload|status}"
+		exit 1
+		;;
+esac
+exit 0

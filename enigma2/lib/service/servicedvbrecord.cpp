@@ -4,6 +4,7 @@
 #include <lib/dvb/epgcache.h>
 #include <lib/dvb/metaparser.h>
 #include <lib/dvb/hdsurmamotor.h>
+#include <lib/dvb/cahandler.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -212,7 +213,11 @@ RESULT eDVBServiceRecord::stop()
 	if (m_state == stateRecording)
 	{
 		if (m_record)
+		{
 			m_record->stop();
+			m_record->setDescrambler(0);
+		}
+		m_csa_session = 0;
 		if (m_target_fd >= 0)
 		{
 			::close(m_target_fd);
@@ -474,6 +479,8 @@ int eDVBServiceRecord::doRecord()
 			if (m_decodare_mai_tarziu && !m_simulate && m_filename.compare(0, 6, "/proc/") != 0)
 				scrieDecodare(program, pids_to_record);
 
+			softCsaRecord(program);
+
 			if (m_state != stateRecording)
 			{
 				m_record->start();
@@ -484,6 +491,47 @@ int eDVBServiceRecord::doRecord()
 	m_error = 0;
 	m_event((iRecordableService*)this, evRecordRunning);
 	return 0;
+}
+
+void eDVBServiceRecord::softCsaRecord(const eDVBServicePMTHandler::program &program)
+{
+	if (m_csa_session || !m_record || m_decodare_mai_tarziu || m_simulate || program.caids.empty())
+		return;
+	eDVBCAHandler *h = eDVBCAHandler::getInstance();
+	if (!h || !h->softCsaReady() || !h->cwProven())
+		return;
+	uint16_t ecm_pid = 0, caid = 0;
+	for (std::list<eDVBServicePMTHandler::program::capid_pair>::const_iterator i(program.caids.begin());
+		i != program.caids.end(); ++i)
+	{
+		if ((i->caid >> 8) == 0x09 && i->capid > 0 && i->capid < 0x1fff)
+		{
+			ecm_pid = i->capid;
+			caid = i->caid;
+			break;
+		}
+	}
+	if (!ecm_pid)
+		return;
+	ePtr<iDVBDemux> demux;
+	if (m_service_handler.getDataDemux(demux) || !demux)
+		return;
+	m_csa_session = new eDVBCSASession(m_ref);
+	if (!m_csa_session->init())
+	{
+		m_csa_session = 0;
+		return;
+	}
+	/* inactive, the session passes the packets as they are; it turns itself on from the ECM (or at once, from the cache
+	   of a service seen as CSA-ALT before) */
+	if (m_record->setDescrambler(ePtr<iServiceScrambled>((iServiceScrambled*)m_csa_session)) < 0)
+	{
+		m_csa_session = 0;
+		return;
+	}
+	eDebug("[eDVBServiceRecord] SoftCSA session for %s (%s), PID %04X", m_ref.toString().c_str(),
+		m_filename.compare(0, 6, "/proc/") == 0 ? "stream" : "recording", ecm_pid);
+	m_csa_session->startECMMonitor(demux, ecm_pid, caid);
 }
 
 RESULT eDVBServiceRecord::frontendInfo(ePtr<iFrontendInformation> &ptr)

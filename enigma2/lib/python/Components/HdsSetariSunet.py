@@ -70,7 +70,8 @@ INCERCARI_NAVIGARE = 90
 
 _STARE = {"memorie": None, "pornit": False, "nav": None, "ceas_nav": None, "incercari": 0, "ceas": None,
 	"verificari": [], "volum_initial": False, "mut_initial": False, "ceas_volum": None, "ceas_scriere": None,
-	"avc_scris": None, "erori": {}, "standby_legat": False}
+	"avc_scris": None, "erori": {}, "standby_legat": False,
+	"placa_de_verificat": False}
 
 
 def N_(text):
@@ -863,6 +864,9 @@ def _porneste_ceas():
 def _laCeasVerificare():
 	acum = time.time() + 0.05
 	_STARE["verificari"] = [t for t in _STARE["verificari"] if t > acum]
+	if _STARE.get("placa_de_verificat"):
+		_STARE["placa_de_verificat"] = False
+		_reverificaPlaca()
 	try:
 		verifica()
 	except Exception as e:
@@ -892,7 +896,9 @@ def _laEveniment(ev):
 			_aplicaVolum()
 		except Exception as e:
 			_jurnal("volumul la pornirea canalului: %s" % e)
-		_reverificaPlaca()
+		# placa se cauta din nou la prima verificare de dupa zap (VERIFICARI_START), nu aici: la evStart, inaintea
+		# acordarii, citirea lui /proc/msp/sound0 (de doua ori, prin firul de fundal) tinea ascultatorul ~11 ms pe .122
+		_STARE["placa_de_verificat"] = True
 		programeaza(VERIFICARI_START)
 	elif ev == getattr(iPlayableService, "evUpdatedInfo", -1):
 		programeaza(VERIFICARI_PISTA)

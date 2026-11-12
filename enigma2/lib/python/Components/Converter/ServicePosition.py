@@ -1,4 +1,9 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+# Argumentele OE-Alliance in plus (11.11.2026): EndTime (ora la care se termina redarea, %H:%M:%S; %H:%M cu ShowNoSeconds sau
+# ShowNoSeconds2), Summary ("MM:SS +Nm"), VFDLength / VFDPosition / VFDRemaining / VFDGauge / VFDSummary (ca fara VFD),
+# optiunile ShowNoSeconds2 (ca ShowNoSeconds), OnlyMinute (numai minutele) si 7segment (se trece cu vederea).
+# Cele de dinainte dau acelasi text.
+from time import localtime, strftime, time as _acum
 from .Converter import Converter
 from .Poll import Poll
 from enigma import iPlayableService
@@ -9,29 +14,30 @@ class ServicePosition(Poll, Converter, object):
 	TYPE_POSITION = 1
 	TYPE_REMAINING = 2
 	TYPE_GAUGE = 3
+	TYPE_SUMMARY = 4
+	TYPE_ENDTIME = 5
+
+	TIPURI = {"Length": TYPE_LENGTH, "Position": TYPE_POSITION, "Remaining": TYPE_REMAINING, "Gauge": TYPE_GAUGE,
+		"Summary": TYPE_SUMMARY, "EndTime": TYPE_ENDTIME}
 
 	def __init__(self, type):
 		Poll.__init__(self)
 		Converter.__init__(self, type)
 
-		args = type.split(',')
+		args = [a.strip() for a in type.split(',')]
 		type = args.pop(0)
+		if type.startswith("VFD") and type[3:] in self.TIPURI:
+			type = type[3:]
 
 		self.negate = 'Negate' in args
 		self.detailed = 'Detailed' in args
 		self.showHours = 'ShowHours' in args
-		self.showNoSeconds = 'ShowNoSeconds' in args
+		self.showNoSeconds = 'ShowNoSeconds' in args or 'ShowNoSeconds2' in args
+		self.onlyMinute = 'OnlyMinute' in args
 
-		if type == "Length":
-			self.type = self.TYPE_LENGTH
-		elif type == "Position":
-			self.type = self.TYPE_POSITION
-		elif type == "Remaining":
-			self.type = self.TYPE_REMAINING
-		elif type == "Gauge":
-			self.type = self.TYPE_GAUGE
-		else:
-			raise ElementError("type must be {Length|Position|Remaining|Gauge} with optional arguments {Negate|Detailed|ShowHours|ShowNoSeconds} for ServicePosition converter")
+		self.type = self.TIPURI.get(type)
+		if self.type is None:
+			raise ElementError("type must be {Length|Position|Remaining|Gauge|Summary|EndTime} with optional arguments {Negate|Detailed|ShowHours|ShowNoSeconds|ShowNoSeconds2|OnlyMinute} for ServicePosition converter")
 
 		if self.detailed:
 			self.poll_interval = 100
@@ -77,6 +83,15 @@ class ServicePosition(Poll, Converter, object):
 		seek = self.getSeek()
 		if seek is None:
 			return ""
+		elif self.type in (self.TYPE_SUMMARY, self.TYPE_ENDTIME):
+			lungime, pozitie = self.length, self.position
+			if not lungime or lungime < 0 or pozitie is None:
+				return ""
+			trecut = pozitie // 90000
+			ramas = lungime // 90000 - trecut
+			if self.type == self.TYPE_SUMMARY:
+				return "%02d:%02d +%2dm" % (trecut // 60, trecut % 60, ramas // 60)
+			return strftime("%H:%M" if self.showNoSeconds else "%H:%M:%S", localtime(_acum() + ramas))
 		else:
 			if self.type == self.TYPE_LENGTH:
 				l = self.length
@@ -96,6 +111,8 @@ class ServicePosition(Poll, Converter, object):
 				l = -l
 				sign = "-"
 
+			if self.onlyMinute and not self.detailed:
+				return sign + "%d" % (l // 60)
 			if not self.detailed:
 				if self.showHours:
 					if self.showNoSeconds:

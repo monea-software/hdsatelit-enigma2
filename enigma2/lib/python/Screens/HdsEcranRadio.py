@@ -1041,6 +1041,11 @@ class HartaRadio(ActionMap):
 CONTEXTE_TASTE = ["InfobarShowHideActions", "InfobarChannelSelection", "ColorActions", "InfobarExtensions",
 	"InfobarAudioSelectionActions"]
 
+# EXIT pe ecranul radio, intrebat intai un plugin care a pornit postul (0.7.4, forumul 588 #1914): fiecare functie din lista e
+# chemata fara argumente; True = tasta e luata (Radio online: postul pornit din plugin peste un canal TV se opreste si revine
+# canalul TV de dinainte, in loc de ecranul negru cu sunet). False sau o eroare: urmatoarea, apoi EXIT ca pana acum.
+LA_EXIT = []
+
 
 def actiuniHarta(leg):
 	"""Actiunile hartii ecranului radio (Screens/InfoBar.py le leaga cu prioritatea -1, inaintea hartilor barei)."""
@@ -1879,6 +1884,13 @@ class LegaturaRadio(object):
 			return 1
 		if getattr(self.infobar, "shown", False):
 			return 0              # bara e deschisa: EXIT o inchide, ca de obicei
+		if self.radio:
+			for f in list(LA_EXIT):
+				try:
+					if f():
+						return 1
+				except Exception as e:
+					_jurnal("EXIT, functia unui plugin: %s: %s" % (type(e).__name__, e))
 		if self.vizibil:
 			self.ascuns_de_om = True
 			self.ascunde()

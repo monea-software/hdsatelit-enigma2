@@ -27,6 +27,7 @@ libenigma_gdi_a_SOURCES = \
 	gmaindc.cpp \
 	gpixmap.cpp \
 	grc.cpp \
+	hdsanimatie.cpp \
 	hdsgpu.cpp \
 	lcd.cpp \
 	mpeg2intra.cpp \
@@ -51,6 +52,7 @@ gdiinclude_HEADERS = \
 	glcddc.h \
 	gpixmap.h \
 	grc.h \
+	hdsanimatie.h \
 	hdsgpu.h \
 	lcd.h \
 	mpeg2intra.h \

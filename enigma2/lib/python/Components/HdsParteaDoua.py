@@ -137,6 +137,12 @@ def montari(radacina=None):
 	return rez
 
 
+# UUID-ul fiecarui stick candidat (dispozitiv, punct, sistem de fisiere), tinut minte cat ramane montat (12.11.2026):
+# ecranul (la 2 s) si pagina web (la 3 s) cer lista mereu, iar fiecare cerere pornea cate un blkid pe firul principal pentru
+# fiecare stick bun (un proces nou la cateva secunde, pana la 5 s de asteptare cand stickul raspunde greu)
+_identStickuri = {}
+
+
 def candidati(radacina=None, conf=None, exclus=(), liber=None):
 	"""Stickurile pe care se poate pune partea a doua: montate sub /media dintr-un dispozitiv USB de tip disc (/dev/sdX),
 	cu scriere, cu sistem de fisiere cunoscut, cu loc liber >= MARIME_MIB + REZERVA_MIB, fara fisierul partii a doua deja
@@ -149,6 +155,7 @@ def candidati(radacina=None, conf=None, exclus=(), liber=None):
 	m = montare(conf)
 	rez = []
 	vazute = set()
+	_identVechi, identNoi = dict(_identStickuri), {}
 	for disp, punct, fs, opt in montari(radacina):
 		if not punct.startswith("/media/") or punct.rstrip("/") == m.rstrip("/") or punct in vazute:
 			continue
@@ -169,11 +176,18 @@ def candidati(radacina=None, conf=None, exclus=(), liber=None):
 		if l < nevoie:
 			continue
 		vazute.add(punct)
-		cod, ident = _ruleaza(["blkid", "-s", "UUID", "-o", "value", disp], 5)
-		if cod != 0 or not re.match(r"^[A-Za-z0-9-]{4,64}$", ident.strip()):
-			continue
+		cheie = (radacina, disp, punct, fs)
+		ident = _identVechi.get(cheie)
+		if ident is None:
+			cod, ident = _ruleaza(["blkid", "-s", "UUID", "-o", "value", disp], 5)
+			if cod != 0 or not re.match(r"^[A-Za-z0-9-]{4,64}$", ident.strip()):
+				continue
+		identNoi[cheie] = ident
 		rez.append({"punct": punct, "liber_mib": l, "fs": fs,
 			"dispozitiv": disp, "ident": ident.strip()})
+	# numai stickurile bune vazute acum: unul scos si altul pus in loc trece printr-o verificare fara el, deci blkid din nou
+	_identStickuri.clear()
+	_identStickuri.update(identNoi)
 	rez.sort(key=lambda x: -x["liber_mib"])
 	return rez
 
@@ -742,9 +756,41 @@ def _actualizari():
 	return A
 
 
-def planContinut(feed, instalate, cerute, A=None):
-	"""Inchiderea dependintelor din indexuri semnate. Lipsurile opresc instalarea."""
+def _permisPeStick(nume):
+	"""Pe stick sunt auditate numai metapachetul partii a doua si cataloagele (fara scripturi, faraScripturi)."""
+	return nume == "hdsatelit-partea-doua-continut" or nume.startswith("enigma2-hdsatelit-po-")
+
+
+def feedSemnat(A, adresa, server, surse, pc, credentiale=None, deschide=None):
+	"""{nume: strofa} din indexurile Packages ale arhitecturilor receptorului, fiecare verificat fata de marimea si
+	suma din stare.json semnat ("indexuri"); la acelasi nume, versiunea cea mai noua, apoi arhitectura cu prioritatea
+	mai mare. ValueError cand un index nu e chiar cel semnat (sau nu se poate citi)."""
+	feed = {}
+	for arh in sorted(set(s[2] for s in surse)):
+		if arh not in pc.arhitecturi:
+			continue
+		x = (server.get("indexuri") or {}).get(arh) or {}
+		corp, e = A._cere(adresa + "/" + arh + "/Packages", credentiale,
+			deschide=deschide, maxim=32 * 1024 * 1024, accept="text/plain")
+		if e or not corp or len(corp) != x.get("marime") or hashlib.sha256(corp).hexdigest() != x.get("sha256"):
+			raise ValueError(_t("Indexul pachetelor nu este cel semnat: ") + arh)
+		for s in A.P.strofe_din_text(corp.decode("utf-8")):
+			n = s.get("package", "")
+			if not A.P.nume_valid(n) or s.get("architecture") != arh:
+				continue
+			vechi = feed.get(n)
+			if vechi is None or A.P.compara_versiuni(s.get("version", ""), vechi["version"]) > 0 or \
+					(s.get("version") == vechi["version"] and pc.arhitecturi[arh] > pc.arhitecturi[vechi["architecture"]]):
+				feed[n] = s
+	return feed
+
+
+def planContinut(feed, instalate, cerute, A=None, permise=None):
+	"""Inchiderea dependintelor din indexuri semnate. Lipsurile opresc instalarea. permise(nume): ce pachete au voie in
+	plan; implicit numai cele auditate pentru stick (_permisPeStick). Completarile din memoria interna
+	(Components/HdsLimbaRestaurare.py) primesc orice pachet semnat, ca la actualizari."""
 	A = A or _actualizari()
+	permise = permise or _permisPeStick
 	plan = {}
 	def satisface(n, op, v, versiuni):
 		return n in versiuni and (not op or A._satisface(versiuni[n], op, v))
@@ -760,8 +806,8 @@ def planContinut(feed, instalate, cerute, A=None):
 			raise ValueError(_t("Pachetul lipseste din feedul semnat: ") + n)
 		if n in instalate and A.P.compara_versiuni(instalate[n], s["version"]) >= 0:
 			return
-		# In aceasta faza sunt auditate numai metapachetele si cataloagele.
-		if n != "hdsatelit-partea-doua-continut" and not n.startswith("enigma2-hdsatelit-po-"):
+		# Pe stick sunt auditate numai metapachetele si cataloagele.
+		if not permise(n):
 			raise ValueError(_t("Pachetul nu este inca auditat pentru stick: ") + n)
 		plan[n] = s
 		for grup in A._dependinte(s.get("depends")) + A._dependinte(s.get("pre-depends")):
@@ -826,20 +872,22 @@ def _localDeschide(dosar, adresa_baza):
 	return deschide
 
 
-def actualizeazaContinut(radacina=None, progres=None, offline=None, lacat=None, cerute=()):
+def actualizeazaContinut(radacina=None, progres=None, offline=None, lacat=None, cerute=(), deschide=None):
+	"""deschide: cititorul unei surse fara retea deja verificate de apelant (zip-ul de completari de pe stick,
+	Components/HdsLimbaRestaurare.SursaStick); semnatura, indexurile si sumele se verifica la fel ca online."""
 	radacina = radacina or radacinaImplicita()
 	propriu = lacat is None
 	lacat = lacat if lacat is not None else ocupaOperatia(radacina)
 	if lacat is None:
 		return False, _t("Alta operatie este in lucru sau interfata trebuie repornita.")
 	try:
-		return _actualizeazaContinut(radacina, progres, offline, cerute)
+		return _actualizeazaContinut(radacina, progres, offline, cerute, deschide)
 	finally:
 		if propriu:
 			elibereazaOperatia(lacat)
 
 
-def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=()):
+def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=(), deschide=None):
 	"""Semnatura, indexuri, plan, SHA256, proba opkg, instalare fara surse, legaturi."""
 	radacina = radacina or radacinaImplicita()
 	progres = progres or (lambda text: None)
@@ -853,8 +901,8 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=()):
 	if canal not in ("public", "proba") or not surse or baza != A.baza_receptorului(radacina):
 		return False, _t("Sursa partii a doua lipseste sau cere o alta imagine.")
 	adresa = A.adresa_stare(canal, baza).rsplit("/", 1)[0]
-	deschide = _localDeschide(offline, adresa) if offline else None
-	credentiale = A.citeste_netrc(radacina) if canal == "proba" and not offline else None
+	deschide = deschide or (_localDeschide(offline, adresa) if offline else None)
+	credentiale = A.citeste_netrc(radacina) if canal == "proba" and not deschide else None
 	dosar = os.path.join(_cale(radacina, _relMontare(conf)), "hds", "descarcare")
 	try:
 		progres(_t("Verific semnatura feedului..."))
@@ -865,23 +913,7 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=()):
 				A.P.compara_versiuni(server.get("imagine_minima", ""), baza) > 0 or \
 				server.get("canal", canal) != canal:
 			raise ValueError(_t("Continutul cere o alta imagine sau alt canal."))
-		feed = {}
-		for arh in sorted(set(s[2] for s in surse)):
-			if arh not in pc.arhitecturi:
-				continue
-			x = (server.get("indexuri") or {}).get(arh) or {}
-			corp, e = A._cere(adresa + "/" + arh + "/Packages", credentiale,
-				deschide=deschide, maxim=32 * 1024 * 1024, accept="text/plain")
-			if e or not corp or len(corp) != x.get("marime") or hashlib.sha256(corp).hexdigest() != x.get("sha256"):
-				raise ValueError(_t("Indexul pachetelor nu este cel semnat: ") + arh)
-			for s in A.P.strofe_din_text(corp.decode("utf-8")):
-				n = s.get("package", "")
-				if not A.P.nume_valid(n) or s.get("architecture") != arh:
-					continue
-				vechi = feed.get(n)
-				if vechi is None or A.P.compara_versiuni(s.get("version", ""), vechi["version"]) > 0 or \
-						(s.get("version") == vechi["version"] and pc.arhitecturi[arh] > pc.arhitecturi[vechi["architecture"]]):
-					feed[n] = s
+		feed = feedSemnat(A, adresa, server, surse, pc, credentiale, deschide)
 		inst = A.instalate(radacina, pc)
 		usb = A.P.citeste_strofe(os.path.join(_cale(radacina, _relMontare(conf)), "var/lib/opkg/status"))
 		pe_stick = {s["package"]: s.get("version", "") for s in usb if "installed" in s.get("status", "").split()}

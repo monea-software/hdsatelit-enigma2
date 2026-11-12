@@ -244,7 +244,8 @@ public:
 			got_mhw2_title_pid,
 			got_mhw2_summary_pid,
 			timeChanged,
-			save /* HDSatelit: write the cache file now (requestSave) */
+			save /* HDSatelit: write the cache file now (requestSave) */,
+			load /* HDSatelit: replace the guide with the cache file (loadLater) */
 		};
 		int type;
 		iDVBChannel *channel;
@@ -352,6 +353,16 @@ public:
 	// porneste firul inainte de ora.
 	void saveLater();
 	void flushEPG();
+	// HDSatelit: pentru pluginurile de ghid ale altor imagini (EPGImport, EPGRefresh, ChannelsImporter, SystemTime...),
+	// cu numele cerute de ele (in Python: load, clear, timeUpdated; enigma_python.i). Toate revin imediat:
+	// - loadLater: pe firul ghidului, cand fisierul ghidului exista: ghidul de acum se goleste si se citeste fisierul (dupa
+	//   un save cerut inainte, in aceeasi coada, deci fisierul citit e cel scris); fara firul ghidului nu face nimic (firul
+	//   citeste fisierul cand porneste);
+	// - clear: tot ghidul golit (= flushEPG);
+	// - timeUpdatedSafe: ghidul pornit dupa ora noua, numai cand ora receptorului e deja buna (altfel nimic).
+	void loadLater();
+	void clear() { flushEPG(); }
+	void timeUpdatedSafe();
 
 	// called from main thread
 	inline void Lock();

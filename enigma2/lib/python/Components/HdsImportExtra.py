@@ -13,7 +13,19 @@
 #     declară modul (videomode_preferred). Limba nu se ia: rămâne cea aleasă în asistent;
 #   - piconurile: numai .png cu nume simplu, fără legături, cu limită de număr, de octeți și de spațiu (copiaza_piconuri);
 #   - pluginurile: numele din lista pachetelor instalate a copiei (citeste_pachete), fără pachetele modulelor de acces
-#     condiționat, potrivite cu sursele de pachete ale receptorului (potriveste_pachete);
+#     condiționat (pe acelea le pune singur importul, mai jos), potrivite cu sursele de pachete ale receptorului
+#     (potriveste_pachete), pentru oferta de după import;
+#   - modulele de acces condiționat (regula din 31.10.2026): fișierele lor din copie (LOCURI_ACCES) se copiază ca atare,
+#     octet cu octet, fără să fie deschise, citite, filtrate, arătate sau trimise; în texte, jurnal, starea comună și web
+#     ajunge cel mult numărul lor. Pachetele modulelor instalate în copie se instalează din nou din sursele de pachete
+#     ale receptorului, după nume (reinstaleaza_acces), fișierele se pun iar peste ce a scris instalarea, iar modulul
+#     ales în copie se alege și aici când scriptul lui există (modul_de_ales; alegerea, pe firul enigma2, în
+#     HdsImportSurse.incheie_importul). Ce nu există în sursele de pachete se spune omului cu numele pachetului;
+#     ce nu se poate instala acum (fără internet, opkg ocupat) intră în coada Components/HdsReinstalare.py, pentru
+#     pornirea următoare. Fișierele de acum pe care copia le înlocuiește rămân în DOSAR_INAINTE_ACCES/<data> (ale
+#     ultimelor PASTRATE_INAINTE importuri; în afara /etc/enigma2, deci nici copia setărilor, nici asistența nu le iau). În cod nu e scris niciun
+#     nume de modul sau de fel: pachetele se recunosc după categorie (TIPAR_CATEGORIE_ACCES, ca HdsPachete), felurile
+#     și scripturile după forma din etc/init.d (HdsCopieSetari.feluri_din_nume_acces), dosarele după lista pachetului;
 #   - rețeaua: felul conexiunii pe cablu și pe Wi-Fi și rețeaua Wi-Fi, din etc/network/interfaces,
 #     etc/wpa_supplicant*.conf și etc/resolv.conf ale copiei (citeste_retea). Parola rețelei stă numai în obiectul
 #     ParolaWifi (repr fără ea), nu intră în texte, în jurnal, în starea comună sau în web. Aplicarea e în
@@ -22,6 +34,7 @@
 import os
 import re
 import shutil
+import stat
 import time
 
 # ---------------------------------------------------------------- locurile din copie
@@ -50,9 +63,26 @@ TIPAR_PICON = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,119}\.png$")
 PREFIX_PLUGIN = "enigma2-plugin-"
 TIPAR_NUME_PACHET = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,120}$")
 # categoriile care nu se oferă: skinurile altor imagini nu se potrivesc pe ecranele imaginii, listele de canale ar
-# înlocui canalele aduse, driverele sunt ale imaginii; modulele de acces condiționat niciodată
+# înlocui canalele aduse, driverele sunt ale imaginii; modulele de acces condiționat nu se oferă, fiindcă le pune singur
+# importul (alegerea „acces”, reinstaleaza_acces)
 CATEGORII_NEOFERITE = ("skins", "settings", "drivers")
 TIPAR_CUVANT_ACCES = re.compile(r"cams?d?[0-9]*$")
+# categoria pachetelor modulelor de acces (aceeași formă ca HdsPachete.TIPAR_CATEGORIE_ACCES)
+TIPAR_CATEGORIE_ACCES = re.compile(r"^[a-z]+cams$")
+# locurile fișierelor modulelor de acces sub rădăcina unei imagini: configurările (cu subdosarele lor) și cheile
+LOCURI_ACCES = ("etc/tuxbox/config", "usr/keys", "var/keys")
+DOSAR_CONFIG_ACCES = "etc/tuxbox/config"
+MAX_FISIERE_ACCES = 1000
+MAX_FISIER_ACCES = 4 * 1024 * 1024
+MAX_TOTAL_ACCES = 32 * 1024 * 1024
+REZERVA_ACCES = 2 * 1024 * 1024
+TERMEN_ACCES_S = 120.0
+# fișierele de acum pe care importul le-a înlocuit, sub rădăcina receptorului, câte un dosar cu data pe import (numai
+# ale ultimelor PASTRATE_INAINTE importuri: un al doilea import nu șterge originalele păstrate de primul)
+DOSAR_INAINTE_ACCES = "home/root/hds-restaurare/acces-inainte-de-import"
+PASTRATE_INAINTE = 3
+SUFIX_GOL_ACCES = "None"    # scriptul gol al unui fel (<fel>.None), ca HdsCopieSetari.SUFIX_GOL_ACCES
+INFO_OPKG = "var/lib/opkg/info"
 
 
 def _(text):
@@ -176,15 +206,19 @@ def locuri_extra(cale, fel, cale_arhiva="", radacina_pregatita=None):
 
 
 def cuprins_extra(cale, fel, cale_arhiva="", membri_extra=()):
-	"""Câmpurile sursei pentru căutare: {"retea": bool, "picon": bool, "pachete": bool}. La o arhivă `membri_extra` sunt
-	căile de sub rădăcina copiei găsite în ea (fel_extra)."""
+	"""Câmpurile sursei pentru căutare: {"retea": bool, "picon": bool, "pachete": bool, "acces": bool}. La o arhivă
+	`membri_extra` sunt căile de sub rădăcina copiei găsite în ea (fel_extra); fișierele modulelor dintr-o arhivă le
+	numără căutarea (HdsImportSurse), deci aici "acces" e False. La un dosar: rădăcina copiei are fișiere în
+	LOCURI_ACCES (numai după nume, oprit la primul)."""
 	if fel == "arhiva":
 		feluri = set(fel_extra(r) for r in membri_extra)
 		loc = locuri_extra(cale, fel, cale_arhiva)
 		return {"retea": REL_INTERFACES in membri_extra, "picon": False,
-			"pachete": "pachete" in feluri or bool(loc["pachete"])}
+			"pachete": "pachete" in feluri or bool(loc["pachete"]), "acces": False}
 	loc = locuri_extra(cale, fel)
-	return {"retea": loc["retea"] is not None, "picon": loc["picon"] is not None, "pachete": bool(loc["pachete"])}
+	rad = radacina_copiei(cale)
+	return {"retea": loc["retea"] is not None, "picon": loc["picon"] is not None, "pachete": bool(loc["pachete"]),
+		"acces": bool(rad and fisiere_acces(rad, 1)[0])}
 
 
 # ---------------------------------------------------------------- setările sigure ale meniului
@@ -470,6 +504,520 @@ def potriveste_pachete(nume, catalog):
 		else:
 			rez["lipsa"] += 1
 	return rez
+
+
+# ---------------------------------------------------------------- modulele de acces condiționat
+
+def _reinstalare():
+	try:
+		from Components import HdsReinstalare as R
+	except ImportError:  # probe pe PC: modulul de lângă acesta
+		import HdsReinstalare as R
+	return R
+
+
+def _copie():
+	try:
+		from Components import HdsCopieSetari as C
+	except ImportError:  # probe pe PC
+		import HdsCopieSetari as C
+	return C
+
+
+def _c(rad, rel):
+	return os.path.join(rad or "/", *rel.split("/"))
+
+
+def este_pachet_acces(nume):
+	"""enigma2-plugin-<categorie>-<nume>, cu categoria modulelor de acces (TIPAR_CATEGORIE_ACCES)."""
+	nume = nume or ""
+	return (nume.startswith(PREFIX_PLUGIN) and bool(TIPAR_NUME_PACHET.match(nume))
+		and bool(TIPAR_CATEGORIE_ACCES.match(_categorie(nume))))
+
+
+def nume_scurt(nume):
+	"""Numele arătat al unui pachet: fără enigma2-plugin-<categorie>- (ca HdsReinstalare._scurt)."""
+	if nume.startswith(PREFIX_PLUGIN):
+		rest = nume[len(PREFIX_PLUGIN):]
+		return rest.split("-", 1)[1] if "-" in rest else rest
+	return nume
+
+
+def este_loc_acces(rel):
+	"""`rel` (cale sub rădăcina copiei, cu /) e sub unul din LOCURI_ACCES."""
+	rel = (rel or "").replace("\\", "/").strip("/")
+	return any(rel.startswith(loc + "/") for loc in LOCURI_ACCES)
+
+
+def _cale_cu_legatura(rad, rel):
+	"""Vreun nume din `rel` (de la rădăcina copiei în jos) e o legătură simbolică (/var/keys -> /usr/keys într-o
+	rădăcină ar trimite la fișierele receptorului)."""
+	cale = rad
+	for parte in rel.split("/"):
+		cale = os.path.join(cale, parte)
+		if os.path.islink(cale):
+			return True
+	return False
+
+
+def fisiere_acces(rad, max_fisiere=MAX_FISIERE_ACCES):
+	"""([(rel, mărime)], tăiat): fișierele obișnuite din LOCURI_ACCES de sub rădăcina `rad`, aflate numai după nume și
+	lstat (nimic nu se deschide), fără legături și fără dosare legate, cel mult `max_fisiere`."""
+	rez = []
+	if not rad:
+		return rez, False
+	for loc in LOCURI_ACCES:
+		baza = _c(rad, loc)
+		if not os.path.isdir(baza) or _cale_cu_legatura(rad, loc):
+			continue
+		for d, dosare, fisiere in os.walk(baza):
+			dosare[:] = sorted(x for x in dosare if not os.path.islink(os.path.join(d, x)))
+			for n in sorted(fisiere):
+				c = os.path.join(d, n)
+				try:
+					st = os.lstat(c)
+				except OSError:
+					continue
+				if not stat.S_ISREG(st.st_mode):
+					continue
+				rez.append((os.path.relpath(c, rad).replace("\\", "/"), st.st_size))
+				if len(rez) >= max_fisiere:
+					return rez, True
+	return rez, False
+
+
+def _spatiu_liber_acces(rad_sistem):
+	return _spatiu_liber(_c(rad_sistem, "etc"))
+
+
+def copiaza_acces(perechi, rad_sistem="/", inainte=None, termen_s=TERMEN_ACCES_S, max_fisier=MAX_FISIER_ACCES,
+		max_total=MAX_TOTAL_ACCES, rezerva=REZERVA_ACCES):
+	"""Copiază ca atare fișierele `perechi` [(cale sursă, rel țintă)] sub `rad_sistem`: shutil.copyfile (octet cu octet;
+	nimic nu se deschide ca text), scris lângă țintă și mutat dintr-o bucată. Un fișier de acum identic (filecmp, octet
+	cu octet) nu se rescrie; unul diferit se păstrează întâi în `inainte` (dacă e dat), cu aceeași cale. O țintă care e
+	legătură sau dosar nu se atinge. Mod: al fișierului de acum, altfel 0755 / 0644 după sursă.
+	Întoarce {"copiate", "la_fel", "pastrate", "sarite", "oprit": "" / "spatiu" / "limita" / "timp"}."""
+	import filecmp
+	rez = {"copiate": 0, "la_fel": 0, "pastrate": 0, "sarite": 0, "oprit": ""}
+	termen = time.time() + termen_s
+	alese = []
+	total = 0
+	for sursa, rel in perechi:
+		try:
+			marime = os.path.getsize(sursa)
+		except OSError:
+			rez["sarite"] += 1
+			continue
+		if marime > max_fisier:
+			rez["sarite"] += 1
+			continue
+		if total + marime > max_total:
+			rez["oprit"] = "limita"
+			break
+		total += marime
+		alese.append((sursa, rel))
+	liber = _spatiu_liber_acces(rad_sistem)
+	if liber is not None and liber - total < rezerva:
+		rez["oprit"] = "spatiu"
+		return rez
+	for sursa, rel in alese:
+		if time.time() > termen:
+			rez["oprit"] = "timp"
+			break
+		tinta = _c(rad_sistem, rel)
+		try:
+			if os.path.islink(tinta) or os.path.isdir(tinta):
+				rez["sarite"] += 1
+				continue
+			exista = os.path.isfile(tinta)
+			if exista and os.path.exists(sursa) and os.path.samefile(sursa, tinta):
+				rez["la_fel"] += 1
+				continue
+			if exista and filecmp.cmp(sursa, tinta, shallow=False):
+				rez["la_fel"] += 1
+				continue
+			if exista:
+				mod = stat.S_IMODE(os.stat(tinta).st_mode)
+				if inainte:
+					pastrat = os.path.join(inainte, *rel.split("/"))
+					os.makedirs(os.path.dirname(pastrat), mode=0o700, exist_ok=True)
+					shutil.copyfile(tinta, pastrat)
+					os.chmod(pastrat, 0o600)
+					rez["pastrate"] += 1
+			else:
+				mod = 0o755 if os.stat(sursa).st_mode & 0o111 else 0o644
+				os.makedirs(os.path.dirname(tinta), mode=0o755, exist_ok=True)
+			nou = tinta + ".hds-nou"
+			shutil.copyfile(sursa, nou)
+			os.chmod(nou, mod)
+			os.replace(nou, tinta)
+			rez["copiate"] += 1
+		except (OSError, IOError):
+			rez["sarite"] += 1
+			try:
+				os.remove(tinta + ".hds-nou")
+			except OSError:
+				pass
+	return rez
+
+
+def pachete_acces_din_copie(cai):
+	"""Pachetele modulelor de acces instalate în copie, din listele ei de pachete (aceleași ca la citeste_pachete, care
+	le lasă deoparte); numai numele, ordonate."""
+	toate = set()
+	for cale in cai or ():
+		try:
+			with open(cale, "r", encoding="utf-8", errors="replace") as f:
+				toate |= _din_text(f.read(MAX_LISTA_PACHETE))
+		except (OSError, IOError):
+			continue
+	return sorted(n for n in toate if este_pachet_acces(n))
+
+
+def _lista_pachetului(rad, nume):
+	"""Căile (fără / la început) din var/lib/opkg/info/<nume>.list sub `rad` (lista fișierelor puse de opkg)."""
+	try:
+		with open(_c(rad, "%s/%s.list" % (INFO_OPKG, nume)), "r", encoding="utf-8", errors="replace") as f:
+			text = f.read(4 * 1024 * 1024)
+	except (OSError, IOError):
+		return []
+	return [r.split("\t", 1)[0].strip().lstrip("/") for r in text.splitlines() if r.strip()]
+
+
+def dosare_config_pachet(rad, nume):
+	"""Dosarele de sub etc/tuxbox/config (primul nivel: etc/tuxbox/config/<x>) puse de pachetul `nume` sub `rad`."""
+	rez = []
+	prefix = DOSAR_CONFIG_ACCES + "/"
+	for c in _lista_pachetului(rad, nume):
+		if c.startswith(prefix):
+			d = prefix + c[len(prefix):].split("/", 1)[0]
+			if d != prefix and d not in rez:
+				rez.append(d)
+	return rez
+
+
+def _module_acces():
+	try:
+		from Components import HdsModuleAcces as M
+	except ImportError:  # probe pe PC
+		import HdsModuleAcces as M
+	return M
+
+
+def dosare_config_aici(rad, nume):
+	"""Dosarele de configurare (etc/tuxbox/config/<x>) ale pachetului `nume` instalat sub `rad`: din lista lui opkg
+	(dosare_config_pachet) sau, când lista nu are dosarul (opkg nu trece mereu dosarele în ea), din scriptul lui
+	<fel>.<x> (argumentul -c / --config-dir al pornirii, HdsModuleAcces.dosar_configurare_din_script; se citește
+	scriptul pachetului, nu fișierele omului)."""
+	rez = dosare_config_pachet(rad, nume)
+	if rez:
+		return rez
+	try:
+		M = _module_acces()
+		feluri = _copie().feluri_acces(rad)
+	except Exception as eroare:
+		_jurnal("dosarul modulului: %s" % eroare.__class__.__name__)
+		return rez
+	for _fel, script in scripturi_pachet(rad, nume, feluri):
+		try:
+			with open(_c(rad, "etc/init.d/" + script), "r", encoding="utf-8", errors="replace") as f:
+				dosar = M.dosar_configurare_din_script(f.read(64 * 1024))
+		except (OSError, IOError, ValueError):
+			continue
+		rel = (dosar or "").strip("/")
+		if rel.startswith(DOSAR_CONFIG_ACCES + "/"):
+			d = DOSAR_CONFIG_ACCES + "/" + rel[len(DOSAR_CONFIG_ACCES) + 1:].split("/", 1)[0]
+			if d not in rez:
+				rez.append(d)
+	return rez
+
+
+def scripturi_pachet(rad, nume, feluri):
+	"""[(fel, script)]: scripturile <fel>.<x> din etc/init.d puse de pachetul `nume`, pentru felurile date."""
+	rez = []
+	for c in _lista_pachetului(rad, nume):
+		if c.startswith("etc/init.d/"):
+			script = c[len("etc/init.d/"):]
+			fel, _p, sufix = script.partition(".")
+			if fel in feluri and sufix and sufix != SUFIX_GOL_ACCES and "/" not in script:
+				rez.append((fel, script))
+	return rez
+
+
+def alese_in_copie(rad):
+	"""{fel: script}: modulul ales al fiecărui fel în etc/init.d al copiei (legătura <fel> -> <fel>.<x>, citită cu
+	os.readlink: nu se urmează și nu se deschide nimic). Felurile după formă (HdsCopieSetari.feluri_din_nume_acces)."""
+	initd = _c(rad, "etc/init.d")
+	if not rad or not os.path.isdir(initd) or _cale_cu_legatura(rad, "etc/init.d"):
+		return {}
+
+	def legatura(n):
+		c = os.path.join(initd, n)
+		try:
+			return os.readlink(c) if os.path.islink(c) else None
+		except OSError:
+			return None
+	try:
+		nume = os.listdir(initd)
+	except OSError:
+		return {}
+	rez = {}
+	for fel in _copie().feluri_din_nume_acces(nume, legatura):
+		tinta = legatura(fel)
+		if not tinta:
+			continue
+		script = os.path.basename(tinta)
+		if script.startswith(fel + ".") and script != fel + "." + SUFIX_GOL_ACCES:
+			rez[fel] = script
+	return rez
+
+
+def pachet_al_scriptului(rad, script, pachete):
+	"""Pachetul (dintre `pachete`) care a pus etc/init.d/<script> sub `rad`, după listele opkg; None."""
+	for p in pachete:
+		if "etc/init.d/" + script in _lista_pachetului(rad, p):
+			return p
+	return None
+
+
+def modul_de_ales(rad_copie, rad_sistem, pachete_copie, instalate_aici):
+	"""Ce modul se alege după import: {"fel", "sufix", "nume" (pachetul, scurt), "reporneste"} sau None.
+	- modulul ales în copie (alese_in_copie), când scriptul lui există aici, sau, cu alt nume, scriptul aceluiași pachet,
+	  instalat aici;
+	- copia fără legături (o arhivă de copie nu le are): când copia avea un singur pachet de modul, instalat acum aici,
+	  iar felul lui nu are aici niciun modul ales.
+	"reporneste": scriptul e deja cel ales aici (fișierele lui tocmai s-au schimbat, deci repornire, nu alegere)."""
+	C = _copie()
+	feluri = C.feluri_acces(rad_sistem)
+	initd = _c(rad_sistem, "etc/init.d")
+
+	def ales_aici(fel):
+		try:
+			t = os.readlink(os.path.join(initd, fel))
+		except OSError:
+			return None
+		b = os.path.basename(t)
+		return b if b.startswith(fel + ".") and b != fel + "." + SUFIX_GOL_ACCES else None
+
+	def rezultat(fel, script, pachet):
+		sufix = script[len(fel) + 1:]
+		return {"fel": fel, "sufix": sufix, "nume": nume_scurt(pachet) if pachet else sufix,
+			"reporneste": ales_aici(fel) == script}
+
+	alese = alese_in_copie(rad_copie)
+	for fel, script in sorted(alese.items()):
+		if fel not in feluri:
+			continue
+		pachet = pachet_al_scriptului(rad_copie, script, pachete_copie)
+		if os.path.isfile(os.path.join(initd, script)) and not os.path.islink(os.path.join(initd, script)):
+			return rezultat(fel, script, pachet)
+		if pachet and pachet in instalate_aici:
+			for f, s in scripturi_pachet(rad_sistem, pachet, (fel,)):
+				if os.path.isfile(os.path.join(initd, s)):
+					return rezultat(f, s, pachet)
+	if alese or len(pachete_copie) != 1 or pachete_copie[0] not in instalate_aici:
+		return None
+	pachet = pachete_copie[0]
+	for f, s in scripturi_pachet(rad_sistem, pachet, feluri):
+		if ales_aici(f) is None and os.path.isfile(os.path.join(initd, s)):
+			return rezultat(f, s, pachet)
+	return None
+
+
+def reinstaleaza_acces(nume, rad_sistem="/", opkg=None):
+	"""Pe firul importului: pachetele `nume` (ale modulelor din copie) puse din nou din sursele de pachete ale
+	receptorului: opkg update o dată, apoi opkg install pe fiecare care lipsește (ca HdsReinstalare.lucreaza).
+	Întoarce {"puse", "deja", "lipsa", "amanate"}: lipsa = nu există în sursele de pachete (spus numai după un update
+	reușit); amanate = nu s-au putut instala acum (fără internet, opkg ocupat)."""
+	R = _reinstalare()
+	rez = {"puse": [], "deja": [], "lipsa": [], "amanate": []}
+	acum = R.instalate(rad_sistem)
+	de_pus = []
+	for n in nume:
+		(rez["deja"] if n in acum else de_pus).append(n)
+	if not de_pus:
+		return rez
+	comanda = R._opkg(rad_sistem, opkg)
+	actualizat = comanda is not None and R._ruleaza(comanda + ["update"], R.TERMEN_UPDATE_S) == 0
+	disponibile = R._in_liste(rad_sistem)
+	for n in de_pus:
+		if n not in disponibile:
+			rez["lipsa" if actualizat else "amanate"].append(n)
+		elif comanda is not None and R._ruleaza(comanda + ["install", n], R.TERMEN_INSTALARE_S) == 0:
+			rez["puse"].append(n)
+		else:
+			rez["amanate"].append(n)
+	return rez
+
+
+def _fisiere_dosar(rad, rel, recursiv=True):
+	"""[(cale, rel_in_dosar)]: fișierele obișnuite din dosarul rel sub rad, fără legături."""
+	baza = _c(rad, rel)
+	rez = []
+	if not os.path.isdir(baza) or _cale_cu_legatura(rad, rel):
+		return rez
+	for d, dosare, fisiere in os.walk(baza):
+		dosare[:] = sorted(x for x in dosare if recursiv and not os.path.islink(os.path.join(d, x)))
+		for n in sorted(fisiere):
+			c = os.path.join(d, n)
+			if os.path.isfile(c) and not os.path.islink(c):
+				rez.append((c, os.path.relpath(c, baza).replace("\\", "/")))
+	return rez
+
+
+def dosar_din_copie(rad_copie, rad_sistem, pachet, dosar_aici, ocupate):
+	"""Pentru un pachet instalat acum de import, al cărui dosar de configurare de aici (`dosar_aici`, etc/tuxbox/config/<x>)
+	nu are pereche în copie: dosarul din copie în care imaginea veche ținea fișierele modulului, ca să fie copiate și în
+	dosarul citit aici. Numai după nume: (1) dosarul pus de același pachet în copie (lista lui opkg); (2) singurul dosar
+	al copiei de sub etc/tuxbox/config, neocupat de alt modul de aici (`ocupate`), care are fișiere cu aceleași nume ca
+	cele puse acum de instalare în `dosar_aici`; (3) fișierele de pe primul nivel al lui etc/tuxbox/config din copie
+	(imaginile vechi le țineau acolo), cu aceleași nume. Întoarce (rel, recursiv) sau None."""
+	if _fisiere_dosar(rad_copie, dosar_aici):
+		return None
+	for d in dosare_config_pachet(rad_copie, pachet):
+		if d not in ocupate and _fisiere_dosar(rad_copie, d):
+			return d, True
+	nume_aici = set(os.path.basename(c) for c, _r in _fisiere_dosar(rad_sistem, dosar_aici))
+	if not nume_aici:
+		return None
+	config = _c(rad_copie, DOSAR_CONFIG_ACCES)
+	potrivite = []
+	try:
+		intrari = sorted(os.listdir(config)) if not _cale_cu_legatura(rad_copie, DOSAR_CONFIG_ACCES) else []
+	except OSError:
+		intrari = []
+	for n in intrari:
+		rel = DOSAR_CONFIG_ACCES + "/" + n
+		if rel in ocupate or not os.path.isdir(os.path.join(config, n)) or os.path.islink(os.path.join(config, n)):
+			continue
+		if nume_aici & set(os.path.basename(c) for c, _r in _fisiere_dosar(rad_copie, rel, False)):
+			potrivite.append(rel)
+	if len(potrivite) == 1:
+		return potrivite[0], True
+	if not potrivite and nume_aici & set(os.path.basename(c) for c, _r in _fisiere_dosar(rad_copie, DOSAR_CONFIG_ACCES,
+			False)):
+		return DOSAR_CONFIG_ACCES, False
+	return None
+
+
+def _dosar_inainte(rad_sistem):
+	"""Dosarul acestui import pentru fișierele de acum înlocuite: DOSAR_INAINTE_ACCES/<data>[-n] (făcut numai când
+	chiar se păstrează ceva, de copiaza_acces)."""
+	baza = os.path.join(_c(rad_sistem, DOSAR_INAINTE_ACCES), time.strftime("%Y%m%d_%H%M%S"))
+	d, n = baza, 1
+	while os.path.exists(d):
+		n += 1
+		d = "%s-%d" % (baza, n)
+	return d
+
+
+def _curata_inainte(rad_sistem, pastrate=PASTRATE_INAINTE):
+	"""Rămân numai fișierele înlocuite de ultimele `pastrate` importuri (numele dosarelor au data)."""
+	baza = _c(rad_sistem, DOSAR_INAINTE_ACCES)
+	try:
+		dosare = sorted(n for n in os.listdir(baza) if os.path.isdir(os.path.join(baza, n))
+			and not os.path.islink(os.path.join(baza, n)))
+	except OSError:
+		return
+	for n in dosare[:max(0, len(dosare) - pastrate)]:
+		shutil.rmtree(os.path.join(baza, n), ignore_errors=True)
+
+
+def importa_acces(rad_copie, liste_pachete, rad_sistem="/", opkg=None, reinstalare=True):
+	"""Tot lucrul cu modulele de acces al importului, pe firul lui: fișierele copiei copiate ca atare (cele de acum
+	înlocuite păstrate în DOSAR_INAINTE_ACCES), pachetele reinstalate, fișierele puse iar peste ce a scris instalarea
+	(și în dosarul citit aici, când imaginea veche le ținea în altul: dosar_din_copie), coada pentru pornirea următoare
+	cu ce nu s-a putut instala acum, modulul de ales. Întoarce {"copiate", "pastrate", "oprit", "pachete", "puse",
+	"deja", "lipsa", "amanate", "alege"}: numai numere și nume de pachete; nicio cale și niciun conținut."""
+	rez = {"copiate": 0, "pastrate": 0, "oprit": "", "pachete": 0, "puse": [], "deja": [], "lipsa": [], "amanate": [],
+		"alege": None}
+	fisiere, taiat = fisiere_acces(rad_copie)
+	perechi = [(_c(rad_copie, rel), rel) for rel, _m in fisiere]
+	if perechi:
+		inainte = _dosar_inainte(rad_sistem)
+		r = copiaza_acces(perechi, rad_sistem, inainte)
+		_curata_inainte(rad_sistem)
+		rez["copiate"] = r["copiate"] + r["la_fel"]
+		rez["pastrate"] = r["pastrate"]
+		rez["oprit"] = r["oprit"] or ("limita" if taiat else "")
+		_jurnal("modulele de acces: %d fisiere copiate ca atare (%d la fel), %d pastrate, %d sarite%s" % (r["copiate"],
+			r["la_fel"], r["pastrate"], r["sarite"], (", oprit: " + rez["oprit"]) if rez["oprit"] else ""))
+		if r["oprit"] == "spatiu":
+			return rez
+	pachete = pachete_acces_din_copie(liste_pachete)
+	rez["pachete"] = len(pachete)
+	if not pachete or not reinstalare:
+		return rez
+	try:
+		inst = reinstaleaza_acces(pachete, rad_sistem, opkg)
+	except Exception as eroare:
+		_jurnal("instalarea modulelor: %s" % eroare.__class__.__name__)
+		inst = {"puse": [], "deja": [], "lipsa": [], "amanate": list(pachete)}
+	for k in ("puse", "deja", "lipsa", "amanate"):
+		rez[k] = list(inst[k])
+	if inst["puse"] and perechi:
+		# instalarea poate scrie în fișierele modulului (configurarea de pornire): copia lor pusă iar, fără păstrare
+		copiaza_acces(perechi, rad_sistem, None)
+		ocupate = set()
+		for p in set(inst["puse"]) | set(inst["deja"]):
+			ocupate.update(dosare_config_aici(rad_sistem, p))
+		for p in inst["puse"]:
+			for d in dosare_config_aici(rad_sistem, p):
+				gasit = dosar_din_copie(rad_copie, rad_sistem, p, d, ocupate - set([d]))
+				if gasit:
+					rel_copie, recursiv = gasit
+					mutate = [(c, d + "/" + r) for c, r in _fisiere_dosar(rad_copie, rel_copie, recursiv)]
+					m = copiaza_acces(mutate, rad_sistem, None)
+					_jurnal("modulele de acces: %d fisiere puse si in dosarul citit de modulul instalat acum" %
+						(m["copiate"] + m["la_fel"]))
+	if inst["amanate"]:
+		try:
+			legaturi = {}
+			for fel, script in alese_in_copie(rad_copie).items():
+				if pachet_al_scriptului(rad_copie, script, inst["amanate"]):
+					legaturi["etc/init.d/" + fel] = script
+			_reinstalare().adauga(rad_sistem, [(n, "acces") for n in inst["amanate"]], legaturi)
+		except Exception as eroare:
+			_jurnal("coada modulelor: %s" % eroare.__class__.__name__)
+	try:
+		rez["alege"] = modul_de_ales(rad_copie, rad_sistem, pachete, set(inst["puse"]) | set(inst["deja"]))
+	except Exception as eroare:
+		_jurnal("modulul de ales: %s" % eroare.__class__.__name__)
+	return rez
+
+
+def texte_acces(r):
+	"""Rândurile pentru om din rezultatul importa_acces (numere și numele scurte ale pachetelor)."""
+	mesaje = []
+	if r.get("oprit") == "spatiu":
+		mesaje.append(_("Fișierele modulelor de acces nu încap în memoria receptorului; nu le-am copiat."))
+	elif r.get("copiate"):
+		mesaje.append(ngettext("Module de acces: %d fișier copiat așa cum era.",
+			"Module de acces: %d fișiere copiate așa cum erau.", r["copiate"]) % r["copiate"])
+		if r.get("oprit"):
+			mesaje.append(_("Copia are mai multe fișiere ale modulelor decât încap în import; am copiat o parte."))
+	if r.get("pastrate"):
+		mesaje.append(ngettext("%d fișier al modulelor, înlocuit de copie, a rămas păstrat pe receptor.",
+			"%d fișiere ale modulelor, înlocuite de copie, au rămas păstrate pe receptor.", r["pastrate"]) % r["pastrate"])
+	if r.get("puse"):
+		mesaje.append(_("Module de acces instalate din nou: %s.") % ", ".join(nume_scurt(n) for n in r["puse"]))
+	if r.get("lipsa"):
+		mesaje.append(_("Nu există în sursele de pachete ale imaginii: %s. Fișierele lor sunt copiate; alege alt modul "
+			"din Meniu, Acces condiționat, Module de acces condiționat.") % ", ".join(nume_scurt(n) for n in r["lipsa"]))
+	if r.get("amanate"):
+		mesaje.append(_("Nu s-au putut instala acum (fără internet sau cu sursele de pachete ocupate): %s. Se instalează "
+			"singure la următoarea pornire a receptorului.") % ", ".join(nume_scurt(n) for n in r["amanate"]))
+	return mesaje
+
+
+def ngettext(unu, multe, n):
+	"""Pluralul tradus (Components/HdsPlural.ngettext); fără pachetul Components (probele de pe PC), forma romanească:
+	unu pentru n == 1, altfel multe. Numele e cel știut de xgettext."""
+	try:
+		from Components.HdsPlural import ngettext as plural
+	except ImportError:
+		return unu if n == 1 else multe
+	return plural(unu, multe, n)
 
 
 # ---------------------------------------------------------------- rețeaua din copie

@@ -1,9 +1,9 @@
 {
- "versiune": 2,
- "data": "2026-10-29",
+ "versiune": 3,
+ "data": "2026-11-11",
  "ro": {
   "titlu": "Notă de confidențialitate pentru beta testeri",
-  "versiune_text": "Versiunea 2, 29 octombrie 2026",
+  "versiune_text": "Versiunea 3, 11 noiembrie 2026",
   "rezumat": "Ce date trimite receptorul tău când ești beta tester al imaginii HD Satelit, cine le primește, de ce, cât timp le păstrăm și cum renunți oricând.",
   "sectiuni": [
    {
@@ -58,7 +58,7 @@
      ],
      [
       "Datele receptorului",
-      "Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI și driverele, ca să adaptăm imaginea și lista de receptoare."
+      "Memoria, tunerele, plăcile de rețea (fără adresa MAC), ieșirea HDMI, driverele și modulele de acces instalate, ca să adaptăm imaginea și lista de receptoare."
      ],
      [
       "Rezultatele probelor",
@@ -75,7 +75,7 @@
     "paragrafe": [
      "Ce conțin: jurnalele noi, scrise când interfața s-a oprit sau un ecran a căzut. Din cele scrise de sistem pleacă numai ultimele rânduri ale jurnalului interfeței și versiunea; din cele ale unui ecran căzut, numele ecranului și urma erorii. Pleacă și celelalte jurnale de erori ale imaginii, pe care receptorul le păstrează după repornire: jurnalul actualizării (ce s-a instalat și cu ce rezultat) și jurnalele extensiilor (instalare, actualizare, ștergere). Plus rândurile noi ale paznicului receptorului: când a repornit interfața și de ce. Jurnalul sistemului nu pleacă.",
      "Când un canal nu merge (fără semnal, fără imagine, eroare de decodare), jurnalul păstrează numele și datele tehnice ale acelui canal, ca să putem afla de ce. Ce canale urmărești când totul merge nu se trimite.",
-     "Înainte să plece, receptorul le curăță: scoate rândurile cu parole, chei, jetoane și Wi-Fi, iar adresele IP și MAC, adresele de e-mail, adresele web și căile spre filmele tale le înlocuiește cu un semn. Setările, rețeaua și lista pachetelor instalate nu pleacă.",
+     "Înainte să plece, receptorul le curăță: scoate rândurile cu parole, chei, jetoane și Wi-Fi, iar adresele IP și MAC, adresele de e-mail, adresele web și căile spre filmele tale le înlocuiește cu un semn. Setările și rețeaua nu pleacă, iar lista pachetelor instalate nu pleacă împreună cu jurnalele.",
      "Cât de des: numai jurnalele noi de la ultima trimitere. Cu trimiterea automată, receptorul le caută la 5 minute după fiecare pornire a interfeței (deci și după o oprire neașteptată sau după o actualizare care nu a reușit) și o dată pe zi, noaptea; altfel, când apeși „Trimite acum”. Pleacă cel mult 3 jurnale pe zi. Cât de mare: dintr-un jurnal pleacă cel mult ultimii 64 KB de text; un pachet are de obicei 3-20 KB, comprimat."
     ]
    },
@@ -106,9 +106,10 @@
     "titlu": "Datele receptorului",
     "paragrafe": [
      "Ce conțin: cum e făcut receptorul tău, nu ce faci cu el. Placa (modelul dat de paza modelului, cipul, tipul plăcii, numele plăcii spus de sistem, procesorul și câte nuclee are), memoria (RAM, memoria internă și numele și mărimea partițiilor ei, fără ce e în ele), tunerele (locul, felul, modurile și numele lor), plăcile de rețea Wi-Fi, Bluetooth și Ethernet (felul, cum sunt legate în receptor, codul de produs, numele și driverul), ieșirea HDMI (modurile de imagine, HDR și CEC), afișajul din față, tipul telecomenzii, versiunile driverelor, dispozitivele USB conectate (felul, codul de produs și numele) și numele pachetelor rămase neinstalate până la capăt după o actualizare.",
+     "Modulele de acces instalate: pentru fiecare, numele pachetului și versiunea lui, feedul din care se poate lua aceeași versiune, dacă e modulul ales și dacă rulează. Fără fișierele lor de configurare, chei, servere, cititoare sau canalele deschise cu ele.",
      "Nu pleacă: adresa MAC a plăcilor de rețea, numele rețelei tale, adresele IP, seria dispozitivelor USB și numele fișierelor de pe ele.",
      "Cât de des: la înscriere, apoi numai când se schimbă ceva. Receptorul ține minte o sumă de control a ultimului pachet trimis și trimite din nou numai când datele de acum dau altă sumă.",
-     "La ce folosesc: ca să adaptăm imaginea fiecărui model și să completăm lista receptoarelor de pe site (memoria, tunerele, Wi-Fi). Serverul păstrează numai ultimul pachet al receptorului tău."
+     "La ce folosesc: ca să adaptăm imaginea fiecărui model și să completăm lista receptoarelor de pe site (memoria, tunerele, Wi-Fi); lista modulelor ne arată ce modul nu pornește sau nu merge pe un model și din ce feed vine. Serverul păstrează numai ultimul pachet al receptorului tău."
     ]
    },
    {
@@ -219,6 +220,7 @@
     "pasi": [
      "Debifezi un fel de date în meniul testerului, la „Datele pe care le trimit”, pe receptor sau în interfața web: felul acela nu mai pleacă, iar serverul îl refuză și el.",
      "Scoți bifa „Trimite automat în fiecare zi”: nu mai pleacă nimic singur, numai ce trimiți tu. Dacă debifezi și toate felurile, nu mai pleacă deloc date. Ce ai trimis rămâne anonim până la termenele de mai sus.",
+     "Alegi „Pune pe pauză (păstrezi înscrierea)”, pe receptor sau în interfața web: receptorul nu mai trimite nimic și nu mai e numărat pe site, dar își păstrează identificatorul, iar serverul păstrează datele până la termenele de mai sus. Când pornești din nou Beta tester, continui cu aceeași înscriere: numele public, contul legat și punctele XP rămân.",
      "Alegi „Ieși din program și șterge datele”, pe receptor sau în interfața web: serverul șterge tot ce ține de identificatorul tău (amprenta, pachetele, canalele, datele receptorului, rezultatele probelor, mesajele, numele și e-mailul, numele public și legarea unui cont), iar receptorul uită identificatorul.",
      "Fără receptor (l-ai dat altcuiva, l-ai refăcut sau nu mai pornește): ne scrii la contact@hdsatelit.com cu identificatorul, iar noi ștergem datele."
     ],
@@ -242,7 +244,7 @@
    {
     "titlu": "Când se schimbă nota",
     "paragrafe": [
-     "Nota are o versiune; aceasta e versiunea 2, din 29 octombrie 2026 (față de versiunea 1 adaugă amprenta receptorului și, în jurnale, datele canalului care nu merge). Dacă schimbăm ce date pleacă sau ce facem cu ele, scriem o versiune nouă, iar receptorul îți spune singur și îți cere din nou acordul, cu bifele tale de până atunci: apeși „Accept” pe ecranul notei noi, pe receptor sau în interfața web. Până nu îl dai, nu mai trimite nimic, afară de ștergere, dacă o ceri.",
+     "Nota are o versiune; aceasta e versiunea 3, din 11 noiembrie 2026 (față de versiunea 2 adaugă, la datele receptorului, modulele de acces instalate și pauza, care păstrează înscrierea; versiunea 2 adăugase amprenta receptorului și, în jurnale, datele canalului care nu merge). Dacă schimbăm ce date pleacă sau ce facem cu ele, scriem o versiune nouă, iar receptorul îți spune singur și îți cere din nou acordul, cu bifele tale de până atunci: apeși „Accept” pe ecranul notei noi, pe receptor sau în interfața web. Până nu îl dai, nu mai trimite nimic, afară de ștergere, dacă o ceri.",
      "Jos în meniul testerului vezi data acordului tău și versiunea notei pe care ai acceptat-o."
     ]
    }
@@ -250,7 +252,7 @@
  },
  "en": {
   "titlu": "Privacy notice for beta testers",
-  "versiune_text": "Version 2, 29 October 2026",
+  "versiune_text": "Version 3, 11 November 2026",
   "rezumat": "What data your receiver sends when you are a beta tester of the HD Satelit image, who receives it, why, how long we keep it and how you can stop at any time.",
   "sectiuni": [
    {
@@ -305,7 +307,7 @@
      ],
      [
       "Receiver details",
-      "Memory, tuners, network cards (without the MAC address), the HDMI output and the drivers, so that we can adapt the image and the list of receivers."
+      "Memory, tuners, network cards (without the MAC address), the HDMI output, the drivers and the installed access modules, so that we can adapt the image and the list of receivers."
      ],
      [
       "Test results",
@@ -322,7 +324,7 @@
     "paragrafe": [
      "What they contain: the new logs written when the interface stopped or a screen crashed. From those written by the system, only the last lines of the interface log and the version are sent; from those of a crashed screen, the screen's name and the error trace. The image's other error logs, which the receiver keeps after a restart, are sent too: the update log (what was installed and with what result) and the logs of the extensions (installing, updating, removing). Plus the new lines of the receiver's watchdog: when the interface restarted and why. The system log is not sent.",
      "When a channel does not work (no signal, no picture, decoding error), the log keeps the name and technical data of that channel, so that we can find out why. Which channels you watch when everything works is not sent.",
-     "Before they leave, the receiver cleans them: it removes the lines with passwords, keys, tokens and Wi-Fi, and replaces IP and MAC addresses, e-mail addresses, web addresses and the paths to your films with a placeholder. The settings, the network and the list of installed packages are not sent.",
+     "Before they leave, the receiver cleans them: it removes the lines with passwords, keys, tokens and Wi-Fi, and replaces IP and MAC addresses, e-mail addresses, web addresses and the paths to your films with a placeholder. The settings and the network are not sent, and the list of installed packages is not sent with the logs.",
      "How often: only the logs that are new since the last sending. With automatic sending, the receiver looks for them 5 minutes after each start of the interface (so also after an unexpected stop or after an update that failed) and once a day, at night; otherwise, when you press “Send now”. At most 3 logs a day are sent. How big: at most the last 64 KB of text of a log are sent; a package is usually 3-20 KB, compressed."
     ]
    },
@@ -353,9 +355,10 @@
     "titlu": "Receiver details",
     "paragrafe": [
      "What they contain: how your receiver is built, not what you do with it. The board (the model given by the model guard, the chip, the board type, the board name reported by the system, the processor and how many cores it has), the memory (RAM, the internal memory and the names and sizes of its partitions, without what is in them), the tuners (their slot, type, modes and name), the Wi-Fi, Bluetooth and Ethernet network cards (the type, how they are connected inside the receiver, the product code, the name and the driver), the HDMI output (the picture modes, HDR and CEC), the front display, the remote control type, the driver versions, the connected USB devices (the type, the product code and the name) and the names of packages left half installed after an update.",
+     "The installed access modules: for each, the package name and its version, the feed the same version can be taken from, whether it is the chosen module and whether it is running. Without their configuration files, keys, servers, readers or the channels opened with them.",
      "Not sent: the MAC address of the network cards, the name of your network, IP addresses, the serial number of USB devices and the names of the files on them.",
      "How often: when you sign up, then only when something changes. The receiver remembers a checksum of the last package sent and sends again only when the current data gives a different checksum.",
-     "What they are for: to adapt the image to each model and to complete the list of receivers on the site (memory, tuners, Wi-Fi). The server keeps only the latest package of your receiver."
+     "What they are for: to adapt the image to each model and to complete the list of receivers on the site (memory, tuners, Wi-Fi); the list of modules shows us which module does not start or does not work on a model and which feed it comes from. The server keeps only the latest package of your receiver."
     ]
    },
    {
@@ -466,6 +469,7 @@
     "pasi": [
      "Untick a kind of data in the tester menu, under “The data I send”, on the receiver or in the web interface: that kind is no longer sent, and the server refuses it too.",
      "Untick “Send automatically every day”: nothing is sent by itself any more, only what you send yourself. If you also untick all the kinds, no data is sent at all. What you sent stays anonymous until the terms above.",
+     "Choose “Pause (keep your sign-up)”, on the receiver or in the web interface: the receiver sends nothing and is no longer counted on the site, but it keeps its identifier, and the server keeps the data until the terms above. When you start Beta tester again, you continue with the same sign-up: the public name, the linked account and the XP points remain.",
      "Choose “Leave the programme and delete the data”, on the receiver or in the web interface: the server deletes everything linked to your identifier (the fingerprint, the packages, the channels, the receiver details, the test results, the messages, the name and the e-mail, the public name and a linked account), and the receiver forgets the identifier.",
      "Without the receiver (you gave it away, restored it or it no longer starts): write to us at contact@hdsatelit.com with the identifier, and we delete the data."
     ],
@@ -489,7 +493,7 @@
    {
     "titlu": "When the notice changes",
     "paragrafe": [
-     "The notice has a version; this is version 2, of 29 October 2026 (compared with version 1 it adds the receiver fingerprint and, in the logs, the data of a channel that does not work). If we change what data is sent or what we do with it, we write a new version, and the receiver tells you by itself and asks for your consent again, with your ticks so far: you press “Accept” on the new notice screen, on the receiver or in the web interface. Until you give it, it sends nothing, except a deletion, if you ask for one.",
+     "The notice has a version; this is version 3, of 11 November 2026 (compared with version 2 it adds, to the receiver details, the installed access modules and the pause, which keeps your sign-up; version 2 had added the receiver fingerprint and, in the logs, the data of a channel that does not work). If we change what data is sent or what we do with it, we write a new version, and the receiver tells you by itself and asks for your consent again, with your ticks so far: you press “Accept” on the new notice screen, on the receiver or in the web interface. Until you give it, it sends nothing, except a deletion, if you ask for one.",
      "At the bottom of the tester menu you can see the date of your consent and the version of the notice you accepted."
     ]
    }

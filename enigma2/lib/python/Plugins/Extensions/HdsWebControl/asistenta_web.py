@@ -532,10 +532,15 @@ function mesaj(id,t,e){ var m=$(id); m.textContent=t||""; m.classList.toggle("er
 function nuRaspunde(){ return "Receptorul nu răspunde."; }
 var copiaInapoi = null;
 var eroarePornireVazuta = "";
+var startCuFocus = false;
 function arata(d){
   var activa = !!d.stare && d.stare!=="oprit";
   $("indisponibil").classList.toggle("ascuns", !!d.disponibil || activa);
   $("pornire").classList.toggle("ascuns", activa || !d.disponibil);
+  // randul 170 (perechea OK-ului de pe receptor): prima data cand se vede pagina de pornire, Start primeste focusul,
+  // deci Enter (sau OK din telecomanda navigatorului) porneste asistenta dintr-un pas; nu fura focusul altui camp
+  if(!activa && d.disponibil && !startCuFocus){ startCuFocus = true;
+    if(!document.activeElement || document.activeElement===document.body){ $("porneste").focus(); } }
   $("pornita").classList.toggle("ascuns", !activa);
   if(d.eroare_pornire){ mesaj("mesaj", d.eroare_pornire, true); }
   else if(eroarePornireVazuta){ mesaj("mesaj", ""); }

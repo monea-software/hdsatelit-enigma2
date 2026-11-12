@@ -342,3 +342,25 @@ def scena(ctx, id_data="ceas.ora", text="", pereche=None, acum=None, detalii=Non
 		rez["valoare"] = "--:--" if id_data in ORE_CALENDAR else ""
 		rez["progres"] = None
 	return rez
+
+
+# Temele mari de la „Tema afișajului” (randarea: HdsAfisajRandare._temaMare).
+TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea")
+
+
+def scenaTema(ctx, tema, acum=None, detalii=None):
+	"""Pagina unei teme mari: canalul privit (numele, piconul, emisiunea de acum si urmatoarea) si ora. Fara
+	progresul emisiunii: cadrul se schimba numai cu ora, canalul sau emisiunea, nu la fiecare secunda."""
+	if tema not in TEME_MARI:
+		raise ValueError("Tema necunoscuta")
+	detalii = dict(detalii or {})
+	if tema != "picon_mare":
+		detalii["imagine"] = ""
+	rez = scena(ctx, "canal.nume", "", None, acum, detalii)
+	canal = dict(rez.get("canal") or {})
+	for cheie in ("emisiune", "urmatoarea"):
+		if canal.get(cheie):
+			canal[cheie] = dict(canal[cheie], progres=None)
+	rez.update(pagina="tema_mare", tema=tema, canal=canal, progres=None,
+		titlu=canal.get("nume", ""), valoare=canal.get("nume") or rez["ceas"])
+	return rez

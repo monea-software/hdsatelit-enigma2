@@ -23,6 +23,10 @@ class PluginDescriptor:
 	
 	# you have to ignore unknown kwargs!
 	
+	# reason la pornire/oprire (WHERE_AUTOSTART, WHERE_SESSIONSTART), cu nume in loc de 0 si 1
+	REASON_START = 0
+	REASON_STOP = 1
+
 	# argument: session
 	WHERE_EXTENSIONSMENU = 0
 	WHERE_MAINMENU = 1
@@ -82,9 +86,23 @@ class PluginDescriptor:
 	WHERE_SKINCHANGE = 26
 	WHERE_EPG_SELECTION_SINGLE_BLUE = 27
 	WHERE_EVENTVIEW = 28
+	# HDSatelit: un nume in plus din enigma2 OE-Alliance (intrarea din meniul de setari de acolo), folosit de unele
+	# pluginuri. Primeste un numar nou, al lui: pluginul se incarca fara eroare (fara numele, cadea la
+	# import); intrarea de acolo nu are meniu la noi. Numerele de mai sus raman cum sunt (le folosesc ecranele noastre).
+	WHERE_VIXMENU = 29
+	# closeMode: ce face lista pluginurilor dupa ce porneste pluginul (DO_CLOSE: se inchide; DO_CLOSE_RECURSIVE: se
+	# inchid si meniurile de sub ea). Se tine pe descriptor; lista noastra ramane deschisa, ca pana acum.
+	DO_NOT_CLOSE = 0
+	DO_CLOSE = 1
+	DO_CLOSE_RECURSIVE = 2
 
 
-	def __init__(self, name = "Plugin", where = [ ], description = "", icon = None, fnc = None, wakeupfnc = None, needsRestart = None, internal = False, weight = 0):
+	def __init__(self, name = "Plugin", where = [ ], description = "", icon = None, fnc = None, wakeupfnc = None, needsRestart = None, internal = False, weight = 0, closeMode = 0, serviceFilter = None, **altele):
+		if altele:
+			print("[Plugin] %s: argumente necunoscute, ignorate: %s" % (name, ", ".join(sorted(altele))))
+		# serviceFilter (alte imagini): pentru meniul canalului, pe ce canale se arata intrarea; se tine pe descriptor
+		self.closeMode = closeMode
+		self.serviceFilter = serviceFilter
 		self.name = name
 		self.internal = internal
 		self.needsRestart = needsRestart
@@ -110,7 +128,13 @@ class PluginDescriptor:
 
 	def updateIcon(self, path):
 		if isinstance(self.iconstr, str):
+			# HDSatelit: o cale absoluta (TV Garden: resolveFilename(SCOPE_PLUGINS, "Extensions/TVGarden/icons/plugin.png")) se ia
+			# ca atare, ca os.path.join; lipita de dosarul pluginului nu se gasea, iar pluginul ramanea fara icoana. Un nume cu
+			# „/” in fata care chiar sta in dosarul pluginului („/icon.png”) ramane cum mergea si inainte.
+			from os.path import isabs
 			cale = '/'.join((path, self.iconstr))
+			if isabs(self.iconstr) and not isfile(cale):
+				cale = self.iconstr
 			# HDSatelit: pluginurile scrise pentru alte imagini au si pictograme .svg, pe care imaginea nu le deseneaza; pictograma nu mai
 			# opreste incarcarea pluginului: se ia .png-ul cu acelasi nume de langa ea, daca exista, altfel pluginul ramane cu cea implicita
 			if cale[-4:] not in ('.png', '.jpg') and cale[-1:] != '.':
@@ -122,6 +146,23 @@ class PluginDescriptor:
 					self.icon = None
 					return
 			self.icon = LoadPixmap(cale)
+
+	# HDSatelit: numele din alte imagini ale acelorasi campuri (pluginurile lor le citesc sau le pun): function = fnc,
+	# iconString/iconData = iconstr/icon, key = numele dosarului pluginului (sau numele, pana la incarcare)
+	function = property(lambda self: self.fnc, lambda self, f: setattr(self, "fnc", f))
+	iconString = property(lambda self: self.iconstr, lambda self, v: setattr(self, "iconstr", v))
+	iconData = property(lambda self: self.icon if self.iconstr is None else None)
+
+	def _getKey(self):
+		if "_hdsKey" in self.__dict__:
+			return self.__dict__["_hdsKey"]
+		from os.path import basename, normpath
+		return basename(normpath(self.path)) if self.path else self.name
+
+	def _setKey(self, valoare):
+		self.__dict__["_hdsKey"] = valoare
+
+	key = property(_getKey, _setKey)
 
 	def getWakeupTime(self):
 		return self.wakeupfnc and self.wakeupfnc() or -1

@@ -31,8 +31,11 @@ restul, numai cele din "nume"); fara niciunul cheia lipseste, deci copiile vechi
 albastri din aceeasi copie; bucati_albastre() da tabelului de pe televizor si paginii web randul pe bucati
 [(text, albastru)] si legenda, ca sa le deseneze colorate (textul enigma2 nu are coduri de culoare).
 
-Modul curat (fara enigma la incarcare): probele pe PC in test_multumiri_testeri_0621.py si
-test_testeri_albastri_0611.py.
+Producatorii care ne ajuta: producatori() citeste lista din imagine (data/multumiri-producatori.json) si
+da firmele cu motivele; HdsAbout.populate le pune in sectiunea „Mulțumiri”, inaintea randului testerilor.
+
+Modul curat (fara enigma la incarcare): probele pe PC in test_multumiri_testeri_0621.py,
+test_testeri_albastri_0611.py si test_multumiri_producatori_mu_074.py.
 """
 
 import json
@@ -272,6 +275,124 @@ def bucati_legenda(leg):
 	if not sep or not inainte.strip() or not dupa.strip():
 		return [(leg, True)]
 	return [(inainte.strip(), True), (dupa.strip(), False)]
+
+
+# ---------------------------------------------------------------- producatorii care ne ajuta
+
+# Sectiunea „Mulțumiri” din „Despre imagine”: firmele care ne ajuta, fiecare cu motivul scurt. Lista sta in imagine,
+# in ${datadir}/enigma2/multumiri-producatori.json (data/multumiri-producatori.json), date simple:
+# {"v": 1, "producatori": [{"nume", "sigla", "unicable", "receptoare"}]}; un camp de ajutor are data (AAAA-LL-ZZ) sau
+# ramane gol. Cand sosesc receptoarele unui producator se scrie data in campul lui "receptoare", nimic
+# altceva. Numai numele firmelor (marca si firma), niciun nume de persoana; numele nu se traduc, motivele da.
+NUME_PRODUCATORI = "multumiri-producatori.json"
+CALE_PRODUCATORI = None                   # None: ${datadir}/enigma2/multumiri-producatori.json; probele pun alta cale
+PRODUCATORI_MAX = 50
+TITLU_MULTUMIRI = N_("Mulțumiri")
+SUBTITLU_PRODUCATORI = N_("Producători care ne ajută")
+SUBTITLU_TESTERI = N_("Beta testeri")
+# campul din fisier -> motivul aratat, in aceasta ordine
+MOTIVE = (
+	("sigla", N_("acordul pentru siglă în ecranele de pornire")),
+	("unicable", N_("datele convertoarelor Unicable")),
+	("receptoare", N_("receptoarele trimise pentru probe")),
+)
+
+
+def cale_producatori():
+	"""Lista din imagine: ${datadir}/enigma2/multumiri-producatori.json."""
+	if CALE_PRODUCATORI:
+		return CALE_PRODUCATORI
+	try:
+		from enigma import eEnv
+		return eEnv.resolve("${datadir}/enigma2/" + NUME_PRODUCATORI)
+	except Exception:
+		return "/usr/share/enigma2/" + NUME_PRODUCATORI
+
+
+def _are(valoare):
+	"""Un camp de ajutor e completat: un sir cu ceva in el (data) sau true."""
+	return valoare is True or (isinstance(valoare, str) and bool(valoare.strip()))
+
+
+def producatori(traducere=None):
+	"""[(nume, motive)] din lista din imagine, in ordinea din fisier: motivele traduse, unite prin ", ". Se sar intrarile
+	fara nume sau fara niciun camp completat; lista lipsa, stricata sau de alta forma da [] (sectiunea nu apare)."""
+	try:
+		with open(cale_producatori(), "rb") as f:
+			date = f.read(MARIME_MAX + 1)
+		if len(date) > MARIME_MAX:
+			return []
+		d = json.loads(date.decode("utf-8"))
+	except (IOError, OSError, ValueError, UnicodeDecodeError):
+		return []
+	if not isinstance(d, dict) or d.get("v") != 1 or not isinstance(d.get("producatori"), list):
+		return []
+	tr = traducere or _t
+	rez = []
+	for p in d["producatori"]:
+		if not isinstance(p, dict):
+			continue
+		nume = curat(p.get("nume"))
+		motive = []
+		for camp, motiv in MOTIVE:
+			if _are(p.get(camp)):
+				try:
+					motive.append(tr(motiv) or motiv)
+				except Exception:
+					motive.append(motiv)
+		if nume and motive:
+			rez.append((nume, ", ".join(motive)))
+			if len(rez) >= PRODUCATORI_MAX:
+				break
+	return rez
+
+
+# ---------------------------------------------------------------- codul deschis luat de la altii
+
+# Proiectele de cod deschis din care imaginea a luat cod, date sau idei (citate in fisierele lor, cu licenta si commitul),
+# in „Despre imagine”, sectiunea „Mulțumiri”, sub producatori; pagina web /informatii/despre arata acelasi text. Numele nu se
+# traduc, ce am luat da. Regula (12.11.2026): un lot care citeaza o sursa noua in fisiere adauga aici un rand scurt.
+SUBTITLU_SURSE = N_("Cod deschis folosit în imagine")
+SURSE = (
+	("OE-Alliance", N_("componentele și convertoarele cerute de teme și pluginuri, ecranul Common Interface")),
+	("VU+ (open-vuplus)", N_("ora trimisă modulului CI, sfârșitul redării din fișier, plăcile Vu+")),
+	("DimitarCC (e2-boxlogos)", N_("siglele receptoarelor din teme (BoxLogo)")),
+	("VDR", N_("forma răspunsului cu ora pentru modulul CI")),
+	("Material Symbols (Google)", N_("desenele fontului de pictograme")),
+	("fissix", N_("traducerea pluginurilor scrise pentru Python 2")),
+	("oZeta", N_("forma convertorului ReceiverInfo")),
+)
+
+
+def surse(traducere=None):
+	"""[(proiectul, ce am luat, tradus)], in ordinea din SURSE."""
+	tr = traducere or _t
+	rez = []
+	for nume, ce in SURSE:
+		try:
+			rez.append((nume, tr(ce) or ce))
+		except Exception:
+			rez.append((nume, ce))
+	return rez
+
+
+def subtitluSurse(traducere=None):
+	try:
+		return (traducere or _t)(SUBTITLU_SURSE) or SUBTITLU_SURSE
+	except Exception:
+		return SUBTITLU_SURSE
+
+
+def titluri(traducere=None):
+	"""(titlul sectiunii, subtitlul producatorilor, subtitlul testerilor), traduse."""
+	tr = traducere or _t
+	rez = []
+	for text in (TITLU_MULTUMIRI, SUBTITLU_PRODUCATORI, SUBTITLU_TESTERI):
+		try:
+			rez.append(tr(text) or text)
+		except Exception:
+			rez.append(text)
+	return tuple(rez)
 
 
 # ---------------------------------------------------------------- actualizarea de pe server

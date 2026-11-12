@@ -500,13 +500,20 @@ deschide(self.session, "afisaj")
 			<item level="0" text="Copia setărilor" entryID="hds_copie_setari" pictograma="copie" weight="16" web="/copie-setari">
 				<screen module="HdsCopieSetari" screen="HdsCopieSetariScreen" />
 			</item>
+			<!-- copia COMPLETA a imaginii (nucleul si tot sistemul) pe un stick sau disc USB, in forma imaginilor de pe site,
+			     pusa inapoi cu „Imagine nouă de pe stick” (Components/HdsCopieImagine.py, Screens/HdsCopieImagine.py); in
+			     web: /copie-imagine. Randul 205 (JAKITAKI, Full Backup fara plugin separat). -->
+			<item level="0" text="Copia completă a imaginii" entryID="hds_copie_imagine" pictograma="copie" weight="17" web="/copie-imagine" stare="netestat">
+				<screen module="HdsCopieImagine" screen="HdsCopieImagineScreen" />
+			</item>
 		</menu>
 
 		<!-- Categoria 9: Rețea & Conexiune Internet -->
 		<menu key="network" weight="90" level="0" text="Network &amp; Internet" entryID="network_selection" pictograma="retea-internet">
 			<id val="network" />
 			<item level="0" text="Network Connection Setup" entryID="network_setup" pictograma="conexiune" web="/retea" weight="10">
-				<screen module="NetworkSetup" screen="NetworkAdapterSelection" />
+				<!-- lista placilor; cu o tema care are numai ecranul NetworkOverview al standardului, acela (Screens/HdsReteaStandard.py) -->
+				<screen module="HdsReteaStandard" screen="HdsListaPlaci" />
 			</item>
 			<!-- cat de des se verifica internetul (Components/HdsStareRetea.py, sectiunea hds_internet din setup.xml); in web:
 			     /setari?id=hds_internet si cardul Internetul din /retea (retea_web.py) -->
@@ -605,7 +612,7 @@ deschide(self.session, "telecomanda")
 			</item>
 			<!-- iesirea HDMI si televizorul in standby (Components/HdsStandbyTv.py, sectiunea hds_standby_tv din setup.xml);
 			     in web: /setari?id=hds_standby_tv si randurile de sub „Standby” din panou (standby_tv_web.py) -->
-			<item level="0" text="Standby și televizorul" entryID="hds_standby_tv" pictograma="standby-tv" web="/setari?id=hds_standby_tv" weight="36" requires="HdsHdmiStandby" stare="netestat">
+			<item level="0" text="Standby și televizorul" entryID="hds_standby_tv" pictograma="standby-tv" web="/setari?id=hds_standby_tv" weight="36" requires="HdsStandbyTv" stare="netestat">
 				<setup id="hds_standby_tv" />
 			</item>
 			<item level="0" text="System Log Viewer" entryID="hds_log_manager" pictograma="jurnal" web="/jurnale-sistem" weight="37">

@@ -1093,8 +1093,15 @@ class _Furnizor(object):
 	def intraStandby(self):
 		import Screens.Standby
 		from Tools import Notifications
-		if Screens.Standby.inStandby is None:
+		# 0.7.4: o singura cerere in coada (inainte fiecare apasare punea inca una, pornite apoi una dupa alta)
+		if Screens.Standby.inStandby is None and not self.standbyInAsteptare():
 			Notifications.AddNotification(Screens.Standby.Standby)
+
+	def anuleazaStandby(self):
+		"""0.7.4: cererile de standby inca in coada (o fereastra deschisa pe televizor) se scot: trezirea si a doua
+		comutare le anuleaza (Screens/Standby.stergeStandbyDinCoada)."""
+		import Screens.Standby
+		return Screens.Standby.stergeStandbyDinCoada()
 
 	def standbyInAsteptare(self):
 		"""Un standby cerut sta in coada notificarilor: InfoBar il deschide abia cand se inchide fereastra de deasupra
@@ -1580,7 +1587,7 @@ def h_about(c):
 	prima = i["retea"][0] if i["retea"] else {"mac": "", "dhcp": False, "ip": "", "mask": "", "gw": ""}
 	disc = i["discuri"][0] if i["discuri"] else {"model": "", "capacity": "", "free": ""}
 	return _xml(c.r, "e2abouts", [("e2about", [
-		# OpenWebif lasa gol ce nu stie; textul „None” ajungea in clienti (proba pe Supreme, 06.11)
+		# interfata web obisnuita a receptoarelor lasa gol ce nu stie; textul „None” ajungea in clienti (proba pe Supreme, 06.11)
 		("e2oeversion", ""),
 		("e2enigmaversion", i["enigma"]),
 		("e2distroversion", NUME_IMAGINE),
@@ -1789,12 +1796,27 @@ def _standbyAsteapta(M):
 		return False
 
 
+def _anuleazaStandby(M):
+	"""Scoate cererile de standby din coada; nimic cand furnizorul nu stie de coada."""
+	f = getattr(M, "anuleazaStandby", None)
+	if f is None:
+		return 0
+	try:
+		return f() or 0
+	except Exception as eroare:
+		_jurnal("standby din coada: %s" % eroare)
+		return 0
+
+
 def h_powerstate(c):
 	"""Standby-ul din aplicatii. Intrarea se face pe loc cand InfoBar e deasupra (notificarea deschide ecranul Standby
 	in acelasi apel); cu o fereastra deschisa pe televizor (un meniu, lista de canale, "Ce e nou") ea sta in coada pana
 	se inchide fereastra. De aceea starea de dupa intrare se citeste din nou: in coada = "instandby" false,
 	"standbypending" true si mesajul (XML: e2instandby false). Iesirea se incheie la urmatorul pas al buclei
-	(Screen.close), deci acolo "instandby" false e spus dinainte, ca pana acum."""
+	(Screen.close), deci acolo "instandby" false e spus dinainte, ca pana acum.
+	0.7.4 (.114, 11.11.2026: doua cereri ramase in coada, iar un OK dupa 12 minute a bagat receptorul in standby, desi
+	intre timp se ceruse trezirea): trezirea (newstate=4) scoate cererile de standby din coada; comutarea (newstate=0)
+	cu o cerere in coada o anuleaza, nu mai pune inca una."""
 	M = c.M
 	stare = c.intreg("newstate")
 	inainte = bool(M.standby())
@@ -1808,12 +1830,16 @@ def h_powerstate(c):
 			if inainte:
 				M.iesiStandby()
 				dupa = False
+			elif _standbyAsteapta(M):
+				_anuleazaStandby(M)
 			else:
 				M.intraStandby()
 				intrare, dupa = True, bool(M.standby())
 		elif stare == 4:
 			if inainte:
 				M.iesiStandby()
+			else:
+				_anuleazaStandby(M)
 			dupa = False
 		elif stare == 5:
 			if not inainte:

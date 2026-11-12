@@ -5,6 +5,7 @@
 
 import os
 import sys
+import threading
 import time
 import weakref
 
@@ -15,7 +16,10 @@ _summary = set()
 _proc_cache = (0, [])
 # Cautarea altor programe cu dispozitivul afisajului deschis (/proc/*/fd): o data la atatea secunde. Pe Vu+ Solo SE
 # tinea firul principal 3 din 40 de esantioane la pasul vechi de 2 s (raportul de procesor 239122).
+# Cautarea ruleaza pe un fir de fundal: pe Octagon SF8008, cu ~200 de procese si fire, tinea firul principal ~0,1-0,2 s
+# o data la 5 s (masurat in proces). Firul principal ia ce s-a gasit ultima data.
 PROC_INTERVAL_S = 5
+_proc_fir = [None]
 _leduri = weakref.WeakSet()
 _ledPermis = None
 
@@ -168,50 +172,66 @@ def _resurseProc(cale):
 
 
 def _procese():
-	"""Alte procese cu dispozitivul deschis; citire rara si limitata."""
+	"""Alte procese cu dispozitivul deschis; citire rara si limitata. Pe firul principal: ce s-a gasit ultima data, iar
+	cautarea (o data la PROC_INTERVAL_S) porneste pe un fir de fundal; pe alt fir: cautarea pe loc. Prima chemare da []
+	(niciun alt program), ca inainte de prima cautare."""
 	global _proc_cache
 	acum = time.monotonic()
 	if 0 <= acum - _proc_cache[0] < PROC_INTERVAL_S:
 		return _proc_cache[1]
-	rez = []
-	try:
-		piduri = os.listdir("/proc")
-	except OSError:
-		return []
-	dispozitive = {
-		os.path.realpath("/dev/dbox/lcd0"): LCD_RESURSE,
-		os.path.realpath("/dev/dbox/oled0"): LCD_RESURSE,
-		os.path.realpath("/dev/lcd2"): ("lcd", "lumina", "live"),
-		os.path.realpath("/dev/vfd"): ("text", "pictograme", "alimentare"),
-	}
-	for pid in [p for p in piduri if p.isdigit() and p != str(os.getpid())][:128]:
+
+	def cauta():
+		global _proc_cache
+		rez = []
 		try:
-			dosar = "/proc/%s/fd" % pid
-			folosite = set()
-			for fd in os.listdir(dosar)[:32]:
-				# legatura din /proc/PID/fd e deja calea adevarata a fisierului deschis (nucleul a rezolvat legaturile
-				# la deschidere): un singur apel readlink, fata de realpath, care facea lstat pe fiecare bucata a caii
-				try:
-					cale = os.readlink(os.path.join(dosar, fd))
-				except OSError:
-					continue
-				resurse = dispozitive.get(cale) or _resurseProc(cale)
-				if not resurse:
-					continue
-				try:
-					with open("/proc/%s/fdinfo/%s" % (pid, fd)) as f:
-						flags = next(l.split()[1] for l in f if l.startswith("flags:"))
-					if int(flags, 8) & os.O_ACCMODE == os.O_RDONLY:
-						continue
-				except (OSError, StopIteration, ValueError):
-					pass
-				folosite.update(resurse)
-			if folosite:
-				rez.append(("Program extern", tuple(sorted(folosite))))
+			piduri = os.listdir("/proc")
 		except OSError:
-			continue
-	_proc_cache = (acum, rez)
-	return rez
+			return
+		dispozitive = {
+			os.path.realpath("/dev/dbox/lcd0"): LCD_RESURSE,
+			os.path.realpath("/dev/dbox/oled0"): LCD_RESURSE,
+			os.path.realpath("/dev/lcd2"): ("lcd", "lumina", "live"),
+			os.path.realpath("/dev/vfd"): ("text", "pictograme", "alimentare"),
+		}
+		for pid in [p for p in piduri if p.isdigit() and p != str(os.getpid())][:128]:
+			try:
+				dosar = "/proc/%s/fd" % pid
+				folosite = set()
+				for fd in os.listdir(dosar)[:32]:
+					# legatura din /proc/PID/fd e deja calea adevarata a fisierului deschis (nucleul a rezolvat legaturile
+					# la deschidere): un singur apel readlink, fata de realpath, care facea lstat pe fiecare bucata a caii
+					try:
+						cale = os.readlink(os.path.join(dosar, fd))
+					except OSError:
+						continue
+					resurse = dispozitive.get(cale) or _resurseProc(cale)
+					if not resurse:
+						continue
+					try:
+						with open("/proc/%s/fdinfo/%s" % (pid, fd)) as f:
+							flags = next(l.split()[1] for l in f if l.startswith("flags:"))
+						if int(flags, 8) & os.O_ACCMODE == os.O_RDONLY:
+							continue
+					except (OSError, StopIteration, ValueError):
+						pass
+					folosite.update(resurse)
+				if folosite:
+					rez.append(("Program extern", tuple(sorted(folosite))))
+			except OSError:
+				continue
+		_proc_cache = (time.monotonic(), rez)
+
+	if threading.current_thread() is not threading.main_thread():
+		cauta()
+		return _proc_cache[1]
+	fir = _proc_fir[0]
+	if fir is None or not fir.is_alive():
+		_proc_cache = (acum, _proc_cache[1])
+		fir = threading.Thread(target=cauta, name="HdsAfisajCompat")
+		fir.daemon = True
+		_proc_fir[0] = fir
+		fir.start()
+	return _proc_cache[1]
 
 
 def stare(color=False, mod=None):

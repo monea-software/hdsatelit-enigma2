@@ -1,4 +1,4 @@
-bin_SCRIPTS = enigma2.sh hds-rezerva.sh hds-rezerva-ecran.py hds-raport.sh
+bin_SCRIPTS = enigma2.sh hds-rezerva.sh hds-rezerva-ecran.py hds-raport.sh hds-actualizare-intrerupta.py
 lib_LTLIBRARIES = libopen.la
 
 libopen_la_SOURCES = libopen.c

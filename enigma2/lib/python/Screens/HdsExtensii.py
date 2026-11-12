@@ -176,27 +176,43 @@ def icoana(cheie, marime):
 	return _icoane[k]
 
 
+def _pixmapPropriu(obj):
+	ptr = getattr(obj, 'icon', None)
+	return ptr if ptr is not None and not isinstance(ptr, str) and all(_marime_pixmap(ptr)) else None
+
+
+def _numeIcoana(obj):
+	nume = getattr(obj, 'iconstr', None)
+	if not nume and isinstance(getattr(obj, 'icon', None), str):
+		nume = obj.icon
+	return nume if isinstance(nume, str) and nume else None
+
+
 def caiIcoanaPlugin(fel, obj):
-	"""Fisierele icoanei proprii, fara a importa sau porni pluginul."""
+	"""Fisierele icoanei proprii, fara a importa sau porni pluginul. La un plugin: icoana descriptorului randului, apoi a
+	celorlalti descriptori ai lui (geamanul din lista pluginurilor tine adesea icoana: XStreamity, TV Garden), apoi
+	plugin.png din dosarul lui. O cale absoluta ramane cum e (os.path.join)."""
+	nume = []
 	if fel == 'plugin':
 		dosar = getattr(obj, 'path', None)
-		nume = getattr(obj, 'iconstr', None)
-		if not nume and isinstance(getattr(obj, 'icon', None), str):
-			nume = obj.icon
+		nume = [_numeIcoana(x) for x in [obj] + L.descriptoriiPluginului(obj, plugins)]
 	elif fel == 'indisponibil':
-		dosar, nume = obj.get('path'), None
+		dosar = obj.get('path')
 	elif fel == 'pachet' and getattr(obj, 'instalat', False):
-		dosar, nume = getattr(obj, 'dosar_plugin', None), None
+		dosar = getattr(obj, 'dosar_plugin', None)
 	else:
 		return []
 	if not isinstance(dosar, str) or not dosar:
 		return []
 	cai = []
-	if isinstance(nume, str) and nume:
-		cale = os.path.join(dosar, nume)
+	for n in nume:
+		if not n:
+			continue
+		cale = os.path.join(dosar, n)
 		if os.path.splitext(cale)[1] not in ('.png', '.jpg'):
 			cale = os.path.splitext(cale)[0] + '.png'
-		cai.append(cale)
+		if cale not in cai:
+			cai.append(cale)
 	cale = os.path.join(dosar, 'plugin.png')
 	if cale not in cai:
 		cai.append(cale)
@@ -218,10 +234,17 @@ def caiIcoanaCategorie(cheie, marime):
 
 
 def icoanaRand(fel, obj, cheie, marime):
-	"""Icoana proprie a extensiei instalate, apoi icoana categoriei."""
+	"""Icoana proprie a extensiei instalate (a descriptorului randului sau a altui descriptor al aceluiasi plugin), apoi
+	icoana categoriei."""
 	if fel == 'plugin':
-		ptr = getattr(obj, 'icon', None)
-		if ptr is not None and not isinstance(ptr, str) and all(_marime_pixmap(ptr)):
+		ptr = _pixmapPropriu(obj)
+		if ptr is None:
+			# ceilalti descriptori se cauta numai cand randul n-are icoana lui
+			for x in L.descriptoriiPluginului(obj, plugins):
+				ptr = _pixmapPropriu(x)
+				if ptr is not None:
+					break
+		if ptr is not None:
 			return ptr
 	for cale in caiIcoanaPlugin(fel, obj):
 		try:
@@ -578,6 +601,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		# o cautare de fisiere neterminata isi termina firul singura (HdsPachete._cautari); rezultatul ei nu mai e asteptat
 		self.timerCautare.stop()
 		self.cautareFisiere = self.cautareRetea = None
+		L.scoateAscultatorRezerva(self._preiaRezerva)
 		d, self.descarca = self.descarca, None
 		if d is not None:
 			d.removeCallback(self._evenimentDescarcare)
@@ -621,7 +645,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self.semnCatalog is None or getattr(self.session, 'current_dialog', self) is not self:
 			return
 		self._verificaLocuriFisiere()
-		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs():
+		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs() or L.rezervaAsteapta():
 			return
 		semn = self._semnCatalog()
 		if semn is None or semn == self.semnCatalog:
@@ -1258,6 +1282,16 @@ class HdsExtensii(Screen, HelpableScreen):
 			ids = [i for i, _e, _n in self.file]
 			if fid in ids:
 				self.fila = ids.index(fid)
+			if parametru != 0 and L.rezervaAsteapta():
+				# moneasoftware.com nu a raspuns, iar sursa pluginurilor externe a trecut pe serverul de rezerva (paza din
+				# HdsExtensiiLucru.pornesteDescarcarea, inaintea acestui ascultator): lista se descarca inca o data, de acolo.
+				# Ecranul spune ce se intampla si urmareste a doua descarcare ca pe a lui (_preiaRezerva); fereastra cu
+				# rezultatul, daca omul a cerut lista, vine dupa ea
+				self.liniiCazute = list(self.liniiDescarcare)
+				self._mesaj(_t('Serverul principal nu răspunde. Lista se descarcă de pe serverul de rezervă.'), 'chihlimbar')
+				self._arataFila()
+				L.laRezerva(self._preiaRezerva)
+				return
 			if parametru == 0:
 				self.mesajStare = ''
 			else:
@@ -1271,6 +1305,24 @@ class HdsExtensii(Screen, HelpableScreen):
 				stare = {'cod': parametru, 'motiv': '' if parametru == 0 else P.motiv_eroare(self.liniiDescarcare)}
 				self.session.open(MessageBox, L.textDescarcare(self.catalog, stare, self.inainteDescarcare),
 					type=MessageBox.TYPE_INFO if parametru == 0 else MessageBox.TYPE_WARNING)
+
+	def _preiaRezerva(self, d):
+		"""A doua descarcare, de pe serverul de rezerva al feedului extern (HdsExtensiiLucru.treciPeRezerva), urmarita ca o
+		descarcare a ecranului: semnul se misca, iar la sfarsit catalogul, mesajul si fereastra ceruta, ca de obicei. d=None:
+		nu a mai pornit (alta lucrare opkg ruleaza), deci ramane motivul primei descarcari."""
+		if d is None or self.descarca is not None:
+			if self.descarca is None:
+				motiv = P.motiv_eroare(getattr(self, 'liniiCazute', []))
+				if self.catalog.surse_cu_lista:
+					motiv += ' ' + _t('Se folosește lista din %s.') % P.text_varsta(self.catalog.varsta_liste)
+				self._mesaj(motiv, 'chihlimbar')
+				self.descarcareCeruta = False
+			return
+		self.liniiDescarcare = []
+		self.descarca = d
+		d.addCallback(self._evenimentDescarcare)
+		self._mesaj(_t('Se descarcă lista de extensii de pe serverul de rezervă'), 'chihlimbar')
+		self._semn()
 
 	def _mesaj(self, text, culoare='eticheta'):
 		self.mesajStare = text

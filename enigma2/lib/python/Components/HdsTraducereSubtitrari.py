@@ -4472,7 +4472,9 @@ def diagnosticPornire(s=None, pista=None, ocr=None):
 			_jurnal("diagnosticul OCR: %s" % e.__class__.__name__)
 			return rezultat("ocr_verificare", _t("Starea OCR nu se poate verifica acum. Verifică OCR sau alege o pistă text."))
 	if not ocr.get("instalat"):
-		return rezultat("ocr_lipsa", _t("Pista aleasă este o imagine, dar programul OCR nu este instalat. Instalează hds-ocr sau alege o pistă text."))
+		# imaginea mica (0.7.4): hds-ocr vine din feed, singur, cand traducerea il cere (HdsOcrSubtitrari.puneLegatura)
+		return rezultat("ocr_lipsa", _t("Pista aleasă este o imagine. Recunoașterea textului se instalează singură când "
+			"receptorul are internet; până atunci subtitrarea rămâne imagine."))
 	if not ocr.get("nucleu", True):
 		return rezultat("ocr_nucleu", _t("Pista aleasă este o imagine, dar nucleul nu oferă legătura OCR. Alege o pistă text."))
 	if not ocr.get("model"):

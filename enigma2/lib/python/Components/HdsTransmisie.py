@@ -206,6 +206,23 @@ def N_(text):
 
 TEXT_NEDECRIPTAT = N_("Canalul e criptat și receptorul nu-l poate decripta acum (fără card sau fără drepturi pentru el).")
 
+
+def textNedecriptat(ref):
+	"""Textul opririi unui canal care nu se descifreaza: TEXT_NEDECRIPTAT, sau, pentru un canal ICAM (Sky Deutschland)
+	cand SoftCSA nu e gata acum (modulul pornit nu il poate descifra), acelasi text ca pe televizor
+	(HdsSoftCsa.TEXT_ICAM_CANAL: ce modul sa aleaga omul). Canalul e ICAM dupa memoria nucleului sau dupa CAID-urile
+	din lamedb (HdsStreamRelay.citesteLamedb, numai aici, la oprire). Orice eroare: TEXT_NEDECRIPTAT."""
+	try:
+		from Components import HdsSoftCsa as S
+		from Components import HdsStreamRelay as SR
+		_SR, alese = S._caidIcam()
+		caids = sorted(alese) if SR.cheieScurta(ref) in SR.citesteLamedb(SR.LAMEDB, alese) else []
+		if S.canalIcamFaraSoftCsa(ref, caids, alese=alese):
+			return _(S.TEXT_ICAM_CANAL)
+	except Exception as e:
+		_jurnal("textul ICAM: %r" % (e,))
+	return _(TEXT_NEDECRIPTAT)
+
 # tipul video din iServiceInformation.sVideoType (lib/dvb/decoder.h)
 VIDEO_DIN_TIP = {0: "mpeg2", 1: "h264", 3: "vc1", 4: "mpeg4", 5: "vc1", 6: "mpeg1", 7: "h265"}
 
@@ -1422,7 +1439,7 @@ class Manager(object):
 		if not ok:
 			return None, motiv
 		criptat = False if referintaDab(ref) else bool(self._criptat(ref))
-		# 0.7.0: un canal din lista Stream Relay vine decodat de la releu, deci nu se refuza ca "criptat"
+		# adresaReleu da mereu None (12.11.2026): orice canal criptat vine de la tuner, descifrat de receptor
 		releu = None if referintaDab(ref) else adresaReleu(refCurata(ref) or ref)
 		if criptat and not self.setari.criptate() and releu is None:
 			return None, CRIPTAT_OPRIT
@@ -1733,7 +1750,7 @@ class Manager(object):
 				s.decriptare = DECRIPTARE_NU
 				_jurnal("sesiune %s %s: nedecriptata (%s, %.0f s, %.0f s de la zap)" % (s.id, s.ref,
 					raspuns or "fara raspuns", trecut, tot))
-				self._opresteAcum(s, _(TEXT_NEDECRIPTAT), cod="nedecriptat")
+				self._opresteAcum(s, textNedecriptat(s.ref), cod="nedecriptat")
 
 	def _bazaDecriptare(self, s, baza):
 		"""Ceasul monoton de la care se socotesc termenele decriptarii: `baza` (primele date ale sesiunii) sau zap-ul
@@ -2811,21 +2828,18 @@ class InregistrareInTeava(object):
 			return 0
 
 
-# ------------------------------------------------------------------ Stream Relay (0.7.0)
-# 0.7.0: TV in browser, "Vezi live" si playerele externe (VLC, Kodi) merg si pe canalele din
-# lista Stream Relay (Components/HdsStreamRelay.py). Pentru ele sesiunea nu inregistreaza serviciul: ia fluxul de la
-# releu (http://<gazda>:<port>/<canal>, adresa si portul din setarile Stream Relay), care l-a cerut la randul lui
-# serverului de flux al imaginii (Hds/DabT2/server8001.py) si l-a decodat. Un fir muta raspunsul releului in teava
-# sesiunii; restul e ca la o inregistrare (firul sesiunii, RescrierePsi, verificarea imaginii clare). Releul care nu
-# raspunde: TEXT_RELEU_OPRIT, pe loc (legatura se incearca cel mult TERMEN_RELEU_S). Fara fisierul listei nimic din toate
-# acestea nu se incarca (adresaReleu se intoarce dupa un singur stat).
+# ------------------------------------------------------------------ Stream Relay (0.7.0, scos din browser 12.11.2026)
+# 0.7.0 - 0.7.4: TV in browser, "Vezi live" si playerele externe luau canalele din lista Stream Relay
+# (Components/HdsStreamRelay.py) de la releu, nu de la tuner. De la 12.11.2026 nu mai iau: adresaReleu da mereu None,
+# fluxul oricarui canal vine de la tuner prin serverul de flux al imaginii, descifrat de receptor (canalele CSA-ALT / ICAM
+# de SoftCSA, in nucleu). Releul oprea fluxul canalelor Sky in browser, desi televizorul le descifra singur. Raman
+# _FluxReleu si FluxReleuInTeava: sursa DAB+ (FluxDabInTeava) e facuta din ele.
 
 FISIER_RELEU = "/etc/enigma2/whitelist_streamrelay"
 TERMEN_RELEU_S = 0.5              # legatura cu releul (pe receptor sau in reteaua de acasa: raspunsul vine pe loc)
 CITIRE_RELEU_S = 1.0              # recv-ul firului: atat cel mult, ca oprirea sa se vada repede
 ANTET_RELEU_MAX = 16384
 TEXT_RELEU_OPRIT = N_("Stream Relay nu răspunde la %s:%d. Verifică adresa și portul din setările Stream Relay.")
-TEXT_RELEU_CAZUT = N_("Stream Relay a oprit fluxul canalului.")
 
 
 def motivReleuOprit(gazda, port, H=None):
@@ -2841,23 +2855,12 @@ def motivReleuOprit(gazda, port, H=None):
 
 
 def adresaReleu(ref, fisier=FISIER_RELEU):
-	"""(gazda, port, cheia canalului) cand `ref` e in lista Stream Relay si releul se poate folosi (pe receptor sau in
-	reteaua de acasa permisa: HdsStreamRelay.releuPermis); altfel None. Fara fisierul listei: None, fara niciun import."""
-	if not os.path.isfile(fisier):
-		return None
-	try:
-		from Components import HdsStreamRelay as SR
-		k = SR.cheie(ref)
-		r = SR.releu()
-		if not k or k not in r.chei():
-			return None
-		gazda, port, _intarziere = r.configurare()
-		if not SR.releuPermis(gazda):
-			return None
-		return ("127.0.0.1" if gazda == "localhost" else gazda), port, k
-	except Exception as e:
-		_jurnal("Stream Relay: %r" % (e,))
-		return None
+	"""Mereu None (12.11.2026): browserul nu mai ia niciun canal de la Stream Relay, nici din lista omului, nici trecut
+	singur. Fluxul vine de la tuner prin serverul de flux al imaginii, descifrat de receptor (canalele CSA-ALT / ICAM de
+	SoftCSA, in nucleu, lib/service/servicedvbrecord.cpp softCsaRecord). Releul oprea fluxul canalelor Sky in browser
+	(mesajul de oprire al releului), desi televizorul le descifra singur. Functia ramane pentru apelurile
+	vechi; sursa releului (FluxReleuInTeava) ramane baza sursei DAB+ (FluxDabInTeava)."""
+	return None
 
 
 def releuAsculta(adresa, termen=TERMEN_RELEU_S):
@@ -3108,13 +3111,13 @@ class InregistrareSauReleu(object):
 		return self._pentru(ses).eroare(ses)
 
 	def textEroare(self, ses):
-		"""Textul opririi la o eroare a sursei: al releului pentru sesiunile prin releu, altfel None (textul tunerului)."""
+		"""Textul opririi la o eroare a sursei: al sursei DAB+ pentru posturile DAB+, altfel None (textul tunerului)."""
 		if referintaDab(ses.ref):
 			abonament = getattr(ses, "dab_abonament", None) or {}
 			if abonament.get("mesaj"):
 				return _(abonament["mesaj"])
 			return _("Redarea DAB+ s-a oprit. Verifică semnalul purtătorului și dacă tunerul este liber.")
-		return _(TEXT_RELEU_CAZUT) if getattr(ses, "releu", None) else None
+		return None
 
 
 def folosiriCanalelor():

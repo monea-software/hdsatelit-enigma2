@@ -20,12 +20,25 @@ public:
 		idStructure,	// service_id == 0 is root
 		idDVB,
 		idFile,
-		idUser=0x1000
+		idUser=0x1000,
+		/* HDSatelit: the type numbers of the other services, under the names the plugins written for the common enigma2
+		   plugin interface use (eServiceReference.idServiceMP3...). The numbers are those every enigma2 writes in its lists. */
+		idServiceIsScrambled=0x0100,	// added to a type: the service is scrambled
+		idServiceM2TS=0x0003,
+		idDVBScrambled=idDVB + idServiceIsScrambled,
+		idServiceMP3=0x1001,		// 4097, the streams and files played by the media player
+		idServiceAirPlay=0x1009,
+		idServiceXINE=0x1010,
+		idServiceDAB=0x1013,
+		idServiceDVD=0x1111,
+		idServiceAzBox=0x1112,
+		idServiceHDMIIn=0x2000
 	};
 	int type;
 
 	enum
 	{
+		noFlags=0,			// HDSatelit: the name the plugins use for „no flag”
 		isDirectory=1,		// SHOULD enter  (implies mustDescent)
 		mustDescent=2,		// cannot be played directly - often used with "isDirectory" (implies canDescent)
 		/*
@@ -48,6 +61,8 @@ public:
 	int flags; // flags will NOT be compared.
 	/* the number of the channel in its list, for the plugins that ask; 0 when the list does not number */
 	inline int getChannelNum() const { return 0; }
+	/* HDSatelit: accepted for the plugins that number their lists; the number is not kept (getChannelNum stays 0) */
+	inline void setChannelNum(int) {}
 
 	inline int getSortKey() const { return (flags & hasSortKey) ? data[3] : ((flags & sort1) ? 1 : 0); }
 
@@ -380,6 +395,9 @@ public:
 		sHBBTVUrl,
 		/* Radio online: snapshot tehnic si spectru pasiv (servicemp3); dict fara adresa sau etichete personale. */
 		sHdsRadioOnline,
+
+			/* SoftCSA, la coada: 1 cand canalul redat e descifrat in software (CSA-ALT, lib/dvb/csasession.h), altfel 0 */
+		sIsSoftCSA,
 
 		sUser = 0x100
 	};

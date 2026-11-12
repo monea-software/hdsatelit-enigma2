@@ -2,7 +2,7 @@ SUMMARY = "Imaginea HDSatelit"
 DESCRIPTION = "enigma2 HDSatelit pe baza OE-Alliance. Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 # versiunea se tine dupa configure.ac din depozitul imaginii (AC_INIT) si dupa DISTRO_VERSION din hdsatelit.conf
-PV = "0.7.3"
+PV = "0.7.4"
 
 # hdsatelit-nume-local: numele hdsatelit.local in reteaua de acasa (avahi-publish), pe langa numele receptorului
 IMAGE_INSTALL = "hdsatelit-base hdsatelit-ssh hdsatelit-nume-local"
@@ -63,6 +63,12 @@ BAD_RECOMMENDATIONS:remove:sf8008m = "kernel-module-wireguard kernel-module-wire
 # 4.4.35, defconfig gbmv200) NU are nici el WireGuard inauntru, deci modulul din afara nucleului intra si aici, ca pe
 # sf8008. oem-info nu e recomandat (masina nu are trasatura oem-info: gbmv200.conf, gigablue-mv200.inc).
 BAD_RECOMMENDATIONS:remove:gbtrio4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
+# Tot GigaBlue TRIO 4K: clasa GigaBlue face ext4-ul radacinii de marime fixa (gigablue-mv200.inc: IMAGE_ROOTFS_SIZE ?=
+# "624288" KB). 0.7.1 incapea la limita, 0.7.2 nu mai incapea (mkfs.ext4: Could not allocate block); partitia userdata are
+# 7000M, deci 768 MiB e in siguranta. Pana la 0.7.4 valoarea statea numai in local.conf-ul dosarului de constructie
+# (fa-dosar-build-60.sh, 9e70ee19f); aici e in strat, deci intra la orice dosar gbtrio4k (overridul vine din
+# MACHINEOVERRIDES =. MACHINEBUILD, gigablue-oem.inc). Proba la constructie: bitbake -e hdsatelit-image | grep ^IMAGE_ROOTFS_SIZE=
+IMAGE_ROOTFS_SIZE:gbtrio4k = "786432"
 # Receptoarele Broadcom (06.11.2026, lotul vuplus4k): Vu+ Solo 4K (linux-vuplus 3.14.28), Uno 4K SE (4.1.20), Duo 4K
 # (4.1.45) si AX HD51 (masina hd51, linux-gfutures 4.10.12). Niciun defconfig nu are CONFIG_WIREGUARD (grep pe
 # recipes-linux/linux-vuplus-*/<masina>/defconfig si linux-gfutures-4.10.12/hd51/defconfig, OE-Alliance 6.0), deci modulul
@@ -70,6 +76,9 @@ BAD_RECOMMENDATIONS:remove:gbtrio4k = "kernel-module-wireguard kernel-module-wir
 BAD_RECOMMENDATIONS:remove:vusolo4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:vuuno4kse = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:vuduo4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
+# Vu+ Duo 4K Lite (VU1): nucleul linux-vuplus 4.1.20 al lui (meta-vuplusde, defconfig_initrd) nu are nici el
+# CONFIG_WIREGUARD; CONFIG_TUN=m
+BAD_RECOMMENDATIONS:remove:vuduo4klite = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:hd51 = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 
 INHIBIT_DEFAULT_DEPS = "1"
@@ -81,16 +90,6 @@ export IMAGE_BASENAME = "hdsatelit-image"
 
 inherit image
 inherit hds-usb-image
-
-# Locul radacinii pe eMMC-ul HiSilicon (10.11.2026, 0.7.3): clasele producatorilor (octagon-, amiko-, gigablue-, dinobot-
-# emmc_image si celelalte) fac rootfs.ext4 cu dd seek=${IMAGE_ROOTFS_SIZE}, adica MEREU la minimul masinii (624288 sau
-# 589824 KB), nu dupa marimea radacinii. 0.7.3 (traducerile in 30 de limbi, afisajul color) nu mai incape: mkfs.ext4
-# „Could not allocate block” la SF8008. Minimul devine 1 GiB numai unde masina are unul din aceste doua minime; partitia
-# userdata are 3580M (SF8008 MINI) sau 7000M (SF8008, Ustym, TRIO, V10), deci incape. Vu+ (Broadcom) si Solo SE (NAND)
-# au alte valori si raman neatinse. Atribuire, nu python () {}: functia anonima din image.bbclass ruleaza inaintea celei
-# din reteta si pune deja valoarea in comanda do_image_<tip> (prima proba, 04:08, tot 156072 de blocuri).
-HDS_ROOTFS_MINIM_MASINA := "${IMAGE_ROOTFS_SIZE}"
-IMAGE_ROOTFS_SIZE = "${@'1048576' if d.getVar('HDS_ROOTFS_MINIM_MASINA').strip() in ('589824', '624288') else d.getVar('HDS_ROOTFS_MINIM_MASINA')}"
 
 # Lista licentelor din imagine, facuta la construire (classes/hds-licente.bbclass): /usr/share/hdsatelit/licente,
 # citita de ecranul „Licențe” si de pagina web /licente
@@ -248,6 +247,55 @@ hds_paza_ssh_rootfs() {
 }
 ROOTFS_POSTPROCESS_COMMAND:append = " hds_paza_ssh_rootfs"
 
+# Paza imaginii mici (0.7.4, 10.11.2026; lucru-sesiune/oe-60/imagine-mica/PROIECT-IMAGINE-MICA.md, riscul 5): ce s-a
+# scos din imagine nu are voie sa revina prin dependintele altui pachet (requests aducea chardet, outcome aducea pytest),
+# iar limbile si afisajul color trebuie sa fie exact cele hotarate. Citeste starea opkg si dosarele radacinii facute:
+# - niciun pachet din HDS_SCOASE_DIN_IMAGINE si niciun hds-ocr-* (recunoasterea textului vine din feed, la cerere);
+# - cataloagele din /usr/share/enigma2/po: exact HDS_LIMBI_NATIVE (conf/distro/hdsatelit.conf), fara niciun pachet
+#   enigma2-hdsatelit-po-*; pe hdsflashmic exact romana si engleza (pachetele po-ro si po-en);
+# - /usr/share/enigma2/HDSatelit/afisaj-color numai unde HDS_AFISAJ_COLOR = 1.
+HDS_SCOASE_DIN_IMAGINE = "python3-pytest python3-pygments python3-chardet hds-ocr hds-ocr-modele"
+python hds_paza_imagine_mica () {
+    import os
+    rad = d.getVar('IMAGE_ROOTFS')
+    flashmic = 'hdsflashmic' in (d.getVar('OVERRIDES') or '').split(':')
+    instalate = set()
+    pachet = None
+    with open(os.path.join(rad, 'var', 'lib', 'opkg', 'status'), encoding='utf-8', errors='replace') as f:
+        for rand in f:
+            if rand.startswith('Package:'):
+                pachet = rand.split(':', 1)[1].strip()
+            elif rand.startswith('Status:') and pachet and rand.split()[-1:] == ['installed']:
+                instalate.add(pachet)
+    if not instalate:
+        bb.fatal('paza imaginii mici: starea opkg din radacina nu are niciun pachet instalat')
+    scoase = sorted(p for p in instalate if p in (d.getVar('HDS_SCOASE_DIN_IMAGINE') or '').split()
+        or p.startswith('hds-ocr-'))
+    if scoase:
+        bb.fatal('paza imaginii mici: pachete scoase din imagine au revenit (prin dependintele altora): %s' % ' '.join(scoase))
+    po = os.path.join(rad, 'usr', 'share', 'enigma2', 'po')
+    cataloage = sorted(n for n in (os.listdir(po) if os.path.isdir(po) else [])
+        if os.path.isfile(os.path.join(po, n, 'LC_MESSAGES', 'enigma2.mo')))
+    pachete_po = sorted(p for p in instalate if p.startswith('enigma2-hdsatelit-po-'))
+    if flashmic:
+        asteptate, asteptate_po = ['en', 'ro'], ['enigma2-hdsatelit-po-en', 'enigma2-hdsatelit-po-ro']
+    else:
+        asteptate, asteptate_po = sorted((d.getVar('HDS_LIMBI_NATIVE') or '').split()), []
+    if not asteptate or cataloage != asteptate:
+        bb.fatal('paza imaginii mici: limbile din imagine sunt %s, asteptate %s' % (' '.join(cataloage) or '-',
+            ' '.join(asteptate) or '-'))
+    if pachete_po != asteptate_po:
+        bb.fatal('paza imaginii mici: pachetele limbilor din imagine sunt %s, asteptate %s' % (' '.join(pachete_po) or '-',
+            ' '.join(asteptate_po) or '-'))
+    afisaj = os.path.isdir(os.path.join(rad, 'usr', 'share', 'enigma2', 'HDSatelit', 'afisaj-color'))
+    if afisaj != (d.getVar('HDS_AFISAJ_COLOR') == '1'):
+        bb.fatal('paza imaginii mici: afisajul color %s in imagine, HDS_AFISAJ_COLOR=%s' % ('este' if afisaj else 'lipseste',
+            d.getVar('HDS_AFISAJ_COLOR')))
+    bb.note('paza imaginii mici: %d limbi in imagine, afisajul color %s, fara %s' % (len(cataloage),
+        'da' if afisaj else 'nu', ' '.join((d.getVar('HDS_SCOASE_DIN_IMAGINE') or '').split())))
+}
+ROOTFS_POSTPROCESS_COMMAND:append = " hds_paza_imagine_mica"
+
 # Paza de model: receptorul pentru care e construita imaginea. Regulile stau ca date, cate un fisier pe model, in
 # hdsatelit-modele/<MACHINEBUILD> (viper4kv20 confirmat; viper4kv30 si viper4kv40 cu confirmat=nu). Din ele se scriu:
 # - /etc/hdsatelit-model in imagine: regulile citite la pornire de garda din enigma2.sh si de
@@ -266,7 +314,7 @@ HDS_MODEL_CHEI = "format:HDS_MODEL_FORMAT distro:HDS_MODEL_DISTRO model:HDS_MODE
 	rootfs_part:HDS_MODEL_ROOTFS_PART upd_path?:HDS_MODEL_UPD_PATH emmc_min_kib?:HDS_MODEL_EMMC_MIN \
 	emmc_max_kib?:HDS_MODEL_EMMC_MAX confirmat?:HDS_MODEL_CONFIRMAT \
 	kernel_name?:HDS_MODEL_KERNEL_NAME rootfs_name?:HDS_MODEL_ROOTFS_NAME familie?:HDS_MODEL_FAMILIE \
-	stocare?:HDS_MODEL_STOCARE"
+	stocare?:HDS_MODEL_STOCARE model_id?:HDS_MODEL_ID"
 
 python () {
     import os
@@ -302,6 +350,13 @@ python () {
     # numele partitiilor nucleului si ale sistemului (garda de la 0.6.3, V10): amandoua sau niciunul, numai litere,
     # cifre si _ (ca reguliValide din Components/HdsPazaModel.py); fara ele garda cauta kernel si rootfs
     import re
+    # model_id= (VU1, 12.11.2026; forma de pe modele-noi-unelte-071): placile al caror tip din driver e comun mai
+    # multor modele (Vu+ Duo 4K Lite: boxtype=vuplus, scris la pornire de vuplus-ddbootup) cer modelul exact
+    if 'model_id' in reguli and not re.fullmatch(r'[a-z0-9]+', reguli['model_id']):
+        bb.fatal('paza de model: model_id trebuie sa aiba numai litere mici si cifre')
+    identitati = {'vuduo4klite': 'duo4klite'}
+    if mb in identitati and reguli.get('model_id') != identitati[mb]:
+        bb.fatal('paza de model: %s cere model_id=%s' % (mb, identitati[mb]))
     nume = [k for k in ('kernel_name', 'rootfs_name') if k in reguli]
     if nume and len(nume) != 2:
         bb.fatal('paza de model: hdsatelit-modele/%s: kernel_name= si rootfs_name= vin impreuna' % mb)
@@ -341,6 +396,9 @@ IMAGEDIR = "e2/update"
 IMAGEDIR:vusolo4k = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:vuuno4kse = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:vuduo4k = "vuplus/${UPDATE_DIR}"
+# Vu+ Duo 4K Lite (VU1): stratul meta-vuplusde nu are UPDATE_DIR; vuplus.inc al lui da IMAGEDIR ?= "vuplus/duo4klite",
+# dosarul pe care il cauta incarcatorul pe stick (si imaginea oficiala VU+ oe-20261009)
+IMAGEDIR:vuduo4klite = "vuplus/duo4klite"
 IMAGEDIR:hd51 = "hd51"
 # Vu+ Solo SE (lotul mips-solose, 06.11.2026): incarcatorul CFE cauta imaginea pe stick numai in vuplus/solose
 # (UPDATE_DIR din vusolose.conf), deci zip-ul _usb.zip pastreaza dosarul masinii.
@@ -385,6 +443,7 @@ hds_reguli_model() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 # Primul Amiko Viper 4K (V10, masina viper4k, lotul imagine-060-v10): aceeasi functie, plus numele partitiilor
@@ -431,6 +490,7 @@ hds_reguli_model:viper4k() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 # Octagon SF8008 (masina sf8008, lotul imagine-060-sf8008): aceeasi asezare a partitiilor ca la V10 (linuxkernel1 si
@@ -475,6 +535,7 @@ hds_reguli_model:sf8008() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 # Octagon SF8008 MINI 4K (masina sf8008m, lotul imagine-060-sf8008m): aceeasi asezare a partitiilor ca la SF8008 si V10
@@ -519,6 +580,7 @@ hds_reguli_model:sf8008m() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 # Uclan Ustym 4K PRO (masina ustym4kpro, lotul ustym4kpro): aceeasi asezare a partitiilor ca la SF8008 (bootargs.bin din
@@ -563,6 +625,7 @@ hds_reguli_model:ustym4kpro() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 # GigaBlue UHD TRIO 4K (masina gbmv200, MACHINEBUILD gbtrio4k, lotul modele-noi-0611): aceeasi asezare a partitiilor ca la
@@ -608,6 +671,7 @@ hds_reguli_model:gbtrio4k() {
 	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
 	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
 	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
 }
 
 hds_marcaj_model_rootfs() {
@@ -638,6 +702,25 @@ hds_enigma_info_rootfs() {
 }
 hds_enigma_info_rootfs[vardepsexclude] += "DATE"
 ROOTFS_POSTPROCESS_COMMAND += "hds_enigma_info_rootfs "
+
+# Data constructiei pe fisierele din care listele de pornire multipla ale altor imagini scot data (papuga, Satedu
+# t=32518 #190354, 08.11.2026: „W bootmenu data wydania to 2018-03-09”). reproducible_final_image_task (image.bbclass,
+# IMAGE_PREPROCESS_COMMAND:append) pune pe TOATE fisierele REPRODUCIBLE_TIMESTAMP_ROOTFS, implicit 1520598896 =
+# 2018-03-09 12:34:56 UTC. Listele care nu citesc enigma.info (sau citesc o forma veche a lui) iau data cea mai noua dintre
+# usr/bin/enigma2, var/lib/opkg/status si usr/share/bootlogo.mvi (mtime), deci aratau 2018-03-09. Numai cele trei fisiere
+# primesc data din compiledate (aceeasi zi ca enigma.info si imagebuild din /etc/image-version); restul ramane
+# reproductibil. Ruleaza dupa reproducible_final_image_task (acelasi :append, citit dupa inherit image).
+hds_data_fisiere_imagine() {
+	z="${DATE}"
+	data="$(echo "$z" | cut -c1-4)-$(echo "$z" | cut -c5-6)-$(echo "$z" | cut -c7-8) 12:00:00 UTC"
+	for f in ${bindir}/enigma2 ${localstatedir}/lib/opkg/status ${datadir}/bootlogo.mvi; do
+		[ -e "${IMAGE_ROOTFS}$f" ] || [ -L "${IMAGE_ROOTFS}$f" ] || continue
+		touch -h -d "$data" "${IMAGE_ROOTFS}$f"
+	done
+	bbnote "hds_data_fisiere_imagine: enigma2, opkg/status, bootlogo.mvi cu data $data"
+}
+hds_data_fisiere_imagine[vardepsexclude] += "DATE"
+IMAGE_PREPROCESS_COMMAND:append = " hds_data_fisiere_imagine "
 
 # Runs at the end of IMAGE_CMD of the machine's image type, after the machine code has closed the zip and removed
 # ${IMAGEDIR}: the sums are taken from the files inside the zip (what gets written), then the marker is added to it.
@@ -697,6 +780,7 @@ IMAGE_CMD:gigablueemmc:append = " hds_marcaj_model_zip; "
 HDS_MARCAJ_ZIP:vusolo4k = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:vuuno4kse = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:vuduo4k = "${IMAGE_NAME}_usb.zip"
+HDS_MARCAJ_ZIP:vuduo4klite = "${IMAGE_NAME}_usb.zip"
 # Sigla incarcatorului Vu+: vuplus.inc pune trasatura bootsplash, iar IMAGE_CMD:tar:prepend al masinii copiaza
 # ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin (BOOTLOGO_FILENAME) in dosarul de pe stick ca splash_auto.bin. Fisierul il face
 # sigla distributiei (reteta ei de sigla, do_deploy, splash480.bmp pe Vu+); hdsatelit-bootlogo nu o face, iar
@@ -711,6 +795,16 @@ IMAGE_CMD:tar:prepend:vuduo4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_D
 IMAGE_CMD:tar:append:vusolo4k = "; hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:vuuno4kse = "; hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:vuduo4k = "; hds_marcaj_model_zip; "
+# Vu+ Duo 4K Lite (VU1, 12.11.2026): IMAGE_CMD:tar:prepend din meta-vuplusde/conf/machine/include/vuplus.inc copiaza
+# sigla din ${DEPLOY_DIR_IMAGE}/splash.bin (BOOTLOGO_FILENAME, alt nume decat la celelalte Vu+ 4K): a noastra,
+# files/hds-splash-vuduo4klite.bmp, BMP Windows 3.x 720 x 540 x 24 (1166454 o, ca splash_auto.bin al imaginii
+# oficiale VU+), facuta din hds-splash-vuplus.bmp. Acelasi prepend pune pe stick si boot.bin (incarcatorul),
+# gpt.bin (tabela de partitii) si rescue.bin, din vuplus-initrd-cfe-vuduo4klite; imaginea obisnuita VU+ NU le are
+# (numai imaginea FACTORY), deci le scoatem din zip inainte de marcaj. initrd.bin ramane: e acelasi fisier ca
+# initrd_vu.bin din arhiva VU+ (sha256 ede431d8, STADIU-VU1-CI-UNICABLE-DUO4KLITE.md).
+HDS_SPLASH_VUDUO4KLITE := "${THISDIR}/files/hds-splash-vuduo4klite.bmp"
+IMAGE_CMD:tar:prepend:vuduo4klite = "install -m 0644 ${HDS_SPLASH_VUDUO4KLITE} ${DEPLOY_DIR_IMAGE}/splash.bin; "
+IMAGE_CMD:tar:append:vuduo4klite = "; zip -d ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}_usb.zip ${IMAGEDIR}/boot.bin ${IMAGEDIR}/gpt.bin ${IMAGEDIR}/rescue.bin; hds_marcaj_model_zip; "
 # AX HD51 (masina hd51): IMAGE_CMD:hdemmc:append din gfutures-arm.inc face ${IMAGE_NAME}_multi.zip cu
 # ${IMAGEDIR}/{imageversion,kernel.bin,rootfs.tar.bz2} (si _recovery_emmc.zip cu disk.img, pe care nu-l atingem).
 HDS_MARCAJ_ZIP:hd51 = "${IMAGE_NAME}_multi.zip"

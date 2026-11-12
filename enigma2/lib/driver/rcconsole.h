@@ -8,13 +8,16 @@
 class eRCConsoleDriver: public eRCDriver
 {
 	struct termios ot;
+	bool m_ot_ok;	/* HDSatelit: ot was read (tcgetattr), so it can be put back */
 protected:
 	int handle;
 	ePtr<eSocketNotifier> sn;
 	int m_escape;	/* HDSatelit: 0, after ESC 1, after ESC [ 2, after ESC [ [ 3 */
 	long m_utf8;	/* HDSatelit: the code point being put together from an UTF-8 sequence */
 	int m_utf8left;	/* HDSatelit: continuation bytes still expected (0 = none) */
+	int m_goale;	/* HDSatelit: reads without data in a row (lib/driver/hdsconsolacitire.h) */
 	void keyPressed(int);
+	void lasaConsola(int rezultat, int err);
 public:
 	eRCConsoleDriver(const char *filename);
 	~eRCConsoleDriver();

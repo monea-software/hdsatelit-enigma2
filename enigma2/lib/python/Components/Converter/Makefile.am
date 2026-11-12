@@ -8,4 +8,7 @@ install_PYTHON = \
 	ConditionalShowHide.py ServicePosition.py ValueRange.py RdsInfo.py Streaming.py \
 	StaticMultiList.py ServiceTime.py MovieInfo.py MenuEntryCompare.py StringListSelection.py \
 	ValueBitTest.py TunerInfo.py ConfigEntryTest.py TemplatedMultiContent.py ProgressToText.py \
-	Combine.py SensorToText.py ValueToPixmap.py Hds*.py
+	Combine.py SensorToText.py ValueToPixmap.py XmlMultiContent.py Hds*.py \
+	ChannelNumbers.py EGAnalogic.py EtAnalogClock.py ExtremeInfo.py HbbtvApplicationInfo.py RemoteControlInfo.py \
+	SmartInfo.py Streaming2.py TrackInfo.py VExtraNumText.py VServiceOrbitalPosition.py VWeather.py VfdDisplay.py \
+	VtiInfo.py VtiTempFan.py pstrCnvrt.py

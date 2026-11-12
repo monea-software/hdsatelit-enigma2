@@ -342,7 +342,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		if self.inchis:
 			return
 		self.gata = True
-		self._pas(_("Navigatorul este pe ecran."), -1, _("MENU sau EXIT pe prima pagină: meniul navigatorului."))
+		self._pas(_("Navigatorul este pe ecran."), -1, _("EXIT: închide"))
 		self["jos"].setText("")
 
 	def laEcranInapoi(self):
@@ -546,7 +546,9 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self._meniu(False)
 
 	def _cerere_iesire(self, date):
-		self._meniu(True)
+		# 0.7.4 (Eduard, 12.11.2026): EXIT (de pe orice pagina) si Inapoi de pe prima pagina inchid navigatorul pe loc,
+		# fara intrebare; meniul ramane pe MENU
+		self.nav.opreste()
 
 	def _cerere_inchide(self, date):
 		self.nav.opreste()

@@ -468,13 +468,26 @@ class VideoOutput:
 		self.simulation = not self.choices["videomode"]
 		if self.simulation:
 			self.choices["videomode"] = SIMULATED_MODES[:]
+		# Vu+ Duo 4K Lite (Components/HdsPlacaVuplus.py): the driver lists wrong modes, the board has a fixed list, and
+		# a new mode is written again after a pause (writeMode)
+		try:
+			from Components import HdsPlacaVuplus
+		except ImportError:  # the tests load this file alone
+			HdsPlacaVuplus = None
+		self.duo4kLite = bool(HdsPlacaVuplus) and not self.simulation and \
+			HdsPlacaVuplus.esteDuo4kLite(HdsPlacaVuplus.caleInfo(self.root))
+		self.rewriteTimer = None
+		self.rewriteSteps = []
+		if self.duo4kLite:
+			self.choices["videomode"] = list(HdsPlacaVuplus.MODURI_DUO4KLITE)
 		# rate -> modes the driver accepts in that rate file; only for the files that exist
 		self.rateChoices = {}
 		for rate, name in RATE_FILES:
 			if self.simulation:
 				self.rateChoices[rate] = SIMULATED_MODES[:]
 			elif os.path.exists(self.root + name):
-				self.rateChoices[rate] = self.readChoices(name + "_choices") or self.choices["videomode"]
+				self.rateChoices[rate] = self.choices["videomode"][:] if self.duo4kLite else \
+					(self.readChoices(name + "_choices") or self.choices["videomode"])
 		# policy (4:3 programmes): only with the file and its list, the known values first in the order of POLICY_ORDER
 		self.policyChoices = []
 		offered = SIMULATED_POLICY[:] if self.simulation else (self.readChoices(POLICY_FILE + "_choices")
@@ -636,7 +649,42 @@ class VideoOutput:
 		fallback = rates.get(50, mode)
 		if fallback not in self.choices["videomode"]:
 			fallback = mode
-		return self.writeModeFiles(rates, fallback, write)
+		written = self.writeModeFiles(rates, fallback, write)
+		if self.duo4kLite and write is None:
+			# only a mode the driver took; a refused one is followed by restore(), which a later rewrite would undo
+			if self.modeReached(written):
+				self.rewriteLater(rates, fallback, mode)
+			else:
+				self.cancelRewrite()
+		return written
+
+	def cancelRewrite(self):
+		self.rewriteSteps = []
+		if self.rewriteTimer is not None:
+			self.rewriteTimer.stop()
+
+	def rewriteLater(self, rates, fallback, mode):
+		"""Vu+ Duo 4K Lite: the driver does not apply a new mode at the first write. After PAUZA_MS a different SD mode
+		goes to the same files, and after another PAUZA_MS the chosen mode again (the result of the first write stays the
+		one the caller sees). A newer mode replaces the plan of an older one."""
+		from Components import HdsPlacaVuplus
+		other = HdsPlacaVuplus.modIntermediar(mode)
+		self.rewriteSteps = [(dict((rate, other) for rate in rates), other), (dict(rates), fallback)]
+		if self.rewriteTimer is None:
+			from enigma import eTimer
+			self.rewriteTimer = eTimer()
+			self.rewriteTimer.callback.append(self.rewriteStep)
+		self.rewriteTimer.stop()
+		self.rewriteTimer.start(HdsPlacaVuplus.PAUZA_MS, True)
+
+	def rewriteStep(self):
+		from Components import HdsPlacaVuplus
+		if not self.rewriteSteps:
+			return
+		rates, fallback = self.rewriteSteps.pop(0)
+		self.writeModeFiles(rates, fallback)
+		if self.rewriteSteps:
+			self.rewriteTimer.start(HdsPlacaVuplus.PAUZA_MS, True)
 
 	def modeFiles(self, mode, byChannel):
 		"""[(driver file, value)] written for this mode when every write works (for the log and the tests)"""
@@ -659,6 +707,7 @@ class VideoOutput:
 	def restore(self, previous):
 		"""writes back a snapshot, in the same order as a new mode (videomode only as fallback, or when there are no
 		rate files); only values the driver file offers; True if all got to the driver"""
+		self.cancelRewrite()  # Vu+ Duo 4K Lite: a pending rewrite of the new mode would undo the restore
 		ok = True
 		rates = {}
 		for rate, name in RATE_FILES:

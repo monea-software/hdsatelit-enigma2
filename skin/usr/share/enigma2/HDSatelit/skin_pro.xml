@@ -1111,6 +1111,12 @@
 		<eLabel position="1448,524" size="292,74" backgroundColor="hdsPanelSolid" zPosition="1" />
 		<widget source="session.CurrentService" render="Label" position="1448,528" size="292,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,ber,Upper</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1448,558" size="292,36" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Ber</convert></widget>
+		<widget source="radio_meniu_online" render="FixedLabel" conditional="radio_meniu_online" position="1121,361" size="638,248" backgroundColor="hdsPanelSolid" zPosition="4"><convert type="ConditionalShowHide" /></widget>
+		<widget name="radio_meniu_titlu" conditional="radio_meniu_titlu" position="1140,362" size="600,36" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_debit" conditional="radio_meniu_debit" position="1140,402" size="600,40" font="HdsBold;32" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_sunet" conditional="radio_meniu_sunet" position="1140,446" size="600,34" font="HdsCond;24" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_mesaj" conditional="radio_meniu_mesaj" position="1140,558" size="600,42" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget source="radio_meniu_bare" conditional="radio_meniu_bare" render="Canvas" position="1140,486" size="600,64" backgroundColor="hdsPanelSolid" zPosition="5" />
 		<eLabel position="1120,626" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
 		<eLabel position="1120,839" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
 		<eLabel position="1120,627" size="1,212" backgroundColor="hdsTrack" zPosition="1" />

@@ -63,15 +63,49 @@ def listePredefinite(plugin=None):
 
 def implicit():
 	return {"activ": "da", "interval_refresh": INTERVAL_IMPLICIT, "url_uri": [], "predefinite": [], "tara": "",
-		"regiune": "", "liste_oprite": [], "liste_puse": [], "rezerva": "da"}
+		"regiune": "", "liste_oprite": [], "liste_puse": [], "rezerva": "da", "toate_tarile": "da"}
 
 
-def citeste(cale=None):
-	"""Setarile din fisier (formatul pluginului); fara fisier, cele implicite."""
+def taraReceptorului():
+	"""Codul de 3 litere al tarii receptorului: din locul ales (Components/HdsLocul), altfel din limba meniului
+	(Components/HdsListeCabluTerestru.tara_alfa3); "" cand nu se stie."""
+	try:
+		from Components import HdsListeCabluTerestru as L
+	except Exception:
+		return ""
+	try:
+		from Components import HdsLocul
+		t = (HdsLocul.stare().get("tara") or "").strip().upper()
+		if _codTara(t):
+			return t
+		if L.ALFA3.get(t):
+			return L.ALFA3[t]
+	except Exception:
+		pass
+	try:
+		t = L.tara_alfa3() or ""
+		return t if _codTara(t) else ""
+	except Exception:
+		return ""
+
+
+def _cuTaraReceptorului(config, tara=None):
+	"""Fara randul tara in fisier (tara nealeasa niciodata): tara receptorului, ca listele ei sa se ia singure;
+	"tara_automata" o arata. Un rand "tara =" gol (Nicio tara, aleasa de om) ramane gol."""
+	tara = taraReceptorului() if tara is None else tara
+	config["tara"] = tara
+	config["tara_automata"] = bool(tara)
+	return config
+
+
+def citeste(cale=None, tara_receptorului=None):
+	"""Setarile din fisier (formatul pluginului); fara fisier, cele implicite. Fara randul tara, tara receptorului
+	(_cuTaraReceptorului; tara_receptorului e pentru probe)."""
 	config = implicit()
 	cale = cale or CALE_CONFIG
 	if not os.path.exists(cale):
-		return config
+		return _cuTaraReceptorului(config, tara_receptorului)
+	scrisa = False
 	try:
 		with open(cale, "r", encoding="utf-8", errors="replace") as f:
 			for linie in f:
@@ -90,6 +124,7 @@ def citeste(cale=None):
 				elif cheie == "predefinite":
 					config["predefinite"] = [x.strip() for x in val.split(",") if x.strip()]
 				elif cheie == "tara":
+					scrisa = True
 					config["tara"] = val.upper() if _codTara(val.upper()) else ""
 				elif cheie == "regiune":
 					config["regiune"] = val if _regiuneBuna(val) else ""
@@ -99,8 +134,12 @@ def citeste(cale=None):
 						lista.append(val)
 				elif cheie == "rezerva":
 					config["rezerva"] = val.lower()
+				elif cheie == "toate_tarile":
+					config["toate_tarile"] = val.lower()
 	except (IOError, OSError) as eroare:
 		print("[HdsDvbISetari] citirea %s: %s" % (cale, eroare))
+	if not scrisa:
+		_cuTaraReceptorului(config, tara_receptorului)
 	return config
 
 
@@ -128,6 +167,8 @@ def scrie(config, cale=None, plugin=None):
 		"regiune = %s" % config.get("regiune", ""),
 		"# rezerva = da / nu: trecerea singura pe internet cand satelitul nu se receptioneaza",
 		"rezerva = %s" % config.get("rezerva", "da"),
+		"# toate_tarile = da / nu: si listele celorlalte tari, dupa ale tarii alese, grupate pe tari (TODO 1883)",
+		"toate_tarile = %s" % config.get("toate_tarile", "da"),
 		"# lista_oprita / lista_pusa = listele tarii scoase sau adaugate de mana (cate un rand)",
 	]
 	for url in config.get("liste_oprite", []):
@@ -247,6 +288,60 @@ def comutaRezerva(config):
 	config["rezerva"] = "nu" if rezervaPornita(config) else "da"
 
 
+# TODO 1883 (Eduard 29.10.2026 13:24): "Acolo intră listele din toate țările, per țări, indiferent că e din România sau
+# din alte țări. Ca o sursă suplimentară de canale care dacă merg în țara aia bine, dacă nu iar bine." Cu toate_tarile
+# (implicit da), dupa listele tarii alese vin listele adevarate (nu de proba) ale celorlalte tari si cele fara tara,
+# grupate pe tari (in buchet cu un marcaj pe tara: pluginul DVB-I, grupeAdrese). Nimic nu se scoate; alegerea tarii
+# ramane (listele ei primele, regiunea, listele de proba puse de mana). Registrele dau tarile TINTA ale unei liste, nu
+# daca e blocata in afara lor: semnul "numai în <țara>" nu se pune, fiindca nu se stie (incercarea din casa,
+# HdsDvbIIncercare, spune "oprite pentru țara ta" la canalele care chiar nu merg).
+
+def toateTarilePornit(config):
+	return str(config.get("toate_tarile", "da")).lower() in ("da", "yes", "1", "true")
+
+
+def comutaToateTarile(config):
+	config["toate_tarile"] = "nu" if toateTarilePornit(config) else "da"
+
+
+def listeleAltorTari(config, registru=None):
+	"""[{"adresa", "lista", "furnizor", "tara"}]: listele adevarate din registre care nu sunt ale tarii alese (si nici
+	scoase de om), cu tara grupei (prima tara tinta; "" = fara tara), dupa numele tarii (cele fara tara la coada), apoi
+	dupa nume; [] cu toate_tarile oprit"""
+	if not toateTarilePornit(config):
+		return []
+	tara = (config.get("tara") or "").upper()
+	oprite = set(config.get("liste_oprite", []))
+	rez = []
+	for l in _registru(registru).get("liste", []):
+		if l.get("proba") or l["adresa"] in oprite:
+			continue
+		tinte = [t.upper() for t in l.get("tari", [])]
+		if tara and tara in tinte:
+			continue
+		rez.append({"adresa": l["adresa"], "lista": l.get("lista", ""), "furnizor": l.get("furnizor", ""),
+			"tara": tinte[0] if tinte else ""})
+	nume = dict((t, numeTara(t).lower()) for t in set(x["tara"] for x in rez if x["tara"]))
+	rez.sort(key=lambda x: (not x["tara"], nume.get(x["tara"], ""), x["lista"].lower()))
+	return rez
+
+
+def grupeAdrese(config, registru=None):
+	"""{adresa: cod de tara} pentru marcajele buchetului (pluginul DVB-I): listele tarii alese -> tara ei, ale
+	celorlalte -> tara grupei lor ("" = fara tara); {} cu toate_tarile oprit (buchetul ca inainte, fara marcaje)"""
+	if not toateTarilePornit(config):
+		return {}
+	rez = {}
+	tara = (config.get("tara") or "").upper()
+	if tara:
+		for l in listeleTarii(config, registru):
+			if l["aleasa"]:
+				rez[l["adresa"]] = tara
+	for l in listeleAltorTari(config, registru):
+		rez.setdefault(l["adresa"], l["tara"])
+	return rez
+
+
 def tariDinRegistre(registru=None):
 	"""[(cod, cate liste, cate nu sunt de proba)] din raspunsul tinut minte al registrelor"""
 	return _R().tari(_registru(registru).get("liste", []))
@@ -317,6 +412,10 @@ def adreseDeDescarcat(config, registru=None, plugin=None):
 			rez += [l["adresa"] for l in listeleTarii(config, registru) if l["aleasa"]]
 		except Exception as eroare:
 			print("[HdsDvbISetari] listele tarii: %s" % eroare)
+		try:
+			rez += [l["adresa"] for l in listeleAltorTari(config, registru)]
+		except Exception as eroare:
+			print("[HdsDvbISetari] listele celorlalte tari: %s" % eroare)
 	bifate = set(config.get("predefinite", []))
 	rez += [a for c, _d, a, _t in listePredefinite(plugin) if c in bifate]
 	rez += list(config.get("url_uri", []))
@@ -363,6 +462,19 @@ def _dateStare(stare=None):
 		return HdsDvbIDate.stare()
 	except Exception:
 		return {}
+
+
+def faraListe(stare=None):
+	"""(True, tara) cand ultima reincarcare DVB-I a aflat ca tara de acum (cod de 3 litere) nu are liste in registre
+	(Plugins/SystemPlugins/HdsDvbI, starea "fara_liste"); altfel (False, ""). Folosit de lista de canale (OK si textul
+	buchetului DVB-I gol) si de pagina web a listei."""
+	try:
+		st = _dateStare(stare) or {}
+		if st.get("fara_liste") and st.get("tara"):
+			return True, st.get("tara")
+	except Exception as e:
+		print("[HdsDvbISetari] starea DVB-I: %s" % e)
+	return False, ""
 
 
 def regiuniTarii(config, stare=None, registru=None):
@@ -425,6 +537,9 @@ def rezumatEcran(config, registru=None, stare=None, reincarcare=None, acum=None)
 	if not tara and not adreseDeDescarcat(config, registru):
 		return "slab", _("Nicio țară aleasă"), _("Alege țara: listele ei de canale se iau singure din registrele DVB-I și se actualizează din oră în oră.")
 	if tara and not adreseDeDescarcat(config, registru):
+		if not listeleTarii(config, registru):
+			return "chihlimbar", "%s · %s" % (cap, _("nicio listă încă")), _(
+				"Registrele DVB-I nu au încă nicio listă pentru această țară. Receptorul verifică singur în fiecare zi.")
 		return "chihlimbar", "%s · %s" % (cap, _("nicio listă aleasă")), _(
 			"Registrele DVB-I nu au pentru această țară decât liste de probă. Poți bifa una mai jos, ca s-o încerci.")
 	if liste and not ok:
@@ -479,6 +594,7 @@ R_TARA = "tara"
 R_REGIUNE = "regiune"
 R_LISTA = "lista"
 R_REZERVA = "rezerva"
+R_TOATE = "toate_tarile"
 R_INCERCARI = "incercari"
 R_AVANSAT = "avansat"
 R_INCHIDE = "inchide"
@@ -504,6 +620,11 @@ def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None):
 		if l["proba"]:
 			expl += " " + _("Listă de probă a registrului: canalele ei pot să nu meargă.")
 		r.append((text, R_LISTA, l["adresa"], expl, bool(l["aleasa"])))
+	n_alte = len(listeleAltorTari(config, registru)) if config.get("tara") and toateTarilePornit(config) else 0
+	r.append(("%s %s" % (_("Liste din toate țările:"), (_("da") + (" · %s %d" % (_("liste:"), n_alte) if n_alte else ""))
+		if toateTarilePornit(config) else _("nu")), R_TOATE, None,
+		_("OK pornește sau oprește. După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg "
+		"dacă furnizorul le lasă și din țara ta."), None))
 	r.append(("%s %s" % (_("Trecere singură pe internet când satelitul nu se recepționează:"),
 		_("da") if rezervaPornita(config) else _("nu")), R_REZERVA, None,
 		_("Când satelitul unui canal nu se recepționează, imaginea vine singură de pe internet, dacă lista are canalul; se întoarce pe satelit când semnalul revine."), None))
@@ -557,6 +678,20 @@ def intreabaRegistrele(la_gata=None, acum=None, intreaba=None, salveaza=None, fi
 	else:
 		_lucru()
 	return True
+
+
+# ------------------------------------------------------------------ cautarea acum (lista de canale, pagina web)
+def cautaAcum(la_gata=None, plugin=None):
+	"""Cele mai noi liste DVB-I acum: registrele intrebate din nou, apoi reincarcarea cu setarile din fisier (tara
+	receptorului cand omul n-a ales alta); dupa ea reincarcarea din ora in ora merge singura. la_gata(succes, eroare)
+	pe firul enigma2. -> False daca o cautare sau o reincarcare e deja in curs."""
+	if _REINCARCARE["in_curs"] and time.time() - _REINCARCARE["ora"] < MAX_REINCARCARE_S:
+		return False
+
+	def _dupaRegistre(raspuns):
+		if not reincarca(la_gata=la_gata, plugin=plugin) and la_gata is not None:
+			la_gata(False, "")
+	return intreabaRegistrele(la_gata=_dupaRegistre)
 
 
 # ------------------------------------------------------------------ reincarcarea

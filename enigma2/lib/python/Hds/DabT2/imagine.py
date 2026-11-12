@@ -17,6 +17,8 @@ In imagine nu exista descriptori de plugin si nici steag de dezactivare:
   server8001          serverul local de flux pe 127.0.0.1:8001 (pornit aici): baza nu are streamserver, iar releele
                       cer fluxul serviciului purtator acolo.
   controlor_dab(), controlor_t2()   controlorii (acelasi obiect pe tot procesul), pentru ferestre si web.
+  inainte_de_scanare(), cine_tine_tunerul()   o scanare de canale (Components/ServiceScan.py) primeste tunerul de
+                      satelit inainte de start; daca tot nu-l primeste, ce il mai tine.
 Paznicul pluginului (bataia din /tmp/hds-bataie) nu porneste in imagine: imaginea are paznicul ei
 (Components/HdsPaznic.py si hds-watchdog). Caile de plugin ale controlorilor sunt dab/ si t2/ de langa modul
 (motor/, date/, bin/).
@@ -94,6 +96,75 @@ def dupa_scanare(pozitii=None):
     except Exception:
         jurnal.eroare('imagine', 'refacerea dupa scanare')
     return False
+
+
+def _tine_ceva(c):
+    """Controlorul tine tunerul de satelit sau il poate lua: post pornit sau tinut, releu care ruleaza (cu sesiunea
+    lui 8001), canal brut."""
+    return c.stare != 'oprit' or c.tuner.tinut() or c.releu.ruleaza()
+
+
+def inainte_de_scanare(motiv='Tunerul a fost dat căutării de canale.'):
+    """Chemat de Components/ServiceScan.py chiar inainte de eComponentScan.start, care ia tunerul cu
+    allocateRawChannel(feid) (lib/components/scan.cpp) si cade daca il tine altcineva. Ecranul ServiceScan opreste
+    serviciul cu nav.stopService(), care nu trece prin extensiile de zap: un program DVB-T2 (sau un post DAB+) pornit
+    inainte si-ar tine releul si sesiunea 8001 (o inregistrare pe purtator) pana il vede paza controlorului (10 s) si
+    inca pana la TINERE_8001_S dupa, iar cautarea ar cadea pe loc cu „tunerul nu a putut fi folosit” (de pilda dupa
+    „Ascultă” in „DVB-T2 prin satelit”, apoi „După satelit” din acelasi meniu). Aici controlorii care tin ceva cedeaza
+    acum, sincron, ca la un zap pe alt transponder (releul, sesiunile 8001 oprite pe loc, canalul brut); o pornire
+    amanata a altui canal (dupa eliberarea purtatorului) se anuleaza, fiindca tunerul il ia cautarea. `motiv` ajunge in
+    jurnal si, la un post DAB+ ascultat in browser, in pagina (HdsTransmisie.textEroare).
+    -> felurile ('dab', 't2') care au cedat. Nu arunca."""
+    from . import intrare
+    cedate = []
+    for prof, _cale in profiluri():
+        c = intrare._controlori.get(prof.nume)
+        if c is None:
+            continue
+        try:
+            c._anuleaza_eliberarea()
+            if _tine_ceva(c):
+                # ce tinea, scris inainte de cedare: proba de pe receptor arata ce anume a oprit cautarea
+                ce = 'stare %s, mod %s, releu %s, canal brut %s, sesiuni 8001 %s' % (
+                    c.stare, c.mod, 'pornit' if c.releu.ruleaza() else 'oprit', 'da' if c.tuner.tinut() else 'nu',
+                    _sesiuni_8001(c._ref_purtator))
+                c.cedeaza(motiv)
+                cedate.append(prof.tip)
+                jurnal.noteaza(prof.eticheta, 'tunerul dat scanarii de canale (%s)' % ce)
+        except Exception:
+            jurnal.eroare(prof.eticheta, 'tunerul pentru scanarea de canale')
+    return cedate
+
+
+def _sesiuni_8001(ref):
+    """Sesiunile serverului local 8001 de pe purtatorul `ref` (toate, fara ref), sau '?' daca nu se poate afla."""
+    try:
+        from . import server8001
+        n = server8001.sesiuni_deschise(ref or None)
+        return '?' if n is None else n
+    except Exception:
+        return '?'
+
+
+def cine_tine_tunerul():
+    """Dupa o scanare de canale care n-a putut lua tunerul (Components/ServiceScan.py): ce tine inca imaginea pe el,
+    din memorie. -> 't2' / 'dab' (un controlor tine inca ceva), '8001' (sesiuni ale serverului local de flux: Stream
+    Relay, alt aparat din retea) sau None (nu stie). Nu arunca."""
+    from . import intrare
+    for prof, _cale in profiluri():
+        c = intrare._controlori.get(prof.nume)
+        try:
+            if c is not None and _tine_ceva(c):
+                return prof.tip
+        except Exception:
+            jurnal.eroare(prof.eticheta, 'cine tine tunerul')
+    try:
+        from . import server8001
+        if server8001.sesiuni_deschise():
+            return '8001'
+    except Exception:
+        jurnal.eroare('imagine', 'sesiunile 8001 dupa scanare')
+    return None
 
 
 def _sterge_fisierele_vechi():

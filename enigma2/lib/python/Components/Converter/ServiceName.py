@@ -46,7 +46,13 @@ class ServiceName(Converter, object):
 			# Tema LCD cere numai numele, fara numar sau program; '_' este un spatiu.
 			return name.replace('_', ' ') if self.type == self.NAME_ONLY else name
 		elif self.type == self.PROVIDER:
-			return self.getServiceInfoValue(info, iServiceInformation.sProvider, ref)
+			v = self.getServiceInfoValue(info, iServiceInformation.sProvider, ref)
+			# HDSatelit: furnizorul facut de scanare din transponder ("DVB-S2 8PSK 11222H 330.0°E") scris pentru om
+			try:
+				from Components.HdsFurnizori import aratat_in_informatii
+				return aratat_in_informatii(v) if v else v
+			except Exception:
+				return v
 		elif self.type == self.REFERENCE:
 			v = self.getServiceInfoValue(info, iServiceInformation.sServiceref, ref)
 			# o referinta din lista de canale sau din ghid: informatia statica a unui canal DVB nu da sServiceref ("N/A"),

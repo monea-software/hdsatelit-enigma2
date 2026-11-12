@@ -91,6 +91,15 @@ def _jurnal(text):
 	print('[HdsEditorCanale] %s' % text)
 
 
+def _furnizorAratat(nume):
+	"""Numele furnizorului ca in lista "Furnizor" a listei de canale (Components/HdsFurnizori.py)."""
+	try:
+		from Components.HdsFurnizori import nume_aratat
+		return nume_aratat(nume)
+	except Exception:
+		return nume or _('Fără furnizor')
+
+
 def _scrie(cale, date):
 	"""Fisierul scris intreg pe stick (.nou, apoi redenumit peste cel vechi). -> cale."""
 	import os
@@ -436,8 +445,10 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		<widget name="key_blue" position="928,662" size="302,30" font="Regular;19" backgroundColor="#003D7BE0" halign="center" valign="center" zPosition="2" />
 	</screen>"""
 
-	def __init__(self, session, radio=False, buchetRef=None, canalRef=None):
-		"""buchetRef / canalRef: buchetul si canalul listei de canale de unde s-a deschis (editorul se deschide pe ele)."""
+	def __init__(self, session, radio=False, buchetRef=None, canalRef=None, buchetNou=False):
+		"""buchetRef / canalRef: buchetul si canalul listei de canale de unde s-a deschis (editorul se deschide pe ele).
+		buchetNou (TODO 1904, „Creează buchet nou” din lista buchetelor): editorul se deschide direct pe filtre, apoi
+		cere numele (propus din filtre), salveaza si se inchide; buchetCreat = fisierul buchetului facut."""
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
 		self.radio = bool(radio)
@@ -472,6 +483,9 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		self.lucru = ''                     # citirea / salvarea in fundal: textul aratat; tastele asteapta
 		self.refsBuchet = frozenset()       # referintele buchetului deschis (semnul „în buchet” din sursa)
 		self._radacinaInitiala = (buchetRef, canalRef)
+		self.buchetNou = bool(buchetNou)
+		self.buchetCreat = None
+		self._buchetNouIncercari = 0
 		self.c = dict((k, _culoare(k)) for k in CULORI)
 		self.sms = NumericalTextInput(nextFunc=self._literaConfirmata)
 		self.sms.mapping = list(LITERE_SMS)
@@ -619,8 +633,63 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		self._incarcaSursa()
 		self._pozitieInitiala()
 		self._arata()
+		if self.buchetNou:
+			self._buchetNouFiltre()
+			return
 		self._cautaProbleme()
 		self._sfaturi()
+
+	# ------------------------------------------------------------ „Creează buchet nou” (TODO 1904, Eduard 29.10.2026)
+	# Din lista buchetelor: filtrele (tip, rezolutie, limba sunetului, subtitrari, sunet, acces...), apoi numele propus
+	# din filtre, apoi salvarea si inapoi in lista buchetelor, pe buchetul nou. EXIT din filtre sau din tastatura =
+	# inapoi in lista buchetelor, fara nimic schimbat.
+
+	def _buchetNouFiltre(self):
+		if self.inchis:
+			return
+		if self._index() is None:
+			# indexul cautarii vine in fundal: se incearca din nou, cel mult un minut
+			self._buchetNouIncercari += 1
+			if self._buchetNouIncercari > 120:
+				self._spune(_('Lista de canale nu e gata. Încearcă din nou.'))
+				return
+			self._spune(_('Se pregătește lista de canale…'))
+			if getattr(self, 'ceasBuchetNou', None) is None:
+				self.ceasBuchetNou = eTimer()
+				self.ceasBuchetNou.callback.append(self._buchetNouFiltre)
+			self.ceasBuchetNou.start(500, True)
+			return
+		self.keyFiltre()
+
+	def _numeDinFiltre(self, selectie):
+		"""Numele propus al buchetului: filtrele alese, pe scurt („HD și 4K, sunet Engleză”)."""
+		try:
+			index = self._index()
+			parti = index.parti_titlu(selectie) if index is not None else []
+		except Exception as e:
+			_jurnal('numele din filtre: %r' % (e,))
+			parti = []
+		nume = u', '.join(parti)[:60].strip()
+		return (nume[:1].upper() + nume[1:]) if nume else ''
+
+	def _buchetNouDupaFiltre(self, selectie):
+		if not [r for r in self.randuri[L.SURSA] if r[0] == 'canal']:
+			self.session.openWithCallback(lambda *_a: self._buchetNouFiltre(), MessageBox,
+				_('Niciun canal nu trece de filtrele alese. Alege altele.'), MessageBox.TYPE_INFO, timeout=6)
+			return
+		self.session.openWithCallback(self._numeBuchetDinFiltre, VirtualKeyBoard, title=_('Numele buchetului nou'),
+			text=self._numeDinFiltre(selectie))
+
+	def _numeBuchetDinFiltre(self, nume=None):
+		nume = (nume or '').strip()
+		if not nume:
+			# tastatura inchisa fara nume: inapoi la filtre (EXIT acolo intoarce in lista buchetelor)
+			self._buchetNouFiltre()
+			return
+		self._numeBuchetCautare(nume)
+		if self.cale and self.cale[0][1] == nume:
+			self.buchetCreat = self.cale[0][0]
+			self._salveaza(iesire=True)
 
 	def _sfaturi(self):
 		"""La prima intrare, indiciul ramane in ecran; editorul se poate folosi direct."""
@@ -749,7 +818,7 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			if nume not in furnizori and nume == 'Unknown' and '' in furnizori:
 				nume = ''        # lista nucleului numeste „Unknown” furnizorul gol
 			if nume in furnizori:
-				dosar = ('furnizor', nume, nume)
+				dosar = ('furnizor', nume, _furnizorAratat(nume))
 			sursa = 'furnizori'
 		else:
 			sursa = fel if fel in ('sateliti', 'furnizori') else 'toate'
@@ -946,19 +1015,75 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		if self.sursaFel == 'sateliti' and self.sursaDosar is None:
 			return [('dosar', ('satelit', poz, self._textSatelit(poz, text), n), False) for poz, text, n in s.sateliti(self.radio)]
 		if self.sursaFel == 'furnizori' and self.sursaDosar is None:
-			return [('dosar', ('furnizor', nume, nume, n), False) for nume, n in s.furnizori(self.radio)]
+			return [('dosar', ('furnizor', nume, _furnizorAratat(nume), n), False) for nume, n in s.furnizori(self.radio)]
 		if self.sursaFel == 'transpondere' and self.sursaDosar is None:
 			return [('dosar', ('transponder',) + self._tp(tp), False) for tp in s.transpondere(self.radio)]
 		if self.sursaFel == 'buchete' and self.sursaDosar is None:
 			return [('dosar', ('buchet', _g(b, 'id'), _g(b, 'nume', '') or _g(b, 'id'), _g(b, 'n', 0)), False)
 				for b in s.buchete(self.radio)]
+		self.varianteSursa = {}
 		if self.sursaDosar is not None:
 			canale = self._dinDosar(self.sursaDosar[0], self.sursaDosar[1])
+			if self.sursaDosar[0] in ('satelit', 'furnizor'):
+				canale = self._faraVariante(canale)
 		elif self.sursaFel == 'cautare':
 			canale = self._cautare()
 		else:
-			canale = s.toate(self.radio)
+			canale = self._faraVariante(s.toate(self.radio))
 		return [('canal', c, False) for c in canale]
+
+	def _faraVariante(self, canale):
+		"""Variantele aceluiasi canal pe acelasi satelit (Components/HdsVarianteCanal.py, ca lista de canale): in toate,
+		intr-un satelit si intr-un furnizor se arata o singura varianta, cu "+N" pe rand; celelalte se adauga din MENU,
+		"Alte variante (N)". Cautarea arata toate variantele."""
+		try:
+			from Components import HdsVarianteCanal as V
+			cheie = (self.s.versiune(), V.stare().versiune)
+			locuri = getattr(self, '_locuriVariante', None)
+			if locuri is None or locuri[0] != cheie:
+				locuri = (cheie, V.locuri_din_canale(self.s.toate(None)))
+				self._locuriVariante = locuri
+			locuri = locuri[1]
+		except Exception as e:
+			_jurnal('variantele: %r' % (e,))
+			return canale
+		if not locuri:
+			return canale
+		cap = {}
+		for c in canale:
+			x = locuri.get(_g(c, 'cheie'))
+			if x is not None and (x[0] not in cap or locuri[_g(cap[x[0]], 'cheie')][1] > x[1]):
+				cap[x[0]] = c
+		rez = []
+		for c in canale:
+			x = locuri.get(_g(c, 'cheie'))
+			if x is None or cap[x[0]] is c:
+				rez.append(c)
+			else:
+				self.varianteSursa.setdefault(_g(cap[x[0]], 'cheie'), []).append(c)
+		for alte in self.varianteSursa.values():
+			alte.sort(key=lambda c: locuri[_g(c, 'cheie')][1])
+		return rez
+
+	def _alteVariante(self, a=None):
+		"""MENU pe un canal al sursei: celelalte variante ale lui; cea aleasa intra in buchet ca OK pe rand."""
+		r = self._curent(L.SURSA)
+		alte = self.varianteSursa.get(_g(r[1], 'cheie')) if r is not None and r[0] == 'canal' else None
+		if not alte:
+			return
+		try:
+			from Components import HdsVarianteCanal as V
+			text = lambda c: u' \u00b7 '.join(x for x in (_g(c, 'nume', ''), _g(c, 'tp_text', ''),
+				_g(c, 'furnizor', '') or 'SID %d' % (_g(c, 'sid', 0) or 0),
+				_('Criptat') if _g(c, 'acces') == 'criptat' else 'FTA') if x)
+		except Exception:
+			return
+		self.session.openWithCallback(self._variantaAleasa, ChoiceBox,
+			title=_('Alte variante (%d)') % len(alte), list=[(text(c), c) for c in alte])
+
+	def _variantaAleasa(self, ales=None):
+		if ales:
+			self._adaugaDinSursa([('canal', ales[1], False)])
 
 	def _textSatelit(self, poz, text):
 		"""„19,2°E Astra 1N”: pozitia si, cand se stie, numele din satellites.xml."""
@@ -1346,7 +1471,12 @@ class HdsEditorCanale(Screen, HelpableScreen):
 				return u'%s  ›' % (t or _('Fără nume')), False, True
 			return _numeVazut(t), bool(_g(obj, 'ascuns') or _g(obj, 'mort') or not _areLitere(t)), False
 		t = _g(obj, 'nume', '')
-		return _numeVazut(t), bool(_g(obj, 'ascuns') or not _areLitere(t)), False
+		vazut = _numeVazut(t)
+		alte = getattr(self, 'varianteSursa', {}).get(_g(obj, 'cheie')) if col == L.SURSA else None
+		if alte:
+			# celelalte variante ale canalului (MENU, "Alte variante")
+			vazut = u'%s  +%d' % (vazut, len(alte))
+		return vazut, bool(_g(obj, 'ascuns') or not _areLitere(t)), False
 
 	def _dreapta(self, col, r):
 		"""Coloanele din dreapta randului: [(text, latime la 1920, culoare)], cel mult 330 px."""
@@ -1876,6 +2006,8 @@ class HdsEditorCanale(Screen, HelpableScreen):
 
 	def _filtreAlese(self, selectie=None):
 		if selectie is None:
+			if self.buchetNou:
+				self.close(self.salvat)
 			return
 		self.cautareSelectie = selectie
 		_FILTRE_TINUTE['sel'] = dict((g, set(v)) for g, v in selectie.items())
@@ -1887,6 +2019,8 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		self.focus = L.SURSA
 		self._seteazaFocus()
 		self._arata()
+		if self.buchetNou:
+			self._buchetNouDupaFiltre(selectie)
 
 	def keySelecteaza(self):
 		if self.mod == L.SELECTEAZA:
@@ -2753,6 +2887,8 @@ class HdsEditorCanale(Screen, HelpableScreen):
 					lista.append((_('Buchet nou din %s') % r[1][2], 'buchet_din'))
 				if r[1][0] in ('satelit', 'transponder'):
 					lista.append((_('Șterge din receptor: %s') % r[1][2], 'sterge_dosar'))
+			if canal and getattr(self, 'varianteSursa', {}).get(_g(obj, 'cheie')):
+				lista.append((_('Alte variante (%d)') % len(self.varianteSursa[_g(obj, 'cheie')]), 'alte_variante'))
 			if canal:
 				lista.append((_('Adaugă după rândul ales din buchet'), 'adauga_aici'))
 				lista.append((_('Adaugă înaintea rândului ales din buchet'), 'adauga_inainte'))
@@ -2833,6 +2969,8 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			self._salveaza()
 		elif a == 'buchet_nou':
 			self.keyBuchetNou()
+		elif a == 'alte_variante':
+			self._alteVariante()
 		elif a == 'redenumeste':
 			self.keyRedenumeste()
 		elif a == 'muta':

@@ -202,15 +202,16 @@ def stareTaste():
 	"""Aceeasi lista de taste si actiuni ca pe televizor."""
 	TR = _dep("HdsTasteRapide")
 	b = TR.actualizeaza_alegeri(_dep("config"))
-	butoane = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.BUTOANE]
-	scurte = [{"cheie": k, "text": text, "valoare": getattr(b, k).value} for k, text in TR.SCURTE]
+	tt = lambda k, text: TR.text_tasta(k, text, _t)  # traduse acum, nu la importul listelor
+	butoane = [{"cheie": k, "text": tt(k, text), "valoare": getattr(b, k).value} for k, text in TR.BUTOANE]
+	scurte = [{"cheie": k, "text": tt(k, text), "valoare": getattr(b, k).value} for k, text in TR.SCURTE]
 	u = TR.initConfigProfil(_dep("config"))
 	profil = []
 	implicite = dict(TR.VALORI_IMPLICITE)
 	for k, implicit, text in TR.PROFIL_SETARI:
 		v = getattr(u, k).value
 		alegeri = [["1", _t("Da")], ["0", _t("Nu")]] if isinstance(implicit, bool) else _alegeri(getattr(u, k))
-		profil.append({"cheie": k, "text": text, "valoare": str(int(v)) if isinstance(v, bool) else str(v), "alegeri": alegeri})
+		profil.append({"cheie": k, "text": tt(k, text), "valoare": str(int(v)) if isinstance(v, bool) else str(v), "alegeri": alegeri})
 		implicite[k] = str(int(implicit)) if isinstance(implicit, bool) else str(implicit)
 	return {"result": True, "butoane": butoane, "scurte": scurte, "profil": profil,
 		"actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0])), "implicite": implicite,

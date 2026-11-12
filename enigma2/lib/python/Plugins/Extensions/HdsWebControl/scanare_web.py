@@ -1476,6 +1476,16 @@ def _tunere():
 	for t in tunere:
 		if auto and t["slot"] == auto["slot"]:
 			t["auto"] = {"text": auto["text_web"], "proba": auto["ok"] == "proba" and not auto["acum"]}
+	# Vu+ 4K cu FBC (Components/HdsFbcMutare.py): setarile lui B mutate singure pe A dupa 0.7.4, sau ce e de facut cand
+	# receptorul n-a putut dovedi in ce mufa e antena; acelasi text ca mesajul de pe televizor
+	try:
+		from Components import HdsFbcMutare
+		fbc = HdsFbcMutare.stare_web()
+	except Exception:
+		fbc = {}
+	for t in tunere:
+		if t["slot"] in fbc:
+			t["fbc"] = fbc[t["slot"]]
 	return tunere
 
 
@@ -2787,6 +2797,7 @@ function cartelaTunere(c){
     linie(c, "Mod", MODURI[t.mod] || t.mod);
     if(t.combinat){ randLegat(c, t); }
     if(t.auto){ randAuto(c, t); }
+    if(t.fbc){ c.appendChild(el("p", "nota", t.fbc)); }
     if(t.satelit){
       if(t.diseqc){ linie(c, "Comutare", DISEQC[t.diseqc] || t.diseqc); }
       linie(c, "Motor", t.motor ? "da" : "nu");
@@ -3151,6 +3162,10 @@ TEXTE_PAGINA = {
 		# tunerul combinat DVB-T2/C (cartela tunerelor): randul "Legat la" si salvarea alegerii
 		N_("Legat la"),
 		N_("Se salvează..."),
+		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
+		N_("Pornire automată"),
+		N_("Încearcă din nou"),
+		N_("Se probează..."),
 	),
 }
 

@@ -272,6 +272,8 @@ TYPES = {
 	# semnul rosu HbbTV: aplicatie de pornit la ROSU in AIT-ul canalului redat si setarea pornita (numai pe imaginea
 	# HDSatelit, HdsCommon.hbbtv_rosu); pe alte imagini mereu fals
 	"HbbtvRosu": ("_hbbtv_rosu", True, M_HBB),
+	# legenda ROSU din bara: „HbbTV” cand ROSU deschide aplicatia canalului, altfel alocarea omului sau „Înregistrează”
+	"RedKeyText": ("_red_key_text", False, M_HBB),
 	"HasTracks": ("_has_tracks", True, M_BASE),
 	"IsRadio": ("_is_radio", True, M_BASE),
 	"IsStream": ("_is_stream", True, M_BASE),
@@ -458,6 +460,8 @@ def _nerupt(text):
 # flags din eServiceReference: dosarele (buchetele) si marcajele nu primesc numar in lista
 REF_DOSAR = 1
 REF_MARCAJ = 64
+# isNumberedMarker: semnul numerotat (randul „-” pus de Fast Scan in locul unui numar nefolosit) se numara, ca in OE-Alliance
+REF_SEMN_NUMEROTAT = 256
 # cel mult atatea intrari citite dintr-un buchet; peste ele numarul nu se mai cauta
 MAX_NUMARATE = 5000
 # semnele de nume scurt din numele DVB (EN 300 468), ca text Python sau ramase ca octeti UTF-8
@@ -528,9 +532,14 @@ def _continut(centru, ref, fel="CS"):
 	return lista.getContent(fel, False) or []
 
 
+def _se_numara(flags):
+	"""Intrarea are un numar in lista: un canal, sau un semn numerotat (ca in OE-Alliance); dosarele si celelalte marcaje nu."""
+	return not flags & (REF_DOSAR | REF_MARCAJ) or bool(flags & REF_SEMN_NUMEROTAT)
+
+
 def _canale(texte):
-	"""Cate canale (fara dosare si marcaje) sunt printre referintele ca text."""
-	return len([1 for s in texte[:MAX_NUMARATE] if not _flags(s) & (REF_DOSAR | REF_MARCAJ)])
+	"""Cate numere (canale si semne numerotate; fara dosare si marcaje) sunt printre referintele ca text."""
+	return len([1 for s in texte[:MAX_NUMARATE] if _se_numara(_flags(s))])
 
 
 def _deplasare(centru, buchet, fa_ref):
@@ -592,7 +601,7 @@ def _numar_in_buchet(centru, buchet, cheie, fa_ref, ref=None):
 	for i, (c, s) in enumerate(intrari):
 		if i >= MAX_NUMARATE:
 			return 0
-		if _flags(s) & (REF_DOSAR | REF_MARCAJ):
+		if not _se_numara(_flags(s)):
 			continue
 		n += 1
 		if c == cheie:
@@ -2264,6 +2273,9 @@ class HdsInfo(Converter):
 
 	def _hbbtv_rosu(self, r):
 		return C.hbbtv_rosu(r)
+
+	def _red_key_text(self, r):
+		return C.rosu_text(r)
 
 	def _has_tracks(self, r):
 		return r.audio()[0] > 1

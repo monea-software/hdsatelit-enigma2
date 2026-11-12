@@ -93,8 +93,10 @@ is usually caused by not marking PSignals as immutable.
 #include <lib/dvb/epgcache.h>
 #include <lib/dvb/dvbtime.h>
 #include <lib/dvb/pmt.h>
+#include <lib/dvb/cahandler.h>
 #include <lib/dvb/hdsspectru.h>
 #include <lib/dvb/hdsteletext.h>
+#include <lib/dvb/hdsfastscan.h>
 #include <lib/service/hdsegalizator.h>
 #include <lib/components/scan.h>
 #include <lib/components/file_eraser.h>
@@ -340,6 +342,8 @@ hds_AsCharPtr(PyObject *obj, char **cptr, int *alloc)
 %immutable eInput::changed;
 %immutable eComponentScan::statusChanged;
 %immutable eComponentScan::newService;
+%immutable eFastScan::scanProgress;
+%immutable eFastScan::scanCompleted;
 %immutable pNavigation::m_event;
 %immutable pNavigation::m_record_event;
 %immutable eListbox::selectionChanged;
@@ -410,6 +414,9 @@ HDS_CONSTRUCTOR_INTREGI(eSize, 2)
 %include <lib/dvb/sec.h>
 /* pentru Python, eEPGCache.save() cere salvarea pe firul ghidului si revine imediat; scrierea insasi ramane privata */
 %rename(save) eEPGCache::saveLater;
+/* load (fisierul ghidului citit din nou, pe firul ghidului) si timeUpdated (numai cu ora buna), cu numele pluginurilor de ghid */
+%rename(load) eEPGCache::loadLater;
+%rename(timeUpdated) eEPGCache::timeUpdatedSafe;
 %include <lib/dvb/epgcache.h>
 %include <lib/dvb/frontendparms.h>
 %include <lib/dvb/dvbtime.h>
@@ -419,6 +426,7 @@ HDS_CONSTRUCTOR_INTREGI(eSize, 2)
 %include <lib/dvb/pmt.h>
 %include <lib/dvb/hdsspectru.h>
 %include <lib/dvb/hdsteletext.h>
+%include <lib/dvb/hdsfastscan.h>
 %include <lib/service/hdsegalizator.h>
 %include <lib/components/scan.h>
 %include <lib/components/file_eraser.h>
@@ -529,6 +537,10 @@ PyObject *getBestPlayableServiceReference(const eServiceReference &bouquet_ref, 
 }
 %}
 
+/* starea SoftCSA (lib/dvb/cahandler.h): biblioteca, modulul legat cu protocolul 3, contoarele; Components/HdsSoftCsa.py */
+PyObject *hdsSoftCsaStare();
+int hdsSoftCsaCanal(const char *ref);
+
 /* jurnalele componentelor (lib/base/hdsjurnal.h), din Components/HdsJurnal.py */
 void hdsJurnalScrie(const char *componenta, const char *nivel, const char *modul, const char *mesaj);
 
@@ -548,6 +560,12 @@ extern void runMainloop();
 extern void quitMainloop(int exit_code);
 extern eApplication *getApplication();
 extern int getPrevAsciiCode();
+extern void setPrevAsciiCode(int code);
+extern void setAnimation_current(int a);
+extern void setAnimation_speed(int speed);
+extern void setAnimation_current_listbox(int a);
+/* HDSatelit: the detail level of the log (eerror.h debugLvl), under the name the plugins ask for */
+static int eGetEnigmaDebugLvl() { return debugLvl; }
 extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement);
 extern const char *getEnigmaVersionString();
 extern void dump_malloc_stats(void);
@@ -555,6 +573,11 @@ extern void dump_malloc_stats(void);
 
 extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement);
 extern int getPrevAsciiCode();
+extern void setPrevAsciiCode(int code);
+extern void setAnimation_current(int a);
+extern void setAnimation_speed(int speed);
+extern void setAnimation_current_listbox(int a);
+extern int eGetEnigmaDebugLvl();
 extern void runMainloop();
 extern void quitMainloop(int exit_code);
 extern eApplication *getApplication();

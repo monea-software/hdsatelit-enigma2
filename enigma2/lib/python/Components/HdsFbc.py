@@ -27,9 +27,18 @@ def _numar(text):
 
 
 def _radacini(text):
-	if not text or not re.match(r"^[0-9]+(?:\s+[0-9]+)*$", text):
+	"""Intrarile fizice din fbc_connect_choices. Doua forme: „0 1” si, la driverele Vu+ 4K (Duo4K cu 45308X FBC),
+	„0=A, 1=B”; fara forma a doua niciun demodulator nu era radacina, rutarea se oprea si toate ramaneau pe intrarea A
+	(sety, Vu+ Duo4K, 10.11.2026: cablul in A mergea numai cu tunerul B configurat)."""
+	if not text:
 		return None
-	valori = frozenset(int(x) for x in text.split())
+	text = text.strip()
+	if re.match(r"^[0-9]+(?:\s+[0-9]+)*$", text):
+		valori = frozenset(int(x) for x in text.split())
+	elif re.match(r"^[0-9]+\s*=\s*[A-Za-z]+(?:\s*,?\s*[0-9]+\s*=\s*[A-Za-z]+)*$", text):
+		valori = frozenset(int(x) for x in re.findall(r"([0-9]+)\s*=", text))
+	else:
+		return None
 	return valori if valori and max(valori) < 8 else None
 
 

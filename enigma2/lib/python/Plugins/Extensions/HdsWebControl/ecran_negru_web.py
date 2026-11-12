@@ -32,7 +32,7 @@ import re
 MAX_TEXT = 600
 MAX_RAND = 400
 _CONTROL = re.compile(u"[\u0000-\u0008\u000b-\u001f\u007f-\u009f\ud800-\udfff]")
-FAPTE_WEB = ("cauta_tp", "cauta", "inregistrari", "cod", "tuner", "analiza", "loc", "ascunde")
+FAPTE_WEB = ("cauta_tp", "cauta", "inregistrari", "cod", "tuner", "analiza", "loc", "module", "ascunde")
 
 
 def _t(text):

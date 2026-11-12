@@ -22,6 +22,7 @@
 #define FTC_SBit_Cache_Lookup(a,b,c,d)	FTC_SBitCache_Lookup(a,b,c,d,NULL)
 
 #include <lib/base/eerror.h>
+#include <lib/base/eenv.h>
 #include <lib/gdi/lcd.h>
 #include <lib/gdi/grc.h>
 #include <lib/base/elock.h>
@@ -209,6 +210,14 @@ fontRenderClass::fontRenderClass(): fb(fbClass::getInstance())
 			eDebug("[FONT] initializing font cache imagecache failed!");
 		}
 	}
+	/*
+	 * HDSatelit: the fallback font, ${datadir}/fonts/fallback.font (the name plugins look for), registered here and not
+	 * in the skin, so it stays the same with any skin. It is used only for the symbols that neither the font of the text
+	 * nor the Replacement font has (arrows, bullets, bars, box lines... from plugins), never for letters.
+	 */
+	std::string fallback = eEnv::resolve("${datadir}/fonts/fallback.font");
+	if (::access(fallback.c_str(), R_OK) == 0 && !AddFont(fallback, "Fallback", 100).empty())
+		eTextPara::setFallbackFont("Fallback");
 	return;
 }
 
@@ -262,7 +271,10 @@ int fontRenderClass::getFont(ePtr<Font> &font, const std::string &face, int size
 void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement)
 {
 	fontRenderClass::getInstance()->AddFont(filename, alias, scale_factor);
-	if (is_replacement)
+	/* HDSatelit: -1 makes it the fallback font (the third one, for symbols): the value skin loaders use for fallback.font */
+	if (is_replacement == -1)
+		eTextPara::setFallbackFont(alias);
+	else if (is_replacement)
 		eTextPara::setReplacementFont(alias);
 }
 
@@ -462,7 +474,47 @@ void eTextPara::setFont(const gFont *font)
 }
 
 std::string eTextPara::replacement_facename;
+std::string eTextPara::fallback_facename;
 std::set<int> eTextPara::forced_replaces;
+
+/* HDSatelit: the code points the fallback font is used for: the symbol blocks U+2190-2BFF (arrows, math, technical
+   signs, enclosed numbers, box lines, blocks, geometric shapes, dingbats, braille...) and U+1F000-1FAFF. Never letters,
+   punctuation, quotes, currency or superscripts (U+2000-218F): a text keeps the look of its own font. */
+static inline bool hdsFallbackSymbol(unsigned long chr)
+{
+	return (chr >= 0x2190 && chr < 0x2C00) || (chr >= 0x1F000 && chr < 0x1FB00);
+}
+
+/* HDSatelit: the fallback font of this paragraph, made at the first symbol the font of the text and the Replacement font
+   do not have, so normal text pays nothing. Called with ftlock held. One more face can push another one out of the
+   FreeType cache, so after it the replacement face and the face of the text are looked up again (the text face last). */
+bool eTextPara::hdsFallbackFace()
+{
+	if (fallback_facename.empty() || !current_font)
+		return false;
+	FTC_Manager manager = fontRenderClass::instance->cacheManager;
+	if (!fallback_font)
+	{
+		fontRenderClass::instance->getFont(fallback_font, fallback_facename, current_font->height);
+		if (!fallback_font)
+			return false;
+	}
+	if (FTC_Manager_LookupFace(manager, fallback_font->scaler.face_id, &fallback_face) < 0 ||
+	    FTC_Manager_LookupSize(manager, &fallback_font->scaler, &fallback_font->size) < 0)
+	{
+		fallback_font = 0;
+		fallback_face = 0;
+		return false;
+	}
+	if (replacement_font &&
+	    (FTC_Manager_LookupFace(manager, replacement_font->scaler.face_id, &replacement_face) < 0 ||
+	     FTC_Manager_LookupSize(manager, &replacement_font->scaler, &replacement_font->size) < 0))
+		replacement_face = 0;
+	if (FTC_Manager_LookupFace(manager, current_font->scaler.face_id, &current_face) < 0 ||
+	    FTC_Manager_LookupSize(manager, &current_font->scaler, &current_font->size) < 0)
+		return false;
+	return true;
+}
 
 void eTextPara::setFont(Font *fnt, Font *replacement)
 {
@@ -470,6 +522,8 @@ void eTextPara::setFont(Font *fnt, Font *replacement)
 		return;
 	current_font=fnt;
 	replacement_font=replacement;
+	fallback_font=0;
+	fallback_face=0;
 	singleLock s(ftlock);
 
 			// we ask for replacment_font first becauseof the cache
@@ -528,11 +582,22 @@ int eTextPara::missingGlyphs(const std::string &face, const std::vector<unsigned
 	if (missing.empty())
 		return 0;
 	FT_Face ft_replacement = 0;
-	if (!replacement_id || FTC_Manager_LookupFace(render->cacheManager, replacement_id, &ft_replacement) != 0 || !ft_replacement)
+	if (replacement_id && FTC_Manager_LookupFace(render->cacheManager, replacement_id, &ft_replacement) == 0 && ft_replacement)
+	{
+		std::vector<unsigned long> still;
+		for (std::vector<unsigned long>::const_iterator i(missing.begin()); i != missing.end(); ++i)
+			if (!FT_Get_Char_Index(ft_replacement, *i))
+				still.push_back(*i);
+		missing.swap(still);
+	}
+	/* HDSatelit: the symbols the fallback font draws are not missing (renderString takes them from it) */
+	FTC_FaceID fallback_id = fallback_facename.empty() ? 0 : render->getFaceID(fallback_facename);
+	FT_Face ft_fallback = 0;
+	if (missing.empty() || !fallback_id || FTC_Manager_LookupFace(render->cacheManager, fallback_id, &ft_fallback) != 0 || !ft_fallback)
 		return missing.size();
 	int count = 0;
 	for (std::vector<unsigned long>::const_iterator i(missing.begin()); i != missing.end(); ++i)
-		if (!FT_Get_Char_Index(ft_replacement, *i))
+		if (!hdsFallbackSymbol(*i) || !FT_Get_Char_Index(ft_fallback, *i))
 			count++;
 	return count;
 }
@@ -619,6 +684,10 @@ int eTextPara::renderString(const char *string, int rflags)
 	
 	int nextflags = 0;
 	
+	unsigned long newcolor = 0; /* HDSatelit: the colour codes \c and \C (see below) */
+	bool activate_newcolor = false;
+	bool activate_colorreset = false;
+
 	for (std::vector<unsigned long>::const_iterator i(uc_visual.begin());
 		i != uc_visual.end(); ++i)
 	{
@@ -633,6 +702,8 @@ int eTextPara::renderString(const char *string, int rflags)
 			{
 			case '\\':
 			{
+				if ((i + 1) == uc_visual.end())
+					break;
 				unsigned long c = *(i+1);
 				switch (c)
 				{
@@ -645,6 +716,45 @@ int eTextPara::renderString(const char *string, int rflags)
 					case 'r':
 						i++;
 						goto nprint;
+					case 'c':
+					{
+						/* HDSatelit: \c + 8 hex digits AARRGGBB colours the next letters, as in the GPL enigma2 sources
+						   (OE-Alliance, lib/gdi/font.cpp); the old notation writes A..F as : ; < = > ? (AJPanel uses it) */
+						unsigned long color = 0;
+						int codeidx;
+						for (codeidx = 0; codeidx < 8; codeidx++)
+						{
+							if ((i + 2 + codeidx) == uc_visual.end())
+								break;
+							unsigned long cc = *(i + 2 + codeidx);
+							if (cc >= '0' && cc <= '9')
+								color = (color << 4) | (cc - '0');
+							else if (cc >= 'a' && cc <= 'f')
+								color = (color << 4) | (cc - 'a' + 10);
+							else if (cc >= 'A' && cc <= 'F')
+								color = (color << 4) | (cc - 'A' + 10);
+							else if (cc >= ':' && cc <= '?')
+								color = (color << 4) | (cc & 0x0f);
+							else
+								break;
+						}
+						if (codeidx == 8)
+						{
+							newcolor = color;
+							activate_newcolor = true;
+							activate_colorreset = false;
+							isprintable = 0;
+							i += 1 + codeidx;
+						}
+						break;
+					}
+					case 'C':
+						/* HDSatelit: \C goes back to the colour of the widget */
+						activate_colorreset = true;
+						activate_newcolor = false;
+						isprintable = 0;
+						++i;
+						break;
 					default:
 					;
 				}
@@ -683,6 +793,7 @@ nprint:	isprintable=0;
 		}
 		if (isprintable)
 		{
+			size_t glyphsBefore = glyphs.size();
 			FT_UInt index = 0;
 
 				/* FIXME: our font doesn't seem to have a hyphen, so use hyphen-minus for it. */
@@ -698,11 +809,38 @@ nprint:	isprintable=0;
 					index=(rflags&RS_DIRECT)? chr : FT_Get_Char_Index(replacement_face, chr);
 
 				if (!index)
-					eDebug("unicode U+%4lx not present", chr);
+				{
+					/* HDSatelit: a symbol neither font has comes from the fallback font; no kerning across fonts */
+					if (!(rflags&RS_DIRECT) && hdsFallbackSymbol(chr) && hdsFallbackFace())
+						index = FT_Get_Char_Index(fallback_face, chr);
+					if (!index)
+						eDebug("unicode U+%4lx not present", chr);
+					else
+					{
+						previous = 0;
+						appendGlyph(fallback_font, fallback_face, index, flags, rflags);
+						previous = 0;
+					}
+				}
 				else
 					appendGlyph(replacement_font, replacement_face, index, flags, rflags);
 			} else
 				appendGlyph(current_font, current_face, index, flags, rflags);
+
+			/* HDSatelit: the first letter drawn after a colour code carries the change (blit) */
+			if (glyphs.size() > glyphsBefore && (activate_newcolor || activate_colorreset))
+			{
+				pGlyph &g = glyphs.back();
+				if (activate_colorreset)
+					g.flags |= GS_COLORRESET;
+				else
+				{
+					g.flags |= GS_COLORCHANGE;
+					g.newcolor = newcolor;
+				}
+				activate_newcolor = false;
+				activate_colorreset = false;
+			}
 		}
 	}
 	bboxValid=false;
@@ -753,22 +891,34 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 	__u16 lookup16_normal[16], lookup16_invert[16], *lookup16;
 	__u32 lookup32_normal[16], lookup32_invert[16], *lookup32;
 
+	/* HDSatelit: the colour tables are made for one foreground colour; the colour codes in the text (\c........ and \C,
+	   see renderString) change it in the middle of the text, as in the GPL enigma2 sources (OE-Alliance, lib/gdi/font.cpp) */
+	if (surface->bpp == 8)
+		opcode = surface->clut.data ? 0 : 1;
+	else if (surface->bpp == 16)
+		opcode = 2;
+	else if (surface->bpp == 32)
+		opcode = 3;
+	else
+	{
+		eWarning("can't render to %dbpp", surface->bpp);
+		return;
+	}
+
+	auto colorTables = [&](const gRGB &foreground)
+	{
 	if (surface->bpp == 8)
 	{
 		if (surface->clut.data)
 		{
 			lookup8_normal=getColor(surface->clut, background, foreground).lookup;
-			
+
 			int i;
 			for (i=0; i<16; ++i)
 				lookup8_invert[i] = lookup8_normal[i^0xF];
-			
-			opcode=0;
-		} else
-			opcode=1;
+		}
 	} else if (surface->bpp == 16)
 	{
-		opcode=2;
 		for (int i=0; i<16; ++i)
 		{
 #define BLEND(y, x, a) (y + (((x-y) * a)>>8))
@@ -787,12 +937,12 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 			lookup16_normal[i] = ((db >> 3) << 11) | ((dg >> 2) << 5) | (dr >> 3);
 #endif
 			da ^= 0xFF;
+			(void)da;
 		}
 		for (int i=0; i<16; ++i)
 			lookup16_invert[i]=lookup16_normal[i^0xF];
 	} else if (surface->bpp == 32)
 	{
-		opcode=3;
 		for (int i=0; i<16; ++i)
 		{
 #define BLEND(y, x, a) (y + (((x-y) * a)>>8))
@@ -812,11 +962,18 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 		}
 		for (int i=0; i<16; ++i)
 			lookup32_invert[i]=lookup32_normal[i^0xF];
-	} else
-	{
-		eWarning("can't render to %dbpp", surface->bpp);
-		return;
 	}
+	};
+
+	bool hasColorCodes = false;
+	for (glyphString::const_iterator g(glyphs.begin()); g != glyphs.end(); ++g)
+		if (g->flags & (GS_COLORCHANGE|GS_COLORRESET))
+		{
+			hasColorCodes = true;
+			break;
+		}
+
+	colorTables(foreground);
 
 	gRegion area(eRect(0, 0, surface->x, surface->y));
 	gRegion clip = dc.getClip() & area;
@@ -829,6 +986,8 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 		std::list<int>::iterator line_chars_it(lineChars.begin());
 		int line_offs=0;
 		int line_chars=0;
+		if (hasColorCodes && c)
+			colorTables(foreground); /* each clip rectangle starts again with the colour of the widget */
 		for (glyphString::iterator i(glyphs.begin()); i != glyphs.end(); ++i, --line_chars)
 		{
 			while(!line_chars)
@@ -836,6 +995,11 @@ void eTextPara::blit(gDC &dc, const ePoint &offset, const gRGB &background, cons
 				line_offs = *(line_offs_it++);
 				line_chars = *(line_chars_it++);
 			}
+
+			if (i->flags & GS_COLORRESET)
+				colorTables(foreground);
+			else if (i->flags & GS_COLORCHANGE)
+				colorTables(gRGB(i->newcolor));
 
 			if (i->flags & GS_SOFTHYPHEN)
 				continue;
@@ -1046,6 +1210,8 @@ void eTextPara::clear()
 
 	current_font = 0;
 	replacement_font = 0;
+	fallback_font = 0;
+	fallback_face = 0;
 
 	glyphs.clear();
 }

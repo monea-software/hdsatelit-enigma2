@@ -23,7 +23,48 @@ from Tools.Directories import fileExists, SCOPE_SKIN_IMAGE, SCOPE_CURRENT_SKIN, 
 from Tools.PiconResolver import (CAI_SIGLE, RADACINI_MEDIA, DOSARE_SIGLE,
 	searchPaths, TIPURI_FLUX, TIPURI_RADIO, sigle_pornite, nume_sigle,
 	nume_dupa_canal, nume_cautate_canal, nume_canal, generatie_sigle,
-	dosare_sigle, getPiconPath, resetPiconPath, cauta_sigla, getPiconName)
+	dosare_sigle, getPiconPath, resetPiconPath, cauta_sigla, getPiconName as _getPiconName)
+
+# Numele de modul pe care le importa pluginurile scrise pentru imaginile OE-Alliance (11.11.2026; de pilda
+# "from Components.Renderer.Picon import getPiconName"). Cautarea e tot a noastra (Tools/PiconResolver.py); mode
+# ("infobar" / "channelselection") se primeste, dar imaginea are aceleasi sigle peste tot.
+lastPiconPath = None
+piconPathCache = {}
+
+
+def getPiconName(serviceName, mode=None):
+	return _getPiconName(serviceName)
+
+
+def getChannelSelectionPiconName(serviceName):
+	return _getPiconName(serviceName)
+
+
+def findPicon(serviceName, mode=None):
+	"""calea siglei cu numele de fisier dat (fara .png), din dosarele de sigle; sir gol cand nu e"""
+	for path in dosare_sigle("picon"):
+		pngname = path + serviceName + ".png"
+		if fileExists(pngname):
+			return pngname
+	return ""
+
+
+def setPiconPath(key, path):
+	global lastPiconPath
+	piconPathCache[key] = path
+	if key in (None, "infobar"):
+		lastPiconPath = path
+
+
+def getDefaultPiconPath():
+	for path in dosare_sigle("picon"):
+		return path.rstrip("/")
+	return None
+
+
+def initPiconPaths():
+	"""dosarele de sigle se afla singure (discurile montate); pentru pluginurile care o cheama"""
+	resetPiconPath()
 
 
 def _anunta(r):
@@ -64,6 +105,9 @@ class Picon(Renderer):
 				self.perType = value in ("1", "true", "yes")
 			elif attrib == "vecini":
 				self.vecini = value
+			elif attrib == "mode":
+				# imaginile OE-Alliance: dosarul de sigle al barei sau al listei; la noi aceleasi sigle
+				self.mode = value
 			else:
 				attribs.append((attrib,value))
 		self.skinAttributes = attribs

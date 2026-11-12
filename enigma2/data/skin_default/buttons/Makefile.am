@@ -32,4 +32,5 @@ dist_install_DATA = \
 	key_text.png \
 	red-big.png \
 	red.png \
+	vkey_icon.png \
 	yellow.png

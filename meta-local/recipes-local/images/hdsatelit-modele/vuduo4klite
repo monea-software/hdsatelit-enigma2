@@ -1,0 +1,28 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Duo 4K Lite (masina vuduo4klite), NECONFIRMAT (VU1, 12.11.2026)
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (BCM7252S, aceeasi placa cu GigaBlue UHD Quad 4K Pro), fara /proc/msp/sys, fara
+# blkdevparts si fara partitia deviceinfo. Cipul din /proc/stb/info/chipset (garda il compara fara "bcm" in fata).
+# Tipul placii: driverul Lite nu-l da singur; la pornire vuplus-ddbootup (meta-vuplusde, S66 in rcS, cerut in
+# hdsatelit-base) scrie /proc/stb/info/boxtype = vuplus, vumodel = vuduo4klite (imaginea oficiala VU+ scrie duo4klite) si
+# model = dm8000. Garda citeste intai boxtype, deci boxtype=vuplus, un nume comun tuturor Vu+ cu acest script; modelul
+# exact il cere model_id=duo4klite (numele scurt din vumodel, fara "vu", ca la GigaBlue). Fara aparat de proba, valorile
+# raman de confirmat din fisa unui tester.
+# kernel_part=mmcblk0p4, rootfs_part=mmcblk0p13: MTD_KERNEL si MTD_ROOTFS din meta-vuplusde/conf/machine/include/vuplus.inc
+# (locul de baza, STARTUP_1; Lite are 8 locuri de pornire pe eMMC, partitia se alege la scrierea de pe stick).
+# kernel_kib: nemasurat (0). Pe stick: dosarul vuplus/duo4klite.
+format=1
+distro=hdsatelit
+model=Vu+ Duo 4K Lite
+machine=vuduo4klite
+machinebuild=vuduo4klite
+chip=7252s
+boxtype=vuplus
+hw=-
+partitions=-
+kernel_part=mmcblk0p4
+kernel_kib=0
+rootfs_part=mmcblk0p13
+confirmat=nu
+familie=broadcom
+model_id=duo4klite

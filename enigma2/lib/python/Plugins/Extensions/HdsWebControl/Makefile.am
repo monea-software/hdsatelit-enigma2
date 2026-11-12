@@ -4,6 +4,7 @@ install_PYTHON = \
 	__init__.py \
 	accel_web.py \
 	acces_conditionat_web.py \
+	porturi_web.py \
 	acces_ssh_web.py \
 	acces_web.py \
 	pasi_decriptare_web.py \
@@ -30,6 +31,7 @@ install_PYTHON = \
 	culegere_canale_web.py \
 	culori_web.py \
 	copie_setari_web.py \
+	copie_imagine_web.py \
 	dabt2_web.py \
 	dab_usb_web.py \
 	oarba_web.py \
@@ -105,10 +107,12 @@ install_PYTHON = \
 	telecomenzi_web.py \
 	temporizatoare_web.py \
 	tema_tv_web.py \
+	tema_export.py \
 	vremea_web.py \
 	traducere_pagini.py \
 	video_web.py \
 	vpn_web.py \
+	vpn_furnizori_web.py \
 	asistenta_web.py \
 	subtitrari_web.py \
 	traducere_subtitrari_web.py \

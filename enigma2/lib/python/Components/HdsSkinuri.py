@@ -39,7 +39,8 @@
 # includerile, rezolutia, fonturile, componentele) si jurnalul activarii pe disc, inainte de schimbarea setarii; la pornire
 # numararea pornirilor in proba (o tema care opreste receptorul nu se incarca la nesfarsit, si dupa o repornire intreaga) si
 # retragerea dupa trei opriri neasteptate in zece minute, chiar daca proba s-a terminat. Trei erori de ecran in 30 de secunde
-# (mytest.py) retrag tema cu MOTIV_ECRANE, inainte de singura repornire a interfetei. Cu tema HD Satelit nu ruleaza nimic din ele.
+# (mytest.py) retrag tema cu MOTIV_ECRANE, inainte de singura repornire a interfetei, numai daca macar una a trecut prin
+# fisierele temei (eroareDinTema); un plugin care cade singur reporneste interfata, dar tema ramane. Cu tema HD Satelit nu ruleaza nimic din ele.
 #
 # Modulul nu importa nimic din enigma2 la incarcare (skin.py il cheama inainte de ecrane; probele de pe PC dau radacina,
 # config si fisierele din RAM).
@@ -461,11 +462,30 @@ def iesireCeruta():
 			T.iesireCeruta()
 
 
-def eroriEcrane(detaliu=""):
+def eroareDinTema(stiva, valoare=None, root=None, info=None):
+	"""mytest.py, la fiecare eroare de ecran: True cand stiva trece prin fisierele temei externe pornite (dosarul ei sau
+	fisierele pachetului ei: convertoare, randatoare, pluginul ei). Cu tema HD Satelit, False."""
+	valoare = valoare or skinPornit()
+	if valoare == SKIN_IMAGINE or esteImaginii(valoare):
+		return False
+	T = _temaExterna()
+	if T is None:
+		return True
+	import posixpath
+	dosar = posixpath.dirname(posixpath.join(root or radacina(), valoare))
+	return T.stivaDinTema(stiva, dosar, info)
+
+
+def eroriEcrane(detaliu="", dinTema=True):
 	"""mytest.py, la a treia eroare de ecran in 30 de secunde, inainte de repornirea interfetei: cu o tema externa, tema se
-	retrage, deci repornirea e una singura si interfata nu intra in bucla. True daca s-a retras."""
+	retrage, deci repornirea e una singura si interfata nu intra in bucla. Numai cand macar una dintre erori a trecut prin
+	fisierele temei (dinTema, eroareDinTema): un plugin care cade singur (OAWeatherOverview sub Obsidian-FHD, 12.11.2026) nu
+	ia omului tema. True daca s-a retras."""
 	valoare = skinPornit()
 	if valoare == SKIN_IMAGINE:
+		return False
+	if not dinTema:
+		_jurnal("erorile ecranului %s nu trec prin fisierele temei %s: tema ramane" % (detaliu, valoare))
 		return False
 	refuza(valoare, MOTIV_ECRANE, str(detaliu)[:200])
 	return True

@@ -119,6 +119,10 @@ def _jurnal(text):
 
 
 def _t(text):
+	# textul gol ramane gol: gettext da pentru "" antetul catalogului (Project-Id-Version ...), care ajungea ca eroare de
+	# pornire pe ecranul asistentei oprite si in pagina web (stare(), ERORI_PORNIRE.get(..., ""))
+	if not text:
+		return text or ""
 	try:
 		return _(text)  # noqa: F821
 	except NameError:

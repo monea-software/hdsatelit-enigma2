@@ -416,6 +416,8 @@ public:
 	RESULT setTunerLinked(int from, int to);
 	RESULT setTunerDepends(int from, int to);
 	void setSlotNotLinked(int tuner_no);
+	/* HDSatelit: pozitia (zecimi de grad) e setata la vreun LNB? (cautarea rapida FastScan sare sateliti nesetati) */
+	bool isOrbitalPositionConfigured(int orbital_position);
 
 	void setRotorMoving(int, bool); // called from the frontend's
 	bool isRotorMoving();

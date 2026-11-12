@@ -12,6 +12,16 @@ a setarilor facuta pe 0.6.x, se scoate din fisierul surselor omului (inlocuirea_
 o adresa veche se sterge, ca opkg sa nu instaleze din ea inainte de urmatorul opkg update.
 Feedul pluginurilor noastre ramane pe stb.hdsatelit.com (Components/HdsActualizari.py, reteta hdsatelit-feed).
 
+Rezerva (0.7.4, 12.11.2026): aceleasi fisiere stau si pe serverul nostru,
+  https://stb.hdsatelit.com/feed/externe/feed-070/<arhitectura> (si feed-070-proba/<arhitectura>),
+puse la fiecare publicare (unelte/pluginuri-externe/feed_vps.py). Gazduirea moneasoftware.com are un filtru anti-robot
+care pune uneori adresa unui om pe lista gri (Wlad, Ucraina, 11.11.2026: 403 si pe receptor, si in browser). Cand un
+`opkg update` arata ca a cazut lista de pe moneasoftware.com (dupa_update, chemat de Components/HdsExtensiiLucru.py),
+aceeasi sursa (acelasi nume, acelasi fisier) trece pe adresa de rezerva si lista veche se sterge; omul nu face nimic.
+La urmatoarea pornire pune_feedul pune iar adresa principala: cand gazduirea il deblocheaza, totul revine singur.
+Nu doua surse: opkg update ar da tot cod de eroare cand cade una (ModuleLipsa si DriverLipsa il iau drept esec), iar
+lista veche a sursei cazute ar ramane si opkg ar descarca tot de pe gazda blocata.
+
 Imaginea il pune singura in /etc/opkg/hds-pluginuri-externe.conf, la pornirea interfetei (mytest.py): asa vine si printr-o
 actualizare prin pachete, fara flash (stratul imaginii nu se schimba printr-o actualizare, iar dupa instalare interfata
 reporneste oricum), si in orice imagine urmatoare. Arhitectura nu e scrisa in cod: e cea a pachetelor de baza instalate
@@ -42,6 +52,9 @@ DOSAR = '/apps/hdsatelit-enigma2/feed-070'
 ADRESA = 'https://' + GAZDA + DOSAR
 # dosarele bazelor vechi (0.6.x), pe care imaginea aceasta nu le foloseste
 DOSARE_VECHI = ('/apps/hdsatelit-enigma2/feed', '/apps/hdsatelit-enigma2/feed-proba')
+GAZDA_REZERVA = 'stb.hdsatelit.com'
+DOSAR_REZERVA = '/feed/externe/feed-070'
+ADRESA_REZERVA = 'https://' + GAZDA_REZERVA + DOSAR_REZERVA
 ANTET = '# HD Satelit: feedul pluginurilor externe (Monea Software, moneasoftware.com). Il scrie imaginea la pornire.'
 # pachetele de baza ale imaginii, construite pentru procesor (nu pentru masina sau pentru toate): Architecture lor e
 # arhitectura procesorului; primul gasit hotaraste
@@ -50,6 +63,9 @@ FARA_PROCESOR = ('all', 'any', 'noarch')
 _ARH = re.compile(r'^[a-z0-9][a-z0-9_\-]{0,63}\Z')
 # calea unui dosar al feedului: DOSAR/<arh> (public) sau DOSAR-proba/<arh>
 _CALE = re.compile(r'^' + re.escape(DOSAR) + r'(-proba)?/([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
+_CALE_REZERVA = re.compile(r'^' + re.escape(DOSAR_REZERVA) + r'(-proba)?/([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
+# adresele din randurile de eroare ale lui opkg (wget: "Failed to download <adresa>, wget returned 8.")
+_ADRESA_IN_RAND = re.compile(r'https?://[^\s,\'"]+')
 _CALE_VECHE = re.compile(r'^(?:%s)/[a-z0-9][a-z0-9_\-]{0,63}/?\Z' % '|'.join(re.escape(d) for d in DOSARE_VECHI))
 
 
@@ -63,13 +79,18 @@ def _potrivire(adresa):
 		gazda = (parti.hostname or '').lower()
 	except ValueError:
 		return None
-	if parti.scheme != 'https' or gazda != GAZDA or parti.query or parti.fragment:
+	if parti.scheme != 'https' or parti.query or parti.fragment:
 		return None
-	return _CALE.match(parti.path or '')
+	if gazda == GAZDA:
+		return _CALE.match(parti.path or '')
+	if gazda == GAZDA_REZERVA:
+		return _CALE_REZERVA.match(parti.path or '')
+	return None
 
 
 def e_feed_extern(adresa):
-	"""True pentru adresa unui dosar al feedului pluginurilor externe (public sau de proba), numai prin https"""
+	"""True pentru adresa unui dosar al feedului pluginurilor externe (public sau de proba, principal sau rezerva),
+	numai prin https"""
 	return _potrivire(adresa) is not None
 
 
@@ -115,12 +136,12 @@ def _sterge_lista(radacina, conf):
 		pass
 
 
-def adresa_pentru(arhitectura):
-	return '%s/%s' % (ADRESA, arhitectura)
+def adresa_pentru(arhitectura, rezerva=False):
+	return '%s/%s' % (ADRESA_REZERVA if rezerva else ADRESA, arhitectura)
 
 
-def text_fisier(arhitectura):
-	return '%s\nsrc/gz %s %s\n' % (ANTET, NUME_SURSA, adresa_pentru(arhitectura))
+def text_fisier(arhitectura, rezerva=False):
+	return '%s\nsrc/gz %s %s\n' % (ANTET, NUME_SURSA, adresa_pentru(arhitectura, rezerva))
 
 
 def arhitectura_procesorului(radacina='/', conf=None):
@@ -249,6 +270,84 @@ def pune_feedul(radacina='/'):
 		# adresa s-a schimbat (alta arhitectura sau fisierul unei baze vechi): lista veche nu mai e buna
 		_sterge_lista(radacina, conf)
 	return 'scris', arh
+
+
+def _adresa_din_fisier(text):
+	"""adresa sursei noastre din textul fisierului (None daca nu e)"""
+	for rand in (text or '').splitlines():
+		parti = rand.split()
+		if len(parti) >= 3 and parti[0] in ('src', 'src/gz') and parti[1] == NUME_SURSA:
+			return parti[2]
+	return None
+
+
+def pe_rezerva(radacina='/'):
+	"""True cand fisierul nostru tine acum adresa de rezerva"""
+	try:
+		with open(P._cale(radacina, FISIER), 'r', encoding='utf-8', errors='replace') as fh:
+			text = fh.read()
+	except (IOError, OSError):
+		return False
+	adresa = _adresa_din_fisier(text) or ''
+	return text.startswith(ANTET) and adresa.startswith(ADRESA_REZERVA + '/')
+
+
+def adrese_cazute(linii):
+	"""adresele pe care opkg spune ca nu le-a putut descarca (randurile "Failed to download ...")"""
+	rez = []
+	for rand in linii or ():
+		if 'ailed to download' not in rand:
+			continue
+		for a in _ADRESA_IN_RAND.findall(rand.split('ailed to download', 1)[1]):
+			a = a.rstrip('.:;)')
+			if a not in rez:
+				rez.append(a)
+	return rez
+
+
+def principalul_a_cazut(linii):
+	"""True cand printre adresele cazute e lista feedului public de pe moneasoftware.com"""
+	for a in adrese_cazute(linii):
+		try:
+			parti = urlsplit(a)
+		except ValueError:
+			continue
+		if (parti.hostname or '').lower() == GAZDA and (parti.path or '').startswith(DOSAR + '/'):
+			return True
+	return False
+
+
+def treci_pe_rezerva(radacina='/'):
+	"""Fisierul nostru trece de pe moneasoftware.com pe adresa de rezerva (aceeasi sursa, acelasi nume), iar lista
+	descarcata de pe moneasoftware.com se sterge (altfel opkg ar instala din ea, de pe gazda blocata). Numai un fisier
+	al nostru (cu ANTET) care tine adresa principala. Intoarce True cand a trecut."""
+	cale = P._cale(radacina, FISIER)
+	try:
+		with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
+			acum = fh.read()
+	except (IOError, OSError):
+		return False
+	adresa = _adresa_din_fisier(acum) or ''
+	if not acum.startswith(ANTET) or not adresa.startswith(ADRESA + '/'):
+		return False
+	arh = adresa[len(ADRESA) + 1:].strip('/')
+	if not _ARH.match(arh):
+		return False
+	if _scrie(cale, text_fisier(arh, rezerva=True)):
+		return False
+	_sterge_lista(radacina, P.citeste_configurarea(radacina))
+	_jurnal('moneasoftware.com nu raspunde: feedul pluginurilor externe trece pe rezerva (%s)' % adresa_pentru(arh, True))
+	return True
+
+
+def dupa_update(linii, radacina='/'):
+	"""Dupa un `opkg update` cu cod de eroare: daca a cazut lista de pe moneasoftware.com, sursa trece pe rezerva.
+	Intoarce True cand a trecut (atunci cine a chemat porneste inca un opkg update). Nu ridica exceptii."""
+	try:
+		return principalul_a_cazut(linii) and treci_pe_rezerva(radacina)
+	except Exception as e:
+		_jurnal('trecerea pe rezerva: %s' % e)
+		return False
 
 
 def porneste(radacina='/'):

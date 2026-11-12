@@ -32,11 +32,20 @@
 # Numai pe receptoarele unde fisierul exista fara lista de alegeri (pe celelalte, randul „HDR type” e in Setari > Video)
 # si numai alegerile pe care televizorul le declara (/proc/msp/disp1, apoi /proc/msp/hdmi0_sink). hdmi_colorimetry nu se
 # atinge (e a „Culorilor pe HDMI”, Components/VideoOutput.py).
+# DRUMUL ZAP-ULUI: la evStart (inaintea acordarii: orice milisecunda aici intarzie comanda catre tuner) nu se
+# citeste nimic din /proc/msp. Ce declara televizorul (disp1, hdmi0_sink) se tine minte; la evStart textul HDR se
+# scrie din televizorul tinut minte si din modul video citit pe loc (/proc/stb, direct), de obicei acelasi text, deci
+# nimic de scris. Televizorul se citeste din nou pe un fir, abia dupa LINISTE_TV_S fara zap (cel mult o data la
+# INTERVAL_TV_S): un text nou (alt televizor) se scrie de acolo si se vede de la canalul urmator; ecranele si pagina
+# (alegeriHdr) il citesc oricum pe loc.
+# Inainte, cele doua citiri pe firul enigma2 (prin HdsProcFundal, cel mult 0,2 s fiecare) au tinut ascultatorul
+# 56-611 ms pe .122.
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il incarca fara receptor.
 
 import os
 import re
+import threading
 import time
 
 CALE_PQ = "/proc/msp/pq"
@@ -53,6 +62,8 @@ VALORI = tuple(range(0, 101, PAS))
 SECUNDE_COMPARATIE = 60    # comparatia pornita din web se opreste singura
 SECUNDE_INCERCARE = 180    # valorile incercate din web, nepastrate, revin singure
 SECUNDE_INTREBARE = 20     # intrebarea dupa o iesire HDR noua (ca in Setari > Video)
+LINISTE_TV_S = 10.0        # televizorul se citeste din nou abia dupa atatea secunde fara zap (nu langa zap)
+INTERVAL_TV_S = 60.0       # si cel mult o data in atatea secunde
 
 CULOARE = "culoare"
 MODUL = "modul"
@@ -138,6 +149,13 @@ def comandaPermisa(comanda):
 
 def _jurnal(text):
 	print("[HdsCalitateImagine] %s" % text)
+
+
+def _inFir(functie):
+	"""functie pe un fir daemon (citirile televizorului de dupa evStart); probele de pe PC o ruleaza pe loc"""
+	t = threading.Thread(target=functie, name="HdsCalitateImagineTv")
+	t.daemon = True
+	t.start()
 
 
 def _procFundal(functie, *argumente):
@@ -500,6 +518,13 @@ class Calitate(object):
 		self.timerComparatie = None
 		self.timerIncercare = None
 		self.intrebare = None       # {"valoare", "inainte", "termen"} cat se intreaba dupa o iesire HDR noua
+		self.tvMinte = None         # ce declara televizorul, citit ultima data (tv()); folosit la evStart
+		self.modMinte = None        # modul video citit ultima data (modVideo()); folosit la evStart
+		self.oferitHdr = None       # hdrOferit(), aflat o data (fisierele programului platformei nu apar si nu dispar)
+		self.lacatHdr = threading.Lock()   # scrieHdr de pe firul enigma2 si de pe firul televizorului
+		self.firTv = False          # firul care citeste televizorul dupa zap-uri merge
+		self.ultimulZap = 0.0       # ceasul (monoton) al ultimului evStart
+		self.tvCitit = 0.0          # ceasul ultimei citiri a televizorului
 		self.oferit = self.simulare or citestePq(self.driver.citeste()) is not None
 
 	# ---- ce exista
@@ -508,17 +533,25 @@ class Calitate(object):
 		"""Fisierul HDR al programului platformei, fara lista de alegeri (cu lista, randul e in Setari > Video)."""
 		if self.simulare:
 			return True
-		return os.path.exists(CALE_HDR) and not os.path.exists(CALE_HDR_ALEGERI) and os.path.exists(CALE_DISP)
+		if self.oferitHdr is None:
+			self.oferitHdr = (os.path.exists(CALE_HDR) and not os.path.exists(CALE_HDR_ALEGERI)
+				and os.path.exists(CALE_DISP))
+		return self.oferitHdr
 
 	def tv(self):
+		"""Ce declara televizorul, citit acum (si tinut minte pentru evStart)."""
 		if self.simulare:
 			return {"stiut": True, "hdr10": True, "hlg": True}
-		return televizorHdr(self.citesteFisier(CALE_DISP), self.citesteFisier(CALE_SINK))
+		self.tvMinte = televizorHdr(self.citesteFisier(CALE_DISP), self.citesteFisier(CALE_SINK))
+		self.tvCitit = self.ceas()
+		return self.tvMinte
 
 	def modVideo(self):
+		"""Modul video, citit acum (si tinut minte pentru evStart)."""
 		if self.simulare:
 			return "1080p50"
-		return (self.citesteFisier(CALE_MOD_VIDEO) or "").strip()
+		self.modMinte = (self.citesteFisier(CALE_MOD_VIDEO) or "").strip()
+		return self.modMinte
 
 	def alegeriHdr(self):
 		"""Valorile randului „Ieșire HDR” pentru televizorul de acum; [] cand randul nu se arata."""
@@ -681,25 +714,72 @@ class Calitate(object):
 
 	# ---- iesirea HDR
 
-	def scrieHdr(self, forteaza=False, alegere=None):
-		"""Textul pentru televizorul si modul video de acum, scris numai cand difera de ultimul (sau forteaza)."""
+	def scrieHdr(self, forteaza=False, alegere=None, tv=None, mod=None):
+		"""Textul pentru televizorul si modul video de acum, scris numai cand difera de ultimul (sau forteaza). tv/mod
+		dati (cei tinuti minte, la evStart; cei cititi pe fir) = fara nicio citire; altfel cititi acum."""
 		if not self.hdrOferit():
 			return None
 		if alegere is None:
 			from Components.config import config
 			alegere = config.hds_calitate.iesire_hdr.value
-		text = hdrDeScris(alegere, self.tv(), self.modVideo())
-		if text != self.hdrScris or forteaza:
-			if self.simulare:
-				_jurnal("simulare: %s = %s" % (CALE_HDR, text))
-				ok = True
-			else:
-				ok = self.scrieFisier(CALE_HDR, text)
-			if ok:
-				if text != self.hdrScris:
-					_jurnal("iesirea HDR: %s (alegerea %s)" % (text, alegere))
-				self.hdrScris = text
+		text = hdrDeScris(alegere, self.tv() if tv is None else tv, self.modVideo() if mod is None else mod)
+		with self.lacatHdr:
+			if text != self.hdrScris or forteaza:
+				if self.simulare:
+					_jurnal("simulare: %s = %s" % (CALE_HDR, text))
+					ok = True
+				else:
+					ok = self.scrieFisier(CALE_HDR, text)
+				if ok:
+					if text != self.hdrScris:
+						_jurnal("iesirea HDR: %s (alegerea %s)" % (text, alegere))
+					self.hdrScris = text
+			return self.hdrScris
+
+	def hdrLaZap(self):
+		"""La evStart, inaintea acordarii: modul video citit acum (/proc/stb, direct si ieftin: o alegere noua in
+		Setari > Video reporneste canalul si trebuie sa se vada pe loc), televizorul din ce e tinut minte (nicio citire
+		din /proc/msp langa zap); televizorul se citeste din nou pe un fir, dupa LINISTE_TV_S fara zap."""
+		if not self.hdrOferit():
+			return None
+		from Components.config import config
+		alegere = config.hds_calitate.iesire_hdr.value
+		self.ultimulZap = self.ceas()
+		if self.simulare or self.tvMinte is None:
+			return self.scrieHdr(alegere=alegere)
+		self.scrieHdr(alegere=alegere, tv=self.tvMinte, mod=self.modVideo())
+		self.citesteTvMaiTarziu()
 		return self.hdrScris
+
+	def citesteTvMaiTarziu(self):
+		"""Un singur fir: asteapta LINISTE_TV_S de la ultimul zap (zap-urile noi o prelungesc), apoi, daca citirea
+		de dinainte e mai veche de INTERVAL_TV_S, citeste televizorul si scrie un text nou (alt televizor) pe loc.
+		Pe .114 (SF8008) citirea pe fir chiar langa zap (0,2 s dupa evStart) a intarziat comanda catre tuner (7 din 22
+		de zap-uri cu ~200 ms in plus): driverul nu suporta citirile din /proc/msp in timpul zap-ului."""
+		if self.firTv:
+			return
+		self.firTv = True
+
+		def lucru():
+			try:
+				while True:
+					ramas = self.ultimulZap + LINISTE_TV_S - self.ceas()
+					if ramas <= 0:
+						break
+					time.sleep(min(ramas, LINISTE_TV_S))
+				if self.ceas() - self.tvCitit < INTERVAL_TV_S:
+					return
+				from Components.config import config
+				tv = televizorHdr(self.citesteFisier(CALE_DISP), self.citesteFisier(CALE_SINK))
+				self.tvMinte, self.tvCitit = tv, self.ceas()
+				# alegerea si modul de acum (omul poate sa le fi schimbat cat a asteptat firul)
+				self.scrieHdr(alegere=config.hds_calitate.iesire_hdr.value, tv=tv,
+					mod=(self.citesteFisier(CALE_MOD_VIDEO) or "").strip())
+			except Exception as e:
+				_jurnal("televizorul, dupa zap: %s" % e)
+			finally:
+				self.firTv = False
+		_inFir(lucru)
 
 	# ---- evenimentele serviciului
 
@@ -712,7 +792,7 @@ class Calitate(object):
 			self.latime = self.inaltime = 0
 			self.gama = 0
 			self.opresteComparatia()
-			self.scrieHdr()
+			self.hdrLaZap()
 			return
 		marime = ev == iPlayableService.evVideoSizeChanged
 		gama = ev == getattr(iPlayableService, "evVideoGammaChanged", None)

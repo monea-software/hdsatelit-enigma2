@@ -47,6 +47,22 @@ def areCatalog(lang, cataloage=None):
 	return cataloage is None or lang in cataloage
 
 
+def limbiPeStick():
+	"""Vu+ Solo SE cu partea a doua (Components/HdsParteaDoua.py): limbile fara catalog se pun pe stick, nu in memoria
+	interna. Pe celelalte receptoare (imaginea mica, de la 0.7.4: 15 limbi in imagine, celelalte in feed) o limba fara
+	catalog se descarca singura cand e aleasa (Components/HdsLimbaRestaurare.py)."""
+	try:
+		from Components import HdsParteaDoua as P
+		return bool(P.citesteConf() and P.radacinaNand())
+	except (ImportError, OSError):
+		return False
+
+
+def etichetaFaraCatalog():
+	"""Ce se scrie dupa numele unei limbi fara catalog in lista limbilor (meniu, asistent, web)."""
+	return _("(pe stick)") if limbiPeStick() else _("(se descarcă)")
+
+
 def limbaInterfata():
 	"""Limba in care sunt textele interfetei acum („en_EN” cand cea salvata nu are catalog sau e ascunsa), "" inainte de
 	prima activare. Tema (Converter/HdsCommon), separatorul zecimal (HdsGrade) si fontul (HdsFontInterfata) o folosesc pe
@@ -146,18 +162,15 @@ class Language:
 			self.activateLanguage(self.langlist[index])
 
 	def getLanguageList(self, suplimentare=False):
-		# Un catalog nou de pe stick apare fara a salva o limba inexistenta.
+		# Un catalog nou de pe stick sau din feed apare fara a salva o limba inexistenta.
 		self.cataloage = cataloageDisponibile()
 		self.langlist = [x for x in self.toatelist if x in LIMBI_COMPLETE and
 			areCatalog(self.toate[x][1], self.cataloage)]
 		self.lang = {x: self.toate[x] for x in self.langlist}
 		if suplimentare:
-			try:
-				from Components import HdsParteaDoua as P
-				if P.citesteConf() and P.radacinaNand():
-					return [(x, self.toate[x]) for x in self.toatelist if x in LIMBI_COMPLETE]
-			except (ImportError, OSError):
-				pass
+			# lista lunga, pe orice receptor: si limbile fara catalog (etichetaFaraCatalog), care vin din feed sau,
+			# pe Vu+ Solo SE, de pe stick
+			return [(x, self.toate[x]) for x in self.toatelist if x in LIMBI_COMPLETE]
 		return [(x, self.lang[x]) for x in self.langlist]
 
 	def getActiveLanguage(self):

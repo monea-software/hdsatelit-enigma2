@@ -12,11 +12,14 @@ si bucla are si ea o limita in octeti: peste ea bucatile se arunca si se numara.
 Aplicatia da:
   handler(server, client, cale) -> Raspuns | Flux | Asteapta
   la_tic(acum)                  -> chemat din bucla de cel putin 4 ori pe secunda (porniri/opriri de surse)
+publica(cheie, date, la) da bucata clientilor abia cand ceasul monoton ajunge la `la` (0.7.4, ritmul PCR al releului
+DAB): bucla tine bucatile din viitor intr-un heap si doarme pana la prima, fara fir in plus. Fara `la`, pe loc.
 Merge pe Python 3 si pe Python 2.7 (acolo selectors lipseste: acelasi contract, pe poll sau select, mai jos).
 """
 from __future__ import division
 
 import collections
+import heapq
 import json
 import os
 import socket
@@ -147,6 +150,9 @@ except ImportError:                                   # Python 2.7: doar ce folo
 CERERE_MAX = 8192
 TERMEN_CERERE_S = 5.0
 PAS_S = 0.25
+AMANARE_MAX_S = 5.0                    # o bucata cu `la` nu sta in heap mai mult de atat (plasa de siguranta)
+TOLERANTA_S = 0.002                    # ce e datorat in urmatoarele 2 ms pleaca acum (fara o trezire in plus)
+MARJA_TREZIRE_S = 0.05                 # marja trezirii sarite in publica(.., la) (vezi acolo)
 
 
 class Raspuns(object):
@@ -261,6 +267,8 @@ def rss_kb():
 
 
 class Server(object):
+    amana = True                         # publica(cheie, date, la) stie sa dea la un moment dat (releul DAB intreaba)
+
     def __init__(self, handler, la_tic=None, port=8898, gazda='127.0.0.1', max_clienti=32, coada_max=8 * 1024 * 1024,
                  jurnal=None, porturi_extra=()):
         """porturi_extra: alte porturi pe care se asculta cu acelasi handler (de ex. portul de control al releului T2
@@ -299,8 +307,10 @@ class Server(object):
         self._trezire_w.setblocking(False)
         self.sel.register(self._trezire_r, selectors.EVENT_READ, 'trezire')
         self._trezit = False
-        self._coada = collections.deque()      # (cheie, date) de la firul de date
+        self._coada = collections.deque()      # (cheie, date, la) de la firul de date
         self._coada_octeti = 0
+        self._amanate = []                     # heap (la, nr, cheie, date): bucatile care asteapta momentul lor
+        self._nr_amanat = 0                    # ordinea la acelasi moment (si nicio comparatie de chei sau date)
         self._lacat = threading.Lock()
         self.clienti = {}                      # sock -> Client
         self.abonati = {}                      # cheie -> set(Client)
@@ -309,21 +319,36 @@ class Server(object):
         self.nr = 0
         self.contoare = {'conexiuni': 0, 'respinse_plin': 0, 'lenti_aruncati': 0, 'coada_aruncate': 0,
                          'cereri_rele': 0, 'exceptii_handler': 0, 'octeti_trimisi': 0, 'cereri': 0, 'cereri_tinute': 0,
-                         'fluxuri': 0}
+                         'fluxuri': 0, 'amanate': 0}
         self.cereri_pe_cale = {}               # prima parte a caii -> numar (diagnostic: cine cere des)
 
     # ------------------------------------------------------------ din firul de date
-    def publica(self, cheie, date):
-        """Poate fi chemat din orice fir. Nu blocheaza."""
+    def publica(self, cheie, date, la=None):
+        """Poate fi chemat din orice fir. Nu blocheaza. la: momentul (ceasul monoton) de la care bucata se da
+        clientilor; None = pe loc. Pe aceeasi cheie momentele nu au voie sa scada (ordinea o tine cine publica)."""
         n = len(date)
         with self._lacat:
             if self._coada_octeti + n > self.coada_max:
                 self.contoare['coada_aruncate'] += 1
                 return False
             self._coada_octeti += n
-            self._coada.append((cheie, date))
-        self.trezeste()
+            self._coada.append((cheie, date, la))
+        if la is None or self._trezire_ceruta(la):
+            self.trezeste()
         return True
+
+    def _trezire_ceruta(self, la):
+        """Fara trezire in plus pe fiecare PES (procesor): bucla ia bucata din coada la urmatoarea ei trezire, iar
+        aceea vine inainte de `la` cand (1) `la` e mai tarziu decat PAS_S (bucla nu doarme niciodata mai mult), sau (2)
+        in heap e deja o bucata datorata inainte de `la` (bucla doarme cel mult pana la ea). Fara cursa: bucla se uita in
+        coada chiar inainte de select (ruleaza), iar aici heap-ul se citeste dupa ce bucata e deja in coada."""
+        if la >= _monoton() + PAS_S + MARJA_TREZIRE_S:
+            return False
+        try:
+            urmator = self._amanate[0][0]
+        except IndexError:
+            return True
+        return urmator > la - MARJA_TREZIRE_S
 
     def trezeste(self):
         if not self._trezit:
@@ -353,8 +378,13 @@ class Server(object):
     def ruleaza(self):
         urmator_tic = 0.0
         while not self.gata:
+            pas = PAS_S
+            if self._coada:
+                pas = 0.0                        # venit dupa golire, fara trezire (publica, _trezire_ceruta)
+            elif self._amanate:
+                pas = min(pas, max(0.0, self._amanate[0][0] - _monoton()))
             try:
-                evenimente = self.sel.select(PAS_S)
+                evenimente = self.sel.select(pas)
             except (OSError, ValueError) as e:
                 self.jurnal('select: %s' % e)
                 evenimente = []
@@ -369,8 +399,8 @@ class Server(object):
                         self._citeste(d)
                     if masca & selectors.EVENT_WRITE and d.sock in self.clienti:
                         self._scrie(d)
-            self._goleste_coada()
             acum = _monoton()
+            self._goleste_coada(acum)
             if evenimente or acum >= urmator_tic:
                 self._verifica_asteptari(acum)
             if acum >= urmator_tic:
@@ -390,6 +420,7 @@ class Server(object):
         self.trezeste()
 
     def inchide(self):
+        self._amanate = []
         for c in list(self.clienti.values()):
             self._arunca(c)
         for s in tuple(self.ascultatori) + (self._trezire_r, self._trezire_w):
@@ -408,12 +439,17 @@ class Server(object):
 
     # ------------------------------------------------------------ interne
     def _goleste_trezirea(self):
-        self._trezit = False
+        # intai se goleste soclul, abia apoi se sterge steagul (0.7.4). Invers, un trezeste() din firul de date venit
+        # intre cele doua isi pierdea octetul in golire, steagul ramanea True cu soclul gol si nicio publicare nu mai
+        # trezea bucla: totul pleca numai la ticul de PAS_S (DAB+ din satelit in rafale de 250 ms, masurat pe .114).
+        # Asa, un trezeste() sarit cat steagul e inca True e acoperit de _goleste_coada si _verifica_asteptari din
+        # aceeasi tura (ruleaza dupa golire), iar unul venit dupa stergere scrie din nou.
         try:
             while _primeste(self._trezire_r, 4096):
                 pass
         except (BlockingIOError, OSError):
             pass
+        self._trezit = False
 
     def _accepta(self, asc=None):
         asc = asc if asc is not None else self.asc
@@ -519,7 +555,13 @@ class Server(object):
             c.cheie = r.cheie
             c.cap = r.cap
             self.contoare['fluxuri'] += 1
-            self.abonati.setdefault(r.cheie, set()).add(c)
+            s = self.abonati.setdefault(r.cheie, set())
+            if not s and self._amanate:
+                # primul abonat: bucatile ramase in heap de la un flux de dinainte al cheii (alt TS, alt PTS) nu-i
+                # ajung lui; fluxul lui incepe cu ce se publica de acum
+                self._amanate = [x for x in self._amanate if x[2] != r.cheie]
+                heapq.heapify(self._amanate)
+            s.add(c)
             antet = ('HTTP/1.0 200 OK\r\nContent-Type: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n'
                      % r.tip).encode('ascii')
             self._pune(c, antet)
@@ -576,18 +618,34 @@ class Server(object):
                 if c.intrare and b'\r\n\r\n' in c.intrare:
                     self._citeste_din_intrare(c)
 
-    def _goleste_coada(self):
-        if not self._coada:
-            return
-        with self._lacat:
-            bucati = self._coada
-            self._coada = collections.deque()
-            self._coada_octeti = 0
-        abonati = self.abonati
-        for cheie, date in bucati:
-            s = abonati.get(cheie)
-            if not s:
-                continue
+    def _goleste_coada(self, acum=None):
+        amanate = self._amanate
+        if self._coada:
+            with self._lacat:
+                bucati = self._coada
+                self._coada = collections.deque()
+                self._coada_octeti = 0
+            if acum is None:
+                acum = _monoton()
+            for cheie, date, la in bucati:
+                if la is None:
+                    self._da(cheie, date)
+                    continue
+                # si cele datorate trec prin heap: pe o cheie ies in ordinea momentelor, dupa cele mai vechi din heap
+                self._nr_amanat += 1
+                heapq.heappush(amanate, (min(la, acum + AMANARE_MAX_S), self._nr_amanat, cheie, date))
+                self.contoare['amanate'] += 1
+        if amanate:
+            if acum is None:
+                acum = _monoton()
+            prag = acum + TOLERANTA_S
+            while amanate and amanate[0][0] <= prag:
+                _la, _nr, cheie, date = heapq.heappop(amanate)
+                self._da(cheie, date)
+
+    def _da(self, cheie, date):
+        s = self.abonati.get(cheie)
+        if s:
             for c in tuple(s):
                 self._pune(c, date)
 

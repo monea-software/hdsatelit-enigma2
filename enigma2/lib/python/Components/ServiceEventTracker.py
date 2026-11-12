@@ -8,6 +8,10 @@ try:
 except Exception:
 	_masura = None
 
+# cate ecrane cu redare (InfoBarBase) sunt deschise acum; pluginurile straine il citesc ca nume al modulului
+# (from Components.ServiceEventTracker import InfoBarCount), ca sa stie daca bara canalului a pornit
+InfoBarCount = 0
+
 
 class InfoBarBase:
 	# pluginurile care vor sa stie cand se deschide un ecran cu redare
@@ -35,6 +39,8 @@ class InfoBarBase:
 			InfoBarBase.onInfoBarClosed.remove(functie)
 
 	def __init__(self, steal_current_service = False):
+		global InfoBarCount
+		InfoBarCount += 1
 		if steal_current_service:
 			ServiceEventTracker.setActiveInfoBar(self, None, None)
 		else:
@@ -45,6 +51,8 @@ class InfoBarBase:
 			functie(self)
 
 	def __close(self):
+		global InfoBarCount
+		InfoBarCount = max(0, InfoBarCount - 1)
 		ServiceEventTracker.popActiveInfoBar()
 		for functie in list(InfoBarBase.onInfoBarClosed):
 			functie(self)
