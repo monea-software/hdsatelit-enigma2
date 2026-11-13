@@ -65630,3 +65630,39 @@ msgstr "A testar..."
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1292
 msgid "· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"
 msgstr "· o servidor principal não responde, a descarregar do servidor de reserva"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:50
+msgid "Televizorul arată receptorul."
+msgstr "O televisor mostra o recetor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:51
+msgid "Televizorul arată altă intrare sau e stins."
+msgstr "O televisor mostra outra entrada ou está desligado."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:52
+msgid "Nu se știe încă ce intrare arată televizorul."
+msgstr "Ainda não se sabe que entrada o televisor mostra."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:64
+msgid "întreabă ce intrare arată televizorul"
+msgstr "perguntar que entrada o televisor mostra"
+
+#: data/setup.xml:210
+msgid "Da: receptorul și televizorul se sting împreună, prin cablul HDMI: în standby și la oprirea completă se stinge și televizorul, iar când stingi televizorul intră și receptorul în standby. Televizorul trebuie să aibă CEC pornit (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge."
+msgstr "Sim: o recetor e o televisor desligam-se juntos, pelo cabo HDMI: em standby e no encerramento completo o televisor também se desliga, e quando desligas o televisor, o recetor também entra em standby. O televisor tem de ter o CEC ligado (LG: SIMPLINK, Samsung: Anynet+, Sony: BRAVIA Sync). Se o televisor estiver noutra entrada, não se desliga."
+
+#: data/setup.xml:211
+msgid "Da: când scoți receptorul din standby (din telecomandă sau din web) și când îl pornești din oprit complet, se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl pornește sau îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit."
+msgstr "Sim: quando tiras o recetor do standby (com o comando ou pela web) e quando o ligas depois de um encerramento completo, o televisor também se liga e muda para a entrada do recetor. Não quando é um temporizador a ligá-lo ou a acordá-lo. O televisor tem de ter o CEC ligado."
+
+#: data/setup.xml:213
+msgid "Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Când alegi receptorul pe televizor, receptorul iese din standby. Puterea și volumul rămân ale televizorului."
+msgstr "Sim: as teclas do comando do televisor controlam o recetor pelo cabo HDMI enquanto o televisor o mostra (SIMPLINK na LG, Anynet+ na Samsung). Mantém OK premido para as teclas que faltam. Quando escolhes o recetor no televisor, o recetor sai do standby. Ligar e volume continuam a ser do televisor."
+
+#: data/setup.xml:208
+msgid "Legătura LG SIMPLINK (toate tastele)"
+msgstr "LG SIMPLINK link (all keys)"
+
+#: data/setup.xml:208
+msgid "Numai la televizoarele LG. Da: receptorul se prezintă televizorului ca aparat LG, iar telecomanda LG (și Magic) îi trimite toate tastele; televizorul îl arată atunci în lista intrărilor ca aparat LG (de pildă „LG Cititor DVD”), nu cu numele lui. Nu: televizorul arată numele receptorului, iar telecomanda LG trimite tastele de bază (săgețile, OK, înapoi); pentru celelalte ține apăsat OK."
+msgstr "LG TVs only. Yes: the receiver presents itself to the TV as an LG device, and the LG remote (also the Magic remote) sends it all keys; the TV then shows it in its input list as an LG device (for example “LG DVD Player”), not by its own name. No: the TV shows the receiver's name, and the LG remote sends the basic keys (arrows, OK, back); for the others, hold OK."

@@ -191,6 +191,16 @@ def caleInclus(fisier, dosare, dosar_teme=None):
 	return None
 
 
+def _citesteXml(cale):
+	"""ET.parse; un fisier al temei cu randuri in codarea veche a limbii (nu UTF-8) se citeste si el, ca in skin.py
+	(HdsSkinuri.citesteXml); fara modul (probe cu fisierul singur), ET.parse ca pana acum."""
+	try:
+		from Components.HdsSkinuri import citesteXml
+	except ImportError:
+		return ET.parse(cale).getroot()
+	return citesteXml(cale)
+
+
 def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=None, _lant=None, _vazute=None, _dosar=None):
 	"""Inlocuieste <include> cu copiii fisierelor incluse (si ale includerilor lor). EroareTema la un fisier lipsa, stricat,
 	inclus in cerc sau prea adanc."""
@@ -214,7 +224,7 @@ def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=No
 		if len(lant) > MAX_ADANCIME:
 			raise EroareTema(MOTIV_INCLUDE, "%s (prea adanc)" % fisier)
 		try:
-			inclus = ET.parse(cale).getroot()
+			inclus = _citesteXml(cale)
 		except Exception as e:
 			raise EroareTema(MOTIV_INCLUDE, "%s: %s" % (fisier, str(e)[:160]))
 		vazute.add(real)
@@ -969,7 +979,7 @@ def verifica(cale, root=None, dosar_fonturi=None, dosar_python=None, cutie=None)
 	rez = {"bun": False, "motiv": "", "detaliu": "", "latime": 0, "inaltime": 0, "fonturi": [], "componente": [], "ecrane": 0}
 	dosar = os.path.dirname(cale)
 	try:
-		radacina = ET.parse(cale).getroot()
+		radacina = _citesteXml(cale)
 	except Exception as e:
 		rez["motiv"], rez["detaliu"] = MOTIV_XML, str(e)[:200]
 		return rez

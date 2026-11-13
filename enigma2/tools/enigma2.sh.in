@@ -112,6 +112,8 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 		# Components/HdsPazaModel.py)
 		hds_cs=$(head -n 1 "$hds_p/proc/stb/info/chipset" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
 		hds_vm=$(head -n 1 "$hds_p/proc/stb/info/vumodel" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		# Dreambox (MDM, DM900/DM920, eMMC): no boxtype and no vumodel; the Dream drivers give the box in /proc/stb/info/model
+		hds_mo=$(head -n 1 "$hds_p/proc/stb/info/model" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
 		hds_rp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^root=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
 		hds_kp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^kernel=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
 		# Multiboot (as Components/HdsPazaModel.py pornireMultiboot): kernel=, root= and rootsubdir= of the slot that
@@ -146,7 +148,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			for hds_f in model gbmodel vumodel; do head -c 64 "$hds_p/proc/stb/info/$hds_f"; echo; done
 			head -c 4096 "$hds_p/proc/stb/info/boxtype"; } 2>/dev/null | tr -c 'A-Za-z0-9' ' ')
 		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" -v kpo="$hds_kpo" -v rsd="$hds_rsd" \
-			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v brp="$hds_rp" -v bkp="$hds_kp" \
+			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v mo="$hds_mo" -v brp="$hds_rp" -v bkp="$hds_kp" \
 			-v slotroot="$hds_root" -v slotkernel="$hds_kernel" -v slotsub="$hds_sub" -v cl="$hds_cl" -v dt="$hds_dt" \
 			-v mi="$hds_mi" '
 			# modelele cunoscute, in ordine alfabetica (ca HdsPazaModel.MODELE_CUNOSCUTE)
@@ -224,7 +226,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				}
 				fam = (R["familie"] == "broadcom")
 				if (fam) {
-					cip = cs; if (bt == "") bt = vm; et = ""
+					# the box type: boxtype, else vumodel (Vu+), else model (Dreambox: the only node its drivers give), the
+					# last one only on eMMC: on NAND boards (Zgemma H9) model is not proof of the box type
+					cip = cs; if (bt == "") bt = vm; if (bt == "" && !nand) bt = mo; et = ""
 					# on eMMC the place comes from /proc/cmdline; on NAND (Vu+ Solo SE) from the /proc/mtd list above
 					if (!nand) {
 						rp = brp; kp = bkp; parti = ""

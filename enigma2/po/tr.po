@@ -70319,3 +70319,39 @@ msgstr "Deneniyor..."
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1292
 msgid "· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"
 msgstr "· ana sunucu yanıt vermiyor, yedek sunucudan indiriliyor"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:50
+msgid "Televizorul arată receptorul."
+msgstr "Televizyon alıcıyı gösteriyor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:51
+msgid "Televizorul arată altă intrare sau e stins."
+msgstr "Televizyon başka bir girişi gösteriyor ya da kapalı."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:52
+msgid "Nu se știe încă ce intrare arată televizorul."
+msgstr "Televizyonun hangi girişi gösterdiği henüz bilinmiyor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:64
+msgid "întreabă ce intrare arată televizorul"
+msgstr "televizyonun hangi girişi gösterdiğini sor"
+
+#: data/setup.xml:210
+msgid "Da: receptorul și televizorul se sting împreună, prin cablul HDMI: în standby și la oprirea completă se stinge și televizorul, iar când stingi televizorul intră și receptorul în standby. Televizorul trebuie să aibă CEC pornit (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge."
+msgstr "Evet: alıcı ve televizyon HDMI kablosu üzerinden birlikte kapanır: bekleme modunda ve tam kapatmada televizyon da kapanır, televizyonu kapattığında da alıcı bekleme moduna geçer. Televizyonda CEC açık olmalı (LG: SIMPLINK, Samsung: Anynet+, Sony: BRAVIA Sync). Televizyon başka bir girişteyse kapanmaz."
+
+#: data/setup.xml:211
+msgid "Da: când scoți receptorul din standby (din telecomandă sau din web) și când îl pornești din oprit complet, se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl pornește sau îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit."
+msgstr "Evet: alıcıyı bekleme modundan çıkardığında (kumandayla ya da web'den) ve tam kapatmadan sonra açtığında televizyon da açılır ve alıcının girişine geçer. Bir zamanlayıcı onu açtığında ya da uyandırdığında olmaz. Televizyonda CEC açık olmalı."
+
+#: data/setup.xml:213
+msgid "Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Când alegi receptorul pe televizor, receptorul iese din standby. Puterea și volumul rămân ale televizorului."
+msgstr "Evet: televizyon kumandasının tuşları, televizyon alıcıyı gösterdiği sürece HDMI kablosu üzerinden alıcıyı kontrol eder (LG'de SIMPLINK, Samsung'da Anynet+). Eksik tuşlar için OK'a basılı tut. Televizyonda alıcıyı seçtiğinde alıcı bekleme modundan çıkar. Güç ve ses televizyonda kalır."
+
+#: data/setup.xml:208
+msgid "Legătura LG SIMPLINK (toate tastele)"
+msgstr "LG SIMPLINK link (all keys)"
+
+#: data/setup.xml:208
+msgid "Numai la televizoarele LG. Da: receptorul se prezintă televizorului ca aparat LG, iar telecomanda LG (și Magic) îi trimite toate tastele; televizorul îl arată atunci în lista intrărilor ca aparat LG (de pildă „LG Cititor DVD”), nu cu numele lui. Nu: televizorul arată numele receptorului, iar telecomanda LG trimite tastele de bază (săgețile, OK, înapoi); pentru celelalte ține apăsat OK."
+msgstr "LG TVs only. Yes: the receiver presents itself to the TV as an LG device, and the LG remote (also the Magic remote) sends it all keys; the TV then shows it in its input list as an LG device (for example “LG DVD Player”), not by its own name. No: the TV shows the receiver's name, and the LG remote sends the basic keys (arrows, OK, back); for the others, hold OK."

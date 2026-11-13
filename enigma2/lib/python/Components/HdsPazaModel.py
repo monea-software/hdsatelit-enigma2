@@ -631,7 +631,10 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 		# Broadcom (CHEIE_FAMILIE): `vumodel` = /proc/stb/info/vumodel, `kernel_part` = kernel_part= din reguli
 		c = _cuvinteCmdline(cmdline)
 		a["cip"] = _simplu((chipset or "").split("\n")[0])
-		a["boxtype"] = a["boxtype"] or _simplu((vumodel or "").split("\n")[0])
+		# tipul placii: boxtype, altfel vumodel (Vu+), altfel model (Dreambox DM900/DM920, MDM: driverele Dream dau
+		# numai /proc/stb/info/model), ca garda din enigma2.sh; numai pe eMMC (aici): amprentaNandDinTexte nu ia model
+		a["boxtype"] = (a["boxtype"] or _simplu((vumodel or "").split("\n")[0])
+			or _simplu((model_placa or "").split("\n")[0]))
 		a["partitii_lista"] = []
 		a["partitii"] = ""
 		rp = _partitieDinCmdline(c.get("root"))

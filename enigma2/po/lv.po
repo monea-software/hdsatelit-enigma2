@@ -64614,3 +64614,39 @@ msgstr "Pārbaude..."
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1292
 msgid "· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"
 msgstr "· galvenais serveris neatbild, lejupielāde notiek no rezerves servera"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:50
+msgid "Televizorul arată receptorul."
+msgstr "Televizors rāda uztvērēju."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:51
+msgid "Televizorul arată altă intrare sau e stins."
+msgstr "Televizors rāda citu ieeju vai ir izslēgts."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:52
+msgid "Nu se știe încă ce intrare arată televizorul."
+msgstr "Vēl nav zināms, kuru ieeju rāda televizors."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:64
+msgid "întreabă ce intrare arată televizorul"
+msgstr "jautā, kuru ieeju rāda televizors"
+
+#: data/setup.xml:210
+msgid "Da: receptorul și televizorul se sting împreună, prin cablul HDMI: în standby și la oprirea completă se stinge și televizorul, iar când stingi televizorul intră și receptorul în standby. Televizorul trebuie să aibă CEC pornit (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge."
+msgstr "Jā: uztvērējs un televizors izslēdzas kopā, caur HDMI kabeli: gaidstāvē un pilnīgas izslēgšanas laikā izslēdzas arī televizors, bet, kad izslēdz televizoru, gaidstāvē pāriet arī uztvērējs. Televizoram jābūt ieslēgtam CEC (LG: SIMPLINK, Samsung: Anynet+, Sony: BRAVIA Sync). Ja televizors ir uz citas ieejas, tas neizslēdzas."
+
+#: data/setup.xml:211
+msgid "Da: când scoți receptorul din standby (din telecomandă sau din web) și când îl pornești din oprit complet, se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl pornește sau îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit."
+msgstr "Jā: kad izved uztvērēju no gaidstāves (ar pulti vai no tīmekļa) un kad to ieslēdz pēc pilnīgas izslēgšanas, ieslēdzas arī televizors un pārslēdzas uz uztvērēja ieeju. Ne tad, kad to ieslēdz vai pamodina taimeris. Televizoram jābūt ieslēgtam CEC."
+
+#: data/setup.xml:213
+msgid "Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Când alegi receptorul pe televizor, receptorul iese din standby. Puterea și volumul rămân ale televizorului."
+msgstr "Jā: televizora pults pogas vada uztvērēju pa HDMI kabeli, kamēr televizors to rāda (LG - SIMPLINK, Samsung - Anynet+). Turi OK nospiestu, lai iegūtu trūkstošās pogas. Kad televizorā izvēlies uztvērēju, uztvērējs iziet no gaidstāves. Ieslēgšana un skaļums paliek televizoram."
+
+#: data/setup.xml:208
+msgid "Legătura LG SIMPLINK (toate tastele)"
+msgstr "LG SIMPLINK link (all keys)"
+
+#: data/setup.xml:208
+msgid "Numai la televizoarele LG. Da: receptorul se prezintă televizorului ca aparat LG, iar telecomanda LG (și Magic) îi trimite toate tastele; televizorul îl arată atunci în lista intrărilor ca aparat LG (de pildă „LG Cititor DVD”), nu cu numele lui. Nu: televizorul arată numele receptorului, iar telecomanda LG trimite tastele de bază (săgețile, OK, înapoi); pentru celelalte ține apăsat OK."
+msgstr "LG TVs only. Yes: the receiver presents itself to the TV as an LG device, and the LG remote (also the Magic remote) sends it all keys; the TV then shows it in its input list as an LG device (for example “LG DVD Player”), not by its own name. No: the TV shows the receiver's name, and the LG remote sends the basic keys (arrows, OK, back); for the others, hold OK."

@@ -70788,3 +70788,39 @@ msgstr "Test en cours..."
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1292
 msgid "· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"
 msgstr "· le serveur principal ne répond pas, téléchargement depuis le serveur de secours"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:50
+msgid "Televizorul arată receptorul."
+msgstr "Le téléviseur affiche le récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:51
+msgid "Televizorul arată altă intrare sau e stins."
+msgstr "Le téléviseur affiche une autre entrée ou est éteint."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:52
+msgid "Nu se știe încă ce intrare arată televizorul."
+msgstr "On ne sait pas encore quelle entrée le téléviseur affiche."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:64
+msgid "întreabă ce intrare arată televizorul"
+msgstr "demander quelle entrée le téléviseur affiche"
+
+#: data/setup.xml:210
+msgid "Da: receptorul și televizorul se sting împreună, prin cablul HDMI: în standby și la oprirea completă se stinge și televizorul, iar când stingi televizorul intră și receptorul în standby. Televizorul trebuie să aibă CEC pornit (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge."
+msgstr "Oui : le récepteur et le téléviseur s’éteignent ensemble, par le câble HDMI : en veille et à l’arrêt complet, le téléviseur s’éteint aussi, et quand tu éteins le téléviseur, le récepteur passe aussi en veille. Le téléviseur doit avoir le CEC activé (LG : SIMPLINK, Samsung : Anynet+, Sony : BRAVIA Sync). Si le téléviseur est sur une autre entrée, il ne s’éteint pas."
+
+#: data/setup.xml:211
+msgid "Da: când scoți receptorul din standby (din telecomandă sau din web) și când îl pornești din oprit complet, se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl pornește sau îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit."
+msgstr "Oui : quand tu sors le récepteur de la veille (télécommande ou web) et quand tu l’allumes après un arrêt complet, le téléviseur s’allume aussi et passe sur l’entrée du récepteur. Pas quand une minuterie l’allume ou le réveille. Le téléviseur doit avoir le CEC activé."
+
+#: data/setup.xml:213
+msgid "Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Când alegi receptorul pe televizor, receptorul iese din standby. Puterea și volumul rămân ale televizorului."
+msgstr "Oui : les touches de la télécommande du téléviseur commandent le récepteur par le câble HDMI tant que le téléviseur l’affiche (SIMPLINK chez LG, Anynet+ chez Samsung). Maintiens OK pour les touches manquantes. Quand tu choisis le récepteur sur le téléviseur, le récepteur sort de la veille. L’alimentation et le volume restent ceux du téléviseur."
+
+#: data/setup.xml:208
+msgid "Legătura LG SIMPLINK (toate tastele)"
+msgstr "LG SIMPLINK link (all keys)"
+
+#: data/setup.xml:208
+msgid "Numai la televizoarele LG. Da: receptorul se prezintă televizorului ca aparat LG, iar telecomanda LG (și Magic) îi trimite toate tastele; televizorul îl arată atunci în lista intrărilor ca aparat LG (de pildă „LG Cititor DVD”), nu cu numele lui. Nu: televizorul arată numele receptorului, iar telecomanda LG trimite tastele de bază (săgețile, OK, înapoi); pentru celelalte ține apăsat OK."
+msgstr "LG TVs only. Yes: the receiver presents itself to the TV as an LG device, and the LG remote (also the Magic remote) sends it all keys; the TV then shows it in its input list as an LG device (for example “LG DVD Player”), not by its own name. No: the TV shows the receiver's name, and the LG remote sends the basic keys (arrows, OK, back); for the others, hold OK."

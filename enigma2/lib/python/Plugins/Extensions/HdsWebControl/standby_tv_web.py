@@ -8,7 +8,8 @@
 #
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat):
 #   GET  /api/standby-tv     {result, in_standby, hdmi: {disponibil, oprita, text, nota}, cec: {disponibil, pornit,
-#                             raspunde, text, nume, nota, telecomanda, activ, ultima_tasta, golite}, adresa_fizica};
+#                             raspunde, text, nume, nota, telecomanda, activ (true / false / null = nu se stie),
+#                             ultima_tasta, golite}, adresa_fizica};
 #                             cu ?jurnal=1 si cec.jurnal: jurnalul CEC (HdsStandbyTv.jurnalCec: mesajele primite si
 #                             trimise si tastele date mai departe, cu ora), numai la cerere (panoul citeste la 5 s)
 #   GET  /api/telecomanda-tv {result, titlu, despre, coloane, randuri: [{cod, receptor, tv}], panou: [{cod, eticheta}],
@@ -45,6 +46,10 @@ T_NUME_CERUT = N_(u"Numele pe televizor: %s, cerut de televizor la %s.")
 T_TASTE_OPRITE = N_(u"Tastele televizorului: oprite din setări.")
 T_TASTE_ASTEAPTA = N_(u"Tastele televizorului: pornite, nicio tastă primită încă.")
 T_TASTE_ULTIMA = N_(u"Tastele televizorului: ultima, %s, la %s.")
+# ce intrare arata televizorul (HdsStandbyTv: Cec.activ True / False / None), 0.7.5
+T_SURSA_NOI = N_(u"Televizorul arată receptorul.")
+T_SURSA_ALTA = N_(u"Televizorul arată altă intrare sau e stins.")
+T_SURSA_NESTIUTA = N_(u"Nu se știe încă ce intrare arată televizorul.")
 MESAJE = {
 	"standby": N_(u"stinge televizorul"),
 	"inactive_source": N_(u"receptorul nu mai e pe ecran"),
@@ -56,6 +61,7 @@ MESAJE = {
 	"cec_version": N_(u"răspunde televizorului"),
 	"feature_abort": N_(u"răspunde televizorului"),
 	"menu_status": N_(u"răspunde televizorului"),
+	"request_active_source": N_(u"întreabă ce intrare arată televizorul"),
 }
 
 
@@ -118,8 +124,18 @@ def notaCec(s):
 		nota = _t(T_NUME_CERUT) % (s.get("nume_tv"), _ora(s.get("nume_cerut")))
 	else:
 		nota = _t(T_NUME) % s.get("nume_tv")
-	taste = notaTaste(s)
-	return nota + (u" " + taste if taste else u"")
+	for parte in (notaTaste(s), notaSursa(s)):
+		if parte:
+			nota += u" " + parte
+	return nota
+
+
+def notaSursa(s):
+	"""Ce intrare arata televizorul, dupa mesajele CEC: receptorul, alta (sau stins) ori nu se stie inca."""
+	if "cec_activ" not in s:
+		return u""
+	a = s.get("cec_activ")
+	return _t(T_SURSA_NOI if a is True else (T_SURSA_ALTA if a is False else T_SURSA_NESTIUTA))
 
 
 def notaTaste(s):
@@ -150,7 +166,7 @@ def stare(T=None, jurnal=False):
 			"raspunde": s.get("cec_raspunde"), "text": textCec(s), "nume": s.get("nume_tv"),
 			"nume_implicit": s.get("nume_implicit"), "nume_cerut": s.get("nume_cerut"),
 			"primite": int(s.get("cec_primite") or 0), "nota": notaCec(s),
-			"telecomanda": bool(s.get("cec_telecomanda")), "activ": bool(s.get("cec_activ")),
+			"telecomanda": bool(s.get("cec_telecomanda")), "activ": s.get("cec_activ"),
 			"ultima_tasta": s.get("cec_ultima_tasta"), "golite": int(s.get("cec_golite") or 0)},
 		"adresa_fizica": s.get("adresa_fizica"),
 	}

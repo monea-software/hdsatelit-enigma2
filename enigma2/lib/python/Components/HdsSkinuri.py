@@ -113,6 +113,108 @@ def _jurnal(text):
 	print("[HdsSkinuri] %s" % text)
 
 
+# ------------------------------------------------------------------ fisierele temelor care nu sunt UTF-8 de la cap la coada
+# Temele facute sau schimbate de oameni cu un editor de Windows pot avea randuri salvate in codarea veche a limbii lor
+# (MERCUS-FHD, darog69, forum 1342: ecranul vremii cu "Wilgotno\x9c\xe6" in Windows-1250, restul fisierului in UTF-8, fara
+# antet <?xml encoding?>). Expat cere UTF-8 si refuza tot fisierul ("not well-formed (invalid token)"), in orice imagine.
+# Aici, NUMAI dupa un asemenea refuz: randurile care sunt UTF-8 bun raman neatinse, iar celelalte se citesc in codarea veche
+# a limbii receptorului (implicit Windows-1250). Pe rand intreg, nu pe octet: "SZCZEG\xd3\xa3\xd3W" are "\xd3\xa3" care ar
+# trece drept UTF-8 (alta litera). Fisierul omului nu se schimba pe disc. Un fisier UTF-8 bun sau cu antetul altei codari
+# nu ajunge niciodata aici (se citeste ca pana acum); unul stricat altfel ramane refuzat, cu eroarea lui.
+CODARE_VECHE = "cp1250"
+CODARE_LIMBA = {"ru": "cp1251", "uk": "cp1251", "bg": "cp1251", "mk": "cp1251", "be": "cp1251", "sr": "cp1251",
+	"el": "cp1253", "tr": "cp1254", "lt": "cp1257", "lv": "cp1257", "et": "cp1257", "he": "cp1255", "ar": "cp1256",
+	"de": "cp1252", "fr": "cp1252", "es": "cp1252", "it": "cp1252", "pt": "cp1252", "nl": "cp1252",
+	"da": "cp1252", "sv": "cp1252", "no": "cp1252", "nb": "cp1252", "fi": "cp1252", "ca": "cp1252", "is": "cp1252"}
+# engleza nu e aici: interfata in engleza nu spune nimic despre limba temei (un polonez cu meniul in engleza ramane pe 1250)
+SETARI = "/etc/enigma2/settings"
+
+
+def codareVeche(setari=None):
+	"""Codarea veche a limbii alese pe receptor (config.osd.language din settings), implicit Windows-1250."""
+	try:
+		with open(setari or SETARI, encoding="utf-8", errors="replace") as f:
+			for rand in f:
+				if rand.startswith("config.osd.language="):
+					return CODARE_LIMBA.get(rand.split("=", 1)[1].strip()[:2].lower(), CODARE_VECHE)
+	except (IOError, OSError):
+		pass
+	return CODARE_VECHE
+
+
+def recodeaza(octeti, codare=None):
+	"""(text UTF-8 in octeti, cate randuri s-au citit in codarea veche) sau None cand fisierul nu e de reparat aici: e UTF-8
+	bun (eroarea XML e alta), are antetul altei codari (expat il citeste dupa antet) sau Python-ul n-are codarea veche."""
+	try:
+		octeti.decode("utf-8")
+		return None
+	except UnicodeDecodeError:
+		pass
+	inceput = octeti[:200].lstrip(b"\xef\xbb\xbf \t\r\n")
+	if inceput.startswith(b"<?xml"):
+		antet = inceput.split(b"?>", 1)[0].lower().replace(b"'", b'"')
+		if b"encoding=" in antet and b'encoding="utf-8"' not in antet and b'encoding="utf8"' not in antet:
+			return None
+	codare = codare or codareVeche()
+	import codecs
+	try:
+		codecs.lookup(codare)
+	except LookupError:
+		return None  # fara codarea in Python-ul receptorului: tema ramane refuzata cu eroarea ei, ca pana acum
+	randuri, schimbate = [], 0
+	for rand in octeti.split(b"\n"):
+		try:
+			randuri.append(rand.decode("utf-8"))
+		except UnicodeDecodeError:
+			try:
+				randuri.append(rand.decode(codare))
+			except UnicodeDecodeError:
+				randuri.append(_randAmestecat(rand, codare))
+			schimbate += 1
+	return "\n".join(randuri).encode("utf-8"), schimbate
+
+
+def _randAmestecat(rand, codare):
+	"""Un rand cu litere UTF-8 si litere in codarea veche deodata (de pilda Ł in UTF-8 are octetul 0x81, pe care Windows-1250 nu
+	il are, deci randul nu se poate citi intreg in nicio codare): bucatile UTF-8 bune raman, octetii ramasi se citesc in codarea
+	veche (un octet fara litera acolo devine semnul de inlocuire), ca tema sa nu fie refuzata pentru un singur rand."""
+	bucati, i = [], 0
+	while i < len(rand):
+		try:
+			bucati.append(rand[i:].decode("utf-8"))
+			break
+		except UnicodeDecodeError as e:
+			bucati.append(rand[i:i + e.start].decode("utf-8"))
+			bucati.append(rand[i + e.start:i + e.end].decode(codare, "replace"))
+			i += e.end
+	return "".join(bucati)
+
+
+def _recodat(cale, codare=None):
+	"""(octeti UTF-8, randuri) din fisierul de la cale, cand recodeaza() il poate repara, altfel None."""
+	try:
+		with open(cale, "rb") as f:
+			octeti = f.read()
+	except (IOError, OSError):
+		return None
+	return recodeaza(octeti, codare)
+
+
+def citesteXml(cale, codare=None):
+	"""Radacina XML a unui fisier al temei: ET.parse ca pana acum; numai cand expat il refuza si fisierul are randuri in
+	codarea veche a limbii (nu UTF-8), le citeste pe acelea in ea (recodeaza), cu un rand in jurnal. Altfel eroarea de la
+	ET.parse, neschimbata."""
+	import xml.etree.ElementTree as ET
+	try:
+		return ET.parse(cale).getroot()
+	except ET.ParseError:
+		r = _recodat(cale, codare)
+		if r is None:
+			raise
+	_jurnal("%s: %d randuri care nu sunt UTF-8, citite ca %s" % (cale, r[1], codare or codareVeche()))
+	return ET.fromstring(r[0])
+
+
 def radacina():
 	from enigma import eEnv
 	return eEnv.resolve("${datadir}/enigma2/")
@@ -214,6 +316,14 @@ def previzualizare(root, nume, poza_lipsa=None):
 	return cale
 
 
+def _inceputSkin(evenimente):
+	"""elementele de la inceputul temei, pana la primul <screen>/<windowstyle>/<fonts> (verificaSkin nu citeste tot)"""
+	for eveniment, el in evenimente:
+		yield el
+		if el.tag in ("screen", "windowstyle", "fonts"):
+			return
+
+
 def verificaSkin(cale):
 	"""{"bun", "motiv", "detaliu", "latime", "inaltime"}: fisierul exista si incepe cu <skin>; rezolutia din primul
 	<output><resolution> (citire de la inceput, oprita la primul <screen>)."""
@@ -223,8 +333,17 @@ def verificaSkin(cale):
 		return rez
 	import xml.etree.ElementTree as ET
 	try:
+		try:
+			evenimente = list(_inceputSkin(ET.iterparse(cale, events=("start",))))
+		except ET.ParseError:
+			# randuri in codarea veche a limbii (nu UTF-8): citite ca in skin.py (citesteXml), altfel eroarea de mai sus
+			r = _recodat(cale)
+			if r is None:
+				raise
+			import io
+			evenimente = list(_inceputSkin(ET.iterparse(io.BytesIO(r[0]), events=("start",))))
 		radacina_gasita = False
-		for eveniment, el in ET.iterparse(cale, events=("start",)):
+		for el in evenimente:
 			if not radacina_gasita:
 				radacina_gasita = True
 				if el.tag != "skin":

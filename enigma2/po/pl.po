@@ -71921,3 +71921,39 @@ msgstr "Próba..."
 #: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1292
 msgid "· serverul principal nu răspunde, se descarcă de pe serverul de rezervă"
 msgstr "· główny serwer nie odpowiada, pobieranie z serwera zapasowego"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:50
+msgid "Televizorul arată receptorul."
+msgstr "Telewizor pokazuje odbiornik."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:51
+msgid "Televizorul arată altă intrare sau e stins."
+msgstr "Telewizor pokazuje inne wejście albo jest wyłączony."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:52
+msgid "Nu se știe încă ce intrare arată televizorul."
+msgstr "Nie wiadomo jeszcze, jakie wejście pokazuje telewizor."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/standby_tv_web.py:64
+msgid "întreabă ce intrare arată televizorul"
+msgstr "zapytaj, jakie wejście pokazuje telewizor"
+
+#: data/setup.xml:210
+msgid "Da: receptorul și televizorul se sting împreună, prin cablul HDMI: în standby și la oprirea completă se stinge și televizorul, iar când stingi televizorul intră și receptorul în standby. Televizorul trebuie să aibă CEC pornit (la LG SIMPLINK, la Samsung Anynet+, la Sony BRAVIA Sync). Dacă televizorul e pe altă intrare, nu se stinge."
+msgstr "Tak: odbiornik i telewizor wyłączają się razem, przez kabel HDMI: w czuwaniu i przy pełnym wyłączeniu wyłącza się też telewizor, a gdy wyłączysz telewizor, odbiornik też przechodzi w czuwanie. Telewizor musi mieć włączone CEC (LG: SIMPLINK, Samsung: Anynet+, Sony: BRAVIA Sync). Jeśli telewizor jest na innym wejściu, nie wyłącza się."
+
+#: data/setup.xml:211
+msgid "Da: când scoți receptorul din standby (din telecomandă sau din web) și când îl pornești din oprit complet, se aprinde și televizorul și trece pe intrarea receptorului. Nu și când îl pornește sau îl trezește un temporizator. Televizorul trebuie să aibă CEC pornit."
+msgstr "Tak: gdy wybudzisz odbiornik z czuwania (pilotem lub przez WWW) i gdy włączysz go po pełnym wyłączeniu, włączy się też telewizor i przełączy na wejście odbiornika. Nie wtedy, gdy włącza go lub wybudza timer. Telewizor musi mieć włączone CEC."
+
+#: data/setup.xml:213
+msgid "Da: tastele telecomenzii televizorului comandă receptorul prin cablul HDMI, cât televizorul îl arată (la LG SIMPLINK, la Samsung Anynet+). Ține apăsat OK pentru tastele care lipsesc. Când alegi receptorul pe televizor, receptorul iese din standby. Puterea și volumul rămân ale televizorului."
+msgstr "Tak: przyciski pilota telewizora sterują odbiornikiem przez kabel HDMI, dopóki telewizor go pokazuje (SIMPLINK w LG, Anynet+ w Samsungu). Przytrzymaj OK, by mieć brakujące przyciski. Gdy wybierzesz odbiornik na telewizorze, odbiornik wychodzi z czuwania. Zasilanie i głośność zostają przy telewizorze."
+
+#: data/setup.xml:208
+msgid "Legătura LG SIMPLINK (toate tastele)"
+msgstr "LG SIMPLINK link (all keys)"
+
+#: data/setup.xml:208
+msgid "Numai la televizoarele LG. Da: receptorul se prezintă televizorului ca aparat LG, iar telecomanda LG (și Magic) îi trimite toate tastele; televizorul îl arată atunci în lista intrărilor ca aparat LG (de pildă „LG Cititor DVD”), nu cu numele lui. Nu: televizorul arată numele receptorului, iar telecomanda LG trimite tastele de bază (săgețile, OK, înapoi); pentru celelalte ține apăsat OK."
+msgstr "LG TVs only. Yes: the receiver presents itself to the TV as an LG device, and the LG remote (also the Magic remote) sends it all keys; the TV then shows it in its input list as an LG device (for example “LG DVD Player”), not by its own name. No: the TV shows the receiver's name, and the LG remote sends the basic keys (arrows, OK, back); for the others, hold OK."

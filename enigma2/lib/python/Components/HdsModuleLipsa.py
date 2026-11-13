@@ -47,6 +47,7 @@ BIBLIOTECI = {
 	"libssl.so.3": "openssl3-compat",
 	"libcrypt.so.1": "libxcrypt-compat",
 	"ld-linux.so.3": "ld-linux-compat",
+	"libcurl.so.4": "libcurl4",  # 13.11.2026: NCam_15.8 (RAED) cere si libcurl, pe care feedul extern il are (LIB)
 }
 OPKG_INFO = "/var/lib/opkg/info"
 INTARZIERE_PORNIRE_MS = 20000

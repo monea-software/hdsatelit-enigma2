@@ -63,6 +63,15 @@ dom_skins = [ ]
 _surseSkin = {}
 _xmlAfisaj = set()
 
+def _citesteXml(filename):
+	# HDSatelit: si fisierele temelor cu randuri salvate in codarea veche a limbii, nu in UTF-8 (MERCUS-FHD, forum 1342):
+	# Components/HdsSkinuri.citesteXml, numai dupa refuzul lui expat; un fisier bun se citeste ca pana acum
+	try:
+		from Components.HdsSkinuri import citesteXml
+	except ImportError:
+		return xml.etree.ElementTree.parse(filename).getroot()
+	return citesteXml(filename)
+
 def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, filename = None):
 	# read the skin. HDSatelit: si cu numele argumentelor OE-Alliance (filename=, desktop=, screenID=), ca la pluginurile
 	# scrise pentru acele imagini; desktop/screenID nu schimba nimic aici (datele se incarca in loadSkinData)
@@ -70,7 +79,7 @@ def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, f
 		name = filename
 	filename = resolveFilename(scope, name)
 	mpath = path.dirname(filename) + "/"
-	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	radacina = _citesteXml(filename)
 	dom_skins.append((mpath, radacina))
 	_surseSkin[id(radacina)] = name
 	return radacina
@@ -200,7 +209,7 @@ def loadSkinTemplates(skinTemplatesFileNames):
 	if skinTemplatesFileNames:
 		for fileName in skinTemplatesFileNames:
 			try:
-				radacina = xml.etree.ElementTree.parse(fileName).getroot()
+				radacina = _citesteXml(fileName)
 			except Exception as err:
 				skinWarning("sabloanele din %s nu s-au citit: %s" % (fileName, err))
 				continue
@@ -301,7 +310,7 @@ def fisierAfisaj(nume):
 def citesteAfisaj(nume):
 	"""Citeste un XML LCD fara sa schimbe setarea salvata sau numele ecranelor."""
 	filename = fisierAfisaj(nume)
-	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	radacina = _citesteXml(filename)
 	if radacina.tag != "skin" or not radacina.findall("screen"):
 		raise ValueError("fisierul nu contine ecrane de afisaj")
 	for tip in ("output", "windowstyle"):

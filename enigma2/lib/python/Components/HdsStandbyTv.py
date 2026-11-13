@@ -77,22 +77,58 @@
 # <Menu Status> "activat" (receptorul cere tastele). Versiunea CEC: 1.4. Compatibilitate cu televizorul: vezi
 # COMPATIBILITATE_TV (codul de producator si legatura facuta prin comenzile proprii ale televizorului, cat tastele
 # televizorului sunt pornite). Sursa activa se afla NUMAI din mesaje (Rsen din
-# hdmi0 nu arata intrarea aleasa: ramane YES si cat televizorul e pe sursa lui): <Set Stream Path> / <Routing Change> /
-# <Routing Information> spre adresa noastra, o tasta de la televizor; <Active Source> al altcuiva, alta cale sau
-# <Standby> de la televizor = nu mai suntem. <Active Source> numai cand televizorul arata intrarea noastra: la mesajele
+# hdmi0 nu arata intrarea aleasa: ramane YES si cat televizorul e pe sursa lui), cu trei stari (Cec.activ): True = pe
+# noi (<Set Stream Path> / <Routing Change> / <Routing Information> spre adresa noastra, o tasta de la televizor),
+# False = stiut ca nu (<Active Source> al altcuiva, alta cale, <Standby> de la televizor, intrarea noastra in standby),
+# None = nu se stie (la pornirea enigma2, pana vine un mesaj). Dupa primul anunt bun, o data, <Request Active Source>
+# 0x85 catre toti: aparatul de pe ecran (sau televizorul, pe tunerul lui) raspunde cu <Active Source> si starea devine
+# False; fara raspuns ramane None. <Active Source> numai cand televizorul arata intrarea noastra: la mesajele
 # de mai sus, la <Request Active Source> daca suntem sursa, la trezirea facuta de om daca eram sursa la intrarea in
 # standby si nimic nu a spus altfel intre timp; la pornire nimic. Nu aprinde si nu muta televizorul. Tipul aparatului
 # e Playback: adresa logica o alege driverul (4, 8, 11). Cat setarea e pornita, mesajele se citesc la CITIRE_RAPIDA_MS.
 # Setarile de standby (Stinge si televizorul, Porneste televizorul la trezire) folosesc acelasi nod: <Standby> 0x36
-# catre televizor la intrarea in standby numai daca receptorul era sursa activa (altfel numai <Inactive Source> 0x9D),
-# <Image View On> 0x04 catre televizor si <Active Source> 0x82 catre toti la iesire. Adresa fizica: CECAddr din
-# /proc/msp/hdmi0_sink (EDID-ul televizorului), altfel ioctl 1.
+# catre televizor la intrarea in standby si la oprirea completa cand receptorul e pe ecran SAU nu se stie (0.7.5:
+# inainte numai cand era stiut pe ecran, deci dupa o pornire fara nicio tasta a televizorului pleca numai <Inactive
+# Source> si televizorul ramanea aprins, Wlad, forum 948); numai cand se stie ca televizorul arata altceva, doar
+# <Inactive Source> 0x9D. <Image View On> 0x04 catre televizor si <Active Source> 0x82 catre toti la iesire. Adresa
+# fizica: CECAddr din /proc/msp/hdmi0_sink (EDID-ul televizorului), altfel ioctl 1.
+# Televizorul -> receptorul (0.7.5, cererea lui wlad-sat, forum 1209; ca handle_tv_standby / handle_tv_wakeup din
+# OE-Alliance, fara setare noua):
+#   - receptorul in standby si televizorul alege intrarea lui (<Set Stream Path> / <Routing Change> / <Routing
+#     Information> spre adresa noastra, de pilda la aprinderea televizorului pe intrarea receptorului sau din lista
+#     SIMPLINK / Anynet+): receptorul se trezeste, cat „Comanda din telecomanda televizorului” e Da (din fabrica);
+#   - televizorul se stinge (<Standby> de la televizor, catre toti sau catre noi) cand receptorul era pe ecran sau nu se
+#     stie: receptorul intra si el in standby, numai cu „Stinge si televizorul (CEC)” aleasa (se sting impreuna). Nu
+#     cat receptorul e deja in standby, se opreste sau tocmai s-a trezit (TREZIT_PAUZA_S: televizorul inca se stinge),
+#     si nici cat se incearca aprinderea televizorului (cel mult APRINDERE_TERMEN_S; proba pe Viper 4K V20 + LG: LG-ul
+#     care abia se stingea a trimis <Standby> la 23 s dupa trezire, iar receptorul trezit de om intra singur in standby).
+#   Pe familia libreader primul octet al mesajului e cel care l-a trimis, deci un mesaj catre toti nu are 0x0F:
+#   <Standby> se trateaza la fel, oricare ar fi primul octet. Totul pe firul principal (_primit vine din _preia).
+# Aprinderea televizorului (0.7.5 b, Wlad, forum 948 #2116/#2118, V10 + LG: „am pornit receptorul din oprit complet si
+# televizorul nu s-a aprins”): cu „Porneste televizorul la trezire (CEC)” aleasa, la trezirea facuta de om SI la pornirea
+# reala a receptorului (sistemul pornit de cel mult PORNIRE_UPTIME_S, nu repornirea interfetei, nu trezirea de la ceas,
+# nu cand interfata porneste in standby; primul pas dupa PORNIRE_DUPA_MS), <Image View On> + <Active Source> se trimit din
+# nou la APRINDERE_REPETA_MS (de la a doua oara si <Give Device Power Status>) pana cand: televizorul spune ca e pornit
+# (<Report Power Status> pornit, o tasta a lui, alegerea intrarii noastre), sau HDMI e sus (Rsen YES), adresa fizica se
+# stie si mesajul a plecat; ori pana trece APRINDERE_TERMEN_S, receptorul intra in standby sau televizorul arata alta
+# intrare. Rsen YES (si cele doua trimiteri bune fara /proc/msp/hdmi0) nu opresc aprinderea daca televizorul a raspuns dupa
+# inceput ca e in standby sau abia se aprinde (<Report Power Status> 01/02/03): pe LG-ul de pe .122 Rsen ramane YES si cu
+# televizorul stins (proba pe receptor), iar aprinderea se oprea dupa o trimitere, cu televizorul inca stins.
+# La LG HPD cade ~5 s cand televizorul se aprinde (AS5): un singur mesaj trimis atunci se pierdea. Un rand in
+# jurnal la inceput si unul la sfarsit (ce s-a trimis, de cate ori, de ce s-a oprit), si intrarea „aprindere” in jurnalul CEC.
+# Codul televizorului (pentru legatura SIMPLINK): si fara intrebarea noastra, cand e sigur al televizorului (pe familia
+# libreader primul octet 0) sau e un cod din COMPATIBILITATE_TV. Altfel, la LG (Wlad, AS5), televizorul isi trimitea codul
+# primul, receptorul il arunca si raspundea la <Give Device Vendor ID> cu <Feature Abort>, iar LG dadea apoi numai
+# tastele de baza (sageti, OK, inapoi).
 #
 # Toate scrierile si citirile sunt prinse; erorile merg in jurnal, cel mult JURNAL_PE_CHEIE randuri de acelasi fel.
 # Jurnalul CEC (Cec.jurnalCec, in memorie, ultimele JURNAL_CEC_MAX intrari, citit prin jurnalCec() si
 # /api/standby-tv?jurnal=1): fiecare mesaj primit si trimis si fiecare tasta data mai departe, cu ora; plus de cate ori
 # coada driverului a fost golita dupa un inceput de neinteles (golite). Arata ce trimite televizorul la apasari repezi,
 # cand ajung tastele si unde se pierd, fara un al doilea cititor al nodului (care ar fura mesajele).
+# 0.7.5: acelasi jurnal (o stare pe un rand, apoi ultimele JURNAL_TMP_RANDURI intrari) si in /tmp/hds-cec.txt, scris
+# cel mult o data la JURNAL_TMP_MS dupa o intrare noua (tmpfs). Asistenta il citeste cu operatia existenta „citeste”
+# (/tmp e in tiparul ei), deci proba CEC se face la omul care are televizorul, fara web, fara SSH, fara operatie noua.
 # Caile se pot muta sub un dosar cu HDS_PROBA_STANDBY_TV (emulatorul si probele de pe PC). Fisierul nu importa nimic
 # din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
@@ -118,6 +154,7 @@ CEC_REL = "/dev/hdmi_cec"
 SEMN_REL = "/tmp/hds-hdmi-oprit"
 MODEL_REL = "/etc/hdsatelit-model"
 ENIGMA_INFO_REL = "/usr/lib/enigma.info"
+JURNAL_TMP_REL = "/tmp/hds-cec.txt"     # jurnalul CEC si pentru asistenta (op „citeste”), in tmpfs
 
 OPRIRE_ASTEAPTA_S = 0.5     # oprirea completa: cat asteapta scrierea CEC (firul de lucru CEC) inainte de quitMainloop
 OPRIRE_LINIE_S = 0.2        # ... si apoi cat pleaca mesajul pe fir (un <Standby> are ~60 ms, plus o reincercare)
@@ -140,6 +177,8 @@ PRELUARE_MS = 10            # familia libreader: pasul citirii nu asteapta; rezu
 CITIRE_BLOCATA_S = 1.0      # familia libreader: un apel in driver care nu se intoarce in atat opreste CEC
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
+JURNAL_TMP_MS = 2000        # jurnalul CEC in JURNAL_TMP_REL: cel mult o scriere la atat dupa o intrare noua
+JURNAL_TMP_RANDURI = 200    # ultimele atatea intrari in fisier
 
 NUME_MAX = 14               # <Set OSD Name>: cel mult 14 caractere ASCII
 NUME_REZERVA = "HD Satelit"
@@ -181,10 +220,21 @@ CEC_STARE_CERUTA = (0x01, 0x03)   # <Give Deck Status>: "pornit", "o data" (la "
 # legatura prin comenzile lor proprii (<Vendor Command>). Pentru ele: la <Give Device Vendor ID> raspundem cu codul
 # televizorului, iar la comenzile lui cu raspunsurile de mai jos (probate pe un televizor real). Codul televizorului:
 # primul <Device Vendor ID> venit cel mult COD_TV_ASTEPTARE_S dupa intrebarea noastra catre el.
+# Legatura LG (SIMPLINK) numai cu setarea „Legătura LG SIMPLINK (toate tastele)” (config.hds_standby.cec_lg_simplink, Nu
+# din fabrica): un LG care primeste codul lui de la receptor il trece in lista intrarilor ca aparat LG („LG Cititor DVD”,
+# dispozitivul de telecomanda universala gasit singur, cu marca LG si tipul DVD) si nu mai arata numele receptorului
+# (vazut in lista intrarilor LG-ului de langa .122, HDMI 1; Octagonul fara legatura, pe HDMI 3, aparea cu numele lui).
+# Fara setare: <Feature Abort> la <Give Device Vendor ID> si fara raspuns la comenzile LG, deci numele adevarat si
+# tastele de baza ale telecomenzii LG (sagetile, OK, inapoi; restul din panoul „Mai multe taste”, OK tinut).
 COMPATIBILITATE_TV = {
 	b"\x00\xe0\x91": "lg",       # LG Electronics (registrul IEEE: 00-E0-91; trimis de televizor pe cablu)
 }
+TREZIT_PAUZA_S = 10.0        # dupa trezirea receptorului, un <Standby> de la televizor nu-l mai pune in standby
 COD_TV_ASTEPTARE_S = 2.0
+APRINDERE_REPETA_MS = 3000   # aprinderea televizorului: pasul (Image View On + Active Source din nou)
+APRINDERE_TERMEN_S = 45.0    # ... cel mult atat de la inceput
+PORNIRE_DUPA_MS = 4000       # la pornirea receptorului, primul pas al aprinderii dupa atat (nodul CEC si adresa)
+PORNIRE_UPTIME_S = 300.0     # „pornirea receptorului” = sistemul pornit de cel mult atat (nu repornirea interfetei)
 COD_TV_REINTREBARE_S = 60.0
 LEGATURA_INCEPUT, LEGATURA_CONFIRMARE, LEGATURA_PORNIRE, LEGATURA_CERERE, LEGATURA_MOD = 0x01, 0x02, 0x03, 0x04, 0x05
 LEGATURA_RECONECTARE, LEGATURA_STARE = 0x0B, 0xA0
@@ -276,12 +326,12 @@ PANOU_TASTE = (T_MENU, T_EXIT, T_ECRAN1, T_ECRAN2, T_ECRAN3, T_ANTERIOR, T_URMAT
 TASTE_TELEVIZOR = (116, 113, 115, 114)          # POWER, MUTE, VOL+, VOL-
 
 RADACINA = None
-IESIRE = VFD = HDMI0 = SINK = CEC = SEMN = MODEL = ENIGMA_INFO = None
+IESIRE = VFD = HDMI0 = SINK = CEC = SEMN = MODEL = ENIGMA_INFO = JURNAL_TMP = None
 
 
 def folosesteRadacina(radacina=None):
 	"""Caile driverului; `radacina` (sau HDS_PROBA_STANDBY_TV) muta toate caile sub un dosar."""
-	global RADACINA, IESIRE, VFD, HDMI0, SINK, CEC, SEMN, MODEL, ENIGMA_INFO
+	global RADACINA, IESIRE, VFD, HDMI0, SINK, CEC, SEMN, MODEL, ENIGMA_INFO, JURNAL_TMP
 	if radacina is None:
 		radacina = os.environ.get("HDS_PROBA_STANDBY_TV") or ""
 	RADACINA = radacina.rstrip("/\\")
@@ -290,7 +340,7 @@ def folosesteRadacina(radacina=None):
 		return RADACINA + rel if RADACINA else rel
 	IESIRE, VFD, HDMI0, SINK, CEC, SEMN = (p(IESIRE_REL), p(VFD_REL), p(HDMI0_REL), p(SINK_REL), p(CEC_REL),
 		p(SEMN_REL))
-	MODEL, ENIGMA_INFO = p(MODEL_REL), p(ENIGMA_INFO_REL)
+	MODEL, ENIGMA_INFO, JURNAL_TMP = p(MODEL_REL), p(ENIGMA_INFO_REL), p(JURNAL_TMP_REL)
 
 
 folosesteRadacina()
@@ -560,6 +610,55 @@ def _inStandby():
 	return getattr(m, "inStandby", None) is not None
 
 
+def _seOpreste():
+	"""True cat fereastra de oprire / repornire (TryQuitMainloop) e deschisa."""
+	import sys
+	m = sys.modules.get("Screens.Standby")
+	return bool(getattr(m, "inTryQuitMainloop", False))
+
+
+def _uptime():
+	"""Secundele de la pornirea sistemului (/proc/uptime), sau None."""
+	try:
+		with io.open((RADACINA or "") + "/proc/uptime", "r", encoding="ascii") as f:
+			return float(f.read(64).split()[0])
+	except Exception:
+		return None
+
+
+def _trezitDeCeas():
+	"""True cand receptorul a pornit singur, de la ceas (temporizator); citirea pastrata de Tools.StbHardware."""
+	try:
+		from Tools.StbHardware import getFPWasTimerWakeup
+		return bool(getFPWasTimerWakeup())
+	except Exception:
+		return False
+
+
+def _standbyReceptor():
+	"""Receptorul in standby, ca la tasta POWER: prin coada notificarilor (o fereastra deschisa pe televizor nu e
+	rupta; la trezire Screens/Standby.stergeStandbyDinCoada scoate o cerere ramasa)."""
+	if _inStandby():
+		return False
+	from Tools import Notifications
+	from Screens.Standby import Standby
+	if any(n[1] is Standby for n in Notifications.notifications):
+		return False
+	Notifications.AddNotification(Standby)
+	return True
+
+
+def _trezesteReceptorul():
+	"""Iesirea din standby, ca la tasta POWER pe ecranul de standby."""
+	import sys
+	m = sys.modules.get("Screens.Standby")
+	ecran = getattr(m, "inStandby", None)
+	if ecran is None:
+		return False
+	ecran.Power()
+	return True
+
+
 def _faTimer(functie):
 	from enigma import eTimer
 	t = eTimer()
@@ -581,6 +680,7 @@ def initConfig():
 		c.cec_porneste = ConfigYesNo(default=False)   # „Pornește televizorul la trezire (CEC)”
 		c.nume_tv = ConfigText(default="", fixed_size=False)   # "Numele receptorului pe televizor" (gol = modelul)
 		c.cec_telecomanda = ConfigYesNo(default=True)  # "Comanda din telecomanda televizorului" (tastele prin CEC)
+		c.cec_lg_simplink = ConfigYesNo(default=False)  # „Legătura LG SIMPLINK (toate tastele)” (vezi COMPATIBILITATE_TV)
 		# pentru /setari (setari_web.py): textul se poate schimba si din web, cel mult NUME_MAX caractere; gol arata
 		# numele implicit
 		c.nume_tv.web_text_max = NUME_MAX
@@ -640,6 +740,17 @@ def telecomandaPornita():
 	"""Setarea "Comanda din telecomanda televizorului" (tastele televizorului prin CEC)."""
 	try:
 		return bool(_cfg().cec_telecomanda.value)
+	except Exception:
+		return False
+
+
+def legaturaPornita(fel):
+	"""Legatura proprie a televizorului (COMPATIBILITATE_TV) aleasa de om: la LG setarea „Legătura LG SIMPLINK (toate
+	tastele)”, Nu din fabrica (cu ea LG arata receptorul ca aparat LG, nu cu numele lui)."""
+	if fel != "lg":
+		return True
+	try:
+		return bool(_cfg().cec_lg_simplink.value)
 	except Exception:
 		return False
 
@@ -804,7 +915,12 @@ class Cec(object):
 		self.telecomanda = telecomanda or telecomandaPornita
 		self.injecteaza = injecteaza or _injecteaza
 		self.panou = panou or deschidePanou
-		self.activ = False           # televizorul arata intrarea receptorului (din mesajele CEC sau din raspunsul nostru)
+		self.activ = None            # televizorul arata intrarea receptorului: True, False (stiut ca nu) sau None (nu se
+		                             # stie: la pornire, pana vine un mesaj); din mesajele CEC sau din raspunsul nostru
+		self.sursaIntrebata = False  # <Request Active Source> trimis dupa primul anunt bun (o data)
+		self.trezitLa = None         # cand s-a trezit receptorul ultima oara (ceasul monoton; pauza la <Standby>)
+		self.standbyTv = None        # functia care pune receptorul in standby (probele o inlocuiesc)
+		self.trezesteReceptorul = None   # functia care trezeste receptorul (probele o inlocuiesc)
 		self.activLaStandby = False  # eram sursa la intrarea in standby, si nimic nu a spus altfel intre timp
 		self.meniuActiv = True       # <Menu Status> trimis televizorului
 		self.codTv = None            # codul de producator al televizorului (3 octeti), cand se stie
@@ -815,8 +931,15 @@ class Cec(object):
 		self.timerOk = None
 		self.timerEliberare = None
 		self.ultimaTasta = None      # {"ui", "cod", "cand"}
+		self.stareTv = None          # ultimul <Report Power Status> al televizorului (0 pornit, 1 standby, 2/3 in trecere)
+		self.tvPornitLa = None       # ceasul monoton al ultimului semn ca televizorul e pornit (stare, tasta, alegerea noastra)
+		self.tvNepornitLa = None     # ceasul monoton al ultimului <Report Power Status> „nu e pornit” (standby, in trecere)
+		self.altaSursaLa = None      # ceasul monoton al ultimului mesaj care a spus ca televizorul arata altceva (sau s-a stins)
+		self.aprindereActiva = False  # StandbyTv incearca acum sa aprinda televizorul (un <Standby> de la el nu ne stinge)
 		self.jurnalCec = []          # jurnalul CEC, cel mult JURNAL_CEC_MAX intrari (cele mai vechi ies)
 		self.golite = 0              # golirile cozii driverului dupa un inceput de neinteles
+		self.timerJurnalTmp = None   # scrierea jurnalului CEC in JURNAL_TMP (asistenta), cel mult una la JURNAL_TMP_MS
+		self.jurnalTmpAsteapta = False
 
 	def _noteaza(self, fel, **campuri):
 		"""O intrare in jurnalul CEC: ora, felul (primit, trimis, tasta, golit) si campurile date."""
@@ -828,6 +951,58 @@ class Cec(object):
 				del self.jurnalCec[:len(self.jurnalCec) - JURNAL_CEC_MAX]
 		except Exception:
 			pass
+		self._jurnalTmpCurand()
+
+	def _jurnalTmpCurand(self):
+		"""Jurnalul CEC in JURNAL_TMP la JURNAL_TMP_MS dupa prima intrare noua (o rafala de taste = o scriere)."""
+		if self.jurnalTmpAsteapta:
+			return
+		try:
+			if self.timerJurnalTmp is None:
+				self.timerJurnalTmp = self.faceTimer(self.scrieJurnalTmp)
+			self.timerJurnalTmp.start(JURNAL_TMP_MS, True)
+			self.jurnalTmpAsteapta = True
+		except Exception as e:
+			_jurnal("jurnalul CEC in %s: %r" % (JURNAL_TMP, e), "cec-jurnal-tmp")
+
+	def textJurnal(self):
+		"""Jurnalul CEC ca text: un rand de stare, apoi ultimele JURNAL_TMP_RANDURI intrari (ora, felul, campurile). Il
+		citeste asistenta (op „citeste” pe JURNAL_TMP_REL): ce primeste si ce trimite receptorul, fara web si fara SSH."""
+		def ora(t):
+			try:
+				return time.strftime("%H:%M:%S", time.localtime(t)) + (".%03d" % int(round((t % 1) * 1000) % 1000))
+			except Exception:
+				return str(t)
+		setari = {}
+		try:
+			c = _cfg()
+			setari = {"stinge": bool(c.cec_stinge.value), "porneste": bool(c.cec_porneste.value),
+				"telecomanda": bool(c.cec_telecomanda.value)}
+		except Exception:
+			pass
+		stare = [("deschis", self.fd is not None), ("blocat", bool(self.blocat)), ("libreader", self.inFir),
+			("logica", self.logica), ("adresa", textAdresa(self.adresaStiuta())),
+			("activ", self.activ), ("cod_tv", hexa(bytearray(self.codTv)) if self.codTv else None),
+			("primite", self.primite), ("golite", self.golite)] + sorted(setari.items())
+		randuri = [u"# HD Satelit: jurnalul CEC (ultimele %d intrari), scris la %s" % (JURNAL_TMP_RANDURI, ora(self.ceas())),
+			u"stare: " + u" ".join(u"%s=%s" % (k, v) for k, v in stare)]
+		for x in self.jurnalCec[-JURNAL_TMP_RANDURI:]:
+			campuri = u" ".join(u"%s=%s" % (k, x[k]) for k in sorted(x) if k not in ("t", "fel"))
+			randuri.append(u"%s %s %s" % (ora(x.get("t", 0)), x.get("fel", u"?"), campuri))
+		return u"\n".join(randuri) + u"\n"
+
+	def scrieJurnalTmp(self):
+		"""Scrie JURNAL_TMP (fisier nou, apoi mutat peste cel vechi: cine citeste nu vede niciodata o jumatate)."""
+		self.jurnalTmpAsteapta = False
+		try:
+			nou = JURNAL_TMP + ".nou"
+			with io.open(nou, "w", encoding="utf-8") as f:
+				f.write(self.textJurnal())
+			os.replace(nou, JURNAL_TMP)
+			return True
+		except Exception as e:
+			_jurnal("jurnalul CEC in %s: %r" % (JURNAL_TMP, e), "cec-jurnal-tmp")
+			return False
 
 	def _tasta(self, cod, steag):
 		"""O tasta a receptorului data mai departe (injecteaza), trecuta si in jurnal."""
@@ -949,7 +1124,7 @@ class Cec(object):
 		intoarce adresa fizica (doi octeti) sau None."""
 		if 0x01 <= buf[0] <= 0x0E:     # 0 e televizorul, 0x0F nicio adresa: driverul inca nu si-a gasit una
 			self.logica = buf[0]
-		if buf[1] or buf[2]:
+		if (buf[1] or buf[2]) and not (buf[1] == 0xFF and buf[2] == 0xFF):     # 0.0.0.0 si f.f.f.f: nicio adresa
 			return bytes(buf[1:3])
 		return None
 
@@ -1098,7 +1273,21 @@ class Cec(object):
 				self.intreabaCodTv()        # televizorul poate sa nu mai intrebe el (si-a tinut minte aparatul)
 		except Exception as e:
 			_jurnal("codul televizorului: %r" % (e,), "cec-cod-tv")
+		self.intreabaSursa()
 		self.sursaDacaTvPeNoi()
+
+	def intreabaSursa(self):
+		"""O data, dupa primul anunt bun, cat nu se stie ce arata televizorul: <Request Active Source> catre toti. Aparatul
+		de pe ecran (sau televizorul, pe tunerul lui) raspunde cu <Active Source>; o adresa care nu e a noastra spune ca
+		televizorul arata altceva (activ = False), deci la standby si la oprire pleaca numai <Inactive Source>."""
+		if self.sursaIntrebata or self.activ is not None or self.fd is None:
+			return False
+		self.sursaIntrebata = True
+		try:
+			return self.trimite(CEC_TOTI, CEC_REQUEST_ACTIVE_SOURCE)
+		except Exception as e:
+			_jurnal("intrebarea sursei active: %r" % (e,), "cec-sursa")
+			return False
 
 	def sursaDacaTvPeNoi(self):
 		"""<Active Source> numai cand mesajele spun ca televizorul e pe intrarea receptorului (sursa acum, sau la
@@ -1371,6 +1560,7 @@ class Cec(object):
 		if cod == CEC_ACTIVE_SOURCE and len(parametri) >= 2:
 			if bytes(parametri[:2]) != self.adresaFizica():
 				self.activ = False      # alt aparat (sau televizorul insusi) e pe ecran
+				self._altaSursa()
 				self.activLaStandby = False
 				self.opresteTastele()
 			return
@@ -1383,13 +1573,26 @@ class Cec(object):
 				_jurnal("sursa activa: %r" % (e,), "cec-sursa")
 			return
 		if cod == CEC_DEVICE_VENDOR_ID and len(parametri) >= 3:
-			self._codPrimit(bytes(bytearray(parametri)[:3]))
+			self._codPrimit(bytes(bytearray(parametri)[:3]), dest)
+			return
+		if cod == CEC_REPORT_POWER_STATUS and parametri:
+			# raspunsul televizorului la <Give Device Power Status> (catre noi; pe libreader primul octet e televizorul)
+			self.stareTv = bytearray(parametri)[0]
+			if self.stareTv == CEC_PORNIT:
+				self._tvPornit()
+			else:
+				# standby (01) sau in trecere (02, 03): Rsen YES nu mai inseamna ca aprinderea a reusit
+				try:
+					self.tvNepornitLa = self.ceasLucru()
+				except Exception:
+					pass
+			return
+		if cod == CEC_STANDBY:
+			# televizorul se stinge: catre toti (V20: primul octet 0x0F) sau, pe familia libreader, cu primul octet al
+			# celui care trimite (0); acelasi lucru si catre noi
+			self._tvStins()
 			return
 		if dest == CEC_TOTI:
-			if cod == CEC_STANDBY:
-				self.activ = False      # televizorul se stinge; receptorul NU intra in standby
-				self.activLaStandby = False
-				self.opresteTastele()
 			return       # catre toti: fara raspuns
 		if self.logica is None:
 			self._adreseDinDriver()     # o intrebare venita inaintea anuntului: adresa noastra din driver
@@ -1420,6 +1623,7 @@ class Cec(object):
 			if self.felTv() == "lg":
 				self._legatura(catre, bytearray(parametri))
 		elif cod == CEC_USER_CONTROL_PRESSED and parametri:
+			self._tvPornit()
 			if self.telecomanda():
 				self.activ = True
 				self.apasa(bytearray(parametri)[0])
@@ -1506,7 +1710,8 @@ class Cec(object):
 	# ---- compatibilitate cu televizorul
 
 	def felTv(self):
-		"""Felul televizorului din COMPATIBILITATE_TV, sau None (cod necunoscut, fara nevoi aparte, tastele oprite)."""
+		"""Felul televizorului din COMPATIBILITATE_TV, sau None (cod necunoscut, fara nevoi aparte, tastele oprite, sau
+		legatura lui neleasa de om: la LG setarea „Legătura LG SIMPLINK”, vezi legaturaPornita)."""
 		if self.codTv is None:
 			return None
 		try:
@@ -1514,7 +1719,10 @@ class Cec(object):
 				return None
 		except Exception:
 			return None
-		return COMPATIBILITATE_TV.get(self.codTv)
+		fel = COMPATIBILITATE_TV.get(self.codTv)
+		if fel is not None and not legaturaPornita(fel):
+			return None
+		return fel
 
 	def intreabaCodTv(self):
 		"""<Give Device Vendor ID> catre televizor, cel mult o data la COD_TV_REINTREBARE_S."""
@@ -1524,14 +1732,32 @@ class Cec(object):
 		self.codTvIntrebat = acum
 		return self.trimite(CEC_TV, CEC_GIVE_DEVICE_VENDOR_ID)
 
-	def _codPrimit(self, cod):
-		"""<Device Vendor ID> (catre toti; driverul nu spune cine l-a trimis): al televizorului daca vine curand dupa
-		intrebarea noastra catre el."""
-		if self.codTv is not None or self.codTvIntrebat is None:
+	def _codPrimit(self, cod, dest=None):
+		"""<Device Vendor ID> (catre toti): al televizorului daca e sigur al lui (familia libreader: primul octet 0 = cine
+		l-a trimis), daca e un cod din COMPATIBILITATE_TV (televizorul isi trimite codul singur, de obicei primul, la
+		aprindere) sau daca vine curand dupa intrebarea noastra catre el (V20: driverul nu spune cine l-a trimis)."""
+		if self.codTv is not None:
 			return
-		if self.ceas() - self.codTvIntrebat <= COD_TV_ASTEPTARE_S:
-			self.codTv = cod
-			_jurnal("codul televizorului: %s" % hexa(bytearray(cod)), "cec-cod-tv")
+		sigur = (bool(self.inFir) and dest == CEC_TV) or cod in COMPATIBILITATE_TV
+		if not sigur and (self.codTvIntrebat is None or self.ceas() - self.codTvIntrebat > COD_TV_ASTEPTARE_S):
+			return
+		self.codTv = cod
+		_jurnal("codul televizorului: %s" % hexa(bytearray(cod)), "cec-cod-tv")
+
+	def _tvPornit(self):
+		"""Un semn ca televizorul e pornit (starea lui, o tasta, alegerea intrarii noastre): aprinderea se poate opri."""
+		try:
+			self.tvPornitLa = self.ceasLucru()
+		except Exception:
+			pass
+
+	def _altaSursa(self):
+		"""Un mesaj spune ca televizorul arata altceva sau s-a stins: o aprindere pornita inainte se opreste (omul a ales
+		altceva); un „stiut ca nu” mai vechi decat aprinderea nu o opreste."""
+		try:
+			self.altaSursaLa = self.ceasLucru()
+		except Exception:
+			pass
 
 	def _legatura(self, catre, p):
 		"""Comenzile proprii ale televizorului pentru legatura cu aparatul (raspunsurile probate pe televizor)."""
@@ -1552,12 +1778,19 @@ class Cec(object):
 	def _caleNoua(self, adresa):
 		"""<Set Stream Path> / <Routing Change> / <Routing Information>: televizorul arata intrarea `adresa`."""
 		if adresa == self.adresaFizica():
-			if self.telecomanda() and not self.inStandby():
+			self._tvPornit()
+			if self.telecomanda() and self.inStandby():
+				# televizorul a ales intrarea receptorului (aprins pe ea sau din lista SIMPLINK / Anynet+): trezirea; la
+				# iesirea din standby pleaca <Active Source> (laIesire)
+				self.activ = True
+				self._trezeste()
+			elif self.telecomanda() and not self.inStandby():
 				self.anuntaSursaActiva()
 			else:
 				self.activ = True
 		else:
 			self.activ = False
+			self._altaSursa()
 			self.activLaStandby = False
 			self.opresteTastele()
 
@@ -1627,11 +1860,56 @@ class Cec(object):
 		else:
 			self._elibereaza()
 
+	# ---- televizorul -> receptorul
+
+	def _tvStins(self):
+		"""<Standby> de la televizor: tastele oprite; cu „Stinge si televizorul (CEC)” aleasa, receptorul intra si el in
+		standby daca era pe ecran sau nu se stie (nu cand televizorul arata altceva), afara de cazurile din seStingeCuTv."""
+		era = self.activ
+		self.activ = False
+		self._altaSursa()
+		self.activLaStandby = False
+		self.opresteTastele()
+		try:
+			if era is not False and self.seStingeCuTv():
+				_jurnal("CEC: televizorul s-a stins, receptorul intra in standby", "cec-tv-stins")
+				self._noteaza("standby", motiv="televizorul s-a stins")
+				(self.standbyTv or _standbyReceptor)()
+		except Exception as e:
+			_jurnal("standby dupa televizor: %r" % (e,), "cec-tv-stins")
+
+	def seStingeCuTv(self):
+		"""True daca receptorul urmeaza televizorul in standby acum: setarea aleasa, receptorul pornit, nicio oprire sau
+		repornire in curs, nicio trezire in ultimele TREZIT_PAUZA_S (televizorul care se stinge chiar atunci) si nicio
+		aprindere a televizorului in curs (cel mult APRINDERE_TERMEN_S: televizorul care abia se stinge cand il aprindem)."""
+		try:
+			if not _cfg().cec_stinge.value:
+				return False
+		except Exception:
+			return False
+		if self.inStandby() or _seOpreste():
+			return False
+		if self.trezitLa is not None and self.ceasLucru() - self.trezitLa < TREZIT_PAUZA_S:
+			return False
+		if self.aprindereActiva:
+			_jurnal("CEC: <Standby> de la televizor cat il aprindem; receptorul ramane pornit", "cec-tv-stins-aprindere")
+			return False
+		return True
+
+	def _trezeste(self):
+		try:
+			_jurnal("CEC: televizorul a ales intrarea receptorului, receptorul se trezeste", "cec-trezire")
+			self._noteaza("trezire", motiv="televizorul a ales intrarea receptorului")
+			(self.trezesteReceptorul or _trezesteReceptorul)()
+		except Exception as e:
+			_jurnal("trezirea de la televizor: %r" % (e,), "cec-trezire")
+
 	# ---- standby
 
 	def stingeTv(self, peIntrare):
-		"""Intrarea in standby: <Standby> catre televizor, sau numai <Inactive Source> cand receptorul nu era sursa
-		activa (sa nu stingem televizorul cuiva care se uita la altceva)."""
+		"""Intrarea in standby: <Standby> catre televizor, sau numai <Inactive Source> cand se stie ca receptorul nu era
+		sursa activa (peIntrare False: sa nu stingem televizorul cuiva care se uita la altceva). None (nu se stie) =
+		<Standby>."""
 		if peIntrare is False:
 			a = self.adresaFizica()
 			if a is None:
@@ -1822,6 +2100,8 @@ class StandbyTv(object):
 		self.timerNume = None
 		self.timerSursa = None
 		self.legat = False
+		self.timerAprindere = None
+		self.aprindere = None             # {"motiv", "inceput", "trimiteri", "ok" (trimiteri bune la rand)} cat se aprinde
 
 	# ---- setarile
 
@@ -1932,8 +2212,8 @@ class StandbyTv(object):
 		"""Din Screens/Standby.py, dupa ce inStandby e pus (canalul e deja oprit)."""
 		eraActiv = False
 		try:
-			eraActiv = bool(self.cec.activ)
-			self.cec.activLaStandby = eraActiv
+			eraActiv = self.peEcran()           # True, False sau None (nu se stie)
+			self.cec.activLaStandby = eraActiv is True
 			self.cec.activ = False
 			self.cec.opresteTastele()
 		except Exception as e:
@@ -1941,12 +2221,15 @@ class StandbyTv(object):
 		self.trezitTemporizator = False
 		self.oprit = False
 		self.limitaSpusa = False
+		if self.aprindere is not None:
+			self._opresteAprinderea("receptorul a intrat in standby")
 		c = _cfg()
 		if c.cec_stinge.value and self.cec.deschis():
 			try:
-				# <Standby> numai daca, dupa mesaje, receptorul era pe ecran; altfel numai <Inactive Source>
+				# <Standby> daca, dupa mesaje, receptorul era pe ecran sau nu se stie; numai <Inactive Source> cand se
+				# stie ca televizorul arata altceva
 				self.cec.stingeTv(eraActiv)
-				if eraActiv:
+				if eraActiv is not False:
 					self.cec.activLaStandby = False     # televizorul stins: la trezire nu mai e pe noi
 			except Exception as e:
 				_jurnal("CEC la standby: %r" % (e,), "cec-intrare")
@@ -1964,10 +2247,22 @@ class StandbyTv(object):
 			_jurnal("iesirea HDMI oprita in standby (vfd %s)" % vfdDorit(), "oprita")
 			self._pornestePaza()
 
+	def peEcran(self):
+		"""Cec.activ (True, False, None = nu se stie); None devine False cand driverul HDMI spune sigur ca televizorul nu
+		tine legatura (Rsen NO: stins, sau intrarea noastra neluata pe televizoarele care o lasa fara terminatie)."""
+		a = self.cec.activ
+		if a is None:
+			try:
+				if tvStins():
+					return False
+			except Exception:
+				pass
+		return a
+
 	def laOprire(self, dormi=None):
 		"""Din Screens/Standby.py, la oprirea completa (TryQuitMainloop 1), chiar inainte de quitMainloop: cu „Stinge si
-		televizorul (CEC)” aleasa, ca la intrarea in standby (<Standby> daca receptorul era pe ecran, altfel <Inactive
-		Source>), apoi asteptarea scurta ca mesajul sa plece. Din standby nimic. Intoarce True daca a trimis ceva."""
+		televizorul (CEC)” aleasa, ca la intrarea in standby (<Standby> daca receptorul era pe ecran sau nu se stie, numai
+		<Inactive Source> cand se stie ca televizorul arata altceva), apoi asteptarea scurta ca mesajul sa plece. Din standby nimic. Intoarce True daca a trimis ceva."""
 		if _inStandby():
 			return False
 		c = _cfg()
@@ -1976,13 +2271,103 @@ class StandbyTv(object):
 		trimis = False
 		try:
 			self.cec.opresteTastele()
-			trimis = self.cec.stingeTv(bool(self.cec.activ)) is not False
+			trimis = self.cec.stingeTv(self.peEcran()) is not False      # None (nu se stie) = <Standby>
 			self.cec.asteaptaScrierile(OPRIRE_ASTEAPTA_S)
 			(dormi or time.sleep)(OPRIRE_LINIE_S)
 			_jurnal("CEC la oprirea completa: %s" % ("trimis" if trimis else "netrimis"), "cec-oprire")
 		except Exception as e:
 			_jurnal("CEC la oprirea completa: %r" % (e,), "cec-oprire")
 		return trimis
+
+	# ---- aprinderea televizorului (trezire si pornirea receptorului)
+
+	def aprindeTv(self, motiv, intarziere=0):
+		"""<Image View On> + <Active Source> acum (sau dupa `intarziere` ms) si din nou la APRINDERE_REPETA_MS, pana cand
+		televizorul e pornit si a primit mesajul (vezi _pasAprindere). Intoarce True daca aprinderea a pornit."""
+		if self.aprindere is not None:
+			self._opresteAprinderea("inlocuita (%s)" % motiv)
+		self.aprindere = {"motiv": motiv, "inceput": self.cec.ceasLucru(), "trimiteri": 0, "ok": 0}
+		self.cec.aprindereActiva = True
+		if self.timerAprindere is None:
+			self.timerAprindere = self.faceTimer(self._pasAprindere)
+		if intarziere:
+			self.timerAprindere.start(intarziere, True)
+		else:
+			self._pasAprindere()
+		return True
+
+	def _opresteAprinderea(self, motiv):
+		a, self.aprindere = self.aprindere, None
+		self.cec.aprindereActiva = False
+		if self.timerAprindere is not None:
+			try:
+				self.timerAprindere.stop()
+			except Exception:
+				pass
+		if a is None:
+			return
+		_jurnal("CEC: aprinderea televizorului (%s) gata: %s; Image View On + Active Source trimise de %d ori" % (
+			a["motiv"], motiv, a["trimiteri"]), "cec-aprindere-gata")
+		self.cec._noteaza("aprindere", motiv=a["motiv"], rezultat=motiv, trimiteri=a["trimiteri"])
+
+	def _pasAprindere(self):
+		a = self.aprindere
+		if a is None:
+			return
+		cec = self.cec
+		try:
+			if _inStandby():
+				return self._opresteAprinderea("receptorul e in standby")
+			if cec.altaSursaLa is not None and cec.altaSursaLa > a["inceput"]:
+				# numai un mesaj venit dupa inceput: la pornire televizorul poate fi pe tunerul lui (raspunsul la
+				# <Request Active Source>), si tocmai atunci trebuie mutat pe receptor
+				return self._opresteAprinderea("televizorul arata alta intrare")
+			if cec.tvPornitLa is not None and cec.tvPornitLa > a["inceput"]:
+				return self._opresteAprinderea("televizorul a raspuns ca e pornit")
+			if a["trimiteri"]:
+				# rezultatul scrierilor de la pasul trecut (pe familia libreader trimite le face firul de lucru)
+				ok = cec.raspunde is True and cec.adresaStiuta() is not None
+				a["ok"] = a["ok"] + 1 if ok else 0
+				rsen = tvPeIntrare()
+				# televizorul a spus dupa inceput ca e in standby / abia se aprinde: Rsen YES (LG il tine si stins) si
+				# trimiterile bune nu dovedesc ca s-a aprins; se repeta pana spune „pornit” sau trece termenul
+				nepornit = cec.tvNepornitLa is not None and cec.tvNepornitLa >= a["inceput"]
+				if ok and rsen is True and not nepornit:
+					return self._opresteAprinderea("HDMI sus, adresa fizica luata, mesajul a plecat")
+				if rsen is None and a["ok"] >= 2 and not nepornit:
+					# fara /proc/msp/hdmi0 (de pilda Vu+ 4K) HDMI nu se vede: doua trimiteri bune la rand ajung
+					return self._opresteAprinderea("mesajul a plecat de doua ori (HDMI nu se poate citi)")
+			if cec.ceasLucru() - a["inceput"] >= APRINDERE_TERMEN_S:
+				return self._opresteAprinderea("termenul de %d s a trecut fara raspunsul televizorului" % APRINDERE_TERMEN_S)
+			if cec.deschis() and not cec.blocat:
+				if not a["trimiteri"]:
+					_jurnal("CEC: aprind televizorul (%s): Image View On + Active Source, din nou la %d s pana raspunde" % (
+						a["motiv"], APRINDERE_REPETA_MS // 1000), "cec-aprindere")
+				cec.pornesteTv()
+				if a["trimiteri"]:
+					cec.trimite(CEC_TV, CEC_GIVE_DEVICE_POWER_STATUS)
+				a["trimiteri"] += 1
+		except Exception as e:
+			_jurnal("aprinderea televizorului: %r" % (e,), "cec-aprindere")
+		if self.aprindere is a and self.timerAprindere is not None:
+			self.timerAprindere.start(APRINDERE_REPETA_MS, True)
+
+	def aprindeLaPornire(self):
+		"""Din porneste (mytest.py): la pornirea reala a receptorului, cu „Porneste televizorul la trezire (CEC)” aleasa,
+		televizorul se aprinde ca la trezire. Nu la repornirea interfetei (sistemul pornit de mai mult de
+		PORNIRE_UPTIME_S), nu cand l-a pornit ceasul (temporizator), nu daca interfata e in standby."""
+		try:
+			if not _cfg().cec_porneste.value or _inStandby():
+				return False
+		except Exception:
+			return False
+		u = _uptime()
+		if u is None or u > PORNIRE_UPTIME_S:
+			return False
+		if _trezitDeCeas():
+			_jurnal("CEC: receptorul pornit de ceas, televizorul nu se aprinde", "cec-aprindere")
+			return False
+		return self.aprindeTv("pornirea receptorului", PORNIRE_DUPA_MS)
 
 	def _pornestePaza(self):
 		if not os.path.exists(HDMI0):
@@ -2037,6 +2422,17 @@ class StandbyTv(object):
 
 	def laIesire(self):
 		"""Din Screens/Standby.py, dupa inStandby = None si inaintea pornirii canalului."""
+		try:
+			self.cec.trezitLa = self.cec.ceasLucru()    # un <Standby> de la televizor chiar acum nu-l mai stinge
+			if self.cec.activ is False:
+				# „stiut ca nu” era starea din standby (televizorul stins de noi sau pe altceva); dupa trezire omul poate
+				# aprinde televizorul de mana pe receptor fara niciun mesaj CEC, deci iar nu se stie (altfel oprirea
+				# completa de dupa trimitea numai <Inactive Source>, ca la Wlad). True (pus chiar acum de alegerea
+				# intrarii de la televizor) ramane.
+				self.cec.activ = None
+				self.cec.sursaIntrebata = False
+		except Exception:
+			pass
 		self._opresteePaza()
 		if self.oprit:
 			self._pornesteIesirea("iesirea din standby")
@@ -2045,13 +2441,18 @@ class StandbyTv(object):
 		try:
 			c = _cfg()
 			if c.cec_porneste.value and not temporizator and self.cec.deschis():
-				self.cec.pornesteTv()
+				self.aprindeTv("trezire")      # primul pas pe loc (ca inainte), apoi din nou pana raspunde televizorul
 			elif not temporizator and self.cec.deschis() and self.cec.telecomanda():
 				# dupa cateva secunde, cand imaginea a pornit: <Active Source> din nou numai daca receptorul era sursa
 				# la intrarea in standby si niciun mesaj nu a spus altfel (nu aprinde si nu muta televizorul)
 				if self.timerSursa is None:
 					self.timerSursa = self.faceTimer(self.cec.sursaDacaTvPeNoi)
 				self.timerSursa.start(SURSA_DUPA_TREZIRE_MS, True)
+			if self.cec.activ is None and not temporizator and not c.cec_porneste.value and \
+					not self.cec.activLaStandby and self.cec.deschis():
+				# trezit de om, fara „Porneste televizorul” si fara semn ca eram pe ecran: un televizor pe alta intrare
+				# spune asta (<Active Source> al altcuiva); de la temporizator nimic, ca pana acum
+				self.cec.intreabaSursa()
 		except Exception as e:
 			_jurnal("CEC la trezire: %r" % (e,), "cec-iesire")
 		self._culoriCurand()
@@ -2106,7 +2507,7 @@ class StandbyTv(object):
 			"nume_trimis": dict(self.cec.numeTrimis) if self.cec.numeTrimis else None,
 			"nume_cerut": self.cec.numeCerut,
 			"cec_telecomanda": bool(c.cec_telecomanda.value),
-			"cec_activ": bool(self.cec.activ),
+			"cec_activ": self.cec.activ,          # True, False sau None (nu se stie)
 			"cec_ultima_tasta": self._ultimaTasta(),
 			"adresa_fizica": textAdresa(self.cec.adresaStiuta()),
 		}
@@ -2157,6 +2558,10 @@ def porneste(session=None):
 	except Exception as e:
 		_jurnal("siguranta la pornire: %r" % (e,), "pornire")
 	tv.potrivesteCec()
+	try:
+		tv.aprindeLaPornire()
+	except Exception as e:
+		_jurnal("aprinderea la pornire: %r" % (e,), "cec-aprindere")
 
 
 def laIntrare():
